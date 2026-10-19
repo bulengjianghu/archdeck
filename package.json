@@ -14,6 +14,8 @@
     "lint:model": "vite-node scripts/lint-model.ts --"
   },
   "dependencies": {
+    "@shikijs/langs": "^3.23.0",
+    "@shikijs/themes": "^3.23.0",
     "@vue-flow/core": "^1.48.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",

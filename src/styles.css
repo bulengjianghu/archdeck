@@ -1,0 +1,175 @@
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --surface-3: #e8ebf0;
+  --border: #dde1e7;
+  --border-strong: #c3c9d3;
+  --text: #1c2330;
+  --text-2: #4d5767;
+  --text-3: #808a99;
+  --accent: #2f6fe4;
+  --accent-soft: #e6eefc;
+  --danger: #c93a3a;
+  --danger-soft: #fbeaea;
+  --warning: #a86a0a;
+  --warning-soft: #fdf3e1;
+
+  --rel-depends: #7b8698;
+  --rel-calls: #2f6fe4;
+  --rel-dataflow: #0f9b8e;
+  --rel-event: #c98a10;
+  --rel-implements: #7a52d6;
+
+  --layer-bg: #f3f5f9;
+  --layer-border: #d5dbe4;
+  --boundary-bg: transparent;
+
+  --radius: 8px;
+  --font: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151b;
+    --surface: #1a1e26;
+    --surface-2: #222731;
+    --surface-3: #2b313d;
+    --border: #2f3542;
+    --border-strong: #434b5b;
+    --text: #e6e9ef;
+    --text-2: #aab2c0;
+    --text-3: #7a8394;
+    --accent: #6b9cf5;
+    --accent-soft: #1f2d48;
+    --danger: #ef7a7a;
+    --danger-soft: #3a2224;
+    --warning: #e2a646;
+    --warning-soft: #3a2f1c;
+
+    --rel-depends: #8e98aa;
+    --rel-calls: #6b9cf5;
+    --rel-dataflow: #3cc4b5;
+    --rel-event: #e2a646;
+    --rel-implements: #a88af0;
+
+    --layer-bg: #1d222b;
+    --layer-border: #343b49;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.6 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--border-strong);
+}
+
+input {
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+}
+
+input:focus,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+code,
+pre {
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+a {
+  color: var(--accent);
+}
+
+.link {
+  color: var(--accent);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.muted {
+  color: var(--text-3);
+}
+
+.rel-depends { --rel: var(--rel-depends); }
+.rel-calls { --rel: var(--rel-calls); }
+.rel-dataflow { --rel: var(--rel-dataflow); }
+.rel-event { --rel: var(--rel-event); }
+.rel-implements { --rel: var(--rel-implements); }
+
+.rel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--rel);
+}
+
+.rel-chip::before {
+  content: '';
+  width: 14px;
+  height: 0;
+  border-top: 2px solid var(--rel);
+}
+
+.rel-depends.rel-chip::before,
+.rel-implements.rel-chip::before {
+  border-top-style: dashed;
+}
+
+.rel-event.rel-chip::before {
+  border-top-style: dotted;
+}
+
+.vue-flow__edge-textbg {
+  fill: var(--surface);
+}
+
+.vue-flow__edge-text {
+  fill: var(--text-2);
+  font-size: 11px;
+}
