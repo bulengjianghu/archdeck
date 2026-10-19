@@ -1,0 +1,136 @@
+# 骨架：4 个层 + 第二级模块。依赖方向：呈现 → 视图状态 → 模型 ← 接入（docs/03-architecture.md §2–§3）。
+
+modules:
+  - id: present
+    name: 呈现层
+    kind: layer
+    order: 1
+    abstraction: 把状态画出来、把用户操作上交：只读 DeskState、只调它的操作，不做投影与布局计算
+    responsibility: 应用外壳与路由、项目列表、项目视图、画布、属性面板、导航与问题提示。
+    includes: [Vue 组件, 路由, 交互事件, 样式]
+    excludes: [层次投影规则, 布局算法, 文件读取]
+    mayDependOn: [state, model]
+    docRefs: [docs/03-architecture.md]
+    children:
+      - id: present.shell
+        name: 应用外壳与路由
+        kind: subsystem
+        responsibility: 应用入口与 hash 路由：`/` 是项目列表，`/p/<项目>` 是项目视图；切换项目时重建视图。
+        codeRefs: [src/main.ts, src/App.vue, src/styles.css]
+      - id: present.project-list
+        name: 项目列表主页
+        kind: subsystem
+        core: true
+        responsibility: 列出模型根目录下的全部项目（简介、分层、规模、生成来源、问题数），点击进入项目的架构视图。
+        codeRefs: [src/components/ProjectList.vue]
+      - id: present.desk-view
+        name: 项目视图
+        kind: subsystem
+        core: true
+        responsibility: 单个项目的工作台：按项目创建并注入一份 DeskState，布置画布与可拖动 / 折叠的属性面板，处理键盘返回与变更通知。
+        codeRefs: [src/components/DeskView.vue]
+      - id: present.canvas
+        name: 画布
+        kind: subsystem
+        core: true
+        responsibility: 把带坐标的视图画成节点和边；处理平移、缩放、单击、双击、悬停；聚焦时只显示相关的边、其余变淡。
+        codeRefs: [src/components/GraphCanvas.vue, src/components/nodes/**, src/components/edges/**]
+      - id: present.panel
+        name: 属性面板
+        kind: subsystem
+        core: true
+        responsibility: 按选中对象的类型显示属性：系统、模块（含层的抽象原则）、关系、聚合边；无选中时显示当前父模块。
+        codeRefs: [src/components/panel/**]
+      - id: present.nav
+        name: 导航
+        kind: subsystem
+        responsibility: 面包屑（含返回项目列表）、搜索跳转、显示开关与关系类型筛选、图例。
+        codeRefs: [src/components/Breadcrumb.vue, src/components/Toolbar.vue, src/components/Legend.vue]
+      - id: present.issues
+        name: 问题提示
+        kind: subsystem
+        responsibility: 列出架构描述的错误与提醒，定位到文件与行号。
+        codeRefs: [src/components/IssueBanner.vue]
+
+  - id: state
+    name: 视图状态层
+    kind: layer
+    order: 2
+    abstraction: 「现在看哪里、选中了什么、怎么摆」：持有交互状态，调用模型层投影并把结果布局成坐标
+    responsibility: DeskState 持有层次 / 选中 / 开关并与 URL 同步；Layout 把层次视图排成坐标与走线。
+    includes: [交互状态, URL 同步, 布局与缓存]
+    excludes: [DOM 渲染, 投影规则本身, 文件读取]
+    mayDependOn: [model]
+    children:
+      - id: state.desk
+        name: DeskState
+        kind: subsystem
+        core: true
+        responsibility: 当前项目的唯一状态持有者：层次、选中、悬停、显示开关、加载状态；对外提供唯一一组操作，并与路由双向同步。
+        codeRefs: [src/state/useDeskState.ts, src/state/inject.ts]
+      - id: state.layout
+        name: Layout
+        kind: subsystem
+        core: true
+        responsibility: 给层次视图算坐标与边的走线：分层总览按层序分带规则排布，普通层次用 elkjs；结果按视图内容缓存。
+        codeRefs: [src/layout/**]
+        docRefs: [docs/02-tech-selection.md]
+
+  - id: access
+    name: 接入层
+    kind: layer
+    order: 3
+    abstraction: 把磁盘上的 YAML 交给页面与命令行：只搬运文本与做摘要，不解释描述的含义
+    responsibility: Vite 插件提供项目列表与项目描述（开发态实时读取并推送变更，构建态固化为静态文件），命令行校验。
+    includes: [文件读取, 开发服务器端点, 变更通知, 构建产物, 命令行]
+    excludes: [解析规则（交给模型层）, 界面]
+    mayDependOn: [model]
+    children:
+      - id: access.model-source
+        name: ModelSource 插件
+        kind: subsystem
+        core: true
+        responsibility: 开发态提供 /projects.json、/models/<项目>.json 并按项目推送 arch-model:changed；构建态输出同名静态文件。
+        codeRefs: [vite/archModelPlugin.ts, vite.config.ts]
+      - id: access.reader
+        name: 描述读取
+        kind: subsystem
+        core: true
+        responsibility: 约定「模型根目录下含 system.yaml 的子目录即项目」，读取项目全部 YAML，并跑一遍模型层生成项目摘要。
+        codeRefs: [vite/readModelDir.ts]
+      - id: access.lint
+        name: 命令行校验
+        kind: subsystem
+        responsibility: npm run lint:model：校验全部项目或指定目录，按文件:行号输出问题，有错误时非零退出，可接入 CI。
+        codeRefs: [scripts/lint-model.ts]
+
+  - id: model
+    name: 模型层
+    kind: layer
+    order: 4
+    abstraction: 纯逻辑核心：输入文本、输出数据，不依赖 Vue / DOM / 布局库，可在 Node 中纯输入输出测试
+    responsibility: 把多个 YAML 文件变成校验过的模型与索引，并按层次投影出要画的节点与边。
+    includes: [文件格式与类型, 解析与合并, 引用校验, 索引, 层次投影]
+    excludes: [Vue, DOM, elkjs, 文件系统]
+    mayDependOn: []
+    docRefs: [docs/03-architecture.md]
+    children:
+      - id: model.types
+        name: 类型与 Schema
+        kind: subsystem
+        core: true
+        responsibility: 描述文件的形状（JSON Schema 与对应的 TS 类型），以及加载、索引、投影各阶段的数据类型。
+        codeRefs: [src/model/types.ts, src/model/project-summary.ts, schema/arch-file.schema.json]
+      - id: model.pipeline
+        name: 加载流水线
+        kind: subsystem
+        core: true
+        responsibility: 文本 → 模型 → 索引：Loader 解析与单文件格式检查，Validator 跨文件引用检查，Indexer 建查询结构；入口 loadModel 串起三步并汇总问题。
+        codeRefs: [src/model/load.ts, src/model/validate.ts, src/model/indexer.ts, src/model/index.ts]
+      - id: model.projector
+        name: Projector 层次投影
+        kind: subsystem
+        core: true
+        responsibility: 给定当前父模块，算出这一层的节点、直接边、聚合边、边界节点；子模块都是层时算出分层总览（带、核心模块、核心跨层边）。
+        codeRefs: [src/model/project.ts]
+        docRefs: [docs/01-requirements.md]

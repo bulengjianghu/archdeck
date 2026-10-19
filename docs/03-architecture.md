@@ -81,13 +81,13 @@ flowchart TB
 
 | 模块 | 层 | 职责（只做什么） | 核心数据结构 | 对外接口 |
 |---|---|---|---|---|
-| **ModelSource** | 接入 | 找到并读取 YAML 文件；开发态监听文件变化并通知页面；构建态打成一份 `model.json` | `RawFile { path, text }` | `fetchFiles(): RawFile[]`，事件 `model:changed` |
+| **ModelSource** | 接入 | 找到模型根目录下的项目并读取其 YAML；生成项目摘要；开发态监听文件变化并按项目通知页面；构建态固化为静态文件 | `RawFile { path, text }`、`ModelPayload`、`ProjectSummary` | `GET projects.json`、`GET models/<项目>.json`，事件 `arch-model:changed { project }` |
 | **Loader** | 模型 | 解析 YAML、按 JSON Schema 检查单文件格式、把多个文件合并成一个模型 | `ArchModel { modules, relations, interfaces, dataStructures }` | `load(files) → { model, issues }` |
 | **Validator** | 模型 | 跨文件检查：ID 唯一、引用存在、祖先与后代之间不连边 | `Issue { severity, file, path, line, code, message }` | `validate(model) → { model, issues }`：error 级问题的实体被剔除，warning 级只去掉坏引用 |
 | **Indexer** | 模型 | 建立查询结构，让后续按 ID 查询都是 O(1) | `ModelIndex { byId, parentOf, childrenOf, ancestorsOf, relationsOf }` | `buildIndex(model) → ModelIndex` |
 | **Projector** | 模型 | 给定一个层次，算出这一层的节点、直接边、聚合边、边界节点；子模块都是层时，额外算出分层总览 | `LevelView { mode: graph\|layered, parent, nodes, edges, boundaries, bands? }`；`Edge { kind: direct\|aggregate, from, to, type, relationIds[] }`；`Band { layerId, order, abstraction, mayDependOn, coreModules[], hiddenCount }` | `projectLevel(index, levelId, opts) → LevelView` |
 | **Layout** | 视图状态 | 给 `LevelView` 的节点算坐标。`graph` 模式用 elkjs（在 Worker 中运行）只排内部模块与内部边，边界节点排在下方一行、边界边画成曲线（聚焦时才显示）；`layered` 模式按层序分带排布，带内核心模块横向排开，不调用 elk。结果按层次缓存 | `PositionedView { view, positions }` | `layout(view) → Promise<PositionedView>` |
-| **DeskState** | 视图状态 | 持有当前层次、选中对象、显示开关；与 URL 同步；对外提供唯一的一组操作 | `DeskState { levelPath[], selection, toggles, issues }` | `drillInto(id)` `goTo(levelId)` `select(ref)` `clearSelection()` `reload()` |
+| **DeskState** | 视图状态 | 每个项目一份：持有当前层次、选中对象、显示开关；与 URL（`/p/<项目>?level=&sel=`）同步，只响应本项目路由；对外提供唯一的一组操作 | `DeskState { levelPath[], selection, toggles, issues }` | `drillInto(id)` `goTo(levelId)` `select(ref)` `clearSelection()` `reload()` |
 | **GraphCanvas** | 呈现 | 把 `PositionedView` 画成节点和边；`layered` 模式下层画成分组节点（带），核心模块作为带的子节点；处理平移、缩放、单击、双击、悬停 | Vue Flow 的节点（含父子分组）和边 | 发出 `select` / `drill` / `hover` 意图给 DeskState |
 | **Panel** | 呈现 | 按选中对象的类型显示属性：模块、关系、聚合边，或无选中时显示当前父模块 | — | 只读 DeskState + ModelIndex |
 | **Nav** | 呈现 | 面包屑返回、搜索跳转、图例、显示开关 | — | 调用 DeskState 的操作 |
@@ -110,7 +110,8 @@ flowchart TB
 | DeskState → Layout | 调用 | `layout(view)` | `LevelView` → `PositionedView` | 异步，命中缓存时立即返回 |
 | GraphCanvas → DeskState | 调用 | `select` / `drillInto` | 节点或边的 ID | 用户意图上交 |
 | Panel / Nav → DeskState | 读取 + 调用 | 状态读取、`goTo` / `select` | ID | 面板里的链接也走同一组操作 |
-| ModelSource → DeskState | 事件 | `model:changed` | 无 | 触发 `reload()` |
+| ModelSource → DeskState | 事件 | `arch-model:changed` | `{ project }` | 本项目变化时触发 `reload()` |
+| ModelSource → ProjectList | 调用 + 事件 | `projects.json`、`arch-model:changed` | `ProjectSummary[]` | 首页展示项目摘要，任一项目变化时刷新 |
 
 依赖方向：**呈现 → 视图状态 → 模型 ← 接入**。模型层是中心，谁都不依赖。
 
@@ -137,6 +138,10 @@ flowchart TB
 复杂度：一次投影遍历一遍关系，`O(关系数 × 层深)`，千级模块下是毫秒级。
 
 ## 5. 运行时序（过程视图）
+
+### 5.0 首页：选择项目
+
+首页（`/`）由 ProjectList 读取 `projects.json` 渲染项目卡片。点击卡片进入 `/p/<项目>`，路由按项目 ID 重建 DeskView；DeskView 在自身作用域内创建该项目的 DeskState 并注入，离开项目时随组件销毁。之后的流程即 §5.1 起，`fetchFiles()` 读取的是 `models/<项目>.json`。
 
 ### 5.1 启动：从文件到第一屏
 
@@ -222,16 +227,16 @@ packages/h5p-arch-desk/
   src/model/                   Loader · Validator · Indexer · Projector（纯逻辑，单测重点）
   src/layout/                  Layout（elk Worker）
   src/state/                   DeskState
-  src/components/              GraphCanvas · Panel · Nav · IssueBanner
-  model/h5player/              h5player 架构描述（AI 生成，ADR-0001）
+  src/components/              ProjectList · DeskView · GraphCanvas · Panel · Nav · IssueBanner
+  model/<项目>/                各项目架构描述（ADR-0001）：h5player、h5p-arch-desk 自身
 ```
 
 运行形态只有两种，都不需要后端：
 
 | 形态 | 描述从哪来 | 用途 |
 |---|---|---|
-| `npm run dev` | 实时读取 `model/h5player/`（可用 `ARCH_MODEL_DIR` 覆盖）下的 YAML，文件变化后自动刷新 | 本地查看；AI 重新生成后立刻看到 |
-| `npm run build` | 打包时把 YAML 固化成 `model.json`，输出静态站点 | 内网部署，团队共享某个版本的架构视图 |
+| `npm run dev` | 实时读取 `model/`（可用 `ARCH_MODEL_ROOT` 覆盖）下各项目的 YAML，文件变化后自动刷新 | 本地查看；AI 重新生成后立刻看到 |
+| `npm run build` | 打包时把项目摘要与各项目 YAML 固化成 `projects.json`、`models/<项目>.json`，输出静态站点 | 内网部署，团队共享某个版本的架构视图 |
 
 ## 7. 价值如何涌现（+1 场景）
 

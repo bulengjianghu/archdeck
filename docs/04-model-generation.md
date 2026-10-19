@@ -1,6 +1,6 @@
 # 架构描述生成规范（给 AI 用）
 
-> 适用：由 AI 读取 h5player 代码，生成或重新生成 `model/h5player/` 下的 YAML（ADR-0001）。
+> 适用：由 AI 读取项目代码，生成或重新生成 `model/<项目>/` 下的 YAML（ADR-0001）。下文以 h5player 为例；其他项目（如本项目自身 `model/h5p-arch-desk/`）同样遵守 §3–§6，§2 的骨架换成该项目的分层。
 > 文件格式以 `schema/arch-file.schema.json` 为准，字段含义见需求文档 §3。
 
 ## 1. 目录与分工
@@ -68,7 +68,7 @@ model/h5player/
 | `depends` | 编译期 import 依赖，且不是更具体的 calls / implements |
 | `calls` | 运行时同步或异步调用，控制权转移 |
 | `dataflow` | 数据面推送（帧、分片、样本） |
-| `event` | 发布 / 订阅事件 |
+| `event` | 发布 / 订阅事件；from = 订阅方，to = 发布方（与依赖方向一致） |
 | `implements` | 实现某个端口或契约（from = 实现方，to = 端口 / 契约所在模块） |
 
 - 关系 ID：`rel.<区域>.<序号或短名>`，全局唯一。

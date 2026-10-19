@@ -151,3 +151,27 @@ describe('DeskState', () => {
     expect(desk.positioned.value?.view.parentId).toBe('infra')
   })
 })
+
+describe('DeskState · 多项目', () => {
+  it('只响应本项目路由上的变化，离开项目时不回写', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', component: { render: () => null } },
+        { path: '/p/:project', component: { render: () => null } },
+      ],
+    })
+    await router.push('/p/demo?level=infra')
+    const desk = createDeskState(async () => ({ project: 'demo', dir: 'x', files: sampleFiles() }), { project: 'demo' })
+    desk.attachRouter(router)
+    await desk.init()
+    expect(desk.project).toBe('demo')
+    expect(desk.levelId.value).toBe('infra')
+    await router.push('/')
+    await new Promise(r => setTimeout(r, 0))
+    expect(desk.levelId.value).toBe('infra')
+    await router.push('/p/other?level=app')
+    await new Promise(r => setTimeout(r, 0))
+    expect(desk.levelId.value).toBe('infra')
+  })
+})

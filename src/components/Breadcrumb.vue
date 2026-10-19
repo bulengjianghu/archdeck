@@ -13,6 +13,8 @@ const crumbs = computed(() => {
 
 <template>
   <nav class="crumbs" aria-label="当前层次">
+    <RouterLink class="crumb home" to="/" title="返回项目列表">项目</RouterLink>
+    <span class="sep">/</span>
     <template v-for="(c, i) in crumbs" :key="c.id">
       <span v-if="i > 0" class="sep">/</span>
       <button v-if="i < crumbs.length - 1" class="crumb" @click="desk.goTo(c.id, { kind: 'module', id: crumbs[i + 1].id })">{{ c.name }}</button>
@@ -42,6 +44,11 @@ const crumbs = computed(() => {
 
 .crumb:hover {
   text-decoration: underline;
+}
+
+.crumb.home {
+  color: var(--text-3);
+  text-decoration: none;
 }
 
 .crumb.current {

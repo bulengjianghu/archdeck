@@ -82,11 +82,19 @@ Mermaid 能画时序图，但输出是一整张 SVG 字符串，难以做到「�
 
 ### 4.1 存放位置
 
-已定（见 [ADR-0001](./adr/0001-model-location.md)）：放在本项目内。
+已定（见 [ADR-0001](./adr/0001-model-location.md)）：放在本项目内。模型根目录 `model/` 下每个含 `system.yaml` 的子目录是一个项目：
 
 ```text
-h5p-arch-desk/model/h5player/     ← 真源，由 AI 根据 h5player 代码生成
-  system.yaml                      ← 根：系统名、生成来源 source{repo,commit,generatedAt}、顶层模块列表
+h5p-arch-desk/model/
+  h5player/                        ← h5player 的描述，由 AI 根据 h5player 代码生成
+  h5p-arch-desk/                   ← 本项目自身的描述
+```
+
+单个项目目录的组织：
+
+```text
+model/<项目>/
+  system.yaml                      ← 根：系统名、生成来源 source{repo,commit,generatedAt}
   modules/
     share.yaml
     domain.yaml
@@ -99,7 +107,7 @@ h5p-arch-desk/model/h5player/     ← 真源，由 AI 根据 h5player 代码生�
   scenarios/*.yaml                 ← 二期
 ```
 
-`ModelSource` 默认读取 `model/h5player/`，可用环境变量 `ARCH_MODEL_DIR` 指向其他目录。
+`ModelSource` 默认读取 `model/`，可用环境变量 `ARCH_MODEL_ROOT` 指向其他模型根目录。
 
 ### 4.2 模块文件示例
 
@@ -234,12 +242,15 @@ packages/h5p-arch-desk/
       Breadcrumb.vue  SearchBox.vue  Legend.vue
       sequence/               二期：SequenceView 等
     state/useDeskState.ts
-    App.vue  main.ts  router.ts
+    components/ProjectList.vue   项目列表主页
+    components/DeskView.vue      单个项目的视图（按项目创建 DeskState）
+    App.vue  main.ts             路由：/ 项目列表，/p/<项目> 项目视图
   vite/
-    archModelPlugin.ts        开发态读 ARCH_MODEL_DIR、监听变更推送 HMR；构建态输出 model.json
+    archModelPlugin.ts        开发态提供 projects.json / models/<项目>.json、按项目推送变更；构建态输出同名静态文件
+    readModelDir.ts           列项目、读项目、生成项目摘要
   scripts/
     lint-model.ts             命令行校验，供 CI
-  model/h5player/             h5player 架构描述（AI 生成）
+  model/<项目>/               各项目架构描述（h5player 由 AI 生成；h5p-arch-desk 为本项目自身）
   tests/fixtures/             测试用小模型
   tests/                      vitest 单测（model/ 全覆盖）
   package.json  vite.config.ts  tsconfig*.json

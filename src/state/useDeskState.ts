@@ -31,6 +31,8 @@ export interface Toggles {
 }
 
 export interface ModelPayload {
+  /** 项目 ID；多项目时用于校验路由与变更通知 */
+  project?: string
   dir: string
   files: RawFile[]
 }
@@ -50,7 +52,12 @@ export function decodeSelection(raw: unknown): Selection | null {
   return { kind, id: m[2] }
 }
 
-export function createDeskState(fetchModel: FetchModel) {
+export interface DeskOptions {
+  /** 所属项目；给出时只响应该项目路由（/p/<project>）上的变化 */
+  project?: string
+}
+
+export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {}) {
   const status = ref<'loading' | 'ready' | 'error'>('loading')
   const loadError = ref<string>()
   const index = shallowRef<ModelIndex | null>(null)
@@ -202,6 +209,8 @@ export function createDeskState(fetchModel: FetchModel) {
       () => r.currentRoute.value.query,
       q => {
         if (!index.value || internalNav > 0) return
+        // 离开本项目（回到项目列表或切到别的项目）时不回写
+        if (options.project !== undefined && r.currentRoute.value.params.project !== options.project) return
         const level = typeof q.level === 'string' ? q.level : index.value.rootId
         const sel = decodeSelection(q.sel)
         if (level !== levelId.value || encodeSelection(sel) !== encodeSelection(selection.value)) {
@@ -224,6 +233,7 @@ export function createDeskState(fetchModel: FetchModel) {
   }
 
   return {
+    project: options.project,
     // 状态（只读使用）
     status,
     loadError,

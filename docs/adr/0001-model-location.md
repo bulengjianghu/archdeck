@@ -25,4 +25,8 @@ h5player 的架构描述由 AI 根据 h5player 代码生成，以 YAML 文件存
 1. `ModelSource` 默认读取 `model/h5player/`，仍保留环境变量 `ARCH_MODEL_DIR` 以便指向其他目录。
 2. 为弥补版本对应关系，`system.yaml` 必须记录生成来源：`source: { repo, commit, generatedAt }`。AI 每次重新生成时更新它；面板在根层显示该信息，架构师能知道图对应的是哪个 h5player 版本。
 3. 后续若做「演化」，以本仓库中 `model/h5player/` 的 git 历史为准，结合 `source.commit` 对应到 h5player 的代码版本。
-4. 若以后迁回 h5player 仓库，只需移动目录并改 `ARCH_MODEL_DIR` 默认值，代码无需改动。
+4. 若以后迁回 h5player 仓库，只需移动目录并改模型根目录配置，代码无需改动。
+
+## 补充（2026-10-19）
+
+工具扩展为多项目后，约定推广为「模型根目录 `model/` 下每个含 `system.yaml` 的子目录是一个项目」：h5player 的描述仍在 `model/h5player/`，本项目自身的描述在 `model/h5p-arch-desk/`。环境变量由 `ARCH_MODEL_DIR`（单个目录）改为 `ARCH_MODEL_ROOT`（模型根目录）。本条结论不变。
