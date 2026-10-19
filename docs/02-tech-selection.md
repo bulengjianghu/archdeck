@@ -82,11 +82,11 @@ Mermaid 能画时序图，但输出是一整张 SVG 字符串，难以做到「�
 
 ### 4.1 存放位置
 
-建议（见需求 Q1）：
+已定（见 [ADR-0001](./adr/0001-model-location.md)）：放在本项目内。
 
 ```text
-h5player/docs/arch/model/          ← 真源，随 h5player 代码一起演化
-  system.yaml                      ← 根：系统名、顶层模块列表
+h5p-arch-desk/model/h5player/     ← 真源，由 AI 根据 h5player 代码生成
+  system.yaml                      ← 根：系统名、生成来源 source{repo,commit,generatedAt}、顶层模块列表
   modules/
     share.yaml
     domain.yaml
@@ -99,7 +99,7 @@ h5player/docs/arch/model/          ← 真源，随 h5player 代码一起演化
   scenarios/*.yaml                 ← 二期
 ```
 
-h5p-arch-desk 通过环境变量 `ARCH_MODEL_DIR`（默认 `../../../h5player/docs/arch/model`）定位；未找到时回退到本项目内的 `examples/model/` 示例数据。
+`ModelSource` 默认读取 `model/h5player/`，可用环境变量 `ARCH_MODEL_DIR` 指向其他目录。
 
 ### 4.2 模块文件示例
 
@@ -239,7 +239,8 @@ packages/h5p-arch-desk/
     archModelPlugin.ts        开发态读 ARCH_MODEL_DIR、监听变更推送 HMR；构建态输出 model.json
   scripts/
     lint-model.ts             命令行校验，供 CI
-  examples/model/             内置示例数据
+  model/h5player/             h5player 架构描述（AI 生成）
+  tests/fixtures/             测试用小模型
   tests/                      vitest 单测（model/ 全覆盖）
   package.json  vite.config.ts  tsconfig*.json
 ```

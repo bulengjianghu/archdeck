@@ -247,11 +247,11 @@ h5player 的架构信息目前分散在几处：
 5. 故意在 YAML 中引用一个不存在的模块 ID，页面与 `npm run lint:model` 都报出明确错误。
 6. 修改 YAML 中某模块的职责文字，页面自动更新，当前层次与选中状态保持不变。
 
-## 9. 待决问题
+## 9. 已决问题
 
-| # | 问题 | 建议 |
+| # | 问题 | 结论 |
 |---|---|---|
-| Q1 | 架构描述文件放在哪个仓库？ | 放 `h5player/docs/arch/model/`，与代码同版本，「演化」直接取 h5player 的 git 历史；h5p-arch-desk 通过配置路径读取。也可先放本项目内，后续迁移 |
-| Q2 | 模块树以哪种划分为主轴：blueprint 的四层分层，还是 module-map 的 13 个业务板块？ | 主轴用四层分层（结构视角）；业务板块作为 `tags`，后续提供「按板块着色/筛选」 |
-| Q3 | 模块 ID 是否与 module-map 的 `M-xxx` 强绑定？ | 不强绑定，用 `codeRefs` 关联，避免两套划分互相牵制 |
-| Q4 | `status: target` 与 `current` 是否同图显示？ | 同图显示，用虚线框区分 target；提供开关只看 current |
+| Q1 | 架构描述文件放在哪个仓库？ | 放本项目 `model/h5player/`，`system.yaml` 记录生成来源的 h5player commit，见 [ADR-0001](./adr/0001-model-location.md) |
+| Q2 | 模块树以哪种划分为主轴：blueprint 的四层分层，还是 module-map 的 13 个业务板块？ | 主轴用四层分层（随 v1.0 定档确认）；业务板块作为 `tags` |
+| Q3 | 模块 ID 是否与 module-map 的 `M-xxx` 强绑定？ | 不强绑定，用 `codeRefs` 关联（随 v1.0 定档确认） |
+| Q4 | `status: target` 与 `current` 是否同图显示？ | 同图显示，用虚线框区分 target；提供开关只看 current（随 v1.0 定档确认） |

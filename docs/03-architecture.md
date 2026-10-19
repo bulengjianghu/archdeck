@@ -222,14 +222,14 @@ packages/h5p-arch-desk/
   src/layout/                  Layout（elk Worker）
   src/state/                   DeskState
   src/components/              GraphCanvas · Panel · Nav · IssueBanner
-  examples/model/              无外部描述时使用的示例数据
+  model/h5player/              h5player 架构描述（AI 生成，ADR-0001）
 ```
 
 运行形态只有两种，都不需要后端：
 
 | 形态 | 描述从哪来 | 用途 |
 |---|---|---|
-| `npm run dev` | 实时读取 `ARCH_MODEL_DIR` 下的 YAML，文件变化后自动刷新 | 本地查看；AI 重新生成后立刻看到 |
+| `npm run dev` | 实时读取 `model/h5player/`（可用 `ARCH_MODEL_DIR` 覆盖）下的 YAML，文件变化后自动刷新 | 本地查看；AI 重新生成后立刻看到 |
 | `npm run build` | 打包时把 YAML 固化成 `model.json`，输出静态站点 | 内网部署，团队共享某个版本的架构视图 |
 
 ## 7. 价值如何涌现（+1 场景）
