@@ -1,6 +1,6 @@
 # h5p-arch-desk
 
-架构可视化：按层次浏览项目的模块与模块间关系。首页是项目列表（目前有 h5player 与本项目自身），进入项目后根层是分层总览（几层、各层抽象原则、层间依赖、核心模块），双击下钻到任意模块，单击查看职责、接口、数据结构与关系。
+架构可视化：按层次浏览项目的模块与模块间关系。首页是项目列表（目前有 h5player、media-web 与本项目自身），进入项目后根层是分层总览（几层、各层抽象原则、层间依赖、核心模块），双击下钻到任意模块，单击查看职责、接口、数据结构与关系。
 
 ## 使用
 
@@ -32,6 +32,7 @@ npm test             # 单元测试
 `model/` 下每个含 `system.yaml` 的子目录是一个项目（[ADR-0001](docs/adr/0001-model-location.md)）：
 
 - `model/h5player/`：由 AI 读取 h5player 代码生成；
+- `model/media-web/`：由 AI 读取 media-platform 仓库 media-web 工作区（浏览器侧 npm 包）的代码生成；
 - `model/h5p-arch-desk/`：本项目自身的架构描述。
 
 规范见 [docs/04-model-generation.md](docs/04-model-generation.md)。代码有变化时让 AI 按规范重新生成对应文件，并更新 `system.yaml` 中的 `source.commit`。新增项目只需新建一个子目录。

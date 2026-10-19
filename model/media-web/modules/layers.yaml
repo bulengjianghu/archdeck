@@ -1,0 +1,116 @@
+# 骨架：5 个层 + 第二级模块（每个 npm 包一个第二级模块）。
+# 代码路径相对 media-platform 仓库根。区域文件只能用 parent 往下挂子模块，不得重复定义本文件中的模块。
+
+modules:
+  - id: providers
+    name: 浏览器 Provider
+    kind: layer
+    order: 1
+    abstraction: 浏览器原生能力的适配：采集、处理、WebCodecs 编解码、容器封装，各自声明能力与端口，持有数据面
+    responsibility: 每种浏览器能力一个独立 Provider 包，同时提供静态注入对象与可注册 facade（ProviderContract + role-scoped ports）。
+    includes: [浏览器 API 调用, Provider descriptor 与 contract, 数据面对象（帧、segment、transferable）]
+    excludes: [Rust / WASM / native 后端, 动态解析逻辑]
+    mayDependOn: [ports, primitives, contracts]
+    docRefs: [media-web/docs/architecture.md, media-web/docs/capability-matrix.md]
+    children:
+      - id: providers.capture
+        name: browser-capture
+        kind: package
+        core: true
+        responsibility: 浏览器采集 Provider（getUserMedia / getDisplayMedia 等）。
+        codeRefs: [media-web/packages/media-provider-browser-capture/src/**]
+      - id: providers.processing
+        name: browser-processing
+        kind: package
+        core: true
+        responsibility: 浏览器侧媒体处理 Provider：合约只声明 processing.graph 角色（Worker 处理图，支持显式 transfer list）；PCM 音频输出（AudioWorklet 与共享内存环）、Track ↔ VideoFrame 视频桥、Canvas 处理、MediaRecorder 录制、Worker 时钟桥经子路径导出，不在合约内。
+        codeRefs: [media-web/packages/media-provider-browser-processing/src/**]
+      - id: providers.webcodecs
+        name: webcodecs
+        kind: package
+        core: true
+        responsibility: 基于 WebCodecs 的编解码 Provider。
+        codeRefs: [media-web/packages/media-provider-webcodecs/src/**]
+      - id: providers.container
+        name: container
+        kind: package
+        responsibility: 基于 Mediabunny 的容器读取与 MP4 写入 Provider，使用 custom:container.* 扩展角色；只提供静态的 containerRuntimeProvider，没有 create* 工厂，合约也未经 defineProviderContract。
+        codeRefs: [media-web/packages/media-provider-container/src/**]
+
+  - id: runtime
+    name: Runtime 解析
+    kind: layer
+    order: 2
+    abstraction: 可选的控制面：按 capability、execution、permission 与 port role 确定性地选择 Provider，只返回 factory / port，不碰数据面
+    responsibility: 校验 Provider descriptor 与 ProviderContract，维护注册表并解析端口；领域 Kit 可以不用它而直接注入固定 Provider。
+    includes: [Registry, Resolver, descriptor / contract 校验]
+    excludes: [帧与 segment 拷贝, 浏览器 native object 持有]
+    mayDependOn: [ports, primitives, contracts]
+    children:
+      - id: runtime.media-runtime
+        name: media-runtime
+        kind: package
+        core: true
+        responsibility: Registry / Resolver 实现（入口 `new Runtime()`）：register 时校验 descriptor 与契约，resolvePort / resolvePortDetailed 按 role 确定性解析；另含 telemetry hub 与纯函数的执行计划校验。不调用 Provider 的 create，不碰数据面。
+        codeRefs: [media-web/packages/media-runtime/src/**]
+
+  - id: ports
+    name: 端口与契约
+    kind: layer
+    order: 3
+    abstraction: 上下层之间的接口约定：Provider 怎么被描述与解析、播放管线与会话内核怎么协作
+    responsibility: Provider SPI（描述、合约、端口、角色枚举、注册 SPI）与直播播放管线契约（含两族管线共用的延迟决策律与 Worker 消息）。
+    includes: [端口与角色定义, 管线接口, 共用的纯决策律]
+    excludes: [具体 Provider 实现, Runtime 实现]
+    mayDependOn: [primitives, contracts]
+    children:
+      - id: ports.provider-spi
+        name: provider-spi
+        kind: package
+        core: true
+        responsibility: Provider descriptor、ProviderContract、role-scoped ports 与内置 role 枚举（含 custom:<id> 扩展），以及注册 SPI。
+        codeRefs: [media-web/packages/media-provider-spi/src/**]
+      - id: ports.playback-pipeline
+        name: playback-pipeline
+        kind: package
+        core: true
+        responsibility: 直播播放管线与会话内核之间的契约，以及 wasm 管线与媒体元素管线两族共用的部分：延迟决策律、HTTP-FLV / HLS 拉流（含 m3u8 解析与窗口、有界重连）、到达抖动与画面冻结计量、墙钟锚点、会话定时器。Worker 消息不在本包（在 media-wasm）。
+        codeRefs: [media-web/packages/media-playback-pipeline/src/**]
+
+  - id: primitives
+    name: 基础原语
+    kind: layer
+    order: 4
+    abstraction: 所有包共用的执行原语与资源模型：错误、Operation、EventHub、Track 端口、帧存储与资源句柄
+    responsibility: Web 基础媒体模型与浏览器媒体资源封装。
+    includes: [错误与 Operation, 事件, Track 端口, FrameStore, owned / borrowed 资源句柄]
+    excludes: [Provider 选择, 具体浏览器能力]
+    mayDependOn: [contracts]
+    children:
+      - id: primitives.core
+        name: media-core
+        kind: package
+        core: true
+        responsibility: 公共执行原语：错误、EventHub、Operation 与执行身份（校验与比较）、Track 端口、编解码配置标识。
+        codeRefs: [media-web/packages/media-core/src/**]
+      - id: primitives.resources
+        name: media-resources
+        kind: package
+        core: true
+        responsibility: 资源模型：owned / borrowed 资源句柄、分层资源预算与有界队列、CPU FrameStore、执行作用域、跨 Worker 交接与信用通道、媒体时钟映射、AudioContext 作用域、随机读源与字节写目标端口。
+        codeRefs: [media-web/packages/media-resources/src/**]
+
+  - id: contracts
+    name: 外部契约
+    kind: layer
+    order: 5
+    abstraction: media-web 之外的公共契约真源（media-specs 生成），media-web 只消费不修改
+    responsibility: 跨语言、跨工作区共享的公共类型与协议。
+    mayDependOn: []
+    children:
+      - id: contracts.media-contracts
+        name: '@lsst/media-contracts'
+        kind: external
+        core: true
+        responsibility: 公共契约（由 media-specs 生成的 TypeScript 类型），是 media-web 各包公共类型的真源。
+        codeRefs: [media-specs/**]
