@@ -171,12 +171,12 @@ export function isBoundaryEdge(e: ViewEdge): boolean {
   return isBoundary(e.from) || isBoundary(e.to)
 }
 
-export function toElkGraph(view: LevelView): ElkNode {
+export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'): ElkNode {
   return {
     id: 'root',
     layoutOptions: {
       'elk.algorithm': 'layered',
-      'elk.direction': 'DOWN',
+      'elk.direction': direction,
       'elk.edgeRouting': 'ORTHOGONAL',
       'elk.layered.spacing.nodeNodeBetweenLayers': '72',
       'elk.spacing.nodeNode': '44',
@@ -278,6 +278,25 @@ function getElk(): Promise<ELK> {
   return elkPromise
 }
 
+/** 画布大致的宽高比；布局结果越接近它，适应画布后缩放越小 */
+const TARGET_ASPECT = 1.4
+
+/**
+ * 普通层次先自上而下排；若结果又高又窄（依赖链长），再试自左向右，取宽高比更接近画布的一种。
+ */
+async function layoutGraph(view: LevelView): Promise<PositionedView> {
+  const elk = await getElk()
+  const down = fromElkGraph(view, await elk.layout(toElkGraph(view, 'DOWN')))
+  const score = (pv: PositionedView) => {
+    const b = contentBounds(pv)
+    return b ? Math.abs(Math.log(b.w / b.h / TARGET_ASPECT)) : 0
+  }
+  const b = contentBounds(down)
+  if (!b || b.w / b.h > TARGET_ASPECT / 2) return down
+  const right = fromElkGraph(view, await elk.layout(toElkGraph(view, 'RIGHT')))
+  return score(right) < score(down) ? right : down
+}
+
 const cache = new Map<string, PositionedView>()
 const CACHE_LIMIT = 64
 
@@ -293,7 +312,7 @@ export async function layoutView(view: LevelView): Promise<PositionedView> {
   if (view.mode === 'layered') result = layoutLayered(view)
   else if (view.nodes.length === 0) result = { view, nodes: new Map(), edges: new Map(), coreEdges: new Map() }
   else if (!view.nodes.some(n => n.role !== 'boundary')) result = fromElkGraph(view, { id: 'root', children: [], edges: [] })
-  else result = fromElkGraph(view, await (await getElk()).layout(toElkGraph(view)))
+  else result = await layoutGraph(view)
   if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value!)
   cache.set(key, result)
   return result

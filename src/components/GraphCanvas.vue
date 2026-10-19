@@ -18,7 +18,7 @@ import Legend from './Legend.vue'
 import type { NodeData } from './nodes/types'
 
 const desk = useDesk()
-const { setViewport, zoomIn, zoomOut, dimensions } = useVueFlow('arch-desk')
+const { setViewport, zoomIn, zoomOut, dimensions, setNodes, setEdges } = useVueFlow('arch-desk')
 
 /** 焦点：悬停优先，其次是选中的模块 */
 const focusId = computed(() => {
@@ -141,6 +141,16 @@ const edges = computed<Edge<RouteEdgeData>[]>(() => {
   return list.filter((e): e is Edge<RouteEdgeData> => e !== null)
 })
 
+// 节点与边直接写入 Vue Flow 的 store，不走 :nodes / :edges 属性：
+// 属性同步在「上一层次有选中、切到分层总览」时会被跳过（store 停留在旧节点），这里绕开它
+watch(nodes, n => setNodes(n), { immediate: true })
+watch(edges, e => setEdges(e), { immediate: true })
+
+// Vue Flow 内部错误默认静默，统一打到控制台便于排查
+function onFlowError(err: unknown) {
+  console.warn('[vue-flow]', err)
+}
+
 // ── 交互 ──
 function onNodeClick({ node }: { node: Node<NodeData> }) {
   desk.select({ kind: 'module', id: node.type === 'more' ? node.id.slice('more:'.length) : node.data!.moduleId })
@@ -203,8 +213,6 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
   <div class="canvas">
     <VueFlow
       id="arch-desk"
-      :nodes="nodes"
-      :edges="edges"
       :min-zoom="0.1"
       :max-zoom="2.5"
       :zoom-on-double-click="false"
@@ -218,6 +226,7 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       @pane-click="desk.select(null)"
       @node-mouse-enter="onNodeEnter"
       @node-mouse-leave="onNodeLeave"
+      @error="onFlowError"
     >
       <template #node-module="p"><ModuleNode :data="p.data" /></template>
       <template #node-boundary="p"><BoundaryNode :data="p.data" /></template>
