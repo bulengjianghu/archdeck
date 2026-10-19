@@ -1,0 +1,41 @@
+{
+  "name": "h5p-arch-desk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "h5player 架构可视化：按层次浏览模块与模块间关系",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --build && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "vue-tsc --build",
+    "lint:model": "vite-node scripts/lint-model.ts --"
+  },
+  "dependencies": {
+    "@vue-flow/core": "^1.48.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "elkjs": "^0.11.0",
+    "markdown-it": "^14.1.0",
+    "shiki": "^3.0.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.6.4",
+    "yaml": "^2.8.0"
+  },
+  "devDependencies": {
+    "@tsconfig/node22": "^22.0.0",
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^22.13.4",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/test-utils": "^2.4.6",
+    "@vue/tsconfig": "^0.7.0",
+    "jsdom": "^25.0.1",
+    "typescript": "~5.7.3",
+    "vite": "^6.1.0",
+    "vite-node": "^3.0.5",
+    "vitest": "^3.0.5",
+    "vue-tsc": "^2.2.2"
+  }
+}

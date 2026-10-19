@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://h5p-arch-desk/arch-file.schema.json",
+  "title": "h5p-arch-desk 架构描述文件",
+  "description": "一个 YAML 文件的结构。各顶层键均可选、可组合；跨文件引用由 validateModel 检查。",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "system": { "$ref": "#/definitions/system" },
+    "module": { "$ref": "#/definitions/module" },
+    "modules": { "type": "array", "items": { "$ref": "#/definitions/module" } },
+    "relations": { "type": "array", "items": { "$ref": "#/definitions/relation" } },
+    "interfaces": { "type": "array", "items": { "$ref": "#/definitions/interface" } },
+    "dataStructures": { "type": "array", "items": { "$ref": "#/definitions/dataStructure" } }
+  },
+  "definitions": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+    "idList": { "type": "array", "items": { "$ref": "#/definitions/id" } },
+    "text": { "type": "string" },
+    "textList": { "type": "array", "items": { "type": "string" } },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "repo": { "type": "string" },
+            "commit": { "type": "string" },
+            "generatedAt": { "type": "string" }
+          }
+        }
+      }
+    },
+    "module": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "name": { "type": "string" },
+        "parent": { "$ref": "#/definitions/id" },
+        "kind": { "type": "string" },
+        "status": { "enum": ["current", "target", "deprecated"] },
+        "core": { "type": "boolean" },
+        "responsibility": { "type": "string" },
+        "principle": { "type": "string" },
+        "dataStructures": { "$ref": "#/definitions/idList" },
+        "provides": { "$ref": "#/definitions/idList" },
+        "codeRefs": { "$ref": "#/definitions/textList" },
+        "docRefs": { "$ref": "#/definitions/textList" },
+        "owner": { "type": "string" },
+        "tags": { "$ref": "#/definitions/textList" },
+        "order": { "type": "number" },
+        "abstraction": { "type": "string" },
+        "includes": { "$ref": "#/definitions/textList" },
+        "excludes": { "$ref": "#/definitions/textList" },
+        "mayDependOn": { "$ref": "#/definitions/idList" },
+        "children": { "type": "array", "items": { "$ref": "#/definitions/module" } }
+      }
+    },
+    "relation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "from", "to", "type"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "from": { "$ref": "#/definitions/id" },
+        "to": { "$ref": "#/definitions/id" },
+        "type": { "enum": ["depends", "calls", "dataflow", "event", "implements"] },
+        "mode": { "enum": ["sync", "async"] },
+        "interface": { "$ref": "#/definitions/id" },
+        "payload": {
+          "oneOf": [{ "$ref": "#/definitions/id" }, { "$ref": "#/definitions/idList" }]
+        },
+        "description": { "type": "string" }
+      }
+    },
+    "interface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "name": { "type": "string" },
+        "owner": { "$ref": "#/definitions/id" },
+        "signature": { "type": "string" },
+        "description": { "type": "string" },
+        "semantics": { "type": "string" }
+      }
+    },
+    "dataStructure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "name": { "type": "string" },
+        "definition": { "type": "string" },
+        "description": { "type": "string" },
+        "invariants": { "type": "string" }
+      }
+    }
+  }
+}

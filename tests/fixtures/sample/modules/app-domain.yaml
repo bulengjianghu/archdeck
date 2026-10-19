@@ -1,0 +1,20 @@
+modules:
+  - id: app
+    name: Application
+    kind: layer
+    order: 2
+    abstraction: 用例编排
+    mayDependOn: [domain]
+    responsibility: 编排
+    children:
+      - { id: app.solution, name: Solution, core: true, responsibility: 方案编排 }
+      - { id: app.fragments, name: Fragments, responsibility: 片段 }
+  - id: domain
+    name: Domain
+    kind: layer
+    order: 3
+    abstraction: 规则与事实
+    responsibility: 规则
+    children:
+      - { id: domain.services, name: Services, core: true, responsibility: 服务 }
+      - { id: domain.models, name: Models, responsibility: 模型 }

@@ -83,7 +83,7 @@ flowchart TB
 |---|---|---|---|---|
 | **ModelSource** | 接入 | 找到并读取 YAML 文件；开发态监听文件变化并通知页面；构建态打成一份 `model.json` | `RawFile { path, text }` | `fetchFiles(): RawFile[]`，事件 `model:changed` |
 | **Loader** | 模型 | 解析 YAML、按 JSON Schema 检查单文件格式、把多个文件合并成一个模型 | `ArchModel { modules, relations, interfaces, dataStructures }` | `load(files) → { model, issues }` |
-| **Validator** | 模型 | 跨文件检查：ID 唯一、引用存在、祖先与后代之间不连边 | `Issue { file, path, code, message }` | `validate(model) → Issue[]` |
+| **Validator** | 模型 | 跨文件检查：ID 唯一、引用存在、祖先与后代之间不连边 | `Issue { severity, file, path, line, code, message }` | `validate(model) → { model, issues }`：error 级问题的实体被剔除，warning 级只去掉坏引用 |
 | **Indexer** | 模型 | 建立查询结构，让后续按 ID 查询都是 O(1) | `ModelIndex { byId, parentOf, childrenOf, ancestorsOf, relationsOf }` | `buildIndex(model) → ModelIndex` |
 | **Projector** | 模型 | 给定一个层次，算出这一层的节点、直接边、聚合边、边界节点；子模块都是层时，额外算出分层总览 | `LevelView { mode: graph\|layered, parent, nodes, edges, boundaries, bands? }`；`Edge { kind: direct\|aggregate, from, to, type, relationIds[] }`；`Band { layerId, order, abstraction, mayDependOn, coreModules[], hiddenCount }` | `projectLevel(index, levelId, opts) → LevelView` |
 | **Layout** | 视图状态 | 给 `LevelView` 的节点算坐标。`graph` 模式用 elkjs（在 Worker 中运行）；`layered` 模式按层序分带排布，带内核心模块横向排开，不调用 elk。结果按层次缓存 | `PositionedView { view, positions }` | `layout(view) → Promise<PositionedView>` |
@@ -104,7 +104,7 @@ flowchart TB
 | 关系 | 类型 | 经由接口 | 交换的数据 | 说明 |
 |---|---|---|---|---|
 | ModelSource → Loader | 调用 | `load(files)` | `RawFile[]` → `ArchModel` | 文本变成结构 |
-| Loader → Validator | 调用 | `validate(model)` | `ArchModel` → `Issue[]` | 有错也继续往下走，坏的引用会被跳过 |
+| Loader → Validator | 调用 | `validate(model)` | `ArchModel` → 修剪后的 `ArchModel` + `Issue[]` | 有错也继续往下走，坏的实体和引用被剔除 |
 | Validator → Indexer | 数据 | `buildIndex(model)` | `ArchModel` → `ModelIndex` | 一次加载只建一次 |
 | DeskState → Projector | 调用 | `projectLevel` | `ModelIndex + levelId` → `LevelView` | 每次切换层次或改动开关时调用 |
 | DeskState → Layout | 调用 | `layout(view)` | `LevelView` → `PositionedView` | 异步，命中缓存时立即返回 |

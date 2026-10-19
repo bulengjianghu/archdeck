@@ -19,13 +19,13 @@
 | 框架 | Vue 3（`<script setup>` + TS） | `vue@^3.5` | — |
 | 构建 | Vite | `vite@^6` | — |
 | 图画布 | **Vue Flow**（`@vue-flow/core`） | `^1.4x` | AntV X6、AntV G6 v5、Cytoscape.js |
-| 自动布局 | **elkjs**（layered 算法） | `^0.9` | dagre（`@dagrejs/dagre`） |
+| 自动布局 | **elkjs**（layered 算法） | `^0.11` | dagre（`@dagrejs/dagre`） |
 | 时序图（二期） | **自研 SVG 组件** | — | Mermaid（仅作导出） |
 | 路由 / 深链接 | vue-router | `^4.6` | — |
 | 状态管理 | Vue `reactive` + composables | — | Pinia（规模变大再引入） |
 | 数据格式 | YAML | `yaml@^2` | JSON |
 | 结构校验 | JSON Schema + ajv | `ajv@^8`、`ajv-formats@^3` | zod |
-| 类型生成 | json-schema-to-typescript | — | 手写类型 |
+| 类型定义 | 手写 TS 类型，与 Schema 并排维护 | — | json-schema-to-typescript（模型字段少，生成步骤不划算） |
 | Markdown | markdown-it | `^14` | marked |
 | 代码高亮 | Shiki（按需加载 ts 语法） | `^1` | highlight.js |
 | 分栏 | 自写 CSS Grid + 拖动条 | — | splitpanes |
@@ -215,10 +215,10 @@ scenario:
 packages/h5p-arch-desk/
   docs/                       需求、选型、计划
   schema/
-    arch-model.schema.json    JSON Schema 真源
+    arch-file.schema.json     JSON Schema 真源（单个 YAML 文件的结构）
   src/
     model/                    ← 与 UI 无关的纯逻辑，单测重点
-      types.ts                由 schema 生成
+      types.ts                手写，与 schema/arch-file.schema.json 对应
       load.ts                 读取并合并多个 YAML 文件
       validate.ts             跨文件引用与约束校验
       index.ts                建立 id → 模块/父链/子集 索引
@@ -245,7 +245,7 @@ packages/h5p-arch-desk/
   package.json  vite.config.ts  tsconfig*.json
 ```
 
-`package.json` 脚本：`dev` / `build` / `preview` / `test` / `type-check` / `lint:model` / `gen:types`。
+`package.json` 脚本：`dev` / `build` / `preview` / `test` / `type-check` / `lint:model`。
 
 ## 6. 数据流
 

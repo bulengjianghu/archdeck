@@ -1,0 +1,4 @@
+system:
+  id: sys
+  name: Demo
+  source: { repo: demo, commit: abc123, generatedAt: '2026-10-19' }

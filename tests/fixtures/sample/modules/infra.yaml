@@ -1,0 +1,23 @@
+module:
+  id: infra
+  name: Infrastructure
+  kind: layer
+  order: 1
+  abstraction: 机制与副作用
+  mayDependOn: [app, domain]
+  responsibility: 机制
+  children:
+    - id: infra.player
+      name: Player
+      core: true
+      responsibility: 组合根
+    - id: infra.framework
+      name: Framework
+      core: true
+      responsibility: 机制内核
+      children:
+        - { id: infra.framework.sm, name: StateMachine, responsibility: 状态机, provides: [if.sm] }
+        - { id: infra.framework.pipeline, name: Pipeline, responsibility: 流水线 }
+    - id: infra.mus
+      name: MUs
+      responsibility: 媒体单元
