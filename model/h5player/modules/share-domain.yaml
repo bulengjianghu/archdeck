@@ -1,0 +1,1956 @@
+# 区域：Share + Domain（share.* / domain.* 第二级之下的子模块、本区域关系、接口与数据结构）
+# 代码来源：packages/share/src/**、packages/domain/src/**
+# 骨架模块（share.contracts 等第二级）在 layers.yaml 中定义，本文件只用 parent 往下挂。
+
+modules:
+  # ───────────────────────── domain.types ─────────────────────────
+  - id: domain.types.modes
+    parent: domain.types
+    name: 方案三元组与模式枚举
+    responsibility: 定义 LoadMode（Mp4/Flv/Hls）、PlayMode（Live/Vod）、SolutionType（Wcs/Wasm/Mse/Fhls/Vcs/Video）三元组枚举，以及 Fhls 呈现形态 FhlsPresentation 与建段判定 decidePresentation。不含任何选型规则。
+    dataStructures: [ds.LoadMode, ds.PlayMode, ds.SolutionType, ds.FhlsPresentation]
+    codeRefs: [packages/domain/src/types/modes.ts, packages/domain/src/types/fhlsPresentation.ts]
+    docRefs: [docs/design/1-domain/domain-model.md, docs/design/4-solutions/fhls/fhls-solution.md]
+
+  - id: domain.types.model-types
+    parent: domain.types
+    name: 模型与观测类型
+    responsibility: 领域公共类型的唯一属地：MuKey / MuType / PlayerStatus / MuStatus / State / Overlay 等状态与 MU 枚举，PlaybackState 与 Statistic 的三档能力面（只读 ⊂ 采集 ⊂ 持有/状态机），ModelViewMap / PlaybackProfile 等 Registry 视图契约，以及弱网观测事实（缓冲、追帧、丢帧、策略决策、拉流）。framework 侧只重导出同一枚举对象，不另起一套值。
+    principle: |
+      - 能力面收窄矩阵用结构类型继承链表达：`PlaybackStateReadView ⊂ CollectorView ⊂ MachineView`、`StatisticReadView ⊂ CollectorView ⊂ OwnerView`，Registry 按调用方身份窄化分发。
+      - `ModelViewMap` 把 5 个槽（state / runtime / statistic / stream / play）映射到各自最宽视图；`WatchableProp` 通过类型运算排除方法键，只允许观察数据属性。
+      - 观测事实一律 `null` 起步，区分「未接计数」与「计为 0」；动作与闸是枚举（StrategyDecisionAction / StrategyBlockedBy），防止统计口径漂移。
+    dataStructures:
+      - ds.MuKey
+      - ds.MuType
+      - ds.PlayerStatus
+      - ds.MuStatus
+      - ds.MuState
+      - ds.State
+      - ds.Overlay
+      - ds.PlaybackStateMemento
+      - ds.PlaybackStateReadView
+      - ds.PlaybackStateCollectorView
+      - ds.PlaybackStateMachineView
+      - ds.StatisticReadView
+      - ds.StatisticCollectorView
+      - ds.StatisticOwnerView
+      - ds.ModelKind
+      - ds.ModelViewMap
+      - ds.PlaybackProfile
+      - ds.SystemLoadLevel
+      - ds.StrategyMode
+      - ds.StrategyDecisionAction
+      - ds.StrategyBlockedBy
+      - ds.AdaptiveBufferFacts
+      - ds.StrategyDecisionFacts
+    codeRefs: [packages/domain/src/types/model.ts]
+    docRefs: [docs/design/1-domain/domain-model.md, docs/design/6-features/player-get-stats.md]
+
+  - id: domain.types.pipeline-topology
+    parent: domain.types
+    name: Pipeline 拓扑契约
+    responsibility: Pipeline 图的拓扑契约类型唯一属地：段类别 SegmentKind、语义锚点 SemanticPosition、腿 LegId / 节点 NodeId、边、拓扑快照与变更描述 PipelineDiffSpec。framework 的 PipelineDiff 等公开 API 由 framework 承载，这里只放规则判定所需的形状。
+    dataStructures: [ds.SegmentKind, ds.SemanticPosition, ds.LegId, ds.NodeId, ds.PipelineEdge, ds.PipelineTopology, ds.PipelineDiffSpec, ds.TopologyError]
+    codeRefs: [packages/domain/src/types/pipelineTopology.ts]
+    docRefs: [docs/design/0-kernel/pipeline-graph-rules.md, docs/design/0-kernel/pipeline-legs.md]
+
+  - id: domain.types.events
+    parent: domain.types
+    name: 领域事件
+    responsibility: 定义领域事件判别联合 DomainEvent（加载/播放模式变化、方案变化、叠加态进出、统计切片开始）。只定义事件形状，发布通道由 domain.ports 的 DomainEventPublisher 提供。
+    dataStructures: [ds.DomainEvent]
+    codeRefs: [packages/domain/src/events.ts]
+    docRefs: [docs/design/1-domain/domain-model.md]
+
+  # ───────────────────────── domain.models ─────────────────────────
+  - id: domain.models.base
+    parent: domain.models
+    name: 聚合基类
+    responsibility: 领域聚合的公共基类 ModelBase（只注入 DomainEventPublisher、抽象 reset、幂等 dispose）与不变量违例错误 InvariantError。不持 Context，不做观察 Proxy（观察归 Registry）。
+    dataStructures: [ds.ModelBase, ds.InvariantError]
+    codeRefs: [packages/domain/src/models/modelBase.ts]
+    docRefs: [docs/design/1-domain/domain-model.md]
+
+  - id: domain.models.playback-state
+    parent: domain.models
+    name: PlaybackState 播放状态聚合
+    responsibility: 持有播放器基态（current / next 两相）、叠加态（Seeking / Buffering）、命令代次与 MU 编制（含多腿别名表），守住转移与叠加的不变量，提供 memento 快照与回滚。不决定迁移规则（由 framework 状态机驱动）。
+    principle: |
+      - 两相提交：`beginTransition` 写入 next 并递增 commandGeneration → `commitTransition` 落到 current → `endTransition` 释放 next；重复 begin / 无 next 时 commit 一律抛 InvariantError。
+      - 叠加不变量：只在 Loaded/Playing/Paused/Buffering 上可开叠加；同 kind 不可重入；Seeking 进行中禁止 Buffering；基态转入 Stopped/Destroyed/Error 时自动清空叠加并逐个发 OverlayExited。
+      - MU 编制：`addMu` 按 `mappingPlayerStatus` 把基态映射为 MU 状态；多腿下以 NodeId 为内部键，裸 MuKey 经别名表解析到活动腿。
+      - `snapshot()` / `restore()` 把基态、叠加、别名一起做原子快照，供 Pipeline 事务回滚。
+    provides: [if.models.playback-state.PlaybackState]
+    dataStructures: [ds.PlaybackState, ds.PlaybackStateMemento]
+    codeRefs: [packages/domain/src/models/playbackState.ts]
+    docRefs: [docs/design/1-domain/domain-model.md, docs/design/0-kernel/state-machine.md]
+
+  - id: domain.models.statistic
+    parent: domain.models
+    name: Statistic 统计聚合
+    responsibility: 播放统计事实的唯一持有者：首帧里程碑、帧率/码率/帧延迟、卡顿与丢帧计数、播放结局累计、弱网观测（观察时长、追帧、拉流、缓冲策略决策）等；区分「未记录」与「记录为 0」，管理计数窗口与统计切片。不取时钟（时刻由调用方传入），不做对外快照映射。
+    principle: |
+      - 写入面按能力面分档：采集方只拿 StatisticCollectorView（mark* / report* / count*），持有方额外有 startNewSlice / reset。
+      - 入参先过不变量校验（有限数、非负、at ≥ since），违例抛 InvariantError，不静默兜底。
+      - 计数族有「观测窗口」：构造 / startNewSlice / countPlaybackAttempt 开窗，reset 关窗；组 A 播放结局累计跨切片保留。
+      - `startNewSlice(reason)` 发布 StatisticSliceStarted 领域事件。
+    provides: [if.models.statistic.Statistic]
+    dataStructures: [ds.Statistic]
+    codeRefs: [packages/domain/src/models/statistic.ts]
+    docRefs: [docs/design/6-features/player-get-stats.md, docs/design/1-domain/domain-model.md]
+
+  - id: domain.models.stream
+    parent: domain.models
+    name: 流模型
+    responsibility: 加载腿的流事实聚合：FlvStreamModel / HlsModel / Mp4StreamModel 三种流模型共享解析得到的流事实（时间基准、帧信息、SPS/PPS、到达高水位、加密版本），并各自承载协议专属事实——HLS 清单滚动窗口、起播分片、墙钟找片；MP4 字节区间与分片加载进度；直播 pts↔墙钟映射轨 WallClockTrack。不发网络请求，不持 DOM。
+    principle: |
+      - 公共流事实委托给组件 StreamFactsCore，三种流模型只是薄外观 + 协议专属状态；Registry 合成 `loadMode` / `playMode` 判别字段，形成 StreamModelUnion。
+      - HlsModel：清单按媒体序号编址，`updatePlaylist` 经 `computeAppendPlan` 判「承接 / 断档」并裁剪 30s 以前的旧片；起播分片按目标延迟从清单尾向前累加；`segmentIndexForWall` 按 DATERANGE 墙钟找片（时移录制腿用）。
+      - Mp4StreamModel：按时间戳换算字节区间，`getNextRange` 按停拉水位给出下一段 Range。
+      - StreamModelTimeline 描述腿的时间基准（playlist / source 轴 + 常量 C），供时移换腿统一到直播轴。
+    provides: [if.models.stream.StreamFacts, if.models.stream.HlsModel, if.models.stream.Mp4StreamModel, if.models.stream.WallClockTrack]
+    dataStructures:
+      - ds.StreamModel
+      - ds.StreamModelUnion
+      - ds.StreamModelViewBase
+      - ds.StreamModelTimeline
+      - ds.FlvStreamModel
+      - ds.HlsModel
+      - ds.Mp4StreamModel
+      - ds.HlsPlaylist
+      - ds.HlsSegment
+      - ds.WallClockTrack
+    codeRefs:
+      - packages/domain/src/models/streamModel/**
+      - packages/domain/src/models/wallClockTrack.ts
+    docRefs: [docs/design/1-domain/domain-model.md, docs/design/1-domain/mp4-stream-model.md, docs/design/6-features/timeshift/guardrail-contracts.md]
+
+  - id: domain.models.play
+    parent: domain.models
+    name: 播放模型
+    responsibility: 播放段的领域事实聚合，按方案一一对应：FrameModel（Wcs/Wasm 帧级渲染）、MseModel（MSE SourceBuffer 事实）、FhlsModel（Fhls 分片生成、呈现时钟、原生取片需求）、VideoPlayModel（原生 Video）。提供能力面断言（assert* / has*）供调用方按能力而非按类判别。VCS 播放模型由 Player 持有，此处只定义其视图契约。不持 DOM / SourceBuffer 句柄。
+    principle: |
+      - 播放模型只存可序列化的值快照（VideoPlaybackSnapshot、帧台账、渲染时间轴），DOM 读数由渲染适配层采样后 `record*` 写入。
+      - 能力面拆分（FrameBufferPlaybackCapability、RenderTimelinePlaybackCapability、MediaReadyStateCapability 等）+ 结构型断言：换方案后模型已换代时 `has*` 返回 false，调用方跳过写入而不抛错。
+      - FhlsModel 按 2s 分片把帧样本组织成 m3u8 分片，记录消费游标、硬 seek 起点与呈现时钟分代（委托 fhlsPresentationClock 纯函数换算）。
+    provides: [if.models.play.FrameModel, if.models.play.MseModel, if.models.play.FhlsModel, if.models.play.assertPlaybackCapability]
+    dataStructures:
+      - ds.PlaybackModel
+      - ds.PlaybackModelUnion
+      - ds.PlaybackModelViewBase
+      - ds.PlaybackModelInstance
+      - ds.VcsPlaybackModelView
+      - ds.FrameModel
+      - ds.MseModel
+      - ds.FhlsModel
+      - ds.VideoPlayModel
+      - ds.NativeDemand
+      - ds.SegmentInfo
+    codeRefs: [packages/domain/src/models/playModel/**]
+    docRefs: [docs/design/1-domain/domain-model.md, docs/design/4-solutions/fhls/fhls-solution.md]
+
+  - id: domain.models.components
+    parent: domain.models
+    name: 模型组件
+    responsibility: 被流模型 / 播放模型组合复用的值组件：StreamFactsCore（解析链路共享流事实）、FrameBufferLedger（解复用/解码帧台账与 GOP 账）、RenderTimeline（渲染时间轴、倍速、补缓冲冻结）、VideoPlaybackSnapshot（video 元素状态值快照）。
+    principle: |
+      - StreamFactsCore 的 `arrivedMaxDts` 是会话内单调高水位，必须在任何丢帧 / 时间戳修正之前上报，否则积压判据会闭环自我抹除；fps 在首秒样本内锁定，dts 倒退时重新起算。
+      - FrameBufferLedger 只记账不持帧数据：按 demuxed / decoding / decoded 三段记帧信息与上限，GopLedger 保留最近 5 个 GOP 的帧数。
+    provides: [if.models.components.FrameBufferLedger, if.models.components.RenderTimeline]
+    dataStructures:
+      - ds.StreamFactsCore
+      - ds.StreamFrameFact
+      - ds.StreamSampleFact
+      - ds.VideoMetadataFact
+      - ds.FrameBufferLedger
+      - ds.BufferFrameInfo
+      - ds.FrameBufferLimits
+      - ds.BufferChange
+      - ds.RenderTimeline
+      - ds.VideoPlaybackSnapshot
+      - ds.VideoPlaybackState
+    codeRefs: [packages/domain/src/models/components/**]
+    docRefs: [docs/design/1-domain/domain-model.md]
+
+  # ───────────────────────── domain.services ─────────────────────────
+  - id: domain.services.solution-select
+    parent: domain.services
+    name: 方案选型与流事实裁决
+    responsibility: 由 URL / 配置 / 请求 / 当前三元组 / 环境能力推出目标 (loadMode, playMode, solution) 及变化标记；流信息到达后裁决是否需要解密与重选方案；推导 Process 段需求（PTS 校正、解密）与直播帧策略的方案分派。只给结论，不执行装配。
+    principle: |
+      - 推断优先级：URL 推断 > 本次请求 > 当前值 > 配置 > 默认（Live / Flv 或 Mp4）；与显式配置冲突时返回 `err(ErrorBase(ConfigError))`。
+      - 可用方案 = 已注册 ∩ 环境能力 ∩ 业务约束（Flv / HLS / 解密 / 直播禁用 Video，点播禁用 Vcs），按 solutionPriority 排序；Video 可用时恒排最前。显式指定只看能力不受优先级名单限制。
+      - `reconcileStreamFacts`：流加密而配置声明不需要解密 → ConfigError；当前为 Video 且流事实与其不兼容 → requiresReselect。
+      - 结果统一用 share 的 `Result<T, ErrorBase>`，不抛异常。
+    provides:
+      - if.services.solution-select.selectSolution
+      - if.services.solution-select.inferSourceModes
+      - if.services.solution-select.reconcileStreamFacts
+      - if.services.solution-select.computeProcessRequirements
+      - if.services.solution-select.resolveLiveFramePlan
+    dataStructures:
+      - ds.SolutionSelectInput
+      - ds.SolutionDecision
+      - ds.SolutionCapabilities
+      - ds.SourceModeInference
+      - ds.StreamFactsReconcileInput
+      - ds.StreamFactsReconcileOutput
+      - ds.ProcessRequirements
+      - ds.LiveFramePlan
+    codeRefs:
+      - packages/domain/src/services/solutionSelector.ts
+      - packages/domain/src/services/streamFactsReconcile.ts
+      - packages/domain/src/services/processRequirements.ts
+      - packages/domain/src/services/liveFramePlan.ts
+    docRefs: [docs/design/2-assembly/solution.md, docs/design/4-solutions/wcs-wasm/live-frame-strategy.md]
+
+  - id: domain.services.buffer-baseline
+    parent: domain.services
+    name: 基线缓冲阈值
+    responsibility: 按播放模式 / 加载模式 / 活动腿给出四阈值基线（起补 / 停补 / 起丢 / 停丢），配置覆盖优先；录制腿固定取点播档。是各自适应控制律与时移阈值的共同起点。
+    provides: [if.services.buffer-baseline.resolvePlaybackBuffer]
+    dataStructures: [ds.PlaybackBufferThresholds]
+    codeRefs: [packages/domain/src/services/playbackBufferPolicy.ts]
+    docRefs: [docs/design/5-capabilities/buffer/buffer-adaptive.md]
+
+  - id: domain.services.live-buffer-control
+    parent: domain.services
+    name: 直播自适应缓冲控制律
+    responsibility: 直播缓冲阈值的控制律（框架无关、host 注入）：SAB 自适应控制器、供需感知控制器 SupplyAware、两者按送货节奏切换的融合控制器 CadenceSwitch、降延迟放行的积压检测器 BacklogDetector，以及 VCS 送帧线的 EWMA 包络控制器。只计算阈值 / 放行位 / 跳跃量，写回与埋点由宿主插件做。
+    principle: |
+      - SAB：扩张只看实测缓冲谷底，固定死区 + 封顶 band + 起播冷静期；平静确认后按固定步长回收；空档预留 setGapFloor 作为独立下限；欠载时上报交棒。
+      - SupplyAware：凹陷深度取「到达回撤」而非缓冲谷底；先判区制（Startup/Stable/Volatile/Underload/Outage/Recovering）再定储备，追帧只在 Stable 放行。
+      - CadenceSwitch：两控制律常驻观测、各自产出影子输出，按批间空档证据决定生效方，切换不 reset 任何一方。
+      - BacklogDetector：开环判据「已到达媒体量 − 墙钟」相邻两窗谷底之差，长窗 / 短窗 / 富余窗三路任一成立即放行降延迟。
+      - VCS AdaptiveBufferController：波谷样本 → 有界窗 mean+k(max−mean) → 非对称 EWMA floor → 死区 + 迟滞台阶输出停等 / 前跳。
+    provides:
+      - if.services.live-buffer-control.createSelfAdaptiveBufferController
+      - if.services.live-buffer-control.createSupplyAwareBufferController
+      - if.services.live-buffer-control.createCadenceSwitchBufferController
+      - if.services.live-buffer-control.createBacklogDetector
+      - if.services.live-buffer-control.AdaptiveBufferController
+    dataStructures: [ds.BufferThresholds, ds.SabHost, ds.SupplyAwareHost, ds.SupplyAwareFacts, ds.CadenceSwitchFacts, ds.TickInput, ds.TickResult]
+    codeRefs:
+      - packages/domain/src/services/selfAdaptiveBufferPolicy.ts
+      - packages/domain/src/services/supplyAwareBufferPolicy.ts
+      - packages/domain/src/services/cadenceSwitchBufferPolicy.ts
+      - packages/domain/src/services/backlogDetector.ts
+      - packages/domain/src/services/vcsAdaptiveBufferPolicy.ts
+    docRefs:
+      - docs/design/5-capabilities/buffer/buffer-adaptive.md
+      - docs/design/5-capabilities/buffer/supply-aware-live-buffer.md
+      - docs/design/5-capabilities/buffer/latency-drop-backlog-gate.md
+      - docs/design/5-capabilities/buffer/vcs-adaptive-buffer-controller.md
+
+  - id: domain.services.vod-buffer
+    parent: domain.services
+    name: 点播缓冲与加载水位
+    responsibility: 点播的自适应缓冲（带宽 / 码率 EWMA、下一段体积与拉流耗时预测、起补 / 停补阈值推导与节流）与加载水位滞回（是否继续拉下一段）。不认识任何 Model 类型与 LoadMode，来源换算由插件整理成入参。
+    principle: |
+      - 阈值推导 = 预测 T_load × 安全系数，经 clamp、变化率夹断与最小间隔节流；拖慢检测命中时跳过节流立即重算。
+      - 水位滞回：停拉线先判且等号侧退出，起拉线严格小于才进入。
+    provides: [if.services.vod-buffer.createVodAdaptiveBufferPolicy, if.services.vod-buffer.deriveVodBufferThresholds, if.services.vod-buffer.vodLoadWatermark]
+    dataStructures: [ds.VodBufferThresholds, ds.VodThresholdDecision]
+    codeRefs: [packages/domain/src/services/vodAdaptiveBufferPolicy.ts, packages/domain/src/services/vodLoadWatermark.ts]
+    docRefs: [docs/design/5-capabilities/buffer/buffer-adaptive.md, docs/design/2-assembly/load-factory-strategy.md]
+
+  - id: domain.services.hls-live
+    parent: domain.services
+    name: HLS 直播与清单节律
+    responsibility: HLS 专属的纯决策：按分片时长与目标延迟推直播缓冲策略、追帧 / 落后判定与暂停恢复（重定位 / 追赶 / 不动）、清单刷新节律（快档 / 慢档 / 停止，点播策略与录制腿驱动共用）。副作用与运行态守卫留在策略层。
+    provides: [if.services.hls-live.getHlsLiveBufferPolicy, if.services.hls-live.decideLiveEdgeLag, if.services.hls-live.hlsPlaylistRefresh]
+    dataStructures: [ds.HlsLiveBufferPolicy, ds.HlsLiveEdgeLagDecision, ds.HlsLiveResumeDecision, ds.HlsPlaylistRefreshDecision]
+    codeRefs:
+      - packages/domain/src/services/hlsLiveBufferPolicy.ts
+      - packages/domain/src/services/hlsLiveCatchupPolicy.ts
+      - packages/domain/src/services/hlsPlaylistRefresh.ts
+    docRefs: [docs/design/2-assembly/load-factory-strategy.md]
+
+  - id: domain.services.fhls-presentation
+    parent: domain.services
+    name: Fhls 呈现规则
+    responsibility: Fhls 方案的纯规则：呈现时钟（源 pts ↔ 呈现时间 ↔ 媒体原点，按渲染轴分代）、连续呈现三条看门狗判据（未渲染 / 进度停滞 / 消费间隔）、连续呈现点播组的供数预算与 seek 收敛判据、原生取片饥饿缓解。不读墙钟、无定时器，错误码留在接线层。
+    principle: |
+      - 渲染 dts = 源 dts + 代偏移 + Σ已生效丢帧偏移；内容跳变（换边 / seek）用 `spliceEpoch` 开新一代，新一代首帧接在两轨最后渲染 dts 之后，渲染轴恒单调。
+      - 供数量按呈现轴计算，避免往回 seek 时源轴算出超量。
+    provides: [if.services.fhls-presentation.presentationClock, if.services.fhls-presentation.judgePresentationHealth, if.services.fhls-presentation.decideContinuousSupply]
+    dataStructures: [ds.PresentationClockFacts, ds.ClockEpoch]
+    codeRefs:
+      - packages/domain/src/services/fhlsPresentationClock.ts
+      - packages/domain/src/services/fhlsPresentationHealth.ts
+      - packages/domain/src/services/fhlsContinuousSupply.ts
+    docRefs: [docs/design/4-solutions/fhls/fhls-solution.md]
+
+  - id: domain.services.timeshift
+    parent: domain.services
+    name: 时移换腿决策
+    responsibility: 直播时移的纯判定：直播腿接点跟踪、换腿判定（覆盖 + 关键帧对齐 + 交接余量）、灰度区回退、接管前有界预取、追不上（饥饿）判定、拖进度换腿、Fhls 切后台续播，以及录制腿与直播腿的对齐方式与时间基准常量 C 换算。无 IO / 定时器 / 全局状态；执行换腿事务的是 app.timeshift。
+    principle: |
+      - `decideLeg` 规则顺序即契约、命中即出：覆盖且对齐（余量够 → switch，不够 → wait）→ 对不齐定局 → 接点滚出 → 录制结束 → 拉取失败 → 未覆盖片数到上限 → 录制头未知 → 等下一片；连续无进展可把 wait 改判 give-up。
+      - 对齐：两侧都能解出绝对墙钟用 wall 模式，C = 直播轨在该帧墙钟处 pts − 帧原始 pts；否则 pts 模式 C = 0。录制帧一律加 C 换到直播轴。
+      - `decideGrace`：录制出错 → error-recovery；已出画 → on-screen；拉片连败 → fallback-live；续播后未出画超时 → fallback-live(no-picture)。
+    provides:
+      - if.services.timeshift.decideLeg
+      - if.services.timeshift.decideGrace
+      - if.services.timeshift.timeBaseConstant
+      - if.services.timeshift.shouldSeekSwitch
+      - if.services.timeshift.decideBackgroundResume
+    dataStructures: [ds.LegDecisionInput, ds.LegDecision, ds.GraceDecision, ds.AlignmentMode, ds.TimeBaseInput, ds.SeekSwitchSnapshot, ds.BackgroundResumeDecision]
+    codeRefs:
+      - packages/domain/src/services/timeShiftLegDecision.ts
+      - packages/domain/src/services/timeShiftAlignment.ts
+      - packages/domain/src/services/timeShiftSeekSwitchDecision.ts
+      - packages/domain/src/services/timeShiftBackgroundResume.ts
+    docRefs: [docs/design/6-features/timeshift/leg-switch.md, docs/design/6-features/timeshift/guardrail-contracts.md]
+
+  # ───────────────────────── domain.algorithms ─────────────────────────
+  - id: domain.algorithms.codec-syntax
+    parent: domain.algorithms
+    name: H.264 位流语法
+    responsibility: H.264 码流的比特级读取（ExpGolomb 缓存式整块读取、FastExpGolomb 逐字节轻量读取，ue(v)/se(v) 解码）与 SPS 解析（profile/level、尺寸含 cropping、SAR、VUI 帧率、POC 字段）。越界抛 share 的 ErrorBase。
+    provides: [if.algorithms.codec-syntax.ExpGolomb, if.algorithms.codec-syntax.parseSps]
+    codeRefs: [packages/domain/src/algorithms/bitReader/**, packages/domain/src/algorithms/h264/**]
+    docRefs: [docs/design/1-domain/stream-parse-algorithms.md]
+
+  - id: domain.algorithms.container
+    parent: domain.algorithms
+    name: 容器元数据解析
+    responsibility: AMF0 解码（FLV script data / onMetaData：时长、宽高、码率、编码 id、点播关键帧索引表），按类型标记递归下降；数据非法时上抛 DemuxFormatError，不静默返回空对象。
+    provides: [if.algorithms.container.parseScriptData]
+    dataStructures: [ds.ParseValueDataType]
+    codeRefs: [packages/domain/src/algorithms/container/**]
+    docRefs: [docs/design/1-domain/stream-parse-algorithms.md]
+
+  - id: domain.algorithms.latency-drop
+    parent: domain.algorithms
+    name: Fhls 降延迟丢帧选段
+    responsibility: 状态转移形纯函数：在合流队列上按关键帧对齐、断裂点约束选出降延迟丢帧区间，缓冲不足时取消；只给 drop/pass/hold/cancel 动作，执行丢帧与偏移记账留给调用方。
+    provides: [if.algorithms.latency-drop.pickLatencyDropRange]
+    dataStructures: [ds.LatencyDropState, ds.LatencyDropEvent, ds.LatencyDropResult]
+    codeRefs: [packages/domain/src/algorithms/fhlsLatencyDropRange.ts]
+    docRefs: [docs/design/4-solutions/fhls/fhls-solution.md]
+
+  # ───────────────────────── domain.rules ─────────────────────────
+  - id: domain.rules.pipeline-rules
+    parent: domain.rules
+    name: Pipeline 图规则
+    responsibility: Pipeline 图变更的唯一规则属地：校验 PipelineDiffSpec（节点增删、段归属、边合法性、外部锚点、多腿 G1–G7 活动腿分区、语义锚点唯一性），推导目标边并应用外部锚点；提供 NodeId / 腿段账本键的唯一拼接口。不持图实例，「当前已有边」由调用方传入。
+    principle: |
+      - `validateDiff(topology, diff, playerPhase, currentEdges)` 在拷贝上依次做 remove → add → 边校验 → 外部锚点校验 → buildTargetEdges → 活动腿分区 → 语义锚点校验，任何错误收集为 TopologyError[] 一次返回；全部通过才 applyExternalAnchors 产出最终边。
+      - 多腿模式由拓扑或本次 diff 带 activeLeg 触发；不带时保持单腿透传行为不变。
+    provides: [if.rules.pipeline-rules.validateDiff, if.rules.pipeline-rules.toNodeId]
+    codeRefs: [packages/domain/src/rules/pipelineRules.ts]
+    docRefs: [docs/design/0-kernel/pipeline-graph-rules.md, docs/design/0-kernel/pipeline-legs.md]
+
+  - id: domain.rules.status-mapping
+    parent: domain.rules
+    name: 状态映射规则
+    responsibility: 播放器基态 PlayerStatus → MU 状态 MuStatus 的穷举映射表（Loaded/Playing/Paused/Buffering → Running 等），framework 状态机同名再导出。
+    provides: [if.rules.status-mapping.mappingPlayerStatus]
+    codeRefs: [packages/domain/src/rules/mappingPlayerStatus.ts]
+    docRefs: [docs/design/1-domain/domain-model.md]
+
+relations:
+  # ── Domain.types 内部 ──
+  - { id: rel.sd.types-events-modes, from: domain.types.events, to: domain.types.modes, type: depends, description: 事件载荷引用 LoadMode / PlayMode / SolutionType }
+  - { id: rel.sd.types-events-model, from: domain.types.events, to: domain.types.model-types, type: depends, description: 叠加事件引用 Overlay }
+  - { id: rel.sd.types-model-modes, from: domain.types.model-types, to: domain.types.modes, type: depends, description: PlaybackProfile 由三元组组成 }
+  - { id: rel.sd.types-model-stream, from: domain.types.model-types, to: domain.models.stream, type: depends, payload: ds.StreamModelUnion, description: ModelViewMap.stream 槽的视图类型（类型层反向引用模型） }
+  - { id: rel.sd.types-model-play, from: domain.types.model-types, to: domain.models.play, type: depends, payload: ds.PlaybackModelUnion, description: ModelViewMap.play 槽的视图类型（类型层反向引用模型） }
+  - { id: rel.sd.types-topology-model, from: domain.types.pipeline-topology, to: domain.types.model-types, type: depends, description: 节点与边以 MuKey / MuType 表达 }
+
+  # ── Domain.ports ──
+  - { id: rel.sd.ports-events, from: domain.ports, to: domain.types.events, type: depends, payload: ds.DomainEvent, description: 发布端口与 Registry 变更方法以 DomainEvent 为载荷 }
+  - { id: rel.sd.ports-model-types, from: domain.ports, to: domain.types.model-types, type: depends, description: IModelRegistry 签名引用 ModelKind / ModelViewMap / PlaybackProfile }
+  - { id: rel.sd.ports-modes, from: domain.ports, to: domain.types.modes, type: depends, description: Registry 换槽与流事实上报引用三元组枚举 }
+  - { id: rel.sd.ports-stream, from: domain.ports, to: domain.models.stream, type: depends, payload: ds.StreamModelTimeline, description: replaceStreamModel 透传腿的时间基准 }
+
+  # ── Domain.models ──
+  - { id: rel.sd.models-base-ports, from: domain.models.base, to: domain.ports, type: depends, interface: if.ports.DomainEventPublisher, description: 聚合构造只注入 DomainEventPublisher }
+  - { id: rel.sd.ps-publish, from: domain.models.playback-state, to: domain.ports, type: event, interface: if.ports.DomainEventPublisher, payload: ds.DomainEvent, description: 叠加进出（OverlayEntered / OverlayExited）同步发布领域事件 }
+  - { id: rel.sd.stat-publish, from: domain.models.statistic, to: domain.ports, type: event, interface: if.ports.DomainEventPublisher, payload: ds.DomainEvent, description: startNewSlice 发布 StatisticSliceStarted }
+  - { id: rel.sd.ps-base, from: domain.models.playback-state, to: domain.models.base, type: depends, description: 继承 ModelBase，违例抛 InvariantError }
+  - { id: rel.sd.stat-base, from: domain.models.statistic, to: domain.models.base, type: depends, description: 继承 ModelBase，违例抛 InvariantError }
+  - { id: rel.sd.stream-base, from: domain.models.stream, to: domain.models.base, type: depends, description: 三种流模型继承 ModelBase }
+  - { id: rel.sd.play-base, from: domain.models.play, to: domain.models.base, type: depends, description: 播放模型继承 ModelBase }
+  - { id: rel.sd.comp-base, from: domain.models.components, to: domain.models.base, type: depends, description: 帧台账 / 渲染时间轴继承 ModelBase }
+  - { id: rel.sd.ps-impl, from: domain.models.playback-state, to: domain.types.model-types, type: implements, payload: ds.PlaybackStateMachineView, description: PlaybackState 实现状态机档能力面 }
+  - { id: rel.sd.stat-impl, from: domain.models.statistic, to: domain.types.model-types, type: implements, payload: ds.StatisticOwnerView, description: Statistic 结构上满足持有档能力面（ModelViewMap.statistic） }
+  - { id: rel.sd.ps-status-map, from: domain.models.playback-state, to: domain.rules.status-mapping, type: calls, interface: if.rules.status-mapping.mappingPlayerStatus, description: addMu 时按基态推 MU 状态 }
+  - { id: rel.sd.stream-comp, from: domain.models.stream, to: domain.models.components, type: depends, payload: ds.StreamFactsCore, description: 公共流事实委托给 StreamFactsCore }
+  - { id: rel.sd.stream-hls-policy, from: domain.models.stream, to: domain.services.hls-live, type: calls, interface: if.services.hls-live.getHlsLiveBufferPolicy, description: HlsModel 按清单分片时长与目标延迟推直播缓冲策略 }
+  - { id: rel.sd.stream-modes, from: domain.models.stream, to: domain.types.modes, type: depends, description: 推断 / 强制播放模式 }
+  - { id: rel.sd.stream-utils, from: domain.models.stream, to: share.utils, type: calls, interface: if.utils.lastOf, description: 取清单 / 样本末项 }
+  - { id: rel.sd.play-comp, from: domain.models.play, to: domain.models.components, type: depends, description: 组合 FrameBufferLedger / RenderTimeline / VideoPlaybackSnapshot }
+  - { id: rel.sd.play-fhls-clock, from: domain.models.play, to: domain.services.fhls-presentation, type: calls, interface: if.services.fhls-presentation.presentationClock, payload: ds.PresentationClockFacts, description: FhlsModel 的呈现时钟分代与媒体原点换算 }
+  - { id: rel.sd.play-modes, from: domain.models.play, to: domain.types.modes, type: depends, description: 播放模型视图以 SolutionType 判别；FhlsModel 持有 FhlsPresentation }
+  - { id: rel.sd.comp-utils, from: domain.models.components, to: share.utils, type: calls, interface: if.utils.lastOf, description: StreamFactsCore 取末帧 }
+  - { id: rel.sd.ps-model-types, from: domain.models.statistic, to: domain.types.model-types, type: depends, description: 观测事实类型（AdaptiveBufferFacts 等） }
+
+  # ── Domain.services ──
+  - { id: rel.sd.sel-errors, from: domain.services.solution-select, to: share.errors, type: depends, description: 冲突 / 不支持时构造 ErrorBase(ConfigError / UnsupportedError) }
+  - { id: rel.sd.sel-result, from: domain.services.solution-select, to: share.contracts, type: depends, interface: if.contracts.Result, payload: ds.Result, description: 选型与裁决结果以 Result 返回 }
+  - { id: rel.sd.sel-modes, from: domain.services.solution-select, to: domain.types.modes, type: depends, description: 输入输出均为三元组枚举 }
+  - { id: rel.sd.baseline-modes, from: domain.services.buffer-baseline, to: domain.types.modes, type: depends, description: 按 PlayMode / LoadMode 选基线 }
+  - { id: rel.sd.ts-baseline, from: domain.services.timeshift, to: domain.services.buffer-baseline, type: calls, interface: if.services.buffer-baseline.resolvePlaybackBuffer, description: 交接余量与录制停更阈值取点播档基线 }
+  - { id: rel.sd.ts-modes, from: domain.services.timeshift, to: domain.types.modes, type: depends, description: 启用条件 / 拖进度换腿按 SolutionType 判定 }
+
+  # ── Domain.algorithms ──
+  - { id: rel.sd.codec-errors, from: domain.algorithms.codec-syntax, to: share.errors, type: depends, description: 位读取越界抛 ErrorBase }
+  - { id: rel.sd.container-errors, from: domain.algorithms.container, to: share.errors, type: depends, description: AMF 数据非法抛 ErrorBase(DemuxFormatError) }
+
+  # ── Domain.rules ──
+  - { id: rel.sd.pr-topology, from: domain.rules.pipeline-rules, to: domain.types.pipeline-topology, type: depends, payload: [ds.PipelineTopology, ds.PipelineDiffSpec, ds.PipelineEdge], description: 校验与推导的输入输出形状 }
+  - { id: rel.sd.pr-model-types, from: domain.rules.pipeline-rules, to: domain.types.model-types, type: depends, description: 按 MuType 判语义锚点、按 PlayerStatus 判可删节点 }
+  - { id: rel.sd.pr-result, from: domain.rules.pipeline-rules, to: share.contracts, type: depends, interface: if.contracts.Result, payload: ds.Result, description: validateDiff 以 Result 返回目标拓扑或 TopologyError 列表 }
+  - { id: rel.sd.sm-model-types, from: domain.rules.status-mapping, to: domain.types.model-types, type: depends, description: PlayerStatus → MuStatus }
+
+interfaces:
+  # ───────── Share ─────────
+  - id: if.contracts.IPlugin
+    name: IPlugin 插件契约
+    owner: share.contracts
+    signature: |
+      interface IPlugin<TApi> {
+        readonly name: string;
+        apply(api: TApi): void;
+        destroy(): void;
+      }
+    description: 跨层最小插件契约，TApi 由宿主（framework 插件控制器）决定。
+    semantics: apply 时拿到宿主 API 完成订阅 / 注册；destroy 必须撤销 apply 中的全部副作用。
+
+  - id: if.contracts.Result
+    name: Result 构造器 ok / err
+    owner: share.contracts
+    signature: |
+      const ok: <T>(value: T) => Result<T, never>;
+      const err: <E>(error: E) => Result<never, E>;
+    description: 纯决策函数返回成功 / 失败的统一方式，调用方按 `ok` 判别字段分支，不抛异常。
+
+  - id: if.errors.ErrorBase
+    name: ErrorBase 错误基类
+    owner: share.errors
+    signature: |
+      class ErrorBase extends Error {
+        static buildVersion: string;
+        code: ErrorCode; module: string;
+        type: ErrorType; level: ErrorLevel;
+        time: number; details: ErrorDetail[];
+        constructor(code: ErrorCode, module: string, message: string);
+        toJson(): { code; message; module; level; type; time; details; buildVersion; stack };
+      }
+    description: 全系统错误的唯一基类；type 与 level 由内部 errorMap 按 code 查表得出，调用方不能自定。
+    semantics: 构造即打点 time（performance.now 优先）；level 决定错误处理链的走向（Fatal / Recoverable / Warn / Ignore）。
+
+  - id: if.errors.errorWrapper
+    name: errorWrapper 错误包装
+    owner: share.errors
+    signature: |
+      const errorWrapper: (errorBase: any, code: ErrorCode, module: string,
+                           detail?: Record<string, any>) => ErrorBase;
+    description: 把任意异常归一为 ErrorBase；已是 ErrorBase 则沿用原实例，并在 details 末尾追加一条带 code / type 的明细。
+
+  - id: if.utils.lastOf
+    name: lastOf 取倒数元素
+    owner: share.utils
+    signature: |
+      function lastOf<T>(items: ArrayLike<T>, offset = 0): T | undefined;
+    semantics: 越界返回 undefined，不做钳位。
+
+  # ───────── Domain.ports ─────────
+  - id: if.ports.DomainEventPublisher
+    name: DomainEventPublisher 领域事件发布端口
+    owner: domain.ports
+    signature: |
+      interface DomainEventPublisher {
+        publish(event: DomainEvent): void;
+      }
+    description: Model 侧唯一可见的事件出口，由 Infra 适配器实现。
+    semantics: 同步发布——publish 返回前订阅侧已收到；订阅回调的异步化与错误隔离由适配器负责，订阅者抛错不得反噬语义方法。
+
+  - id: if.ports.IModelRegistry
+    name: IModelRegistry 模型注册表端口
+    owner: domain.ports
+    signature: |
+      interface IModelRegistry {
+        getView<K extends ModelKind>(kind: K): ModelViewMap[K];
+        getPlaybackProfile(): PlaybackProfile;            // 未选型时抛
+        getPlaybackSelection(): { loadMode; playMode; solution: SolutionType | undefined };
+        replaceStreamModel(loadMode: LoadMode, playMode?: PlayMode,
+          creatorOptions?: { playMode?: PlayMode; timeline?: StreamModelTimeline }): readonly DomainEvent[];
+        changePlayMode(playMode: PlayMode): readonly DomainEvent[];
+        replacePlaybackModel(solution: SolutionType): readonly DomainEvent[];
+        watch<K extends ModelKind, P extends WatchableProp<K>>(kind: K, prop: P,
+          cb: (newValue, oldValue?) => void): Disposable;
+      }
+    description: 模型槽位的读取、换代与属性观察；由 framework 的 ModelRegistry 实现。
+    semantics: 三元组（loadMode / playMode / solution）只从当前 stream / play 槽派生，不另存副本；换槽方法返回本次产生的领域事件（LoadModeChanged / PlayModeChanged / SolutionChanged）。
+
+  - id: if.ports.StreamFactReporter
+    name: StreamFactReporter 流事实上报端口
+    owner: domain.ports
+    signature: |
+      interface StreamFactReporter {
+        reportStreamInfo(facts: StreamInfoFacts): Promise<{
+          readonly start: PlayStageStart | null;
+          readonly resumeDespiteUnload?: boolean;
+        }>;
+      }
+    description: 加载策略把流信息（加密版本、推断播放模式）报给方案协调者、换回播放段启动入口的唯一通路；由 Application（Solution）实现。
+    semantics: 代际过期时 start 为 null，调用方须静默；本次上报自己引发重选而卸载了调用方时 resumeDespiteUnload=true，调用方仍须完成启动握手。
+
+  - id: if.ports.PlayStageStart
+    name: PlayStageStart 播放段启动入口
+    owner: domain.ports
+    signature: |
+      type PlayStageStartTarget = 'Loaded' | 'Playing' | 'Buffering' | 'Paused';
+      type PlayStageStart = (target: PlayStageStartTarget,
+                             reason: 'command' | 'facts') => Promise<void>;
+      function toPlayStageStartTarget(status?: string): PlayStageStartTarget | undefined;
+      interface PlayStageHandle { load(url: string): Promise<void>; play(url: string): Promise<void>; }
+    description: 播放段启动协调者的入口与目标态；目标态一律由 stateModel.nextStatus 经 toPlayStageStartTarget 换算，四个态都要覆盖。
+
+  # ───────── Domain.models ─────────
+  - id: if.models.playback-state.PlaybackState
+    name: PlaybackState 语义方法
+    owner: domain.models.playback-state
+    signature: |
+      class PlaybackState extends ModelBase implements PlaybackStateMachineView {
+        readonly status: PlayerStatus; readonly nextStatus: PlayerStatus;
+        readonly commandGeneration: number; readonly overlays: ReadonlySet<Overlay>;
+        matches(q: { status?: PlayerStatus; overlay?: Overlay }): boolean;
+        getMuStatus(key: MuKey, phase: 'current' | 'next'): MuStatus | undefined;
+        beginTransition(target: State): void;
+        commitTransition(target: State): void;
+        endTransition(): void;
+        enterOverlay(kind: Overlay, reason?: string): void;
+        exitOverlay(kind: Overlay): void;
+        addMu(key: MuKey, alias?: MuKey): void; removeMu(key: MuKey): void;
+        realiasMu(alias: MuKey, key: MuKey): void;
+        snapshot(): PlaybackStateMemento; restore(m: PlaybackStateMemento): void;
+      }
+    semantics: 违反转移 / 叠加不变量时抛 InvariantError；enterOverlay / exitOverlay 及终态清叠加会同步发布 OverlayEntered / OverlayExited。
+
+  - id: if.models.statistic.Statistic
+    name: Statistic 采集与持有面
+    owner: domain.models.statistic
+    signature: |
+      class Statistic extends ModelBase /* ≅ StatisticOwnerView */ {
+        markFirstLoaded(atMs: number, sinceMs: number): void;   // markFirstRendered 等同形
+        reportBitrate(v: { current: number; average?: number; jitter?: number }): void;
+        countBuffering(): void; countDroppedVideo(n?: number): void;
+        countPlaybackAttempt(): void; countRestart(): void;
+        markPlaybackObservationStart(atMs: number): void;
+        reportStrategyDecision(v: { atMs; action: StrategyDecisionAction; blockedBy?; lagMs?; thresholdMs? }): void;
+        reportAdaptiveBuffer(patch: Partial<AdaptiveBufferFacts>): void;
+        startNewSlice(reason: string): void;
+        reset(): void;
+        // … 其余只读字段见 StatisticReadView
+      }
+    semantics: 时刻一律由调用方传入；非有限数 / 负数 / at < since 抛 InvariantError；startNewSlice 发布 StatisticSliceStarted。
+
+  - id: if.models.stream.StreamFacts
+    name: 流模型公共事实面
+    owner: domain.models.stream
+    signature: |
+      // FlvStreamModel / HlsModel / Mp4StreamModel 共有（委托 StreamFactsCore）
+      recordDemuxedData(audio: readonly StreamFrameFact[], video: readonly StreamFrameFact[], info?): void;
+      onArrivedMediaDts(batchMaxDts: number): void;   // 到达高水位，单调
+      applyParamSet(patch: ParamSetPatch): void;       // SPS / PPS / metadata
+      initializeTimeBases(dtsBase: number, ptsBase: number): void;
+      markEncryptionVersion(value: string): void;
+      setNextStageReady(value: boolean): void;
+      readonly dtsBase?: number; readonly arrivedMaxDts: number;
+      readonly videoFrameDuration: number; readonly gopDuration?: number;
+      readonly calculatedFps: number; readonly encryptionVersion?: string;
+      timeline: StreamModelTimeline;
+    description: 解封装 / 校正链路写入流事实、策略与插件读取流事实的公共面。
+    semantics: onArrivedMediaDts 必须在任何丢帧与时间戳修正之前调用。
+
+  - id: if.models.stream.HlsModel
+    name: HlsModel 清单与起播
+    owner: domain.models.stream
+    signature: |
+      class HlsModel extends ModelBase {
+        updatePlaylist(newPlaylist: HlsPlaylist, basePlayUrl: string): void;
+        getInitialSegmentIndex(): number;
+        getTargetLatencyMs(): number;
+        getLiveBufferPolicy(): HlsLiveBufferPolicy;
+        getInferredPlayMode(playList?: HlsPlaylist): PlayMode;
+        setForcedPlayMode(playMode: PlayMode | undefined): void;
+        seekToLiveEdge(): void;
+        segmentIndexForWall(wallMs: number): number | 'rolled-out' | undefined;
+        isContentCompleted(): boolean;
+        readonly isLive: boolean;
+      }
+    semantics: 清单片按媒体序号编址，新清单首序号 > 已知连续上界即判断档；直播只保留当前片前 30s 内的旧片。
+
+  - id: if.models.stream.Mp4StreamModel
+    name: Mp4StreamModel 字节区间
+    owner: domain.models.stream
+    signature: |
+      class Mp4StreamModel extends ModelBase {
+        recordFileSize(size: number): void;
+        recordTrackInfo(type: 'audio' | 'video', info: { trackId: number; firstPts?: number }): void;
+        getRangeByTimestamp(time: number, duration: number): [number, number] | …;
+        getNextRange(stopFillBufferDuration?: number): …;
+        onLoadStart(startByte: number, byteLength: number): void;
+        onFragmentLoadFinish(range: [number, number | string], isSuccess: boolean): void;
+        onCancelLoading(): void;
+        isLoadToEnd(): boolean;
+      }
+
+  - id: if.models.stream.WallClockTrack
+    name: WallClockTrack 墙钟映射轨
+    owner: domain.models.stream
+    signature: |
+      class WallClockTrack {   // 容量 400，FIFO
+        record(pts: number | undefined, wallMs: number | undefined): void;
+        wallAt(pts: number): number | undefined;
+        ptsAt(wallMs: number): number | undefined;
+        hasWall(wallMs: number): boolean;
+        readonly size: number;
+      }
+    semantics: 任一侧缺失或非有限值不记；查询精确命中优先，否则按查询轴最近一条外推；空轨返回 undefined。
+
+  - id: if.models.play.FrameModel
+    name: FrameModel 帧级播放事实
+    owner: domain.models.play
+    signature: |
+      class FrameModel extends ModelBase {
+        readonly frameBufferModel: FrameBufferLedger;
+        getCurrentPts(nowMs: number): number;
+        resetRenderStartTime(pts: number, nowMs: number): void;
+        setPlayRate(rate: number, nowMs: number): void;
+        setLastRenderPts(type: 'audio' | 'video', pts: number): void;
+        enterFillBuffer(source: 'load' | 'decode', nowMs: number, frozenPts?: number): void;
+        exitFillBuffer(source: 'load' | 'decode', nowMs: number, o?: { anchored?: boolean }): void;
+        configureBufferLimits(limits: FrameBufferLimits): void;
+        appendDemuxed(type: 'audio' | 'video', frames: readonly BufferFrameInfo[]): void;
+      }
+    description: Wcs / Wasm 方案的播放模型（渲染时间轴 + 帧台账）。
+
+  - id: if.models.play.MseModel
+    name: MseModel SourceBuffer 事实
+    owner: domain.models.play
+    signature: |
+      class MseModel extends ModelBase {
+        recordVideoState(state: VideoPlaybackState): void;
+        recordBufferedRanges(ranges: readonly BufferedRange[]): void;
+        recordSourceBufferAttached(type: 'audio' | 'video'): void;
+        recordSourceBufferedRanges(type, ranges): void;
+        getMediaBufferedEnd(isMin?: boolean): number;
+        isTimeInBufferedRange(time: number, currentTime?: number): boolean;
+        videoRangeCovers(timeMs: number): boolean;
+        getCurrentPts(): number; getReadyState(): number;
+      }
+    description: MSE 方案的播放模型，只存 SourceBuffer / video 的值快照，不持句柄。
+
+  - id: if.models.play.FhlsModel
+    name: FhlsModel 分片与呈现时钟
+    owner: domain.models.play
+    signature: |
+      class FhlsModel extends ModelBase {
+        readonly frameBufferModel: FrameBufferLedger;
+        readonly presentation: FhlsPresentation; readonly clock: PresentationClockFacts;
+        readonly nativeDemand: NativeDemand;
+        buildSegments(frames: readonly FrameSampleInfo[]): …;
+        appendBuffer(seqNo: number): …; consumeSegment(seqNo: number): …;
+        getSegmentInfo(seqNo: number): SegmentInfo | undefined;
+        openClockEpoch(e: { fromRenderDts: number; offsetMs: number }): void;
+        recordLatencyDrop(d: { track; fromSourceDts: number; extraMs: number }): void;
+        recordNativeDemand(d: NativeDemand): void;
+        isBufferEmpty(): boolean;
+      }
+    semantics: presentation 建段即定、会话内不变（assignPresentation 只允许一次）。
+
+  - id: if.models.play.assertPlaybackCapability
+    name: 播放模型能力断言
+    owner: domain.models.play
+    signature: |
+      function assertFrameModel(m: unknown): asserts m is FrameModel;
+      function assertMseModel(m: unknown): asserts m is MseModel;
+      function hasMseModelCapability(m: unknown): m is MseModel;
+      function assertFhlsModel(m: unknown): asserts m is FhlsModel;
+      function assertVcsPlaybackModel(m: unknown): asserts m is VcsPlaybackModelView;
+      function assertRenderTimelinePlaybackCapability(m: unknown): asserts m is …;
+      function hasFrameBufferPlaybackCapability(m: unknown): m is …;
+      // … assertHlsStreamModel / assertMp4StreamModel 同族（streamModel/types.ts）
+    description: 按能力而非按具体类收窄模型；assert* 不满足时抛 InvariantError，has* 返回 false 供换代后跳过写入。
+
+  - id: if.models.components.FrameBufferLedger
+    name: FrameBufferLedger 帧台账
+    owner: domain.models.components
+    signature: |
+      class FrameBufferLedger extends ModelBase {
+        configureBufferLimits(limits: FrameBufferLimits): void;
+        handleBufferChange(payload: BufferChange): void;
+        appendDemuxed(type: BufferMediaType, frames: readonly BufferFrameInfo[]): void;
+        beginDecoding(type): void; finishDecoding(type): void;
+        settleDecoded(type, frame: BufferFrameInfo): void;
+        getGopFrameCount(dts: number): number;
+        readonly videoDemuxedBufferDuration: number;
+        getVideoTimeRange(): TimeRange | null;
+      }
+    description: 记账 demuxed / decoding / decoded 三段帧信息与上限，供送解码节流与缓冲时长计算。
+
+  - id: if.models.components.RenderTimeline
+    name: RenderTimeline 渲染时间轴
+    owner: domain.models.components
+    signature: |
+      class RenderTimeline extends ModelBase {
+        readonly playStartTime: number; readonly playRate: number;
+        readonly firstRenderPts: number;
+        getCurrentPts(nowMs: number): number;
+        resetRenderStartTime(pts: number, nowMs: number): void;
+        setPlayRate(rate: number, nowMs: number): void;
+        enterFillBuffer(source: FillBufferSource, nowMs: number, frozenPts?: number): void;
+        exitFillBuffer(source: FillBufferSource, nowMs: number, o?: { anchored?: boolean }): void;
+      }
+    semantics: 补缓冲期间冻结播放位置；多来源（load / decode）全部退出后才解冻。
+
+  # ───────── Domain.services ─────────
+  - id: if.services.solution-select.selectSolution
+    name: selectSolution 方案选型
+    owner: domain.services.solution-select
+    signature: |
+      function selectSolution(input: SolutionSelectInput): Result<SolutionDecision, ErrorBase>;
+      function getAvailableSolutions(capabilities: SolutionCapabilities,
+        registered: readonly SolutionType[], constraints: SolutionConstraints): readonly SolutionType[];
+    semantics: 与显式配置的 playMode / solution 冲突返回 ConfigError；无可用方案返回 UnsupportedError；changes.process = loadMode 或 solution 变化。
+
+  - id: if.services.solution-select.inferSourceModes
+    name: inferSourceModes URL 推断
+    owner: domain.services.solution-select
+    signature: |
+      function inferSourceModes(url: string): { loadMode: LoadMode; playMode: PlayMode | undefined };
+    semantics: .mp4 → Mp4/Vod；.flv → Flv/Live；.m3u8 → Hls/未知（交给清单推断）；其余默认 Flv。
+
+  - id: if.services.solution-select.reconcileStreamFacts
+    name: reconcileStreamFacts 流事实裁决
+    owner: domain.services.solution-select
+    signature: |
+      function reconcileStreamFacts(input: StreamFactsReconcileInput)
+        : Result<StreamFactsReconcileOutput, ErrorBase>;
+      function isVideoIncompatibleWithStreamFacts(loadMode?: LoadMode, needsDecryption: boolean): boolean;
+    semantics: 流加密而配置 needsDecryption=false → ConfigError；当前为 Video 且 HLS / 需解密 → requiresReselect。
+
+  - id: if.services.solution-select.computeProcessRequirements
+    name: computeProcessRequirements 加工需求
+    owner: domain.services.solution-select
+    signature: |
+      function computeProcessRequirements(input: { loadMode; solution; needsDecryption: boolean;
+        configNeedsDecryption?: boolean }): ProcessRequirements;
+    semantics: 非 HLS 且非 Wasm 才需 PTS 校正；流加密或配置要求时需解密。
+
+  - id: if.services.solution-select.resolveLiveFramePlan
+    name: resolveLiveFramePlan 直播帧策略分派
+    owner: domain.services.solution-select
+    signature: |
+      function resolveLiveFramePlan(solution: SolutionType | undefined): LiveFramePlan;
+
+  - id: if.services.buffer-baseline.resolvePlaybackBuffer
+    name: resolvePlaybackBuffer 基线阈值
+    owner: domain.services.buffer-baseline
+    signature: |
+      function resolvePlaybackBuffer(playMode: PlayMode, loadMode: LoadMode,
+        configBuffer?: PlaybackBufferThresholds): Readonly<PlaybackBufferThresholds>;
+      function resolveLegPlaybackBuffer(input: { playMode; loadMode;
+        activeLeg: 'live' | 'recording'; configBuffer? }): Readonly<PlaybackBufferThresholds>;
+    semantics: 配置优先；否则点播 3000/10000、HLS 直播 500/4000、其余直播 300/1000/1300/1000；录制腿固定点播档。
+
+  - id: if.services.live-buffer-control.createSelfAdaptiveBufferController
+    name: SAB 自适应缓冲控制器
+    owner: domain.services.live-buffer-control
+    signature: |
+      function createSelfAdaptiveBufferController(host: SabHost, overrides?: Partial<SabConfig>)
+        : SelfAdaptiveBufferController;
+      interface SelfAdaptiveBufferController {
+        onStatusChange(oldStatus: string, newStatus: string): void;
+        onBufferSize(value: number): void;
+        setGapFloor(gapMs: number): void;
+        reset(): void;
+        readonly needsHandoff: boolean;
+      }
+    semantics: 通过 host.applyBuffer(thresholds, 'control' | 'gapReserve') 写回阈值；起播预缓冲与 warmup 内只观测。
+
+  - id: if.services.live-buffer-control.createSupplyAwareBufferController
+    name: 供需感知缓冲控制器
+    owner: domain.services.live-buffer-control
+    signature: |
+      function createSupplyAwareBufferController(host: SupplyAwareHost,
+        overrides?: Partial<SupplyAwareConfig>): SupplyAwareController;
+      interface SupplyAwareController {
+        onSample(s: { arrivedMs: number; bufferMs: number }): void;
+        onStatusChange(oldStatus: string, newStatus: string): void;
+        reset(): void;
+        getFacts(): SupplyAwareFacts;
+      }
+    semantics: 只在值变化时调用 host.applyBuffer / setLatencyDropAllowed；交棒只上报不执行。
+
+  - id: if.services.live-buffer-control.createCadenceSwitchBufferController
+    name: 融合缓冲控制器
+    owner: domain.services.live-buffer-control
+    signature: |
+      function createCadenceSwitchBufferController(host: CadenceSwitchHost,
+        overrides?: CadenceSwitchOverrides): CadenceSwitchController;
+      interface CadenceSwitchController {
+        onBufferSize(s: { arrivedMs: number; bufferMs: number }): void;
+        onTick(s: { arrivedMs: number; bufferMs: number }): void;
+        onStatusChange(oldStatus: string, newStatus: string): void;
+        reset(): void;
+        getFacts(): CadenceSwitchFacts;
+      }
+    semantics: 生效方切换时先写回新生效方输出，再调用 host.reportActive。
+
+  - id: if.services.live-buffer-control.createBacklogDetector
+    name: 积压检测器
+    owner: domain.services.live-buffer-control
+    signature: |
+      function createBacklogDetector(overrides?: Partial<BacklogDetectorConfig>): BacklogDetector;
+      interface BacklogDetector {
+        observe(nowMs: number, arrivedMediaMs: number, bufferMs: number): void;
+        isBacklogged(stopDropMs: number, query?: { sustainedOnly?: boolean }): boolean;
+        isSettled(): boolean;
+        maxArrivalGap(): number;
+        reset(): void;
+      }
+    semantics: 起播观察期未完成前一律不放行；换流 / 重连 / 暂停恢复后须 reset。
+
+  - id: if.services.live-buffer-control.AdaptiveBufferController
+    name: VCS 自适应缓冲控制器
+    owner: domain.services.live-buffer-control
+    signature: |
+      class AdaptiveBufferController {
+        constructor(cfg?: Partial<AdaptiveBufferConfig>);
+        tick(input: TickInput): TickResult;
+        getState(): BufferState; getDeficit(): number;
+        reset(): void;
+      }
+      function effectiveDeadbands(cfg: { deadbandGrow; deadbandShrink; aggressiveness })
+        : { k: number; grow: number; shrink: number };
+    description: VCS 送帧线控制律；effectiveDeadbands 是工作点调制死区的唯一实现，观测侧须复用它。
+
+  - id: if.services.vod-buffer.createVodAdaptiveBufferPolicy
+    name: 点播带宽 / 耗时预测
+    owner: domain.services.vod-buffer
+    signature: |
+      const createVodAdaptiveBufferPolicy: (overrides?: Partial<VodAdaptiveBufferConfig>)
+        => VodAdaptiveBufferPolicy;
+      interface VodAdaptiveBufferPolicy {
+        readonly predictedBandwidth: number; readonly encodingBitrate: number;
+        readonly predictedLoadTimeMs: number;
+        onFragmentLoaded(sample: VodFragmentLoadSample): void;
+        predictNextFragment(hint: VodNextFragmentHint): VodLoadPrediction;
+        onFragmentProgress(progress: VodFragmentProgress): boolean;
+        resetPrediction(): void; reset(): void;
+      }
+
+  - id: if.services.vod-buffer.deriveVodBufferThresholds
+    name: 点播阈值推导
+    owner: domain.services.vod-buffer
+    signature: |
+      const deriveVodBufferThresholds: (input: VodThresholdInput,
+        overrides?: Partial<VodAdaptiveBufferConfig>) => VodThresholdDecision;
+    semantics: apply 为 null 表示本次不调整（节流命中或结果未变）。
+
+  - id: if.services.vod-buffer.vodLoadWatermark
+    name: 点播加载水位滞回
+    owner: domain.services.vod-buffer
+    signature: |
+      function vodLoadWatermark(input: VodLoadWatermarkInput): { load: boolean; filling: boolean };
+
+  - id: if.services.hls-live.getHlsLiveBufferPolicy
+    name: HLS 直播缓冲策略
+    owner: domain.services.hls-live
+    signature: |
+      function getHlsLiveBufferPolicy(segmentDurationsSeconds: number[], targetLatencyMs: number)
+        : HlsLiveBufferPolicy;
+
+  - id: if.services.hls-live.decideLiveEdgeLag
+    name: HLS 追帧与暂停恢复判定
+    owner: domain.services.hls-live
+    signature: |
+      function decideLiveEdgeLag(input: { … }): HlsLiveEdgeLagDecision;
+      function decideResumeFromPaused(input: { … }): HlsLiveResumeDecision;
+      function resolveResumeCatchupThresholdMs(input: { configuredThresholdMs?: number;
+        targetLatencyMs: number }): number;
+      function shouldDropPausedBuffer(input: { … }): boolean;
+    semantics: 阈值数值与比较方向是契约；dispatch / cancelLoad 等副作用留在策略层。
+
+  - id: if.services.hls-live.hlsPlaylistRefresh
+    name: HLS 清单刷新节律
+    owner: domain.services.hls-live
+    signature: |
+      function hlsPlaylistRefresh(input: HlsPlaylistRefreshInput): HlsPlaylistRefreshDecision;
+    semantics: 带 ENDLIST → stop；有请求在飞 → in-flight；播放位置距清单尾 < 一片 → 快档 300ms，否则慢档 max(target/2, 500ms)；快档末片久未变退慢档。
+
+  - id: if.services.fhls-presentation.presentationClock
+    name: Fhls 呈现时钟换算
+    owner: domain.services.fhls-presentation
+    signature: |
+      function createInitialClockEpoch(): ClockEpoch;
+      function toPresentationMs(facts: PresentationClockFacts, sourcePts: number, …): number | undefined;
+      function toSourcePts(facts: PresentationClockFacts, presentationMs: number): number | undefined;
+      function mediaOriginAt(facts: PresentationClockFacts, presentationMs: number): number | undefined;
+      function spliceEpoch(…): ClockEpoch;
+      function epochIndexAt(facts: PresentationClockFacts, presentationMs: number): number | undefined;
+    semantics: renderZeroPts 未定时一律返回 undefined；不改入参。
+
+  - id: if.services.fhls-presentation.judgePresentationHealth
+    name: Fhls 看门狗判据
+    owner: domain.services.fhls-presentation
+    signature: |
+      function judgeNotRendering(s: NotRenderingSample): boolean;
+      function judgeProgressStalled(s: ProgressStalledSample): boolean;
+      function judgeConsumeGap(s: ConsumeGapSample): boolean;
+      function countConsumedSinceProgress(s: { consumedSinceProgress: number; paused: boolean }): number;
+
+  - id: if.services.fhls-presentation.decideContinuousSupply
+    name: Fhls 连续呈现供数
+    owner: domain.services.fhls-presentation
+    signature: |
+      function continuousSupplyBudget(startFillBufferDurationMs: number): number;
+      function decideContinuousSupply(i: { … }): …;
+      function isContinuousSeekSettled(i: { … }): boolean;
+      function decideNativeDemandRelief(i: { … }): …;
+
+  - id: if.services.timeshift.decideLeg
+    name: 换腿判定
+    owner: domain.services.timeshift
+    signature: |
+      function decideLeg(input: LegDecisionInput,
+        thresholds?: LegDecisionThresholds): LegDecision;
+      function trackKeyFrame(prev: KeyFrameTrack, keyPts: number, smoothing?: number): KeyFrameTrack;
+      function resolveAnchor(input: { … }): AnchorPoint | undefined;
+      function decidePrefetch(input: PrefetchInput, t?: PrefetchThresholds): …;
+      function shouldArm(s: ArmSnapshot, supported: ReadonlySet<SolutionType>): boolean;
+      function starvationEvent(…): …; function isStarved(…): boolean;
+    semantics: 规则顺序即契约、命中即出。
+
+  - id: if.services.timeshift.decideGrace
+    name: 灰度区判定
+    owner: domain.services.timeshift
+    signature: |
+      function decideGrace(snapshot: GraceSnapshot, thresholds?: GraceThresholds): GraceDecision;
+
+  - id: if.services.timeshift.timeBaseConstant
+    name: 对齐方式与时间基准
+    owner: domain.services.timeshift
+    signature: |
+      function selectAlignment(i: { liveHasWallClock: boolean; recordingHasWallClock: boolean }): AlignmentMode;
+      function timeBaseConstant(input: TimeBaseInput): number | undefined;
+      function toLiveAxis(recordingPts: number | undefined, c: number): number | undefined;
+      function segmentIndexForLivePts(…): number;
+      function stepPtsLocate(input: LocateStepInput): LocateStep;
+      function buildTimeShiftInfoPayload(i: { durationMs; originPts; renderOrigin }): { … };
+    semantics: 录制原始 pts + C = 直播轴 pts；pts 模式 C 恒 0。
+
+  - id: if.services.timeshift.shouldSeekSwitch
+    name: 拖进度换腿判定
+    owner: domain.services.timeshift
+    signature: |
+      function shouldSeekSwitch(s: SeekSwitchSnapshot, supported: ReadonlySet<SolutionType | string>): boolean;
+      function resolveSeekSwitchTarget(input: { … }): SeekSwitchTarget;
+      function seekSwitchReady(input: { … }): { ready: true; keyPts: number } | { ready: false };
+      function seekSwitchUnfreezeGate(solution: SolutionType | string): 'seek-end' | 'seek-issued';
+
+  - id: if.services.timeshift.decideBackgroundResume
+    name: Fhls 切后台续播判定
+    owner: domain.services.timeshift
+    signature: |
+      function decideBackgroundResume(input: BackgroundResumeInput): BackgroundResumeDecision;
+      function resumeProgressStalled(i: { startCurrentTime; currentTime; elapsedMs }): boolean;
+      function shouldRetryReinstall(i: { rendered; cachedSegments; requestedSinceRestart }): boolean;
+    semantics: 事实取不到不算成立（宁可先原生续播）；原生暂停期已饿过则直接重装。
+
+  # ───────── Domain.algorithms ─────────
+  - id: if.algorithms.codec-syntax.ExpGolomb
+    name: ExpGolomb 位读取器
+    owner: domain.algorithms.codec-syntax
+    signature: |
+      class ExpGolomb {
+        constructor(uint8array: Uint8Array);
+        readBits(bits: number): number; readBool(): boolean; readByte(): number;
+        readUEG(): number; readSEG(): number;
+        destroy(): void;
+      }
+      class FastExpGolomb { readBit(); readBits(bits: number); readUEG(); readSEG(): number; }
+    semantics: 越界或参数非法抛 ErrorBase。
+
+  - id: if.algorithms.codec-syntax.parseSps
+    name: SpsParser.parseSps
+    owner: domain.algorithms.codec-syntax
+    signature: |
+      class SpsParser {
+        static ebspToRbsp(u8: Uint8Array): Uint8Array;
+        static parseSps(u8: Uint8Array): { profileString; levelString; chromaFormat;
+          frameRate: { fixed; fps; fpsNum; fpsDen }; sarRatio; codecSize; presentSize;
+          pocType; log2MaxPicOrderCntLsb; …; unit: Uint8Array };
+      }
+
+  - id: if.algorithms.container.parseScriptData
+    name: AMF.parseScriptData
+    owner: domain.algorithms.container
+    signature: |
+      class AMF {
+        static parseScriptData(buf: ArrayBuffer, dataOffset: number, dataSize: number)
+          : Record<string, ParseValueDataType>;
+        static parseValue(buf: ArrayBuffer, dataOffset: number, dataSize: number)
+          : { data: ParseValueDataType; size: number; objectEnd?: boolean };
+      }
+    semantics: 名值对解析失败上抛 ErrorBase(DemuxFormatError)，不返回空对象。
+
+  - id: if.algorithms.latency-drop.pickLatencyDropRange
+    name: pickLatencyDropRange 丢帧选段
+    owner: domain.algorithms.latency-drop
+    signature: |
+      const LATENCY_DROP_IDLE: LatencyDropState;
+      function pickLatencyDropRange(state: LatencyDropState, event: LatencyDropEvent): LatencyDropResult;
+    semantics: drop 动作只在锁定那一步返回一次；执行丢帧后由调用方复位为 LATENCY_DROP_IDLE。
+
+  # ───────── Domain.rules ─────────
+  - id: if.rules.pipeline-rules.validateDiff
+    name: validateDiff 图变更校验
+    owner: domain.rules.pipeline-rules
+    signature: |
+      function validateDiff(topology: PipelineTopology, diff: PipelineDiffSpec,
+        playerPhase: PlayerStatus, currentEdges: readonly PipelineEdge[])
+        : Result<{ topology: PipelineTopology; edges: PipelineEdge[] }, TopologyError[]>;
+      function buildTargetEdges(…): PipelineEdge[];
+      function applyExternalAnchors(…): PipelineEdge[] | undefined;
+    semantics: 不修改入参；错误一次性收集返回；framework pipelineController 单点调用，规则与错误文案不得回流 framework。
+
+  - id: if.rules.pipeline-rules.toNodeId
+    name: NodeId / 腿段键拼接
+    owner: domain.rules.pipeline-rules
+    signature: |
+      const PRIMARY_LEG_ID: LegId;   // 'primary'
+      function toNodeId(key: MuKey, leg: LegId): NodeId;     // `${key}@${leg}`
+      function legSegmentKey(leg: LegId): SegmentKind;        // `load:${leg}`
+
+  - id: if.rules.status-mapping.mappingPlayerStatus
+    name: mappingPlayerStatus 状态映射
+    owner: domain.rules.status-mapping
+    signature: |
+      function mappingPlayerStatus(status: PlayerStatus): MuStatus;
+
+dataStructures:
+  # ───────── Share ─────────
+  - id: ds.Result
+    name: Result
+    definition: |
+      type Result<T, E> =
+        | { ok: true; value: T }
+        | { ok: false; error: E };
+    description: 跨层成功 / 失败判别联合。
+  - id: ds.ErrorCode
+    name: ErrorCode 错误码
+    definition: |
+      enum ErrorCode {
+        UnknownError, UnsupportedError, ConfigError, InvalidUrlError, UnsupportedCodecError, DemuxFormatError,
+        PullStreamTaskError, VideoDecodedTaskError, …,
+        PipelineNotWorkError, MediaPluginInsertError, CommandUnknownError, CommandNoTransitionRuleError, …,
+        MuHttpLoaderResponseError, MuDemuxerError, MuVideoDecoderError, MuMseRenderError, MuFhlsRenderError, …,
+        HlsPlaylistFetchError, HlsPlaylistRefreshError, MediaNetworkError,
+        TimeShiftResumeUnavailable, TimeShiftRevertUnavailable,
+        NetworkReconnectFailed, ReconnectConnectTimeout, ReconnectNoFrameTimeout, ReconnectStreamStalled, …
+      }
+    description: 全系统错误码（约 60 个），字符串枚举值是对外协议的一部分。
+    invariants: 每个 ErrorCode 在 errorMap 中都有唯一的 (ErrorType, ErrorLevel)。
+  - id: ds.ErrorLevel
+    name: ErrorLevel 错误级别
+    definition: |
+      enum ErrorLevel { Warn = 'Warn', Recoverable = 'Recoverable', Fatal = 'Fatal', Ignore = 'Ignore' }
+  - id: ds.ErrorType
+    name: ErrorType 错误类别
+    definition: |
+      enum ErrorType { Action, Command, Event, Hook = 'PluginHook', MuProcess, Pipeline, AsyncTask,
+        Init, Config, PullStream, Demux, Remux, Decode, Render, Other }
+  - id: ds.ErrorDetail
+    name: ErrorDetail 错误明细
+    definition: |
+      interface ErrorDetail { code: ErrorCode; type: ErrorType; [key: string]: any }
+  - id: ds.ErrorBase
+    name: ErrorBase
+    definition: |
+      class ErrorBase extends Error {
+        code: ErrorCode; module: string; type: ErrorType; level: ErrorLevel;
+        time: number; details: ErrorDetail[];
+      }
+    description: 错误对象形状；行为见 if.errors.ErrorBase。
+
+  # ───────── Domain.types ─────────
+  - id: ds.LoadMode
+    name: LoadMode 加载模式
+    definition: |
+      enum LoadMode { Mp4 = 'Mp4', Flv = 'Flv', Hls = 'Hls' }
+  - id: ds.PlayMode
+    name: PlayMode 播放模式
+    definition: |
+      enum PlayMode { Live = 'Live', Vod = 'Vod' }
+    invariants: 只有直播与点播两种；时移不是播放模式（时移期间仍为 Live）。
+  - id: ds.SolutionType
+    name: SolutionType 播放方案
+    definition: |
+      enum SolutionType { Wcs = 'Wcs', Wasm = 'Wasm', Mse = 'Mse', Fhls = 'Fhls', Vcs = 'Vcs', Video = 'Video' }
+  - id: ds.FhlsPresentation
+    name: FhlsPresentation 呈现形态
+    definition: |
+      type FhlsPresentation = 'continuous' | 'segmented';
+      function decidePresentation(entryPlayMode: PlayMode): FhlsPresentation;
+    invariants: 建段即定，直播 → continuous、点播 → segmented；换腿改 playMode 不改呈现形态。
+  - id: ds.MuKey
+    name: MuKey 媒体单元键
+    definition: |
+      enum MuKey {
+        HttpLoader, HlsHttpLoader, Mp4Loader,
+        FlvDemuxer, TsDemuxer, Mp4Demuxer,
+        Mp4Remuxer, Mp4FrameRemuxer, FhlsRemuxer = 'FhlsRemux',
+        VideoDecoder, AudioDecoder, WasmVideoDecoder, WasmAudioDecoder,
+        VideoRender, VideoFrameRender, VideoYuvRender, WorkletAudioRender, …,
+        MseRender, FhlsRender, VcsRender, VcsLowDelayRender,
+        DemuxedBuffer, ProcessedBuffer, DecodedBuffer, FhlsRemuxedBuffer, …,
+        Decryptor, VodDecryptor, NetworkLimit, PtsCorrector, NaluTypeFilter, FrameInfoCorrector,
+      }
+    description: 媒体单元身份；framework 侧是同一枚举对象的再导出。
+  - id: ds.MuType
+    name: MuType 媒体单元阶段
+    definition: |
+      enum MuType { Loader, Demuxer, Muxer, Remuxer, VideoDecoder, AudioDecoder,
+        VideoRender, AudioRender, AvRender, Buffer, Corrector, Plugin }
+    invariants: 枚举值是协议值，大小写不可改。
+  - id: ds.PlayerStatus
+    name: PlayerStatus 播放器基态
+    definition: |
+      enum PlayerStatus { Idle, Inited, Loaded, Playing, Buffering, Paused, Stopped, Destroyed, Error }
+  - id: ds.MuStatus
+    name: MuStatus MU 编制状态
+    definition: |
+      enum MuStatus { Idle, Inited, Running, Stopped }
+    description: 过渡产物（M-ARC-3 收敛）。
+  - id: ds.MuState
+    name: MuState
+    definition: |
+      interface MuState { status: MuStatus; mu: MuKey }
+  - id: ds.State
+    name: State 状态机基态结构
+    definition: |
+      interface State { status: PlayerStatus; subStates: MuState[] }
+  - id: ds.Overlay
+    name: Overlay 叠加态
+    definition: |
+      type Overlay = 'Seeking' | 'Buffering';
+      interface OverlayEntry { readonly kind: Overlay; readonly reason?: string }
+  - id: ds.PlaybackStateMemento
+    name: PlaybackStateMemento 状态快照
+    definition: |
+      interface PlaybackStateMemento {
+        readonly current: Readonly<State>;
+        readonly next: Readonly<State> | null;
+        readonly overlays: readonly OverlayEntry[];
+        readonly aliases?: readonly (readonly [MuKey, MuKey])[];   // 裸 MuKey → NodeId
+      }
+    description: PlaybackState.snapshot() 的原子快照，Pipeline 事务回滚用。
+  - id: ds.PlaybackStateReadView
+    name: PlaybackStateReadView 只读档
+    definition: |
+      interface PlaybackStateReadView {
+        readonly status: PlayerStatus; readonly nextStatus: PlayerStatus;
+        readonly commandGeneration: number;
+        readonly overlays: ReadonlySet<Overlay>;
+        matches(q: { status?: PlayerStatus; overlay?: Overlay }): boolean;
+        getMuStatus(key: MuKey, phase: 'current' | 'next'): MuStatus | undefined;
+        snapshotState(phase: 'current' | 'next'): Readonly<State>;
+      }
+  - id: ds.PlaybackStateCollectorView
+    name: PlaybackStateCollectorView 采集档
+    definition: |
+      interface PlaybackStateCollectorView extends PlaybackStateReadView {
+        enterOverlay(kind: Overlay, reason?: string): void;
+        exitOverlay(kind: Overlay): void;
+      }
+  - id: ds.PlaybackStateMachineView
+    name: PlaybackStateMachineView 状态机档
+    definition: |
+      interface PlaybackStateMachineView extends PlaybackStateCollectorView {
+        beginTransition(target: State): void;
+        commitTransition(target: State): void;
+        endTransition(): void;
+        addMu(key: MuKey, alias?: MuKey): void;
+        removeMu(key: MuKey): void;
+        realiasMu(alias: MuKey, key: MuKey): void;
+        snapshot(): PlaybackStateMemento;
+        restore(memento: PlaybackStateMemento): void;
+        reset(): void;
+      }
+    description: ModelViewMap.state 的视图，仅 framework 状态机持有。
+  - id: ds.StatisticReadView
+    name: StatisticReadView 统计只读档
+    definition: |
+      interface StatisticReadView {
+        readonly firstLoaded / firstDemuxed / firstRendered: { at: number | null; duration: number };
+        readonly bufferingCount: number; readonly droppedVideoCount: number;
+        readonly fps: { render: number; decode: number };
+        readonly bitrate / frameDelay: { current: number; average: number; jitter: number };
+        readonly systemLoadLevel: SystemLoadLevel;
+        readonly attempts / successes / failures / restarts / restartFailures: number;
+        readonly recordedFlags: StatisticRecordedFlags;
+        readonly playbackObservedMs: number; readonly hiddenMs: number;
+        readonly catchup: CatchupFacts; readonly network: NetworkFacts;
+        readonly strategyMode: StrategyMode | null;
+        readonly adaptiveBuffer: AdaptiveBufferFacts | null;
+        readonly dropFrame: DropFrameFacts | null;
+        readonly lastDecision: StrategyDecisionFacts | null;
+        // …
+      }
+  - id: ds.StatisticCollectorView
+    name: StatisticCollectorView 统计采集档
+    definition: |
+      interface StatisticCollectorView extends StatisticReadView {
+        markFirstLoaded(atMs: number, sinceMs: number): void;   // mark* 同族
+        reportBitrate(v): void; reportFrameDelay(v): void;       // report* 同族
+        countBuffering(): void; countDroppedVideo(n?: number): void;  // count* 同族
+        countPlaybackAttempt(): void; countRestart(): void;
+        markPlaybackObservationStart(atMs: number): void;
+        reportAdaptiveBuffer(patch: Partial<AdaptiveBufferFacts>): void;
+        reportStrategyDecision(v: { atMs; action; blockedBy?; lagMs?; thresholdMs? }): void;
+        // …
+      }
+  - id: ds.StatisticOwnerView
+    name: StatisticOwnerView 统计持有档
+    definition: |
+      interface StatisticOwnerView extends StatisticCollectorView {
+        startNewSlice(reason: string): void;
+        reset(): void;
+      }
+  - id: ds.ModelKind
+    name: ModelKind 模型槽
+    definition: |
+      type ModelKind = 'state' | 'runtime' | 'statistic' | 'stream' | 'play';
+  - id: ds.ModelViewMap
+    name: ModelViewMap 槽视图映射
+    definition: |
+      interface ModelViewMap {
+        state: PlaybackStateMachineView;
+        runtime: Record<string, unknown>;
+        statistic: StatisticOwnerView;
+        stream: StreamModelUnion;
+        play: PlaybackModelUnion;
+      }
+      type WatchableProp<K extends ModelKind> = /* 视图中非方法键 */;
+  - id: ds.PlaybackProfile
+    name: PlaybackProfile 方案三元组投影
+    definition: |
+      interface PlaybackProfile {
+        readonly loadMode: LoadMode;
+        readonly playMode: PlayMode;
+        readonly solution: SolutionType;
+      }
+    invariants: 只由当前 stream / play 槽派生，不单独持有状态。
+  - id: ds.SystemLoadLevel
+    name: SystemLoadLevel 系统负载档
+    definition: |
+      enum SystemLoadLevel { None = 0, Slight = 1, Medium = 2, Extreme = 3 }
+  - id: ds.StrategyMode
+    name: StrategyMode 缓冲策略档
+    definition: |
+      type StrategyMode = 'auto' | 'fixed' | 'supply';
+  - id: ds.StrategyDecisionAction
+    name: StrategyDecisionAction 策略动作
+    definition: |
+      enum StrategyDecisionAction { None = 'none', Grow = 'grow', Shrink = 'shrink', Catchup = 'catchup', Wait = 'wait' }
+  - id: ds.StrategyBlockedBy
+    name: StrategyBlockedBy 策略闸
+    definition: |
+      enum StrategyBlockedBy { Deadband = 'deadband', MinSeekInterval = 'minSeekInterval',
+        Warmup = 'warmup', Confirming = 'confirming', Flooded = 'flooded' }
+    invariants: 三条腿写同一个槽，新增取值须走契约变更。
+  - id: ds.AdaptiveBufferFacts
+    name: AdaptiveBufferFacts 自适应缓冲观测
+    definition: |
+      interface AdaptiveBufferFacts {
+        readonly currentMs: number | null; readonly valleyMs: number | null;
+        readonly thresholds: { startFillMs; stopFillMs; startDropMs; stopDropMs } | null;
+        readonly bandMs: number | null; readonly deficitMs: number | null;
+        readonly state: string | null; readonly underruns: number | null;
+        readonly workPoint: number | null;
+        readonly activeArm: 'sab' | 'supply' | null; readonly armSwitches: number | null;
+        // …
+      }
+    invariants: 每项都可能为 null（不同腿出不同子集）；四阈值一体上报。
+  - id: ds.StrategyDecisionFacts
+    name: StrategyDecisionFacts 最近一次策略决策
+    definition: |
+      interface StrategyDecisionFacts {
+        readonly at: number | null;
+        readonly action: StrategyDecisionAction | null;
+        readonly blockedBy: StrategyBlockedBy | null;
+        readonly lagMs: number | null;
+        readonly thresholdMs: number | null;
+      }
+  - id: ds.SegmentKind
+    name: SegmentKind 段类别
+    definition: |
+      type SegmentKind = 'load' | 'process' | 'play' | 'external';
+    description: 多腿时 Load 段账本键为 `load:<LegId>`（由 legSegmentKey 拼接）。
+  - id: ds.SemanticPosition
+    name: SemanticPosition 语义锚点
+    definition: |
+      type SemanticPosition = 'after-load' | 'after-decode' | 'before-render';
+  - id: ds.LegId
+    name: LegId 腿标识
+    definition: |
+      type LegId = string;   // 主腿固定 PRIMARY_LEG_ID = 'primary'
+  - id: ds.NodeId
+    name: NodeId 图内节点身份
+    definition: |
+      type NodeId = MuKey;   // Load 段节点为 `<MuKey>@<LegId>`，其余段就是 MuKey
+  - id: ds.PipelineEdge
+    name: PipelineEdge
+    definition: |
+      interface PipelineEdge { from: MuKey; to: MuKey }
+  - id: ds.PipelineTopology
+    name: PipelineTopology 拓扑快照
+    definition: |
+      interface PipelineTopology {
+        nodes: Map<MuKey, { type: MuType }>;
+        segments: Map<SegmentKind, MuKey[]>;
+        anchors: Map<MuKey, SemanticPosition>;
+        activeLeg?: LegId;   // 给出即进入多腿模式
+      }
+  - id: ds.PipelineDiffSpec
+    name: PipelineDiffSpec 图变更描述
+    definition: |
+      interface PipelineDiffSpec {
+        addNodes: { node?: { key: MuKey; type: MuType }; segment: SegmentKind; leg?: LegId }[];
+        removeNodes: MuKey[];
+        edges: PipelineEdge[];
+        externalAnchors: { key: MuKey; position: SemanticPosition }[];
+        activeLeg?: LegId;   // 改指活动腿，与换边同一事务生效
+      }
+  - id: ds.TopologyError
+    name: TopologyError 拓扑校验错误
+    definition: |
+      interface TopologyError { code: string; message: string }
+  - id: ds.DomainEvent
+    name: DomainEvent 领域事件
+    definition: |
+      type DomainEvent =
+        | { kind: 'LoadModeChanged'; previous: LoadMode; current: LoadMode }
+        | { kind: 'PlayModeChanged'; previous: PlayMode; current: PlayMode }
+        | { kind: 'SolutionChanged'; previous: SolutionType | undefined; current: SolutionType }
+        | { kind: 'OverlayEntered'; overlay: Overlay; reason?: string }
+        | { kind: 'OverlayExited'; overlay: Overlay }
+        | { kind: 'StatisticSliceStarted'; reason: string };
+
+  # ───────── Domain.ports ─────────
+  - id: ds.DomainEventPublisher
+    name: DomainEventPublisher
+    definition: |
+      interface DomainEventPublisher { publish(event: DomainEvent): void }
+    description: 端口类型；语义见 if.ports.DomainEventPublisher。
+  - id: ds.IModelRegistry
+    name: IModelRegistry
+    definition: |
+      interface IModelRegistry {
+        getView<K extends ModelKind>(kind: K): ModelViewMap[K];
+        getPlaybackProfile(): PlaybackProfile;
+        replaceStreamModel(loadMode, playMode?, creatorOptions?): readonly DomainEvent[];
+        changePlayMode(playMode: PlayMode): readonly DomainEvent[];
+        replacePlaybackModel(solution: SolutionType): readonly DomainEvent[];
+        watch(kind, prop, callback): Disposable;
+        // …
+      }
+    description: 端口类型；语义见 if.ports.IModelRegistry。
+  - id: ds.Disposable
+    name: Disposable
+    definition: |
+      type Disposable = () => void;
+  - id: ds.StreamInfoFacts
+    name: StreamInfoFacts 流信息事实
+    definition: |
+      interface StreamInfoFacts {
+        readonly encryptionVersion?: string;
+        readonly inferredPlayMode?: PlayMode;
+      }
+  - id: ds.StreamFactReporter
+    name: StreamFactReporter
+    definition: |
+      interface StreamFactReporter {
+        reportStreamInfo(facts: StreamInfoFacts):
+          Promise<{ readonly start: PlayStageStart | null; readonly resumeDespiteUnload?: boolean }>;
+      }
+    description: 端口类型；语义见 if.ports.StreamFactReporter。
+  - id: ds.PlayStageStart
+    name: PlayStageStart
+    definition: |
+      type PlayStageStartTarget = 'Loaded' | 'Playing' | 'Buffering' | 'Paused';
+      type PlayStageStartReason = 'command' | 'facts';
+      type PlayStageStart = (target: PlayStageStartTarget, reason: PlayStageStartReason) => Promise<void>;
+  - id: ds.PlayStageHandle
+    name: PlayStageHandle
+    definition: |
+      interface PlayStageHandle { load(url: string): Promise<void>; play(url: string): Promise<void> }
+
+  # ───────── Domain.models ─────────
+  - id: ds.ModelBase
+    name: ModelBase 聚合基类
+    definition: |
+      abstract class ModelBase {
+        protected constructor(protected readonly publisher: DomainEventPublisher);
+        abstract reset(): void;
+        dispose(): void;   // 默认空实现，幂等
+      }
+  - id: ds.InvariantError
+    name: InvariantError 不变量违例
+    definition: |
+      class InvariantError extends Error { name: 'InvariantError' }
+    description: 语义方法入参违反聚合不变量时抛出，Fatal 前置拦截。
+  - id: ds.PlaybackState
+    name: PlaybackState
+    definition: |
+      class PlaybackState extends ModelBase implements PlaybackStateMachineView {
+        private _current: State; private _next: State | null;
+        private _overlays: OverlayEntry[]; private _commandGeneration: number;
+        private _aliasIndex: Map<MuKey, MuKey>;
+      }
+    invariants: |
+      1. 同时至多一个待决转移（next）；2. commit / end 必须有 next；3. 叠加只在 Loaded/Playing/Paused/Buffering 上开；
+      4. 同 kind 叠加不可重入；5. Seeking 中不可进 Buffering；6. 转入 Stopped/Destroyed/Error 自动清空叠加。
+  - id: ds.Statistic
+    name: Statistic
+    definition: |
+      class Statistic extends ModelBase /* ≅ StatisticOwnerView */ {
+        // 组 A：播放结局累计（跨切片保留）；组 B：计数族（随观测窗口清零）；组 C：瞬时值
+        // 弱网观测：观察时长 / 不可见时长 / 追帧 / 拉流 / 策略档 / 自适应缓冲 / 丢帧 / 最近决策
+      }
+    invariants: 时刻须为有限数且 at ≥ since；计数为非负有限数；「未记录」与「记录为 0」由 recordedFlags 区分。
+  - id: ds.StreamModel
+    name: StreamModel
+    definition: |
+      type StreamModel = FlvStreamModel | HlsModel | Mp4StreamModel;
+  - id: ds.StreamModelViewBase
+    name: StreamModelViewBase 流模型视图公共面
+    definition: |
+      interface StreamModelViewBase {
+        readonly loadMode: LoadMode;      // Registry 合成
+        readonly playMode: PlayMode;      // Registry 合成，slot 层恒有值
+        readonly isNextStageReady: boolean;
+        readonly arrivedMaxDts: number;   // 单调只增
+        reset(): void; destroy(): void;
+      }
+  - id: ds.StreamModelUnion
+    name: StreamModelUnion 流模型视图联合
+    definition: |
+      type Mp4StreamModelView = Mp4StreamModel & StreamModelViewBase & { loadMode: LoadMode.Mp4 };
+      type FlvStreamModelView = FlvStreamModel & StreamModelViewBase & { loadMode: LoadMode.Flv };
+      type HlsStreamModelView = HlsModel & StreamModelViewBase & { loadMode: LoadMode.Hls };
+      type StreamModelUnion = Mp4StreamModelView | FlvStreamModelView | HlsStreamModelView;
+    description: ModelViewMap.stream 槽的类型，按 loadMode 判别。
+  - id: ds.StreamModelTimeline
+    name: StreamModelTimeline 腿时间基准
+    definition: |
+      interface StreamModelTimeline {
+        readonly axis: 'playlist' | 'source';
+        readonly offset: number;        // 常量 C，source 轴时由 DemuxedBuffer 段尾统一加到 pts/dts
+        readonly originPts?: number;    // 清单轴原点的直播轴 pts
+      }
+    invariants: "缺省为 { axis: playlist, offset: 0 }。"
+  - id: ds.FlvStreamModel
+    name: FlvStreamModel
+    definition: |
+      class FlvStreamModel extends ModelBase {
+        timeline: StreamModelTimeline;
+        // 公共流事实面（见 if.models.stream.StreamFacts）+ 直播 pts↔墙钟轨（WallClockTrack）
+      }
+  - id: ds.HlsModel
+    name: HlsModel
+    definition: |
+      class HlsModel extends ModelBase {
+        timeline: StreamModelTimeline;
+        // 公共流事实面 + 清单（HlsPlaylist）、媒体序号原点、已知连续上界、
+        // 当前片游标、目标延迟、强制播放模式、DATERANGE 墙钟表
+      }
+  - id: ds.Mp4StreamModel
+    name: Mp4StreamModel
+    definition: |
+      class Mp4StreamModel extends ModelBase {
+        timeline: StreamModelTimeline;
+        readonly mp4ByteRange: { start: number; end: number };
+        // 公共流事实面 + 文件大小、轨道信息、已加载字节区间、在途加载
+      }
+  - id: ds.HlsPlaylist
+    name: HlsPlaylist HLS 清单
+    definition: |
+      interface HlsPlaylist {
+        version: number; targetDuration: number; mediaSequence: number;
+        segments: HlsSegment[]; endList: boolean; lastUpdated: number;
+        dateRanges?: Array<Record<string, unknown>>;
+        playlistType: PlayListType; discontinuityStarts: number[]; url: string;
+        serverControl?: HlsServerControl;
+      }
+  - id: ds.HlsSegment
+    name: HlsSegment HLS 分片
+    definition: |
+      interface HlsSegment {
+        duration: number; uri: string; url: string; timeline: number; start: number;
+        durationStart: number; durationEnd: number; isLoaded?: boolean;
+        discontinuity?: true; discontinuityGroupId: number;
+      }
+  - id: ds.WallClockTrack
+    name: WallClockTrack
+    definition: |
+      class WallClockTrack {   // Map<pts, wallMs>，容量 WALL_CLOCK_TRACK_CAPACITY = 400，FIFO
+        record(pts?: number, wallMs?: number): void;
+        wallAt(pts: number): number | undefined;
+        ptsAt(wallMs: number): number | undefined;
+      }
+  - id: ds.PlaybackModel
+    name: PlaybackModel
+    definition: |
+      type PlaybackModel = FrameModel | MseModel | FhlsModel | VideoPlayModel;   // VCS 由 Player 持有
+  - id: ds.PlaybackModelInstance
+    name: PlaybackModelInstance 播放槽存储契约
+    definition: |
+      interface PlaybackModelInstance { readonly bufferSize: number; reset(): void; destroy(): void }
+  - id: ds.PlaybackModelViewBase
+    name: PlaybackModelViewBase 播放模型视图公共面
+    definition: |
+      interface PlaybackModelViewBase {
+        readonly solution: SolutionType;   // Registry 合成
+        readonly bufferSize: number;
+        getCurrentPts(): number;
+        reset(): void; destroy(): void;
+      }
+  - id: ds.VcsPlaybackModelView
+    name: VcsPlaybackModelView
+    definition: |
+      interface VcsPlaybackModelView extends PlaybackModelViewBase {
+        readonly solution: SolutionType.Vcs;
+        readonly renderDtsAxis: number; readonly hasVideoError: boolean; readonly frameCount: number;
+        recordCost(type: 'load' | 'play' | 'seek', cost: number): void;
+        updateLatestRelativeDemuxedDts(dts: number): void;
+        onDestory(): void;
+      }
+    description: VCS 播放模型由 Player（Infra）实现，Domain 只定义视图契约。
+  - id: ds.PlaybackModelUnion
+    name: PlaybackModelUnion 播放模型视图联合
+    definition: |
+      type PlaybackModelUnion =
+        | FramePlaybackModelView   // FrameModel, solution: Wasm | Wcs
+        | MsePlaybackModelView     // MseModel, solution: Mse
+        | FhlsPlaybackModelView    // FhlsModel, solution: Fhls
+        | VcsPlaybackModelView     // solution: Vcs
+        | VideoPlaybackModelView;  // VideoPlayModel, solution: Video
+    description: ModelViewMap.play 槽的类型，按 solution 判别。
+  - id: ds.FrameModel
+    name: FrameModel
+    definition: |
+      class FrameModel extends ModelBase {
+        readonly frameBufferModel: FrameBufferLedger;
+        private timeline: RenderTimeline;
+        bufferSize: number;
+      }
+  - id: ds.MseModel
+    name: MseModel
+    definition: |
+      class MseModel extends ModelBase {
+        readonly videoPlayback: VideoPlaybackSnapshot;
+        readonly frameBufferModel: FrameBufferLedger;
+        // 媒体原点、最新音视频 pts、buffered 区间、SourceBuffer 挂载 / updating / 区间、暂停期丢 append 标记
+      }
+  - id: ds.FhlsModel
+    name: FhlsModel
+    definition: |
+      class FhlsModel extends ModelBase {
+        readonly videoPlayback: VideoPlaybackSnapshot;
+        readonly frameBufferModel: FrameBufferLedger;
+        presentation: FhlsPresentation; clock: PresentationClockFacts;
+        nativeDemand: NativeDemand; streamId: string; clientId?: string;
+        // 分片表（SegmentInfo，2s/片）、消费游标、硬 seek 起点、解复用 / 重封装进度
+      }
+  - id: ds.VideoPlayModel
+    name: VideoPlayModel
+    definition: |
+      class VideoPlayModel extends ModelBase {
+        private videoPlayback: VideoPlaybackSnapshot;
+        getCurrentPts(): number; getReadyState(): number; getVideoBufferEnd(): number;
+        recordVideoState(state: VideoPlaybackState): void;
+      }
+  - id: ds.NativeDemand
+    name: NativeDemand 原生取片需求
+    definition: |
+      interface NativeDemand {
+        readonly pending: number; readonly pendingSince: number | undefined;
+        readonly lastRequestAt: number | undefined; readonly starvedWhilePaused: number;
+        readonly requestedSinceRestart: boolean; readonly cachedSegments: number;
+      }
+    description: Safari 原生经 SW 取片的需求事实；时刻字段均为 performance.now 单调钟。
+  - id: ds.SegmentInfo
+    name: SegmentInfo Fhls 分片
+    definition: |
+      interface SegmentInfo {
+        seqNo: number; beginDts: number; beginPts: number; duration: number;
+        frameInfos: Array<{ pts: number; dts: number; frameType: unknown }>;
+      }
+  - id: ds.StreamFactsCore
+    name: StreamFactsCore
+    definition: |
+      class StreamFactsCore {
+        dtsBase?: number; videoPtsBase?: number; audioPtsBase?: number;
+        maxDts: number; arrivedMaxDts: number;
+        hasBframe: boolean; gopDuration?: number; keyFrameCts?: number; calculatedFps: number;
+        videoFrameDuration: number; audioFrameDuration: number;
+        sps: any; pps: any; videoMetadata?: VideoMetadataFact; audioMetadata: unknown;
+        videoSampleInfos: StreamSampleFact[]; audioSampleInfos: StreamSampleFact[];
+        isNextStageReady: boolean; encryptionVersion?: string;
+      }
+    invariants: arrivedMaxDts 会话内单调只增（复位点清零），必须在丢帧 / 时间戳修正前上报。
+  - id: ds.StreamFrameFact
+    name: StreamFrameFact
+    definition: |
+      interface StreamFrameFact {
+        readonly pts: number; readonly dts?: number; readonly frameType?: string | number;
+        readonly index?: number; readonly isKeyframe?: boolean; readonly offset?: number; readonly size?: number;
+      }
+  - id: ds.StreamSampleFact
+    name: StreamSampleFact
+    definition: |
+      interface StreamSampleFact extends StreamFrameFact {
+        readonly dts: number; readonly index: number; readonly isKeyframe: boolean;
+        readonly offset: number; readonly size: number;
+      }
+  - id: ds.VideoMetadataFact
+    name: VideoMetadataFact
+    definition: |
+      type VideoMetadataFact = { readonly spsppsHash?: string; readonly [key: string]: any };
+  - id: ds.FrameBufferLedger
+    name: FrameBufferLedger
+    definition: |
+      class FrameBufferLedger extends ModelBase {
+        demuxedAudioInfos / demuxedVideoInfos: readonly BufferFrameInfo[];
+        decodedAudioInfos / decodedVideoInfos: readonly BufferFrameInfo[];
+        audioDecodingCount / videoDecodingCount: number;
+        limits: FrameBufferLimits; gopLedger: GopLedger;
+      }
+  - id: ds.BufferFrameInfo
+    name: BufferFrameInfo 台账帧信息
+    definition: |
+      interface BufferFrameInfo {
+        readonly pts: number; readonly dts?: number; readonly frameType?: any;
+        readonly generationTime?: number; readonly nalRefIdc?: number;
+      }
+  - id: ds.FrameBufferLimits
+    name: FrameBufferLimits 帧台账上限
+    definition: |
+      interface FrameBufferLimits {
+        readonly maxAudioDecodingAndDecodedPacketCount: number;
+        readonly maxVideoDecodingAndDecodedPacketCount: number;
+        readonly maxAudioDecodedFrameCount: number;
+        readonly maxVideoDecodedFrameCount: number;
+        readonly batchSendDecodeCount: number;
+      }
+  - id: ds.BufferChange
+    name: BufferChange 缓冲变更
+    definition: |
+      interface BufferChange {
+        readonly mediaType: 'audio' | 'video'; readonly bufferMu: string;
+        readonly actionType: string; readonly frameInfos?: readonly BufferFrameInfo[];
+      }
+  - id: ds.RenderTimeline
+    name: RenderTimeline
+    definition: |
+      class RenderTimeline extends ModelBase {
+        playStartTime: number; playRate: number; firstRenderPts: number;
+        lastAudioRenderPts: number; lastVideoRenderPts: number;
+        disableSendRender: boolean; fillBufferSources: Set<'load' | 'decode'>;
+      }
+  - id: ds.VideoPlaybackSnapshot
+    name: VideoPlaybackSnapshot
+    definition: |
+      class VideoPlaybackSnapshot {
+        getCurrentPts(): number; getReadyState(): number; getVideoBufferEnd(): number;
+        getPaused(): boolean; getEnded(): boolean;
+        recordVideoState(state: VideoPlaybackState): void;
+      }
+    description: video 元素状态的值快照；DOM 句柄由渲染适配层持有。
+  - id: ds.VideoPlaybackState
+    name: VideoPlaybackState
+    definition: |
+      interface VideoPlaybackState {
+        readonly currentPts: number; readonly readyState: number; readonly videoBufferEnd: number;
+        readonly paused?: boolean; readonly ended?: boolean;
+      }
+
+  # ───────── Domain.services ─────────
+  - id: ds.SolutionSelectInput
+    name: SolutionSelectInput 选型输入
+    definition: |
+      interface SolutionSelectInput {
+        url?: string;
+        config: { playMode?: PlayMode; solution?: SolutionType; needsDecryption?: boolean;
+                  solutionPriority?: readonly SolutionType[] };
+        request?: { playMode?: PlayMode; solution?: SolutionType };
+        current: { loadMode?: LoadMode; playMode?: PlayMode; solution?: SolutionType; needsDecryption?: boolean };
+        capabilities: SolutionCapabilities;
+        registered: readonly SolutionType[];
+      }
+  - id: ds.SolutionDecision
+    name: SolutionDecision 选型结论
+    definition: |
+      interface SolutionDecision {
+        loadMode: LoadMode; playMode: PlayMode; solution: SolutionType;
+        changes: { loadMode: boolean; playMode: boolean; solution: boolean; process: boolean };
+      }
+  - id: ds.SolutionCapabilities
+    name: SolutionCapabilities 环境能力
+    definition: |
+      type SolutionCapabilities = Readonly<Partial<Record<SolutionType, boolean>>>;
+    invariants: 以枚举值为键，不得改为命名布尔字段（属性混淆会改名）。
+  - id: ds.SourceModeInference
+    name: SourceModeInference URL 推断结果
+    definition: |
+      interface SourceModeInference { loadMode: LoadMode; playMode: PlayMode | undefined }
+  - id: ds.StreamFactsReconcileInput
+    name: StreamFactsReconcileInput
+    definition: |
+      interface StreamFactsReconcileInput {
+        current: { loadMode: LoadMode; playMode: PlayMode; solution: SolutionType; needsDecryption: boolean };
+        facts: { encryptionVersion?: string; inferredPlayMode?: PlayMode };
+        config: { needsDecryption?: boolean; playMode?: PlayMode; solution?: SolutionType };
+      }
+  - id: ds.StreamFactsReconcileOutput
+    name: StreamFactsReconcileOutput
+    definition: |
+      interface StreamFactsReconcileOutput {
+        needsDecryption: boolean; processChange: boolean; requiresReselect: boolean;
+      }
+  - id: ds.ProcessRequirements
+    name: ProcessRequirements Process 段需求
+    definition: |
+      interface ProcessRequirements { needsCorrectPts: boolean; needsDecryption: boolean }
+  - id: ds.LiveFramePlan
+    name: LiveFramePlan 直播帧策略计划
+    definition: |
+      interface LiveFramePlan {
+        readonly sendDecode: LiveFrameSendDecodeKind;   // Wcs | Wasm
+        readonly dropVideo: LiveFrameDropVideoKind;     // WasmLatency | Generic
+        readonly sendDecodeOnDecodedInput: boolean;
+      }
+  - id: ds.PlaybackBufferThresholds
+    name: PlaybackBufferThresholds 四阈值（只读）
+    definition: |
+      interface PlaybackBufferThresholds {
+        readonly startFillBufferDuration: number; readonly stopFillBufferDuration: number;
+        readonly startDropFrameDuration: number;  readonly stopDropFrameDuration: number;
+      }
+  - id: ds.BufferThresholds
+    name: BufferThresholds 四阈值（控制律写回）
+    definition: |
+      interface BufferThresholds {
+        startFillBufferDuration: number; stopFillBufferDuration: number;
+        startDropFrameDuration: number;  stopDropFrameDuration: number;
+      }
+  - id: ds.SabHost
+    name: SabHost SAB 宿主接口
+    definition: |
+      interface SabHost {
+        now(): number;
+        getBaseBuffer(): BufferThresholds;
+        applyBuffer(t: BufferThresholds, source: 'control' | 'gapReserve'): void;
+        reportHandoff(on: boolean): void;
+      }
+    description: 由宿主插件（app.plugins）实现并注入控制律。
+  - id: ds.SupplyAwareHost
+    name: SupplyAwareHost 供需感知宿主接口
+    definition: |
+      interface SupplyAwareHost {
+        now(): number;
+        getInitialThresholds(): BufferThresholds;
+        applyBuffer(t: BufferThresholds): void;
+        setLatencyDropAllowed(allowed: boolean): void;
+        reportHandoff(on: boolean): void;
+      }
+      interface CadenceSwitchHost extends SupplyAwareHost {
+        reportActive(arm: 'sab' | 'supply', switchCount: number): void;
+      }
+  - id: ds.SupplyAwareFacts
+    name: SupplyAwareFacts 供需感知观测
+    definition: |
+      interface SupplyAwareFacts {
+        state: 'Startup' | 'Stable' | 'Volatile' | 'Underload' | 'Outage' | 'Recovering';
+        supplyFast: number | null; supplyMed: number | null;
+        drawdownMs: number; reserveMs: number; resumeMs: number;
+        latencyDropAllowed: boolean; handoff: boolean;
+        cadenceMs: number | null; outageThresholdMs: number;
+        // …
+      }
+  - id: ds.CadenceSwitchFacts
+    name: CadenceSwitchFacts 融合控制观测
+    definition: |
+      interface CadenceSwitchFacts {
+        active: 'sab' | 'supply'; switchCount: number;
+        idleGapCount: number; chunkSeen: boolean; lastIdleEvidenceAt: number | null;
+        supply: SupplyAwareFacts;
+        sabOut: ArmOutput; supplyOut: ArmOutput;   // { thresholds; latencyDropAllowed; handoff }
+      }
+  - id: ds.TickInput
+    name: TickInput VCS 控制器输入
+    definition: |
+      interface TickInput { now: number; frontierDts: number; oldestDemuxedDts: number; latestDemuxedDts: number }
+  - id: ds.TickResult
+    name: TickResult VCS 控制器输出
+    definition: |
+      interface TickResult {
+        frontierDts: number; state: BufferState; lead: number; jumpMs: number; deficit: number;
+        valleyLeadMean: number; valleyLeadMin: number;
+        growJumps: number; shrinkJumps: number; underruns: number; flooded: boolean;
+      }
+  - id: ds.VodBufferThresholds
+    name: VodBufferThresholds 点播阈值
+    definition: |
+      interface VodBufferThresholds { startFillBufferDuration: number; stopFillBufferDuration: number }
+    invariants: 点播侧只动这两个阈值。
+  - id: ds.VodThresholdDecision
+    name: VodThresholdDecision 点播阈值决策
+    definition: |
+      interface VodThresholdDecision {
+        apply: VodBufferThresholds | null;
+        reason: 'throttled' | 'unchanged' | 'derived' | 'baseline-fallback';
+      }
+  - id: ds.HlsLiveBufferPolicy
+    name: HlsLiveBufferPolicy
+    definition: |
+      interface HlsLiveBufferPolicy {
+        startFillBufferDuration: number; stopFillBufferDuration: number;
+        startDropFrameDuration: number; stopDropFrameDuration: number;
+        pauseBufferLimit: number;
+      }
+  - id: ds.HlsLiveEdgeLagDecision
+    name: HlsLiveEdgeLagDecision
+    definition: |
+      interface HlsLiveEdgeLagDecision { lagMs: number; catchupThresholdMs: number; jumpToLiveEdge: boolean }
+  - id: ds.HlsLiveResumeDecision
+    name: HlsLiveResumeDecision
+    definition: |
+      type HlsLiveResumeDecision =
+        | { kind: 'relocate'; reason: 'pausedBufferDropped' | 'longPause' }
+        | { kind: 'chase'; skipMs: number }
+        | { kind: 'none'; reason: 'skipNotFinite' | 'skipBelowMin' };
+  - id: ds.HlsPlaylistRefreshDecision
+    name: HlsPlaylistRefreshDecision
+    definition: |
+      type HlsPlaylistRefreshDecision =
+        | { kind: 'stop' }
+        | { kind: 'in-flight' }
+        | { kind: 'schedule'; tier: 'fast' | 'slow'; delayMs: number };
+  - id: ds.PresentationClockFacts
+    name: PresentationClockFacts Fhls 呈现时钟
+    definition: |
+      interface PresentationClockFacts {
+        readonly renderZeroPts: number | undefined;
+        readonly epochs: readonly ClockEpoch[];
+      }
+    invariants: 渲染轴恒单调；未定 renderZeroPts 时所有换算返回 undefined。
+  - id: ds.ClockEpoch
+    name: ClockEpoch 呈现时钟代
+    definition: |
+      interface ClockEpoch {
+        readonly fromRenderDts: number;   // 第 0 代为 -Infinity
+        readonly offsetMs: number;
+        readonly videoDrops: readonly { fromSourceDts: number; extraMs: number }[];
+        readonly audioDrops: readonly { fromSourceDts: number; extraMs: number }[];
+      }
+  - id: ds.LegDecisionInput
+    name: LegDecisionInput 换腿判定输入
+    definition: |
+      interface LegDecisionInput {
+        inSession: boolean; switched: boolean; givenUp: boolean;
+        anchor: AnchorPoint | undefined;
+        recordHead: number | undefined; recordStart?: number;
+        recordKeyframePts: ReadonlyArray<number>; frameDurationMs: number;
+        windowStart: number | undefined; recordEnded?: boolean; anchorRolledOut?: boolean;
+        fetchFailures: number; uncoveredTries?: number;
+        timeBaseFinal?: boolean; recordStalledMs?: number;
+      }
+  - id: ds.LegDecision
+    name: LegDecision 换腿判定结论
+    definition: |
+      type LegDecision =
+        | { kind: 'idle' } | { kind: 'supplying' } | { kind: 'live-keeps-supplying' }
+        | { kind: 'wait'; reason: 'no-anchor' | 'anchor-estimated' | 'lead-insufficient'
+                               | 'record-head-not-ready' | 'next-segment' }
+        | { kind: 'switch'; cutPts: number }
+        | { kind: 'give-up'; reason: 'rolled-out' | 'record-ended' | 'fetch-failed' | 'not-catching-up';
+            detail?: 'keyframe-misaligned'; alignment?: AlignmentDiagnostics; cause?: 'record-stalled' };
+  - id: ds.GraceDecision
+    name: GraceDecision 灰度区结论
+    definition: |
+      type GraceDecision =
+        | { kind: 'hold' } | { kind: 'on-screen' }
+        | { kind: 'fallback-live'; cause: 'no-picture' | 'fetch-failed' }
+        | { kind: 'error-recovery' };
+  - id: ds.AlignmentMode
+    name: AlignmentMode 对齐方式
+    definition: |
+      type AlignmentMode = 'pts' | 'wall';
+  - id: ds.TimeBaseInput
+    name: TimeBaseInput 时间基准输入
+    definition: |
+      type TimeBaseInput =
+        | { mode: 'pts' }
+        | { mode: 'wall'; liveTrack: { ptsAt(wallMs: number): number | undefined };
+            frameWallMs: number; framePts: number };
+  - id: ds.SeekSwitchSnapshot
+    name: SeekSwitchSnapshot 拖进度换腿快照
+    definition: |
+      interface SeekSwitchSnapshot {
+        timeShiftUrl: string | undefined;   // 已登记的时移录制地址
+        activeLegIsPrimary: boolean;
+        loadMode: LoadMode | string;
+        playMode: PlayMode | string;
+        solution: SolutionType | string;
+      }
+  - id: ds.BackgroundResumeDecision
+    name: BackgroundResumeDecision 切后台续播结论
+    definition: |
+      type BackgroundResumeDecision =
+        | { kind: 'not-applicable' }
+        | { kind: 'native' }
+        | { kind: 'reinstall'; reason: 'buffer-evicted' | 'native-starved' | 'pause-point-evicted' };
+
+  # ───────── Domain.algorithms ─────────
+  - id: ds.ParseValueDataType
+    name: ParseValueDataType AMF 值
+    definition: |
+      type ParseValueDataType =
+        | undefined | number | Date | boolean | null | string
+        | ParseValueDataType[]
+        | { [k: string]: ParseValueDataType }
+        | { data: ParseValueDataType; size: number; objectEnd?: boolean };
+  - id: ds.LatencyDropState
+    name: LatencyDropState 丢帧选段状态
+    definition: |
+      interface LatencyDropState {
+        readonly durationMs: number;          // 0 = 无任务
+        readonly startDts: number | undefined;
+        readonly endDts: number | undefined;
+        readonly locked: boolean;             // 已锁定待调用方执行
+      }
+  - id: ds.LatencyDropEvent
+    name: LatencyDropEvent 丢帧选段事件
+    definition: |
+      type LatencyDropEvent =
+        | { kind: 'begin'; durationMs: number; gopDurationMs: number | undefined } & LatencyDropQueueFacts
+        | { kind: 'videoCombined'; frame: LatencyDropFrame } & LatencyDropQueueFacts
+        | { kind: 'send'; frameDts: number; videoBufferMs: number | undefined };
+  - id: ds.LatencyDropResult
+    name: LatencyDropResult 丢帧选段结果
+    definition: |
+      interface LatencyDropResult {
+        readonly state: LatencyDropState;
+        readonly action: { kind: 'none' } | { kind: 'drop'; startDts: number; endDts: number }
+                       | { kind: 'pass' } | { kind: 'hold' } | { kind: 'cancel' };
+      }

@@ -7,8 +7,10 @@
  * - 一端在 P 外部：外部端点提升为「最近公共祖先下、它那一侧的子模块」作为边界节点。
  * 同一 (from, to, type) 的关系合并成一条边。
  */
+import { RELATION_TYPES } from './types'
 import type {
   Band,
+  RelationType,
   ModelIndex,
   ProjectOptions,
   RelationEntity,
@@ -51,9 +53,9 @@ export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectO
     return visible(r.from) && visible(r.to)
   })
 
-  const edges = new EdgeCollector()
+  const edges = new EdgeCollector(!layered && !!opts.mergeTypes)
   const boundaryOrder: string[] = []
-  const coreEdges = new EdgeCollector()
+  const coreEdges = new EdgeCollector(false)
   const coreOf = new Map<string, Set<string>>()
   if (layered) for (const l of children) coreOf.set(l, new Set(visibleChildren(l).filter(c => index.modules.get(c)!.core)))
 
@@ -120,31 +122,42 @@ function coreRep(path: string[], depth: number, coreOf: Map<string, Set<string>>
 }
 
 class EdgeCollector {
-  private map = new Map<string, ViewEdge & { allExact: boolean; modes: Set<string> }>()
+  private map = new Map<string, ViewEdge & { allExact: boolean; modes: Set<string>; counts: Map<RelationType, number> }>()
+
+  constructor(private readonly mergeTypes: boolean) {}
 
   add(from: string, to: string, r: RelationEntity, exact: boolean) {
-    const id = edgeId(from, to, r.type)
+    const id = edgeId(from, to, this.mergeTypes ? undefined : r.type)
     let e = this.map.get(id)
     if (!e) {
-      e = { id, kind: 'direct', from, to, type: r.type, relationIds: [], mode: 'sync', allExact: true, modes: new Set() }
+      e = { id, kind: 'direct', from, to, type: r.type, types: [], relationIds: [], mode: 'sync', allExact: true, modes: new Set(), counts: new Map() }
       this.map.set(id, e)
     }
     e.relationIds.push(r.id)
     e.allExact &&= exact
     e.modes.add(r.mode ?? 'sync')
+    e.counts.set(r.type, (e.counts.get(r.type) ?? 0) + 1)
   }
 
   result(): ViewEdge[] {
-    return [...this.map.values()].map(({ allExact, modes, ...e }) => ({
-      ...e,
-      kind: allExact && e.relationIds.length === 1 ? 'direct' : 'aggregate',
-      mode: modes.size > 1 ? 'mixed' : ([...modes][0] as 'sync' | 'async'),
-    }))
+    return [...this.map.values()].map(({ allExact, modes, counts, ...e }) => {
+      const types = [...counts]
+        .map(([type, count]) => ({ type, count }))
+        .sort((a, b) => b.count - a.count || RELATION_TYPES.indexOf(a.type) - RELATION_TYPES.indexOf(b.type))
+      return {
+        ...e,
+        type: types[0].type,
+        types,
+        kind: allExact && e.relationIds.length === 1 ? 'direct' : 'aggregate',
+        mode: modes.size > 1 ? 'mixed' : ([...modes][0] as 'sync' | 'async'),
+      }
+    })
   }
 }
 
-export function edgeId(from: string, to: string, type: string): string {
-  return `${from}->${to}:${type}`
+/** 视图边 ID；不给 type 表示合并了类型 */
+export function edgeId(from: string, to: string, type?: string): string {
+  return type ? `${from}->${to}:${type}` : `${from}->${to}`
 }
 
 /** currentOnly 时，status: target 的模块及其后代不可见 */

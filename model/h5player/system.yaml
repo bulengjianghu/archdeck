@@ -1,0 +1,10 @@
+system:
+  id: h5player
+  name: H5Player
+  description: |
+    Web 端音视频播放器 SDK。支持 FLV / MP4 / HLS 等流，按方案（WCS / Wasm / MSE / FHLS / VCS / Video）完成加载、解析、解码、缓冲与渲染。
+    按「决策内收、副作用外置、契约驱动装配」分为 Infrastructure / Application / Domain / Share 四层（见 docs/arch/blueprint.md）。
+  source:
+    repo: h5player
+    commit: d7f408607a639e1ff800b7b35c5c173971c2dd65
+    generatedAt: '2026-10-19'

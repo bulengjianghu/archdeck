@@ -6,7 +6,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { MarkerType, VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import { useDesk } from '@/state/inject'
-import { contentBounds, edgeLabel, moreChipId, type Box } from '@/layout/layout'
+import { contentBounds, edgeLabel, isBoundaryEdge, moreChipId, type Box } from '@/layout/layout'
 import type { ViewEdge } from '@/model'
 import ModuleNode from './nodes/ModuleNode.vue'
 import BoundaryNode from './nodes/BoundaryNode.vue'
@@ -24,7 +24,10 @@ const { setViewport, zoomIn, zoomOut, dimensions } = useVueFlow('arch-desk')
 const focusId = computed(() => {
   if (desk.hoverId.value) return desk.hoverId.value
   const s = desk.selection.value
-  return s?.kind === 'module' ? s.id : null
+  if (s?.kind !== 'module') return null
+  // 选中的外部模块在本视图里以边界节点出现
+  const pv = desk.positioned.value
+  return pv && !pv.nodes.has(s.id) && pv.nodes.has(`boundary:${s.id}`) ? `boundary:${s.id}` : s.id
 })
 
 const selectedEdgeIds = computed(() => {
@@ -130,7 +133,10 @@ const edges = computed<Edge<RouteEdgeData>[]>(() => {
       },
     }
   }
-  const list = pv.view.edges.map(e => make(e, pv.edges.get(e.id), false))
+  // 边界边默认隐藏：只在聚焦（悬停 / 选中）其任一端或被选中时出现，避免外部关系淹没内部结构
+  const list = pv.view.edges
+    .filter(e => !isBoundaryEdge(e) || selectedEdgeIds.value.has(e.id) || (!!f && (e.from === f || e.to === f)))
+    .map(e => make(e, pv.edges.get(e.id), false))
   if (layered) list.push(...visibleCoreEdges.value.map(e => make(e, pv.coreEdges.get(e.id), true)))
   return list.filter((e): e is Edge<RouteEdgeData> => e !== null)
 })

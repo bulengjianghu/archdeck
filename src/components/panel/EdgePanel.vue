@@ -28,7 +28,7 @@ const endId = (nodeId: string) => (nodeId.startsWith('boundary:') ? nodeId.slice
         <button class="link" @click="desk.select({ kind: 'module', id: endId(edge.to) })">{{ endName(edge.to) }}</button>
       </h2>
       <div class="badges">
-        <span class="rel-chip" :class="`rel-${edge.type}`">{{ edge.type }}</span>
+        <span v-for="t in edge.types" :key="t.type" class="rel-chip" :class="`rel-${t.type}`">{{ t.type }}{{ edge.types.length > 1 ? ` ×${t.count}` : '' }}</span>
         <span class="badge">{{ edge.kind === 'aggregate' ? '聚合边' : '直接边' }}</span>
         <span v-if="edge.mode !== 'sync'" class="badge">{{ edge.mode === 'async' ? '异步' : '同步 + 异步' }}</span>
       </div>

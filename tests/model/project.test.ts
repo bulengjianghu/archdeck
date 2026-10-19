@@ -122,6 +122,29 @@ describe('projectLevel · 过滤与汇总', () => {
     expect(edge.mode).toBe('mixed')
   })
 
+  it('mergeTypes：普通层次同一对模块的不同类型合并为一条边，类型取条数最多者；分层总览不合并', () => {
+    const { index: idx } = loadModel(sampleFiles({
+      'z.yaml': [
+        'relations:',
+        '  - { id: x1, from: infra.framework.sm, to: infra.mus, type: calls }',
+        '  - { id: x2, from: infra.framework.sm, to: infra.mus, type: event }',
+      ].join('\n'),
+    }))
+    const view = projectLevel(idx, 'infra', { showBoundaries: true, mergeTypes: true })
+    const e = view.edges.find(x => x.from === 'infra.framework' && x.to === 'infra.mus')!
+    expect(e.id).toBe('infra.framework->infra.mus')
+    expect(e.relationIds).toEqual(['r4', 'x1', 'x2'])
+    expect(e.type).toBe('calls')
+    expect(e.types).toEqual([
+      { type: 'calls', count: 1 },
+      { type: 'dataflow', count: 1 },
+      { type: 'event', count: 1 },
+    ])
+    expect(view.edges.filter(x => x.from === 'infra.framework' && x.to === 'infra.mus')).toHaveLength(1)
+    const root = projectLevel(idx, 'sys', { showBoundaries: true, mergeTypes: true })
+    expect(root.edges.some(x => x.id === 'infra->app:calls')).toBe(true)
+  })
+
   it('单条关系、两端恰好是本层模块时才是直接边', () => {
     const view = projectLevel(index, 'app')
     expect(edgeSummary(view.edges)).toEqual([

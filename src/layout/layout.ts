@@ -157,8 +157,18 @@ export function sizeOf(n: ViewNode): { w: number; h: number } {
   return n.role === 'boundary' ? NODE_SIZE.boundary : NODE_SIZE.module
 }
 
+/** 合并了多种类型的边只标条数，颜色表示主要类型；单一类型标类型名 */
 export function edgeLabel(e: ViewEdge): string {
-  return e.relationIds.length > 1 ? `${e.type} ×${e.relationIds.length}` : e.type
+  const n = e.relationIds.length
+  if (e.types.length > 1) return `×${n}`
+  return n > 1 ? `${e.type} ×${n}` : e.type
+}
+
+const isBoundary = (id: string) => id.startsWith('boundary:')
+
+/** 内部边（两端都不是边界节点）交给 elk；边界边另行绘制 */
+export function isBoundaryEdge(e: ViewEdge): boolean {
+  return isBoundary(e.from) || isBoundary(e.to)
 }
 
 export function toElkGraph(view: LevelView): ElkNode {
@@ -177,8 +187,8 @@ export function toElkGraph(view: LevelView): ElkNode {
       'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
       'elk.edgeLabels.inline': 'true',
     },
-    children: view.nodes.map(n => ({ id: n.id, width: sizeOf(n).w, height: sizeOf(n).h })),
-    edges: view.edges.map<ElkExtendedEdge>(e => {
+    children: view.nodes.filter(n => n.role !== 'boundary').map(n => ({ id: n.id, width: sizeOf(n).w, height: sizeOf(n).h })),
+    edges: view.edges.filter(e => !isBoundaryEdge(e)).map<ElkExtendedEdge>(e => {
       const text = edgeLabel(e)
       return {
         id: e.id,
@@ -203,7 +213,51 @@ export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
       label: lbl && lbl.x !== undefined ? { x: lbl.x + (lbl.width ?? 0) / 2, y: (lbl.y ?? 0) + (lbl.height ?? 0) / 2 } : undefined,
     })
   }
+  placeBoundaries(view, nodes, edges)
   return { view, nodes, edges, coreEdges: new Map() }
+}
+
+export const BOUNDARY_ROW_GAP = 96
+
+/**
+ * 边界节点统一放在内部结构下方一行，按「连接的内部模块的平均横坐标」排序以减少交叉；
+ * 边界边画成从内部模块到边界节点的曲线（默认隐藏，聚焦时显示）。
+ */
+export function placeBoundaries(view: LevelView, nodes: Map<string, Box>, edges: Map<string, EdgeRoute>) {
+  const boundaries = view.nodes.filter(n => n.role === 'boundary')
+  if (boundaries.length === 0) return
+  const inner = [...nodes.values()]
+  const minX = inner.length ? Math.min(...inner.map(b => b.x)) : 0
+  const maxX = inner.length ? Math.max(...inner.map(b => b.x + b.w)) : 0
+  const bottom = inner.length ? Math.max(...inner.map(b => b.y + b.h)) : 0
+  const anchorX = (id: string) => {
+    const xs = view.edges
+      .filter(e => (e.from === id || e.to === id) && isBoundaryEdge(e))
+      .map(e => nodes.get(e.from === id ? e.to : e.from))
+      .filter((b): b is Box => !!b)
+      .map(b => b.x + b.w / 2)
+    return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : (minX + maxX) / 2
+  }
+  const sorted = [...boundaries].sort((a, b) => anchorX(a.id) - anchorX(b.id))
+  const { w, h } = NODE_SIZE.boundary
+  const gap = 20
+  const rowW = sorted.length * w + (sorted.length - 1) * gap
+  let x = (minX + maxX) / 2 - rowW / 2
+  const y = bottom + BOUNDARY_ROW_GAP
+  for (const n of sorted) {
+    nodes.set(n.id, { x, y, w, h })
+    x += w + gap
+  }
+  for (const e of view.edges) {
+    if (!isBoundaryEdge(e)) continue
+    const a = nodes.get(e.from)
+    const b = nodes.get(e.to)
+    if (!a || !b) continue
+    const down = a.y < b.y
+    const p1 = { x: a.x + a.w / 2, y: down ? a.y + a.h : a.y }
+    const p2 = { x: b.x + b.w / 2, y: down ? b.y : b.y + b.h }
+    edges.set(e.id, { points: [p1, p2], curve: true, label: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } })
+  }
 }
 
 let elkPromise: Promise<ELK> | undefined
@@ -238,6 +292,7 @@ export async function layoutView(view: LevelView): Promise<PositionedView> {
   let result: PositionedView
   if (view.mode === 'layered') result = layoutLayered(view)
   else if (view.nodes.length === 0) result = { view, nodes: new Map(), edges: new Map(), coreEdges: new Map() }
+  else if (!view.nodes.some(n => n.role !== 'boundary')) result = fromElkGraph(view, { id: 'root', children: [], edges: [] })
   else result = fromElkGraph(view, await (await getElk()).layout(toElkGraph(view)))
   if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value!)
   cache.set(key, result)

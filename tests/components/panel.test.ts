@@ -61,7 +61,7 @@ describe('属性面板', () => {
   })
 
   it('选中聚合边：列出原始关系，点击跳到关系所在层次', async () => {
-    const { wrapper, desk } = await mountPanel('/?level=infra&sel=e:infra.framework->infra.mus:dataflow')
+    const { wrapper, desk } = await mountPanel('/?level=infra&sel=e:infra.framework->infra.mus')
     expect(wrapper.text()).toContain('聚合边')
     expect(wrapper.text()).toContain('Pipeline → MUs')
     await wrapper.find('.rel-row .link').trigger('click')

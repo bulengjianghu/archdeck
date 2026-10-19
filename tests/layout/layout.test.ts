@@ -93,3 +93,18 @@ describe('layoutView', () => {
     expect(cacheKey(full)).not.toBe(cacheKey(noBoundary))
   })
 })
+
+describe('边界节点', () => {
+  it('普通层次：边界节点排在内部结构下方一行，边界边为曲线', async () => {
+    const view = projectLevel(index, 'infra', { showBoundaries: true, mergeTypes: true })
+    const pv = await layoutView(view)
+    const inner = view.nodes.filter(n => n.role !== 'boundary').map(n => pv.nodes.get(n.id)!)
+    const bottom = Math.max(...inner.map(b => b.y + b.h))
+    const boundaries = view.nodes.filter(n => n.role === 'boundary').map(n => pv.nodes.get(n.id)!)
+    expect(boundaries.length).toBe(2)
+    for (const b of boundaries) expect(b.y).toBeGreaterThan(bottom)
+    expect(new Set(boundaries.map(b => b.y)).size).toBe(1)
+    const e = view.edges.find(x => x.to === 'boundary:app')!
+    expect(pv.edges.get(e.id)!.curve).toBe(true)
+  })
+})

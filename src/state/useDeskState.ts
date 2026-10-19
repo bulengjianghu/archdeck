@@ -72,6 +72,7 @@ export function createDeskState(fetchModel: FetchModel) {
       return projectLevel(index.value, levelId.value, {
         showBoundaries: toggles.showBoundaries,
         currentOnly: toggles.currentOnly,
+        mergeTypes: true,
         relationTypes: toggles.relationTypes.length === RELATION_TYPES.length ? undefined : toggles.relationTypes,
       })
     } catch {

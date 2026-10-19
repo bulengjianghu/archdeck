@@ -86,7 +86,7 @@ flowchart TB
 | **Validator** | 模型 | 跨文件检查：ID 唯一、引用存在、祖先与后代之间不连边 | `Issue { severity, file, path, line, code, message }` | `validate(model) → { model, issues }`：error 级问题的实体被剔除，warning 级只去掉坏引用 |
 | **Indexer** | 模型 | 建立查询结构，让后续按 ID 查询都是 O(1) | `ModelIndex { byId, parentOf, childrenOf, ancestorsOf, relationsOf }` | `buildIndex(model) → ModelIndex` |
 | **Projector** | 模型 | 给定一个层次，算出这一层的节点、直接边、聚合边、边界节点；子模块都是层时，额外算出分层总览 | `LevelView { mode: graph\|layered, parent, nodes, edges, boundaries, bands? }`；`Edge { kind: direct\|aggregate, from, to, type, relationIds[] }`；`Band { layerId, order, abstraction, mayDependOn, coreModules[], hiddenCount }` | `projectLevel(index, levelId, opts) → LevelView` |
-| **Layout** | 视图状态 | 给 `LevelView` 的节点算坐标。`graph` 模式用 elkjs（在 Worker 中运行）；`layered` 模式按层序分带排布，带内核心模块横向排开，不调用 elk。结果按层次缓存 | `PositionedView { view, positions }` | `layout(view) → Promise<PositionedView>` |
+| **Layout** | 视图状态 | 给 `LevelView` 的节点算坐标。`graph` 模式用 elkjs（在 Worker 中运行）只排内部模块与内部边，边界节点排在下方一行、边界边画成曲线（聚焦时才显示）；`layered` 模式按层序分带排布，带内核心模块横向排开，不调用 elk。结果按层次缓存 | `PositionedView { view, positions }` | `layout(view) → Promise<PositionedView>` |
 | **DeskState** | 视图状态 | 持有当前层次、选中对象、显示开关；与 URL 同步；对外提供唯一的一组操作 | `DeskState { levelPath[], selection, toggles, issues }` | `drillInto(id)` `goTo(levelId)` `select(ref)` `clearSelection()` `reload()` |
 | **GraphCanvas** | 呈现 | 把 `PositionedView` 画成节点和边；`layered` 模式下层画成分组节点（带），核心模块作为带的子节点；处理平移、缩放、单击、双击、悬停 | Vue Flow 的节点（含父子分组）和边 | 发出 `select` / `drill` / `hover` 意图给 DeskState |
 | **Panel** | 呈现 | 按选中对象的类型显示属性：模块、关系、聚合边，或无选中时显示当前父模块 | — | 只读 DeskState + ModelIndex |
@@ -123,7 +123,8 @@ flowchart TB
    - A、B 都存在且 A ≠ B：如果 a、b 本身就是 A、B，画**直接边**；否则并入 `A → B` 的**聚合边**（按方向和类型分组，记录原始关系 ID）。
    - A = B：属于更深层次，不画。
    - 一端在外部：生成**边界节点**，边连到边界节点（受开关控制）。
-3. 输出 `LevelView`。
+3. 同一对节点之间的关系合并成一条边：分层总览按 (from, to, type) 分开；普通层次按 (from, to) 合并，记录各类型条数（`mergeTypes`）。
+4. 输出 `LevelView`。
 
 **分层总览**：如果 P 的直接子模块全部是 `kind: layer`，则 `mode = layered`，并且额外处理以下几点：
 

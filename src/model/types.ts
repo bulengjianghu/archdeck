@@ -183,12 +183,15 @@ export interface ViewNode {
 export type ViewEdgeKind = 'direct' | 'aggregate'
 
 export interface ViewEdge {
-  /** `<from>-><to>:<type>`，同一视图内唯一且在重新加载后保持不变 */
+  /** `<from>-><to>:<type>`（按类型分开）或 `<from>-><to>`（合并类型），同一视图内唯一且在重新加载后保持不变 */
   id: string
   kind: ViewEdgeKind
   from: string
   to: string
+  /** 合并类型时为条数最多的类型 */
   type: RelationType
+  /** 各类型条数，按条数降序 */
+  types: { type: RelationType; count: number }[]
   relationIds: string[]
   /** 原始关系的同步/异步汇总：全同步、全异步，或混合 */
   mode: 'sync' | 'async' | 'mixed'
@@ -218,4 +221,6 @@ export interface ProjectOptions {
   relationTypes?: readonly RelationType[]
   /** true 时隐藏 status: target 的模块及其关系 */
   currentOnly?: boolean
+  /** 普通层次中同一对模块之间的关系合并成一条边，不按类型分开（分层总览不受影响） */
+  mergeTypes?: boolean
 }
