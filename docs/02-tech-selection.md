@@ -18,7 +18,7 @@
 |---|---|---|---|
 | 框架 | Vue 3（`<script setup>` + TS） | `vue@^3.5` | — |
 | 构建 | Vite | `vite@^6` | — |
-| 图画布 | **Vue Flow**（`@vue-flow/core`） | `^1.4x` | AntV X6、AntV G6 v5、Cytoscape.js |
+| 图画布 | **Vue Flow**（`@vue-flow/core`） | `^1.48` | AntV X6、AntV G6 v5、Cytoscape.js |
 | 自动布局 | **elkjs**（layered 算法） | `^0.11` | dagre（`@dagrejs/dagre`） |
 | 时序图（二期） | **自研 SVG 组件** | — | Mermaid（仅作导出） |
 | 路由 / 深链接 | vue-router | `^4.6` | — |
@@ -27,7 +27,7 @@
 | 结构校验 | JSON Schema + ajv | `ajv@^8`、`ajv-formats@^3` | zod |
 | 类型定义 | 手写 TS 类型，与 Schema 并排维护 | — | json-schema-to-typescript（模型字段少，生成步骤不划算） |
 | Markdown | markdown-it | `^14` | marked |
-| 代码高亮 | Shiki（按需加载 ts 语法） | `^1` | highlight.js |
+| 代码高亮 | Shiki（按需加载 ts 语法） | `^3` | highlight.js |
 | 分栏 | 自写 CSS Grid + 拖动条 | — | splitpanes |
 | 单元测试 | Vitest + @vue/test-utils + jsdom | 与 auto_test 一致 | — |
 | E2E（后续） | Playwright | 与 auto_test 一致 | — |
