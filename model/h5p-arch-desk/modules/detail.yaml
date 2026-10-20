@@ -15,12 +15,12 @@ modules:
   - id: present.canvas.nodes
     name: 节点组件
     parent: present.canvas
-    responsibility: 五种节点：模块（职责摘要、可下钻标识、目标态虚线）、边界（外部模块与所在路径）、带（层名、抽象原则、可依赖层）、核心模块小块、「+N 个其他模块」占位。
+    responsibility: 五种节点：模块（职责摘要、可下钻标识、目标态虚线）、边界（外部模块与所在路径）、带（层名、抽象原则、可依赖层）、核心模块小块、「+N 个其他模块」占位；设计版本中新增 / 修改描边与「△N」变更角标。
     codeRefs: [src/components/nodes/**]
   - id: present.canvas.edges
     name: 边组件
     parent: present.canvas
-    responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线；颜色按关系类型，线宽随聚合条数增加，异步为点划线。
+    responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线；颜色按关系类型，线宽随聚合条数增加，异步为点划线；设计版本中含新增 / 修改关系的边加变更底色。
     codeRefs: [src/components/edges/**]
 
   - id: present.panel.dispatch
@@ -48,6 +48,11 @@ modules:
     parent: present.panel
     responsibility: 系统简介、生成来源（仓库 / 提交 / 时间）、规模统计与顶层模块列表。
     codeRefs: [src/components/panel/SystemPanel.vue]
+  - id: present.panel.design
+    name: 设计面板
+    parent: present.panel
+    responsibility: 设计版本根层：设计目标与范围、本轮做了什么、待评审确认的问题、按实体分组的变更清单（点击跳转，删除项只列出）、各轮评审意见与轮次切换。
+    codeRefs: [src/components/panel/DesignSection.vue]
   - id: present.panel.content
     name: 内容组件
     parent: present.panel
@@ -60,6 +65,8 @@ modules:
       - src/components/panel/DataStructureItem.vue
       - src/components/panel/RelationRow.vue
       - src/components/panel/Section.vue
+      - src/components/panel/ChangeBadge.vue
+      - src/components/panel/DesignNote.vue
 
   - id: present.nav.breadcrumb
     name: 面包屑
@@ -83,6 +90,11 @@ modules:
     parent: state.desk
     responsibility: 取回项目描述并调用 loadModel；首次加载以 URL 决定层次与选中，重新加载时保留层次与选中，层次已不存在则退到最近的仍存在的上级。
     codeRefs: [src/state/useDeskState.ts]
+  - id: state.desk.versions
+    name: 版本与对比基线
+    parent: state.desk
+    responsibility: 设计版本下持有设计信息与本轮、对比基线（当前版本 / 上一轮）的索引；派生差异与基线漂移（起草时的基线提交与当前版本不一致）。
+    codeRefs: [src/state/useDeskState.ts]
   - id: state.desk.projection
     name: 视图派生
     parent: state.desk
@@ -99,7 +111,7 @@ modules:
     responsibility: 层次与选中写进 hash 路由的查询参数（下钻进历史，选中不进历史）；外部的后退 / 前进 / 改地址回写到状态。
     principle: |
       路由导航是异步的：自己发起的导航完成前，路由变化一律视为回声、不回写状态，避免双击（两次选中 + 一次下钻）时旧地址覆盖新层次；
-      离开本项目路由时也不回写。
+      离开本项目或本版本的路由时也不回写。
     codeRefs: [src/state/useDeskState.ts]
 
   - id: state.layout.layered
@@ -185,6 +197,10 @@ relations:
   - { id: rel.ad.relation-content, from: present.panel.relation, to: present.panel.content, type: depends }
   - { id: rel.ad.edge-content, from: present.panel.edge, to: present.panel.content, type: depends }
   - { id: rel.ad.system-content, from: present.panel.system, to: present.panel.content, type: depends }
+  - { id: rel.ad.system-design, from: present.panel.system, to: present.panel.design, type: depends, description: 设计版本根层先显示设计面板 }
+  - { id: rel.ad.design-content, from: present.panel.design, to: present.panel.content, type: depends }
+  - { id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: depends }
+  - { id: rel.ad.version-shell, from: present.version, to: present.shell, type: calls, description: 切换版本即导航到对应路由，带上当前 level / sel }
 
   # 呈现 → 接入（HTTP 与变更通知；event 方向为订阅方 → 发布方）
   - id: rel.ad.list-fetch
@@ -221,6 +237,11 @@ relations:
   - { id: rel.ad.crumb-act, from: present.nav.breadcrumb, to: state.desk.actions, type: calls, interface: if.desk.actions }
   - { id: rel.ad.toolbar-act, from: present.nav.toolbar, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 搜索结果 → revealModule；显示开关写入 toggles }
   - { id: rel.ad.issues-read, from: present.issues, to: state.desk.loading, type: depends, payload: [ds.Issue] }
+  - { id: rel.ad.version-read, from: present.version, to: state.desk.versions, type: depends, payload: [ds.DesignInfo, ds.ModelDiff], description: 设计、轮次、对比基线、变更计数；对比基线与标出变更写入 toggles }
+  - { id: rel.ad.flow-diff, from: present.canvas.flow, to: state.desk.versions, type: depends, payload: [ds.ModelDiff], description: 节点与边的变更标记 }
+  - { id: rel.ad.design-read, from: present.panel.design, to: state.desk.versions, type: depends, payload: [ds.DesignInfo, ds.ModelDiff] }
+  - { id: rel.ad.design-act, from: present.panel.design, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 变更清单点击 → revealModule / revealRelation }
+  - { id: rel.ad.content-diff, from: present.panel.content, to: state.desk.versions, type: depends, payload: [ds.ModelDiff], description: 新增 / 修改标记与改了哪些字段 }
 
   # 呈现 → 模型（只用类型与少量纯函数）
   - { id: rel.ad.list-types, from: present.project-list, to: model.types, type: depends, payload: [ds.ProjectSummary] }
@@ -229,6 +250,9 @@ relations:
 
   # 视图状态内部与 → 模型
   - { id: rel.ad.loading-entry, from: state.desk.loading, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, payload: [ds.ModelIndex, ds.Issue] }
+  - { id: rel.ad.loading-baselines, from: state.desk.loading, to: state.desk.versions, type: dataflow, payload: [ds.ModelPayload], description: 设计版本的载荷附带设计信息与对比基线原文 }
+  - { id: rel.ad.versions-entry, from: state.desk.versions, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 对比基线同样走 loadModel }
+  - { id: rel.ad.versions-diff, from: state.desk.versions, to: model.diff, type: calls, interface: if.model.diffModels, payload: [ds.ModelDiff], description: 切换对比基线或重新加载时重算 }
   - { id: rel.ad.loading-keep, from: state.desk.loading, to: state.desk.actions, type: calls, description: 重新加载后按旧路径恢复层次与选中 }
   - { id: rel.ad.url-actions, from: state.desk.url-sync, to: state.desk.actions, type: calls, description: 外部路由变化回写层次与选中 }
   - { id: rel.ad.actions-url, from: state.desk.actions, to: state.desk.url-sync, type: calls, description: 下钻进历史，选中替换当前地址 }
@@ -258,7 +282,7 @@ relations:
   - { id: rel.ad.lint-reader, from: access.lint, to: access.reader, type: calls, interface: if.reader.projects }
   - { id: rel.ad.lint-entry, from: access.lint, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, payload: [ds.Issue] }
   - { id: rel.ad.reader-entry, from: access.reader, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 生成项目摘要时跑一遍模型层 }
-  - { id: rel.ad.reader-types, from: access.reader, to: model.types, type: depends, payload: [ds.RawFile, ds.ProjectSummary] }
+  - { id: rel.ad.reader-types, from: access.reader, to: model.types, type: depends, payload: [ds.RawFile, ds.ProjectSummary, ds.DesignInfo] }
 
   # 模型层内部
   - { id: rel.ad.entry-loader, from: model.pipeline.entry, to: model.pipeline.loader, type: calls, interface: if.model.load }
@@ -271,6 +295,7 @@ relations:
   - { id: rel.ad.overview-endpoints, from: model.projector.overview, to: model.projector.endpoints, type: calls }
   - { id: rel.ad.endpoints-collector, from: model.projector.endpoints, to: model.projector.collector, type: calls }
   - { id: rel.ad.overview-collector, from: model.projector.overview, to: model.projector.collector, type: calls, description: 核心跨层边单独汇总 }
+  - { id: rel.ad.diff-index, from: model.diff, to: model.pipeline.indexer, type: depends, payload: [ds.ModelIndex], description: 按 ID 对齐两份索引，用路径计入祖先 }
   - { id: rel.ad.projector-types, from: model.projector, to: model.types, type: depends, payload: [ds.LevelView, ds.ViewEdge, ds.Band] }
 
 interfaces:
@@ -305,6 +330,12 @@ interfaces:
     signature: |
       projectLevel(index: ModelIndex, parentId: string, opts?: ProjectOptions): LevelView
     semantics: 层次不存在或被「只看现状」隐藏时抛错；同样的输入得到同样的输出（边 ID 稳定）。
+  - id: if.model.diffModels
+    name: diffModels
+    owner: model.diff
+    signature: |
+      diffModels(base: ModelIndex, target: ModelIndex): ModelDiff
+    semantics: 纯函数；变更按实体类别（模块、关系、接口、数据结构）与变更类别（新增、修改、删除）排序。
   - id: if.layout.layoutView
     name: layoutView
     owner: state.layout.runner
@@ -320,10 +351,11 @@ interfaces:
     name: createDeskState
     owner: state.desk
     signature: |
-      createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: string }): DeskState
-      // DeskState: { status, index, issues, levelId, levelPath, selection, hoverId, toggles, view, positioned, … ,
+      createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: string; version?: VersionRef }): DeskState
+      // DeskState: { status, index, issues, levelId, levelPath, selection, hoverId, toggles, view, positioned,
+      //              designs, design, revision, baselines, baseline, diff, baseDrift, … ,
       //              init(), reload(), attachRouter(router), …操作 }
-    semantics: 每个项目一份；在组件 setup 中创建，其 watch 随组件销毁。
+    semantics: 每个项目的每个版本一份；在组件 setup 中创建，其 watch 随组件销毁。
   - id: if.desk.actions
     name: DeskState 操作
     owner: state.desk.actions
@@ -340,7 +372,8 @@ interfaces:
     owner: access.model-source
     signature: |
       GET projects.json            → ProjectSummary[]
-      GET models/<项目>.json       → ModelPayload        // 不存在时 404
+      GET models/<项目>.json       → ModelPayload        // 当前版本；不存在时 404
+      GET models/<项目>/designs/<设计>/<轮次>.json → ModelPayload  // 设计版本某一轮，附 compare 对比基线
       ws  arch-model:changed       → { project: string }  // 仅开发态，按项目合并 150ms 内的变化
     semantics: 开发态实时读取；构建态为同名静态文件，页面无需区分。
   - id: if.reader.projects
@@ -350,7 +383,9 @@ interfaces:
       listProjectIds(modelRoot: string): string[]
       readProject(modelRoot: string, id: string, projectRoot: string): ModelPayload | null
       listProjects(modelRoot: string, projectRoot: string): ProjectSummary[]
-    semantics: 含 system.yaml 的子目录才算项目；项目 ID 只允许目录名安全字符。
+      listDesigns(projectDir: string): DesignInfo[]
+      readDesignRevision(modelRoot, project, design, revision, projectRoot): ModelPayload | null
+    semantics: 含 system.yaml 的子目录才算项目；项目 ID、设计 ID、轮次 ID 只允许目录名安全字符。design.yaml 的问题记入 DesignInfo.problems，不抛错。
 
 dataStructures:
   - id: ds.ArchFileDef
@@ -465,8 +500,13 @@ dataStructures:
   - id: ds.ModelPayload
     name: ModelPayload
     definition: |
-      interface ModelPayload { project?: string; dir: string; files: RawFile[] }
-    description: 一个项目的全部描述原文，由 ModelSource 交给页面。
+      interface ModelPayload {
+        project?: string; dir: string; files: RawFile[]
+        designs?: DesignInfo[]                       // 本项目的全部设计版本
+        version?: { design: string; revision: string } // 设计版本时给出
+        compare?: { current: CompareSource; previous?: CompareSource } // { label, dir, files }
+      }
+    description: 一个项目某个版本的全部描述原文，由 ModelSource 交给页面；设计版本附带对比基线原文。
   - id: ds.ProjectSummary
     name: ProjectSummary
     definition: |
@@ -477,5 +517,28 @@ dataStructures:
         top: { id: string; name: string; abstraction?: string }[]
         counts: { modules: number; relations: number; interfaces: number; dataStructures: number }
         errors: number; warnings: number
+        designs: DesignInfo[]
       }
     description: 项目列表页展示的摘要，由接入层在 Node 侧跑模型层算出。
+  - id: ds.DesignInfo
+    name: DesignInfo
+    definition: |
+      interface DesignInfo {
+        id: string; name: string
+        status: 'draft' | 'reviewing' | 'accepted' | 'implemented' | 'abandoned'
+        goal?: string
+        base?: { commit?: string; generatedAt?: string }
+        revisions: { id: string; date?: string; summary?: string; questions?: string[]; feedback?: string }[]
+        problems: string[]
+      }
+    description: 设计版本的元信息，来自 designs/<设计>/design.yaml。
+  - id: ds.ModelDiff
+    name: ModelDiff
+    definition: |
+      interface ModelDiff {
+        changes: Change[]       // { entity, id, kind: added|changed|removed, name, fields? }
+        module / relation / interface / dataStructure: Map<string, Change>  // 仅新增与修改
+        touched: Map<string, number>  // 模块 → 涉及的变更条数
+        counts: { added: number; changed: number; removed: number }
+      }
+    description: 设计版本相对对比基线的差异。

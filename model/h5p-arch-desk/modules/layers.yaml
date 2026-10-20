@@ -15,20 +15,26 @@ modules:
       - id: present.shell
         name: 应用外壳与路由
         kind: subsystem
-        responsibility: 应用入口与 hash 路由：`/` 是项目列表，`/p/<项目>` 是项目视图；切换项目时重建视图。
+        responsibility: 应用入口与 hash 路由：`/` 是项目列表，`/p/<项目>` 是项目当前版本，`/p/<项目>/d/<设计>/<轮次>` 是设计版本；切换项目或版本时重建视图。
         codeRefs: [src/main.ts, src/App.vue, src/styles.css]
       - id: present.project-list
         name: 项目列表主页
         kind: subsystem
         core: true
-        responsibility: 列出模型根目录下的全部项目（简介、分层、规模、生成来源、问题数），点击进入项目的架构视图。
+        responsibility: 列出模型根目录下的全部项目（简介、分层、规模、生成来源、问题数）及各项目的设计版本，点击进入项目当前版本或设计的最新一轮。
         codeRefs: [src/components/ProjectList.vue]
       - id: present.desk-view
         name: 项目视图
         kind: subsystem
         core: true
-        responsibility: 单个项目的工作台：按项目创建并注入一份 DeskState，布置画布与可拖动 / 折叠的属性面板，处理键盘返回与变更通知。
+        responsibility: 单个项目某个版本的工作台：按项目 + 版本创建并注入一份 DeskState，布置画布、设计信息条与可拖动 / 折叠的属性面板，处理键盘返回与变更通知。
         codeRefs: [src/components/DeskView.vue]
+      - id: present.version
+        name: 版本切换与设计信息条
+        kind: subsystem
+        responsibility: 在当前版本与各设计的各轮之间切换（保留层次与选中）；设计版本下显示设计名、轮次、状态，选择对比基线（当前版本 / 上一轮），显示变更计数、标出变更开关与基线漂移提示。
+        codeRefs: [src/components/VersionSwitcher.vue, src/components/DesignBar.vue]
+        docRefs: [docs/adr/0002-design-versions.md]
       - id: present.canvas
         name: 画布
         kind: subsystem
@@ -39,7 +45,7 @@ modules:
         name: 属性面板
         kind: subsystem
         core: true
-        responsibility: 按选中对象的类型显示属性：系统、模块（含层的抽象原则）、关系、聚合边；无选中时显示当前父模块。
+        responsibility: 按选中对象的类型显示属性：系统（设计版本另含设计说明与变更清单）、模块（含层的抽象原则）、关系、聚合边；无选中时显示当前父模块；设计版本中标出新增 / 修改与设计说明。
         codeRefs: [src/components/panel/**]
       - id: present.nav
         name: 导航
@@ -57,7 +63,7 @@ modules:
     kind: layer
     order: 2
     abstraction: 「现在看哪里、选中了什么、怎么摆」：持有交互状态，调用模型层投影并把结果布局成坐标
-    responsibility: DeskState 持有层次 / 选中 / 开关并与 URL 同步；Layout 把层次视图排成坐标与走线。
+    responsibility: DeskState 持有层次 / 选中 / 开关（设计版本另持对比基线与差异）并与 URL 同步；Layout 把层次视图排成坐标与走线。
     includes: [交互状态, URL 同步, 布局与缓存]
     excludes: [DOM 渲染, 投影规则本身, 文件读取]
     mayDependOn: [model]
@@ -66,7 +72,7 @@ modules:
         name: DeskState
         kind: subsystem
         core: true
-        responsibility: 当前项目的唯一状态持有者：层次、选中、悬停、显示开关、加载状态；对外提供唯一一组操作，并与路由双向同步。
+        responsibility: 当前项目当前版本的唯一状态持有者：层次、选中、悬停、显示开关、加载状态，设计版本的对比基线与差异；对外提供唯一一组操作，并与路由双向同步。
         codeRefs: [src/state/useDeskState.ts, src/state/inject.ts]
       - id: state.layout
         name: Layout
@@ -90,18 +96,18 @@ modules:
         name: ModelSource 插件
         kind: subsystem
         core: true
-        responsibility: 开发态提供 /projects.json、/models/<项目>.json 并按项目推送 arch-model:changed；构建态输出同名静态文件。
+        responsibility: 开发态提供 /projects.json、/models/<项目>.json、/models/<项目>/designs/<设计>/<轮次>.json 并按项目推送 arch-model:changed（含设计版本的变化）；构建态输出同名静态文件。
         codeRefs: [vite/archModelPlugin.ts, vite.config.ts]
       - id: access.reader
         name: 描述读取
         kind: subsystem
         core: true
-        responsibility: 约定「模型根目录下含 system.yaml 的子目录即项目」，读取项目全部 YAML，并跑一遍模型层生成项目摘要。
+        responsibility: 约定「模型根目录下含 system.yaml 的子目录即项目、其下 designs/<设计>/ 是设计版本」，读取项目当前版本（跳过 designs/）或设计某一轮的 YAML 及对比基线，读 design.yaml，并跑一遍模型层生成项目摘要。
         codeRefs: [vite/readModelDir.ts]
       - id: access.lint
         name: 命令行校验
         kind: subsystem
-        responsibility: npm run lint:model：校验全部项目或指定目录，按文件:行号输出问题，有错误时非零退出，可接入 CI。
+        responsibility: npm run lint:model：校验全部项目或指定目录（含各设计版本的每一轮与 design.yaml），按文件:行号输出问题，有错误时非零退出，可接入 CI。
         codeRefs: [scripts/lint-model.ts]
 
   - id: model
@@ -110,7 +116,7 @@ modules:
     order: 4
     abstraction: 纯逻辑核心：输入文本、输出数据，不依赖 Vue / DOM / 布局库，可在 Node 中纯输入输出测试
     responsibility: 把多个 YAML 文件变成校验过的模型与索引，并按层次投影出要画的节点与边。
-    includes: [文件格式与类型, 解析与合并, 引用校验, 索引, 层次投影]
+    includes: [文件格式与类型, 解析与合并, 引用校验, 索引, 层次投影, 版本对比]
     excludes: [Vue, DOM, elkjs, 文件系统]
     mayDependOn: []
     docRefs: [docs/03-architecture.md]
@@ -120,7 +126,7 @@ modules:
         kind: subsystem
         core: true
         responsibility: 描述文件的形状（JSON Schema 与对应的 TS 类型），以及加载、索引、投影各阶段的数据类型。
-        codeRefs: [src/model/types.ts, src/model/project-summary.ts, schema/arch-file.schema.json]
+        codeRefs: [src/model/types.ts, src/model/project-summary.ts, src/model/design.ts, schema/arch-file.schema.json]
       - id: model.pipeline
         name: 加载流水线
         kind: subsystem
@@ -134,3 +140,12 @@ modules:
         responsibility: 给定当前父模块，算出这一层的节点、直接边、聚合边、边界节点；子模块都是层时算出分层总览（带、核心模块、核心跨层边）。
         codeRefs: [src/model/project.ts]
         docRefs: [docs/01-requirements.md]
+      - id: model.diff
+        name: 版本对比
+        kind: subsystem
+        responsibility: 设计版本相对对比基线新增 / 修改 / 删除了哪些模块、关系、接口、数据结构（逐字段比较），以及每个模块涉及多少处变更。
+        principle: |
+          - 按实体 ID 对齐；出处与 designNote 不算修改，缺省与空数组视为相同。
+          - 「涉及变更」：子树内模块的增删改计入各祖先；关系的增删改计入两端及其祖先；接口 / 数据结构计入提供方与持有它的模块。删除项按基线中的位置计入目标模型里仍存在的祖先。
+        codeRefs: [src/model/diff.ts]
+        docRefs: [docs/adr/0002-design-versions.md]
