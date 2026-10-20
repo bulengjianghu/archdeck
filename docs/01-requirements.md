@@ -204,4 +204,4 @@ h5player 的架构信息分散在几处：
 | Q5 | 迭代前怎么先出架构设计再开发？ | 设计版本，见 [ADR-0002](./adr/0002-design-versions.md) |
 | Q6 | 动态视角的架构？ | 经设计版本 phase2-dynamic 四轮评审定稿，见 [ADR-0003](./adr/0003-phase2-dynamic-view.md) |
 | Q7 | 文档怎么组织？ | 需求 / 领域模型 / 架构（总览 + 专题）/ 描述格式，每类信息只有一个归属，见 [ADR-0004](./adr/0004-docs-structure.md) |
-| Q8 | 实现二期时定稿规则没覆盖的情况怎么处理？ | 细化为来源「议」的规则（L9、P5、P12、S5a、S5b、S13、V3、R14），理由见 [ADR-0005](./adr/0005-phase2-implementation-refinements.md)，待负责人确认 |
+| Q8 | 实现二期时定稿规则没覆盖的情况怎么处理？ | 细化为来源「议」的规则（L9、P5、P12、S5a、S5b、S13、V3、R14），负责人已确认，理由见 [ADR-0005](./adr/0005-phase2-implementation-refinements.md) |
