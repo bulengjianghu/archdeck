@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createDeskState, decodeSelection, encodeSelection, type ModelPayload } from '../../src/state/useDeskState'
-import { sampleFiles } from '../fixtures/sample'
+import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
 async function setup(initialUrl = '/', files = sampleFiles()) {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
@@ -242,5 +242,59 @@ describe('DeskState · 设计版本', () => {
     await router.push('/p/demo/d/next/r1?level=app')
     await new Promise(r => setTimeout(r, 0))
     expect(desk.levelId.value).toBe('infra')
+  })
+})
+
+describe('DeskState · 运行视角', () => {
+  async function openDesk(url = '/') {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+    await router.push(url)
+    const desk = createDeskState(async () => ({ dir: 'x', files: scenarioFiles() }))
+    desk.attachRouter(router)
+    await desk.init()
+    const settle = async () => {
+      await new Promise(r => setTimeout(r, 0))
+      await nextTick()
+    }
+    return { desk, router, settle }
+  }
+
+  it('打开场景：进入运行视角、层次不变、舞台不受筛选影响；派生出本层投影与时序模型', async () => {
+    const { desk, router, settle } = await openDesk('/?level=infra')
+    desk.setToggles({ relationTypes: ['depends'], showBoundaries: false })
+    expect(desk.view.value!.nodes.some(n => n.role === 'boundary')).toBe(false)
+    desk.openScenario('sc.play')
+    await settle()
+    expect(desk.perspective.value).toBe('run')
+    expect(desk.levelId.value).toBe('infra')
+    expect(router.currentRoute.value.query).toMatchObject({ level: 'infra', sc: 'sc.play' })
+    expect(desk.view.value!.nodes.some(n => n.id === 'boundary:app')).toBe(true)
+    expect(desk.scenarioView.value!.messages.length).toBeGreaterThan(0)
+    expect(desk.sequence.value!.participants[0].kind).toBe('actor')
+    expect(desk.home.value).toBe('sys')
+    desk.pause()
+    desk.next()
+    await settle()
+    expect(desk.frame.value?.id).toBe('sc.play#start')
+    expect(router.currentRoute.value.query.step).toBe('sc.play#start')
+  })
+
+  it('复制地址到新页面：回到同一场景、同一步骤、同一分支选择，处于暂停', async () => {
+    const { desk } = await openDesk('/?level=infra&sc=sc.play&step=sc.play%23update&alt=0')
+    expect(desk.playback.value).toMatchObject({ scenarioId: 'sc.play', frameId: 'sc.play#update', playing: false })
+    expect(desk.playback.value!.choices.get('sc.play#3')).toBe(0)
+    expect(desk.currentIndex.value).not.toBeNull()
+  })
+
+  it('钉住对象时派生其在本场景中的参与；退出场景回到结构视角，层次与选中保留', async () => {
+    const { desk, router, settle } = await openDesk('/?level=infra&sc=sc.play&step=sc.play%23done&alt=1')
+    desk.select({ kind: 'module', id: 'infra.framework' })
+    expect(desk.focus.value.kind).toBe('pinned')
+    expect(desk.pinnedParticipation.value!.frames.length).toBeGreaterThan(0)
+    desk.closeScenario()
+    await settle()
+    expect(desk.perspective.value).toBe('structure')
+    expect(desk.selection.value).toEqual({ kind: 'module', id: 'infra.framework' })
+    expect(router.currentRoute.value.query.sc).toBeUndefined()
   })
 })

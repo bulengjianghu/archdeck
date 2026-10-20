@@ -6,11 +6,46 @@
  * - 与外界的交互交给同步适配器：路由（sync/router）、模型源（sync/modelSource）、布局（sync/layout）。
  * 呈现层只读这里的状态、只调这里的操作，不直接调用模型层的计算。
  */
-import { computed, ref, shallowRef } from 'vue'
+import { computed, getCurrentScope, onScopeDispose, ref, shallowRef } from 'vue'
 import type { Router } from 'vue-router'
-import { RELATION_TYPES, diffModels, projectLevel, type Issue, type LevelView, type ModelDiff, type ModelIndex } from '@/model'
+import {
+  RELATION_TYPES,
+  buildSequence,
+  currentMessage,
+  diffModels,
+  participation,
+  planScenario,
+  projectLevel,
+  projectScenario,
+  resolvePath,
+  scenarioHome,
+  stageEnds,
+  walkedCount,
+  type Issue,
+  type LevelView,
+  type ModelDiff,
+  type ModelIndex,
+  type Participation,
+  type ScenarioLevelView,
+  type ScenarioPlan,
+  type SequenceModel,
+} from '@/model'
 import type { DesignInfo, VersionRef } from '@/model/design'
-import { DEFAULT_TOGGLES, encodeView, keyIntent, transition, type Selection, type Toggles, type ViewAction, type ViewState } from './transition'
+import { layoutSequence, type PositionedSequence } from '@/layout/sequence'
+import {
+  DEFAULT_TOGGLES,
+  encodeView,
+  focusOf,
+  keyIntent,
+  perspectiveOf,
+  transition,
+  type Selection,
+  type Speed,
+  type Toggles,
+  type ViewAction,
+  type ViewState,
+} from './transition'
+import { createClockSync } from './sync/clock'
 import { createRouterSync, type RouterSync, type RouterSyncOptions } from './sync/router'
 import { fetchAndLoad, watchModelChanges, type Baseline, type ChangeEvents, type FetchModel } from './sync/modelSource'
 import { createLayoutSync } from './sync/layout'
@@ -40,11 +75,11 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     const idx = index.value
     if (!idx) return false
     const prev = state.value
-    const { state: next, history } = transition(prev, action, { index: idx })
+    const { state: next, history } = transition(prev, action, { index: idx, plan: plan.value, levelView: view.value, scenarioView: scenarioView.value })
     if (next === prev) return false
     state.value = next
     if (next.levelId !== prev.levelId) levelVersion.value++
-    router?.write(encodeView(next, idx), history)
+    router?.write(encodeView(next, idx, plan.value), history)
     return true
   }
 
@@ -52,12 +87,23 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const levelId = computed(() => state.value.levelId)
   const selection = computed(() => state.value.selection)
   const hoverId = computed(() => state.value.hover)
+  const playback = computed(() => state.value.playback)
   const levelPath = computed(() => (index.value && levelId.value ? (index.value.pathOf.get(levelId.value) ?? []) : []))
+  /** 视角与焦点（V1、V2），由视图状态推出 */
+  const perspective = computed(() => perspectiveOf(state.value))
+  const focus = computed(() => focusOf(state.value))
+
+  /** 打开的场景的回放计划：只随场景与模型变化 */
+  const scenarioId = computed(() => state.value.playback?.scenarioId ?? null)
+  const plan = computed<ScenarioPlan | null>(() => (index.value && scenarioId.value ? planScenario(index.value, scenarioId.value) : null))
+  const scenario = computed(() => (scenarioId.value ? (index.value?.scenarios.get(scenarioId.value) ?? null) : null))
 
   const view = computed<LevelView | null>(() => {
     const t = state.value.toggles
     if (!index.value || !levelId.value) return null
     try {
+      // L9：运行视角下舞台不受显示开关影响，并补齐场景帧端点的边界节点与参与者（P12）
+      if (plan.value) return projectLevel(index.value, levelId.value, { showBoundaries: true, mergeTypes: true, scenarioEnds: stageEnds(plan.value) })
       return projectLevel(index.value, levelId.value, {
         showBoundaries: t.showBoundaries,
         currentOnly: t.currentOnly,
@@ -69,6 +115,36 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     }
   })
   const positioned = createLayoutSync(view)
+
+  // ── 运行视角的派生：回放路径 → 本层帧投影 → 时序模型 → 时序图坐标 ──
+  const choices = computed(() => state.value.playback?.choices ?? new Map<string, number>())
+  const path = computed(() => (plan.value ? resolvePath(plan.value, choices.value) : null))
+  const scenarioView = computed<ScenarioLevelView | null>(() =>
+    index.value && plan.value && view.value ? projectScenario(index.value, view.value, plan.value, choices.value) : null,
+  )
+  const home = computed(() => (index.value && plan.value ? scenarioHome(index.value, plan.value) : null))
+  /** 播放头所在的可见消息序号；尚未开始或本层不可见时为 null */
+  const currentIndex = computed(() => (scenarioView.value ? currentMessage(scenarioView.value, state.value.playback?.frameId ?? null) : null))
+  /** 从头播放到播放头为止走过的可见消息数 */
+  const walked = computed(() => (scenarioView.value ? walkedCount(scenarioView.value, state.value.playback?.frameId ?? null) : 0))
+  const frame = computed(() => {
+    const id = state.value.playback?.frameId
+    return id && plan.value ? (plan.value.frames.get(id) ?? null) : null
+  })
+  const sequence = computed<SequenceModel | null>(() =>
+    index.value && plan.value && view.value && scenarioView.value ? buildSequence(index.value, view.value, plan.value, choices.value, scenarioView.value) : null,
+  )
+  const positionedSequence = computed<PositionedSequence | null>(() => {
+    if (!sequence.value) return null
+    const pv = positioned.value
+    return layoutSequence(sequence.value, pv && pv.view.parentId === levelId.value ? pv : null)
+  })
+  /** 钉住对象在本场景中的参与（V6）；运行视角下有选中时才有 */
+  const pinnedParticipation = computed<Participation | null>(() => {
+    const s = state.value.selection
+    if (!index.value || !path.value || !scenarioView.value || !s) return null
+    return participation(index.value, path.value.frames, scenarioView.value, s, state.value.playback?.frameId)
+  })
 
   /** 打开的设计（当前版本时为 null） */
   const design = computed(() => (options.version ? (designs.value.find(d => d.id === options.version!.design) ?? null) : null))
@@ -119,6 +195,10 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     }
   }
 
+  // 时钟同步：播放中按速度到点 dispatch(tick)
+  const stopClock = createClockSync(() => state.value.playback, () => void dispatch({ type: 'tick' }))
+  if (getCurrentScope()) onScopeDispose(stopClock)
+
   /** 订阅本项目的描述变化（开发态 import.meta.hot），返回取消订阅函数 */
   function watchChanges(events: ChangeEvents | undefined) {
     return watchModelChanges(events, options.project, () => void reload())
@@ -146,6 +226,16 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const revealModule = (id: string) => void dispatch({ type: 'revealModule', id })
   const setHover = (id: string | null) => void dispatch({ type: 'hover', id })
   const setToggles = (patch: Partial<Toggles>) => void dispatch({ type: 'toggle', patch })
+  const openScenario = (id: string) => void dispatch({ type: 'openScenario', id })
+  const closeScenario = () => void dispatch({ type: 'closeScenario' })
+  const next = () => void dispatch({ type: 'next' })
+  const prev = () => void dispatch({ type: 'prev' })
+  const seek = (frameId: string) => void dispatch({ type: 'seek', frameId })
+  const play = () => void dispatch({ type: 'play' })
+  const pause = () => void dispatch({ type: 'pause' })
+  const setSpeed = (value: Speed) => void dispatch({ type: 'speed', value })
+  const chooseBranch = (pointId: string, option: number) => void dispatch({ type: 'chooseBranch', pointId, option })
+
   /** 键盘（N7、N9）：返回 'leave' 表示应回到项目列表，由呈现层导航 */
   function pressKey(key: string): 'leave' | boolean {
     const idx = index.value
@@ -172,6 +262,20 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     toggles,
     view,
     positioned,
+    perspective,
+    focus,
+    playback,
+    scenario,
+    plan,
+    path,
+    scenarioView,
+    home,
+    currentIndex,
+    walked,
+    frame,
+    sequence,
+    positionedSequence,
+    pinnedParticipation,
     levelVersion,
     designs,
     design,
@@ -195,6 +299,15 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     setHover,
     setToggles,
     pressKey,
+    openScenario,
+    closeScenario,
+    next,
+    prev,
+    seek,
+    play,
+    pause,
+    setSpeed,
+    chooseBranch,
   }
 }
 

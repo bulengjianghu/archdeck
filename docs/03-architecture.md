@@ -61,8 +61,8 @@ flowchart TB
 
 | 模块 | 职责 | 状态 | 专题 |
 |---|---|---|---|
-| DeskState（核心） | 协调者：持有视图状态、唯一写入口 `dispatch`、派生要画的数据；同步适配器（路由、时钟、模型源、布局）；设计版本的对比基线与差异 | 已实现（时钟同步待实现） | 视图状态 |
-| 视图状态转移（核心） | 会话规则的纯函数：视角与焦点（V）、导航（N）、回放（R、F6a、F6c）、URL 编解码 | 已实现：导航、URL（视角与焦点、回放待实现） | 视图状态 |
+| DeskState（核心） | 协调者：持有视图状态、唯一写入口 `dispatch`、派生要画的数据；同步适配器（路由、时钟、模型源、布局）；设计版本的对比基线与差异 | 已实现 | 视图状态 |
+| 视图状态转移（核心） | 会话规则的纯函数：视角与焦点（V）、导航（N）、回放（R、F6a、F6c）、URL 编解码 | 已实现 | 视图状态 |
 | Layout（核心） | 结构图排布（分层总览 / elkjs，Worker 中运行，按内容缓存）；时序图排布 | 已实现 | 结构投影 · 场景 |
 
 ### 3.3 模型层
@@ -133,8 +133,8 @@ packages/h5p-arch-desk/
     model/                    模型层：types · load · validate · indexer · project · diff · design
       scenario/               场景投影：bind · steps · plan · path · level · participation · sequence
     state/                    视图状态层：useDeskState（协调者）· inject
-      transition/             会话规则：types · navigation · url · focus（待实现）· playback（待实现）
-      sync/                   同步适配器：router · modelSource · layout · clock（待实现）
+      transition/             会话规则：types · navigation · focus · playback · url
+      sync/                   同步适配器：router · clock · modelSource · layout
     layout/                   layout.ts（结构图）· sequence.ts（时序图）
     components/               呈现层（专题「工作台」列出组件分工）
   tests/                      单测（按层组织）与 fixtures

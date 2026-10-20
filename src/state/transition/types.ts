@@ -2,7 +2,7 @@
  * 视图状态：用户此刻在看什么，一个值（docs/architecture/view-state.md §1）。
  * 只经 transition() 改变；视角与焦点由它推出，不另存字段。
  */
-import type { ModelIndex, RelationType } from '@/model'
+import type { LevelView, ModelIndex, RelationType, ScenarioLevelView, ScenarioPlan } from '@/model'
 
 export type Selection =
   | { kind: 'module'; id: string }
@@ -72,6 +72,10 @@ export type ViewAction =
 
 export interface TransitionContext {
   index: ModelIndex
+  /** 运行视角：打开的场景的回放计划、当前层次的舞台视图、回放路径在当前层次的投影 */
+  plan?: ScenarioPlan | null
+  levelView?: LevelView | null
+  scenarioView?: ScenarioLevelView | null
 }
 
 export interface TransitionResult {
