@@ -24,6 +24,12 @@ export function verticalCurve(a: Point, b: Point): string {
   return `M${a.x},${a.y} C${a.x},${a.y + dy} ${b.x},${b.y - dy} ${b.x},${b.y}`
 }
 
+/** 两点之间的横向 S 形曲线（从侧边出发的参与者边） */
+export function horizontalCurve(a: Point, b: Point): string {
+  const dx = (b.x - a.x) / 2
+  return `M${a.x},${a.y} C${a.x + dx},${a.y} ${b.x - dx},${b.y} ${b.x},${b.y}`
+}
+
 function dist(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y)
 }

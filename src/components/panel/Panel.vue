@@ -6,6 +6,7 @@ import ModulePanel from './ModulePanel.vue'
 import RelationPanel from './RelationPanel.vue'
 import EdgePanel from './EdgePanel.vue'
 import SystemPanel from './SystemPanel.vue'
+import ActorPanel from './ActorPanel.vue'
 
 const desk = useDesk()
 const target = computed(() => {
@@ -15,6 +16,7 @@ const target = computed(() => {
   if (s?.kind === 'module' && idx.modules.has(s.id)) return { kind: 'module' as const, id: s.id }
   if (s?.kind === 'relation' && idx.relations.has(s.id)) return { kind: 'relation' as const, id: s.id }
   if (s?.kind === 'edge') return { kind: 'edge' as const, id: s.id }
+  if (s?.kind === 'actor' && idx.actors.has(s.id)) return { kind: 'actor' as const, id: s.id }
   const level = desk.levelId.value
   return level && level !== idx.rootId ? { kind: 'module' as const, id: level } : { kind: 'system' as const, id: idx.rootId }
 })
@@ -26,6 +28,7 @@ const target = computed(() => {
       <ModulePanel v-if="target.kind === 'module'" :id="target.id" :key="`m:${target.id}`" />
       <RelationPanel v-else-if="target.kind === 'relation'" :id="target.id" :key="`r:${target.id}`" />
       <EdgePanel v-else-if="target.kind === 'edge'" :id="target.id" :key="`e:${target.id}`" />
+      <ActorPanel v-else-if="target.kind === 'actor'" :id="target.id" :key="`a:${target.id}`" />
       <SystemPanel v-else />
     </template>
   </div>

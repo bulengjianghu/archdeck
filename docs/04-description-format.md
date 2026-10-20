@@ -2,7 +2,6 @@
 
 > 本文回答**描述文件怎么组织、怎么写**，供人和 AI（按代码生成当前版本、起草设计版本）遵守。
 > 格式以 `schema/arch-file.schema.json` 为准；字段与规则的含义以 [02-domain.md](./02-domain.md) 为准，本文只给写法与约定。
-> 标「待实现」的内容（外部参与者、场景、JSON）在二期实现后才被 Schema 接受。
 
 ## 1. 目录与分工
 
@@ -14,8 +13,8 @@ model/<项目>/
   modules/
     layers.yaml            骨架：全部层 + 第二级模块（ID 固定，见 §3.1）
     <区域>.yaml            各区域的子树：第二级模块之下的模块、本区域的关系、接口、数据结构
-  actors.yaml              外部参与者及其入口关系（待实现）
-  scenarios/<场景>.yaml    一个场景一个文件，也可用 .json（待实现）
+  actors.yaml              外部参与者及其入口关系
+  scenarios/<场景>.yaml    一个场景一个文件，也可用 .json
   designs/<设计>/          设计版本（§5），读取当前版本时跳过
 ```
 
@@ -24,7 +23,7 @@ model/<项目>/
 
 ## 2. 文件格式
 
-一个文件的顶层键都可选、可任意组合：`system`、`module`（单个模块，可带 `parent`）、`modules`、`relations`、`interfaces`、`dataStructures`、`actors`（待实现）、`scenario` / `scenarios`（待实现）。未知字段即格式错误，整份文件被跳过（M1）。
+一个文件的顶层键都可选、可任意组合：`system`、`module`（单个模块，可带 `parent`）、`modules`、`relations`、`interfaces`、`dataStructures`、`actors`、`scenario` / `scenarios`。未知字段即格式错误，整份文件被跳过（M1）。
 
 ```yaml
 # modules/infra.yaml —— 模块子树 + 本区域的关系
@@ -88,13 +87,13 @@ modules:
 ```
 
 ```yaml
-# actors.yaml（待实现）
+# actors.yaml
 actors:
   - { id: actor.biz, name: 业务方, kind: system, description: 通过 SDK API 调用播放器 }
 relations:
   - { id: rel.ctx.api, from: actor.biz, to: infra.player-index, type: calls, interface: if.player.api }
 
-# scenarios/command.yaml（待实现）
+# scenarios/command.yaml
 scenario:
   id: sc.command
   name: 命令执行（play / switch / reset）
@@ -181,18 +180,18 @@ scenario:
 - 不连祖先与后代，不为「包含」建关系（M6）。
 - 异步（Worker postMessage、事件、定时器回调）标 `mode: async`；有明确接口填 `interface`，有明确载荷填 `payload`。
 
-### 3.5 外部参与者（待实现）
+### 3.5 外部参与者
 
 - 只为**主动发起交互**的外部实体建参与者（A3）：人、主动调用或推送的外部系统、时间。被动依赖（浏览器 API、CDN、三方库）继续用模块或 `codeRefs`。事件由谁发出就算谁的异步消息，不是一类参与者（A5）。
 - ID：`actor.<短名>`；`kind`：`user` / `system` / `time`。
 - 为每个参与者写**入口关系**，说明它从哪个模块进入系统；方向按 §3.4，`from` 是主动方。
 
-### 3.6 场景（待实现）
+### 3.6 场景
 
 - 一个场景一个文件，ID `sc.<短名>`；写 `name`、`description`，有明确触发原因时写 `cause`。不写默认层次与触发者（S9、A6），第一条消息通常从参与者发出。
 - **只写一套最细步骤**（S3）：消息端点写能表达清楚的最深模块或参与者（S4），不为不同层次各写一套；跨区域时对端仍只写第二级模块 ID。
 - `call` 用于同步调用；事件发布、postMessage、定时器回调等不等待的用 `async`；`return` 只在返回值本身值得展示时显式写。
-- **对应关系**：只对应 `calls` / `dataflow` / `event`（S12）；两端之间只有一条运行时关系时可不写 `relation`（S13），有多条时写明。引用 `event` 关系时消息方向与关系相反，属正常。`lint:model` 提醒「结构图中没有对应关系」时，优先补结构关系。
+- **对应关系**：只对应 `calls` / `dataflow` / `event`（S12）；两端之间只有一条运行时关系时可不写 `relation`（S13），有多条时写明。引用 `event` 关系时消息方向与关系相反，属正常；关系写在消息端点的祖先上（如跨区域只写到第二级模块）也算对得上（S5a）。`lint:model` 提醒「结构图中没有对应关系」时，优先补结构关系。
 - **组合步骤**：`alt` 每个分支写清 `when`；`loop` 写 `while`；`par` 只用于确实同时进行的流程；可复用的子流程拆成独立场景用 `ref` 引用，不得循环引用（S6）。
 - **步骤 id**：分享链接会指向具体步骤，路径式 ID 在插入步骤后会变；关键步骤（`alt` 各分支的首步、常被讨论的步骤）写场景内唯一的 `id`（F2、S11）。
 - **从 mermaid 迁移**（D-8）：参与者对照骨架的模块 ID；`alt` / `loop` / `par` 一一对应；系统外的 `participant` 改写为外部参与者。

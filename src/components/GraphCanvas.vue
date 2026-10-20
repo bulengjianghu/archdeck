@@ -7,12 +7,14 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { MarkerType, VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import { useDesk } from '@/state/inject'
 import { contentBounds, edgeLabel, isBoundaryEdge, moreChipId, type Box } from '@/layout/layout'
-import { FIELD_LABELS, type ViewEdge } from '@/model'
+import { FIELD_LABELS, moduleName, type ViewEdge } from '@/model'
 import ModuleNode from './nodes/ModuleNode.vue'
 import BoundaryNode from './nodes/BoundaryNode.vue'
 import BandNode from './nodes/BandNode.vue'
 import CoreNode from './nodes/CoreNode.vue'
 import MoreNode from './nodes/MoreNode.vue'
+import ActorNode from './nodes/ActorNode.vue'
+import FrameNode from './nodes/FrameNode.vue'
 import RouteEdge, { type RouteEdgeData } from './edges/RouteEdge.vue'
 import Legend from './Legend.vue'
 import type { NodeData } from './nodes/types'
@@ -24,6 +26,7 @@ const { setViewport, zoomIn, zoomOut, dimensions, setNodes, setEdges } = useVueF
 const focusId = computed(() => {
   if (desk.hoverId.value) return desk.hoverId.value
   const s = desk.selection.value
+  if (s?.kind === 'actor') return s.id
   if (s?.kind !== 'module') return null
   // 选中的外部模块在本视图里以边界节点出现
   const pv = desk.positioned.value
@@ -55,8 +58,8 @@ const neighborhood = computed<Set<string> | null>(() => {
   const pv = desk.positioned.value
   const f = focusId.value
   if (!pv || !f || !pv.nodes.has(f)) return null
-  // 分层总览中只有核心模块参与聚焦，选中层（带）不让其他内容变淡
-  if (pv.view.mode === 'layered' && !pv.view.nodes.some(n => n.id === f && n.role === 'core')) return null
+  // 分层总览中只有核心模块与参与者参与聚焦，选中层（带）不让其他内容变淡
+  if (pv.view.mode === 'layered' && !pv.view.nodes.some(n => n.id === f && (n.role === 'core' || n.role === 'actor'))) return null
   const set = new Set([f])
   const edges = pv.view.mode === 'layered' ? visibleCoreEdges.value : pv.view.edges
   for (const e of edges) {
@@ -98,9 +101,18 @@ const nodes = computed<Node<NodeData>[]>(() => {
   const place = (id: string, box: Box, type: string, data: NodeData, zIndex: number) =>
     out.push({ id, type, position: { x: box.x, y: box.y }, data, zIndex, width: box.w, height: box.h, style: { width: `${box.w}px`, height: `${box.h}px` }, selectable: false, draggable: false, connectable: false })
 
+  if (pv.frame) {
+    place('frame', pv.frame, 'frame', { moduleId: pv.view.parentId, name: moduleName(idx, pv.view.parentId), childCount: 0, selected: false, dim: false }, -1)
+  }
   for (const n of pv.view.nodes) {
     const box = pv.nodes.get(n.id)
     if (!box) continue
+    if (n.role === 'actor') {
+      const a = idx.actors.get(n.moduleId)
+      const data = { moduleId: n.moduleId, name: a?.name ?? n.moduleId, actor: a, actorKind: n.actorKind, childCount: 0 }
+      place(n.id, box, 'actor', { ...data, selected: sel?.kind === 'actor' && sel.id === n.moduleId, dim: !!near && !near.has(n.id) }, 2)
+      continue
+    }
     const m = idx.modules.get(n.moduleId)
     const base: NodeData = {
       moduleId: n.moduleId,
@@ -176,10 +188,13 @@ function onFlowError(err: unknown) {
 
 // ── 交互 ──
 function onNodeClick({ node }: { node: Node<NodeData> }) {
-  desk.select({ kind: 'module', id: node.type === 'more' ? node.id.slice('more:'.length) : node.data!.moduleId })
+  if (node.type === 'frame') desk.select(null)
+  else if (node.type === 'actor') desk.select({ kind: 'actor', id: node.data!.moduleId })
+  else desk.select({ kind: 'module', id: node.type === 'more' ? node.id.slice('more:'.length) : node.data!.moduleId })
 }
 
 function onNodeDoubleClick({ node }: { node: Node<NodeData> }) {
+  if (node.type === 'actor' || node.type === 'frame') return
   if (node.type === 'boundary') desk.revealModule(node.data!.moduleId)
   else if (node.type === 'more') desk.drillInto(node.id.slice('more:'.length))
   else desk.drillInto(node.data!.moduleId)
@@ -192,7 +207,7 @@ function onEdgeClick({ edge }: { edge: Edge<RouteEdgeData> }) {
 }
 
 function onNodeEnter({ node }: { node: Node<NodeData> }) {
-  if (node.type === 'core' || node.type === 'module' || node.type === 'boundary') desk.setHover(node.id)
+  if (node.type === 'core' || node.type === 'module' || node.type === 'boundary' || node.type === 'actor') desk.setHover(node.id)
 }
 
 function onNodeLeave() {
@@ -256,6 +271,8 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       <template #node-band="p"><BandNode :data="p.data" /></template>
       <template #node-core="p"><CoreNode :data="p.data" /></template>
       <template #node-more="p"><MoreNode :data="p.data" /></template>
+      <template #node-actor="p"><ActorNode :data="p.data" /></template>
+      <template #node-frame="p"><FrameNode :data="p.data" /></template>
       <template #edge-route="p"><RouteEdge :id="p.id" :data="p.data" :marker-end="p.markerEnd" /></template>
     </VueFlow>
 

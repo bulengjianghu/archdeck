@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
+import { moduleName } from '@/model'
 import Section from './Section.vue'
 import RelationRow from './RelationRow.vue'
 
@@ -13,19 +14,21 @@ const edge = computed(() => {
 function endName(nodeId: string): string {
   const boundary = nodeId.startsWith('boundary:')
   const id = boundary ? nodeId.slice('boundary:'.length) : nodeId
-  const n = desk.index.value?.modules.get(id)?.name ?? id
+  const n = desk.index.value ? moduleName(desk.index.value, id) : id
   return boundary ? `${n}（外部）` : n
 }
 const endId = (nodeId: string) => (nodeId.startsWith('boundary:') ? nodeId.slice('boundary:'.length) : nodeId)
+const endSelection = (nodeId: string) =>
+  desk.index.value?.actors.has(nodeId) ? ({ kind: 'actor', id: nodeId } as const) : ({ kind: 'module', id: endId(nodeId) } as const)
 </script>
 
 <template>
   <div v-if="edge" class="edge-panel">
     <header class="head">
       <h2 class="endpoints">
-        <button class="link" @click="desk.select({ kind: 'module', id: endId(edge.from) })">{{ endName(edge.from) }}</button>
+        <button class="link" @click="desk.select(endSelection(edge.from))">{{ endName(edge.from) }}</button>
         <span class="muted">→</span>
-        <button class="link" @click="desk.select({ kind: 'module', id: endId(edge.to) })">{{ endName(edge.to) }}</button>
+        <button class="link" @click="desk.select(endSelection(edge.to))">{{ endName(edge.to) }}</button>
       </h2>
       <div class="badges">
         <span v-for="t in edge.types" :key="t.type" class="rel-chip" :class="`rel-${t.type}`">{{ t.type }}{{ edge.types.length > 1 ? ` ×${t.count}` : '' }}</span>

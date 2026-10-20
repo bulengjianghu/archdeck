@@ -20,6 +20,8 @@
   --rel-dataflow: #0f9b8e;
   --rel-event: #c98a10;
   --rel-implements: #7a52d6;
+  --actor: #8a5cc7;
+  --actor-soft: #f3edfb;
 
   --layer-bg: #f3f5f9;
   --layer-border: #d5dbe4;
@@ -61,6 +63,8 @@
     --rel-dataflow: #3cc4b5;
     --rel-event: #e2a646;
     --rel-implements: #a88af0;
+    --actor: #b08ae6;
+    --actor-soft: #2c2440;
 
     --layer-bg: #1d222b;
     --layer-border: #343b49;

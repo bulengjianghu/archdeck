@@ -9,6 +9,7 @@ export type Selection =
   | { kind: 'relation'; id: string }
   /** 视图里的一条边（多为聚合边），ID 见 edgeId() */
   | { kind: 'edge'; id: string }
+  | { kind: 'actor'; id: string }
 
 export interface Toggles {
   showBoundaries: boolean

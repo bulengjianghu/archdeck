@@ -2,37 +2,106 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://h5p-arch-desk/arch-file.schema.json",
   "title": "h5p-arch-desk 架构描述文件",
-  "description": "一个 YAML 文件的结构。各顶层键均可选、可组合；跨文件引用由 validateModel 检查。",
+  "description": "一个描述文件（YAML 或 JSON）的结构。各顶层键均可选、可组合；跨文件引用由 validate 检查。",
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "system": { "$ref": "#/definitions/system" },
-    "module": { "$ref": "#/definitions/module" },
-    "modules": { "type": "array", "items": { "$ref": "#/definitions/module" } },
-    "relations": { "type": "array", "items": { "$ref": "#/definitions/relation" } },
-    "interfaces": { "type": "array", "items": { "$ref": "#/definitions/interface" } },
-    "dataStructures": { "type": "array", "items": { "$ref": "#/definitions/dataStructure" } }
+    "system": {
+      "$ref": "#/definitions/system"
+    },
+    "module": {
+      "$ref": "#/definitions/module"
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/module"
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/relation"
+      }
+    },
+    "interfaces": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/interface"
+      }
+    },
+    "dataStructures": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/dataStructure"
+      }
+    },
+    "actors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/actor"
+      }
+    },
+    "scenario": {
+      "$ref": "#/definitions/scenario"
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/scenario"
+      }
+    }
   },
   "definitions": {
-    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
-    "idList": { "type": "array", "items": { "$ref": "#/definitions/id" } },
-    "text": { "type": "string" },
-    "textList": { "type": "array", "items": { "type": "string" } },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "idList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/id"
+      }
+    },
+    "text": {
+      "type": "string"
+    },
+    "textList": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "system": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name"],
+      "required": [
+        "id",
+        "name"
+      ],
       "properties": {
-        "id": { "$ref": "#/definitions/id" },
-        "name": { "type": "string" },
-        "description": { "type": "string" },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
         "source": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "repo": { "type": "string" },
-            "commit": { "type": "string" },
-            "generatedAt": { "type": "string" }
+            "repo": {
+              "type": "string"
+            },
+            "commit": {
+              "type": "string"
+            },
+            "generatedAt": {
+              "type": "string"
+            }
           }
         }
       }
@@ -40,75 +109,447 @@
     "module": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name"],
+      "required": [
+        "id",
+        "name"
+      ],
       "properties": {
-        "id": { "$ref": "#/definitions/id" },
-        "name": { "type": "string" },
-        "parent": { "$ref": "#/definitions/id" },
-        "kind": { "type": "string" },
-        "status": { "enum": ["current", "target", "deprecated"] },
-        "core": { "type": "boolean" },
-        "responsibility": { "type": "string" },
-        "principle": { "type": "string" },
-        "dataStructures": { "$ref": "#/definitions/idList" },
-        "provides": { "$ref": "#/definitions/idList" },
-        "codeRefs": { "$ref": "#/definitions/textList" },
-        "docRefs": { "$ref": "#/definitions/textList" },
-        "owner": { "type": "string" },
-        "tags": { "$ref": "#/definitions/textList" },
-        "order": { "type": "number" },
-        "abstraction": { "type": "string" },
-        "includes": { "$ref": "#/definitions/textList" },
-        "excludes": { "$ref": "#/definitions/textList" },
-        "mayDependOn": { "$ref": "#/definitions/idList" },
-        "children": { "type": "array", "items": { "$ref": "#/definitions/module" } },
-        "designNote": { "type": "string", "description": "设计版本专用：为什么这样设计 / 调整（Markdown）" }
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parent": {
+          "$ref": "#/definitions/id"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "current",
+            "target",
+            "deprecated"
+          ]
+        },
+        "core": {
+          "type": "boolean"
+        },
+        "responsibility": {
+          "type": "string"
+        },
+        "principle": {
+          "type": "string"
+        },
+        "dataStructures": {
+          "$ref": "#/definitions/idList"
+        },
+        "provides": {
+          "$ref": "#/definitions/idList"
+        },
+        "codeRefs": {
+          "$ref": "#/definitions/textList"
+        },
+        "docRefs": {
+          "$ref": "#/definitions/textList"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "tags": {
+          "$ref": "#/definitions/textList"
+        },
+        "order": {
+          "type": "number"
+        },
+        "abstraction": {
+          "type": "string"
+        },
+        "includes": {
+          "$ref": "#/definitions/textList"
+        },
+        "excludes": {
+          "$ref": "#/definitions/textList"
+        },
+        "mayDependOn": {
+          "$ref": "#/definitions/idList"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/module"
+          }
+        },
+        "designNote": {
+          "type": "string",
+          "description": "设计版本专用：为什么这样设计 / 调整（Markdown）"
+        }
       }
     },
     "relation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "from", "to", "type"],
+      "required": [
+        "id",
+        "from",
+        "to",
+        "type"
+      ],
       "properties": {
-        "id": { "$ref": "#/definitions/id" },
-        "from": { "$ref": "#/definitions/id" },
-        "to": { "$ref": "#/definitions/id" },
-        "type": { "enum": ["depends", "calls", "dataflow", "event", "implements"] },
-        "mode": { "enum": ["sync", "async"] },
-        "interface": { "$ref": "#/definitions/id" },
-        "payload": {
-          "oneOf": [{ "$ref": "#/definitions/id" }, { "$ref": "#/definitions/idList" }]
+        "id": {
+          "$ref": "#/definitions/id"
         },
-        "description": { "type": "string" },
-        "designNote": { "type": "string", "description": "设计版本专用：为什么这样设计 / 调整（Markdown）" }
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "type": {
+          "enum": [
+            "depends",
+            "calls",
+            "dataflow",
+            "event",
+            "implements"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "sync",
+            "async"
+          ]
+        },
+        "interface": {
+          "$ref": "#/definitions/id"
+        },
+        "payload": {
+          "oneOf": [
+            {
+              "$ref": "#/definitions/id"
+            },
+            {
+              "$ref": "#/definitions/idList"
+            }
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "designNote": {
+          "type": "string",
+          "description": "设计版本专用：为什么这样设计 / 调整（Markdown）"
+        }
       }
     },
     "interface": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name"],
+      "required": [
+        "id",
+        "name"
+      ],
       "properties": {
-        "id": { "$ref": "#/definitions/id" },
-        "name": { "type": "string" },
-        "owner": { "$ref": "#/definitions/id" },
-        "signature": { "type": "string" },
-        "description": { "type": "string" },
-        "semantics": { "type": "string" },
-        "designNote": { "type": "string", "description": "设计版本专用：为什么这样设计 / 调整（Markdown）" }
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "$ref": "#/definitions/id"
+        },
+        "signature": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "semantics": {
+          "type": "string"
+        },
+        "designNote": {
+          "type": "string",
+          "description": "设计版本专用：为什么这样设计 / 调整（Markdown）"
+        }
       }
     },
     "dataStructure": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name"],
+      "required": [
+        "id",
+        "name"
+      ],
       "properties": {
-        "id": { "$ref": "#/definitions/id" },
-        "name": { "type": "string" },
-        "definition": { "type": "string" },
-        "description": { "type": "string" },
-        "invariants": { "type": "string" },
-        "designNote": { "type": "string", "description": "设计版本专用：为什么这样设计 / 调整（Markdown）" }
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "definition": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "invariants": {
+          "type": "string"
+        },
+        "designNote": {
+          "type": "string",
+          "description": "设计版本专用：为什么这样设计 / 调整（Markdown）"
+        }
       }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "kind"
+      ],
+      "description": "外部参与者：系统之外主动发起交互的实体，不进模块树（规则 A1–A5）",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "user",
+            "system",
+            "time"
+          ],
+          "description": "user 人的操作 / system 外部系统主动调用或推送 / time 定时与超时"
+        },
+        "description": {
+          "type": "string"
+        },
+        "designNote": {
+          "type": "string",
+          "description": "设计版本专用：为什么这样设计 / 调整（Markdown）"
+        }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "steps"
+      ],
+      "description": "一条有名字的执行链路；不写默认层次与触发者（规则 S9、A6）",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "cause": {
+          "type": "string",
+          "description": "触发原因（文字）"
+        },
+        "steps": {
+          "$ref": "#/definitions/steps"
+        },
+        "designNote": {
+          "type": "string",
+          "description": "设计版本专用：为什么这样设计 / 调整（Markdown）"
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/step"
+      }
+    },
+    "message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id",
+          "description": "场景内唯一；写了则帧 ID 稳定（F2、S11）"
+        },
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "label": {
+          "type": "string"
+        },
+        "relation": {
+          "$ref": "#/definitions/id",
+          "description": "对应的结构关系（S12、S13）"
+        },
+        "interface": {
+          "$ref": "#/definitions/id"
+        },
+        "payload": {
+          "oneOf": [
+            {
+              "$ref": "#/definitions/id"
+            },
+            {
+              "$ref": "#/definitions/idList"
+            }
+          ]
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "step": {
+      "description": "消息步骤（call / async / return）或组合步骤（alt / loop / par / ref），规则 S2",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "call"
+          ],
+          "properties": {
+            "call": {
+              "$ref": "#/definitions/message"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "async"
+          ],
+          "properties": {
+            "async": {
+              "$ref": "#/definitions/message"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "return"
+          ],
+          "properties": {
+            "return": {
+              "$ref": "#/definitions/message"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "alt"
+          ],
+          "properties": {
+            "alt": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "when",
+                  "steps"
+                ],
+                "properties": {
+                  "when": {
+                    "type": "string"
+                  },
+                  "steps": {
+                    "$ref": "#/definitions/steps"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "loop"
+          ],
+          "properties": {
+            "loop": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "while",
+                "steps"
+              ],
+              "properties": {
+                "while": {
+                  "type": "string"
+                },
+                "steps": {
+                  "$ref": "#/definitions/steps"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "par"
+          ],
+          "properties": {
+            "par": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "steps"
+                ],
+                "properties": {
+                  "steps": {
+                    "$ref": "#/definitions/steps"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ref"
+          ],
+          "properties": {
+            "ref": {
+              "$ref": "#/definitions/id",
+              "description": "引用另一个场景 ID（S6）"
+            }
+          }
+        }
+      ]
     }
   }
 }

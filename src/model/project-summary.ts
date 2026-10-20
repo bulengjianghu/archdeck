@@ -14,7 +14,7 @@ export interface ProjectSummary {
   layered: boolean
   /** 根下的顶层模块（分层时即各层） */
   top: { id: string; name: string; abstraction?: string }[]
-  counts: { modules: number; relations: number; interfaces: number; dataStructures: number }
+  counts: { modules: number; relations: number; interfaces: number; dataStructures: number; actors: number; scenarios: number }
   errors: number
   warnings: number
   /** 设计版本（ADR-0002） */

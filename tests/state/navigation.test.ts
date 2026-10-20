@@ -97,6 +97,17 @@ describe('导航规则', () => {
     expect(run(base, { type: 'restore', query: { level: 'infra.renamed' } }).state.levelId).toBe('sys')
   })
 
+  it('N12：「只看现状」隐藏了当前层次时，退到最近的可见层次', () => {
+    const { index: idx } = loadModel(
+      sampleFiles({ 'z.yaml': 'modules: [{ id: app.next, name: Next, parent: app, status: target, responsibility: x, children: [{ id: app.next.a, name: A, responsibility: x }] }]' }),
+    )
+    const s = at('app.next', { selection: { kind: 'module', id: 'app.next.a' } })
+    const r = transition(s, { type: 'toggle', patch: { currentOnly: true } }, { index: idx })
+    expect(r.state.levelId).toBe('app')
+    expect(r.state.toggles.currentOnly).toBe(true)
+    expect(transition(at('infra'), { type: 'toggle', patch: { currentOnly: true } }, { index: idx }).state.levelId).toBe('infra')
+  })
+
   it('N13：单击空白取消选中', () => {
     expect(run(at('infra', { selection: { kind: 'module', id: 'infra.mus' } }), { type: 'select', selection: null }).state.selection).toBeNull()
   })

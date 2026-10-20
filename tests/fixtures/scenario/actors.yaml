@@ -1,0 +1,9 @@
+actors:
+  - { id: actor.biz, name: 业务方, kind: system, description: 通过 SDK 调用播放器 }
+  - { id: actor.viewer, name: 观众, kind: user }
+  - { id: actor.timer, name: 定时器, kind: time }
+relations:
+  - { id: rc1, from: actor.biz, to: infra.player, type: calls }
+  - { id: rc2, from: actor.viewer, to: infra.player, type: calls }
+  - { id: rp, from: infra.player, to: infra.framework.sm, type: calls }
+  - { id: re1, from: infra.player, to: infra.framework.sm, type: event, mode: async }

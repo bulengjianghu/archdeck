@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { loadModel, projectLevel } from '../../src/model'
 import { BAND, cacheKey, contentBounds, layoutLayered, layoutView, moreChipId } from '../../src/layout/layout'
-import { sampleFiles } from '../fixtures/sample'
+import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
 const { index } = loadModel(sampleFiles())
 
@@ -106,5 +106,40 @@ describe('边界节点', () => {
     expect(new Set(boundaries.map(b => b.y)).size).toBe(1)
     const e = view.edges.find(x => x.to === 'boundary:app')!
     expect(pv.edges.get(e.id)!.curve).toBe(true)
+  })
+})
+
+describe('外部参与者（A7）', () => {
+  const { index: idx } = loadModel(scenarioFiles())
+
+  it('分层总览：用户在带的上方，外部系统在右侧通道之外；有边界框', async () => {
+    const view = projectLevel(idx, 'sys')
+    const pv = await layoutView(view)
+    const firstBand = pv.nodes.get('infra')!
+    const viewer = pv.nodes.get('actor.viewer')!
+    const biz = pv.nodes.get('actor.biz')!
+    expect(viewer.y + viewer.h).toBeLessThan(firstBand.y)
+    expect(biz.x).toBeGreaterThan(firstBand.x + firstBand.w)
+    expect(pv.frame).toBeDefined()
+    for (const e of view.edges.filter(x => x.from.startsWith('actor'))) expect(pv.edges.get(e.id)!.curve).toBeTruthy()
+  })
+
+  it('普通层次：参与者不参与 elk 排布，排在边界框外；边界框只包住内部模块', async () => {
+    const view = projectLevel(idx, 'infra', { showBoundaries: true, mergeTypes: true })
+    const pv = await layoutView(view)
+    const f = pv.frame!
+    for (const n of view.nodes.filter(x => x.role === 'module')) {
+      const b = pv.nodes.get(n.id)!
+      expect(b.x).toBeGreaterThanOrEqual(f.x)
+      expect(b.x + b.w).toBeLessThanOrEqual(f.x + f.w)
+    }
+    const viewer = pv.nodes.get('actor.viewer')!
+    expect(viewer.y + viewer.h).toBeLessThan(f.y)
+    expect(pv.nodes.get('actor.biz')!.x).toBeGreaterThan(f.x + f.w)
+    expect(pv.edges.get(view.edges.find(e => e.from === 'actor.biz')!.id)).toBeDefined()
+  })
+
+  it('没有参与者时没有边界框', async () => {
+    expect((await layoutView(projectLevel(index, 'infra'))).frame).toBeUndefined()
   })
 })

@@ -1,4 +1,4 @@
-import type { ModuleEntity } from '@/model'
+import type { ActorEntity, ActorKind, ModuleEntity } from '@/model'
 
 /** 画布节点的公共数据 */
 export interface NodeData {
@@ -21,4 +21,7 @@ export interface NodeData {
   changedFields?: string
   /** 设计版本：涉及其子树或相关关系的变更条数 */
   touched?: number
+  /** 外部参与者节点 */
+  actor?: ActorEntity
+  actorKind?: ActorKind
 }

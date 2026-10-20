@@ -19,8 +19,8 @@ export interface Box extends Point {
 
 export interface EdgeRoute {
   points: Point[]
-  /** 曲线（核心模块跨层边）还是折线 */
-  curve?: boolean
+  /** 曲线（核心模块跨层边、边界边、参与者的边）还是折线；'h' 为从侧边出发的横向曲线 */
+  curve?: boolean | 'h'
   label?: Point
 }
 
@@ -30,9 +30,11 @@ export interface PositionedView {
   edges: Map<string, EdgeRoute>
   /** layered：核心跨层边的走线 */
   coreEdges: Map<string, EdgeRoute>
+  /** 有外部参与者时：内部结构外的边界框（根层为系统边界，A7） */
+  frame?: Box
 }
 
-export const NODE_SIZE = { module: { w: 208, h: 76 }, boundary: { w: 176, h: 48 } }
+export const NODE_SIZE = { module: { w: 208, h: 76 }, boundary: { w: 176, h: 48 }, actor: { w: 160, h: 52 } }
 export const BAND = {
   left: 236,
   right: 168,
@@ -116,18 +118,84 @@ export function layoutLayered(view: LevelView): PositionedView {
     }
   }
 
+  // A7：用户在带的上方一行，外部系统与时间在右侧通道之外一列；与参与者相连的边画成曲线
+  const frame = { x: 0, y: 0, w: width, h: Math.max(0, y - BAND.gap) }
+  placeActors(view, nodes, frame, width + 28 + lane * BAND.lane + 56 - frame.x - frame.w)
+  for (const e of view.edges) {
+    if (edges.has(e.id)) continue
+    const route = actorRoute(nodes.get(e.from), nodes.get(e.to))
+    if (route) edges.set(e.id, route)
+  }
+
   const coreEdges = new Map<string, EdgeRoute>()
   for (const e of view.coreEdges ?? []) {
     const a = nodes.get(e.from)
     const b = nodes.get(e.to)
     if (!a || !b) continue
+    const actorEnd = isActorNode(view, e.from) || isActorNode(view, e.to)
+    if (actorEnd) {
+      coreEdges.set(e.id, actorRoute(a, b)!)
+      continue
+    }
     const down = a.y < b.y
     const p1 = { x: a.x + a.w / 2, y: down ? a.y + a.h : a.y }
     const p2 = { x: b.x + b.w / 2, y: down ? b.y : b.y + b.h }
     coreEdges.set(e.id, { points: [p1, p2], curve: true, label: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } })
   }
 
-  return { view, nodes, edges, coreEdges }
+  return { view, nodes, edges, coreEdges, ...(hasActors(view) ? { frame } : {}) }
+}
+
+// ── 外部参与者（A7）────────────────────────────────────────────
+
+const isActorNode = (view: LevelView, id: string) => view.nodes.some(n => n.id === id && n.role === 'actor')
+const hasActors = (view: LevelView) => view.nodes.some(n => n.role === 'actor')
+export const ACTOR_GAP = 72
+
+/**
+ * 参与者排布：用户类在边界框上方一行，外部系统与时间类在右侧一列（离边界框 rightGap）；
+ * 按所连内部节点的位置排序以减少交叉。
+ */
+export function placeActors(view: LevelView, nodes: Map<string, Box>, frame: Box, rightGap = ACTOR_GAP) {
+  const actors = view.nodes.filter(n => n.role === 'actor')
+  if (actors.length === 0) return
+  const kindOf = (id: string) => view.nodes.find(n => n.id === id)?.actorKind ?? 'system'
+  const anchor = (id: string, axis: 'x' | 'y') => {
+    const vs = view.edges
+      .filter(e => e.from === id || e.to === id)
+      .map(e => nodes.get(e.from === id ? e.to : e.from))
+      .filter((b): b is Box => !!b)
+      .map(b => (axis === 'x' ? b.x + b.w / 2 : b.y + b.h / 2))
+    return vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : axis === 'x' ? frame.x + frame.w / 2 : frame.y + frame.h / 2
+  }
+  const { w, h } = NODE_SIZE.actor
+  const gap = 20
+  const users = actors.filter(a => kindOf(a.id) === 'user').sort((a, b) => anchor(a.id, 'x') - anchor(b.id, 'x'))
+  const others = actors.filter(a => kindOf(a.id) !== 'user').sort((a, b) => anchor(a.id, 'y') - anchor(b.id, 'y'))
+  let x = frame.x + frame.w / 2 - (users.length * w + (users.length - 1) * gap) / 2
+  for (const a of users) {
+    nodes.set(a.id, { x, y: frame.y - ACTOR_GAP - h, w, h })
+    x += w + gap
+  }
+  let y = frame.y + frame.h / 2 - (others.length * h + (others.length - 1) * gap) / 2
+  for (const a of others) {
+    nodes.set(a.id, { x: frame.x + frame.w + rightGap, y, w, h })
+    y += h + gap
+  }
+}
+
+/** 参与者与内部节点之间的曲线：上方的参与者从底边出发，右侧的从左边出发 */
+function actorRoute(a?: Box, b?: Box): EdgeRoute | undefined {
+  if (!a || !b) return undefined
+  const port = (box: Box, other: Box): Point => {
+    if (other.y + other.h <= box.y) return { x: box.x + box.w / 2, y: box.y }
+    if (other.y >= box.y + box.h) return { x: box.x + box.w / 2, y: box.y + box.h }
+    return other.x >= box.x + box.w ? { x: box.x + box.w, y: box.y + box.h / 2 } : { x: box.x, y: box.y + box.h / 2 }
+  }
+  const p1 = port(a, b)
+  const p2 = port(b, a)
+  const side = p1.y !== a.y && p1.y !== a.y + a.h
+  return { points: [p1, p2], curve: side ? 'h' : true, label: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } }
 }
 
 /** 节点与走线的总外框，用于适应画布 */
@@ -154,7 +222,7 @@ export function contentBounds(pv: PositionedView): Box | null {
 // ── 普通层次 ─────────────────────────────────────────────────
 
 export function sizeOf(n: ViewNode): { w: number; h: number } {
-  return n.role === 'boundary' ? NODE_SIZE.boundary : NODE_SIZE.module
+  return n.role === 'boundary' ? NODE_SIZE.boundary : n.role === 'actor' ? NODE_SIZE.actor : NODE_SIZE.module
 }
 
 /** 合并了多种类型的边只标条数，颜色表示主要类型；单一类型标类型名 */
@@ -187,8 +255,8 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
       'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
       'elk.edgeLabels.inline': 'true',
     },
-    children: view.nodes.filter(n => n.role !== 'boundary').map(n => ({ id: n.id, width: sizeOf(n).w, height: sizeOf(n).h })),
-    edges: view.edges.filter(e => !isBoundaryEdge(e)).map<ElkExtendedEdge>(e => {
+    children: view.nodes.filter(n => n.role !== 'boundary' && n.role !== 'actor').map(n => ({ id: n.id, width: sizeOf(n).w, height: sizeOf(n).h })),
+    edges: view.edges.filter(e => !isBoundaryEdge(e) && !isActorNode(view, e.from) && !isActorNode(view, e.to)).map<ElkExtendedEdge>(e => {
       const text = edgeLabel(e)
       return {
         id: e.id,
@@ -213,8 +281,24 @@ export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
       label: lbl && lbl.x !== undefined ? { x: lbl.x + (lbl.width ?? 0) / 2, y: (lbl.y ?? 0) + (lbl.height ?? 0) / 2 } : undefined,
     })
   }
+  // 边界框只包住内部结构（不含边界节点与参与者）
+  const inner = [...nodes.values()]
+  const pad = 28
+  const frame = inner.length
+    ? (() => {
+        const x1 = Math.min(...inner.map(b => b.x)) - pad
+        const y1 = Math.min(...inner.map(b => b.y)) - pad
+        return { x: x1, y: y1, w: Math.max(...inner.map(b => b.x + b.w)) + pad - x1, h: Math.max(...inner.map(b => b.y + b.h)) + pad - y1 }
+      })()
+    : { x: 0, y: 0, w: NODE_SIZE.module.w, h: NODE_SIZE.module.h }
   placeBoundaries(view, nodes, edges)
-  return { view, nodes, edges, coreEdges: new Map() }
+  placeActors(view, nodes, frame)
+  for (const e of view.edges) {
+    if (edges.has(e.id) || !(isActorNode(view, e.from) || isActorNode(view, e.to))) continue
+    const route = actorRoute(nodes.get(e.from), nodes.get(e.to))
+    if (route) edges.set(e.id, route)
+  }
+  return { view, nodes, edges, coreEdges: new Map(), ...(hasActors(view) ? { frame } : {}) }
 }
 
 export const BOUNDARY_ROW_GAP = 96
@@ -226,7 +310,7 @@ export const BOUNDARY_ROW_GAP = 96
 export function placeBoundaries(view: LevelView, nodes: Map<string, Box>, edges: Map<string, EdgeRoute>) {
   const boundaries = view.nodes.filter(n => n.role === 'boundary')
   if (boundaries.length === 0) return
-  const inner = [...nodes.values()]
+  const inner = view.nodes.filter(n => n.role !== 'boundary' && n.role !== 'actor').map(n => nodes.get(n.id)).filter((b): b is Box => !!b)
   const minX = inner.length ? Math.min(...inner.map(b => b.x)) : 0
   const maxX = inner.length ? Math.max(...inner.map(b => b.x + b.w)) : 0
   const bottom = inner.length ? Math.max(...inner.map(b => b.y + b.h)) : 0
@@ -301,7 +385,7 @@ const cache = new Map<string, PositionedView>()
 const CACHE_LIMIT = 64
 
 export function cacheKey(view: LevelView): string {
-  return JSON.stringify([view.mode, view.parentId, view.nodes.map(n => n.id), view.edges.map(e => [e.id, e.relationIds.length])])
+  return JSON.stringify([view.mode, view.parentId, view.nodes.map(n => (n.actorKind ? `${n.id}:${n.actorKind}` : n.id)), view.edges.map(e => [e.id, e.relationIds.length])])
 }
 
 export async function layoutView(view: LevelView): Promise<PositionedView> {
@@ -311,7 +395,7 @@ export async function layoutView(view: LevelView): Promise<PositionedView> {
   let result: PositionedView
   if (view.mode === 'layered') result = layoutLayered(view)
   else if (view.nodes.length === 0) result = { view, nodes: new Map(), edges: new Map(), coreEdges: new Map() }
-  else if (!view.nodes.some(n => n.role !== 'boundary')) result = fromElkGraph(view, { id: 'root', children: [], edges: [] })
+  else if (!view.nodes.some(n => n.role !== 'boundary' && n.role !== 'actor')) result = fromElkGraph(view, { id: 'root', children: [], edges: [] })
   else result = await layoutGraph(view)
   if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value!)
   cache.set(key, result)

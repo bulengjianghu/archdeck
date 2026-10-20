@@ -66,6 +66,7 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
             <div><dt>关系</dt><dd>{{ p.counts.relations }}</dd></div>
             <div><dt>接口</dt><dd>{{ p.counts.interfaces }}</dd></div>
             <div><dt>数据结构</dt><dd>{{ p.counts.dataStructures }}</dd></div>
+            <div v-if="p.counts.scenarios"><dt>场景</dt><dd>{{ p.counts.scenarios }}</dd></div>
           </dl>
 
           <footer class="meta">

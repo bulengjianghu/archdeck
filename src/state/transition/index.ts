@@ -37,7 +37,7 @@ function apply(state: ViewState, action: ViewAction, { index }: TransitionContex
     case 'hover':
       return { state: state.hover === action.id ? state : { ...state, hover: action.id }, history: 'replace' }
     case 'toggle':
-      return { state: { ...state, toggles: { ...state.toggles, ...action.patch } }, history: 'replace' }
+      return nav.toggle(state, index, action.patch)
     default:
       return { state, history: 'replace' }
   }

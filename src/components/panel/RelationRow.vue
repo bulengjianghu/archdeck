@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
+import { moduleName } from '@/model'
 import ChangeBadge from './ChangeBadge.vue'
 
 /** 一行关系：点击跳到它真实所在的层次并选中；perspective 给出时只显示对端 */
 const props = defineProps<{ id: string; perspective?: string }>()
 const desk = useDesk()
 const r = computed(() => desk.index.value?.relations.get(props.id))
-const name = (id: string) => desk.index.value?.modules.get(id)?.name ?? id
+const name = (id: string) => (desk.index.value ? moduleName(desk.index.value, id) : id)
 const ifName = computed(() => (r.value?.interface ? desk.index.value?.interfaces.get(r.value.interface)?.name : undefined))
 </script>
 

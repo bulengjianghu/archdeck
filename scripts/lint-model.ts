@@ -50,7 +50,9 @@ for (const dir of dirs) {
   const top = (index.childrenOf.get(index.rootId) ?? []).length
   console.log(
     `${payload.dir}：${payload.files.length} 个文件，${index.modules.size} 个模块（根下 ${top} 个），` +
-      `${index.relations.size} 条关系，${index.interfaces.size} 个接口，${index.dataStructures.size} 个数据结构；` +
+      `${index.relations.size} 条关系，${index.interfaces.size} 个接口，${index.dataStructures.size} 个数据结构` +
+      (index.actors.size || index.scenarios.size ? `，${index.actors.size} 个参与者，${index.scenarios.size} 个场景` : '') +
+      '；' +
       `${errors.length} 个错误，${warnings.length} 个提醒`,
   )
   totalErrors += errors.length

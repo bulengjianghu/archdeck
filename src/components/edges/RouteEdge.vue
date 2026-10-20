@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { BaseEdge } from '@vue-flow/core'
 import type { EdgeRoute } from '@/layout/layout'
 import type { ViewEdge } from '@/model'
-import { roundedPolyline, verticalCurve } from './routePath'
+import { horizontalCurve, roundedPolyline, verticalCurve } from './routePath'
 
 export interface RouteEdgeData {
   route: EdgeRoute
@@ -21,7 +21,8 @@ const props = defineProps<{ id: string; data: RouteEdgeData; markerEnd?: string 
 
 const path = computed(() => {
   const pts = props.data.route.points
-  return props.data.route.curve && pts.length === 2 ? verticalCurve(pts[0], pts[1]) : roundedPolyline(pts)
+  if (props.data.route.curve && pts.length === 2) return props.data.route.curve === 'h' ? horizontalCurve(pts[0], pts[1]) : verticalCurve(pts[0], pts[1])
+  return roundedPolyline(pts)
 })
 
 const DASH: Record<string, string | undefined> = { depends: '6 4', implements: '6 4', event: '2 4' }

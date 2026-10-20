@@ -4,14 +4,14 @@
  * | 参数    | 含义                                   |
  * |---------|----------------------------------------|
  * | `level` | 当前层次（根层省略）                   |
- * | `sel`   | 选中，`m:` / `r:` / `e:` 前缀          |
+ * | `sel`   | 选中，`m:` / `r:` / `e:` / `a:` 前缀   |
  */
 import type { ModelIndex } from '@/model'
 import { selectionExists, withLevel } from './navigation'
 import type { Query, Selection, TransitionResult, ViewState } from './types'
 
-const SELECTION_PREFIX = { module: 'm', relation: 'r', edge: 'e' } as const
-const SELECTION_KIND = { m: 'module', r: 'relation', e: 'edge' } as const
+const SELECTION_PREFIX = { module: 'm', relation: 'r', edge: 'e', actor: 'a' } as const
+const SELECTION_KIND = { m: 'module', r: 'relation', e: 'edge', a: 'actor' } as const
 
 export function encodeSelection(s: Selection | null): string | undefined {
   if (!s) return undefined
@@ -20,7 +20,7 @@ export function encodeSelection(s: Selection | null): string | undefined {
 
 export function decodeSelection(raw: unknown): Selection | null {
   if (typeof raw !== 'string') return null
-  const m = /^([mre]):(.+)$/.exec(raw)
+  const m = /^([mrea]):(.+)$/.exec(raw)
   if (!m) return null
   return { kind: SELECTION_KIND[m[1] as keyof typeof SELECTION_KIND], id: m[2] }
 }

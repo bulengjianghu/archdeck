@@ -2,6 +2,7 @@
  * Indexer：把校验后的模型整理成按 ID 查询的结构。输入必须来自 validate()。
  */
 import type { ArchModel, ModelIndex, ModuleEntity } from './types'
+import { messagesOf } from './scenario/steps'
 
 export function buildIndex(model: ArchModel): ModelIndex {
   const rootId = model.system.id
@@ -32,6 +33,21 @@ export function buildIndex(model: ArchModel): ModelIndex {
     push(inRelations, r.to, r.id)
   }
 
+  const scenarios = new Map(model.scenarios.map(s => [s.id, s]))
+  const scenariosOf = new Map<string, string[]>([[rootId, model.scenarios.map(s => s.id)]])
+  const triggeredBy = new Map<string, string[]>()
+  for (const sc of model.scenarios) {
+    const messages = messagesOf(scenarios, sc.id)
+    // R4：有帧端点在其子树内的场景 → 端点的全部祖先（根已含全部场景）
+    const touched = new Set<string>()
+    for (const m of messages) for (const id of [m.msg.from, m.msg.to]) for (const p of pathOf.get(id) ?? []) touched.add(p)
+    touched.delete(rootId)
+    for (const id of touched) push(scenariosOf, id, sc.id)
+    // A6：触发者 = 第一条消息的发送方
+    const first = messages[0]?.msg.from
+    if (first !== undefined && model.actors.some(a => a.id === first)) push(triggeredBy, first, sc.id)
+  }
+
   return {
     model,
     rootId,
@@ -43,7 +59,16 @@ export function buildIndex(model: ArchModel): ModelIndex {
     pathOf,
     outRelations,
     inRelations,
+    actors: new Map(model.actors.map(a => [a.id, a])),
+    scenarios,
+    scenariosOf,
+    triggeredBy,
   }
+}
+
+/** 触发者（A6）：第一条消息的发送方，模块或参与者；场景没有消息时为 undefined */
+export function triggerOf(index: ModelIndex, scenarioId: string): string | undefined {
+  return messagesOf(index.scenarios, scenarioId)[0]?.msg.from
 }
 
 /** 全部是层时按 order（缺省排最后）再按声明顺序；否则按声明顺序 */
@@ -84,6 +109,7 @@ export function isLayered(index: ModelIndex, parentId: string): boolean {
   return kids.length > 0 && kids.every(k => index.modules.get(k)?.kind === 'layer')
 }
 
+/** 模块、参与者或系统根的显示名 */
 export function moduleName(index: ModelIndex, id: string): string {
-  return id === index.rootId ? index.model.system.name : (index.modules.get(id)?.name ?? id)
+  return id === index.rootId ? index.model.system.name : (index.modules.get(id)?.name ?? index.actors.get(id)?.name ?? id)
 }

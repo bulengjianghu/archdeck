@@ -75,7 +75,7 @@ describe('接入层 · 多项目读取', () => {
         { id: 'up', name: 'Up', abstraction: 'a' },
         { id: 'down', name: 'Down', abstraction: 'b' },
       ],
-      counts: { modules: 2, relations: 1, interfaces: 0, dataStructures: 0 },
+      counts: { modules: 2, relations: 1, interfaces: 0, dataStructures: 0, actors: 0, scenarios: 0 },
       errors: 1,
     })
     expect(alpha).toMatchObject({ id: 'alpha', layered: false, warnings: 1 })

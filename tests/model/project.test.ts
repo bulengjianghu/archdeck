@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { loadModel, mapEndpoint, projectLevel, type LevelView, type ViewEdge } from '../../src/model'
-import { sampleFiles } from '../fixtures/sample'
+import { loadModel, mapEndpoint, nearestVisibleLevel, projectLevel, type LevelView, type ViewEdge } from '../../src/model'
+import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
 const { index } = loadModel(sampleFiles())
 
@@ -171,5 +171,46 @@ describe('mapEndpoint', () => {
     expect(mapEndpoint(index, 'infra', 'infra')).toEqual({ kind: 'skip' })
     expect(mapEndpoint(index, 'infra.framework', 'infra')).toEqual({ kind: 'skip' })
     expect(mapEndpoint(index, 'infra', 'nope')).toEqual({ kind: 'skip' })
+  })
+})
+
+describe('外部参与者（L6、A2）', () => {
+  const { index: idx } = loadModel(scenarioFiles())
+
+  it('mapEndpoint：参与者在任何层次都映射为它自己', () => {
+    expect(mapEndpoint(idx, 'sys', 'actor.biz')).toEqual({ kind: 'actor', node: 'actor.biz', exact: true })
+    expect(mapEndpoint(idx, 'infra.framework', 'actor.biz')).toEqual({ kind: 'actor', node: 'actor.biz', exact: true })
+  })
+
+  it('根层出现全部有关系的参与者，入口关系投影为到层的边；没有关系的参与者不出现', () => {
+    const v = projectLevel(idx, 'sys')
+    expect(nodeIds(v, 'actor')).toEqual(['actor.biz', 'actor.viewer'])
+    expect(v.nodes.find(n => n.id === 'actor.biz')).toMatchObject({ role: 'actor', actorKind: 'system', hasChildren: false })
+    expect(edgeSummary(v.edges).filter(e => e.startsWith('actor'))).toEqual(['actor.biz->infra:calls:aggregate:rc1', 'actor.viewer->infra:calls:aggregate:rc2'])
+    // 入口落在核心模块上：核心跨层边连到核心模块
+    expect(edgeSummary(v.coreEdges!).filter(e => e.startsWith('actor'))).toEqual(['actor.biz->infra.player:calls:direct:rc1', 'actor.viewer->infra.player:calls:direct:rc2'])
+  })
+
+  it('某一层只出现与本层子树有关系的参与者，不受边界节点开关影响', () => {
+    const infra = projectLevel(idx, 'infra', { showBoundaries: false, mergeTypes: true })
+    expect(nodeIds(infra, 'actor')).toEqual(['actor.biz', 'actor.viewer'])
+    expect(infra.edges.find(e => e.from === 'actor.biz')).toMatchObject({ to: 'infra.player', kind: 'direct' })
+    expect(nodeIds(projectLevel(idx, 'infra.framework'), 'actor')).toEqual([])
+    expect(nodeIds(projectLevel(idx, 'app'), 'actor')).toEqual([])
+  })
+
+  it('关系类型筛选同样作用于参与者的边', () => {
+    expect(nodeIds(projectLevel(idx, 'sys', { showBoundaries: true, relationTypes: ['depends'] }), 'actor')).toEqual([])
+  })
+})
+
+describe('nearestVisibleLevel（N12）', () => {
+  const { index: idx } = loadModel(
+    sampleFiles({ 'z.yaml': 'modules: [{ id: app.next, name: Next, parent: app, status: target, responsibility: x, children: [{ id: app.next.a, name: A, responsibility: x }] }]' }),
+  )
+  it('层次被「只看现状」隐藏时退到最近的可见祖先；未隐藏时不变', () => {
+    expect(nearestVisibleLevel(idx, 'app.next.a', { currentOnly: true })).toBe('app')
+    expect(nearestVisibleLevel(idx, 'app.next.a', { currentOnly: false })).toBe('app.next.a')
+    expect(nearestVisibleLevel(idx, 'nope', { currentOnly: true })).toBe('sys')
   })
 })

@@ -23,14 +23,17 @@ import type {
  * 端点映射：把一个端点映射到「父模块 P 下的直接子模块」（结构投影与场景投影共用，规则 L1–L4、P1）。
  * - local：落在 P 的子树内，node 为对应的子模块，exact 表示端点恰好就是该子模块；
  * - external：在 P 外，提升为「最近公共祖先下、它那一侧的子模块」作为边界节点；
+ * - actor：外部参与者，在任何层次都映射为它自己（L6）；
  * - skip：端点就是 P 本身或其祖先，或不存在。
  */
 export type Endpoint =
   | { kind: 'local'; node: string; exact: boolean }
   | { kind: 'external'; node: string; exact: boolean }
+  | { kind: 'actor'; node: string; exact: true }
   | { kind: 'skip' }
 
 export function mapEndpoint(index: ModelIndex, parentId: string, id: string): Endpoint {
+  if (index.actors.has(id)) return { kind: 'actor', node: id, exact: true }
   const parentPath = index.pathOf.get(parentId)
   const path = index.pathOf.get(id)
   if (!parentPath || !path) return { kind: 'skip' }
@@ -60,8 +63,9 @@ export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectO
 
   const relations = index.model.relations.filter(r => {
     if (opts.relationTypes && opts.relationTypes.length > 0 && !opts.relationTypes.includes(r.type)) return false
-    return visible(r.from) && visible(r.to)
+    return (index.actors.has(r.from) || visible(r.from)) && (index.actors.has(r.to) || visible(r.to))
   })
+  const actorIds = new Set<string>()
 
   const edges = new EdgeCollector(!layered && !!opts.mergeTypes)
   const boundaryOrder: string[] = []
@@ -74,6 +78,19 @@ export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectO
     const b = mapEndpoint(index, parentId, r.to)
     if (a.kind === 'skip' || b.kind === 'skip') continue
     if (a.kind === 'external' && b.kind === 'external') continue
+
+    // L6、A2：参与者与本层子树之间的关系；与本层子树无关的参与者不出现
+    if (a.kind === 'actor' || b.kind === 'actor') {
+      const local = a.kind === 'local' ? a : b.kind === 'local' ? b : null
+      if (!local) continue
+      actorIds.add(a.kind === 'actor' ? a.node : (b as { node: string }).node)
+      edges.add(a.node, b.node, r, local.exact)
+      if (layered) {
+        const c = coreRep(index.pathOf.get(local === a ? r.from : r.to)!, depth, coreOf)
+        if (c.core) coreEdges.add(a.kind === 'actor' ? a.node : c.node, b.kind === 'actor' ? b.node : c.node, r, c.exact)
+      }
+      continue
+    }
 
     if (a.kind === 'local' && b.kind === 'local') {
       if (a.node === b.node) continue
@@ -113,6 +130,7 @@ export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectO
   for (const b of boundaryOrder) {
     nodes.push({ id: `boundary:${b}`, moduleId: b, role: 'boundary', hasChildren: visibleChildren(b).length > 0 })
   }
+  for (const a of index.model.actors) if (actorIds.has(a.id)) nodes.push({ id: a.id, moduleId: a.id, role: 'actor', hasChildren: false, actorKind: a.kind })
 
   return {
     mode: layered ? 'layered' : 'graph',
@@ -168,6 +186,13 @@ class EdgeCollector {
 /** 视图边 ID；不给 type 表示合并了类型 */
 export function edgeId(from: string, to: string, type?: string): string {
   return type ? `${from}->${to}:${type}` : `${from}->${to}`
+}
+
+/** N12：给定可见性下最近的可见层次（层次自身或最近的可见祖先，否则根） */
+export function nearestVisibleLevel(index: ModelIndex, levelId: string, opts: Pick<ProjectOptions, 'currentOnly'>): string {
+  const visible = makeVisibility(index, { showBoundaries: true, ...opts })
+  const path = index.pathOf.get(levelId) ?? [index.rootId]
+  return [...path].reverse().find(visible) ?? index.rootId
 }
 
 /** currentOnly 时，status: target 的模块及其后代不可见 */

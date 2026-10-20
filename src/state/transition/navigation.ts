@@ -2,8 +2,8 @@
  * 导航规则（N1–N13）：层次与选中怎么变、进不进浏览器历史。纯函数。
  * 「重新加载后退到哪」等关于被描述系统的问题交给模型层的架构查询（nearestExisting、lowestCommonAncestor）。
  */
-import { lowestCommonAncestor, nearestExisting, type ModelIndex } from '@/model'
-import type { Selection, TransitionResult, ViewAction, ViewState } from './types'
+import { lowestCommonAncestor, nearestExisting, nearestVisibleLevel, type ModelIndex } from '@/model'
+import type { Selection, Toggles, TransitionResult, ViewAction, ViewState } from './types'
 
 /** 选中的对象在本模型中是否存在；视图边按 ID 规则重算，总视为存在 */
 export function selectionExists(index: ModelIndex, s: Selection | null): s is Selection {
@@ -13,6 +13,8 @@ export function selectionExists(index: ModelIndex, s: Selection | null): s is Se
       return index.modules.has(s.id) || s.id === index.rootId
     case 'relation':
       return index.relations.has(s.id)
+    case 'actor':
+      return index.actors.has(s.id)
     case 'edge':
       return true
   }
@@ -76,6 +78,14 @@ export function revealModule(state: ViewState, index: ModelIndex, id: string): T
 /** N5、N11：重新加载保留层次与选中；层次失效退到最近仍存在的祖先，选中失效则清空 */
 export function reloaded(state: ViewState, index: ModelIndex, previousPath: readonly string[]): TransitionResult {
   return replace(withLevel(state, index, nearestExisting(index, previousPath), { keepSelection: true }))
+}
+
+/** 显示开关；N12：「只看现状」隐藏了当前层次时退到最近的可见层次 */
+export function toggle(state: ViewState, index: ModelIndex, patch: Partial<Toggles>): TransitionResult {
+  const toggles = { ...state.toggles, ...patch }
+  const next = { ...state, toggles }
+  const level = state.levelId ? nearestVisibleLevel(index, state.levelId, toggles) : state.levelId
+  return replace(level === state.levelId ? next : withLevel(next, index, level, { keepSelection: true }))
 }
 
 /** 键盘意图：N9 Esc 先取消选中、无选中再返回上级；N7 Backspace 返回上级，根层回项目列表（'leave'） */

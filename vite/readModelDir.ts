@@ -42,7 +42,7 @@ export interface ModelPayload {
 }
 
 export function isModelFile(file: string): boolean {
-  return /\.ya?ml$/i.test(file)
+  return /\.(ya?ml|json)$/i.test(file)
 }
 
 export function readModelDir(dir: string, projectRoot: string): Pick<ModelPayload, 'dir' | 'files'> {
@@ -188,6 +188,8 @@ export function summarizeProject(payload: ModelPayload): ProjectSummary {
       relations: index.relations.size,
       interfaces: index.interfaces.size,
       dataStructures: index.dataStructures.size,
+      actors: index.actors.size,
+      scenarios: index.scenarios.size,
     },
     errors: issues.filter(i => i.severity === 'error').length,
     warnings: issues.filter(i => i.severity === 'warning').length,

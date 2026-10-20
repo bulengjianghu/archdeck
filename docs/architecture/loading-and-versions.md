@@ -28,7 +28,7 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计)──▶ ModelDiff（
 | `readDesignRevision` | 读设计的某一轮，并附对比基线：当前版本，以及上一轮（若有） |
 | `summarizeProject` | 跑一遍 `loadModel`，生成首页卡片的摘要（规模、问题数、顶层、设计版本） |
 
-描述文件扩展名：`.yaml` / `.yml`；`.json` 待实现（S8）。
+描述文件扩展名：`.yaml` / `.yml` / `.json`（S8，JSON 与 YAML 走同一解析器）。
 
 ### 2.1 端点与事件
 
@@ -45,16 +45,10 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计)──▶ ModelDiff（
 
 | 步骤 | 做什么 | 规则 |
 |---|---|---|
-| `load` | 按路径排序；逐文件解析 YAML（语法错误整份跳过）、按 JSON Schema 检查格式（未知字段即错误，整份跳过）；合并为 `ArchModel`，每个实体记录出处 `{ file, path, line }`；展开内联子模块 | M1、M2、M10 |
-| `validate` | 跨文件检查，不抛异常：error 级实体被剔除，warning 级只去掉坏引用，返回可以安全建索引的模型 | M3–M9 |
-| `buildIndex` | 按 ID 的表；`childrenOf`（层按 `order` 排序）；`pathOf`（根到模块）；出入边表；查询 `lowestCommonAncestor`、`moduleName` | — |
+| `load` | 按路径排序；逐文件解析 YAML / JSON（语法错误整份跳过）、按 JSON Schema 检查格式（未知字段即错误，整份跳过）；合并为 `ArchModel`，每个实体记录出处 `{ file, path, line }`；展开内联子模块；步骤树规整为 `Step`（记录路径与出处，F2） | M1、M2、M10、S2、S8 |
+| `validate` | 跨文件检查，不抛异常：error 级实体被剔除，warning 级只去掉坏引用，返回可以安全建索引的模型；场景先清理坏端点、坏引用、重复步骤 id 与成环的 `ref`，再用 `bindRelation` 检查与结构的一致性（校验与回放结果一致） | M3–M9、S5–S6、S11–S12 |
+| `buildIndex` | 按 ID 的表（含参与者、场景）；`childrenOf`（层按 `order` 排序）；`pathOf`（根到模块）；出入边表（含参与者）；`scenariosOf`（模块 → 有帧端点在其子树内的场景，R4）；`triggeredBy`（参与者 → 由它触发的场景，A6）；查询 `lowestCommonAncestor`、`nearestExisting`（N5、N11）、`moduleName`、`triggerOf` | R4、A6 |
 | `loadModel` | 串起三步并汇总问题；模型层对外唯一的加载入口 | — |
-
-待实现（ADR-0003）：
-
-- Loader：解析 `actors`、`scenario` / `scenarios`（每个步骤记录出处）、`.json`。
-- Validator：参与者 ID 不与模块重复（M3）；场景校验 S5–S13。与结构的一致性检查调用场景投影的 `bindRelation`，保证校验与回放结果一致。
-- Indexer：`scenariosOf`（模块 → 有帧端点在其子树内的场景）、`triggeredBy`（参与者 → 由它触发的场景，A6）、架构查询 `nearestExisting`（N5、N11）。
 
 ## 4. 设计版本与对比
 
@@ -100,7 +94,7 @@ interface ModelPayload {
 interface ProjectSummary {
   id: string; name: string; description?: string; source?: SourceDef; dir: string
   layered: boolean; top: { id: string; name: string; abstraction?: string }[]
-  counts: { modules: number; relations: number; interfaces: number; dataStructures: number }
+  counts: { modules: number; relations: number; interfaces: number; dataStructures: number; actors: number; scenarios: number }
   errors: number; warnings: number; designs: DesignInfo[]
 }
 
@@ -117,7 +111,7 @@ interface ArchModel {                       // 实体都带 src { file, path, li
   modules: ModuleEntity[]                   // 扁平化，带 parentId、seq
   relations: RelationEntity[]               // payload 规整为数组
   interfaces: InterfaceEntity[]; dataStructures: DataStructureEntity[]
-  actors: ActorEntity[]; scenarios: ScenarioEntity[]   // 待实现
+  actors: ActorEntity[]; scenarios: ScenarioEntity[]   // 场景的 steps 为规整后的 Step 树
 }
 
 interface Issue { severity: 'error' | 'warning'; code: string; message: string; file?: string; path?: string; line?: number }
@@ -127,8 +121,8 @@ interface ModelIndex {
   modules / relations / interfaces / dataStructures: Map<string, …>
   childrenOf: Map<string, string[]>; pathOf: Map<string, string[]>
   outRelations / inRelations: Map<string, string[]>
-  actors: Map<string, ActorEntity>; scenarios: Map<string, ScenarioEntity>        // 待实现
-  scenariosOf: Map<string, string[]>; triggeredBy: Map<string, string[]>          // 待实现
+  actors: Map<string, ActorEntity>; scenarios: Map<string, ScenarioEntity>
+  scenariosOf: Map<string, string[]>; triggeredBy: Map<string, string[]>
 }
 
 interface ModelDiff {
@@ -153,6 +147,7 @@ listProjects(modelRoot, projectRoot): ProjectSummary[]
 // 模型层
 loadModel(files: readonly RawFile[]): { index: ModelIndex; issues: Issue[] }    // 纯函数，不抛异常
 lowestCommonAncestor(index, a, b): string
-nearestExisting(index, path: readonly string[]): string                         // 待实现：旧路径中最深的仍存在的模块，否则根
+nearestExisting(index, path: readonly string[]): string                         // 旧路径中最深的仍存在的模块，否则根
+triggerOf(index, scenarioId): string | undefined                                  // A6：第一条消息的发送方
 diffModels(base: ModelIndex, target: ModelIndex): ModelDiff
 ```

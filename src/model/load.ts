@@ -1,5 +1,5 @@
 /**
- * Loader：解析 YAML、按 JSON Schema 检查单文件格式、把多个文件合并成一个模型。
+ * Loader：解析 YAML / JSON（同一解析器，S8）、按 JSON Schema 检查单文件格式、把多个文件合并成一个模型。
  *
  * 单文件格式不合法时整份文件跳过并报错；跨文件的引用完整性交给 validate.ts。
  */
@@ -7,6 +7,7 @@ import Ajv, { type ErrorObject } from 'ajv'
 import { LineCounter, parseDocument, type Document } from 'yaml'
 import schema from '../../schema/arch-file.schema.json'
 import type {
+  ActorEntity,
   ArchFileDef,
   ArchModel,
   DataStructureEntity,
@@ -16,7 +17,10 @@ import type {
   ModuleEntity,
   RawFile,
   RelationEntity,
+  ScenarioEntity,
   SourceLoc,
+  Step,
+  StepDef,
   SystemDef,
 } from './types'
 
@@ -38,6 +42,8 @@ export function load(files: readonly RawFile[]): LoadResult {
   const relations: RelationEntity[] = []
   const interfaces: InterfaceEntity[] = []
   const dataStructures: DataStructureEntity[] = []
+  const actors: ActorEntity[] = []
+  const scenarios: ScenarioEntity[] = []
   let seq = 0
 
   const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path))
@@ -71,6 +77,13 @@ export function load(files: readonly RawFile[]): LoadResult {
     })
     data.interfaces?.forEach((x, i) => interfaces.push({ ...x, src: locate(['interfaces', i]) }))
     data.dataStructures?.forEach((x, i) => dataStructures.push({ ...x, src: locate(['dataStructures', i]) }))
+    data.actors?.forEach((x, i) => actors.push({ ...x, seq: seq++, src: locate(['actors', i]) }))
+    const pushScenario = (def: NonNullable<ArchFileDef['scenario']>, path: (string | number)[]) => {
+      const { steps, ...rest } = def
+      scenarios.push({ ...rest, steps: normalizeSteps(steps, [...path, 'steps'], '', locate), seq: seq++, src: locate(path) })
+    }
+    if (data.scenario) pushScenario(data.scenario, ['scenario'])
+    data.scenarios?.forEach((x, i) => pushScenario(x, ['scenarios', i]))
   }
 
   let system = DEFAULT_SYSTEM
@@ -84,7 +97,35 @@ export function load(files: readonly RawFile[]): LoadResult {
   }
   for (const m of modules) if (m.parentId === undefined) m.parentId = system.id
 
-  return { model: { system, modules, relations, interfaces, dataStructures }, issues }
+  return { model: { system, modules, relations, interfaces, dataStructures, actors, scenarios }, issues }
+}
+
+/** 步骤树规整为 Step：记录路径（F2）与出处，payload 规整为数组 */
+function normalizeSteps(defs: StepDef[], yamlPath: (string | number)[], prefix: string, locate: ParsedFile['locate']): Step[] {
+  return defs.map((def, i) => {
+    const at = [...yamlPath, i]
+    const path = prefix ? `${prefix}.${i}` : String(i)
+    const src = locate(at)
+    if ('call' in def || 'async' in def || 'return' in def) {
+      const kind = 'call' in def ? 'call' : 'async' in def ? 'async' : 'return'
+      const raw = 'call' in def ? def.call : 'async' in def ? def.async : def.return
+      const payload = raw.payload === undefined ? [] : Array.isArray(raw.payload) ? raw.payload : [raw.payload]
+      return { kind, path, src, msg: { ...raw, payload } }
+    }
+    if ('alt' in def) {
+      return {
+        kind: 'alt',
+        path,
+        src,
+        branches: def.alt.map((b, k) => ({ when: b.when, steps: normalizeSteps(b.steps, [...at, 'alt', k, 'steps'], `${path}.alt${k}`, locate) })),
+      }
+    }
+    if ('loop' in def) return { kind: 'loop', path, src, while: def.loop.while, steps: normalizeSteps(def.loop.steps, [...at, 'loop', 'steps'], `${path}.loop`, locate) }
+    if ('par' in def) {
+      return { kind: 'par', path, src, branches: def.par.map((b, k) => ({ steps: normalizeSteps(b.steps, [...at, 'par', k, 'steps'], `${path}.par${k}`, locate) })) }
+    }
+    return { kind: 'ref', path, src, scenario: def.ref }
+  })
 }
 
 interface ParsedFile {
