@@ -317,4 +317,6 @@ export interface ProjectOptions {
   currentOnly?: boolean
   /** 普通层次中同一对模块之间的关系合并成一条边，不按类型分开（分层总览不受影响） */
   mergeTypes?: boolean
+  /** 运行视角的舞台：场景中全部帧的端点，用于补齐结构上没有关系的边界节点与参与者 */
+  scenarioEnds?: readonly { from: string; to: string }[]
 }

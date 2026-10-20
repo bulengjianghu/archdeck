@@ -112,6 +112,17 @@ export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectO
     else edges.add(a.node, boundaryId, r, exact)
   }
 
+  // 舞台：场景中的帧走到本层外或来自参与者时，即使结构上没有关系也补上对应的边界节点 / 参与者（P2、P11）
+  for (const { from, to } of opts.scenarioEnds ?? []) {
+    const a = mapEndpoint(index, parentId, from)
+    const b = mapEndpoint(index, parentId, to)
+    if (a.kind !== 'local' && b.kind !== 'local') continue
+    for (const ep of [a, b]) {
+      if (ep.kind === 'actor') actorIds.add(ep.node)
+      else if (ep.kind === 'external' && opts.showBoundaries && !boundaryOrder.includes(ep.node)) boundaryOrder.push(ep.node)
+    }
+  }
+
   const nodes: ViewNode[] = children.map(id => ({
     id,
     moduleId: id,

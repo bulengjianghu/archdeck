@@ -63,7 +63,7 @@ flowchart TB
 |---|---|---|---|
 | DeskState（核心） | 协调者：持有视图状态、唯一写入口 `dispatch`、派生要画的数据；同步适配器（路由、时钟、模型源、布局）；设计版本的对比基线与差异 | 已实现（时钟同步待实现） | 视图状态 |
 | 视图状态转移（核心） | 会话规则的纯函数：视角与焦点（V）、导航（N）、回放（R、F6a、F6c）、URL 编解码 | 已实现：导航、URL（视角与焦点、回放待实现） | 视图状态 |
-| Layout（核心） | 结构图排布（分层总览 / elkjs，Worker 中运行，按内容缓存）；时序图排布 | 已实现（时序图待实现） | 结构投影 · 场景 |
+| Layout（核心） | 结构图排布（分层总览 / elkjs，Worker 中运行，按内容缓存）；时序图排布 | 已实现 | 结构投影 · 场景 |
 
 ### 3.3 模型层
 
@@ -72,7 +72,7 @@ flowchart TB
 | 类型与 Schema（核心） | 描述文件的格式（JSON Schema）与各阶段数据类型 | 已实现 | 加载与版本 |
 | 加载流水线（核心） | Loader → Validator → Indexer，入口 `loadModel`；规则 M、S5–S13 | 已实现 | 加载与版本 |
 | Projector（核心） | 层次投影与分层总览（L、O），端点映射 `mapEndpoint`，最近可见层次 | 已实现 | 结构投影 |
-| 场景投影（核心） | 回放计划、回放路径、帧的层次投影、参与查询、时序模型（S、F、P、R7、R13） | 待实现 | 场景 |
+| 场景投影（核心） | 回放计划、回放路径、帧的层次投影、参与查询、时序模型（S、F、P、R7、R13） | 已实现 | 场景 |
 | 版本对比 | 设计版本相对对比基线的差异与涉及变更数（E1、E2） | 已实现 | 加载与版本 |
 
 ### 3.4 接入层
@@ -131,11 +131,11 @@ packages/h5p-arch-desk/
   scripts/lint-model.ts       命令行校验
   src/
     model/                    模型层：types · load · validate · indexer · project · diff · design
-      scenario/               待实现：plan · path · level · participation · sequence
+      scenario/               场景投影：bind · steps · plan · path · level · participation · sequence
     state/                    视图状态层：useDeskState（协调者）· inject
       transition/             会话规则：types · navigation · url · focus（待实现）· playback（待实现）
       sync/                   同步适配器：router · modelSource · layout · clock（待实现）
-    layout/                   layout.ts（结构图）· sequence.ts（待实现，时序图）
+    layout/                   layout.ts（结构图）· sequence.ts（时序图）
     components/               呈现层（专题「工作台」列出组件分工）
   tests/                      单测（按层组织）与 fixtures
 ```
