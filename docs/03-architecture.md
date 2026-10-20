@@ -1,6 +1,6 @@
 # h5p-arch-desk 架构文档
 
-> 状态：v1.0 定档（2026-10-19），范围：一期（只看结构，不做时序回放、不做一致性校验）
+> 状态：v1.1（2026-10-20）。§0–§7 描述**已实现**的架构（一期 + 设计版本）；§8 是**已定稿、待实现**的二期动态视角目标架构（[ADR-0003](./adr/0003-phase2-dynamic-view.md)），实现完成后并入 §2–§6
 > 相关：[01-requirements.md](./01-requirements.md) · [02-tech-selection.md](./02-tech-selection.md)
 
 ---
@@ -18,14 +18,17 @@
 | 开发视图 | 模块落在哪些目录 | §6 |
 | 物理视图 | 跑在哪里 | §6 |
 | 场景（+1） | 上面这些如何合起来产生价值 | §7 |
+| 二期目标架构 | 动态视角怎么长在一期之上 | §8 |
 
 ## 1. 设计原则
 
-1. **描述与渲染分离**。YAML 是唯一真源，页面只读不写。描述的变化只有一种方式：AI 重新根据代码生成 YAML。
+1. **描述与渲染分离**。描述文件是唯一真源，页面只读不写。描述的变化只有两种方式：AI 按代码重新生成当前版本；AI 在当前版本上起草设计版本（ADR-0002）。
 2. **规则与界面分离**。"一层看什么、深层关系怎么提升成聚合边"是本工具的核心规则，写成不依赖 Vue 的纯函数，可以单独测试、单独替换界面。
 3. **每层只算本层**。任何时刻只计算并渲染当前层次的直接子模块和相关的边。层次再深、模型再大，单屏的工作量也不变。
 4. **出错要说出来**。描述文件有错误时（引用不存在、ID 重复），明确报出文件和位置，不静默丢弃。因为描述来自 AI，错误报告就是给 AI 的返工清单。
 5. **依赖单向**。外层依赖内层，内层不感知外层（见 §3）。
+6. **按知识划分层次**（二期起，ADR-0003）。判别法：换一个前端（命令行、导出脚本、AI 查询），这条规则还需要吗？需要的是**关于被描述系统的知识**，放模型层；只在交互浏览时有意义的是**关于一次浏览会话的规则**，放视图状态层。纯不纯是技术属性，不是分层依据——两层的规则都写成纯函数。
+7. **状态是一个值，规则是纯函数，协调者只有一个**（二期起，ADR-0003）。互相约束的状态不拆成多个 store；状态只经纯的转移函数改变；与外界（路由、计时器、文件、布局）的交互由协调者通过同步适配器完成，外界始终是状态的投影。
 
 ## 2. 层次与模块
 
@@ -99,6 +102,7 @@ flowchart TB
 - **模型层不 import Vue、DOM、elkjs**。输入数据，输出数据。
 - **呈现层不直接调用模型层的计算**。它只读 DeskState 并发出操作意图，避免投影规则散落在组件里。
 - **Projector 不知道坐标，Layout 不知道层次规则**。两者通过 `LevelView` 交接。
+- **模型层回答「被描述的系统是什么」，视图状态层回答「用户此刻在看什么」**（原则 6）。例如「重新加载后某个旧层次最近仍存在的祖先」是模型层的查询，「重新加载后要不要保留选中」是视图状态层的规则。
 
 ## 3. 模块间关系
 
@@ -301,3 +305,99 @@ LevelView（十几个节点）
 - **几秒内回答结构问题**：某个模块负责什么、对外提供什么、被谁依赖、和谁交换什么数据。不需要翻代码和多份文档。
 - **在任意层次做判断**：在根层看分层是否合理、依赖方向是否正确；下钻一层看子系统内部的职责划分。每层只需要面对十几个节点。
 - **跟上代码的变化**：代码变了，AI 重新生成描述，图随之更新。架构师看到的总是接近当前代码的结构，而不是半年前写的文档。
+
+## 8. 二期目标架构：动态视角（已定稿，待实现）
+
+> 来源：设计版本 `model/h5p-arch-desk/designs/phase2-dynamic/` r4（在工具里打开可逐层查看、下钻，并与当前版本对比），结论见 [ADR-0003](./adr/0003-phase2-dynamic-view.md)。
+> 需求见 [01-requirements.md §3.7、§5、§8.2](./01-requirements.md)；领域规则清单（V / N / S / A / F / P / R）见 r4 的设计说明，是单测的穷举依据。
+
+### 8.1 总体
+
+不动一期骨架，四层与依赖方向不变：
+
+```mermaid
+flowchart TB
+    subgraph L1["呈现层"]
+        PS["视角切换 · 场景列表"]
+        Canvas["画布（舞台 + 回放叠加）"]
+        Seq["时序图"]
+        Player["回放控制条"]
+        Panel["属性面板（焦点 · 运行信息）"]
+        Split["分屏容器"]
+    end
+    subgraph L2["视图状态层"]
+        Desk["DeskState 协调者<br/>持有 ViewState · dispatch · 派生"]
+        Trans["视图状态转移（会话规则，纯函数）<br/>视角与焦点 · 导航 · 回放 · URL"]
+        Sync["同步适配器<br/>路由 · 时钟 · 模型源 · 布局"]
+        Layout["Layout + 时序图排布"]
+    end
+    subgraph L4["模型层"]
+        Pipe["加载流水线（+ 参与者、场景、校验 S5–S13）"]
+        Proj["Projector（+ 参与者、最近可见层次）"]
+        Scn["场景投影<br/>回放计划 · 回放路径 · 帧的层次投影 · 参与查询 · 时序模型"]
+    end
+    subgraph L3["接入层"]
+        Src["ModelSource（+ .json）"]
+    end
+    L1 --> Desk
+    Desk --> Trans
+    Desk --> Sync
+    Desk --> Layout
+    Trans --> Proj
+    Trans --> Scn
+    Desk --> Scn
+    Scn --> Proj
+    Sync --> Src
+    Src --> Pipe
+```
+
+### 8.2 各层变化
+
+| 层 | 新增 | 调整 |
+|---|---|---|
+| 模型层 | **场景投影**（核心）：回放计划（展开、关系绑定 S12 / S13）、回放路径（分支选择 F6 / F6b、到达某帧需要的选择 R13）、帧的层次投影（落点、可见消息、下一步 / 上一步 R7、场景所在层次 S9）、参与查询（V6）、时序模型 | 类型与 Schema：`actors`、`scenario(s)`；Loader：.json、参与者、场景；Validator：S5–S13；Indexer：`scenariosOf`、`triggeredBy`、`nearestExisting`；Projector：参与者节点（A2、A8）、导出 `mapEndpoint`、`nearestVisibleLevel`（N12） |
+| 视图状态层 | **视图状态转移**（核心，会话规则）：视角与焦点（V1–V4）、导航（N1–N12，从一期 DeskState 移出）、回放（R1–R13）、URL 编解码；同步适配器：时钟、布局（路由、模型源由一期代码拆出）；时序图排布 | DeskState 收缩为协调者：持有 `ViewState`，唯一写入口 `dispatch`，派生层次视图、回放路径、本层可见消息、时序模型、参与信息、版本差异 |
+| 呈现层 | 视角切换、场景列表、分屏容器（布局树）、时序图（泳道、组合框、交互）、回放控制条（含分支选择）、面板的运行信息 / 步骤 / 场景 / 参与者 | 画布：舞台（V5）、回放叠加、步骤序号、未建模虚线（P11）、参与者节点与系统边界；面板分派改为按焦点；DeskView 交给分屏容器 |
+| 接入层 | — | 描述文件扩展名加 `.json` |
+
+### 8.3 视图状态与焦点
+
+```text
+ViewState = { levelId, selection, hover, toggles, playback: null | { scenarioId, frameId, choices, playing, speed } }
+视角   = playback 为 null ? 结构 : 运行                         （V1，不另存字段）
+焦点   = 结构视角：selection ?? 当前父模块
+         运行视角：selection ≠ null ? 钉住(selection) : 跟随(frameId)   （V2）
+不变式 = playing ⇒ selection = null                             （每次转移后断言）
+```
+
+### 8.4 关键时序
+
+**指向某一步（R13）**——时序图消息、结构图步骤序号、步骤目录、运行信息里的步骤都走这一条：
+
+```mermaid
+sequenceDiagram
+    participant U as 架构师
+    participant UI as 时序图 / 画布 / 面板
+    participant DS as DeskState
+    participant T as 视图状态转移
+    participant M as 场景投影（模型层）
+    participant R as 路由同步
+
+    U->>UI: 单击第 7 步
+    UI->>DS: dispatch(seek 7)
+    DS->>T: transition(state, seek, ctx)
+    T->>M: choicesFor(计划, 已选分支, 7) · landing(本层投影, 7)
+    M-->>T: 所需分支选择 · 落点帧
+    T-->>DS: 新状态（frameId、choices，playing=false，selection=null）
+    DS->>DS: 派生：回放路径 → 本层可见消息 → 时序模型
+    DS-->>UI: 两图定位到第 7 步，已走过的边 = 从头播放到第 7 步
+    R->>R: 地址 = encode(新状态)，替换不进历史
+```
+
+**播放中双击下钻（V3、R6、R7）**：`drill` 转移在运行视角下同时暂停并钉住；层次视图变化 → 帧重新投影 → 本层可见消息变细；`frameId` 不变，所以两图停在同一帧。
+
+**到达分支点（F6、F6a）**：时钟同步到点 `dispatch(next)` → `stepAfter` 返回空且 `resolvePath` 报告未选分支 → 转移把 `playing` 置为 false → 回放控制条展开全部选项 → `chooseBranch` → 路径延长，用户点播放继续。
+
+### 8.5 开发视图增量
+
+见 [02-tech-selection.md §5](./02-tech-selection.md)：`src/model/scenario/`、`src/state/transition/`、`src/state/sync/`、`src/layout/sequence.ts`、`src/components/{split,sequence}/` 等；分期见同文档 §8 的 P4a–P4f。

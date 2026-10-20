@@ -1,6 +1,6 @@
 # h5p-arch-desk 技术选型
 
-> 状态：v1.0 定档（2026-10-19）
+> 状态：v1.1（2026-10-20）。v1.0 定档于 2026-10-19；v1.1 按二期设计定稿（[ADR-0003](./adr/0003-phase2-dynamic-view.md)）更新 §2 数据格式、§3.3、§3.5、§4、§5–§8
 > 对应需求：[01-requirements.md](./01-requirements.md)
 
 ---
@@ -23,12 +23,12 @@
 | 时序图（二期） | **自研 SVG 组件** | — | Mermaid（仅作导出） |
 | 路由 / 深链接 | vue-router | `^4.6` | — |
 | 状态管理 | Vue `reactive` + composables | — | Pinia（规模变大再引入） |
-| 数据格式 | YAML | `yaml@^2` | JSON |
+| 数据格式 | YAML 或 JSON（同一个解析器，JSON 是 YAML 的子集） | `yaml@^2` | — |
 | 结构校验 | JSON Schema + ajv | `ajv@^8`、`ajv-formats@^3` | zod |
 | 类型定义 | 手写 TS 类型，与 Schema 并排维护 | — | json-schema-to-typescript（模型字段少，生成步骤不划算） |
 | Markdown | markdown-it | `^14` | marked |
 | 代码高亮 | Shiki（按需加载 ts 语法） | `^3` | highlight.js |
-| 分栏 | 自写 CSS Grid + 拖动条 | — | splitpanes |
+| 分栏 / 分屏 | 自写 CSS Grid + 拖动条；二期分屏容器按可序列化的布局树排布 | — | splitpanes |
 | 单元测试 | Vitest + @vue/test-utils + jsdom | 与 auto_test 一致 | — |
 | E2E（后续） | Playwright | 与 auto_test 一致 | — |
 | 包管理 | npm（与 auto_test 一致，独立 `package-lock.json`） | — | — |
@@ -64,9 +64,9 @@
 
 ### 3.3 时序图（二期）：自研 SVG 组件
 
-Mermaid 能画时序图，但输出是一整张 SVG 字符串，难以做到「选中某一步 → 面板联动 → 结构图同步高亮」，也无法按层次投影参与者。二期场景数据本身已是结构化的步骤树（call / alt / loop / par / async / ref），布局规则简单（泳道等距、步骤纵向累加、组合框包住子步骤），自研 Vue + SVG 组件成本可控且完全可交互。Mermaid 只用于「导出到文档」。
+Mermaid 能画时序图，但输出是一整张 SVG 字符串，难以做到「指向某一步 → 面板联动 → 结构图同步定位」，也无法按层次投影参与者。二期场景数据本身已是结构化的步骤树（call / alt / loop / par / async / ref），布局规则简单（泳道等距、步骤纵向累加、组合框包住子步骤），自研 Vue + SVG 组件成本可控且完全可交互。Mermaid 只用于「导出到文档」。
 
-结构图上的回放直接复用 Vue Flow：按当前步骤给对应边加动画 class、给节点加高亮态。
+结构图上的回放直接复用 Vue Flow：按当前可见消息给对应边加流动动画 class（方向可与边箭头相反）、给节点加高亮态，不新增节点、不重新布局。唯一的例外是「结构中未建模」的临时虚线：它不参与布局，用两端节点的坐标直接画一条曲线。
 
 ### 3.4 数据格式：YAML + JSON Schema
 
@@ -74,9 +74,15 @@ Mermaid 能画时序图，但输出是一整张 SVG 字符串，难以做到「�
 - 一份 JSON Schema 同时用于：编辑器提示（VS Code YAML 插件）、ajv 运行时校验、生成 TS 类型。
 - Schema 只校验单文件结构；跨文件引用完整性（ID 存在、无重复、祖先-后代不连边）由自写的 `validateModel()` 完成。
 
-### 3.5 状态管理：先不用 Pinia
+### 3.5 状态管理：一个值 + 纯转移 + 一个协调者，仍不用 Pinia
 
-全局状态只有：已加载的模型、当前层次路径、选中对象、视图开关、（二期）当前场景与步骤。用一个 `useDeskState()` composable 持有，层次与选中同步到 URL query（vue-router），足够。若后续加入编辑、撤销、多视图联动导致状态变复杂，再引入 Pinia。
+二期定稿（ADR-0003）后的结构：
+
+- **视图状态是一个值**（`ViewState`：层次、选中、悬停、开关、回放），互相约束，不拆成多个 store。
+- **会话规则是纯函数**：`transition(state, action, ctx) → { state, history }`，不依赖 Vue、路由、计时器，按领域规则清单穷举单测。关于被描述系统的问题（最近祖先、本层下一步等）调用模型层的架构查询。
+- **一个协调者**：`useDeskState()` 持有 `shallowRef<ViewState>`，唯一写入口 `dispatch(action)`，派生数据全部是 `computed`；与外界的交互交给四个同步适配器（路由、时钟、模型源、布局），每个都能用假对象单测。
+
+这本质上是一个小型的 reducer 模式，用 Vue 的 `shallowRef` + `computed` 实现已足够；状态只有一个值、写入口只有一个，引入 Pinia 没有额外收益。若后续加入编辑、撤销，可在 `dispatch` 上直接做历史记录。
 
 ## 4. 数据模型与文件组织
 
@@ -104,7 +110,9 @@ model/<项目>/
       framework.yaml               ← 一个文件描述一个模块子树，大小自定
   interfaces/*.yaml
   data-structures/*.yaml
-  scenarios/*.yaml                 ← 二期
+  actors.yaml                      ← 二期：外部参与者（也可写在任意文件的顶层键 actors 下）
+  scenarios/*.yaml|json            ← 二期：与 modules/ 同级，YAML / JSON 均可
+  designs/<设计>/                   ← 设计版本（ADR-0002），读取当前版本时跳过
 ```
 
 `ModelSource` 默认读取 `model/`，可用环境变量 `ARCH_MODEL_ROOT` 指向其他模型根目录。
@@ -193,66 +201,81 @@ dataStructures:
 
 ### 4.4 场景文件示例（二期）
 
+字段与规则见需求 §3.7、§5.1；规则编号见设计版本 r4 的领域规则清单。
+
 ```yaml
+# actors.yaml
+actors:
+  - { id: actor.viewer, name: 观众, kind: user }
+  - { id: actor.biz,    name: 业务方, kind: system, description: 通过 SDK API 调用播放器 }
+
 # scenarios/command-flow.yaml
 scenario:
   id: sc.command
   name: 命令执行（play / switch / reset）
-  level: root            # 默认展示层次
+  cause: 业务方调用 play / switch / reset
+  # 不写默认层次（S9）；触发者 = 第一条消息的发送方 actor.biz（A6）
   steps:
-    - call: { from: ext.user, to: infra.player-index, label: play/switch/reset }
+    - call: { id: cmd, from: actor.biz, to: infra.player-index, label: play/switch/reset }
     - call: { from: infra.player-index, to: infra.framework.state-machine, interface: if.sm.sendCommand }
     - call: { from: infra.framework.state-machine, to: app.solution, label: pre/post hook }
     - call: { from: app.solution, to: domain.services, label: select / reconcile / policy }
-    - alt:
+    - alt:                                  # 回放到这里停下，由用户选择（F6）
         - when: 需要改图
           steps:
-            - call: { from: app.solution, to: infra.framework.pipeline, interface: if.pipeline.updatePipeline }
-            - loop:
+            - call: { id: update, from: app.solution, to: infra.framework.pipeline, interface: if.pipeline.updatePipeline }
+            - loop:                         # 回放时展开一遍（F4）
                 while: 每个新增 MU
                 steps:
                   - call: { from: infra.framework.pipeline, to: infra.mus, label: lifecycle catch-up }
         - when: 无需改图
           steps: []
-    - async: { from: infra.framework.state-machine, to: ext.user, label: command result / event }
+    - async: { from: infra.framework.state-machine, to: actor.biz, label: command result / event }
 ```
+
+同样的内容写成 JSON 也可以；两者解析成同一份数据结构。
 
 ## 5. 工程结构
 
+带「二期」标注的是按 ADR-0003 新增的目录，尚未实现。
+
 ```text
 packages/h5p-arch-desk/
-  docs/                       需求、选型、计划
+  docs/                       需求、选型、架构、生成规范、ADR
   schema/
-    arch-file.schema.json     JSON Schema 真源（单个 YAML 文件的结构）
+    arch-file.schema.json     JSON Schema 真源（单个描述文件的结构）
   src/
-    model/                    ← 与 UI 无关的纯逻辑，单测重点
-      types.ts                手写，与 schema/arch-file.schema.json 对应
-      load.ts                 读取并合并多个 YAML 文件
+    model/                    ← 关于被描述系统的知识，纯函数，单测重点
+      types.ts  design.ts  project-summary.ts
+      load.ts                 解析并合并多个描述文件
       validate.ts             跨文件引用与约束校验
-      index.ts                建立 id → 模块/父链/子集 索引
-      project.ts              层次投影：可见节点、聚合边、边界节点（需求 §3.5）
-      scenario.ts             二期：场景步骤树展开与按层次投影
+      indexer.ts              索引与查询（最近公共祖先、最近仍存在的祖先）
+      project.ts              层次投影（需求 §3.5、§3.6）、端点映射、最近可见层次
+      diff.ts                 版本对比（ADR-0002）
+      scenario/               二期：plan（回放计划 + 关系绑定）· path（回放路径与分支选择）·
+                              level（帧的层次投影、下一步、落点）· participation（参与查询）· sequence（时序模型）
+    state/
+      useDeskState.ts         协调者：持有视图状态、dispatch、派生
+      inject.ts
+      transition/             二期：会话规则（focus · navigation · playback · url），纯函数
+      sync/                   二期：同步适配器（router · clock · modelSource · layout）
     layout/
-      elkWorker.ts            elkjs 布局（Web Worker）
+      layout.ts               结构图排布（分层总览 / elkjs，Worker 中运行）
+      sequence.ts             二期：时序图排布
     components/
-      GraphCanvas.vue         封装 Vue Flow
-      nodes/ModuleNode.vue    BoundaryNode.vue
-      edges/RelationEdge.vue  AggregateEdge.vue
-      panel/                  ModulePanel / RelationPanel / AggregatePanel
-      Breadcrumb.vue  SearchBox.vue  Legend.vue
-      sequence/               二期：SequenceView 等
-    state/useDeskState.ts
-    components/ProjectList.vue   项目列表主页
-    components/DeskView.vue      单个项目的视图（按项目创建 DeskState）
-    App.vue  main.ts             路由：/ 项目列表，/p/<项目> 项目视图
+      ProjectList.vue  DeskView.vue  GraphCanvas.vue  Breadcrumb.vue  Toolbar.vue  Legend.vue  IssueBanner.vue
+      VersionSwitcher.vue  DesignBar.vue
+      nodes/  edges/  panel/
+      PerspectiveSwitch.vue  ScenarioList.vue  PlayerBar.vue  BranchChooser.vue   二期
+      split/  sequence/                                                          二期
+    App.vue  main.ts          路由：/ 项目列表，/p/<项目>[/d/<设计>/<轮次>] 项目视图
   vite/
-    archModelPlugin.ts        开发态提供 projects.json / models/<项目>.json、按项目推送变更；构建态输出同名静态文件
-    readModelDir.ts           列项目、读项目、生成项目摘要
+    archModelPlugin.ts        开发态端点与变更推送；构建态输出静态文件
+    readModelDir.ts           列项目、读项目与设计版本、生成项目摘要
   scripts/
-    lint-model.ts             命令行校验，供 CI
-  model/<项目>/               各项目架构描述（h5player 由 AI 生成；h5p-arch-desk 为本项目自身）
-  tests/fixtures/             测试用小模型
-  tests/                      vitest 单测（model/ 全覆盖）
+    lint-model.ts             命令行校验（含设计版本），供 CI
+  model/<项目>/               各项目架构描述（ADR-0001），designs/ 下为设计版本（ADR-0002）
+  tests/                      vitest 单测；tests/fixtures/ 为测试用小模型
   package.json  vite.config.ts  tsconfig*.json
 ```
 
@@ -261,25 +284,29 @@ packages/h5p-arch-desk/
 ## 6. 数据流
 
 ```text
-YAML 文件 ──(Vite 插件: yaml 解析)──> 原始对象
-   └─(ajv + validateModel)──> 合法模型 / 错误列表(带文件与路径)
+描述文件（YAML / JSON）──(Vite 插件)──> 原文
+   └─(load + validate)──> 合法模型 / 问题列表(带文件与行号)
          └─(buildIndex)──> 模型索引
-               └─(projectLevel(index, levelId, options))──> { nodes, edges, aggregates, boundaries }
-                     └─(elk 布局)──> 带坐标的节点
-                           └─ GraphCanvas 渲染；选中 → Panel 按 id 查索引
+               ├─(projectLevel(index, levelId, options))──> 层次视图 ──(布局同步：elk / 分层)──> 带坐标的结构图
+               └─ 二期，打开场景时：
+                  planScenario ──> 回放计划 ──(resolvePath + 已选分支)──> 回放路径
+                     └─(projectScenario(index, 层次视图, 路径))──> 本层可见消息 ──> 时序模型 ──(layoutSequence)──> 时序图
+用户意图 / 外界变化 ──> 动作 ──(dispatch → transition)──> 新视图状态 ──> 以上派生重新计算；路由与时钟由同步适配器跟随状态
 ```
 
-文件变更时 Vite 插件推送自定义 HMR 事件，前端重新走一遍上面的流程，保留 URL 中的层次与选中 ID。
+文件变更时 Vite 插件推送自定义 HMR 事件，模型源同步适配器重新加载并 dispatch，层次与选中按导航规则保留或回退。
 
 ## 7. 测试策略
 
 | 层 | 内容 | 工具 |
 |---|---|---|
-| 纯逻辑 | 加载合并、引用校验、层次投影四条规则、聚合边计数、场景展开与投影 | Vitest，目标覆盖率 ≥ 90% |
+| 纯逻辑：模型层 | 加载合并、引用校验、层次投影规则、聚合边计数、版本对比；二期的架构查询与场景展开 / 投影，按领域规则清单逐条穷举 | Vitest，目标覆盖率 ≥ 90% |
+| 纯逻辑：会话规则 | 二期视图状态转移（视角与焦点、导航、回放、URL 编解码），按领域规则清单逐条穷举，并断言每次转移后焦点不变式成立 | Vitest |
+| 同步适配器 | 路由（含回声处理）、时钟、模型源、布局 | Vitest + 假路由 / 假时钟 |
 | 组件 | 面板按选中类型渲染、面包屑跳转、双击下钻事件 | Vitest + @vue/test-utils |
-| 端到端（一期末） | 需求 §8 的 6 条验收标准 | Playwright |
+| 端到端 | 需求 §8.1、§8.2 的验收标准 | Playwright（后续） |
 
-按仓库 AGENTS.md 的 TDD 分工推进：先在 `docs/plan/` 下写实施计划与任务 ID，测试与实现分角色提交。
+实施计划不写进仓库（项目负责人决定）：由开发者按本文与领域规则清单自行推进，重要决策记 ADR。
 
 ## 8. 分期落地建议
 
@@ -289,4 +316,10 @@ YAML 文件 ──(Vite 插件: yaml 解析)──> 原始对象
 | P1 | 画布 + 面板 + 下钻 + 面包屑 + 自动布局（需求 C-1 ~ C-8） |
 | P2 | 录入 h5player 初始架构内容（需求 §4.5）、热更新、`lint:model` |
 | P3 | P1 级需求（悬停高亮、深链接、搜索） |
-| P4 | 二期：场景数据模型、时序图视图、图上回放 |
+| P4 | 二期（ADR-0003），按依赖从内到外：|
+| P4a | 重构一期：视图状态转移（导航规则）与同步适配器抽出，定位类知识下沉为架构查询；行为不变，一期测试全绿 |
+| P4b | 数据模型：Schema 与类型（actors、scenario / scenarios、.json）、Loader、Validator（S5–S13）、Indexer（scenariosOf、triggeredBy）；参与者进入静态视图（投影、布局、节点、面板） |
+| P4c | 场景投影：回放计划、回放路径、帧的层次投影、参与查询、时序模型，按规则清单穷举单测 |
+| P4d | 会话规则与适配器：视角与焦点、回放、URL；时钟同步 |
+| P4e | 界面：视角切换、场景列表、分屏容器、时序图、回放控制条、舞台与回放叠加、运行信息与步骤 / 场景 / 参与者面板 |
+| P4f | 内容与验收：h5p-arch-desk 自身场景、h5player 两个迁移场景（D-8）；需求 §8.2 验收；按代码重新生成当前版本，设计版本状态改为 implemented |
