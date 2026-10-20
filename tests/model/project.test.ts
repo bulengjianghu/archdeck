@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { loadModel, projectLevel, type LevelView, type ViewEdge } from '../../src/model'
+import { loadModel, mapEndpoint, projectLevel, type LevelView, type ViewEdge } from '../../src/model'
 import { sampleFiles } from '../fixtures/sample'
 
 const { index } = loadModel(sampleFiles())
@@ -153,5 +153,23 @@ describe('projectLevel · 过滤与汇总', () => {
       'boundary:infra->app.solution:calls:aggregate:r1',
       'boundary:infra->app.solution:depends:aggregate:r3',
     ])
+  })
+})
+
+describe('mapEndpoint', () => {
+  it('local：落在子树内，映射到直接子模块，标明是否恰好是它', () => {
+    expect(mapEndpoint(index, 'infra', 'infra.framework')).toEqual({ kind: 'local', node: 'infra.framework', exact: true })
+    expect(mapEndpoint(index, 'infra', 'infra.framework.sm')).toEqual({ kind: 'local', node: 'infra.framework', exact: false })
+  })
+
+  it('external：提升为最近公共祖先下它那一侧的子模块', () => {
+    expect(mapEndpoint(index, 'infra.framework', 'infra.mus')).toEqual({ kind: 'external', node: 'infra.mus', exact: true })
+    expect(mapEndpoint(index, 'infra.framework', 'app.solution')).toEqual({ kind: 'external', node: 'app', exact: false })
+  })
+
+  it('skip：端点是父模块本身、其祖先或不存在', () => {
+    expect(mapEndpoint(index, 'infra', 'infra')).toEqual({ kind: 'skip' })
+    expect(mapEndpoint(index, 'infra.framework', 'infra')).toEqual({ kind: 'skip' })
+    expect(mapEndpoint(index, 'infra', 'nope')).toEqual({ kind: 'skip' })
   })
 })

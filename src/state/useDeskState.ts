@@ -1,87 +1,25 @@
 /**
- * DeskState：持有当前层次、选中对象、显示开关，对外提供唯一一组操作。
- * 层次与选中写进 URL（hash 路由），刷新或分享链接后回到同一视图。
+ * DeskState：协调者（docs/architecture/view-state.md §2）。
+ * - 持有视图状态（一个值）、加载后的模型与对比基线；
+ * - 唯一写入口 dispatch(action) → transition() → 写入新状态；对外的操作都是构造动作并 dispatch 的包装；
+ * - 派生要画的数据（层次视图、差异……）；
+ * - 与外界的交互交给同步适配器：路由（sync/router）、模型源（sync/modelSource）、布局（sync/layout）。
  * 呈现层只读这里的状态、只调这里的操作，不直接调用模型层的计算。
  */
-import { computed, reactive, ref, shallowRef, watch } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 import type { Router } from 'vue-router'
-import {
-  RELATION_TYPES,
-  diffModels,
-  loadModel,
-  lowestCommonAncestor,
-  projectLevel,
-  type Issue,
-  type LevelView,
-  type ModelDiff,
-  type ModelIndex,
-  type RawFile,
-  type RelationType,
-} from '@/model'
+import { RELATION_TYPES, diffModels, projectLevel, type Issue, type LevelView, type ModelDiff, type ModelIndex } from '@/model'
 import type { DesignInfo, VersionRef } from '@/model/design'
-import { layoutView, type PositionedView } from '@/layout/layout'
+import { DEFAULT_TOGGLES, encodeView, keyIntent, transition, type Selection, type Toggles, type ViewAction, type ViewState } from './transition'
+import { createRouterSync, type RouterSync, type RouterSyncOptions } from './sync/router'
+import { fetchAndLoad, watchModelChanges, type Baseline, type ChangeEvents, type FetchModel } from './sync/modelSource'
+import { createLayoutSync } from './sync/layout'
 
-export type Selection =
-  | { kind: 'module'; id: string }
-  | { kind: 'relation'; id: string }
-  /** 视图里的一条边（多为聚合边），ID 见 edgeId() */
-  | { kind: 'edge'; id: string }
+export type { Selection, Toggles } from './transition'
+export { encodeSelection, decodeSelection } from './transition'
+export type { CompareSource, ModelPayload, FetchModel } from './sync/modelSource'
 
-export interface Toggles {
-  showBoundaries: boolean
-  currentOnly: boolean
-  relationTypes: RelationType[]
-  /** 设计版本：在图上标出相对对比基线的变更 */
-  showDiff: boolean
-  /** 设计版本的对比基线：当前版本或上一轮 */
-  compareTo: 'current' | 'previous'
-}
-
-export interface CompareSource {
-  label: string
-  dir: string
-  files: RawFile[]
-}
-
-export interface ModelPayload {
-  /** 项目 ID；多项目时用于校验路由与变更通知 */
-  project?: string
-  dir: string
-  files: RawFile[]
-  /** 本项目的全部设计版本 */
-  designs?: DesignInfo[]
-  /** 打开的是设计版本时给出（ADR-0002） */
-  version?: VersionRef
-  compare?: { current: CompareSource; previous?: CompareSource }
-}
-
-export type FetchModel = () => Promise<ModelPayload>
-
-export function encodeSelection(s: Selection | null): string | undefined {
-  if (!s) return undefined
-  return `${s.kind[0]}:${s.id}`
-}
-
-export function decodeSelection(raw: unknown): Selection | null {
-  if (typeof raw !== 'string') return null
-  const m = /^([mre]):(.+)$/.exec(raw)
-  if (!m) return null
-  const kind = ({ m: 'module', r: 'relation', e: 'edge' } as const)[m[1] as 'm' | 'r' | 'e']
-  return { kind, id: m[2] }
-}
-
-export interface DeskOptions {
-  /** 所属项目；给出时只响应该项目路由（/p/<project>）上的变化 */
-  project?: string
-  /** 所属版本；缺省为当前版本。只响应同一版本路由上的变化 */
-  version?: VersionRef
-}
-
-/** 对比基线加载后的结果 */
-interface Baseline {
-  label: string
-  index: ModelIndex
-}
+export type DeskOptions = RouterSyncOptions
 
 export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {}) {
   const status = ref<'loading' | 'ready' | 'error'>('loading')
@@ -89,44 +27,55 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const index = shallowRef<ModelIndex | null>(null)
   const issues = shallowRef<Issue[]>([])
   const modelDir = ref('')
-  const levelId = ref('')
-  const selection = ref<Selection | null>(null)
-  const hoverId = ref<string | null>(null)
-  const toggles = reactive<Toggles>({
-    showBoundaries: true,
-    currentOnly: false,
-    relationTypes: [...RELATION_TYPES],
-    showDiff: true,
-    compareTo: 'current',
-  })
   const designs = shallowRef<DesignInfo[]>([])
   const baselines = shallowRef<{ current?: Baseline; previous?: Baseline }>({})
-  const positioned = shallowRef<PositionedView | null>(null)
-  /** 每次层次切换递增，界面据此决定是否 fit */
+  const state = shallowRef<ViewState>({ levelId: '', selection: null, hover: null, toggles: DEFAULT_TOGGLES(RELATION_TYPES), playback: null })
+  /** 每次层次切换递增，界面据此决定是否适应画布 */
   const levelVersion = ref(0)
-  let router: Router | null = null
-  let internalNav = 0
+  let router: RouterSync | null = null
+
+  // ── 唯一写入口 ──
+  /** 返回状态是否改变 */
+  function dispatch(action: ViewAction): boolean {
+    const idx = index.value
+    if (!idx) return false
+    const prev = state.value
+    const { state: next, history } = transition(prev, action, { index: idx })
+    if (next === prev) return false
+    state.value = next
+    if (next.levelId !== prev.levelId) levelVersion.value++
+    router?.write(encodeView(next, idx), history)
+    return true
+  }
+
+  // ── 派生 ──
+  const levelId = computed(() => state.value.levelId)
+  const selection = computed(() => state.value.selection)
+  const hoverId = computed(() => state.value.hover)
+  const levelPath = computed(() => (index.value && levelId.value ? (index.value.pathOf.get(levelId.value) ?? []) : []))
 
   const view = computed<LevelView | null>(() => {
+    const t = state.value.toggles
     if (!index.value || !levelId.value) return null
     try {
       return projectLevel(index.value, levelId.value, {
-        showBoundaries: toggles.showBoundaries,
-        currentOnly: toggles.currentOnly,
+        showBoundaries: t.showBoundaries,
+        currentOnly: t.currentOnly,
         mergeTypes: true,
-        relationTypes: toggles.relationTypes.length === RELATION_TYPES.length ? undefined : toggles.relationTypes,
+        relationTypes: t.relationTypes.length === RELATION_TYPES.length ? undefined : t.relationTypes,
       })
     } catch {
       return null
     }
   })
+  const positioned = createLayoutSync(view)
 
   /** 打开的设计（当前版本时为 null） */
   const design = computed(() => (options.version ? (designs.value.find(d => d.id === options.version!.design) ?? null) : null))
   const revision = computed(() => design.value?.revisions.find(r => r.id === options.version!.revision) ?? null)
   const baseline = computed<Baseline | null>(() => {
     const b = baselines.value
-    return (toggles.compareTo === 'previous' ? b.previous : undefined) ?? b.current ?? null
+    return (state.value.toggles.compareTo === 'previous' ? b.previous : undefined) ?? b.current ?? null
   })
   /** 设计版本相对对比基线的差异；当前版本时为 null */
   const diff = computed<ModelDiff | null>(() => (index.value && baseline.value ? diffModels(baseline.value.index, index.value) : null))
@@ -137,160 +86,80 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     return !!was && !!now && was !== now
   })
 
-  const levelPath = computed(() => (index.value && levelId.value ? (index.value.pathOf.get(levelId.value) ?? []) : []))
-
-  // 视图变化 → 重新布局；用序号丢弃过期的异步结果
-  let layoutSeq = 0
-  watch(view, async v => {
-    const seq = ++layoutSeq
-    if (!v) {
-      positioned.value = null
-      return
-    }
-    const result = await layoutView(v)
-    if (seq === layoutSeq) positioned.value = result
+  /** 开关：读取来自视图状态，写入即 dispatch(toggle)（呈现层可直接 v-model） */
+  const toggles = new Proxy({} as Toggles, {
+    get: (_, key) => state.value.toggles[key as keyof Toggles],
+    set: (_, key, value) => {
+      setToggles({ [key]: value } as Partial<Toggles>)
+      return true
+    },
+    has: (_, key) => key in state.value.toggles,
+    ownKeys: () => Reflect.ownKeys(state.value.toggles),
+    getOwnPropertyDescriptor: (_, key) => ({ ...Reflect.getOwnPropertyDescriptor(state.value.toggles, key), configurable: true }),
   })
 
-  // ── 加载 ──
+  // ── 加载（模型源同步）──
   async function reload() {
     try {
-      const payload = await fetchModel()
+      const loaded = await fetchAndLoad(fetchModel)
       const prevIndex = index.value
-      const prevPath = prevIndex && levelId.value ? (prevIndex.pathOf.get(levelId.value) ?? []) : []
-      const loaded = loadModel(payload.files)
-      modelDir.value = payload.dir
-      issues.value = loaded.issues
-      designs.value = payload.designs ?? []
-      const toBaseline = (src?: CompareSource): Baseline | undefined => (src ? { label: src.label, index: loadModel(src.files).index } : undefined)
-      baselines.value = { current: toBaseline(payload.compare?.current), previous: toBaseline(payload.compare?.previous) }
-      index.value = loaded.index
+      const previousPath = prevIndex && levelId.value ? (prevIndex.pathOf.get(levelId.value) ?? []) : []
+      modelDir.value = loaded.payload.dir
+      issues.value = loaded.model.issues
+      designs.value = loaded.payload.designs ?? []
+      baselines.value = loaded.baselines
+      index.value = loaded.model.index
       status.value = 'ready'
       loadError.value = undefined
-      // 首次加载由 init() 按 URL 决定层次；重新加载时保留层次，若已不存在则退到最近的仍存在的上级
-      if (prevIndex) {
-        const keep = [...prevPath].reverse().find(id => loaded.index.pathOf.has(id))
-        setLevel(keep ?? loaded.index.rootId, { history: false, keepSelection: true })
-      }
+      // 首次加载由 init() 按 URL 决定层次；重新加载时保留层次与选中（N5）
+      if (prevIndex) dispatch({ type: 'reloaded', previousPath })
     } catch (e) {
       status.value = index.value ? 'ready' : 'error'
       loadError.value = e instanceof Error ? e.message : String(e)
     }
   }
 
-  function exists(s: Selection | null): boolean {
-    if (!s || !index.value) return false
-    if (s.kind === 'module') return index.value.modules.has(s.id) || s.id === index.value.rootId
-    if (s.kind === 'relation') return index.value.relations.has(s.id)
-    return true
-  }
-
-  // ── 操作 ──
-  function setLevel(id: string, opts: { history?: boolean; keepSelection?: boolean; select?: Selection | null } = {}) {
-    const idx = index.value
-    if (!idx) return
-    const target = idx.pathOf.has(id) ? id : idx.rootId
-    const changed = target !== levelId.value
-    levelId.value = target
-    if (opts.select !== undefined) selection.value = opts.select
-    else if (!opts.keepSelection || !exists(selection.value)) selection.value = null
-    if (changed) {
-      levelVersion.value++
-      hoverId.value = null
-    }
-    syncUrl(opts.history ?? changed)
-  }
-
-  /** 双击下钻：只有有子模块时生效 */
-  function drillInto(moduleId: string) {
-    const kids = index.value?.childrenOf.get(moduleId) ?? []
-    if (kids.length === 0) return false
-    setLevel(moduleId, { history: true })
-    return true
-  }
-
-  function goTo(id: string, select?: Selection | null) {
-    setLevel(id, { history: true, select })
-  }
-
-  function goUp() {
-    const path = levelPath.value
-    if (path.length > 1) goTo(path[path.length - 2], { kind: 'module', id: path[path.length - 1] })
-  }
-
-  function select(s: Selection | null) {
-    selection.value = s
-    syncUrl(false)
-  }
-
-  /** 跳到某条关系真实所在的层次（两端的最近公共祖先）并选中 */
-  function revealRelation(relationId: string) {
-    const idx = index.value
-    const r = idx?.relations.get(relationId)
-    if (!idx || !r) return
-    goTo(lowestCommonAncestor(idx, r.from, r.to), { kind: 'relation', id: relationId })
-  }
-
-  /** 跳到模块所在层次并选中它 */
-  function revealModule(moduleId: string) {
-    const idx = index.value
-    const m = idx?.modules.get(moduleId)
-    if (!idx || !m) return
-    goTo(m.parentId, { kind: 'module', id: moduleId })
-  }
-
-  function setHover(id: string | null) {
-    hoverId.value = id
-  }
-
-  // ── URL 同步 ──
-  function syncUrl(push: boolean) {
-    if (!router || !index.value) return
-    const query: Record<string, string> = {}
-    if (levelId.value && levelId.value !== index.value.rootId) query.level = levelId.value
-    const sel = encodeSelection(selection.value)
-    if (sel) query.sel = sel
-    const cur = router.currentRoute.value.query
-    if (cur.level === query.level && cur.sel === query.sel) return
-    // 路由导航是异步的：自己发起的导航完成前，路由变化一律视为回声，不回写状态
-    internalNav++
-    void (push ? router.push({ query }) : router.replace({ query })).finally(() => internalNav--)
+  /** 订阅本项目的描述变化（开发态 import.meta.hot），返回取消订阅函数 */
+  function watchChanges(events: ChangeEvents | undefined) {
+    return watchModelChanges(events, options.project, () => void reload())
   }
 
   function attachRouter(r: Router) {
-    router = r
-    watch(
-      () => r.currentRoute.value.query,
-      q => {
-        if (!index.value || internalNav > 0) return
-        // 离开本项目或本版本（回到项目列表、切到别的项目或版本）时不回写
-        const params = r.currentRoute.value.params
-        if (options.project !== undefined && params.project !== options.project) return
-        if ((params.design ?? undefined) !== options.version?.design || (params.revision ?? undefined) !== options.version?.revision) return
-        const level = typeof q.level === 'string' ? q.level : index.value.rootId
-        const sel = decodeSelection(q.sel)
-        if (level !== levelId.value || encodeSelection(sel) !== encodeSelection(selection.value)) {
-          setLevel(level, { history: false, select: exists(sel) ? sel : null })
-        }
-      },
-    )
+    router?.stop()
+    router = createRouterSync(r, options, query => dispatch({ type: 'restore', query }))
   }
 
   /** 首次加载：以 URL 为准 */
   async function init() {
     await reload()
-    const idx = index.value
-    if (!idx) return
-    const q = router?.currentRoute.value.query ?? {}
-    const level = typeof q.level === 'string' && idx.pathOf.has(q.level) ? q.level : idx.rootId
-    const sel = decodeSelection(q.sel)
-    setLevel(level, { history: false, select: exists(sel) ? sel : null })
+    if (!index.value) return
+    dispatch({ type: 'restore', query: router?.query() ?? {} })
     levelVersion.value++
+  }
+
+  // ── 操作：构造动作并 dispatch ──
+  const drillInto = (id: string) => dispatch({ type: 'drill', id })
+  const goTo = (id: string, select?: Selection | null) => void dispatch({ type: 'goTo', id, select })
+  const goUp = () => void dispatch({ type: 'goUp' })
+  const select = (s: Selection | null) => void dispatch({ type: 'select', selection: s })
+  const revealRelation = (id: string) => void dispatch({ type: 'revealRelation', id })
+  const revealModule = (id: string) => void dispatch({ type: 'revealModule', id })
+  const setHover = (id: string | null) => void dispatch({ type: 'hover', id })
+  const setToggles = (patch: Partial<Toggles>) => void dispatch({ type: 'toggle', patch })
+  /** 键盘（N7、N9）：返回 'leave' 表示应回到项目列表，由呈现层导航 */
+  function pressKey(key: string): 'leave' | boolean {
+    const idx = index.value
+    if (!idx) return false
+    const intent = keyIntent(state.value, idx, key)
+    if (intent === 'leave') return 'leave'
+    return intent ? dispatch(intent) : false
   }
 
   return {
     project: options.project,
     version: options.version,
     // 状态（只读使用）
+    state,
     status,
     loadError,
     index,
@@ -312,9 +181,11 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     diff,
     baseDrift,
     // 操作
+    dispatch,
     init,
     reload,
     attachRouter,
+    watchChanges,
     drillInto,
     goTo,
     goUp,
@@ -322,6 +193,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     revealRelation,
     revealModule,
     setHover,
+    setToggles,
+    pressKey,
   }
 }
 

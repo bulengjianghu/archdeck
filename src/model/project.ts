@@ -19,10 +19,31 @@ import type {
   LevelView,
 } from './types'
 
-type Endpoint =
-  | { kind: 'local'; node: string; exact: boolean; depthPath: string[] }
+/**
+ * 端点映射：把一个端点映射到「父模块 P 下的直接子模块」（结构投影与场景投影共用，规则 L1–L4、P1）。
+ * - local：落在 P 的子树内，node 为对应的子模块，exact 表示端点恰好就是该子模块；
+ * - external：在 P 外，提升为「最近公共祖先下、它那一侧的子模块」作为边界节点；
+ * - skip：端点就是 P 本身或其祖先，或不存在。
+ */
+export type Endpoint =
+  | { kind: 'local'; node: string; exact: boolean }
   | { kind: 'external'; node: string; exact: boolean }
   | { kind: 'skip' }
+
+export function mapEndpoint(index: ModelIndex, parentId: string, id: string): Endpoint {
+  const parentPath = index.pathOf.get(parentId)
+  const path = index.pathOf.get(id)
+  if (!parentPath || !path) return { kind: 'skip' }
+  const depth = parentPath.length - 1
+  if (path[depth] === parentId) {
+    if (path.length === depth + 1) return { kind: 'skip' } // 端点就是 P 自身，属于上一层次
+    return { kind: 'local', node: path[depth + 1], exact: path.length === depth + 2 }
+  }
+  let i = 0
+  while (i < path.length && i < parentPath.length && path[i] === parentPath[i]) i++
+  if (i >= path.length) return { kind: 'skip' } // 端点是 P 的祖先（校验已禁止，防御）
+  return { kind: 'external', node: path[i], exact: path.length === i + 1 }
+}
 
 export const DEFAULT_PROJECT_OPTIONS: ProjectOptions = { showBoundaries: true }
 
@@ -36,17 +57,6 @@ export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectO
   const visibleChildren = (id: string) => (index.childrenOf.get(id) ?? []).filter(visible)
 
   const depth = parentPath.length - 1
-  const mapEndpoint = (id: string): Endpoint => {
-    const path = index.pathOf.get(id)!
-    if (path[depth] === parentId) {
-      if (path.length === depth + 1) return { kind: 'skip' } // 端点就是 P 自身，属于上一层次
-      return { kind: 'local', node: path[depth + 1], exact: path.length === depth + 2, depthPath: path }
-    }
-    let i = 0
-    while (i < path.length && i < parentPath.length && path[i] === parentPath[i]) i++
-    if (i >= path.length) return { kind: 'skip' } // 端点是 P 的祖先（校验已禁止，防御）
-    return { kind: 'external', node: path[i], exact: path.length === i + 1 }
-  }
 
   const relations = index.model.relations.filter(r => {
     if (opts.relationTypes && opts.relationTypes.length > 0 && !opts.relationTypes.includes(r.type)) return false
@@ -60,8 +70,8 @@ export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectO
   if (layered) for (const l of children) coreOf.set(l, new Set(visibleChildren(l).filter(c => index.modules.get(c)!.core)))
 
   for (const r of relations) {
-    const a = mapEndpoint(r.from)
-    const b = mapEndpoint(r.to)
+    const a = mapEndpoint(index, parentId, r.from)
+    const b = mapEndpoint(index, parentId, r.to)
     if (a.kind === 'skip' || b.kind === 'skip') continue
     if (a.kind === 'external' && b.kind === 'external') continue
 
@@ -69,8 +79,8 @@ export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectO
       if (a.node === b.node) continue
       edges.add(a.node, b.node, r, a.exact && b.exact)
       if (layered) {
-        const ca = coreRep(a.depthPath, depth, coreOf)
-        const cb = coreRep(b.depthPath, depth, coreOf)
+        const ca = coreRep(index.pathOf.get(r.from)!, depth, coreOf)
+        const cb = coreRep(index.pathOf.get(r.to)!, depth, coreOf)
         // 两端都没落到核心模块时与层间边重复，不再记录
         if (ca.core || cb.core) coreEdges.add(ca.node, cb.node, r, ca.exact && cb.exact)
       }

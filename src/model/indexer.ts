@@ -74,6 +74,11 @@ export function lowestCommonAncestor(index: ModelIndex, a: string, b: string): s
   return pa[i - 1] ?? index.rootId
 }
 
+/** 旧路径（根到某模块）中最深的、在本模型中仍存在的模块；都不存在时为根（N5、N11） */
+export function nearestExisting(index: ModelIndex, path: readonly string[]): string {
+  return [...path].reverse().find(id => index.pathOf.has(id)) ?? index.rootId
+}
+
 export function isLayered(index: ModelIndex, parentId: string): boolean {
   const kids = index.childrenOf.get(parentId) ?? []
   return kids.length > 0 && kids.every(k => index.modules.get(k)?.kind === 'layer')

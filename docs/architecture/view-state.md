@@ -2,7 +2,7 @@
 
 > 回答：用户此刻在看什么；一次操作怎么改变它；它怎么与路由、计时器、描述文件、布局保持一致。
 > 覆盖模块：视图状态层的 DeskState（协调者）与视图状态转移（会话规则）。原则见 [03-architecture.md](../03-architecture.md) 原则 6、7；规则见 [02-domain.md](../02-domain.md) 的 V、N、R、F6a、F6c、E3、E4。
-> 现状：一期 DeskState 直接修改状态、导航规则写在其内部（N1–N11、N13 已实现）。本专题描述目标结构，重构时行为不变、一期测试作为回归（「待重构」）。
+> 状态：视图状态、导航规则、URL 编解码与路由 / 模型源 / 布局同步已实现；视角与焦点、回放、时钟同步待实现。
 
 ## 1. 视图状态
 
@@ -161,5 +161,6 @@ createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: s
 
 transition(state: ViewState, action: ViewAction, ctx: TransitionContext): { state: ViewState; history: 'push' | 'replace' }
 encodeView(state: ViewState, index: ModelIndex): Record<string, string>
-decodeView(query: Record<string, string>, index: ModelIndex): ViewAction
+// 解码即 transition(state, { type: 'restore', query }, ctx)：丢弃无效值，恢复到最接近的合法状态
+keyIntent(state, index, key: 'Escape' | 'Backspace'): ViewAction | 'leave' | null      // N7、N9；'leave' = 回项目列表
 ```

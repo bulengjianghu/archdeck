@@ -36,11 +36,8 @@ provide(DESK_STATE, desk)
 if (import.meta.env.DEV) (window as unknown as { __desk: typeof desk }).__desk = desk
 
 // 开发态：本项目的描述文件变化后重新加载，保留当前层次与选中
-const onModelChanged = (data: { project?: string }) => {
-  if (data?.project === props.project) void desk.reload()
-}
-import.meta.hot?.on('arch-model:changed', onModelChanged)
-onBeforeUnmount(() => import.meta.hot?.off('arch-model:changed', onModelChanged))
+const unwatchModel = desk.watchChanges(import.meta.hot)
+onBeforeUnmount(unwatchModel)
 void router.isReady().then(() => desk.init())
 
 // 面板宽度可拖动、可折叠
@@ -75,19 +72,13 @@ function onDividerUp() {
   }
 }
 
-// 键盘：Esc 先取消选中，再返回上级；Backspace 直接返回上级
+// 键盘：Esc 先取消选中，再返回上级；Backspace 返回上级，根层回项目列表（N7、N9）
 function onKey(e: KeyboardEvent) {
   const t = e.target as HTMLElement
   if (t.closest('input, textarea, [contenteditable="true"]')) return
-  if (e.key === 'Escape') {
-    if (desk.selection.value) desk.select(null)
-    else desk.goUp()
-  } else if (e.key === 'Backspace') {
-    e.preventDefault()
-    // 已在项目根层时回到项目列表
-    if (desk.levelPath.value.length <= 1) void router.push('/')
-    else desk.goUp()
-  }
+  if (e.key !== 'Escape' && e.key !== 'Backspace') return
+  if (e.key === 'Backspace') e.preventDefault()
+  if (desk.pressKey(e.key) === 'leave') void router.push('/')
 }
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))

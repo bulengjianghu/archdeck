@@ -46,9 +46,7 @@ function onKey(e: KeyboardEvent) {
 
 function toggleType(t: RelationType) {
   const list = desk.toggles.relationTypes
-  const i = list.indexOf(t)
-  if (i >= 0) list.splice(i, 1)
-  else list.push(t)
+  desk.setToggles({ relationTypes: list.includes(t) ? list.filter(x => x !== t) : [...list, t] })
 }
 </script>
 
