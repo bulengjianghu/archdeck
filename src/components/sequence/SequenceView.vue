@@ -38,8 +38,10 @@ watch(
     const i = p.model.messages.findIndex(m => m.pathIndex === ci)
     if (i < 0) return
     const y = p.messages[i].y
-    if (y < el.scrollTop + 40 || y > el.scrollTop + el.clientHeight - 40) el.scrollTo({ top: Math.max(0, y - el.clientHeight / 2), behavior: 'smooth' })
+    // 不用平滑滚动：播放中每一拍都会重新触发，平滑滚动会被下一次渲染打断
+    if (y < el.scrollTop + 40 || y > el.scrollTop + el.clientHeight - 40) el.scrollTop = Math.max(0, y - el.clientHeight / 2)
   },
+  { immediate: true },
 )
 </script>
 

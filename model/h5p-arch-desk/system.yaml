@@ -2,7 +2,7 @@ system:
   id: h5p-arch-desk
   name: h5p-arch-desk
   description: |
-    架构可视化工具：AI 把项目代码压缩成模块级的 YAML 描述，本工具把描述按层次画成可下钻、可点选的图。
+    架构可视化工具：AI 把项目代码压缩成模块级的 YAML 描述，本工具把描述按层次画成可下钻、可点选、可回放执行链路的图。
     按依赖方向分为呈现 / 视图状态 / 接入 / 模型四层，模型层是不依赖 Vue 与布局库的纯逻辑核心（见 docs/03-architecture.md）。
   source:
     repo: h5player-demo/packages/h5p-arch-desk

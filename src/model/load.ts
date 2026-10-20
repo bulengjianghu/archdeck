@@ -170,15 +170,21 @@ function makeLocator(file: string, doc: Document, lineCounter: LineCounter) {
   }
 }
 
-/** oneOf 等组合关键字会对同一位置报出多条错误，每个位置只保留最有用的一条 */
+/**
+ * oneOf 等组合关键字会对同一位置报出多条错误，每个位置只保留最有用的一条；
+ * 嵌套结构（步骤树）中，深处已有错误时不再报它外层各候选分支的失败
+ */
 function dedupeErrors(errors: ErrorObject[]): ErrorObject[] {
   const byPath = new Map<string, ErrorObject>()
   for (const e of errors) {
     const prev = byPath.get(e.instancePath)
     if (!prev || prev.keyword === 'oneOf') byPath.set(e.instancePath, e)
   }
-  return [...byPath.values()]
+  const paths = [...byPath.keys()]
+  return [...byPath.values()].filter(e => !paths.some(p => p.startsWith(`${e.instancePath}/`)))
 }
+
+const STEP_KEYS = ['call', 'async', 'return', 'alt', 'loop', 'par', 'ref']
 
 function describeSchemaError(err: ErrorObject): string {
   const where = err.instancePath || '(文件顶层)'
@@ -186,6 +192,7 @@ function describeSchemaError(err: ErrorObject): string {
     case 'additionalProperties':
       return `${where} 不认识的字段「${(err.params as { additionalProperty: string }).additionalProperty}」`
     case 'required':
+      if (/\/steps\/\d+$/.test(err.instancePath) && STEP_KEYS.includes((err.params as { missingProperty: string }).missingProperty)) return `${where} 步骤必须是 call / async / return / alt / loop / par / ref 之一（每个步骤只写一个键）`
       return `${where} 缺少必填字段「${(err.params as { missingProperty: string }).missingProperty}」`
     case 'enum':
       return `${where} 取值必须是 ${(err.params as { allowedValues: unknown[] }).allowedValues.join(' / ')} 之一`

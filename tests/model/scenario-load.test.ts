@@ -163,3 +163,17 @@ describe('索引', () => {
     expect(index.actors.get('actor.timer')?.kind).toBe('time')
   })
 })
+
+describe('格式错误的报告', () => {
+  it('步骤树中深处的错误只报最深处，不报外层各候选分支', () => {
+    const { issues } = load(scenario('scenario: { id: sc.x, name: X, steps: [{ alt: [{ when: a, steps: [{ call: { from: a, to: b, lable: x } }] }] }] }'))
+    expect(issues).toHaveLength(1)
+    expect(issues[0].message).toContain('lable')
+    expect(issues[0].path).toBe('scenario.steps.0.alt.0.steps.0.call')
+  })
+
+  it('不认识的步骤类型提示可用的步骤键', () => {
+    const { issues } = load(scenario('scenario: { id: sc.x, name: X, steps: [{ jump: { from: a, to: b } }] }'))
+    expect(issues.map(i => i.message).join('\n')).toContain('步骤必须是 call / async / return / alt / loop / par / ref 之一')
+  })
+})

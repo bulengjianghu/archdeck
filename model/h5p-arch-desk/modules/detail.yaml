@@ -11,22 +11,28 @@ modules:
       - **变淡**：有焦点时，与焦点不相邻的节点和边变淡；分层总览里带不参与变淡。
       - **适应画布**：内容外框直接取自布局结果，不依赖 Vue Flow 对节点尺寸的测量，只等画布容器有尺寸。
       - **写 store 而非传属性**：节点与边通过 setNodes / setEdges 写入；属性同步在「上一层有选中、切回总览」时会被跳过。
+      - **舞台**（运行视角）：本层参与场景的节点与走过的边突出，其余变淡但不隐藏，布局不变（V5）。
+      - **回放叠加**（运行视角）：按当前可见消息给对应视图边加「当前步骤」态并沿步骤方向流动（可与边的箭头相反，P10）、端点节点加「活动」态；已走过的边保留淡色并标步骤序号；内部活动只高亮节点；
+        本层两节点之间没有视图边时，回放期间临时画一条「结构中未建模」虚线，不参与布局，离开这一步即消失（P11）；当前帧在本层不可见时提示「下钻 / 到上一层查看」（R11）。
+      - **点击含义**（运行视角）：单击节点 / 边仍是选中，同时暂停并钉住焦点（V3）；单击边上的步骤序号 = 指向这一步（R13）。
+      - **分支预览**：停在 alt 分支点时，各选项首条消息对应的边以虚线预览并标选项序号，与分支选择联动。
+      - **外部参与者**：参与者以独立节点类型画在固定位置，内部结构外画系统边界框。
     codeRefs: [src/components/GraphCanvas.vue]
   - id: present.canvas.nodes
     name: 节点组件
     parent: present.canvas
-    responsibility: 五种节点：模块（职责摘要、可下钻标识、目标态虚线）、边界（外部模块与所在路径）、带（层名、抽象原则、可依赖层）、核心模块小块、「+N 个其他模块」占位；设计版本中新增 / 修改描边与「△N」变更角标。
+    responsibility: 六种节点：模块（职责摘要、可下钻标识、目标态虚线）、边界（系统内、本层外的模块与所在路径）、外部参与者（用户 / 外部系统 / 时间图标，系统外）、带（层名、抽象原则、可依赖层）、核心模块小块、「+N 个其他模块」占位；设计版本中新增 / 修改描边与「△N」变更角标。
     codeRefs: [src/components/nodes/**]
   - id: present.canvas.edges
     name: 边组件
     parent: present.canvas
-    responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线；颜色按关系类型，线宽随聚合条数增加，异步为点划线；设计版本中含新增 / 修改关系的边加变更底色。
+    responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线；颜色按关系类型，线宽随聚合条数增加，异步为点划线；设计版本中含新增 / 修改关系的边加变更底色；回放时当前步骤的边沿方向流动（同步实心箭头、异步开放箭头与虚线，D-6），走过的边标序号。
     codeRefs: [src/components/edges/**]
 
   - id: present.panel.dispatch
     name: 面板分派
     parent: present.panel
-    responsibility: 按选中对象类型选择面板；无选中时显示当前父模块，根层显示系统面板。
+    responsibility: 按焦点选择面板：结构视角下焦点 = 选中，否则当前父模块（根层为系统）；运行视角下钉住时按选中对象（模块 / 关系 / 聚合边 / 参与者）、跟随时为当前步骤（未开始时为场景）。运行视角下模块、关系、聚合边面板顶部加「运行信息」，结构信息折叠在下方（V6）。
     codeRefs: [src/components/panel/Panel.vue]
   - id: present.panel.module
     name: 模块面板
@@ -76,20 +82,20 @@ modules:
   - id: present.nav.toolbar
     name: 工具栏
     parent: present.nav
-    responsibility: 按名称或 ID 搜索模块并跳转；边界节点、只看现状、关系类型筛选等显示开关。
+    responsibility: 按名称或 ID 搜索模块并跳转（运行视角下搜索跳转同样暂停并钉住，V3）；边界节点、只看现状、关系类型筛选等显示开关。场景入口移到视角切换。
     codeRefs: [src/components/Toolbar.vue]
   - id: present.nav.legend
     name: 图例
     parent: present.nav
-    responsibility: 关系类型的颜色与线型、聚合线宽、可下钻与目标态的节点样式说明。
+    responsibility: 关系类型的颜色与线型、聚合线宽、可下钻与目标态的节点样式说明、外部参与者与系统边界；回放中追加当前步骤 / 已走过 / 内部活动 / 分支预览 / 同步与异步的图例。
     codeRefs: [src/components/Legend.vue]
 
   # ── 视图状态层 ──────────────────────────────────────────
   - id: state.desk.loading
-    name: 加载与重新加载
+    name: 模型源同步
     parent: state.desk
-    responsibility: 取回项目描述并调用 loadModel；首次加载以 URL 决定层次与选中，重新加载时保留层次与选中，层次已不存在则退到最近的仍存在的上级。
-    codeRefs: [src/state/useDeskState.ts]
+    responsibility: 同步适配器之一：取回项目描述并调用 loadModel，把加载结果作为动作交给 dispatch（首次加载 / 重新加载）；监听本项目的变更通知触发重新加载。「保留层次与选中、失效时退到上级」不在这里，是转移规则。
+    codeRefs: [src/state/sync/modelSource.ts]
   - id: state.desk.versions
     name: 版本与对比基线
     parent: state.desk
@@ -98,21 +104,32 @@ modules:
   - id: state.desk.projection
     name: 视图派生
     parent: state.desk
-    responsibility: 由「索引 + 当前层次 + 开关」派生层次视图（computed），视图变化后异步布局，并丢弃过期的布局结果。
+    responsibility: 由视图状态与模型派生一切要画的数据（全部是 computed，调用纯函数）：层次视图；打开场景时的回放计划、回放路径、本层的帧投影与可见消息、时序模型与时序图坐标；设计版本的差异。
     codeRefs: [src/state/useDeskState.ts]
   - id: state.desk.actions
-    name: 操作
+    name: dispatch 与操作
     parent: state.desk
-    responsibility: 对外唯一一组操作：下钻、跳转、返回上级、选中、定位关系（跳到两端的最近公共祖先）、定位模块、悬停。
+    responsibility: 视图状态唯一的写入口 dispatch(action)：调用视图状态转移得到新状态并写入，层次变化时通知画布适应；对外的一组操作（下钻、跳转、返回上级、选中、定位、悬停、打开 / 关闭场景、单步、指向某一步、播放 / 暂停、速度、选分支）都只是构造动作并 dispatch。
+    principle: 本身不含领域规则：所有「给定状态与动作，下一个状态是什么」都在视图状态转移里；这里只把派生的上下文（索引、本层帧投影等）交给转移函数。
     codeRefs: [src/state/useDeskState.ts]
   - id: state.desk.url-sync
-    name: URL 同步
+    name: 路由同步
     parent: state.desk
-    responsibility: 层次与选中写进 hash 路由的查询参数（下钻进历史，选中不进历史）；外部的后退 / 前进 / 改地址回写到状态。
+    responsibility: 同步适配器之一：让地址始终等于 encode(视图状态)；外部的后退 / 前进 / 改地址 / 打开分享链接时，decode 成动作交给 dispatch。进不进浏览器历史由转移结果标注（规则 N10、R10）。
     principle: |
       路由导航是异步的：自己发起的导航完成前，路由变化一律视为回声、不回写状态，避免双击（两次选中 + 一次下钻）时旧地址覆盖新层次；
       离开本项目或本版本的路由时也不回写。
-    codeRefs: [src/state/useDeskState.ts]
+    codeRefs: [src/state/sync/router.ts]
+  - id: state.desk.clock
+    name: 时钟同步
+    parent: state.desk
+    responsibility: 同步适配器之一：视图状态中回放为「播放中」时让计时器运行，按速度到点 dispatch(tick)（每条可见消息一个节拍，1 倍速 1 秒；尚未开始时 200ms 后走出第一步）；暂停、到达分支点、关闭场景或组件销毁时停止。
+    codeRefs: [src/state/sync/clock.ts]
+  - id: state.desk.layout-sync
+    name: 布局同步
+    parent: state.desk
+    responsibility: 同步适配器之一：层次视图变化后调用异步布局，按序号丢弃过期结果，把定位好的视图回填给派生数据。
+    codeRefs: [src/state/sync/layout.ts]
 
   - id: state.layout.layered
     name: 分层总览排布
@@ -127,7 +144,7 @@ modules:
   - id: state.layout.boundaries
     name: 边界节点排布
     parent: state.layout
-    responsibility: 边界节点统一排在内部结构下方一行，按所连内部模块的平均横坐标排序以减少交叉；边界边画成曲线。
+    responsibility: 边界节点统一排在内部结构下方一行，按所连内部模块的平均横坐标排序以减少交叉；边界边画成曲线。外部参与者：用户类排在内部结构上方一行，外部系统与时间类排在右侧一列；内部结构外画系统边界虚线框。
     codeRefs: [src/layout/layout.ts]
   - id: state.layout.runner
     name: 布局入口与缓存
@@ -139,18 +156,24 @@ modules:
   - id: model.pipeline.loader
     name: Loader
     parent: model.pipeline
-    responsibility: 解析 YAML、按 JSON Schema 检查单文件格式（未知字段即报错）、把多个文件合并成一个模型并记录每个实体的出处（文件 / 路径 / 行号）。
+    responsibility: 解析 YAML / JSON、按 JSON Schema 检查单文件格式（未知字段即报错）、把多个文件合并成一个模型并记录每个实体的出处（文件 / 路径 / 行号）；解析外部参与者、场景与嵌套步骤树（每个步骤记录路径与出处）。
     codeRefs: [src/model/load.ts]
   - id: model.pipeline.validator
     name: Validator
     parent: model.pipeline
-    responsibility: 跨文件检查：ID 唯一、父模块存在且父链无环、关系端点有效、不连祖先与后代、接口 / 数据结构引用存在、层字段完整。
-    principle: 不抛异常：error 级问题的实体被剔除，warning 级只去掉坏引用，返回一份可以安全建索引的模型和问题列表。
+    responsibility: 跨文件检查：ID 唯一、父模块存在且父链无环、关系端点有效、不连祖先与后代、接口 / 数据结构引用存在、层字段完整；检查外部参与者（ID 与模块不重复）与场景：消息端点是模块或参与者、引用的关系 / 接口 / 数据结构存在且与端点一致、步骤 id 在场景内唯一、ref 指向的场景存在且无循环引用。
+    principle: |
+      不抛异常：error 级问题的实体被剔除，warning 级只去掉坏引用，返回一份可以安全建索引的模型和问题列表。
+
+      步骤与结构一致性（规则 S5 / S5a）：
+      - 引用了 relation：端点必须与关系一致，否则 error；relation 为 event 类型时按反向比对（结构上 event 是订阅方 → 发布方，消息是发布方 → 订阅方）。
+      - 没引用 relation：按 S13 推断（两端之间恰好一条运行时关系即认定）；推断不到且两端（及其祖先之间）结构上没有任何关系时报 warning「结构图中没有对应关系」。
+      - 引用了 depends / implements 关系：error（S12，只有运行时关系会「发生一次」）。
     codeRefs: [src/model/validate.ts]
   - id: model.pipeline.indexer
     name: Indexer
     parent: model.pipeline
-    responsibility: 建立按 ID 查询的结构：模块 / 关系 / 接口 / 数据结构表、子模块表（层按 order 排序）、根到模块的路径、出入边表；提供最近公共祖先等查询。
+    responsibility: 建立按 ID 查询的结构：模块 / 关系 / 接口 / 数据结构 / 参与者 / 场景表、子模块表（层按 order 排序）、根到模块的路径、出入边表、模块 → 涉及它的场景、参与者 → 由它触发的场景（触发者 = 第一条消息的发送方，规则 A6）；提供最近公共祖先、最近仍存在的祖先等查询。
     codeRefs: [src/model/indexer.ts]
   - id: model.pipeline.entry
     name: loadModel 入口
@@ -161,7 +184,7 @@ modules:
   - id: model.projector.endpoints
     name: 端点映射
     parent: model.projector
-    responsibility: 把关系两端映射到「当前父模块下的直接子模块」或外部边界节点，并按开关（只看现状、关系类型）过滤可见性。
+    responsibility: 把关系两端映射到「当前父模块下的直接子模块」、系统内的边界节点或系统外的参与者，并按开关（只看现状、关系类型）过滤可见性；导出为公共函数 mapEndpoint，供场景投影映射帧端点。
     principle: |
       - 两端落在不同子模块：恰好是子模块本身 → 直接边，否则 → 聚合边；
       - 两端落在同一子模块：属于更深层次，不画；
@@ -180,27 +203,27 @@ modules:
 
 relations:
   # 呈现层内部
-  - { id: rel.ad.shell-list, from: present.shell, to: present.project-list, type: depends, description: 路由 `/` 指向项目列表 }
-  - { id: rel.ad.shell-desk, from: present.shell, to: present.desk-view, type: depends, description: 路由 `/p/<项目>` 指向项目视图，按项目 ID 重建 }
-  - { id: rel.ad.desk-canvas, from: present.desk-view, to: present.canvas.flow, type: depends }
-  - { id: rel.ad.desk-panel, from: present.desk-view, to: present.panel.dispatch, type: depends }
-  - { id: rel.ad.desk-nav, from: present.desk-view, to: present.nav, type: depends }
-  - { id: rel.ad.desk-issues, from: present.desk-view, to: present.issues, type: depends }
-  - { id: rel.ad.flow-nodes, from: present.canvas.flow, to: present.canvas.nodes, type: depends }
-  - { id: rel.ad.flow-edges, from: present.canvas.flow, to: present.canvas.edges, type: depends }
-  - { id: rel.ad.flow-legend, from: present.canvas.flow, to: present.nav.legend, type: depends, description: 图例浮在画布右下角 }
-  - { id: rel.ad.panel-module, from: present.panel.dispatch, to: present.panel.module, type: depends }
-  - { id: rel.ad.panel-relation, from: present.panel.dispatch, to: present.panel.relation, type: depends }
-  - { id: rel.ad.panel-edge, from: present.panel.dispatch, to: present.panel.edge, type: depends }
-  - { id: rel.ad.panel-system, from: present.panel.dispatch, to: present.panel.system, type: depends }
-  - { id: rel.ad.module-content, from: present.panel.module, to: present.panel.content, type: depends }
-  - { id: rel.ad.relation-content, from: present.panel.relation, to: present.panel.content, type: depends }
-  - { id: rel.ad.edge-content, from: present.panel.edge, to: present.panel.content, type: depends }
-  - { id: rel.ad.system-content, from: present.panel.system, to: present.panel.content, type: depends }
-  - { id: rel.ad.system-design, from: present.panel.system, to: present.panel.design, type: depends, description: 设计版本根层先显示设计面板 }
-  - { id: rel.ad.design-content, from: present.panel.design, to: present.panel.content, type: depends }
-  - { id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: depends }
-  - { id: rel.ad.version-shell, from: present.version, to: present.shell, type: calls, description: 切换版本即导航到对应路由，带上当前 level / sel }
+  - {id: rel.ad.shell-list, from: present.shell, to: present.project-list, type: depends, description: 路由 `/` 指向项目列表}
+  - {id: rel.ad.shell-desk, from: present.shell, to: present.desk-view, type: depends, description: 路由 `/p/<项目>` 指向项目视图，按项目 ID 重建}
+  - {id: rel.ad.desk-canvas, from: present.desk-view, to: present.canvas.flow, type: depends}
+  - {id: rel.ad.desk-panel, from: present.desk-view, to: present.panel.dispatch, type: depends}
+  - {id: rel.ad.desk-nav, from: present.desk-view, to: present.nav, type: depends}
+  - {id: rel.ad.desk-issues, from: present.desk-view, to: present.issues, type: depends}
+  - {id: rel.ad.flow-nodes, from: present.canvas.flow, to: present.canvas.nodes, type: depends}
+  - {id: rel.ad.flow-edges, from: present.canvas.flow, to: present.canvas.edges, type: depends}
+  - {id: rel.ad.flow-legend, from: present.canvas.flow, to: present.nav.legend, type: depends, description: 图例浮在画布右下角}
+  - {id: rel.ad.panel-module, from: present.panel.dispatch, to: present.panel.module, type: depends}
+  - {id: rel.ad.panel-relation, from: present.panel.dispatch, to: present.panel.relation, type: depends}
+  - {id: rel.ad.panel-edge, from: present.panel.dispatch, to: present.panel.edge, type: depends}
+  - {id: rel.ad.panel-system, from: present.panel.dispatch, to: present.panel.system, type: depends}
+  - {id: rel.ad.module-content, from: present.panel.module, to: present.panel.content, type: depends}
+  - {id: rel.ad.relation-content, from: present.panel.relation, to: present.panel.content, type: depends}
+  - {id: rel.ad.edge-content, from: present.panel.edge, to: present.panel.content, type: depends}
+  - {id: rel.ad.system-content, from: present.panel.system, to: present.panel.content, type: depends}
+  - {id: rel.ad.system-design, from: present.panel.system, to: present.panel.design, type: depends, description: 设计版本根层先显示设计面板}
+  - {id: rel.ad.design-content, from: present.panel.design, to: present.panel.content, type: depends}
+  - {id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: depends}
+  - {id: rel.ad.version-shell, from: present.version, to: present.shell, type: calls, description: 切换版本即导航到对应路由，带上当前 level / sel}
 
   # 呈现 → 接入（HTTP 与变更通知；event 方向为订阅方 → 发布方）
   - id: rel.ad.list-fetch
@@ -211,7 +234,7 @@ relations:
     interface: if.source.endpoints
     payload: [ds.ProjectSummary]
     description: GET projects.json 取项目摘要列表
-  - { id: rel.ad.list-changed, from: present.project-list, to: access.model-source, type: event, mode: async, interface: if.source.endpoints, description: 任一项目描述变化后刷新摘要 }
+  - {id: rel.ad.list-changed, from: present.project-list, to: access.model-source, type: event, mode: async, interface: if.source.endpoints, description: 任一项目描述变化后刷新摘要}
   - id: rel.ad.desk-fetch
     from: present.desk-view
     to: access.model-source
@@ -220,43 +243,43 @@ relations:
     interface: if.source.endpoints
     payload: [ds.ModelPayload]
     description: GET models/<项目>.json 取该项目全部 YAML 原文
-  - { id: rel.ad.desk-changed, from: present.desk-view, to: access.model-source, type: event, mode: async, interface: if.source.endpoints, description: 只响应本项目的 arch-model:changed，触发重新加载 }
+  - {id: rel.ad.desk-changed, from: present.desk-view, to: access.model-source, type: event, mode: async, interface: if.source.endpoints, description: 只响应本项目的 arch-model:changed，触发重新加载}
 
   # 呈现 → 视图状态
-  - { id: rel.ad.desk-create, from: present.desk-view, to: state.desk.loading, type: calls, interface: if.desk.createDeskState, description: 进入项目时创建并注入 DeskState，调用 init；变更通知时调用 reload }
-  - { id: rel.ad.desk-keys, from: present.desk-view, to: state.desk.actions, type: calls, interface: if.desk.actions, description: Esc 取消选中 / 返回上级，Backspace 返回上级 }
-  - { id: rel.ad.flow-read, from: present.canvas.flow, to: state.desk.projection, type: depends, payload: [ds.PositionedView, ds.Selection], description: 读取带坐标的视图、选中与悬停 }
-  - { id: rel.ad.flow-act, from: present.canvas.flow, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击 → select，双击 → drillInto / revealModule，悬停 → setHover }
-  - { id: rel.ad.flow-bounds, from: present.canvas.flow, to: state.layout.runner, type: calls, interface: if.layout.contentBounds, description: 适应画布时取内容外框 }
-  - { id: rel.ad.edges-route, from: present.canvas.edges, to: state.layout.runner, type: depends, payload: [ds.PositionedView], description: 使用 Layout 给出的走线点 }
-  - { id: rel.ad.panel-read, from: present.panel.dispatch, to: state.desk.projection, type: depends, payload: [ds.Selection] }
-  - { id: rel.ad.edgepanel-read, from: present.panel.edge, to: state.desk.projection, type: depends, payload: [ds.LevelView], description: 在当前视图里查找聚合边 }
-  - { id: rel.ad.module-act, from: present.panel.module, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 子模块点击、进入、可依赖层跳转 }
-  - { id: rel.ad.relation-act, from: present.panel.relation, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 端点跳转、定位到所在层次 }
-  - { id: rel.ad.content-act, from: present.panel.content, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 关系行点击 → revealRelation }
-  - { id: rel.ad.crumb-act, from: present.nav.breadcrumb, to: state.desk.actions, type: calls, interface: if.desk.actions }
-  - { id: rel.ad.toolbar-act, from: present.nav.toolbar, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 搜索结果 → revealModule；显示开关写入 toggles }
-  - { id: rel.ad.issues-read, from: present.issues, to: state.desk.loading, type: depends, payload: [ds.Issue] }
-  - { id: rel.ad.version-read, from: present.version, to: state.desk.versions, type: depends, payload: [ds.DesignInfo, ds.ModelDiff], description: 设计、轮次、对比基线、变更计数；对比基线与标出变更写入 toggles }
-  - { id: rel.ad.flow-diff, from: present.canvas.flow, to: state.desk.versions, type: depends, payload: [ds.ModelDiff], description: 节点与边的变更标记 }
-  - { id: rel.ad.design-read, from: present.panel.design, to: state.desk.versions, type: depends, payload: [ds.DesignInfo, ds.ModelDiff] }
-  - { id: rel.ad.design-act, from: present.panel.design, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 变更清单点击 → revealModule / revealRelation }
-  - { id: rel.ad.content-diff, from: present.panel.content, to: state.desk.versions, type: depends, payload: [ds.ModelDiff], description: 新增 / 修改标记与改了哪些字段 }
+  - {id: rel.ad.desk-create, from: present.desk-view, to: state.desk.loading, type: calls, interface: if.desk.createDeskState, description: 进入项目时创建并注入 DeskState，调用 init；变更通知时调用 reload}
+  - {id: rel.ad.desk-keys, from: present.desk-view, to: state.desk.actions, type: calls, interface: if.desk.actions, description: Esc 取消选中 / 返回上级，Backspace 返回上级}
+  - {id: rel.ad.flow-read, from: present.canvas.flow, to: state.desk.projection, type: depends, payload: [ds.PositionedView, ds.Selection], description: 读取带坐标的视图、选中与悬停}
+  - {id: rel.ad.flow-act, from: present.canvas.flow, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击 → select，双击 → drillInto / revealModule，悬停 → setHover}
+  - {id: rel.ad.flow-bounds, from: present.canvas.flow, to: state.layout.runner, type: calls, interface: if.layout.contentBounds, description: 适应画布时取内容外框}
+  - {id: rel.ad.edges-route, from: present.canvas.edges, to: state.layout.runner, type: depends, payload: [ds.PositionedView], description: 使用 Layout 给出的走线点}
+  - {id: rel.ad.panel-read, from: present.panel.dispatch, to: state.desk.projection, type: depends, payload: [ds.Selection]}
+  - {id: rel.ad.edgepanel-read, from: present.panel.edge, to: state.desk.projection, type: depends, payload: [ds.LevelView], description: 在当前视图里查找聚合边}
+  - {id: rel.ad.module-act, from: present.panel.module, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 子模块点击、进入、可依赖层跳转}
+  - {id: rel.ad.relation-act, from: present.panel.relation, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 端点跳转、定位到所在层次}
+  - {id: rel.ad.content-act, from: present.panel.content, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 关系行点击 → revealRelation}
+  - {id: rel.ad.crumb-act, from: present.nav.breadcrumb, to: state.desk.actions, type: calls, interface: if.desk.actions}
+  - {id: rel.ad.toolbar-act, from: present.nav.toolbar, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 搜索结果 → revealModule；显示开关写入 toggles}
+  - {id: rel.ad.issues-read, from: present.issues, to: state.desk.loading, type: depends, payload: [ds.Issue]}
+  - {id: rel.ad.version-read, from: present.version, to: state.desk.versions, type: depends, payload: [ds.DesignInfo, ds.ModelDiff], description: 设计、轮次、对比基线、变更计数；对比基线与标出变更写入 toggles}
+  - {id: rel.ad.flow-diff, from: present.canvas.flow, to: state.desk.versions, type: depends, payload: [ds.ModelDiff], description: 节点与边的变更标记}
+  - {id: rel.ad.design-read, from: present.panel.design, to: state.desk.versions, type: depends, payload: [ds.DesignInfo, ds.ModelDiff]}
+  - {id: rel.ad.design-act, from: present.panel.design, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 变更清单点击 → revealModule / revealRelation}
+  - {id: rel.ad.content-diff, from: present.panel.content, to: state.desk.versions, type: depends, payload: [ds.ModelDiff], description: 新增 / 修改标记与改了哪些字段}
 
   # 呈现 → 模型（只用类型与少量纯函数）
-  - { id: rel.ad.list-types, from: present.project-list, to: model.types, type: depends, payload: [ds.ProjectSummary] }
-  - { id: rel.ad.toolbar-types, from: present.nav.toolbar, to: model.types, type: depends, description: RELATION_TYPES 枚举 }
-  - { id: rel.ad.crumb-name, from: present.nav.breadcrumb, to: model.pipeline.indexer, type: calls, description: moduleName 取显示名 }
+  - {id: rel.ad.list-types, from: present.project-list, to: model.types, type: depends, payload: [ds.ProjectSummary]}
+  - {id: rel.ad.toolbar-types, from: present.nav.toolbar, to: model.types, type: depends, description: RELATION_TYPES 枚举}
+  - {id: rel.ad.crumb-name, from: present.nav.breadcrumb, to: model.pipeline.indexer, type: calls, description: moduleName 取显示名}
 
   # 视图状态内部与 → 模型
-  - { id: rel.ad.loading-entry, from: state.desk.loading, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, payload: [ds.ModelIndex, ds.Issue] }
-  - { id: rel.ad.loading-baselines, from: state.desk.loading, to: state.desk.versions, type: dataflow, payload: [ds.ModelPayload], description: 设计版本的载荷附带设计信息与对比基线原文 }
-  - { id: rel.ad.versions-entry, from: state.desk.versions, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 对比基线同样走 loadModel }
-  - { id: rel.ad.versions-diff, from: state.desk.versions, to: model.diff, type: calls, interface: if.model.diffModels, payload: [ds.ModelDiff], description: 切换对比基线或重新加载时重算 }
-  - { id: rel.ad.loading-keep, from: state.desk.loading, to: state.desk.actions, type: calls, description: 重新加载后按旧路径恢复层次与选中 }
-  - { id: rel.ad.url-actions, from: state.desk.url-sync, to: state.desk.actions, type: calls, description: 外部路由变化回写层次与选中 }
-  - { id: rel.ad.actions-url, from: state.desk.actions, to: state.desk.url-sync, type: calls, description: 下钻进历史，选中替换当前地址 }
-  - { id: rel.ad.actions-lca, from: state.desk.actions, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: revealRelation 用最近公共祖先定位层次 }
+  - {id: rel.ad.loading-entry, from: state.desk.loading, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, payload: [ds.ModelIndex, ds.Issue]}
+  - {id: rel.ad.loading-baselines, from: state.desk.loading, to: state.desk.versions, type: dataflow, payload: [ds.ModelPayload], description: 设计版本的载荷附带设计信息与对比基线原文}
+  - {id: rel.ad.versions-entry, from: state.desk.versions, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 对比基线同样走 loadModel}
+  - {id: rel.ad.versions-diff, from: state.desk.versions, to: model.diff, type: calls, interface: if.model.diffModels, payload: [ds.ModelDiff], description: 切换对比基线或重新加载时重算}
+  - {id: rel.ad.loading-keep, from: state.desk.loading, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 加载完成 → dispatch(loaded / reloaded)，层次回退由转移规则决定}
+  - {id: rel.ad.url-actions, from: state.desk.url-sync, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 外部路由变化 → decode → dispatch}
+  - {id: rel.ad.actions-url, from: state.desk.url-sync, to: state.desk.actions, type: depends, payload: [ds.ViewState], description: 观察视图状态，地址 = encode(状态)}
+  - {id: rel.ad.actions-lca, from: state.transition.navigation, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: 定位关系用最近公共祖先}
   - id: rel.ad.projection-project
     from: state.desk.projection
     to: model.projector
@@ -272,31 +295,31 @@ relations:
     interface: if.layout.layoutView
     payload: [ds.LevelView, ds.PositionedView]
     description: 视图变化后异步布局，用序号丢弃过期结果
-  - { id: rel.ad.runner-layered, from: state.layout.runner, to: state.layout.layered, type: calls }
-  - { id: rel.ad.runner-graph, from: state.layout.runner, to: state.layout.graph, type: calls, mode: async, description: elk 在 Worker 中运行 }
-  - { id: rel.ad.graph-boundaries, from: state.layout.graph, to: state.layout.boundaries, type: calls }
-  - { id: rel.ad.layout-types, from: state.layout.runner, to: model.types, type: depends, payload: [ds.LevelView] }
+  - {id: rel.ad.runner-layered, from: state.layout.runner, to: state.layout.layered, type: calls}
+  - {id: rel.ad.runner-graph, from: state.layout.runner, to: state.layout.graph, type: calls, mode: async, description: elk 在 Worker 中运行}
+  - {id: rel.ad.graph-boundaries, from: state.layout.graph, to: state.layout.boundaries, type: calls}
+  - {id: rel.ad.layout-types, from: state.layout.runner, to: model.types, type: depends, payload: [ds.LevelView]}
 
   # 接入层
-  - { id: rel.ad.source-reader, from: access.model-source, to: access.reader, type: calls, interface: if.reader.projects, payload: [ds.ProjectSummary, ds.ModelPayload] }
-  - { id: rel.ad.lint-reader, from: access.lint, to: access.reader, type: calls, interface: if.reader.projects }
-  - { id: rel.ad.lint-entry, from: access.lint, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, payload: [ds.Issue] }
-  - { id: rel.ad.reader-entry, from: access.reader, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 生成项目摘要时跑一遍模型层 }
-  - { id: rel.ad.reader-types, from: access.reader, to: model.types, type: depends, payload: [ds.RawFile, ds.ProjectSummary, ds.DesignInfo] }
+  - {id: rel.ad.source-reader, from: access.model-source, to: access.reader, type: calls, interface: if.reader.projects, payload: [ds.ProjectSummary, ds.ModelPayload]}
+  - {id: rel.ad.lint-reader, from: access.lint, to: access.reader, type: calls, interface: if.reader.projects}
+  - {id: rel.ad.lint-entry, from: access.lint, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, payload: [ds.Issue]}
+  - {id: rel.ad.reader-entry, from: access.reader, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 生成项目摘要时跑一遍模型层}
+  - {id: rel.ad.reader-types, from: access.reader, to: model.types, type: depends, payload: [ds.RawFile, ds.ProjectSummary, ds.DesignInfo]}
 
   # 模型层内部
-  - { id: rel.ad.entry-loader, from: model.pipeline.entry, to: model.pipeline.loader, type: calls, interface: if.model.load }
-  - { id: rel.ad.entry-validator, from: model.pipeline.entry, to: model.pipeline.validator, type: calls, interface: if.model.validate }
-  - { id: rel.ad.entry-indexer, from: model.pipeline.entry, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex }
-  - { id: rel.ad.flow-load-validate, from: model.pipeline.loader, to: model.pipeline.validator, type: dataflow, payload: [ds.ArchModel, ds.Issue], description: 合并后的模型交给跨文件校验 }
-  - { id: rel.ad.flow-validate-index, from: model.pipeline.validator, to: model.pipeline.indexer, type: dataflow, payload: [ds.ArchModel], description: 剔除坏实体后的模型交给建索引 }
-  - { id: rel.ad.loader-schema, from: model.pipeline.loader, to: model.types, type: depends, payload: [ds.ArchFileDef, ds.RawFile] }
-  - { id: rel.ad.projector-index, from: model.projector, to: model.pipeline.indexer, type: depends, payload: [ds.ModelIndex], description: 投影读取索引中的路径与子模块表 }
-  - { id: rel.ad.overview-endpoints, from: model.projector.overview, to: model.projector.endpoints, type: calls }
-  - { id: rel.ad.endpoints-collector, from: model.projector.endpoints, to: model.projector.collector, type: calls }
-  - { id: rel.ad.overview-collector, from: model.projector.overview, to: model.projector.collector, type: calls, description: 核心跨层边单独汇总 }
-  - { id: rel.ad.diff-index, from: model.diff, to: model.pipeline.indexer, type: depends, payload: [ds.ModelIndex], description: 按 ID 对齐两份索引，用路径计入祖先 }
-  - { id: rel.ad.projector-types, from: model.projector, to: model.types, type: depends, payload: [ds.LevelView, ds.ViewEdge, ds.Band] }
+  - {id: rel.ad.entry-loader, from: model.pipeline.entry, to: model.pipeline.loader, type: calls, interface: if.model.load}
+  - {id: rel.ad.entry-validator, from: model.pipeline.entry, to: model.pipeline.validator, type: calls, interface: if.model.validate}
+  - {id: rel.ad.entry-indexer, from: model.pipeline.entry, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex}
+  - {id: rel.ad.flow-load-validate, from: model.pipeline.loader, to: model.pipeline.validator, type: dataflow, payload: [ds.ArchModel, ds.Issue], description: 合并后的模型交给跨文件校验}
+  - {id: rel.ad.flow-validate-index, from: model.pipeline.validator, to: model.pipeline.indexer, type: dataflow, payload: [ds.ArchModel], description: 剔除坏实体后的模型交给建索引}
+  - {id: rel.ad.loader-schema, from: model.pipeline.loader, to: model.types, type: depends, payload: [ds.ArchFileDef, ds.RawFile]}
+  - {id: rel.ad.projector-index, from: model.projector, to: model.pipeline.indexer, type: depends, payload: [ds.ModelIndex], description: 投影读取索引中的路径与子模块表}
+  - {id: rel.ad.overview-endpoints, from: model.projector.overview, to: model.projector.endpoints, type: calls}
+  - {id: rel.ad.endpoints-collector, from: model.projector.endpoints, to: model.projector.collector, type: calls}
+  - {id: rel.ad.overview-collector, from: model.projector.overview, to: model.projector.collector, type: calls, description: 核心跨层边单独汇总}
+  - {id: rel.ad.diff-index, from: model.diff, to: model.pipeline.indexer, type: depends, payload: [ds.ModelIndex], description: 按 ID 对齐两份索引，用路径计入祖先}
+  - {id: rel.ad.projector-types, from: model.projector, to: model.types, type: depends, payload: [ds.LevelView, ds.ViewEdge, ds.Band]}
 
 interfaces:
   - id: if.model.loadModel
@@ -322,6 +345,7 @@ interfaces:
     signature: |
       buildIndex(model: ArchModel): ModelIndex
       lowestCommonAncestor(index: ModelIndex, a: string, b: string): string
+      nearestExisting(index: ModelIndex, path: readonly string[]): string   // 旧路径中最深的、在本索引中仍存在的模块（否则根）
       moduleName(index: ModelIndex, id: string): string
     semantics: 输入必须来自 validate()。
   - id: if.model.projectLevel
@@ -329,7 +353,8 @@ interfaces:
     owner: model.projector
     signature: |
       projectLevel(index: ModelIndex, parentId: string, opts?: ProjectOptions): LevelView
-    semantics: 层次不存在或被「只看现状」隐藏时抛错；同样的输入得到同样的输出（边 ID 稳定）。
+      nearestVisibleLevel(index: ModelIndex, levelId: string, opts: ProjectOptions): string   // N12
+    semantics: 层次不存在或被「只看现状」隐藏时抛错（调用方先用 nearestVisibleLevel 取合法层次）；同样的输入得到同样的输出（边 ID 稳定）。
   - id: if.model.diffModels
     name: diffModels
     owner: model.diff
@@ -352,21 +377,18 @@ interfaces:
     owner: state.desk
     signature: |
       createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: string; version?: VersionRef }): DeskState
-      // DeskState: { status, index, issues, levelId, levelPath, selection, hoverId, toggles, view, positioned,
-      //              designs, design, revision, baselines, baseline, diff, baseDrift, … ,
-      //              init(), reload(), attachRouter(router), …操作 }
-    semantics: 每个项目的每个版本一份；在组件 setup 中创建，其 watch 随组件销毁。
+      // DeskState: { state: ViewState（只读）, index, issues, 派生数据（view, positioned, scenarioView, sequence, diff, …）,
+      //              dispatch(action), init(), attachRouter(router), …操作（见 if.desk.actions） }
+    semantics: 每个项目的每个版本一份；在组件 setup 中创建，其 watch 与同步适配器随组件销毁。
   - id: if.desk.actions
     name: DeskState 操作
     owner: state.desk.actions
     signature: |
-      drillInto(moduleId: string): boolean      // 有子模块才生效
-      goTo(levelId: string, select?: Selection | null): void
-      goUp(): void                              // 返回上级并选中刚离开的模块
-      select(s: Selection | null): void
-      revealRelation(relationId: string): void  // 跳到两端的最近公共祖先并选中
-      revealModule(moduleId: string): void      // 跳到父模块并选中
-      setHover(id: string | null): void
+      dispatch(action: ViewAction): void          // 唯一写入口
+      // 以下都是构造动作并 dispatch 的便捷包装
+      drillInto(moduleId) · goTo(levelId, select?) · goUp() · select(s) · revealRelation(id) · revealModule(id) · setHover(id)
+      openScenario(id) · closeScenario() · next() · prev() · seek(frameId) · play() · pause() · setSpeed(x) · chooseBranch(pointId, option)
+    semantics: 操作本身不含规则；同一动作在任何状态下的效果由视图状态转移决定。
   - id: if.source.endpoints
     name: 模型端点
     owner: access.model-source
@@ -398,6 +420,9 @@ dataStructures:
         relations?: RelationDef[]
         interfaces?: InterfaceDef[]
         dataStructures?: DataStructureDef[]
+        actors?: ActorDef[]          // 外部参与者
+        scenario?: ScenarioDef
+        scenarios?: ScenarioDef[]
       }
     description: 一个 YAML 文件的顶层形状，与 schema/arch-file.schema.json 对应。
   - id: ds.RawFile
@@ -414,6 +439,8 @@ dataStructures:
         relations: RelationEntity[]
         interfaces: InterfaceEntity[]
         dataStructures: DataStructureEntity[]
+        actors: ActorEntity[]
+        scenarios: ScenarioEntity[]
       }
     description: 多个文件合并后的模型，每个实体记录出处 src { file, path, line }。
   - id: ds.Issue
@@ -436,6 +463,10 @@ dataStructures:
         childrenOf: Map<string, string[]>   // 层按 order 排序
         pathOf: Map<string, string[]>       // 从根到模块
         outRelations / inRelations: Map<string, string[]>
+        scenarios: Map<string, ScenarioEntity>
+        scenariosOf: Map<string, string[]>       // 模块 → 有帧端点落在其子树内的场景
+        actors: Map<string, ActorEntity>
+        triggeredBy: Map<string, string[]>       // 参与者 → 由它触发的场景（第一条消息的发送方）
         // …
       }
     description: 按 ID 查询的索引。
@@ -455,7 +486,7 @@ dataStructures:
       interface LevelView {
         mode: 'graph' | 'layered'
         parentId: string
-        nodes: ViewNode[]            // role: module | boundary | layer | core
+        nodes: ViewNode[]            // role: module | boundary | layer | core | actor
         edges: ViewEdge[]
         bands?: Band[]               // 仅 layered
         coreEdges?: ViewEdge[]       // 仅 layered，聚焦时显示

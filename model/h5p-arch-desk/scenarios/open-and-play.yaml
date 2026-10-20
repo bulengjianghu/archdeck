@@ -1,0 +1,46 @@
+scenario:
+  id: sc.open-and-play
+  name: 打开场景并回放
+  description: |
+    架构师在顶部「运行」中选定一个场景：进入运行视角、层次不变、从头自动播放；时钟每一拍前进一条本层可见消息，
+    到 alt 未选分支处暂停并展开全部选项，选一支后继续；单击时序图中之前的一条消息，播放头后退到那一步。
+  cause: 架构师想看某条执行链路这一次怎么走
+  steps:
+    - call: {id: pick, from: actor.architect, to: present.perspective, label: 点「运行」}
+    - call: {from: present.perspective, to: present.scenarios, label: 弹出场景列表（本层相关 / 全部 / 按发起者）}
+    - call: {id: choose, from: actor.architect, to: present.scenarios, label: 选定场景}
+    - call: {id: open, from: present.scenarios, to: state.desk.actions, label: openScenario(id)}
+    - call: {from: state.desk.actions, to: state.transition.playback, label: transition(openScenario)：运行视角、播放头为空、自动播放}
+    - return: {from: state.transition.playback, to: state.desk.actions, label: 新的视图状态}
+    - async: {from: state.desk.actions, to: state.desk.url-sync, label: 地址 = encode(新状态)，进浏览器历史}
+    - call: {from: state.desk.projection, to: model.scenario.flatten, label: planScenario：步骤树展开为回放计划}
+    - call: {from: state.desk.projection, to: model.projector.endpoints, label: projectLevel（舞台：补齐场景端点）}
+    - call: {from: state.desk.projection, to: model.scenario.path, label: resolvePath}
+    - call: {from: state.desk.projection, to: model.scenario.level, label: projectScenario：本层可见消息}
+    - call: {from: state.desk.projection, to: model.scenario.sequence, label: buildSequence}
+    - call: {from: state.desk.projection, to: state.layout.sequence, label: layoutSequence}
+    - call: {from: present.sequence.interact, to: state.desk.projection, label: 读取定位好的时序图}
+    - loop:
+        while: 播放中，每一拍（每条可见消息）
+        steps:
+          - async: {id: tick, from: state.desk.clock, to: state.desk.actions, label: 到点 dispatch(tick)}
+          - call: {from: state.desk.actions, to: state.transition.playback, label: transition(tick)}
+          - call: {from: state.transition.playback, to: model.scenario.level, label: stepAfter：本层下一条可见消息}
+          - call: {from: state.desk.projection, to: state.layout.stage, label: stageOverlay：走过的边、当前消息}
+          - call: {from: present.canvas.flow, to: state.desk.projection, label: 当前消息沿方向流动，走过的边标序号}
+    - alt:
+        - when: 到 alt 未选分支处
+          steps:
+            - call: {id: branch, from: actor.architect, to: present.player, label: 在展开的选项中选一支}
+            - call: {from: present.player, to: state.desk.actions, label: 'chooseBranch(point, option)'}
+            - call: {from: state.desk.actions, to: state.transition.playback, label: transition(chooseBranch)}
+            - call: {from: state.transition.playback, to: model.scenario.path, label: chooseBranch：改选丢弃其后的选择}
+            - call: {from: actor.architect, to: present.player, label: 点 ▶ 继续播放}
+        - when: 到场景末尾
+          steps: []
+    - call: {id: seek, from: actor.architect, to: present.sequence.interact, label: 单击之前的一条消息}
+    - call: {from: present.sequence.interact, to: state.desk.actions, label: seek(frameId)}
+    - call: {from: state.desk.actions, to: state.transition.playback, label: transition(seek)：暂停、焦点跟随}
+    - call: {from: state.transition.playback, to: model.scenario.path, label: choicesFor：到达该帧需要的分支选择}
+    - call: {from: state.transition.playback, to: model.scenario.level, label: landing：落在可见消息的第一帧}
+    - async: {from: state.desk.actions, to: state.desk.url-sync, label: 地址替换为新的步骤}

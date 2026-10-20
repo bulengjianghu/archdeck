@@ -1,0 +1,29 @@
+# 迁移自 h5player docs/arch/blueprint.md §4.2「控制面：命令与 Hook」的时序图（D-8）。
+scenario:
+  id: sc.command
+  name: 命令执行（play / switch / reset）
+  description: |
+    命令是改变 Player 生命周期状态的唯一通道：业务方调用 API → 状态机串行执行命令 → Solution 的前后置 Hook 做决策与编排，
+    需要改图时以一次 Pipeline 事务换代（引用「方案切换事务」）→ 状态机把命令生成的 Action 下发给 MU → 结果与事件回到业务方。
+    Fragment 内部的 seek、flush、drop 属于状态内的数据面机动，不走这条链路。
+  cause: 业务方调用 play / switch / reset
+  steps:
+    - call: {id: cmd, from: actor.biz, to: infra.player-index.player-api, label: play / switch / reset}
+    - call: {from: infra.player-index.player-api, to: infra.framework.state-machine.scheduler, interface: if.framework.state-machine.sendCommand, payload: ds.CommandInfo, label: sendCommand}
+    - async: {from: infra.framework.state-machine.scheduler, to: infra.framework.state-machine.engine, label: 串行取出命令执行}
+    - call: {id: hook, from: infra.framework.state-machine.engine, to: app.solution.lifecycle, payload: ds.CommandHook, label: pre / post hook}
+    - call: {from: app.solution.lifecycle, to: domain.services.solution-select, label: select / reconcile / policy}
+    - return: {from: domain.services.solution-select, to: app.solution.lifecycle, label: decision}
+    - alt:
+        - when: 需要改图（方案或三元组变化）
+          steps:
+            - call: {id: swap, from: app.solution.lifecycle, to: app.solution.stage-swap, label: onSwitch：换代}
+            - ref: sc.switch-transaction
+        - when: 无需改图
+          steps: []
+    - return: {from: app.solution.lifecycle, to: infra.framework.state-machine.engine, payload: ds.ErrorBase, label: success / ErrorBase}
+    - async: {id: dispatch, from: infra.framework.state-machine.engine, to: infra.framework.pipeline.dispatch, interface: if.framework.pipeline.Dispatcher, label: dispatch generated actions}
+    - call: {from: infra.framework.pipeline.dispatch, to: infra.framework.media-unit, interface: if.framework.media-unit.MediaUnit, label: handleAction}
+    - async: {from: infra.framework.state-machine.engine, to: infra.framework.kernel.event-bus, label: PlayerStatusChange}
+    - async: {from: infra.framework.kernel.event-bus, to: infra.player-index.player-api, label: 转发框架事件}
+    - return: {id: result, from: infra.player-index.player-api, to: actor.biz, payload: ds.CommandResponse, label: command result / event}

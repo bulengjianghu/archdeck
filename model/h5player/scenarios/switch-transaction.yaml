@@ -1,0 +1,31 @@
+# 迁移自 h5player docs/arch/blueprint.md §4.3「方案切换事务」的时序图（D-8）；Pipeline 对新增 MU 的生命周期补齐取自 §4.2。
+scenario:
+  id: sc.switch-transaction
+  name: 方案切换事务
+  description: |
+    切换不是「先删旧图再试着建新图」，而是候选代际与图事务协同提交：旧段先 quiesce，ModelRegistry 发起可回滚的模型切换，
+    候选段计划经一次 updatePipeline 提交；成功则提交模型并销毁旧代，失败则销毁候选、回滚模型、恢复旧代。
+    三道保护共同阻止代际竞态：状态机命令串行；旧段在候选构建前 quiesce；Pipeline 与 Model 只在各自事务成功后提交。
+  cause: 命令 Hook 判定需要换方案或换地址（三元组变化）
+  steps:
+    - call: {id: quiesce, from: app.solution.stage-swap, to: app.factories.base, interface: if.factories.StageFactory, label: quiesce old generation}
+    - call: {id: begin, from: app.solution.stage-swap, to: infra.framework.model-registry.registry, interface: if.framework.model-registry.beginStreamModelSwitch, label: beginXxxModelSwitch()}
+    - return: {from: infra.framework.model-registry.registry, to: app.solution.stage-swap, payload: ds.PlaybackModelSwitch, label: reversible model switch}
+    - call: {id: plan, from: app.solution.stage-swap, to: app.factories.base, payload: ds.StagePipelinePlan, label: build candidate StagePlan}
+    - call: {id: update, from: app.solution.stage-swap, to: infra.framework.pipeline.transaction, interface: if.framework.pipeline.updatePipeline, label: updatePipeline(nodes + target edges)}
+    - loop:
+        while: 每个新增 MU
+        steps:
+          - call: {from: infra.framework.pipeline.transaction, to: infra.framework.media-unit, interface: if.framework.media-unit.MediaUnit, label: lifecycle catch-up}
+    - alt:
+        - when: pipeline success
+          steps:
+            - return: {id: ok, from: infra.framework.pipeline.transaction, to: app.solution.stage-swap, payload: ds.PipelineUpdateResult, label: Ok(report)}
+            - call: {from: app.solution.stage-swap, to: infra.framework.model-registry.registry, label: commit()}
+            - call: {from: app.solution.stage-swap, to: app.factories.base, label: destroy old generation}
+        - when: validation / catch-up failure
+          steps:
+            - return: {id: err, from: infra.framework.pipeline.transaction, to: app.solution.stage-swap, payload: ds.ErrorBase, label: Err(ErrorBase)}
+            - call: {from: app.solution.stage-swap, to: app.factories.base, label: destroy candidate}
+            - call: {from: app.solution.stage-swap, to: infra.framework.model-registry.registry, label: rollback()}
+            - call: {from: app.solution.stage-swap, to: app.factories.base, label: resume old generation}
