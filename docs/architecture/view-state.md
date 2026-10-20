@@ -1,7 +1,7 @@
 # 专题：视图状态与协调
 
-> 回答：用户此刻在看什么；一次操作怎么改变它；它怎么与路由、计时器、描述文件、布局保持一致。
-> 覆盖模块：视图状态层的 DeskState（协调者）与视图状态转移（会话规则）。原则见 [03-architecture.md](../03-architecture.md) 原则 6、7；规则见 [02-domain.md](../02-domain.md) 的 V、N、R、F6a、F6c、E3、E4。
+> 回答：用户此刻在看什么；一次操作怎么改变它；它怎么与路由、描述文件、布局保持一致。
+> 覆盖模块：视图状态层的 DeskState（协调者）与视图状态转移（会话规则）。原则见 [03-architecture.md](../03-architecture.md) 原则 6、7；规则见 [02-domain.md](../02-domain.md) 的 V、N、R、F6c、E3、E4。
 
 ## 1. 视图状态
 
@@ -18,10 +18,8 @@ interface ViewState {
 
 interface PlaybackState {
   scenarioId: string
-  frameId: string | null             // 播放头；null = 尚未开始
+  frameId: string | null             // 播放头；null = 停在开头（尚未开始）
   choices: Map<string, number>       // 分支点 → 已选选项
-  playing: boolean
-  speed: 0.5 | 1 | 2
 }
 ```
 
@@ -31,8 +29,9 @@ interface PlaybackState {
 视角 = playback 为 null ? 结构 : 运行
 焦点 = 结构视角：selection ?? 当前父模块
        运行视角：selection ≠ null ? 钉住(selection) : 跟随(frameId)
-不变式：playback?.playing ⇒ selection = null      （每次转移后断言）
 ```
+
+回放只由用户驱动（R1），状态里没有「播放中」，也就没有选中与播放头争夺面板的问题：指向对象即钉住（V3），取消选中或移动播放头即回到跟随（V4、V7）。
 
 ## 2. 协调者：DeskState
 
@@ -42,21 +41,21 @@ interface PlaybackState {
 |---|---|
 | 持有 | `ViewState`（`shallowRef`）、加载后的模型索引与问题、设计信息与对比基线索引 |
 | 唯一写入口 | `dispatch(action)`：`transition(state, action, ctx)` 得到新状态与历史标注，写入；对外的操作都是构造动作并 dispatch 的包装 |
-| 派生（`computed`，调用纯函数） | 层次视图 `projectLevel`（运行视角下为舞台视图：不受显示开关影响并补齐场景端点，L9、P12）；打开场景时：回放计划 → 回放路径 → 本层帧投影与可见消息 → 时序模型 → 时序图坐标；视角与焦点；钉住对象的参与信息；设计版本的差异 `diffModels` 与基线漂移 |
-| 外界同步 | 交给四个同步适配器（§4） |
+| 派生（`computed`，调用纯函数） | 层次视图 `projectLevel`（运行视角下为舞台视图：不受显示开关影响并补齐场景端点，L9、P12）；打开场景时：回放计划 → 回放路径 → 本层帧投影与可见消息 → 时序模型 → 时序图坐标，以及步骤大纲 `outlineScenario` 与参与模块 `scenarioModules`（导航树用，T5、T6）；视角与焦点；钉住对象的参与信息；设计版本的差异 `diffModels` 与基线漂移 |
+| 外界同步 | 交给三个同步适配器（§4） |
 
 派生是一条 computed 链：层次或开关变化 → 层次视图 → 帧投影 → 时序模型 → 时序布局。结构图与时序图因此不会不同步。
 
 ## 3. 会话规则：视图状态转移
 
-`transition(state, action, ctx) → { state, history: 'push' | 'replace' }`，纯函数，不依赖 Vue、路由、计时器；非法动作返回原状态；任何输出都满足焦点不变式（每次转移后断言）。上下文 `ctx` 提供索引、打开的场景的回放计划、当前层次的舞台视图与本层帧投影。代码在 `src/state/transition/`：`navigation` · `focus` · `playback` · `url`。
+`transition(state, action, ctx) → { state, history: 'push' | 'replace' }`，纯函数，不依赖 Vue、路由；非法动作返回原状态。上下文 `ctx` 提供索引、打开的场景的回放计划、当前层次的舞台视图与本层帧投影。代码在 `src/state/transition/`：`navigation` · `focus` · `playback` · `url`。
 
 | 子模块 | 规则 | 遇到关于被描述系统的问题时调用 |
 |---|---|---|
-| 视角与焦点 | V1–V4：视角与焦点由状态推出（`perspectiveOf` / `focusOf`）；导航动作在运行视角下即「指向」，暂停并钉住（下钻钉住被下钻的模块）；取消选中回到跟随、保持暂停 | — |
-| 导航 | N1–N13：下钻、跳转、返回上级、选中、定位、Esc / Backspace、重新加载与切换版本后的回退 | `nearestExisting`（N5、N11）、`nearestVisibleLevel`（N12）、`lowestCommonAncestor`（N3） |
-| 回放 | R1、R5、R6、R10、R12–R14、F6a：打开场景（从头自动播放，播放头为空、第一拍走出第一步）、退出、单步（暂停）、时钟到点（`tick`，到分支点 / 末尾暂停）、指向、选分支、播放 / 暂停 / 速度；重新加载后场景失效则退出 | `stepAfter` / `stepBefore`（R7）、`landing`、`choicesFor`（R13）、`chooseBranch`（F6b）、`resolvePath`（F6） |
-| URL 编解码 | N6、N10、F6c、R10、R12：状态 ↔ 查询参数；解码时丢弃无效值，恢复到最接近的合法状态：带有效步骤时停在该步、不播放；同一场景已打开时保持暂停；只有场景时从头自动播放 | `choiceList` / `choicesFromList`（F6c）、`planScenario` |
+| 视角与焦点 | V1–V4：视角与焦点由状态推出（`perspectiveOf` / `focusOf`）；导航动作在运行视角下即「指向」，钉住对象（下钻钉住被下钻的模块）；取消选中回到跟随 | — |
+| 导航 | N1–N13：下钻、跳转、返回上级、选中、定位、Esc / Backspace、重新加载与切换版本后的回退；跳转与定位只在层次改变时进历史（N10） | `nearestExisting`（N5、N11）、`nearestVisibleLevel`（N12）、`lowestCommonAncestor`（N3） |
+| 回放 | R1、R5、R6、R10、R12、R13、V7：打开场景（停在开头，播放头为空）、退出、单步（回到跟随）、指向、选分支；重新加载后场景失效则退出 | `stepAfter` / `stepBefore`（R7）、`landing`、`choicesFor`（R13）、`chooseBranch`（F6b）、`resolvePath`（F6） |
+| URL 编解码 | N6、N10、F6c、R10、R12：状态 ↔ 查询参数；解码时丢弃无效值，恢复到最接近的合法状态：带有效步骤时停在该步；同一场景已打开且没带步骤时保留原播放头；只有场景时停在开头 | `choiceList` / `choicesFromList`（F6c）、`planScenario` |
 
 | 查询参数 | 含义 | 进历史 |
 |---|---|---|
@@ -73,7 +72,6 @@ interface PlaybackState {
 | 适配器 | 状态 → 外界 | 外界 → 动作 |
 |---|---|---|
 | 路由同步 | 地址 = `encode(state)`，按历史标注 push / replace | 后退、前进、改地址、打开分享链接 → `decode` → `restore` |
-| 时钟同步 | `playing` 为真时计时器按速度运行：每条可见消息一个节拍（1 倍速 1 秒），播放头为空时 200ms 后走出第一步 | 到点 → `tick` |
 | 模型源同步 | — | 取描述文件 → `loaded`；本项目 `arch-model:changed` → 重新取 → `reloaded` |
 | 布局同步 | 层次视图变化 → 调用 `layoutView` | 布局完成 → 回填定位结果（序号过期则丢弃） |
 
@@ -114,12 +112,12 @@ AI 改写描述 → ModelSource 推送 → 模型源同步重新取并 `dispatch
 
 ### 5.4 运行视角
 
-**指向某一步（R13）**——时序图消息、结构图步骤序号、步骤目录、运行信息里的步骤都走这一条：
+**指向某一步（R13）**——时序图消息、结构图步骤序号、步骤树、运行信息里的步骤都走这一条：
 
 ```mermaid
 sequenceDiagram
     participant U as 架构师
-    participant UI as 时序图 / 画布 / 面板
+    participant UI as 时序图 / 画布 / 步骤树 / 面板
     participant DS as DeskState
     participant T as 视图状态转移
     participant M as 场景投影（模型层）
@@ -130,15 +128,15 @@ sequenceDiagram
     DS->>T: transition(state, seek, ctx)
     T->>M: choicesFor(计划, 已选分支, 7) · landing(本层投影, 7)
     M-->>T: 所需分支选择 · 落点帧
-    T-->>DS: frameId、choices；playing = false；selection = null
+    T-->>DS: frameId、choices；selection = null（回到跟随）
     DS->>DS: 派生：回放路径 → 本层可见消息 → 时序模型
-    DS-->>UI: 两图定位到第 7 步，已走过的边 = 从头播放到第 7 步
+    DS-->>UI: 两图与步骤树定位到第 7 步，已走过的边 = 从头单步到第 7 步
     RS->>RS: 地址 = encode(新状态)，替换
 ```
 
-- **播放中双击下钻**（V3、R6、R7）：`drill` 在运行视角下同时暂停并钉住；层次视图变化 → 帧重新投影，本层可见消息变细；`frameId` 不变，两图停在同一帧。
-- **到达分支点**（F6、F6a）：时钟到点 `dispatch(tick)` → 走到下一条可见消息，其后已无可见消息（路径在未选分支处截止）→ `playing = false` → 回放控制条展开全部选项 → `dispatch(chooseBranch)` → 路径延长，用户点播放继续。
-- **取消选中**（V4）：Esc 或单击空白 → `selection = null`，焦点回到跟随，保持暂停。
+- **回放中双击下钻**（V3、R6、R7）：`drill` 在运行视角下钉住被下钻的模块；层次视图变化 → 帧重新投影，本层可见消息变细；`frameId` 不变，两图停在同一帧。
+- **单步到分支点**（F6）：`dispatch(next)` 走到下一条可见消息；其后已无可见消息（路径在未选分支处截止）时回放控制条展开全部选项，「下一步」不可用 → `dispatch(chooseBranch)` → 路径延长，继续单步。
+- **取消选中**（V4）：Esc 或单击空白 → `selection = null`，焦点回到跟随。单步、拖动进度同样回到跟随（V7）。
 
 ## 6. 动作与接口
 
@@ -149,16 +147,15 @@ type ViewAction =
   | { type: 'select'; selection } | { type: 'revealRelation'; id } | { type: 'revealModule'; id }
   | { type: 'hover'; id } | { type: 'toggle'; patch: Partial<Toggles> }
   | { type: 'openScenario'; id } | { type: 'closeScenario' }
-  | { type: 'next' } | { type: 'prev' } | { type: 'tick' } | { type: 'seek'; frameId }
-  | { type: 'play' } | { type: 'pause' } | { type: 'speed'; value }
+  | { type: 'next' } | { type: 'prev' } | { type: 'seek'; frameId }
   | { type: 'chooseBranch'; pointId; option }
 
 createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: string; version?: VersionRef }): DeskState
 // DeskState：state（只读）、index、issues、派生数据、dispatch、init()、attachRouter(router)，以及操作：
 //   drillInto · goTo · goUp · select · revealRelation · revealModule · setHover
-//   openScenario · closeScenario · next · prev · seek · play · pause · setSpeed · chooseBranch
+//   openScenario · closeScenario · next · prev · seek · chooseBranch
 // 派生：view · positioned · perspective · focus · playback · scenario · plan · path · scenarioView · home
-//       currentIndex · walked · frame · sequence · positionedSequence · pinnedParticipation
+//       currentIndex · walked · frame · sequence · positionedSequence · pinnedParticipation · outline · scenarioModules
 
 transition(state: ViewState, action: ViewAction, ctx: TransitionContext): { state: ViewState; history: 'push' | 'replace' }
 // TransitionContext: { index: ModelIndex; plan?: ScenarioPlan; levelView?: LevelView; scenarioView?: ScenarioLevelView }

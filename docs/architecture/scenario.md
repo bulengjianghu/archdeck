@@ -1,7 +1,7 @@
 # 专题：场景投影与回放
 
 > 回答：一个场景在某一层怎么走；单步、跳转、分支选择怎么算；时序图的内容与坐标从哪来。
-> 覆盖模块：模型层的场景投影（`src/model/scenario/`：plan · path · level · participation · sequence，另有 bind · steps）；视图状态层 Layout 的时序图排布（`src/layout/sequence.ts`）。概念见 [02-domain.md §1.3](../02-domain.md#13-场景与回放)，规则见 S、F、P、R7、R13、V6；回放的会话规则（何时暂停、焦点）见[视图状态与协调](./view-state.md)，画法见[工作台界面](./workbench.md)。
+> 覆盖模块：模型层的场景投影（`src/model/scenario/`：plan · path · level · participation · outline · sequence，另有 bind · steps）；视图状态层 Layout 的时序图排布（`src/layout/sequence.ts`）。概念见 [02-domain.md §1.3](../02-domain.md#13-场景与回放)，规则见 S、F、P、R7、R13、V6、T5、T6；回放的会话规则（焦点、历史）见[视图状态与协调](./view-state.md)，画法见[工作台界面](./workbench.md)。
 
 ## 1. 流水线
 
@@ -18,6 +18,10 @@
 本层帧投影：每帧的落点 + 合并出的可见消息
   ├─ buildSequence ──▶ 时序模型（计划全貌）──layoutSequence──▶ 时序图坐标
   └─ participation(对象) ──▶ 运行信息
+
+回放计划 + 已选分支
+  ├─ outlineScenario ──▶ 步骤大纲（导航树的步骤树）
+  └─ scenarioModules ──▶ 参与模块（导航树的模块树标记）
 ```
 
 全部是纯函数，结果交给视图状态层派生（见[视图状态与协调 §2](./view-state.md#2-协调者deskstate)）。
@@ -64,11 +68,22 @@
 | `scenarioHome` | 场景所在层次：所有帧端点的最近公共祖先；公共祖先本身是端点时取其父模块 | S9 |
 | `stageEnds` | 舞台需要的端点对（计划中的全部帧） | P12 |
 
-## 5. 参与查询（`participation`）
+## 5. 参与查询（`participation`、`scenarioModules`）
 
 回答「某个模块 / 关系 / 视图边 / 参与者在本场景中做了什么」（V6）：按路径顺序列出它参与的帧（模块含其子树，视图边含其聚合的关系，关系含推断绑定的帧）、在本层投影下收发的可见消息、用到的接口与数据结构，以及离播放头最近的一帧。脱离工作台同样成立，例如问 AI「Layout 在打开场景这个流程里做了什么」用的是同一个查询。
 
-## 6. 时序模型与时序图排布
+`scenarioModules` 回答「哪些模块参与了这个场景」：计划中全部帧（含所有分支）的模块端点及其祖先（T5）。与层次、播放头无关。
+
+## 6. 步骤大纲（`outlineScenario`）
+
+把回放计划按组合结构还原成一棵树（T6），供导航树的步骤树逐行画出；与层次无关，只随计划与已选分支变化。
+
+- 帧按外到内的组合框标签分组：连续带同一个 `loop` / `ref` 实例、同一个 `par` 分支的帧归入同一个分组节点。
+- 分支点成为 `alt` 节点，下挂全部选项；每个选项带条件、选项序号和状态，空选项没有子节点。
+- 状态与时序图全貌一致（`linearize` 的「全貌」模式）：路径上为 `path`，未选的选项为 `unchosen`，截止处之后为 `unreached`。
+- 「已走过 / 当前 / 本层序号」依赖播放头与层次，不在大纲里，由导航树用 `ScenarioLevelView`（`messageOf`、`currentMessage`、`walkedCount`）现算。
+
+## 7. 时序模型与时序图排布
 
 **时序模型**（`buildSequence`）：由计划全貌在本层的投影产出参与者（带名称）、消息（同步 / 异步 / 显式返回 / 内部活动 / 空分支占位；隐含的返回不画，S10a；路径上的消息带 `pathIndex`，其余带 `unchosen` / `unreached` 状态）、组合框（类型、条件、包住的消息区间；`alt` 列出全部分支，并标明已选 / 未选 / 未到达）。框内消息全部是内部活动时，框标记为折叠（P6）。
 
@@ -78,7 +93,7 @@
 - 泳道宽度按名称自适应；消息纵向累加；组合框包住其子消息，按嵌套深度内缩。
 - 结果按「层次 + 场景 + 路径」缓存。
 
-## 7. 数据结构
+## 8. 数据结构
 
 ```ts
 interface ScenarioPlan { scenarioId: string; nodes: PlanNode[]; frames: Map<string, Frame>; points: Map<string, BranchPoint> }
@@ -119,6 +134,11 @@ interface Participation {
   nearest?: string
 }
 
+type OutlineNode =
+  | { kind: 'frame'; frame: Frame; status: 'path' | 'unchosen' | 'unreached' }
+  | { kind: 'group'; tag: FragmentTag; children: OutlineNode[] }                 // loop · par 的一个分支 · ref
+  | { kind: 'alt'; pointId: string; options: { option: number; when: string; status: 'path' | 'unchosen' | 'unreached'; children: OutlineNode[] }[] }
+
 interface SequenceModel {
   participants: { nodeId: string; id: string; name: string; kind: 'module' | 'boundary' | 'actor' }[]
   messages: { index: number; from: string; to: string; kind: 'call' | 'async' | 'return' | 'internal' | 'empty'; label: string;
@@ -137,7 +157,7 @@ interface PositionedSequence {
 }
 ```
 
-## 8. 接口
+## 9. 接口
 
 ```ts
 planScenario(index: ModelIndex, scenarioId: string): ScenarioPlan
@@ -155,6 +175,8 @@ currentMessage(view, frameId): number | null      walkedCount(view, frameId): nu
 scenarioHome(index: ModelIndex, plan: ScenarioPlan): string
 stageEnds(plan: ScenarioPlan): { from: string; to: string }[]
 participation(index, frames: Frame[], view: ScenarioLevelView, target: { kind: 'module' | 'relation' | 'edge' | 'actor'; id: string }, playhead?): Participation
+scenarioModules(index: ModelIndex, plan: ScenarioPlan): Set<string>
+outlineScenario(plan: ScenarioPlan, choices): OutlineNode[]
 buildSequence(index, view: LevelView, plan: ScenarioPlan, choices, pathView: ScenarioLevelView): SequenceModel
 layoutSequence(model: SequenceModel, structure?: PositionedView): PositionedSequence
 ```
