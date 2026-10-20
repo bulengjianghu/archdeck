@@ -35,16 +35,16 @@ npm test             # 单元测试
 - `model/media-web/`：由 AI 读取 media-platform 仓库 media-web 工作区（浏览器侧 npm 包）的代码生成；
 - `model/h5p-arch-desk/`：本项目自身的架构描述。
 
-规范见 [docs/04-model-generation.md](docs/04-model-generation.md)。代码有变化时让 AI 按规范重新生成对应文件，并更新 `system.yaml` 中的 `source.commit`。新增项目只需新建一个子目录。
+规范见 [docs/04-description-format.md](docs/04-description-format.md)。代码有变化时让 AI 按规范重新生成对应文件，并更新 `system.yaml` 中的 `source.commit`。新增项目只需新建一个子目录。
 
 ## 设计版本
 
-迭代某个项目前，可以先让 AI 在当前架构上出一份**设计版本**评审，多轮沟通后定稿再开发（[ADR-0002](docs/adr/0002-design-versions.md)）。设计版本放在 `model/<项目>/designs/<设计>/`，每轮（r1、r2…）是一份完整描述；项目视图左上角切换版本，设计版本中图上标出相对当前版本（或上一轮）的新增 / 修改，「△N」表示其内部涉及 N 处变更，根层面板有设计目标、本轮说明、待确认问题和完整变更清单。起草方式见[描述生成规范 §7](docs/04-model-generation.md#7-设计版本adr-0002)。
+迭代某个项目前，可以先让 AI 在当前架构上出一份**设计版本**评审，多轮沟通后定稿再开发（[ADR-0002](docs/adr/0002-design-versions.md)）。设计版本放在 `model/<项目>/designs/<设计>/`，每轮（r1、r2…）是一份完整描述；项目视图左上角切换版本，设计版本中图上标出相对当前版本（或上一轮）的新增 / 修改，「△N」表示其内部涉及 N 处变更，根层面板有设计目标、本轮说明、待确认问题和完整变更清单。起草方式见[描述格式 §5](docs/04-description-format.md#5-设计版本)。
 
 ## 二期：动态视角（已定稿，待实现）
 
-在结构之上叠加场景、时序图与结构图上的回放。架构经设计版本 `model/h5p-arch-desk/designs/phase2-dynamic/` 四轮评审定稿（r4），结论见 [ADR-0003](docs/adr/0003-phase2-dynamic-view.md)，目标架构见[架构 §8](docs/03-architecture.md)，需求见[需求 §5、§8.2](docs/01-requirements.md)。
+在结构之上叠加场景、时序图与结构图上的回放。架构经设计版本 `model/h5p-arch-desk/designs/phase2-dynamic/` 四轮评审定稿（r4），结论见 [ADR-0003](docs/adr/0003-phase2-dynamic-view.md)，需求见[需求 §4.4](docs/01-requirements.md)，概念与规则见[领域模型](docs/02-domain.md)，目标架构见[架构总览](docs/03-architecture.md)与[专题](docs/architecture/)。
 
 ## 文档
 
-- [需求](docs/01-requirements.md) · [技术选型](docs/02-tech-selection.md) · [架构](docs/03-architecture.md) · [描述生成规范](docs/04-model-generation.md) · [ADR](docs/adr/README.md)
+[文档地图](docs/README.md)：[需求](docs/01-requirements.md) · [领域模型与规则](docs/02-domain.md) · [架构总览](docs/03-architecture.md)（[专题](docs/architecture/)）· [描述格式](docs/04-description-format.md) · [ADR](docs/adr/README.md)

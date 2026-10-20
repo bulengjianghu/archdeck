@@ -1,7 +1,7 @@
 /**
  * Layout：给 LevelView 算坐标与边的走线。
  * - graph：elkjs layered 算法，自上而下，正交走线；
- * - layered：按层序分带，规则排布，不调用 elk（需求 §3.6）。
+ * - layered：按层序分带，规则排布，不调用 elk（规则 O2、O3，见 docs/02-domain.md）。
  * 结果按视图内容缓存，同样的输入得到同样的输出。
  */
 import type { ELK, ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk-api'

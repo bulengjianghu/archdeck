@@ -1,4 +1,4 @@
-# 骨架：4 个层 + 第二级模块。依赖方向：呈现 → 视图状态 → 模型 ← 接入（docs/03-architecture.md §2–§3）。
+# 骨架：4 个层 + 第二级模块。依赖方向：呈现 → 视图状态 → 模型 ← 接入（docs/03-architecture.md §2–§4）。
 
 modules:
   - id: present
@@ -80,7 +80,7 @@ modules:
         core: true
         responsibility: 给层次视图算坐标与边的走线：分层总览按层序分带规则排布，普通层次用 elkjs；结果按视图内容缓存。
         codeRefs: [src/layout/**]
-        docRefs: [docs/02-tech-selection.md]
+        docRefs: [docs/architecture/projection.md]
 
   - id: access
     name: 接入层
@@ -139,7 +139,7 @@ modules:
         core: true
         responsibility: 给定当前父模块，算出这一层的节点、直接边、聚合边、边界节点；子模块都是层时算出分层总览（带、核心模块、核心跨层边）。
         codeRefs: [src/model/project.ts]
-        docRefs: [docs/01-requirements.md]
+        docRefs: [docs/02-domain.md, docs/architecture/projection.md]
       - id: model.diff
         name: 版本对比
         kind: subsystem
