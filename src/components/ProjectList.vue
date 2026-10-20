@@ -2,6 +2,7 @@
 /** 项目列表主页：列出模型根目录下的全部项目，点击进入该项目的架构视图 */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { ProjectSummary } from '@/model/project-summary'
+import { DESIGN_STATUS_LABELS } from '@/model/design'
 
 const projects = ref<ProjectSummary[]>([])
 const status = ref<'loading' | 'ready' | 'error'>('loading')
@@ -75,6 +76,22 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
             <span class="open">打开 →</span>
           </footer>
         </RouterLink>
+        <ul v-if="p.designs?.length" class="designs" aria-label="设计版本">
+          <li v-for="d in p.designs" :key="d.id">
+            <RouterLink
+              v-if="d.revisions.length"
+              class="design"
+              :to="`/p/${encodeURIComponent(p.id)}/d/${encodeURIComponent(d.id)}/${encodeURIComponent(d.revisions[d.revisions.length - 1].id)}`"
+            >
+              <span class="tag">设计</span>
+              <span class="dname">{{ d.name }}</span>
+              <span class="dstatus" :class="d.status">{{ DESIGN_STATUS_LABELS[d.status] }}</span>
+              <span class="drev">{{ d.revisions[d.revisions.length - 1].id }} · 共 {{ d.revisions.length }} 轮</span>
+              <span class="open">打开 →</span>
+            </RouterLink>
+            <span v-else class="design broken">设计 {{ d.name }}：{{ d.problems[0] }}</span>
+          </li>
+        </ul>
       </li>
     </ul>
   </div>
@@ -114,7 +131,13 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
   gap: 16px;
 }
 
+.grid > li {
+  display: flex;
+  flex-direction: column;
+}
+
 .card {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -227,5 +250,71 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
 .open {
   margin-left: auto;
   color: var(--accent);
+}
+.designs {
+  list-style: none;
+  margin: -6px 0 0;
+  padding: 10px 12px 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+}
+
+.design {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.design:hover {
+  background: var(--diff-changed-soft);
+}
+
+.design .tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--diff-changed);
+  border: 1px solid var(--diff-changed);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+
+.dname {
+  font-weight: 600;
+}
+
+.dstatus {
+  font-size: 11px;
+  padding: 0 7px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+}
+
+.dstatus.accepted,
+.dstatus.implemented {
+  color: var(--diff-added);
+  border-color: var(--diff-added);
+}
+
+.drev {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.design .open {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.design.broken {
+  color: var(--danger);
+  font-size: 12px;
 }
 </style>

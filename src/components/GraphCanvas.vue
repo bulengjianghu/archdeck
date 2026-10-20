@@ -7,7 +7,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { MarkerType, VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import { useDesk } from '@/state/inject'
 import { contentBounds, edgeLabel, isBoundaryEdge, moreChipId, type Box } from '@/layout/layout'
-import type { ViewEdge } from '@/model'
+import { FIELD_LABELS, type ViewEdge } from '@/model'
 import ModuleNode from './nodes/ModuleNode.vue'
 import BoundaryNode from './nodes/BoundaryNode.vue'
 import BandNode from './nodes/BandNode.vue'
@@ -66,6 +66,27 @@ const neighborhood = computed<Set<string> | null>(() => {
   return set
 })
 
+/** 设计版本且开启「标出变更」时的差异；否则为 null */
+const marks = computed(() => (desk.toggles.showDiff ? desk.diff.value : null))
+
+function diffOf(moduleId: string): Pick<NodeData, 'change' | 'changedFields' | 'touched'> {
+  const d = marks.value
+  if (!d) return {}
+  const c = d.module.get(moduleId)
+  return {
+    change: c?.kind === 'added' || c?.kind === 'changed' ? c.kind : undefined,
+    changedFields: c?.fields?.map(f => FIELD_LABELS[f] ?? f).join('、'),
+    touched: d.touched.get(moduleId),
+  }
+}
+
+function edgeChange(e: ViewEdge): 'added' | 'changed' | undefined {
+  const d = marks.value
+  if (!d) return undefined
+  const kinds = e.relationIds.map(id => d.relation.get(id)?.kind)
+  return kinds.includes('added') ? 'added' : kinds.includes('changed') ? 'changed' : undefined
+}
+
 const nodes = computed<Node<NodeData>[]>(() => {
   const pv = desk.positioned.value
   const idx = desk.index.value
@@ -89,6 +110,7 @@ const nodes = computed<Node<NodeData>[]>(() => {
       selected: sel?.kind === 'module' && sel.id === n.moduleId,
       // 分层总览中带不参与变淡，只有核心模块会
       dim: !!near && !near.has(n.id) && !(layered && n.role === 'layer'),
+      ...diffOf(n.moduleId),
     }
     if (n.role === 'boundary') {
       const path = (idx.pathOf.get(n.moduleId) ?? []).slice(1, -1).map(id => idx.modules.get(id)?.name ?? id)
@@ -128,6 +150,7 @@ const edges = computed<Edge<RouteEdgeData>[]>(() => {
         label: edgeLabel(e),
         selected,
         core,
+        change: edgeChange(e),
         // 分层总览：层间边在聚焦核心模块时变淡；普通层次：与焦点无关的边变淡
         dim: layered ? !!near && !core && !selected : !!near && !touchesFocus && !selected,
       },

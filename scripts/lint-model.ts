@@ -2,24 +2,36 @@
  * 命令行校验架构描述：
  *   npm run lint:model                 校验模型根目录（默认 model/）下的全部项目
  *   npm run lint:model -- <项目目录>   只校验指定目录
+ * 项目下的设计版本（designs/<设计>/<轮次>/，ADR-0002）逐轮一并校验，design.yaml 的问题按 error 计。
  * 有 error 时退出码为 1；只有 warning 时为 0。
  */
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadModel, type Issue } from '../src/model'
-import { listProjectIds, readModelDir, resolveModelRoot } from '../vite/readModelDir'
+import { DESIGNS_DIR, listDesigns, listProjectIds, readModelDir, resolveModelRoot } from '../vite/readModelDir'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const arg = process.argv.slice(2).find(a => a !== '--')
 const modelRoot = resolveModelRoot(root)
-const dirs = arg ? [path.resolve(process.cwd(), arg)] : listProjectIds(modelRoot).map(id => path.join(modelRoot, id))
+const projectDirs = arg ? [path.resolve(process.cwd(), arg)] : listProjectIds(modelRoot).map(id => path.join(modelRoot, id))
+const dirs: string[] = []
+let totalErrors = 0
+for (const dir of projectDirs) {
+  dirs.push(dir)
+  for (const d of listDesigns(dir)) {
+    for (const p of d.problems) {
+      console.log(`  error   ${path.relative(root, path.join(dir, DESIGNS_DIR, d.id, 'design.yaml'))}  ${p}  [design]`)
+      totalErrors++
+    }
+    for (const r of d.revisions) dirs.push(path.join(dir, DESIGNS_DIR, d.id, r.id))
+  }
+}
 
-if (dirs.length === 0) {
+if (projectDirs.length === 0) {
   console.error(`没有找到项目：${modelRoot} 下没有含 system.yaml 的子目录`)
   process.exit(1)
 }
 
-let totalErrors = 0
 for (const dir of dirs) {
   const payload = readModelDir(dir, root)
   if (payload.files.length === 0) {

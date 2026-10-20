@@ -15,4 +15,10 @@ export interface NodeData {
   band?: { abstraction?: string; mayDependOn: string[]; hiddenCount: number }
   /** +N 占位块 */
   hiddenCount?: number
+  /** 设计版本：本模块相对对比基线新增或修改 */
+  change?: 'added' | 'changed'
+  /** 修改了哪些字段（显示用） */
+  changedFields?: string
+  /** 设计版本：涉及其子树或相关关系的变更条数 */
+  touched?: number
 }

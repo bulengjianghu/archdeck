@@ -6,6 +6,8 @@ import Section from './Section.vue'
 import InterfaceItem from './InterfaceItem.vue'
 import DataStructureItem from './DataStructureItem.vue'
 import RelationRow from './RelationRow.vue'
+import ChangeBadge from './ChangeBadge.vue'
+import DesignNote from './DesignNote.vue'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -38,8 +40,10 @@ function openChild(childId: string) {
         <span v-if="m.status && m.status !== 'current'" class="badge warn">{{ STATUS[m.status] }}</span>
         <span v-if="m.core" class="badge accent">核心</span>
         <span v-for="t in m.tags ?? []" :key="t" class="badge">{{ t }}</span>
+        <ChangeBadge entity="module" :id="m.id" detail />
       </div>
     </header>
+    <DesignNote :text="m.designNote" />
 
     <Section title="职责">
       <Markdown v-if="m.responsibility" :text="m.responsibility" />
@@ -79,6 +83,7 @@ function openChild(childId: string) {
       <ul class="plain">
         <li v-for="c in children" :key="c.id" class="child">
           <button class="link" @click="openChild(c.id)">{{ c.name }}</button>
+          <ChangeBadge entity="module" :id="c.id" />
           <span v-if="c.core" class="badge accent">核心</span>
           <span v-if="(idx.childrenOf.get(c.id) ?? []).length" class="muted">⌄ {{ idx.childrenOf.get(c.id)!.length }}</span>
           <span class="resp">{{ c.responsibility }}</span>

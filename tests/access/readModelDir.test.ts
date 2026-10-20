@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { isProjectId, listProjectIds, listProjects, readProject, resolveModelRoot } from '../../vite/readModelDir'
+import { isProjectId, listDesigns, listProjectIds, listProjects, readDesignRevision, readProject, resolveModelRoot, versionFile } from '../../vite/readModelDir'
 
 let root: string
 let modelRoot: string
@@ -26,6 +26,17 @@ beforeAll(() => {
   write('alpha/m.yml', 'modules: [{ id: m1, name: M1 }]')
   write('no-system/x.yaml', 'modules: [{ id: z, name: Z }]')
   write('README.md', '不是项目')
+  // 设计版本（ADR-0002）
+  write(
+    'alpha/designs/next/design.yaml',
+    'design:\n  name: 下一期\n  status: reviewing\n  goal: 目标\n  base: { commit: c0 }\n  revisions:\n    - { id: r1, date: 2026-10-20, summary: 第一轮, feedback: 改名 }\n    - { id: r2, questions: [要不要拆] }\n    - { id: r9 }\n',
+  )
+  write('alpha/designs/next/r1/system.yaml', 'system: { id: alpha, name: Alpha }')
+  write('alpha/designs/next/r1/m.yaml', 'modules: [{ id: m1, name: M1 }, { id: m2, name: M2 }]')
+  write('alpha/designs/next/r2/system.yaml', 'system: { id: alpha, name: Alpha }')
+  write('alpha/designs/next/r2/m.yaml', 'modules: [{ id: m1, name: M1 }, { id: m3, name: M3 }]')
+  write('alpha/designs/bad/design.yaml', 'design: { status: wip }')
+  write('alpha/designs/no-meta/r1/system.yaml', 'system: { id: alpha, name: Alpha }')
 })
 
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }))
@@ -41,6 +52,7 @@ describe('接入层 · 多项目读取', () => {
     expect(p.project).toBe('beta')
     expect(p.dir).toBe('model/beta')
     expect(p.files.map(f => f.path)).toEqual(['modules/layers.yaml', 'system.yaml'])
+    // designs/ 不属于当前版本
     expect(readProject(modelRoot, 'alpha', root)!.files.map(f => f.path)).toEqual(['m.yml', 'system.yaml'])
   })
 
@@ -67,6 +79,34 @@ describe('接入层 · 多项目读取', () => {
       errors: 1,
     })
     expect(alpha).toMatchObject({ id: 'alpha', layered: false, warnings: 1 })
+  })
+
+  it('设计版本：有 design.yaml 的子目录才算；缺快照的轮次被忽略并记为问题', () => {
+    const designs = listDesigns(path.join(modelRoot, 'alpha'))
+    expect(designs.map(d => d.id)).toEqual(['bad', 'next'])
+    const next = designs[1]
+    expect(next).toMatchObject({ name: '下一期', status: 'reviewing', goal: '目标', base: { commit: 'c0' } })
+    expect(next.revisions).toEqual([
+      { id: 'r1', date: '2026-10-20', summary: '第一轮', feedback: '改名', questions: undefined },
+      { id: 'r2', date: undefined, summary: undefined, feedback: undefined, questions: ['要不要拆'] },
+    ])
+    expect(next.problems).toEqual(['轮次 r9 缺少快照目录 r9/system.yaml，已忽略'])
+    expect(designs[0].status).toBe('draft')
+    expect(designs[0].problems).toHaveLength(2) // 非法 status + 没有轮次
+    expect(listProjects(modelRoot, root).find(p => p.id === 'alpha')!.designs.map(d => d.id)).toEqual(['bad', 'next'])
+  })
+
+  it('读设计的某一轮：附当前版本与上一轮作为对比基线', () => {
+    const r2 = readDesignRevision(modelRoot, 'alpha', 'next', 'r2', root)!
+    expect(r2.version).toEqual({ design: 'next', revision: 'r2' })
+    expect(r2.dir).toBe('model/alpha/designs/next/r2')
+    expect(r2.files.map(f => f.path)).toEqual(['m.yaml', 'system.yaml'])
+    expect(r2.compare?.current.files.map(f => f.path)).toEqual(['m.yml', 'system.yaml'])
+    expect(r2.compare?.previous).toMatchObject({ label: '下一期 · r1', dir: 'model/alpha/designs/next/r1' })
+    expect(readDesignRevision(modelRoot, 'alpha', 'next', 'r1', root)!.compare?.previous).toBeUndefined()
+    expect(readDesignRevision(modelRoot, 'alpha', 'next', 'r9', root)).toBeNull()
+    expect(readDesignRevision(modelRoot, 'alpha', '..', 'r1', root)).toBeNull()
+    expect(versionFile('alpha', { design: 'next', revision: 'r2' })).toBe('models/alpha/designs/next/r2.json')
   })
 
   it('模型根目录默认是项目内 model/，可用 ARCH_MODEL_ROOT 覆盖', () => {

@@ -49,6 +49,8 @@ export interface ModuleDef {
   excludes?: string[]
   mayDependOn?: string[]
   children?: ModuleDef[]
+  /** 设计版本专用：为什么这样设计 / 调整（Markdown） */
+  designNote?: string
 }
 
 export interface RelationDef {
@@ -60,6 +62,7 @@ export interface RelationDef {
   interface?: string
   payload?: string | string[]
   description?: string
+  designNote?: string
 }
 
 export interface InterfaceDef {
@@ -69,6 +72,7 @@ export interface InterfaceDef {
   signature?: string
   description?: string
   semantics?: string
+  designNote?: string
 }
 
 export interface DataStructureDef {
@@ -77,6 +81,7 @@ export interface DataStructureDef {
   definition?: string
   description?: string
   invariants?: string
+  designNote?: string
 }
 
 /** 一个 YAML 文件的顶层形状；各键均可选，可任意组合 */

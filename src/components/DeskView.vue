@@ -11,19 +11,25 @@ import GraphCanvas from './GraphCanvas.vue'
 import Breadcrumb from './Breadcrumb.vue'
 import Toolbar from './Toolbar.vue'
 import IssueBanner from './IssueBanner.vue'
+import VersionSwitcher from './VersionSwitcher.vue'
+import DesignBar from './DesignBar.vue'
 import Panel from './panel/Panel.vue'
 
-const props = defineProps<{ project: string }>()
+const props = defineProps<{ project: string; design?: string; revision?: string }>()
 const router = useRouter()
+const version = props.design && props.revision ? { design: props.design, revision: props.revision } : undefined
 
 async function fetchModel(): Promise<ModelPayload> {
-  const res = await fetch(`${import.meta.env.BASE_URL}models/${encodeURIComponent(props.project)}.json`, { cache: 'no-store' })
-  if (res.status === 404) throw new Error(`项目「${props.project}」不存在`)
-  if (!res.ok) throw new Error(`读取项目「${props.project}」失败：HTTP ${res.status}`)
+  const enc = encodeURIComponent
+  const file = version ? `models/${enc(props.project)}/designs/${enc(version.design)}/${enc(version.revision)}.json` : `models/${enc(props.project)}.json`
+  const what = version ? `设计版本「${version.design} / ${version.revision}」` : `项目「${props.project}」`
+  const res = await fetch(`${import.meta.env.BASE_URL}${file}`, { cache: 'no-store' })
+  if (res.status === 404) throw new Error(`${what}不存在`)
+  if (!res.ok) throw new Error(`读取${what}失败：HTTP ${res.status}`)
   return res.json()
 }
 
-const desk = createDeskState(fetchModel, { project: props.project })
+const desk = createDeskState(fetchModel, { project: props.project, version })
 desk.attachRouter(router)
 provide(DESK_STATE, desk)
 // 开发态便于在浏览器控制台检查状态
@@ -90,12 +96,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 <template>
   <div class="desk" :style="{ '--panel-w': collapsed ? '0px' : `${panelWidth}px` }">
     <header class="top">
+      <VersionSwitcher />
       <Breadcrumb />
       <Toolbar />
       <button class="collapse" :title="collapsed ? '展开属性面板' : '收起属性面板'" @click="collapsed = !collapsed">
         {{ collapsed ? '‹ 面板' : '面板 ›' }}
       </button>
     </header>
+
+    <DesignBar v-if="version && desk.status.value === 'ready'" class="design-bar" />
 
     <main class="canvas-area">
       <div v-if="desk.status.value === 'loading'" class="state">正在加载架构描述…</div>
@@ -130,8 +139,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .desk {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto var(--panel-w);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   height: 100%;
+}
+
+.design-bar {
+  grid-column: 1 / -1;
 }
 
 .top {
@@ -152,6 +165,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 .canvas-area {
+  grid-row: 3;
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -178,6 +192,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 .divider {
+  grid-row: 3;
   width: 5px;
   cursor: col-resize;
   background: var(--border);
@@ -190,6 +205,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 .panel-area {
+  grid-row: 3;
   min-width: 0;
   min-height: 0;
   overflow: auto;

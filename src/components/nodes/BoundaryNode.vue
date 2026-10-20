@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import Handles from './Handles.vue'
+import DiffMark from './DiffMark.vue'
 import type { NodeData } from './types'
 
 defineProps<{ data: NodeData }>()
 </script>
 
 <template>
-  <div class="boundary-node" :class="{ selected: data.selected, dim: data.dim }" :title="`外部模块：${data.path}`">
+  <div class="boundary-node" :class="{ selected: data.selected, dim: data.dim, [`diff-${data.change}`]: !!data.change }" :title="`外部模块：${data.path}`">
     <Handles />
+    <DiffMark :data="data" />
     <div class="name">{{ data.name }}</div>
     <div class="path">外部 · {{ data.path }}</div>
   </div>
@@ -15,6 +17,7 @@ defineProps<{ data: NodeData }>()
 
 <style scoped>
 .boundary-node {
+  position: relative;
   width: 100%;
   height: 100%;
   padding: 5px 10px;

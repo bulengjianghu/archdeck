@@ -5,6 +5,8 @@ import Markdown from './Markdown.vue'
 import Section from './Section.vue'
 import InterfaceItem from './InterfaceItem.vue'
 import DataStructureItem from './DataStructureItem.vue'
+import ChangeBadge from './ChangeBadge.vue'
+import DesignNote from './DesignNote.vue'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -33,8 +35,10 @@ const visibleHere = computed(() => desk.view.value?.edges.some(e => e.relationId
         <span class="rel-chip" :class="`rel-${r.type}`">{{ TYPE[r.type] }}</span>
         <span class="badge">{{ r.mode === 'async' ? '异步' : '同步' }}</span>
         <button v-if="!visibleHere" class="small" @click="desk.revealRelation(r.id)">定位到所在层次</button>
+        <ChangeBadge entity="relation" :id="r.id" detail />
       </div>
     </header>
+    <DesignNote :text="r.designNote" />
 
     <Section v-if="r.description" title="说明"><Markdown :text="r.description" /></Section>
     <Section title="经由接口">

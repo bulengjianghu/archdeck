@@ -25,6 +25,13 @@
   --layer-border: #d5dbe4;
   --boundary-bg: transparent;
 
+  /* 设计版本相对对比基线的变更（ADR-0002） */
+  --diff-added: #1f9d55;
+  --diff-added-soft: #ddf3e6;
+  --diff-changed: #c27c0e;
+  --diff-changed-soft: #fbefd9;
+  --diff-removed: #c93a3a;
+
   --radius: 8px;
   --font: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', 'Microsoft YaHei', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -57,6 +64,12 @@
 
     --layer-bg: #1d222b;
     --layer-border: #343b49;
+
+    --diff-added: #4cc483;
+    --diff-added-soft: #1b3326;
+    --diff-changed: #e2a646;
+    --diff-changed-soft: #3a2f1c;
+    --diff-removed: #ef7a7a;
     color-scheme: dark;
   }
 }
@@ -172,4 +185,44 @@ a {
 .vue-flow__edge-text {
   fill: var(--text-2);
   font-size: 11px;
+}
+
+/* ── 设计版本的变更标记：节点描边 + 角标（各节点组件共用；需压过节点组件自身的边框与阴影） ── */
+.diff-added {
+  border-color: var(--diff-added) !important;
+  box-shadow: 0 0 0 3px var(--diff-added-soft) !important;
+}
+
+.diff-changed {
+  border-color: var(--diff-changed) !important;
+  box-shadow: 0 0 0 3px var(--diff-changed-soft) !important;
+}
+
+.diff-tag {
+  display: inline-block;
+  font-size: 10.5px;
+  line-height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #fff;
+}
+
+.diff-tag.added {
+  background: var(--diff-added);
+}
+
+.diff-tag.changed {
+  background: var(--diff-changed);
+}
+
+.diff-tag.removed {
+  background: var(--diff-removed);
+}
+
+.diff-tag.touched {
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-weight: 500;
 }

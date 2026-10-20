@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Handles from './Handles.vue'
+import DiffMark from './DiffMark.vue'
 import type { NodeData } from './types'
 
 defineProps<{ data: NodeData }>()
@@ -8,10 +9,11 @@ defineProps<{ data: NodeData }>()
 <template>
   <div
     class="core"
-    :class="{ selected: data.selected, dim: data.dim, target: data.module?.status === 'target' }"
+    :class="{ selected: data.selected, dim: data.dim, target: data.module?.status === 'target', [`diff-${data.change}`]: !!data.change }"
     :title="data.module?.responsibility"
   >
     <Handles />
+    <DiffMark :data="data" />
     <span class="name">{{ data.name }}</span>
     <span v-if="data.childCount > 0" class="drill" title="双击下钻">⌄ {{ data.childCount }}</span>
   </div>
@@ -19,6 +21,7 @@ defineProps<{ data: NodeData }>()
 
 <style scoped>
 .core {
+  position: relative;
   width: 100%;
   height: 100%;
   display: flex;

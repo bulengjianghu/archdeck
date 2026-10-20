@@ -86,3 +86,38 @@ npm run lint:model
 
 - 必须 0 个错误。提醒（warning）要逐条看：缺职责要补；引用了其他区域尚未定义的接口 / 数据结构时可暂时保留提醒。
 - 重新生成后更新 `system.yaml` 的 `source.commit` 与 `source.generatedAt`。
+
+## 7. 设计版本（ADR-0002）
+
+迭代前先出设计、评审定稿后再开发时，按以下方式起草和修改设计版本。
+
+```text
+model/<项目>/designs/<设计 ID>/
+  design.yaml
+  r1/   system.yaml、modules/…   第 1 轮：从当前版本完整复制后修改
+  r2/   …                        第 2 轮：从上一轮完整复制后按评审意见修改
+```
+
+`design.yaml`：
+
+```yaml
+design:
+  name: 二期 · 动态视角          # 显示名
+  status: reviewing             # draft / reviewing / accepted / implemented / abandoned
+  goal: |                       # 设计目标与范围（Markdown）
+    …
+  base: { commit: <当前版本 system.yaml 的 source.commit>, generatedAt: … }
+  revisions:
+    - id: r1
+      date: '2026-10-20'
+      summary: |                # 本轮做了什么（Markdown）
+      questions: [ … ]          # 待评审确认的问题，每条一句，给出推荐选项
+      feedback: |               # 架构师对本轮的评审意见（收到后再填）
+```
+
+- **起草**：先确认当前版本与代码一致（不一致先重新生成并提交），再把当前版本整份复制为 `r1/`，在副本上改。不要改当前版本。
+- **只改要改的**：新增模块、关系、接口、数据结构按 §3–§5 写；已有实体只在设计确实要调整时才改；ID 保持不变，界面按 ID 对比。删除实体就直接删。
+- **写设计说明**：每个新增或修改的模块 / 关系 / 接口 / 数据结构写 `designNote`，说清为什么这样设计、取舍是什么。`designNote` 不算修改，只在设计版本里写。
+- **新一轮**：收到评审意见后，先把意见记到上一轮的 `feedback`，再把上一轮整份复制为新一轮修改；旧轮次不再改动。
+- **定稿与实现**：定稿时 `status: accepted`；按设计实现、重新生成当前版本后改为 `implemented`。
+- 设计版本同样要求 `npm run lint:model` 0 个错误（命令会逐轮校验）。

@@ -3,8 +3,8 @@ import { RouterView } from 'vue-router'
 </script>
 
 <template>
-  <!-- 切换项目时重建视图，每个项目一份独立状态 -->
+  <!-- 切换项目或版本时重建视图，每个项目的每个版本一份独立状态 -->
   <RouterView v-slot="{ Component, route }">
-    <component :is="Component" :key="String(route.params.project ?? 'home')" />
+    <component :is="Component" :key="[route.params.project ?? 'home', route.params.design, route.params.revision].join('|')" />
   </RouterView>
 </template>

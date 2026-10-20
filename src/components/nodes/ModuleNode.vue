@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Handles from './Handles.vue'
+import DiffMark from './DiffMark.vue'
 import type { NodeData } from './types'
 
 defineProps<{ data: NodeData }>()
@@ -14,10 +15,12 @@ defineProps<{ data: NodeData }>()
       target: data.module?.status === 'target',
       deprecated: data.module?.status === 'deprecated',
       drillable: data.childCount > 0,
+      [`diff-${data.change}`]: !!data.change,
     }"
     :title="data.module?.responsibility"
   >
     <Handles />
+    <DiffMark :data="data" />
     <div class="head">
       <span class="name">{{ data.name }}</span>
       <span v-if="data.module?.kind" class="kind">{{ data.module.kind }}</span>
@@ -36,7 +39,8 @@ defineProps<{ data: NodeData }>()
   background: var(--surface);
   border: 1.5px solid var(--border-strong);
   border-radius: var(--radius);
-  overflow: hidden;
+  /* 不裁切：变更角标骑在上边框 */
+  overflow: visible;
   transition: opacity 0.15s;
 }
 

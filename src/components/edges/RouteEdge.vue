@@ -13,6 +13,8 @@ export interface RouteEdgeData {
   dim: boolean
   /** 核心跨层边，只在悬停/选中时出现 */
   core?: boolean
+  /** 设计版本：边包含新增或修改的关系 */
+  change?: 'added' | 'changed'
 }
 
 const props = defineProps<{ id: string; data: RouteEdgeData; markerEnd?: string }>()
@@ -38,6 +40,17 @@ const style = computed(() => {
 </script>
 
 <template>
+  <path
+    v-if="data.change"
+    :d="path"
+    class="edge-diff"
+    fill="none"
+    :stroke="`var(--diff-${data.change})`"
+    :stroke-width="9"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    :opacity="data.dim ? 0.06 : 0.28"
+  />
   <BaseEdge
     :id="id"
     :path="path"
@@ -53,3 +66,9 @@ const style = computed(() => {
     :class="{ 'edge-selected': data.selected, 'edge-core': data.core }"
   />
 </template>
+
+<style scoped>
+.edge-diff {
+  pointer-events: none;
+}
+</style>

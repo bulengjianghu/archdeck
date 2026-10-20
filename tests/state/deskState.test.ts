@@ -175,3 +175,72 @@ describe('DeskState · 多项目', () => {
     expect(desk.levelId.value).toBe('infra')
   })
 })
+
+describe('DeskState · 设计版本', () => {
+  const design = {
+    id: 'next',
+    name: '下一期',
+    status: 'reviewing' as const,
+    base: { commit: 'old' },
+    revisions: [{ id: 'r1' }, { id: 'r2' }],
+    problems: [],
+  }
+  const withSource = (commit: string) => sampleFiles({ 'system.yaml': `system: { id: sys, name: Sys, source: { commit: ${commit} } }` })
+  const r2Files = sampleFiles({ 'system.yaml': 'system: { id: sys, name: Sys }', 'extra.yaml': 'modules: [{ id: infra.new, name: New, parent: infra }]' })
+
+  async function open(initialUrl: string) {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/p/:project', component: { render: () => null } },
+        { path: '/p/:project/d/:design/:revision', component: { render: () => null } },
+      ],
+    })
+    await router.push(initialUrl)
+    const desk = createDeskState(
+      async () => ({
+        project: 'demo',
+        dir: 'model/demo/designs/next/r2',
+        files: r2Files,
+        designs: [design],
+        version: { design: 'next', revision: 'r2' },
+        compare: {
+          current: { label: '当前版本', dir: 'model/demo', files: withSource('new') },
+          previous: { label: '下一期 · r1', dir: 'x', files: r2Files },
+        },
+      }),
+      { project: 'demo', version: { design: 'next', revision: 'r2' } },
+    )
+    desk.attachRouter(router)
+    await desk.init()
+    return { desk, router }
+  }
+
+  it('载入设计与对比基线，算出差异；可切换对比上一轮', async () => {
+    const { desk } = await open('/p/demo/d/next/r2')
+    expect(desk.design.value?.name).toBe('下一期')
+    expect(desk.revision.value?.id).toBe('r2')
+    expect(desk.baseline.value?.label).toBe('当前版本')
+    expect(desk.diff.value?.module.get('infra.new')?.kind).toBe('added')
+    expect(desk.diff.value?.touched.get('infra')).toBe(1)
+    desk.toggles.compareTo = 'previous'
+    expect(desk.baseline.value?.label).toBe('下一期 · r1')
+    expect(desk.diff.value?.changes).toEqual([])
+  })
+
+  it('基线提交与当前版本不一致时提示漂移', async () => {
+    const { desk } = await open('/p/demo/d/next/r2')
+    expect(desk.baseDrift.value).toBe(true)
+  })
+
+  it('只响应同一版本路由上的变化', async () => {
+    const { desk, router } = await open('/p/demo/d/next/r2?level=infra')
+    expect(desk.levelId.value).toBe('infra')
+    await router.push('/p/demo?level=app')
+    await new Promise(r => setTimeout(r, 0))
+    expect(desk.levelId.value).toBe('infra')
+    await router.push('/p/demo/d/next/r1?level=app')
+    await new Promise(r => setTimeout(r, 0))
+    expect(desk.levelId.value).toBe('infra')
+  })
+})

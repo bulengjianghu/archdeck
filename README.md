@@ -7,7 +7,7 @@
 ```bash
 npm install
 npm run dev          # 本地查看：首页是项目列表，读取 model/ 下各项目，文件变化后自动刷新
-npm run build        # 产出静态站点 dist/（含 projects.json 与 models/<项目>.json），可部署到任意路径
+npm run build        # 产出静态站点 dist/（含 projects.json、models/<项目>.json 与各设计版本），可部署到任意路径
 npm run lint:model   # 校验架构描述，有错误时退出码为 1
 npm test             # 单元测试
 ```
@@ -36,6 +36,10 @@ npm test             # 单元测试
 - `model/h5p-arch-desk/`：本项目自身的架构描述。
 
 规范见 [docs/04-model-generation.md](docs/04-model-generation.md)。代码有变化时让 AI 按规范重新生成对应文件，并更新 `system.yaml` 中的 `source.commit`。新增项目只需新建一个子目录。
+
+## 设计版本
+
+迭代某个项目前，可以先让 AI 在当前架构上出一份**设计版本**评审，多轮沟通后定稿再开发（[ADR-0002](docs/adr/0002-design-versions.md)）。设计版本放在 `model/<项目>/designs/<设计>/`，每轮（r1、r2…）是一份完整描述；项目视图左上角切换版本，设计版本中图上标出相对当前版本（或上一轮）的新增 / 修改，「△N」表示其内部涉及 N 处变更，根层面板有设计目标、本轮说明、待确认问题和完整变更清单。起草方式见[描述生成规范 §7](docs/04-model-generation.md#7-设计版本adr-0002)。
 
 ## 文档
 

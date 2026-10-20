@@ -11,6 +11,8 @@ const router = createRouter({
   routes: [
     { path: '/', name: 'home', component: ProjectList, meta: { title: '架构台' } },
     { path: '/p/:project', name: 'project', component: DeskView, props: true },
+    // 设计版本（ADR-0002）
+    { path: '/p/:project/d/:design/:revision', name: 'design', component: DeskView, props: true },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })

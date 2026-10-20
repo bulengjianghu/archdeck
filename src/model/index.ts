@@ -9,6 +9,8 @@ export { load } from './load'
 export { validate } from './validate'
 export { buildIndex, lowestCommonAncestor, isLayered, moduleName } from './indexer'
 export { projectLevel, edgeId, DEFAULT_PROJECT_OPTIONS } from './project'
+export { diffModels, FIELD_LABELS } from './diff'
+export type { Change, ChangeKind, EntityKind, ModelDiff } from './diff'
 
 export interface LoadedModel {
   index: ModelIndex

@@ -61,7 +61,8 @@
         "includes": { "$ref": "#/definitions/textList" },
         "excludes": { "$ref": "#/definitions/textList" },
         "mayDependOn": { "$ref": "#/definitions/idList" },
-        "children": { "type": "array", "items": { "$ref": "#/definitions/module" } }
+        "children": { "type": "array", "items": { "$ref": "#/definitions/module" } },
+        "designNote": { "type": "string", "description": "设计版本专用：为什么这样设计 / 调整（Markdown）" }
       }
     },
     "relation": {
@@ -78,7 +79,8 @@
         "payload": {
           "oneOf": [{ "$ref": "#/definitions/id" }, { "$ref": "#/definitions/idList" }]
         },
-        "description": { "type": "string" }
+        "description": { "type": "string" },
+        "designNote": { "type": "string", "description": "设计版本专用：为什么这样设计 / 调整（Markdown）" }
       }
     },
     "interface": {
@@ -91,7 +93,8 @@
         "owner": { "$ref": "#/definitions/id" },
         "signature": { "type": "string" },
         "description": { "type": "string" },
-        "semantics": { "type": "string" }
+        "semantics": { "type": "string" },
+        "designNote": { "type": "string", "description": "设计版本专用：为什么这样设计 / 调整（Markdown）" }
       }
     },
     "dataStructure": {
@@ -103,7 +106,8 @@
         "name": { "type": "string" },
         "definition": { "type": "string" },
         "description": { "type": "string" },
-        "invariants": { "type": "string" }
+        "invariants": { "type": "string" },
+        "designNote": { "type": "string", "description": "设计版本专用：为什么这样设计 / 调整（Markdown）" }
       }
     }
   }

@@ -81,13 +81,14 @@ flowchart TB
 
 | 模块 | 层 | 职责（只做什么） | 核心数据结构 | 对外接口 |
 |---|---|---|---|---|
-| **ModelSource** | 接入 | 找到模型根目录下的项目并读取其 YAML；生成项目摘要；开发态监听文件变化并按项目通知页面；构建态固化为静态文件 | `RawFile { path, text }`、`ModelPayload`、`ProjectSummary` | `GET projects.json`、`GET models/<项目>.json`，事件 `arch-model:changed { project }` |
+| **ModelSource** | 接入 | 找到模型根目录下的项目并读取其 YAML；发现项目的设计版本（`designs/<设计>/r<N>/`，ADR-0002）；生成项目摘要；开发态监听文件变化并按项目通知页面；构建态固化为静态文件 | `RawFile { path, text }`、`ModelPayload`、`ProjectSummary`、`DesignInfo` | `GET projects.json`、`GET models/<项目>.json`、`GET models/<项目>/designs/<设计>/<轮次>.json`（附对比基线），事件 `arch-model:changed { project }` |
 | **Loader** | 模型 | 解析 YAML、按 JSON Schema 检查单文件格式、把多个文件合并成一个模型 | `ArchModel { modules, relations, interfaces, dataStructures }` | `load(files) → { model, issues }` |
 | **Validator** | 模型 | 跨文件检查：ID 唯一、引用存在、祖先与后代之间不连边 | `Issue { severity, file, path, line, code, message }` | `validate(model) → { model, issues }`：error 级问题的实体被剔除，warning 级只去掉坏引用 |
 | **Indexer** | 模型 | 建立查询结构，让后续按 ID 查询都是 O(1) | `ModelIndex { byId, parentOf, childrenOf, ancestorsOf, relationsOf }` | `buildIndex(model) → ModelIndex` |
+| **Diff** | 模型 | 版本对比：设计版本相对对比基线新增 / 修改 / 删除了哪些模块、关系、接口、数据结构，以及每个模块涉及多少处变更 | `ModelDiff { changes, module/relation/…: Map<id, Change>, touched, counts }` | `diffModels(base, target) → ModelDiff` |
 | **Projector** | 模型 | 给定一个层次，算出这一层的节点、直接边、聚合边、边界节点；子模块都是层时，额外算出分层总览 | `LevelView { mode: graph\|layered, parent, nodes, edges, boundaries, bands? }`；`Edge { kind: direct\|aggregate, from, to, type, relationIds[] }`；`Band { layerId, order, abstraction, mayDependOn, coreModules[], hiddenCount }` | `projectLevel(index, levelId, opts) → LevelView` |
 | **Layout** | 视图状态 | 给 `LevelView` 的节点算坐标。`graph` 模式用 elkjs（在 Worker 中运行）只排内部模块与内部边，边界节点排在下方一行、边界边画成曲线（聚焦时才显示）；`layered` 模式按层序分带排布，带内核心模块横向排开，不调用 elk。结果按层次缓存 | `PositionedView { view, positions }` | `layout(view) → Promise<PositionedView>` |
-| **DeskState** | 视图状态 | 每个项目一份：持有当前层次、选中对象、显示开关；与 URL（`/p/<项目>?level=&sel=`）同步，只响应本项目路由；对外提供唯一的一组操作 | `DeskState { levelPath[], selection, toggles, issues }` | `drillInto(id)` `goTo(levelId)` `select(ref)` `clearSelection()` `reload()` |
+| **DeskState** | 视图状态 | 每个项目的每个版本一份：持有当前层次、选中对象、显示开关；设计版本另持有对比基线与差异；与 URL（`/p/<项目>[/d/<设计>/<轮次>]?level=&sel=`）同步，只响应本项目本版本的路由；对外提供唯一的一组操作 | `DeskState { levelPath[], selection, toggles, issues, design?, baseline?, diff? }` | `drillInto(id)` `goTo(levelId)` `select(ref)` `clearSelection()` `reload()` |
 | **GraphCanvas** | 呈现 | 把 `PositionedView` 画成节点和边；`layered` 模式下层画成分组节点（带），核心模块作为带的子节点；处理平移、缩放、单击、双击、悬停 | Vue Flow 的节点（含父子分组）和边 | 发出 `select` / `drill` / `hover` 意图给 DeskState |
 | **Panel** | 呈现 | 按选中对象的类型显示属性：模块、关系、聚合边，或无选中时显示当前父模块 | — | 只读 DeskState + ModelIndex |
 | **Nav** | 呈现 | 面包屑返回、搜索跳转、图例、显示开关 | — | 调用 DeskState 的操作 |
@@ -112,6 +113,7 @@ flowchart TB
 | Panel / Nav → DeskState | 读取 + 调用 | 状态读取、`goTo` / `select` | ID | 面板里的链接也走同一组操作 |
 | ModelSource → DeskState | 事件 | `arch-model:changed` | `{ project }` | 本项目变化时触发 `reload()` |
 | ModelSource → ProjectList | 调用 + 事件 | `projects.json`、`arch-model:changed` | `ProjectSummary[]` | 首页展示项目摘要，任一项目变化时刷新 |
+| DeskState → Diff | 调用 | `diffModels` | 对比基线 `ModelIndex` + 设计版本 `ModelIndex` → `ModelDiff` | 只在设计版本中；切换对比基线时重算 |
 
 依赖方向：**呈现 → 视图状态 → 模型 ← 接入**。模型层是中心，谁都不依赖。
 
@@ -218,6 +220,26 @@ sequenceDiagram
     DS-->>C: 重绘；有错误时 IssueBanner 列出
 ```
 
+### 5.5 设计版本：AI 起草、架构师评审、多轮迭代（ADR-0002）
+
+```mermaid
+sequenceDiagram
+    participant A as 架构师
+    participant AI as AI
+    participant F as designs/<设计>/
+    participant UI as h5p-arch-desk
+
+    A->>AI: 迭代目标（如二期动态视角）
+    AI->>F: 复制当前版本为 r1，在其上扩展与调整；写 design.yaml（目标、本轮说明、待确认问题）
+    F-->>UI: 文件变化 → 刷新
+    A->>UI: 打开设计版本：图上看新增 / 修改，下钻，读设计说明与变更清单
+    A->>AI: 评审意见
+    AI->>F: 意见记入 r1.feedback；复制 r1 为 r2 并修改
+    Note over A,F: 重复直到定稿：status = accepted
+```
+
+设计版本走与当前版本完全相同的加载、投影、布局流程；差异只多一步 `diffModels`，结果交给画布（节点 / 边标色、「△N」）和面板（新增 / 修改标记、改了哪些字段、变更清单）。
+
 ## 6. 开发视图与物理视图
 
 ```text
@@ -229,6 +251,7 @@ packages/h5p-arch-desk/
   src/state/                   DeskState
   src/components/              ProjectList · DeskView · GraphCanvas · Panel · Nav · IssueBanner
   model/<项目>/                各项目架构描述（ADR-0001）：h5player、h5p-arch-desk 自身
+  model/<项目>/designs/<设计>/ 设计版本：design.yaml + 每轮完整快照 r1/ r2/ …（ADR-0002）
 ```
 
 运行形态只有两种，都不需要后端：

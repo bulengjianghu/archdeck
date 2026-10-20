@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import Markdown from './Markdown.vue'
 import Section from './Section.vue'
+import DesignSection from './DesignSection.vue'
 
 const desk = useDesk()
 const idx = computed(() => desk.index.value!)
@@ -13,7 +14,8 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
 
 <template>
   <div class="system-panel">
-    <header class="head">
+    <DesignSection v-if="desk.design.value && desk.revision.value" />
+    <header class="head" :class="{ 'after-design': !!desk.design.value }">
       <h2>{{ sys.name }}</h2>
       <div class="badges">
         <code>{{ sys.id }}</code>
@@ -75,5 +77,11 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
 
 .top .muted {
   font-size: 12px;
+}
+</style>
+
+<style scoped>
+.head.after-design {
+  border-top: 6px solid var(--surface-2);
 }
 </style>
