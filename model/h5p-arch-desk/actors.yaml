@@ -12,7 +12,8 @@ actors:
 relations:
   - {id: rel.ctx.perspective, from: actor.architect, to: present.perspective, type: calls, description: 点「运行」打开场景列表；退出场景}
   - {id: rel.ctx.scenarios, from: actor.architect, to: present.scenarios, type: calls, description: 选定场景}
-  - {id: rel.ctx.player, from: actor.architect, to: present.player, type: calls, description: 单步、播放 / 暂停、速度、拖动进度、选分支}
+  - {id: rel.ctx.player, from: actor.architect, to: present.player, type: calls, description: 上一步 / 下一步、拖动进度、选分支}
+  - {id: rel.ctx.nav-tree, from: actor.architect, to: present.nav-tree, type: calls, description: 在模块树中定位、下钻；在步骤树中指向某一步、选分支}
   - {id: rel.ctx.sequence, from: actor.architect, to: present.sequence.interact, type: calls, description: 单击时序图中的消息、悬停预览}
   - {id: rel.ctx.canvas, from: actor.architect, to: present.canvas.flow, type: calls, description: 单击 / 双击 / 悬停节点与边，单击步骤序号}
   - {id: rel.ctx.panel, from: actor.architect, to: present.panel, type: calls, description: 在属性面板中跳转、指向步骤}

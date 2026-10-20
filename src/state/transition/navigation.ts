@@ -44,9 +44,10 @@ export function drill(state: ViewState, index: ModelIndex, id: string): Transiti
   return push(withLevel(state, index, id))
 }
 
-/** 跳到某层次（面包屑、跳到场景所在层次……），可同时设定选中 */
+/** 跳到某层次（面包屑、跳到场景所在层次……），可同时设定选中；N10：层次改变才进历史 */
 export function goTo(state: ViewState, index: ModelIndex, id: string, select?: Selection | null): TransitionResult {
-  return push(withLevel(state, index, id, { select }))
+  const next = withLevel(state, index, id, { select })
+  return next.levelId === state.levelId ? replace(next) : push(next)
 }
 
 /** N8：返回上级时选中刚离开的模块 */

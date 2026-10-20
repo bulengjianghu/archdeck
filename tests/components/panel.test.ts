@@ -87,22 +87,19 @@ describe('属性面板 · 运行视角', () => {
     expect(desk.playback.value?.scenarioId).toBe('sc.play')
   })
 
-  it('跟随：尚未开始时显示场景（触发者、所在层次、步骤目录），之后显示当前步骤', async () => {
+  it('跟随：停在开头时显示场景（触发者、所在层次、引用；步骤目录在导航树），之后显示当前步骤', async () => {
     const { wrapper, desk } = await mountPanel('/?sc=sc.play&step=sc.play%23update&alt=0', scenarioFiles())
     const text = wrapper.text()
     expect(text).toContain('当前步骤')
     expect(text).toContain('StateMachine → Pipeline')
     expect(text).toContain('推断')
     expect(text).toContain('分支 [需要改图]')
-    desk.pause()
     desk.closeScenario()
     desk.openScenario('sc.play')
-    desk.pause()
     await flushPromises()
     const s = wrapper.text()
-    expect(s).toContain('步骤目录')
+    expect(s).not.toContain('步骤目录')
     expect(s).toContain('业务方')
-    expect(s).toContain('循环 [每个 MU]')
     expect(s).toContain('引用了')
   })
 

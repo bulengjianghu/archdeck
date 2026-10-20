@@ -272,16 +272,16 @@ describe('DeskState · 运行视角', () => {
     expect(desk.scenarioView.value!.messages.length).toBeGreaterThan(0)
     expect(desk.sequence.value!.participants[0].kind).toBe('actor')
     expect(desk.home.value).toBe('sys')
-    desk.pause()
+    expect(desk.frame.value).toBeNull()
     desk.next()
     await settle()
     expect(desk.frame.value?.id).toBe('sc.play#start')
     expect(router.currentRoute.value.query.step).toBe('sc.play#start')
   })
 
-  it('复制地址到新页面：回到同一场景、同一步骤、同一分支选择，处于暂停', async () => {
+  it('复制地址到新页面：回到同一场景、同一步骤、同一分支选择', async () => {
     const { desk } = await openDesk('/?level=infra&sc=sc.play&step=sc.play%23update&alt=0')
-    expect(desk.playback.value).toMatchObject({ scenarioId: 'sc.play', frameId: 'sc.play#update', playing: false })
+    expect(desk.playback.value).toMatchObject({ scenarioId: 'sc.play', frameId: 'sc.play#update' })
     expect(desk.playback.value!.choices.get('sc.play#3')).toBe(0)
     expect(desk.currentIndex.value).not.toBeNull()
   })
@@ -296,5 +296,15 @@ describe('DeskState · 运行视角', () => {
     expect(desk.perspective.value).toBe('structure')
     expect(desk.selection.value).toEqual({ kind: 'module', id: 'infra.framework' })
     expect(router.currentRoute.value.query.sc).toBeUndefined()
+  })
+
+  it('导航树的派生：步骤大纲（T6）与参与模块（T5）随场景出现，退出后清空', async () => {
+    const { desk } = await openDesk('/?sc=sc.play')
+    expect(desk.outline.value.some(n => n.kind === 'group' && n.tag.kind === 'ref')).toBe(true)
+    expect(desk.participants.value.has('infra')).toBe(true)
+    expect(desk.participants.value.has('infra.framework.sm')).toBe(true)
+    desk.closeScenario()
+    expect(desk.outline.value).toEqual([])
+    expect(desk.participants.value.size).toBe(0)
   })
 })

@@ -3,7 +3,7 @@
  * 脱离工作台同样成立，例如问「Layout 在打开场景这个流程里做了什么」用的是同一个查询。
  */
 import type { ModelIndex } from '../types'
-import type { Frame } from './plan'
+import type { Frame, ScenarioPlan } from './plan'
 import type { ScenarioLevelView } from './level'
 
 export type ParticipationTarget = { kind: 'module' | 'relation' | 'edge' | 'actor'; id: string }
@@ -64,4 +64,12 @@ export function participation(
     dataStructures: uniq(involved.flatMap(f => f.payload)),
     nearest,
   }
+}
+
+/** T5：参与本场景的模块——计划中全部帧（含所有分支）的模块端点及其祖先（不含系统根）；与层次、播放头无关 */
+export function scenarioModules(index: ModelIndex, plan: ScenarioPlan): Set<string> {
+  const out = new Set<string>()
+  for (const f of plan.frames.values())
+    for (const id of [f.from, f.to]) for (const m of index.pathOf.get(id) ?? []) if (m !== index.rootId) out.add(m)
+  return out
 }

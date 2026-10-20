@@ -20,7 +20,9 @@ export {
   stageEnds,
 } from './level'
 export type { Landing, VisibleLanding, VisibleMessage, ScenarioLevelView, FrameStatus } from './level'
-export { participation } from './participation'
+export { participation, scenarioModules } from './participation'
 export type { Participation, ParticipationTarget } from './participation'
+export { outlineScenario } from './outline'
+export type { OutlineNode, OutlineOption } from './outline'
 export { buildSequence } from './sequence'
 export type { SequenceModel, SequenceMessage, SequenceFragment, SequenceParticipant } from './sequence'

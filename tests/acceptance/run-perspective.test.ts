@@ -26,23 +26,25 @@ async function open(project: string, url = `/p/${project}`, extra: RawFile[] = [
     await new Promise(r => setTimeout(r, 0))
     await nextTick()
   }
-  /** 时钟到点（不等真实计时器） */
-  const tick = (n = 1) => {
-    for (let i = 0; i < n; i++) desk.dispatch({ type: 'tick' })
+  /** 连按 n 次「下一步」；到分支点或末尾后多按无效 */
+  const step = (n = 1) => {
+    for (let i = 0; i < n; i++) desk.next()
   }
-  return { desk, router, settle, tick }
+  return { desk, router, settle, step }
 }
 
 describe('§6.2 运行视角验收', () => {
-  it('1. 在根层通过「运行」选一个场景：进入运行视角、层次不变、自动播放；只突出参与者与走过的边；出现时序图；参与者泳道在最左', async () => {
+  it('1. 在根层通过「运行」选一个场景：进入运行视角、层次不变、停在开头且面板显示场景；逐步前进；只突出参与者与走过的边；出现时序图；参与者泳道在最左', async () => {
     for (const [project, sc] of [['h5player', 'sc.command'], ['h5p-arch-desk', 'sc.open-and-play']]) {
-      const { desk, tick } = await open(project)
+      const { desk, step } = await open(project)
       const root = desk.levelId.value
       desk.openScenario(sc)
       expect(desk.perspective.value).toBe('run')
       expect(desk.levelId.value).toBe(root)
-      expect(desk.playback.value).toMatchObject({ scenarioId: sc, playing: true })
-      tick(2)
+      expect(desk.playback.value).toMatchObject({ scenarioId: sc, frameId: null })
+      expect(desk.focus.value).toEqual({ kind: 'follow', frameId: null })
+      expect(desk.walked.value).toBe(0)
+      step(2)
       const sv = desk.scenarioView.value!
       const active = new Set(sv.messages.flatMap(m => (m.at.kind === 'internal' ? [m.at.node] : [m.at.from, m.at.to])))
       expect(active.size).toBeGreaterThan(0)
@@ -52,19 +54,16 @@ describe('§6.2 运行视角验收', () => {
     }
   })
 
-  it('2. 播放中双击下钻：暂停并钉住，播放头仍是同一帧；泳道变细、可见消息变多、单步粒度变细', async () => {
-    const { desk, tick } = await open('h5player')
+  it('2. 回放中双击下钻：钉住被下钻的模块，播放头仍是同一帧；泳道变细、可见消息变多、单步粒度变细', async () => {
+    const { desk, step } = await open('h5player')
     desk.openScenario('sc.command')
-    // 先走过两个分支点（需要改图 → 事务成功），再从头播放到一半
-    tick(20)
+    // 先走过两个分支点（需要改图 → 事务成功），再回到第一步、前进到一半
+    step(20)
     desk.chooseBranch(desk.branchPoint.value!.id, 0)
-    desk.play()
-    tick(20)
+    step(20)
     desk.chooseBranch(desk.branchPoint.value!.id, 0)
     desk.seek(desk.scenarioView.value!.messages[0].frameIds[0])
-    desk.play()
-    tick(3)
-    expect(desk.playback.value!.playing).toBe(true)
+    step(3)
     const frame = desk.playback.value!.frameId
     // 两端都在 Infrastructure 内的帧：根层合并为该层的内部活动，下钻后拆成更细的可见消息
     const idx = desk.index.value!
@@ -73,7 +72,7 @@ describe('§6.2 运行视角验收', () => {
     const rootMessages = messagesOf().size
     const rootLanes = desk.sequence.value!.participants.map(p => p.nodeId)
     desk.drillInto('infra')
-    expect(desk.playback.value).toMatchObject({ playing: false, frameId: frame })
+    expect(desk.playback.value!.frameId).toBe(frame)
     expect(desk.focus.value).toEqual({ kind: 'pinned', selection: { kind: 'module', id: 'infra' } })
     expect(messagesOf().size).toBeGreaterThan(rootMessages)
     // 泳道变细：根层把 Infrastructure 内部的活动画在「Infrastructure」一条泳道上，下钻后换成它的子模块
@@ -83,16 +82,17 @@ describe('§6.2 运行视角验收', () => {
     expect(lanes).toEqual(expect.arrayContaining(['infra.player-index', 'infra.framework']))
   })
 
-  it('3. 播放到 alt：自动暂停并展开全部选项；选一支后继续；退回分支点之前再前进沿用已选分支；在分支点改选后其后的选择被丢弃', async () => {
-    const { desk, tick } = await open('h5player')
+  it('3. 单步到 alt：展开全部选项，未选时不能再前进；选一支后继续；退回分支点之前再前进沿用已选分支；在分支点改选后其后的选择被丢弃', async () => {
+    const { desk, step } = await open('h5player')
     desk.openScenario('sc.command')
-    tick(20)
-    expect(desk.playback.value!.playing).toBe(false)
+    step(20)
     const point = desk.branchPoint.value!
+    const stuck = desk.playback.value!.frameId
+    desk.next()
+    expect(desk.playback.value!.frameId).toBe(stuck)
     expect(point.options.map(o => o.when)).toEqual(['需要改图（方案或三元组变化）', '无需改图'])
     desk.chooseBranch(point.id, 0)
-    desk.play()
-    tick(20)
+    step(20)
     // ref 内联的「方案切换事务」里还有一个分支点
     const inner = desk.branchPoint.value!
     expect(inner.id).not.toBe(point.id)
@@ -110,43 +110,44 @@ describe('§6.2 运行视角验收', () => {
     expect(desk.playback.value!.choices.get(point.id)).toBe(1)
   })
 
-  it('4. 在时序图上点一条之前的消息：后退到这一步并暂停，已走过的边与「从头播放到这一步」完全一致；推断的关系有「推断」标记', async () => {
-    const { desk, tick } = await open('h5player', '/p/h5player?level=infra')
+  it('4. 在时序图上点一条之前的消息：后退到这一步，已走过的边与「从头单步到这一步」完全一致；推断的关系有「推断」标记', async () => {
+    const { desk, step } = await open('h5player', '/p/h5player?level=infra')
     desk.openScenario('sc.command')
-    tick(30)
+    step(30)
     desk.chooseBranch(desk.branchPoint.value!.id, 1)
-    desk.play()
-    tick(30)
+    step(30)
     await new Promise(r => setTimeout(r, 300))
     const target = desk.sequence.value!.messages.find(m => m.pathIndex === 2)!
     desk.seek(target.frameIds[0])
-    const viaSeek = { frame: desk.playback.value!.frameId, walked: [...desk.overlay.value!.walked.keys()], playing: desk.playback.value!.playing }
-    // 从头播放到这一步
+    const viaSeek = { frame: desk.playback.value!.frameId, walked: [...desk.overlay.value!.walked.keys()] }
+    // 从头单步到这一步
     desk.closeScenario()
     desk.openScenario('sc.command')
-    tick(3)
+    step(3)
+    await new Promise(r => setTimeout(r, 300))
     const viaPlay = { frame: desk.playback.value!.frameId, walked: [...desk.overlay.value!.walked.keys()] }
-    expect(viaSeek.playing).toBe(false)
     expect(viaSeek.frame).toBe(viaPlay.frame)
     expect(viaSeek.walked).toEqual(viaPlay.walked)
     // 面板：推断的关系
     expect(desk.frame.value!.relationInferred).toBe(true)
   })
 
-  it('5. 钉住一个模块时先显示它在本场景中参与的步骤；取消选中回到当前步骤但不恢复播放；点播放后恢复跟随', async () => {
-    const { desk, tick } = await open('h5p-arch-desk', '/p/h5p-arch-desk?level=state')
+  it('5. 钉住一个模块时先显示它在本场景中参与的步骤；取消选中，或单步、指向某一步，回到当前步骤（跟随）', async () => {
+    const { desk, step } = await open('h5p-arch-desk', '/p/h5p-arch-desk?level=state')
     desk.openScenario('sc.open-and-play')
-    tick(4)
+    step(4)
     desk.select({ kind: 'module', id: 'state.desk' })
     expect(desk.focus.value.kind).toBe('pinned')
-    expect(desk.playback.value!.playing).toBe(false)
     expect(desk.pinnedParticipation.value!.frames.length).toBeGreaterThan(0)
+    const at = desk.playback.value!.frameId
     desk.select(null)
-    expect(desk.focus.value).toMatchObject({ kind: 'follow' })
-    expect(desk.playback.value!.playing).toBe(false)
-    desk.play()
-    expect(desk.playback.value!.playing).toBe(true)
+    expect(desk.focus.value).toEqual({ kind: 'follow', frameId: at })
+    desk.select({ kind: 'module', id: 'state.desk' })
+    desk.next()
     expect(desk.focus.value.kind).toBe('follow')
+    desk.select({ kind: 'module', id: 'state.desk' })
+    desk.seek(at!)
+    expect(desk.focus.value).toEqual({ kind: 'follow', frameId: at })
   })
 
   it('6. 与结构不一致的步骤：端点与引用关系不符、两端无任何关系 → 错误 / 提醒；引用 depends → 错误；无关系的一步回放时画「结构中未建模」', async () => {
@@ -157,7 +158,7 @@ describe('§6.2 运行视角验收', () => {
   name: 不一致的步骤
   steps:
     - call: {from: model.diff, to: access.lint, relation: rel.ad.list-fetch}
-    - call: {from: state.desk.clock, to: access.lint}
+    - call: {from: state.desk.layout-sync, to: access.lint}
     - call: {from: present.shell, to: present.project-list, relation: rel.ad.shell-list}
 `,
     }
@@ -167,25 +168,23 @@ describe('§6.2 运行视角验收', () => {
       ['warning', 'step-unmodeled'],
       ['error', 'step-relation-not-runtime'],
     ])
-    const { desk, tick } = await open('h5p-arch-desk', '/p/h5p-arch-desk', [bad])
+    const { desk, step } = await open('h5p-arch-desk', '/p/h5p-arch-desk', [bad])
     expect(desk.issues.value.filter(i => i.file === 'scenarios/bad.yaml')).toHaveLength(3)
     desk.openScenario('sc.bad')
-    tick(2)
+    step(2)
     expect(desk.scenarioView.value!.messages[1].at.kind).toBe('unmodeled')
   })
 
-  it('7. 复制运行视角下的地址到新标签打开：回到同一场景、同一步骤、同一分支选择，处于暂停', async () => {
+  it('7. 复制运行视角下的地址到新标签打开：回到同一场景、同一步骤、同一分支选择', async () => {
     const a = await open('h5player', '/p/h5player?level=infra')
     a.desk.openScenario('sc.command')
-    a.tick(30)
+    a.step(30)
     a.desk.chooseBranch(a.desk.branchPoint.value!.id, 0)
-    a.desk.play()
-    a.tick(4)
-    a.desk.pause()
+    a.step(4)
     await a.settle()
     const url = a.router.currentRoute.value.fullPath
     const b = await open('h5player', url)
-    expect(b.desk.playback.value).toMatchObject({ scenarioId: 'sc.command', frameId: a.desk.playback.value!.frameId, playing: false })
+    expect(b.desk.playback.value).toMatchObject({ scenarioId: 'sc.command', frameId: a.desk.playback.value!.frameId })
     expect([...b.desk.playback.value!.choices]).toEqual([...a.desk.playback.value!.choices])
     expect(b.desk.levelId.value).toBe('infra')
   })

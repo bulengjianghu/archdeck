@@ -30,7 +30,7 @@ const { setViewport, zoomIn, zoomOut, dimensions, setNodes, setEdges } = useVueF
 /** 运行视角的舞台叠加；结构视角为 null */
 const stage = computed(() => (desk.perspective.value === 'run' ? desk.overlay.value : null))
 
-/** 悬停时序图中的一条消息时，它在本层的落点（预览，不暂停） */
+/** 悬停时序图中的一条消息时，它在本层的落点（预览） */
 const hoverLanding = computed(() => {
   const h = desk.hoverId.value
   const sv = desk.scenarioView.value
@@ -331,6 +331,17 @@ watch(
     tryPendingFit()
   },
   { immediate: true },
+)
+
+// 画布容器尺寸变化（进入 / 退出运行视角、切换分屏方向、拖动分隔条或折叠两侧栏）后重新适应
+let resizeTimer: ReturnType<typeof setTimeout> | undefined
+watch(
+  () => [dimensions.value.width, dimensions.value.height] as const,
+  ([w, h], [pw, ph]) => {
+    if (!pw || !ph || (Math.abs(w - pw) < 24 && Math.abs(h - ph) < 24)) return
+    clearTimeout(resizeTimer)
+    resizeTimer = setTimeout(fitNow, 120)
+  },
 )
 
 const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned.value.view.nodes.length === 0)

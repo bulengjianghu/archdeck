@@ -6,7 +6,7 @@
  * - 与外界的交互交给同步适配器：路由（sync/router）、模型源（sync/modelSource）、布局（sync/layout）。
  * 呈现层只读这里的状态、只调这里的操作，不直接调用模型层的计算。
  */
-import { computed, getCurrentScope, onScopeDispose, ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 import type { Router } from 'vue-router'
 import {
   RELATION_TYPES,
@@ -15,12 +15,14 @@ import {
   diffModels,
   frameHome,
   landFrame,
+  outlineScenario,
   participation,
   planScenario,
   projectLevel,
   projectScenario,
   resolvePath,
   scenarioHome,
+  scenarioModules,
   stageEnds,
   stepAfter,
   walkedCount,
@@ -28,6 +30,7 @@ import {
   type LevelView,
   type ModelDiff,
   type ModelIndex,
+  type OutlineNode,
   type Participation,
   type ScenarioLevelView,
   type ScenarioPlan,
@@ -44,12 +47,10 @@ import {
   perspectiveOf,
   transition,
   type Selection,
-  type Speed,
   type Toggles,
   type ViewAction,
   type ViewState,
 } from './transition'
-import { createClockSync } from './sync/clock'
 import { createRouterSync, type RouterSync, type RouterSyncOptions } from './sync/router'
 import { fetchAndLoad, watchModelChanges, type Baseline, type ChangeEvents, type FetchModel } from './sync/modelSource'
 import { createLayoutSync } from './sync/layout'
@@ -168,6 +169,10 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     return participation(index.value, path.value.frames, scenarioView.value, s, state.value.playback?.frameId)
   })
 
+  /** 导航树：步骤大纲（T6）与参与本场景的模块（T5），与层次、播放头无关 */
+  const outline = computed<OutlineNode[]>(() => (plan.value ? outlineScenario(plan.value, choices.value) : []))
+  const participants = computed<ReadonlySet<string>>(() => (index.value && plan.value ? scenarioModules(index.value, plan.value) : new Set()))
+
   /** 打开的设计（当前版本时为 null） */
   const design = computed(() => (options.version ? (designs.value.find(d => d.id === options.version!.design) ?? null) : null))
   const revision = computed(() => design.value?.revisions.find(r => r.id === options.version!.revision) ?? null)
@@ -217,10 +222,6 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     }
   }
 
-  // 时钟同步：播放中按速度到点 dispatch(tick)
-  const stopClock = createClockSync(() => state.value.playback, () => void dispatch({ type: 'tick' }))
-  if (getCurrentScope()) onScopeDispose(stopClock)
-
   /** 订阅本项目的描述变化（开发态 import.meta.hot），返回取消订阅函数 */
   function watchChanges(events: ChangeEvents | undefined) {
     return watchModelChanges(events, options.project, () => void reload())
@@ -252,10 +253,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const closeScenario = () => void dispatch({ type: 'closeScenario' })
   const next = () => void dispatch({ type: 'next' })
   const prev = () => void dispatch({ type: 'prev' })
-  const seek = (frameId: string) => void dispatch({ type: 'seek', frameId })
-  const play = () => void dispatch({ type: 'play' })
-  const pause = () => void dispatch({ type: 'pause' })
-  const setSpeed = (value: Speed) => void dispatch({ type: 'speed', value })
+  const seek = (frameId: string | null) => void dispatch({ type: 'seek', frameId })
   const chooseBranch = (pointId: string, option: number) => void dispatch({ type: 'chooseBranch', pointId, option })
 
   /** 键盘（N7、N9）：返回 'leave' 表示应回到项目列表，由呈现层导航 */
@@ -298,6 +296,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     sequence,
     positionedSequence,
     pinnedParticipation,
+    outline,
+    participants,
     branchPoint,
     frameLevel,
     overlay,
@@ -329,9 +329,6 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     next,
     prev,
     seek,
-    play,
-    pause,
-    setSpeed,
     chooseBranch,
   }
 }

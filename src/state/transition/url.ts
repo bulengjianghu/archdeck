@@ -45,17 +45,17 @@ export function encodeView(state: ViewState, index: ModelIndex, plan?: ScenarioP
 
 /**
  * 按查询参数恢复：不存在的层次回到根，不存在的选中被丢弃；
- * 场景：带有效步骤时停在该步、不播放（R12）；同一场景已打开时保持暂停；否则从头打开并自动播放。
+ * 场景（R12）：带有效步骤时停在该步；同一场景已打开且没带步骤时保留原播放头；否则停在开头。
  */
 export function restore(state: ViewState, ctx: TransitionContext, query: Query): TransitionResult {
   const { index } = ctx
   const level = query.level ?? index.rootId
   const sel = decodeSelection(query.sel)
   const next = withLevel(state, index, level, { select: selectionExists(index, sel) ? sel : null })
-  return { state: { ...next, playback: restorePlayback(state, ctx, query, next.selection !== null) }, history: 'replace' }
+  return { state: { ...next, playback: restorePlayback(state, ctx, query) }, history: 'replace' }
 }
 
-function restorePlayback(state: ViewState, ctx: TransitionContext, query: Query, selected: boolean): PlaybackState | null {
+function restorePlayback(state: ViewState, ctx: TransitionContext, query: Query): PlaybackState | null {
   const sc = query.sc
   if (!sc || !ctx.index.scenarios.has(sc)) return null
   const same = state.playback?.scenarioId === sc
@@ -63,13 +63,9 @@ function restorePlayback(state: ViewState, ctx: TransitionContext, query: Query,
   const list = (query.alt ?? '').split('.').filter(Boolean).map(Number)
   const choices = choicesFromList(plan, list)
   const onPath = new Set(resolvePath(plan, choices).frames.map(f => f.id))
-  const speed = state.playback?.speed ?? 1
-  if (query.step && onPath.has(query.step)) return { scenarioId: sc, frameId: query.step, choices, playing: false, speed }
-  if (same) {
-    const frameId = state.playback!.frameId && onPath.has(state.playback!.frameId) ? state.playback!.frameId : null
-    return { scenarioId: sc, frameId, choices, playing: false, speed }
-  }
-  return { scenarioId: sc, frameId: null, choices, playing: !selected, speed }
+  if (query.step && onPath.has(query.step)) return { scenarioId: sc, frameId: query.step, choices }
+  const kept = same && state.playback!.frameId && onPath.has(state.playback!.frameId) ? state.playback!.frameId : null
+  return { scenarioId: sc, frameId: kept, choices }
 }
 
 /** 两组查询参数是否相同（忽略值为 undefined 的键） */

@@ -6,7 +6,7 @@ modules:
     kind: layer
     order: 1
     abstraction: 把状态画出来、把用户操作上交：只读 DeskState、只调它的操作，不做投影与布局计算
-    responsibility: 应用外壳与路由、项目列表、项目视图、画布（含回放高亮）、时序图、场景列表与回放控制、属性面板、导航与问题提示。
+    responsibility: 应用外壳与路由、项目列表、项目视图、导航树、画布（含回放高亮）、时序图、场景列表与回放控制、属性面板、导航与问题提示。
     includes: [Vue 组件, 路由, 交互事件, 样式]
     excludes: [层次投影规则, 布局算法, 文件读取]
     mayDependOn: [state, model]
@@ -27,7 +27,7 @@ modules:
         name: 项目视图
         kind: subsystem
         core: true
-        responsibility: 单个项目某个版本的工作台：按项目 + 版本创建并注入一份 DeskState，布置画布区、设计信息条与可拖动 / 折叠的属性面板，处理键盘意图；打开场景后画布区交给分屏容器放入结构图与时序图，底部出现回放控制条。
+        responsibility: 单个项目某个版本的工作台：按项目 + 版本创建并注入一份 DeskState，布置左侧导航树、中间画布区、设计信息条与右侧属性面板（两侧宽度可拖动、可折叠，记在本地，W-1），处理键盘意图；打开场景后画布区交给分屏容器放入结构图与时序图（默认左右，可切换为上下），底部出现回放控制条。
         codeRefs: [src/components/DeskView.vue]
       - id: present.version
         name: 版本切换与设计信息条
@@ -55,8 +55,15 @@ modules:
       - id: present.player
         name: 回放控制条
         kind: subsystem
-        responsibility: 回放控制（D-3）：上一步 / 下一步（按本层可见消息，规则 R7）、播放 / 暂停、速度、进度条拖动到已走路径上任意位置；显示「第 i / N 步」（分支点之后未定时为「≥ N」）与当前消息摘要；到达 alt 分支点时展开全部选项（条件 + 首条消息）供选择，选定后继续；键盘 ← → 空格，数字键选分支。只有播放控制能恢复播放（V4）。
+        responsibility: 回放控制（D-3）：回放只由用户驱动，不提供自动播放（R1）。上一步 / 下一步（按本层可见消息，规则 R7；在第一步后退回到开头）、进度条拖动到已走路径上任意位置（拖到 0 即回到开头）；显示「第 i / N 步」（停在开头为 0，分支点之后未定时为「≥ N」）；到达 alt 分支点时展开全部选项（条件 + 首条消息）供选择，未选时「下一步」不可用；键盘 ← → 单步，数字键选分支。
         codeRefs: [src/components/PlayerBar.vue, src/components/BranchChooser.vue]
+      - id: present.nav-tree
+        name: 导航树
+        kind: subsystem
+        responsibility: 工作台左侧的全局目录（W-7、T1）：「模块」页签列出模块树，「步骤」页签（只在运行视角出现）列出步骤树；进入运行视角切到步骤页签，退出切回模块页签。层次、选中、参与模块、当前步骤在树上同步展开与高亮；单击 / 双击 / 悬停复用画布与时序图的同一套操作，不新增会话规则。
+        principle: 页签、展开 / 折叠状态只属于这块界面，不进视图状态与 URL；树上显示的「谁参与了场景」「步骤怎样嵌套」由模型层回答（scenarioModules、outlineScenario），呈现层只画。
+        codeRefs: [src/components/tree/NavTree.vue, src/components/tree/types.ts]
+        docRefs: [docs/adr/0006-workbench-navigation.md]
       - id: present.canvas
         name: 画布
         kind: subsystem
@@ -85,7 +92,7 @@ modules:
     kind: layer
     order: 2
     abstraction: 关于**一次浏览会话**的规则与协调：「现在看哪里、焦点是什么、播到哪一步、怎么摆」。视图状态是一个值，会话规则是纯函数，一个协调者负责持有、派生与和外界同步；关于被描述系统的问题一律问模型层
-    responsibility: 会话规则（视图状态转移，纯函数）决定视角、焦点、几个指针之间的关系、浏览器历史与 URL；DeskState 持有视图状态、派生要画的数据、经同步适配器与路由 / 时钟 / 描述文件 / 布局保持一致；Layout 把层次视图与时序模型排成坐标与走线。
+    responsibility: 会话规则（视图状态转移，纯函数）决定视角、焦点、几个指针之间的关系、浏览器历史与 URL；DeskState 持有视图状态、派生要画的数据、经同步适配器与路由 / 描述文件 / 布局保持一致；Layout 把层次视图与时序模型排成坐标与走线。
     includes: [视图状态与会话规则, URL 编解码, 协调与同步适配器, 布局与缓存]
     excludes: [DOM 渲染, 关于被描述系统的知识（投影、最近祖先、本层下一步等，属于模型层）, 文件读取]
     mayDependOn: [model]
@@ -102,8 +109,8 @@ modules:
         core: true
         responsibility: 会话规则的纯函数：给定视图状态、动作与上下文，算出下一个视图状态及是否进浏览器历史。管视角（V）、焦点与几个指针的关系（选中、播放头、悬停）、开关、浏览器历史与 URL 编解码；凡是关于被描述系统的问题（最近存在 / 可见的祖先、本层的下一步、到达某帧需要的分支选择、谁参与了哪一步）都调用模型层的架构查询，自己不实现。不依赖 Vue、路由、计时器。
         principle: |
-          - **一个事实一个值**：层次、选中、开关、场景、播放头、已选分支、播放状态互相约束，是同一个视图状态（ds.ViewState），不拆成多个有状态模块。
-          - **焦点不变式**：运行视角下「播放中 ⇒ 无选中（跟随）」「有选中（钉住）⇒ 暂停」；任何转移都保持这两条。
+          - **一个事实一个值**：层次、选中、开关、场景、播放头、已选分支互相约束，是同一个视图状态（ds.ViewState），不拆成多个有状态模块。
+          - **一个主语**：运行视角下焦点「跟随 / 钉住」二选一；回放只由用户驱动，状态里没有「播放中」，也就没有选中与播放头争夺面板（ADR-0006）。
           - **规则即知识**：每条规则编号、注明来源与所在模块（见设计说明的「领域规则清单」），单测按清单穷举。
         codeRefs: [src/state/transition/**]
       - id: state.layout

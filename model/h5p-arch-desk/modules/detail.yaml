@@ -9,12 +9,12 @@ modules:
     principle: |
       - **边的显隐**：分层总览中核心跨层边只在聚焦时出现；普通层次中边界边只在聚焦其一端或被选中时出现。
       - **变淡**：有焦点时，与焦点不相邻的节点和边变淡；分层总览里带不参与变淡。
-      - **适应画布**：内容外框直接取自布局结果，不依赖 Vue Flow 对节点尺寸的测量，只等画布容器有尺寸。
+      - **适应画布**：内容外框直接取自布局结果，不依赖 Vue Flow 对节点尺寸的测量，只等画布容器有尺寸；切换层次、画布容器尺寸变化（进入运行视角、切换分屏方向、拖动分隔条、折叠两侧栏）后重新适应。
       - **写 store 而非传属性**：节点与边通过 setNodes / setEdges 写入；属性同步在「上一层有选中、切回总览」时会被跳过。
       - **舞台**（运行视角）：本层参与场景的节点与走过的边突出，其余变淡但不隐藏，布局不变（V5）。
       - **回放叠加**（运行视角）：按当前可见消息给对应视图边加「当前步骤」态并沿步骤方向流动（可与边的箭头相反，P10）、端点节点加「活动」态；已走过的边保留淡色并标步骤序号；内部活动只高亮节点；
         本层两节点之间没有视图边时，回放期间临时画一条「结构中未建模」虚线，不参与布局，离开这一步即消失（P11）；当前帧在本层不可见时提示「下钻 / 到上一层查看」（R11）。
-      - **点击含义**（运行视角）：单击节点 / 边仍是选中，同时暂停并钉住焦点（V3）；单击边上的步骤序号 = 指向这一步（R13）。
+      - **点击含义**（运行视角）：单击节点 / 边仍是选中，即钉住焦点（V3）；单击边上的步骤序号 = 指向这一步（R13）。
       - **分支预览**：停在 alt 分支点时，各选项首条消息对应的边以虚线预览并标选项序号，与分支选择联动。
       - **外部参与者**：参与者以独立节点类型画在固定位置，内部结构外画系统边界框。
     codeRefs: [src/components/GraphCanvas.vue]
@@ -104,12 +104,12 @@ modules:
   - id: state.desk.projection
     name: 视图派生
     parent: state.desk
-    responsibility: 由视图状态与模型派生一切要画的数据（全部是 computed，调用纯函数）：层次视图；打开场景时的回放计划、回放路径、本层的帧投影与可见消息、时序模型与时序图坐标；设计版本的差异。
+    responsibility: 由视图状态与模型派生一切要画的数据（全部是 computed，调用纯函数）：层次视图；打开场景时的回放计划、回放路径、本层的帧投影与可见消息、时序模型与时序图坐标，以及导航树用的步骤大纲与参与模块；设计版本的差异。
     codeRefs: [src/state/useDeskState.ts]
   - id: state.desk.actions
     name: dispatch 与操作
     parent: state.desk
-    responsibility: 视图状态唯一的写入口 dispatch(action)：调用视图状态转移得到新状态并写入，层次变化时通知画布适应；对外的一组操作（下钻、跳转、返回上级、选中、定位、悬停、打开 / 关闭场景、单步、指向某一步、播放 / 暂停、速度、选分支）都只是构造动作并 dispatch。
+    responsibility: 视图状态唯一的写入口 dispatch(action)：调用视图状态转移得到新状态并写入，层次变化时通知画布适应；对外的一组操作（下钻、跳转、返回上级、选中、定位、悬停、打开 / 关闭场景、单步、指向某一步或回到开头、选分支）都只是构造动作并 dispatch。
     principle: 本身不含领域规则：所有「给定状态与动作，下一个状态是什么」都在视图状态转移里；这里只把派生的上下文（索引、本层帧投影等）交给转移函数。
     codeRefs: [src/state/useDeskState.ts]
   - id: state.desk.url-sync
@@ -120,11 +120,6 @@ modules:
       路由导航是异步的：自己发起的导航完成前，路由变化一律视为回声、不回写状态，避免双击（两次选中 + 一次下钻）时旧地址覆盖新层次；
       离开本项目或本版本的路由时也不回写。
     codeRefs: [src/state/sync/router.ts]
-  - id: state.desk.clock
-    name: 时钟同步
-    parent: state.desk
-    responsibility: 同步适配器之一：视图状态中回放为「播放中」时让计时器运行，按速度到点 dispatch(tick)（每条可见消息一个节拍，1 倍速 1 秒；尚未开始时 200ms 后走出第一步）；暂停、到达分支点、关闭场景或组件销毁时停止。
-    codeRefs: [src/state/sync/clock.ts]
   - id: state.desk.layout-sync
     name: 布局同步
     parent: state.desk
@@ -387,7 +382,7 @@ interfaces:
       dispatch(action: ViewAction): void          // 唯一写入口
       // 以下都是构造动作并 dispatch 的便捷包装
       drillInto(moduleId) · goTo(levelId, select?) · goUp() · select(s) · revealRelation(id) · revealModule(id) · setHover(id)
-      openScenario(id) · closeScenario() · next() · prev() · seek(frameId) · play() · pause() · setSpeed(x) · chooseBranch(pointId, option)
+      openScenario(id) · closeScenario() · next() · prev() · seek(frameId | null) · chooseBranch(pointId, option)   // seek(null) = 回到开头
     semantics: 操作本身不含规则；同一动作在任何状态下的效果由视图状态转移决定。
   - id: if.source.endpoints
     name: 模型端点

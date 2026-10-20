@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * 单个项目的架构视图：画布 + 属性面板。每次进入项目创建一份独立的 DeskState，
+ * 单个项目的架构视图：导航树 + 画布区 + 属性面板（W-1）。每次进入项目创建一份独立的 DeskState，
  * 其 watch 都在本组件作用域内，离开项目时随组件销毁。
  */
-import { onBeforeUnmount, onMounted, provide, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, provide, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { createDeskState, type ModelPayload } from '@/state/useDeskState'
 import { DESK_STATE } from '@/state/inject'
@@ -17,8 +17,9 @@ import PerspectiveSwitch from './PerspectiveSwitch.vue'
 import PlayerBar from './PlayerBar.vue'
 import SequenceView from './sequence/SequenceView.vue'
 import SplitView from './split/SplitView.vue'
-import { readLayout, resize, saveLayout, toggleSlot, type PaneLayout } from './split/paneLayout'
+import { directionOf, readLayout, resize, saveLayout, setDirection, toggleSlot, type PaneLayout } from './split/paneLayout'
 import Panel from './panel/Panel.vue'
+import NavTree from './tree/NavTree.vue'
 
 const props = defineProps<{ project: string; design?: string; revision?: string }>()
 const router = useRouter()
@@ -45,40 +46,54 @@ const unwatchModel = desk.watchChanges(import.meta.hot)
 onBeforeUnmount(unwatchModel)
 void router.isReady().then(() => desk.init())
 
-// 面板宽度可拖动、可折叠
-const panelWidth = ref(readWidth())
-const collapsed = ref(false)
-let dragging = false
-
-function readWidth(): number {
+// 导航树与属性面板：宽度可拖动、可折叠，记在本地（W-1）
+function readNumber(key: string, min: number, max: number, fallback: number): number {
   try {
-    const w = Number(localStorage.getItem('h5p-arch-desk:panel-width'))
-    return w >= 280 && w <= 900 ? w : 420
+    const w = Number(localStorage.getItem(key))
+    return w >= min && w <= max ? w : fallback
   } catch {
-    return 420
+    return fallback
   }
 }
-
-function onDividerDown(e: PointerEvent) {
-  dragging = true
-  ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-}
-function onDividerMove(e: PointerEvent) {
-  if (!dragging) return
-  panelWidth.value = Math.min(900, Math.max(280, window.innerWidth - e.clientX))
-}
-function onDividerUp() {
-  if (!dragging) return
-  dragging = false
+function store(key: string, value: string) {
   try {
-    localStorage.setItem('h5p-arch-desk:panel-width', String(panelWidth.value))
+    localStorage.setItem(key, value)
   } catch {
     /* 存不了就算了 */
   }
 }
 
-// 画布区分屏：上结构图、下时序图（W-4），比例与收起状态按项目记在本地
+const panelWidth = ref(readNumber('h5p-arch-desk:panel-width', 280, 900, 420))
+const collapsed = ref(false)
+const navWidth = ref(readNumber('h5p-arch-desk:nav-width', 180, 520, 260))
+const navCollapsed = ref(readNumber('h5p-arch-desk:nav-collapsed', 0, 1, 0) === 1)
+function toggleNav() {
+  navCollapsed.value = !navCollapsed.value
+  store('h5p-arch-desk:nav-collapsed', navCollapsed.value ? '1' : '0')
+}
+
+let dragging: 'panel' | 'nav' | null = null
+function onDividerDown(which: 'panel' | 'nav', e: PointerEvent) {
+  dragging = which
+  ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+}
+function onDividerMove(e: PointerEvent) {
+  if (dragging === 'panel') panelWidth.value = Math.min(900, Math.max(280, window.innerWidth - e.clientX))
+  else if (dragging === 'nav') navWidth.value = Math.min(520, Math.max(180, e.clientX))
+}
+function onDividerUp() {
+  if (dragging === 'panel') store('h5p-arch-desk:panel-width', String(panelWidth.value))
+  else if (dragging === 'nav') store('h5p-arch-desk:nav-width', String(navWidth.value))
+  dragging = null
+}
+
+// 画布区分屏：结构图与时序图左右或上下排列（W-4），方向、比例与收起状态按项目记在本地
 const paneLayout = ref<PaneLayout>(readLayout(props.project))
+const paneDir = computed(() => directionOf(paneLayout.value))
+function onDirection(dir: 'row' | 'column') {
+  paneLayout.value = setDirection(paneLayout.value, dir)
+  saveLayout(props.project, paneLayout.value)
+}
 function onResize(path: number[], i: number, ratio: number) {
   paneLayout.value = resize(paneLayout.value, path, i, ratio)
   saveLayout(props.project, paneLayout.value)
@@ -89,7 +104,7 @@ function onToggle(slot: 'structure' | 'sequence') {
 }
 
 // 键盘：Esc 先取消选中，再返回上级；Backspace 返回上级，根层回项目列表（N7、N9）；
-// 运行视角：← → 单步，空格播放 / 暂停，数字键选分支
+// 运行视角：← → 单步，数字键选分支
 function onKey(e: KeyboardEvent) {
   const t = e.target as HTMLElement
   if (t.closest('input, textarea, select, [contenteditable="true"]')) return
@@ -97,7 +112,6 @@ function onKey(e: KeyboardEvent) {
     const bp = desk.branchPoint.value
     if (e.key === 'ArrowRight') desk.next()
     else if (e.key === 'ArrowLeft') desk.prev()
-    else if (e.key === ' ') desk.playback.value?.playing ? desk.pause() : desk.play()
     else if (bp && /^[1-9]$/.test(e.key) && Number(e.key) <= bp.options.length) desk.chooseBranch(bp.id, Number(e.key) - 1)
     else if (e.key !== 'Escape' && e.key !== 'Backspace') return
     if (e.key !== 'Escape' && e.key !== 'Backspace') {
@@ -114,8 +128,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div class="desk" :style="{ '--panel-w': collapsed ? '0px' : `${panelWidth}px` }">
+  <div class="desk" :style="{ '--panel-w': collapsed ? '0px' : `${panelWidth}px`, '--nav-w': navCollapsed ? '0px' : `${navWidth}px` }">
     <header class="top">
+      <button class="collapse nav-toggle" :title="navCollapsed ? '展开导航树' : '收起导航树'" @click="toggleNav">
+        {{ navCollapsed ? '导航 ›' : '‹ 导航' }}
+      </button>
       <VersionSwitcher />
       <PerspectiveSwitch v-if="desk.status.value === 'ready'" />
       <Breadcrumb />
@@ -126,6 +143,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     </header>
 
     <DesignBar v-if="version && desk.status.value === 'ready'" class="design-bar" />
+
+    <aside v-show="!navCollapsed" class="nav-area">
+      <NavTree v-if="desk.status.value === 'ready'" />
+    </aside>
+    <div
+      v-show="!navCollapsed"
+      class="divider nav-divider"
+      @pointerdown="onDividerDown('nav', $event)"
+      @pointermove="onDividerMove"
+      @pointerup="onDividerUp"
+    />
 
     <main class="canvas-area">
       <div v-if="desk.status.value === 'loading'" class="state">正在加载架构描述…</div>
@@ -144,7 +172,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             <IssueBanner />
           </template>
           <template #sequence="{ collapsed, toggle }">
-            <SequenceView v-if="desk.perspective.value === 'run'" :collapsed="collapsed" @toggle="toggle" />
+            <SequenceView v-if="desk.perspective.value === 'run'" :collapsed="collapsed" :dir="paneDir" @toggle="toggle" @direction="onDirection" />
           </template>
         </SplitView>
         <PlayerBar v-if="desk.perspective.value === 'run'" class="player-bar" />
@@ -153,8 +181,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
     <div
       v-show="!collapsed"
-      class="divider"
-      @pointerdown="onDividerDown"
+      class="divider panel-divider"
+      @pointerdown="onDividerDown('panel', $event)"
       @pointermove="onDividerMove"
       @pointerup="onDividerUp"
     />
@@ -167,7 +195,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 <style scoped>
 .desk {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto var(--panel-w);
+  grid-template-columns: var(--nav-w) auto minmax(0, 1fr) auto var(--panel-w);
   grid-template-rows: auto auto minmax(0, 1fr);
   height: 100%;
 }
@@ -193,8 +221,30 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   font-size: 12px;
 }
 
+.nav-toggle {
+  margin-left: 0;
+}
+
+.nav-area {
+  grid-row: 3;
+  grid-column: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+}
+
+.nav-divider {
+  grid-column: 2;
+}
+
+.panel-divider {
+  grid-column: 4;
+}
+
 .canvas-area {
   grid-row: 3;
+  grid-column: 3;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -245,6 +295,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .panel-area {
   grid-row: 3;
+  grid-column: 5;
   min-width: 0;
   min-height: 0;
   overflow: auto;

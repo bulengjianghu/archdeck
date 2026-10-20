@@ -21,16 +21,12 @@ export interface Toggles {
   compareTo: 'current' | 'previous'
 }
 
-export type Speed = 0.5 | 1 | 2
-
 export interface PlaybackState {
   scenarioId: string
-  /** 播放头（帧 ID）；null = 尚未开始 */
+  /** 播放头（帧 ID）；null = 停在开头（尚未开始）。只由用户移动，没有自动播放（R1） */
   frameId: string | null
   /** 分支点 ID → 已选选项 */
   choices: ReadonlyMap<string, number>
-  playing: boolean
-  speed: Speed
 }
 
 export interface ViewState {
@@ -62,13 +58,9 @@ export type ViewAction =
   | { type: 'closeScenario' }
   | { type: 'next' }
   | { type: 'prev' }
-  | { type: 'seek'; frameId: string }
-  | { type: 'play' }
-  | { type: 'pause' }
-  | { type: 'speed'; value: Speed }
+  /** 指向某一步；null = 回到开头 */
+  | { type: 'seek'; frameId: string | null }
   | { type: 'chooseBranch'; pointId: string; option: number }
-  /** 时钟到点：与 next 相同，但到分支点或末尾时暂停（F6a） */
-  | { type: 'tick' }
 
 export interface TransitionContext {
   index: ModelIndex

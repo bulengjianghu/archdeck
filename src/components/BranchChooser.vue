@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 分支选择（F6）：停在分支点时展开全部选项（条件 + 首条消息），选一个后路径延长，由用户点播放继续 */
+/** 分支选择（F6）：停在分支点时展开全部选项（条件 + 首条消息），选一个后路径延长，由用户单步继续 */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'

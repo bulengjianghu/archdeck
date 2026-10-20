@@ -81,10 +81,12 @@ describe('导航规则', () => {
     expect(keyIntent(at('infra'), index, 'a')).toBeNull()
   })
 
-  it('N10：下钻、跳转进浏览器历史，选中只替换地址', () => {
+  it('N10：下钻、跳转、定位在层次改变时进浏览器历史；层次不变（含选中）只替换地址', () => {
     expect(run(base, { type: 'drill', id: 'infra' }).history).toBe('push')
     expect(run(base, { type: 'goTo', id: 'app' }).history).toBe('push')
     expect(run(base, { type: 'revealModule', id: 'infra.mus' }).history).toBe('push')
+    expect(run(at('infra'), { type: 'revealModule', id: 'infra.mus' }).history).toBe('replace')
+    expect(run(base, { type: 'goTo', id: 'sys', select: null }).history).toBe('replace')
     expect(run(base, { type: 'select', selection: { kind: 'module', id: 'infra' } }).history).toBe('replace')
     expect(run(base, { type: 'restore', query: { level: 'infra' } }).history).toBe('replace')
   })

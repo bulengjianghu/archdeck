@@ -3,7 +3,7 @@
  *   视角 = playback 为 null ? 结构 : 运行
  *   焦点 = 结构视角：selection ?? 当前父模块
  *          运行视角：selection ≠ null ? 钉住(selection) : 跟随(当前帧)
- *   不变式：playback?.playing ⇒ selection = null
+ * 回放只由用户驱动（R1），没有「播放中」与选中争夺面板。
  */
 import type { Selection, TransitionResult, ViewState } from './types'
 
@@ -22,23 +22,11 @@ export function focusOf(state: ViewState): Focus {
   return state.selection ? { kind: 'pinned', selection: state.selection } : { kind: 'follow', frameId: state.playback.frameId }
 }
 
-/** V3：运行视角下的「指向」先暂停；结构视角原样返回 */
-export function pause(state: ViewState): ViewState {
-  return state.playback?.playing ? { ...state, playback: { ...state.playback, playing: false } } : state
-}
-
 /**
- * V3：把一次导航（选中、下钻、跳转、定位、返回上级）作为「指向」：运行视角下暂停；
- * 下钻在运行视角下钉住被下钻的模块（结构视角按 N2 清空选中）。取消选中（V4）也暂停（本就无播放），回到跟随。
+ * V3：下钻作为「指向」：运行视角下钉住被下钻的模块（结构视角按 N2 清空选中）。
+ * 其余导航（选中、跳转、定位、返回上级）本身就设定了选中，运行视角下即钉住，无需改写。
  */
-export function asPointing(before: ViewState, result: TransitionResult, drilled?: string): TransitionResult {
-  if (!before.playback || result.state === before) return result
-  let state = pause(result.state)
-  if (drilled && state.levelId === drilled) state = { ...state, selection: { kind: 'module', id: drilled } }
-  return { ...result, state }
-}
-
-/** V2：每次转移后断言 */
-export function assertFocusInvariant(state: ViewState): void {
-  if (state.playback?.playing && state.selection !== null) throw new Error('焦点不变式被破坏：播放中仍有选中')
+export function asPointing(before: ViewState, result: TransitionResult, drilled: string): TransitionResult {
+  if (!before.playback || result.state === before || result.state.levelId !== drilled) return result
+  return { ...result, state: { ...result.state, selection: { kind: 'module', id: drilled } } }
 }

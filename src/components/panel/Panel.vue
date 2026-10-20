@@ -38,7 +38,7 @@ const target = computed(() => {
       <template v-else>
         <div v-if="run" class="pinned-bar">
           <span class="badge accent">已钉住</span>
-          <span class="muted">回放已暂停；Esc 或单击空白回到当前步骤，点 ▶ 继续播放</span>
+          <span class="muted">Esc、单击空白或单步回到当前步骤</span>
         </div>
         <RunSection v-if="run" />
         <component :is="run ? 'details' : 'div'" class="structure" :open="run ? false : undefined">

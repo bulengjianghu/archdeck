@@ -1,12 +1,12 @@
 # 运行视角：场景投影、会话规则、时序图与回放相关的子模块、关系、接口与数据结构。
-# 规则编号（V / N / S / A / F / P / R）见 docs/02-domain.md。
+# 规则编号（V / N / S / A / F / P / R / T）见 docs/02-domain.md。
 
 modules:
   # ── 呈现层 ──────────────────────────────────────────────
   - id: present.desk-view.split
     name: 分屏容器
     parent: present.desk-view
-    responsibility: 按布局树排布画布区的视图（结构图、时序图）：目前提供上下两块、比例可拖、下方可收起；比例与收起状态按项目记在本地。
+    responsibility: 按布局树排布画布区的视图（结构图、时序图）：两块，方向可切换（默认左右，W-4），比例可拖，时序图可收起（左右排列时缩成一条竖栏）；方向、比例与收起状态按项目记在本地。
     principle: 布局树是可序列化的值（ds.PaneLayout），视图组件只按「槽位」挂载，不知道自己在哪；以后的自由拖拽分屏只需扩展布局树的编辑操作。
     codeRefs: [src/components/split/**]
 
@@ -23,13 +23,13 @@ modules:
   - id: present.sequence.interact
     name: 时序图交互
     parent: present.sequence
-    responsibility: 单击消息 = 指向这一步（R13）：播放头前进或后退到它并暂停，焦点跟随它；在未选分支上的消息同样可单击，先改选该分支再跳转；当前消息高亮并自动滚动到可见；悬停消息时在结构图上预览对应的边（D-7，悬停不暂停）。
+    responsibility: 单击消息 = 指向这一步（R13）：播放头前进或后退到它，焦点跟随它；在未选分支上的消息同样可单击，先改选该分支再跳转；当前消息高亮并自动滚动到可见；悬停消息时在结构图上预览对应的边（D-7）。标题栏切换分屏方向（左右 ⇆ 上下）。
     codeRefs: [src/components/sequence/SequenceView.vue]
 
   - id: present.panel.scenario
     name: 场景面板
     parent: present.panel
-    responsibility: 场景名称、说明、触发者（第一条消息的发送方）与触发原因、场景所在层次（可跳转）、参与模块、步骤目录（按组合框缩进，点击跳到该步）；ref 引用了哪些场景、被哪些场景引用。
+    responsibility: 焦点跟随且停在开头时显示：场景名称、说明、触发者（第一条消息的发送方）与触发原因、场景所在层次（可跳转）、参与模块；ref 引用了哪些场景、被哪些场景引用。步骤目录在导航树的步骤树里。
     codeRefs: [src/components/panel/ScenarioPanel.vue]
   - id: present.panel.step
     name: 步骤面板
@@ -47,25 +47,36 @@ modules:
     responsibility: 外部参与者的名称、类别（用户 / 外部系统 / 时间）、说明；与系统的入口关系；由它触发的场景（可打开）。
     codeRefs: [src/components/panel/ActorPanel.vue]
 
+  - id: present.nav-tree.modules
+    name: 模块树
+    parent: present.nav-tree
+    responsibility: 系统为根的完整模块层级（T2：层按 order；结构视角下「只看现状」开启时不列目标态模块，运行视角下不受开关影响）。状态 → 树：当前层次的祖先链展开并标出当前层次，选中的模块高亮、展开到它并滚到可见；运行视角下标出参与本场景的模块与当前步骤的两端（T3、T5）。树 → 意图：单击 = revealModule（N4），单击系统 = 回根层，双击有子模块的 = drillInto，悬停本层可见的模块 = setHover（T4）。
+    codeRefs: [src/components/tree/ModuleTree.vue, src/components/tree/ModuleTreeNode.vue]
+  - id: present.nav-tree.steps
+    name: 步骤树
+    parent: present.nav-tree
+    responsibility: 步骤大纲的逐行呈现（T6）：loop、par 分支、ref 为可折叠的分组，alt 列出全部分支与条件，空分支占位。状态 → 树：帧标出已走过 / 当前 / 未走到 / 未选分支 / 未到达，本层可见的帧显示本层可见消息序号（与时序图、控制条一致），不可见的标「本层不可见」，当前帧滚到可见（T7）。树 → 意图：单击帧 = seek（R13），单击分支标题 = chooseBranch（F6b），「开头」= seek(null)，悬停帧在结构图上预览落点（T8）。
+    codeRefs: [src/components/tree/StepTree.vue, src/components/tree/StepTreeNode.vue]
+
   # ── 视图状态层 ──────────────────────────────────────────
   - id: state.transition.focus
     name: 视角与焦点规则
     parent: state.transition
-    responsibility: 视角（结构 / 运行，由是否打开场景决定）与焦点（结构视角 = 选中或当前父模块；运行视角 = 跟随或钉住）的转移；维持焦点不变式：播放中 ⇒ 无选中，有选中 ⇒ 暂停；任何「指向」动作（选中、下钻、搜索跳转、指向步骤）在运行视角下都先暂停；取消选中（Esc、单击空白）回到跟随但保持暂停；只有播放控制能恢复播放（规则 V1–V6）。
+    responsibility: 视角（结构 / 运行，由是否打开场景决定）与焦点（结构视角 = 选中或当前父模块；运行视角 = 跟随或钉住二选一）由视图状态推出（V1、V2）；运行视角下「指向」对象即钉住，下钻钉住被下钻的模块（V3）；取消选中回到跟随（V4）。
     codeRefs: [src/state/transition/focus.ts]
   - id: state.transition.navigation
     name: 导航规则
     parent: state.transition
-    responsibility: 层次与选中的会话规则：下钻、跳转、返回上级、选中、定位关系 / 模块时选中与层次怎么变、Esc 的先后、进不进浏览器历史（规则 N1–N12）；「重新加载后退到哪」「被『只看现状』隐藏时退到哪」等定位问题调用模型层的 nearestExisting / nearestVisibleLevel。
+    responsibility: 层次与选中的会话规则：下钻、跳转、返回上级、选中、定位关系 / 模块时选中与层次怎么变、Esc 的先后、进不进浏览器历史（规则 N1–N13；跳转与定位只在层次改变时进历史，N10）；「重新加载后退到哪」「被『只看现状』隐藏时退到哪」等定位问题调用模型层的 nearestExisting / nearestVisibleLevel。
     codeRefs: [src/state/transition/navigation.ts]
   - id: state.transition.playback
     name: 回放规则
     parent: state.transition
-    responsibility: 回放的会话规则：打开场景（从头打开自动播放，从带步骤的链接进入停在该步）、退出场景、前进 / 后退、指向某一步、到达分支点或末尾暂停、选分支、播放 / 暂停 / 速度（规则 R1–R13、F6a、F6c）。「下一步是哪一帧」「到达某帧需要哪些分支选择」「改选后保留哪些选择」都调用模型层的场景查询。
+    responsibility: 回放的会话规则：回放只由用户驱动（R1）——打开场景停在开头（R12，从带步骤的链接进入停在该步）、退出场景、前进 / 后退（在第一步后退回到开头）、指向某一步或回到开头、选分支（规则 R1、R5、R6、R10、R12、R13、F6、V7）。「下一步是哪一帧」「到达某帧需要哪些分支选择」「改选后保留哪些选择」都调用模型层的场景查询。
     principle: |
-      - 播放头以**帧 ID** 记录，与层次无关；层次变化后仍是同一帧（R6）。
-      - 指向某一步（R13）：播放头移到该步（向前或向后）并暂停；所需的分支选择由模型层 choicesFor 给出；画面等同从头播放到这一步。
-      - 恢复播放：清空选中（焦点回到跟随）；只有播放控制能恢复播放（V4）。取消选中也回到跟随，但不恢复播放。
+      - 播放头以**帧 ID** 记录，与层次无关；层次变化后仍是同一帧（R6）；为空表示停在开头。
+      - 指向某一步（R13）：播放头移到该步（向前或向后）；所需的分支选择由模型层 choicesFor 给出；画面等同从头单步到这一步。
+      - 移动播放头（单步、指向、拖动进度）回到跟随（V7）；停在未选分支的分支点时「下一步」无效，先选分支。
     codeRefs: [src/state/transition/playback.ts]
   - id: state.transition.url
     name: URL 编解码
@@ -111,8 +122,14 @@ modules:
   - id: model.scenario.participation
     name: 参与查询
     parent: model.scenario
-    responsibility: 回答「某个模块 / 关系 / 视图边 / 参与者在本场景中做了什么」：按路径顺序列出它参与的帧（模块含其子树、视图边含其聚合的关系、关系含推断绑定），在本层投影下收发的消息，用到的接口与数据结构。
+    responsibility: 回答「某个模块 / 关系 / 视图边 / 参与者在本场景中做了什么」：按路径顺序列出它参与的帧（模块含其子树、视图边含其聚合的关系、关系含推断绑定），在本层投影下收发的消息，用到的接口与数据结构。另回答「哪些模块参与了这个场景」（scenarioModules：全部帧的模块端点及其祖先，T5）。
     codeRefs: [src/model/scenario/participation.ts]
+  - id: model.scenario.outline
+    name: 步骤大纲
+    parent: model.scenario
+    responsibility: 把回放计划按组合结构还原成一棵树（T6）：连续带同一个 loop / ref 实例、同一个 par 分支的帧归入同一分组，分支点成为 alt 节点并下挂全部选项（条件、序号、状态，空选项无子节点）；状态与时序图全貌一致（路径上 path、未选 unchosen、截止之后 unreached）。与层次、播放头无关。
+    principle: 「已走过 / 当前 / 本层序号」依赖播放头与层次，不在大纲里，由导航树用本层帧投影现算。
+    codeRefs: [src/model/scenario/outline.ts]
   - id: model.scenario.sequence
     name: 时序模型
     parent: model.scenario
@@ -121,8 +138,10 @@ modules:
 
 relations:
   # 呈现层内部
-  - {id: rel.p2.split-canvas, from: present.desk-view.split, to: present.canvas.flow, type: depends, description: 上方槽位}
-  - {id: rel.p2.split-sequence, from: present.desk-view.split, to: present.sequence.interact, type: depends, description: 下方槽位，打开场景时出现}
+  - {id: rel.p2.split-canvas, from: present.desk-view.split, to: present.canvas.flow, type: depends, description: 结构图槽位（左 / 上）}
+  - {id: rel.p2.split-sequence, from: present.desk-view.split, to: present.sequence.interact, type: depends, description: 时序图槽位（右 / 下），打开场景时出现；时序图标题栏切换方向}
+  - {id: rel.p6.desk-nav-tree, from: present.desk-view, to: present.nav-tree, type: depends, description: 左侧固定栏，可折叠}
+  - {id: rel.p6.nav-perspective, from: present.nav-tree, to: state.desk.projection, type: depends, payload: [ds.ViewState], description: 视角变化时切换页签（T1）}
   - {id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: depends}
   - {id: rel.p3.desk-perspective, from: present.desk-view, to: present.perspective, type: depends}
   - {id: rel.p3.perspective-scenarios, from: present.perspective, to: present.scenarios, type: depends, description: 「运行」入口弹出场景列表}
@@ -146,7 +165,11 @@ relations:
   - {id: rel.p2.list-read, from: present.scenarios, to: state.desk.projection, type: depends, payload: [ds.ModelIndex], description: 按 scenariosOf(当前层次) 与 triggeredBy 筛选}
   - {id: rel.p2.list-open, from: present.scenarios, to: state.desk.actions, type: calls, interface: if.desk.actions, description: openScenario(id)}
   - {id: rel.p2.player-read, from: present.player, to: state.desk.projection, type: depends, payload: [ds.ViewState, ds.ScenarioLevelView], description: 当前位置、本层可见消息数、是否停在分支点及其选项}
-  - {id: rel.p2.player-act, from: present.player, to: state.desk.actions, type: calls, interface: if.desk.actions, description: prev / next / play / pause / seek / setSpeed / chooseBranch}
+  - {id: rel.p2.player-act, from: present.player, to: state.desk.actions, type: calls, interface: if.desk.actions, description: prev / next / seek（拖动进度，0 = 回到开头）/ chooseBranch}
+  - {id: rel.p6.modules-read, from: present.nav-tree.modules, to: state.desk.projection, type: depends, payload: [ds.ModelIndex, ds.ViewState, ds.Frame], description: 模块层级、当前层次与选中、参与模块、当前步骤的两端}
+  - {id: rel.p6.modules-act, from: present.nav-tree.modules, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击 → revealModule / goTo(根)；双击 → drillInto；悬停 → setHover}
+  - {id: rel.p6.steps-read, from: present.nav-tree.steps, to: state.desk.projection, type: depends, payload: [ds.OutlineNode, ds.ScenarioLevelView, ds.ViewState], description: 步骤大纲、本层可见消息序号、播放头}
+  - {id: rel.p6.steps-act, from: present.nav-tree.steps, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击帧 → seek（R13）；单击分支标题 → chooseBranch；「开头」→ seek(null)；悬停 → setHover}
   - {id: rel.p2.seq-read, from: present.sequence.interact, to: state.desk.projection, type: depends, payload: [ds.PositionedSequence, ds.ViewState], description: 读取定位好的时序图与当前位置}
   - {id: rel.p2.seq-act, from: present.sequence.interact, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击消息（含未选分支上的）→ seek（R13）；悬停 → setHover}
   - id: rel.p2.flow-playback
@@ -155,10 +178,10 @@ relations:
     type: depends
     payload: [ds.ScenarioLevelView, ds.ViewState]
     description: 当前消息落在哪条视图边 / 哪个节点、已走过哪些、分支点各选项的预览边
-  - {id: rel.p2.flow-step, from: present.canvas.flow, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击步骤序号 → seek（R13）；单击分支预览序号 → chooseBranch；单击节点 / 边仍是 select（运行视角下同时暂停）}
+  - {id: rel.p2.flow-step, from: present.canvas.flow, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击步骤序号 → seek（R13）；单击分支预览序号 → chooseBranch；单击节点 / 边仍是 select（运行视角下即钉住）}
   - {id: rel.p2.step-read, from: present.panel.step, to: state.desk.projection, type: depends, payload: [ds.Frame, ds.ScenarioLevelView]}
   - {id: rel.p2.step-act, from: present.panel.step, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 端点点击 → revealModule；关系点击 → revealRelation}
-  - {id: rel.p2.scenario-act, from: present.panel.scenario, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 步骤目录 → seek；ref → openScenario；「跳到场景所在层次」→ goTo}
+  - {id: rel.p2.scenario-act, from: present.panel.scenario, to: state.desk.actions, type: calls, interface: if.desk.actions, description: ref → openScenario；「跳到场景所在层次」→ goTo；参与模块 → revealModule}
   - {id: rel.p2.actor-act, from: present.panel.actor, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 打开由它触发的场景}
 
   # 视图状态内部
@@ -170,8 +193,6 @@ relations:
     payload: [ds.ViewState, ds.ViewAction]
     description: 唯一写入口：dispatch → transition → 写入新状态
   - {id: rel.p2.router-codec, from: state.desk.url-sync, to: state.transition.url, type: calls, interface: if.state.urlCodec, description: 状态 ↔ 查询参数}
-  - {id: rel.p2.clock-actions, from: state.desk.clock, to: state.desk.actions, type: calls, mode: async, interface: if.desk.actions, description: 到点 dispatch(tick)}
-  - {id: rel.p2.clock-read, from: state.desk.clock, to: state.desk.actions, type: depends, payload: [ds.ViewState], description: 观察 playing 与 speed}
   - {id: rel.p2.layoutsync-runner, from: state.desk.layout-sync, to: state.layout.runner, type: calls, mode: async, interface: if.layout.layoutView, payload: [ds.LevelView, ds.PositionedView]}
   - {id: rel.p2.layoutsync-read, from: state.desk.layout-sync, to: state.desk.projection, type: depends, payload: [ds.LevelView], description: 层次视图变化触发布局，结果回填}
   - id: rel.p2.projection-plan
@@ -208,7 +229,8 @@ relations:
   - {id: rel.p2.nav-projector, from: state.transition.navigation, to: model.projector, type: calls, interface: if.model.projectLevel, description: nearestVisibleLevel（N12）}
   - {id: rel.p3.nav-existing, from: state.transition.navigation, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: nearestExisting（N5、N11）}
   - {id: rel.p3.focus-types, from: state.transition.focus, to: model.types, type: depends, payload: [ds.ViewState]}
-  - {id: rel.p3.projection-participation, from: state.desk.projection, to: model.scenario.participation, type: calls, interface: if.model.participation, payload: [ds.Participation], description: 运行视角下钉住对象时派生其运行信息}
+  - {id: rel.p3.projection-participation, from: state.desk.projection, to: model.scenario.participation, type: calls, interface: if.model.participation, payload: [ds.Participation], description: 运行视角下钉住对象时派生其运行信息；打开场景时派生参与模块（scenarioModules，T5）}
+  - {id: rel.p6.projection-outline, from: state.desk.projection, to: model.scenario.outline, type: calls, interface: if.model.outlineScenario, payload: [ds.OutlineNode], description: 打开场景或已选分支变化时派生步骤大纲（T6）}
   - {id: rel.p2.transition-types, from: state.transition, to: model.types, type: depends, payload: [ds.ViewState, ds.ViewAction]}
 
   # 模型层内部
@@ -220,8 +242,10 @@ relations:
   - {id: rel.p3.validator-bind, from: model.pipeline.validator, to: model.scenario.flatten, type: calls, description: S5a / S13 与回放共用 bindRelation}
   - {id: rel.p3.participation-level, from: model.scenario.participation, to: model.scenario.level, type: depends, payload: [ds.ScenarioLevelView], description: 本层投影下收发的消息}
   - {id: rel.p3.participation-path, from: model.scenario.participation, to: model.scenario.path, type: depends, payload: [ds.Frame]}
+  - {id: rel.p6.outline-plan, from: model.scenario.outline, to: model.scenario.flatten, type: depends, payload: [ds.ScenarioPlan], description: 按计划节点与帧的组合框标签还原嵌套}
+  - {id: rel.p6.outline-level, from: model.scenario.outline, to: model.scenario.level, type: depends, description: 帧状态（path / unchosen / unreached）与时序图全貌同义}
   - {id: rel.p2.level-lca, from: model.scenario.level, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: 场景所在层次 = 帧端点的最近公共祖先}
-  - {id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: depends, payload: [ds.ScenarioEntity, ds.ScenarioPlan, ds.Frame, ds.ScenarioLevelView, ds.SequenceModel]}
+  - {id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: depends, payload: [ds.ScenarioEntity, ds.ScenarioPlan, ds.Frame, ds.ScenarioLevelView, ds.SequenceModel, ds.OutlineNode]}
 
 interfaces:
   - id: if.state.transition
@@ -232,7 +256,7 @@ interfaces:
       // TransitionContext: { index: ModelIndex; plan?: ScenarioPlan; levelView?: LevelView; scenarioView?: ScenarioLevelView }
       perspectiveOf(state): 'structure' | 'run'
       focusOf(state): { kind: 'selection' | 'pinned'; selection } | { kind: 'level'; levelId } | { kind: 'follow'; frameId }
-    semantics: 纯函数；非法动作返回原状态（不抛错）；同样输入同样输出；任何输出都满足焦点不变式（V2）。规则清单中每条至少一个单测。
+    semantics: 纯函数；非法动作返回原状态（不抛错）；同样输入同样输出。规则清单中每条至少一个单测。
   - id: if.state.urlCodec
     name: URL 编解码
     owner: state.transition.url
@@ -276,6 +300,13 @@ interfaces:
     signature: |
       participation(index: ModelIndex, frames: Frame[], view: ScenarioLevelView,
                     target: { kind: 'module' | 'relation' | 'edge' | 'actor'; id: string }, playhead?: string | null): Participation
+      scenarioModules(index: ModelIndex, plan: ScenarioPlan): Set<string>   // T5：全部帧的模块端点及其祖先（不含根）
+  - id: if.model.outlineScenario
+    name: outlineScenario
+    owner: model.scenario.outline
+    signature: |
+      outlineScenario(plan: ScenarioPlan, choices: ReadonlyMap<string, number>): OutlineNode[]
+    semantics: 纯函数；计划中每帧在大纲里恰好出现一次；状态与 linearize 的全貌模式一致。
   - id: if.model.mapEndpoint
     name: mapEndpoint
     owner: model.projector.endpoints
@@ -448,19 +479,17 @@ dataStructures:
         toggles: Toggles                  // 边界节点、只看现状、关系类型、标出变更、对比基线
         playback: PlaybackState | null    // null = 结构视角；非 null = 运行视角（V1）
       }
-      // 焦点不变式（V2）：playback?.playing ⇒ selection === null；运行视角下 selection ≠ null 即「钉住」
+      // 运行视角下 selection ≠ null 即「钉住」，否则「跟随」播放头（V2）
     description: 视图状态：用户此刻在看什么，一个值（C+）。由 DeskState 持有，只经 transition 改变；视角与焦点由它推出，不另存字段。
   - id: ds.PlaybackState
     name: PlaybackState
     definition: |
       interface PlaybackState {
         scenarioId: string
-        frameId: string | null            // 播放头（帧 ID），null = 尚未开始
+        frameId: string | null            // 播放头（帧 ID），null = 停在开头
         choices: Map<string, number>      // 分支点 ID → 已选选项
-        playing: boolean
-        speed: 0.5 | 1 | 2
       }
-    description: 视图状态中的回放部分；scenarioId、frameId、choices 写进 URL（sc / step / alt）。
+    description: 视图状态中的回放部分，全部写进 URL（sc / step / alt）。回放只由用户驱动，没有播放状态与速度（R1）。
   - id: ds.ViewAction
     name: ViewAction
     definition: |
@@ -470,8 +499,7 @@ dataStructures:
         | { type: 'select'; selection } | { type: 'revealRelation'; id } | { type: 'revealModule'; id }
         | { type: 'hover'; id } | { type: 'toggle'; patch: Partial<Toggles> }
         | { type: 'openScenario'; id } | { type: 'closeScenario' }
-        | { type: 'next' } | { type: 'prev' } | { type: 'tick' } | { type: 'seek'; frameId }
-        | { type: 'play' } | { type: 'pause' } | { type: 'speed'; value }
+        | { type: 'next' } | { type: 'prev' } | { type: 'seek'; frameId: string | null }   // null = 回到开头
         | { type: 'chooseBranch'; pointId; option }
     description: 用户意图与外界变化统一成动作，经 dispatch 交给 transition。
   - id: ds.Participation
@@ -490,4 +518,13 @@ dataStructures:
       type PaneLayout =
         | { kind: 'pane'; slot: 'structure' | 'sequence'; collapsed?: boolean }
         | { kind: 'split'; dir: 'row' | 'column'; sizes: number[]; children: PaneLayout[] }
-    description: 分屏布局树；目前固定为 column 两块，后续自由拖拽只扩展其编辑操作。
+    description: 分屏布局树；两块，根分割方向可切换（row 左右 / column 上下，默认 row），后续自由拖拽只扩展其编辑操作。
+  - id: ds.OutlineNode
+    name: OutlineNode
+    definition: |
+      type OutlineNode =
+        | { kind: 'frame'; frame: Frame; status: 'path' | 'unchosen' | 'unreached' }
+        | { kind: 'group'; tag: FragmentTag; children: OutlineNode[] }     // loop · par 的一个分支 · ref
+        | { kind: 'alt'; pointId: string
+            options: { option: number; when: string; status: 'path' | 'unchosen' | 'unreached'; children: OutlineNode[] }[] }
+    description: 步骤大纲：回放计划按组合结构还原的树，导航树的步骤树逐行画出（T6）。

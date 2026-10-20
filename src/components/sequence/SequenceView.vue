@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * 时序图（D-2、D-7、R3、R5、R11）：只画定位好坐标的时序模型。
- * 单击消息（含未选分支上的）→ 指向该步（R13）；当前消息高亮并滚动到可见；悬停消息时在结构图上预览对应的边（不暂停）。
+ * 单击消息（含未选分支上的）→ 指向该步（R13）；当前消息高亮并滚动到可见；悬停消息时在结构图上预览对应的边。
+ * 标题栏可切换分屏方向（W-4）；左右排列时收起即缩成一条竖栏。
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -9,8 +10,9 @@ import { moduleName, type SequenceMessage } from '@/model'
 import SequenceLanes from './SequenceLanes.vue'
 import SequenceFragments from './SequenceFragments.vue'
 
-defineProps<{ collapsed: boolean }>()
-const emit = defineEmits<{ toggle: [] }>()
+const props = defineProps<{ collapsed: boolean; dir: 'row' | 'column' }>()
+const emit = defineEmits<{ toggle: []; direction: [dir: 'row' | 'column'] }>()
+const strip = computed(() => props.collapsed && props.dir === 'row')
 const desk = useDesk()
 const scroller = ref<HTMLElement>()
 
@@ -38,7 +40,7 @@ watch(
     const i = p.model.messages.findIndex(m => m.pathIndex === ci)
     if (i < 0) return
     const y = p.messages[i].y
-    // 不用平滑滚动：播放中每一拍都会重新触发，平滑滚动会被下一次渲染打断
+    // 不用平滑滚动：连续单步时平滑滚动会被下一次渲染打断
     if (y < el.scrollTop + 40 || y > el.scrollTop + el.clientHeight - 40) el.scrollTop = Math.max(0, y - el.clientHeight / 2)
   },
   { immediate: true },
@@ -46,11 +48,18 @@ watch(
 </script>
 
 <template>
-  <section class="sequence" :class="{ collapsed }">
+  <section v-if="strip" class="sequence strip" title="展开时序图" @click="emit('toggle')">
+    <button class="fold">◂</button>
+    <strong>时序图</strong>
+  </section>
+  <section v-else class="sequence" :class="[{ collapsed }, dir]">
     <header class="bar">
-      <button class="fold" :title="collapsed ? '展开时序图' : '收起时序图'" @click="emit('toggle')">{{ collapsed ? '▸' : '▾' }}</button>
+      <button class="fold" :title="collapsed ? '展开时序图' : '收起时序图'" @click="emit('toggle')">{{ collapsed ? '▸' : dir === 'row' ? '▸' : '▾' }}</button>
       <strong>时序图</strong>
       <span class="muted">· {{ levelName }}</span>
+      <button class="dir" :title="dir === 'row' ? '改为上下排列' : '改为左右排列'" @click="emit('direction', dir === 'row' ? 'column' : 'row')">
+        {{ dir === 'row' ? '⇅ 上下' : '⇆ 左右' }}
+      </button>
       <span v-if="!collapsed && hiddenCurrent" class="hint warn">
         当前步骤在本层不可见：
         <button class="link" @click="desk.goTo(desk.frameLevel.value!)">到能看到它的层次</button>
@@ -88,10 +97,40 @@ watch(
   border-top: 1px solid var(--border);
 }
 
+.sequence.row {
+  border-top: none;
+  border-left: 1px solid var(--border);
+}
+
+.strip {
+  width: 30px;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: none;
+  border-left: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 12.5px;
+}
+
+.strip strong {
+  writing-mode: vertical-rl;
+  letter-spacing: 2px;
+}
+
+.dir {
+  margin-left: auto;
+  flex: none;
+  font-size: 11.5px;
+  padding: 1px 6px;
+}
+
 .bar {
   display: flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
   padding: 4px 10px;
   font-size: 12.5px;
   border-bottom: 1px solid var(--border);
