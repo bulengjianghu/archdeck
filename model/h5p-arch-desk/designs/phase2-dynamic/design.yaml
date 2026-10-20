@@ -1,7 +1,7 @@
 design:
   id: phase2-dynamic
   name: 二期 · 动态视角
-  status: accepted
+  status: implemented
   goal: |
     在一期「看见结构」之上叠加「看见运行」（需求 §5）：一条有名字的执行链路（场景）由有序步骤组成，
     以**时序图**和**结构图上的回放**两种方式呈现，并且与一期的层次规则一致——高层看粗步骤，下钻看细步骤。
