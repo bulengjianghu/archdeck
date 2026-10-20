@@ -1,12 +1,15 @@
 <script setup lang="ts">
 /**
  * GraphCanvas：把 PositionedView 画成节点和边；处理平移、缩放、单击、双击、悬停。
+ * 运行视角下作为舞台（V5）：本层参与的节点与走过的边突出、其余变淡，当前消息沿步骤方向流动（P10），
+ * 未建模的消息画临时虚线（P11），步骤序号可单击指向（R13），停在分支点时预览各选项（F6）。
  * 只读 DeskState、只发操作意图，不做任何投影或布局计算。
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { MarkerType, VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import { useDesk } from '@/state/inject'
 import { contentBounds, edgeLabel, isBoundaryEdge, moreChipId, type Box } from '@/layout/layout'
+import { unmodeledId } from '@/layout/stage'
 import { FIELD_LABELS, moduleName, type ViewEdge } from '@/model'
 import ModuleNode from './nodes/ModuleNode.vue'
 import BoundaryNode from './nodes/BoundaryNode.vue'
@@ -15,6 +18,8 @@ import CoreNode from './nodes/CoreNode.vue'
 import MoreNode from './nodes/MoreNode.vue'
 import ActorNode from './nodes/ActorNode.vue'
 import FrameNode from './nodes/FrameNode.vue'
+import StepBadge from './nodes/StepBadge.vue'
+import BranchPreview from './nodes/BranchPreview.vue'
 import RouteEdge, { type RouteEdgeData } from './edges/RouteEdge.vue'
 import Legend from './Legend.vue'
 import type { NodeData } from './nodes/types'
@@ -22,8 +27,21 @@ import type { NodeData } from './nodes/types'
 const desk = useDesk()
 const { setViewport, zoomIn, zoomOut, dimensions, setNodes, setEdges } = useVueFlow('arch-desk')
 
+/** 运行视角的舞台叠加；结构视角为 null */
+const stage = computed(() => (desk.perspective.value === 'run' ? desk.overlay.value : null))
+
+/** 悬停时序图中的一条消息时，它在本层的落点（预览，不暂停） */
+const hoverLanding = computed(() => {
+  const h = desk.hoverId.value
+  const sv = desk.scenarioView.value
+  if (!h?.startsWith('step:') || !sv) return null
+  const m = sv.messageOf.get(h.slice('step:'.length))
+  return m === undefined ? null : sv.messages[m].at
+})
+
 /** 焦点：悬停优先，其次是选中的模块 */
 const focusId = computed(() => {
+  if (desk.hoverId.value?.startsWith('step:')) return null
   if (desk.hoverId.value) return desk.hoverId.value
   const s = desk.selection.value
   if (s?.kind === 'actor') return s.id
@@ -45,12 +63,21 @@ const selectedEdgeIds = computed(() => {
   return new Set<string>()
 })
 
-/** 分层总览中显示的核心跨层边：与焦点相连的，或被选中的 */
+/** 回放走过的、当前的、预览的边（视图边 ID） */
+const playEdges = computed(() => {
+  const st = stage.value
+  const ids = new Set<string>(st?.walked.keys() ?? [])
+  for (const p of st?.previews ?? []) if (p.at?.kind === 'edge') ids.add(p.at.edgeId)
+  if (hoverLanding.value?.kind === 'edge') ids.add(hoverLanding.value.edgeId)
+  return ids
+})
+
+/** 分层总览中显示的核心跨层边：与焦点相连的、被选中的，或回放落在其上的（P7） */
 const visibleCoreEdges = computed<ViewEdge[]>(() => {
   const pv = desk.positioned.value
   if (!pv?.view.coreEdges) return []
   const f = focusId.value
-  return pv.view.coreEdges.filter(e => (f && (e.from === f || e.to === f)) || selectedEdgeIds.value.has(e.id))
+  return pv.view.coreEdges.filter(e => (f && (e.from === f || e.to === f)) || selectedEdgeIds.value.has(e.id) || playEdges.value.has(e.id))
 })
 
 /** 与焦点相邻的节点 ID；无焦点时为 null（不变淡） */
@@ -90,16 +117,31 @@ function edgeChange(e: ViewEdge): 'added' | 'changed' | undefined {
   return kinds.includes('added') ? 'added' : kinds.includes('changed') ? 'changed' : undefined
 }
 
+/** 运行视角下节点的回放态：当前消息的端点或内部活动、悬停预览 */
+function playClass(id: string): string | undefined {
+  const st = stage.value
+  if (!st) return undefined
+  const cur = st.current?.at
+  const hov = hoverLanding.value
+  const touches = (at: typeof cur | null) => !!at && (at.kind === 'internal' ? at.node === id : at.from === id || at.to === id)
+  if (touches(cur)) return cur!.kind === 'internal' ? 'play-current play-internal' : 'play-current'
+  if (touches(hov)) return 'play-hover'
+  return undefined
+}
+
 const nodes = computed<Node<NodeData>[]>(() => {
   const pv = desk.positioned.value
   const idx = desk.index.value
   if (!pv || !idx) return []
   const sel = desk.selection.value
   const near = neighborhood.value
+  const st = stage.value
   const layered = pv.view.mode === 'layered'
   const out: Node<NodeData>[] = []
+  // 运行视角：本层参与的节点突出，其余变淡（V5）；结构视角：与焦点无关的变淡
+  const dimmed = (id: string, base: boolean) => (st ? !st.active.has(id) : base)
   const place = (id: string, box: Box, type: string, data: NodeData, zIndex: number) =>
-    out.push({ id, type, position: { x: box.x, y: box.y }, data, zIndex, width: box.w, height: box.h, style: { width: `${box.w}px`, height: `${box.h}px` }, selectable: false, draggable: false, connectable: false })
+    out.push({ id, type, position: { x: box.x, y: box.y }, data, zIndex, width: box.w, height: box.h, style: { width: `${box.w}px`, height: `${box.h}px` }, selectable: false, draggable: false, connectable: false, class: playClass(id) })
 
   if (pv.frame) {
     place('frame', pv.frame, 'frame', { moduleId: pv.view.parentId, name: moduleName(idx, pv.view.parentId), childCount: 0, selected: false, dim: false }, -1)
@@ -110,7 +152,7 @@ const nodes = computed<Node<NodeData>[]>(() => {
     if (n.role === 'actor') {
       const a = idx.actors.get(n.moduleId)
       const data = { moduleId: n.moduleId, name: a?.name ?? n.moduleId, actor: a, actorKind: n.actorKind, childCount: 0 }
-      place(n.id, box, 'actor', { ...data, selected: sel?.kind === 'actor' && sel.id === n.moduleId, dim: !!near && !near.has(n.id) }, 2)
+      place(n.id, box, 'actor', { ...data, selected: sel?.kind === 'actor' && sel.id === n.moduleId, dim: dimmed(n.id, !!near && !near.has(n.id)) }, 2)
       continue
     }
     const m = idx.modules.get(n.moduleId)
@@ -121,7 +163,7 @@ const nodes = computed<Node<NodeData>[]>(() => {
       childCount: idx.childrenOf.get(n.moduleId)?.length ?? 0,
       selected: sel?.kind === 'module' && sel.id === n.moduleId,
       // 分层总览中带不参与变淡，只有核心模块会
-      dim: !!near && !near.has(n.id) && !(layered && n.role === 'layer'),
+      dim: dimmed(n.id, !!near && !near.has(n.id) && !(layered && n.role === 'layer')),
       ...diffOf(n.moduleId),
     }
     if (n.role === 'boundary') {
@@ -131,48 +173,93 @@ const nodes = computed<Node<NodeData>[]>(() => {
       const band = pv.view.bands?.find(b => b.layerId === n.id)
       place(n.id, box, 'band', { ...base, band: { abstraction: m?.abstraction, mayDependOn: (m?.mayDependOn ?? []).map(id => idx.modules.get(id)?.name ?? id), hiddenCount: band?.hiddenCount ?? 0 } }, 0)
       const more = pv.nodes.get(moreChipId(n.id))
-      if (more && band) place(moreChipId(n.id), more, 'more', { ...base, selected: false, dim: !!near, hiddenCount: band.hiddenCount }, 2)
+      if (more && band) place(moreChipId(n.id), more, 'more', { ...base, selected: false, dim: !!st || !!near, hiddenCount: band.hiddenCount }, 2)
     } else {
       place(n.id, box, n.role === 'core' ? 'core' : 'module', base, 2)
     }
   }
+
+  // 步骤序号（可单击指向该步）与分支预览序号（可单击选这一支）
+  const sv = desk.scenarioView.value
+  if (st && sv) {
+    const current = st.current?.index
+    for (const mark of st.walked.values()) {
+      if (!mark.at) continue
+      const steps = mark.steps.map(n => ({ n, frameId: sv.messages[n - 1].frameIds[0], current: n - 1 === current }))
+      place(`step:${mark.edgeId}`, { ...mark.at, w: 1, h: 1 }, 'step', { moduleId: '', name: '', childCount: 0, selected: false, dim: false, steps }, 6)
+    }
+    const point = desk.branchPoint.value
+    for (const p of st.previews) {
+      if (!p.pos || !point) continue
+      place(`preview:${p.option}`, { ...p.pos, w: 1, h: 1 }, 'preview', { moduleId: '', name: '', childCount: 0, selected: false, dim: false, preview: { pointId: point.id, option: p.option, label: p.label } }, 7)
+    }
+  }
   return out
 })
+
+/** 回放态：当前（带方向）、走过、预览、悬停 */
+function playOf(id: string): Pick<RouteEdgeData, 'play' | 'flowReverse'> {
+  const st = stage.value
+  if (!st) return {}
+  const cur = st.current?.at
+  const curId = cur?.kind === 'edge' ? cur.edgeId : cur?.kind === 'unmodeled' ? unmodeledId(cur.from, cur.to) : null
+  if (curId === id) return { play: 'current', flowReverse: cur!.kind === 'edge' ? cur!.reverse : false }
+  const hov = hoverLanding.value
+  if (hov && (hov.kind === 'edge' ? hov.edgeId : hov.kind === 'unmodeled' ? unmodeledId(hov.from, hov.to) : null) === id) return { play: 'hover' }
+  if (st.previews.some(p => p.at?.kind === 'edge' && p.at.edgeId === id)) return { play: 'preview' }
+  if (st.walked.has(id)) return { play: 'walked' }
+  return {}
+}
+
+/** 临时边（未建模、预览）用的视图边外形 */
+const tempEdge = (id: string, from: string, to: string): ViewEdge => ({ id, kind: 'direct', from, to, type: 'calls', types: [], relationIds: [], mode: 'sync' })
 
 const edges = computed<Edge<RouteEdgeData>[]>(() => {
   const pv = desk.positioned.value
   if (!pv) return []
   const near = neighborhood.value
   const f = focusId.value
+  const st = stage.value
   const layered = pv.view.mode === 'layered'
-  const make = (e: ViewEdge, route: RouteEdgeData['route'] | undefined, core: boolean): Edge<RouteEdgeData> | null => {
+  const make = (e: ViewEdge, route: RouteEdgeData['route'] | undefined, core: boolean, extra: Partial<RouteEdgeData> = {}): Edge<RouteEdgeData> | null => {
     if (!route) return null
     const selected = selectedEdgeIds.value.has(e.id)
     const touchesFocus = !!f && (e.from === f || e.to === f)
+    const play = playOf(e.id)
     return {
       id: core ? `core:${e.id}` : e.id,
       source: e.from,
       target: e.to,
       type: 'route',
-      zIndex: core ? 3 : 1,
+      zIndex: play.play === 'current' ? 5 : core ? 3 : 1,
       markerEnd: { type: e.type === 'implements' ? MarkerType.Arrow : MarkerType.ArrowClosed, color: `var(--rel-${e.type})`, width: 14, height: 14 },
       data: {
         route,
         edge: e,
-        label: edgeLabel(e),
+        // 运行视角下走过的边由步骤序号标注，不再标类型
+        label: st && play.play ? '' : edgeLabel(e),
         selected,
         core,
         change: edgeChange(e),
-        // 分层总览：层间边在聚焦核心模块时变淡；普通层次：与焦点无关的边变淡
-        dim: layered ? !!near && !core && !selected : !!near && !touchesFocus && !selected,
+        // 运行视角：只有走过 / 当前 / 预览的边不淡（V5）；分层总览：层间边在聚焦核心模块时变淡；普通层次：与焦点无关的边变淡
+        dim: st ? !play.play && !selected : layered ? !!near && !core && !selected : !!near && !touchesFocus && !selected,
+        ...play,
+        ...extra,
       },
     }
   }
-  // 边界边默认隐藏：只在聚焦（悬停 / 选中）其任一端或被选中时出现，避免外部关系淹没内部结构
+  // 边界边默认隐藏：只在聚焦（悬停 / 选中）其任一端、被选中或回放经过时出现，避免外部关系淹没内部结构
   const list = pv.view.edges
-    .filter(e => !isBoundaryEdge(e) || selectedEdgeIds.value.has(e.id) || (!!f && (e.from === f || e.to === f)))
+    .filter(e => !isBoundaryEdge(e) || selectedEdgeIds.value.has(e.id) || playEdges.value.has(e.id) || (!!f && (e.from === f || e.to === f)))
     .map(e => make(e, pv.edges.get(e.id), false))
   if (layered) list.push(...visibleCoreEdges.value.map(e => make(e, pv.coreEdges.get(e.id), true)))
+  // P11：结构中未建模的消息画临时虚线，不参与布局；分支预览落在未建模处同样画虚线
+  for (const u of st?.unmodeled ?? []) list.push(make(tempEdge(u.edgeId, u.from, u.to), u.route, false, { unmodeled: true, label: '未建模' }))
+  for (const p of st?.previews ?? []) {
+    if (p.at?.kind !== 'unmodeled' || !p.route) continue
+    const id = unmodeledId(p.at.from, p.at.to)
+    if (!st!.walked.has(id)) list.push(make(tempEdge(id, p.at.from, p.at.to), p.route, false, { unmodeled: true, play: 'preview', label: '' }))
+  }
   return list.filter((e): e is Edge<RouteEdgeData> => e !== null)
 })
 
@@ -188,19 +275,21 @@ function onFlowError(err: unknown) {
 
 // ── 交互 ──
 function onNodeClick({ node }: { node: Node<NodeData> }) {
+  if (node.type === 'step' || node.type === 'preview') return
   if (node.type === 'frame') desk.select(null)
   else if (node.type === 'actor') desk.select({ kind: 'actor', id: node.data!.moduleId })
   else desk.select({ kind: 'module', id: node.type === 'more' ? node.id.slice('more:'.length) : node.data!.moduleId })
 }
 
 function onNodeDoubleClick({ node }: { node: Node<NodeData> }) {
-  if (node.type === 'actor' || node.type === 'frame') return
+  if (node.type === 'actor' || node.type === 'frame' || node.type === 'step' || node.type === 'preview') return
   if (node.type === 'boundary') desk.revealModule(node.data!.moduleId)
   else if (node.type === 'more') desk.drillInto(node.id.slice('more:'.length))
   else desk.drillInto(node.data!.moduleId)
 }
 
 function onEdgeClick({ edge }: { edge: Edge<RouteEdgeData> }) {
+  if (edge.data!.unmodeled) return
   const e = edge.data!.edge
   if (e.kind === 'direct') desk.select({ kind: 'relation', id: e.relationIds[0] })
   else desk.select({ kind: 'edge', id: e.id })
@@ -273,10 +362,16 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       <template #node-more="p"><MoreNode :data="p.data" /></template>
       <template #node-actor="p"><ActorNode :data="p.data" /></template>
       <template #node-frame="p"><FrameNode :data="p.data" /></template>
+      <template #node-step="p"><StepBadge :data="p.data" /></template>
+      <template #node-preview="p"><BranchPreview :data="p.data" /></template>
       <template #edge-route="p"><RouteEdge :id="p.id" :data="p.data" :marker-end="p.markerEnd" /></template>
     </VueFlow>
 
     <div v-if="isEmpty" class="empty">这个模块没有子模块</div>
+    <div v-if="stage?.hiddenCurrent" class="play-hint">
+      当前步骤在本层不可见（两端都在本层之外）：
+      <button class="link" @click="desk.goTo(desk.frameLevel.value!)">到能看到它的层次</button>
+    </div>
 
     <div class="zoom">
       <button title="放大" @click="zoomIn()">＋</button>
@@ -300,6 +395,19 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
   place-content: center;
   color: var(--text-3);
   pointer-events: none;
+}
+
+.play-hint {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  padding: 4px 12px;
+  font-size: 12.5px;
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-radius: 14px;
 }
 
 .zoom {

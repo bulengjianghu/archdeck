@@ -38,7 +38,7 @@ const scenarios = computed(() => (idx.value.triggeredBy.get(props.id) ?? []).map
     <Section title="由它触发的场景" :count="scenarios.length">
       <ul v-if="scenarios.length" class="plain">
         <li v-for="s in scenarios" :key="s.id" class="scenario-row">
-          <span>{{ s.name }}</span>
+          <button class="link" @click="desk.openScenario(s.id)">▶ {{ s.name }}</button>
           <span v-if="s.cause" class="muted">{{ s.cause }}</span>
         </li>
       </ul>

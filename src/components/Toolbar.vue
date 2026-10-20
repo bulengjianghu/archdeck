@@ -4,6 +4,7 @@ import { useDesk } from '@/state/inject'
 import { RELATION_TYPES, type ModuleEntity, type RelationType } from '@/model'
 
 const desk = useDesk()
+const run = computed(() => desk.perspective.value === 'run')
 const query = ref('')
 const open = ref(false)
 const active = ref(0)
@@ -71,6 +72,7 @@ function toggleType(t: RelationType) {
       <ul v-else-if="open && query.trim()" class="results"><li class="none">没有匹配的模块</li></ul>
     </div>
 
+    <fieldset class="toggles" :disabled="run" :title="run ? '运行视角下舞台显示全部关系类型与边界节点（L9）；退出场景后恢复' : undefined">
     <label class="check"><input v-model="desk.toggles.showBoundaries" type="checkbox" /> 边界节点</label>
     <label class="check"><input v-model="desk.toggles.currentOnly" type="checkbox" /> 只看现状</label>
     <div class="types" role="group" aria-label="关系类型筛选">
@@ -85,6 +87,7 @@ function toggleType(t: RelationType) {
         {{ t }}
       </button>
     </div>
+    </fieldset>
   </div>
 </template>
 
@@ -147,6 +150,20 @@ function toggleType(t: RelationType) {
 .results .none {
   color: var(--text-3);
   cursor: default;
+}
+
+.toggles {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.toggles:disabled {
+  opacity: 0.4;
 }
 
 .check {

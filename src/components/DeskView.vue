@@ -13,6 +13,11 @@ import Toolbar from './Toolbar.vue'
 import IssueBanner from './IssueBanner.vue'
 import VersionSwitcher from './VersionSwitcher.vue'
 import DesignBar from './DesignBar.vue'
+import PerspectiveSwitch from './PerspectiveSwitch.vue'
+import PlayerBar from './PlayerBar.vue'
+import SequenceView from './sequence/SequenceView.vue'
+import SplitView from './split/SplitView.vue'
+import { readLayout, resize, saveLayout, toggleSlot, type PaneLayout } from './split/paneLayout'
 import Panel from './panel/Panel.vue'
 
 const props = defineProps<{ project: string; design?: string; revision?: string }>()
@@ -72,10 +77,34 @@ function onDividerUp() {
   }
 }
 
-// 键盘：Esc 先取消选中，再返回上级；Backspace 返回上级，根层回项目列表（N7、N9）
+// 画布区分屏：上结构图、下时序图（W-4），比例与收起状态按项目记在本地
+const paneLayout = ref<PaneLayout>(readLayout(props.project))
+function onResize(path: number[], i: number, ratio: number) {
+  paneLayout.value = resize(paneLayout.value, path, i, ratio)
+  saveLayout(props.project, paneLayout.value)
+}
+function onToggle(slot: 'structure' | 'sequence') {
+  paneLayout.value = toggleSlot(paneLayout.value, slot)
+  saveLayout(props.project, paneLayout.value)
+}
+
+// 键盘：Esc 先取消选中，再返回上级；Backspace 返回上级，根层回项目列表（N7、N9）；
+// 运行视角：← → 单步，空格播放 / 暂停，数字键选分支
 function onKey(e: KeyboardEvent) {
   const t = e.target as HTMLElement
-  if (t.closest('input, textarea, [contenteditable="true"]')) return
+  if (t.closest('input, textarea, select, [contenteditable="true"]')) return
+  if (desk.perspective.value === 'run') {
+    const bp = desk.branchPoint.value
+    if (e.key === 'ArrowRight') desk.next()
+    else if (e.key === 'ArrowLeft') desk.prev()
+    else if (e.key === ' ') desk.playback.value?.playing ? desk.pause() : desk.play()
+    else if (bp && /^[1-9]$/.test(e.key) && Number(e.key) <= bp.options.length) desk.chooseBranch(bp.id, Number(e.key) - 1)
+    else if (e.key !== 'Escape' && e.key !== 'Backspace') return
+    if (e.key !== 'Escape' && e.key !== 'Backspace') {
+      e.preventDefault()
+      return
+    }
+  }
   if (e.key !== 'Escape' && e.key !== 'Backspace') return
   if (e.key === 'Backspace') e.preventDefault()
   if (desk.pressKey(e.key) === 'leave') void router.push('/')
@@ -88,6 +117,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   <div class="desk" :style="{ '--panel-w': collapsed ? '0px' : `${panelWidth}px` }">
     <header class="top">
       <VersionSwitcher />
+      <PerspectiveSwitch v-if="desk.status.value === 'ready'" />
       <Breadcrumb />
       <Toolbar />
       <button class="collapse" :title="collapsed ? '展开属性面板' : '收起属性面板'" @click="collapsed = !collapsed">
@@ -108,8 +138,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         </div>
       </div>
       <template v-else>
-        <GraphCanvas />
-        <IssueBanner />
+        <SplitView :layout="paneLayout" :hidden="desk.perspective.value === 'run' ? [] : ['sequence']" @resize="onResize" @toggle="onToggle">
+          <template #structure>
+            <GraphCanvas />
+            <IssueBanner />
+          </template>
+          <template #sequence="{ collapsed, toggle }">
+            <SequenceView v-if="desk.perspective.value === 'run'" :collapsed="collapsed" @toggle="toggle" />
+          </template>
+        </SplitView>
+        <PlayerBar v-if="desk.perspective.value === 'run'" class="player-bar" />
       </template>
     </main>
 
@@ -158,8 +196,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .canvas-area {
   grid-row: 3;
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
+}
+
+.canvas-area > :deep(.split) {
+  flex: 1 1 auto;
+}
+
+.player-bar {
+  flex: none;
 }
 
 .state {

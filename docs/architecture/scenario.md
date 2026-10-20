@@ -1,7 +1,7 @@
 # 专题：场景投影与回放
 
 > 回答：一个场景在某一层怎么走；单步、跳转、分支选择怎么算；时序图的内容与坐标从哪来。
-> 覆盖模块：模型层的场景投影（`src/model/scenario/`：plan · path · level · participation · sequence，另有 bind · steps）；视图状态层 Layout 的时序图排布（`src/layout/sequence.ts`）。概念见 [02-domain.md §1.3](../02-domain.md#13-场景与回放待实现)，规则见 S、F、P、R7、R13、V6；回放的会话规则（何时暂停、焦点）见[视图状态与协调](./view-state.md)，画法见[工作台界面](./workbench.md)。
+> 覆盖模块：模型层的场景投影（`src/model/scenario/`：plan · path · level · participation · sequence，另有 bind · steps）；视图状态层 Layout 的时序图排布（`src/layout/sequence.ts`）。概念见 [02-domain.md §1.3](../02-domain.md#13-场景与回放)，规则见 S、F、P、R7、R13、V6；回放的会话规则（何时暂停、焦点）见[视图状态与协调](./view-state.md)，画法见[工作台界面](./workbench.md)。
 
 ## 1. 流水线
 

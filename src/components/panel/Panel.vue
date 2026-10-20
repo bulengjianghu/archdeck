@@ -1,7 +1,13 @@
 <script setup lang="ts">
-/** 属性面板：按选中对象的类型分派；无选中时显示当前父模块（根层显示系统） */
+/**
+ * 属性面板：按焦点分派（V2）。结构视角：选中，否则当前父模块（根层显示系统）；
+ * 运行视角：钉住时为选中对象，运行信息在上、结构信息折叠在下（V6）；跟随时为当前步骤，尚未开始时为场景。
+ */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
+import ScenarioPanel from './ScenarioPanel.vue'
+import StepPanel from './StepPanel.vue'
+import RunSection from './RunSection.vue'
 import ModulePanel from './ModulePanel.vue'
 import RelationPanel from './RelationPanel.vue'
 import EdgePanel from './EdgePanel.vue'
@@ -9,10 +15,12 @@ import SystemPanel from './SystemPanel.vue'
 import ActorPanel from './ActorPanel.vue'
 
 const desk = useDesk()
+const run = computed(() => desk.perspective.value === 'run')
 const target = computed(() => {
   const idx = desk.index.value
   const s = desk.selection.value
   if (!idx) return null
+  if (run.value && !s) return desk.frame.value ? { kind: 'step' as const, id: desk.frame.value.id } : { kind: 'scenario' as const, id: desk.scenario.value!.id }
   if (s?.kind === 'module' && idx.modules.has(s.id)) return { kind: 'module' as const, id: s.id }
   if (s?.kind === 'relation' && idx.relations.has(s.id)) return { kind: 'relation' as const, id: s.id }
   if (s?.kind === 'edge') return { kind: 'edge' as const, id: s.id }
@@ -25,11 +33,23 @@ const target = computed(() => {
 <template>
   <div class="panel">
     <template v-if="target">
-      <ModulePanel v-if="target.kind === 'module'" :id="target.id" :key="`m:${target.id}`" />
-      <RelationPanel v-else-if="target.kind === 'relation'" :id="target.id" :key="`r:${target.id}`" />
-      <EdgePanel v-else-if="target.kind === 'edge'" :id="target.id" :key="`e:${target.id}`" />
-      <ActorPanel v-else-if="target.kind === 'actor'" :id="target.id" :key="`a:${target.id}`" />
-      <SystemPanel v-else />
+      <StepPanel v-if="target.kind === 'step'" :key="`f:${target.id}`" />
+      <ScenarioPanel v-else-if="target.kind === 'scenario'" :key="`s:${target.id}`" />
+      <template v-else>
+        <div v-if="run" class="pinned-bar">
+          <span class="badge accent">已钉住</span>
+          <span class="muted">回放已暂停；Esc 或单击空白回到当前步骤，点 ▶ 继续播放</span>
+        </div>
+        <RunSection v-if="run" />
+        <component :is="run ? 'details' : 'div'" class="structure" :open="run ? false : undefined">
+          <summary v-if="run" class="structure-head">结构信息</summary>
+          <ModulePanel v-if="target.kind === 'module'" :id="target.id" :key="`m:${target.id}`" />
+          <RelationPanel v-else-if="target.kind === 'relation'" :id="target.id" :key="`r:${target.id}`" />
+          <EdgePanel v-else-if="target.kind === 'edge'" :id="target.id" :key="`e:${target.id}`" />
+          <ActorPanel v-else-if="target.kind === 'actor'" :id="target.id" :key="`a:${target.id}`" />
+          <SystemPanel v-else />
+        </component>
+      </template>
     </template>
   </div>
 </template>
@@ -136,6 +156,24 @@ const target = computed(() => {
 .panel .item .sub {
   font-size: 12px;
   color: var(--text-3);
+}
+
+.panel .pinned-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  padding: 10px 18px 0;
+  font-size: 12px;
+}
+
+.panel .structure-head {
+  padding: 10px 18px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  cursor: pointer;
+  border-top: 1px solid var(--border);
 }
 
 .panel .src {

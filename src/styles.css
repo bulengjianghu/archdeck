@@ -230,3 +230,24 @@ a {
   color: var(--text-2);
   font-weight: 500;
 }
+
+/* ── 运行视角：节点的回放态（GraphCanvas 给 Vue Flow 节点加的类） ── */
+.vue-flow__node.play-current > * {
+  box-shadow: 0 0 0 3px var(--accent) !important;
+  opacity: 1 !important;
+}
+
+.vue-flow__node.play-internal > * {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.vue-flow__node.play-hover > * {
+  box-shadow: 0 0 0 3px var(--warning) !important;
+  opacity: 1 !important;
+}
+
+@keyframes pulse {
+  50% {
+    box-shadow: 0 0 0 7px var(--accent-soft);
+  }
+}

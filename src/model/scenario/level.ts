@@ -239,7 +239,16 @@ export function landing(view: ScenarioLevelView, frameId: string): string {
 
 /** S9：场景所在层次 = 所有帧端点（模块）的最近公共祖先 */
 export function scenarioHome(index: ModelIndex, plan: ScenarioPlan): string {
-  const ends = [...plan.frames.values()].flatMap(f => [f.from, f.to]).filter(id => index.modules.has(id))
+  return homeOf(index, [...plan.frames.values()].flatMap(f => [f.from, f.to]))
+}
+
+/** R11：能看到某一帧的层次（两端的最近公共祖先） */
+export function frameHome(index: ModelIndex, frame: Frame): string {
+  return homeOf(index, [frame.from, frame.to])
+}
+
+function homeOf(index: ModelIndex, ids: string[]): string {
+  const ends = ids.filter(id => index.modules.has(id))
   if (ends.length === 0) return index.rootId
   const lca = ends.reduce((acc, id) => lowestCommonAncestor(index, acc, id))
   // 公共祖先本身就是端点时，在它这一层看不到它自己，退到它的父模块

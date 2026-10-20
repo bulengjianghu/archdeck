@@ -184,6 +184,11 @@ export function placeActors(view: LevelView, nodes: Map<string, Box>, frame: Box
   }
 }
 
+/** 两个盒子之间的曲线：上下错开时从上下边出发，否则从侧边出发（参与者的边、回放中的临时线） */
+export function linkRoute(a?: Box, b?: Box): EdgeRoute | undefined {
+  return actorRoute(a, b)
+}
+
 /** 参与者与内部节点之间的曲线：上方的参与者从底边出发，右侧的从左边出发 */
 function actorRoute(a?: Box, b?: Box): EdgeRoute | undefined {
   if (!a || !b) return undefined

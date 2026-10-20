@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
+import { moduleName } from '@/model'
 import Markdown from './Markdown.vue'
 import Section from './Section.vue'
 import InterfaceItem from './InterfaceItem.vue'
@@ -11,7 +12,8 @@ import DesignNote from './DesignNote.vue'
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
 const r = computed(() => desk.index.value!.relations.get(props.id)!)
-const name = (id: string) => desk.index.value!.modules.get(id)?.name ?? id
+const name = (id: string) => moduleName(desk.index.value!, id)
+const point = (id: string) => (desk.index.value!.actors.has(id) ? desk.select({ kind: 'actor', id }) : desk.revealModule(id))
 const TYPE: Record<string, string> = {
   depends: '依赖（编译期）',
   calls: '调用（控制权转移）',
@@ -26,9 +28,9 @@ const visibleHere = computed(() => desk.view.value?.edges.some(e => e.relationId
   <div v-if="r" class="relation-panel">
     <header class="head">
       <h2 class="endpoints">
-        <button class="link" @click="desk.revealModule(r.from)">{{ name(r.from) }}</button>
+        <button class="link" @click="point(r.from)">{{ name(r.from) }}</button>
         <span class="arrow">→</span>
-        <button class="link" @click="desk.revealModule(r.to)">{{ name(r.to) }}</button>
+        <button class="link" @click="point(r.to)">{{ name(r.to) }}</button>
       </h2>
       <div class="badges">
         <code>{{ r.id }}</code>

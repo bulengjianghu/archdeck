@@ -16,6 +16,7 @@ export {
   stepBefore,
   landing,
   scenarioHome,
+  frameHome,
   stageEnds,
 } from './level'
 export type { Landing, VisibleLanding, VisibleMessage, ScenarioLevelView, FrameStatus } from './level'

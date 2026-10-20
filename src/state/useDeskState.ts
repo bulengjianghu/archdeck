@@ -13,6 +13,8 @@ import {
   buildSequence,
   currentMessage,
   diffModels,
+  frameHome,
+  landFrame,
   participation,
   planScenario,
   projectLevel,
@@ -20,6 +22,7 @@ import {
   resolvePath,
   scenarioHome,
   stageEnds,
+  stepAfter,
   walkedCount,
   type Issue,
   type LevelView,
@@ -32,6 +35,7 @@ import {
 } from '@/model'
 import type { DesignInfo, VersionRef } from '@/model/design'
 import { layoutSequence, type PositionedSequence } from '@/layout/sequence'
+import { stageOverlay, type StageOverlay } from '@/layout/stage'
 import {
   DEFAULT_TOGGLES,
   encodeView,
@@ -130,6 +134,24 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const frame = computed(() => {
     const id = state.value.playback?.frameId
     return id && plan.value ? (plan.value.frames.get(id) ?? null) : null
+  })
+  /** 停在分支点：路径在未选分支处截止，且播放头已在本层最后一条可见消息（F6） */
+  const branchPoint = computed(() => {
+    const pending = path.value?.pending
+    if (!pending || !scenarioView.value) return null
+    return stepAfter(scenarioView.value, state.value.playback?.frameId ?? null) === null ? pending : null
+  })
+  /** 当前帧在本层不可见时，能看到它的层次（R11） */
+  const frameLevel = computed(() => (index.value && frame.value ? frameHome(index.value, frame.value) : null))
+  /** 舞台叠加：参与的节点、走过的边、当前消息、未建模临时线、分支预览（V5） */
+  const overlay = computed<StageOverlay | null>(() => {
+    const pv = positioned.value
+    if (!index.value || !scenarioView.value || !view.value || !pv || pv.view.parentId !== levelId.value) return null
+    const bp = branchPoint.value
+    const options = bp
+      ? bp.options.map((o, k) => ({ option: k, label: o.when, landing: o.first ? landFrame(index.value!, view.value!, o.first) : null }))
+      : []
+    return stageOverlay(scenarioView.value, pv, state.value.playback?.frameId ?? null, options)
   })
   const sequence = computed<SequenceModel | null>(() =>
     index.value && plan.value && view.value && scenarioView.value ? buildSequence(index.value, view.value, plan.value, choices.value, scenarioView.value) : null,
@@ -276,6 +298,9 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     sequence,
     positionedSequence,
     pinnedParticipation,
+    branchPoint,
+    frameLevel,
+    overlay,
     levelVersion,
     designs,
     design,
