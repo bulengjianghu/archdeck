@@ -272,8 +272,8 @@ h5player 的架构信息分散在几处：
 
 1. 「方案切换事务」在 infra.framework 层单步到 `beginXxxModelSwitch()`：结构图上 Solution（外部）与 Model Registry 之间是按关系类型着色的实线临时线，标「经由上层」，不是红色虚线；时序图上该消息标「经由上层关系」。
 2. 同一步的步骤面板注明对应关系建在上层，「定位」后跳到该关系所在层次并选中它。
-3. 补齐描述前，「命令执行」的 `pre / post hook` 及其返回 `success / ErrorBase` 在 infra.framework 与 infra.framework.state-machine 两层仍为「结构中未建模」；补上 Framework 回调 lifecycle 钩子的关系后，两层都不再是未建模。
-4. 「方案切换事务」「命令执行」在全部层次与分支上，除第 3 条的缺口外不再出现「结构中未建模」。
+3. 「命令执行」的 `pre / post hook` 及其返回 `success / ErrorBase`：描述缺 Framework 回调 lifecycle 钩子的关系时，在 infra.framework 与 infra.framework.state-machine 两层为「结构中未建模」；补上该关系（`rel.framework.sm-engine-solution-hooks`）后，两层都落在视图边上。
+4. 「方案切换事务」「命令执行」在全部层次与分支上不再出现「结构中未建模」。
 
 ## 7. 后续方向
 

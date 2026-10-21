@@ -20,8 +20,9 @@ test('beginXxxModelSwitch()：结构图画「经由上层」实线、时序图�
   expect(query(page).get('level')).not.toBe('infra.framework')
 })
 
-test('命令执行的 pre / post hook：没有绑定关系，仍为红色虚线「未建模」', async ({ page }) => {
+test('命令执行的 pre / post hook：描述补上 Framework 回调 lifecycle 的关系后落在视图边上，不再是「未建模」', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra.framework&sc=sc.command&alt=1&step=sc.command%23hook')
-  await expect(page.locator('.vue-flow__edge[data-id^="unmodeled:"]')).toHaveCount(1)
-  await expect(page.locator('.msg.selected .tag')).toContainText('结构中未建模')
+  await expect(page.locator('.msg.selected')).toContainText('pre / post hook')
+  await expect(page.locator('.vue-flow__edge[data-id^="unmodeled:"]')).toHaveCount(0)
+  await expect(page.locator('.msg .tag')).toHaveCount(0)
 })

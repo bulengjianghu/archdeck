@@ -36,16 +36,17 @@ describe('§6.9 经由上层关系验收', () => {
     expect(desk.levelId.value).not.toBe('infra.framework')
   })
 
-  it('3. 「命令执行」的 pre / post hook 及其返回在 infra.framework 与 infra.framework.state-machine 两层仍为未建模（描述缺少 Framework 回调 lifecycle 的关系）', async () => {
+  it('3. 「命令执行」的 pre / post hook 及其返回：描述补上 Framework 回调 lifecycle 钩子的关系后，infra.framework 与 infra.framework.state-machine 两层都不再是未建模', async () => {
     for (const level of ['infra.framework', 'infra.framework.state-machine']) {
       const desk = await open(`/p/h5player?level=${level}&sc=sc.command&step=sc.command%23hook&alt=1`)
-      expect(current(desk).at.kind).toBe('unmodeled')
+      expect(desk.run.frame.value).toMatchObject({ relation: 'rel.framework.sm-engine-solution-hooks', relationInferred: true })
+      expect(current(desk).at.kind).toBe('edge')
       const ret = desk.run.sequence.value!.messages.find(m => m.label === 'success / ErrorBase')!
-      expect(ret.temp).toBe('unmodeled')
+      expect(ret.temp).toBeUndefined()
     }
   })
 
-  it('4. 两个场景的全部层次与分支上，未建模的只有第 3 条的缺口', () => {
+  it('4. 两个场景的全部层次与分支上不再出现未建模', () => {
     const { index } = loadModel(readModelDir(path.join(ROOT, 'model/h5player'), ROOT).files)
     const levels = [index.rootId, ...[...index.modules.keys()].filter(id => (index.childrenOf.get(id)?.length ?? 0) > 0)]
     const unmodeled = new Set<string>()
@@ -62,11 +63,6 @@ describe('§6.9 经由上层关系验收', () => {
       }
     }
     expect(upper).toBeGreaterThan(0)
-    expect([...unmodeled].sort()).toEqual([
-      'infra.framework pre / post hook',
-      'infra.framework success / ErrorBase',
-      'infra.framework.state-machine pre / post hook',
-      'infra.framework.state-machine success / ErrorBase',
-    ])
+    expect([...unmodeled]).toEqual([])
   })
 })

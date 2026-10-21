@@ -15,7 +15,7 @@ modules:
   - id: present.sequence.lanes
     name: 泳道与消息
     parent: present.sequence
-    responsibility: 消息区：生命线、按序自上而下画消息箭头与标签；同步 / 异步 / 显式返回三种线型（隐含的返回不画）；内部活动画成生命线上的激活条；外部参与者泳道在最左，用竖线隔出系统边界；选中突出（R15、R16）：只有选中的步骤用选中样式，配对的调用 / 返回加浅色「配对」标记；选中模块等对象时突出相关泳道的生命线，进度所在的消息只在序号旁加小标记；不做悬停弹出（W-1）。
+    responsibility: 消息区：生命线、按序自上而下画消息箭头与标签；同步 / 异步 / 显式返回三种线型（隐含的返回不画）；内部活动画成生命线上的激活条；本层没有视图边的消息在标签后标「经由上层关系」（P15）或红色箭头「结构中未建模」（P11）；外部参与者泳道在最左，用竖线隔出系统边界；选中突出（R15、R16）：只有选中的步骤用选中样式，配对的调用 / 返回加浅色「配对」标记；选中模块等对象时突出相关泳道的生命线，进度所在的消息只在序号旁加小标记；不做悬停弹出（W-1）。
     codeRefs: [src/components/sequence/SequenceLanes.vue]
   - id: present.sequence.fragments
     name: 组合框
@@ -41,7 +41,7 @@ modules:
   - id: present.panel.step
     name: 步骤面板
     parent: present.panel
-    responsibility: 先回答「这一步做什么」（D-5）：作用（标签与说明）；输入（携带的数据）与输出（配对返回的数据，本步是返回时为回应的调用，异步为「不等待返回」，没写显式返回时指向接口签名，F7）；数据结构；经由接口。其后是真实端点与本层投影、本层一条可见消息覆盖的多帧；结构关系（对应关系与「推断」标记）默认折叠，可「在画布上显示」这条消息两端的静态关系（V9）；最后是出处。
+    responsibility: 先回答「这一步做什么」（D-5）：作用（标签与说明）；输入（携带的数据）与输出（配对返回的数据，本步是返回时为回应的调用，异步为「不等待返回」，没写显式返回时指向接口签名，F7）；数据结构；经由接口。其后是真实端点与本层投影（经由上层关系时注明对应关系建在上层，可「定位到这条关系」，P15）、本层一条可见消息覆盖的多帧；结构关系（对应关系与「推断」标记）默认折叠，可「在画布上显示」这条消息两端的静态关系（V9）；最后是出处。
     codeRefs: [src/components/panel/StepPanel.vue]
   - id: present.panel.run
     name: 运行信息
@@ -109,13 +109,13 @@ modules:
   - id: state.layout.stage
     name: 舞台叠加
     parent: state.layout
-    responsibility: 把本层帧投影与进度换成画布要画的数据与坐标：本层参与的节点、走过的边与步骤序号的位置、当前消息、未建模临时线的走线、停在分支点时各选项首条消息的预览位置、当前帧本层不可见（V5、P7、P10、P11、R11）。舞台显示 stageDisplay：按参与节点、回放边、静态关系显示方式、「在画布上显示」的对象与悬停的节点，给出每个节点与视图边显示、淡化还是隐藏（V5、V8、V9、V10）。
+    responsibility: 把本层帧投影与进度换成画布要画的数据与坐标：本层参与的节点、走过的边与步骤序号的位置、当前消息、本层没有视图边时的临时线（temps：经由上层关系带对应关系 P15、未建模 P11）的走线、停在分支点时各选项首条消息的预览位置、当前帧本层不可见（V5、P7、P10、P11、P15、R11）。舞台显示 stageDisplay：按参与节点、回放边、静态关系显示方式、「在画布上显示」的对象与悬停的节点，给出每个节点与视图边显示、淡化还是隐藏（V5、V8、V9、V10）。
     principle: 纯函数，与时序图排布对称——呈现层只按它着色，不自己映射端点或算坐标。
     codeRefs: [src/layout/stage.ts]
   - id: state.layout.canvas
     name: 画布场景
     parent: state.layout
-    responsibility: 把带坐标的层次视图换成画布要画的节点与边（canvasScene，ADR-0013）：位置、类型、数据与类名、层级，以及运行视角下适应画布用的可见节点。结构视角：聚焦对象（悬停优先、其次选中）不相邻的节点与边变淡，分层总览中带不参与变淡；核心跨层边只在聚焦核心模块、被选中或回放落在其上时出现（O4、P7）；边界边只在聚焦其一端、被选中或回放经过时出现（L4）。运行视角：按舞台显示（stageDisplay）决定显隐与淡化（V5、V8、V9、V10）；回放叠加——当前消息的边带方向流动、端点节点为活动态、走过的边标步骤序号、未建模临时线、分支预览（P7、P10、P11、F6）；选中步骤时其余走过的边与步骤序号变灰（R15、R16）。选中文件时投影节点加文件高亮（G14）；设计版本标出新增 / 修改与涉及变更数。
+    responsibility: 把带坐标的层次视图换成画布要画的节点与边（canvasScene，ADR-0013）：位置、类型、数据与类名、层级，以及运行视角下适应画布用的可见节点。结构视角：聚焦对象（悬停优先、其次选中）不相邻的节点与边变淡，分层总览中带不参与变淡；核心跨层边只在聚焦核心模块、被选中或回放落在其上时出现（O4、P7）；边界边只在聚焦其一端、被选中或回放经过时出现（L4）。运行视角：按舞台显示（stageDisplay）决定显隐与淡化（V5、V8、V9、V10）；回放叠加——当前消息的边带方向流动、端点节点为活动态、走过的边标步骤序号、临时线（经由上层关系取关系的类型色画实线、标「经由上层」、随关系选中，P15；未建模画红色虚线，P11）、分支预览（P7、P10、P11、F6）；选中步骤时其余走过的边与步骤序号变灰（R15、R16）。选中文件时投影节点加文件高亮（G14）；设计版本标出新增 / 修改与涉及变更数。
     principle: 纯函数，与 stageOverlay、stageDisplay 对称：呈现层只按结果写入 Vue Flow，不自己判断显隐、变淡与回放态；节点与边的数据类型（NodeData、RouteEdgeData）因此归 Layout。
     codeRefs: [src/layout/canvas.ts]
 
@@ -138,7 +138,7 @@ modules:
     parent: model.scenario
     responsibility: 把路径上每一帧的 from / to 用 mapEndpoint 映射到当前层次：两个不同节点之间 → 对应的视图边 ID（P1、P2，含边界边、参与者边、核心跨层边 P7）；两端在同一子模块 → 内部活动（P3）；分层总览中先看核心模块：同一核心模块才是它的内部活动，同一层的不同泳道之间带上两条泳道（lanes），时序图画成泳道间的消息、结构图按层的内部活动（P7、P14）；两端都在本层外 → 不可见（P4）。把连续的帧合并为本层的可见消息（同一条边或同一节点上的内部活动合并，P5），作为单步单位。算出场景所在层次（所有帧端点的最近公共祖先，S9）。
     principle: |
-      视图边 ID 与 projectLevel 的边 ID 规则相同（edgeId），画布直接给已有的边加回放态；消息方向与边方向相反时标记 reverse（P10）；本层两节点之间没有视图边时落点为「未建模」（P11）。关系类型筛选不作用于回放（P8 已删除）。
+      视图边 ID 与 projectLevel 的边 ID 规则相同（edgeId），画布直接给已有的边加回放态；消息方向与边方向相反时标记 reverse（P10）；本层两节点之间没有视图边时按帧自身的关系绑定（显式或推断，与 S5a 同一口径）区分：已绑定为「经由上层关系」（upper，带 relationId，P15），未绑定为「未建模」（P11）；两者按两端节点照常合并，合并的帧中有未绑定的整条为未建模（P16）。关系类型筛选不作用于回放（P8 已删除）。
       「本层的下一步 / 上一步」（R7）与「指向某帧时进度落在哪条可见消息」（R13：落在其所在可见消息，合并时取这一段的第一帧）在这里回答。
     codeRefs: [src/model/scenario/level.ts]
   - id: model.scenario.participation
@@ -155,7 +155,7 @@ modules:
   - id: model.scenario.sequence
     name: 时序模型
     parent: model.scenario
-    responsibility: 由本层的可见消息产出时序模型：参与者（父模块、模块路径、所属层、层次排序键 hierarchyKey，本层非层子模块标为可按横坐标排，P9、P13）、消息（同步 / 异步 / 显式返回 / 内部活动）、组合框（类型、条件、包住的消息区间；alt 含全部分支、选项序号及哪一支已选）；框内消息全部合并为内部活动时标记为折叠（P6）。另回答「某个模块或参与者在这张时序图里是哪些泳道」（lanesOf，R15、R16）：参与者为自己的泳道；模块是当前层次本身或其祖先时没有；否则为它包含的泳道，没有时为包含它的最深泳道。
+    responsibility: 由本层的可见消息产出时序模型：参与者（父模块、模块路径、所属层、层次排序键 hierarchyKey，本层非层子模块标为可按横坐标排，P9、P13）、消息（同步 / 异步 / 显式返回 / 内部活动；本层没有视图边时标经由上层关系或未建模，P11、P15）、组合框（类型、条件、包住的消息区间；alt 含全部分支、选项序号及哪一支已选）；框内消息全部合并为内部活动时标记为折叠（P6）。另回答「某个模块或参与者在这张时序图里是哪些泳道」（lanesOf，R15、R16）：参与者为自己的泳道；模块是当前层次本身或其祖先时没有；否则为它包含的泳道，没有时为包含它的最深泳道。
     codeRefs: [src/model/scenario/sequence.ts]
 
 relations:
@@ -330,7 +330,7 @@ interfaces:
     name: projectScenario / scenarioHome
     owner: model.scenario.level
     signature: |
-      landFrame(index: ModelIndex, view: LevelView, frame: Frame): Landing          // P1–P4、P7、P10、P11
+      landFrame(index: ModelIndex, view: LevelView, frame: Frame): Landing          // P1–P4、P7、P10、P11、P15
       projectScenario(index: ModelIndex, view: LevelView, plan: ScenarioPlan, choices): ScenarioLevelView
       scenarioHome(index: ModelIndex, plan: ScenarioPlan): string   // S9：所有帧端点的最近公共祖先；它本身是端点时取父模块
       frameHome(index: ModelIndex, frame: Frame): string           // R11：能看到某一帧的层次
@@ -381,7 +381,7 @@ interfaces:
     signature: |
       stageOverlay(sv: ScenarioLevelView, pv: PositionedView, frameId: string | null,
                    options?: { option: number; label: string; landing: Landing | null }[]): StageOverlay
-    semantics: 纯函数；只给出数据与坐标（参与的节点、走过的边与步骤序号、当前消息、未建模临时线的走线、分支预览的位置），画布只按它着色。
+    semantics: 纯函数；只给出数据与坐标（参与的节点、走过的边与步骤序号、当前消息、经由上层与未建模临时线的走线、分支预览的位置），画布只按它着色。
   - id: if.layout.canvasScene
     name: canvasScene
     owner: state.layout.canvas
@@ -479,15 +479,17 @@ dataStructures:
   - id: ds.ScenarioLevelView
     name: ScenarioLevelView
     definition: |
+      type Lanes = { from: string; to: string }   // 分层总览中时序图上的两条泳道（P7、P14）
       interface ScenarioLevelView {
         levelId: string
         messages: {                    // 本层可见消息 = 单步单位（R7）
           index: number
           frameIds: string[]           // 覆盖的连续帧
           at:
-            | { kind: 'edge'; edgeId: string; from: string; to: string; reverse: boolean; core?: boolean }   // reverse：与边箭头方向相反（P10）；core：核心跨层边（P7）
-            | { kind: 'unmodeled'; from: string; to: string }                                // P11：本层无视图边，回放时画临时虚线
-            | { kind: 'internal'; node: string }
+            | { kind: 'edge'; edgeId: string; from: string; to: string; reverse: boolean; core?: boolean; lanes?: Lanes }   // reverse：与边箭头方向相反（P10）；core：核心跨层边（P7）
+            | { kind: 'upper'; from: string; to: string; relationId: string; lanes?: Lanes }   // P15：本层无视图边，帧已绑定关系（关系建在上层），回放时画关系类型色的临时实线
+            | { kind: 'unmodeled'; from: string; to: string; lanes?: Lanes }                   // P11：本层无视图边，帧未绑定关系，回放时画临时虚线
+            | { kind: 'internal'; node: string; lanes?: Lanes }                                // lanes：分层总览中同一层不同泳道之间（P7、P14）
           kind: 'call' | 'async' | 'return' | 'internal'
         }[]
         hidden: string[]               // 本层不可见的帧
@@ -504,7 +506,8 @@ dataStructures:
         messages: {
           index: number; from: string; to: string; label: string; frameIds: string[]
           kind: 'call' | 'async' | 'return' | 'internal' | 'empty'     // empty：空分支占位
-          status: 'path' | 'unchosen' | 'unreached'; pathIndex?: number; unmodeled?: boolean
+          status: 'path' | 'unchosen' | 'unreached'; pathIndex?: number
+          temp?: 'upper' | 'unmodeled'; relationId?: string            // 本层无视图边：经由上层关系（P15）/ 结构中未建模（P11）
         }[]
         fragments: {
           id: string; kind: 'alt' | 'loop' | 'par' | 'ref'; label: string; depth: number
@@ -534,7 +537,7 @@ dataStructures:
         active: Set<string>                                          // 本层参与回放的节点
         walked: Map<string, { edgeId: string; steps: number[]; at?: Point }>   // 走过（含当前）的边与步骤序号位置
         current: { index: number; at: VisibleLanding } | null
-        unmodeled: { edgeId: string; from: string; to: string; route: EdgeRoute }[]   // P11 临时线
+        temps: { kind: 'upper' | 'unmodeled'; edgeId: string; from: string; to: string; route: EdgeRoute; relationId?: string }[]   // 临时线：经由上层（P15）/ 未建模（P11），ID 为 `<kind>:<from>|<to>`
         previews: { option: number; label: string; at: VisibleLanding | null; route?: EdgeRoute; pos?: Point }[]
         hiddenCurrent: boolean                                       // R11
       }

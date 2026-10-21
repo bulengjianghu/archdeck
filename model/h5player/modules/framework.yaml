@@ -632,6 +632,12 @@ relations:
     type: calls
     description: 命令执行异常包装为 CommandUnknownError 交 handleError
     interface: if.framework.kernel.handleError
+  - id: rel.framework.sm-engine-solution-hooks
+    from: infra.framework.state-machine.engine
+    to: app.solution
+    type: calls
+    description: 命令执行前后依次回调 Solution 经 SolutionDeps 注册的 pre / post 命令 Hook（CommandHook.callback(command)），逐个 await；pre Hook 返回 true 即阻断命令（CommandBlockedByHookError）
+    payload: ds.CommandInfo
   - id: rel.framework.sm-engine-domain-rules
     from: infra.framework.state-machine.engine
     to: domain.rules
