@@ -24,7 +24,7 @@ model/<项目>/
 
 ## 2. 文件格式
 
-一个文件的顶层键都可选、可任意组合：`system`、`module`（单个模块，可带 `parent`）、`modules`、`relations`、`interfaces`、`dataStructures`、`actors`、`scenario` / `scenarios`、`sourceIgnore`。未知字段即格式错误，整份文件被跳过（M1）。
+一个文件的顶层键都可选、可任意组合：`system`、`module`（单个模块，可带 `parent`）、`modules`、`relations`、`interfaces`、`dataStructures`、`actors`、`scenario` / `scenarios`、`sourceIgnore`、`sourceLimits`。未知字段即格式错误，整份文件被跳过（M1）。
 
 ```yaml
 # modules/infra.yaml —— 模块子树 + 本区域的关系
@@ -213,6 +213,13 @@ sourceIgnore:
   - tests/**
   - '*.md'
   - tsconfig*.json
+```
+
+- **超长阈值**（G20）：文件树把超过 `sourceLimits.maxLines` 行（缺省 500）的 TS / JS / Vue 文件标红；项目需要别的阈值时写在 `source-ignore.yaml`，只写一处：
+
+```yaml
+sourceLimits:
+  maxLines: 400
 ```
 
 - 页面只列出未归属文件，不提供忽略操作；按文件树与 `lint:model` 的列表逐条判断，能归纳成目录或通配符的合并成一条。

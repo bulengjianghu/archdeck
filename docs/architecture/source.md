@@ -1,7 +1,7 @@
 # 专题：源码接入与归属
 
 > 回答：被描述项目的源码从哪里读；一个文件属于哪个模块；模块的入口导出了什么，与描述对不对得上。
-> 覆盖模块：接入层的「源码读取」；模型层的「源码归属」。规则见 [02-domain.md](../02-domain.md) 的 G；界面见[工作台界面](./workbench.md) §2、§6、§8、§9；状态与同步见[视图状态与协调](./view-state.md) §4。
+> 覆盖模块：接入层的「源码读取」；模型层的「源码归属」。规则见 [02-domain.md](../02-domain.md) 的 G（行数与超长：G19–G21）；界面见[工作台界面](./workbench.md) §2、§6、§8、§9；状态与同步见[视图状态与协调](./view-state.md) §4。
 
 ## 1. 分工
 
@@ -9,7 +9,7 @@
 本地源码根目录（system.source.repo，G1）     接入层：只列文件、读文件、做语法摘要，不判断归属
    │ readSourceTree / readSourceFile / readExports
    ▼
-SourceTree { files, packages } · SourceFile · ExportedSymbol[]
+SourceTree { files, packages, lines } · SourceFile · ExportedSymbol[]
    │ （开发态端点；命令行直接调用）
    ▼
 assignFiles(index, files, sourceIgnore) → SourceOwnership    模型层：归属、入口、对应、投影
@@ -26,7 +26,7 @@ moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
 |---|---|---|
 | `resolveSourceRoot(system, workspaceRoot, env)` | 先看 `ARCH_SOURCE_ROOT_<ID>`，再用工作区根目录（`ARCH_WORKSPACE_ROOT`，缺省为本包往上三级）拼上 `source.repo`；返回 `{ status: 'local', root }`，或 `{ status: 'absent', tried, reason }` | G1 |
 | `listSourceFiles(root)` | 在 git 仓库内执行 `git ls-files --cached --others --exclude-standard`（相对 `root`），失败时遍历目录并排除 `node_modules`、`.git`、`dist`、`coverage` 等；按路径排序 | G2 |
-| `readSourceTree(modelRoot, project, …)` | 组合以上两步，并读取清单中每个 `package.json` 的 `main` / `exports`，交给入口规则用 | G1、G2、G10 |
+| `readSourceTree(modelRoot, project, …)` | 组合以上两步，并读取清单中每个 `package.json` 的 `main` / `exports`，交给入口规则用；统计 TS / JS / Vue 文件的物理行数（按修改时间与大小缓存） | G1、G2、G10、G19 |
 | `readSourceFile(root, files, path)` | 路径必须在清单中（防穿越）；超过 512 KB 或含 NUL 字节时只返回 `{ tooLarge }` / `{ binary }` | G17 |
 | `readExports(root, files, path)` | TypeScript `createSourceFile` 做语法解析：`export` 声明、`export { a as b }`、`export default`；相对路径的 `export *` / `export … from` 解析到 `.ts` / `.tsx` / `.js` / `/index.ts`，最多追 5 层，记录来源文件；签名为声明文本去掉函数体与类成员体，最多 25 行 | G11 |
 
@@ -53,7 +53,8 @@ moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
 | `matchExports(index, id, exports)` | 模块的接口（`moduleInterfaces`：`provides` 加上 `owner` 在本模块子树内的接口）的名称（去掉括号与泛型）对导出名：`matched`、`undescribed`（导出未描述）、`unexported`（描述未导出）；默认导出不参与 | G12 |
 | `fileNodes(index, view, owners)` | 归属模块逐个 `mapEndpoint` 到当前层次：`local` → 子模块节点，`external` → 边界节点（视图中有时），`skip` → 不高亮（`self: true`）；分层总览另加路径上的核心模块节点 | G14 |
 | `sourceIssues(index, own, tree)` | 每个冲突文件、未归属文件一条 warning（`source.conflict` / `source.unowned`），`entry` 不在清单中一条 warning（`source.entry`，定位到描述出处） | G6、G7、G9、G10 |
-| `fileTree(files, own)` | 按 `/` 组成目录树，目录带文件数、未归属数与忽略数，内部文件全部忽略的目录标为忽略；目录在前、按名称排序 | G18 |
+| `fileTree(files, own, lines?, maxLines?)` | 按 `/` 组成目录树，目录带文件数、未归属数与忽略数，内部文件全部忽略的目录标为忽略；给出行数时目录另带行数合计与超长文件数；目录在前、按名称排序 | G18、G21 |
+| `isLong(lines, maxLines)` · `moduleLines(files, lines, maxLines)` | 是否超长；一组文件（如模块的文件）的行数合计与超长数 | G20、G21 |
 
 复杂度：`assignFiles` 为 `O(文件数 × codeRefs 条数 × 路径长度)`，5000 个文件、几百条 `codeRefs` 时是几十毫秒；模型或文件清单变化时才重算。
 
@@ -61,7 +62,7 @@ moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
 
 ```ts
 type SourcePayload =
-  | { status: 'local'; root: string; files: string[]; packages: Record<string, PackageEntry> }   // packages 的键为 package.json 所在目录（'' 为根）
+  | { status: 'local'; root: string; files: string[]; packages: Record<string, PackageEntry>; lines: Record<string, number> }   // packages 的键为 package.json 所在目录（'' 为根）；lines 只含统计行数的文件（G19）
   | { status: 'absent'; repo?: string; tried?: string; reason: string }
   | { status: 'unavailable' }                    // 页面侧：构建态取不到端点
 interface PackageEntry { main?: string; exports?: unknown }
@@ -85,7 +86,7 @@ interface SourceOwnership {
 interface ModuleEntry { file: string; via: 'entry' | 'index' | 'package'; missing?: boolean }
 interface ExportMatch { matched: { interfaceId: string; symbol: ExportedSymbol }[]; undescribed: ExportedSymbol[]; unexported: string[] }
 interface FileNodes { nodes: Set<string>; self: boolean }
-interface DirNode { name: string; path: string; dirs: DirNode[]; files: string[]; count: number; unowned: number; ignored: boolean }   // ignored：子树内文件全部忽略（G18）
+interface DirNode { name: string; path: string; dirs: DirNode[]; files: string[]; count: number; unowned: number; ignored: boolean; lines: number; long: number }   // ignored：子树内文件全部忽略（G18）；lines / long：子树行数合计与超长文件数（G21）
 ```
 
 ## 5. 接口
@@ -105,5 +106,7 @@ moduleEntry(index, own, tree: { files; packages }, moduleId): ModuleEntry | null
 matchExports(index, moduleId, exports: readonly ExportedSymbol[]): ExportMatch
 fileNodes(index, view: LevelView, owners: readonly string[]): FileNodes
 sourceIssues(index, own, tree): Issue[]
-fileTree(files: readonly string[], own: SourceOwnership): DirNode
+fileTree(files: readonly string[], own: SourceOwnership, lines?: Record<string, number>, maxLines?: number): DirNode
+isLong(lines: number | undefined, maxLines: number): boolean
+moduleLines(files: readonly string[], lines: Record<string, number>, maxLines: number): { lines: number; long: number; counted: number }
 ```
