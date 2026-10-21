@@ -260,6 +260,59 @@ describe('帧的层次投影', () => {
     expect(stage(bare, 'infra', bp).nodes.some(n => n.id === 'boundary:app')).toBe(true)
   })
 
+  /** 关系 r9 的一端是 infra.framework 本身：在 infra.framework 层没有它的视图边 */
+  const upperFiles = (steps: string) =>
+    loadModel(
+      scenarioFiles({
+        'upper.yaml': 'relations: [{ id: r9, from: app.solution, to: infra.framework, type: calls }]',
+        'scenarios/x.yaml': `scenario: { id: sc.v, name: V, steps: ${steps} }`,
+      }),
+    ).index
+
+  it('P11、P15：本层没有视图边时，是否建模只看帧自身的关系绑定——显式或推断绑定了关系为「经由上层关系」，未绑定为「未建模」', () => {
+    const idx = upperFiles(
+      '[{ call: { id: a, from: app.solution, to: infra.framework.pipeline } }, { return: { id: b, from: infra.framework.pipeline, to: app.solution, relation: r9 } }, { call: { id: c, from: app.fragments, to: infra.framework.pipeline } }]',
+    )
+    const p = planScenario(idx, 'sc.v')
+    expect(p.frames.get('sc.v#a')).toMatchObject({ relation: 'r9', relationInferred: true })
+    const v = project('infra.framework', new Map(), p, idx)
+    expect(v.messages.map(m => m.at)).toEqual([
+      { kind: 'upper', from: 'boundary:app', to: 'infra.framework.pipeline', relationId: 'r9' },
+      { kind: 'upper', from: 'infra.framework.pipeline', to: 'boundary:app', relationId: 'r9' },
+      { kind: 'unmodeled', from: 'boundary:app', to: 'infra.framework.pipeline' },
+    ])
+    // 上一层关系有视图边：照常落在边上
+    expect(project('sys', new Map(), p, idx).messages[0].at).toMatchObject({ kind: 'edge' })
+    // 时序图：经由上层关系与未建模分别标出
+    const view = stage(idx, 'infra.framework', p)
+    const seq = buildSequence(idx, view, p, new Map(), projectScenario(idx, view, p, new Map()))
+    expect(seq.messages.map(m => [m.temp, m.relationId])).toEqual([
+      ['upper', 'r9'],
+      ['upper', 'r9'],
+      ['unmodeled', undefined],
+    ])
+  })
+
+  it('P16：同一对节点上经由上层与未建模的帧照常合并（P5）；合并的帧中有未绑定的，整条为「未建模」，全部已绑定时为「经由上层关系」', () => {
+    const a = '{ call: { id: a, from: app.solution, to: infra.framework.pipeline } }'
+    const c = '{ call: { id: c, from: app.fragments, to: infra.framework.pipeline } }'
+    const b = '{ call: { id: b, from: app.solution, to: infra.framework.sm, relation: r9 } }'
+    for (const steps of [`[${a}, ${c}]`, `[${c}, ${a}]`]) {
+      const idx = upperFiles(steps)
+      const v = project('infra.framework', new Map(), planScenario(idx, 'sc.v'), idx)
+      expect(v.messages).toHaveLength(1)
+      expect(v.messages[0].frameIds).toHaveLength(2)
+      expect(v.messages[0].at.kind).toBe('unmodeled')
+    }
+    const idx = upperFiles(`[${a}, ${a.replace('id: a', 'id: a2')}]`)
+    const v = project('infra.framework', new Map(), planScenario(idx, 'sc.v'), idx)
+    expect(v.messages).toHaveLength(1)
+    expect(v.messages[0].at).toMatchObject({ kind: 'upper', relationId: 'r9' })
+    // 到不同子模块的帧不合并
+    const i2 = upperFiles(`[${a}, ${b}]`)
+    expect(project('infra.framework', new Map(), planScenario(i2, 'sc.v'), i2).messages).toHaveLength(2)
+  })
+
   it('舞台补齐参与者：结构上与本层无关系的参与者在场景中出现时也上舞台', () => {
     const { index: idx } = loadModel(scenarioFiles({ 'scenarios/x.yaml': 'scenario: { id: sc.t, name: T, steps: [{ async: { from: actor.timer, to: app.solution } }] }' }))
     const p = planScenario(idx, 'sc.t')

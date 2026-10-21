@@ -41,8 +41,10 @@ export interface SequenceMessage {
   status: FrameStatus
   /** 回放路径上的消息在 ScenarioLevelView.messages 中的序号 */
   pathIndex?: number
-  /** 本层两节点之间没有视图边（P11） */
-  unmodeled?: boolean
+  /** 本层两节点之间没有视图边：经由上层关系（P15）/ 结构中未建模（P11） */
+  temp?: 'upper' | 'unmodeled'
+  /** 经由上层关系时对应的关系 */
+  relationId?: string
 }
 
 export interface SequenceFragment {
@@ -122,7 +124,7 @@ export function buildSequence(index: ModelIndex, view: LevelView, plan: Scenario
       frameIds: it.frames.map(f => f.id),
       status: it.status,
       ...(it.status === 'path' ? { pathIndex: pathView.messageOf.get(first.id) } : {}),
-      ...(at.kind === 'unmodeled' ? { unmodeled: true } : {}),
+      ...(at.kind === 'unmodeled' ? { temp: at.kind } : at.kind === 'upper' ? { temp: at.kind, relationId: at.relationId } : {}),
     }
   })
 

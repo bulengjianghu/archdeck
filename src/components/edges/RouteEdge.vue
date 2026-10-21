@@ -17,13 +17,21 @@ const DASH: Record<string, string | undefined> = { depends: '6 4', implements: '
 const style = computed(() => {
   const n = props.data.edge.relationIds.length
   const width = 1.5 + Math.min(2.5, (n - 1) * 0.5) + (props.data.selected ? 1.5 : 0) + (props.data.play === 'walked' ? 0.5 : 0)
-  if (props.data.unmodeled) {
+  if (props.data.temp === 'unmodeled') {
     return { stroke: 'var(--danger)', strokeWidth: 1.5, strokeDasharray: '5 5', opacity: props.data.play === 'preview' ? 0.7 : 0.9 }
   }
   return {
     stroke: props.data.play === 'preview' ? 'var(--warning)' : props.data.muted ? 'var(--text-3)' : `var(--rel-${props.data.edge.type})`,
     strokeWidth: width,
-    strokeDasharray: props.data.play === 'preview' ? '6 4' : props.data.edge.mode === 'async' ? '8 3 2 3' : DASH[props.data.edge.type],
+    // P15：经由上层关系的临时线为实线，与视图边以标注区分
+    strokeDasharray:
+      props.data.play === 'preview'
+        ? '6 4'
+        : props.data.temp === 'upper'
+          ? undefined
+          : props.data.edge.mode === 'async'
+            ? '8 3 2 3'
+            : DASH[props.data.edge.type],
     opacity: props.data.dim ? 0.12 : props.data.muted ? 0.45 : 1,
     transition: 'opacity 0.15s',
   }

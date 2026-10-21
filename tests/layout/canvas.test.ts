@@ -107,6 +107,29 @@ describe('canvasScene', () => {
     expect(edge(paired, 'actor.biz->infra.player')!.data.muted).toBe(false)
   })
 
+  it('P11、P15：经由上层关系的临时线取关系的类型、标「经由上层」，随关系选中；未建模的临时线标「未建模」', async () => {
+    const { index: idx } = loadModel(
+      scenarioFiles({
+        'upper.yaml': 'relations: [{ id: r9, from: app.solution, to: infra.framework, type: dataflow }]',
+        'scenarios/x.yaml':
+          'scenario: { id: sc.v, name: V, steps: [{ call: { id: a, from: app.solution, to: infra.framework.pipeline } }, { call: { id: c, from: infra.framework.pipeline, to: app.fragments } }] }',
+      }),
+    )
+    const plan = planScenario(idx, 'sc.v')
+    const view = projectLevel(idx, 'infra.framework', { showBoundaries: true, mergeTypes: true, scenarioEnds: stageEnds(plan) })
+    const sv = projectScenario(idx, view, plan, new Map())
+    const positioned = await layoutView(view)
+    const stage = stageOverlay(sv, positioned, 'sc.v#c')
+    const input: CanvasInput = { ...(await structure('infra')), index: idx, positioned, scenarioView: sv, stage }
+    const s = canvasScene(input)
+    const upper = edge(s, 'upper:boundary:app|infra.framework.pipeline')!
+    expect(upper.data).toMatchObject({ temp: 'upper', label: '经由上层', play: 'walked', selected: false })
+    expect(upper.data.edge).toMatchObject({ type: 'dataflow', relationIds: ['r9'] })
+    expect(upper.markerEnd.color).toBe('var(--rel-dataflow)')
+    expect(edge(s, 'unmodeled:infra.framework.pipeline|boundary:app')!.data).toMatchObject({ temp: 'unmodeled', label: '未建模', play: 'current' })
+    expect(edge(canvasScene({ ...input, selection: { kind: 'relation', id: 'r9' } }), upper.id)!.data.selected).toBe(true)
+  })
+
   it('G14：选中文件的投影节点加文件高亮；设计版本标出新增的模块', async () => {
     const input = await structure('infra')
     expect(node(canvasScene({ ...input, fileHits: new Set(['infra.mus']) }), 'infra.mus')!.class).toContain('file-hit')

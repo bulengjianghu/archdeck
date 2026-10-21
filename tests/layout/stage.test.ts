@@ -1,8 +1,8 @@
-/** 舞台叠加：V5（参与的节点、走过的边）、P10（方向）、P11（未建模临时线）、R11（本层不可见）、分支预览 */
+/** 舞台叠加：V5（参与的节点、走过的边）、P10（方向）、P11 / P15（未建模与经由上层的临时线）、R11（本层不可见）、分支预览 */
 import { describe, expect, it } from 'vitest'
 import { landFrame, loadModel, planScenario, projectLevel, projectScenario, stageEnds } from '../../src/model'
 import { layoutView } from '../../src/layout/layout'
-import { stageDisplay, stageOverlay, unmodeledId } from '../../src/layout/stage'
+import { stageDisplay, stageOverlay, tempId } from '../../src/layout/stage'
 import { scenarioFiles } from '../fixtures/sample'
 
 async function setup(level: string, choices: Map<string, number>, files = scenarioFiles(), id = 'sc.play') {
@@ -42,9 +42,31 @@ describe('stageOverlay', () => {
     const files = scenarioFiles({ 'scenarios/x.yaml': 'scenario: { id: sc.u, name: U, steps: [{ call: { from: infra.mus, to: app.fragments } }] }' })
     const { sv, pv } = await setup('infra', new Map(), files, 'sc.u')
     const o = stageOverlay(sv, pv, 'sc.u#0')
-    expect(o.unmodeled).toHaveLength(1)
-    expect(o.unmodeled[0]).toMatchObject({ edgeId: unmodeledId('infra.mus', 'boundary:app'), from: 'infra.mus', to: 'boundary:app' })
-    expect(o.unmodeled[0].route.points).toHaveLength(2)
+    expect(o.temps).toHaveLength(1)
+    expect(o.temps[0]).toMatchObject({
+      kind: 'unmodeled',
+      edgeId: tempId({ kind: 'unmodeled', from: 'infra.mus', to: 'boundary:app' }),
+      from: 'infra.mus',
+      to: 'boundary:app',
+    })
+    expect(o.temps[0].route.points).toHaveLength(2)
+  })
+
+  it('P15：走过的经由上层关系的消息画临时线，带对应关系；与未建模的临时线分开', async () => {
+    const files = scenarioFiles({
+      'upper.yaml': 'relations: [{ id: r9, from: app.solution, to: infra.framework, type: calls }]',
+      'scenarios/x.yaml':
+        'scenario: { id: sc.v, name: V, steps: [{ call: { id: a, from: app.solution, to: infra.framework.pipeline } }, { async: { id: b, from: infra.framework.sm, to: infra.framework.pipeline } }, { call: { id: c, from: app.fragments, to: infra.framework.pipeline } }] }',
+    })
+    const { sv, pv } = await setup('infra.framework', new Map(), files, 'sc.v')
+    const o = stageOverlay(sv, pv, 'sc.v#c')
+    const ends = { from: 'boundary:app', to: 'infra.framework.pipeline' }
+    expect(o.temps.map(t => [t.kind, t.edgeId, t.relationId])).toEqual([
+      ['upper', tempId({ kind: 'upper', ...ends }), 'r9'],
+      ['unmodeled', tempId({ kind: 'unmodeled', ...ends }), undefined],
+    ])
+    expect(o.walked.get(tempId({ kind: 'upper', ...ends }))!.steps).toEqual([1])
+    expect(o.current).toMatchObject({ index: 2, at: { kind: 'unmodeled' } })
   })
 
   it('分支预览：各选项首条消息的落点与序号位置；空分支没有落点', async () => {

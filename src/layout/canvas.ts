@@ -3,7 +3,7 @@
  * 选中突出的灰化）、类名、层级，以及运行视角下适应画布用的可见节点。纯函数，与 stageOverlay、stageDisplay 同属 Layout；
  * 画布组件只把结果写入 Vue Flow、把交互转成操作。规则见 docs/architecture/workbench.md §4。
  *   结构视角：聚焦对象（悬停优先、其次选中）不相邻的节点与边变淡；核心跨层边只在聚焦核心模块时出现（O4）；边界边只在聚焦其一端或被选中时出现（L4）。
- *   运行视角：舞台显示决定显隐与淡化（V5、V8、V9、V10）；回放叠加（P7、P10、P11、F6）；选中步骤时其余走过的边与步骤序号变灰（R15、R16）。
+ *   运行视角：舞台显示决定显隐与淡化（V5、V8、V9、V10）；回放叠加（P7、P10、P11、P15、F6）；选中步骤时其余走过的边与步骤序号变灰（R15、R16）。
  *   选中文件：归属模块在本层的投影节点加文件高亮（G14）。
  */
 import {
@@ -18,7 +18,7 @@ import {
   type ViewEdge,
 } from '@/model'
 import { edgeLabel, isBoundaryEdge, moreChipId, type Box, type EdgeRoute, type PositionedView } from './layout'
-import { stageDisplay, unmodeledId, type StageOverlay, type StaticMode, type Visibility } from './stage'
+import { isTemp, landingId, stageDisplay, type StageOverlay, type StaticMode, type TempLine, type Visibility } from './stage'
 
 /** 画布节点的公共数据 */
 export interface NodeData {
@@ -66,8 +66,8 @@ export interface RouteEdgeData {
   muted?: boolean
   /** 当前消息与边的箭头方向相反（P10） */
   flowReverse?: boolean
-  /** 结构中未建模的临时线（P11） */
-  unmodeled?: boolean
+  /** 本层没有视图边时的临时线：经由上层关系（P15）/ 结构中未建模（P11） */
+  temp?: TempLine['kind']
 }
 
 export type CanvasNodeType = 'frame' | 'module' | 'boundary' | 'band' | 'core' | 'more' | 'actor' | 'step' | 'preview'
@@ -130,8 +130,11 @@ export interface CanvasScene {
   visibleIds: Set<string> | null
 }
 
-/** 临时边（未建模、预览）用的视图边外形 */
-const tempEdge = (id: string, from: string, to: string): ViewEdge => ({ id, kind: 'direct', from, to, type: 'calls', types: [], relationIds: [], mode: 'sync' })
+/** 临时线用的视图边外形；经由上层关系时取该关系的类型与同步 / 异步（P15） */
+function tempEdge(idx: ModelIndex | null, id: string, from: string, to: string, relationId?: string): ViewEdge {
+  const r = relationId ? idx?.relations.get(relationId) : undefined
+  return { id, kind: 'direct', from, to, type: r?.type ?? 'calls', types: [], relationIds: relationId ? [relationId] : [], mode: r?.mode ?? 'sync' }
+}
 
 export function canvasScene(input: CanvasInput): CanvasScene {
   const { positioned: pv, index: idx, selection: sel, hover, stage: st, scenarioView: sv } = input
@@ -156,7 +159,11 @@ export function canvasScene(input: CanvasInput): CanvasScene {
 
   const selectedEdgeIds = (() => {
     if (sel?.kind === 'edge') return new Set([sel.id])
-    if (sel?.kind === 'relation') return new Set([...pv.view.edges, ...(pv.view.coreEdges ?? [])].filter(e => e.relationIds.includes(sel.id)).map(e => e.id))
+    if (sel?.kind === 'relation') {
+      const ids = [...pv.view.edges, ...(pv.view.coreEdges ?? [])].filter(e => e.relationIds.includes(sel.id)).map(e => e.id)
+      // P15：经由上层关系的临时线同样随关系选中
+      return new Set([...ids, ...(st?.temps ?? []).filter(t => t.relationId === sel.id).map(t => t.edgeId)])
+    }
     return new Set<string>()
   })()
 
@@ -186,9 +193,7 @@ export function canvasScene(input: CanvasInput): CanvasScene {
     const ids = new Set<string>()
     for (const i of emphMessages) {
       const at = sv.messages[i]?.at
-      if (at?.kind === 'edge') ids.add(at.edgeId)
-      else if (at?.kind === 'unmodeled') ids.add(unmodeledId(at.from, at.to))
-      else if (at?.kind === 'internal') ids.add(`node:${at.node}`)
+      if (at) ids.add(landingId(at))
     }
     return ids
   })()
@@ -337,10 +342,9 @@ export function canvasScene(input: CanvasInput): CanvasScene {
   function playOf(id: string): Pick<RouteEdgeData, 'play' | 'flowReverse'> {
     if (!st) return {}
     const cur = st.current?.at
-    const curId = cur?.kind === 'edge' ? cur.edgeId : cur?.kind === 'unmodeled' ? unmodeledId(cur.from, cur.to) : null
-    if (curId === id) return { play: 'current', flowReverse: cur!.kind === 'edge' ? cur!.reverse : false }
+    if (cur && cur.kind !== 'internal' && landingId(cur) === id) return { play: 'current', flowReverse: cur.kind === 'edge' ? cur.reverse : false }
     const hov = hoverLanding
-    if (hov && (hov.kind === 'edge' ? hov.edgeId : hov.kind === 'unmodeled' ? unmodeledId(hov.from, hov.to) : null) === id) return { play: 'hover' }
+    if (hov && hov.kind !== 'internal' && landingId(hov) === id) return { play: 'hover' }
     if (st.previews.some(p => p.at?.kind === 'edge' && p.at.edgeId === id)) return { play: 'preview' }
     if (st.walked.has(id)) return { play: 'walked' }
     return {}
@@ -388,13 +392,18 @@ export function canvasScene(input: CanvasInput): CanvasScene {
     .filter(e => !isBoundaryEdge(e) || boundaryShown(e))
     .map(e => make(e, pv.edges.get(e.id), false))
   if (layered) list.push(...visibleCoreEdges.map(e => make(e, pv.coreEdges.get(e.id), true)))
-  // P11：结构中未建模的消息画临时虚线，不参与布局；分支预览落在未建模处同样画虚线
-  for (const u of st?.unmodeled ?? [])
-    list.push(make(tempEdge(u.edgeId, u.from, u.to), u.route, false, { unmodeled: true, label: '未建模', muted: !!emphEdges && !emphEdges.has(u.edgeId) }))
+  // P11、P15：本层没有视图边的消息画临时线，不参与布局——经由上层关系为关系类型色的实线，未建模为红色虚线；分支预览同样画临时线
+  for (const u of st?.temps ?? []) {
+    const label = u.kind === 'upper' ? '经由上层' : '未建模'
+    list.push(
+      make(tempEdge(idx, u.edgeId, u.from, u.to, u.relationId), u.route, false, { temp: u.kind, label, muted: !!emphEdges && !emphEdges.has(u.edgeId) }),
+    )
+  }
   for (const p of st?.previews ?? []) {
-    if (p.at?.kind !== 'unmodeled' || !p.route) continue
-    const id = unmodeledId(p.at.from, p.at.to)
-    if (!st!.walked.has(id)) list.push(make(tempEdge(id, p.at.from, p.at.to), p.route, false, { unmodeled: true, play: 'preview', label: '' }))
+    if (!isTemp(p.at) || !p.route) continue
+    const id = landingId(p.at)
+    const rel = p.at.kind === 'upper' ? p.at.relationId : undefined
+    if (!st!.walked.has(id)) list.push(make(tempEdge(idx, id, p.at.from, p.at.to, rel), p.route, false, { temp: p.at.kind, play: 'preview', label: '' }))
   }
 
   const visibleIds =

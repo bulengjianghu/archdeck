@@ -32,6 +32,7 @@ const LABEL: Record<string, string> = {
         <div class="row head">回放</div>
         <div class="row"><span class="flow" /> 当前步骤（沿消息方向流动） <span class="num">3</span> 已走过的步骤</div>
         <div class="row"><span class="box active" /> 当前端点 / 内部活动 <span class="line unmodeled" /> 结构中未建模</div>
+        <div class="row"><span class="line upper" /> 经由上层关系（关系建在上层，本层没有它的边）</div>
         <div class="row"><span class="line preview" /> 分支预览 · 时序图：实线实心箭头 = 同步，虚线开放箭头 = 异步，点线 = 返回</div>
         <div class="row muted">灰色 = 选中步骤时其余已走的步骤 · 静态关系：{{ MODE_LABEL[stage.mode.value] }}（左下角切换）</div>
       </template>
@@ -57,6 +58,10 @@ const LABEL: Record<string, string> = {
 
 .line.unmodeled {
   border-top: 2px dashed var(--danger);
+}
+
+.line.upper {
+  border-top: 2px solid var(--rel-calls);
 }
 
 .line.preview {

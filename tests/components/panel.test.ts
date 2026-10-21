@@ -113,6 +113,31 @@ describe('属性面板 · 运行视角', () => {
   })
 })
 
+describe('P15：经由上层关系', () => {
+  it('步骤面板注明对应关系建在上层，「定位到这条关系」跳到该关系所在层次并选中它', async () => {
+    const files = scenarioFiles({
+      'upper.yaml': 'relations: [{ id: r9, from: app.solution, to: infra.framework, type: calls }]',
+      'scenarios/x.yaml': 'scenario: { id: sc.v, name: V, steps: [{ call: { id: a, from: app.solution, to: infra.framework.pipeline, label: swap } }] }',
+    })
+    const { wrapper, desk } = await mountPanel('/?level=infra.framework&sc=sc.v&step=sc.v%23a', files)
+    const text = wrapper.text()
+    expect(text).toContain('（经由上层关系）')
+    expect(text).toContain('对应关系建在上层：Solution → Framework')
+    const btn = wrapper.findAll('button').find(b => b.text() === '定位到这条关系')!
+    await btn.trigger('click')
+    await flushPromises()
+    expect(desk.selected.value).toEqual({ kind: 'relation', id: 'r9' })
+    expect(desk.levelId.value).not.toBe('infra.framework')
+  })
+
+  it('未绑定关系的步骤仍为「结构中未建模」，不显示上层关系', async () => {
+    const files = scenarioFiles({ 'scenarios/x.yaml': 'scenario: { id: sc.u, name: U, steps: [{ call: { id: a, from: infra.mus, to: app.fragments } }] }' })
+    const { wrapper } = await mountPanel('/?level=infra&sc=sc.u&step=sc.u%23a', files)
+    expect(wrapper.text()).toContain('（结构中未建模）')
+    expect(wrapper.text()).not.toContain('对应关系建在上层')
+  })
+})
+
 describe('D-5：步骤的输入', () => {
   it('signatureLine：按标签开头的调用名在接口签名中找到对应的一行或一段', async () => {
     const { signatureLine } = await import('../../src/components/panel/runText')

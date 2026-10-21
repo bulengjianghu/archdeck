@@ -71,7 +71,7 @@ export function createRun({ state, index, levelId, plan, view, positioned, fileO
   })
   /** 当前帧在本层不可见时，能看到它的层次（R11） */
   const frameLevel = computed(() => (index.value && frame.value ? frameHome(index.value, frame.value) : null))
-  /** 舞台叠加：参与的节点、走过的边、当前消息、未建模临时线、分支预览（V5） */
+  /** 舞台叠加：参与的节点、走过的边、当前消息、经由上层与未建模的临时线、分支预览（V5、P11、P15） */
   const overlay = computed<StageOverlay | null>(() => {
     const pv = positioned.value
     if (!index.value || !scenarioView.value || !view.value || !pv || pv.view.parentId !== levelId.value) return null

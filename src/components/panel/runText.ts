@@ -18,7 +18,9 @@ export function nodeName(index: ModelIndex, nodeId: string): string {
 export function landingText(index: ModelIndex, at: VisibleLanding): string {
   if (at.kind === 'internal') return `${nodeName(index, at.node)} 内部`
   const text = `${nodeName(index, at.from)} → ${nodeName(index, at.to)}`
-  return at.kind === 'unmodeled' ? `${text}（结构中未建模）` : at.reverse ? `${text}（与边的箭头相反）` : text
+  if (at.kind === 'unmodeled') return `${text}（结构中未建模）`
+  if (at.kind === 'upper') return `${text}（经由上层关系）`
+  return at.reverse ? `${text}（与边的箭头相反）` : text
 }
 
 export function fragmentText(t: FragmentTag): string {

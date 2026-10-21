@@ -60,7 +60,7 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
     <g
       v-for="(m, i) in ps.model.messages"
       :key="i"
-      :class="['msg', m.kind, state(m), { unmodeled: m.unmodeled, hover: isHover(m) }]"
+      :class="['msg', m.kind, state(m), { unmodeled: m.temp === 'unmodeled', hover: isHover(m) }]"
       @click="m.kind !== 'empty' && emit('pick', m)"
       @mouseenter="m.kind !== 'empty' && emit('hover', m)"
       @mouseleave="emit('hover', null)"
@@ -83,7 +83,9 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
           :marker-end="`url(#seq-${m.kind === 'call' ? 'solid' : 'open'})`"
         />
         <text :x="(cx(m.from) + cx(m.to)) / 2" :y="ps.messages[i].y - 5" text-anchor="middle" class="label">
-          {{ m.label }}<tspan v-if="m.unmodeled" class="tag"> · 结构中未建模</tspan><tspan v-if="state(m).includes('paired')" class="pair-tag"> · 配对</tspan>
+          {{ m.label }}<tspan v-if="m.temp === 'unmodeled'" class="tag"> · 结构中未建模</tspan
+          ><tspan v-else-if="m.temp === 'upper'" class="upper-tag"> · 经由上层关系</tspan
+          ><tspan v-if="state(m).includes('paired')" class="pair-tag"> · 配对</tspan>
         </text>
       </template>
       <text v-if="m.pathIndex !== undefined" x="4" :y="ps.messages[i].y + 4" class="num"
@@ -152,6 +154,11 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
 .paired .arrow {
   stroke: var(--accent);
   stroke-opacity: 0.45;
+}
+
+.upper-tag {
+  font-size: 10px;
+  fill: var(--text-3);
 }
 
 .pair-tag {

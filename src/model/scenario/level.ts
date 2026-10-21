@@ -1,5 +1,5 @@
 /**
- * 帧的层次投影（P1–P5、P7、P10、P11、S9、R7、R13）：把回放路径上的每一帧映射到当前层次，合并为可见消息。
+ * 帧的层次投影（P1–P5、P7、P10、P11、P15、P16、S9、R7、R13）：把回放路径上的每一帧映射到当前层次，合并为可见消息。
  * 端点映射与结构投影共用 mapEndpoint（P1），落点的视图边 ID 与 projectLevel 一致。
  */
 import { lowestCommonAncestor } from '../indexer'
@@ -15,7 +15,9 @@ export type Lanes = { from: string; to: string }
 export type Landing =
   /** 落在视图边上；from / to 是消息方向上的视图节点，reverse 表示与边的箭头相反（P10）；core 表示分层总览的核心跨层边（P7） */
   | { kind: 'edge'; edgeId: string; from: string; to: string; reverse: boolean; core?: boolean; lanes?: Lanes }
-  /** 本层两节点之间没有视图边（P11） */
+  /** 本层两节点之间没有视图边，帧已绑定关系（显式或推断）：关系建在上层，一端是当前层次本身或其祖先（P15） */
+  | { kind: 'upper'; from: string; to: string; relationId: string; lanes?: Lanes }
+  /** 本层两节点之间没有视图边，帧没有绑定任何关系：结构中未建模（P11） */
   | { kind: 'unmodeled'; from: string; to: string; lanes?: Lanes }
   /** 两端落在本层同一个节点（P3）；带 lanes 时是分层总览中同一层不同泳道之间的消息，时序图画成泳道间的箭头 */
   | { kind: 'internal'; node: string; lanes?: Lanes }
@@ -85,6 +87,8 @@ export function landFrame(index: ModelIndex, view: LevelView, frame: Frame, node
   }
   const e = findEdge(view.edges, a.node, b.node, frame.relation)
   if (e) return { kind: 'edge', edgeId: e.id, from: a.node, to: b.node, reverse: e.from !== a.node, ...lanes }
+  // P11、P15：是否建模只看帧自身的关系绑定（与 S5a 同一口径），不看本层有没有视图边
+  if (frame.relation) return { kind: 'upper', from: a.node, to: b.node, relationId: frame.relation, ...lanes }
   return { kind: 'unmodeled', from: a.node, to: b.node, ...lanes }
 }
 
@@ -136,9 +140,9 @@ export function linearize(plan: ScenarioPlan, choices: Choices, mode: 'path' | '
   return out
 }
 
-/** 同一条视图边（含方向）、同一节点内部、同一对未建模节点（含方向） */
+/** 同一条视图边（含方向）、同一节点内部、同一对没有视图边的节点（含方向；经由上层与未建模不区分，P5） */
 const landingKey = (l: VisibleLanding) =>
-  (l.kind === 'edge' ? `e:${l.edgeId}:${l.from}` : l.kind === 'internal' ? `i:${l.node}` : `u:${l.from}|${l.to}`) + (l.lanes ? `:${l.lanes.from}>${l.lanes.to}` : '')
+  (l.kind === 'edge' ? `e:${l.edgeId}:${l.from}` : l.kind === 'internal' ? `i:${l.node}` : `t:${l.from}|${l.to}`) + (l.lanes ? `:${l.lanes.from}>${l.lanes.to}` : '')
 const contextKey = (f: Frame) => f.fragments.map(t => `${t.id}:${t.branch ?? ''}`).join('/')
 
 export interface MergedMessage {
@@ -177,6 +181,8 @@ export function mergeEntries(index: ModelIndex, view: LevelView, entries: readon
     const key = `${landingKey(at)}#${contextKey(e.frame)}#${e.status}`
     if (open && open.key === key) {
       open.msg.frames.push(e.frame)
+      // P16：合并的帧中有未绑定关系的，整条消息判为未建模
+      if (at.kind === 'unmodeled') open.msg.at = at
       continue
     }
     open = { msg: { kind: 'message', frames: [e.frame], at, status: e.status }, key }

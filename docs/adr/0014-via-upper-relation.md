@@ -1,6 +1,6 @@
 # ADR-0014：经由上层关系——是否建模由步骤自身的关系绑定决定
 
-- 状态：已采纳（待实现）
+- 状态：已采纳（已实现）
 - 日期：2026-10-21
 - 决策人：项目负责人（方案 A，2026-10-21）；实现者提出的细化规则（来源「议」）列在下文，待负责人确认
 - 关联：需求 D-5、D-6，验收标准 §6.9；领域模型 §1.3、§2（P5、P11、P15、P16、R15、S5a、S13）；ADR-0005（S5a、S13 的来源）
@@ -55,3 +55,8 @@
 - 下钻到 Framework 内部时，「方案切换事务」的 `beginXxxModelSwitch()` 等步骤显示为「经由上层关系」，不再误报；真正的缺口（如 Framework 回调 lifecycle 钩子）仍是红色虚线，图上一眼可分。
 - 落点 `Landing` 多一种 `upper`；舞台叠加、画布场景、时序模型 / 时序图、步骤面板、图例随之调整。
 - h5player 描述补上「Framework 回调 lifecycle 钩子」方向的关系，修复 4 处真实缺口。
+
+## 实现结果
+
+- 落点 `Landing` 新增 `upper`（`src/model/scenario/level.ts`），舞台叠加的临时线统一为 `temps`（`kind`：`upper` / `unmodeled`），画布、时序图、步骤面板、图例随之调整。
+- 单测覆盖 P11、P15、P16；验收 `tests/acceptance/via-upper.test.ts` 以真实描述核对 §6.9；E2E `e2e/via-upper.spec.ts`。

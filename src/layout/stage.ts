@@ -1,6 +1,6 @@
 /**
- * 舞台叠加（V5、P7、P10、P11、R11）与舞台显示（V5、V8、V9）：把本层帧投影与播放头换成画布要画的东西——
- * 参与的节点、走过的边与步骤序号、当前消息（方向）、未建模的临时线、分支点各选项的预览。
+ * 舞台叠加（V5、P7、P10、P11、P15、R11）与舞台显示（V5、V8、V9）：把本层帧投影与播放头换成画布要画的东西——
+ * 参与的节点、走过的边与步骤序号、当前消息（方向）、经由上层与未建模的临时线、分支点各选项的预览。
  * 纯函数，只算数据与坐标；画布只按它着色。
  */
 import { currentMessage, walkedCount, type Landing, type ScenarioLevelView, type VisibleLanding } from '@/model'
@@ -8,7 +8,7 @@ import type { LevelView } from '@/model'
 import { linkRoute, type Box, type EdgeRoute, type PositionedView } from './layout'
 
 export interface StageMark {
-  /** 视图边 ID；未建模的临时线为 `unmodeled:<from>|<to>` */
+  /** 视图边 ID；临时线为 `<种类>:<from>|<to>`（tempId），内部活动为 `node:<节点>` */
   edgeId: string
   /** 步骤序号（从 1 起，对应本层可见消息） */
   steps: number[]
@@ -23,15 +23,32 @@ export interface StageOverlay {
   walked: Map<string, StageMark>
   /** 当前可见消息 */
   current: { index: number; at: VisibleLanding } | null
-  /** 本层没有视图边的两节点之间的临时线（P11）：只画走过的与当前的 */
-  unmodeled: { edgeId: string; from: string; to: string; route: EdgeRoute }[]
+  /** 本层没有视图边的两节点之间的临时线（经由上层 P15、未建模 P11）：只画走过的与当前的 */
+  temps: TempLine[]
   /** 停在分支点时各选项首条消息的预览 */
   previews: { option: number; label: string; at: VisibleLanding | null; route?: EdgeRoute; pos?: { x: number; y: number } }[]
   /** 当前帧在本层不可见（R11） */
   hiddenCurrent: boolean
 }
 
-export const unmodeledId = (from: string, to: string) => `unmodeled:${from}|${to}`
+/** 临时线落点：本层两节点之间没有视图边 */
+export type TempLanding = Extract<VisibleLanding, { kind: 'upper' | 'unmodeled' }>
+
+export interface TempLine {
+  kind: TempLanding['kind']
+  edgeId: string
+  from: string
+  to: string
+  route: EdgeRoute
+  /** 经由上层关系：对应的关系 */
+  relationId?: string
+}
+
+export const tempId = (at: Pick<TempLanding, 'kind' | 'from' | 'to'>) => `${at.kind}:${at.from}|${at.to}`
+export const isTemp = (at: VisibleLanding | null | undefined): at is TempLanding => at?.kind === 'upper' || at?.kind === 'unmodeled'
+
+/** 落点在画布上对应的边 ID：视图边、临时线，或内部活动的 `node:<节点>` */
+export const landingId = (at: VisibleLanding): string => (at.kind === 'edge' ? at.edgeId : at.kind === 'internal' ? `node:${at.node}` : tempId(at))
 
 const mid = (r?: EdgeRoute) => r?.label ?? (r ? r.points[Math.floor(r.points.length / 2)] : undefined)
 const center = (b?: Box) => (b ? { x: b.x + b.w / 2, y: b.y + b.h / 2 } : undefined)
@@ -54,16 +71,17 @@ export function stageOverlay(
   }
   const routeOf = (at: VisibleLanding): { id: string; route?: EdgeRoute } => {
     if (at.kind === 'edge') return { id: at.edgeId, route: at.core ? pv.coreEdges.get(at.edgeId) : pv.edges.get(at.edgeId) }
-    if (at.kind === 'unmodeled') return { id: unmodeledId(at.from, at.to), route: linkRoute(pv.nodes.get(at.from), pv.nodes.get(at.to)) }
-    return { id: `node:${at.node}` }
+    if (isTemp(at)) return { id: tempId(at), route: linkRoute(pv.nodes.get(at.from), pv.nodes.get(at.to)) }
+    return { id: landingId(at) }
   }
 
   const walked = new Map<string, StageMark>()
-  const unmodeled = new Map<string, StageOverlay['unmodeled'][number]>()
+  const temps = new Map<string, TempLine>()
   const count = walkedCount(sv, frameId)
   sv.messages.slice(0, count).forEach(m => {
     const { id, route } = routeOf(m.at)
-    if (m.at.kind === 'unmodeled' && route) unmodeled.set(id, { edgeId: id, from: m.at.from, to: m.at.to, route })
+    if (isTemp(m.at) && route && !temps.has(id))
+      temps.set(id, { kind: m.at.kind, edgeId: id, from: m.at.from, to: m.at.to, route, ...(m.at.kind === 'upper' ? { relationId: m.at.relationId } : {}) })
     const box = m.at.kind === 'internal' ? pv.nodes.get(m.at.node) : undefined
     const mark = walked.get(id) ?? { edgeId: id, steps: [], at: box ? { x: box.x + box.w - 8, y: box.y + 2 } : mid(route) }
     mark.steps.push(m.index + 1)
@@ -81,7 +99,7 @@ export function stageOverlay(
     return { option: o.option, label: o.label, at, route, pos }
   })
 
-  return { active, walked, current, unmodeled: [...unmodeled.values()], previews, hiddenCurrent: frameId !== null && ci === null }
+  return { active, walked, current, temps: [...temps.values()], previews, hiddenCurrent: frameId !== null && ci === null }
 }
 
 /** V8：运行视角下静态关系的显示方式 */

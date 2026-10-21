@@ -2,7 +2,7 @@
 /**
  * 步骤面板（D-5，选中步骤时，V2）：先回答「这一步做什么」——作用、输入（签名中与标签同名的一行 + 携带的数据）、输出（配对返回，F7）、数据结构、经由接口；
  * 步骤没写的接口与数据取自对应关系并标「取自关系」（S14）；
- * 其后是真实端点与本层投影、本层一条可见消息覆盖的多帧；结构关系默认折叠，可在画布上显示（V9）；最后是出处。
+ * 其后是真实端点与本层投影（经由上层关系时注明关系建在上层并可定位，P15）、本层一条可见消息覆盖的多帧；结构关系默认折叠，可在画布上显示（V9）；最后是出处。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -29,6 +29,12 @@ const callLine = computed(() => signatureLine(f.value.interface ? idx.value.inte
 const output = computed(() => stepOutput(f.value, desk.run.pairs.value, desk.run.plan.value!.frames))
 /** 输出侧要展开的数据结构：配对返回携带的 */
 const outData = computed(() => (output.value.kind === 'pair' ? output.value.frame.payload : []))
+/** P15：经由上层关系时对应的关系（本帧自己的绑定优先） */
+const upperRel = computed(() => {
+  const at = msg.value?.at
+  if (at?.kind !== 'upper') return null
+  return idx.value.relations.get(f.value.relation ?? at.relationId) ?? null
+})
 /** V9：当前可见消息在本层的两端 */
 const revealNodes = computed(() => {
   const at = msg.value?.at
@@ -107,6 +113,10 @@ function pointAt(id: string) {
         <button class="link" @click="pointAt(f.to)">{{ moduleName(idx, f.to) }}</button>
       </div>
       <div v-if="msg" class="sub muted">在本层：{{ landingText(idx, msg.at) }}</div>
+      <div v-if="upperRel" class="sub upper">
+        对应关系建在上层：{{ moduleName(idx, upperRel.from) }} → {{ moduleName(idx, upperRel.to) }}，本层没有它的边。
+        <button class="link" @click="desk.revealRelation(upperRel.id)">定位到这条关系</button>
+      </div>
       <div v-else class="sub muted">两端都在本层之外。<button class="link" @click="desk.goTo(desk.run.frameLevel.value!)">到能看到它的层次</button></div>
     </Section>
 
@@ -188,6 +198,10 @@ function pointAt(id: string) {
 .sub {
   font-size: 12.5px;
   margin-top: 4px;
+}
+
+.upper {
+  color: var(--text-2);
 }
 
 .frames {

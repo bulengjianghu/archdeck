@@ -2,7 +2,7 @@
 /**
  * GraphCanvas：把 PositionedView 画成节点和边；处理平移、缩放、单击、双击、悬停。
  * 运行视角下作为舞台（V5）：本层参与的节点与走过的边突出、其余变淡，当前消息沿步骤方向流动（P10），
- * 未建模的消息画临时虚线（P11），步骤序号可单击指向（R13），停在分支点时预览各选项（F6）。
+ * 本层没有视图边的消息画临时线（经由上层关系 P15 / 未建模 P11），步骤序号可单击指向（R13），停在分支点时预览各选项（F6）。
  * 舞台按静态关系显示方式隐藏或淡化不参与的节点与静态边（V5、V8），「在画布上显示」的对象照常（V9）；
  * 选中步骤时其余走过的边与步骤序号淡为灰色；选中其他对象时不变灰，舞台始终按进度（R15、R16）。
  * 选中文件时，其归属模块在本层的投影节点加文件高亮（G14）。
@@ -84,7 +84,7 @@ function onNodeDoubleClick({ node }: { node: Node<NodeData> }) {
 }
 
 function onEdgeClick({ edge }: { edge: Edge<RouteEdgeData> }) {
-  if (edge.data!.unmodeled) return
+  if (edge.data!.temp === 'unmodeled') return
   const e = edge.data!.edge
   if (e.kind === 'direct') desk.select({ kind: 'relation', id: e.relationIds[0] })
   else desk.select({ kind: 'edge', id: e.id })
