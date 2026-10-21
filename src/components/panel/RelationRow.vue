@@ -10,6 +10,8 @@ const desk = useDesk()
 const r = computed(() => desk.index.value?.relations.get(props.id))
 const name = (id: string) => (desk.index.value ? moduleName(desk.index.value, id) : id)
 const ifName = computed(() => (r.value?.interface ? desk.index.value?.interfaces.get(r.value.interface)?.name : undefined))
+/** K5：有代码事实时标出证实 */
+const fact = computed(() => desk.facts.report.value?.relations.get(props.id)?.status)
 </script>
 
 <template>
@@ -23,6 +25,8 @@ const ifName = computed(() => (r.value?.interface ? desk.index.value?.interfaces
     <span class="rel-chip" :class="`rel-${r.type}`">{{ r.type }}</span>
     <span v-if="r.mode === 'async'" class="muted">异步</span>
     <code v-if="ifName" class="if">{{ ifName }}</code>
+    <span v-if="fact === 'confirmed'" class="fact ok" title="已被代码证实">✓</span>
+    <span v-else-if="fact === 'unconfirmed'" class="fact" title="代码中没有对应的依赖">?</span>
   </li>
 </template>
 
@@ -33,6 +37,15 @@ const ifName = computed(() => (r.value?.interface ? desk.index.value?.interfaces
   align-items: center;
   gap: 4px 8px;
   padding: 3px 0;
+}
+
+.fact {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.fact.ok {
+  color: var(--success, var(--accent));
 }
 
 .if {

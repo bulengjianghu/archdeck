@@ -10,9 +10,9 @@
 ```ts
 interface ViewState {
   levelId: string
-  selection: Selection | null        // 显式选中的对象 { kind: 'module' | 'relation' | 'edge' | 'actor' | 'file'; id }（文件的 id 为相对源码根目录的路径）；运行视角下为 null 即选中进度所在的步骤 / 场景
+  selection: Selection | null        // 显式选中的对象 { kind: 'module' | 'relation' | 'edge' | 'actor' | 'file' | 'dep'; id }（文件的 id 为相对源码根目录的路径；dep 为代码依赖叠加线，id 为 `<依赖方模块>-><被依赖方模块>`，K10）；运行视角下为 null 即选中进度所在的步骤 / 场景
   hover: string | null
-  toggles: Toggles                   // showBoundaries · currentOnly · relationTypes · showDiff · compareTo
+  toggles: Toggles                   // showBoundaries · currentOnly · relationTypes · showDiff · compareTo · showFacts（代码事实叠加，K9）
   playback: PlaybackState | null     // null = 结构视角
 }
 
@@ -49,7 +49,7 @@ URL 与此一致，编码不需区分：选中步骤时只有 `step`；选中场
 
 舞台的静态关系显示方式（V8）与「在画布上显示」（V9）只属于画布这块界面，和副栏页签一样留在呈现层，不进视图状态与 URL。
 
-源码（文件清单、归属）不是视图状态：它是关于被描述系统的数据，像模型索引一样由协调者持有、由源码同步取得。副栏的页签与预览文件只属于那块界面，留在呈现层（G15）。
+源码（文件清单、归属）与代码事实（文件依赖、基线、拦截记录）不是视图状态：它们是关于被描述系统的数据，像模型索引一样由协调者持有、由源码同步取得。副栏的页签与预览文件只属于那块界面，留在呈现层（G15）。
 
 ## 2. 协调者：DeskState
 
@@ -59,9 +59,9 @@ URL 与此一致，编码不需区分：选中步骤时只有 `step`；选中场
 |---|---|
 | 持有 | `ViewState`（`shallowRef`）、加载后的模型索引与问题、设计信息与对比基线索引、源码清单 `SourcePayload` |
 | 唯一写入口 | `dispatch(action)`：`transition(state, action, ctx)` 得到新状态与历史标注，写入；对外的操作都是构造动作并 dispatch 的包装 |
-| 派生（`computed`，调用纯函数） | 选中 `selectedOf`（V2）与选中突出 `emphasisOf`（R15、R16，泳道取自时序模型的 `lanesOf`）与调用返回配对 `pairReturns`（F7）；路线 `routeOf`（F6f）；层次视图 `projectLevel`（运行视角下为舞台视图：不受显示开关影响并补齐场景端点，L9、P12）；打开场景时：回放计划 → 回放路径 → 本层帧投影与可见消息 → 时序模型 → 时序图坐标，以及步骤大纲 `outlineScenario` 与参与模块 `scenarioModules`（导航树用，T5、T6）；视角；选中对象（非步骤、非场景）的参与信息；设计版本的差异 `diffModels` 与基线漂移；源码：归属 `assignFiles`、目录树 `fileTree`、选中模块的文件 / 入口、选中文件的归属模块与本层投影 `fileNodes`（G14）、归属警告 `sourceIssues`（只在当前版本并入问题列表，G9） |
+| 派生（`computed`，调用纯函数） | 选中 `selectedOf`（V2）与选中突出 `emphasisOf`（R15、R16，泳道取自时序模型的 `lanesOf`）与调用返回配对 `pairReturns`（F7）；路线 `routeOf`（F6f）；层次视图 `projectLevel`（运行视角下为舞台视图：不受显示开关影响并补齐场景端点，L9、P12）；打开场景时：回放计划 → 回放路径 → 本层帧投影与可见消息 → 时序模型 → 时序图坐标，以及步骤大纲 `outlineScenario` 与参与模块 `scenarioModules`（导航树用，T5、T6）；视角；选中对象（非步骤、非场景）的参与信息；设计版本的差异 `diffModels` 与基线漂移；源码：归属 `assignFiles`、目录树 `fileTree`、选中模块的文件 / 入口、选中文件的归属模块与本层投影 `fileNodes`（G14）、归属警告 `sourceIssues`（只在当前版本并入问题列表，G9）；架构治理：治理报告 `governanceReport`、结构视角开关开启时的本层投影 `levelFacts`（K9、Y4）、门禁错误 `gateIssues`（并入问题列表，U9）、选中叠加线的 `depsBetween`（K10）、拦截摘要 `summarizeLedger`（Q4） |
 | 外界同步 | 交给四个同步适配器（§4） |
-| 对外的形状 | 核心平铺：视图状态与直接推出的层次、选中、视角、开关、层次视图与坐标、`playback`，以及全部操作；领域派生分三组，代码在 `src/state/desk/`（ADR-0013）：`desk.run` 运行视角、`desk.files` 源码、`desk.versions` 设计版本与对比 |
+| 对外的形状 | 核心平铺：视图状态与直接推出的层次、选中、视角、开关、层次视图与坐标、`playback`，以及全部操作；领域派生分四组，代码在 `src/state/desk/`（ADR-0013）：`desk.run` 运行视角、`desk.files` 源码、`desk.versions` 设计版本与对比、`desk.facts` 架构治理（ADR-0015） |
 
 派生是一条 computed 链：层次或开关变化 → 层次视图 → 帧投影 → 时序模型 → 时序布局。结构图与时序图因此不会不同步。层次视图只依赖层次、显示开关与打开的场景，悬停、选中、进度变化不会引起重新投影与重新排布（ADR-0009）。
 

@@ -82,6 +82,9 @@ export function emphasisOf(state: ViewState, ctx: EmphasisContext): Emphasis | n
       if (r) [r.from, r.to].forEach(add)
       break
     }
+    case 'dep':
+      s.id.split('->').forEach(add)
+      break
     case 'edge': {
       // 视图边的两端是视图节点：模块节点（含边界节点、带）按其模块取泳道，参与者节点即其泳道
       const lv = ctx.levelView

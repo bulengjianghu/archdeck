@@ -17,6 +17,14 @@ const DASH: Record<string, string | undefined> = { depends: '6 4', implements: '
 const style = computed(() => {
   const n = props.data.edge.relationIds.length
   const width = 1.5 + Math.min(2.5, (n - 1) * 0.5) + (props.data.selected ? 1.5 : 0) + (props.data.play === 'walked' ? 0.5 : 0)
+  if (props.data.temp === 'code') {
+    return {
+      stroke: props.data.violated ? 'var(--danger)' : 'var(--text-3)',
+      strokeWidth: props.data.selected ? 2.5 : 1.5,
+      strokeDasharray: '3 4',
+      opacity: props.data.dim ? 0.12 : 0.9,
+    }
+  }
   if (props.data.temp === 'unmodeled') {
     return { stroke: 'var(--danger)', strokeWidth: 1.5, strokeDasharray: '5 5', opacity: props.data.play === 'preview' ? 0.7 : 0.9 }
   }
@@ -50,6 +58,7 @@ const style = computed(() => {
     stroke-linejoin="round"
     :opacity="data.dim ? 0.06 : 0.28"
   />
+  <path v-if="data.violated && !data.temp" :d="path" class="edge-violated" fill="none" stroke-linecap="round" :opacity="data.dim ? 0.06 : 0.3" />
   <path v-if="data.play === 'current' || data.play === 'hover'" :d="path" class="edge-glow" :class="data.play" fill="none" stroke-linecap="round" />
   <BaseEdge
     :id="id"
@@ -71,6 +80,12 @@ const style = computed(() => {
 <style scoped>
 .edge-diff {
   pointer-events: none;
+}
+
+.edge-violated {
+  pointer-events: none;
+  stroke: var(--danger);
+  stroke-width: 8;
 }
 
 .edge-glow {

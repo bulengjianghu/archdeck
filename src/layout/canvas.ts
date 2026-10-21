@@ -5,19 +5,23 @@
  *   结构视角：聚焦对象（悬停优先、其次选中）不相邻的节点与边变淡；核心跨层边只在聚焦核心模块时出现（O4）；边界边只在聚焦其一端或被选中时出现（L4）。
  *   运行视角：舞台显示决定显隐与淡化（V5、V8、V9、V10）；回放叠加（P7、P10、P11、P15、F6）；选中步骤时其余走过的边与步骤序号变灰（R15、R16）。
  *   选中文件：归属模块在本层的投影节点加文件高亮（G14）。
+ *   代码事实（结构视角、开关开启，K9、Y4）：关系边标证实、含违规的边红色描边、未描述依赖与违规画成不参与布局的叠加线、本层环的节点标编号。
  */
 import {
   FIELD_LABELS,
   moduleName,
   type ActorEntity,
   type ActorKind,
+  type DepOverlay,
+  type EdgeFact,
+  type LevelFacts,
   type ModelDiff,
   type ModelIndex,
   type ModuleEntity,
   type ScenarioLevelView,
   type ViewEdge,
 } from '@/model'
-import { edgeLabel, isBoundaryEdge, moreChipId, type Box, type EdgeRoute, type PositionedView } from './layout'
+import { edgeLabel, isBoundaryEdge, linkRoute, moreChipId, type Box, type EdgeRoute, type PositionedView } from './layout'
 import { isTemp, landingId, stageDisplay, type StageOverlay, type StaticMode, type TempLine, type Visibility } from './stage'
 
 /** 画布节点的公共数据 */
@@ -48,6 +52,8 @@ export interface NodeData {
   steps?: { n: number; frameId: string; current: boolean; muted?: boolean }[]
   /** 运行视角：分支点某个选项的预览 */
   preview?: { pointId: string; option: number; label: string }
+  /** Y4：本层环的编号 */
+  cycle?: number
 }
 
 export interface RouteEdgeData {
@@ -66,8 +72,14 @@ export interface RouteEdgeData {
   muted?: boolean
   /** 当前消息与边的箭头方向相反（P10） */
   flowReverse?: boolean
-  /** 本层没有视图边时的临时线：经由上层关系（P15）/ 结构中未建模（P11） */
-  temp?: TempLine['kind']
+  /** 本层没有视图边时的临时线：经由上层关系（P15）/ 结构中未建模（P11）；代码依赖叠加线（K9） */
+  temp?: TempLine['kind'] | 'code'
+  /** K9：关系边的证实 */
+  fact?: EdgeFact
+  /** K9：边含违规 */
+  violated?: boolean
+  /** K9：代码依赖叠加线的内容 */
+  overlay?: DepOverlay
 }
 
 export type CanvasNodeType = 'frame' | 'module' | 'boundary' | 'band' | 'core' | 'more' | 'actor' | 'step' | 'preview'
@@ -121,6 +133,8 @@ export interface CanvasInput {
   fileHits: ReadonlySet<string> | null
   /** 停在分支点时的分支点 ID（分支预览用） */
   branchPointId: string | null
+  /** K9、Y4：结构视角下开启「代码事实」时的本层投影；否则为 null */
+  facts?: LevelFacts | null
 }
 
 export interface CanvasScene {
@@ -129,6 +143,9 @@ export interface CanvasScene {
   /** V5：运行视角隐藏了静态内容时只按这些节点适应画布；否则为 null（取全部内容） */
   visibleIds: Set<string> | null
 }
+
+/** K9：关系边的证实标记 */
+const FACT_MARK: Record<EdgeFact, string> = { confirmed: '✓', partial: '◐', unconfirmed: '?' }
 
 /** 临时线用的视图边外形；经由上层关系时取该关系的类型与同步 / 异步（P15） */
 function tempEdge(idx: ModelIndex | null, id: string, from: string, to: string, relationId?: string): ViewEdge {
@@ -157,8 +174,10 @@ export function canvasScene(input: CanvasInput): CanvasScene {
     return !pv.nodes.has(sel.id) && pv.nodes.has(`boundary:${sel.id}`) ? `boundary:${sel.id}` : sel.id
   })()
 
+  const facts = st ? null : (input.facts ?? null)
   const selectedEdgeIds = (() => {
     if (sel?.kind === 'edge') return new Set([sel.id])
+    if (sel?.kind === 'dep') return new Set((facts?.overlays ?? []).filter(o => `${o.fromModule}->${o.toModule}` === sel.id).map(o => o.id))
     if (sel?.kind === 'relation') {
       const ids = [...pv.view.edges, ...(pv.view.coreEdges ?? [])].filter(e => e.relationIds.includes(sel.id)).map(e => e.id)
       // P15：经由上层关系的临时线同样随关系选中
@@ -289,6 +308,7 @@ export function canvasScene(input: CanvasInput): CanvasScene {
         // 分层总览中带不参与变淡，只有核心模块会
         dim: dimmed(n.id, !!near && !near.has(n.id) && !(layered && n.role === 'layer')),
         ...diffOf(n.moduleId),
+        ...(facts?.cycles.has(n.id) ? { cycle: facts.cycles.get(n.id) } : {}),
       }
       if (n.role === 'boundary') {
         const path = (idx.pathOf.get(n.moduleId) ?? []).slice(1, -1).map(id => idx.modules.get(id)?.name ?? id)
@@ -356,6 +376,8 @@ export function canvasScene(input: CanvasInput): CanvasScene {
     const selected = selectedEdgeIds.has(e.id)
     const touchesFocus = !!f && (e.from === f || e.to === f)
     const play = playOf(e.id)
+    const fact = facts?.edgeFacts.get(e.id)
+    const base = st && play.play ? '' : edgeLabel(e)
     return {
       id: core ? `core:${e.id}` : e.id,
       source: e.from,
@@ -366,8 +388,10 @@ export function canvasScene(input: CanvasInput): CanvasScene {
       data: {
         route,
         edge: e,
-        // 运行视角下走过的边由步骤序号标注，不再标类型
-        label: st && play.play ? '' : edgeLabel(e),
+        // 运行视角下走过的边由步骤序号标注，不再标类型；K9：证实标记跟在类型后
+        label: fact ? `${base} ${FACT_MARK[fact]}`.trim() : base,
+        ...(fact ? { fact } : {}),
+        ...(facts?.violatedEdges.has(e.id) ? { violated: true } : {}),
         selected,
         core,
         change: edgeChange(e),
@@ -386,7 +410,8 @@ export function canvasScene(input: CanvasInput): CanvasScene {
     selectedEdgeIds.has(e.id) ||
     playEdges.has(e.id) ||
     (!!f && (e.from === f || e.to === f)) ||
-    (!!st && (input.mode === 'show' || revealed.has(e.from) || revealed.has(e.to)))
+    (!!st && (input.mode === 'show' || revealed.has(e.from) || revealed.has(e.to))) ||
+    !!facts?.violatedEdges.has(e.id)
   const list = pv.view.edges
     .filter(e => !st || edgeVis(e.id) !== 'hide' || playEdges.has(e.id) || selectedEdgeIds.has(e.id) || playOf(e.id).play)
     .filter(e => !isBoundaryEdge(e) || boundaryShown(e))
@@ -397,6 +422,14 @@ export function canvasScene(input: CanvasInput): CanvasScene {
     const label = u.kind === 'upper' ? '经由上层' : '未建模'
     list.push(
       make(tempEdge(idx, u.edgeId, u.from, u.to, u.relationId), u.route, false, { temp: u.kind, label, muted: !!emphEdges && !emphEdges.has(u.edgeId) }),
+    )
+  }
+  // K9：代码依赖叠加线，不参与布局
+  for (const o of facts?.overlays ?? []) {
+    const label = [o.undescribed ? `未描述 ${o.undescribed}` : '', o.violations ? `违规 ${o.violations}` : ''].filter(Boolean).join(' · ')
+    const ve: ViewEdge = { id: o.id, kind: 'direct', from: o.from, to: o.to, type: 'depends', types: [], relationIds: [], mode: 'sync' }
+    list.push(
+      make(ve, linkRoute(pv.nodes.get(o.from), pv.nodes.get(o.to)), false, { temp: 'code', label, overlay: o, ...(o.violations ? { violated: true } : {}) }),
     )
   }
   for (const p of st?.previews ?? []) {

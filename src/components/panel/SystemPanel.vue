@@ -4,6 +4,7 @@ import { useDesk } from '@/state/inject'
 import Markdown from './Markdown.vue'
 import Section from './Section.vue'
 import DesignSection from './DesignSection.vue'
+import GovernanceSection from './GovernanceSection.vue'
 
 const desk = useDesk()
 const idx = computed(() => desk.index.value!)
@@ -64,6 +65,7 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
         </li>
       </ul>
     </Section>
+    <GovernanceSection />
     <footer class="src muted">描述目录：{{ desk.modelDir.value }}</footer>
   </div>
 </template>

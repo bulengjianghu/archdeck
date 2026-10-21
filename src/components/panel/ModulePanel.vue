@@ -9,6 +9,7 @@ import RelationRow from './RelationRow.vue'
 import ChangeBadge from './ChangeBadge.vue'
 import DesignNote from './DesignNote.vue'
 import ModuleSource from './ModuleSource.vue'
+import ModuleGovernance from './ModuleGovernance.vue'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -121,6 +122,7 @@ function openChild(childId: string) {
     </Section>
 
     <ModuleSource :id="m.id" />
+    <ModuleGovernance :id="m.id" />
 
     <footer class="src muted">出处：{{ desk.modelDir.value }}/{{ m.src.file }}{{ m.src.line ? `:${m.src.line}` : '' }}</footer>
   </div>

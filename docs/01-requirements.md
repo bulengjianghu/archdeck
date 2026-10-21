@@ -28,7 +28,7 @@ h5player 的架构信息分散在几处：
 | 看见运行 | 在静态结构上叠加场景：依次、分支、循环、异步地调用了哪些模块 | 已实现 |
 | 对上源码 | 模块与真实源码文件互相定位：模块由哪些文件组成、从哪里导出什么、与描述的接口是否一致 | 已实现 |
 | 看见演化 | 对比任意两个 git 版本之间模块和关系的增删改 | 后续（设计版本与基线的对比已实现） |
-| 支撑治理 | 从代码提取依赖事实，与描述比对、按架构规则校验，环度与违规只许变好（棘轮门禁）；把规则与语义交给 AI agent，在写代码前判定（ADR-0015） | 待实现 |
+| 支撑治理 | 从代码提取依赖事实，与描述比对、按架构规则校验，环度与违规只许变好（棘轮门禁）；把规则与语义交给 AI agent，在写代码前判定（ADR-0015） | 已实现 |
 
 ### 2.2 非目标
 
@@ -170,22 +170,22 @@ h5player 的架构信息分散在几处：
 
 | 编号 | 需求 | 规则 | 优先级 | 状态 |
 |---|---|---|---|---|
-| GV-1 | 从源码提取文件依赖（穿透 barrel 再导出），按归属提升为模块依赖；外部依赖按包名统计 | K1–K4 | P0 | 待实现 |
-| GV-2 | 描述与代码比对：关系已证实 / 未证实，模块依赖未描述；编译期关系未证实报警告 | K5–K8 | P0 | 待实现 |
-| GV-3 | 架构规则 `rules.yaml`：层规则（`mayDependOn` 默认拒绝）、模块依赖白名单、访问面、带理由的例外；违规带文件证据 | U1–U6 | P0 | 待实现 |
-| GV-4 | 模块环与文件环、环度；可声明容忍的环 | Y1–Y3 | P0 | 待实现 |
-| GV-5 | 棘轮门禁：`npm run arch -- baseline` 生成基线；`lint:model` 对基线外的新增违规、环度上升报错并非零退出，可接入 CI | U7、U8 | P0 | 待实现 |
-| GV-6 | 画布叠加：顶部「代码事实」开关；关系边标已证实 / 未证实；未描述依赖与违规画成不参与布局的叠加线；违规边红色描边；本层的环标在节点上 | K9、Y4 | P0 | 待实现 |
-| GV-7 | 面板：根层「架构治理」一节（事实统计、违规按新增 / 已知 / 已豁免、环与环度对比基线、拦截记录摘要）；模块（生效的规则、出入的违规与未描述依赖、所在的环）；关系（证实状态与证据）；代码依赖叠加线（模块依赖与文件证据，可选中文件） | K10、U9 | P0 | 待实现 |
-| GV-8 | 问题提示列出门禁错误 | U9 | P1 | 待实现 |
+| GV-1 | 从源码提取文件依赖（穿透 barrel 再导出），按归属提升为模块依赖；外部依赖按包名统计 | K1–K4 | P0 | 已实现 |
+| GV-2 | 描述与代码比对：关系已证实 / 未证实，模块依赖未描述；编译期关系未证实报警告 | K5–K8 | P0 | 已实现 |
+| GV-3 | 架构规则 `rules.yaml`：层规则（`mayDependOn` 默认拒绝）、模块依赖白名单、访问面、带理由的例外；违规带文件证据 | U1–U6 | P0 | 已实现 |
+| GV-4 | 模块环与文件环、环度；可声明容忍的环 | Y1–Y3 | P0 | 已实现 |
+| GV-5 | 棘轮门禁：`npm run arch -- baseline` 生成基线；`lint:model` 对基线外的新增违规、环度上升报错并非零退出，可接入 CI | U7、U8 | P0 | 已实现 |
+| GV-6 | 画布叠加：顶部「代码事实」开关；关系边标已证实 / 未证实；未描述依赖与违规画成不参与布局的叠加线；违规边红色描边；本层的环标在节点上 | K9、Y4 | P0 | 已实现 |
+| GV-7 | 面板：根层「架构治理」一节（事实统计、违规按新增 / 已知 / 已豁免、环与环度对比基线、拦截记录摘要）；模块（生效的规则、出入的违规与未描述依赖、所在的环）；关系（证实状态与证据）；代码依赖叠加线（模块依赖与文件证据，可选中文件） | K10、U9 | P0 | 已实现 |
+| GV-8 | 问题提示列出门禁错误 | U9 | P1 | 已实现 |
 
 ### 4.9 agent 接口
 
 | 编号 | 需求 | 规则 | 优先级 | 状态 |
 |---|---|---|---|---|
-| AG-1 | 命令行 `npm run arch -- <命令>`：`locate`（文件或模块）、`check`（写前判定）、`violations`、`cycles`、`rescan`、`report`（拦截报告）、`baseline`（生成基线，仅命令行） | Q1–Q3、U7 | P0 | 待实现 |
-| AG-2 | MCP 服务器 `npm run arch:mcp`（stdio）：与命令行相同的查询，不含生成基线；任何支持 MCP 的 coding agent 可接入 | Q5、Q6 | P0 | 待实现 |
-| AG-3 | 拦截记录：写前判定与重新扫描写入 `governance/ledger.jsonl`，报告可量化「拦了多少、环度降了多少」 | Q4 | P0 | 待实现 |
+| AG-1 | 命令行 `npm run arch -- <命令>`：`locate`（文件或模块）、`check`（写前判定）、`violations`、`cycles`、`rescan`、`report`（拦截报告）、`baseline`（生成基线，仅命令行） | Q1–Q3、U7 | P0 | 已实现 |
+| AG-2 | MCP 服务器 `npm run arch:mcp`（stdio）：与命令行相同的查询，不含生成基线；任何支持 MCP 的 coding agent 可接入 | Q5、Q6 | P0 | 已实现 |
+| AG-3 | 拦截记录：写前判定与重新扫描写入 `governance/ledger.jsonl`，报告可量化「拦了多少、环度降了多少」 | Q4 | P0 | 已实现 |
 
 ### 4.7 初始内容
 
@@ -297,17 +297,17 @@ h5player 的架构信息分散在几处：
 3. 「命令执行」的 `pre / post hook` 及其返回 `success / ErrorBase`：描述缺 Framework 回调 lifecycle 钩子的关系时，在 infra.framework 与 infra.framework.state-machine 两层为「结构中未建模」；补上该关系（`rel.framework.sm-engine-solution-hooks`）后，两层都落在视图边上。
 4. 「方案切换事务」「命令执行」在全部层次与分支上不再出现「结构中未建模」。
 
-### 6.10 架构治理（待验收）
+### 6.10 架构治理（已通过）
 
-以 h5p-arch-desk 自身与 h5player 验收（自动化验收：`tests/acceptance/governance.test.ts`，以真实的 `model/` 描述与本机源码验证；h5player 源码不在本机时跳过对应用例）：
+以 h5p-arch-desk 自身与 h5player 验收（自动化验收：`tests/acceptance/governance.test.ts`，浏览器端 `e2e/governance.spec.ts`，以真实的 `model/` 描述与本机源码验证；h5player 源码不在本机时跳过对应用例）：
 
 1. `npm run arch -- locate src/model/load.ts`：给出归属「模型层 / 加载流水线」、各级职责、可依赖的层（模型层不可依赖其他层）。
-2. `npm run arch -- check src/model/load.ts vue`（外部包）与 `check src/model/load.ts ../state/inject`：后者 `denied`，理由为模型层不可依赖视图状态层；`check src/state/useDeskState.ts @/model` 为 `allowed`，附模型层的职责。
+2. `npm run arch -- check src/model/load.ts vue`（外部包，`unconstrained`）与 `check src/model/load.ts ../state/inject`：后者 `denied`，理由为模型层不可依赖视图状态层；`check src/state/useDeskState.ts @/model --names loadModel` 为 `allowed`，附目标模块的职责与接口。
 3. h5player 中 `@h5player/framework` 的命名导入，目标落在声明该名称的 framework 内部文件，经由为 `packages/framework/src/index.ts`。
-4. 在 `rules.yaml` 给某模块写 `mayDependOn` 漏掉它真实依赖的模块：`lint:model` 报违规（无基线时为提醒）；`npm run arch -- baseline` 后再跑为 0 个错误；再新增一条越界依赖，`lint:model` 报 `rule.new` 并以 1 退出。
+4. 在 `rules.yaml` 给某模块写 `mayDependOn` 漏掉它真实依赖的模块：`lint:model` 报违规（无基线时为提醒）；`npm run arch -- baseline` 后再跑为 0 个错误；再出现一条基线之外的越界依赖（新写的代码，或收紧了规则），`lint:model` 报 `rule.new` 并以 1 退出。
 5. 打开 h5p-arch-desk，开启「代码事实」：根层分层总览上层间边标 ✓；有未描述依赖的层之间出现灰色虚线叠加线，单击后面板列出模块依赖与文件证据，地址带 `sel=d:`。
 6. 根层面板「架构治理」显示文件依赖数、模块依赖数、关系已证实 / 未证实、未描述依赖数、违规与环度对比基线。
-7. 通过 MCP 客户端调用 `check_dependency` 与 `rescan` 后，`governance/ledger.jsonl` 各多一行，`prevention_report` 的次数随之增加。
+7. 调用 `check_dependency` 与 `rescan` 后，`governance/ledger.jsonl` 各多一行，`prevention_report` 的次数随之增加（MCP 外壳只做参数与格式，验收直接驱动查询核心）。
 
 ## 7. 后续方向
 

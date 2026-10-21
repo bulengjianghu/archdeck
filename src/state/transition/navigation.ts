@@ -18,6 +18,11 @@ export function selectionExists(index: ModelIndex, s: Selection | null): s is Se
     case 'edge':
     case 'file':
       return true
+    case 'dep': {
+      // K10：两端都是存在的模块或参与者
+      const ends = s.id.split('->')
+      return ends.length === 2 && ends.every(id => index.modules.has(id) || index.actors.has(id))
+    }
   }
 }
 

@@ -32,12 +32,12 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 | 函数 | 做什么 | 规则 |
 |---|---|---|
 | `readCodeDeps(root, files, packages)` | 对清单中的脚本文件逐个解析（Vue 取 `<script>` 块），收集导入语句；说明符解析与再导出穿透见下；按绝对路径的修改时间与大小缓存每个文件的解析结果 | K1–K3 |
-| `resolveSpecifier(files, packages, from, spec)` | 相对路径补全扩展名与 `/index.*`；裸说明符按工作区包名解析到包入口或子路径；解析不到返回 `null`（外部依赖） | K2 |
-| `importTargets(root, files, packages, from, spec, names?)` | 一条导入的目标：命名导入沿再导出链追到声明文件（复用导出解析的再导出逻辑，最多 5 层）；其余以经由文件为目标 | K3 |
+| `createResolver(root, files, packages)` | 相对路径补全扩展名与 `/index.*`；裸说明符先按 `tsconfig*.json` 的 `paths`，再按工作区包名解析到包入口或子路径；解析不到返回 `null`（外部依赖） | K2 |
+| `importTargets(via, names, exportsOf)` · `resolveImport(…, from, spec, names?)` | 一条导入的目标：命名导入沿再导出链追到声明文件（复用导出解析的 `exportsResolver`，最多 5 层）；其余以经由文件为目标；`resolveImport` 供写前判定按说明符解析 | K3 |
 
 - 工作区包：清单中每个 `package.json` 的 `name` → 所在目录；`<name>` 的入口依次取 `exports['.']`、`main`、`types`，指向不在清单中的产物（`dist/x.js`）时换成 `src/x.ts`，再退回 `src/index.ts`、`index.ts`。
 - 一个文件的解析结果：`{ line, spec, kind, names | '*' | 'default' | null }[]`，与文件内容一起缓存；目标解析每次按当前清单做（清单变了结果跟着变）。
-- 性能：h5player（约 600 个脚本文件）首次解析约 2–3 秒，之后只重解析变化的文件。
+- 性能（实测）：h5player 1657 个脚本文件首次提取 1.7 秒、缓存命中 0.2 秒；本项目约 170 个文件 0.16 秒。之后只重解析变化的文件。
 
 ## 3. 治理存储（接入层，`vite/governanceStore.ts`）
 

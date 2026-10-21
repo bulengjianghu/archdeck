@@ -5,6 +5,20 @@ import { RELATION_TYPES, type ModuleEntity, type RelationType } from '@/model'
 
 const desk = useDesk()
 const run = computed(() => desk.perspective.value === 'run')
+/** K8、K9：代码事实开关只在结构视角、有事实时可用 */
+const FACTS_HINT: Record<string, string> = {
+  design: '设计版本不对应代码，没有代码事实',
+  'no-source': '源码不在本地或构建产物不含源码，没有代码事实',
+  loading: '正在提取代码依赖…',
+  error: '提取代码依赖失败',
+}
+const factsHint = computed(() =>
+  run.value
+    ? '运行视角下不叠加代码事实'
+    : desk.facts.status.value === 'ready'
+      ? '在图上叠加代码事实：关系是否被代码证实、未描述的依赖、违规与环'
+      : FACTS_HINT[desk.facts.status.value],
+)
 const query = ref('')
 const open = ref(false)
 const active = ref(0)
@@ -98,10 +112,17 @@ function toggleType(t: RelationType) {
         </button>
       </div>
     </fieldset>
+    <label class="check facts" :class="{ off: run || desk.facts.status.value !== 'ready' }" :title="factsHint">
+      <input v-model="desk.toggles.showFacts" type="checkbox" :disabled="run || desk.facts.status.value !== 'ready'" /> 代码事实
+    </label>
   </div>
 </template>
 
 <style scoped>
+.facts.off {
+  opacity: 0.5;
+}
+
 .toolbar {
   display: flex;
   align-items: center;

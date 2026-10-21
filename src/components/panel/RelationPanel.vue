@@ -8,6 +8,7 @@ import InterfaceItem from './InterfaceItem.vue'
 import DataStructureItem from './DataStructureItem.vue'
 import ChangeBadge from './ChangeBadge.vue'
 import DesignNote from './DesignNote.vue'
+import RelationFact from './RelationFact.vue'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -50,6 +51,7 @@ const visibleHere = computed(() => desk.view.value?.edges.some(e => e.relationId
     <Section v-if="r.payload.length" title="交换的数据结构" :count="r.payload.length">
       <DataStructureItem v-for="id in r.payload" :key="id" :id="id" open />
     </Section>
+    <RelationFact :id="r.id" />
 
     <footer class="src muted">出处：{{ desk.modelDir.value }}/{{ r.src.file }}{{ r.src.line ? `:${r.src.line}` : '' }}</footer>
   </div>

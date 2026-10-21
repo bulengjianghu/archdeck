@@ -1,6 +1,6 @@
 # h5p-arch-desk
 
-架构可视化工具：AI 把项目代码压缩成模块级的架构描述（`model/<项目>/`），本工具按层次画成可下钻、可点选、可回放的图，并对上真实源码；架构迭代可以先出「设计版本」在图上评审，再开发。
+架构可视化工具：AI 把项目代码压缩成模块级的架构描述（`model/<项目>/`），本工具按层次画成可下钻、可点选、可回放的图，并对上真实源码；架构迭代可以先出「设计版本」在图上评审，再开发；并用代码事实、架构规则与棘轮门禁管住演化，把约束交给 coding agent。
 
 首页是项目列表（目前有 h5player、media-web 与本项目自身）。进入项目后根层是分层总览（几层、各层抽象原则、层间依赖、核心模块），双击下钻到任意模块，单击查看职责、接口、数据结构与关系；顶部「运行」选一个场景即进入运行视角，逐步回放执行链路。
 
@@ -22,6 +22,8 @@ npm run dev          # 本地查看：首页是项目列表，读取 model/ 下�
 | `npm run lint:model` | 校验全部架构描述（含设计版本每一轮），有错误时退出码为 1；`npm run lint:model -- model/h5player` 只校验一个项目 |
 | `npm test` | 单元测试与验收（jsdom，读取真实的 `model/`） |
 | `npm run test:e2e` | 浏览器端 E2E（Playwright，使用本机 Chrome，自动启动开发服务器） |
+| `npm run arch -- <命令>` | 架构治理的命令行：`locate`、`check <from> <to>`（写前判定）、`violations`、`cycles`、`rescan`、`report`、`baseline`（生成基线），`--project <项目>`、`--json` |
+| `npm run arch:mcp` | 架构治理的 MCP 服务器（stdio），供 coding agent 写代码前判定依赖 |
 | `npm run type-check` | 类型检查 |
 | `npm run lint` / `npm run format` | ESLint + Prettier 检查 / 自动格式化 |
 
@@ -61,6 +63,7 @@ npm run dev          # 本地查看：首页是项目列表，读取 model/ 下�
 | 副栏标题栏 | 切换时序图 / 源代码页签、「定位」到当前步骤、切换左右 / 上下排列、收起 |
 | 「专注」 | 一键收起导航树与属性面板，再按一次恢复 |
 | 导航树「文件」页签 | 源码文件树（行数、超长标红、未归属标记）；单击文件在副栏只读预览 |
+| 顶部「代码事实」 | 结构视角下在图上叠加代码事实：关系 ✓ 已证实 / ? 未证实，灰色虚线为未描述的依赖、红色为违规，↻ 为本层的环；单击叠加线看文件证据；根层面板「架构治理」有统计、违规与环 |
 
 当前层次、选中、场景、步骤与已选分支都写进 URL，复制链接即可分享同一画面。分屏方向、比例、面板宽度等界面偏好记在本地。
 
@@ -73,6 +76,21 @@ npm run dev          # 本地查看：首页是项目列表，读取 model/ 下�
 - `model/h5p-arch-desk/`：本项目自身的架构描述，含场景「打开场景并回放」。
 
 写法见 [docs/04-description-format.md](docs/04-description-format.md)。代码变化后让 AI 按规范重新生成受影响的文件，并更新 `system.yaml` 中的 `source.commit`；用 `npm run lint:model` 自检（源码在本地时附带文件归属警告）。新增项目只需新建一个子目录。
+
+## 架构治理
+
+把 AI 生成的描述、架构师的规则与代码事实放在一起对照（[ADR-0015](docs/adr/0015-architecture-governance.md)，机制见[专题](docs/architecture/governance.md)）：
+
+- **代码事实**：从源码提取文件依赖（TS 语法解析，穿透 barrel 再导出），按 `codeRefs` 提升为模块依赖，与描述比对：关系已证实 / 未证实，代码里有而描述里没有的依赖。
+- **架构规则**：层的 `mayDependOn`（默认拒绝），加上 `model/<项目>/rules.yaml`（模块白名单、访问面、带理由的例外、容忍的环）。规则是架构师的意图，AI 重新生成描述时不改它。
+- **棘轮门禁**：`npm run arch -- baseline --project <项目>` 生成基线，评审后提交；此后 `lint:model` 对基线之外的新增违规、环度上升报错。
+- **agent 接口**：`npm run arch -- check <from> <to>` 与 MCP 服务器在写代码前判定一条依赖，并给出目标模块的职责、访问面与接口；判定与重新扫描写进 `governance/ledger.jsonl`，可统计拦截效果。
+
+在被开发的仓库里把 MCP 服务器接给 coding agent（以 Claude Code 的 `.mcp.json` 为例；本包根目录的 `.mcp.json` 是本项目自举用的）：
+
+```json
+{ "mcpServers": { "arch": { "command": "npm", "args": ["--prefix", "<本包路径>", "run", "-s", "arch:mcp"], "env": { "ARCH_PROJECT": "h5player" } } } }
+```
 
 ## 设计版本
 

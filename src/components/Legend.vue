@@ -28,6 +28,11 @@ const LABEL: Record<string, string> = {
       </div>
       <div class="row muted">线越粗 = 聚合的关系越多；点划线 = 异步</div>
       <div class="row"><span class="box" /> 模块 <span class="box stack" /> 可下钻 <span class="box dashed" /> 目标态 / 外部</div>
+      <template v-if="desk.facts.level.value">
+        <div class="row head">代码事实</div>
+        <div class="row">✓ 关系已被代码证实 · ? 未证实 · ◐ 部分证实 · <span class="cycle">↻ N</span> 本层的环</div>
+        <div class="row"><span class="line code" /> 未描述的代码依赖 <span class="line code bad" /> 违规（红色描边的关系边同理）</div>
+      </template>
       <template v-if="desk.perspective.value === 'run'">
         <div class="row head">回放</div>
         <div class="row"><span class="flow" /> 当前步骤（沿消息方向流动） <span class="num">3</span> 已走过的步骤</div>
@@ -58,6 +63,23 @@ const LABEL: Record<string, string> = {
 
 .line.unmodeled {
   border-top: 2px dashed var(--danger);
+}
+
+.line.code {
+  border-top: 2px dashed var(--text-3);
+}
+
+.line.code.bad {
+  border-top-color: var(--danger);
+}
+
+.cycle {
+  white-space: nowrap;
+  padding: 0 5px;
+  font-size: 11px;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: 8px;
 }
 
 .line.upper {

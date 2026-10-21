@@ -12,6 +12,8 @@ export type Selection =
   | { kind: 'actor'; id: string }
   /** 源码文件，id 为相对源码根目录的路径（G16） */
   | { kind: 'file'; id: string }
+  /** 代码依赖叠加线，id 为 `<依赖方模块>-><被依赖方模块>`（本层两端节点的模块 ID，K10） */
+  | { kind: 'dep'; id: string }
 
 export interface Toggles {
   showBoundaries: boolean
@@ -21,6 +23,8 @@ export interface Toggles {
   showDiff: boolean
   /** 设计版本的对比基线：当前版本或上一轮 */
   compareTo: 'current' | 'previous'
+  /** K9：结构视角下在画布上叠加代码事实 */
+  showFacts: boolean
 }
 
 export interface PlaybackState {
@@ -84,4 +88,5 @@ export const DEFAULT_TOGGLES = (relationTypes: readonly RelationType[]): Toggles
   relationTypes: [...relationTypes],
   showDiff: true,
   compareTo: 'current',
+  showFacts: false,
 })

@@ -2,7 +2,7 @@
  * DeskState：协调者（docs/architecture/view-state.md §2）。
  * - 持有视图状态（一个值）、加载后的模型与对比基线；
  * - 唯一写入口 dispatch(action) → transition() → 写入新状态；对外的操作都是构造动作并 dispatch 的包装；
- * - 派生要画的数据：核心（层次、选中、视角、层次视图）平铺，领域派生分组——run 运行视角、files 源码、versions 版本（ADR-0013，见 ./desk/）；
+ * - 派生要画的数据：核心（层次、选中、视角、层次视图）平铺，领域派生分组——run 运行视角、files 源码、versions 版本、facts 架构治理（ADR-0013、ADR-0015，见 ./desk/）；
  * - 与外界的交互交给同步适配器：路由（sync/router）、模型源（sync/modelSource）、布局（sync/layout）、源码（sync/source）。
  * 呈现层只读这里的状态、只调这里的操作，不直接调用模型层的计算。
  */
@@ -29,6 +29,7 @@ import { NO_SOURCE, createSourceSync, type SourceFetcher } from './sync/source'
 import { createRun } from './desk/run'
 import { createFiles } from './desk/files'
 import { createVersions } from './desk/versions'
+import { createFacts } from './desk/facts'
 
 export type { Selection, Toggles } from './transition'
 export { encodeSelection, decodeSelection } from './transition'
@@ -106,7 +107,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const files = createFiles({ state, index, view, sync: sourceSync, design: !!options.version })
   const run = createRun({ state, index, levelId, plan, view, positioned, fileOwners: files.owners })
   const versions = createVersions({ state, index, designs, baselines, version: options.version })
-  const allIssues = computed(() => [...issues.value, ...files.warnings.value])
+  const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version })
+  const allIssues = computed(() => [...issues.value, ...files.warnings.value, ...facts.gateIssues.value])
 
   /** 开关：读取来自视图状态，写入即 dispatch(toggle)（呈现层可直接 v-model） */
   const toggles = new Proxy({} as Toggles, {
@@ -220,6 +222,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     run,
     files,
     versions,
+    facts,
     // 操作
     dispatch,
     init,
