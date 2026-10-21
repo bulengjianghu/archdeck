@@ -35,6 +35,7 @@
 - **展开**：消息步骤成为帧（F1）；`ref` 内联子场景并记为 ref 组合框（F3）；`loop` 展开一遍并标注条件（F4）；`par` 各分支按书写顺序串行并标注并行（F5）；`alt` 成为分支点，每个选项一棵子树（F6）。每帧记录外到内的组合框路径。
 - **帧 ID**（F2）：场景 ID + 步骤 `id`，没写时用步骤在树中的路径（如 `sc.open#4.alt0.1`）；`ref` 内联时加上引用处前缀，同一子场景被引用两次也不冲突。校验已保证 `ref` 无环（S6），展开必然终止。
 - **绑定关系** `bindRelation`（S5a、S12、S13，`bind.ts`）：关系两端分别是消息两端自身或其祖先即「对得上」；方向按 `event` 反向、`return` 再反向比对。显式引用优先；否则两端之间恰好一条运行时关系即认定并标为推断，恰好连在两端上的优先于连在祖先上的；同时给出消息方向是否与关系箭头相反。Validator 调用同一个函数做 S5a 检查，校验与回放结果一致。
+- **继承接口与数据**（S14）：消息步骤没写 `interface` / `payload` 时，取绑定关系（显式或推断）的值；`return` 只继承 `interface`；帧上记下哪些是继承来的（`inherited`），面板据此标「取自关系」。
 - **分支点 ID** 与组合框实例 ID 同帧 ID 的规则（场景 ID + `#` + 前缀 + 步骤路径）。
 - **调用与返回配对** `pairReturns`（F7）：按书写顺序遍历计划，`call` 入栈；显式 `return`（X → Y）在栈中自顶向下找最近的 Y → X 调用，找到即配对，并弹出它及其上的调用（它们没有显式返回）；`alt` 的每个选项从进入分支点时的栈副本开始，选项内未配对的调用在选项结束时丢弃，分支点之后继续用进入时的栈；`async` 不入栈。结果是帧 ID ↔ 帧 ID 的双向映射，与层次和已选分支无关，打开场景时随计划算一次。
 
@@ -62,6 +63,8 @@
 | 两个不同节点，但本层没有视图边 | `unmodeled`：回放期间画临时虚线 | P11 |
 | 同一个子模块 | `internal`：内部活动 | P3 |
 | 两端都在本层外 | 不可见 | P4 |
+| 分层总览：两端在同一核心模块 | `internal`：该核心模块的内部活动 | P3 |
+| 分层总览：两端在同一层的不同泳道（核心模块之间、核心模块与层内其他模块之间） | `internal`：结构图上是该层（带）的内部活动，另带 `lanes`（两条泳道，消息方向），时序图据此画成泳道之间的消息 | P7、P14 |
 | 一端是当前父模块自身或其祖先 | 按另一端的内部活动 | — |
 
 然后把连续落在同一条视图边且方向相同、或同一节点内部，并在同一组合框分支中的帧合并为**可见消息**（P5），它是本层的单步单位。合并前先把计划**线性化**（`linearize`）：回放用「路径」模式（截止于未选分支的分支点），时序图用「全貌」模式（未选分支标 `unchosen`，截止之后标 `unreached`）；两者共用同一套落点与合并规则，分支点与空分支都会断开合并，所以路径上的消息在两边一一对应。
@@ -93,7 +96,7 @@
 
 ## 7. 时序模型与时序图排布
 
-**时序模型**（`buildSequence`）：由计划全貌在本层的投影产出参与者（带名称、父模块、模块路径、所属层与层次排序键 `hierarchyKey`；本层子模块标为可按横坐标排，P9、P13）、消息（同步 / 异步 / 显式返回 / 内部活动 / 空分支占位；隐含的返回不画，S10a；路径上的消息带 `pathIndex`，其余带 `unchosen` / `unreached` 状态）、组合框（类型、条件、包住的消息区间；`alt` 列出全部分支及其选项序号，并标明已选 / 未选 / 未到达，界面据此直选分支，F6e）。框内消息全部是内部活动时，框标记为折叠（P6）。
+**时序模型**（`buildSequence`）：由计划全貌在本层的投影产出参与者（泳道互不包含，P14；分层总览中有核心模块的层，其层泳道名为「<层名> · 其他」，归入该层分组、排在核心模块之后，P13；带名称、父模块、模块路径、所属层与层次排序键 `hierarchyKey`；本层子模块标为可按横坐标排，P9、P13）、消息（同步 / 异步 / 显式返回 / 内部活动 / 空分支占位；隐含的返回不画，S10a；路径上的消息带 `pathIndex`，其余带 `unchosen` / `unreached` 状态）、组合框（类型、条件、包住的消息区间；`alt` 列出全部分支及其选项序号，并标明已选 / 未选 / 未到达，界面据此直选分支，F6e）。框内消息全部是内部活动时，框标记为折叠（P6）。
 
 **时序图排布**（`layoutSequence`，视图状态层 Layout，同步计算、不调用 elk）：
 
@@ -118,6 +121,7 @@ interface Frame {
   kind: 'call' | 'async' | 'return'
   from: string; to: string                 // 真实端点：最深模块或参与者
   label?: string; interface?: string; payload: string[]; note?: string
+  inherited?: { interface?: boolean; payload?: boolean }   // S14：取自对应关系
   relation?: string; relationInferred: boolean; reverse: boolean
   scenarioId: string; stepPath: string; src: SourceLoc   // 步骤写在哪个场景（ref 内联时为被引用者）
   fragments: FragmentTag[]                 // 外到内
@@ -126,7 +130,7 @@ interface Frame {
 type Landing =
   | { kind: 'edge'; edgeId: string; from: string; to: string; reverse: boolean; core?: boolean }
   | { kind: 'unmodeled'; from: string; to: string }
-  | { kind: 'internal'; node: string }
+  | { kind: 'internal'; node: string; lanes?: { from: string; to: string } }   // lanes：分层总览中同一层不同泳道之间（P7）
   | { kind: 'hidden' }
 
 interface ScenarioLevelView {
