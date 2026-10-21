@@ -120,24 +120,24 @@ modules:
     responsibility: 同步适配器之一：层次视图变化后调用异步布局，按序号丢弃过期结果，把定位好的视图回填给派生数据。
     codeRefs: [src/state/sync/layout.ts]
 
-  # 以下四个是 layout.ts 内的概念划分，文件归 Layout
-  - id: state.layout.layered
-    name: 分层总览排布
-    parent: state.layout
-    responsibility: 按层序自上而下分带，带内核心模块横向排开（含 +N 占位）；相邻层间的边画在带间空隙并横向错开，跨多层的边走右侧通道；核心跨层边画成曲线。
-  - id: state.layout.graph
-    name: 普通层次排布
-    parent: state.layout
-    responsibility: 用 elkjs layered 算法排内部模块与内部边（正交走线、标签内联）；结果过于狭长时再试自左向右，取宽高比更接近画布者。
-  - id: state.layout.boundaries
-    name: 边界节点排布
-    parent: state.layout
-    responsibility: 边界节点统一排在内部结构下方一行，按视图给出的层次顺序从左到右排列（L4，与时序图泳道一致）；边界边画成曲线。外部参与者：用户类排在内部结构上方一行，外部系统与时间类排在右侧一列；内部结构外画系统边界虚线框。
   - id: state.layout.runner
     name: 布局入口与缓存
     parent: state.layout
-    responsibility: layoutView 按视图模式分派排布；浏览器里在 Worker 中运行 elk，无 Worker 环境用同步打包版；结果按视图内容缓存。
+    responsibility: layoutView 按视图模式分派给三种排布；浏览器里在 Worker 中运行 elk，无 Worker 环境用同步打包版；结果按视图内容缓存。边的走线工具（edgeLabel、linkRoute、isBoundaryEdge）也在这里，供画布场景使用。
     codeRefs: [src/layout/layout.ts]
+  # 以下三个是 layout.ts 内的概念划分，代码在 Layout 入口的文件里（K5 宿主相同，关系不判定）
+  - id: state.layout.runner.layered
+    name: 分层总览排布
+    parent: state.layout.runner
+    responsibility: 按层序自上而下分带，带内核心模块横向排开（含 +N 占位）；相邻层间的边画在带间空隙并横向错开，跨多层的边走右侧通道；核心跨层边画成曲线。
+  - id: state.layout.runner.graph
+    name: 普通层次排布
+    parent: state.layout.runner
+    responsibility: 用 elkjs layered 算法排内部模块与内部边（正交走线、标签内联），elk 在 Worker 中运行；结果过于狭长时再试自左向右，取宽高比更接近画布者。
+  - id: state.layout.runner.boundaries
+    name: 边界节点排布
+    parent: state.layout.runner
+    responsibility: 边界节点统一排在内部结构下方一行，按视图给出的层次顺序从左到右排列（L4，与时序图泳道一致）；边界边画成曲线。外部参与者：用户类排在内部结构上方一行，外部系统与时间类排在右侧一列；内部结构外画系统边界虚线框。
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.pipeline.loader
@@ -263,7 +263,6 @@ relations:
   # 视图状态内部与 → 模型
   - {id: rel.ad.loading-entry, from: state.desk.loading, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, payload: [ds.ModelIndex, ds.Issue]}
   - {id: rel.ad.loading-baselines, from: state.desk.loading, to: state.desk.versions, type: dataflow, payload: [ds.ModelPayload], description: 设计版本的载荷附带设计信息与对比基线原文}
-  - {id: rel.ad.versions-entry, from: state.desk.versions, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 对比基线同样走 loadModel}
   - {id: rel.ad.versions-diff, from: state.desk.versions, to: model.diff, type: calls, interface: if.model.diffModels, payload: [ds.ModelDiff], description: 切换对比基线或重新加载时重算}
   - {id: rel.ad.loading-keep, from: state.desk.loading, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 加载完成 → dispatch(loaded / reloaded)，层次回退由转移规则决定}
   - {id: rel.ad.url-actions, from: state.desk.url-sync, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 外部路由变化 → decode → dispatch}
@@ -284,9 +283,7 @@ relations:
     interface: if.layout.layoutView
     payload: [ds.LevelView, ds.PositionedView]
     description: 视图变化后异步布局，用序号丢弃过期结果
-  - {id: rel.ad.runner-layered, from: state.layout.runner, to: state.layout.layered, type: calls}
-  - {id: rel.ad.runner-graph, from: state.layout.runner, to: state.layout.graph, type: calls, mode: async, description: elk 在 Worker 中运行}
-  - {id: rel.ad.graph-boundaries, from: state.layout.graph, to: state.layout.boundaries, type: calls}
+  - {id: rel.ad.graph-boundaries, from: state.layout.runner.graph, to: state.layout.runner.boundaries, type: calls}
   - {id: rel.ad.layout-types, from: state.layout.runner, to: model.types, type: depends, payload: [ds.LevelView]}
 
   # 接入层
@@ -308,6 +305,22 @@ relations:
   - {id: rel.ad.overview-collector, from: model.projector.overview, to: model.projector.collector, type: calls, description: 核心跨层边单独汇总}
   - {id: rel.ad.diff-index, from: model.diff, to: model.types, type: depends, payload: [ds.ModelIndex], description: 按 ID 对齐两份索引，用路径计入祖先}
   - {id: rel.ad.projector-types, from: model.projector, to: model.types, type: depends, payload: [ds.ModelIndex, ds.LevelView, ds.ViewEdge, ds.Band]}
+  # 模型层入口的再导出与名称、标签（K7 按代码补齐）
+  - {id: rel.ad.entry-reexport-diff, from: model.pipeline.entry, to: model.diff, type: depends, description: 模型层入口再导出 diffModels、FIELD_LABELS}
+  - {id: rel.ad.entry-reexport-governance, from: model.pipeline.entry, to: model.governance, type: depends, description: 模型层入口再导出架构治理}
+  - {id: rel.ad.entry-reexport-projector, from: model.pipeline.entry, to: model.projector, type: depends, description: 模型层入口再导出 projectLevel、mapEndpoint 等}
+  - {id: rel.ad.entry-reexport-scenario, from: model.pipeline.entry, to: model.scenario, type: depends, description: 模型层入口再导出场景投影}
+  - {id: rel.ad.entry-reexport-source, from: model.pipeline.entry, to: model.source, type: depends, description: 模型层入口再导出源码归属}
+  - {id: rel.ad.indexer-steps, from: model.pipeline.indexer, to: model.scenario.flatten, type: calls, description: messagesOf：建索引时收集场景消息}
+  - {id: rel.ad.present-names, from: present, to: model.pipeline.indexer, type: depends, description: moduleName、triggerOf 等名称查询，呈现层各处显示模块名}
+  - {id: rel.ad.present-labels, from: present, to: model.types, type: depends, description: 标签常量：RELATION_TYPES、ACTOR_KIND_LABELS、DESIGN_STATUS_LABELS}
+  - {id: rel.ad.content-labels, from: present.panel.content, to: model.diff, type: depends, description: FIELD_LABELS：变更角标的字段名}
+  - {id: rel.ad.nodes-act, from: present.canvas.nodes, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 分支预览选这一支（chooseBranch）、步骤序号指向这一步（seek）}
+  - {id: rel.ad.system-read, from: present.panel.system, to: state.desk.projection, type: depends, description: 系统面板读索引、层次视图与版本}
+  - {id: rel.ad.system-act, from: present.panel.system, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 选中模块或问题}
+  - {id: rel.ad.legend-stage, from: present.nav.legend, to: present.canvas, type: depends, description: useStage：图例随舞台显示方式}
+  - {id: rel.ad.desk-labels, from: state.desk, to: model.types, type: depends, description: RELATION_TYPES：关系类型开关的初值}
+  - {id: rel.ad.projection-names, from: state.desk.projection, to: model.pipeline.indexer, type: depends, description: triggerOf：场景列表的触发者}
 
 interfaces:
   - id: if.model.loadModel

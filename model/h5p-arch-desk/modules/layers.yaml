@@ -163,7 +163,7 @@ modules:
       - id: access.deps
         name: 依赖提取
         kind: subsystem
-        responsibility: 用 TypeScript 语法树提取被描述项目的文件依赖（import / import type / export … from / import() / require，Vue 取 <script> 块，K1）；把说明符解析到清单中的文件——读出 tsconfig paths，交给模型层的说明符解析（相对路径补全、工作区包名与包入口，K2）；命名导入沿再导出链追到声明文件，记目标与经由（K3）；按修改时间与大小缓存。不判断归属与规则。
+        responsibility: 用 TypeScript 语法树提取被描述项目的文件依赖（import / import type / export … from / import() / require，Vue 取 <script> 块，K1）；把说明符解析到清单中的文件——读出 tsconfig paths，交给模型层的说明符解析（相对路径补全、工作区包名与包入口，K2）；命名导入沿再导出链追到声明文件，记目标与经由（K3），类型与值按每个名字区分（K1a）；按修改时间与大小缓存。不判断归属与规则。
         codeRefs: [vite/readDeps.ts]
         docRefs: [docs/architecture/governance.md]
       - id: access.governance-store

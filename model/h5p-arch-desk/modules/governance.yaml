@@ -29,7 +29,7 @@ modules:
   - id: model.governance.facts
     name: 事实比对
     parent: model.governance
-    responsibility: 文件依赖按归属提升为模块依赖（K4）；关系的证实（端点相同或互为祖先后代，dataflow 两向，K5）；未描述依赖（K7）。
+    responsibility: 文件依赖按归属提升为模块依赖（K4）；关系的证实（端点相同或互为祖先后代，dataflow 两向，K5；两端宿主相同的概念拆分不判定，K5a）；未描述依赖（只计有值导入的，K7）。
     codeRefs: [src/model/governance/facts.ts]
   - id: model.governance.rules
     name: 规则判定
@@ -151,3 +151,22 @@ relations:
   - {id: rel.gv.model-projector, from: model.governance.level, to: model.projector, type: depends, description: mapEndpoint（K9、Y4）}
   - {id: rel.gv.model-types, from: model.governance, to: model.types, type: depends, payload: [ds.ModelIndex]}
   - {id: rel.gv.pipeline-rules, from: model.pipeline, to: model.types, type: depends, description: rules 的加载与校验（U1）}
+  # 架构治理内部与名称、标签（K7 按代码补齐）
+  - {id: rel.gv.cycles-facts, from: model.governance.cycles, to: model.governance.facts, type: calls, description: within：环按模块子树判断}
+  - {id: rel.gv.level-facts, from: model.governance.level, to: model.governance.facts, type: calls, description: depKey：本层叠加线按模块依赖键取依据}
+  - {id: rel.gv.level-cycles, from: model.governance.level, to: model.governance.cycles, type: calls, description: stronglyConnected：本层环编号（Y4）}
+  - {id: rel.gv.query-facts, from: model.governance.query, to: model.governance.facts, type: calls, description: coveringRelations、related：写前判定与模块治理信息（Q1、Q2）}
+  - {id: rel.gv.query-cycles, from: model.governance.query, to: model.governance.cycles, type: calls, description: stronglyConnected：写前判定这条依赖会不会成环或扩大环}
+  - {id: rel.gv.query-rules, from: model.governance.query, to: model.governance.rules, type: calls, description: judge、rulesFor：判定与生效的规则}
+  - {id: rel.gv.report-facts, from: model.governance.report, to: model.governance.facts, type: calls, description: liftDeps、confirmRelations、undescribedDeps（K4、K5、K7）}
+  - {id: rel.gv.report-cycles, from: model.governance.report, to: model.governance.cycles, type: calls, description: moduleCycles、fileCycles、cyclicityOf（Y1–Y3）}
+  - {id: rel.gv.report-rules, from: model.governance.report, to: model.governance.rules, type: calls, description: evaluateRules（U2–U4）}
+  - {id: rel.gv.rules-facts, from: model.governance.rules, to: model.governance.facts, type: calls, description: within：规则按模块子树匹配}
+  - {id: rel.gv.model-names, from: model.governance, to: model.pipeline.indexer, type: depends, description: moduleName：违规、判定与报告的说明文字用模块名}
+  - {id: rel.gv.agent-pipeline, from: access.agent, to: model.pipeline, type: calls, interface: if.model.loadModel, description: loadModel 加载描述；moduleName 生成回答}
+  - {id: rel.gv.agent-ownership, from: access.agent, to: model.source.ownership, type: calls, interface: if.model.assignFiles, description: 按 codeRefs 归属源码（G3–G8）}
+  - {id: rel.gv.store-reader, from: access.governance-store, to: access.reader, type: depends, description: GOVERNANCE_DIR：治理产物目录名与描述读取共用（读取时跳过）}
+  - {id: rel.gv.dep-report, from: present.panel.dep, to: model.governance.report, type: depends, description: RULE_LABELS：违规的规则名}
+  - {id: rel.gv.panel-report, from: present.panel.governance, to: model.governance.report, type: depends, description: RULE_LABELS：违规的规则名}
+  - {id: rel.gv.dep-content, from: present.panel.dep, to: present.panel.content, type: depends, description: 复用 Section}
+  - {id: rel.gv.panel-content, from: present.panel.governance, to: present.panel.content, type: depends, description: 复用 Section}

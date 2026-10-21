@@ -278,6 +278,21 @@ relations:
   - {id: rel.p6.outline-level, from: model.scenario.outline, to: model.scenario.level, type: depends, description: 帧状态（path / unchosen / unreached）与时序图全貌同义}
   - {id: rel.p2.level-lca, from: model.scenario.level, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: 场景所在层次 = 帧端点的最近公共祖先}
   - {id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: depends, payload: [ds.ScenarioEntity, ds.ScenarioPlan, ds.Frame, ds.ScenarioLevelView, ds.SequenceModel, ds.OutlineNode]}
+  # 场景投影、时序图与视图状态转移补齐（K7）
+  - {id: rel.p2.seqmodel-path, from: model.scenario.sequence, to: model.scenario.path, type: calls, description: resolvePath：按选择展开路径}
+  - {id: rel.p2.seqmodel-names, from: model.scenario.sequence, to: model.pipeline.indexer, type: depends, description: moduleName：泳道与消息的显示名}
+  - {id: rel.p6.steps-text, from: present.nav-tree.steps, to: present.panel, type: depends, description: fragmentText、frameText：步骤树与面板共用的步骤文字}
+  - {id: rel.p2.actor-content, from: present.panel.actor, to: present.panel.content, type: depends, description: 复用 Markdown、Section、RelationRow}
+  - {id: rel.p3.run-content, from: present.panel.run, to: present.panel.content, type: depends, description: 复用 Section}
+  - {id: rel.p2.seq-geometry, from: present.sequence, to: state.layout.sequence, type: depends, payload: [ds.PositionedSequence], description: SEQ、headsHeight：时序图的几何常量与定位结果}
+  - {id: rel.p8.canvas-diff, from: state.layout.canvas, to: model.diff, type: depends, description: FIELD_LABELS：变更说明的字段名}
+  - {id: rel.p8.canvas-names, from: state.layout.canvas, to: model.pipeline.indexer, type: depends, description: moduleName：节点与边界的显示名}
+  - {id: rel.p8.canvas-route, from: state.layout.canvas, to: state.layout.runner, type: calls, description: edgeLabel、linkRoute、isBoundaryEdge：边的走线与标签}
+  - {id: rel.p2.seqlayout-keys, from: state.layout.sequence, to: model.projector, type: depends, description: compareKeys：泳道按层次键排序（L4）}
+  - {id: rel.p8.stage-level, from: state.layout.stage, to: model.scenario.level, type: calls, description: currentMessage、walkedCount：舞台叠加的当前一步与走过的步数}
+  - {id: rel.p2.url-plan, from: state.transition.url, to: model.scenario.flatten, type: calls, description: planScenario、choiceList：地址里的分支选择编解码}
+  - {id: rel.p2.url-path, from: state.transition.url, to: model.scenario.path, type: calls, description: resolvePath：恢复时校验选中的步骤}
+  - {id: rel.p2.url-navigation, from: state.transition.url, to: state.transition.navigation, type: calls, description: selectionExists、withLevel：恢复时校正层次与选中}
 
 interfaces:
   - id: if.state.transition
