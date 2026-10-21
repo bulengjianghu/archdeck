@@ -120,7 +120,7 @@ describe('运行视角', () => {
     expect(row('infra.framework')!.classes()).toContain('active')
   })
 
-  it('T6、T7：步骤树按组合结构嵌套；当前步骤高亮，序号与本层可见消息一致；不可见的标出', async () => {
+  it('T6、T7：步骤树按组合结构嵌套；选中的步骤高亮，序号与本层可见消息一致；不可见的标出', async () => {
     const { wrapper, desk } = await mountTree('/?sc=sc.play', scenarioFiles())
     const text = wrapper.text()
     expect(text).toContain('分支')
@@ -129,12 +129,12 @@ describe('运行视角', () => {
     expect(text).toContain('（空分支）')
     expect(text).toContain('循环 [每个 MU]')
     expect(text).toContain('引用：决策')
-    expect(wrapper.find('.frame.current').exists()).toBe(false)
+    expect(wrapper.find('.frame.selected').exists()).toBe(false)
     desk.next()
     desk.next()
     await flushPromises()
-    const cur = wrapper.findAll('.frame.current')
-    expect(cur.length).toBeGreaterThan(0)
+    const cur = wrapper.findAll('.frame.selected')
+    expect(cur).toHaveLength(1)
     expect(cur[0].find('.seq').text()).toBe(String(desk.currentIndex.value! + 1))
     expect(wrapper.findAll('.frame.walked').length).toBeGreaterThan(0)
     // 分支未选：其后的帧标未到达

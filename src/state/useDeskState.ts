@@ -61,10 +61,11 @@ import {
   DEFAULT_TOGGLES,
   emphasisOf,
   encodeView,
-  focusOf,
+  selectedOf,
   keyIntent,
   perspectiveOf,
   transition,
+  type Emphasis,
   type Selection,
   type Toggles,
   type ViewAction,
@@ -119,9 +120,9 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const hoverId = computed(() => state.value.hover)
   const playback = computed(() => state.value.playback)
   const levelPath = computed(() => (index.value && levelId.value ? (index.value.pathOf.get(levelId.value) ?? []) : []))
-  /** 视角与焦点（V1、V2），由视图状态推出 */
+  /** 视角与选中（V1、V2、V7），由视图状态推出 */
   const perspective = computed(() => perspectiveOf(state.value))
-  const focus = computed(() => focusOf(state.value))
+  const selected = computed(() => selectedOf(state.value))
 
   /** 打开的场景的回放计划：只随场景与模型变化 */
   const scenarioId = computed(() => state.value.playback?.scenarioId ?? null)
@@ -189,8 +190,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     const pv = positioned.value
     return layoutSequence(sequence.value, pv && pv.view.parentId === levelId.value ? pv : null)
   })
-  /** 钉住对象在本场景中的参与（V6）；运行视角下有选中时才有 */
-  const pinnedParticipation = computed<Participation | null>(() => {
+  /** 选中对象（步骤、场景、文件以外）在本场景中的参与（V6）；运行视角下才有 */
+  const selectedParticipation = computed<Participation | null>(() => {
     const s = state.value.selection
     if (!index.value || !path.value || !scenarioView.value || !s || s.kind === 'file') return null
     return participation(index.value, path.value.frames, scenarioView.value, s, state.value.playback?.frameId)
@@ -200,8 +201,12 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const pairs = computed<ReturnPairs | null>(() => (plan.value ? pairReturns(plan.value) : null))
   /** F6f：路线（路径上的分支点与所选，以及待选的分支点） */
   const route = computed<RouteItem[]>(() => (plan.value ? routeOf(plan.value, choices.value) : []))
-  /** R15：焦点突出的本层可见消息序号；null 表示不突出 */
-  const emphasis = computed(() => emphasisOf(state.value, scenarioView.value, pairs.value, pinnedParticipation.value, index.value ?? undefined))
+  /** R15、R16：选中突出——选中步骤的消息与配对消息、选中其他对象时突出的泳道；结构视角为 null */
+  const emphasis = computed<Emphasis | null>(() =>
+    index.value
+      ? emphasisOf(state.value, { index: index.value, levelView: view.value, scenarioView: scenarioView.value, sequence: sequence.value, pairs: pairs.value, fileOwners: fileOwners.value })
+      : null,
+  )
   /** V5：参与本场景的舞台节点（时序图泳道）：path = 回放路径上的消息碰到它，other = 只在未选分支 / 未到达处 */
   const stageParticipants = computed<ReadonlyMap<string, 'path' | 'other'>>(() => {
     const out = new Map<string, 'path' | 'other'>()
@@ -377,7 +382,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     view,
     positioned,
     perspective,
-    focus,
+    selected,
     playback,
     scenario,
     plan,
@@ -389,7 +394,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     frame,
     sequence,
     positionedSequence,
-    pinnedParticipation,
+    selectedParticipation,
     outline,
     participants,
     pairs,

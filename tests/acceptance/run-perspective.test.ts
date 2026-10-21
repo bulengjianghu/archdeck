@@ -42,7 +42,7 @@ describe('§6.2 运行视角验收', () => {
       expect(desk.perspective.value).toBe('run')
       expect(desk.levelId.value).toBe(root)
       expect(desk.playback.value).toMatchObject({ scenarioId: sc, frameId: null })
-      expect(desk.focus.value).toEqual({ kind: 'follow', frameId: null })
+      expect(desk.selected.value).toEqual({ kind: 'scenario', id: sc })
       expect(desk.walked.value).toBe(0)
       step(2)
       const sv = desk.scenarioView.value!
@@ -54,7 +54,7 @@ describe('§6.2 运行视角验收', () => {
     }
   })
 
-  it('2. 回放中双击下钻：钉住被下钻的模块，播放头仍是同一帧；泳道变细、可见消息不少于上一层、单步粒度变细', async () => {
+  it('2. 回放中双击下钻：选中被下钻的模块，播放头仍是同一帧；泳道变细、可见消息不少于上一层、单步粒度变细', async () => {
     const { desk, step } = await open('h5player')
     desk.openScenario('sc.command')
     // 先走过两个分支点（需要改图 → 事务成功），再回到第一步、前进到一半
@@ -73,7 +73,7 @@ describe('§6.2 运行视角验收', () => {
     const rootLanes = desk.sequence.value!.participants.map(p => p.nodeId)
     desk.drillInto('infra')
     expect(desk.playback.value!.frameId).toBe(frame)
-    expect(desk.focus.value).toEqual({ kind: 'pinned', selection: { kind: 'module', id: 'infra' } })
+    expect(desk.selected.value).toEqual({ kind: 'module', id: 'infra' })
     expect(messagesOf().size).toBeGreaterThanOrEqual(rootMessages)
     // 泳道变细：根层 Infrastructure 的非核心模块画在「Infrastructure · 其他」泳道上，下钻后换成它的子模块
     const lanes = desk.sequence.value!.participants.map(p => p.nodeId)
@@ -137,22 +137,22 @@ describe('§6.2 运行视角验收', () => {
     expect(desk.frame.value!.relationInferred).toBe(true)
   })
 
-  it('5. 钉住一个模块时先显示它在本场景中参与的步骤；取消选中，或单步、指向某一步，回到当前步骤（跟随）', async () => {
+  it('5. 选中一个模块时先显示它在本场景中参与的步骤；取消选中，或单步、指向某一步，选中回到进度所在的步骤', async () => {
     const { desk, step } = await open('h5p-arch-desk', '/p/h5p-arch-desk?level=state')
     desk.openScenario('sc.open-and-play')
     step(4)
     desk.select({ kind: 'module', id: 'state.desk' })
-    expect(desk.focus.value.kind).toBe('pinned')
-    expect(desk.pinnedParticipation.value!.frames.length).toBeGreaterThan(0)
+    expect(desk.selected.value).toEqual({ kind: 'module', id: 'state.desk' })
+    expect(desk.selectedParticipation.value!.frames.length).toBeGreaterThan(0)
     const at = desk.playback.value!.frameId
     desk.select(null)
-    expect(desk.focus.value).toEqual({ kind: 'follow', frameId: at })
+    expect(desk.selected.value).toEqual({ kind: 'step', id: at })
     desk.select({ kind: 'module', id: 'state.desk' })
     desk.next()
-    expect(desk.focus.value.kind).toBe('follow')
+    expect(desk.selected.value!.kind).toBe('step')
     desk.select({ kind: 'module', id: 'state.desk' })
     desk.seek(at!)
-    expect(desk.focus.value).toEqual({ kind: 'follow', frameId: at })
+    expect(desk.selected.value).toEqual({ kind: 'step', id: at })
   })
 
   it('6. 与结构不一致的步骤：端点与引用关系不符、两端无任何关系 → 错误 / 提醒；引用 depends → 错误；无关系的一步回放时画「结构中未建模」', async () => {

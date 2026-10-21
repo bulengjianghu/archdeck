@@ -87,10 +87,10 @@ describe('属性面板 · 运行视角', () => {
     expect(desk.playback.value?.scenarioId).toBe('sc.play')
   })
 
-  it('跟随：停在开头时显示场景（触发者、所在层次、引用；步骤目录在导航树），之后显示当前步骤', async () => {
+  it('选中场景（停在开头）时显示场景（触发者、所在层次、引用；步骤目录在导航树），选中步骤时显示步骤', async () => {
     const { wrapper, desk } = await mountPanel('/?sc=sc.play&step=sc.play%23update&alt=0', scenarioFiles())
     const text = wrapper.text()
-    expect(text).toContain('当前步骤')
+    expect(text).toContain('选中的步骤')
     expect(text).toContain('StateMachine → Pipeline')
     expect(text).toContain('推断')
     expect(text).toContain('分支 [需要改图]')
@@ -103,12 +103,12 @@ describe('属性面板 · 运行视角', () => {
     expect(s).toContain('引用了')
   })
 
-  it('钉住：运行信息在上，结构信息折叠在下', async () => {
+  it('选中模块：运行信息在上，结构信息折叠在下；没有「已钉住」提示（ADR-0012）', async () => {
     const { wrapper } = await mountPanel('/?sc=sc.play&step=sc.play%23done&alt=0&sel=m:infra.framework.sm&level=infra.framework', scenarioFiles())
     const text = wrapper.text()
-    expect(text).toContain('已钉住')
+    expect(text).not.toContain('已钉住')
     expect(text).toContain('在「播放」中')
-    expect(text).toContain('离播放头最近')
+    expect(text).toContain('离进度最近')
     expect(wrapper.find('details.structure').exists()).toBe(true)
   })
 })

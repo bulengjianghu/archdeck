@@ -1,21 +1,25 @@
 <script setup lang="ts">
 /**
  * 消息区：生命线与按序自上而下的消息（R2：同步实线实心箭头、异步虚线开放箭头、显式返回点线；S10a 只画显式返回）；
- * 内部活动画成生命线上的激活条；外部参与者在最左，竖线隔出系统边界（A7）；焦点突出时其余路径上的消息变灰（R15）。
+ * 内部活动画成生命线上的激活条；外部参与者在最左，竖线隔出系统边界（A7）。
+ * 选中突出（R15、R16）：只有选中的步骤用选中样式，配对的调用 / 返回加浅色「配对」标记；选中其他对象时突出泳道的生命线，
+ * 进度所在的消息只在序号旁加小标记。
  * 泳道头在 SequenceHeads（固定在顶部与底部，D-2）。不做悬停弹出（W-1）。
  */
 import { computed } from 'vue'
 import type { PositionedSequence } from '@/layout/sequence'
 import { headsHeight } from '@/layout/sequence'
 import type { SequenceMessage } from '@/model'
+import type { Emphasis } from '@/state/transition'
 
 const props = defineProps<{
   ps: PositionedSequence
+  /** 进度所在的可见消息序号 */
   current: number | null
   walked: number
   hover: string | null
-  /** R15：突出的可见消息序号；null 表示不突出 */
-  emphasis: ReadonlySet<number> | null
+  /** R15、R16：选中突出；null 表示结构视角 */
+  emphasis: Emphasis | null
 }>()
 const emit = defineEmits<{ pick: [m: SequenceMessage]; hover: [m: SequenceMessage | null] }>()
 const top = computed(() => headsHeight(props.ps))
@@ -29,12 +33,14 @@ const cx = (nodeId: string) => {
 }
 
 function state(m: SequenceMessage): string {
-  if (m.status !== 'path') return m.status
+  if (m.status !== 'path' || m.pathIndex === undefined) return m.status
   const em = props.emphasis
-  const focus = em && m.pathIndex !== undefined ? (em.has(m.pathIndex) ? ' focus' : ' muted') : ''
-  if (m.pathIndex === props.current) return 'current' + focus
-  return (m.pathIndex !== undefined && m.pathIndex < props.walked ? 'walked' : 'future') + focus
+  if (em?.selected === m.pathIndex) return 'selected'
+  const pos = m.pathIndex < props.walked ? 'walked' : 'future'
+  return pos + (em?.paired.has(m.pathIndex) ? ' paired' : '')
 }
+/** 选中的不是步骤时，进度所在的消息只在序号旁加小标记 */
+const isProgress = (m: SequenceMessage) => m.pathIndex !== undefined && m.pathIndex === props.current && props.emphasis?.selected == null
 const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step:${m.frameIds[0]}`
 </script>
 
@@ -42,7 +48,15 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
   <g class="lanes">
     <line v-if="ps.boundaryX !== undefined" :x1="ps.boundaryX" :x2="ps.boundaryX" :y1="top" :y2="ps.size.h" class="sys-boundary" />
     <text v-if="ps.boundaryX !== undefined" :x="ps.boundaryX + 4" :y="ps.size.h - 6" class="sys-label">系统边界</text>
-    <line v-for="{ p, box } in lanes" :key="p.nodeId" :x1="box.x + box.w / 2" :x2="box.x + box.w / 2" :y1="top" :y2="ps.size.h" class="lifeline" />
+    <line
+      v-for="{ p, box } in lanes"
+      :key="p.nodeId"
+      :x1="box.x + box.w / 2"
+      :x2="box.x + box.w / 2"
+      :y1="top"
+      :y2="ps.size.h"
+      :class="['lifeline', { emph: emphasis?.lanes.has(p.nodeId) }]"
+    />
   </g>
   <g class="messages">
     <g
@@ -71,10 +85,10 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
           :marker-end="`url(#seq-${m.kind === 'call' ? 'solid' : 'open'})`"
         />
         <text :x="(cx(m.from) + cx(m.to)) / 2" :y="ps.messages[i].y - 5" text-anchor="middle" class="label">
-          {{ m.label }}<tspan v-if="m.unmodeled" class="tag"> · 结构中未建模</tspan>
+          {{ m.label }}<tspan v-if="m.unmodeled" class="tag"> · 结构中未建模</tspan><tspan v-if="state(m).includes('paired')" class="pair-tag"> · 配对</tspan>
         </text>
       </template>
-      <text v-if="m.pathIndex !== undefined" x="4" :y="ps.messages[i].y + 4" class="num">{{ m.pathIndex + 1 }}</text>
+      <text v-if="m.pathIndex !== undefined" x="4" :y="ps.messages[i].y + 4" class="num">{{ m.pathIndex + 1 }}<tspan v-if="isProgress(m)" class="progress" dx="2">◂</tspan></text>
     </g>
   </g>
 </template>
@@ -112,7 +126,7 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
   fill: var(--surface-2);
 }
 
-.msg.current .hit {
+.msg.selected .hit {
   fill: var(--accent-soft);
 }
 
@@ -129,9 +143,21 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
   stroke-dasharray: 2 3;
 }
 
-.current .arrow {
+.selected .arrow {
   stroke: var(--accent);
   stroke-width: 2.5;
+}
+
+/* R15：配对的调用 / 返回只加浅色标记 */
+.paired .arrow {
+  stroke: var(--accent);
+  stroke-opacity: 0.45;
+}
+
+.pair-tag {
+  font-size: 10px;
+  fill: var(--accent);
+  opacity: 0.7;
 }
 
 .unmodeled .arrow {
@@ -143,7 +169,7 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
   stroke: var(--text-3);
 }
 
-.current .activation {
+.selected .activation {
   fill: var(--accent-soft);
   stroke: var(--accent);
 }
@@ -153,7 +179,7 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
   fill: var(--text-2);
 }
 
-.current .label {
+.selected .label {
   fill: var(--accent);
   font-weight: 600;
 }
@@ -167,38 +193,20 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
   fill: var(--text-3);
 }
 
+/* 选中的不是步骤时，进度所在的位置 */
+.progress {
+  fill: var(--accent);
+  font-size: 10px;
+}
+
+.lifeline.emph {
+  stroke: var(--accent);
+  stroke-dasharray: none;
+  stroke-width: 1.5;
+}
+
 .future {
   opacity: 0.55;
-}
-
-/* R15：焦点突出时，其余路径上的消息变灰 */
-.muted .arrow {
-  stroke: var(--text-3);
-}
-
-.muted .label {
-  fill: var(--text-3);
-}
-
-.muted.walked,
-.muted.future {
-  opacity: 0.4;
-}
-
-.focus .arrow {
-  stroke-width: 2.2;
-}
-
-.focus:not(.current) .arrow {
-  stroke: var(--accent);
-}
-
-.focus:not(.current) .label {
-  fill: var(--accent);
-}
-
-.focus.future {
-  opacity: 1;
 }
 
 .unchosen,

@@ -17,7 +17,7 @@ function scenarioView(state: ViewState, ctx: TransitionContext, choices = state.
   return projectScenario(ctx.index, ctx.levelView, ctx.plan, choices)
 }
 
-/** V1、R5、R12：打开场景（或换场景）进入运行视角，不改层次；停在开头，焦点跟随；R10：进历史 */
+/** V1、R5、R12：打开场景（或换场景）进入运行视角，不改层次；停在开头、选中场景（V2）；R10：进历史 */
 export function openScenario(state: ViewState, ctx: TransitionContext, id: string): TransitionResult {
   if (!ctx.index.scenarios.has(id)) return replace(state)
   return push({ ...state, selection: null, playback: { scenarioId: id, frameId: null, choices: new Map() } })
@@ -28,7 +28,7 @@ export function closeScenario(state: ViewState): TransitionResult {
   return state.playback ? push({ ...state, playback: null }) : replace(state)
 }
 
-/** R7、V7：单步前进 / 后退，按本层可见消息；移动了播放头即回到跟随 */
+/** R7、V7：单步前进 / 后退，按本层可见消息；选中移动后的那一步（清空显式选中） */
 function step(state: ViewState, ctx: TransitionContext, find: typeof stepAfter): TransitionResult {
   const v = scenarioView(state, ctx)
   if (!v) return replace(state)
@@ -43,7 +43,7 @@ function step(state: ViewState, ctx: TransitionContext, find: typeof stepAfter):
 export const next = (state: ViewState, ctx: TransitionContext) => step(state, ctx, stepAfter)
 export const prev = (state: ViewState, ctx: TransitionContext) => step(state, ctx, stepBefore)
 
-/** R13、V7：指向某一步——播放头前进或后退到该步，焦点跟随它；在未选分支上先改选，落在合并的可见消息上取第一帧。null = 回到开头（R12） */
+/** R13、V7：指向某一步——选中它，进度（播放头）前进或后退到该步；在未选分支上先改选，落在合并的可见消息上取第一帧。null = 回到开头（R12） */
 export function seek(state: ViewState, ctx: TransitionContext, frameId: string | null): TransitionResult {
   const pb = state.playback
   if (!pb || !ctx.plan) return replace(state)
@@ -57,7 +57,7 @@ export function seek(state: ViewState, ctx: TransitionContext, frameId: string |
 }
 
 /**
- * F6、F6b、F6e：在任意分支点选择或改选（不在路径上时先补齐到达它的选择）；焦点不变。
+ * F6、F6b、F6e：在任意分支点选择或改选（不在路径上时先补齐到达它的选择）；选中不变（选中的是步骤时随进度移动，V7）。
  * 播放头仍在新路径上时不动，否则停在该分支点之前的最后一帧（取其可见消息的第一帧），之前没有帧时回到开头；之后由用户单步继续。
  */
 export function chooseBranch(state: ViewState, ctx: TransitionContext, pointId: string, option: number): TransitionResult {

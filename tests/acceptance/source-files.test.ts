@@ -174,7 +174,7 @@ describe('§6.4 源代码验收', () => {
     expect(bare.desk.ownership.value!.ignored.has('docs/README.md')).toBe(true)
   })
 
-  it('6. 运行视角下选中文件：钉住，副栏切到源代码；单步后回到跟随，副栏切回时序图，源代码页签仍在', async () => {
+  it('6. 运行视角下选中文件：副栏切到源代码；单步后选中下一步，副栏切回时序图，源代码页签仍在', async () => {
     const { desk } = await open('h5p-arch-desk')
     desk.openScenario('sc.open-and-play')
     const aside = useAside(desk)
@@ -182,11 +182,11 @@ describe('§6.4 源代码验收', () => {
     expect(aside.tab.value).toBe('sequence')
     desk.selectFile('src/state/useDeskState.ts')
     await settle()
-    expect(desk.focus.value).toEqual({ kind: 'pinned', selection: { kind: 'file', id: 'src/state/useDeskState.ts' } })
+    expect(desk.selected.value).toEqual({ kind: 'file', id: 'src/state/useDeskState.ts' })
     expect(aside.tab.value).toBe('source')
     desk.next()
     await settle()
-    expect(desk.focus.value.kind).toBe('follow')
+    expect(desk.selected.value!.kind).toBe('step')
     expect(aside.tab.value).toBe('sequence')
     expect(aside.previewPath.value).toBe('src/state/useDeskState.ts')
     // 退出场景：结构视角下副栏仍显示预览，关闭后消失

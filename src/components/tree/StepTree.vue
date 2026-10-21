@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
  * 步骤树（T6–T8）：步骤大纲 `outlineScenario` 的逐行呈现。
- * - 状态 → 树：帧标出已走过 / 当前 / 未走到 / 未选分支 / 未到达；本层可见的帧显示可见消息序号（与时序图、控制条一致），
- *   不可见的标「本层不可见」；当前帧滚到可见。
- * - 树 → 意图：单击帧指向该步（R13），单击 alt 分支标题选该分支（F6b），悬停帧在结构图上预览落点。
+ * - 状态 → 树：帧标出已走过 / 进度所在 / 未走到 / 未选分支 / 未到达；选中步骤时它的帧为选中样式，本层合并为同一条可见消息的
+ *   其他帧为「同一步」；选中的不是步骤时进度所在的帧只加小标记（T7、ADR-0012）；本层可见的帧显示可见消息序号
+ *   （与时序图、控制条一致），不可见的标「本层不可见」；进度所在的帧滚到可见。
+ * - 树 → 意图：单击帧指向该步即选中它（R13），单击 alt 分支标题选该分支（F6b），悬停帧在结构图上预览落点。
  * 分组的折叠状态只属于这块界面。
  */
 import { computed, nextTick, ref, watch } from 'vue'
@@ -23,13 +24,16 @@ function mark(f: Frame, status: 'path' | 'unchosen' | 'unreached'): FrameMark {
   const seq = m === undefined ? undefined : m + 1
   if (status !== 'path' || !v) return { state: status === 'path' ? 'ahead' : status, seq, hidden }
   const head = desk.playback.value?.frameId ?? null
+  const step = desk.selected.value?.kind === 'step'
+  if (f.id === head) return { state: step ? 'selected' : 'progress', seq, hidden }
   const cur = desk.currentIndex.value
-  if (head !== null && (cur !== null ? m === cur : f.id === head)) return { state: 'current', seq, hidden }
+  if (step && cur !== null && m === cur) return { state: 'same', seq, hidden }
   const at = head === null ? -1 : (v.order.get(head) ?? -1)
-  return { state: (v.order.get(f.id) ?? Infinity) < at ? 'walked' : 'ahead', seq, hidden }
+  // 进度所在可见消息中的其他帧随这一步一起走过
+  return { state: (v.order.get(f.id) ?? Infinity) < at || (cur !== null && m === cur) ? 'walked' : 'ahead', seq, hidden }
 }
 
-// mark 在行组件渲染时读取场景投影与播放头，依赖由行组件自己追踪
+// mark 在行组件渲染时读取场景投影、进度与选中，依赖由行组件自己追踪
 const ctx = computed<StepTreeContext>(() => ({ index: desk.index.value!, collapsed: collapsed.value, mark }))
 
 function toggle(id: string) {
@@ -41,12 +45,12 @@ function hover(id: string | null) {
   desk.setHover(id ? `step:${id}` : null)
 }
 
-// T7：当前帧滚到可见
+// T7：进度所在的帧滚到可见
 watch(
   () => [desk.playback.value?.frameId, desk.currentIndex.value] as const,
   async () => {
     await nextTick()
-    root.value?.querySelector<HTMLElement>('.frame.current')?.scrollIntoView?.({ block: 'nearest' })
+    root.value?.querySelector<HTMLElement>('.frame.selected, .frame.progress')?.scrollIntoView?.({ block: 'nearest' })
   },
   { immediate: true },
 )
@@ -56,7 +60,7 @@ watch(
   <div ref="root" class="step-tree" @mouseleave="hover(null)">
     <div class="scenario">
       <strong>{{ desk.scenario.value?.name }}</strong>
-      <button class="link start" :class="{ current: !desk.playback.value?.frameId }" title="回到开头" @click="desk.seek(null)">开头</button>
+      <button class="link start" :class="{ current: desk.selected.value?.kind === 'scenario' }" title="回到开头（选中场景）" @click="desk.seek(null)">开头</button>
     </div>
     <ul class="tree" role="tree">
       <StepTreeNode

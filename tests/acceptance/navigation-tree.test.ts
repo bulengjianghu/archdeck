@@ -77,7 +77,7 @@ describe('§6.3 导航树与分屏验收', () => {
     expect(wrapper.text()).toContain('引用：')
     for (let i = 0; i < 3; i++) desk.next()
     await flushPromises()
-    const cur = wrapper.findAll('.frame.current')
+    const cur = wrapper.findAll('.frame.selected')
     expect(cur.length).toBeGreaterThan(0)
     expect(Number(cur[0].find('.seq').text())).toBe(desk.currentIndex.value! + 1)
     expect(desk.walked.value).toBe(3)
@@ -89,10 +89,31 @@ describe('§6.3 导航树与分屏验收', () => {
     desk.seek(target.id)
     await flushPromises()
     expect(desk.playback.value!.choices.get(point.id)).toBe(1)
-    expect(wrapper.find('.frame.current').exists()).toBe(true)
+    expect(wrapper.find('.frame.selected').exists()).toBe(true)
   })
 
-  it('4. 运行视角下模块树标出参与模块；单击其中一个即钉住，面板显示它的运行信息', async () => {
+  it('§6.8-7 T7：选中步骤时它的帧为选中样式，同一可见消息的其他帧为「同一步」；选中其他对象时进度所在的帧只加小标记', async () => {
+    const { desk, wrapper } = await open('h5p-arch-desk')
+    desk.openScenario('sc.open-and-play')
+    // 根层（分层总览）找一条合并了多帧的可见消息
+    let guard = 0
+    while (desk.currentIndex.value === null || desk.scenarioView.value!.messages[desk.currentIndex.value].frameIds.length < 2) {
+      desk.next()
+      if (++guard > 20) throw new Error('没有合并的可见消息')
+    }
+    await flushPromises()
+    expect(wrapper.findAll('.frame.selected')).toHaveLength(1)
+    const same = wrapper.findAll('.frame.same')
+    expect(same.length).toBeGreaterThan(0)
+    expect(same[0].text()).toContain('本层合并为 1 步')
+    desk.select({ kind: 'module', id: desk.index.value!.childrenOf.get(desk.levelId.value)![0] })
+    await flushPromises()
+    expect(wrapper.find('.frame.selected').exists()).toBe(false)
+    expect(wrapper.find('.frame.same').exists()).toBe(false)
+    expect(wrapper.findAll('.frame.progress')).toHaveLength(1)
+  })
+
+  it('4. 运行视角下模块树标出参与模块；单击其中一个即选中它，面板显示它的运行信息', async () => {
     const { desk, row, tab } = await open('h5p-arch-desk', '/p/h5p-arch-desk?level=state')
     desk.openScenario('sc.open-and-play')
     await flushPromises()
@@ -100,8 +121,8 @@ describe('§6.3 导航树与分屏验收', () => {
     expect(row('state')!.classes()).toContain('part')
     expect(row('state.desk')!.classes()).toContain('part')
     await row('state.desk')!.trigger('click')
-    expect(desk.focus.value).toEqual({ kind: 'pinned', selection: { kind: 'module', id: 'state.desk' } })
-    expect(desk.pinnedParticipation.value!.frames.length).toBeGreaterThan(0)
+    expect(desk.selected.value).toEqual({ kind: 'module', id: 'state.desk' })
+    expect(desk.selectedParticipation.value!.frames.length).toBeGreaterThan(0)
   })
 
   it('5. 分屏默认左右；切换为上下后按项目记在本地，刷新仍保持；收起状态随之保留', () => {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 属性面板：按焦点分派（V2）。结构视角：选中，否则当前父模块（根层显示系统）；
- * 运行视角：钉住时为选中对象，运行信息在上、结构信息折叠在下（V6）；跟随时为当前步骤，尚未开始时为场景。
+ * 属性面板：按选中分派（V2，ADR-0012）。结构视角：选中的对象，无选中时为当前父模块（根层显示系统）；
+ * 运行视角：选中步骤 → 步骤面板，选中场景 → 场景面板，其他对象 → 运行信息在上、结构信息折叠在下（V6）。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -19,9 +19,10 @@ const desk = useDesk()
 const run = computed(() => desk.perspective.value === 'run')
 const target = computed(() => {
   const idx = desk.index.value
-  const s = desk.selection.value
+  const s = desk.selected.value
   if (!idx) return null
-  if (run.value && !s) return desk.frame.value ? { kind: 'step' as const, id: desk.frame.value.id } : { kind: 'scenario' as const, id: desk.scenario.value!.id }
+  if (s?.kind === 'step') return desk.frame.value ? { kind: 'step' as const, id: s.id } : null
+  if (s?.kind === 'scenario') return { kind: 'scenario' as const, id: s.id }
   if (s?.kind === 'module' && idx.modules.has(s.id)) return { kind: 'module' as const, id: s.id }
   if (s?.kind === 'relation' && idx.relations.has(s.id)) return { kind: 'relation' as const, id: s.id }
   if (s?.kind === 'edge') return { kind: 'edge' as const, id: s.id }
@@ -38,10 +39,6 @@ const target = computed(() => {
       <StepPanel v-if="target.kind === 'step'" :key="`f:${target.id}`" />
       <ScenarioPanel v-else-if="target.kind === 'scenario'" :key="`s:${target.id}`" />
       <template v-else>
-        <div v-if="run" class="pinned-bar">
-          <span class="badge accent">已钉住</span>
-          <span class="muted">Esc、单击空白或单步回到当前步骤</span>
-        </div>
         <FilePanel v-if="target.kind === 'file'" :key="`f:${target.id}`" :path="target.id" />
         <RunSection v-if="run && target.kind !== 'file'" />
         <component :is="run ? 'details' : 'div'" v-if="target.kind !== 'file'" class="structure" :open="run ? false : undefined">
@@ -165,15 +162,6 @@ const target = computed(() => {
 .panel .item .sub {
   font-size: 12px;
   color: var(--text-3);
-}
-
-.panel .pinned-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: baseline;
-  padding: 10px 18px 0;
-  font-size: 12px;
 }
 
 .panel .structure-head {

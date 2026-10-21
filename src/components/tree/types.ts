@@ -34,7 +34,8 @@ export interface FileTreeContext {
 
 /** T7：一帧在步骤树上的标记 */
 export interface FrameMark {
-  state: 'walked' | 'current' | 'ahead' | 'unchosen' | 'unreached'
+  /** selected：选中的步骤；same：与它在本层合并为同一条可见消息的其他帧；progress：选中的不是步骤时进度所在的帧 */
+  state: 'walked' | 'selected' | 'same' | 'progress' | 'ahead' | 'unchosen' | 'unreached'
   /** 本层可见消息序号（1 起）；本层不可见时为空 */
   seq?: number
   hidden: boolean

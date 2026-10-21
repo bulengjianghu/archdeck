@@ -286,11 +286,11 @@ describe('DeskState · 运行视角', () => {
     expect(desk.currentIndex.value).not.toBeNull()
   })
 
-  it('钉住对象时派生其在本场景中的参与；退出场景回到结构视角，层次与选中保留', async () => {
+  it('选中对象时派生其在本场景中的参与；退出场景回到结构视角，层次与选中保留', async () => {
     const { desk, router, settle } = await openDesk('/?level=infra&sc=sc.play&step=sc.play%23done&alt=1')
     desk.select({ kind: 'module', id: 'infra.framework' })
-    expect(desk.focus.value.kind).toBe('pinned')
-    expect(desk.pinnedParticipation.value!.frames.length).toBeGreaterThan(0)
+    expect(desk.selected.value).toEqual({ kind: 'module', id: 'infra.framework' })
+    expect(desk.selectedParticipation.value!.frames.length).toBeGreaterThan(0)
     desk.closeScenario()
     await settle()
     expect(desk.perspective.value).toBe('structure')

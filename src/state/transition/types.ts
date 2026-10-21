@@ -1,6 +1,6 @@
 /**
  * 视图状态：用户此刻在看什么，一个值（docs/architecture/view-state.md §1）。
- * 只经 transition() 改变；视角与焦点由它推出，不另存字段。
+ * 只经 transition() 改变；视角与选中由它推出，不另存字段（运行视角下 selection 为空即选中进度所在的步骤 / 场景，ADR-0012）。
  */
 import type { LevelView, ModelIndex, RelationType, ScenarioLevelView, ScenarioPlan } from '@/model'
 

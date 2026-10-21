@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 步骤面板（D-5，焦点跟随当前步骤时）：先回答「这一步做什么」——作用、输入（签名中与标签同名的一行 + 携带的数据）、输出（配对返回，F7）、数据结构、经由接口；
+ * 步骤面板（D-5，选中步骤时，V2）：先回答「这一步做什么」——作用、输入（签名中与标签同名的一行 + 携带的数据）、输出（配对返回，F7）、数据结构、经由接口；
  * 步骤没写的接口与数据取自对应关系并标「取自关系」（S14）；
  * 其后是真实端点与本层投影、本层一条可见消息覆盖的多帧；结构关系默认折叠，可在画布上显示（V9）；最后是出处。
  */
@@ -46,7 +46,7 @@ function pointAt(id: string) {
   <div v-if="f" class="step-panel">
     <header class="head">
       <div class="badges top">
-        <span class="badge accent">当前步骤</span>
+        <span class="badge accent">选中的步骤</span>
         <span v-if="msg" class="muted">第 {{ msg.index + 1 }} / {{ total }} 步（本层）</span>
         <span v-else class="badge warn">本层不可见</span>
       </div>

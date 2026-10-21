@@ -38,18 +38,20 @@ describe('§6.5 运行视角聚焦验收', () => {
     expect([...boundaries].sort((a, b) => compareKeys(hierarchyKey(desk.index.value!, a), hierarchyKey(desk.index.value!, b)))).toEqual(boundaries)
   })
 
-  it('2. 有显式返回的调用：与配对返回一起突出；钉住模块后突出它参与的消息', async () => {
+  it('2. 有显式返回的调用：只有它为选中，配对返回只作配对；选中模块后突出它所在的泳道、不突出消息', async () => {
     const desk = await open('/p/h5player?level=infra.framework&sc=sc.command&alt=1')
     desk.seek('sc.command#hook')
     const sv = desk.scenarioView.value!
     const paired = desk.pairs.value!.get('sc.command#hook')!
     expect(desk.plan.value!.frames.get(paired)!.kind).toBe('return')
-    expect([...desk.emphasis.value!].sort()).toEqual([sv.messageOf.get('sc.command#hook')!, sv.messageOf.get(paired)!].sort())
+    expect(desk.emphasis.value!.selected).toBe(sv.messageOf.get('sc.command#hook')!)
+    expect([...desk.emphasis.value!.paired]).toEqual([sv.messageOf.get(paired)!])
     desk.select({ kind: 'module', id: 'infra.framework.state-machine' })
-    expect([...desk.emphasis.value!]).toEqual(desk.pinnedParticipation.value!.messages)
+    expect(desk.emphasis.value!.selected).toBeNull()
+    expect([...desk.emphasis.value!.lanes]).toEqual(['infra.framework.state-machine'])
   })
 
-  it('3. 直选分支：改走未选的一支，路线同步；播放头原在旧分支内时退到分支点之前；改选靠前的分支点提示丢弃个数', async () => {
+  it('3. 直选分支：改走未选的一支，路线同步；进度原在旧分支内时退到分支点之前；改选靠前的分支点提示丢弃个数', async () => {
     const desk = await open('/p/h5player?level=infra.framework&sc=sc.command')
     const point = desk.route.value[0].pointId
     // 走「需要改图」并进入分支内

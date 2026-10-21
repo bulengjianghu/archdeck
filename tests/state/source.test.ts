@@ -7,7 +7,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { createDeskState, decodeSelection, encodeSelection, type ModelPayload, type SourceFetcher } from '../../src/state/useDeskState'
 import { httpSourceFetcher } from '../../src/components/source/httpSource'
 import { createSourceSync } from '../../src/state/sync/source'
-import { focusOf } from '../../src/state/transition'
+import { selectedOf } from '../../src/state/transition'
 import type { SourcePayload } from '../../src/model'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
@@ -57,14 +57,14 @@ describe('G16 文件是一种选中', () => {
     expect(router.currentRoute.value.query.sel).toBe('f:src/stray.ts')
     expect(router.options.history.state.position).toBe(before)
   })
-  it('运行视角下选中文件即钉住（V3），取消选中回到跟随（V4）', async () => {
+  it('运行视角下选中文件（V3、G16），取消选中回到进度所在的步骤或场景（V4）', async () => {
     const { desk } = await setup()
     desk.openScenario('sc.play')
     desk.selectFile('src/framework/extra.ts')
-    expect(focusOf(desk.state.value)).toEqual({ kind: 'pinned', selection: { kind: 'file', id: 'src/framework/extra.ts' } })
-    expect(desk.pinnedParticipation.value).toBeNull()
+    expect(selectedOf(desk.state.value)).toEqual({ kind: 'file', id: 'src/framework/extra.ts' })
+    expect(desk.selectedParticipation.value).toBeNull()
     desk.select(null)
-    expect(focusOf(desk.state.value).kind).toBe('follow')
+    expect(selectedOf(desk.state.value)).toEqual({ kind: 'scenario', id: 'sc.play' })
   })
 })
 

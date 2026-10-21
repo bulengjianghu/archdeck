@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 时序图（D-2、D-7、R3、R5、R11）：只画定位好坐标的时序模型。
- * 单击消息（含未选分支上的）→ 指向该步（R13）；单击 alt 的分支条件 → 选该分支（F6e）；悬停消息时在结构图上预览对应的边；焦点突出（R15）。
+ * 单击消息（含未选分支上的）→ 指向该步，即选中它（R13）；单击 alt 的分支条件 → 选该分支（F6e）；悬停消息时在结构图上预览对应的边；选中突出（R15、R16）。
  * 泳道头固定在顶部、底部另有一份，消息区夹在中间纵向滚动，三块从左起排、不拉伸（D-2）；只在用户移动播放头后把当前步骤滚到中间（D-7）。
  * 不可见提示与「定位」在副栏标题栏（split/AsidePane.vue，ADR-0010），「定位」调用这里暴露的 centerCurrent。
  */
@@ -65,7 +65,7 @@ watch(
         <button v-if="desk.home.value" @click="desk.goTo(desk.home.value)">跳到场景所在层次：{{ homeName }}</button>
       </div>
       <template v-else-if="ps">
-        <div class="pin top"><SequenceHeads :ps="ps" where="top" :group-name="groupName" /></div>
+        <div class="pin top"><SequenceHeads :ps="ps" where="top" :group-name="groupName" :lanes="desk.emphasis.value?.lanes" /></div>
         <svg :width="ps.size.w" :height="ps.size.h - top" :viewBox="`0 ${top} ${ps.size.w} ${ps.size.h - top}`" class="svg">
           <defs>
             <marker id="seq-solid" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
@@ -86,7 +86,7 @@ watch(
             @hover="hover"
           />
         </svg>
-        <div class="pin bottom"><SequenceHeads :ps="ps" where="bottom" :group-name="groupName" /></div>
+        <div class="pin bottom"><SequenceHeads :ps="ps" where="bottom" :group-name="groupName" :lanes="desk.emphasis.value?.lanes" /></div>
       </template>
     </div>
   </section>

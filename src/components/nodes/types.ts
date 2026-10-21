@@ -7,7 +7,7 @@ export interface NodeData {
   module?: ModuleEntity
   childCount: number
   selected: boolean
-  /** 有焦点（悬停/选中）时，与焦点无关的节点变淡 */
+  /** 结构视角有聚焦对象（悬停 / 选中）时，与它无关的节点变淡 */
   dim: boolean
   /** 边界节点：外部模块所在路径 */
   path?: string

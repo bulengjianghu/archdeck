@@ -17,7 +17,7 @@ export interface RouteEdgeData {
   change?: 'added' | 'changed'
   /** 运行视角：当前消息、走过、分支预览、时序图悬停预览 */
   play?: 'current' | 'walked' | 'preview' | 'hover'
-  /** R15：有焦点突出时，不属于突出消息的走过的边淡为灰色 */
+  /** R15：选中步骤时，不属于选中 / 配对消息的走过的边淡为灰色 */
   muted?: boolean
   /** 当前消息与边的箭头方向相反（P10） */
   flowReverse?: boolean

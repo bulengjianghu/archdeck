@@ -165,3 +165,20 @@ export function buildSequence(index: ModelIndex, view: LevelView, plan: Scenario
 
   return { participants, messages, fragments }
 }
+
+/**
+ * R15、R16：模块或参与者在这张时序图中对应的泳道（视图节点 ID）。
+ * 参与者为它自己的泳道；模块是当前层次本身或其祖先时没有；否则为它包含的泳道（泳道模块是它自身或其后代），
+ * 没有时为包含它的最深泳道（P14：泳道互不包含，分层总览中核心模块优先于「<层名> · 其他」）。
+ */
+export function lanesOf(index: ModelIndex, sequence: SequenceModel, levelId: string, id: string): Set<string> {
+  const lanes = sequence.participants
+  if (index.actors.has(id)) return new Set(lanes.filter(p => p.kind === 'actor' && p.id === id).map(p => p.nodeId))
+  const path = index.pathOf.get(id)
+  if (!path || index.pathOf.get(levelId)?.includes(id)) return new Set()
+  const inside = lanes.filter(p => p.kind !== 'actor' && p.path.includes(id))
+  if (inside.length) return new Set(inside.map(p => p.nodeId))
+  let best: SequenceParticipant | null = null
+  for (const p of lanes) if (p.kind !== 'actor' && path.includes(p.id) && (!best || p.path.length > best.path.length)) best = p
+  return new Set(best ? [best.nodeId] : [])
+}

@@ -4,15 +4,15 @@
  */
 import * as nav from './navigation'
 import * as pb from './playback'
-import { asPointing } from './focus'
+import { asPointing } from './selected'
 import { restore } from './url'
 import type { TransitionContext, TransitionResult, ViewAction, ViewState } from './types'
 
 export * from './types'
 export { selectionExists, keyIntent } from './navigation'
 export { encodeSelection, decodeSelection, encodeView, sameQuery } from './url'
-export { perspectiveOf, focusOf, emphasisOf } from './focus'
-export type { Perspective, Focus } from './focus'
+export { perspectiveOf, selectedOf, emphasisOf } from './selected'
+export type { Perspective, Selected, Emphasis, EmphasisContext } from './selected'
 
 export function transition(state: ViewState, action: ViewAction, ctx: TransitionContext): TransitionResult {
   const { index } = ctx
@@ -23,7 +23,7 @@ export function transition(state: ViewState, action: ViewAction, ctx: Transition
       const r = nav.reloaded(state, index, action.previousPath)
       return { ...r, state: pb.reloadedPlayback(r.state, ctx) }
     }
-    // 导航即「指向」：运行视角下设定的选中即钉住；下钻钉住被下钻的模块（V3）
+    // 导航即「指向」：运行视角下同样设定选中；下钻选中被下钻的模块（V3）
     case 'drill':
       return asPointing(state, nav.drill(state, index, action.id), action.id)
     case 'goTo':

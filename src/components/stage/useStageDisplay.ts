@@ -1,7 +1,7 @@
 /**
  * 舞台显示（V8、V9）：只属于画布这块界面，不进视图状态与 URL。由项目视图创建并注入，画布读取、面板写入。
  * - 静态关系显示方式：隐藏（默认）/ 淡显 / 全显，按项目记在本地；
- * - 「在画布上显示」的临时对象（视图节点 ID）：播放头、焦点（选中）、层次任一变化即收回。
+ * - 「在画布上显示」的临时对象（视图节点 ID）：进度、选中、层次任一变化即收回。
  */
 import { inject, ref, watch, type InjectionKey, type Ref } from 'vue'
 import type { StaticMode } from '@/layout/stage'
@@ -44,7 +44,7 @@ export function useStageDisplay(project: string, desk: Pick<DeskState, 'playback
     reveal.value = same ? [] : [...nodeIds]
   }
 
-  // V9：播放头、焦点、层次任一变化即收回
+  // V9：进度、选中、层次任一变化即收回
   watch(
     () => [desk.playback.value?.frameId, desk.playback.value?.scenarioId, desk.selection.value, desk.levelId.value] as const,
     () => (reveal.value = []),

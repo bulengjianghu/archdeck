@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** V9：在画布上临时显示这些视图节点的静态关系；再按一次收起。播放头、焦点、层次变化后自动收回 */
+/** V9：在画布上临时显示这些视图节点的静态关系；再按一次收起。进度、选中、层次变化后自动收回 */
 import { computed } from 'vue'
 import { useStage } from '../stage/useStageDisplay'
 

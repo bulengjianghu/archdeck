@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 运行信息（V6、D-11）：运行视角下钉住对象时面板顶部的一节，回答「在这次流程中做了什么」——
- * 本场景中参与的步骤（单击指向，标出离播放头最近的一步）、在本层收发的消息、用到的接口与数据；
+ * 运行信息（V6、D-11）：运行视角下选中模块、关系、视图边、参与者时面板顶部的一节，回答「在这次流程中做了什么」——
+ * 本场景中参与的步骤（单击指向，标出离进度最近的一步）、在本层收发的消息、用到的接口与数据；
  * 模块与参与者可在画布上显示它在本层节点的结构关系（V9）。
  */
 import { computed } from 'vue'
@@ -11,10 +11,10 @@ import RevealButton from './RevealButton.vue'
 import { frameText } from './runText'
 
 const desk = useDesk()
-const p = computed(() => desk.pinnedParticipation.value)
+const p = computed(() => desk.selectedParticipation.value)
 const idx = computed(() => desk.index.value!)
 const ROLE = { from: '发出', to: '收到', internal: '内部', traverse: '经过' } as const
-/** V9：钉住的模块 / 参与者在本层对应的视图节点（自身、边界节点或所在的子模块） */
+/** V9：选中的模块 / 参与者在本层对应的视图节点（自身、边界节点或所在的子模块） */
 const revealNodes = computed(() => {
   const s = desk.selection.value
   const view = desk.view.value
@@ -37,7 +37,7 @@ const nameOf = (kind: 'if' | 'ds', id: string) => (kind === 'if' ? idx.value.int
       <li v-for="x in p.frames" :key="x.frameId" :class="{ nearest: x.frameId === p.nearest, current: x.frameId === desk.playback.value?.frameId }">
         <span class="role">{{ ROLE[x.role] }}</span>
         <button class="link" @click="desk.seek(x.frameId)">{{ frameText(idx, desk.plan.value!.frames.get(x.frameId)!) }}</button>
-        <span v-if="x.frameId === p.nearest" class="badge accent">离播放头最近</span>
+        <span v-if="x.frameId === p.nearest" class="badge accent">离进度最近</span>
       </li>
     </ol>
     <div class="meta muted">本层可见消息：{{ p.messages.length ? p.messages.map(m => `第 ${m + 1} 步`).join('、') : '无' }}</div>

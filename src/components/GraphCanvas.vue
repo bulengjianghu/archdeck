@@ -4,7 +4,7 @@
  * 运行视角下作为舞台（V5）：本层参与的节点与走过的边突出、其余变淡，当前消息沿步骤方向流动（P10），
  * 未建模的消息画临时虚线（P11），步骤序号可单击指向（R13），停在分支点时预览各选项（F6）。
  * 舞台按静态关系显示方式隐藏或淡化不参与的节点与静态边（V5、V8），「在画布上显示」的对象照常（V9）；
- * 焦点突出时其余走过的边与步骤序号淡为灰色（R15）。
+ * 选中步骤时其余走过的边与步骤序号淡为灰色；选中其他对象时不变灰，舞台始终按进度（R15、R16）。
  * 选中文件时，其归属模块在本层的投影节点加文件高亮（G14）。
  * 只读 DeskState、只发操作意图，不做任何投影或布局计算。
  */
@@ -44,7 +44,7 @@ const hoverLanding = computed(() => {
   return m === undefined ? null : sv.messages[m].at
 })
 
-/** 焦点：悬停优先，其次是选中的模块 */
+/** 聚焦对象：悬停优先，其次是选中的模块 */
 const focusId = computed(() => {
   if (desk.hoverId.value?.startsWith('step:')) return null
   if (desk.hoverId.value) return desk.hoverId.value
@@ -92,9 +92,13 @@ const display = computed(() => {
 const visOf = (id: string): Visibility => display.value?.nodes.get(id) ?? 'show'
 const edgeVis = (id: string): Visibility => display.value?.edges.get(id) ?? 'show'
 
-/** R15：突出消息所在的边；null 表示不突出 */
-const emphEdges = computed<Set<string> | null>(() => {
+/** R15、R16：选中步骤的消息与配对消息所在的边；选中的不是步骤时为 null（不变灰） */
+const emphMessages = computed<Set<number> | null>(() => {
   const em = desk.emphasis.value
+  return em?.selected == null ? null : new Set([em.selected, ...em.paired])
+})
+const emphEdges = computed<Set<string> | null>(() => {
+  const em = emphMessages.value
   const sv = desk.scenarioView.value
   if (!em || !sv) return null
   const ids = new Set<string>()
@@ -107,7 +111,7 @@ const emphEdges = computed<Set<string> | null>(() => {
   return ids
 })
 
-/** 分层总览中显示的核心跨层边：与焦点相连的、被选中的，或回放落在其上的（P7） */
+/** 分层总览中显示的核心跨层边：与聚焦对象相连的、被选中的，或回放落在其上的（P7） */
 const visibleCoreEdges = computed<ViewEdge[]>(() => {
   const pv = desk.positioned.value
   if (!pv?.view.coreEdges) return []
@@ -115,7 +119,7 @@ const visibleCoreEdges = computed<ViewEdge[]>(() => {
   return pv.view.coreEdges.filter(e => (f && (e.from === f || e.to === f)) || selectedEdgeIds.value.has(e.id) || playEdges.value.has(e.id))
 })
 
-/** 与焦点相邻的节点 ID；无焦点时为 null（不变淡） */
+/** 与聚焦对象相邻的节点 ID；无聚焦对象时为 null（不变淡） */
 const neighborhood = computed<Set<string> | null>(() => {
   const pv = desk.positioned.value
   const f = focusId.value
@@ -175,7 +179,7 @@ const nodes = computed<Node<NodeData>[]>(() => {
   const st = stage.value
   const layered = pv.view.mode === 'layered'
   const out: Node<NodeData>[] = []
-  // 运行视角：按舞台显示（V5、V8、V9）；结构视角：与焦点无关的变淡
+  // 运行视角：按舞台显示（V5、V8、V9）；结构视角：与聚焦对象无关的变淡
   const dimmed = (id: string, base: boolean) => (st ? visOf(id) === 'dim' : base)
   const hidden = (id: string) => !!st && visOf(id) === 'hide'
   const fileHit = desk.fileHits.value?.nodes
@@ -223,7 +227,7 @@ const nodes = computed<Node<NodeData>[]>(() => {
   const sv = desk.scenarioView.value
   if (st && sv) {
     const current = st.current?.index
-    const em = desk.emphasis.value
+    const em = emphMessages.value
     for (const mark of st.walked.values()) {
       if (!mark.at) continue
       const steps = mark.steps.map(n => ({ n, frameId: sv.messages[n - 1].frameIds[0], current: n - 1 === current, muted: !!em && !em.has(n - 1) }))
@@ -282,9 +286,9 @@ const edges = computed<Edge<RouteEdgeData>[]>(() => {
         selected,
         core,
         change: edgeChange(e),
-        // 运行视角：按舞台显示（V5、V8）；分层总览：层间边在聚焦核心模块时变淡；普通层次：与焦点无关的边变淡
+        // 运行视角：按舞台显示（V5、V8）；分层总览：层间边在聚焦核心模块时变淡；普通层次：与聚焦对象无关的边变淡
         dim: st ? !play.play && !selected && edgeVis(e.id) === 'dim' : layered ? !!near && !core && !selected : !!near && !touchesFocus && !selected,
-        // R15：焦点突出时，不属于突出消息的走过的边淡为灰色
+        // R15：选中步骤时，不属于选中 / 配对消息的走过的边淡为灰色
         muted: play.play === 'walked' && !!emphEdges.value && !emphEdges.value.has(e.id),
         ...play,
         ...extra,
