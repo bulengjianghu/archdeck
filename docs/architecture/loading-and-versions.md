@@ -38,14 +38,15 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计)──▶ ModelDiff（
 | `GET models/<项目>.json` | 当前版本的 `ModelPayload`；不存在时 404 |
 | `GET models/<项目>/designs/<设计>/<轮次>.json` | 设计某一轮的 `ModelPayload`，带 `compare` |
 | ws `arch-model:changed` | `{ project }`；仅开发态，同一项目 150ms 内的多次变化合并为一次（含设计版本目录） |
+| `GET source/<项目>…` | 被描述项目的源码清单、文件与导出；仅开发态，见[源码接入与归属 §2.1](./source.md#21-端点) |
 
-开发态由 Vite 插件实时读取；构建态在 `generateBundle` 中把上述 JSON 输出为同名静态文件，页面无需区分。命令行校验 `lint:model` 使用同样的读取函数，逐项目、逐设计轮次校验，`design.yaml` 的问题按 error 计。
+开发态由 Vite 插件实时读取；构建态在 `generateBundle` 中把上述 JSON 输出为同名静态文件，页面无需区分。命令行校验 `lint:model` 使用同样的读取函数，逐项目、逐设计轮次校验，`design.yaml` 的问题按 error 计；源码在本地时，当前版本附带归属警告（G9，`readSourceTree` + `sourceIssues`）。
 
 ## 3. 加载流水线（模型层）
 
 | 步骤 | 做什么 | 规则 |
 |---|---|---|
-| `load` | 按路径排序；逐文件解析 YAML / JSON（语法错误整份跳过）、按 JSON Schema 检查格式（未知字段即错误，整份跳过）；合并为 `ArchModel`，每个实体记录出处 `{ file, path, line }`；展开内联子模块；步骤树规整为 `Step`（记录路径与出处，F2） | M1、M2、M10、S2、S8 |
+| `load` | 按路径排序；逐文件解析 YAML / JSON（语法错误整份跳过）、按 JSON Schema 检查格式（未知字段即错误，整份跳过）；合并为 `ArchModel`，每个实体记录出处 `{ file, path, line }`；展开内联子模块；步骤树规整为 `Step`（记录路径与出处，F2）；各文件的 `sourceIgnore` 合并为一个列表（G8） | M1、M2、M10、S2、S8 |
 | `validate` | 跨文件检查，不抛异常：error 级实体被剔除，warning 级只去掉坏引用，返回可以安全建索引的模型；场景先清理坏端点、坏引用、重复步骤 id 与成环的 `ref`，再用 `bindRelation` 检查与结构的一致性（校验与回放结果一致） | M3–M9、S5–S6、S11–S12 |
 | `buildIndex` | 按 ID 的表（含参与者、场景）；`childrenOf`（层按 `order` 排序）；`pathOf`（根到模块）；出入边表（含参与者）；`scenariosOf`（模块 → 有帧端点在其子树内的场景，R4）；`triggeredBy`（参与者 → 由它触发的场景，A6）；查询 `lowestCommonAncestor`、`nearestExisting`（N5、N11）、`moduleName`、`triggerOf` | R4、A6 |
 | `loadModel` | 串起三步并汇总问题；模型层对外唯一的加载入口 | — |
@@ -112,6 +113,7 @@ interface ArchModel {                       // 实体都带 src { file, path, li
   relations: RelationEntity[]               // payload 规整为数组
   interfaces: InterfaceEntity[]; dataStructures: DataStructureEntity[]
   actors: ActorEntity[]; scenarios: ScenarioEntity[]   // 场景的 steps 为规整后的 Step 树
+  sourceIgnore: string[]                    // 忽略清单（G8），不参与版本对比
 }
 
 interface Issue { severity: 'error' | 'warning'; code: string; message: string; file?: string; path?: string; line?: number }

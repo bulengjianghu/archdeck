@@ -9,12 +9,13 @@
 
 ```text
 model/<项目>/
-  system.yaml              系统根 + 生成来源 source { repo, commit, generatedAt }
+  system.yaml              系统根 + 生成来源 source { repo, commit, generatedAt }；repo 也决定源码根目录（§3.7）
   modules/
     layers.yaml            骨架：全部层 + 第二级模块（ID 固定，见 §3.1）
     <区域>.yaml            各区域的子树：第二级模块之下的模块、本区域的关系、接口、数据结构
   actors.yaml              外部参与者及其入口关系
   scenarios/<场景>.yaml    一个场景一个文件，也可用 .json
+  source-ignore.yaml       忽略清单 sourceIgnore：不属于任何模块的源码文件（§3.7）
   designs/<设计>/          设计版本（§5），读取当前版本时跳过
 ```
 
@@ -23,7 +24,7 @@ model/<项目>/
 
 ## 2. 文件格式
 
-一个文件的顶层键都可选、可任意组合：`system`、`module`（单个模块，可带 `parent`）、`modules`、`relations`、`interfaces`、`dataStructures`、`actors`、`scenario` / `scenarios`。未知字段即格式错误，整份文件被跳过（M1）。
+一个文件的顶层键都可选、可任意组合：`system`、`module`（单个模块，可带 `parent`）、`modules`、`relations`、`interfaces`、`dataStructures`、`actors`、`scenario` / `scenarios`、`sourceIgnore`。未知字段即格式错误，整份文件被跳过（M1）。
 
 ```yaml
 # modules/infra.yaml —— 模块子树 + 本区域的关系
@@ -156,7 +157,8 @@ scenario:
 - **接口 / 数据结构**：只列对外有意义的（被其他模块调用或交换的）。
 - **核心模块**：仅用于第二级模块，由骨架维护，每层 3~5 个，优先选被其他层依赖最多的。
 - **status**：已落地写 `current`（可省略）；蓝图中有、代码中未落地写 `target`；计划移除写 `deprecated`。
-- **codeRefs / docRefs**：被描述项目仓库根的相对路径或 glob、设计文档路径。
+- **codeRefs / docRefs**：相对源码根目录（§3.7）的路径或 glob（`*`、`**`、`?`、`{a,b}`；不带通配符的路径匹配同名文件或整个目录）、设计文档路径。
+- **entry**：模块对外入口不符合约定（模块目录下的 `index.ts`，或其 `package.json` 的 `exports` / `main`）时才写，相对源码根目录（G10）。
 
 ### 3.3 接口与数据结构
 
@@ -196,13 +198,32 @@ scenario:
 - **步骤 id**：分享链接会指向具体步骤，路径式 ID 在插入步骤后会变；关键步骤（`alt` 各分支的首步、常被讨论的步骤）写场景内唯一的 `id`（F2、S11）。
 - **从 mermaid 迁移**（D-8）：参与者对照骨架的模块 ID；`alt` / `loop` / `par` 一一对应；系统外的 `participant` 改写为外部参与者。
 
+### 3.7 源码归属
+
+源码根目录 = 工作区根目录（默认 `work4/`）+ `system.source.repo`（G1），如 `repo: h5player` → `work4/h5player`，`repo: h5player-demo/packages/h5p-arch-desk` → 本包。`codeRefs` 与 `entry` 都相对这个目录书写。
+
+- **每个源码文件都应恰好归属一个模块**：子模块写自己的文件，父模块可以写覆盖整个目录的 glob，祖先与后代同时匹配时归最深的模块（G5）；两个互不包含的模块不要写同一个文件（G6）。
+- **未归属的文件**：真正属于某个模块的，补到它的 `codeRefs`；不属于任何模块的（文档、测试、构建配置、示例），写进 `source-ignore.yaml`：
+
+```yaml
+# source-ignore.yaml —— 不属于任何模块的文件（G8），glob 写法同 codeRefs
+sourceIgnore:
+  - docs/**
+  - tests/**
+  - '*.md'
+  - tsconfig*.json
+```
+
+- 页面只列出未归属文件，不提供忽略操作；按文件树与 `lint:model` 的列表逐条判断，能归纳成目录或通配符的合并成一条。
+- `lint:model` 在源码在本地时报出 `source.unowned` / `source.conflict` / `source.entry` 警告，生成后逐条处理。
+
 ## 4. 校验与提交
 
 ```bash
 npm run lint:model
 ```
 
-- 必须 0 个错误；提醒逐条处理：缺职责要补；引用其他区域尚未定义的接口 / 数据结构时可暂留。
+- 必须 0 个错误；提醒逐条处理：缺职责要补；引用其他区域尚未定义的接口 / 数据结构时可暂留；源码归属警告按 §3.7 处理。
 - 按代码重新生成当前版本后，更新 `system.yaml` 的 `source.commit` 与 `source.generatedAt`。
 
 ## 5. 设计版本

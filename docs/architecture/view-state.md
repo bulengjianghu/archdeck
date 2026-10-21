@@ -1,7 +1,7 @@
 # 专题：视图状态与协调
 
 > 回答：用户此刻在看什么；一次操作怎么改变它；它怎么与路由、描述文件、布局保持一致。
-> 覆盖模块：视图状态层的 DeskState（协调者）与视图状态转移（会话规则）。原则见 [03-architecture.md](../03-architecture.md) 原则 6、7；规则见 [02-domain.md](../02-domain.md) 的 V、N、R、F6c、E3、E4。
+> 覆盖模块：视图状态层的 DeskState（协调者）与视图状态转移（会话规则）。原则见 [03-architecture.md](../03-architecture.md) 原则 6、7；规则见 [02-domain.md](../02-domain.md) 的 V、N、R、F6c、E3、E4、G9、G14、G16。
 
 ## 1. 视图状态
 
@@ -10,7 +10,7 @@
 ```ts
 interface ViewState {
   levelId: string
-  selection: Selection | null        // { kind: 'module' | 'relation' | 'edge' | 'actor'; id }
+  selection: Selection | null        // { kind: 'module' | 'relation' | 'edge' | 'actor' | 'file'; id }（文件的 id 为相对源码根目录的路径）
   hover: string | null
   toggles: Toggles                   // showBoundaries · currentOnly · relationTypes · showDiff · compareTo
   playback: PlaybackState | null     // null = 结构视角
@@ -31,7 +31,9 @@ interface PlaybackState {
        运行视角：selection ≠ null ? 钉住(selection) : 跟随(frameId)
 ```
 
-回放只由用户驱动（R1），状态里没有「播放中」，也就没有选中与播放头争夺面板的问题：指向对象即钉住（V3），取消选中或移动播放头即回到跟随（V4、V7）。
+回放只由用户驱动（R1），状态里没有「播放中」，也就没有选中与播放头争夺面板的问题：指向对象（含文件）即钉住（V3、G16），取消选中或移动播放头即回到跟随（V4、V7）。
+
+源码（文件清单、归属）不是视图状态：它是关于被描述系统的数据，像模型索引一样由协调者持有、由源码同步取得。副栏的页签与预览文件只属于那块界面，留在呈现层（G15）。
 
 ## 2. 协调者：DeskState
 
@@ -39,10 +41,10 @@ interface PlaybackState {
 
 | 职责 | 内容 |
 |---|---|
-| 持有 | `ViewState`（`shallowRef`）、加载后的模型索引与问题、设计信息与对比基线索引 |
+| 持有 | `ViewState`（`shallowRef`）、加载后的模型索引与问题、设计信息与对比基线索引、源码清单 `SourcePayload` |
 | 唯一写入口 | `dispatch(action)`：`transition(state, action, ctx)` 得到新状态与历史标注，写入；对外的操作都是构造动作并 dispatch 的包装 |
-| 派生（`computed`，调用纯函数） | 层次视图 `projectLevel`（运行视角下为舞台视图：不受显示开关影响并补齐场景端点，L9、P12）；打开场景时：回放计划 → 回放路径 → 本层帧投影与可见消息 → 时序模型 → 时序图坐标，以及步骤大纲 `outlineScenario` 与参与模块 `scenarioModules`（导航树用，T5、T6）；视角与焦点；钉住对象的参与信息；设计版本的差异 `diffModels` 与基线漂移 |
-| 外界同步 | 交给三个同步适配器（§4） |
+| 派生（`computed`，调用纯函数） | 层次视图 `projectLevel`（运行视角下为舞台视图：不受显示开关影响并补齐场景端点，L9、P12）；打开场景时：回放计划 → 回放路径 → 本层帧投影与可见消息 → 时序模型 → 时序图坐标，以及步骤大纲 `outlineScenario` 与参与模块 `scenarioModules`（导航树用，T5、T6）；视角与焦点；钉住对象的参与信息；设计版本的差异 `diffModels` 与基线漂移；源码：归属 `assignFiles`、目录树 `fileTree`、选中模块的文件 / 入口、选中文件的归属模块与本层投影 `fileNodes`（G14）、归属警告 `sourceIssues`（只在当前版本并入问题列表，G9） |
+| 外界同步 | 交给四个同步适配器（§4） |
 
 派生是一条 computed 链：层次或开关变化 → 层次视图 → 帧投影 → 时序模型 → 时序布局。结构图与时序图因此不会不同步。
 
@@ -52,7 +54,7 @@ interface PlaybackState {
 
 | 子模块 | 规则 | 遇到关于被描述系统的问题时调用 |
 |---|---|---|
-| 视角与焦点 | V1–V4：视角与焦点由状态推出（`perspectiveOf` / `focusOf`）；导航动作在运行视角下即「指向」，钉住对象（下钻钉住被下钻的模块）；取消选中回到跟随 | — |
+| 视角与焦点 | V1–V4、G16：视角与焦点由状态推出（`perspectiveOf` / `focusOf`）；导航动作在运行视角下即「指向」，钉住对象（下钻钉住被下钻的模块）；取消选中回到跟随 | — |
 | 导航 | N1–N13：下钻、跳转、返回上级、选中、定位、Esc / Backspace、重新加载与切换版本后的回退；跳转与定位只在层次改变时进历史（N10） | `nearestExisting`（N5、N11）、`nearestVisibleLevel`（N12）、`lowestCommonAncestor`（N3） |
 | 回放 | R1、R5、R6、R10、R12、R13、V7：打开场景（停在开头，播放头为空）、退出、单步（回到跟随）、指向、选分支；重新加载后场景失效则退出 | `stepAfter` / `stepBefore`（R7）、`landing`、`choicesFor`（R13）、`chooseBranch`（F6b）、`resolvePath`（F6） |
 | URL 编解码 | N6、N10、F6c、R10、R12：状态 ↔ 查询参数；解码时丢弃无效值，恢复到最接近的合法状态：带有效步骤时停在该步；同一场景已打开且没带步骤时保留原播放头；只有场景时停在开头 | `choiceList` / `choicesFromList`（F6c）、`planScenario` |
@@ -60,7 +62,7 @@ interface PlaybackState {
 | 查询参数 | 含义 | 进历史 |
 |---|---|---|
 | `level` | 当前层次（根层省略） | 下钻、跳转：是 |
-| `sel` | 选中，`m:` / `r:` / `e:` / `a:` 前缀 | 否 |
+| `sel` | 选中，`m:` / `r:` / `e:` / `a:` / `f:` 前缀（`f:` 后为文件路径，G16） | 否 |
 | `sc` | 场景（有即运行视角） | 打开场景：是 |
 | `step` | 播放头帧 ID | 否 |
 | `alt` | 已选分支：路径上依次经过的分支点的选项序号，以 `.` 连接（如 `0.1`） | 否 |
@@ -74,6 +76,7 @@ interface PlaybackState {
 | 路由同步 | 地址 = `encode(state)`，按历史标注 push / replace | 后退、前进、改地址、打开分享链接 → `decode` → `restore` |
 | 模型源同步 | — | 取描述文件 → `loaded`；本项目 `arch-model:changed` → 重新取 → `reloaded` |
 | 布局同步 | 层次视图变化 → 调用 `layoutView` | 布局完成 → 回填定位结果（序号过期则丢弃） |
+| 源码同步 | — | 进入项目、描述重新加载、用户刷新 → 取 `source/<项目>.json`（404 视为构建态 `unavailable`，G2）；文件内容与导出按路径按需取、按清单版本缓存（[源码接入与归属 §2.1](./source.md#21-端点)） |
 
 **路由回声**：路由导航是异步的。自己发起的导航完成前，路由变化一律视为回声、不回写状态；否则双击（两次选中 + 一次下钻）时旧地址会覆盖新层次。离开本项目或本版本的路由时也不回写。
 
@@ -150,12 +153,14 @@ type ViewAction =
   | { type: 'next' } | { type: 'prev' } | { type: 'seek'; frameId }
   | { type: 'chooseBranch'; pointId; option }
 
-createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: string; version?: VersionRef }): DeskState
+createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: string; version?: VersionRef; source?: SourceFetcher }): DeskState
+// SourceFetcher: { tree(): Promise<SourcePayload>; file(path): Promise<SourceFile | null>; exports(path): Promise<ExportedSymbol[] | null> }；缺省按 HTTP 端点取
 // DeskState：state（只读）、index、issues、派生数据、dispatch、init()、attachRouter(router)，以及操作：
 //   drillInto · goTo · goUp · select · revealRelation · revealModule · setHover
-//   openScenario · closeScenario · next · prev · seek · chooseBranch
+//   openScenario · closeScenario · next · prev · seek · chooseBranch · refreshSource · sourceFile(path) · sourceExports(path)
 // 派生：view · positioned · perspective · focus · playback · scenario · plan · path · scenarioView · home
 //       currentIndex · walked · frame · sequence · positionedSequence · pinnedParticipation · outline · scenarioModules
+//       source · ownership · sourceTree · selectedFile · fileOwners · fileHits · moduleFileSet · allIssues
 
 transition(state: ViewState, action: ViewAction, ctx: TransitionContext): { state: ViewState; history: 'push' | 'replace' }
 // TransitionContext: { index: ModelIndex; plan?: ScenarioPlan; levelView?: LevelView; scenarioView?: ScenarioLevelView }
