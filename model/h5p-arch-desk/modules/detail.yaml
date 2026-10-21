@@ -99,7 +99,7 @@ modules:
   - id: state.desk.projection
     name: 视图派生（核心与 desk.run）
     parent: state.desk
-    responsibility: 由视图状态与模型派生要画的数据（全部是 computed，调用纯函数）。核心平铺在 DeskState 上：层次视图与坐标、选中（selectedOf）、视角。运行视角的派生归 desk.run（ADR-0013）：回放计划、调用与返回的配对、回放路径与路线、本层的帧投影与可见消息、选中突出（emphasisOf）、舞台叠加与参与节点、时序模型与时序图坐标，以及导航树用的步骤大纲与参与模块。源码与版本的派生另见 desk.files、desk.versions。
+    responsibility: 由视图状态与模型派生要画的数据（全部是 computed，调用纯函数）。核心平铺在 DeskState 上：层次视图与坐标、选中（selectedOf）、视角。运行视角的派生归 desk.run（ADR-0013）：回放计划、调用与返回的配对、回放路径与路线、本层的帧投影与可见消息、选中突出（emphasisOf）、舞台叠加与参与节点、时序模型与时序图坐标，导航树用的步骤大纲与参与模块，以及场景列表（全部场景的触发者与消息数）与当前场景的触发者、ref 引用与被引用（呈现层不再自己遍历场景）。源码与版本的派生另见 desk.files、desk.versions。
     codeRefs: [src/state/desk/run.ts]
   - id: state.desk.actions
     name: dispatch 与操作

@@ -26,3 +26,6 @@ rules:
     - module: state.transition
       exposes: [entry]
       reason: 会话规则只经 src/state/transition/index.ts 访问
+    - module: state.layout
+      exposes: [src/layout/canvas.ts, src/layout/sequence.ts, src/layout/stage.ts, src/layout/layout.ts]
+      reason: Layout 没有统一入口，对外是四个纯函数文件——画布场景 canvas.ts、时序图坐标 sequence.ts、舞台叠加与显示 stage.ts、层次布局 layout.ts；DeskState 的布局同步与呈现层（画布、时序图）直接调用它们是 ADR-0013 允许的，Layout 以后拆出的内部文件不对外

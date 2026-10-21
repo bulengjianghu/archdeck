@@ -185,7 +185,7 @@ relations:
   - {id: rel.p2.scenario-content, from: present.panel.scenario, to: present.panel.content, type: depends}
 
   # 呈现 → 视图状态（只读派生、只 dispatch）
-  - {id: rel.p2.list-read, from: present.scenarios, to: state.desk.projection, type: depends, payload: [ds.ModelIndex], description: 按 scenariosOf(当前层次) 与 triggeredBy 筛选}
+  - {id: rel.p2.list-read, from: present.scenarios, to: state.desk.projection, type: depends, payload: [ds.ModelIndex], description: desk.run 派生的场景列表（触发者、消息数），按 scenariosOf(当前层次) 与触发者筛选}
   - {id: rel.p2.list-open, from: present.scenarios, to: state.desk.actions, type: calls, interface: if.desk.actions, description: openScenario(id)}
   - {id: rel.p2.player-read, from: present.player, to: state.desk.projection, type: depends, payload: [ds.ViewState, ds.ScenarioLevelView], description: 当前位置、本层可见消息数、是否停在分支点及其选项}
   - {id: rel.p2.player-act, from: present.player, to: state.desk.actions, type: calls, interface: if.desk.actions, description: prev / next / seek（拖动进度，0 = 回到开头）/ chooseBranch}
