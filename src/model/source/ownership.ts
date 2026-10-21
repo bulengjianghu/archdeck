@@ -186,9 +186,10 @@ export function sourceIssues(index: ModelIndex, own: SourceOwnership, tree: Pick
   return issues
 }
 
-/** 目录树：目录在前、按名称排序；目录带文件数与未归属数 */
+/** 目录树：目录在前、按名称排序；目录带文件数与未归属数；G18：子树内文件全部忽略的目录也是忽略状态 */
 export function fileTree(files: readonly string[], own: SourceOwnership): DirNode {
-  const root: DirNode = { name: '', path: '', dirs: [], files: [], count: 0, unowned: 0 }
+  const root: DirNode = { name: '', path: '', dirs: [], files: [], count: 0, unowned: 0, ignored: false }
+  const ignoredCount = new Map<DirNode, number>()
   const unowned = new Set(own.unowned)
   const dirOf = new Map<string, DirNode>([['', root]])
   const ensure = (path: string): DirNode => {
@@ -196,7 +197,7 @@ export function fileTree(files: readonly string[], own: SourceOwnership): DirNod
     if (d) return d
     const cut = path.lastIndexOf('/')
     const parent = ensure(cut < 0 ? '' : path.slice(0, cut))
-    d = { name: path.slice(cut + 1), path, dirs: [], files: [], count: 0, unowned: 0 }
+    d = { name: path.slice(cut + 1), path, dirs: [], files: [], count: 0, unowned: 0, ignored: false }
     parent.dirs.push(d)
     dirOf.set(path, d)
     return d
@@ -206,10 +207,12 @@ export function fileTree(files: readonly string[], own: SourceOwnership): DirNod
     const dir = cut < 0 ? '' : f.slice(0, cut)
     ensure(dir).files.push(f)
     const bad = unowned.has(f) ? 1 : 0
+    const skip = own.ignored.has(f) ? 1 : 0
     for (let p: string | null = dir; p !== null; p = p === '' ? null : p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '') {
       const d = dirOf.get(p)!
       d.count++
       d.unowned += bad
+      ignoredCount.set(d, (ignoredCount.get(d) ?? 0) + skip)
     }
   }
   const sort = (d: DirNode) => {
@@ -218,5 +221,6 @@ export function fileTree(files: readonly string[], own: SourceOwnership): DirNod
     d.dirs.forEach(sort)
   }
   sort(root)
+  for (const d of dirOf.values()) d.ignored = d.count > 0 && ignoredCount.get(d) === d.count
   return root
 }

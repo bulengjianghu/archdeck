@@ -19,7 +19,14 @@ const pad = (d: number) => ({ paddingLeft: `${8 + d * 14}px` })
 
 <template>
   <li v-if="!isRoot" role="treeitem" :aria-expanded="open">
-    <div class="row dir" :data-dir="dir.path" :style="pad(depth)" :class="{ hit: ctx.hitDirs.has(dir.path) }" @click="emit('toggle', dir.path)">
+    <div
+      class="row dir"
+      :data-dir="dir.path"
+      :style="pad(depth)"
+      :class="{ hit: ctx.hitDirs.has(dir.path), ignored: dir.ignored }"
+      :title="dir.ignored ? `${dir.path}：内部文件全部已忽略` : dir.path"
+      @click="emit('toggle', dir.path)"
+    >
       <span class="caret">{{ open ? '▾' : '▸' }}</span>
       <span class="name">{{ dir.name }}</span>
       <span class="count">{{ dir.count }}</span>
@@ -135,6 +142,8 @@ ul {
   font-weight: 600;
 }
 
+.dir.ignored > .name,
+.dir.ignored > .count,
 .file.ignored > .name {
   color: var(--text-3);
 }

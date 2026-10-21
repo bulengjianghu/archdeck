@@ -64,13 +64,17 @@ async function open(project: string, url = `/p/${project}`, extra: RawFile[] = [
 }
 
 describe('§6.4 源代码验收', () => {
-  it('1. h5p-arch-desk 的文件页签列出本包源码；media-web 提示「源码不在本地」，页面其余功能正常', async () => {
+  it('1. h5p-arch-desk 的文件页签列出本包源码，内部全部忽略的目录标为已忽略；media-web 提示「源码不在本地」，页面其余功能正常', async () => {
     const { nav, tab, fileRow } = await open('h5p-arch-desk')
     await tab('文件').trigger('click')
     await settle()
     expect(nav.find('.file-tree').text()).toContain(ROOT)
     expect(nav.findAll('.row.dir').some(r => r.attributes('data-dir') === 'src')).toBe(true)
     expect(fileRow('package.json')).toBeTruthy()
+    // G18：docs/、model/、tests/ 内部全部忽略，目录本身也标为已忽略；src/ 不是
+    const dirRow = (d: string) => nav.findAll('.row.dir').find(r => r.attributes('data-dir') === d)!
+    expect(['docs', 'model', 'tests'].map(d => dirRow(d).classes().includes('ignored'))).toEqual([true, true, true])
+    expect(dirRow('src').classes()).not.toContain('ignored')
 
     const mw = await open('media-web')
     expect(mw.desk.source.value).toMatchObject({ status: 'absent', reason: '源码不在本地' })

@@ -249,4 +249,20 @@ describe('目录树', () => {
     expect(src.dirs.map(d => d.name)).toEqual(['app', 'core'])
     expect(root.dirs[2].unowned).toBe(1)
   })
+  it('G18：目录内全部文件（含子目录）都是忽略状态时目录本身也是忽略状态', () => {
+    const root = fileTree(files, own)
+    const docs = root.dirs.find(d => d.name === 'docs')!
+    expect(docs.ignored).toBe(true)
+    expect(root.dirs.find(d => d.name === 'src')!.ignored).toBe(false)
+    expect(root.dirs.find(d => d.name === 'tools')!.ignored).toBe(false)
+    expect(root.ignored).toBe(false)
+    // 子目录逐级忽略，上级目录也忽略；混有一个未忽略文件就不是
+    const nested = ['a/b/x.md', 'a/c/y.md', 'a/z.md']
+    const ownN = assignFiles(index, nested, ['**/*.md'])
+    const a = fileTree(nested, ownN).dirs[0]
+    expect([a.ignored, ...a.dirs.map(d => d.ignored)]).toEqual([true, true, true])
+    const mixed = [...nested, 'a/c/keep.ts']
+    const m = fileTree(mixed, assignFiles(index, mixed, ['**/*.md'])).dirs[0]
+    expect([m.ignored, m.dirs.find(d => d.name === 'b')!.ignored, m.dirs.find(d => d.name === 'c')!.ignored]).toEqual([false, true, false])
+  })
 })

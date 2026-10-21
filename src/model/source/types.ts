@@ -80,4 +80,6 @@ export interface DirNode {
   count: number
   /** 子树内未归属文件数 */
   unowned: number
+  /** G18：子树内的文件全部是忽略状态 */
+  ignored: boolean
 }
