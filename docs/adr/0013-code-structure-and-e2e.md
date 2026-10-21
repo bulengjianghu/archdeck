@@ -1,6 +1,6 @@
 # ADR-0013：代码结构调整与浏览器端 E2E
 
-- 状态：已采纳（待实现）
+- 状态：已采纳（已实现）
 - 日期：2026-10-21
 - 决策人：项目负责人（执行 MVP 评估中 P2「代码结构」各项，完成后补浏览器端 E2E）；具体做法由实现者提出
 - 关联：架构总览 §3.2、§4–§6；视图状态专题 §2、§6；工作台专题 §4；需求 §5「可测性」
@@ -18,7 +18,7 @@ MVP 评估（2026-10-21）认为功能已可投入基本使用，代码结构上
 
 ## 结论
 
-### 1. DeskState 按领域分组（待重构）
+### 1. DeskState 按领域分组
 
 - **平铺的核心**：视图状态与它直接推出的东西——`state`、加载状态、模型索引与问题、层次、选中（`selection` / `selected`）、悬停、视角、开关、层次视图与坐标、`playback`——以及**全部操作**（唯一一组操作不拆）。
 - **三个分组**，各自的派生放在 `src/state/desk/` 下的独立文件，由 `createDeskState` 组装：
@@ -31,23 +31,23 @@ MVP 评估（2026-10-21）认为功能已可投入基本使用，代码结构上
 
 - 行为不变：派生仍是同一条 computed 链，只改归属与访问路径。
 
-### 2. 画布场景下沉 Layout（待重构）
+### 2. 画布场景下沉 Layout
 
 - 新增 `src/layout/canvas.ts`：`canvasScene(input)` 是纯函数，给出画布的节点与边——位置、类型、数据（选中、变淡、设计版本标记、回放态、选中突出的灰化）、类名、层级，以及运行视角下适应画布用的可见节点。与 `stageOverlay`、`stageDisplay` 同属 Layout。
 - GraphCanvas 只负责：把结果写入 Vue Flow、把单击 / 双击 / 悬停转成 DeskState 操作、适应画布。
 - 节点与边的数据类型（`NodeData`、`RouteEdgeData`）随之归 Layout，节点与边组件只读它们。
 
-### 3. 代码规范门禁（待实现）
+### 3. 代码规范门禁
 
-- **ESLint**（flat config：`@eslint/js` 推荐规则、`typescript-eslint`、`eslint-plugin-vue`）检查正确性问题；**Prettier** 只管格式，配置贴合现有风格（无分号、单引号、宽行）。
+- **ESLint**（flat config：`@eslint/js` 推荐规则、`typescript-eslint`、`eslint-plugin-vue`）检查正确性问题；**Prettier** 只管格式，配置贴合现有风格（无分号、单引号、160 宽）；Markdown 文档不交给 Prettier（表格与排版由文档约定管）。
 - 新增 `npm run lint`（ESLint + Prettier 检查）与 `npm run format`；`lint` 与 `type-check`、`test`、`lint:model` 一起作为提交前门禁。
 
-### 4. 主包拆分（待实现）
+### 4. 主包拆分
 
 - 项目视图按路由懒加载，首页（项目列表）不加载画布、时序图与面板。
 - 第三方库按用途拆块：Vue Flow、Markdown、高亮各一块；elkjs 原本就在 Worker 中按需加载。
 
-### 5. 浏览器端 E2E（待实现）
+### 5. 浏览器端 E2E
 
 - **Playwright**（`@playwright/test`）跑在本机 Chrome 上，自带开发服务器（独立端口），读真实的 `model/` 描述。
 - 覆盖 jsdom 测不到的界面行为：首页进入项目与下钻、运行视角的选中样式与泳道突出、Esc 回到进度所在的步骤、分屏方向切换、选中文件时副栏的源码预览。
@@ -63,3 +63,4 @@ MVP 评估（2026-10-21）认为功能已可投入基本使用，代码结构上
 
 1. 架构总览（DeskState 与 Layout 的职责、主要依赖、技术栈、开发视图）、视图状态专题、工作台专题与需求的「可测性」按最终态改写。
 2. 呈现层与测试中对 DeskState 的访问路径随分组改变；本项目的架构描述 `model/h5p-arch-desk/` 随代码更新。
+3. 实现结果：`useDeskState.ts` 由 458 行降到约 250 行，GraphCanvas.vue 由 538 行降到约 280 行，`canvasScene` 有独立单测；首页首屏 JS 由约 802 KB（gzip 277 KB）降到约 106 KB（gzip 42 KB）；E2E 9 个用例，本机约 7 秒。
