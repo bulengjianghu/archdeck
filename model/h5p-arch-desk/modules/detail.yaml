@@ -137,6 +137,7 @@ modules:
     name: 布局入口与缓存
     parent: state.layout
     responsibility: layoutView 按视图模式分派排布；浏览器里在 Worker 中运行 elk，无 Worker 环境用同步打包版；结果按视图内容缓存。
+    codeRefs: [src/layout/layout.ts]
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.pipeline.loader
@@ -266,7 +267,7 @@ relations:
   - {id: rel.ad.versions-diff, from: state.desk.versions, to: model.diff, type: calls, interface: if.model.diffModels, payload: [ds.ModelDiff], description: 切换对比基线或重新加载时重算}
   - {id: rel.ad.loading-keep, from: state.desk.loading, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 加载完成 → dispatch(loaded / reloaded)，层次回退由转移规则决定}
   - {id: rel.ad.url-actions, from: state.desk.url-sync, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 外部路由变化 → decode → dispatch}
-  - {id: rel.ad.actions-url, from: state.desk.url-sync, to: state.desk.actions, type: depends, payload: [ds.ViewState], description: 观察视图状态，地址 = encode(状态)}
+  - {id: rel.ad.actions-url, from: state.desk.actions, to: state.desk.url-sync, type: dataflow, payload: [ds.ViewState], description: 状态改变后写地址（router.write），地址 = encode(状态)}
   - {id: rel.ad.actions-lca, from: state.transition.navigation, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: 定位关系用最近公共祖先}
   - id: rel.ad.projection-project
     from: state.desk.projection
@@ -302,12 +303,11 @@ relations:
   - {id: rel.ad.flow-load-validate, from: model.pipeline.loader, to: model.pipeline.validator, type: dataflow, payload: [ds.ArchModel, ds.Issue], description: 合并后的模型交给跨文件校验}
   - {id: rel.ad.flow-validate-index, from: model.pipeline.validator, to: model.pipeline.indexer, type: dataflow, payload: [ds.ArchModel], description: 剔除坏实体后的模型交给建索引}
   - {id: rel.ad.loader-schema, from: model.pipeline.loader, to: model.types, type: depends, payload: [ds.ArchFileDef, ds.RawFile]}
-  - {id: rel.ad.projector-index, from: model.projector, to: model.pipeline.indexer, type: depends, payload: [ds.ModelIndex], description: 投影读取索引中的路径与子模块表}
   - {id: rel.ad.overview-endpoints, from: model.projector.overview, to: model.projector.endpoints, type: calls}
   - {id: rel.ad.endpoints-collector, from: model.projector.endpoints, to: model.projector.collector, type: calls}
   - {id: rel.ad.overview-collector, from: model.projector.overview, to: model.projector.collector, type: calls, description: 核心跨层边单独汇总}
-  - {id: rel.ad.diff-index, from: model.diff, to: model.pipeline.indexer, type: depends, payload: [ds.ModelIndex], description: 按 ID 对齐两份索引，用路径计入祖先}
-  - {id: rel.ad.projector-types, from: model.projector, to: model.types, type: depends, payload: [ds.LevelView, ds.ViewEdge, ds.Band]}
+  - {id: rel.ad.diff-index, from: model.diff, to: model.types, type: depends, payload: [ds.ModelIndex], description: 按 ID 对齐两份索引，用路径计入祖先}
+  - {id: rel.ad.projector-types, from: model.projector, to: model.types, type: depends, payload: [ds.ModelIndex, ds.LevelView, ds.ViewEdge, ds.Band]}
 
 interfaces:
   - id: if.model.loadModel

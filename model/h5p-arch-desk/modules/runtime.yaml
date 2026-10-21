@@ -169,10 +169,7 @@ relations:
   - {id: rel.p3.perspective-scenarios, from: present.perspective, to: present.scenarios, type: depends, description: 「运行」入口弹出场景列表}
   - {id: rel.p3.perspective-act, from: present.perspective, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 退出场景 → closeScenario}
   - {id: rel.p3.perspective-read, from: present.perspective, to: state.desk.projection, type: depends, payload: [ds.ViewState], description: 当前视角与场景名}
-  - {id: rel.p3.module-run, from: present.panel.module, to: present.panel.run, type: depends}
-  - {id: rel.p3.relation-run, from: present.panel.relation, to: present.panel.run, type: depends}
-  - {id: rel.p3.edge-run, from: present.panel.edge, to: present.panel.run, type: depends}
-  - {id: rel.p3.actor-run, from: present.panel.actor, to: present.panel.run, type: depends}
+  - {id: rel.p3.dispatch-run, from: present.panel.dispatch, to: present.panel.run, type: depends, description: 运行视角下选中模块、关系、聚合边、参与者时，运行信息在结构信息之上（V6）}
   - {id: rel.p3.run-read, from: present.panel.run, to: state.desk.projection, type: depends, payload: [ds.Participation]}
   - {id: rel.p3.run-act, from: present.panel.run, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击参与的步骤 → seek（R13）}
   - {id: rel.p2.seq-lanes, from: present.sequence.interact, to: present.sequence.lanes, type: depends}
@@ -225,7 +222,7 @@ relations:
     description: 唯一写入口：dispatch → transition → 写入新状态
   - {id: rel.p2.router-codec, from: state.desk.url-sync, to: state.transition.url, type: calls, interface: if.state.urlCodec, description: 状态 ↔ 查询参数}
   - {id: rel.p2.layoutsync-runner, from: state.desk.layout-sync, to: state.layout.runner, type: calls, mode: async, interface: if.layout.layoutView, payload: [ds.LevelView, ds.PositionedView]}
-  - {id: rel.p2.layoutsync-read, from: state.desk.layout-sync, to: state.desk.projection, type: depends, payload: [ds.LevelView], description: 层次视图变化触发布局，结果回填}
+  - {id: rel.p2.layoutsync-read, from: state.desk.projection, to: state.desk.layout-sync, type: dataflow, payload: [ds.LevelView], description: 层次视图（Ref）交给布局同步，变化触发布局，结果回填}
   - id: rel.p2.projection-plan
     from: state.desk.projection
     to: model.scenario.flatten
@@ -255,7 +252,7 @@ relations:
   - {id: rel.p5.projection-stage, from: state.desk.projection, to: state.layout.stage, type: calls, interface: if.layout.stageOverlay, payload: [ds.ScenarioLevelView, ds.PositionedView, ds.StageOverlay], description: 运行视角下派生舞台叠加}
   - {id: rel.p5.stage-runner, from: state.layout.stage, to: state.layout.runner, type: depends, payload: [ds.PositionedView], description: 用结构图坐标算步骤序号与临时线的位置}
   - {id: rel.p2.seqlayout-positions, from: state.layout.sequence, to: state.layout.runner, type: depends, payload: [ds.PositionedView], description: 同一父模块内的本层子模块按结构图中节点的横坐标排（P9）}
-  - {id: rel.p2.seqlayout-types, from: state.layout.sequence, to: model.types, type: depends, payload: [ds.SequenceModel]}
+  - {id: rel.p2.seqlayout-types, from: state.layout.sequence, to: model.scenario.sequence, type: depends, payload: [ds.SequenceModel], description: 时序模型的类型与层次顺序比较（compareKeys 经模型层入口）}
 
   # 视图状态 → 模型（转移规则需要的查询）
   - {id: rel.p2.playback-path, from: state.transition.playback, to: model.scenario.path, type: calls, interface: if.model.resolvePath, description: 是否停在分支点；改选后保留哪些选择（F6b）；到达某帧需要的选择（R13）；直选分支需要的选择与分支点之前的帧（F6e）}
@@ -273,10 +270,10 @@ relations:
   - {id: rel.p2.level-sequence, from: model.scenario.level, to: model.scenario.sequence, type: dataflow, payload: [ds.ScenarioLevelView], description: 本层的可见消息交给时序模型}
   - {id: rel.p8.sequence-hierarchy, from: model.scenario.sequence, to: model.projector.hierarchy, type: calls, interface: if.model.hierarchyKey, description: 参与者的层次排序键（P9）}
   - {id: rel.p2.path-plan, from: model.scenario.path, to: model.scenario.flatten, type: depends, payload: [ds.ScenarioPlan]}
-  - {id: rel.p2.flatten-index, from: model.scenario.flatten, to: model.pipeline.indexer, type: depends, payload: [ds.ModelIndex], description: 读取场景表以内联 ref；读取关系表以绑定关系（S13）}
+  - {id: rel.p2.flatten-index, from: model.scenario.flatten, to: model.types, type: depends, payload: [ds.ModelIndex], description: 读取场景表以内联 ref；读取关系表以绑定关系（S13）}
   - {id: rel.p3.validator-bind, from: model.pipeline.validator, to: model.scenario.flatten, type: calls, description: S5a / S13 与回放共用 bindRelation}
   - {id: rel.p3.participation-level, from: model.scenario.participation, to: model.scenario.level, type: depends, payload: [ds.ScenarioLevelView], description: 本层投影下收发的消息}
-  - {id: rel.p3.participation-path, from: model.scenario.participation, to: model.scenario.path, type: depends, payload: [ds.Frame]}
+  - {id: rel.p3.participation-path, from: model.scenario.participation, to: model.scenario.flatten, type: depends, payload: [ds.Frame], description: 按回放路径上的帧求参与（帧类型来自回放计划）}
   - {id: rel.p6.outline-plan, from: model.scenario.outline, to: model.scenario.flatten, type: depends, payload: [ds.ScenarioPlan], description: 按计划节点与帧的组合框标签还原嵌套}
   - {id: rel.p6.outline-level, from: model.scenario.outline, to: model.scenario.level, type: depends, description: 帧状态（path / unchosen / unreached）与时序图全貌同义}
   - {id: rel.p2.level-lca, from: model.scenario.level, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: 场景所在层次 = 帧端点的最近公共祖先}

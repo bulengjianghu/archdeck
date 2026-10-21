@@ -1,0 +1,151 @@
+# 架构治理（ADR-0015）：代码事实、架构规则、棘轮门禁与 agent 接口。
+# 规则编号（K、U、Y、Q）见 docs/02-domain.md §2.14–§2.17；机制见 docs/architecture/governance.md。
+
+modules:
+  # ── 呈现层 ──────────────────────────────────────────────
+  - id: present.panel.governance
+    name: 架构治理面板
+    parent: present.panel
+    responsibility: 面板中的「架构治理」：根层的事实统计、违规按新增 / 已知 / 已豁免分组（可展开文件证据）、模块环与外部依赖、环度对比基线、拦截记录摘要（GV-7）；模块的生效规则、出入违规与未描述依赖、所在环（Q1）；关系的证实与文件证据（K5、K6）；关系行上的证实标记。文件证据可单击选中文件。
+    codeRefs:
+      - src/components/panel/GovernanceSection.vue
+      - src/components/panel/ModuleGovernance.vue
+      - src/components/panel/RelationFact.vue
+      - src/components/panel/FileDepList.vue
+  - id: present.panel.dep
+    name: 代码依赖面板
+    parent: present.panel
+    responsibility: 选中代码依赖叠加线时的面板（K10）：投影到这对节点的模块依赖（已描述 / 未描述）、其中的违规与理由、文件证据；层次变化后不再存在时说明原因。
+    codeRefs: [src/components/panel/DepPanel.vue]
+
+  # ── 视图状态层 ──────────────────────────────────────────
+  - id: state.desk.facts
+    name: 架构治理派生（desk.facts）
+    parent: state.desk
+    responsibility: 由源码同步取得的代码事实派生（computed，调用模型层架构治理）：事实状态（设计版本、源码不在本地、取数中、失败，K8）、治理报告、结构视角开关开启时的本层投影（K9、Y4）、进问题提示的门禁错误（U9）、拦截记录摘要（Q4）、选中的代码依赖叠加线（K10）、模块治理信息与关系证实。
+    codeRefs: [src/state/desk/facts.ts]
+
+  # ── 模型层 ──────────────────────────────────────────────
+  - id: model.governance.facts
+    name: 事实比对
+    parent: model.governance
+    responsibility: 文件依赖按归属提升为模块依赖（K4）；关系的证实（端点相同或互为祖先后代，dataflow 两向，K5）；未描述依赖（K7）。
+    codeRefs: [src/model/governance/facts.ts]
+  - id: model.governance.rules
+    name: 规则判定
+    parent: model.governance
+    responsibility: 一条依赖对层规则、依赖白名单、访问面的判定与例外（U2–U5）；按种类、规则所在与两端合并为违规（U6）；一个模块上生效的规则（Q1）。
+    codeRefs: [src/model/governance/rules.ts]
+  - id: model.governance.cycles
+    name: 环与环度
+    parent: model.governance
+    responsibility: Tarjan 强连通分量（迭代实现）、模块环与文件环、容忍、环度 = 规模平方和（Y1–Y3）。
+    codeRefs: [src/model/governance/cycles.ts]
+  - id: model.governance.report
+    name: 治理报告与门禁
+    parent: model.governance
+    responsibility: 组合事实、比对、违规、环与基线成治理报告；按基线标出新增 / 已知并给出门禁问题（U8）；页面只取门禁错误（U9）；由报告生成基线（U7）。
+    codeRefs: [src/model/governance/report.ts]
+  - id: model.governance.level
+    name: 本层投影
+    parent: model.governance
+    responsibility: 代码事实投影到当前层次：视图边的证实与违规、未描述依赖与违规的叠加线、本层的环（K9、Y4）；叠加线选中时的模块依赖（K10）。与结构图、帧共用 mapEndpoint。
+    codeRefs: [src/model/governance/level.ts]
+  - id: model.governance.query
+    name: agent 查询
+    parent: model.governance
+    responsibility: 定位文件、说明模块（路径与各级职责、生效规则、接口签名、出入关系与违规，Q1）；写前判定（允许 / 拒绝 / 无约束、环影响、覆盖关系、目标语义，Q2）；拦截记录统计（Q4）。输出可直接序列化。
+    codeRefs: [src/model/governance/query.ts, src/model/governance/ledger.ts]
+
+interfaces:
+  - id: if.governance.report
+    name: governanceReport
+    owner: model.governance.report
+    signature: |
+      governanceReport(index: ModelIndex, own: SourceOwnership, tree: { files; packages }, code: CodeDeps, baseline: Baseline | null): GovernanceReport
+      levelFacts(index: ModelIndex, view: LevelView, report: GovernanceReport): LevelFacts
+    semantics: |
+      - 纯函数；页面、lint:model、agent 接口同一套结果（Q6）
+      - 没有基线时违规为 open（提醒）；有基线时基线外为 new（错误）
+  - id: if.governance.check
+    name: checkDependency
+    owner: model.governance.query
+    signature: |
+      checkDependency(index: ModelIndex, own: SourceOwnership, report: GovernanceReport | null, entryOf: EntryOf, from: string, targets: CheckTarget[]): CheckResult
+      describeModule(index: ModelIndex, own: SourceOwnership, report: GovernanceReport | null, entryOf: EntryOf, id: string): ModuleDetail | null
+    semantics: |
+      - 多个目标逐个判定，取最严的结果（Q2）
+      - 只读，不改事实；拦截记录由 agent 接口写
+  - id: if.access.deps
+    name: readCodeDeps
+    owner: access.deps
+    signature: |
+      readCodeDeps(root: string, files: string[], packages: Record<string, PackageEntry>): CodeDeps
+      resolveImport(root: string, files: string[], packages: Record<string, PackageEntry>, from: string, spec: string, names?: string[]): CheckTarget[]
+  - id: if.agent.mcp
+    name: MCP 工具
+    owner: access.agent
+    signature: |
+      list_projects() · overview(project?) · locate(target, project?)
+      check_dependency(from, to, names?, project?) · list_violations(onlyNew?, project?)
+      list_cycles(project?) · rescan(project?) · prevention_report(project?)
+    semantics: |
+      - stdio；check_dependency 与 rescan 写拦截记录（Q4）
+      - 不提供改规则、生成基线（Q5）
+
+dataStructures:
+  - id: ds.FileDep
+    name: FileDep
+    definition: |
+      interface FileDep { from: string; to: string; via: string; kind: 'value' | 'type'; line: number }
+  - id: ds.GovernanceReport
+    name: GovernanceReport
+    definition: |
+      interface GovernanceReport {
+        moduleDeps: Map<string, ModuleDep>; relations: Map<string, Confirmation>; undescribed: ModuleDep[]
+        violations: Violation[]; moduleCycles: Cycle[]; fileCycles: Cycle[]; cyclicity: { modules; files }
+        baseline: Baseline | null; gate: GateSummary; issues: Issue[]
+        // …
+      }
+  - id: ds.CheckResult
+    name: CheckResult
+    definition: |
+      interface CheckResult { verdict: 'allowed' | 'denied' | 'unconstrained'; notes: string[]; checks: PairCheck[]; targets: ModuleBrief[] }
+
+relations:
+  # 外部参与者
+  - {id: rel.gv.ai-agent, from: actor.ai, to: access.agent, type: calls, interface: if.agent.mcp, payload: [ds.CheckResult], description: coding agent 写代码前判定依赖、写完重新扫描（MCP 或命令行）}
+  # 呈现层
+  - {id: rel.gv.dispatch-dep, from: present.panel.dispatch, to: present.panel.dep, type: depends, description: 选中代码依赖叠加线时分派到代码依赖面板}
+  - {id: rel.gv.system-gov, from: present.panel.system, to: present.panel.governance, type: depends}
+  - {id: rel.gv.module-gov, from: present.panel.module, to: present.panel.governance, type: depends}
+  - {id: rel.gv.relation-gov, from: present.panel.relation, to: present.panel.governance, type: depends}
+  - {id: rel.gv.dep-gov, from: present.panel.dep, to: present.panel.governance, type: depends, description: 复用文件证据列表}
+  - {id: rel.gv.panel-read, from: present.panel.governance, to: state.desk.facts, type: depends, payload: [ds.GovernanceReport], description: 治理报告、模块治理信息、关系证实、拦截摘要}
+  - {id: rel.gv.dep-read, from: present.panel.dep, to: state.desk.facts, type: depends, description: 选中的代码依赖叠加线}
+  - {id: rel.gv.canvas-read, from: present.canvas.flow, to: state.desk.facts, type: depends, description: 本层投影（K9、Y4）}
+  - {id: rel.gv.toolbar-read, from: present.nav.toolbar, to: state.desk.facts, type: depends, description: 事实状态决定「代码事实」开关是否可用}
+  - {id: rel.gv.legend-read, from: present.nav.legend, to: state.desk.facts, type: depends}
+  - {id: rel.gv.canvas-select, from: present.canvas.flow, to: state.desk.actions, type: calls, interface: if.desk.actions, description: "单击代码依赖叠加线 → select(kind: dep)"}
+  # 视图状态层
+  - {id: rel.gv.facts-sync, from: state.desk.facts, to: state.desk.source-sync, type: depends, description: 代码事实随源码清单取得（facts.json）}
+  - {id: rel.gv.facts-files, from: state.desk.facts, to: state.desk.files, type: depends, payload: [ds.SourceOwnership], description: 归属与源码清单}
+  - {id: rel.gv.facts-model, from: state.desk.facts, to: model.governance, type: calls, interface: if.governance.report, payload: [ds.GovernanceReport]}
+  - {id: rel.gv.canvas-types, from: state.layout.canvas, to: model.governance.level, type: depends, description: 叠加线与证实标记的数据类型}
+  # 接入层
+  - {id: rel.gv.source-deps, from: access.model-source, to: access.deps, type: calls, interface: if.access.deps, payload: [ds.FileDep], description: /source/<项目>/facts.json}
+  - {id: rel.gv.source-store, from: access.model-source, to: access.governance-store, type: calls, description: 基线与最近的拦截记录}
+  - {id: rel.gv.deps-exports, from: access.deps, to: access.source, type: calls, description: 复用导出解析穿透再导出（K3）}
+  - {id: rel.gv.agent-deps, from: access.agent, to: access.deps, type: calls, interface: if.access.deps}
+  - {id: rel.gv.agent-store, from: access.agent, to: access.governance-store, type: calls, description: 读基线；写拦截记录；命令行生成基线}
+  - {id: rel.gv.agent-reader, from: access.agent, to: access.reader, type: calls, description: 读项目描述}
+  - {id: rel.gv.agent-source, from: access.agent, to: access.source, type: calls, description: 源码清单}
+  - {id: rel.gv.agent-model, from: access.agent, to: model.governance, type: calls, interface: if.governance.check, payload: [ds.CheckResult]}
+  - {id: rel.gv.lint-deps, from: access.lint, to: access.deps, type: calls, interface: if.access.deps}
+  - {id: rel.gv.lint-store, from: access.lint, to: access.governance-store, type: calls, description: 读基线}
+  - {id: rel.gv.lint-model, from: access.lint, to: model.governance, type: calls, interface: if.governance.report, description: 门禁问题与摘要（U8）}
+  # 模型层
+  - {id: rel.gv.model-source, from: model.governance, to: model.source, type: depends, description: 归属与入口（G3–G10）}
+  - {id: rel.gv.model-projector, from: model.governance.level, to: model.projector, type: depends, description: mapEndpoint（K9、Y4）}
+  - {id: rel.gv.model-types, from: model.governance, to: model.types, type: depends, payload: [ds.ModelIndex]}
+  - {id: rel.gv.pipeline-rules, from: model.pipeline, to: model.types, type: depends, description: rules 的加载与校验（U1）}

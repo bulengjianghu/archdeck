@@ -107,7 +107,7 @@ modules:
         name: DeskState
         kind: subsystem
         core: true
-        responsibility: 当前项目当前版本的唯一状态持有者：层次、选中（含文件）、悬停、显示开关、加载状态，当前场景与回放进度，设计版本的对比基线与差异，被描述项目的源码清单与文件归属；对外提供唯一一组操作，并经同步适配器与路由、描述文件、布局、源码保持一致。对外核心平铺，运行视角、源码、版本的派生分为 run / files / versions 三组（ADR-0013）。
+        responsibility: 当前项目当前版本的唯一状态持有者：层次、选中（含文件）、悬停、显示开关、加载状态，当前场景与回放进度，设计版本的对比基线与差异，被描述项目的源码清单与文件归属；对外提供唯一一组操作，并经同步适配器与路由、描述文件、布局、源码保持一致。对外核心平铺，运行视角、源码、版本、架构治理的派生分为 run / files / versions / facts 四组（ADR-0013、ADR-0015）。
         codeRefs: [src/state/useDeskState.ts, src/state/inject.ts]
       - id: state.transition
         name: 视图状态转移
