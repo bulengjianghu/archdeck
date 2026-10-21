@@ -15,7 +15,7 @@ modules:
   - id: present.sequence.lanes
     name: 泳道与消息
     parent: present.sequence
-    responsibility: 画参与者头部与生命线、按序自上而下画消息箭头与标签；同步 / 异步 / 显式返回三种线型（隐含的返回不画）；内部活动画成生命线上的激活条；外部参与者泳道在最左，用竖线隔出系统边界；同一父模块的泳道头上方画分组框标父模块名（P13）；焦点突出时突出的消息用强调色，其余路径上的消息变灰（R15）；悬停泳道头或消息时上交信息卡请求。
+    responsibility: 消息区：生命线、按序自上而下画消息箭头与标签；同步 / 异步 / 显式返回三种线型（隐含的返回不画）；内部活动画成生命线上的激活条；外部参与者泳道在最左，用竖线隔出系统边界；焦点突出时突出的消息用强调色，其余路径上的消息变灰（R15）；不做悬停弹出（W-1）。
     codeRefs: [src/components/sequence/SequenceLanes.vue]
   - id: present.sequence.fragments
     name: 组合框
@@ -25,13 +25,13 @@ modules:
   - id: present.sequence.interact
     name: 时序图交互
     parent: present.sequence
-    responsibility: 单击消息 = 指向这一步（R13）：播放头前进或后退到它，焦点跟随它；在未选分支上的消息同样可单击，先改选该分支再跳转；单击 alt 的分支条件 = chooseBranch（F6e）；当前消息高亮并自动滚动到可见；悬停消息时在结构图上预览对应的边（D-7），悬停片刻后弹出信息卡（W-9）；把焦点突出（R15）交给泳道与消息。
+    responsibility: 单击消息 = 指向这一步（R13）：播放头前进或后退到它，焦点跟随它；在未选分支上的消息同样可单击，先改选该分支再跳转；单击 alt 的分支条件 = chooseBranch（F6e）；当前消息高亮；只在用户移动播放头后把当前步骤滚到纵向中间，信息条的「定位」同理，悬停、选中、切换层次都不滚动（D-7）；悬停消息时在结构图上预览对应的边；把焦点突出（R15）交给泳道与消息。
     codeRefs: [src/components/sequence/SequenceView.vue]
-  - id: present.sequence.card
-    name: 信息卡
+  - id: present.sequence.heads
+    name: 泳道头
     parent: present.sequence
-    responsibility: 悬停泳道头或消息片刻后在指针旁弹出摘要，移开即消失，不改变焦点（W-9）。泳道：名称、类别、完整路径、所属层、职责第一句（P13）；消息：类型、两端、作用、输入（携带的数据）、输出（配对返回的数据，F7）。完整内容仍在属性面板。
-    codeRefs: [src/components/sequence/InfoCard.vue]
+    responsibility: 泳道头固定在时序图顶部、底部另有一份，消息区夹在中间纵向滚动（D-2）；顶部另画同一父模块的分组框（P13）与系统边界线（A7）；与消息区同在一个滚动容器，横向滚动时一起移动。
+    codeRefs: [src/components/sequence/SequenceHeads.vue]
 
   - id: present.panel.scenario
     name: 场景面板
@@ -114,7 +114,7 @@ modules:
   - id: model.scenario.flatten
     name: 回放计划
     parent: model.scenario
-    responsibility: 把步骤树展开成回放计划（帧树）：ref 内联子场景并记为 ref 组合框（F3）；loop 展开一遍并标注循环条件（F4）；par 各分支按书写顺序串行并标注并行（F5）；alt 处分叉为分支点，每个选项一棵子树（F6）。每帧带 ID、所在组合框路径，以及对应的结构关系（显式引用或按 S13 推断，标明是否推断）。调用与显式返回配对（pairReturns，F7）：按书写顺序以栈匹配，alt 各分支从进入分支点时的栈开始，async 不配对。
+    responsibility: 把步骤树展开成回放计划（帧树）：ref 内联子场景并记为 ref 组合框（F3）；loop 展开一遍并标注循环条件（F4）；par 各分支按书写顺序串行并标注并行（F5）；alt 处分叉为分支点，每个选项一棵子树（F6）。每帧带 ID、所在组合框路径，以及对应的结构关系（显式引用或按 S13 推断，标明是否推断）；步骤没写的接口与数据取自对应关系（返回只取接口），并标明继承（S14）。调用与显式返回配对（pairReturns，F7）：按书写顺序以栈匹配，alt 各分支从进入分支点时的栈开始，async 不配对。
     principle: |
       帧 ID = 场景 ID + 步骤 id；步骤没写 id 时用它在树中的路径（如 `sc.open#4.alt0.1`）（F2）。ref 内联时 ID 加上引用处前缀，同一子场景被引用两次也不冲突。
       绑定关系 bindRelation（S12、S13）：显式引用优先；否则两端之间恰好一条运行时关系（calls / dataflow / event，event 按反向）即认定并标为推断；Validator 用同一个函数，校验与界面结果一致。
@@ -127,7 +127,7 @@ modules:
   - id: model.scenario.level
     name: 帧的层次投影
     parent: model.scenario
-    responsibility: 把路径上每一帧的 from / to 用 mapEndpoint 映射到当前层次：两个不同节点之间 → 对应的视图边 ID（P1、P2，含边界边、参与者边、核心跨层边 P7）；两端在同一子模块 → 内部活动（P3）；两端都在本层外 → 不可见（P4）。把连续的帧合并为本层的可见消息（同一条边或同一节点上的内部活动合并，P5），作为单步单位。算出场景所在层次（所有帧端点的最近公共祖先，S9）。
+    responsibility: 把路径上每一帧的 from / to 用 mapEndpoint 映射到当前层次：两个不同节点之间 → 对应的视图边 ID（P1、P2，含边界边、参与者边、核心跨层边 P7）；两端在同一子模块 → 内部活动（P3）；分层总览中先看核心模块：同一核心模块才是它的内部活动，同一层的不同泳道之间带上两条泳道（lanes），时序图画成泳道间的消息、结构图按层的内部活动（P7、P14）；两端都在本层外 → 不可见（P4）。把连续的帧合并为本层的可见消息（同一条边或同一节点上的内部活动合并，P5），作为单步单位。算出场景所在层次（所有帧端点的最近公共祖先，S9）。
     principle: |
       视图边 ID 与 projectLevel 的边 ID 规则相同（edgeId），画布直接给已有的边加回放态；消息方向与边方向相反时标记 reverse（P10）；本层两节点之间没有视图边时落点为「未建模」（P11）。关系类型筛选不作用于回放（P8 已删除）。
       「本层的下一步 / 上一步」（R7）与「指向某帧时播放头落在哪条可见消息」（R13：落在其所在可见消息，合并时取这一段的第一帧）在这里回答。
@@ -168,7 +168,7 @@ relations:
   - {id: rel.p3.run-act, from: present.panel.run, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击参与的步骤 → seek（R13）}
   - {id: rel.p2.seq-lanes, from: present.sequence.interact, to: present.sequence.lanes, type: depends}
   - {id: rel.p2.seq-fragments, from: present.sequence.interact, to: present.sequence.fragments, type: depends}
-  - {id: rel.p8.seq-card, from: present.sequence.interact, to: present.sequence.card, type: depends, description: 悬停片刻后弹出信息卡（W-9）}
+  - {id: rel.p9.seq-heads, from: present.sequence.interact, to: present.sequence.heads, type: depends, description: 顶部与底部各一份}
   - {id: rel.p8.desk-stage, from: present.desk-view, to: present.canvas, type: depends, description: 创建并注入舞台显示（静态关系显示方式按项目记在本地；在画布上显示的临时对象，V8、V9）}
   - {id: rel.p8.step-stage, from: present.panel.step, to: present.canvas, type: depends, description: 「在画布上显示」当前消息两端的静态关系（V9）}
   - {id: rel.p8.run-stage, from: present.panel.run, to: present.canvas, type: depends, description: 「在画布上显示」钉住对象的静态关系（V9）}
@@ -190,7 +190,6 @@ relations:
   - {id: rel.p2.seq-read, from: present.sequence.interact, to: state.desk.projection, type: depends, payload: [ds.PositionedSequence, ds.ViewState], description: 读取定位好的时序图与当前位置}
   - {id: rel.p2.seq-act, from: present.sequence.interact, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击消息（含未选分支上的）→ seek（R13）；单击 alt 分支条件 → chooseBranch（F6e）；悬停 → setHover}
   - {id: rel.p8.seq-emphasis, from: present.sequence.interact, to: state.desk.projection, type: depends, payload: [ds.ViewState], description: 焦点突出的可见消息（R15）}
-  - {id: rel.p8.card-read, from: present.sequence.card, to: state.desk.projection, type: depends, payload: [ds.ScenarioPlan, ds.ReturnPairs], description: 帧的数据与配对返回（输出）}
   - {id: rel.p8.route-read, from: present.player.route, to: state.desk.projection, type: depends, payload: [ds.RouteItem], description: 路线（F6f）}
   - {id: rel.p8.route-act, from: present.player.route, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 下拉改选 → chooseBranch，返回被丢弃的选择个数用于提示（F6f）}
   - {id: rel.p8.flow-stage-display, from: present.canvas.flow, to: state.layout.stage, type: calls, interface: if.layout.stageDisplay, payload: [ds.LevelView, ds.StageDisplay], description: 每个节点与边显示、淡化还是隐藏（V5、V8、V9）}
@@ -526,7 +525,7 @@ dataStructures:
     name: ReturnPairs
     definition: |
       type ReturnPairs = ReadonlyMap<string, string>   // 帧 ID ↔ 配对帧 ID（双向）
-    description: 调用与显式返回的配对（F7）；步骤的输出、焦点突出与信息卡都用它。
+    description: 调用与显式返回的配对（F7）；步骤的输出与焦点突出都用它。
   - id: ds.RouteItem
     name: RouteItem
     definition: |

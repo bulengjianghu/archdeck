@@ -384,11 +384,26 @@ interfaces:
     name: DeskState 操作
     owner: state.desk.actions
     signature: |
-      dispatch(action: ViewAction): void          // 唯一写入口
+      dispatch(action: ViewAction): boolean                   // 唯一写入口；返回状态是否改变
       // 以下都是构造动作并 dispatch 的便捷包装
-      drillInto(moduleId) · goTo(levelId, select?) · goUp() · select(s) · revealRelation(id) · revealModule(id) · setHover(id)
-      openScenario(id) · closeScenario() · next() · prev() · seek(frameId | null) · chooseBranch(pointId, option)   // seek(null) = 回到开头
-      selectFile(path) · refreshSource() · sourceFile(path) · sourceExports(path)                                 // 源码（G）
+      drillInto(moduleId: string): boolean
+      goTo(levelId: string, select?: Selection | null): void
+      goUp(): void
+      select(selection: Selection | null): void
+      revealRelation(relationId: string): void
+      revealModule(moduleId: string): void
+      setHover(id: string | null): void
+      setToggles(patch: Partial<Toggles>): void
+      openScenario(id: string): void                          // 进入运行视角，停在开头（R12）
+      closeScenario(): void
+      next(): void
+      prev(): void
+      seek(frameId: string | null): void                      // null = 回到开头
+      chooseBranch(pointId: string, option: number): number   // 返回被丢弃的其他分支选择个数（F6f）
+      selectFile(path: string): void                          // 源码（G）
+      refreshSource(): Promise<void>
+      sourceFile(path: string): Promise<SourceFile | null>
+      sourceExports(path: string): Promise<ExportedSymbol[] | null>
     semantics: 操作本身不含规则；同一动作在任何状态下的效果由视图状态转移决定。
   - id: if.source.endpoints
     name: 模型端点
