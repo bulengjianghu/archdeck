@@ -65,6 +65,83 @@
           "minimum": 1
         }
       }
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "架构规则（U1–U5、Y3）：架构师的意图，约定写在 rules.yaml，只能声明一次；AI 重新生成当前版本时不改动",
+      "properties": {
+        "layers": {
+          "type": "boolean",
+          "description": "层规则开关（U2），缺省 true：层按 mayDependOn 默认拒绝"
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "module"
+            ],
+            "properties": {
+              "module": {
+                "$ref": "#/definitions/id"
+              },
+              "mayDependOn": {
+                "$ref": "#/definitions/idList",
+                "description": "依赖白名单（U3）：子树之外只许依赖这些模块的子树"
+              },
+              "exposes": {
+                "$ref": "#/definitions/textList",
+                "description": "访问面（U4）：子树之外只许经这些文件访问；glob 相对源码根目录，entry 表示模块入口"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "allow": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to"
+            ],
+            "properties": {
+              "from": {
+                "$ref": "#/definitions/id"
+              },
+              "to": {
+                "$ref": "#/definitions/id"
+              },
+              "rule": {
+                "enum": [
+                  "layer",
+                  "deps",
+                  "exposes"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "description": "必填（U1）"
+              }
+            }
+          }
+        },
+        "cycles": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tolerated": {
+              "$ref": "#/definitions/idList",
+              "description": "容忍的环（Y3）：环的全部成员都在这些子树内时不计入门禁"
+            }
+          }
+        }
+      }
     }
   },
   "definitions": {

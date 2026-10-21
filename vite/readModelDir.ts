@@ -19,6 +19,8 @@ import { DESIGN_STATUS_LABELS, versionLabel } from '../src/model/design'
 export type { ProjectSummary }
 
 export const DESIGNS_DIR = 'designs'
+/** 基线与拦截记录（ADR-0015），不属于描述 */
+export const GOVERNANCE_DIR = 'governance'
 
 /** 一份可对比的描述：当前版本，或设计的某一轮 */
 export interface CompareSource {
@@ -51,8 +53,8 @@ export function readModelDir(dir: string, projectRoot: string): Pick<ModelPayloa
     if (!fs.existsSync(cur)) return
     for (const ent of fs.readdirSync(cur, { withFileTypes: true })) {
       const full = path.join(cur, ent.name)
-      // 设计版本不属于当前版本
-      if (ent.isDirectory() && cur === dir && ent.name === DESIGNS_DIR) continue
+      // 设计版本不属于当前版本；governance/ 不属于描述
+      if (ent.isDirectory() && cur === dir && (ent.name === DESIGNS_DIR || ent.name === GOVERNANCE_DIR)) continue
       if (ent.isDirectory()) walk(full)
       else if (isModelFile(ent.name)) files.push({ path: path.relative(dir, full).split(path.sep).join('/'), text: fs.readFileSync(full, 'utf8') })
     }

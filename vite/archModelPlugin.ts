@@ -5,14 +5,17 @@
  *   文件变化时推送 `arch-model:changed`，载荷 { project } 指明哪个项目变了；
  * - 构建态：把上述内容固化为产物中的同名静态文件。
  * 源码（G1、G2、G17、G11，docs/architecture/source.md §2.1）只在开发态提供：GET /source/<项目>.json（文件清单）、
- *   /source/<项目>/file.json?path=（单个文件）、/source/<项目>/exports.json?path=（导出）；构建态不输出，页面拿到 404 即「构建产物不含源码」。
+ *   /source/<项目>/file.json?path=（单个文件）、/source/<项目>/exports.json?path=（导出）、/source/<项目>/facts.json（代码事实、基线与拦截记录，K8）；
+ *   构建态不输出，页面拿到 404 即「构建产物不含源码」。
  * 项目内容只搬运原始文本，解析与校验都在页面侧的模型层完成，保证两种形态报错一致。
  */
 import path from 'node:path'
 import type { Plugin } from 'vite'
 import { isModelFile, listProjectIds, listProjects, readDesignRevision, readProject, versionFile } from './readModelDir'
 import { readExports, readSourceFile, readSourceTree } from './readSource'
-import type { SourcePayload } from '../src/model'
+import { readCodeDeps } from './readDeps'
+import { LEDGER_PAGE_LIMIT, governanceDir, readBaseline, readLedger } from './governanceStore'
+import type { FactsPayload, SourcePayload } from '../src/model'
 
 export const MODEL_CHANGED_EVENT = 'arch-model:changed'
 export const PROJECTS_FILE = 'projects.json'
@@ -62,7 +65,7 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
       server.middlewares.use((req, res, next) => {
         const [url, search = ''] = (req.url ?? '').split('?')
         if (url === `/${PROJECTS_FILE}`) return json(res, listProjects(modelRoot, root))
-        const src = /^\/source\/([^/]+?)(?:\/(file|exports))?\.json$/.exec(url)
+        const src = /^\/source\/([^/]+?)(?:\/(file|exports|facts))?\.json$/.exec(url)
         if (src) {
           const project = decodeURIComponent(src[1])
           const tree = treeOf(project, !src[2])
@@ -70,6 +73,19 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
           if (!src[2]) return json(res, tree)
           const file = new URLSearchParams(search).get('path') ?? ''
           if (tree.status !== 'local') return json(res, { error: '源码不在本地' }, 404)
+          if (src[2] === 'facts') {
+            const dir = governanceDir(modelRoot, project)
+            try {
+              const facts: FactsPayload = {
+                deps: readCodeDeps(tree.root, tree.files, tree.packages),
+                baseline: readBaseline(dir),
+                ledger: readLedger(dir, LEDGER_PAGE_LIMIT),
+              }
+              return json(res, facts)
+            } catch (e) {
+              return json(res, { error: `提取失败：${e instanceof Error ? e.message : String(e)}` }, 500)
+            }
+          }
           let out: unknown
           try {
             out = src[2] === 'file' ? readSourceFile(tree.root, tree.files, file) : readExports(tree.root, tree.files, file)

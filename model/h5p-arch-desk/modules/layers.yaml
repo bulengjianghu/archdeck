@@ -132,8 +132,8 @@ modules:
     kind: layer
     order: 3
     abstraction: 把磁盘上的 YAML 交给页面与命令行：只搬运文本与做摘要，不解释描述的含义
-    responsibility: Vite 插件提供项目列表与项目描述（开发态实时读取并推送变更，构建态固化为静态文件），开发态读取被描述项目的源码（文件清单、文件、导出），命令行校验。
-    includes: [文件读取, 源码清单与导出解析, 开发服务器端点, 变更通知, 构建产物, 命令行]
+    responsibility: Vite 插件提供项目列表与项目描述（开发态实时读取并推送变更，构建态固化为静态文件），开发态读取被描述项目的源码（文件清单、文件、导出）与代码事实（依赖），命令行校验，以及给 AI agent 的接口（命令行与 MCP）。
+    includes: [文件读取, 源码清单与导出解析, 依赖提取, 治理存储（基线、拦截记录）, 开发服务器端点, 变更通知, 构建产物, 命令行, agent 接口]
     excludes: [解析规则与文件归属（交给模型层）, 界面]
     mayDependOn: [model]
     children:
@@ -141,13 +141,13 @@ modules:
         name: ModelSource 插件
         kind: subsystem
         core: true
-        responsibility: 开发态提供 /projects.json、/models/<项目>.json、/models/<项目>/designs/<设计>/<轮次>.json 并按项目推送 arch-model:changed（含设计版本的变化）；开发态另提供 /source/<项目>.json、/source/<项目>/file.json、/source/<项目>/exports.json（源码清单短暂缓存）；构建态只输出描述的同名静态文件，不含源码。
+        responsibility: 开发态提供 /projects.json、/models/<项目>.json、/models/<项目>/designs/<设计>/<轮次>.json 并按项目推送 arch-model:changed（含设计版本的变化）；开发态另提供 /source/<项目>.json、/source/<项目>/file.json、/source/<项目>/exports.json、/source/<项目>/facts.json（代码事实、基线与拦截记录，K8；源码清单短暂缓存）；构建态只输出描述的同名静态文件，不含源码。
         codeRefs: [vite/archModelPlugin.ts, vite.config.ts]
       - id: access.reader
         name: 描述读取
         kind: subsystem
         core: true
-        responsibility: 约定「模型根目录下含 system.yaml 的子目录即项目、其下 designs/<设计>/ 是设计版本」，读取项目当前版本（跳过 designs/）或设计某一轮的描述文件（YAML / JSON）及对比基线，读 design.yaml，并跑一遍模型层生成项目摘要。
+        responsibility: 约定「模型根目录下含 system.yaml 的子目录即项目、其下 designs/<设计>/ 是设计版本」，读取项目当前版本（跳过 designs/ 与 governance/）或设计某一轮的描述文件（YAML / JSON）及对比基线，读 design.yaml，并跑一遍模型层生成项目摘要。
         codeRefs: [vite/readModelDir.ts]
       - id: access.source
         name: 源码读取
@@ -158,8 +158,29 @@ modules:
       - id: access.lint
         name: 命令行校验
         kind: subsystem
-        responsibility: npm run lint:model：校验全部项目或指定目录（含各设计版本的每一轮与 design.yaml），源码在本地时附带当前版本的源码归属警告（G9），按文件:行号输出问题，有错误时非零退出，可接入 CI。
+        responsibility: npm run lint:model：校验全部项目或指定目录（含各设计版本的每一轮与 design.yaml），源码在本地时附带当前版本的源码归属警告（G9）与架构治理（代码事实、规则违规、环度，按基线棘轮：新增违规与环度上升为错误，U8），按文件:行号输出问题，有错误时非零退出，可接入 CI。
         codeRefs: [scripts/lint-model.ts]
+      - id: access.deps
+        name: 依赖提取
+        kind: subsystem
+        responsibility: 用 TypeScript 语法树提取被描述项目的文件依赖（import / import type / export … from / import() / require，Vue 取 <script> 块，K1）；把说明符解析到清单中的文件——相对路径补全、tsconfig paths、工作区包名与包入口（K2）；命名导入沿再导出链追到声明文件，记目标与经由（K3）；按修改时间与大小缓存。不判断归属与规则。
+        codeRefs: [vite/readDeps.ts]
+        docRefs: [docs/architecture/governance.md]
+      - id: access.governance-store
+        name: 治理存储
+        kind: subsystem
+        responsibility: 读写项目下 governance/（不属于描述）：基线 baseline.json（只由命令行生成，U7）、拦截记录 ledger.jsonl（追加，Q4）；读源码根目录的 git 提交。
+        codeRefs: [vite/governanceStore.ts]
+      - id: access.agent
+        name: agent 接口
+        kind: subsystem
+        core: true
+        responsibility: 给 AI coding agent 与人用的架构查询：查询核心按项目加载描述、源码清单、代码事实与基线并调用模型层的架构治理（定位、写前判定、违规、环、重新扫描、拦截报告，Q1–Q4）；两层外壳——命令行 npm run arch（另有生成基线）与 MCP 服务器 npm run arch:mcp（stdio），同一输入同一结果（Q6）；只读描述、规则与基线，只写拦截记录（Q5）。
+        principle: |
+          - **写前判定**：agent 在写下 import 之前询问；判定之外附上目标模块的职责、访问面与接口签名，让它知道该走哪里，而不只是「不行」。
+          - **架构师的意图只读**：不提供改规则、生成基线的工具，规则由人或设计版本定；拦截记录让效果可量化。
+        codeRefs: [scripts/agent/**, scripts/arch.ts, scripts/arch-mcp.ts, .mcp.json]
+        docRefs: [docs/architecture/governance.md, docs/adr/0015-architecture-governance.md]
 
   - id: model
     name: 模型层
@@ -167,7 +188,7 @@ modules:
     order: 4
     abstraction: 关于**被描述系统**的知识，脱离工作台仍成立：输入描述、输出数据，不依赖 Vue / DOM / 布局库，可在 Node 中纯输入输出测试
     responsibility: 把多个描述文件变成校验过的模型与索引（含参与者与场景），按层次投影出要画的节点与边，把场景展开、按层次投影成回放帧与时序模型，并回答关于被描述系统的架构查询（最近存在 / 可见的祖先、本层的下一步、到达某帧需要的分支选择、谁参与了哪一步）。
-    includes: [文件格式与类型, 解析与合并, 引用校验, 索引, 层次投影, 场景展开与投影, 架构查询, 版本对比, 源码归属]
+    includes: [文件格式与类型, 解析与合并, 引用校验, 索引, 层次投影, 场景展开与投影, 架构查询, 版本对比, 源码归属, 架构治理]
     excludes: [Vue, DOM, elkjs, 文件系统]
     mayDependOn: []
     docRefs: [docs/03-architecture.md]
@@ -221,3 +242,14 @@ modules:
         responsibility: 被描述项目的源码文件与模块对上：文件按 codeRefs 归属模块（祖先与后代同时匹配取最深的，互不包含的模块同时匹配为冲突），未归属与忽略清单，模块的文件（子树并集）与入口文件，入口导出与模块接口的对应，选中文件在当前层次的投影，目录树，以及归属警告。输入是模型索引与接入层给的文件清单，不碰文件系统。
         codeRefs: [src/model/source/**]
         docRefs: [docs/architecture/source.md, docs/adr/0007-source-files.md]
+      - id: model.governance
+        name: 架构治理
+        kind: subsystem
+        core: true
+        responsibility: 代码事实与架构规则：文件依赖按归属提升为模块依赖，与描述比对（关系已证实 / 未证实、未描述依赖，K4–K7）；按 rules 与层的 mayDependOn 判定违规（层规则、依赖白名单、访问面、例外，U2–U6）；模块环与文件环、环度（Y）；按基线给出门禁问题（U8）；投影到当前层次（K9、Y4）；agent 查询（定位、模块说明、写前判定、拦截统计，Q1、Q2、Q4）。输入是索引、归属与接入层给的依赖，不碰文件系统。
+        principle: |
+          - **事实与意图分开**：事实来自代码（确定、可复现），意图来自架构师（rules.yaml），描述来自 AI；三者对照才能发现偏航。
+          - **默认拒绝**：写了白名单或访问面即只许这些；存量违规由基线承接，只许不增加（棘轮）。
+          - **与结构投影同一套规则**：访问面的入口用 G10，本层投影用 mapEndpoint。
+        codeRefs: [src/model/governance/**]
+        docRefs: [docs/architecture/governance.md, docs/adr/0015-architecture-governance.md]

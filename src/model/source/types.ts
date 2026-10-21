@@ -7,6 +7,9 @@
 export interface PackageEntry {
   main?: string
   exports?: unknown
+  /** K2：工作区包名与类型入口 */
+  name?: string
+  types?: string
 }
 
 /** G19：统计行数的源码文件 */

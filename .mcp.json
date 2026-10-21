@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "h5p-arch-desk": {
+      "command": "npm",
+      "args": ["run", "-s", "arch:mcp"],
+      "env": { "ARCH_PROJECT": "h5p-arch-desk" }
+    }
+  }
+}

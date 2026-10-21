@@ -5,7 +5,7 @@
  * - error：实体被剔除（重复 ID、父模块不存在、关系端点无效……）
  * - warning：实体保留，有问题的引用被去掉，或只是提醒补全内容
  */
-import type { ActorEntity, ArchModel, Issue, ModuleEntity, RelationEntity, ScenarioEntity, SourceLoc, Step } from './types'
+import type { ActorEntity, ArchModel, Issue, ModuleEntity, RelationEntity, RulesDef, ScenarioEntity, SourceLoc, Step } from './types'
 import { buildIndex } from './indexer'
 import { bindRelation } from './scenario/bind'
 import { forEachStep, mapChildren } from './scenario/steps'
@@ -178,6 +178,7 @@ export function validate(input: ArchModel): ValidateResult {
     scenarios: [],
     sourceIgnore: input.sourceIgnore ?? [],
     ...(input.sourceLimits ? { sourceLimits: input.sourceLimits } : {}),
+    ...(input.rules ? { rules: cleanRules(input.rules, id => modules.has(id), input.rulesSrc, err, warn), rulesSrc: input.rulesSrc } : {}),
   }
 
   // ── 场景（S5–S13）──
@@ -286,4 +287,41 @@ function keepKnown(ids: readonly string[], known: Map<string, unknown>, onUnknow
     onUnknown(id)
     return false
   })
+}
+
+/** U1：规则引用不存在的模块提醒并去掉该条（同 M7）；allow 缺 reason 报错并去掉该条 */
+function cleanRules(
+  rules: RulesDef,
+  exists: (id: string) => boolean,
+  src: SourceLoc | undefined,
+  err: (code: string, message: string, src?: SourceLoc) => void,
+  warn: (code: string, message: string, src?: SourceLoc) => void,
+): RulesDef {
+  const known = (ids: readonly string[] | undefined, where: string) =>
+    ids?.filter(id => exists(id) || (warn('unknown-rule-module', `${where}引用的模块「${id}」不存在`, src), false))
+  const modules = (rules.modules ?? []).flatMap(r => {
+    if (!exists(r.module)) {
+      warn('unknown-rule-module', `规则引用的模块「${r.module}」不存在，该条被忽略`, src)
+      return []
+    }
+    return [{ ...r, ...(r.mayDependOn ? { mayDependOn: known(r.mayDependOn, `模块「${r.module}」的 mayDependOn `) } : {}) }]
+  })
+  const allow = (rules.allow ?? []).filter(a => {
+    if (!a.reason?.trim()) {
+      err('allow-without-reason', `例外 ${a.from} → ${a.to} 没有写 reason，该条被忽略`, src)
+      return false
+    }
+    if (!exists(a.from) || !exists(a.to)) {
+      warn('unknown-rule-module', `例外 ${a.from} → ${a.to} 引用的模块不存在，该条被忽略`, src)
+      return false
+    }
+    return true
+  })
+  const tolerated = known(rules.cycles?.tolerated, 'cycles.tolerated ')
+  return {
+    ...(rules.layers !== undefined ? { layers: rules.layers } : {}),
+    modules,
+    allow,
+    ...(tolerated ? { cycles: { tolerated } } : {}),
+  }
 }

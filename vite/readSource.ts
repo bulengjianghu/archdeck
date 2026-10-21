@@ -77,7 +77,13 @@ function readPackages(root: string, files: readonly string[]): Record<string, Pa
     if (f !== 'package.json' && !f.endsWith('/package.json')) continue
     try {
       const pkg = JSON.parse(fs.readFileSync(path.join(root, f), 'utf8')) as PackageEntry
-      out[f === 'package.json' ? '' : f.slice(0, -'/package.json'.length)] = { main: typeof pkg.main === 'string' ? pkg.main : undefined, exports: pkg.exports }
+      const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
+      out[f === 'package.json' ? '' : f.slice(0, -'/package.json'.length)] = {
+        main: str(pkg.main),
+        exports: pkg.exports,
+        ...(str(pkg.name) ? { name: str(pkg.name) } : {}),
+        ...(str(pkg.types) ? { types: str(pkg.types) } : {}),
+      }
     } catch {
       /* 坏的 package.json 当作没有入口 */
     }
@@ -317,6 +323,20 @@ function collectExports(
   }
   memo.set(file, out)
   return out
+}
+
+/** K3：同一批文件共用解析结果的导出查询（再导出带声明文件 from）；非脚本或不在清单中为空数组 */
+export function exportsResolver(root: string, files: readonly string[]): (file: string) => ExportedSymbol[] {
+  const set = new Set(files)
+  const memo = new Map<string, ExportedSymbol[]>()
+  return file => {
+    if (!set.has(file) || !SCRIPT_EXT.test(file)) return []
+    try {
+      return collectExports(root, file, set, 0, memo, new Set())
+    } catch {
+      return []
+    }
+  }
 }
 
 /** G11：入口文件的导出；非 TS / JS 文件为空数组；不在清单中为 null */

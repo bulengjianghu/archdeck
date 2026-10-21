@@ -146,11 +146,44 @@ export interface ArchFileDef {
   sourceIgnore?: string[]
   /** G20：源码文件的超长阈值 */
   sourceLimits?: SourceLimits
+  /** U1：架构规则（约定文件 rules.yaml），只能声明一次 */
+  rules?: RulesDef
 }
 
 /** G20：源码文件的限制；maxLines 缺省 500 */
 export interface SourceLimits {
   maxLines?: number
+}
+
+/** 架构规则的种类：层规则（U2）、依赖白名单（U3）、访问面（U4） */
+export type RuleKind = 'layer' | 'deps' | 'exposes'
+export const RULE_KINDS: readonly RuleKind[] = ['layer', 'deps', 'exposes']
+
+/** 一个模块上的规则（U3、U4） */
+export interface ModuleRuleDef {
+  module: string
+  /** 子树之外只许依赖这些模块的子树；写了即默认拒绝 */
+  mayDependOn?: string[]
+  /** 子树之外只许经这些文件访问：glob，或 `entry`（模块入口，G10） */
+  exposes?: string[]
+  reason?: string
+}
+
+/** 例外（U5） */
+export interface AllowDef {
+  from: string
+  to: string
+  rule?: RuleKind
+  reason: string
+}
+
+/** 架构规则（U1–U5、Y3）：架构师的意图，AI 重新生成当前版本时不改动 */
+export interface RulesDef {
+  /** 层规则开关，缺省 true（U2） */
+  layers?: boolean
+  modules?: ModuleRuleDef[]
+  allow?: AllowDef[]
+  cycles?: { tolerated?: string[] }
 }
 
 // ── 加载产物 ─────────────────────────────────────────────────
@@ -234,6 +267,10 @@ export interface ArchModel {
   sourceIgnore: string[]
   /** G20：只取第一处声明，不参与版本对比 */
   sourceLimits?: SourceLimits
+  /** U1：只取第一处声明，去掉坏引用后的架构规则；不参与版本对比 */
+  rules?: RulesDef
+  /** U1：rules 的出处 */
+  rulesSrc?: SourceLoc
 }
 
 export type IssueSeverity = 'error' | 'warning'
