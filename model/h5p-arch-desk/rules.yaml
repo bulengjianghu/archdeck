@@ -11,3 +11,18 @@ rules:
     - module: access.agent
       mayDependOn: [model, access.reader, access.source, access.deps, access.governance-store]
       reason: agent 接口只是查询核心加两层外壳，不经开发服务器
+    - module: model
+      exposes: [entry]
+      reason: 模型层对外只经入口 src/model/index.ts（03 §3「模型层入口：文本 → 校验后的索引」）；类型、设计版本元信息与项目摘要都由入口导出，外部不直达内部文件
+    - module: model.source
+      exposes: [entry]
+      reason: 源码归属只经 src/model/source/index.ts 访问，glob、ownership、types 是它的内部拆分
+    - module: model.scenario
+      exposes: [entry, src/model/scenario/steps.ts]
+      reason: 场景投影只经入口访问；Indexer 直达 steps.ts 取 messagesOf——场景入口再导出的 level.ts / sequence.ts 依赖 indexer，经入口会成 indexer ↔ scenario 的环，而 steps.ts 只依赖类型
+    - module: model.governance
+      exposes: [entry]
+      reason: 架构治理只经 src/model/governance/index.ts 访问
+    - module: state.transition
+      exposes: [entry]
+      reason: 会话规则只经 src/state/transition/index.ts 访问

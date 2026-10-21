@@ -191,6 +191,7 @@ modules:
     includes: [文件格式与类型, 解析与合并, 引用校验, 索引, 层次投影, 场景展开与投影, 架构查询, 版本对比, 源码归属, 架构治理]
     excludes: [Vue, DOM, elkjs, 文件系统]
     mayDependOn: []
+    entry: src/model/index.ts
     docRefs: [docs/03-architecture.md]
     children:
       - id: model.types
