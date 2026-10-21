@@ -308,3 +308,19 @@ describe('DeskState · 运行视角', () => {
     expect(desk.participants.value.size).toBe(0)
   })
 })
+
+describe('ADR-0009：悬停与选中不引起重新投影', () => {
+  it('悬停、选中、单步后层次视图与时序模型是同一个对象；切换开关才重算', async () => {
+    const { desk } = await setup('/', scenarioFiles())
+    desk.openScenario('sc.play')
+    desk.next()
+    const view = desk.view.value
+    const seq = desk.sequence.value
+    desk.setHover('infra')
+    desk.select({ kind: 'module', id: 'infra' })
+    expect(desk.view.value).toBe(view)
+    expect(desk.sequence.value).toBe(seq)
+    desk.setToggles({ showDiff: true })
+    expect(desk.view.value).not.toBe(view)
+  })
+})

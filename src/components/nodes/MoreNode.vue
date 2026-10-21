@@ -5,7 +5,7 @@ defineProps<{ data: NodeData }>()
 </script>
 
 <template>
-  <div class="more" :class="{ dim: data.dim }" title="单击查看该层全部模块，双击进入该层">+{{ data.hiddenCount }} 个其他模块</div>
+  <div class="more" :class="{ dim: data.dim }">+{{ data.hiddenCount }} 个其他模块</div>
 </template>
 
 <style scoped>

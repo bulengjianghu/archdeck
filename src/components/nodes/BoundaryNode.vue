@@ -7,7 +7,7 @@ defineProps<{ data: NodeData }>()
 </script>
 
 <template>
-  <div class="boundary-node" :class="{ selected: data.selected, dim: data.dim, [`diff-${data.change}`]: !!data.change }" :title="`外部模块：${data.path}`">
+  <div class="boundary-node" :class="{ selected: data.selected, dim: data.dim, [`diff-${data.change}`]: !!data.change }">
     <Handles />
     <DiffMark :data="data" />
     <div class="name">{{ data.name }}</div>

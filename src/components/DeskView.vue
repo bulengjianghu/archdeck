@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 单个项目的架构视图：导航树 + 画布区 + 属性面板（W-1）；面板可固定或浮动（W-8），「专注」一键收起两侧栏。每次进入项目创建一份独立的 DeskState，
+ * 单个项目的架构视图：导航树 + 画布区 + 属性面板（W-1）；「专注」一键收起两侧栏。每次进入项目创建一份独立的 DeskState，
  * 其 watch 都在本组件作用域内，离开项目时随组件销毁。
  */
 import { computed, onBeforeUnmount, onMounted, provide, ref } from 'vue'
@@ -73,12 +73,7 @@ function togglePanel() {
   collapsed.value = !collapsed.value
   store('h5p-arch-desk:panel-collapsed', collapsed.value ? '1' : '0')
 }
-// W-8：面板形态——固定（占一栏）/ 浮动（叠在画布区右侧，不挤占画布宽度）
-const floating = ref(readNumber('h5p-arch-desk:panel-floating', 0, 1, 0) === 1)
-function toggleFloating() {
-  floating.value = !floating.value
-  store('h5p-arch-desk:panel-floating', floating.value ? '1' : '0')
-}
+
 const navWidth = ref(readNumber('h5p-arch-desk:nav-width', 180, 520, 260))
 const navCollapsed = ref(readNumber('h5p-arch-desk:nav-collapsed', 0, 1, 0) === 1)
 function toggleNav() {
@@ -157,7 +152,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div class="desk" :style="{ '--panel-w': collapsed || floating ? '0px' : `${panelWidth}px`, '--nav-w': navCollapsed ? '0px' : `${navWidth}px`, '--float-w': `${panelWidth}px` }">
+  <div class="desk" :style="{ '--panel-w': collapsed ? '0px' : `${panelWidth}px`, '--nav-w': navCollapsed ? '0px' : `${navWidth}px` }">
     <header class="top">
       <button class="collapse nav-toggle" :title="navCollapsed ? '展开导航树' : '收起导航树'" @click="toggleNav">
         {{ navCollapsed ? '导航 ›' : '‹ 导航' }}
@@ -223,26 +218,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     </main>
 
     <div
-      v-show="!collapsed && !floating"
+      v-show="!collapsed"
       class="divider panel-divider"
       @pointerdown="onDividerDown('panel', $event)"
       @pointermove="onDividerMove"
       @pointerup="onDividerUp"
     />
-    <aside v-show="!collapsed" class="panel-area" :class="{ floating }">
-      <div
-        v-if="floating"
-        class="float-edge"
-        @pointerdown="onDividerDown('panel', $event)"
-        @pointermove="onDividerMove"
-        @pointerup="onDividerUp"
-      />
-      <div class="panel-bar">
-        <span class="muted">属性</span>
-        <button class="small" :title="floating ? '固定为右侧一栏' : '浮动在画布上，不挤占画布宽度'" @click="toggleFloating">
-          {{ floating ? '固定' : '浮动' }}
-        </button>
-      </div>
+    <aside v-show="!collapsed" class="panel-area">
       <Panel v-if="desk.status.value === 'ready'" />
     </aside>
   </div>
@@ -366,54 +348,5 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   min-height: 0;
   overflow: auto;
   background: var(--surface);
-}
-
-/* W-8：浮动——叠在画布区右侧，不占栏 */
-.panel-area.floating {
-  grid-column: 3 / 6;
-  justify-self: end;
-  align-self: start;
-  max-height: calc(100% - 16px);
-  position: relative;
-  z-index: 20;
-  width: var(--float-w);
-  max-width: calc(100% - 24px);
-  margin: 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  box-shadow: 0 8px 28px rgb(0 0 0 / 20%);
-}
-
-.float-edge {
-  position: sticky;
-  top: 0;
-  float: left;
-  width: 6px;
-  height: 100%;
-  margin-right: -6px;
-  cursor: col-resize;
-  z-index: 1;
-}
-
-.float-edge:hover {
-  background: var(--accent);
-}
-
-.panel-bar {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 10px 4px 18px;
-  font-size: 12px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-}
-
-.panel-bar .small {
-  font-size: 11.5px;
-  padding: 1px 8px;
 }
 </style>

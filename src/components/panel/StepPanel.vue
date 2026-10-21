@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * 步骤面板（D-5，焦点跟随当前步骤时）：先回答「这一步做什么」——作用、输入、输出（配对返回，F7）、数据结构、经由接口；
+ * 步骤面板（D-5，焦点跟随当前步骤时）：先回答「这一步做什么」——作用、输入（签名中与标签同名的一行 + 携带的数据）、输出（配对返回，F7）、数据结构、经由接口；
+ * 步骤没写的接口与数据取自对应关系并标「取自关系」（S14）；
  * 其后是真实端点与本层投影、本层一条可见消息覆盖的多帧；结构关系默认折叠，可在画布上显示（V9）；最后是出处。
  */
 import { computed } from 'vue'
@@ -12,7 +13,7 @@ import InterfaceItem from './InterfaceItem.vue'
 import DataStructureItem from './DataStructureItem.vue'
 import RelationRow from './RelationRow.vue'
 import RevealButton from './RevealButton.vue'
-import { KIND_LABEL, dataNames, fragmentText, frameText, landingText, stepOutput } from './runText'
+import { KIND_LABEL, dataNames, fragmentText, frameText, landingText, signatureLine, stepOutput } from './runText'
 
 const desk = useDesk()
 const idx = computed(() => desk.index.value!)
@@ -23,6 +24,8 @@ const msg = computed(() => {
 })
 const total = computed(() => desk.scenarioView.value?.messages.length ?? 0)
 const writtenIn = computed(() => (f.value.scenarioId !== desk.scenario.value?.id ? idx.value.scenarios.get(f.value.scenarioId)?.name : undefined))
+/** D-5：经由接口时签名中与标签同名的一行 */
+const callLine = computed(() => signatureLine(f.value.interface ? idx.value.interfaces.get(f.value.interface)?.signature : undefined, f.value.label))
 const output = computed(() => stepOutput(f.value, desk.pairs.value, desk.plan.value!.frames))
 /** 输出侧要展开的数据结构：配对返回携带的 */
 const outData = computed(() => (output.value.kind === 'pair' ? output.value.frame.payload : []))
@@ -68,8 +71,11 @@ function pointAt(id: string) {
       <dl class="io">
         <dt>输入</dt>
         <dd>
-          <template v-if="f.payload.length">{{ dataNames(idx, f.payload) }}</template>
-          <span v-else class="muted">没有写携带的数据</span>
+          <code v-if="callLine" class="call">{{ callLine }}</code>
+          <div v-if="f.payload.length">
+            {{ dataNames(idx, f.payload) }}<span v-if="f.inherited?.payload" class="badge from-rel">取自关系</span>
+          </div>
+          <span v-else-if="!callLine" class="muted">没有写携带的数据</span>
         </dd>
         <dt>输出</dt>
         <dd>
@@ -91,7 +97,10 @@ function pointAt(id: string) {
       <DataStructureItem v-for="d in f.payload" :key="`in:${d}`" :id="d" />
       <DataStructureItem v-for="d in outData" :key="`out:${d}`" :id="d" />
     </Section>
-    <Section v-if="f.interface" title="经由接口"><InterfaceItem :id="f.interface" open /></Section>
+    <Section v-if="f.interface" title="经由接口">
+      <span v-if="f.inherited?.interface" class="badge from-rel">取自关系</span>
+      <InterfaceItem :id="f.interface" open />
+    </Section>
 
     <Section title="端点与本层投影">
       <div class="ends">
@@ -157,6 +166,18 @@ function pointAt(id: string) {
 
 .io dd {
   margin: 0;
+}
+
+.call {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 2px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.from-rel {
+  margin-left: 6px;
 }
 
 .ends {

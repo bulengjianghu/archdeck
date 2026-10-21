@@ -27,15 +27,6 @@ export function fragmentText(t: FragmentTag): string {
   return `${FRAGMENT_LABEL[t.kind]} [${t.label}]`
 }
 
-/** Markdown 文本的第一句（信息卡用的摘要） */
-export function firstSentence(text?: string): string {
-  if (!text) return ''
-  const plain = text.replace(/[`*_#>]/g, '').replace(/\s+/g, ' ').trim()
-  const m = plain.match(/^.+?[。；.;!?！？](?=\s|$)|^.+?[。；！？]/)
-  const s = m ? m[0] : plain
-  return s.length > 80 ? `${s.slice(0, 80)}…` : s
-}
-
 /** 数据结构 ID 的显示名 */
 export function dataNames(index: ModelIndex, ids: readonly string[]): string {
   return ids.map(id => index.dataStructures.get(id)?.name ?? id).join('、')
@@ -61,10 +52,17 @@ export function stepOutput(f: Frame, pairs: ReadonlyMap<string, string> | null, 
   return pf ? { kind: 'pair', frame: pf } : { kind: 'implicit' }
 }
 
-/** 模块的完整路径（不含自身）与所属层（自身或最近的层祖先） */
-export function placeOf(index: ModelIndex, moduleId: string): { path: string; layer?: string } {
-  const ids = index.pathOf.get(moduleId) ?? []
-  const layer = [...ids].reverse().find(id => index.modules.get(id)?.kind === 'layer')
-  const layerName = layer ? `${moduleName(index, layer)}${index.modules.get(layer)?.order !== undefined ? `（第 ${index.modules.get(layer)!.order} 层）` : ''}` : undefined
-  return { path: ids.slice(0, -1).map(id => moduleName(index, id)).join(' › '), ...(layerName ? { layer: layerName } : {}) }
+/**
+ * D-5：接口签名中与步骤标签同名的那一行——标签开头的调用名（如 `openScenario(id)`、`planScenario：…` 中的名字）在签名里后接 `(`；
+ * 一行写多个操作时以 `·` 分段取匹配的那一段。找不到时为 null。
+ */
+export function signatureLine(signature: string | undefined, label: string | undefined): string | null {
+  const name = label?.trim().match(/^([A-Za-z_$][\w$]*)(?=\s*[(（：:]|\s|$)/)?.[1]
+  if (!signature || !name) return null
+  const call = new RegExp(`(^|[^\\w$.])${name.replace(/\$/g, '\\$')}\\s*\\(`)
+  for (const line of signature.split('\n')) {
+    const seg = line.split(' · ').find(x => call.test(x))
+    if (seg) return seg.replace(/\s*\/\/.*$/, '').trim()
+  }
+  return null
 }

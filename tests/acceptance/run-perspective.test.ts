@@ -54,7 +54,7 @@ describe('§6.2 运行视角验收', () => {
     }
   })
 
-  it('2. 回放中双击下钻：钉住被下钻的模块，播放头仍是同一帧；泳道变细、可见消息变多、单步粒度变细', async () => {
+  it('2. 回放中双击下钻：钉住被下钻的模块，播放头仍是同一帧；泳道变细、可见消息不少于上一层、单步粒度变细', async () => {
     const { desk, step } = await open('h5player')
     desk.openScenario('sc.command')
     // 先走过两个分支点（需要改图 → 事务成功），再回到第一步、前进到一半
@@ -65,7 +65,7 @@ describe('§6.2 运行视角验收', () => {
     desk.seek(desk.scenarioView.value!.messages[0].frameIds[0])
     step(3)
     const frame = desk.playback.value!.frameId
-    // 两端都在 Infrastructure 内的帧：根层合并为该层的内部活动，下钻后拆成更细的可见消息
+    // 两端都在 Infrastructure 内的帧：根层按核心模块与「其他」泳道画，下钻后拆到子模块，可见消息不少于根层
     const idx = desk.index.value!
     const inInfra = desk.path.value!.frames.filter(f => [f.from, f.to].every(id => idx.pathOf.get(id)?.includes('infra'))).map(f => f.id)
     const messagesOf = () => new Set(inInfra.map(id => desk.scenarioView.value!.messageOf.get(id)).filter(m => m !== undefined))
@@ -74,11 +74,12 @@ describe('§6.2 运行视角验收', () => {
     desk.drillInto('infra')
     expect(desk.playback.value!.frameId).toBe(frame)
     expect(desk.focus.value).toEqual({ kind: 'pinned', selection: { kind: 'module', id: 'infra' } })
-    expect(messagesOf().size).toBeGreaterThan(rootMessages)
-    // 泳道变细：根层把 Infrastructure 内部的活动画在「Infrastructure」一条泳道上，下钻后换成它的子模块
+    expect(messagesOf().size).toBeGreaterThanOrEqual(rootMessages)
+    // 泳道变细：根层 Infrastructure 的非核心模块画在「Infrastructure · 其他」泳道上，下钻后换成它的子模块
     const lanes = desk.sequence.value!.participants.map(p => p.nodeId)
-    expect(rootLanes).toContain('infra')
     expect(lanes).not.toContain('infra')
+    // 下钻后出现根层没有的更细的泳道
+    expect(lanes.some(id => !rootLanes.includes(id))).toBe(true)
     expect(lanes).toEqual(expect.arrayContaining(['infra.player-index', 'infra.framework']))
   })
 

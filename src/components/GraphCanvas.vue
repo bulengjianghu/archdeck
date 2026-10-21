@@ -155,7 +155,9 @@ function playClass(id: string): string | undefined {
   if (!st) return undefined
   const cur = st.current?.at
   const hov = hoverLanding.value
-  const touches = (at: typeof cur | null) => !!at && (at.kind === 'internal' ? at.node === id : at.from === id || at.to === id)
+  // P7：分层总览中同一层不同泳道之间的消息，带与两端的核心模块小块都标为活动
+  const touches = (at: typeof cur | null) =>
+    !!at && ((at.kind === 'internal' ? at.node === id : at.from === id || at.to === id) || at.lanes?.from === id || at.lanes?.to === id)
   if (touches(cur)) return cur!.kind === 'internal' ? 'play-current play-internal' : 'play-current'
   if (touches(hov)) return 'play-hover'
   return undefined

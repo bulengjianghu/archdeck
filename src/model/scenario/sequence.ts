@@ -74,7 +74,9 @@ export function buildSequence(index: ModelIndex, view: LevelView, plan: Scenario
     if (participants.some(p => p.nodeId === nodeId)) return
     const boundary = nodeId.startsWith('boundary:')
     const id = boundary ? nodeId.slice('boundary:'.length) : nodeId
-    const name = moduleName(index, id)
+    // P13、P14：分层总览中有核心模块的层，其泳道只代表层内其他模块：「<层名> · 其他」，归入该层分组、排在核心模块之后
+    const other = view.mode === 'layered' && view.nodes.some(n => n.role === 'core' && n.layerId === nodeId)
+    const name = other ? `${moduleName(index, id)} · 其他` : moduleName(index, id)
     if (index.actors.has(id)) {
       participants.push({ nodeId, id, name, kind: 'actor', path: [], key: [], byX: false })
       return
@@ -87,10 +89,10 @@ export function buildSequence(index: ModelIndex, view: LevelView, plan: Scenario
       id,
       name,
       kind: boundary ? 'boundary' : 'module',
-      parentId: m?.parentId,
+      parentId: other ? id : m?.parentId,
       path,
       ...(layer ? { layer } : {}),
-      key: hierarchyKey(index, id),
+      key: other ? [...hierarchyKey(index, id), Infinity, 0] : hierarchyKey(index, id),
       byX: !boundary && m?.parentId === view.parentId && m.kind !== 'layer',
     })
   }
@@ -105,7 +107,8 @@ export function buildSequence(index: ModelIndex, view: LevelView, plan: Scenario
     const first = it.frames[0]
     tagsOf.push(first.fragments)
     const at = it.at
-    const [from, to] = at.kind === 'internal' ? [at.node, at.node] : [at.from, at.to]
+    // P14：时序图的泳道取 lanes（分层总览中核心模块优先），否则取落点节点
+    const [from, to] = at.lanes ? [at.lanes.from, at.lanes.to] : at.kind === 'internal' ? [at.node, at.node] : [at.from, at.to]
     addParticipant(from)
     addParticipant(to)
     const ifName = first.interface ? index.interfaces.get(first.interface)?.name : undefined

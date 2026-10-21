@@ -112,3 +112,24 @@ describe('属性面板 · 运行视角', () => {
     expect(wrapper.find('details.structure').exists()).toBe(true)
   })
 })
+
+describe('D-5：步骤的输入', () => {
+  it('signatureLine：按标签开头的调用名在接口签名中找到对应的一行或一段', async () => {
+    const { signatureLine } = await import('../../src/components/panel/runText')
+    const sig = 'dispatch(action: ViewAction): void\nopenScenario(id: string): void · closeScenario(): void   // 场景\nseek(frameId: string | null): void'
+    expect(signatureLine(sig, 'openScenario(id)')).toBe('openScenario(id: string): void')
+    expect(signatureLine(sig, 'closeScenario：退出')).toBe('closeScenario(): void')
+    expect(signatureLine(sig, 'seek')).toBe('seek(frameId: string | null): void')
+    expect(signatureLine(sig, '点「运行」')).toBeNull()
+    expect(signatureLine(sig, 'open(x)')).toBeNull()
+  })
+
+  it('S14：步骤没写的接口取自对应关系，面板标「取自关系」并给出签名行', async () => {
+    const files = scenarioFiles({
+      'scenarios/inh.yaml': 'scenario: { id: sc.inh, name: I, steps: [{ call: { id: a, from: infra.framework.sm, to: app.solution, label: "sendCommand(cmd)" } }] }',
+    })
+    const { wrapper } = await mountPanel('/?sc=sc.inh&step=sc.inh%23a', files)
+    expect(wrapper.find('.call').text()).toBe('sendCommand(cmd: Command): Result')
+    expect(wrapper.text()).toContain('取自关系')
+  })
+})

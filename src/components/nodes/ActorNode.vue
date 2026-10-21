@@ -8,7 +8,7 @@ const ICON = { user: '👤', system: '⇄', time: '⏱' } as const
 </script>
 
 <template>
-  <div class="actor-node" :class="{ selected: data.selected, dim: data.dim, [`kind-${data.actorKind}`]: true }" :title="data.actor?.description">
+  <div class="actor-node" :class="{ selected: data.selected, dim: data.dim, [`kind-${data.actorKind}`]: true }">
     <Handles />
     <span class="icon">{{ ICON[data.actorKind ?? 'system'] }}</span>
     <div class="text">

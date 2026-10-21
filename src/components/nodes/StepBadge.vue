@@ -14,7 +14,6 @@ const desk = useDesk()
       :key="s.n"
       class="n"
       :class="{ current: s.current, muted: s.muted }"
-      :title="`第 ${s.n} 步：单击跳到这一步`"
       @click.stop="desk.seek(s.frameId)"
     >
       {{ s.n }}

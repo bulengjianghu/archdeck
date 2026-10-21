@@ -8,7 +8,7 @@ const desk = useDesk()
 </script>
 
 <template>
-  <button class="preview" :title="`选这一支：${data.preview?.label}`" @click.stop="desk.chooseBranch(data.preview!.pointId, data.preview!.option)">
+  <button class="preview" @click.stop="desk.chooseBranch(data.preview!.pointId, data.preview!.option)">
     {{ data.preview!.option + 1 }} · {{ data.preview!.label }}
   </button>
 </template>

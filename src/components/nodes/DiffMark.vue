@@ -8,8 +8,8 @@ defineProps<{ data: NodeData }>()
 <template>
   <div v-if="data.change || data.touched" class="diff-mark">
     <span v-if="data.change === 'added'" class="diff-tag added">新增</span>
-    <span v-else-if="data.change === 'changed'" class="diff-tag changed" :title="data.changedFields">修改</span>
-    <span v-if="data.touched" class="diff-tag touched" title="其内部或相关关系上的变更条数">△ {{ data.touched }}</span>
+    <span v-else-if="data.change === 'changed'" class="diff-tag changed">修改</span>
+    <span v-if="data.touched" class="diff-tag touched">△ {{ data.touched }}</span>
   </div>
 </template>
 

@@ -17,7 +17,6 @@ defineProps<{ data: NodeData }>()
       drillable: data.childCount > 0,
       [`diff-${data.change}`]: !!data.change,
     }"
-    :title="data.module?.responsibility"
   >
     <Handles />
     <DiffMark :data="data" />
@@ -26,7 +25,7 @@ defineProps<{ data: NodeData }>()
       <span v-if="data.module?.kind" class="kind">{{ data.module.kind }}</span>
     </div>
     <div class="resp">{{ data.module?.responsibility }}</div>
-    <span v-if="data.childCount > 0" class="drill" title="双击下钻">⌄ {{ data.childCount }}</span>
+    <span v-if="data.childCount > 0" class="drill">⌄ {{ data.childCount }}</span>
   </div>
 </template>
 

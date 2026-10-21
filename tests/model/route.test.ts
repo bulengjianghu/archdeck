@@ -112,3 +112,29 @@ describe('F7：调用与显式返回配对', () => {
     expect(pp.get('sc.lone#r1')).toBe('sc.lone#c')
   })
 })
+
+describe('S14：步骤继承对应关系的接口与数据', () => {
+  const sc = `scenario:
+  id: sc.inh
+  name: 继承
+  steps:
+    - call: { id: a, from: infra.framework.sm, to: app.solution }
+    - call: { id: b, from: infra.framework.sm, to: infra.framework.pipeline }
+    - return: { id: c, from: infra.framework.pipeline, to: infra.framework.sm }
+    - call: { id: d, from: infra.framework.sm, to: infra.framework.pipeline, payload: ds.cmd, interface: if.sm }
+`
+  const { index: ix } = loadModel(scenarioFiles({ 'scenarios/inh.yaml': sc }))
+  const p = planScenario(ix, 'sc.inh')
+  const f = (id: string) => p.frames.get(`sc.inh#${id}`)!
+
+  it('没写时取对应关系的接口与数据，并标明继承', () => {
+    expect(f('a')).toMatchObject({ interface: 'if.sm', inherited: { interface: true } })
+    expect(f('b')).toMatchObject({ payload: ['ds.cmd'], inherited: { payload: true } })
+  })
+
+  it('返回只继承接口，不继承数据；步骤写了就用步骤的，不标继承', () => {
+    expect(f('c').payload).toEqual([])
+    expect(f('c').inherited?.payload).toBeUndefined()
+    expect(f('d').inherited).toBeUndefined()
+  })
+})

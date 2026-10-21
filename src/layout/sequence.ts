@@ -27,6 +27,9 @@ export interface PositionedSequence {
 
 export const SEQ = { padX: 16, laneGap: 28, minLane: 96, headerH: 40, groupH: 20, top: 64, row: 34, rowInternal: 28, rowEmpty: 24, fragHead: 24, branchGap: 22, fragTail: 10 }
 
+/** 顶部泳道头区的高度（分组框 + 泳道头）；消息区从这里开始（D-2：泳道头固定在顶部） */
+export const headsHeight = (ps: Pick<PositionedSequence, 'headY'>) => ps.headY + SEQ.headerH - 4
+
 /** 名称的大致显示宽度：中文按 13px，其余按 7px */
 export function textWidth(s: string): number {
   let w = 0

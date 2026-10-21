@@ -198,7 +198,7 @@ describe('回放', () => {
     expect(other.playback!.choices.get(ALT)).toBe(0)
     expect(frameOf(other)).toBe('sc.play#update')
     const merged = loadModel(
-      scenarioFiles({ 'scenarios/x.yaml': 'scenario: { id: sc.m, name: M, steps: [{ call: { id: a, from: infra.player, to: infra.framework.sm } }, { call: { id: b, from: infra.framework.sm, to: infra.framework.pipeline } }] }' }),
+      scenarioFiles({ 'scenarios/x.yaml': 'scenario: { id: sc.m, name: M, steps: [{ call: { id: a, from: infra.framework.sm, to: infra.framework.pipeline } }, { call: { id: b, from: infra.framework.pipeline, to: infra.framework.sm } }] }' }),
     ).index
     const plan = planScenario(merged, 'sc.m')
     const st: ViewState = { ...base, playback: { scenarioId: 'sc.m', frameId: null, choices: new Map() } }

@@ -127,8 +127,10 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const plan = computed<ScenarioPlan | null>(() => (index.value && scenarioId.value ? planScenario(index.value, scenarioId.value) : null))
   const scenario = computed(() => (scenarioId.value ? (index.value?.scenarios.get(scenarioId.value) ?? null) : null))
 
+  /** 层次视图只依赖层次、显示开关与打开的场景：悬停、选中、播放头变化时 togglesNow 的值不变，不引起重新投影与布局（ADR-0009） */
+  const togglesNow = computed(() => state.value.toggles)
   const view = computed<LevelView | null>(() => {
-    const t = state.value.toggles
+    const t = togglesNow.value
     if (!index.value || !levelId.value) return null
     try {
       // L9：运行视角下舞台不受显示开关影响，并补齐场景帧端点的边界节点与参与者（P12）

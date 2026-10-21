@@ -49,6 +49,8 @@ export function stageOverlay(
       active.add(m.at.from)
       active.add(m.at.to)
     }
+    // P7：分层总览中消息两端的核心模块小块同样参与
+    if (m.at.lanes) for (const id of [m.at.lanes.from, m.at.lanes.to]) active.add(id)
   }
   const routeOf = (at: VisibleLanding): { id: string; route?: EdgeRoute } => {
     if (at.kind === 'edge') return { id: at.edgeId, route: at.core ? pv.coreEdges.get(at.edgeId) : pv.edges.get(at.edgeId) }

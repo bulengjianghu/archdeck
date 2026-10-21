@@ -19,7 +19,7 @@ export {
   frameHome,
   stageEnds,
 } from './level'
-export type { Landing, VisibleLanding, VisibleMessage, ScenarioLevelView, FrameStatus } from './level'
+export type { Landing, Lanes, VisibleLanding, VisibleMessage, ScenarioLevelView, FrameStatus } from './level'
 export { participation, scenarioModules } from './participation'
 export type { Participation, ParticipationTarget } from './participation'
 export { outlineScenario } from './outline'

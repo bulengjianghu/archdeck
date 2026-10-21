@@ -6,6 +6,7 @@ import {
   choicesFor,
   choicesFromList,
   chooseBranch,
+  compareKeys,
   currentMessage,
   landing,
   loadModel,
@@ -171,9 +172,21 @@ describe('帧的层次投影', () => {
   })
 
   it('P3：两端在同一子模块 → 内部活动', () => {
+    const v = project('infra')
+    const m = v.messages[v.messageOf.get('sc.play#update')!]
+    expect(m.at).toEqual({ kind: 'internal', node: 'infra.framework' })
+    expect(m.kind).toBe('internal')
+  })
+
+  it('P3、P7、P14：分层总览先看核心模块——同一层的不同核心模块之间是泳道间的消息，结构图按层的内部活动', () => {
     const v = project('sys')
-    expect(v.messages[v.messageOf.get('sc.play#1')!].at).toEqual({ kind: 'internal', node: 'infra' })
-    expect(v.messages[v.messageOf.get('sc.play#1')!].kind).toBe('internal')
+    const m = v.messages[v.messageOf.get('sc.play#1')!]
+    // infra.player → infra.framework.sm：两个核心模块都在 Infrastructure 层
+    expect(m.at).toEqual({ kind: 'internal', node: 'infra', lanes: { from: 'infra.player', to: 'infra.framework' } })
+    expect(m.kind).toBe('call')
+    // 两端在同一核心模块：该核心模块的内部活动
+    const u = v.messages[v.messageOf.get('sc.play#update')!]
+    expect(u.at).toEqual({ kind: 'internal', node: 'infra.framework' })
   })
 
   it('P4：两端都在本层外 → 本层不可见', () => {
@@ -203,8 +216,8 @@ describe('帧的层次投影', () => {
   id: sc.m
   name: M
   steps:
-    - call: { id: a, from: infra.player, to: infra.framework.sm }
-    - call: { id: b, from: infra.framework.sm, to: infra.framework.pipeline }
+    - call: { id: a, from: infra.framework.sm, to: infra.framework.pipeline }
+    - call: { id: b, from: infra.framework.pipeline, to: infra.framework.sm }
     - call: { id: c, from: infra.framework.sm, to: app.solution }
     - call: { id: d, from: infra.framework.sm, to: app.solution, label: again }`,
       }),
@@ -215,6 +228,18 @@ describe('帧的层次投影', () => {
     expect(v.messages[1].at).toMatchObject({ kind: 'edge', edgeId: 'infra.framework->app.solution:calls', core: true })
     expect(landing(v, 'sc.m#b')).toBe('sc.m#a')
     expect(project('infra.framework', new Map(), p, idx).messages.map(m => m.frameIds)).toEqual([['sc.m#a'], ['sc.m#b'], ['sc.m#c', 'sc.m#d']])
+    // 分层总览中同一层的不同泳道之间不与内部活动合并（P14）
+    const { index: i2 } = loadModel(
+      scenarioFiles({
+        'scenarios/y.yaml': `scenario:
+  id: sc.n
+  name: N
+  steps:
+    - call: { id: a, from: infra.player, to: infra.framework.sm }
+    - call: { id: b, from: infra.framework.sm, to: infra.framework.pipeline }`,
+      }),
+    )
+    expect(project('sys', new Map(), planScenario(i2, 'sc.n'), i2).messages.map(m => m.frameIds)).toEqual([['sc.n#a'], ['sc.n#b']])
   })
 
   it('P10：消息按步骤自己的方向流动，与边的箭头相反时标 reverse', () => {
@@ -349,9 +374,37 @@ describe('时序模型', () => {
   })
 
   it('P6：组合框内的消息在本层全部是内部活动时折叠', () => {
-    const s = seq('sys', take(0))
-    expect(s.fragments.find(f => f.kind === 'loop')).toMatchObject({ collapsed: true, label: '每个 MU' })
+    const { index: ix } = loadModel(
+      scenarioFiles({
+        'scenarios/z.yaml': `scenario:
+  id: sc.z
+  name: Z
+  steps:
+    - loop:
+        while: 每一批
+        steps:
+          - call: { from: infra.framework.sm, to: infra.framework.pipeline }`,
+      }),
+    )
+    const p = planScenario(ix, 'sc.z')
+    const at = (level: string) => {
+      const view = projectLevel(ix, level, { showBoundaries: true, mergeTypes: true, scenarioEnds: stageEnds(p) })
+      return buildSequence(ix, view, p, new Map(), projectScenario(ix, view, p, new Map()))
+    }
+    expect(at('sys').fragments.find(f => f.kind === 'loop')).toMatchObject({ collapsed: true, label: '每一批' })
+    expect(at('infra.framework').fragments.find(f => f.kind === 'loop')!.collapsed).toBe(false)
     expect(seq('infra', take(0)).fragments.find(f => f.kind === 'loop')!.collapsed).toBe(false)
+  })
+
+  it('P13、P14：分层总览中有核心模块的层，其泳道为「<层名> · 其他」，归入该层分组、排在核心模块之后；泳道互不包含', () => {
+    const s = seq('sys', take(0))
+    const lane = s.participants.find(p => p.nodeId === 'infra')!
+    expect(lane.name).toMatch(/ · 其他$/)
+    expect(lane.parentId).toBe('infra')
+    for (const core of s.participants.filter(p => p.parentId === 'infra' && p.nodeId !== 'infra')) expect(compareKeys(core.key, lane.key)).toBeLessThan(0)
+    const ids = s.participants.filter(p => p.kind !== 'actor').map(p => p.nodeId)
+    // 除「其他」泳道外，没有一条泳道是另一条泳道的祖先
+    for (const a of ids) for (const b of ids) if (a !== b && !s.participants.find(p => p.nodeId === a)!.name.endsWith(' · 其他')) expect(index.pathOf.get(b)?.includes(a) ?? false).toBe(false)
   })
 
   it('S10a：只画显式 return，call 隐含的返回不画', () => {

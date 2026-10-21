@@ -17,7 +17,6 @@ function title(f: SequenceFragment): string {
   return f.kind === 'loop' ? `[${f.label}]` : f.label
 }
 const branchClass = (chosen: boolean | null | undefined) => (chosen === null ? 'unreached' : chosen === false ? 'unchosen' : 'chosen')
-const tip = (chosen: boolean | null | undefined) => (chosen ? '当前走的分支' : '单击改走这一支')
 </script>
 
 <template>
@@ -37,7 +36,6 @@ const tip = (chosen: boolean | null | undefined) => (chosen ? '当前走的分�
         @click="f.kind === 'alt' && f.branches?.[0] && emit('branch', f.id, f.branches[0].option)"
       >
         {{ title(f) }}<tspan v-if="f.collapsed" class="muted"> · 本层合并为内部活动</tspan>
-        <title v-if="f.kind === 'alt'">{{ tip(f.branches?.[0]?.chosen) }}</title>
       </text>
       <template v-if="f.branches">
         <g v-for="(y, bi) in ps.fragments[k].branchY" :key="bi" :class="f.kind === 'alt' ? branchClass(f.branches[bi + 1]?.chosen) : ''">
@@ -50,7 +48,6 @@ const tip = (chosen: boolean | null | undefined) => (chosen ? '当前走的分�
             @click="emit('branch', f.id, f.branches[bi + 1].option)"
           >
             [{{ f.branches[bi + 1].label }}]
-            <title>{{ tip(f.branches[bi + 1].chosen) }}</title>
           </text>
         </g>
       </template>

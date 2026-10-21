@@ -3,7 +3,7 @@
  * - 消息步骤 = 一帧（F1）；组合步骤只给帧打标签（fragments，外到内）；
  * - 帧 ID = 场景 ID + `#` + 步骤 id，没写时用步骤路径；ref 内联时加上引用处前缀 `<ref 路径>/`（F2、F3）；
  * - loop 展开一遍（F4）；par 各分支按书写顺序串行（F5）；alt 每个选项一棵子树（F6）；
- * - 每帧绑定对应的结构关系（bindRelation，S12、S13）。
+ * - 每帧绑定对应的结构关系（bindRelation，S12、S13）；步骤没写的接口与数据取自对应关系（S14）。
  */
 import type { MessageKind, ModelIndex, SourceLoc, Step } from '../types'
 import { bindRelation } from './bind'
@@ -33,6 +33,8 @@ export interface Frame {
   relationInferred: boolean
   /** 消息方向与关系箭头相反 */
   reverse: boolean
+  /** S14：接口 / 数据取自对应关系（步骤没写） */
+  inherited?: { interface?: boolean; payload?: boolean }
   /** 步骤写在哪个场景（ref 内联时为被引用的场景）及其路径、出处 */
   scenarioId: string
   stepPath: string
@@ -71,18 +73,23 @@ export function planScenario(index: ModelIndex, scenarioId: string): ScenarioPla
         case 'async':
         case 'return': {
           const b = bindRelation(index, { kind: s.kind, from: s.msg.from, to: s.msg.to, relation: s.msg.relation })
+          // S14：没写的接口与数据取自对应关系；返回只取接口（关系上的数据描述的是调用方向）
+          const rel = b.issue || !b.relation ? undefined : index.relations.get(b.relation)
+          const inheritIf = !s.msg.interface && !!rel?.interface
+          const inheritData = s.kind !== 'return' && s.msg.payload.length === 0 && !!rel?.payload?.length
           const frame: Frame = {
             id: `${scenarioId}#${ctx.prefix}${s.msg.id ?? s.path}`,
             kind: s.kind,
             from: s.msg.from,
             to: s.msg.to,
             label: s.msg.label,
-            interface: s.msg.interface,
-            payload: s.msg.payload,
+            interface: s.msg.interface ?? (inheritIf ? rel!.interface : undefined),
+            payload: inheritData ? [...rel!.payload!] : s.msg.payload,
             note: s.msg.note,
             relation: b.issue ? undefined : b.relation,
             relationInferred: b.inferred,
             reverse: b.reverse,
+            ...(inheritIf || inheritData ? { inherited: { ...(inheritIf ? { interface: true } : {}), ...(inheritData ? { payload: true } : {}) } } : {}),
             scenarioId: ctx.writtenIn,
             stepPath: s.path,
             src: s.src,

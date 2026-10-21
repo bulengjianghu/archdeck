@@ -10,12 +10,11 @@ defineProps<{ data: NodeData }>()
   <div
     class="core"
     :class="{ selected: data.selected, dim: data.dim, target: data.module?.status === 'target', [`diff-${data.change}`]: !!data.change }"
-    :title="data.module?.responsibility"
   >
     <Handles />
     <DiffMark :data="data" />
     <span class="name">{{ data.name }}</span>
-    <span v-if="data.childCount > 0" class="drill" title="双击下钻">⌄ {{ data.childCount }}</span>
+    <span v-if="data.childCount > 0" class="drill">⌄ {{ data.childCount }}</span>
   </div>
 </template>
 

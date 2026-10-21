@@ -8,14 +8,17 @@ import type { LevelView, MessageKind, ModelIndex, ViewEdge } from '../types'
 import type { Frame, PlanNode, ScenarioPlan } from './plan'
 import type { Choices } from './path'
 
+/** 分层总览中消息在时序图上的两条泳道（核心模块优先），与结构图上的落点节点不同时给出（P7、P14） */
+export type Lanes = { from: string; to: string }
+
 /** 一帧在本层的落点 */
 export type Landing =
   /** 落在视图边上；from / to 是消息方向上的视图节点，reverse 表示与边的箭头相反（P10）；core 表示分层总览的核心跨层边（P7） */
-  | { kind: 'edge'; edgeId: string; from: string; to: string; reverse: boolean; core?: boolean }
+  | { kind: 'edge'; edgeId: string; from: string; to: string; reverse: boolean; core?: boolean; lanes?: Lanes }
   /** 本层两节点之间没有视图边（P11） */
-  | { kind: 'unmodeled'; from: string; to: string }
-  /** 两端落在本层同一个节点（P3） */
-  | { kind: 'internal'; node: string }
+  | { kind: 'unmodeled'; from: string; to: string; lanes?: Lanes }
+  /** 两端落在本层同一个节点（P3）；带 lanes 时是分层总览中同一层不同泳道之间的消息，时序图画成泳道间的箭头 */
+  | { kind: 'internal'; node: string; lanes?: Lanes }
   /** 两端都在本层外（P4） */
   | { kind: 'hidden' }
 
@@ -67,17 +70,22 @@ export function landFrame(index: ModelIndex, view: LevelView, frame: Frame, node
   const b = viewNode(index, view, ids, frame.to)
   // P4：至少一端落在本层子树内才可见；一端是父模块自身或祖先时按另一端的内部活动处理
   if (!a?.local && !b?.local) return { kind: 'hidden' }
-  if (!a || !b) return { kind: 'internal', node: (a ?? b)!.node }
-  if (a.node === b.node) return { kind: 'internal', node: a.node }
-  if (view.mode === 'layered') {
-    const ca = index.actors.has(frame.from) ? frame.from : (coreNode(index, view, frame.from) ?? a.node)
-    const cb = index.actors.has(frame.to) ? frame.to : (coreNode(index, view, frame.to) ?? b.node)
-    const core = ca !== a.node || cb !== b.node ? findEdge(view.coreEdges ?? [], ca, cb, frame.relation) : undefined
-    if (core) return { kind: 'edge', edgeId: core.id, from: ca, to: cb, reverse: core.from !== ca, core: true }
+  const layered = view.mode === 'layered'
+  // P3、P7、P14：分层总览先看核心模块——端点在核心模块的子树内时，它的泳道是核心模块
+  const ca = layered ? (index.actors.has(frame.from) ? frame.from : (coreNode(index, view, frame.from) ?? a?.node)) : a?.node
+  const cb = layered ? (index.actors.has(frame.to) ? frame.to : (coreNode(index, view, frame.to) ?? b?.node)) : b?.node
+  if (!a || !b) return { kind: 'internal', node: ((a ? ca : cb) ?? (a ?? b)!.node)! }
+  if (ca === cb) return { kind: 'internal', node: ca! }
+  // 只在泳道与结构图落点节点不同时给出
+  const lanes = layered && (ca !== a.node || cb !== b.node) ? { lanes: { from: ca!, to: cb! } } : {}
+  if (a.node === b.node) return { kind: 'internal', node: a.node, ...lanes }
+  if (layered) {
+    const core = 'lanes' in lanes ? findEdge(view.coreEdges ?? [], ca!, cb!, frame.relation) : undefined
+    if (core) return { kind: 'edge', edgeId: core.id, from: ca!, to: cb!, reverse: core.from !== ca, core: true }
   }
   const e = findEdge(view.edges, a.node, b.node, frame.relation)
-  if (e) return { kind: 'edge', edgeId: e.id, from: a.node, to: b.node, reverse: e.from !== a.node }
-  return { kind: 'unmodeled', from: a.node, to: b.node }
+  if (e) return { kind: 'edge', edgeId: e.id, from: a.node, to: b.node, reverse: e.from !== a.node, ...lanes }
+  return { kind: 'unmodeled', from: a.node, to: b.node, ...lanes }
 }
 
 // ── 线性化：路径（回放）与全貌（时序图）共用同一套合并规则 ──
@@ -130,7 +138,7 @@ export function linearize(plan: ScenarioPlan, choices: Choices, mode: 'path' | '
 
 /** 同一条视图边（含方向）、同一节点内部、同一对未建模节点（含方向） */
 const landingKey = (l: VisibleLanding) =>
-  l.kind === 'edge' ? `e:${l.edgeId}:${l.from}` : l.kind === 'internal' ? `i:${l.node}` : `u:${l.from}|${l.to}`
+  (l.kind === 'edge' ? `e:${l.edgeId}:${l.from}` : l.kind === 'internal' ? `i:${l.node}` : `u:${l.from}|${l.to}`) + (l.lanes ? `:${l.lanes.from}>${l.lanes.to}` : '')
 const contextKey = (f: Frame) => f.fragments.map(t => `${t.id}:${t.branch ?? ''}`).join('/')
 
 export interface MergedMessage {
@@ -177,7 +185,9 @@ export function mergeEntries(index: ModelIndex, view: LevelView, entries: readon
   return { items, hidden }
 }
 
-export const messageKind = (m: { frames: Frame[]; at: VisibleLanding }): VisibleMessage['kind'] => (m.at.kind === 'internal' ? 'internal' : m.frames[0].kind)
+/** 内部活动画成激活条；分层总览中同一层不同泳道之间（带 lanes）按帧自己的类型画箭头 */
+export const messageKind = (m: { frames: Frame[]; at: VisibleLanding }): VisibleMessage['kind'] =>
+  m.at.kind === 'internal' && !m.at.lanes ? 'internal' : m.frames[0].kind
 
 /** 回放路径在当前层次的投影 */
 export function projectScenario(index: ModelIndex, view: LevelView, plan: ScenarioPlan, choices: Choices): ScenarioLevelView {
