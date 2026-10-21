@@ -55,6 +55,7 @@ beforeAll(() => {
       'type T = import("./lazy").L',
     ].join('\n'),
   )
+  write(repo, 'src/mixed.ts', "import { Engine, type Mode } from '@demo/core'\nimport { Mode as M, assist } from '@demo/core'\nexport { Engine, assist }\n")
   write(repo, 'src/lib/x.ts', "export const x = 1\nexport { u } from '@demo/util'\n")
   write(repo, 'src/side.ts', '')
   write(repo, 'src/lazy.ts', 'export type L = 1\n')
@@ -101,7 +102,24 @@ describe('K1 提取导入', () => {
 
   it('Vue 取 <script> 块，行号按文件计', () => {
     const imps = parseVueImports('src/View.vue', fs.readFileSync(path.join(repo, 'src/View.vue'), 'utf8'))
-    expect(imps).toEqual([{ spec: './lib/x', line: 3, kind: 'value', names: ['x'] }])
+    expect(imps).toEqual([{ spec: './lib/x', line: 3, kind: 'value', names: ['x'], types: [] }])
+  })
+
+  it('K1a：类型与值按名字区分——写成只引类型的名字记入 types；整条 import type 的名字都是类型', () => {
+    const imps = parseImports('a.ts', "import { a, type B } from './x'\nimport type { C } from './y'\nexport { d, type E } from './z'")
+    expect(imps.map(i => `${i.spec}:${i.kind}:${i.names.join(',')}:${i.types.join(',')}`)).toEqual(['./x:value:a,B:B', './y:type:C:C', './z:value:d,E:E'])
+  })
+
+  it('K1a：一个目标只承接类型名时为 type——写成只引类型，或声明为 interface / type 别名', () => {
+    const code = readCodeDeps(repo, files, PACKAGES)
+    const mixed = code.deps.filter(d => d.from === 'src/mixed.ts').map(d => `${d.line}:${d.to}:${d.kind}`)
+    expect(mixed).toEqual([
+      // Engine 是类（值），与只引类型的 Mode 落在同一文件：value
+      '1:packages/core/src/engine.ts:value',
+      // Mode 没写 type，但声明是 type 别名：engine.ts 只承接类型名；assist 落在 helper.ts：value
+      '2:packages/core/src/engine.ts:type',
+      '2:packages/core/src/helper.ts:value',
+    ])
   })
 })
 

@@ -33,10 +33,10 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 |---|---|---|
 | `readCodeDeps(root, files, packages)` | 对清单中的脚本文件逐个解析（Vue 取 `<script>` 块），收集导入语句；说明符解析与再导出穿透见下；按绝对路径的修改时间与大小缓存每个文件的解析结果 | K1–K3 |
 | `readPathAliases(root, files)` · `createResolver(root, files, packages)` | 读出清单中各 `tsconfig*.json` 的 `paths`，交给模型层的 `specResolver`（[source.md §3](source.md)）解析；解析不到返回 `null`（外部依赖） | K2 |
-| `importTargets(via, names, exportsOf)` · `resolveImport(…, from, spec, names?)` | 一条导入的目标：命名导入沿再导出链追到声明文件（复用导出解析的 `exportsResolver`，最多 5 层）；其余以经由文件为目标；`resolveImport` 供写前判定按说明符解析 | K3 |
+| `importTargetKinds(imp, via, exportsOf)` · `importTargets(via, names, exportsOf)` · `resolveImport(…, from, spec, names?)` | 一条导入的目标与种类：命名导入沿再导出链追到声明文件（复用导出解析的 `exportsResolver`，最多 5 层），每个名字按写法（`type X`）或声明（`interface` / `type`）判为类型，只承接类型名的目标为 `type`；其余以经由文件为目标、取整条语句的种类；`importTargets` 只取目标，`resolveImport` 供写前判定按说明符解析 | K1a、K3 |
 
 - 路径补全与包入口只有一套，在模型层（`completePath`、`packageEntry`，K2）：入口文件（G10）、导出解析（G11）与这里共用，模块入口与依赖的经由文件口径一致。
-- 一个文件的解析结果：`{ line, spec, kind, names | '*' | 'default' | null }[]`，与文件内容一起缓存；目标解析每次按当前清单做（清单变了结果跟着变）。
+- 一个文件的解析结果：`{ line, spec, kind, names, types }[]`（`types` 为写成只引类型的名字），与文件内容一起缓存；目标解析每次按当前清单做（清单变了结果跟着变）。
 - 性能（实测）：h5player 1657 个脚本文件首次提取 1.7 秒、缓存命中 0.2 秒；本项目约 170 个文件 0.16 秒。之后只重解析变化的文件。
 
 ## 3. 治理存储（接入层，`vite/governanceStore.ts`）
@@ -55,8 +55,8 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 | 函数 | 做什么 | 规则 |
 |---|---|---|
 | `liftDeps(index, own, deps)` | 文件依赖两端取归属模块（冲突时全部），去掉同模块与祖先后代，按 `A->B` 合并为 `ModuleDep`；返回 `{ moduleDeps, skipped }` | K4 |
-| `confirmRelations(index, moduleDeps)` | 每条关系：端点有参与者或目标态 → `skipped`；有 `from` 子树 → `to` 子树的模块依赖（`dataflow` 两向）→ `confirmed`，带依据的模块依赖键；否则 `unconfirmed` | K5 |
-| `undescribedDeps(index, moduleDeps)` | 没有关系覆盖的模块依赖（端点相同或互为祖先后代、方向一致，`dataflow` 不论方向） | K7 |
+| `hostOf(index, direct, id)` · `confirmRelations(index, moduleDeps, direct)` | 宿主：自身或最近的、有直接归属文件的祖先。每条关系：端点有参与者或目标态 → `skipped`；两端宿主相同 → `skipped` 并带 `host`（概念拆分，同文件，面板说明）；有 `from` 子树 → `to` 子树的模块依赖（`dataflow` 两向）→ `confirmed`，带依据的模块依赖键；否则 `unconfirmed` | K5、K5a |
+| `undescribedDeps(index, moduleDeps)` | 含 `value` 文件依赖、且没有关系覆盖的模块依赖（端点相同或互为祖先后代、方向一致，`dataflow` 不论方向）；只引类型的不算 | K7 |
 | `judge(index, rules, entryOf, dep)` | 一条（依赖方模块，被依赖方模块，经由文件及其归属）对全部规则的判定：层规则、白名单、访问面，返回命中的 `{ kind, at, reason }` 与是否有规则约束；`allow` 匹配的标为已豁免 | U2–U5 |
 | `evaluateRules(index, own, moduleDeps, entryOf)` | 对每条模块依赖的每条文件证据 `judge`，按 `<种类>:<规则所在>:<A>-><B>` 合并为 `Violation` | U6 |
 | `cycles(nodes, edges)` | Tarjan 强连通分量，返回规模 ≥ 2 的分量，成员按名称排序 | Y1 |

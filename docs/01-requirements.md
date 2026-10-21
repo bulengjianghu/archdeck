@@ -170,8 +170,8 @@ h5player 的架构信息分散在几处：
 
 | 编号 | 需求 | 规则 | 优先级 | 状态 |
 |---|---|---|---|---|
-| GV-1 | 从源码提取文件依赖（穿透 barrel 再导出），按归属提升为模块依赖；外部依赖按包名统计 | K1–K4 | P0 | 已实现 |
-| GV-2 | 描述与代码比对：关系已证实 / 未证实，模块依赖未描述；编译期关系未证实报警告 | K5–K8 | P0 | 已实现 |
+| GV-1 | 从源码提取文件依赖（穿透 barrel 再导出，按每个导入的名字区分类型与值），按归属提升为模块依赖；外部依赖按包名统计 | K1–K4 | P0 | 已实现 |
+| GV-2 | 描述与代码比对：关系已证实 / 未证实（同一组文件内的概念拆分不判定），模块依赖未描述（只引类型的不算）；编译期关系未证实报警告 | K5–K8 | P0 | 已实现 |
 | GV-3 | 架构规则 `rules.yaml`：层规则（`mayDependOn` 默认拒绝）、模块依赖白名单、访问面、带理由的例外；违规带文件证据 | U1–U6 | P0 | 已实现 |
 | GV-4 | 模块环与文件环、环度；可声明容忍的环 | Y1–Y3 | P0 | 已实现 |
 | GV-5 | 棘轮门禁：`npm run arch -- baseline` 生成基线；`lint:model` 对基线外的新增违规、环度上升报错并非零退出，可接入 CI | U7、U8 | P0 | 已实现 |
@@ -305,7 +305,7 @@ h5player 的架构信息分散在几处：
 2. `npm run arch -- check src/model/load.ts vue`（外部包，`unconstrained`）与 `check src/model/load.ts ../state/inject`：后者 `denied`，理由为模型层不可依赖视图状态层；`check src/state/useDeskState.ts @/model --names loadModel` 为 `allowed`，附目标模块的职责与接口。
 3. h5player 中 `@h5player/framework` 的命名导入，目标落在声明该名称的 framework 内部文件，经由为 `packages/framework/src/index.ts`。
 4. 在 `rules.yaml` 给某模块写 `mayDependOn` 漏掉它真实依赖的模块：`lint:model` 报违规（无基线时为提醒）；`npm run arch -- baseline` 后再跑为 0 个错误；再出现一条基线之外的越界依赖（新写的代码，或收紧了规则），`lint:model` 报 `rule.new` 并以 1 退出。
-5. 打开 h5p-arch-desk，开启「代码事实」：根层分层总览上层间边标 ✓；有未描述依赖的层之间出现灰色虚线叠加线，单击后面板列出模块依赖与文件证据，地址带 `sel=d:`。
+5. 打开 h5p-arch-desk，开启「代码事实」：根层分层总览上层间边标 ✓；描述漏掉关系时（验收中去掉 h5p-arch-desk 的一条关系；浏览器端用源码在本机的 h5player），有未描述依赖的层之间出现灰色虚线叠加线，单击后面板列出模块依赖与文件证据，地址带 `sel=d:`；Layout 入口文件内概念子模块之间的关系，面板标「不判定：概念拆分，同文件」（K5a）。
 6. 根层面板「架构治理」显示文件依赖数、模块依赖数、关系已证实 / 未证实、未描述依赖数、违规与环度对比基线。
 7. 调用 `check_dependency` 与 `rescan` 后，`governance/ledger.jsonl` 各多一行，`prevention_report` 的次数随之增加（MCP 外壳只做参数与格式，验收直接驱动查询核心）。
 

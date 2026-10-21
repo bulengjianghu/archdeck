@@ -72,6 +72,8 @@ export type ConfirmStatus = 'confirmed' | 'unconfirmed' | 'skipped'
 export interface Confirmation {
   status: ConfirmStatus
   deps: string[]
+  /** 两端宿主相同（概念拆分，同文件）而不判定时，为共同的宿主模块 */
+  host?: string
 }
 
 /** 一条规则命中（U2–U4） */

@@ -77,7 +77,7 @@ describe('§6.10 架构治理验收', () => {
     fs.rmSync(path.join(tmp, 'h5p-arch-desk', 'governance', 'baseline.json'))
   })
 
-  it('5–6. 页面：开启「代码事实」，根层关系边有证实、叠加线可选中；根层面板显示架构治理', async () => {
+  it('5–6. 页面：开启「代码事实」，根层关系边有证实；描述漏掉关系时出现叠加线、可选中；根层面板显示架构治理', async () => {
     const tree = () => readSourceTree(MODEL, 'h5p-arch-desk', ROOT) as SourcePayload
     const source: SourceFetcher = {
       tree: async () => tree(),
@@ -90,8 +90,12 @@ describe('§6.10 架构治理验收', () => {
     }
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/p/:project', component: { render: () => null } }] })
     await router.push('/p/h5p-arch-desk')
+    // 本项目的描述已无未描述依赖：去掉「呈现层 → 共享类型的标签常量」这条关系，造出跨层的未描述依赖
     const p = readProject(MODEL, 'h5p-arch-desk', ROOT)!
-    const desk = createDeskState(async () => p, { project: 'h5p-arch-desk', source })
+    const dropped = 'rel.ad.present-labels'
+    const files = p.files.map(f => ({ ...f, text: f.text.replace(new RegExp(`^.*id: ${dropped},.*\\n`, 'm'), '') }))
+    expect(files.some((f, i) => f.text !== p.files[i].text)).toBe(true)
+    const desk = createDeskState(async () => ({ ...p, files }), { project: 'h5p-arch-desk', source })
     desk.attachRouter(router)
     await desk.init()
     for (let i = 0; i < 3; i++) await flushPromises()
@@ -110,6 +114,12 @@ describe('§6.10 架构治理验收', () => {
     expect(router.currentRoute.value.query.sel).toBe(`d:${o.fromModule}->${o.toModule}`)
     await nextTick()
     expect(panel.text()).toContain('模块依赖')
+
+    // K5a：Layout 入口文件内的概念子模块之间的关系不判定，面板说明原因
+    desk.select({ kind: 'relation', id: 'rel.ad.graph-boundaries' })
+    await flushPromises()
+    await nextTick()
+    expect(panel.text()).toContain('不判定：概念拆分，同文件')
   })
 
   it('7. 写前判定与重新扫描写拦截记录，报告随之计数', () => {

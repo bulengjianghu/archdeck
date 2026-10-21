@@ -2,7 +2,7 @@
  * 依赖提取（Node 侧，供 Vite 插件、命令行校验与 agent 接口共用，docs/architecture/governance.md §2）。
  * 只读懂导入语法、把说明符解析到清单中的文件，不判断归属与规则（在模型层）。
  *
- * K1：TypeScript 语法解析（不做类型检查），Vue 取 <script> 块；按修改时间与大小缓存。
+ * K1：TypeScript 语法解析（不做类型检查），Vue 取 <script> 块；按修改时间与大小缓存；类型与值按每个导入的名字区分。
  * K2：相对路径补全扩展名；裸说明符按 tsconfig 的 paths 与工作区包名解析，其余为外部依赖。
  * K3：命名导入沿再导出链追到声明文件；目标 = 声明文件，经由 = 直接导入的文件。
  */
@@ -16,12 +16,16 @@ import { exportsResolver } from './readSource'
 const SCRIPT = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|vue)$/i
 const DECLARATION = /\.d\.(m|c)?ts$/i
 
-/** 一条导入语句的语法摘要；names 为空数组表示不按名称穿透（默认、命名空间、副作用、export *、动态导入） */
+/**
+ * 一条导入语句的语法摘要；names 为空数组表示不按名称穿透（默认、命名空间、副作用、export *、动态导入）。
+ * kind 为整条语句的种类（全部为类型时 type）；types 为写成只引类型的名字（`type X` 或整条 `import type`）。
+ */
 export interface ParsedImport {
   spec: string
   line: number
   kind: DepKind
   names: string[]
+  types: string[]
 }
 
 const parseCache = new Map<string, { mtimeMs: number; size: number; imports: ParsedImport[] }>()
@@ -47,17 +51,25 @@ export function parseImports(file: string, text: string, kind = scriptKind(file)
       const typeOnly = !!clause && (clause.isTypeOnly || (!clause.name && !!named && named.length > 0 && named.every(e => e.isTypeOnly)))
       // 只有命名导入时按名称穿透；带默认或命名空间导入时以经由文件为目标
       const names = clause && !clause.name && named ? named.map(e => (e.propertyName ?? e.name).text) : []
-      out.push({ spec, line: lineOf(st), kind: typeOnly ? 'type' : 'value', names })
+      const types = clause && !clause.name && named ? named.filter(e => typeOnly || e.isTypeOnly).map(e => (e.propertyName ?? e.name).text) : []
+      out.push({ spec, line: lineOf(st), kind: typeOnly ? 'type' : 'value', names, types })
     } else if (ts.isExportDeclaration(st)) {
       const spec = literal(st.moduleSpecifier)
       if (!spec) continue
       const clause = st.exportClause
       const named = clause && ts.isNamedExports(clause) ? clause.elements : undefined
       const typeOnly = st.isTypeOnly || (!!named && named.length > 0 && named.every(e => e.isTypeOnly))
-      out.push({ spec, line: lineOf(st), kind: typeOnly ? 'type' : 'value', names: named ? named.map(e => (e.propertyName ?? e.name).text) : [] })
+      const name = (e: ts.ExportSpecifier) => (e.propertyName ?? e.name).text
+      out.push({
+        spec,
+        line: lineOf(st),
+        kind: typeOnly ? 'type' : 'value',
+        names: named?.map(name) ?? [],
+        types: named?.filter(e => typeOnly || e.isTypeOnly).map(name) ?? [],
+      })
     } else if (ts.isImportEqualsDeclaration(st) && ts.isExternalModuleReference(st.moduleReference)) {
       const spec = literal(st.moduleReference.expression)
-      if (spec) out.push({ spec, line: lineOf(st), kind: st.isTypeOnly ? 'type' : 'value', names: [] })
+      if (spec) out.push({ spec, line: lineOf(st), kind: st.isTypeOnly ? 'type' : 'value', names: [], types: [] })
     }
   }
   // 动态导入与 require：参数为字符串字面量
@@ -66,10 +78,10 @@ export function parseImports(file: string, text: string, kind = scriptKind(file)
       const spec = literal(n.arguments[0])
       const isImport = n.expression.kind === ts.SyntaxKind.ImportKeyword
       const isRequire = ts.isIdentifier(n.expression) && n.expression.text === 'require'
-      if (spec && (isImport || isRequire)) out.push({ spec, line: lineOf(n), kind: 'value', names: [] })
+      if (spec && (isImport || isRequire)) out.push({ spec, line: lineOf(n), kind: 'value', names: [], types: [] })
     } else if (ts.isImportTypeNode(n) && ts.isLiteralTypeNode(n.argument)) {
       const spec = literal(n.argument.literal)
-      if (spec) out.push({ spec, line: lineOf(n), kind: 'type', names: [] })
+      if (spec) out.push({ spec, line: lineOf(n), kind: 'type', names: [], types: [] })
     }
     ts.forEachChild(n, visit)
   }
@@ -140,13 +152,35 @@ export function createResolver(root: string, files: readonly string[], packages:
   return { resolve: specResolver(files, packages, readPathAliases(root, files)) }
 }
 
+type ExportsOf = (file: string) => { name: string; kind?: string; from?: string }[]
+
 /** K3：一条导入的目标：命名导入按名称追到声明文件，其余为经由文件 */
-export function importTargets(via: string, names: readonly string[], exportsOf: (file: string) => { name: string; from?: string }[]): string[] {
-  if (!names.length) return [via]
+export function importTargets(via: string, names: readonly string[], exportsOf: ExportsOf): string[] {
+  return importTargetKinds({ kind: 'value', names, types: [] }, via, exportsOf).map(t => t.to)
+}
+
+/** 声明为类型的导出（K1）：interface 与 type 别名 */
+const TYPE_DECL = new Set(['interface', 'type'])
+
+/**
+ * K1、K3：一条导入的目标与种类。命名导入按名称追到声明文件；一个名字是类型，当它写成只引类型或声明为 interface / type；
+ * 一个目标只承接类型名时为 type，否则为 value。不按名称穿透的导入以经由文件为目标、取整条语句的种类。
+ */
+export function importTargetKinds(
+  imp: { kind: DepKind; names: readonly string[]; types: readonly string[] },
+  via: string,
+  exportsOf: ExportsOf,
+): { to: string; kind: DepKind }[] {
+  if (!imp.names.length) return [{ to: via, kind: imp.kind }]
   const syms = exportsOf(via)
-  const out = new Set<string>()
-  for (const n of names) out.add(syms.find(s => s.name === n)?.from ?? via)
-  return [...out]
+  const out = new Map<string, DepKind>()
+  for (const n of imp.names) {
+    const sym = syms.find(s => s.name === n)
+    const to = sym?.from ?? via
+    const kind: DepKind = imp.kind === 'type' || imp.types.includes(n) || TYPE_DECL.has(sym?.kind ?? '') ? 'type' : 'value'
+    out.set(to, out.get(to) === 'value' ? 'value' : kind)
+  }
+  return [...out].map(([to, kind]) => ({ to, kind }))
 }
 
 /** K1–K3：全部文件依赖与外部依赖 */
@@ -166,7 +200,7 @@ export function readCodeDeps(root: string, files: readonly string[], packages: R
         external[key] = (external[key] ?? 0) + 1
         continue
       }
-      for (const to of importTargets(via, imp.names, exportsOf)) if (to !== from) deps.push({ from, to, via, kind: imp.kind, line: imp.line })
+      for (const t of importTargetKinds(imp, via, exportsOf)) if (t.to !== from) deps.push({ from, to: t.to, via, kind: t.kind, line: imp.line })
     }
   }
   return { deps, external, parsed }

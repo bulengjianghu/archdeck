@@ -13,6 +13,7 @@ import {
   entryResolver,
   gateIssues,
   governanceReport,
+  hostOf,
   levelFacts,
   liftDeps,
   loadModel,
@@ -157,6 +158,29 @@ describe('K5、K6 关系的证实', () => {
     expect(confirmRelations(index, moduleDeps).get('rel.2')!.status).toBe('confirmed')
   })
 
+  it('K5a：宿主为自身或最近的有直接归属文件的祖先；两端宿主相同的关系不判定，带宿主', () => {
+    const layers = LAYERS.replace(
+      '{ id: core.impl, name: Impl, responsibility: 实现, codeRefs: [src/core/impl/**] }',
+      '{ id: core.impl, name: Impl, responsibility: 实现, codeRefs: [src/core/impl/**], children: [{ id: core.impl.a, name: A, responsibility: 甲 }, { id: core.impl.b, name: B, responsibility: 乙 }] }',
+    ).replace(
+      'relations:\n',
+      'relations:\n  - { id: rel.c1, from: core.impl.a, to: core.impl.b, type: calls }\n  - { id: rel.c2, from: core.impl.a, to: ui.view, type: calls }\n  - { id: rel.c3, from: core.impl.b, to: core.api, type: calls }\n',
+    )
+    const { index } = loadModel([files()[0], { path: 'modules/layers.yaml', text: layers }])
+    const own = assignFiles(index, SRC, [])
+    expect(hostOf(index, own.direct, 'core.impl.a')).toBe('core.impl')
+    expect(hostOf(index, own.direct, 'core.api')).toBe('core.api')
+    expect(hostOf(index, own.direct, 'core')).toBeUndefined()
+    const conf = confirmRelations(index, liftDeps(index, own, DEPS).moduleDeps, own.direct)
+    // 同一宿主内的概念拆分：不判定
+    expect(conf.get('rel.c1')).toEqual({ status: 'skipped', deps: [], host: 'core.impl' })
+    // 宿主不同：照常判定，依赖落在宿主（祖先）上也算证实
+    expect(conf.get('rel.c2')!.status).toBe('confirmed')
+    expect(conf.get('rel.c3')!.status).toBe('unconfirmed')
+    // 不传归属时没有宿主，照常判定
+    expect(confirmRelations(index, liftDeps(index, own, DEPS).moduleDeps).get('rel.c1')!.status).toBe('unconfirmed')
+  })
+
   it('只有编译期关系未证实报 fact.unconfirmed', () => {
     const { report } = setup()
     const unconfirmed = report.issues.filter(i => i.code === 'fact.unconfirmed')
@@ -173,6 +197,15 @@ describe('K7 未描述依赖', () => {
         .map(d => d.key)
         .sort(),
     ).toEqual(['core.impl->ui.view', 'core.util->ui.view', 'ui.view->core.util'])
+  })
+
+  it('只引用类型的模块依赖不算；有一条值依赖就算', () => {
+    const { index, own } = setup()
+    const type = (from: string, to: string): FileDep => ({ ...dep(from, to), kind: 'type' })
+    const onlyTypes = liftDeps(index, own, [type('src/ui/view/a.ts', 'src/core/impl/i.ts')]).moduleDeps
+    expect(undescribedDeps(index, onlyTypes)).toEqual([])
+    const mixed = liftDeps(index, own, [type('src/ui/view/a.ts', 'src/core/impl/i.ts'), dep('src/ui/view/a.ts', 'src/core/impl/i.ts', undefined, 2)]).moduleDeps
+    expect(undescribedDeps(index, mixed).map(d => d.key)).toEqual(['ui.view->core.impl'])
   })
 })
 

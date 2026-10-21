@@ -89,9 +89,9 @@ export function createFacts({ state, index, view, files, sync, design }: FactsIn
       : null
 
   /** K5：关系的证实与依据的模块依赖 */
-  const relationFact = (id: string): { status: 'confirmed' | 'unconfirmed' | 'skipped'; deps: ModuleDep[] } | null => {
+  const relationFact = (id: string): { status: 'confirmed' | 'unconfirmed' | 'skipped'; deps: ModuleDep[]; host?: string } | null => {
     const c = report.value?.relations.get(id)
-    return c ? { status: c.status, deps: c.deps.map(k => report.value!.moduleDeps.get(k)!).filter(Boolean) } : null
+    return c ? { status: c.status, deps: c.deps.map(k => report.value!.moduleDeps.get(k)!).filter(Boolean), host: c.host } : null
   }
 
   return { status, error, report, level, gateIssues, ledger, entryOf, selectedDep, moduleDetail, relationFact }

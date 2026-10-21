@@ -39,7 +39,7 @@ export function governanceReport(
 ): GovernanceReport {
   const entryOf = entryResolver(index, own, tree)
   const { moduleDeps, skipped } = liftDeps(index, own, code.deps)
-  const relations = confirmRelations(index, moduleDeps)
+  const relations = confirmRelations(index, moduleDeps, own.direct)
   const undescribed = undescribedDeps(index, moduleDeps)
   const violations = withBaseline(evaluateRules(index, own, moduleDeps.values(), entryOf), baseline)
   const mc = moduleCycles(index, moduleDeps.values())

@@ -206,6 +206,7 @@ scenario:
 源码根目录 = 工作区根目录（默认 `work4/`）+ `system.source.repo`（G1），如 `repo: h5player` → `work4/h5player`，`repo: h5player-demo/packages/h5p-arch-desk` → 本包。`codeRefs` 与 `entry` 都相对这个目录书写。
 
 - **每个源码文件都应恰好归属一个模块**：子模块写自己的文件，父模块可以写覆盖整个目录的 glob，祖先与后代同时匹配时归最深的模块（G5）；两个互不包含的模块不要写同一个文件（G6）。
+- **概念子模块**：一个文件内有清晰的子结构、值得在图上分开讲时（如 Layout 入口文件内的三种排布），子模块不写 `codeRefs`，挂在拥有该文件的模块下面；它与同一宿主内其他部分的关系照常写，`lint:model` 标「概念拆分，同文件」、不判定（K5a），不要为了能被证实而改写端点。
 - **未归属的文件**：真正属于某个模块的，补到它的 `codeRefs`；不属于任何模块的（文档、测试、构建配置、示例），写进 `source-ignore.yaml`：
 
 ```yaml
@@ -258,7 +259,7 @@ npm run lint:model
 
 - 必须 0 个错误；提醒逐条处理：缺职责要补；引用其他区域尚未定义的接口 / 数据结构时可暂留；源码归属警告按 §3.7 处理。
 - 按代码重新生成当前版本后，更新 `system.yaml` 的 `source.commit` 与 `source.generatedAt`。
-- 源码在本地时 `lint:model` 一并检查代码事实与架构规则（K、U、Y）：基线之外的新增违规（`rule.new`）、环度上升（`cycle.grew`）是错误，要么修代码，要么由架构师裁决后改规则；`fact.unconfirmed` 提醒说明描述里的编译期关系在代码里找不到，按代码修正描述。
+- 源码在本地时 `lint:model` 一并检查代码事实与架构规则（K、U、Y）：基线之外的新增违规（`rule.new`）、环度上升（`cycle.grew`）是错误，要么修代码，要么由架构师裁决后改规则；`fact.unconfirmed` 提醒说明描述里的编译期关系在代码里找不到，按代码修正描述；未描述依赖只计有值导入的（K7），只引类型的不必补关系，名称查询、标签常量这类到处用的值依赖写在能表达清楚的最高层（如 `present → model.pipeline.indexer`）。
 - 基线由人生成并提交：
 
 ```bash
