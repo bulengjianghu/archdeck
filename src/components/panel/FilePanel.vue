@@ -14,16 +14,16 @@ const props = defineProps<{ path: string }>()
 const desk = useDesk()
 const openPreview = useOpenPreview()
 const idx = computed(() => desk.index.value!)
-const local = computed(() => (desk.source.value?.status === 'local' ? desk.source.value : null))
+const local = computed(() => (desk.files.payload.value?.status === 'local' ? desk.files.payload.value : null))
 const exists = computed(() => !!local.value?.files.includes(props.path))
-const owners = computed(() => desk.ownership.value?.owners.get(props.path) ?? [])
-const ignored = computed(() => !!desk.ownership.value?.ignored.has(props.path))
-const hits = computed(() => desk.fileHits.value)
-const entries = computed(() => desk.entryModulesOf(props.path))
+const owners = computed(() => desk.files.ownership.value?.owners.get(props.path) ?? [])
+const ignored = computed(() => !!desk.files.ownership.value?.ignored.has(props.path))
+const hits = computed(() => desk.files.hits.value)
+const entries = computed(() => desk.files.entryModulesOf(props.path))
 const script = computed(() => /\.(m|c)?(t|j)sx?$/i.test(props.path))
 const name = computed(() => props.path.split('/').pop())
-const lineCount = computed(() => desk.lines.value[props.path])
-const long = computed(() => isLong(lineCount.value, desk.maxLines.value))
+const lineCount = computed(() => desk.files.lines.value[props.path])
+const long = computed(() => isLong(lineCount.value, desk.files.maxLines.value))
 const levelName = computed(() => moduleName(idx.value, desk.levelId.value))
 const pathOf = (id: string) => (idx.value.pathOf.get(id) ?? []).slice(1).map(m => moduleName(idx.value, m)).join(' / ')
 </script>
@@ -41,13 +41,13 @@ const pathOf = (id: string) => (idx.value.pathOf.get(id) ?? []).slice(1).map(m =
         <span v-if="owners.length > 1" class="badge warn">归属冲突</span>
         <span v-else-if="exists && !owners.length && !ignored" class="badge warn">未归属</span>
         <span v-if="ignored" class="badge">已忽略</span>
-        <span v-if="lineCount !== undefined" class="badge" :class="{ bad: long }">{{ lineCount }} 行{{ long ? `（超过 ${desk.maxLines.value}）` : '' }}</span>
+        <span v-if="lineCount !== undefined" class="badge" :class="{ bad: long }">{{ lineCount }} 行{{ long ? `（超过 ${desk.files.maxLines.value}）` : '' }}</span>
       </div>
     </header>
 
     <Section v-if="!local" title="源码">
       <p class="muted">
-        {{ desk.source.value?.status === 'absent' ? `源码不在本地（${desk.source.value.tried ?? desk.source.value.reason}）` : desk.source.value ? '构建产物不含源码' : '正在读取源码清单…' }}
+        {{ desk.files.payload.value?.status === 'absent' ? `源码不在本地（${desk.files.payload.value.tried ?? desk.files.payload.value.reason}）` : desk.files.payload.value ? '构建产物不含源码' : '正在读取源码清单…' }}
       </p>
     </Section>
     <Section v-else-if="!exists" title="源码"><p class="muted">文件不存在：不在源码文件清单中（可能已删除或改名）</p></Section>

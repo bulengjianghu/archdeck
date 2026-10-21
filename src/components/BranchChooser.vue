@@ -5,7 +5,7 @@ import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 
 const desk = useDesk()
-const point = computed(() => desk.branchPoint.value)
+const point = computed(() => desk.run.branchPoint.value)
 function firstLabel(k: number): string {
   const f = point.value?.options[k].first
   const idx = desk.index.value

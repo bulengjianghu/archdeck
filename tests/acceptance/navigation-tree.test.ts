@@ -79,10 +79,10 @@ describe('§6.3 导航树与分屏验收', () => {
     await flushPromises()
     const cur = wrapper.findAll('.frame.selected')
     expect(cur.length).toBeGreaterThan(0)
-    expect(Number(cur[0].find('.seq').text())).toBe(desk.currentIndex.value! + 1)
-    expect(desk.walked.value).toBe(3)
+    expect(Number(cur[0].find('.seq').text())).toBe(desk.run.currentIndex.value! + 1)
+    expect(desk.run.walked.value).toBe(3)
     // 单击「无需改图」分支下的第一步
-    const point = desk.plan.value!.points.values().next().value!
+    const point = desk.run.plan.value!.points.values().next().value!
     const target = point.options[1].first!
     const row = wrapper.findAll('.frame').filter(f => f.classes().includes('unreached') || f.classes().includes('unchosen'))
     expect(row.length).toBeGreaterThan(0)
@@ -97,7 +97,7 @@ describe('§6.3 导航树与分屏验收', () => {
     desk.openScenario('sc.open-and-play')
     // 根层（分层总览）找一条合并了多帧的可见消息
     let guard = 0
-    while (desk.currentIndex.value === null || desk.scenarioView.value!.messages[desk.currentIndex.value].frameIds.length < 2) {
+    while (desk.run.currentIndex.value === null || desk.run.scenarioView.value!.messages[desk.run.currentIndex.value].frameIds.length < 2) {
       desk.next()
       if (++guard > 20) throw new Error('没有合并的可见消息')
     }
@@ -122,7 +122,7 @@ describe('§6.3 导航树与分屏验收', () => {
     expect(row('state.desk')!.classes()).toContain('part')
     await row('state.desk')!.trigger('click')
     expect(desk.selected.value).toEqual({ kind: 'module', id: 'state.desk' })
-    expect(desk.selectedParticipation.value!.frames.length).toBeGreaterThan(0)
+    expect(desk.run.participation.value!.frames.length).toBeGreaterThan(0)
   })
 
   it('5. 分屏默认左右；切换为上下后按项目记在本地，刷新仍保持；收起状态随之保留', () => {

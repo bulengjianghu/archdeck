@@ -43,20 +43,20 @@ describe('§6.8 统一选中验收', () => {
   it('2、3. 选中步骤时只有它为选中、配对返回只作配对；选中模块时突出泳道、不突出消息，sel 与 step 并存，「下一步」从进度处继续', async () => {
     const { desk, query } = await open('/p/h5player?level=infra.framework&sc=sc.command&alt=1')
     desk.seek('sc.command#hook')
-    const sv = desk.scenarioView.value!
-    expect(desk.emphasis.value).toMatchObject({ selected: sv.messageOf.get('sc.command#hook') })
-    expect(desk.emphasis.value!.paired.size).toBe(1)
-    expect(desk.emphasis.value!.lanes.size).toBe(0)
+    const sv = desk.run.scenarioView.value!
+    expect(desk.run.emphasis.value).toMatchObject({ selected: sv.messageOf.get('sc.command#hook') })
+    expect(desk.run.emphasis.value!.paired.size).toBe(1)
+    expect(desk.run.emphasis.value!.lanes.size).toBe(0)
     const at = desk.playback.value!.frameId
     desk.select({ kind: 'module', id: 'infra.framework.state-machine' })
-    expect(desk.emphasis.value).toMatchObject({ selected: null })
-    expect(desk.emphasis.value!.paired.size).toBe(0)
-    expect([...desk.emphasis.value!.lanes]).toEqual(['infra.framework.state-machine'])
+    expect(desk.run.emphasis.value).toMatchObject({ selected: null })
+    expect(desk.run.emphasis.value!.paired.size).toBe(0)
+    expect([...desk.run.emphasis.value!.lanes]).toEqual(['infra.framework.state-machine'])
     expect(desk.playback.value!.frameId).toBe(at)
     expect(await query()).toMatchObject({ sel: 'm:infra.framework.state-machine', step: at })
     desk.next()
     expect(desk.selected.value!.kind).toBe('step')
-    expect(desk.currentIndex.value).toBe(sv.messageOf.get(at!)! + 1)
+    expect(desk.run.currentIndex.value).toBe(sv.messageOf.get(at!)! + 1)
   })
 
   it('4. 下钻选中被下钻的模块（当前层次本身，不突出）；返回上级在父层选中退出来的模块，原来的步骤被取消，其泳道突出', async () => {
@@ -65,15 +65,15 @@ describe('§6.8 统一选中验收', () => {
     const at = desk.playback.value!.frameId
     desk.drillInto('infra')
     expect(desk.selected.value).toEqual({ kind: 'module', id: 'infra' })
-    expect(desk.emphasis.value).toEqual({ selected: null, paired: new Set(), lanes: new Set() })
+    expect(desk.run.emphasis.value).toEqual({ selected: null, paired: new Set(), lanes: new Set() })
     desk.next()
     expect(desk.selected.value!.kind).toBe('step')
     desk.goUp()
     expect(desk.selected.value).toEqual({ kind: 'module', id: 'infra' })
     expect(desk.playback.value!.frameId).not.toBe(at)
-    const lanes = lanesOf(desk.index.value!, desk.sequence.value!, desk.levelId.value, 'infra')
+    const lanes = lanesOf(desk.index.value!, desk.run.sequence.value!, desk.levelId.value, 'infra')
     expect(lanes.size).toBeGreaterThan(0)
-    expect(desk.emphasis.value!.lanes).toEqual(lanes)
+    expect(desk.run.emphasis.value!.lanes).toEqual(lanes)
   })
 
   it('5. 选中模块后 Esc 回到选中进度所在的步骤；再按 Esc 返回上级', async () => {
@@ -94,14 +94,14 @@ describe('§6.8 统一选中验收', () => {
     const idx = desk.index.value!
     const lanesOfEnds = (id: string) => {
       const r = idx.relations.get(id)!
-      return new Set([r.from, r.to].flatMap(e => [...lanesOf(idx, desk.sequence.value!, desk.levelId.value, e)]))
+      return new Set([r.from, r.to].flatMap(e => [...lanesOf(idx, desk.run.sequence.value!, desk.levelId.value, e)]))
     }
     // 回放路径上一条两端落在两条不同泳道上的关系
-    const relation = [...desk.plan.value!.frames.values()].map(f => f.relation).find(id => !!id && lanesOfEnds(id).size === 2)!
+    const relation = [...desk.run.plan.value!.frames.values()].map(f => f.relation).find(id => !!id && lanesOfEnds(id).size === 2)!
     expect(relation).toBeTruthy()
     desk.select({ kind: 'relation', id: relation })
     const expected = lanesOfEnds(relation)
-    expect(desk.emphasis.value!.lanes).toEqual(expected)
-    expect(desk.emphasis.value!.selected).toBeNull()
+    expect(desk.run.emphasis.value!.lanes).toEqual(expected)
+    expect(desk.run.emphasis.value!.selected).toBeNull()
   })
 })

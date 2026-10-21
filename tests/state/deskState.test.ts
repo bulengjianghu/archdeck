@@ -218,19 +218,19 @@ describe('DeskState · 设计版本', () => {
 
   it('载入设计与对比基线，算出差异；可切换对比上一轮', async () => {
     const { desk } = await open('/p/demo/d/next/r2')
-    expect(desk.design.value?.name).toBe('下一期')
-    expect(desk.revision.value?.id).toBe('r2')
-    expect(desk.baseline.value?.label).toBe('当前版本')
-    expect(desk.diff.value?.module.get('infra.new')?.kind).toBe('added')
-    expect(desk.diff.value?.touched.get('infra')).toBe(1)
+    expect(desk.versions.design.value?.name).toBe('下一期')
+    expect(desk.versions.revision.value?.id).toBe('r2')
+    expect(desk.versions.baseline.value?.label).toBe('当前版本')
+    expect(desk.versions.diff.value?.module.get('infra.new')?.kind).toBe('added')
+    expect(desk.versions.diff.value?.touched.get('infra')).toBe(1)
     desk.toggles.compareTo = 'previous'
-    expect(desk.baseline.value?.label).toBe('下一期 · r1')
-    expect(desk.diff.value?.changes).toEqual([])
+    expect(desk.versions.baseline.value?.label).toBe('下一期 · r1')
+    expect(desk.versions.diff.value?.changes).toEqual([])
   })
 
   it('基线提交与当前版本不一致时提示漂移', async () => {
     const { desk } = await open('/p/demo/d/next/r2')
-    expect(desk.baseDrift.value).toBe(true)
+    expect(desk.versions.drift.value).toBe(true)
   })
 
   it('只响应同一版本路由上的变化', async () => {
@@ -269,13 +269,13 @@ describe('DeskState · 运行视角', () => {
     expect(desk.levelId.value).toBe('infra')
     expect(router.currentRoute.value.query).toMatchObject({ level: 'infra', sc: 'sc.play' })
     expect(desk.view.value!.nodes.some(n => n.id === 'boundary:app')).toBe(true)
-    expect(desk.scenarioView.value!.messages.length).toBeGreaterThan(0)
-    expect(desk.sequence.value!.participants[0].kind).toBe('actor')
-    expect(desk.home.value).toBe('sys')
-    expect(desk.frame.value).toBeNull()
+    expect(desk.run.scenarioView.value!.messages.length).toBeGreaterThan(0)
+    expect(desk.run.sequence.value!.participants[0].kind).toBe('actor')
+    expect(desk.run.home.value).toBe('sys')
+    expect(desk.run.frame.value).toBeNull()
     desk.next()
     await settle()
-    expect(desk.frame.value?.id).toBe('sc.play#start')
+    expect(desk.run.frame.value?.id).toBe('sc.play#start')
     expect(router.currentRoute.value.query.step).toBe('sc.play#start')
   })
 
@@ -283,14 +283,14 @@ describe('DeskState · 运行视角', () => {
     const { desk } = await openDesk('/?level=infra&sc=sc.play&step=sc.play%23update&alt=0')
     expect(desk.playback.value).toMatchObject({ scenarioId: 'sc.play', frameId: 'sc.play#update' })
     expect(desk.playback.value!.choices.get('sc.play#3')).toBe(0)
-    expect(desk.currentIndex.value).not.toBeNull()
+    expect(desk.run.currentIndex.value).not.toBeNull()
   })
 
   it('选中对象时派生其在本场景中的参与；退出场景回到结构视角，层次与选中保留', async () => {
     const { desk, router, settle } = await openDesk('/?level=infra&sc=sc.play&step=sc.play%23done&alt=1')
     desk.select({ kind: 'module', id: 'infra.framework' })
     expect(desk.selected.value).toEqual({ kind: 'module', id: 'infra.framework' })
-    expect(desk.selectedParticipation.value!.frames.length).toBeGreaterThan(0)
+    expect(desk.run.participation.value!.frames.length).toBeGreaterThan(0)
     desk.closeScenario()
     await settle()
     expect(desk.perspective.value).toBe('structure')
@@ -300,12 +300,12 @@ describe('DeskState · 运行视角', () => {
 
   it('导航树的派生：步骤大纲（T6）与参与模块（T5）随场景出现，退出后清空', async () => {
     const { desk } = await openDesk('/?sc=sc.play')
-    expect(desk.outline.value.some(n => n.kind === 'group' && n.tag.kind === 'ref')).toBe(true)
-    expect(desk.participants.value.has('infra')).toBe(true)
-    expect(desk.participants.value.has('infra.framework.sm')).toBe(true)
+    expect(desk.run.outline.value.some(n => n.kind === 'group' && n.tag.kind === 'ref')).toBe(true)
+    expect(desk.run.participants.value.has('infra')).toBe(true)
+    expect(desk.run.participants.value.has('infra.framework.sm')).toBe(true)
     desk.closeScenario()
-    expect(desk.outline.value).toEqual([])
-    expect(desk.participants.value.size).toBe(0)
+    expect(desk.run.outline.value).toEqual([])
+    expect(desk.run.participants.value.size).toBe(0)
   })
 })
 
@@ -315,11 +315,11 @@ describe('ADR-0009：悬停与选中不引起重新投影', () => {
     desk.openScenario('sc.play')
     desk.next()
     const view = desk.view.value
-    const seq = desk.sequence.value
+    const seq = desk.run.sequence.value
     desk.setHover('infra')
     desk.select({ kind: 'module', id: 'infra' })
     expect(desk.view.value).toBe(view)
-    expect(desk.sequence.value).toBe(seq)
+    expect(desk.run.sequence.value).toBe(seq)
     desk.setToggles({ showDiff: true })
     expect(desk.view.value).not.toBe(view)
   })

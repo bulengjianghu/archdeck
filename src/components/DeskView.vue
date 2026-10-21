@@ -133,7 +133,7 @@ function onKey(e: KeyboardEvent) {
   const t = e.target as HTMLElement
   if (t.closest('input, textarea, select, [contenteditable="true"]')) return
   if (desk.perspective.value === 'run') {
-    const bp = desk.branchPoint.value
+    const bp = desk.run.branchPoint.value
     if (e.key === 'ArrowRight') desk.next()
     else if (e.key === 'ArrowLeft') desk.prev()
     else if (bp && /^[1-9]$/.test(e.key) && Number(e.key) <= bp.options.length) desk.chooseBranch(bp.id, Number(e.key) - 1)

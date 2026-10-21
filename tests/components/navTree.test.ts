@@ -135,7 +135,7 @@ describe('运行视角', () => {
     await flushPromises()
     const cur = wrapper.findAll('.frame.selected')
     expect(cur).toHaveLength(1)
-    expect(cur[0].find('.seq').text()).toBe(String(desk.currentIndex.value! + 1))
+    expect(cur[0].find('.seq').text()).toBe(String(desk.run.currentIndex.value! + 1))
     expect(wrapper.findAll('.frame.walked').length).toBeGreaterThan(0)
     // 分支未选：其后的帧标未到达
     expect(wrapper.findAll('.frame.unreached').length).toBeGreaterThan(0)

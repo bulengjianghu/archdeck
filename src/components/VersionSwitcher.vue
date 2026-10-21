@@ -21,11 +21,11 @@ function onChange(e: Event) {
 </script>
 
 <template>
-  <label v-if="desk.project && desk.designs.value.length" class="version" :class="{ design: !!desk.version }">
+  <label v-if="desk.project && desk.versions.designs.value.length" class="version" :class="{ design: !!desk.version }">
     <span class="sr">版本</span>
     <select :value="value" aria-label="切换版本" @change="onChange">
       <option value="">当前版本（代码）</option>
-      <optgroup v-for="d in desk.designs.value" :key="d.id" :label="`设计 · ${d.name}（${DESIGN_STATUS_LABELS[d.status]}）`">
+      <optgroup v-for="d in desk.versions.designs.value" :key="d.id" :label="`设计 · ${d.name}（${DESIGN_STATUS_LABELS[d.status]}）`">
         <option v-for="(r, i) in [...d.revisions].reverse()" :key="r.id" :value="`${d.id}/${r.id}`" :title="r.date">
           {{ d.name }} · {{ r.id }}{{ i === 0 ? '（最新）' : '' }}
         </option>

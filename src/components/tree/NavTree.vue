@@ -11,13 +11,13 @@ import FileTree from './FileTree.vue'
 
 const desk = useDesk()
 type Tab = 'modules' | 'files' | 'steps'
-const tab = ref<Tab>(desk.selectedFile.value ? 'files' : desk.perspective.value === 'run' ? 'steps' : 'modules')
+const tab = ref<Tab>(desk.files.selected.value ? 'files' : desk.perspective.value === 'run' ? 'steps' : 'modules')
 watch(
   () => desk.perspective.value,
   p => (tab.value = p === 'run' ? 'steps' : 'modules'),
 )
 watch(
-  () => desk.selectedFile.value,
+  () => desk.files.selected.value,
   f => f && (tab.value = 'files'),
 )
 </script>

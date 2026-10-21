@@ -8,7 +8,7 @@ import type { DeskState } from '@/state/useDeskState'
 
 export type AsideTab = 'sequence' | 'source'
 
-export function useAside(desk: Pick<DeskState, 'selectedFile' | 'perspective' | 'playback'>) {
+export function useAside(desk: Pick<DeskState, 'files' | 'perspective' | 'playback'>) {
   const previewPath = ref<string | null>(null)
   const tab = ref<AsideTab>('sequence')
   const run = computed(() => desk.perspective.value === 'run')
@@ -23,7 +23,7 @@ export function useAside(desk: Pick<DeskState, 'selectedFile' | 'perspective' | 
   }
 
   watch(
-    () => desk.selectedFile.value,
+    () => desk.files.selected.value,
     f => f && open(f),
     { immediate: true },
   )

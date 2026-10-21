@@ -33,12 +33,12 @@ const stageUi = useStage()
 const { setViewport, zoomIn, zoomOut, dimensions, setNodes, setEdges } = useVueFlow('arch-desk')
 
 /** 运行视角的舞台叠加；结构视角为 null */
-const stage = computed(() => (desk.perspective.value === 'run' ? desk.overlay.value : null))
+const stage = computed(() => (desk.perspective.value === 'run' ? desk.run.overlay.value : null))
 
 /** 悬停时序图中的一条消息时，它在本层的落点（预览） */
 const hoverLanding = computed(() => {
   const h = desk.hoverId.value
-  const sv = desk.scenarioView.value
+  const sv = desk.run.scenarioView.value
   if (!h?.startsWith('step:') || !sv) return null
   const m = sv.messageOf.get(h.slice('step:'.length))
   return m === undefined ? null : sv.messages[m].at
@@ -87,19 +87,19 @@ const display = computed(() => {
   // V10：悬停的节点（时序图消息的悬停不算）
   const h = desk.hoverId.value
   const hover = h && !h.startsWith('step:') ? h : null
-  return stageDisplay({ view: pv.view, participants: desk.stageParticipants.value, playEdges: play, mode: stageUi.mode.value, reveal: new Set(stageUi.reveal.value), hover })
+  return stageDisplay({ view: pv.view, participants: desk.run.stageParticipants.value, playEdges: play, mode: stageUi.mode.value, reveal: new Set(stageUi.reveal.value), hover })
 })
 const visOf = (id: string): Visibility => display.value?.nodes.get(id) ?? 'show'
 const edgeVis = (id: string): Visibility => display.value?.edges.get(id) ?? 'show'
 
 /** R15、R16：选中步骤的消息与配对消息所在的边；选中的不是步骤时为 null（不变灰） */
 const emphMessages = computed<Set<number> | null>(() => {
-  const em = desk.emphasis.value
+  const em = desk.run.emphasis.value
   return em?.selected == null ? null : new Set([em.selected, ...em.paired])
 })
 const emphEdges = computed<Set<string> | null>(() => {
   const em = emphMessages.value
-  const sv = desk.scenarioView.value
+  const sv = desk.run.scenarioView.value
   if (!em || !sv) return null
   const ids = new Set<string>()
   for (const i of em) {
@@ -136,7 +136,7 @@ const neighborhood = computed<Set<string> | null>(() => {
 })
 
 /** 设计版本且开启「标出变更」时的差异；否则为 null */
-const marks = computed(() => (desk.toggles.showDiff ? desk.diff.value : null))
+const marks = computed(() => (desk.toggles.showDiff ? desk.versions.diff.value : null))
 
 function diffOf(moduleId: string): Pick<NodeData, 'change' | 'changedFields' | 'touched'> {
   const d = marks.value
@@ -182,7 +182,7 @@ const nodes = computed<Node<NodeData>[]>(() => {
   // 运行视角：按舞台显示（V5、V8、V9）；结构视角：与聚焦对象无关的变淡
   const dimmed = (id: string, base: boolean) => (st ? visOf(id) === 'dim' : base)
   const hidden = (id: string) => !!st && visOf(id) === 'hide'
-  const fileHit = desk.fileHits.value?.nodes
+  const fileHit = desk.files.hits.value?.nodes
   const classOf = (id: string) => [playClass(id), fileHit?.has(id) ? 'file-hit' : ''].filter(Boolean).join(' ') || undefined
   const place = (id: string, box: Box, type: string, data: NodeData, zIndex: number) =>
     out.push({ id, type, position: { x: box.x, y: box.y }, data, zIndex, width: box.w, height: box.h, style: { width: `${box.w}px`, height: `${box.h}px` }, selectable: false, draggable: false, connectable: false, class: classOf(id) })
@@ -224,7 +224,7 @@ const nodes = computed<Node<NodeData>[]>(() => {
   }
 
   // 步骤序号（可单击指向该步）与分支预览序号（可单击选这一支）
-  const sv = desk.scenarioView.value
+  const sv = desk.run.scenarioView.value
   if (st && sv) {
     const current = st.current?.index
     const em = emphMessages.value
@@ -233,7 +233,7 @@ const nodes = computed<Node<NodeData>[]>(() => {
       const steps = mark.steps.map(n => ({ n, frameId: sv.messages[n - 1].frameIds[0], current: n - 1 === current, muted: !!em && !em.has(n - 1) }))
       place(`step:${mark.edgeId}`, { ...mark.at, w: 1, h: 1 }, 'step', { moduleId: '', name: '', childCount: 0, selected: false, dim: false, steps }, 6)
     }
-    const point = desk.branchPoint.value
+    const point = desk.run.branchPoint.value
     for (const p of st.previews) {
       if (!p.pos || !point) continue
       place(`preview:${p.option}`, { ...p.pos, w: 1, h: 1 }, 'preview', { moduleId: '', name: '', childCount: 0, selected: false, dim: false, preview: { pointId: point.id, option: p.option, label: p.label } }, 7)
@@ -449,7 +449,7 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
     <div v-if="isEmpty" class="empty">这个模块没有子模块</div>
     <div v-if="stage?.hiddenCurrent" class="play-hint">
       当前步骤在本层不可见（两端都在本层之外）：
-      <button class="link" @click="desk.goTo(desk.frameLevel.value!)">到能看到它的层次</button>
+      <button class="link" @click="desk.goTo(desk.run.frameLevel.value!)">到能看到它的层次</button>
     </div>
 
     <div class="zoom">

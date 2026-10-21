@@ -10,15 +10,15 @@ import BranchChooser from './BranchChooser.vue'
 import RouteBar from './RouteBar.vue'
 
 const desk = useDesk()
-const total = computed(() => desk.scenarioView.value?.messages.length ?? 0)
-const open = computed(() => !!desk.path.value?.pending)
-const position = computed(() => desk.walked.value)
+const total = computed(() => desk.run.scenarioView.value?.messages.length ?? 0)
+const open = computed(() => !!desk.run.path.value?.pending)
+const position = computed(() => desk.run.walked.value)
 const atStart = computed(() => !desk.playback.value?.frameId)
 
 function onSlide(e: Event) {
   const v = Number((e.target as HTMLInputElement).value)
   if (v === 0) return desk.seek(null)
-  const m = desk.scenarioView.value?.messages[v - 1]
+  const m = desk.run.scenarioView.value?.messages[v - 1]
   if (m) desk.seek(m.frameIds[0])
 }
 </script>

@@ -14,15 +14,15 @@ const desk = useDesk()
 /** 太长的文件不高亮（高亮在主线程，几十万字符会卡住界面），仍带行号显示 */
 const HIGHLIGHT_LIMIT = 200_000
 
-const res = computed(() => (desk.source.value?.status === 'local' ? desk.sourceFile(props.path).value : null))
+const res = computed(() => (desk.files.payload.value?.status === 'local' ? desk.files.file(props.path).value : null))
 const file = computed(() => (res.value?.status === 'ok' ? res.value.value : null))
 const text = computed(() => (file.value && 'text' in file.value ? file.value.text : null))
 const lines = computed(() => (text.value === null ? 0 : text.value.split('\n').length))
-const owners = computed(() => desk.ownership.value?.owners.get(props.path) ?? [])
+const owners = computed(() => desk.files.ownership.value?.owners.get(props.path) ?? [])
 const status = computed(() => {
   const p = props.path
-  if (desk.ownership.value?.ignored.has(p)) return '已忽略'
-  if (desk.ownership.value?.unowned.includes(p)) return '未归属'
+  if (desk.files.ownership.value?.ignored.has(p)) return '已忽略'
+  if (desk.files.ownership.value?.unowned.includes(p)) return '未归属'
   return owners.value.length > 1 ? '归属冲突' : ''
 })
 
@@ -55,7 +55,7 @@ const kb = (n: number) => `${Math.round(n / 1024)} KB`
       <span class="badge ro">只读</span>
     </header>
     <div class="body">
-      <SourceStatus v-if="desk.source.value?.status !== 'local'" />
+      <SourceStatus v-if="desk.files.payload.value?.status !== 'local'" />
       <p v-else-if="!res || res.status === 'loading'" class="hint">正在读取…</p>
       <p v-else-if="res.status === 'missing'" class="hint">文件不在源码清单中（可能已删除或改名）。</p>
       <p v-else-if="res.status === 'error'" class="hint warn">读取失败：{{ res.message }}</p>

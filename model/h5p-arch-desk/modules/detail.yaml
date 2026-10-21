@@ -97,15 +97,17 @@ modules:
     parent: state.desk
     responsibility: 同步适配器之一：取回项目描述并调用 loadModel，把加载结果作为动作交给 dispatch（首次加载 / 重新加载）；监听本项目的变更通知触发重新加载。「保留层次与选中、失效时退到上级」不在这里，是转移规则。
     codeRefs: [src/state/sync/modelSource.ts]
-  # 以下三个是 useDeskState.ts 内的概念划分，不写 codeRefs，文件归 DeskState（避免归属冲突，G6）
+  # 分组派生在 src/state/desk/（ADR-0013）；dispatch 与操作是 useDeskState.ts 内的概念划分，不写 codeRefs，文件归 DeskState（避免归属冲突，G6）
   - id: state.desk.versions
     name: 版本与对比基线
     parent: state.desk
     responsibility: 设计版本下持有设计信息与本轮、对比基线（当前版本 / 上一轮）的索引；派生差异与基线漂移（起草时的基线提交与当前版本不一致）。
+    codeRefs: [src/state/desk/versions.ts]
   - id: state.desk.projection
     name: 视图派生
     parent: state.desk
     responsibility: 由视图状态与模型派生一切要画的数据（全部是 computed，调用纯函数）：层次视图；打开场景时的回放计划、调用与返回的配对、回放路径与路线、本层的帧投影与可见消息、选中（selectedOf）与选中突出（emphasisOf）、舞台参与节点、时序模型与时序图坐标，以及导航树用的步骤大纲与参与模块；设计版本的差异。
+    codeRefs: [src/state/desk/run.ts, src/state/desk/files.ts]
   - id: state.desk.actions
     name: dispatch 与操作
     parent: state.desk

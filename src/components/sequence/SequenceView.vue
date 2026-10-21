@@ -16,9 +16,9 @@ import SequenceFragments from './SequenceFragments.vue'
 const desk = useDesk()
 const scroller = ref<HTMLElement>()
 
-const ps = computed(() => desk.positionedSequence.value)
-const homeName = computed(() => (desk.index.value && desk.home.value ? moduleName(desk.index.value, desk.home.value) : ''))
-const empty = computed(() => (desk.scenarioView.value?.messages.length ?? 0) === 0)
+const ps = computed(() => desk.run.positionedSequence.value)
+const homeName = computed(() => (desk.index.value && desk.run.home.value ? moduleName(desk.index.value, desk.run.home.value) : ''))
+const empty = computed(() => (desk.run.scenarioView.value?.messages.length ?? 0) === 0)
 const top = computed(() => (ps.value ? headsHeight(ps.value) : 0))
 const groupName = (parentId: string) => (desk.index.value ? moduleName(desk.index.value, parentId) : parentId)
 
@@ -36,7 +36,7 @@ function branch(pointId: string, option: number) {
 function centerCurrent() {
   const el = scroller.value
   const p = ps.value
-  const ci = desk.currentIndex.value
+  const ci = desk.run.currentIndex.value
   if (!el || !p || ci === null) return
   const i = p.model.messages.findIndex(m => m.pathIndex === ci)
   if (i < 0) return
@@ -62,10 +62,10 @@ watch(
     <div ref="scroller" class="body">
       <div v-if="empty" class="empty">
         <p>本层看不到这个场景的任何一步。</p>
-        <button v-if="desk.home.value" @click="desk.goTo(desk.home.value)">跳到场景所在层次：{{ homeName }}</button>
+        <button v-if="desk.run.home.value" @click="desk.goTo(desk.run.home.value)">跳到场景所在层次：{{ homeName }}</button>
       </div>
       <template v-else-if="ps">
-        <div class="pin top"><SequenceHeads :ps="ps" where="top" :group-name="groupName" :lanes="desk.emphasis.value?.lanes" /></div>
+        <div class="pin top"><SequenceHeads :ps="ps" where="top" :group-name="groupName" :lanes="desk.run.emphasis.value?.lanes" /></div>
         <svg :width="ps.size.w" :height="ps.size.h - top" :viewBox="`0 ${top} ${ps.size.w} ${ps.size.h - top}`" class="svg">
           <defs>
             <marker id="seq-solid" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
@@ -78,15 +78,15 @@ watch(
           <SequenceFragments :ps="ps" @branch="branch" />
           <SequenceLanes
             :ps="ps"
-            :current="desk.currentIndex.value"
-            :walked="desk.walked.value"
+            :current="desk.run.currentIndex.value"
+            :walked="desk.run.walked.value"
             :hover="desk.hoverId.value"
-            :emphasis="desk.emphasis.value"
+            :emphasis="desk.run.emphasis.value"
             @pick="pick"
             @hover="hover"
           />
         </svg>
-        <div class="pin bottom"><SequenceHeads :ps="ps" where="bottom" :group-name="groupName" :lanes="desk.emphasis.value?.lanes" /></div>
+        <div class="pin bottom"><SequenceHeads :ps="ps" where="bottom" :group-name="groupName" :lanes="desk.run.emphasis.value?.lanes" /></div>
       </template>
     </div>
   </section>

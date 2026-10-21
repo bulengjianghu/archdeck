@@ -77,7 +77,7 @@ describe('§6.4 源代码验收', () => {
     expect(dirRow('src').classes()).not.toContain('ignored')
 
     const mw = await open('media-web')
-    expect(mw.desk.source.value).toMatchObject({ status: 'absent', reason: '源码不在本地' })
+    expect(mw.desk.files.payload.value).toMatchObject({ status: 'absent', reason: '源码不在本地' })
     await mw.tab('文件').trigger('click')
     await settle()
     expect(mw.nav.text()).toContain('源码不在本地')
@@ -91,7 +91,7 @@ describe('§6.4 源代码验收', () => {
     desk.revealModule('present.nav-tree')
     await tab('文件').trigger('click')
     await settle()
-    const files = desk.filesOf('present.nav-tree')
+    const files = desk.files.filesOf('present.nav-tree')
     expect(files).toEqual(expect.arrayContaining(['src/components/tree/NavTree.vue', 'src/components/tree/FileTree.vue', 'src/components/tree/ModuleTree.vue']))
     expect(panel.text()).toContain('源代码文件')
     expect(panel.text()).toContain('src/components/tree/FileTree.vue')
@@ -100,7 +100,7 @@ describe('§6.4 源代码验收', () => {
 
     desk.revealModule('present')
     await settle()
-    const all = desk.filesOf('present')
+    const all = desk.files.filesOf('present')
     expect(all).toEqual(expect.arrayContaining([...files, 'src/components/GraphCanvas.vue', 'src/main.ts']))
     expect(all.every(f => !f.startsWith('src/model/'))).toBe(true)
   })
@@ -111,11 +111,11 @@ describe('§6.4 源代码验收', () => {
     desk.selectFile(file)
     await settle()
     expect(router.currentRoute.value.query.sel).toBe(`f:${file}`)
-    expect(desk.fileOwners.value).toEqual(['present.nav-tree.files'])
+    expect(desk.files.owners.value).toEqual(['present.nav-tree.files'])
     expect(panel.text()).toContain('归属模块')
     expect(panel.text()).toContain('文件树')
     // 根层是分层总览：高亮所在的带（呈现层）
-    expect([...desk.fileHits.value!.nodes]).toContain('present')
+    expect([...desk.files.hits.value!.nodes]).toContain('present')
     // 模块树展开到归属模块并标出
     const nav = mount(NavTree, { global })
     await settle()
@@ -125,7 +125,7 @@ describe('§6.4 源代码验收', () => {
     // 下钻到呈现层：高亮导航树
     desk.goTo('present', { kind: 'file', id: file })
     await settle()
-    expect([...desk.fileHits.value!.nodes]).toEqual(['present.nav-tree'])
+    expect([...desk.files.hits.value!.nodes]).toEqual(['present.nav-tree'])
     // 副栏：选中文件即预览
     const aside = useAside(desk)
     expect(aside.previewPath.value).toBe(file)
@@ -144,7 +144,7 @@ describe('§6.4 源代码验收', () => {
 
   it('4. 选中「加载流水线」：面板显示入口与导出，loadModel 与描述的接口对上，对不上的分组列出', async () => {
     const { desk, panel } = await open('h5p-arch-desk', '/p/h5p-arch-desk?level=model&sel=m:model.pipeline')
-    expect(desk.entryOf('model.pipeline')).toEqual({ file: 'src/model/index.ts', via: 'index' })
+    expect(desk.files.entryOf('model.pipeline')).toEqual({ file: 'src/model/index.ts', via: 'index' })
     await settle()
     const text = panel.text()
     expect(text).toContain('入口文件')
@@ -171,7 +171,7 @@ describe('§6.4 源代码验收', () => {
     expect(lintIssues.some(i => i.code === 'source.unowned' && i.message.includes('docs/README.md'))).toBe(true)
     // 有忽略清单的真实描述：没有未归属
     expect(bare.desk.allIssues.value.filter(i => i.code === 'source.unowned')).toEqual([])
-    expect(bare.desk.ownership.value!.ignored.has('docs/README.md')).toBe(true)
+    expect(bare.desk.files.ownership.value!.ignored.has('docs/README.md')).toBe(true)
   })
 
   it('6. 运行视角下选中文件：副栏切到源代码；单步后选中下一步，副栏切回时序图，源代码页签仍在', async () => {
@@ -199,11 +199,11 @@ describe('§6.4 源代码验收', () => {
 
   it.skipIf(!H5PLAYER_LOCAL)('h5player：Framework 的入口导出与描述的接口对应，描述的真实归属问题报为警告', async () => {
     const { desk } = await open('h5player', '/p/h5player?level=infra&sel=m:infra.framework')
-    expect(desk.entryOf('infra.framework')).toEqual({ file: 'packages/framework/src/index.ts', via: 'index' })
-    const exports = desk.sourceExports('packages/framework/src/index.ts')
+    expect(desk.files.entryOf('infra.framework')).toEqual({ file: 'packages/framework/src/index.ts', via: 'index' })
+    const exports = desk.files.exports('packages/framework/src/index.ts')
     await settle()
     expect(exports.value.status).toBe('ok')
-    const match = desk.exportMatch('infra.framework', exports.value.status === 'ok' ? exports.value.value : [])!
+    const match = desk.files.exportMatch('infra.framework', exports.value.status === 'ok' ? exports.value.value : [])!
     expect(match.matched.map(m => m.symbol.name)).toEqual(expect.arrayContaining(['Framework', 'Context']))
     expect(desk.allIssues.value.some(i => i.code === 'source.conflict')).toBe(true)
   })

@@ -23,7 +23,7 @@ const childrenOf = (id: string) =>
 const selectedId = computed(() => (desk.selection.value?.kind === 'module' ? desk.selection.value.id : null))
 /** T5：当前步骤两端的祖先链 */
 const active = computed(() => {
-  const f = desk.frame.value
+  const f = desk.run.frame.value
   if (!run.value || !f) return new Set<string>()
   return new Set([f.from, f.to].flatMap(id => idx.value.pathOf.get(id) ?? []))
 })
@@ -39,13 +39,13 @@ function reveal(id: string | null) {
   expanded.value = next
 }
 watch(
-  () => [desk.levelId.value, selectedId.value, desk.index.value, desk.fileOwners.value] as const,
+  () => [desk.levelId.value, selectedId.value, desk.index.value, desk.files.owners.value] as const,
   async () => {
     reveal(desk.levelId.value)
     reveal(selectedId.value)
-    for (const o of desk.fileOwners.value) reveal(o)
+    for (const o of desk.files.owners.value) reveal(o)
     await nextTick()
-    const target = selectedId.value ?? desk.fileOwners.value[0] ?? desk.levelId.value
+    const target = selectedId.value ?? desk.files.owners.value[0] ?? desk.levelId.value
     const row = [...(root.value?.querySelectorAll<HTMLElement>('[data-id]') ?? [])].find(el => el.dataset.id === target)
     row?.scrollIntoView?.({ block: 'nearest' })
   },
@@ -63,9 +63,9 @@ const ctx = computed(() => ({
   expanded: expanded.value,
   levelId: desk.levelId.value,
   selectedId: selectedId.value,
-  participants: run.value ? desk.participants.value : new Set<string>(),
+  participants: run.value ? desk.run.participants.value : new Set<string>(),
   active: active.value,
-  fileOwners: new Set(desk.fileOwners.value),
+  fileOwners: new Set(desk.files.owners.value),
 }))
 
 function pick(id: string) {

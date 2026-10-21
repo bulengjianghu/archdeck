@@ -12,12 +12,12 @@ import DesignNote from './DesignNote.vue'
 
 const desk = useDesk()
 const idx = computed(() => desk.index.value!)
-const sc = computed(() => desk.scenario.value!)
+const sc = computed(() => desk.run.scenario.value!)
 const trigger = computed(() => triggerOf(idx.value, sc.value.id))
-const empty = computed(() => (desk.scenarioView.value?.messages.length ?? 0) === 0)
+const empty = computed(() => (desk.run.scenarioView.value?.messages.length ?? 0) === 0)
 
 const participants = computed(() => {
-  const plan = desk.plan.value
+  const plan = desk.run.plan.value
   return plan ? [...new Set([...plan.frames.values()].flatMap(f => [f.from, f.to]))] : []
 })
 const refs = computed(() => {
@@ -50,7 +50,7 @@ function pointAt(id: string) {
     <DesignNote :text="sc.designNote" />
     <div v-if="empty" class="notice">
       本层看不到这个场景的任何一步。
-      <button v-if="desk.home.value" class="link" @click="desk.goTo(desk.home.value)">跳到场景所在层次：{{ moduleName(idx, desk.home.value) }}</button>
+      <button v-if="desk.run.home.value" class="link" @click="desk.goTo(desk.run.home.value)">跳到场景所在层次：{{ moduleName(idx, desk.run.home.value) }}</button>
     </div>
     <Section v-if="sc.description" title="说明"><Markdown :text="sc.description" /></Section>
     <Section title="触发">
@@ -60,9 +60,9 @@ function pointAt(id: string) {
         <span v-else class="muted">—</span>
       </div>
       <div v-if="sc.cause"><span class="muted">原因</span> {{ sc.cause }}</div>
-      <div v-if="desk.home.value">
+      <div v-if="desk.run.home.value">
         <span class="muted">所在层次</span>
-        <button class="link" @click="desk.goTo(desk.home.value)">{{ moduleName(idx, desk.home.value) }}</button>
+        <button class="link" @click="desk.goTo(desk.run.home.value)">{{ moduleName(idx, desk.run.home.value) }}</button>
       </div>
     </Section>
     <Section title="参与的模块与参与者" :count="participants.length">

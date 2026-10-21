@@ -24,7 +24,7 @@ async function open(url: string) {
 describe('§6.5 运行视角聚焦验收', () => {
   it('1. 泳道按层次顺序：同层的在前、Framework 子模块相邻成组、Application 在后；结构图边界节点行顺序一致', async () => {
     const desk = await open('/p/h5player?level=infra.framework&sc=sc.command')
-    const model = desk.sequence.value!
+    const model = desk.run.sequence.value!
     const order = model.participants.filter(p => p.kind !== 'actor')
     const lanes = [...(await import('../../src/layout/sequence')).layoutSequence(model).lanes.keys()]
     const inner = lanes.filter(id => order.some(p => p.nodeId === id)).map(id => order.find(p => p.nodeId === id)!)
@@ -41,45 +41,45 @@ describe('§6.5 运行视角聚焦验收', () => {
   it('2. 有显式返回的调用：只有它为选中，配对返回只作配对；选中模块后突出它所在的泳道、不突出消息', async () => {
     const desk = await open('/p/h5player?level=infra.framework&sc=sc.command&alt=1')
     desk.seek('sc.command#hook')
-    const sv = desk.scenarioView.value!
-    const paired = desk.pairs.value!.get('sc.command#hook')!
-    expect(desk.plan.value!.frames.get(paired)!.kind).toBe('return')
-    expect(desk.emphasis.value!.selected).toBe(sv.messageOf.get('sc.command#hook')!)
-    expect([...desk.emphasis.value!.paired]).toEqual([sv.messageOf.get(paired)!])
+    const sv = desk.run.scenarioView.value!
+    const paired = desk.run.pairs.value!.get('sc.command#hook')!
+    expect(desk.run.plan.value!.frames.get(paired)!.kind).toBe('return')
+    expect(desk.run.emphasis.value!.selected).toBe(sv.messageOf.get('sc.command#hook')!)
+    expect([...desk.run.emphasis.value!.paired]).toEqual([sv.messageOf.get(paired)!])
     desk.select({ kind: 'module', id: 'infra.framework.state-machine' })
-    expect(desk.emphasis.value!.selected).toBeNull()
-    expect([...desk.emphasis.value!.lanes]).toEqual(['infra.framework.state-machine'])
+    expect(desk.run.emphasis.value!.selected).toBeNull()
+    expect([...desk.run.emphasis.value!.lanes]).toEqual(['infra.framework.state-machine'])
   })
 
   it('3. 直选分支：改走未选的一支，路线同步；进度原在旧分支内时退到分支点之前；改选靠前的分支点提示丢弃个数', async () => {
     const desk = await open('/p/h5player?level=infra.framework&sc=sc.command')
-    const point = desk.route.value[0].pointId
+    const point = desk.run.route.value[0].pointId
     // 走「需要改图」并进入分支内
     desk.chooseBranch(point, 0)
     desk.seek('sc.command#swap')
     expect(desk.playback.value!.frameId).toBe('sc.command#swap')
     // 内层还有分支点：选一个，再改选外层
-    const innerPoint = desk.route.value[1]?.pointId
+    const innerPoint = desk.run.route.value[1]?.pointId
     if (innerPoint) desk.chooseBranch(innerPoint, 0)
     const dropped = desk.chooseBranch(point, 1)
-    expect(desk.route.value[0].chosen).toBe(1)
+    expect(desk.run.route.value[0].chosen).toBe(1)
     expect(dropped).toBe(innerPoint ? 1 : 0)
     // 停在分支点之前的最后一帧（本层可见时取其可见消息的第一帧）
-    const last = pointPrefix(desk.plan.value!, desk.playback.value!.choices, point).at(-1)!.id
-    const sv = desk.scenarioView.value!
+    const last = pointPrefix(desk.run.plan.value!, desk.playback.value!.choices, point).at(-1)!.id
+    const sv = desk.run.scenarioView.value!
     const m = sv.messageOf.get(last)
     expect(desk.playback.value!.frameId).toBe(m === undefined ? last : sv.messages[m].frameIds[0])
-    expect(desk.walked.value).toBeGreaterThan(0)
+    expect(desk.run.walked.value).toBeGreaterThan(0)
   })
 
   it('4. 舞台默认只显示参与本场景的节点；淡显时其余淡化出现；在画布上显示的对象的静态边出现', async () => {
     const desk = await open('/p/h5player?level=infra.framework&sc=sc.command&step=sc.command%23hook')
     const view = desk.view.value!
-    const input = { view, participants: desk.stageParticipants.value, playEdges: new Set<string>(), reveal: new Set<string>() }
+    const input = { view, participants: desk.run.stageParticipants.value, playEdges: new Set<string>(), reveal: new Set<string>() }
     const hide = stageDisplay({ ...input, mode: 'hide' })
     const hidden = [...hide.nodes].filter(([, v]) => v === 'hide').map(([id]) => id)
     expect(hidden.length).toBeGreaterThan(0)
-    for (const id of hidden) expect(desk.stageParticipants.value.has(id)).toBe(false)
+    for (const id of hidden) expect(desk.run.stageParticipants.value.has(id)).toBe(false)
     const dim = stageDisplay({ ...input, mode: 'dim' })
     for (const id of hidden) expect(dim.nodes.get(id)).toBe('dim')
     const sm = 'infra.framework.state-machine'

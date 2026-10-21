@@ -11,7 +11,7 @@ import RevealButton from './RevealButton.vue'
 import { frameText } from './runText'
 
 const desk = useDesk()
-const p = computed(() => desk.selectedParticipation.value)
+const p = computed(() => desk.run.participation.value)
 const idx = computed(() => desk.index.value!)
 const ROLE = { from: '发出', to: '收到', internal: '内部', traverse: '经过' } as const
 /** V9：选中的模块 / 参与者在本层对应的视图节点（自身、边界节点或所在的子模块） */
@@ -31,12 +31,12 @@ const nameOf = (kind: 'if' | 'ds', id: string) => (kind === 'if' ? idx.value.int
 </script>
 
 <template>
-  <Section v-if="p" :title="`在「${desk.scenario.value?.name}」中`" :count="p.frames.length">
+  <Section v-if="p" :title="`在「${desk.run.scenario.value?.name}」中`" :count="p.frames.length">
     <p v-if="!p.frames.length" class="muted">没有参与这个场景已走出的路径。</p>
     <ol v-else class="steps">
       <li v-for="x in p.frames" :key="x.frameId" :class="{ nearest: x.frameId === p.nearest, current: x.frameId === desk.playback.value?.frameId }">
         <span class="role">{{ ROLE[x.role] }}</span>
-        <button class="link" @click="desk.seek(x.frameId)">{{ frameText(idx, desk.plan.value!.frames.get(x.frameId)!) }}</button>
+        <button class="link" @click="desk.seek(x.frameId)">{{ frameText(idx, desk.run.plan.value!.frames.get(x.frameId)!) }}</button>
         <span v-if="x.frameId === p.nearest" class="badge accent">离进度最近</span>
       </li>
     </ol>

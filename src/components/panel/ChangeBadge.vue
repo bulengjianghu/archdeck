@@ -6,13 +6,13 @@ import { FIELD_LABELS, type EntityKind } from '@/model'
 
 const props = defineProps<{ entity: EntityKind; id: string; detail?: boolean }>()
 const desk = useDesk()
-const c = computed(() => desk.diff.value?.[props.entity].get(props.id))
+const c = computed(() => desk.versions.diff.value?.[props.entity].get(props.id))
 const fields = computed(() => c.value?.fields?.map(f => FIELD_LABELS[f] ?? f).join('、'))
 </script>
 
 <template>
   <template v-if="c">
-    <span class="diff-tag" :class="c.kind" :title="`相对${desk.baseline.value?.label}`">{{ c.kind === 'added' ? '新增' : '修改' }}</span>
+    <span class="diff-tag" :class="c.kind" :title="`相对${desk.versions.baseline.value?.label}`">{{ c.kind === 'added' ? '新增' : '修改' }}</span>
     <span v-if="detail && fields" class="changed-fields">改了：{{ fields }}</span>
   </template>
 </template>

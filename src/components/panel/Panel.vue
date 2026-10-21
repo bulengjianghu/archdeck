@@ -21,7 +21,7 @@ const target = computed(() => {
   const idx = desk.index.value
   const s = desk.selected.value
   if (!idx) return null
-  if (s?.kind === 'step') return desk.frame.value ? { kind: 'step' as const, id: s.id } : null
+  if (s?.kind === 'step') return desk.run.frame.value ? { kind: 'step' as const, id: s.id } : null
   if (s?.kind === 'scenario') return { kind: 'scenario' as const, id: s.id }
   if (s?.kind === 'module' && idx.modules.has(s.id)) return { kind: 'module' as const, id: s.id }
   if (s?.kind === 'relation' && idx.relations.has(s.id)) return { kind: 'relation' as const, id: s.id }

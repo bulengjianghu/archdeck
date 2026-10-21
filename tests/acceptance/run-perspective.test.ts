@@ -43,14 +43,14 @@ describe('§6.2 运行视角验收', () => {
       expect(desk.levelId.value).toBe(root)
       expect(desk.playback.value).toMatchObject({ scenarioId: sc, frameId: null })
       expect(desk.selected.value).toEqual({ kind: 'scenario', id: sc })
-      expect(desk.walked.value).toBe(0)
+      expect(desk.run.walked.value).toBe(0)
       step(2)
-      const sv = desk.scenarioView.value!
+      const sv = desk.run.scenarioView.value!
       const active = new Set(sv.messages.flatMap(m => (m.at.kind === 'internal' ? [m.at.node] : [m.at.from, m.at.to])))
       expect(active.size).toBeGreaterThan(0)
       expect(active.size).toBeLessThan(desk.view.value!.nodes.length)
-      expect(desk.sequence.value!.participants[0].kind).toBe('actor')
-      expect(desk.walked.value).toBe(2)
+      expect(desk.run.sequence.value!.participants[0].kind).toBe('actor')
+      expect(desk.run.walked.value).toBe(2)
     }
   })
 
@@ -59,24 +59,24 @@ describe('§6.2 运行视角验收', () => {
     desk.openScenario('sc.command')
     // 先走过两个分支点（需要改图 → 事务成功），再回到第一步、前进到一半
     step(20)
-    desk.chooseBranch(desk.branchPoint.value!.id, 0)
+    desk.chooseBranch(desk.run.branchPoint.value!.id, 0)
     step(20)
-    desk.chooseBranch(desk.branchPoint.value!.id, 0)
-    desk.seek(desk.scenarioView.value!.messages[0].frameIds[0])
+    desk.chooseBranch(desk.run.branchPoint.value!.id, 0)
+    desk.seek(desk.run.scenarioView.value!.messages[0].frameIds[0])
     step(3)
     const frame = desk.playback.value!.frameId
     // 两端都在 Infrastructure 内的帧：根层按核心模块与「其他」泳道画，下钻后拆到子模块，可见消息不少于根层
     const idx = desk.index.value!
-    const inInfra = desk.path.value!.frames.filter(f => [f.from, f.to].every(id => idx.pathOf.get(id)?.includes('infra'))).map(f => f.id)
-    const messagesOf = () => new Set(inInfra.map(id => desk.scenarioView.value!.messageOf.get(id)).filter(m => m !== undefined))
+    const inInfra = desk.run.path.value!.frames.filter(f => [f.from, f.to].every(id => idx.pathOf.get(id)?.includes('infra'))).map(f => f.id)
+    const messagesOf = () => new Set(inInfra.map(id => desk.run.scenarioView.value!.messageOf.get(id)).filter(m => m !== undefined))
     const rootMessages = messagesOf().size
-    const rootLanes = desk.sequence.value!.participants.map(p => p.nodeId)
+    const rootLanes = desk.run.sequence.value!.participants.map(p => p.nodeId)
     desk.drillInto('infra')
     expect(desk.playback.value!.frameId).toBe(frame)
     expect(desk.selected.value).toEqual({ kind: 'module', id: 'infra' })
     expect(messagesOf().size).toBeGreaterThanOrEqual(rootMessages)
     // 泳道变细：根层 Infrastructure 的非核心模块画在「Infrastructure · 其他」泳道上，下钻后换成它的子模块
-    const lanes = desk.sequence.value!.participants.map(p => p.nodeId)
+    const lanes = desk.run.sequence.value!.participants.map(p => p.nodeId)
     expect(lanes).not.toContain('infra')
     // 下钻后出现根层没有的更细的泳道
     expect(lanes.some(id => !rootLanes.includes(id))).toBe(true)
@@ -87,7 +87,7 @@ describe('§6.2 运行视角验收', () => {
     const { desk, step } = await open('h5player')
     desk.openScenario('sc.command')
     step(20)
-    const point = desk.branchPoint.value!
+    const point = desk.run.branchPoint.value!
     const stuck = desk.playback.value!.frameId
     desk.next()
     expect(desk.playback.value!.frameId).toBe(stuck)
@@ -95,7 +95,7 @@ describe('§6.2 运行视角验收', () => {
     desk.chooseBranch(point.id, 0)
     step(20)
     // ref 内联的「方案切换事务」里还有一个分支点
-    const inner = desk.branchPoint.value!
+    const inner = desk.run.branchPoint.value!
     expect(inner.id).not.toBe(point.id)
     desk.chooseBranch(inner.id, 1)
     const at = desk.playback.value!.frameId
@@ -115,26 +115,26 @@ describe('§6.2 运行视角验收', () => {
     const { desk, step } = await open('h5player', '/p/h5player?level=infra')
     desk.openScenario('sc.command')
     step(30)
-    desk.chooseBranch(desk.branchPoint.value!.id, 1)
+    desk.chooseBranch(desk.run.branchPoint.value!.id, 1)
     step(30)
     // 舞台叠加依赖异步布局：负载高时 300ms 不一定够，等到布局完成为止
     const layoutReady = async () => {
-      for (let i = 0; i < 100 && !desk.overlay.value; i++) await new Promise(r => setTimeout(r, 50))
+      for (let i = 0; i < 100 && !desk.run.overlay.value; i++) await new Promise(r => setTimeout(r, 50))
     }
     await layoutReady()
-    const target = desk.sequence.value!.messages.find(m => m.pathIndex === 2)!
+    const target = desk.run.sequence.value!.messages.find(m => m.pathIndex === 2)!
     desk.seek(target.frameIds[0])
-    const viaSeek = { frame: desk.playback.value!.frameId, walked: [...desk.overlay.value!.walked.keys()] }
+    const viaSeek = { frame: desk.playback.value!.frameId, walked: [...desk.run.overlay.value!.walked.keys()] }
     // 从头单步到这一步
     desk.closeScenario()
     desk.openScenario('sc.command')
     step(3)
     await layoutReady()
-    const viaPlay = { frame: desk.playback.value!.frameId, walked: [...desk.overlay.value!.walked.keys()] }
+    const viaPlay = { frame: desk.playback.value!.frameId, walked: [...desk.run.overlay.value!.walked.keys()] }
     expect(viaSeek.frame).toBe(viaPlay.frame)
     expect(viaSeek.walked).toEqual(viaPlay.walked)
     // 面板：推断的关系
-    expect(desk.frame.value!.relationInferred).toBe(true)
+    expect(desk.run.frame.value!.relationInferred).toBe(true)
   })
 
   it('5. 选中一个模块时先显示它在本场景中参与的步骤；取消选中，或单步、指向某一步，选中回到进度所在的步骤', async () => {
@@ -143,7 +143,7 @@ describe('§6.2 运行视角验收', () => {
     step(4)
     desk.select({ kind: 'module', id: 'state.desk' })
     expect(desk.selected.value).toEqual({ kind: 'module', id: 'state.desk' })
-    expect(desk.selectedParticipation.value!.frames.length).toBeGreaterThan(0)
+    expect(desk.run.participation.value!.frames.length).toBeGreaterThan(0)
     const at = desk.playback.value!.frameId
     desk.select(null)
     expect(desk.selected.value).toEqual({ kind: 'step', id: at })
@@ -177,14 +177,14 @@ describe('§6.2 运行视角验收', () => {
     expect(desk.issues.value.filter(i => i.file === 'scenarios/bad.yaml')).toHaveLength(3)
     desk.openScenario('sc.bad')
     step(2)
-    expect(desk.scenarioView.value!.messages[1].at.kind).toBe('unmodeled')
+    expect(desk.run.scenarioView.value!.messages[1].at.kind).toBe('unmodeled')
   })
 
   it('7. 复制运行视角下的地址到新标签打开：回到同一场景、同一步骤、同一分支选择', async () => {
     const a = await open('h5player', '/p/h5player?level=infra')
     a.desk.openScenario('sc.command')
     a.step(30)
-    a.desk.chooseBranch(a.desk.branchPoint.value!.id, 0)
+    a.desk.chooseBranch(a.desk.run.branchPoint.value!.id, 0)
     a.step(4)
     await a.settle()
     const url = a.router.currentRoute.value.fullPath
@@ -202,6 +202,6 @@ describe('§6.2 运行视角验收', () => {
     expect(desk.perspective.value).toBe('structure')
     expect(desk.levelId.value).toBe('infra')
     expect(desk.selection.value).toEqual({ kind: 'module', id: 'infra.framework' })
-    expect(desk.sequence.value).toBeNull()
+    expect(desk.run.sequence.value).toBeNull()
   })
 })

@@ -22,9 +22,9 @@ onBeforeUnmount(() => clearTimeout(timer))
 </script>
 
 <template>
-  <div v-if="desk.route.value.length" class="route" role="group" aria-label="路线">
+  <div v-if="desk.run.route.value.length" class="route" role="group" aria-label="路线">
     <span class="title">路线</span>
-    <label v-for="(r, i) in desk.route.value" :key="r.pointId" class="item" :class="{ pending: r.chosen === null }">
+    <label v-for="(r, i) in desk.run.route.value" :key="r.pointId" class="item" :class="{ pending: r.chosen === null }">
       <span class="no">{{ i + 1 }}</span>
       <select :value="r.chosen ?? -1" :title="r.chosen === null ? '待选：选一支后继续' : '改走另一支'" @change="choose(r.pointId, $event)">
         <option v-if="r.chosen === null" :value="-1" disabled>待选</option>

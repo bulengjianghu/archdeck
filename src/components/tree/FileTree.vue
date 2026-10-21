@@ -19,10 +19,10 @@ const onlyUnowned = ref(false)
 const onlyLong = ref(false)
 const expanded = ref(new Set<string>())
 
-const own = computed(() => desk.ownership.value)
-const tree = computed(() => desk.sourceTree.value)
-const local = computed(() => (desk.source.value?.status === 'local' ? desk.source.value : null))
-const hits = computed(() => desk.moduleFileSet.value)
+const own = computed(() => desk.files.ownership.value)
+const tree = computed(() => desk.files.tree.value)
+const local = computed(() => (desk.files.payload.value?.status === 'local' ? desk.files.payload.value : null))
+const hits = computed(() => desk.files.moduleFiles.value)
 const selectedModule = computed(() => (desk.selection.value?.kind === 'module' ? desk.selection.value.id : null))
 
 const dirsOf = (file: string) => {
@@ -44,7 +44,7 @@ async function scrollTo(file: string | undefined) {
   row?.scrollIntoView?.({ block: 'nearest' })
 }
 watch(
-  () => [desk.selectedFile.value, tree.value] as const,
+  () => [desk.files.selected.value, tree.value] as const,
   ([f]) => {
     if (!f) return
     expandTo(f)
@@ -73,19 +73,19 @@ const ctx = computed<FileTreeContext>(() => ({
     ...(onlyUnowned.value ? (own.value?.unowned ?? []).flatMap(dirsOf) : []),
     ...(onlyLong.value ? longFiles.value.flatMap(dirsOf) : []),
   ]),
-  selected: desk.selectedFile.value,
+  selected: desk.files.selected.value,
   hits: hits.value,
   hitDirs: hitDirs.value,
   unowned: new Set(own.value?.unowned ?? []),
   conflicts: new Set(own.value?.conflicts ?? []),
   ignored: own.value?.ignored ?? new Set(),
   onlyUnowned: onlyUnowned.value,
-  lines: desk.lines.value,
-  maxLines: desk.maxLines.value,
+  lines: desk.files.lines.value,
+  maxLines: desk.files.maxLines.value,
   onlyLong: onlyLong.value,
 }))
 /** 「只看超长」时展开到全部超长文件 */
-const longFiles = computed(() => Object.keys(desk.lines.value).filter(f => desk.lines.value[f] > desk.maxLines.value))
+const longFiles = computed(() => Object.keys(desk.files.lines.value).filter(f => desk.files.lines.value[f] > desk.files.maxLines.value))
 </script>
 
 <template>
@@ -99,12 +99,12 @@ const longFiles = computed(() => Object.keys(desk.lines.value).filter(f => desk.
           <span v-if="own.unowned.length" class="warn">未归属 {{ own.unowned.length }}</span>
           <span v-if="own.conflicts.length" class="warn">冲突 {{ own.conflicts.length }}</span>
           <span v-if="own.ignored.size" class="muted">忽略 {{ own.ignored.size }}</span>
-          <span v-if="tree.long" class="bad">超长 {{ tree.long }}（&gt; {{ desk.maxLines.value }} 行）</span>
+          <span v-if="tree.long" class="bad">超长 {{ tree.long }}（&gt; {{ desk.files.maxLines.value }} 行）</span>
         </div>
         <div class="tools">
           <label><input v-model="onlyUnowned" type="checkbox" /> 只看未归属</label>
           <label><input v-model="onlyLong" type="checkbox" /> 只看超长</label>
-          <button class="small" title="重新列出源码文件" @click="desk.refreshSource()">刷新</button>
+          <button class="small" title="重新列出源码文件" @click="desk.files.refresh()">刷新</button>
         </div>
         <div v-if="selectedModule" class="hint">
           {{ moduleName(desk.index.value!, selectedModule) }}：{{ hits.size }} 个文件

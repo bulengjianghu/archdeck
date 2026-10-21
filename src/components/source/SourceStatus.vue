@@ -4,7 +4,7 @@ import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 
 const desk = useDesk()
-const s = computed(() => desk.source.value)
+const s = computed(() => desk.files.payload.value)
 const envKey = computed(() => `ARCH_SOURCE_ROOT_${(desk.project ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '_')}`)
 </script>
 

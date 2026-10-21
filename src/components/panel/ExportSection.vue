@@ -11,9 +11,9 @@ import InterfaceItem from './InterfaceItem.vue'
 
 const props = defineProps<{ file: string; moduleId?: string }>()
 const desk = useDesk()
-const res = computed(() => desk.sourceExports(props.file).value)
+const res = computed(() => desk.files.exports(props.file).value)
 const symbols = computed(() => (res.value.status === 'ok' ? res.value.value : []))
-const match = computed(() => (props.moduleId ? desk.exportMatch(props.moduleId, symbols.value) : null))
+const match = computed(() => (props.moduleId ? desk.files.exportMatch(props.moduleId, symbols.value) : null))
 const few = computed(() => symbols.value.length <= 3)
 </script>
 

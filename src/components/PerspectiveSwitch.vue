@@ -21,13 +21,13 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick))
     <button
       class="seg run"
       :class="{ on: desk.perspective.value === 'run' }"
-      :title="desk.scenario.value ? '换场景' : '运行视角：选一个场景，看它这一次怎么走'"
+      :title="desk.run.scenario.value ? '换场景' : '运行视角：选一个场景，看它这一次怎么走'"
       :aria-expanded="open"
       @click="open = !open"
     >
-      运行<template v-if="desk.scenario.value">：{{ desk.scenario.value.name }}</template> ▾
+      运行<template v-if="desk.run.scenario.value">：{{ desk.run.scenario.value.name }}</template> ▾
     </button>
-    <button v-if="desk.scenario.value" class="exit" title="退出场景，回到结构视角（保留层次与选中）" @click="desk.closeScenario()">×</button>
+    <button v-if="desk.run.scenario.value" class="exit" title="退出场景，回到结构视角（保留层次与选中）" @click="desk.closeScenario()">×</button>
     <ScenarioList v-if="open" @picked="open = false" />
   </div>
 </template>

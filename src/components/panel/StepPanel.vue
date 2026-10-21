@@ -17,16 +17,16 @@ import { KIND_LABEL, dataNames, fragmentText, frameText, landingText, signatureL
 
 const desk = useDesk()
 const idx = computed(() => desk.index.value!)
-const f = computed(() => desk.frame.value!)
+const f = computed(() => desk.run.frame.value!)
 const msg = computed(() => {
-  const ci = desk.currentIndex.value
-  return ci === null ? null : (desk.scenarioView.value?.messages[ci] ?? null)
+  const ci = desk.run.currentIndex.value
+  return ci === null ? null : (desk.run.scenarioView.value?.messages[ci] ?? null)
 })
-const total = computed(() => desk.scenarioView.value?.messages.length ?? 0)
-const writtenIn = computed(() => (f.value.scenarioId !== desk.scenario.value?.id ? idx.value.scenarios.get(f.value.scenarioId)?.name : undefined))
+const total = computed(() => desk.run.scenarioView.value?.messages.length ?? 0)
+const writtenIn = computed(() => (f.value.scenarioId !== desk.run.scenario.value?.id ? idx.value.scenarios.get(f.value.scenarioId)?.name : undefined))
 /** D-5：经由接口时签名中与标签同名的一行 */
 const callLine = computed(() => signatureLine(f.value.interface ? idx.value.interfaces.get(f.value.interface)?.signature : undefined, f.value.label))
-const output = computed(() => stepOutput(f.value, desk.pairs.value, desk.plan.value!.frames))
+const output = computed(() => stepOutput(f.value, desk.run.pairs.value, desk.run.plan.value!.frames))
 /** 输出侧要展开的数据结构：配对返回携带的 */
 const outData = computed(() => (output.value.kind === 'pair' ? output.value.frame.payload : []))
 /** V9：当前可见消息在本层的两端 */
@@ -110,14 +110,14 @@ function pointAt(id: string) {
       </div>
       <div v-if="msg" class="sub muted">在本层：{{ landingText(idx, msg.at) }}</div>
       <div v-else class="sub muted">
-        两端都在本层之外。<button class="link" @click="desk.goTo(desk.frameLevel.value!)">到能看到它的层次</button>
+        两端都在本层之外。<button class="link" @click="desk.goTo(desk.run.frameLevel.value!)">到能看到它的层次</button>
       </div>
     </Section>
 
     <Section v-if="msg && msg.frameIds.length > 1" title="本层这一步覆盖的帧" :count="msg.frameIds.length">
       <ol class="frames">
         <li v-for="id in msg.frameIds" :key="id" :class="{ current: id === f.id }">
-          <button class="link" @click="desk.seek(id)">{{ frameText(idx, desk.plan.value!.frames.get(id)!) }}</button>
+          <button class="link" @click="desk.seek(id)">{{ frameText(idx, desk.run.plan.value!.frames.get(id)!) }}</button>
         </li>
       </ol>
       <p class="muted hint">下钻可以看到更细的步骤。</p>

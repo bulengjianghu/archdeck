@@ -12,9 +12,9 @@ import ChangeBadge from './ChangeBadge.vue'
 const desk = useDesk()
 const route = useRoute()
 const router = useRouter()
-const d = computed(() => desk.design.value!)
-const r = computed(() => desk.revision.value!)
-const diff = computed(() => desk.diff.value)
+const d = computed(() => desk.versions.design.value!)
+const r = computed(() => desk.versions.revision.value!)
+const diff = computed(() => desk.versions.diff.value)
 
 const ENTITY_LABEL: Record<EntityKind, string> = { module: '模块', relation: '关系', interface: '接口', dataStructure: '数据结构' }
 const groups = computed(() => {
@@ -64,7 +64,7 @@ function openRevision(id: string) {
       <ol class="questions"><li v-for="q in r.questions" :key="q"><Markdown :text="q" /></li></ol>
     </Section>
 
-    <Section :title="`变更清单（相对${desk.baseline.value?.label ?? '基线'}）`" :count="diff?.changes.length ?? 0">
+    <Section :title="`变更清单（相对${desk.versions.baseline.value?.label ?? '基线'}）`" :count="diff?.changes.length ?? 0">
       <p v-if="!diff?.changes.length" class="muted">没有变更</p>
       <div v-for="g in groups" :key="g.entity" class="group">
         <div class="sub">{{ g.label }} · {{ g.items.length }}</div>

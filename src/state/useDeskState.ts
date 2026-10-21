@@ -2,70 +2,21 @@
  * DeskState：协调者（docs/architecture/view-state.md §2）。
  * - 持有视图状态（一个值）、加载后的模型与对比基线；
  * - 唯一写入口 dispatch(action) → transition() → 写入新状态；对外的操作都是构造动作并 dispatch 的包装；
- * - 派生要画的数据（层次视图、差异……）；
+ * - 派生要画的数据：核心（层次、选中、视角、层次视图）平铺，领域派生分组——run 运行视角、files 源码、versions 版本（ADR-0013，见 ./desk/）；
  * - 与外界的交互交给同步适配器：路由（sync/router）、模型源（sync/modelSource）、布局（sync/layout）、源码（sync/source）。
  * 呈现层只读这里的状态、只调这里的操作，不直接调用模型层的计算。
  */
 import { computed, ref, shallowRef } from 'vue'
 import type { Router } from 'vue-router'
-import {
-  DEFAULT_MAX_LINES,
-  RELATION_TYPES,
-  assignFiles,
-  buildSequence,
-  currentMessage,
-  diffModels,
-  fileNodes,
-  fileTree,
-  frameHome,
-  landFrame,
-  matchExports,
-  moduleEntry,
-  moduleFiles,
-  outlineScenario,
-  pairReturns,
-  participation,
-  planScenario,
-  projectLevel,
-  projectScenario,
-  resolvePath,
-  routeOf,
-  scenarioHome,
-  scenarioModules,
-  sourceIssues,
-  stageEnds,
-  stepAfter,
-  walkedCount,
-  type DirNode,
-  type ExportMatch,
-  type ExportedSymbol,
-  type FileNodes,
-  type Issue,
-  type LevelView,
-  type ModuleEntry,
-  type ModelDiff,
-  type ModelIndex,
-  type OutlineNode,
-  type Participation,
-  type ScenarioLevelView,
-  type ScenarioPlan,
-  type ReturnPairs,
-  type RouteItem,
-  type SequenceModel,
-  type SourceOwnership,
-} from '@/model'
-import type { DesignInfo, VersionRef } from '@/model/design'
-import { layoutSequence, type PositionedSequence } from '@/layout/sequence'
-import { stageOverlay, type StageOverlay } from '@/layout/stage'
+import { RELATION_TYPES, planScenario, projectLevel, stageEnds, type Issue, type LevelView, type ModelIndex, type ScenarioPlan } from '@/model'
+import type { DesignInfo } from '@/model/design'
 import {
   DEFAULT_TOGGLES,
-  emphasisOf,
   encodeView,
-  selectedOf,
   keyIntent,
   perspectiveOf,
+  selectedOf,
   transition,
-  type Emphasis,
   type Selection,
   type Toggles,
   type ViewAction,
@@ -75,6 +26,9 @@ import { createRouterSync, type RouterSync, type RouterSyncOptions } from './syn
 import { fetchAndLoad, watchModelChanges, type Baseline, type ChangeEvents, type FetchModel } from './sync/modelSource'
 import { createLayoutSync } from './sync/layout'
 import { NO_SOURCE, createSourceSync, type SourceFetcher } from './sync/source'
+import { createRun } from './desk/run'
+import { createFiles } from './desk/files'
+import { createVersions } from './desk/versions'
 
 export type { Selection, Toggles } from './transition'
 export { encodeSelection, decodeSelection } from './transition'
@@ -106,7 +60,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     const idx = index.value
     if (!idx) return false
     const prev = state.value
-    const { state: next, history } = transition(prev, action, { index: idx, plan: plan.value, levelView: view.value, scenarioView: scenarioView.value })
+    const { state: next, history } = transition(prev, action, { index: idx, plan: plan.value, levelView: view.value, scenarioView: run.scenarioView.value })
     if (next === prev) return false
     state.value = next
     if (next.levelId !== prev.levelId) levelVersion.value++
@@ -127,7 +81,6 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   /** 打开的场景的回放计划：只随场景与模型变化 */
   const scenarioId = computed(() => state.value.playback?.scenarioId ?? null)
   const plan = computed<ScenarioPlan | null>(() => (index.value && scenarioId.value ? planScenario(index.value, scenarioId.value) : null))
-  const scenario = computed(() => (scenarioId.value ? (index.value?.scenarios.get(scenarioId.value) ?? null) : null))
 
   /** 层次视图只依赖层次、显示开关与打开的场景：悬停、选中、播放头变化时 togglesNow 的值不变，不引起重新投影与布局（ADR-0009） */
   const togglesNow = computed(() => state.value.toggles)
@@ -149,134 +102,11 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   })
   const positioned = createLayoutSync(view)
 
-  // ── 运行视角的派生：回放路径 → 本层帧投影 → 时序模型 → 时序图坐标 ──
-  const choices = computed(() => state.value.playback?.choices ?? new Map<string, number>())
-  const path = computed(() => (plan.value ? resolvePath(plan.value, choices.value) : null))
-  const scenarioView = computed<ScenarioLevelView | null>(() =>
-    index.value && plan.value && view.value ? projectScenario(index.value, view.value, plan.value, choices.value) : null,
-  )
-  const home = computed(() => (index.value && plan.value ? scenarioHome(index.value, plan.value) : null))
-  /** 播放头所在的可见消息序号；尚未开始或本层不可见时为 null */
-  const currentIndex = computed(() => (scenarioView.value ? currentMessage(scenarioView.value, state.value.playback?.frameId ?? null) : null))
-  /** 从头播放到播放头为止走过的可见消息数 */
-  const walked = computed(() => (scenarioView.value ? walkedCount(scenarioView.value, state.value.playback?.frameId ?? null) : 0))
-  const frame = computed(() => {
-    const id = state.value.playback?.frameId
-    return id && plan.value ? (plan.value.frames.get(id) ?? null) : null
-  })
-  /** 停在分支点：路径在未选分支处截止，且播放头已在本层最后一条可见消息（F6） */
-  const branchPoint = computed(() => {
-    const pending = path.value?.pending
-    if (!pending || !scenarioView.value) return null
-    return stepAfter(scenarioView.value, state.value.playback?.frameId ?? null) === null ? pending : null
-  })
-  /** 当前帧在本层不可见时，能看到它的层次（R11） */
-  const frameLevel = computed(() => (index.value && frame.value ? frameHome(index.value, frame.value) : null))
-  /** 舞台叠加：参与的节点、走过的边、当前消息、未建模临时线、分支预览（V5） */
-  const overlay = computed<StageOverlay | null>(() => {
-    const pv = positioned.value
-    if (!index.value || !scenarioView.value || !view.value || !pv || pv.view.parentId !== levelId.value) return null
-    const bp = branchPoint.value
-    const options = bp
-      ? bp.options.map((o, k) => ({ option: k, label: o.when, landing: o.first ? landFrame(index.value!, view.value!, o.first) : null }))
-      : []
-    return stageOverlay(scenarioView.value, pv, state.value.playback?.frameId ?? null, options)
-  })
-  const sequence = computed<SequenceModel | null>(() =>
-    index.value && plan.value && view.value && scenarioView.value ? buildSequence(index.value, view.value, plan.value, choices.value, scenarioView.value) : null,
-  )
-  const positionedSequence = computed<PositionedSequence | null>(() => {
-    if (!sequence.value) return null
-    const pv = positioned.value
-    return layoutSequence(sequence.value, pv && pv.view.parentId === levelId.value ? pv : null)
-  })
-  /** 选中对象（步骤、场景、文件以外）在本场景中的参与（V6）；运行视角下才有 */
-  const selectedParticipation = computed<Participation | null>(() => {
-    const s = state.value.selection
-    if (!index.value || !path.value || !scenarioView.value || !s || s.kind === 'file') return null
-    return participation(index.value, path.value.frames, scenarioView.value, s, state.value.playback?.frameId)
-  })
-
-  /** F7：调用与显式返回的配对，随计划算一次 */
-  const pairs = computed<ReturnPairs | null>(() => (plan.value ? pairReturns(plan.value) : null))
-  /** F6f：路线（路径上的分支点与所选，以及待选的分支点） */
-  const route = computed<RouteItem[]>(() => (plan.value ? routeOf(plan.value, choices.value) : []))
-  /** R15、R16：选中突出——选中步骤的消息与配对消息、选中其他对象时突出的泳道；结构视角为 null */
-  const emphasis = computed<Emphasis | null>(() =>
-    index.value
-      ? emphasisOf(state.value, { index: index.value, levelView: view.value, scenarioView: scenarioView.value, sequence: sequence.value, pairs: pairs.value, fileOwners: fileOwners.value })
-      : null,
-  )
-  /** V5：参与本场景的舞台节点（时序图泳道）：path = 回放路径上的消息碰到它，other = 只在未选分支 / 未到达处 */
-  const stageParticipants = computed<ReadonlyMap<string, 'path' | 'other'>>(() => {
-    const out = new Map<string, 'path' | 'other'>()
-    for (const m of sequence.value?.messages ?? []) {
-      if (m.kind === 'empty') continue
-      for (const id of [m.from, m.to]) if (m.status === 'path') out.set(id, 'path')
-      else if (!out.has(id)) out.set(id, 'other')
-    }
-    return out
-  })
-
-  /** 导航树：步骤大纲（T6）与参与本场景的模块（T5），与层次、播放头无关 */
-  const outline = computed<OutlineNode[]>(() => (plan.value ? outlineScenario(plan.value, choices.value) : []))
-  const participants = computed<ReadonlySet<string>>(() => (index.value && plan.value ? scenarioModules(index.value, plan.value) : new Set()))
-
-  // ── 源码（G）：清单由源码同步取得，归属与投影调用模型层 ──
-  const source = sourceSync.tree
-  const localSource = computed(() => (source.value?.status === 'local' ? source.value : null))
-  const ownership = computed<SourceOwnership | null>(() =>
-    index.value && localSource.value ? assignFiles(index.value, localSource.value.files, index.value.model.sourceIgnore) : null,
-  )
-  /** G19、G20：文件行数与超长阈值 */
-  const lines = computed<Readonly<Record<string, number>>>(() => localSource.value?.lines ?? {})
-  const maxLines = computed(() => index.value?.model.sourceLimits?.maxLines ?? DEFAULT_MAX_LINES)
-  const sourceTree = computed<DirNode | null>(() =>
-    localSource.value && ownership.value ? fileTree(localSource.value.files, ownership.value, lines.value, maxLines.value) : null,
-  )
-  const selectedFile = computed(() => (state.value.selection?.kind === 'file' ? state.value.selection.id : null))
-  /** 选中文件的归属模块（冲突时多个，G6） */
-  const fileOwners = computed<string[]>(() => (selectedFile.value ? (ownership.value?.owners.get(selectedFile.value) ?? []) : []))
-  /** G14：选中文件在当前层次的投影 */
-  const fileHits = computed<FileNodes | null>(() =>
-    index.value && view.value && selectedFile.value ? fileNodes(index.value, view.value, fileOwners.value) : null,
-  )
-  /** G13：选中模块的文件 */
-  const moduleFileSet = computed<ReadonlySet<string>>(() => {
-    const s = state.value.selection
-    if (!index.value || !ownership.value || s?.kind !== 'module') return new Set()
-    return new Set(moduleFiles(index.value, ownership.value, s.id))
-  })
-  const filesOf = (moduleId: string): string[] => (index.value && ownership.value ? moduleFiles(index.value, ownership.value, moduleId) : [])
-  const entryOf = (moduleId: string): ModuleEntry | null =>
-    index.value && ownership.value && localSource.value ? moduleEntry(index.value, ownership.value, localSource.value, moduleId) : null
-  /** G12：入口导出与模块 provides 的对应 */
-  const exportMatch = (moduleId: string, symbols: readonly ExportedSymbol[]): ExportMatch | null =>
-    index.value ? matchExports(index.value, moduleId, symbols) : null
-  /** 以某个文件为入口的模块 */
-  const entryModulesOf = (file: string): string[] =>
-    index.value && ownership.value ? index.value.model.modules.filter(m => entryOf(m.id)?.file === file).map(m => m.id) : []
-  /** G9：归属警告只对当前版本报 */
-  const sourceWarnings = computed<Issue[]>(() =>
-    !options.version && index.value && ownership.value && localSource.value ? sourceIssues(index.value, ownership.value, localSource.value) : [],
-  )
-  const allIssues = computed(() => [...issues.value, ...sourceWarnings.value])
-
-  /** 打开的设计（当前版本时为 null） */
-  const design = computed(() => (options.version ? (designs.value.find(d => d.id === options.version!.design) ?? null) : null))
-  const revision = computed(() => design.value?.revisions.find(r => r.id === options.version!.revision) ?? null)
-  const baseline = computed<Baseline | null>(() => {
-    const b = baselines.value
-    return (state.value.toggles.compareTo === 'previous' ? b.previous : undefined) ?? b.current ?? null
-  })
-  /** 设计版本相对对比基线的差异；当前版本时为 null */
-  const diff = computed<ModelDiff | null>(() => (index.value && baseline.value ? diffModels(baseline.value.index, index.value) : null))
-  /** 设计起草时的基线提交与当前版本不一致：当前版本已按新代码重新生成 */
-  const baseDrift = computed(() => {
-    const was = design.value?.base?.commit
-    const now = baselines.value.current?.index.model.system.source?.commit
-    return !!was && !!now && was !== now
-  })
+  // ── 领域派生（ADR-0013）──
+  const files = createFiles({ state, index, view, sync: sourceSync, design: !!options.version })
+  const run = createRun({ state, index, levelId, plan, view, positioned, fileOwners: files.owners })
+  const versions = createVersions({ state, index, designs, baselines, version: options.version })
+  const allIssues = computed(() => [...issues.value, ...files.warnings.value])
 
   /** 开关：读取来自视图状态，写入即 dispatch(toggle)（呈现层可直接 v-model） */
   const toggles = new Proxy({} as Toggles, {
@@ -349,9 +179,9 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const seek = (frameId: string | null) => void dispatch({ type: 'seek', frameId })
   /** F6e、F6f：选分支；返回被丢弃的其他分支选择个数（界面据此提示） */
   const chooseBranch = (pointId: string, option: number): number => {
-    const before = choices.value
+    const before = run.choices.value
     dispatch({ type: 'chooseBranch', pointId, option })
-    return [...before.keys()].filter(k => k !== pointId && !choices.value.has(k)).length
+    return [...before.keys()].filter(k => k !== pointId && !run.choices.value.has(k)).length
   }
   const selectFile = (path: string) => select({ kind: 'file', id: path })
 
@@ -367,69 +197,29 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   return {
     project: options.project,
     version: options.version,
-    // 状态（只读使用）
+    // 核心（只读使用）
     state,
     status,
     loadError,
     index,
     issues,
+    allIssues,
     modelDir,
     levelId,
     levelPath,
     selection,
+    selected,
     hoverId,
+    perspective,
     toggles,
     view,
     positioned,
-    perspective,
-    selected,
-    playback,
-    scenario,
-    plan,
-    path,
-    scenarioView,
-    home,
-    currentIndex,
-    walked,
-    frame,
-    sequence,
-    positionedSequence,
-    selectedParticipation,
-    outline,
-    participants,
-    pairs,
-    route,
-    emphasis,
-    stageParticipants,
-    branchPoint,
-    frameLevel,
-    overlay,
     levelVersion,
-    source,
-    ownership,
-    sourceTree,
-    lines,
-    maxLines,
-    selectedFile,
-    fileOwners,
-    fileHits,
-    moduleFileSet,
-    sourceWarnings,
-    allIssues,
-    filesOf,
-    entryOf,
-    exportMatch,
-    entryModulesOf,
-    sourceFile: sourceSync.file,
-    sourceExports: sourceSync.exports,
-    refreshSource: sourceSync.refresh,
-    designs,
-    design,
-    revision,
-    baselines,
-    baseline,
-    diff,
-    baseDrift,
+    playback,
+    // 领域派生
+    run,
+    files,
+    versions,
     // 操作
     dispatch,
     init,

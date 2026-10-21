@@ -5,9 +5,9 @@ import { useDesk } from '@/state/inject'
 import { DESIGN_STATUS_LABELS } from '@/model/design'
 
 const desk = useDesk()
-const d = computed(() => desk.design.value)
-const r = computed(() => desk.revision.value)
-const counts = computed(() => desk.diff.value?.counts)
+const d = computed(() => desk.versions.design.value)
+const r = computed(() => desk.versions.revision.value)
+const counts = computed(() => desk.versions.diff.value?.counts)
 const latest = computed(() => !!d.value && d.value.revisions[d.value.revisions.length - 1]?.id === r.value?.id)
 
 function showDesignNotes() {
@@ -30,17 +30,17 @@ function showDesignNotes() {
     <label class="cmp">
       对比
       <select v-model="desk.toggles.compareTo">
-        <option value="current">{{ desk.baselines.value.current?.label ?? '当前版本' }}</option>
-        <option v-if="desk.baselines.value.previous" value="previous">上一轮（{{ desk.baselines.value.previous.label }}）</option>
+        <option value="current">{{ desk.versions.baselines.value.current?.label ?? '当前版本' }}</option>
+        <option v-if="desk.versions.baselines.value.previous" value="previous">上一轮（{{ desk.versions.baselines.value.previous.label }}）</option>
       </select>
     </label>
-    <span v-if="counts" class="counts" :title="`相对${desk.baseline.value?.label}`">
+    <span v-if="counts" class="counts" :title="`相对${desk.versions.baseline.value?.label}`">
       <span class="diff-tag added">新增 {{ counts.added }}</span>
       <span class="diff-tag changed">修改 {{ counts.changed }}</span>
       <span class="diff-tag removed">删除 {{ counts.removed }}</span>
     </span>
     <label class="check"><input v-model="desk.toggles.showDiff" type="checkbox" /> 图上标出变更</label>
-    <span v-if="desk.baseDrift.value" class="drift" title="设计起草后当前版本已按新代码重新生成，「相对当前版本」的变更可能包含代码本身的变化">
+    <span v-if="desk.versions.drift.value" class="drift" title="设计起草后当前版本已按新代码重新生成，「相对当前版本」的变更可能包含代码本身的变化">
       ⚠ 基线已漂移
     </span>
   </div>

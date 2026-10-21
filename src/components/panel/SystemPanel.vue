@@ -14,8 +14,8 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
 
 <template>
   <div class="system-panel">
-    <DesignSection v-if="desk.design.value && desk.revision.value" />
-    <header class="head" :class="{ 'after-design': !!desk.design.value }">
+    <DesignSection v-if="desk.versions.design.value && desk.versions.revision.value" />
+    <header class="head" :class="{ 'after-design': !!desk.versions.design.value }">
       <h2>{{ sys.name }}</h2>
       <div class="badges">
         <code>{{ sys.id }}</code>

@@ -20,7 +20,7 @@ const desk = useDesk()
 const sequence = ref<InstanceType<typeof SequenceView>>()
 const onSequence = computed(() => props.run && !(props.tab === 'source' && props.previewPath))
 /** R11：当前帧在本层不可见 */
-const hiddenCurrent = computed(() => !!desk.frame.value && desk.currentIndex.value === null)
+const hiddenCurrent = computed(() => !!desk.run.frame.value && desk.run.currentIndex.value === null)
 </script>
 
 <template>
@@ -40,9 +40,9 @@ const hiddenCurrent = computed(() => !!desk.frame.value && desk.currentIndex.val
       </span>
       <template v-if="onSequence && !collapsed">
         <span v-if="hiddenCurrent" class="hint">
-          本层不可见：<button class="link" @click="desk.goTo(desk.frameLevel.value!)">到能看到它的层次</button>
+          本层不可见：<button class="link" @click="desk.goTo(desk.run.frameLevel.value!)">到能看到它的层次</button>
         </span>
-        <button class="locate" :disabled="desk.currentIndex.value === null" @click="sequence?.centerCurrent()">定位</button>
+        <button class="locate" :disabled="desk.run.currentIndex.value === null" @click="sequence?.centerCurrent()">定位</button>
       </template>
       <button class="dir" :title="dir === 'row' ? '改为上下排列' : '改为左右排列'" @click="emit('direction', dir === 'row' ? 'column' : 'row')">
         {{ dir === 'row' ? '⇅ 上下' : '⇆ 左右' }}

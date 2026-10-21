@@ -18,7 +18,7 @@ const root = ref<HTMLElement>()
 const collapsed = ref(new Set<string>())
 
 function mark(f: Frame, status: 'path' | 'unchosen' | 'unreached'): FrameMark {
-  const v = desk.scenarioView.value
+  const v = desk.run.scenarioView.value
   const m = v?.messageOf.get(f.id)
   const hidden = status === 'path' && m === undefined
   const seq = m === undefined ? undefined : m + 1
@@ -26,7 +26,7 @@ function mark(f: Frame, status: 'path' | 'unchosen' | 'unreached'): FrameMark {
   const head = desk.playback.value?.frameId ?? null
   const step = desk.selected.value?.kind === 'step'
   if (f.id === head) return { state: step ? 'selected' : 'progress', seq, hidden }
-  const cur = desk.currentIndex.value
+  const cur = desk.run.currentIndex.value
   if (step && cur !== null && m === cur) return { state: 'same', seq, hidden }
   const at = head === null ? -1 : (v.order.get(head) ?? -1)
   // 进度所在可见消息中的其他帧随这一步一起走过
@@ -47,7 +47,7 @@ function hover(id: string | null) {
 
 // T7：进度所在的帧滚到可见
 watch(
-  () => [desk.playback.value?.frameId, desk.currentIndex.value] as const,
+  () => [desk.playback.value?.frameId, desk.run.currentIndex.value] as const,
   async () => {
     await nextTick()
     root.value?.querySelector<HTMLElement>('.frame.selected, .frame.progress')?.scrollIntoView?.({ block: 'nearest' })
@@ -59,12 +59,12 @@ watch(
 <template>
   <div ref="root" class="step-tree" @mouseleave="hover(null)">
     <div class="scenario">
-      <strong>{{ desk.scenario.value?.name }}</strong>
+      <strong>{{ desk.run.scenario.value?.name }}</strong>
       <button class="link start" :class="{ current: desk.selected.value?.kind === 'scenario' }" title="回到开头（选中场景）" @click="desk.seek(null)">开头</button>
     </div>
     <ul class="tree" role="tree">
       <StepTreeNode
-        v-for="(n, k) in desk.outline.value"
+        v-for="(n, k) in desk.run.outline.value"
         :key="k"
         :node="n"
         :depth="0"
