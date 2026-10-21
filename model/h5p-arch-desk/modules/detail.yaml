@@ -147,7 +147,7 @@ modules:
   - id: model.pipeline.loader
     name: Loader
     parent: model.pipeline
-    responsibility: 解析 YAML / JSON、按 JSON Schema 检查单文件格式（未知字段即报错）、把多个文件合并成一个模型并记录每个实体的出处（文件 / 路径 / 行号）；解析外部参与者、场景与嵌套步骤树（每个步骤记录路径与出处）。
+    responsibility: 解析 YAML / JSON、按 JSON Schema 检查单文件格式（未知字段即报错）、把多个文件合并成一个模型并记录每个实体的出处（文件 / 路径 / 行号）；解析外部参与者、场景与嵌套步骤树（每个步骤记录路径与出处）；sourceLimits 只取第一处声明，重复时提醒（G20）。
     codeRefs: [src/model/load.ts]
   - id: model.pipeline.validator
     name: Validator

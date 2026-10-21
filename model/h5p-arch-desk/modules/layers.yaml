@@ -152,7 +152,7 @@ modules:
       - id: access.source
         name: 源码读取
         kind: subsystem
-        responsibility: 按 system.source.repo 解析被描述项目的源码根目录（工作区根目录 + repo，环境变量可覆盖；不在本地时给出原因与尝试的路径，G1）；列出文件清单（git 仓库内按 git 的忽略规则，否则排除依赖与产物目录，G2）与各 package.json 的入口字段；读取单个文件（必须在清单中，过大或二进制只给提示，G17）；用 TypeScript 语法树解析导出的名称、类别与签名，顺着相对路径的再导出往下找（G11）。不判断文件属于哪个模块。
+        responsibility: 按 system.source.repo 解析被描述项目的源码根目录（工作区根目录 + repo，环境变量可覆盖；不在本地时给出原因与尝试的路径，G1）；列出文件清单（git 仓库内按 git 的忽略规则，否则排除依赖与产物目录，G2）与各 package.json 的入口字段；读取单个文件（必须在清单中，过大或二进制只给提示，G17）；用 TypeScript 语法树解析导出的名称、类别与签名，顺着相对路径的再导出往下找（G11）。不判断文件属于哪个模块；统计 TS / JS / Vue 文件的物理行数，按修改时间与大小缓存（G19）。
         codeRefs: [vite/readSource.ts]
         docRefs: [docs/architecture/source.md]
       - id: access.lint

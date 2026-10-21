@@ -75,7 +75,7 @@ modules:
   - id: state.transition.focus
     name: 视角与焦点规则
     parent: state.transition
-    responsibility: 视角（结构 / 运行，由是否打开场景决定）与焦点（结构视角 = 选中或当前父模块；运行视角 = 跟随或钉住二选一）由视图状态推出（V1、V2）；运行视角下「指向」对象即钉住，下钻钉住被下钻的模块（V3）；取消选中回到跟随（V4）。焦点突出（emphasisOf，R15）同样由状态推出：跟随时为当前可见消息及其配对帧所在的消息，钉住时为钉住对象参与的消息，停在开头不突出。
+    responsibility: 视角（结构 / 运行，由是否打开场景决定）与焦点（结构视角 = 选中或当前父模块；运行视角 = 跟随或钉住二选一）由视图状态推出（V1、V2）；运行视角下「指向」对象即钉住，下钻钉住被下钻的模块（V3）；取消选中回到跟随（V4）。焦点突出（emphasisOf，R15）同样由状态推出：跟随时为当前可见消息及其配对帧所在的消息，钉住时为钉住对象参与的消息（钉住的是当前层次本身或其祖先时按跟随，ADR-0011），停在开头不突出。
     codeRefs: [src/state/transition/focus.ts]
   - id: state.transition.navigation
     name: 导航规则
