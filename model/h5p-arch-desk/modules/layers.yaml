@@ -21,7 +21,7 @@ modules:
         name: 项目列表主页
         kind: subsystem
         core: true
-        responsibility: 列出模型根目录下的全部项目（简介、分层、规模、生成来源、问题数）及各项目的设计版本，点击进入项目当前版本或设计的最新一轮。
+        responsibility: 列出模型根目录下的全部项目（简介、分层、规模、生成来源、问题数）及各项目推进中的设计版本（已实现、已放弃的设计归档，只注明个数，DV-6），点击进入项目当前版本或设计的最新一轮。
         codeRefs: [src/components/ProjectList.vue]
       - id: present.desk-view
         name: 项目视图

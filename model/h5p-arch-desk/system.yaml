@@ -6,5 +6,5 @@ system:
     按依赖方向分为呈现 / 视图状态 / 接入 / 模型四层，模型层是不依赖 Vue 与布局库的纯逻辑核心（见 docs/03-architecture.md）。
   source:
     repo: h5player-demo/packages/h5p-arch-desk
-    commit: 3329dc58f4d544ee66b4583b6296e29e14501df6
+    commit: c4d7b4500bc817278c5911b9d653a33e499e043d
     generatedAt: '2026-10-21'
