@@ -43,7 +43,11 @@ export function resolveSourceRoot(project: string, system: SystemDef, workspace:
 export function listSourceFiles(root: string): string[] {
   let files: string[]
   try {
-    const out = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: root, maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] })
+    const out = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
+      cwd: root,
+      maxBuffer: 256 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
     files = [...new Set(out.toString('utf8').split('\0').filter(Boolean))].filter(f => {
       try {
         return fs.statSync(path.join(root, f)).isFile() // 去掉已删除未提交的文件与子模块目录
@@ -122,8 +126,23 @@ export function countLines(root: string, files: readonly string[]): Record<strin
 }
 
 const LANGS: Record<string, string> = {
-  ts: 'typescript', mts: 'typescript', cts: 'typescript', tsx: 'tsx', js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'jsx',
-  vue: 'vue', json: 'json', yaml: 'yaml', yml: 'yaml', md: 'markdown', css: 'css', scss: 'scss', html: 'html', sh: 'shellscript',
+  ts: 'typescript',
+  mts: 'typescript',
+  cts: 'typescript',
+  tsx: 'tsx',
+  js: 'javascript',
+  mjs: 'javascript',
+  cjs: 'javascript',
+  jsx: 'jsx',
+  vue: 'vue',
+  json: 'json',
+  yaml: 'yaml',
+  yml: 'yaml',
+  md: 'markdown',
+  css: 'css',
+  scss: 'scss',
+  html: 'html',
+  sh: 'shellscript',
 }
 
 export function langOf(file: string): string {
@@ -150,12 +169,26 @@ function resolveModule(from: string, spec: string, files: ReadonlySet<string>): 
   if (!spec.startsWith('.')) return null
   const base = path.posix.normalize(path.posix.join(path.posix.dirname(from), spec))
   const stem = base.replace(/\.(m|c)?js$/, '')
-  const candidates = [base, `${stem}.ts`, `${stem}.tsx`, `${stem}.mts`, `${stem}.js`, `${stem}.jsx`, `${stem}.d.ts`, `${base}/index.ts`, `${base}/index.tsx`, `${base}/index.js`]
+  const candidates = [
+    base,
+    `${stem}.ts`,
+    `${stem}.tsx`,
+    `${stem}.mts`,
+    `${stem}.js`,
+    `${stem}.jsx`,
+    `${stem}.d.ts`,
+    `${base}/index.ts`,
+    `${base}/index.tsx`,
+    `${base}/index.js`,
+  ]
   return candidates.find(c => files.has(c)) ?? null
 }
 
 const clip = (text: string) => {
-  const lines = text.replace(/^export\s+(default\s+)?(declare\s+)?/, '').trimEnd().split('\n')
+  const lines = text
+    .replace(/^export\s+(default\s+)?(declare\s+)?/, '')
+    .trimEnd()
+    .split('\n')
   return lines.length > MAX_SIGNATURE_LINES ? [...lines.slice(0, MAX_SIGNATURE_LINES - 1), '// …'].join('\n') : lines.join('\n')
 }
 
@@ -167,7 +200,11 @@ function signatureOf(node: ts.Node, sf: ts.SourceFile): string {
   if (ts.isClassDeclaration(node)) {
     const head = text.slice(node.getStart(sf), node.members.pos).trimEnd()
     const members = node.members
-      .filter(m => !(ts.getCombinedModifierFlags(m as ts.Declaration) & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected)) && !(m.name && ts.isPrivateIdentifier(m.name)))
+      .filter(
+        m =>
+          !(ts.getCombinedModifierFlags(m as ts.Declaration) & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected)) &&
+          !(m.name && ts.isPrivateIdentifier(m.name)),
+      )
       .map(m => {
         const body = ts.isMethodDeclaration(m) || ts.isConstructorDeclaration(m) || ts.isGetAccessor(m) || ts.isSetAccessor(m) ? m.body : undefined
         const t = body ? text.slice(m.getStart(sf), body.getStart(sf)).trimEnd() : m.getText(sf).replace(/\s*=[\s\S]*$/, '')
@@ -185,7 +222,9 @@ function variableSignature(decl: ts.VariableDeclaration, list: ts.VariableDeclar
   const init = decl.initializer
   if (init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init))) {
     const params = `(${init.parameters.map(p => p.getText(sf)).join(', ')})`
-    return clip(`${keyword} ${name} = ${init.typeParameters ? `<${init.typeParameters.map(t => t.getText(sf)).join(', ')}>` : ''}${params}${init.type ? `: ${init.type.getText(sf)}` : ''} => …`)
+    return clip(
+      `${keyword} ${name} = ${init.typeParameters ? `<${init.typeParameters.map(t => t.getText(sf)).join(', ')}>` : ''}${params}${init.type ? `: ${init.type.getText(sf)}` : ''} => …`,
+    )
   }
   return `${keyword} ${name}`
 }
@@ -195,7 +234,14 @@ const hasModifier = (node: ts.Node, kind: ts.SyntaxKind) => !!(ts.canHaveModifie
 type Local = { kind: ExportedSymbol['kind']; signature: string; line: number }
 
 /** memo：本次解析中已算过的文件；stack：当前再导出链（防环） */
-function collectExports(root: string, file: string, files: ReadonlySet<string>, depth: number, memo: Map<string, ExportedSymbol[]>, stack: ReadonlySet<string>): ExportedSymbol[] {
+function collectExports(
+  root: string,
+  file: string,
+  files: ReadonlySet<string>,
+  depth: number,
+  memo: Map<string, ExportedSymbol[]>,
+  stack: ReadonlySet<string>,
+): ExportedSymbol[] {
   if (stack.has(file)) return []
   const done = memo.get(file)
   if (done) return done
@@ -225,7 +271,8 @@ function collectExports(root: string, file: string, files: ReadonlySet<string>, 
     else if (ts.isEnumDeclaration(st)) declare(st.name.text, 'enum', st)
     else if (ts.isModuleDeclaration(st)) declare(st.name.getText(sf), 'namespace', st, `namespace ${st.name.getText(sf)}`)
     else if (ts.isVariableStatement(st))
-      for (const d of st.declarationList.declarations) if (ts.isIdentifier(d.name)) declare(d.name.text, 'const', d, variableSignature(d, st.declarationList, sf))
+      for (const d of st.declarationList.declarations)
+        if (ts.isIdentifier(d.name)) declare(d.name.text, 'const', d, variableSignature(d, st.declarationList, sf))
   }
 
   for (const st of sf.statements) {
@@ -242,7 +289,13 @@ function collectExports(root: string, file: string, files: ReadonlySet<string>, 
       // export * from './x'：不含默认导出
       for (const s of sub()) if (s.name !== 'default') add({ ...s, from: s.from ?? target! })
     } else if (ts.isNamespaceExport(clause)) {
-      add({ name: clause.name.text, kind: 'namespace', signature: `export * as ${clause.name.text} from '${spec}'`, line: lineOf(st), from: target ?? undefined })
+      add({
+        name: clause.name.text,
+        kind: 'namespace',
+        signature: `export * as ${clause.name.text} from '${spec}'`,
+        line: lineOf(st),
+        from: target ?? undefined,
+      })
     } else {
       const fromTarget = spec ? sub() : []
       for (const el of clause.elements) {
@@ -250,7 +303,11 @@ function collectExports(root: string, file: string, files: ReadonlySet<string>, 
         const name = el.name.text
         if (spec) {
           const hit = fromTarget.find(s => s.name === local)
-          add(hit ? { ...hit, name, from: hit.from ?? target! } : { name, kind: 'reexport', signature: `export { ${el.getText(sf)} } from '${spec}'`, line: lineOf(el), from: target ?? undefined })
+          add(
+            hit
+              ? { ...hit, name, from: hit.from ?? target! }
+              : { name, kind: 'reexport', signature: `export { ${el.getText(sf)} } from '${spec}'`, line: lineOf(el), from: target ?? undefined },
+          )
         } else {
           const l = locals.get(local)
           add(l ? { name, ...l } : { name, kind: 'reexport', line: lineOf(el) })

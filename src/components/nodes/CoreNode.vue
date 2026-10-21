@@ -7,10 +7,7 @@ defineProps<{ data: NodeData }>()
 </script>
 
 <template>
-  <div
-    class="core"
-    :class="{ selected: data.selected, dim: data.dim, target: data.module?.status === 'target', [`diff-${data.change}`]: !!data.change }"
-  >
+  <div class="core" :class="{ selected: data.selected, dim: data.dim, target: data.module?.status === 'target', [`diff-${data.change}`]: !!data.change }">
     <Handles />
     <DiffMark :data="data" />
     <span class="name">{{ data.name }}</span>

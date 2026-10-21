@@ -93,7 +93,11 @@ describe('接入层 · 多项目读取', () => {
     expect(next.problems).toEqual(['轮次 r9 缺少快照目录 r9/system.yaml，已忽略'])
     expect(designs[0].status).toBe('draft')
     expect(designs[0].problems).toHaveLength(2) // 非法 status + 没有轮次
-    expect(listProjects(modelRoot, root).find(p => p.id === 'alpha')!.designs.map(d => d.id)).toEqual(['bad', 'next'])
+    expect(
+      listProjects(modelRoot, root)
+        .find(p => p.id === 'alpha')!
+        .designs.map(d => d.id),
+    ).toEqual(['bad', 'next'])
   })
 
   it('读设计的某一轮：附当前版本与上一轮作为对比基线', () => {

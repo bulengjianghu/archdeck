@@ -9,13 +9,7 @@ const desk = useDesk()
 
 <template>
   <div class="step-badge">
-    <button
-      v-for="s in data.steps ?? []"
-      :key="s.n"
-      class="n"
-      :class="{ current: s.current, muted: s.muted }"
-      @click.stop="desk.seek(s.frameId)"
-    >
+    <button v-for="s in data.steps ?? []" :key="s.n" class="n" :class="{ current: s.current, muted: s.muted }" @click.stop="desk.seek(s.frameId)">
       {{ s.n }}
     </button>
   </div>

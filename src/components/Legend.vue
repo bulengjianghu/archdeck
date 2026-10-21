@@ -23,7 +23,9 @@ const LABEL: Record<string, string> = {
   <div class="legend">
     <button class="toggle" @click="open = !open">图例 {{ open ? '▾' : '▸' }}</button>
     <div v-if="open" class="body">
-      <div v-for="t in RELATION_TYPES" :key="t" class="row"><span class="rel-chip" :class="`rel-${t}`">{{ LABEL[t] }}</span></div>
+      <div v-for="t in RELATION_TYPES" :key="t" class="row">
+        <span class="rel-chip" :class="`rel-${t}`">{{ LABEL[t] }}</span>
+      </div>
       <div class="row muted">线越粗 = 聚合的关系越多；点划线 = 异步</div>
       <div class="row"><span class="box" /> 模块 <span class="box stack" /> 可下钻 <span class="box dashed" /> 目标态 / 外部</div>
       <template v-if="desk.perspective.value === 'run'">
@@ -117,7 +119,9 @@ const LABEL: Record<string, string> = {
 }
 
 .box.stack {
-  box-shadow: 2px 2px 0 -1px var(--surface), 2px 2px 0 0 var(--border-strong);
+  box-shadow:
+    2px 2px 0 -1px var(--surface),
+    2px 2px 0 0 var(--border-strong);
 }
 
 .box.dashed {

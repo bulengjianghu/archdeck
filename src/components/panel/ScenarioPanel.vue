@@ -41,7 +41,9 @@ function pointAt(id: string) {
 <template>
   <div v-if="sc" class="scenario-panel">
     <header class="head">
-      <div class="title"><h2>{{ sc.name }}</h2></div>
+      <div class="title">
+        <h2>{{ sc.name }}</h2>
+      </div>
       <div class="badges">
         <code>{{ sc.id }}</code>
         <span class="badge accent">场景</span>
@@ -50,7 +52,9 @@ function pointAt(id: string) {
     <DesignNote :text="sc.designNote" />
     <div v-if="empty" class="notice">
       本层看不到这个场景的任何一步。
-      <button v-if="desk.run.home.value" class="link" @click="desk.goTo(desk.run.home.value)">跳到场景所在层次：{{ moduleName(idx, desk.run.home.value) }}</button>
+      <button v-if="desk.run.home.value" class="link" @click="desk.goTo(desk.run.home.value)">
+        跳到场景所在层次：{{ moduleName(idx, desk.run.home.value) }}
+      </button>
     </div>
     <Section v-if="sc.description" title="说明"><Markdown :text="sc.description" /></Section>
     <Section title="触发">

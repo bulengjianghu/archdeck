@@ -19,7 +19,9 @@ const scenarios = computed(() => (idx.value.triggeredBy.get(props.id) ?? []).map
 <template>
   <div v-if="a" class="actor-panel">
     <header class="head">
-      <div class="title"><h2>{{ a.name }}</h2></div>
+      <div class="title">
+        <h2>{{ a.name }}</h2>
+      </div>
       <div class="badges">
         <code>{{ a.id }}</code>
         <span class="badge accent">外部参与者</span>
@@ -32,7 +34,9 @@ const scenarios = computed(() => (idx.value.triggeredBy.get(props.id) ?? []).map
       <p v-else class="muted">未填写</p>
     </Section>
     <Section title="入口关系" :count="relations.length">
-      <ul v-if="relations.length" class="plain"><RelationRow v-for="r in relations" :key="r" :id="r" :perspective="a.id" /></ul>
+      <ul v-if="relations.length" class="plain">
+        <RelationRow v-for="r in relations" :key="r" :id="r" :perspective="a.id" />
+      </ul>
       <p v-else class="muted">没有与系统的关系</p>
     </Section>
     <Section title="由它触发的场景" :count="scenarios.length">
@@ -44,7 +48,9 @@ const scenarios = computed(() => (idx.value.triggeredBy.get(props.id) ?? []).map
       </ul>
       <p v-else class="muted">没有以它为第一条消息发送方的场景</p>
     </Section>
-    <div class="src muted">{{ a.src.file }}<template v-if="a.src.line">:{{ a.src.line }}</template></div>
+    <div class="src muted">
+      {{ a.src.file }}<template v-if="a.src.line">:{{ a.src.line }}</template>
+    </div>
   </div>
   <div v-else class="head muted">参与者「{{ id }}」在当前描述中不存在。</div>
 </template>

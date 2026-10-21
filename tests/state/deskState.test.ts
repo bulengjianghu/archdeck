@@ -21,7 +21,11 @@ async function setup(initialUrl = '/', files = sampleFiles()) {
 
 describe('选中编码', () => {
   it('模块 / 关系 / 边可往返编码', () => {
-    for (const s of [{ kind: 'module', id: 'a.b' }, { kind: 'relation', id: 'r1' }, { kind: 'edge', id: 'a->b:calls' }] as const) {
+    for (const s of [
+      { kind: 'module', id: 'a.b' },
+      { kind: 'relation', id: 'r1' },
+      { kind: 'edge', id: 'a->b:calls' },
+    ] as const) {
       expect(decodeSelection(encodeSelection(s))).toEqual(s)
     }
     expect(decodeSelection('x:1')).toBeNull()
@@ -107,7 +111,7 @@ describe('DeskState', () => {
     expect(desk.selection.value).toEqual({ kind: 'module', id: 'infra.framework.sm' })
 
     const files = sampleFiles().map(f =>
-      f.path === 'modules/infra.yaml' ? { ...f, text: f.text.replace(/    - id: infra\.framework\n[\s\S]*?(?=    - id: infra\.mus)/, '') } : f,
+      f.path === 'modules/infra.yaml' ? { ...f, text: f.text.replace(/ {4}- id: infra\.framework\n[\s\S]*?(?= {4}- id: infra\.mus)/, '') } : f,
     )
     setPayload({ dir: 'model/test', files: files.map(f => (f.path === 'relations.yaml' ? { ...f, text: 'relations: []' } : f)) })
     await desk.reload()

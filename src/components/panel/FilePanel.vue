@@ -25,7 +25,11 @@ const name = computed(() => props.path.split('/').pop())
 const lineCount = computed(() => desk.files.lines.value[props.path])
 const long = computed(() => isLong(lineCount.value, desk.files.maxLines.value))
 const levelName = computed(() => moduleName(idx.value, desk.levelId.value))
-const pathOf = (id: string) => (idx.value.pathOf.get(id) ?? []).slice(1).map(m => moduleName(idx.value, m)).join(' / ')
+const pathOf = (id: string) =>
+  (idx.value.pathOf.get(id) ?? [])
+    .slice(1)
+    .map(m => moduleName(idx.value, m))
+    .join(' / ')
 </script>
 
 <template>
@@ -41,13 +45,21 @@ const pathOf = (id: string) => (idx.value.pathOf.get(id) ?? []).slice(1).map(m =
         <span v-if="owners.length > 1" class="badge warn">归属冲突</span>
         <span v-else-if="exists && !owners.length && !ignored" class="badge warn">未归属</span>
         <span v-if="ignored" class="badge">已忽略</span>
-        <span v-if="lineCount !== undefined" class="badge" :class="{ bad: long }">{{ lineCount }} 行{{ long ? `（超过 ${desk.files.maxLines.value}）` : '' }}</span>
+        <span v-if="lineCount !== undefined" class="badge" :class="{ bad: long }"
+          >{{ lineCount }} 行{{ long ? `（超过 ${desk.files.maxLines.value}）` : '' }}</span
+        >
       </div>
     </header>
 
     <Section v-if="!local" title="源码">
       <p class="muted">
-        {{ desk.files.payload.value?.status === 'absent' ? `源码不在本地（${desk.files.payload.value.tried ?? desk.files.payload.value.reason}）` : desk.files.payload.value ? '构建产物不含源码' : '正在读取源码清单…' }}
+        {{
+          desk.files.payload.value?.status === 'absent'
+            ? `源码不在本地（${desk.files.payload.value.tried ?? desk.files.payload.value.reason}）`
+            : desk.files.payload.value
+              ? '构建产物不含源码'
+              : '正在读取源码清单…'
+        }}
       </p>
     </Section>
     <Section v-else-if="!exists" title="源码"><p class="muted">文件不存在：不在源码文件清单中（可能已删除或改名）</p></Section>
@@ -62,7 +74,9 @@ const pathOf = (id: string) => (idx.value.pathOf.get(id) ?? []).slice(1).map(m =
         </ul>
         <p v-if="owners.length > 1" class="warn-text">多个互不包含的模块的 codeRefs 都匹配这个文件，请只保留一处（G6）。</p>
         <p v-else-if="ignored" class="muted">在忽略清单（sourceIgnore）中，不属于任何模块。</p>
-        <p v-else-if="!owners.length" class="warn-text">没有模块的 codeRefs 匹配这个文件：属于某个模块就补进它的 codeRefs，否则写进 <code>source-ignore.yaml</code> 的 sourceIgnore。</p>
+        <p v-else-if="!owners.length" class="warn-text">
+          没有模块的 codeRefs 匹配这个文件：属于某个模块就补进它的 codeRefs，否则写进 <code>source-ignore.yaml</code> 的 sourceIgnore。
+        </p>
       </Section>
 
       <Section v-if="owners.length" title="当前层次">
@@ -73,7 +87,9 @@ const pathOf = (id: string) => (idx.value.pathOf.get(id) ?? []).slice(1).map(m =
 
       <Section v-if="entries.length" title="作为入口">
         <ul class="plain">
-          <li v-for="m in entries" :key="m"><button class="link" @click="desk.revealModule(m)">{{ moduleName(idx, m) }}</button> 的对外入口</li>
+          <li v-for="m in entries" :key="m">
+            <button class="link" @click="desk.revealModule(m)">{{ moduleName(idx, m) }}</button> 的对外入口
+          </li>
         </ul>
       </Section>
 

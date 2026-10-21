@@ -6,7 +6,18 @@ import os from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { MAX_PREVIEW_BYTES, countLines, langOf, listSourceFiles, readExports, readSourceFile, readSourceTree, resolveSourceRoot, sourceRootEnvKey, workspaceRoot } from '../../vite/readSource'
+import {
+  MAX_PREVIEW_BYTES,
+  countLines,
+  langOf,
+  listSourceFiles,
+  readExports,
+  readSourceFile,
+  readSourceTree,
+  resolveSourceRoot,
+  sourceRootEnvKey,
+  workspaceRoot,
+} from '../../vite/readSource'
 
 let ws: string
 let projectRoot: string
@@ -27,7 +38,10 @@ beforeAll(() => {
   write(modelRoot, 'gone/system.yaml', 'system: { id: gone, name: Gone, source: { repo: elsewhere/gone } }')
   write(modelRoot, 'norepo/system.yaml', 'system: { id: norepo, name: NoRepo }')
   repo = path.join(ws, 'app-repo')
-  write(repo, 'src/index.ts', `
+  write(
+    repo,
+    'src/index.ts',
+    `
 export * from './a'
 export { b as renamed, type B } from './b'
 export * as ns from './c'
@@ -37,8 +51,12 @@ export default function main(x: number): string {
 }
 const local = 1
 export { local as exposed }
-`)
-  write(repo, 'src/a.ts', `
+`,
+  )
+  write(
+    repo,
+    'src/a.ts',
+    `
 /** 注释 */
 export function alpha(a: string, b?: number): Promise<void> {
   console.log(a, b)
@@ -57,7 +75,8 @@ export class Store<T> extends Base {
   }
 }
 export default 42
-`)
+`,
+  )
   write(repo, 'src/b.ts', 'export function b(): void {}\nexport type B = { b: 1 }\n')
   write(repo, 'src/c.ts', 'export const c = 1\n')
   write(repo, 'big.txt', 'x'.repeat(MAX_PREVIEW_BYTES + 1))
@@ -83,7 +102,12 @@ describe('G1 源码根目录', () => {
     expect(r).toEqual({ status: 'local', root: repo })
   })
   it('目录不存在或未写 repo：源码不在本地，不抛错', () => {
-    expect(readSourceTree(modelRoot, 'gone', projectRoot, {})).toEqual({ status: 'absent', repo: 'elsewhere/gone', tried: path.join(ws, 'elsewhere/gone'), reason: '源码不在本地' })
+    expect(readSourceTree(modelRoot, 'gone', projectRoot, {})).toEqual({
+      status: 'absent',
+      repo: 'elsewhere/gone',
+      tried: path.join(ws, 'elsewhere/gone'),
+      reason: '源码不在本地',
+    })
     expect(readSourceTree(modelRoot, 'norepo', projectRoot, {})).toMatchObject({ status: 'absent', reason: expect.stringContaining('repo') })
     expect(readSourceTree(modelRoot, 'nope', projectRoot, {})).toBeNull()
   })

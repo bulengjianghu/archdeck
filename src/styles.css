@@ -152,11 +152,21 @@ a {
   color: var(--text-3);
 }
 
-.rel-depends { --rel: var(--rel-depends); }
-.rel-calls { --rel: var(--rel-calls); }
-.rel-dataflow { --rel: var(--rel-dataflow); }
-.rel-event { --rel: var(--rel-event); }
-.rel-implements { --rel: var(--rel-implements); }
+.rel-depends {
+  --rel: var(--rel-depends);
+}
+.rel-calls {
+  --rel: var(--rel-calls);
+}
+.rel-dataflow {
+  --rel: var(--rel-dataflow);
+}
+.rel-event {
+  --rel: var(--rel-event);
+}
+.rel-implements {
+  --rel: var(--rel-implements);
+}
 
 .rel-chip {
   display: inline-flex;
@@ -233,7 +243,9 @@ a {
 
 /* ── 选中文件：归属模块在本层的投影节点（G14） ── */
 .vue-flow__node.file-hit > * {
-  box-shadow: 0 0 0 3px var(--accent), 0 0 0 6px var(--accent-soft) !important;
+  box-shadow:
+    0 0 0 3px var(--accent),
+    0 0 0 6px var(--accent-soft) !important;
   opacity: 1 !important;
 }
 

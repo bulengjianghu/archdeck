@@ -8,7 +8,15 @@ import CodeBlock from './CodeBlock.vue'
 const props = defineProps<{ symbol: ExportedSymbol; interfaceId?: string; open?: boolean }>()
 const desk = useDesk()
 const KIND: Record<ExportedSymbol['kind'], string> = {
-  function: '函数', class: '类', interface: '接口', type: '类型', enum: '枚举', const: '常量', namespace: '命名空间', default: '默认导出', reexport: '再导出',
+  function: '函数',
+  class: '类',
+  interface: '接口',
+  type: '类型',
+  enum: '枚举',
+  const: '常量',
+  namespace: '命名空间',
+  default: '默认导出',
+  reexport: '再导出',
 }
 const iface = computed(() => (props.interfaceId ? desk.index.value?.interfaces.get(props.interfaceId) : undefined))
 </script>

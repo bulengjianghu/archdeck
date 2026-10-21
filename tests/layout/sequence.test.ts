@@ -87,6 +87,11 @@ describe('layoutSequence', () => {
   it('没有结构图坐标时按层次排序键排', async () => {
     const { model } = await setup('infra')
     const inner = model.participants.filter(p => p.kind !== 'actor').sort((a, b) => compareKeys(a.key, b.key))
-    expect([...layoutSequence(model).lanes.keys()]).toEqual(model.participants.filter(p => p.kind === 'actor').concat(inner).map(p => p.nodeId))
+    expect([...layoutSequence(model).lanes.keys()]).toEqual(
+      model.participants
+        .filter(p => p.kind === 'actor')
+        .concat(inner)
+        .map(p => p.nodeId),
+    )
   })
 })

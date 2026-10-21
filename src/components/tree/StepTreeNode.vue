@@ -10,10 +10,20 @@ const props = defineProps<{ node: OutlineNode; depth: number; ctx: StepTreeConte
 const emit = defineEmits<{ seek: [id: string]; choose: [pointId: string, option: number]; toggle: [id: string]; hover: [id: string | null] }>()
 
 const KIND_ICON = { call: '→', async: '⇢', return: '↩' } as const
-const STATE_TEXT = { walked: '已走过', selected: '选中的步骤', same: '同一步（本层合并为 1 步）', progress: '进度所在', ahead: '未走到', unchosen: '未选分支', unreached: '未到达' } as const
+const STATE_TEXT = {
+  walked: '已走过',
+  selected: '选中的步骤',
+  same: '同一步（本层合并为 1 步）',
+  progress: '进度所在',
+  ahead: '未走到',
+  unchosen: '未选分支',
+  unreached: '未到达',
+} as const
 const pad = (d: number) => ({ paddingLeft: `${8 + d * 14}px` })
 const mark = computed(() => (props.node.kind === 'frame' ? props.ctx.mark(props.node.frame, props.node.status) : null))
-const groupId = computed(() => (props.node.kind === 'group' ? `${props.node.tag.id}:${props.node.tag.branch ?? ''}` : props.node.kind === 'alt' ? props.node.pointId : ''))
+const groupId = computed(() =>
+  props.node.kind === 'group' ? `${props.node.tag.id}:${props.node.tag.branch ?? ''}` : props.node.kind === 'alt' ? props.node.pointId : '',
+)
 const open = computed(() => !props.ctx.collapsed.has(groupId.value))
 </script>
 

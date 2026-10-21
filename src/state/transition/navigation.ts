@@ -31,8 +31,7 @@ interface LevelOptions {
 /** 切换层次；不存在的层次回到根。切换后清空悬停 */
 export function withLevel(state: ViewState, index: ModelIndex, id: string, opts: LevelOptions = {}): ViewState {
   const levelId = index.pathOf.has(id) ? id : index.rootId
-  const selection =
-    opts.select !== undefined ? opts.select : opts.keepSelection && selectionExists(index, state.selection) ? state.selection : null
+  const selection = opts.select !== undefined ? opts.select : opts.keepSelection && selectionExists(index, state.selection) ? state.selection : null
   return { ...state, levelId, selection, hover: levelId === state.levelId ? state.hover : null }
 }
 

@@ -16,7 +16,13 @@ const project = {
   counts: { modules: 1, relations: 0, interfaces: 0, dataStructures: 0, scenarios: 0 },
   errors: 0,
   warnings: 0,
-  designs: [design('d-draft', 'draft'), design('d-review', 'reviewing'), design('d-accepted', 'accepted'), design('d-done', 'implemented'), design('d-drop', 'abandoned')],
+  designs: [
+    design('d-draft', 'draft'),
+    design('d-review', 'reviewing'),
+    design('d-accepted', 'accepted'),
+    design('d-done', 'implemented'),
+    design('d-drop', 'abandoned'),
+  ],
 }
 
 afterEach(() => vi.unstubAllGlobals())

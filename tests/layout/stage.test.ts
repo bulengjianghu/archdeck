@@ -71,7 +71,11 @@ describe('stageDisplay（V5、V8、V9）', () => {
       { id: 'c->d', from: 'c', to: 'd' },
     ].map(e => ({ ...e, kind: 'direct' as const, type: 'calls' as const, types: [], relationIds: [], mode: 'sync' as const })),
   }
-  const participants = new Map<string, 'path' | 'other'>([['a', 'path'], ['b', 'path'], ['c', 'other']])
+  const participants = new Map<string, 'path' | 'other'>([
+    ['a', 'path'],
+    ['b', 'path'],
+    ['c', 'other'],
+  ])
   const base = { view, participants, playEdges: new Set(['a->b']), reveal: new Set<string>() }
 
   it('隐藏（默认）：参与路径的节点与回放边显示；只在未选分支处的节点淡化；其余节点与静态边隐藏', () => {

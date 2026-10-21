@@ -24,9 +24,7 @@ const props = defineProps<{
 const emit = defineEmits<{ pick: [m: SequenceMessage]; hover: [m: SequenceMessage | null] }>()
 const top = computed(() => headsHeight(props.ps))
 
-const lanes = computed(() =>
-  props.ps.model.participants.map(p => ({ p, box: props.ps.lanes.get(p.nodeId)! })).filter(x => x.box),
-)
+const lanes = computed(() => props.ps.model.participants.map(p => ({ p, box: props.ps.lanes.get(p.nodeId)! })).filter(x => x.box))
 const cx = (nodeId: string) => {
   const b = props.ps.lanes.get(nodeId)
   return b ? b.x + b.w / 2 : 0
@@ -88,7 +86,9 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
           {{ m.label }}<tspan v-if="m.unmodeled" class="tag"> · 结构中未建模</tspan><tspan v-if="state(m).includes('paired')" class="pair-tag"> · 配对</tspan>
         </text>
       </template>
-      <text v-if="m.pathIndex !== undefined" x="4" :y="ps.messages[i].y + 4" class="num">{{ m.pathIndex + 1 }}<tspan v-if="isProgress(m)" class="progress" dx="2">◂</tspan></text>
+      <text v-if="m.pathIndex !== undefined" x="4" :y="ps.messages[i].y + 4" class="num"
+        >{{ m.pathIndex + 1 }}<tspan v-if="isProgress(m)" class="progress" dx="2">◂</tspan></text
+      >
     </g>
   </g>
 </template>

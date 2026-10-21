@@ -11,6 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "type-check": "vue-tsc --build",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write . && eslint . --fix",
     "lint:model": "vite-node scripts/lint-model.ts --"
   },
   "dependencies": {
@@ -27,17 +29,24 @@
     "yaml": "^2.8.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@tsconfig/node22": "^22.0.0",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.13.4",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.7.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-vue": "^10.11.1",
+    "globals": "^17.13.0",
     "jsdom": "^25.0.1",
+    "prettier": "^3.9.9",
     "typescript": "~5.7.3",
+    "typescript-eslint": "^8.71.1",
     "vite": "^6.1.0",
     "vite-node": "^3.0.5",
     "vitest": "^3.0.5",
+    "vue-eslint-parser": "^10.4.1",
     "vue-tsc": "^2.2.2"
   }
 }

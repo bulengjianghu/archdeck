@@ -17,8 +17,7 @@ const run = computed(() => desk.perspective.value === 'run')
 
 /** T2：结构视角下「只看现状」开启时不列目标态模块及其后代；运行视角不受开关影响（L9） */
 const hideTarget = computed(() => !run.value && desk.toggles.currentOnly)
-const childrenOf = (id: string) =>
-  (idx.value.childrenOf.get(id) ?? []).filter(c => !(hideTarget.value && idx.value.modules.get(c)?.status === 'target'))
+const childrenOf = (id: string) => (idx.value.childrenOf.get(id) ?? []).filter(c => !(hideTarget.value && idx.value.modules.get(c)?.status === 'target'))
 
 const selectedId = computed(() => (desk.selection.value?.kind === 'module' ? desk.selection.value.id : null))
 /** T5：当前步骤两端的祖先链 */

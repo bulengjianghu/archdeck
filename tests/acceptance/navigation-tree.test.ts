@@ -58,7 +58,10 @@ describe('§6.3 导航树与分屏验收', () => {
   })
 
   it('2. 结构视角下开启「只看现状」，模块树不再列出目标态模块', async () => {
-    const extra: RawFile = { path: 'modules/zz-target.yaml', text: 'modules: [{ id: infra.next-gen, parent: infra, name: 下一代内核, responsibility: 目标态示例, status: target }]' }
+    const extra: RawFile = {
+      path: 'modules/zz-target.yaml',
+      text: 'modules: [{ id: infra.next-gen, parent: infra, name: 下一代内核, responsibility: 目标态示例, status: target }]',
+    }
     const { desk, row } = await open('h5player', '/p/h5player?level=infra', [extra])
     expect(row('infra.next-gen')).toBeTruthy()
     desk.setToggles({ currentOnly: true })

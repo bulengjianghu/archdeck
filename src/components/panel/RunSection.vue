@@ -41,8 +41,12 @@ const nameOf = (kind: 'if' | 'ds', id: string) => (kind === 'if' ? idx.value.int
       </li>
     </ol>
     <div class="meta muted">本层可见消息：{{ p.messages.length ? p.messages.map(m => `第 ${m + 1} 步`).join('、') : '无' }}</div>
-    <div v-if="p.interfaces.length" class="meta"><span class="muted">接口</span> <code v-for="i in p.interfaces" :key="i" class="chip">{{ nameOf('if', i) }}</code></div>
-    <div v-if="p.dataStructures.length" class="meta"><span class="muted">数据</span> <code v-for="d in p.dataStructures" :key="d" class="chip">{{ nameOf('ds', d) }}</code></div>
+    <div v-if="p.interfaces.length" class="meta">
+      <span class="muted">接口</span> <code v-for="i in p.interfaces" :key="i" class="chip">{{ nameOf('if', i) }}</code>
+    </div>
+    <div v-if="p.dataStructures.length" class="meta">
+      <span class="muted">数据</span> <code v-for="d in p.dataStructures" :key="d" class="chip">{{ nameOf('ds', d) }}</code>
+    </div>
     <RevealButton :nodes="revealNodes" class="meta" />
   </Section>
 </template>

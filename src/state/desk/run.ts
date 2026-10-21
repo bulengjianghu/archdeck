@@ -76,13 +76,13 @@ export function createRun({ state, index, levelId, plan, view, positioned, fileO
     const pv = positioned.value
     if (!index.value || !scenarioView.value || !view.value || !pv || pv.view.parentId !== levelId.value) return null
     const bp = branchPoint.value
-    const options = bp
-      ? bp.options.map((o, k) => ({ option: k, label: o.when, landing: o.first ? landFrame(index.value!, view.value!, o.first) : null }))
-      : []
+    const options = bp ? bp.options.map((o, k) => ({ option: k, label: o.when, landing: o.first ? landFrame(index.value!, view.value!, o.first) : null })) : []
     return stageOverlay(scenarioView.value, pv, frameId(), options)
   })
   const sequence = computed<SequenceModel | null>(() =>
-    index.value && plan.value && view.value && scenarioView.value ? buildSequence(index.value, view.value, plan.value, choices.value, scenarioView.value) : null,
+    index.value && plan.value && view.value && scenarioView.value
+      ? buildSequence(index.value, view.value, plan.value, choices.value, scenarioView.value)
+      : null,
   )
   const positionedSequence = computed<PositionedSequence | null>(() => {
     if (!sequence.value) return null
@@ -103,7 +103,14 @@ export function createRun({ state, index, levelId, plan, view, positioned, fileO
   /** R15、R16：选中突出——选中步骤的消息与配对消息、选中其他对象时突出的泳道；结构视角为 null */
   const emphasis = computed<Emphasis | null>(() =>
     index.value
-      ? emphasisOf(state.value, { index: index.value, levelView: view.value, scenarioView: scenarioView.value, sequence: sequence.value, pairs: pairs.value, fileOwners: fileOwners.value })
+      ? emphasisOf(state.value, {
+          index: index.value,
+          levelView: view.value,
+          scenarioView: scenarioView.value,
+          sequence: sequence.value,
+          pairs: pairs.value,
+          fileOwners: fileOwners.value,
+        })
       : null,
   )
   /** V5：参与本场景的舞台节点（时序图泳道）：path = 回放路径上的消息碰到它，other = 只在未选分支 / 未到达处 */
@@ -111,8 +118,9 @@ export function createRun({ state, index, levelId, plan, view, positioned, fileO
     const out = new Map<string, 'path' | 'other'>()
     for (const m of sequence.value?.messages ?? []) {
       if (m.kind === 'empty') continue
-      for (const id of [m.from, m.to]) if (m.status === 'path') out.set(id, 'path')
-      else if (!out.has(id)) out.set(id, 'other')
+      for (const id of [m.from, m.to])
+        if (m.status === 'path') out.set(id, 'path')
+        else if (!out.has(id)) out.set(id, 'other')
     }
     return out
   })

@@ -7,8 +7,7 @@
 export type PaneSlot = 'structure' | 'aside'
 
 export type PaneLayout =
-  | { kind: 'pane'; slot: PaneSlot; collapsed?: boolean }
-  | { kind: 'split'; dir: 'row' | 'column'; sizes: number[]; children: PaneLayout[] }
+  { kind: 'pane'; slot: PaneSlot; collapsed?: boolean } | { kind: 'split'; dir: 'row' | 'column'; sizes: number[]; children: PaneLayout[] }
 
 export const DEFAULT_LAYOUT: PaneLayout = {
   kind: 'split',

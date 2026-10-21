@@ -105,14 +105,25 @@ export function layoutLayered(view: LevelView): PositionedView {
       const down = ia < ib
       const y1 = down ? a.y + a.h : a.y
       const y2 = down ? b.y : b.y + b.h
-      edges.set(e.id, { points: [{ x, y: y1 }, { x, y: y2 }], label: { x, y: (y1 + y2) / 2 } })
+      edges.set(e.id, {
+        points: [
+          { x, y: y1 },
+          { x, y: y2 },
+        ],
+        label: { x, y: (y1 + y2) / 2 },
+      })
     } else {
       const x = width + 28 + lane * BAND.lane
       lane++
       const y1 = a.y + a.h / 2 + (lane % 3) * 8 - 8
       const y2 = b.y + b.h / 2 + (lane % 3) * 8 - 8
       edges.set(e.id, {
-        points: [{ x: a.x + a.w, y: y1 }, { x, y: y1 }, { x, y: y2 }, { x: b.x + b.w, y: y2 }],
+        points: [
+          { x: a.x + a.w, y: y1 },
+          { x, y: y1 },
+          { x, y: y2 },
+          { x: b.x + b.w, y: y2 },
+        ],
         label: { x, y: (y1 + y2) / 2 },
       })
     }
@@ -262,15 +273,17 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
       'elk.edgeLabels.inline': 'true',
     },
     children: view.nodes.filter(n => n.role !== 'boundary' && n.role !== 'actor').map(n => ({ id: n.id, width: sizeOf(n).w, height: sizeOf(n).h })),
-    edges: view.edges.filter(e => !isBoundaryEdge(e) && !isActorNode(view, e.from) && !isActorNode(view, e.to)).map<ElkExtendedEdge>(e => {
-      const text = edgeLabel(e)
-      return {
-        id: e.id,
-        sources: [e.from],
-        targets: [e.to],
-        labels: [{ id: `${e.id}#label`, text, width: text.length * 7 + 14, height: 18 }],
-      }
-    }),
+    edges: view.edges
+      .filter(e => !isBoundaryEdge(e) && !isActorNode(view, e.from) && !isActorNode(view, e.to))
+      .map<ElkExtendedEdge>(e => {
+        const text = edgeLabel(e)
+        return {
+          id: e.id,
+          sources: [e.from],
+          targets: [e.to],
+          labels: [{ id: `${e.id}#label`, text, width: text.length * 7 + 14, height: 18 }],
+        }
+      }),
   }
 }
 
@@ -316,7 +329,10 @@ export const BOUNDARY_ROW_GAP = 96
 export function placeBoundaries(view: LevelView, nodes: Map<string, Box>, edges: Map<string, EdgeRoute>) {
   const sorted = view.nodes.filter(n => n.role === 'boundary')
   if (sorted.length === 0) return
-  const inner = view.nodes.filter(n => n.role !== 'boundary' && n.role !== 'actor').map(n => nodes.get(n.id)).filter((b): b is Box => !!b)
+  const inner = view.nodes
+    .filter(n => n.role !== 'boundary' && n.role !== 'actor')
+    .map(n => nodes.get(n.id))
+    .filter((b): b is Box => !!b)
   const minX = inner.length ? Math.min(...inner.map(b => b.x)) : 0
   const maxX = inner.length ? Math.max(...inner.map(b => b.x + b.w)) : 0
   const bottom = inner.length ? Math.max(...inner.map(b => b.y + b.h)) : 0
@@ -347,10 +363,7 @@ let elkPromise: Promise<ELK> | undefined
 function getElk(): Promise<ELK> {
   elkPromise ??= (async () => {
     if (typeof Worker !== 'undefined' && typeof window !== 'undefined') {
-      const [{ default: ElkApi }, { default: ElkWorker }] = await Promise.all([
-        import('elkjs/lib/elk-api.js'),
-        import('elkjs/lib/elk-worker.min.js?worker'),
-      ])
+      const [{ default: ElkApi }, { default: ElkWorker }] = await Promise.all([import('elkjs/lib/elk-api.js'), import('elkjs/lib/elk-worker.min.js?worker')])
       return new ElkApi({ workerFactory: () => new ElkWorker() })
     }
     const { default: ElkBundled } = await import('elkjs/lib/elk.bundled.js')
@@ -382,7 +395,12 @@ const cache = new Map<string, PositionedView>()
 const CACHE_LIMIT = 64
 
 export function cacheKey(view: LevelView): string {
-  return JSON.stringify([view.mode, view.parentId, view.nodes.map(n => (n.actorKind ? `${n.id}:${n.actorKind}` : n.id)), view.edges.map(e => [e.id, e.relationIds.length])])
+  return JSON.stringify([
+    view.mode,
+    view.parentId,
+    view.nodes.map(n => (n.actorKind ? `${n.id}:${n.actorKind}` : n.id)),
+    view.edges.map(e => [e.id, e.relationIds.length]),
+  ])
 }
 
 export async function layoutView(view: LevelView): Promise<PositionedView> {

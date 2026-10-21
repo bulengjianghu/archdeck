@@ -6,7 +6,17 @@
  *   运行视角：舞台显示决定显隐与淡化（V5、V8、V9、V10）；回放叠加（P7、P10、P11、F6）；选中步骤时其余走过的边与步骤序号变灰（R15、R16）。
  *   选中文件：归属模块在本层的投影节点加文件高亮（G14）。
  */
-import { FIELD_LABELS, moduleName, type ActorEntity, type ActorKind, type ModelDiff, type ModelIndex, type ModuleEntity, type ScenarioLevelView, type ViewEdge } from '@/model'
+import {
+  FIELD_LABELS,
+  moduleName,
+  type ActorEntity,
+  type ActorKind,
+  type ModelDiff,
+  type ModelIndex,
+  type ModuleEntity,
+  type ScenarioLevelView,
+  type ViewEdge,
+} from '@/model'
 import { edgeLabel, isBoundaryEdge, moreChipId, type Box, type EdgeRoute, type PositionedView } from './layout'
 import { stageDisplay, unmodeledId, type StageOverlay, type StaticMode, type Visibility } from './stage'
 
@@ -253,7 +263,8 @@ export function canvasScene(input: CanvasInput): CanvasScene {
         class: classOf(id),
       })
 
-    if (pv.frame) place('frame', pv.frame, 'frame', { moduleId: pv.view.parentId, name: moduleName(idx, pv.view.parentId), childCount: 0, selected: false, dim: false }, -1)
+    if (pv.frame)
+      place('frame', pv.frame, 'frame', { moduleId: pv.view.parentId, name: moduleName(idx, pv.view.parentId), childCount: 0, selected: false, dim: false }, -1)
     for (const n of pv.view.nodes) {
       const box = pv.nodes.get(n.id)
       if (!box || hidden(n.id)) continue
@@ -279,7 +290,20 @@ export function canvasScene(input: CanvasInput): CanvasScene {
         place(n.id, box, 'boundary', { ...base, path: path.length ? path.join(' / ') : idx.model.system.name }, 1)
       } else if (n.role === 'layer') {
         const band = pv.view.bands?.find(b => b.layerId === n.id)
-        place(n.id, box, 'band', { ...base, band: { abstraction: m?.abstraction, mayDependOn: (m?.mayDependOn ?? []).map(id => idx.modules.get(id)?.name ?? id), hiddenCount: band?.hiddenCount ?? 0 } }, 0)
+        place(
+          n.id,
+          box,
+          'band',
+          {
+            ...base,
+            band: {
+              abstraction: m?.abstraction,
+              mayDependOn: (m?.mayDependOn ?? []).map(id => idx.modules.get(id)?.name ?? id),
+              hiddenCount: band?.hiddenCount ?? 0,
+            },
+          },
+          0,
+        )
         const more = pv.nodes.get(moreChipId(n.id))
         if (more && band) place(moreChipId(n.id), more, 'more', { ...base, selected: false, dim: !!st || !!near, hiddenCount: band.hiddenCount }, 2)
       } else {
@@ -292,7 +316,12 @@ export function canvasScene(input: CanvasInput): CanvasScene {
       const current = st.current?.index
       for (const mark of st.walked.values()) {
         if (!mark.at) continue
-        const steps = mark.steps.map(n => ({ n, frameId: sv.messages[n - 1].frameIds[0], current: n - 1 === current, muted: !!emphMessages && !emphMessages.has(n - 1) }))
+        const steps = mark.steps.map(n => ({
+          n,
+          frameId: sv.messages[n - 1].frameIds[0],
+          current: n - 1 === current,
+          muted: !!emphMessages && !emphMessages.has(n - 1),
+        }))
         place(`step:${mark.edgeId}`, { ...mark.at, w: 1, h: 1 }, 'step', { moduleId: '', name: '', childCount: 0, selected: false, dim: false, steps }, 6)
       }
       for (const p of st.previews) {
@@ -350,7 +379,10 @@ export function canvasScene(input: CanvasInput): CanvasScene {
   // 边界边默认隐藏：只在聚焦（悬停 / 选中）其任一端、被选中或回放经过时出现，避免外部关系淹没内部结构
   const revealed = new Set(input.reveal)
   const boundaryShown = (e: ViewEdge) =>
-    selectedEdgeIds.has(e.id) || playEdges.has(e.id) || (!!f && (e.from === f || e.to === f)) || (!!st && (input.mode === 'show' || revealed.has(e.from) || revealed.has(e.to)))
+    selectedEdgeIds.has(e.id) ||
+    playEdges.has(e.id) ||
+    (!!f && (e.from === f || e.to === f)) ||
+    (!!st && (input.mode === 'show' || revealed.has(e.from) || revealed.has(e.to)))
   const list = pv.view.edges
     .filter(e => !st || edgeVis(e.id) !== 'hide' || playEdges.has(e.id) || selectedEdgeIds.has(e.id) || playOf(e.id).play)
     .filter(e => !isBoundaryEdge(e) || boundaryShown(e))
@@ -365,6 +397,7 @@ export function canvasScene(input: CanvasInput): CanvasScene {
     if (!st!.walked.has(id)) list.push(make(tempEdge(id, p.at.from, p.at.to), p.route, false, { unmodeled: true, play: 'preview', label: '' }))
   }
 
-  const visibleIds = display && [...display.nodes.values()].includes('hide') ? new Set([...display.nodes].filter(([, v]) => v !== 'hide').map(([id]) => id)) : null
+  const visibleIds =
+    display && [...display.nodes.values()].includes('hide') ? new Set([...display.nodes].filter(([, v]) => v !== 'hide').map(([id]) => id)) : null
   return { nodes, edges: list.filter((e): e is CanvasEdge => e !== null), visibleIds }
 }

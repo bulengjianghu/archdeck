@@ -37,12 +37,7 @@ export function dataNames(index: ModelIndex, ids: readonly string[]): string {
  * - pair：调用有配对的显式返回；reply：本步就是返回，回应配对的调用；
  * - async：异步，不等待返回；implicit：同步调用没写显式返回（见接口签名）；none：返回没有配对的调用。
  */
-export type StepOutput =
-  | { kind: 'pair'; frame: Frame }
-  | { kind: 'reply'; frame: Frame }
-  | { kind: 'async' }
-  | { kind: 'implicit' }
-  | { kind: 'none' }
+export type StepOutput = { kind: 'pair'; frame: Frame } | { kind: 'reply'; frame: Frame } | { kind: 'async' } | { kind: 'implicit' } | { kind: 'none' }
 
 export function stepOutput(f: Frame, pairs: ReadonlyMap<string, string> | null, frames: ReadonlyMap<string, Frame>): StepOutput {
   const other = pairs?.get(f.id)

@@ -44,7 +44,13 @@ const pad = (d: number) => ({ paddingLeft: `${8 + d * 14}px` })
           class="row file"
           :data-path="f"
           :style="pad(childDepth)"
-          :class="{ selected: ctx.selected === f, hit: ctx.hits.has(f), unowned: ctx.unowned.has(f), conflict: ctx.conflicts.has(f), ignored: ctx.ignored.has(f) }"
+          :class="{
+            selected: ctx.selected === f,
+            hit: ctx.hits.has(f),
+            unowned: ctx.unowned.has(f),
+            conflict: ctx.conflicts.has(f),
+            ignored: ctx.ignored.has(f),
+          }"
           :title="ctx.unowned.has(f) ? `${f}：未归属任何模块` : ctx.conflicts.has(f) ? `${f}：归属冲突` : ctx.ignored.has(f) ? `${f}：已忽略` : f"
           @click="emit('pick', f)"
         >
@@ -64,7 +70,13 @@ const pad = (d: number) => ({ paddingLeft: `${8 + d * 14}px` })
         class="row file"
         :data-path="f"
         :style="pad(0)"
-        :class="{ selected: ctx.selected === f, hit: ctx.hits.has(f), unowned: ctx.unowned.has(f), conflict: ctx.conflicts.has(f), ignored: ctx.ignored.has(f) }"
+        :class="{
+          selected: ctx.selected === f,
+          hit: ctx.hits.has(f),
+          unowned: ctx.unowned.has(f),
+          conflict: ctx.conflicts.has(f),
+          ignored: ctx.ignored.has(f),
+        }"
         @click="emit('pick', f)"
       >
         <span class="caret" />

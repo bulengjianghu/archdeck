@@ -20,12 +20,20 @@ const results = computed<ModuleEntity[]>(() => {
     const score = name === q ? 0 : name.startsWith(q) ? 1 : name.includes(q) ? 2 : id.includes(q) ? 3 : -1
     if (score >= 0) hits.push({ m, score })
   }
-  return hits.sort((a, b) => a.score - b.score || a.m.seq - b.m.seq).slice(0, 12).map(h => h.m)
+  return hits
+    .sort((a, b) => a.score - b.score || a.m.seq - b.m.seq)
+    .slice(0, 12)
+    .map(h => h.m)
 })
 
 function pathLabel(m: ModuleEntity): string {
   const idx = desk.index.value!
-  return (idx.pathOf.get(m.parentId) ?? []).slice(1).map(id => idx.modules.get(id)?.name ?? id).join(' / ') || idx.model.system.name
+  return (
+    (idx.pathOf.get(m.parentId) ?? [])
+      .slice(1)
+      .map(id => idx.modules.get(id)?.name ?? id)
+      .join(' / ') || idx.model.system.name
+  )
 }
 
 function pick(m: ModuleEntity) {
@@ -69,24 +77,26 @@ function toggleType(t: RelationType) {
           <span class="where">{{ pathLabel(m) }}</span>
         </li>
       </ul>
-      <ul v-else-if="open && query.trim()" class="results"><li class="none">没有匹配的模块</li></ul>
+      <ul v-else-if="open && query.trim()" class="results">
+        <li class="none">没有匹配的模块</li>
+      </ul>
     </div>
 
     <fieldset class="toggles" :disabled="run" :title="run ? '运行视角下舞台显示全部关系类型与边界节点（L9）；退出场景后恢复' : undefined">
-    <label class="check"><input v-model="desk.toggles.showBoundaries" type="checkbox" /> 边界节点</label>
-    <label class="check"><input v-model="desk.toggles.currentOnly" type="checkbox" /> 只看现状</label>
-    <div class="types" role="group" aria-label="关系类型筛选">
-      <button
-        v-for="t in RELATION_TYPES"
-        :key="t"
-        class="type rel-chip"
-        :class="[`rel-${t}`, { off: !desk.toggles.relationTypes.includes(t) }]"
-        :aria-pressed="desk.toggles.relationTypes.includes(t)"
-        @click="toggleType(t)"
-      >
-        {{ t }}
-      </button>
-    </div>
+      <label class="check"><input v-model="desk.toggles.showBoundaries" type="checkbox" /> 边界节点</label>
+      <label class="check"><input v-model="desk.toggles.currentOnly" type="checkbox" /> 只看现状</label>
+      <div class="types" role="group" aria-label="关系类型筛选">
+        <button
+          v-for="t in RELATION_TYPES"
+          :key="t"
+          class="type rel-chip"
+          :class="[`rel-${t}`, { off: !desk.toggles.relationTypes.includes(t) }]"
+          :aria-pressed="desk.toggles.relationTypes.includes(t)"
+          @click="toggleType(t)"
+        >
+          {{ t }}
+        </button>
+      </div>
     </fieldset>
   </div>
 </template>

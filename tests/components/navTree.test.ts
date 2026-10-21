@@ -174,7 +174,15 @@ describe('分屏方向（W-4）', () => {
   })
 
   it('副栏泛化前存下的布局（槽位 sequence）读出时改为 aside，方向与收起保留', () => {
-    const old = { kind: 'split', dir: 'column', sizes: [0.6, 0.4], children: [{ kind: 'pane', slot: 'structure' }, { kind: 'pane', slot: 'sequence', collapsed: true }] }
+    const old = {
+      kind: 'split',
+      dir: 'column',
+      sizes: [0.6, 0.4],
+      children: [
+        { kind: 'pane', slot: 'structure' },
+        { kind: 'pane', slot: 'sequence', collapsed: true },
+      ],
+    }
     localStorage.setItem('h5p-arch-desk:split:v2:legacy', JSON.stringify(old))
     expect(readLayout('legacy')).toEqual({ ...old, children: [old.children[0], { kind: 'pane', slot: 'aside', collapsed: true }] })
   })

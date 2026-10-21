@@ -106,9 +106,7 @@ const longFiles = computed(() => Object.keys(desk.files.lines.value).filter(f =>
           <label><input v-model="onlyLong" type="checkbox" /> 只看超长</label>
           <button class="small" title="重新列出源码文件" @click="desk.files.refresh()">刷新</button>
         </div>
-        <div v-if="selectedModule" class="hint">
-          {{ moduleName(desk.index.value!, selectedModule) }}：{{ hits.size }} 个文件
-        </div>
+        <div v-if="selectedModule" class="hint">{{ moduleName(desk.index.value!, selectedModule) }}：{{ hits.size }} 个文件</div>
       </header>
       <ul class="tree" role="tree">
         <FileTreeNode :dir="tree" :depth="0" :ctx="ctx" @pick="desk.selectFile" @toggle="toggle" />

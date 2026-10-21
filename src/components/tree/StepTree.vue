@@ -60,7 +60,9 @@ watch(
   <div ref="root" class="step-tree" @mouseleave="hover(null)">
     <div class="scenario">
       <strong>{{ desk.run.scenario.value?.name }}</strong>
-      <button class="link start" :class="{ current: desk.selected.value?.kind === 'scenario' }" title="回到开头（选中场景）" @click="desk.seek(null)">开头</button>
+      <button class="link start" :class="{ current: desk.selected.value?.kind === 'scenario' }" title="回到开头（选中场景）" @click="desk.seek(null)">
+        开头
+      </button>
     </div>
     <ul class="tree" role="tree">
       <StepTreeNode

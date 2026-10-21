@@ -197,7 +197,7 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       <div v-if="stage" class="static-mode" role="group" aria-label="静态关系">
         <span class="muted">静态关系</span>
         <button
-          v-for="m in (['hide', 'dim', 'show'] as const)"
+          v-for="m in ['hide', 'dim', 'show'] as const"
           :key="m"
           :class="{ on: stageUi.mode.value === m }"
           :title="m === 'hide' ? '只显示参与本场景的节点与走过的边' : m === 'dim' ? '不参与的节点与静态边淡化显示' : '全部照常显示'"

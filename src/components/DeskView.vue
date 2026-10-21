@@ -174,13 +174,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <aside v-show="!navCollapsed" class="nav-area">
       <NavTree v-if="desk.status.value === 'ready'" />
     </aside>
-    <div
-      v-show="!navCollapsed"
-      class="divider nav-divider"
-      @pointerdown="onDividerDown('nav', $event)"
-      @pointermove="onDividerMove"
-      @pointerup="onDividerUp"
-    />
+    <div v-show="!navCollapsed" class="divider nav-divider" @pointerdown="onDividerDown('nav', $event)" @pointermove="onDividerMove" @pointerup="onDividerUp" />
 
     <main class="canvas-area">
       <div v-if="desk.status.value === 'loading'" class="state">正在加载架构描述…</div>

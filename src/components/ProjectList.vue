@@ -65,15 +65,32 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
           </div>
 
           <dl class="counts">
-            <div><dt>模块</dt><dd>{{ p.counts.modules }}</dd></div>
-            <div><dt>关系</dt><dd>{{ p.counts.relations }}</dd></div>
-            <div><dt>接口</dt><dd>{{ p.counts.interfaces }}</dd></div>
-            <div><dt>数据结构</dt><dd>{{ p.counts.dataStructures }}</dd></div>
-            <div v-if="p.counts.scenarios"><dt>场景</dt><dd>{{ p.counts.scenarios }}</dd></div>
+            <div>
+              <dt>模块</dt>
+              <dd>{{ p.counts.modules }}</dd>
+            </div>
+            <div>
+              <dt>关系</dt>
+              <dd>{{ p.counts.relations }}</dd>
+            </div>
+            <div>
+              <dt>接口</dt>
+              <dd>{{ p.counts.interfaces }}</dd>
+            </div>
+            <div>
+              <dt>数据结构</dt>
+              <dd>{{ p.counts.dataStructures }}</dd>
+            </div>
+            <div v-if="p.counts.scenarios">
+              <dt>场景</dt>
+              <dd>{{ p.counts.scenarios }}</dd>
+            </div>
           </dl>
 
           <footer class="meta">
-            <span v-if="p.source?.commit">基于 <code>{{ shortCommit(p.source.commit) }}</code></span>
+            <span v-if="p.source?.commit"
+              >基于 <code>{{ shortCommit(p.source.commit) }}</code></span
+            >
             <span v-if="p.source?.generatedAt">· {{ p.source.generatedAt }}</span>
             <span v-if="p.errors" class="bad">{{ p.errors }} 个错误</span>
             <span v-if="p.warnings" class="warn">{{ p.warnings }} 个提醒</span>

@@ -22,9 +22,7 @@ const all = computed(() => {
 })
 const related = computed(() => new Set(desk.index.value?.scenariosOf.get(desk.levelId.value) ?? []))
 const triggers = computed(() => [...new Map(all.value.filter(x => x.by).map(x => [x.by!, x.byName])).entries()])
-const shown = computed(() =>
-  all.value.filter(x => (scope.value === 'all' || related.value.has(x.s.id)) && (!trigger.value || x.by === trigger.value)),
-)
+const shown = computed(() => all.value.filter(x => (scope.value === 'all' || related.value.has(x.s.id)) && (!trigger.value || x.by === trigger.value)))
 
 function pick(id: string) {
   desk.openScenario(id)

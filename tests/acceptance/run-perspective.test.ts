@@ -35,7 +35,10 @@ async function open(project: string, url = `/p/${project}`, extra: RawFile[] = [
 
 describe('§6.2 运行视角验收', () => {
   it('1. 在根层通过「运行」选一个场景：进入运行视角、层次不变、停在开头且面板显示场景；逐步前进；只突出参与者与走过的边；出现时序图；参与者泳道在最左', async () => {
-    for (const [project, sc] of [['h5player', 'sc.command'], ['h5p-arch-desk', 'sc.open-and-play']]) {
+    for (const [project, sc] of [
+      ['h5player', 'sc.command'],
+      ['h5p-arch-desk', 'sc.open-and-play'],
+    ]) {
       const { desk, step } = await open(project)
       const root = desk.levelId.value
       desk.openScenario(sc)

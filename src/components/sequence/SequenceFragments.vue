@@ -23,10 +23,7 @@ const branchClass = (chosen: boolean | null | undefined) => (chosen === null ? '
   <g class="fragments">
     <g v-for="(f, k) in ps.model.fragments" :key="f.id" :class="['frag', f.kind, { collapsed: f.collapsed }]">
       <rect :x="ps.fragments[k].x" :y="ps.fragments[k].y" :width="ps.fragments[k].w" :height="ps.fragments[k].h" rx="4" class="box" />
-      <path
-        :d="`M${ps.fragments[k].x},${ps.fragments[k].y + 16} h${30} l6,-6 v-10`"
-        class="tab"
-      />
+      <path :d="`M${ps.fragments[k].x},${ps.fragments[k].y + 16} h${30} l6,-6 v-10`" class="tab" />
       <text :x="ps.fragments[k].x + 4" :y="ps.fragments[k].y + 12" class="kind">{{ TAG[f.kind] }}</text>
       <text
         :x="ps.fragments[k].x + 42"

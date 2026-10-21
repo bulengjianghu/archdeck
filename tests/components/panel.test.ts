@@ -126,7 +126,8 @@ describe('D-5：步骤的输入', () => {
 
   it('S14：步骤没写的接口取自对应关系，面板标「取自关系」并给出签名行', async () => {
     const files = scenarioFiles({
-      'scenarios/inh.yaml': 'scenario: { id: sc.inh, name: I, steps: [{ call: { id: a, from: infra.framework.sm, to: app.solution, label: "sendCommand(cmd)" } }] }',
+      'scenarios/inh.yaml':
+        'scenario: { id: sc.inh, name: I, steps: [{ call: { id: a, from: infra.framework.sm, to: app.solution, label: "sendCommand(cmd)" } }] }',
     })
     const { wrapper } = await mountPanel('/?sc=sc.inh&step=sc.inh%23a', files)
     expect(wrapper.find('.call').text()).toBe('sendCommand(cmd: Command): Result')

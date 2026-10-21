@@ -1,4 +1,4 @@
-# 不属于任何模块的文件（G8）：文档、描述内容、测试、包与编译配置。glob 写法同 codeRefs，相对源码根目录（本包）。
+# 不属于任何模块的文件（G8）：文档、描述内容、测试（含 E2E）、包、编译与代码规范配置。glob 写法同 codeRefs，相对源码根目录（本包）。
 sourceIgnore:
   - docs/**
   - model/**
@@ -8,3 +8,8 @@ sourceIgnore:
   - package.json
   - package-lock.json
   - tsconfig*.json
+  - eslint.config.js
+  - .prettierrc.json
+  - .prettierignore
+  - e2e/**
+  - playwright.config.ts

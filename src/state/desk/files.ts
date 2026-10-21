@@ -42,7 +42,9 @@ export function createFiles({ state, index, view, sync, design }: FilesInputs) {
   /** G19、G20：文件行数与超长阈值 */
   const lines = computed<Readonly<Record<string, number>>>(() => local.value?.lines ?? {})
   const maxLines = computed(() => index.value?.model.sourceLimits?.maxLines ?? DEFAULT_MAX_LINES)
-  const tree = computed<DirNode | null>(() => (local.value && ownership.value ? fileTree(local.value.files, ownership.value, lines.value, maxLines.value) : null))
+  const tree = computed<DirNode | null>(() =>
+    local.value && ownership.value ? fileTree(local.value.files, ownership.value, lines.value, maxLines.value) : null,
+  )
   /** 选中的文件（G16） */
   const selected = computed(() => (state.value.selection?.kind === 'file' ? state.value.selection.id : null))
   /** 选中文件的归属模块（冲突时多个，G6） */
@@ -59,12 +61,15 @@ export function createFiles({ state, index, view, sync, design }: FilesInputs) {
   const entryOf = (moduleId: string): ModuleEntry | null =>
     index.value && ownership.value && local.value ? moduleEntry(index.value, ownership.value, local.value, moduleId) : null
   /** G12：入口导出与模块 provides 的对应 */
-  const exportMatch = (moduleId: string, symbols: readonly ExportedSymbol[]): ExportMatch | null => (index.value ? matchExports(index.value, moduleId, symbols) : null)
+  const exportMatch = (moduleId: string, symbols: readonly ExportedSymbol[]): ExportMatch | null =>
+    index.value ? matchExports(index.value, moduleId, symbols) : null
   /** 以某个文件为入口的模块 */
   const entryModulesOf = (file: string): string[] =>
     index.value && ownership.value ? index.value.model.modules.filter(m => entryOf(m.id)?.file === file).map(m => m.id) : []
   /** G9：归属警告只对当前版本报 */
-  const warnings = computed<Issue[]>(() => (!design && index.value && ownership.value && local.value ? sourceIssues(index.value, ownership.value, local.value) : []))
+  const warnings = computed<Issue[]>(() =>
+    !design && index.value && ownership.value && local.value ? sourceIssues(index.value, ownership.value, local.value) : [],
+  )
 
   return {
     payload,

@@ -72,7 +72,8 @@ describe('canvasScene', () => {
     const input = await run()
     const hidden = canvasScene(input)
     expect(hidden.visibleIds).not.toBeNull()
-    for (const n of hidden.nodes.filter(n => n.type === 'module' || n.type === 'boundary' || n.type === 'actor')) expect(hidden.visibleIds!.has(n.id)).toBe(true)
+    for (const n of hidden.nodes.filter(n => n.type === 'module' || n.type === 'boundary' || n.type === 'actor'))
+      expect(hidden.visibleIds!.has(n.id)).toBe(true)
     const all = canvasScene({ ...input, mode: 'show' })
     expect(all.visibleIds).toBeNull()
     expect(all.nodes.length).toBeGreaterThanOrEqual(hidden.nodes.length)
@@ -86,10 +87,20 @@ describe('canvasScene', () => {
     const current = input.stage!.current!.index
     const step = canvasScene({ ...input, emphasis: { selected: current, paired: new Set() } })
     expect(edge(step, 'actor.biz->infra.player')!.data.muted).toBe(true)
-    expect(step.nodes.filter(n => n.type === 'step').flatMap(n => n.data.steps!).some(x => x.muted)).toBe(true)
+    expect(
+      step.nodes
+        .filter(n => n.type === 'step')
+        .flatMap(n => n.data.steps!)
+        .some(x => x.muted),
+    ).toBe(true)
     const other = canvasScene({ ...input, emphasis: { selected: null, paired: new Set() } })
     expect(other.edges.some(e => e.data.muted)).toBe(false)
-    expect(other.nodes.filter(n => n.type === 'step').flatMap(n => n.data.steps!).some(x => x.muted)).toBe(false)
+    expect(
+      other.nodes
+        .filter(n => n.type === 'step')
+        .flatMap(n => n.data.steps!)
+        .some(x => x.muted),
+    ).toBe(false)
     // 配对消息所在的边也不变灰
     const walked = [...input.stage!.walked.values()].find(m => m.edgeId === 'actor.biz->infra.player')!
     const paired = canvasScene({ ...input, emphasis: { selected: current, paired: new Set([walked.steps[0] - 1]) } })

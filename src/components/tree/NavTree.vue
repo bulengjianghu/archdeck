@@ -27,13 +27,7 @@ watch(
     <header class="tabs" role="tablist">
       <button role="tab" :class="{ on: tab === 'modules' }" :aria-selected="tab === 'modules'" @click="tab = 'modules'">模块</button>
       <button role="tab" :class="{ on: tab === 'files' }" :aria-selected="tab === 'files'" @click="tab = 'files'">文件</button>
-      <button
-        v-if="desk.perspective.value === 'run'"
-        role="tab"
-        :class="{ on: tab === 'steps' }"
-        :aria-selected="tab === 'steps'"
-        @click="tab = 'steps'"
-      >
+      <button v-if="desk.perspective.value === 'run'" role="tab" :class="{ on: tab === 'steps' }" :aria-selected="tab === 'steps'" @click="tab = 'steps'">
         步骤
       </button>
     </header>

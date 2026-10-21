@@ -119,9 +119,17 @@ describe('§6.4 源代码验收', () => {
     // 模块树展开到归属模块并标出
     const nav = mount(NavTree, { global })
     await settle()
-    await nav.findAll('[role=tab]').find(t => t.text() === '模块')!.trigger('click')
+    await nav
+      .findAll('[role=tab]')
+      .find(t => t.text() === '模块')!
+      .trigger('click')
     await settle()
-    expect(nav.findAll('.row').find(r => r.attributes('data-id') === 'present.nav-tree.files')!.classes()).toContain('owner')
+    expect(
+      nav
+        .findAll('.row')
+        .find(r => r.attributes('data-id') === 'present.nav-tree.files')!
+        .classes(),
+    ).toContain('owner')
     // 下钻到呈现层：高亮导航树
     desk.goTo('present', { kind: 'file', id: file })
     await settle()
@@ -155,7 +163,10 @@ describe('§6.4 源代码验收', () => {
   })
 
   it('5. 两个互不包含的模块写同一文件、或有文件没有模块匹配：页面与 lint 报警告；加入忽略清单后未归属警告消失', async () => {
-    const conflict: RawFile = { path: 'modules/zz-conflict.yaml', text: 'modules: [{ id: present.extra, parent: present, name: Extra, responsibility: x, codeRefs: [src/components/tree/FileTree.vue] }]' }
+    const conflict: RawFile = {
+      path: 'modules/zz-conflict.yaml',
+      text: 'modules: [{ id: present.extra, parent: present, name: Extra, responsibility: x, codeRefs: [src/components/tree/FileTree.vue] }]',
+    }
     const narrowed: RawFile = { path: 'zz-ignore.yaml', text: 'sourceIgnore: []' }
     const { desk } = await open('h5p-arch-desk', '/p/h5p-arch-desk', [conflict, narrowed])
     expect(desk.allIssues.value.filter(i => i.code === 'source.conflict').map(i => i.message)).toEqual([expect.stringContaining('FileTree.vue')])

@@ -58,8 +58,12 @@ function openChild(childId: string) {
       </Section>
       <Section v-if="m.includes?.length || m.excludes?.length" title="应该包含 / 不应该包含">
         <div class="inc">
-          <ul class="yes"><li v-for="x in m.includes ?? []" :key="x">{{ x }}</li></ul>
-          <ul class="no"><li v-for="x in m.excludes ?? []" :key="x">{{ x }}</li></ul>
+          <ul class="yes">
+            <li v-for="x in m.includes ?? []" :key="x">{{ x }}</li>
+          </ul>
+          <ul class="no">
+            <li v-for="x in m.excludes ?? []" :key="x">{{ x }}</li>
+          </ul>
         </div>
       </Section>
       <Section title="可依赖的层">
@@ -93,15 +97,21 @@ function openChild(childId: string) {
     </Section>
 
     <Section v-if="outs.length" title="出边（它依赖 / 调用谁）" :count="outs.length">
-      <ul class="plain"><RelationRow v-for="r in outs" :key="r" :id="r" :perspective="m.id" /></ul>
+      <ul class="plain">
+        <RelationRow v-for="r in outs" :key="r" :id="r" :perspective="m.id" />
+      </ul>
     </Section>
     <Section v-if="ins.length" title="入边（谁依赖 / 调用它）" :count="ins.length">
-      <ul class="plain"><RelationRow v-for="r in ins" :key="r" :id="r" :perspective="m.id" /></ul>
+      <ul class="plain">
+        <RelationRow v-for="r in ins" :key="r" :id="r" :perspective="m.id" />
+      </ul>
     </Section>
 
     <Section v-if="m.codeRefs?.length || m.docRefs?.length || m.owner" title="代码与文档">
       <ul class="plain refs">
-        <li v-for="c in m.codeRefs ?? []" :key="c"><code>{{ c }}</code></li>
+        <li v-for="c in m.codeRefs ?? []" :key="c">
+          <code>{{ c }}</code>
+        </li>
         <li v-for="d in m.docRefs ?? []" :key="d">
           <a v-if="/^https?:/.test(d)" :href="d" target="_blank" rel="noreferrer">{{ d }}</a>
           <span v-else>📄 {{ d }}</span>

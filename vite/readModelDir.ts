@@ -167,8 +167,7 @@ export function readDesignRevision(modelRoot: string, project: string, design: s
 }
 
 /** 构建产物中各版本的文件名 */
-export const versionFile = (project: string, v?: VersionRef) =>
-  v ? `models/${project}/designs/${v.design}/${v.revision}.json` : `models/${project}.json`
+export const versionFile = (project: string, v?: VersionRef) => (v ? `models/${project}/designs/${v.design}/${v.revision}.json` : `models/${project}.json`)
 
 /** 项目列表页用的摘要：直接跑一遍模型层，统计规模与问题数 */
 export function summarizeProject(payload: ModelPayload): ProjectSummary {

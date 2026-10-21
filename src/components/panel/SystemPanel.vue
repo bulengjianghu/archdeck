@@ -25,19 +25,35 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
     <Section v-if="sys.description" title="简介"><Markdown :text="sys.description" /></Section>
     <Section title="生成来源">
       <dl v-if="sys.source" class="kv">
-        <template v-if="sys.source.repo"><dt>仓库</dt><dd>{{ sys.source.repo }}</dd></template>
-        <template v-if="sys.source.commit"><dt>提交</dt><dd><code>{{ sys.source.commit }}</code></dd></template>
-        <template v-if="sys.source.generatedAt"><dt>生成时间</dt><dd>{{ sys.source.generatedAt }}</dd></template>
+        <template v-if="sys.source.repo"
+          ><dt>仓库</dt>
+          <dd>{{ sys.source.repo }}</dd></template
+        >
+        <template v-if="sys.source.commit"
+          ><dt>提交</dt>
+          <dd>
+            <code>{{ sys.source.commit }}</code>
+          </dd></template
+        >
+        <template v-if="sys.source.generatedAt"
+          ><dt>生成时间</dt>
+          <dd>{{ sys.source.generatedAt }}</dd></template
+        >
       </dl>
       <p v-else class="muted">未记录（system.source）</p>
     </Section>
     <Section title="规模">
       <dl class="kv">
-        <dt>{{ layered ? '层' : '顶层模块' }}</dt><dd>{{ top.length }}</dd>
-        <dt>模块</dt><dd>{{ idx.modules.size }}</dd>
-        <dt>关系</dt><dd>{{ idx.relations.size }}</dd>
-        <dt>接口</dt><dd>{{ idx.interfaces.size }}</dd>
-        <dt>数据结构</dt><dd>{{ idx.dataStructures.size }}</dd>
+        <dt>{{ layered ? '层' : '顶层模块' }}</dt>
+        <dd>{{ top.length }}</dd>
+        <dt>模块</dt>
+        <dd>{{ idx.modules.size }}</dd>
+        <dt>关系</dt>
+        <dd>{{ idx.relations.size }}</dd>
+        <dt>接口</dt>
+        <dd>{{ idx.interfaces.size }}</dd>
+        <dt>数据结构</dt>
+        <dd>{{ idx.dataStructures.size }}</dd>
       </dl>
     </Section>
     <Section :title="layered ? '分层' : '顶层模块'" :count="top.length">

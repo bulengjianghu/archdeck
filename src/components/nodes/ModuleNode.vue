@@ -44,7 +44,9 @@ defineProps<{ data: NodeData }>()
 }
 
 .module-node.drillable {
-  box-shadow: 3px 3px 0 -1px var(--surface), 3px 3px 0 0 var(--border-strong);
+  box-shadow:
+    3px 3px 0 -1px var(--surface),
+    3px 3px 0 0 var(--border-strong);
 }
 
 .module-node.selected {

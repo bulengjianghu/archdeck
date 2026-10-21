@@ -31,7 +31,9 @@ const hiddenCurrent = computed(() => !!desk.run.frame.value && desk.run.currentI
   <section v-else class="aside" :class="[{ collapsed }, dir]">
     <header class="bar" role="tablist">
       <button class="fold" :title="collapsed ? '展开副栏' : '收起副栏'" @click="emit('toggle')">{{ collapsed ? '▸' : dir === 'row' ? '▸' : '▾' }}</button>
-      <button v-if="run" role="tab" class="tab" :class="{ on: tab === 'sequence' }" :aria-selected="tab === 'sequence'" @click="emit('tab', 'sequence')">时序图</button>
+      <button v-if="run" role="tab" class="tab" :class="{ on: tab === 'sequence' }" :aria-selected="tab === 'sequence'" @click="emit('tab', 'sequence')">
+        时序图
+      </button>
       <span v-if="previewPath" class="tab-wrap" :class="{ on: tab === 'source' }">
         <button role="tab" class="tab" :class="{ on: tab === 'source' }" :aria-selected="tab === 'source'" :title="previewPath" @click="emit('tab', 'source')">
           源代码 · {{ fileName }}

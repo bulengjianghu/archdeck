@@ -1,6 +1,6 @@
 /** 会话规则：视角与选中（V1–V4、V7）、选中突出（R15、R16）、回放（R1、R5、R6、R10、R12、R13、F6、F6b、F6e）、URL（F6c、R10、R12） */
 import { describe, expect, it } from 'vitest'
-import { buildSequence, loadModel, pairReturns, planScenario, projectLevel, projectScenario, RELATION_TYPES, resolvePath, stageEnds } from '../../src/model'
+import { buildSequence, loadModel, pairReturns, planScenario, projectLevel, projectScenario, RELATION_TYPES, stageEnds } from '../../src/model'
 import {
   DEFAULT_TOGGLES,
   emphasisOf,
@@ -67,7 +67,10 @@ describe('视角与选中', () => {
     expect(run(s, { type: 'hover', id: 'infra' }).state.selection).toBeNull()
     const sel = run(s, { type: 'select', selection: { kind: 'edge', id: 'infra->app:calls' } }).state
     expect(selectedOf(sel)).toEqual({ kind: 'edge', id: 'infra->app:calls' })
-    for (const a of [{ type: 'revealModule', id: 'infra.mus' }, { type: 'revealRelation', id: 'r6' }] as ViewAction[]) {
+    for (const a of [
+      { type: 'revealModule', id: 'infra.mus' },
+      { type: 'revealRelation', id: 'r6' },
+    ] as ViewAction[]) {
       const r = run(s, a).state
       expect(selectedOf(r)!.kind).toBe(a.type === 'revealModule' ? 'module' : 'relation')
       expect(frameOf(r)).toBe(frameOf(s))
@@ -246,12 +249,19 @@ describe('回放', () => {
     expect(other.playback!.choices.get(ALT)).toBe(0)
     expect(frameOf(other)).toBe('sc.play#update')
     const merged = loadModel(
-      scenarioFiles({ 'scenarios/x.yaml': 'scenario: { id: sc.m, name: M, steps: [{ call: { id: a, from: infra.framework.sm, to: infra.framework.pipeline } }, { call: { id: b, from: infra.framework.pipeline, to: infra.framework.sm } }] }' }),
+      scenarioFiles({
+        'scenarios/x.yaml':
+          'scenario: { id: sc.m, name: M, steps: [{ call: { id: a, from: infra.framework.sm, to: infra.framework.pipeline } }, { call: { id: b, from: infra.framework.pipeline, to: infra.framework.sm } }] }',
+      }),
     ).index
     const plan = planScenario(merged, 'sc.m')
     const st: ViewState = { ...base, playback: { scenarioId: 'sc.m', frameId: null, choices: new Map() } }
     const lv = projectLevel(merged, 'sys', { showBoundaries: true, mergeTypes: true, scenarioEnds: stageEnds(plan) })
-    const r = transition(st, { type: 'seek', frameId: 'sc.m#b' }, { index: merged, plan, levelView: lv, scenarioView: projectScenario(merged, lv, plan, new Map()) })
+    const r = transition(
+      st,
+      { type: 'seek', frameId: 'sc.m#b' },
+      { index: merged, plan, levelView: lv, scenarioView: projectScenario(merged, lv, plan, new Map()) },
+    )
     expect(frameOf(r.state)).toBe('sc.m#a')
   })
 

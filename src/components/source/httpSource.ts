@@ -19,4 +19,3 @@ export function httpSourceFetcher(project: string, base = ''): SourceFetcher {
     exports: path => get<ExportedSymbol[]>(`source/${enc(project)}/exports.json?path=${enc(path)}`),
   }
 }
-

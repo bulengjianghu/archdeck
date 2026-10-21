@@ -56,12 +56,16 @@ function openRevision(id: string) {
     </header>
 
     <Section v-if="d.problems.length" title="design.yaml 问题" :count="d.problems.length">
-      <ul class="problems"><li v-for="p in d.problems" :key="p">{{ p }}</li></ul>
+      <ul class="problems">
+        <li v-for="p in d.problems" :key="p">{{ p }}</li>
+      </ul>
     </Section>
     <Section v-if="d.goal" title="设计目标与范围"><Markdown :text="d.goal" /></Section>
     <Section v-if="r.summary" :title="`本轮（${r.id}）做了什么`"><Markdown :text="r.summary" /></Section>
     <Section v-if="r.questions?.length" title="待评审确认" :count="r.questions.length">
-      <ol class="questions"><li v-for="q in r.questions" :key="q"><Markdown :text="q" /></li></ol>
+      <ol class="questions">
+        <li v-for="q in r.questions" :key="q"><Markdown :text="q" /></li>
+      </ol>
     </Section>
 
     <Section :title="`变更清单（相对${desk.versions.baseline.value?.label ?? '基线'}）`" :count="diff?.changes.length ?? 0">

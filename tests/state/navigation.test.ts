@@ -101,7 +101,10 @@ describe('导航规则', () => {
 
   it('N12：「只看现状」隐藏了当前层次时，退到最近的可见层次', () => {
     const { index: idx } = loadModel(
-      sampleFiles({ 'z.yaml': 'modules: [{ id: app.next, name: Next, parent: app, status: target, responsibility: x, children: [{ id: app.next.a, name: A, responsibility: x }] }]' }),
+      sampleFiles({
+        'z.yaml':
+          'modules: [{ id: app.next, name: Next, parent: app, status: target, responsibility: x, children: [{ id: app.next.a, name: A, responsibility: x }] }]',
+      }),
     )
     const s = at('app.next', { selection: { kind: 'module', id: 'app.next.a' } })
     const r = transition(s, { type: 'toggle', patch: { currentOnly: true } }, { index: idx })

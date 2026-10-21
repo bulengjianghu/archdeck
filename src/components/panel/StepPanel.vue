@@ -72,9 +72,7 @@ function pointAt(id: string) {
         <dt>输入</dt>
         <dd>
           <code v-if="callLine" class="call">{{ callLine }}</code>
-          <div v-if="f.payload.length">
-            {{ dataNames(idx, f.payload) }}<span v-if="f.inherited?.payload" class="badge from-rel">取自关系</span>
-          </div>
+          <div v-if="f.payload.length">{{ dataNames(idx, f.payload) }}<span v-if="f.inherited?.payload" class="badge from-rel">取自关系</span></div>
           <span v-else-if="!callLine" class="muted">没有写携带的数据</span>
         </dd>
         <dt>输出</dt>
@@ -109,9 +107,7 @@ function pointAt(id: string) {
         <button class="link" @click="pointAt(f.to)">{{ moduleName(idx, f.to) }}</button>
       </div>
       <div v-if="msg" class="sub muted">在本层：{{ landingText(idx, msg.at) }}</div>
-      <div v-else class="sub muted">
-        两端都在本层之外。<button class="link" @click="desk.goTo(desk.run.frameLevel.value!)">到能看到它的层次</button>
-      </div>
+      <div v-else class="sub muted">两端都在本层之外。<button class="link" @click="desk.goTo(desk.run.frameLevel.value!)">到能看到它的层次</button></div>
     </Section>
 
     <Section v-if="msg && msg.frameIds.length > 1" title="本层这一步覆盖的帧" :count="msg.frameIds.length">
@@ -128,7 +124,9 @@ function pointAt(id: string) {
       <Section title="对应关系">
         <ul v-if="f.relation" class="plain">
           <RelationRow :id="f.relation" />
-          <li v-if="f.relationInferred" class="muted inferred"><span class="badge warn">推断</span> 描述中没写 relation，两端之间恰好一条运行时关系，自动认定</li>
+          <li v-if="f.relationInferred" class="muted inferred">
+            <span class="badge warn">推断</span> 描述中没写 relation，两端之间恰好一条运行时关系，自动认定
+          </li>
         </ul>
         <p v-else class="muted">结构中没有与这一步对应的关系</p>
         <RevealButton :nodes="revealNodes" class="reveal-row" />

@@ -71,7 +71,10 @@ describe('G16 文件是一种选中', () => {
 describe('G2 源码同步', () => {
   afterEach(() => vi.unstubAllGlobals())
   it('构建态：清单端点 404 → unavailable；文件 404 → missing', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 404 })))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 404 })),
+    )
     const f = httpSourceFetcher('p')
     expect(await f.tree()).toEqual({ status: 'unavailable' })
     const sync = createSourceSync(f)
