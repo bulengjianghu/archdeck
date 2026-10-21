@@ -22,11 +22,13 @@ import {
   moduleEntry,
   moduleFiles,
   outlineScenario,
+  pairReturns,
   participation,
   planScenario,
   projectLevel,
   projectScenario,
   resolvePath,
+  routeOf,
   scenarioHome,
   scenarioModules,
   sourceIssues,
@@ -46,6 +48,8 @@ import {
   type Participation,
   type ScenarioLevelView,
   type ScenarioPlan,
+  type ReturnPairs,
+  type RouteItem,
   type SequenceModel,
   type SourceOwnership,
 } from '@/model'
@@ -54,6 +58,7 @@ import { layoutSequence, type PositionedSequence } from '@/layout/sequence'
 import { stageOverlay, type StageOverlay } from '@/layout/stage'
 import {
   DEFAULT_TOGGLES,
+  emphasisOf,
   encodeView,
   focusOf,
   keyIntent,
@@ -188,6 +193,23 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     return participation(index.value, path.value.frames, scenarioView.value, s, state.value.playback?.frameId)
   })
 
+  /** F7：调用与显式返回的配对，随计划算一次 */
+  const pairs = computed<ReturnPairs | null>(() => (plan.value ? pairReturns(plan.value) : null))
+  /** F6f：路线（路径上的分支点与所选，以及待选的分支点） */
+  const route = computed<RouteItem[]>(() => (plan.value ? routeOf(plan.value, choices.value) : []))
+  /** R15：焦点突出的本层可见消息序号；null 表示不突出 */
+  const emphasis = computed(() => emphasisOf(state.value, scenarioView.value, pairs.value, pinnedParticipation.value))
+  /** V5：参与本场景的舞台节点（时序图泳道）：path = 回放路径上的消息碰到它，other = 只在未选分支 / 未到达处 */
+  const stageParticipants = computed<ReadonlyMap<string, 'path' | 'other'>>(() => {
+    const out = new Map<string, 'path' | 'other'>()
+    for (const m of sequence.value?.messages ?? []) {
+      if (m.kind === 'empty') continue
+      for (const id of [m.from, m.to]) if (m.status === 'path') out.set(id, 'path')
+      else if (!out.has(id)) out.set(id, 'other')
+    }
+    return out
+  })
+
   /** 导航树：步骤大纲（T6）与参与本场景的模块（T5），与层次、播放头无关 */
   const outline = computed<OutlineNode[]>(() => (plan.value ? outlineScenario(plan.value, choices.value) : []))
   const participants = computed<ReadonlySet<string>>(() => (index.value && plan.value ? scenarioModules(index.value, plan.value) : new Set()))
@@ -312,7 +334,12 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const next = () => void dispatch({ type: 'next' })
   const prev = () => void dispatch({ type: 'prev' })
   const seek = (frameId: string | null) => void dispatch({ type: 'seek', frameId })
-  const chooseBranch = (pointId: string, option: number) => void dispatch({ type: 'chooseBranch', pointId, option })
+  /** F6e、F6f：选分支；返回被丢弃的其他分支选择个数（界面据此提示） */
+  const chooseBranch = (pointId: string, option: number): number => {
+    const before = choices.value
+    dispatch({ type: 'chooseBranch', pointId, option })
+    return [...before.keys()].filter(k => k !== pointId && !choices.value.has(k)).length
+  }
   const selectFile = (path: string) => select({ kind: 'file', id: path })
 
   /** 键盘（N7、N9）：返回 'leave' 表示应回到项目列表，由呈现层导航 */
@@ -357,6 +384,10 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     pinnedParticipation,
     outline,
     participants,
+    pairs,
+    route,
+    emphasis,
+    stageParticipants,
     branchPoint,
     frameLevel,
     overlay,

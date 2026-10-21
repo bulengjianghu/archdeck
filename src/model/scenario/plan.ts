@@ -143,3 +143,35 @@ export function firstFrame(nodes: readonly PlanNode[]): Frame | undefined {
   }
   return undefined
 }
+
+/** 调用与显式返回的配对：帧 ID → 配对帧 ID（双向；一条调用可能被多个分支中的返回回应，取书写顺序的第一个） */
+export type ReturnPairs = ReadonlyMap<string, string>
+
+/**
+ * F7：调用与显式返回配对。按书写顺序以栈匹配：call 入栈；return（X → Y）匹配栈中最近的 Y → X 调用，
+ * 并弹出它及其上的调用（它们没有显式返回）。alt 的每个选项从进入分支点时的栈副本开始，选项内未配对的调用随选项结束丢弃，
+ * 分支点之后继续用进入时的栈；async 不配对。与层次、已选分支无关。
+ */
+export function pairReturns(plan: ScenarioPlan): ReturnPairs {
+  const pairs = new Map<string, string>()
+  const walk = (nodes: readonly PlanNode[], stack: Frame[]) => {
+    for (const n of nodes) {
+      if (n.kind === 'branch') {
+        for (const opt of n.options) walk(opt, [...stack])
+        continue
+      }
+      const f = n.frame
+      if (f.kind === 'call') stack.push(f)
+      else if (f.kind === 'return') {
+        let i = stack.length - 1
+        while (i >= 0 && !(stack[i].from === f.to && stack[i].to === f.from)) i--
+        if (i < 0) continue
+        if (!pairs.has(stack[i].id)) pairs.set(stack[i].id, f.id)
+        pairs.set(f.id, stack[i].id)
+        stack.length = i
+      }
+    }
+  }
+  walk(plan.nodes, [])
+  return pairs
+}

@@ -13,7 +13,7 @@ const desk = useDesk()
       v-for="s in data.steps ?? []"
       :key="s.n"
       class="n"
-      :class="{ current: s.current }"
+      :class="{ current: s.current, muted: s.muted }"
       :title="`第 ${s.n} 步：单击跳到这一步`"
       @click.stop="desk.seek(s.frameId)"
     >
@@ -41,6 +41,11 @@ const desk = useDesk()
   font-size: 10.5px;
   line-height: 16px;
   font-weight: 700;
+}
+
+.n.muted {
+  border-color: var(--border-strong);
+  color: var(--text-3);
 }
 
 .n.current {

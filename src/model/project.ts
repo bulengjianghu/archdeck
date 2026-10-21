@@ -138,6 +138,8 @@ export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectO
       return { layerId: l, order: m.order ?? Infinity, coreModuleIds: core, hiddenCount: visibleChildren(l).length - core.length }
     })
   }
+  // L4：边界节点按层次顺序排列，与时序图泳道一致（P9）
+  boundaryOrder.sort((x, y) => compareKeys(hierarchyKey(index, x), hierarchyKey(index, y)))
   for (const b of boundaryOrder) {
     nodes.push({ id: `boundary:${b}`, moduleId: b, role: 'boundary', hasChildren: visibleChildren(b).length > 0 })
   }
@@ -192,6 +194,29 @@ class EdgeCollector {
       }
     })
   }
+}
+
+/**
+ * 层次顺序（P9、L4）：模块在层次中的排序键。从根下到该模块的路径上每一级两项：
+ * 层为 [0, order]，其他模块为 [1, 在父模块子模块中的描述顺序]。逐项比较即得层次顺序（compareKeys）：
+ * 同一父模块的模块相邻，上层在前，祖先在后代之前。参与者与未知 ID 的键为空。
+ */
+export function hierarchyKey(index: ModelIndex, id: string): number[] {
+  const path = index.pathOf.get(id)
+  if (!path || index.actors.has(id)) return []
+  const key: number[] = []
+  for (let i = 1; i < path.length; i++) {
+    const m = index.modules.get(path[i])!
+    if (m.kind === 'layer') key.push(0, m.order ?? Infinity)
+    else key.push(1, (index.childrenOf.get(path[i - 1]) ?? []).indexOf(path[i]))
+  }
+  return key
+}
+
+/** 排序键逐项比较；一方是另一方的前缀时较短者在前 */
+export function compareKeys(a: readonly number[], b: readonly number[]): number {
+  for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] !== b[i]) return a[i] < b[i] ? -1 : 1
+  return a.length - b.length
 }
 
 /** 视图边 ID；不给 type 表示合并了类型 */

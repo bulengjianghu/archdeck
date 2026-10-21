@@ -1,15 +1,21 @@
 /**
- * 时序图排布（A7、P9）：给时序模型算坐标。同步、纯函数，不调用 elk。
- * - 外部参与者泳道在最左，与系统内泳道之间画分隔线；其余泳道按结构图中对应节点的横坐标排序，使两张图左右关系一致；
+ * 时序图排布（A7、P9、P13）：给时序模型算坐标。同步、纯函数，不调用 elk。
+ * - 外部参与者泳道在最左，与系统内泳道之间画分隔线；其余泳道按层次顺序（排序键），
+ *   同一父模块内的本层子模块改按结构图中对应节点的横坐标，使两张图左右一致；
+ * - 父模块相同的连续泳道成一组，分组框画在泳道头上方（参与者不分组）；
  * - 泳道宽度按名称自适应；消息纵向累加；组合框包住其子消息，按嵌套深度内缩。
  */
-import type { SequenceModel } from '@/model'
+import { compareKeys, type SequenceModel, type SequenceParticipant } from '@/model'
 import type { PositionedView } from './layout'
 
 export interface PositionedSequence {
   model: SequenceModel
   /** 视图节点 ID → 泳道（左边与宽度），按从左到右的顺序 */
   lanes: Map<string, { x: number; w: number }>
+  /** P13：父模块相同的连续泳道，分组框的横向范围 */
+  groups: { parentId: string; x: number; w: number }[]
+  /** 泳道头的纵坐标（有分组时下移给分组框让位） */
+  headY: number
   /** 参与者与系统内泳道之间的分隔线 */
   boundaryX?: number
   /** 每条消息箭头的纵坐标 */
@@ -19,7 +25,7 @@ export interface PositionedSequence {
   size: { w: number; h: number }
 }
 
-export const SEQ = { padX: 16, laneGap: 28, minLane: 96, headerH: 40, top: 64, row: 34, rowInternal: 28, rowEmpty: 24, fragHead: 24, branchGap: 22, fragTail: 10 }
+export const SEQ = { padX: 16, laneGap: 28, minLane: 96, headerH: 40, groupH: 20, top: 64, row: 34, rowInternal: 28, rowEmpty: 24, fragHead: 24, branchGap: 22, fragTail: 10 }
 
 /** 名称的大致显示宽度：中文按 13px，其余按 7px */
 export function textWidth(s: string): number {
@@ -34,9 +40,15 @@ export function layoutSequence(model: SequenceModel, structure?: PositionedView 
     return b ? b.x + b.w / 2 : Infinity
   }
   const seqOf = new Map(model.participants.map((p, i) => [p.nodeId, i]))
-  const byX = (a: { nodeId: string }, b: { nodeId: string }) => centerX(a.nodeId) - centerX(b.nodeId) || seqOf.get(a.nodeId)! - seqOf.get(b.nodeId)!
+  const byX = (a: SequenceParticipant, b: SequenceParticipant) => centerX(a.nodeId) - centerX(b.nodeId) || seqOf.get(a.nodeId)! - seqOf.get(b.nodeId)!
+  // P9：层次顺序；只在最后一级不同的两个本层子模块改按横坐标（没有坐标时 centerX 都是 Infinity，回落到排序键）
+  const byHierarchy = (a: SequenceParticipant, b: SequenceParticipant) => {
+    const sameParent = a.byX && b.byX && compareKeys(a.key.slice(0, -2), b.key.slice(0, -2)) === 0
+    const dx = sameParent ? centerX(a.nodeId) - centerX(b.nodeId) : 0
+    return (Number.isFinite(dx) ? dx : 0) || compareKeys(a.key, b.key) || seqOf.get(a.nodeId)! - seqOf.get(b.nodeId)!
+  }
   const actors = model.participants.filter(p => p.kind === 'actor').sort(byX)
-  const inner = model.participants.filter(p => p.kind !== 'actor').sort(byX)
+  const inner = model.participants.filter(p => p.kind !== 'actor').sort(byHierarchy)
 
   const lanes = new Map<string, { x: number; w: number }>()
   let x = SEQ.padX
@@ -50,12 +62,17 @@ export function layoutSequence(model: SequenceModel, structure?: PositionedView 
     boundaryX = x - SEQ.laneGap / 2
     x += 8
   }
+  const groups: PositionedSequence['groups'] = []
   for (const p of inner) {
     const w = Math.max(SEQ.minLane, textWidth(p.name) + 28)
     lanes.set(p.nodeId, { x, w })
+    const last = groups[groups.length - 1]
+    if (last && p.parentId !== undefined && last.parentId === p.parentId) last.w = x + w - last.x
+    else if (p.parentId !== undefined) groups.push({ parentId: p.parentId, x, w })
     x += w + SEQ.laneGap
   }
   const width = Math.max(x - SEQ.laneGap + SEQ.padX, 240)
+  const shift = groups.length ? SEQ.groupH : 0
 
   const opening = new Map<number, number[]>()
   const closing = new Map<number, number[]>()
@@ -67,7 +84,7 @@ export function layoutSequence(model: SequenceModel, structure?: PositionedView 
   const fragEnd = model.fragments.map(() => 0)
   const branchY: number[][] = model.fragments.map(() => [])
 
-  let y = SEQ.top
+  let y = SEQ.top + shift
   const messages = model.messages.map((m, i) => {
     for (const k of (opening.get(i) ?? []).sort((a, b) => model.fragments[a].depth - model.fragments[b].depth)) {
       fragY[k] = y
@@ -98,5 +115,5 @@ export function layoutSequence(model: SequenceModel, structure?: PositionedView 
     return { x: left - inset, y: fragY[k], w: right - left + 2 * inset, h: fragEnd[k] - fragY[k], branchY: branchY[k] }
   })
 
-  return { model, lanes, boundaryX, messages, fragments, size: { w: width, h: y + 24 } }
+  return { model, lanes, groups, headY: 8 + shift, boundaryX, messages, fragments, size: { w: width, h: y + 24 } }
 }

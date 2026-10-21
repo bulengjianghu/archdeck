@@ -53,14 +53,15 @@ export function chooseBranch(plan: ScenarioPlan, choices: Choices, pointId: stri
   return next
 }
 
-/** 从根到某帧要经过的分支选择（分支点 → 选项），按经过的先后；帧不在计划中时为 null */
-function routeTo(plan: ScenarioPlan, frameId: string): [string, number][] | null {
+/** 从根到某帧（或某个分支点）要经过的分支选择（分支点 → 选项），按经过的先后；不在计划中时为 null */
+function routeTo(plan: ScenarioPlan, target: { frameId: string } | { pointId: string }): [string, number][] | null {
   const find = (nodes: readonly PlanNode[], route: [string, number][]): [string, number][] | null => {
     for (const n of nodes) {
       if (n.kind === 'frame') {
-        if (n.frame.id === frameId) return route
+        if ('frameId' in target && n.frame.id === target.frameId) return route
         continue
       }
+      if ('pointId' in target && n.point.id === target.pointId) return route
       for (let k = 0; k < n.options.length; k++) {
         const r = find(n.options[k], [...route, [n.point.id, k]])
         if (r) return r
@@ -77,11 +78,48 @@ function routeTo(plan: ScenarioPlan, frameId: string): [string, number][] | null
  */
 export function choicesFor(plan: ScenarioPlan, choices: Choices, frameId: string): Map<string, number> | null {
   if (!plan.frames.has(frameId)) return null
-  const route = new Map(routeTo(plan, frameId)!)
+  return reach(plan, choices, new Map(routeTo(plan, { frameId })!), r => r.frames.some(f => f.id === frameId))
+}
+
+/**
+ * F6e：直选任意分支点的某一支。分支点不在路径上时先像 choicesFor 一样补齐到达它所需的选择，
+ * 再在它上面选择（F6b：改选丢弃其后的选择）。分支点或选项不存在时为 null。
+ */
+export function choicesForBranch(plan: ScenarioPlan, choices: Choices, pointId: string, option: number): Map<string, number> | null {
+  const point = plan.points.get(pointId)
+  if (!point || option < 0 || option >= point.options.length) return null
+  const reached = reach(plan, choices, new Map(routeTo(plan, { pointId })!), r => r.pending?.id === pointId || r.points.some(p => p.id === pointId))
+  return reached && chooseBranch(plan, reached, pointId, option)
+}
+
+/** F6e：路径上分支点之前的帧（不含分支点内的帧）；分支点不在路径上时为空 */
+export function pointPrefix(plan: ScenarioPlan, choices: Choices, pointId: string): Frame[] {
+  const without = new Map(choices)
+  without.delete(pointId)
+  const r = resolvePath(plan, without)
+  return r.pending?.id === pointId ? r.frames : []
+}
+
+/** 路线上的一项：路径上依次经过的分支点（chosen 为所选选项），截止处待选的分支点 chosen 为 null */
+export interface RouteItem {
+  pointId: string
+  when: string[]
+  chosen: number | null
+}
+
+/** F6f：路线 = 路径上依次经过的分支点与所选选项，加上截止处待选的分支点 */
+export function routeOf(plan: ScenarioPlan, choices: Choices): RouteItem[] {
+  const { points, pending } = resolvePath(plan, choices)
+  const item = (p: BranchPoint, chosen: number | null): RouteItem => ({ pointId: p.id, when: p.options.map(o => o.when), chosen })
+  return [...points.map(p => item(p, choices.get(p.id)!)), ...(pending ? [item(pending, null)] : [])]
+}
+
+/** 沿路径依次改选，直到 done：route 中的分支点选指定选项，其余尚未选择的保留已有选择、没有时取第一个 */
+function reach(plan: ScenarioPlan, choices: Choices, route: ReadonlyMap<string, number>, done: (r: ResolvedPath) => boolean): Map<string, number> | null {
   let next = new Map(choices)
   for (let guard = 0; guard <= plan.points.size; guard++) {
     const r = resolvePath(plan, next)
-    if (r.frames.some(f => f.id === frameId)) return next
+    if (done(r)) return next
     const wrong = r.points.find(p => route.has(p.id) && next.get(p.id) !== route.get(p.id))
     if (wrong) next = chooseBranch(plan, next, wrong.id, route.get(wrong.id)!)
     else if (r.pending) next = chooseBranch(plan, next, r.pending.id, route.get(r.pending.id) ?? choices.get(r.pending.id) ?? 0)

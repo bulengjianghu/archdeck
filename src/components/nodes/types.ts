@@ -25,7 +25,7 @@ export interface NodeData {
   actor?: ActorEntity
   actorKind?: ActorKind
   /** 运行视角：步骤序号（结构图上的序号标记） */
-  steps?: { n: number; frameId: string; current: boolean }[]
+  steps?: { n: number; frameId: string; current: boolean; muted?: boolean }[]
   /** 运行视角：分支点某个选项的预览 */
   preview?: { pointId: string; option: number; label: string }
 }

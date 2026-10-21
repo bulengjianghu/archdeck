@@ -1,15 +1,30 @@
 <script setup lang="ts">
 /**
  * 泳道与消息：参与者头部与生命线、按序自上而下的消息（R2：同步实线实心箭头、异步虚线开放箭头、显式返回点线；S10a 只画显式返回）；
- * 内部活动画成生命线上的激活条；外部参与者在最左，竖线隔出系统边界（A7）。
+ * 内部活动画成生命线上的激活条；外部参与者在最左，竖线隔出系统边界（A7）；
+ * 同一父模块的泳道头上方画分组框（P13）；焦点突出时其余路径上的消息变灰（R15）。
  */
 import { computed } from 'vue'
 import type { PositionedSequence } from '@/layout/sequence'
 import { SEQ } from '@/layout/sequence'
-import type { SequenceMessage } from '@/model'
+import type { SequenceMessage, SequenceParticipant } from '@/model'
 
-const props = defineProps<{ ps: PositionedSequence; current: number | null; walked: number; hover: string | null }>()
-const emit = defineEmits<{ pick: [m: SequenceMessage]; hover: [m: SequenceMessage | null] }>()
+const props = defineProps<{
+  ps: PositionedSequence
+  current: number | null
+  walked: number
+  hover: string | null
+  /** R15：突出的可见消息序号；null 表示不突出 */
+  emphasis: ReadonlySet<number> | null
+  /** P13：分组框的标题 */
+  groupName: (parentId: string) => string
+}>()
+const emit = defineEmits<{
+  pick: [m: SequenceMessage]
+  hover: [m: SequenceMessage | null]
+  /** 信息卡：悬停泳道头或消息（null 为移开） */
+  card: [target: { kind: 'lane'; participant: SequenceParticipant } | { kind: 'message'; message: SequenceMessage } | null, e?: MouseEvent]
+}>()
 
 const lanes = computed(() =>
   props.ps.model.participants.map(p => ({ p, box: props.ps.lanes.get(p.nodeId)! })).filter(x => x.box),
@@ -22,23 +37,30 @@ const ICON = { actor: '👤', boundary: '↗', module: '' } as const
 
 function state(m: SequenceMessage): string {
   if (m.status !== 'path') return m.status
-  if (m.pathIndex === props.current) return 'current'
-  return m.pathIndex !== undefined && m.pathIndex < props.walked ? 'walked' : 'future'
+  const em = props.emphasis
+  const focus = em && m.pathIndex !== undefined ? (em.has(m.pathIndex) ? ' focus' : ' muted') : ''
+  if (m.pathIndex === props.current) return 'current' + focus
+  return (m.pathIndex !== undefined && m.pathIndex < props.walked ? 'walked' : 'future') + focus
 }
 const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step:${m.frameIds[0]}`
 </script>
 
 <template>
   <g class="lanes">
+    <g v-for="g in ps.groups" :key="`${g.parentId}@${g.x}`" class="group">
+      <rect :x="g.x - 6" :y="4" :width="g.w + 12" :height="ps.headY + SEQ.headerH - 12 - 4 + 4" rx="6" class="group-box" />
+      <text :x="g.x" :y="16" class="group-name">{{ groupName(g.parentId) }}</text>
+    </g>
     <line v-if="ps.boundaryX !== undefined" :x1="ps.boundaryX" :x2="ps.boundaryX" :y1="4" :y2="ps.size.h" class="sys-boundary" />
     <text v-if="ps.boundaryX !== undefined" :x="ps.boundaryX + 4" :y="ps.size.h - 6" class="sys-label">系统边界</text>
     <g v-for="{ p, box } in lanes" :key="p.nodeId" :class="['lane', p.kind]">
-      <line :x1="box.x + box.w / 2" :x2="box.x + box.w / 2" :y1="SEQ.headerH" :y2="ps.size.h - 8" class="lifeline" />
-      <rect :x="box.x" :y="8" :width="box.w" :height="SEQ.headerH - 12" rx="6" class="head" />
-      <text :x="box.x + box.w / 2" :y="8 + (SEQ.headerH - 12) / 2 + 4" text-anchor="middle" class="head-text">
-        {{ ICON[p.kind] }} {{ p.name }}
-      </text>
-      <title>{{ p.id }}</title>
+      <line :x1="box.x + box.w / 2" :x2="box.x + box.w / 2" :y1="ps.headY + SEQ.headerH - 8" :y2="ps.size.h - 8" class="lifeline" />
+      <g class="head-hit" @mouseenter="emit('card', { kind: 'lane', participant: p }, $event)" @mouseleave="emit('card', null)">
+        <rect :x="box.x" :y="ps.headY" :width="box.w" :height="SEQ.headerH - 12" rx="6" class="head" />
+        <text :x="box.x + box.w / 2" :y="ps.headY + (SEQ.headerH - 12) / 2 + 4" text-anchor="middle" class="head-text">
+          {{ ICON[p.kind] }} {{ p.name }}
+        </text>
+      </g>
     </g>
   </g>
   <g class="messages">
@@ -47,8 +69,8 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
       :key="i"
       :class="['msg', m.kind, state(m), { unmodeled: m.unmodeled, hover: isHover(m) }]"
       @click="m.kind !== 'empty' && emit('pick', m)"
-      @mouseenter="m.kind !== 'empty' && emit('hover', m)"
-      @mouseleave="emit('hover', null)"
+      @mouseenter="m.kind !== 'empty' && (emit('hover', m), emit('card', { kind: 'message', message: m }, $event))"
+      @mouseleave="(emit('hover', null), emit('card', null))"
     >
       <rect class="hit" :x="0" :y="ps.messages[i].y - 14" width="100%" :height="28" />
       <template v-if="m.kind === 'empty'">
@@ -85,6 +107,21 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
 .sys-label {
   font-size: 10px;
   fill: var(--actor);
+}
+
+.group-box {
+  fill: var(--surface-2);
+  stroke: var(--border);
+}
+
+.group-name {
+  font-size: 10.5px;
+  font-weight: 600;
+  fill: var(--text-3);
+}
+
+.head-hit {
+  cursor: default;
 }
 
 .lifeline {
@@ -187,6 +224,36 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
 
 .future {
   opacity: 0.55;
+}
+
+/* R15：焦点突出时，其余路径上的消息变灰 */
+.muted .arrow {
+  stroke: var(--text-3);
+}
+
+.muted .label {
+  fill: var(--text-3);
+}
+
+.muted.walked,
+.muted.future {
+  opacity: 0.4;
+}
+
+.focus .arrow {
+  stroke-width: 2.2;
+}
+
+.focus:not(.current) .arrow {
+  stroke: var(--accent);
+}
+
+.focus:not(.current) .label {
+  fill: var(--accent);
+}
+
+.focus.future {
+  opacity: 1;
 }
 
 .unchosen,

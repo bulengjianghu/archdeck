@@ -5,6 +5,7 @@
  */
 import type { LevelView, ModelIndex } from '../types'
 import { moduleName } from '../indexer'
+import { hierarchyKey } from '../project'
 import type { FragmentKind, FragmentTag, ScenarioPlan } from './plan'
 import { resolvePath, type Choices } from './path'
 import { linearize, mergeEntries, messageKind, type FrameStatus, type ScenarioLevelView } from './level'
@@ -16,6 +17,16 @@ export interface SequenceParticipant {
   id: string
   name: string
   kind: 'module' | 'boundary' | 'actor'
+  /** 所属父模块（参与者没有）；P13 按它分组 */
+  parentId?: string
+  /** 根下到自身的模块 ID（参与者为空） */
+  path: string[]
+  /** 所属层：模块自身或最近的 kind: layer 祖先 */
+  layer?: string
+  /** 层次顺序的排序键（P9） */
+  key: number[]
+  /** 本层的非层子模块：同一父模块内改按结构图横坐标排（P9） */
+  byX: boolean
 }
 
 export interface SequenceMessage {
@@ -44,8 +55,8 @@ export interface SequenceFragment {
   last: number
   /** P6：框内的消息在本层全部是内部活动，缩成一行 */
   collapsed: boolean
-  /** 仅 alt 与 par：各分支；chosen 为 null 表示分支点尚未到达 */
-  branches?: { label: string; chosen: boolean | null; first: number; last: number }[]
+  /** 仅 alt 与 par：各分支（option 为选项序号，F6e）；chosen 为 null 表示分支点尚未到达 */
+  branches?: { option: number; label: string; chosen: boolean | null; first: number; last: number }[]
 }
 
 export interface SequenceModel {
@@ -63,7 +74,25 @@ export function buildSequence(index: ModelIndex, view: LevelView, plan: Scenario
     if (participants.some(p => p.nodeId === nodeId)) return
     const boundary = nodeId.startsWith('boundary:')
     const id = boundary ? nodeId.slice('boundary:'.length) : nodeId
-    participants.push({ nodeId, id, name: moduleName(index, id), kind: index.actors.has(id) ? 'actor' : boundary ? 'boundary' : 'module' })
+    const name = moduleName(index, id)
+    if (index.actors.has(id)) {
+      participants.push({ nodeId, id, name, kind: 'actor', path: [], key: [], byX: false })
+      return
+    }
+    const m = index.modules.get(id)
+    const path = (index.pathOf.get(id) ?? []).slice(1)
+    const layer = [...path].reverse().find(p => index.modules.get(p)?.kind === 'layer')
+    participants.push({
+      nodeId,
+      id,
+      name,
+      kind: boundary ? 'boundary' : 'module',
+      parentId: m?.parentId,
+      path,
+      ...(layer ? { layer } : {}),
+      key: hierarchyKey(index, id),
+      byX: !boundary && m?.parentId === view.parentId && m.kind !== 'layer',
+    })
   }
 
   const tagsOf: FragmentTag[][] = []
@@ -119,12 +148,12 @@ export function buildSequence(index: ModelIndex, view: LevelView, plan: Scenario
       const chosen = (k: number) => (onPath.has(f.id) ? choices.get(f.id) === k : null)
       const branches = point.options.flatMap((o, k) => {
         const r = branchMap.get(k)
-        return r ? [{ label: o.when, chosen: chosen(k), ...r }] : []
+        return r ? [{ option: k, label: o.when, chosen: chosen(k), ...r }] : []
       })
       return { ...f, collapsed, branches }
     }
     if (f.kind === 'par') {
-      const branches = [...branchMap].sort((a, b) => a[0] - b[0]).map(([, r]) => ({ label: '', chosen: true, ...r }))
+      const branches = [...branchMap].sort((a, b) => a[0] - b[0]).map(([k, r]) => ({ option: k, label: '', chosen: true, ...r }))
       return { ...f, collapsed, branches }
     }
     return { ...f, collapsed }

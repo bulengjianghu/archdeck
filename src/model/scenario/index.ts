@@ -2,10 +2,10 @@
 export { bindRelation, RUNTIME_RELATION_TYPES } from './bind'
 export type { Binding, MessageEnds } from './bind'
 export { forEachStep, messagesOf, mapChildren } from './steps'
-export { planScenario, firstFrame } from './plan'
-export type { BranchPoint, Frame, FragmentKind, FragmentTag, PlanNode, ScenarioPlan } from './plan'
-export { resolvePath, chooseBranch, choicesFor, choiceList, choicesFromList } from './path'
-export type { Choices, ResolvedPath } from './path'
+export { planScenario, firstFrame, pairReturns } from './plan'
+export type { BranchPoint, Frame, FragmentKind, FragmentTag, PlanNode, ReturnPairs, ScenarioPlan } from './plan'
+export { resolvePath, chooseBranch, choicesFor, choicesForBranch, pointPrefix, routeOf, choiceList, choicesFromList } from './path'
+export type { Choices, ResolvedPath, RouteItem } from './path'
 export {
   landFrame,
   linearize,

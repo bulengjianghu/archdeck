@@ -11,7 +11,7 @@ import type { TransitionContext, TransitionResult, ViewAction, ViewState } from 
 export * from './types'
 export { selectionExists, keyIntent } from './navigation'
 export { encodeSelection, decodeSelection, encodeView, sameQuery } from './url'
-export { perspectiveOf, focusOf } from './focus'
+export { perspectiveOf, focusOf, emphasisOf } from './focus'
 export type { Perspective, Focus } from './focus'
 
 export function transition(state: ViewState, action: ViewAction, ctx: TransitionContext): TransitionResult {

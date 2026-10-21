@@ -3,6 +3,8 @@
  * GraphCanvas：把 PositionedView 画成节点和边；处理平移、缩放、单击、双击、悬停。
  * 运行视角下作为舞台（V5）：本层参与的节点与走过的边突出、其余变淡，当前消息沿步骤方向流动（P10），
  * 未建模的消息画临时虚线（P11），步骤序号可单击指向（R13），停在分支点时预览各选项（F6）。
+ * 舞台按静态关系显示方式隐藏或淡化不参与的节点与静态边（V5、V8），「在画布上显示」的对象照常（V9）；
+ * 焦点突出时其余走过的边与步骤序号淡为灰色（R15）。
  * 选中文件时，其归属模块在本层的投影节点加文件高亮（G14）。
  * 只读 DeskState、只发操作意图，不做任何投影或布局计算。
  */
@@ -10,7 +12,8 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { MarkerType, VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import { useDesk } from '@/state/inject'
 import { contentBounds, edgeLabel, isBoundaryEdge, moreChipId, type Box } from '@/layout/layout'
-import { unmodeledId } from '@/layout/stage'
+import { stageDisplay, unmodeledId, type StaticMode, type Visibility } from '@/layout/stage'
+import { useStage } from './stage/useStageDisplay'
 import { FIELD_LABELS, moduleName, type ViewEdge } from '@/model'
 import ModuleNode from './nodes/ModuleNode.vue'
 import BoundaryNode from './nodes/BoundaryNode.vue'
@@ -26,6 +29,7 @@ import Legend from './Legend.vue'
 import type { NodeData } from './nodes/types'
 
 const desk = useDesk()
+const stageUi = useStage()
 const { setViewport, zoomIn, zoomOut, dimensions, setNodes, setEdges } = useVueFlow('arch-desk')
 
 /** 运行视角的舞台叠加；结构视角为 null */
@@ -70,6 +74,33 @@ const playEdges = computed(() => {
   const ids = new Set<string>(st?.walked.keys() ?? [])
   for (const p of st?.previews ?? []) if (p.at?.kind === 'edge') ids.add(p.at.edgeId)
   if (hoverLanding.value?.kind === 'edge') ids.add(hoverLanding.value.edgeId)
+  return ids
+})
+
+/** 舞台显示（V5、V8、V9）：运行视角下每个节点与边显示、淡化还是隐藏；结构视角为 null */
+const display = computed(() => {
+  const pv = desk.positioned.value
+  if (!stage.value || !pv) return null
+  const play = new Set(playEdges.value)
+  const cur = stage.value.current?.at
+  if (cur?.kind === 'edge') play.add(cur.edgeId)
+  return stageDisplay({ view: pv.view, participants: desk.stageParticipants.value, playEdges: play, mode: stageUi.mode.value, reveal: new Set(stageUi.reveal.value) })
+})
+const visOf = (id: string): Visibility => display.value?.nodes.get(id) ?? 'show'
+const edgeVis = (id: string): Visibility => display.value?.edges.get(id) ?? 'show'
+
+/** R15：突出消息所在的边；null 表示不突出 */
+const emphEdges = computed<Set<string> | null>(() => {
+  const em = desk.emphasis.value
+  const sv = desk.scenarioView.value
+  if (!em || !sv) return null
+  const ids = new Set<string>()
+  for (const i of em) {
+    const at = sv.messages[i]?.at
+    if (at?.kind === 'edge') ids.add(at.edgeId)
+    else if (at?.kind === 'unmodeled') ids.add(unmodeledId(at.from, at.to))
+    else if (at?.kind === 'internal') ids.add(`node:${at.node}`)
+  }
   return ids
 })
 
@@ -139,8 +170,9 @@ const nodes = computed<Node<NodeData>[]>(() => {
   const st = stage.value
   const layered = pv.view.mode === 'layered'
   const out: Node<NodeData>[] = []
-  // 运行视角：本层参与的节点突出，其余变淡（V5）；结构视角：与焦点无关的变淡
-  const dimmed = (id: string, base: boolean) => (st ? !st.active.has(id) : base)
+  // 运行视角：按舞台显示（V5、V8、V9）；结构视角：与焦点无关的变淡
+  const dimmed = (id: string, base: boolean) => (st ? visOf(id) === 'dim' : base)
+  const hidden = (id: string) => !!st && visOf(id) === 'hide'
   const fileHit = desk.fileHits.value?.nodes
   const classOf = (id: string) => [playClass(id), fileHit?.has(id) ? 'file-hit' : ''].filter(Boolean).join(' ') || undefined
   const place = (id: string, box: Box, type: string, data: NodeData, zIndex: number) =>
@@ -151,7 +183,7 @@ const nodes = computed<Node<NodeData>[]>(() => {
   }
   for (const n of pv.view.nodes) {
     const box = pv.nodes.get(n.id)
-    if (!box) continue
+    if (!box || hidden(n.id)) continue
     if (n.role === 'actor') {
       const a = idx.actors.get(n.moduleId)
       const data = { moduleId: n.moduleId, name: a?.name ?? n.moduleId, actor: a, actorKind: n.actorKind, childCount: 0 }
@@ -186,9 +218,10 @@ const nodes = computed<Node<NodeData>[]>(() => {
   const sv = desk.scenarioView.value
   if (st && sv) {
     const current = st.current?.index
+    const em = desk.emphasis.value
     for (const mark of st.walked.values()) {
       if (!mark.at) continue
-      const steps = mark.steps.map(n => ({ n, frameId: sv.messages[n - 1].frameIds[0], current: n - 1 === current }))
+      const steps = mark.steps.map(n => ({ n, frameId: sv.messages[n - 1].frameIds[0], current: n - 1 === current, muted: !!em && !em.has(n - 1) }))
       place(`step:${mark.edgeId}`, { ...mark.at, w: 1, h: 1 }, 'step', { moduleId: '', name: '', childCount: 0, selected: false, dim: false, steps }, 6)
     }
     const point = desk.branchPoint.value
@@ -244,20 +277,27 @@ const edges = computed<Edge<RouteEdgeData>[]>(() => {
         selected,
         core,
         change: edgeChange(e),
-        // 运行视角：只有走过 / 当前 / 预览的边不淡（V5）；分层总览：层间边在聚焦核心模块时变淡；普通层次：与焦点无关的边变淡
-        dim: st ? !play.play && !selected : layered ? !!near && !core && !selected : !!near && !touchesFocus && !selected,
+        // 运行视角：按舞台显示（V5、V8）；分层总览：层间边在聚焦核心模块时变淡；普通层次：与焦点无关的边变淡
+        dim: st ? !play.play && !selected && edgeVis(e.id) === 'dim' : layered ? !!near && !core && !selected : !!near && !touchesFocus && !selected,
+        // R15：焦点突出时，不属于突出消息的走过的边淡为灰色
+        muted: play.play === 'walked' && !!emphEdges.value && !emphEdges.value.has(e.id),
         ...play,
         ...extra,
       },
     }
   }
   // 边界边默认隐藏：只在聚焦（悬停 / 选中）其任一端、被选中或回放经过时出现，避免外部关系淹没内部结构
+  const revealed = new Set(stageUi.reveal.value)
+  const boundaryShown = (e: ViewEdge) =>
+    selectedEdgeIds.value.has(e.id) || playEdges.value.has(e.id) || (!!f && (e.from === f || e.to === f)) || (!!st && (stageUi.mode.value === 'show' || revealed.has(e.from) || revealed.has(e.to)))
   const list = pv.view.edges
-    .filter(e => !isBoundaryEdge(e) || selectedEdgeIds.value.has(e.id) || playEdges.value.has(e.id) || (!!f && (e.from === f || e.to === f)))
+    .filter(e => !st || edgeVis(e.id) !== 'hide' || playEdges.value.has(e.id) || selectedEdgeIds.value.has(e.id) || playOf(e.id).play)
+    .filter(e => !isBoundaryEdge(e) || boundaryShown(e))
     .map(e => make(e, pv.edges.get(e.id), false))
   if (layered) list.push(...visibleCoreEdges.value.map(e => make(e, pv.coreEdges.get(e.id), true)))
   // P11：结构中未建模的消息画临时虚线，不参与布局；分支预览落在未建模处同样画虚线
-  for (const u of st?.unmodeled ?? []) list.push(make(tempEdge(u.edgeId, u.from, u.to), u.route, false, { unmodeled: true, label: '未建模' }))
+  for (const u of st?.unmodeled ?? [])
+    list.push(make(tempEdge(u.edgeId, u.from, u.to), u.route, false, { unmodeled: true, label: '未建模', muted: !!emphEdges.value && !emphEdges.value.has(u.edgeId) }))
   for (const p of st?.previews ?? []) {
     if (p.at?.kind !== 'unmodeled' || !p.route) continue
     const id = unmodeledId(p.at.from, p.at.to)
@@ -311,11 +351,27 @@ function onNodeLeave() {
 // 只需等画布容器有尺寸，切换层次后自动适应
 const pendingFit = ref(true)
 watch(desk.levelVersion, () => (pendingFit.value = true))
+/** V5：运行视角隐藏了静态内容时只按可见节点适应画布；否则为 null（取全部内容） */
+const visibleIds = computed<Set<string> | null>(() => {
+  const d = display.value
+  if (!d || ![...d.nodes.values()].includes('hide')) return null
+  return new Set([...d.nodes].filter(([, v]) => v !== 'hide').map(([id]) => id))
+})
+// 进出运行视角、切换显示方式后重新适应
+watch(
+  () => [desk.perspective.value, stageUi.mode.value] as const,
+  async () => {
+    pendingFit.value = true
+    await nextTick()
+    tryPendingFit()
+  },
+)
+const MODE_LABEL: Record<StaticMode, string> = { hide: '隐藏', dim: '淡显', show: '全显' }
 function fitNow(): boolean {
   const pv = desk.positioned.value
   const { width, height } = dimensions.value
   if (!pv || width === 0 || height === 0) return false
-  const b = contentBounds(pv)
+  const b = contentBounds(pv, visibleIds.value ?? undefined)
   if (!b) return false
   const pad = 0.08
   const zoom = Math.min(1.2, (width * (1 - 2 * pad)) / b.w, (height * (1 - 2 * pad)) / b.h)
@@ -391,6 +447,18 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       <button title="放大" @click="zoomIn()">＋</button>
       <button title="缩小" @click="zoomOut()">－</button>
       <button title="适应画布" @click="fitNow()">适应</button>
+      <div v-if="stage" class="static-mode" role="group" aria-label="静态关系">
+        <span class="muted">静态关系</span>
+        <button
+          v-for="m in (['hide', 'dim', 'show'] as const)"
+          :key="m"
+          :class="{ on: stageUi.mode.value === m }"
+          :title="m === 'hide' ? '只显示参与本场景的节点与走过的边' : m === 'dim' ? '不参与的节点与静态边淡化显示' : '全部照常显示'"
+          @click="stageUi.setMode(m)"
+        >
+          {{ MODE_LABEL[m] }}
+        </button>
+      </div>
     </div>
     <Legend />
   </div>
@@ -437,5 +505,25 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
   min-width: 30px;
   font-size: 12px;
   padding: 3px 8px;
+}
+
+.static-mode {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.static-mode .muted {
+  margin-right: 4px;
+}
+
+.static-mode button.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
 }
 </style>

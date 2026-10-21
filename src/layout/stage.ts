@@ -1,9 +1,10 @@
 /**
- * 舞台叠加（V5、P7、P10、P11、R11）：把本层帧投影与播放头换成画布要画的东西——
+ * 舞台叠加（V5、P7、P10、P11、R11）与舞台显示（V5、V8、V9）：把本层帧投影与播放头换成画布要画的东西——
  * 参与的节点、走过的边与步骤序号、当前消息（方向）、未建模的临时线、分支点各选项的预览。
  * 纯函数，只算数据与坐标；画布只按它着色。
  */
 import { currentMessage, walkedCount, type Landing, type ScenarioLevelView, type VisibleLanding } from '@/model'
+import type { LevelView } from '@/model'
 import { linkRoute, type Box, type EdgeRoute, type PositionedView } from './layout'
 
 export interface StageMark {
@@ -79,4 +80,55 @@ export function stageOverlay(
   })
 
   return { active, walked, current, unmodeled: [...unmodeled.values()], previews, hiddenCurrent: frameId !== null && ci === null }
+}
+
+/** V8：运行视角下静态关系的显示方式 */
+export type StaticMode = 'hide' | 'dim' | 'show'
+export type Visibility = 'show' | 'dim' | 'hide'
+
+export interface StageDisplayInput {
+  view: LevelView
+  /** 参与本场景的节点（时序图泳道）：path = 回放路径上的消息碰到它，other = 只出现在未选分支或未到达部分 */
+  participants: ReadonlyMap<string, 'path' | 'other'>
+  /** 回放边（走过、当前、预览、悬停预览）的视图边 ID */
+  playEdges: ReadonlySet<string>
+  mode: StaticMode
+  /** V9：「在画布上显示」的节点，它们的静态边及对端节点照常显示 */
+  reveal: ReadonlySet<string>
+}
+
+export interface StageDisplay {
+  nodes: Map<string, Visibility>
+  edges: Map<string, Visibility>
+}
+
+/**
+ * 舞台显示（V5、V8、V9）：运行视角下每个节点与视图边是显示、淡化还是隐藏。布局不变，只决定画不画、淡不淡。
+ * - 回放边始终显示；参与路径的节点显示，只在未选分支 / 未到达处出现的节点淡化；
+ * - 其余节点与静态边：隐藏 / 淡化 / 照常（按显示方式）；「在画布上显示」的节点的静态边及对端节点照常；
+ * - 分层总览的带始终显示（它是骨架）。
+ */
+export function stageDisplay(input: StageDisplayInput): StageDisplay {
+  const { view, participants, playEdges, mode, reveal } = input
+  const rest: Visibility = mode === 'hide' ? 'hide' : mode === 'dim' ? 'dim' : 'show'
+  const revealedEdges = view.edges.filter(e => reveal.has(e.from) || reveal.has(e.to))
+  const revealedNodes = new Set([...reveal, ...revealedEdges.flatMap(e => [e.from, e.to])])
+
+  const nodes = new Map<string, Visibility>()
+  for (const n of view.nodes) {
+    const p = participants.get(n.id)
+    if (p === 'path') nodes.set(n.id, 'show')
+    else if (n.role === 'layer' || revealedNodes.has(n.id)) nodes.set(n.id, 'show')
+    else if (p === 'other') nodes.set(n.id, mode === 'show' ? 'show' : 'dim')
+    else nodes.set(n.id, rest)
+  }
+  const edges = new Map<string, Visibility>()
+  const revealed = new Set(revealedEdges.map(e => e.id))
+  for (const e of [...view.edges, ...(view.coreEdges ?? [])]) {
+    if (playEdges.has(e.id) || revealed.has(e.id)) edges.set(e.id, 'show')
+    // 端点被隐藏的边不画
+    else if (nodes.get(e.from) === 'hide' || nodes.get(e.to) === 'hide') edges.set(e.id, 'hide')
+    else edges.set(e.id, rest)
+  }
+  return { nodes, edges }
 }

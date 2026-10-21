@@ -1,8 +1,9 @@
-/** 会话规则：视角与焦点（V1–V4、V7）、回放（R1、R5、R6、R10、R12、R13、F6、F6b）、URL（F6c、R10、R12） */
+/** 会话规则：视角与焦点（V1–V4、V7）、焦点突出（R15）、回放（R1、R5、R6、R10、R12、R13、F6、F6b、F6e）、URL（F6c、R10、R12） */
 import { describe, expect, it } from 'vitest'
-import { loadModel, planScenario, projectLevel, projectScenario, RELATION_TYPES, stageEnds } from '../../src/model'
+import { loadModel, pairReturns, participation, planScenario, projectLevel, projectScenario, RELATION_TYPES, resolvePath, stageEnds } from '../../src/model'
 import {
   DEFAULT_TOGGLES,
+  emphasisOf,
   encodeView,
   focusOf,
   perspectiveOf,
@@ -140,10 +141,51 @@ describe('回放', () => {
     expect(frameOf(s)).toBe('sc.play#update')
     s = run(s, prev, prev, next, next).state
     expect(frameOf(s)).toBe('sc.play#update')
-    // 改选后播放头不在新路径上：回到开头
+    // F6e：改选后播放头不在新路径上——停在分支点之前的最后一帧，下一步进入新分支
     const changed = run(s, { type: 'chooseBranch', pointId: ALT, option: 1 }).state
     expect(changed.playback!.choices.get(ALT)).toBe(1)
-    expect(frameOf(changed)).toBeNull()
+    expect(frameOf(changed)).toBe('sc.play#2')
+    expect(changed.selection).toBeNull()
+  })
+
+  it('F6e：播放头仍在新路径上时不动；分支点之前没有帧时回到开头；不在路径上的分支点也能直选', () => {
+    // 播放头在分支点之前：改选不动它
+    const before = open('sys', next, next).state
+    expect(frameOf(run(before, { type: 'chooseBranch', pointId: ALT, option: 1 }).state)).toBe(frameOf(before))
+    // 尚未到达分支点也能直选（补齐到达它的选择）
+    const early = run(open('sys').state, { type: 'chooseBranch', pointId: ALT, option: 0 }).state
+    expect(early.playback!.choices.get(ALT)).toBe(0)
+    expect(frameOf(early)).toBeNull()
+    // 不存在的分支点：不变
+    const same = open('sys', next).state
+    expect(run(same, { type: 'chooseBranch', pointId: 'nope', option: 0 }).state).toBe(same)
+  })
+
+  it('R15：跟随时突出当前消息与配对返回；钉住时突出参与的消息；停在开头或结构视角不突出', () => {
+    const plan = planScenario(index, 'sc.play')
+    const pairs = pairReturns(plan)
+    const at = (s: ViewState) => ctxOf(s).scenarioView!
+    // 结构视角、停在开头
+    expect(emphasisOf(base, null, pairs, null)).toBeNull()
+    const start = open('sys', { type: 'chooseBranch', pointId: ALT, option: 1 }).state
+    expect(emphasisOf(start, at(start), pairs, null)).toBeNull()
+    // 走到 sc.decide 的调用：它与配对返回一起突出
+    let s = start
+    const v0 = at(s)
+    const callIdx = v0.messages.findIndex(m => m.frameIds.some(f => plan.frames.get(f)!.kind === 'call' && pairs.has(f)))
+    expect(callIdx).toBeGreaterThanOrEqual(0)
+    s = run(s, { type: 'seek', frameId: v0.messages[callIdx].frameIds[0] }).state
+    const v = at(s)
+    const em = emphasisOf(s, v, pairs, null)!
+    const call = v.messages[v.messageOf.get(frameOf(s)!)!]
+    const paired = call.frameIds.map(f => pairs.get(f)).find(Boolean)!
+    expect([...em].sort()).toEqual([v.messageOf.get(frameOf(s)!)!, v.messageOf.get(paired)!].sort())
+    // 钉住：参与的消息；钉住文件：空集
+    const pinned = run(s, { type: 'select', selection: { kind: 'module', id: 'app.solution' } }).state
+    const part = participation(index, resolvePath(plan, pinned.playback!.choices).frames, v, { kind: 'module', id: 'app.solution' })
+    expect([...emphasisOf(pinned, v, pairs, part)!]).toEqual(part.messages)
+    const file = run(s, { type: 'select', selection: { kind: 'file', id: 'x.ts' } }).state
+    expect(emphasisOf(file, v, pairs, null)!.size).toBe(0)
   })
 
   it('R13：指向某一步——前进或后退到该步、焦点跟随；在未选分支上先改选；落在合并消息的第一帧', () => {

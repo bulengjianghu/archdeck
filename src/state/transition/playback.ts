@@ -4,7 +4,7 @@
  * 「下一步是哪一帧」「到达某帧需要哪些分支选择」「改选后保留哪些选择」都问模型层的场景查询。
  * 播放头以帧 ID 记录，与层次无关；层次变化时不动它（R6）。
  */
-import { chooseBranch as choose, choicesFor, landing, projectScenario, resolvePath, stepAfter, stepBefore, type ScenarioLevelView } from '@/model'
+import { choicesFor, choicesForBranch, landing, pointPrefix, projectScenario, resolvePath, stepAfter, stepBefore, type ScenarioLevelView } from '@/model'
 import type { TransitionContext, TransitionResult, ViewState } from './types'
 
 const replace = (state: ViewState): TransitionResult => ({ state, history: 'replace' })
@@ -56,13 +56,21 @@ export function seek(state: ViewState, ctx: TransitionContext, frameId: string |
   return replace({ ...state, selection: null, playback: { ...pb, choices: kept, frameId: target } })
 }
 
-/** F6、F6b：在分支点选择或改选；播放头不在新路径上时回到开头；之后由用户单步继续 */
+/**
+ * F6、F6b、F6e：在任意分支点选择或改选（不在路径上时先补齐到达它的选择）；焦点不变。
+ * 播放头仍在新路径上时不动，否则停在该分支点之前的最后一帧（取其可见消息的第一帧），之前没有帧时回到开头；之后由用户单步继续。
+ */
 export function chooseBranch(state: ViewState, ctx: TransitionContext, pointId: string, option: number): TransitionResult {
   const pb = state.playback
-  if (!pb || !ctx.plan || !ctx.plan.points.has(pointId)) return replace(state)
-  const choices = choose(ctx.plan, pb.choices, pointId, option)
+  if (!pb || !ctx.plan) return replace(state)
+  const choices = choicesForBranch(ctx.plan, pb.choices, pointId, option)
+  if (!choices) return replace(state)
   const frames = resolvePath(ctx.plan, choices).frames
-  const frameId = pb.frameId === null || frames.some(f => f.id === pb.frameId) ? pb.frameId : null
+  if (pb.frameId === null || frames.some(f => f.id === pb.frameId)) return replace({ ...state, playback: { ...pb, choices } })
+  const before = pointPrefix(ctx.plan, choices, pointId)
+  const last = before[before.length - 1]
+  const v = last ? scenarioView(state, ctx, choices) : null
+  const frameId = last ? (v ? landing(v, last.id) : last.id) : null
   return replace({ ...state, playback: { ...pb, choices, frameId } })
 }
 

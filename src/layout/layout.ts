@@ -203,8 +203,8 @@ function actorRoute(a?: Box, b?: Box): EdgeRoute | undefined {
   return { points: [p1, p2], curve: side ? 'h' : true, label: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } }
 }
 
-/** 节点与走线的总外框，用于适应画布 */
-export function contentBounds(pv: PositionedView): Box | null {
+/** 节点与走线的总外框，用于适应画布；给出 only 时只取这些节点（运行视角隐藏静态内容时，V5） */
+export function contentBounds(pv: PositionedView, only?: ReadonlySet<string>): Box | null {
   let x1 = Infinity
   let y1 = Infinity
   let x2 = -Infinity
@@ -215,11 +215,12 @@ export function contentBounds(pv: PositionedView): Box | null {
     x2 = Math.max(x2, x)
     y2 = Math.max(y2, y)
   }
-  for (const b of pv.nodes.values()) {
+  for (const [id, b] of pv.nodes) {
+    if (only && !only.has(id)) continue
     add(b.x, b.y)
     add(b.x + b.w, b.y + b.h)
   }
-  for (const r of pv.edges.values()) for (const p of r.points) add(p.x, p.y)
+  if (!only) for (const r of pv.edges.values()) for (const p of r.points) add(p.x, p.y)
   if (x1 === Infinity) return null
   return { x: x1, y: y1, w: Math.max(1, x2 - x1), h: Math.max(1, y2 - y1) }
 }
@@ -309,25 +310,16 @@ export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
 export const BOUNDARY_ROW_GAP = 96
 
 /**
- * 边界节点统一放在内部结构下方一行，按「连接的内部模块的平均横坐标」排序以减少交叉；
+ * 边界节点统一放在内部结构下方一行，按视图给出的层次顺序从左到右排列（L4，与时序图泳道一致）；
  * 边界边画成从内部模块到边界节点的曲线（默认隐藏，聚焦时显示）。
  */
 export function placeBoundaries(view: LevelView, nodes: Map<string, Box>, edges: Map<string, EdgeRoute>) {
-  const boundaries = view.nodes.filter(n => n.role === 'boundary')
-  if (boundaries.length === 0) return
+  const sorted = view.nodes.filter(n => n.role === 'boundary')
+  if (sorted.length === 0) return
   const inner = view.nodes.filter(n => n.role !== 'boundary' && n.role !== 'actor').map(n => nodes.get(n.id)).filter((b): b is Box => !!b)
   const minX = inner.length ? Math.min(...inner.map(b => b.x)) : 0
   const maxX = inner.length ? Math.max(...inner.map(b => b.x + b.w)) : 0
   const bottom = inner.length ? Math.max(...inner.map(b => b.y + b.h)) : 0
-  const anchorX = (id: string) => {
-    const xs = view.edges
-      .filter(e => (e.from === id || e.to === id) && isBoundaryEdge(e))
-      .map(e => nodes.get(e.from === id ? e.to : e.from))
-      .filter((b): b is Box => !!b)
-      .map(b => b.x + b.w / 2)
-    return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : (minX + maxX) / 2
-  }
-  const sorted = [...boundaries].sort((a, b) => anchorX(a.id) - anchorX(b.id))
   const { w, h } = NODE_SIZE.boundary
   const gap = 20
   const rowW = sorted.length * w + (sorted.length - 1) * gap

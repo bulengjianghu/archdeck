@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 步骤面板（D-5，焦点跟随当前步骤时）：类型、序号、所在组合框与分支条件；真实端点与本层投影；
- * 本层一条可见消息覆盖多帧时列出这些帧；接口、数据结构；对应关系（推断时标「推断」）。
+ * 步骤面板（D-5，焦点跟随当前步骤时）：先回答「这一步做什么」——作用、输入、输出（配对返回，F7）、数据结构、经由接口；
+ * 其后是真实端点与本层投影、本层一条可见消息覆盖的多帧；结构关系默认折叠，可在画布上显示（V9）；最后是出处。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -11,7 +11,8 @@ import Markdown from './Markdown.vue'
 import InterfaceItem from './InterfaceItem.vue'
 import DataStructureItem from './DataStructureItem.vue'
 import RelationRow from './RelationRow.vue'
-import { KIND_LABEL, fragmentText, frameText, landingText } from './runText'
+import RevealButton from './RevealButton.vue'
+import { KIND_LABEL, dataNames, fragmentText, frameText, landingText, stepOutput } from './runText'
 
 const desk = useDesk()
 const idx = computed(() => desk.index.value!)
@@ -22,6 +23,15 @@ const msg = computed(() => {
 })
 const total = computed(() => desk.scenarioView.value?.messages.length ?? 0)
 const writtenIn = computed(() => (f.value.scenarioId !== desk.scenario.value?.id ? idx.value.scenarios.get(f.value.scenarioId)?.name : undefined))
+const output = computed(() => stepOutput(f.value, desk.pairs.value, desk.plan.value!.frames))
+/** 输出侧要展开的数据结构：配对返回携带的 */
+const outData = computed(() => (output.value.kind === 'pair' ? output.value.frame.payload : []))
+/** V9：当前可见消息在本层的两端 */
+const revealNodes = computed(() => {
+  const at = msg.value?.at
+  if (!at) return []
+  return at.kind === 'internal' ? [at.node] : [at.from, at.to]
+})
 
 function pointAt(id: string) {
   if (idx.value.actors.has(id)) desk.select({ kind: 'actor', id })
@@ -44,7 +54,46 @@ function pointAt(id: string) {
       </div>
     </header>
 
-    <Section title="真实端点">
+    <Section title="作用">
+      <p class="lead">
+        <button class="link" @click="pointAt(f.from)">{{ moduleName(idx, f.from) }}</button>
+        <span class="muted"> {{ f.kind === 'return' ? '返回给' : f.kind === 'async' ? '通知' : '调用' }} </span>
+        <button class="link" @click="pointAt(f.to)">{{ moduleName(idx, f.to) }}</button>
+        <template v-if="f.label">：{{ f.label }}</template>
+      </p>
+      <Markdown v-if="f.note" :text="f.note" />
+    </Section>
+
+    <Section title="输入与输出">
+      <dl class="io">
+        <dt>输入</dt>
+        <dd>
+          <template v-if="f.payload.length">{{ dataNames(idx, f.payload) }}</template>
+          <span v-else class="muted">没有写携带的数据</span>
+        </dd>
+        <dt>输出</dt>
+        <dd>
+          <template v-if="output.kind === 'pair'">
+            <button class="link" @click="desk.seek(output.frame.id)">{{ output.frame.label || '返回' }}</button>
+            <template v-if="output.frame.payload.length">：{{ dataNames(idx, output.frame.payload) }}</template>
+          </template>
+          <template v-else-if="output.kind === 'reply'">
+            回应调用 <button class="link" @click="desk.seek(output.frame.id)">{{ frameText(idx, output.frame) }}</button>
+          </template>
+          <span v-else-if="output.kind === 'async'" class="muted">异步，不等待返回</span>
+          <span v-else-if="output.kind === 'implicit'" class="muted">隐含返回（描述没写显式返回，见接口签名）</span>
+          <span v-else class="muted">没有对应的调用</span>
+        </dd>
+      </dl>
+    </Section>
+
+    <Section v-if="f.payload.length || outData.length" title="数据结构" :count="f.payload.length + outData.length">
+      <DataStructureItem v-for="d in f.payload" :key="`in:${d}`" :id="d" />
+      <DataStructureItem v-for="d in outData" :key="`out:${d}`" :id="d" />
+    </Section>
+    <Section v-if="f.interface" title="经由接口"><InterfaceItem :id="f.interface" open /></Section>
+
+    <Section title="端点与本层投影">
       <div class="ends">
         <button class="link" @click="pointAt(f.from)">{{ moduleName(idx, f.from) }}</button>
         <span class="muted">→</span>
@@ -65,19 +114,17 @@ function pointAt(id: string) {
       <p class="muted hint">下钻可以看到更细的步骤。</p>
     </Section>
 
-    <Section title="对应关系">
-      <ul v-if="f.relation" class="plain">
-        <RelationRow :id="f.relation" />
-        <li v-if="f.relationInferred" class="muted inferred"><span class="badge warn">推断</span> 描述中没写 relation，两端之间恰好一条运行时关系，自动认定</li>
-      </ul>
-      <p v-else class="muted">结构中没有与这一步对应的关系</p>
-    </Section>
-
-    <Section v-if="f.interface" title="经由接口"><InterfaceItem :id="f.interface" open /></Section>
-    <Section v-if="f.payload.length" title="携带的数据" :count="f.payload.length">
-      <DataStructureItem v-for="d in f.payload" :key="d" :id="d" />
-    </Section>
-    <Section v-if="f.note" title="说明"><Markdown :text="f.note" /></Section>
+    <details class="structure">
+      <summary class="structure-head">结构关系</summary>
+      <Section title="对应关系">
+        <ul v-if="f.relation" class="plain">
+          <RelationRow :id="f.relation" />
+          <li v-if="f.relationInferred" class="muted inferred"><span class="badge warn">推断</span> 描述中没写 relation，两端之间恰好一条运行时关系，自动认定</li>
+        </ul>
+        <p v-else class="muted">结构中没有与这一步对应的关系</p>
+        <RevealButton :nodes="revealNodes" class="reveal-row" />
+      </Section>
+    </details>
 
     <footer class="src muted">
       <template v-if="writtenIn">写在场景「{{ writtenIn }}」中 · </template>
@@ -89,6 +136,27 @@ function pointAt(id: string) {
 <style scoped>
 .top {
   margin: 0 0 6px;
+}
+
+.lead {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.io {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.io dt {
+  color: var(--text-3);
+}
+
+.io dd {
+  margin: 0;
 }
 
 .ends {
@@ -121,5 +189,9 @@ function pointAt(id: string) {
 .inferred {
   font-size: 12px;
   padding-top: 2px;
+}
+
+.reveal-row {
+  margin-top: 8px;
 }
 </style>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { loadModel, mapEndpoint, nearestVisibleLevel, projectLevel, type LevelView, type ViewEdge } from '../../src/model'
+import { compareKeys, hierarchyKey, loadModel, mapEndpoint, nearestVisibleLevel, projectLevel, type LevelView, type ViewEdge } from '../../src/model'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
 const { index } = loadModel(sampleFiles())
@@ -71,7 +71,8 @@ describe('projectLevel · 普通层次', () => {
 
   it('Framework 层：直接边；外部端点提升到最近公共祖先下它那一侧的模块', () => {
     const view = projectLevel(index, 'infra.framework')
-    expect(nodeIds(view, 'boundary')).toEqual(['boundary:app', 'boundary:infra.mus'])
+    // L4：边界节点按层次顺序——infra（order 1）下的 infra.mus 在 app（order 2）之前
+    expect(nodeIds(view, 'boundary')).toEqual(['boundary:infra.mus', 'boundary:app'])
     expect(edgeSummary(view.edges)).toEqual([
       'infra.framework.pipeline->boundary:infra.mus:dataflow:direct:r4',
       'infra.framework.sm->boundary:app:calls:aggregate:r1',
@@ -212,5 +213,24 @@ describe('nearestVisibleLevel（N12）', () => {
     expect(nearestVisibleLevel(idx, 'app.next.a', { currentOnly: true })).toBe('app')
     expect(nearestVisibleLevel(idx, 'app.next.a', { currentOnly: false })).toBe('app.next.a')
     expect(nearestVisibleLevel(idx, 'nope', { currentOnly: true })).toBe('sys')
+  })
+})
+
+describe('层次顺序 hierarchyKey（P9、L4）', () => {
+  const { index } = loadModel(sampleFiles())
+  const sorted = (ids: string[]) => [...ids].sort((a, b) => compareKeys(hierarchyKey(index, a), hierarchyKey(index, b)))
+
+  it('层按 order：上层在前，同一层下的模块相邻', () => {
+    expect(sorted(['domain', 'app', 'infra.mus', 'infra'])).toEqual(['infra', 'infra.mus', 'app', 'domain'])
+  })
+
+  it('同一父模块下非层按描述顺序；祖先在后代之前', () => {
+    const kids = index.childrenOf.get('infra')!
+    expect(sorted([...kids].reverse())).toEqual(kids)
+    expect(compareKeys(hierarchyKey(index, 'infra.framework'), hierarchyKey(index, 'infra.framework.sm'))).toBeLessThan(0)
+  })
+
+  it('参与者与未知 ID 没有排序键', () => {
+    expect(hierarchyKey(index, 'nope')).toEqual([])
   })
 })

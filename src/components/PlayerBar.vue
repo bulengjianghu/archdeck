@@ -1,11 +1,13 @@
 <script setup lang="ts">
 /**
  * 回放控制条（D-3、D-12、R1、R12、F6d）：回放只由用户驱动——上一步 / 下一步（按本层可见消息）、
- * 进度条拖动到已走路径上的任意位置（拖到 0 即回到开头）；「第 i / N 步」，分支点之后未定时为「≥ N」；停在分支点时展开全部选项。
+ * 进度条拖动到已走路径上的任意位置（拖到 0 即回到开头）；「第 i / N 步」，分支点之后未定时为「≥ N」；
+ * 常驻路线总览（F6f）；停在分支点时展开全部选项。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import BranchChooser from './BranchChooser.vue'
+import RouteBar from './RouteBar.vue'
 
 const desk = useDesk()
 const total = computed(() => desk.scenarioView.value?.messages.length ?? 0)
@@ -29,6 +31,7 @@ function onSlide(e: Event) {
     </div>
     <input class="progress" type="range" min="0" :max="total" :value="position" :disabled="total === 0" aria-label="进度" @input="onSlide" />
     <span class="count">第 {{ position }} / {{ open ? '≥ ' : '' }}{{ total }} 步</span>
+    <RouteBar />
     <BranchChooser />
   </div>
 </template>

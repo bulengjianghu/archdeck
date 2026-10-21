@@ -17,6 +17,8 @@ export interface RouteEdgeData {
   change?: 'added' | 'changed'
   /** 运行视角：当前消息、走过、分支预览、时序图悬停预览 */
   play?: 'current' | 'walked' | 'preview' | 'hover'
+  /** R15：有焦点突出时，不属于突出消息的走过的边淡为灰色 */
+  muted?: boolean
   /** 当前消息与边的箭头方向相反（P10） */
   flowReverse?: boolean
   /** 结构中未建模的临时线（P11） */
@@ -40,10 +42,10 @@ const style = computed(() => {
     return { stroke: 'var(--danger)', strokeWidth: 1.5, strokeDasharray: '5 5', opacity: props.data.play === 'preview' ? 0.7 : 0.9 }
   }
   return {
-    stroke: props.data.play === 'preview' ? 'var(--warning)' : `var(--rel-${props.data.edge.type})`,
+    stroke: props.data.play === 'preview' ? 'var(--warning)' : props.data.muted ? 'var(--text-3)' : `var(--rel-${props.data.edge.type})`,
     strokeWidth: width,
     strokeDasharray: props.data.play === 'preview' ? '6 4' : props.data.edge.mode === 'async' ? '8 3 2 3' : DASH[props.data.edge.type],
-    opacity: props.data.dim ? 0.12 : 1,
+    opacity: props.data.dim ? 0.12 : props.data.muted ? 0.45 : 1,
     transition: 'opacity 0.15s',
   }
 })

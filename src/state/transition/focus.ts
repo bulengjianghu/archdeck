@@ -5,6 +5,7 @@
  *          运行视角：selection ≠ null ? 钉住(selection) : 跟随(当前帧)
  * 回放只由用户驱动（R1），没有「播放中」与选中争夺面板。
  */
+import type { Participation, ReturnPairs, ScenarioLevelView } from '@/model'
 import type { Selection, TransitionResult, ViewState } from './types'
 
 export type Perspective = 'structure' | 'run'
@@ -20,6 +21,26 @@ export const perspectiveOf = (state: ViewState): Perspective => (state.playback 
 export function focusOf(state: ViewState): Focus {
   if (!state.playback) return state.selection ? { kind: 'selection', selection: state.selection } : { kind: 'level', levelId: state.levelId }
   return state.selection ? { kind: 'pinned', selection: state.selection } : { kind: 'follow', frameId: state.playback.frameId }
+}
+
+/**
+ * R15：焦点突出——运行视角下要突出的本层可见消息序号；null 表示不突出（结构视角、停在开头、当前帧本层不可见）。
+ * 跟随：当前可见消息 + 配对帧（F7）所在的可见消息；钉住：钉住对象参与的可见消息（文件不参与，为空集）。
+ */
+export function emphasisOf(state: ViewState, view: ScenarioLevelView | null, pairs: ReturnPairs | null, pinned: Participation | null): Set<number> | null {
+  const pb = state.playback
+  if (!pb || !view) return null
+  if (state.selection) return new Set(state.selection.kind === 'file' ? [] : (pinned?.messages ?? []))
+  if (pb.frameId === null) return null
+  const current = view.messageOf.get(pb.frameId)
+  if (current === undefined) return null
+  const out = new Set([current])
+  for (const f of view.messages[current].frameIds) {
+    const pair = pairs?.get(f)
+    const m = pair === undefined ? undefined : view.messageOf.get(pair)
+    if (m !== undefined) out.add(m)
+  }
+  return out
 }
 
 /**

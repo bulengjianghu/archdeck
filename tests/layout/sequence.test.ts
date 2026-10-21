@@ -1,6 +1,6 @@
-/** 时序图排布：A7（参与者最左并隔出系统边界）、P9（泳道按结构图横坐标排序）、组合框包住子消息 */
+/** 时序图排布：A7（参与者最左并隔出系统边界）、P9（泳道按层次顺序）、P13（同一父模块分组）、组合框包住子消息 */
 import { describe, expect, it } from 'vitest'
-import { buildSequence, loadModel, planScenario, projectLevel, projectScenario, stageEnds } from '../../src/model'
+import { buildSequence, compareKeys, loadModel, planScenario, projectLevel, projectScenario, stageEnds } from '../../src/model'
 import { layoutView } from '../../src/layout/layout'
 import { layoutSequence, textWidth } from '../../src/layout/sequence'
 import { scenarioFiles } from '../fixtures/sample'
@@ -26,13 +26,38 @@ describe('layoutSequence', () => {
     for (const id of order.slice(1)) expect(ps.lanes.get(id)!.x).toBeGreaterThan(ps.boundaryX!)
   })
 
-  it('P9：系统内泳道按结构图中节点的横坐标排序', async () => {
-    const { ps, structure } = await setup('infra')
-    const inner = [...ps.lanes.keys()].slice(1)
-    const xs = inner.map(id => structure.nodes.get(id)!.x + structure.nodes.get(id)!.w / 2)
+  it('P9：同一父模块内的本层子模块按结构图横坐标排，其余按层次顺序', async () => {
+    const { ps, structure, model } = await setup('infra.framework')
+    const inner = [...ps.lanes.keys()].filter(id => model.participants.find(p => p.nodeId === id)!.kind !== 'actor')
+    const parts = inner.map(id => model.participants.find(p => p.nodeId === id)!)
+    // 本层子模块（byX）之间按横坐标
+    const local = parts.filter(p => p.byX)
+    const xs = local.map(p => structure.nodes.get(p.nodeId)!.x + structure.nodes.get(p.nodeId)!.w / 2)
     expect([...xs].sort((a, b) => a - b)).toEqual(xs)
+    // 跨父模块按层次顺序：排序键的父模块前缀单调不减
+    for (let i = 1; i < parts.length; i++) {
+      const a = parts[i - 1]
+      const b = parts[i]
+      if (!(a.byX && b.byX)) expect(compareKeys(a.key, b.key)).toBeLessThan(0)
+    }
   })
 
+  it('P13：父模块相同的连续泳道成一组，分组框覆盖这些泳道；有分组时泳道头下移', async () => {
+    const { ps, model } = await setup('infra')
+    expect(ps.groups.length).toBeGreaterThan(0)
+    for (const g of ps.groups) {
+      const members = model.participants.filter(p => p.parentId === g.parentId && ps.lanes.has(p.nodeId))
+      expect(members.length).toBeGreaterThan(0)
+      for (const p of members) {
+        const lane = ps.lanes.get(p.nodeId)!
+        if (lane.x >= g.x && lane.x + lane.w <= g.x + g.w) continue
+        // 同一父模块的泳道不连续时会出现多个分组，至少落在其中一个里
+        expect(ps.groups.some(o => o.parentId === g.parentId && lane.x >= o.x && lane.x + lane.w <= o.x + o.w)).toBe(true)
+      }
+    }
+    expect(model.participants.filter(p => p.kind === 'actor').every(p => p.parentId === undefined)).toBe(true)
+    expect(ps.headY).toBeGreaterThan(8)
+  })
   it('泳道宽度按名称自适应，互不重叠；消息自上而下', async () => {
     const { ps } = await setup('infra')
     const lanes = [...ps.lanes.values()]
@@ -59,8 +84,9 @@ describe('layoutSequence', () => {
     expect(ps.size.h).toBeGreaterThan(ps.messages[ps.messages.length - 1].y)
   })
 
-  it('没有结构图坐标时按出现顺序排', async () => {
+  it('没有结构图坐标时按层次排序键排', async () => {
     const { model } = await setup('infra')
-    expect([...layoutSequence(model).lanes.keys()]).toEqual(model.participants.filter(p => p.kind === 'actor').concat(model.participants.filter(p => p.kind !== 'actor')).map(p => p.nodeId))
+    const inner = model.participants.filter(p => p.kind !== 'actor').sort((a, b) => compareKeys(a.key, b.key))
+    expect([...layoutSequence(model).lanes.keys()]).toEqual(model.participants.filter(p => p.kind === 'actor').concat(inner).map(p => p.nodeId))
   })
 })

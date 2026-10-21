@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { landFrame, loadModel, planScenario, projectLevel, projectScenario, stageEnds } from '../../src/model'
 import { layoutView } from '../../src/layout/layout'
-import { stageOverlay, unmodeledId } from '../../src/layout/stage'
+import { stageDisplay, stageOverlay, unmodeledId } from '../../src/layout/stage'
 import { scenarioFiles } from '../fixtures/sample'
 
 async function setup(level: string, choices: Map<string, number>, files = scenarioFiles(), id = 'sc.play') {
@@ -57,5 +57,48 @@ describe('stageOverlay', () => {
       [1, undefined],
     ])
     expect(o.previews[0].pos).toBeDefined()
+  })
+})
+
+describe('stageDisplay（V5、V8、V9）', () => {
+  const view = {
+    mode: 'graph' as const,
+    parentId: 'p',
+    nodes: ['a', 'b', 'c', 'd'].map(id => ({ id, moduleId: id, role: 'module' as const, hasChildren: false })),
+    edges: [
+      { id: 'a->b', from: 'a', to: 'b' },
+      { id: 'b->c', from: 'b', to: 'c' },
+      { id: 'c->d', from: 'c', to: 'd' },
+    ].map(e => ({ ...e, kind: 'direct' as const, type: 'calls' as const, types: [], relationIds: [], mode: 'sync' as const })),
+  }
+  const participants = new Map<string, 'path' | 'other'>([['a', 'path'], ['b', 'path'], ['c', 'other']])
+  const base = { view, participants, playEdges: new Set(['a->b']), reveal: new Set<string>() }
+
+  it('隐藏（默认）：参与路径的节点与回放边显示；只在未选分支处的节点淡化；其余节点与静态边隐藏', () => {
+    const d = stageDisplay({ ...base, mode: 'hide' })
+    expect(Object.fromEntries(d.nodes)).toEqual({ a: 'show', b: 'show', c: 'dim', d: 'hide' })
+    expect(Object.fromEntries(d.edges)).toEqual({ 'a->b': 'show', 'b->c': 'hide', 'c->d': 'hide' })
+  })
+
+  it('淡显 / 全显', () => {
+    const dim = stageDisplay({ ...base, mode: 'dim' })
+    expect(dim.nodes.get('d')).toBe('dim')
+    expect(dim.edges.get('b->c')).toBe('dim')
+    const show = stageDisplay({ ...base, mode: 'show' })
+    expect([...show.nodes.values()].every(v => v === 'show')).toBe(true)
+    expect(show.edges.get('c->d')).toBe('show')
+  })
+
+  it('V9：在画布上显示的节点，其静态边及对端节点照常显示', () => {
+    const d = stageDisplay({ ...base, mode: 'hide', reveal: new Set(['c']) })
+    expect(d.edges.get('b->c')).toBe('show')
+    expect(d.edges.get('c->d')).toBe('show')
+    expect(d.nodes.get('d')).toBe('show')
+    expect(d.nodes.get('c')).toBe('show')
+  })
+
+  it('分层总览的带始终显示', () => {
+    const layered = { ...view, mode: 'layered' as const, nodes: [{ id: 'L', moduleId: 'L', role: 'layer' as const, hasChildren: true }], edges: [] }
+    expect(stageDisplay({ ...base, view: layered, mode: 'hide' }).nodes.get('L')).toBe('show')
   })
 })
