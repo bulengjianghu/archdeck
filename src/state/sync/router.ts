@@ -8,7 +8,7 @@
  */
 import { watch, type WatchStopHandle } from 'vue'
 import type { LocationQuery, Router } from 'vue-router'
-import type { VersionRef } from '@/model/design'
+import type { VersionRef } from '@/model'
 import { sameQuery, type Query } from '../transition'
 
 export interface RouterSyncOptions {

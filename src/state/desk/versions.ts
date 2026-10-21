@@ -2,8 +2,7 @@
  * DeskState 的版本派生（desk.versions，ADR-0013）：设计列表、当前设计与轮次、对比基线、差异与基线漂移（E1–E4）。
  */
 import { computed, type ShallowRef } from 'vue'
-import { diffModels, type ModelDiff, type ModelIndex } from '@/model'
-import type { DesignInfo, VersionRef } from '@/model/design'
+import { diffModels, type DesignInfo, type ModelDiff, type ModelIndex, type VersionRef } from '@/model'
 import type { ViewState } from '../transition'
 import type { Baseline } from '../sync/modelSource'
 

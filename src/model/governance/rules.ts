@@ -2,8 +2,7 @@
  * 架构规则的判定（U2–U6）：一条依赖违不违规、哪条规则、为什么；按种类、规则所在与两端模块合并为违规。
  */
 import { moduleName } from '../indexer'
-import { matchRef, normalizeRef } from '../source/glob'
-import type { SourceOwnership } from '../source/types'
+import { matchRef, normalizeRef, type SourceOwnership } from '../source'
 import type { ModelIndex, ModuleRuleDef, RuleKind, RulesDef } from '../types'
 import { within } from './facts'
 import type { FileDep, ModuleDep, RuleHit, Violation } from './types'

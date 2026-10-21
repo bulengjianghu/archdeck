@@ -2,8 +2,7 @@
  * 治理报告（K4–K7、U2–U9、Y1–Y3）：把代码事实、架构规则与基线组合成一份报告，页面、lint:model 与 agent 接口共用。
  */
 import { moduleName } from '../indexer'
-import { moduleEntry } from '../source/ownership'
-import type { LocalSource, SourceOwnership } from '../source/types'
+import { moduleEntry, type LocalSource, type SourceOwnership } from '../source'
 import type { Issue, ModelIndex, RuleKind } from '../types'
 import { confirmRelations, liftDeps, undescribedDeps } from './facts'
 import { cyclicityOf, fileCycles, moduleCycles } from './cycles'

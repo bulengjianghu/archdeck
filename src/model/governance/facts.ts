@@ -3,7 +3,7 @@
  * 关于被描述系统的知识，页面、lint:model 与 agent 接口共用。
  */
 import type { ModelIndex, RelationEntity } from '../types'
-import type { SourceOwnership } from '../source/types'
+import type { SourceOwnership } from '../source'
 import type { Confirmation, FileDep, ModuleDep } from './types'
 
 export const depKey = (from: string, to: string) => `${from}->${to}`

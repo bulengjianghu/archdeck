@@ -10,11 +10,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import { loadModel } from '../src/model'
-import type { RawFile } from '../src/model/types'
-import type { ProjectSummary } from '../src/model/project-summary'
-import type { DesignInfo, DesignStatus, RevisionInfo, VersionRef } from '../src/model/design'
-import { DESIGN_STATUS_LABELS, versionLabel } from '../src/model/design'
+import { DESIGN_STATUS_LABELS, loadModel, versionLabel } from '../src/model'
+import type { DesignInfo, DesignStatus, ProjectSummary, RawFile, RevisionInfo, VersionRef } from '../src/model'
 
 export type { ProjectSummary }
 

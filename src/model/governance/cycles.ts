@@ -2,7 +2,7 @@
  * 环（Y1–Y3）：强连通分量与环度。
  */
 import type { ModelIndex } from '../types'
-import type { SourceOwnership } from '../source/types'
+import type { SourceOwnership } from '../source'
 import { within } from './facts'
 import type { Cycle, FileDep, ModuleDep } from './types'
 

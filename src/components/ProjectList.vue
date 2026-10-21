@@ -1,8 +1,7 @@
 <script setup lang="ts">
 /** 项目列表主页：列出模型根目录下的全部项目，点击进入该项目的架构视图；卡片下只列推进中的设计版本，已归档的只注明个数（DV-6） */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import type { ProjectSummary } from '@/model/project-summary'
-import { DESIGN_STATUS_LABELS, isArchived } from '@/model/design'
+import { DESIGN_STATUS_LABELS, isArchived, type ProjectSummary } from '@/model'
 
 const projects = ref<ProjectSummary[]>([])
 const status = ref<'loading' | 'ready' | 'error'>('loading')

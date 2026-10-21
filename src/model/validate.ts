@@ -7,8 +7,7 @@
  */
 import type { ActorEntity, ArchModel, Issue, ModuleEntity, RelationEntity, RulesDef, ScenarioEntity, SourceLoc, Step } from './types'
 import { buildIndex } from './indexer'
-import { bindRelation } from './scenario/bind'
-import { forEachStep, mapChildren } from './scenario/steps'
+import { bindRelation, forEachStep, mapChildren } from './scenario'
 
 export interface ValidateResult {
   model: ArchModel

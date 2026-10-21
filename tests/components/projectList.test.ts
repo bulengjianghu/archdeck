@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import ProjectList from '../../src/components/ProjectList.vue'
-import { isArchived, type DesignStatus } from '../../src/model/design'
+import { isArchived, type DesignStatus } from '../../src/model'
 
 const design = (id: string, status: DesignStatus) => ({ id, name: id, status, revisions: [{ id: 'r1' }], problems: [] })
 const project = {

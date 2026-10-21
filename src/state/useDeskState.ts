@@ -8,8 +8,7 @@
  */
 import { computed, ref, shallowRef } from 'vue'
 import type { Router } from 'vue-router'
-import { RELATION_TYPES, planScenario, projectLevel, stageEnds, type Issue, type LevelView, type ModelIndex, type ScenarioPlan } from '@/model'
-import type { DesignInfo } from '@/model/design'
+import { RELATION_TYPES, planScenario, projectLevel, stageEnds, type DesignInfo, type Issue, type LevelView, type ModelIndex, type ScenarioPlan } from '@/model'
 import {
   DEFAULT_TOGGLES,
   encodeView,

@@ -5,6 +5,8 @@ import { buildIndex } from './indexer'
 import type { Issue, ModelIndex, RawFile } from './types'
 
 export * from './types'
+export * from './design'
+export type { ProjectSummary } from './project-summary'
 export { load } from './load'
 export { validate } from './validate'
 export { buildIndex, lowestCommonAncestor, nearestExisting, isLayered, moduleName, triggerOf } from './indexer'

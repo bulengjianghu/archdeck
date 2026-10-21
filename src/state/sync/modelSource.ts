@@ -2,8 +2,7 @@
  * 模型源同步：取描述文件并交给模型层加载；本项目的描述变化（开发态 `arch-model:changed`）时重新取。
  * 只负责外界，加载结果由协调者 dispatch。
  */
-import { loadModel, type LoadedModel, type ModelIndex, type RawFile } from '@/model'
-import type { DesignInfo, VersionRef } from '@/model/design'
+import { loadModel, type DesignInfo, type LoadedModel, type ModelIndex, type RawFile, type VersionRef } from '@/model'
 
 export interface CompareSource {
   label: string

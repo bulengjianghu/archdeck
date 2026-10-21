@@ -3,7 +3,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDesk } from '@/state/inject'
-import { DESIGN_STATUS_LABELS } from '@/model/design'
+import { DESIGN_STATUS_LABELS } from '@/model'
 
 const desk = useDesk()
 const route = useRoute()
