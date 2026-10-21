@@ -638,6 +638,12 @@ relations:
     type: calls
     description: 命令执行前后依次回调 Solution 经 SolutionDeps 注册的 pre / post 命令 Hook（CommandHook.callback(command)），逐个 await；pre Hook 返回 true 即阻断命令（CommandBlockedByHookError）
     payload: ds.CommandInfo
+  - id: rel.framework.sm-engine-timeshift-hooks
+    from: infra.framework.state-machine.engine
+    to: app.timeshift
+    type: calls
+    description: 命令执行前回调时移协调器注册的前置 Hook（观察 Pause 来源、Resume、Seek、Switch、Destroy），逐个 await；Resume 时在状态迁移前放流放阀
+    payload: ds.CommandInfo
   - id: rel.framework.sm-engine-domain-rules
     from: infra.framework.state-machine.engine
     to: domain.rules

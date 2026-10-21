@@ -905,6 +905,13 @@ relations:
     type: calls
     mode: sync
     description: starvationEvent / isStarved
+  - id: rel.timeshift.recovery-solution
+    from: app.timeshift.live-recovery
+    to: app.solution
+    type: calls
+    mode: async
+    interface: if.timeshift.coordinator.legPort
+    description: 经协调器注入的腿端口：ensureLiveLeg 新建直播腿、revertLiveLeg 换回、失败或撤销时 withdrawLeg('primary')
   - id: rel.timeshift.recovery-mus
     from: app.timeshift.live-recovery
     to: infra.mus
@@ -923,6 +930,19 @@ relations:
     type: calls
     mode: async
     description: 发内部 Pause{origin:'seek-switch'} / Seek{source:'Internal'} / Resume 命令
+  - id: rel.timeshift.seek-solution
+    from: app.timeshift.seek-switch
+    to: app.solution
+    type: calls
+    mode: async
+    interface: if.timeshift.coordinator.legPort
+    description: 经协调器注入的腿端口：holdLeg('primary') 冻结、createLeg 建录制腿、seekSwitchLeg 换边、提交后 withdrawLeg('primary')；提交前失败撤录制腿、releaseLeg 放直播阀
+  - id: rel.timeshift.seek-driver
+    from: app.timeshift.seek-switch
+    to: app.timeshift.recording-driver
+    type: calls
+    interface: if.timeshift.recording-driver.driver
+    description: 经 createDriver 建录制腿驱动并 start，快照带 positionMs 时按清单轴毫秒直接取片
   - id: rel.timeshift.bg-domain
     from: app.timeshift.background-resume
     to: domain.services

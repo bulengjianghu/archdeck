@@ -1,0 +1,21 @@
+# 取自 h5player docs/design/2-assembly/leg-switch-transaction.md 与 solutionLegs.ts / solutionLegSwitch.ts；供时移各场景 ref。
+scenario:
+  id: sc.timeshift-leg-switch
+  name: 换腿事务（SwitchLeg）
+  description: |
+    时移的 switch（暂停路径对接）、seek-switch（拖进度换边）、revert-live（回直播换回）共用的换腿事务。
+    腿端口不直接改图，而是经状态机发状态内命令 SwitchLeg（只有自迁移，不经 Stop，暂停画面与播放段缓冲保留），
+    事务本体在 Solution 的 SwitchLeg 前置 Hook 里跑：②–⑦ 可整体回滚，⑧–⑩ 为提交后收尾。结果经 pendingOutcome 回到腿端口。
+  cause: 腿端口 switchLeg / seekSwitchLeg / revertLiveLeg 被调用
+  steps:
+    - call: {id: cmd, from: app.solution.legs, to: infra.framework.state-machine.scheduler, interface: if.framework.state-machine.sendCommand, payload: ds.CommandInfo, label: 'sendCommand(SwitchLeg{direction})'}
+    - async: {from: infra.framework.state-machine.scheduler, to: infra.framework.state-machine.engine, label: 串行执行 SwitchLeg（自迁移）}
+    - call: {id: hook, from: infra.framework.state-machine.engine, to: app.solution.lifecycle, label: SwitchLeg 前置 Hook}
+    - call: {id: tx, from: app.solution.lifecycle, to: app.solution.leg-switch, interface: if.solution.performLegSwitch, payload: ds.LegSwitchDirection, label: performLegSwitch：十步换腿事务}
+    - call: {from: app.solution.leg-switch, to: app.solution.legs, interface: if.solution.LegPort, label: ① 两腿段尾阀门 hold}
+    - call: {from: app.solution.leg-switch, to: infra.framework.pipeline.transaction, interface: if.framework.pipeline.updatePipeline, label: '④ updatePipeline{activeLeg, edges}：接手腿接入处理段'}
+    - call: {from: app.solution.leg-switch, to: app.factories.process, label: ⑥ 按目标 playMode 做处理段差量}
+    - call: {from: app.solution.leg-switch, to: app.strategies.load.vod, interface: if.strategies.vodLoad, label: ⑧ 点播承接 resumeFromSegment（接手腿为录制腿时）}
+    - call: {from: app.solution.leg-switch, to: app.solution.legs, interface: if.solution.LegPort, label: '⑩ releaseLeg(incoming, {fromPts: cutPts})'}
+    - return: {from: app.solution.lifecycle, to: infra.framework.state-machine.engine, label: Hook 完成}
+    - async: {from: app.solution.leg-switch, to: app.solution.legs, payload: ds.LegSwitchOutcome, label: pendingOutcome：事务结果}
