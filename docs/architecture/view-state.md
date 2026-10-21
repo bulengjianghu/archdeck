@@ -1,7 +1,7 @@
 # 专题：视图状态与协调
 
 > 回答：用户此刻在看什么；一次操作怎么改变它；它怎么与路由、描述文件、布局保持一致。
-> 覆盖模块：视图状态层的 DeskState（协调者）与视图状态转移（会话规则）。原则见 [03-architecture.md](../03-architecture.md) 原则 6、7；规则见 [02-domain.md](../02-domain.md) 的 V、N、R、F6c、E3、E4、G9、G14、G16。
+> 覆盖模块：视图状态层的 DeskState（协调者）与视图状态转移（会话规则）。原则见 [03-architecture.md](../03-architecture.md) 原则 6、7；规则见 [02-domain.md](../02-domain.md) 的 V、N、R、F6c、F6e、E3、E4、G9、G14、G16。
 
 ## 1. 视图状态
 
@@ -33,6 +33,16 @@ interface PlaybackState {
 
 回放只由用户驱动（R1），状态里没有「播放中」，也就没有选中与播放头争夺面板的问题：指向对象（含文件）即钉住（V3、G16），取消选中或移动播放头即回到跟随（V4、V7）。
 
+焦点突出（R15）同样由状态推出：
+
+```text
+突出 = 运行视角且焦点为跟随：当前可见消息 + 配对帧（F7）所在的可见消息；停在开头为「不突出」
+       运行视角且焦点为钉住：钉住对象参与的可见消息（参与查询）；钉住文件为空集
+       结构视角：不突出
+```
+
+舞台的静态关系显示方式（V8）与「在画布上显示」（V9）只属于画布这块界面，和副栏页签一样留在呈现层，不进视图状态与 URL。
+
 源码（文件清单、归属）不是视图状态：它是关于被描述系统的数据，像模型索引一样由协调者持有、由源码同步取得。副栏的页签与预览文件只属于那块界面，留在呈现层（G15）。
 
 ## 2. 协调者：DeskState
@@ -43,7 +53,7 @@ interface PlaybackState {
 |---|---|
 | 持有 | `ViewState`（`shallowRef`）、加载后的模型索引与问题、设计信息与对比基线索引、源码清单 `SourcePayload` |
 | 唯一写入口 | `dispatch(action)`：`transition(state, action, ctx)` 得到新状态与历史标注，写入；对外的操作都是构造动作并 dispatch 的包装 |
-| 派生（`computed`，调用纯函数） | 层次视图 `projectLevel`（运行视角下为舞台视图：不受显示开关影响并补齐场景端点，L9、P12）；打开场景时：回放计划 → 回放路径 → 本层帧投影与可见消息 → 时序模型 → 时序图坐标，以及步骤大纲 `outlineScenario` 与参与模块 `scenarioModules`（导航树用，T5、T6）；视角与焦点；钉住对象的参与信息；设计版本的差异 `diffModels` 与基线漂移；源码：归属 `assignFiles`、目录树 `fileTree`、选中模块的文件 / 入口、选中文件的归属模块与本层投影 `fileNodes`（G14）、归属警告 `sourceIssues`（只在当前版本并入问题列表，G9） |
+| 派生（`computed`，调用纯函数） | 焦点突出 `emphasisOf`（R15）与调用返回配对 `pairReturns`（F7）；路线 `routeOf`（F6f）；层次视图 `projectLevel`（运行视角下为舞台视图：不受显示开关影响并补齐场景端点，L9、P12）；打开场景时：回放计划 → 回放路径 → 本层帧投影与可见消息 → 时序模型 → 时序图坐标，以及步骤大纲 `outlineScenario` 与参与模块 `scenarioModules`（导航树用，T5、T6）；视角与焦点；钉住对象的参与信息；设计版本的差异 `diffModels` 与基线漂移；源码：归属 `assignFiles`、目录树 `fileTree`、选中模块的文件 / 入口、选中文件的归属模块与本层投影 `fileNodes`（G14）、归属警告 `sourceIssues`（只在当前版本并入问题列表，G9） |
 | 外界同步 | 交给四个同步适配器（§4） |
 
 派生是一条 computed 链：层次或开关变化 → 层次视图 → 帧投影 → 时序模型 → 时序布局。结构图与时序图因此不会不同步。
@@ -56,7 +66,7 @@ interface PlaybackState {
 |---|---|---|
 | 视角与焦点 | V1–V4、G16：视角与焦点由状态推出（`perspectiveOf` / `focusOf`）；导航动作在运行视角下即「指向」，钉住对象（下钻钉住被下钻的模块）；取消选中回到跟随 | — |
 | 导航 | N1–N13：下钻、跳转、返回上级、选中、定位、Esc / Backspace、重新加载与切换版本后的回退；跳转与定位只在层次改变时进历史（N10） | `nearestExisting`（N5、N11）、`nearestVisibleLevel`（N12）、`lowestCommonAncestor`（N3） |
-| 回放 | R1、R5、R6、R10、R12、R13、V7：打开场景（停在开头，播放头为空）、退出、单步（回到跟随）、指向、选分支；重新加载后场景失效则退出 | `stepAfter` / `stepBefore`（R7）、`landing`、`choicesFor`（R13）、`chooseBranch`（F6b）、`resolvePath`（F6） |
+| 回放 | R1、R5、R6、R10、R12、R13、V7、F6e：打开场景（停在开头，播放头为空）、退出、单步（回到跟随）、指向、选分支（任何分支点；播放头不在新路径上时停在分支点之前）；重新加载后场景失效则退出 | `stepAfter` / `stepBefore`（R7）、`landing`、`choicesFor`（R13）、`chooseBranch`（F6b）、`choicesForBranch` / `pointPrefix`（F6e）、`resolvePath`（F6） |
 | URL 编解码 | N6、N10、F6c、R10、R12：状态 ↔ 查询参数；解码时丢弃无效值，恢复到最接近的合法状态：带有效步骤时停在该步；同一场景已打开且没带步骤时保留原播放头；只有场景时停在开头 | `choiceList` / `choicesFromList`（F6c）、`planScenario` |
 
 | 查询参数 | 含义 | 进历史 |
@@ -139,6 +149,7 @@ sequenceDiagram
 
 - **回放中双击下钻**（V3、R6、R7）：`drill` 在运行视角下钉住被下钻的模块；层次视图变化 → 帧重新投影，本层可见消息变细；`frameId` 不变，两图停在同一帧。
 - **单步到分支点**（F6）：`dispatch(next)` 走到下一条可见消息；其后已无可见消息（路径在未选分支处截止）时回放控制条展开全部选项，「下一步」不可用 → `dispatch(chooseBranch)` → 路径延长，继续单步。
+- **直选分支**（F6e）：时序图的分支条件、路线总览、步骤树的分支标题都发 `dispatch(chooseBranch)` → 分支点不在路径上时 `choicesForBranch` 补齐到达它的选择 → 播放头仍在新路径上则不动，否则停在 `pointPrefix` 的最后一帧（取其可见消息的第一帧），没有则回到开头；焦点不变。
 - **取消选中**（V4）：Esc 或单击空白 → `selection = null`，焦点回到跟随。单步、拖动进度同样回到跟随（V7）。
 
 ## 6. 动作与接口
@@ -165,6 +176,7 @@ createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: s
 transition(state: ViewState, action: ViewAction, ctx: TransitionContext): { state: ViewState; history: 'push' | 'replace' }
 // TransitionContext: { index: ModelIndex; plan?: ScenarioPlan; levelView?: LevelView; scenarioView?: ScenarioLevelView }
 perspectiveOf(state): 'structure' | 'run'
+emphasisOf(state, view: ScenarioLevelView | null, pairs: ReturnPairs | null, pinned: Participation | null): Set<number> | null   // 突出的可见消息序号；null = 不突出（R15）
 focusOf(state): { kind: 'selection' | 'pinned'; selection } | { kind: 'level'; levelId } | { kind: 'follow'; frameId }
 encodeView(state: ViewState, index: ModelIndex, plan?: ScenarioPlan): Record<string, string>
 // 解码即 transition(state, { type: 'restore', query }, ctx)：丢弃无效值，恢复到最接近的合法状态

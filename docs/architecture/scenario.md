@@ -21,7 +21,11 @@
 
 回放计划 + 已选分支
   ├─ outlineScenario ──▶ 步骤大纲（导航树的步骤树）
+  ├─ routeOf ──▶ 路线（回放控制条的路线总览）
   └─ scenarioModules ──▶ 参与模块（导航树的模块树标记）
+
+回放计划
+  └─ pairReturns ──▶ 调用与显式返回的配对（步骤的输出、焦点突出）
 ```
 
 全部是纯函数，结果交给视图状态层派生（见[视图状态与协调 §2](./view-state.md#2-协调者deskstate)）。
@@ -32,6 +36,7 @@
 - **帧 ID**（F2）：场景 ID + 步骤 `id`，没写时用步骤在树中的路径（如 `sc.open#4.alt0.1`）；`ref` 内联时加上引用处前缀，同一子场景被引用两次也不冲突。校验已保证 `ref` 无环（S6），展开必然终止。
 - **绑定关系** `bindRelation`（S5a、S12、S13，`bind.ts`）：关系两端分别是消息两端自身或其祖先即「对得上」；方向按 `event` 反向、`return` 再反向比对。显式引用优先；否则两端之间恰好一条运行时关系即认定并标为推断，恰好连在两端上的优先于连在祖先上的；同时给出消息方向是否与关系箭头相反。Validator 调用同一个函数做 S5a 检查，校验与回放结果一致。
 - **分支点 ID** 与组合框实例 ID 同帧 ID 的规则（场景 ID + `#` + 前缀 + 步骤路径）。
+- **调用与返回配对** `pairReturns`（F7）：按书写顺序遍历计划，`call` 入栈；显式 `return`（X → Y）在栈中自顶向下找最近的 Y → X 调用，找到即配对，并弹出它及其上的调用（它们没有显式返回）；`alt` 的每个选项从进入分支点时的栈副本开始，选项内未配对的调用在选项结束时丢弃，分支点之后继续用进入时的栈；`async` 不入栈。结果是帧 ID ↔ 帧 ID 的双向映射，与层次和已选分支无关，打开场景时随计划算一次。
 
 ## 3. 回放路径（`resolvePath` 等）
 
@@ -40,6 +45,9 @@
 | `resolvePath(plan, choices)` | 按已选分支走出线性帧序列；遇到未选分支的分支点即截止，并报告该分支点（`pending`）；无效的选择被忽略 | F6 |
 | `chooseBranch(plan, choices, point, option)` | 在某个分支点选择或改选；改选会丢弃该分支点之后的选择 | F6b |
 | `choicesFor(plan, choices, frameId)` | 到达某一帧需要的分支选择：已在路径上时原样返回；否则包住它的分支点选它所在的选项，它之前尚未选择的分支点保留已有选择、没有时取第一个选项 | R13 |
+| `choicesForBranch(plan, choices, point, option)` | 直选任意分支点的某一支：分支点不在路径上时，像 `choicesFor` 一样补齐到达它所需的选择（包住它的分支点选它所在的选项，其余保留已有选择或取第一个），再在它上面 `chooseBranch` | F6e |
+| `pointPrefix(plan, choices, point)` | 路径上分支点之前的帧（不含分支点内的帧）；回放规则据此在改走另一支后把播放头停在分支点之前 | F6e |
+| `routeOf(plan, choices)` | 路线：路径上依次经过的分支点（带所选选项）与截止处待选的分支点（无选项） | F6f |
 | `choiceList` / `choicesFromList` | 已选分支 ↔ 路径上分支点先后的选项序号（URL 有序编码） | F6c |
 
 ## 4. 帧的层次投影（`projectScenario` 等）
@@ -85,11 +93,13 @@
 
 ## 7. 时序模型与时序图排布
 
-**时序模型**（`buildSequence`）：由计划全貌在本层的投影产出参与者（带名称）、消息（同步 / 异步 / 显式返回 / 内部活动 / 空分支占位；隐含的返回不画，S10a；路径上的消息带 `pathIndex`，其余带 `unchosen` / `unreached` 状态）、组合框（类型、条件、包住的消息区间；`alt` 列出全部分支，并标明已选 / 未选 / 未到达）。框内消息全部是内部活动时，框标记为折叠（P6）。
+**时序模型**（`buildSequence`）：由计划全貌在本层的投影产出参与者（带名称、父模块、模块路径、所属层与层次排序键 `hierarchyKey`；本层子模块标为可按横坐标排，P9、P13）、消息（同步 / 异步 / 显式返回 / 内部活动 / 空分支占位；隐含的返回不画，S10a；路径上的消息带 `pathIndex`，其余带 `unchosen` / `unreached` 状态）、组合框（类型、条件、包住的消息区间；`alt` 列出全部分支及其选项序号，并标明已选 / 未选 / 未到达，界面据此直选分支，F6e）。框内消息全部是内部活动时，框标记为折叠（P6）。
 
 **时序图排布**（`layoutSequence`，视图状态层 Layout，同步计算、不调用 elk）：
 
-- 外部参与者泳道在最左，与系统内泳道之间画分隔线（A7）；其余泳道按结构图中对应节点的横坐标排序，使两张图左右关系一致（P9）。
+- 外部参与者泳道在最左，与系统内泳道之间画分隔线（A7）。
+- 其余泳道按层次顺序（P9）：逐项比较参与者的排序键；两者只在最后一级不同且都是本层的非层子模块时，改按结构图中对应节点的横坐标比较，同一父模块内两张图左右一致；没有结构图坐标时按排序键。
+- 分组（P13）：排序后父模块相同的连续泳道成一组，分组框画在泳道头上方，标父模块名；参与者不分组。
 - 泳道宽度按名称自适应；消息纵向累加；组合框包住其子消息，按嵌套深度内缩。
 - 结果按「层次 + 场景 + 路径」缓存。
 
@@ -139,17 +149,23 @@ type OutlineNode =
   | { kind: 'group'; tag: FragmentTag; children: OutlineNode[] }                 // loop · par 的一个分支 · ref
   | { kind: 'alt'; pointId: string; options: { option: number; when: string; status: 'path' | 'unchosen' | 'unreached'; children: OutlineNode[] }[] }
 
+type ReturnPairs = Map<string, string>   // 帧 ID ↔ 配对帧 ID（双向）
+
+interface RouteItem { pointId: string; when: string[]; chosen: number | null }   // chosen 为 null：截止处待选
+
 interface SequenceModel {
-  participants: { nodeId: string; id: string; name: string; kind: 'module' | 'boundary' | 'actor' }[]
+  participants: { nodeId: string; id: string; name: string; kind: 'module' | 'boundary' | 'actor';
+                  parentId?: string; path: string[]; layer?: string; key: number[]; byX: boolean }[]   // path：根下到自身的模块 ID
   messages: { index: number; from: string; to: string; kind: 'call' | 'async' | 'return' | 'internal' | 'empty'; label: string;
               frameIds: string[]; status: 'path' | 'unchosen' | 'unreached'; pathIndex?: number; unmodeled?: boolean }[]
   fragments: { id: string; kind: 'alt' | 'loop' | 'par' | 'ref'; label: string; depth: number; first: number; last: number;
-               collapsed: boolean; branches?: { label: string; chosen: boolean | null; first: number; last: number }[] }[]
+               collapsed: boolean; branches?: { option: number; label: string; chosen: boolean | null; first: number; last: number }[] }[]
 }
 
 interface PositionedSequence {
   model: SequenceModel
-  lanes: Map<string, { x: number; w: number }>
+  lanes: Map<string, { x: number; w: number }>   // 按从左到右的顺序
+  groups: { parentId: string; x: number; w: number }[]  // P13
   boundaryX?: number
   messages: { y: number }[]
   fragments: { x: number; y: number; w: number; h: number; branchY: number[] }[]
@@ -164,6 +180,10 @@ planScenario(index: ModelIndex, scenarioId: string): ScenarioPlan
 bindRelation(index: ModelIndex, msg: { kind; from; to; relation? }): { relation?: string; inferred: boolean; reverse: boolean; issue?: 'mismatch' | 'not-runtime' | 'unrelated' }
 resolvePath(plan, choices): { frames: Frame[]; pending?: BranchPoint; points: BranchPoint[] }
 chooseBranch(plan, choices, pointId: string, option: number): Map<string, number>
+choicesForBranch(plan, choices, pointId: string, option: number): Map<string, number> | null
+pointPrefix(plan, choices, pointId: string): Frame[]
+routeOf(plan, choices): RouteItem[]
+pairReturns(plan: ScenarioPlan): ReturnPairs
 choicesFor(plan, choices, frameId: string): Map<string, number> | null
 choiceList(plan, choices): number[]            choicesFromList(plan, list: number[]): Map<string, number>
 landFrame(index, view: LevelView, frame: Frame): Landing

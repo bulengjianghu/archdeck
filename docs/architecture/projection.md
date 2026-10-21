@@ -1,7 +1,7 @@
 # 专题：结构投影与布局
 
 > 回答：给定一个层次，要画哪些节点和边、摆在哪里。
-> 覆盖模块：模型层的 Projector；视图状态层的 Layout（结构图部分，时序图排布见[场景投影与回放](./scenario.md)）。规则见 [02-domain.md](../02-domain.md) 的 L、O、A2 / A7、N12。
+> 覆盖模块：模型层的 Projector；视图状态层的 Layout（结构图部分，时序图排布见[场景投影与回放](./scenario.md)，舞台显示见[工作台界面 §4](./workbench.md#4-画布结构图)）。规则见 [02-domain.md](../02-domain.md) 的 L、O、A2 / A7、N12、P9。
 
 ## 1. Projector：层次投影
 
@@ -25,7 +25,11 @@
 
 **参与者**（L6 / A2）：某一层出现与本层子树有关系的参与者（根层为全部有关系的参与者），参与者与本层子模块之间的关系按上面的规则投影成边（不受边界节点开关影响，受关系类型筛选）；分层总览中入口落在核心模块上时另记一条核心跨层边。
 
-**架构查询**：`nearestVisibleLevel(index, levelId, opts)` 返回在给定可见性下最近的可见层次（N12），供导航规则在「只看现状」隐藏当前层次时回退。
+**架构查询**：
+
+- `nearestVisibleLevel(index, levelId, opts)` 返回在给定可见性下最近的可见层次（N12），供导航规则在「只看现状」隐藏当前层次时回退。
+- `hierarchyKey(index, id)` 返回模块在层次顺序中的排序键（P9、L4）：从根到该模块的路径上每一级一项，层为 `[0, order]`，其他模块为 `[1, 描述顺序]`；按键逐项比较即得层次顺序，前缀相同的较短者在前（祖先在后代之前）。参与者没有排序键。
+- 边界节点在 `LevelView.nodes` 中按 `hierarchyKey` 排序输出，Layout 按此顺序排边界节点行，时序图泳道用同一个键，两张图的外部模块顺序因此一致。
 
 **边 ID** 由 `edgeId(from, to, type?)` 生成：`<from>-><to>:<type>`（按类型分开）或 `<from>-><to>`（合并类型）。同样的输入得到同样的 ID，重新加载后选中仍然有效；场景投影用同一规则把帧定位到视图边。
 
@@ -39,7 +43,7 @@
 |---|---|
 | `layered` | 不调用 elk。按层序自上而下分带，带内核心模块横向排开（含 `+N` 占位）；相邻层间的边画在带间空隙并横向错开；跨多层的边走右侧通道（O3）；核心跨层边画成曲线 |
 | `graph` | elkjs layered 算法排内部模块与内部边（正交走线、标签内联）。先自上而下排，结果过于狭长时再试自左向右，取宽高比更接近画布者 |
-| 边界节点 | 统一排在内部结构下方一行，按所连内部模块的平均横坐标排序以减少交叉；边界边画成曲线（L4） |
+| 边界节点 | 统一排在内部结构下方一行，按视图给出的层次顺序从左到右排列（与时序图泳道一致）；边界边画成曲线（L4） |
 | 外部参与者 | 不参与 elk 排布。用户类排在内部结构上方一行，外部系统与时间类排在右侧一列（分层总览排在右侧通道之外），按所连节点的位置排序；内部结构外画边界虚线框（根层为系统边界，其他层次为当前父模块）；参与者的边画成曲线、常驻显示（A7） |
 
 - elk 在 Web Worker 中运行，按需动态加载；无 Worker 环境（测试）用同步打包版兜底。
@@ -93,6 +97,8 @@ projectLevel(index: ModelIndex, parentId: string, opts?: ProjectOptions): LevelV
   // 层次不存在或被「只看现状」隐藏时抛错；调用方先用 nearestVisibleLevel 取合法层次
 mapEndpoint(index, parentId, id): { kind: 'local' | 'external' | 'actor' | 'skip'; node?: string; exact?: boolean }
 nearestVisibleLevel(index, levelId, opts): string
+hierarchyKey(index: ModelIndex, id: string): number[]   // 每级两项：[是否非层, order 或描述顺序]
+compareKeys(a: number[], b: number[]): number
 edgeId(from: string, to: string, type?: string): string
 layoutView(view: LevelView): Promise<PositionedView>
 contentBounds(pv: PositionedView): Box | null        // 画布适应时取内容外框
