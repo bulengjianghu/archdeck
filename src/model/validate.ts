@@ -177,6 +177,7 @@ export function validate(input: ArchModel): ValidateResult {
     actors: [...actors.values()],
     scenarios: [],
     sourceIgnore: input.sourceIgnore ?? [],
+    ...(input.sourceLimits ? { sourceLimits: input.sourceLimits } : {}),
   }
 
   // ── 场景（S5–S13）──

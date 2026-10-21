@@ -54,6 +54,17 @@
     "sourceIgnore": {
       "$ref": "#/definitions/textList",
       "description": "忽略清单（G8）：不属于任何模块的源码文件，glob 相对源码根目录"
+    },
+    "sourceLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "源码限制（G20）：maxLines 为超长阈值，缺省 500；只能声明一次",
+      "properties": {
+        "maxLines": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
     }
   },
   "definitions": {

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 /**
- * 文件面板（SR-7）：路径、归属模块（冲突时全部列出）或未归属 / 已忽略、当前层次中的投影（G14）、作为哪些模块的入口、导出。
+ * 文件面板（SR-7）：路径、行数与是否超长（G21）、归属模块（冲突时全部列出）或未归属 / 已忽略、当前层次中的投影（G14）、作为哪些模块的入口、导出。
  * 页面只读：未归属文件只提示怎么处理，不提供忽略操作（ADR-0007）。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
-import { moduleName } from '@/model'
+import { isLong, moduleName } from '@/model'
 import { useOpenPreview } from '../source/preview'
 import Section from './Section.vue'
 import ExportSection from './ExportSection.vue'
@@ -22,6 +22,8 @@ const hits = computed(() => desk.fileHits.value)
 const entries = computed(() => desk.entryModulesOf(props.path))
 const script = computed(() => /\.(m|c)?(t|j)sx?$/i.test(props.path))
 const name = computed(() => props.path.split('/').pop())
+const lineCount = computed(() => desk.lines.value[props.path])
+const long = computed(() => isLong(lineCount.value, desk.maxLines.value))
 const levelName = computed(() => moduleName(idx.value, desk.levelId.value))
 const pathOf = (id: string) => (idx.value.pathOf.get(id) ?? []).slice(1).map(m => moduleName(idx.value, m)).join(' / ')
 </script>
@@ -39,6 +41,7 @@ const pathOf = (id: string) => (idx.value.pathOf.get(id) ?? []).slice(1).map(m =
         <span v-if="owners.length > 1" class="badge warn">归属冲突</span>
         <span v-else-if="exists && !owners.length && !ignored" class="badge warn">未归属</span>
         <span v-if="ignored" class="badge">已忽略</span>
+        <span v-if="lineCount !== undefined" class="badge" :class="{ bad: long }">{{ lineCount }} 行{{ long ? `（超过 ${desk.maxLines.value}）` : '' }}</span>
       </div>
     </header>
 

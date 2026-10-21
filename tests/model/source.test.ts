@@ -3,15 +3,18 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_MAX_LINES,
   assignFiles,
   fileNodes,
   fileTree,
+  isLong,
   loadModel,
   matchExports,
   matchRef,
   moduleDir,
   moduleEntry,
   moduleFiles,
+  moduleLines,
   projectLevel,
   sourceIssues,
   staticPrefix,
@@ -264,5 +267,40 @@ describe('目录树', () => {
     const mixed = [...nested, 'a/c/keep.ts']
     const m = fileTree(mixed, assignFiles(index, mixed, ['**/*.md'])).dirs[0]
     expect([m.ignored, m.dirs.find(d => d.name === 'b')!.ignored, m.dirs.find(d => d.name === 'c')!.ignored]).toEqual([false, true, false])
+  })
+})
+
+describe('G19–G21 行数与超长', () => {
+  const lines = { 'src/app/main.ts': 700, 'src/app/ui/Button.vue': 120, 'src/core/a.ts': 501, 'src/core/b.ts': 500 }
+
+  it('G20：超过阈值才算超长，没有行数的文件不算；阈值缺省 500', () => {
+    expect(DEFAULT_MAX_LINES).toBe(500)
+    expect(isLong(501, 500)).toBe(true)
+    expect(isLong(500, 500)).toBe(false)
+    expect(isLong(undefined, 500)).toBe(false)
+  })
+
+  it('G21：目录带子树行数合计与超长文件数；阈值可变', () => {
+    const root = fileTree(files, own, lines, 500)
+    const src = root.dirs.find(d => d.name === 'src')!
+    expect([src.lines, src.long]).toEqual([1821, 2])
+    const core = src.dirs.find(d => d.name === 'core')!
+    expect([core.lines, core.long]).toEqual([1001, 1])
+    expect(fileTree(files, own, lines, 100).dirs.find(d => d.name === 'src')!.long).toBe(4)
+    // 不给行数时合计为 0
+    expect(fileTree(files, own).lines).toBe(0)
+  })
+
+  it('G21：一组文件的行数合计、超长数与统计了行数的文件数', () => {
+    expect(moduleLines(['src/core/a.ts', 'src/core/b.ts', 'tools/x.sh'], lines, 500)).toEqual({ lines: 1001, long: 1, counted: 2 })
+  })
+
+  it('G20：sourceLimits 读入描述；重复声明时用第一处并提醒', () => {
+    const one = loadModel([...FILES, { path: 'limits.yaml', text: 'sourceLimits: { maxLines: 300 }' }])
+    expect(one.index.model.sourceLimits).toEqual({ maxLines: 300 })
+    const two = loadModel([...FILES, { path: 'a.yaml', text: 'sourceLimits: { maxLines: 300 }' }, { path: 'b.yaml', text: 'sourceLimits: { maxLines: 800 }' }])
+    expect(two.index.model.sourceLimits).toEqual({ maxLines: 300 })
+    expect(two.issues.some(i => i.code === 'duplicate-source-limits' && i.file === 'b.yaml')).toBe(true)
+    expect(loadModel([...FILES, { path: 'bad.yaml', text: 'sourceLimits: { maxLines: 0 }' }]).issues.some(i => i.severity === 'error')).toBe(true)
   })
 })

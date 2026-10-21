@@ -16,6 +16,7 @@ import type { FileTreeContext } from './types'
 const desk = useDesk()
 const root = ref<HTMLElement>()
 const onlyUnowned = ref(false)
+const onlyLong = ref(false)
 const expanded = ref(new Set<string>())
 
 const own = computed(() => desk.ownership.value)
@@ -67,7 +68,11 @@ function toggle(path: string) {
 }
 
 const ctx = computed<FileTreeContext>(() => ({
-  expanded: onlyUnowned.value ? new Set([...expanded.value, ...(own.value?.unowned ?? []).flatMap(dirsOf)]) : expanded.value,
+  expanded: new Set([
+    ...expanded.value,
+    ...(onlyUnowned.value ? (own.value?.unowned ?? []).flatMap(dirsOf) : []),
+    ...(onlyLong.value ? longFiles.value.flatMap(dirsOf) : []),
+  ]),
   selected: desk.selectedFile.value,
   hits: hits.value,
   hitDirs: hitDirs.value,
@@ -75,7 +80,12 @@ const ctx = computed<FileTreeContext>(() => ({
   conflicts: new Set(own.value?.conflicts ?? []),
   ignored: own.value?.ignored ?? new Set(),
   onlyUnowned: onlyUnowned.value,
+  lines: desk.lines.value,
+  maxLines: desk.maxLines.value,
+  onlyLong: onlyLong.value,
 }))
+/** 「只看超长」时展开到全部超长文件 */
+const longFiles = computed(() => Object.keys(desk.lines.value).filter(f => desk.lines.value[f] > desk.maxLines.value))
 </script>
 
 <template>
@@ -89,9 +99,11 @@ const ctx = computed<FileTreeContext>(() => ({
           <span v-if="own.unowned.length" class="warn">未归属 {{ own.unowned.length }}</span>
           <span v-if="own.conflicts.length" class="warn">冲突 {{ own.conflicts.length }}</span>
           <span v-if="own.ignored.size" class="muted">忽略 {{ own.ignored.size }}</span>
+          <span v-if="tree.long" class="bad">超长 {{ tree.long }}（&gt; {{ desk.maxLines.value }} 行）</span>
         </div>
         <div class="tools">
           <label><input v-model="onlyUnowned" type="checkbox" /> 只看未归属</label>
+          <label><input v-model="onlyLong" type="checkbox" /> 只看超长</label>
           <button class="small" title="重新列出源码文件" @click="desk.refreshSource()">刷新</button>
         </div>
         <div v-if="selectedModule" class="hint">
@@ -140,6 +152,10 @@ const ctx = computed<FileTreeContext>(() => ({
 
 .warn {
   color: var(--warning);
+}
+
+.bad {
+  color: var(--danger);
 }
 
 .hint {

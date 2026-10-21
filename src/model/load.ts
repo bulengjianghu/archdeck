@@ -45,6 +45,7 @@ export function load(files: readonly RawFile[]): LoadResult {
   const actors: ActorEntity[] = []
   const scenarios: ScenarioEntity[] = []
   const sourceIgnore: string[] = []
+  let sourceLimits: { def: NonNullable<ArchFileDef['sourceLimits']>; file: string } | undefined
   let seq = 0
 
   const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path))
@@ -86,6 +87,10 @@ export function load(files: readonly RawFile[]): LoadResult {
     if (data.scenario) pushScenario(data.scenario, ['scenario'])
     data.scenarios?.forEach((x, i) => pushScenario(x, ['scenarios', i]))
     if (data.sourceIgnore) sourceIgnore.push(...data.sourceIgnore)
+    // G20：sourceLimits 只能声明一次，重复时用第一处
+    if (data.sourceLimits && sourceLimits)
+      issues.push({ severity: 'warning', code: 'duplicate-source-limits', message: `sourceLimits 只能声明一次，已在 ${sourceLimits.file} 声明，这里的被忽略`, ...locate(['sourceLimits']) })
+    else if (data.sourceLimits) sourceLimits = { def: data.sourceLimits, file: locate(['sourceLimits']).file }
   }
 
   let system = DEFAULT_SYSTEM
@@ -99,7 +104,7 @@ export function load(files: readonly RawFile[]): LoadResult {
   }
   for (const m of modules) if (m.parentId === undefined) m.parentId = system.id
 
-  return { model: { system, modules, relations, interfaces, dataStructures, actors, scenarios, sourceIgnore }, issues }
+  return { model: { system, modules, relations, interfaces, dataStructures, actors, scenarios, sourceIgnore, ...(sourceLimits ? { sourceLimits: sourceLimits.def } : {}) }, issues }
 }
 
 /** 步骤树规整为 Step：记录路径（F2）与出处，payload 规整为数组 */

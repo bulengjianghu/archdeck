@@ -144,6 +144,13 @@ export interface ArchFileDef {
   scenarios?: ScenarioDef[]
   /** 忽略清单（G8）：不属于任何模块的源码文件 */
   sourceIgnore?: string[]
+  /** G20：源码文件的超长阈值 */
+  sourceLimits?: SourceLimits
+}
+
+/** G20：源码文件的限制；maxLines 缺省 500 */
+export interface SourceLimits {
+  maxLines?: number
 }
 
 // ── 加载产物 ─────────────────────────────────────────────────
@@ -225,6 +232,8 @@ export interface ArchModel {
   scenarios: ScenarioEntity[]
   /** 各文件 sourceIgnore 的合并（G8），不参与版本对比 */
   sourceIgnore: string[]
+  /** G20：只取第一处声明，不参与版本对比 */
+  sourceLimits?: SourceLimits
 }
 
 export type IssueSeverity = 'error' | 'warning'

@@ -5,7 +5,7 @@
  *          运行视角：selection ≠ null ? 钉住(selection) : 跟随(当前帧)
  * 回放只由用户驱动（R1），没有「播放中」与选中争夺面板。
  */
-import type { Participation, ReturnPairs, ScenarioLevelView } from '@/model'
+import type { ModelIndex, Participation, ReturnPairs, ScenarioLevelView } from '@/model'
 import type { Selection, TransitionResult, ViewState } from './types'
 
 export type Perspective = 'structure' | 'run'
@@ -26,11 +26,20 @@ export function focusOf(state: ViewState): Focus {
 /**
  * R15：焦点突出——运行视角下要突出的本层可见消息序号；null 表示不突出（结构视角、停在开头、当前帧本层不可见）。
  * 跟随：当前可见消息 + 配对帧（F7）所在的可见消息；钉住：钉住对象参与的可见消息（文件不参与，为空集）。
+ * 钉住的是当前层次本身或其祖先（如下钻后钉住的模块）时按跟随：本层消息几乎都与它有关，全部突出等于没有突出（ADR-0011）。
  */
-export function emphasisOf(state: ViewState, view: ScenarioLevelView | null, pairs: ReturnPairs | null, pinned: Participation | null): Set<number> | null {
+export function emphasisOf(
+  state: ViewState,
+  view: ScenarioLevelView | null,
+  pairs: ReturnPairs | null,
+  pinned: Participation | null,
+  index?: ModelIndex,
+): Set<number> | null {
   const pb = state.playback
   if (!pb || !view) return null
-  if (state.selection) return new Set(state.selection.kind === 'file' ? [] : (pinned?.messages ?? []))
+  const s = state.selection
+  const enclosing = s?.kind === 'module' && !!index?.pathOf.get(state.levelId)?.includes(s.id)
+  if (s && !enclosing) return new Set(s.kind === 'file' ? [] : (pinned?.messages ?? []))
   if (pb.frameId === null) return null
   const current = view.messageOf.get(pb.frameId)
   if (current === undefined) return null

@@ -6,7 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { MAX_PREVIEW_BYTES, langOf, listSourceFiles, readExports, readSourceFile, readSourceTree, resolveSourceRoot, sourceRootEnvKey, workspaceRoot } from '../../vite/readSource'
+import { MAX_PREVIEW_BYTES, countLines, langOf, listSourceFiles, readExports, readSourceFile, readSourceTree, resolveSourceRoot, sourceRootEnvKey, workspaceRoot } from '../../vite/readSource'
 
 let ws: string
 let projectRoot: string
@@ -163,5 +163,18 @@ describe('G11 导出解析', () => {
   it('非 TS / JS 文件为空数组，不在清单中为 null', () => {
     expect(exportsOf('package.json')).toEqual([])
     expect(readExports(repo, listSourceFiles(repo), 'nope.ts')).toBeNull()
+  })
+})
+
+describe('G19 行数', () => {
+  it('只统计 TS / JS / Vue 等；按物理行数，末行无换行另计 1，空文件为 0；文件变化后重新统计', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-lines-'))
+    write(dir, 'a.ts', 'a\nb\nc\n')
+    write(dir, 'b.vue', 'x\ny')
+    write(dir, 'c.ts', '')
+    write(dir, 'd.md', '1\n2\n')
+    expect(countLines(dir, ['a.ts', 'b.vue', 'c.ts', 'd.md', 'missing.ts'])).toEqual({ 'a.ts': 3, 'b.vue': 2, 'c.ts': 0 })
+    write(dir, 'a.ts', 'a\nb\nc\nd\ne\n')
+    expect(countLines(dir, ['a.ts'])['a.ts']).toBe(5)
   })
 })

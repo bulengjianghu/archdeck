@@ -5,7 +5,7 @@
 import { mapEndpoint } from '../project'
 import type { Issue, LevelView, ModelIndex, ModuleEntity } from '../types'
 import { hasWildcard, matchRef, normalizeRef, staticPrefix } from './glob'
-import type { DirNode, ExportMatch, ExportedSymbol, FileNodes, LocalSource, ModuleEntry, SourceOwnership } from './types'
+import { DEFAULT_MAX_LINES, type DirNode, type ExportMatch, type ExportedSymbol, type FileNodes, type LocalSource, type ModuleEntry, type SourceOwnership } from './types'
 
 /** G3、G5–G8：按 codeRefs 归属每个文件 */
 export function assignFiles(index: ModelIndex, files: readonly string[], ignore: readonly string[]): SourceOwnership {
@@ -187,8 +187,27 @@ export function sourceIssues(index: ModelIndex, own: SourceOwnership, tree: Pick
 }
 
 /** 目录树：目录在前、按名称排序；目录带文件数与未归属数；G18：子树内文件全部忽略的目录也是忽略状态 */
-export function fileTree(files: readonly string[], own: SourceOwnership): DirNode {
-  const root: DirNode = { name: '', path: '', dirs: [], files: [], count: 0, unowned: 0, ignored: false }
+/** G20：超过阈值即超长；没有行数（不统计的文件）不算 */
+export const isLong = (lines: number | undefined, maxLines: number): boolean => lines !== undefined && lines > maxLines
+
+/** G21：一组文件（如模块的文件）的行数合计、超长文件数与统计了行数的文件数 */
+export function moduleLines(files: readonly string[], lines: Readonly<Record<string, number>>, maxLines: number): { lines: number; long: number; counted: number } {
+  let total = 0
+  let long = 0
+  let counted = 0
+  for (const f of files) {
+    const n = lines[f]
+    if (n === undefined) continue
+    counted++
+    total += n
+    if (isLong(n, maxLines)) long++
+  }
+  return { lines: total, long, counted }
+}
+
+/** G18、G21：目录树，目录带文件数、未归属数、忽略状态，给出行数时另带行数合计与超长文件数 */
+export function fileTree(files: readonly string[], own: SourceOwnership, lines: Readonly<Record<string, number>> = {}, maxLines = DEFAULT_MAX_LINES): DirNode {
+  const root: DirNode = { name: '', path: '', dirs: [], files: [], count: 0, unowned: 0, ignored: false, lines: 0, long: 0 }
   const ignoredCount = new Map<DirNode, number>()
   const unowned = new Set(own.unowned)
   const dirOf = new Map<string, DirNode>([['', root]])
@@ -197,7 +216,7 @@ export function fileTree(files: readonly string[], own: SourceOwnership): DirNod
     if (d) return d
     const cut = path.lastIndexOf('/')
     const parent = ensure(cut < 0 ? '' : path.slice(0, cut))
-    d = { name: path.slice(cut + 1), path, dirs: [], files: [], count: 0, unowned: 0, ignored: false }
+    d = { name: path.slice(cut + 1), path, dirs: [], files: [], count: 0, unowned: 0, ignored: false, lines: 0, long: 0 }
     parent.dirs.push(d)
     dirOf.set(path, d)
     return d
@@ -208,10 +227,14 @@ export function fileTree(files: readonly string[], own: SourceOwnership): DirNod
     ensure(dir).files.push(f)
     const bad = unowned.has(f) ? 1 : 0
     const skip = own.ignored.has(f) ? 1 : 0
+    const n = lines[f] ?? 0
+    const long = isLong(lines[f], maxLines) ? 1 : 0
     for (let p: string | null = dir; p !== null; p = p === '' ? null : p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '') {
       const d = dirOf.get(p)!
       d.count++
       d.unowned += bad
+      d.lines += n
+      d.long += long
       ignoredCount.set(d, (ignoredCount.get(d) ?? 0) + skip)
     }
   }

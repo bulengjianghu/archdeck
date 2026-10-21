@@ -26,6 +26,10 @@ export interface FileTreeContext {
   conflicts: ReadonlySet<string>
   ignored: ReadonlySet<string>
   onlyUnowned: boolean
+  /** G19–G21：文件行数、超长阈值、「只看超长」 */
+  lines: Readonly<Record<string, number>>
+  maxLines: number
+  onlyLong: boolean
 }
 
 /** T7：一帧在步骤树上的标记 */

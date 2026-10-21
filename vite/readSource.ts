@@ -10,7 +10,7 @@ import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import ts from 'typescript'
 import { loadModel } from '../src/model'
-import type { ExportedSymbol, PackageEntry, SourceFile, SourcePayload, SystemDef } from '../src/model'
+import { LINE_COUNTED, type ExportedSymbol, type PackageEntry, type SourceFile, type SourcePayload, type SystemDef } from '../src/model'
 import { readProject } from './readModelDir'
 
 /** G17：超过这个大小不预览 */
@@ -89,7 +89,36 @@ export function readSourceTree(modelRoot: string, project: string, projectRoot: 
   const at = resolveSourceRoot(project, system, workspaceRoot(projectRoot, env), env)
   if (at.status === 'absent') return at
   const files = listSourceFiles(at.root)
-  return { status: 'local', root: at.root, files, packages: readPackages(at.root, files) }
+  return { status: 'local', root: at.root, files, packages: readPackages(at.root, files), lines: countLines(at.root, files) }
+}
+
+/** G19：行数缓存，键为绝对路径，按修改时间与大小判断是否过期 */
+const lineCache = new Map<string, { mtimeMs: number; size: number; lines: number }>()
+
+/** G19：TS / JS / Vue 等文件的物理行数（换行符个数，末行无换行另计 1，空文件为 0） */
+export function countLines(root: string, files: readonly string[]): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const rel of files) {
+    if (!LINE_COUNTED.test(rel)) continue
+    const abs = path.join(root, rel)
+    try {
+      const st = fs.statSync(abs)
+      const hit = lineCache.get(abs)
+      if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) {
+        out[rel] = hit.lines
+        continue
+      }
+      const buf = fs.readFileSync(abs)
+      let n = 0
+      for (let i = buf.indexOf(10); i !== -1; i = buf.indexOf(10, i + 1)) n++
+      if (buf.length > 0 && buf[buf.length - 1] !== 10) n++
+      lineCache.set(abs, { mtimeMs: st.mtimeMs, size: st.size, lines: n })
+      out[rel] = n
+    } catch {
+      /* 读不到（刚删除等）就不统计 */
+    }
+  }
+  return out
 }
 
 const LANGS: Record<string, string> = {

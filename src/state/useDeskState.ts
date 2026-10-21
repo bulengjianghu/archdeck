@@ -9,6 +9,7 @@
 import { computed, ref, shallowRef } from 'vue'
 import type { Router } from 'vue-router'
 import {
+  DEFAULT_MAX_LINES,
   RELATION_TYPES,
   assignFiles,
   buildSequence,
@@ -200,7 +201,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   /** F6f：路线（路径上的分支点与所选，以及待选的分支点） */
   const route = computed<RouteItem[]>(() => (plan.value ? routeOf(plan.value, choices.value) : []))
   /** R15：焦点突出的本层可见消息序号；null 表示不突出 */
-  const emphasis = computed(() => emphasisOf(state.value, scenarioView.value, pairs.value, pinnedParticipation.value))
+  const emphasis = computed(() => emphasisOf(state.value, scenarioView.value, pairs.value, pinnedParticipation.value, index.value ?? undefined))
   /** V5：参与本场景的舞台节点（时序图泳道）：path = 回放路径上的消息碰到它，other = 只在未选分支 / 未到达处 */
   const stageParticipants = computed<ReadonlyMap<string, 'path' | 'other'>>(() => {
     const out = new Map<string, 'path' | 'other'>()
@@ -222,7 +223,12 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const ownership = computed<SourceOwnership | null>(() =>
     index.value && localSource.value ? assignFiles(index.value, localSource.value.files, index.value.model.sourceIgnore) : null,
   )
-  const sourceTree = computed<DirNode | null>(() => (localSource.value && ownership.value ? fileTree(localSource.value.files, ownership.value) : null))
+  /** G19、G20：文件行数与超长阈值 */
+  const lines = computed<Readonly<Record<string, number>>>(() => localSource.value?.lines ?? {})
+  const maxLines = computed(() => index.value?.model.sourceLimits?.maxLines ?? DEFAULT_MAX_LINES)
+  const sourceTree = computed<DirNode | null>(() =>
+    localSource.value && ownership.value ? fileTree(localSource.value.files, ownership.value, lines.value, maxLines.value) : null,
+  )
   const selectedFile = computed(() => (state.value.selection?.kind === 'file' ? state.value.selection.id : null))
   /** 选中文件的归属模块（冲突时多个，G6） */
   const fileOwners = computed<string[]>(() => (selectedFile.value ? (ownership.value?.owners.get(selectedFile.value) ?? []) : []))
@@ -397,6 +403,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     source,
     ownership,
     sourceTree,
+    lines,
+    maxLines,
     selectedFile,
     fileOwners,
     fileHits,

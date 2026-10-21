@@ -113,6 +113,12 @@ const target = computed(() => {
   border-color: transparent;
 }
 
+.panel .badge.bad {
+  background: var(--danger-soft, var(--warning-soft));
+  color: var(--danger);
+  border-color: transparent;
+}
+
 .panel .badge.warn {
   background: var(--warning-soft);
   color: var(--warning);

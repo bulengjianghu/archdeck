@@ -186,6 +186,14 @@ describe('回放', () => {
     expect([...emphasisOf(pinned, v, pairs, part)!]).toEqual(part.messages)
     const file = run(s, { type: 'select', selection: { kind: 'file', id: 'x.ts' } }).state
     expect(emphasisOf(file, v, pairs, null)!.size).toBe(0)
+    // ADR-0011：钉住当前层次本身或其祖先时按跟随
+    const follow = emphasisOf(s, v, pairs, null)
+    const self = { ...s, selection: { kind: 'module' as const, id: s.levelId } }
+    expect(emphasisOf(self, v, pairs, part, index)).toEqual(follow)
+    const drilled = { ...s, levelId: 'app', selection: { kind: 'module' as const, id: 'app' } }
+    expect(emphasisOf(drilled, v, pairs, part, index)).toEqual(follow)
+    // 当前层次之外的模块仍按参与突出
+    expect([...emphasisOf(pinned, v, pairs, part, index)!]).toEqual(part.messages)
   })
 
   it('R13：指向某一步——前进或后退到该步、焦点跟随；在未选分支上先改选；落在合并消息的第一帧', () => {

@@ -62,7 +62,7 @@ moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
 
 ```ts
 type SourcePayload =
-  | { status: 'local'; root: string; files: string[]; packages: Record<string, PackageEntry>; lines: Record<string, number> }   // packages 的键为 package.json 所在目录（'' 为根）；lines 只含统计行数的文件（G19）
+  | { status: 'local'; root: string; files: string[]; packages: Record<string, PackageEntry>; lines?: Record<string, number> }   // packages 的键为 package.json 所在目录（'' 为根）；lines 只含统计行数的文件（G19）
   | { status: 'absent'; repo?: string; tried?: string; reason: string }
   | { status: 'unavailable' }                    // 页面侧：构建态取不到端点
 interface PackageEntry { main?: string; exports?: unknown }
