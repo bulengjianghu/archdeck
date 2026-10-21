@@ -1,8 +1,8 @@
 <script setup lang="ts">
-/** 项目列表主页：列出模型根目录下的全部项目，点击进入该项目的架构视图 */
+/** 项目列表主页：列出模型根目录下的全部项目，点击进入该项目的架构视图；卡片下只列推进中的设计版本，已归档的只注明个数（DV-6） */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { ProjectSummary } from '@/model/project-summary'
-import { DESIGN_STATUS_LABELS } from '@/model/design'
+import { DESIGN_STATUS_LABELS, isArchived } from '@/model/design'
 
 const projects = ref<ProjectSummary[]>([])
 const status = ref<'loading' | 'ready' | 'error'>('loading')
@@ -27,6 +27,9 @@ onMounted(() => {
   import.meta.hot?.on('arch-model:changed', onChanged)
 })
 onBeforeUnmount(() => import.meta.hot?.off('arch-model:changed', onChanged))
+
+const activeDesigns = (p: ProjectSummary) => (p.designs ?? []).filter(d => !isArchived(d.status))
+const archivedCount = (p: ProjectSummary) => (p.designs ?? []).filter(d => isArchived(d.status)).length
 
 const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0, 8) : c)
 </script>
@@ -77,8 +80,8 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
             <span class="open">打开 →</span>
           </footer>
         </RouterLink>
-        <ul v-if="p.designs?.length" class="designs" aria-label="设计版本">
-          <li v-for="d in p.designs" :key="d.id">
+        <ul v-if="activeDesigns(p).length" class="designs" aria-label="设计版本">
+          <li v-for="d in activeDesigns(p)" :key="d.id">
             <RouterLink
               v-if="d.revisions.length"
               class="design"
@@ -93,6 +96,7 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
             <span v-else class="design broken">设计 {{ d.name }}：{{ d.problems[0] }}</span>
           </li>
         </ul>
+        <p v-if="archivedCount(p)" class="archived muted">已归档 {{ archivedCount(p) }} 个设计（已实现或已放弃），可在项目视图的版本切换中查看</p>
       </li>
     </ul>
   </div>
@@ -112,6 +116,11 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
 
 .hero p {
   margin: 6px 0 28px;
+}
+
+.archived {
+  margin: 6px 4px 0;
+  font-size: 12px;
 }
 
 .center {

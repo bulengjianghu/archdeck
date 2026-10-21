@@ -15,6 +15,9 @@ export const DESIGN_STATUS_LABELS: Record<DesignStatus, string> = {
   abandoned: '已放弃',
 }
 
+/** 已结束迭代的设计归档（DV-6）：项目列表不再列出，仍可从版本切换打开 */
+export const isArchived = (status: DesignStatus): boolean => status === 'implemented' || status === 'abandoned'
+
 export interface RevisionInfo {
   /** 轮次 ID，同时是快照目录名，如 r1 */
   id: string
