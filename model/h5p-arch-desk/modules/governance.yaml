@@ -91,6 +91,7 @@ interfaces:
       list_cycles(project?) · rescan(project?) · prevention_report(project?)
     semantics: |
       - stdio；check_dependency 与 rescan 写拦截记录（Q4）
+      - 每次调用前比对输入，源码清单或文件的修改时间变了就重建，不必先 rescan
       - 不提供改规则、生成基线（Q5）
 
 dataStructures:
@@ -136,6 +137,7 @@ relations:
   - {id: rel.gv.source-deps, from: access.model-source, to: access.deps, type: calls, interface: if.access.deps, payload: [ds.FileDep], description: /source/<项目>/facts.json}
   - {id: rel.gv.source-store, from: access.model-source, to: access.governance-store, type: calls, description: 基线与最近的拦截记录}
   - {id: rel.gv.deps-exports, from: access.deps, to: access.source, type: calls, description: 复用导出解析穿透再导出（K3）}
+  - {id: rel.gv.deps-resolve, from: access.deps, to: model.source.resolve, type: calls, interface: if.model.specResolver, description: 说明符解析与包入口（K2）}
   - {id: rel.gv.agent-deps, from: access.agent, to: access.deps, type: calls, interface: if.access.deps}
   - {id: rel.gv.agent-store, from: access.agent, to: access.governance-store, type: calls, description: 读基线；写拦截记录；命令行生成基线}
   - {id: rel.gv.agent-reader, from: access.agent, to: access.reader, type: calls, description: 读项目描述}

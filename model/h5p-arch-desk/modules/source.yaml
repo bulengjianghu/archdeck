@@ -40,11 +40,18 @@ modules:
   - id: model.source.ownership
     name: 归属与入口
     parent: model.source
-    responsibility: 文件 → 模块的归属（G5 取最深、G6 冲突、G7 未归属、G8 忽略）、模块的文件（G4）、模块目录与入口文件（G10）、模块的接口与入口导出的对应（G12）、选中文件在当前层次的投影（G14）、归属警告（G9 由调用方决定是否报）、目录树（内部文件全部忽略的目录也是忽略状态，G18；目录带行数合计与超长数）、是否超长与一组文件的行数合计（isLong、moduleLines，G20、G21）。
+    responsibility: 文件 → 模块的归属（G5 取最深、G6 冲突、G7 未归属、G8 忽略）、模块的文件（G4）、模块目录与入口文件（G10：有 package.json 取包入口，否则 index.*，都用路径补全与包入口那一套）、模块的接口与入口导出的对应（G12）、选中文件在当前层次的投影（G14）、归属警告（G9 由调用方决定是否报）、目录树（内部文件全部忽略的目录也是忽略状态，G18；目录带行数合计与超长数）、是否超长与一组文件的行数合计（isLong、moduleLines，G20、G21）。
     principle: |
       - **归属是关于被描述系统的知识**：换成命令行（lint:model）或 AI 查询同样成立，所以在模型层；接入层只给文件清单。
       - **与结构投影同一套端点规则**：选中文件的归属模块用 mapEndpoint 提升到当前层次（与关系、帧一致）。
     codeRefs: [src/model/source/ownership.ts]
+  - id: model.source.resolve
+    name: 路径补全与包入口
+    parent: model.source
+    responsibility: 路径补全（原样 → .js 写法换成 .ts 等 → 补扩展名 → /index.*）、相对路径说明符、工作区包入口（exports['.'] → main → types，产物 dist/… 不在清单中时换成 src/…，再退回 src/index.*、index.*）与说明符解析（tsconfig paths、工作区包名，K2）。入口文件（G10）、导出解析（G11）与依赖提取（K2、K3）共用这一套，所以 U4 看的经由文件与模块入口口径一致。输入是文件清单、包入口字段与 paths，不碰文件系统。
+    principle: |
+      - **一套口径**：「这个说明符指向哪个文件」「这个包的入口是哪个文件」只算一处；入口、导出、依赖各自补全会让访问面规则（U4）出现假违规。
+    codeRefs: [src/model/source/resolve.ts]
 
 relations:
   # 呈现层
@@ -85,11 +92,13 @@ relations:
   - {id: rel.p7.source-entry, from: access.source, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 取 system.source.repo 解析源码根目录}
   - {id: rel.p7.lint-source, from: access.lint, to: access.source, type: calls, interface: if.source.readSourceTree, description: 当前版本的源码清单}
   - {id: rel.p7.lint-ownership, from: access.lint, to: model.source.ownership, type: calls, interface: if.model.assignFiles, description: 归属警告（G9）}
+  - {id: rel.p7.source-resolve, from: access.source, to: model.source.resolve, type: calls, interface: if.model.specResolver, description: 再导出的相对路径补全（G11）}
 
   # 模型层
   - {id: rel.p7.ownership-glob, from: model.source.ownership, to: model.source.glob, type: calls, interface: if.model.matchRef}
   - {id: rel.p7.ownership-endpoint, from: model.source.ownership, to: model.projector.endpoints, type: calls, interface: if.model.mapEndpoint, description: 选中文件的归属模块投影到当前层次（G14）}
   - {id: rel.p7.ownership-types, from: model.source.ownership, to: model.types, type: depends, payload: [ds.ModelIndex, ds.LevelView, ds.Issue]}
+  - {id: rel.p7.ownership-resolve, from: model.source.ownership, to: model.source.resolve, type: calls, interface: if.model.specResolver, description: 入口文件取包入口或 index.*（G10）}
 
 interfaces:
   - id: if.source.readSourceTree
@@ -101,7 +110,7 @@ interfaces:
       readExports(root: string, files: readonly string[], path: string): ExportedSymbol[] | null
     semantics: |
       - 源码根目录 = ARCH_SOURCE_ROOT_<项目> ?? (ARCH_WORKSPACE_ROOT ?? 本包往上三级) + system.source.repo；不在本地返回 absent 与原因，不抛错（G1）。
-      - 路径必须在文件清单中；超过 512 KB 或含 NUL 字节只给提示（G17）；导出只做语法解析，再导出最多追 5 层（G11）。
+      - 路径必须在文件清单中；超过 512 KB 或含 NUL 字节只给提示（G17）；导出只做语法解析，再导出按 K2 补全、补全到非 TS / JS 文件时不追，最多追 5 层（G11）。
   - id: if.source.sourceEndpoints
     name: 源码端点
     owner: access.model-source
@@ -125,6 +134,16 @@ interfaces:
       moduleEntry(index, own, tree: { files; packages }, moduleId): ModuleEntry | null
       sourceIssues(index, own, tree): Issue[]
     semantics: G3–G10；纯函数，不碰文件系统。
+  - id: if.model.specResolver
+    name: specResolver
+    owner: model.source.resolve
+    signature: |
+      specResolver(files: readonly string[], packages: Record<string, PackageEntry>, aliases?: PathAlias[]): (from: string, spec: string) => string | null
+      packageEntry(dir: string, pkg: PackageEntry, files: ReadonlySet<string>): string | null
+      completePath(base: string, files: ReadonlySet<string>): string | null
+      resolveRelative(from: string, spec: string, files: ReadonlySet<string>): string | null
+      indexFile(dir: string, files: ReadonlySet<string>): string | null
+    semantics: K2；纯函数，不碰文件系统。入口文件（G10）、导出解析（G11）与依赖提取共用；解析不到（三方库、Node 内建）为 null。
   - id: if.model.matchExports
     name: matchExports
     owner: model.source.ownership
@@ -144,7 +163,7 @@ dataStructures:
     name: SourcePayload
     definition: |
       type SourcePayload =
-        | { status: 'local'; root: string; files: string[]; packages: Record<string, { main?: string; exports?: unknown }>; lines?: Record<string, number> }   // lines：TS / JS / Vue 文件的行数（G19）
+        | { status: 'local'; root: string; files: string[]; packages: Record<string, { main?: string; exports?: unknown; name?: string; types?: string }>; lines?: Record<string, number> }   // lines：TS / JS / Vue 文件的行数（G19）
         | { status: 'absent'; repo?: string; tried?: string; reason: string }
         | { status: 'unavailable' }      // 页面侧：构建态取不到端点
     description: 被描述项目的源码清单；路径相对源码根目录，packages 的键为 package.json 所在目录。

@@ -152,7 +152,7 @@ modules:
       - id: access.source
         name: 源码读取
         kind: subsystem
-        responsibility: 按 system.source.repo 解析被描述项目的源码根目录（工作区根目录 + repo，环境变量可覆盖；不在本地时给出原因与尝试的路径，G1）；列出文件清单（git 仓库内按 git 的忽略规则，否则排除依赖与产物目录，G2）与各 package.json 的入口字段；读取单个文件（必须在清单中，过大或二进制只给提示，G17）；用 TypeScript 语法树解析导出的名称、类别与签名，顺着相对路径的再导出往下找（G11）。不判断文件属于哪个模块；统计 TS / JS / Vue 文件的物理行数，按修改时间与大小缓存（G19）。
+        responsibility: 按 system.source.repo 解析被描述项目的源码根目录（工作区根目录 + repo，环境变量可覆盖；不在本地时给出原因与尝试的路径，G1）；列出文件清单（git 仓库内按 git 的忽略规则，否则排除依赖与产物目录，G2）与各 package.json 的入口字段；读取单个文件（必须在清单中，过大或二进制只给提示，G17）；用 TypeScript 语法树解析导出的名称、类别与签名，顺着相对路径的再导出往下找（路径补全用模型层那一套，G11）。不判断文件属于哪个模块；统计 TS / JS / Vue 文件的物理行数，按修改时间与大小缓存（G19）。
         codeRefs: [vite/readSource.ts]
         docRefs: [docs/architecture/source.md]
       - id: access.lint
@@ -163,7 +163,7 @@ modules:
       - id: access.deps
         name: 依赖提取
         kind: subsystem
-        responsibility: 用 TypeScript 语法树提取被描述项目的文件依赖（import / import type / export … from / import() / require，Vue 取 <script> 块，K1）；把说明符解析到清单中的文件——相对路径补全、tsconfig paths、工作区包名与包入口（K2）；命名导入沿再导出链追到声明文件，记目标与经由（K3）；按修改时间与大小缓存。不判断归属与规则。
+        responsibility: 用 TypeScript 语法树提取被描述项目的文件依赖（import / import type / export … from / import() / require，Vue 取 <script> 块，K1）；把说明符解析到清单中的文件——读出 tsconfig paths，交给模型层的说明符解析（相对路径补全、工作区包名与包入口，K2）；命名导入沿再导出链追到声明文件，记目标与经由（K3）；按修改时间与大小缓存。不判断归属与规则。
         codeRefs: [vite/readDeps.ts]
         docRefs: [docs/architecture/governance.md]
       - id: access.governance-store
@@ -175,7 +175,7 @@ modules:
         name: agent 接口
         kind: subsystem
         core: true
-        responsibility: 给 AI coding agent 与人用的架构查询：查询核心按项目加载描述、源码清单、代码事实与基线并调用模型层的架构治理（定位、写前判定、违规、环、重新扫描、拦截报告，Q1–Q4）；两层外壳——命令行 npm run arch（另有生成基线）与 MCP 服务器 npm run arch:mcp（stdio），同一输入同一结果（Q6）；只读描述、规则与基线，只写拦截记录（Q5）。
+        responsibility: 给 AI coding agent 与人用的架构查询：查询核心按项目加载描述、源码清单、代码事实与基线并调用模型层的架构治理（定位、写前判定、违规、环、重新扫描、拦截报告，Q1–Q4）；每次查询前比对输入（描述、源码清单与各文件的修改时间与大小、基线），变了就重建，长驻时新建文件、新加依赖后无需重新扫描即可判定；两层外壳——命令行 npm run arch（另有生成基线）与 MCP 服务器 npm run arch:mcp（stdio），同一输入同一结果（Q6）；只读描述、规则与基线，只写拦截记录（Q5）。
         principle: |
           - **写前判定**：agent 在写下 import 之前询问；判定之外附上目标模块的职责、访问面与接口签名，让它知道该走哪里，而不只是「不行」。
           - **架构师的意图只读**：不提供改规则、生成基线的工具，规则由人或设计版本定；拦截记录让效果可量化。
@@ -240,7 +240,7 @@ modules:
       - id: model.source
         name: 源码归属
         kind: subsystem
-        responsibility: 被描述项目的源码文件与模块对上：文件按 codeRefs 归属模块（祖先与后代同时匹配取最深的，互不包含的模块同时匹配为冲突），未归属与忽略清单，模块的文件（子树并集）与入口文件，入口导出与模块接口的对应，选中文件在当前层次的投影，目录树，以及归属警告。输入是模型索引与接入层给的文件清单，不碰文件系统。
+        responsibility: 被描述项目的源码文件与模块对上：文件按 codeRefs 归属模块（祖先与后代同时匹配取最深的，互不包含的模块同时匹配为冲突），未归属与忽略清单，模块的文件（子树并集）与入口文件，路径补全与包入口（入口、导出与依赖提取共用，K2），入口导出与模块接口的对应，选中文件在当前层次的投影，目录树，以及归属警告。输入是模型索引与接入层给的文件清单，不碰文件系统。
         codeRefs: [src/model/source/**]
         docRefs: [docs/architecture/source.md, docs/adr/0007-source-files.md]
       - id: model.governance
