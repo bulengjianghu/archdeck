@@ -10,6 +10,7 @@
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { MarkerType, VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
+import '@vue-flow/core/dist/style.css'
 import { useDesk } from '@/state/inject'
 import { contentBounds } from '@/layout/layout'
 import { canvasScene, type NodeData, type RouteEdgeData } from '@/layout/canvas'
