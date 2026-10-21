@@ -1,0 +1,140 @@
+# 专题：架构治理
+
+> 回答：代码依赖从哪里来；描述的关系对不对；架构规则怎么判、门禁怎么卡；agent 怎么在写代码前询问。
+> 覆盖模块：接入层的「依赖提取」「治理存储」「agent 接口」；模型层的「架构治理」。规则见 [02-domain.md](../02-domain.md) 的 K、U、Y、Q；决策见 [ADR-0015](../adr/0015-architecture-governance.md)；界面见[工作台界面](./workbench.md)；归属与入口复用[源码接入与归属](./source.md)。
+
+## 1. 分工
+
+```text
+本地源码根目录                         接入层：只读语法，不判断归属与规则
+   │ readCodeDeps（K1–K3，按修改时间缓存）
+   ▼
+CodeDeps { deps: FileDep[], external, parsed }   +  governance/baseline.json · ledger.jsonl（治理存储）
+   │  开发态端点 source/<项目>/facts.json；命令行与 agent 接口直接调用
+   ▼
+governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
+   ├ liftDeps → ModuleDep（K4）
+   ├ confirmRelations · undescribedDeps（K5–K7）
+   ├ evaluateRules → Violation（U2–U6）
+   ├ cycles · cyclicity（Y1–Y3）
+   └ gate → Issue（U8）
+   │
+   ├─ DeskState：levelFacts（K9、Y4）→ 画布叠加与面板
+   ├─ lint:model：问题与摘要
+   └─ agent 接口：locate · describeModule · checkDependency · summarizeLedger（Q1–Q4）
+```
+
+- 「这条依赖违不违规」「这条关系是真是假」是关于被描述系统的知识，换成命令行、MCP 同样需要，所以全部在模型层（原则 6）；页面、`lint:model`、agent 接口三处结果一致（Q6）。
+- 接入层只做两件事：读懂 TypeScript 的导入语法，以及读写 `governance/` 下的两个文件。
+
+## 2. 依赖提取（接入层，`vite/readDeps.ts`）
+
+| 函数 | 做什么 | 规则 |
+|---|---|---|
+| `readCodeDeps(root, files, packages)` | 对清单中的脚本文件逐个解析（Vue 取 `<script>` 块），收集导入语句；说明符解析与再导出穿透见下；按绝对路径的修改时间与大小缓存每个文件的解析结果 | K1–K3 |
+| `resolveSpecifier(files, packages, from, spec)` | 相对路径补全扩展名与 `/index.*`；裸说明符按工作区包名解析到包入口或子路径；解析不到返回 `null`（外部依赖） | K2 |
+| `importTargets(root, files, packages, from, spec, names?)` | 一条导入的目标：命名导入沿再导出链追到声明文件（复用导出解析的再导出逻辑，最多 5 层）；其余以经由文件为目标 | K3 |
+
+- 工作区包：清单中每个 `package.json` 的 `name` → 所在目录；`<name>` 的入口依次取 `exports['.']`、`main`、`types`，指向不在清单中的产物（`dist/x.js`）时换成 `src/x.ts`，再退回 `src/index.ts`、`index.ts`。
+- 一个文件的解析结果：`{ line, spec, kind, names | '*' | 'default' | null }[]`，与文件内容一起缓存；目标解析每次按当前清单做（清单变了结果跟着变）。
+- 性能：h5player（约 600 个脚本文件）首次解析约 2–3 秒，之后只重解析变化的文件。
+
+## 3. 治理存储（接入层，`vite/governanceStore.ts`）
+
+| 函数 | 做什么 | 规则 |
+|---|---|---|
+| `governanceDir(modelRoot, project)` | `model/<项目>/governance/` | — |
+| `readBaseline(dir)` / `writeBaseline(dir, baseline)` | 读写 `baseline.json`（格式化 JSON，键排序，便于评审差异） | U7 |
+| `readLedger(dir, limit?)` / `appendLedger(dir, entry)` | 读（最近 N 行）/ 追加 `ledger.jsonl`，一行一个 JSON | Q4 |
+| `sourceCommit(root)` | 源码根目录的 `git rev-parse HEAD`，失败为 `undefined` | U7 |
+
+- `readModelDir` 跳过项目下的 `governance/`（与 `designs/` 同），它不属于描述。
+
+## 4. 架构治理（模型层，`src/model/governance/`）
+
+| 函数 | 做什么 | 规则 |
+|---|---|---|
+| `liftDeps(index, own, deps)` | 文件依赖两端取归属模块（冲突时全部），去掉同模块与祖先后代，按 `A->B` 合并为 `ModuleDep`；返回 `{ moduleDeps, skipped }` | K4 |
+| `confirmRelations(index, moduleDeps)` | 每条关系：端点有参与者或目标态 → `skipped`；有 `from` 子树 → `to` 子树的模块依赖（`dataflow` 两向）→ `confirmed`，带依据的模块依赖键；否则 `unconfirmed` | K5 |
+| `undescribedDeps(index, moduleDeps)` | 没有关系覆盖的模块依赖（端点相同或互为祖先后代、方向一致，`dataflow` 不论方向） | K7 |
+| `judge(index, rules, entryOf, dep)` | 一条（依赖方模块，被依赖方模块，经由文件及其归属）对全部规则的判定：层规则、白名单、访问面，返回命中的 `{ kind, at, reason }` 与是否有规则约束；`allow` 匹配的标为已豁免 | U2–U5 |
+| `evaluateRules(index, own, moduleDeps, entryOf)` | 对每条模块依赖的每条文件证据 `judge`，按 `<种类>:<规则所在>:<A>-><B>` 合并为 `Violation` | U6 |
+| `cycles(nodes, edges)` | Tarjan 强连通分量，返回规模 ≥ 2 的分量，成员按名称排序 | Y1 |
+| `cyclicity(cycles)` | 未容忍的环的 Σ 规模² | Y2、Y3 |
+| `governanceReport(index, own, tree, deps, baseline)` | 组合以上：事实、比对、违规（带基线状态）、模块环与文件环、环度、门禁问题与摘要 | K4–K7、U8、Y |
+| `levelFacts(index, view, report)` | 当前层次：视图边的证实标记与违规；未描述依赖与违规投影成的叠加线；本层的环编号 | K9、Y4 |
+| `depsBetween(index, view, report, from, to)` | 叠加线选中时的内容：投影到这对节点的模块依赖、违规与文件证据 | K10 |
+| `rulesFor(index, moduleId)` | 对一个模块生效的规则：所在各级层的 `mayDependOn`、祖先链上的白名单与访问面 | Q1 |
+| `describeModule(index, own, report, entryOf, id)` · `locate(…, file)` | agent 用的模块 / 文件说明：路径与各级职责、生效的规则、接口签名、入口、出入关系与违规 | Q1 |
+| `checkDependency(index, own, report, entryOf, from, targets)` | 写前判定：对每个目标 `judge`，取最严；环影响为在模块依赖图上加边后重算包含两端的强连通分量；附覆盖关系与目标模块语义 | Q2 |
+| `summarizeLedger(entries)` | 按判定统计次数；扫描的违规数与环度首末值 | Q4 |
+
+### 4.1 数据结构
+
+```ts
+interface FileDep { from: string; to: string; via: string; kind: 'value' | 'type'; line: number }
+interface CodeDeps { deps: FileDep[]; external: Record<string, number>; parsed: number }
+interface ModuleDep { key: string; from: string; to: string; files: FileDep[] }      // key = `${from}->${to}`
+type RuleKind = 'layer' | 'deps' | 'exposes'
+interface Violation {
+  key: string; kind: RuleKind; at: string; from: string; to: string; reason: string
+  files: FileDep[]; status: 'new' | 'known' | 'open' | 'allowed'; allowReason?: string
+}
+interface Cycle { members: string[]; tolerated: boolean }
+interface Baseline { createdAt: string; commit?: string; violations: string[]; cyclicity: { modules: number; files: number } }
+interface GovernanceReport {
+  moduleDeps: Map<string, ModuleDep>; skipped: number; external: Record<string, number>
+  relations: Map<string, { status: 'confirmed' | 'unconfirmed' | 'skipped'; deps: string[] }>
+  undescribed: ModuleDep[]; violations: Violation[]
+  moduleCycles: Cycle[]; fileCycles: Cycle[]; cyclicity: { modules: number; files: number }
+  baseline: Baseline | null
+  gate: { newViolations: number; knownViolations: number; resolved: number; cycleGrew: boolean }
+  issues: Issue[]
+}
+type Verdict = 'allowed' | 'denied' | 'unconstrained'
+```
+
+## 5. agent 接口（接入层，`scripts/agent/`、`scripts/arch.ts`、`scripts/arch-mcp.ts`）
+
+查询核心 `createService({ modelRoot, root })`：按项目加载描述、源码清单、依赖、基线，算出 `GovernanceReport` 并缓存；`rescan` 重新读取。两种外壳只做参数解析与输出格式。
+
+| 命令行 `npm run arch -- …` | MCP 工具 | 说明 | 写拦截记录 |
+|---|---|---|---|
+| `projects` | `list_projects` | 项目与源码状态 | — |
+| `locate <文件或模块>` | `locate` | Q1 | — |
+| `check <from> <to>` | `check_dependency` | Q2；`to` 可为导入说明符 | ✅ |
+| `violations [--new]` | `list_violations` | 违规与基线状态 | — |
+| `cycles` | `list_cycles` | 模块环、文件环、环度与基线 | — |
+| `rescan` | `rescan` | Q3 | ✅ |
+| `report` | `prevention_report` | Q4 | — |
+| `baseline` | —（Q5） | 生成基线，由人执行 | — |
+
+- 每个工具都有可选参数 `project`（Q6）。命令行默认输出给人看的文本，`--json` 输出与 MCP 相同的 JSON。
+- MCP 服务器经 stdio 通信，stdout 只留给协议；日志写 stderr。
+- 接入：在 agent 的 MCP 配置里加入 `npm --prefix <本包路径> run -s arch:mcp`；本包根目录的 `.mcp.json` 是示例（在本仓库里自举）。
+
+## 6. 运行时序
+
+```mermaid
+sequenceDiagram
+    participant Agent as coding agent
+    participant MCP as arch-mcp
+    participant Svc as 查询核心
+    participant Model as 架构治理（模型层）
+    participant Store as governance/
+    Agent->>MCP: check_dependency(src/a.ts, "../state/x")
+    MCP->>Svc: check(project, from, to)
+    Svc->>Svc: importTargets（K2、K3）
+    Svc->>Model: checkDependency(index, own, report, entryOf, from, targets)
+    Model-->>Svc: denied · 规则与理由 · 环影响 · 目标语义
+    Svc->>Store: appendLedger
+    Svc-->>MCP: 结果
+    MCP-->>Agent: denied：模型层不可依赖视图状态层；应经由 …
+```
+
+## 7. 页面
+
+- `source/<项目>/facts.json`（开发态）：`{ deps, baseline, ledger }`（拦截记录取最近 2000 行）；构建态 404，与源码同理（K8）。
+- DeskState 的 `facts` 分组：源码清单就绪后取事实；`report = governanceReport(…)`；`level = levelFacts(…)`（只在结构视角、「代码事实」开启时用于画布）；`gateIssues` 进问题提示（U9）。「刷新源码」同时重新取事实。
+- 画布：`canvasScene` 多两个输入——视图边的证实与违规标记、叠加线（坐标由 `linkRoute` 算，不参与布局）；节点数据多 `cycle` 编号（K9、Y4）。
+- 选中 `{ kind: 'dep', id: '<A>-><B>' }`：URL `sel=d:`，面板 `DepPanel`（K10）；运行视角下按选中关系的方式突出两端泳道。

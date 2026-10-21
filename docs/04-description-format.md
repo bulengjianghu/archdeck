@@ -16,7 +16,9 @@ model/<项目>/
   actors.yaml              外部参与者及其入口关系
   scenarios/<场景>.yaml    一个场景一个文件，也可用 .json
   source-ignore.yaml       忽略清单 sourceIgnore：不属于任何模块的源码文件（§3.7）
+  rules.yaml               架构规则 rules：架构师的意图，AI 重新生成时不改动（§3.8）
   designs/<设计>/          设计版本（§5），读取当前版本时跳过
+  governance/              基线 baseline.json 与拦截记录 ledger.jsonl，由命令行与 agent 接口写，不属于描述，读取时跳过（§4）
 ```
 
 - 骨架只描述层和第二级模块；区域文件**不得重复定义**它们，只能用 `parent: <第二级 ID>` 往下挂子模块。
@@ -24,7 +26,7 @@ model/<项目>/
 
 ## 2. 文件格式
 
-一个文件的顶层键都可选、可任意组合：`system`、`module`（单个模块，可带 `parent`）、`modules`、`relations`、`interfaces`、`dataStructures`、`actors`、`scenario` / `scenarios`、`sourceIgnore`、`sourceLimits`。未知字段即格式错误，整份文件被跳过（M1）。
+一个文件的顶层键都可选、可任意组合：`system`、`module`（单个模块，可带 `parent`）、`modules`、`relations`、`interfaces`、`dataStructures`、`actors`、`scenario` / `scenarios`、`sourceIgnore`、`sourceLimits`、`rules`。未知字段即格式错误，整份文件被跳过（M1）。
 
 ```yaml
 # modules/infra.yaml —— 模块子树 + 本区域的关系
@@ -225,6 +227,29 @@ sourceLimits:
 - 页面只列出未归属文件，不提供忽略操作；按文件树与 `lint:model` 的列表逐条判断，能归纳成目录或通配符的合并成一条。
 - `lint:model` 在源码在本地时报出 `source.unowned` / `source.conflict` / `source.entry` 警告，生成后逐条处理。
 
+### 3.8 架构规则
+
+`rules.yaml` 写架构师的意图（U1–U5、Y3），**不由代码生成**：人直接写，或经设计版本评审定稿后写入。AI 按代码重新生成当前版本时不得改动它；代码与规则冲突时由门禁报出，不是去改规则（ADR-0015）。
+
+```yaml
+# rules.yaml
+rules:
+  layers: true                  # 层按骨架里的 mayDependOn 默认拒绝（U2），缺省 true
+  modules:
+    - module: infra.framework
+      mayDependOn: [share, domain]                  # 子树之外只许依赖这些模块的子树（U3）
+      exposes: [entry, packages/framework/src/common/**]   # 子树之外只许经这些文件访问；entry = 模块入口（U4）
+      reason: Framework 是机制内核，只认契约，不认具体方案
+  allow:                        # 例外（U5），reason 必填
+    - { from: app.solution, to: infra.framework.pipeline, rule: exposes, reason: 事务提交暂走内部 API，见 issue #123 }
+  cycles:
+    tolerated: [domain.types]  # 环的全部成员都在这些子树内时容忍（Y3）
+```
+
+- 层规则写在骨架的 `mayDependOn` 上（§3.1），这里只能整体开关。
+- 先写约束少而硬的规则（层、核心模块的白名单与访问面），再逐步收紧；存量违规用基线承接（§4），不用 `allow` 掩盖——`allow` 只给有理由、长期接受的例外。
+- 设计版本可以修改 `rules`，随设计一起评审。
+
 ## 4. 校验与提交
 
 ```bash
@@ -233,6 +258,12 @@ npm run lint:model
 
 - 必须 0 个错误；提醒逐条处理：缺职责要补；引用其他区域尚未定义的接口 / 数据结构时可暂留；源码归属警告按 §3.7 处理。
 - 按代码重新生成当前版本后，更新 `system.yaml` 的 `source.commit` 与 `source.generatedAt`。
+- 源码在本地时 `lint:model` 一并检查代码事实与架构规则（K、U、Y）：基线之外的新增违规（`rule.new`）、环度上升（`cycle.grew`）是错误，要么修代码，要么由架构师裁决后改规则；`fact.unconfirmed` 提醒说明描述里的编译期关系在代码里找不到，按代码修正描述。
+- 基线由人生成并提交：
+
+```bash
+npm run arch -- baseline --project <项目>   # 写 model/<项目>/governance/baseline.json
+```
 
 ## 5. 设计版本
 
@@ -259,7 +290,7 @@ design:
       feedback: |               # 架构师对本轮的评审意见，原样记录
 ```
 
-- **起草**：先确认当前版本与代码一致（不一致先重新生成并提交），再把当前版本整份复制为 `r1/`，在副本上改；不改当前版本。
+- **起草**：先确认当前版本与代码一致（不一致先重新生成并提交），再把当前版本整份复制为 `r1/`（不含 `designs/` 与 `governance/`），在副本上改；不改当前版本。
 - **只改要改的**：新增实体按 §3 写；已有实体只在设计确实要调整时改，ID 保持不变（界面按 ID 对比）；删除就直接删。
 - **设计说明**：每个新增或修改的实体写 `designNote`，说清为什么这样设计、取舍是什么。
 - **新一轮**：先把评审意见原样记到上一轮的 `feedback`，再把上一轮整份复制为新一轮修改；旧轮次不再改动。
