@@ -77,7 +77,7 @@ flowchart TB
 | Projector（核心） | 层次投影与分层总览（L、O），端点映射 `mapEndpoint`，最近可见层次，层次顺序 `hierarchyKey`（P9、L4） | 已实现 | 结构投影 |
 | 场景投影（核心） | 回放计划（含调用与返回配对 F7、步骤继承关系的接口与数据 S14）、回放路径（含路线与直选分支，F6e、F6f）、帧的层次投影、参与查询、步骤大纲、时序模型（泳道层次顺序与所属，P9、P13）（S、F、P、R7、R13、T5、T6） | 已实现 | 场景 |
 | 版本对比 | 设计版本相对对比基线的差异与涉及变更数（E1、E2） | 已实现 | 加载与版本 |
-| 源码归属 | 文件按 `codeRefs` 归属模块、未归属与冲突、忽略清单、入口文件、导出与 `provides` 的对应、文件在当前层次的投影、目录树（G3–G14、G18） | 已实现 | 源码 |
+| 源码归属 | 文件按 `codeRefs` 归属模块、未归属与冲突、忽略清单、入口文件、导出与 `provides` 的对应、文件在当前层次的投影、目录树（G3–G14、G18）；路径补全、包入口与说明符解析（K2，入口、导出解析与依赖提取共用） | 已实现 | 源码 |
 | 架构治理 | 文件依赖提升为模块依赖、关系证实与未描述依赖（K4–K7）；规则校验、违规与例外（U2–U6）；环与环度（Y）；基线门禁（U8）；本层投影（K9、Y4）；agent 查询：定位、写前判定、拦截报告（Q1、Q2、Q4） | 已实现 | 架构治理 |
 
 ### 3.4 接入层
@@ -88,9 +88,9 @@ flowchart TB
 | 描述读取（核心） | 发现项目与设计版本，读取描述文件（YAML / JSON），生成项目摘要 | 已实现 | 加载与版本 |
 | 源码读取 | 解析源码根目录、列出文件清单与包入口、读取单个文件、用 TypeScript 解析导出，端点由 ModelSource 插件挂载（G1、G2、G11、G17） | 已实现 | 源码 |
 | 命令行校验 | `npm run lint:model`，含设计版本的每一轮；源码在本地时附带当前版本的归属警告（G9）与治理门禁（U8） | 已实现 | 加载与版本 · 架构治理 |
-| 依赖提取 | 用 TypeScript 语法解析提取文件依赖、解析说明符（含 tsconfig paths 与工作区包）、穿透再导出；按修改时间缓存；端点由 ModelSource 插件挂载（K1–K3） | 已实现 | 架构治理 |
+| 依赖提取 | 用 TypeScript 语法解析提取文件依赖、读 tsconfig paths 并经源码归属的说明符解析（K2）、穿透再导出；按修改时间缓存；端点由 ModelSource 插件挂载（K1–K3） | 已实现 | 架构治理 |
 | 治理存储 | 读写项目下 `governance/`：基线（只由命令行生成）、拦截记录（追加）；读源码根目录的 git 提交（U7、Q4） | 已实现 | 架构治理 |
-| agent 接口 | 查询核心（加载描述、源码、事实，调用模型层）与两种外壳：命令行 `npm run arch`、MCP 服务器 `npm run arch:mcp`（Q1–Q6） | 已实现 | 架构治理 |
+| agent 接口 | 查询核心（加载描述、源码、事实，调用模型层；每次查询前比对输入，变了就重建）与两种外壳：命令行 `npm run arch`、MCP 服务器 `npm run arch:mcp`（Q1–Q6） | 已实现 | 架构治理 |
 
 ### 3.5 模块边界的判据
 
@@ -115,6 +115,7 @@ flowchart TB
 | DeskState → 源码归属 | `assignFiles`、`moduleFiles`、`moduleEntry`、`matchExports`、`fileNodes`、`sourceIssues`、`fileTree` | 派生 |
 | 项目视图 → ModelSource | HTTP 端点 `source/<项目>.json`、`source/<项目>/file.json`、`source/<项目>/exports.json`（`httpSourceFetcher`，注入给源码同步） | 与 `fetchModel` 一样，外界地址只在呈现层出现；文件清单与内容按需取，不推送 |
 | 命令行校验 → 源码读取、源码归属 | `readSourceTree`、`sourceIssues` | 与页面报出同样的归属警告 |
+| 源码读取、依赖提取 → 源码归属 | `resolveRelative`、`specResolver`、`joinPath` | 导出解析（G11）、依赖提取（K2）与入口文件（G10）同一套路径补全与包入口 |
 | 命令行校验、agent 接口 → 依赖提取、治理存储、架构治理 | `readCodeDeps`、`readBaseline`、`appendLedger`、`governanceReport`、`checkDependency` | 与页面同一套治理计算（K8、U8、Q6） |
 | DeskState → 架构治理 | `governanceReport`、`levelFacts` | 派生；事实经源码同步按需取（`source/<项目>/facts.json`） |
 | 架构治理 → 源码归属、Projector | `moduleEntry`、`matchRef`、`mapEndpoint` | 访问面的入口（U4）与本层投影（K9、Y4）复用同一套规则 |

@@ -26,9 +26,9 @@ moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
 |---|---|---|
 | `resolveSourceRoot(system, workspaceRoot, env)` | 先看 `ARCH_SOURCE_ROOT_<ID>`，再用工作区根目录（`ARCH_WORKSPACE_ROOT`，缺省为本包往上三级）拼上 `source.repo`；返回 `{ status: 'local', root }`，或 `{ status: 'absent', tried, reason }` | G1 |
 | `listSourceFiles(root)` | 在 git 仓库内执行 `git ls-files --cached --others --exclude-standard`（相对 `root`），失败时遍历目录并排除 `node_modules`、`.git`、`dist`、`coverage` 等；按路径排序 | G2 |
-| `readSourceTree(modelRoot, project, …)` | 组合以上两步，并读取清单中每个 `package.json` 的 `main` / `exports`，交给入口规则用；统计 TS / JS / Vue 文件的物理行数（按修改时间与大小缓存） | G1、G2、G10、G19 |
+| `readSourceTree(modelRoot, project, …)` | 组合以上两步，并读取清单中每个 `package.json` 的 `name` / `main` / `exports` / `types`，交给包入口（`packageEntry`）用；统计 TS / JS / Vue 文件的物理行数（按修改时间与大小缓存） | G1、G2、G10、G19 |
 | `readSourceFile(root, files, path)` | 路径必须在清单中（防穿越）；超过 512 KB 或含 NUL 字节时只返回 `{ tooLarge }` / `{ binary }` | G17 |
-| `readExports(root, files, path)` | TypeScript `createSourceFile` 做语法解析：`export` 声明、`export { a as b }`、`export default`；相对路径的 `export *` / `export … from` 解析到 `.ts` / `.tsx` / `.js` / `/index.ts`，最多追 5 层，记录来源文件；签名为声明文本去掉函数体与类成员体，最多 25 行 | G11 |
+| `readExports(root, files, path)` | TypeScript `createSourceFile` 做语法解析：`export` 声明、`export { a as b }`、`export default`；相对路径的 `export *` / `export … from` 用 `resolveRelative` 补全（K2），补全到非 TS / JS 文件时不追，最多追 5 层，记录来源文件；签名为声明文本去掉函数体与类成员体，最多 25 行 | G11 |
 
 ### 2.1 端点
 
@@ -49,7 +49,10 @@ moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
 | `assignFiles(index, files, ignore)` | 对每个文件求匹配它的模块，去掉是其他匹配模块祖先的（G5），剩下的就是归属模块：0 个时查忽略清单，得到 `ignored` 或 `unowned`；2 个及以上为冲突 | G3、G5–G8 |
 | `moduleFiles(index, own, id)` | 子树内全部归属文件的并集；系统根取全部已归属文件 | G4 |
 | `moduleDir(module, files)` | 每条 `codeRefs` 取目录（glob 取第一个通配符段之前的部分；恰为清单中的文件时取所在目录；否则视为目录），再取它们的公共目录 | G10 |
-| `moduleEntry(index, own, tree, id)` | 依次取 `entry` → `<模块目录>/index.ts` → `<模块目录>/package.json` 的 `exports['.']`（字符串，或 `import` / `default` / `types`）或 `main`；按约定找到的必须在清单中并属于本模块子树 | G10 |
+| `moduleEntry(index, own, tree, id)` | 依次取 `entry` → 模块目录下有 `package.json` 时取 `packageEntry`，没有时取 `<模块目录>/index.*`（`indexFile`）；按约定找到的必须在清单中并属于本模块子树 | G10 |
+| `completePath(base, files)` · `resolveRelative(from, spec, files)` · `indexFile(dir, files)` | 路径补全（`resolve.ts`）：原样 → 去掉 `.js` 写法补 `MODULE_EXTS` → `/index.*`；相对路径从依赖方所在目录出发 | K2、G11 |
+| `packageEntry(dir, pkg, files)` | 包入口：`exports['.']` → `main` → `types` 依次补全，产物 `dist/…`、`.d.ts` 不在清单中时换成 `src/…`，再退回 `src/index.*`、`index.*`；入口文件（G10）与依赖提取解析包名（K2）都用它，所以 U4 看的经由文件与入口一致 | G10、K2 |
+| `specResolver(files, packages, aliases)` | 说明符解析：相对路径补全；裸说明符先按 tsconfig `paths`（接入层读出的 `PathAlias`），再按工作区包名解析到包入口或包目录下的子路径；解析不到返回 `null` | K2 |
 | `matchExports(index, id, exports)` | 模块的接口（`moduleInterfaces`：`provides` 加上 `owner` 在本模块子树内的接口）的名称（去掉括号与泛型）对导出名：`matched`、`undescribed`（导出未描述）、`unexported`（描述未导出）；默认导出不参与 | G12 |
 | `fileNodes(index, view, owners)` | 归属模块逐个 `mapEndpoint` 到当前层次：`local` → 子模块节点，`external` → 边界节点（视图中有时），`skip` → 不高亮（`self: true`）；分层总览另加路径上的核心模块节点 | G14 |
 | `sourceIssues(index, own, tree)` | 每个冲突文件、未归属文件一条 warning（`source.conflict` / `source.unowned`），`entry` 不在清单中一条 warning（`source.entry`，定位到描述出处） | G6、G7、G9、G10 |

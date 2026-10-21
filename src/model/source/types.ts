@@ -12,6 +12,13 @@ export interface PackageEntry {
   types?: string
 }
 
+/** K2：tsconfig 的一条 paths——模式前缀与后缀（`*` 两侧），目标模板相对源码根目录、含 `*` */
+export interface PathAlias {
+  prefix: string
+  suffix: string
+  targets: string[]
+}
+
 /** G19：统计行数的源码文件 */
 export const LINE_COUNTED = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|vue)$/i
 

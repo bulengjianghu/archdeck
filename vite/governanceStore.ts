@@ -9,7 +9,7 @@ import type { Baseline, LedgerEntry } from '../src/model'
 import { GOVERNANCE_DIR } from './readModelDir'
 
 export { GOVERNANCE_DIR }
-const BASELINE_FILE = 'baseline.json'
+export const BASELINE_FILE = 'baseline.json'
 const LEDGER_FILE = 'ledger.jsonl'
 /** 页面只取最近这么多行拦截记录 */
 export const LEDGER_PAGE_LIMIT = 2000

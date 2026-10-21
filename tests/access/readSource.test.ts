@@ -184,6 +184,16 @@ describe('G11 导出解析', () => {
     expect(e.find(s => s.name === 'exposed')).toMatchObject({ kind: 'const', signature: 'const local' })
     expect(e.find(s => s.name === 'default')).toMatchObject({ kind: 'default', signature: expect.stringContaining('function main(x: number): string') })
   })
+  it('再导出的路径按 K2 补全（如 /index.mts、.mjs）；补全到 Vue 等非 TS / JS 文件时不追', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-reexport-'))
+    write(dir, 'index.ts', "export * from './sub'\nexport { m } from './m.mjs'\nexport * from './View.vue'\nexport { default as V } from './View.vue'\n")
+    write(dir, 'sub/index.mts', 'export const s = 1\n')
+    write(dir, 'm.mjs', 'export function m() {}\n')
+    write(dir, 'View.vue', '<script setup lang="ts">\nexport const notParsed = 1\n</script>\n')
+    const e = readExports(dir, listSourceFiles(dir), 'index.ts')!
+    expect(e.map(s => `${s.name}<${s.from ?? ''}:${s.kind}`)).toEqual(['s<sub/index.mts:const', 'm<m.mjs:function', 'V<View.vue:reexport'])
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
   it('非 TS / JS 文件为空数组，不在清单中为 null', () => {
     expect(exportsOf('package.json')).toEqual([])
     expect(readExports(repo, listSourceFiles(repo), 'nope.ts')).toBeNull()

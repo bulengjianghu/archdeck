@@ -5,6 +5,7 @@
 import { mapEndpoint } from '../project'
 import type { Issue, LevelView, ModelIndex, ModuleEntity } from '../types'
 import { hasWildcard, matchRef, normalizeRef, staticPrefix } from './glob'
+import { indexFile, packageEntry } from './resolve'
 import { DEFAULT_MAX_LINES, type DirNode, type ExportMatch, type ExportedSymbol, type FileNodes, type LocalSource, type ModuleEntry, type SourceOwnership } from './types'
 
 /** G3、G5–G8：按 codeRefs 归属每个文件 */
@@ -61,42 +62,10 @@ export function moduleDir(module: Pick<ModuleEntity, 'codeRefs'>, files: Readonl
   return common.join('/')
 }
 
-const join = (dir: string, rel: string) => {
-  const parts = (dir ? `${dir}/${rel}` : rel).split('/')
-  const out: string[] = []
-  for (const p of parts) {
-    if (p === '' || p === '.') continue
-    if (p === '..') out.pop()
-    else out.push(p)
-  }
-  return out.join('/')
-}
-
-/** package.json 的 exports['.'] 或 main 指向的相对路径 */
-function packageTarget(pkg: { main?: string; exports?: unknown }): string[] {
-  const pick = (x: unknown): string | undefined => {
-    if (typeof x === 'string') return x
-    if (x && typeof x === 'object') {
-      const o = x as Record<string, unknown>
-      for (const k of ['import', 'default', 'types']) {
-        const v = pick(o[k])
-        if (v) return v
-      }
-    }
-    return undefined
-  }
-  const out: string[] = []
-  const e = pkg.exports
-  if (e !== undefined) {
-    const dot = e && typeof e === 'object' && !Array.isArray(e) && Object.keys(e).some(k => k.startsWith('.')) ? (e as Record<string, unknown>)['.'] : e
-    const t = pick(dot)
-    if (t) out.push(t)
-  }
-  if (pkg.main) out.push(pkg.main)
-  return out
-}
-
-/** G10：入口文件——entry → 模块目录下的 index.ts → 模块目录下 package.json 的 exports / main；按约定找到的须属于本模块子树 */
+/**
+ * G10：入口文件——描述的 entry；否则模块目录下有 package.json 时取包入口（K2，与依赖提取解析包名得到的文件相同），
+ * 没有时取模块目录下的 index.*（K2 的补全）；按约定找到的须属于本模块子树
+ */
 export function moduleEntry(index: ModelIndex, own: SourceOwnership, tree: Pick<LocalSource, 'files' | 'packages'>, moduleId: string): ModuleEntry | null {
   const m = index.modules.get(moduleId)
   if (!m) return null
@@ -107,12 +76,9 @@ export function moduleEntry(index: ModelIndex, own: SourceOwnership, tree: Pick<
   }
   const dir = moduleDir(m, files)
   if (dir === null) return null
-  const ok = (f: string) => files.has(f) && inSubtree(index, own, f, moduleId)
-  const index_ = join(dir, 'index.ts')
-  if (ok(index_)) return { file: index_, via: 'index' }
   const pkg = tree.packages[dir]
-  if (pkg) for (const t of packageTarget(pkg)) if (ok(join(dir, t))) return { file: join(dir, t), via: 'package' }
-  return null
+  const file = pkg ? packageEntry(dir, pkg, files) : indexFile(dir, files)
+  return file && inSubtree(index, own, file, moduleId) ? { file, via: pkg ? 'package' : 'index' } : null
 }
 
 /** 接口名去掉括号与泛型，与导出名比较（G12） */

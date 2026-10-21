@@ -32,10 +32,10 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 | 函数 | 做什么 | 规则 |
 |---|---|---|
 | `readCodeDeps(root, files, packages)` | 对清单中的脚本文件逐个解析（Vue 取 `<script>` 块），收集导入语句；说明符解析与再导出穿透见下；按绝对路径的修改时间与大小缓存每个文件的解析结果 | K1–K3 |
-| `createResolver(root, files, packages)` | 相对路径补全扩展名与 `/index.*`；裸说明符先按 `tsconfig*.json` 的 `paths`，再按工作区包名解析到包入口或子路径；解析不到返回 `null`（外部依赖） | K2 |
+| `readPathAliases(root, files)` · `createResolver(root, files, packages)` | 读出清单中各 `tsconfig*.json` 的 `paths`，交给模型层的 `specResolver`（[source.md §3](source.md)）解析；解析不到返回 `null`（外部依赖） | K2 |
 | `importTargets(via, names, exportsOf)` · `resolveImport(…, from, spec, names?)` | 一条导入的目标：命名导入沿再导出链追到声明文件（复用导出解析的 `exportsResolver`，最多 5 层）；其余以经由文件为目标；`resolveImport` 供写前判定按说明符解析 | K3 |
 
-- 工作区包：清单中每个 `package.json` 的 `name` → 所在目录；`<name>` 的入口依次取 `exports['.']`、`main`、`types`，指向不在清单中的产物（`dist/x.js`）时换成 `src/x.ts`，再退回 `src/index.ts`、`index.ts`。
+- 路径补全与包入口只有一套，在模型层（`completePath`、`packageEntry`，K2）：入口文件（G10）、导出解析（G11）与这里共用，模块入口与依赖的经由文件口径一致。
 - 一个文件的解析结果：`{ line, spec, kind, names | '*' | 'default' | null }[]`，与文件内容一起缓存；目标解析每次按当前清单做（清单变了结果跟着变）。
 - 性能（实测）：h5player 1657 个脚本文件首次提取 1.7 秒、缓存命中 0.2 秒；本项目约 170 个文件 0.16 秒。之后只重解析变化的文件。
 
@@ -96,7 +96,7 @@ type Verdict = 'allowed' | 'denied' | 'unconstrained'
 
 ## 5. agent 接口（接入层，`scripts/agent/`、`scripts/arch.ts`、`scripts/arch-mcp.ts`）
 
-查询核心 `createService({ modelRoot, root })`：按项目加载描述、源码清单、依赖、基线，算出 `GovernanceReport` 并缓存；`rescan` 重新读取。两种外壳只做参数解析与输出格式。
+查询核心 `createService({ modelRoot, root })`：按项目加载描述、源码清单、依赖、基线，算出 `GovernanceReport` 并缓存。每次查询前重新列出源码清单，比对输入的指纹（描述文本、清单与其中每个文件的修改时间与大小、基线文件的修改时间），有变化就重建（依赖提取按文件缓存，只重解析变了的文件），所以 MCP 长驻时新建文件、新加依赖后无需 `rescan` 即可 `locate`、`check`。`rescan` 总是重建，并与本会话上一次扫描（还没扫描过时为首次加载的结果）、与基线比较。两种外壳只做参数解析与输出格式。
 
 | 命令行 `npm run arch -- …` | MCP 工具 | 说明 | 写拦截记录 |
 |---|---|---|---|

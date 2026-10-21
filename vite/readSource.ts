@@ -10,7 +10,7 @@ import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import ts from 'typescript'
 import { loadModel } from '../src/model'
-import { LINE_COUNTED, type ExportedSymbol, type PackageEntry, type SourceFile, type SourcePayload, type SystemDef } from '../src/model'
+import { LINE_COUNTED, resolveRelative, type ExportedSymbol, type PackageEntry, type SourceFile, type SourcePayload, type SystemDef } from '../src/model'
 import { readProject } from './readModelDir'
 
 /** G17：超过这个大小不预览 */
@@ -170,26 +170,6 @@ export function readSourceFile(root: string, files: readonly string[], rel: stri
 
 const SCRIPT_EXT = /\.(m|c)?(t|j)sx?$/i
 
-/** 相对路径的模块说明符解析到清单中的文件 */
-function resolveModule(from: string, spec: string, files: ReadonlySet<string>): string | null {
-  if (!spec.startsWith('.')) return null
-  const base = path.posix.normalize(path.posix.join(path.posix.dirname(from), spec))
-  const stem = base.replace(/\.(m|c)?js$/, '')
-  const candidates = [
-    base,
-    `${stem}.ts`,
-    `${stem}.tsx`,
-    `${stem}.mts`,
-    `${stem}.js`,
-    `${stem}.jsx`,
-    `${stem}.d.ts`,
-    `${base}/index.ts`,
-    `${base}/index.tsx`,
-    `${base}/index.js`,
-  ]
-  return candidates.find(c => files.has(c)) ?? null
-}
-
 const clip = (text: string) => {
   const lines = text
     .replace(/^export\s+(default\s+)?(declare\s+)?/, '')
@@ -288,8 +268,9 @@ function collectExports(
     }
     if (!ts.isExportDeclaration(st)) continue
     const spec = st.moduleSpecifier && ts.isStringLiteral(st.moduleSpecifier) ? st.moduleSpecifier.text : undefined
-    const target = spec ? resolveModule(file, spec, files) : null
-    const sub = () => (target && depth < MAX_REEXPORT_DEPTH ? collectExports(root, target, files, depth + 1, memo, chain) : [])
+    const target = spec?.startsWith('.') ? resolveRelative(file, spec, files) : null
+    // 补全到非 TS / JS 文件（如 .vue）时不追
+    const sub = () => (target && SCRIPT_EXT.test(target) && depth < MAX_REEXPORT_DEPTH ? collectExports(root, target, files, depth + 1, memo, chain) : [])
     const clause = st.exportClause
     if (!clause) {
       // export * from './x'：不含默认导出

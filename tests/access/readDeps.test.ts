@@ -186,6 +186,38 @@ describe('Q2–Q6 agent 接口的查询核心', () => {
     expect(report.byVerdict.denied).toBe(1)
   })
 
+  it('长驻不过期：新建文件、新加依赖后无需 rescan 即可 locate、check，违规随之出现；删掉后随之消失', () => {
+    const s = svc()
+    expect(s.locate('src/fresh.ts')).toMatchObject({ status: 'missing' })
+    const before = s.overview().fileDeps
+    write(repo, 'src/fresh.ts', "import { Engine } from '@demo/core'\nexport const e = Engine\n")
+    expect(s.locate('src/fresh.ts')).toMatchObject({ status: 'owned', owners: ['top'] })
+    const r = s.check('src/fresh.ts', './side')
+    expect(r.resolved).toEqual([{ to: 'src/side.ts', via: 'src/side.ts' }])
+    expect(s.check('src/fresh.ts', '@demo/core', undefined, ['Engine']).verdict).toBe('denied')
+    expect(s.overview().fileDeps).toBe(before + 1)
+    expect(s.violations().some(v => v.from.startsWith('base'))).toBe(false)
+    write(repo, 'packages/core/src/fresh.ts', "import '../../../src/side'\n")
+    expect(s.violations().find(v => v.from.startsWith('base'))?.evidence).toEqual(['packages/core/src/fresh.ts:1 → src/side.ts'])
+    fs.rmSync(path.join(repo, 'packages/core/src/fresh.ts'))
+    // 改已有文件的依赖（修改时间与大小变化）同样生效
+    write(repo, 'src/fresh.ts', 'export const e = 1\n')
+    expect(s.overview().fileDeps).toBe(before)
+    fs.rmSync(path.join(repo, 'src/fresh.ts'))
+    expect(s.locate('src/fresh.ts')).toMatchObject({ status: 'missing' })
+  })
+
+  it('Q3：自动重建不移动「上一次扫描」——首次扫描与会话首次加载的结果比较', () => {
+    const s = svc()
+    const seen = s.overview().violations.open
+    write(repo, 'packages/core/src/fresh.ts', "import '../../../src/side'\n")
+    expect(s.overview().violations.open).toBe(seen + 1)
+    const scan = s.rescan()
+    expect(scan.sinceLastScan.added).toHaveLength(1)
+    fs.rmSync(path.join(repo, 'packages/core/src/fresh.ts'))
+    expect(s.rescan().sinceLastScan.removed).toEqual(scan.sinceLastScan.added)
+  })
+
   it('Q3：重新扫描与上一次、与基线比较；U7：生成基线后门禁不再失败', () => {
     const s = svc()
     const first = s.rescan()

@@ -1,10 +1,11 @@
 /**
- * 源码归属（docs/02-domain.md §2.13 G3–G14）：模型层的纯函数，按规则逐条验证。
+ * 源码归属（docs/02-domain.md §2.13 G3–G14，及 K2 的路径补全与包入口）：模型层的纯函数，按规则逐条验证。
  */
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_MAX_LINES,
   assignFiles,
+  completePath,
   fileNodes,
   fileTree,
   isLong,
@@ -15,8 +16,11 @@ import {
   moduleEntry,
   moduleFiles,
   moduleLines,
+  packageEntry,
   projectLevel,
+  resolveRelative,
   sourceIssues,
+  specResolver,
   staticPrefix,
   type ExportedSymbol,
   type RawFile,
@@ -197,6 +201,67 @@ describe('G10 入口文件', () => {
     const other = loadModel([...FILES, { path: 'x.yaml', text: 'modules: [{ id: z, name: Z, responsibility: z, codeRefs: [src/app/api/other.ts, src/app/api/client.ts] }]' }])
     const own3 = assignFiles(other.index, files, [])
     expect(moduleEntry(other.index, own3, tree, 'z')).toBeNull()
+  })
+})
+
+describe('G10 入口与 K2 包入口同一套', () => {
+  const pkgFiles = ['pkg/package.json', 'pkg/index.ts', 'pkg/src/index.ts', 'pkg/src/main.ts', 'ui/index.tsx', 'ui/Button.vue', 'app/main.ts']
+  const model = loadModel([
+    {
+      path: 'm.yaml',
+      text: 'modules: [{ id: pkg, name: Pkg, responsibility: p, codeRefs: [pkg/**] }, { id: ui, name: UI, responsibility: u, codeRefs: [ui/**] }, { id: app, name: App, responsibility: a, codeRefs: [app/**] }]',
+    },
+  ])
+  const ownP = assignFiles(model.index, pkgFiles, [])
+  const entryWith = (pkg: object) => moduleEntry(model.index, ownP, { files: pkgFiles, packages: { pkg } }, 'pkg')
+  it('模块目录有 package.json 时取包入口，优先于目录下的 index：main 指向不在清单中的产物 dist/….js 时换成 src/….ts', () => {
+    expect(entryWith({ main: 'dist/index.js' })).toEqual({ file: 'pkg/src/index.ts', via: 'package' })
+    expect(entryWith({ main: 'src/main.ts' })).toEqual({ file: 'pkg/src/main.ts', via: 'package' })
+    expect(entryWith({ types: 'dist/main.d.ts' })).toEqual({ file: 'pkg/src/main.ts', via: 'package' })
+    // 没有入口字段：退回 src/index.*，再退回 index.*
+    expect(entryWith({})).toEqual({ file: 'pkg/src/index.ts', via: 'package' })
+  })
+  it('与依赖提取解析包名得到的文件相同（U4 看的经由文件即入口）', () => {
+    for (const pkg of [{ main: 'dist/index.js' }, { main: 'src/main.ts' }, { exports: { '.': { require: './dist/main.cjs' } } }, {}]) {
+      const resolve = specResolver(pkgFiles, { pkg: { name: '@x/pkg', ...pkg } })
+      expect(entryWith(pkg)?.file).toBe(resolve('app/main.ts', '@x/pkg'))
+    }
+  })
+  it('没有 package.json 时取目录下的 index.*（按 K2 的扩展名）', () => {
+    expect(moduleEntry(model.index, ownP, { files: pkgFiles, packages: {} }, 'ui')).toEqual({ file: 'ui/index.tsx', via: 'index' })
+    expect(moduleEntry(model.index, ownP, { files: pkgFiles, packages: {} }, 'app')).toBeNull()
+  })
+})
+
+describe('K2 路径补全与包入口（模型层）', () => {
+  const set = new Set(['src/a.ts', 'src/b.vue', 'src/c.d.ts', 'src/lib/index.mts', 'src/m.mjs', 'core/src/index.ts', 'core/src/x.ts'])
+  it('原样 → .js 写法换成 .ts 等 → 补扩展名 → /index.*；规范化 . 与 ..', () => {
+    expect(completePath('src/a.js', set)).toBe('src/a.ts')
+    expect(completePath('src/b', set)).toBe('src/b.vue')
+    expect(completePath('src/c', set)).toBe('src/c.d.ts')
+    expect(completePath('src/lib', set)).toBe('src/lib/index.mts')
+    expect(completePath('src/m.mjs', set)).toBe('src/m.mjs')
+    expect(completePath('./src/lib/../a', set)).toBe('src/a.ts')
+    expect(completePath('src/none', set)).toBeNull()
+  })
+  it('相对路径从依赖方所在目录出发；越过根目录不命中；裸说明符不算相对路径', () => {
+    expect(resolveRelative('src/lib/index.mts', '../a', set)).toBe('src/a.ts')
+    expect(resolveRelative('src/a.ts', '../../src/a', set)).toBeNull()
+    expect(resolveRelative('src/a.ts', 'core', set)).toBeNull()
+  })
+  it('包入口：exports 的 . / import / default / types / require 条件 → main → types，产物退回 src', () => {
+    expect(packageEntry('core', { exports: { '.': { require: './dist/x.cjs' } } }, set)).toBe('core/src/x.ts')
+    expect(packageEntry('core', { exports: './src/x.ts', main: 'dist/index.js' }, set)).toBe('core/src/x.ts')
+    expect(packageEntry('core', { main: 'dist/index.js' }, set)).toBe('core/src/index.ts')
+    expect(packageEntry('core', {}, set)).toBe('core/src/index.ts')
+    expect(packageEntry('src', {}, new Set(['src/x.ts']))).toBeNull()
+  })
+  it('tsconfig paths 先于工作区包名；包名带子路径解析到包目录下', () => {
+    const r = specResolver([...set], { core: { name: '@x/core' } }, [{ prefix: '@/', suffix: '', targets: ['src/*'] }])
+    expect(r('src/a.ts', '@/lib')).toBe('src/lib/index.mts')
+    expect(r('src/a.ts', '@x/core')).toBe('core/src/index.ts')
+    expect(r('src/a.ts', '@x/core/src/x')).toBe('core/src/x.ts')
+    expect(r('src/a.ts', 'vue')).toBeNull()
   })
 })
 

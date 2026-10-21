@@ -9,7 +9,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
-import type { CodeDeps, DepKind, FileDep, PackageEntry } from '../src/model'
+import { joinPath, packageName, specResolver, type CodeDeps, type DepKind, type FileDep, type PackageEntry, type PathAlias } from '../src/model'
 import { exportsResolver } from './readSource'
 
 /** K1：参与提取的脚本文件 */
@@ -107,24 +107,7 @@ function importsOf(root: string, rel: string): ParsedImport[] {
   }
 }
 
-// ── 说明符解析（K2）──
-
-const EXTS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.vue', '.d.ts']
-
-const normalize = (p: string) => path.posix.normalize(p).replace(/^\.\//, '').replace(/\/$/, '')
-
-/** 一个路径（不含扩展名或带 .js 写法）补全到清单中的文件 */
-function complete(base: string, files: ReadonlySet<string>): string | null {
-  const b = normalize(base)
-  if (files.has(b)) return b
-  const stem = b.replace(/\.(m|c)?js$/, '')
-  for (const e of EXTS) if (files.has(stem + e)) return stem + e
-  for (const e of EXTS) if (files.has(`${b}/index${e}`)) return `${b}/index${e}`
-  return null
-}
-
-/** tsconfig 的 paths：模式前缀 → 目标模板（相对源码根目录，含 *） */
-export type PathAlias = { prefix: string; suffix: string; targets: string[] }
+// ── 说明符解析（K2）：解析规则在模型层（specResolver），这里只读 tsconfig ──
 
 /** K2：清单中各 tsconfig*.json 的 compilerOptions.paths（不追 extends） */
 export function readPathAliases(root: string, files: readonly string[]): PathAlias[] {
@@ -135,39 +118,17 @@ export function readPathAliases(root: string, files: readonly string[]): PathAli
     const opts = cfg.config?.compilerOptions
     if (!opts?.paths) continue
     const dir = path.posix.dirname(f) === '.' ? '' : path.posix.dirname(f)
-    const base = normalize(path.posix.join(dir, opts.baseUrl ?? '.'))
+    const base = joinPath(dir, opts.baseUrl ?? '.')
     for (const [pattern, targets] of Object.entries(opts.paths as Record<string, string[]>)) {
       const star = pattern.indexOf('*')
       out.push({
         prefix: star < 0 ? pattern : pattern.slice(0, star),
         suffix: star < 0 ? '' : pattern.slice(star + 1),
-        targets: targets.map(t => normalize(path.posix.join(base, t))),
+        targets: targets.map(t => joinPath(base, t)),
       })
     }
   }
   return out
-}
-
-/** 包入口：exports['.'] → main → types；指向不在清单中的产物时换成 src/….ts，再退回 src/index、index */
-function packageEntry(dir: string, pkg: PackageEntry, files: ReadonlySet<string>): string | null {
-  const pick = (x: unknown): string | undefined => {
-    if (typeof x === 'string') return x
-    if (x && typeof x === 'object') {
-      const o = x as Record<string, unknown>
-      for (const k of ['.', 'import', 'default', 'types', 'require']) {
-        const v = pick(o[k])
-        if (v) return v
-      }
-    }
-    return undefined
-  }
-  const candidates = [pick(pkg.exports), pkg.main, pkg.types].filter((c): c is string => !!c)
-  for (const c of candidates) {
-    const p = path.posix.join(dir, c)
-    const hit = complete(p, files) ?? complete(p.replace(/(^|\/)dist\//, '$1src/').replace(/\.d\.ts$|\.(m|c)?js$/, ''), files)
-    if (hit) return hit
-  }
-  return complete(path.posix.join(dir, 'src/index'), files) ?? complete(path.posix.join(dir, 'index'), files)
 }
 
 /** K2 的解析上下文：清单、包名 → 目录与入口、路径别名 */
@@ -176,38 +137,7 @@ export interface Resolver {
 }
 
 export function createResolver(root: string, files: readonly string[], packages: Record<string, PackageEntry>): Resolver {
-  const set = new Set(files)
-  const aliases = readPathAliases(root, files)
-  const byName = new Map<string, string>()
-  for (const [dir, pkg] of Object.entries(packages)) if (pkg.name && !byName.has(pkg.name)) byName.set(pkg.name, dir)
-  const entries = new Map<string, string | null>()
-  return {
-    resolve(from, spec) {
-      if (spec.startsWith('.') || spec.startsWith('/')) return complete(path.posix.join(path.posix.dirname(from), spec), set)
-      for (const a of aliases) {
-        if (!spec.startsWith(a.prefix) || !spec.endsWith(a.suffix)) continue
-        const mid = spec.slice(a.prefix.length, spec.length - a.suffix.length)
-        for (const t of a.targets) {
-          const hit = complete(t.replace('*', mid), set)
-          if (hit) return hit
-        }
-      }
-      const parts = spec.split('/')
-      const name = spec.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
-      const dir = byName.get(name)
-      if (dir === undefined) return null
-      const sub = spec.slice(name.length + 1)
-      if (sub) return complete(path.posix.join(dir, sub), set)
-      if (!entries.has(name)) entries.set(name, packageEntry(dir, packages[dir], set))
-      return entries.get(name)!
-    },
-  }
-}
-
-/** 外部依赖的包名 */
-const packageName = (spec: string) => {
-  const parts = spec.split('/')
-  return spec.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
+  return { resolve: specResolver(files, packages, readPathAliases(root, files)) }
 }
 
 /** K3：一条导入的目标：命名导入按名称追到声明文件，其余为经由文件 */

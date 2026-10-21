@@ -2,8 +2,11 @@
  * agent 接口的查询核心（docs/architecture/governance.md §5）：按项目加载描述、源码清单、代码事实与基线，调用模型层的架构治理。
  * 命令行（scripts/arch.ts）与 MCP 服务器（scripts/arch-mcp.ts）只是两层外壳，同一输入给出同一结果（Q6）。
  * 只读描述、规则与基线；写的只有拦截记录（Q5）。生成基线只给命令行用（U7）。
+ * 每次查询前比对输入的指纹（描述、源码清单与各文件的修改时间与大小、基线），有变化就重建，长驻时不会拿过期的事实判定。
  */
+import fs from 'node:fs'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import {
   assignFiles,
   checkDependency,
@@ -28,7 +31,7 @@ import {
 import { listProjectIds, readProject, resolveModelRoot } from '../../vite/readModelDir'
 import { readSourceTree } from '../../vite/readSource'
 import { readCodeDeps, resolveImport } from '../../vite/readDeps'
-import { appendLedger, governanceDir, readBaseline, readLedger, sourceCommit, writeBaseline } from '../../vite/governanceStore'
+import { appendLedger, BASELINE_FILE, governanceDir, readBaseline, readLedger, sourceCommit, writeBaseline } from '../../vite/governanceStore'
 
 export interface ServiceOptions {
   /** 本包根目录 */
@@ -47,16 +50,36 @@ export interface Loaded {
   own: SourceOwnership
   entryOf: EntryOf
   report: GovernanceReport
+  /** 输入的指纹（stampOf） */
+  stamp: string
 }
 
 export class ServiceError extends Error {}
+
+/** 输入的指纹：描述文本、源码清单与清单中每个文件的修改时间与大小、基线文件的修改时间；依赖提取按同样的键缓存，重建只重读变了的文件 */
+function stampOf(model: readonly { path: string; text: string }[], tree: LocalSource, gov: string): string {
+  const h = createHash('sha1')
+  const stat = (abs: string) => {
+    try {
+      const st = fs.statSync(abs)
+      return `${st.mtimeMs}:${st.size}`
+    } catch {
+      return '-'
+    }
+  }
+  for (const f of model) h.update(`${f.path}\0${f.text}\0`)
+  for (const f of tree.files) h.update(`${f}\0${stat(path.join(tree.root, f))}\0`)
+  h.update(`baseline\0${stat(path.join(gov, BASELINE_FILE))}`)
+  return h.digest('hex')
+}
 
 export function createService(opts: ServiceOptions) {
   const env = opts.env ?? process.env
   const modelRoot = resolveModelRoot(opts.root, env)
   const cache = new Map<string, Loaded>()
-  /** Q3：本会话上一次扫描的违规键 */
+  /** Q3：本会话上一次扫描的违规键（还没扫描过时为首次加载的结果） */
   const lastScan = new Map<string, Set<string>>()
+  const violationKeys = (r: GovernanceReport) => new Set(r.violations.filter(v => v.status !== 'allowed').map(v => v.key))
 
   /** Q6：项目缺省为 ARCH_PROJECT，否则为唯一项目 */
   function projectId(p?: string): string {
@@ -67,21 +90,26 @@ export function createService(opts: ServiceOptions) {
     return id
   }
 
+  /** 指纹没变就用缓存；fresh 时无论如何重建（rescan、baseline） */
   function load(p?: string, fresh = false): Loaded {
     const project = projectId(p)
-    const hit = cache.get(project)
-    if (hit && !fresh) return hit
     const payload = readProject(modelRoot, project, opts.root)!
-    const { index, issues } = loadModel(payload.files)
     const tree = readSourceTree(modelRoot, project, opts.root, env)
     // K8：源码不在本地时没有事实
     if (!tree || tree.status !== 'local')
       throw new ServiceError(`项目 ${project} 的源码不在本地（${tree?.status === 'absent' ? (tree.tried ?? tree.reason) : '未知'}），没有代码事实`)
+    const gov = governanceDir(modelRoot, project)
+    const stamp = stampOf(payload.files, tree, gov)
+    const hit = cache.get(project)
+    if (hit && !fresh && hit.stamp === stamp) return hit
+    const { index, issues } = loadModel(payload.files)
     const own = assignFiles(index, tree.files, index.model.sourceIgnore)
     const deps = readCodeDeps(tree.root, tree.files, tree.packages)
-    const report = governanceReport(index, own, tree, deps, readBaseline(governanceDir(modelRoot, project)))
-    const loaded: Loaded = { project, index, issues, tree, files: new Set(tree.files), own, entryOf: entryResolver(index, own, tree), report }
+    const report = governanceReport(index, own, tree, deps, readBaseline(gov))
+    const loaded: Loaded = { project, index, issues, tree, files: new Set(tree.files), own, entryOf: entryResolver(index, own, tree), report, stamp }
     cache.set(project, loaded)
+    // Q3：本会话还没扫描过时，「上一次扫描」是首次加载的结果，不随自动重建移动
+    if (!lastScan.has(project)) lastScan.set(project, violationKeys(report))
     return loaded
   }
 
@@ -220,17 +248,10 @@ export function createService(opts: ServiceOptions) {
     /** Q3：重新扫描，与基线、与本会话上一次扫描比较 */
     rescan(p?: string) {
       const project = projectId(p)
-      const before =
-        lastScan.get(project) ??
-        new Set(
-          cache
-            .get(project)
-            ?.report.violations.filter(v => v.status !== 'allowed')
-            .map(v => v.key) ?? [],
-        )
+      const before = lastScan.get(project) ?? new Set<string>()
       const l = load(project, true)
       const r = l.report
-      const now_ = new Set(r.violations.filter(v => v.status !== 'allowed').map(v => v.key))
+      const now_ = violationKeys(r)
       lastScan.set(project, now_)
       const baseKeys = new Set(r.baseline?.violations ?? [])
       const out = {
