@@ -10,6 +10,7 @@ import {
   matchExports,
   moduleEntry,
   moduleFiles,
+  moduleLines,
   sourceIssues,
   type DirNode,
   type ExportMatch,
@@ -58,6 +59,8 @@ export function createFiles({ state, index, view, sync, design }: FilesInputs) {
     return new Set(moduleFiles(index.value, ownership.value, s.id))
   })
   const filesOf = (moduleId: string): string[] => (index.value && ownership.value ? moduleFiles(index.value, ownership.value, moduleId) : [])
+  /** G21：模块文件的行数合计与超长文件数 */
+  const linesOf = (moduleId: string) => moduleLines(filesOf(moduleId), lines.value, maxLines.value)
   const entryOf = (moduleId: string): ModuleEntry | null =>
     index.value && ownership.value && local.value ? moduleEntry(index.value, ownership.value, local.value, moduleId) : null
   /** G12：入口导出与模块 provides 的对应 */
@@ -83,6 +86,7 @@ export function createFiles({ state, index, view, sync, design }: FilesInputs) {
     moduleFiles: moduleFileSet,
     warnings,
     filesOf,
+    linesOf,
     entryOf,
     exportMatch,
     entryModulesOf,

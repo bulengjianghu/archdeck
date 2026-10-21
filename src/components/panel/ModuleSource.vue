@@ -2,7 +2,7 @@
 /** 模块面板的「源代码」一节（SR-5）：模块的文件（子树并集，G4，带行数、超长标红，并给合计，G21）、入口文件（G10）、入口导出与 provides 的对应（G12） */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
-import { isLong, moduleLines, moduleName } from '@/model'
+import { isLong, moduleName } from '@/model'
 import Section from './Section.vue'
 import ExportSection from './ExportSection.vue'
 
@@ -14,7 +14,7 @@ const local = computed(() => desk.files.payload.value?.status === 'local')
 const files = computed(() => desk.files.filesOf(props.id))
 const shown = computed(() => (showAll.value ? files.value : files.value.slice(0, LIMIT)))
 const entry = computed(() => desk.files.entryOf(props.id))
-const total = computed(() => moduleLines(files.value, desk.files.lines.value, desk.files.maxLines.value))
+const total = computed(() => desk.files.linesOf(props.id))
 const long = (f: string) => isLong(desk.files.lines.value[f], desk.files.maxLines.value)
 const VIA = { entry: '描述指定', index: '约定 index.ts', package: 'package.json' } as const
 /** 文件直接归属的模块不是本模块时注明（子模块的文件） */

@@ -6,8 +6,10 @@ import { computed, type ComputedRef, type Ref, type ShallowRef } from 'vue'
 import {
   buildSequence,
   currentMessage,
+  forEachStep,
   frameHome,
   landFrame,
+  messagesOf,
   outlineScenario,
   pairReturns,
   participation,
@@ -17,6 +19,7 @@ import {
   scenarioHome,
   scenarioModules,
   stepAfter,
+  triggerOf,
   walkedCount,
   type LevelView,
   type ModelIndex,
@@ -24,6 +27,7 @@ import {
   type Participation,
   type ReturnPairs,
   type RouteItem,
+  type ScenarioEntity,
   type ScenarioLevelView,
   type ScenarioPlan,
   type SequenceModel,
@@ -129,8 +133,37 @@ export function createRun({ state, index, levelId, plan, view, positioned, fileO
   const outline = computed<OutlineNode[]>(() => (plan.value ? outlineScenario(plan.value, choices.value) : []))
   const participants = computed<ReadonlySet<string>>(() => (index.value && plan.value ? scenarioModules(index.value, plan.value) : new Set()))
 
+  /** 场景列表（D-1、R4a）：全部场景及其触发者与消息条数，与是否在回放无关 */
+  const catalog = computed<{ scenario: ScenarioEntity; trigger: string | undefined; messages: number }[]>(() => {
+    const idx = index.value
+    if (!idx) return []
+    return [...idx.scenarios.values()].map(s => ({ scenario: s, trigger: triggerOf(idx, s.id), messages: messagesOf(idx.scenarios, s.id).length }))
+  })
+  /** 当前场景的触发者 */
+  const trigger = computed(() => (index.value && scenario.value ? triggerOf(index.value, scenario.value.id) : undefined))
+  /** 当前场景用 ref 引用的场景 ID */
+  const refs = computed<string[]>(() => {
+    const out = new Set<string>()
+    if (scenario.value) forEachStep(scenario.value.steps, s => s.kind === 'ref' && out.add(s.scenario))
+    return [...out]
+  })
+  /** 用 ref 引用了当前场景的场景 */
+  const referencedBy = computed<ScenarioEntity[]>(() => {
+    const id = scenarioId.value
+    if (!index.value || !id) return []
+    return [...index.value.scenarios.values()].filter(o => {
+      let hit = false
+      forEachStep(o.steps, s => (hit ||= s.kind === 'ref' && s.scenario === id))
+      return hit
+    })
+  })
+
   return {
     scenario,
+    catalog,
+    trigger,
+    refs,
+    referencedBy,
     plan,
     choices,
     path,

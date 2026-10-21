@@ -5,7 +5,7 @@
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
-import { forEachStep, moduleName, triggerOf } from '@/model'
+import { moduleName } from '@/model'
 import Section from './Section.vue'
 import Markdown from './Markdown.vue'
 import DesignNote from './DesignNote.vue'
@@ -13,25 +13,15 @@ import DesignNote from './DesignNote.vue'
 const desk = useDesk()
 const idx = computed(() => desk.index.value!)
 const sc = computed(() => desk.run.scenario.value!)
-const trigger = computed(() => triggerOf(idx.value, sc.value.id))
+const trigger = desk.run.trigger
 const empty = computed(() => (desk.run.scenarioView.value?.messages.length ?? 0) === 0)
 
 const participants = computed(() => {
   const plan = desk.run.plan.value
   return plan ? [...new Set([...plan.frames.values()].flatMap(f => [f.from, f.to]))] : []
 })
-const refs = computed(() => {
-  const out = new Set<string>()
-  forEachStep(sc.value.steps, s => s.kind === 'ref' && out.add(s.scenario))
-  return [...out]
-})
-const referencedBy = computed(() =>
-  [...idx.value.scenarios.values()].filter(o => {
-    let hit = false
-    forEachStep(o.steps, s => (hit ||= s.kind === 'ref' && s.scenario === sc.value.id))
-    return hit
-  }),
-)
+const refs = desk.run.refs
+const referencedBy = desk.run.referencedBy
 function pointAt(id: string) {
   if (idx.value.actors.has(id)) desk.select({ kind: 'actor', id })
   else desk.revealModule(id)

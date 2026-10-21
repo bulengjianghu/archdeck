@@ -50,108 +50,142 @@ export function mapEndpoint(index: ModelIndex, parentId: string, id: string): En
 
 export const DEFAULT_PROJECT_OPTIONS: ProjectOptions = { showBoundaries: true }
 
+/** 一个层次的投影输入：父模块、可见性与其可见子模块 */
+interface LevelScope {
+  index: ModelIndex
+  parentId: string
+  opts: ProjectOptions
+  visible: (id: string) => boolean
+  children: string[]
+}
+
+/** 关系投影到本层的结果：视图边、出现的参与者与边界节点 */
+interface Projected {
+  edges: EdgeCollector
+  actorIds: Set<string>
+  boundaryOrder: string[]
+}
+
 export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectOptions = DEFAULT_PROJECT_OPTIONS): LevelView {
   const visible = makeVisibility(index, opts)
-  const parentPath = index.pathOf.get(parentId)
-  if (!parentPath || !visible(parentId)) throw new Error(`未知或已隐藏的层次：${parentId}`)
-
+  if (!index.pathOf.has(parentId) || !visible(parentId)) throw new Error(`未知或已隐藏的层次：${parentId}`)
   const children = (index.childrenOf.get(parentId) ?? []).filter(visible)
+  const scope: LevelScope = { index, parentId, opts, visible, children }
   const layered = children.length > 0 && children.every(id => index.modules.get(id)!.kind === 'layer')
-  const visibleChildren = (id: string) => (index.childrenOf.get(id) ?? []).filter(visible)
-
-  const depth = parentPath.length - 1
 
   const relations = index.model.relations.filter(r => {
     if (opts.relationTypes && opts.relationTypes.length > 0 && !opts.relationTypes.includes(r.type)) return false
     return (index.actors.has(r.from) || visible(r.from)) && (index.actors.has(r.to) || visible(r.to))
   })
-  const actorIds = new Set<string>()
+  const proj: Projected = { edges: new EdgeCollector(!layered && !!opts.mergeTypes), actorIds: new Set(), boundaryOrder: [] }
+  for (const r of relations) projectRelation(scope, proj, r)
+  addScenarioEnds(scope, proj)
 
-  const edges = new EdgeCollector(!layered && !!opts.mergeTypes)
-  const boundaryOrder: string[] = []
-  const coreEdges = new EdgeCollector(false)
-  const coreOf = new Map<string, Set<string>>()
-  if (layered) for (const l of children) coreOf.set(l, new Set(visibleChildren(l).filter(c => index.modules.get(c)!.core)))
-
-  for (const r of relations) {
-    const a = mapEndpoint(index, parentId, r.from)
-    const b = mapEndpoint(index, parentId, r.to)
-    if (a.kind === 'skip' || b.kind === 'skip') continue
-    if (a.kind === 'external' && b.kind === 'external') continue
-
-    // L6、A2：参与者与本层子树之间的关系；与本层子树无关的参与者不出现
-    if (a.kind === 'actor' || b.kind === 'actor') {
-      const local = a.kind === 'local' ? a : b.kind === 'local' ? b : null
-      if (!local) continue
-      actorIds.add(a.kind === 'actor' ? a.node : (b as { node: string }).node)
-      edges.add(a.node, b.node, r, local.exact)
-      if (layered) {
-        const c = coreRep(index.pathOf.get(local === a ? r.from : r.to)!, depth, coreOf)
-        if (c.core) coreEdges.add(a.kind === 'actor' ? a.node : c.node, b.kind === 'actor' ? b.node : c.node, r, c.exact)
-      }
-      continue
-    }
-
-    if (a.kind === 'local' && b.kind === 'local') {
-      if (a.node === b.node) continue
-      edges.add(a.node, b.node, r, a.exact && b.exact)
-      if (layered) {
-        const ca = coreRep(index.pathOf.get(r.from)!, depth, coreOf)
-        const cb = coreRep(index.pathOf.get(r.to)!, depth, coreOf)
-        // 两端都没落到核心模块时与层间边重复，不再记录
-        if (ca.core || cb.core) coreEdges.add(ca.node, cb.node, r, ca.exact && cb.exact)
-      }
-      continue
-    }
-    if (!opts.showBoundaries) continue
-    const ext = a.kind === 'external' ? a : (b as Extract<Endpoint, { kind: 'external' }>)
-    const boundaryId = `boundary:${ext.node}`
-    if (!boundaryOrder.includes(ext.node)) boundaryOrder.push(ext.node)
-    const exact = a.exact && b.exact
-    if (a.kind === 'external') edges.add(boundaryId, (b as { node: string }).node, r, exact)
-    else edges.add(a.node, boundaryId, r, exact)
+  const tail = [...boundaryNodes(scope, proj.boundaryOrder), ...actorNodes(index, proj.actorIds)]
+  if (!layered) {
+    const nodes = children.map(id => childNode(scope, id, 'module'))
+    return { mode: 'graph', parentId, nodes: [...nodes, ...tail], edges: proj.edges.result() }
   }
+  return layeredOverview(scope, relations, proj, tail)
+}
 
-  // 舞台：场景中的帧走到本层外或来自参与者时，即使结构上没有关系也补上对应的边界节点 / 参与者（P2、P11）
+/** 关系 a → b 投影到本层：参与者与本层子树之间的边、本层子模块之间的边、与外部的边界边 */
+function projectRelation({ index, parentId, opts }: LevelScope, proj: Projected, r: RelationEntity) {
+  const a = mapEndpoint(index, parentId, r.from)
+  const b = mapEndpoint(index, parentId, r.to)
+  if (a.kind === 'skip' || b.kind === 'skip') return
+  if (a.kind === 'external' && b.kind === 'external') return
+
+  // L6、A2：参与者与本层子树之间的关系；与本层子树无关的参与者不出现
+  if (a.kind === 'actor' || b.kind === 'actor') {
+    const local = a.kind === 'local' ? a : b.kind === 'local' ? b : null
+    if (!local) return
+    proj.actorIds.add(a.kind === 'actor' ? a.node : b.node)
+    proj.edges.add(a.node, b.node, r, local.exact)
+    return
+  }
+  if (a.kind === 'local' && b.kind === 'local') {
+    if (a.node !== b.node) proj.edges.add(a.node, b.node, r, a.exact && b.exact)
+    return
+  }
+  if (opts.showBoundaries) addBoundaryEdge(proj, a, b, r)
+}
+
+/** 一端在本层外：外部端点画成边界节点 */
+function addBoundaryEdge(proj: Projected, a: Exclude<Endpoint, { kind: 'skip' }>, b: Exclude<Endpoint, { kind: 'skip' }>, r: RelationEntity) {
+  const ext = a.kind === 'external' ? a : b
+  const boundaryId = `boundary:${ext.node}`
+  if (!proj.boundaryOrder.includes(ext.node)) proj.boundaryOrder.push(ext.node)
+  const exact = a.exact && b.exact
+  if (a.kind === 'external') proj.edges.add(boundaryId, b.node, r, exact)
+  else proj.edges.add(a.node, boundaryId, r, exact)
+}
+
+/** 舞台：场景中的帧走到本层外或来自参与者时，即使结构上没有关系也补上对应的边界节点 / 参与者（P2、P11） */
+function addScenarioEnds({ index, parentId, opts }: LevelScope, proj: Projected) {
   for (const { from, to } of opts.scenarioEnds ?? []) {
     const a = mapEndpoint(index, parentId, from)
     const b = mapEndpoint(index, parentId, to)
     if (a.kind !== 'local' && b.kind !== 'local') continue
     for (const ep of [a, b]) {
-      if (ep.kind === 'actor') actorIds.add(ep.node)
-      else if (ep.kind === 'external' && opts.showBoundaries && !boundaryOrder.includes(ep.node)) boundaryOrder.push(ep.node)
+      if (ep.kind === 'actor') proj.actorIds.add(ep.node)
+      else if (ep.kind === 'external' && opts.showBoundaries && !proj.boundaryOrder.includes(ep.node)) proj.boundaryOrder.push(ep.node)
     }
   }
+}
 
-  const nodes: ViewNode[] = children.map(id => ({
-    id,
-    moduleId: id,
-    role: layered ? 'layer' : 'module',
-    hasChildren: visibleChildren(id).length > 0,
-  }))
-  let bands: Band[] | undefined
-  if (layered) {
-    bands = children.map(l => {
-      const m = index.modules.get(l)!
-      const core = visibleChildren(l).filter(c => coreOf.get(l)!.has(c))
-      for (const c of core) nodes.push({ id: c, moduleId: c, role: 'core', hasChildren: visibleChildren(c).length > 0, layerId: l })
-      return { layerId: l, order: m.order ?? Infinity, coreModuleIds: core, hiddenCount: visibleChildren(l).length - core.length }
-    })
-  }
-  // L4：边界节点按层次顺序排列，与时序图泳道一致（P9）
+const visibleChildren = ({ index, visible }: LevelScope, id: string) => (index.childrenOf.get(id) ?? []).filter(visible)
+
+function childNode(scope: LevelScope, id: string, role: 'module' | 'layer'): ViewNode {
+  return { id, moduleId: id, role, hasChildren: visibleChildren(scope, id).length > 0 }
+}
+
+/** L4：边界节点按层次顺序排列，与时序图泳道一致（P9） */
+function boundaryNodes(scope: LevelScope, boundaryOrder: string[]): ViewNode[] {
+  const { index } = scope
   boundaryOrder.sort((x, y) => compareKeys(hierarchyKey(index, x), hierarchyKey(index, y)))
-  for (const b of boundaryOrder) {
-    nodes.push({ id: `boundary:${b}`, moduleId: b, role: 'boundary', hasChildren: visibleChildren(b).length > 0 })
-  }
-  for (const a of index.model.actors) if (actorIds.has(a.id)) nodes.push({ id: a.id, moduleId: a.id, role: 'actor', hasChildren: false, actorKind: a.kind })
+  return boundaryOrder.map(b => ({ id: `boundary:${b}`, moduleId: b, role: 'boundary', hasChildren: visibleChildren(scope, b).length > 0 }))
+}
 
-  return {
-    mode: layered ? 'layered' : 'graph',
-    parentId,
-    nodes,
-    edges: edges.result(),
-    ...(layered ? { bands, coreEdges: coreEdges.result() } : {}),
+function actorNodes(index: ModelIndex, actorIds: ReadonlySet<string>): ViewNode[] {
+  return index.model.actors.filter(a => actorIds.has(a.id)).map(a => ({ id: a.id, moduleId: a.id, role: 'actor', hasChildren: false, actorKind: a.kind }))
+}
+
+/** 分层总览（O）：层画成带，带内只画核心模块，另算核心模块之间的核心跨层边 */
+function layeredOverview(scope: LevelScope, relations: readonly RelationEntity[], proj: Projected, tail: ViewNode[]): LevelView {
+  const { index, parentId, children } = scope
+  const coreOf = new Map<string, Set<string>>()
+  for (const l of children) coreOf.set(l, new Set(visibleChildren(scope, l).filter(c => index.modules.get(c)!.core)))
+  const nodes = children.map(id => childNode(scope, id, 'layer'))
+  const bands: Band[] = children.map(l => {
+    const m = index.modules.get(l)!
+    const kids = visibleChildren(scope, l)
+    const core = kids.filter(c => coreOf.get(l)!.has(c))
+    for (const c of core) nodes.push({ id: c, moduleId: c, role: 'core', hasChildren: visibleChildren(scope, c).length > 0, layerId: l })
+    return { layerId: l, order: m.order ?? Infinity, coreModuleIds: core, hiddenCount: kids.length - core.length }
+  })
+  const coreEdges = new EdgeCollector(false)
+  for (const r of relations) projectCoreRelation(scope, coreOf, coreEdges, r)
+  return { mode: 'layered', parentId, nodes: [...nodes, ...tail], edges: proj.edges.result(), bands, coreEdges: coreEdges.result() }
+}
+
+/** 核心跨层边：关系端点在层内落到核心模块时用核心模块；两端都没落到核心模块时与层间边重复，不记录 */
+function projectCoreRelation({ index, parentId }: LevelScope, coreOf: Map<string, Set<string>>, coreEdges: EdgeCollector, r: RelationEntity) {
+  const depth = index.pathOf.get(parentId)!.length - 1
+  const a = mapEndpoint(index, parentId, r.from)
+  const b = mapEndpoint(index, parentId, r.to)
+  if (a.kind === 'skip' || b.kind === 'skip') return
+  if (a.kind === 'actor' || b.kind === 'actor') {
+    const local = a.kind === 'local' ? a : b.kind === 'local' ? b : null
+    if (!local) return
+    const c = coreRep(index.pathOf.get(local === a ? r.from : r.to)!, depth, coreOf)
+    if (c.core) coreEdges.add(a.kind === 'actor' ? a.node : c.node, b.kind === 'actor' ? b.node : c.node, r, c.exact)
+    return
   }
+  if (a.kind !== 'local' || b.kind !== 'local' || a.node === b.node) return
+  const ca = coreRep(index.pathOf.get(r.from)!, depth, coreOf)
+  const cb = coreRep(index.pathOf.get(r.to)!, depth, coreOf)
+  if (ca.core || cb.core) coreEdges.add(ca.node, cb.node, r, ca.exact && cb.exact)
 }
 
 /** 端点在层内落到核心模块时用核心模块，否则用层本身 */

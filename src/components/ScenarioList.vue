@@ -5,21 +5,16 @@
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
-import { messagesOf, moduleName, triggerOf } from '@/model'
+import { moduleName } from '@/model'
 
 const emit = defineEmits<{ picked: [] }>()
 const desk = useDesk()
 const scope = ref<'level' | 'all'>('level')
 const trigger = ref('')
 
-const all = computed(() => {
-  const idx = desk.index.value
-  if (!idx) return []
-  return [...idx.scenarios.values()].map(s => {
-    const by = triggerOf(idx, s.id)
-    return { s, by, byName: by ? moduleName(idx, by) : '—', count: messagesOf(idx.scenarios, s.id).length }
-  })
-})
+const all = computed(() =>
+  desk.run.catalog.value.map(({ scenario: s, trigger: by, messages }) => ({ s, by, byName: by ? moduleName(desk.index.value!, by) : '—', count: messages })),
+)
 const related = computed(() => new Set(desk.index.value?.scenariosOf.get(desk.levelId.value) ?? []))
 const triggers = computed(() => [...new Map(all.value.filter(x => x.by).map(x => [x.by!, x.byName])).entries()])
 const shown = computed(() => all.value.filter(x => (scope.value === 'all' || related.value.has(x.s.id)) && (!trigger.value || x.by === trigger.value)))
