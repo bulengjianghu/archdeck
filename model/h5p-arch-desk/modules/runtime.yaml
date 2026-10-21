@@ -15,18 +15,23 @@ modules:
   - id: present.sequence.lanes
     name: 泳道与消息
     parent: present.sequence
-    responsibility: 画参与者头部与生命线、按序自上而下画消息箭头与标签；同步 / 异步 / 显式返回三种线型（隐含的返回不画）；内部活动画成生命线上的激活条；外部参与者泳道在最左，用竖线隔出系统边界。
+    responsibility: 画参与者头部与生命线、按序自上而下画消息箭头与标签；同步 / 异步 / 显式返回三种线型（隐含的返回不画）；内部活动画成生命线上的激活条；外部参与者泳道在最左，用竖线隔出系统边界；同一父模块的泳道头上方画分组框标父模块名（P13）；焦点突出时突出的消息用强调色，其余路径上的消息变灰（R15）；悬停泳道头或消息时上交信息卡请求。
     codeRefs: [src/components/sequence/SequenceLanes.vue]
   - id: present.sequence.fragments
     name: 组合框
     parent: present.sequence
-    responsibility: 画 alt / loop / par / ref 组合框：左上角标类型，loop 标循环条件，par 标「并行（串行回放）」，ref 显示被引用场景名；alt 显示全部分支与条件，已选分支正常显示、未选分支淡化，未到达的分支点各分支都淡化；框内消息在本层全部合并为内部活动时，框缩成一行。
+    responsibility: 画 alt / loop / par / ref 组合框：左上角标类型，loop 标循环条件，par 标「并行（串行回放）」，ref 显示被引用场景名；alt 显示全部分支与条件，已选分支正常显示（条件加下划线）、未选分支淡化，未到达的分支点各分支都淡化；每个分支条件可单击，改走这一支（F6e）；框内消息在本层全部合并为内部活动时，框缩成一行。
     codeRefs: [src/components/sequence/SequenceFragments.vue]
   - id: present.sequence.interact
     name: 时序图交互
     parent: present.sequence
-    responsibility: 单击消息 = 指向这一步（R13）：播放头前进或后退到它，焦点跟随它；在未选分支上的消息同样可单击，先改选该分支再跳转；当前消息高亮并自动滚动到可见；悬停消息时在结构图上预览对应的边（D-7）。标题栏切换分屏方向（左右 ⇆ 上下）。
+    responsibility: 单击消息 = 指向这一步（R13）：播放头前进或后退到它，焦点跟随它；在未选分支上的消息同样可单击，先改选该分支再跳转；单击 alt 的分支条件 = chooseBranch（F6e）；当前消息高亮并自动滚动到可见；悬停消息时在结构图上预览对应的边（D-7），悬停片刻后弹出信息卡（W-9）；把焦点突出（R15）交给泳道与消息。
     codeRefs: [src/components/sequence/SequenceView.vue]
+  - id: present.sequence.card
+    name: 信息卡
+    parent: present.sequence
+    responsibility: 悬停泳道头或消息片刻后在指针旁弹出摘要，移开即消失，不改变焦点（W-9）。泳道：名称、类别、完整路径、所属层、职责第一句（P13）；消息：类型、两端、作用、输入（携带的数据）、输出（配对返回的数据，F7）。完整内容仍在属性面板。
+    codeRefs: [src/components/sequence/InfoCard.vue]
 
   - id: present.panel.scenario
     name: 场景面板
@@ -36,18 +41,24 @@ modules:
   - id: present.panel.step
     name: 步骤面板
     parent: present.panel
-    responsibility: 当前步骤的类型、序号、所在组合框路径与分支条件（D-5）；from → to 的真实端点与在本层投影到的节点（均可点击）；本层一条可见消息覆盖多帧时列出这些帧；经由接口的签名与语义、携带的数据结构；引用的关系；说明。
+    responsibility: 先回答「这一步做什么」（D-5）：作用（标签与说明）；输入（携带的数据）与输出（配对返回的数据，本步是返回时为回应的调用，异步为「不等待返回」，没写显式返回时指向接口签名，F7）；数据结构；经由接口。其后是真实端点与本层投影、本层一条可见消息覆盖的多帧；结构关系（对应关系与「推断」标记）默认折叠，可「在画布上显示」当前消息两端的静态关系（V9）；最后是出处。
     codeRefs: [src/components/panel/StepPanel.vue]
   - id: present.panel.run
     name: 运行信息
     parent: present.panel
-    responsibility: 运行视角下模块、关系、聚合边、参与者面板顶部的一节，回答「在这次流程中做了什么」（V6）：本场景中参与的步骤（按顺序，可单击跳转，标出离播放头最近的一步）、在本层投影下收发的消息、本场景中用到的接口与数据；面板原有的结构信息折叠在其下方。
+    responsibility: 运行视角下模块、关系、聚合边、参与者面板顶部的一节，回答「在这次流程中做了什么」（V6）：本场景中参与的步骤（按顺序，可单击跳转，标出离播放头最近的一步）、在本层投影下收发的消息、本场景中用到的接口与数据；模块与参与者可「在画布上显示」它在本层节点的静态关系（V9）；面板原有的结构信息折叠在其下方。
     codeRefs: [src/components/panel/RunSection.vue]
   - id: present.panel.actor
     name: 参与者面板
     parent: present.panel
     responsibility: 外部参与者的名称、类别（用户 / 外部系统 / 时间）、说明；与系统的入口关系；由它触发的场景（可打开）。
     codeRefs: [src/components/panel/ActorPanel.vue]
+
+  - id: present.player.route
+    name: 路线总览
+    parent: present.player
+    responsibility: 常驻显示路线（F6f）：路径上依次经过的分支点与所选条件、截止处待选的分支点；每项下拉列出全部条件，改选即 chooseBranch（F6e）；改选丢弃了其后的选择时提示丢弃的个数数秒。
+    codeRefs: [src/components/RouteBar.vue]
 
   - id: present.nav-tree.modules
     name: 模块树
@@ -57,14 +68,14 @@ modules:
   - id: present.nav-tree.steps
     name: 步骤树
     parent: present.nav-tree
-    responsibility: 步骤大纲的逐行呈现（T6）：loop、par 分支、ref 为可折叠的分组，alt 列出全部分支与条件，空分支占位。状态 → 树：帧标出已走过 / 当前 / 未走到 / 未选分支 / 未到达，本层可见的帧显示本层可见消息序号（与时序图、控制条一致），不可见的标「本层不可见」，当前帧滚到可见（T7）。树 → 意图：单击帧 = seek（R13），单击分支标题 = chooseBranch（F6b），「开头」= seek(null)，悬停帧在结构图上预览落点（T8）。
+    responsibility: 步骤大纲的逐行呈现（T6）：loop、par 分支、ref 为可折叠的分组，alt 列出全部分支与条件，空分支占位。状态 → 树：帧标出已走过 / 当前 / 未走到 / 未选分支 / 未到达，本层可见的帧显示本层可见消息序号（与时序图、控制条一致），不可见的标「本层不可见」，当前帧滚到可见（T7）。树 → 意图：单击帧 = seek（R13），单击分支标题 = chooseBranch（F6b、F6e），「开头」= seek(null)，悬停帧在结构图上预览落点（T8）。
     codeRefs: [src/components/tree/StepTree.vue, src/components/tree/StepTreeNode.vue]
 
   # ── 视图状态层 ──────────────────────────────────────────
   - id: state.transition.focus
     name: 视角与焦点规则
     parent: state.transition
-    responsibility: 视角（结构 / 运行，由是否打开场景决定）与焦点（结构视角 = 选中或当前父模块；运行视角 = 跟随或钉住二选一）由视图状态推出（V1、V2）；运行视角下「指向」对象即钉住，下钻钉住被下钻的模块（V3）；取消选中回到跟随（V4）。
+    responsibility: 视角（结构 / 运行，由是否打开场景决定）与焦点（结构视角 = 选中或当前父模块；运行视角 = 跟随或钉住二选一）由视图状态推出（V1、V2）；运行视角下「指向」对象即钉住，下钻钉住被下钻的模块（V3）；取消选中回到跟随（V4）。焦点突出（emphasisOf，R15）同样由状态推出：跟随时为当前可见消息及其配对帧所在的消息，钉住时为钉住对象参与的消息，停在开头不突出。
     codeRefs: [src/state/transition/focus.ts]
   - id: state.transition.navigation
     name: 导航规则
@@ -74,7 +85,7 @@ modules:
   - id: state.transition.playback
     name: 回放规则
     parent: state.transition
-    responsibility: 回放的会话规则：回放只由用户驱动（R1）——打开场景停在开头（R12，从带步骤的链接进入停在该步）、退出场景、前进 / 后退（在第一步后退回到开头）、指向某一步或回到开头、选分支（规则 R1、R5、R6、R10、R12、R13、F6、V7）。「下一步是哪一帧」「到达某帧需要哪些分支选择」「改选后保留哪些选择」都调用模型层的场景查询。
+    responsibility: 回放的会话规则：回放只由用户驱动（R1）——打开场景停在开头（R12，从带步骤的链接进入停在该步）、退出场景、前进 / 后退（在第一步后退回到开头）、指向某一步或回到开头、选分支（任何分支点，不在路径上时先补齐到达它的选择；播放头不在新路径上时停在分支点之前，F6e）（规则 R1、R5、R6、R10、R12、R13、F6、F6e、V7）。「下一步是哪一帧」「到达某帧需要哪些分支选择」「改选后保留哪些选择」都调用模型层的场景查询。
     principle: |
       - 播放头以**帧 ID** 记录，与层次无关；层次变化后仍是同一帧（R6）；为空表示停在开头。
       - 指向某一步（R13）：播放头移到该步（向前或向后）；所需的分支选择由模型层 choicesFor 给出；画面等同从头单步到这一步。
@@ -89,13 +100,13 @@ modules:
   - id: state.layout.sequence
     name: 时序图排布
     parent: state.layout
-    responsibility: 给时序模型算坐标：外部参与者泳道在最左，其余泳道按结构图中节点的横坐标排序（规则 P9）；泳道宽度按名称自适应；消息纵向累加；组合框包住其子消息并按嵌套深度内缩。结果由协调者按输入（层次、场景、已选分支、结构图坐标）派生并缓存。
+    responsibility: 给时序模型算坐标：外部参与者泳道在最左，其余泳道按层次顺序（排序键）排列，同一父模块内的本层子模块改按结构图中节点的横坐标（P9）；父模块相同的连续泳道成一组，分组框画在泳道头上方（P13）；泳道宽度按名称自适应；消息纵向累加；组合框包住其子消息并按嵌套深度内缩。结果由协调者按输入（层次、场景、已选分支、结构图坐标）派生。
     principle: 规则简单、同步计算，不调用 elk（技术选型 §3.3）。
     codeRefs: [src/layout/sequence.ts]
   - id: state.layout.stage
     name: 舞台叠加
     parent: state.layout
-    responsibility: 把本层帧投影与播放头换成画布要画的数据与坐标：本层参与的节点、走过的边与步骤序号的位置、当前消息、未建模临时线的走线、停在分支点时各选项首条消息的预览位置、当前帧本层不可见（V5、P7、P10、P11、R11）。
+    responsibility: 把本层帧投影与播放头换成画布要画的数据与坐标：本层参与的节点、走过的边与步骤序号的位置、当前消息、未建模临时线的走线、停在分支点时各选项首条消息的预览位置、当前帧本层不可见（V5、P7、P10、P11、R11）。舞台显示 stageDisplay：按参与节点、回放边、静态关系显示方式与「在画布上显示」的对象，给出每个节点与视图边显示、淡化还是隐藏（V5、V8、V9）。
     principle: 纯函数，与时序图排布对称——呈现层只按它着色，不自己映射端点或算坐标。
     codeRefs: [src/layout/stage.ts]
 
@@ -103,7 +114,7 @@ modules:
   - id: model.scenario.flatten
     name: 回放计划
     parent: model.scenario
-    responsibility: 把步骤树展开成回放计划（帧树）：ref 内联子场景并记为 ref 组合框（F3）；loop 展开一遍并标注循环条件（F4）；par 各分支按书写顺序串行并标注并行（F5）；alt 处分叉为分支点，每个选项一棵子树（F6）。每帧带 ID、所在组合框路径，以及对应的结构关系（显式引用或按 S13 推断，标明是否推断）。
+    responsibility: 把步骤树展开成回放计划（帧树）：ref 内联子场景并记为 ref 组合框（F3）；loop 展开一遍并标注循环条件（F4）；par 各分支按书写顺序串行并标注并行（F5）；alt 处分叉为分支点，每个选项一棵子树（F6）。每帧带 ID、所在组合框路径，以及对应的结构关系（显式引用或按 S13 推断，标明是否推断）。调用与显式返回配对（pairReturns，F7）：按书写顺序以栈匹配，alt 各分支从进入分支点时的栈开始，async 不配对。
     principle: |
       帧 ID = 场景 ID + 步骤 id；步骤没写 id 时用它在树中的路径（如 `sc.open#4.alt0.1`）（F2）。ref 内联时 ID 加上引用处前缀，同一子场景被引用两次也不冲突。
       绑定关系 bindRelation（S12、S13）：显式引用优先；否则两端之间恰好一条运行时关系（calls / dataflow / event，event 按反向）即认定并标为推断；Validator 用同一个函数，校验与界面结果一致。
@@ -111,7 +122,7 @@ modules:
   - id: model.scenario.path
     name: 回放路径
     parent: model.scenario
-    responsibility: 按已选分支从回放计划走出线性帧序列，遇到未选分支的分支点即截止并报告；回答分支选择的组合问题：在某个分支点改选后保留哪些选择（F6b）、到达某一帧需要哪些选择（R13）。
+    responsibility: 按已选分支从回放计划走出线性帧序列，遇到未选分支的分支点即截止并报告；回答分支选择的组合问题：在某个分支点改选后保留哪些选择（F6b）、到达某一帧需要哪些选择（R13）、直选任意分支点需要哪些选择与分支点之前的帧（choicesForBranch / pointPrefix，F6e）；给出路线（路径上的分支点与所选、待选的分支点，routeOf，F6f）。
     codeRefs: [src/model/scenario/path.ts]
   - id: model.scenario.level
     name: 帧的层次投影
@@ -135,7 +146,7 @@ modules:
   - id: model.scenario.sequence
     name: 时序模型
     parent: model.scenario
-    responsibility: 由本层的可见消息产出时序模型：参与者、消息（同步 / 异步 / 显式返回 / 内部活动）、组合框（类型、条件、包住的消息区间；alt 含全部分支及哪一支已选）；框内消息全部合并为内部活动时标记为折叠（P6）。
+    responsibility: 由本层的可见消息产出时序模型：参与者（父模块、模块路径、所属层、层次排序键 hierarchyKey，本层非层子模块标为可按横坐标排，P9、P13）、消息（同步 / 异步 / 显式返回 / 内部活动）、组合框（类型、条件、包住的消息区间；alt 含全部分支、选项序号及哪一支已选）；框内消息全部合并为内部活动时标记为折叠（P6）。
     codeRefs: [src/model/scenario/sequence.ts]
 
 relations:
@@ -157,6 +168,10 @@ relations:
   - {id: rel.p3.run-act, from: present.panel.run, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击参与的步骤 → seek（R13）}
   - {id: rel.p2.seq-lanes, from: present.sequence.interact, to: present.sequence.lanes, type: depends}
   - {id: rel.p2.seq-fragments, from: present.sequence.interact, to: present.sequence.fragments, type: depends}
+  - {id: rel.p8.seq-card, from: present.sequence.interact, to: present.sequence.card, type: depends, description: 悬停片刻后弹出信息卡（W-9）}
+  - {id: rel.p8.desk-stage, from: present.desk-view, to: present.canvas, type: depends, description: 创建并注入舞台显示（静态关系显示方式按项目记在本地；在画布上显示的临时对象，V8、V9）}
+  - {id: rel.p8.step-stage, from: present.panel.step, to: present.canvas, type: depends, description: 「在画布上显示」当前消息两端的静态关系（V9）}
+  - {id: rel.p8.run-stage, from: present.panel.run, to: present.canvas, type: depends, description: 「在画布上显示」钉住对象的静态关系（V9）}
   - {id: rel.p2.panel-scenario, from: present.panel.dispatch, to: present.panel.scenario, type: depends}
   - {id: rel.p2.panel-step, from: present.panel.dispatch, to: present.panel.step, type: depends}
   - {id: rel.p2.panel-actor, from: present.panel.dispatch, to: present.panel.actor, type: depends}
@@ -173,7 +188,12 @@ relations:
   - {id: rel.p6.steps-read, from: present.nav-tree.steps, to: state.desk.projection, type: depends, payload: [ds.OutlineNode, ds.ScenarioLevelView, ds.ViewState], description: 步骤大纲、本层可见消息序号、播放头}
   - {id: rel.p6.steps-act, from: present.nav-tree.steps, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击帧 → seek（R13）；单击分支标题 → chooseBranch；「开头」→ seek(null)；悬停 → setHover}
   - {id: rel.p2.seq-read, from: present.sequence.interact, to: state.desk.projection, type: depends, payload: [ds.PositionedSequence, ds.ViewState], description: 读取定位好的时序图与当前位置}
-  - {id: rel.p2.seq-act, from: present.sequence.interact, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击消息（含未选分支上的）→ seek（R13）；悬停 → setHover}
+  - {id: rel.p2.seq-act, from: present.sequence.interact, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击消息（含未选分支上的）→ seek（R13）；单击 alt 分支条件 → chooseBranch（F6e）；悬停 → setHover}
+  - {id: rel.p8.seq-emphasis, from: present.sequence.interact, to: state.desk.projection, type: depends, payload: [ds.ViewState], description: 焦点突出的可见消息（R15）}
+  - {id: rel.p8.card-read, from: present.sequence.card, to: state.desk.projection, type: depends, payload: [ds.ScenarioPlan, ds.ReturnPairs], description: 帧的数据与配对返回（输出）}
+  - {id: rel.p8.route-read, from: present.player.route, to: state.desk.projection, type: depends, payload: [ds.RouteItem], description: 路线（F6f）}
+  - {id: rel.p8.route-act, from: present.player.route, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 下拉改选 → chooseBranch，返回被丢弃的选择个数用于提示（F6f）}
+  - {id: rel.p8.flow-stage-display, from: present.canvas.flow, to: state.layout.stage, type: calls, interface: if.layout.stageDisplay, payload: [ds.LevelView, ds.StageDisplay], description: 每个节点与边显示、淡化还是隐藏（V5、V8、V9）}
   - id: rel.p2.flow-playback
     from: present.canvas.flow
     to: state.desk.projection
@@ -181,7 +201,7 @@ relations:
     payload: [ds.ScenarioLevelView, ds.ViewState]
     description: 当前消息落在哪条视图边 / 哪个节点、已走过哪些、分支点各选项的预览边
   - {id: rel.p2.flow-step, from: present.canvas.flow, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击步骤序号 → seek（R13）；单击分支预览序号 → chooseBranch；单击节点 / 边仍是 select（运行视角下即钉住）}
-  - {id: rel.p2.step-read, from: present.panel.step, to: state.desk.projection, type: depends, payload: [ds.Frame, ds.ScenarioLevelView]}
+  - {id: rel.p2.step-read, from: present.panel.step, to: state.desk.projection, type: depends, payload: [ds.Frame, ds.ScenarioLevelView, ds.ReturnPairs], description: 当前帧、本层投影与配对返回（输出，F7）}
   - {id: rel.p2.step-act, from: present.panel.step, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 端点点击 → revealModule；关系点击 → revealRelation}
   - {id: rel.p2.scenario-act, from: present.panel.scenario, to: state.desk.actions, type: calls, interface: if.desk.actions, description: ref → openScenario；「跳到场景所在层次」→ goTo；参与模块 → revealModule}
   - {id: rel.p2.actor-act, from: present.panel.actor, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 打开由它触发的场景}
@@ -204,7 +224,9 @@ relations:
     interface: if.model.planScenario
     payload: [ds.ScenarioPlan]
     description: 打开场景时展开一次，与层次无关
-  - {id: rel.p2.projection-path, from: state.desk.projection, to: model.scenario.path, type: calls, interface: if.model.resolvePath, payload: [ds.ScenarioPlan, ds.Frame], description: 已选分支变化时重算路径}
+  - {id: rel.p2.projection-path, from: state.desk.projection, to: model.scenario.path, type: calls, interface: if.model.resolvePath, payload: [ds.ScenarioPlan, ds.Frame, ds.RouteItem], description: 已选分支变化时重算路径与路线（routeOf，F6f）}
+  - {id: rel.p8.projection-pairs, from: state.desk.projection, to: model.scenario.flatten, type: calls, interface: if.model.pairReturns, payload: [ds.ReturnPairs], description: 打开场景时算一次调用与返回的配对（F7）}
+  - {id: rel.p8.projection-emphasis, from: state.desk.projection, to: state.transition.focus, type: calls, interface: if.state.transition, payload: [ds.ViewState, ds.ScenarioLevelView, ds.ReturnPairs, ds.Participation], description: emphasisOf：焦点突出的可见消息（R15）}
   - id: rel.p2.projection-level
     from: state.desk.projection
     to: model.scenario.level
@@ -222,11 +244,11 @@ relations:
     description: 同步计算；泳道顺序参考结构图布局
   - {id: rel.p5.projection-stage, from: state.desk.projection, to: state.layout.stage, type: calls, interface: if.layout.stageOverlay, payload: [ds.ScenarioLevelView, ds.PositionedView, ds.StageOverlay], description: 运行视角下派生舞台叠加}
   - {id: rel.p5.stage-runner, from: state.layout.stage, to: state.layout.runner, type: depends, payload: [ds.PositionedView], description: 用结构图坐标算步骤序号与临时线的位置}
-  - {id: rel.p2.seqlayout-positions, from: state.layout.sequence, to: state.layout.runner, type: depends, payload: [ds.PositionedView], description: 读取结构图中节点的横坐标决定泳道顺序}
+  - {id: rel.p2.seqlayout-positions, from: state.layout.sequence, to: state.layout.runner, type: depends, payload: [ds.PositionedView], description: 同一父模块内的本层子模块按结构图中节点的横坐标排（P9）}
   - {id: rel.p2.seqlayout-types, from: state.layout.sequence, to: model.types, type: depends, payload: [ds.SequenceModel]}
 
   # 视图状态 → 模型（转移规则需要的查询）
-  - {id: rel.p2.playback-path, from: state.transition.playback, to: model.scenario.path, type: calls, interface: if.model.resolvePath, description: 是否停在分支点；改选后保留哪些选择（F6b）；到达某帧需要的选择（R13）}
+  - {id: rel.p2.playback-path, from: state.transition.playback, to: model.scenario.path, type: calls, interface: if.model.resolvePath, description: 是否停在分支点；改选后保留哪些选择（F6b）；到达某帧需要的选择（R13）；直选分支需要的选择与分支点之前的帧（F6e）}
   - {id: rel.p2.playback-level, from: state.transition.playback, to: model.scenario.level, type: calls, interface: if.model.projectScenario, description: 本层的下一步 / 上一步（R7）；指向某帧时的落点（R13）}
   - {id: rel.p2.nav-projector, from: state.transition.navigation, to: model.projector, type: calls, interface: if.model.projectLevel, description: nearestVisibleLevel（N12）}
   - {id: rel.p3.nav-existing, from: state.transition.navigation, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: nearestExisting（N5、N11）}
@@ -239,6 +261,7 @@ relations:
   - {id: rel.p2.level-endpoints, from: model.scenario.level, to: model.projector.endpoints, type: calls, interface: if.model.mapEndpoint, description: 与结构投影共用同一套端点规则}
   - {id: rel.p2.level-edgeid, from: model.scenario.level, to: model.projector.collector, type: depends, description: 用 edgeId 规则算出帧对应的视图边 ID}
   - {id: rel.p2.level-sequence, from: model.scenario.level, to: model.scenario.sequence, type: dataflow, payload: [ds.ScenarioLevelView], description: 本层的可见消息交给时序模型}
+  - {id: rel.p8.sequence-hierarchy, from: model.scenario.sequence, to: model.projector.hierarchy, type: calls, interface: if.model.hierarchyKey, description: 参与者的层次排序键（P9）}
   - {id: rel.p2.path-plan, from: model.scenario.path, to: model.scenario.flatten, type: depends, payload: [ds.ScenarioPlan]}
   - {id: rel.p2.flatten-index, from: model.scenario.flatten, to: model.pipeline.indexer, type: depends, payload: [ds.ModelIndex], description: 读取场景表以内联 ref；读取关系表以绑定关系（S13）}
   - {id: rel.p3.validator-bind, from: model.pipeline.validator, to: model.scenario.flatten, type: calls, description: S5a / S13 与回放共用 bindRelation}
@@ -258,6 +281,7 @@ interfaces:
       // TransitionContext: { index: ModelIndex; plan?: ScenarioPlan; levelView?: LevelView; scenarioView?: ScenarioLevelView }
       perspectiveOf(state): 'structure' | 'run'
       focusOf(state): { kind: 'selection' | 'pinned'; selection } | { kind: 'level'; levelId } | { kind: 'follow'; frameId }
+      emphasisOf(state, view: ScenarioLevelView | null, pairs: ReturnPairs | null, pinned: Participation | null): Set<number> | null   // R15；null = 不突出
     semantics: 纯函数；非法动作返回原状态（不抛错）；同样输入同样输出。规则清单中每条至少一个单测。
   - id: if.state.urlCodec
     name: URL 编解码
@@ -273,6 +297,12 @@ interfaces:
       bindRelation(index: ModelIndex, msg: { kind; from; to; relation? }):
         { relation?: string; inferred: boolean; reverse: boolean; issue?: 'mismatch' | 'not-runtime' | 'unrelated' }   // S5a、S12、S13
     semantics: 纯函数；校验已保证 ref 无环，展开必然终止。
+  - id: if.model.pairReturns
+    name: pairReturns
+    owner: model.scenario.flatten
+    signature: |
+      pairReturns(plan: ScenarioPlan): ReturnPairs   // F7：帧 ID ↔ 配对帧 ID
+    semantics: 纯函数，与层次、已选分支无关；一条调用被多个分支中的返回回应时取书写顺序的第一个。
   - id: if.model.resolvePath
     name: resolvePath
     owner: model.scenario.path
@@ -280,6 +310,9 @@ interfaces:
       resolvePath(plan: ScenarioPlan, choices: ReadonlyMap<string, number>): { frames: Frame[]; pending?: BranchPoint; points: BranchPoint[] }
       chooseBranch(plan, choices, pointId: string, option: number): Map<string, number>   // F6b：改选后丢弃其后的选择
       choicesFor(plan, choices, frameId: string): Map<string, number> | null             // R13：到达该帧需要的选择（尽量保留现有选择）
+      choicesForBranch(plan, choices, pointId: string, option: number): Map<string, number> | null   // F6e：直选任意分支点
+      pointPrefix(plan, choices, pointId: string): Frame[]                                // F6e：路径上分支点之前的帧
+      routeOf(plan, choices): RouteItem[]                                                 // F6f：路线
       choiceList(plan, choices): number[]; choicesFromList(plan, list: number[]): Map<string, number>   // F6c：URL 有序编码
     semantics: pending 为路径截止处未选分支的分支点；无效的选择（分支点不在路径上、序号越界）被忽略。
   - id: if.model.projectScenario
@@ -324,7 +357,7 @@ interfaces:
     owner: state.layout.sequence
     signature: |
       layoutSequence(model: SequenceModel, structure?: PositionedView | null): PositionedSequence
-    semantics: 同步、纯函数；参与者泳道在最左，其余按 structure 中节点横坐标排序。
+    semantics: 同步、纯函数；参与者泳道在最左，其余按层次排序键排列，同一父模块内的本层子模块按 structure 中节点横坐标（P9）；父模块相同的连续泳道成组（P13）。
   - id: if.layout.stageOverlay
     name: stageOverlay
     owner: state.layout.stage
@@ -332,6 +365,13 @@ interfaces:
       stageOverlay(sv: ScenarioLevelView, pv: PositionedView, frameId: string | null,
                    options?: { option: number; label: string; landing: Landing | null }[]): StageOverlay
     semantics: 纯函数；只给出数据与坐标（参与的节点、走过的边与步骤序号、当前消息、未建模临时线的走线、分支预览的位置），画布只按它着色。
+  - id: if.layout.stageDisplay
+    name: stageDisplay
+    owner: state.layout.stage
+    signature: |
+      stageDisplay(input: { view: LevelView; participants: Map<string, 'path' | 'other'>; playEdges: Set<string>;
+                            mode: 'hide' | 'dim' | 'show'; reveal: Set<string> }): StageDisplay
+    semantics: 纯函数（V5、V8、V9）：回放边始终显示；参与路径的节点显示、只在未选分支处的淡化；其余按显示方式；在画布上显示的对象的静态边及对端照常；带始终显示。布局不变。
 
 dataStructures:
   - id: ds.ActorDef
@@ -434,7 +474,8 @@ dataStructures:
     name: SequenceModel
     definition: |
       interface SequenceModel {
-        participants: { nodeId: string; id: string; name: string; kind: 'module' | 'boundary' | 'actor' }[]
+        participants: { nodeId: string; id: string; name: string; kind: 'module' | 'boundary' | 'actor'
+                        parentId?: string; path: string[]; layer?: string; key: number[]; byX: boolean }[]   // P9、P13
         messages: {
           index: number; from: string; to: string; label: string; frameIds: string[]
           kind: 'call' | 'async' | 'return' | 'internal' | 'empty'     // empty：空分支占位
@@ -443,7 +484,7 @@ dataStructures:
         fragments: {
           id: string; kind: 'alt' | 'loop' | 'par' | 'ref'; label: string; depth: number
           first: number; last: number; collapsed: boolean
-          branches?: { label: string; chosen: boolean | null; first: number; last: number }[]   // alt / par；null = 未到达
+          branches?: { option: number; label: string; chosen: boolean | null; first: number; last: number }[]   // alt / par；null = 未到达；option 供直选（F6e）
         }[]
       }
     description: 当前层次的时序图内容（无坐标）：计划全貌，路径上的消息与回放的可见消息一一对应，未选分支与未到达的部分也列出。
@@ -453,6 +494,8 @@ dataStructures:
       interface PositionedSequence {
         model: SequenceModel
         lanes: Map<string, { x: number; w: number }>
+        groups: { parentId: string; x: number; w: number }[]   // P13 分组框
+        headY: number                   // 泳道头纵坐标（有分组时下移）
         boundaryX?: number              // 参与者与系统内泳道之间的分隔线
         messages: { y: number }[]
         fragments: { x: number; y: number; w: number; h: number; branchY: number[] }[]   // branchY：第 2 个起各分支的分隔线
@@ -471,6 +514,24 @@ dataStructures:
         hiddenCurrent: boolean                                       // R11
       }
     description: 舞台叠加：画布在运行视角下要画的回放数据与坐标（V5）。
+  - id: ds.StageDisplay
+    name: StageDisplay
+    definition: |
+      interface StageDisplay {
+        nodes: Map<string, 'show' | 'dim' | 'hide'>
+        edges: Map<string, 'show' | 'dim' | 'hide'>
+      }
+    description: 舞台显示：运行视角下每个视图节点与视图边显示、淡化还是隐藏（V5、V8、V9）。
+  - id: ds.ReturnPairs
+    name: ReturnPairs
+    definition: |
+      type ReturnPairs = ReadonlyMap<string, string>   // 帧 ID ↔ 配对帧 ID（双向）
+    description: 调用与显式返回的配对（F7）；步骤的输出、焦点突出与信息卡都用它。
+  - id: ds.RouteItem
+    name: RouteItem
+    definition: |
+      interface RouteItem { pointId: string; when: string[]; chosen: number | null }   // chosen 为 null：截止处待选
+    description: 路线的一项（F6f）：路径上依次经过的分支点与所选选项，以及截止处待选的分支点。
   - id: ds.ViewState
     name: ViewState
     definition: |

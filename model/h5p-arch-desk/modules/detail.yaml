@@ -11,7 +11,8 @@ modules:
       - **变淡**：有焦点时，与焦点不相邻的节点和边变淡；分层总览里带不参与变淡。
       - **适应画布**：内容外框直接取自布局结果，不依赖 Vue Flow 对节点尺寸的测量，只等画布容器有尺寸；切换层次、画布容器尺寸变化（进入运行视角、切换分屏方向、拖动分隔条、折叠两侧栏）后重新适应。
       - **写 store 而非传属性**：节点与边通过 setNodes / setEdges 写入；属性同步在「上一层有选中、切回总览」时会被跳过。
-      - **舞台**（运行视角）：本层参与场景的节点与走过的边突出，其余变淡但不隐藏，布局不变（V5）。
+      - **舞台**（运行视角）：布局不变，按舞台显示（stageDisplay）决定每个节点与边显示、淡化还是隐藏：默认只显示参与本场景的节点与回放边，不参与的按显示方式隐藏 / 淡显 / 全显（V5、V8，左下角切换），「在画布上显示」的对象的静态边照常（V9）；隐藏时适应画布只取可见节点。
+      - **焦点突出**（R15）：不属于突出消息的走过的边与步骤序号淡为灰色。
       - **回放叠加**（运行视角）：按当前可见消息给对应视图边加「当前步骤」态并沿步骤方向流动（可与边的箭头相反，P10）、端点节点加「活动」态；已走过的边保留淡色并标步骤序号；内部活动只高亮节点；
         本层两节点之间没有视图边时，回放期间临时画一条「结构中未建模」虚线，不参与布局，离开这一步即消失（P11）；当前帧在本层不可见时提示「下钻 / 到上一层查看」（R11）。
       - **点击含义**（运行视角）：单击节点 / 边仍是选中，即钉住焦点（V3）；单击边上的步骤序号 = 指向这一步（R13）。
@@ -87,7 +88,7 @@ modules:
   - id: present.nav.legend
     name: 图例
     parent: present.nav
-    responsibility: 关系类型的颜色与线型、聚合线宽、可下钻与目标态的节点样式说明、外部参与者与系统边界；回放中追加当前步骤 / 已走过 / 内部活动 / 分支预览 / 同步与异步的图例。
+    responsibility: 关系类型的颜色与线型、聚合线宽、可下钻与目标态的节点样式说明、外部参与者与系统边界；回放中追加当前步骤 / 已走过 / 内部活动 / 分支预览 / 同步与异步的图例，以及灰色的含义与当前的静态关系显示方式。
     codeRefs: [src/components/Legend.vue]
 
   # ── 视图状态层 ──────────────────────────────────────────
@@ -104,7 +105,7 @@ modules:
   - id: state.desk.projection
     name: 视图派生
     parent: state.desk
-    responsibility: 由视图状态与模型派生一切要画的数据（全部是 computed，调用纯函数）：层次视图；打开场景时的回放计划、回放路径、本层的帧投影与可见消息、时序模型与时序图坐标，以及导航树用的步骤大纲与参与模块；设计版本的差异。
+    responsibility: 由视图状态与模型派生一切要画的数据（全部是 computed，调用纯函数）：层次视图；打开场景时的回放计划、调用与返回的配对、回放路径与路线、本层的帧投影与可见消息、焦点突出、舞台参与节点、时序模型与时序图坐标，以及导航树用的步骤大纲与参与模块；设计版本的差异。
   - id: state.desk.actions
     name: dispatch 与操作
     parent: state.desk
@@ -136,7 +137,7 @@ modules:
   - id: state.layout.boundaries
     name: 边界节点排布
     parent: state.layout
-    responsibility: 边界节点统一排在内部结构下方一行，按所连内部模块的平均横坐标排序以减少交叉；边界边画成曲线。外部参与者：用户类排在内部结构上方一行，外部系统与时间类排在右侧一列；内部结构外画系统边界虚线框。
+    responsibility: 边界节点统一排在内部结构下方一行，按视图给出的层次顺序从左到右排列（L4，与时序图泳道一致）；边界边画成曲线。外部参与者：用户类排在内部结构上方一行，外部系统与时间类排在右侧一列；内部结构外画系统边界虚线框。
   - id: state.layout.runner
     name: 布局入口与缓存
     parent: state.layout
@@ -188,6 +189,10 @@ modules:
     name: 分层总览
     parent: model.projector
     responsibility: 子模块全是层时产出带（层序、核心模块、隐藏数）与核心跨层边（端点落到核心模块，否则落到层）。
+  - id: model.projector.hierarchy
+    name: 层次顺序
+    parent: model.projector
+    responsibility: 模块在层次中的排序键 hierarchyKey（P9、L4）：从根下到模块的路径上每一级一项，层按 order、其他按描述顺序；逐项比较即得层次顺序，同一父模块的模块相邻、上层在前、祖先在后代之前。投影按它排边界节点，时序模型按它排泳道。
 
 relations:
   # 呈现层内部
@@ -343,6 +348,13 @@ interfaces:
       projectLevel(index: ModelIndex, parentId: string, opts?: ProjectOptions): LevelView
       nearestVisibleLevel(index: ModelIndex, levelId: string, opts: ProjectOptions): string   // N12
     semantics: 层次不存在或被「只看现状」隐藏时抛错（调用方先用 nearestVisibleLevel 取合法层次）；同样的输入得到同样的输出（边 ID 稳定）。
+  - id: if.model.hierarchyKey
+    name: hierarchyKey
+    owner: model.projector.hierarchy
+    signature: |
+      hierarchyKey(index: ModelIndex, id: string): number[]   // 每级两项：[0, order]（层）或 [1, 描述顺序]；参与者为空
+      compareKeys(a: number[], b: number[]): number          // 逐项比较，前缀较短者在前
+    semantics: 纯函数；结构图边界节点行与时序图泳道共用，两张图的外部模块顺序一致。
   - id: if.model.diffModels
     name: diffModels
     owner: model.diff
