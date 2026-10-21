@@ -53,7 +53,7 @@ moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
 | `matchExports(index, id, exports)` | 模块的接口（`moduleInterfaces`：`provides` 加上 `owner` 在本模块子树内的接口）的名称（去掉括号与泛型）对导出名：`matched`、`undescribed`（导出未描述）、`unexported`（描述未导出）；默认导出不参与 | G12 |
 | `fileNodes(index, view, owners)` | 归属模块逐个 `mapEndpoint` 到当前层次：`local` → 子模块节点，`external` → 边界节点（视图中有时），`skip` → 不高亮（`self: true`）；分层总览另加路径上的核心模块节点 | G14 |
 | `sourceIssues(index, own, tree)` | 每个冲突文件、未归属文件一条 warning（`source.conflict` / `source.unowned`），`entry` 不在清单中一条 warning（`source.entry`，定位到描述出处） | G6、G7、G9、G10 |
-| `fileTree(files, own)` | 按 `/` 组成目录树，目录带文件数与未归属数，目录在前、按名称排序 | — |
+| `fileTree(files, own)` | 按 `/` 组成目录树，目录带文件数、未归属数与忽略数，内部文件全部忽略的目录标为忽略；目录在前、按名称排序 | G18 |
 
 复杂度：`assignFiles` 为 `O(文件数 × codeRefs 条数 × 路径长度)`，5000 个文件、几百条 `codeRefs` 时是几十毫秒；模型或文件清单变化时才重算。
 
@@ -85,7 +85,7 @@ interface SourceOwnership {
 interface ModuleEntry { file: string; via: 'entry' | 'index' | 'package'; missing?: boolean }
 interface ExportMatch { matched: { interfaceId: string; symbol: ExportedSymbol }[]; undescribed: ExportedSymbol[]; unexported: string[] }
 interface FileNodes { nodes: Set<string>; self: boolean }
-interface DirNode { name: string; path: string; dirs: DirNode[]; files: string[]; count: number; unowned: number }
+interface DirNode { name: string; path: string; dirs: DirNode[]; files: string[]; count: number; unowned: number; ignored: boolean }   // ignored：子树内文件全部忽略（G18）
 ```
 
 ## 5. 接口
