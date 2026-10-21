@@ -1,6 +1,6 @@
 # ADR-0003：二期动态视角的架构
 
-- 状态：已采纳（已实现，实现中的规则细化见 [ADR-0005](./0005-phase2-implementation-refinements.md)；结论 2 的时钟同步与结论 4 中与播放有关的部分被 [ADR-0006](./0006-workbench-navigation.md) 修订）
+- 状态：已采纳（已实现，实现中的规则细化见 [ADR-0005](./0005-phase2-implementation-refinements.md)；结论 2 的时钟同步与结论 4 中与播放有关的部分被 [ADR-0006](./0006-workbench-navigation.md) 修订；结论 4 的焦点（跟随 / 钉住）被 [ADR-0012](./0012-unified-selection.md) 修订为统一的选中）
 - 日期：2026-10-20
 - 决策人：项目负责人
 - 关联：需求文档 §4.4、领域模型 §2、架构总览与专题、设计版本 `model/h5p-arch-desk/designs/phase2-dynamic/`（r1–r4，r4 定稿）、ADR-0002
