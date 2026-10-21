@@ -1,29 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { BaseEdge } from '@vue-flow/core'
-import type { EdgeRoute } from '@/layout/layout'
-import type { ViewEdge } from '@/model'
+import type { RouteEdgeData } from '@/layout/canvas'
 import { horizontalCurve, roundedPolyline, verticalCurve } from './routePath'
-
-export interface RouteEdgeData {
-  route: EdgeRoute
-  edge: ViewEdge
-  label: string
-  selected: boolean
-  dim: boolean
-  /** 核心跨层边，只在悬停/选中时出现 */
-  core?: boolean
-  /** 设计版本：边包含新增或修改的关系 */
-  change?: 'added' | 'changed'
-  /** 运行视角：当前消息、走过、分支预览、时序图悬停预览 */
-  play?: 'current' | 'walked' | 'preview' | 'hover'
-  /** R15：选中步骤时，不属于选中 / 配对消息的走过的边淡为灰色 */
-  muted?: boolean
-  /** 当前消息与边的箭头方向相反（P10） */
-  flowReverse?: boolean
-  /** 结构中未建模的临时线（P11） */
-  unmodeled?: boolean
-}
 
 const props = defineProps<{ id: string; data: RouteEdgeData; markerEnd?: string }>()
 
