@@ -97,6 +97,8 @@ export interface StageDisplayInput {
   mode: StaticMode
   /** V9：「在画布上显示」的节点，它们的静态边及对端节点照常显示 */
   reveal: ReadonlySet<string>
+  /** V10：悬停的视图节点，临时显示它的静态边 */
+  hover?: string | null
 }
 
 export interface StageDisplay {
@@ -105,13 +107,14 @@ export interface StageDisplay {
 }
 
 /**
- * 舞台显示（V5、V8、V9）：运行视角下每个节点与视图边是显示、淡化还是隐藏。布局不变，只决定画不画、淡不淡。
+ * 舞台显示（V5、V8、V9、V10）：运行视角下每个节点与视图边是显示、淡化还是隐藏。布局不变，只决定画不画、淡不淡。
  * - 回放边始终显示；参与路径的节点显示，只在未选分支 / 未到达处出现的节点淡化；
  * - 其余节点与静态边：隐藏 / 淡化 / 照常（按显示方式）；「在画布上显示」的节点的静态边及对端节点照常；
+ * - 悬停的可见节点：「隐藏」时它的静态边及对端节点淡显，「淡显」时它的静态边照常；「全显」不变；
  * - 分层总览的带始终显示（它是骨架）。
  */
 export function stageDisplay(input: StageDisplayInput): StageDisplay {
-  const { view, participants, playEdges, mode, reveal } = input
+  const { view, participants, playEdges, mode, reveal, hover } = input
   const rest: Visibility = mode === 'hide' ? 'hide' : mode === 'dim' ? 'dim' : 'show'
   const revealedEdges = view.edges.filter(e => reveal.has(e.from) || reveal.has(e.to))
   const revealedNodes = new Set([...reveal, ...revealedEdges.flatMap(e => [e.from, e.to])])
@@ -126,8 +129,15 @@ export function stageDisplay(input: StageDisplayInput): StageDisplay {
   }
   const edges = new Map<string, Visibility>()
   const revealed = new Set(revealedEdges.map(e => e.id))
+  // V10：悬停的节点须本身可见；它的静态边在「隐藏」时淡显（对端节点同样淡显），在「淡显」时照常
+  const hovering = !!hover && mode !== 'show' && nodes.has(hover) && nodes.get(hover) !== 'hide'
+  const hovered = hovering ? [...view.edges, ...(view.coreEdges ?? [])].filter(e => e.from === hover || e.to === hover) : []
+  const hoverEdge: Visibility = mode === 'hide' ? 'dim' : 'show'
+  if (mode === 'hide') for (const e of hovered) for (const id of [e.from, e.to]) if (nodes.get(id) === 'hide') nodes.set(id, 'dim')
+  const hoverIds = new Set(hovered.map(e => e.id))
   for (const e of [...view.edges, ...(view.coreEdges ?? [])]) {
     if (playEdges.has(e.id) || revealed.has(e.id)) edges.set(e.id, 'show')
+    else if (hoverIds.has(e.id)) edges.set(e.id, hoverEdge)
     // 端点被隐藏的边不画
     else if (nodes.get(e.from) === 'hide' || nodes.get(e.to) === 'hide') edges.set(e.id, 'hide')
     else edges.set(e.id, rest)

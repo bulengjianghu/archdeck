@@ -117,7 +117,11 @@ describe('§6.2 运行视角验收', () => {
     step(30)
     desk.chooseBranch(desk.branchPoint.value!.id, 1)
     step(30)
-    await new Promise(r => setTimeout(r, 300))
+    // 舞台叠加依赖异步布局：负载高时 300ms 不一定够，等到布局完成为止
+    const layoutReady = async () => {
+      for (let i = 0; i < 100 && !desk.overlay.value; i++) await new Promise(r => setTimeout(r, 50))
+    }
+    await layoutReady()
     const target = desk.sequence.value!.messages.find(m => m.pathIndex === 2)!
     desk.seek(target.frameIds[0])
     const viaSeek = { frame: desk.playback.value!.frameId, walked: [...desk.overlay.value!.walked.keys()] }
@@ -125,7 +129,7 @@ describe('§6.2 运行视角验收', () => {
     desk.closeScenario()
     desk.openScenario('sc.command')
     step(3)
-    await new Promise(r => setTimeout(r, 300))
+    await layoutReady()
     const viaPlay = { frame: desk.playback.value!.frameId, walked: [...desk.overlay.value!.walked.keys()] }
     expect(viaSeek.frame).toBe(viaPlay.frame)
     expect(viaSeek.walked).toEqual(viaPlay.walked)

@@ -84,7 +84,10 @@ const display = computed(() => {
   const play = new Set(playEdges.value)
   const cur = stage.value.current?.at
   if (cur?.kind === 'edge') play.add(cur.edgeId)
-  return stageDisplay({ view: pv.view, participants: desk.stageParticipants.value, playEdges: play, mode: stageUi.mode.value, reveal: new Set(stageUi.reveal.value) })
+  // V10：悬停的节点（时序图消息的悬停不算）
+  const h = desk.hoverId.value
+  const hover = h && !h.startsWith('step:') ? h : null
+  return stageDisplay({ view: pv.view, participants: desk.stageParticipants.value, playEdges: play, mode: stageUi.mode.value, reveal: new Set(stageUi.reveal.value), hover })
 })
 const visOf = (id: string): Visibility => display.value?.nodes.get(id) ?? 'show'
 const edgeVis = (id: string): Visibility => display.value?.edges.get(id) ?? 'show'

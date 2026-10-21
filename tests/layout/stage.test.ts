@@ -97,6 +97,20 @@ describe('stageDisplay（V5、V8、V9）', () => {
     expect(d.nodes.get('c')).toBe('show')
   })
 
+  it('V10：悬停可见节点——「隐藏」时它的静态边与对端节点淡显，「淡显」时它的静态边照常；悬停隐藏的节点或「全显」时不变', () => {
+    const hide = stageDisplay({ ...base, mode: 'hide', hover: 'c' })
+    expect(hide.edges.get('b->c')).toBe('dim')
+    expect(hide.edges.get('c->d')).toBe('dim')
+    expect(hide.nodes.get('d')).toBe('dim')
+    expect(hide.edges.get('a->b')).toBe('show')
+    const dim = stageDisplay({ ...base, mode: 'dim', hover: 'c' })
+    expect(dim.edges.get('c->d')).toBe('show')
+    expect(dim.edges.get('b->c')).toBe('show')
+    // d 在「隐藏」时不渲染，悬停不到；即使给出也不展开
+    expect(stageDisplay({ ...base, mode: 'hide', hover: 'd' })).toEqual(stageDisplay({ ...base, mode: 'hide' }))
+    expect(stageDisplay({ ...base, mode: 'show', hover: 'c' })).toEqual(stageDisplay({ ...base, mode: 'show' }))
+  })
+
   it('分层总览的带始终显示', () => {
     const layered = { ...view, mode: 'layered' as const, nodes: [{ id: 'L', moduleId: 'L', role: 'layer' as const, hasChildren: true }], edges: [] }
     expect(stageDisplay({ ...base, view: layered, mode: 'hide' }).nodes.get('L')).toBe('show')

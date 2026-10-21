@@ -1,9 +1,12 @@
 <script setup lang="ts">
 /**
- * 副栏（W-4、G15）：分屏的第二块。标题栏为收起、页签「时序图」（运行视角）「源代码」（有预览文件时，可关闭）、分屏方向切换；
+ * 副栏（W-4、G15）：分屏的第二块。只有一栏标题栏（ADR-0010）：收起、页签「时序图」（运行视角）「源代码」（有预览文件时，可关闭）、
+ * 时序图页签下的当前层次名、本层不可见提示与「定位」、分屏方向切换；
  * 内容为时序图或源代码预览。页签与预览文件由项目视图持有，只属于这块界面。左右排列时收起即缩成一条竖栏。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { useDesk } from '@/state/inject'
+import { moduleName } from '@/model'
 import SequenceView from '../sequence/SequenceView.vue'
 import SourceView from '../source/SourceView.vue'
 import type { AsideTab } from './useAside'
@@ -13,6 +16,13 @@ const emit = defineEmits<{ toggle: []; direction: [dir: 'row' | 'column']; tab: 
 const strip = computed(() => props.collapsed && props.dir === 'row')
 const fileName = computed(() => props.previewPath?.split('/').pop() ?? '')
 const title = computed(() => (props.tab === 'source' ? '源代码' : '时序图'))
+
+const desk = useDesk()
+const sequence = ref<InstanceType<typeof SequenceView>>()
+const onSequence = computed(() => props.run && !(props.tab === 'source' && props.previewPath))
+const levelName = computed(() => (desk.index.value ? moduleName(desk.index.value, desk.levelId.value) : ''))
+/** R11：当前帧在本层不可见 */
+const hiddenCurrent = computed(() => !!desk.frame.value && desk.currentIndex.value === null)
 </script>
 
 <template>
@@ -30,13 +40,20 @@ const title = computed(() => (props.tab === 'source' ? '源代码' : '时序图'
         </button>
         <button class="close" title="关闭预览" @click="emit('close')">×</button>
       </span>
+      <template v-if="onSequence && !collapsed">
+        <span class="level muted">{{ levelName }}</span>
+        <span v-if="hiddenCurrent" class="hint">
+          本层不可见：<button class="link" @click="desk.goTo(desk.frameLevel.value!)">到能看到它的层次</button>
+        </span>
+        <button class="locate" :disabled="desk.currentIndex.value === null" @click="sequence?.centerCurrent()">定位</button>
+      </template>
       <button class="dir" :title="dir === 'row' ? '改为上下排列' : '改为左右排列'" @click="emit('direction', dir === 'row' ? 'column' : 'row')">
         {{ dir === 'row' ? '⇅ 上下' : '⇆ 左右' }}
       </button>
     </header>
     <div v-if="!collapsed" class="content">
       <SourceView v-if="tab === 'source' && previewPath" :path="previewPath" />
-      <SequenceView v-else-if="run" />
+      <SequenceView v-else-if="run" ref="sequence" />
     </div>
   </section>
 </template>
@@ -117,6 +134,36 @@ const title = computed(() => (props.tab === 'source' ? '源代码' : '时序图'
   color: var(--accent);
   border-bottom-color: var(--accent);
   font-weight: 600;
+}
+
+.level {
+  margin-left: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+
+.hint {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--warning);
+}
+
+.locate {
+  margin-left: auto;
+  flex: none;
+  font-size: 11.5px;
+  padding: 1px 8px;
+  margin-bottom: 3px;
+}
+
+.locate:disabled {
+  opacity: 0.4;
+}
+
+.locate + .dir {
+  margin-left: 4px;
 }
 
 .dir {

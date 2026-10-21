@@ -2,8 +2,8 @@
 /**
  * 时序图（D-2、D-7、R3、R5、R11）：只画定位好坐标的时序模型。
  * 单击消息（含未选分支上的）→ 指向该步（R13）；单击 alt 的分支条件 → 选该分支（F6e）；悬停消息时在结构图上预览对应的边；焦点突出（R15）。
- * 泳道头固定在顶部、底部另有一份，消息区夹在中间纵向滚动（D-2）；只在用户移动播放头后把当前步骤滚到中间，「定位」同理（D-7）。
- * 收起、页签与分屏方向切换在副栏（split/AsidePane.vue）；这里只画信息条（当前层次、当前帧不可见的提示、定位）与时序图本身。
+ * 泳道头固定在顶部、底部另有一份，消息区夹在中间纵向滚动，三块从左起排、不拉伸（D-2）；只在用户移动播放头后把当前步骤滚到中间（D-7）。
+ * 层次名、不可见提示与「定位」在副栏标题栏（split/AsidePane.vue，ADR-0010），「定位」调用这里暴露的 centerCurrent。
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -17,10 +17,8 @@ const desk = useDesk()
 const scroller = ref<HTMLElement>()
 
 const ps = computed(() => desk.positionedSequence.value)
-const levelName = computed(() => (desk.index.value ? moduleName(desk.index.value, desk.levelId.value) : ''))
 const homeName = computed(() => (desk.index.value && desk.home.value ? moduleName(desk.index.value, desk.home.value) : ''))
 const empty = computed(() => (desk.scenarioView.value?.messages.length ?? 0) === 0)
-const hiddenCurrent = computed(() => !!desk.frame.value && desk.currentIndex.value === null)
 const top = computed(() => (ps.value ? headsHeight(ps.value) : 0))
 const groupName = (parentId: string) => (desk.index.value ? moduleName(desk.index.value, parentId) : parentId)
 
@@ -46,6 +44,8 @@ function centerCurrent() {
   el.scrollTop = Math.max(0, p.messages[i].y - el.clientHeight / 2)
 }
 
+defineExpose({ centerCurrent })
+
 // D-7：只在用户移动播放头后滚动——悬停、选中、切换层次、重新加载都不改播放头，不会触发
 watch(
   () => desk.playback.value?.frameId,
@@ -59,15 +59,6 @@ watch(
 
 <template>
   <section class="sequence">
-    <header class="bar">
-      <strong>时序图</strong>
-      <span class="muted">· {{ levelName }}</span>
-      <span v-if="hiddenCurrent" class="hint warn">
-        当前步骤在本层不可见：
-        <button class="link" @click="desk.goTo(desk.frameLevel.value!)">到能看到它的层次</button>
-      </span>
-      <button v-if="ps && !empty" class="locate" :disabled="desk.currentIndex.value === null" @click="centerCurrent">定位</button>
-    </header>
     <div ref="scroller" class="body">
       <div v-if="empty" class="empty">
         <p>本层看不到这个场景的任何一步。</p>
@@ -111,37 +102,6 @@ watch(
   background: var(--surface);
 }
 
-.bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-  overflow: hidden;
-  padding: 3px 10px;
-  font-size: 12px;
-  border-bottom: 1px solid var(--border);
-  flex: none;
-}
-
-.hint {
-  margin-left: 12px;
-  font-size: 12px;
-}
-
-.warn {
-  color: var(--warning);
-}
-
-.locate {
-  margin-left: auto;
-  font-size: 12px;
-  padding: 1px 8px;
-}
-
-.locate:disabled {
-  opacity: 0.4;
-}
-
 .body {
   flex: 1 1 auto;
   overflow: auto;
@@ -169,7 +129,6 @@ watch(
 
 .svg {
   display: block;
-  min-width: 100%;
 }
 
 .empty {
