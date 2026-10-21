@@ -1,6 +1,6 @@
 {
   "extends": "@tsconfig/node22/tsconfig.json",
-  "include": ["vite.config.*", "vite/**/*", "scripts/**/*"],
+  "include": ["vite.config.*", "vite/**/*", "scripts/**/*", "playwright.config.ts", "e2e/**/*"],
   "compilerOptions": {
     "noEmit": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
