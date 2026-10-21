@@ -6,7 +6,7 @@ modules:
     kind: layer
     order: 1
     abstraction: 把状态画出来、把用户操作上交：只读 DeskState、只调它的操作，不做投影与布局计算
-    responsibility: 应用外壳与路由、项目列表、项目视图、导航树、画布（含回放高亮）、时序图、场景列表与回放控制、属性面板、导航与问题提示。
+    responsibility: 应用外壳与路由、项目列表、项目视图（含分屏与副栏）、导航树（模块 / 文件 / 步骤）、画布（含回放与文件高亮）、时序图、源代码预览、场景列表与回放控制、属性面板、导航与问题提示。
     includes: [Vue 组件, 路由, 交互事件, 样式]
     excludes: [层次投影规则, 布局算法, 文件读取]
     mayDependOn: [state, model]
@@ -16,7 +16,7 @@ modules:
         name: 应用外壳与路由
         kind: subsystem
         responsibility: 应用入口与 hash 路由：`/` 是项目列表，`/p/<项目>` 是项目当前版本，`/p/<项目>/d/<设计>/<轮次>` 是设计版本；切换项目或版本时重建视图。
-        codeRefs: [src/main.ts, src/App.vue, src/styles.css]
+        codeRefs: [index.html, env.d.ts, src/main.ts, src/App.vue, src/styles.css]
       - id: present.project-list
         name: 项目列表主页
         kind: subsystem
@@ -60,10 +60,16 @@ modules:
       - id: present.nav-tree
         name: 导航树
         kind: subsystem
-        responsibility: 工作台左侧的全局目录（W-7、T1）：「模块」页签列出模块树，「步骤」页签（只在运行视角出现）列出步骤树；进入运行视角切到步骤页签，退出切回模块页签。层次、选中、参与模块、当前步骤在树上同步展开与高亮；单击 / 双击 / 悬停复用画布与时序图的同一套操作，不新增会话规则。
-        principle: 页签、展开 / 折叠状态只属于这块界面，不进视图状态与 URL；树上显示的「谁参与了场景」「步骤怎样嵌套」由模型层回答（scenarioModules、outlineScenario），呈现层只画。
+        responsibility: 工作台左侧的全局目录（W-7、T1）：「模块」页签列出模块树，「文件」页签列出被描述项目的源码文件树，「步骤」页签（只在运行视角出现）列出步骤树；进入运行视角切到步骤页签，退出切回模块页签，选中文件切到文件页签。层次、选中、参与模块、当前步骤、选中模块的文件在树上同步展开与高亮；单击 / 双击 / 悬停复用画布与时序图的同一套操作，不新增会话规则。
+        principle: 页签、展开 / 折叠状态只属于这块界面，不进视图状态与 URL；树上显示的「谁参与了场景」「步骤怎样嵌套」「文件属于哪个模块」由模型层回答（scenarioModules、outlineScenario、assignFiles），呈现层只画。
         codeRefs: [src/components/tree/NavTree.vue, src/components/tree/types.ts]
-        docRefs: [docs/adr/0006-workbench-navigation.md]
+        docRefs: [docs/adr/0006-workbench-navigation.md, docs/adr/0007-source-files.md]
+      - id: present.source
+        name: 源代码预览
+        kind: subsystem
+        responsibility: 在副栏只读预览选中的源码文件（SR-8、G17）：路径、归属模块（可定位）、行数，按扩展名语法高亮（Shiki，与签名高亮共用）并带行号；过大、二进制、文件不存在、源码不在本地、构建态时只给提示。没有编辑、保存等 IDE 功能。
+        codeRefs: [src/components/source/**]
+        docRefs: [docs/adr/0007-source-files.md]
       - id: present.canvas
         name: 画布
         kind: subsystem
@@ -101,7 +107,7 @@ modules:
         name: DeskState
         kind: subsystem
         core: true
-        responsibility: 当前项目当前版本的唯一状态持有者：层次、选中、悬停、显示开关、加载状态，当前场景与回放进度，设计版本的对比基线与差异；对外提供唯一一组操作，并与路由双向同步。
+        responsibility: 当前项目当前版本的唯一状态持有者：层次、选中（含文件）、悬停、显示开关、加载状态，当前场景与回放进度，设计版本的对比基线与差异，被描述项目的源码清单与文件归属；对外提供唯一一组操作，并经同步适配器与路由、描述文件、布局、源码保持一致。
         codeRefs: [src/state/useDeskState.ts, src/state/inject.ts]
       - id: state.transition
         name: 视图状态转移
@@ -126,16 +132,16 @@ modules:
     kind: layer
     order: 3
     abstraction: 把磁盘上的 YAML 交给页面与命令行：只搬运文本与做摘要，不解释描述的含义
-    responsibility: Vite 插件提供项目列表与项目描述（开发态实时读取并推送变更，构建态固化为静态文件），命令行校验。
-    includes: [文件读取, 开发服务器端点, 变更通知, 构建产物, 命令行]
-    excludes: [解析规则（交给模型层）, 界面]
+    responsibility: Vite 插件提供项目列表与项目描述（开发态实时读取并推送变更，构建态固化为静态文件），开发态读取被描述项目的源码（文件清单、文件、导出），命令行校验。
+    includes: [文件读取, 源码清单与导出解析, 开发服务器端点, 变更通知, 构建产物, 命令行]
+    excludes: [解析规则与文件归属（交给模型层）, 界面]
     mayDependOn: [model]
     children:
       - id: access.model-source
         name: ModelSource 插件
         kind: subsystem
         core: true
-        responsibility: 开发态提供 /projects.json、/models/<项目>.json、/models/<项目>/designs/<设计>/<轮次>.json 并按项目推送 arch-model:changed（含设计版本的变化）；构建态输出同名静态文件。
+        responsibility: 开发态提供 /projects.json、/models/<项目>.json、/models/<项目>/designs/<设计>/<轮次>.json 并按项目推送 arch-model:changed（含设计版本的变化）；开发态另提供 /source/<项目>.json、/source/<项目>/file.json、/source/<项目>/exports.json（源码清单短暂缓存）；构建态只输出描述的同名静态文件，不含源码。
         codeRefs: [vite/archModelPlugin.ts, vite.config.ts]
       - id: access.reader
         name: 描述读取
@@ -143,10 +149,16 @@ modules:
         core: true
         responsibility: 约定「模型根目录下含 system.yaml 的子目录即项目、其下 designs/<设计>/ 是设计版本」，读取项目当前版本（跳过 designs/）或设计某一轮的描述文件（YAML / JSON）及对比基线，读 design.yaml，并跑一遍模型层生成项目摘要。
         codeRefs: [vite/readModelDir.ts]
+      - id: access.source
+        name: 源码读取
+        kind: subsystem
+        responsibility: 按 system.source.repo 解析被描述项目的源码根目录（工作区根目录 + repo，环境变量可覆盖；不在本地时给出原因与尝试的路径，G1）；列出文件清单（git 仓库内按 git 的忽略规则，否则排除依赖与产物目录，G2）与各 package.json 的入口字段；读取单个文件（必须在清单中，过大或二进制只给提示，G17）；用 TypeScript 语法树解析导出的名称、类别与签名，顺着相对路径的再导出往下找（G11）。不判断文件属于哪个模块。
+        codeRefs: [vite/readSource.ts]
+        docRefs: [docs/architecture/source.md]
       - id: access.lint
         name: 命令行校验
         kind: subsystem
-        responsibility: npm run lint:model：校验全部项目或指定目录（含各设计版本的每一轮与 design.yaml），按文件:行号输出问题，有错误时非零退出，可接入 CI。
+        responsibility: npm run lint:model：校验全部项目或指定目录（含各设计版本的每一轮与 design.yaml），源码在本地时附带当前版本的源码归属警告（G9），按文件:行号输出问题，有错误时非零退出，可接入 CI。
         codeRefs: [scripts/lint-model.ts]
 
   - id: model
@@ -155,7 +167,7 @@ modules:
     order: 4
     abstraction: 关于**被描述系统**的知识，脱离工作台仍成立：输入描述、输出数据，不依赖 Vue / DOM / 布局库，可在 Node 中纯输入输出测试
     responsibility: 把多个描述文件变成校验过的模型与索引（含参与者与场景），按层次投影出要画的节点与边，把场景展开、按层次投影成回放帧与时序模型，并回答关于被描述系统的架构查询（最近存在 / 可见的祖先、本层的下一步、到达某帧需要的分支选择、谁参与了哪一步）。
-    includes: [文件格式与类型, 解析与合并, 引用校验, 索引, 层次投影, 场景展开与投影, 架构查询, 版本对比]
+    includes: [文件格式与类型, 解析与合并, 引用校验, 索引, 层次投影, 场景展开与投影, 架构查询, 版本对比, 源码归属]
     excludes: [Vue, DOM, elkjs, 文件系统]
     mayDependOn: []
     docRefs: [docs/03-architecture.md]
@@ -192,6 +204,7 @@ modules:
           - **与结构投影同一套端点规则**：帧端点用 Projector 的端点映射提升到当前层次（D-4，规则 P1）。
           - **只写一套最细步骤**（S3）：各层投影合并；时序图与单步粒度都随层次变化，下钻后变细（规则 R7）。
           - **不知道坐标**：输出纯数据，坐标交给 Layout。
+        codeRefs: [src/model/scenario/**]
         docRefs: [docs/01-requirements.md]
       - id: model.diff
         name: 版本对比
@@ -202,3 +215,9 @@ modules:
           - 「涉及变更」：子树内模块的增删改计入各祖先；关系的增删改计入两端及其祖先；接口 / 数据结构计入提供方与持有它的模块。删除项按基线中的位置计入目标模型里仍存在的祖先。
         codeRefs: [src/model/diff.ts]
         docRefs: [docs/adr/0002-design-versions.md]
+      - id: model.source
+        name: 源码归属
+        kind: subsystem
+        responsibility: 被描述项目的源码文件与模块对上：文件按 codeRefs 归属模块（祖先与后代同时匹配取最深的，互不包含的模块同时匹配为冲突），未归属与忽略清单，模块的文件（子树并集）与入口文件，入口导出与模块接口的对应，选中文件在当前层次的投影，目录树，以及归属警告。输入是模型索引与接入层给的文件清单，不碰文件系统。
+        codeRefs: [src/model/source/**]
+        docRefs: [docs/architecture/source.md, docs/adr/0007-source-files.md]

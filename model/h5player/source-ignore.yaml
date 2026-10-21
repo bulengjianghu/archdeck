@@ -1,0 +1,18 @@
+# 不属于任何模块的文件（G8）：文档、测试、示例、脚本、构建与包配置、静态资源。glob 写法同 codeRefs，相对源码根目录（work4/h5player）。
+# 剩下的未归属文件就是描述漏写的源码，应补进对应模块的 codeRefs。
+sourceIgnore:
+  - docs/**
+  - tests/**
+  - packages/*/tests/**
+  - examples/**
+  - scripts/**
+  - assets/**
+  - vendor/**
+  - '**/*.md'
+  - '*.{json,lock,ts,js,cjs,mjs,yaml,yml}'
+  - '.*'
+  - '.*/**'
+  - patches/**
+  - plugins/**
+  - packages/*/*.{json,ts,js,cjs,mjs}
+  - packages/*/.*

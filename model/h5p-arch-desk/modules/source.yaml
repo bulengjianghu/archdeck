@@ -1,0 +1,174 @@
+# 源代码文件树与代码预览（ADR-0007）：源码读取、源码归属、源码同步、文件树、副栏的源代码预览、文件面板。
+# 规则编号（G）见 docs/02-domain.md §2.13；机制见 docs/architecture/source.md。
+
+modules:
+  # ── 呈现层 ──────────────────────────────────────────────
+  - id: present.nav-tree.files
+    name: 文件树
+    parent: present.nav-tree
+    responsibility: 导航树「文件」页签（SR-1、SR-2、G13）：被描述项目的源码目录树，目录带文件数与未归属数，文件标出未归属、归属冲突、已忽略；选中模块时其文件高亮并展开到第一个文件，选中文件时展开并滚到它；单击文件即选中；「只看未归属」筛选与「刷新」；源码不在本地或构建态时只给提示。页面只读，不提供忽略操作。
+    codeRefs: [src/components/tree/FileTree.vue, src/components/tree/FileTreeNode.vue]
+  - id: present.panel.file
+    name: 文件面板
+    parent: present.panel
+    responsibility: 选中文件时的面板（SR-7）：路径、归属模块（可定位，冲突时全部列出）或未归属 / 已忽略及处理提示、当前层次中的投影说明（G14）、以它为入口的模块、导出（与模块接口的对应）；「预览源码」重新打开副栏预览。
+    codeRefs: [src/components/panel/FilePanel.vue]
+  - id: present.panel.module-source
+    name: 模块的源代码
+    parent: present.panel
+    responsibility: 模块面板的「源代码」一节（SR-5）：模块的文件（子树并集，可选中，注明直接归属的子模块）、入口文件及来源（描述 entry / 约定 index.ts / package.json）、入口导出按「已对应 / 导出未描述 / 描述未导出」分组列出（G12）。
+    codeRefs: [src/components/panel/ModuleSource.vue, src/components/panel/ExportSection.vue, src/components/panel/ExportItem.vue]
+
+  # ── 视图状态层 ──────────────────────────────────────────
+  - id: state.desk.source-sync
+    name: 源码同步
+    parent: state.desk
+    responsibility: 同步适配器之一：进入项目、描述重新加载、用户刷新时经注入的 SourceFetcher 取源码清单（构建态拿到 404 即「不含源码」，G2）；文件内容与导出按路径按需取、缓存，刷新清单时作废。只负责外界，归属由视图派生调用模型层计算。
+    codeRefs: [src/state/sync/source.ts]
+
+  # ── 模型层 ──────────────────────────────────────────────
+  - id: model.source.glob
+    name: glob 匹配
+    parent: model.source
+    responsibility: codeRefs 与忽略清单的匹配（G3）：`*` 不跨 `/`、`**` 跨任意层、`?`、`{a,b}`；不含通配符的路径匹配同名文件或该目录下的全部文件；取 glob 通配符前的目录部分。模型层自己的纯函数，不依赖 Node 库。
+    codeRefs: [src/model/source/glob.ts]
+  - id: model.source.ownership
+    name: 归属与入口
+    parent: model.source
+    responsibility: 文件 → 模块的归属（G5 取最深、G6 冲突、G7 未归属、G8 忽略）、模块的文件（G4）、模块目录与入口文件（G10）、模块的接口与入口导出的对应（G12）、选中文件在当前层次的投影（G14）、归属警告（G9 由调用方决定是否报）、目录树。
+    principle: |
+      - **归属是关于被描述系统的知识**：换成命令行（lint:model）或 AI 查询同样成立，所以在模型层；接入层只给文件清单。
+      - **与结构投影同一套端点规则**：选中文件的归属模块用 mapEndpoint 提升到当前层次（与关系、帧一致）。
+    codeRefs: [src/model/source/ownership.ts]
+
+relations:
+  # 呈现层
+  - {id: rel.p7.files-read, from: present.nav-tree.files, to: state.desk.projection, type: depends, payload: [ds.SourceOwnership, ds.Selection], description: 目录树、归属标记、选中模块的文件、选中文件}
+  - {id: rel.p7.files-act, from: present.nav-tree.files, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击文件 → selectFile；刷新 → refreshSource}
+  - {id: rel.p7.split-source, from: present.desk-view.split, to: present.source, type: depends, description: 副栏「源代码」页签，有预览文件时出现}
+  - {id: rel.p7.source-read, from: present.source, to: state.desk.projection, type: depends, payload: [ds.SourceOwnership], description: 预览文件的归属模块与状态}
+  - {id: rel.p7.source-file, from: present.source, to: state.desk.source-sync, type: calls, mode: async, interface: if.desk.actions, payload: [ds.SourcePayload], description: sourceFile(path) 按需取文件内容}
+  - {id: rel.p7.source-content, from: present.source, to: present.panel.content, type: depends, description: 复用 Shiki 高亮（按扩展名加载语法）}
+  - {id: rel.p7.panel-file, from: present.panel.dispatch, to: present.panel.file, type: depends, description: 选中文件时分派到文件面板}
+  - {id: rel.p7.module-source, from: present.panel.module, to: present.panel.module-source, type: depends}
+  - {id: rel.p7.file-exports, from: present.panel.file, to: present.panel.module-source, type: depends, description: 复用导出分组列表}
+  - {id: rel.p7.file-read, from: present.panel.file, to: state.desk.projection, type: depends, payload: [ds.SourceOwnership, ds.FileNodes]}
+  - {id: rel.p7.file-act, from: present.panel.file, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 归属模块 → revealModule}
+  - {id: rel.p7.file-preview, from: present.panel.file, to: present.desk-view.split, type: calls, description: 「预览源码」经注入请求副栏打开预览}
+  - {id: rel.p7.modsrc-read, from: present.panel.module-source, to: state.desk.projection, type: depends, payload: [ds.ModuleEntry, ds.ExportedSymbol], description: 模块的文件、入口、导出对应}
+  - {id: rel.p7.modsrc-act, from: present.panel.module-source, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击文件 → selectFile}
+  - {id: rel.p7.modsrc-content, from: present.panel.module-source, to: present.panel.content, type: depends, description: 签名代码块、接口折叠项}
+  - {id: rel.p7.flow-file, from: present.canvas.flow, to: state.desk.projection, type: depends, payload: [ds.FileNodes], description: 选中文件时高亮其归属模块在本层的投影节点}
+  - {id: rel.p7.modtree-file, from: present.nav-tree.modules, to: state.desk.projection, type: depends, description: 选中文件时展开并标出归属模块}
+
+  # 视图状态层
+  - id: rel.p7.desk-source-fetch
+    from: present.desk-view
+    to: access.model-source
+    type: calls
+    mode: async
+    interface: if.source.sourceEndpoints
+    payload: [ds.SourcePayload, ds.ExportedSymbol]
+    description: 项目视图创建的 httpSourceFetcher：GET source/<项目>.json、file.json、exports.json（404 即构建态），注入给源码同步
+  - {id: rel.p7.desk-source-inject, from: present.desk-view, to: state.desk.source-sync, type: depends, description: createDeskState 时注入 SourceFetcher}
+  - {id: rel.p7.projection-ownership, from: state.desk.projection, to: model.source.ownership, type: calls, interface: if.model.assignFiles, payload: [ds.SourceOwnership], description: 归属、目录树、模块的文件与入口、选中文件的投影、归属警告（只对当前版本）}
+  - {id: rel.p7.projection-sync, from: state.desk.projection, to: state.desk.source-sync, type: depends, payload: [ds.SourcePayload], description: 读取源码清单}
+  - {id: rel.p7.loading-source, from: state.desk.loading, to: state.desk.source-sync, type: calls, description: 描述重新加载后重新取源码清单}
+
+  # 接入层
+  - {id: rel.p7.plugin-source, from: access.model-source, to: access.source, type: calls, interface: if.source.readSourceTree, payload: [ds.SourcePayload, ds.ExportedSymbol], description: 源码端点委托源码读取}
+  - {id: rel.p7.source-entry, from: access.source, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 取 system.source.repo 解析源码根目录}
+  - {id: rel.p7.lint-source, from: access.lint, to: access.source, type: calls, interface: if.source.readSourceTree, description: 当前版本的源码清单}
+  - {id: rel.p7.lint-ownership, from: access.lint, to: model.source.ownership, type: calls, interface: if.model.assignFiles, description: 归属警告（G9）}
+
+  # 模型层
+  - {id: rel.p7.ownership-glob, from: model.source.ownership, to: model.source.glob, type: calls, interface: if.model.matchRef}
+  - {id: rel.p7.ownership-endpoint, from: model.source.ownership, to: model.projector.endpoints, type: calls, interface: if.model.mapEndpoint, description: 选中文件的归属模块投影到当前层次（G14）}
+  - {id: rel.p7.ownership-types, from: model.source.ownership, to: model.types, type: depends, payload: [ds.ModelIndex, ds.LevelView, ds.Issue]}
+
+interfaces:
+  - id: if.source.readSourceTree
+    name: readSourceTree
+    owner: access.source
+    signature: |
+      readSourceTree(modelRoot: string, project: string, projectRoot: string, env?): SourcePayload | null
+      readSourceFile(root: string, files: readonly string[], path: string): SourceFile | null
+      readExports(root: string, files: readonly string[], path: string): ExportedSymbol[] | null
+    semantics: |
+      - 源码根目录 = ARCH_SOURCE_ROOT_<项目> ?? (ARCH_WORKSPACE_ROOT ?? 本包往上三级) + system.source.repo；不在本地返回 absent 与原因，不抛错（G1）。
+      - 路径必须在文件清单中；超过 512 KB 或含 NUL 字节只给提示（G17）；导出只做语法解析，再导出最多追 5 层（G11）。
+  - id: if.source.sourceEndpoints
+    name: 源码端点
+    owner: access.model-source
+    signature: |
+      GET source/<项目>.json                → SourcePayload
+      GET source/<项目>/file.json?path=      → SourceFile        // 不在清单中 404
+      GET source/<项目>/exports.json?path=   → ExportedSymbol[]  // 非 TS / JS 为 []
+    semantics: 仅开发态；构建态不输出，页面拿到 404 即「构建产物不含源码」。不推送变化。
+  - id: if.model.matchRef
+    name: matchRef
+    owner: model.source.glob
+    signature: |
+      matchRef(ref: string, file: string): boolean
+    semantics: G3；纯函数。
+  - id: if.model.assignFiles
+    name: assignFiles
+    owner: model.source.ownership
+    signature: |
+      assignFiles(index: ModelIndex, files: readonly string[], ignore: readonly string[]): SourceOwnership
+      moduleFiles(index, own, moduleId): string[]
+      moduleEntry(index, own, tree: { files; packages }, moduleId): ModuleEntry | null
+      sourceIssues(index, own, tree): Issue[]
+    semantics: G3–G10；纯函数，不碰文件系统。
+  - id: if.model.matchExports
+    name: matchExports
+    owner: model.source.ownership
+    signature: |
+      matchExports(index: ModelIndex, moduleId: string, exports: readonly ExportedSymbol[]): ExportMatch
+      // ExportMatch { matched: { interfaceId, symbol }[]; undescribed: ExportedSymbol[]; unexported: string[] }
+    semantics: G12：模块的接口 = provides + owner 在本模块子树内的接口；按名称（去掉括号与泛型）对应，默认导出不参与。
+  - id: if.model.fileNodes
+    name: fileNodes
+    owner: model.source.ownership
+    signature: |
+      fileNodes(index: ModelIndex, view: LevelView, owners: readonly string[]): FileNodes
+    semantics: G14：归属模块经 mapEndpoint 落到本层的子模块或边界节点；分层总览另加路径上的核心模块；归属模块是当前父模块或其祖先时 self 为真。
+
+dataStructures:
+  - id: ds.SourcePayload
+    name: SourcePayload
+    definition: |
+      type SourcePayload =
+        | { status: 'local'; root: string; files: string[]; packages: Record<string, { main?: string; exports?: unknown }> }
+        | { status: 'absent'; repo?: string; tried?: string; reason: string }
+        | { status: 'unavailable' }      // 页面侧：构建态取不到端点
+    description: 被描述项目的源码清单；路径相对源码根目录，packages 的键为 package.json 所在目录。
+  - id: ds.SourceOwnership
+    name: SourceOwnership
+    definition: |
+      interface SourceOwnership {
+        owners: Map<string, string[]>      // 文件 → 归属模块（冲突时多个）
+        direct: Map<string, string[]>      // 模块 → 直接归属它的文件
+        unowned: string[]; ignored: Set<string>; conflicts: string[]
+      }
+    description: 文件归属的结果（G3–G8）。
+  - id: ds.ExportedSymbol
+    name: ExportedSymbol
+    definition: |
+      interface ExportedSymbol {
+        name: string                       // 默认导出为 'default'
+        kind: 'function' | 'class' | 'interface' | 'type' | 'enum' | 'const' | 'namespace' | 'default' | 'reexport'
+        signature?: string; line: number
+        from?: string                      // 经再导出时声明所在的文件
+      }
+    description: 入口导出的一个符号（G11）。
+  - id: ds.ModuleEntry
+    name: ModuleEntry
+    definition: |
+      interface ModuleEntry { file: string; via: 'entry' | 'index' | 'package'; missing?: boolean }
+    description: 模块的入口文件及来源（G10）。
+  - id: ds.FileNodes
+    name: FileNodes
+    definition: |
+      interface FileNodes { nodes: Set<string>; self: boolean }
+    description: 选中文件在当前层次要高亮的视图节点（G14）。

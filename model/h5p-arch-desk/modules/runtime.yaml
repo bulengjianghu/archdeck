@@ -4,10 +4,12 @@
 modules:
   # ── 呈现层 ──────────────────────────────────────────────
   - id: present.desk-view.split
-    name: 分屏容器
+    name: 分屏容器与副栏
     parent: present.desk-view
-    responsibility: 按布局树排布画布区的视图（结构图、时序图）：两块，方向可切换（默认左右，W-4），比例可拖，时序图可收起（左右排列时缩成一条竖栏）；方向、比例与收起状态按项目记在本地。
-    principle: 布局树是可序列化的值（ds.PaneLayout），视图组件只按「槽位」挂载，不知道自己在哪；以后的自由拖拽分屏只需扩展布局树的编辑操作。
+    responsibility: 按布局树排布画布区的视图：结构图与副栏两块，方向可切换（默认左右，W-4），比例可拖，副栏可收起（左右排列时缩成一条竖栏）；方向、比例与收起状态按项目记在本地。副栏顶部的页签在「时序图」（运行视角）与「源代码」（有预览文件时）之间切换：选中文件切到源代码并预览它，打开场景或移动播放头切到时序图，预览文件保留到关闭（G15）。
+    principle: |
+      - 布局树是可序列化的值（ds.PaneLayout），视图组件只按「槽位」（structure / aside）挂载，不知道自己在哪；以后的自由拖拽分屏只需扩展布局树的编辑操作。
+      - 页签与预览文件只属于这块界面（useAside），不进视图状态与 URL；副栏在运行视角或有预览文件时出现。
     codeRefs: [src/components/split/**]
 
   - id: present.sequence.lanes
@@ -139,7 +141,7 @@ modules:
 relations:
   # 呈现层内部
   - {id: rel.p2.split-canvas, from: present.desk-view.split, to: present.canvas.flow, type: depends, description: 结构图槽位（左 / 上）}
-  - {id: rel.p2.split-sequence, from: present.desk-view.split, to: present.sequence.interact, type: depends, description: 时序图槽位（右 / 下），打开场景时出现；时序图标题栏切换方向}
+  - {id: rel.p2.split-sequence, from: present.desk-view.split, to: present.sequence.interact, type: depends, description: 副栏「时序图」页签（右 / 下），运行视角下出现；副栏标题栏切换方向}
   - {id: rel.p6.desk-nav-tree, from: present.desk-view, to: present.nav-tree, type: depends, description: 左侧固定栏，可折叠}
   - {id: rel.p6.nav-perspective, from: present.nav-tree, to: state.desk.projection, type: depends, payload: [ds.ViewState], description: 视角变化时切换页签（T1）}
   - {id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: depends}
@@ -516,7 +518,7 @@ dataStructures:
     name: PaneLayout
     definition: |
       type PaneLayout =
-        | { kind: 'pane'; slot: 'structure' | 'sequence'; collapsed?: boolean }
+        | { kind: 'pane'; slot: 'structure' | 'aside'; collapsed?: boolean }
         | { kind: 'split'; dir: 'row' | 'column'; sizes: number[]; children: PaneLayout[] }
     description: 分屏布局树；两块，根分割方向可切换（row 左右 / column 上下，默认 row），后续自由拖拽只扩展其编辑操作。
   - id: ds.OutlineNode

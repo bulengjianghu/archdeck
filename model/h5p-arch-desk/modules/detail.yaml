@@ -96,22 +96,20 @@ modules:
     parent: state.desk
     responsibility: 同步适配器之一：取回项目描述并调用 loadModel，把加载结果作为动作交给 dispatch（首次加载 / 重新加载）；监听本项目的变更通知触发重新加载。「保留层次与选中、失效时退到上级」不在这里，是转移规则。
     codeRefs: [src/state/sync/modelSource.ts]
+  # 以下三个是 useDeskState.ts 内的概念划分，不写 codeRefs，文件归 DeskState（避免归属冲突，G6）
   - id: state.desk.versions
     name: 版本与对比基线
     parent: state.desk
     responsibility: 设计版本下持有设计信息与本轮、对比基线（当前版本 / 上一轮）的索引；派生差异与基线漂移（起草时的基线提交与当前版本不一致）。
-    codeRefs: [src/state/useDeskState.ts]
   - id: state.desk.projection
     name: 视图派生
     parent: state.desk
     responsibility: 由视图状态与模型派生一切要画的数据（全部是 computed，调用纯函数）：层次视图；打开场景时的回放计划、回放路径、本层的帧投影与可见消息、时序模型与时序图坐标，以及导航树用的步骤大纲与参与模块；设计版本的差异。
-    codeRefs: [src/state/useDeskState.ts]
   - id: state.desk.actions
     name: dispatch 与操作
     parent: state.desk
     responsibility: 视图状态唯一的写入口 dispatch(action)：调用视图状态转移得到新状态并写入，层次变化时通知画布适应；对外的一组操作（下钻、跳转、返回上级、选中、定位、悬停、打开 / 关闭场景、单步、指向某一步或回到开头、选分支）都只是构造动作并 dispatch。
     principle: 本身不含领域规则：所有「给定状态与动作，下一个状态是什么」都在视图状态转移里；这里只把派生的上下文（索引、本层帧投影等）交给转移函数。
-    codeRefs: [src/state/useDeskState.ts]
   - id: state.desk.url-sync
     name: 路由同步
     parent: state.desk
@@ -126,26 +124,23 @@ modules:
     responsibility: 同步适配器之一：层次视图变化后调用异步布局，按序号丢弃过期结果，把定位好的视图回填给派生数据。
     codeRefs: [src/state/sync/layout.ts]
 
+  # 以下四个是 layout.ts 内的概念划分，文件归 Layout
   - id: state.layout.layered
     name: 分层总览排布
     parent: state.layout
     responsibility: 按层序自上而下分带，带内核心模块横向排开（含 +N 占位）；相邻层间的边画在带间空隙并横向错开，跨多层的边走右侧通道；核心跨层边画成曲线。
-    codeRefs: [src/layout/layout.ts]
   - id: state.layout.graph
     name: 普通层次排布
     parent: state.layout
     responsibility: 用 elkjs layered 算法排内部模块与内部边（正交走线、标签内联）；结果过于狭长时再试自左向右，取宽高比更接近画布者。
-    codeRefs: [src/layout/layout.ts]
   - id: state.layout.boundaries
     name: 边界节点排布
     parent: state.layout
     responsibility: 边界节点统一排在内部结构下方一行，按所连内部模块的平均横坐标排序以减少交叉；边界边画成曲线。外部参与者：用户类排在内部结构上方一行，外部系统与时间类排在右侧一列；内部结构外画系统边界虚线框。
-    codeRefs: [src/layout/layout.ts]
   - id: state.layout.runner
     name: 布局入口与缓存
     parent: state.layout
     responsibility: layoutView 按视图模式分派排布；浏览器里在 Worker 中运行 elk，无 Worker 环境用同步打包版；结果按视图内容缓存。
-    codeRefs: [src/layout/layout.ts]
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.pipeline.loader
@@ -176,6 +171,7 @@ modules:
     responsibility: 串起 load → validate → buildIndex，汇总两步的问题；模型层对外的唯一加载入口。
     codeRefs: [src/model/index.ts]
 
+  # 以下三个是 project.ts 内的概念划分，文件归 Projector
   - id: model.projector.endpoints
     name: 端点映射
     parent: model.projector
@@ -184,17 +180,14 @@ modules:
       - 两端落在不同子模块：恰好是子模块本身 → 直接边，否则 → 聚合边；
       - 两端落在同一子模块：属于更深层次，不画；
       - 一端在外部：提升为「最近公共祖先下、它那一侧的子模块」作为边界节点。
-    codeRefs: [src/model/project.ts]
   - id: model.projector.collector
     name: 边汇总
     parent: model.projector
     responsibility: 把映射后同一对节点的关系合并成一条边：分层总览按类型分开，普通层次按节点对合并并记录各类型条数；汇总同步 / 异步。
-    codeRefs: [src/model/project.ts]
   - id: model.projector.overview
     name: 分层总览
     parent: model.projector
     responsibility: 子模块全是层时产出带（层序、核心模块、隐藏数）与核心跨层边（端点落到核心模块，否则落到层）。
-    codeRefs: [src/model/project.ts]
 
 relations:
   # 呈现层内部
@@ -371,8 +364,8 @@ interfaces:
     name: createDeskState
     owner: state.desk
     signature: |
-      createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: string; version?: VersionRef }): DeskState
-      // DeskState: { state: ViewState（只读）, index, issues, 派生数据（view, positioned, scenarioView, sequence, diff, …）,
+      createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: string; version?: VersionRef; source?: SourceFetcher }): DeskState
+      // DeskState: { state: ViewState（只读）, index, issues, 派生数据（view, positioned, scenarioView, sequence, diff, ownership, fileHits, …）,
       //              dispatch(action), init(), attachRouter(router), …操作（见 if.desk.actions） }
     semantics: 每个项目的每个版本一份；在组件 setup 中创建，其 watch 与同步适配器随组件销毁。
   - id: if.desk.actions
@@ -383,6 +376,7 @@ interfaces:
       // 以下都是构造动作并 dispatch 的便捷包装
       drillInto(moduleId) · goTo(levelId, select?) · goUp() · select(s) · revealRelation(id) · revealModule(id) · setHover(id)
       openScenario(id) · closeScenario() · next() · prev() · seek(frameId | null) · chooseBranch(pointId, option)   // seek(null) = 回到开头
+      selectFile(path) · refreshSource() · sourceFile(path) · sourceExports(path)                                 // 源码（G）
     semantics: 操作本身不含规则；同一动作在任何状态下的效果由视图状态转移决定。
   - id: if.source.endpoints
     name: 模型端点
@@ -418,6 +412,7 @@ dataStructures:
         actors?: ActorDef[]          // 外部参与者
         scenario?: ScenarioDef
         scenarios?: ScenarioDef[]
+        sourceIgnore?: string[]      // 忽略清单（G8）
       }
     description: 一个 YAML 文件的顶层形状，与 schema/arch-file.schema.json 对应。
   - id: ds.RawFile
@@ -436,6 +431,7 @@ dataStructures:
         dataStructures: DataStructureEntity[]
         actors: ActorEntity[]
         scenarios: ScenarioEntity[]
+        sourceIgnore: string[]        // 各文件 sourceIgnore 的合并，不参与版本对比
       }
     description: 多个文件合并后的模型，每个实体记录出处 src { file, path, line }。
   - id: ds.Issue
@@ -522,7 +518,9 @@ dataStructures:
         | { kind: 'module'; id: string }
         | { kind: 'relation'; id: string }
         | { kind: 'edge'; id: string }     // 视图中的边（多为聚合边）
-    description: "当前选中对象，编码进 URL 的 sel 参数（m: / r: / e: 前缀）。"
+        | { kind: 'actor'; id: string }
+        | { kind: 'file'; id: string }     // 源码文件，id 为相对源码根目录的路径（G16）
+    description: "当前选中对象，编码进 URL 的 sel 参数（m: / r: / e: / a: / f: 前缀）。"
   - id: ds.ModelPayload
     name: ModelPayload
     definition: |
