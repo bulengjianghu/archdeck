@@ -13,6 +13,7 @@ import RelationPanel from './RelationPanel.vue'
 import EdgePanel from './EdgePanel.vue'
 import SystemPanel from './SystemPanel.vue'
 import ActorPanel from './ActorPanel.vue'
+import FilePanel from './FilePanel.vue'
 
 const desk = useDesk()
 const run = computed(() => desk.perspective.value === 'run')
@@ -25,6 +26,7 @@ const target = computed(() => {
   if (s?.kind === 'relation' && idx.relations.has(s.id)) return { kind: 'relation' as const, id: s.id }
   if (s?.kind === 'edge') return { kind: 'edge' as const, id: s.id }
   if (s?.kind === 'actor' && idx.actors.has(s.id)) return { kind: 'actor' as const, id: s.id }
+  if (s?.kind === 'file') return { kind: 'file' as const, id: s.id }
   const level = desk.levelId.value
   return level && level !== idx.rootId ? { kind: 'module' as const, id: level } : { kind: 'system' as const, id: idx.rootId }
 })
@@ -40,8 +42,9 @@ const target = computed(() => {
           <span class="badge accent">已钉住</span>
           <span class="muted">Esc、单击空白或单步回到当前步骤</span>
         </div>
-        <RunSection v-if="run" />
-        <component :is="run ? 'details' : 'div'" class="structure" :open="run ? false : undefined">
+        <FilePanel v-if="target.kind === 'file'" :key="`f:${target.id}`" :path="target.id" />
+        <RunSection v-if="run && target.kind !== 'file'" />
+        <component :is="run ? 'details' : 'div'" v-if="target.kind !== 'file'" class="structure" :open="run ? false : undefined">
           <summary v-if="run" class="structure-head">结构信息</summary>
           <ModulePanel v-if="target.kind === 'module'" :id="target.id" :key="`m:${target.id}`" />
           <RelationPanel v-else-if="target.kind === 'relation'" :id="target.id" :key="`r:${target.id}`" />

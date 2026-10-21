@@ -3,18 +3,24 @@
  * - 持有视图状态（一个值）、加载后的模型与对比基线；
  * - 唯一写入口 dispatch(action) → transition() → 写入新状态；对外的操作都是构造动作并 dispatch 的包装；
  * - 派生要画的数据（层次视图、差异……）；
- * - 与外界的交互交给同步适配器：路由（sync/router）、模型源（sync/modelSource）、布局（sync/layout）。
+ * - 与外界的交互交给同步适配器：路由（sync/router）、模型源（sync/modelSource）、布局（sync/layout）、源码（sync/source）。
  * 呈现层只读这里的状态、只调这里的操作，不直接调用模型层的计算。
  */
 import { computed, ref, shallowRef } from 'vue'
 import type { Router } from 'vue-router'
 import {
   RELATION_TYPES,
+  assignFiles,
   buildSequence,
   currentMessage,
   diffModels,
+  fileNodes,
+  fileTree,
   frameHome,
   landFrame,
+  matchExports,
+  moduleEntry,
+  moduleFiles,
   outlineScenario,
   participation,
   planScenario,
@@ -23,11 +29,17 @@ import {
   resolvePath,
   scenarioHome,
   scenarioModules,
+  sourceIssues,
   stageEnds,
   stepAfter,
   walkedCount,
+  type DirNode,
+  type ExportMatch,
+  type ExportedSymbol,
+  type FileNodes,
   type Issue,
   type LevelView,
+  type ModuleEntry,
   type ModelDiff,
   type ModelIndex,
   type OutlineNode,
@@ -35,6 +47,7 @@ import {
   type ScenarioLevelView,
   type ScenarioPlan,
   type SequenceModel,
+  type SourceOwnership,
 } from '@/model'
 import type { DesignInfo, VersionRef } from '@/model/design'
 import { layoutSequence, type PositionedSequence } from '@/layout/sequence'
@@ -54,12 +67,17 @@ import {
 import { createRouterSync, type RouterSync, type RouterSyncOptions } from './sync/router'
 import { fetchAndLoad, watchModelChanges, type Baseline, type ChangeEvents, type FetchModel } from './sync/modelSource'
 import { createLayoutSync } from './sync/layout'
+import { NO_SOURCE, createSourceSync, type SourceFetcher } from './sync/source'
 
 export type { Selection, Toggles } from './transition'
 export { encodeSelection, decodeSelection } from './transition'
 export type { CompareSource, ModelPayload, FetchModel } from './sync/modelSource'
+export type { SourceFetcher, Resource } from './sync/source'
 
-export type DeskOptions = RouterSyncOptions
+export type DeskOptions = RouterSyncOptions & {
+  /** 被描述项目的源码（G1、G2）；缺省等同构建态（不含源码） */
+  source?: SourceFetcher
+}
 
 export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {}) {
   const status = ref<'loading' | 'ready' | 'error'>('loading')
@@ -73,6 +91,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   /** 每次层次切换递增，界面据此决定是否适应画布 */
   const levelVersion = ref(0)
   let router: RouterSync | null = null
+  const sourceSync = createSourceSync(options.source ?? NO_SOURCE)
 
   // ── 唯一写入口 ──
   /** 返回状态是否改变 */
@@ -165,13 +184,48 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   /** 钉住对象在本场景中的参与（V6）；运行视角下有选中时才有 */
   const pinnedParticipation = computed<Participation | null>(() => {
     const s = state.value.selection
-    if (!index.value || !path.value || !scenarioView.value || !s) return null
+    if (!index.value || !path.value || !scenarioView.value || !s || s.kind === 'file') return null
     return participation(index.value, path.value.frames, scenarioView.value, s, state.value.playback?.frameId)
   })
 
   /** 导航树：步骤大纲（T6）与参与本场景的模块（T5），与层次、播放头无关 */
   const outline = computed<OutlineNode[]>(() => (plan.value ? outlineScenario(plan.value, choices.value) : []))
   const participants = computed<ReadonlySet<string>>(() => (index.value && plan.value ? scenarioModules(index.value, plan.value) : new Set()))
+
+  // ── 源码（G）：清单由源码同步取得，归属与投影调用模型层 ──
+  const source = sourceSync.tree
+  const localSource = computed(() => (source.value?.status === 'local' ? source.value : null))
+  const ownership = computed<SourceOwnership | null>(() =>
+    index.value && localSource.value ? assignFiles(index.value, localSource.value.files, index.value.model.sourceIgnore) : null,
+  )
+  const sourceTree = computed<DirNode | null>(() => (localSource.value && ownership.value ? fileTree(localSource.value.files, ownership.value) : null))
+  const selectedFile = computed(() => (state.value.selection?.kind === 'file' ? state.value.selection.id : null))
+  /** 选中文件的归属模块（冲突时多个，G6） */
+  const fileOwners = computed<string[]>(() => (selectedFile.value ? (ownership.value?.owners.get(selectedFile.value) ?? []) : []))
+  /** G14：选中文件在当前层次的投影 */
+  const fileHits = computed<FileNodes | null>(() =>
+    index.value && view.value && selectedFile.value ? fileNodes(index.value, view.value, fileOwners.value) : null,
+  )
+  /** G13：选中模块的文件 */
+  const moduleFileSet = computed<ReadonlySet<string>>(() => {
+    const s = state.value.selection
+    if (!index.value || !ownership.value || s?.kind !== 'module') return new Set()
+    return new Set(moduleFiles(index.value, ownership.value, s.id))
+  })
+  const filesOf = (moduleId: string): string[] => (index.value && ownership.value ? moduleFiles(index.value, ownership.value, moduleId) : [])
+  const entryOf = (moduleId: string): ModuleEntry | null =>
+    index.value && ownership.value && localSource.value ? moduleEntry(index.value, ownership.value, localSource.value, moduleId) : null
+  /** G12：入口导出与模块 provides 的对应 */
+  const exportMatch = (moduleId: string, symbols: readonly ExportedSymbol[]): ExportMatch | null =>
+    index.value ? matchExports(index.value, moduleId, symbols) : null
+  /** 以某个文件为入口的模块 */
+  const entryModulesOf = (file: string): string[] =>
+    index.value && ownership.value ? index.value.model.modules.filter(m => entryOf(m.id)?.file === file).map(m => m.id) : []
+  /** G9：归属警告只对当前版本报 */
+  const sourceWarnings = computed<Issue[]>(() =>
+    !options.version && index.value && ownership.value && localSource.value ? sourceIssues(index.value, ownership.value, localSource.value) : [],
+  )
+  const allIssues = computed(() => [...issues.value, ...sourceWarnings.value])
 
   /** 打开的设计（当前版本时为 null） */
   const design = computed(() => (options.version ? (designs.value.find(d => d.id === options.version!.design) ?? null) : null))
@@ -215,7 +269,10 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       status.value = 'ready'
       loadError.value = undefined
       // 首次加载由 init() 按 URL 决定层次；重新加载时保留层次与选中（N5）
-      if (prevIndex) dispatch({ type: 'reloaded', previousPath })
+      if (prevIndex) {
+        dispatch({ type: 'reloaded', previousPath })
+        void sourceSync.refresh()
+      }
     } catch (e) {
       status.value = index.value ? 'ready' : 'error'
       loadError.value = e instanceof Error ? e.message : String(e)
@@ -234,6 +291,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
 
   /** 首次加载：以 URL 为准 */
   async function init() {
+    void sourceSync.refresh()
     await reload()
     if (!index.value) return
     dispatch({ type: 'restore', query: router?.query() ?? {} })
@@ -255,6 +313,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const prev = () => void dispatch({ type: 'prev' })
   const seek = (frameId: string | null) => void dispatch({ type: 'seek', frameId })
   const chooseBranch = (pointId: string, option: number) => void dispatch({ type: 'chooseBranch', pointId, option })
+  const selectFile = (path: string) => select({ kind: 'file', id: path })
 
   /** 键盘（N7、N9）：返回 'leave' 表示应回到项目列表，由呈现层导航 */
   function pressKey(key: string): 'leave' | boolean {
@@ -302,6 +361,22 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     frameLevel,
     overlay,
     levelVersion,
+    source,
+    ownership,
+    sourceTree,
+    selectedFile,
+    fileOwners,
+    fileHits,
+    moduleFileSet,
+    sourceWarnings,
+    allIssues,
+    filesOf,
+    entryOf,
+    exportMatch,
+    entryModulesOf,
+    sourceFile: sourceSync.file,
+    sourceExports: sourceSync.exports,
+    refreshSource: sourceSync.refresh,
     designs,
     design,
     revision,
@@ -330,6 +405,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     prev,
     seek,
     chooseBranch,
+    selectFile,
   }
 }
 

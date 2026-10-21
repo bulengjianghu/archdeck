@@ -8,6 +8,7 @@ import DataStructureItem from './DataStructureItem.vue'
 import RelationRow from './RelationRow.vue'
 import ChangeBadge from './ChangeBadge.vue'
 import DesignNote from './DesignNote.vue'
+import ModuleSource from './ModuleSource.vue'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -108,6 +109,8 @@ function openChild(childId: string) {
         <li v-if="m.owner" class="muted">负责人：{{ m.owner }}</li>
       </ul>
     </Section>
+
+    <ModuleSource :id="m.id" />
 
     <footer class="src muted">出处：{{ desk.modelDir.value }}/{{ m.src.file }}{{ m.src.line ? `:${m.src.line}` : '' }}</footer>
   </div>

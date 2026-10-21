@@ -2,7 +2,7 @@
 /**
  * 模块树（T2–T5）：系统为根的完整模块层级。
  * - 状态 → 树：当前层次的祖先链展开并标出当前层次，选中的模块高亮、展开到它并滚到可见；
- *   运行视角下标出参与本场景的模块与当前步骤的两端。
+ *   运行视角下标出参与本场景的模块与当前步骤的两端；选中文件时标出其归属模块并展开到它（G14）。
  * - 树 → 意图：单击定位（N4），单击系统回根层，双击有子模块的下钻（N1、N2）；悬停本层可见的模块等同悬停画布节点。
  * 展开状态只属于这块界面。
  */
@@ -39,12 +39,13 @@ function reveal(id: string | null) {
   expanded.value = next
 }
 watch(
-  () => [desk.levelId.value, selectedId.value, desk.index.value] as const,
+  () => [desk.levelId.value, selectedId.value, desk.index.value, desk.fileOwners.value] as const,
   async () => {
     reveal(desk.levelId.value)
     reveal(selectedId.value)
+    for (const o of desk.fileOwners.value) reveal(o)
     await nextTick()
-    const target = selectedId.value ?? desk.levelId.value
+    const target = selectedId.value ?? desk.fileOwners.value[0] ?? desk.levelId.value
     const row = [...(root.value?.querySelectorAll<HTMLElement>('[data-id]') ?? [])].find(el => el.dataset.id === target)
     row?.scrollIntoView?.({ block: 'nearest' })
   },
@@ -64,6 +65,7 @@ const ctx = computed(() => ({
   selectedId: selectedId.value,
   participants: run.value ? desk.participants.value : new Set<string>(),
   active: active.value,
+  fileOwners: new Set(desk.fileOwners.value),
 }))
 
 function pick(id: string) {

@@ -6,7 +6,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import NavTree from '../../src/components/tree/NavTree.vue'
 import { createDeskState } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
-import { DEFAULT_LAYOUT, directionOf, setDirection, toggleSlot } from '../../src/components/split/paneLayout'
+import { DEFAULT_LAYOUT, directionOf, readLayout, setDirection, toggleSlot } from '../../src/components/split/paneLayout'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
 async function mountTree(url = '/', files = sampleFiles()) {
@@ -22,9 +22,9 @@ async function mountTree(url = '/', files = sampleFiles()) {
 }
 
 describe('模块树', () => {
-  it('T1、T3：结构视角只有模块页签；展开到当前层次并标出它，选中的模块高亮', async () => {
+  it('T1、T3：结构视角有模块与文件页签；展开到当前层次并标出它，选中的模块高亮', async () => {
     const { wrapper, row } = await mountTree('/?level=infra.framework&sel=m:infra.framework.sm')
-    expect(wrapper.findAll('[role=tab]').map(t => t.text())).toEqual(['模块'])
+    expect(wrapper.findAll('[role=tab]').map(t => t.text())).toEqual(['模块', '文件'])
     expect(row('infra.framework')!.classes()).toContain('level')
     expect(row('infra.framework.sm')!.classes()).toContain('selected')
     // 祖先链展开，旁支不展开
@@ -88,12 +88,24 @@ describe('运行视角', () => {
     const { wrapper, desk } = await mountTree('/', scenarioFiles())
     desk.openScenario('sc.play')
     await flushPromises()
-    expect(wrapper.findAll('[role=tab]').map(t => t.text())).toEqual(['模块', '步骤'])
+    expect(wrapper.findAll('[role=tab]').map(t => t.text())).toEqual(['模块', '文件', '步骤'])
     expect(wrapper.find('.step-tree').exists()).toBe(true)
     desk.closeScenario()
     await flushPromises()
     expect(wrapper.find('.step-tree').exists()).toBe(false)
-    expect(wrapper.findAll('[role=tab]')).toHaveLength(1)
+    expect(wrapper.findAll('[role=tab]')).toHaveLength(2)
+  })
+
+  it('T1：选中文件切到文件页签（ADR-0007）', async () => {
+    const { wrapper, desk } = await mountTree('/', scenarioFiles())
+    desk.openScenario('sc.play')
+    await flushPromises()
+    desk.selectFile('src/a.ts')
+    await flushPromises()
+    expect(wrapper.find('[role=tab][aria-selected=true]').text()).toBe('文件')
+    expect(wrapper.find('.file-tree').exists()).toBe(true)
+    // 未注入源码来源时等同构建态，只给提示
+    expect(wrapper.text()).toContain('构建产物不含源码')
   })
 
   it('T5：模块树标出参与模块与当前步骤的两端', async () => {
@@ -154,10 +166,16 @@ describe('运行视角', () => {
 describe('分屏方向（W-4）', () => {
   it('默认左右；切换方向保留比例与收起状态', () => {
     expect(directionOf(DEFAULT_LAYOUT)).toBe('row')
-    const folded = toggleSlot(DEFAULT_LAYOUT, 'sequence')
+    const folded = toggleSlot(DEFAULT_LAYOUT, 'aside')
     const col = setDirection(folded, 'column')
     expect(directionOf(col)).toBe('column')
     expect(col.kind === 'split' && col.sizes).toEqual(DEFAULT_LAYOUT.kind === 'split' && DEFAULT_LAYOUT.sizes)
     expect(col.kind === 'split' && col.children[1]).toMatchObject({ collapsed: true })
+  })
+
+  it('副栏泛化前存下的布局（槽位 sequence）读出时改为 aside，方向与收起保留', () => {
+    const old = { kind: 'split', dir: 'column', sizes: [0.6, 0.4], children: [{ kind: 'pane', slot: 'structure' }, { kind: 'pane', slot: 'sequence', collapsed: true }] }
+    localStorage.setItem('h5p-arch-desk:split:v2:legacy', JSON.stringify(old))
+    expect(readLayout('legacy')).toEqual({ ...old, children: [old.children[0], { kind: 'pane', slot: 'aside', collapsed: true }] })
   })
 })

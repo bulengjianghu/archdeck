@@ -4,8 +4,9 @@ import { useDesk } from '@/state/inject'
 
 const desk = useDesk()
 const open = ref(false)
-const errors = computed(() => desk.issues.value.filter(i => i.severity === 'error'))
-const warnings = computed(() => desk.issues.value.filter(i => i.severity === 'warning'))
+// 描述的问题与源码归属警告（G9，只对当前版本）
+const errors = computed(() => desk.allIssues.value.filter(i => i.severity === 'error'))
+const warnings = computed(() => desk.allIssues.value.filter(i => i.severity === 'warning'))
 const sorted = computed(() => [...errors.value, ...warnings.value])
 </script>
 

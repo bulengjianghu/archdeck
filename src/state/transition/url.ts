@@ -4,7 +4,7 @@
  * | 参数    | 含义                                              |
  * |---------|---------------------------------------------------|
  * | `level` | 当前层次（根层省略）                              |
- * | `sel`   | 选中，`m:` / `r:` / `e:` / `a:` 前缀              |
+ * | `sel`   | 选中，`m:` / `r:` / `e:` / `a:` / `f:` 前缀       |
  * | `sc`    | 打开的场景（有即运行视角）                        |
  * | `step`  | 播放头帧 ID                                       |
  * | `alt`   | 已选分支：路径上依次经过的分支点的选项，以 `.` 连接 |
@@ -13,8 +13,8 @@ import { choiceList, choicesFromList, planScenario, resolvePath, type ModelIndex
 import { selectionExists, withLevel } from './navigation'
 import type { PlaybackState, Query, Selection, TransitionContext, TransitionResult, ViewState } from './types'
 
-const SELECTION_PREFIX = { module: 'm', relation: 'r', edge: 'e', actor: 'a' } as const
-const SELECTION_KIND = { m: 'module', r: 'relation', e: 'edge', a: 'actor' } as const
+const SELECTION_PREFIX = { module: 'm', relation: 'r', edge: 'e', actor: 'a', file: 'f' } as const
+const SELECTION_KIND = { m: 'module', r: 'relation', e: 'edge', a: 'actor', f: 'file' } as const
 
 export function encodeSelection(s: Selection | null): string | undefined {
   if (!s) return undefined
@@ -23,7 +23,7 @@ export function encodeSelection(s: Selection | null): string | undefined {
 
 export function decodeSelection(raw: unknown): Selection | null {
   if (typeof raw !== 'string') return null
-  const m = /^([mrea]):(.+)$/.exec(raw)
+  const m = /^([mreaf]):(.+)$/.exec(raw)
   if (!m) return null
   return { kind: SELECTION_KIND[m[1] as keyof typeof SELECTION_KIND], id: m[2] }
 }

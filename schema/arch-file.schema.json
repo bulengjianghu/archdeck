@@ -50,6 +50,10 @@
       "items": {
         "$ref": "#/definitions/scenario"
       }
+    },
+    "sourceIgnore": {
+      "$ref": "#/definitions/textList",
+      "description": "忽略清单（G8）：不属于任何模块的源码文件，glob 相对源码根目录"
     }
   },
   "definitions": {
@@ -150,6 +154,10 @@
         },
         "codeRefs": {
           "$ref": "#/definitions/textList"
+        },
+        "entry": {
+          "type": "string",
+          "description": "对外入口文件，相对源码根目录；不写时按约定推出（G10）"
         },
         "docRefs": {
           "$ref": "#/definitions/textList"

@@ -176,6 +176,7 @@ export function validate(input: ArchModel): ValidateResult {
     dataStructures: [...dataStructures.values()],
     actors: [...actors.values()],
     scenarios: [],
+    sourceIgnore: input.sourceIgnore ?? [],
   }
 
   // ── 场景（S5–S13）──

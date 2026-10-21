@@ -11,6 +11,21 @@ export interface ModuleTreeContext {
   participants: ReadonlySet<string>
   /** T5：当前步骤两端及其祖先 */
   active: ReadonlySet<string>
+  /** G14：选中文件的归属模块 */
+  fileOwners: ReadonlySet<string>
+}
+
+/** 文件树（G13）：展开状态、选中与高亮、归属标记 */
+export interface FileTreeContext {
+  expanded: ReadonlySet<string>
+  selected: string | null
+  /** 选中模块的文件 */
+  hits: ReadonlySet<string>
+  hitDirs: ReadonlySet<string>
+  unowned: ReadonlySet<string>
+  conflicts: ReadonlySet<string>
+  ignored: ReadonlySet<string>
+  onlyUnowned: boolean
 }
 
 /** T7：一帧在步骤树上的标记 */

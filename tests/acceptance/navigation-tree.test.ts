@@ -107,7 +107,7 @@ describe('§6.3 导航树与分屏验收', () => {
   it('5. 分屏默认左右；切换为上下后按项目记在本地，刷新仍保持；收起状态随之保留', () => {
     expect(directionOf(DEFAULT_LAYOUT)).toBe('row')
     expect(directionOf(readLayout('acceptance'))).toBe('row')
-    saveLayout('acceptance', toggleSlot(setDirection(DEFAULT_LAYOUT, 'column'), 'sequence'))
+    saveLayout('acceptance', toggleSlot(setDirection(DEFAULT_LAYOUT, 'column'), 'aside'))
     const again = readLayout('acceptance')
     expect(directionOf(again)).toBe('column')
     expect(again.kind === 'split' && again.children[1]).toMatchObject({ collapsed: true })

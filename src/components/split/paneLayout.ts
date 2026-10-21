@@ -1,9 +1,10 @@
 /**
  * 分屏布局树（W-4）：可序列化的值，视图组件只按槽位挂载，不知道自己的位置。
- * 提供「两块、方向可切换（默认左右）、比例可拖、时序图可收起」；按项目记在本地，不进视图状态与 URL。
+ * 提供「两块、方向可切换（默认左右）、比例可拖、副栏可收起」；按项目记在本地，不进视图状态与 URL。
+ * 槽位：structure 结构图；aside 副栏（时序图 / 源代码，G15）。
  * 以后的自由拖拽分屏只扩展这里的编辑操作。
  */
-export type PaneSlot = 'structure' | 'sequence'
+export type PaneSlot = 'structure' | 'aside'
 
 export type PaneLayout =
   | { kind: 'pane'; slot: PaneSlot; collapsed?: boolean }
@@ -15,7 +16,7 @@ export const DEFAULT_LAYOUT: PaneLayout = {
   sizes: [0.55, 0.45],
   children: [
     { kind: 'pane', slot: 'structure' },
-    { kind: 'pane', slot: 'sequence' },
+    { kind: 'pane', slot: 'aside' },
   ],
 }
 
@@ -54,7 +55,7 @@ export function setDirection(layout: PaneLayout, dir: 'row' | 'column'): PaneLay
 export function isPaneLayout(x: unknown): x is PaneLayout {
   if (!x || typeof x !== 'object') return false
   const o = x as Record<string, unknown>
-  if (o.kind === 'pane') return o.slot === 'structure' || o.slot === 'sequence'
+  if (o.kind === 'pane') return o.slot === 'structure' || o.slot === 'aside'
   return (
     o.kind === 'split' &&
     (o.dir === 'row' || o.dir === 'column') &&
@@ -68,9 +69,17 @@ export function isPaneLayout(x: unknown): x is PaneLayout {
 // v2：默认方向改为左右（ADR-0006），旧的上下比例不再沿用
 const key = (project?: string) => `h5p-arch-desk:split:v2:${project ?? '-'}`
 
+/** 旧的槽位名 sequence（副栏泛化前，ADR-0007）读出时改为 aside */
+function migrate(x: unknown): unknown {
+  if (!x || typeof x !== 'object') return x
+  const o = x as Record<string, unknown>
+  if (o.kind === 'pane') return o.slot === 'sequence' ? { ...o, slot: 'aside' } : o
+  return Array.isArray(o.children) ? { ...o, children: o.children.map(migrate) } : o
+}
+
 export function readLayout(project?: string): PaneLayout {
   try {
-    const raw = JSON.parse(localStorage.getItem(key(project)) ?? 'null')
+    const raw = migrate(JSON.parse(localStorage.getItem(key(project)) ?? 'null'))
     return isPaneLayout(raw) ? raw : DEFAULT_LAYOUT
   } catch {
     return DEFAULT_LAYOUT

@@ -7,7 +7,7 @@ defineOptions({ name: 'SplitView' })
 const props = withDefaults(defineProps<{ layout: PaneLayout; path?: number[]; hidden?: PaneSlot[] }>(), { path: () => [], hidden: () => [] })
 const emit = defineEmits<{ resize: [path: number[], i: number, ratio: number]; toggle: [slot: PaneSlot] }>()
 type SlotProps = { collapsed: boolean; toggle: () => void }
-defineSlots<{ structure?: (p: SlotProps) => unknown; sequence?: (p: SlotProps) => unknown }>()
+defineSlots<{ structure?: (p: SlotProps) => unknown; aside?: (p: SlotProps) => unknown }>()
 const toggleSelf = () => props.layout.kind === 'pane' && emit('toggle', props.layout.slot)
 const box = ref<HTMLElement>()
 
@@ -59,7 +59,7 @@ function onUp() {
       />
       <div v-show="!isHidden(child)" class="cell" :style="{ flex: flexOf(k) }">
         <SplitView :layout="child" :path="[...path, k]" :hidden="hidden" @resize="(p, i, r) => emit('resize', p, i, r)" @toggle="s => emit('toggle', s)">
-          <template v-for="name in ['structure', 'sequence'] as const" #[name]="slotProps: SlotProps" :key="name">
+          <template v-for="name in ['structure', 'aside'] as const" #[name]="slotProps: SlotProps" :key="name">
             <slot :name="name" v-bind="slotProps" />
           </template>
         </SplitView>

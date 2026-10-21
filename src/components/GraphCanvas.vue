@@ -3,6 +3,7 @@
  * GraphCanvas：把 PositionedView 画成节点和边；处理平移、缩放、单击、双击、悬停。
  * 运行视角下作为舞台（V5）：本层参与的节点与走过的边突出、其余变淡，当前消息沿步骤方向流动（P10），
  * 未建模的消息画临时虚线（P11），步骤序号可单击指向（R13），停在分支点时预览各选项（F6）。
+ * 选中文件时，其归属模块在本层的投影节点加文件高亮（G14）。
  * 只读 DeskState、只发操作意图，不做任何投影或布局计算。
  */
 import { computed, nextTick, ref, watch } from 'vue'
@@ -140,8 +141,10 @@ const nodes = computed<Node<NodeData>[]>(() => {
   const out: Node<NodeData>[] = []
   // 运行视角：本层参与的节点突出，其余变淡（V5）；结构视角：与焦点无关的变淡
   const dimmed = (id: string, base: boolean) => (st ? !st.active.has(id) : base)
+  const fileHit = desk.fileHits.value?.nodes
+  const classOf = (id: string) => [playClass(id), fileHit?.has(id) ? 'file-hit' : ''].filter(Boolean).join(' ') || undefined
   const place = (id: string, box: Box, type: string, data: NodeData, zIndex: number) =>
-    out.push({ id, type, position: { x: box.x, y: box.y }, data, zIndex, width: box.w, height: box.h, style: { width: `${box.w}px`, height: `${box.h}px` }, selectable: false, draggable: false, connectable: false, class: playClass(id) })
+    out.push({ id, type, position: { x: box.x, y: box.y }, data, zIndex, width: box.w, height: box.h, style: { width: `${box.w}px`, height: `${box.h}px` }, selectable: false, draggable: false, connectable: false, class: classOf(id) })
 
   if (pv.frame) {
     place('frame', pv.frame, 'frame', { moduleId: pv.view.parentId, name: moduleName(idx, pv.view.parentId), childCount: 0, selected: false, dim: false }, -1)

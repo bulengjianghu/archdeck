@@ -38,7 +38,10 @@ export interface ModuleDef {
   principle?: string
   dataStructures?: string[]
   provides?: string[]
+  /** 源码路径或 glob，相对源码根目录（G3） */
   codeRefs?: string[]
+  /** 对外入口文件，相对源码根目录；不写时按约定推出（G10） */
+  entry?: string
   docRefs?: string[]
   owner?: string
   tags?: string[]
@@ -139,6 +142,8 @@ export interface ArchFileDef {
   actors?: ActorDef[]
   scenario?: ScenarioDef
   scenarios?: ScenarioDef[]
+  /** 忽略清单（G8）：不属于任何模块的源码文件 */
+  sourceIgnore?: string[]
 }
 
 // ── 加载产物 ─────────────────────────────────────────────────
@@ -218,6 +223,8 @@ export interface ArchModel {
   dataStructures: DataStructureEntity[]
   actors: ActorEntity[]
   scenarios: ScenarioEntity[]
+  /** 各文件 sourceIgnore 的合并（G8），不参与版本对比 */
+  sourceIgnore: string[]
 }
 
 export type IssueSeverity = 'error' | 'warning'

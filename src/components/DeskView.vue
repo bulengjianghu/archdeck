@@ -6,6 +6,7 @@
 import { computed, onBeforeUnmount, onMounted, provide, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { createDeskState, type ModelPayload } from '@/state/useDeskState'
+import { httpSourceFetcher } from './source/httpSource'
 import { DESK_STATE } from '@/state/inject'
 import GraphCanvas from './GraphCanvas.vue'
 import Breadcrumb from './Breadcrumb.vue'
@@ -15,11 +16,13 @@ import VersionSwitcher from './VersionSwitcher.vue'
 import DesignBar from './DesignBar.vue'
 import PerspectiveSwitch from './PerspectiveSwitch.vue'
 import PlayerBar from './PlayerBar.vue'
-import SequenceView from './sequence/SequenceView.vue'
 import SplitView from './split/SplitView.vue'
+import AsidePane from './split/AsidePane.vue'
+import { useAside } from './split/useAside'
 import { directionOf, readLayout, resize, saveLayout, setDirection, toggleSlot, type PaneLayout } from './split/paneLayout'
 import Panel from './panel/Panel.vue'
 import NavTree from './tree/NavTree.vue'
+import { OPEN_PREVIEW } from './source/preview'
 
 const props = defineProps<{ project: string; design?: string; revision?: string }>()
 const router = useRouter()
@@ -35,7 +38,7 @@ async function fetchModel(): Promise<ModelPayload> {
   return res.json()
 }
 
-const desk = createDeskState(fetchModel, { project: props.project, version })
+const desk = createDeskState(fetchModel, { project: props.project, version, source: httpSourceFetcher(props.project, import.meta.env.BASE_URL) })
 desk.attachRouter(router)
 provide(DESK_STATE, desk)
 // 开发态便于在浏览器控制台检查状态
@@ -87,7 +90,12 @@ function onDividerUp() {
   dragging = null
 }
 
-// 画布区分屏：结构图与时序图左右或上下排列（W-4），方向、比例与收起状态按项目记在本地
+// 副栏（G15）：页签与预览文件只属于这块界面
+const aside = useAside(desk)
+const { previewPath, tab: asideTab, run } = aside
+provide(OPEN_PREVIEW, aside.open)
+
+// 画布区分屏：结构图与副栏左右或上下排列（W-4），方向、比例与收起状态按项目记在本地
 const paneLayout = ref<PaneLayout>(readLayout(props.project))
 const paneDir = computed(() => directionOf(paneLayout.value))
 function onDirection(dir: 'row' | 'column') {
@@ -98,7 +106,7 @@ function onResize(path: number[], i: number, ratio: number) {
   paneLayout.value = resize(paneLayout.value, path, i, ratio)
   saveLayout(props.project, paneLayout.value)
 }
-function onToggle(slot: 'structure' | 'sequence') {
+function onToggle(slot: 'structure' | 'aside') {
   paneLayout.value = toggleSlot(paneLayout.value, slot)
   saveLayout(props.project, paneLayout.value)
 }
@@ -166,13 +174,24 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         </div>
       </div>
       <template v-else>
-        <SplitView :layout="paneLayout" :hidden="desk.perspective.value === 'run' ? [] : ['sequence']" @resize="onResize" @toggle="onToggle">
+        <SplitView :layout="paneLayout" :hidden="aside.hidden.value ? ['aside'] : []" @resize="onResize" @toggle="onToggle">
           <template #structure>
             <GraphCanvas />
             <IssueBanner />
           </template>
-          <template #sequence="{ collapsed, toggle }">
-            <SequenceView v-if="desk.perspective.value === 'run'" :collapsed="collapsed" :dir="paneDir" @toggle="toggle" @direction="onDirection" />
+          <template #aside="{ collapsed, toggle }">
+            <AsidePane
+              v-if="!aside.hidden.value"
+              :collapsed="collapsed"
+              :dir="paneDir"
+              :tab="asideTab"
+              :run="run"
+              :preview-path="previewPath"
+              @toggle="toggle"
+              @direction="onDirection"
+              @tab="t => (asideTab = t)"
+              @close="aside.close"
+            />
           </template>
         </SplitView>
         <PlayerBar v-if="desk.perspective.value === 'run'" class="player-bar" />

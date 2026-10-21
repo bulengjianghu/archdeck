@@ -5,7 +5,7 @@
 import { lowestCommonAncestor, nearestExisting, nearestVisibleLevel, type ModelIndex } from '@/model'
 import type { Selection, Toggles, TransitionResult, ViewAction, ViewState } from './types'
 
-/** 选中的对象在本模型中是否存在；视图边按 ID 规则重算，总视为存在 */
+/** 选中的对象在本模型中是否存在；视图边按 ID 规则重算、文件不在模型里（G16，由面板提示），总视为存在 */
 export function selectionExists(index: ModelIndex, s: Selection | null): s is Selection {
   if (!s) return false
   switch (s.kind) {
@@ -16,6 +16,7 @@ export function selectionExists(index: ModelIndex, s: Selection | null): s is Se
     case 'actor':
       return index.actors.has(s.id)
     case 'edge':
+    case 'file':
       return true
   }
 }

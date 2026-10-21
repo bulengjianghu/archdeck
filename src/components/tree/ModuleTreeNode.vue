@@ -24,6 +24,7 @@ const name = computed(() => (isRoot.value ? props.ctx.index.model.system.name : 
       :class="{
         level: ctx.levelId === id,
         selected: ctx.selectedId === id,
+        owner: ctx.fileOwners.has(id),
         part: ctx.participants.has(id),
         active: ctx.active.has(id),
         target: mod?.status === 'target',
@@ -122,6 +123,18 @@ ul {
   font-style: italic;
   color: var(--text-2);
   text-decoration: underline dashed var(--border-strong);
+}
+
+.owner {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+  border-left-style: dashed;
+}
+
+.owner > .name::after {
+  content: ' · 文件归属';
+  font-size: 10.5px;
+  color: var(--accent);
 }
 
 .dimmed {

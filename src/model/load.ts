@@ -44,6 +44,7 @@ export function load(files: readonly RawFile[]): LoadResult {
   const dataStructures: DataStructureEntity[] = []
   const actors: ActorEntity[] = []
   const scenarios: ScenarioEntity[] = []
+  const sourceIgnore: string[] = []
   let seq = 0
 
   const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path))
@@ -84,6 +85,7 @@ export function load(files: readonly RawFile[]): LoadResult {
     }
     if (data.scenario) pushScenario(data.scenario, ['scenario'])
     data.scenarios?.forEach((x, i) => pushScenario(x, ['scenarios', i]))
+    if (data.sourceIgnore) sourceIgnore.push(...data.sourceIgnore)
   }
 
   let system = DEFAULT_SYSTEM
@@ -97,7 +99,7 @@ export function load(files: readonly RawFile[]): LoadResult {
   }
   for (const m of modules) if (m.parentId === undefined) m.parentId = system.id
 
-  return { model: { system, modules, relations, interfaces, dataStructures, actors, scenarios }, issues }
+  return { model: { system, modules, relations, interfaces, dataStructures, actors, scenarios, sourceIgnore }, issues }
 }
 
 /** 步骤树规整为 Step：记录路径（F2）与出处，payload 规整为数组 */

@@ -76,7 +76,7 @@ interface PlaybackState {
 | 路由同步 | 地址 = `encode(state)`，按历史标注 push / replace | 后退、前进、改地址、打开分享链接 → `decode` → `restore` |
 | 模型源同步 | — | 取描述文件 → `loaded`；本项目 `arch-model:changed` → 重新取 → `reloaded` |
 | 布局同步 | 层次视图变化 → 调用 `layoutView` | 布局完成 → 回填定位结果（序号过期则丢弃） |
-| 源码同步 | — | 进入项目、描述重新加载、用户刷新 → 取 `source/<项目>.json`（404 视为构建态 `unavailable`，G2）；文件内容与导出按路径按需取、按清单版本缓存（[源码接入与归属 §2.1](./source.md#21-端点)） |
+| 源码同步 | — | 进入项目、描述重新加载、用户刷新 → 经注入的 `SourceFetcher`（项目视图注入 `httpSourceFetcher`）取 `source/<项目>.json`（404 视为构建态 `unavailable`，G2）；文件内容与导出按路径按需取、按清单版本缓存（[源码接入与归属 §2.1](./source.md#21-端点)） |
 
 **路由回声**：路由导航是异步的。自己发起的导航完成前，路由变化一律视为回声、不回写状态；否则双击（两次选中 + 一次下钻）时旧地址会覆盖新层次。离开本项目或本版本的路由时也不回写。
 
@@ -154,7 +154,7 @@ type ViewAction =
   | { type: 'chooseBranch'; pointId; option }
 
 createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: string; version?: VersionRef; source?: SourceFetcher }): DeskState
-// SourceFetcher: { tree(): Promise<SourcePayload>; file(path): Promise<SourceFile | null>; exports(path): Promise<ExportedSymbol[] | null> }；缺省按 HTTP 端点取
+// SourceFetcher: { tree(): Promise<SourcePayload>; file(path): Promise<SourceFile | null>; exports(path): Promise<ExportedSymbol[] | null> }；缺省等同构建态（不含源码），项目视图注入 `httpSourceFetcher`
 // DeskState：state（只读）、index、issues、派生数据、dispatch、init()、attachRouter(router)，以及操作：
 //   drillInto · goTo · goUp · select · revealRelation · revealModule · setHover
 //   openScenario · closeScenario · next · prev · seek · chooseBranch · refreshSource · sourceFile(path) · sourceExports(path)

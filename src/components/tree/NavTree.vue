@@ -1,18 +1,24 @@
 <script setup lang="ts">
 /**
- * 导航树（W-7、T1）：左侧固定栏，「模块」「步骤」两个页签。步骤页签只在运行视角出现；
- * 进入运行视角切到步骤页签，退出切回模块页签。页签只属于这块界面，不进视图状态与 URL。
+ * 导航树（W-7、T1）：左侧固定栏，「模块」「文件」「步骤」三个页签。步骤页签只在运行视角出现；
+ * 进入运行视角切到步骤页签，退出切回模块页签，选中文件切到文件页签。页签只属于这块界面，不进视图状态与 URL。
  */
 import { ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'
 import ModuleTree from './ModuleTree.vue'
 import StepTree from './StepTree.vue'
+import FileTree from './FileTree.vue'
 
 const desk = useDesk()
-const tab = ref<'modules' | 'steps'>(desk.perspective.value === 'run' ? 'steps' : 'modules')
+type Tab = 'modules' | 'files' | 'steps'
+const tab = ref<Tab>(desk.selectedFile.value ? 'files' : desk.perspective.value === 'run' ? 'steps' : 'modules')
 watch(
   () => desk.perspective.value,
   p => (tab.value = p === 'run' ? 'steps' : 'modules'),
+)
+watch(
+  () => desk.selectedFile.value,
+  f => f && (tab.value = 'files'),
 )
 </script>
 
@@ -20,6 +26,7 @@ watch(
   <nav class="nav-tree">
     <header class="tabs" role="tablist">
       <button role="tab" :class="{ on: tab === 'modules' }" :aria-selected="tab === 'modules'" @click="tab = 'modules'">模块</button>
+      <button role="tab" :class="{ on: tab === 'files' }" :aria-selected="tab === 'files'" @click="tab = 'files'">文件</button>
       <button
         v-if="desk.perspective.value === 'run'"
         role="tab"
@@ -32,6 +39,7 @@ watch(
     </header>
     <div class="body">
       <StepTree v-if="tab === 'steps' && desk.perspective.value === 'run'" />
+      <FileTree v-else-if="tab === 'files'" />
       <ModuleTree v-else />
     </div>
   </nav>

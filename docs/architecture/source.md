@@ -50,7 +50,7 @@ moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
 | `moduleFiles(index, own, id)` | 子树内全部归属文件的并集；系统根取全部已归属文件 | G4 |
 | `moduleDir(module, files)` | 每条 `codeRefs` 取目录（glob 取第一个通配符段之前的部分；恰为清单中的文件时取所在目录；否则视为目录），再取它们的公共目录 | G10 |
 | `moduleEntry(index, own, tree, id)` | 依次取 `entry` → `<模块目录>/index.ts` → `<模块目录>/package.json` 的 `exports['.']`（字符串，或 `import` / `default` / `types`）或 `main`；按约定找到的必须在清单中并属于本模块子树 | G10 |
-| `matchExports(index, id, exports)` | `provides` 的接口名（去掉括号与泛型）对导出名：`matched`、`undescribed`（导出未描述）、`unexported`（描述未导出）；默认导出不参与 | G12 |
+| `matchExports(index, id, exports)` | 模块的接口（`moduleInterfaces`：`provides` 加上 `owner` 在本模块子树内的接口）的名称（去掉括号与泛型）对导出名：`matched`、`undescribed`（导出未描述）、`unexported`（描述未导出）；默认导出不参与 | G12 |
 | `fileNodes(index, view, owners)` | 归属模块逐个 `mapEndpoint` 到当前层次：`local` → 子模块节点，`external` → 边界节点（视图中有时），`skip` → 不高亮（`self: true`）；分层总览另加路径上的核心模块节点 | G14 |
 | `sourceIssues(index, own, tree)` | 每个冲突文件、未归属文件一条 warning（`source.conflict` / `source.unowned`），`entry` 不在清单中一条 warning（`source.entry`，定位到描述出处） | G6、G7、G9、G10 |
 | `fileTree(files, own)` | 按 `/` 组成目录树，目录带文件数与未归属数，目录在前、按名称排序 | — |

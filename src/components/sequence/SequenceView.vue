@@ -2,7 +2,7 @@
 /**
  * 时序图（D-2、D-7、R3、R5、R11）：只画定位好坐标的时序模型。
  * 单击消息（含未选分支上的）→ 指向该步（R13）；当前消息高亮并滚动到可见；悬停消息时在结构图上预览对应的边。
- * 标题栏可切换分屏方向（W-4）；左右排列时收起即缩成一条竖栏。
+ * 收起、页签与分屏方向切换在副栏（split/AsidePane.vue）；这里只画信息条（当前层次、当前帧不可见的提示）与时序图本身。
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -10,9 +10,6 @@ import { moduleName, type SequenceMessage } from '@/model'
 import SequenceLanes from './SequenceLanes.vue'
 import SequenceFragments from './SequenceFragments.vue'
 
-const props = defineProps<{ collapsed: boolean; dir: 'row' | 'column' }>()
-const emit = defineEmits<{ toggle: []; direction: [dir: 'row' | 'column'] }>()
-const strip = computed(() => props.collapsed && props.dir === 'row')
 const desk = useDesk()
 const scroller = ref<HTMLElement>()
 
@@ -48,24 +45,16 @@ watch(
 </script>
 
 <template>
-  <section v-if="strip" class="sequence strip" title="展开时序图" @click="emit('toggle')">
-    <button class="fold">◂</button>
-    <strong>时序图</strong>
-  </section>
-  <section v-else class="sequence" :class="[{ collapsed }, dir]">
+  <section class="sequence">
     <header class="bar">
-      <button class="fold" :title="collapsed ? '展开时序图' : '收起时序图'" @click="emit('toggle')">{{ collapsed ? '▸' : dir === 'row' ? '▸' : '▾' }}</button>
       <strong>时序图</strong>
       <span class="muted">· {{ levelName }}</span>
-      <button class="dir" :title="dir === 'row' ? '改为上下排列' : '改为左右排列'" @click="emit('direction', dir === 'row' ? 'column' : 'row')">
-        {{ dir === 'row' ? '⇅ 上下' : '⇆ 左右' }}
-      </button>
-      <span v-if="!collapsed && hiddenCurrent" class="hint warn">
+      <span v-if="hiddenCurrent" class="hint warn">
         当前步骤在本层不可见：
         <button class="link" @click="desk.goTo(desk.frameLevel.value!)">到能看到它的层次</button>
       </span>
     </header>
-    <div v-if="!collapsed" ref="scroller" class="body">
+    <div ref="scroller" class="body">
       <div v-if="empty" class="empty">
         <p>本层看不到这个场景的任何一步。</p>
         <button v-if="desk.home.value" @click="desk.goTo(desk.home.value)">跳到场景所在层次：{{ homeName }}</button>
@@ -91,38 +80,9 @@ watch(
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100%;
   min-height: 0;
+  flex: 1 1 auto;
   background: var(--surface);
-  border-top: 1px solid var(--border);
-}
-
-.sequence.row {
-  border-top: none;
-  border-left: 1px solid var(--border);
-}
-
-.strip {
-  width: 30px;
-  align-items: center;
-  gap: 8px;
-  padding-top: 6px;
-  border-top: none;
-  border-left: 1px solid var(--border);
-  cursor: pointer;
-  font-size: 12.5px;
-}
-
-.strip strong {
-  writing-mode: vertical-rl;
-  letter-spacing: 2px;
-}
-
-.dir {
-  margin-left: auto;
-  flex: none;
-  font-size: 11.5px;
-  padding: 1px 6px;
 }
 
 .bar {
@@ -131,20 +91,10 @@ watch(
   gap: 6px;
   white-space: nowrap;
   overflow: hidden;
-  padding: 4px 10px;
-  font-size: 12.5px;
+  padding: 3px 10px;
+  font-size: 12px;
   border-bottom: 1px solid var(--border);
   flex: none;
-}
-
-.collapsed .bar {
-  border-bottom: none;
-}
-
-.fold {
-  border: none;
-  background: none;
-  padding: 0 4px;
 }
 
 .hint {

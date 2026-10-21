@@ -108,7 +108,7 @@ flowchart TB
 | 场景投影 → Projector | `mapEndpoint`、`edgeId` | 结构图与时序图共用同一套端点规则（P1） |
 | 源码归属 → Projector | `mapEndpoint` | 选中文件在当前层次的投影与帧、关系同一套规则（G14） |
 | DeskState → 源码归属 | `assignFiles`、`moduleFiles`、`moduleEntry`、`matchExports`、`fileNodes`、`sourceIssues`、`fileTree` | 派生 |
-| 源码同步 → 源码读取 | HTTP 端点 `source/<项目>.json`、`source/<项目>/file.json`、`source/<项目>/exports.json` | 文件清单与文件内容按需取，不推送 |
+| 项目视图 → ModelSource | HTTP 端点 `source/<项目>.json`、`source/<项目>/file.json`、`source/<项目>/exports.json`（`httpSourceFetcher`，注入给源码同步） | 与 `fetchModel` 一样，外界地址只在呈现层出现；文件清单与内容按需取，不推送 |
 | 命令行校验 → 源码读取、源码归属 | `readSourceTree`、`sourceIssues` | 与页面报出同样的归属警告 |
 | 接入层 → 模型层 | `loadModel` | 项目摘要与命令行校验 |
 | 模型源同步 → ModelSource | HTTP 端点、`arch-model:changed` 事件 | 加载与重新加载 |
@@ -143,7 +143,7 @@ packages/h5p-arch-desk/
   src/
     model/                    模型层：types · load · validate · indexer · project · diff · design
       scenario/               场景投影：bind · steps · plan · path · level · participation · outline · sequence
-      source/                 源码归属：glob · ownership · entry · tree
+      source/                 源码归属：types · glob · ownership（归属、入口、导出对应、投影、目录树）
     state/                    视图状态层：useDeskState（协调者）· inject
       transition/             会话规则：types · navigation · focus · playback · url
       sync/                   同步适配器：router · modelSource · layout · source

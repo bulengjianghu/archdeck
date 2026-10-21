@@ -10,6 +10,8 @@ export type Selection =
   /** 视图里的一条边（多为聚合边），ID 见 edgeId() */
   | { kind: 'edge'; id: string }
   | { kind: 'actor'; id: string }
+  /** 源码文件，id 为相对源码根目录的路径（G16） */
+  | { kind: 'file'; id: string }
 
 export interface Toggles {
   showBoundaries: boolean
