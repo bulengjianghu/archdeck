@@ -64,9 +64,9 @@ flowchart TB
 
 | 模块 | 职责 | 状态 | 专题 |
 |---|---|---|---|
-| DeskState（核心） | 协调者：持有视图状态、唯一写入口 `dispatch`、派生要画的数据；同步适配器（路由、模型源、布局、源码）；设计版本的对比基线与差异；文件归属与源码警告 | 已实现 | 视图状态 |
+| DeskState（核心） | 协调者：持有视图状态、唯一写入口 `dispatch`、派生要画的数据；同步适配器（路由、模型源、布局、源码）；设计版本的对比基线与差异；文件归属与源码警告。对外核心平铺，领域派生分 `run` / `files` / `versions` 三组（ADR-0013） | 已实现（分组：待重构） | 视图状态 |
 | 视图状态转移（核心） | 会话规则的纯函数：视角与选中（V）与选中突出（R15、R16）、导航（N）、回放（R、F6c、F6e、V7）、URL 编解码（含文件选中，G16） | 已实现 | 视图状态 |
-| Layout（核心） | 结构图排布（分层总览 / elkjs，Worker 中运行，按内容缓存；边界节点按层次顺序，L4）；时序图排布（泳道层次顺序与分组，P9、P13）；舞台叠加（走过的边、当前消息、未建模临时线、分支预览的坐标）与舞台显示（哪些节点与边隐藏、淡化、临时显示，V5、V8、V9） | 已实现 | 结构投影 · 场景 |
+| Layout（核心） | 结构图排布（分层总览 / elkjs，Worker 中运行，按内容缓存；边界节点按层次顺序，L4）；时序图排布（泳道层次顺序与分组，P9、P13）；舞台叠加（走过的边、当前消息、未建模临时线、分支预览的坐标）与舞台显示（哪些节点与边隐藏、淡化、临时显示，V5、V8、V9）；画布场景 `canvasScene`（节点与边的数据、显隐、变淡、回放态与选中突出，ADR-0013） | 已实现（画布场景：待重构） | 结构投影 · 场景 · 工作台 |
 
 ### 3.3 模型层
 
@@ -105,7 +105,7 @@ flowchart TB
 | 视图状态转移 → 模型层 | 架构查询（`nearestExisting`、`nearestVisibleLevel`、`stepAfter`、`choicesFor` 等） | 会话规则遇到关于被描述系统的问题一律问模型层 |
 | DeskState → 模型层 | `loadModel`、`projectLevel`、`planScenario` / `resolvePath` / `routeOf` / `projectScenario`、`pairReturns`、`participation` / `scenarioModules`、`outlineScenario`、`diffModels` | 派生 |
 | DeskState → Layout | `layoutView`（异步，经布局同步适配器）、`layoutSequence`、`stageOverlay`（同步） | 坐标 |
-| 画布 → Layout | `stageDisplay`（显示用的纯函数） | 舞台上每个节点与边隐藏、淡化还是显示（V5、V8、V9）；显示方式与临时显示来自项目视图，不进视图状态 |
+| 画布 → Layout | `canvasScene`（内部调用 `stageDisplay`，显示用的纯函数） | 画布的节点与边，含舞台上每个节点与边隐藏、淡化还是显示（V5、V8、V9）；显示方式与临时显示来自项目视图，不进视图状态 |
 | 场景投影 → Projector | `mapEndpoint`、`edgeId`、`hierarchyKey` | 结构图与时序图共用同一套端点规则（P1）与层次顺序（P9、L4） |
 | 源码归属 → Projector | `mapEndpoint` | 选中文件在当前层次的投影与帧、关系同一套规则（G14） |
 | DeskState → 源码归属 | `assignFiles`、`moduleFiles`、`moduleEntry`、`matchExports`、`fileNodes`、`sourceIssues`、`fileTree` | 派生 |
@@ -129,6 +129,9 @@ flowchart TB
 | 导出解析 | TypeScript 编译器 API（Node 侧，只做语法树，不做类型检查） | 已是开发依赖；语法树足以拿到名称与声明文本，毫秒级 | ts-morph（额外依赖）、类型检查器（慢，依赖工程配置） |
 | glob 匹配 | 自研纯函数（`*`、`**`、`?`、`{a,b}`） | 模型层不依赖文件系统与 Node 库；规则简单，可穷举单测 | minimatch / picomatch（需打进页面） |
 | 包管理 | npm，独立 `package-lock.json` | 与 auto_test 一致 | — |
+| 代码规范 | ESLint（flat config：`@eslint/js`、typescript-eslint、eslint-plugin-vue）+ Prettier（按现有风格） | ESLint 查正确性，Prettier 只管格式，互不重叠（ADR-0013） | 只靠 type-check |
+| 浏览器端 E2E | Playwright（`@playwright/test`，本机 Chrome，自带开发服务器） | 覆盖 jsdom 测不到的界面行为；自动等待，对 SVG 友好（ADR-0013） | Cypress、Vitest 浏览器模式 |
+| 打包拆分 | 项目视图按路由懒加载；Vue Flow、Markdown、高亮各自成块 | 首页不加载画布（ADR-0013） | — |
 
 依赖版本以 `package.json` 为准，引入时选已发布两周以上的稳定版。
 
@@ -146,11 +149,13 @@ packages/h5p-arch-desk/
       scenario/               场景投影：bind · steps · plan · path · level · participation · outline · sequence
       source/                 源码归属：types · glob · ownership（归属、入口、导出对应、投影、目录树）
     state/                    视图状态层：useDeskState（协调者）· inject
-      transition/             会话规则：types · navigation · focus · playback · url
+      transition/             会话规则：types · navigation · selected · playback · url
+      desk/                   DeskState 的分组派生：run · files · versions
       sync/                   同步适配器：router · modelSource · layout · source
-    layout/                   layout.ts（结构图）· sequence.ts（时序图）· stage.ts（舞台叠加）
+    layout/                   layout.ts（结构图）· sequence.ts（时序图）· stage.ts（舞台叠加与显示）· canvas.ts（画布场景）
     components/               呈现层（专题「工作台」列出组件分工）
-  tests/                      单测（按层组织）与 fixtures
+  tests/                      单测（按层组织）、验收与 fixtures
+  e2e/                        浏览器端 E2E（Playwright）
 ```
 
 | 形态 | 描述从哪来 | 用途 |

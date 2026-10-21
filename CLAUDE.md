@@ -7,6 +7,8 @@ npm run dev          # 本地查看
 npm test             # 单元测试
 npm run type-check
 npm run lint:model   # 校验全部描述（含设计版本每一轮），0 个错误才算通过
+npm run lint         # ESLint + Prettier 检查；npm run format 自动格式化
+npm run test:e2e     # 浏览器端 E2E（Playwright，本机 Chrome）
 npm run build
 ```
 

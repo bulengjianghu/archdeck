@@ -61,6 +61,7 @@ URL 与此一致，编码不需区分：选中步骤时只有 `step`；选中场
 | 唯一写入口 | `dispatch(action)`：`transition(state, action, ctx)` 得到新状态与历史标注，写入；对外的操作都是构造动作并 dispatch 的包装 |
 | 派生（`computed`，调用纯函数） | 选中 `selectedOf`（V2）与选中突出 `emphasisOf`（R15、R16，泳道取自时序模型的 `lanesOf`）与调用返回配对 `pairReturns`（F7）；路线 `routeOf`（F6f）；层次视图 `projectLevel`（运行视角下为舞台视图：不受显示开关影响并补齐场景端点，L9、P12）；打开场景时：回放计划 → 回放路径 → 本层帧投影与可见消息 → 时序模型 → 时序图坐标，以及步骤大纲 `outlineScenario` 与参与模块 `scenarioModules`（导航树用，T5、T6）；视角；选中对象（非步骤、非场景）的参与信息；设计版本的差异 `diffModels` 与基线漂移；源码：归属 `assignFiles`、目录树 `fileTree`、选中模块的文件 / 入口、选中文件的归属模块与本层投影 `fileNodes`（G14）、归属警告 `sourceIssues`（只在当前版本并入问题列表，G9） |
 | 外界同步 | 交给四个同步适配器（§4） |
+| 对外的形状 | 核心平铺：视图状态与直接推出的层次、选中、视角、开关、层次视图与坐标、`playback`，以及全部操作；领域派生分三组，代码在 `src/state/desk/`（ADR-0013，待重构）：`desk.run` 运行视角、`desk.files` 源码、`desk.versions` 设计版本与对比 |
 
 派生是一条 computed 链：层次或开关变化 → 层次视图 → 帧投影 → 时序模型 → 时序布局。结构图与时序图因此不会不同步。层次视图只依赖层次、显示开关与打开的场景，悬停、选中、进度变化不会引起重新投影与重新排布（ADR-0009）。
 
@@ -173,12 +174,17 @@ type ViewAction =
 
 createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: string; version?: VersionRef; source?: SourceFetcher }): DeskState
 // SourceFetcher: { tree(): Promise<SourcePayload>; file(path): Promise<SourceFile | null>; exports(path): Promise<ExportedSymbol[] | null> }；缺省等同构建态（不含源码），项目视图注入 `httpSourceFetcher`
-// DeskState：state（只读）、index、issues、派生数据、dispatch、init()、attachRouter(router)，以及操作：
-//   drillInto · goTo · goUp · select · revealRelation · revealModule · setHover
-//   openScenario · closeScenario · next · prev · seek · chooseBranch · refreshSource · sourceFile(path) · sourceExports(path)
-// 派生：view · positioned · perspective · selected · playback · scenario · plan · path · scenarioView · home
-//       currentIndex · walked · frame · sequence · positionedSequence · selectedParticipation · emphasis · outline · scenarioModules
-//       source · ownership · sourceTree · selectedFile · fileOwners · fileHits · moduleFileSet · allIssues
+// DeskState（ADR-0013）：
+//   核心：state（只读）· status · loadError · index · issues · allIssues · modelDir · levelId · levelPath · selection · selected · hoverId
+//         perspective · toggles · view · positioned · levelVersion · playback · project · version
+//   操作：dispatch · init · reload · attachRouter · watchChanges · pressKey
+//         drillInto · goTo · goUp · select · selectFile · revealRelation · revealModule · setHover · setToggles
+//         openScenario · closeScenario · next · prev · seek · chooseBranch
+//   run：scenario · plan · path · scenarioView · home · currentIndex · walked · frame · branchPoint · frameLevel · overlay
+//        sequence · positionedSequence · pairs · route · emphasis · stageParticipants · participation · outline · participants
+//   files：payload · ownership · tree · lines · maxLines · selected · owners · hits · moduleFiles · warnings
+//          filesOf(id) · entryOf(id) · exportMatch(id, symbols) · entryModulesOf(path) · file(path) · exports(path) · refresh()
+//   versions：designs · design · revision · baselines · baseline · diff · drift
 
 transition(state: ViewState, action: ViewAction, ctx: TransitionContext): { state: ViewState; history: 'push' | 'replace' }
 // TransitionContext: { index: ModelIndex; plan?: ScenarioPlan; levelView?: LevelView; scenarioView?: ScenarioLevelView }
