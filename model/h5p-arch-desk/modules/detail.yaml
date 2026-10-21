@@ -5,19 +5,12 @@ modules:
   - id: present.canvas.flow
     name: 视图转换与交互
     parent: present.canvas
-    responsibility: 把 PositionedView 转成 Vue Flow 的节点与边并直接写入其 store；计算聚焦（悬停优先、其次选中）与相邻集合；把单击 / 双击 / 悬停转成 DeskState 操作；切换层次后按布局外框适应画布。
+    responsibility: 把 Layout 的画布场景（canvasScene：节点与边的数据、显隐、变淡、回放态与选中突出）写入 Vue Flow 的 store；把单击 / 双击 / 悬停转成 DeskState 操作；切换层次后按布局外框适应画布。画什么不在这里算（ADR-0013）。
     principle: |
-      - **边的显隐**：分层总览中核心跨层边只在聚焦时出现；普通层次中边界边只在聚焦其一端或被选中时出现。
-      - **变淡**（结构视角）：有聚焦对象（悬停或选中）时，与它不相邻的节点和边变淡；分层总览里带不参与变淡。
-      - **适应画布**：内容外框直接取自布局结果，不依赖 Vue Flow 对节点尺寸的测量，只等画布容器有尺寸；切换层次、画布容器尺寸变化（进入运行视角、切换分屏方向、拖动分隔条、折叠两侧栏）后重新适应。
       - **写 store 而非传属性**：节点与边通过 setNodes / setEdges 写入；属性同步在「上一层有选中、切回总览」时会被跳过。
-      - **舞台**（运行视角）：布局不变，按舞台显示（stageDisplay）决定每个节点与边显示、淡化还是隐藏：默认只显示参与本场景的节点与回放边，不参与的按显示方式隐藏 / 淡显 / 全显（V5、V8，左下角切换），「在画布上显示」的对象的静态边照常（V9），悬停的可见节点临时显示它的静态边（V10）；隐藏时适应画布只取可见节点。
-      - **选中突出**（R15、R16）：只在选中步骤时，不属于选中消息与配对消息的走过的边与步骤序号淡为灰色；选中其他对象时不变灰，舞台始终按进度。
-      - **回放叠加**（运行视角）：按进度所在的可见消息给对应视图边加「当前步骤」态并沿步骤方向流动（可与边的箭头相反，P10）、端点节点加「活动」态；已走过的边保留淡色并标步骤序号；内部活动只高亮节点；
-        本层两节点之间没有视图边时，回放期间临时画一条「结构中未建模」虚线，不参与布局，离开这一步即消失（P11）；当前帧在本层不可见时提示「下钻 / 到上一层查看」（R11）。
-      - **点击含义**（运行视角）：单击节点 / 边仍是选中（V3）；单击边上的步骤序号 = 指向这一步，即选中它（R13）。
-      - **分支预览**：停在 alt 分支点时，各选项首条消息对应的边以虚线预览并标选项序号，与分支选择联动。
-      - **外部参与者**：参与者以独立节点类型画在固定位置，内部结构外画系统边界框。
+      - **适应画布**：内容外框直接取自布局结果，不依赖 Vue Flow 对节点尺寸的测量，只等画布容器有尺寸；运行视角隐藏静态内容时只取画布场景给出的可见节点；切换层次、画布容器尺寸变化（进入运行视角、切换分屏方向、拖动分隔条、折叠两侧栏）后重新适应。
+      - **点击含义**：单击节点 / 边 = 选中（运行视角同样，V3）；双击 = 下钻或跳到边界节点所在层次；单击边上的步骤序号 = 指向这一步，即选中它（R13）；单击分支预览序号 = 选这一支。
+      - **静态关系显示方式**：左下角切换隐藏 / 淡显 / 全显（V8），值来自舞台显示（按项目记在本地）。
     codeRefs: [src/components/GraphCanvas.vue]
   - id: present.canvas.nodes
     name: 节点组件
@@ -99,15 +92,15 @@ modules:
     codeRefs: [src/state/sync/modelSource.ts]
   # 分组派生在 src/state/desk/（ADR-0013）；dispatch 与操作是 useDeskState.ts 内的概念划分，不写 codeRefs，文件归 DeskState（避免归属冲突，G6）
   - id: state.desk.versions
-    name: 版本与对比基线
+    name: 版本与对比基线（desk.versions）
     parent: state.desk
     responsibility: 设计版本下持有设计信息与本轮、对比基线（当前版本 / 上一轮）的索引；派生差异与基线漂移（起草时的基线提交与当前版本不一致）。
     codeRefs: [src/state/desk/versions.ts]
   - id: state.desk.projection
-    name: 视图派生
+    name: 视图派生（核心与 desk.run）
     parent: state.desk
-    responsibility: 由视图状态与模型派生一切要画的数据（全部是 computed，调用纯函数）：层次视图；打开场景时的回放计划、调用与返回的配对、回放路径与路线、本层的帧投影与可见消息、选中（selectedOf）与选中突出（emphasisOf）、舞台参与节点、时序模型与时序图坐标，以及导航树用的步骤大纲与参与模块；设计版本的差异。
-    codeRefs: [src/state/desk/run.ts, src/state/desk/files.ts]
+    responsibility: 由视图状态与模型派生要画的数据（全部是 computed，调用纯函数）。核心平铺在 DeskState 上：层次视图与坐标、选中（selectedOf）、视角。运行视角的派生归 desk.run（ADR-0013）：回放计划、调用与返回的配对、回放路径与路线、本层的帧投影与可见消息、选中突出（emphasisOf）、舞台叠加与参与节点、时序模型与时序图坐标，以及导航树用的步骤大纲与参与模块。源码与版本的派生另见 desk.files、desk.versions。
+    codeRefs: [src/state/desk/run.ts]
   - id: state.desk.actions
     name: dispatch 与操作
     parent: state.desk
@@ -379,8 +372,11 @@ interfaces:
     owner: state.desk
     signature: |
       createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: string; version?: VersionRef; source?: SourceFetcher }): DeskState
-      // DeskState: { state: ViewState（只读）, index, issues, 派生数据（view, positioned, scenarioView, sequence, diff, ownership, fileHits, …）,
-      //              dispatch(action), init(), attachRouter(router), …操作（见 if.desk.actions） }
+      // DeskState（ADR-0013）：核心平铺 { state（只读）, status, index, issues, allIssues, levelId, levelPath, selection, selected, hoverId,
+      //   perspective, toggles, view, positioned, levelVersion, playback, dispatch, init, attachRouter, …操作（见 if.desk.actions） }
+      //   + run：{ scenario, plan, path, scenarioView, currentIndex, walked, frame, overlay, sequence, positionedSequence, emphasis, participation, outline, … }
+      //   + files：{ payload, ownership, tree, lines, maxLines, selected, owners, hits, moduleFiles, warnings, filesOf, entryOf, file(path), exports(path), refresh }
+      //   + versions：{ designs, design, revision, baselines, baseline, diff, drift }
     semantics: 每个项目的每个版本一份；在组件 setup 中创建，其 watch 与同步适配器随组件销毁。
   - id: if.desk.actions
     name: DeskState 操作

@@ -25,6 +25,11 @@ modules:
     parent: state.desk
     responsibility: 同步适配器之一：进入项目、描述重新加载、用户刷新时经注入的 SourceFetcher 取源码清单（构建态拿到 404 即「不含源码」，G2）；文件内容与导出按路径按需取、缓存，刷新清单时作废。只负责外界，归属由视图派生调用模型层计算。
     codeRefs: [src/state/sync/source.ts]
+  - id: state.desk.files
+    name: 源码派生（desk.files）
+    parent: state.desk
+    responsibility: 由源码清单与模型派生源码相关的数据（computed，调用模型层源码归属）：归属与未归属 / 冲突、目录树、行数与超长阈值（G19、G20）、选中文件的归属模块与在本层的投影（G14）、选中模块的文件（G13）、入口与导出对应（G10–G12）、归属警告（只对当前版本，G9）；按需取文件内容与导出（转交源码同步）。
+    codeRefs: [src/state/desk/files.ts]
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.source.glob
@@ -43,23 +48,23 @@ modules:
 
 relations:
   # 呈现层
-  - {id: rel.p7.files-read, from: present.nav-tree.files, to: state.desk.projection, type: depends, payload: [ds.SourceOwnership, ds.Selection], description: 目录树、归属标记、选中模块的文件、选中文件}
+  - {id: rel.p7.files-read, from: present.nav-tree.files, to: state.desk.files, type: depends, payload: [ds.SourceOwnership, ds.Selection], description: 目录树、归属标记、选中模块的文件、选中文件}
   - {id: rel.p7.files-act, from: present.nav-tree.files, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击文件 → selectFile；刷新 → refreshSource}
   - {id: rel.p7.split-source, from: present.desk-view.split, to: present.source, type: depends, description: 副栏「源代码」页签，有预览文件时出现}
-  - {id: rel.p7.source-read, from: present.source, to: state.desk.projection, type: depends, payload: [ds.SourceOwnership], description: 预览文件的归属模块与状态}
+  - {id: rel.p7.source-read, from: present.source, to: state.desk.files, type: depends, payload: [ds.SourceOwnership], description: 预览文件的归属模块与状态}
   - {id: rel.p7.source-file, from: present.source, to: state.desk.source-sync, type: calls, mode: async, interface: if.desk.actions, payload: [ds.SourcePayload], description: sourceFile(path) 按需取文件内容}
   - {id: rel.p7.source-content, from: present.source, to: present.panel.content, type: depends, description: 复用 Shiki 高亮（按扩展名加载语法）}
   - {id: rel.p7.panel-file, from: present.panel.dispatch, to: present.panel.file, type: depends, description: 选中文件时分派到文件面板}
   - {id: rel.p7.module-source, from: present.panel.module, to: present.panel.module-source, type: depends}
   - {id: rel.p7.file-exports, from: present.panel.file, to: present.panel.module-source, type: depends, description: 复用导出分组列表}
-  - {id: rel.p7.file-read, from: present.panel.file, to: state.desk.projection, type: depends, payload: [ds.SourceOwnership, ds.FileNodes]}
+  - {id: rel.p7.file-read, from: present.panel.file, to: state.desk.files, type: depends, payload: [ds.SourceOwnership, ds.FileNodes]}
   - {id: rel.p7.file-act, from: present.panel.file, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 归属模块 → revealModule}
   - {id: rel.p7.file-preview, from: present.panel.file, to: present.desk-view.split, type: calls, description: 「预览源码」经注入请求副栏打开预览}
-  - {id: rel.p7.modsrc-read, from: present.panel.module-source, to: state.desk.projection, type: depends, payload: [ds.ModuleEntry, ds.ExportedSymbol], description: 模块的文件、入口、导出对应}
+  - {id: rel.p7.modsrc-read, from: present.panel.module-source, to: state.desk.files, type: depends, payload: [ds.ModuleEntry, ds.ExportedSymbol], description: 模块的文件、入口、导出对应}
   - {id: rel.p7.modsrc-act, from: present.panel.module-source, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击文件 → selectFile}
   - {id: rel.p7.modsrc-content, from: present.panel.module-source, to: present.panel.content, type: depends, description: 签名代码块、接口折叠项}
-  - {id: rel.p7.flow-file, from: present.canvas.flow, to: state.desk.projection, type: depends, payload: [ds.FileNodes], description: 选中文件时高亮其归属模块在本层的投影节点}
-  - {id: rel.p7.modtree-file, from: present.nav-tree.modules, to: state.desk.projection, type: depends, description: 选中文件时展开并标出归属模块}
+  - {id: rel.p7.flow-file, from: present.canvas.flow, to: state.desk.files, type: depends, payload: [ds.FileNodes], description: 选中文件时高亮其归属模块在本层的投影节点}
+  - {id: rel.p7.modtree-file, from: present.nav-tree.modules, to: state.desk.files, type: depends, description: 选中文件时展开并标出归属模块}
 
   # 视图状态层
   - id: rel.p7.desk-source-fetch
@@ -72,7 +77,7 @@ relations:
     description: 项目视图创建的 httpSourceFetcher：GET source/<项目>.json、file.json、exports.json（404 即构建态），注入给源码同步
   - {id: rel.p7.desk-source-inject, from: present.desk-view, to: state.desk.source-sync, type: depends, description: createDeskState 时注入 SourceFetcher}
   - {id: rel.p7.projection-ownership, from: state.desk.projection, to: model.source.ownership, type: calls, interface: if.model.assignFiles, payload: [ds.SourceOwnership], description: 归属、目录树、模块的文件与入口、选中文件的投影、归属警告（只对当前版本）}
-  - {id: rel.p7.projection-sync, from: state.desk.projection, to: state.desk.source-sync, type: depends, payload: [ds.SourcePayload], description: 读取源码清单}
+  - {id: rel.p7.projection-sync, from: state.desk.files, to: state.desk.source-sync, type: depends, payload: [ds.SourcePayload], description: 读取源码清单}
   - {id: rel.p7.loading-source, from: state.desk.loading, to: state.desk.source-sync, type: calls, description: 描述重新加载后重新取源码清单}
 
   # 接入层

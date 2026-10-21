@@ -112,6 +112,12 @@ modules:
     responsibility: 把本层帧投影与进度换成画布要画的数据与坐标：本层参与的节点、走过的边与步骤序号的位置、当前消息、未建模临时线的走线、停在分支点时各选项首条消息的预览位置、当前帧本层不可见（V5、P7、P10、P11、R11）。舞台显示 stageDisplay：按参与节点、回放边、静态关系显示方式、「在画布上显示」的对象与悬停的节点，给出每个节点与视图边显示、淡化还是隐藏（V5、V8、V9、V10）。
     principle: 纯函数，与时序图排布对称——呈现层只按它着色，不自己映射端点或算坐标。
     codeRefs: [src/layout/stage.ts]
+  - id: state.layout.canvas
+    name: 画布场景
+    parent: state.layout
+    responsibility: 把带坐标的层次视图换成画布要画的节点与边（canvasScene，ADR-0013）：位置、类型、数据与类名、层级，以及运行视角下适应画布用的可见节点。结构视角：聚焦对象（悬停优先、其次选中）不相邻的节点与边变淡，分层总览中带不参与变淡；核心跨层边只在聚焦核心模块、被选中或回放落在其上时出现（O4、P7）；边界边只在聚焦其一端、被选中或回放经过时出现（L4）。运行视角：按舞台显示（stageDisplay）决定显隐与淡化（V5、V8、V9、V10）；回放叠加——当前消息的边带方向流动、端点节点为活动态、走过的边标步骤序号、未建模临时线、分支预览（P7、P10、P11、F6）；选中步骤时其余走过的边与步骤序号变灰（R15、R16）。选中文件时投影节点加文件高亮（G14）；设计版本标出新增 / 修改与涉及变更数。
+    principle: 纯函数，与 stageOverlay、stageDisplay 对称：呈现层只按结果写入 Vue Flow，不自己判断显隐、变淡与回放态；节点与边的数据类型（NodeData、RouteEdgeData）因此归 Layout。
+    codeRefs: [src/layout/canvas.ts]
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.scenario.flatten
@@ -195,7 +201,8 @@ relations:
   - {id: rel.p8.seq-emphasis, from: present.sequence.interact, to: state.desk.projection, type: depends, payload: [ds.Emphasis], description: 选中突出：选中消息、配对消息、突出的泳道（R15、R16）}
   - {id: rel.p8.route-read, from: present.player.route, to: state.desk.projection, type: depends, payload: [ds.RouteItem], description: 路线（F6f）}
   - {id: rel.p8.route-act, from: present.player.route, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 下拉改选 → chooseBranch，返回被丢弃的选择个数用于提示（F6f）}
-  - {id: rel.p8.flow-stage-display, from: present.canvas.flow, to: state.layout.stage, type: calls, interface: if.layout.stageDisplay, payload: [ds.LevelView, ds.StageDisplay], description: 每个节点与边显示、淡化还是隐藏（V5、V8、V9）}
+  - {id: rel.p13.flow-canvas, from: present.canvas.flow, to: state.layout.canvas, type: calls, interface: if.layout.canvasScene, payload: [ds.PositionedView, ds.StageOverlay, ds.Emphasis, ds.CanvasScene], description: 画布要画的节点与边（ADR-0013）}
+  - {id: rel.p8.flow-stage-display, from: state.layout.canvas, to: state.layout.stage, type: calls, interface: if.layout.stageDisplay, payload: [ds.LevelView, ds.StageDisplay], description: 每个节点与边显示、淡化还是隐藏（V5、V8、V9）}
   - id: rel.p2.flow-playback
     from: present.canvas.flow
     to: state.desk.projection
@@ -375,6 +382,14 @@ interfaces:
       stageOverlay(sv: ScenarioLevelView, pv: PositionedView, frameId: string | null,
                    options?: { option: number; label: string; landing: Landing | null }[]): StageOverlay
     semantics: 纯函数；只给出数据与坐标（参与的节点、走过的边与步骤序号、当前消息、未建模临时线的走线、分支预览的位置），画布只按它着色。
+  - id: if.layout.canvasScene
+    name: canvasScene
+    owner: state.layout.canvas
+    signature: |
+      canvasScene(input: CanvasInput): CanvasScene
+      // CanvasInput: { positioned; index; selection; hover; stage: StageOverlay | null; scenarioView; emphasis: { selected; paired } | null;
+      //                participants; mode: 'hide' | 'dim' | 'show'; reveal: string[]; diff: ModelDiff | null; fileHits: Set<string> | null; branchPointId }
+    semantics: 纯函数（ADR-0013）；结构视角的聚焦变淡与边的显隐、运行视角的舞台显示与回放叠加、选中步骤时的灰化（R15、R16）、文件高亮（G14）、设计版本标记都在这里算。
   - id: if.layout.stageDisplay
     name: stageDisplay
     owner: state.layout.stage
@@ -524,6 +539,15 @@ dataStructures:
         hiddenCurrent: boolean                                       // R11
       }
     description: 舞台叠加：画布在运行视角下要画的回放数据与坐标（V5）。
+  - id: ds.CanvasScene
+    name: CanvasScene
+    definition: |
+      interface CanvasScene {
+        nodes: CanvasNode[]              // 与 Vue Flow 的节点同形：id、type、position、data: NodeData、zIndex、宽高、class
+        edges: CanvasEdge[]              // 与 Vue Flow 的边同形：id、source、target、type: 'route'、markerEnd、data: RouteEdgeData
+        visibleIds: Set<string> | null   // 运行视角隐藏了静态内容时适应画布只取这些节点
+      }
+    description: 画布场景：画布要画的全部节点与边（ADR-0013）。
   - id: ds.StageDisplay
     name: StageDisplay
     definition: |

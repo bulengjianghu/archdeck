@@ -107,7 +107,7 @@ modules:
         name: DeskState
         kind: subsystem
         core: true
-        responsibility: 当前项目当前版本的唯一状态持有者：层次、选中（含文件）、悬停、显示开关、加载状态，当前场景与回放进度，设计版本的对比基线与差异，被描述项目的源码清单与文件归属；对外提供唯一一组操作，并经同步适配器与路由、描述文件、布局、源码保持一致。
+        responsibility: 当前项目当前版本的唯一状态持有者：层次、选中（含文件）、悬停、显示开关、加载状态，当前场景与回放进度，设计版本的对比基线与差异，被描述项目的源码清单与文件归属；对外提供唯一一组操作，并经同步适配器与路由、描述文件、布局、源码保持一致。对外核心平铺，运行视角、源码、版本的派生分为 run / files / versions 三组（ADR-0013）。
         codeRefs: [src/state/useDeskState.ts, src/state/inject.ts]
       - id: state.transition
         name: 视图状态转移
@@ -123,7 +123,7 @@ modules:
         name: Layout
         kind: subsystem
         core: true
-        responsibility: 给层次视图算坐标与边的走线：分层总览按层序分带规则排布，普通层次用 elkjs；给时序模型算泳道与步骤坐标；结果按视图内容缓存。
+        responsibility: 给层次视图算坐标与边的走线：分层总览按层序分带规则排布，普通层次用 elkjs；给时序模型算泳道与步骤坐标；舞台叠加与舞台显示；画布场景（节点与边的数据、显隐、变淡、回放态，ADR-0013）；结果按视图内容缓存。
         codeRefs: [src/layout/**]
         docRefs: [docs/02-tech-selection.md]
 
