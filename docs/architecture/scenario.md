@@ -1,7 +1,7 @@
 # 专题：场景投影与回放
 
 > 回答：一个场景在某一层怎么走；单步、跳转、分支选择怎么算；时序图的内容与坐标从哪来。
-> 覆盖模块：模型层的场景投影（`src/model/scenario/`：plan · path · level · participation · outline · sequence，另有 bind · steps）；视图状态层 Layout 的时序图排布（`src/layout/sequence.ts`）。概念见 [02-domain.md §1.3](../02-domain.md#13-场景与回放)，规则见 S、F、P、R7、R13、R16、V6、T5、T6；回放的会话规则（选中、历史）见[视图状态与协调](./view-state.md)，画法见[工作台界面](./workbench.md)。
+> 覆盖模块：模型层的场景投影（`src/model/scenario/`：plan · path · level · participation · outline · sequence，另有 bind · steps）；视图状态层 Layout 的时序图排布（`src/layout/sequence.ts`）。概念见 [02-domain.md §1.3](../02-domain.md#13-场景与回放)，规则见 S、F、P（含 P15、P16）、R7、R13、R16、V6、T5、T6；回放的会话规则（选中、历史）见[视图状态与协调](./view-state.md)，画法见[工作台界面](./workbench.md)。
 
 ## 1. 流水线
 
@@ -60,14 +60,15 @@
 | 映射结果 | 落点 | 规则 |
 |---|---|---|
 | 两个不同节点，且本层有连接它们的视图边 | `edge`：该视图边的 ID（`edgeId` 规则，优先含该帧对应关系的边），并标记方向是否与边相反；分层总览中一端落在核心模块的子树内且有对应的核心跨层边时落在核心跨层边上（`core`） | P1、P2、P7、P10 |
-| 两个不同节点，但本层没有视图边 | `unmodeled`：回放期间画临时虚线 | P11 |
+| 两个不同节点，本层没有视图边，帧已绑定关系（`frame.relation`，显式或推断） | `upper`：经由上层关系——关系一端是当前层次本身或其祖先；带 `relationId`，回放期间画关系类型色的临时实线 | P15 |
+| 两个不同节点，本层没有视图边，帧没有绑定关系 | `unmodeled`：结构中未建模，回放期间画临时虚线 | P11 |
 | 同一个子模块 | `internal`：内部活动 | P3 |
 | 两端都在本层外 | 不可见 | P4 |
 | 分层总览：两端在同一核心模块 | `internal`：该核心模块的内部活动 | P3 |
 | 分层总览：两端在同一层的不同泳道（核心模块之间、核心模块与层内其他模块之间） | `internal`：结构图上是该层（带）的内部活动，另带 `lanes`（两条泳道，消息方向），时序图据此画成泳道之间的消息 | P7、P14 |
 | 一端是当前父模块自身或其祖先 | 按另一端的内部活动 | — |
 
-然后把连续落在同一条视图边且方向相同、或同一节点内部，并在同一组合框分支中的帧合并为**可见消息**（P5），它是本层的单步单位。合并前先把计划**线性化**（`linearize`）：回放用「路径」模式（截止于未选分支的分支点），时序图用「全貌」模式（未选分支标 `unchosen`，截止之后标 `unreached`）；两者共用同一套落点与合并规则，分支点与空分支都会断开合并，所以路径上的消息在两边一一对应。
+然后把连续落在同一条视图边且方向相同、或同一节点内部，并在同一组合框分支中的帧合并为**可见消息**（P5），它是本层的单步单位。`upper` 与 `unmodeled` 按两端节点（含方向）合并为同一类；合并出的消息只要有一帧是 `unmodeled` 就整条为 `unmodeled`，全部是 `upper` 时为 `upper`、`relationId` 取第一帧的（P16）。合并前先把计划**线性化**（`linearize`）：回放用「路径」模式（截止于未选分支的分支点），时序图用「全貌」模式（未选分支标 `unchosen`，截止之后标 `unreached`）；两者共用同一套落点与合并规则，分支点与空分支都会断开合并，所以路径上的消息在两边一一对应。
 
 同一模块回答的查询：
 
@@ -129,10 +130,12 @@ interface Frame {
   fragments: FragmentTag[]                 // 外到内
 }
 
+type Lanes = { from: string; to: string }   // 分层总览中时序图上的两条泳道（P7、P14）
 type Landing =
-  | { kind: 'edge'; edgeId: string; from: string; to: string; reverse: boolean; core?: boolean }
-  | { kind: 'unmodeled'; from: string; to: string }
-  | { kind: 'internal'; node: string; lanes?: { from: string; to: string } }   // lanes：分层总览中同一层不同泳道之间（P7）
+  | { kind: 'edge'; edgeId: string; from: string; to: string; reverse: boolean; core?: boolean; lanes?: Lanes }
+  | { kind: 'upper'; from: string; to: string; relationId: string; lanes?: Lanes }   // P15：经由上层关系
+  | { kind: 'unmodeled'; from: string; to: string; lanes?: Lanes }                       // P11：结构中未建模
+  | { kind: 'internal'; node: string; lanes?: Lanes }   // lanes：分层总览中同一层不同泳道之间（P7）
   | { kind: 'hidden' }
 
 interface ScenarioLevelView {
@@ -163,7 +166,8 @@ interface SequenceModel {
   participants: { nodeId: string; id: string; name: string; kind: 'module' | 'boundary' | 'actor';
                   parentId?: string; path: string[]; layer?: string; key: number[]; byX: boolean }[]   // path：根下到自身的模块 ID
   messages: { index: number; from: string; to: string; kind: 'call' | 'async' | 'return' | 'internal' | 'empty'; label: string;
-              frameIds: string[]; status: 'path' | 'unchosen' | 'unreached'; pathIndex?: number; unmodeled?: boolean }[]
+              frameIds: string[]; status: 'path' | 'unchosen' | 'unreached'; pathIndex?: number;
+              temp?: 'upper' | 'unmodeled'; relationId?: string }[]   // 本层没有视图边：经由上层关系（P15）/ 结构中未建模（P11）
   fragments: { id: string; kind: 'alt' | 'loop' | 'par' | 'ref'; label: string; depth: number; first: number; last: number;
                collapsed: boolean; branches?: { option: number; label: string; chosen: boolean | null; first: number; last: number }[] }[]
 }
