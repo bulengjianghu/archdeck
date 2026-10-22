@@ -51,7 +51,7 @@ const few = computed(() => symbols.value.length <= 3)
 }
 
 .sub.ok {
-  color: var(--rel-dataflow);
+  color: var(--rel-streams);
 }
 
 .sub.warn {

@@ -1,5 +1,5 @@
 /** 「显示」面板的名称表：静态关系显示方式（V8）、关系类型（L8、L10）、代码事实不可用的原因（K8） */
-import { RELATION_TYPES, RUNTIME_RELATION_TYPES, type RelationType } from '@/model'
+import { RELATION_TYPES, RUNTIME_RELATION_TYPES } from '@/model'
 import type { StaticMode } from '@/layout/stage'
 
 export const MODES: readonly StaticMode[] = ['hide', 'dim', 'show']
@@ -10,13 +10,7 @@ export const MODE_HINT: Record<StaticMode, string> = {
   show: '全部照常显示',
 }
 
-export const TYPE_LABEL: Record<RelationType, string> = {
-  depends: '依赖',
-  calls: '调用（控制权转移）',
-  dataflow: '数据推送',
-  event: '事件',
-  implements: '实现端口 / 契约',
-}
+export { RELATION_TYPE_LABELS as TYPE_LABEL, RELATION_TYPE_HINTS as TYPE_HINT } from '../shared/labels'
 /** 与画布一致（L10）：运行时在前 */
 export const TYPE_ORDER = [...RUNTIME_RELATION_TYPES, ...RELATION_TYPES.filter(t => !RUNTIME_RELATION_TYPES.includes(t))]
 

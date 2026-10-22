@@ -1,5 +1,23 @@
 /** 界面文案：领域枚举的中文显示名。只是呈现关注点，不进模型层（模型层只给枚举与类型）。 */
-import type { ActorKind, DesignStatus } from '@/model'
+import type { ActorKind, DesignStatus, RelationType } from '@/model'
+
+/** 关系类型（02 §1.1、ADR-0022）：图例、面板、边的类型标签共用 */
+export const RELATION_TYPE_LABELS: Record<RelationType, string> = {
+  calls: '命令',
+  notifies: '通知',
+  streams: '流',
+  depends: '依赖',
+  implements: '实现契约',
+}
+
+/** 每类关系一句话读法：运行时三类是图例的三句话，箭头一律指控制流方向 */
+export const RELATION_TYPE_HINTS: Record<RelationType, string> = {
+  calls: '要结果',
+  notifies: '不要结果、一对多，箭头指向被通知方',
+  streams: '连续数据，箭头指向数据去向',
+  depends: '编译期知道对方',
+  implements: '实现对方声明的接口',
+}
 
 export const ACTOR_KIND_LABELS: Record<ActorKind, string> = { user: '用户', system: '外部系统', time: '时间' }
 

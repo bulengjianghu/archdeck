@@ -4,6 +4,7 @@
  * - 类型列表是主体：按运行时 / 编译期两段，行既是图例又是筛选（结构视角点击筛选，L8）；示意带该类关系在画布上的箭头
  *   （箭头按同步 / 异步取，只有 implements 固定为空心三角，arrowOf），所以类型行一律画实心、implements 画三角。
  * - 「线的读法」是修饰：对任意类型都适用的箭头与粗细，放在浅底卡片里、中性色示意、不可点击。
+ * 每行在类型名后给一句读法（ADR-0022）：命令 = 要结果；通知 = 不要结果、一对多、箭头指向被通知方；流 = 连续数据、箭头指向数据去向。
  * 线型（事实状态）不在这里讲，只在「代码事实」组。
  */
 import { computed } from 'vue'
@@ -11,7 +12,7 @@ import { RELATION_TYPES, RUNTIME_RELATION_TYPES, type RelationType } from '@/mod
 import { useDesk } from '@/state/inject'
 import DisplayGroup from './DisplayGroup.vue'
 import LineSwatch from './LineSwatch.vue'
-import { TYPE_LABEL, TYPE_ORDER } from './labels'
+import { TYPE_HINT, TYPE_LABEL, TYPE_ORDER } from './labels'
 
 defineProps<{ run: boolean; open: boolean }>()
 const emit = defineEmits<{ toggle: [] }>()
@@ -54,13 +55,17 @@ const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] 
             @click="toggleType(t)"
           >
             <span class="sw"><LineSwatch :look="lookOf(t, !shown(t))" :arrow="arrowOf(t)" :width="36" /></span>
-            <span>{{ TYPE_LABEL[t] }}</span>
+            <span
+              >{{ TYPE_LABEL[t] }}<span class="hint"> = {{ TYPE_HINT[t] }}</span></span
+            >
           </button>
         </template>
         <template v-else>
           <div v-for="t in sec.types" :key="t" class="item">
             <span class="sw"><LineSwatch :look="lookOf(t)" :arrow="arrowOf(t)" :width="36" /></span>
-            <span>{{ TYPE_LABEL[t] }}</span>
+            <span
+              >{{ TYPE_LABEL[t] }}<span class="hint"> = {{ TYPE_HINT[t] }}</span></span
+            >
           </div>
         </template>
       </template>
@@ -88,6 +93,10 @@ const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] 
 /* 带箭头的类型示意比通用示意列宽一些，线不被箭头吃掉 */
 .type-list .sw {
   width: 36px;
+}
+
+.hint {
+  color: var(--text-3);
 }
 
 .section {

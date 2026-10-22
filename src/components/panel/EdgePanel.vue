@@ -4,6 +4,7 @@ import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import Section from './Section.vue'
 import RelationRow from './RelationRow.vue'
+import { RELATION_TYPE_LABELS } from '../shared/labels'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -31,7 +32,7 @@ const endSelection = (nodeId: string) =>
         <button class="link" @click="desk.select(endSelection(edge.to))">{{ endName(edge.to) }}</button>
       </h2>
       <div class="badges">
-        <span class="rel-chip" :class="`rel-${edge.type}`">{{ edge.type }} ×{{ edge.relationIds.length }}</span>
+        <span class="rel-chip" :class="`rel-${edge.type}`" :title="edge.type">{{ RELATION_TYPE_LABELS[edge.type] }} ×{{ edge.relationIds.length }}</span>
         <span class="badge">{{ edge.kind === 'aggregate' ? '聚合边' : '直接边' }}</span>
         <span v-if="edge.mode !== 'sync'" class="badge">{{ edge.mode === 'async' ? '异步' : '同步 + 异步' }}</span>
       </div>

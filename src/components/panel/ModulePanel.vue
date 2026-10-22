@@ -10,6 +10,7 @@ import ChangeBadge from './ChangeBadge.vue'
 import DesignNote from './DesignNote.vue'
 import ModuleSource from './ModuleSource.vue'
 import ModuleGovernance from './ModuleGovernance.vue'
+import PortTriad from './PortTriad.vue'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -91,17 +92,18 @@ function openChild(childId: string) {
       </ul>
     </Section>
 
-    <Section v-if="outs.length" title="出边（它依赖 / 调用谁）" :count="outs.length">
+    <Section v-if="outs.length" title="出边（它依赖 / 命令 / 通知谁）" :count="outs.length">
       <ul class="plain">
         <RelationRow v-for="r in outs" :key="r" :id="r" :perspective="m.id" />
       </ul>
     </Section>
-    <Section v-if="ins.length" title="入边（谁依赖 / 调用它）" :count="ins.length">
+    <Section v-if="ins.length" title="入边（谁依赖 / 命令 / 通知它）" :count="ins.length">
       <ul class="plain">
         <RelationRow v-for="r in ins" :key="r" :id="r" :perspective="m.id" />
       </ul>
     </Section>
 
+    <PortTriad :id="m.id" />
     <ModuleGovernance :id="m.id" />
     <ModuleSource :id="m.id" />
     <Section v-if="m.principle" title="实现原理" fold><Markdown :text="m.principle" /></Section>
@@ -140,7 +142,7 @@ function openChild(childId: string) {
 
 .inc .yes li::marker {
   content: '✓ ';
-  color: var(--rel-dataflow);
+  color: var(--rel-streams);
 }
 
 .inc .no li::marker {

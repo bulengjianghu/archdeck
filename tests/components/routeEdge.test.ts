@@ -51,8 +51,8 @@ describe('RouteEdge', () => {
   })
 
   it('P15：经由上层的临时线为关系类型色的虚线', () => {
-    const s = render({ temp: 'upper', edge: { ...base.edge, type: 'dataflow' } }).style
-    expect(s).toContain('var(--rel-dataflow)')
+    const s = render({ temp: 'upper', edge: { ...base.edge, type: 'streams' } }).style
+    expect(s).toContain('var(--rel-streams)')
     expect(s).toContain('stroke-dasharray: 6 4')
   })
 

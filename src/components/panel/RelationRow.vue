@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import ChangeBadge from './ChangeBadge.vue'
+import { RELATION_TYPE_LABELS } from '../shared/labels'
 
 /** 一行关系：点击跳到它真实所在的层次并选中；perspective 给出时只显示对端 */
 const props = defineProps<{ id: string; perspective?: string }>()
@@ -22,11 +23,11 @@ const fact = computed(() => desk.facts.report.value?.relations.get(props.id)?.st
       <template v-else>{{ name(r.from) }} → {{ name(r.to) }}</template>
     </button>
     <ChangeBadge entity="relation" :id="r.id" />
-    <span class="rel-chip" :class="`rel-${r.type}`">{{ r.type }}</span>
+    <span class="rel-chip" :class="`rel-${r.type}`" :title="r.type">{{ RELATION_TYPE_LABELS[r.type] }}</span>
     <span v-if="r.mode === 'async'" class="muted">异步</span>
     <code v-if="ifName" class="if">{{ ifName }}</code>
     <span v-if="fact === 'confirmed'" class="fact ok" title="已被代码证实">✓</span>
-    <span v-else-if="fact === 'unconfirmed'" class="fact" title="代码中没有对应的依赖">?</span>
+    <span v-else-if="fact === 'unconfirmed'" class="fact" title="未被代码证实">?</span>
   </li>
 </template>
 

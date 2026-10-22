@@ -18,8 +18,8 @@
   /* 关系类型（L10）：运行时三类饱和；编译期两类低饱和、明度接近背景，与 --text-3 拉开 */
   --rel-depends: #aeb9cc;
   --rel-calls: #2f6fe4;
-  --rel-dataflow: #0f9b8e;
-  --rel-event: #c98a10;
+  --rel-streams: #0f9b8e;
+  --rel-notifies: #c98a10;
   --rel-implements: #bba8e0;
   /* 代码依赖叠加线（K9，点线；有违规时为 --danger） */
   --edge-code: #8a4f7d;
@@ -63,8 +63,8 @@
 
     --rel-depends: #4f5b70;
     --rel-calls: #6b9cf5;
-    --rel-dataflow: #3cc4b5;
-    --rel-event: #e2a646;
+    --rel-streams: #3cc4b5;
+    --rel-notifies: #e2a646;
     --rel-implements: #65578e;
     --edge-code: #d58cc4;
     --actor: #b08ae6;
@@ -162,11 +162,11 @@ a {
 .rel-calls {
   --rel: var(--rel-calls);
 }
-.rel-dataflow {
-  --rel: var(--rel-dataflow);
+.rel-streams {
+  --rel: var(--rel-streams);
 }
-.rel-event {
-  --rel: var(--rel-event);
+.rel-notifies {
+  --rel: var(--rel-notifies);
 }
 .rel-implements {
   --rel: var(--rel-implements);

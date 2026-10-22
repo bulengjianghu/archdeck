@@ -51,18 +51,41 @@ describe('属性面板', () => {
     expect(text).toContain('modules/infra.yaml')
   })
 
-  it('选中关系：端点、类型、经由接口、交换的数据结构', async () => {
+  it('K11：声明了接口的模块有端口三角——定义 · 实现者 · 使用者，单击选中那条关系；没有接口的模块没有', async () => {
+    const files = sampleFiles({
+      'ports.yaml':
+        'relations:\n  - { id: rpi, from: app.solution, to: infra.framework.sm, type: implements }\n  - { id: rpu, from: infra.player, to: infra.framework.sm, type: calls, via: inject }\n',
+    })
+    const { wrapper, desk } = await mountPanel('/?level=infra.framework&sel=m:infra.framework.sm', files)
+    const section = wrapper.findAll('section').find(x => x.text().includes('端口（定义 · 实现者 · 使用者）'))!
+    expect(section.text()).toContain('sendCommand')
+    expect(section.text()).toContain('实现者 1')
+    expect(section.text()).toContain('使用者 1')
+    expect(section.text()).toContain('经 注入')
+    await section.find('.party .link').trigger('click')
+    expect(desk.selection.value).toEqual({ kind: 'relation', id: 'rpi' })
+    const other = await mountPanel('/?level=infra.framework&sel=m:infra.framework.pipeline', files)
+    expect(other.wrapper.text()).not.toContain('端口（定义')
+  })
+
+  it('选中关系：端点、类型、五个维度、经由接口、交换的数据结构', async () => {
     const { wrapper } = await mountPanel('/?level=infra.framework&sel=r:r6')
     const text = wrapper.text()
     expect(text).toContain('StateMachine')
     expect(text).toContain('Pipeline')
-    expect(text).toContain('调用（控制权转移）')
+    expect(text).toContain('命令')
+    // ADR-0022：控制流、知识（没有代码事实时不判定）、语义、同步性、平面各一行
+    expect(wrapper.findAll('.dims dt').map(d => d.text())).toEqual(['控制流', '知识', '语义', '同步性', '平面'])
+    expect(text).toContain('StateMachine → Pipeline')
+    expect(text).toContain('不判定：没有代码事实')
+    expect(text).toContain('命令：要结果')
+    expect(text).toContain('控制面')
     expect(text).toContain('未指定')
     expect(text).toContain('Command')
   })
 
   it('选中聚合边：列出原始关系，点击跳到关系所在层次', async () => {
-    const { wrapper, desk } = await mountPanel('/?level=infra&sel=e:infra.framework->infra.mus:dataflow')
+    const { wrapper, desk } = await mountPanel('/?level=infra&sel=e:infra.framework->infra.mus:streams')
     expect(wrapper.text()).toContain('聚合边')
     expect(wrapper.text()).toContain('Pipeline → MUs')
     await wrapper.find('.rel-row .link').trigger('click')
