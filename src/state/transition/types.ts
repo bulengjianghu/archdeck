@@ -88,5 +88,5 @@ export const DEFAULT_TOGGLES = (relationTypes: readonly RelationType[]): Toggles
   relationTypes: [...relationTypes],
   showDiff: true,
   compareTo: 'current',
-  showFacts: false,
+  showFacts: true,
 })

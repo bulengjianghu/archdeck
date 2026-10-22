@@ -103,7 +103,7 @@ const summary = computed(() => {
     hiddenTypes.value ? `隐藏 ${hiddenTypes.value} 类关系` : '',
     t.showBoundaries ? '' : '无边界节点',
     t.currentOnly ? '只看现状' : '',
-    t.showFacts && factsReady.value ? '代码事实' : '',
+    t.showFacts || !factsReady.value ? '' : '代码事实已关',
   ].filter(Boolean)
 })
 </script>

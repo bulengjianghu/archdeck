@@ -11,7 +11,7 @@ import type { GovernanceReport, LevelCycle, ModuleDep, Violation } from './types
 
 export type EdgeFact = 'confirmed' | 'partial' | 'unconfirmed'
 
-/** 一条代码依赖叠加线：本层两个节点之间的未描述依赖与违规（K9） */
+/** 一条代码依赖叠加线：本层两个节点之间的未描述依赖与基线外的违规（K9） */
 export interface DepOverlay {
   /** `dep:<依赖方节点>-><被依赖方节点>` */
   id: string
@@ -76,8 +76,9 @@ export function levelFacts(index: ModelIndex, view: LevelView, report: Governanc
     const p = project(d)
     if (p) bump(p[0], p[1], 'undescribed')
   }
+  // 画布只画基线外的违规（新增，或没有基线时的全部）；已知与已豁免的只在面板列出（K9）
   for (const v of report.violations) {
-    if (v.status === 'allowed') continue
+    if (v.status === 'allowed' || v.status === 'known') continue
     const p = project(v)
     if (p) bump(p[0], p[1], 'violations')
   }

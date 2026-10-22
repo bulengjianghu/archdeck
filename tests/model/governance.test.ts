@@ -333,6 +333,19 @@ describe('K9、K10、Y4、Y5 本层投影', () => {
     expect([...f.cycles.keys()].sort()).toEqual(['boundary:core', 'ui.store', 'ui.view'])
   })
 
+  it('K9：画布只画基线外的违规——已知（基线内）与已豁免的不进叠加线与红晕，面板照常列出', () => {
+    const { index, report: open } = setup()
+    const all = open.violations.filter(v => v.status !== 'allowed').map(v => v.key)
+    const { report } = setup(undefined, { createdAt: 't', violations: all, cyclicity: { modules: 99, files: 99 } })
+    expect(report.violations.filter(v => v.status === 'known')).toHaveLength(all.length)
+    const view = projectLevel(index, 'ui')
+    const f = levelFacts(index, view, report)
+    expect(f.violatedEdges.size).toBe(0)
+    expect(f.overlays.every(o => o.violations === 0)).toBe(true)
+    // 未描述依赖照常是叠加线
+    expect(f.overlays.some(o => o.undescribed > 0)).toBe(true)
+  })
+
   it('K9、Y5：同方向有多条视图边（L5 按类型分边）时，违规红晕与本层环的视图边只取类型声明顺序中的第一条', () => {
     const { index } = loadModel([...files(), { path: 'modules/z.yaml', text: 'relations: [{ id: rel.7, from: ui.store, to: core.util, type: depends }]' }])
     const own = assignFiles(index, SRC, [])

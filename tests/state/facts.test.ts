@@ -73,11 +73,13 @@ describe('U9 门禁错误进问题提示', () => {
 })
 
 describe('K9、Y4 本层投影只在结构视角、开关开启时', () => {
-  it('开关关闭为 null；开启后有本层的环；运行视角下为 null', async () => {
+  it('GV-6：开关缺省开启，有本层的环；关闭为 null；运行视角下为 null', async () => {
     const { desk } = await setup()
+    expect(desk.toggles.showFacts).toBe(true)
+    expect([...desk.facts.level.value!.cycles.keys()].sort()).toEqual(['app', 'infra'])
+    desk.setToggles({ showFacts: false })
     expect(desk.facts.level.value).toBeNull()
     desk.setToggles({ showFacts: true })
-    expect([...desk.facts.level.value!.cycles.keys()].sort()).toEqual(['app', 'infra'])
     desk.openScenario('sc.play')
     expect(desk.facts.level.value).toBeNull()
   })
@@ -116,6 +118,7 @@ describe('K9、Y4 本层投影只在结构视角、开关开启时', () => {
 describe('Y5 选中节点所在的本层环', () => {
   it('选中带环编号的模块给出环的节点与本层依赖；不在环中、开关关闭、运行视角为 null', async () => {
     const { desk } = await setup('/?sel=m:app')
+    desk.setToggles({ showFacts: false })
     expect(desk.facts.selectedCycle.value).toBeNull()
     desk.setToggles({ showFacts: true })
     const c = desk.facts.selectedCycle.value!
