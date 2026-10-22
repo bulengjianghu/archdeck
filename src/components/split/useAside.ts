@@ -31,13 +31,11 @@ export function useAside(desk: Pick<DeskState, 'files' | 'perspective' | 'playba
     f => f && open(f),
     { immediate: true },
   )
-  watch(
-    () => [run.value, desk.playback.value?.scenarioId, desk.playback.value?.frameId] as const,
-    ([r], prev) => {
-      if (r) tab.value = 'sequence'
-      else if (prev?.[0] && previewPath.value) tab.value = 'source'
-    },
-  )
+  // 三个值分开监听：只在视角、场景或帧真的变了时切页签；描述重新加载（N5）后 playback 换了对象但场景与帧不变，不切
+  watch([run, () => desk.playback.value?.scenarioId, () => desk.playback.value?.frameId], ([r], prev) => {
+    if (r) tab.value = 'sequence'
+    else if (prev?.[0] && previewPath.value) tab.value = 'source'
+  })
 
   return {
     previewPath,
