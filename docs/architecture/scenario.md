@@ -213,7 +213,7 @@ layoutSequence(model: SequenceModel, structure?: PositionedView): PositionedSequ
 
 ## 10. 步骤的代码证据
 
-> 状态：待实现（S16–S18，D-21）。匹配是关于被描述系统的知识（换成命令行也要），实现放在模型层「架构治理」（`src/model/governance/evidence.ts`），与关系的证实（K5）同一处、同一口径；场景投影只提供帧（类型来自契约 `scenario/types.ts`），不反向依赖治理。
+> 状态：已实现（S16–S18，D-21）。匹配是关于被描述系统的知识（换成命令行也要），实现放在模型层「架构治理」（`src/model/governance/evidence.ts`），与关系的证实（K5）同一处、同一口径；场景投影只提供帧（类型来自契约 `scenario/types.ts`），不反向依赖治理。
 
 **做什么**：把运行视角的每一步消息对到已有的代码事实（K1 的文件依赖及导入名 `names`），给出候选调用点（文件:行）与证据等级，让架构师从「AI 说这一步存在」跳到代码里那一行；找不到时明确说没有证据。不改描述格式。
 
