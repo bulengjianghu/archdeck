@@ -3,9 +3,10 @@
  * - 外部参与者泳道在最左，与系统内泳道之间画分隔线；其余泳道按层次顺序（排序键），
  *   同一父模块内的本层子模块改按结构图中对应节点的横坐标，使两张图左右一致；
  * - 父模块相同的连续泳道成一组，分组框画在泳道头上方（参与者不分组）；
- * - 泳道宽度按名称自适应；消息纵向累加；组合框包住其子消息，按嵌套深度内缩。
+ * - 泳道宽度按名称自适应；消息纵向累加；组合框包住其子消息，按嵌套深度内缩；
+ * - 给了各帧的证据等级时，每条消息取合并的各帧中最弱的一档（S17：有一帧无证据即无证据）。
  */
-import { compareKeys, type SequenceModel, type SequenceParticipant } from '@/model'
+import { compareKeys, type EvidenceLevel, type SequenceModel, type SequenceParticipant } from '@/model'
 import type { PositionedView } from './layout'
 
 export interface PositionedSequence {
@@ -18,8 +19,8 @@ export interface PositionedSequence {
   headY: number
   /** 参与者与系统内泳道之间的分隔线 */
   boundaryX?: number
-  /** 每条消息箭头的纵坐标 */
-  messages: { y: number }[]
+  /** 每条消息箭头的纵坐标；evidence 为消息的证据等级（给了各帧等级时，S17） */
+  messages: { y: number; evidence?: EvidenceLevel }[]
   /** 与 model.fragments 一一对应；branchY 为第 2 个起各分支的分隔线纵坐标 */
   fragments: { x: number; y: number; w: number; h: number; branchY: number[] }[]
   size: { w: number; h: number }
@@ -50,7 +51,18 @@ export function textWidth(s: string): number {
   return w
 }
 
-export function layoutSequence(model: SequenceModel, structure?: PositionedView | null): PositionedSequence {
+/** S17：消息的证据等级——合并的各帧中最弱的一档；各帧都没有等级时不给 */
+const WEAKEST: readonly EvidenceLevel[] = ['none', 'module', 'name', 'skipped']
+function messageEvidence(frameIds: readonly string[], evidence: ReadonlyMap<string, EvidenceLevel>): EvidenceLevel | undefined {
+  const levels = new Set(frameIds.map(id => evidence.get(id)))
+  return WEAKEST.find(l => levels.has(l))
+}
+
+export function layoutSequence(
+  model: SequenceModel,
+  structure?: PositionedView | null,
+  evidence?: ReadonlyMap<string, EvidenceLevel> | null,
+): PositionedSequence {
   const centerX = (nodeId: string) => {
     const b = structure?.nodes.get(nodeId)
     return b ? b.x + b.w / 2 : Infinity
@@ -119,7 +131,8 @@ export function layoutSequence(model: SequenceModel, structure?: PositionedView 
       y += SEQ.fragTail
       fragEnd[k] = y
     }
-    return { y: at }
+    const level = evidence ? messageEvidence(m.frameIds, evidence) : undefined
+    return level ? { y: at, evidence: level } : { y: at }
   })
 
   const fragments = model.fragments.map((f, k) => {

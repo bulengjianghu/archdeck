@@ -30,6 +30,7 @@ import {
   type CheckResult,
   type CheckTarget,
   type EntryOf,
+  type FileDep,
   type GovernanceReport,
   type Issue,
   type LedgerClient,
@@ -60,6 +61,8 @@ export interface Loaded {
   own: SourceOwnership
   entryOf: EntryOf
   report: GovernanceReport
+  /** K1：文件依赖（步骤的代码证据用，S16） */
+  deps: FileDep[]
   /** J1：演化事实；读不到 git 历史时为原因 */
   evolution: EvolutionStats | { error: string }
   /** 输入的指纹（stampOf） */
@@ -120,7 +123,19 @@ export function createService(opts: ServiceOptions) {
     const hist = historyOptions(index.model.system)
     const history = readSourceHistory(tree.root, tree.files, hist)
     const evolution = history.status === 'ok' ? evolutionStats(index, own, history, tree.lines ?? {}, report, hist.coupling) : { error: history.reason }
-    const loaded: Loaded = { project, index, issues, tree, files: new Set(tree.files), own, entryOf: entryResolver(index, own, tree), report, evolution, stamp }
+    const loaded: Loaded = {
+      project,
+      index,
+      issues,
+      tree,
+      files: new Set(tree.files),
+      own,
+      entryOf: entryResolver(index, own, tree),
+      report,
+      deps: deps.deps,
+      evolution,
+      stamp,
+    }
     cache.set(project, loaded)
     // Q3：本会话还没扫描过时，「上一次扫描」是首次加载的结果，不随自动重建移动
     if (!lastScan.has(project)) lastScan.set(project, violationKeys(report))
@@ -281,7 +296,7 @@ export function createService(opts: ServiceOptions) {
     issues(p?: string, category?: ReworkCategory): { project: string; list: ReworkList; markdown: string } {
       const l = load(p)
       const evo = 'error' in l.evolution ? {} : { evolution: l.evolution }
-      const all = reworkList({ index: l.index, issues: l.issues, source: { own: l.own, tree: l.tree }, report: l.report, ...evo })
+      const all = reworkList({ index: l.index, issues: l.issues, source: { own: l.own, tree: l.tree }, report: l.report, deps: l.deps, ...evo })
       const items = category ? all.items.filter(i => i.category === category) : all.items
       const list: ReworkList = category ? { ...all, items } : all
       const modelDir = path.relative(opts.root, path.join(modelRoot, l.project)).split(path.sep).join('/')

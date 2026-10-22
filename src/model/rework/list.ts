@@ -3,9 +3,9 @@
  * 每条带文件行号、规则编号与建议动作。关于被描述系统的知识，页面、命令行与 MCP 共用同一份结果。
  */
 import { RULE_LABELS, moduleName } from '../names'
-import { bindRelation, forEachStep, RUNTIME_RELATION_TYPES } from '../scenario'
+import { bindRelation, forEachStep, planScenario, RUNTIME_RELATION_TYPES } from '../scenario'
 import { matchRef, missingEvidence, moduleEntry, type LocalSource, type SourceOwnership } from '../source'
-import { contractNames, unconfirmedCode, unconfirmedReason, unconfirmedWarns, type FileDep, type GovernanceReport, type Violation } from '../governance'
+import { contractNames, stepEvidence, unconfirmedCode, unconfirmedReason, unconfirmedWarns, type FileDep, type GovernanceReport, type Violation } from '../governance'
 import { reviewDiffText, reviewStates, REVIEW_FIELD_LABELS, REVIEW_FIELDS } from '../review'
 import { isolatedCouplings, type EvolutionStats } from '../evolution'
 import type { Issue, ModelIndex, SourceLoc } from '../types'
@@ -21,6 +21,8 @@ export interface ReworkInput {
   report?: GovernanceReport
   /** 演化事实（J）；没有时不含「时间耦合」 */
   evolution?: EvolutionStats
+  /** 文件依赖（K1）；与 source 同时给出时含「步骤无证据」（S17） */
+  deps?: readonly FileDep[]
 }
 
 /** Q8：校验问题代码 → 规则编号 */
@@ -111,6 +113,7 @@ export function reworkList(input: ReworkInput): ReworkList {
   items.push(...unmodeledItems(index, name))
   items.push(...reviewItems(index, name))
   if (input.evolution) items.push(...couplingItems(index, input.evolution, name))
+  if (source && input.deps) items.push(...unevidencedItems(index, source.own, source.tree, input.deps, name))
 
   const sev = (s: ReworkSeverity) => REWORK_SEVERITIES.indexOf(s)
   const cat = (c: ReworkItem['category']) => REWORK_CATEGORIES.indexOf(c)
@@ -461,6 +464,56 @@ function couplingItems(index: ModelIndex, stats: EvolutionStats, name: (id: stri
         { kind: 'fix-code' as const, text: '没有运行时关系时，检查两者是否应合并，或按变化原因重新拆分' },
       ],
       target: { modules: [c.a, c.b] },
+    }
+  })
+}
+
+// ── 步骤无证据（S16、S17）：同一对端点（含方向）的步骤一个根因；ref 内联的帧按它写在哪个场景的哪一步去重 ──
+
+function unevidencedItems(
+  index: ModelIndex,
+  own: SourceOwnership,
+  tree: Pick<LocalSource, 'files' | 'packages'>,
+  deps: readonly FileDep[],
+  name: (id: string) => string,
+): ReworkItem[] {
+  const entryOf = (id: string) => {
+    const e = moduleEntry(index, own, tree, id)
+    return e && !e.missing ? e.file : null
+  }
+  const groups = new Map<string, { from: string; to: string; steps: ReworkLoc[]; seen: Set<string>; scenarios: Set<string> }>()
+  for (const sc of index.scenarios.values())
+    for (const f of planScenario(index, sc.id).frames.values()) {
+      if (stepEvidence(f, index, own, deps, entryOf).level !== 'none') continue
+      const key = `${f.from}->${f.to}`
+      const g = groups.get(key) ?? { from: f.from, to: f.to, steps: [], seen: new Set<string>(), scenarios: new Set<string>() }
+      groups.set(key, g)
+      const step = `${f.scenarioId}#${f.stepPath}`
+      if (g.seen.has(step)) continue
+      g.seen.add(step)
+      g.scenarios.add(f.scenarioId)
+      const loc = descLoc(f.src, `场景「${index.scenarios.get(f.scenarioId)?.name ?? f.scenarioId}」步骤 ${f.stepPath}：${f.label ?? `${f.kind} ${f.from} → ${f.to}`}`)
+      if (loc) g.steps.push(loc)
+    }
+
+  return [...groups].map(([key, g]) => {
+    const first = g.steps[0]
+    return {
+      id: `unevidenced:${key}`,
+      category: 'unevidenced' as const,
+      severity: 'warning' as const,
+      rules: ['S16', 'S17'],
+      code: 'step.no-evidence',
+      title: `步骤无证据：${name(g.from)} → ${name(g.to)} 的 ${g.steps.length} 个步骤在代码里找不到两端之间的任何依赖`,
+      detail: '两端的文件之间没有导入（值与类型都没有）：步骤可能写错了端点或接口，或代码经注入 / 回调传递而静态导入看不见',
+      ...(first ? { at: first } : {}),
+      affected: g.steps,
+      actions: [
+        { kind: 'fix-description' as const, text: '检查步骤（或其关系）的接口名与两端：端点写能表达清楚的最深模块', ...(first ? { file: first.file } : {}) },
+        { kind: 'add-code-refs' as const, text: '检查两端模块的 codeRefs 是否漏了真正承载这次调用的文件' },
+        { kind: 'fix-relation' as const, text: '确实经注入 / 回调传递的，给步骤对应的关系写 via（静态导入证实不了，不判定）', snippet: 'via: inject   # 或 callback、port' },
+      ],
+      target: { modules: [g.from, g.to].filter(id => index.modules.has(id)), scenario: [...g.scenarios][0] },
     }
   })
 }

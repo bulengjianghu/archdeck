@@ -149,3 +149,24 @@ describe('K10 代码依赖叠加线的选中', () => {
     expect(desk.selection.value).toBeNull()
   })
 })
+
+describe('S16、S17 步骤的代码证据（desk.evidence）', () => {
+  it('打开场景按计划逐帧求证据与汇总；选中步骤即进度所在的一帧；时序图消息带等级；设计版本没有', async () => {
+    const { desk } = await setup('/?sc=sc.play')
+    const plan = desk.run.plan.value!
+    const sc = desk.evidence.scenario.value!
+    expect(sc.frames.size).toBe(plan.frames.size)
+    expect(Object.values(sc.counts).reduce((a, b) => a + b, 0)).toBe(plan.frames.size)
+    expect(desk.evidence.step.value).toBeNull()
+    desk.next()
+    const id = desk.state.value.playback!.frameId!
+    expect(desk.evidence.step.value).toBe(sc.frames.get(id))
+    const ps = desk.run.positionedSequence.value!
+    expect(ps.messages.some(m => m.evidence)).toBe(true)
+    // 场景列表：无证据帧数与汇总一致
+    expect(desk.evidence.unevidenced.value.get('sc.play') ?? 0).toBe(sc.counts.none)
+    const design = await setup('/?sc=sc.play', fetcher(), { design: 'd', revision: 'r1' })
+    expect(design.desk.evidence.scenario.value).toBeNull()
+    expect(design.desk.evidence.unevidenced.value.size).toBe(0)
+  })
+})

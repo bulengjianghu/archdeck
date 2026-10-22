@@ -31,6 +31,7 @@ import {
   type ScenarioLevelView,
   type ScenarioPlan,
   type SequenceModel,
+  type EvidenceLevel,
 } from '@/model'
 import type { PositionedView } from '@/layout/layout'
 import { layoutSequence, type PositionedSequence } from '@/layout/sequence'
@@ -46,9 +47,11 @@ export interface RunInputs {
   positioned: Ref<PositionedView | null>
   /** 选中文件的归属模块（选中突出用，R15） */
   fileOwners: ComputedRef<string[]>
+  /** 各帧的证据等级（S17，时序图的「?」）；没有代码事实时为 null */
+  evidence?: ComputedRef<ReadonlyMap<string, EvidenceLevel> | null>
 }
 
-export function createRun({ state, index, levelId, plan, view, positioned, fileOwners }: RunInputs) {
+export function createRun({ state, index, levelId, plan, view, positioned, fileOwners, evidence }: RunInputs) {
   const scenarioId = computed(() => state.value.playback?.scenarioId ?? null)
   const scenario = computed(() => (scenarioId.value ? (index.value?.scenarios.get(scenarioId.value) ?? null) : null))
   const frameId = () => state.value.playback?.frameId ?? null
@@ -91,7 +94,7 @@ export function createRun({ state, index, levelId, plan, view, positioned, fileO
   const positionedSequence = computed<PositionedSequence | null>(() => {
     if (!sequence.value) return null
     const pv = positioned.value
-    return layoutSequence(sequence.value, pv && pv.view.parentId === levelId.value ? pv : null)
+    return layoutSequence(sequence.value, pv && pv.view.parentId === levelId.value ? pv : null, evidence?.value)
   })
   /** 选中对象（步骤、场景、文件以外）在本场景中的参与（V6）；运行视角下才有 */
   const selectionParticipation = computed<Participation | null>(() => {
