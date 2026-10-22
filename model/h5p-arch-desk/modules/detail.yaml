@@ -26,9 +26,6 @@ modules:
   - id: access.reader
     name: 描述读取
     codeRefs: [vite/readModelDir.ts, vite/readGit.ts]
-  - id: access.writer
-    name: 描述写入
-    codeRefs: [vite/writeModel.ts]
   - id: access.lint
     name: 命令行校验
     codeRefs: [scripts/lint-model.ts]

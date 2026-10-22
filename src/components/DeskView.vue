@@ -6,7 +6,7 @@
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { createDeskState, type ModelPayload } from '@/state/useDeskState'
-import { isCommitVersion, type VersionRef } from '@/model'
+import { isCommitVersion, isIntentVersion, type VersionRef } from '@/model'
 import { httpModelWriter, httpSourceFetcher } from './source/httpSource'
 import { DESK_STATE } from '@/state/inject'
 import GraphCanvas from './GraphCanvas.vue'
@@ -29,27 +29,33 @@ import { NAV_TAB, type NavTab } from './shared/navTab'
 import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
 import { useEvolutionPrefs } from './display/useEvolutionPrefs'
 
-const props = defineProps<{ project: string; design?: string; revision?: string; commit?: string; base?: string }>()
+const props = defineProps<{ project: string; design?: string; revision?: string; commit?: string; base?: string; intent?: string }>()
 const router = useRouter()
-// 设计版本（ADR-0002）或提交版本（E5、E6）；都没有时为当前版本
+// 设计版本（ADR-0002）、提交版本（E5、E6）或持久草图版本（ADR-0024）；都没有时为当前版本
 const version: VersionRef | undefined = props.commit
   ? { commit: props.commit, ...(props.base ? { base: props.base } : {}) }
   : props.design && props.revision
     ? { design: props.design, revision: props.revision }
-    : undefined
+    : props.intent
+      ? { intent: props.intent }
+      : undefined
 
 async function fetchModel(): Promise<ModelPayload> {
   const enc = encodeURIComponent
   const file = isCommitVersion(version)
     ? `models/${enc(props.project)}/commits/${enc(version.commit)}.json${version.base ? `?base=${enc(version.base)}` : ''}`
-    : version
-      ? `models/${enc(props.project)}/designs/${enc(version.design)}/${enc(version.revision)}.json`
-      : `models/${enc(props.project)}.json`
+    : isIntentVersion(version)
+      ? `models/${enc(props.project)}/intent/${enc(version.intent)}.json`
+      : version
+        ? `models/${enc(props.project)}/designs/${enc(version.design)}/${enc(version.revision)}.json`
+        : `models/${enc(props.project)}.json`
   const what = isCommitVersion(version)
     ? `提交「${version.commit.slice(0, 8)}」`
-    : version
-      ? `设计版本「${version.design} / ${version.revision}」`
-      : `项目「${props.project}」`
+    : isIntentVersion(version)
+      ? `持久草图「${version.intent}」`
+      : version
+        ? `设计版本「${version.design} / ${version.revision}」`
+        : `项目「${props.project}」`
   const res = await fetch(`${import.meta.env.BASE_URL}${file}`, { cache: 'no-store' })
   if (res.status === 404) throw new Error(`${what}不存在`)
   if (!res.ok) throw new Error(`读取${what}失败：HTTP ${res.status}`)

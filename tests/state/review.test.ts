@@ -5,10 +5,12 @@ import { describe, expect, it } from 'vitest'
 import { reviewEntries, reviewHash, type ReviewedInput } from '@/model'
 import { createDeskState, type ModelWriter } from '../../src/state/useDeskState'
 import { sampleFiles } from '../fixtures/sample'
+import { NO_WRITER } from '../../src/state/sync/writer'
 
 function fakeWriter() {
   const batches: ReviewedInput[][] = []
   const writer: ModelWriter = {
+    ...NO_WRITER,
     feedback: async () => ({ ok: false, error: 'x' }),
     allow: async () => ({ ok: false, error: 'x' }),
     ignore: async () => ({ ok: false, error: 'x' }),

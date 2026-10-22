@@ -55,12 +55,13 @@ import { createReview } from './desk/review'
 import { createEvolution } from './desk/evolution'
 import { createIntent } from './desk/intent'
 import { createEvidence } from './desk/evidence'
+import { createEdit } from './desk/edit'
 
 export type { Selection, Toggles } from './transition'
 export { encodeSelection, decodeSelection } from './transition'
 export type { CompareSource, ModelPayload, FetchModel } from './sync/modelSource'
 export type { SourceFetcher, Resource } from './sync/source'
-export type { ModelWriter, WriteOutcome } from './sync/writer'
+export type { ModelWriter, WriteOutcome, SketchSaveOutcome } from './sync/writer'
 
 export type DeskOptions = RouterSyncOptions & {
   /** 被描述项目的源码（G1、G2）；缺省为没有源码来源（只看描述的测试） */
@@ -82,6 +83,11 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const sketchPrompt = shallowRef('')
   /** X4：载荷附带的设计草图 */
   const sketches = shallowRef<{ design: string; file: RawFile }[]>([])
+  /** 读到的描述的索引；编辑态下核心的 index 换成编辑中的草图的索引（desk.edit，ADR-0024） */
+  const loadedIndex = shallowRef<ModelIndex | null>(null)
+  /** 载荷的原文与草图文件的指纹（编辑态加载草图、保存时比对用） */
+  const payloadFiles = shallowRef<RawFile[]>([])
+  const payloadSketch = shallowRef<{ file: string; hash: string } | undefined>(undefined)
   const state = shallowRef<ViewState>({ levelId: '', selection: null, hover: null, toggles: DEFAULT_TOGGLES(RELATION_TYPES), playback: null })
   /** 每次层次切换递增，界面据此决定是否适应画布 */
   const levelVersion = ref(0)
@@ -94,7 +100,13 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     const idx = index.value
     if (!idx) return false
     const prev = state.value
-    const { state: next, history } = transition(prev, action, { index: idx, plan: plan.value, levelView: view.value, scenarioView: run.scenarioView.value })
+    const { state: next, history } = transition(prev, action, {
+      index: idx,
+      plan: plan.value,
+      levelView: view.value,
+      scenarioView: run.scenarioView.value,
+      editable: edit.editable,
+    })
     if (next === prev) return false
     state.value = next
     if (next.levelId !== prev.levelId) levelVersion.value++
@@ -157,6 +169,21 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version })
   const evolution = createEvolution({ state, index, view, files, facts, sync: sourceSync, design: !!options.version })
   const intent = createIntent({ index, designs, sketches, version: options.version })
+  // ── 编辑草图（X7，ADR-0024）：只在草图版本上可用 ──
+  const edit = createEdit({
+    version: options.version,
+    loaded: loadedIndex,
+    files: payloadFiles,
+    sketch: payloadSketch,
+    current: () => baselines.value.current?.index ?? null,
+    accepted: () =>
+      isDesignVersion(options.version) ? (designs.value.find(d => d.id === (options.version as { design: string }).design)?.accepted ?? []) : [],
+    levelPath: () => levelPath.value,
+    dispatch: action => dispatch(action),
+    show: idx => (index.value = idx),
+    reload: () => reload(),
+    writer: options.writer ?? NO_WRITER,
+  })
   const allIssues = computed(() => [...issues.value, ...files.warnings.value, ...facts.gateIssues.value])
   /** W-6、Q7：返工清单——问题页签与画布角标；源码归属与代码事实只对当前版本（G9、K8），草图偏差对设计各轮也有（X4） */
   const rework = computed<ReworkList | null>(() => {
@@ -236,7 +263,10 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       sketchPrompt.value = loaded.payload.sketchPrompt ?? ''
       sketches.value = loaded.payload.sketches ?? []
       baselines.value = loaded.baselines
-      index.value = loaded.model.index
+      payloadFiles.value = loaded.payload.files
+      payloadSketch.value = loaded.payload.sketch
+      loadedIndex.value = loaded.model.index
+      index.value = edit.onReloaded()
       status.value = 'ready'
       loadError.value = undefined
       // 首次加载由 init() 按 URL 决定层次；重新加载时保留层次与选中（N5）
@@ -337,6 +367,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     evolution,
     intent,
     evidence,
+    edit,
     // 操作
     dispatch,
     init,

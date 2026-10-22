@@ -1,3 +1,4 @@
+import { NO_WRITER } from '../../src/state/sync/writer'
 import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -331,6 +332,7 @@ describe('DeskState · 写入人拥有的文件（B1–B4）', () => {
   it('当前版本可加例外与忽略项、不能记评审意见；设计版本只能记评审意见；都交给注入的写入来源', async () => {
     const calls: string[] = []
     const writer = {
+      ...NO_WRITER,
       feedback: async (b: { design: string; revision: string; text: string }) => (
         calls.push(`f:${b.design}/${b.revision}:${b.text}`),
         { ok: true as const, file: 'd.yaml' }

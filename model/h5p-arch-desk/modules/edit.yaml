@@ -87,6 +87,68 @@ modules:
     name: 改名与删除的跟随
     parent: state.transition.edit
     responsibility: edited 动作（携带编辑的影响）：当前层次或选中的模块被改名 → 换成新 ID；被删除 → 层次退到 draft 里最近仍存在的祖先、选中清空；选中的关系被删除 → 清空；新建的模块 → 选中它，便于接着在面板里填写（C-4 就地输入之后）；撤销 / 重做的影响按同样规则跟随。不进浏览器历史。
+  - id: state.desk.edit
+    name: 编辑中的草图
+    parent: state.desk
+    kind: component
+    responsibility: |
+      DeskState 的编辑分组（desk.edit）：持有编辑会话（ds.EditSession，一个值：编辑目标、读取时的草图与文件指纹、编辑中的草图、撤销 / 重做栈），由纯函数改变；
+      对外提供编辑操作（每个画布 / 面板意图一个，经 model.intent.edit 应用）、撤销 / 重做、保存、放弃、新建设计；
+      编辑态下把编辑中的草图加载成模型索引，作为 DeskState 的 index 交给已有的投影、布局、导航树与面板——派生给画布与面板的只有草图本身；并派生即时校验、对当前版本的实时核验（L-1）、本次改动摘要（L-2）与晋升预览（L-4）。
+    principle: |
+      - **一个值**：草图、撤销栈、读取时的指纹互相约束（撤销回到读取时的草图即不脏），合成一个 EditSession，不拆成多个 ref；「脏」由 draft 与读取时的草图是否相同推出，不另存（原则 6）。
+      - **复用而不分叉**：编辑态不另做一套画布数据——draft 经 loadModel 成为索引，后面的 projectLevel、layoutView、canvasScene、导航树照常工作；画布只多出编辑用的落点（插入条、连线柄）。
+      - **编辑态只对草图版本开启**（X7）：设计的草图（/d/<设计>/sketch）与持久草图（/i/<ID>）；当前版本、设计轮次、提交版本上没有编辑态。
+    codeRefs: [src/state/desk/edit.ts]
+  - id: state.desk.edit.session
+    name: 编辑会话
+    parent: state.desk.edit
+    responsibility: 编辑会话的值与纯函数：begin（以读取到的草图与指纹开始）、apply（调用 applyEdit；成功则把编辑前的草图连同操作压入撤销栈、清空重做栈，拒绝则会话不变并返回原因）、undo / redo、saved（保存成功：读取时的草图与指纹更新为刚保存的，清空两个栈）、reloaded（描述重新加载：指纹相同则不变，否则标记 stale——文件已在外部改动）、replay（把撤销栈里的操作按顺序重放到新读取的草图上，用于 stale 后继续，返回重放失败的操作）；撤销栈深度上限 200。
+    principle: |
+      - 撤销栈存「编辑前的草图快照 + 操作」：快照让撤销与重做是 O(1) 的值替换；操作让 stale 之后能把本次改动重放到新文件上（S-3 的「重新加载后再改」不必从头再画）。
+      - **撤销粒度（X7g）**：一个 EditOp 一步。文本字段从获得焦点到失焦或回车是一次提交，产生一个 updateModule / updateRelation，即一步；其间的多次击键不进撤销栈；值未变时不提交；Esc 还原字段、不提交。同一字段的连续两次提交是两步，不合并（可预测优先于省步数）。
+      - **重放失败的兜底**（评审意见 5）：replay 列出失败的操作，会话仍为 stale；此时可以「放弃本次改动」（discard：以新读到的草图重新 begin，清空两个栈），不会卡在 stale 状态。
+    codeRefs: [src/state/desk/edit/session.ts]
+  - id: state.desk.edit.derive
+    name: 编辑态派生
+    parent: state.desk.edit
+    responsibility: 由编辑会话派生（computed）：draft 连同 system.yaml 与持久草图加载成模型索引（编辑态下作为 DeskState 的 index）；即时校验 validateSketch（P-6、S-2）；对当前版本的实时核验 sketchCheck（L-1，「实现后将有 N 处偏差」，当前版本取自载荷附带的对比基线）；本次未保存改动与上次保存相比的摘要（L-2，diffModels 比较两份草图的索引：新增 / 修改 / 删除了哪些实体）；声明 supersedes 时与被替换持久草图的差异（L-4，diffModels）；是否脏、能否撤销 / 重做 / 保存。
+    principle: draft → 索引走 loadModel：把 draft 序列化成一份虚拟的 sketch.yaml 原文交给同一条加载流水线，草图实体的加载、补充与校验规则与读文件时完全一致（X1）；草图只有几十个实体，每次操作重算一遍的代价可以忽略。
+    codeRefs: [src/state/desk/edit/derive.ts]
+  - id: state.desk.edit.commands
+    name: 编辑操作
+    parent: state.desk.edit
+    responsibility: 对呈现层的唯一一组编辑操作（if.desk.edit）：enterEdit / exitEdit（经 dispatch 交给编辑规则）、edit(op)（会话 apply，成功后把影响以 edited 动作 dispatch，让层次与选中跟随改名与删除）、undo / redo（同样 dispatch 影响）、previewMove（移动前的 ID 影响预览）、save / discard / createDesign（交给写回同步）、canLeave（离开前是否需要确认，问编辑规则）。操作本身不含规则。
+    codeRefs: [src/state/desk/edit/commands.ts]
+  - id: state.desk.edit.save
+    name: 草图写回同步
+    parent: state.desk.edit
+    responsibility: 同步适配器（与路由、模型源、布局同列）：保存时把 draft 与读取时的指纹经注入的 ModelWriter POST 给写入端点（整份写回，B6）；新建设计时 POST 设计 ID、名称、目标与底稿；结果——成功则会话 saved 并等文件变化推送回来（N5），指纹不符则会话 stale 并提示「文件已变，重新加载后再改」（S-3），校验不过则把服务端的问题列表交给派生定位到实体（S-2）。stale 后「重新加载并重放」：取最新载荷、replay，部分失败时列出失败的操作，并提供「放弃本次改动」作兜底。保存成功后停留在编辑态。
+    codeRefs: [src/state/desk/edit/save.ts]
+  - id: access.writer.append
+    name: 追加写入
+    parent: access.writer
+    kind: component
+    responsibility: |
+      一期已有的写入（草图修订后归这里）：人拥有文件的追加写入——评审意见（B2）、例外（B3）、忽略项（B4）、确认记录（Z1、Z6，同一模块更新那一条）、认可偏差（X4）——与归档 / 晋升（X3）；
+      YAML 文档模型的打开（openDoc：解析失败拒绝写）与保存（save：写回并更新指纹，X6）这两个件供草图写回共用。只追加、不删改。
+    codeRefs: [vite/writeModel.ts]
+  - id: access.writer.sketch
+    name: 草图写回
+    parent: access.writer
+    kind: component
+    responsibility: |
+      人拥有的草图的整份写回（B6）与新建设计：
+      saveSketch——目标为持久草图 intent/<ID>.yaml 或设计的草图 designs/<设计>/sketch.yaml；先比对文件当前指纹与读取时的指纹（X6 同一算法），不同即拒绝（409，「文件已变，重新加载后再改」，S-3）；再从磁盘读持久草图、用 validateSketch 校验，有 error 即拒绝（422，附问题列表，S-2）；
+      然后用 YAML 文档模型把新草图合并进原文档：映射逐键、带 id 的列表按 id 对齐、标量只在值变了才替换，没变的节点原样保留（连同注释）；写回后更新 owned.json 的指纹并在 ledger.jsonl 记一行（来源 page、种类 sketch）。
+      createDesign——设计 ID 合法且目录不存在；写 design.yaml（名称、目标、status: draft、base.commit 取当前版本 system.source.commit）与 sketch.yaml（底稿），两者都登记指纹。
+      端点由 ModelSource 插件挂载：POST /write/<项目>/sketch（持久草图，正文带草图 ID）、/write/<项目>/designs/<设计>/sketch、/write/<项目>/designs（新建），只收同源 JSON（B5）。
+    principle: |
+      - **注释的限度**（负责人裁决接受）：注释挂在节点上，节点没变注释就在；改过的标量保留其行尾注释，删掉的条目注释随之消失，新条目没有注释。写进 04 §3.10。
+      - **服务端再校验一遍**：页面的即时校验只是提示，写入端点是最后一道；两边调用同一个 validateSketch，结果一致。
+      - **只写草图**：路径只由项目、草图 ID、设计 ID 拼出（isProjectId），不接受任意路径；AI 生成的文件一律不写。
+    codeRefs: [vite/writeSketch.ts]
+
 relations:
   # ── 模型层：意图内部 ──
   - {id: rel.ed.layers-locate, from: model.intent.edit.layers, to: model.intent.edit.locate, type: calls, description: 寻址与 ID 生成}
@@ -107,6 +169,40 @@ relations:
   - {id: rel.ed.follow-existing, from: state.transition.edit, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: nearestExisting：删除后层次退到草图里最近仍存在的祖先}
   - {id: rel.ed.edit-navigation, from: state.transition.edit, to: state.transition.navigation, type: calls, description: withLevel：跟随后的层次与选中}
   - {id: rel.ed.mode-types, from: state.transition.edit, to: model.types, type: depends, payload: [ds.ViewState], description: SketchTarget、EditEffects}
+  # ── 视图状态层：编辑中的草图 ──
+  - {id: rel.ed.commands-session, from: state.desk.edit.commands, to: state.desk.edit.session, type: calls, interface: if.desk.editSession, description: apply / undo / redo / replay / discard / reloaded}
+  - {id: rel.ed.commands-mode, from: state.desk.edit.commands, to: state.transition.edit, type: calls, interface: if.state.editMode, description: leaveGuard：离开前是否要确认}
+  - {id: rel.ed.commands-dispatch, from: state.desk.edit.commands, to: state.desk.actions, type: calls, interface: if.desk.actions, description: dispatch(enterEdit / exitEdit / edited)}
+  - {id: rel.ed.commands-save, from: state.desk.edit.commands, to: state.desk.edit.save, type: calls, description: save / createDesign 交给写回同步}
+  - {id: rel.ed.commands-derive, from: state.desk.edit.commands, to: state.desk.edit.derive, type: calls, description: draftIndex、editContext：编辑后的索引与上下文}
+  - {id: rel.ed.save-session, from: state.desk.edit.save, to: state.desk.edit.session, type: calls, interface: if.desk.editSession, description: 写入结果 → saved / 已过时}
+  - {id: rel.ed.save-writer-port, from: state.desk.edit.save, to: state.desk.writer, type: depends, description: 注入的 ModelWriter（同一个 HTTP 写入来源，含 saveSketch / createDesign）}
+  - {id: rel.ed.derive-session, from: state.desk.edit.derive, to: state.desk.edit.session, type: calls, description: isDirty}
+  - {id: rel.ed.loading-edit, from: state.desk.loading, to: state.desk.edit.commands, type: calls, description: 重新加载后 onReloaded：认出刚保存的或标为已过时，给出要显示的索引}
+  - {id: rel.ed.session-apply, from: state.desk.edit.session, to: model.intent.edit, type: calls, interface: if.intent.applyEdit, description: 应用一个编辑操作得到新草图与影响}
+  - {id: rel.ed.commands-preview, from: state.desk.edit.commands, to: model.intent.edit, type: calls, interface: if.intent.idImpact, description: previewMove；seedSketch：新建设计的底稿}
+  - {id: rel.ed.commands-load, from: state.desk.edit.commands, to: model.pipeline.loader, type: calls, description: 从载荷原文读出草图定义}
+  - {id: rel.ed.derive-validate, from: state.desk.edit.derive, to: model.intent.validate, type: calls, interface: if.intent.validateSketch, description: 每次操作后即时校验（与写入端点同一函数）}
+  - {id: rel.ed.derive-check, from: state.desk.edit.derive, to: model.intent.check, type: calls, interface: if.intent.sketchCheck, description: 对当前版本实时跑 sketchCheck（L-1）}
+  - {id: rel.ed.derive-load, from: state.desk.edit.derive, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 编辑中的草图序列化为虚拟 sketch.yaml，与 system.yaml、持久草图一起加载成索引}
+  - {id: rel.ed.derive-diff, from: state.desk.edit.derive, to: model.diff, type: calls, interface: if.model.diffModels, description: 未保存改动（L-2）与晋升预览（L-4）}
+  - {id: rel.ed.derive-edit, from: state.desk.edit.derive, to: model.intent.edit, type: calls, description: sketchText：草图交给加载流水线}
+  # ── 接入层：草图写回 ──
+  - id: rel.ed.save-writer
+    from: state.desk.edit.save
+    to: access.writer.sketch
+    type: calls
+    via: http
+    mode: async
+    interface: if.writer.saveSketch
+    description: 保存（整份写回，带读取时的指纹）与新建设计，经开发服务器端点
+  - {id: rel.ed.source-sketch, from: access.model-source, to: access.writer.sketch, type: calls, interface: if.writer.saveSketch, description: 挂载 POST /write/<项目>/sketch、/write/<项目>/designs/<设计>/sketch、/write/<项目>/designs}
+  - {id: rel.ed.sketch-append, from: access.writer.sketch, to: access.writer.append, type: depends, description: openDoc / save：YAML 文档模型的打开与保存只有一份}
+  - {id: rel.ed.sketch-validate, from: access.writer.sketch, to: model.intent.validate, type: calls, interface: if.intent.validateSketch, description: 写前在服务端再校验一遍（与页面同一函数）}
+  - {id: rel.ed.sketch-load, from: access.writer.sketch, to: model.pipeline.loader, type: calls, description: 读持久草图作为校验上下文、读 system.yaml 取基线}
+  - {id: rel.ed.sketch-reader, from: access.writer.sketch, to: access.reader, type: depends, description: isProjectId、SKETCH_FILE、DESIGNS_DIR、readModelDir、sketchHash}
+  - {id: rel.ed.sketch-store, from: access.writer.sketch, to: access.governance-store, type: calls, description: 更新指纹（touchOwned）、记拦截记录一行}
+  - {id: rel.ed.sketch-intent, from: access.writer.sketch, to: model.intent, type: calls, description: sketchLifetime、sketchText}
 
 interfaces:
   - id: if.intent.applyEdit
@@ -145,3 +241,50 @@ interfaces:
       archiveVerdict(check: SketchCheck): ArchiveVerdict; sketchModules(sketch: SketchEntity, index: ModelIndex): string[]
       compareOwned(record: OwnedRecord | null, hashes: Record<string, string>): Issue[]
     semantics: 纯函数；页面、lint:model、sketch-check 与写入端点同一套结果（X4）
+  - id: if.writer.saveSketch
+    name: saveSketch
+    owner: access.writer.sketch
+    signature: |
+      saveSketch(modelRoot: string, project: string, req: SaveSketchRequest, root: string): { file: string; hash: string }
+      createDesign(modelRoot: string, project: string, req: { id: string; name: string; goal?: string; sketch: SketchDef }, root: string): { file: string; files: string[] }
+      // HTTP：POST /write/<项目>/sketch | /write/<项目>/designs/<设计>/sketch → 200 { file, hash } | 409（指纹不符）| 422 { error, issues }（校验不过）
+      //       POST /write/<项目>/designs → 200 { file, files } | 409（设计已存在）
+    semantics: |
+      - 写前比对指纹、再校验，任一不过即拒绝，文件不动（X7i、X7f）
+      - 合并进 YAML 文档：未改动的节点（连同注释）原样保留；新条目跟随同一列表已有条目的写法
+      - 写后更新 owned.json 的指纹（X6），ledger.jsonl 记一行（tool: sketch）
+  - id: if.desk.edit
+    name: 编辑操作（desk.edit）
+    owner: state.desk.edit.commands
+    signature: |
+      enterEdit(): boolean                                   // 只在草图版本上有效（X7a）
+      exitEdit(force?: boolean): 'confirm' | 'done'           // 有未保存改动且未 force 时返回 confirm
+      edit(op: EditOp): { ok: true } | { ok: false; reason: string }
+      undo(): boolean; redo(): boolean
+      previewMove(id: string, parent: string, newId?: string): IdImpact
+      save(): Promise<{ ok: true } | { ok: false; error: string; conflict?: true; issues?: SketchValidationIssue[] }>
+      discard(): Promise<void>                                // 放弃本次改动；已过时时先重新加载
+      replayOnReload(): Promise<{ failed: EditOp[] }>         // X7i
+      createDesign(input: { id; name; goal?; base: 'empty' | 'copy' }): Promise<WriteOutcome>
+      canLeave(): 'free' | 'confirm'
+      // 只读：editable、target、session、active、draft、stale、canUndo、canRedo、dirty、validation、check、changes、promotion、saving、lastSave、serverIssues
+    semantics: 操作本身不含规则：编辑规则在 model.intent.edit，会话规则在 state.transition.edit，撤销栈在 state.desk.edit.session。
+  - id: if.desk.editSession
+    name: 编辑会话函数
+    owner: state.desk.edit.session
+    signature: |
+      begin(target: SketchTarget, file: string, sketch: SketchDef, hash: string): EditSession
+      apply(s: EditSession, op: EditOp, ctx: EditContext): { session: EditSession; result: EditResult }
+      undo(s): { session; effects } | null; redo(s): { session; effects } | null
+      saved(s, hash): EditSession; reloaded(s, sketch, hash): EditSession; discard(s, sketch?, hash?): EditSession
+      replay(s, sketch, hash, ctx): { session: EditSession; failed: EditOp[] }
+      isDirty(s): boolean
+    semantics: 纯函数；撤销栈深度上限 200，超出丢最早的（X7g）。
+  - id: if.state.editMode
+    name: 编辑规则
+    owner: state.transition.edit
+    signature: |
+      // 经 transition(state, action, ctx) 分派：{ type: 'enterEdit'; target } | { type: 'exitEdit' } | { type: 'edited'; effects; previousPath }
+      leaveGuard(dirty: boolean): 'free' | 'confirm'
+      isEditing(state: ViewState): boolean
+    semantics: 纯函数（X7a、X7h）；编辑态下 openScenario、选中文件、打开代码事实与演化叠加为无效动作，返回原状态。

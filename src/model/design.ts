@@ -16,6 +16,11 @@ export const isArchived = (status: DesignStatus): boolean => status === 'impleme
 export const SKETCH_REVISION = 'sketch'
 export const isSketchRevision = (v: VersionRef | undefined): v is DesignVersionRef => isDesignVersion(v) && v.revision === SKETCH_REVISION
 
+/** E8：每轮的说明文件（AI 拥有）：designs/<设计>/r<N>/revision.yaml，顶层键 revision */
+export const REVISION_FILE = 'revision.yaml'
+/** E8：轮次目录名 r<N> */
+export const revisionNumber = (id: string): number | null => (/^r(\d+)$/.test(id) ? Number(id.slice(1)) : null)
+
 export interface RevisionInfo {
   /** 轮次 ID，同时是快照目录名，如 r1 */
   id: string
@@ -63,11 +68,19 @@ export interface CommitVersionRef {
   base?: string
 }
 
+/** 持久草图版本（ADR-0024）：/p/<项目>/i/<草图 ID>，内容 = system.yaml + intent/**，可编辑 */
+export interface IntentVersionRef {
+  intent: string
+}
+
 /** 打开的是哪个版本：缺省为当前版本 */
-export type VersionRef = DesignVersionRef | CommitVersionRef
+export type VersionRef = DesignVersionRef | CommitVersionRef | IntentVersionRef
 
 export const isCommitVersion = (v: VersionRef | undefined): v is CommitVersionRef => !!v && 'commit' in v
 export const isDesignVersion = (v: VersionRef | undefined): v is DesignVersionRef => !!v && 'design' in v
+export const isIntentVersion = (v: VersionRef | undefined): v is IntentVersionRef => !!v && 'intent' in v
+/** X7a：可进入编辑态的版本——设计的草图与持久草图 */
+export const isSketchVersion = (v: VersionRef | undefined): boolean => isSketchRevision(v) || isIntentVersion(v)
 
 /** E6：对比基线为当前版本（工作区）时 base 的取值 */
 export const WORKTREE = 'worktree'

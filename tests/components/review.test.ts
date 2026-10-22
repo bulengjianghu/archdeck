@@ -2,6 +2,7 @@
 /**
  * 人确认层的界面（RV-3、RV-4；Z3–Z5）：模块面板的状态标记、「自上次确认以来的改动」与「确认 / 复核并确认」；模块树的需复核标记与「只看需复核」；根层健康度一行。
  */
+import { NO_WRITER } from '../../src/state/sync/writer'
 import { describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -21,6 +22,7 @@ async function mountWith(Comp: typeof Panel | typeof ModuleTree, url: string, re
   await router.push(url)
   const batches: ReviewedInput[][] = []
   const writer: ModelWriter = {
+    ...NO_WRITER,
     feedback: async () => ({ ok: false, error: 'x' }),
     allow: async () => ({ ok: false, error: 'x' }),
     ignore: async () => ({ ok: false, error: 'x' }),

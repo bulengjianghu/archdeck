@@ -125,6 +125,16 @@ export function createService(opts: ServiceOptions) {
     return id
   }
 
+  /** Q11：没给项目时由设计 ID 推出——在全部项目里找这个设计，恰好一个即用它，否则报错并列出候选 */
+  function projectOfDesign(p: string | undefined, design: string | undefined): string {
+    if (p || !design || env.ARCH_PROJECT) return projectId(p)
+    const ids = listProjectIds(modelRoot)
+    const hits = ids.filter(id => fs.existsSync(path.join(modelRoot, id, 'designs', design, 'design.yaml')))
+    if (hits.length === 1) return hits[0]
+    if (!hits.length) throw new ServiceError(`没有项目有设计「${design}」（项目：${ids.join('、')}）`)
+    throw new ServiceError(`多个项目都有设计「${design}」，请用 --project 指定：${hits.join('、')}`)
+  }
+
   /** 指纹没变就用缓存；fresh 时无论如何重建（rescan、baseline） */
   function load(p?: string, fresh = false): Loaded {
     const project = projectId(p)
@@ -390,12 +400,12 @@ export function createService(opts: ServiceOptions) {
     report(p?: string) {
       const project = projectId(p)
       const s = summarizeLedger(readLedger(governanceDir(modelRoot, project)))
-      return { project, summary: `写前判定 ${s.checks} 次 · 重新扫描 ${s.rescans} 次 · 确认写入 ${s.reviewedWrites} 次`, ...s }
+      return { project, summary: `写前判定 ${s.checks} 次 · 重新扫描 ${s.rescans} 次 · 确认写入 ${s.reviewedWrites} 次 · 草图写回 ${s.sketchWrites} 次`, ...s }
     },
 
     /** X4：草图核验——缺省为活动草图对当前版本；给了 design 时为该设计的草图对当前版本（revision 为某一轮时对那一轮） */
     sketchCheck(p?: string, design?: string, revision?: string): { project: string; target: string; checks: SketchCheck[] } {
-      const project = projectId(p)
+      const project = projectOfDesign(p, design)
       if (!design) {
         const l = load(project)
         return { project, target: '当前版本', checks: l.checks }
@@ -421,7 +431,7 @@ export function createService(opts: ServiceOptions) {
 
     /** X3、X8：归档 / 晋升，与页面同一函数；不一致即拒绝 */
     sketchArchive(p: string | undefined, design: string) {
-      const project = projectId(p)
+      const project = projectOfDesign(p, design)
       try {
         const r = archiveDesign(modelRoot, project, design, opts.root)
         cache.delete(project)

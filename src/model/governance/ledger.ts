@@ -14,6 +14,8 @@ export interface LedgerSummary {
   rescans: number
   /** 确认记录写入次数（Z6） */
   reviewedWrites: number
+  /** B6：草图整份写回与新建设计的次数（ADR-0024） */
+  sketchWrites: number
   first?: { at: string; violations: number; cyclicity: Cyclicity }
   last?: { at: string; violations: number; cyclicity: Cyclicity }
 }
@@ -26,6 +28,7 @@ export function summarizeLedger(entries: readonly LedgerEntry[]): LedgerSummary 
     cycleFlags: 0,
     rescans: 0,
     reviewedWrites: 0,
+    sketchWrites: 0,
   }
   for (const e of entries) {
     if (e.tool === 'check_dependency') {
@@ -34,6 +37,7 @@ export function summarizeLedger(entries: readonly LedgerEntry[]): LedgerSummary 
       if (e.verdict === 'denied') for (const r of new Set(e.rules)) s.deniedByRule[r]++
       if (e.cycle) s.cycleFlags++
     } else if (e.tool === 'reviewed') s.reviewedWrites++
+    else if (e.tool === 'sketch') s.sketchWrites++
     else {
       s.rescans++
       const point = { at: e.at, violations: e.violations, cyclicity: e.cyclicity }

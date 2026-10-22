@@ -29,16 +29,17 @@ import {
   type ReviewedOrigin,
   type RuleKind,
 } from '../src/model'
-import { DESIGNS_DIR, SKETCH_FILE, designSketch, isProjectId, readDesignInfo, readModelDir } from './readModelDir'
+import { DESIGNS_DIR, SKETCH_FILE, designSketch, isProjectId, listRevisionDirs, readDesignInfo, readModelDir } from './readModelDir'
 import { appendLedger, governanceDir, touchOwned } from './governanceStore'
 
 export class WriteError extends Error {}
 
 export type WriteResult = { file: string }
 
-const today = () => new Date().toISOString().slice(0, 10)
+export const today = () => new Date().toISOString().slice(0, 10)
 
-function openDoc(file: string, empty: string): Document {
+/** 打开 YAML 文档（解析失败拒绝写）；草图写回共用（access.writer.sketch） */
+export function openDoc(file: string, empty: string): Document {
   const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : empty
   const doc = parseDocument(text)
   if (doc.errors.length) throw new WriteError(`${path.basename(file)} 解析失败：${doc.errors[0].message.split('\n')[0]}，请先修好再写`)
@@ -46,19 +47,19 @@ function openDoc(file: string, empty: string): Document {
 }
 
 /** 写回并更新指纹（X6）：file 为绝对路径，modelRoot / project 给出它相对项目描述目录的位置 */
-function save(file: string, doc: Document, root: string, modelRoot: string, project: string): WriteResult {
+export function save(file: string, doc: Document, root: string, modelRoot: string, project: string): WriteResult {
   fs.writeFileSync(file, doc.toString({ lineWidth: 0 }))
   touchOwned(modelRoot, project, path.relative(path.join(modelRoot, project), file).split(path.sep).join('/'))
   return { file: path.relative(root, file).split(path.sep).join('/') }
 }
 
-function projectDir(modelRoot: string, project: string): string {
+export function projectDir(modelRoot: string, project: string): string {
   const dir = path.join(modelRoot, project)
   if (!isProjectId(project) || !fs.existsSync(path.join(dir, 'system.yaml'))) throw new WriteError(`项目不存在：${project}`)
   return dir
 }
 
-/** B2：在设计某一轮的 feedback 后追加一段评审意见（前加日期） */
+/** B2：在设计某一轮的 feedback 后追加一段评审意见（前加日期）；revisions[] 里还没有该轮的条目时新建 { id, feedback }（轮次从目录发现，E8） */
 export function appendFeedback(modelRoot: string, project: string, design: string, revision: string, text: string, root: string): WriteResult {
   const body = text.trim()
   if (!body) throw new WriteError('评审意见不能为空')
@@ -66,9 +67,20 @@ export function appendFeedback(modelRoot: string, project: string, design: strin
   const file = path.join(projectDir(modelRoot, project), DESIGNS_DIR, design, 'design.yaml')
   if (!fs.existsSync(file)) throw new WriteError(`设计不存在：${design}`)
   const doc = openDoc(file, '')
-  const revs = doc.getIn(['design', 'revisions'])
-  const rev = isSeq(revs) ? revs.items.find(r => isMap(r) && r.get('id') === revision) : undefined
-  if (!rev || !isMap(rev)) throw new WriteError(`轮次不存在：${design} / ${revision}`)
+  if (!isMap(doc.get('design'))) throw new WriteError('design.yaml 缺少顶层键 design')
+  let revs = doc.getIn(['design', 'revisions'])
+  if (revs !== undefined && !isSeq(revs)) throw new WriteError('design.revisions 不是列表')
+  let rev = isSeq(revs) ? revs.items.find(r => isMap(r) && r.get('id') === revision) : undefined
+  if (!rev) {
+    if (!listRevisionDirs(path.dirname(file)).includes(revision)) throw new WriteError(`轮次不存在：${design} / ${revision}`)
+    if (!isSeq(revs)) {
+      doc.setIn(['design', 'revisions'], doc.createNode([]))
+      revs = doc.getIn(['design', 'revisions'])
+    }
+    rev = doc.createNode({ id: revision })
+    ;(revs as { items: unknown[] }).items.push(rev)
+  }
+  if (!isMap(rev)) throw new WriteError(`轮次不存在：${design} / ${revision}`)
   const before = rev.get('feedback')
   const entry = `（${today()} 页面记录）${body}`
   rev.set('feedback', typeof before === 'string' && before.trim() ? `${before.trimEnd()}\n\n${entry}\n` : `${entry}\n`)

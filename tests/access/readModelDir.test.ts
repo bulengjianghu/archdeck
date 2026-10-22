@@ -121,7 +121,7 @@ describe('接入层 · 多项目读取', () => {
     ])
     expect(next.problems).toEqual(['轮次 r9 缺少快照目录 r9/system.yaml，已忽略'])
     expect(designs[0].status).toBe('draft')
-    expect(designs[0].problems).toHaveLength(2) // 非法 status + 没有轮次
+    expect(designs[0].problems).toHaveLength(1) // 非法 status；没有轮次不是问题（E8：新建设计后只有草图）
     expect(
       listProjects(modelRoot, root)
         .find(p => p.id === 'alpha')!

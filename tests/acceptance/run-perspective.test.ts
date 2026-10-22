@@ -166,7 +166,7 @@ describe('§6.2 运行视角验收', () => {
   name: 不一致的步骤
   steps:
     - call: {from: model.diff, to: access.lint, relation: rel.ad.list-fetch}
-    - call: {from: state.desk.layout-sync, to: access.lint}
+    - call: {from: model.diff, to: model.evolution}
     - call: {from: present.shell, to: present.project-list, relation: rel.ad.shell-list}
 `,
     }
@@ -176,7 +176,7 @@ describe('§6.2 运行视角验收', () => {
       ['warning', 'step-unmodeled'],
       ['error', 'step-relation-not-runtime'],
     ])
-    const { desk, step } = await open('h5p-arch-desk', '/p/h5p-arch-desk', [bad])
+    const { desk, step } = await open('h5p-arch-desk', '/p/h5p-arch-desk?level=model', [bad])
     expect(desk.issues.value.filter(i => i.file === 'scenarios/bad.yaml')).toHaveLength(3)
     desk.openScenario('sc.bad')
     step(2)

@@ -45,6 +45,17 @@ export function listModelCommits(projectDir: string, limit = COMMIT_LIMIT): Mode
   }
 }
 
+/** L-2：项目描述目录下一个文件在 HEAD 时的内容（草图的「上一次提交」）；没有提交过、不在 git 仓库内为 null */
+export function readFileAtHead(projectDir: string, rel: string): string | null {
+  const at = locate(projectDir)
+  if (!at || rel.split('/').includes('..')) return null
+  try {
+    return git(at.top, ['show', `HEAD:${at.rel ? `${at.rel}/` : ''}${rel}`])
+  } catch {
+    return null
+  }
+}
+
 /** E5：项目描述在某个提交时的全部描述文件（跳过 designs/ 与 governance/，同当前版本）；提交不存在或目录当时不存在为 null */
 export function readModelAt(projectDir: string, rev: string): RawFile[] | null {
   const at = locate(projectDir)
