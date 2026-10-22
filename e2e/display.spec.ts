@@ -1,4 +1,4 @@
-/** 「显示」面板（W-2、ADR-0017）：先设置后图例；按视角只出现能用的开关，折叠时摘要列出非默认设置；运行视角默认只展开「回放」；时序图图例在副栏「?」 */
+/** 「显示」面板（W-2、ADR-0017）：先设置后图例；按视角只出现能用的开关，折叠时摘要列出非默认设置；运行视角默认只展开「回放」；时序图图例在副栏「图例」 */
 import { expect, test } from '@playwright/test'
 import { openDesk } from './helpers'
 
@@ -34,7 +34,7 @@ test('运行视角：静态关系显示方式在面板里，结构类开关不�
   await expect(panel.getByRole('button', { name: /^显示/ })).toContainText('静态关系：淡显')
 })
 
-test('时序图图例在副栏标题栏的「?」里', async ({ page }) => {
+test('时序图图例在副栏标题栏的「图例」里', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
   await page.getByRole('button', { name: '时序图图例' }).click()
   await expect(page.getByRole('note', { name: '时序图图例' })).toContainText('同步调用')

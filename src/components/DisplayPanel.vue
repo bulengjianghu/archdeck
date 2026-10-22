@@ -5,7 +5,7 @@
  *   并用一行说明运行视角下舞台不受结构类开关影响（L9）。
  * - 图例：按画布上的对象分组（关系、节点、代码事实、回放），一行一项，左列为与画布同款的示意、右列为文字；
  *   既是开关又是图例的放在图例里——关系类型行点击筛选（L8），代码事实开关在组标题右侧（K9）。
- *   时序图的箭头约定不在这里，在副栏时序图标题栏的「?」里。
+ *   时序图的箭头约定不在这里，在副栏时序图标题栏的「图例」里。
  * - 折叠时标题后摘要列出非默认的设置；面板展开与各组折叠按视角记在本机（运行视角默认只展开「回放」）。
  * 开关写 DeskState 的 toggles；静态关系写舞台显示（按项目记在本机，V8）。
  */
@@ -283,7 +283,8 @@ const summary = computed(() => {
         <template v-if="groups.play">
           <div class="item">
             <svg class="sw" viewBox="0 0 28 10">
-              <line class="flow" x1="1" y1="5" x2="27" y2="5" stroke="var(--accent)" stroke-width="3" stroke-dasharray="6 4" />
+              <line x1="1" y1="5" x2="27" y2="5" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" />
+              <line class="flow" x1="1" y1="5" x2="27" y2="5" stroke="var(--surface)" stroke-width="1.6" stroke-dasharray="3 9" stroke-linecap="round" />
             </svg>
             <span>当前步骤（沿消息方向流动）</span>
           </div>
@@ -590,7 +591,7 @@ button {
 
 @keyframes flow {
   to {
-    stroke-dashoffset: -20;
+    stroke-dashoffset: -24;
   }
 }
 

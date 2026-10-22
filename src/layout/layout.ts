@@ -45,6 +45,8 @@ export const BAND = {
   minH: 104,
   gap: 64,
   lane: 22,
+  /** 系统边界框与带、右侧通道之间的留白 */
+  framePad: 20,
   /** O7：带内每行模块块的上限 */
   maxColumns: 8,
 }
@@ -150,8 +152,11 @@ export function layoutLayered(view: LevelView, opts: LayoutOptions = {}): Positi
     }
   }
 
+  // 系统边界框包住全部带与右侧通道，四周留 BAND.framePad，不与带的外沿重合
+  const pad = BAND.framePad
+  const right = lane ? width + 28 + (lane - 1) * BAND.lane : width
+  const frame = { x: -pad, y: -pad, w: right + 2 * pad, h: Math.max(0, y - BAND.gap) + 2 * pad }
   // A7：用户在带的上方一行，外部系统与时间在右侧通道之外一列；与参与者相连的边画成曲线
-  const frame = { x: 0, y: 0, w: width, h: Math.max(0, y - BAND.gap) }
   placeActors(view, nodes, frame, width + 28 + lane * BAND.lane + 56 - frame.x - frame.w)
   const offsets = parallelOffsets(view.edges)
   for (const e of view.edges) {

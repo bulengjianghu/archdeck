@@ -87,7 +87,10 @@ const markerId = computed(() => `arrow-${props.id.replace(/[^\w-]/g, c => `_${c.
       :class="{ 'edge-selected': data.selected, 'edge-core': data.core }"
     />
   </g>
-  <path v-if="data.play === 'current'" :d="path" class="edge-flow" :class="{ reverse: data.flowReverse }" fill="none" />
+  <template v-if="data.play === 'current'">
+    <path :d="path" class="edge-flow-base" fill="none" stroke-linecap="round" />
+    <path :d="path" class="edge-flow" :class="{ reverse: data.flowReverse }" fill="none" stroke-linecap="round" />
+  </template>
 </template>
 
 <style scoped>
@@ -120,12 +123,19 @@ const markerId = computed(() => `arrow-${props.id.replace(/[^\w-]/g, c => `_${c.
   stroke: var(--warning);
 }
 
-/* 当前消息：沿步骤自己的方向流动（P10），与边的箭头相反时反向 */
-.edge-flow {
+/* 当前消息：沿步骤自己的方向流动（P10），与边的箭头相反时反向。
+   底线加粗为强调色，上面走一串浅色短点——不管边本身什么颜色、多粗都看得出流动 */
+.edge-flow-base {
   pointer-events: none;
   stroke: var(--accent);
-  stroke-width: 3;
-  stroke-dasharray: 10 8;
+  stroke-width: 4;
+}
+
+.edge-flow {
+  pointer-events: none;
+  stroke: var(--surface);
+  stroke-width: 1.6;
+  stroke-dasharray: 3 9;
   animation: flow 0.9s linear infinite;
 }
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 副栏（W-4、G15）：分屏的第二块。只有一栏标题栏（ADR-0010）：收起、页签「时序图」（运行视角）「源代码」（有预览文件时，可关闭）、
- * 时序图页签下的本层不可见提示、「定位」与「?」（时序图的箭头约定，ADR-0017）、分屏方向切换（当前层次已在面包屑中，不重复）；
+ * 时序图页签下的本层不可见提示、「定位」与「图例」（时序图的箭头约定，ADR-0017）、分屏方向切换（当前层次已在面包屑中，不重复）；
  * 内容为时序图或源代码预览。页签与预览文件由项目视图持有，只属于这块界面。左右排列时收起即缩成一条竖栏。
  */
 import { computed, ref } from 'vue'
@@ -21,7 +21,7 @@ const sequence = ref<InstanceType<typeof SequenceView>>()
 const onSequence = computed(() => props.run && !(props.tab === 'source' && props.previewPath))
 /** R11：当前帧在本层不可见 */
 const hiddenCurrent = computed(() => !!desk.run.frame.value && desk.run.currentIndex.value === null)
-/** 时序图图例浮层：再点「?」或焦点移出即收起 */
+/** 时序图图例浮层：再点「图例」或焦点移出即收起 */
 const help = ref(false)
 </script>
 
@@ -47,7 +47,7 @@ const help = ref(false)
           本层不可见：<button class="link" @click="desk.goTo(desk.run.frameLevel.value!)">到能看到它的层次</button>
         </span>
         <button class="locate" :disabled="desk.run.currentIndex.value === null" @click="sequence?.centerCurrent()">定位</button>
-        <button class="help" title="时序图图例" aria-label="时序图图例" :aria-expanded="help" @click="help = !help" @blur="help = false">?</button>
+        <button class="help" title="时序图图例" aria-label="时序图图例" :aria-expanded="help" @click="help = !help" @blur="help = false">图例</button>
       </template>
       <button class="dir" :title="dir === 'row' ? '改为上下排列' : '改为左右排列'" @click="emit('direction', dir === 'row' ? 'column' : 'row')">
         {{ dir === 'row' ? '⇅ 上下' : '⇆ 左右' }}
@@ -183,14 +183,9 @@ const help = ref(false)
 
 .help {
   flex: none;
-  width: 20px;
-  height: 20px;
-  padding: 0;
+  font-size: 11.5px;
+  padding: 1px 8px;
   margin-bottom: 3px;
-  border-radius: 50%;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-2);
 }
 
 .help + .dir {
