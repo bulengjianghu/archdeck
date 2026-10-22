@@ -23,7 +23,10 @@ const lint = () => compareOwned(readOwned(governanceDir(modelRoot, 'p')), ownedH
 beforeEach(() => {
   fs.rmSync(P, { recursive: true, force: true })
   write('system.yaml', 'system: { id: p, name: P }')
-  write('intent/skeleton.yaml', 'sketch:\n  id: skeleton\n  modules:\n    - { id: a, name: A, kind: layer, order: 1, abstraction: x, responsibility: x }\n    - { id: b, name: B, kind: layer, order: 2, abstraction: y, responsibility: y }\n')
+  write(
+    'intent/skeleton.yaml',
+    'sketch:\n  id: skeleton\n  modules:\n    - { id: a, name: A, kind: layer, order: 1, abstraction: x, responsibility: x }\n    - { id: b, name: B, kind: layer, order: 2, abstraction: y, responsibility: y }\n',
+  )
   write('modules/m.yaml', 'modules:\n  - { id: a.x, name: X, parent: a, responsibility: x }\n')
   write('rules.yaml', 'rules:\n  allow: []\n')
   write('designs/d/design.yaml', 'design:\n  name: D\n  revisions:\n    - { id: r1 }\n')

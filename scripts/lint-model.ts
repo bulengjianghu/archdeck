@@ -2,7 +2,7 @@
  * 命令行校验架构描述：
  *   npm run lint:model                 校验模型根目录（默认 model/）下的全部项目
  *   npm run lint:model -- <项目目录>   只校验指定目录
- * 项目下的设计版本（designs/<设计>/<轮次>/，ADR-0002）逐轮一并校验，design.yaml 的问题按 error 计。
+ * 项目下的设计版本（designs/<设计>/<轮次>/，ADR-0002）逐轮一并校验，design.yaml 的问题按 error 计；设计的草图（sketch.yaml）按草图版本校验（DV-10）。
  * 当前版本附带源码归属警告（G9：未归属、归属冲突、entry 不存在）与架构治理（K、U、Y）：
  * 基线外的新增违规、环度上升为 error（U8，棘轮），其余为 warning；读不到源码为 error（G1，源码在本地是前提）；设计版本不对应代码，不报。
  * 当前版本另比对人拥有文件的指纹（X6）：登记后被改动为 error owned.changed，未登记为 warning。
@@ -11,7 +11,16 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { assignFiles, compareOwned, governanceReport, loadModel, sourceIssues, type GovernanceReport, type Issue } from '../src/model'
-import { DESIGNS_DIR, listDesigns, listProjectIds, readModelDir, resolveModelRoot } from '../vite/readModelDir'
+import {
+  DESIGNS_DIR,
+  SKETCH_FILE,
+  listDesigns,
+  listProjectIds,
+  readModelDir,
+  readSketchVersion,
+  resolveModelRoot,
+  type ModelPayload,
+} from '../vite/readModelDir'
 import { readSourceTree } from '../vite/readSource'
 import { readCodeDeps } from '../vite/readDeps'
 import { governanceDir, ownedHashes, readBaseline, readOwned } from '../vite/governanceStore'
@@ -22,16 +31,20 @@ const modelRoot = resolveModelRoot(root)
 const projectDirs = arg ? [path.resolve(process.cwd(), arg)] : listProjectIds(modelRoot).map(id => path.join(modelRoot, id))
 /** 当前版本目录 → 项目 ID（只有它们附带源码归属警告） */
 const currentOf = new Map<string, string>()
-const dirs: string[] = []
+/** 要校验的目录；草图版本不是目录，由 readSketchVersion 给出载荷 */
+const dirs: (string | { dir: string; payload: Pick<ModelPayload, 'dir' | 'files'> })[] = []
 let totalErrors = 0
 for (const dir of projectDirs) {
   dirs.push(dir)
-  if (path.dirname(dir) === modelRoot) currentOf.set(dir, path.basename(dir))
+  const projectId = path.dirname(dir) === modelRoot ? path.basename(dir) : undefined
+  if (projectId) currentOf.set(dir, projectId)
   for (const d of listDesigns(dir)) {
     for (const p of d.problems) {
       console.log(`  error   ${path.relative(root, path.join(dir, DESIGNS_DIR, d.id, 'design.yaml'))}  ${p}  [design]`)
       totalErrors++
     }
+    const sketch = d.sketch && projectId ? readSketchVersion(modelRoot, projectId, d.id, root) : null
+    if (sketch) dirs.push({ dir: path.join(dir, DESIGNS_DIR, d.id, SKETCH_FILE), payload: sketch })
     for (const r of d.revisions) dirs.push(path.join(dir, DESIGNS_DIR, d.id, r.id))
   }
 }
@@ -41,8 +54,9 @@ if (projectDirs.length === 0) {
   process.exit(1)
 }
 
-for (const dir of dirs) {
-  const payload = readModelDir(dir, root)
+for (const entry of dirs) {
+  const dir = typeof entry === 'string' ? entry : entry.dir
+  const payload = typeof entry === 'string' ? readModelDir(dir, root) : entry.payload
   if (payload.files.length === 0) {
     console.error(`模型目录中没有 YAML 文件：${dir}`)
     totalErrors++

@@ -34,6 +34,32 @@ describe('选中编码', () => {
 })
 
 describe('DeskState', () => {
+  it('DV-10：草图作为版本——versions.sketch 为真、没有轮次、带「交给 AI」的指令；草图不是轮次，不能记录评审意见', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+    await router.push('/')
+    const files = sampleFiles()
+    const desk = createDeskState(
+      async () => ({
+        dir: 'model/test/designs/d',
+        files,
+        designs: [{ id: 'd', name: 'D', status: 'reviewing', revisions: [{ id: 'r1' }], sketch: true, problems: [] }],
+        version: { design: 'd', revision: 'sketch' },
+        compare: { current: { label: '当前版本', dir: 'model/test', files } },
+        sketchPrompt: '# 按草图扩展：设计「d」',
+      }),
+      { project: 'test', version: { design: 'd', revision: 'sketch' } },
+    )
+    desk.attachRouter(router)
+    await desk.init()
+    expect(desk.versions.sketch).toBe(true)
+    expect(desk.versions.design.value?.id).toBe('d')
+    expect(desk.versions.revision.value).toBeNull()
+    expect(desk.versions.sketchPrompt.value).toBe('# 按草图扩展：设计「d」')
+    expect(desk.versions.baseline.value?.label).toBe('当前版本')
+    expect(desk.versions.diff.value?.counts).toEqual({ added: 0, changed: 0, removed: 0 })
+    expect(desk.write.canFeedback).toBe(false)
+  })
+
   it('初始在根层次，视图为分层总览', async () => {
     const { desk } = await setup()
     expect(desk.levelId.value).toBe('sys')

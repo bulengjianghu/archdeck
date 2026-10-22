@@ -103,7 +103,9 @@ function run(): number {
       return 0
     }
     default:
-      console.error('用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|report|baseline|own> [参数] [--project <项目>] [--json]')
+      console.error(
+        '用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|report|baseline|own> [参数] [--project <项目>] [--json]',
+      )
       return 2
   }
 }

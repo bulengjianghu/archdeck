@@ -36,7 +36,19 @@ import {
 import { listProjectIds, readProject, resolveModelRoot } from '../../vite/readModelDir'
 import { readSourceTree } from '../../vite/readSource'
 import { readCodeDeps, resolveImport } from '../../vite/readDeps'
-import { appendLedger, BASELINE_FILE, OWNED_FILE, governanceDir, ownedHashes, readBaseline, readLedger, readOwned, registerOwned, sourceCommit, writeBaseline } from '../../vite/governanceStore'
+import {
+  appendLedger,
+  BASELINE_FILE,
+  OWNED_FILE,
+  governanceDir,
+  ownedHashes,
+  readBaseline,
+  readLedger,
+  readOwned,
+  registerOwned,
+  sourceCommit,
+  writeBaseline,
+} from '../../vite/governanceStore'
 
 export interface ServiceOptions {
   /** 本包根目录 */

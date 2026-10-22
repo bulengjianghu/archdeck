@@ -25,6 +25,7 @@ import {
   type ReworkItem,
   type ReworkList,
   isDesignVersion,
+  isSketchRevision,
   type RuleKind,
 } from '@/model'
 import {
@@ -72,6 +73,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const designs = shallowRef<DesignInfo[]>([])
   const commits = shallowRef<ModelCommit[]>([])
   const baselines = shallowRef<{ current?: Baseline; previous?: Baseline }>({})
+  /** DV-10：草图版本的「交给 AI」指令 */
+  const sketchPrompt = shallowRef('')
   const state = shallowRef<ViewState>({ levelId: '', selection: null, hover: null, toggles: DEFAULT_TOGGLES(RELATION_TYPES), playback: null })
   /** 每次层次切换递增，界面据此决定是否适应画布 */
   const levelVersion = ref(0)
@@ -141,7 +144,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   // ── 领域派生（ADR-0013）──
   const files = createFiles({ state, index, view, sync: sourceSync, design: !!options.version })
   const run = createRun({ state, index, levelId, plan, view, positioned, fileOwners: files.owners })
-  const versions = createVersions({ state, index, designs, commits, baselines, version: options.version })
+  const versions = createVersions({ state, index, designs, commits, baselines, version: options.version, sketchPrompt })
   const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version })
   const allIssues = computed(() => [...issues.value, ...files.warnings.value, ...facts.gateIssues.value])
   /** W-6、Q7：返工清单——问题页签与画布角标；源码归属与代码事实只对当前版本（G9、K8） */
@@ -158,8 +161,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const writer = options.writer ?? NO_WRITER
   const dv = isDesignVersion(options.version) ? options.version : undefined
   const write = {
-    /** 设计版本可记录评审意见；当前版本可加例外与忽略项（B2–B4） */
-    canFeedback: !!dv,
+    /** 设计的某一轮可记录评审意见（草图不是轮次）；当前版本可加例外与忽略项（B2–B4） */
+    canFeedback: !!dv && !isSketchRevision(options.version),
     canEditRules: !options.version,
     feedback: (text: string): Promise<WriteOutcome> =>
       dv ? writer.feedback({ design: dv.design, revision: dv.revision, text }) : Promise.resolve({ ok: false, error: '只有设计版本能记录评审意见' }),
@@ -199,6 +202,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       issues.value = loaded.model.issues
       designs.value = loaded.payload.designs ?? []
       commits.value = loaded.payload.commits ?? []
+      sketchPrompt.value = loaded.payload.sketchPrompt ?? ''
       baselines.value = loaded.baselines
       index.value = loaded.model.index
       status.value = 'ready'

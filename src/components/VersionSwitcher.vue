@@ -1,9 +1,9 @@
 <script setup lang="ts">
-/** 版本切换：当前版本（由代码生成）、某个设计版本的某一轮（ADR-0002），或描述在某个 git 提交时的快照（E5）。切换时保留层次与选中 */
+/** 版本切换：当前版本（由代码生成）、某个设计的草图（DV-10，排在 r1 之前）或某一轮（ADR-0002），或描述在某个 git 提交时的快照（E5）。切换时保留层次与选中 */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDesk } from '@/state/inject'
-import { isArchived, isCommitVersion, isDesignVersion } from '@/model'
+import { SKETCH_REVISION, isArchived, isCommitVersion, isDesignVersion } from '@/model'
 import { DESIGN_STATUS_LABELS } from './shared/labels'
 
 const desk = useDesk()
@@ -46,6 +46,7 @@ function onChange(e: Event) {
         <option v-for="(r, i) in [...d.revisions].reverse()" :key="r.id" :value="`${d.id}/${r.id}`" :title="r.date">
           {{ d.name }} · {{ r.id }}{{ i === 0 ? '（最新）' : '' }}
         </option>
+        <option v-if="d.sketch" :value="`${d.id}/${SKETCH_REVISION}`" title="架构师的草图：设计的尺子，各轮按它展开">{{ d.name }} · 草图</option>
       </optgroup>
       <optgroup v-if="archived.length" label="已归档的设计（已实现 / 已放弃）">
         <template v-for="d in archived" :key="d.id">
@@ -57,6 +58,7 @@ function onChange(e: Event) {
           >
             {{ d.name }} · {{ r.id }}
           </option>
+          <option v-if="d.sketch" :value="`${d.id}/${SKETCH_REVISION}`">{{ d.name }} · 草图</option>
         </template>
       </optgroup>
       <optgroup v-if="commits.length || extraCommit" label="提交（描述的历史）">

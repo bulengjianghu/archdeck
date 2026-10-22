@@ -16,7 +16,7 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
 
 <template>
   <div class="system-panel">
-    <DesignSection v-if="desk.versions.design.value && desk.versions.revision.value" />
+    <DesignSection v-if="desk.versions.design.value && (desk.versions.revision.value || desk.versions.sketch)" />
     <CommitSection v-else-if="desk.versions.commit.value" />
     <header class="head" :class="{ 'after-design': !!desk.versions.design.value || !!desk.versions.commit.value }">
       <h2>{{ sys.name }}</h2>
