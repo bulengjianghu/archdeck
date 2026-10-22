@@ -31,7 +31,7 @@ onBeforeUnmount(() => import.meta.hot?.off('arch-model:changed', onChanged))
 const activeDesigns = (p: ProjectSummary) => (p.designs ?? []).filter(d => !isArchived(d.status))
 const archivedCount = (p: ProjectSummary) => (p.designs ?? []).filter(d => isArchived(d.status)).length
 
-// Q10：违规有基线时只显示相对基线的变化 ±N（绝对数进悬停），没有基线时为绝对数并标「无基线」
+// Q10：违规有基线时显示相对基线的变化 ±N 与存量 M（计入门禁的条数，不含已豁免），没有基线时为绝对数并标「无基线」
 type Health = NonNullable<ProjectSummary['health']>
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '±0')
 const violationText = (h: Health) => (h.violations!.delta === null ? String(h.violations!.count) : signed(h.violations!.delta))
@@ -99,7 +99,9 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
             <template v-if="p.health?.violations">
               <div class="violations" :class="violationTone(p.health)" :title="violationTitle(p.health)">
                 <dt>违规{{ p.health.violations.delta === null ? '（无基线）' : '（相对基线）' }}</dt>
-                <dd>{{ violationText(p.health) }}</dd>
+                <dd>
+                  {{ violationText(p.health) }}<small v-if="p.health.violations.delta !== null" class="stock"> · 存量 {{ p.health.violations.count }}</small>
+                </dd>
               </div>
               <div class="cycles" :class="cycleTone(p.health)" :title="cycleTitle(p.health)">
                 <dt>模块环</dt>

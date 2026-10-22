@@ -42,7 +42,7 @@ const externals = computed(() =>
 )
 const ledger = computed(() => f.ledger.value)
 
-// GV-7：有基线时只显示相对基线的变化，绝对值进悬停
+// GV-7、Q10：有基线时违规显示相对基线的变化 ±N 与存量（计入门禁的条数），环度只显示升降；其余绝对值进悬停
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '±0')
 const trend = (now: number, base: number) => (now > base ? `↑ +${now - base}` : now < base ? `↓ −${base - now}` : '持平')
 const trendClass = (now: number, base: number) => (now > base ? 'bad' : now < base ? 'ok' : 'muted')
@@ -80,6 +80,7 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
         <dd :title="violationTitle">
           <template v-if="r.baseline">
             <span :class="{ bad: r.gate.newViolations }">{{ signed(r.gate.newViolations - r.gate.resolved) }}</span>
+            <span class="stock"> · 存量 {{ counted }}</span>
             <span class="muted">（相对基线：新增 {{ r.gate.newViolations }} · 已消除 {{ r.gate.resolved }}）</span>
           </template>
           <template v-else>{{ counted }} <span class="muted">（无基线）</span></template>

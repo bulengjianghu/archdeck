@@ -41,7 +41,7 @@ describe('项目列表', () => {
     expect(wrapper.find('.archived').text()).toContain('已归档 2 个设计')
   })
 
-  it('H-1：卡片以健康度为主——违规有基线时显示 ±N（绝对数进悬停），无基线时为绝对数并标「无基线」；规模为次', async () => {
+  it('H-1、Q10：卡片以健康度为主——违规有基线时显示「±N · 存量 M」（新增 / 已消除进悬停），无基线时为绝对数并标「无基线」；规模为次', async () => {
     const health = (delta: number | null) => ({
       unowned: 2,
       conflicts: 1,
@@ -60,13 +60,15 @@ describe('项目列表', () => {
     const wrapper = mount(ProjectList, { global: { plugins: [router] } })
     await flushPromises()
     const [a, b] = wrapper.findAll('.card')
-    expect(a.find('.violations dd').text()).toBe('−2')
+    expect(a.find('.violations dd').text()).toBe('−2 · 存量 5')
     expect(a.find('.violations').attributes('title')).toContain('计入门禁 5 条')
+    expect(a.find('.violations').attributes('title')).toContain('新增 1，已消除 3')
     expect(a.find('.violations').classes()).toContain('bad')
     expect(a.find('.cycles dd').text()).toContain('2 · 最大 7')
     expect(a.find('.cycles dd').text()).toContain('↓')
     expect(b.find('.violations dt').text()).toContain('无基线')
     expect(b.find('.violations dd').text()).toBe('5')
+    expect(b.find('.violations dd').text()).not.toContain('存量')
     expect(a.find('.scale').text()).toContain('模块 1')
   })
 })

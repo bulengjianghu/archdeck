@@ -226,7 +226,7 @@ modules:
     expect(desk.selection.value).toEqual(e.edgeId ? { kind: 'edge', id: e.edgeId } : { kind: 'dep', id: 'infra->app' })
   })
 
-  it('GV-7：根层「架构治理」有基线时只显示相对基线的变化（违规 ±N、环度 ↑↓），绝对值在悬停中；没有基线时为绝对数并标「无基线」', async () => {
+  it('GV-7、Q10：根层「架构治理」有基线时违规显示「±N · 存量 M」、环度只显示 ↑↓，其余绝对值在悬停中；没有基线时为绝对数并标「无基线」', async () => {
     const open = async (baseline: { createdAt: string; violations: string[]; cyclicity: { modules: number; files: number } } | null) => {
       const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
       await router.push('/')
@@ -251,7 +251,9 @@ modules:
     const based = await open({ createdAt: 't', violations: [], cyclicity: { modules: 9, files: 0 } })
     expect(based.row('环度').text()).toContain('↓ −5')
     expect(based.row('环度').attributes('title')).toContain('模块 4')
-    expect(based.row('违规').text()).toContain('+1（相对基线：新增 1')
+    expect(based.row('违规').text()).toContain('+1 · 存量 1（相对基线：新增 1')
+    expect(none.row('违规').text()).toContain('无基线')
+    expect(none.row('违规').text()).not.toContain('存量')
     expect(based.row('违规').attributes('title')).toContain('计入门禁 1 条')
   })
 })
