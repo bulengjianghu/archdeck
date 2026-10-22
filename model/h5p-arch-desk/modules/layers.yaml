@@ -132,7 +132,7 @@ modules:
         name: Layout
         kind: subsystem
         core: true
-        responsibility: 给层次视图算坐标与边的走线：分层总览按层序分带规则排布（带内列数按画布宽度换算，O7），普通层次用 elkjs；给时序模型算泳道与步骤坐标；舞台叠加与舞台显示；画布场景（节点与边的数据、显隐、变淡、回放态，ADR-0013）；结果按视图内容缓存。
+        responsibility: 给层次视图算坐标与边的走线：分层总览按层序分带规则排布（带内列数按画布宽度换算，O7），普通层次用 elkjs；框外的角色按方位摆放（A7、L4），交叉处画跳线（L11）；给时序模型算泳道与步骤坐标；舞台叠加与舞台显示；画布场景（节点与边的数据、显隐、变淡、回放态，ADR-0013）；结果按视图内容缓存。
         codeRefs: [src/layout/**]
         docRefs: [docs/02-tech-selection.md]
 

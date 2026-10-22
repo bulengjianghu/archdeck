@@ -15,7 +15,7 @@ modules:
   - id: present.canvas.nodes
     name: 节点组件
     parent: present.canvas
-    responsibility: 六种节点：模块（职责摘要、可下钻标识、目标态虚线）、边界（系统内、本层外的模块与所在路径）、外部参与者（用户 / 外部系统 / 时间图标，系统外）、带（层名、抽象原则、可依赖层）、核心模块小块、「+N 个其他模块」占位；设计版本中新增 / 修改描边与「△N」变更角标。
+    responsibility: 七种节点：模块（职责摘要、可下钻标识、目标态虚线）、边界（系统内、本层外的模块与所在路径）、外部参与者（用户 / 外部系统 / 时间图标，系统外）、边界框（系统框与当前父模块框，FrameNode）、带（层名、抽象原则、可依赖层）、核心模块小块、「+N 个其他模块」占位；设计版本中新增 / 修改描边与「△N」变更角标。
     codeRefs: [src/components/nodes/**]
   - id: present.canvas.edges
     name: 边组件
@@ -127,23 +127,23 @@ modules:
   - id: state.layout.runner
     name: 布局入口与缓存
     parent: state.layout
-    responsibility: Layout 的入口（layout.ts，对外只经它引用）：layoutView 按视图模式分派给分层总览或普通层次排布，结果按视图内容与布局算法版本（LAYOUT_VERSION）缓存；几何类型（点、盒子、走线、带坐标的视图）、节点尺寸与内容外框 contentBounds（geometry.ts）。
+    responsibility: Layout 的入口（layout.ts，对外只经它引用）：layoutView 按视图模式分派给分层总览或普通层次排布，结果按视图内容（普通层次不含框外元素的边）与布局算法版本（LAYOUT_VERSION）缓存；几何类型（点、盒子、走线、带坐标的视图与它的父模块框 parentFrame、系统框 frame）、节点尺寸与内容外框 contentBounds（含两种框，geometry.ts）。
     codeRefs: [src/layout/layout.ts, src/layout/geometry.ts]
   - id: state.layout.runner.layered
     name: 分层总览排布
     parent: state.layout.runner
     codeRefs: [src/layout/layered.ts]
-    responsibility: 按层序自上而下分带，带内核心模块横向排开（含 +N 占位）；相邻层间的边画在带间空隙并横向错开，跨多层的边走右侧通道；核心跨层边画成曲线。
+    responsibility: 按层序自上而下分带，带内核心模块横向排开（含 +N 占位）；相邻层间的边画在带间空隙并横向错开，跨多层的边走右侧通道；核心模块之间的跨层边画成曲线。父模块框（根层即系统框）包住全部带与右侧通道；框外元素（用户、外部系统与时间、边界节点）按方位摆放，它们的边（含到核心模块的跨层边）由 outsideRouter 正交走线：带按对端方位取顶边 / 右边 / 底边，核心模块上进下出、短桩先到带间空隙的中线，不贴着带的边框（A7、L4）。
   - id: state.layout.runner.graph
     name: 普通层次排布
     parent: state.layout.runner
     codeRefs: [src/layout/graph.ts]
-    responsibility: 用 elkjs layered 算法排全部节点（内部模块、边界节点、参与者）与内部边、参与者的边（边界边不参与布局，图保持紧凑）：正交走线、标签内联；每条边两端各有固定朝向的端口——内部节点上进下出（自左向右时左进右出），用户只朝下，边界节点与外部系统只朝上（L11）；有参与者时画父模块虚线框，包住内部节点与走线并留出内边距；elk 在浏览器的 Worker 中运行（无 Worker 环境用同步打包版）；结果过于狭长时再试自左向右，取宽高比更接近画布者。
+    responsibility: 用 elkjs layered 算法只排父模块框内的子模块与它们之间的边：正交走线、标签内联；每条边两端各有固定朝向的端口——上进下出（自左向右时左进右出，L11）；父模块框包住内部节点与走线并留出内边距，框外的元素在布局后按方位摆放（placeOutside，A7、L4）；elk 在浏览器的 Worker 中运行（无 Worker 环境用同步打包版）；结果过于狭长时再试自左向右，取宽高比更接近画布者。
   - id: state.layout.runner.boundaries
-    name: 边界节点排布
+    name: 框外元素与手工走线
     parent: state.layout.runner
     codeRefs: [src/layout/routes.ts]
-    responsibility: 边界节点、外部系统与时间层约束为最后一行、用户为第一行，最后一行的先后用位置提示按视图给出的层次顺序固定（L4，与时序图泳道一致）；边界边不参与布局，要画时由 edgeRoute 按需正交绕行（routing 的 detour：不穿节点、从目标上方进入，同一节点上的多条边界边错开），走线按布局记忆。有参与者时内部结构外画系统边界虚线框。分层总览中参与者另行排布：用户在带的上方，外部系统与时间在右侧通道之外，边画成曲线。手工走线与编码工具也在这里（routes.ts）：参与者排布 placeActors 与曲线 linkRoute、edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、isBoundaryEdge（L10），供排布与画布场景使用。
+    responsibility: 方位表示角色（A7、L4）：用户在系统框上方、外部系统与时间在系统框右侧（placeActors），边界节点在父模块框下方一行、按视图给出的层次顺序（与时序图泳道一致），系统框包住父模块框与边界节点行（placeOutside）；方位固定在屏幕上，不随布局方向改变。普通层次中框外元素的边（参与者的边、边界边）不参与布局，要画时由 edgeRoute 按需正交绕行（routing 的 detour：用户底边、外部系统左边、边界节点顶边出入，不穿节点，从目标的入口侧进入，同一节点上的多条边错开、同一起点的边各走一条横线），走线按布局记忆。手工走线与编码工具也在这里（routes.ts）：回放临时线与叠加线的曲线 linkRoute、edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、isBoundaryEdge（L10），供排布与画布场景使用。
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.pipeline.loader
@@ -292,8 +292,8 @@ relations:
     interface: if.layout.layoutView
     payload: [ds.LevelView, ds.PositionedView]
     description: 视图变化后异步布局，用序号丢弃过期结果
-  - {id: rel.ad.graph-boundaries, from: state.layout.runner.graph, to: state.layout.runner.boundaries, type: calls}
-  - {id: rel.ad.layered-boundaries, from: state.layout.runner.layered, to: state.layout.runner.boundaries, type: calls, description: placeActors、actorRoute、parallelOffsets：分层总览中参与者的位置与曲线、平行曲线错开}
+  - {id: rel.ad.graph-boundaries, from: state.layout.runner.graph, to: state.layout.runner.boundaries, type: calls, description: placeOutside、compassOf、edgeLabel、spreadEnds：框外元素按方位摆放、端口方向与标签}
+  - {id: rel.ad.layered-boundaries, from: state.layout.runner.layered, to: state.layout.runner.boundaries, type: calls, description: placeOutside、portFor、slotOf、parallelOffsets：分层总览中框外元素的位置、正交走线的端口与错开、核心跨层边的平行曲线}
   - {id: rel.ad.layout-types, from: state.layout.runner, to: model.types, type: depends, payload: [ds.LevelView]}
 
   # 接入层
