@@ -26,6 +26,12 @@ modules:
     responsibility: 由源码同步取得的代码事实派生（computed，调用模型层架构治理）：事实状态（设计版本或历史提交、取数中、失败——源码清单读取失败也算，K8、G1）、治理报告、结构视角开关开启时（缺省开启）的本层投影（只取基线外的违规，K9、Y4）、门禁错误（U9）、拦截记录摘要（Q4）、选中的代码依赖叠加线（K10）、选中节点所在的本层环（Y5）、模块治理信息、关系证实（含知识方向与「证据像 depends」）与端口三角（K11）。
     codeRefs: [src/state/desk/facts.ts]
 
+  - id: state.desk.review
+    name: 人确认层派生（desk.review）
+    parent: state.desk
+    responsibility: 每个模块的确认状态与差异、确认范围与计数（调用模型层「确认」，Z3–Z5）；「确认」的写入意图——按当天、来源 manual 生成记录，经注入的 ModelWriter 分批写入，结果由文件变化推送回来（N5）；只对当前版本（Z1）。
+    codeRefs: [src/state/desk/review.ts]
+
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.governance.facts
     name: 事实比对
@@ -75,6 +81,16 @@ modules:
     codeRefs: [src/model/rework/index.ts, src/model/rework/list.ts, src/model/rework/markdown.ts, src/model/rework/health.ts]
     docRefs: [docs/architecture/governance.md]
 
+  - id: model.review
+    name: 确认
+    parent: model
+    kind: subsystem
+    responsibility: 人确认层的架构查询（Z1–Z6）：模块的确认摘要与指纹（覆盖职责、包含 / 不包含、可依赖的层、接口签名、直接子模块，Z2）、确认状态三档与「上次确认时 vs 现在」的差异（Z3）、确认范围（核心与第二级模块，Z4）、健康度计数（Z5）、为一组模块生成确认记录（Z6）。纯函数，页面、命令行与草图归档同一份。
+    provides: [if.review.query]
+    entry: src/model/review/index.ts
+    codeRefs: [src/model/review/index.ts, src/model/review/hash.ts, src/model/review/status.ts, src/model/review/text.ts]
+    docRefs: [docs/architecture/governance.md]
+
 interfaces:
   - id: if.governance.report
     name: governanceReport
@@ -111,6 +127,18 @@ interfaces:
       - stdio；check_dependency 与 rescan 写拦截记录（Q4）
       - 每次调用前比对输入，源码清单或文件的修改时间变了就重建，不必先 rescan
       - 不提供改规则、生成基线（Q5）
+
+  - id: if.review.query
+    name: reviewStates
+    owner: model.review
+    signature: |
+      reviewHash(index: ModelIndex, moduleId: string): string
+      reviewStates(index: ModelIndex): Map<string, ReviewState>
+      reviewCounts(index: ModelIndex): ReviewCounts
+      reviewEntries(index: ModelIndex, ids: string[], opts: { source: string; note?: string; at?: string }): ReviewedInput[]
+    semantics: |
+      - 纯函数；记录来自 index.model.reviewed（Z1）
+      - 内容相同必得相同指纹，与声明顺序无关（Z2）
 
   - id: if.rework.list
     name: reworkList

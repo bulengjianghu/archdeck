@@ -65,9 +65,9 @@ reviewed:
         - present.panel.system
   - module: state.desk
     at: 2026-10-22
-    hash: f8531d79cdb74d2a
+    hash: f313b0260c7dc17b
     source: manual
-    note: 第三轮自举样本：按 docs/03 §3 模块表核对职责、对外接口与子模块
+    note: 第三轮自举样本：补人确认层派生（desk.review）后复核
     summary:
       responsibility: 当前项目当前版本的唯一状态持有者：层次、选中（含文件）、悬停、显示开关、加载状态，当前场景与回放进度，设计版本与提交版本的对比基线与差异，被描述项目的源码清单与文件归属，返工清单（W-6）与写入人拥有的文件（B1–B4），分层总览的临时展开与带内列数（O6、O7）；对外提供唯一一组操作，并经同步适配器与路由、描述文件、布局、源码保持一致。对外核心平铺，运行视角、源码、版本、架构治理的派生分为 run / files / versions / facts 四组（ADR-0013、ADR-0015）。
       children:
@@ -77,6 +77,7 @@ reviewed:
         - state.desk.layout-sync
         - state.desk.loading
         - state.desk.projection
+        - state.desk.review
         - state.desk.source-sync
         - state.desk.url-sync
         - state.desk.versions
