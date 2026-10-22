@@ -1,20 +1,31 @@
 /**
- * 归档写确认记录的接入点（X3，待联调）。
+ * 归档写确认记录的接入点（X3，待联调）。这个桩不写任何文件：返回 pending，归档照常改设计状态，结果里注明「确认记录待联调」。
  *
- * 约定：确认层（任务 B，人确认层 reviewed.yaml）在 vite/writeModel.ts 实现 `appendReviewed(modelRoot, project, entries)`，
- * 合入后把这里的桩换成它（改 writeModel.ts 里 archiveDesign 的导入即可），reviewed.yaml 的格式与指纹口径由确认层决定、归档方不碰。
+ * 合入确认层（任务 B，分支 r3-reviewed）后把函数体换成下面两行即可，其余不动：
  *
- * 归档方给出的每条记录（ReviewedEntry，src/model/intent/types.ts）：
- *   - module   模块 ID（草图覆盖的、版本里存在的模块）
- *   - at       归档日期（YYYY-MM-DD）
- *   - summary  摘要：草图写的职责，没写时为模块名
- *   - source   'sketch:<设计 ID>'
- *   - hash     不填：指纹由确认层按它的口径（职责 / 接口 / 直接子模块）在写入时计算
- * 期望的返回：{ file: 写入的文件（相对本包根目录）, count: 写入的条数 }；写不了时抛错，归档随之失败、不改设计状态。
+ *   import { reviewEntries } from '../src/model'            // src/model/review：按确认层的口径算 hash 与摘要（职责 / 接口 / 直接子模块）
+ *   import { appendReviewed } from './writeModel'            // 确认层的写入端点：逐条按 module 更新或追加，全部校验通过才写
+ *   …
+ *   const r = appendReviewed(modelRoot, project, reviewEntries(index, modules, { source: `sketch:${design}`, at }), root)
+ *   return { file: r.file, count: r.added.length + r.updated.length }
  *
- * 这个桩不写任何文件：返回 pending，归档照常改设计状态，并在结果里注明「确认记录待联调」。
+ * 约定（确认层交接记录）：
+ *   - appendReviewed(modelRoot, project, entries: ReviewedInput[], root?) → { file, updated: string[], added: string[] }
+ *   - ReviewedInput = { module, at (YYYY-MM-DD), hash（非空，由 reviewEntries 计算）, summary（实现后的那一版）, source: 'manual' | 'sketch:<设计 ID>', note? }
+ *   - 没有 reviewed.yaml 时新建；reviewed.yaml 是人拥有的文件（已在 isOwnedFile 里，X6）
+ * 归档方只给出：草图覆盖的、版本里存在的模块 ID（src/model/intent 的 sketchModules）、设计 ID、日期与当前版本的索引。
  */
-import type { ReviewedEntry } from '../src/model'
+import type { ModelIndex } from '../src/model'
+
+export interface SketchReviewedInput {
+  /** 当前版本的索引（确认层按它算指纹与摘要） */
+  index: ModelIndex
+  /** 草图覆盖的、版本里存在的模块 */
+  modules: readonly string[]
+  design: string
+  /** YYYY-MM-DD */
+  at: string
+}
 
 export interface AppendReviewedResult {
   file: string
@@ -23,6 +34,6 @@ export interface AppendReviewedResult {
   pending?: true
 }
 
-export function appendReviewed(_modelRoot: string, _project: string, entries: readonly ReviewedEntry[]): AppendReviewedResult {
-  return { file: 'reviewed.yaml', count: entries.length, pending: true }
+export function appendSketchReviewed(_modelRoot: string, _project: string, _root: string, input: SketchReviewedInput): AppendReviewedResult {
+  return { file: 'reviewed.yaml', count: input.modules.length, pending: true }
 }

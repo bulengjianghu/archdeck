@@ -80,7 +80,7 @@ flowchart TB
 | 版本对比 | 设计版本相对对比基线的差异与涉及变更数（E1、E2） | 已实现 | 加载与版本 |
 | 源码归属 | 文件按 `codeRefs` 归属模块、未归属与冲突、忽略清单、入口文件、导出与 `provides` 的对应、文件在当前层次的投影、目录树（G3–G14、G18）；路径补全、包入口与说明符解析（K2，入口、导出解析与依赖提取共用） | 已实现 | 源码 |
 | 架构治理 | 文件依赖提升为模块依赖、关系证实与未描述依赖（K4–K7）；端口三角（K11）；规则校验、违规与例外（U2–U6）；环与环度（Y）；基线门禁（U8）；本层投影与本层环的构成（K9、Y4、Y5）；agent 查询：定位、写前判定、拦截报告（Q1、Q2、Q4） | 已实现 | 架构治理 |
-| 意图 | 草图核验 `sketchCheck`（X2、X4）：草图与持久草图的矛盾检查、按口径比对版本、应用认可偏差；归档判定 `archiveVerdict`（一致与否、归档还是晋升，X3）与确认记录的生成 `reviewedEntries`（草图覆盖的模块 → 记录，供确认层写入）；指纹比对 `compareOwned`（X6）。输入是草图定义与模型索引，不碰文件系统 | 已实现 | 架构治理 |
+| 意图 | 草图核验 `sketchCheck`（X2、X4）：草图与持久草图的矛盾检查、按口径比对版本、应用认可偏差；归档判定 `archiveVerdict`（一致与否、归档还是晋升，X3）与草图覆盖的模块 `sketchModules`（供确认层写确认记录）；指纹比对 `compareOwned`（X6）。输入是草图定义与模型索引，不碰文件系统 | 已实现 | 架构治理 |
 | 返工清单 | 把描述问题、源码归属、代码事实、违规、未建模的步骤、草图偏差与指纹不符汇总为按根因聚合的返工项，每条带文件行号、规则编号与建议动作；渲染给 agent 的 Markdown（Q7–Q9）；项目健康度计数（Q10）。只读其他模型子模块的结果，不新增事实 | 已实现 | 架构治理 |
 
 ### 3.4 接入层
@@ -126,7 +126,7 @@ flowchart TB
 | agent 接口 → 返工清单 | `reworkList`、`reworkMarkdown` | 命令行与 MCP 的 `issues` 同一份结果（Q9） |
 | 返工清单 → 加载流水线、源码归属、架构治理、场景投影、意图 | 校验问题、`SourceOwnership`、`GovernanceReport`、`bindRelation`、`SketchCheck` | 只汇总已有结果；未建模的步骤与回放同一套绑定（S13、P11）；草图偏差一条一个根因（X4） |
 | DeskState、命令行校验、agent 接口 → 意图 | `sketchCheck`、`activeSketches`、`archiveVerdict`、`compareOwned` | 页面、`lint:model` 与 `sketch-check` 同一套核验（X4）；归档前的判定与命令行同一函数（X3） |
-| 描述写入 → 意图、确认层写入 | `archiveVerdict`、`reviewedEntries`、`appendReviewed` | 归档时先核验当前版本，一致才写；确认记录经确认层的写入端点（X3，待联调） |
+| 描述写入 → 意图、确认层写入 | `archiveVerdict`、`sketchModules`、`appendSketchReviewed`（→ 确认层的 `reviewEntries` + `appendReviewed`） | 归档时先核验当前版本，一致才写；确认记录经确认层的写入端点（X3，待联调） |
 | 命令行校验、agent 接口 → 治理存储 | `readOwned`、`ownedHashes` | 指纹比对的输入（X6） |
 | DeskState → 架构治理 | `governanceReport`、`levelFacts` | 派生；事实经源码同步按需取（`source/<项目>/facts.json`） |
 | 架构治理 → 源码归属、Projector | `moduleEntry`、`matchRef`、`mapEndpoint` | 访问面的入口（U4）与本层投影（K9、Y4）复用同一套规则 |
@@ -173,7 +173,7 @@ packages/h5p-arch-desk/
       scenario/               场景投影：types（契约）· bind · steps · plan · path · level · participation · outline · sequence
       source/                 源码归属：types（契约）· glob · ownership（归属、入口、导出对应、投影、目录树）
       governance/             架构治理：types · facts · rules · cycles · report · level · query · ledger · ports
-      intent/                 意图：types（契约：草图定义、偏差、isSketchFile、isOwnedFile）· check（sketchCheck、矛盾检查）· lifecycle（archiveVerdict、reviewedEntries）· owned（compareOwned）
+      intent/                 意图：types（契约：草图定义、偏差、isSketchFile、isOwnedFile）· check（sketchCheck、矛盾检查）· lifecycle（archiveVerdict、sketchModules）· owned（compareOwned）
       rework/                 返工清单：types（契约）· list · markdown
     state/                    视图状态层：useDeskState（协调者）· inject
       transition/             会话规则：types · navigation · selected · playback · url

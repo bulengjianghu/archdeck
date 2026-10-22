@@ -113,7 +113,7 @@ describe('X1 草图先入、其他文件只能补充', () => {
 })
 
 // ── X2–X5：核验与生命周期 ──
-import { archiveVerdict, checkSketches, parseDesignSketches, reviewedEntries, sketchCheck, sketchLifetime, type SketchEntity } from '../../src/model'
+import { archiveVerdict, checkSketches, parseDesignSketches, sketchCheck, sketchLifetime, sketchModules, type SketchEntity } from '../../src/model'
 
 const DESIGN_SKETCH = `
 sketch:
@@ -241,13 +241,8 @@ describe('X3 归档判定与确认记录', () => {
     expect(archiveVerdict({ ...consistent, lifetime: 'persistent' })).toMatchObject({ ok: false, outcome: 'archive' })
   })
 
-  it('确认记录：草图覆盖的、版本里存在的每个模块一条，摘要为草图写的职责，来源 sketch:<设计>，不含指纹', () => {
+  it('确认记录的对象：草图覆盖的、版本里存在的模块（按草图顺序）；指纹与摘要由确认层算', () => {
     const { index } = loadModel(files({ 'modules/r1.yaml': R1 }))
-    expect(reviewedEntries(design(), index, 'd1', '2026-10-22')).toEqual([
-      { module: 'ui.view', at: '2026-10-22', summary: 'View', source: 'sketch:d1' },
-      { module: 'ui.view.list', at: '2026-10-22', summary: '列表', source: 'sketch:d1' },
-      { module: 'ui.view.detail', at: '2026-10-22', summary: 'Detail', source: 'sketch:d1' },
-      { module: 'core.api', at: '2026-10-22', summary: 'Api', source: 'sketch:d1' },
-    ])
+    expect(sketchModules(design(), index)).toEqual(['ui.view', 'ui.view.list', 'ui.view.detail', 'core.api'])
   })
 })

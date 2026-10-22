@@ -1,9 +1,9 @@
 /**
- * 草图的生命周期（X3）：归档判定与交给确认层的确认记录。纯函数；写文件在接入层（描述写入）。
+ * 草图的生命周期（X3）：归档判定与草图覆盖的模块（交给确认层写确认记录）。纯函数；写文件在接入层（描述写入）。
  */
 import type { ModelIndex, SketchEntity } from '../types'
 import { flattenSketch } from './check'
-import type { ArchiveVerdict, ReviewedEntry, SketchCheck } from './types'
+import type { ArchiveVerdict, SketchCheck } from './types'
 
 /** X3：核验一致才能归档；声明 supersedes 的为晋升；持久草图不归档 */
 export function archiveVerdict(check: SketchCheck): ArchiveVerdict {
@@ -24,9 +24,9 @@ export function archiveVerdict(check: SketchCheck): ArchiveVerdict {
   return { ok: true, outcome, check }
 }
 
-/** X3：归档时为草图覆盖的每个模块生成一条确认记录；summary 为草图写的职责（没写时为模块名）；指纹由确认层算 */
-export function reviewedEntries(sketch: SketchEntity, index: ModelIndex, design: string, at: string): ReviewedEntry[] {
+/** X3：归档时写确认记录的对象——草图覆盖的、版本里存在的模块（按草图顺序）；记录的指纹与摘要由确认层按它的口径算 */
+export function sketchModules(sketch: SketchEntity, index: ModelIndex): string[] {
   return flattenSketch(sketch)
-    .filter(m => index.modules.has(m.id))
-    .map(m => ({ module: m.id, at, summary: (m.def.responsibility ?? m.def.name ?? m.id).trim(), source: `sketch:${design}` }))
+    .map(m => m.id)
+    .filter(id => index.modules.has(id))
 }

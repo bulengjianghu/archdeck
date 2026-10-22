@@ -75,18 +75,6 @@ export interface ArchiveVerdict {
   check: SketchCheck
 }
 
-/**
- * X3：归档时交给确认层写入的一条确认记录（reviewed.yaml 的写入端点 appendReviewed 由确认层实现）。
- * 指纹（hash）由确认层按自己的口径计算，归档方不填。
- */
-export interface ReviewedEntry {
-  module: string
-  at: string
-  summary: string
-  /** 来源：`sketch:<设计 ID>` */
-  source: string
-}
-
 /** X6：人拥有文件的指纹记录 governance/owned.json */
 export interface OwnedRecord {
   updatedAt: string

@@ -7,10 +7,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { isMap, isSeq, parseDocument, type Document } from 'yaml'
-import { RULE_KINDS, archiveVerdict, checkSketches, loadModel, parseDesignSketches, reviewedEntries, type ArchiveVerdict, type RuleKind } from '../src/model'
+import { RULE_KINDS, archiveVerdict, checkSketches, loadModel, parseDesignSketches, sketchModules, type ArchiveVerdict, type RuleKind } from '../src/model'
 import { DESIGNS_DIR, SKETCH_FILE, designSketch, isProjectId, readDesignInfo, readModelDir } from './readModelDir'
 import { touchOwned } from './governanceStore'
-import { appendReviewed } from './reviewedHook'
+import { appendSketchReviewed } from './reviewedHook'
 
 export class WriteError extends Error {}
 
@@ -132,7 +132,7 @@ export interface ArchiveResult extends WriteResult {
 
 /**
  * X3：归档 / 晋升。先对当前版本核验（含认可的偏差），不一致即拒绝；
- * until-implemented → design.yaml 的 status 改为 implemented，并经确认层的 appendReviewed 写入草图覆盖的模块的确认记录；
+ * until-implemented → design.yaml 的 status 改为 implemented，并经确认层的写入端点（vite/reviewedHook.ts，待联调）写入草图覆盖的模块的确认记录；
  * supersedes → 草图整份替换 intent/<ID>.yaml（id 改为被替换者、lifetime persistent、去掉 supersedes），状态同样改为 implemented。
  */
 export function archiveDesign(modelRoot: string, project: string, design: string, root: string): ArchiveResult {
@@ -168,7 +168,7 @@ export function archiveDesign(modelRoot: string, project: string, design: string
     fs.mkdirSync(path.dirname(dest), { recursive: true })
     promoted = save(dest, sdoc, root, modelRoot, project).file
   } else {
-    const r = appendReviewed(modelRoot, project, reviewedEntries(entity, index, design, at))
+    const r = appendSketchReviewed(modelRoot, project, root, { index, modules: sketchModules(entity, index), design, at })
     reviewed = { count: r.count, file: r.file, ...(r.pending ? { pending: true } : {}) }
   }
   doc.setIn(['design', 'status'], 'implemented')
