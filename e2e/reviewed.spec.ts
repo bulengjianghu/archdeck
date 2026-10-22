@@ -45,6 +45,7 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
     await panel.locator('form').getByRole('button', { name: '确认', exact: true }).click()
     await expect.poll(count).toBe(before + 1)
     await expect(badge).toHaveText(/^已确认 \d{4}-\d{2}-\d{2}$/)
+    await expect(badge).toHaveAttribute('title', /已确认的内容与代码是否一致由代码事实判断/)
     const hash1 = entry()
     expect(hash1).toBeTruthy()
     // 确认写入记一行拦截记录，来源 page（Z6）

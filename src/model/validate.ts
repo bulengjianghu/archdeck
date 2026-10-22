@@ -387,7 +387,7 @@ function cleanReviewed(entries: readonly ReviewedEntry[], exists: (id: string) =
   const byModule = new Map<string, ReviewedEntry>()
   for (const e of entries) {
     if (!exists(e.module)) {
-      warn('unknown-reviewed-module', `确认记录引用的模块「${e.module}」不存在，该条被忽略`, e.src)
+      warn('unknown-reviewed-module', `确认记录失效：模块 ${e.module} 已改名或删除，请在新模块上重新确认`, e.src)
       continue
     }
     if (byModule.has(e.module)) warn('duplicate-reviewed', `模块「${e.module}」有多条确认记录，取最后一条`, e.src)

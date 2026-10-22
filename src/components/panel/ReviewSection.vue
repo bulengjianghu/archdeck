@@ -20,6 +20,14 @@ const subtree = computed(() => desk.review.subtree(props.id))
 const fields = computed(() => (st.value.diff ? REVIEW_FIELDS.filter(f => st.value.diff![f].length) : []))
 const mark = (c: ReviewChange) => (c.kind === 'added' ? '+' : c.kind === 'removed' ? '−' : '≠')
 const SOURCE = (s?: string) => (s === 'manual' ? '面板确认' : s?.startsWith('sketch:') ? `草图归档 ${s.slice(7)}` : (s ?? ''))
+/** 确认只回答「AI 有没有动你看过的东西」，不担保描述与代码一致 */
+const FACTS_NOTE = '已确认的内容与代码是否一致由代码事实判断'
+const badgeTitle = computed(() => {
+  const e = st.value.entry
+  if (!e) return '架构师还没有确认过这个模块'
+  const base = `${e.at} ${SOURCE(e.source)}${e.note ? `：${e.note}` : ''}`
+  return st.value.status === 'reviewed' ? `${base}\n${FACTS_NOTE}` : base
+})
 
 const note = ref('')
 const withChildren = ref(false)
@@ -39,7 +47,7 @@ async function confirm() {
     v-if="part === 'badge' && (st.status !== 'unreviewed' || inScope)"
     class="badge review"
     :class="{ accent: st.status === 'reviewed', warn: st.status === 'stale' }"
-    :title="st.entry ? `${st.entry.at} ${SOURCE(st.entry.source)}${st.entry.note ? `：${st.entry.note}` : ''}` : '架构师还没有确认过这个模块'"
+    :title="badgeTitle"
     >{{ st.status === 'reviewed' ? `已确认 ${st.entry!.at}` : REVIEW_STATUS_LABELS[st.status] }}</span
   >
 

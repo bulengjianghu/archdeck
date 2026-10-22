@@ -68,6 +68,7 @@ describe('Z1 确认记录是人拥有的文件', () => {
     expect(index.model.reviewed).toHaveLength(1)
     expect(index.model.reviewed[0]).toMatchObject({ module: 'ui.view', hash: 'cccc', source: 'sketch:d1', note: '第二次', src: { file: 'reviewed.yaml', path: 'reviewed.2' } })
     expect(issues.map(i => i.code).sort()).toEqual(['duplicate-reviewed', 'unknown-reviewed-module'])
+    expect(issues.find(i => i.code === 'unknown-reviewed-module')?.message).toBe('确认记录失效：模块 nope 已改名或删除，请在新模块上重新确认')
     expect(issues.every(i => i.severity === 'warning')).toBe(true)
   })
   it('格式：缺 module / at / hash、来源写法不对、不认识的字段都是格式错误（M1）', () => {
