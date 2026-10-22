@@ -7,6 +7,7 @@ import NavTree from '../../src/components/tree/NavTree.vue'
 import { createDeskState } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
 import { DEFAULT_LAYOUT, directionOf, readLayout, setDirection, toggleSlot } from '../../src/components/split/paneLayout'
+import { REWORK_CATEGORIES, REWORK_CATEGORY_LABELS } from '../../src/model'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
 async function mountTree(url = '/', files = sampleFiles()) {
@@ -211,5 +212,36 @@ describe('问题页签（W-6）', () => {
     await flushPromises()
     expect(copied).toContain('### [错误]')
     expect(copied).toContain('model/test/extra.yaml')
+  })
+
+  it('按类别筛选：类别与命令行 issues --category 同一枚举；选一类只剩该类，与严重度筛选叠加；计数角标不变', async () => {
+    // 一条坏关系（描述错误）+ 一个两端之间没有运行时关系的步骤（结构中未建模）
+    const bad = scenarioFiles({
+      'extra.yaml': 'relations:\n  - { id: rel.bad, from: infra, to: nowhere, type: calls }\n',
+      'scenarios/extra.yaml': 'scenario: { id: sc.x, name: X, steps: [{ call: { from: domain.services, to: infra.mus, label: go } }] }\n',
+    })
+    const { wrapper, desk } = await mountTree('/', bad)
+    const tab = wrapper.findAll('[role=tab]').find(t => t.text().startsWith('问题'))!
+    const badge = tab.find('.count').text()
+    await tab.trigger('click')
+    const list = desk.rework.value!
+    expect(list.byCategory.description).toBeGreaterThan(0)
+    expect(list.byCategory.unmodeled).toBeGreaterThan(0)
+    const select = wrapper.find('.issue-list select.category')
+    expect(select.findAll('option').map(o => o.attributes('value'))).toEqual(['all', ...REWORK_CATEGORIES])
+    // 没有代码事实：违规等类别没有条目，不可选
+    expect(select.find('option[value=violation]').attributes('disabled')).toBeDefined()
+    expect(select.find('option[value=unmodeled]').text()).toBe(`${REWORK_CATEGORY_LABELS.unmodeled} ${list.byCategory.unmodeled}`)
+    await select.setValue('unmodeled')
+    const items = () => wrapper.findAll('.issue-list .item')
+    expect(items()).toHaveLength(list.byCategory.unmodeled)
+    expect(items().every(i => i.find('.meta').text().startsWith(REWORK_CATEGORY_LABELS.unmodeled))).toBe(true)
+    // 与严重度叠加：未建模的步骤都是提醒，选「错误」后一条不剩并给出提示
+    await wrapper.find('.issue-list .filters button.error').trigger('click')
+    expect(items()).toHaveLength(0)
+    expect(wrapper.find('.issue-list').text()).toContain('没有符合筛选条件的问题')
+    await select.setValue('description')
+    expect(items()).toHaveLength(list.items.filter(i => i.category === 'description' && i.severity === 'error').length)
+    expect(tab.find('.count').text()).toBe(badge)
   })
 })

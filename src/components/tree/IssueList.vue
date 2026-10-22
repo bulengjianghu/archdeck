@@ -1,16 +1,28 @@
 <script setup lang="ts">
 /**
- * 导航树「问题」页签（W-6）：返工清单（Q7、Q8）按严重度排序，可按严重度筛选；展开一条看根因所在、受影响位置与建议动作，
+ * 导航树「问题」页签（W-6）：返工清单（Q7、Q8）按严重度排序，可按严重度、类别筛选（类别与命令行 `issues --category` 同一枚举）；
+ * 展开一条看根因所在、受影响位置与建议动作，
  * 可定位到关系 / 文件 / 模块，「复制给 agent」把这一条（或整份清单）的 Markdown 指令放进剪贴板（Q9）。
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
-import { REWORK_CATEGORY_LABELS, REWORK_SEVERITY_LABELS, type ReworkItem, type ReworkLoc, type ReworkSeverity } from '@/model'
+import {
+  REWORK_CATEGORIES,
+  REWORK_CATEGORY_LABELS,
+  REWORK_SEVERITY_LABELS,
+  type ReworkCategory,
+  type ReworkItem,
+  type ReworkLoc,
+  type ReworkSeverity,
+} from '@/model'
 
 const desk = useDesk()
 const list = computed(() => desk.rework.value)
 const filter = ref<ReworkSeverity | 'all'>('all')
-const shown = computed(() => (list.value?.items ?? []).filter(i => filter.value === 'all' || i.severity === filter.value))
+const category = ref<ReworkCategory | 'all'>('all')
+const shown = computed(() =>
+  (list.value?.items ?? []).filter(i => (filter.value === 'all' || i.severity === filter.value) && (category.value === 'all' || i.category === category.value)),
+)
 const open = ref(new Set<string>())
 const copied = ref<string | null>(null)
 /** 展开后最多列出的受影响位置 */
@@ -77,12 +89,18 @@ async function copy(key: string, item?: ReworkItem) {
             {{ REWORK_SEVERITY_LABELS[s] }} {{ list.counts[s] }}
           </button>
         </div>
+        <select v-model="category" class="category" aria-label="按类别筛选">
+          <option value="all">全部类别</option>
+          <option v-for="c in REWORK_CATEGORIES" :key="c" :value="c" :disabled="!list.byCategory[c]">
+            {{ REWORK_CATEGORY_LABELS[c] }} {{ list.byCategory[c] }}
+          </option>
+        </select>
         <button class="copy-all" :disabled="!list.items.length" title="把整份返工清单（Markdown）复制给 agent" @click="copy('*')">
           {{ copied === '*' ? '已复制' : '复制全部给 agent' }}
         </button>
       </header>
       <p v-if="!list.facts" class="muted pad note">没有代码事实（{{ desk.version ? '非当前版本' : '代码事实未就绪' }}），未含违规、未证实与未描述依赖。</p>
-      <p v-if="!shown.length" class="muted pad">没有需要返工的问题。</p>
+      <p v-if="!shown.length" class="muted pad">{{ list.items.length ? '没有符合筛选条件的问题。' : '没有需要返工的问题。' }}</p>
       <ul class="items">
         <li v-for="i in shown" :key="i.id" class="item" :class="[i.severity, { open: open.has(i.id) }]" :data-id="i.id">
           <button class="row" :aria-expanded="open.has(i.id)" @click="toggle(i.id)">
@@ -168,6 +186,16 @@ async function copy(key: string, item?: ReworkItem) {
   border-color: var(--accent);
   color: var(--accent);
   font-weight: 600;
+}
+
+.category {
+  max-width: 46%;
+  font-size: 11.5px;
+  padding: 1px 4px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
 }
 
 .copy-all {
