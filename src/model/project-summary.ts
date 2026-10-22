@@ -1,6 +1,7 @@
 /** 项目列表页展示的项目摘要（由接入层在 Node 侧算好，页面只展示） */
 import type { SourceDef } from './types'
 import type { DesignInfo } from './design'
+import type { ReviewCounts } from './review'
 
 export interface ProjectSummary {
   /** 项目 ID，即模型根目录下的子目录名 */
@@ -37,4 +38,6 @@ export interface ProjectHealth {
   cycles?: { count: number; maxSize: number; cyclicity: number; baseline: number | null }
   /** 报警的未证实关系（K6）：编译期关系，以及两端之间没有任何依赖的运行时关系 */
   unconfirmed?: number
+  /** 人确认层（Z5）：确认范围内的已确认与需复核；只读描述即可算出，读不到代码事实时也有 */
+  reviewed?: ReviewCounts
 }

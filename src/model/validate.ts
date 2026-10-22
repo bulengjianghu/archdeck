@@ -14,6 +14,7 @@ import type {
   ModelIndex,
   ModuleEntity,
   RelationEntity,
+  ReviewedEntry,
   RulesDef,
   ScenarioEntity,
   SourceLoc,
@@ -65,6 +66,7 @@ export function validate(input: ArchModel): ValidateResult {
     actors: [...actors.values()],
     scenarios: [],
     sourceIgnore: input.sourceIgnore ?? [],
+    reviewed: cleanReviewed(input.reviewed ?? [], id => modules.has(id), warn),
     ...(input.sourceLimits ? { sourceLimits: input.sourceLimits } : {}),
     ...(input.rules ? { rules: cleanRules(input.rules, id => modules.has(id), input.rulesSrc, err, warn), rulesSrc: input.rulesSrc } : {}),
   }
@@ -377,6 +379,20 @@ function keepKnown(ids: readonly string[], known: Map<string, unknown>, onUnknow
     onUnknown(id)
     return false
   })
+}
+
+/** Z1：确认记录引用不存在的模块提醒并去掉该条（同 M7）；同一模块多条时取最后一条并提醒 */
+function cleanReviewed(entries: readonly ReviewedEntry[], exists: (id: string) => boolean, warn: Report): ReviewedEntry[] {
+  const byModule = new Map<string, ReviewedEntry>()
+  for (const e of entries) {
+    if (!exists(e.module)) {
+      warn('unknown-reviewed-module', `确认记录引用的模块「${e.module}」不存在，该条被忽略`, e.src)
+      continue
+    }
+    if (byModule.has(e.module)) warn('duplicate-reviewed', `模块「${e.module}」有多条确认记录，取最后一条`, e.src)
+    byModule.set(e.module, e)
+  }
+  return [...byModule.values()]
 }
 
 /** U1：规则引用不存在的模块提醒并去掉该条（同 M7）；allow 缺 reason 报错并去掉该条 */

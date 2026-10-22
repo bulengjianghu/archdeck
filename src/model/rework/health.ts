@@ -2,6 +2,7 @@
  * 项目健康度（Q10）：项目卡片上的一行摘要，与返工清单同一批材料，只计数不列明细。
  */
 import { unconfirmedWarns, type GovernanceReport } from '../governance'
+import { reviewCounts } from '../review'
 import type { ProjectHealth } from '../project-summary'
 import type { SourceOwnership } from '../source'
 import type { ModelIndex } from '../types'
@@ -31,5 +32,6 @@ export function projectHealth(index: ModelIndex, own: SourceOwnership, report: G
       baseline: report.baseline?.cyclicity.modules ?? null,
     },
     unconfirmed,
+    reviewed: reviewCounts(index),
   }
 }

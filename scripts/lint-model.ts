@@ -9,7 +9,7 @@
  */
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { assignFiles, governanceReport, loadModel, sourceIssues, type GovernanceReport, type Issue } from '../src/model'
+import { assignFiles, governanceReport, loadModel, reviewCounts, sourceIssues, type GovernanceReport, type Issue } from '../src/model'
 import { DESIGNS_DIR, listDesigns, listProjectIds, readModelDir, resolveModelRoot } from '../vite/readModelDir'
 import { readSourceTree } from '../vite/readSource'
 import { readCodeDeps } from '../vite/readDeps'
@@ -62,6 +62,9 @@ for (const dir of dirs) {
     issues.push(...report.issues)
     governanceNote = governanceSummary(report)
   } else if (tree) issues.push({ severity: 'error', code: 'source.missing', message: `读不到源码（源码在本地是前提，G1）：${tree.reason}` })
+  // Z3、Z5：需复核是人的待办，不报错，只在摘要给计数（只对当前版本）
+  const rc = project ? reviewCounts(index) : null
+  const reviewNote = rc ? `；确认：已确认 ${rc.reviewed} / ${rc.scope} · 需复核 ${rc.stale}` : ''
   const fmt = (i: Issue) => {
     const where = i.file ? `${payload.dir}/${i.file}${i.line ? `:${i.line}` : ''}` : '(全局)'
     return `  ${i.severity === 'error' ? 'error  ' : 'warning'} ${where}  ${i.message}  [${i.code}]`
@@ -76,6 +79,7 @@ for (const dir of dirs) {
       (index.actors.size || index.scenarios.size ? `，${index.actors.size} 个参与者，${index.scenarios.size} 个场景` : '') +
       sourceNote +
       governanceNote +
+      reviewNote +
       '；' +
       `${errors.length} 个错误，${warnings.length} 个提醒`,
   )

@@ -6,6 +6,7 @@ import { RULE_LABELS, moduleName } from '../names'
 import { bindRelation, forEachStep, RUNTIME_RELATION_TYPES } from '../scenario'
 import { matchRef, moduleEntry, type LocalSource, type SourceOwnership } from '../source'
 import { contractNames, unconfirmedCode, unconfirmedReason, unconfirmedWarns, type FileDep, type GovernanceReport, type Violation } from '../governance'
+import { reviewDiffText, reviewStates, REVIEW_FIELD_LABELS, REVIEW_FIELDS } from '../review'
 import type { Issue, ModelIndex, SourceLoc } from '../types'
 import { REWORK_CATEGORIES, REWORK_SEVERITIES, type ReworkAction, type ReworkItem, type ReworkList, type ReworkLoc, type ReworkSeverity } from './types'
 
@@ -105,6 +106,7 @@ export function reworkList(input: ReworkInput): ReworkList {
   if (source) items.push(...ownershipItems(index, source.own, source.tree, name, report?.conflicted))
   if (report) items.push(...factItems(index, report, name))
   items.push(...unmodeledItems(index, name))
+  items.push(...reviewItems(index, name))
 
   const sev = (s: ReworkSeverity) => REWORK_SEVERITIES.indexOf(s)
   const cat = (c: ReworkItem['category']) => REWORK_CATEGORIES.indexOf(c)
@@ -463,6 +465,32 @@ function unmodeledItems(index: ModelIndex, name: (id: string) => string): Rework
       affected: g.steps,
       actions,
       target: { modules: [g.a, g.b].filter(id => index.modules.has(id)), scenario: [...g.scenarios][0] },
+    })
+  }
+  return items
+}
+
+// ── 需复核的模块（Z3）：人的待办，一个模块一条，不给片段、不交给 agent ──
+
+function reviewItems(index: ModelIndex, name: (id: string) => string): ReworkItem[] {
+  const items: ReworkItem[] = []
+  for (const [id, st] of reviewStates(index)) {
+    if (st.status !== 'stale' || !st.entry) continue
+    const m = index.modules.get(id)!
+    const at = descLoc(m.src)
+    const changed = st.diff ? REVIEW_FIELDS.filter(f => st.diff![f].length).map(f => REVIEW_FIELD_LABELS[f]) : []
+    items.push({
+      id: `review:${id}`,
+      category: 'review',
+      severity: 'warning',
+      rules: ['Z3'],
+      code: 'review.stale',
+      title: `需复核：${name(id)}——${st.entry.at} 确认后${changed.length ? `${changed.join('、')}变了` : '内容变了'}`,
+      detail: st.diff ? reviewDiffText(st.diff) : '记录里没有确认时的摘要，列不出差异',
+      ...(at ? { at } : {}),
+      affected: [],
+      actions: [{ kind: 'review', text: '在面板上复核并确认（人的动作，不交给 agent；AI 不要改 reviewed.yaml）' }],
+      target: { modules: [id] },
     })
   }
   return items

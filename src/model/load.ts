@@ -21,6 +21,7 @@ import type {
   RelationDef,
   RelationEntity,
   RelationType,
+  ReviewedEntry,
   ScenarioEntity,
   SourceLoc,
   Step,
@@ -49,6 +50,7 @@ export function load(files: readonly RawFile[]): LoadResult {
   const actors: ActorEntity[] = []
   const scenarios: ScenarioEntity[] = []
   const sourceIgnore: string[] = []
+  const reviewed: ReviewedEntry[] = []
   let sourceLimits: { def: NonNullable<ArchFileDef['sourceLimits']>; file: string } | undefined
   let rules: { def: NonNullable<ArchFileDef['rules']>; src: SourceLoc } | undefined
   let seq = 0
@@ -93,6 +95,8 @@ export function load(files: readonly RawFile[]): LoadResult {
     if (data.scenario) pushScenario(data.scenario, ['scenario'])
     data.scenarios?.forEach((x, i) => pushScenario(x, ['scenarios', i]))
     if (data.sourceIgnore) sourceIgnore.push(...data.sourceIgnore)
+    // Z1：各文件的确认记录合并（约定只在 reviewed.yaml）
+    data.reviewed?.forEach((x, i) => reviewed.push({ ...x, src: locate(['reviewed', i]) }))
     // G20：sourceLimits 只能声明一次，重复时用第一处
     if (data.sourceLimits && sourceLimits)
       issues.push({ severity: 'warning', code: 'duplicate-source-limits', message: `sourceLimits 只能声明一次，已在 ${sourceLimits.file} 声明，这里的被忽略`, ...locate(['sourceLimits']) })
@@ -116,7 +120,7 @@ export function load(files: readonly RawFile[]): LoadResult {
 
   return {
     model: {
-      system, modules, relations, interfaces, dataStructures, actors, scenarios, sourceIgnore, ...(sourceLimits ? { sourceLimits: sourceLimits.def } : {}),
+      system, modules, relations, interfaces, dataStructures, actors, scenarios, sourceIgnore, reviewed, ...(sourceLimits ? { sourceLimits: sourceLimits.def } : {}),
       ...(rules ? { rules: rules.def, rulesSrc: rules.src } : {}),
     },
     issues,
