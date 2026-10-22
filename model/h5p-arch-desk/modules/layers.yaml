@@ -28,7 +28,7 @@ modules:
         kind: subsystem
         core: true
         responsibility: 单个项目某个版本的工作台：按项目 + 版本创建并注入一份 DeskState，布置左侧导航树、中间画布区、设计信息条与右侧属性面板（两侧宽度可拖动、可折叠，宽度与折叠状态记在本地；「专注」一键收起两侧栏，W-1）；创建并注入舞台显示（静态关系显示方式、在画布上显示，V8、V9）；处理键盘意图；打开场景后画布区交给分屏容器放入结构图与时序图（默认左右，可切换为上下），底部出现回放控制条。
-        codeRefs: [src/components/DeskView.vue]
+        codeRefs: [src/components/DeskView.vue, src/components/GuideDialog.vue]
       - id: present.version
         name: 版本切换与设计信息条
         kind: subsystem

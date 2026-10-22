@@ -141,7 +141,11 @@ export function readDesignInfo(designDir: string, id: string): DesignInfo {
   }
   if (revisions.length === 0) problems.push('没有可打开的轮次（revisions 为空或快照目录缺失）')
   const base = raw.base && typeof raw.base === 'object' ? (raw.base as DesignInfo['base']) : undefined
-  return { id, name: str(raw.name) ?? id, status, goal: str(raw.goal), base, revisions, problems }
+  // DV-9：adr 为一个或多个路径
+  const adrRaw = typeof raw.adr === 'string' ? [raw.adr] : Array.isArray(raw.adr) ? raw.adr : []
+  const adr = adrRaw.filter((a): a is string => typeof a === 'string' && !!a.trim())
+  if (raw.adr !== undefined && (!adr.length || adr.length !== adrRaw.length)) problems.push('adr 必须是路径字符串或路径列表')
+  return { id, name: str(raw.name) ?? id, status, goal: str(raw.goal), base, ...(adr.length ? { adr } : {}), revisions, problems }
 }
 
 /** 读设计版本的某一轮，附带对比基线（当前版本与上一轮）；不存在返回 null */

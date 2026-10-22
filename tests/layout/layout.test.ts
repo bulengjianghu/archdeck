@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { loadModel, projectLevel } from '../../src/model'
 import {
   BAND,
+  bandColumnsFor,
   PARALLEL_GAP,
   cacheKey,
   contentBounds,
@@ -24,6 +25,20 @@ const { index } = loadModel(sampleFiles())
 describe('layoutLayered · 分层总览', () => {
   const view = projectLevel(index, 'sys')
   const pv = layoutLayered(view)
+
+  it('O7：带宽按画布宽度铺开——列数随宽度增加，至少 3、至多 maxColumns；缓存按列数区分', () => {
+    expect(bandColumnsFor(400)).toBe(3)
+    expect(bandColumnsFor(10_000)).toBe(BAND.maxColumns)
+    const narrow = layoutLayered(view, { bandColumns: 3 }).nodes.get('infra')!.w
+    const wide = layoutLayered(view, { bandColumns: 8 }).nodes.get('infra')!.w
+    expect(wide).toBeGreaterThan(narrow)
+    expect(cacheKey(view, { bandColumns: 3 })).not.toBe(cacheKey(view, { bandColumns: 8 }))
+  })
+
+  it('O6：展开的层的占位块变为「收起」，仍占一个位置', () => {
+    const v = projectLevel(index, 'sys', { showBoundaries: true, expandedBands: ['app'] })
+    expect(layoutLayered(v).nodes.has(moreChipId('app'))).toBe(true)
+  })
 
   it('带按层序自上而下排列，等宽且互不重叠', () => {
     const bands = ['infra', 'app', 'domain'].map(id => pv.nodes.get(id)!)

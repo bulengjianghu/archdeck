@@ -33,6 +33,8 @@ export interface DesignInfo {
   goal?: string
   /** 起草时所基于的当前版本 */
   base?: { commit?: string; generatedAt?: string }
+  /** DV-9：定稿后记录结论的 ADR，相对源码根目录的路径（可多个） */
+  adr?: string[]
   /** 按先后排列，最后一轮为最新 */
   revisions: RevisionInfo[]
   /** design.yaml 的格式问题、缺失的快照目录等 */

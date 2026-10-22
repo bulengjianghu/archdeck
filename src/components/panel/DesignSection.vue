@@ -7,12 +7,23 @@ import { DESIGN_STATUS_LABELS } from '../shared/labels'
 import Markdown from './Markdown.vue'
 import Section from './Section.vue'
 import ChangeList from './ChangeList.vue'
+import { useOpenPreview } from '../shared/preview'
 import WriteForm from './WriteForm.vue'
 
 const desk = useDesk()
 const route = useRoute()
 const router = useRouter()
 const d = computed(() => desk.versions.design.value!)
+const openPreview = useOpenPreview()
+/** DV-9：ADR 链接——源码清单里有这个文件时在副栏预览 */
+const hasFile = (f: string) => {
+  const p = desk.files.payload.value
+  return p?.status === 'local' && p.files.includes(f)
+}
+const adrLabel = (f: string) => {
+  const m = /(\d{4})[^/]*\.md$/.exec(f)
+  return m ? `ADR-${m[1]}` : f.split('/').pop()
+}
 const r = computed(() => desk.versions.revision.value!)
 
 function openRevision(id: string) {
@@ -30,6 +41,14 @@ function openRevision(id: string) {
         <span class="badge">{{ DESIGN_STATUS_LABELS[d.status] }}</span>
         <span v-if="d.base?.commit" class="badge" :title="d.base.commit">基于 {{ d.base.commit.slice(0, 8) }}</span>
       </div>
+      <p v-if="d.adr?.length" class="adr">
+        结论记录：
+        <template v-for="(a, i) in d.adr" :key="a">
+          <span v-if="i" class="muted">、</span>
+          <button v-if="hasFile(a)" class="link" :title="`在副栏预览 ${a}`" @click="openPreview(a)">{{ adrLabel(a) }}</button>
+          <code v-else :title="a">{{ adrLabel(a) }}</code>
+        </template>
+      </p>
     </header>
 
     <Section v-if="d.problems.length" title="design.yaml 问题" :count="d.problems.length">
@@ -88,6 +107,11 @@ function openRevision(id: string) {
 
 .questions li + li {
   margin-top: 4px;
+}
+
+.adr {
+  margin: 6px 0 0;
+  font-size: 12.5px;
 }
 
 .sub {

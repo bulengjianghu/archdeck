@@ -18,6 +18,8 @@ export interface NodeData {
   band?: { abstraction?: string; mayDependOn: string[]; hiddenCount: number }
   /** +N 占位块 */
   hiddenCount?: number
+  /** O6：带内 +N 临时展开后，展开出来的模块数（占位块变为「收起」） */
+  expanded?: number
   /** 设计版本：本模块相对对比基线新增或修改 */
   change?: 'added' | 'changed'
   /** 设计版本：涉及其子树或相关关系的变更条数 */

@@ -106,7 +106,7 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
         </dd>
         <dd v-else class="muted">无（npm run arch -- baseline 生成）</dd>
       </dl>
-      <p class="hint muted">开启顶部「代码事实」在图上查看：关系 ✓ 已证实 / ? 未证实，灰色虚线为未描述的依赖，红色为违规，↻ 为本层的环。</p>
+      <p class="hint muted">图上缺省叠加代码事实（「显示」面板可关闭）：虚线加 ? 为未证实的关系，点线为未描述的依赖，红色为基线外的违规，↻ 为本层的环。</p>
     </template>
   </Section>
 

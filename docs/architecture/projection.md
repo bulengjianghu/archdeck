@@ -19,7 +19,8 @@
 
 **分层总览**（O1–O4）：P 的可见子模块全是层时 `mode = layered`：
 
-- 按 `order` 生成带，带上该层 `core: true` 的子模块，其余计入 `hiddenCount`（显示为 `+N`）。
+- 按 `order` 生成带，带上该层 `core: true` 的子模块，其余计入 `hiddenCount`（显示为 `+N`）；`expandedBands` 中的层（O6，临时展开）全部子模块都按核心模块露出，`hiddenCount` 为 0、`expanded` 记展开数。
+- 布局（`layoutLayered(view, { bandColumns })`）：带内每行的模块块数由画布宽度换算（`bandColumnsFor`，3–8，O7），带宽按列数撑满；缓存键含列数。
 - 层与层之间的边按上面的规则算出，作为带间的聚合边。
 - 再对每个核心模块算一次跨层关系，端点落到对方层内的核心模块；对方不是核心模块时落到对方所在的层；两端都没落到核心模块的与层间边重复，不记录。结果放在 `coreEdges`，默认不画。
 
@@ -79,7 +80,7 @@ interface ViewEdge {
   mode: 'sync' | 'async' | 'mixed'
 }
 
-interface Band { layerId: string; order: number; coreModuleIds: string[]; hiddenCount: number }
+interface Band { layerId: string; order: number; coreModuleIds: string[]; hiddenCount: number; expanded?: number }
 
 interface PositionedView {
   view: LevelView

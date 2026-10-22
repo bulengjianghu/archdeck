@@ -45,6 +45,16 @@ export const BAND = {
   minH: 104,
   gap: 64,
   lane: 22,
+  /** O7：带内每行模块块的上限 */
+  maxColumns: 8,
+}
+
+/** 没有画布宽度时的带内列数 */
+export const DEFAULT_BAND_COLUMNS = 5
+
+export interface LayoutOptions {
+  /** O7：分层总览的带内列数（bandColumnsFor 由画布宽度得出） */
+  bandColumns?: number
 }
 
 // ── 分层总览 ─────────────────────────────────────────────────
@@ -54,19 +64,30 @@ export function moreChipId(layerId: string): string {
   return `more:${layerId}`
 }
 
-export function layoutLayered(view: LevelView): PositionedView {
+/** O7：带内每行能放几个模块块——按画布宽度铺开，至少 3、至多 BAND.maxColumns */
+export function bandColumnsFor(canvasWidth: number): number {
+  const fit = Math.floor((canvasWidth - BAND.left - BAND.right - BAND.chipGap) / (BAND.chip.w + BAND.chipGap))
+  return Math.max(3, Math.min(BAND.maxColumns, fit))
+}
+
+/** 带内有占位块（「+N 个其他模块」或展开后的「收起」） */
+const hasChip = (b: { hiddenCount: number; expanded?: number }) => b.hiddenCount > 0 || !!b.expanded
+
+export function layoutLayered(view: LevelView, opts: LayoutOptions = {}): PositionedView {
   const bands = view.bands ?? []
   const nodes = new Map<string, Box>()
-  const maxCore = Math.max(1, ...bands.map(b => b.coreModuleIds.length + (b.hiddenCount > 0 ? 1 : 0)))
-  const perRow = Math.max(3, Math.min(maxCore, 5))
-  const middle = Math.max(BAND.minMiddle, perRow * (BAND.chip.w + BAND.chipGap) - BAND.chipGap + 2 * BAND.chipGap)
+  const columns = opts.bandColumns ?? DEFAULT_BAND_COLUMNS
+  const maxCore = Math.max(1, ...bands.map(b => b.coreModuleIds.length + (hasChip(b) ? 1 : 0)))
+  const perRow = Math.max(3, Math.min(maxCore, columns))
+  // O7：带宽按画布铺开（列数给出），内容少时也不缩窄
+  const middle = Math.max(BAND.minMiddle, columns * (BAND.chip.w + BAND.chipGap) - BAND.chipGap + 2 * BAND.chipGap)
   const width = BAND.left + middle + BAND.right
 
   let y = 0
   const bandIndex = new Map<string, number>()
   bands.forEach((band, i) => {
     bandIndex.set(band.layerId, i)
-    const slots = band.coreModuleIds.length + (band.hiddenCount > 0 ? 1 : 0)
+    const slots = band.coreModuleIds.length + (hasChip(band) ? 1 : 0)
     const rows = Math.max(1, Math.ceil(slots / perRow))
     const h = Math.max(BAND.minH, rows * BAND.chip.h + (rows - 1) * BAND.chipGap + 2 * BAND.padY)
     nodes.set(band.layerId, { x: 0, y, w: width, h })
@@ -78,7 +99,7 @@ export function layoutLayered(view: LevelView): PositionedView {
       h: BAND.chip.h,
     })
     band.coreModuleIds.forEach((id, k) => nodes.set(id, chipBox(k)))
-    if (band.hiddenCount > 0) nodes.set(moreChipId(band.layerId), chipBox(band.coreModuleIds.length))
+    if (hasChip(band)) nodes.set(moreChipId(band.layerId), chipBox(band.coreModuleIds.length))
     y += h + BAND.gap
   })
 
@@ -430,8 +451,9 @@ async function layoutGraph(view: LevelView): Promise<PositionedView> {
 const cache = new Map<string, PositionedView>()
 const CACHE_LIMIT = 64
 
-export function cacheKey(view: LevelView): string {
+export function cacheKey(view: LevelView, opts: LayoutOptions = {}): string {
   return JSON.stringify([
+    view.mode === 'layered' ? (opts.bandColumns ?? DEFAULT_BAND_COLUMNS) : 0,
     view.mode,
     view.parentId,
     view.nodes.map(n => (n.actorKind ? `${n.id}:${n.actorKind}` : n.id)),
@@ -439,12 +461,12 @@ export function cacheKey(view: LevelView): string {
   ])
 }
 
-export async function layoutView(view: LevelView): Promise<PositionedView> {
-  const key = cacheKey(view)
+export async function layoutView(view: LevelView, opts: LayoutOptions = {}): Promise<PositionedView> {
+  const key = cacheKey(view, opts)
   const hit = cache.get(key)
   if (hit) return { ...hit, view }
   let result: PositionedView
-  if (view.mode === 'layered') result = layoutLayered(view)
+  if (view.mode === 'layered') result = layoutLayered(view, opts)
   else if (view.nodes.length === 0) result = { view, nodes: new Map(), edges: new Map(), coreEdges: new Map() }
   else if (!view.nodes.some(n => n.role !== 'boundary' && n.role !== 'actor')) result = fromElkGraph(view, { id: 'root', children: [], edges: [] })
   else result = await layoutGraph(view)

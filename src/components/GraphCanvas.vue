@@ -9,7 +9,7 @@
  * 结构视角开启「代码事实」时叠加证实标记、违规与代码依赖叠加线、本层的环（K9、Y4）；单击叠加线即选中它（K10）。
  * 画什么由 Layout 的 canvasScene 算出（ADR-0013）；这里只把结果写入 Vue Flow、把交互转成操作、适应画布。
  */
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import { useDesk } from '@/state/inject'
@@ -72,7 +72,9 @@ function onNodeClick({ node }: { node: Node<NodeData> }) {
   if (node.type === 'step' || node.type === 'preview') return
   if (node.type === 'frame') desk.select(null)
   else if (node.type === 'actor') desk.select({ kind: 'actor', id: node.data!.moduleId })
-  else desk.select({ kind: 'module', id: node.type === 'more' ? node.id.slice('more:'.length) : node.data!.moduleId })
+  // O6：单击带内 +N 临时展开非核心模块（再单击「收起」），不改层次、不改选中
+  else if (node.type === 'more') desk.toggleBand(node.id.slice('more:'.length))
+  else desk.select({ kind: 'module', id: node.data!.moduleId })
 }
 
 function onNodeDoubleClick({ node }: { node: Node<NodeData> }) {
@@ -103,6 +105,19 @@ function onNodeLeave() {
 // 视野：内容边界直接取自布局结果（不依赖 Vue Flow 对节点尺寸的测量，首帧即可用）；
 // 只需等画布容器有尺寸，切换层次后自动适应
 const pendingFit = ref(true)
+
+// O7：分层总览的带按画布宽度铺开——容器宽度交给协调者，换算成带内列数（只在列数变化时重新布局）
+const host = ref<HTMLElement | null>(null)
+let resize: ResizeObserver | null = null
+onMounted(() => {
+  if (!host.value) return
+  desk.setCanvasWidth(host.value.clientWidth)
+  if (typeof ResizeObserver !== 'undefined') {
+    resize = new ResizeObserver(entries => desk.setCanvasWidth(entries[0].contentRect.width))
+    resize.observe(host.value)
+  }
+})
+onBeforeUnmount(() => resize?.disconnect())
 watch(desk.levelVersion, () => (pendingFit.value = true))
 /** V5：运行视角隐藏了静态内容时只按可见节点适应画布；否则为 null（取全部内容） */
 const visibleIds = computed(() => scene.value.visibleIds)
@@ -155,7 +170,7 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
 </script>
 
 <template>
-  <div class="canvas">
+  <div ref="host" class="canvas">
     <VueFlow
       id="arch-desk"
       :min-zoom="0.1"

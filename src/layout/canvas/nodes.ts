@@ -118,7 +118,17 @@ function bandNodes(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box, ba
   const out = [placeNode(ctx, n.id, box, 'band', data, 0)]
   const more = ctx.pv.nodes.get(moreChipId(n.id))
   if (more && band)
-    out.push(placeNode(ctx, moreChipId(n.id), more, 'more', { ...base, selected: false, dim: !!ctx.st || !!ctx.near, hiddenCount: band.hiddenCount }, 2))
+    out.push(
+      placeNode(
+        ctx,
+        moreChipId(n.id),
+        more,
+        'more',
+        { ...base, selected: false, dim: !!ctx.st || !!ctx.near, hiddenCount: band.hiddenCount, expanded: band.expanded ?? 0 },
+        // 在核心跨层边（z 3）之上：单击「+N」/「收起」不被线挡住
+        4,
+      ),
+    )
   return out
 }
 

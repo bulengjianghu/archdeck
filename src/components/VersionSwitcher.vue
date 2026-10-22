@@ -3,7 +3,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDesk } from '@/state/inject'
-import { isCommitVersion, isDesignVersion } from '@/model'
+import { isArchived, isCommitVersion, isDesignVersion } from '@/model'
 import { DESIGN_STATUS_LABELS } from './shared/labels'
 
 const desk = useDesk()
@@ -14,6 +14,9 @@ const v = desk.version
 /** 选项值：设计版本为 `<设计>/<轮次>`，提交版本为 `c:<提交>` */
 const value = computed(() => (isCommitVersion(v) ? `c:${desk.versions.commit.value?.hash ?? v.commit}` : isDesignVersion(v) ? `${v.design}/${v.revision}` : ''))
 const commits = computed(() => desk.versions.commits.value)
+/** DV-6：推进中的设计各自一组，已归档的（已实现、已放弃）合为一组放在后面 */
+const active = computed(() => desk.versions.designs.value.filter(d => !isArchived(d.status)))
+const archived = computed(() => desk.versions.designs.value.filter(d => isArchived(d.status)))
 /** 打开的提交不在最近的提交列表里时也要能显示 */
 const extraCommit = computed(() => {
   const c = desk.versions.commit.value
@@ -39,10 +42,22 @@ function onChange(e: Event) {
     <span class="sr">版本</span>
     <select :value="value" aria-label="切换版本" @change="onChange">
       <option value="">当前版本（代码）</option>
-      <optgroup v-for="d in desk.versions.designs.value" :key="d.id" :label="`设计 · ${d.name}（${DESIGN_STATUS_LABELS[d.status]}）`">
+      <optgroup v-for="d in active" :key="d.id" :label="`设计 · ${d.name}（${DESIGN_STATUS_LABELS[d.status]}）`">
         <option v-for="(r, i) in [...d.revisions].reverse()" :key="r.id" :value="`${d.id}/${r.id}`" :title="r.date">
           {{ d.name }} · {{ r.id }}{{ i === 0 ? '（最新）' : '' }}
         </option>
+      </optgroup>
+      <optgroup v-if="archived.length" label="已归档的设计（已实现 / 已放弃）">
+        <template v-for="d in archived" :key="d.id">
+          <option
+            v-for="r in [...d.revisions].reverse()"
+            :key="r.id"
+            :value="`${d.id}/${r.id}`"
+            :title="`${DESIGN_STATUS_LABELS[d.status]}${r.date ? ` · ${r.date}` : ''}`"
+          >
+            {{ d.name }} · {{ r.id }}
+          </option>
+        </template>
       </optgroup>
       <optgroup v-if="commits.length || extraCommit" label="提交（描述的历史）">
         <option v-if="extraCommit" :value="`c:${extraCommit.hash}`">{{ extraCommit.short }}</option>

@@ -6,7 +6,7 @@
  * - 与外界的交互交给同步适配器：路由（sync/router）、模型源（sync/modelSource）、布局（sync/layout）、源码（sync/source）。
  * 呈现层只读这里的状态、只调这里的操作，不直接调用模型层的计算。
  */
-import { computed, ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import type { Router } from 'vue-router'
 import {
   RELATION_TYPES,
@@ -42,6 +42,7 @@ import {
 import { createRouterSync, type RouterSync, type RouterSyncOptions } from './sync/router'
 import { fetchAndLoad, watchModelChanges, type Baseline, type ChangeEvents, type FetchModel } from './sync/modelSource'
 import { createLayoutSync } from './sync/layout'
+import { bandColumnsFor, layoutView, type LayoutOptions } from '@/layout/layout'
 import { NO_SOURCE, createSourceSync, type SourceFetcher } from './sync/source'
 import { NO_WRITER, type ModelWriter, type WriteOutcome } from './sync/writer'
 import { createRun } from './desk/run'
@@ -107,13 +108,26 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
 
   /** 层次视图只依赖层次、显示开关与打开的场景：悬停、选中、播放头变化时 togglesNow 的值不变，不引起重新投影与布局（ADR-0009） */
   const togglesNow = computed(() => state.value.toggles)
+  /** O6：分层总览中临时展开的层（只属于这次浏览，不进视图状态与 URL）；层次变化即收起 */
+  const expandedBands = shallowRef<string[]>([])
+  watch(levelId, () => (expandedBands.value = []))
+  const toggleBand = (layerId: string) =>
+    (expandedBands.value = expandedBands.value.includes(layerId) ? expandedBands.value.filter(x => x !== layerId) : [...expandedBands.value, layerId])
+  /** O7：带内列数随画布宽度变化（只在列数变化时重新布局） */
+  const layoutOpts = shallowRef<LayoutOptions>({})
+  const setCanvasWidth = (px: number) => {
+    const bandColumns = bandColumnsFor(px)
+    if (layoutOpts.value.bandColumns !== bandColumns) layoutOpts.value = { bandColumns }
+  }
   const view = computed<LevelView | null>(() => {
     const t = togglesNow.value
     if (!index.value || !levelId.value) return null
     try {
       // L9：运行视角下舞台不受显示开关影响，并补齐场景帧端点的边界节点与参与者（P12）
-      if (plan.value) return projectLevel(index.value, levelId.value, { showBoundaries: true, scenarioEnds: stageEnds(plan.value) })
+      const expanded = expandedBands.value.length ? { expandedBands: expandedBands.value } : {}
+      if (plan.value) return projectLevel(index.value, levelId.value, { showBoundaries: true, scenarioEnds: stageEnds(plan.value), ...expanded })
       return projectLevel(index.value, levelId.value, {
+        ...expanded,
         showBoundaries: t.showBoundaries,
         currentOnly: t.currentOnly,
         relationTypes: t.relationTypes.length === RELATION_TYPES.length ? undefined : t.relationTypes,
@@ -122,7 +136,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       return null
     }
   })
-  const positioned = createLayoutSync(view)
+  const positioned = createLayoutSync(view, layoutView, layoutOpts)
 
   // ── 领域派生（ADR-0013）──
   const files = createFiles({ state, index, view, sync: sourceSync, design: !!options.version })
@@ -262,6 +276,9 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     allIssues,
     rework,
     reworkPrompt,
+    expandedBands,
+    toggleBand,
+    setCanvasWidth,
     write,
     modelDir,
     levelId,

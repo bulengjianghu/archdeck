@@ -29,7 +29,7 @@ beforeAll(() => {
   // 设计版本（ADR-0002）
   write(
     'alpha/designs/next/design.yaml',
-    'design:\n  name: 下一期\n  status: reviewing\n  goal: 目标\n  base: { commit: c0 }\n  revisions:\n    - { id: r1, date: 2026-10-20, summary: 第一轮, feedback: 改名 }\n    - { id: r2, questions: [要不要拆] }\n    - { id: r9 }\n',
+    'design:\n  name: 下一期\n  status: reviewing\n  goal: 目标\n  adr: docs/adr/0009-next.md\n  base: { commit: c0 }\n  revisions:\n    - { id: r1, date: 2026-10-20, summary: 第一轮, feedback: 改名 }\n    - { id: r2, questions: [要不要拆] }\n    - { id: r9 }\n',
   )
   write('alpha/designs/next/r1/system.yaml', 'system: { id: alpha, name: Alpha }')
   write('alpha/designs/next/r1/m.yaml', 'modules: [{ id: m1, name: M1 }, { id: m2, name: M2 }]')
@@ -85,7 +85,7 @@ describe('接入层 · 多项目读取', () => {
     const designs = listDesigns(path.join(modelRoot, 'alpha'))
     expect(designs.map(d => d.id)).toEqual(['bad', 'next'])
     const next = designs[1]
-    expect(next).toMatchObject({ name: '下一期', status: 'reviewing', goal: '目标', base: { commit: 'c0' } })
+    expect(next).toMatchObject({ name: '下一期', status: 'reviewing', goal: '目标', base: { commit: 'c0' }, adr: ['docs/adr/0009-next.md'] })
     expect(next.revisions).toEqual([
       { id: 'r1', date: '2026-10-20', summary: '第一轮', feedback: '改名', questions: undefined },
       { id: 'r2', date: undefined, summary: undefined, feedback: undefined, questions: ['要不要拆'] },

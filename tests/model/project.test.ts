@@ -11,6 +11,17 @@ const nodeIds = (v: LevelView, role?: string) => v.nodes.filter(n => !role || n.
 describe('projectLevel · 分层总览（根层）', () => {
   const view = projectLevel(index, 'sys')
 
+  it('O6：临时展开的层把非核心模块按核心模块露出，记下展开数；层次与其他层不变', () => {
+    const v = projectLevel(index, 'sys', { showBoundaries: true, expandedBands: ['app'] })
+    const app = v.bands!.find(b => b.layerId === 'app')!
+    expect(app.hiddenCount).toBe(0)
+    expect(app.expanded).toBe(1)
+    expect(app.coreModuleIds.length).toBe(2)
+    expect(v.nodes.filter(n => n.role === 'core' && n.layerId === 'app')).toHaveLength(2)
+    expect(v.bands!.find(b => b.layerId === 'infra')!.hiddenCount).toBe(1)
+    expect(v.parentId).toBe('sys')
+  })
+
   it('子模块全是层时用 layered 模式，带按 order 排列', () => {
     expect(view.mode).toBe('layered')
     expect(view.bands!.map(b => b.layerId)).toEqual(['infra', 'app', 'domain'])

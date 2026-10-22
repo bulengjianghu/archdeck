@@ -290,6 +290,7 @@ design:
   name: 二期 · 动态视角
   status: reviewing             # draft / reviewing / accepted / implemented / abandoned
   goal: |                       # 设计目标与范围
+  adr: docs/adr/0003-phase2-dynamic-view.md   # 定稿后记录结论的 ADR（一个或列表，相对源码根目录，E7）
   base: { commit: <起草时当前版本的 source.commit>, generatedAt: … }
   revisions:
     - id: r1

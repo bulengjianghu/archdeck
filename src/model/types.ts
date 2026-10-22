@@ -348,6 +348,8 @@ export interface Band {
   order: number
   coreModuleIds: string[]
   hiddenCount: number
+  /** O6：临时展开时，展开出来的非核心模块数（已并入 coreModuleIds，hiddenCount 为 0） */
+  expanded?: number
 }
 
 export interface LevelView {
@@ -369,6 +371,8 @@ export interface ProjectOptions {
   currentOnly?: boolean
   /** 运行视角的舞台：场景中全部帧的端点，用于补齐结构上没有关系的边界节点与参与者 */
   scenarioEnds?: readonly { from: string; to: string }[]
+  /** O6：分层总览中临时展开的层：非核心模块与核心模块一样露出，不改层次 */
+  expandedBands?: readonly string[]
 }
 
 // ── 版本对比（E1、E2）：计算在 diff.ts ──

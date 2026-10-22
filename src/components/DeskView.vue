@@ -15,6 +15,7 @@ import Toolbar from './Toolbar.vue'
 import VersionSwitcher from './VersionSwitcher.vue'
 import DesignBar from './DesignBar.vue'
 import CommitBar from './CommitBar.vue'
+import GuideDialog from './GuideDialog.vue'
 import PerspectiveSwitch from './PerspectiveSwitch.vue'
 import PlayerBar from './PlayerBar.vue'
 import SplitView from './split/SplitView.vue'
@@ -135,6 +136,8 @@ function onDividerUp() {
 const aside = useAside(desk)
 const { previewPath, tab: asideTab, run } = aside
 provide(OPEN_PREVIEW, aside.open)
+// W-10：「怎么读这张图」
+const guideOpen = ref(false)
 // W-6：导航树页签由项目视图持有，画布的问题角标切到「问题」页签
 const navTab = ref<NavTab>(desk.perspective.value === 'run' ? 'steps' : 'modules')
 provide(NAV_TAB, navTab)
@@ -200,6 +203,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <PerspectiveSwitch v-if="desk.status.value === 'ready'" />
       <Breadcrumb />
       <Toolbar />
+      <button class="collapse guide-btn" title="怎么读这张图" aria-label="怎么读这张图" @click="guideOpen = true">?</button>
       <button class="collapse" :class="{ on: focused }" :title="focused ? '恢复导航树与属性面板' : '收起导航树与属性面板'" @click="toggleFocus">
         {{ focused ? '退出专注' : '专注' }}
       </button>
@@ -269,6 +273,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <aside v-show="!collapsed" class="panel-area">
       <Panel v-if="desk.status.value === 'ready'" />
     </aside>
+    <GuideDialog v-if="guideOpen" @close="guideOpen = false" />
   </div>
 </template>
 

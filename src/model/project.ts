@@ -153,14 +153,23 @@ function actorNodes(index: ModelIndex, actorIds: ReadonlySet<string>): ViewNode[
 function layeredOverview(scope: LevelScope, relations: readonly RelationEntity[], proj: Projected, tail: ViewNode[]): LevelView {
   const { index, parentId, children } = scope
   const coreOf = new Map<string, Set<string>>()
-  for (const l of children) coreOf.set(l, new Set(visibleChildren(scope, l).filter(c => index.modules.get(c)!.core)))
+  // O6：临时展开的层，全部子模块都按核心模块露出
+  const expanded = new Set(scope.opts.expandedBands ?? [])
+  for (const l of children) coreOf.set(l, new Set(visibleChildren(scope, l).filter(c => expanded.has(l) || index.modules.get(c)!.core)))
   const nodes = children.map(id => childNode(scope, id, 'layer'))
   const bands: Band[] = children.map(l => {
     const m = index.modules.get(l)!
     const kids = visibleChildren(scope, l)
     const core = kids.filter(c => coreOf.get(l)!.has(c))
     for (const c of core) nodes.push({ id: c, moduleId: c, role: 'core', hasChildren: visibleChildren(scope, c).length > 0, layerId: l })
-    return { layerId: l, order: m.order ?? Infinity, coreModuleIds: core, hiddenCount: kids.length - core.length }
+    const declared = kids.filter(c => index.modules.get(c)!.core).length
+    return {
+      layerId: l,
+      order: m.order ?? Infinity,
+      coreModuleIds: core,
+      hiddenCount: kids.length - core.length,
+      ...(expanded.has(l) && core.length > declared ? { expanded: core.length - declared } : {}),
+    }
   })
   const coreEdges = new EdgeCollector()
   for (const r of relations) projectCoreRelation(scope, coreOf, coreEdges, r)
