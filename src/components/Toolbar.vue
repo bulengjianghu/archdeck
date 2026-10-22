@@ -1,24 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
-import { RELATION_TYPES, type ModuleEntity, type RelationType } from '@/model'
+import type { ModuleEntity } from '@/model'
 
 const desk = useDesk()
-const run = computed(() => desk.perspective.value === 'run')
-/** K8、K9：代码事实开关只在结构视角、有事实时可用 */
-const FACTS_HINT: Record<string, string> = {
-  design: '设计版本不对应代码，没有代码事实',
-  'no-source': '源码不在本地或构建产物不含源码，没有代码事实',
-  loading: '正在提取代码依赖…',
-  error: '提取代码依赖失败',
-}
-const factsHint = computed(() =>
-  run.value
-    ? '运行视角下不叠加代码事实'
-    : desk.facts.status.value === 'ready'
-      ? '在图上叠加代码事实：关系是否被代码证实、未描述的依赖、违规与环'
-      : FACTS_HINT[desk.facts.status.value],
-)
 const query = ref('')
 const open = ref(false)
 const active = ref(0)
@@ -66,11 +51,6 @@ function onKey(e: KeyboardEvent) {
   } else return
   e.preventDefault()
 }
-
-function toggleType(t: RelationType) {
-  const list = desk.toggles.relationTypes
-  desk.setToggles({ relationTypes: list.includes(t) ? list.filter(x => x !== t) : [...list, t] })
-}
 </script>
 
 <template>
@@ -95,34 +75,10 @@ function toggleType(t: RelationType) {
         <li class="none">没有匹配的模块</li>
       </ul>
     </div>
-
-    <fieldset class="toggles" :disabled="run" :title="run ? '运行视角下舞台显示全部关系类型与边界节点（L9）；退出场景后恢复' : undefined">
-      <label class="check"><input v-model="desk.toggles.showBoundaries" type="checkbox" /> 边界节点</label>
-      <label class="check"><input v-model="desk.toggles.currentOnly" type="checkbox" /> 只看现状</label>
-      <div class="types" role="group" aria-label="关系类型筛选">
-        <button
-          v-for="t in RELATION_TYPES"
-          :key="t"
-          class="type rel-chip"
-          :class="[`rel-${t}`, { off: !desk.toggles.relationTypes.includes(t) }]"
-          :aria-pressed="desk.toggles.relationTypes.includes(t)"
-          @click="toggleType(t)"
-        >
-          {{ t }}
-        </button>
-      </div>
-    </fieldset>
-    <label class="check facts" :class="{ off: run || desk.facts.status.value !== 'ready' }" :title="factsHint">
-      <input v-model="desk.toggles.showFacts" type="checkbox" :disabled="run || desk.facts.status.value !== 'ready'" /> 代码事实
-    </label>
   </div>
 </template>
 
 <style scoped>
-.facts.off {
-  opacity: 0.5;
-}
-
 .toolbar {
   display: flex;
   align-items: center;
@@ -181,47 +137,5 @@ function toggleType(t: RelationType) {
 .results .none {
   color: var(--text-3);
   cursor: default;
-}
-
-.toggles {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 0;
-  padding: 0;
-  border: none;
-  min-width: 0;
-}
-
-.toggles:disabled {
-  opacity: 0.4;
-}
-
-.check {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--text-2);
-  white-space: nowrap;
-}
-
-.types {
-  display: flex;
-  gap: 2px;
-}
-
-.type {
-  border: 1px solid transparent;
-  background: none;
-  padding: 1px 6px;
-}
-
-.type:hover {
-  border-color: var(--border);
-}
-
-.type.off {
-  opacity: 0.35;
 }
 </style>

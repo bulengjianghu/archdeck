@@ -10,7 +10,7 @@ modules:
       - **写 store 而非传属性**：节点与边通过 setNodes / setEdges 写入；属性同步在「上一层有选中、切回总览」时会被跳过。
       - **适应画布**：内容外框直接取自布局结果，不依赖 Vue Flow 对节点尺寸的测量，只等画布容器有尺寸；运行视角隐藏静态内容时只取画布场景给出的可见节点；切换层次、画布容器尺寸变化（进入运行视角、切换分屏方向、拖动分隔条、折叠两侧栏）后重新适应。
       - **点击含义**：单击节点 / 边 = 选中（运行视角同样，V3）；双击 = 下钻或跳到边界节点所在层次；单击边上的步骤序号 = 指向这一步，即选中它（R13）；单击分支预览序号 = 选这一支。
-      - **静态关系显示方式**：左下角切换隐藏 / 淡显 / 全显（V8），值来自舞台显示（按项目记在本地）。
+      - **静态关系显示方式**：在「显示」面板切换隐藏 / 淡显 / 全显（V8），值来自舞台显示（按项目记在本地）。
     codeRefs: [src/components/GraphCanvas.vue]
   - id: present.canvas.nodes
     name: 节点组件
@@ -76,13 +76,13 @@ modules:
   - id: present.nav.toolbar
     name: 工具栏
     parent: present.nav
-    responsibility: 按名称或 ID 搜索模块并跳转（运行视角下搜索跳转同样选中目标，V3）；边界节点、只看现状、关系类型筛选等显示开关。场景入口移到视角切换。
+    responsibility: 按名称或 ID 搜索模块并跳转（运行视角下搜索跳转同样选中目标，V3）。显示开关统一在画布右下角「显示」面板（ADR-0017）；场景入口在视角切换。
     codeRefs: [src/components/Toolbar.vue]
-  - id: present.nav.legend
-    name: 图例
-    parent: present.nav
-    responsibility: 关系类型的颜色与线型、聚合线宽、可下钻与目标态的节点样式说明、外部参与者与系统边界；回放中追加当前步骤 / 已走过 / 内部活动 / 分支预览 / 经由上层关系 / 未建模 / 同步与异步的图例，以及灰色的含义与当前的静态关系显示方式。
-    codeRefs: [src/components/Legend.vue]
+  - id: present.canvas.legend
+    name: 显示面板（显示设置与图例）
+    parent: present.canvas
+    responsibility: 画布右下角的「显示」面板：按视角只出现当前能用的开关（结构视角为边界节点、只看现状、关系类型筛选、代码事实；运行视角为静态关系显示方式），折叠时摘要列出非默认的设置；图例：关系类型的颜色与线型、聚合线宽、可下钻与目标态的节点样式说明、外部参与者与系统边界；回放中追加当前步骤 / 已走过 / 内部活动 / 分支预览 / 经由上层关系 / 未建模 / 同步与异步的图例，以及灰色的含义与当前的静态关系显示方式。
+    codeRefs: [src/components/DisplayPanel.vue]
 
   # ── 视图状态层 ──────────────────────────────────────────
   - id: state.desk.loading
@@ -200,7 +200,7 @@ relations:
   - {id: rel.ad.desk-issues, from: present.desk-view, to: present.issues, type: depends}
   - {id: rel.ad.flow-nodes, from: present.canvas.flow, to: present.canvas.nodes, type: depends}
   - {id: rel.ad.flow-edges, from: present.canvas.flow, to: present.canvas.edges, type: depends}
-  - {id: rel.ad.flow-legend, from: present.canvas.flow, to: present.nav.legend, type: depends, description: 图例浮在画布右下角}
+  - {id: rel.ad.flow-legend, from: present.canvas.flow, to: present.canvas.legend, type: depends, description: 图例浮在画布右下角}
   - {id: rel.ad.panel-module, from: present.panel.dispatch, to: present.panel.module, type: depends}
   - {id: rel.ad.panel-relation, from: present.panel.dispatch, to: present.panel.relation, type: depends}
   - {id: rel.ad.panel-edge, from: present.panel.dispatch, to: present.panel.edge, type: depends}
@@ -318,7 +318,6 @@ relations:
   - {id: rel.ad.nodes-act, from: present.canvas.nodes, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 分支预览选这一支（chooseBranch）、步骤序号指向这一步（seek）}
   - {id: rel.ad.system-read, from: present.panel.system, to: state.desk.projection, type: depends, description: 系统面板读索引、层次视图与版本}
   - {id: rel.ad.system-act, from: present.panel.system, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 选中模块或问题}
-  - {id: rel.ad.legend-stage, from: present.nav.legend, to: present.canvas, type: depends, description: useStage：图例随舞台显示方式}
   - {id: rel.ad.desk-labels, from: state.desk, to: model.types, type: depends, description: RELATION_TYPES：关系类型开关的初值}
   - {id: rel.ad.projection-names, from: state.desk.projection, to: model.pipeline.indexer, type: depends, description: triggerOf：场景列表的触发者}
 

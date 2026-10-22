@@ -3,7 +3,7 @@
  * GraphCanvas：把 PositionedView 画成节点和边；处理平移、缩放、单击、双击、悬停。
  * 运行视角下作为舞台（V5）：本层参与的节点与走过的边突出、其余变淡，当前消息沿步骤方向流动（P10），
  * 本层没有视图边的消息画临时线（经由上层关系 P15 / 未建模 P11），步骤序号可单击指向（R13），停在分支点时预览各选项（F6）。
- * 舞台按静态关系显示方式隐藏或淡化不参与的节点与静态边（V5、V8），「在画布上显示」的对象照常（V9）；
+ * 舞台按静态关系显示方式（在「显示」面板切换）隐藏或淡化不参与的节点与静态边（V5、V8），「在画布上显示」的对象照常（V9）；
  * 选中步骤时其余走过的边与步骤序号淡为灰色；选中其他对象时不变灰，舞台始终按进度（R15、R16）。
  * 选中文件时，其归属模块在本层的投影节点加文件高亮（G14）。
  * 结构视角开启「代码事实」时叠加证实标记、违规与代码依赖叠加线、本层的环（K9、Y4）；单击叠加线即选中它（K10）。
@@ -15,7 +15,6 @@ import '@vue-flow/core/dist/style.css'
 import { useDesk } from '@/state/inject'
 import { contentBounds } from '@/layout/layout'
 import { canvasScene, type NodeData, type RouteEdgeData } from '@/layout/canvas'
-import type { StaticMode } from '@/layout/stage'
 import { useStage } from './stage/useStageDisplay'
 import ModuleNode from './nodes/ModuleNode.vue'
 import BoundaryNode from './nodes/BoundaryNode.vue'
@@ -27,7 +26,7 @@ import FrameNode from './nodes/FrameNode.vue'
 import StepBadge from './nodes/StepBadge.vue'
 import BranchPreview from './nodes/BranchPreview.vue'
 import RouteEdge from './edges/RouteEdge.vue'
-import Legend from './Legend.vue'
+import DisplayPanel from './DisplayPanel.vue'
 
 const desk = useDesk()
 const stageUi = useStage()
@@ -118,7 +117,6 @@ watch(
     tryPendingFit()
   },
 )
-const MODE_LABEL: Record<StaticMode, string> = { hide: '隐藏', dim: '淡显', show: '全显' }
 function fitNow(): boolean {
   const pv = desk.positioned.value
   const { width, height } = dimensions.value
@@ -199,20 +197,8 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       <button title="放大" @click="zoomIn()">＋</button>
       <button title="缩小" @click="zoomOut()">－</button>
       <button title="适应画布" @click="fitNow()">适应</button>
-      <div v-if="stage" class="static-mode" role="group" aria-label="静态关系">
-        <span class="muted">静态关系</span>
-        <button
-          v-for="m in ['hide', 'dim', 'show'] as const"
-          :key="m"
-          :class="{ on: stageUi.mode.value === m }"
-          :title="m === 'hide' ? '只显示参与本场景的节点与走过的边' : m === 'dim' ? '不参与的节点与静态边淡化显示' : '全部照常显示'"
-          @click="stageUi.setMode(m)"
-        >
-          {{ MODE_LABEL[m] }}
-        </button>
-      </div>
     </div>
-    <Legend />
+    <DisplayPanel />
   </div>
 </template>
 
@@ -257,25 +243,5 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
   min-width: 30px;
   font-size: 12px;
   padding: 3px 8px;
-}
-
-.static-mode {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 8px;
-  padding-left: 8px;
-  border-left: 1px solid var(--border);
-  font-size: 12px;
-}
-
-.static-mode .muted {
-  margin-right: 4px;
-}
-
-.static-mode button.on {
-  background: var(--accent-soft);
-  color: var(--accent);
-  border-color: var(--accent);
 }
 </style>

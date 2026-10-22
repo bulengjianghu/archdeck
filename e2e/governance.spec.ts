@@ -45,7 +45,9 @@ test('h5player：单击未描述依赖的叠加线选中它并显示代码依赖
   await expect(page.locator('.dep-panel')).toContainText('模块依赖')
 })
 
-test('运行视角下「代码事实」开关不可用', async ({ page }) => {
+test('运行视角下「显示」面板不出现「代码事实」开关（L9）', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
-  await expect(page.locator('label.facts input')).toBeDisabled()
+  await page.getByRole('button', { name: /^显示/ }).click()
+  await expect(page.getByRole('region', { name: '显示' })).toContainText('运行视角下舞台显示全部节点与关系')
+  await expect(page.locator('label.facts')).toHaveCount(0)
 })

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * 文件树（SR-1、SR-2、G13）：被描述项目的源码目录树。
- * - 状态 → 树：选中模块时其文件高亮、所在目录标点并展开到第一个文件；选中文件时该行高亮、展开到它并滚到可见；
+ * - 状态 → 树：选中模块（含层）时其文件高亮、所在目录标点，展开的目录恰为含高亮文件的目录（其余收起），并滚到第一个文件；
+ *   选中文件、步骤、边等其他对象时树的展开与滚动不动，只更新高亮；
  *   文件标出未归属、归属冲突、已忽略。
  * - 树 → 意图：单击文件即选中（G16）；单击目录展开 / 折叠。页面只读，不提供忽略操作（ADR-0007）。
  * 展开状态与「只看未归属」只属于这块界面。
@@ -32,32 +33,18 @@ const dirsOf = (file: string) => {
 /** 含高亮文件的目录 */
 const hitDirs = computed(() => new Set([...hits.value].flatMap(dirsOf)))
 
-function expandTo(file: string | undefined) {
-  if (!file) return
-  const next = new Set(expanded.value)
-  for (const d of dirsOf(file)) next.add(d)
-  expanded.value = next
-}
 async function scrollTo(file: string | undefined) {
   await nextTick()
   const row = [...(root.value?.querySelectorAll<HTMLElement>('[data-path]') ?? [])].find(el => el.dataset.path === file)
   row?.scrollIntoView?.({ block: 'nearest' })
 }
-watch(
-  () => [desk.files.selected.value, tree.value] as const,
-  ([f]) => {
-    if (!f) return
-    expandTo(f)
-    void scrollTo(f)
-  },
-  { immediate: true },
-)
+/** 选中模块（含层）时：展开的目录恰为含高亮文件的目录，其余收起；选中其他对象时树不动 */
 watch(
   () => [selectedModule.value, tree.value] as const,
-  () => {
-    const first = [...hits.value].sort()[0]
-    expandTo(first)
-    void scrollTo(first)
+  ([m]) => {
+    if (!m) return
+    expanded.value = new Set(hitDirs.value)
+    void scrollTo([...hits.value].sort()[0])
   },
   { immediate: true },
 )

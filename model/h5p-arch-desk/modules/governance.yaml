@@ -126,7 +126,7 @@ relations:
   - {id: rel.gv.dep-read, from: present.panel.dep, to: state.desk.facts, type: depends, description: 选中的代码依赖叠加线}
   - {id: rel.gv.canvas-read, from: present.canvas.flow, to: state.desk.facts, type: depends, description: 本层投影（K9、Y4）}
   - {id: rel.gv.toolbar-read, from: present.nav.toolbar, to: state.desk.facts, type: depends, description: 事实状态决定「代码事实」开关是否可用}
-  - {id: rel.gv.legend-read, from: present.nav.legend, to: state.desk.facts, type: depends}
+  - {id: rel.gv.legend-read, from: present.canvas.legend, to: state.desk.facts, type: depends}
   - {id: rel.gv.canvas-select, from: present.canvas.flow, to: state.desk.actions, type: calls, interface: if.desk.actions, description: "单击代码依赖叠加线 → select(kind: dep)"}
   # 视图状态层
   - {id: rel.gv.facts-sync, from: state.desk.facts, to: state.desk.source-sync, type: depends, description: 代码事实随源码清单取得（facts.json）}
