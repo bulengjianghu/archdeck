@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import RouteEdge from '../../src/components/edges/RouteEdge.vue'
 import type { RouteEdgeData } from '../../src/layout/canvas'
+import { arrowDepth, arrowSize } from '../../src/components/edges/edgeStyle'
 
 const base: RouteEdgeData = {
   route: {
@@ -30,6 +31,17 @@ function render(data: Partial<RouteEdgeData>) {
 }
 
 describe('RouteEdge', () => {
+  it('箭头随线宽档放大，空心「V」描边 = 线宽 + 1；线在箭头处回缩一个箭头深度', () => {
+    const one = render({ arrow: 'open', weight: 1 })
+    const three = render({ arrow: 'open', weight: 3 })
+    expect(Number(one.w.find('marker').attributes('markerWidth'))).toBe(arrowSize(1))
+    expect(Number(three.w.find('marker').attributes('markerWidth'))).toBe(arrowSize(3))
+    expect(Number(one.marker.attributes('stroke-width')) * (arrowSize(1) / 10)).toBeCloseTo(1.5 + 1)
+    // 竖直的边终点 (0,100)：线停在 100 − 箭头深度，尖端落在原终点
+    const d = one.w.find('path.vue-flow__edge-path').attributes('d')!
+    expect(d.endsWith(`L0,${100 - arrowDepth(arrowSize(1))}`)).toBe(true)
+  })
+
   it('已证实为实线；未证实为虚线；叠加线为点线（叠加线专用色）', () => {
     expect(render({}).style).not.toContain('dasharray')
     expect(render({ factState: 'unconfirmed' }).style).toContain('stroke-dasharray: 6 4')

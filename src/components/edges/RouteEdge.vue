@@ -7,20 +7,26 @@
 import { computed } from 'vue'
 import { BaseEdge } from '@vue-flow/core'
 import type { RouteEdgeData } from '@/layout/canvas'
-import { horizontalCurve, roundedPolyline, verticalCurve } from './routePath'
-import { FLOW, strokeColor, strokeStyle } from './edgeStyle'
+import type { Point } from '@/layout/layout'
+import { horizontalCurve, retractEnd, roundedPolyline, verticalCurve } from './routePath'
+import ArrowMarker from './ArrowMarker.vue'
+import { FLOW, arrowDepth, arrowSize, strokeColor, strokeStyle } from './edgeStyle'
 
 const props = defineProps<{ id: string; data: RouteEdgeData }>()
 
-const path = computed(() => {
-  const pts = props.data.route.points
-  if (props.data.route.curve && pts.length === 2) return props.data.route.curve === 'h' ? horizontalCurve(pts[0], pts[1]) : verticalCurve(pts[0], pts[1])
+const draw = (pts: Point[]) => {
+  const c = props.data.route.curve
+  if (c && pts.length === 2) return c === 'h' ? horizontalCurve(pts[0], pts[1]) : verticalCurve(pts[0], pts[1])
   return roundedPolyline(pts)
-})
+}
 
 const look = computed(() => ({ ...props.data, type: props.data.edge.type }))
 const color = computed(() => strokeColor(look.value))
 const style = computed(() => ({ ...strokeStyle(look.value), ...(props.data.temp ? {} : { transition: 'opacity 0.15s' }) }))
+/** 箭头大小随线宽档；线在箭头处回缩一个箭头深度（晕与红晕仍沿完整走线） */
+const size = computed(() => arrowSize(props.data.weight))
+const path = computed(() => draw(props.data.route.points))
+const linePath = computed(() => draw(retractEnd(props.data.route.points, props.data.route.curve, arrowDepth(size.value))))
 
 /** 每条边自带箭头 marker，颜色跟随线色 */
 const markerId = computed(() => `arrow-${props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)}`)}`)
@@ -28,11 +34,7 @@ const markerId = computed(() => `arrow-${props.id.replace(/[^\w-]/g, c => `_${c.
 
 <template>
   <defs>
-    <marker :id="markerId" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto">
-      <path v-if="data.arrow === 'open'" d="M1,1 L9,5 L1,9" fill="none" :stroke="color" stroke-width="1.5" stroke-linejoin="round" />
-      <path v-else-if="data.arrow === 'triangle'" d="M1,1 L9,5 L1,9 Z" fill="var(--surface)" :stroke="color" stroke-width="1.3" stroke-linejoin="round" />
-      <path v-else d="M0,0 L10,5 L0,10 Z" :fill="color" />
-    </marker>
+    <ArrowMarker :id="markerId" :kind="data.arrow" :color="color" :size="size" :line-width="style.strokeWidth" />
   </defs>
   <path
     v-if="data.change && !data.violated"
@@ -51,7 +53,7 @@ const markerId = computed(() => `arrow-${props.id.replace(/[^\w-]/g, c => `_${c.
   <g :class="{ 'edge-label-pill': data.pill, 'edge-label-warn': data.warn }">
     <BaseEdge
       :id="id"
-      :path="path"
+      :path="linePath"
       :marker-end="`url(#${markerId})`"
       :style="style"
       :interaction-width="16"
@@ -65,9 +67,9 @@ const markerId = computed(() => `arrow-${props.id.replace(/[^\w-]/g, c => `_${c.
     />
   </g>
   <template v-if="data.play === 'current'">
-    <path :d="path" class="edge-flow-base" fill="none" stroke-linecap="round" :stroke-width="FLOW.baseWidth" />
+    <path :d="linePath" class="edge-flow-base" fill="none" stroke-linecap="round" :stroke-width="FLOW.baseWidth" />
     <path
-      :d="path"
+      :d="linePath"
       class="edge-flow"
       :class="{ reverse: data.flowReverse }"
       fill="none"

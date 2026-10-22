@@ -14,6 +14,9 @@ import {
   parallelOffsets,
   placeBoundaries,
   toElkGraph,
+  fromElkGraph,
+  LABEL_SLOT,
+  spreadEnds,
   type Box,
   type EdgeRoute,
 } from '../../src/layout/layout'
@@ -215,5 +218,66 @@ describe('L10：标签、线宽档、平行边', () => {
     placeBoundaries(view, nodes, routes)
     const [a, b] = pair.map(e => routes.get(e.id)!.points[0].x)
     expect(Math.abs(a - b)).toBe(PARALLEL_GAP)
+  })
+})
+
+describe('边标签与终点（L10）', () => {
+  // 取有两条以上直接边（交给 elk）的层次
+  const view = ['sys', 'infra', 'infra.framework', 'app'].map(id => projectLevel(index, id)).find(v => toElkGraph(v).edges!.length >= 2)!
+
+  it('每条直接边都申请至少放得下「?」/「×N」的标签槽', () => {
+    for (const e of toElkGraph(view).edges!) {
+      expect(e.labels![0].width).toBeGreaterThanOrEqual(LABEL_SLOT.w)
+      expect(e.labels![0].height).toBe(LABEL_SLOT.h)
+    }
+  })
+
+  it('elk 留在原点、离走线太远的标签坐标不用（画布按中点兜底），走线附近的照用', () => {
+    const graph = toElkGraph(view)
+    const [a, b] = graph.edges!
+    const children = graph.children!.map((c, i) => ({ ...c, x: 300 + i * 260, y: 300 }))
+    const sections = (y: number) => [{ id: 's', startPoint: { x: 400, y }, endPoint: { x: 400, y: y + 80 } }]
+    const out = fromElkGraph(view, {
+      ...graph,
+      children,
+      edges: [
+        { ...a, sections: sections(400), labels: [{ ...a.labels![0], x: 0, y: 0 }] },
+        { ...b, sections: sections(600), labels: [{ ...b.labels![0], x: 390, y: 630 }] },
+      ],
+    })
+    expect(out.edges.get(a.id)!.label).toBeUndefined()
+    expect(out.edges.get(b.id)!.label).toEqual({ x: 390 + b.labels![0].width! / 2, y: 630 + LABEL_SLOT.h / 2 })
+  })
+
+  it('平行边终点重合时沿目标节点边缘错开 PARALLEL_GAP，最后一段保持正交', () => {
+    const edges = new Map<string, EdgeRoute>([
+      [
+        'p:calls',
+        {
+          points: [
+            { x: 0, y: 0 },
+            { x: 0, y: 40 },
+            { x: 100, y: 40 },
+            { x: 100, y: 80 },
+          ],
+        },
+      ],
+      [
+        'p:depends',
+        {
+          points: [
+            { x: 50, y: 0 },
+            { x: 50, y: 30 },
+            { x: 100, y: 30 },
+            { x: 100, y: 80 },
+          ],
+        },
+      ],
+    ])
+    const ve = (id: string): ViewEdge => ({ id, kind: 'direct', from: 'a', to: 'b', type: 'calls', relationIds: [], mode: 'sync' })
+    spreadEnds([ve('p:calls'), ve('p:depends')], edges)
+    const ends = [...edges.values()].map(r => r.points.slice(-2))
+    expect(ends.map(([, e]) => e.x)).toEqual([100 - PARALLEL_GAP / 2, 100 + PARALLEL_GAP / 2])
+    for (const [p, e] of ends) expect(p.x).toBe(e.x)
   })
 })

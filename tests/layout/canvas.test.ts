@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { diffModels, loadModel, planScenario, projectLevel, projectScenario, stageEnds } from '../../src/model'
 import { layoutView } from '../../src/layout/layout'
 import { stageOverlay } from '../../src/layout/stage'
-import { canvasScene, type CanvasInput } from '../../src/layout/canvas'
+import { canvasScene, routeMidpoint, type CanvasInput } from '../../src/layout/canvas'
 import { scenarioFiles } from '../fixtures/sample'
 
 const { index } = loadModel(scenarioFiles())
@@ -177,6 +177,29 @@ describe('canvasScene', () => {
     expect(edge(canvasScene(input), id)!.data).toMatchObject({ label: '×2', pill: true, weight: 2 })
     const facts = { edgeFacts: new Map([[id, 'partial' as const]]), violatedEdges: new Set<string>(), overlays: [], cycles: new Map(), levelCycles: [] }
     expect(edge(canvasScene({ ...input, facts }), id)!.data).toMatchObject({ label: '×2 ?', pill: true, warn: true })
+  })
+
+  it('标签没有坐标（elk 没给）而要标 ? 或 ×N 时，落在走线中点，不退到画布原点', async () => {
+    const input = await structure('infra')
+    const pv = input.positioned!
+    const [id, route] = [...pv.edges].find(([, r]) => r.points.length >= 2)!
+    const edges = new Map(pv.edges)
+    edges.set(id, { points: route.points })
+    const facts = { edgeFacts: new Map([[id, 'unconfirmed' as const]]), violatedEdges: new Set<string>(), overlays: [], cycles: new Map(), levelCycles: [] }
+    const e = edge(canvasScene({ ...input, positioned: { ...pv, edges }, facts }), id)!
+    expect(e.data.label).toContain('?')
+    expect(e.data.route.label).toEqual(routeMidpoint({ points: route.points }))
+    expect(e.data.route.label).not.toEqual({ x: 0, y: 0 })
+  })
+
+  it('routeMidpoint：折线按长度取一半处，曲线取两端点中点', () => {
+    const poly = [
+      { x: 0, y: 0 },
+      { x: 0, y: 10 },
+      { x: 30, y: 10 },
+    ]
+    expect(routeMidpoint({ points: poly })).toEqual({ x: 10, y: 10 })
+    expect(routeMidpoint({ points: [poly[0], poly[2]], curve: true })).toEqual({ x: 15, y: 5 })
   })
 
   it('G14：选中文件的投影节点加文件高亮；设计版本标出新增的模块', async () => {

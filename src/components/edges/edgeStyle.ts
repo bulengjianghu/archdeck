@@ -14,6 +14,16 @@ export type StrokeLook = Partial<Pick<RouteEdgeData, 'temp' | 'violated' | 'play
 export const WIDTH = { runtime: [1.5, 2.5, 3.5], compile: [1, 1.75, 2.5] } as const
 export const DASHED = '6 4'
 export const DOTTED = '0.5 4.5'
+/**
+ * 箭头（L10：实心 = 同步，空心「V」= 异步，空心三角 = implements）：大小随线宽档走，14 / 16 / 18 px；
+ * 形状画在 10×10 的 viewBox 里，底边在 x = 1、尖端在 x = 9，标记的参考点在底边中点——线回缩一个箭头深度后接在底边上，尖端落在原终点。
+ */
+export type ArrowKind = 'closed' | 'open' | 'triangle'
+export const ARROW_PATH: Record<ArrowKind, string> = { closed: 'M1,1 L9,5 L1,9 Z', open: 'M1,1 L9,5 L1,9', triangle: 'M1,1 L9,5 L1,9 Z' }
+export const arrowSize = (weight: 1 | 2 | 3 = 1): number => 12 + weight * 2
+/** 尖端到底边的距离（px） */
+export const arrowDepth = (size: number): number => (size * 8) / 10
+
 /** 回放当前步骤：强调色底线上走一串浅色短点（P10） */
 export const FLOW = { baseWidth: 4, width: 1.6, dash: '3 9' } as const
 

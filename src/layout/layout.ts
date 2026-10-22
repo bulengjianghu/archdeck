@@ -285,6 +285,14 @@ export function edgeWeight(e: ViewEdge): 1 | 2 | 3 {
 
 /** 平行边的错开量（px） */
 export const PARALLEL_GAP = 10
+/** 点是否落在折线包围盒向外扩 pad 的范围内 */
+export function nearPoints(p: Point, pts: readonly Point[], pad: number): boolean {
+  const xs = pts.map(q => q.x)
+  const ys = pts.map(q => q.y)
+  return p.x >= Math.min(...xs) - pad && p.x <= Math.max(...xs) + pad && p.y >= Math.min(...ys) - pad && p.y <= Math.max(...ys) + pad
+}
+/** elk 标签槽的最小尺寸：放得下「?」或「×N」 */
+export const LABEL_SLOT = { w: 24, h: 18 }
 
 /**
  * L10：同一对节点之间（不论方向）的多条边按序号对称错开，序号按边在视图中的顺序；只有一条的为 0。
@@ -299,6 +307,36 @@ export function parallelOffsets(edges: readonly ViewEdge[]): Map<string, number>
   const out = new Map<string, number>()
   for (const ids of groups.values()) ids.forEach((id, i) => out.set(id, (i - (ids.length - 1) / 2) * PARALLEL_GAP))
   return out
+}
+
+/**
+ * 平行边（同一对节点，L5）的终点锚点沿目标节点边缘错开 PARALLEL_GAP，箭头不叠压。
+ * 只动终点重合的边：最后一段竖直时横移最后两点，水平时纵移——前一段仍保持正交。
+ */
+export function spreadEnds(viewEdges: readonly ViewEdge[], edges: Map<string, EdgeRoute>) {
+  const groups = new Map<string, string[]>()
+  for (const e of viewEdges) {
+    const r = edges.get(e.id)
+    if (!r || r.points.length < 2) continue
+    const end = r.points[r.points.length - 1]
+    const k = `${e.to}|${Math.round(end.x)},${Math.round(end.y)}`
+    groups.set(k, [...(groups.get(k) ?? []), e.id])
+  }
+  for (const ids of groups.values()) {
+    if (ids.length < 2) continue
+    ids.forEach((id, i) => {
+      const d = (i - (ids.length - 1) / 2) * PARALLEL_GAP
+      const r = edges.get(id)!
+      const pts = r.points.map(p => ({ ...p }))
+      const [a, b] = [pts[pts.length - 2], pts[pts.length - 1]]
+      const vertical = Math.abs(a.x - b.x) < 0.5
+      for (const p of [a, b]) {
+        if (vertical) p.x += d
+        else p.y += d
+      }
+      edges.set(id, { ...r, points: pts })
+    })
+  }
 }
 
 /** 曲线整体错开：上下出发的曲线横移，侧边出发的（'h'）纵移 */
@@ -334,14 +372,15 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
     children: view.nodes.filter(n => n.role !== 'boundary' && n.role !== 'actor').map(n => ({ id: n.id, width: sizeOf(n).w, height: sizeOf(n).h })),
     edges: view.edges
       .filter(e => !isBoundaryEdge(e) && !isActorNode(view, e.from) && !isActorNode(view, e.to))
-      // L5：同一对节点按类型的平行边作为多重边一并交给 elk，由它错开；只有 ×N 的边带标签
+      // L5：同一对节点按类型的平行边作为多重边一并交给 elk，由它错开。
+      // 每条边都申请一个至少放得下「?」或「×N」的标签槽：事实标记在布局后才叠加，槽太小时 elk 可能不给坐标（画布另有中点兜底）
       .map<ElkExtendedEdge>(e => {
         const text = edgeLabel(e)
         return {
           id: e.id,
           sources: [e.from],
           targets: [e.to],
-          labels: [{ id: `${e.id}#label`, text, width: text ? text.length * 7 + 18 : 1, height: text ? 18 : 1 }],
+          labels: [{ id: `${e.id}#label`, text, width: Math.max(LABEL_SLOT.w, text.length * 7 + 18), height: LABEL_SLOT.h }],
         }
       }),
   }
@@ -355,11 +394,12 @@ export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
     const s = e.sections?.[0]
     if (!s) continue
     const lbl = e.labels?.[0]
-    edges.set(e.id, {
-      points: [s.startPoint, ...(s.bendPoints ?? []), s.endPoint],
-      label: lbl && lbl.x !== undefined ? { x: lbl.x + (lbl.width ?? 0) / 2, y: (lbl.y ?? 0) + (lbl.height ?? 0) / 2 } : undefined,
-    })
+    const points = [s.startPoint, ...(s.bendPoints ?? []), s.endPoint]
+    const label = lbl && lbl.x !== undefined ? { x: lbl.x + (lbl.width ?? 0) / 2, y: (lbl.y ?? 0) + (lbl.height ?? 0) / 2 } : undefined
+    // elk 有时把没放下的标签留在原点：离走线太远的标签坐标不用，交给画布按走线中点放（canvas/edges.ts routeMidpoint）
+    edges.set(e.id, { points, ...(label && nearPoints(label, points, LABEL_SLOT.w + LABEL_SLOT.h) ? { label } : {}) })
   }
+  spreadEnds(view.edges, edges)
   // 边界框只包住内部结构（不含边界节点与参与者）
   const inner = [...nodes.values()]
   const pad = 28

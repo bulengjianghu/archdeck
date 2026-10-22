@@ -47,8 +47,31 @@ function edgeDim(ctx: SceneContext, e: ViewEdge, core: boolean, selected: boolea
   return !!ctx.near && !touchesFocus(ctx, e) && !selected
 }
 
-function makeEdge(ctx: SceneContext, e: ViewEdge, route: EdgeRoute | undefined, core: boolean, extra: Partial<RouteEdgeData> = {}): CanvasEdge | null {
-  if (!route) return null
+/**
+ * 走线的中点：曲线取两端点的中点，折线按长度取一半处。
+ * elk 不一定给每个标签槽返回坐标；没有标签坐标而要画标签（×N、?）时落在这里，不能退到画布原点。
+ */
+export function routeMidpoint(route: EdgeRoute): { x: number; y: number } {
+  const pts = route.points
+  if (route.curve || pts.length < 2) {
+    const a = pts[0] ?? { x: 0, y: 0 }
+    const b = pts[pts.length - 1] ?? a
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+  }
+  const lens = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y))
+  let rest = lens.reduce((n, l) => n + l, 0) / 2
+  for (let i = 0; i < lens.length; i++) {
+    if (rest <= lens[i] && lens[i] > 0) {
+      const t = rest / lens[i]
+      return { x: pts[i].x + (pts[i + 1].x - pts[i].x) * t, y: pts[i].y + (pts[i + 1].y - pts[i].y) * t }
+    }
+    rest -= lens[i]
+  }
+  return pts[pts.length - 1]
+}
+
+function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined, core: boolean, extra: Partial<RouteEdgeData> = {}): CanvasEdge | null {
+  if (!route0) return null
   const selected = ctx.selectedEdgeIds.has(e.id)
   const play = playOf(ctx, e.id)
   const fact = ctx.facts?.edgeFacts.get(e.id)
@@ -56,6 +79,8 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route: EdgeRoute | undefined, 
   // 运行视角下走过的边由步骤序号标注，不标条数；K9：异常标记跟在条数后
   const count = ctx.st && play.play ? '' : edgeLabel(e)
   const mark = state === 'unconfirmed' ? '?' : ''
+  const label = extra.label ?? [count, mark].filter(Boolean).join(' ')
+  const route = label && !route0.label ? { ...route0, label: routeMidpoint(route0) } : route0
   return {
     id: core ? `core:${e.id}` : e.id,
     source: e.from,
@@ -65,7 +90,7 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route: EdgeRoute | undefined, 
     data: {
       route,
       edge: e,
-      label: [count, mark].filter(Boolean).join(' '),
+      label,
       ...(count ? { pill: true } : {}),
       ...(mark ? { warn: true } : {}),
       factState: state,

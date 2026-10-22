@@ -38,3 +38,20 @@ function toward(from: Point, to: Point, len: number): Point {
   const d = dist(from, to) || 1
   return { x: from.x + ((to.x - from.x) / d) * len, y: from.y + ((to.y - from.y) / d) * len }
 }
+
+/**
+ * 箭头处回缩（L10）：线终点沿来向退回 depth，箭头从这里画到原终点，空心「V」独立成形、不骑在线上。
+ * 折线沿最后一段退（不超过该段长度）；竖向 / 横向 S 形曲线在终点处的切线是竖直 / 水平的，沿该方向退。
+ */
+export function retractEnd(points: readonly Point[], curve: boolean | 'h' | undefined, depth: number): Point[] {
+  if (points.length < 2 || depth <= 0) return [...points]
+  const a = points[points.length - 2]
+  const b = points[points.length - 1]
+  let end: Point
+  if (curve && points.length === 2) {
+    const along = curve === 'h' ? b.x - a.x : b.y - a.y
+    const d = Math.min(depth, Math.abs(along) / 2) * Math.sign(along)
+    end = curve === 'h' ? { x: b.x - d, y: b.y } : { x: b.x, y: b.y - d }
+  } else end = toward(b, a, Math.min(depth, dist(a, b) - 1))
+  return [...points.slice(0, -1), end]
+}

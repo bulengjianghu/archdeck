@@ -53,7 +53,7 @@ const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] 
       <span>实线 = 已证实，虚线 = 未证实</span>
     </div>
     <div class="item">
-      <span class="sw pair"><LineSwatch :color="NEUTRAL" :width="13" arrow="closed" /><LineSwatch :color="NEUTRAL" :width="13" arrow="open" /></span>
+      <span class="sw pair wide"><LineSwatch :color="NEUTRAL" :width="24" arrow="closed" /><LineSwatch :color="NEUTRAL" :width="24" arrow="open" /></span>
       <span>箭头实心 = 同步，空心 = 异步</span>
     </div>
     <div class="item">
@@ -70,6 +70,11 @@ const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] 
 <style scoped>
 .sw.pair {
   gap: 2px;
+}
+
+/* 箭头与画布同大（14 px 起），两段并排放不进 28 px 的示意列 */
+.sw.wide {
+  width: auto;
 }
 
 .aside-note {
