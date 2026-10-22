@@ -29,7 +29,7 @@ modules:
   - id: model.governance.facts
     name: 事实比对
     parent: model.governance
-    responsibility: 文件依赖按归属提升为模块依赖（K4）；关系的证实（端点相同或互为祖先后代，dataflow 两向，K5；两端宿主相同的概念拆分不判定，K5a）；未描述依赖（只计有值导入的，K7）。
+    responsibility: 文件依赖按归属提升为模块依赖（一端是归属冲突文件的不提升、单独列出，祖先后代之间的另记，K4）；关系的证实（端点相同或互为祖先后代，dataflow 两向，K5；两端宿主相同的概念拆分不判定，K5a）；未证实是否报警（编译期关系，或两端之间没有任何依赖的运行时关系，K6）；未描述依赖（只计有值导入的，K7）。
     codeRefs: [src/model/governance/facts.ts]
   - id: model.governance.rules
     name: 规则判定
@@ -39,7 +39,7 @@ modules:
   - id: model.governance.cycles
     name: 环与环度
     parent: model.governance
-    responsibility: Tarjan 强连通分量（迭代实现）、模块环与文件环、容忍、环度 = 规模平方和（Y1–Y3）。
+    responsibility: Tarjan 强连通分量（迭代实现）、模块环与文件环（只按值依赖，只引类型的依赖不成环）、容忍、环度 = 规模平方和（Y1–Y3）。
     codeRefs: [src/model/governance/cycles.ts]
   - id: model.governance.report
     name: 治理报告与门禁
@@ -60,7 +60,7 @@ modules:
     name: 返工清单
     parent: model
     kind: subsystem
-    responsibility: 把描述错误与提醒、违规（新增 / 已知 / 已豁免）、环度上升与可收紧基线、源码归属、未证实的编译期关系、未描述依赖、结构中未建模的步骤汇总为返工项，按根因聚合（同一组重叠的 codeRefs、同一目录的漏写、越过同一条边界依赖同一模块、同一对端点之间缺的关系），每条带描述文件行号、受影响位置、规则编号与建议动作（含 YAML 片段）；渲染给 agent 的 Markdown（Q7–Q9）。只汇总其他模型子模块已有的结果，不新增事实。
+    responsibility: 把描述错误与提醒、违规（新增 / 已知 / 已豁免）、环度上升与可收紧基线、源码归属（冲突项注明因冲突未计入的依赖条数）、报警的未证实关系（K6）、未描述依赖、结构中未建模的步骤汇总为返工项，按根因聚合（同一组重叠的 codeRefs、同一目录的漏写、越过同一条边界依赖同一模块、同一对端点之间缺的关系），每条带描述文件行号、受影响位置、规则编号与建议动作（含 YAML 片段）；渲染给 agent 的 Markdown（Q7–Q9）。只汇总其他模型子模块已有的结果，不新增事实。
     principle: |
       - **按根因聚合**：判据是「改一处能消掉几条」，h5player 的 287 条违规收成 17 条。
       - **只给方向不替人决定**：加例外、收紧基线由架构师决定（U5、U7），建议里只给片段。

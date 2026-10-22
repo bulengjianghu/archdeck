@@ -83,7 +83,7 @@ modules:
   - id: state.transition.navigation
     name: 导航规则
     parent: state.transition
-    responsibility: 层次与选中的会话规则：下钻、跳转、返回上级、选中、定位关系 / 模块时选中与层次怎么变、Esc 的先后、进不进浏览器历史（规则 N1–N13；跳转与定位只在层次改变时进历史，N10）；「重新加载后退到哪」「被『只看现状』隐藏时退到哪」等定位问题调用模型层的 nearestExisting / nearestVisibleLevel。
+    responsibility: 层次与选中的会话规则：下钻、跳转、返回上级、选中、定位关系 / 模块时选中与层次怎么变、Esc 只取消选中、进不进浏览器历史（规则 N1–N13；跳转与定位只在层次改变时进历史，N10）；「重新加载后退到哪」「被『只看现状』隐藏时退到哪」等定位问题调用模型层的 nearestExisting / nearestVisibleLevel。
     codeRefs: [src/state/transition/navigation.ts]
   - id: state.transition.playback
     name: 回放规则
