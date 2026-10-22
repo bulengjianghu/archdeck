@@ -1,15 +1,9 @@
 /**
  * 架构治理（§6.10 第 5、6 条）：开启「代码事实」，只标异常——未证实的关系边为虚线并标 ?、已证实的不标；单击代码依赖叠加线看证据；根层面板有架构治理。
- * 本项目的描述已无未描述依赖，叠加线用 h5player 验证；h5player 源码不在本机时跳过。
+ * 本项目的描述已无未描述依赖，叠加线用 h5player 验证（源码在本地是前提，G1，不设跳过）。
  */
-import fs from 'node:fs'
-import path from 'node:path'
 import { expect, test } from '@playwright/test'
 import { openDesk, query } from './helpers'
-
-/** 工作区根目录（同 vite/readSource 的 workspaceRoot；那里会连带加载 JSON 模块，Playwright 不支持） */
-const WS = path.resolve(import.meta.dirname, '..', process.env.ARCH_WORKSPACE_ROOT ?? '../../..')
-const H5PLAYER_LOCAL = fs.existsSync(path.join(WS, 'h5player'))
 
 test('开启代码事实：未证实的边标 ?，已证实的不标 ✓（K9、L10）', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk')
@@ -28,7 +22,6 @@ test('K5a：Layout 入口文件内概念子模块之间的关系，面板标「�
 })
 
 test('h5player：单击未描述依赖的叠加线选中它并显示代码依赖面板', async ({ page }) => {
-  test.skip(!H5PLAYER_LOCAL, 'h5player 源码不在本机')
   await openDesk(page, '/p/h5player')
   await expect(page.locator('.panel')).toContainText('架构治理')
   await expect(page.locator('.panel')).toContainText(/已证实 \d+/)

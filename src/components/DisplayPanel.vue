@@ -88,10 +88,9 @@ const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] 
 
 // ── 代码事实（K9）──
 const FACTS_HINT: Record<string, string> = {
-  design: '设计版本不对应代码，没有代码事实',
-  'no-source': '源码不在本地或构建产物不含源码',
+  design: '设计版本与历史提交不对应当前代码，没有代码事实',
   loading: '正在提取代码依赖…',
-  error: '提取代码依赖失败',
+  error: '读取源码或提取代码依赖失败',
 }
 const factsReady = computed(() => desk.facts.status.value === 'ready')
 const factsHint = computed(() => (factsReady.value ? '' : FACTS_HINT[desk.facts.status.value]))

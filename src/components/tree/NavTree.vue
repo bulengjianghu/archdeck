@@ -1,17 +1,21 @@
 <script setup lang="ts">
 /**
- * 导航树（W-7、T1）：左侧固定栏，「模块」「文件」「步骤」三个页签。步骤页签只在运行视角出现；
- * 进入运行视角切到步骤页签，退出切回模块页签，选中文件切到文件页签。页签只属于这块界面，不进视图状态与 URL。
+ * 导航树（W-7、T1）：左侧固定栏，「模块」「文件」「步骤」「问题」四个页签。步骤页签只在运行视角出现；
+ * 进入运行视角切到步骤页签，退出切回模块页签，选中文件切到文件页签；画布的问题角标切到问题页签（W-6）。
+ * 页签只属于这块界面，不进视图状态与 URL。
  */
-import { ref, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useDesk } from '@/state/inject'
+import { useNavTab } from '../shared/navTab'
 import ModuleTree from './ModuleTree.vue'
 import StepTree from './StepTree.vue'
 import FileTree from './FileTree.vue'
+import IssueList from './IssueList.vue'
 
 const desk = useDesk()
-type Tab = 'modules' | 'files' | 'steps'
-const tab = ref<Tab>(desk.files.selected.value ? 'files' : desk.perspective.value === 'run' ? 'steps' : 'modules')
+const tab = useNavTab(desk.files.selected.value ? 'files' : desk.perspective.value === 'run' ? 'steps' : 'modules')
+/** 问题页签的计数：错误与提醒（提示不计） */
+const issueCount = computed(() => (desk.rework.value ? desk.rework.value.counts.error + desk.rework.value.counts.warning : 0))
 watch(
   () => desk.perspective.value,
   p => (tab.value = p === 'run' ? 'steps' : 'modules'),
@@ -30,9 +34,13 @@ watch(
       <button v-if="desk.perspective.value === 'run'" role="tab" :class="{ on: tab === 'steps' }" :aria-selected="tab === 'steps'" @click="tab = 'steps'">
         步骤
       </button>
+      <button role="tab" class="issues-tab" :class="{ on: tab === 'issues' }" :aria-selected="tab === 'issues'" @click="tab = 'issues'">
+        问题<span v-if="issueCount" class="count" :class="{ bad: desk.rework.value?.counts.error }">{{ issueCount }}</span>
+      </button>
     </header>
     <div class="body">
-      <StepTree v-if="tab === 'steps' && desk.perspective.value === 'run'" />
+      <IssueList v-if="tab === 'issues'" />
+      <StepTree v-else-if="tab === 'steps' && desk.perspective.value === 'run'" />
       <FileTree v-else-if="tab === 'files'" />
       <ModuleTree v-else />
     </div>
@@ -70,6 +78,20 @@ watch(
   color: var(--accent);
   border-bottom-color: var(--accent);
   font-weight: 600;
+}
+
+.count {
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 11px;
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.count.bad {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .body {

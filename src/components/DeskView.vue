@@ -12,7 +12,6 @@ import { DESK_STATE } from '@/state/inject'
 import GraphCanvas from './GraphCanvas.vue'
 import Breadcrumb from './Breadcrumb.vue'
 import Toolbar from './Toolbar.vue'
-import IssueBanner from './IssueBanner.vue'
 import VersionSwitcher from './VersionSwitcher.vue'
 import DesignBar from './DesignBar.vue'
 import CommitBar from './CommitBar.vue'
@@ -25,6 +24,7 @@ import { directionOf, readLayout, resize, saveLayout, setDirection, toggleSlot, 
 import Panel from './panel/Panel.vue'
 import NavTree from './tree/NavTree.vue'
 import { OPEN_PREVIEW } from './shared/preview'
+import { NAV_TAB, type NavTab } from './shared/navTab'
 import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
 
 const props = defineProps<{ project: string; design?: string; revision?: string; commit?: string; base?: string }>()
@@ -122,6 +122,17 @@ function onDividerUp() {
 const aside = useAside(desk)
 const { previewPath, tab: asideTab, run } = aside
 provide(OPEN_PREVIEW, aside.open)
+// W-6：导航树页签由项目视图持有，画布的问题角标切到「问题」页签
+const navTab = ref<NavTab>(desk.perspective.value === 'run' ? 'steps' : 'modules')
+provide(NAV_TAB, navTab)
+const issueCount = computed(() => {
+  const c = desk.rework.value?.counts
+  return { errors: c?.error ?? 0, warnings: c?.warning ?? 0, total: (c?.error ?? 0) + (c?.warning ?? 0) }
+})
+function showIssues() {
+  navTab.value = 'issues'
+  if (navCollapsed.value) toggleNav()
+}
 
 // 舞台显示（V8、V9）：只属于画布这块界面
 provide(STAGE_DISPLAY, useStageDisplay(props.project, desk))
@@ -206,7 +217,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <SplitView :layout="paneLayout" :hidden="aside.hidden.value ? ['aside'] : []" @resize="onResize" @toggle="onToggle">
           <template #structure>
             <GraphCanvas />
-            <IssueBanner />
+            <button
+              v-if="issueCount.total"
+              class="issue-badge"
+              :class="{ bad: issueCount.errors }"
+              :title="`返工清单：${issueCount.errors} 个错误、${issueCount.warnings} 个提醒，单击在导航树「问题」页签查看`"
+              @click="showIssues"
+            >
+              ⚠ {{ issueCount.total }}
+            </button>
           </template>
           <template #aside="{ collapsed, toggle }">
             <AsidePane
@@ -358,5 +377,24 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   min-height: 0;
   overflow: auto;
   background: var(--surface);
+}
+.issue-badge {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  z-index: 6;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 10px;
+  border: 1px solid var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.issue-badge.bad {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 </style>

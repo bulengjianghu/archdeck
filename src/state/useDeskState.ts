@@ -19,6 +19,11 @@ import {
   type LevelView,
   type ModelIndex,
   type ScenarioPlan,
+  reworkList,
+  reworkItemMarkdown,
+  reworkMarkdown,
+  type ReworkItem,
+  type ReworkList,
 } from '@/model'
 import {
   DEFAULT_TOGGLES,
@@ -119,6 +124,24 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const versions = createVersions({ state, index, designs, commits, baselines, version: options.version })
   const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version })
   const allIssues = computed(() => [...issues.value, ...files.warnings.value, ...facts.gateIssues.value])
+  /** W-6、Q7：返工清单——问题页签与画布角标；源码归属与代码事实只对当前版本（G9、K8） */
+  const rework = computed<ReworkList | null>(() => {
+    const idx = index.value
+    if (!idx) return null
+    const p = files.payload.value
+    const own = files.ownership.value
+    const source = !options.version && own && p?.status === 'local' ? { own, tree: p } : undefined
+    const report = options.version ? null : facts.report.value
+    return reworkList({ index: idx, issues: issues.value, ...(source ? { source } : {}), ...(report ? { report } : {}) })
+  })
+  /** W-6、Q9：给 agent 的指令（Markdown）；不给返工项时为整份清单 */
+  function reworkPrompt(item?: ReworkItem): string {
+    const list = rework.value
+    if (!list) return ''
+    const p = files.payload.value
+    const opts = { modelDir: modelDir.value, ...(p?.status === 'local' ? { sourceRoot: p.root } : {}) }
+    return item ? reworkItemMarkdown(item, opts) : reworkMarkdown(list, `${index.value!.model.system.name}（${options.project ?? index.value!.rootId}）`, opts)
+  }
 
   /** 开关：读取来自视图状态，写入即 dispatch(toggle)（呈现层可直接 v-model） */
   const toggles = new Proxy({} as Toggles, {
@@ -217,6 +240,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     index,
     issues,
     allIssues,
+    rework,
+    reworkPrompt,
     modelDir,
     levelId,
     levelPath,

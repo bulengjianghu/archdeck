@@ -196,7 +196,7 @@ relations:
   - {id: rel.ad.desk-canvas, from: present.desk-view, to: present.canvas.flow, type: depends}
   - {id: rel.ad.desk-panel, from: present.desk-view, to: present.panel.dispatch, type: depends}
   - {id: rel.ad.desk-nav, from: present.desk-view, to: present.nav, type: depends}
-  - {id: rel.ad.desk-issues, from: present.desk-view, to: present.issues, type: depends}
+  - {id: rel.ad.desk-issues, from: present.nav-tree, to: present.issues, type: depends, description: 第四个页签「问题」}
   - {id: rel.ad.flow-nodes, from: present.canvas.flow, to: present.canvas.nodes, type: depends}
   - {id: rel.ad.flow-edges, from: present.canvas.flow, to: present.canvas.edges, type: depends}
   - {id: rel.ad.flow-legend, from: present.canvas.flow, to: present.canvas.legend, type: depends, description: 图例浮在画布右下角}
@@ -314,6 +314,7 @@ relations:
   - {id: rel.ad.present-names, from: present, to: model.types, type: depends, description: 契约（U10）：名称查询 moduleName（各处显示模块名）、小谓词 isLong / isArchived、枚举 RELATION_TYPES、规则名 RULE_LABELS}
   - {id: rel.ad.content-labels, from: present.panel.content, to: present.shared, type: depends, description: FIELD_LABELS：变更角标的字段名}
   - {id: rel.ad.version-labels, from: present.version, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS：设计状态的显示名}
+  - {id: rel.ad.navtree-tab, from: present.nav-tree, to: present.shared, type: depends, description: NAV_TAB：页签由项目视图持有，问题角标可切到「问题」页签（W-6）}
   - {id: rel.ad.list-labels, from: present.project-list, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS：设计状态的显示名}
   - {id: rel.ad.design-labels, from: present.panel.design, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS：设计状态的显示名}
   - {id: rel.ad.actor-labels, from: present.panel.actor, to: present.shared, type: depends, description: ACTOR_KIND_LABELS：参与者类别的显示名}

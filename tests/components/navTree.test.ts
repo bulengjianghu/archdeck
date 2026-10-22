@@ -21,10 +21,13 @@ async function mountTree(url = '/', files = sampleFiles()) {
   return { wrapper, desk, router, row }
 }
 
+/** 页签名（问题页签带计数，去掉） */
+const tabNames = (wrapper: Awaited<ReturnType<typeof mountTree>>['wrapper']) => wrapper.findAll('[role=tab]').map(t => t.text().replace(/\d+$/, ''))
+
 describe('模块树', () => {
   it('T1、T3：结构视角有模块与文件页签；展开到当前层次并标出它，选中的模块高亮', async () => {
     const { wrapper, row } = await mountTree('/?level=infra.framework&sel=m:infra.framework.sm')
-    expect(wrapper.findAll('[role=tab]').map(t => t.text())).toEqual(['模块', '文件'])
+    expect(tabNames(wrapper)).toEqual(['模块', '文件', '问题'])
     expect(row('infra.framework')!.classes()).toContain('level')
     expect(row('infra.framework.sm')!.classes()).toContain('selected')
     // 祖先链展开，旁支不展开
@@ -88,12 +91,12 @@ describe('运行视角', () => {
     const { wrapper, desk } = await mountTree('/', scenarioFiles())
     desk.openScenario('sc.play')
     await flushPromises()
-    expect(wrapper.findAll('[role=tab]').map(t => t.text())).toEqual(['模块', '文件', '步骤'])
+    expect(tabNames(wrapper)).toEqual(['模块', '文件', '步骤', '问题'])
     expect(wrapper.find('.step-tree').exists()).toBe(true)
     desk.closeScenario()
     await flushPromises()
     expect(wrapper.find('.step-tree').exists()).toBe(false)
-    expect(wrapper.findAll('[role=tab]')).toHaveLength(2)
+    expect(wrapper.findAll('[role=tab]')).toHaveLength(3)
   })
 
   it('T1：选中文件切到文件页签（ADR-0007）', async () => {
@@ -185,5 +188,28 @@ describe('分屏方向（W-4）', () => {
     }
     localStorage.setItem('h5p-arch-desk:split:v2:legacy', JSON.stringify(old))
     expect(readLayout('legacy')).toEqual({ ...old, children: [old.children[0], { kind: 'pane', slot: 'aside', collapsed: true }] })
+  })
+})
+
+describe('问题页签（W-6）', () => {
+  it('列出返工清单：计数为错误与提醒，按严重度排序；展开见位置与建议，可定位、可复制给 agent', async () => {
+    const bad = sampleFiles({ 'extra.yaml': 'relations:\n  - { id: rel.bad, from: infra, to: nowhere, type: calls }\n' })
+    const { wrapper, desk } = await mountTree('/', bad)
+    const tab = wrapper.findAll('[role=tab]').find(t => t.text().startsWith('问题'))!
+    const list = desk.rework.value!
+    expect(tab.find('.count').text()).toBe(String(list.counts.error + list.counts.warning))
+    await tab.trigger('click')
+    const items = wrapper.findAll('.issue-list .item')
+    expect(items.length).toBe(list.items.length)
+    expect(items[0].classes()).toContain('error')
+    await items[0].find('.row').trigger('click')
+    expect(items[0].find('.at code').text()).toContain('model/test/extra.yaml')
+    expect(items[0].text()).toContain('改正描述')
+    let copied = ''
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t: string) => void (copied = t) }, configurable: true })
+    await items[0].findAll('.buttons button').at(-1)!.trigger('click')
+    await flushPromises()
+    expect(copied).toContain('### [错误]')
+    expect(copied).toContain('model/test/extra.yaml')
   })
 })

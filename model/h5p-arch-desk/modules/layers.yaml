@@ -88,10 +88,10 @@ modules:
         responsibility: 面包屑（含返回项目列表）、搜索跳转、显示开关。
         codeRefs: [src/components/Breadcrumb.vue, src/components/Toolbar.vue]
       - id: present.issues
-        name: 问题提示
+        name: 问题页签
         kind: subsystem
-        responsibility: 列出架构描述的错误与提醒，定位到文件与行号。
-        codeRefs: [src/components/IssueBanner.vue]
+        responsibility: 导航树「问题」页签（W-6）：返工清单按严重度排序、可按严重度筛选；展开一条看根因所在、受影响位置（源码文件可选中）与建议动作（含 YAML 片段），可定位到关系 / 文件 / 模块，「复制给 agent」把这一条或整份清单的 Markdown 指令放进剪贴板（Q7–Q9）。画布左上角只留错误与提醒的计数角标，单击切到这个页签。
+        codeRefs: [src/components/tree/IssueList.vue]
       - id: present.shared
         name: 呈现共用件
         kind: subsystem

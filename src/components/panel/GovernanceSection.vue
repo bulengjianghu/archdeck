@@ -15,8 +15,7 @@ const r = computed(() => f.report.value)
 const name = (id: string) => (desk.index.value ? moduleName(desk.index.value, id) : id)
 
 const REASON: Record<string, string> = {
-  design: '设计版本不对应代码，没有代码事实。',
-  'no-source': '源码不在本地（或构建产物不含源码），没有代码事实。',
+  design: '设计版本与历史提交不对应当前代码，没有代码事实（K8）。',
   loading: '正在提取代码依赖…',
 }
 const confirm = computed(() => {
@@ -43,7 +42,7 @@ const ledger = computed(() => f.ledger.value)
 
 <template>
   <Section title="架构治理">
-    <p v-if="!r" class="muted">{{ f.error.value ? `提取代码依赖失败：${f.error.value}` : REASON[f.status.value] }}</p>
+    <p v-if="!r" class="muted">{{ f.error.value ? `没有代码事实：${f.error.value}` : REASON[f.status.value] }}</p>
     <template v-else>
       <dl class="kv">
         <dt>文件依赖</dt>

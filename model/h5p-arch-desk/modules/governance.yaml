@@ -199,6 +199,7 @@ relations:
   - {id: rel.gv.source-health-model, from: access.model-source, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 健康度：加载描述（Q10）}
   - {id: rel.gv.source-health-own, from: access.model-source, to: model.source.ownership, type: calls, interface: if.model.assignFiles, description: 健康度：归属（Q10）}
   - {id: rel.gv.source-health-report, from: access.model-source, to: model.governance.report, type: calls, interface: if.governance.report, description: 健康度：治理报告（Q10）}
+  - {id: rel.gv.desk-rework, from: state.desk, to: model.rework, type: calls, interface: if.rework.list, payload: [ds.ReworkItem], description: 问题页签的返工清单与「复制给 agent」的 Markdown（W-6）}
   - {id: rel.gv.agent-rework, from: access.agent, to: model.rework, type: calls, interface: if.rework.list, payload: [ds.ReworkItem], description: 命令行与 MCP 的 issues（Q9）}
   - {id: rel.gv.rework-source, from: model.rework, to: model.source, type: calls, description: matchRef、moduleEntry：冲突的 codeRefs 组合与 entry 是否存在}
   - {id: rel.gv.rework-scenario, from: model.rework, to: model.scenario, type: calls, description: bindRelation、forEachStep：未建模的步骤（S13、P11）}
