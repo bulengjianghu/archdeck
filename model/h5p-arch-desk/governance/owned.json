@@ -1,10 +1,10 @@
 {
-  "updatedAt": "2026-10-22T15:25:45.723Z",
+  "updatedAt": "2026-10-22T15:41:21.279Z",
   "files": {
     "designs/phase2-dynamic/design.yaml": "6516452b564ba19af25d3966b1d462226c04bc50",
     "designs/phase2-dynamic/sketch.yaml": "da9e1b89e07721fb7960e25b9f7f8c1d95940742",
-    "designs/sketch-editor/design.yaml": "3b3123857a6d5788049ba1f0192dde4b52fb67ac",
-    "designs/sketch-editor/sketch.yaml": "54f7a6fb2ca5e3bf90e34130c87319b579b1dd10",
+    "designs/sketch-editor/design.yaml": "1d03cc1aff8cc79a0c7a1558081044a6adab9cb4",
+    "designs/sketch-editor/sketch.yaml": "9284843d229c277e676d89aa8f7ae825ddd09e17",
     "intent/skeleton.yaml": "0287d72ee8ad88b6728c6316feef65596fdce099",
     "reviewed.yaml": "892ed70b0680b8af704572748e2a6ed8b18fbe56",
     "rules.yaml": "a13c7fdc7f24544c64076910eab98367580b6f7c",

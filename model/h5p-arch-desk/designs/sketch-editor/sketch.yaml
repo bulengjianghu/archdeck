@@ -2,24 +2,28 @@
 # 功能清单见 plans/arch-desk-round3/08-sketch-editor-features.md。
 # 钉住的只有：编辑规则放在哪一层、编辑中的草图是一个值、写回经同一个写入模块、画布与面板只发意图。
 # 其余（子模块再拆分、接口签名、职责细节）由 AI 展开；封闭了 model.intent 与 access.writer 两个子树，AI 不得在它们之下另加直接子模块。
+# r1 评审后修订（2026-10-22，协调者代架构师）：按 questions 第 7 条补 model.intent.check 与 access.writer.append，让已有代码在封闭子树里有归属、依赖可见；按第 8 条去掉第三级的 core（04 §3.2：核心只用于第二级）。
 sketch:
   id: sketch-editor
   lifetime: until-implemented
-  closed: [model.intent, access.writer]
+  closed: [model.intent, access.writer]   # 封闭集合：model.intent 下 check / edit / validate，access.writer 下 append / sketch
   modules:
     # ── 模型层：对草图定义的编辑与校验是「关于被描述系统的知识」——换成命令行同样需要，所以放模型层 ──
     - id: model.intent.edit
       parent: model.intent
       name: 草图编辑
       kind: component
-      core: true
       responsibility: 对草图定义的纯函数编辑：加 / 删 / 改层与模块、移动模块（ID 前缀级联到后代、关系与接口 owner）、连 / 删关系、增删接口、改 core / closed / mayDependOn；输入草图与一个编辑操作，输出新草图或拒绝原因，不碰文件与界面。
     - id: model.intent.validate
       parent: model.intent
       name: 草图校验
       kind: component
-      core: true
       responsibility: 草图的即时校验：格式（schema）、ID 规则与唯一、引用完整、层依赖无环、与持久草图的矛盾（复用 X4 的矛盾检查）；编辑态每次操作后与保存前共用同一函数。
+    - id: model.intent.check
+      parent: model.intent
+      name: 草图核验与生命周期
+      kind: component
+      responsibility: 一期已有的代码归这里：草图与持久草图的矛盾检查、按口径比对设计某一轮或当前版本得出偏差、应用认可偏差、归档判定与确认记录、人拥有文件的指纹比对（X3、X4、X6）；矛盾检查供草图校验共用。
     # ── 视图状态层：编辑中的草图是一个值，由 DeskState 持有；编辑动作是转移函数 ──
     - id: state.desk.edit
       parent: state.desk
@@ -37,12 +41,16 @@ sketch:
       name: 草图写回
       kind: component
       responsibility: 持久草图与设计草图的整份写回（B6）：用 YAML 文档模型重写、保留未改动节点的注释，写前校验并比对读取时的指纹（外部已改动则拒绝），写后更新 owned.json；新建设计时创建 design.yaml 与空草图。
+    - id: access.writer.append
+      parent: access.writer
+      name: 追加写入
+      kind: component
+      responsibility: 一期已有的代码归这里：人拥有文件的追加写入（评审意见、例外、忽略项、确认记录、认可偏差）与归档 / 晋升（B1–B5、Z6、X3）；YAML 文档模型的打开与保存供草图写回共用。
     # ── 呈现层：画布与面板只发意图，不自己改草图 ──
     - id: present.canvas.edit
       parent: present.canvas
       name: 画布编辑态
       kind: component
-      core: true
       responsibility: 只在草图下开启：带的插入条与排序、带内 / 父模块内新建模块、拖动移动、拖线建关系、右键菜单、删除；每个操作只发一个编辑意图给 DeskState，不保存坐标。
     - id: present.panel.edit
       parent: present.panel
@@ -63,6 +71,8 @@ sketch:
     - { id: rel.se.desk-check, from: state.desk.edit, to: model.intent, type: calls, description: 编辑中对当前版本实时跑 sketchCheck（L-1） }
     - { id: rel.se.desk-transition, from: state.desk.edit, to: state.transition.edit, type: calls, description: 进入 / 退出编辑态经转移函数 }
     - { id: rel.se.desk-writer, from: state.desk.edit, to: access.writer.sketch, type: calls, via: http, description: 保存：整份写回与新建设计，经开发服务器端点 }
+    - { id: rel.se.validate-check, from: model.intent.validate, to: model.intent.check, type: depends, description: 矛盾检查只有一份，校验复用核验的 }
+    - { id: rel.se.sketch-append, from: access.writer.sketch, to: access.writer.append, type: depends, description: YAML 文档模型的打开与保存只有一份 }
   interfaces:
     - { id: if.intent.applyEdit, name: applyEdit, owner: model.intent.edit }
     - { id: if.intent.validateSketch, name: validateSketch, owner: model.intent.validate }

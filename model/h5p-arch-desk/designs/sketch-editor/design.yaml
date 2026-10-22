@@ -45,6 +45,21 @@ design:
         X7g 撤销 / 重做只在本次未保存的编辑内，一个操作一步，保存即清空；
         X7h 编辑后的跟随：改名换成新 ID，删除退到最近仍存在的祖先，新建即选中；
         B6 细化：整份写回 = 指纹比对 → 校验 → 文档合并（注释只在未改动的节点保留）→ 更新指纹 → 拦截记录一行。
+      feedback: |
+        （2026-10-22 协调者代架构师评审，本轮架构师不参与）
+
+        **意见（要改）**
+        1. 问题 5：接受 A 的语义（复制第二级即 supersedes 骨架），但缺省改为**空草图**；复制底稿的选项改名为「改骨架（定稿后晋升替换骨架）」并在对话框里说明后果。负责人原裁决「缺省复制」是在不知道这层语义时做的，r2 按此改，并在 summary 里注明这一条偏离了负责人原裁决、待其复核。
+        2. 问题 7：选 A。草图已补 `model.intent.check`（核验与生命周期）与 `access.writer.append`（追加写入），封闭集合随之扩大；r2 把 check.ts / lifecycle.ts / owned.ts 归入 model.intent.check、writeModel.ts 的追加写入与归档归入 access.writer.append，并补上 validate → check、sketch → append 两条依赖（草图已写）。
+        3. 问题 8：选 A。草图已去掉第三级的 core；r2 同步，不要再给第三级写 core。
+        4. 流程缺口「AI 写 design.yaml 的 revisions 必然触发 owned.changed」：采纳拆分所有权——每轮的 summary / questions 移到 AI 拥有的 `r<N>/revision.yaml`，`design.yaml` 只留人拥有的 goal / base / status / feedback / accepted；描述读取合并两处。这一项纳入本设计范围（access.reader「描述读取」与 04 §5），r2 补模块说明、接口与 designNote；两个工具缺口（只有草图的设计报「没有可打开的轮次」、`sketch-check` 不能从 --design 推项目）也列进本设计的实现项。
+        5. 问题 3：接受 A，但重放失败后要有兜底——列出失败的操作，提供「放弃本次改动」（即 B 作为 A 的兜底），不能让人卡在 stale 状态。
+
+        **疑问（先澄清，不改文件）**
+        6. present.panel.edit 拆成 5 个子模块是否过细：层表单与模块表单字段差别真的大到要分开吗？请列出两者字段的交集与差集；若交集过半，r2 合为「实体表单」一个子模块。
+        7. 撤销粒度与文本字段：一个文本框里连续多次击键是一步还是多步？失焦提交算一步？请在 X7g 里写明，并说明在模块表单改 ID 时与「移动」的关系（改 ID 是否等价于一次移动）。
+
+        **确认（按推荐）**：问题 1 A、2 A（关系 / 接口 ID 不随模块改名；确认框给出当前版本的引用数）、4 A、6 A、9 A。
       questions:
         - "**1. 编辑会话（草图 + 撤销栈）放哪**：A. DeskState 的编辑分组 state.desk.edit.session，一个值、纯函数（r1）；B. 整个放进 ViewState，由 state.transition.edit 转移；C. 模型层。推荐 A——撤销栈是一次编辑会话的事，换成命令行不需要（原则 3），排除 C；它不进 URL、与浏览的层次和选中只经「影响」相互作用（改名、删除后的跟随），而那部分已在 ViewState 的 editing + edited 动作里由转移函数管，排除 B。选 B 需要改草图：rel.se.desk-edit 的起点要从 state.desk.edit 改到 state.transition.edit。"
         - "**2. 移动模块级联改 ID 的实现位置与范围**：A. 模型层 model.intent.edit.move，纯函数，级联后代、关系两端、接口 owner、closed、mayDependOn，关系与接口自身的 ID 不改（r1）；B. 写回时对 YAML 文本做 ID 替换；C. 视图状态层。推荐 A——B 会误伤职责文字里提到的 ID、也无法在保存前预览与撤销；C 让将来的命令行（arch sketch mv）用不上。另请确认：关系 / 接口 ID 不随模块改名（保持 AI 文件里的引用稳定），以及确认框里给出「当前版本里还有 N 处引用旧 ID、保存后需交给 AI 重新生成」。"
