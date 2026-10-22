@@ -177,3 +177,13 @@ describe('格式错误的报告', () => {
     expect(issues.map(i => i.message).join('\n')).toContain('步骤必须是 call / async / return / alt / loop / par / ref 之一')
   })
 })
+
+describe('S15 证据文件字段', () => {
+  it('evidence 是字符串数组，原样进入场景实体；写成别的形状是格式错误', () => {
+    const ok = load(scenario('scenario: { id: sc.e, name: E, evidence: [tests/a.test.ts, e2e/b.spec.ts], steps: [{ call: { from: actor.biz, to: infra.player } }] }'))
+    expect(ok.model.scenarios.find(s => s.id === 'sc.e')!.evidence).toEqual(['tests/a.test.ts', 'e2e/b.spec.ts'])
+    expect(ok.model.scenarios.find(s => s.id === 'sc.play')!.evidence).toBeUndefined()
+    const bad = load(scenario('scenario: { id: sc.e, name: E, evidence: tests/a.test.ts, steps: [] }'))
+    expect(codes(bad.issues)).toContain('schema')
+  })
+})

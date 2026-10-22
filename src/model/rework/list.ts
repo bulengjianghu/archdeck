@@ -4,7 +4,7 @@
  */
 import { RULE_LABELS, moduleName } from '../names'
 import { bindRelation, forEachStep, RUNTIME_RELATION_TYPES } from '../scenario'
-import { matchRef, moduleEntry, type LocalSource, type SourceOwnership } from '../source'
+import { matchRef, missingEvidence, moduleEntry, type LocalSource, type SourceOwnership } from '../source'
 import { contractNames, unconfirmedCode, unconfirmedReason, unconfirmedWarns, type FileDep, type GovernanceReport, type Violation } from '../governance'
 import type { Issue, ModelIndex, SourceLoc } from '../types'
 import { REWORK_CATEGORIES, REWORK_SEVERITIES, type ReworkAction, type ReworkItem, type ReworkList, type ReworkLoc, type ReworkSeverity } from './types'
@@ -69,8 +69,8 @@ function descriptionFix(i: Issue): string {
   return i.severity === 'error' ? '改正描述：这一处的实体已被剔除，图上看不到它' : '改正描述：坏引用已被去掉'
 }
 
-/** 由下面的材料重新算、不从 issues 取的问题：未建模的步骤（S5a 的 warning）、源码归属、门禁与事实 */
-const recomputed = (code: string) => code === 'step-unmodeled' || /^(source|rule|cycle|fact)\./.test(code)
+/** 由下面的材料重新算、不从 issues 取的问题：未建模的步骤（S5a 的 warning）、源码归属、场景证据（S15）、门禁与事实 */
+const recomputed = (code: string) => code === 'step-unmodeled' || /^(source|scenario|rule|cycle|fact)\./.test(code)
 
 const RULE_OF_KIND: Record<Violation['kind'], string> = { layer: 'U2', deps: 'U3', exposes: 'U4' }
 
@@ -102,7 +102,7 @@ export function reworkList(input: ReworkInput): ReworkList {
     })
   }
 
-  if (source) items.push(...ownershipItems(index, source.own, source.tree, name, report?.conflicted))
+  if (source) items.push(...ownershipItems(index, source.own, source.tree, name, report?.conflicted), ...evidenceItems(index, source.tree))
   if (report) items.push(...factItems(index, report, name))
   items.push(...unmodeledItems(index, name))
 
@@ -113,6 +113,26 @@ export function reworkList(input: ReworkInput): ReworkList {
   const counts = Object.fromEntries(REWORK_SEVERITIES.map(s => [s, items.filter(i => i.severity === s).length])) as ReworkList['counts']
   const byCategory = Object.fromEntries(REWORK_CATEGORIES.map(c => [c, items.filter(i => i.category === c).length])) as ReworkList['byCategory']
   return { items, counts, byCategory, facts: !!report }
+}
+
+// ── 场景证据（S15）：证据文件不在源码清单里，一条文件一个根因，归描述问题 ──
+
+function evidenceItems(index: ModelIndex, tree: Pick<LocalSource, 'files'>): ReworkItem[] {
+  return missingEvidence(index, tree.files).map(({ scenario, file }) => {
+    const at = descLoc(scenario.src)!
+    return {
+      id: `description:scenario.evidence:${scenario.id}:${file}`,
+      category: 'description',
+      severity: 'warning',
+      rules: ['S15'],
+      code: 'scenario.evidence',
+      title: `场景「${scenario.name}」的证据文件「${file}」不在源码文件清单中`,
+      at,
+      affected: [at],
+      actions: [{ kind: 'fix-description', text: '改正 evidence 里的路径（相对源码根目录，与文件清单一致）；文件已删除时去掉这一条', file: scenario.src.file }],
+      target: { scenario: scenario.id },
+    }
+  })
 }
 
 // ── 源码归属（G6、G7、G10） ──

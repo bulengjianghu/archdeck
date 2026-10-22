@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 场景列表（D-1、R4、R4a）：默认只列与当前层次相关的场景（有帧端点在当前子树内），可切到全部、按发起者筛选；
- * 选定即进入运行视角，不改变层次。
+ * 选定即进入运行视角，不改变层次。声明了证据文件的场景标 ✓（S15、D-20）。
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -40,7 +40,9 @@ function pick(id: string) {
     <ul v-if="shown.length">
       <li v-for="x in shown" :key="x.s.id">
         <button class="item" :class="{ current: desk.playback.value?.scenarioId === x.s.id }" @click="pick(x.s.id)">
-          <span class="name">▶ {{ x.s.name }}</span>
+          <span class="name"
+            >▶ {{ x.s.name }}<span v-if="x.s.evidence?.length" class="evidence" :title="`声明了 ${x.s.evidence.length} 个证据文件`"> ✓</span></span
+          >
           <span class="meta">{{ x.byName }} 发起 · {{ x.count }} 条消息</span>
           <span v-if="x.s.cause" class="cause">{{ x.s.cause }}</span>
         </button>
@@ -133,6 +135,11 @@ ul {
 
 .name {
   font-weight: 600;
+}
+
+.evidence {
+  color: var(--success, var(--accent));
+  font-weight: 400;
 }
 
 .meta,

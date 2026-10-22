@@ -144,6 +144,8 @@ export interface ScenarioDef {
   description?: string
   /** 触发原因（文字）；触发者由第一条消息的发送方推出（A6） */
   cause?: string
+  /** S15：证据文件——验证这条链路的测试、E2E 等源码文件（相对源码根目录）；只校验在源码清单里存在 */
+  evidence?: string[]
   steps: StepDef[]
   designNote?: string
 }

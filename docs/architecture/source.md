@@ -55,7 +55,8 @@ moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
 | `specResolver(files, packages, aliases)` | 说明符解析：相对路径补全；裸说明符先按 tsconfig `paths`（接入层读出的 `PathAlias`），再按工作区包名解析到包入口或包目录下的子路径；解析不到返回 `null` | K2 |
 | `matchExports(index, id, exports)` | 模块的接口（`moduleInterfaces`：`provides` 加上 `owner` 在本模块子树内的接口）的名称（去掉括号与泛型）对导出名：`matched`、`undescribed`（导出未描述）、`unexported`（描述未导出）；默认导出不参与 | G12 |
 | `fileNodes(index, view, owners)` | 归属模块逐个 `mapEndpoint` 到当前层次：`local` → 子模块节点，`external` → 边界节点（视图中有时），`skip` → 不高亮（`self: true`）；分层总览另加路径上的核心模块节点 | G14 |
-| `sourceIssues(index, own, tree)` | 每个冲突文件、未归属文件一条 warning（`source.conflict` / `source.unowned`），`entry` 不在清单中一条 warning（`source.entry`，定位到描述出处） | G6、G7、G9、G10 |
+| `sourceIssues(index, own, tree)` | 每个冲突文件、未归属文件一条 warning（`source.conflict` / `source.unowned`），`entry` 不在清单中一条 warning（`source.entry`，定位到描述出处）；场景证据文件不在清单中一条 warning（`scenario.evidence`，定位到场景出处） | G6、G7、G9、G10、S15 |
+| `missingEvidence(index, files)` | 各场景 `evidence` 中不在文件清单里的路径，带所属场景；`sourceIssues`、返工清单与场景面板共用 | S15 |
 | `fileTree(files, own, lines?, maxLines?)` | 按 `/` 组成目录树，目录带文件数、未归属数与忽略数，内部文件全部忽略的目录标为忽略；给出行数时目录另带行数合计与超长文件数；目录在前、按名称排序 | G18、G21 |
 | `moduleLines(files, lines, maxLines)` | 一组文件（如模块的文件）的行数合计与超长数；单个文件是否超长用契约里的 `isLong`（`src/model/names.ts`，U10） | G20、G21 |
 
@@ -108,6 +109,7 @@ moduleEntry(index, own, tree: { files; packages }, moduleId): ModuleEntry | null
 matchExports(index, moduleId, exports: readonly ExportedSymbol[]): ExportMatch
 fileNodes(index, view: LevelView, owners: readonly string[]): FileNodes
 sourceIssues(index, own, tree): Issue[]
+missingEvidence(index, files: readonly string[]): { scenario: ScenarioEntity; file: string }[]
 fileTree(files: readonly string[], own: SourceOwnership, lines?: Record<string, number>, maxLines?: number): DirNode
 moduleLines(files: readonly string[], lines: Record<string, number>, maxLines: number): { lines: number; long: number; counted: number }
 ```

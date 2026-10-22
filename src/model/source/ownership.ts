@@ -1,10 +1,10 @@
 /**
- * 源码归属（G3–G12、G14）：文件属于哪个模块、模块的文件与入口、入口导出与 provides 的对应、文件在当前层次的投影。
+ * 源码归属（G3–G12、G14）：文件属于哪个模块、模块的文件与入口、入口导出与 provides 的对应、文件在当前层次的投影；场景证据文件是否存在（S15）。
  * 关于被描述系统的知识，换成命令行或 AI 查询同样成立；输入是模型索引与接入层给的文件清单，不碰文件系统。
  */
 import { isLong } from '../names'
 import { mapEndpoint } from '../project'
-import type { Issue, LevelView, ModelIndex, ModuleEntity } from '../types'
+import type { Issue, LevelView, ModelIndex, ModuleEntity, ScenarioEntity } from '../types'
 import { hasWildcard, matchRef, normalizeRef, staticPrefix } from './glob'
 import { indexFile, packageEntry } from './resolve'
 import { DEFAULT_MAX_LINES, type DirNode, type ExportMatch, type ExportedSymbol, type FileNodes, type LocalSource, type ModuleEntry, type SourceOwnership } from './types'
@@ -131,7 +131,13 @@ export function fileNodes(index: ModelIndex, view: LevelView, owners: readonly s
   return { nodes, self }
 }
 
-/** G6、G7、G10：归属警告（只对当前版本报，G9 由调用方决定） */
+/** S15：场景声明的证据文件中不在源码清单里的（只校验存在，不解析内容） */
+export function missingEvidence(index: ModelIndex, files: readonly string[]): { scenario: ScenarioEntity; file: string }[] {
+  const set = new Set(files)
+  return index.model.scenarios.flatMap(scenario => (scenario.evidence ?? []).filter(file => !set.has(file)).map(file => ({ scenario, file })))
+}
+
+/** G6、G7、G10、S15：归属警告与证据文件警告（只对当前版本报，G9 由调用方决定） */
 export function sourceIssues(index: ModelIndex, own: SourceOwnership, tree: Pick<LocalSource, 'files' | 'packages'>): Issue[] {
   const issues: Issue[] = []
   const name = (id: string) => index.modules.get(id)?.name ?? id
@@ -149,6 +155,9 @@ export function sourceIssues(index: ModelIndex, own: SourceOwnership, tree: Pick
     if (!m.entry) continue
     const e = moduleEntry(index, own, tree, m.id)
     if (e?.missing) issues.push({ severity: 'warning', code: 'source.entry', message: `模块「${m.name}」的 entry「${e.file}」不在源码文件清单中`, ...m.src })
+  }
+  for (const { scenario, file } of missingEvidence(index, tree.files)) {
+    issues.push({ severity: 'warning', code: 'scenario.evidence', message: `场景「${scenario.name}」的证据文件「${file}」不在源码文件清单中`, ...scenario.src })
   }
   return issues
 }

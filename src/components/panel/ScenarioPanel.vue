@@ -1,16 +1,24 @@
 <script setup lang="ts">
 /**
- * 场景面板（选中场景时，即进度在开头且没有选中其他对象，V2、R12）：说明、触发者与原因、场景所在层次（可跳转）、参与模块、ref 的引用与被引用。
- * 步骤目录在导航树的步骤树里（T6）。
+ * 场景面板（选中场景时，即进度在开头且没有选中其他对象，V2、R12）：说明、触发者与原因、场景所在层次（可跳转）、参与模块、ref 的引用与被引用、
+ * 证据文件（S15、D-20：在源码清单里的可在副栏预览，不在的标出）。步骤目录在导航树的步骤树里（T6）。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
+import { useOpenPreview } from '../shared/preview'
 import Section from './Section.vue'
 import Markdown from './Markdown.vue'
 import DesignNote from './DesignNote.vue'
 
 const desk = useDesk()
+const openPreview = useOpenPreview()
+/** 源码清单在本地时才能判断证据文件存不存在 */
+const local = computed(() => desk.files.payload.value?.status === 'local')
+const hasFile = (f: string) => {
+  const p = desk.files.payload.value
+  return p?.status === 'local' && p.files.includes(f)
+}
 const idx = computed(() => desk.index.value!)
 const sc = computed(() => desk.run.scenario.value!)
 const trigger = desk.run.trigger
@@ -74,6 +82,17 @@ function pointAt(id: string) {
         <button v-for="o in referencedBy" :key="o.id" class="link ref" @click="desk.openScenario(o.id)">{{ o.name }}</button>
       </div>
     </Section>
+    <Section v-if="sc.evidence?.length" title="证据" :count="sc.evidence.length">
+      <ul class="plain evidence">
+        <li v-for="f in sc.evidence" :key="f">
+          <button v-if="hasFile(f)" class="link" :title="`在副栏预览 ${f}`" @click="openPreview(f)">{{ f }}</button>
+          <template v-else>
+            <code>{{ f }}</code>
+            <span v-if="local" class="missing">不在源码清单中</span>
+          </template>
+        </li>
+      </ul>
+    </Section>
     <footer class="src muted">出处：{{ desk.modelDir.value }}/{{ sc.src.file }}{{ sc.src.line ? `:${sc.src.line}` : '' }}</footer>
   </div>
 </template>
@@ -90,5 +109,19 @@ function pointAt(id: string) {
 
 .ref {
   margin-left: 8px;
+}
+
+.evidence li {
+  word-break: break-all;
+}
+
+.evidence code {
+  font-size: 12px;
+}
+
+.missing {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--warning);
 }
 </style>

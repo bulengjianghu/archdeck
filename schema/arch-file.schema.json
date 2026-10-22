@@ -482,6 +482,13 @@
           "type": "string",
           "description": "触发原因（文字）"
         },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "证据文件：验证这条链路的测试、E2E 等源码文件路径（相对源码根目录）；只校验在源码清单里存在，不解析内容（S15）"
+        },
         "steps": {
           "$ref": "#/definitions/steps"
         },

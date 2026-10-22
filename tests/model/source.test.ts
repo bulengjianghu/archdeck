@@ -11,6 +11,7 @@ import {
   isLong,
   loadModel,
   matchExports,
+  missingEvidence,
   matchRef,
   moduleDir,
   moduleEntry,
@@ -367,5 +368,21 @@ describe('G19–G21 行数与超长', () => {
     expect(two.index.model.sourceLimits).toEqual({ maxLines: 300 })
     expect(two.issues.some(i => i.code === 'duplicate-source-limits' && i.file === 'b.yaml')).toBe(true)
     expect(loadModel([...FILES, { path: 'bad.yaml', text: 'sourceLimits: { maxLines: 0 }' }]).issues.some(i => i.severity === 'error')).toBe(true)
+  })
+})
+
+describe('S15 场景证据文件', () => {
+  const SC = 'scenario: { id: sc.e, name: 证据, evidence: [src/app/main.ts, tests/nope.test.ts], steps: [{ call: { from: app.ui, to: app.api, label: go } }] }'
+  const loaded = loadModel([...FILES, { path: 'scenarios/e.yaml', text: SC }])
+  it('不在源码清单里的证据文件一条提醒，定位到场景出处；在清单里的不报', () => {
+    const own2 = assignFiles(loaded.index, files, loaded.index.model.sourceIgnore)
+    const issues = sourceIssues(loaded.index, own2, tree).filter(i => i.code === 'scenario.evidence')
+    expect(issues).toEqual([expect.objectContaining({ severity: 'warning', file: 'scenarios/e.yaml', message: expect.stringContaining('tests/nope.test.ts') })])
+    expect(issues[0].message).toContain('证据')
+    expect(missingEvidence(loaded.index, files).map(x => [x.scenario.id, x.file])).toEqual([['sc.e', 'tests/nope.test.ts']])
+    expect(missingEvidence(loaded.index, [...files, 'tests/nope.test.ts'])).toEqual([])
+  })
+  it('没写 evidence 的场景不参与', () => {
+    expect(missingEvidence(index, [])).toEqual([])
   })
 })

@@ -10,6 +10,7 @@ import {
   reworkItemMarkdown,
   reworkList,
   reworkMarkdown,
+  sourceIssues,
   type Baseline,
   type FileDep,
   type RawFile,
@@ -284,5 +285,25 @@ describe('Q10 项目健康度', () => {
     const h = health({ createdAt: 't', violations: ['layer:core:core.util->ui.view', 'layer:core:gone->ui.view', 'layer:core:gone2->ui.view'], cyclicity: { modules: 4, files: 0 } })
     expect(h.violations).toMatchObject({ count: 2, new: 1, resolved: 2, delta: -1 })
     expect(h.cycles!.baseline).toBe(4)
+  })
+})
+
+describe('S15 场景证据', () => {
+  const withEvidence = (): RawFile[] =>
+    files().map(f => (f.path === 'scenarios/sc.yaml' ? { ...f, text: f.text.replace('  steps:', '  evidence: [src/ui/view/a.ts, tests/missing.test.ts]\n  steps:') } : f))
+  it('证据文件不在源码清单：描述类提醒，带场景出处、规则 S15 与建议；传进来的 issues 里已有的不重复', () => {
+    const { index, issues } = loadModel(withEvidence())
+    const own = assignFiles(index, SRC, ['docs/**'])
+    const tree = { files: SRC, packages: {} }
+    const list = reworkList({ index, issues, source: { own, tree } })
+    const items = byCode(list.items, 'scenario.evidence')
+    expect(items.map(i => i.id)).toEqual(['description:scenario.evidence:sc:tests/missing.test.ts'])
+    expect(items[0]).toMatchObject({ category: 'description', severity: 'warning', rules: ['S15'], target: { scenario: 'sc' } })
+    expect(items[0].at).toMatchObject({ in: 'description', file: 'scenarios/sc.yaml' })
+    expect(items[0].actions[0]).toMatchObject({ kind: 'fix-description', file: 'scenarios/sc.yaml' })
+    const again = reworkList({ index, issues: [...issues, ...sourceIssues(index, own, tree)], source: { own, tree } })
+    expect(byCode(again.items, 'scenario.evidence')).toHaveLength(1)
+    // 没有源码清单时不判断
+    expect(byCode(reworkList({ index, issues }).items, 'scenario.evidence')).toEqual([])
   })
 })

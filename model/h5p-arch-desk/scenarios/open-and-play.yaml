@@ -6,6 +6,12 @@ scenario:
     每按一次「下一步」前进一条本层可见消息，结构图、时序图、步骤树同步高亮；到 alt 未选分支处展开全部选项，
     选一支后继续；在步骤树中单击之前的一步，选中它，进度后退到那一步。回放只由用户驱动，没有自动播放（ADR-0006）。
   cause: 架构师想看某条执行链路这一次怎么走
+  evidence:
+    - tests/acceptance/run-perspective.test.ts
+    - tests/acceptance/unified-selection.test.ts
+    - tests/state/playback.test.ts
+    - e2e/run-default.spec.ts
+    - e2e/selection.spec.ts
   steps:
     - call: {id: pick, from: actor.architect, to: present.perspective, label: 点「运行」}
     - call: {from: present.perspective, to: present.scenarios, label: 弹出场景列表（本层相关 / 全部 / 按发起者）}
