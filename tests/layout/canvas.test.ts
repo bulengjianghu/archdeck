@@ -219,6 +219,18 @@ describe('canvasScene', () => {
     expect(hiddenBoundary.length).toBeGreaterThan(0)
   })
 
+  it('A7、L4：框表示边界——下钻后外框为系统、内框为当前父模块，边界节点在两框之间；根层只有系统框', async () => {
+    const input = await structure('infra')
+    const s = canvasScene(input)
+    const frames = s.nodes.filter(n => n.type === 'frame')
+    expect(frames.map(f => [f.id, f.data.name])).toEqual([
+      ['frame', index.model.system.name],
+      ['frame:parent', index.modules.get('infra')!.name],
+    ])
+    const root = canvasScene({ ...input, positioned: await layoutView(projectLevel(index, index.rootId)) })
+    expect(root.nodes.filter(n => n.type === 'frame').map(f => f.data.name)).toEqual([index.model.system.name])
+  })
+
   it('routeMidpoint：折线按长度取一半处，曲线取两端点中点', () => {
     const poly = [
       { x: 0, y: 0 },

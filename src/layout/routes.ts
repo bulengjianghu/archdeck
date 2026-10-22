@@ -144,56 +144,139 @@ export function isBoundaryEdge(e: ViewEdge): boolean {
   return isBoundary(e.from) || isBoundary(e.to)
 }
 
-// ── 边界边按需走线（L4、L11）────────────────────────────────────
+// ── 框外的元素：方位表示角色（A7、L4）──────────────────────────
 
-/** 同一节点上多条边界边的短桩逐条加长量（px） */
+/** 父模块框到边界节点行、边界节点行到系统框（px） */
+export const BOUNDARY_GAP = 40
+export const SYSTEM_PAD = 28
+
+/**
+ * 方位：用户在系统框上方，外部系统与时间在系统框右侧，边界节点在父模块框下方、系统框之内，其余在父模块框内。
+ * 方位固定在屏幕上，不随普通层次的布局方向（自上而下 / 自左向右）改变。
+ */
+export type Compass = 'top' | 'right' | 'bottom' | 'inner'
+
+export function compassOf(n: { role?: string; actorKind?: string }): Compass {
+  if (n.role === 'boundary') return 'bottom'
+  if (n.role === 'actor') return n.actorKind === 'user' ? 'top' : 'right'
+  return 'inner'
+}
+
+const union = (a: Box, b: Box): Box => {
+  const x = Math.min(a.x, b.x)
+  const y = Math.min(a.y, b.y)
+  return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y }
+}
+const expand = (b: Box, d: number): Box => ({ x: b.x - d, y: b.y - d, w: b.w + 2 * d, h: b.h + 2 * d })
+
+/**
+ * 给定父模块框（已包住内部节点与走线），摆放框外的元素：边界节点在它下方一行（按视图顺序，即层次顺序），
+ * 系统框包住父模块框与边界节点行（有边界节点时留 SYSTEM_PAD，没有时与父模块框重合）；参与者按方位放在系统框外（placeActors）。
+ * 没有边界节点也没有参与者时不给系统框。rightGap 为外部系统离系统框的距离（分层总览要让出右侧通道）。
+ */
+export function placeOutside(view: LevelView, nodes: Map<string, Box>, parentFrame: Box, rightGap = ACTOR_GAP): Box | undefined {
+  const bs = view.nodes.filter(n => n.role === 'boundary')
+  if (!bs.length && !hasActors(view)) return undefined
+  let frame = parentFrame
+  if (bs.length) {
+    const { w, h } = NODE_SIZE.boundary
+    const gap = 20
+    const rowW = bs.length * w + (bs.length - 1) * gap
+    const x0 = parentFrame.x + parentFrame.w / 2 - rowW / 2
+    const y = parentFrame.y + parentFrame.h + BOUNDARY_GAP
+    bs.forEach((n, i) => nodes.set(n.id, { x: x0 + i * (w + gap), y, w, h }))
+    frame = expand(union(parentFrame, { x: x0, y, w: rowW, h }), SYSTEM_PAD)
+  }
+  placeActors(view, nodes, frame, rightGap)
+  return frame
+}
+
+// ── 框外元素的边按需走线（A7、L4、L11）──────────────────────────
+
+/** 同一节点同一侧多条边的短桩逐条加长量（px） */
 const LANE_GAP = 6
 /** 加长量的上限：短桩不超出层间空隙（72）的一半 */
 const MAX_LANE = 22
 
-/** 边界边的走线按节点布局记忆：同一份布局里每条边只算一次（布局本身另按视图内容缓存） */
-const boundaryMemo = new WeakMap<Map<string, Box>, Map<string, EdgeRoute | undefined>>()
+/** 框外元素的边（参与者的边、边界边）：普通层次不参与布局，要画时才走线 */
+export const isOutsideEdge = (view: LevelView, e: ViewEdge) => isBoundaryEdge(e) || isActorNode(view, e.from) || isActorNode(view, e.to)
+
+/** 走线按节点布局记忆：同一份布局里每条边只算一次（布局本身另按视图内容缓存） */
+const outsideMemo = new WeakMap<Map<string, Box>, Map<string, EdgeRoute | undefined>>()
 
 /**
- * 一条边的走线：布局给出的直接用；普通层次的边界边不参与布局，第一次要画时按端口方向正交绕行（不穿节点，从目标的入口侧进入）。
- * 端口：内部节点出边在下、进边在上，边界节点在上（RIGHT 布局为右 / 左 / 左，L11）；同一节点上的多条边界边沿该边错开。
+ * 一条边的走线：布局给出的直接用；普通层次中框外元素的边不参与布局，第一次要画时按方位与端口方向正交绕行（不穿节点，从目标的入口侧进入）。
  */
 export function edgeRoute(pv: PositionedView, e: ViewEdge): EdgeRoute | undefined {
   const laid = pv.edges.get(e.id)
-  if (laid || pv.view.mode === 'layered' || !isBoundaryEdge(e)) return laid
-  let memo = boundaryMemo.get(pv.nodes)
-  if (!memo) boundaryMemo.set(pv.nodes, (memo = new Map()))
-  // 走线依赖同一节点上其他边界边的序号：视图的边界边（如关系类型筛选后）不同则另算
+  if (laid || pv.view.mode === 'layered' || !isOutsideEdge(pv.view, e)) return laid
+  let memo = outsideMemo.get(pv.nodes)
+  if (!memo) outsideMemo.set(pv.nodes, (memo = new Map()))
+  // 走线依赖同一节点上其他框外边的序号：视图的这类边（如关系类型筛选后）不同则另算
   const key = `${e.id}|${pv.view.edges
-    .filter(isBoundaryEdge)
+    .filter(x => isOutsideEdge(pv.view, x))
     .map(x => x.id)
     .join(',')}`
-  if (!memo.has(key)) memo.set(key, boundaryRoute(pv, e))
+  if (!memo.has(key)) memo.set(key, outsideRoute(pv, e))
   return memo.get(key)
 }
 
-function boundaryRoute(pv: PositionedView, e: ViewEdge): EdgeRoute | undefined {
+/**
+ * 端口按方位：用户在底边朝下、外部系统在左边朝左、边界节点在顶边朝上；内部节点进边在入口侧（自上而下为顶边，自左向右为左边）、
+ * 出边在出口侧（底边 / 右边，L11）。同一节点同一侧的多条边沿该边错开 PARALLEL_GAP，短桩逐条加长。
+ */
+export function portFor(box: Box, compass: Compass, end: 'in' | 'out', direction: 'DOWN' | 'RIGHT', slot: { i: number; n: number }, stub?: number): PortAt {
+  const along = (len: number) => Math.max(-len / 2 + 8, Math.min(len / 2 - 8, (slot.i - (slot.n - 1) / 2) * PARALLEL_GAP))
+  const lane = Math.min(slot.i * LANE_GAP, MAX_LANE)
+  const side =
+    compass === 'top'
+      ? 'bottom'
+      : compass === 'right'
+        ? 'left'
+        : compass === 'bottom'
+          ? 'top'
+          : direction === 'DOWN'
+            ? end === 'in'
+              ? 'top'
+              : 'bottom'
+            : end === 'in'
+              ? 'left'
+              : 'right'
+  const cx = box.x + box.w / 2
+  const cy = box.y + box.h / 2
+  const base = { lane, ...(stub !== undefined ? { stub } : {}) }
+  if (side === 'top') return { x: cx + along(box.w), y: box.y, dir: -1, ...base }
+  if (side === 'bottom') return { x: cx + along(box.w), y: box.y + box.h, dir: 1, ...base }
+  if (side === 'left') return { x: box.x, y: cy + along(box.h), dir: -1, axis: 'h', ...base }
+  return { x: box.x + box.w, y: cy + along(box.h), dir: 1, axis: 'h', ...base }
+}
+
+/** 终点短桩再按起点上的序号加长：同一起点出发、去往同一行的几条边各走一条横线，不重叠 */
+export const withSourceLane = (p: PortAt, from: { i: number }): PortAt => ({ ...p, lane: Math.min((p.lane ?? 0) + from.i * LANE_GAP, MAX_LANE) })
+
+/** 同一节点上（同一类）边的序号，用于错开 */
+export function slotOf(edges: readonly ViewEdge[], node: string, id: string): { i: number; n: number } {
+  const mine = edges.filter(x => x.from === node || x.to === node)
+  return {
+    i: Math.max(
+      0,
+      mine.findIndex(x => x.id === id),
+    ),
+    n: mine.length,
+  }
+}
+
+function outsideRoute(pv: PositionedView, e: ViewEdge): EdgeRoute | undefined {
   const a = pv.nodes.get(e.from)
   const b = pv.nodes.get(e.to)
-  if (!a || !b) return undefined
-  // RIGHT 布局转置成自上而下来算，算完再转回
-  const t = pv.direction === 'RIGHT'
-  const tp = (p: Point): Point => (t ? { x: p.y, y: p.x } : p)
-  const tb = (x: Box): Box => (t ? { x: x.y, y: x.x, w: x.h, h: x.w } : x)
-  /** 同一节点上的边界边：沿该边错开 PARALLEL_GAP，短桩按序号加长 LANE_GAP，各走一条水平线 */
-  const slot = (node: string, box: Box) => {
-    const mine = pv.view.edges.filter(x => isBoundaryEdge(x) && (x.from === node || x.to === node))
-    const i = mine.findIndex(x => x.id === e.id)
-    return { dx: Math.max(-box.w / 2 + 8, Math.min(box.w / 2 - 8, (i - (mine.length - 1) / 2) * PARALLEL_GAP)), lane: Math.min(i * LANE_GAP, MAX_LANE) }
-  }
-  const A = tb(a)
-  const B = tb(b)
-  const out = isBoundary(e.from)
-  const s = slot(e.from, A)
-  const d = slot(e.to, B)
-  const from: PortAt = { x: A.x + A.w / 2 + s.dx, y: out ? A.y : A.y + A.h, dir: out ? -1 : 1, lane: s.lane }
-  const to: PortAt = { x: B.x + B.w / 2 + d.dx, y: B.y, dir: -1, lane: d.lane }
+  const na = pv.view.nodes.find(n => n.id === e.from)
+  const nb = pv.view.nodes.find(n => n.id === e.to)
+  if (!a || !b || !na || !nb) return undefined
+  const dir = pv.direction ?? 'DOWN'
+  const outside = pv.view.edges.filter(x => isOutsideEdge(pv.view, x))
+  const fs = slotOf(outside, e.from, e.id)
+  const from = portFor(a, compassOf(na), 'out', dir, fs)
+  const to = withSourceLane(portFor(b, compassOf(nb), 'in', dir, slotOf(outside, e.to, e.id)), fs)
   // 两端自身也是障碍：中间三段（横、竖通道、横）都在两端的短桩之外，不能穿过它们
-  const obstacles = [...pv.nodes.values()].map(tb)
-  return { points: detour(from, to, obstacles).map(tp) }
+  return { points: detour(from, to, [...pv.nodes.values()]) }
 }

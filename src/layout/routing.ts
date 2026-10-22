@@ -49,19 +49,25 @@ export function jumpsOf(lines: readonly JumpLine[]): Map<string, Point[]> {
 
 // ── 按需的正交绕行（L4：边界边显示时才走线）──────────────────────
 
-/** 端口：盒子某条边上的出入点；dir 为离开盒子的方向（向下 +1、向上 −1；RIGHT 布局时转置为左右） */
+/**
+ * 端口：盒子某条边上的出入点。axis 为离开盒子的方向所在的轴（'v' 上下、'h' 左右，缺省 'v'），
+ * dir 为沿该轴的方向（+1 向下 / 向右，−1 向上 / 向左）。
+ */
 export interface PortAt {
   x: number
   y: number
   dir: 1 | -1
-  /** 短桩加长量：同一节点同一侧的多条边各走一条水平线，不重叠 */
+  axis?: 'v' | 'h'
+  /** 短桩加长量：同一节点同一侧的多条边各走一条线，不重叠 */
   lane?: number
+  /** 短桩长度（缺省 STUB）：分层总览里进核心模块的边要先到带间空隙的中线 */
+  stub?: number
 }
 
 /** 离开端口先走的短桩，落在层间空隙里 */
 export const STUB = 14
-/** 绕到所有节点外侧时离外框的距离 */
-const OUTSIDE = 28
+/** 绕到所有节点外侧时离节点外沿的距离：落在父模块框（留 28）与系统框（再留 28）之间，不压框线 */
+const OUTSIDE = 42
 
 const crossesBox = (a: Point, b: Point, box: { x: number; y: number; w: number; h: number }) => {
   const x1 = Math.min(a.x, b.x)
@@ -72,13 +78,13 @@ const crossesBox = (a: Point, b: Point, box: { x: number; y: number; w: number; 
 }
 
 /**
- * 在固定的节点之间画一条正交折线（自上而下的坐标系；RIGHT 布局由调用方转置）：
- * 起点端口 → 短桩 → 横到一条竖直通道 x → 竖直到终点短桩的高度 → 横到终点 → 进终点端口。
+ * 在固定的节点之间画一条正交折线：起点端口 → 短桩（沿端口方向）→ 横到一条竖直通道 x → 竖直到终点短桩的高度 → 横到终点短桩 → 进终点端口。
+ * 端口可在上下边（参与者在上方、边界节点在下方）或左右边（右侧的外部系统从左边进出）。
  * 通道 x 取起终点自身、障碍之间空隙的中线与外框两侧，选中间三段都不穿障碍（含两端节点自身）、总长最短的；都不行时走外框外侧。
  */
 export function detour(from: PortAt, to: PortAt, obstacles: readonly { x: number; y: number; w: number; h: number }[]): Point[] {
-  const p1 = { x: from.x, y: from.y + from.dir * (STUB + (from.lane ?? 0)) }
-  const p2 = { x: to.x, y: to.y + to.dir * (STUB + (to.lane ?? 0)) }
+  const p1 = stubEnd(from)
+  const p2 = stubEnd(to)
   const xs = obstacles.flatMap(o => [o.x, o.x + o.w])
   const left = Math.min(from.x, to.x, ...xs) - OUTSIDE
   const right = Math.max(from.x, to.x, ...xs) + OUTSIDE
@@ -90,6 +96,12 @@ export function detour(from: PortAt, to: PortAt, obstacles: readonly { x: number
   const cost = (x: number) => Math.abs(x - p1.x) + Math.abs(x - p2.x)
   const best = candidates.sort((a, b) => cost(a) - cost(b)).find(x => free(pathOf(x))) ?? (cost(left) < cost(right) ? left : right)
   return simplify(pathOf(best))
+}
+
+/** 端口沿其方向走出短桩后的点 */
+function stubEnd(p: PortAt): Point {
+  const d = p.dir * ((p.stub ?? STUB) + (p.lane ?? 0))
+  return p.axis === 'h' ? { x: p.x + d, y: p.y } : { x: p.x, y: p.y + d }
 }
 
 /** 去掉重合点与共线的中间点 */

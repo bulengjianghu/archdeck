@@ -8,6 +8,8 @@ import {
   portSide,
   edgeRoute,
   isBoundaryEdge,
+  isOutsideEdge,
+  compassOf,
   LAYOUT_VERSION,
   contentBounds,
   edgeLabel,
@@ -90,7 +92,8 @@ describe('layoutLayered · 分层总览', () => {
   it('外框包含所有节点与右侧通道', () => {
     const b = contentBounds(pv)!
     const lane = pv.edges.get('infra->domain:depends')!.points[1].x
-    expect(b.x).toBe(0)
+    // 外框含父模块框（留 BAND.framePad，标题在框线上方）
+    expect(b.x).toBe(-BAND.framePad)
     expect(b.x + b.w).toBeGreaterThanOrEqual(lane)
   })
 })
@@ -165,38 +168,83 @@ describe('边界节点', () => {
   })
 })
 
-describe('外部参与者（A7）', () => {
+describe('方位表示角色、框表示边界（A7、L4）', () => {
   const { index: idx } = loadModel(scenarioFiles())
+  const inside = (b: Box, f: Box) => b.x >= f.x && b.y >= f.y && b.x + b.w <= f.x + f.w && b.y + b.h <= f.y + f.h
+  const orthogonal = (pts: readonly { x: number; y: number }[]) => pts.slice(1).every((p, i) => p.x === pts[i].x || p.y === pts[i].y)
 
-  it('分层总览：用户在带的上方，外部系统在右侧通道之外；有边界框', async () => {
+  it('分层总览：用户在系统框上方、外部系统在右侧通道之外；参与者的边正交走线，进核心模块时先到带间空隙中线', async () => {
     const view = projectLevel(idx, 'sys')
     const pv = await layoutView(view)
-    const firstBand = pv.nodes.get('infra')!
+    const f = pv.frame!
     const viewer = pv.nodes.get('actor.viewer')!
     const biz = pv.nodes.get('actor.biz')!
-    expect(viewer.y + viewer.h).toBeLessThan(firstBand.y)
-    expect(biz.x).toBeGreaterThan(firstBand.x + firstBand.w)
-    expect(pv.frame).toBeDefined()
-    for (const e of view.edges.filter(x => x.from.startsWith('actor'))) expect(pv.edges.get(e.id)!.curve).toBeTruthy()
+    expect(viewer.y + viewer.h).toBeLessThan(f.y)
+    expect(biz.x).toBeGreaterThan(f.x + f.w)
+    for (const e of view.edges.filter(x => x.from.startsWith('actor'))) {
+      const r = pv.edges.get(e.id)!
+      expect(r.curve).toBeUndefined()
+      expect(orthogonal(r.points)).toBe(true)
+    }
+    for (const e of (view.coreEdges ?? []).filter(x => x.from === 'actor.biz')) {
+      const r = pv.coreEdges.get(e.id)!
+      const target = pv.nodes.get(e.to)!
+      const [p, q] = r.points.slice(-2)
+      expect(q.y).toBe(target.y)
+      // 横段不贴着带的边框：在目标带上沿之上至少半个带间空隙
+      const band = [...pv.nodes.entries()].find(([id, b]) => view.bands!.some(x => x.layerId === id) && inside(target, b))![1]
+      expect(p.y).toBeLessThanOrEqual(band.y - BAND.framePad / 2)
+    }
   })
 
-  it('普通层次：参与者进 elk——用户在第一行、外部系统在最后一行，都在边界框外；边界框只包住内部模块', async () => {
+  it('普通层次：内部节点在父模块框内；边界节点在父模块框下方、系统框之内，按层次顺序；用户在系统框上方，外部系统在系统框右侧', async () => {
     const view = projectLevel(idx, 'infra', { showBoundaries: true })
     const pv = await layoutView(view)
+    const pf = pv.parentFrame!
     const f = pv.frame!
-    for (const n of view.nodes.filter(x => x.role === 'module')) {
-      const b = pv.nodes.get(n.id)!
-      expect(b.x).toBeGreaterThanOrEqual(f.x)
-      expect(b.x + b.w).toBeLessThanOrEqual(f.x + f.w)
+    for (const n of view.nodes.filter(x => x.role === 'module')) expect(inside(pv.nodes.get(n.id)!, pf)).toBe(true)
+    const bs = view.nodes.filter(n => n.role === 'boundary').map(n => n.id)
+    expect(bs.length).toBeGreaterThan(0)
+    for (const id of bs) {
+      const b = pv.nodes.get(id)!
+      expect(b.y).toBeGreaterThan(pf.y + pf.h)
+      expect(inside(b, f)).toBe(true)
     }
+    expect([...bs].sort((a, b) => pv.nodes.get(a)!.x - pv.nodes.get(b)!.x)).toEqual(bs)
+    expect(inside(pf, f)).toBe(true)
     const viewer = pv.nodes.get('actor.viewer')!
+    const biz = pv.nodes.get('actor.biz')!
     expect(viewer.y + viewer.h).toBeLessThan(f.y)
-    expect(pv.nodes.get('actor.biz')!.y).toBeGreaterThan(f.y + f.h)
-    expect(pv.edges.get(view.edges.find(e => e.from === 'actor.biz')!.id)!.curve).toBeUndefined()
+    expect(biz.x).toBeGreaterThan(f.x + f.w)
   })
 
-  it('没有参与者时没有边界框', async () => {
-    expect((await layoutView(projectLevel(index, 'infra'))).frame).toBeUndefined()
+  it('普通层次：框外元素的边不参与布局，按需正交走线——外部系统从左边进出、用户从底边出发、都从目标的入口侧进入', async () => {
+    const view = projectLevel(idx, 'infra', { showBoundaries: true })
+    const pv = await layoutView(view)
+    for (const e of view.edges.filter(x => isOutsideEdge(view, x))) {
+      expect(pv.edges.has(e.id)).toBe(false)
+      const r = edgeRoute(pv, e)!
+      expect(orthogonal(r.points)).toBe(true)
+    }
+    const fromBiz = edgeRoute(
+      pv,
+      view.edges.find(e => e.from === 'actor.biz')!,
+    )!
+    const biz = pv.nodes.get('actor.biz')!
+    expect(fromBiz.points[0].x).toBe(biz.x)
+    expect(fromBiz.points[1].x).toBeLessThan(biz.x)
+    const fromViewer = edgeRoute(
+      pv,
+      view.edges.find(e => e.from === 'actor.viewer')!,
+    )!
+    const viewer = pv.nodes.get('actor.viewer')!
+    expect(fromViewer.points[0].y).toBe(viewer.y + viewer.h)
+  })
+
+  it('没有框外元素时没有系统框，只有父模块框', async () => {
+    const pv = await layoutView(projectLevel(index, 'infra', { showBoundaries: false }))
+    expect(pv.frame).toBeUndefined()
+    expect(pv.parentFrame).toBeDefined()
   })
 })
 
@@ -306,49 +354,45 @@ describe('L11 端口方向', () => {
     return owner.ports!.find(p => p.id === port)!.layoutOptions!['elk.port.side']
   }
 
-  it('内部节点进边在上、出边在下（RIGHT：左进右出）；用户只朝下，边界节点与外部系统只朝上；端口固定边、各边各有端口', () => {
+  it('elk 只排父模块框内的子模块与它们之间的边；进边在上、出边在下（RIGHT：左进右出）；端口固定边、各边各有端口', () => {
     const g = toElkGraph(view, 'DOWN')
-    const inner = view.edges.find(
-      e => !e.from.startsWith('boundary:') && !e.to.startsWith('boundary:') && !e.from.startsWith('actor.') && !e.to.startsWith('actor.'),
-    )!
+    expect(g.children!.map(c => c.id).sort()).toEqual(
+      view.nodes
+        .filter(n => compassOf(n) === 'inner')
+        .map(n => n.id)
+        .sort(),
+    )
+    expect(
+      g.edges!.every(
+        e =>
+          !isOutsideEdge(
+            view,
+            view.edges.find(x => x.id === e.id)!,
+          ),
+      ),
+    ).toBe(true)
+    const inner = view.edges.find(e => !isOutsideEdge(view, e))!
     expect([side(g, `${inner.id}#out`), side(g, `${inner.id}#in`)]).toEqual(['SOUTH', 'NORTH'])
     const r = toElkGraph(view, 'RIGHT')
     expect([side(r, `${inner.id}#out`), side(r, `${inner.id}#in`)]).toEqual(['EAST', 'WEST'])
-    // 边界边不进 elk（按需走线）；边界节点的端口方向仍是朝上
-    expect(g.edges!.some(e => e.id.includes('boundary:'))).toBe(false)
-    expect(
-      portSide(
-        view.nodes.find(n => n.role === 'boundary')!,
-        'in',
-        'DOWN',
-      ),
-    ).toBe('NORTH')
-    const fromUser = view.edges.find(e => e.from === 'actor.viewer')!
-    expect(side(g, `${fromUser.id}#out`)).toBe('SOUTH')
-    const fromBiz = view.edges.find(e => e.from === 'actor.biz')!
-    expect(side(g, `${fromBiz.id}#out`)).toBe('NORTH')
+    expect(portSide('in', 'DOWN')).toBe('NORTH')
     for (const c of g.children!) expect(c.layoutOptions!['elk.portConstraints']).toBe('FIXED_SIDE')
     const ports = g.children!.flatMap(c => c.ports!.map(p => p.id))
-    expect(new Set(ports).size).toBe(view.edges.filter(e => !isBoundaryEdge(e)).length * 2)
+    expect(new Set(ports).size).toBe(g.edges!.length * 2)
   })
 
-  it('用户第一行、边界节点与外部系统最后一行（层约束），最后一行按视图顺序给位置提示', () => {
-    const g = toElkGraph(view, 'DOWN')
-    const lc = (id: string) => g.children!.find(c => c.id === id)!.layoutOptions!['elk.layered.layering.layerConstraint']
-    expect(lc('actor.viewer')).toBe('FIRST_SEPARATE')
-    expect(lc('actor.biz')).toBe('LAST_SEPARATE')
-    const bs = view.nodes.filter(n => n.role === 'boundary').map(n => n.id)
-    for (const id of bs) expect(lc(id)).toBe('LAST_SEPARATE')
-    expect(bs.map(id => g.children!.find(c => c.id === id)!.layoutOptions!['elk.position'])).toEqual(bs.map((_, i) => `(${i * 1000},0)`))
-    expect(
-      g.children!.find(c => c.id === view.nodes.find(n => n.role === 'module')!.id)?.layoutOptions?.['elk.layered.layering.layerConstraint'],
-    ).toBeUndefined()
+  it('方位：用户 top、外部系统 right、边界节点 bottom、其余 inner', () => {
+    const of = (id: string) => compassOf(view.nodes.find(n => n.id === id)!)
+    expect(of('actor.viewer')).toBe('top')
+    expect(of('actor.biz')).toBe('right')
+    expect(compassOf(view.nodes.find(n => n.role === 'boundary')!)).toBe('bottom')
+    expect(compassOf(view.nodes.find(n => n.role === 'module')!)).toBe('inner')
   })
 
   it('布局缓存键带布局算法版本；两级缓存——普通层次的边界边不进布局的键，走线按布局另行记忆', () => {
     expect(cacheKey(view)).toContain(LAYOUT_VERSION)
-    const noBoundaryEdges = { ...view, edges: view.edges.filter(e => !isBoundaryEdge(e)) }
-    expect(cacheKey(noBoundaryEdges)).toBe(cacheKey(view))
-    expect(cacheKey({ ...view, edges: view.edges.slice(1) })).not.toBe(cacheKey(view))
+    const innerOnly = { ...view, edges: view.edges.filter(e => !isOutsideEdge(view, e)) }
+    expect(cacheKey(innerOnly)).toBe(cacheKey(view))
+    expect(cacheKey({ ...view, edges: innerOnly.edges.slice(1) })).not.toBe(cacheKey(view))
   })
 })

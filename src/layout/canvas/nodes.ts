@@ -25,6 +25,11 @@ function playClass(ctx: SceneContext, id: string): string | undefined {
   return undefined
 }
 
+/** 两框重合时系统框外扩的量（px） */
+const FRAME_GAP = 16
+const sameBox = (a: Box, b: Box) => a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h
+const grow = (b: Box, d: number): Box => ({ x: b.x - d, y: b.y - d, w: b.w + 2 * d, h: b.h + 2 * d })
+
 /** 浮在激活的边（EDGE_Z）之上的节点：步骤徽标、分支预览、带内「+N」占位块（单击不被线挡住） */
 const OVER_EDGES = { step: 1003, preview: 1004, more: 1003 } as const
 
@@ -58,9 +63,18 @@ function diffOf(marks: ModelDiff | null, moduleId: string): Pick<NodeData, 'chan
 export function moduleNodes(ctx: SceneContext, idx: ModelIndex): CanvasNode[] {
   const { pv } = ctx
   const nodes: CanvasNode[] = []
+  // A7、L4：框表示边界——根层只有系统框；下钻后外框为系统边界、内框为当前父模块，边界节点在两框之间，参与者在外框之外。
+  // 没有框外元素时不画框（内容即全部）
   if (pv.frame) {
-    const data = { moduleId: pv.view.parentId, name: moduleName(idx, pv.view.parentId), childCount: 0, selected: false, dim: false }
-    nodes.push(placeNode(ctx, 'frame', pv.frame, 'frame', data, -1))
+    const frameData = (id: string) => ({ moduleId: id, name: moduleName(idx, id), childCount: 0, selected: false, dim: false })
+    const root = pv.view.parentId === idx.rootId
+    if (root || !pv.parentFrame) nodes.push(placeNode(ctx, 'frame', root ? (pv.parentFrame ?? pv.frame) : pv.frame, 'frame', frameData(idx.rootId), -2))
+    else {
+      // 没有边界节点时两框重合：系统框向外让出一圈，内外框都看得见
+      const sys = sameBox(pv.frame, pv.parentFrame) ? grow(pv.frame, FRAME_GAP) : pv.frame
+      nodes.push(placeNode(ctx, 'frame', sys, 'frame', frameData(idx.rootId), -2))
+      nodes.push(placeNode(ctx, 'frame:parent', pv.parentFrame, 'frame', frameData(pv.view.parentId), -1))
+    }
   }
   for (const n of pv.view.nodes) {
     const box = pv.nodes.get(n.id)

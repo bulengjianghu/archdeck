@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 内部结构外的边界框：根层为系统边界，其他层次为当前父模块（A7）；不参与交互 */
+/** 边界框（A7、L4）：系统框（根层只有它）或当前父模块框（下钻后在系统框之内），标题在框线左上；不参与交互 */
 import type { NodeData } from './types'
 
 defineProps<{ data: NodeData }>()
