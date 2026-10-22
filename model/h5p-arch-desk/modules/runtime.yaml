@@ -2,6 +2,23 @@
 # 规则编号（V / N / S / A / F / P / R / T）见 docs/02-domain.md。
 
 modules:
+  # ── 骨架模块的代码落点（04 §3.10：骨架只写目录级，细到文件的由 AI 在这里补充，X1）──
+  - id: present.desk-view
+    name: 项目视图
+    codeRefs: [src/components/DeskView.vue, src/components/GuideDialog.vue]
+  - id: present.scenarios
+    name: 场景列表
+    codeRefs: [src/components/ScenarioList.vue]
+  - id: present.perspective
+    name: 视角切换
+    codeRefs: [src/components/PerspectiveSwitch.vue]
+  - id: present.player
+    name: 回放控制条
+    codeRefs: [src/components/PlayerBar.vue, src/components/BranchChooser.vue]
+  - id: model.scenario
+    name: 场景投影
+    codeRefs: [src/model/scenario/index.ts]
+
   # ── 呈现层 ──────────────────────────────────────────────
   - id: present.desk-view.split
     name: 分屏容器与副栏

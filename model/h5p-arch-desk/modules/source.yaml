@@ -2,6 +2,17 @@
 # 规则编号（G）见 docs/02-domain.md §2.13；机制见 docs/architecture/source.md。
 
 modules:
+  # ── 骨架模块的代码落点（04 §3.10：骨架只写目录级，细到文件的由 AI 在这里补充，X1）──
+  - id: present.nav-tree
+    name: 导航树
+    codeRefs: [src/components/tree/NavTree.vue, src/components/tree/types.ts]
+  - id: access.source
+    name: 源码读取
+    codeRefs: [vite/readSource.ts]
+  - id: model.source
+    name: 源码归属
+    codeRefs: [src/model/source/index.ts]
+
   # ── 呈现层 ──────────────────────────────────────────────
   - id: present.nav-tree.files
     name: 文件树

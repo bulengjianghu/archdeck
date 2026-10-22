@@ -1,6 +1,50 @@
 # 第二级之下的子模块、关系、接口与数据结构。
 
 modules:
+  # ── 骨架模块的代码落点（04 §3.10：骨架只写目录级，细到文件的由 AI 在这里补充，X1）──
+  - id: present.shell
+    name: 应用外壳与路由
+    codeRefs: [index.html, env.d.ts, src/main.ts, src/App.vue, src/styles.css]
+  - id: present.project-list
+    name: 项目列表主页
+    codeRefs: [src/components/ProjectList.vue]
+  - id: present.version
+    name: 版本切换与设计信息条
+    codeRefs: [src/components/VersionSwitcher.vue, src/components/DesignBar.vue, src/components/CommitBar.vue]
+  - id: present.canvas
+    name: 画布
+    codeRefs: [src/components/GraphCanvas.vue, src/components/DisplayPanel.vue, src/components/nodes/**, src/components/edges/**, src/components/stage/**]
+  - id: present.nav
+    name: 导航
+    codeRefs: [src/components/Breadcrumb.vue, src/components/Toolbar.vue]
+  - id: state.desk
+    name: DeskState
+    codeRefs: [src/state/useDeskState.ts, src/state/inject.ts, src/state/desk/intent.ts]
+  - id: access.model-source
+    name: ModelSource 插件
+    codeRefs: [vite/archModelPlugin.ts, vite/readHealth.ts, vite.config.ts]
+  - id: access.reader
+    name: 描述读取
+    codeRefs: [vite/readModelDir.ts, vite/readGit.ts]
+  - id: access.writer
+    name: 描述写入
+    codeRefs: [vite/writeModel.ts]
+  - id: access.lint
+    name: 命令行校验
+    codeRefs: [scripts/lint-model.ts]
+  - id: model.types
+    name: 类型与 Schema
+    codeRefs: [src/model/types.ts, src/model/names.ts, src/model/project-summary.ts, src/model/design.ts, src/model/scenario/types.ts, src/model/source/types.ts, src/model/governance/types.ts, src/model/intent/types.ts, src/model/rework/types.ts, src/model/review/types.ts, src/model/evolution/types.ts, schema/arch-file.schema.json]
+  - id: model.pipeline
+    name: 加载流水线
+    codeRefs: [src/model/load.ts, src/model/validate.ts, src/model/indexer.ts, src/model/index.ts]
+  - id: model.projector
+    name: Projector 层次投影
+    codeRefs: [src/model/project.ts]
+  - id: model.diff
+    name: 版本对比
+    codeRefs: [src/model/diff.ts]
+
   # ── 呈现层 ──────────────────────────────────────────────
   - id: present.canvas.flow
     name: 视图转换与交互

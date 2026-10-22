@@ -2,6 +2,35 @@
 # 规则编号（K、U、Y、Q）见 docs/02-domain.md §2.14–§2.17；机制见 docs/architecture/governance.md。
 
 modules:
+  # ── 骨架模块的代码落点（04 §3.10：骨架只写目录级，细到文件的由 AI 在这里补充，X1）──
+  - id: present.issues
+    name: 问题页签
+    codeRefs: [src/components/tree/IssueList.vue]
+  - id: access.deps
+    name: 依赖提取
+    codeRefs: [vite/readDeps.ts]
+  - id: access.governance-store
+    name: 治理存储
+    codeRefs: [vite/governanceStore.ts]
+  - id: access.history
+    name: 源码历史读取
+    codeRefs: [vite/readHistory.ts]
+  - id: access.agent
+    name: agent 接口
+    codeRefs: [scripts/agent/**, scripts/arch.ts, scripts/arch-mcp.ts, .mcp.json]
+  - id: model.governance
+    name: 架构治理
+    codeRefs: [src/model/governance/index.ts]
+  - id: model.rework
+    name: 返工清单
+    codeRefs: [src/model/rework/index.ts, src/model/rework/list.ts, src/model/rework/markdown.ts, src/model/rework/health.ts]
+  - id: model.evolution
+    name: 演化事实
+    codeRefs: [src/model/evolution/index.ts, src/model/evolution/history.ts, src/model/evolution/level.ts]
+  - id: model.intent
+    name: 意图
+    codeRefs: [src/model/intent/index.ts, src/model/intent/check.ts, src/model/intent/lifecycle.ts, src/model/intent/owned.ts]
+
   # ── 呈现层 ──────────────────────────────────────────────
   - id: present.panel.governance
     name: 架构治理面板
@@ -79,6 +108,7 @@ modules:
     name: 确认
     parent: model
     provides: [if.review.query]
+    codeRefs: [src/model/review/index.ts, src/model/review/hash.ts, src/model/review/status.ts, src/model/review/text.ts]
 
 interfaces:
   - id: if.governance.report
