@@ -79,7 +79,7 @@ flowchart TB
 | 场景投影（核心） | 回放计划（含调用与返回配对 F7、步骤继承关系的接口与数据 S14）、回放路径（含路线与直选分支，F6e、F6f）、帧的层次投影、参与查询、步骤大纲、时序模型（泳道层次顺序与所属，P9、P13）（S、F、P、R7、R13、T5、T6） | 已实现 | 场景 |
 | 版本对比 | 设计版本相对对比基线的差异与涉及变更数（E1、E2） | 已实现 | 加载与版本 |
 | 源码归属 | 文件按 `codeRefs` 归属模块、未归属与冲突、忽略清单、入口文件、导出与 `provides` 的对应、文件在当前层次的投影、目录树（G3–G14、G18）；路径补全、包入口与说明符解析（K2，入口、导出解析与依赖提取共用） | 已实现 | 源码 |
-| 架构治理 | 文件依赖提升为模块依赖、关系证实与未描述依赖（K4–K7）；规则校验、违规与例外（U2–U6）；环与环度（Y）；基线门禁（U8）；本层投影与本层环的构成（K9、Y4、Y5）；agent 查询：定位、写前判定、拦截报告（Q1、Q2、Q4） | 已实现 | 架构治理 |
+| 架构治理 | 文件依赖提升为模块依赖、关系证实与未描述依赖（K4–K7）；端口三角（K11）；规则校验、违规与例外（U2–U6）；环与环度（Y）；基线门禁（U8）；本层投影与本层环的构成（K9、Y4、Y5）；agent 查询：定位、写前判定、拦截报告（Q1、Q2、Q4） | 已实现 | 架构治理 |
 | 返工清单 | 把描述问题、源码归属、代码事实、违规与未建模的步骤汇总为按根因聚合的返工项，每条带文件行号、规则编号与建议动作；渲染给 agent 的 Markdown（Q7–Q9）；项目健康度计数（Q10）。只读其他模型子模块的结果，不新增事实 | 已实现 | 架构治理 |
 
 ### 3.4 接入层
@@ -92,6 +92,7 @@ flowchart TB
 | 描述写入 | 只追加人拥有的三类内容：评审意见（`design.yaml`）、例外（`rules.yaml`）、忽略项（`source-ignore.yaml`），用 YAML 文档模型保留注释；端点由 ModelSource 插件挂载，只收同源 JSON POST（B1–B5） | 已实现 | 加载与版本 |
 | 源码读取 | 解析源码根目录、列出文件清单与包入口、读取单个文件、用 TypeScript 解析导出，端点由 ModelSource 插件挂载（G1、G2、G11、G17） | 已实现 | 源码 |
 | 命令行校验 | `npm run lint:model`，含设计版本的每一轮；当前版本附带归属警告（G9）与治理门禁（U8），读不到源码为错误（G1） | 已实现 | 加载与版本 · 架构治理 |
+| 关系类型迁移 | `npm run migrate:relations`：描述（含设计版本各轮）里的旧名 `event` → `notifies` 并翻转两端、`dataflow` → `streams`，只替换这几个值、保留注释与排版，列出说明里有方向字样的条目（M12、ADR-0022） | 已实现 | 加载与版本 |
 | 依赖提取 | 用 TypeScript 语法解析提取文件依赖、读 tsconfig paths 并经源码归属的说明符解析（K2）、穿透再导出；按修改时间缓存；端点由 ModelSource 插件挂载（K1–K3） | 已实现 | 架构治理 |
 | 治理存储 | 读写项目下 `governance/`：基线（只由命令行生成）、拦截记录（追加）；读源码根目录的 git 提交（U7、Q4） | 已实现 | 架构治理 |
 | agent 接口 | 查询核心（加载描述、源码、事实，调用模型层；每次查询前比对输入，变了就重建）与两种外壳：命令行 `npm run arch`、MCP 服务器 `npm run arch:mcp`（Q1–Q9，含返工清单 `issues`） | 已实现 | 架构治理 |
@@ -162,13 +163,14 @@ packages/h5p-arch-desk/
   vite/                       接入层：archModelPlugin.ts（端点与推送）、readModelDir.ts（读取与摘要）、readGit.ts（描述的 git 历史）、readHealth.ts（健康度）、writeModel.ts（人拥有的文件的追加写入）、readSource.ts（源码根目录、文件清单、文件、导出）、
                               readDeps.ts（依赖提取）、governanceStore.ts（基线与拦截记录）
   scripts/lint-model.ts       命令行校验
+  scripts/migrate-relations.ts  关系类型迁移（改写在 vite/migrateRelations.ts，M12）
   scripts/agent/service.ts    agent 接口的查询核心；scripts/arch.ts（命令行）、scripts/arch-mcp.ts（MCP 服务器）
   model/<项目>/governance/    基线 baseline.json 与拦截记录 ledger.jsonl（不属于描述，ADR-0015）
   src/
     model/                    模型层：types · names · load · validate · indexer · project · diff · design
       scenario/               场景投影：types（契约）· bind · steps · plan · path · level · participation · outline · sequence
       source/                 源码归属：types（契约）· glob · ownership（归属、入口、导出对应、投影、目录树）
-      governance/             架构治理：types · facts · rules · cycles · report · level · query · ledger
+      governance/             架构治理：types · facts · rules · cycles · report · level · query · ledger · ports
       rework/                 返工清单：types（契约）· list · markdown
     state/                    视图状态层：useDeskState（协调者）· inject
       transition/             会话规则：types · navigation · selected · playback · url
