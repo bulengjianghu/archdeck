@@ -174,10 +174,15 @@ modules:
         kind: subsystem
         responsibility: npm run lint:model：校验全部项目或指定目录（含各设计版本的每一轮与 design.yaml），源码在本地时附带当前版本的源码归属警告（G9）与架构治理（代码事实、规则违规、环度，按基线棘轮：新增违规与环度上升为错误，U8），按文件:行号输出问题，有错误时非零退出，可接入 CI。
         codeRefs: [scripts/lint-model.ts]
+      - id: access.migrate
+        name: 关系类型迁移
+        kind: subsystem
+        responsibility: npm run migrate:relations：把描述（含设计版本各轮）里关系类型的旧名改为新名——event → notifies 并翻转 from / to，dataflow → streams（M12、ADR-0022）；用 YAML 文档模型定位节点、只替换这几个值在原文中的字符，注释与排版不动；列出说明里有方向字样、需要人工核对的条目。不进只读的 agent 接口（Q5）。
+        codeRefs: [scripts/migrate-relations.ts, vite/migrateRelations.ts]
       - id: access.deps
         name: 依赖提取
         kind: subsystem
-        responsibility: 用 TypeScript 语法树提取被描述项目的文件依赖（import / import type / export … from / import() / require，Vue 取 <script> 块，K1）；把说明符解析到清单中的文件——读出 tsconfig paths，交给模型层的说明符解析（相对路径补全、工作区包名与包入口，K2）；命名导入沿再导出链追到声明文件，记目标与经由（K3），类型与值按每个名字区分（K1a）；按修改时间与大小缓存。不判断归属与规则。
+        responsibility: 用 TypeScript 语法树提取被描述项目的文件依赖（import / import type / export … from / import() / require，Vue 取 <script> 块，K1）；把说明符解析到清单中的文件——读出 tsconfig paths，交给模型层的说明符解析（相对路径补全、工作区包名与包入口，K2）；命名导入沿再导出链追到声明文件，记目标与经由（K3），类型与值按每个名字区分（K1a）；每个目标另记落到它的导入名与是否被类的 implements / extends 引用（K5 的 implements 证据）；按修改时间与大小缓存。不判断归属与规则。
         codeRefs: [vite/readDeps.ts]
         docRefs: [docs/architecture/governance.md]
       - id: access.governance-store
@@ -235,7 +240,7 @@ modules:
         principle: |
           - **术语**：**步骤**是描述里的树（消息步骤为叶子，组合步骤为容器，时序图上画成组合框）；**帧**是一条消息步骤展开后的回放单位；
             **回放计划**是展开后的帧树；**回放路径**是按已选分支走出的线性帧序列；**可见消息**是本层投影后合并出的单步单位，一条覆盖一段连续的帧。
-          - **步骤与关系**：关系是静态的「会这样交互」，步骤是场景里按时间发生的**一次**交互——运行时关系（calls / dataflow / event）的一次发生（S12）；
+          - **步骤与关系**：关系是静态的「会这样交互」，步骤是场景里按时间发生的**一次**交互——运行时关系（calls / notifies / streams，箭头为控制流方向，与消息同向）的一次发生（S12）；
             一条关系可被多次经过，一个步骤最多对应一条关系，也可能没有对应（S5a、S13）。两条投影链平行：关系 → 视图边，帧 → 可见消息；可见消息画在连接同一对节点的视图边上，按步骤自己的方向流动（P10）。
           - **与结构投影同一套端点规则**：帧端点用 Projector 的端点映射提升到当前层次（D-4，规则 P1）。
           - **只写一套最细步骤**（S3）：各层投影合并；时序图与单步粒度都随层次变化，下钻后变细（规则 R7）。

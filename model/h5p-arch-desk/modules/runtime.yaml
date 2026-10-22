@@ -126,7 +126,7 @@ modules:
     responsibility: 把步骤树展开成回放计划（帧树）：ref 内联子场景并记为 ref 组合框（F3）；loop 展开一遍并标注循环条件（F4）；par 各分支按书写顺序串行并标注并行（F5）；alt 处分叉为分支点，每个选项一棵子树（F6）。每帧带 ID、所在组合框路径，以及对应的结构关系（显式引用或按 S13 推断，标明是否推断）；步骤没写的接口与数据取自对应关系（返回只取接口），并标明继承（S14）。调用与显式返回配对（pairReturns，F7）：按书写顺序以栈匹配，alt 各分支从进入分支点时的栈开始，async 不配对。
     principle: |
       帧 ID = 场景 ID + 步骤 id；步骤没写 id 时用它在树中的路径（如 `sc.open#4.alt0.1`）（F2）。ref 内联时 ID 加上引用处前缀，同一子场景被引用两次也不冲突。
-      绑定关系 bindRelation（S12、S13）：显式引用优先；否则两端之间恰好一条运行时关系（calls / dataflow / event，event 按反向）即认定并标为推断；Validator 用同一个函数，校验与界面结果一致。
+      绑定关系 bindRelation（S12、S13）：显式引用优先；否则两端之间恰好一条与消息同向的运行时关系（calls / notifies / streams；关系箭头是控制流方向，只有 return 反向比对，ADR-0022）即认定并标为推断；Validator 用同一个函数，校验与界面结果一致。
     codeRefs: [src/model/scenario/plan.ts, src/model/scenario/bind.ts, src/model/scenario/steps.ts]
   - id: model.scenario.path
     name: 回放路径
@@ -227,7 +227,7 @@ relations:
   - {id: rel.p6.steps-calls, from: present.nav-tree.steps, to: state.desk.projection, type: calls, payload: [ds.OutlineNode], description: 读取步骤大纲与本层投影，高亮进度所在的步骤}
   - {id: rel.p2.flow-calls, from: present.canvas.flow, to: state.desk.projection, type: calls, payload: [ds.StageOverlay], description: 读取舞台叠加：当前消息与走过的边}
   - {id: rel.p3.perspective-opens, from: present.perspective, to: present.scenarios, type: calls, description: 单击「运行」弹出场景列表}
-  - {id: rel.p2.layoutsync-read, from: state.desk.projection, to: state.desk.layout-sync, type: dataflow, payload: [ds.LevelView], description: 层次视图（Ref）交给布局同步，变化触发布局，结果回填}
+  - {id: rel.p2.layoutsync-read, from: state.desk.projection, to: state.desk.layout-sync, type: streams, payload: [ds.LevelView], description: 层次视图（Ref）交给布局同步，变化触发布局，结果回填}
   - id: rel.p2.projection-plan
     from: state.desk.projection
     to: model.scenario.flatten
@@ -272,7 +272,7 @@ relations:
   # 模型层内部
   - {id: rel.p2.level-endpoints, from: model.scenario.level, to: model.projector.endpoints, type: calls, interface: if.model.mapEndpoint, description: 与结构投影共用同一套端点规则}
   - {id: rel.p2.level-edgeid, from: model.scenario.level, to: model.projector.collector, type: depends, description: 用 edgeId 规则算出帧对应的视图边 ID}
-  - {id: rel.p2.level-sequence, from: model.scenario.level, to: model.scenario.sequence, type: dataflow, payload: [ds.ScenarioLevelView], description: 本层的可见消息交给时序模型}
+  - {id: rel.p2.level-sequence, from: model.scenario.level, to: model.scenario.sequence, type: streams, payload: [ds.ScenarioLevelView], description: 本层的可见消息交给时序模型}
   - {id: rel.p8.sequence-hierarchy, from: model.scenario.sequence, to: model.projector.hierarchy, type: calls, interface: if.model.hierarchyKey, description: 参与者的层次排序键（P9）}
   - {id: rel.p2.flatten-index, from: model.scenario.flatten, to: model.types, type: depends, payload: [ds.ModelIndex], description: 读取场景表以内联 ref；读取关系表以绑定关系（S13）}
   - {id: rel.p3.validator-bind, from: model.pipeline.validator, to: model.scenario.flatten, type: calls, description: S5a / S13 与回放共用 bindRelation}
@@ -444,7 +444,7 @@ dataStructures:
         id?: string                    // 可选，场景内唯一；写了则帧 ID 稳定（F2）
         from: string; to: string       // 模块（写最深的）或参与者
         label?: string
-        relation?: string              // 可选：对应的结构关系，两端须是消息两端自身或其祖先（event 反向比对）
+        relation?: string              // 可选：对应的结构关系，两端须是消息两端自身或其祖先，与消息同向（return 反向比对）
         interface?: string
         payload?: string | string[]
         note?: string

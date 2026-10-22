@@ -31,12 +31,12 @@ modules:
   - id: present.panel.module
     name: 模块面板
     parent: present.panel
-    responsibility: 模块的职责、实现原理、对外接口、核心数据结构、子模块、出入边、代码与文档引用；层额外显示抽象原则、包含 / 不包含、可依赖的层。
+    responsibility: 模块的职责、实现原理、对外接口、核心数据结构、子模块、出入边、声明了接口时的端口三角（K11）、代码与文档引用；层额外显示抽象原则、包含 / 不包含、可依赖的层。
     codeRefs: [src/components/panel/ModulePanel.vue]
   - id: present.panel.relation
     name: 关系面板
     parent: present.panel
-    responsibility: 关系的两端、类型、同步 / 异步、经由接口、交换的数据结构；不在当前视图时提供「定位到所在层次」。
+    responsibility: 关系的两端与类型；「关系」一节按五个维度各一行——控制流、知识（由代码事实给出：同向 / 反向 / 经端口 / 不判定）、语义、同步性、平面（ADR-0022）；经由接口、交换的数据结构；不在当前视图时提供「定位到所在层次」。
     codeRefs: [src/components/panel/RelationPanel.vue]
   - id: present.panel.edge
     name: 聚合边面板
@@ -80,7 +80,7 @@ modules:
   - id: present.canvas.legend
     name: 显示面板（显示设置与图例）
     parent: present.canvas
-    responsibility: 画布右下角的「显示」面板，先「设置」后「图例」（ADR-0017）：设置只放没有图例的开关（结构视角为边界节点、只看现状；运行视角为静态关系显示方式）；图例一个视觉通道一组、每组可折叠（ADR-0017 第三轮）——关系类型 · 颜色（类型列表按运行时 / 编译期两段，示意带该类箭头，结构视角下每行兼作类型筛选；下方「线的读法」卡片说明对任意类型适用的箭头与粗细、×N，L10）、节点、代码事实 · 线型（结构视角，开关在组标题；线型只在这一组讲）、回放（运行视角）；一行一项，示意线由 LineSwatch 按与边组件共用的 edgeStyle 画出，与画布同款。各组为子组件（NodeSettings、RelationLegend、FactsLegend、ReplayLegend，外壳 DisplayGroup）。折叠时摘要列出非默认的设置（运行视角缺省折叠，摘要总是「静态关系：<方式>」）；面板展开与各组折叠按视角记在本机（useDisplayPrefs），运行视角默认只展开「回放」。
+    responsibility: 画布右下角的「显示」面板，先「设置」后「图例」（ADR-0017）：设置只放没有图例的开关（结构视角为边界节点、只看现状；运行视角为静态关系显示方式）；图例一个视觉通道一组、每组可折叠（ADR-0017 第三轮）——关系类型 · 颜色（类型列表按运行时 / 编译期两段，示意带该类箭头，每行类型名后一句读法——命令 = 要结果、通知 = 不要结果、一对多、箭头指向被通知方、流 = 连续数据、箭头指向数据去向（ADR-0022），结构视角下每行兼作类型筛选；下方「线的读法」卡片说明对任意类型适用的箭头与粗细、×N，L10）、节点、代码事实 · 线型（结构视角，开关在组标题；线型只在这一组讲）、回放（运行视角）；一行一项，示意线由 LineSwatch 按与边组件共用的 edgeStyle 画出，与画布同款。各组为子组件（NodeSettings、RelationLegend、FactsLegend、ReplayLegend，外壳 DisplayGroup）。折叠时摘要列出非默认的设置（运行视角缺省折叠，摘要总是「静态关系：<方式>」）；面板展开与各组折叠按视角记在本机（useDisplayPrefs），运行视角默认只展开「回放」。
     codeRefs: [src/components/DisplayPanel.vue, src/components/display/**]
 
   # ── 视图状态层 ──────────────────────────────────────────
@@ -149,17 +149,17 @@ modules:
   - id: model.pipeline.loader
     name: Loader
     parent: model.pipeline
-    responsibility: 解析 YAML / JSON、按 JSON Schema 检查单文件格式（未知字段即报错）、把多个文件合并成一个模型并记录每个实体的出处（文件 / 路径 / 行号）；解析外部参与者、场景与嵌套步骤树（每个步骤记录路径与出处）；sourceLimits 只取第一处声明，重复时提醒（G20）。
+    responsibility: 解析 YAML / JSON、按 JSON Schema 检查单文件格式（未知字段即报错）、把多个文件合并成一个模型并记录每个实体的出处（文件 / 路径 / 行号）；解析外部参与者、场景与嵌套步骤树（每个步骤记录路径与出处）；sourceLimits 只取第一处声明，重复时提醒（G20）；关系类型的旧名 event / dataflow 映射为 notifies（翻转两端）/ streams 并逐条提醒迁移（M12）。
     codeRefs: [src/model/load.ts]
   - id: model.pipeline.validator
     name: Validator
     parent: model.pipeline
-    responsibility: 跨文件检查：ID 唯一、父模块存在且父链无环、关系端点有效、不连祖先与后代、接口 / 数据结构引用存在、层字段完整；检查外部参与者（ID 与模块不重复）与场景：消息端点是模块或参与者、引用的关系 / 接口 / 数据结构存在且与端点一致、步骤 id 在场景内唯一、ref 指向的场景存在且无循环引用。
+    responsibility: 跨文件检查：ID 唯一、父模块存在且父链无环、关系端点有效、不连祖先与后代、接口 / 数据结构引用存在、层字段完整；检查外部参与者（ID 与模块不重复）与场景：消息端点是模块或参与者、引用的关系 / 接口 / 数据结构存在且与端点一致、步骤 id 在场景内唯一、ref 指向的场景存在且无循环引用；implements 的目标须声明接口（M11）、pull 只用于 streams（M13）。
     principle: |
       不抛异常：error 级问题的实体被剔除，warning 级只去掉坏引用，返回一份可以安全建索引的模型和问题列表。
 
       步骤与结构一致性（规则 S5 / S5a）：
-      - 引用了 relation：端点必须与关系一致，否则 error；relation 为 event 类型时按反向比对（结构上 event 是订阅方 → 发布方，消息是发布方 → 订阅方）。
+      - 引用了 relation：端点与方向必须与关系一致，否则 error；运行时关系的箭头是控制流方向，与消息同向，只有 return 反向比对（S12、ADR-0022）。
       - 没引用 relation：按 S13 推断（两端之间恰好一条运行时关系即认定）；推断不到且两端（及其祖先之间）结构上没有任何关系时报 warning「结构图中没有对应关系」。
       - 引用了 depends / implements 关系：error（S12，只有运行时关系会「发生一次」）。
     codeRefs: [src/model/validate.ts]
@@ -221,7 +221,7 @@ relations:
   - {id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: depends}
   - {id: rel.ad.version-shell, from: present.version, to: present.shell, type: calls, via: router, description: 切换版本即导航到对应路由，带上当前 level / sel}
 
-  # 呈现 → 接入（HTTP 与变更通知；event 方向为订阅方 → 发布方）
+  # 呈现 ↔ 接入（HTTP 请求；变更通知 notifies 由接入层发往页面，控制流方向）
   - id: rel.ad.list-fetch
     from: present.project-list
     to: access.model-source
@@ -231,7 +231,7 @@ relations:
     interface: if.source.endpoints
     payload: [ds.ProjectSummary]
     description: GET projects.json 取项目摘要列表
-  - {id: rel.ad.list-changed, from: present.project-list, to: access.model-source, type: event, via: hmr, mode: async, interface: if.source.endpoints, description: 任一项目描述变化后刷新摘要}
+  - {id: rel.ad.list-changed, from: access.model-source, to: present.project-list, type: notifies, via: hmr, mode: async, interface: if.source.endpoints, description: 任一项目描述变化后刷新摘要}
   - id: rel.ad.desk-fetch
     from: present.desk-view
     to: access.model-source
@@ -241,7 +241,7 @@ relations:
     interface: if.source.endpoints
     payload: [ds.ModelPayload]
     description: GET models/<项目>.json 取该项目全部 YAML 原文
-  - {id: rel.ad.desk-changed, from: present.desk-view, to: access.model-source, type: event, via: hmr, mode: async, interface: if.source.endpoints, description: 只响应本项目的 arch-model:changed，触发重新加载}
+  - {id: rel.ad.desk-changed, from: access.model-source, to: present.desk-view, type: notifies, via: hmr, mode: async, interface: if.source.endpoints, description: 只响应本项目的 arch-model:changed，触发重新加载}
 
   # 呈现 → 视图状态
   - {id: rel.ad.desk-create, from: present.desk-view, to: state.desk.loading, type: calls, interface: if.desk.createDeskState, description: 进入项目时创建并注入 DeskState，调用 init；变更通知时调用 reload}
@@ -271,11 +271,11 @@ relations:
 
   # 视图状态内部与 → 模型
   - {id: rel.ad.loading-entry, from: state.desk.loading, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, payload: [ds.ModelIndex, ds.Issue]}
-  - {id: rel.ad.loading-baselines, from: state.desk.loading, to: state.desk.versions, type: dataflow, payload: [ds.ModelPayload], description: 设计版本的载荷附带设计信息与对比基线原文}
+  - {id: rel.ad.loading-baselines, from: state.desk.loading, to: state.desk.versions, type: streams, pull: true, payload: [ds.ModelPayload], description: 设计版本的载荷附带设计信息与对比基线原文}
   - {id: rel.ad.versions-diff, from: state.desk.versions, to: model.diff, type: calls, interface: if.model.diffModels, payload: [ds.ModelDiff], description: 切换对比基线或重新加载时重算}
   - {id: rel.ad.loading-keep, from: state.desk.loading, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 加载完成 → dispatch(loaded / reloaded)，层次回退由转移规则决定}
   - {id: rel.ad.url-actions, from: state.desk.url-sync, to: state.desk.actions, type: calls, via: callback, interface: if.desk.actions, description: 外部路由变化 → decode → dispatch}
-  - {id: rel.ad.actions-url, from: state.desk.actions, to: state.desk.url-sync, type: dataflow, payload: [ds.ViewState], description: 状态改变后写地址（router.write），地址 = encode(状态)}
+  - {id: rel.ad.actions-url, from: state.desk.actions, to: state.desk.url-sync, type: streams, payload: [ds.ViewState], description: 状态改变后写地址（router.write），地址 = encode(状态)}
   - {id: rel.ad.actions-lca, from: state.transition.navigation, to: model.projector.hierarchy, type: calls, interface: if.model.lowestCommonAncestor, description: 定位关系用最近公共祖先}
   - id: rel.ad.projection-project
     from: state.desk.projection
@@ -307,7 +307,7 @@ relations:
   - {id: rel.ad.entry-loader, from: model.pipeline.entry, to: model.pipeline.loader, type: calls, interface: if.model.load}
   - {id: rel.ad.entry-validator, from: model.pipeline.entry, to: model.pipeline.validator, type: calls, interface: if.model.validate}
   - {id: rel.ad.entry-indexer, from: model.pipeline.entry, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex}
-  - {id: rel.ad.flow-validate-index, from: model.pipeline.validator, to: model.pipeline.indexer, type: dataflow, payload: [ds.ArchModel], description: 剔除坏实体后的模型交给建索引}
+  - {id: rel.ad.flow-validate-index, from: model.pipeline.validator, to: model.pipeline.indexer, type: streams, payload: [ds.ArchModel], description: 剔除坏实体后的模型交给建索引}
   - {id: rel.ad.loader-schema, from: model.pipeline.loader, to: model.types, type: depends, payload: [ds.ArchFileDef, ds.RawFile]}
   - {id: rel.ad.overview-endpoints, from: model.projector.overview, to: model.projector.endpoints, type: calls}
   - {id: rel.ad.endpoints-collector, from: model.projector.endpoints, to: model.projector.collector, type: calls}
@@ -324,6 +324,10 @@ relations:
   - {id: rel.ad.present-names, from: present, to: model.types, type: depends, description: 契约（U10）：名称查询 moduleName（各处显示模块名）、小谓词 isLong / isArchived、枚举 RELATION_TYPES、规则名 RULE_LABELS}
   - {id: rel.ad.content-labels, from: present.panel.content, to: present.shared, type: depends, description: FIELD_LABELS：变更角标的字段名}
   - {id: rel.ad.version-labels, from: present.version, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS：设计状态的显示名}
+  - {id: rel.ad.legend-type-labels, from: present.canvas.legend, to: present.shared, type: depends, description: RELATION_TYPE_LABELS / RELATION_TYPE_HINTS：关系类型名与一句话读法（ADR-0022）}
+  - {id: rel.ad.relation-type-labels, from: present.panel.relation, to: present.shared, type: depends, description: RELATION_TYPE_LABELS / RELATION_TYPE_HINTS：类型名与「语义」一行}
+  - {id: rel.ad.edge-type-labels, from: present.panel.edge, to: present.shared, type: depends, description: RELATION_TYPE_LABELS：聚合边与关系行的类型名}
+  - {id: rel.gv.ports-type-labels, from: present.panel.governance, to: present.shared, type: depends, description: RELATION_TYPE_LABELS：端口三角各项的类型名}
   - {id: rel.ad.navtree-tab, from: present.nav-tree, to: present.shared, type: depends, description: NAV_TAB：页签由项目视图持有，问题角标可切到「问题」页签（W-6）}
   - {id: rel.ad.list-labels, from: present.project-list, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS：设计状态的显示名}
   - {id: rel.ad.design-labels, from: present.panel.design, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS：设计状态的显示名}

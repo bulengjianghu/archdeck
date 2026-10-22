@@ -6,11 +6,12 @@ modules:
   - id: present.panel.governance
     name: 架构治理面板
     parent: present.panel
-    responsibility: 面板中的「架构治理」：根层先给健康度摘要（事实统计；违规相对基线 ±N、环度 ↑↓、模块环个数与最大规模，绝对值在悬停中，GV-7），明细里违规按新增 / 已知 / 已豁免分组（可展开文件证据，未豁免的可「加例外（写理由）」，B3）、模块环与外部依赖、拦截记录摘要（GV-7）；模块的生效规则、出入违规与未描述依赖、所在环（Q1）；选中带环编号的节点时所在的本层环：环内节点、构成环的每条本层依赖（展开见模块依赖与文件证据，单击选中对应的视图边或代码依赖，GV-9、Y5）；关系的证实与文件证据（K5、K6）；关系行上的证实标记。文件证据可单击选中文件。
+    responsibility: 面板中的「架构治理」：根层先给健康度摘要（事实统计；违规相对基线 ±N、环度 ↑↓、模块环个数与最大规模，绝对值在悬停中，GV-7），明细里违规按新增 / 已知 / 已豁免分组（可展开文件证据，未豁免的可「加例外（写理由）」，B3）、模块环与外部依赖、拦截记录摘要（GV-7）；模块的生效规则、出入违规与未描述依赖、所在环（Q1）；选中带环编号的节点时所在的本层环：环内节点、构成环的每条本层依赖（展开见模块依赖与文件证据，单击选中对应的视图边或代码依赖，GV-9、Y5）；关系的证实与文件证据（K5、K6，implements 另有「证据像 depends」）；声明了接口的模块的端口三角：定义 · 实现者 · 使用者，每项带证实标记、单击选中关系（K11）；关系行上的证实标记。文件证据可单击选中文件。
     codeRefs:
       - src/components/panel/GovernanceSection.vue
       - src/components/panel/ModuleGovernance.vue
       - src/components/panel/RelationFact.vue
+      - src/components/panel/PortTriad.vue
       - src/components/panel/FileDepList.vue
   - id: present.panel.dep
     name: 代码依赖面板
@@ -22,14 +23,14 @@ modules:
   - id: state.desk.facts
     name: 架构治理派生（desk.facts）
     parent: state.desk
-    responsibility: 由源码同步取得的代码事实派生（computed，调用模型层架构治理）：事实状态（设计版本或历史提交、取数中、失败——源码清单读取失败也算，K8、G1）、治理报告、结构视角开关开启时（缺省开启）的本层投影（只取基线外的违规，K9、Y4）、门禁错误（U9）、拦截记录摘要（Q4）、选中的代码依赖叠加线（K10）、选中节点所在的本层环（Y5）、模块治理信息与关系证实。
+    responsibility: 由源码同步取得的代码事实派生（computed，调用模型层架构治理）：事实状态（设计版本或历史提交、取数中、失败——源码清单读取失败也算，K8、G1）、治理报告、结构视角开关开启时（缺省开启）的本层投影（只取基线外的违规，K9、Y4）、门禁错误（U9）、拦截记录摘要（Q4）、选中的代码依赖叠加线（K10）、选中节点所在的本层环（Y5）、模块治理信息、关系证实（含知识方向与「证据像 depends」）与端口三角（K11）。
     codeRefs: [src/state/desk/facts.ts]
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.governance.facts
     name: 事实比对
     parent: model.governance
-    responsibility: 文件依赖按归属提升为模块依赖（一端是归属冲突文件的不提升、单独列出，祖先后代之间的另记，K4）；关系的证实（端点相同或互为祖先后代，dataflow 两向，K5；两端宿主相同的概念拆分不判定，K5a；写了 via 的不判定，K5b）；未证实是否报警（编译期关系，或两端之间没有任何依赖的运行时关系，K6）；未描述依赖（只计有值导入的，K7）。
+    responsibility: 文件依赖按归属提升为模块依赖（一端是归属冲突文件的不提升、单独列出，祖先后代之间的另记，K4）；关系的证实（端点相同或互为祖先后代，notifies 与 streams 两向；implements 只认引用目标声明的接口名或类的 implements / extends，只有其他导入时标「证据像 depends」；证实时给出依据相对箭头的知识方向，K5；两端宿主相同的概念拆分不判定，K5a；写了 via 的不判定，K5b）；未证实是否报警（编译期关系，或两端之间没有任何依赖的运行时关系，K6）；未描述依赖（只计有值导入的，notifies 与 streams 覆盖两个方向，K7）。
     codeRefs: [src/model/governance/facts.ts]
   - id: model.governance.rules
     name: 规则判定
@@ -56,6 +57,11 @@ modules:
     parent: model.governance
     responsibility: 定位文件、说明模块（路径与各级职责、生效规则、接口签名、出入关系与违规，Q1）；写前判定（允许 / 拒绝 / 无约束、环影响、覆盖关系、目标语义，Q2）；拦截记录统计（Q4）。输出可直接序列化。
     codeRefs: [src/model/governance/query.ts, src/model/governance/ledger.ts]
+  - id: model.governance.ports
+    name: 端口三角
+    parent: model.governance
+    responsibility: 一个声明了接口的模块的三方（K11、ADR-0022）：定义（provides 与子树内 owner 指向它的接口）、实现者（to 在子树内的 implements）、使用者（to 在子树内的 depends / calls / streams，含写了 via 的；通知的箭头指向订阅者，不算使用）；给了治理报告时每项带证实状态。只看描述，没有接口的模块返回空。
+    codeRefs: [src/model/governance/ports.ts]
   - id: model.rework
     name: 返工清单
     parent: model
@@ -127,7 +133,7 @@ dataStructures:
   - id: ds.FileDep
     name: FileDep
     definition: |
-      interface FileDep { from: string; to: string; via: string; kind: 'value' | 'type'; line: number }
+      interface FileDep { from: string; to: string; via: string; kind: 'value' | 'type'; line: number; names?: string[]; heritage?: true }
   - id: ds.GovernanceReport
     name: GovernanceReport
     definition: |
@@ -207,7 +213,12 @@ relations:
   - {id: rel.gv.agent-rework, from: access.agent, to: model.rework, type: calls, interface: if.rework.list, payload: [ds.ReworkItem], description: 命令行与 MCP 的 issues（Q9）}
   - {id: rel.gv.rework-source, from: model.rework, to: model.source, type: calls, description: matchRef、moduleEntry：冲突的 codeRefs 组合与 entry 是否存在}
   - {id: rel.gv.rework-scenario, from: model.rework, to: model.scenario, type: calls, description: bindRelation、forEachStep：未建模的步骤（S13、P11）}
-  - {id: rel.gv.rework-facts, from: model.rework, to: model.governance.facts, type: calls, description: unconfirmedWarns、unconfirmedReason：报警的未证实关系与说明（K6），返工清单与健康度共用}
+  - {id: rel.gv.rework-facts, from: model.rework, to: model.governance.facts, type: calls, description: unconfirmedWarns、unconfirmedCode、unconfirmedReason：报警的未证实关系、问题代码与说明（K6；证据像 depends 建议改为 depends），返工清单与健康度共用}
+  - {id: rel.gv.ports-source, from: model.governance.ports, to: model.source.ownership, type: calls, description: moduleInterfaces：模块的接口（G12）}
+  - {id: rel.gv.facts-ports-source, from: model.governance.facts, to: model.source.ownership, type: calls, description: moduleInterfaces：implements 目标声明的接口名（K5 的证据）}
+  - {id: rel.gv.facts-ports, from: state.desk.facts, to: model.governance.ports, type: calls, description: portTriad：模块面板的端口三角（K11）}
+  - {id: rel.gv.migrate-model, from: access.migrate, to: model.types, type: depends, description: LEGACY_RELATION_TYPES：旧名与新名、是否翻转（M12）}
+  - {id: rel.gv.migrate-reader, from: access.migrate, to: access.reader, type: calls, description: resolveModelRoot、listProjectIds：找到要迁移的项目目录}
   - {id: rel.gv.rework-types, from: model.rework, to: model.types, type: depends, description: 返工项的类型、类别与严重度名称（契约），moduleName、RULE_LABELS}
   - {id: rel.gv.store-reader, from: access.governance-store, to: access.reader, type: depends, description: GOVERNANCE_DIR：治理产物目录名与描述读取共用（读取时跳过）}
   - {id: rel.gv.dep-content, from: present.panel.dep, to: present.panel.content, type: depends, description: 复用 Section}

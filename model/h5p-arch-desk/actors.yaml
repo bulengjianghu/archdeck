@@ -17,4 +17,4 @@ relations:
   - {id: rel.ctx.sequence, from: actor.architect, to: present.sequence.interact, type: calls, description: 单击时序图中的消息、悬停预览}
   - {id: rel.ctx.canvas, from: actor.architect, to: present.canvas.flow, type: calls, description: 单击 / 双击 / 悬停节点与边，单击步骤序号}
   - {id: rel.ctx.panel, from: actor.architect, to: present.panel, type: calls, description: 在属性面板中跳转、指向步骤}
-  - {id: rel.ctx.ai, from: actor.ai, to: access.model-source, type: dataflow, mode: async, description: 改写描述文件；开发服务器监听到变化后按项目推送 arch-model:changed}
+  - {id: rel.ctx.ai, from: actor.ai, to: access.model-source, type: notifies, mode: async, description: 改写描述文件（不等结果）；开发服务器监听到变化后按项目推送 arch-model:changed}
