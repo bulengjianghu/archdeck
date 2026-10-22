@@ -70,16 +70,16 @@ describe('G16 文件是一种选中', () => {
 
 describe('G2 源码同步', () => {
   afterEach(() => vi.unstubAllGlobals())
-  it('构建态：清单端点 404 → unavailable；文件 404 → missing', async () => {
+  it('G1：清单端点 404 → error（附原因）；文件 404 → missing', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response('{}', { status: 404 })),
     )
     const f = httpSourceFetcher('p')
-    expect(await f.tree()).toEqual({ status: 'unavailable' })
+    expect(await f.tree()).toMatchObject({ status: 'error', reason: expect.stringContaining('p') })
     const sync = createSourceSync(f)
     await sync.refresh()
-    expect(sync.tree.value).toEqual({ status: 'unavailable' })
+    expect(sync.tree.value).toMatchObject({ status: 'error' })
     const r = sync.file('a.ts')
     await flush()
     expect(r.value).toEqual({ status: 'missing' })
@@ -96,18 +96,18 @@ describe('G2 源码同步', () => {
     expect(sync.file('a.ts')).not.toBe(a)
     expect(file).toHaveBeenCalledTimes(2)
   })
-  it('取清单失败：作为「不在本地」显示原因，不抛错', async () => {
+  it('取清单失败：为 error 并给出原因，不抛错', async () => {
     const sync = createSourceSync({ ...fetcher(), tree: async () => Promise.reject(new Error('boom')) })
     await sync.refresh()
-    expect(sync.tree.value).toMatchObject({ status: 'absent', reason: expect.stringContaining('boom') })
+    expect(sync.tree.value).toMatchObject({ status: 'error', reason: expect.stringContaining('boom') })
   })
-  it('未注入源码来源时等同构建态', async () => {
+  it('未注入源码来源时清单为 error', async () => {
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
     const desk = createDeskState(async () => ({ dir: 'm', files: sampleFiles() }))
     desk.attachRouter(router)
     await desk.init()
     await flush()
-    expect(desk.files.payload.value).toEqual({ status: 'unavailable' })
+    expect(desk.files.payload.value).toEqual({ status: 'error', reason: '没有注入源码来源' })
     expect(desk.files.tree.value).toBeNull()
   })
 })

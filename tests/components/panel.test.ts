@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import Panel from '../../src/components/panel/Panel.vue'
-import { createDeskState } from '../../src/state/useDeskState'
+import { createDeskState, type SourceFetcher } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
+import type { FileDep } from '../../src/model'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
 async function mountPanel(url = '/', files = sampleFiles()) {
@@ -61,7 +62,7 @@ describe('属性面板', () => {
   })
 
   it('选中聚合边：列出原始关系，点击跳到关系所在层次', async () => {
-    const { wrapper, desk } = await mountPanel('/?level=infra&sel=e:infra.framework->infra.mus')
+    const { wrapper, desk } = await mountPanel('/?level=infra&sel=e:infra.framework->infra.mus:dataflow')
     expect(wrapper.text()).toContain('聚合边')
     expect(wrapper.text()).toContain('Pipeline → MUs')
     await wrapper.find('.rel-row .link').trigger('click')
@@ -157,5 +158,48 @@ describe('D-5：步骤的输入', () => {
     const { wrapper } = await mountPanel('/?sc=sc.inh&step=sc.inh%23a', files)
     expect(wrapper.find('.call').text()).toBe('sendCommand(cmd: Command): Result')
     expect(wrapper.text()).toContain('取自关系')
+  })
+})
+
+describe('GV-9、Y5：本层环可解释', () => {
+  const REFS = `
+modules:
+  - { id: app.solution.core, parent: app.solution, name: Core, responsibility: x, codeRefs: [src/app/**] }
+  - { id: infra.framework.extra, parent: infra.framework, name: Extra, responsibility: x, codeRefs: [src/framework/**] }
+`
+  const dep = (from: string, to: string): FileDep => ({ from, to, via: to, kind: 'value', line: 7 })
+  const source: SourceFetcher = {
+    tree: async () => ({ status: 'local', root: '/repo', files: ['src/app/s.ts', 'src/framework/extra.ts'], packages: {} }),
+    file: async () => null,
+    exports: async () => [],
+    facts: async () => ({
+      deps: { deps: [dep('src/app/s.ts', 'src/framework/extra.ts'), dep('src/framework/extra.ts', 'src/app/s.ts')], external: {}, parsed: 2 },
+      baseline: null,
+      ledger: [],
+    }),
+  }
+
+  it('选中带环编号的节点：架构治理列出环内节点与本层依赖，展开见模块依赖与文件证据，单击选中对应的边或代码依赖', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+    await router.push('/?sel=m:app')
+    const desk = createDeskState(async () => ({ dir: 'model/test', files: [...scenarioFiles(), { path: 'modules/zz-refs.yaml', text: REFS }] }), { source })
+    desk.attachRouter(router)
+    await desk.init()
+    await flushPromises()
+    desk.setToggles({ showFacts: true })
+    const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+    await flushPromises()
+    const block = wrapper.find('.level-cycle')
+    expect(block.text()).toMatch(/所在的本层环 ↻\d/)
+    expect(block.text()).toContain('Application')
+    expect(block.text()).toContain('Infrastructure')
+    const rows = block.findAll('details')
+    expect(rows).toHaveLength(2)
+    expect(block.text()).toContain('src/framework/extra.ts:7')
+    const back = rows.find(r => r.find('summary').text().startsWith('Infrastructure'))!
+    const e = desk.facts.selectedCycle.value!.edges.find(x => x.fromModule === 'infra')!
+    await back.find('summary button').trigger('click')
+    await flushPromises()
+    expect(desk.selection.value).toEqual(e.edgeId ? { kind: 'edge', id: e.edgeId } : { kind: 'dep', id: 'infra->app' })
   })
 })

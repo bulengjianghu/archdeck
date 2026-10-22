@@ -1,7 +1,7 @@
 # 专题：架构治理
 
 > 回答：代码依赖从哪里来；描述的关系对不对；架构规则怎么判、门禁怎么卡；agent 怎么在写代码前询问。
-> 覆盖模块：接入层的「依赖提取」「治理存储」「agent 接口」；模型层的「架构治理」。规则见 [02-domain.md](../02-domain.md) 的 K、U、Y、Q；决策见 [ADR-0015](../adr/0015-architecture-governance.md)；界面见[工作台界面](./workbench.md)；归属与入口复用[源码接入与归属](./source.md)。
+> 覆盖模块：接入层的「依赖提取」「治理存储」「agent 接口」；模型层的「架构治理」「返工清单」。规则见 [02-domain.md](../02-domain.md) 的 K、U、Y、Q（返工清单 Q7–Q9）；决策见 [ADR-0015](../adr/0015-architecture-governance.md)；界面见[工作台界面](./workbench.md)；归属与入口复用[源码接入与归属](./source.md)。
 
 ## 1. 分工
 
@@ -10,7 +10,7 @@
    │ readCodeDeps（K1–K3，按修改时间缓存）
    ▼
 CodeDeps { deps: FileDep[], external, parsed }   +  governance/baseline.json · ledger.jsonl（治理存储）
-   │  开发态端点 source/<项目>/facts.json；命令行与 agent 接口直接调用
+   │  开发服务器端点 source/<项目>/facts.json；命令行与 agent 接口直接调用
    ▼
 governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
    ├ liftDeps → ModuleDep（K4）
@@ -19,7 +19,7 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
    ├ cycles · cyclicity（Y1–Y3）
    └ gate → Issue（U8）
    │
-   ├─ DeskState：levelFacts（K9、Y4）→ 画布叠加与面板
+   ├─ DeskState：levelFacts（K9、Y4、Y5）→ 画布叠加与面板
    ├─ lint:model：问题与摘要
    └─ agent 接口：locate · describeModule · checkDependency · summarizeLedger（Q1–Q4）
 ```
@@ -62,7 +62,7 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 | `cycles(nodes, edges)` | Tarjan 强连通分量，返回规模 ≥ 2 的分量，成员按名称排序 | Y1 |
 | `cyclicity(cycles)` | 未容忍的环的 Σ 规模² | Y2、Y3 |
 | `governanceReport(index, own, tree, deps, baseline)` | 组合以上：事实、比对、违规（带基线状态）、模块环与文件环、环度、门禁问题与摘要 | K4–K7、U8、Y |
-| `levelFacts(index, view, report)` | 当前层次：视图边的证实标记与违规；未描述依赖与违规投影成的叠加线；本层的环编号 | K9、Y4 |
+| `levelFacts(index, view, report)` | 当前层次：视图边的证实标记与违规；未描述依赖与违规投影成的叠加线；本层的环编号；每个本层环的构成（环内节点按视图顺序，环内每条本层依赖带同方向视图边与投影来的模块依赖）——与环编号同一次投影得出，不另取事实 | K9、Y4、Y5 |
 | `depsBetween(index, view, report, from, to)` | 叠加线选中时的内容：投影到这对节点的模块依赖、违规与文件证据 | K10 |
 | `rulesFor(index, moduleId)` | 对一个模块生效的规则：所在各级层的 `mayDependOn`、祖先链上的白名单与访问面 | Q1 |
 | `describeModule(index, own, report, entryOf, id)` · `locate(…, file)` | agent 用的模块 / 文件说明：路径与各级职责、生效的规则、接口签名、入口、出入关系与违规 | Q1 |
@@ -92,7 +92,36 @@ interface GovernanceReport {
   issues: Issue[]
 }
 type Verdict = 'allowed' | 'denied' | 'unconstrained'
+// Y5：本层环的构成（契约类型，呈现层直接引用）
+interface LevelCycleEdge { from: string; to: string; fromModule: string; toModule: string; edgeId?: string; deps: ModuleDep[] }
+interface LevelCycle { id: number; nodes: { id: string; module: string }[]; edges: LevelCycleEdge[] }
+// levelFacts 的结果：{ edgeFacts, violatedEdges, overlays, cycles: Map<节点, 环编号>, levelCycles: LevelCycle[] }
 ```
+
+### 4.2 返工清单（模型层，`src/model/rework/`）
+
+工具擅长发现问题，返工清单让问题带着「在哪、为什么、怎么改」离开工具：页面问题页签、命令行与 MCP 用同一份结果。
+
+| 函数 | 做什么 | 规则 |
+|---|---|---|
+| `reworkList({ index, issues, source?, report? })` | 汇总：校验问题（跳过归属、门禁、事实与 S5a 未建模，它们由下列材料重新算）、归属（冲突按匹配的 codeRefs 组合、未归属按目录、entry 不存在）、违规（按基线状态 · 种类 · 规则所在 · 被依赖方）、环度上升与可收紧基线、未证实的编译期关系、未描述依赖、未建模的步骤（`bindRelation` 绑定不到关系的消息步骤，按两端聚合）；排序后给出各严重度与类别的计数 | Q7、Q8 |
+| `reworkMarkdown(list, title, { modelDir, sourceRoot, limit })` · `reworkItemMarkdown(item, opts)` | 给 agent 的指令：摘要、每条的规则、位置、受影响（缺省最多 20 处）、建议与 YAML 片段；描述文件路径加模型目录前缀 | Q9 |
+
+```ts
+type ReworkCategory = 'description' | 'violation' | 'cycle' | 'ownership' | 'unconfirmed' | 'undescribed' | 'unmodeled'
+interface ReworkLoc { in: 'description' | 'source'; file: string; line?: number; note?: string }
+interface ReworkAction { kind: ReworkActionKind; text: string; file?: string; snippet?: string }
+interface ReworkItem {
+  id: string /* `<类别>:<根因键>`，稳定 */; category: ReworkCategory; severity: 'error' | 'warning' | 'info'
+  rules: string[]; code: string; title: string; detail?: string; status?: ViolationStatus
+  at?: ReworkLoc /* 根因所在 */; affected: ReworkLoc[]; actions: ReworkAction[]
+  target: { modules?: string[]; relation?: string; dep?: string; file?: string; scenario?: string } // 页面定位
+}
+interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; byCategory: Record<ReworkCategory, number>; facts: boolean }
+```
+
+- 聚合的判据是「改一处能消掉几条」：同一组重叠的 codeRefs、同一目录的漏写、越过同一条边界依赖同一个模块（常见于契约放错了层）、同一对端点之间缺的关系。h5player 的 287 条违规由此收成 17 条。
+- 建议动作只给方向与片段，不替人决定：加例外、收紧基线由架构师决定（U5、U7）。
 
 ## 5. agent 接口（接入层，`scripts/agent/`、`scripts/arch.ts`、`scripts/arch-mcp.ts`）
 
@@ -106,6 +135,7 @@ type Verdict = 'allowed' | 'denied' | 'unconstrained'
 | `violations [--new]` | `list_violations` | 违规与基线状态 | — |
 | `cycles` | `list_cycles` | 模块环、文件环、环度与基线 | — |
 | `rescan` | `rescan` | Q3 | ✅ |
+| `issues [--category <类别>]` | `issues`（`format`、`category`） | 返工清单（Q7–Q9），命令行缺省 Markdown、`--json` 为 JSON | — |
 | `report` | `prevention_report` | Q4 | — |
 | `baseline` | —（Q5） | 生成基线，由人执行 | — |
 
@@ -134,7 +164,8 @@ sequenceDiagram
 
 ## 7. 页面
 
-- `source/<项目>/facts.json`（开发态）：`{ deps, baseline, ledger }`（拦截记录取最近 2000 行）；构建态 404，与源码同理（K8）。
-- DeskState 的 `facts` 分组：源码清单就绪后取事实；`report = governanceReport(…)`；`level = levelFacts(…)`（只在结构视角、「代码事实」开启时用于画布）；`gateIssues` 进问题提示（U9）。「刷新源码」同时重新取事实。
+- `source/<项目>/facts.json`：`{ deps, baseline, ledger }`（拦截记录取最近 2000 行）；源码清单读取失败时 404，事实状态为 `error` 并带原因（K8、G1）。
+- DeskState 的 `facts` 分组：源码清单就绪后取事实；`report = governanceReport(…)`；`level = levelFacts(…)`（只在结构视角、「代码事实」开启时用于画布）；`selectedCycle`：选中的模块（本层节点或边界节点）所在的本层环（Y5）；`gateIssues` 进问题提示（U9）。「刷新源码」同时重新取事实。
 - 画布：`canvasScene` 多两个输入——视图边的证实与违规标记、叠加线（坐标由 `linkRoute` 算，不参与布局）；节点数据多 `cycle` 编号（K9、Y4）。
 - 选中 `{ kind: 'dep', id: '<A>-><B>' }`：URL `sel=d:`，面板 `DepPanel`（K10）；运行视角下按选中关系的方式突出两端泳道。
+- 本层环可解释（Y5）：模块面板「架构治理」一节列出 `selectedCycle`，单击一条本层依赖即 `select`——有 `edgeId` 时选中视图边（`sel=e:`），否则选中代码依赖（`sel=d:`），画布按已有的选中规则高亮视图边或叠加线。

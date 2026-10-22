@@ -15,11 +15,14 @@
   --warning: #a86a0a;
   --warning-soft: #fdf3e1;
 
-  --rel-depends: #7b8698;
+  /* 关系类型（L10）：运行时三类饱和；编译期两类低饱和、明度接近背景，与 --text-3 拉开 */
+  --rel-depends: #aeb9cc;
   --rel-calls: #2f6fe4;
   --rel-dataflow: #0f9b8e;
   --rel-event: #c98a10;
-  --rel-implements: #7a52d6;
+  --rel-implements: #bba8e0;
+  /* 代码依赖叠加线（K9，点线；有违规时为 --danger） */
+  --edge-code: #8a4f7d;
   --actor: #8a5cc7;
   --actor-soft: #f3edfb;
 
@@ -58,11 +61,12 @@
     --warning: #e2a646;
     --warning-soft: #3a2f1c;
 
-    --rel-depends: #8e98aa;
+    --rel-depends: #4f5b70;
     --rel-calls: #6b9cf5;
     --rel-dataflow: #3cc4b5;
     --rel-event: #e2a646;
-    --rel-implements: #a88af0;
+    --rel-implements: #65578e;
+    --edge-code: #d58cc4;
     --actor: #b08ae6;
     --actor-soft: #2c2440;
 
@@ -185,11 +189,7 @@ a {
 
 .rel-depends.rel-chip::before,
 .rel-implements.rel-chip::before {
-  border-top-style: dashed;
-}
-
-.rel-event.rel-chip::before {
-  border-top-style: dotted;
+  border-top-width: 1.5px;
 }
 
 .vue-flow__edge-textbg {
@@ -199,6 +199,22 @@ a {
 .vue-flow__edge-text {
   fill: var(--text-2);
   font-size: 11px;
+}
+
+/* 聚合边的 ×N（L10）：带边框的 pill，与直接边区分 */
+.edge-label-pill .vue-flow__edge-textbg {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.edge-label-pill .vue-flow__edge-text {
+  font-weight: 600;
+}
+
+/* 异常标记（? / 未描述 / 违规） */
+.edge-label-warn .vue-flow__edge-text {
+  fill: var(--warning);
+  font-weight: 600;
 }
 
 /* ── 设计版本的变更标记：节点描边 + 角标（各节点组件共用；需压过节点组件自身的边框与阴影） ── */

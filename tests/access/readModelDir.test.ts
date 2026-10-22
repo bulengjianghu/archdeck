@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { isProjectId, listDesigns, listProjectIds, listProjects, readDesignRevision, readProject, resolveModelRoot, versionFile } from '../../vite/readModelDir'
+import { isProjectId, listDesigns, listProjectIds, listProjects, readDesignRevision, readProject, resolveModelRoot } from '../../vite/readModelDir'
 
 let root: string
 let modelRoot: string
@@ -110,7 +110,6 @@ describe('接入层 · 多项目读取', () => {
     expect(readDesignRevision(modelRoot, 'alpha', 'next', 'r1', root)!.compare?.previous).toBeUndefined()
     expect(readDesignRevision(modelRoot, 'alpha', 'next', 'r9', root)).toBeNull()
     expect(readDesignRevision(modelRoot, 'alpha', '..', 'r1', root)).toBeNull()
-    expect(versionFile('alpha', { design: 'next', revision: 'r2' })).toBe('models/alpha/designs/next/r2.json')
   })
 
   it('模型根目录默认是项目内 model/，可用 ARCH_MODEL_ROOT 覆盖', () => {

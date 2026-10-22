@@ -1,5 +1,5 @@
 /**
- * 视图状态层的架构治理（K8–K10、U9、Y4）：事实同步、desk.facts 派生、代码依赖叠加线的选中，以及画布场景的叠加。
+ * 视图状态层的架构治理（K8–K10、U9、Y4、Y5）：事实同步、desk.facts 派生、代码依赖叠加线的选中，以及画布场景的叠加。
  */
 import { describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
@@ -45,9 +45,11 @@ async function setup(url = '/', source: SourceFetcher = fetcher(), version?: { d
 }
 
 describe('K8 事实同步', () => {
-  it('清单在本地时随后取事实；取不到为 no-source；设计版本为 design', async () => {
+  it('清单取到后随后取事实；清单读取失败为 error 并带原因（G1）；设计版本为 design', async () => {
     expect((await setup()).desk.facts.status.value).toBe('ready')
-    expect((await setup('/', fetcher(null, false))).desk.facts.status.value).toBe('no-source')
+    const broken = await setup('/', { ...fetcher(), tree: async () => ({ status: 'error', reason: '源码根目录不存在：/x' }) })
+    expect(broken.desk.facts.status.value).toBe('error')
+    expect(broken.desk.facts.error.value).toBe('源码根目录不存在：/x')
     const design = await setup('/', fetcher(), { design: 'd', revision: 'r1' })
     expect(design.desk.facts.status.value).toBe('design')
     expect(design.desk.facts.report.value).toBeNull()
@@ -108,6 +110,24 @@ describe('K9、Y4 本层投影只在结构视角、开关开启时', () => {
     expect(overlay.data.label).toContain('违规 1')
     // 开关关闭（facts 为 null）时没有叠加
     expect(canvasScene({ ...base, facts: null }).edges.some(e => e.data.temp === 'code')).toBe(false)
+  })
+})
+
+describe('Y5 选中节点所在的本层环', () => {
+  it('选中带环编号的模块给出环的节点与本层依赖；不在环中、开关关闭、运行视角为 null', async () => {
+    const { desk } = await setup('/?sel=m:app')
+    expect(desk.facts.selectedCycle.value).toBeNull()
+    desk.setToggles({ showFacts: true })
+    const c = desk.facts.selectedCycle.value!
+    expect(c.id).toBe(desk.facts.level.value!.cycles.get('app'))
+    expect(c.nodes.map(n => n.id).sort()).toEqual(['app', 'infra'])
+    expect(c.edges.map(e => `${e.fromModule}->${e.toModule}`).sort()).toEqual(['app->infra', 'infra->app'])
+    expect(c.edges.find(e => e.from === 'infra')!.deps.map(d => d.key)).toEqual(['infra.framework.extra->app.solution.core'])
+    desk.select({ kind: 'module', id: 'domain' })
+    expect(desk.facts.selectedCycle.value).toBeNull()
+    desk.select({ kind: 'module', id: 'app' })
+    desk.openScenario('sc.play')
+    expect(desk.facts.selectedCycle.value).toBeNull()
   })
 })
 

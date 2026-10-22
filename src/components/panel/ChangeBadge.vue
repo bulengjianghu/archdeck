@@ -2,7 +2,8 @@
 /** 设计版本：实体相对对比基线是新增还是修改；detail 时列出改了哪些字段 */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
-import { FIELD_LABELS, type EntityKind } from '@/model'
+import type { EntityKind } from '@/model'
+import { FIELD_LABELS } from '../shared/labels'
 
 const props = defineProps<{ entity: EntityKind; id: string; detail?: boolean }>()
 const desk = useDesk()

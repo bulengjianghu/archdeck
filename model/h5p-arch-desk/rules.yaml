@@ -2,6 +2,9 @@
 # 层规则来自骨架 modules/layers.yaml 的 mayDependOn。
 rules:
   modules:
+    - module: present
+      mayDependOn: [state, model.types]
+      reason: 呈现层对模型层只依赖契约（类型、枚举、名称查询与小谓词，U10）；投影、场景、归属、治理等计算经视图状态层取用。契约与计算分成不同子模块，「只用契约」才能由门禁校验，而不只是写在文档里（03 §3.5）
     - module: state.layout
       mayDependOn: [model]
       reason: Layout 只把模型层的视图排成坐标，不知道 DeskState 与会话规则（03 §3.5「Projector 不知道坐标，Layout 不知道层次规则」）
@@ -16,7 +19,7 @@ rules:
       reason: 模型层对外只经入口 src/model/index.ts（03 §3「模型层入口：文本 → 校验后的索引」）；类型、设计版本元信息与项目摘要都由入口导出，外部不直达内部文件
     - module: model.source
       exposes: [entry]
-      reason: 源码归属只经 src/model/source/index.ts 访问，glob、ownership、types 是它的内部拆分
+      reason: 源码归属只经 src/model/source/index.ts 访问，glob、ownership、resolve 是它的内部拆分（types.ts 属于契约「类型与 Schema」，U10）
     - module: model.scenario
       exposes: [entry, src/model/scenario/steps.ts]
       reason: 场景投影只经入口访问；Indexer 直达 steps.ts 取 messagesOf——场景入口再导出的 level.ts / sequence.ts 依赖 indexer，经入口会成 indexer ↔ scenario 的环，而 steps.ts 只依赖类型

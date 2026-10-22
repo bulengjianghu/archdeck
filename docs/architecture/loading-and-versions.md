@@ -26,7 +26,8 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计)──▶ ModelDiff（
 | `readProject` | 读项目当前版本的全部描述文件，**跳过 `designs/`**；附带该项目的设计版本列表 |
 | `listDesigns` / `readDesignInfo` | 发现 `designs/<设计>/design.yaml`；格式问题、缺失的轮次快照记入 `problems`，不抛错 |
 | `readDesignRevision` | 读设计的某一轮，并附对比基线：当前版本，以及上一轮（若有） |
-| `summarizeProject` | 跑一遍 `loadModel`，生成首页卡片的摘要（规模、问题数、顶层、设计版本） |
+| `summarizeProject` | 跑一遍 `loadModel`，生成首页卡片的摘要（规模、问题数、顶层、设计版本）；健康度由调用方算好附上 |
+| `listProjects(modelRoot, projectRoot, health?)` · `readHealth`（`vite/readHealth.ts`） | 开发服务器给每个项目附上健康度：读源码清单、代码事实与基线，交给模型层 `projectHealth` 计数（Q10）；依赖提取按文件缓存，刷新首页只重解析变了的文件 |
 
 描述文件扩展名：`.yaml` / `.yml` / `.json`（S8，JSON 与 YAML 走同一解析器）。
 
@@ -37,10 +38,10 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计)──▶ ModelDiff（
 | `GET projects.json` | `ProjectSummary[]` |
 | `GET models/<项目>.json` | 当前版本的 `ModelPayload`；不存在时 404 |
 | `GET models/<项目>/designs/<设计>/<轮次>.json` | 设计某一轮的 `ModelPayload`，带 `compare` |
-| ws `arch-model:changed` | `{ project }`；仅开发态，同一项目 150ms 内的多次变化合并为一次（含设计版本目录） |
-| `GET source/<项目>…` | 被描述项目的源码清单、文件与导出；仅开发态，见[源码接入与归属 §2.1](./source.md#21-端点) |
+| ws `arch-model:changed` | `{ project }`；同一项目 150ms 内的多次变化合并为一次（含设计版本目录） |
+| `GET source/<项目>…` | 被描述项目的源码清单、文件与导出，见[源码接入与归属 §2.1](./source.md#21-端点) |
 
-开发态由 Vite 插件实时读取；构建态在 `generateBundle` 中把上述 JSON 输出为同名静态文件，页面无需区分。命令行校验 `lint:model` 使用同样的读取函数，逐项目、逐设计轮次校验，`design.yaml` 的问题按 error 计；源码在本地时，当前版本附带归属警告（G9，`readSourceTree` + `sourceIssues`）。
+全部由开发服务器的 Vite 插件实时读取，没有构建态输出（本地开发工具，ADR-0007 修订）。命令行校验 `lint:model` 使用同样的读取函数，逐项目、逐设计轮次校验，`design.yaml` 的问题按 error 计；当前版本附带归属警告（G9，`readSourceTree` + `sourceIssues`）。
 
 ## 3. 加载流水线（模型层）
 
@@ -48,8 +49,10 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计)──▶ ModelDiff（
 |---|---|---|
 | `load` | 按路径排序；逐文件解析 YAML / JSON（语法错误整份跳过）、按 JSON Schema 检查格式（未知字段即错误，整份跳过）；合并为 `ArchModel`，每个实体记录出处 `{ file, path, line }`；展开内联子模块；步骤树规整为 `Step`（记录路径与出处，F2）；各文件的 `sourceIgnore` 合并为一个列表（G8） | M1、M2、M10、S2、S8 |
 | `validate` | 跨文件检查，不抛异常：error 级实体被剔除，warning 级只去掉坏引用，返回可以安全建索引的模型；场景先清理坏端点、坏引用、重复步骤 id 与成环的 `ref`，再用 `bindRelation` 检查与结构的一致性（校验与回放结果一致） | M3–M9、S5–S6、S11–S12 |
-| `buildIndex` | 按 ID 的表（含参与者、场景）；`childrenOf`（层按 `order` 排序）；`pathOf`（根到模块）；出入边表（含参与者）；`scenariosOf`（模块 → 有帧端点在其子树内的场景，R4）；`triggeredBy`（参与者 → 由它触发的场景，A6）；查询 `lowestCommonAncestor`、`nearestExisting`（N5、N11）、`moduleName`、`triggerOf` | R4、A6 |
+| `buildIndex` | 按 ID 的表（含参与者、场景）；`childrenOf`（层按 `order` 排序）；`pathOf`（根到模块）；出入边表（含参与者）；`scenariosOf`（模块 → 有帧端点在其子树内的场景，R4）；`triggeredBy`（参与者 → 由它触发的场景，A6）；查询 `nearestExisting`（N5、N11）、`triggerOf` | R4、A6 |
 | `loadModel` | 串起三步并汇总问题；模型层对外唯一的加载入口 | — |
+
+名称查询与小谓词不在流水线里，属于类型与 Schema（契约，U10）：`moduleName`（模块、参与者或系统根的显示名）、`isLong`（G20）、`RULE_LABELS`（规则种类名）在 `src/model/names.ts`，`isArchived`（DV-6）在 `src/model/design.ts`。领域枚举的中文显示名（参与者类别、设计状态、变更字段）是界面文案，在呈现层 `src/components/shared/labels.ts`。
 
 ## 4. 设计版本与对比
 
@@ -97,6 +100,15 @@ interface ProjectSummary {
   layered: boolean; top: { id: string; name: string; abstraction?: string }[]
   counts: { modules: number; relations: number; interfaces: number; dataStructures: number; actors: number; scenarios: number }
   errors: number; warnings: number; designs: DesignInfo[]
+  health?: ProjectHealth          // Q10：卡片以健康度为主、规模为次
+}
+
+interface ProjectHealth {
+  note?: string                   // 读不到代码事实的原因
+  unowned?: number; conflicts?: number
+  violations?: { count: number; new: number; resolved: number; allowed: number; delta: number | null }  // delta = 新增 − 已消除，无基线为 null
+  cycles?: { count: number; maxSize: number; cyclicity: number; baseline: number | null }
+  unconfirmed?: number
 }
 
 interface DesignInfo {
@@ -144,11 +156,10 @@ listProjectIds(modelRoot): string[]
 readProject(modelRoot, id, projectRoot): ModelPayload | null
 listDesigns(projectDir): DesignInfo[]
 readDesignRevision(modelRoot, project, design, revision, projectRoot): ModelPayload | null
-listProjects(modelRoot, projectRoot): ProjectSummary[]
+listProjects(modelRoot, projectRoot, health?: (payload) => ProjectHealth): ProjectSummary[]
 
 // 模型层
 loadModel(files: readonly RawFile[]): { index: ModelIndex; issues: Issue[] }    // 纯函数，不抛异常
-lowestCommonAncestor(index, a, b): string
 nearestExisting(index, path: readonly string[]): string                         // 旧路径中最深的仍存在的模块，否则根
 triggerOf(index, scenarioId): string | undefined                                  // A6：第一条消息的发送方
 diffModels(base: ModelIndex, target: ModelIndex): ModelDiff

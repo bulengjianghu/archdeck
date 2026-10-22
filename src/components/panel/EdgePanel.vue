@@ -31,9 +31,7 @@ const endSelection = (nodeId: string) =>
         <button class="link" @click="desk.select(endSelection(edge.to))">{{ endName(edge.to) }}</button>
       </h2>
       <div class="badges">
-        <span v-for="t in edge.types" :key="t.type" class="rel-chip" :class="`rel-${t.type}`"
-          >{{ t.type }}{{ edge.types.length > 1 ? ` ×${t.count}` : '' }}</span
-        >
+        <span class="rel-chip" :class="`rel-${edge.type}`">{{ edge.type }} ×{{ edge.relationIds.length }}</span>
         <span class="badge">{{ edge.kind === 'aggregate' ? '聚合边' : '直接边' }}</span>
         <span v-if="edge.mode !== 'sync'" class="badge">{{ edge.mode === 'async' ? '异步' : '同步 + 异步' }}</span>
       </div>

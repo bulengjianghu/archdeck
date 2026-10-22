@@ -1,24 +1,9 @@
+import type { FragmentTag, PlanNode, ScenarioPlan, Choices, FrameStatus, OutlineOption, OutlineNode } from './types'
 /**
  * 步骤大纲（T6）：把回放计划按组合结构还原成一棵树，供导航树的步骤树逐行画出。
  * 与层次无关，只随计划与已选分支变化；状态与时序图全貌一致（linearize 的 display 模式）：
  * 路径上为 path，未选的选项为 unchosen，截止处之后为 unreached。
  */
-import type { Choices } from './path'
-import type { Frame, FragmentTag, PlanNode, ScenarioPlan } from './plan'
-import type { FrameStatus } from './level'
-
-export interface OutlineOption {
-  option: number
-  when: string
-  status: FrameStatus
-  children: OutlineNode[]
-}
-
-export type OutlineNode =
-  | { kind: 'frame'; frame: Frame; status: FrameStatus }
-  /** loop、par 的一个分支、ref */
-  | { kind: 'group'; tag: FragmentTag; children: OutlineNode[] }
-  | { kind: 'alt'; pointId: string; options: OutlineOption[] }
 
 const sameTag = (a: FragmentTag, b: FragmentTag) => a.id === b.id && a.branch === b.branch
 

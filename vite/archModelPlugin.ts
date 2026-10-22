@@ -1,19 +1,18 @@
 /**
- * ModelSource：把模型根目录下各项目的 YAML 交给页面。
- * - 开发态：GET /projects.json（项目摘要列表）、GET /models/<项目>.json（该项目当前版本全部 YAML 原文）、
+ * ModelSource：开发服务器把模型根目录下各项目的描述与本地源码交给页面（本地架构工作台只有这一种运行形态，ADR-0007 修订）。
+ * - 描述：GET /projects.json（项目摘要列表，附健康度 Q10）、GET /models/<项目>.json（该项目当前版本全部 YAML 原文）、
  *   GET /models/<项目>/designs/<设计>/<轮次>.json（设计版本某一轮，附对比基线，ADR-0002）实时读取；
  *   文件变化时推送 `arch-model:changed`，载荷 { project } 指明哪个项目变了；
- * - 构建态：把上述内容固化为产物中的同名静态文件。
- * 源码（G1、G2、G17、G11，docs/architecture/source.md §2.1）只在开发态提供：GET /source/<项目>.json（文件清单）、
- *   /source/<项目>/file.json?path=（单个文件）、/source/<项目>/exports.json?path=（导出）、/source/<项目>/facts.json（代码事实、基线与拦截记录，K8）；
- *   构建态不输出，页面拿到 404 即「构建产物不含源码」。
- * 项目内容只搬运原始文本，解析与校验都在页面侧的模型层完成，保证两种形态报错一致。
+ * - 源码（G1、G2、G17、G11，docs/architecture/source.md §2.1）：GET /source/<项目>.json（文件清单）、
+ *   /source/<项目>/file.json?path=（单个文件）、/source/<项目>/exports.json?path=（导出）、/source/<项目>/facts.json（代码事实、基线与拦截记录，K8）。
+ * 项目内容只搬运原始文本，解析与校验都在页面侧的模型层完成，与命令行同一套报错。
  */
 import path from 'node:path'
 import type { Plugin } from 'vite'
-import { isModelFile, listProjectIds, listProjects, readDesignRevision, readProject, versionFile } from './readModelDir'
+import { isModelFile, listProjects, readDesignRevision, readProject } from './readModelDir'
 import { readExports, readSourceFile, readSourceTree } from './readSource'
 import { readCodeDeps } from './readDeps'
+import { readHealth } from './readHealth'
 import { LEDGER_PAGE_LIMIT, governanceDir, readBaseline, readLedger } from './governanceStore'
 import type { FactsPayload, SourcePayload } from '../src/model'
 
@@ -64,7 +63,11 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
       }
       server.middlewares.use((req, res, next) => {
         const [url, search = ''] = (req.url ?? '').split('?')
-        if (url === `/${PROJECTS_FILE}`) return json(res, listProjects(modelRoot, root))
+        if (url === `/${PROJECTS_FILE}`)
+          return json(
+            res,
+            listProjects(modelRoot, root, p => readHealth(modelRoot, p.project, p.files, root)),
+          )
         const src = /^\/source\/([^/]+?)(?:\/(file|exports|facts))?\.json$/.exec(url)
         if (src) {
           const project = decodeURIComponent(src[1])
@@ -72,7 +75,7 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
           if (!tree) return json(res, { error: `项目不存在：${project}` }, 404)
           if (!src[2]) return json(res, tree)
           const file = new URLSearchParams(search).get('path') ?? ''
-          if (tree.status !== 'local') return json(res, { error: '源码不在本地' }, 404)
+          if (tree.status !== 'local') return json(res, { error: tree.reason }, 404)
           if (src[2] === 'facts') {
             const dir = governanceDir(modelRoot, project)
             try {
@@ -105,19 +108,6 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
         const payload = readProject(modelRoot, decodeURIComponent(m[1]), root)
         return payload ? json(res, payload) : json(res, { error: `项目不存在：${m[1]}` }, 404)
       })
-    },
-    generateBundle() {
-      this.emitFile({ type: 'asset', fileName: PROJECTS_FILE, source: JSON.stringify(listProjects(modelRoot, root)) })
-      for (const id of listProjectIds(modelRoot)) {
-        const current = readProject(modelRoot, id, root)!
-        this.emitFile({ type: 'asset', fileName: versionFile(id), source: JSON.stringify(current) })
-        for (const d of current.designs ?? []) {
-          for (const r of d.revisions) {
-            const v = { design: d.id, revision: r.id }
-            this.emitFile({ type: 'asset', fileName: versionFile(id, v), source: JSON.stringify(readDesignRevision(modelRoot, id, d.id, r.id, root)) })
-          }
-        }
-      }
     },
   }
 }

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
+import { REWORK_CATEGORIES, type ReworkCategory } from '../src/model'
 import { ServiceError, createService } from './agent/service'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -90,6 +91,31 @@ server.registerTool(
     inputSchema: { project },
   },
   ({ project }) => reply(() => svc.rescan(project)),
+)
+
+server.registerTool(
+  'issues',
+  {
+    title: '返工清单',
+    description:
+      '当前版本里需要人或 AI 修正的问题，按根因聚合（同一对 codeRefs 重叠的冲突文件、同一目录的未归属文件、同一对端点间未建模的步骤各为一条）：描述错误与提醒、违规（新增 / 已知 / 已豁免）、环度上升、源码归属、未证实的编译期关系、未描述依赖、结构中未建模的步骤。每条带文件行号、规则编号与建议动作（含可粘贴的 YAML 片段）。修正描述前先看它，改完用 rescan 或 lint:model 自检。',
+    inputSchema: {
+      format: z.enum(['markdown', 'json']).optional().describe('缺省 markdown（与命令行 npm run arch -- issues 相同）；json 为结构化结果（与 --json 相同）'),
+      category: z
+        .enum(REWORK_CATEGORIES as [ReworkCategory, ...ReworkCategory[]])
+        .optional()
+        .describe('只看一类'),
+      project,
+    },
+  },
+  ({ format, category, project }) => {
+    try {
+      const r = svc.issues(project, category)
+      return { content: [{ type: 'text' as const, text: format === 'json' ? JSON.stringify(r.list, null, 2) : r.markdown }] }
+    } catch (e) {
+      return { isError: true, content: [{ type: 'text' as const, text: e instanceof ServiceError ? e.message : String(e) }] }
+    }
+  },
 )
 
 server.registerTool(

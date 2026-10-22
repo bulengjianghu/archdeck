@@ -7,11 +7,10 @@ import { resolveModelRoot } from './vite/readModelDir'
 const root = fileURLToPath(new URL('.', import.meta.url))
 
 export default defineConfig({
-  // 相对路径，构建产物可部署在任意子路径
-  base: './',
   plugins: [vue(), archModelPlugin({ modelRoot: resolveModelRoot(root), root })],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   worker: { format: 'es' },
+  // npm run build 只做类型检查与打包验证（分块、Worker、按需加载能打成产物），产物不部署：本工具只在本地开发服务器上运行（ADR-0007 修订）
   build: {
     // elk.bundled（约 1.4MB）只在无 Worker 环境兜底，浏览器不会加载
     chunkSizeWarningLimit: 1500,

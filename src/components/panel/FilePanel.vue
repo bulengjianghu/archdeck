@@ -6,7 +6,7 @@
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { isLong, moduleName } from '@/model'
-import { useOpenPreview } from '../source/preview'
+import { useOpenPreview } from '../shared/preview'
 import Section from './Section.vue'
 import ExportSection from './ExportSection.vue'
 
@@ -53,13 +53,7 @@ const pathOf = (id: string) =>
 
     <Section v-if="!local" title="源码">
       <p class="muted">
-        {{
-          desk.files.payload.value?.status === 'absent'
-            ? `源码不在本地（${desk.files.payload.value.tried ?? desk.files.payload.value.reason}）`
-            : desk.files.payload.value
-              ? '构建产物不含源码'
-              : '正在读取源码清单…'
-        }}
+        {{ desk.files.payload.value?.status === 'error' ? desk.files.payload.value.reason : '正在读取源码清单…' }}
       </p>
     </Section>
     <Section v-else-if="!exists" title="源码"><p class="muted">文件不存在：不在源码文件清单中（可能已删除或改名）</p></Section>

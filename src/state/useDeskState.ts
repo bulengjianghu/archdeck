@@ -36,7 +36,7 @@ export type { CompareSource, ModelPayload, FetchModel } from './sync/modelSource
 export type { SourceFetcher, Resource } from './sync/source'
 
 export type DeskOptions = RouterSyncOptions & {
-  /** 被描述项目的源码（G1、G2）；缺省等同构建态（不含源码） */
+  /** 被描述项目的源码（G1、G2）；缺省为没有源码来源（只看描述的测试） */
   source?: SourceFetcher
 }
 
@@ -89,11 +89,10 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     if (!index.value || !levelId.value) return null
     try {
       // L9：运行视角下舞台不受显示开关影响，并补齐场景帧端点的边界节点与参与者（P12）
-      if (plan.value) return projectLevel(index.value, levelId.value, { showBoundaries: true, mergeTypes: true, scenarioEnds: stageEnds(plan.value) })
+      if (plan.value) return projectLevel(index.value, levelId.value, { showBoundaries: true, scenarioEnds: stageEnds(plan.value) })
       return projectLevel(index.value, levelId.value, {
         showBoundaries: t.showBoundaries,
         currentOnly: t.currentOnly,
-        mergeTypes: true,
         relationTypes: t.relationTypes.length === RELATION_TYPES.length ? undefined : t.relationTypes,
       })
     } catch {

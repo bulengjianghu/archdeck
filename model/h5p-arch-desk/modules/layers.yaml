@@ -74,8 +74,8 @@ modules:
         name: 画布
         kind: subsystem
         core: true
-        responsibility: 把带坐标的视图画成节点和边；处理平移、缩放、单击、双击、悬停；聚焦时只显示相关的边、其余变淡；运行视角下结构图作为舞台：默认只显示参与本场景的节点与走过的边，不参与的节点与静态边按显示方式隐藏 / 淡显 / 全显，布局不变（V5、V8），「在画布上显示」的对象的静态边照常（V9）；叠加回放；选中步骤时其余走过的边变灰（D-3、R15）。
-        codeRefs: [src/components/GraphCanvas.vue, src/components/nodes/**, src/components/edges/**, src/components/stage/**]
+        responsibility: 把带坐标的视图画成节点和边；处理平移、缩放、单击、双击、悬停；聚焦时只显示相关的边、其余变淡；运行视角下结构图作为舞台：默认只显示参与本场景的节点与走过的边，不参与的节点与静态边按显示方式隐藏 / 淡显 / 全显，布局不变（V5、V8），「在画布上显示」的对象的静态边照常（V9）；叠加回放；选中步骤时其余走过的边变灰（D-3、R15）；右下角浮动的「显示」面板（显示设置与图例）。
+        codeRefs: [src/components/GraphCanvas.vue, src/components/DisplayPanel.vue, src/components/nodes/**, src/components/edges/**, src/components/stage/**]
       - id: present.panel
         name: 属性面板
         kind: subsystem
@@ -85,13 +85,22 @@ modules:
       - id: present.nav
         name: 导航
         kind: subsystem
-        responsibility: 面包屑（含返回项目列表）、搜索跳转、显示开关与关系类型筛选、图例。
-        codeRefs: [src/components/Breadcrumb.vue, src/components/Toolbar.vue, src/components/Legend.vue]
+        responsibility: 面包屑（含返回项目列表）、搜索跳转、显示开关。
+        codeRefs: [src/components/Breadcrumb.vue, src/components/Toolbar.vue]
       - id: present.issues
         name: 问题提示
         kind: subsystem
         responsibility: 列出架构描述的错误与提醒，定位到文件与行号。
         codeRefs: [src/components/IssueBanner.vue]
+      - id: present.shared
+        name: 呈现共用件
+        kind: subsystem
+        responsibility: 多个子系统共用、自身不依赖其他呈现子系统的叶子：界面文案（领域枚举的中文显示名：参与者类别、设计状态、变更字段，labels.ts）、代码高亮（Shiki 封装，签名与源代码预览共用，highlight.ts）、「在副栏预览」的注入键（项目视图提供、面板取用，preview.ts）。
+        principle: |
+          - **只放叶子**：共用件不 import 其他呈现子系统，被谁用都不会成环（Y4）。
+          - **注入键放共用件**：键由提供方（项目视图）与取用方（面板）共同引用；放在项目视图会让面板依赖项目视图，而项目视图本就渲染面板，成环。
+          - **文案不进模型层**：命令行与门禁消息也要用的名称（规则名）属于模型层的契约（U10）。
+        codeRefs: [src/components/shared/**]
 
   - id: state
     name: 视图状态层
@@ -142,7 +151,7 @@ modules:
         kind: subsystem
         core: true
         responsibility: 开发态提供 /projects.json、/models/<项目>.json、/models/<项目>/designs/<设计>/<轮次>.json 并按项目推送 arch-model:changed（含设计版本的变化）；开发态另提供 /source/<项目>.json、/source/<项目>/file.json、/source/<项目>/exports.json、/source/<项目>/facts.json（代码事实、基线与拦截记录，K8；源码清单短暂缓存）；构建态只输出描述的同名静态文件，不含源码。
-        codeRefs: [vite/archModelPlugin.ts, vite.config.ts]
+        codeRefs: [vite/archModelPlugin.ts, vite/readHealth.ts, vite.config.ts]
       - id: access.reader
         name: 描述读取
         kind: subsystem
@@ -188,7 +197,7 @@ modules:
     order: 4
     abstraction: 关于**被描述系统**的知识，脱离工作台仍成立：输入描述、输出数据，不依赖 Vue / DOM / 布局库，可在 Node 中纯输入输出测试
     responsibility: 把多个描述文件变成校验过的模型与索引（含参与者与场景），按层次投影出要画的节点与边，把场景展开、按层次投影成回放帧与时序模型，并回答关于被描述系统的架构查询（最近存在 / 可见的祖先、本层的下一步、到达某帧需要的分支选择、谁参与了哪一步）。
-    includes: [文件格式与类型, 解析与合并, 引用校验, 索引, 层次投影, 场景展开与投影, 架构查询, 版本对比, 源码归属, 架构治理]
+    includes: [文件格式与类型, 解析与合并, 引用校验, 索引, 层次投影, 场景展开与投影, 架构查询, 版本对比, 源码归属, 架构治理, 返工清单]
     excludes: [Vue, DOM, elkjs, 文件系统]
     mayDependOn: []
     entry: src/model/index.ts
@@ -198,8 +207,8 @@ modules:
         name: 类型与 Schema
         kind: subsystem
         core: true
-        responsibility: 描述文件的形状（JSON Schema 与对应的 TS 类型；顶层键含 actors、scenario / scenarios 与步骤树），以及加载、索引、投影、场景各阶段的数据类型。
-        codeRefs: [src/model/types.ts, src/model/project-summary.ts, src/model/design.ts, schema/arch-file.schema.json]
+        responsibility: 模型层的契约：描述文件的形状（JSON Schema 与对应的 TS 类型；顶层键含 actors、scenario / scenarios 与步骤树），加载、索引、投影、场景投影、源码归属、架构治理各阶段的数据类型（声明收在 types.ts、scenario/types.ts、source/types.ts、governance/types.ts），领域枚举，以及只查表的名称查询与小谓词（moduleName、isLong、isArchived、RULE_LABELS）。不含投影与计算；呈现层对模型层只依赖它（U10）。
+        codeRefs: [src/model/types.ts, src/model/names.ts, src/model/project-summary.ts, src/model/design.ts, src/model/scenario/types.ts, src/model/source/types.ts, src/model/governance/types.ts, src/model/rework/types.ts, schema/arch-file.schema.json]
       - id: model.pipeline
         name: 加载流水线
         kind: subsystem
@@ -226,7 +235,7 @@ modules:
           - **与结构投影同一套端点规则**：帧端点用 Projector 的端点映射提升到当前层次（D-4，规则 P1）。
           - **只写一套最细步骤**（S3）：各层投影合并；时序图与单步粒度都随层次变化，下钻后变细（规则 R7）。
           - **不知道坐标**：输出纯数据，坐标交给 Layout。
-        codeRefs: [src/model/scenario/**]
+        codeRefs: [src/model/scenario/index.ts]
         docRefs: [docs/01-requirements.md]
       - id: model.diff
         name: 版本对比
@@ -241,7 +250,7 @@ modules:
         name: 源码归属
         kind: subsystem
         responsibility: 被描述项目的源码文件与模块对上：文件按 codeRefs 归属模块（祖先与后代同时匹配取最深的，互不包含的模块同时匹配为冲突），未归属与忽略清单，模块的文件（子树并集）与入口文件，路径补全与包入口（入口、导出与依赖提取共用，K2），入口导出与模块接口的对应，选中文件在当前层次的投影，目录树，以及归属警告。输入是模型索引与接入层给的文件清单，不碰文件系统。
-        codeRefs: [src/model/source/**]
+        codeRefs: [src/model/source/index.ts]
         docRefs: [docs/architecture/source.md, docs/adr/0007-source-files.md]
       - id: model.governance
         name: 架构治理
@@ -252,5 +261,5 @@ modules:
           - **事实与意图分开**：事实来自代码（确定、可复现），意图来自架构师（rules.yaml），描述来自 AI；三者对照才能发现偏航。
           - **默认拒绝**：写了白名单或访问面即只许这些；存量违规由基线承接，只许不增加（棘轮）。
           - **与结构投影同一套规则**：访问面的入口用 G10，本层投影用 mapEndpoint。
-        codeRefs: [src/model/governance/**]
+        codeRefs: [src/model/governance/index.ts]
         docRefs: [docs/architecture/governance.md, docs/adr/0015-architecture-governance.md]

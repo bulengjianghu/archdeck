@@ -1,15 +1,20 @@
 <script setup lang="ts">
-/** 模块面板的「架构治理」一节（GV-7、Q1）：生效的规则、出入的违规与未描述依赖、所在的模块环 */
+/** 模块面板的「架构治理」一节（GV-7、GV-9、Q1）：生效的规则、出入的违规与未描述依赖、所在的模块环与本层环（Y5） */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
-import { RULE_LABELS, moduleName } from '@/model'
+import { RULE_LABELS, moduleName, type LevelCycleEdge } from '@/model'
 import Section from './Section.vue'
+import FileDepList from './FileDepList.vue'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
 const d = computed(() => desk.facts.moduleDetail(props.id))
 const name = (id: string) => (desk.index.value ? moduleName(desk.index.value, id) : id)
 const STATUS: Record<string, string> = { new: '新增', known: '已知', open: '', allowed: '已豁免' }
+/** Y5：选中的节点在本层环中时（结构视角、「代码事实」开启） */
+const cycle = computed(() => (desk.selection.value?.kind === 'module' && desk.selection.value.id === props.id ? desk.facts.selectedCycle.value : null))
+/** 单击一条本层依赖：有同方向视图边时选中它，否则选中这对节点的代码依赖（K10） */
+const pick = (e: LevelCycleEdge) => desk.select(e.edgeId ? { kind: 'edge', id: e.edgeId } : { kind: 'dep', id: `${e.fromModule}->${e.toModule}` })
 const hasRules = computed(() => !!d.value && (d.value.rules.layers.length > 0 || d.value.rules.deps.length > 0 || d.value.rules.exposes.length > 0))
 const empty = computed(
   () =>
@@ -19,7 +24,8 @@ const empty = computed(
     !d.value.violations.in.length &&
     !d.value.undescribed.out.length &&
     !d.value.undescribed.in.length &&
-    !d.value.cycles.length,
+    !d.value.cycles.length &&
+    !cycle.value,
 )
 </script>
 
@@ -73,6 +79,32 @@ const empty = computed(
         <button v-for="m in c" :key="m" class="link" @click="desk.revealModule(m)">{{ name(m) }}</button>
       </p>
     </div>
+    <div v-if="cycle" class="block level-cycle">
+      <h4 class="bad">所在的本层环 ↻{{ cycle.id }}</h4>
+      <p class="list">
+        <span v-for="n in cycle.nodes" :key="n.id">{{ name(n.module) }}</span>
+      </p>
+      <ul class="plain">
+        <li v-for="e in cycle.edges" :key="`${e.from}->${e.to}`">
+          <details>
+            <summary>
+              <button class="link" :title="e.edgeId ? '在画布上选中这条边' : '选中这对节点的代码依赖'" @click.prevent="pick(e)">
+                {{ name(e.fromModule) }} → {{ name(e.toModule) }}
+              </button>
+              <span class="muted small">{{ e.deps.length }} 条模块依赖</span>
+            </summary>
+            <ul class="plain deps">
+              <li v-for="dep in e.deps" :key="dep.key">
+                <div>
+                  {{ name(dep.from) }} → {{ name(dep.to) }} <span class="muted small">{{ dep.files.length }} 处</span>
+                </div>
+                <FileDepList :deps="dep.files" :limit="4" />
+              </li>
+            </ul>
+          </details>
+        </li>
+      </ul>
+    </div>
   </Section>
 </template>
 
@@ -113,5 +145,13 @@ h4 {
 
 li {
   padding: 2px 0;
+}
+
+.level-cycle summary {
+  cursor: pointer;
+}
+
+.level-cycle .deps {
+  padding-left: 14px;
 }
 </style>

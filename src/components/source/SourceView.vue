@@ -1,13 +1,12 @@
 <script setup lang="ts">
 /**
  * 源代码预览（SR-8、G17）：只读显示预览文件——路径、归属模块、行数，按扩展名高亮的代码与行号。
- * 过大、二进制、文件不存在、源码不在本地、构建态时只给提示；没有编辑、保存等 IDE 功能。
+ * 过大、二进制、文件不存在、源码清单读取失败时只给提示；没有编辑、保存等 IDE 功能。
  */
 import { computed, ref, watchEffect } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
-import { highlightCode } from '../panel/highlight'
-import SourceStatus from './SourceStatus.vue'
+import { highlightCode } from '../shared/highlight'
 
 const props = defineProps<{ path: string }>()
 const desk = useDesk()
@@ -55,7 +54,9 @@ const kb = (n: number) => `${Math.round(n / 1024)} KB`
       <span class="badge ro">只读</span>
     </header>
     <div class="body">
-      <SourceStatus v-if="desk.files.payload.value?.status !== 'local'" />
+      <p v-if="desk.files.payload.value?.status !== 'local'" class="source-note" :class="{ err: desk.files.payload.value }">
+        {{ desk.files.payload.value?.status === 'error' ? desk.files.payload.value.reason : '正在读取源码清单…' }}
+      </p>
       <p v-else-if="!res || res.status === 'loading'" class="hint">正在读取…</p>
       <p v-else-if="res.status === 'missing'" class="hint">文件不在源码清单中（可能已删除或改名）。</p>
       <p v-else-if="res.status === 'error'" class="hint warn">读取失败：{{ res.message }}</p>
@@ -171,5 +172,17 @@ const kb = (n: number) => `${Math.round(n / 1024)} KB`
   .code-view .shiki span {
     color: var(--shiki-dark) !important;
   }
+}
+/* G1：源码在本地是前提，读不到清单是配置错误 */
+.source-note {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  word-break: break-all;
+}
+
+.source-note.err {
+  color: var(--danger);
 }
 </style>

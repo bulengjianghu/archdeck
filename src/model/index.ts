@@ -6,17 +6,18 @@ import type { Issue, ModelIndex, RawFile } from './types'
 
 export * from './types'
 export * from './design'
-export type { ProjectSummary } from './project-summary'
+export * from './names'
+export type { ProjectSummary, ProjectHealth } from './project-summary'
 export { load } from './load'
 export { validate } from './validate'
-export { buildIndex, lowestCommonAncestor, nearestExisting, isLayered, moduleName, triggerOf } from './indexer'
+export { buildIndex, nearestExisting, isLayered, triggerOf } from './indexer'
 export * from './scenario'
 export * from './source'
 export * from './governance'
-export { projectLevel, mapEndpoint, nearestVisibleLevel, edgeId, hierarchyKey, compareKeys, DEFAULT_PROJECT_OPTIONS } from './project'
+export * from './rework'
+export { projectLevel, mapEndpoint, nearestVisibleLevel, edgeId, hierarchyKey, compareKeys, lowestCommonAncestor, DEFAULT_PROJECT_OPTIONS } from './project'
 export type { Endpoint } from './project'
-export { diffModels, FIELD_LABELS } from './diff'
-export type { Change, ChangeKind, EntityKind, ModelDiff } from './diff'
+export { diffModels } from './diff'
 
 export interface LoadedModel {
   index: ModelIndex

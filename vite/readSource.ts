@@ -27,15 +27,20 @@ export function workspaceRoot(projectRoot: string, env: NodeJS.ProcessEnv = proc
 
 export const sourceRootEnvKey = (project: string) => `ARCH_SOURCE_ROOT_${project.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`
 
-export type SourceRoot = { status: 'local'; root: string } | { status: 'absent'; repo?: string; tried?: string; reason: string }
+export type SourceRoot = { status: 'local'; root: string } | { status: 'error'; tried?: string; reason: string }
 
-/** G1：解析源码根目录；不在本地时返回原因，不抛错 */
+/** G1：解析源码根目录；源码在本地是前提，根目录不存在或未写 repo 是配置错误，返回原因与尝试的路径（调用方报错），不抛异常 */
 export function resolveSourceRoot(project: string, system: SystemDef, workspace: string, env: NodeJS.ProcessEnv = process.env): SourceRoot {
   const repo = system.source?.repo
   const override = env[sourceRootEnvKey(project)]
-  if (!override && !repo) return { status: 'absent', reason: '描述未写 system.source.repo' }
+  if (!override && !repo) return { status: 'error', reason: `描述未写 system.source.repo（或用环境变量 ${sourceRootEnvKey(project)} 指定源码根目录）` }
   const root = path.resolve(workspace, override ?? repo!)
-  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return { status: 'absent', repo, tried: root, reason: '源码不在本地' }
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory())
+    return {
+      status: 'error',
+      tried: root,
+      reason: `源码根目录不存在：${root}（检查 system.source.repo，或用 ${sourceRootEnvKey(project)} / ARCH_WORKSPACE_ROOT 指定）`,
+    }
   return { status: 'local', root }
 }
 
@@ -97,7 +102,7 @@ export function readSourceTree(modelRoot: string, project: string, projectRoot: 
   if (!payload) return null
   const system = loadModel(payload.files).index.model.system
   const at = resolveSourceRoot(project, system, workspaceRoot(projectRoot, env), env)
-  if (at.status === 'absent') return at
+  if (at.status === 'error') return at
   const files = listSourceFiles(at.root)
   return { status: 'local', root: at.root, files, packages: readPackages(at.root, files), lines: countLines(at.root, files) }
 }

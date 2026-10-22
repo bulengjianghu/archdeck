@@ -10,7 +10,7 @@
    │ readSourceTree / readSourceFile / readExports
    ▼
 SourceTree { files, packages, lines } · SourceFile · ExportedSymbol[]
-   │ （开发态端点；命令行直接调用）
+   │ （开发服务器端点；命令行直接调用）
    ▼
 assignFiles(index, files, sourceIgnore) → SourceOwnership    模型层：归属、入口、对应、投影
 moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
@@ -24,7 +24,7 @@ moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
 
 | 函数 | 做什么 | 规则 |
 |---|---|---|
-| `resolveSourceRoot(system, workspaceRoot, env)` | 先看 `ARCH_SOURCE_ROOT_<ID>`，再用工作区根目录（`ARCH_WORKSPACE_ROOT`，缺省为本包往上三级）拼上 `source.repo`；返回 `{ status: 'local', root }`，或 `{ status: 'absent', tried, reason }` | G1 |
+| `resolveSourceRoot(system, workspaceRoot, env)` | 先看 `ARCH_SOURCE_ROOT_<ID>`，再用工作区根目录（`ARCH_WORKSPACE_ROOT`，缺省为本包往上三级）拼上 `source.repo`；返回 `{ status: 'local', root }`，或 `{ status: 'error', tried, reason }`（配置错误，调用方报错） | G1 |
 | `listSourceFiles(root)` | 在 git 仓库内执行 `git ls-files --cached --others --exclude-standard`（相对 `root`），失败时遍历目录并排除 `node_modules`、`.git`、`dist`、`coverage` 等；按路径排序 | G2 |
 | `readSourceTree(modelRoot, project, …)` | 组合以上两步，并读取清单中每个 `package.json` 的 `name` / `main` / `exports` / `types`，交给包入口（`packageEntry`）用；统计 TS / JS / Vue 文件的物理行数（按修改时间与大小缓存） | G1、G2、G10、G19 |
 | `readSourceFile(root, files, path)` | 路径必须在清单中（防穿越）；超过 512 KB 或含 NUL 字节时只返回 `{ tooLarge }` / `{ binary }` | G17 |
@@ -34,11 +34,11 @@ moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
 
 | 端点 | 返回 |
 |---|---|
-| `GET source/<项目>.json` | `SourcePayload`：`local`（文件清单、包入口、根目录）或 `absent`（尝试的路径与原因） |
+| `GET source/<项目>.json` | `SourcePayload`：`local`（文件清单、包入口、根目录）或 `error`（源码根目录读不到：原因与尝试的路径，G1） |
 | `GET source/<项目>/file.json?path=` | `SourceFile`：文本，或 `tooLarge` / `binary`；不在清单中为 404 |
 | `GET source/<项目>/exports.json?path=` | `ExportedSymbol[]`；非 TS / JS 文件为空数组 |
 
-- 只在开发态提供。构建态不输出这些文件，页面拿到 404 就当作「构建产物不含源码」（G2）。
+- 源码在本地是前提（ADR-0007 修订）：读不到是配置错误，页面在文件页签给出原因，不再有「不在本地」「构建产物不含源码」的分支。
 - 源码不监听变化。进入项目、描述刷新、用户点「刷新」时重新列出，避免监听整个被描述仓库。
 
 ## 3. 源码归属（模型层，`src/model/source/`）
@@ -57,7 +57,7 @@ moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
 | `fileNodes(index, view, owners)` | 归属模块逐个 `mapEndpoint` 到当前层次：`local` → 子模块节点，`external` → 边界节点（视图中有时），`skip` → 不高亮（`self: true`）；分层总览另加路径上的核心模块节点 | G14 |
 | `sourceIssues(index, own, tree)` | 每个冲突文件、未归属文件一条 warning（`source.conflict` / `source.unowned`），`entry` 不在清单中一条 warning（`source.entry`，定位到描述出处） | G6、G7、G9、G10 |
 | `fileTree(files, own, lines?, maxLines?)` | 按 `/` 组成目录树，目录带文件数、未归属数与忽略数，内部文件全部忽略的目录标为忽略；给出行数时目录另带行数合计与超长文件数；目录在前、按名称排序 | G18、G21 |
-| `isLong(lines, maxLines)` · `moduleLines(files, lines, maxLines)` | 是否超长；一组文件（如模块的文件）的行数合计与超长数 | G20、G21 |
+| `moduleLines(files, lines, maxLines)` | 一组文件（如模块的文件）的行数合计与超长数；单个文件是否超长用契约里的 `isLong`（`src/model/names.ts`，U10） | G20、G21 |
 
 复杂度：`assignFiles` 为 `O(文件数 × codeRefs 条数 × 路径长度)`，5000 个文件、几百条 `codeRefs` 时是几十毫秒；模型或文件清单变化时才重算。
 
@@ -66,8 +66,7 @@ moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
 ```ts
 type SourcePayload =
   | { status: 'local'; root: string; files: string[]; packages: Record<string, PackageEntry>; lines?: Record<string, number> }   // packages 的键为 package.json 所在目录（'' 为根）；lines 只含统计行数的文件（G19）
-  | { status: 'absent'; repo?: string; tried?: string; reason: string }
-  | { status: 'unavailable' }                    // 页面侧：构建态取不到端点
+  | { status: 'error'; reason: string; tried?: string }   // G1：源码根目录读不到（配置错误），或页面侧取清单失败
 interface PackageEntry { main?: string; exports?: unknown }
 
 type SourceFile = { path: string; text: string; lang: string } | { path: string; tooLarge: number } | { path: string; binary: true }
@@ -96,7 +95,7 @@ interface DirNode { name: string; path: string; dirs: DirNode[]; files: string[]
 
 ```ts
 // 接入层
-resolveSourceRoot(system: SystemDef, workspaceRoot: string, env?): { status: 'local'; root } | { status: 'absent'; tried?; reason }
+resolveSourceRoot(system: SystemDef, workspaceRoot: string, env?): { status: 'local'; root } | { status: 'error'; tried?; reason }
 readSourceTree(modelRoot, project, projectRoot, env?): SourcePayload | null
 readSourceFile(root, files, path): SourceFile | null
 readExports(root, files, path): ExportedSymbol[] | null
@@ -110,6 +109,5 @@ matchExports(index, moduleId, exports: readonly ExportedSymbol[]): ExportMatch
 fileNodes(index, view: LevelView, owners: readonly string[]): FileNodes
 sourceIssues(index, own, tree): Issue[]
 fileTree(files: readonly string[], own: SourceOwnership, lines?: Record<string, number>, maxLines?: number): DirNode
-isLong(lines: number | undefined, maxLines: number): boolean
 moduleLines(files: readonly string[], lines: Record<string, number>, maxLines: number): { lines: number; long: number; counted: number }
 ```

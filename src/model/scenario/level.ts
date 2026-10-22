@@ -2,49 +2,10 @@
  * 帧的层次投影（P1–P5、P7、P10、P11、P15、P16、S9、R7、R13）：把回放路径上的每一帧映射到当前层次，合并为可见消息。
  * 端点映射与结构投影共用 mapEndpoint（P1），落点的视图边 ID 与 projectLevel 一致。
  */
-import { lowestCommonAncestor } from '../indexer'
-import { mapEndpoint } from '../project'
-import type { LevelView, MessageKind, ModelIndex, ViewEdge } from '../types'
-import type { Frame, PlanNode, ScenarioPlan } from './plan'
-import type { Choices } from './path'
-
-/** 分层总览中消息在时序图上的两条泳道（核心模块优先），与结构图上的落点节点不同时给出（P7、P14） */
-export type Lanes = { from: string; to: string }
-
-/** 一帧在本层的落点 */
-export type Landing =
-  /** 落在视图边上；from / to 是消息方向上的视图节点，reverse 表示与边的箭头相反（P10）；core 表示分层总览的核心跨层边（P7） */
-  | { kind: 'edge'; edgeId: string; from: string; to: string; reverse: boolean; core?: boolean; lanes?: Lanes }
-  /** 本层两节点之间没有视图边，帧已绑定关系（显式或推断）：关系建在上层，一端是当前层次本身或其祖先（P15） */
-  | { kind: 'upper'; from: string; to: string; relationId: string; lanes?: Lanes }
-  /** 本层两节点之间没有视图边，帧没有绑定任何关系：结构中未建模（P11） */
-  | { kind: 'unmodeled'; from: string; to: string; lanes?: Lanes }
-  /** 两端落在本层同一个节点（P3）；带 lanes 时是分层总览中同一层不同泳道之间的消息，时序图画成泳道间的箭头 */
-  | { kind: 'internal'; node: string; lanes?: Lanes }
-  /** 两端都在本层外（P4） */
-  | { kind: 'hidden' }
-
-export type VisibleLanding = Exclude<Landing, { kind: 'hidden' }>
-
-export interface VisibleMessage {
-  index: number
-  /** 覆盖的连续帧 */
-  frameIds: string[]
-  at: VisibleLanding
-  kind: MessageKind | 'internal'
-}
-
-export interface ScenarioLevelView {
-  levelId: string
-  /** 本层可见消息 = 单步单位（R7） */
-  messages: VisibleMessage[]
-  /** 本层不可见的帧 */
-  hidden: string[]
-  /** 路径上帧的先后序号 */
-  order: Map<string, number>
-  /** 帧 → 所在可见消息的序号 */
-  messageOf: Map<string, number>
-}
+import { lowestCommonAncestor, mapEndpoint } from '../project'
+import { RUNTIME_RELATION_TYPES } from '../types'
+import type { LevelView, ModelIndex, ViewEdge } from '../types'
+import type { Frame, PlanNode, ScenarioPlan, Choices, Landing, VisibleLanding, VisibleMessage, ScenarioLevelView, FrameStatus } from './types'
 
 /** 视图节点 ID：本层子模块、边界节点、参与者；视图中没有该节点时为 null */
 function viewNode(index: ModelIndex, view: LevelView, ids: ReadonlySet<string>, id: string): { node: string; local: boolean } | null {
@@ -61,9 +22,17 @@ function coreNode(index: ModelIndex, view: LevelView, id: string): string | null
   return second !== undefined && view.nodes.some(n => n.role === 'core' && n.id === second) ? second : null
 }
 
-function findEdge(edges: readonly ViewEdge[], a: string, b: string, relation?: string): ViewEdge | undefined {
+/**
+ * P17：帧落在两节点之间时选边。绑定了关系 → 含该关系的边，其次同类型的边，都没有则为经由上层（返回 undefined）；
+ * 未绑定关系 → 同方向的运行时关系边优先，其次同方向的、任一条。
+ */
+function findEdge(index: ModelIndex, edges: readonly ViewEdge[], a: string, b: string, relation?: string): ViewEdge | undefined {
   const between = edges.filter(e => (e.from === a && e.to === b) || (e.from === b && e.to === a))
-  return (relation ? between.find(e => e.relationIds.includes(relation)) : undefined) ?? between.find(e => e.from === a) ?? between[0]
+  if (relation) {
+    const type = index.relations.get(relation)?.type
+    return between.find(e => e.relationIds.includes(relation)) ?? between.find(e => e.type === type)
+  }
+  return between.find(e => e.from === a && RUNTIME_RELATION_TYPES.includes(e.type)) ?? between.find(e => e.from === a) ?? between[0]
 }
 
 export function landFrame(index: ModelIndex, view: LevelView, frame: Frame, nodeIds?: ReadonlySet<string>): Landing {
@@ -82,10 +51,10 @@ export function landFrame(index: ModelIndex, view: LevelView, frame: Frame, node
   const lanes = layered && (ca !== a.node || cb !== b.node) ? { lanes: { from: ca!, to: cb! } } : {}
   if (a.node === b.node) return { kind: 'internal', node: a.node, ...lanes }
   if (layered) {
-    const core = 'lanes' in lanes ? findEdge(view.coreEdges ?? [], ca!, cb!, frame.relation) : undefined
+    const core = 'lanes' in lanes ? findEdge(index, view.coreEdges ?? [], ca!, cb!, frame.relation) : undefined
     if (core) return { kind: 'edge', edgeId: core.id, from: ca!, to: cb!, reverse: core.from !== ca, core: true }
   }
-  const e = findEdge(view.edges, a.node, b.node, frame.relation)
+  const e = findEdge(index, view.edges, a.node, b.node, frame.relation)
   if (e) return { kind: 'edge', edgeId: e.id, from: a.node, to: b.node, reverse: e.from !== a.node, ...lanes }
   // P11、P15：是否建模只看帧自身的关系绑定（与 S5a 同一口径），不看本层有没有视图边
   if (frame.relation) return { kind: 'upper', from: a.node, to: b.node, relationId: frame.relation, ...lanes }
@@ -93,8 +62,6 @@ export function landFrame(index: ModelIndex, view: LevelView, frame: Frame, node
 }
 
 // ── 线性化：路径（回放）与全貌（时序图）共用同一套合并规则 ──
-
-export type FrameStatus = 'path' | 'unchosen' | 'unreached'
 
 export type Entry =
   | { kind: 'frame'; frame: Frame; status: FrameStatus }
@@ -140,9 +107,9 @@ export function linearize(plan: ScenarioPlan, choices: Choices, mode: 'path' | '
   return out
 }
 
-/** 同一条视图边（含方向）、同一节点内部、同一对没有视图边的节点（含方向；经由上层与未建模不区分，P5） */
+/** 同一对节点之间的视图边（含方向，不论边的类型）、同一节点内部、同一对没有视图边的节点（含方向；经由上层与未建模不区分，P5） */
 const landingKey = (l: VisibleLanding) =>
-  (l.kind === 'edge' ? `e:${l.edgeId}:${l.from}` : l.kind === 'internal' ? `i:${l.node}` : `t:${l.from}|${l.to}`) + (l.lanes ? `:${l.lanes.from}>${l.lanes.to}` : '')
+  (l.kind === 'edge' ? `e:${l.from}>${l.to}${l.core ? ':core' : ''}` : l.kind === 'internal' ? `i:${l.node}` : `t:${l.from}|${l.to}`) + (l.lanes ? `:${l.lanes.from}>${l.lanes.to}` : '')
 const contextKey = (f: Frame) => f.fragments.map(t => `${t.id}:${t.branch ?? ''}`).join('/')
 
 export interface MergedMessage {
@@ -160,7 +127,7 @@ export interface EmptySlot {
   status: FrameStatus
 }
 
-/** P5：连续落在同一条视图边且同方向、或同一节点内部，并在同一组合框分支中的帧合并为一条可见消息；不可见的帧、分支点、空分支都会断开合并 */
+/** P5：连续落在同一对节点之间的视图边上且同方向（不论类型，消息落在第一帧的边上）、或同一节点内部，并在同一组合框分支中的帧合并为一条可见消息；不可见的帧、分支点、空分支都会断开合并 */
 export function mergeEntries(index: ModelIndex, view: LevelView, entries: readonly Entry[]): { items: (MergedMessage | EmptySlot)[]; hidden: Frame[] } {
   const ids = new Set(view.nodes.map(n => n.id))
   const items: (MergedMessage | EmptySlot)[] = []

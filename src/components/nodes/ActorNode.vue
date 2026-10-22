@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Handles from './Handles.vue'
 import type { NodeData } from './types'
-import { ACTOR_KIND_LABELS } from '@/model'
+import { ACTOR_KIND_LABELS } from '../shared/labels'
 
 defineProps<{ data: NodeData }>()
 const ICON = { user: '👤', system: '⇄', time: '⏱' } as const

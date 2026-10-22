@@ -20,7 +20,7 @@ modules:
   - id: present.canvas.edges
     name: 边组件
     parent: present.canvas
-    responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线；颜色按关系类型，线宽随聚合条数增加，异步为点划线；设计版本中含新增 / 修改关系的边加变更底色；回放时当前步骤的边沿方向流动（同步实心箭头、异步开放箭头与虚线，D-6），走过的边标序号；临时线：经由上层关系为关系类型色的实线（P15），未建模为红色虚线（P11）。
+    responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线。一个视觉通道只表一个维度（L10、ADR-0018）：颜色 = 关系类型（编译期低饱和且更细）；线型 = 事实状态（实线已证实或无事实、虚线未证实、点线为代码依赖叠加线，K9）；箭头自画 marker——同步实心、异步空心、implements 空心三角；线宽 = 聚合条数三档；×N 标签画成 pill，异常标记用警示色。晕：违规红晕优先于设计变更底色，选中为强调色窄晕（不改线宽），回放当前步骤为宽晕并沿方向流动（P10）；走过的边不加粗。临时线：经由上层关系为关系类型色的虚线（P15），未建模为红色虚线（P11）。
     codeRefs: [src/components/edges/**]
 
   - id: present.panel.dispatch
@@ -56,11 +56,10 @@ modules:
   - id: present.panel.content
     name: 内容组件
     parent: present.panel
-    responsibility: 面板共用的内容块：Markdown（禁用原始 HTML）、TS 代码高亮（按需加载 shiki）、接口与数据结构折叠项、关系行、分节。
+    responsibility: 面板共用的内容块：Markdown（禁用原始 HTML）、TS 代码块（高亮用呈现共用件）、接口与数据结构折叠项、关系行、分节。
     codeRefs:
       - src/components/panel/Markdown.vue
       - src/components/panel/CodeBlock.vue
-      - src/components/panel/highlight.ts
       - src/components/panel/InterfaceItem.vue
       - src/components/panel/DataStructureItem.vue
       - src/components/panel/RelationRow.vue
@@ -81,7 +80,7 @@ modules:
   - id: present.canvas.legend
     name: 显示面板（显示设置与图例）
     parent: present.canvas
-    responsibility: 画布右下角的「显示」面板：按视角只出现当前能用的开关（结构视角为边界节点、只看现状、关系类型筛选、代码事实；运行视角为静态关系显示方式），折叠时摘要列出非默认的设置；图例：关系类型的颜色与线型、聚合线宽、可下钻与目标态的节点样式说明、外部参与者与系统边界；回放中追加当前步骤 / 已走过 / 内部活动 / 分支预览 / 经由上层关系 / 未建模 / 同步与异步的图例，以及灰色的含义与当前的静态关系显示方式。
+    responsibility: 画布右下角的「显示」面板，先「设置」后「图例」（ADR-0017）：设置只放没有图例的开关（结构视角为边界节点、只看现状；运行视角为静态关系显示方式）；图例按画布对象分组、每组可折叠——关系（类型行按运行时在前、编译期在后，颜色与粗细示意，结构视角下每行兼作类型筛选；线型、箭头、线宽与 ×N 的说明，L10）、节点、代码事实（结构视角，开关在组标题）、回放（运行视角）；一行一项，示意与画布同款。折叠时摘要列出非默认的设置；面板展开与各组折叠按视角记在本机，运行视角默认只展开「回放」。
     codeRefs: [src/components/DisplayPanel.vue]
 
   # ── 视图状态层 ──────────────────────────────────────────
@@ -123,7 +122,7 @@ modules:
   - id: state.layout.runner
     name: 布局入口与缓存
     parent: state.layout
-    responsibility: layoutView 按视图模式分派给三种排布；浏览器里在 Worker 中运行 elk，无 Worker 环境用同步打包版；结果按视图内容缓存。边的走线工具（edgeLabel、linkRoute、isBoundaryEdge）也在这里，供画布场景使用。
+    responsibility: layoutView 按视图模式分派给三种排布；浏览器里在 Worker 中运行 elk，无 Worker 环境用同步打包版；结果按视图内容缓存。边的走线与编码工具（edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、linkRoute、isBoundaryEdge，L10）也在这里，供画布场景使用。
     codeRefs: [src/layout/layout.ts]
   # 以下三个是 layout.ts 内的概念划分，代码在 Layout 入口的文件里（K5 宿主相同，关系不判定）
   - id: state.layout.runner.layered
@@ -133,7 +132,7 @@ modules:
   - id: state.layout.runner.graph
     name: 普通层次排布
     parent: state.layout.runner
-    responsibility: 用 elkjs layered 算法排内部模块与内部边（正交走线、标签内联），elk 在 Worker 中运行；结果过于狭长时再试自左向右，取宽高比更接近画布者。
+    responsibility: 用 elkjs layered 算法排内部模块与内部边（正交走线、标签内联；同一对节点按类型的平行边作为多重边一并交给 elk），elk 在 Worker 中运行；结果过于狭长时再试自左向右，取宽高比更接近画布者。
   - id: state.layout.runner.boundaries
     name: 边界节点排布
     parent: state.layout.runner
@@ -180,15 +179,15 @@ modules:
   - id: model.projector.collector
     name: 边汇总
     parent: model.projector
-    responsibility: 把映射后同一对节点的关系合并成一条边：分层总览按类型分开，普通层次按节点对合并并记录各类型条数；汇总同步 / 异步。
+    responsibility: 把映射后的关系按 (from, to, type) 收集成视图边（L5）：同一对节点之间不同类型的关系各成一条，同类型内聚合并记条数（L2）；汇总同步 / 异步。
   - id: model.projector.overview
     name: 分层总览
     parent: model.projector
     responsibility: 子模块全是层时产出带（层序、核心模块、隐藏数）与核心跨层边（端点落到核心模块，否则落到层）。
   - id: model.projector.hierarchy
-    name: 层次顺序
+    name: 层次顺序与公共祖先
     parent: model.projector
-    responsibility: 模块在层次中的排序键 hierarchyKey（P9、L4）：从根下到模块的路径上每一级一项，层按 order、其他按描述顺序；逐项比较即得层次顺序，同一父模块的模块相邻、上层在前、祖先在后代之前。投影按它排边界节点，时序模型按它排泳道。
+    responsibility: 模块在层次中的排序键 hierarchyKey（P9、L4）：从根下到模块的路径上每一级一项，层按 order、其他按描述顺序；逐项比较即得层次顺序，同一父模块的模块相邻、上层在前、祖先在后代之前。投影按它排边界节点，时序模型按它排泳道；两个模块的最近公共祖先 lowestCommonAncestor（N3 定位关系、S9 场景所在层次）。
 
 relations:
   # 呈现层内部
@@ -255,10 +254,10 @@ relations:
   - {id: rel.ad.design-act, from: present.panel.design, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 变更清单点击 → revealModule / revealRelation}
   - {id: rel.ad.content-diff, from: present.panel.content, to: state.desk.versions, type: depends, payload: [ds.ModelDiff], description: 新增 / 修改标记与改了哪些字段}
 
-  # 呈现 → 模型（只用类型与少量纯函数）
+  # 呈现 → 模型（只依赖契约「类型与 Schema」，U10）
   - {id: rel.ad.list-types, from: present.project-list, to: model.types, type: depends, payload: [ds.ProjectSummary]}
   - {id: rel.ad.toolbar-types, from: present.nav.toolbar, to: model.types, type: depends, description: RELATION_TYPES 枚举}
-  - {id: rel.ad.crumb-name, from: present.nav.breadcrumb, to: model.pipeline.indexer, type: calls, description: moduleName 取显示名}
+  - {id: rel.ad.crumb-name, from: present.nav.breadcrumb, to: model.types, type: calls, description: moduleName 取显示名}
 
   # 视图状态内部与 → 模型
   - {id: rel.ad.loading-entry, from: state.desk.loading, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, payload: [ds.ModelIndex, ds.Issue]}
@@ -267,7 +266,7 @@ relations:
   - {id: rel.ad.loading-keep, from: state.desk.loading, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 加载完成 → dispatch(loaded / reloaded)，层次回退由转移规则决定}
   - {id: rel.ad.url-actions, from: state.desk.url-sync, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 外部路由变化 → decode → dispatch}
   - {id: rel.ad.actions-url, from: state.desk.actions, to: state.desk.url-sync, type: dataflow, payload: [ds.ViewState], description: 状态改变后写地址（router.write），地址 = encode(状态)}
-  - {id: rel.ad.actions-lca, from: state.transition.navigation, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: 定位关系用最近公共祖先}
+  - {id: rel.ad.actions-lca, from: state.transition.navigation, to: model.projector.hierarchy, type: calls, interface: if.model.lowestCommonAncestor, description: 定位关系用最近公共祖先}
   - id: rel.ad.projection-project
     from: state.desk.projection
     to: model.projector
@@ -306,15 +305,19 @@ relations:
   - {id: rel.ad.diff-index, from: model.diff, to: model.types, type: depends, payload: [ds.ModelIndex], description: 按 ID 对齐两份索引，用路径计入祖先}
   - {id: rel.ad.projector-types, from: model.projector, to: model.types, type: depends, payload: [ds.ModelIndex, ds.LevelView, ds.ViewEdge, ds.Band]}
   # 模型层入口的再导出与名称、标签（K7 按代码补齐）
-  - {id: rel.ad.entry-reexport-diff, from: model.pipeline.entry, to: model.diff, type: depends, description: 模型层入口再导出 diffModels、FIELD_LABELS}
+  - {id: rel.ad.entry-reexport-diff, from: model.pipeline.entry, to: model.diff, type: depends, description: 模型层入口再导出 diffModels}
   - {id: rel.ad.entry-reexport-governance, from: model.pipeline.entry, to: model.governance, type: depends, description: 模型层入口再导出架构治理}
   - {id: rel.ad.entry-reexport-projector, from: model.pipeline.entry, to: model.projector, type: depends, description: 模型层入口再导出 projectLevel、mapEndpoint 等}
   - {id: rel.ad.entry-reexport-scenario, from: model.pipeline.entry, to: model.scenario, type: depends, description: 模型层入口再导出场景投影}
   - {id: rel.ad.entry-reexport-source, from: model.pipeline.entry, to: model.source, type: depends, description: 模型层入口再导出源码归属}
   - {id: rel.ad.indexer-steps, from: model.pipeline.indexer, to: model.scenario.flatten, type: calls, description: messagesOf：建索引时收集场景消息}
-  - {id: rel.ad.present-names, from: present, to: model.pipeline.indexer, type: depends, description: moduleName、triggerOf 等名称查询，呈现层各处显示模块名}
-  - {id: rel.ad.present-labels, from: present, to: model.types, type: depends, description: 标签常量：RELATION_TYPES、ACTOR_KIND_LABELS、DESIGN_STATUS_LABELS}
-  - {id: rel.ad.content-labels, from: present.panel.content, to: model.diff, type: depends, description: FIELD_LABELS：变更角标的字段名}
+  - {id: rel.ad.present-names, from: present, to: model.types, type: depends, description: 契约（U10）：名称查询 moduleName（各处显示模块名）、小谓词 isLong / isArchived、枚举 RELATION_TYPES、规则名 RULE_LABELS}
+  - {id: rel.ad.content-labels, from: present.panel.content, to: present.shared, type: depends, description: FIELD_LABELS：变更角标的字段名}
+  - {id: rel.ad.version-labels, from: present.version, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS：设计状态的显示名}
+  - {id: rel.ad.list-labels, from: present.project-list, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS：设计状态的显示名}
+  - {id: rel.ad.design-labels, from: present.panel.design, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS：设计状态的显示名}
+  - {id: rel.ad.actor-labels, from: present.panel.actor, to: present.shared, type: depends, description: ACTOR_KIND_LABELS：参与者类别的显示名}
+  - {id: rel.ad.actor-node-labels, from: present.canvas.nodes, to: present.shared, type: depends, description: ACTOR_KIND_LABELS：参与者类别的显示名}
   - {id: rel.ad.nodes-act, from: present.canvas.nodes, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 分支预览选这一支（chooseBranch）、步骤序号指向这一步（seek）}
   - {id: rel.ad.system-read, from: present.panel.system, to: state.desk.projection, type: depends, description: 系统面板读索引、层次视图与版本}
   - {id: rel.ad.system-act, from: present.panel.system, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 选中模块或问题}
@@ -340,14 +343,21 @@ interfaces:
     signature: |
       validate(model: ArchModel): { model: ArchModel; issues: Issue[] }
   - id: if.model.buildIndex
-    name: buildIndex / lowestCommonAncestor
+    name: buildIndex
     owner: model.pipeline.indexer
     signature: |
       buildIndex(model: ArchModel): ModelIndex
-      lowestCommonAncestor(index: ModelIndex, a: string, b: string): string
       nearestExisting(index: ModelIndex, path: readonly string[]): string   // 旧路径中最深的、在本索引中仍存在的模块（否则根）
-      moduleName(index: ModelIndex, id: string): string
     semantics: 输入必须来自 validate()。
+  - id: if.model.names
+    name: moduleName
+    owner: model.types
+    signature: |
+      moduleName(index: ModelIndex, id: string): string   // 模块、参与者或系统根的显示名
+      isLong(lines: number | undefined, maxLines: number): boolean   // G20
+      isArchived(status: DesignStatus): boolean   // DV-6
+      RULE_LABELS: Record<RuleKind, string>
+    semantics: 契约里的名称查询与小谓词（U10）：只按 ID 或枚举查表，不做投影与计算；呈现层、命令行与模型层内部共用。
   - id: if.model.projectLevel
     name: projectLevel
     owner: model.projector
@@ -355,6 +365,12 @@ interfaces:
       projectLevel(index: ModelIndex, parentId: string, opts?: ProjectOptions): LevelView
       nearestVisibleLevel(index: ModelIndex, levelId: string, opts: ProjectOptions): string   // N12
     semantics: 层次不存在或被「只看现状」隐藏时抛错（调用方先用 nearestVisibleLevel 取合法层次）；同样的输入得到同样的输出（边 ID 稳定）。
+  - id: if.model.lowestCommonAncestor
+    name: lowestCommonAncestor
+    owner: model.projector.hierarchy
+    signature: |
+      lowestCommonAncestor(index: ModelIndex, a: string, b: string): string   // 两个模块路径的最近公共祖先；不存在的模块按根算
+    semantics: 纯函数；定位关系（N3）与场景所在层次（S9）共用。
   - id: if.model.hierarchyKey
     name: hierarchyKey
     owner: model.projector.hierarchy
@@ -505,7 +521,7 @@ dataStructures:
         showBoundaries: boolean
         relationTypes?: RelationType[]
         currentOnly?: boolean
-        mergeTypes?: boolean
+        scenarioEnds?: { from: string; to: string }[]
       }
     description: 投影开关。
   - id: ds.LevelView
@@ -524,12 +540,11 @@ dataStructures:
     name: ViewEdge
     definition: |
       interface ViewEdge {
-        id: string                   // from->to[:type]，重新加载后不变
+        id: string                   // from->to:type（L5），重新加载后不变
         kind: 'direct' | 'aggregate'
         from: string; to: string
-        type: RelationType           // 合并类型时取条数最多者
-        types: { type: RelationType; count: number }[]
-        relationIds: string[]
+        type: RelationType
+        relationIds: string[]        // 条数即其长度
         mode: 'sync' | 'async' | 'mixed'
       }
     description: 视图中的一条边，可能聚合了多条原始关系。

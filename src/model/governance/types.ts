@@ -66,6 +66,30 @@ export interface ModuleDep {
   files: FileDep[]
 }
 
+/** Y5：本层环里的一条本层依赖 */
+export interface LevelCycleEdge {
+  /** 本层的两端节点（视图节点 ID） */
+  from: string
+  to: string
+  /** 两端节点对应的模块 ID（选中代码依赖用，K10） */
+  fromModule: string
+  toModule: string
+  /** 这对节点之间同方向的视图边；没有时不给 */
+  edgeId?: string
+  /** 投影到这对节点的模块依赖（K4），带文件证据 */
+  deps: ModuleDep[]
+}
+
+/** Y5：本层的一个环 */
+export interface LevelCycle {
+  /** 环编号（Y4，从 1 起） */
+  id: number
+  /** 环内节点，按视图节点顺序；module 为节点对应的模块 ID */
+  nodes: { id: string; module: string }[]
+  /** 两端都在环中的本层依赖，按节点顺序 */
+  edges: LevelCycleEdge[]
+}
+
 export type ConfirmStatus = 'confirmed' | 'unconfirmed' | 'skipped'
 
 /** 关系的证实（K5）：deps 为依据的模块依赖键 */

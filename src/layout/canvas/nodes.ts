@@ -2,7 +2,7 @@
  * 画布场景的节点（ADR-0013）：本层的模块、带与 +N 占位块、边界节点、参与者；回放叠加的步骤序号与分支预览序号。
  * 结构视角按聚焦变淡，运行视角按舞台显示（V5、V8、V9）；回放态与文件高亮（G14）写进类名。
  */
-import { FIELD_LABELS, moduleName, type ModelDiff, type ModelIndex, type ModuleEntity, type ViewNode, type VisibleLanding } from '@/model'
+import { moduleName, type ModelDiff, type ModelIndex, type ModuleEntity, type ViewNode, type VisibleLanding } from '@/model'
 import { moreChipId, type Box } from '../layout'
 import type { Visibility } from '../stage'
 import type { SceneContext } from './context'
@@ -42,12 +42,11 @@ function placeNode(ctx: SceneContext, id: string, box: Box, type: CanvasNodeType
   }
 }
 
-function diffOf(marks: ModelDiff | null, moduleId: string): Pick<NodeData, 'change' | 'changedFields' | 'touched'> {
+function diffOf(marks: ModelDiff | null, moduleId: string): Pick<NodeData, 'change' | 'touched'> {
   if (!marks) return {}
   const c = marks.module.get(moduleId)
   return {
     change: c?.kind === 'added' || c?.kind === 'changed' ? c.kind : undefined,
-    changedFields: c?.fields?.map(f => FIELD_LABELS[f] ?? f).join('、'),
     touched: marks.touched.get(moduleId),
   }
 }

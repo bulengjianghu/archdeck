@@ -1,7 +1,7 @@
 /**
  * agent 查询（Q1、Q2）：定位文件、说明模块、写前判定。输出为可直接序列化的普通对象，命令行与 MCP 共用（Q6）。
  */
-import { moduleName } from '../indexer'
+import { moduleName } from '../names'
 import { moduleFiles, moduleInterfaces, type SourceOwnership } from '../source'
 import type { ModelIndex, RuleKind } from '../types'
 import { stronglyConnected } from './cycles'

@@ -5,12 +5,10 @@
  * - 两端映射到不同子模块：端点恰好就是子模块 → 直接边；否则 → 聚合边；
  * - 两端映射到同一子模块：属于更深层次，不画；
  * - 一端在 P 外部：外部端点提升为「最近公共祖先下、它那一侧的子模块」作为边界节点。
- * 同一 (from, to, type) 的关系合并成一条边。
+ * 同一 (from, to, type) 的关系合并成一条边（L5：同一对节点之间不同类型的关系各成一条）。
  */
-import { RELATION_TYPES } from './types'
 import type {
   Band,
-  RelationType,
   ModelIndex,
   ProjectOptions,
   RelationEntity,
@@ -77,7 +75,7 @@ export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectO
     if (opts.relationTypes && opts.relationTypes.length > 0 && !opts.relationTypes.includes(r.type)) return false
     return (index.actors.has(r.from) || visible(r.from)) && (index.actors.has(r.to) || visible(r.to))
   })
-  const proj: Projected = { edges: new EdgeCollector(!layered && !!opts.mergeTypes), actorIds: new Set(), boundaryOrder: [] }
+  const proj: Projected = { edges: new EdgeCollector(), actorIds: new Set(), boundaryOrder: [] }
   for (const r of relations) projectRelation(scope, proj, r)
   addScenarioEnds(scope, proj)
 
@@ -164,7 +162,7 @@ function layeredOverview(scope: LevelScope, relations: readonly RelationEntity[]
     for (const c of core) nodes.push({ id: c, moduleId: c, role: 'core', hasChildren: visibleChildren(scope, c).length > 0, layerId: l })
     return { layerId: l, order: m.order ?? Infinity, coreModuleIds: core, hiddenCount: kids.length - core.length }
   })
-  const coreEdges = new EdgeCollector(false)
+  const coreEdges = new EdgeCollector()
   for (const r of relations) projectCoreRelation(scope, coreOf, coreEdges, r)
   return { mode: 'layered', parentId, nodes: [...nodes, ...tail], edges: proj.edges.result(), bands, coreEdges: coreEdges.result() }
 }
@@ -196,38 +194,38 @@ function coreRep(path: string[], depth: number, coreOf: Map<string, Set<string>>
   return { node: layer, core: false, exact: path.length === depth + 2 }
 }
 
+/** L5：按 (from, to, type) 收集视图边，同类型内聚合并汇总同步 / 异步 */
 class EdgeCollector {
-  private map = new Map<string, ViewEdge & { allExact: boolean; modes: Set<string>; counts: Map<RelationType, number> }>()
-
-  constructor(private readonly mergeTypes: boolean) {}
+  private map = new Map<string, ViewEdge & { allExact: boolean; modes: Set<string> }>()
 
   add(from: string, to: string, r: RelationEntity, exact: boolean) {
-    const id = edgeId(from, to, this.mergeTypes ? undefined : r.type)
+    const id = edgeId(from, to, r.type)
     let e = this.map.get(id)
     if (!e) {
-      e = { id, kind: 'direct', from, to, type: r.type, types: [], relationIds: [], mode: 'sync', allExact: true, modes: new Set(), counts: new Map() }
+      e = { id, kind: 'direct', from, to, type: r.type, relationIds: [], mode: 'sync', allExact: true, modes: new Set() }
       this.map.set(id, e)
     }
     e.relationIds.push(r.id)
     e.allExact &&= exact
     e.modes.add(r.mode ?? 'sync')
-    e.counts.set(r.type, (e.counts.get(r.type) ?? 0) + 1)
   }
 
   result(): ViewEdge[] {
-    return [...this.map.values()].map(({ allExact, modes, counts, ...e }) => {
-      const types = [...counts]
-        .map(([type, count]) => ({ type, count }))
-        .sort((a, b) => b.count - a.count || RELATION_TYPES.indexOf(a.type) - RELATION_TYPES.indexOf(b.type))
-      return {
-        ...e,
-        type: types[0].type,
-        types,
-        kind: allExact && e.relationIds.length === 1 ? 'direct' : 'aggregate',
-        mode: modes.size > 1 ? 'mixed' : ([...modes][0] as 'sync' | 'async'),
-      }
-    })
+    return [...this.map.values()].map(({ allExact, modes, ...e }) => ({
+      ...e,
+      kind: allExact && e.relationIds.length === 1 ? 'direct' : 'aggregate',
+      mode: modes.size > 1 ? 'mixed' : ([...modes][0] as 'sync' | 'async'),
+    }))
   }
+}
+
+/** 两个模块路径的最近公共祖先（N3 定位关系、S9 场景所在层次） */
+export function lowestCommonAncestor(index: ModelIndex, a: string, b: string): string {
+  const pa = index.pathOf.get(a) ?? [index.rootId]
+  const pb = index.pathOf.get(b) ?? [index.rootId]
+  let i = 0
+  while (i < pa.length && i < pb.length && pa[i] === pb[i]) i++
+  return pa[i - 1] ?? index.rootId
 }
 
 /**
@@ -253,9 +251,9 @@ export function compareKeys(a: readonly number[], b: readonly number[]): number 
   return a.length - b.length
 }
 
-/** 视图边 ID；不给 type 表示合并了类型 */
-export function edgeId(from: string, to: string, type?: string): string {
-  return type ? `${from}->${to}:${type}` : `${from}->${to}`
+/** 视图边 ID（L5） */
+export function edgeId(from: string, to: string, type: string): string {
+  return `${from}->${to}:${type}`
 }
 
 /** N12：给定可见性下最近的可见层次（层次自身或最近的可见祖先，否则根） */

@@ -14,7 +14,7 @@
    - `actor`：外部参与者，在任何层次都映射为它自己（L6）；
    - `skip`：端点就是 P 本身或其祖先。
 3. **按映射结果归类**（L1–L4）：两端映射到不同子模块 → 两端都 `exact` 为直接边，否则并入聚合边；映射到同一子模块 → 不画；一端在外 → 边界边（受开关控制）；两端都在外 → 不画。
-4. **合并**（L5）：分层总览按 `(from, to, type)` 分开；普通层次按 `(from, to)` 合并，记录各类型条数，颜色取条数最多的类型；同步 / 异步汇总为 `sync` / `async` / `mixed`。
+4. **合并**（L5）：普通层次与分层总览都按 `(from, to, type)` 分边，同一对节点之间不同类型的关系各成一条；同类型内聚合，条数即 `relationIds.length`，同步 / 异步汇总为 `sync` / `async` / `mixed`。
 5. **可见性**（L7、L8）：「只看现状」时 `status: target` 的模块及其后代不可见；关系类型筛选只过滤结构图的边。
 
 **分层总览**（O1–O4）：P 的可见子模块全是层时 `mode = layered`：
@@ -29,9 +29,10 @@
 
 - `nearestVisibleLevel(index, levelId, opts)` 返回在给定可见性下最近的可见层次（N12），供导航规则在「只看现状」隐藏当前层次时回退。
 - `hierarchyKey(index, id)` 返回模块在层次顺序中的排序键（P9、L4）：从根到该模块的路径上每一级一项，层为 `[0, order]`，其他模块为 `[1, 描述顺序]`；按键逐项比较即得层次顺序，前缀相同的较短者在前（祖先在后代之前）。参与者没有排序键。
+- `lowestCommonAncestor(index, a, b)` 返回两个模块路径的最近公共祖先（不存在的模块按根算）：定位关系跳到它（N3），场景所在层次由全部帧端点逐个求得（S9）。与端点映射、层次顺序同为树上的纯查询，放在 Projector，场景投影因此只依赖 Projector、不依赖加载流水线。
 - 边界节点在 `LevelView.nodes` 中按 `hierarchyKey` 排序输出，Layout 按此顺序排边界节点行，时序图泳道用同一个键，两张图的外部模块顺序因此一致。
 
-**边 ID** 由 `edgeId(from, to, type?)` 生成：`<from>-><to>:<type>`（按类型分开）或 `<from>-><to>`（合并类型）。同样的输入得到同样的 ID，重新加载后选中仍然有效；场景投影用同一规则把帧定位到视图边。
+**边 ID** 由 `edgeId(from, to, type)` 生成：`<from>-><to>:<type>`。同样的输入得到同样的 ID，重新加载后选中仍然有效；场景投影用同一规则把帧定位到视图边（按帧绑定关系的类型选边，P17）。
 
 复杂度：一次投影遍历一遍关系，`O(关系数 × 层深)`，千级模块为毫秒级。
 
@@ -42,8 +43,9 @@
 | 模式 | 排布 |
 |---|---|
 | `layered` | 不调用 elk。按层序自上而下分带，带内核心模块横向排开（含 `+N` 占位）；相邻层间的边画在带间空隙并横向错开；跨多层的边走右侧通道（O3）；核心跨层边画成曲线 |
-| `graph` | elkjs layered 算法排内部模块与内部边（正交走线、标签内联）。先自上而下排，结果过于狭长时再试自左向右，取宽高比更接近画布者 |
+| `graph` | elkjs layered 算法排内部模块与内部边（正交走线、标签内联；同一对节点之间按类型的平行边作为多重边一并交给 elk，由它错开）。先自上而下排，结果过于狭长时再试自左向右，取宽高比更接近画布者 |
 | 边界节点 | 统一排在内部结构下方一行，按视图给出的层次顺序从左到右排列（与时序图泳道一致）；边界边画成曲线（L4） |
+| 平行边 | 边界边、参与者的边、核心跨层边的曲线：同一对节点之间的多条边（不论方向）按序号横向（侧边出发的曲线为纵向）错开 10px（`parallelOffsets`，L10） |
 | 外部参与者 | 不参与 elk 排布。用户类排在内部结构上方一行，外部系统与时间类排在右侧一列（分层总览排在右侧通道之外），按所连节点的位置排序；内部结构外画边界虚线框（根层为系统边界，其他层次为当前父模块）；参与者的边画成曲线、常驻显示（A7） |
 
 - elk 在 Web Worker 中运行，按需动态加载；无 Worker 环境（测试）用同步打包版兜底。
@@ -57,7 +59,6 @@ interface ProjectOptions {
   showBoundaries: boolean
   relationTypes?: readonly RelationType[]   // 为空表示不过滤
   currentOnly?: boolean                     // 隐藏 status: target
-  mergeTypes?: boolean                      // 普通层次按节点对合并
 }
 
 interface LevelView {
@@ -73,9 +74,8 @@ interface ViewEdge {
   id: string                 // edgeId 规则，重新加载后不变
   kind: 'direct' | 'aggregate'
   from: string; to: string
-  type: RelationType         // 合并类型时取条数最多者
-  types: { type: RelationType; count: number }[]
-  relationIds: string[]
+  type: RelationType
+  relationIds: string[]      // 条数 = relationIds.length
   mode: 'sync' | 'async' | 'mixed'
 }
 
@@ -99,7 +99,8 @@ mapEndpoint(index, parentId, id): { kind: 'local' | 'external' | 'actor' | 'skip
 nearestVisibleLevel(index, levelId, opts): string
 hierarchyKey(index: ModelIndex, id: string): number[]   // 每级两项：[是否非层, order 或描述顺序]
 compareKeys(a: number[], b: number[]): number
-edgeId(from: string, to: string, type?: string): string
+lowestCommonAncestor(index: ModelIndex, a: string, b: string): string   // 最近公共祖先：定位关系（N3）与场景所在层次（S9）共用
+edgeId(from: string, to: string, type: string): string
 layoutView(view: LevelView): Promise<PositionedView>
 contentBounds(pv: PositionedView): Box | null        // 画布适应时取内容外框
 ```

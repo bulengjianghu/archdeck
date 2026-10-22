@@ -2,7 +2,7 @@
 /** 设计版本信息条：哪个设计、第几轮、状态；对比基线、变更计数、是否在图上标出变更（ADR-0002） */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
-import { DESIGN_STATUS_LABELS } from '@/model'
+import { DESIGN_STATUS_LABELS } from './shared/labels'
 
 const desk = useDesk()
 const d = computed(() => desk.versions.design.value)

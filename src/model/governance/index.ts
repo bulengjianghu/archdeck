@@ -3,7 +3,7 @@ export { depKey, within, related, liftDeps, hostOf, confirmRelations, covers, co
 export { judge, evaluateRules, rulesFor, exposesMatch, exposesText, violationKey, rulesOf } from './rules'
 export type { EntryOf, DepProbe, Judgement, ModuleRules } from './rules'
 export { stronglyConnected, moduleCycles, fileCycles, cyclicityOf } from './cycles'
-export { governanceReport, gateIssues, makeBaseline, entryResolver, RULE_LABELS } from './report'
+export { governanceReport, gateIssues, makeBaseline, entryResolver } from './report'
 export { levelFacts, depsBetween, nodeOf } from './level'
 export type { DepOverlay, EdgeFact, LevelFacts } from './level'
 export { moduleBrief, describeModule, locateFile, checkDependency } from './query'

@@ -1,6 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { loadModel, projectLevel } from '../../src/model'
-import { BAND, cacheKey, contentBounds, layoutLayered, layoutView, moreChipId } from '../../src/layout/layout'
+import {
+  BAND,
+  PARALLEL_GAP,
+  cacheKey,
+  contentBounds,
+  edgeLabel,
+  edgeWeight,
+  layoutLayered,
+  layoutView,
+  moreChipId,
+  parallelOffsets,
+  placeBoundaries,
+  toElkGraph,
+  type Box,
+  type EdgeRoute,
+} from '../../src/layout/layout'
+import type { ViewEdge } from '../../src/model'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
 const { index } = loadModel(sampleFiles())
@@ -96,7 +112,7 @@ describe('layoutView', () => {
 
 describe('边界节点', () => {
   it('普通层次：边界节点排在内部结构下方一行，边界边为曲线', async () => {
-    const view = projectLevel(index, 'infra', { showBoundaries: true, mergeTypes: true })
+    const view = projectLevel(index, 'infra', { showBoundaries: true })
     const pv = await layoutView(view)
     const inner = view.nodes.filter(n => n.role !== 'boundary').map(n => pv.nodes.get(n.id)!)
     const bottom = Math.max(...inner.map(b => b.y + b.h))
@@ -125,7 +141,7 @@ describe('外部参与者（A7）', () => {
   })
 
   it('普通层次：参与者不参与 elk 排布，排在边界框外；边界框只包住内部模块', async () => {
-    const view = projectLevel(idx, 'infra', { showBoundaries: true, mergeTypes: true })
+    const view = projectLevel(idx, 'infra', { showBoundaries: true })
     const pv = await layoutView(view)
     const f = pv.frame!
     for (const n of view.nodes.filter(x => x.role === 'module')) {
@@ -141,5 +157,48 @@ describe('外部参与者（A7）', () => {
 
   it('没有参与者时没有边界框', async () => {
     expect((await layoutView(projectLevel(index, 'infra'))).frame).toBeUndefined()
+  })
+})
+
+describe('L10：标签、线宽档、平行边', () => {
+  const ve = (id: string, from: string, to: string, n: number, type: ViewEdge['type'] = 'calls'): ViewEdge => ({
+    id,
+    kind: n > 1 ? 'aggregate' : 'direct',
+    from,
+    to,
+    type,
+    relationIds: Array.from({ length: n }, (_, i) => `r${i}`),
+    mode: 'sync',
+  })
+
+  it('标签只标聚合条数：含多条关系为 ×N，其余为空，不写类型名', () => {
+    expect(edgeLabel(ve('a', 'x', 'y', 1))).toBe('')
+    expect(edgeLabel(ve('a', 'x', 'y', 3, 'depends'))).toBe('×3')
+  })
+
+  it('线宽三档：1 / 2–4 / ≥5', () => {
+    expect([1, 2, 4, 5, 12].map(n => edgeWeight(ve('a', 'x', 'y', n)))).toEqual([1, 2, 2, 3, 3])
+  })
+
+  it('同一对节点（不论方向）的多条边对称错开，单条为 0', () => {
+    const o = parallelOffsets([ve('a', 'x', 'y', 1), ve('b', 'x', 'y', 1, 'depends'), ve('c', 'y', 'x', 1, 'event'), ve('d', 'x', 'z', 1)])
+    expect([o.get('a'), o.get('b'), o.get('c'), o.get('d')]).toEqual([-PARALLEL_GAP, 0, PARALLEL_GAP, 0])
+  })
+
+  it('同一对节点按类型的平行边都交给 elk；边界边的曲线按序号错开', () => {
+    const { index: idx } = loadModel(sampleFiles({ 'z.yaml': 'relations: [{ id: x1, from: infra.player, to: app.solution, type: calls }]' }))
+    const view = projectLevel(idx, 'infra', { showBoundaries: true })
+    const pair = view.edges.filter(e => e.from === 'infra.player' && e.to === 'boundary:app')
+    expect(pair.map(e => e.type).sort()).toEqual(['calls', 'depends'])
+    const inner = { ...view, edges: [ve('p:calls', 'infra.player', 'infra.framework', 1), ve('p:depends', 'infra.player', 'infra.framework', 2, 'depends')] }
+    expect(toElkGraph(inner).edges!.map(e => [e.id, e.labels![0].text])).toEqual([
+      ['p:calls', ''],
+      ['p:depends', '×2'],
+    ])
+    const nodes = new Map<string, Box>(view.nodes.filter(n => n.role === 'module').map((n, i) => [n.id, { x: i * 240, y: 0, w: 208, h: 76 }]))
+    const routes = new Map<string, EdgeRoute>()
+    placeBoundaries(view, nodes, routes)
+    const [a, b] = pair.map(e => routes.get(e.id)!.points[0].x)
+    expect(Math.abs(a - b)).toBe(PARALLEL_GAP)
   })
 })

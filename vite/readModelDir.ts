@@ -10,8 +10,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import { DESIGN_STATUS_LABELS, loadModel, versionLabel } from '../src/model'
-import type { DesignInfo, DesignStatus, ProjectSummary, RawFile, RevisionInfo, VersionRef } from '../src/model'
+import { DESIGN_STATUSES, loadModel, versionLabel } from '../src/model'
+import type { DesignInfo, DesignStatus, ProjectHealth, ProjectSummary, RawFile, RevisionInfo, VersionRef } from '../src/model'
 
 export type { ProjectSummary }
 
@@ -89,8 +89,6 @@ export function readProject(modelRoot: string, id: string, projectRoot: string):
 
 // ── 设计版本 ──
 
-const DESIGN_STATUSES = Object.keys(DESIGN_STATUS_LABELS) as DesignStatus[]
-
 /** 列出项目的设计版本（有 design.yaml 的 designs/<ID>/），按 ID 排序 */
 export function listDesigns(projectDir: string): DesignInfo[] {
   const root = path.join(projectDir, DESIGNS_DIR)
@@ -165,11 +163,8 @@ export function readDesignRevision(modelRoot: string, project: string, design: s
   }
 }
 
-/** 构建产物中各版本的文件名 */
-export const versionFile = (project: string, v?: VersionRef) => (v ? `models/${project}/designs/${v.design}/${v.revision}.json` : `models/${project}.json`)
-
-/** 项目列表页用的摘要：直接跑一遍模型层，统计规模与问题数 */
-export function summarizeProject(payload: ModelPayload): ProjectSummary {
+/** 项目列表页用的摘要：直接跑一遍模型层，统计规模与问题数；健康度（Q10）由调用方另算后附上 */
+export function summarizeProject(payload: ModelPayload, health?: ProjectHealth): ProjectSummary {
   const { index, issues } = loadModel(payload.files)
   const sys = index.model.system
   const top = (index.childrenOf.get(index.rootId) ?? []).map(id => index.modules.get(id)!)
@@ -191,10 +186,15 @@ export function summarizeProject(payload: ModelPayload): ProjectSummary {
     },
     errors: issues.filter(i => i.severity === 'error').length,
     warnings: issues.filter(i => i.severity === 'warning').length,
+    ...(health ? { health } : {}),
     designs: payload.designs ?? [],
   }
 }
 
-export function listProjects(modelRoot: string, projectRoot: string): ProjectSummary[] {
-  return listProjectIds(modelRoot).map(id => summarizeProject(readProject(modelRoot, id, projectRoot)!))
+/** health：按项目算健康度（开发服务器传 readHealth；读源码与代码事实不属于描述读取） */
+export function listProjects(modelRoot: string, projectRoot: string, health?: (payload: ModelPayload) => ProjectHealth): ProjectSummary[] {
+  return listProjectIds(modelRoot).map(id => {
+    const payload = readProject(modelRoot, id, projectRoot)!
+    return summarizeProject(payload, health?.(payload))
+  })
 }

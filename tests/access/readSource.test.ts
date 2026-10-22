@@ -101,14 +101,13 @@ describe('G1 源码根目录', () => {
     const r = resolveSourceRoot('norepo', { id: 'norepo', name: 'N' }, '/nowhere', { ARCH_SOURCE_ROOT_NOREPO: repo })
     expect(r).toEqual({ status: 'local', root: repo })
   })
-  it('目录不存在或未写 repo：源码不在本地，不抛错', () => {
-    expect(readSourceTree(modelRoot, 'gone', projectRoot, {})).toEqual({
-      status: 'absent',
-      repo: 'elsewhere/gone',
+  it('G1：源码在本地是前提，目录不存在或未写 repo 是配置错误，给出原因与尝试的路径，不抛异常', () => {
+    expect(readSourceTree(modelRoot, 'gone', projectRoot, {})).toMatchObject({
+      status: 'error',
       tried: path.join(ws, 'elsewhere/gone'),
-      reason: '源码不在本地',
+      reason: expect.stringContaining('源码根目录不存在'),
     })
-    expect(readSourceTree(modelRoot, 'norepo', projectRoot, {})).toMatchObject({ status: 'absent', reason: expect.stringContaining('repo') })
+    expect(readSourceTree(modelRoot, 'norepo', projectRoot, {})).toMatchObject({ status: 'error', reason: expect.stringContaining('ARCH_SOURCE_ROOT_NOREPO') })
     expect(readSourceTree(modelRoot, 'nope', projectRoot, {})).toBeNull()
   })
 })

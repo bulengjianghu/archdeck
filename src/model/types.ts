@@ -10,6 +10,8 @@
 
 export type RelationType = 'depends' | 'calls' | 'dataflow' | 'event' | 'implements'
 export const RELATION_TYPES: readonly RelationType[] = ['depends', 'calls', 'dataflow', 'event', 'implements']
+/** 运行时关系（§1.1）：步骤只对应这三类（S12）；画布上饱和、编译期两类降权（L10） */
+export const RUNTIME_RELATION_TYPES: readonly RelationType[] = ['calls', 'dataflow', 'event']
 
 export type ModuleStatus = 'current' | 'target' | 'deprecated'
 
@@ -88,7 +90,6 @@ export interface DataStructureDef {
 }
 
 export type ActorKind = 'user' | 'system' | 'time'
-export const ACTOR_KIND_LABELS: Record<ActorKind, string> = { user: '用户', system: '外部系统', time: '时间' }
 
 /** 外部参与者：系统之外主动发起交互的实体，不进模块树（A1–A5） */
 export interface ActorDef {
@@ -330,15 +331,13 @@ export interface ViewNode {
 export type ViewEdgeKind = 'direct' | 'aggregate'
 
 export interface ViewEdge {
-  /** `<from>-><to>:<type>`（按类型分开）或 `<from>-><to>`（合并类型），同一视图内唯一且在重新加载后保持不变 */
+  /** `<from>-><to>:<type>`（L5：同一对节点按类型各一条），同一视图内唯一且在重新加载后保持不变 */
   id: string
   kind: ViewEdgeKind
   from: string
   to: string
-  /** 合并类型时为条数最多的类型 */
   type: RelationType
-  /** 各类型条数，按条数降序 */
-  types: { type: RelationType; count: number }[]
+  /** 原始关系；条数即其长度 */
   relationIds: string[]
   /** 原始关系的同步/异步汇总：全同步、全异步，或混合 */
   mode: 'sync' | 'async' | 'mixed'
@@ -368,8 +367,34 @@ export interface ProjectOptions {
   relationTypes?: readonly RelationType[]
   /** true 时隐藏 status: target 的模块及其关系 */
   currentOnly?: boolean
-  /** 普通层次中同一对模块之间的关系合并成一条边，不按类型分开（分层总览不受影响） */
-  mergeTypes?: boolean
   /** 运行视角的舞台：场景中全部帧的端点，用于补齐结构上没有关系的边界节点与参与者 */
   scenarioEnds?: readonly { from: string; to: string }[]
+}
+
+// ── 版本对比（E1、E2）：计算在 diff.ts ──
+
+export type ChangeKind = 'added' | 'changed' | 'removed'
+export type EntityKind = 'module' | 'relation' | 'interface' | 'dataStructure'
+
+export interface Change {
+  entity: EntityKind
+  id: string
+  kind: ChangeKind
+  /** 显示名；关系为「from → to」 */
+  name: string
+  /** 修改了哪些字段（字段名；显示名在呈现层） */
+  fields?: string[]
+}
+
+export interface ModelDiff {
+  /** 全部变更，按实体类别、变更类别、声明顺序排列 */
+  changes: Change[]
+  /** 目标模型中存在的实体（新增 / 修改）按 ID 查询 */
+  module: Map<string, Change>
+  relation: Map<string, Change>
+  interface: Map<string, Change>
+  dataStructure: Map<string, Change>
+  /** 目标模型中的模块 ID → 涉及它（及其子树）的变更条数，不含模块自身的增改 */
+  touched: Map<string, number>
+  counts: Record<ChangeKind, number>
 }

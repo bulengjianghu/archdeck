@@ -22,7 +22,7 @@ import { useAside } from './split/useAside'
 import { directionOf, readLayout, resize, saveLayout, setDirection, toggleSlot, type PaneLayout } from './split/paneLayout'
 import Panel from './panel/Panel.vue'
 import NavTree from './tree/NavTree.vue'
-import { OPEN_PREVIEW } from './source/preview'
+import { OPEN_PREVIEW } from './shared/preview'
 import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
 
 const props = defineProps<{ project: string; design?: string; revision?: string }>()

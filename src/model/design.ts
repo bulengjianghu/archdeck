@@ -7,13 +7,7 @@
 /** 设计整体状态：起草 → 评审中 → 已定稿 → 已实现；或放弃 */
 export type DesignStatus = 'draft' | 'reviewing' | 'accepted' | 'implemented' | 'abandoned'
 
-export const DESIGN_STATUS_LABELS: Record<DesignStatus, string> = {
-  draft: '起草中',
-  reviewing: '评审中',
-  accepted: '已定稿',
-  implemented: '已实现',
-  abandoned: '已放弃',
-}
+export const DESIGN_STATUSES: readonly DesignStatus[] = ['draft', 'reviewing', 'accepted', 'implemented', 'abandoned']
 
 /** 已结束迭代的设计归档（DV-6）：项目列表不再列出，仍可从版本切换打开 */
 export const isArchived = (status: DesignStatus): boolean => status === 'implemented' || status === 'abandoned'

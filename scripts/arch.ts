@@ -9,6 +9,7 @@
  *   violations [--new]            违规与基线状态
  *   cycles                        模块环、文件环与环度
  *   rescan                        重新扫描，与基线、上一次扫描比较（Q3）
+ *   issues [--category <类别>]    返工清单：按根因聚合的问题、文件行号、规则编号与建议动作（Q7–Q9），默认 Markdown
  *   report                        拦截报告（Q4）
  *   baseline                      生成基线 governance/baseline.json（U7，由人执行并提交）
  *
@@ -16,7 +17,7 @@
  */
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { RULE_LABELS, type CheckResult } from '../src/model'
+import { REWORK_CATEGORIES, RULE_LABELS, type CheckResult, type ReworkCategory } from '../src/model'
 import { ServiceError, createService } from './agent/service'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -26,7 +27,7 @@ const args: string[] = []
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (!a.startsWith('--')) args.push(a)
-  else if (['--project', '--names'].includes(a)) flags.set(a.slice(2), argv[++i] ?? '')
+  else if (['--project', '--names', '--category'].includes(a)) flags.set(a.slice(2), argv[++i] ?? '')
   else flags.set(a.slice(2), true)
 }
 const [cmd, ...rest] = args
@@ -77,6 +78,13 @@ function run(): number {
       return out(svc.cycles(project))
     case 'rescan':
       return out(svc.rescan(project))
+    case 'issues': {
+      const c = flags.get('category')
+      if (c !== undefined && !(REWORK_CATEGORIES as readonly unknown[]).includes(c)) throw new ServiceError(`类别只能是 ${REWORK_CATEGORIES.join(' / ')}`)
+      const r = svc.issues(project, c as ReworkCategory | undefined)
+      console.log(asJson ? JSON.stringify(r.list, null, 2) : r.markdown)
+      return 0
+    }
     case 'report':
       return out(svc.report(project))
     case 'baseline': {
@@ -88,7 +96,7 @@ function run(): number {
       return 0
     }
     default:
-      console.error('用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|report|baseline> [参数] [--project <项目>] [--json]')
+      console.error('用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|report|baseline> [参数] [--project <项目>] [--json]')
       return 2
   }
 }
@@ -102,9 +110,10 @@ function out(value: unknown): number {
   return 0
 }
 
+// 用 exitCode 而不是 exit()：输出接管道时 exit() 会截断还没写完的 stdout
 try {
-  process.exit(run())
+  process.exitCode = run()
 } catch (e) {
   console.error(e instanceof ServiceError ? e.message : e)
-  process.exit(2)
+  process.exitCode = 2
 }

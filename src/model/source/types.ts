@@ -25,11 +25,10 @@ export const LINE_COUNTED = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|vue)$/i
 /** G20：超长阈值的缺省值 */
 export const DEFAULT_MAX_LINES = 500
 
-/** 源码清单：开发服务器实时读取（G1、G2）；构建态取不到端点时为 unavailable */
+/** 源码清单：开发服务器实时读取（G1、G2）。源码在本地是前提，读不到是配置错误（error，附原因与尝试的路径） */
 export type SourcePayload =
   | { status: 'local'; root: string; files: string[]; packages: Record<string, PackageEntry>; lines?: Record<string, number> }
-  | { status: 'absent'; repo?: string; tried?: string; reason: string }
-  | { status: 'unavailable' }
+  | { status: 'error'; reason: string; tried?: string }
 
 export type LocalSource = Extract<SourcePayload, { status: 'local' }>
 

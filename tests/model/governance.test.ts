@@ -1,5 +1,5 @@
 /**
- * 架构治理（docs/02-domain.md §2.14–§2.17 K4–K10、U1–U9、Y1–Y4、Q1、Q2、Q4）：模型层的纯函数，按规则逐条验证。
+ * 架构治理（docs/02-domain.md §2.14–§2.17 K4–K10、U1–U9、Y1–Y5、Q1、Q2、Q4）：模型层的纯函数，按规则逐条验证。
  * 文件依赖直接给出（提取在接入层，见 tests/access/readDeps.test.ts）。
  */
 import { describe, expect, it } from 'vitest'
@@ -318,7 +318,7 @@ describe('Y1–Y3 环与环度', () => {
   })
 })
 
-describe('K9、K10、Y4 本层投影', () => {
+describe('K9、K10、Y4、Y5 本层投影', () => {
   it('视图边的证实与违规，未描述依赖成为叠加线，本层的环', () => {
     const { index, report } = setup()
     const view = projectLevel(index, 'ui')
@@ -331,6 +331,38 @@ describe('K9、K10、Y4 本层投影', () => {
     expect([o.fromModule, o.toModule]).toEqual(['ui.view', 'core'])
     expect(new Set(f.cycles.values()).size).toBe(1)
     expect([...f.cycles.keys()].sort()).toEqual(['boundary:core', 'ui.store', 'ui.view'])
+  })
+
+  it('K9、Y5：同方向有多条视图边（L5 按类型分边）时，违规红晕与本层环的视图边只取类型声明顺序中的第一条', () => {
+    const { index } = loadModel([...files(), { path: 'modules/z.yaml', text: 'relations: [{ id: rel.7, from: ui.store, to: core.util, type: depends }]' }])
+    const own = assignFiles(index, SRC, [])
+    const report = governanceReport(index, own, { files: SRC, packages: {} }, CODE, null)
+    const view = projectLevel(index, 'ui')
+    expect(view.edges.filter(e => e.from === 'ui.store' && e.to === 'boundary:core').map(e => e.type).sort()).toEqual(['calls', 'depends'])
+    const f = levelFacts(index, view, report)
+    expect([...f.violatedEdges].filter(id => id.startsWith('ui.store->boundary:core'))).toEqual(['ui.store->boundary:core:depends'])
+    const e = f.levelCycles[0].edges.find(x => x.from === 'ui.store' && x.to === 'boundary:core')!
+    expect(e.edgeId).toBe('ui.store->boundary:core:depends')
+  })
+
+  it('Y5：本层环的节点按视图顺序，环内的本层依赖带同方向视图边与投影来的模块依赖', () => {
+    const { index, report } = setup()
+    const view = projectLevel(index, 'ui')
+    const [c] = levelFacts(index, view, report).levelCycles
+    expect(c.id).toBe(1)
+    const order = view.nodes.map(n => n.id)
+    expect(c.nodes.map(n => n.id)).toEqual(order.filter(id => ['ui.view', 'ui.store', 'boundary:core'].includes(id)))
+    expect(c.nodes.find(n => n.id === 'boundary:core')!.module).toBe('core')
+    const pairs = c.edges.map(e => `${e.from}->${e.to}`)
+    expect([...pairs].sort()).toEqual(['boundary:core->ui.view', 'ui.store->boundary:core', 'ui.view->boundary:core', 'ui.view->ui.store'])
+    expect(pairs).toEqual([...pairs].sort((a, b) => order.indexOf(a.split('->')[0]) - order.indexOf(b.split('->')[0]) || order.indexOf(a.split('->')[1]) - order.indexOf(b.split('->')[1])))
+    const edge = (p: string) => c.edges.find(e => `${e.from}->${e.to}` === p)!
+    expect(edge('ui.view->ui.store').edgeId).toBe(view.edges.find(e => e.from === 'ui.view' && e.to === 'ui.store')!.id)
+    expect(edge('ui.view->boundary:core').edgeId).toBeUndefined()
+    const back = edge('boundary:core->ui.view')
+    expect([back.fromModule, back.toModule]).toEqual(['core', 'ui.view'])
+    expect(back.deps.map(d => d.key).sort()).toEqual(['core.impl->ui.view', 'core.util->ui.view'])
+    expect(back.deps.every(d => d.files.length > 0)).toBe(true)
   })
 
   it('视图边的关系全部未证实为 unconfirmed', () => {

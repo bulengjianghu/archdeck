@@ -123,26 +123,24 @@ describe('projectLevel · 过滤与汇总', () => {
     expect(edge.mode).toBe('mixed')
   })
 
-  it('mergeTypes：普通层次同一对模块的不同类型合并为一条边，类型取条数最多者；分层总览不合并', () => {
+  it('L5：普通层次同一对模块之间不同类型的关系各成一条边，ID 带类型；同类型内聚合', () => {
     const { index: idx } = loadModel(sampleFiles({
       'z.yaml': [
         'relations:',
         '  - { id: x1, from: infra.framework.sm, to: infra.mus, type: calls }',
         '  - { id: x2, from: infra.framework.sm, to: infra.mus, type: event }',
+        '  - { id: x3, from: infra.framework.sm, to: infra.mus, type: calls, mode: async }',
       ].join('\n'),
     }))
-    const view = projectLevel(idx, 'infra', { showBoundaries: true, mergeTypes: true })
-    const e = view.edges.find(x => x.from === 'infra.framework' && x.to === 'infra.mus')!
-    expect(e.id).toBe('infra.framework->infra.mus')
-    expect(e.relationIds).toEqual(['r4', 'x1', 'x2'])
-    expect(e.type).toBe('calls')
-    expect(e.types).toEqual([
-      { type: 'calls', count: 1 },
-      { type: 'dataflow', count: 1 },
-      { type: 'event', count: 1 },
+    const view = projectLevel(idx, 'infra', { showBoundaries: true })
+    const pair = view.edges.filter(x => x.from === 'infra.framework' && x.to === 'infra.mus')
+    expect(pair.map(e => [e.id, e.type, e.relationIds, e.mode])).toEqual([
+      ['infra.framework->infra.mus:dataflow', 'dataflow', ['r4'], 'sync'],
+      ['infra.framework->infra.mus:calls', 'calls', ['x1', 'x3'], 'mixed'],
+      ['infra.framework->infra.mus:event', 'event', ['x2'], 'sync'],
     ])
-    expect(view.edges.filter(x => x.from === 'infra.framework' && x.to === 'infra.mus')).toHaveLength(1)
-    const root = projectLevel(idx, 'sys', { showBoundaries: true, mergeTypes: true })
+    expect(pair.every(e => !('types' in e))).toBe(true)
+    const root = projectLevel(idx, 'sys', { showBoundaries: true })
     expect(root.edges.some(x => x.id === 'infra->app:calls')).toBe(true)
   })
 
@@ -193,7 +191,7 @@ describe('外部参与者（L6、A2）', () => {
   })
 
   it('某一层只出现与本层子树有关系的参与者，不受边界节点开关影响', () => {
-    const infra = projectLevel(idx, 'infra', { showBoundaries: false, mergeTypes: true })
+    const infra = projectLevel(idx, 'infra', { showBoundaries: false })
     expect(nodeIds(infra, 'actor')).toEqual(['actor.biz', 'actor.viewer'])
     expect(infra.edges.find(e => e.from === 'actor.biz')).toMatchObject({ to: 'infra.player', kind: 'direct' })
     expect(nodeIds(projectLevel(idx, 'infra.framework'), 'actor')).toEqual([])

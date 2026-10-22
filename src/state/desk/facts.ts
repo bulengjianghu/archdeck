@@ -1,6 +1,6 @@
 /**
  * DeskState 的架构治理派生（desk.facts，ADR-0015）：代码事实由源码同步取得，治理报告、本层投影与门禁问题调用模型层（K、U、Y）。
- * 只对当前版本、源码在本地时（K8）；画布叠加只在结构视角、「代码事实」开启时（K9）。
+ * 只对当前版本（K8）；画布叠加只在结构视角、「代码事实」开启时（K9）。
  */
 import { computed, type ComputedRef, type ShallowRef } from 'vue'
 import {
@@ -14,6 +14,7 @@ import {
   type GovernanceReport,
   type Issue,
   type LedgerSummary,
+  type LevelCycle,
   type LevelFacts,
   type LevelView,
   type ModelIndex,
@@ -34,18 +35,22 @@ export interface FactsInputs {
   design: boolean
 }
 
-/** 为什么没有代码事实，或正在取 */
-export type FactsStatus = 'ready' | 'loading' | 'design' | 'no-source' | 'error'
+/** 为什么没有代码事实，或正在取；源码清单读取失败也是 error（源码在本地是前提，G1） */
+export type FactsStatus = 'ready' | 'loading' | 'design' | 'error'
 
 export function createFacts({ state, index, view, files, sync, design }: FactsInputs) {
   const resource = sync.facts
   const status = computed<FactsStatus>(() => {
     if (design) return 'design'
     const r = resource.value
-    if (!r) return files.payload.value === null ? 'loading' : 'no-source'
+    if (!r) return files.payload.value === null ? 'loading' : 'error'
     return r.status === 'ok' ? 'ready' : r.status === 'loading' ? 'loading' : 'error'
   })
-  const error = computed(() => (resource.value?.status === 'error' ? resource.value.message : null))
+  const error = computed(() => {
+    const p = files.payload.value
+    if (p?.status === 'error') return p.reason
+    return resource.value?.status === 'error' ? resource.value.message : null
+  })
 
   const report = computed<GovernanceReport | null>(() => {
     const r = resource.value
@@ -82,6 +87,16 @@ export function createFacts({ state, index, view, files, sync, design }: FactsIn
     return { from, to, detail: depsBetween(index.value, view.value, report.value, from, to) }
   })
 
+  /** Y5：选中的节点（模块或边界节点）所在的本层环；本层投影不可用时为 null（同 K9） */
+  const selectedCycle = computed<LevelCycle | null>(() => {
+    const s = state.value.selection
+    const lv = level.value
+    if (s?.kind !== 'module' || !lv || !view.value) return null
+    const node = view.value.nodes.some(n => n.id === s.id) ? s.id : `boundary:${s.id}`
+    const id = lv.cycles.get(node)
+    return id === undefined ? null : (lv.levelCycles.find(c => c.id === id) ?? null)
+  })
+
   /** Q1：模块的治理信息（生效的规则、出入的违规与未描述依赖、所在的环） */
   const moduleDetail = (id: string): ModuleDetail | null =>
     report.value && index.value && files.ownership.value && entryOf.value
@@ -94,7 +109,7 @@ export function createFacts({ state, index, view, files, sync, design }: FactsIn
     return c ? { status: c.status, deps: c.deps.map(k => report.value!.moduleDeps.get(k)!).filter(Boolean), host: c.host } : null
   }
 
-  return { status, error, report, level, gateIssues, ledger, entryOf, selectedDep, moduleDetail, relationFact }
+  return { status, error, report, level, gateIssues, ledger, entryOf, selectedDep, selectedCycle, moduleDetail, relationFact }
 }
 
 export type FactsDerivations = ReturnType<typeof createFacts>

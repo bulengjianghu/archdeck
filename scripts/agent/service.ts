@@ -18,6 +18,10 @@ import {
   moduleName,
   summarizeLedger,
   entryResolver,
+  reworkList,
+  reworkMarkdown,
+  type ReworkCategory,
+  type ReworkList,
   type CheckResult,
   type CheckTarget,
   type EntryOf,
@@ -95,9 +99,8 @@ export function createService(opts: ServiceOptions) {
     const project = projectId(p)
     const payload = readProject(modelRoot, project, opts.root)!
     const tree = readSourceTree(modelRoot, project, opts.root, env)
-    // K8：源码不在本地时没有事实
-    if (!tree || tree.status !== 'local')
-      throw new ServiceError(`项目 ${project} 的源码不在本地（${tree?.status === 'absent' ? (tree.tried ?? tree.reason) : '未知'}），没有代码事实`)
+    // G1：源码在本地是前提，读不到是配置错误
+    if (!tree || tree.status !== 'local') throw new ServiceError(`项目 ${project} 读不到源码：${tree?.reason ?? '项目不存在'}`)
     const gov = governanceDir(modelRoot, project)
     const stamp = stampOf(payload.files, tree, gov)
     const hit = cache.get(project)
@@ -126,10 +129,7 @@ export function createService(opts: ServiceOptions) {
         const tree = readSourceTree(modelRoot, id, opts.root, env)
         return {
           id,
-          source:
-            tree?.status === 'local'
-              ? { status: 'local', root: tree.root, files: tree.files.length }
-              : { status: 'absent', tried: tree?.status === 'absent' ? tree.tried : undefined },
+          source: tree?.status === 'local' ? { status: 'local', root: tree.root, files: tree.files.length } : { status: 'error', reason: tree?.reason },
         }
       })
     },
@@ -264,6 +264,16 @@ export function createService(opts: ServiceOptions) {
       }
       record(project, { at: now(), tool: 'rescan', client: opts.client, violations: now_.size, newViolations: r.gate.newViolations, cyclicity: r.cyclicity })
       return out
+    },
+
+    /** Q7–Q9：返工清单；同一份结果给 JSON 与 Markdown */
+    issues(p?: string, category?: ReworkCategory): { project: string; list: ReworkList; markdown: string } {
+      const l = load(p)
+      const all = reworkList({ index: l.index, issues: l.issues, source: { own: l.own, tree: l.tree }, report: l.report })
+      const items = category ? all.items.filter(i => i.category === category) : all.items
+      const list: ReworkList = category ? { ...all, items } : all
+      const modelDir = path.relative(opts.root, path.join(modelRoot, l.project)).split(path.sep).join('/')
+      return { project: l.project, list, markdown: reworkMarkdown(list, `${l.index.model.system.name}（${l.project}）`, { modelDir, sourceRoot: l.tree.root }) }
     },
 
     /** Q4 */

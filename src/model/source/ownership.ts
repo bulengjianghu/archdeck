@@ -2,6 +2,7 @@
  * 源码归属（G3–G12、G14）：文件属于哪个模块、模块的文件与入口、入口导出与 provides 的对应、文件在当前层次的投影。
  * 关于被描述系统的知识，换成命令行或 AI 查询同样成立；输入是模型索引与接入层给的文件清单，不碰文件系统。
  */
+import { isLong } from '../names'
 import { mapEndpoint } from '../project'
 import type { Issue, LevelView, ModelIndex, ModuleEntity } from '../types'
 import { hasWildcard, matchRef, normalizeRef, staticPrefix } from './glob'
@@ -153,9 +154,6 @@ export function sourceIssues(index: ModelIndex, own: SourceOwnership, tree: Pick
 }
 
 /** 目录树：目录在前、按名称排序；目录带文件数与未归属数；G18：子树内文件全部忽略的目录也是忽略状态 */
-/** G20：超过阈值即超长；没有行数（不统计的文件）不算 */
-export const isLong = (lines: number | undefined, maxLines: number): boolean => lines !== undefined && lines > maxLines
-
 /** G21：一组文件（如模块的文件）的行数合计、超长文件数与统计了行数的文件数 */
 export function moduleLines(files: readonly string[], lines: Readonly<Record<string, number>>, maxLines: number): { lines: number; long: number; counted: number } {
   let total = 0

@@ -5,65 +5,8 @@
  * 另外为目标模型中的每个模块算出「涉及多少处变更」：子树内的模块增删改，
  * 以及以它（或其后代）为端点的关系、它提供 / 持有的接口与数据结构的增删改，用于在上级层次引导下钻。
  */
-import type { ModelIndex } from './types'
+import type { Change, ChangeKind, EntityKind, ModelDiff, ModelIndex } from './types'
 
-export type ChangeKind = 'added' | 'changed' | 'removed'
-export type EntityKind = 'module' | 'relation' | 'interface' | 'dataStructure'
-
-export interface Change {
-  entity: EntityKind
-  id: string
-  kind: ChangeKind
-  /** 显示名；关系为「from → to」 */
-  name: string
-  /** 修改了哪些字段（字段名，见 FIELD_LABELS） */
-  fields?: string[]
-}
-
-export interface ModelDiff {
-  /** 全部变更，按实体类别、变更类别、声明顺序排列 */
-  changes: Change[]
-  /** 目标模型中存在的实体（新增 / 修改）按 ID 查询 */
-  module: Map<string, Change>
-  relation: Map<string, Change>
-  interface: Map<string, Change>
-  dataStructure: Map<string, Change>
-  /** 目标模型中的模块 ID → 涉及它（及其子树）的变更条数，不含模块自身的增改 */
-  touched: Map<string, number>
-  counts: Record<ChangeKind, number>
-}
-
-export const FIELD_LABELS: Record<string, string> = {
-  name: '名称',
-  parentId: '位置',
-  kind: '类别',
-  status: '状态',
-  core: '核心',
-  responsibility: '职责',
-  principle: '实现原理',
-  dataStructures: '数据结构',
-  provides: '对外接口',
-  codeRefs: '代码引用',
-  docRefs: '文档引用',
-  owner: '负责人 / 提供方',
-  tags: '标签',
-  order: '层序',
-  abstraction: '抽象原则',
-  includes: '应包含',
-  excludes: '不应包含',
-  mayDependOn: '可依赖的层',
-  from: '起点',
-  to: '终点',
-  type: '类型',
-  mode: '同步 / 异步',
-  interface: '经由接口',
-  payload: '交换数据',
-  description: '说明',
-  signature: '签名',
-  semantics: '语义',
-  definition: '定义',
-  invariants: '不变量',
-}
 
 const IGNORED = new Set(['src', 'seq', 'designNote'])
 const ENTITY_ORDER: EntityKind[] = ['module', 'relation', 'interface', 'dataStructure']

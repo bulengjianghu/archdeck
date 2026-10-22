@@ -13,7 +13,7 @@ import { factEdges, replayEdges, structureEdges } from './canvas/edges'
 import { moduleNodes, replayNodes } from './canvas/nodes'
 import type { CanvasEdge, CanvasInput, CanvasScene } from './canvas/types'
 
-export type { CanvasEdge, CanvasInput, CanvasNode, CanvasNodeType, CanvasScene, NodeData, RouteEdgeData } from './canvas/types'
+export type { CanvasEdge, CanvasInput, CanvasNode, CanvasNodeType, CanvasScene, EdgeArrow, FactState, NodeData, RouteEdgeData } from './canvas/types'
 
 export function canvasScene(input: CanvasInput): CanvasScene {
   if (!input.positioned) return { nodes: [], edges: [], visibleIds: null }

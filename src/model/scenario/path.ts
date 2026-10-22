@@ -1,18 +1,8 @@
+import type { Frame, BranchPoint, PlanNode, ScenarioPlan, Choices, ResolvedPath, RouteItem } from './types'
 /**
  * 回放路径（F6、F6b、R13）：按已选分支从回放计划走出线性帧序列，并回答分支选择的组合问题。
  * 已选分支是「分支点 ID → 选项序号」；分支点不在路径上、序号越界的选择被忽略。
  */
-import type { BranchPoint, Frame, PlanNode, ScenarioPlan } from './plan'
-
-export type Choices = ReadonlyMap<string, number>
-
-export interface ResolvedPath {
-  frames: Frame[]
-  /** 路径截止处未选分支的分支点（F6） */
-  pending?: BranchPoint
-  /** 路径上依次经过的分支点 */
-  points: BranchPoint[]
-}
 
 export function resolvePath(plan: ScenarioPlan, choices: Choices): ResolvedPath {
   const frames: Frame[] = []
@@ -98,13 +88,6 @@ export function pointPrefix(plan: ScenarioPlan, choices: Choices, pointId: strin
   without.delete(pointId)
   const r = resolvePath(plan, without)
   return r.pending?.id === pointId ? r.frames : []
-}
-
-/** 路线上的一项：路径上依次经过的分支点（chosen 为所选选项），截止处待选的分支点 chosen 为 null */
-export interface RouteItem {
-  pointId: string
-  when: string[]
-  chosen: number | null
 }
 
 /** F6f：路线 = 路径上依次经过的分支点与所选选项，加上截止处待选的分支点 */

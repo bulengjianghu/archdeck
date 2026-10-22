@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watchEffect } from 'vue'
-import { highlightTs } from './highlight'
+import { highlightTs } from '../shared/highlight'
 
 const props = defineProps<{ code: string }>()
 const html = ref<string>()

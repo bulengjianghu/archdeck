@@ -10,7 +10,7 @@ const plan = planScenario(index, 'sc.play')
 const choices = new Map([['sc.play#3', 0]])
 
 async function setup(level: string) {
-  const view = projectLevel(index, level, { showBoundaries: true, mergeTypes: true, scenarioEnds: stageEnds(plan) })
+  const view = projectLevel(index, level, { showBoundaries: true, scenarioEnds: stageEnds(plan) })
   const model = buildSequence(index, view, plan, choices, projectScenario(index, view, plan, choices))
   const structure = await layoutView(view)
   return { model, structure, ps: layoutSequence(model, structure) }

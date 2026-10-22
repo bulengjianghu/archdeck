@@ -28,10 +28,7 @@ const conflict = (f: string) => desk.files.ownership.value?.conflicts.includes(f
 <template>
   <Section title="源代码文件" :count="local ? files.length : undefined">
     <p v-if="!desk.files.payload.value" class="muted">正在读取源码清单…</p>
-    <p v-else-if="desk.files.payload.value.status === 'absent'" class="muted">
-      源码不在本地（{{ desk.files.payload.value.tried ?? desk.files.payload.value.reason }}）
-    </p>
-    <p v-else-if="desk.files.payload.value.status === 'unavailable'" class="muted">构建产物不含源码，请用 <code>npm run dev</code> 查看</p>
+    <p v-else-if="desk.files.payload.value.status === 'error'" class="muted">{{ desk.files.payload.value.reason }}</p>
     <template v-else>
       <p v-if="!files.length" class="muted">
         没有文件归属这个模块{{ desk.index.value?.modules.get(id)?.codeRefs?.length ? '（codeRefs 没有匹配到文件）' : '（未写 codeRefs）' }}

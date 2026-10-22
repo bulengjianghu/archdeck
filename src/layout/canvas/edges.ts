@@ -1,20 +1,23 @@
 /**
  * 画布场景的边（ADR-0013）：关系边（本层视图边与分层总览的核心跨层边）、回放叠加的临时线（P11、P15）与分支预览、
- * 代码事实叠加线（K9）。显隐、变淡、回放态、选中突出的灰化与证实标记都在这里定。
+ * 代码事实叠加线（K9）。显隐、变淡、回放态、选中突出的灰化，以及视觉通道（L10：线型、箭头、线宽档、标签）都在这里定。
  */
-import type { EdgeFact, ModelDiff, ModelIndex, ViewEdge } from '@/model'
-import { edgeLabel, isBoundaryEdge, linkRoute, type EdgeRoute } from '../layout'
+import { RUNTIME_RELATION_TYPES, type EdgeFact, type ModelDiff, type ModelIndex, type ViewEdge } from '@/model'
+import { edgeLabel, edgeWeight, isBoundaryEdge, linkRoute, type EdgeRoute } from '../layout'
 import { isTemp, landingId } from '../stage'
 import type { SceneContext } from './context'
-import type { CanvasEdge, RouteEdgeData } from './types'
+import type { CanvasEdge, EdgeArrow, FactState, RouteEdgeData } from './types'
 
-/** K9：关系边的证实标记 */
-const FACT_MARK: Record<EdgeFact, string> = { confirmed: '✓', partial: '◐', unconfirmed: '?' }
+/** K9、L10：只标异常——未证实与部分证实画虚线并标 ?，已证实与没有事实的照常 */
+const factState = (fact: EdgeFact | undefined): FactState => (fact === 'unconfirmed' || fact === 'partial' ? 'unconfirmed' : 'confirmed')
+
+/** L10：implements 空心三角；同步（含同步与异步混合）实心；异步空心 */
+export const arrowOf = (e: ViewEdge): EdgeArrow => (e.type === 'implements' ? 'triangle' : e.mode === 'async' ? 'open' : 'closed')
 
 /** 临时线用的视图边外形；经由上层关系时取该关系的类型与同步 / 异步（P15） */
 function tempEdge(idx: ModelIndex | null, id: string, from: string, to: string, relationId?: string): ViewEdge {
   const r = relationId ? idx?.relations.get(relationId) : undefined
-  return { id, kind: 'direct', from, to, type: r?.type ?? 'calls', types: [], relationIds: relationId ? [relationId] : [], mode: r?.mode ?? 'sync' }
+  return { id, kind: 'direct', from, to, type: r?.type ?? 'calls', relationIds: relationId ? [relationId] : [], mode: r?.mode ?? 'sync' }
 }
 
 /** 回放态：当前（带方向）、走过、预览、悬停 */
@@ -49,19 +52,26 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route: EdgeRoute | undefined, 
   const selected = ctx.selectedEdgeIds.has(e.id)
   const play = playOf(ctx, e.id)
   const fact = ctx.facts?.edgeFacts.get(e.id)
-  const base = ctx.st && play.play ? '' : edgeLabel(e)
+  const state = factState(fact)
+  // 运行视角下走过的边由步骤序号标注，不标条数；K9：异常标记跟在条数后
+  const count = ctx.st && play.play ? '' : edgeLabel(e)
+  const mark = state === 'unconfirmed' ? '?' : ''
   return {
     id: core ? `core:${e.id}` : e.id,
     source: e.from,
     target: e.to,
     type: 'route',
     zIndex: play.play === 'current' ? 5 : core ? 3 : 1,
-    markerEnd: { type: e.type === 'implements' ? 'arrow' : 'arrowclosed', color: `var(--rel-${e.type})`, width: 14, height: 14 },
     data: {
       route,
       edge: e,
-      // 运行视角下走过的边由步骤序号标注，不再标类型；K9：证实标记跟在类型后
-      label: fact ? `${base} ${FACT_MARK[fact]}`.trim() : base,
+      label: [count, mark].filter(Boolean).join(' '),
+      ...(count ? { pill: true } : {}),
+      ...(mark ? { warn: true } : {}),
+      factState: state,
+      arrow: arrowOf(e),
+      weight: edgeWeight(e),
+      compile: !RUNTIME_RELATION_TYPES.includes(e.type),
       ...(fact ? { fact } : {}),
       ...(ctx.facts?.violatedEdges.has(e.id) ? { violated: true } : {}),
       selected,
@@ -104,7 +114,7 @@ export function structureEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   return list
 }
 
-/** 回放叠加的边：P11、P15 本层没有视图边的消息画临时线，不参与布局——经由上层关系为关系类型色的实线，未建模为红色虚线；分支预览同样画临时线 */
+/** 回放叠加的边：P11、P15 本层没有视图边的消息画临时线，不参与布局——经由上层关系为关系类型色的虚线，未建模为红色虚线；分支预览同样画临时线 */
 export function replayEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   const { st, emphEdges } = ctx
   if (!st) return []
@@ -113,6 +123,8 @@ export function replayEdges(ctx: SceneContext): (CanvasEdge | null)[] {
     makeEdge(ctx, tempEdge(idx, u.edgeId, u.from, u.to, u.relationId), u.route, false, {
       temp: u.kind,
       label: u.kind === 'upper' ? '经由上层' : '未建模',
+      pill: false,
+      warn: false,
       muted: !!emphEdges && !emphEdges.has(u.edgeId),
     }),
   )
@@ -121,7 +133,9 @@ export function replayEdges(ctx: SceneContext): (CanvasEdge | null)[] {
     const id = landingId(p.at)
     const rel = p.at.kind === 'upper' ? p.at.relationId : undefined
     if (!st.walked.has(id))
-      list.push(makeEdge(ctx, tempEdge(idx, id, p.at.from, p.at.to, rel), p.route, false, { temp: p.at.kind, play: 'preview', label: '' }))
+      list.push(
+        makeEdge(ctx, tempEdge(idx, id, p.at.from, p.at.to, rel), p.route, false, { temp: p.at.kind, play: 'preview', label: '', pill: false, warn: false }),
+      )
   }
   return list
 }
@@ -130,8 +144,16 @@ export function replayEdges(ctx: SceneContext): (CanvasEdge | null)[] {
 export function factEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   return (ctx.facts?.overlays ?? []).map(o => {
     const label = [o.undescribed ? `未描述 ${o.undescribed}` : '', o.violations ? `违规 ${o.violations}` : ''].filter(Boolean).join(' · ')
-    const ve: ViewEdge = { id: o.id, kind: 'direct', from: o.from, to: o.to, type: 'depends', types: [], relationIds: [], mode: 'sync' }
+    const ve: ViewEdge = { id: o.id, kind: 'direct', from: o.from, to: o.to, type: 'depends', relationIds: [], mode: 'sync' }
     const route = linkRoute(ctx.pv.nodes.get(o.from), ctx.pv.nodes.get(o.to))
-    return makeEdge(ctx, ve, route, false, { temp: 'code', label, overlay: o, ...(o.violations ? { violated: true } : {}) })
+    return makeEdge(ctx, ve, route, false, {
+      temp: 'code',
+      label,
+      warn: true,
+      pill: false,
+      factState: 'undescribed',
+      overlay: o,
+      ...(o.violations ? { violated: true } : {}),
+    })
   })
 }

@@ -6,7 +6,7 @@ modules:
   - id: present.desk-view.split
     name: 分屏容器与副栏
     parent: present.desk-view
-    responsibility: 按布局树排布画布区的视图：结构图与副栏两块，方向可切换（默认左右，W-4），比例可拖，副栏可收起（左右排列时缩成一条竖栏）；方向、比例与收起状态按项目记在本地。副栏只有一栏标题栏（ADR-0010）：收起、页签、时序图页签下的本层不可见提示与「定位」、方向切换；页签在「时序图」（运行视角）与「源代码」（有预览文件时）之间切换：选中文件切到源代码并预览它，打开场景或移动进度切到时序图，预览文件保留到关闭（G15）。
+    responsibility: 按布局树排布画布区的视图：结构图与副栏两块，方向可切换（默认左右，W-4），比例可拖，副栏可收起（左右排列时缩成一条竖栏）；方向、比例与收起状态按项目记在本地。副栏只有一栏标题栏（ADR-0010）：收起、页签、时序图页签下的本层不可见提示、「定位」与「?」（时序图图例浮层）、方向切换；页签在「时序图」（运行视角）与「源代码」（有预览文件时）之间切换：选中文件切到源代码并预览它，打开场景或移动进度切到时序图，预览文件保留到关闭（G15）。
     principle: |
       - 布局树是可序列化的值（ds.PaneLayout），视图组件只按「槽位」（structure / aside）挂载，不知道自己在哪；以后的自由拖拽分屏只需扩展布局树的编辑操作。
       - 页签与预览文件只属于这块界面（useAside），不进视图状态与 URL；副栏在运行视角或有预览文件时出现。
@@ -115,7 +115,7 @@ modules:
   - id: state.layout.canvas
     name: 画布场景
     parent: state.layout
-    responsibility: 把带坐标的层次视图换成画布要画的节点与边（canvasScene，ADR-0013）：位置、类型、数据与类名、层级，以及运行视角下适应画布用的可见节点。结构视角：聚焦对象（悬停优先、其次选中）不相邻的节点与边变淡，分层总览中带不参与变淡；核心跨层边只在聚焦核心模块、被选中或回放落在其上时出现（O4、P7）；边界边只在聚焦其一端、被选中或回放经过时出现（L4）。运行视角：按舞台显示（stageDisplay）决定显隐与淡化（V5、V8、V9、V10）；回放叠加——当前消息的边带方向流动、端点节点为活动态、走过的边标步骤序号、临时线（经由上层关系取关系的类型色画实线、标「经由上层」、随关系选中，P15；未建模画红色虚线，P11）、分支预览（P7、P10、P11、F6）；选中步骤时其余走过的边与步骤序号变灰（R15、R16）。选中文件时投影节点加文件高亮（G14）；设计版本标出新增 / 修改与涉及变更数。
+    responsibility: 把带坐标的层次视图换成画布要画的节点与边（canvasScene，ADR-0013）：位置、类型、数据与类名、层级，以及运行视角下适应画布用的可见节点。结构视角：聚焦对象（悬停优先、其次选中）不相邻的节点与边变淡，分层总览中带不参与变淡；核心跨层边只在聚焦核心模块、被选中或回放落在其上时出现（O4、P7）；边界边只在聚焦其一端、被选中或回放经过时出现（L4）。运行视角：按舞台显示（stageDisplay）决定显隐与淡化（V5、V8、V9、V10）；回放叠加——当前消息的边带方向流动、端点节点为活动态、走过的边标步骤序号、临时线（经由上层关系取关系的类型色画虚线、标「经由上层」、随关系选中，P15；未建模画红色虚线，P11）、分支预览（P7、P10、P11、F6）；选中步骤时其余走过的边与步骤序号变灰（R15、R16）。边的视觉通道（L10）：线型取事实状态（结构视角开启代码事实时未证实为虚线并标 ?，已证实不标，K9）、箭头取同步 / 异步 / implements、线宽档取条数、编译期降权，标签只有 ×N 与异常；选中不改线宽。选中文件时投影节点加文件高亮（G14）；设计版本标出新增 / 修改与涉及变更数。
     principle: 纯函数，与 stageOverlay、stageDisplay 对称：呈现层只按结果写入 Vue Flow，不自己判断显隐、变淡与回放态；节点与边的数据类型（NodeData、RouteEdgeData）因此归 Layout。
     codeRefs: [src/layout/canvas.ts, src/layout/canvas/**]
 
@@ -136,7 +136,7 @@ modules:
   - id: model.scenario.level
     name: 帧的层次投影
     parent: model.scenario
-    responsibility: 把路径上每一帧的 from / to 用 mapEndpoint 映射到当前层次：两个不同节点之间 → 对应的视图边 ID（P1、P2，含边界边、参与者边、核心跨层边 P7）；两端在同一子模块 → 内部活动（P3）；分层总览中先看核心模块：同一核心模块才是它的内部活动，同一层的不同泳道之间带上两条泳道（lanes），时序图画成泳道间的消息、结构图按层的内部活动（P7、P14）；两端都在本层外 → 不可见（P4）。把连续的帧合并为本层的可见消息（同一条边或同一节点上的内部活动合并，P5），作为单步单位。算出场景所在层次（所有帧端点的最近公共祖先，S9）。
+    responsibility: 把路径上每一帧的 from / to 用 mapEndpoint 映射到当前层次：两个不同节点之间 → 对应的视图边 ID（P1、P2，含边界边、参与者边、核心跨层边 P7；按帧绑定关系的类型选边，P17）；两端在同一子模块 → 内部活动（P3）；分层总览中先看核心模块：同一核心模块才是它的内部活动，同一层的不同泳道之间带上两条泳道（lanes），时序图画成泳道间的消息、结构图按层的内部活动（P7、P14）；两端都在本层外 → 不可见（P4）。把连续的帧合并为本层的可见消息（同一对节点之间同方向的边——不论类型——或同一节点上的内部活动合并，P5），作为单步单位。算出场景所在层次（所有帧端点的最近公共祖先，S9）。
     principle: |
       视图边 ID 与 projectLevel 的边 ID 规则相同（edgeId），画布直接给已有的边加回放态；消息方向与边方向相反时标记 reverse（P10）；本层两节点之间没有视图边时按帧自身的关系绑定（显式或推断，与 S5a 同一口径）区分：已绑定为「经由上层关系」（upper，带 relationId，P15），未绑定为「未建模」（P11）；两者按两端节点照常合并，合并的帧中有未绑定的整条为未建模（P16）。关系类型筛选不作用于回放（P8 已删除）。
       「本层的下一步 / 上一步」（R7）与「指向某帧时进度落在哪条可见消息」（R13：落在其所在可见消息，合并时取这一段的第一帧）在这里回答。
@@ -252,7 +252,7 @@ relations:
   - {id: rel.p5.projection-stage, from: state.desk.projection, to: state.layout.stage, type: calls, interface: if.layout.stageOverlay, payload: [ds.ScenarioLevelView, ds.PositionedView, ds.StageOverlay], description: 运行视角下派生舞台叠加}
   - {id: rel.p5.stage-runner, from: state.layout.stage, to: state.layout.runner, type: depends, payload: [ds.PositionedView], description: 用结构图坐标算步骤序号与临时线的位置}
   - {id: rel.p2.seqlayout-positions, from: state.layout.sequence, to: state.layout.runner, type: depends, payload: [ds.PositionedView], description: 同一父模块内的本层子模块按结构图中节点的横坐标排（P9）}
-  - {id: rel.p2.seqlayout-types, from: state.layout.sequence, to: model.scenario.sequence, type: depends, payload: [ds.SequenceModel], description: 时序模型的类型与层次顺序比较（compareKeys 经模型层入口）}
+  - {id: rel.p2.seqlayout-types, from: state.layout.sequence, to: model.types, type: depends, payload: [ds.SequenceModel], description: 时序模型的类型}
 
   # 视图状态 → 模型（转移规则需要的查询）
   - {id: rel.p2.playback-path, from: state.transition.playback, to: model.scenario.path, type: calls, interface: if.model.resolvePath, description: 是否停在分支点；改选后保留哪些选择（F6b）；到达某帧需要的选择（R13）；直选分支需要的选择与分支点之前的帧（F6e）}
@@ -269,25 +269,19 @@ relations:
   - {id: rel.p2.level-edgeid, from: model.scenario.level, to: model.projector.collector, type: depends, description: 用 edgeId 规则算出帧对应的视图边 ID}
   - {id: rel.p2.level-sequence, from: model.scenario.level, to: model.scenario.sequence, type: dataflow, payload: [ds.ScenarioLevelView], description: 本层的可见消息交给时序模型}
   - {id: rel.p8.sequence-hierarchy, from: model.scenario.sequence, to: model.projector.hierarchy, type: calls, interface: if.model.hierarchyKey, description: 参与者的层次排序键（P9）}
-  - {id: rel.p2.path-plan, from: model.scenario.path, to: model.scenario.flatten, type: depends, payload: [ds.ScenarioPlan]}
   - {id: rel.p2.flatten-index, from: model.scenario.flatten, to: model.types, type: depends, payload: [ds.ModelIndex], description: 读取场景表以内联 ref；读取关系表以绑定关系（S13）}
   - {id: rel.p3.validator-bind, from: model.pipeline.validator, to: model.scenario.flatten, type: calls, description: S5a / S13 与回放共用 bindRelation}
-  - {id: rel.p3.participation-level, from: model.scenario.participation, to: model.scenario.level, type: depends, payload: [ds.ScenarioLevelView], description: 本层投影下收发的消息}
-  - {id: rel.p3.participation-path, from: model.scenario.participation, to: model.scenario.flatten, type: depends, payload: [ds.Frame], description: 按回放路径上的帧求参与（帧类型来自回放计划）}
-  - {id: rel.p6.outline-plan, from: model.scenario.outline, to: model.scenario.flatten, type: depends, payload: [ds.ScenarioPlan], description: 按计划节点与帧的组合框标签还原嵌套}
-  - {id: rel.p6.outline-level, from: model.scenario.outline, to: model.scenario.level, type: depends, description: 帧状态（path / unchosen / unreached）与时序图全貌同义}
-  - {id: rel.p2.level-lca, from: model.scenario.level, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: 场景所在层次 = 帧端点的最近公共祖先}
+  - {id: rel.p2.level-lca, from: model.scenario.level, to: model.projector.hierarchy, type: calls, interface: if.model.lowestCommonAncestor, description: 场景所在层次 = 帧端点的最近公共祖先}
   - {id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: depends, payload: [ds.ScenarioEntity, ds.ScenarioPlan, ds.Frame, ds.ScenarioLevelView, ds.SequenceModel, ds.OutlineNode]}
   # 场景投影、时序图与视图状态转移补齐（K7）
   - {id: rel.p2.seqmodel-path, from: model.scenario.sequence, to: model.scenario.path, type: calls, description: resolvePath：按选择展开路径}
-  - {id: rel.p2.seqmodel-names, from: model.scenario.sequence, to: model.pipeline.indexer, type: depends, description: moduleName：泳道与消息的显示名}
+  - {id: rel.p2.seqmodel-names, from: model.scenario.sequence, to: model.types, type: depends, description: moduleName：泳道与消息的显示名}
   - {id: rel.p6.steps-text, from: present.nav-tree.steps, to: present.panel, type: depends, description: fragmentText、frameText：步骤树与面板共用的步骤文字}
   - {id: rel.p2.actor-content, from: present.panel.actor, to: present.panel.content, type: depends, description: 复用 Markdown、Section、RelationRow}
   - {id: rel.p3.run-content, from: present.panel.run, to: present.panel.content, type: depends, description: 复用 Section}
   - {id: rel.p2.seq-geometry, from: present.sequence, to: state.layout.sequence, type: depends, payload: [ds.PositionedSequence], description: SEQ、headsHeight：时序图的几何常量与定位结果}
-  - {id: rel.p8.canvas-diff, from: state.layout.canvas, to: model.diff, type: depends, description: FIELD_LABELS：变更说明的字段名}
-  - {id: rel.p8.canvas-names, from: state.layout.canvas, to: model.pipeline.indexer, type: depends, description: moduleName：节点与边界的显示名}
-  - {id: rel.p8.canvas-route, from: state.layout.canvas, to: state.layout.runner, type: calls, description: edgeLabel、linkRoute、isBoundaryEdge：边的走线与标签}
+  - {id: rel.p8.canvas-names, from: state.layout.canvas, to: model.types, type: depends, payload: [ds.ModelDiff], description: moduleName：节点与边界的显示名；ModelDiff：节点的新增 / 修改标记与涉及变更数}
+  - {id: rel.p8.canvas-route, from: state.layout.canvas, to: state.layout.runner, type: calls, description: edgeLabel、edgeWeight、linkRoute、isBoundaryEdge：边的走线、标签与线宽档}
   - {id: rel.p2.seqlayout-keys, from: state.layout.sequence, to: model.projector, type: depends, description: compareKeys：泳道按层次键排序（L4）}
   - {id: rel.p8.stage-level, from: state.layout.stage, to: model.scenario.level, type: calls, description: currentMessage、walkedCount：舞台叠加的当前一步与走过的步数}
   - {id: rel.p2.url-plan, from: state.transition.url, to: model.scenario.flatten, type: calls, description: planScenario、choiceList：地址里的分支选择编解码}
@@ -499,7 +493,7 @@ dataStructures:
           frameIds: string[]           // 覆盖的连续帧
           at:
             | { kind: 'edge'; edgeId: string; from: string; to: string; reverse: boolean; core?: boolean; lanes?: Lanes }   // reverse：与边箭头方向相反（P10）；core：核心跨层边（P7）
-            | { kind: 'upper'; from: string; to: string; relationId: string; lanes?: Lanes }   // P15：本层无视图边，帧已绑定关系（关系建在上层），回放时画关系类型色的临时实线
+            | { kind: 'upper'; from: string; to: string; relationId: string; lanes?: Lanes }   // P15：本层无视图边，帧已绑定关系（关系建在上层），回放时画关系类型色的临时虚线
             | { kind: 'unmodeled'; from: string; to: string; lanes?: Lanes }                   // P11：本层无视图边，帧未绑定关系，回放时画临时虚线
             | { kind: 'internal'; node: string; lanes?: Lanes }                                // lanes：分层总览中同一层不同泳道之间（P7、P14）
           kind: 'call' | 'async' | 'return' | 'internal'

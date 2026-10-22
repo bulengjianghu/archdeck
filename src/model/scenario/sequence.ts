@@ -4,68 +4,11 @@
  * 单击它们即指向该步（R13）。与回放共用同一套落点与合并规则，路径上的消息与 ScenarioLevelView 一一对应。
  */
 import type { LevelView, ModelIndex } from '../types'
-import { moduleName } from '../indexer'
+import { moduleName } from '../names'
 import { hierarchyKey } from '../project'
-import type { FragmentKind, FragmentTag, ScenarioPlan } from './plan'
-import { resolvePath, type Choices } from './path'
-import { linearize, mergeEntries, messageKind, type FrameStatus, type ScenarioLevelView } from './level'
-
-export interface SequenceParticipant {
-  /** 视图节点 ID（本层子模块、`boundary:<模块>`、参与者） */
-  nodeId: string
-  /** 模块或参与者 ID */
-  id: string
-  name: string
-  kind: 'module' | 'boundary' | 'actor'
-  /** 所属父模块（参与者没有）；P13 按它分组 */
-  parentId?: string
-  /** 根下到自身的模块 ID（参与者为空） */
-  path: string[]
-  /** 所属层：模块自身或最近的 kind: layer 祖先 */
-  layer?: string
-  /** 层次顺序的排序键（P9） */
-  key: number[]
-  /** 本层的非层子模块：同一父模块内改按结构图横坐标排（P9） */
-  byX: boolean
-}
-
-export interface SequenceMessage {
-  index: number
-  /** 消息方向上的视图节点；内部活动两端相同 */
-  from: string
-  to: string
-  /** empty：空分支的占位 */
-  kind: 'call' | 'async' | 'return' | 'internal' | 'empty'
-  label: string
-  frameIds: string[]
-  status: FrameStatus
-  /** 回放路径上的消息在 ScenarioLevelView.messages 中的序号 */
-  pathIndex?: number
-  /** 本层两节点之间没有视图边：经由上层关系（P15）/ 结构中未建模（P11） */
-  temp?: 'upper' | 'unmodeled'
-  /** 经由上层关系时对应的关系 */
-  relationId?: string
-}
-
-export interface SequenceFragment {
-  id: string
-  kind: FragmentKind
-  label: string
-  /** 嵌套深度，最外层为 0 */
-  depth: number
-  first: number
-  last: number
-  /** P6：框内的消息在本层全部是内部活动，缩成一行 */
-  collapsed: boolean
-  /** 仅 alt 与 par：各分支（option 为选项序号，F6e）；chosen 为 null 表示分支点尚未到达 */
-  branches?: { option: number; label: string; chosen: boolean | null; first: number; last: number }[]
-}
-
-export interface SequenceModel {
-  participants: SequenceParticipant[]
-  messages: SequenceMessage[]
-  fragments: SequenceFragment[]
-}
+import { resolvePath } from './path'
+import { linearize, mergeEntries, messageKind } from './level'
+import type { FragmentTag, ScenarioPlan, Choices, ScenarioLevelView, SequenceParticipant, SequenceMessage, SequenceFragment, SequenceModel } from './types'
 
 export function buildSequence(index: ModelIndex, view: LevelView, plan: ScenarioPlan, choices: Choices, pathView: ScenarioLevelView): SequenceModel {
   const { items } = mergeEntries(index, view, linearize(plan, choices, 'display'))

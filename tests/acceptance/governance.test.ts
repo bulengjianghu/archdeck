@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * 验收：docs/01-requirements.md §6.10 架构治理，以真实的 model/ 描述与本机源码驱动 agent 接口的查询核心、协调者与面板。
- * agent 接口的两层外壳（命令行、MCP）只做参数与格式，这里直接驱动查询核心；h5player 源码不在本机时跳过对应用例。
+ * agent 接口的两层外壳（命令行、MCP）只做参数与格式，这里直接驱动查询核心；源码在本地是前提（G1），不设跳过。
  */
 import fs from 'node:fs'
 import os from 'node:os'
@@ -11,7 +11,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { nextTick } from 'vue'
 import { readProject } from '../../vite/readModelDir'
-import { readSourceTree, workspaceRoot } from '../../vite/readSource'
+import { readSourceTree } from '../../vite/readSource'
 import { readCodeDeps } from '../../vite/readDeps'
 import { createService } from '../../scripts/agent/service'
 import { createDeskState, type SourceFetcher } from '../../src/state/useDeskState'
@@ -21,8 +21,6 @@ import type { SourcePayload } from '../../src/model'
 
 const ROOT = path.resolve(import.meta.dirname, '../..')
 const MODEL = path.join(ROOT, 'model')
-const WS = workspaceRoot(ROOT)
-const H5PLAYER_LOCAL = fs.existsSync(path.join(WS, 'h5player'))
 
 /** 临时模型根目录：复制本项目的描述，拦截记录与基线写在这里，不碰仓库 */
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-gov-'))
@@ -51,7 +49,15 @@ describe('§6.10 架构治理验收', () => {
     expect(s.check('src/model/load.ts', 'vue').verdict).toBe('unconstrained')
   })
 
-  it.skipIf(!H5PLAYER_LOCAL)('3. h5player：@h5player/framework 的命名导入落在声明文件，经由 framework 入口', () => {
+  it('2a. U10：呈现层经 @/model 只许用契约——moduleName 允许，projectLevel 穿透入口落到 Projector，违反依赖白名单', () => {
+    const s = svc()
+    expect(s.check('src/components/Breadcrumb.vue', '@/model', undefined, ['moduleName', 'RELATION_TYPES', 'isLong']).verdict).toBe('allowed')
+    const denied = s.check('src/components/Breadcrumb.vue', '@/model', undefined, ['projectLevel'])
+    expect(denied.verdict).toBe('denied')
+    expect(denied.checks.flatMap(c => c.hits).some(h => h.kind === 'deps' && h.reason.includes('类型与 Schema'))).toBe(true)
+  })
+
+  it('3. h5player：@h5player/framework 的命名导入落在声明文件，经由 framework 入口', () => {
     const tree = readSourceTree(MODEL, 'h5player', ROOT) as Extract<SourcePayload, { status: 'local' }>
     const code = readCodeDeps(tree.root, tree.files, tree.packages)
     const viaIndex = code.deps.filter(d => d.via === 'packages/framework/src/index.ts' && d.from.startsWith('packages/player/'))
@@ -90,9 +96,9 @@ describe('§6.10 架构治理验收', () => {
     }
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/p/:project', component: { render: () => null } }] })
     await router.push('/p/h5p-arch-desk')
-    // 本项目的描述已无未描述依赖：去掉「呈现层 → 共享类型的标签常量」这条关系，造出跨层的未描述依赖
+    // 本项目的描述已无未描述依赖：去掉「呈现层 → 契约」这条关系（moduleName 等，U10），造出跨层的未描述依赖
     const p = readProject(MODEL, 'h5p-arch-desk', ROOT)!
-    const dropped = 'rel.ad.present-labels'
+    const dropped = 'rel.ad.present-names'
     const files = p.files.map(f => ({ ...f, text: f.text.replace(new RegExp(`^.*id: ${dropped},.*\\n`, 'm'), '') }))
     expect(files.some((f, i) => f.text !== p.files[i].text)).toBe(true)
     const desk = createDeskState(async () => ({ ...p, files }), { project: 'h5p-arch-desk', source })
@@ -131,5 +137,34 @@ describe('§6.10 架构治理验收', () => {
     expect(r.checks).toBe(n0 + 1)
     expect(r.rescans).toBeGreaterThan(0)
     expect(fs.readFileSync(path.join(tmp, 'h5p-arch-desk', 'governance', 'ledger.jsonl'), 'utf8')).toContain('"client":"mcp"')
+  })
+
+  it('9. 返工清单：按根因聚合，命令行与 MCP 同一份 JSON / Markdown，每条带位置、规则与建议', () => {
+    // 去掉一个模块的 codeRefs：它目录下的文件成为未归属，按目录合并为一条
+    const layers = path.join(tmp, 'h5p-arch-desk', 'modules', 'layers.yaml')
+    const text = fs.readFileSync(layers, 'utf8')
+    fs.writeFileSync(layers, text.replace(/codeRefs: \[src\/components\/shared\/\*\*\]/, 'codeRefs: []'))
+    try {
+      const r = svc().issues()
+      const unowned = r.list.items.find(i => i.id === 'ownership:unowned:src/components/shared')!
+      expect(unowned.affected.length).toBeGreaterThan(2)
+      expect(unowned.actions.map(a => a.kind)).toEqual(['add-code-refs', 'add-ignore'])
+      expect(r.markdown).toContain(`### [提醒] ${unowned.title}`)
+      expect(r.markdown).toContain('src/components/shared/*')
+      // 同一查询核心：两次调用（命令行、MCP 两层外壳的输入）结果一致
+      expect(svc().issues().list).toEqual(r.list)
+    } finally {
+      fs.writeFileSync(layers, text)
+    }
+  })
+
+  it('9a. h5player：越过同一条层边界依赖同一模块的违规合并为一条，带全部文件证据', () => {
+    const s = createService({ root: ROOT, client: 'cli', env: { ...process.env, ARCH_PROJECT: 'h5player' } })
+    const r = s.issues()
+    const violations = r.list.items.filter(i => i.category === 'violation')
+    const total = s.overview().violations
+    expect(violations.length).toBeLessThan(total.new + total.known + total.open)
+    expect(violations[0].affected.length).toBeGreaterThan(100)
+    expect(violations[0].actions.map(a => a.kind)).toEqual(['fix-code', 'add-exception'])
   })
 })

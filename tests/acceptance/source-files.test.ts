@@ -1,16 +1,15 @@
 // @vitest-environment jsdom
 /**
  * 验收：docs/01-requirements.md §6.4 源代码，以真实的 model/ 描述与本机源码目录驱动协调者与界面组件。
- * 源码经接入层的读取函数直接提供（等同开发服务器端点）；h5player 源码不在本机时跳过对应用例。
+ * 源码经接入层的读取函数直接提供（等同开发服务器端点）；源码在本地是前提（G1），不设跳过。
  */
-import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { nextTick } from 'vue'
 import { readProject } from '../../vite/readModelDir'
-import { readExports, readSourceFile, readSourceTree, workspaceRoot } from '../../vite/readSource'
+import { readExports, readSourceFile, readSourceTree } from '../../vite/readSource'
 import { createDeskState, type SourceFetcher } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
 import { useAside } from '../../src/components/split/useAside'
@@ -21,7 +20,6 @@ import { assignFiles, sourceIssues, type RawFile, type SourcePayload } from '../
 
 const ROOT = path.resolve(import.meta.dirname, '../..')
 const MODEL = path.join(ROOT, 'model')
-const H5PLAYER_LOCAL = fs.existsSync(path.join(workspaceRoot(ROOT), 'h5player'))
 
 function nodeFetcher(project: string): SourceFetcher {
   const tree = () => readSourceTree(MODEL, project, ROOT) as SourcePayload
@@ -64,7 +62,7 @@ async function open(project: string, url = `/p/${project}`, extra: RawFile[] = [
 }
 
 describe('§6.4 源代码验收', () => {
-  it('1. h5p-arch-desk 的文件页签列出本包源码，内部全部忽略的目录标为已忽略；media-web 提示「源码不在本地」，页面其余功能正常', async () => {
+  it('1. h5p-arch-desk 的文件页签列出本包源码，内部全部忽略的目录标为已忽略', async () => {
     const { nav, tab, fileRow } = await open('h5p-arch-desk')
     await tab('文件').trigger('click')
     await settle()
@@ -75,15 +73,6 @@ describe('§6.4 源代码验收', () => {
     const dirRow = (d: string) => nav.findAll('.row.dir').find(r => r.attributes('data-dir') === d)!
     expect(['docs', 'model', 'tests'].map(d => dirRow(d).classes().includes('ignored'))).toEqual([true, true, true])
     expect(dirRow('src').classes()).not.toContain('ignored')
-
-    const mw = await open('media-web')
-    expect(mw.desk.files.payload.value).toMatchObject({ status: 'absent', reason: '源码不在本地' })
-    await mw.tab('文件').trigger('click')
-    await settle()
-    expect(mw.nav.text()).toContain('源码不在本地')
-    expect(mw.nav.text()).toContain('media-platform/media-web')
-    expect(mw.desk.view.value?.nodes.length).toBeGreaterThan(0)
-    expect(mw.desk.allIssues.value.filter(i => i.code.startsWith('source.'))).toEqual([])
   })
 
   it('2. 选中「导航树」：面板列出它的文件，文件树高亮这些文件；选中「呈现层」：文件是子树的并集', async () => {
@@ -208,7 +197,7 @@ describe('§6.4 源代码验收', () => {
     expect(aside.hidden.value).toBe(true)
   })
 
-  it.skipIf(!H5PLAYER_LOCAL)('h5player：Framework 的入口导出与描述的接口对应，描述的真实归属问题报为警告', async () => {
+  it('h5player：Framework 的入口导出与描述的接口对应，描述的真实归属问题报为警告', async () => {
     const { desk } = await open('h5player', '/p/h5player?level=infra&sel=m:infra.framework')
     expect(desk.files.entryOf('infra.framework')).toEqual({ file: 'packages/framework/src/index.ts', via: 'index' })
     const exports = desk.files.exports('packages/framework/src/index.ts')

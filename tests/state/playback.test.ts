@@ -23,7 +23,7 @@ const base: ViewState = { levelId: 'sys', selection: null, hover: null, toggles:
 function ctxOf(s: ViewState): TransitionContext {
   if (!s.playback) return { index }
   const plan = planScenario(index, s.playback.scenarioId)
-  const levelView = projectLevel(index, s.levelId, { showBoundaries: true, mergeTypes: true, scenarioEnds: stageEnds(plan) })
+  const levelView = projectLevel(index, s.levelId, { showBoundaries: true, scenarioEnds: stageEnds(plan) })
   return { index, plan, levelView, scenarioView: projectScenario(index, levelView, plan, s.playback.choices) }
 }
 
@@ -224,7 +224,7 @@ describe('回放', () => {
     // 参与者、关系（两端）、视图边（两端）、文件（归属模块）
     expect(lanes(s, { kind: 'actor', id: 'actor.biz' })).toEqual(['actor.biz'])
     expect(lanes(s, { kind: 'relation', id: 'r1' })).toEqual(['boundary:app', 'infra.framework'])
-    expect(lanes(s, { kind: 'edge', id: 'infra.player->infra.framework' })).toEqual(['infra.framework', 'infra.player'])
+    expect(lanes(s, { kind: 'edge', id: 'infra.player->infra.framework:calls' })).toEqual(['infra.framework', 'infra.player'])
     expect(lanes(s, { kind: 'file', id: 'x.ts' }, ['infra.mus'])).toEqual(['infra.mus'])
   })
 
@@ -256,7 +256,7 @@ describe('回放', () => {
     ).index
     const plan = planScenario(merged, 'sc.m')
     const st: ViewState = { ...base, playback: { scenarioId: 'sc.m', frameId: null, choices: new Map() } }
-    const lv = projectLevel(merged, 'sys', { showBoundaries: true, mergeTypes: true, scenarioEnds: stageEnds(plan) })
+    const lv = projectLevel(merged, 'sys', { showBoundaries: true, scenarioEnds: stageEnds(plan) })
     const r = transition(
       st,
       { type: 'seek', frameId: 'sc.m#b' },

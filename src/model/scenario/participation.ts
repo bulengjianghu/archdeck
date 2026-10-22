@@ -3,21 +3,7 @@
  * 脱离工作台同样成立，例如问「Layout 在打开场景这个流程里做了什么」用的是同一个查询。
  */
 import type { ModelIndex } from '../types'
-import type { Frame, ScenarioPlan } from './plan'
-import type { ScenarioLevelView } from './level'
-
-export type ParticipationTarget = { kind: 'module' | 'relation' | 'edge' | 'actor'; id: string }
-
-export interface Participation {
-  /** 参与的帧，按路径顺序；from / to / internal 对模块与参与者，traverse 对关系与视图边 */
-  frames: { frameId: string; seq: number; role: 'from' | 'to' | 'internal' | 'traverse' }[]
-  /** 涉及的本层可见消息序号 */
-  messages: number[]
-  interfaces: string[]
-  dataStructures: string[]
-  /** 离播放头最近的参与帧 */
-  nearest?: string
-}
+import type { Frame, ScenarioPlan, ScenarioLevelView, ParticipationTarget, Participation } from './types'
 
 export function participation(
   index: ModelIndex,

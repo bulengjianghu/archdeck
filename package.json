@@ -3,11 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "h5player 架构可视化：按层次浏览模块与模块间关系",
+  "description": "本地架构工作台：看见 · 对照 · 守住",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --build && vite build",
-    "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

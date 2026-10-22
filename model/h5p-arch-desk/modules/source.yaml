@@ -40,7 +40,7 @@ modules:
   - id: model.source.ownership
     name: 归属与入口
     parent: model.source
-    responsibility: 文件 → 模块的归属（G5 取最深、G6 冲突、G7 未归属、G8 忽略）、模块的文件（G4）、模块目录与入口文件（G10：有 package.json 取包入口，否则 index.*，都用路径补全与包入口那一套）、模块的接口与入口导出的对应（G12）、选中文件在当前层次的投影（G14）、归属警告（G9 由调用方决定是否报）、目录树（内部文件全部忽略的目录也是忽略状态，G18；目录带行数合计与超长数）、是否超长与一组文件的行数合计（isLong、moduleLines，G20、G21）。
+    responsibility: 文件 → 模块的归属（G5 取最深、G6 冲突、G7 未归属、G8 忽略）、模块的文件（G4）、模块目录与入口文件（G10：有 package.json 取包入口，否则 index.*，都用路径补全与包入口那一套）、模块的接口与入口导出的对应（G12）、选中文件在当前层次的投影（G14）、归属警告（G9 由调用方决定是否报）、目录树（内部文件全部忽略的目录也是忽略状态，G18；目录带行数合计与超长数）、一组文件的行数合计与超长数（moduleLines，G21；单个文件是否超长用契约的 isLong，G20）。
     principle: |
       - **归属是关于被描述系统的知识**：换成命令行（lint:model）或 AI 查询同样成立，所以在模型层；接入层只给文件清单。
       - **与结构投影同一套端点规则**：选中文件的归属模块用 mapEndpoint 提升到当前层次（与关系、帧一致）。
@@ -60,7 +60,7 @@ relations:
   - {id: rel.p7.split-source, from: present.desk-view.split, to: present.source, type: depends, description: 副栏「源代码」页签，有预览文件时出现}
   - {id: rel.p7.source-read, from: present.source, to: state.desk.files, type: depends, payload: [ds.SourceOwnership], description: 预览文件的归属模块与状态}
   - {id: rel.p7.source-file, from: present.source, to: state.desk.source-sync, type: calls, mode: async, interface: if.desk.actions, payload: [ds.SourcePayload], description: sourceFile(path) 按需取文件内容}
-  - {id: rel.p7.source-content, from: present.source, to: present.panel.content, type: depends, description: 复用 Shiki 高亮（按扩展名加载语法）}
+  - {id: rel.p7.source-content, from: present.source, to: present.shared, type: depends, description: 复用 Shiki 高亮（按扩展名加载语法）}
   - {id: rel.p7.panel-file, from: present.panel.dispatch, to: present.panel.file, type: depends, description: 选中文件时分派到文件面板}
   - {id: rel.p7.module-source, from: present.panel.module, to: present.panel.module-source, type: depends}
   - {id: rel.p7.file-exports, from: present.panel.file, to: present.panel.module-source, type: depends, description: 复用导出分组列表}
@@ -92,6 +92,7 @@ relations:
   - {id: rel.p7.source-entry, from: access.source, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 取 system.source.repo 解析源码根目录}
   - {id: rel.p7.lint-source, from: access.lint, to: access.source, type: calls, interface: if.source.readSourceTree, description: 当前版本的源码清单}
   - {id: rel.p7.lint-ownership, from: access.lint, to: model.source.ownership, type: calls, interface: if.model.assignFiles, description: 归属警告（G9）}
+  - {id: rel.p7.source-types, from: access.source, to: model.types, type: depends, description: LINE_COUNTED：统计行数的文件类型；源码载荷与导出的类型}
   - {id: rel.p7.source-resolve, from: access.source, to: model.source.resolve, type: calls, interface: if.model.specResolver, description: 再导出的相对路径补全（G11）}
 
   # 模型层
@@ -102,11 +103,12 @@ relations:
   # 呈现层与接入层补齐（K7）
   - {id: rel.p7.source-reader, from: access.source, to: access.reader, type: calls, description: readProject：读 system.yaml 取源码位置}
   - {id: rel.p7.filetree-status, from: present.nav-tree.files, to: present.source, type: depends, description: 复用 SourceStatus 显示源码状态}
-  - {id: rel.p7.filetree-ownership, from: present.nav-tree.files, to: model.source.ownership, type: depends, description: isLong：超长文件标记}
-  - {id: rel.p7.file-ownership, from: present.panel.file, to: model.source.ownership, type: depends, description: isLong：超长文件标记}
-  - {id: rel.p7.modsrc-ownership, from: present.panel.module-source, to: model.source.ownership, type: depends, description: isLong：超长文件标记}
+  - {id: rel.p7.filetree-ownership, from: present.nav-tree.files, to: model.types, type: depends, description: isLong：超长文件标记}
+  - {id: rel.p7.file-ownership, from: present.panel.file, to: model.types, type: depends, description: isLong：超长文件标记}
+  - {id: rel.p7.modsrc-ownership, from: present.panel.module-source, to: model.types, type: depends, description: isLong：超长文件标记}
   - {id: rel.p7.file-content, from: present.panel.file, to: present.panel.content, type: depends, description: 复用 Section}
-  - {id: rel.p7.file-preview-key, from: present.panel.file, to: present.source, type: depends, description: useOpenPreview：取项目视图注入的「在副栏预览」（注入键在源码区）}
+  - {id: rel.p7.desk-preview-key, from: present.desk-view, to: present.shared, type: depends, description: OPEN_PREVIEW：提供「在副栏预览」的注入键}
+  - {id: rel.p7.file-preview-key, from: present.panel.file, to: present.shared, type: depends, description: useOpenPreview：取项目视图注入的「在副栏预览」}
 
 interfaces:
   - id: if.source.readSourceTree

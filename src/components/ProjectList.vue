@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /** 项目列表主页：列出模型根目录下的全部项目，点击进入该项目的架构视图；卡片下只列推进中的设计版本，已归档的只注明个数（DV-6） */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { DESIGN_STATUS_LABELS, isArchived, type ProjectSummary } from '@/model'
+import { isArchived, type ProjectSummary } from '@/model'
+import { DESIGN_STATUS_LABELS } from './shared/labels'
 
 const projects = ref<ProjectSummary[]>([])
 const status = ref<'loading' | 'ready' | 'error'>('loading')
@@ -29,6 +30,27 @@ onBeforeUnmount(() => import.meta.hot?.off('arch-model:changed', onChanged))
 
 const activeDesigns = (p: ProjectSummary) => (p.designs ?? []).filter(d => !isArchived(d.status))
 const archivedCount = (p: ProjectSummary) => (p.designs ?? []).filter(d => isArchived(d.status)).length
+
+// Q10：违规有基线时只显示相对基线的变化 ±N（绝对数进悬停），没有基线时为绝对数并标「无基线」
+type Health = NonNullable<ProjectSummary['health']>
+const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '±0')
+const violationText = (h: Health) => (h.violations!.delta === null ? String(h.violations!.count) : signed(h.violations!.delta))
+const violationTone = (h: Health) => (h.violations!.new ? 'bad' : h.violations!.delta === null && h.violations!.count ? 'warn' : 'ok')
+const violationTitle = (h: Health) => {
+  const v = h.violations!
+  const parts = [`计入门禁 ${v.count} 条`]
+  if (v.delta !== null) parts.push(`新增 ${v.new}`, `已消除 ${v.resolved}`)
+  else parts.push('没有基线：运行 npm run arch -- baseline 封存存量')
+  if (v.allowed) parts.push(`已豁免 ${v.allowed}`)
+  return parts.join('，')
+}
+const cycleTrend = (h: Health) => {
+  const c = h.cycles!
+  return c.baseline === null || c.cyclicity === c.baseline ? '' : c.cyclicity > c.baseline ? ' ↑' : ' ↓'
+}
+const cycleTone = (h: Health) => (h.cycles!.baseline !== null && h.cycles!.cyclicity > h.cycles!.baseline ? 'bad' : h.cycles!.count ? 'warn' : 'ok')
+const cycleTitle = (h: Health) =>
+  `模块环 ${h.cycles!.count} 个（不含容忍的环），最大 ${h.cycles!.maxSize} 个模块；环度 ${h.cycles!.cyclicity}${h.cycles!.baseline !== null ? `（基线 ${h.cycles!.baseline}）` : '（无基线）'}`
 
 const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0, 8) : c)
 </script>
@@ -63,36 +85,54 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
             <span v-for="t in p.top" :key="t.id" class="layer" :title="t.abstraction">{{ t.name }}</span>
           </div>
 
-          <dl class="counts">
-            <div>
-              <dt>模块</dt>
-              <dd>{{ p.counts.modules }}</dd>
+          <dl class="health" aria-label="健康度">
+            <div :class="p.errors ? 'bad' : 'ok'">
+              <dt>描述错误</dt>
+              <dd>{{ p.errors }}</dd>
             </div>
-            <div>
-              <dt>关系</dt>
-              <dd>{{ p.counts.relations }}</dd>
+            <div :class="p.warnings ? 'warn' : 'ok'">
+              <dt>描述提醒</dt>
+              <dd>{{ p.warnings }}</dd>
             </div>
-            <div>
-              <dt>接口</dt>
-              <dd>{{ p.counts.interfaces }}</dd>
-            </div>
-            <div>
-              <dt>数据结构</dt>
-              <dd>{{ p.counts.dataStructures }}</dd>
-            </div>
-            <div v-if="p.counts.scenarios">
-              <dt>场景</dt>
-              <dd>{{ p.counts.scenarios }}</dd>
-            </div>
+            <template v-if="p.health?.violations">
+              <div class="violations" :class="violationTone(p.health)" :title="violationTitle(p.health)">
+                <dt>违规{{ p.health.violations.delta === null ? '（无基线）' : '（相对基线）' }}</dt>
+                <dd>{{ violationText(p.health) }}</dd>
+              </div>
+              <div class="cycles" :class="cycleTone(p.health)" :title="cycleTitle(p.health)">
+                <dt>模块环</dt>
+                <dd>
+                  {{ p.health.cycles!.count }}<small v-if="p.health.cycles!.count"> · 最大 {{ p.health.cycles!.maxSize }}</small
+                  ><small v-if="cycleTrend(p.health)" class="trend">{{ cycleTrend(p.health) }}</small>
+                </dd>
+              </div>
+              <div :class="p.health.unconfirmed ? 'warn' : 'ok'" title="编译期关系（depends、implements）在代码中没有对应的依赖（K6）">
+                <dt>未证实</dt>
+                <dd>{{ p.health.unconfirmed }}</dd>
+              </div>
+              <div
+                :class="p.health.unowned || p.health.conflicts ? 'warn' : 'ok'"
+                :title="`未归属 ${p.health.unowned} 个文件，归属冲突 ${p.health.conflicts} 个文件`"
+              >
+                <dt>未归属</dt>
+                <dd>
+                  {{ p.health.unowned }}<small v-if="p.health.conflicts"> · 冲突 {{ p.health.conflicts }}</small>
+                </dd>
+              </div>
+            </template>
           </dl>
+          <p v-if="p.health?.note" class="note warn">{{ p.health.note }}</p>
+
+          <p class="scale">
+            模块 {{ p.counts.modules }} · 关系 {{ p.counts.relations }} · 接口 {{ p.counts.interfaces }} · 数据结构 {{ p.counts.dataStructures
+            }}<template v-if="p.counts.scenarios"> · 场景 {{ p.counts.scenarios }}</template>
+          </p>
 
           <footer class="meta">
             <span v-if="p.source?.commit"
               >基于 <code>{{ shortCommit(p.source.commit) }}</code></span
             >
             <span v-if="p.source?.generatedAt">· {{ p.source.generatedAt }}</span>
-            <span v-if="p.errors" class="bad">{{ p.errors }} 个错误</span>
-            <span v-if="p.warnings" class="warn">{{ p.warnings }} 个提醒</span>
             <span class="open">打开 →</span>
           </footer>
         </RouterLink>
@@ -231,28 +271,62 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
   border: 1px solid var(--layer-border);
 }
 
-.counts {
+.health {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin: 0;
 }
 
-.counts div {
+.health div {
   background: var(--surface-2);
   border-radius: 8px;
   padding: 6px 10px;
+  border-left: 3px solid transparent;
 }
 
-.counts dt {
+.health dt {
   font-size: 11px;
   color: var(--text-3);
 }
 
-.counts dd {
+.health dd {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+}
+
+.health small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-2);
+}
+
+.health .ok dd {
+  color: var(--text-3);
+}
+
+.health .warn {
+  border-left-color: var(--warning);
+}
+
+.health .bad {
+  border-left-color: var(--danger);
+}
+
+.health .bad dd {
+  color: var(--danger);
+}
+
+.note {
+  margin: 0;
+  font-size: 12px;
+}
+
+.scale {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-3);
 }
 
 .meta {

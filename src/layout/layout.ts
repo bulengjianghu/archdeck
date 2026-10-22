@@ -132,26 +132,29 @@ export function layoutLayered(view: LevelView): PositionedView {
   // A7：用户在带的上方一行，外部系统与时间在右侧通道之外一列；与参与者相连的边画成曲线
   const frame = { x: 0, y: 0, w: width, h: Math.max(0, y - BAND.gap) }
   placeActors(view, nodes, frame, width + 28 + lane * BAND.lane + 56 - frame.x - frame.w)
+  const offsets = parallelOffsets(view.edges)
   for (const e of view.edges) {
     if (edges.has(e.id)) continue
     const route = actorRoute(nodes.get(e.from), nodes.get(e.to))
-    if (route) edges.set(e.id, route)
+    if (route) edges.set(e.id, shifted(route, offsets.get(e.id) ?? 0))
   }
 
   const coreEdges = new Map<string, EdgeRoute>()
+  const coreOffsets = parallelOffsets(view.coreEdges ?? [])
   for (const e of view.coreEdges ?? []) {
     const a = nodes.get(e.from)
     const b = nodes.get(e.to)
     if (!a || !b) continue
     const actorEnd = isActorNode(view, e.from) || isActorNode(view, e.to)
+    const d = coreOffsets.get(e.id) ?? 0
     if (actorEnd) {
-      coreEdges.set(e.id, actorRoute(a, b)!)
+      coreEdges.set(e.id, shifted(actorRoute(a, b)!, d))
       continue
     }
     const down = a.y < b.y
     const p1 = { x: a.x + a.w / 2, y: down ? a.y + a.h : a.y }
     const p2 = { x: b.x + b.w / 2, y: down ? b.y : b.y + b.h }
-    coreEdges.set(e.id, { points: [p1, p2], curve: true, label: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } })
+    coreEdges.set(e.id, shifted({ points: [p1, p2], curve: true, label: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } }, d))
   }
 
   return { view, nodes, edges, coreEdges, ...(hasActors(view) ? { frame } : {}) }
@@ -242,11 +245,41 @@ export function sizeOf(n: ViewNode): { w: number; h: number } {
   return n.role === 'boundary' ? NODE_SIZE.boundary : n.role === 'actor' ? NODE_SIZE.actor : NODE_SIZE.module
 }
 
-/** 合并了多种类型的边只标条数，颜色表示主要类型；单一类型标类型名 */
+/** L10：标签只标聚合条数——含多条关系的边为 `×N`，其余为空；类型名不进标签（靠颜色、图例与面板） */
 export function edgeLabel(e: ViewEdge): string {
   const n = e.relationIds.length
-  if (e.types.length > 1) return `×${n}`
-  return n > 1 ? `${e.type} ×${n}` : e.type
+  return n > 1 ? `×${n}` : ''
+}
+
+/** L10：线宽档位——聚合条数 1 / 2–4 / ≥5 */
+export function edgeWeight(e: ViewEdge): 1 | 2 | 3 {
+  const n = e.relationIds.length
+  return n >= 5 ? 3 : n >= 2 ? 2 : 1
+}
+
+/** 平行边的错开量（px） */
+export const PARALLEL_GAP = 10
+
+/**
+ * L10：同一对节点之间（不论方向）的多条边按序号对称错开，序号按边在视图中的顺序；只有一条的为 0。
+ * elk 排的内部边自行错开，这里用于曲线（边界边、参与者的边、核心跨层边）。
+ */
+export function parallelOffsets(edges: readonly ViewEdge[]): Map<string, number> {
+  const groups = new Map<string, string[]>()
+  for (const e of edges) {
+    const k = e.from < e.to ? `${e.from}|${e.to}` : `${e.to}|${e.from}`
+    groups.set(k, [...(groups.get(k) ?? []), e.id])
+  }
+  const out = new Map<string, number>()
+  for (const ids of groups.values()) ids.forEach((id, i) => out.set(id, (i - (ids.length - 1) / 2) * PARALLEL_GAP))
+  return out
+}
+
+/** 曲线整体错开：上下出发的曲线横移，侧边出发的（'h'）纵移 */
+function shifted(route: EdgeRoute, d: number): EdgeRoute {
+  if (!d) return route
+  const mv = (p: Point): Point => (route.curve === 'h' ? { x: p.x, y: p.y + d } : { x: p.x + d, y: p.y })
+  return { ...route, points: route.points.map(mv), ...(route.label ? { label: mv(route.label) } : {}) }
 }
 
 const isBoundary = (id: string) => id.startsWith('boundary:')
@@ -275,13 +308,14 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
     children: view.nodes.filter(n => n.role !== 'boundary' && n.role !== 'actor').map(n => ({ id: n.id, width: sizeOf(n).w, height: sizeOf(n).h })),
     edges: view.edges
       .filter(e => !isBoundaryEdge(e) && !isActorNode(view, e.from) && !isActorNode(view, e.to))
+      // L5：同一对节点按类型的平行边作为多重边一并交给 elk，由它错开；只有 ×N 的边带标签
       .map<ElkExtendedEdge>(e => {
         const text = edgeLabel(e)
         return {
           id: e.id,
           sources: [e.from],
           targets: [e.to],
-          labels: [{ id: `${e.id}#label`, text, width: text.length * 7 + 14, height: 18 }],
+          labels: [{ id: `${e.id}#label`, text, width: text ? text.length * 7 + 18 : 1, height: text ? 18 : 1 }],
         }
       }),
   }
@@ -312,10 +346,11 @@ export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
     : { x: 0, y: 0, w: NODE_SIZE.module.w, h: NODE_SIZE.module.h }
   placeBoundaries(view, nodes, edges)
   placeActors(view, nodes, frame)
+  const offsets = parallelOffsets(view.edges)
   for (const e of view.edges) {
     if (edges.has(e.id) || !(isActorNode(view, e.from) || isActorNode(view, e.to))) continue
     const route = actorRoute(nodes.get(e.from), nodes.get(e.to))
-    if (route) edges.set(e.id, route)
+    if (route) edges.set(e.id, shifted(route, offsets.get(e.id) ?? 0))
   }
   return { view, nodes, edges, coreEdges: new Map(), ...(hasActors(view) ? { frame } : {}) }
 }
@@ -345,6 +380,7 @@ export function placeBoundaries(view: LevelView, nodes: Map<string, Box>, edges:
     nodes.set(n.id, { x, y, w, h })
     x += w + gap
   }
+  const offsets = parallelOffsets(view.edges.filter(isBoundaryEdge))
   for (const e of view.edges) {
     if (!isBoundaryEdge(e)) continue
     const a = nodes.get(e.from)
@@ -353,7 +389,7 @@ export function placeBoundaries(view: LevelView, nodes: Map<string, Box>, edges:
     const down = a.y < b.y
     const p1 = { x: a.x + a.w / 2, y: down ? a.y + a.h : a.y }
     const p2 = { x: b.x + b.w / 2, y: down ? b.y : b.y + b.h }
-    edges.set(e.id, { points: [p1, p2], curve: true, label: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } })
+    edges.set(e.id, shifted({ points: [p1, p2], curve: true, label: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } }, offsets.get(e.id) ?? 0))
   }
 }
 

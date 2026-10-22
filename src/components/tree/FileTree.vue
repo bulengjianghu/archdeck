@@ -10,7 +10,6 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
-import SourceStatus from '../source/SourceStatus.vue'
 import FileTreeNode from './FileTreeNode.vue'
 import type { FileTreeContext } from './types'
 
@@ -77,7 +76,9 @@ const longFiles = computed(() => Object.keys(desk.files.lines.value).filter(f =>
 
 <template>
   <div ref="root" class="file-tree">
-    <SourceStatus v-if="!local" />
+    <p v-if="!local" class="source-note" :class="{ err: desk.files.payload.value }">
+      {{ desk.files.payload.value?.status === 'error' ? desk.files.payload.value.reason : '正在读取源码清单…' }}
+    </p>
     <template v-else-if="tree && own">
       <header class="head">
         <div class="root" :title="local.root">{{ local.root }}</div>
@@ -151,5 +152,17 @@ const longFiles = computed(() => Object.keys(desk.files.lines.value).filter(f =>
   list-style: none;
   margin: 0;
   padding: 0;
+}
+/* G1：源码在本地是前提，读不到清单是配置错误 */
+.source-note {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  word-break: break-all;
+}
+
+.source-note.err {
+  color: var(--danger);
 }
 </style>

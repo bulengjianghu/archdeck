@@ -6,33 +6,11 @@
  * 方向：call / async 沿控制流 from → to；event 关系的箭头是订阅方 → 发布方，消息由发布方发出，与箭头相反；
  * return 再反一次。
  */
+import { RUNTIME_RELATION_TYPES } from '../types'
 import type { MessageKind, ModelIndex, RelationEntity, RelationType } from '../types'
+import type { MessageEnds, Binding } from './types'
 
-/** 运行时关系：步骤只对应这三类（S12） */
-export const RUNTIME_RELATION_TYPES: readonly RelationType[] = ['calls', 'dataflow', 'event']
-
-export interface MessageEnds {
-  kind: MessageKind
-  from: string
-  to: string
-  relation?: string
-}
-
-export interface Binding {
-  /** 对应的关系 ID；没有对应时不给 */
-  relation?: string
-  /** 没写 relation、由 S13 推断得出 */
-  inferred: boolean
-  /** 消息方向与关系箭头相反（event、return，P10） */
-  reverse: boolean
-  /**
-   * 与结构不一致之处（供 Validator 报告）：
-   * - mismatch：引用了关系但端点或方向对不上（error）
-   * - not-runtime：引用了 depends / implements（error）
-   * - unrelated：没写 relation、推断不到，且两端结构上没有任何关系（warning）
-   */
-  issue?: 'mismatch' | 'not-runtime' | 'unrelated'
-}
+export { RUNTIME_RELATION_TYPES }
 
 /** a 是 id 自身或其祖先 */
 function covers(index: ModelIndex, a: string, id: string): boolean {

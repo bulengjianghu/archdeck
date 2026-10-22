@@ -10,7 +10,7 @@
  * 画什么由 Layout 的 canvasScene 算出（ADR-0013）；这里只把结果写入 Vue Flow、把交互转成操作、适应画布。
  */
 import { computed, nextTick, ref, watch } from 'vue'
-import { MarkerType, VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
+import { VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import { useDesk } from '@/state/inject'
 import { contentBounds } from '@/layout/layout'
@@ -55,9 +55,7 @@ const scene = computed(() =>
   }),
 )
 const nodes = computed<Node<NodeData>[]>(() => scene.value.nodes)
-const edges = computed<Edge<RouteEdgeData>[]>(() =>
-  scene.value.edges.map(e => ({ ...e, markerEnd: { ...e.markerEnd, type: e.markerEnd.type === 'arrow' ? MarkerType.Arrow : MarkerType.ArrowClosed } })),
-)
+const edges = computed<Edge<RouteEdgeData>[]>(() => scene.value.edges)
 
 // 节点与边直接写入 Vue Flow 的 store，不走 :nodes / :edges 属性：
 // 属性同步在「上一层次有选中、切到分层总览」时会被跳过（store 停留在旧节点），这里绕开它
@@ -184,7 +182,7 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       <template #node-frame="p"><FrameNode :data="p.data" /></template>
       <template #node-step="p"><StepBadge :data="p.data" /></template>
       <template #node-preview="p"><BranchPreview :data="p.data" /></template>
-      <template #edge-route="p"><RouteEdge :id="p.id" :data="p.data" :marker-end="p.markerEnd" /></template>
+      <template #edge-route="p"><RouteEdge :id="p.id" :data="p.data" /></template>
     </VueFlow>
 
     <div v-if="isEmpty" class="empty">这个模块没有子模块</div>

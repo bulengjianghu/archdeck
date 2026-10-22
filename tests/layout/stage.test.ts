@@ -8,7 +8,7 @@ import { scenarioFiles } from '../fixtures/sample'
 async function setup(level: string, choices: Map<string, number>, files = scenarioFiles(), id = 'sc.play') {
   const { index } = loadModel(files)
   const plan = planScenario(index, id)
-  const view = projectLevel(index, level, { showBoundaries: true, mergeTypes: true, scenarioEnds: stageEnds(plan) })
+  const view = projectLevel(index, level, { showBoundaries: true, scenarioEnds: stageEnds(plan) })
   const sv = projectScenario(index, view, plan, choices)
   return { index, plan, view, sv, pv: await layoutView(view) }
 }
@@ -18,7 +18,9 @@ describe('stageOverlay', () => {
     const { sv, pv } = await setup('infra', new Map([['sc.play#3', 0]]))
     const o = stageOverlay(sv, pv, 'sc.play#done')
     expect([...o.active].sort()).toEqual(['actor.biz', 'boundary:app', 'infra.framework', 'infra.mus', 'infra.player'])
-    expect(o.walked.get('infra.player->infra.framework')!.steps).toEqual([2, 6])
+    // P17：同一对节点的 calls 与 event 两条边，结果事件（绑定 event 关系）落在 event 边上
+    expect(o.walked.get('infra.player->infra.framework:calls')!.steps).toEqual([2])
+    expect(o.walked.get('infra.player->infra.framework:event')!.steps).toEqual([6])
     expect(o.walked.get('node:infra.framework')!.steps).toEqual([4])
     expect(o.current).toMatchObject({ index: 5, at: { kind: 'edge', reverse: true } })
     expect(o.hiddenCurrent).toBe(false)
@@ -27,7 +29,7 @@ describe('stageOverlay', () => {
   it('只标出到播放头为止走过的；尚未开始时什么都没走', async () => {
     const { sv, pv } = await setup('infra', new Map([['sc.play#3', 0]]))
     expect(stageOverlay(sv, pv, null).walked.size).toBe(0)
-    expect([...stageOverlay(sv, pv, 'sc.play#1').walked.keys()]).toEqual(['actor.biz->infra.player', 'infra.player->infra.framework'])
+    expect([...stageOverlay(sv, pv, 'sc.play#1').walked.keys()]).toEqual(['actor.biz->infra.player:calls', 'infra.player->infra.framework:calls'])
   })
 
   it('R11：当前帧在本层不可见时标出，已走过的仍保留', async () => {

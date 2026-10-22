@@ -1,12 +1,13 @@
 /**
- * 代码事实在当前层次的投影（K9、K10、Y4）：视图边的证实与违规、代码依赖叠加线、本层的环。
+ * 代码事实在当前层次的投影（K9、K10、Y4、Y5）：视图边的证实与违规、代码依赖叠加线、本层的环及其构成。
  * 投影与结构图、帧共用 mapEndpoint（P1、G14）。
  */
 import { mapEndpoint } from '../project'
+import { RELATION_TYPES } from '../types'
 import type { LevelView, ModelIndex } from '../types'
 import { stronglyConnected } from './cycles'
 import { depKey } from './facts'
-import type { GovernanceReport, ModuleDep, Violation } from './types'
+import type { GovernanceReport, LevelCycle, ModuleDep, Violation } from './types'
 
 export type EdgeFact = 'confirmed' | 'partial' | 'unconfirmed'
 
@@ -31,6 +32,8 @@ export interface LevelFacts {
   overlays: DepOverlay[]
   /** Y4：本层的环，节点 ID → 环编号（从 1 起） */
   cycles: Map<string, number>
+  /** Y5：每个本层环的节点与构成它的本层依赖，按环编号 */
+  levelCycles: LevelCycle[]
 }
 
 /** 模块投影到本层的节点 ID；本层没有对应节点（如未显示的边界节点）时为 null */
@@ -78,7 +81,10 @@ export function levelFacts(index: ModelIndex, view: LevelView, report: Governanc
     const p = project(v)
     if (p) bump(p[0], p[1], 'violations')
   }
-  const edgeByPair = new Map(view.edges.map(e => [depKey(e.from, e.to), e.id]))
+  // 同方向有多条视图边（L5 按类型分边）时取关系类型声明顺序中的第一条（依赖优先），违规红晕与 Y5 都只标它
+  const edgeByPair = new Map<string, string>()
+  for (const e of [...view.edges].sort((x, y) => RELATION_TYPES.indexOf(x.type) - RELATION_TYPES.indexOf(y.type)))
+    if (!edgeByPair.has(depKey(e.from, e.to))) edgeByPair.set(depKey(e.from, e.to), e.id)
   const violatedEdges = new Set<string>()
   const overlays: DepOverlay[] = []
   for (const [k, p] of pairs) {
@@ -88,15 +94,33 @@ export function levelFacts(index: ModelIndex, view: LevelView, report: Governanc
       overlays.push({ id: `dep:${k}`, ...p, fromModule: moduleOfNode(view, p.from), toModule: moduleOfNode(view, p.to) })
   }
 
-  // Y4：本层的环
-  const edges: [string, string][] = []
+  // Y4：本层的环；Y5：按节点对记下投影来的模块依赖，环的构成由此给出
+  const levelDeps = new Map<string, { from: string; to: string; deps: ModuleDep[] }>()
   for (const d of report.moduleDeps.values()) {
     const p = project(d)
-    if (p) edges.push([p[0], p[1]])
+    if (!p) continue
+    const k = depKey(p[0], p[1])
+    const e = levelDeps.get(k) ?? { from: p[0], to: p[1], deps: [] }
+    e.deps.push(d)
+    levelDeps.set(k, e)
   }
   const cycles = new Map<string, number>()
-  stronglyConnected(edges).forEach((members, i) => members.forEach(m => cycles.set(m, i + 1)))
-  return { edgeFacts, violatedEdges, overlays, cycles }
+  const order = new Map(view.nodes.map((n, i) => [n.id, i]))
+  const byOrder = (a: string, b: string) => (order.get(a) ?? 0) - (order.get(b) ?? 0)
+  const levelCycles = stronglyConnected([...levelDeps.values()].map(e => [e.from, e.to] as [string, string])).map((members, i) => {
+    const id = i + 1
+    members.forEach(m => cycles.set(m, id))
+    const inCycle = new Set(members)
+    const edges = [...levelDeps.values()]
+      .filter(e => inCycle.has(e.from) && inCycle.has(e.to))
+      .sort((a, b) => byOrder(a.from, b.from) || byOrder(a.to, b.to))
+      .map(e => {
+        const edgeId = edgeByPair.get(depKey(e.from, e.to))
+        return { ...e, fromModule: moduleOfNode(view, e.from), toModule: moduleOfNode(view, e.to), ...(edgeId ? { edgeId } : {}) }
+      })
+    return { id, nodes: [...members].sort(byOrder).map(m => ({ id: m, module: moduleOfNode(view, m) })), edges }
+  })
+  return { edgeFacts, violatedEdges, overlays, cycles, levelCycles }
 }
 
 /** K10：投影到本层这对节点（以两端的模块 ID 指明）的模块依赖与违规 */

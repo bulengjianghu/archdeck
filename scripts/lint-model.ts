@@ -3,8 +3,8 @@
  *   npm run lint:model                 校验模型根目录（默认 model/）下的全部项目
  *   npm run lint:model -- <项目目录>   只校验指定目录
  * 项目下的设计版本（designs/<设计>/<轮次>/，ADR-0002）逐轮一并校验，design.yaml 的问题按 error 计。
- * 源码在本地时，当前版本附带源码归属警告（G9：未归属、归属冲突、entry 不存在）与架构治理（K、U、Y）：
- * 基线外的新增违规、环度上升为 error（U8，棘轮），其余为 warning；设计版本不对应代码，不报。
+ * 当前版本附带源码归属警告（G9：未归属、归属冲突、entry 不存在）与架构治理（K、U、Y）：
+ * 基线外的新增违规、环度上升为 error（U8，棘轮），其余为 warning；读不到源码为 error（G1，源码在本地是前提）；设计版本不对应代码，不报。
  * 有 error 时退出码为 1；只有 warning 时为 0。
  */
 import path from 'node:path'
@@ -61,7 +61,7 @@ for (const dir of dirs) {
     const report = governanceReport(index, own, tree, readCodeDeps(tree.root, tree.files, tree.packages), readBaseline(governanceDir(modelRoot, project!)))
     issues.push(...report.issues)
     governanceNote = governanceSummary(report)
-  } else if (tree) sourceNote = `；源码不在本地（${tree.status === 'absent' ? (tree.tried ?? tree.reason) : ''}），跳过归属检查`
+  } else if (tree) issues.push({ severity: 'error', code: 'source.missing', message: `读不到源码（源码在本地是前提，G1）：${tree.reason}` })
   const fmt = (i: Issue) => {
     const where = i.file ? `${payload.dir}/${i.file}${i.line ? `:${i.line}` : ''}` : '(全局)'
     return `  ${i.severity === 'error' ? 'error  ' : 'warning'} ${where}  ${i.message}  [${i.code}]`

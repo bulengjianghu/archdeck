@@ -1,15 +1,13 @@
 /**
  * 治理报告（K4–K7、U2–U9、Y1–Y3）：把代码事实、架构规则与基线组合成一份报告，页面、lint:model 与 agent 接口共用。
  */
-import { moduleName } from '../indexer'
+import { RULE_LABELS, moduleName } from '../names'
 import { moduleEntry, type LocalSource, type SourceOwnership } from '../source'
-import type { Issue, ModelIndex, RuleKind } from '../types'
+import type { Issue, ModelIndex } from '../types'
 import { confirmRelations, liftDeps, undescribedDeps } from './facts'
 import { cyclicityOf, fileCycles, moduleCycles } from './cycles'
 import { evaluateRules, type EntryOf } from './rules'
 import type { Baseline, CodeDeps, GovernanceReport, Violation } from './types'
-
-export const RULE_LABELS: Record<RuleKind, string> = { layer: '层规则', deps: '依赖白名单', exposes: '访问面' }
 
 /** G10：入口文件（不存在的 entry 不算） */
 export function entryResolver(index: ModelIndex, own: SourceOwnership, tree: Pick<LocalSource, 'files' | 'packages'>): EntryOf {

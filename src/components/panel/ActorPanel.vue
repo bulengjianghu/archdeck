@@ -2,7 +2,7 @@
 /** 外部参与者面板（C-14）：名称、类别、说明、入口关系、由它触发的场景 */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
-import { ACTOR_KIND_LABELS } from '@/model'
+import { ACTOR_KIND_LABELS } from '../shared/labels'
 import Markdown from './Markdown.vue'
 import Section from './Section.vue'
 import RelationRow from './RelationRow.vue'

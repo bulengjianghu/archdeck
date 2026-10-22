@@ -1,6 +1,6 @@
 /**
  * 按 HTTP 端点取被描述项目的源码（开发态由 ModelSource 插件提供，docs/architecture/source.md §2.1），注入给 DeskState 的源码同步。
- * 与 fetchModel 一样由项目视图创建：外界的地址只在呈现层出现。构建态没有这些端点，清单 404 即 unavailable（G2）。
+ * 与 fetchModel 一样由项目视图创建：外界的地址只在呈现层出现。取不到清单时为 error（附原因）。
  */
 import type { ExportedSymbol, FactsPayload, SourceFile, SourcePayload } from '@/model'
 import type { SourceFetcher } from '@/state/useDeskState'
@@ -14,7 +14,7 @@ export function httpSourceFetcher(project: string, base = ''): SourceFetcher {
     return res.json() as Promise<T>
   }
   return {
-    tree: async () => (await get<SourcePayload>(`source/${enc(project)}.json`)) ?? { status: 'unavailable' },
+    tree: async () => (await get<SourcePayload>(`source/${enc(project)}.json`)) ?? { status: 'error', reason: `开发服务器没有项目 ${project} 的源码端点` },
     file: path => get<SourceFile>(`source/${enc(project)}/file.json?path=${enc(path)}`),
     exports: path => get<ExportedSymbol[]>(`source/${enc(project)}/exports.json?path=${enc(path)}`),
     facts: () => get<FactsPayload>(`source/${enc(project)}/facts.json`),

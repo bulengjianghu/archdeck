@@ -20,8 +20,6 @@ export interface NodeData {
   hiddenCount?: number
   /** 设计版本：本模块相对对比基线新增或修改 */
   change?: 'added' | 'changed'
-  /** 修改了哪些字段（显示用） */
-  changedFields?: string
   /** 设计版本：涉及其子树或相关关系的变更条数 */
   touched?: number
   /** 外部参与者节点 */
@@ -35,10 +33,28 @@ export interface NodeData {
   cycle?: number
 }
 
+/** L10：线型表示的事实状态——已证实或没有代码事实（实线）/ 未证实或部分证实（虚线）/ 代码有描述无（点线） */
+export type FactState = 'confirmed' | 'unconfirmed' | 'undescribed'
+
+/** L10：箭头——同步实心、异步空心、implements 空心三角 */
+export type EdgeArrow = 'closed' | 'open' | 'triangle'
+
 export interface RouteEdgeData {
   route: EdgeRoute
   edge: ViewEdge
+  /** L10：只有聚合条数（×N）与异常标记；运行视角走过的边为空 */
   label: string
+  /** 标签含 ×N：画成带边框的 pill */
+  pill?: boolean
+  /** 标签含异常标记（? / 未描述 / 违规） */
+  warn?: boolean
+  factState: FactState
+  arrow: EdgeArrow
+  /** 线宽档位：聚合条数 1 / 2–4 / ≥5 */
+  weight: 1 | 2 | 3
+  /** 编译期关系（depends、implements）：低饱和、更细 */
+  compile: boolean
+  /** 选中：强调色窄晕，不改线宽 */
   selected: boolean
   dim: boolean
   /** 核心跨层边，只在悬停/选中时出现 */
@@ -79,14 +95,13 @@ export interface CanvasNode {
   class?: string
 }
 
-/** 与 Vue Flow 的边同形；箭头类型由画布换成 Vue Flow 的枚举 */
+/** 与 Vue Flow 的边同形；箭头由 RouteEdge 按 data.arrow 自画（L10） */
 export interface CanvasEdge {
   id: string
   source: string
   target: string
   type: 'route'
   zIndex: number
-  markerEnd: { type: 'arrow' | 'arrowclosed'; color: string; width: number; height: number }
   data: RouteEdgeData
 }
 

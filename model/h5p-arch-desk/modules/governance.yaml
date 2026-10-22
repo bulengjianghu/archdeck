@@ -6,7 +6,7 @@ modules:
   - id: present.panel.governance
     name: 架构治理面板
     parent: present.panel
-    responsibility: 面板中的「架构治理」：根层的事实统计、违规按新增 / 已知 / 已豁免分组（可展开文件证据）、模块环与外部依赖、环度对比基线、拦截记录摘要（GV-7）；模块的生效规则、出入违规与未描述依赖、所在环（Q1）；关系的证实与文件证据（K5、K6）；关系行上的证实标记。文件证据可单击选中文件。
+    responsibility: 面板中的「架构治理」：根层的事实统计、违规按新增 / 已知 / 已豁免分组（可展开文件证据）、模块环与外部依赖、环度对比基线、拦截记录摘要（GV-7）；模块的生效规则、出入违规与未描述依赖、所在环（Q1）；选中带环编号的节点时所在的本层环：环内节点、构成环的每条本层依赖（展开见模块依赖与文件证据，单击选中对应的视图边或代码依赖，GV-9、Y5）；关系的证实与文件证据（K5、K6）；关系行上的证实标记。文件证据可单击选中文件。
     codeRefs:
       - src/components/panel/GovernanceSection.vue
       - src/components/panel/ModuleGovernance.vue
@@ -22,7 +22,7 @@ modules:
   - id: state.desk.facts
     name: 架构治理派生（desk.facts）
     parent: state.desk
-    responsibility: 由源码同步取得的代码事实派生（computed，调用模型层架构治理）：事实状态（设计版本、源码不在本地、取数中、失败，K8）、治理报告、结构视角开关开启时的本层投影（K9、Y4）、进问题提示的门禁错误（U9）、拦截记录摘要（Q4）、选中的代码依赖叠加线（K10）、模块治理信息与关系证实。
+    responsibility: 由源码同步取得的代码事实派生（computed，调用模型层架构治理）：事实状态（设计版本、源码不在本地、取数中、失败，K8）、治理报告、结构视角开关开启时的本层投影（K9、Y4）、进问题提示的门禁错误（U9）、拦截记录摘要（Q4）、选中的代码依赖叠加线（K10）、选中节点所在的本层环（Y5）、模块治理信息与关系证实。
     codeRefs: [src/state/desk/facts.ts]
 
   # ── 模型层 ──────────────────────────────────────────────
@@ -49,13 +49,25 @@ modules:
   - id: model.governance.level
     name: 本层投影
     parent: model.governance
-    responsibility: 代码事实投影到当前层次：视图边的证实与违规、未描述依赖与违规的叠加线、本层的环（K9、Y4）；叠加线选中时的模块依赖（K10）。与结构图、帧共用 mapEndpoint。
+    responsibility: 代码事实投影到当前层次：视图边的证实与违规、未描述依赖与违规的叠加线、本层的环及其构成——环内节点与每条本层依赖的视图边、模块依赖（K9、Y4、Y5）；叠加线选中时的模块依赖（K10）。与结构图、帧共用 mapEndpoint。
     codeRefs: [src/model/governance/level.ts]
   - id: model.governance.query
     name: agent 查询
     parent: model.governance
     responsibility: 定位文件、说明模块（路径与各级职责、生效规则、接口签名、出入关系与违规，Q1）；写前判定（允许 / 拒绝 / 无约束、环影响、覆盖关系、目标语义，Q2）；拦截记录统计（Q4）。输出可直接序列化。
     codeRefs: [src/model/governance/query.ts, src/model/governance/ledger.ts]
+  - id: model.rework
+    name: 返工清单
+    parent: model
+    kind: subsystem
+    responsibility: 把描述错误与提醒、违规（新增 / 已知 / 已豁免）、环度上升与可收紧基线、源码归属、未证实的编译期关系、未描述依赖、结构中未建模的步骤汇总为返工项，按根因聚合（同一组重叠的 codeRefs、同一目录的漏写、越过同一条边界依赖同一模块、同一对端点之间缺的关系），每条带描述文件行号、受影响位置、规则编号与建议动作（含 YAML 片段）；渲染给 agent 的 Markdown（Q7–Q9）。只汇总其他模型子模块已有的结果，不新增事实。
+    principle: |
+      - **按根因聚合**：判据是「改一处能消掉几条」，h5player 的 287 条违规收成 17 条。
+      - **只给方向不替人决定**：加例外、收紧基线由架构师决定（U5、U7），建议里只给片段。
+      - 未建模的步骤与回放用同一套关系绑定（bindRelation，S13），与层次无关（P11）。
+    entry: src/model/rework/index.ts
+    codeRefs: [src/model/rework/index.ts, src/model/rework/list.ts, src/model/rework/markdown.ts, src/model/rework/health.ts]
+    docRefs: [docs/architecture/governance.md]
 
 interfaces:
   - id: if.governance.report
@@ -88,13 +100,30 @@ interfaces:
     signature: |
       list_projects() · overview(project?) · locate(target, project?)
       check_dependency(from, to, names?, project?) · list_violations(onlyNew?, project?)
-      list_cycles(project?) · rescan(project?) · prevention_report(project?)
+      list_cycles(project?) · rescan(project?) · issues(format?, category?, project?) · prevention_report(project?)
     semantics: |
       - stdio；check_dependency 与 rescan 写拦截记录（Q4）
       - 每次调用前比对输入，源码清单或文件的修改时间变了就重建，不必先 rescan
       - 不提供改规则、生成基线（Q5）
 
+  - id: if.rework.list
+    name: reworkList
+    owner: model.rework
+    signature: |
+      reworkList(input: { index: ModelIndex; issues: Issue[]; source?: { own: SourceOwnership; tree }; report?: GovernanceReport }): ReworkList
+      reworkMarkdown(list: ReworkList, title: string, opts?: { modelDir?; sourceRoot?; limit? }): string
+    semantics: |
+      - 纯函数；命令行与 MCP 的 issues 同一份结果（Q9）
+      - 返工项 ID 为「类别:根因键」，重新计算后不变
+
 dataStructures:
+  - id: ds.ReworkItem
+    name: ReworkItem
+    definition: |
+      interface ReworkItem {
+        id: string; category: ReworkCategory; severity: 'error' | 'warning' | 'info'; rules: string[]; code: string
+        title: string; detail?: string; at?: ReworkLoc; affected: ReworkLoc[]; actions: ReworkAction[]; target: ReworkTarget
+      }
   - id: ds.FileDep
     name: FileDep
     definition: |
@@ -149,7 +178,7 @@ relations:
   # 模型层
   - {id: rel.gv.model-source, from: model.governance, to: model.source, type: depends, description: 归属与入口（G3–G10）}
   - {id: rel.gv.model-projector, from: model.governance.level, to: model.projector, type: depends, description: mapEndpoint（K9、Y4）}
-  - {id: rel.gv.model-types, from: model.governance, to: model.types, type: depends, payload: [ds.ModelIndex]}
+  - {id: rel.gv.model-types, from: model.governance, to: model.types, type: depends, payload: [ds.ModelIndex], description: moduleName、RULE_LABELS：违规、判定与报告的说明文字用模块名与规则名}
   - {id: rel.gv.pipeline-rules, from: model.pipeline, to: model.types, type: depends, description: rules 的加载与校验（U1）}
   # 架构治理内部与名称、标签（K7 按代码补齐）
   - {id: rel.gv.cycles-facts, from: model.governance.cycles, to: model.governance.facts, type: calls, description: within：环按模块子树判断}
@@ -162,11 +191,18 @@ relations:
   - {id: rel.gv.report-cycles, from: model.governance.report, to: model.governance.cycles, type: calls, description: moduleCycles、fileCycles、cyclicityOf（Y1–Y3）}
   - {id: rel.gv.report-rules, from: model.governance.report, to: model.governance.rules, type: calls, description: evaluateRules（U2–U4）}
   - {id: rel.gv.rules-facts, from: model.governance.rules, to: model.governance.facts, type: calls, description: within：规则按模块子树匹配}
-  - {id: rel.gv.model-names, from: model.governance, to: model.pipeline.indexer, type: depends, description: moduleName：违规、判定与报告的说明文字用模块名}
-  - {id: rel.gv.agent-pipeline, from: access.agent, to: model.pipeline, type: calls, interface: if.model.loadModel, description: loadModel 加载描述；moduleName 生成回答}
+  - {id: rel.gv.agent-pipeline, from: access.agent, to: model.pipeline, type: calls, interface: if.model.loadModel, description: loadModel 加载描述}
+  - {id: rel.gv.agent-types, from: access.agent, to: model.types, type: depends, description: moduleName、RULE_LABELS：生成回答与命令行输出}
   - {id: rel.gv.agent-ownership, from: access.agent, to: model.source.ownership, type: calls, interface: if.model.assignFiles, description: 按 codeRefs 归属源码（G3–G8）}
+  - {id: rel.gv.entry-reexport-rework, from: model.pipeline.entry, to: model.rework, type: depends, description: 模型层入口再导出返工清单}
+  - {id: rel.gv.source-health, from: access.model-source, to: model.rework, type: calls, description: projectHealth：项目卡片的健康度（Q10）}
+  - {id: rel.gv.source-health-model, from: access.model-source, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 健康度：加载描述（Q10）}
+  - {id: rel.gv.source-health-own, from: access.model-source, to: model.source.ownership, type: calls, interface: if.model.assignFiles, description: 健康度：归属（Q10）}
+  - {id: rel.gv.source-health-report, from: access.model-source, to: model.governance.report, type: calls, interface: if.governance.report, description: 健康度：治理报告（Q10）}
+  - {id: rel.gv.agent-rework, from: access.agent, to: model.rework, type: calls, interface: if.rework.list, payload: [ds.ReworkItem], description: 命令行与 MCP 的 issues（Q9）}
+  - {id: rel.gv.rework-source, from: model.rework, to: model.source, type: calls, description: matchRef、moduleEntry：冲突的 codeRefs 组合与 entry 是否存在}
+  - {id: rel.gv.rework-scenario, from: model.rework, to: model.scenario, type: calls, description: bindRelation、forEachStep：未建模的步骤（S13、P11）}
+  - {id: rel.gv.rework-types, from: model.rework, to: model.types, type: depends, description: 返工项的类型、类别与严重度名称（契约），moduleName、RULE_LABELS}
   - {id: rel.gv.store-reader, from: access.governance-store, to: access.reader, type: depends, description: GOVERNANCE_DIR：治理产物目录名与描述读取共用（读取时跳过）}
-  - {id: rel.gv.dep-report, from: present.panel.dep, to: model.governance.report, type: depends, description: RULE_LABELS：违规的规则名}
-  - {id: rel.gv.panel-report, from: present.panel.governance, to: model.governance.report, type: depends, description: RULE_LABELS：违规的规则名}
   - {id: rel.gv.dep-content, from: present.panel.dep, to: present.panel.content, type: depends, description: 复用 Section}
   - {id: rel.gv.panel-content, from: present.panel.governance, to: present.panel.content, type: depends, description: 复用 Section}

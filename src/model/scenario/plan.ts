@@ -5,60 +5,9 @@
  * - loop 展开一遍（F4）；par 各分支按书写顺序串行（F5）；alt 每个选项一棵子树（F6）；
  * - 每帧绑定对应的结构关系（bindRelation，S12、S13）；步骤没写的接口与数据取自对应关系（S14）。
  */
-import type { MessageKind, ModelIndex, SourceLoc, Step } from '../types'
+import type { ModelIndex, Step } from '../types'
 import { bindRelation } from './bind'
-
-export type FragmentKind = 'alt' | 'loop' | 'par' | 'ref'
-
-/** 帧所在的一层组合框：id 是组合框实例 ID（alt 即分支点 ID），branch 是所在分支 */
-export interface FragmentTag {
-  kind: FragmentKind
-  id: string
-  label: string
-  branch?: number
-}
-
-export interface Frame {
-  id: string
-  kind: MessageKind
-  /** 真实端点：最深模块或参与者 */
-  from: string
-  to: string
-  label?: string
-  interface?: string
-  payload: string[]
-  note?: string
-  relation?: string
-  /** S13：对应关系是推断的 */
-  relationInferred: boolean
-  /** 消息方向与关系箭头相反 */
-  reverse: boolean
-  /** S14：接口 / 数据取自对应关系（步骤没写） */
-  inherited?: { interface?: boolean; payload?: boolean }
-  /** 步骤写在哪个场景（ref 内联时为被引用的场景）及其路径、出处 */
-  scenarioId: string
-  stepPath: string
-  src: SourceLoc
-  /** 外到内 */
-  fragments: FragmentTag[]
-}
-
-export interface BranchPoint {
-  id: string
-  /** 分支点所在的组合框（不含它自己的 alt 标签） */
-  fragments: FragmentTag[]
-  options: { when: string; first?: Frame }[]
-}
-
-export type PlanNode = { kind: 'frame'; frame: Frame } | { kind: 'branch'; point: BranchPoint; options: PlanNode[][] }
-
-export interface ScenarioPlan {
-  scenarioId: string
-  nodes: PlanNode[]
-  /** 计划中的全部帧（含所有分支），按书写顺序 */
-  frames: Map<string, Frame>
-  points: Map<string, BranchPoint>
-}
+import type { FragmentTag, Frame, BranchPoint, PlanNode, ScenarioPlan, ReturnPairs } from './types'
 
 export function planScenario(index: ModelIndex, scenarioId: string): ScenarioPlan {
   const frames = new Map<string, Frame>()
@@ -150,9 +99,6 @@ export function firstFrame(nodes: readonly PlanNode[]): Frame | undefined {
   }
   return undefined
 }
-
-/** 调用与显式返回的配对：帧 ID → 配对帧 ID（双向；一条调用可能被多个分支中的返回回应，取书写顺序的第一个） */
-export type ReturnPairs = ReadonlyMap<string, string>
 
 /**
  * F7：调用与显式返回配对。按书写顺序以栈匹配：call 入栈；return（X → Y）匹配栈中最近的 Y → X 调用，

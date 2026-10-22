@@ -32,7 +32,7 @@ const take = (c: number) => new Map([[ALT, c]])
 const ids = (p: ScenarioPlan, choices: Map<string, number>) => resolvePath(p, choices).frames.map(f => f.id)
 
 const stage = (idx: ModelIndex, level: string, p: ScenarioPlan) =>
-  projectLevel(idx, level, { showBoundaries: true, mergeTypes: true, scenarioEnds: stageEnds(p) })
+  projectLevel(idx, level, { showBoundaries: true, scenarioEnds: stageEnds(p) })
 const project = (level: string, choices = take(0), p = plan, idx = index) => projectScenario(idx, stage(idx, level, p), p, choices)
 
 describe('回放计划', () => {
@@ -167,8 +167,8 @@ describe('帧的层次投影', () => {
   it('P2：一端在本层外 → 走到边界节点或参与者的边', () => {
     const v = project('infra')
     const at = (f: string) => v.messages[v.messageOf.get(f)!].at
-    expect(at('sc.play#start')).toMatchObject({ kind: 'edge', edgeId: 'actor.biz->infra.player' })
-    expect(at('sc.play#2')).toMatchObject({ kind: 'edge', edgeId: 'infra.framework->boundary:app', from: 'infra.framework', to: 'boundary:app' })
+    expect(at('sc.play#start')).toMatchObject({ kind: 'edge', edgeId: 'actor.biz->infra.player:calls' })
+    expect(at('sc.play#2')).toMatchObject({ kind: 'edge', edgeId: 'infra.framework->boundary:app:calls', from: 'infra.framework', to: 'boundary:app' })
   })
 
   it('P3：两端在同一子模块 → 内部活动', () => {
@@ -242,10 +242,57 @@ describe('帧的层次投影', () => {
     expect(project('sys', new Map(), planScenario(i2, 'sc.n'), i2).messages.map(m => m.frameIds)).toEqual([['sc.n#a'], ['sc.n#b']])
   })
 
+  it('P17：按帧绑定关系的类型选边——含该关系的边，其次同类型的边，没有同类型时经由上层；未绑定时同方向的运行时边优先', () => {
+    const { index: idx } = loadModel(
+      scenarioFiles({
+        'p17.yaml': [
+          'relations:',
+          '  - { id: x2, from: infra.player, to: app.solution, type: calls }',
+          '  - { id: xc, from: infra, to: app.solution, type: calls }',
+          '  - { id: xu, from: infra, to: app.solution, type: dataflow }',
+        ].join('\n'),
+        'scenarios/p17.yaml': `scenario:
+  id: sc.t
+  name: T
+  steps:
+    - call: { id: own, from: infra.player, to: app.solution, relation: x2 }
+    - call: { id: same, from: infra.player, to: app.solution, relation: xc }
+    - async: { id: upper, from: infra.player, to: app.solution, relation: xu }
+    - call: { id: free, from: infra.player, to: app.fragments }`,
+      }),
+    )
+    const p = planScenario(idx, 'sc.t')
+    const v = project('infra', new Map(), p, idx)
+    const at = (f: string) => v.messages[v.messageOf.get(`sc.t#${f}`)!].at
+    expect(at('own')).toMatchObject({ kind: 'edge', edgeId: 'infra.player->boundary:app:calls' })
+    expect(at('same')).toMatchObject({ kind: 'edge', edgeId: 'infra.player->boundary:app:calls' })
+    // 这对节点之间有 depends 与 calls 边，但没有 dataflow 边：经由上层，不借用其他类型的边
+    expect(at('upper')).toMatchObject({ kind: 'upper', relationId: 'xu' })
+    expect(at('free')).toMatchObject({ kind: 'edge', edgeId: 'infra.player->boundary:app:calls' })
+  })
+
+  it('P5：连续落在同一对节点之间、同方向的帧不论边的类型合并为一条可见消息，落在第一帧的边上', () => {
+    const { index: idx } = loadModel(
+      scenarioFiles({
+        'p5.yaml': 'relations: [{ id: xd, from: infra.player, to: infra.framework.sm, type: dataflow }]',
+        'scenarios/p5.yaml': `scenario:
+  id: sc.p
+  name: P
+  steps:
+    - call: { id: a, from: infra.player, to: infra.framework.sm, relation: rp }
+    - async: { id: b, from: infra.player, to: infra.framework.sm, relation: xd }`,
+      }),
+    )
+    const p = planScenario(idx, 'sc.p')
+    const v = project('infra', new Map(), p, idx)
+    expect(v.messages.map(m => m.frameIds)).toEqual([['sc.p#a', 'sc.p#b']])
+    expect(v.messages[0].at).toMatchObject({ kind: 'edge', edgeId: 'infra.player->infra.framework:calls' })
+  })
+
   it('P10：消息按步骤自己的方向流动，与边的箭头相反时标 reverse', () => {
     const v = project('infra')
     const done = v.messages[v.messageOf.get('sc.play#done')!].at
-    expect(done).toMatchObject({ kind: 'edge', edgeId: 'infra.player->infra.framework', from: 'infra.framework', to: 'infra.player', reverse: true })
+    expect(done).toMatchObject({ kind: 'edge', edgeId: 'infra.player->infra.framework:event', from: 'infra.framework', to: 'infra.player', reverse: true })
   })
 
   it('P11：本层两节点之间没有视图边时落点为「未建模」；舞台补齐结构上没有关系的边界节点', () => {
@@ -389,7 +436,8 @@ describe('参与查询（V6）', () => {
 
   it('关系（含推断绑定）、视图边、参与者', () => {
     expect(participation(index, frames, v, { kind: 'relation', id: 're1' }).frames.map(f => f.frameId)).toEqual(['sc.play#done'])
-    expect(participation(index, frames, v, { kind: 'edge', id: 'infra.player->infra.framework' }).frames.map(f => f.frameId)).toEqual(['sc.play#1', 'sc.play#done'])
+    expect(participation(index, frames, v, { kind: 'edge', id: 'infra.player->infra.framework:calls' }).frames.map(f => f.frameId)).toEqual(['sc.play#1'])
+    expect(participation(index, frames, v, { kind: 'edge', id: 'infra.player->infra.framework:event' }).frames.map(f => f.frameId)).toEqual(['sc.play#done'])
     expect(participation(index, frames, v, { kind: 'actor', id: 'actor.biz' }).frames).toEqual([{ frameId: 'sc.play#start', seq: 0, role: 'from' }])
   })
 })
@@ -441,7 +489,7 @@ describe('时序模型', () => {
     )
     const p = planScenario(ix, 'sc.z')
     const at = (level: string) => {
-      const view = projectLevel(ix, level, { showBoundaries: true, mergeTypes: true, scenarioEnds: stageEnds(p) })
+      const view = projectLevel(ix, level, { showBoundaries: true, scenarioEnds: stageEnds(p) })
       return buildSequence(ix, view, p, new Map(), projectScenario(ix, view, p, new Map()))
     }
     expect(at('sys').fragments.find(f => f.kind === 'loop')).toMatchObject({ collapsed: true, label: '每一批' })

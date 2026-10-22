@@ -104,8 +104,8 @@ describe('运行视角', () => {
     await flushPromises()
     expect(wrapper.find('[role=tab][aria-selected=true]').text()).toBe('文件')
     expect(wrapper.find('.file-tree').exists()).toBe(true)
-    // 未注入源码来源时等同构建态，只给提示
-    expect(wrapper.text()).toContain('构建产物不含源码')
+    // 未注入源码来源时清单为 error，文件页签给出原因
+    expect(wrapper.find('.source-note.err').text()).toContain('没有注入源码来源')
   })
 
   it('T5：模块树标出参与模块与当前步骤的两端', async () => {
