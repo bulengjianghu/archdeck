@@ -130,7 +130,7 @@ flowchart TB
 | DeskState → 演化事实 | `evolutionStats`、`levelEvolution` | 派生；历史经源码同步按需取（`source/<项目>/history.json`，J1） |
 | 演化事实 → 源码归属、架构治理、Projector | `moduleLines`、`within`、`mapEndpoint` | 归属与行数（J2、J3）、有无依赖（J4）与本层投影（J5）复用同一套规则 |
 | 返工清单 → 演化事实 | `isolatedCouplings` | 无依赖无关系的耦合对（J6） |
-| DeskState、命令行校验、agent 接口 → 意图 | `sketchCheck`、`activeSketches`、`archiveVerdict`、`compareOwned` | 页面、`lint:model` 与 `sketch-check` 同一套核验（X4）；归档前的判定与命令行同一函数（X3） |
+| DeskState、命令行校验、agent 接口 → 意图 | `sketchCheck`、`checkSketches`、`archiveVerdict`、`compareOwned` | 页面、`lint:model` 与 `sketch-check` 同一套核验（X4）；归档前的判定与命令行同一函数（X3） |
 | 描述写入 → 意图、确认 | `archiveVerdict`、`sketchModules`、`reviewEntries`（写入用同一文件里确认层的 `appendReviewed`） | 归档时先核验当前版本，一致才写；确认记录的指纹与摘要按确认层的口径，来源 `sketch:<设计 ID>`（X3、Z6） |
 | 返工清单 → 加载流水线、源码归属、架构治理、场景投影、意图 | 校验问题、`SourceOwnership`、`GovernanceReport`、`bindRelation`、`SketchCheck` | 只汇总已有结果；未建模的步骤与回放同一套绑定（S13、P11）；草图偏差一条一个根因（X4） |
 | 命令行校验、agent 接口 → 治理存储 | `readOwned`、`ownedHashes` | 指纹比对的输入（X6） |
