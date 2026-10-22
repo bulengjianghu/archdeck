@@ -3,7 +3,7 @@
  */
 import type { LevelView, ViewEdge } from '@/model'
 import { NODE_SIZE, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
-import { detour, type PortAt } from './routing'
+import { ARRIVE, detour, type PortAt } from './routing'
 
 // ── 外部参与者（A7）────────────────────────────────────────────
 
@@ -146,9 +146,9 @@ export function isBoundaryEdge(e: ViewEdge): boolean {
 
 // ── 框外的元素：方位表示角色（A7、L4）──────────────────────────
 
-/** 父模块框到边界节点行、边界节点行到系统框（px） */
-export const BOUNDARY_GAP = 40
-export const SYSTEM_PAD = 28
+/** 父模块框到边界节点行（放得下进边界节点的 ARRIVE 短桩与错开量）；边界节点行到系统框（px） */
+export const BOUNDARY_GAP = 72
+export const SYSTEM_PAD = 44
 
 /**
  * 方位：用户在系统框上方，外部系统与时间在系统框右侧，边界节点在父模块框下方、系统框之内，其余在父模块框内。
@@ -276,7 +276,8 @@ function outsideRoute(pv: PositionedView, e: ViewEdge): EdgeRoute | undefined {
   const outside = pv.view.edges.filter(x => isOutsideEdge(pv.view, x))
   const fs = slotOf(outside, e.from, e.id)
   const from = portFor(a, compassOf(na), 'out', dir, fs)
-  const to = withSourceLane(portFor(b, compassOf(nb), 'in', dir, slotOf(outside, e.to, e.id)), fs)
+  // 终点短桩加长到 ARRIVE：箭头前留出直段，拐弯不贴着箭头
+  const to = withSourceLane(portFor(b, compassOf(nb), 'in', dir, slotOf(outside, e.to, e.id), ARRIVE), fs)
   // 两端自身也是障碍：中间三段（横、竖通道、横）都在两端的短桩之外，不能穿过它们
   return { points: detour(from, to, [...pv.nodes.values()]) }
 }

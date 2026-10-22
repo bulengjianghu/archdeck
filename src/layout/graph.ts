@@ -48,7 +48,8 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
       'elk.spacing.edgeNode': '24',
       'elk.spacing.edgeEdge': '14',
       'elk.spacing.portPort': '12',
-      'elk.layered.spacing.edgeNodeBetweenLayers': '24',
+      // 进节点前的直段放得下箭头与拐角圆角（同 ARRIVE 的考虑）
+      'elk.layered.spacing.edgeNodeBetweenLayers': '30',
       'elk.layered.spacing.edgeEdgeBetweenLayers': '12',
       'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
       'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',

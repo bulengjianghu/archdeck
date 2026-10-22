@@ -66,8 +66,14 @@ export interface PortAt {
 
 /** 离开端口先走的短桩，落在层间空隙里 */
 export const STUB = 14
-/** 绕到所有节点外侧时离节点外沿的距离：落在父模块框（留 28）与系统框（再留 28）之间，不压框线 */
-const OUTSIDE = 42
+/**
+ * 进入终点端口前的直段：箭头（最深约 14）+ 拐角圆角 8 + 余量，拐弯不紧贴箭头。
+ * 加上同侧错开的加长量（≤ 22）后，进内部节点的横线落在父模块框（留 28）与系统框（再留 44）之间、离两条框线各约 10，
+ * 只在靠近目标处竖直穿过父模块框一次。
+ */
+export const ARRIVE = 38
+/** 绕到所有节点外侧时离节点外沿的距离：落在父模块框（留 28）与系统框（再留 44）之间，不压框线 */
+const OUTSIDE = 50
 
 const crossesBox = (a: Point, b: Point, box: { x: number; y: number; w: number; h: number }) => {
   const x1 = Math.min(a.x, b.x)
