@@ -69,6 +69,7 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 | `rulesFor(index, moduleId)` | 对一个模块生效的规则：所在各级层的 `mayDependOn`、祖先链上的白名单与访问面 | Q1 |
 | `describeModule(index, own, report, entryOf, id)` · `locate(…, file)` | agent 用的模块 / 文件说明：路径与各级职责、生效的规则、接口签名、入口、出入关系与违规 | Q1 |
 | `checkDependency(index, own, report, entryOf, from, targets)` | 写前判定：对每个目标 `judge`，取最严；环影响为在值依赖的模块图（`valueDeps`）上加边后重算包含两端的强连通分量；附覆盖关系与目标模块语义 | Q2 |
+| `stepEvidence(frame, index, own, deps, entryOf)` · `scenarioEvidence(plan, …)` | 步骤的候选调用点与证据等级（按名字匹配 / 按模块依赖 / 无证据 / 不判定）、场景各等级计数；算法见[场景投影与回放 §10](./scenario.md#10-步骤的代码证据)（待实现） | S16 |
 | `summarizeLedger(entries)` | 按判定统计次数；扫描的违规数与环度首末值 | Q4 |
 
 ### 4.1 数据结构
@@ -106,11 +107,11 @@ interface LevelCycle { id: number; nodes: { id: string; module: string }[]; edge
 
 | 函数 | 做什么 | 规则 |
 |---|---|---|
-| `reworkList({ index, issues, source?, report? })` | 汇总：校验问题（跳过归属、证据、门禁、事实与 S5a 未建模，它们由下列材料重新算）、归属（冲突按匹配的 codeRefs 组合，`detail` 注明一端是这组文件、因冲突未计入的依赖条数（`report.conflicted`，K4）；未归属按目录；entry 不存在）、不在清单里的场景证据文件（`missingEvidence`，归描述问题，S15）、违规（按基线状态 · 种类 · 规则所在 · 被依赖方）、环度上升与可收紧基线、报警的未证实关系（`unconfirmedWarns`）、未描述依赖、未建模的步骤（`bindRelation` 绑定不到关系的消息步骤，按两端聚合）；排序后给出各严重度与类别的计数 | Q7、Q8 |
+| `reworkList({ index, issues, source?, report? })` | 汇总：校验问题（跳过归属、证据、门禁、事实与 S5a 未建模，它们由下列材料重新算）、归属（冲突按匹配的 codeRefs 组合，`detail` 注明一端是这组文件、因冲突未计入的依赖条数（`report.conflicted`，K4）；未归属按目录；entry 不存在）、不在清单里的场景证据文件（`missingEvidence`，归描述问题，S15）、违规（按基线状态 · 种类 · 规则所在 · 被依赖方）、环度上升与可收紧基线、报警的未证实关系（`unconfirmedWarns`）、未描述依赖、未建模的步骤（`bindRelation` 绑定不到关系的消息步骤，按两端聚合）、无证据的步骤（给了文件依赖 `deps` 时，`scenarioEvidence` 为 `none` 的步骤按两端与方向聚合，S17，待实现）；排序后给出各严重度与类别的计数 | Q7、Q8 |
 | `reworkMarkdown(list, title, { modelDir, sourceRoot, limit })` · `reworkItemMarkdown(item, opts)` | 给 agent 的指令：摘要、每条的规则、位置、受影响（缺省最多 20 处）、建议与 YAML 片段；描述文件路径加模型目录前缀 | Q9 |
 
 ```ts
-type ReworkCategory = 'description' | 'violation' | 'cycle' | 'ownership' | 'unconfirmed' | 'undescribed' | 'unmodeled' | 'coupling'   // coupling：时间耦合（J6）
+type ReworkCategory = 'description' | 'violation' | 'cycle' | 'ownership' | 'unconfirmed' | 'undescribed' | 'unmodeled' | 'review' | 'coupling' | 'unevidenced'   // coupling：时间耦合（J6）；unevidenced：步骤无证据（S17）
 interface ReworkLoc { in: 'description' | 'source'; file: string; line?: number; note?: string }
 interface ReworkAction { kind: ReworkActionKind; text: string; file?: string; snippet?: string }
 interface ReworkItem {

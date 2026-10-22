@@ -210,3 +210,46 @@ outlineScenario(plan: ScenarioPlan, choices): OutlineNode[]
 buildSequence(index, view: LevelView, plan: ScenarioPlan, choices, pathView: ScenarioLevelView): SequenceModel
 layoutSequence(model: SequenceModel, structure?: PositionedView): PositionedSequence
 ```
+
+## 10. 步骤的代码证据
+
+> 状态：待实现（S16–S18，D-21）。匹配是关于被描述系统的知识（换成命令行也要），实现放在模型层「架构治理」（`src/model/governance/evidence.ts`），与关系的证实（K5）同一处、同一口径；场景投影只提供帧（类型来自契约 `scenario/types.ts`），不反向依赖治理。
+
+**做什么**：把运行视角的每一步消息对到已有的代码事实（K1 的文件依赖及导入名 `names`），给出候选调用点（文件:行）与证据等级，让架构师从「AI 说这一步存在」跳到代码里那一行；找不到时明确说没有证据。不改描述格式。
+
+**算法**（`stepEvidence(frame, index, own, deps, entryOf?)`，规则 S16）：
+
+| 步骤 | 做什么 |
+|---|---|
+| 1. 不判定 | 一端是参与者 → `actor`；绑定的关系写了 `via` → `via`（同 K5b）；一端或其祖先是目标态 → `target`；两端文件相同（同一模块或同一宿主，K5a）→ `host` |
+| 2. 两端文件 | 模块子树的归属文件（`moduleFiles`，G4）；子树没有文件时取宿主的直接归属文件 |
+| 3. 方向 | `call` / `async`：发送方文件 → 接收方文件；`return`：接收方文件 → 发送方文件；绑定关系是 `notifies` / `streams` 时两个方向都算 |
+| 4. 候选 | 依赖方在一侧、目标在另一侧的文件依赖；经由文件是目标侧模块的入口文件（G10，`entryOf`）的也算 |
+| 5. 接口名 | 帧的接口（含 S14 继承的）的 `name` 去掉括号与泛型后是标识符时用它，否则取接口 ID 的最后一段 |
+| 6. 等级 | 有接口名且有候选的 `names` 含它 → `name`，只列这些；否则有候选 → `module`，值依赖在前、最多 10 条，另给总数；没有 → `none` |
+| 7. 排序 | 经由即目标（直接导入目标文件）的在前，再按依赖方文件、行号 |
+
+`scenarioEvidence(plan, index, own, deps, entryOf?)` 对回放计划的全部帧（含各分支与 `ref` 内联）逐帧求证据，并按等级计数（场景汇总）；没有代码事实时 DeskState 不调用（K8）。
+
+**呈现**（S17、S18，视图状态层只派生、呈现层只读）：
+
+| 位置 | 内容 |
+|---|---|
+| DeskState 证据派生 `evidence`（`src/state/desk/evidence.ts`，随代码事实与计划变化） | 打开场景时按计划算一次 `scenarioEvidence`；选中步骤的证据、场景汇总；场景列表用的各场景无证据帧数（全部场景，随事实刷新） |
+| Layout `layoutSequence(model, structure, evidence?)` | 每条消息的证据等级：合并的各帧有一个 `none` 即 `none`，否则有 `module` 即 `module`，否则有 `name` 即 `name`，全部不判定为 `skipped`；时序图对 `none` 在标签后加「?」 |
+| 步骤面板「代码证据」 | 在「经由接口」之后：等级与说明（按名字匹配时给出接口名；不判定时给原因）、候选列表（依赖方文件:行 → 目标，经由不同于目标时注明），单击在副栏预览并滚到该行 |
+| 场景面板「证据」 | 先 S15 的证据文件，后「按名字 a · 按依赖 b · 无证据 c · 不判定 d」 |
+| 场景列表 | 有无证据帧的场景标「? N」 |
+| 返工清单 | 「步骤无证据」（`unevidenced`，warning，`step.no-evidence`）：同一对端点（含方向）合并，受影响为各步骤的描述位置（S17） |
+
+```ts
+type EvidenceLevel = 'name' | 'module' | 'none' | 'skipped'
+type StepEvidence =
+  | { level: 'name' | 'module'; name?: string; candidates: FileDep[]; total: number }   // name：用来匹配的接口名
+  | { level: 'none'; name?: string }
+  | { level: 'skipped'; reason: 'actor' | 'via' | 'target' | 'host'; via?: RelationVia; host?: string }
+interface ScenarioEvidence { frames: Map<string, StepEvidence>; counts: Record<EvidenceLevel, number> }
+
+stepEvidence(frame: Pick<Frame, 'kind' | 'from' | 'to' | 'interface' | 'relation'>, index: ModelIndex, own: SourceOwnership, deps: readonly FileDep[], entryOf?: EntryOf): StepEvidence
+scenarioEvidence(plan: ScenarioPlan, index, own, deps, entryOf?): ScenarioEvidence
+```
