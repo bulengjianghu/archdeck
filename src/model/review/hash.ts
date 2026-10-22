@@ -13,7 +13,10 @@ export const normalizeLines = (text: string | undefined): string =>
     .filter(Boolean)
     .join('\n')
 
-const sorted = (xs: readonly string[] | undefined) => [...(xs ?? [])].sort()
+/** 指纹里一切按 ID 排序的地方共用这一个比较器：按 UTF-16 码元比较，与区域设置无关（大小写、非 ASCII 的 ID 也稳定） */
+export const compareIds = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
+
+const sorted = (xs: readonly string[] | undefined) => [...(xs ?? [])].sort(compareIds)
 
 /** 现在的摘要：从索引里读 */
 export function reviewSummary(index: ModelIndex, moduleId: string): ReviewSummary {
@@ -36,7 +39,7 @@ export function normalizeSummary(def: ReviewSummaryDef | undefined): ReviewSumma
     includes: [...(def?.includes ?? [])],
     excludes: [...(def?.excludes ?? [])],
     mayDependOn: sorted(def?.mayDependOn),
-    provides: [...(def?.provides ?? [])].sort((a, b) => a.id.localeCompare(b.id)).map(p => ({ id: p.id, signature: p.signature?.trim() ?? '' })),
+    provides: [...(def?.provides ?? [])].sort((a, b) => compareIds(a.id, b.id)).map(p => ({ id: p.id, signature: p.signature?.trim() ?? '' })),
     children: sorted(def?.children),
   }
 }

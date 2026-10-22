@@ -15,6 +15,7 @@ import {
   reviewStatus,
   reviewSummary,
   reworkList,
+  summaryHash,
   subtreeOf,
   isReviewSource,
   type RawFile,
@@ -111,6 +112,27 @@ describe('Z2 指纹覆盖什么', () => {
     expect(hashOf(MODULES.replace('includes: [组件, 页面]', 'includes: [组件]'), 'ui')).not.toBe(parent)
     expect(hashOf(MODULES.replace('mayDependOn: [core]', 'mayDependOn: []'), 'ui')).not.toBe(parent)
     expect(hashOf(MODULES.replace('      - id: ui.store\n', '      - { id: ui.extra, name: Extra, responsibility: 多一个 }\n      - id: ui.store\n'), 'ui')).not.toBe(parent)
+  })
+  it('排序口径一致：含大小写的接口 ID，确认时的指纹与从记录摘要重算的指纹相同，状态为已确认；非 ASCII 的 ID（只可能出现在手写的摘要里）同一口径', () => {
+    const ids = ['if.zeta', 'if.Alpha', 'if.b-2', 'if.B_1', 'if.beta']
+    const text = MODULES.replace('provides: [if.render, if.mount]', `provides: [${ids.join(', ')}]`).replace(
+      /interfaces:[\s\S]*$/,
+      `interfaces:\n${ids.map(id => `  - { id: ${id}, name: ${id}, owner: ui.view, signature: '${id}(): void' }`).join('\n')}\n`,
+    )
+    const index = load('', text).index
+    const [e] = reviewEntries(index, ['ui.view'], { source: 'manual' })
+    // 按码元排序：大写在小写之前（localeCompare 会把 if.Alpha 排到 if.b-2 之后之类，与摘要重算不一致）
+    expect(e.summary.provides!.map(p => p.id)).toEqual(['if.Alpha', 'if.B_1', 'if.b-2', 'if.beta', 'if.zeta'])
+    expect(summaryHash(normalizeSummary(e.summary))).toBe(e.hash)
+    // 记录里的接口顺序被人手工打乱也一样
+    const shuffled = { ...e.summary, provides: [...e.summary.provides!].reverse() }
+    expect(summaryHash(normalizeSummary(shuffled))).toBe(e.hash)
+    const yaml = `reviewed:\n  - { module: ui.view, at: '2026-10-22', hash: ${e.hash}, source: manual, summary: ${JSON.stringify(shuffled)} }\n`
+    expect(reviewStates(load(yaml, text).index).get('ui.view')).toMatchObject({ status: 'reviewed' })
+    // 非 ASCII：摘要里的接口与子模块、可依赖的层同一比较器
+    const odd = normalizeSummary({ provides: [{ id: 'if.接口' }, { id: 'if.émile' }, { id: 'if.Zed' }, { id: 'if.apple' }], children: ['m.接口', 'm.émile', 'm.Zed', 'm.apple'] })
+    expect(odd.provides.map(p => p.id)).toEqual(['if.Zed', 'if.apple', 'if.émile', 'if.接口'])
+    expect(odd.children).toEqual(['m.Zed', 'm.apple', 'm.émile', 'm.接口'])
   })
   it('不覆盖：实现原理、codeRefs、名称、关系、接口的声明顺序、职责的首尾空白', () => {
     expect(hashOf(MODULES.replace('principle: 用 Vue', 'principle: 用 React'))).toBe(base)
