@@ -127,21 +127,23 @@ modules:
   - id: state.layout.runner
     name: 布局入口与缓存
     parent: state.layout
-    responsibility: layoutView 按视图模式分派给三种排布；浏览器里在 Worker 中运行 elk，无 Worker 环境用同步打包版；结果按视图内容与布局算法版本（LAYOUT_VERSION）缓存。边的走线与编码工具（edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、linkRoute、isBoundaryEdge，L10）也在这里，供画布场景使用。
-    codeRefs: [src/layout/layout.ts]
-  # 以下三个是 layout.ts 内的概念划分，代码在 Layout 入口的文件里（K5 宿主相同，关系不判定）
+    responsibility: Layout 的入口（layout.ts，对外只经它引用）：layoutView 按视图模式分派给分层总览或普通层次排布，结果按视图内容与布局算法版本（LAYOUT_VERSION）缓存；几何类型（点、盒子、走线、带坐标的视图）、节点尺寸与内容外框 contentBounds（geometry.ts）。
+    codeRefs: [src/layout/layout.ts, src/layout/geometry.ts]
   - id: state.layout.runner.layered
     name: 分层总览排布
     parent: state.layout.runner
+    codeRefs: [src/layout/layered.ts]
     responsibility: 按层序自上而下分带，带内核心模块横向排开（含 +N 占位）；相邻层间的边画在带间空隙并横向错开，跨多层的边走右侧通道；核心跨层边画成曲线。
   - id: state.layout.runner.graph
     name: 普通层次排布
     parent: state.layout.runner
-    responsibility: 用 elkjs layered 算法排全部节点（内部模块、边界节点、参与者）与全部边：正交走线、标签内联；每条边两端各有固定朝向的端口——内部节点上进下出（自左向右时左进右出），用户只朝下，边界节点与外部系统只朝上（L11）；elk 在 Worker 中运行；结果过于狭长时再试自左向右，取宽高比更接近画布者。
+    codeRefs: [src/layout/graph.ts]
+    responsibility: 用 elkjs layered 算法排全部节点（内部模块、边界节点、参与者）与全部边：正交走线、标签内联；每条边两端各有固定朝向的端口——内部节点上进下出（自左向右时左进右出），用户只朝下，边界节点与外部系统只朝上（L11）；elk 在浏览器的 Worker 中运行（无 Worker 环境用同步打包版）；结果过于狭长时再试自左向右，取宽高比更接近画布者。
   - id: state.layout.runner.boundaries
     name: 边界节点排布
     parent: state.layout.runner
-    responsibility: 边界节点、外部系统与时间层约束为最后一行、用户为第一行，最后一行的先后用位置提示按视图给出的层次顺序固定（L4，与时序图泳道一致）；边界边与参与者的边由 elk 正交绕行。有参与者时内部结构外画系统边界虚线框。分层总览中参与者另行排布：用户在带的上方，外部系统与时间在右侧通道之外，边画成曲线。
+    codeRefs: [src/layout/routes.ts]
+    responsibility: 边界节点、外部系统与时间层约束为最后一行、用户为第一行，最后一行的先后用位置提示按视图给出的层次顺序固定（L4，与时序图泳道一致）；边界边与参与者的边由 elk 正交绕行。有参与者时内部结构外画系统边界虚线框。分层总览中参与者另行排布：用户在带的上方，外部系统与时间在右侧通道之外，边画成曲线。手工走线与编码工具也在这里（routes.ts）：参与者排布 placeActors 与曲线 linkRoute、edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、isBoundaryEdge（L10），供排布与画布场景使用。
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.pipeline.loader
@@ -291,6 +293,7 @@ relations:
     payload: [ds.LevelView, ds.PositionedView]
     description: 视图变化后异步布局，用序号丢弃过期结果
   - {id: rel.ad.graph-boundaries, from: state.layout.runner.graph, to: state.layout.runner.boundaries, type: calls}
+  - {id: rel.ad.layered-boundaries, from: state.layout.runner.layered, to: state.layout.runner.boundaries, type: calls, description: placeActors、actorRoute、parallelOffsets：分层总览中参与者的位置与曲线、平行曲线错开}
   - {id: rel.ad.layout-types, from: state.layout.runner, to: model.types, type: depends, payload: [ds.LevelView]}
 
   # 接入层

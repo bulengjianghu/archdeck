@@ -121,8 +121,8 @@ describe('§6.10 架构治理验收', () => {
     await nextTick()
     expect(panel.text()).toContain('模块依赖')
 
-    // K5a：Layout 入口文件内的概念子模块之间的关系不判定，面板说明原因
-    desk.select({ kind: 'relation', id: 'rel.ad.graph-boundaries' })
+    // K5a：Projector 文件内的概念子模块之间的关系不判定，面板说明原因
+    desk.select({ kind: 'relation', id: 'rel.ad.overview-endpoints' })
     await flushPromises()
     await nextTick()
     expect(panel.text()).toContain('不判定：概念拆分，同文件')

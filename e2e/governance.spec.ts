@@ -16,8 +16,8 @@ test('开启代码事实：未证实的边标 ?，已证实的不标 ✓（K9、
   await expect(page.locator('.vue-flow__edge-text', { hasText: '✓' })).toHaveCount(0)
 })
 
-test('K5a：Layout 入口文件内概念子模块之间的关系，面板标「概念拆分，同文件」', async ({ page }) => {
-  await openDesk(page, '/p/h5p-arch-desk?level=state.layout.runner&sel=r:rel.ad.graph-boundaries')
+test('K5a：Projector 文件内概念子模块之间的关系，面板标「概念拆分，同文件」', async ({ page }) => {
+  await openDesk(page, '/p/h5p-arch-desk?level=model.projector&sel=r:rel.ad.overview-endpoints')
   await expect(page.locator('.panel')).toContainText('不判定：概念拆分，同文件')
 })
 
