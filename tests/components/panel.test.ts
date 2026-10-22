@@ -239,7 +239,7 @@ modules:
   - { id: infra.framework.sm.impl, parent: infra.framework.sm, name: SmImpl, responsibility: x, codeRefs: [src/sm/**] }
   - { id: infra.framework.pipeline.impl, parent: infra.framework.pipeline, name: PipeImpl, responsibility: x, codeRefs: [src/pipe/**] }
 `
-  async function relationPanel(deps: FileDep[]) {
+  async function relationPanel(deps: FileDep[], extra = '', rel = 'r6') {
     const source: SourceFetcher = {
       tree: async () => ({ status: 'local', root: '/repo', files: ['src/sm/a.ts', 'src/pipe/b.ts'], packages: {} }),
       file: async () => null,
@@ -247,8 +247,10 @@ modules:
       facts: async () => ({ deps: { deps, external: {}, parsed: 2 }, baseline: null, ledger: [] }),
     }
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
-    await router.push('/?level=infra.framework&sel=r:r6')
-    const desk = createDeskState(async () => ({ dir: 'model/test', files: [...sampleFiles(), { path: 'modules/zz-refs.yaml', text: REFS }] }), { source })
+    await router.push(`/?level=infra.framework&sel=r:${rel}`)
+    const desk = createDeskState(async () => ({ dir: 'model/test', files: [...sampleFiles(), { path: 'modules/zz-refs.yaml', text: REFS + extra }] }), {
+      source,
+    })
     desk.attachRouter(router)
     await desk.init()
     await flushPromises()
@@ -260,6 +262,12 @@ modules:
   it('运行时关系两端之间没有任何依赖：标红，提示按代码修正描述', async () => {
     const text = await relationPanel([])
     expect(text).toContain('两端之间在代码里没有任何依赖')
+  })
+
+  it('K5b：写了 via 的关系：面板标「不判定：经 HTTP」，头部有「经 HTTP」标记', async () => {
+    const text = await relationPanel([], 'relations:\n  - { id: r9, from: infra.framework.sm, to: infra.framework.pipeline, type: calls, via: http }\n', 'r9')
+    expect(text).toContain('不判定：经 HTTP')
+    expect(text).not.toContain('未证实')
   })
 
   it('运行时关系只有反向依赖：只标注「可能经端口或注入」', async () => {

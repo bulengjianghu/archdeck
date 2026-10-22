@@ -844,6 +844,7 @@ relations:
     from: app.timeshift.coordinator
     to: app.solution
     type: calls
+    via: inject
     mode: async
     interface: if.timeshift.coordinator.legPort
     description: createLeg / holdLeg / releaseLeg / switchLeg / ensureLiveLeg / revertLiveLeg / withdrawLeg 等换腿事务
@@ -909,6 +910,7 @@ relations:
     from: app.timeshift.live-recovery
     to: app.solution
     type: calls
+    via: inject
     mode: async
     interface: if.timeshift.coordinator.legPort
     description: 经协调器注入的腿端口：ensureLiveLeg 新建直播腿、revertLiveLeg 换回、失败或撤销时 withdrawLeg('primary')
@@ -934,6 +936,7 @@ relations:
     from: app.timeshift.seek-switch
     to: app.solution
     type: calls
+    via: inject
     mode: async
     interface: if.timeshift.coordinator.legPort
     description: 经协调器注入的腿端口：holdLeg('primary') 冻结、createLeg 建录制腿、seekSwitchLeg 换边、提交后 withdrawLeg('primary')；提交前失败撤录制腿、releaseLeg 放直播阀

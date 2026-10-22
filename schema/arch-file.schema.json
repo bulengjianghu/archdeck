@@ -317,6 +317,15 @@
             "async"
           ]
         },
+        "via": {
+          "enum": [
+            "http",
+            "hmr",
+            "inject",
+            "router",
+            "callback"
+          ]
+        },
         "interface": {
           "$ref": "#/definitions/id"
         },

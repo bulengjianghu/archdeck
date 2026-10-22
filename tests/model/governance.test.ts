@@ -206,6 +206,14 @@ describe('K5、K6 关系的证实', () => {
     expect(unconfirmedWarns(index.relations.get('rel.8')!, st('rel.8'))).toBe(false)
   })
 
+  it('K5b：写了 via 的关系不判定（同 K5a 的 skipped），不报警告、不进返工清单', () => {
+    const { index } = loadModel([...files(), { path: 'modules/z.yaml', text: 'relations: [{ id: rel.8, from: core.api, to: core.util, type: calls, via: inject }]' }])
+    const own = assignFiles(index, SRC, [])
+    const report = governanceReport(index, own, { files: SRC, packages: {} }, CODE, null)
+    expect(report.relations.get('rel.8')).toEqual({ status: 'skipped', deps: [], via: 'inject' })
+    expect(report.issues.some(i => i.code === 'fact.unconfirmed' && i.message.includes('rel.8'))).toBe(false)
+  })
+
   it('K6：祖先与后代之间的依赖（K4 不提升）也算两端有依赖——祖先的文件组装子模块（注入）', () => {
     const { index } = setup()
     const own = assignFiles(index, [...SRC, 'src/core/wire.ts'], [])

@@ -216,27 +216,29 @@ relations:
   - {id: rel.ad.system-design, from: present.panel.system, to: present.panel.design, type: depends, description: 设计版本根层先显示设计面板}
   - {id: rel.ad.design-content, from: present.panel.design, to: present.panel.content, type: depends}
   - {id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: depends}
-  - {id: rel.ad.version-shell, from: present.version, to: present.shell, type: calls, description: 切换版本即导航到对应路由，带上当前 level / sel}
+  - {id: rel.ad.version-shell, from: present.version, to: present.shell, type: calls, via: router, description: 切换版本即导航到对应路由，带上当前 level / sel}
 
   # 呈现 → 接入（HTTP 与变更通知；event 方向为订阅方 → 发布方）
   - id: rel.ad.list-fetch
     from: present.project-list
     to: access.model-source
     type: calls
+    via: http
     mode: async
     interface: if.source.endpoints
     payload: [ds.ProjectSummary]
     description: GET projects.json 取项目摘要列表
-  - {id: rel.ad.list-changed, from: present.project-list, to: access.model-source, type: event, mode: async, interface: if.source.endpoints, description: 任一项目描述变化后刷新摘要}
+  - {id: rel.ad.list-changed, from: present.project-list, to: access.model-source, type: event, via: hmr, mode: async, interface: if.source.endpoints, description: 任一项目描述变化后刷新摘要}
   - id: rel.ad.desk-fetch
     from: present.desk-view
     to: access.model-source
     type: calls
+    via: http
     mode: async
     interface: if.source.endpoints
     payload: [ds.ModelPayload]
     description: GET models/<项目>.json 取该项目全部 YAML 原文
-  - {id: rel.ad.desk-changed, from: present.desk-view, to: access.model-source, type: event, mode: async, interface: if.source.endpoints, description: 只响应本项目的 arch-model:changed，触发重新加载}
+  - {id: rel.ad.desk-changed, from: present.desk-view, to: access.model-source, type: event, via: hmr, mode: async, interface: if.source.endpoints, description: 只响应本项目的 arch-model:changed，触发重新加载}
 
   # 呈现 → 视图状态
   - {id: rel.ad.desk-create, from: present.desk-view, to: state.desk.loading, type: calls, interface: if.desk.createDeskState, description: 进入项目时创建并注入 DeskState，调用 init；变更通知时调用 reload}
@@ -269,7 +271,7 @@ relations:
   - {id: rel.ad.loading-baselines, from: state.desk.loading, to: state.desk.versions, type: dataflow, payload: [ds.ModelPayload], description: 设计版本的载荷附带设计信息与对比基线原文}
   - {id: rel.ad.versions-diff, from: state.desk.versions, to: model.diff, type: calls, interface: if.model.diffModels, payload: [ds.ModelDiff], description: 切换对比基线或重新加载时重算}
   - {id: rel.ad.loading-keep, from: state.desk.loading, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 加载完成 → dispatch(loaded / reloaded)，层次回退由转移规则决定}
-  - {id: rel.ad.url-actions, from: state.desk.url-sync, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 外部路由变化 → decode → dispatch}
+  - {id: rel.ad.url-actions, from: state.desk.url-sync, to: state.desk.actions, type: calls, via: callback, interface: if.desk.actions, description: 外部路由变化 → decode → dispatch}
   - {id: rel.ad.actions-url, from: state.desk.actions, to: state.desk.url-sync, type: dataflow, payload: [ds.ViewState], description: 状态改变后写地址（router.write），地址 = encode(状态)}
   - {id: rel.ad.actions-lca, from: state.transition.navigation, to: model.projector.hierarchy, type: calls, interface: if.model.lowestCommonAncestor, description: 定位关系用最近公共祖先}
   - id: rel.ad.projection-project

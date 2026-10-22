@@ -102,6 +102,11 @@ export function confirmRelations(
       out.set(r.id, { status: 'skipped', deps: [] })
       continue
     }
+    // K5b：经 HTTP、HMR、注入、路由或回调传递的关系，静态导入证实不了
+    if (r.via) {
+      out.set(r.id, { status: 'skipped', deps: [], via: r.via })
+      continue
+    }
     const host = hostOf(index, direct, r.from)
     if (host && host === hostOf(index, direct, r.to)) {
       out.set(r.id, { status: 'skipped', deps: [], host })

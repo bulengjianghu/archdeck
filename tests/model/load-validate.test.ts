@@ -39,6 +39,15 @@ describe('load', () => {
     expect(model.modules.some(m => m.id === 'x')).toBe(false)
   })
 
+  it('K5b：关系的 via 只收枚举值（http / hmr / inject / router / callback），其余为格式错误', () => {
+    const ok = load(sampleFiles({ 'v.yaml': 'relations:\n  - { id: rv, from: infra.framework.sm, to: infra.framework.pipeline, type: calls, via: http }\n' }))
+    expect(ok.issues).toEqual([])
+    expect(ok.model.relations.find(r => r.id === 'rv')!.via).toBe('http')
+    const bad = load(sampleFiles({ 'v.yaml': 'relations:\n  - { id: rv, from: infra.framework.sm, to: infra.framework.pipeline, type: calls, via: socket }\n' }))
+    expect(bad.issues.find(i => i.code === 'schema')).toMatchObject({ file: 'v.yaml' })
+    expect(bad.model.relations.some(r => r.id === 'rv')).toBe(false)
+  })
+
   it('system 重复声明报错；未声明时使用默认根并提醒', () => {
     expect(codes(load(sampleFiles({ 'dup.yaml': 'system: { id: other, name: O }' })).issues)).toContain('duplicate-system')
     const { model, issues } = load([{ path: 'a.yaml', text: 'module: { id: a, name: A, responsibility: x }' }])

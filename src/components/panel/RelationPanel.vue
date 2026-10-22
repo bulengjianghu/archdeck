@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
-import { moduleName } from '@/model'
+import { VIA_LABELS, moduleName } from '@/model'
 import Markdown from './Markdown.vue'
 import Section from './Section.vue'
 import InterfaceItem from './InterfaceItem.vue'
@@ -37,6 +37,7 @@ const visibleHere = computed(() => desk.view.value?.edges.some(e => e.relationId
         <code>{{ r.id }}</code>
         <span class="rel-chip" :class="`rel-${r.type}`">{{ TYPE[r.type] }}</span>
         <span class="badge">{{ r.mode === 'async' ? '异步' : '同步' }}</span>
+        <span v-if="r.via" class="badge" title="经此传递，静态导入证实不了（K5b）">经 {{ VIA_LABELS[r.via] }}</span>
         <button v-if="!visibleHere" class="small" @click="desk.revealRelation(r.id)">定位到所在层次</button>
         <ChangeBadge entity="relation" :id="r.id" detail />
       </div>

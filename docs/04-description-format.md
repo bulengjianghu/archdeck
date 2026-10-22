@@ -191,6 +191,15 @@ scenario:
 - 端点写在能表达清楚的**最深模块**上，上层自动聚合；跨区域时对端只写对方的第二级模块 ID，不猜更深的 ID。
 - 不连祖先与后代，不为「包含」建关系（M6）。
 - 异步（Worker postMessage、事件、定时器回调）标 `mode: async`；有明确接口填 `interface`，有明确载荷填 `payload`。
+- `via`（K5b）：只在两端之间**确实不可能有导入**时写——跨进程、经框架注入或路由、经组装者注入的回调；写了即不判定证实，`lint:model` 不再为它报 `fact.unconfirmed`。取值 `http` / `hmr` / `inject` / `router` / `callback`。拿不准的不写，留给 `fact.unconfirmed` 提醒去核对。本项目的例子：
+
+  | 关系 | `via` | 为什么导入证实不了 |
+  |---|---|---|
+  | `rel.ad.desk-fetch`、`rel.ad.list-fetch`、`rel.p7.desk-source-fetch`（页面 → ModelSource 插件） | `http` | 浏览器经 HTTP 请求开发服务器，两端不在一个进程 |
+  | `rel.ad.desk-changed`、`rel.ad.list-changed`（页面订阅描述变化） | `hmr` | 开发服务器经 HMR 推送 `arch-model:changed` |
+  | `rel.ad.version-shell`（版本切换 → 应用外壳） | `router` | 经 vue-router 导航，路由表在外壳里 |
+  | `rel.p7.file-preview`（文件面板 → 项目视图） | `inject` | 经共用件的注入键 provide / inject |
+  | `rel.ad.url-actions`（路由同步 → dispatch） | `callback` | 协调者把 `query => dispatch(…)` 回调交给路由同步 |
 
 ### 3.5 外部参与者
 
@@ -267,7 +276,7 @@ npm run lint:model
 
 - 必须 0 个错误；提醒逐条处理：缺职责要补；引用其他区域尚未定义的接口 / 数据结构时可暂留；源码归属警告按 §3.7 处理。
 - 按代码重新生成当前版本后，更新 `system.yaml` 的 `source.commit` 与 `source.generatedAt`。
-- `lint:model` 一并检查代码事实与架构规则（K、U、Y）：基线之外的新增违规（`rule.new`）、环度上升（`cycle.grew`）是错误，要么修代码，要么由架构师裁决后改规则；`fact.unconfirmed` 提醒说明描述里的编译期关系在代码里找不到，或运行时关系的两端之间在代码里没有任何依赖（K6），按代码修正描述——运行时交互经由第三个模块转交时，关系写在实际调用的两端之间（如 `entry → validator`，而不是 `loader → validator`）；未描述依赖只计有值导入的（K7），只引类型的不必补关系，名称查询、标签常量这类到处用的值依赖写在能表达清楚的最高层（如 `present → model.pipeline.indexer`）。
+- `lint:model` 一并检查代码事实与架构规则（K、U、Y）：基线之外的新增违规（`rule.new`）、环度上升（`cycle.grew`）是错误，要么修代码，要么由架构师裁决后改规则；`fact.unconfirmed` 提醒说明描述里的编译期关系在代码里找不到，或运行时关系的两端之间在代码里没有任何依赖（K6），按代码修正描述（确实经 HTTP、注入、路由或回调传递的写 `via`，K5b）——运行时交互经由第三个模块转交时，关系写在实际调用的两端之间（如 `entry → validator`，而不是 `loader → validator`）；未描述依赖只计有值导入的（K7），只引类型的不必补关系，名称查询、标签常量这类到处用的值依赖写在能表达清楚的最高层（如 `present → model.pipeline.indexer`）。
 - 基线由人生成并提交：
 
 ```bash

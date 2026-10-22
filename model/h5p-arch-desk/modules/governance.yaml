@@ -29,7 +29,7 @@ modules:
   - id: model.governance.facts
     name: 事实比对
     parent: model.governance
-    responsibility: 文件依赖按归属提升为模块依赖（一端是归属冲突文件的不提升、单独列出，祖先后代之间的另记，K4）；关系的证实（端点相同或互为祖先后代，dataflow 两向，K5；两端宿主相同的概念拆分不判定，K5a）；未证实是否报警（编译期关系，或两端之间没有任何依赖的运行时关系，K6）；未描述依赖（只计有值导入的，K7）。
+    responsibility: 文件依赖按归属提升为模块依赖（一端是归属冲突文件的不提升、单独列出，祖先后代之间的另记，K4）；关系的证实（端点相同或互为祖先后代，dataflow 两向，K5；两端宿主相同的概念拆分不判定，K5a；写了 via 的不判定，K5b）；未证实是否报警（编译期关系，或两端之间没有任何依赖的运行时关系，K6）；未描述依赖（只计有值导入的，K7）。
     codeRefs: [src/model/governance/facts.ts]
   - id: model.governance.rules
     name: 规则判定

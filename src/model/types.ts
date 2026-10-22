@@ -11,6 +11,10 @@
 export type RelationType = 'depends' | 'calls' | 'dataflow' | 'event' | 'implements'
 export const RELATION_TYPES: readonly RelationType[] = ['depends', 'calls', 'dataflow', 'event', 'implements']
 /** 运行时关系（§1.1）：步骤只对应这三类（S12）；画布上饱和、编译期两类降权（L10） */
+/** 关系经由什么传递、静态导入在原理上证实不了（K5b） */
+export type RelationVia = 'http' | 'hmr' | 'inject' | 'router' | 'callback'
+export const RELATION_VIAS: readonly RelationVia[] = ['http', 'hmr', 'inject', 'router', 'callback']
+
 export const RUNTIME_RELATION_TYPES: readonly RelationType[] = ['calls', 'dataflow', 'event']
 
 export type ModuleStatus = 'current' | 'target' | 'deprecated'
@@ -64,6 +68,8 @@ export interface RelationDef {
   to: string
   type: RelationType
   mode?: 'sync' | 'async'
+  /** K5b：经此传递，静态导入在原理上证实不了；有它的关系不判定 */
+  via?: RelationVia
   interface?: string
   payload?: string | string[]
   description?: string

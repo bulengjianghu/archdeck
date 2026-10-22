@@ -2,7 +2,7 @@
  * 架构治理的数据类型（docs/architecture/governance.md §4.1）：接入层产出的文件依赖、基线与拦截记录，模型层产出的比对、违规与环。
  * 路径一律相对源码根目录、以 `/` 分隔。
  */
-import type { Issue, RuleKind } from '../types'
+import type { Issue, RelationVia, RuleKind } from '../types'
 
 export type DepKind = 'value' | 'type'
 
@@ -98,6 +98,8 @@ export interface Confirmation {
   deps: string[]
   /** 两端宿主相同（概念拆分，同文件）而不判定时，为共同的宿主模块 */
   host?: string
+  /** 关系写了 via（K5b）而不判定时，为经由的方式 */
+  via?: RelationVia
   /** 未证实且两端之间（含祖先后代）没有任何模块依赖，两个方向、值与类型都没有（K6） */
   isolated?: boolean
 }

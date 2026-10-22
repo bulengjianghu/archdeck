@@ -55,7 +55,7 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 | 函数 | 做什么 | 规则 |
 |---|---|---|
 | `liftDeps(index, own, deps)` | 文件依赖两端取归属模块，去掉同模块与祖先后代，按 `A->B` 合并为 `ModuleDep`；一端未归属或已忽略的计入 `skipped`，一端是归属冲突文件的不提升、列入 `conflicted`；另记祖先与后代之间的模块对 `nested`（K6 判定两端有无依赖用）；返回 `{ moduleDeps, skipped, conflicted, nested }` | K4 |
-| `hostOf(index, direct, id)` · `confirmRelations(index, moduleDeps, direct)` | 宿主：自身或最近的、有直接归属文件的祖先。每条关系：端点有参与者或目标态 → `skipped`；两端宿主相同 → `skipped` 并带 `host`（概念拆分，同文件，面板说明）；有 `from` 子树 → `to` 子树的模块依赖（`dataflow` 两向）→ `confirmed`，带依据的模块依赖键；否则 `unconfirmed`，两端之间（模块依赖与 K4 未提升的祖先后代依赖 `nested`，不论方向）没有任何依赖时带 `isolated`。`unconfirmedWarns(r, c)`：编译期关系未证实、或运行时关系 `isolated` 时报 `fact.unconfirmed`；`unconfirmedReason(r)` 给问题、返工项共用的说明 | K5、K5a、K6 |
+| `hostOf(index, direct, id)` · `confirmRelations(index, moduleDeps, direct)` | 宿主：自身或最近的、有直接归属文件的祖先。每条关系：端点有参与者或目标态 → `skipped`；写了 `via` → `skipped` 并带 `via`（K5b，面板标「不判定：经 …」）；两端宿主相同 → `skipped` 并带 `host`（概念拆分，同文件，面板说明）；有 `from` 子树 → `to` 子树的模块依赖（`dataflow` 两向）→ `confirmed`，带依据的模块依赖键；否则 `unconfirmed`，两端之间（模块依赖与 K4 未提升的祖先后代依赖 `nested`，不论方向）没有任何依赖时带 `isolated`。`unconfirmedWarns(r, c)`：编译期关系未证实、或运行时关系 `isolated` 时报 `fact.unconfirmed`；`unconfirmedReason(r)` 给问题、返工项共用的说明 | K5、K5a、K6 |
 | `undescribedDeps(index, moduleDeps)` | 含 `value` 文件依赖、且没有关系覆盖的模块依赖（端点相同或互为祖先后代、方向一致，`dataflow` 不论方向）；只引类型的不算 | K7 |
 | `judge(index, rules, entryOf, dep)` | 一条（依赖方模块，被依赖方模块，经由文件及其归属）对全部规则的判定：层规则、白名单、访问面，返回命中的 `{ kind, at, reason }` 与是否有规则约束；`allow` 匹配的标为已豁免 | U2–U5 |
 | `evaluateRules(index, own, moduleDeps, entryOf)` | 对每条模块依赖的每条文件证据 `judge`，按 `<种类>:<规则所在>:<A>-><B>` 合并为 `Violation` | U6 |
