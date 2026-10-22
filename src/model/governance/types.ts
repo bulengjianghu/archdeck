@@ -198,3 +198,22 @@ export interface PortTriad {
   implementers: PortParty[]
   users: PortParty[]
 }
+
+/** 步骤的证据等级（S16）：按名字匹配 / 按模块依赖 / 无证据 / 不判定 */
+export type EvidenceLevel = 'name' | 'module' | 'none' | 'skipped'
+export const EVIDENCE_LEVELS: readonly EvidenceLevel[] = ['name', 'module', 'none', 'skipped']
+
+/** 不判定的原因：一端是参与者 / 关系写了 via / 一端是目标态 / 两端文件相同（同一模块或同一宿主） */
+export type EvidenceSkip = 'actor' | 'via' | 'target' | 'host'
+
+/** 一步消息的代码证据（S16）：candidates 为候选调用点（依赖方文件:行），name 为用来匹配的接口名 */
+export type StepEvidence =
+  | { level: 'name' | 'module'; name?: string; candidates: FileDep[]; total: number }
+  | { level: 'none'; name?: string }
+  | { level: 'skipped'; reason: EvidenceSkip; via?: RelationVia; host?: string }
+
+/** 场景的证据汇总：回放计划每一帧的证据与各等级的帧数 */
+export interface ScenarioEvidence {
+  frames: Map<string, StepEvidence>
+  counts: Record<EvidenceLevel, number>
+}

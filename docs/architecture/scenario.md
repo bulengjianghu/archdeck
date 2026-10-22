@@ -222,7 +222,7 @@ layoutSequence(model: SequenceModel, structure?: PositionedView): PositionedSequ
 | 步骤 | 做什么 |
 |---|---|
 | 1. 不判定 | 一端是参与者 → `actor`；绑定的关系写了 `via` → `via`（同 K5b）；一端或其祖先是目标态 → `target`；两端文件相同（同一模块或同一宿主，K5a）→ `host` |
-| 2. 两端文件 | 模块子树的归属文件（`moduleFiles`，G4）；子树没有文件时取宿主的直接归属文件 |
+| 2. 两端文件 | 模块子树的归属文件（`moduleFiles`，G4），加上它在两端最近公共祖先之下的各级祖先的直接归属文件（如 `state.desk.actions` 取 DeskState 的 `useDeskState.ts`、`inject.ts`，`state.transition.playback` 取 `transition/index.ts`）；都没有时取宿主的直接归属文件 |
 | 3. 方向 | `call` / `async`：发送方文件 → 接收方文件；`return`：接收方文件 → 发送方文件；绑定关系是 `notifies` / `streams` 时两个方向都算 |
 | 4. 候选 | 依赖方在一侧、目标在另一侧的文件依赖；经由文件是目标侧模块的入口文件（G10，`entryOf`）的也算 |
 | 5. 接口名 | 帧的接口（含 S14 继承的）的 `name` 去掉括号与泛型后是标识符时用它，否则取接口 ID 的最后一段 |

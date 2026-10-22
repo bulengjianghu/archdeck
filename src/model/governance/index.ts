@@ -11,3 +11,4 @@ export type { ModuleBrief, ModuleDetail, FileStatus, CheckTarget, CheckResult, P
 export { portTriad } from './ports'
 export { summarizeLedger } from './ledger'
 export type { LedgerSummary } from './ledger'
+export { stepEvidence, scenarioEvidence, interfaceName, EVIDENCE_LIMIT } from './evidence'
