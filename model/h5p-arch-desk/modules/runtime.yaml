@@ -132,7 +132,7 @@ modules:
   - id: state.layout.canvas
     name: 画布场景
     parent: state.layout
-    responsibility: 把带坐标的层次视图换成画布要画的节点与边（canvasScene，ADR-0013）：位置、类型、数据与类名、层级，以及运行视角下适应画布用的可见节点；框：根层只画系统框，下钻后外框为系统、内框为当前父模块，边界节点在两框之间（两框重合时外框外扩，A7、L4）；要标 ×N 或 ? 而走线没有标签位置时取走线中点（routeMidpoint）。边的层级：与聚焦对象相邻、选中、回放经过的边浮在节点之上（EDGE_Z）。框外边：先对当前画出来的这组调用 outsideRoutes 分配轨道，边与运行视角的步骤序号、分支预览都用分配后的走线。跳线：对画出来的折线关系边调用 routing 的 jumpsOf，交叉处的水平段标跳点（L11）。结构视角：聚焦对象（悬停优先、其次选中）不相邻的节点与边变淡，分层总览中带不参与变淡；核心跨层边只在聚焦核心模块、被选中或回放落在其上时出现（O4、P7）；边界边只在聚焦其一端、被选中或回放经过时出现（L4）。运行视角：按舞台显示（stageDisplay）决定显隐与淡化（V5、V8、V9、V10）；回放叠加——当前消息的边带方向流动、端点节点为活动态、走过的边标步骤序号、临时线（经由上层关系取关系的类型色画虚线、标「经由上层」、随关系选中，P15；未建模画红色虚线，P11）、分支预览（P7、P10、P11、F6）；选中步骤时其余走过的边与步骤序号变灰（R15、R16）。边的视觉通道（L10）：线型取事实状态（结构视角开启代码事实时未证实为虚线并标 ?，已证实不标，K9）、箭头取同步 / 异步 / implements、线宽档取条数、编译期降权，标签只有 ×N 与异常；选中不改线宽。选中文件时投影节点加文件高亮（G14）；设计版本标出新增 / 修改与涉及变更数。
+    responsibility: 把带坐标的层次视图换成画布要画的节点与边（canvasScene，ADR-0013）：位置、类型、数据与类名、层级，以及运行视角下适应画布用的可见节点；框：根层只画系统框，下钻后外框为系统、内框为当前父模块，边界节点在两框之间（两框重合时外框外扩，A7、L4）；要标 ×N 或 ? 而走线没有标签位置时取走线中点（routeMidpoint）。边的层级：与聚焦对象相邻、选中、回放经过的边浮在节点之上（EDGE_Z）。框外边：先对当前画出来的这组调用 outsideRoutes 分配轨道，边与运行视角的步骤序号、分支预览都用分配后的走线。跳线：对画出来的折线关系边调用 routing 的 jumpsOf，交叉处的水平段标跳点（L11）。结构视角：聚焦对象（悬停优先、其次选中）不相邻的节点与边变淡，分层总览中带不参与变淡；核心跨层边只在聚焦核心模块、被选中或回放落在其上时出现（O4、P7）；边界边只在聚焦其一端、被选中或回放经过时出现（L4）。运行视角：按舞台显示（stageDisplay）决定显隐与淡化（V5、V8、V9、V10）；回放叠加——当前消息的边带方向流动、端点节点为活动态、走过的边标步骤序号、临时线（经由上层关系取关系的类型色画虚线、标「经由上层」、随关系选中，P15；未建模画红色虚线，P11）、分支预览（P7、P10、P11、F6）；选中步骤时其余走过的边与步骤序号变灰（R15、R16）。边的视觉通道（L10）：线型取事实状态（结构视角开启代码事实时未证实为虚线并标 ?，已证实不标，K9）、箭头取同步 / 异步 / implements、线宽档取条数、编译期降权，标签只有 ×N 与异常；选中不改线宽。选中文件时投影节点加文件高亮（G14）；设计版本标出新增 / 修改与涉及变更数。编辑态（X7，canvas/edit.ts）：给出编辑落点——分层总览中带之间与末尾的插入条、带内与父模块框内的「+ 模块」（insert 伪节点）；模块、核心模块小块与带可拖动、可连线；不改节点与边的显隐规则。
     principle: 纯函数，与 stageOverlay、stageDisplay 对称：呈现层只按结果写入 Vue Flow，不自己判断显隐、变淡与回放态；节点与边的数据类型（NodeData、RouteEdgeData）因此归 Layout。
     codeRefs: [src/layout/canvas.ts, src/layout/canvas/**]
 
@@ -416,7 +416,8 @@ interfaces:
     signature: |
       canvasScene(input: CanvasInput): CanvasScene
       // CanvasInput: { positioned; index; selection; hover; stage: StageOverlay | null; scenarioView; emphasis: { selected; paired } | null;
-      //                participants; mode: 'hide' | 'dim' | 'show'; reveal: string[]; diff: ModelDiff | null; fileHits: Set<string> | null; branchPointId }
+      //                participants; mode: 'hide' | 'dim' | 'show'; reveal: string[]; diff: ModelDiff | null; fileHits: Set<string> | null; branchPointId;
+      //                editing?: boolean }   // 编辑态：加插入条与「+ 模块」，模块与带可拖动、可连线（X7）
     semantics: 纯函数（ADR-0013）；结构视角的聚焦变淡与边的显隐、运行视角的舞台显示与回放叠加、选中步骤时的灰化（R15、R16）、文件高亮（G14）、设计版本标记都在这里算。
   - id: if.layout.stageDisplay
     name: stageDisplay
@@ -615,6 +616,7 @@ dataStructures:
         hover: string | null
         toggles: Toggles                  // 边界节点、只看现状、关系类型、标出变更、对比基线
         playback: PlaybackState | null    // null = 结构视角；非 null = 运行视角（V1）
+        editing?: SketchTarget | null     // 编辑态（X7a）：正在编辑的草图；与 playback 互斥，不进 URL
       }
       // 选中（V2、V7）= selection ≠ null ? selection : 运行视角下进度所在的步骤（frameId 为空时为场景）
     description: 视图状态：用户此刻在看什么，一个值（C+）。由 DeskState 持有，只经 transition 改变；视角与选中由它推出，不另存字段（ADR-0012）。
@@ -638,6 +640,8 @@ dataStructures:
         | { type: 'openScenario'; id } | { type: 'closeScenario' }
         | { type: 'next' } | { type: 'prev' } | { type: 'seek'; frameId: string | null }   // null = 回到开头
         | { type: 'chooseBranch'; pointId; option }
+        | { type: 'enterEdit'; target: SketchTarget } | { type: 'exitEdit' }
+        | { type: 'edited'; effects: EditEffects; previousPath }          // 编辑的影响：层次与选中跟随改名与删除（X7h）
     description: 用户意图与外界变化统一成动作，经 dispatch 交给 transition。
   - id: ds.Participation
     name: Participation

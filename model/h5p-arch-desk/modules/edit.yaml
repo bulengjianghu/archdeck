@@ -264,13 +264,13 @@ relations:
   # ── 视图状态层：编辑中的草图 ──
   - {id: rel.ed.commands-session, from: state.desk.edit.commands, to: state.desk.edit.session, type: calls, interface: if.desk.editSession, description: apply / undo / redo / replay / discard / reloaded}
   - {id: rel.ed.commands-mode, from: state.desk.edit.commands, to: state.transition.edit, type: calls, interface: if.state.editMode, description: leaveGuard：离开前是否要确认}
-  - {id: rel.ed.commands-dispatch, from: state.desk.edit.commands, to: state.desk.actions, type: calls, interface: if.desk.actions, description: dispatch(enterEdit / exitEdit / edited)}
+  - {id: rel.ed.commands-dispatch, from: state.desk.edit.commands, to: state.desk.actions, type: calls, via: callback, interface: if.desk.actions, description: dispatch(enterEdit / exitEdit / edited)}
   - {id: rel.ed.commands-save, from: state.desk.edit.commands, to: state.desk.edit.save, type: calls, description: save / createDesign 交给写回同步}
   - {id: rel.ed.commands-derive, from: state.desk.edit.commands, to: state.desk.edit.derive, type: calls, description: draftIndex、editContext：编辑后的索引与上下文}
   - {id: rel.ed.save-session, from: state.desk.edit.save, to: state.desk.edit.session, type: calls, interface: if.desk.editSession, description: 写入结果 → saved / 已过时}
   - {id: rel.ed.save-writer-port, from: state.desk.edit.save, to: state.desk.writer, type: depends, description: 注入的 ModelWriter（同一个 HTTP 写入来源，含 saveSketch / createDesign）}
   - {id: rel.ed.derive-session, from: state.desk.edit.derive, to: state.desk.edit.session, type: calls, description: isDirty}
-  - {id: rel.ed.loading-edit, from: state.desk.loading, to: state.desk.edit.commands, type: calls, description: 重新加载后 onReloaded：认出刚保存的或标为已过时，给出要显示的索引}
+  - {id: rel.ed.reload-edit, from: state.desk.actions, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: 重新加载后 onReloaded：认出刚保存的或标为已过时，给出要显示的索引（编辑态下为草图的索引）}
   - {id: rel.ed.session-apply, from: state.desk.edit.session, to: model.intent.edit, type: calls, interface: if.intent.applyEdit, description: 应用一个编辑操作得到新草图与影响}
   - {id: rel.ed.commands-preview, from: state.desk.edit.commands, to: model.intent.edit, type: calls, interface: if.intent.idImpact, description: previewMove；seedSketch：新建设计的底稿}
   - {id: rel.ed.commands-load, from: state.desk.edit.commands, to: model.pipeline.loader, type: calls, description: 从载荷原文读出草图定义}
@@ -280,6 +280,8 @@ relations:
   - {id: rel.ed.derive-diff, from: state.desk.edit.derive, to: model.diff, type: calls, interface: if.model.diffModels, description: 未保存改动（L-2）与晋升预览（L-4）}
   - {id: rel.ed.derive-edit, from: state.desk.edit.derive, to: model.intent.edit, type: calls, description: sketchText：草图交给加载流水线}
   # ── 接入层：草图写回 ──
+  - {id: rel.ed.sketch-types, from: access.writer.sketch, to: model.types, type: depends, description: 草图目标与校验结果的类型（SketchTarget、SketchValidation）}
+  - {id: rel.ed.commands-check, from: state.desk.edit.commands, to: model.intent.check, type: depends, description: sketchLifetime：新建设计时找到持久的骨架}
   - id: rel.ed.save-writer
     from: state.desk.edit.save
     to: access.writer.sketch
@@ -380,3 +382,109 @@ interfaces:
       leaveGuard(dirty: boolean): 'free' | 'confirm'
       isEditing(state: ViewState): boolean
     semantics: 纯函数（X7a、X7h）；编辑态下 openScenario、选中文件、打开代码事实与演化叠加为无效动作，返回原状态。
+
+dataStructures:
+  - id: ds.SketchDef
+    name: SketchDef
+    definition: |
+      interface SketchDef {
+        id: string
+        lifetime?: 'persistent' | 'until-implemented'
+        closed?: string[]
+        supersedes?: string
+        modules?: ModuleDef[]          // 可嵌套 children，也可平铺写 parent
+        relations?: RelationDef[]
+        interfaces?: InterfaceDef[]
+        dataStructures?: DataStructureDef[]
+      }
+    description: 草图定义（已在 src/model/types.ts）；编辑中的草图就是这样一个值。
+  - id: ds.EditOp
+    name: EditOp
+    definition: |
+      type EditOp =
+        | { op: 'addLayer'; name: string; id?: string; at: number }            // at：插入位置（第几条带之前）
+        | { op: 'reorderLayer'; id: string; to: number }
+        | { op: 'setMayDependOn'; id: string; layers: string[] }
+        | { op: 'addModule'; parent: string; name: string; id?: string; kind?: ModuleKind }
+        | { op: 'updateModule'; id: string; patch: ModulePatch }                // name / responsibility / kind / codeRefs / abstraction / includes / excludes / core
+        | { op: 'setClosed'; id: string; closed: boolean }
+        | { op: 'moveModule'; id: string; parent: string; newId?: string }    // 缺省新 ID = 新父 ID + 原短名
+        | { op: 'renameModule'; id: string; newId: string }                   // = 父不变的 moveModule（只改短名），原地改写，同一级联与确认
+        | { op: 'removeModule'; id: string }                                   // 层也用它
+        | { op: 'connect'; from: string; to: string; type: RelationType; description?: string; interface?: string }
+        | { op: 'updateRelation'; id: string; patch: { type?; description?; interface? } }
+        | { op: 'removeRelation'; id: string }
+        | { op: 'addInterface'; owner: string; name: string; signature?: string }
+        | { op: 'updateInterface'; id: string; patch: { name?; signature? } }
+        | { op: 'removeInterface'; id: string }
+        | { op: 'setMeta'; patch: { lifetime?: SketchLifetime; supersedes?: string | null } }
+    description: 一个编辑操作 = 一次用户意图 = 撤销栈的一步。可序列化，stale 后可重放。
+  - id: ds.EditResult
+    name: EditResult
+    definition: |
+      type EditResult =
+        | { ok: true; sketch: SketchDef; effects: EditEffects }
+        | { ok: false; code: 'not-found' | 'id-taken' | 'id-prefix' | 'id-format' | 'duplicate-relation' | 'ancestor' | 'persistent' | 'invalid'; reason: string }
+      interface EditEffects {
+        created: string[]                   // 新建的模块 / 关系 / 接口 ID
+        renamed: [from: string, to: string][]   // 移动与改 ID 的级联（含后代）
+        removed: string[]                   // 级联删除的全部 ID
+      }
+    description: applyEdit 的结果；effects 供选中跟随（state.transition.edit.follow）与二次确认的提示。
+  - id: ds.IdImpact
+    name: IdImpact
+    definition: |
+      interface IdImpact {
+        renamed: [from: string, to: string][]        // 草图内改写的模块 ID（自身与后代）
+        references: number                           // 草图内改写的引用条数（关系两端、接口 owner、closed、mayDependOn）
+        outside: { modules: number; relations: number; interfaces: number; messages: number }   // 当前版本里仍引用旧 ID 的（AI 生成）
+        rejected?: string                            // 不能移动的原因（如设计草图移动持久草图的模块）
+      }
+    description: 移动前的影响预览，「移动会改 ID」确认框的内容（C-5）。
+  - id: ds.EditSession
+    name: EditSession
+    definition: |
+      interface EditSession {
+        target: SketchTarget                                  // { kind: 'design'; design } | { kind: 'persistent'; id }
+        file: string                                          // 草图在载荷里的路径（设计的草图为 sketch.yaml）
+        base: { sketch: SketchDef; hash: string }             // 读取时（或上次保存后）的草图与文件指纹
+        draft: SketchDef                                      // 编辑中的草图
+        past: { op: EditOp; before: SketchDef; after: SketchDef; effects: EditEffects }[]   // 撤销栈（深度上限 200）
+        future: { op: EditOp; before: SketchDef; after: SketchDef; effects: EditEffects }[] // 重做栈
+        stale: boolean                                        // 文件已在外部改动（重新加载时指纹不同，或保存被拒绝）
+      }
+      // 脏 = draft 与 base.sketch 不同（推出，不存）
+    description: 编辑中的草图连同撤销栈与读取时的指纹，一个值，由 DeskState 的编辑分组持有。
+  - id: ds.SketchValidation
+    name: SketchValidation
+    definition: |
+      interface SketchValidation {
+        ok: boolean                                           // 没有 error
+        issues: {
+          severity: 'error' | 'warning'
+          code: 'sketch.schema' | 'sketch.id' | 'sketch.id-dup' | 'sketch.id-prefix' | 'sketch.ref' | 'sketch.ancestor'
+              | 'sketch.layer-cycle' | 'sketch.contradiction' | 'sketch.empty'   // empty：warning，模块没写职责
+          message: string
+          target: { module?: string; relation?: string; interface?: string }   // 定位到实体（P-6）
+          path?: string                                       // 草图里的位置，如 modules[2].children[0]
+        }[]
+      }
+    description: 草图本身的校验结果（能不能保存）；与核验的偏差（SketchCheck）是两回事。
+  - id: ds.SaveSketchRequest
+    name: SaveSketchRequest
+    definition: |
+      interface SaveSketchRequest {
+        target: { kind: 'persistent'; id: string } | { kind: 'design'; design: string }
+        sketch: SketchDef
+        baseHash: string                                      // 读取时的文件指纹（SHA-1，与 owned.json 同一算法）
+      }
+    description: 草图整份写回的请求正文（JSON）。
+  - id: ds.SketchCheck
+    name: SketchCheck
+    definition: |
+      interface SketchCheck {
+        sketch: string; design?: string; lifetime: 'persistent' | 'until-implemented'; supersedes?: string
+        deviations: SketchDeviation[]        // 稳定键 <种类>:<实体 ID>，已认可的降为 info
+        counts: { error: number; warning: number; info: number }
+      }
+    description: 一张草图对一个版本的核验结果（X4，已在 src/model/intent/types.ts）；编辑态下对当前版本实时算，面板显示「实现后将有 N 处偏差」（L-1）。

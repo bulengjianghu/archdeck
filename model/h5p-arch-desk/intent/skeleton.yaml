@@ -152,7 +152,7 @@ sketch:
         - id: access.writer
           name: 描述写入
           kind: subsystem
-          responsibility: 只追加人拥有的三类内容（B1–B5，ADR-0019）：设计某一轮的评审意见（design.yaml feedback）、架构规则的例外（rules.yaml 的 rules.allow，两端须为存在的模块、理由必填）、源码忽略项（source-ignore.yaml）；AI 生成的 modules/、scenarios/、system.yaml 不写；用 YAML 文档模型修改，保留注释与其他内容。端点由 ModelSource 插件挂载，只收同源的 JSON POST。
+          responsibility: 人拥有文件的写入（B1–B6，ADR-0019、ADR-0023、ADR-0024）：只追加——设计某一轮的评审意见（design.yaml feedback，该轮没有条目时新建）、架构规则的例外（rules.yaml 的 rules.allow，两端须为存在的模块、理由必填）、源码忽略项（source-ignore.yaml）、确认记录（reviewed.yaml，同一模块更新那一条）、认可偏差（design.yaml accepted）；归档 / 晋升（改设计状态、晋升时整份替换持久草图）；草图整份写回与新建设计（比对读取时的指纹、写前校验、未改动的节点保留注释）。写后更新指纹（X6）；AI 生成的 modules/、scenarios/、system.yaml 不写；用 YAML 文档模型修改。端点由 ModelSource 插件挂载，只收同源的 JSON POST。
         - id: access.source
           name: 源码读取
           kind: subsystem

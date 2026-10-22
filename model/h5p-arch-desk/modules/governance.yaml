@@ -268,3 +268,36 @@ relations:
   - {id: rel.gv.store-reader, from: access.governance-store, to: access.reader, type: depends, description: GOVERNANCE_DIR：治理产物目录名与描述读取共用（读取时跳过）}
   - {id: rel.gv.dep-content, from: present.panel.dep, to: present.panel.content, type: depends, description: 复用 Section}
   - {id: rel.gv.panel-content, from: present.panel.governance, to: present.panel.content, type: depends, description: 复用 Section}
+  # 按代码补齐（K7，2026-10-23 重新生成）
+  - {id: rel.gv.evolution-types, from: model.evolution, to: model.types, type: depends, description: evolution/types.ts 的契约：缺省窗口、阈值与类型}
+  - {id: rel.gv.review-types, from: model.review, to: model.types, type: depends, description: review/types.ts 的契约：确认状态与记录的类型}
+  - {id: rel.gv.rework-review, from: model.rework, to: model.review, type: depends, description: reviewStates、reviewCounts、需复核的摘要文字（Z3、Z5）}
+  - {id: rel.gv.rework-evolution, from: model.rework, to: model.evolution, type: depends, description: isolatedCouplings：无依赖无关系的耦合对（J6）}
+  - {id: rel.gv.agent-check, from: access.agent, to: model.intent.check, type: depends, description: checkSketches、compareOwned：sketch-check 与指纹比对（X4、X6）}
+  - {id: rel.gv.agent-append, from: access.agent, to: access.writer.append, type: depends, description: archiveDesign：sketch archive 与页面同一函数（X8）}
+  - {id: rel.gv.agent-history, from: access.agent, to: access.history, type: depends, description: readSourceHistory：hotspots / coupling 命令}
+  - {id: rel.gv.agent-evolution, from: access.agent, to: model.evolution, type: depends, description: evolutionStats：热度与耦合（J1–J4）}
+  - {id: rel.gv.lint-check, from: access.lint, to: model.intent.check, type: depends, description: checkSketches、compareOwned：活动草图核验与指纹门禁（X4、X6）}
+  - {id: rel.gv.lint-review, from: access.lint, to: model.review, type: depends, description: reviewCounts：确认计数的摘要（Z5）}
+  - {id: rel.gv.append-check, from: access.writer.append, to: model.intent.check, type: depends, description: checkSketches、archiveVerdict、sketchModules：归档前核验当前版本（X3）}
+  - {id: rel.gv.append-review, from: access.writer.append, to: model.review, type: depends, description: reviewEntries、reviewHash：确认记录的指纹与摘要（Z6）}
+  - {id: rel.gv.append-store, from: access.writer.append, to: access.governance-store, type: depends, description: touchOwned、appendLedger：写后更新指纹、记拦截记录（X6、Z6）}
+  - {id: rel.gv.store-types, from: access.governance-store, to: model.types, type: depends, description: isOwnedFile：人拥有的文件清单（X6）}
+  - {id: rel.gv.history-reader, from: access.history, to: access.reader, type: depends, description: readGit 的 git 调用封装}
+  - {id: rel.gv.history-evolution, from: access.history, to: model.evolution, type: depends, description: isFixCommit 等缺陷匹配规则（J1）}
+  - {id: rel.gv.source-history, from: access.model-source, to: access.history, type: calls, description: GET source/<项目>/history.json、commit.json（J1）}
+  - {id: rel.gv.source-review, from: access.model-source, to: model.review, type: depends, description: readHealth 的确认计数（Z5、Q10）}
+  - {id: rel.gv.reader-diff, from: access.reader, to: model.diff, type: depends, description: diffModels：「交给 AI」附草图相对上一次提交的改动摘要（L-2）}
+  - {id: rel.gv.reader-check, from: access.reader, to: model.intent.check, type: depends, description: checkSketches：项目卡片上设计的偏差计数（X4）}
+  - {id: rel.gv.evolution-facts, from: model.evolution, to: model.governance.facts, type: depends, description: within：耦合两端有无模块依赖（J4）}
+  - {id: rel.gv.evolution-level, from: model.evolution, to: model.governance.level, type: depends, description: 本层投影的节点映射（J5）}
+  - {id: rel.gv.evolution-ownership, from: model.evolution, to: model.source.ownership, type: depends, description: 文件按归属提升为模块（J2）}
+  - {id: rel.gv.entry-reexport-evolution, from: model.pipeline.entry, to: model.evolution, type: depends, description: 模型层入口再导出演化事实}
+  - {id: rel.gv.entry-reexport-intent, from: model.pipeline.entry, to: model.intent, type: depends, description: 模型层入口再导出意图}
+  - {id: rel.gv.entry-reexport-review, from: model.pipeline.entry, to: model.review, type: depends, description: 模型层入口再导出确认}
+  - {id: rel.gv.desk-evolution-model, from: state.desk.evolution, to: model.evolution, type: calls, description: evolutionStats、levelEvolution：热度与耦合的派生（J5）}
+  - {id: rel.gv.desk-review-model, from: state.desk.review, to: model.review, type: calls, interface: if.review.query, description: reviewStates、reviewCounts、reviewEntries（Z3–Z5）}
+  - {id: rel.gv.navigation-evolution, from: state.transition.navigation, to: model.evolution, type: depends, description: coupleEnds：耦合线选中的两端（J7）}
+  - {id: rel.gv.selection-evolution, from: state.transition.selection, to: model.evolution, type: depends, description: coupleEnds：选中耦合线时突出的两端（J7）}
+  - {id: rel.gv.scenario-panel-shared, from: present.panel.scenario, to: present.shared, type: depends, description: OPEN_PREVIEW、证据标签：证据文件在副栏预览（S15）}
+  - {id: rel.gv.step-panel-shared, from: present.panel.step, to: present.shared, type: depends, description: OPEN_PREVIEW、证据等级标签：代码证据在副栏预览（S16）}
