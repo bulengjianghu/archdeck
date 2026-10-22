@@ -1,0 +1,69 @@
+# 草图：草图的画布编辑（任务 A 二期）。由协调者代架构师起草（负责人 2026-10-22 授权，本次只走通流程），
+# 功能清单见 plans/arch-desk-round3/08-sketch-editor-features.md。
+# 钉住的只有：编辑规则放在哪一层、编辑中的草图是一个值、写回经同一个写入模块、画布与面板只发意图。
+# 其余（子模块再拆分、接口签名、职责细节）由 AI 展开；封闭了 model.intent 与 access.writer 两个子树，AI 不得在它们之下另加直接子模块。
+sketch:
+  id: sketch-editor
+  lifetime: until-implemented
+  closed: [model.intent, access.writer]
+  modules:
+    # ── 模型层：对草图定义的编辑与校验是「关于被描述系统的知识」——换成命令行同样需要，所以放模型层 ──
+    - id: model.intent.edit
+      parent: model.intent
+      name: 草图编辑
+      kind: component
+      core: true
+      responsibility: 对草图定义的纯函数编辑：加 / 删 / 改层与模块、移动模块（ID 前缀级联到后代、关系与接口 owner）、连 / 删关系、增删接口、改 core / closed / mayDependOn；输入草图与一个编辑操作，输出新草图或拒绝原因，不碰文件与界面。
+    - id: model.intent.validate
+      parent: model.intent
+      name: 草图校验
+      kind: component
+      core: true
+      responsibility: 草图的即时校验：格式（schema）、ID 规则与唯一、引用完整、层依赖无环、与持久草图的矛盾（复用 X4 的矛盾检查）；编辑态每次操作后与保存前共用同一函数。
+    # ── 视图状态层：编辑中的草图是一个值，由 DeskState 持有；编辑动作是转移函数 ──
+    - id: state.desk.edit
+      parent: state.desk
+      name: 编辑中的草图
+      kind: component
+      responsibility: 持有编辑中的草图（一个值）、撤销 / 重做栈、脏标记与读取时的指纹；对外提供编辑操作（经 model.intent.edit 应用）、保存与放弃意图；编辑态下派生给画布与面板的只有草图本身。
+    - id: state.transition.edit
+      parent: state.transition
+      name: 编辑规则
+      kind: component
+      responsibility: 进入 / 退出编辑态的会话规则：编辑态与运行视角、文件选中、代码事实互斥；有未保存改动时的离开确认；Esc 只取消选中。
+    # ── 接入层：草图整份写回走同一个写入模块 ──
+    - id: access.writer.sketch
+      parent: access.writer
+      name: 草图写回
+      kind: component
+      responsibility: 持久草图与设计草图的整份写回（B6）：用 YAML 文档模型重写、保留未改动节点的注释，写前校验并比对读取时的指纹（外部已改动则拒绝），写后更新 owned.json；新建设计时创建 design.yaml 与空草图。
+    # ── 呈现层：画布与面板只发意图，不自己改草图 ──
+    - id: present.canvas.edit
+      parent: present.canvas
+      name: 画布编辑态
+      kind: component
+      core: true
+      responsibility: 只在草图下开启：带的插入条与排序、带内 / 父模块内新建模块、拖动移动、拖线建关系、右键菜单、删除；每个操作只发一个编辑意图给 DeskState，不保存坐标。
+    - id: present.panel.edit
+      parent: present.panel
+      name: 编辑表单
+      kind: component
+      responsibility: 编辑态下层 / 模块 / 关系 / 接口 / 草图元信息的表单，以及即时校验结果与「实现后将有 N 处偏差」的核验结果；改动即发意图。
+    - id: present.version.edit
+      parent: present.version
+      name: 编辑信息条
+      kind: component
+      responsibility: 「编辑草图：<名>」、未保存标记、保存 / 放弃 / 校验按钮、新建设计入口；保存成功后停留在编辑态。
+  relations:
+    - { id: rel.se.canvas-desk, from: present.canvas.edit, to: state.desk.edit, type: calls, description: 画布的每个编辑操作只发一个意图 }
+    - { id: rel.se.panel-desk, from: present.panel.edit, to: state.desk.edit, type: calls, description: 表单改动即发意图 }
+    - { id: rel.se.bar-desk, from: present.version.edit, to: state.desk.edit, type: calls, description: 保存 / 放弃 / 新建设计 }
+    - { id: rel.se.desk-edit, from: state.desk.edit, to: model.intent.edit, type: calls, description: 应用一个编辑操作得到新草图 }
+    - { id: rel.se.desk-validate, from: state.desk.edit, to: model.intent.validate, type: calls, description: 每次操作后与保存前校验 }
+    - { id: rel.se.desk-check, from: state.desk.edit, to: model.intent, type: calls, description: 编辑中对当前版本实时跑 sketchCheck（L-1） }
+    - { id: rel.se.desk-transition, from: state.desk.edit, to: state.transition.edit, type: calls, description: 进入 / 退出编辑态经转移函数 }
+    - { id: rel.se.desk-writer, from: state.desk.edit, to: access.writer.sketch, type: calls, via: http, description: 保存：整份写回与新建设计，经开发服务器端点 }
+  interfaces:
+    - { id: if.intent.applyEdit, name: applyEdit, owner: model.intent.edit }
+    - { id: if.intent.validateSketch, name: validateSketch, owner: model.intent.validate }
+    - { id: if.writer.saveSketch, name: saveSketch, owner: access.writer.sketch }
