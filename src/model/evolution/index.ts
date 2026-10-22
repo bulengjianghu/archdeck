@@ -11,6 +11,8 @@ export {
   touchedModules,
   moduleHistory,
   couplings,
+  specificCouplings,
+  listedCouplings,
   evolutionStats,
   hotspots,
   isolatedCouplings,

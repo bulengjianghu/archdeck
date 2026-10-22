@@ -150,8 +150,13 @@ describe('J4 时间耦合：同提交 ≥ 5 且占两端 ≥ 30%，标注依赖�
     expect(couplingBetween(s, 'core.util', 'core.api')).toMatchObject({ shared: 5, dependency: false, relation: false })
     // ui 与 core：有依赖（ui.store → core.api）也有关系（rel.2）
     expect(couplingBetween(s, 'ui', 'core')).toMatchObject({ dependency: true, relation: true })
-    // 上级是子树并集：core.impl 与 ui（view 的父）同样达到阈值
-    expect(couplingsOf(s, 'core.impl').map(x => x.id)).toEqual([coupleId('core.impl', 'ui'), coupleId('core.impl', 'ui.view')])
+    // 上级是子树并集：core.impl 与 ui（view 的父）同样达到阈值，但清单只列最具体的对
+    expect(s.couplings.map(x => x.id)).toContain(coupleId('core.impl', 'ui'))
+    expect(s.specific.has(coupleId('core.impl', 'ui'))).toBe(false)
+    expect(s.specific.has(coupleId('core', 'ui'))).toBe(false)
+    expect([...s.specific].sort()).toEqual([coupleId('core.api', 'core.util'), coupleId('core.impl', 'ui.view')].sort())
+    expect(couplingsOf(s, 'core.impl').map(x => x.id)).toEqual([coupleId('core.impl', 'ui.view')])
+    expect(couplingsOf(s, 'ui').map(x => x.id)).toEqual([])
   })
 
   it('阈值可改；没有治理报告时依赖按无', () => {

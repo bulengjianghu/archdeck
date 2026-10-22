@@ -166,6 +166,21 @@ export function couplings(
   return out.sort((x, y) => y.shared - x.shared || x.id.localeCompare(y.id))
 }
 
+/**
+ * J4：最具体的耦合对——若另一对的两端分别落在这对两端的子树内（至少一端更深），这对是同一现象在上级的并集，清单不列。
+ * 本层投影仍用全部对（投到本层时合并）。
+ */
+export function specificCouplings(index: ModelIndex, list: readonly Coupling[]): Set<string> {
+  const out = new Set<string>()
+  for (const c of list) {
+    const covered = list.some(
+      d => d !== c && ((within(index, d.a, c.a) && within(index, d.b, c.b)) || (within(index, d.a, c.b) && within(index, d.b, c.a))),
+    )
+    if (!covered) out.add(c.id)
+  }
+  return out
+}
+
 /** J1–J4：组合统计 */
 export function evolutionStats(
   index: ModelIndex,
@@ -178,13 +193,15 @@ export function evolutionStats(
   const modules = moduleHistory(index, own, history, lines)
   const { perCommit } = touchedModules(index, own, history)
   const counted = history.commits.filter((_, i) => perCommit[i].size > 0)
+  const pairs = couplings(index, own, history, modules, report, threshold)
   return {
     days: history.days,
     since: history.since,
     commits: counted.length,
     fixes: counted.filter(c => c.fix).length,
     modules,
-    couplings: couplings(index, own, history, modules, report, threshold),
+    couplings: pairs,
+    specific: specificCouplings(index, pairs),
   }
 }
 
@@ -196,11 +213,14 @@ export function hotspots(stats: EvolutionStats, kind: HeatKind, limit = 10): Mod
     .slice(0, limit)
 }
 
-/** J6：无依赖且无描述关系的耦合对（代码事实看不见的耦合），按次数降序 */
-export const isolatedCouplings = (stats: EvolutionStats): Coupling[] => stats.couplings.filter(c => !c.dependency && !c.relation)
+/** J4：清单用的耦合对——只列最具体的 */
+export const listedCouplings = (stats: EvolutionStats): Coupling[] => stats.couplings.filter(c => stats.specific.has(c.id))
 
-/** 一个模块参与的耦合对（任一端），按次数降序 */
-export const couplingsOf = (stats: EvolutionStats, id: string): Coupling[] => stats.couplings.filter(c => c.a === id || c.b === id)
+/** J6：无依赖且无描述关系的耦合对（代码事实看不见的耦合），只列最具体的，按次数降序 */
+export const isolatedCouplings = (stats: EvolutionStats): Coupling[] => listedCouplings(stats).filter(c => !c.dependency && !c.relation)
+
+/** 一个模块参与的耦合对（任一端，只列最具体的），按次数降序 */
+export const couplingsOf = (stats: EvolutionStats, id: string): Coupling[] => listedCouplings(stats).filter(c => c.a === id || c.b === id)
 
 /** 两个模块之间的耦合（J7：关系与聚合边面板的「同提交 ×N」） */
 export const couplingBetween = (stats: EvolutionStats, a: string, b: string): Coupling | undefined => stats.couplings.find(c => c.id === coupleId(a, b))

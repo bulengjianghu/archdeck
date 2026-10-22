@@ -44,6 +44,8 @@ const semantics = computed(
 )
 const plane = computed(() => (!runtime.value ? '—（编译期）' : r.value.type === 'streams' ? '数据面' : '控制面'))
 const visibleHere = computed(() => desk.view.value?.edges.some(e => e.relationIds.includes(props.id)) ?? false)
+/** J7：两端有时间耦合时标「同提交 ×N」 */
+const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
 </script>
 
 <template>
@@ -59,6 +61,9 @@ const visibleHere = computed(() => desk.view.value?.edges.some(e => e.relationId
         <span class="rel-chip" :class="`rel-${r.type}`">{{ RELATION_TYPE_LABELS[r.type] }}</span>
         <span v-if="runtime" class="badge">{{ r.mode === 'async' ? '异步' : '同步' }}</span>
         <span v-if="r.via" class="badge" title="经此传递，静态导入证实不了（K5b）">经 {{ VIA_LABELS[r.via] }}</span>
+        <button v-if="couple" class="badge couple" title="两端是时间耦合：单击看共同的提交（J7）" @click="desk.select({ kind: 'couple', id: couple.id })">
+          同提交 ×{{ couple.shared }}
+        </button>
         <button v-if="!visibleHere" class="small" @click="desk.revealRelation(r.id)">定位到所在层次</button>
         <ChangeBadge entity="relation" :id="r.id" detail />
       </div>

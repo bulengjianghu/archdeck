@@ -13,6 +13,8 @@ export interface ModuleTreeContext {
   active: ReadonlySet<string>
   /** G14：选中文件的归属模块 */
   fileOwners: ReadonlySet<string>
+  /** J8：「按热度」排序时每个模块的次数（显示在行尾）；描述顺序时为 null */
+  heatCount?: ((id: string) => number) | null
 }
 
 /** 文件树（G13）：展开状态、选中与高亮、归属标记 */

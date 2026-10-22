@@ -46,6 +46,26 @@ export function horizontalCurve(a: Point, b: Point): string {
   return `M${a.x},${a.y} C${a.x + dx},${a.y} ${b.x - dx},${b.y} ${b.x},${b.y}`
 }
 
+/** J5：两点之间的波浪线（时间耦合）：沿直线每 wavelength 一个周期、振幅 amplitude 的正弦折线，首尾落在端点上 */
+export function wavyPath(a: Point, b: Point, amplitude = 3, wavelength = 12): string {
+  const len = dist(a, b)
+  if (len < 1) return `M${a.x},${a.y}`
+  const ux = (b.x - a.x) / len
+  const uy = (b.y - a.y) / len
+  const nx = -uy
+  const ny = ux
+  const n = Math.max(2, Math.round(len / wavelength) * 2)
+  let d = `M${a.x},${a.y}`
+  for (let i = 1; i <= n; i++) {
+    const t = i / n
+    const off = i === n ? 0 : i % 2 ? amplitude : -amplitude
+    const x = a.x + ux * len * t + nx * off
+    const y = a.y + uy * len * t + ny * off
+    d += ` L${x.toFixed(1)},${y.toFixed(1)}`
+  }
+  return d
+}
+
 function dist(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y)
 }

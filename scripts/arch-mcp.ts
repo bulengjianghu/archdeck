@@ -119,6 +119,32 @@ server.registerTool(
 )
 
 server.registerTool(
+  'hotspots',
+  {
+    title: '修改 / 缺陷热度前 N 的模块',
+    description:
+      '按 git 历史（缺省近 180 天）统计模块的修改次数与缺陷修复次数，热度 = 次数 × √当前行数；只列有直接归属文件的模块。改一个热点模块前先看它的职责与接口。',
+    inputSchema: {
+      kind: z.enum(['changes', 'fixes']).optional().describe('修改热度（缺省）或缺陷热度'),
+      limit: z.number().int().positive().optional(),
+      project,
+    },
+  },
+  ({ kind, limit, project }) => reply(() => svc.hotspots(project, kind ?? 'changes', limit ?? 10)),
+)
+
+server.registerTool(
+  'coupling',
+  {
+    title: '时间耦合的模块对',
+    description:
+      '总在同一提交里一起改的模块对（同提交 ≥ 5 次且占两端修改次数 ≥ 30%），标注两端之间有没有模块依赖与描述关系；onlyIsolated 只列两者都没有的对——代码事实看不见的耦合，多半是未描述的运行时关系或该合并 / 拆分。',
+    inputSchema: { onlyIsolated: z.boolean().optional(), project },
+  },
+  ({ onlyIsolated, project }) => reply(() => svc.coupling(project, onlyIsolated ?? false)),
+)
+
+server.registerTool(
   'prevention_report',
   { title: '拦截报告', description: '拦截记录的统计：判定次数与结果、按规则统计的拒绝、扫描中违规数与环度的首末值。', inputSchema: { project } },
   ({ project }) => reply(() => svc.report(project)),

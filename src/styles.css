@@ -23,6 +23,13 @@
   --rel-implements: #bba8e0;
   /* 代码依赖叠加线（K9，点线；有违规时为 --danger） */
   --edge-code: #8a4f7d;
+  /* 时间耦合的波浪线（J5）：灰；无依赖无关系的更深 */
+  --edge-couple: #9aa3b2;
+  --edge-couple-strong: #4b5563;
+  /* 热度角标三档（J5） */
+  --heat-1: #f6d9a8;
+  --heat-2: #ec9d5a;
+  --heat-3: #c8432a;
   --actor: #8a5cc7;
   --actor-soft: #f3edfb;
 
@@ -67,6 +74,11 @@
     --rel-notifies: #e2a646;
     --rel-implements: #65578e;
     --edge-code: #d58cc4;
+    --edge-couple: #6c7686;
+    --edge-couple-strong: #c5ccd8;
+    --heat-1: #6b5230;
+    --heat-2: #b86d2e;
+    --heat-3: #ef6a4c;
     --actor: #b08ae6;
     --actor-soft: #2c2440;
 

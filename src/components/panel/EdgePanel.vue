@@ -19,6 +19,14 @@ function endName(nodeId: string): string {
   return boundary ? `${n}（外部）` : n
 }
 const endId = (nodeId: string) => (nodeId.startsWith('boundary:') ? nodeId.slice('boundary:'.length) : nodeId)
+/** J7：两端模块有时间耦合时标「同提交 ×N」 */
+const couple = computed(() => {
+  const e = edge.value
+  if (!e || !desk.index.value) return undefined
+  const a = endId(e.from)
+  const b = endId(e.to)
+  return desk.index.value.modules.has(a) && desk.index.value.modules.has(b) ? desk.evolution.between(a, b) : undefined
+})
 const endSelection = (nodeId: string) =>
   desk.index.value?.actors.has(nodeId) ? ({ kind: 'actor', id: nodeId } as const) : ({ kind: 'module', id: endId(nodeId) } as const)
 </script>
@@ -35,6 +43,9 @@ const endSelection = (nodeId: string) =>
         <span class="rel-chip" :class="`rel-${edge.type}`" :title="edge.type">{{ RELATION_TYPE_LABELS[edge.type] }} ×{{ edge.relationIds.length }}</span>
         <span class="badge">{{ edge.kind === 'aggregate' ? '聚合边' : '直接边' }}</span>
         <span v-if="edge.mode !== 'sync'" class="badge">{{ edge.mode === 'async' ? '异步' : '同步 + 异步' }}</span>
+        <button v-if="couple" class="badge couple" title="两端是时间耦合：单击看共同的提交（J7）" @click="desk.select({ kind: 'couple', id: couple.id })">
+          同提交 ×{{ couple.shared }}
+        </button>
       </div>
       <p class="hint muted">由更深层次的 {{ edge.relationIds.length }} 条关系汇总而成。点击任意一条，跳到它真实所在的层次。</p>
     </header>

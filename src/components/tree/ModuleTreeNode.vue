@@ -42,6 +42,7 @@ const name = computed(() => (isRoot.value ? props.ctx.index.model.system.name : 
       <span class="name">{{ name }}</span>
       <span v-if="mod?.kind === 'layer'" class="tag">层</span>
       <span v-if="ctx.levelId === id" class="tag here">当前层次</span>
+      <span v-if="ctx.heatCount && !isRoot" class="heat muted">{{ ctx.heatCount(id) }}</span>
     </div>
     <ul v-if="kids.length && open" role="group">
       <ModuleTreeNode
@@ -103,6 +104,12 @@ ul {
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 0 4px;
+}
+
+.heat {
+  flex: none;
+  margin-left: auto;
+  font-size: 10.5px;
 }
 
 .tag.here {

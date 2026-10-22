@@ -4,9 +4,11 @@
  * - 状态 → 树：当前层次的祖先链展开并标出当前层次，选中的模块高亮、展开到它并滚到可见；
  *   运行视角下标出参与本场景的模块与当前步骤的两端；选中文件时标出其归属模块并展开到它（G14）。
  * - 树 → 意图：单击定位（N4），单击系统回根层，双击有子模块的下钻（N1、N2）；悬停本层可见的模块等同悬停画布节点。
- * 展开状态只属于这块界面。
+ * 排序「描述顺序 / 按热度」（J8）：按热度时同一父模块下的子模块按热度降序、同值保持描述顺序，热度种类取「显示」面板所选（关闭时按修改热度）。
+ * 展开状态与排序只属于这块界面。
  */
 import { computed, nextTick, ref, watch } from 'vue'
+import { heatCount, heatValue, type HeatKind } from '@/model'
 import { useDesk } from '@/state/inject'
 import ModuleTreeNode from './ModuleTreeNode.vue'
 
@@ -17,7 +19,23 @@ const run = computed(() => desk.perspective.value === 'run')
 
 /** T2：结构视角下「只看现状」开启时不列目标态模块及其后代；运行视角不受开关影响（L9） */
 const hideTarget = computed(() => !run.value && desk.toggles.currentOnly)
-const childrenOf = (id: string) => (idx.value.childrenOf.get(id) ?? []).filter(c => !(hideTarget.value && idx.value.modules.get(c)?.status === 'target'))
+/** J8：排序方式；热度种类取开关所选，关闭时按修改热度 */
+const sort = ref<'order' | 'heat'>('order')
+const kind = computed<HeatKind>(() => (desk.toggles.heat === 'fixes' ? 'fixes' : 'changes'))
+const heatOf = (id: string) => {
+  const m = desk.evolution.moduleOf(id)
+  return m ? heatValue(m, kind.value) : 0
+}
+const countOf = (id: string) => {
+  const m = desk.evolution.moduleOf(id)
+  return m ? heatCount(m, kind.value) : 0
+}
+const byHeat = computed(() => sort.value === 'heat' && desk.evolution.status.value === 'ready')
+const childrenOf = (id: string) => {
+  const kids = (idx.value.childrenOf.get(id) ?? []).filter(c => !(hideTarget.value && idx.value.modules.get(c)?.status === 'target'))
+  // 稳定排序：热度相同的保持描述顺序
+  return byHeat.value ? [...kids].sort((a, b) => heatOf(b) - heatOf(a)) : kids
+}
 
 const selectedId = computed(() => (desk.selection.value?.kind === 'module' ? desk.selection.value.id : null))
 /** T5：当前步骤两端的祖先链 */
@@ -65,6 +83,7 @@ const ctx = computed(() => ({
   participants: run.value ? desk.run.participants.value : new Set<string>(),
   active: active.value,
   fileOwners: new Set(desk.files.owners.value),
+  heatCount: byHeat.value ? countOf : null,
 }))
 
 function pick(id: string) {
@@ -80,9 +99,26 @@ function hover(id: string | null) {
 </script>
 
 <template>
-  <ul ref="root" class="tree" role="tree" @mouseleave="hover(null)">
-    <ModuleTreeNode :id="idx.rootId" :depth="0" :ctx="ctx" @pick="pick" @drill="drill" @toggle="toggle" @hover="hover" />
-  </ul>
+  <div class="module-tree">
+    <div v-if="!run" class="sort" role="group" aria-label="模块排序">
+      <span class="sort-label">排序</span>
+      <span class="segmented">
+        <button :class="{ on: sort === 'order' }" :aria-pressed="sort === 'order'" @click="sort = 'order'">描述顺序</button>
+        <button
+          :class="{ on: sort === 'heat' }"
+          :aria-pressed="sort === 'heat'"
+          :disabled="desk.evolution.status.value !== 'ready'"
+          :title="desk.evolution.status.value === 'ready' ? `按${kind === 'fixes' ? '缺陷' : '修改'}热度降序（同一父模块下）` : '没有演化事实'"
+          @click="sort = 'heat'"
+        >
+          按热度
+        </button>
+      </span>
+    </div>
+    <ul ref="root" class="tree" role="tree" @mouseleave="hover(null)">
+      <ModuleTreeNode :id="idx.rootId" :depth="0" :ctx="ctx" @pick="pick" @drill="drill" @toggle="toggle" @hover="hover" />
+    </ul>
+  </div>
 </template>
 
 <style scoped>
@@ -90,5 +126,45 @@ function hover(id: string | null) {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 6px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.segmented button {
+  border: none;
+  border-radius: 0;
+  background: none;
+  padding: 0 8px;
+  font: inherit;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.segmented button + button {
+  border-left: 1px solid var(--border);
+}
+
+.segmented button.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.segmented button:disabled {
+  opacity: 0.5;
 }
 </style>

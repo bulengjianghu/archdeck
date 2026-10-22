@@ -18,8 +18,13 @@ import {
   moduleName,
   summarizeLedger,
   entryResolver,
+  evolutionStats,
+  hotspots,
+  listedCouplings,
   reworkList,
   reworkMarkdown,
+  type EvolutionStats,
+  type HeatKind,
   type ReworkCategory,
   type ReworkList,
   type CheckResult,
@@ -35,6 +40,7 @@ import {
 import { listProjectIds, readProject, resolveModelRoot } from '../../vite/readModelDir'
 import { readSourceTree } from '../../vite/readSource'
 import { readCodeDeps, resolveImport } from '../../vite/readDeps'
+import { historyOptions, readSourceHistory } from '../../vite/readHistory'
 import { appendLedger, BASELINE_FILE, governanceDir, readBaseline, readLedger, sourceCommit, writeBaseline } from '../../vite/governanceStore'
 
 export interface ServiceOptions {
@@ -54,6 +60,8 @@ export interface Loaded {
   own: SourceOwnership
   entryOf: EntryOf
   report: GovernanceReport
+  /** J1：演化事实；读不到 git 历史时为原因 */
+  evolution: EvolutionStats | { error: string }
   /** 输入的指纹（stampOf） */
   stamp: string
 }
@@ -109,7 +117,10 @@ export function createService(opts: ServiceOptions) {
     const own = assignFiles(index, tree.files, index.model.sourceIgnore)
     const deps = readCodeDeps(tree.root, tree.files, tree.packages)
     const report = governanceReport(index, own, tree, deps, readBaseline(gov))
-    const loaded: Loaded = { project, index, issues, tree, files: new Set(tree.files), own, entryOf: entryResolver(index, own, tree), report, stamp }
+    const hist = historyOptions(index.model.system)
+    const history = readSourceHistory(tree.root, tree.files, hist)
+    const evolution = history.status === 'ok' ? evolutionStats(index, own, history, tree.lines ?? {}, report, hist.coupling) : { error: history.reason }
+    const loaded: Loaded = { project, index, issues, tree, files: new Set(tree.files), own, entryOf: entryResolver(index, own, tree), report, evolution, stamp }
     cache.set(project, loaded)
     // Q3：本会话还没扫描过时，「上一次扫描」是首次加载的结果，不随自动重建移动
     if (!lastScan.has(project)) lastScan.set(project, violationKeys(report))
@@ -269,11 +280,55 @@ export function createService(opts: ServiceOptions) {
     /** Q7–Q9：返工清单；同一份结果给 JSON 与 Markdown */
     issues(p?: string, category?: ReworkCategory): { project: string; list: ReworkList; markdown: string } {
       const l = load(p)
-      const all = reworkList({ index: l.index, issues: l.issues, source: { own: l.own, tree: l.tree }, report: l.report })
+      const evo = 'error' in l.evolution ? {} : { evolution: l.evolution }
+      const all = reworkList({ index: l.index, issues: l.issues, source: { own: l.own, tree: l.tree }, report: l.report, ...evo })
       const items = category ? all.items.filter(i => i.category === category) : all.items
       const list: ReworkList = category ? { ...all, items } : all
       const modelDir = path.relative(opts.root, path.join(modelRoot, l.project)).split(path.sep).join('/')
       return { project: l.project, list, markdown: reworkMarkdown(list, `${l.index.model.system.name}（${l.project}）`, { modelDir, sourceRoot: l.tree.root }) }
+    },
+
+    /** J8：热度前 N（与页面系统面板同一函数） */
+    hotspots(p?: string, kind: HeatKind = 'changes', limit = 10) {
+      const l = load(p)
+      if ('error' in l.evolution) throw new ServiceError(`项目 ${l.project} 没有演化事实：${l.evolution.error}`)
+      const s = l.evolution
+      return {
+        project: l.project,
+        kind,
+        window: { days: s.days, since: s.since, commits: s.commits, fixes: s.fixes },
+        modules: hotspots(s, kind, limit).map(m => ({
+          id: m.id,
+          name: name(l, m.id),
+          changes: m.changes,
+          fixes: m.fixes,
+          lines: m.lines,
+          heat: Math.round(kind === 'fixes' ? m.fixHeat : m.heat),
+        })),
+      }
+    },
+
+    /** J4、J6：时间耦合（与页面同一结果）；onlyIsolated 只列无依赖无关系的对 */
+    coupling(p?: string, onlyIsolated = false) {
+      const l = load(p)
+      if ('error' in l.evolution) throw new ServiceError(`项目 ${l.project} 没有演化事实：${l.evolution.error}`)
+      const s = l.evolution
+      return {
+        project: l.project,
+        window: { days: s.days, since: s.since, commits: s.commits },
+        pairs: listedCouplings(s)
+          .filter(c => !onlyIsolated || (!c.dependency && !c.relation))
+          .map(c => ({
+            a: `${c.a}（${name(l, c.a)}）`,
+            b: `${c.b}（${name(l, c.b)}）`,
+            shared: c.shared,
+            ratioA: Math.round(c.ratioA * 100) / 100,
+            ratioB: Math.round(c.ratioB * 100) / 100,
+            dependency: c.dependency,
+            relation: c.relation,
+            commits: c.commits.slice(0, 5).map(h => h.slice(0, 8)),
+          })),
+      }
     },
 
     /** Q4 */

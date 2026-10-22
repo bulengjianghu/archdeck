@@ -27,6 +27,7 @@ import NavTree from './tree/NavTree.vue'
 import { OPEN_PREVIEW } from './shared/preview'
 import { NAV_TAB, type NavTab } from './shared/navTab'
 import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
+import { useEvolutionPrefs } from './display/useEvolutionPrefs'
 
 const props = defineProps<{ project: string; design?: string; revision?: string; commit?: string; base?: string }>()
 const router = useRouter()
@@ -69,7 +70,9 @@ if (import.meta.env.DEV) (window as unknown as { __desk: typeof desk }).__desk =
 // 开发态：本项目的描述文件变化后重新加载，保留当前层次与选中
 const unwatchModel = desk.watchChanges(import.meta.hot)
 onBeforeUnmount(unwatchModel)
-void router.isReady().then(() => desk.init())
+// J5：「演化」叠加的开关按项目记在本地，模型加载后恢复
+const evolutionPrefs = useEvolutionPrefs(props.project, desk)
+void router.isReady().then(() => desk.init().then(evolutionPrefs.restore))
 
 // 导航树与属性面板：宽度可拖动、可折叠，记在本地（W-1）
 function readNumber(key: string, min: number, max: number, fallback: number): number {

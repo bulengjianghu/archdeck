@@ -10,6 +10,8 @@
  *   cycles                        模块环、文件环与环度
  *   rescan                        重新扫描，与基线、上一次扫描比较（Q3）
  *   issues [--category <类别>]    返工清单：按根因聚合的问题、文件行号、规则编号与建议动作（Q7–Q9），默认 Markdown
+ *   hotspots [--fixes] [--limit N] 热度前 N 的模块（J8；--fixes 为缺陷热度，缺省修改热度）
+ *   coupling [--isolated]         时间耦合的模块对（J4）；--isolated 只列无依赖无关系的对（J6）
  *   report                        拦截报告（Q4）
  *   baseline                      生成基线 governance/baseline.json（U7，由人执行并提交）
  *
@@ -27,7 +29,7 @@ const args: string[] = []
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (!a.startsWith('--')) args.push(a)
-  else if (['--project', '--names', '--category'].includes(a)) flags.set(a.slice(2), argv[++i] ?? '')
+  else if (['--project', '--names', '--category', '--limit'].includes(a)) flags.set(a.slice(2), argv[++i] ?? '')
   else flags.set(a.slice(2), true)
 }
 const [cmd, ...rest] = args
@@ -85,6 +87,12 @@ function run(): number {
       console.log(asJson ? JSON.stringify(r.list, null, 2) : r.markdown)
       return 0
     }
+    case 'hotspots': {
+      const limit = typeof flags.get('limit') === 'string' ? Number(flags.get('limit')) : 10
+      return out(svc.hotspots(project, flags.has('fixes') ? 'fixes' : 'changes', Number.isFinite(limit) && limit > 0 ? limit : 10))
+    }
+    case 'coupling':
+      return out(svc.coupling(project, flags.has('isolated')))
     case 'report':
       return out(svc.report(project))
     case 'baseline': {
@@ -96,7 +104,9 @@ function run(): number {
       return 0
     }
     default:
-      console.error('用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|report|baseline> [参数] [--project <项目>] [--json]')
+      console.error(
+        '用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|hotspots|coupling|report|baseline> [参数] [--project <项目>] [--json]',
+      )
       return 2
   }
 }

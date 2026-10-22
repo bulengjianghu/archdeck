@@ -122,11 +122,9 @@ describe('J5 本层投影只在结构视角、热度或耦合开启时', () => {
     const e = desk.evolution
     expect(e.moduleOf('app.solution.core')).toMatchObject({ changes: 6, fixes: 2, lines: 100 })
     expect(e.moduleOf('app')).toMatchObject({ changes: 6 })
-    expect(e.couplingsFor('app.solution.core').map(x => x.id)).toEqual([
-      'app.solution.core~infra',
-      'app.solution.core~infra.framework',
-      'app.solution.core~infra.framework.extra',
-    ])
+    // 只列最具体的对（祖先对是同一现象的并集）
+    expect(e.couplingsFor('app.solution.core').map(x => x.id)).toEqual(['app.solution.core~infra.framework.extra'])
+    expect(e.stats.value!.couplings.map(x => x.id)).toContain('app.solution.core~infra')
     expect(e.between('infra.framework.extra', 'app.solution.core')).toMatchObject({ shared: 5, dependency: true })
     expect(e.hotspotsOf('changes').map(m => m.id)).toEqual(['infra.framework.extra', 'app.solution.core', 'domain.models.core'])
     expect(e.hotspotsOf('fixes', 1).map(m => m.id)).toEqual(['infra.framework.extra'])

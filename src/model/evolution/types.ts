@@ -86,7 +86,10 @@ export interface EvolutionStats {
   commits: number
   fixes: number
   modules: Map<string, ModuleHistory>
+  /** 全部达到阈值的耦合对（含上级的对，本层投影用） */
   couplings: Coupling[]
+  /** 最具体的耦合对的 ID：两端子树内已有更深的耦合对时，祖先对是同一现象的并集，清单不列（J4） */
+  specific: Set<string>
 }
 
 export type HeatKind = 'changes' | 'fixes'
