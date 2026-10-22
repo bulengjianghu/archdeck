@@ -62,18 +62,6 @@ modules:
     parent: model.governance
     responsibility: 一个声明了接口的模块的三方（K11、ADR-0022）：定义（provides 与子树内 owner 指向它的接口）、实现者（to 在子树内的 implements）、使用者（to 在子树内的 depends / calls / streams，含写了 via 的；通知的箭头指向订阅者，不算使用）；给了治理报告时每项带证实状态。只看描述，没有接口的模块返回空。
     codeRefs: [src/model/governance/ports.ts]
-  - id: model.rework
-    name: 返工清单
-    parent: model
-    kind: subsystem
-    responsibility: 把描述错误与提醒、违规（新增 / 已知 / 已豁免）、环度上升与可收紧基线、源码归属（冲突项注明因冲突未计入的依赖条数）、报警的未证实关系（K6）、未描述依赖、结构中未建模的步骤汇总为返工项，按根因聚合（同一组重叠的 codeRefs、同一目录的漏写、越过同一条边界依赖同一模块、同一对端点之间缺的关系），每条带描述文件行号、受影响位置、规则编号与建议动作（含 YAML 片段）；渲染给 agent 的 Markdown（Q7–Q9）。只汇总其他模型子模块已有的结果，不新增事实。
-    principle: |
-      - **按根因聚合**：判据是「改一处能消掉几条」，h5player 的 287 条违规收成 17 条。
-      - **只给方向不替人决定**：加例外、收紧基线由架构师决定（U5、U7），建议里只给片段。
-      - 未建模的步骤与回放用同一套关系绑定（bindRelation，S13），与层次无关（P11）。
-    entry: src/model/rework/index.ts
-    codeRefs: [src/model/rework/index.ts, src/model/rework/list.ts, src/model/rework/markdown.ts, src/model/rework/health.ts]
-    docRefs: [docs/architecture/governance.md]
 
 interfaces:
   - id: if.governance.report

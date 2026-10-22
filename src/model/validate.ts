@@ -65,6 +65,7 @@ export function validate(input: ArchModel): ValidateResult {
     actors: [...actors.values()],
     scenarios: [],
     sourceIgnore: input.sourceIgnore ?? [],
+    sketches: input.sketches ?? [],
     ...(input.sourceLimits ? { sourceLimits: input.sourceLimits } : {}),
     ...(input.rules ? { rules: cleanRules(input.rules, id => modules.has(id), input.rulesSrc, err, warn), rulesSrc: input.rulesSrc } : {}),
   }

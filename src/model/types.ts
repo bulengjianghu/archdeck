@@ -165,6 +165,28 @@ export interface ArchFileDef {
   sourceLimits?: SourceLimits
   /** U1：架构规则（约定文件 rules.yaml），只能声明一次 */
   rules?: RulesDef
+  /** X1：草图（只在 intent/*.yaml 与 designs/<设计>/sketch.yaml 里用） */
+  sketch?: SketchDef
+}
+
+/** X3：草图的生命周期 */
+export type SketchLifetime = 'persistent' | 'until-implemented'
+export const SKETCH_LIFETIMES: readonly SketchLifetime[] = ['persistent', 'until-implemented']
+
+/** X1、X2：草图——人拥有的局部描述，内容与普通描述同形，没写的字段不约束 */
+export interface SketchDef {
+  /** 持久草图有固定 ID（骨架为 skeleton）；设计的草图 ID 即设计 ID */
+  id: string
+  /** intent/ 下缺省 persistent，设计的草图缺省 until-implemented（X3） */
+  lifetime?: SketchLifetime
+  /** 封闭的子树：这些草图模块的直接子模块集合必须与草图相等（X2） */
+  closed?: string[]
+  /** 定稿实现后替换的持久草图 ID（晋升，X3） */
+  supersedes?: string
+  modules?: ModuleDef[]
+  relations?: RelationDef[]
+  interfaces?: InterfaceDef[]
+  dataStructures?: DataStructureDef[]
 }
 
 /** G20：源码文件的限制；maxLines 缺省 500 */
@@ -289,6 +311,17 @@ export interface ArchModel {
   rules?: RulesDef
   /** U1：rules 的出处 */
   rulesSrc?: SourceLoc
+  /** X1：本次加载的草图文件（整份定义，供核验），不参与版本对比 */
+  sketches: SketchEntity[]
+}
+
+/** 一份已加载的草图（X1）：定义、所在文件与出处；设计的草图另记所属设计 */
+export interface SketchEntity {
+  def: SketchDef
+  file: string
+  src: SourceLoc
+  /** 设计的草图：所属设计 ID（由接入层按路径或载荷给出，模型层只透传） */
+  design?: string
 }
 
 export type IssueSeverity = 'error' | 'warning'

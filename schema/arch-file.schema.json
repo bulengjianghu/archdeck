@@ -142,6 +142,59 @@
           }
         }
       }
+    },
+    "sketch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "description": "草图（X1、X2，ADR-0023）：人拥有的局部描述，只在 intent/*.yaml 与 designs/<设计>/sketch.yaml 里用；内容与普通描述同形，没写的字段不约束",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id",
+          "description": "持久草图有固定 ID（骨架为 skeleton）；设计的草图 ID 即设计 ID"
+        },
+        "lifetime": {
+          "enum": [
+            "persistent",
+            "until-implemented"
+          ],
+          "description": "生命周期（X3）：intent/ 下缺省 persistent，设计的草图缺省 until-implemented"
+        },
+        "closed": {
+          "$ref": "#/definitions/idList",
+          "description": "封闭的子树（X2）：这些草图模块的直接子模块集合必须与草图相等"
+        },
+        "supersedes": {
+          "$ref": "#/definitions/id",
+          "description": "定稿实现后替换的持久草图 ID（晋升，X3）"
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/module"
+          }
+        },
+        "relations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/relation"
+          }
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/interface"
+          }
+        },
+        "dataStructures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/dataStructure"
+          }
+        }
+      }
     }
   },
   "definitions": {

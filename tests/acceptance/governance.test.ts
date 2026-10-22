@@ -141,7 +141,7 @@ describe('§6.10 架构治理验收', () => {
 
   it('9. 返工清单：按根因聚合，命令行与 MCP 同一份 JSON / Markdown，每条带位置、规则与建议', () => {
     // 去掉一个模块的 codeRefs：它目录下的文件成为未归属，按目录合并为一条
-    const layers = path.join(tmp, 'h5p-arch-desk', 'modules', 'layers.yaml')
+    const layers = path.join(tmp, 'h5p-arch-desk', 'intent', 'skeleton.yaml')
     const text = fs.readFileSync(layers, 'utf8')
     fs.writeFileSync(layers, text.replace(/codeRefs: \[src\/components\/shared\/\*\*\]/, 'codeRefs: []'))
     try {
