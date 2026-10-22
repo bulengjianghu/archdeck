@@ -9,12 +9,12 @@
 磁盘 model/<项目>/…            接入层只搬运原文，不解释含义
    │ readProject / readDesignRevision
    ▼
-ModelPayload { files: RawFile[], designs, version?, compare? }
+ModelPayload { files: RawFile[], designs, commits, version?, compare? }
    │ （页面与命令行各自调用，保证两边报错一致）
    ▼
 loadModel(files) = load → validate → buildIndex      模型层
    ▼
-ModelIndex + Issue[]      ──diffModels(基线, 设计)──▶ ModelDiff（仅设计版本）
+ModelIndex + Issue[]      ──diffModels(基线, 设计或提交)──▶ ModelDiff（设计版本与提交版本）
 ```
 
 ## 2. 读取（接入层）
@@ -26,6 +26,7 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计)──▶ ModelDiff（
 | `readProject` | 读项目当前版本的全部描述文件，**跳过 `designs/`**；附带该项目的设计版本列表 |
 | `listDesigns` / `readDesignInfo` | 发现 `designs/<设计>/design.yaml`；格式问题、缺失的轮次快照记入 `problems`，不抛错 |
 | `readDesignRevision` | 读设计的某一轮，并附对比基线：当前版本，以及上一轮（若有） |
+| `listModelCommits` · `readModelAt` · `readCommitVersion`（`vite/readGit.ts`） | E5、E6：`git log -n50 -- <项目描述目录>` 列出提交；`git ls-tree` + `git show <提交>:<路径>` 读快照（跳过 `designs/`、`governance/`）；附对比基线（缺省更早的一个提交，或 `worktree` 当前版本）作为 `compare.current`；提交号只收十六进制，参数经 execFile 传给 git |
 | `summarizeProject` | 跑一遍 `loadModel`，生成首页卡片的摘要（规模、问题数、顶层、设计版本）；健康度由调用方算好附上 |
 | `listProjects(modelRoot, projectRoot, health?)` · `readHealth`（`vite/readHealth.ts`） | 开发服务器给每个项目附上健康度：读源码清单、代码事实与基线，交给模型层 `projectHealth` 计数（Q10）；依赖提取按文件缓存，刷新首页只重解析变了的文件 |
 
@@ -38,6 +39,7 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计)──▶ ModelDiff（
 | `GET projects.json` | `ProjectSummary[]` |
 | `GET models/<项目>.json` | 当前版本的 `ModelPayload`；不存在时 404 |
 | `GET models/<项目>/designs/<设计>/<轮次>.json` | 设计某一轮的 `ModelPayload`，带 `compare` |
+| `GET models/<项目>/commits/<提交>.json?base=<提交｜worktree>` | 提交版本的 `ModelPayload`（`version: { commit, base }`，带 `compare.current`，E5、E6）；提交不存在或当时没有该项目时 404 |
 | ws `arch-model:changed` | `{ project }`；同一项目 150ms 内的多次变化合并为一次（含设计版本目录） |
 | `GET source/<项目>…` | 被描述项目的源码清单、文件与导出，见[源码接入与归属 §2.1](./source.md#21-端点) |
 
@@ -91,7 +93,8 @@ interface RawFile { path: string; text: string }          // path 相对项目�
 interface ModelPayload {
   project: string; dir: string; files: RawFile[]
   designs?: DesignInfo[]
-  version?: { design: string; revision: string }            // 设计版本时给出
+  commits?: ModelCommit[]                                   // E5：改动过描述的最近提交 { hash, short, date, subject }
+  version?: { design: string; revision: string } | { commit: string; base?: string }   // 设计版本或提交版本（E5、E6）时给出
   compare?: { current: CompareSource; previous?: CompareSource }  // CompareSource = { label, dir, files }
 }
 

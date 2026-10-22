@@ -1,8 +1,8 @@
 /**
- * DeskState 的版本派生（desk.versions，ADR-0013）：设计列表、当前设计与轮次、对比基线、差异与基线漂移（E1–E4）。
+ * DeskState 的版本派生（desk.versions，ADR-0013）：设计列表、当前设计与轮次、提交版本、对比基线、差异与基线漂移（E1–E6）。
  */
 import { computed, type ShallowRef } from 'vue'
-import { diffModels, type DesignInfo, type ModelDiff, type ModelIndex, type VersionRef } from '@/model'
+import { diffModels, isCommitVersion, isDesignVersion, type DesignInfo, type ModelCommit, type ModelDiff, type ModelIndex, type VersionRef } from '@/model'
 import type { ViewState } from '../transition'
 import type { Baseline } from '../sync/modelSource'
 
@@ -10,21 +10,30 @@ export interface VersionsInputs {
   state: ShallowRef<ViewState>
   index: ShallowRef<ModelIndex | null>
   designs: ShallowRef<DesignInfo[]>
+  /** 改动过描述的最近提交（E5），新的在前 */
+  commits: ShallowRef<ModelCommit[]>
   baselines: ShallowRef<{ current?: Baseline; previous?: Baseline }>
-  /** 打开的设计版本；当前版本时为 undefined */
+  /** 打开的设计版本或提交版本；当前版本时为 undefined */
   version?: VersionRef
 }
 
-export function createVersions({ state, index, designs, baselines, version }: VersionsInputs) {
-  /** 打开的设计（当前版本时为 null） */
-  const design = computed(() => (version ? (designs.value.find(d => d.id === version.design) ?? null) : null))
-  const revision = computed(() => design.value?.revisions.find(r => r.id === version!.revision) ?? null)
-  /** E3：对比基线为当前版本或上一轮 */
+export function createVersions({ state, index, designs, commits, baselines, version }: VersionsInputs) {
+  const dv = isDesignVersion(version) ? version : undefined
+  const cv = isCommitVersion(version) ? version : undefined
+  /** 打开的设计（不是设计版本时为 null） */
+  const design = computed(() => (dv ? (designs.value.find(d => d.id === dv.design) ?? null) : null))
+  const revision = computed(() => design.value?.revisions.find(r => r.id === dv!.revision) ?? null)
+  const find = (rev?: string) => (rev ? (commits.value.find(c => c.hash.startsWith(rev.toLowerCase())) ?? null) : null)
+  /** E5：打开的提交（不是提交版本时为 null）；不在最近的提交列表里时只有哈希 */
+  const commit = computed<ModelCommit | null>(() => (cv ? (find(cv.commit) ?? { hash: cv.commit, short: cv.commit.slice(0, 8), date: '', subject: '' }) : null))
+  /** E6：提交版本的对比基线提交；为当前版本（worktree）时为 null */
+  const baseCommit = computed(() => find(cv?.base))
+  /** E3：设计版本的对比基线为当前版本或上一轮；提交版本只有一个基线（E6） */
   const baseline = computed<Baseline | null>(() => {
     const b = baselines.value
     return (state.value.toggles.compareTo === 'previous' ? b.previous : undefined) ?? b.current ?? null
   })
-  /** 设计版本相对对比基线的差异；当前版本时为 null */
+  /** 相对对比基线的差异；当前版本时为 null */
   const diff = computed<ModelDiff | null>(() => (index.value && baseline.value ? diffModels(baseline.value.index, index.value) : null))
   /** E4：设计起草时的基线提交与当前版本不一致——当前版本已按新代码重新生成 */
   const drift = computed(() => {
@@ -33,7 +42,7 @@ export function createVersions({ state, index, designs, baselines, version }: Ve
     return !!was && !!now && was !== now
   })
 
-  return { designs, design, revision, baselines, baseline, diff, drift }
+  return { designs, design, revision, commits, commit, baseCommit, baselines, baseline, diff, drift }
 }
 
 export type VersionDerivations = ReturnType<typeof createVersions>

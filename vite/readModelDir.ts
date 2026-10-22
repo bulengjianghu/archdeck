@@ -11,7 +11,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { DESIGN_STATUSES, loadModel, versionLabel } from '../src/model'
-import type { DesignInfo, DesignStatus, ProjectHealth, ProjectSummary, RawFile, RevisionInfo, VersionRef } from '../src/model'
+import type { DesignInfo, DesignStatus, ModelCommit, ProjectHealth, ProjectSummary, RawFile, RevisionInfo, VersionRef } from '../src/model'
 
 export type { ProjectSummary }
 
@@ -34,6 +34,8 @@ export interface ModelPayload {
   files: RawFile[]
   /** 本项目的全部设计版本，供版本切换 */
   designs?: DesignInfo[]
+  /** 改动过本项目描述的最近提交，供版本切换（E5，开发服务器附上） */
+  commits?: ModelCommit[]
   /** 打开的是设计版本时给出 */
   version?: VersionRef
   /** 设计版本的对比基线：当前版本，以及上一轮（若有） */

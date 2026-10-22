@@ -39,10 +39,35 @@ export interface DesignInfo {
   problems: string[]
 }
 
-/** 打开的是哪个版本：缺省为当前版本 */
-export interface VersionRef {
+/** 设计版本的某一轮 */
+export interface DesignVersionRef {
   design: string
   revision: string
+}
+
+/** 提交版本（E5、E6）：描述在某个 git 提交时的快照；base 为对比基线的提交，`worktree` 为当前版本，缺省为历史中更早的一个提交 */
+export interface CommitVersionRef {
+  commit: string
+  base?: string
+}
+
+/** 打开的是哪个版本：缺省为当前版本 */
+export type VersionRef = DesignVersionRef | CommitVersionRef
+
+export const isCommitVersion = (v: VersionRef | undefined): v is CommitVersionRef => !!v && 'commit' in v
+export const isDesignVersion = (v: VersionRef | undefined): v is DesignVersionRef => !!v && 'design' in v
+
+/** E6：对比基线为当前版本（工作区）时 base 的取值 */
+export const WORKTREE = 'worktree'
+
+/** 改动过项目描述的一个 git 提交（E5） */
+export interface ModelCommit {
+  /** 完整哈希 */
+  hash: string
+  short: string
+  /** 提交日期（YYYY-MM-DD） */
+  date: string
+  subject: string
 }
 
 export const versionLabel = (d: Pick<DesignInfo, 'name'>, rev: string) => `${d.name} · ${rev}`

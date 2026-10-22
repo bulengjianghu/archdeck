@@ -6,6 +6,7 @@
 import { computed, onBeforeUnmount, onMounted, provide, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { createDeskState, type ModelPayload } from '@/state/useDeskState'
+import { isCommitVersion, type VersionRef } from '@/model'
 import { httpSourceFetcher } from './source/httpSource'
 import { DESK_STATE } from '@/state/inject'
 import GraphCanvas from './GraphCanvas.vue'
@@ -14,6 +15,7 @@ import Toolbar from './Toolbar.vue'
 import IssueBanner from './IssueBanner.vue'
 import VersionSwitcher from './VersionSwitcher.vue'
 import DesignBar from './DesignBar.vue'
+import CommitBar from './CommitBar.vue'
 import PerspectiveSwitch from './PerspectiveSwitch.vue'
 import PlayerBar from './PlayerBar.vue'
 import SplitView from './split/SplitView.vue'
@@ -25,14 +27,27 @@ import NavTree from './tree/NavTree.vue'
 import { OPEN_PREVIEW } from './shared/preview'
 import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
 
-const props = defineProps<{ project: string; design?: string; revision?: string }>()
+const props = defineProps<{ project: string; design?: string; revision?: string; commit?: string; base?: string }>()
 const router = useRouter()
-const version = props.design && props.revision ? { design: props.design, revision: props.revision } : undefined
+// 设计版本（ADR-0002）或提交版本（E5、E6）；都没有时为当前版本
+const version: VersionRef | undefined = props.commit
+  ? { commit: props.commit, ...(props.base ? { base: props.base } : {}) }
+  : props.design && props.revision
+    ? { design: props.design, revision: props.revision }
+    : undefined
 
 async function fetchModel(): Promise<ModelPayload> {
   const enc = encodeURIComponent
-  const file = version ? `models/${enc(props.project)}/designs/${enc(version.design)}/${enc(version.revision)}.json` : `models/${enc(props.project)}.json`
-  const what = version ? `设计版本「${version.design} / ${version.revision}」` : `项目「${props.project}」`
+  const file = isCommitVersion(version)
+    ? `models/${enc(props.project)}/commits/${enc(version.commit)}.json${version.base ? `?base=${enc(version.base)}` : ''}`
+    : version
+      ? `models/${enc(props.project)}/designs/${enc(version.design)}/${enc(version.revision)}.json`
+      : `models/${enc(props.project)}.json`
+  const what = isCommitVersion(version)
+    ? `提交「${version.commit.slice(0, 8)}」`
+    : version
+      ? `设计版本「${version.design} / ${version.revision}」`
+      : `项目「${props.project}」`
   const res = await fetch(`${import.meta.env.BASE_URL}${file}`, { cache: 'no-store' })
   if (res.status === 404) throw new Error(`${what}不存在`)
   if (!res.ok) throw new Error(`读取${what}失败：HTTP ${res.status}`)
@@ -169,7 +184,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </button>
     </header>
 
-    <DesignBar v-if="version && desk.status.value === 'ready'" class="design-bar" />
+    <CommitBar v-if="isCommitVersion(version) && desk.status.value === 'ready'" class="design-bar" />
+    <DesignBar v-else-if="version && desk.status.value === 'ready'" class="design-bar" />
 
     <aside v-show="!navCollapsed" class="nav-area">
       <NavTree v-if="desk.status.value === 'ready'" />

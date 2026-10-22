@@ -8,7 +8,7 @@
  */
 import { watch, type WatchStopHandle } from 'vue'
 import type { LocationQuery, Router } from 'vue-router'
-import type { VersionRef } from '@/model'
+import { isCommitVersion, type VersionRef } from '@/model'
 import { sameQuery, type Query } from '../transition'
 
 export interface RouterSyncOptions {
@@ -38,7 +38,10 @@ export function createRouterSync(router: Router, options: RouterSyncOptions, onR
   const onOwnRoute = () => {
     const params = router.currentRoute.value.params
     if (options.project !== undefined && params.project !== options.project) return false
-    return (params.design ?? undefined) === options.version?.design && (params.revision ?? undefined) === options.version?.revision
+    const v = options.version
+    const same = (key: string, want?: string) => (params[key] ?? undefined) === want
+    if (isCommitVersion(v)) return same('commit', v.commit) && same('base', v.base)
+    return same('design', v?.design) && same('revision', v?.revision) && same('commit', undefined)
   }
 
   const stop: WatchStopHandle = watch(

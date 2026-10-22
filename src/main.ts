@@ -13,6 +13,8 @@ const router = createRouter({
     { path: '/p/:project', name: 'project', component: DeskView, props: true },
     // 设计版本（ADR-0002）
     { path: '/p/:project/d/:design/:revision', name: 'design', component: DeskView, props: true },
+    // 提交版本（E5、E6）：描述在某个 git 提交时的快照，可选对比基线（另一个提交或 worktree）
+    { path: '/p/:project/c/:commit/:base?', name: 'commit', component: DeskView, props: true },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })

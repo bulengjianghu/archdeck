@@ -2,7 +2,7 @@
  * 模型源同步：取描述文件并交给模型层加载；本项目的描述变化（开发态 `arch-model:changed`）时重新取。
  * 只负责外界，加载结果由协调者 dispatch。
  */
-import { loadModel, type DesignInfo, type LoadedModel, type ModelIndex, type RawFile, type VersionRef } from '@/model'
+import { loadModel, type DesignInfo, type LoadedModel, type ModelCommit, type ModelIndex, type RawFile, type VersionRef } from '@/model'
 
 export interface CompareSource {
   label: string
@@ -17,7 +17,9 @@ export interface ModelPayload {
   files: RawFile[]
   /** 本项目的全部设计版本 */
   designs?: DesignInfo[]
-  /** 打开的是设计版本时给出（ADR-0002） */
+  /** 改动过本项目描述的最近提交（E5） */
+  commits?: ModelCommit[]
+  /** 打开的是设计版本（ADR-0002）或提交版本（E5）时给出 */
   version?: VersionRef
   compare?: { current: CompareSource; previous?: CompareSource }
 }

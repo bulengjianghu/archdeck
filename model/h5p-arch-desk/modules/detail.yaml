@@ -52,7 +52,7 @@ modules:
     name: 设计面板
     parent: present.panel
     responsibility: 设计版本根层：设计目标与范围、本轮做了什么、待评审确认的问题、按实体分组的变更清单（点击跳转，删除项只列出）、各轮评审意见与轮次切换。
-    codeRefs: [src/components/panel/DesignSection.vue]
+    codeRefs: [src/components/panel/DesignSection.vue, src/components/panel/CommitSection.vue, src/components/panel/ChangeList.vue]
   - id: present.panel.content
     name: 内容组件
     parent: present.panel

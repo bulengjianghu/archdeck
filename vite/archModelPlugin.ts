@@ -1,7 +1,9 @@
 /**
  * ModelSource：开发服务器把模型根目录下各项目的描述与本地源码交给页面（本地架构工作台只有这一种运行形态，ADR-0007 修订）。
  * - 描述：GET /projects.json（项目摘要列表，附健康度 Q10）、GET /models/<项目>.json（该项目当前版本全部 YAML 原文）、
- *   GET /models/<项目>/designs/<设计>/<轮次>.json（设计版本某一轮，附对比基线，ADR-0002）实时读取；
+ *   GET /models/<项目>/designs/<设计>/<轮次>.json（设计版本某一轮，附对比基线，ADR-0002）、
+ *   GET /models/<项目>/commits/<提交>.json?base=<提交|worktree>（描述在某个 git 提交时的快照，附对比基线，E5、E6）实时读取；
+ *   各版本附上改动过描述的最近提交（版本切换用）；
  *   文件变化时推送 `arch-model:changed`，载荷 { project } 指明哪个项目变了；
  * - 源码（G1、G2、G17、G11，docs/architecture/source.md §2.1）：GET /source/<项目>.json（文件清单）、
  *   /source/<项目>/file.json?path=（单个文件）、/source/<项目>/exports.json?path=（导出）、/source/<项目>/facts.json（代码事实、基线与拦截记录，K8）。
@@ -9,10 +11,11 @@
  */
 import path from 'node:path'
 import type { Plugin } from 'vite'
-import { isModelFile, listProjects, readDesignRevision, readProject } from './readModelDir'
+import { isModelFile, listProjects, readDesignRevision, readProject, type ModelPayload } from './readModelDir'
 import { readExports, readSourceFile, readSourceTree } from './readSource'
 import { readCodeDeps } from './readDeps'
 import { readHealth } from './readHealth'
+import { listModelCommits, readCommitVersion } from './readGit'
 import { LEDGER_PAGE_LIMIT, governanceDir, readBaseline, readLedger } from './governanceStore'
 import type { FactsPayload, SourcePayload } from '../src/model'
 
@@ -97,16 +100,29 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
           }
           return out ? json(res, out) : json(res, { error: `文件不在源码清单中：${file}` }, 404)
         }
+        // E5：版本切换要列出改动过描述的提交，各版本都附上
+        const withCommits = (project: string, payload: ModelPayload) => ({
+          ...payload,
+          commits: payload.commits ?? listModelCommits(path.join(modelRoot, project)),
+        })
+        const c = /^\/models\/([^/]+)\/commits\/([^/]+)\.json$/.exec(url)
+        if (c) {
+          const [project, rev] = c.slice(1).map(decodeURIComponent)
+          const base = new URLSearchParams(search).get('base') ?? undefined
+          const payload = readCommitVersion(modelRoot, project, rev, base, root)
+          return payload ? json(res, payload) : json(res, { error: `提交不存在或当时没有该项目的描述：${project} @ ${rev}` }, 404)
+        }
         const d = /^\/models\/([^/]+)\/designs\/([^/]+)\/([^/]+)\.json$/.exec(url)
         if (d) {
           const [project, design, revision] = d.slice(1).map(decodeURIComponent)
           const payload = readDesignRevision(modelRoot, project, design, revision, root)
-          return payload ? json(res, payload) : json(res, { error: `设计版本不存在：${project} / ${design} / ${revision}` }, 404)
+          return payload ? json(res, withCommits(project, payload)) : json(res, { error: `设计版本不存在：${project} / ${design} / ${revision}` }, 404)
         }
         const m = /^\/models\/([^/]+)\.json$/.exec(url)
         if (!m) return next()
-        const payload = readProject(modelRoot, decodeURIComponent(m[1]), root)
-        return payload ? json(res, payload) : json(res, { error: `项目不存在：${m[1]}` }, 404)
+        const project = decodeURIComponent(m[1])
+        const payload = readProject(modelRoot, project, root)
+        return payload ? json(res, withCommits(project, payload)) : json(res, { error: `项目不存在：${m[1]}` }, 404)
       })
     },
   }

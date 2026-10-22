@@ -8,7 +8,18 @@
  */
 import { computed, ref, shallowRef } from 'vue'
 import type { Router } from 'vue-router'
-import { RELATION_TYPES, planScenario, projectLevel, stageEnds, type DesignInfo, type Issue, type LevelView, type ModelIndex, type ScenarioPlan } from '@/model'
+import {
+  RELATION_TYPES,
+  planScenario,
+  projectLevel,
+  stageEnds,
+  type DesignInfo,
+  type ModelCommit,
+  type Issue,
+  type LevelView,
+  type ModelIndex,
+  type ScenarioPlan,
+} from '@/model'
 import {
   DEFAULT_TOGGLES,
   encodeView,
@@ -47,6 +58,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const issues = shallowRef<Issue[]>([])
   const modelDir = ref('')
   const designs = shallowRef<DesignInfo[]>([])
+  const commits = shallowRef<ModelCommit[]>([])
   const baselines = shallowRef<{ current?: Baseline; previous?: Baseline }>({})
   const state = shallowRef<ViewState>({ levelId: '', selection: null, hover: null, toggles: DEFAULT_TOGGLES(RELATION_TYPES), playback: null })
   /** 每次层次切换递增，界面据此决定是否适应画布 */
@@ -104,7 +116,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   // ── 领域派生（ADR-0013）──
   const files = createFiles({ state, index, view, sync: sourceSync, design: !!options.version })
   const run = createRun({ state, index, levelId, plan, view, positioned, fileOwners: files.owners })
-  const versions = createVersions({ state, index, designs, baselines, version: options.version })
+  const versions = createVersions({ state, index, designs, commits, baselines, version: options.version })
   const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version })
   const allIssues = computed(() => [...issues.value, ...files.warnings.value, ...facts.gateIssues.value])
 
@@ -129,6 +141,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       modelDir.value = loaded.payload.dir
       issues.value = loaded.model.issues
       designs.value = loaded.payload.designs ?? []
+      commits.value = loaded.payload.commits ?? []
       baselines.value = loaded.baselines
       index.value = loaded.model.index
       status.value = 'ready'

@@ -4,6 +4,7 @@ import { useDesk } from '@/state/inject'
 import Markdown from './Markdown.vue'
 import Section from './Section.vue'
 import DesignSection from './DesignSection.vue'
+import CommitSection from './CommitSection.vue'
 import GovernanceSection from './GovernanceSection.vue'
 
 const desk = useDesk()
@@ -16,7 +17,8 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
 <template>
   <div class="system-panel">
     <DesignSection v-if="desk.versions.design.value && desk.versions.revision.value" />
-    <header class="head" :class="{ 'after-design': !!desk.versions.design.value }">
+    <CommitSection v-else-if="desk.versions.commit.value" />
+    <header class="head" :class="{ 'after-design': !!desk.versions.design.value || !!desk.versions.commit.value }">
       <h2>{{ sys.name }}</h2>
       <div class="badges">
         <code>{{ sys.id }}</code>

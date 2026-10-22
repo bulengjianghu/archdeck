@@ -250,6 +250,57 @@ describe('DeskState · 设计版本', () => {
   })
 })
 
+describe('DeskState · 提交版本（E5、E6）', () => {
+  const commits = [
+    { hash: 'b2'.repeat(20), short: 'b2b2b2b', date: '2026-10-22', subject: '加模块' },
+    { hash: 'a1'.repeat(20), short: 'a1a1a1a', date: '2026-10-21', subject: '第一版' },
+  ]
+  const newer = sampleFiles({ 'extra.yaml': 'modules: [{ id: infra.new, name: New, parent: infra }]' })
+
+  async function open(url: string, version: { commit: string; base?: string }) {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/p/:project', component: { render: () => null } },
+        { path: '/p/:project/c/:commit/:base?', component: { render: () => null } },
+      ],
+    })
+    await router.push(url)
+    const desk = createDeskState(
+      async () => ({
+        project: 'demo',
+        dir: 'model/demo@b2b2b2b',
+        files: newer,
+        commits,
+        version: { commit: version.commit, base: version.base ?? commits[1].hash },
+        compare: { current: { label: '提交 a1a1a1a', dir: 'model/demo@a1a1a1a', files: sampleFiles() } },
+      }),
+      { project: 'demo', version },
+    )
+    desk.attachRouter(router)
+    await desk.init()
+    return { desk, router }
+  }
+
+  it('打开的提交按短哈希前缀对上提交列表；相对基线提交算出差异；没有代码事实', async () => {
+    const { desk } = await open('/p/demo/c/b2b2', { commit: 'b2b2' })
+    expect(desk.versions.commit.value?.subject).toBe('加模块')
+    expect(desk.versions.design.value).toBeNull()
+    expect(desk.versions.baseline.value?.label).toBe('提交 a1a1a1a')
+    expect(desk.versions.diff.value?.module.get('infra.new')?.kind).toBe('added')
+    expect(desk.facts.status.value).toBe('design')
+  })
+
+  it('指定基线时给出基线提交；只响应同一提交与基线的路由', async () => {
+    const { desk, router } = await open(`/p/demo/c/b2b2/${commits[1].hash}?level=infra`, { commit: 'b2b2', base: commits[1].hash })
+    expect(desk.versions.baseCommit.value?.short).toBe('a1a1a1a')
+    expect(desk.levelId.value).toBe('infra')
+    await router.push('/p/demo/c/b2b2/worktree?level=app')
+    await new Promise(r => setTimeout(r, 0))
+    expect(desk.levelId.value).toBe('infra')
+  })
+})
+
 describe('DeskState · 运行视角', () => {
   async function openDesk(url = '/') {
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
