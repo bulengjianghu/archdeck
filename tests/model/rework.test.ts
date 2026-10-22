@@ -335,3 +335,20 @@ describe('X4 草图偏差进返工清单', () => {
     expect(reworkMarkdown(open, 'T')).toContain('### [提醒] 设计「d」的草图偏差')
   })
 })
+
+describe('S17 步骤无证据', () => {
+  it('两端之间没有任何依赖的步骤按端点（含方向）聚合为 warning，有依赖与不判定的不进；没给文件依赖时不判断', () => {
+    const { index, issues } = loadModel(files())
+    const own = assignFiles(index, SRC, ['docs/**'])
+    const tree = { files: SRC, packages: {} }
+    const deps = [...DEPS, dep('src/ui/store/s.ts', 'src/core/api/index.ts', 2)]
+    const list = reworkList({ index, issues, source: { own, tree }, deps })
+    const items = byCode(list.items, 'step.no-evidence')
+    expect(items.map(i => i.id).sort()).toEqual(['unevidenced:core.util->ui.panel', 'unevidenced:ui.panel->core.util', 'unevidenced:ui.view->core.api'])
+    expect(items[0]).toMatchObject({ category: 'unevidenced', severity: 'warning', rules: ['S16', 'S17'], target: { scenario: 'sc' } })
+    expect(items[0].affected[0]).toMatchObject({ in: 'description', file: 'scenarios/sc.yaml' })
+    expect(items[0].actions.map(a => a.kind)).toEqual(['fix-description', 'add-code-refs', 'fix-relation'])
+    expect(list.byCategory.unevidenced).toBe(3)
+    expect(byCode(reworkList({ index, issues, source: { own, tree } }).items, 'step.no-evidence')).toEqual([])
+  })
+})

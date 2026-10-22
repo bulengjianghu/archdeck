@@ -2,7 +2,7 @@
  * DeskState：协调者（docs/architecture/view-state.md §2）。
  * - 持有视图状态（一个值）、加载后的模型与对比基线；
  * - 唯一写入口 dispatch(action) → transition() → 写入新状态；对外的操作都是构造动作并 dispatch 的包装；
- * - 派生要画的数据：核心（层次、选中、视角、层次视图）平铺，领域派生分组——run 运行视角、files 源码、versions 版本、facts 架构治理、evolution 演化事实（ADR-0013、ADR-0015、ADR-0023，见 ./desk/）；
+ * - 派生要画的数据：核心（层次、选中、视角、层次视图）平铺，领域派生分组——run 运行视角、files 源码、versions 版本、facts 架构治理、evidence 步骤证据、evolution 演化事实（ADR-0013、ADR-0015、ADR-0023，见 ./desk/）；
  * - 与外界的交互交给同步适配器：路由（sync/router）、模型源（sync/modelSource）、布局（sync/layout）、源码（sync/source）。
  * 呈现层只读这里的状态、只调这里的操作，不直接调用模型层的计算。
  */
@@ -54,6 +54,7 @@ import { createFacts } from './desk/facts'
 import { createReview } from './desk/review'
 import { createEvolution } from './desk/evolution'
 import { createIntent } from './desk/intent'
+import { createEvidence } from './desk/evidence'
 
 export type { Selection, Toggles } from './transition'
 export { encodeSelection, decodeSelection } from './transition'
@@ -149,7 +150,9 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
 
   // ── 领域派生（ADR-0013）──
   const files = createFiles({ state, index, view, sync: sourceSync, design: !!options.version })
-  const run = createRun({ state, index, levelId, plan, view, positioned, fileOwners: files.owners })
+  // 步骤的代码证据（S16、S17）：时序图的「?」由 run 交给 Layout，所以先于 run 创建
+  const evidence = createEvidence({ state, index, plan, planOf: planScenario, files, sync: sourceSync, design: !!options.version })
+  const run = createRun({ state, index, levelId, plan, view, positioned, fileOwners: files.owners, evidence: evidence.levels })
   const versions = createVersions({ state, index, designs, commits, baselines, version: options.version, sketchPrompt })
   const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version })
   const evolution = createEvolution({ state, index, view, files, facts, sync: sourceSync, design: !!options.version })
@@ -165,6 +168,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     const report = options.version ? null : facts.report.value
     const evo = options.version ? null : evolution.stats.value
     const checks = intent.checks.value
+    const deps = evidence.deps.value
     return reworkList({
       index: idx,
       issues: issues.value,
@@ -172,6 +176,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       ...(report ? { report } : {}),
       ...(evo ? { evolution: evo } : {}),
       ...(checks.length ? { sketches: checks } : {}),
+      ...(deps ? { deps } : {}),
     })
   })
   // ── 写入人拥有的文件（B1–B5，ADR-0019）：只发意图，结果由文件变化推送回来（N5）──
@@ -331,6 +336,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     review,
     evolution,
     intent,
+    evidence,
     // 操作
     dispatch,
     init,

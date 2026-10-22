@@ -34,6 +34,7 @@ import {
   type CheckResult,
   type CheckTarget,
   type EntryOf,
+  type FileDep,
   type GovernanceReport,
   type Issue,
   type LedgerClient,
@@ -77,6 +78,8 @@ export interface Loaded {
   own: SourceOwnership
   entryOf: EntryOf
   report: GovernanceReport
+  /** K1：文件依赖（步骤的代码证据用，S16） */
+  deps: FileDep[]
   /** J1：演化事实；读不到 git 历史时为原因 */
   evolution: EvolutionStats | { error: string }
   /** X4：活动草图对当前版本的核验 */
@@ -160,6 +163,7 @@ export function createService(opts: ServiceOptions) {
       own,
       entryOf: entryResolver(index, own, tree),
       report,
+      deps: deps.deps,
       evolution,
       checks,
       stamp,
@@ -324,7 +328,15 @@ export function createService(opts: ServiceOptions) {
     issues(p?: string, category?: ReworkCategory): { project: string; list: ReworkList; markdown: string } {
       const l = load(p)
       const evo = 'error' in l.evolution ? {} : { evolution: l.evolution }
-      const all = reworkList({ index: l.index, issues: l.issues, source: { own: l.own, tree: l.tree }, report: l.report, ...evo, sketches: l.checks })
+      const all = reworkList({
+        index: l.index,
+        issues: l.issues,
+        source: { own: l.own, tree: l.tree },
+        report: l.report,
+        deps: l.deps,
+        ...evo,
+        sketches: l.checks,
+      })
       const items = category ? all.items.filter(i => i.category === category) : all.items
       const list: ReworkList = category ? { ...all, items } : all
       const modelDir = path.relative(opts.root, path.join(modelRoot, l.project)).split(path.sep).join('/')

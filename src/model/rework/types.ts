@@ -18,7 +18,8 @@ export type ReworkCategory =
   | 'coupling'
   | 'sketch'
   | 'owned'
-export const REWORK_CATEGORIES: readonly ReworkCategory[] = ['description', 'violation', 'cycle', 'ownership', 'unconfirmed', 'undescribed', 'unmodeled', 'review', 'coupling', 'sketch', 'owned']
+  | 'unevidenced'
+export const REWORK_CATEGORIES: readonly ReworkCategory[] = ['description', 'violation', 'cycle', 'ownership', 'unconfirmed', 'undescribed', 'unmodeled', 'review', 'coupling', 'sketch', 'owned', 'unevidenced']
 
 /** 严重度：error 卡门禁或剔除了实体；warning 描述与代码不一致；info 只提示（未描述依赖、已豁免） */
 export type ReworkSeverity = IssueSeverity | 'info'
@@ -113,6 +114,7 @@ export const REWORK_CATEGORY_LABELS: Record<ReworkCategory, string> = {
   coupling: '时间耦合',
   sketch: '草图偏差',
   owned: '指纹不符',
+  unevidenced: '步骤无证据',
 }
 
 export const REWORK_SEVERITY_LABELS: Record<ReworkSeverity, string> = { error: '错误', warning: '提醒', info: '提示' }

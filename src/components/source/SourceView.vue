@@ -2,13 +2,15 @@
 /**
  * 源代码预览（SR-8、G17）：只读显示预览文件——路径、归属模块、行数，按扩展名高亮的代码与行号。
  * 过大、二进制、文件不存在、源码清单读取失败时只给提示；没有编辑、保存等 IDE 功能。
+ * 带目标行时滚到该行并标出（S18：步骤面板的候选调用点）。
  */
-import { computed, ref, watchEffect } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch, watchEffect } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import { highlightCode } from '../shared/highlight'
+import { markLine } from './markLine'
 
-const props = defineProps<{ path: string }>()
+const props = defineProps<{ path: string; line?: number }>()
 const desk = useDesk()
 /** 太长的文件不高亮（高亮在主线程，几十万字符会卡住界面），仍带行号显示 */
 const HIGHLIGHT_LIMIT = 200_000
@@ -39,6 +41,25 @@ watchEffect(async () => {
   }
 })
 const plainLines = computed(() => (text.value ?? '').split('\n'))
+/** S18：目标行在渲染内容里标出（高亮结果的第 N 个 span.line 加 target），不靠事后改 DOM */
+const shown = computed(() => (html.value ? markLine(html.value, props.line) : null))
+/** 内容渲染好或目标行变化后滚到目标行；副栏刚出现、尚未排好版（高为 0）时等排好版再滚 */
+const body = ref<HTMLElement | null>(null)
+let pending = false
+function revealLine() {
+  const root = body.value
+  const el = root?.querySelector<HTMLElement>('.line.target')
+  pending = !!el && root!.clientHeight === 0
+  if (el && !pending) el.scrollIntoView({ block: 'center' })
+}
+watch([shown, text, () => props.line], () => nextTick(revealLine), { flush: 'post', immediate: true })
+// 测试环境（jsdom）没有 ResizeObserver
+const resized = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => pending && revealLine())
+watch(body, (el, old) => {
+  if (old) resized?.unobserve(old)
+  if (el) resized?.observe(el)
+})
+onBeforeUnmount(() => resized?.disconnect())
 const kb = (n: number) => `${Math.round(n / 1024)} KB`
 </script>
 
@@ -53,7 +74,7 @@ const kb = (n: number) => `${Math.round(n / 1024)} KB`
       <span v-if="status" class="badge" :class="{ warn: status !== '已忽略' }">{{ status }}</span>
       <span class="badge ro">只读</span>
     </header>
-    <div class="body">
+    <div ref="body" class="body">
       <p v-if="desk.files.payload.value?.status !== 'local'" class="source-note" :class="{ err: desk.files.payload.value }">
         {{ desk.files.payload.value?.status === 'error' ? desk.files.payload.value.reason : '正在读取源码清单…' }}
       </p>
@@ -63,8 +84,11 @@ const kb = (n: number) => `${Math.round(n / 1024)} KB`
       <p v-else-if="file && 'tooLarge' in file" class="hint">文件过大（{{ kb(file.tooLarge) }}），不预览。</p>
       <p v-else-if="file && 'binary' in file" class="hint">二进制文件，不预览。</p>
       <!-- eslint-disable-next-line vue/no-v-html -- shiki 输出，已转义源码 -->
-      <div v-else-if="html" class="code-view" v-html="html" />
-      <pre v-else class="code-view plain"><code><span v-for="(l, i) in plainLines" :key="i" class="line">{{ l }}</span></code></pre>
+      <div v-else-if="shown" class="code-view" v-html="shown" />
+      <pre
+        v-else
+        class="code-view plain"
+      ><code><span v-for="(l, i) in plainLines" :key="i" class="line" :class="{ target: i + 1 === line }">{{ l }}</span></code></pre>
     </div>
   </section>
 </template>
@@ -154,6 +178,11 @@ const kb = (n: number) => `${Math.round(n / 1024)} KB`
 
 .code-view.plain .line {
   display: block;
+}
+
+/* S18：目标行 */
+.code-view .line.target {
+  background: var(--accent-soft);
 }
 
 .code-view .line::before {

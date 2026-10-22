@@ -24,7 +24,7 @@ modules:
     name: 架构治理派生（desk.facts）
     parent: state.desk
     responsibility: 由源码同步取得的代码事实派生（computed，调用模型层架构治理）：事实状态（设计版本或历史提交、取数中、失败——源码清单读取失败也算，K8、G1）、治理报告、结构视角开关开启时（缺省开启）的本层投影（只取基线外的违规，K9、Y4）、门禁错误（U9）、拦截记录摘要（Q4）、选中的代码依赖叠加线（K10）、选中节点所在的本层环（Y5）、模块治理信息、关系证实（含知识方向与「证据像 depends」）与端口三角（K11）。
-    codeRefs: [src/state/desk/facts.ts]
+    codeRefs: [src/state/desk/facts.ts, src/state/desk/evidence.ts]
   - id: state.desk.evolution
     name: 演化事实派生（desk.evolution）
     parent: state.desk
@@ -42,7 +42,7 @@ modules:
     name: 事实比对
     parent: model.governance
     responsibility: 文件依赖按归属提升为模块依赖（一端是归属冲突文件的不提升、单独列出，祖先后代之间的另记，K4）；关系的证实（端点相同或互为祖先后代，notifies 与 streams 两向；implements 只认引用目标声明的接口名或类的 implements / extends，否则只引数据类型为「结构性实现」（info）、引用了函数 / 类 / 变量为「证据像 depends」；证实时给出依据相对箭头的知识方向，K5；两端宿主相同的概念拆分不判定，K5a；写了 via 的不判定，K5b）；未证实是否报警（编译期关系，或两端之间没有任何依赖的运行时关系，K6）；未描述依赖（只计有值导入的，notifies 与 streams 覆盖两个方向，K7）。
-    codeRefs: [src/model/governance/facts.ts]
+    codeRefs: [src/model/governance/facts.ts, src/model/governance/evidence.ts]
   - id: model.governance.rules
     name: 规则判定
     parent: model.governance

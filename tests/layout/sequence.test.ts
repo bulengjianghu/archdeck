@@ -95,3 +95,23 @@ describe('layoutSequence', () => {
     )
   })
 })
+
+describe('S17 消息的证据等级', () => {
+  it('给了各帧等级时每条消息取合并帧中最弱的一档（有一帧无证据即无证据），没有等级的消息不标', async () => {
+    const { model: base, structure } = await setup('infra')
+    // 本层的可见消息都只有一帧：把第一条改成合并两帧的消息
+    const first = base.messages.findIndex(m => m.kind !== 'empty')
+    const model = { ...base, messages: base.messages.map((m, i) => (i === first ? { ...m, frameIds: [...m.frameIds, 'merged'] } : m)) }
+    const visible = model.messages.map((m, i) => ({ m, i })).filter(({ m }) => m.kind !== 'empty')
+    const a = visible[0]
+    const b = visible[1]
+    const levels = new Map<string, 'name' | 'module' | 'none' | 'skipped'>()
+    a.m.frameIds.forEach((id, k) => levels.set(id, k === 0 ? 'name' : 'none'))
+    b.m.frameIds.forEach(id => levels.set(id, 'module'))
+    const ps = layoutSequence(model, structure, levels)
+    expect(ps.messages[a.i].evidence).toBe('none')
+    expect(ps.messages[b.i].evidence).toBe('module')
+    expect(visible.filter(x => x !== a && x !== b).every(({ i }) => ps.messages[i].evidence === undefined)).toBe(true)
+    expect(layoutSequence(model, structure).messages.every(m => !('evidence' in m))).toBe(true)
+  })
+})
