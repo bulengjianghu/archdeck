@@ -20,7 +20,7 @@ modules:
   - id: present.canvas.edges
     name: 边组件
     parent: present.canvas
-    responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线。一个视觉通道只表一个维度（L10、ADR-0018）：颜色 = 关系类型（编译期低饱和且更细）；线型 = 事实状态（实线已证实或无事实、虚线未证实、点线为代码依赖叠加线，K9）；箭头自画 marker——同步实心、异步空心、implements 空心三角；线宽 = 聚合条数三档；×N 标签画成 pill，异常标记用警示色。晕：违规红晕优先于设计变更底色，选中为强调色窄晕（不改线宽），回放当前步骤为宽晕并沿方向流动（P10）；走过的边不加粗。临时线：经由上层关系为关系类型色的虚线（P15），未建模为红色虚线（P11）。
+    responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线；颜色、线宽、线型的映射在 edgeStyle，与「显示」面板的示意线共用。一个视觉通道只表一个维度（L10、ADR-0018）：颜色 = 关系类型（编译期低饱和且更细）；线型 = 事实状态（实线已证实或无事实、虚线未证实、点线为代码依赖叠加线，K9）；箭头自画 marker——同步实心、异步空心、implements 空心三角；线宽 = 聚合条数三档；×N 标签画成 pill，异常标记用警示色。晕：违规红晕优先于设计变更底色，选中为强调色窄晕（不改线宽），回放当前步骤为宽晕并沿方向流动（P10）；走过的边不加粗。临时线：经由上层关系为关系类型色的虚线（P15），未建模为红色虚线（P11）。
     codeRefs: [src/components/edges/**]
 
   - id: present.panel.dispatch
@@ -80,8 +80,8 @@ modules:
   - id: present.canvas.legend
     name: 显示面板（显示设置与图例）
     parent: present.canvas
-    responsibility: 画布右下角的「显示」面板，先「设置」后「图例」（ADR-0017）：设置只放没有图例的开关（结构视角为边界节点、只看现状；运行视角为静态关系显示方式）；图例按画布对象分组、每组可折叠——关系（类型行按运行时在前、编译期在后，颜色与粗细示意，结构视角下每行兼作类型筛选；线型、箭头、线宽与 ×N 的说明，L10）、节点、代码事实（结构视角，开关在组标题）、回放（运行视角）；一行一项，示意与画布同款。折叠时摘要列出非默认的设置（运行视角缺省折叠，摘要总是「静态关系：<方式>」）；面板展开与各组折叠按视角记在本机，运行视角默认只展开「回放」。
-    codeRefs: [src/components/DisplayPanel.vue]
+    responsibility: 画布右下角的「显示」面板，先「设置」后「图例」（ADR-0017）：设置只放没有图例的开关（结构视角为边界节点、只看现状；运行视角为静态关系显示方式）；图例按画布对象分组、每组可折叠——关系（类型行按运行时在前、编译期在后，颜色与粗细示意，结构视角下每行兼作类型筛选；线型、箭头、线宽与 ×N 的说明，L10）、节点、代码事实（结构视角，开关在组标题）、回放（运行视角）；一行一项，示意线由 LineSwatch 按与边组件共用的 edgeStyle 画出，与画布同款。各组为子组件（NodeSettings、RelationLegend、FactsLegend、ReplayLegend，外壳 DisplayGroup）。折叠时摘要列出非默认的设置（运行视角缺省折叠，摘要总是「静态关系：<方式>」）；面板展开与各组折叠按视角记在本机（useDisplayPrefs），运行视角默认只展开「回放」。
+    codeRefs: [src/components/DisplayPanel.vue, src/components/display/**]
 
   # ── 视图状态层 ──────────────────────────────────────────
   - id: state.desk.loading
@@ -205,6 +205,7 @@ relations:
   - {id: rel.ad.flow-nodes, from: present.canvas.flow, to: present.canvas.nodes, type: depends}
   - {id: rel.ad.flow-edges, from: present.canvas.flow, to: present.canvas.edges, type: depends}
   - {id: rel.ad.flow-legend, from: present.canvas.flow, to: present.canvas.legend, type: depends, description: 图例浮在画布右下角}
+  - {id: rel.ad.legend-edge-style, from: present.canvas.legend, to: present.canvas.edges, type: depends, description: 图例的示意线（LineSwatch）与画布的边共用 edgeStyle（颜色、线宽、线型，L10）}
   - {id: rel.ad.panel-module, from: present.panel.dispatch, to: present.panel.module, type: depends}
   - {id: rel.ad.panel-relation, from: present.panel.dispatch, to: present.panel.relation, type: depends}
   - {id: rel.ad.panel-edge, from: present.panel.dispatch, to: present.panel.edge, type: depends}

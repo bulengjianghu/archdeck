@@ -129,10 +129,10 @@ type PaneLayout =
 - **写入人拥有的文件**（`panel/WriteForm.vue`，B1–B5）：先收起为一个链接，展开填写后「写入」，成功显示写进的文件、失败显示原因。用在三处：违规详情「加例外（写理由）」（`GovernanceSection`，当前版本）、未归属文件「加入忽略」（`FilePanel`，可一键改为整个目录）、设计面板当前一轮「记录评审意见」（`DesignSection`）。
 - **怎么读这张图**（`GuideDialog.vue`，W-10）：顶栏「帮助」打开的对话框，结构 / 运行 / 对照与治理三组各一句话加小示意；只讲概念，具体图例留在「显示」面板；Esc 或单击遮罩关闭（Esc 只关对话框，不取消画布上的选中）。
 - **问题角标**：画布左上角「⚠ N」，N 为返工清单的错误与提醒数（提示不计），有错误时为危险色；单击展开导航树并切到「问题」页签（W-6、U9）。
-- **「显示」面板**（`DisplayPanel.vue`，W-2、ADR-0017）：先「设置」后「图例」。
+- **「显示」面板**（`DisplayPanel.vue` 外壳 + `display/`：设置 `NodeSettings`，图例 `RelationLegend`、`FactsLegend`、`ReplayLegend`，组外壳 `DisplayGroup`，示意线 `LineSwatch`，本机记忆 `useDisplayPrefs`，W-2、ADR-0017）：先「设置」后「图例」。
   - **设置**只放没有图例的开关：结构视角为边界节点、只看现状；运行视角为静态关系显示方式隐藏 / 淡显 / 全显（分段按钮，V8），下面一行「ⓘ 场景中显示全部节点与关系类型」（完整说明在悬停提示，L9）。
   - **图例**按画布上的对象分组，每组可单独折叠：关系（类型行：颜色与粗细示意，运行时与编译期分开，结构视角下每行兼作该类关系的显示开关，L8，组标题右侧为「点击筛选」或有隐藏时的「全部显示」；线型：实线 = 已证实、虚线 = 未证实、点线 = 代码有描述无；箭头：实心 = 同步、空心 = 异步、空心三角 = 实现；线越粗 = 聚合条数越多，「×N」见面板）、节点（模块、可下钻、目标态 / 外部）、代码事实（结构视角；开关在组标题右侧，K9：不可用时置灰并写明原因；开启后列出未证实（虚线 + ?）、本层环、未描述依赖（点线）与违规（红色点线、红晕））、回放（运行视角：当前步骤、已走过、其余已走（选中某步时变灰）、当前端点 / 内部活动、经由上层关系（类型色虚线）、未建模、分支预览）。时序图的箭头约定不在这里，在副栏的「图例」（§2）。
-  - **排版**：一行一项，左列为与画布同款的示意（固定宽，线型与 `RouteEdge` 一致），右列为正文色文字（颜色只在示意上）；只有「节点」组三个短项并排。面向用户的文字不出现规则编号。
+  - **排版**：一行一项，左列为与画布同款的示意（固定宽；示意线由 `LineSwatch` 按与 `RouteEdge` 共用的 `edges/edgeStyle.ts` 画出，不手写示意样式），右列为正文色文字（颜色只在示意上）；只有「节点」组三个短项并排。面向用户的文字不出现规则编号。
   - **折叠与记忆**：折叠时标题后列出非默认设置（结构视角：隐藏几类关系、无边界节点、只看现状、代码事实已关）；运行视角缺省折叠，标题后总是一行「静态关系：<显示方式>」。面板展开与各组折叠按视角记在本机：结构视角默认面板与各组全展开；运行视角默认面板收起，展开后只展开「回放」。面板限高，超出在内部滚动。对比基线、图上标出变更留在设计信息条，缩放留在左下角。
 
 ## 11. 组件与模块对照
@@ -146,7 +146,7 @@ type PaneLayout =
 | 视角切换 · 场景列表 · 回放控制条 | `PerspectiveSwitch.vue`、`ScenarioList.vue`、`PlayerBar.vue`、`RouteBar.vue`、`BranchChooser.vue` |
 | 导航树 · 问题页签 | `tree/**`（NavTree · ModuleTree · FileTree · StepTree · IssueList） |
 | 源代码预览 | `source/**`（SourceView · httpSource） |
-| 画布 | `GraphCanvas.vue`、`DisplayPanel.vue`（浮在画布右下角，读舞台显示）、`nodes/**`（含 ActorNode、FrameNode、StepBadge、BranchPreview）、`edges/**` |
+| 画布 | `GraphCanvas.vue`、`DisplayPanel.vue` 与 `display/**`（浮在画布右下角，读舞台显示）、`nodes/**`（含 ActorNode、FrameNode、StepBadge、BranchPreview）、`edges/**` |
 | 时序图 | `sequence/**`（SequenceView · SequenceHeads · SequenceLanes · SequenceFragments） |
 | 属性面板 | `panel/**`（含 ChangeList（设计版本与提交版本共用的变更清单）、CommitSection、ActorPanel、FilePanel、ModuleSource、ScenarioPanel、StepPanel、RunSection、DepPanel、GovernanceSection、ModuleGovernance、RelationFact、FileDepList） |
 | 导航 | `Breadcrumb.vue`、`Toolbar.vue` |

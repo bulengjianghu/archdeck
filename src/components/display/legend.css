@@ -1,0 +1,60 @@
+/* 「显示」面板图例的共用样式（各组子组件共用，限定在 .display 内）：一行一项，左列示意固定宽，右列文字 */
+.display .item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 22px;
+  line-height: 1.35;
+  text-align: left;
+  color: var(--text);
+}
+
+.display .item.muted {
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.display .item.inline {
+  gap: 12px;
+}
+
+.display .item.inline > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.display .sw {
+  flex: none;
+  width: 28px;
+  height: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+
+.display .box {
+  display: inline-block;
+  width: 16px;
+  height: 11px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 3px;
+}
+
+.display .box.stack {
+  box-shadow:
+    2px 2px 0 -1px var(--surface),
+    2px 2px 0 0 var(--border-strong);
+}
+
+.display .box.dashed {
+  border-style: dashed;
+}
+
+.display .box.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}

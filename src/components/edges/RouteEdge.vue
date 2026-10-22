@@ -8,6 +8,7 @@ import { computed } from 'vue'
 import { BaseEdge } from '@vue-flow/core'
 import type { RouteEdgeData } from '@/layout/canvas'
 import { horizontalCurve, roundedPolyline, verticalCurve } from './routePath'
+import { FLOW, strokeColor, strokeStyle } from './edgeStyle'
 
 const props = defineProps<{ id: string; data: RouteEdgeData }>()
 
@@ -17,33 +18,9 @@ const path = computed(() => {
   return roundedPolyline(pts)
 })
 
-/** 线宽档位（px）：运行时 / 编译期 */
-const WIDTH = { runtime: [1.5, 2.5, 3.5], compile: [1, 1.75, 2.5] } as const
-const DASHED = '6 4'
-const DOTTED = '0.5 4.5'
-
-const color = computed(() => {
-  const d = props.data
-  if (d.temp === 'code') return d.violated ? 'var(--danger)' : 'var(--edge-code)'
-  if (d.temp === 'unmodeled') return 'var(--danger)'
-  if (d.play === 'preview') return 'var(--warning)'
-  if (d.muted) return 'var(--text-3)'
-  return `var(--rel-${d.edge.type})`
-})
-
-const style = computed(() => {
-  const d = props.data
-  if (d.temp === 'code') return { stroke: color.value, strokeWidth: 2, strokeDasharray: DOTTED, strokeLinecap: 'round' as const, opacity: d.dim ? 0.12 : 0.95 }
-  if (d.temp === 'unmodeled') return { stroke: color.value, strokeWidth: 1.5, strokeDasharray: '5 5', opacity: d.play === 'preview' ? 0.7 : 0.9 }
-  return {
-    stroke: color.value,
-    strokeWidth: WIDTH[d.compile ? 'compile' : 'runtime'][d.weight - 1],
-    // 线型只表事实状态；分支预览与经由上层（P15）的临时线为虚线
-    strokeDasharray: d.play === 'preview' || d.temp === 'upper' || d.factState === 'unconfirmed' ? DASHED : undefined,
-    opacity: d.dim ? 0.12 : d.muted ? 0.45 : 1,
-    transition: 'opacity 0.15s',
-  }
-})
+const look = computed(() => ({ ...props.data, type: props.data.edge.type }))
+const color = computed(() => strokeColor(look.value))
+const style = computed(() => ({ ...strokeStyle(look.value), ...(props.data.temp ? {} : { transition: 'opacity 0.15s' }) }))
 
 /** 每条边自带箭头 marker，颜色跟随线色 */
 const markerId = computed(() => `arrow-${props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)}`)}`)
@@ -88,8 +65,16 @@ const markerId = computed(() => `arrow-${props.id.replace(/[^\w-]/g, c => `_${c.
     />
   </g>
   <template v-if="data.play === 'current'">
-    <path :d="path" class="edge-flow-base" fill="none" stroke-linecap="round" />
-    <path :d="path" class="edge-flow" :class="{ reverse: data.flowReverse }" fill="none" stroke-linecap="round" />
+    <path :d="path" class="edge-flow-base" fill="none" stroke-linecap="round" :stroke-width="FLOW.baseWidth" />
+    <path
+      :d="path"
+      class="edge-flow"
+      :class="{ reverse: data.flowReverse }"
+      fill="none"
+      stroke-linecap="round"
+      :stroke-width="FLOW.width"
+      :stroke-dasharray="FLOW.dash"
+    />
   </template>
 </template>
 
@@ -128,14 +113,11 @@ const markerId = computed(() => `arrow-${props.id.replace(/[^\w-]/g, c => `_${c.
 .edge-flow-base {
   pointer-events: none;
   stroke: var(--accent);
-  stroke-width: 4;
 }
 
 .edge-flow {
   pointer-events: none;
   stroke: var(--surface);
-  stroke-width: 1.6;
-  stroke-dasharray: 3 9;
   animation: flow 0.9s linear infinite;
 }
 
