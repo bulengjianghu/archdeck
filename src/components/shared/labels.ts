@@ -1,5 +1,5 @@
 /** 界面文案：领域枚举的中文显示名。只是呈现关注点，不进模型层（模型层只给枚举与类型）。 */
-import type { ActorKind, DesignStatus, RelationType } from '@/model'
+import type { ActorKind, DesignStatus, EvidenceLevel, RelationType } from '@/model'
 
 /** 关系类型（02 §1.1、ADR-0022）：图例、面板、边的类型标签共用 */
 export const RELATION_TYPE_LABELS: Record<RelationType, string> = {
@@ -18,6 +18,9 @@ export const RELATION_TYPE_HINTS: Record<RelationType, string> = {
   depends: '编译期知道对方',
   implements: '实现对方声明的接口',
 }
+
+/** 步骤的证据等级（S16）：步骤面板、场景面板共用 */
+export const EVIDENCE_LEVEL_LABELS: Record<EvidenceLevel, string> = { name: '按名字匹配', module: '按模块依赖', none: '无证据', skipped: '不判定' }
 
 export const ACTOR_KIND_LABELS: Record<ActorKind, string> = { user: '用户', system: '外部系统', time: '时间' }
 

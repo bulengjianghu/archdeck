@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /**
  * 场景面板（选中场景时，即进度在开头且没有选中其他对象，V2、R12）：说明、触发者与原因、场景所在层次（可跳转）、参与模块、ref 的引用与被引用、
- * 证据文件（S15、D-20：在源码清单里的可在副栏预览，不在的标出）。步骤目录在导航树的步骤树里（T6）。
+ * 证据：先证据文件（S15、D-20：在源码清单里的可在副栏预览，不在的标出），后各步的证据等级计数（S16，有代码事实时）。步骤目录在导航树的步骤树里（T6）。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import { useOpenPreview } from '../shared/preview'
+import { EVIDENCE_LEVEL_LABELS } from '../shared/labels'
 import Section from './Section.vue'
 import Markdown from './Markdown.vue'
 import DesignNote from './DesignNote.vue'
@@ -30,6 +31,10 @@ const participants = computed(() => {
 })
 const refs = desk.run.refs
 const referencedBy = desk.run.referencedBy
+/** S16：本场景各步的证据等级计数；没有代码事实时为 null */
+const evCounts = computed(() => desk.evidence.scenario.value?.counts ?? null)
+const EV_SHORT = { name: '按名字', module: '按依赖', none: '无证据', skipped: '不判定' } as const
+
 function pointAt(id: string) {
   if (idx.value.actors.has(id)) desk.select({ kind: 'actor', id })
   else desk.revealModule(id)
@@ -82,8 +87,8 @@ function pointAt(id: string) {
         <button v-for="o in referencedBy" :key="o.id" class="link ref" @click="desk.openScenario(o.id)">{{ o.name }}</button>
       </div>
     </Section>
-    <Section v-if="sc.evidence?.length" title="证据" :count="sc.evidence.length">
-      <ul class="plain evidence">
+    <Section v-if="sc.evidence?.length || evCounts" title="证据" :count="sc.evidence?.length">
+      <ul v-if="sc.evidence?.length" class="plain evidence">
         <li v-for="f in sc.evidence" :key="f">
           <button v-if="hasFile(f)" class="link" :title="`在副栏预览 ${f}`" @click="openPreview(f)">{{ f }}</button>
           <template v-else>
@@ -92,6 +97,16 @@ function pointAt(id: string) {
           </template>
         </li>
       </ul>
+      <div v-if="evCounts" class="ev-counts">
+        <span class="muted">各步</span>
+        <span
+          v-for="(l, i) in ['name', 'module', 'none', 'skipped'] as const"
+          :key="l"
+          :class="{ warn: l === 'none' && evCounts[l] > 0 }"
+          :title="EVIDENCE_LEVEL_LABELS[l]"
+          ><template v-if="i > 0"> · </template>{{ EV_SHORT[l] }} {{ evCounts[l] }}</span
+        >
+      </div>
     </Section>
     <footer class="src muted">出处：{{ desk.modelDir.value }}/{{ sc.src.file }}{{ sc.src.line ? `:${sc.src.line}` : '' }}</footer>
   </div>
@@ -109,6 +124,15 @@ function pointAt(id: string) {
 
 .ref {
   margin-left: 8px;
+}
+
+.ev-counts {
+  margin-top: 4px;
+  font-size: 12.5px;
+}
+
+.ev-counts .warn {
+  color: var(--warning);
 }
 
 .evidence li {

@@ -10,15 +10,19 @@ export type AsideTab = 'sequence' | 'source'
 
 export function useAside(desk: Pick<DeskState, 'files' | 'perspective' | 'playback'>) {
   const previewPath = ref<string | null>(null)
+  /** S18：预览要滚到的行；没有时从头显示 */
+  const previewLine = ref<number | null>(null)
   const tab = ref<AsideTab>('sequence')
   const run = computed(() => desk.perspective.value === 'run')
 
-  function open(path: string) {
+  function open(path: string, line?: number) {
     previewPath.value = path
+    previewLine.value = line ?? null
     tab.value = 'source'
   }
   function close() {
     previewPath.value = null
+    previewLine.value = null
     tab.value = 'sequence'
   }
 
@@ -37,6 +41,7 @@ export function useAside(desk: Pick<DeskState, 'files' | 'perspective' | 'playba
 
   return {
     previewPath,
+    previewLine,
     tab,
     run,
     hidden: computed(() => !run.value && !previewPath.value),

@@ -71,7 +71,9 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
       </template>
       <template v-else-if="m.kind === 'internal'">
         <rect :x="cx(m.from) - 5" :y="ps.messages[i].y - 10" width="10" height="20" rx="2" class="activation" />
-        <text :x="cx(m.from) + 10" :y="ps.messages[i].y + 4" class="label">{{ m.label || '内部活动' }}</text>
+        <text :x="cx(m.from) + 10" :y="ps.messages[i].y + 4" class="label"
+          >{{ m.label || '内部活动' }}<tspan v-if="ps.messages[i].evidence === 'none'" class="no-evidence"> ?</tspan></text
+        >
       </template>
       <template v-else>
         <line
@@ -85,6 +87,7 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
         <text :x="(cx(m.from) + cx(m.to)) / 2" :y="ps.messages[i].y - 5" text-anchor="middle" class="label">
           {{ m.label }}<tspan v-if="m.temp === 'unmodeled'" class="tag"> · 结构中未建模</tspan
           ><tspan v-else-if="m.temp === 'upper'" class="upper-tag"> · 经由上层关系</tspan
+          ><tspan v-if="ps.messages[i].evidence === 'none'" class="no-evidence"> ?</tspan
           ><tspan v-if="state(m).includes('paired')" class="pair-tag"> · 配对</tspan>
         </text>
       </template>
@@ -193,6 +196,12 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
 
 .tag {
   fill: var(--danger);
+}
+
+/* S17：无证据的消息，与结构图未证实边同一记号 */
+.no-evidence {
+  fill: var(--warning);
+  font-weight: 700;
 }
 
 .num {

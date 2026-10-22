@@ -41,7 +41,14 @@ function pick(id: string) {
       <li v-for="x in shown" :key="x.s.id">
         <button class="item" :class="{ current: desk.playback.value?.scenarioId === x.s.id }" @click="pick(x.s.id)">
           <span class="name"
-            >▶ {{ x.s.name }}<span v-if="x.s.evidence?.length" class="evidence" :title="`声明了 ${x.s.evidence.length} 个证据文件`"> ✓</span></span
+            >▶ {{ x.s.name }}<span v-if="x.s.evidence?.length" class="evidence" :title="`声明了 ${x.s.evidence.length} 个证据文件`"> ✓</span
+            ><span
+              v-if="desk.evidence.unevidenced.value.get(x.s.id)"
+              class="unevidenced"
+              :title="`${desk.evidence.unevidenced.value.get(x.s.id)} 个步骤在代码里没有证据（S17）`"
+            >
+              ? {{ desk.evidence.unevidenced.value.get(x.s.id) }}</span
+            ></span
           >
           <span class="meta">{{ x.byName }} 发起 · {{ x.count }} 条消息</span>
           <span v-if="x.s.cause" class="cause">{{ x.s.cause }}</span>
@@ -135,6 +142,11 @@ ul {
 
 .name {
   font-weight: 600;
+}
+
+.unevidenced {
+  color: var(--warning);
+  font-weight: 400;
 }
 
 .evidence {

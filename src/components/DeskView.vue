@@ -137,7 +137,7 @@ function onDividerUp() {
 
 // 副栏（G15）：页签与预览文件只属于这块界面
 const aside = useAside(desk)
-const { previewPath, tab: asideTab, run } = aside
+const { previewPath, previewLine, tab: asideTab, run } = aside
 provide(OPEN_PREVIEW, aside.open)
 // W-10：「怎么读这张图」
 const guideOpen = ref(false)
@@ -255,6 +255,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               :tab="asideTab"
               :run="run"
               :preview-path="previewPath"
+              :preview-line="previewLine"
               @toggle="toggle"
               @direction="onDirection"
               @tab="t => (asideTab = t)"

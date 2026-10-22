@@ -1,18 +1,20 @@
 <script setup lang="ts">
 /**
  * 步骤面板（D-5，选中步骤时，V2）：先回答「这一步做什么」——作用、输入（签名中与标签同名的一行 + 携带的数据）、输出（配对返回，F7）、数据结构、经由接口；
- * 步骤没写的接口与数据取自对应关系并标「取自关系」（S14）；
+ * 步骤没写的接口与数据取自对应关系并标「取自关系」（S14）；有代码事实时「经由接口」之后是代码证据：等级与候选调用点，单击在副栏预览到该行（S16、S18）；
  * 其后是真实端点与本层投影（经由上层关系时注明关系建在上层并可定位，P15）、本层一条可见消息覆盖的多帧；结构关系默认折叠，可在画布上显示（V9）；最后是出处。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
-import { moduleName } from '@/model'
+import { VIA_LABELS, moduleName } from '@/model'
 import Section from './Section.vue'
 import Markdown from './Markdown.vue'
 import InterfaceItem from './InterfaceItem.vue'
 import DataStructureItem from './DataStructureItem.vue'
 import RelationRow from './RelationRow.vue'
 import RevealButton from './RevealButton.vue'
+import { useOpenPreview } from '../shared/preview'
+import { EVIDENCE_LEVEL_LABELS } from '../shared/labels'
 import { KIND_LABEL, dataNames, fragmentText, frameText, landingText, signatureLine, stepOutput } from './runText'
 
 const desk = useDesk()
@@ -40,6 +42,23 @@ const revealNodes = computed(() => {
   const at = msg.value?.at
   if (!at) return []
   return at.kind === 'internal' ? [at.node] : [at.from, at.to]
+})
+
+/** S16：代码证据；没有代码事实时为 null（K8） */
+const openPreview = useOpenPreview()
+const ev = computed(() => desk.evidence.step.value)
+const evNote = computed(() => {
+  const e = ev.value
+  if (!e) return ''
+  if (e.level === 'none') return '两端之间在代码里没有任何依赖：检查接口名或两端 codeRefs；确实经注入 / 回调传递的给关系写 via'
+  if (e.level !== 'skipped') {
+    if (e.level === 'name') return `导入名含接口名「${e.name}」`
+    return e.name ? `导入名里没有接口名「${e.name}」，列出两端之间的依赖` : '步骤没有接口，列出两端之间的依赖'
+  }
+  if (e.reason === 'actor') return '一端是外部参与者'
+  if (e.reason === 'via') return `关系经 ${VIA_LABELS[e.via!]} 传递，静态导入证实不了`
+  if (e.reason === 'target') return '一端是目标态模块，尚未落地'
+  return e.host ? `两端在同一组文件里（${moduleName(idx.value, e.host)}）` : '两端在同一组文件里'
 })
 
 function pointAt(id: string) {
@@ -105,6 +124,22 @@ function pointAt(id: string) {
       <span v-if="f.inherited?.interface" class="badge from-rel">取自关系</span>
       <InterfaceItem :id="f.interface" open />
     </Section>
+    <Section v-if="ev" title="代码证据" :count="'total' in ev ? ev.total : undefined">
+      <div class="evidence-level">
+        <span class="badge" :class="`ev-${ev.level}`">{{ EVIDENCE_LEVEL_LABELS[ev.level] }}</span>
+        <span class="muted">{{ evNote }}</span>
+      </div>
+      <ul v-if="'candidates' in ev" class="plain candidates">
+        <li v-for="d in ev.candidates" :key="`${d.from}:${d.line}:${d.to}`">
+          <button class="link" :title="`在副栏预览 ${d.from} 第 ${d.line} 行`" @click="openPreview(d.from, d.line)">{{ d.from }}:{{ d.line }}</button>
+          <span class="muted">
+            → {{ d.to }}<template v-if="d.via !== d.to">（经 {{ d.via }}）</template><template v-if="d.kind === 'type'"> · 只引类型</template></span
+          >
+          <code v-if="d.names?.length" class="names">{{ d.names.join(', ') }}</code>
+        </li>
+      </ul>
+      <p v-if="'total' in ev && ev.total > ev.candidates.length" class="muted">另有 {{ ev.total - ev.candidates.length }} 条未列出</p>
+    </Section>
 
     <Section title="端点与本层投影">
       <div class="ends">
@@ -151,6 +186,35 @@ function pointAt(id: string) {
 </template>
 
 <style scoped>
+.evidence-level {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ev-name {
+  color: var(--success, var(--accent));
+}
+
+.ev-none {
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-color: transparent;
+}
+
+.candidates li {
+  margin-top: 4px;
+  word-break: break-all;
+  font-size: 12.5px;
+}
+
+.candidates .names {
+  margin-left: 6px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
 .top {
   margin: 0 0 6px;
 }

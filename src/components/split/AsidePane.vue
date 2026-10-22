@@ -10,7 +10,7 @@ import SequenceView from '../sequence/SequenceView.vue'
 import SourceView from '../source/SourceView.vue'
 import type { AsideTab } from './useAside'
 
-const props = defineProps<{ collapsed: boolean; dir: 'row' | 'column'; tab: AsideTab; run: boolean; previewPath: string | null }>()
+const props = defineProps<{ collapsed: boolean; dir: 'row' | 'column'; tab: AsideTab; run: boolean; previewPath: string | null; previewLine?: number | null }>()
 const emit = defineEmits<{ toggle: []; direction: [dir: 'row' | 'column']; tab: [tab: AsideTab]; close: [] }>()
 const strip = computed(() => props.collapsed && props.dir === 'row')
 const fileName = computed(() => props.previewPath?.split('/').pop() ?? '')
@@ -74,7 +74,7 @@ const help = ref(false)
       </div>
     </div>
     <div v-if="!collapsed" class="content">
-      <SourceView v-if="tab === 'source' && previewPath" :path="previewPath" />
+      <SourceView v-if="tab === 'source' && previewPath" :path="previewPath" :line="previewLine ?? undefined" />
       <SequenceView v-else-if="run" ref="sequence" />
     </div>
   </section>

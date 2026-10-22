@@ -1,0 +1,44 @@
+/** 步骤的代码证据（S16–S18、D-21）：步骤面板列出候选调用点、单击在副栏滚到该行；无证据的步骤在时序图带「?」并进问题页签 */
+import { expect, test } from '@playwright/test'
+import { openDesk } from './helpers'
+
+test('单步到 transition(openScenario)：面板按名字匹配到 useDeskState.ts 的一行，单击在副栏预览并滚到该行', async ({ page }) => {
+  await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
+  // 从开头单步，直到选中 transition(openScenario) 那一步
+  const title = page.locator('.step-panel h2')
+  for (let i = 0; i < 10 && !((await title.count()) && (await title.textContent())?.startsWith('transition(openScenario)')); i++)
+    await page.getByRole('button', { name: /下一步/ }).click()
+  await expect(title).toHaveText(/^transition\(openScenario\)/)
+
+  const section = page.locator('.step-panel .section').filter({ has: page.locator('h3', { hasText: '代码证据' }) })
+  await expect(section).toContainText('按名字匹配')
+  await expect(section).toContainText('导入名含接口名「transition」')
+  const candidate = section.getByRole('button', { name: /^src\/state\/useDeskState\.ts:\d+$/ })
+  await expect(candidate).toHaveCount(1)
+  const line = Number((await candidate.textContent())!.split(':')[1])
+
+  await candidate.click()
+  await expect(page.locator('.aside .tab.on')).toContainText('useDeskState.ts')
+  // 全量并行跑时首次读源码与加载语法可能超过 10s，留足余量
+  const target = page.locator('.source-view .line.target')
+  await expect(target).toHaveCount(1, { timeout: 20_000 })
+  await expect(target).toBeInViewport()
+  expect(await target.evaluate(el => [...el.parentElement!.querySelectorAll('.line')].indexOf(el) + 1)).toBe(line)
+  // 步骤面板保持（只预览、不改变选中）
+  await expect(title).toHaveText(/^transition\(openScenario\)/)
+})
+
+test('无证据的步骤：时序图消息带「?」，场景面板计数、场景列表「? N」，问题页签有「步骤无证据」', async ({ page }) => {
+  await openDesk(page, '/p/h5player?sc=sc.timeshift-leg-switch')
+  await expect(page.locator('svg .no-evidence').first()).toBeVisible({ timeout: 20_000 })
+  const section = page.locator('.scenario-panel .section').filter({ has: page.locator('h3', { hasText: '证据' }) })
+  await expect(section).toContainText(/无证据 [1-9]/)
+  await page.getByRole('button', { name: /^运行：/ }).click()
+  await expect(page.locator('.scenario-list .item .unevidenced').first()).toHaveText(/\? \d+/)
+  await page.keyboard.press('Escape')
+  // 运行视角下导航树缺省收起（W-1）
+  await page.getByRole('button', { name: '导航 ›' }).click()
+  await page.getByRole('tab', { name: /问题/ }).click()
+  await page.getByRole('combobox', { name: '按类别筛选' }).selectOption('unevidenced')
+  await expect(page.locator('.nav-tree .item .title').first()).toContainText('步骤无证据')
+})
