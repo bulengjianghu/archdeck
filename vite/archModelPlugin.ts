@@ -109,7 +109,7 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
                   : w[2] === 'ignore'
                     ? appendIgnore(modelRoot, project, body.pattern, root)
                     : w[2] === 'reviewed'
-                      ? appendReviewed(modelRoot, project, reviewedBatch(parsed), root)
+                      ? appendReviewed(modelRoot, project, reviewedBatch(parsed), root, { origin: 'page' })
                       : w[2] === 'accept'
                         ? appendAccepted(modelRoot, project, body.design, body.deviation, body.reason, root)
                         : archiveDesign(modelRoot, project, body.design, root)

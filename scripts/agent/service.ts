@@ -389,7 +389,8 @@ export function createService(opts: ServiceOptions) {
     /** Q4 */
     report(p?: string) {
       const project = projectId(p)
-      return { project, ...summarizeLedger(readLedger(governanceDir(modelRoot, project))) }
+      const s = summarizeLedger(readLedger(governanceDir(modelRoot, project)))
+      return { project, summary: `写前判定 ${s.checks} 次 · 重新扫描 ${s.rescans} 次 · 确认写入 ${s.reviewedWrites} 次`, ...s }
     },
 
     /** X4：草图核验——缺省为活动草图对当前版本；给了 design 时为该设计的草图对当前版本（revision 为某一轮时对那一轮） */

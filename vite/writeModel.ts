@@ -8,6 +8,7 @@
  * 约定（草图归档调用，Z6）：`appendReviewed(modelRoot, project, entries)` 一次写多条，entries 的每条为
  * `{ module, at, hash, summary, source, note? }`（ReviewedInput，由模型层 `reviewEntries(index, ids, { source: 'sketch:<设计 ID>' })` 构造）；
  * 同一模块已有记录时更新那一条，否则追加；返回写进的文件与更新 / 追加的模块 ID。
+ * 每条的 hash 必须等于用当前描述算出的 reviewHash，不符即拒绝整次写入；每次写入在 governance/ledger.jsonl 追加一行（Z6）。
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -20,13 +21,16 @@ import {
   loadModel,
   parseDesignSketches,
   reviewEntries,
+  reviewHash,
   sketchModules,
   type ArchiveVerdict,
+  type ModelIndex,
   type ReviewedInput,
+  type ReviewedOrigin,
   type RuleKind,
 } from '../src/model'
 import { DESIGNS_DIR, SKETCH_FILE, designSketch, isProjectId, readDesignInfo, readModelDir } from './readModelDir'
-import { touchOwned } from './governanceStore'
+import { appendLedger, governanceDir, touchOwned } from './governanceStore'
 
 export class WriteError extends Error {}
 
@@ -187,7 +191,7 @@ export function archiveDesign(modelRoot: string, project: string, design: string
   } else {
     const modules = sketchModules(entity, index)
     if (modules.length) {
-      const r = appendReviewed(modelRoot, project, reviewEntries(index, modules, { source: `sketch:${design}`, at }), root)
+      const r = appendReviewed(modelRoot, project, reviewEntries(index, modules, { source: `sketch:${design}`, at }), root, { origin: 'archive', design })
       reviewed = { count: r.added.length + r.updated.length, file: r.file }
     } else reviewed = { count: 0, file: path.relative(root, path.join(dir, 'reviewed.yaml')).split(path.sep).join('/') }
   }
@@ -206,10 +210,12 @@ export interface ReviewedWriteResult extends WriteResult {
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 
 /** 一条记录的校验与规整；坏的抛 WriteError */
-function cleanEntry(raw: unknown, exists: (id: string) => boolean): ReviewedInput {
+function cleanEntry(raw: unknown, index: ModelIndex): ReviewedInput {
   const e = (raw && typeof raw === 'object' ? raw : {}) as Partial<ReviewedInput>
-  if (typeof e.module !== 'string' || !exists(e.module)) throw new WriteError(`模块不存在：${String(e.module)}`)
+  if (typeof e.module !== 'string' || !index.modules.has(e.module)) throw new WriteError(`模块不存在：${String(e.module)}`)
   if (typeof e.hash !== 'string' || !e.hash.trim()) throw new WriteError(`模块「${e.module}」的记录缺少 hash`)
+  if (e.hash.trim() !== reviewHash(index, e.module))
+    throw new WriteError(`模块「${e.module}」的记录 hash 与当前描述的指纹不符：描述已变，请刷新后重新确认（Z6）`)
   if (!isReviewSource(e.source)) throw new WriteError(`模块「${e.module}」的记录 source 只能是 manual 或 sketch:<设计 ID>`)
   const at = e.at === undefined ? today() : e.at
   if (typeof at !== 'string' || !DATE.test(at)) throw new WriteError(`模块「${e.module}」的记录 at 必须是 YYYY-MM-DD`)
@@ -221,15 +227,22 @@ function cleanEntry(raw: unknown, exists: (id: string) => boolean): ReviewedInpu
 
 /**
  * Z1、Z6：在 reviewed.yaml 的 reviewed 里按模块更新或追加一条或多条记录；没有文件时新建。
- * 同一批里同一模块出现多次时取最后一条。全部记录校验通过才写，否则一条都不写。
+ * 同一批里同一模块出现多次时取最后一条。全部记录校验通过（含 hash 等于当前 reviewHash）才写，否则一条都不写；
+ * 写后在拦截记录追加一行（来源 page / cli / archive、模块数、设计 ID）。
  */
-export function appendReviewed(modelRoot: string, project: string, entries: readonly unknown[], root: string = path.dirname(modelRoot)): ReviewedWriteResult {
+export function appendReviewed(
+  modelRoot: string,
+  project: string,
+  entries: readonly unknown[],
+  root: string = path.dirname(modelRoot),
+  opts: { origin?: ReviewedOrigin; design?: string } = {},
+): ReviewedWriteResult {
   const dir = projectDir(modelRoot, project)
   if (!Array.isArray(entries) || !entries.length) throw new WriteError('没有要写的确认记录')
   const { index } = loadModel(readModelDir(dir, root).files)
   const byModule = new Map<string, ReviewedInput>()
   for (const raw of entries) {
-    const e = cleanEntry(raw, id => index.modules.has(id))
+    const e = cleanEntry(raw, index)
     byModule.set(e.module, e)
   }
   const file = path.join(dir, 'reviewed.yaml')
@@ -252,5 +265,13 @@ export function appendReviewed(modelRoot: string, project: string, entries: read
       added.push(e.module)
     }
   }
-  return { ...save(file, doc, root, modelRoot, project), updated, added }
+  const out = save(file, doc, root, modelRoot, project)
+  appendLedger(governanceDir(modelRoot, project), {
+    at: new Date().toISOString(),
+    tool: 'reviewed',
+    origin: opts.origin ?? 'cli',
+    modules: byModule.size,
+    ...(opts.design ? { design: opts.design } : {}),
+  })
+  return { ...out, updated, added }
 }

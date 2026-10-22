@@ -12,6 +12,8 @@ export interface LedgerSummary {
   /** 会形成或扩大模块环的判定次数 */
   cycleFlags: number
   rescans: number
+  /** 确认记录写入次数（Z6） */
+  reviewedWrites: number
   first?: { at: string; violations: number; cyclicity: Cyclicity }
   last?: { at: string; violations: number; cyclicity: Cyclicity }
 }
@@ -23,6 +25,7 @@ export function summarizeLedger(entries: readonly LedgerEntry[]): LedgerSummary 
     deniedByRule: { layer: 0, deps: 0, exposes: 0 },
     cycleFlags: 0,
     rescans: 0,
+    reviewedWrites: 0,
   }
   for (const e of entries) {
     if (e.tool === 'check_dependency') {
@@ -30,7 +33,8 @@ export function summarizeLedger(entries: readonly LedgerEntry[]): LedgerSummary 
       s.byVerdict[e.verdict]++
       if (e.verdict === 'denied') for (const r of new Set(e.rules)) s.deniedByRule[r]++
       if (e.cycle) s.cycleFlags++
-    } else {
+    } else if (e.tool === 'reviewed') s.reviewedWrites++
+    else {
       s.rescans++
       const point = { at: e.at, violations: e.violations, cyclicity: e.cyclicity }
       s.first ??= point

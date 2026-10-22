@@ -52,10 +52,14 @@ export type Verdict = 'allowed' | 'denied' | 'unconstrained'
 
 export type LedgerClient = 'cli' | 'mcp'
 
+/** 确认记录写入的来源（Z6）：页面确认 / Node 侧直接调用 / 草图归档 */
+export type ReviewedOrigin = 'page' | 'cli' | 'archive'
+
 /** 拦截记录的一行（Q4） */
 export type LedgerEntry =
   | { at: string; tool: 'check_dependency'; client: LedgerClient; from: string; to: string; verdict: Verdict; rules: RuleKind[]; cycle: boolean }
   | { at: string; tool: 'rescan'; client: LedgerClient; violations: number; newViolations: number; cyclicity: Cyclicity }
+  | { at: string; tool: 'reviewed'; origin: ReviewedOrigin; modules: number; design?: string }
 
 /** 开发态端点 source/<项目>/facts.json 的内容（K8） */
 export interface FactsPayload {

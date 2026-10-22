@@ -53,7 +53,7 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计或提交)──▶ Mod
 | `POST write/<项目>/feedback` `{ design, revision, text }` | `appendFeedback` | 该轮 `design.yaml` 的 `feedback` 末尾追加一段（带日期） |
 | `POST write/<项目>/allow` `{ from, to, rule?, reason }` | `appendAllow` | `rules` 所在文件的 `rules.allow` 追加一条（校验两端模块存在、理由必填、不重复） |
 | `POST write/<项目>/ignore` `{ pattern }` | `appendIgnore` | `source-ignore.yaml` 的 `sourceIgnore` 追加一项（没有文件时新建） |
-| `POST write/<项目>/reviewed` `{ entries: [{ module, at, hash, summary, source, note? }] }`（也接受单条或数组） | `appendReviewed(modelRoot, project, entries)` | `reviewed.yaml` 的 `reviewed`：逐条按 `module` 更新已有记录或追加（没有文件时新建）；校验模块存在、`source` 为 `manual` 或 `sketch:<设计 ID>`；草图归档批量调用同一函数（Z1、Z6） |
+| `POST write/<项目>/reviewed` `{ entries: [{ module, at, hash, summary, source, note? }] }`（也接受单条或数组） | `appendReviewed(modelRoot, project, entries)` | `reviewed.yaml` 的 `reviewed`：逐条按 `module` 更新已有记录或追加（没有文件时新建）；校验模块存在、`hash` 等于当前描述的 `reviewHash`（任一条不符整次拒绝）、`source` 为 `manual` 或 `sketch:<设计 ID>`；写后在 `governance/ledger.jsonl` 追加一行（来源 `page`）；草图归档批量调用同一函数（来源 `archive`，Z1、Z6） |
 | `POST write/<项目>/accept` `{ design, deviation, reason }` | `appendAccepted` | 该设计 `design.yaml` 的 `accepted` 追加一条认可的偏差（键、理由、日期；同一键已有时拒绝，X4） |
 | `POST write/<项目>/archive` `{ design }` | `archiveDesign` | 归档 / 晋升（X3）：先对当前版本跑 `sketchCheck`，不一致即拒绝；`until-implemented` → `design.yaml` 的 `status` 改为 `implemented`，并经确认层写入草图覆盖的模块的确认记录（`reviewEntries` 算指纹与摘要、`appendReviewed` 逐条更新或追加，来源 `sketch:<设计 ID>`；先写记录、后改状态，记录校验不过整次归档不生效）；`supersedes` → 草图整份替换 `intent/<ID>.yaml`（ID 改为被替换者、`lifetime: persistent`），状态同样改为 `implemented` |
 

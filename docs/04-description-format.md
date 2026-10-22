@@ -326,6 +326,9 @@ reviewed:
 - 一个模块一条；再次确认时更新那一条（页面与 `appendReviewed` 都这样做），人手工编辑时也不要写两条。
 - 记录引用的模块不存在时提醒并忽略；模块改了 ID 视同未确认，重新确认即可。
 - 设计版本的快照目录里不放 `reviewed.yaml`（只对当前版本，Z1）。
+- 写入端点与 `appendReviewed` 只收 `hash` 等于当前描述指纹的记录（Z6）：页面停在旧描述上确认会被拒绝，刷新后重来。每次写入在 `governance/ledger.jsonl` 记一行（来源 `page` / `cli` / `archive`），`npm run arch -- report` 给出确认写入次数。
+
+**诚实说明：确认不证明是人做的。** 本工具是本地单用户工具，写入端点只收同源请求（B5），但同一台机器上的进程（包括 agent）可以照页面的方式 POST，工具分不清人与 agent。防线是三件事：指纹门禁（`reviewed.yaml` 登记在 `owned.json`，绕过端点直接改文件即 `owned.changed`，X6）、拦截记录（每次确认写入可查来源与次数）、git 审计（`reviewed.yaml` 与 `ledger.jsonl` 都进提交，谁何时确认了什么看提交历史）。MCP 不提供确认写入；agent 不得调用确认端点。
 
 ### 3.10 草图
 

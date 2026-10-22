@@ -2,7 +2,7 @@
  * 人确认层的核心路径（§6.11，RV-1–RV-4）：确认一个模块 → reviewed.yaml 多一条 → 改描述的职责一行（模拟内容被改动）→
  * 树与面板出现「需复核」且差异只有那一行、返工清单多一条 → 复核并确认后消失、记录仍是一条。
  * 直接改真实的 model/h5p-arch-desk/，结束时原样恢复（其他 spec 只读这份描述，临时改一行职责不影响它们的断言）。
- * 第二级模块的职责写在骨架 intent/skeleton.yaml（X1）；页面写入会更新指纹 governance/owned.json（X6），一并恢复。
+ * 第二级模块的职责写在骨架 intent/skeleton.yaml（X1）；页面写入会更新指纹 governance/owned.json（X6）、追加拦截记录 governance/ledger.jsonl（Z6），一并恢复。
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -13,6 +13,8 @@ const MODEL = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 const LAYERS = path.join(MODEL, 'intent/skeleton.yaml')
 const OWNED = path.join(MODEL, 'governance/owned.json')
 const REVIEWED = path.join(MODEL, 'reviewed.yaml')
+/** 每次确认写入追加一行拦截记录（Z6），一并恢复 */
+const LEDGER = path.join(MODEL, 'governance/ledger.jsonl')
 /** 第二级、非核心的模块：不在自举样本（核心模块）里，确认后文件应多一条 */
 const MODULE = 'access.writer'
 const OLD_LINE = '只收同源的 JSON POST。'
@@ -22,6 +24,7 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
   const layers0 = fs.readFileSync(LAYERS, 'utf8')
   const reviewed0 = fs.existsSync(REVIEWED) ? fs.readFileSync(REVIEWED, 'utf8') : null
   const owned0 = fs.existsSync(OWNED) ? fs.readFileSync(OWNED, 'utf8') : null
+  const ledger0 = fs.existsSync(LEDGER) ? fs.readFileSync(LEDGER, 'utf8') : null
   expect(layers0).toContain(OLD_LINE)
   const count = () => (fs.readFileSync(REVIEWED, 'utf8').match(/^ {2}- module: /gm) ?? []).length
   const entry = () => /module: access\.writer\n\s+at: [^\n]+\n\s+hash: (\S+)/.exec(fs.readFileSync(REVIEWED, 'utf8'))?.[1]
@@ -44,6 +47,9 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
     await expect(badge).toHaveText(/^已确认 \d{4}-\d{2}-\d{2}$/)
     const hash1 = entry()
     expect(hash1).toBeTruthy()
+    // 确认写入记一行拦截记录，来源 page（Z6）
+    const last = fs.readFileSync(LEDGER, 'utf8').trim().split('\n').at(-1)!
+    expect(JSON.parse(last)).toMatchObject({ tool: 'reviewed', origin: 'page', modules: 1 })
     expect(fs.readFileSync(REVIEWED, 'utf8')).toContain('note: E2E 确认')
     await expect(treeRow.locator('.tag.reviewed')).toHaveText('✓')
 
@@ -77,5 +83,7 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
     else fs.writeFileSync(REVIEWED, reviewed0)
     if (owned0 === null) fs.rmSync(OWNED, { force: true })
     else fs.writeFileSync(OWNED, owned0)
+    if (ledger0 === null) fs.rmSync(LEDGER, { force: true })
+    else fs.writeFileSync(LEDGER, ledger0)
   }
 })

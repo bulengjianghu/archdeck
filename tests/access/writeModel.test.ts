@@ -98,10 +98,22 @@ describe('B1 只写人拥有的文件', () => {
 })
 
 describe('Z1、Z6 确认记录（appendReviewed）', () => {
+  /** 用当前描述算出的指纹（Z6：写入端点只收与它相等的 hash） */
+  const current = (module: string) => reviewHash(loadModel(readModelDir(P, root).files).index, module)
+  const ledger = () => {
+    const f = path.join(P, 'governance', 'ledger.jsonl')
+    return fs.existsSync(f)
+      ? fs
+          .readFileSync(f, 'utf8')
+          .split('\n')
+          .filter(Boolean)
+          .map(l => JSON.parse(l))
+      : []
+  }
   const entry = (module: string, extra: Record<string, unknown> = {}) => ({
     module,
     at: '2026-10-22',
-    hash: 'aaaa0000bbbb1111',
+    hash: current(module),
     source: 'manual',
     summary: { responsibility: 'x', provides: [{ id: 'if.a', signature: 'a(): void' }] },
     ...extra,
@@ -114,7 +126,7 @@ describe('Z1、Z6 确认记录（appendReviewed）', () => {
       {
         module: 'a',
         at: '2026-10-22',
-        hash: 'aaaa0000bbbb1111',
+        hash: current('a'),
         source: 'manual',
         note: '看过了',
         summary: { responsibility: 'x', provides: [{ id: 'if.a', signature: 'a(): void' }] },
@@ -126,24 +138,24 @@ describe('Z1、Z6 确认记录（appendReviewed）', () => {
       'reviewed.yaml',
       '# 架构师的确认\nreviewed:\n  - { module: a, at: "2026-10-01", hash: old, source: manual, note: 旧话 }\n  - { module: b, at: "2026-10-01", hash: keep, source: manual }\n',
     )
-    const r = appendReviewed(modelRoot, 'p', [entry('a', { hash: 'new1', source: 'sketch:d1' })], root)
+    const r = appendReviewed(modelRoot, 'p', [entry('a', { source: 'sketch:d1' })], root)
     expect(r).toMatchObject({ added: [], updated: ['a'] })
     const text = read('reviewed.yaml')
     expect(text).toContain('# 架构师的确认')
     const list = parse(text).reviewed
     expect(list).toHaveLength(2)
-    expect(list[0]).toEqual({ module: 'a', at: '2026-10-22', hash: 'new1', source: 'sketch:d1', summary: entry('a').summary })
+    expect(list[0]).toEqual({ module: 'a', at: '2026-10-22', hash: current('a'), source: 'sketch:d1', summary: entry('a').summary })
     expect(list[0].note).toBeUndefined()
     expect(list[1]).toMatchObject({ module: 'b', hash: 'keep' })
   })
   it('批量：一次写多条，有的更新有的追加；同一批里重复的模块取最后一条；at 缺省为当天', () => {
     write('reviewed.yaml', 'reviewed:\n  - { module: a, at: "2026-10-01", hash: old, source: manual }\n')
-    const r = appendReviewed(modelRoot, 'p', [entry('b', { at: undefined }), entry('a', { hash: 'first' }), entry('a', { hash: 'last' })], root)
+    const r = appendReviewed(modelRoot, 'p', [entry('b', { at: undefined }), entry('a', { note: 'first' }), entry('a', { note: 'last' })], root)
     expect(r).toMatchObject({ updated: ['a'], added: ['b'] })
     const list = parse(read('reviewed.yaml')).reviewed
-    expect(list.map((e: { module: string; hash: string }) => [e.module, e.hash])).toEqual([
-      ['a', 'last'],
-      ['b', 'aaaa0000bbbb1111'],
+    expect(list.map((e: { module: string; hash: string; note?: string }) => [e.module, e.hash, e.note])).toEqual([
+      ['a', current('a'), 'last'],
+      ['b', current('b'), undefined],
     ])
     expect(list[1].at).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
@@ -160,6 +172,25 @@ describe('Z1、Z6 确认记录（appendReviewed）', () => {
     const m = read('modules/m.yaml')
     appendReviewed(modelRoot, 'p', [entry('a'), entry('b')], root)
     expect(read('modules/m.yaml')).toBe(m)
+  })
+  it('hash 不符：任一条的 hash 不等于用当前描述算出的指纹即拒绝整次写入，不写文件、不记拦截记录', () => {
+    expect(() => appendReviewed(modelRoot, 'p', [entry('a'), entry('b', { hash: 'aaaa0000bbbb1111' })], root)).toThrow('指纹不符')
+    expect(fs.existsSync(path.join(P, 'reviewed.yaml'))).toBe(false)
+    expect(ledger()).toEqual([])
+    // 描述在确认前变了：页面带来的旧指纹被拒绝
+    const stale = entry('a')
+    write('modules/m.yaml', 'modules:\n  - { id: a, name: A, responsibility: 改过的职责 }\n  - { id: b, name: B, responsibility: y }\n')
+    expect(() => appendReviewed(modelRoot, 'p', [stale], root)).toThrow(WriteError)
+  })
+  it('写后多一行拦截记录：tool reviewed、来源、模块数、设计 ID（可选）', () => {
+    appendReviewed(modelRoot, 'p', [entry('a'), entry('b')], root, { origin: 'page' })
+    expect(ledger()).toEqual([{ at: expect.any(String), tool: 'reviewed', origin: 'page', modules: 2 }])
+    appendReviewed(modelRoot, 'p', [entry('a')], root)
+    appendReviewed(modelRoot, 'p', [entry('b', { source: 'sketch:d' })], root, { origin: 'archive', design: 'd' })
+    expect(ledger().slice(1)).toEqual([
+      { at: expect.any(String), tool: 'reviewed', origin: 'cli', modules: 1 },
+      { at: expect.any(String), tool: 'reviewed', origin: 'archive', modules: 1, design: 'd' },
+    ])
   })
 })
 
@@ -206,6 +237,12 @@ describe('X4 认可偏差 · X3 归档 / 晋升', () => {
     })
     expect(reviewStates(index).get('a.x')).toMatchObject({ status: 'reviewed' })
     expect(JSON.parse(read('governance/owned.json')).files['reviewed.yaml']).toBeTruthy()
+    // 归档写确认记录走同一路径：拦截记录多一行，来源 archive、带设计 ID
+    const lines = read('governance/ledger.jsonl')
+      .split('\n')
+      .filter(Boolean)
+      .map(l => JSON.parse(l))
+    expect(lines).toEqual([{ at: expect.any(String), tool: 'reviewed', origin: 'archive', modules: 1, design: 'd' }])
     expect(() => archiveDesign(modelRoot, 'p', 'd', root)).toThrow('已归档')
     expect(fs.existsSync(path.join(modelRoot, 'p', 'governance', 'owned.json'))).toBe(true)
   })

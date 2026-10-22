@@ -46,7 +46,7 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 |---|---|---|
 | `governanceDir(modelRoot, project)` | `model/<项目>/governance/` | — |
 | `readBaseline(dir)` / `writeBaseline(dir, baseline)` | 读写 `baseline.json`（格式化 JSON，键排序，便于评审差异） | U7 |
-| `readLedger(dir, limit?)` / `appendLedger(dir, entry)` | 读（最近 N 行）/ 追加 `ledger.jsonl`，一行一个 JSON | Q4 |
+| `readLedger(dir, limit?)` / `appendLedger(dir, entry)` | 读（最近 N 行）/ 追加 `ledger.jsonl`，一行一个 JSON；三种行：`check_dependency`、`rescan`（agent 接口）、`reviewed`（确认记录写入，`appendReviewed` 写，Z6） | Q4、Z6 |
 | `sourceCommit(root)` | 源码根目录的 `git rev-parse HEAD`，失败为 `undefined` | U7 |
 | `readOwned(dir)` / `writeOwned(dir, record)` | 读写 `owned.json`：`{ updatedAt, files: { 路径: SHA-1 } }`，键排序 | X6 |
 | `ownedHashes(projectDir)` | 列出项目下人拥有的文件（`isOwnedFile`）并算指纹，交给模型层 `compareOwned` | X6 |
@@ -147,7 +147,7 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 
 - 返工清单（§4.2）多一类 `review`（「需复核」）：一个需复核的模块一条，warning，规则 Z3，`detail` 为差异摘要，建议动作 `{ kind: 'review', text: '在面板上复核并确认' }`——人的动作，没有 `snippet`。`lint:model` 不列它，只在摘要给出「确认：已确认 a / b · 需复核 c」。
 - `projectHealth` 另给 `reviewed: { scope, reviewed, stale }`（Z5），它只读描述，读不到代码事实时也有。
-- 写入：`POST write/<项目>/reviewed`（[加载与版本 §2.2](./loading-and-versions.md#22-写入人拥有的文件vitewritemodelts-b1b5-adr-0019)）与 `appendReviewed(modelRoot, project, entries)`：逐条按 `module` 更新已有记录或追加；`entries` 的字段 `module`、`at`、`hash`、`summary`、`source`、`note?`；草图归档（X 组）调用同一个函数一次写多条。
+- 写入：`POST write/<项目>/reviewed`（[加载与版本 §2.2](./loading-and-versions.md#22-写入人拥有的文件vitewritemodelts-b1b5-adr-0019)）与 `appendReviewed(modelRoot, project, entries, root?, { origin?, design? })`：逐条按 `module` 更新已有记录或追加；每条 `hash` 必须等于当前 `reviewHash`，不符整次拒绝；写后在 `ledger.jsonl` 追加 `{ at, tool: 'reviewed', origin, modules, design? }`（`origin`：端点为 `page`、归档为 `archive`、其余 Node 侧调用缺省 `cli`，Z6）；`entries` 的字段 `module`、`at`、`hash`、`summary`、`source`、`note?`；草图归档（X 组）调用同一个函数一次写多条。
 
 ### 4.4 意图（模型层，`src/model/intent/`）
 
