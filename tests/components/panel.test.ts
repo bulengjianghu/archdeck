@@ -202,4 +202,33 @@ modules:
     await flushPromises()
     expect(desk.selection.value).toEqual(e.edgeId ? { kind: 'edge', id: e.edgeId } : { kind: 'dep', id: 'infra->app' })
   })
+
+  it('GV-7：根层「架构治理」有基线时只显示相对基线的变化（违规 ±N、环度 ↑↓），绝对值在悬停中；没有基线时为绝对数并标「无基线」', async () => {
+    const open = async (baseline: { createdAt: string; violations: string[]; cyclicity: { modules: number; files: number } } | null) => {
+      const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+      await router.push('/')
+      const desk = createDeskState(async () => ({ dir: 'model/test', files: [...scenarioFiles(), { path: 'modules/zz-refs.yaml', text: REFS }] }), {
+        source: { ...source, facts: async () => ({ ...(await source.facts!())!, baseline }) },
+      })
+      desk.attachRouter(router)
+      await desk.init()
+      await flushPromises()
+      const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+      await flushPromises()
+      const row = (label: string) => {
+        const dts = wrapper.findAll('dt')
+        const i = dts.findIndex(d => d.text() === label)
+        return wrapper.findAll('dd')[i]
+      }
+      return { row }
+    }
+    const none = await open(null)
+    expect(none.row('环度').text()).toContain('无基线')
+    expect(none.row('模块环').text()).toMatch(/1 个 · 最大 2/)
+    const based = await open({ createdAt: 't', violations: [], cyclicity: { modules: 9, files: 0 } })
+    expect(based.row('环度').text()).toContain('↓ −5')
+    expect(based.row('环度').attributes('title')).toContain('模块 4')
+    expect(based.row('违规').text()).toContain('+1（相对基线：新增 1')
+    expect(based.row('违规').attributes('title')).toContain('计入门禁 1 条')
+  })
 })

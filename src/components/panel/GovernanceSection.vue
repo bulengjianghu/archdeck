@@ -39,6 +39,21 @@ const externals = computed(() =>
     .slice(0, 8),
 )
 const ledger = computed(() => f.ledger.value)
+
+// GV-7：有基线时只显示相对基线的变化，绝对值进悬停
+const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '±0')
+const trend = (now: number, base: number) => (now > base ? `↑ +${now - base}` : now < base ? `↓ −${base - now}` : '持平')
+const trendClass = (now: number, base: number) => (now > base ? 'bad' : now < base ? 'ok' : 'muted')
+const counted = computed(() => (r.value?.violations ?? []).filter(v => v.status !== 'allowed').length)
+const violationTitle = computed(() => {
+  const x = r.value
+  if (!x) return ''
+  const allowed = x.violations.length - counted.value
+  return `计入门禁 ${counted.value} 条（新增 ${x.gate.newViolations} · 已知 ${x.gate.knownViolations}）${allowed ? `，已豁免 ${allowed}` : ''}${x.baseline ? `，基线 ${x.baseline.violations.length} 条` : ''}`
+})
+const liveCycles = computed(() => (r.value?.moduleCycles ?? []).filter(c => !c.tolerated))
+const maxCycle = computed(() => Math.max(0, ...liveCycles.value.map(c => c.members.length)))
+const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c.tolerated).length)
 </script>
 
 <template>
@@ -58,11 +73,29 @@ const ledger = computed(() => f.ledger.value)
         </dd>
         <dt>未描述依赖</dt>
         <dd>{{ r.undescribed.length }}</dd>
+        <dt>违规</dt>
+        <dd :title="violationTitle">
+          <template v-if="r.baseline">
+            <span :class="{ bad: r.gate.newViolations }">{{ signed(r.gate.newViolations - r.gate.resolved) }}</span>
+            <span class="muted">（相对基线：新增 {{ r.gate.newViolations }} · 已消除 {{ r.gate.resolved }}）</span>
+          </template>
+          <template v-else>{{ counted }} <span class="muted">（无基线）</span></template>
+        </dd>
+        <dt>模块环</dt>
+        <dd :title="`不含容忍的环；文件环 ${liveFileCycles} 个`">
+          {{ liveCycles.length }} 个<template v-if="liveCycles.length"> · 最大 {{ maxCycle }}</template>
+        </dd>
         <dt>环度</dt>
-        <dd>
-          模块 {{ r.cyclicity.modules }} · 文件 {{ r.cyclicity.files }}
-          <span v-if="r.baseline" class="muted">（基线 {{ r.baseline.cyclicity.modules }} · {{ r.baseline.cyclicity.files }}）</span>
-          <span v-if="r.gate.cycleGrew" class="bad">上升</span>
+        <dd
+          :title="`模块 ${r.cyclicity.modules} · 文件 ${r.cyclicity.files}${r.baseline ? `（基线 ${r.baseline.cyclicity.modules} · ${r.baseline.cyclicity.files}）` : ''}`"
+        >
+          <template v-if="r.baseline">
+            模块
+            <span :class="trendClass(r.cyclicity.modules, r.baseline.cyclicity.modules)">{{ trend(r.cyclicity.modules, r.baseline.cyclicity.modules) }}</span> ·
+            文件
+            <span :class="trendClass(r.cyclicity.files, r.baseline.cyclicity.files)">{{ trend(r.cyclicity.files, r.baseline.cyclicity.files) }}</span>
+          </template>
+          <template v-else>模块 {{ r.cyclicity.modules }} · 文件 {{ r.cyclicity.files }} <span class="muted">（无基线）</span></template>
         </dd>
         <dt>基线</dt>
         <dd v-if="r.baseline">
