@@ -23,7 +23,7 @@ const REASON: Record<string, string> = {
     <p v-else-if="e.history.value?.note" class="muted">{{ e.history.value.note }}。</p>
     <template v-else>
       <p class="muted window">
-        近 {{ stats.days }} 天：{{ stats.commits }} 次提交触及源码，其中缺陷修复 {{ stats.fixes }} 次；时间耦合 {{ stats.couplings.length }} 对
+        近 {{ stats.days }} 天：{{ stats.commits }} 次提交触及源码，其中缺陷修复 {{ stats.fixes }} 次；时间耦合 {{ stats.couplings.length }} 对（含上级并集）
       </p>
       <div class="block">
         <h4>{{ kind === 'fixes' ? '缺陷' : '修改' }}热度前 {{ top.length }}</h4>
@@ -39,7 +39,7 @@ const REASON: Record<string, string> = {
       </div>
       <div class="block">
         <h4>
-          无依赖无关系的时间耦合<span class="count">{{ e.isolated.value.length }}</span>
+          无依赖无关系的时间耦合（只列最具体的对）<span class="count">{{ e.isolated.value.length }}</span>
         </h4>
         <ul v-if="e.isolated.value.length" class="plain">
           <li v-for="c in e.isolated.value" :key="c.id" class="pair">

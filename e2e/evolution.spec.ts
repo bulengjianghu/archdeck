@@ -33,7 +33,9 @@ test('系统面板「演化」列出热度前 10；模块树可按热度排序',
   await expect(panel).toContainText('演化（git 历史）')
   await expect(panel).toContainText(/修改热度前 10/)
   await expect(panel.locator('.top li')).toHaveCount(10)
-  await expect(panel).toContainText('无依赖无关系的时间耦合')
+  // 两种口径分开写（J4）：总数含上级并集，清单只列最具体的对
+  await expect(panel).toContainText(/时间耦合 \d+ 对（含上级并集）/)
+  await expect(panel).toContainText('无依赖无关系的时间耦合（只列最具体的对）')
   const sort = page.getByRole('group', { name: '模块排序' })
   await sort.getByRole('button', { name: '按热度' }).click()
   await expect(sort.getByRole('button', { name: '按热度' })).toHaveAttribute('aria-pressed', 'true')
