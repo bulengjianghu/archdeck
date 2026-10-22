@@ -47,6 +47,10 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 | `readBaseline(dir)` / `writeBaseline(dir, baseline)` | 读写 `baseline.json`（格式化 JSON，键排序，便于评审差异） | U7 |
 | `readLedger(dir, limit?)` / `appendLedger(dir, entry)` | 读（最近 N 行）/ 追加 `ledger.jsonl`，一行一个 JSON | Q4 |
 | `sourceCommit(root)` | 源码根目录的 `git rev-parse HEAD`，失败为 `undefined` | U7 |
+| `readOwned(dir)` / `writeOwned(dir, record)` | 读写 `owned.json`：`{ updatedAt, files: { 路径: SHA-1 } }`，键排序 | X6 |
+| `ownedHashes(projectDir)` | 列出项目下人拥有的文件（`isOwnedFile`）并算指纹，交给模型层 `compareOwned` | X6 |
+| `registerOwned(modelRoot, project)` | 命令行 `arch own`：把全部人拥有文件的指纹写进 `owned.json`（只由人执行） | X6 |
+| `touchOwned(modelRoot, project, file)` | 写入端点写完一个人拥有的文件后更新它的指纹（没有 `owned.json` 时新建，只含这一项） | X6 |
 
 - `readModelDir` 跳过项目下的 `governance/`（与 `designs/` 同），它不属于描述。
 
@@ -105,11 +109,11 @@ interface LevelCycle { id: number; nodes: { id: string; module: string }[]; edge
 
 | 函数 | 做什么 | 规则 |
 |---|---|---|
-| `reworkList({ index, issues, source?, report? })` | 汇总：校验问题（跳过归属、门禁、事实与 S5a 未建模，它们由下列材料重新算）、归属（冲突按匹配的 codeRefs 组合，`detail` 注明一端是这组文件、因冲突未计入的依赖条数（`report.conflicted`，K4）；未归属按目录；entry 不存在）、违规（按基线状态 · 种类 · 规则所在 · 被依赖方）、环度上升与可收紧基线、报警的未证实关系（`unconfirmedWarns`）、未描述依赖、未建模的步骤（`bindRelation` 绑定不到关系的消息步骤，按两端聚合）；排序后给出各严重度与类别的计数 | Q7、Q8 |
+| `reworkList({ index, issues, source?, report?, sketches? })` | 汇总：校验问题（跳过归属、门禁、事实与 S5a 未建模，它们由下列材料重新算；`owned.*` 归入类别 `owned`）、归属（冲突按匹配的 codeRefs 组合，`detail` 注明一端是这组文件、因冲突未计入的依赖条数（`report.conflicted`，K4）；未归属按目录；entry 不存在）、违规（按基线状态 · 种类 · 规则所在 · 被依赖方）、环度上升与可收紧基线、报警的未证实关系（`unconfirmedWarns`）、未描述依赖、未建模的步骤（`bindRelation` 绑定不到关系的消息步骤，按两端聚合）、草图偏差（`sketches`：每张活动草图的 `SketchCheck`，一条偏差一个根因，已认可的为 info，X4）；排序后给出各严重度与类别的计数 | Q7、Q8 |
 | `reworkMarkdown(list, title, { modelDir, sourceRoot, limit })` · `reworkItemMarkdown(item, opts)` | 给 agent 的指令：摘要、每条的规则、位置、受影响（缺省最多 20 处）、建议与 YAML 片段；描述文件路径加模型目录前缀 | Q9 |
 
 ```ts
-type ReworkCategory = 'description' | 'violation' | 'cycle' | 'ownership' | 'unconfirmed' | 'undescribed' | 'unmodeled'
+type ReworkCategory = 'description' | 'violation' | 'cycle' | 'ownership' | 'unconfirmed' | 'undescribed' | 'unmodeled' | 'sketch' | 'owned'
 interface ReworkLoc { in: 'description' | 'source'; file: string; line?: number; note?: string }
 interface ReworkAction { kind: ReworkActionKind; text: string; file?: string; snippet?: string }
 interface ReworkItem {
@@ -122,7 +126,34 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 ```
 
 - 聚合的判据是「改一处能消掉几条」：同一组重叠的 codeRefs、同一目录的漏写、越过同一条边界依赖同一个模块（常见于契约放错了层）、同一对端点之间缺的关系。h5player 的 178 条违规由此收成 13 条。
-- 建议动作只给方向与片段，不替人决定：加例外、收紧基线由架构师决定（U5、U7）。
+- 建议动作只给方向与片段，不替人决定：加例外、收紧基线、认可偏差、登记指纹由架构师决定（U5、U7、X4、X6）。
+
+### 4.3 意图（模型层，`src/model/intent/`）
+
+草图是架构师的意图（02 §1.8）；核验回答「版本有没有按意图来」，与「这条依赖违不违规」一样是关于被描述系统的知识，页面、`lint:model` 与 agent 接口同一份结果。
+
+| 函数 | 做什么 | 规则 |
+|---|---|---|
+| `isSketchFile(path)` · `isOwnedFile(path)` | 契约小谓词：`intent/**/*.yaml` 与 `sketch.yaml` 是草图文件；人拥有的文件清单（草图、`rules.yaml`、`source-ignore.yaml`、`designs/*/design.yaml`、`reviewed.yaml`） | X1、X6 |
+| `flattenSketch(def)` | 草图定义展开为实体清单：模块（带父 ID：嵌套位置、`parent`，否则根）、关系、接口、数据结构，每条记住写了哪些字段 | X2 |
+| `sketchCheck(sketch, index, { persistent?, accepted? })` | 核验：先查与持久草图的矛盾（同一模块两边都写的 `kind` / `core` / `mayDependOn` / 父模块不一致，或往封闭子树下加直接子模块 → `sketch.contradiction`，`supersedes` 时跳过）；再逐项比对版本——缺模块 `sketch.missing-module`、封闭子树多出的直接子模块 `sketch.extra-child`、字段不一致 `sketch.field`（error）；关系没有对应 `sketch.missing-relation`（两端 + 类型，版本里两端落在草图两端子树内也算）、接口不存在 / `owner` 不同 `sketch.missing-interface` / `sketch.interface-owner`（warning）。每条偏差带稳定键 `<种类>:<实体 ID>`、所在实体与建议；`accepted` 里的 warning 降为 info 并带理由；结果 `SketchCheck { sketch, deviations, counts, consistent }`，`consistent` = 零 error 且提醒都已认可 | X2、X4 |
+| `activeSketches(index, extra)` | 对一个版本有约束力的草图：`index.model.sketches` 里的持久草图 + 载荷附带的设计草图；持久草图另给核验用 | X3、X4 |
+| `archiveVerdict(sketch, index, accepted)` | 归档判定：核验一致才能归档；结局按 `supersedes` 为「晋升」、否则「归档」；持久草图不能归档 | X3 |
+| `reviewedEntries(sketch, index, design, at)` | 归档时给确认层的记录：草图覆盖的每个模块一条 `{ module, at, summary, source: 'sketch:<设计>' }`，`summary` 为草图写的职责（没写时为模块名）；指纹由确认层按自己的口径计算，这里不填 | X3 |
+| `compareOwned(record, hashes)` | 指纹比对：已登记的文件内容不符或已不存在 → error `owned.changed`；人拥有的文件未登记 → warning `owned.unregistered`；没有记录 → warning `owned.none` | X6 |
+
+```ts
+interface SketchDeviation {
+  key: string                           // `<种类>:<实体 ID>`，稳定
+  code: 'sketch.contradiction' | 'sketch.missing-module' | 'sketch.extra-child' | 'sketch.field' | 'sketch.missing-relation' | 'sketch.missing-interface' | 'sketch.interface-owner'
+  severity: 'error' | 'warning' | 'info'; rules: string[]
+  message: string; detail?: string
+  target: { modules?: string[]; relation?: string; interface?: string }
+  at?: SourceLoc                        // 草图里的位置
+  accepted?: { reason: string; at?: string }
+}
+interface SketchCheck { sketch: string; design?: string; deviations: SketchDeviation[]; counts: { error: number; warning: number; info: number }; consistent: boolean }
+```
 
 ## 5. agent 接口（接入层，`scripts/agent/`、`scripts/arch.ts`、`scripts/arch-mcp.ts`）
 
@@ -139,6 +170,11 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 | `issues [--category <类别>]` | `issues`（`format`、`category`） | 返工清单（Q7–Q9），命令行缺省 Markdown、`--json` 为 JSON | — |
 | `report` | `prevention_report` | Q4 | — |
 | `baseline` | —（Q5） | 生成基线，由人执行 | — |
+| `own` | —（X6） | 登记人拥有文件的指纹 `governance/owned.json`，由人执行 | — |
+| `sketch-check [--design <设计>] [--revision <轮次>]` | `sketch_check` | X4：活动草图对当前版本（缺省）或设计某一轮的核验，命令行缺省给人看的文本、`--json` 为结构化结果 | — |
+| `sketch archive <设计>` | `sketch_archive` | X3、X8：归档 / 晋升，与页面同一函数 `archiveDesign`；不一致即拒绝 | — |
+
+- 查询核心加载时一并比对指纹（`compareOwned`），`owned.*` 问题进 `issues`。
 
 - 每个工具都有可选参数 `project`（Q6）。命令行默认输出给人看的文本，`--json` 输出与 MCP 相同的 JSON。
 - MCP 服务器经 stdio 通信，stdout 只留给协议；日志写 stderr。
@@ -170,3 +206,4 @@ sequenceDiagram
 - 画布：`canvasScene` 多两个输入——视图边的证实与违规标记、叠加线（坐标由 `linkRoute` 算，不参与布局）；节点数据多 `cycle` 编号（K9、Y4）。
 - 选中 `{ kind: 'dep', id: '<A>-><B>' }`：URL `sel=d:`，面板 `DepPanel`（K10）；运行视角下按选中关系的方式突出两端泳道。
 - 本层环可解释（Y5）：模块面板「架构治理」一节列出 `selectedCycle`，单击一条本层依赖即 `select`——有 `edgeId` 时选中视图边（`sel=e:`），否则选中代码依赖（`sel=d:`），画布按已有的选中规则高亮视图边或叠加线。
+- 意图（X3、X4）：DeskState 的 `intent` 组——活动草图、每张的 `sketchCheck`、归档判定；系统面板「意图」一节（`IntentSection.vue`）列每张活动草图的偏差计数与「查看偏差」（切到问题页签）；设计面板的「草图核验」（偏差清单、提醒级偏差的「认可偏差（写理由）」→ `desk.write.accept`、一致时的「归档」/「晋升」→ `desk.write.archive`）；草图版本的设计信息条「交给 AI」。
