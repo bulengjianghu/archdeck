@@ -102,7 +102,6 @@ relations:
   - {id: rel.p7.ownership-resolve, from: model.source.ownership, to: model.source.resolve, type: calls, interface: if.model.specResolver, description: 入口文件取包入口或 index.*（G10）}
   # 呈现层与接入层补齐（K7）
   - {id: rel.p7.source-reader, from: access.source, to: access.reader, type: calls, description: readProject：读 system.yaml 取源码位置}
-  - {id: rel.p7.filetree-status, from: present.nav-tree.files, to: present.source, type: depends, description: 复用 SourceStatus 显示源码状态}
   - {id: rel.p7.filetree-ownership, from: present.nav-tree.files, to: model.types, type: depends, description: isLong：超长文件标记}
   - {id: rel.p7.file-ownership, from: present.panel.file, to: model.types, type: depends, description: isLong：超长文件标记}
   - {id: rel.p7.modsrc-ownership, from: present.panel.module-source, to: model.types, type: depends, description: isLong：超长文件标记}

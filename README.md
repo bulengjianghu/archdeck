@@ -1,8 +1,14 @@
 # h5p-arch-desk
 
-架构可视化工具：AI 把项目代码压缩成模块级的架构描述（`model/<项目>/`），本工具按层次画成可下钻、可点选、可回放的图，并对上真实源码；架构迭代可以先出「设计版本」在图上评审，再开发；并用代码事实、架构规则与棘轮门禁管住演化，把约束交给 coding agent。
+**本地架构工作台：看见 · 对照 · 守住。**
 
-首页是项目列表（目前有 h5player、media-web 与本项目自身）。进入项目后根层是分层总览（几层、各层抽象原则、层间依赖、核心模块），双击下钻到任意模块，单击查看职责、接口、数据结构与关系；顶部「运行」选一个场景即进入运行视角，逐步回放执行链路。
+- **看见**：AI 把项目代码压缩成模块级的架构描述（`model/<项目>/`），本工具按层次画成可下钻、可点选的结构图，叠加场景回放执行链路，用「设计版本」先在图上评审、再开发。
+- **对照**：描述与本地源码互相印证——文件归属、入口导出、关系是否被代码证实、有没有未描述的依赖；发现的问题汇总成按根因聚合的返工清单，交给人或 AI 修正。
+- **守住**：架构规则、环与棘轮门禁让结构只许变好，coding agent 写代码前先问能不能依赖。
+
+它是本地开发工具：被描述项目的源码必须在本地，开发服务器读源码、跑 TypeScript 语法解析、读 git，不做构建部署。
+
+首页是项目列表（目前有 h5player 与本项目自身），每张卡片先给健康度（描述问题、违规相对基线的变化、环、未证实、未归属），再给规模。进入项目后根层是分层总览（几层、各层抽象原则、层间依赖、核心模块），双击下钻到任意模块，单击查看职责、接口、数据结构与关系；顶部「运行」选一个场景即进入运行视角，逐步回放执行链路。
 
 ## 快速开始
 
@@ -17,12 +23,12 @@ npm run dev          # 本地查看：首页是项目列表，读取 model/ 下�
 
 | 命令 | 用途 |
 |---|---|
-| `npm run dev` | 本地查看；源代码功能（文件树、预览、导出对照）只在开发态可用 |
-| `npm run build` | 产出静态站点 `dist/`（含项目摘要与各版本描述），可部署到任意路径；构建产物不含源码 |
+| `npm run dev` | 启动本地架构工作台（读 `model/` 与被描述项目的本地源码） |
+| `npm run build` | 类型检查与打包验证；产物不部署（本工具只在本地开发服务器上运行） |
 | `npm run lint:model` | 校验全部架构描述（含设计版本每一轮），有错误时退出码为 1；`npm run lint:model -- model/h5player` 只校验一个项目 |
 | `npm test` | 单元测试与验收（jsdom，读取真实的 `model/`） |
 | `npm run test:e2e` | 浏览器端 E2E（Playwright，使用本机 Chrome，自动启动开发服务器） |
-| `npm run arch -- <命令>` | 架构治理的命令行：`locate`、`check <from> <to>`（写前判定）、`violations`、`cycles`、`rescan`、`report`、`baseline`（生成基线），`--project <项目>`、`--json` |
+| `npm run arch -- <命令>` | 架构治理的命令行：`locate`、`check <from> <to>`（写前判定）、`violations`、`cycles`、`rescan`、`issues`（返工清单）、`report`、`baseline`（生成基线），`--project <项目>`、`--json` |
 | `npm run arch:mcp` | 架构治理的 MCP 服务器（stdio），供 coding agent 写代码前判定依赖 |
 | `npm run type-check` | 类型检查 |
 | `npm run lint` / `npm run format` | ESLint + Prettier 检查 / 自动格式化 |
@@ -72,10 +78,9 @@ npm run dev          # 本地查看：首页是项目列表，读取 model/ 下�
 `model/` 下每个含 `system.yaml` 的子目录是一个项目（[ADR-0001](docs/adr/0001-model-location.md)）：
 
 - `model/h5player/`：由 AI 读取 h5player 代码生成，含场景「命令执行」「方案切换事务」；
-- `model/media-web/`：由 AI 读取 media-platform 仓库 media-web 工作区（浏览器侧 npm 包）的代码生成；
 - `model/h5p-arch-desk/`：本项目自身的架构描述，含场景「打开场景并回放」。
 
-写法见 [docs/04-description-format.md](docs/04-description-format.md)。代码变化后让 AI 按规范重新生成受影响的文件，并更新 `system.yaml` 中的 `source.commit`；用 `npm run lint:model` 自检（源码在本地时附带文件归属警告）。新增项目只需新建一个子目录。
+写法见 [docs/04-description-format.md](docs/04-description-format.md)。代码变化后让 AI 按规范重新生成受影响的文件，并更新 `system.yaml` 中的 `source.commit`；用 `npm run lint:model` 自检（附带文件归属警告与治理门禁）。新增项目只需新建一个子目录。
 
 ## 架构治理
 

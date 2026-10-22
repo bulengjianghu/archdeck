@@ -59,7 +59,9 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
   <div class="home">
     <header class="hero">
       <h1>架构台</h1>
-      <p class="muted">按层次查看项目的模块、职责、接口与模块间关系。选择一个项目进入它的架构视图。</p>
+      <p class="muted">
+        本地架构工作台：<strong>看见</strong> 结构、运行与设计版本 · <strong>对照</strong> 描述与代码 · <strong>守住</strong> 规则、环与门禁。选择一个项目进入。
+      </p>
     </header>
 
     <p v-if="status === 'loading'" class="muted center">正在读取项目列表…</p>

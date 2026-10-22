@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createDeskState, decodeSelection, encodeSelection, type ModelPayload } from '../../src/state/useDeskState'
@@ -78,7 +78,8 @@ describe('DeskState', () => {
     desk.drillInto('infra.framework')
     await settle()
     router.back()
-    await new Promise(r => setTimeout(r, 20))
+    // 浏览器后退经 popstate 异步回到上一条历史：等到层次变化为止
+    await vi.waitFor(() => expect(desk.levelId.value).toBe('infra'), { timeout: 5_000, interval: 10 })
     await settle()
     expect(desk.levelId.value).toBe('infra')
   })
@@ -151,8 +152,8 @@ describe('DeskState', () => {
 
   it('视图变化后异步产出布局结果', async () => {
     const { desk } = await setup('/?level=infra')
-    await new Promise(r => setTimeout(r, 200))
-    expect(desk.positioned.value?.view.parentId).toBe('infra')
+    // 布局在 elkjs 中异步完成，耗时随机器负载变化：等到结果出现为止，不靠固定计时
+    await vi.waitFor(() => expect(desk.positioned.value?.view.parentId).toBe('infra'), { timeout: 10_000, interval: 20 })
   })
 })
 
