@@ -2,7 +2,7 @@
  * 视图状态：用户此刻在看什么，一个值（docs/architecture/view-state.md §1）。
  * 只经 transition() 改变；视角与选中由它推出，不另存字段（运行视角下 selection 为空即选中进度所在的步骤 / 场景，ADR-0012）。
  */
-import type { LevelView, ModelIndex, RelationType, ScenarioLevelView, ScenarioPlan } from '@/model'
+import type { HeatKind, LevelView, ModelIndex, RelationType, ScenarioLevelView, ScenarioPlan } from '@/model'
 
 export type Selection =
   | { kind: 'module'; id: string }
@@ -14,6 +14,8 @@ export type Selection =
   | { kind: 'file'; id: string }
   /** 代码依赖叠加线，id 为 `<依赖方模块>-><被依赖方模块>`（本层两端节点的模块 ID，K10） */
   | { kind: 'dep'; id: string }
+  /** 时间耦合（耦合线），id 为 `<A>~<B>`（两端模块 ID 按字典序，J7） */
+  | { kind: 'couple'; id: string }
 
 export interface Toggles {
   showBoundaries: boolean
@@ -25,6 +27,10 @@ export interface Toggles {
   compareTo: 'current' | 'previous'
   /** K9：结构视角下在画布上叠加代码事实 */
   showFacts: boolean
+  /** J5：热度角标——关 / 修改热度 / 缺陷热度（单选，缺省关，按项目记在本地） */
+  heat: 'off' | HeatKind
+  /** J5：时间耦合的波浪线（缺省关，按项目记在本地） */
+  coupling: boolean
 }
 
 export interface PlaybackState {
@@ -89,4 +95,6 @@ export const DEFAULT_TOGGLES = (relationTypes: readonly RelationType[]): Toggles
   showDiff: true,
   compareTo: 'current',
   showFacts: true,
+  heat: 'off',
+  coupling: false,
 })

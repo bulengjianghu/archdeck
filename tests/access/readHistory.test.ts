@@ -23,7 +23,11 @@ function write(rel: string, text: string) {
 function commit(key: string, msg: string, date?: string) {
   git('add', '-A')
   const env = date ? { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } : process.env
-  execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-q', '-m', msg], { cwd: repo, env, stdio: ['ignore', 'pipe', 'ignore'] })
+  execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-q', '-m', msg], {
+    cwd: repo,
+    env,
+    stdio: ['ignore', 'pipe', 'ignore'],
+  })
   hashes[key] = git('rev-parse', 'HEAD')
 }
 const OPTS = historyOptions(undefined)
@@ -132,7 +136,16 @@ describe('J1 源码历史读取', () => {
   })
 
   it('解析 numstat：二进制文件的增删为 0；非法行跳过', () => {
-    const out = ['\x01h1\x1fh\x1f2026-01-01\x1ffix: x', '', '-\t-\timg.png', '3\t1\ta.ts', 'garbage', '\x01h2\x1fh\x1f2026-01-02\x1fy', '', '1\t1\tnot-listed.ts'].join('\n')
+    const out = [
+      '\x01h1\x1fh\x1f2026-01-01\x1ffix: x',
+      '',
+      '-\t-\timg.png',
+      '3\t1\ta.ts',
+      'garbage',
+      '\x01h2\x1fh\x1f2026-01-02\x1fy',
+      '',
+      '1\t1\tnot-listed.ts',
+    ].join('\n')
     const list = parseNumstat(out, '', new Set(['img.png', 'a.ts']), [])
     expect(list).toHaveLength(1)
     expect(list[0].files).toEqual([

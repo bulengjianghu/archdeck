@@ -3,7 +3,7 @@
  */
 import { nodeOf } from '../governance/level'
 import type { LevelView, ModelIndex } from '../types'
-import { heatCount, heatValue } from './history'
+import { coupleId, heatCount, heatValue } from './history'
 import type { EvolutionStats, HeatKind, HeatTier, LevelCoupling, LevelEvolution, NodeHeat } from './types'
 
 /** J3：三档按分位数——按值排序三等分（低 / 中 / 高）；0 不分档（返回 null） */
@@ -59,11 +59,15 @@ export function levelEvolution(index: ModelIndex, view: LevelView, stats: Evolut
         shared: c.shared,
         isolated: !c.dependency && !c.relation,
         pairs: [c.id],
+        primary: c.id,
         hashes: new Set(c.commits),
       })
   }
   const couplings = [...pairs.values()]
     .sort((x, y) => y.shared - x.shared || x.id.localeCompare(y.id))
-    .map(({ hashes: _h, ...rest }) => rest)
+    .map(({ hashes: _h, ...rest }) => {
+      const exact = coupleId(rest.fromModule, rest.toModule)
+      return { ...rest, primary: rest.pairs.includes(exact) ? exact : rest.pairs[0] }
+    })
   return { kind, heat, couplings }
 }

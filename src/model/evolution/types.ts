@@ -112,8 +112,10 @@ export interface LevelCoupling {
   shared: number
   /** 投到这对节点的耦合对都没有依赖也没有关系：代码事实看不见的耦合 */
   isolated: boolean
-  /** 投到这对节点的耦合对 ID */
+  /** 投到这对节点的耦合对 ID（按次数降序） */
   pairs: string[]
+  /** 单击耦合线选中的那一对：两端恰为这对节点的模块时取它，否则取次数最多的一对（J7） */
+  primary: string
 }
 
 export interface LevelEvolution {

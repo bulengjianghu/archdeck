@@ -1,5 +1,5 @@
 /** 画布场景各部分共用的派生（ADR-0013）：聚焦对象、选中的边、回放经过的边、舞台显示、选中突出与相邻节点 */
-import type { LevelFacts, ScenarioLevelView, ViewEdge, VisibleLanding } from '@/model'
+import type { LevelEvolution, LevelFacts, ScenarioLevelView, ViewEdge, VisibleLanding } from '@/model'
 import type { EdgeRoute, PositionedView } from '../layout'
 import { landingId, stageDisplay, type StageDisplay, type StageOverlay } from '../stage'
 import type { CanvasInput } from './types'
@@ -13,6 +13,8 @@ export interface SceneContext {
   layered: boolean
   /** 结构视角下开启「代码事实」时的本层投影；运行视角为 null */
   facts: LevelFacts | null
+  /** 结构视角下开启热度或时间耦合时的本层投影（J5）；运行视角为 null */
+  evo: LevelEvolution | null
   /** 悬停时序图中的一条消息时，它在本层的落点（预览） */
   hoverLanding: VisibleLanding | null
   /** 聚焦对象：悬停优先，其次是选中的模块（选中的外部模块在本视图里以边界节点出现） */
@@ -37,9 +39,10 @@ export function sceneContext(input: CanvasInput, pv: PositionedView): SceneConte
   const { stage: st, scenarioView: sv } = input
   const layered = pv.view.mode === 'layered'
   const facts = st ? null : (input.facts ?? null)
+  const evo = st ? null : (input.evolution ?? null)
   const hoverLanding = hoverLandingOf(input.hover, sv)
   const focusId = focusOf(input, pv)
-  const selectedEdgeIds = selectedEdgesOf(input, pv, facts)
+  const selectedEdgeIds = selectedEdgesOf(input, pv, facts, evo)
   const playEdges = new Set<string>(st?.walked.keys() ?? [])
   for (const p of st?.previews ?? []) if (p.at?.kind === 'edge') playEdges.add(p.at.edgeId)
   if (hoverLanding?.kind === 'edge') playEdges.add(hoverLanding.edgeId)
@@ -55,6 +58,7 @@ export function sceneContext(input: CanvasInput, pv: PositionedView): SceneConte
     sv,
     layered,
     facts,
+    evo,
     hoverLanding,
     focusId,
     selectedEdgeIds,
@@ -82,9 +86,11 @@ function focusOf({ hover, selection: sel }: CanvasInput, pv: PositionedView): st
   return !pv.nodes.has(sel.id) && pv.nodes.has(`boundary:${sel.id}`) ? `boundary:${sel.id}` : sel.id
 }
 
-function selectedEdgesOf({ selection: sel, stage: st }: CanvasInput, pv: PositionedView, facts: LevelFacts | null): Set<string> {
+function selectedEdgesOf({ selection: sel, stage: st }: CanvasInput, pv: PositionedView, facts: LevelFacts | null, evo: LevelEvolution | null): Set<string> {
   if (sel?.kind === 'edge') return new Set([sel.id])
   if (sel?.kind === 'dep') return new Set((facts?.overlays ?? []).filter(o => `${o.fromModule}->${o.toModule}` === sel.id).map(o => o.id))
+  // J7：选中的耦合对所在的耦合线
+  if (sel?.kind === 'couple') return new Set((evo?.couplings ?? []).filter(l => l.pairs.includes(sel.id)).map(l => l.id))
   if (sel?.kind === 'relation') {
     const ids = [...pv.view.edges, ...(pv.view.coreEdges ?? [])].filter(e => e.relationIds.includes(sel.id)).map(e => e.id)
     // P15：经由上层关系的临时线同样随关系选中

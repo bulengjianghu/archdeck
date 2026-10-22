@@ -2,7 +2,7 @@
  * 导航规则（N1–N13）：层次与选中怎么变、进不进浏览器历史。纯函数。
  * 「重新加载后退到哪」等关于被描述系统的问题交给模型层的架构查询（nearestExisting、lowestCommonAncestor）。
  */
-import { lowestCommonAncestor, nearestExisting, nearestVisibleLevel, type ModelIndex } from '@/model'
+import { lowestCommonAncestor, nearestExisting, nearestVisibleLevel, type ModelIndex, coupleEnds } from '@/model'
 import type { Selection, Toggles, TransitionResult, ViewAction, ViewState } from './types'
 
 /** 选中的对象在本模型中是否存在；视图边按 ID 规则重算、文件不在模型里（G16，由面板提示），总视为存在 */
@@ -22,6 +22,11 @@ export function selectionExists(index: ModelIndex, s: Selection | null): s is Se
       // K10：两端都是存在的模块或参与者
       const ends = s.id.split('->')
       return ends.length === 2 && ends.every(id => index.modules.has(id) || index.actors.has(id))
+    }
+    case 'couple': {
+      // J7：两端都是存在的模块
+      const ends = coupleEnds(s.id)
+      return !!ends && ends.every(id => index.modules.has(id))
     }
   }
 }

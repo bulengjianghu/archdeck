@@ -1,5 +1,20 @@
 /** 画布场景的对外类型（ADR-0013）：与 Vue Flow 的节点、边同形，经 src/layout/canvas.ts 再导出 */
-import type { ActorEntity, ActorKind, DepOverlay, EdgeFact, LevelFacts, ModelDiff, ModelIndex, ModuleEntity, ScenarioLevelView, ViewEdge } from '@/model'
+import type {
+  ActorEntity,
+  ActorKind,
+  DepOverlay,
+  EdgeFact,
+  HeatKind,
+  LevelCoupling,
+  LevelEvolution,
+  LevelFacts,
+  ModelDiff,
+  ModelIndex,
+  ModuleEntity,
+  NodeHeat,
+  ScenarioLevelView,
+  ViewEdge,
+} from '@/model'
 import type { EdgeRoute, Point, PositionedView } from '../layout'
 import type { StageOverlay, StaticMode, TempLine } from '../stage'
 
@@ -33,6 +48,8 @@ export interface NodeData {
   preview?: { pointId: string; option: number; label: string }
   /** Y4：本层环的编号 */
   cycle?: number
+  /** J5：热度角标（右下角三档色块）：档位、种类、热度值与次数 */
+  heat?: NodeHeat & { kind: HeatKind }
 }
 
 /** L10：线型表示的事实状态——已证实或没有代码事实（实线）/ 未证实或部分证实（虚线）/ 代码有描述无（点线） */
@@ -69,8 +86,8 @@ export interface RouteEdgeData {
   muted?: boolean
   /** 当前消息与边的箭头方向相反（P10） */
   flowReverse?: boolean
-  /** 本层没有视图边时的临时线：经由上层关系（P15）/ 结构中未建模（P11）；代码依赖叠加线（K9） */
-  temp?: TempLine['kind'] | 'code'
+  /** 本层没有视图边时的临时线：经由上层关系（P15）/ 结构中未建模（P11）；代码依赖叠加线（K9）；时间耦合的波浪线（J5） */
+  temp?: TempLine['kind'] | 'code' | 'couple'
   /** K9：关系边的证实 */
   fact?: EdgeFact
   /** K9：边含违规 */
@@ -79,6 +96,8 @@ export interface RouteEdgeData {
   jumps?: Point[]
   /** K9：代码依赖叠加线的内容 */
   overlay?: DepOverlay
+  /** J5：耦合线的内容（次数、两端、是否无依赖无关系） */
+  couple?: LevelCoupling
 }
 
 export type CanvasNodeType = 'frame' | 'module' | 'boundary' | 'band' | 'core' | 'more' | 'actor' | 'step' | 'preview'
@@ -133,6 +152,8 @@ export interface CanvasInput {
   branchPointId: string | null
   /** K9、Y4：结构视角下开启「代码事实」时的本层投影；否则为 null */
   facts?: LevelFacts | null
+  /** J5：结构视角下开启热度或时间耦合时的本层投影；否则为 null */
+  evolution?: LevelEvolution | null
 }
 
 export interface CanvasScene {
