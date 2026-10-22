@@ -10,6 +10,8 @@ import Section from './Section.vue'
 import FileDepList from './FileDepList.vue'
 import WriteForm from './WriteForm.vue'
 
+/** 根层先给健康度摘要（summary），分层、简介、生成来源之后再给违规、环等明细（detail）；不给时两部分都画 */
+defineProps<{ part?: 'summary' | 'detail' }>()
 const desk = useDesk()
 const f = desk.facts
 const r = computed(() => f.report.value)
@@ -57,7 +59,7 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
 </script>
 
 <template>
-  <Section title="架构治理">
+  <Section v-if="part !== 'detail'" title="健康度（架构治理）">
     <p v-if="!r" class="muted">{{ f.error.value ? `没有代码事实：${f.error.value}` : REASON[f.status.value] }}</p>
     <template v-else>
       <dl class="kv">
@@ -108,7 +110,7 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
     </template>
   </Section>
 
-  <Section v-if="r && r.violations.length" title="违规" :count="r.violations.length">
+  <Section v-if="part !== 'summary' && r && r.violations.length" title="违规" :count="r.violations.length">
     <div v-for="g in groups" :key="g.status" class="group">
       <h4 :class="`st-${g.status}`">{{ STATUS_LABEL[g.status] }} {{ g.list.length }}</h4>
       <ul class="plain">
@@ -135,7 +137,7 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
     </div>
   </Section>
 
-  <Section v-if="r && r.moduleCycles.length" title="模块环" :count="r.moduleCycles.length">
+  <Section v-if="part !== 'summary' && r && r.moduleCycles.length" title="模块环" :count="r.moduleCycles.length">
     <ul class="plain">
       <li v-for="(c, i) in r.moduleCycles" :key="i" class="cycle">
         <span class="muted">{{ c.members.length }} 个{{ c.tolerated ? '（容忍）' : '' }}：</span>
@@ -149,13 +151,13 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
     </p>
   </Section>
 
-  <Section v-if="r && externals.length" title="外部依赖（按导入次数）">
+  <Section v-if="part !== 'summary' && r && externals.length" title="外部依赖（按导入次数）">
     <p class="muted ext">
       <span v-for="[pkg, n] in externals" :key="pkg">{{ pkg }} {{ n }}</span>
     </p>
   </Section>
 
-  <Section v-if="ledger && (ledger.checks || ledger.rescans)" title="拦截记录（agent 接口）">
+  <Section v-if="part !== 'summary' && ledger && (ledger.checks || ledger.rescans)" title="拦截记录（agent 接口）">
     <dl class="kv">
       <dt>写前判定</dt>
       <dd>{{ ledger.checks }} 次：拒绝 {{ ledger.byVerdict.denied }} · 允许 {{ ledger.byVerdict.allowed }} · 无约束 {{ ledger.byVerdict.unconstrained }}</dd>

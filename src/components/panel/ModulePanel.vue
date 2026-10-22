@@ -75,14 +75,8 @@ function openChild(childId: string) {
       </Section>
     </template>
 
-    <Section v-if="m.principle" title="实现原理"><Markdown :text="m.principle" /></Section>
-
     <Section v-if="m.provides?.length" title="对外接口" :count="m.provides.length">
       <InterfaceItem v-for="id in m.provides" :key="id" :id="id" :open="m.provides.length <= 2" />
-    </Section>
-
-    <Section v-if="m.dataStructures?.length" title="核心数据结构" :count="m.dataStructures.length">
-      <DataStructureItem v-for="id in m.dataStructures" :key="id" :id="id" :open="m.dataStructures.length <= 2" />
     </Section>
 
     <Section v-if="children.length" :title="isLayer ? '本层模块' : '子模块'" :count="children.length">
@@ -108,7 +102,13 @@ function openChild(childId: string) {
       </ul>
     </Section>
 
-    <Section v-if="m.codeRefs?.length || m.docRefs?.length || m.owner" title="代码与文档">
+    <ModuleGovernance :id="m.id" />
+    <ModuleSource :id="m.id" />
+    <Section v-if="m.principle" title="实现原理" fold><Markdown :text="m.principle" /></Section>
+    <Section v-if="m.dataStructures?.length" title="核心数据结构" fold :count="m.dataStructures.length">
+      <DataStructureItem v-for="id in m.dataStructures" :key="id" :id="id" :open="m.dataStructures.length <= 2" />
+    </Section>
+    <Section v-if="m.codeRefs?.length || m.docRefs?.length || m.owner" title="代码与文档引用" fold>
       <ul class="plain refs">
         <li v-for="c in m.codeRefs ?? []" :key="c">
           <code>{{ c }}</code>
@@ -120,9 +120,6 @@ function openChild(childId: string) {
         <li v-if="m.owner" class="muted">负责人：{{ m.owner }}</li>
       </ul>
     </Section>
-
-    <ModuleSource :id="m.id" />
-    <ModuleGovernance :id="m.id" />
 
     <footer class="src muted">出处：{{ desk.modelDir.value }}/{{ m.src.file }}{{ m.src.line ? `:${m.src.line}` : '' }}</footer>
   </div>

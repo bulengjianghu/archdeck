@@ -25,8 +25,17 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
         <span class="badge">系统</span>
       </div>
     </header>
+    <GovernanceSection part="summary" />
+    <Section :title="layered ? '分层' : '顶层模块'" :count="top.length">
+      <ul class="plain">
+        <li v-for="m in top" :key="m.id" class="top">
+          <button class="link" @click="desk.select({ kind: 'module', id: m.id })">{{ m.name }}</button>
+          <span class="muted">{{ m.abstraction ?? m.responsibility }}</span>
+        </li>
+      </ul>
+    </Section>
     <Section v-if="sys.description" title="简介"><Markdown :text="sys.description" /></Section>
-    <Section title="生成来源">
+    <Section title="生成来源与规模">
       <dl v-if="sys.source" class="kv">
         <template v-if="sys.source.repo"
           ><dt>仓库</dt>
@@ -44,8 +53,7 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
         >
       </dl>
       <p v-else class="muted">未记录（system.source）</p>
-    </Section>
-    <Section title="规模">
+      <div class="sub">规模</div>
       <dl class="kv">
         <dt>{{ layered ? '层' : '顶层模块' }}</dt>
         <dd>{{ top.length }}</dd>
@@ -59,15 +67,7 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
         <dd>{{ idx.dataStructures.size }}</dd>
       </dl>
     </Section>
-    <Section :title="layered ? '分层' : '顶层模块'" :count="top.length">
-      <ul class="plain">
-        <li v-for="m in top" :key="m.id" class="top">
-          <button class="link" @click="desk.select({ kind: 'module', id: m.id })">{{ m.name }}</button>
-          <span class="muted">{{ m.abstraction ?? m.responsibility }}</span>
-        </li>
-      </ul>
-    </Section>
-    <GovernanceSection />
+    <GovernanceSection part="detail" />
     <footer class="src muted">描述目录：{{ desk.modelDir.value }}</footer>
   </div>
 </template>
@@ -87,6 +87,12 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
 
 .kv dd {
   margin: 0;
+}
+
+.sub {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  color: var(--text-3);
 }
 
 .top {
