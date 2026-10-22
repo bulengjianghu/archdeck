@@ -7,6 +7,7 @@ import DesignSection from './DesignSection.vue'
 import CommitSection from './CommitSection.vue'
 import GovernanceSection from './GovernanceSection.vue'
 import EvolutionSection from './EvolutionSection.vue'
+import IntentSection from './IntentSection.vue'
 
 const desk = useDesk()
 const idx = computed(() => desk.index.value!)
@@ -17,7 +18,7 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
 
 <template>
   <div class="system-panel">
-    <DesignSection v-if="desk.versions.design.value && desk.versions.revision.value" />
+    <DesignSection v-if="desk.versions.design.value && (desk.versions.revision.value || desk.versions.sketch)" />
     <CommitSection v-else-if="desk.versions.commit.value" />
     <header class="head" :class="{ 'after-design': !!desk.versions.design.value || !!desk.versions.commit.value }">
       <h2>{{ sys.name }}</h2>
@@ -27,6 +28,7 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
       </div>
     </header>
     <GovernanceSection part="summary" />
+    <IntentSection />
     <Section :title="layered ? '分层' : '顶层模块'" :count="top.length">
       <ul class="plain">
         <li v-for="m in top" :key="m.id" class="top">

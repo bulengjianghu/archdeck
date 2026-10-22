@@ -145,6 +145,28 @@ server.registerTool(
 )
 
 server.registerTool(
+  'sketch_check',
+  {
+    title: '草图核验',
+    description:
+      '架构师的草图是 AI 不能违背的约束（X4）：缺省核验活动草图（持久草图与已定稿设计的草图）对当前版本；给 design 时核验该设计的草图对当前版本，再给 revision 时对那一轮。返回每张草图的偏差（错误：缺模块、封闭子树多出子模块、父模块 / kind / core / mayDependOn 不一致；提醒：关系或接口没有对应）与是否一致。起草设计版本后先跑它，零错误才交评审；提醒确有理由时写进 design.yaml 的 questions 由架构师认可，不要自己改草图。',
+    inputSchema: { design: z.string().optional().describe('设计 ID'), revision: z.string().optional().describe('轮次 ID，如 r1'), project },
+  },
+  ({ design, revision, project }) => reply(() => svc.sketchCheck(project, design, revision)),
+)
+
+server.registerTool(
+  'sketch_archive',
+  {
+    title: '归档 / 晋升设计的草图',
+    description:
+      '设计实现、当前版本重新生成后，对当前版本核验一致时归档（X3、X8）：一次性草图把设计状态改为 implemented 并为草图覆盖的模块写确认记录；声明 supersedes 的草图晋升、整份替换对应的持久草图。不一致即拒绝。归档的决定由架构师做出，agent 只代为执行。',
+    inputSchema: { design: z.string().describe('设计 ID'), project },
+  },
+  ({ design, project }) => reply(() => svc.sketchArchive(project, design)),
+)
+
+server.registerTool(
   'prevention_report',
   { title: '拦截报告', description: '拦截记录的统计：判定次数与结果、按规则统计的拒绝、扫描中违规数与环度的首末值。', inputSchema: { project } },
   ({ project }) => reply(() => svc.report(project)),

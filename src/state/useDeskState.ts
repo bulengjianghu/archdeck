@@ -18,6 +18,7 @@ import {
   type Issue,
   type LevelView,
   type ModelIndex,
+  type RawFile,
   type ScenarioPlan,
   reworkList,
   reworkItemMarkdown,
@@ -25,6 +26,7 @@ import {
   type ReworkItem,
   type ReworkList,
   isDesignVersion,
+  isSketchRevision,
   type RuleKind,
 } from '@/model'
 import {
@@ -51,6 +53,7 @@ import { createVersions } from './desk/versions'
 import { createFacts } from './desk/facts'
 import { createReview } from './desk/review'
 import { createEvolution } from './desk/evolution'
+import { createIntent } from './desk/intent'
 
 export type { Selection, Toggles } from './transition'
 export { encodeSelection, decodeSelection } from './transition'
@@ -74,6 +77,10 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const designs = shallowRef<DesignInfo[]>([])
   const commits = shallowRef<ModelCommit[]>([])
   const baselines = shallowRef<{ current?: Baseline; previous?: Baseline }>({})
+  /** DV-10：草图版本的「交给 AI」指令 */
+  const sketchPrompt = shallowRef('')
+  /** X4：载荷附带的设计草图 */
+  const sketches = shallowRef<{ design: string; file: RawFile }[]>([])
   const state = shallowRef<ViewState>({ levelId: '', selection: null, hover: null, toggles: DEFAULT_TOGGLES(RELATION_TYPES), playback: null })
   /** 每次层次切换递增，界面据此决定是否适应画布 */
   const levelVersion = ref(0)
@@ -143,11 +150,12 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   // ── 领域派生（ADR-0013）──
   const files = createFiles({ state, index, view, sync: sourceSync, design: !!options.version })
   const run = createRun({ state, index, levelId, plan, view, positioned, fileOwners: files.owners })
-  const versions = createVersions({ state, index, designs, commits, baselines, version: options.version })
+  const versions = createVersions({ state, index, designs, commits, baselines, version: options.version, sketchPrompt })
   const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version })
   const evolution = createEvolution({ state, index, view, files, facts, sync: sourceSync, design: !!options.version })
+  const intent = createIntent({ index, designs, sketches, version: options.version })
   const allIssues = computed(() => [...issues.value, ...files.warnings.value, ...facts.gateIssues.value])
-  /** W-6、Q7：返工清单——问题页签与画布角标；源码归属与代码事实只对当前版本（G9、K8） */
+  /** W-6、Q7：返工清单——问题页签与画布角标；源码归属与代码事实只对当前版本（G9、K8），草图偏差对设计各轮也有（X4） */
   const rework = computed<ReworkList | null>(() => {
     const idx = index.value
     if (!idx) return null
@@ -156,14 +164,22 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     const source = !options.version && own && p?.status === 'local' ? { own, tree: p } : undefined
     const report = options.version ? null : facts.report.value
     const evo = options.version ? null : evolution.stats.value
-    return reworkList({ index: idx, issues: issues.value, ...(source ? { source } : {}), ...(report ? { report } : {}), ...(evo ? { evolution: evo } : {}) })
+    const checks = intent.checks.value
+    return reworkList({
+      index: idx,
+      issues: issues.value,
+      ...(source ? { source } : {}),
+      ...(report ? { report } : {}),
+      ...(evo ? { evolution: evo } : {}),
+      ...(checks.length ? { sketches: checks } : {}),
+    })
   })
   // ── 写入人拥有的文件（B1–B5，ADR-0019）：只发意图，结果由文件变化推送回来（N5）──
   const writer = options.writer ?? NO_WRITER
   const dv = isDesignVersion(options.version) ? options.version : undefined
   const write = {
-    /** 设计版本可记录评审意见；当前版本可加例外与忽略项（B2–B4） */
-    canFeedback: !!dv,
+    /** 设计的某一轮可记录评审意见（草图不是轮次）；当前版本可加例外与忽略项（B2–B4） */
+    canFeedback: !!dv && !isSketchRevision(options.version),
     canEditRules: !options.version,
     feedback: (text: string): Promise<WriteOutcome> =>
       dv ? writer.feedback({ design: dv.design, revision: dv.revision, text }) : Promise.resolve({ ok: false, error: '只有设计版本能记录评审意见' }),
@@ -171,6 +187,12 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       options.version ? Promise.resolve({ ok: false, error: '例外只加在当前版本' }) : writer.allow(input),
     ignore: (pattern: string): Promise<WriteOutcome> =>
       options.version ? Promise.resolve({ ok: false, error: '忽略项只加在当前版本' }) : writer.ignore({ pattern }),
+    /** X4：认可偏差——只对设计版本（轮次或草图）打开的那个设计 */
+    canAccept: !!dv,
+    accept: (deviation: string, reason: string): Promise<WriteOutcome> =>
+      dv ? writer.accept({ design: dv.design, deviation, reason }) : Promise.resolve({ ok: false, error: '只有设计版本能认可偏差' }),
+    /** X3：归档 / 晋升——对设计版本打开的那个设计，以当前版本的核验为准 */
+    archive: (): Promise<WriteOutcome> => (dv ? writer.archive({ design: dv.design }) : Promise.resolve({ ok: false, error: '只有设计版本能归档' })),
   }
   // ── 人确认层（Z1–Z6，ADR-0023）：确认状态的派生与确认的写入意图；只对当前版本 ──
   const review = createReview({ index, version: options.version, writer })
@@ -206,6 +228,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       issues.value = loaded.model.issues
       designs.value = loaded.payload.designs ?? []
       commits.value = loaded.payload.commits ?? []
+      sketchPrompt.value = loaded.payload.sketchPrompt ?? ''
+      sketches.value = loaded.payload.sketches ?? []
       baselines.value = loaded.baselines
       index.value = loaded.model.index
       status.value = 'ready'
@@ -306,6 +330,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     facts,
     review,
     evolution,
+    intent,
     // 操作
     dispatch,
     init,

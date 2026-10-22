@@ -2,18 +2,44 @@
  * 命令行校验架构描述：
  *   npm run lint:model                 校验模型根目录（默认 model/）下的全部项目
  *   npm run lint:model -- <项目目录>   只校验指定目录
- * 项目下的设计版本（designs/<设计>/<轮次>/，ADR-0002）逐轮一并校验，design.yaml 的问题按 error 计。
+ * 项目下的设计版本（designs/<设计>/<轮次>/，ADR-0002）逐轮一并校验，design.yaml 的问题按 error 计；设计的草图（sketch.yaml）按草图版本校验（DV-10）。
  * 当前版本附带源码归属警告（G9：未归属、归属冲突、entry 不存在）与架构治理（K、U、Y）：
  * 基线外的新增违规、环度上升为 error（U8，棘轮），其余为 warning；读不到源码为 error（G1，源码在本地是前提）；设计版本不对应代码，不报。
+ * 当前版本另比对人拥有文件的指纹（X6）：登记后被改动为 error owned.changed，未登记为 warning。
+ * 活动草图的核验（X4）：持久草图对每个版本、已定稿设计的草图对当前版本、设计的草图对本设计各轮；偏差按严重度报出（已认可的不报）。
  * 有 error 时退出码为 1；只有 warning 时为 0。
  */
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { assignFiles, governanceReport, loadModel, reviewCounts, sourceIssues, type GovernanceReport, type Issue } from '../src/model'
-import { DESIGNS_DIR, listDesigns, listProjectIds, readModelDir, resolveModelRoot } from '../vite/readModelDir'
+import {
+  assignFiles,
+  checkSketches,
+  compareOwned,
+  governanceReport,
+  loadModel,
+  reviewCounts,
+  parseDesignSketches,
+  sourceIssues,
+  type AcceptedDeviation,
+  type GovernanceReport,
+  type Issue,
+  type RawFile,
+  type SketchCheck,
+} from '../src/model'
+import {
+  DESIGNS_DIR,
+  designSketch,
+  SKETCH_FILE,
+  listDesigns,
+  listProjectIds,
+  readModelDir,
+  readSketchVersion,
+  resolveModelRoot,
+  type ModelPayload,
+} from '../vite/readModelDir'
 import { readSourceTree } from '../vite/readSource'
 import { readCodeDeps } from '../vite/readDeps'
-import { governanceDir, readBaseline } from '../vite/governanceStore'
+import { governanceDir, ownedHashes, readBaseline, readOwned } from '../vite/governanceStore'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const arg = process.argv.slice(2).find(a => a !== '--')
@@ -21,17 +47,38 @@ const modelRoot = resolveModelRoot(root)
 const projectDirs = arg ? [path.resolve(process.cwd(), arg)] : listProjectIds(modelRoot).map(id => path.join(modelRoot, id))
 /** 当前版本目录 → 项目 ID（只有它们附带源码归属警告） */
 const currentOf = new Map<string, string>()
-const dirs: string[] = []
+/** 要校验的目录；草图版本不是目录，由 readSketchVersion 给出载荷；设计各轮附本设计的草图与认可的偏差（X4） */
+interface Entry {
+  dir: string
+  payload?: Pick<ModelPayload, 'dir' | 'files'>
+  sketches?: { design: string; file: RawFile }[]
+  accepted?: Map<string, readonly AcceptedDeviation[]>
+  /** 草图版本自己是尺子，不核验 */
+  skipSketches?: boolean
+  /** 项目描述目录（草图偏差的位置相对它） */
+  project?: string
+}
+const dirs: Entry[] = []
 let totalErrors = 0
 for (const dir of projectDirs) {
-  dirs.push(dir)
-  if (path.dirname(dir) === modelRoot) currentOf.set(dir, path.basename(dir))
-  for (const d of listDesigns(dir)) {
+  const projectId = path.dirname(dir) === modelRoot ? path.basename(dir) : undefined
+  if (projectId) currentOf.set(dir, projectId)
+  const designs = listDesigns(dir)
+  const accepted = new Map(designs.map(d => [d.id, d.accepted ?? []]))
+  // X3、X4：已定稿、未归档的设计的草图约束当前版本
+  dirs.push({ dir, sketches: designs.filter(d => d.sketch && d.status === 'accepted').flatMap(d => designSketch(dir, d.id) ?? []), accepted, project: dir })
+  for (const d of designs) {
     for (const p of d.problems) {
       console.log(`  error   ${path.relative(root, path.join(dir, DESIGNS_DIR, d.id, 'design.yaml'))}  ${p}  [design]`)
       totalErrors++
     }
-    for (const r of d.revisions) dirs.push(path.join(dir, DESIGNS_DIR, d.id, r.id))
+    const sketch = d.sketch && projectId ? readSketchVersion(modelRoot, projectId, d.id, root) : null
+    if (sketch) dirs.push({ dir: path.join(dir, DESIGNS_DIR, d.id, SKETCH_FILE), payload: sketch, skipSketches: true })
+    // X4：设计的草图只对最新一轮把关（早先各轮是演进的历史，页面上照常看它们的偏差）
+    const own = d.sketch ? designSketch(dir, d.id) : null
+    const latest = d.revisions[d.revisions.length - 1]?.id
+    for (const r of d.revisions)
+      dirs.push({ dir: path.join(dir, DESIGNS_DIR, d.id, r.id), sketches: own && r.id === latest ? [own] : [], accepted, project: dir })
   }
 }
 
@@ -40,8 +87,9 @@ if (projectDirs.length === 0) {
   process.exit(1)
 }
 
-for (const dir of dirs) {
-  const payload = readModelDir(dir, root)
+for (const entry of dirs) {
+  const dir = entry.dir
+  const payload = entry.payload ?? readModelDir(dir, root)
   if (payload.files.length === 0) {
     console.error(`模型目录中没有 YAML 文件：${dir}`)
     totalErrors++
@@ -50,9 +98,22 @@ for (const dir of dirs) {
   const loaded = loadModel(payload.files)
   const { index } = loaded
   const issues = [...loaded.issues]
+  // X4：活动草图的核验，偏差按严重度报出（已认可的为 info，不报）
+  const checks: SketchCheck[] = entry.skipSketches ? [] : checkSketches(index, parseDesignSketches(entry.sketches ?? []), entry.accepted)
+  for (const c of checks)
+    for (const d of c.deviations)
+      if (d.severity !== 'info')
+        issues.push({
+          severity: d.severity,
+          code: d.code,
+          message: `${c.design ? `设计「${c.design}」的草图` : `持久草图「${c.sketch}」`}：${d.message}`,
+          ...(d.at ? { file: d.at.file, path: d.at.path } : {}),
+        })
   let sourceNote = ''
   let governanceNote = ''
   const project = currentOf.get(dir)
+  // X6：当前版本比对人拥有文件的指纹
+  if (project) issues.push(...compareOwned(readOwned(governanceDir(modelRoot, project)), ownedHashes(dir)))
   const tree = project ? readSourceTree(modelRoot, project, root) : null
   if (tree?.status === 'local') {
     const own = assignFiles(index, tree.files, index.model.sourceIgnore)
@@ -80,6 +141,7 @@ for (const dir of dirs) {
       sourceNote +
       governanceNote +
       reviewNote +
+      (checks.length ? `；草图 ${checks.map(c => `${c.sketch}${c.consistent ? ' 一致' : ` 偏差 ${c.counts.error + c.counts.warning}`}`).join('、')}` : '') +
       '；' +
       `${errors.length} 个错误，${warnings.length} 个提醒`,
   )

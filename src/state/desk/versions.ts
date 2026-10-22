@@ -2,7 +2,17 @@
  * DeskState 的版本派生（desk.versions，ADR-0013）：设计列表、当前设计与轮次、提交版本、对比基线、差异与基线漂移（E1–E6）。
  */
 import { computed, type ShallowRef } from 'vue'
-import { diffModels, isCommitVersion, isDesignVersion, type DesignInfo, type ModelCommit, type ModelDiff, type ModelIndex, type VersionRef } from '@/model'
+import {
+  diffModels,
+  isCommitVersion,
+  isDesignVersion,
+  isSketchRevision,
+  type DesignInfo,
+  type ModelCommit,
+  type ModelDiff,
+  type ModelIndex,
+  type VersionRef,
+} from '@/model'
 import type { ViewState } from '../transition'
 import type { Baseline } from '../sync/modelSource'
 
@@ -15,14 +25,18 @@ export interface VersionsInputs {
   baselines: ShallowRef<{ current?: Baseline; previous?: Baseline }>
   /** 打开的设计版本或提交版本；当前版本时为 undefined */
   version?: VersionRef
+  /** DV-10：草图版本的「交给 AI」指令 */
+  sketchPrompt: ShallowRef<string>
 }
 
-export function createVersions({ state, index, designs, commits, baselines, version }: VersionsInputs) {
+export function createVersions({ state, index, designs, commits, baselines, version, sketchPrompt }: VersionsInputs) {
   const dv = isDesignVersion(version) ? version : undefined
   const cv = isCommitVersion(version) ? version : undefined
   /** 打开的设计（不是设计版本时为 null） */
   const design = computed(() => (dv ? (designs.value.find(d => d.id === dv.design) ?? null) : null))
-  const revision = computed(() => design.value?.revisions.find(r => r.id === dv!.revision) ?? null)
+  /** DV-10：打开的是设计的草图（它本身不是轮次） */
+  const sketch = isSketchRevision(version)
+  const revision = computed(() => (sketch ? null : (design.value?.revisions.find(r => r.id === dv!.revision) ?? null)))
   const find = (rev?: string) => (rev ? (commits.value.find(c => c.hash.startsWith(rev.toLowerCase())) ?? null) : null)
   /** E5：打开的提交（不是提交版本时为 null）；不在最近的提交列表里时只有哈希 */
   const commit = computed<ModelCommit | null>(() => (cv ? (find(cv.commit) ?? { hash: cv.commit, short: cv.commit.slice(0, 8), date: '', subject: '' }) : null))
@@ -42,7 +56,7 @@ export function createVersions({ state, index, designs, commits, baselines, vers
     return !!was && !!now && was !== now
   })
 
-  return { designs, design, revision, commits, commit, baseCommit, baselines, baseline, diff, drift }
+  return { designs, design, revision, sketch, sketchPrompt, commits, commit, baseCommit, baselines, baseline, diff, drift }
 }
 
 export type VersionDerivations = ReturnType<typeof createVersions>

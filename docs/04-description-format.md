@@ -10,32 +10,34 @@
 ```text
 model/<项目>/
   system.yaml              系统根 + 生成来源 source { repo, commit, generatedAt, history }；repo 也决定源码根目录（§3.7），history 为 git 历史的窗口与缺陷匹配（§3.7）
+  intent/
+    skeleton.yaml          骨架：全部层 + 第二级模块（人拥有的持久草图，ID 固定，见 §3.1、§3.10）
+    <ID>.yaml              其他持久草图：核心模块的持久设计（§3.10）
   modules/
-    layers.yaml            骨架：全部层 + 第二级模块（ID 固定，见 §3.1）
-    <区域>.yaml            各区域的子树：第二级模块之下的模块、本区域的关系、接口、数据结构
+    <区域>.yaml            各区域的子树：第二级模块之下的模块、本区域的关系、接口、数据结构（AI 按代码生成）
   actors.yaml              外部参与者及其入口关系
   scenarios/<场景>.yaml    一个场景一个文件，也可用 .json
   source-ignore.yaml       忽略清单 sourceIgnore：不属于任何模块的源码文件（§3.7）
   rules.yaml               架构规则 rules：架构师的意图，AI 重新生成时不改动（§3.8）
   reviewed.yaml            确认记录 reviewed：架构师确认过哪些模块、确认时的指纹与摘要，AI 重新生成时不改动（§3.9）
-  designs/<设计>/          设计版本（§5），读取当前版本时跳过
-  governance/              基线 baseline.json 与拦截记录 ledger.jsonl，由命令行与 agent 接口写，不属于描述，读取时跳过（§4）
+  designs/<设计>/          设计版本（§5）：sketch.yaml（架构师的草图）+ design.yaml + r<N>/（AI 展开的各轮），读取当前版本时跳过
+  governance/              基线 baseline.json、拦截记录 ledger.jsonl、人拥有文件的指纹 owned.json，由命令行与 agent 接口写，不属于描述，读取时跳过（§4）
 ```
 
-**谁拥有哪个文件**（B1，ADR-0019）：
+**谁拥有哪个文件**（B1、B6、X6，ADR-0019、ADR-0023）：
 
-| 拥有者 | 文件 | 页面 |
-|---|---|---|
-| AI（按代码生成） | `system.yaml`、`modules/`、`actors.yaml`、`scenarios/`；设计版本各轮快照 `designs/<设计>/r<N>/` | 只读 |
-| 人（架构师、负责人） | `rules.yaml`（AI 重新生成时不改动，§3.8）、`source-ignore.yaml`（忽略项）、`designs/<设计>/design.yaml` 的评审意见 `feedback`、`reviewed.yaml`（确认记录，§3.9） | 只追加：例外、忽略项、评审意见；确认记录追加或按模块更新（Z1）；其余由人编辑 |
-| 命令行与 agent 接口 | `governance/` | 只读 |
+| 拥有者 | 文件 | 页面 | 指纹 |
+|---|---|---|---|
+| AI（按代码生成） | `system.yaml`、`modules/`（骨架之下）、`actors.yaml`、`scenarios/`；设计版本各轮快照 `designs/<设计>/r<N>/` | 只读 | — |
+| 人（架构师、负责人） | 草图：`intent/*.yaml`（骨架等持久草图）、`designs/<设计>/sketch.yaml`；`rules.yaml`（AI 重新生成时不改动，§3.8）；`source-ignore.yaml`（忽略项）；`designs/<设计>/design.yaml`（评审意见 `feedback`、认可偏差 `accepted`）；`reviewed.yaml`（确认记录，§3.9） | 只追加：例外、忽略项、评审意见、认可偏差；确认记录追加或按模块更新（Z1）；归档 / 晋升改设计状态、晋升时整份替换持久草图；草图整份覆盖为后续（X7）；其余由人编辑 | 记在 `governance/owned.json`：人改完后 `npm run arch -- own` 登记，页面写入自动更新，`lint:model` 不符即报错 `owned.changed` |
+| 命令行与 agent 接口 | `governance/` | 只读 | — |
 
-- 骨架只描述层和第二级模块；区域文件**不得重复定义**它们，只能用 `parent: <第二级 ID>` 往下挂子模块。
+- 骨架只描述层和第二级模块；AI 只能用 `parent: <第二级 ID>` 往骨架之下挂子模块，对骨架里的模块只能补草图没写的字段，不得重定义已写的字段（X1，`lint:model` 报 `sketch-redefined`）。没有 `intent/skeleton.yaml` 的旧描述仍可把层写在 `modules/layers.yaml`（兼容期）。
 - 一个区域文件对应一位生成者负责的范围，互不改写，便于并行生成和局部重新生成。
 
 ## 2. 文件格式
 
-一个文件的顶层键都可选、可任意组合：`system`、`module`（单个模块，可带 `parent`）、`modules`、`relations`、`interfaces`、`dataStructures`、`actors`、`scenario` / `scenarios`、`sourceIgnore`、`sourceLimits`、`rules`。未知字段即格式错误，整份文件被跳过（M1）。
+一个文件的顶层键都可选、可任意组合：`system`、`module`（单个模块，可带 `parent`）、`modules`、`relations`、`interfaces`、`dataStructures`、`actors`、`scenario` / `scenarios`、`sourceIgnore`、`sourceLimits`、`rules`、`reviewed`（确认记录，§3.9）、`sketch`（草图，只在 `intent/` 与 `designs/<设计>/sketch.yaml` 里用，§3.10）。未知字段即格式错误，整份文件被跳过（M1）。
 
 ```yaml
 # modules/infra.yaml —— 模块子树 + 本区域的关系
@@ -82,20 +84,24 @@ dataStructures:
 ```
 
 ```yaml
-# modules/layers.yaml —— 层（根层的分层总览靠这些字段）
-modules:
-  - id: domain
-    name: Domain
-    kind: layer
-    order: 3
-    abstraction: 规则与事实；纯决策，无 DOM / 网络
-    includes: [纯决策, 领域类型与模型, 协议算法, 规则表, 领域端口]
-    excludes: [DOM, 网络, Framework / Player 实现, 装配时序]
-    mayDependOn: [share]
-    responsibility: …
-    children:
-      - { id: domain.services, name: Services, core: true, responsibility: … }
-      - { id: domain.events, name: Events, responsibility: … }     # 非核心，总览中折叠为 +N
+# intent/skeleton.yaml —— 骨架：层（根层的分层总览靠这些字段）与第二级模块，人拥有的持久草图（§3.10）
+sketch:
+  id: skeleton
+  lifetime: persistent
+  closed: [domain, share]        # 这些层的直接子模块集合必须与这里相等（X2）
+  modules:
+    - id: domain
+      name: Domain
+      kind: layer
+      order: 3
+      abstraction: 规则与事实；纯决策，无 DOM / 网络
+      includes: [纯决策, 领域类型与模型, 协议算法, 规则表, 领域端口]
+      excludes: [DOM, 网络, Framework / Player 实现, 装配时序]
+      mayDependOn: [share]
+      responsibility: …
+      children:
+        - { id: domain.services, name: Services, core: true, responsibility: … }
+        - { id: domain.events, name: Events, responsibility: … }     # 非核心，总览中折叠为 +N
 ```
 
 ```yaml
@@ -133,7 +139,7 @@ scenario:
 
 ### 3.1 骨架
 
-骨架由项目决定：先按项目已有的分层文档确定层与第二级模块，写进 `layers.yaml`，ID 一经确定不再改。以 h5player 为例（第二级模块 ID 固定）：
+骨架由架构师决定：先按项目已有的分层文档确定层与第二级模块，写进 `intent/skeleton.yaml`（持久草图，第二级封闭，§3.10），ID 一经确定不再改；AI 重新生成当前版本时不得改动它，只在它之下挂子模块（X1、X5）。以 h5player 为例（第二级模块 ID 固定）：
 
 | 层 | 第二级模块 | 代码落点（h5player 仓库根相对路径） |
 |---|---|---|
@@ -321,14 +327,47 @@ reviewed:
 - 记录引用的模块不存在时提醒并忽略；模块改了 ID 视同未确认，重新确认即可。
 - 设计版本的快照目录里不放 `reviewed.yaml`（只对当前版本，Z1）。
 
+### 3.10 草图
+
+草图是架构师的意图载体（02 §1.10，X1–X5）：一份人拥有的**局部描述**，范围与深度由架构师自选，没写的字段不约束；AI 必须沿用它的 ID 与父子关系，只在它之下展开。写法与普通描述同形，外面包一层 `sketch`：
+
+```yaml
+# designs/<设计>/sketch.yaml（设计的草图）；持久草图在 intent/<ID>.yaml
+sketch:
+  id: phase2-dynamic             # 持久草图有固定 ID；设计的草图 ID 即设计 ID
+  lifetime: until-implemented    # persistent（持久，不归档）/ until-implemented（实现一致后归档，设计的草图缺省）
+  closed: [model.scenario]       # 这些子树的直接子模块集合必须与草图相等（X2）；没列的子树开放——版本至少包含草图写的
+  supersedes: skeleton           # 可选：定稿实现后替换这个持久草图（晋升，X3）；没有它时与持久草图矛盾即 error
+  modules:
+    - id: model.scenario          # 挂在骨架之下：写 parent，或在 modules 里嵌套
+      parent: model
+      name: 场景投影
+      kind: subsystem
+      core: true
+      responsibility: 把场景展开成回放计划、按层次投影成可见消息与时序模型
+      children:
+        - { id: model.scenario.plan, name: 回放计划, responsibility: 步骤树 → 帧树 }
+  relations:
+    - { id: rel.sk.desk-plan, from: state.desk, to: model.scenario, type: calls, description: 只读派生数据 }
+  interfaces:
+    - { id: if.model.planScenario, name: planScenario, owner: model.scenario }
+```
+
+- **位置**：骨架 `intent/skeleton.yaml`；其他持久草图 `intent/<ID>.yaml`；设计的草图 `designs/<设计>/sketch.yaml`，与 `design.yaml` 并列。全部人拥有，纳入指纹门禁（§4）。
+- **加载**：草图先于其他文件进入 Loader；其他文件对草图实体只能补充（往下挂子模块、补草图没写的字段），不能重定义（X1）。打开设计的草图时按普通描述加载：`system.yaml` + 持久草图 + 该草图，对比基线为当前版本（DV-10）。
+- **核验**（X4）：对设计各轮与当前版本（`lint:model` 只对最新一轮与当前版本把关），只比草图写了的——缺模块、封闭子树多出子模块、父模块 / `kind` / `core` / `mayDependOn` 不一致为错误；关系没有对应（两端 + 类型，深层提升也算）、接口不存在或 `owner` 不同为提醒；职责等文字由 AI 展开，不判。`npm run arch -- sketch-check [--design <设计>]` 与页面问题页签「草图偏差」同一份结果。
+- **写什么**：只写架构师要钉住的——层与核心模块、它们之间的关系、必须存在的接口；覆盖到哪一层由架构师决定，其余留给 AI。职责一两句话即可，AI 展开时会补全。
+
 ## 4. 校验与提交
 
 ```bash
 npm run lint:model
+npm run arch -- own            # 人改完 intent/、sketch.yaml、rules.yaml、source-ignore.yaml、design.yaml、reviewed.yaml 后登记指纹（X6）
 ```
 
 - 必须 0 个错误；提醒逐条处理：缺职责要补；引用其他区域尚未定义的接口 / 数据结构时可暂留；源码归属警告按 §3.7 处理；场景证据文件不存在（`scenario.evidence`）按 §3.6 改正路径。
-- 按代码重新生成当前版本后，更新 `system.yaml` 的 `source.commit` 与 `source.generatedAt`。
+- 人拥有的文件由指纹门禁守住：`lint:model` 报 `owned.changed` 时说明有人拥有的文件在登记后被改动（多半是 AI 重新生成时碰了它）——由人核对后恢复，或确认改动后再 `arch own`；`owned.unregistered` 提醒有人拥有的文件还没登记。AI 不得运行 `arch own`。
+- 按代码重新生成当前版本后，更新 `system.yaml` 的 `source.commit` 与 `source.generatedAt`；对活动草图跑 `sketch-check`，偏差按草图修正描述（X5）。
 - `lint:model` 一并检查代码事实与架构规则（K、U、Y）：基线之外的新增违规（`rule.new`）、环度上升（`cycle.grew`）是错误，要么修代码，要么由架构师裁决后改规则；`fact.unconfirmed` 提醒说明描述里的编译期关系在代码里找不到，或运行时关系的两端之间在代码里没有任何依赖（K6），按代码修正描述（确实经 HTTP、注入、路由或回调传递的写 `via`，K5b）——运行时交互经由第三个模块转交时，关系写在实际调用的两端之间（如 `entry → validator`，而不是 `loader → validator`）；未描述依赖只计有值导入的（K7），只引类型的不必补关系，名称查询、标签常量这类到处用的值依赖写在能表达清楚的最高层（如 `present → model.pipeline.indexer`）。
 - 基线由人生成并提交：
 
@@ -336,14 +375,15 @@ npm run lint:model
 npm run arch -- baseline --project <项目>   # 写 model/<项目>/governance/baseline.json
 ```
 
-## 5. 设计版本
+## 5. 设计版本：草图 + 轮次
 
-迭代前先出设计、评审定稿后再开发（ADR-0002）。
+迭代前先出设计、评审定稿后再开发（ADR-0002）。设计 = 架构师的草图（尺子）+ AI 按草图展开的各轮完整快照（被量的东西）+ 评审意见 + ADR（ADR-0023）。
 
 ```text
 model/<项目>/designs/<设计 ID>/
+  sketch.yaml                    架构师的草图（§3.10，人拥有）；版本切换中排在 r1 之前
   design.yaml
-  r1/   system.yaml、modules/…   第 1 轮：从当前版本完整复制后修改
+  r1/   system.yaml、intent/、modules/…   第 1 轮：AI 从当前版本完整复制后按草图扩展
   r2/   …                        第 2 轮：从上一轮完整复制后按评审意见修改
 ```
 
@@ -354,6 +394,8 @@ design:
   goal: |                       # 设计目标与范围
   adr: docs/adr/0003-phase2-dynamic-view.md   # 定稿后记录结论的 ADR（一个或列表，相对源码根目录，E7）
   base: { commit: <起草时当前版本的 source.commit>, generatedAt: … }
+  accepted:                     # 认可的偏差（X4）：由面板「认可偏差（写理由）」追加；只能认可提醒级偏差
+    - { deviation: 'missing-relation:rel.sk.desk-plan', reason: 调用经 DeskState 的派生，不单独建关系, at: '2026-10-22' }
   revisions:
     - id: r1
       date: '2026-10-20'
@@ -362,9 +404,28 @@ design:
       feedback: |               # 架构师对本轮的评审意见，原样记录
 ```
 
-- **起草**：先确认当前版本与代码一致（不一致先重新生成并提交），再把当前版本整份复制为 `r1/`（不含 `designs/` 与 `governance/`），在副本上改；不改当前版本。
+流程：
+
+1. **画草图**：架构师写 `sketch.yaml`（§3.10；二期可在画布上画），`lint:model` 校验格式与 ID；草图不得与持久草图矛盾，要改骨架就声明 `supersedes`。
+2. **交给 AI**：设计信息条「交给 AI」生成指令——草图全文 + 下面的「按草图扩展」一节；AI 据此在当前版本上起草 r1。
+3. **评审循环**：每一轮都跑核验（`sketch-check`），偏差进返工清单；AI 起草后自己先跑一遍，零 error 才交评审。架构师在架构台上对比、下钻、记评审意见；提醒级偏差确属合理时「认可偏差（写理由）」。
+4. **定稿与实现**：`status: accepted`，结论记 ADR，同步 01–04；实现、重新生成当前版本后，核验对象变为当前版本；一致即「归档」（`until-implemented`：状态 `implemented`，草图覆盖的模块写入确认记录）或「晋升」（`supersedes`：草图替换对应的持久草图）。归档由人显式发起（面板或 `arch sketch archive`）。
+
+写法约定：
+
+- **起草**：先确认当前版本与代码一致（不一致先重新生成并提交），再把当前版本整份复制为 `r1/`（不含 `designs/` 与 `governance/`，含 `intent/`），在副本上按草图扩展；不改当前版本。
 - **只改要改的**：新增实体按 §3 写；已有实体只在设计确实要调整时改，ID 保持不变（界面按 ID 对比）；删除就直接删。
 - **设计说明**：每个新增或修改的实体写 `designNote`，说清为什么这样设计、取舍是什么。
 - **新一轮**：先把评审意见原样记到上一轮的 `feedback`，再把上一轮整份复制为新一轮修改；旧轮次不再改动。
-- **定稿**：`status: accepted`，结论记 ADR，并把新增的概念、规则、需求、架构同步进 01–04 文档；实现后按代码重新生成当前版本，状态改为 `implemented`。
 - 设计版本同样要求 `lint:model` 0 个错误（逐轮校验）。
+
+### 按草图扩展
+
+给 AI 的规范（「交给 AI」的指令由草图全文与这一节组成）：
+
+1. 草图是约束，不是建议：草图里的每个实体都必须出现在你的版本里，ID、父子关系、`kind`、`core`、`mayDependOn` 与草图一致；草图写的关系（两端与类型）与接口（ID 与 `owner`）必须有对应。
+2. 声明 `closed` 的子树下，直接子模块的集合必须与草图相等——不多不少；没声明的子树可以加子模块。
+3. 没写的字段由你展开：职责、实现原理、接口签名、数据结构、更深层的子模块与关系，都按 §3 的生成规范写全。
+4. ID 纪律（X5）：草图里的 ID 由架构师起，你只能沿用；你新增的实体只能挂在草图实体之下，ID 以其为前缀（如草图有 `model.scenario`，你可以加 `model.scenario.plan`，不能加 `model.playback`）；不得重命名、移动草图里出现过的实体，要改就把问题写进 `design.yaml` 的 `questions` 交给架构师改草图。
+5. 从当前版本整份复制为新一轮，只改要改的；每个新增或修改的实体写 `designNote`。
+6. 起草后运行 `npm run lint:model` 与 `npm run arch -- sketch-check --design <设计>`：零 error 才算完成；提醒级偏差如确有理由，写进 `questions` 由架构师认可，不要自己改草图。

@@ -8,6 +8,7 @@ import { matchRef, missingEvidence, moduleEntry, type LocalSource, type SourceOw
 import { contractNames, unconfirmedCode, unconfirmedReason, unconfirmedWarns, type FileDep, type GovernanceReport, type Violation } from '../governance'
 import { reviewDiffText, reviewStates, REVIEW_FIELD_LABELS, REVIEW_FIELDS } from '../review'
 import { isolatedCouplings, type EvolutionStats } from '../evolution'
+import { SKETCH_DEVIATION_LABELS, type SketchCheck } from '../intent'
 import type { Issue, ModelIndex, SourceLoc } from '../types'
 import { REWORK_CATEGORIES, REWORK_SEVERITIES, type ReworkAction, type ReworkItem, type ReworkList, type ReworkLoc, type ReworkSeverity } from './types'
 
@@ -21,6 +22,8 @@ export interface ReworkInput {
   report?: GovernanceReport
   /** 演化事实（J）；没有时不含「时间耦合」 */
   evolution?: EvolutionStats
+  /** X4：活动草图的核验结果；没有时不含草图偏差 */
+  sketches?: readonly SketchCheck[]
 }
 
 /** Q8：校验问题代码 → 规则编号 */
@@ -64,10 +67,16 @@ const ISSUE_RULES: Record<string, string[]> = {
   'duplicate-rules': ['U1'],
   'unknown-rule-module': ['U1'],
   'allow-without-reason': ['U1'],
+  'sketch-redefined': ['X1'],
+  'sketch-misplaced': ['X1'],
+  'owned.changed': ['X6'],
+  'owned.unregistered': ['X6'],
+  'owned.none': ['X6'],
 }
 
 /** Q8：描述问题的建议动作 */
 function descriptionFix(i: Issue): string {
+  if (i.code === 'sketch-redefined') return '草图里的实体由架构师定：去掉这里对已写字段的重定义，只补草图没写的字段或往下挂子模块；要改草图本身请交给架构师（X1、X5）'
   if (i.code === 'relation-type-renamed') return '改为新名：event → notifies 并对调 from / to，dataflow → streams；再核对说明里的方向字样'
   if (i.code === 'implements-no-interface') return '确实实现了契约时在目标模块声明接口（interfaces 的 owner 或 provides）；只是使用对方时改为 depends'
   return i.severity === 'error' ? '改正描述：这一处的实体已被剔除，图上看不到它' : '改正描述：坏引用已被去掉'
@@ -88,20 +97,23 @@ export function reworkList(input: ReworkInput): ReworkList {
   const name = (id: string) => moduleName(index, id)
   const items: ReworkItem[] = []
 
-  // ── 描述问题（M、S、U1）：一条问题一个根因 ──
+  // ── 描述问题（M、S、U1、X1）：一条问题一个根因；指纹不符（X6）另归一类 ──
   for (const i of input.issues) {
     if (recomputed(i.code)) continue
     const at = descLoc(i)
+    const owned = i.code.startsWith('owned.')
     items.push({
-      id: `description:${i.code}:${i.file ?? ''}:${i.path ?? ''}:${i.message}`,
-      category: 'description',
+      id: `${owned ? 'owned' : 'description'}:${i.code}:${i.file ?? ''}:${i.path ?? ''}:${i.message}`,
+      category: owned ? 'owned' : 'description',
       severity: i.severity,
       rules: ISSUE_RULES[i.code] ?? ['M9'],
       code: i.code,
       title: i.message,
       ...(at ? { at } : {}),
       affected: at ? [at] : [],
-      actions: [{ kind: 'fix-description', text: descriptionFix(i), ...(i.file ? { file: i.file } : {}) }],
+      actions: owned
+        ? [{ kind: 'register-owned', text: i.code === 'owned.changed' ? '由人核对改动：不该改的恢复文件；确认改动后运行 npm run arch -- own 重新登记' : '人确认内容后运行 npm run arch -- own 登记指纹', file: 'governance/owned.json' }]
+        : [{ kind: 'fix-description', text: descriptionFix(i), ...(i.file ? { file: i.file } : {}) }],
       target: {},
     })
   }
@@ -111,6 +123,7 @@ export function reworkList(input: ReworkInput): ReworkList {
   items.push(...unmodeledItems(index, name))
   items.push(...reviewItems(index, name))
   if (input.evolution) items.push(...couplingItems(index, input.evolution, name))
+  for (const c of input.sketches ?? []) items.push(...sketchItems(c))
 
   const sev = (s: ReworkSeverity) => REWORK_SEVERITIES.indexOf(s)
   const cat = (c: ReworkItem['category']) => REWORK_CATEGORIES.indexOf(c)
@@ -547,6 +560,37 @@ function reviewItems(index: ModelIndex, name: (id: string) => string): ReworkIte
     })
   }
   return items
+}
+
+// ── 草图偏差（X4）：一条偏差一个根因；已认可的不进返工清单（没有要返工的，在设计面板列出） ──
+
+function sketchItems(c: SketchCheck): ReworkItem[] {
+  const file = c.deviations[0]?.at?.file
+  const who = c.design ? `设计「${c.design}」的草图` : `持久草图「${c.sketch}」`
+  return c.deviations.filter(d => !d.accepted).map(d => {
+    const at = descLoc(d.at)
+    const actions: ReworkAction[] = []
+    if (d.code === 'sketch.contradiction') actions.push({ kind: 'accept-deviation', text: '架构师决定：改草图使其与持久草图一致，或在草图里声明 supersedes 替换它（X3）', ...(file ? { file } : {}) })
+    else {
+      actions.push({ kind: 'follow-sketch', text: 'AI 按草图改描述：沿用草图的 ID 与父子关系，只在草图之下展开（X5）' })
+      if (d.severity !== 'error')
+        actions.push({ kind: 'accept-deviation', text: '确有理由时由架构师在设计面板「认可偏差（写理由）」，记入 design.yaml 的 accepted', ...(c.design ? { file: `designs/${c.design}/design.yaml` } : {}) })
+      else actions.push({ kind: 'accept-deviation', text: '错误不能认可；意图确实要改时由架构师改草图' })
+    }
+    return {
+      id: `sketch:${c.sketch}:${d.key}`,
+      category: 'sketch',
+      severity: d.severity,
+      rules: d.rules,
+      code: d.code,
+      title: `${who}偏差（${SKETCH_DEVIATION_LABELS[d.code]}）：${d.message}`,
+      ...(d.detail ? { detail: d.detail } : {}),
+      ...(at ? { at } : {}),
+      affected: at ? [at] : [],
+      actions,
+      target: d.target,
+    }
+  })
 }
 
 /** 两端（含祖先）之间的关系：运行时的与其余的 */

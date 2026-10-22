@@ -12,6 +12,10 @@ export const DESIGN_STATUSES: readonly DesignStatus[] = ['draft', 'reviewing', '
 /** 已结束迭代的设计归档（DV-6）：项目列表不再列出，仍可从版本切换打开 */
 export const isArchived = (status: DesignStatus): boolean => status === 'implemented' || status === 'abandoned'
 
+/** DV-10：草图作为版本打开时的轮次 ID（路由 /p/<项目>/d/<设计>/sketch） */
+export const SKETCH_REVISION = 'sketch'
+export const isSketchRevision = (v: VersionRef | undefined): v is DesignVersionRef => isDesignVersion(v) && v.revision === SKETCH_REVISION
+
 export interface RevisionInfo {
   /** 轮次 ID，同时是快照目录名，如 r1 */
   id: string
@@ -37,6 +41,12 @@ export interface DesignInfo {
   adr?: string[]
   /** 按先后排列，最后一轮为最新 */
   revisions: RevisionInfo[]
+  /** DV-5、DV-10：有 sketch.yaml（架构师的草图） */
+  sketch?: boolean
+  /** X4：认可的偏差（design.yaml 的 accepted） */
+  accepted?: { deviation: string; reason: string; at?: string }[]
+  /** X4：项目摘要里的偏差计数（未认可的 error 与 warning；草图对最新一轮核验，已定稿的对当前版本） */
+  deviations?: { errors: number; warnings: number }
   /** design.yaml 的格式问题、缺失的快照目录等 */
   problems: string[]
 }

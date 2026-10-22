@@ -10,12 +10,25 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import { DESIGN_STATUSES, loadModel, versionLabel } from '../src/model'
-import type { DesignInfo, DesignStatus, ModelCommit, ProjectHealth, ProjectSummary, RawFile, RevisionInfo, VersionRef } from '../src/model'
+import { DESIGN_STATUSES, SKETCH_REVISION, checkSketches, isArchived, isSketchFile, loadModel, parseDesignSketches, versionLabel } from '../src/model'
+import type {
+  AcceptedDeviation,
+  DesignInfo,
+  DesignStatus,
+  ModelCommit,
+  ModelIndex,
+  ProjectHealth,
+  ProjectSummary,
+  RawFile,
+  RevisionInfo,
+  VersionRef,
+} from '../src/model'
 
 export type { ProjectSummary }
 
 export const DESIGNS_DIR = 'designs'
+/** 设计的草图（X1、DV-10） */
+export const SKETCH_FILE = 'sketch.yaml'
 /** 基线与拦截记录（ADR-0015），不属于描述 */
 export const GOVERNANCE_DIR = 'governance'
 
@@ -40,6 +53,10 @@ export interface ModelPayload {
   version?: VersionRef
   /** 设计版本的对比基线：当前版本，以及上一轮（若有） */
   compare?: { current: CompareSource; previous?: CompareSource }
+  /** X4：对本版本有约束力的设计草图——当前版本：已定稿、未归档的设计的；设计某一轮：本设计的 */
+  sketches?: { design: string; file: RawFile }[]
+  /** DV-10：草图版本的「交给 AI」指令 */
+  sketchPrompt?: string
 }
 
 export function isModelFile(file: string): boolean {
@@ -86,7 +103,17 @@ export function listProjectIds(modelRoot: string): string[] {
 export function readProject(modelRoot: string, id: string, projectRoot: string): ModelPayload | null {
   if (!isProjectId(id) || !listProjectIds(modelRoot).includes(id)) return null
   const dir = path.join(modelRoot, id)
-  return { project: id, ...readModelDir(dir, projectRoot), designs: listDesigns(dir) }
+  const designs = listDesigns(dir)
+  // X3、X4：已定稿、未归档的设计的草图约束当前版本
+  const sketches = designs.filter(d => d.sketch && d.status === 'accepted').flatMap(d => designSketch(dir, d.id) ?? [])
+  return { project: id, ...readModelDir(dir, projectRoot), designs, ...(sketches.length ? { sketches } : {}) }
+}
+
+/** 设计的草图文件（没有时为 null） */
+export function designSketch(projectDir: string, design: string): { design: string; file: RawFile } | null {
+  const file = path.join(projectDir, DESIGNS_DIR, design, SKETCH_FILE)
+  if (!isProjectId(design) || !fs.existsSync(file)) return null
+  return { design, file: { path: `${DESIGNS_DIR}/${design}/${SKETCH_FILE}`, text: fs.readFileSync(file, 'utf8') } }
 }
 
 // ── 设计版本 ──
@@ -145,11 +172,32 @@ export function readDesignInfo(designDir: string, id: string): DesignInfo {
   const adrRaw = typeof raw.adr === 'string' ? [raw.adr] : Array.isArray(raw.adr) ? raw.adr : []
   const adr = adrRaw.filter((a): a is string => typeof a === 'string' && !!a.trim())
   if (raw.adr !== undefined && (!adr.length || adr.length !== adrRaw.length)) problems.push('adr 必须是路径字符串或路径列表')
-  return { id, name: str(raw.name) ?? id, status, goal: str(raw.goal), base, ...(adr.length ? { adr } : {}), revisions, problems }
+  // X4：认可的偏差
+  const accepted: AcceptedDeviation[] = []
+  for (const a of Array.isArray(raw.accepted) ? (raw.accepted as Record<string, unknown>[]) : []) {
+    const deviation = str(a?.deviation)
+    const reason = str(a?.reason)
+    if (deviation && reason) accepted.push({ deviation, reason, at: str(a.at) ?? (a.at instanceof Date ? a.at.toISOString().slice(0, 10) : undefined) })
+    else problems.push('accepted 中有条目缺少 deviation 或 reason')
+  }
+  const sketch = fs.existsSync(path.join(designDir, SKETCH_FILE))
+  return {
+    id,
+    name: str(raw.name) ?? id,
+    status,
+    goal: str(raw.goal),
+    base,
+    ...(adr.length ? { adr } : {}),
+    revisions,
+    ...(sketch ? { sketch } : {}),
+    ...(accepted.length ? { accepted } : {}),
+    problems,
+  }
 }
 
-/** 读设计版本的某一轮，附带对比基线（当前版本与上一轮）；不存在返回 null */
+/** 读设计版本的某一轮，附带对比基线（当前版本与上一轮）与本设计的草图；轮次为 sketch 时读草图版本（DV-10）；不存在返回 null */
 export function readDesignRevision(modelRoot: string, project: string, design: string, revision: string, projectRoot: string): ModelPayload | null {
+  if (revision === SKETCH_REVISION) return readSketchVersion(modelRoot, project, design, projectRoot)
   const current = readProject(modelRoot, project, projectRoot)
   if (!current || !isProjectId(design) || !isProjectId(revision)) return null
   const info = current.designs?.find(d => d.id === design)
@@ -157,6 +205,7 @@ export function readDesignRevision(modelRoot: string, project: string, design: s
   if (!info || at < 0) return null
   const designDir = path.join(modelRoot, project, DESIGNS_DIR, design)
   const prev = info.revisions[at - 1]
+  const sketch = designSketch(path.join(modelRoot, project), design)
   return {
     project,
     ...readModelDir(path.join(designDir, revision), projectRoot),
@@ -166,11 +215,71 @@ export function readDesignRevision(modelRoot: string, project: string, design: s
       current: { label: '当前版本', dir: current.dir, files: current.files },
       ...(prev ? { previous: { label: versionLabel(info, prev.id), ...readModelDir(path.join(designDir, prev.id), projectRoot) } } : {}),
     },
+    ...(sketch ? { sketches: [sketch] } : {}),
   }
 }
 
-/** 项目列表页用的摘要：直接跑一遍模型层，统计规模与问题数；健康度（Q10）由调用方另算后附上 */
-export function summarizeProject(payload: ModelPayload, health?: ProjectHealth): ProjectSummary {
+/**
+ * DV-10：草图作为版本——文件 = 当前版本的 system.yaml + 持久草图（intent/）+ 该设计的 sketch.yaml，对比基线为当前版本；
+ * 附「交给 AI」的指令（草图全文 + 04 §5「按草图扩展」，docsRoot 缺省为本包根目录）。没有草图时返回 null。
+ */
+export function readSketchVersion(modelRoot: string, project: string, design: string, projectRoot: string, docsRoot = projectRoot): ModelPayload | null {
+  const current = readProject(modelRoot, project, projectRoot)
+  const sketch = current && designSketch(path.join(modelRoot, project), design)
+  if (!current || !sketch) return null
+  const designDir = path.join(modelRoot, project, DESIGNS_DIR, design)
+  return {
+    project,
+    dir: path.relative(projectRoot, designDir) || '.',
+    files: [...current.files.filter(f => f.path === 'system.yaml' || isSketchFile(f.path)), { ...sketch.file, path: SKETCH_FILE }],
+    designs: current.designs,
+    version: { design, revision: SKETCH_REVISION },
+    compare: { current: { label: '当前版本', dir: current.dir, files: current.files } },
+    sketchPrompt: sketchPrompt(design, sketch.file.text, docsRoot),
+  }
+}
+
+/** DV-10：「交给 AI」的指令——草图全文 + 04 §5「按草图扩展」一节（从本包 docs 截取；读不到时只给草图） */
+export function sketchPrompt(design: string, sketchText: string, docsRoot: string): string {
+  let section = ''
+  try {
+    const doc = fs.readFileSync(path.join(docsRoot, 'docs', '04-description-format.md'), 'utf8')
+    const m = /^### 按草图扩展\n([\s\S]*?)(?=^#{1,3} |(?![\s\S]))/m.exec(doc)
+    section = m ? m[1].trim() : ''
+  } catch {
+    section = ''
+  }
+  return [
+    `# 按草图扩展：设计「${design}」`,
+    '',
+    `请在当前版本上起草设计 \`${design}\` 的下一轮（没有轮次时为 r1）：把当前版本整份复制为新一轮，按下面的草图扩展，草图是约束、不是建议。`,
+    '',
+    `## 草图（designs/${design}/sketch.yaml）`,
+    '',
+    '```yaml',
+    sketchText.trimEnd(),
+    '```',
+    '',
+    '## 规范（docs/04-description-format.md §5「按草图扩展」）',
+    '',
+    section || '（读不到 docs/04-description-format.md，请按 04 §5「按草图扩展」一节执行）',
+    '',
+  ].join('\n')
+}
+
+/** X4：有草图的设计的偏差计数——未归档的对最新一轮核验（已定稿的对当前版本），卡片标「偏差 N」 */
+function designDeviations(modelRoot: string, project: string, current: ModelIndex, d: DesignInfo, projectRoot: string): DesignInfo['deviations'] | undefined {
+  const dir = path.join(modelRoot, project)
+  const sketch = d.sketch && !isArchived(d.status) ? designSketch(dir, d.id) : null
+  if (!sketch) return undefined
+  const last = d.revisions[d.revisions.length - 1]
+  const target = d.status === 'accepted' || !last ? current : loadModel(readModelDir(path.join(dir, DESIGNS_DIR, d.id, last.id), projectRoot).files).index
+  const check = checkSketches(target, parseDesignSketches([sketch]), new Map([[d.id, d.accepted ?? []]])).find(c => c.design === d.id)
+  return check ? { errors: check.counts.error, warnings: check.counts.warning } : undefined
+}
+
+/** 项目列表页用的摘要：直接跑一遍模型层，统计规模与问题数；健康度（Q10）由调用方另算后附上；有草图的设计附偏差计数（X4） */
+export function summarizeProject(payload: ModelPayload, health?: ProjectHealth, ctx?: { modelRoot: string; projectRoot: string }): ProjectSummary {
   const { index, issues } = loadModel(payload.files)
   const sys = index.model.system
   const top = (index.childrenOf.get(index.rootId) ?? []).map(id => index.modules.get(id)!)
@@ -193,7 +302,10 @@ export function summarizeProject(payload: ModelPayload, health?: ProjectHealth):
     errors: issues.filter(i => i.severity === 'error').length,
     warnings: issues.filter(i => i.severity === 'warning').length,
     ...(health ? { health } : {}),
-    designs: payload.designs ?? [],
+    designs: (payload.designs ?? []).map(d => {
+      const deviations = ctx ? designDeviations(ctx.modelRoot, payload.project, index, d, ctx.projectRoot) : undefined
+      return deviations ? { ...d, deviations } : d
+    }),
   }
 }
 
@@ -201,6 +313,6 @@ export function summarizeProject(payload: ModelPayload, health?: ProjectHealth):
 export function listProjects(modelRoot: string, projectRoot: string, health?: (payload: ModelPayload) => ProjectHealth): ProjectSummary[] {
   return listProjectIds(modelRoot).map(id => {
     const payload = readProject(modelRoot, id, projectRoot)!
-    return summarizeProject(payload, health?.(payload))
+    return summarizeProject(payload, health?.(payload), { modelRoot, projectRoot })
   })
 }

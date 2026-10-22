@@ -32,11 +32,26 @@ export function httpModelWriter(project: string, base = ''): ModelWriter {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const out = (await res.json()) as { file?: string; error?: string }
-      return res.ok && out.file ? { ok: true, file: out.file } : { ok: false, error: out.error ?? `HTTP ${res.status}` }
+      const out = (await res.json()) as { file?: string; error?: string; outcome?: string; reviewed?: { count: number; pending?: true }; promoted?: string }
+      if (!res.ok || !out.file) return { ok: false, error: out.error ?? `HTTP ${res.status}` }
+      // X3：归档 / 晋升的结果说明
+      const note =
+        out.outcome === 'promote'
+          ? `已晋升：草图替换了 ${out.promoted}`
+          : out.outcome === 'archive'
+            ? `已归档：${out.reviewed?.count ?? 0} 条确认记录${out.reviewed?.pending ? '（确认层写入端点待联调，尚未写入 reviewed.yaml）' : ''}`
+            : undefined
+      return { ok: true, file: out.file, ...(note ? { note } : {}) }
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
     }
   }
-  return { feedback: b => post('feedback', b), allow: b => post('allow', b), ignore: b => post('ignore', b), reviewed: b => post('reviewed', b) }
+  return {
+    feedback: b => post('feedback', b),
+    allow: b => post('allow', b),
+    ignore: b => post('ignore', b),
+    reviewed: b => post('reviewed', b),
+    accept: b => post('accept', b),
+    archive: b => post('archive', b),
+  }
 }

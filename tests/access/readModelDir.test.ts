@@ -2,7 +2,18 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { isProjectId, listDesigns, listProjectIds, listProjects, readDesignRevision, readProject, resolveModelRoot } from '../../vite/readModelDir'
+import {
+  designSketch,
+  isProjectId,
+  listDesigns,
+  listProjectIds,
+  listProjects,
+  readDesignRevision,
+  readProject,
+  readSketchVersion,
+  resolveModelRoot,
+  sketchPrompt,
+} from '../../vite/readModelDir'
 
 let root: string
 let modelRoot: string
@@ -37,13 +48,31 @@ beforeAll(() => {
   write('alpha/designs/next/r2/m.yaml', 'modules: [{ id: m1, name: M1 }, { id: m3, name: M3 }]')
   write('alpha/designs/bad/design.yaml', 'design: { status: wip }')
   write('alpha/designs/no-meta/r1/system.yaml', 'system: { id: alpha, name: Alpha }')
+  // 草图（X1、DV-10）：gamma 有持久草图；设计 sk 有草图、已定稿（约束当前版本）；设计 plain 没有草图
+  write('gamma/system.yaml', 'system: { id: gamma, name: Gamma }')
+  write('gamma/m.yml', 'modules: [{ id: core.impl, name: Impl, parent: core, responsibility: x }]')
+  write('gamma/intent/skeleton.yaml', 'sketch: { id: skeleton, modules: [{ id: core, name: Core, kind: layer, order: 1, abstraction: a, responsibility: c }] }')
+  write('gamma/designs/plain/design.yaml', 'design:\n  name: 无草图\n  revisions:\n    - { id: r1 }\n')
+  write('gamma/designs/plain/r1/system.yaml', 'system: { id: gamma, name: Gamma }')
+  write(
+    'gamma/designs/sk/design.yaml',
+    'design:\n  name: 有草图\n  status: accepted\n  accepted:\n    - { deviation: "missing-relation:rel.sk.x", reason: 经注入, at: 2026-10-22 }\n    - { deviation: bad }\n  revisions:\n    - { id: r1 }\n',
+  )
+  write('gamma/designs/sk/sketch.yaml', 'sketch: { id: sk, modules: [{ id: core.api, name: Api, parent: core }] }')
+  write('gamma/designs/sk/r1/system.yaml', 'system: { id: gamma, name: Gamma }')
+  // 文档：草图版本的「交给 AI」指令从这里截取「按草图扩展」一节
+  fs.mkdirSync(path.join(root, 'docs'), { recursive: true })
+  fs.writeFileSync(
+    path.join(root, 'docs', '04-description-format.md'),
+    '## 5. 设计版本\n\n正文。\n\n### 按草图扩展\n\n1. 草图是约束。\n2. 沿用 ID。\n\n## 6. 其他\n\n略。\n',
+  )
 })
 
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }))
 
 describe('接入层 · 多项目读取', () => {
   it('只有含 system.yaml 的子目录才算项目，按名称排序', () => {
-    expect(listProjectIds(modelRoot)).toEqual(['alpha', 'beta'])
+    expect(listProjectIds(modelRoot)).toEqual(['alpha', 'beta', 'gamma'])
     expect(listProjectIds(path.join(root, 'missing'))).toEqual([])
   })
 
@@ -98,6 +127,37 @@ describe('接入层 · 多项目读取', () => {
         .find(p => p.id === 'alpha')!
         .designs.map(d => d.id),
     ).toEqual(['bad', 'next'])
+  })
+
+  it('X1、X4：发现设计的草图与认可的偏差；已定稿设计的草图随当前版本给出，设计某一轮附本设计的草图', () => {
+    const designs = listDesigns(path.join(modelRoot, 'gamma'))
+    const sk = designs.find(d => d.id === 'sk')!
+    expect(sk.sketch).toBe(true)
+    expect(sk.accepted).toEqual([{ deviation: 'missing-relation:rel.sk.x', reason: '经注入', at: '2026-10-22' }])
+    expect(sk.problems).toEqual(['accepted 中有条目缺少 deviation 或 reason'])
+    expect(designs.find(d => d.id === 'plain')!.sketch).toBeUndefined()
+    const current = readProject(modelRoot, 'gamma', root)!
+    expect(current.files.map(f => f.path)).toEqual(['intent/skeleton.yaml', 'm.yml', 'system.yaml'])
+    expect(current.sketches?.map(s => [s.design, s.file.path])).toEqual([['sk', 'designs/sk/sketch.yaml']])
+    expect(readDesignRevision(modelRoot, 'gamma', 'sk', 'r1', root)!.sketches?.map(s => s.design)).toEqual(['sk'])
+    expect(readDesignRevision(modelRoot, 'gamma', 'plain', 'r1', root)!.sketches).toBeUndefined()
+    expect(designSketch(path.join(modelRoot, 'gamma'), 'plain')).toBeNull()
+  })
+
+  it('DV-10：草图作为版本——system + 持久草图 + 该草图，对比基线为当前版本，附「交给 AI」的指令', () => {
+    const v = readSketchVersion(modelRoot, 'gamma', 'sk', root)!
+    expect(v.version).toEqual({ design: 'sk', revision: 'sketch' })
+    expect(v.dir).toBe('model/gamma/designs/sk')
+    expect(v.files.map(f => f.path)).toEqual(['intent/skeleton.yaml', 'system.yaml', 'sketch.yaml'])
+    expect(v.compare).toEqual({ current: { label: '当前版本', dir: 'model/gamma', files: readProject(modelRoot, 'gamma', root)!.files } })
+    expect(v.sketchPrompt).toContain('# 按草图扩展：设计「sk」')
+    expect(v.sketchPrompt).toContain('id: sk, modules: [{ id: core.api')
+    expect(v.sketchPrompt).toContain('1. 草图是约束。\n2. 沿用 ID。')
+    expect(v.sketchPrompt).not.toContain('## 6. 其他')
+    // 同一入口：轮次 sketch 即草图版本；没有草图的设计没有草图版本；读不到文档时只给草图
+    expect(readDesignRevision(modelRoot, 'gamma', 'sk', 'sketch', root)).toEqual(v)
+    expect(readSketchVersion(modelRoot, 'gamma', 'plain', root)).toBeNull()
+    expect(sketchPrompt('sk', 'sketch: {}', path.join(root, 'nowhere'))).toContain('读不到 docs/04-description-format.md')
   })
 
   it('读设计的某一轮：附当前版本与上一轮作为对比基线', () => {

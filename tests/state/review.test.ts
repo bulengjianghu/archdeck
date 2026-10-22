@@ -13,6 +13,8 @@ function fakeWriter() {
     allow: async () => ({ ok: false, error: 'x' }),
     ignore: async () => ({ ok: false, error: 'x' }),
     reviewed: async b => (batches.push(b.entries), { ok: true, file: 'model/test/reviewed.yaml' }),
+    accept: async () => ({ ok: false, error: 'x' }),
+    archive: async () => ({ ok: false, error: 'x' }),
   }
   return { writer, batches }
 }

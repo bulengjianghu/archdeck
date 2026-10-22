@@ -2,16 +2,21 @@
  * Loader：解析 YAML / JSON（同一解析器，S8）、按 JSON Schema 检查单文件格式、把多个文件合并成一个模型。
  *
  * 单文件格式不合法时整份文件跳过并报错；跨文件的引用完整性交给 validate.ts。
+ * 草图文件（intent/*.yaml、sketch.yaml，X1）先于其他文件进入：草图里的实体既作为普通实体进模型，又整份记入 model.sketches 供核验；
+ * 其他文件对草图实体只能补充（往下挂子模块、补草图没写的字段），对草图已写的字段给出不同的值即重定义，报错并以草图为准。
  */
 import Ajv, { type ErrorObject } from 'ajv'
 import { LineCounter, parseDocument, type Document } from 'yaml'
 import schema from '../../schema/arch-file.schema.json'
 import { LEGACY_RELATION_TYPES } from './types'
+import { isSketchFile } from './intent/types'
 import type {
   ActorEntity,
   ArchFileDef,
   ArchModel,
+  DataStructureDef,
   DataStructureEntity,
+  InterfaceDef,
   InterfaceEntity,
   Issue,
   ModuleDef,
@@ -23,6 +28,7 @@ import type {
   RelationType,
   ReviewedEntry,
   ScenarioEntity,
+  SketchEntity,
   SourceLoc,
   Step,
   StepDef,
@@ -53,15 +59,58 @@ export function load(files: readonly RawFile[]): LoadResult {
   const reviewed: ReviewedEntry[] = []
   let sourceLimits: { def: NonNullable<ArchFileDef['sourceLimits']>; file: string } | undefined
   let rules: { def: NonNullable<ArchFileDef['rules']>; src: SourceLoc } | undefined
+  const sketches: SketchEntity[] = []
+  /** X1：草图里的实体，按「种类:ID」记住实体与草图写了哪些字段，供其他文件补充时比对 */
+  const sketched = new Map<string, { entity: Record<string, unknown>; written: Set<string>; file: string }>()
   let seq = 0
 
-  const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path))
+  // X1：草图文件先入；其余按路径排序
+  const sorted = [...files].sort((a, b) => Number(isSketchFile(b.path)) - Number(isSketchFile(a.path)) || a.path.localeCompare(b.path))
   for (const file of sorted) {
     const parsed = parseFile(file, issues)
     if (!parsed) continue
     const { data, locate } = parsed
+    const sketch = data.sketch
+    if (sketch && !isSketchFile(file.path))
+      issues.push({ severity: 'warning', code: 'sketch-misplaced', message: `草图应放在 intent/<ID>.yaml 或 designs/<设计>/sketch.yaml，这里的照常加载`, ...locate(['sketch']) })
 
     if (data.system) systems.push({ def: data.system, src: locate(['system']) })
+
+    /**
+     * X1：实体已由草图声明时的合并。草图文件之间后者覆盖前者（设计的草图在持久草图之后；矛盾由核验报出）；
+     * 其他文件只能补草图没写的字段，对已写字段给出不同的值报 sketch-redefined、以草图为准。返回 true 表示已合并、不再新建实体。
+     */
+    type Fields = Record<string, unknown>
+    const supplement = (kind: string, id: string, def: object, src: SourceLoc, skip: readonly string[]): boolean => {
+      const hit = sketched.get(`${kind}:${id}`)
+      if (!hit) return false
+      const conflicts: string[] = []
+      for (const [key, value] of Object.entries(def as Fields)) {
+        if (key === 'id' || skip.includes(key) || value === undefined) continue
+        if (sketch) {
+          hit.entity[key] = value
+          hit.written.add(key)
+        } else if (!hit.written.has(key)) {
+          hit.entity[key] = value
+          hit.written.add(key)
+        } else if (JSON.stringify(hit.entity[key]) !== JSON.stringify(value)) conflicts.push(key)
+      }
+      if (conflicts.length)
+        issues.push({
+          severity: 'error',
+          code: 'sketch-redefined',
+          message: `「${id}」是草图（${hit.file}）里的实体，这里重定义了它的 ${conflicts.join('、')}（X1：其他文件只能补充草图没写的字段与子树）；以草图为准`,
+          ...src,
+        })
+      return true
+    }
+    const remember = (kind: string, id: string, entity: object, def: object, skip: readonly string[]) => {
+      if (!sketch) return
+      const written = new Set(Object.keys(def).filter(k => k !== 'id' && !skip.includes(k) && (def as Fields)[k] !== undefined))
+      // 模块的父子关系总由草图决定：挂在根下的也不许别的文件搬走
+      if (kind === 'module') written.add('parentId')
+      sketched.set(`${kind}:${id}`, { entity: entity as Fields, written, file: file.path })
+    }
 
     const pushModule = (def: ModuleDef, parentId: string | undefined, path: (string | number)[], nested: boolean) => {
       const { children, parent, ...rest } = def
@@ -73,20 +122,56 @@ export function load(files: readonly RawFile[]): LoadResult {
           ...locate([...path, 'parent']),
         })
       }
+      const src = locate(path)
       // parentId 为 undefined 表示挂在系统根下，合并完成后再回填
-      modules.push({ ...rest, parentId: (nested ? parentId : parent) as string, seq: seq++, src: locate(path) })
+      const parentOf = nested ? parentId : parent
+      const merged = supplement('module', def.id, { ...rest, ...(parentOf !== undefined ? { parentId: parentOf } : {}) }, src, ['children', 'parent'])
+      if (!merged) {
+        const entity: ModuleEntity = { ...rest, parentId: parentOf as string, seq: seq++, src }
+        modules.push(entity)
+        remember('module', def.id, entity, { ...rest, ...(parentOf !== undefined ? { parentId: parentOf } : {}) }, ['children', 'parent'])
+      }
       children?.forEach((child, i) => pushModule(child, def.id, [...path, 'children', i], true))
+    }
+    const pushRelation = (r: RelationDef, path: (string | number)[]) => {
+      const src = locate(path)
+      const payload = r.payload === undefined ? [] : Array.isArray(r.payload) ? r.payload : [r.payload]
+      const typed = currentType(r, src, issues)
+      const fields = { ...r, ...typed, payload }
+      if (supplement('relation', r.id, fields, src, [])) return
+      const entity: RelationEntity = { ...fields, seq: seq++, src }
+      relations.push(entity)
+      remember('relation', r.id, entity, fields, [])
+    }
+    const pushInterface = (x: InterfaceDef, path: (string | number)[]) => {
+      const src = locate(path)
+      if (supplement('interface', x.id, x, src, [])) return
+      const entity: InterfaceEntity = { ...x, src }
+      interfaces.push(entity)
+      remember('interface', x.id, entity, x, [])
+    }
+    const pushDataStructure = (x: DataStructureDef, path: (string | number)[]) => {
+      const src = locate(path)
+      if (supplement('data-structure', x.id, x, src, [])) return
+      const entity: DataStructureEntity = { ...x, src }
+      dataStructures.push(entity)
+      remember('data-structure', x.id, entity, x, [])
+    }
+
+    // X1：草图的内容先进模型，再整份记入 sketches 供核验
+    if (sketch) {
+      sketch.modules?.forEach((m, i) => pushModule(m, undefined, ['sketch', 'modules', i], false))
+      sketch.relations?.forEach((r, i) => pushRelation(r, ['sketch', 'relations', i]))
+      sketch.interfaces?.forEach((x, i) => pushInterface(x, ['sketch', 'interfaces', i]))
+      sketch.dataStructures?.forEach((x, i) => pushDataStructure(x, ['sketch', 'dataStructures', i]))
+      sketches.push({ def: sketch, file: file.path, src: locate(['sketch']) })
     }
     if (data.module) pushModule(data.module, undefined, ['module'], false)
     data.modules?.forEach((m, i) => pushModule(m, undefined, ['modules', i], false))
 
-    data.relations?.forEach((r, i) => {
-      const payload = r.payload === undefined ? [] : Array.isArray(r.payload) ? r.payload : [r.payload]
-      const src = locate(['relations', i])
-      relations.push({ ...r, ...currentType(r, src, issues), payload, seq: seq++, src })
-    })
-    data.interfaces?.forEach((x, i) => interfaces.push({ ...x, src: locate(['interfaces', i]) }))
-    data.dataStructures?.forEach((x, i) => dataStructures.push({ ...x, src: locate(['dataStructures', i]) }))
+    data.relations?.forEach((r, i) => pushRelation(r, ['relations', i]))
+    data.interfaces?.forEach((x, i) => pushInterface(x, ['interfaces', i]))
+    data.dataStructures?.forEach((x, i) => pushDataStructure(x, ['dataStructures', i]))
     data.actors?.forEach((x, i) => actors.push({ ...x, seq: seq++, src: locate(['actors', i]) }))
     const pushScenario = (def: NonNullable<ArchFileDef['scenario']>, path: (string | number)[]) => {
       const { steps, ...rest } = def
@@ -122,6 +207,7 @@ export function load(files: readonly RawFile[]): LoadResult {
     model: {
       system, modules, relations, interfaces, dataStructures, actors, scenarios, sourceIgnore, reviewed, ...(sourceLimits ? { sourceLimits: sourceLimits.def } : {}),
       ...(rules ? { rules: rules.def, rulesSrc: rules.src } : {}),
+      sketches,
     },
     issues,
   }

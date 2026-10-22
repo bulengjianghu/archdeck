@@ -25,6 +25,8 @@ async function mountWith(Comp: typeof Panel | typeof ModuleTree, url: string, re
     allow: async () => ({ ok: false, error: 'x' }),
     ignore: async () => ({ ok: false, error: 'x' }),
     reviewed: async b => (batches.push(b.entries), { ok: true, file: 'model/test/reviewed.yaml' }),
+    accept: async () => ({ ok: false, error: 'x' }),
+    archive: async () => ({ ok: false, error: 'x' }),
   }
   const desk = createDeskState(async () => ({ dir: 'model/test', files: sampleFiles({ 'reviewed.yaml': reviewed }) }), {
     writer,

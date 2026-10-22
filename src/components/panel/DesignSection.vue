@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 设计版本的根层面板：设计目标、本轮说明、待确认问题、历轮评审意见、变更清单（ADR-0002；变更清单与提交版本共用 ChangeList） */
+/** 设计版本的根层面板：设计目标、本轮说明、待确认问题、历轮评审意见、变更清单（ADR-0002；变更清单与提交版本共用 ChangeList）；草图版本（DV-10）没有轮次 */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDesk } from '@/state/inject'
@@ -9,6 +9,7 @@ import Section from './Section.vue'
 import ChangeList from './ChangeList.vue'
 import { useOpenPreview } from '../shared/preview'
 import WriteForm from './WriteForm.vue'
+import SketchCheckSection from './SketchCheckSection.vue'
 
 const desk = useDesk()
 const route = useRoute()
@@ -24,7 +25,8 @@ const adrLabel = (f: string) => {
   const m = /(\d{4})[^/]*\.md$/.exec(f)
   return m ? `ADR-${m[1]}` : f.split('/').pop()
 }
-const r = computed(() => desk.versions.revision.value!)
+const r = computed(() => desk.versions.revision.value)
+const sketch = desk.versions.sketch
 
 function openRevision(id: string) {
   void router.push({ name: 'design', params: { project: desk.project!, design: d.value.id, revision: id }, query: route.query })
@@ -36,8 +38,8 @@ function openRevision(id: string) {
     <header class="head">
       <h2>{{ d.name }}</h2>
       <div class="badges">
-        <code>{{ d.id }} / {{ r.id }}</code>
-        <span class="badge warn">设计版本</span>
+        <code>{{ d.id }} / {{ r ? r.id : '草图' }}</code>
+        <span class="badge warn">{{ sketch ? '草图' : '设计版本' }}</span>
         <span class="badge">{{ DESIGN_STATUS_LABELS[d.status] }}</span>
         <span v-if="d.base?.commit" class="badge" :title="d.base.commit">基于 {{ d.base.commit.slice(0, 8) }}</span>
       </div>
@@ -57,22 +59,27 @@ function openRevision(id: string) {
       </ul>
     </Section>
     <Section v-if="d.goal" title="设计目标与范围"><Markdown :text="d.goal" /></Section>
-    <Section v-if="r.summary" :title="`本轮（${r.id}）做了什么`"><Markdown :text="r.summary" /></Section>
-    <Section v-if="r.questions?.length" title="待评审确认" :count="r.questions.length">
+    <Section v-if="sketch" title="草图">
+      <p class="muted small-note">架构师画的局部描述：各轮按它展开，核验以它为尺子（X1–X4）。相对当前版本的变更清单里，删除项就是草图没画的部分。</p>
+    </Section>
+    <Section v-if="r?.summary" :title="`本轮（${r.id}）做了什么`"><Markdown :text="r.summary" /></Section>
+    <Section v-if="r?.questions?.length" title="待评审确认" :count="r.questions.length">
       <ol class="questions">
         <li v-for="q in r.questions" :key="q"><Markdown :text="q" /></li>
       </ol>
     </Section>
 
+    <SketchCheckSection v-if="d.sketch" />
+
     <ChangeList />
 
     <Section title="评审轮次" :count="d.revisions.length">
       <ol class="revisions">
-        <li v-for="x in d.revisions" :key="x.id" :class="{ current: x.id === r.id }">
+        <li v-for="x in d.revisions" :key="x.id" :class="{ current: x.id === r?.id }">
           <div class="rev-head">
-            <button class="link" :disabled="x.id === r.id" @click="openRevision(x.id)">{{ x.id }}</button>
+            <button class="link" :disabled="x.id === r?.id" @click="openRevision(x.id)">{{ x.id }}</button>
             <span v-if="x.date" class="muted">{{ x.date }}</span>
-            <span v-if="x.id === r.id" class="badge accent">正在查看</span>
+            <span v-if="x.id === r?.id" class="badge accent">正在查看</span>
           </div>
           <div v-if="x.feedback" class="feedback">
             <div class="sub">评审意见</div>
@@ -80,7 +87,7 @@ function openRevision(id: string) {
           </div>
           <div v-else-if="x.id === d.revisions[d.revisions.length - 1]?.id" class="muted small-note">等待评审意见</div>
           <WriteForm
-            v-if="x.id === r.id && desk.write.canFeedback"
+            v-if="x.id === r?.id && desk.write.canFeedback"
             label="记录评审意见"
             multiline
             placeholder="评审意见（Markdown），追加到本轮 design.yaml 的 feedback"

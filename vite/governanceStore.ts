@@ -4,13 +4,16 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import type { Baseline, LedgerEntry } from '../src/model'
-import { GOVERNANCE_DIR } from './readModelDir'
+import { isOwnedFile, type Baseline, type LedgerEntry, type OwnedRecord } from '../src/model'
+import { DESIGNS_DIR, GOVERNANCE_DIR, isModelFile } from './readModelDir'
 
 export { GOVERNANCE_DIR }
 export const BASELINE_FILE = 'baseline.json'
 const LEDGER_FILE = 'ledger.jsonl'
+/** X6：人拥有文件的指纹 */
+export const OWNED_FILE = 'owned.json'
 /** 页面只取最近这么多行拦截记录 */
 export const LEDGER_PAGE_LIMIT = 2000
 
@@ -56,6 +59,66 @@ export function readLedger(dir: string, limit?: number): LedgerEntry[] {
 export function appendLedger(dir: string, entry: LedgerEntry): void {
   fs.mkdirSync(dir, { recursive: true })
   fs.appendFileSync(path.join(dir, LEDGER_FILE), `${JSON.stringify(entry)}\n`)
+}
+
+// ── X6：人拥有文件的指纹 ──
+
+export function readOwned(dir: string): OwnedRecord | null {
+  try {
+    const r = JSON.parse(fs.readFileSync(path.join(dir, OWNED_FILE), 'utf8')) as OwnedRecord
+    return r && typeof r.files === 'object' && r.files ? r : null
+  } catch {
+    return null
+  }
+}
+
+/** 键排序、缩进两格，便于评审差异 */
+export function writeOwned(dir: string, record: OwnedRecord): string {
+  fs.mkdirSync(dir, { recursive: true })
+  const file = path.join(dir, OWNED_FILE)
+  const files = Object.fromEntries(Object.entries(record.files).sort(([a], [b]) => a.localeCompare(b)))
+  fs.writeFileSync(file, `${JSON.stringify({ updatedAt: record.updatedAt, files }, null, 2)}\n`)
+  return file
+}
+
+export const ownedFingerprint = (text: string): string => createHash('sha1').update(text).digest('hex')
+
+/** 项目下人拥有的文件（isOwnedFile，含 designs/<设计>/ 下的草图与元信息）及其指纹：路径相对项目描述目录 */
+export function ownedHashes(projectDir: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  const add = (rel: string) => {
+    if (isOwnedFile(rel)) out[rel] = ownedFingerprint(fs.readFileSync(path.join(projectDir, rel), 'utf8'))
+  }
+  if (!fs.existsSync(projectDir)) return out
+  for (const ent of fs.readdirSync(projectDir, { withFileTypes: true })) {
+    if (ent.isFile() && isModelFile(ent.name)) add(ent.name)
+    else if (ent.isDirectory() && ent.name === 'intent') for (const f of fs.readdirSync(path.join(projectDir, 'intent'))) add(`intent/${f}`)
+    else if (ent.isDirectory() && ent.name === DESIGNS_DIR)
+      for (const d of fs.readdirSync(path.join(projectDir, DESIGNS_DIR), { withFileTypes: true })) {
+        if (!d.isDirectory()) continue
+        for (const f of fs.readdirSync(path.join(projectDir, DESIGNS_DIR, d.name))) add(`${DESIGNS_DIR}/${d.name}/${f}`)
+      }
+  }
+  return out
+}
+
+/** 命令行 arch own：把全部人拥有文件的指纹写进 owned.json（只由人执行） */
+export function registerOwned(modelRoot: string, project: string, at = new Date().toISOString()): { file: string; files: string[] } {
+  const files = ownedHashes(path.join(modelRoot, project))
+  const file = writeOwned(governanceDir(modelRoot, project), { updatedAt: at, files })
+  return { file, files: Object.keys(files).sort() }
+}
+
+/** 写入端点写完一个人拥有的文件后更新它的指纹；没有 owned.json 时新建、只含这一项（其余待人登记） */
+export function touchOwned(modelRoot: string, project: string, rel: string, at = new Date().toISOString()): void {
+  if (!isOwnedFile(rel)) return
+  const dir = governanceDir(modelRoot, project)
+  const prev = readOwned(dir)
+  const full = path.join(modelRoot, project, rel)
+  const files = { ...(prev?.files ?? {}) }
+  if (fs.existsSync(full)) files[rel] = ownedFingerprint(fs.readFileSync(full, 'utf8'))
+  else delete files[rel]
+  writeOwned(dir, { updatedAt: at, files })
 }
 
 /** U7：源码根目录的 git 提交；不是 git 仓库时为 undefined */

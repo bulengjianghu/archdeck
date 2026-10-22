@@ -19,9 +19,13 @@ export interface ModelPayload {
   designs?: DesignInfo[]
   /** 改动过本项目描述的最近提交（E5） */
   commits?: ModelCommit[]
-  /** 打开的是设计版本（ADR-0002）或提交版本（E5）时给出 */
+  /** 打开的是设计版本（ADR-0002，轮次或草图 DV-10）或提交版本（E5）时给出 */
   version?: VersionRef
   compare?: { current: CompareSource; previous?: CompareSource }
+  /** X4：对本版本有约束力的设计草图 */
+  sketches?: { design: string; file: RawFile }[]
+  /** DV-10：草图版本的「交给 AI」指令 */
+  sketchPrompt?: string
 }
 
 export type FetchModel = () => Promise<ModelPayload>
