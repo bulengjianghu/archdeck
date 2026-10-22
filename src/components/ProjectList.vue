@@ -149,6 +149,14 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
               <span class="dname">{{ d.name }}</span>
               <span class="dstatus" :class="d.status">{{ DESIGN_STATUS_LABELS[d.status] }}</span>
               <span class="drev">{{ d.revisions[d.revisions.length - 1].id }} · 共 {{ d.revisions.length }} 轮</span>
+              <span
+                v-if="d.deviations && d.deviations.errors + d.deviations.warnings"
+                class="ddev"
+                :class="{ bad: d.deviations.errors }"
+                :title="`草图核验：错误 ${d.deviations.errors} · 提醒 ${d.deviations.warnings}（X4）`"
+                >偏差 {{ d.deviations.errors + d.deviations.warnings }}</span
+              >
+              <span v-else-if="d.sketch" class="ddev ok" title="草图核验一致">草图一致</span>
               <span class="open">打开 →</span>
             </RouterLink>
             <span v-else class="design broken">设计 {{ d.name }}：{{ d.problems[0] }}</span>
@@ -413,6 +421,24 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
 .design .open {
   margin-left: auto;
   font-size: 12px;
+}
+
+.ddev {
+  font-size: 11px;
+  padding: 0 7px;
+  border-radius: 10px;
+  border: 1px solid var(--warning);
+  color: var(--warning);
+}
+
+.ddev.bad {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.ddev.ok {
+  border-color: var(--diff-added);
+  color: var(--diff-added);
 }
 
 .design.broken {

@@ -4,15 +4,19 @@
  */
 import type { RuleKind } from '@/model'
 
-export type WriteOutcome = { ok: true; file: string } | { ok: false; error: string }
+export type WriteOutcome = { ok: true; file: string; note?: string } | { ok: false; error: string }
 
 export interface ModelWriter {
   feedback(input: { design: string; revision: string; text: string }): Promise<WriteOutcome>
   allow(input: { from: string; to: string; rule?: RuleKind; reason: string }): Promise<WriteOutcome>
   ignore(input: { pattern: string }): Promise<WriteOutcome>
+  /** X4：认可一条偏差 */
+  accept(input: { design: string; deviation: string; reason: string }): Promise<WriteOutcome>
+  /** X3：归档 / 晋升 */
+  archive(input: { design: string }): Promise<WriteOutcome>
 }
 
 const none = async (): Promise<WriteOutcome> => ({ ok: false, error: '没有注入写入来源' })
 
 /** 没有注入写入来源时（只看描述的测试） */
-export const NO_WRITER: ModelWriter = { feedback: none, allow: none, ignore: none }
+export const NO_WRITER: ModelWriter = { feedback: none, allow: none, ignore: none, accept: none, archive: none }

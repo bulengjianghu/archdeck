@@ -122,7 +122,7 @@ sketch:
           kind: subsystem
           core: true
           responsibility: 当前项目当前版本的唯一状态持有者：层次、选中（含文件）、悬停、显示开关、加载状态，当前场景与回放进度，设计版本与提交版本的对比基线与差异，被描述项目的源码清单与文件归属，返工清单（W-6）与写入人拥有的文件（B1–B4），分层总览的临时展开与带内列数（O6、O7）；对外提供唯一一组操作，并经同步适配器与路由、描述文件、布局、源码保持一致。对外核心平铺，运行视角、源码、版本、架构治理的派生分为 run / files / versions / facts 四组（ADR-0013、ADR-0015）。
-          codeRefs: [src/state/useDeskState.ts, src/state/inject.ts]
+          codeRefs: [src/state/useDeskState.ts, src/state/inject.ts, src/state/desk/intent.ts]
         - id: state.transition
           name: 视图状态转移
           kind: subsystem
@@ -167,7 +167,7 @@ sketch:
           name: 描述写入
           kind: subsystem
           responsibility: 只追加人拥有的三类内容（B1–B5，ADR-0019）：设计某一轮的评审意见（design.yaml feedback）、架构规则的例外（rules.yaml 的 rules.allow，两端须为存在的模块、理由必填）、源码忽略项（source-ignore.yaml）；AI 生成的 modules/、scenarios/、system.yaml 不写；用 YAML 文档模型修改，保留注释与其他内容。端点由 ModelSource 插件挂载，只收同源的 JSON POST。
-          codeRefs: [vite/writeModel.ts]
+          codeRefs: [vite/writeModel.ts, vite/reviewedHook.ts]
         - id: access.source
           name: 源码读取
           kind: subsystem
@@ -218,7 +218,7 @@ sketch:
           kind: subsystem
           core: true
           responsibility: 模型层的契约：描述文件的形状（JSON Schema 与对应的 TS 类型；顶层键含 actors、scenario / scenarios 与步骤树），加载、索引、投影、场景投影、源码归属、架构治理各阶段的数据类型（声明收在 types.ts、scenario/types.ts、source/types.ts、governance/types.ts），领域枚举，以及只查表的名称查询与小谓词（moduleName、isLong、isArchived、RULE_LABELS）。不含投影与计算；呈现层对模型层只依赖它（U10）。
-          codeRefs: [src/model/types.ts, src/model/names.ts, src/model/project-summary.ts, src/model/design.ts, src/model/scenario/types.ts, src/model/source/types.ts, src/model/governance/types.ts, src/model/rework/types.ts, schema/arch-file.schema.json]
+          codeRefs: [src/model/types.ts, src/model/names.ts, src/model/project-summary.ts, src/model/design.ts, src/model/scenario/types.ts, src/model/source/types.ts, src/model/governance/types.ts, src/model/intent/types.ts, src/model/rework/types.ts, schema/arch-file.schema.json]
         - id: model.pipeline
           name: 加载流水线
           kind: subsystem
@@ -289,5 +289,5 @@ sketch:
           kind: subsystem
           responsibility: 草图核验（X2、X4）：草图与持久草图的矛盾检查、按口径比对设计某一轮或当前版本得出偏差、应用认可偏差；归档判定（X3）与交给确认层的确认记录；人拥有文件的指纹比对（X6）。输入是草图定义与模型索引，不碰文件系统。
           entry: src/model/intent/index.ts
-          codeRefs: [src/model/intent/**]
+          codeRefs: [src/model/intent/index.ts, src/model/intent/check.ts, src/model/intent/lifecycle.ts, src/model/intent/owned.ts]
           docRefs: [docs/architecture/governance.md, docs/adr/0023-sketch-reviewed-and-evolution.md]

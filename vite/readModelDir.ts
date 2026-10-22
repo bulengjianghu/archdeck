@@ -10,8 +10,19 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import { DESIGN_STATUSES, SKETCH_REVISION, isSketchFile, loadModel, versionLabel } from '../src/model'
-import type { AcceptedDeviation, DesignInfo, DesignStatus, ModelCommit, ProjectHealth, ProjectSummary, RawFile, RevisionInfo, VersionRef } from '../src/model'
+import { DESIGN_STATUSES, SKETCH_REVISION, checkSketches, isArchived, isSketchFile, loadModel, parseDesignSketches, versionLabel } from '../src/model'
+import type {
+  AcceptedDeviation,
+  DesignInfo,
+  DesignStatus,
+  ModelCommit,
+  ModelIndex,
+  ProjectHealth,
+  ProjectSummary,
+  RawFile,
+  RevisionInfo,
+  VersionRef,
+} from '../src/model'
 
 export type { ProjectSummary }
 
@@ -102,7 +113,7 @@ export function readProject(modelRoot: string, id: string, projectRoot: string):
 export function designSketch(projectDir: string, design: string): { design: string; file: RawFile } | null {
   const file = path.join(projectDir, DESIGNS_DIR, design, SKETCH_FILE)
   if (!isProjectId(design) || !fs.existsSync(file)) return null
-  return { design, file: { path: SKETCH_FILE, text: fs.readFileSync(file, 'utf8') } }
+  return { design, file: { path: `${DESIGNS_DIR}/${design}/${SKETCH_FILE}`, text: fs.readFileSync(file, 'utf8') } }
 }
 
 // ── 设计版本 ──
@@ -220,7 +231,7 @@ export function readSketchVersion(modelRoot: string, project: string, design: st
   return {
     project,
     dir: path.relative(projectRoot, designDir) || '.',
-    files: [...current.files.filter(f => f.path === 'system.yaml' || isSketchFile(f.path)), sketch.file],
+    files: [...current.files.filter(f => f.path === 'system.yaml' || isSketchFile(f.path)), { ...sketch.file, path: SKETCH_FILE }],
     designs: current.designs,
     version: { design, revision: SKETCH_REVISION },
     compare: { current: { label: '当前版本', dir: current.dir, files: current.files } },
@@ -256,8 +267,19 @@ export function sketchPrompt(design: string, sketchText: string, docsRoot: strin
   ].join('\n')
 }
 
-/** 项目列表页用的摘要：直接跑一遍模型层，统计规模与问题数；健康度（Q10）由调用方另算后附上 */
-export function summarizeProject(payload: ModelPayload, health?: ProjectHealth): ProjectSummary {
+/** X4：有草图的设计的偏差计数——未归档的对最新一轮核验（已定稿的对当前版本），卡片标「偏差 N」 */
+function designDeviations(modelRoot: string, project: string, current: ModelIndex, d: DesignInfo, projectRoot: string): DesignInfo['deviations'] | undefined {
+  const dir = path.join(modelRoot, project)
+  const sketch = d.sketch && !isArchived(d.status) ? designSketch(dir, d.id) : null
+  if (!sketch) return undefined
+  const last = d.revisions[d.revisions.length - 1]
+  const target = d.status === 'accepted' || !last ? current : loadModel(readModelDir(path.join(dir, DESIGNS_DIR, d.id, last.id), projectRoot).files).index
+  const check = checkSketches(target, parseDesignSketches([sketch]), new Map([[d.id, d.accepted ?? []]])).find(c => c.design === d.id)
+  return check ? { errors: check.counts.error, warnings: check.counts.warning } : undefined
+}
+
+/** 项目列表页用的摘要：直接跑一遍模型层，统计规模与问题数；健康度（Q10）由调用方另算后附上；有草图的设计附偏差计数（X4） */
+export function summarizeProject(payload: ModelPayload, health?: ProjectHealth, ctx?: { modelRoot: string; projectRoot: string }): ProjectSummary {
   const { index, issues } = loadModel(payload.files)
   const sys = index.model.system
   const top = (index.childrenOf.get(index.rootId) ?? []).map(id => index.modules.get(id)!)
@@ -280,7 +302,10 @@ export function summarizeProject(payload: ModelPayload, health?: ProjectHealth):
     errors: issues.filter(i => i.severity === 'error').length,
     warnings: issues.filter(i => i.severity === 'warning').length,
     ...(health ? { health } : {}),
-    designs: payload.designs ?? [],
+    designs: (payload.designs ?? []).map(d => {
+      const deviations = ctx ? designDeviations(ctx.modelRoot, payload.project, index, d, ctx.projectRoot) : undefined
+      return deviations ? { ...d, deviations } : d
+    }),
   }
 }
 
@@ -288,6 +313,6 @@ export function summarizeProject(payload: ModelPayload, health?: ProjectHealth):
 export function listProjects(modelRoot: string, projectRoot: string, health?: (payload: ModelPayload) => ProjectHealth): ProjectSummary[] {
   return listProjectIds(modelRoot).map(id => {
     const payload = readProject(modelRoot, id, projectRoot)!
-    return summarizeProject(payload, health?.(payload))
+    return summarizeProject(payload, health?.(payload), { modelRoot, projectRoot })
   })
 }

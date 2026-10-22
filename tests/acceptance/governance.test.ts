@@ -179,3 +179,32 @@ describe('§6.10 架构治理验收', () => {
     expect(l.report.issues.filter(i => i.severity !== 'error' && i.code.startsWith('fact.'))).toEqual([])
   })
 })
+
+describe('§6.11 意图验收（X4、X8）：命令行 / MCP 的 sketch-check 与 sketch archive 经同一查询核心', () => {
+  const design = path.join(tmp, 'h5p-arch-desk', 'designs', 'gate')
+  const write = (rel: string, text: string) => {
+    fs.mkdirSync(path.dirname(path.join(design, rel)), { recursive: true })
+    fs.writeFileSync(path.join(design, rel), text)
+  }
+  afterAll(() => fs.rmSync(design, { recursive: true, force: true }))
+
+  it('活动草图对当前版本：骨架一致；设计的草图不一致时归档被拒绝，一致后归档改状态、确认记录经桩（pending）', () => {
+    const s = svc()
+    expect(s.sketchCheck().checks.map(c => [c.sketch, c.consistent])).toEqual([['skeleton', true]])
+    write('design.yaml', 'design:\n  name: 门禁\n  status: accepted\n  revisions: []\n')
+    write(
+      'sketch.yaml',
+      'sketch:\n  id: gate\n  modules:\n    - { id: model.intent, parent: model, name: 意图 }\n    - { id: model.nowhere, parent: model, name: 不存在 }\n',
+    )
+    const bad = s.sketchCheck(undefined, 'gate')
+    expect(bad.target).toBe('当前版本')
+    // 骨架封闭了模型层的第二级：没声明 supersedes 就往下加模块既与持久草图矛盾，版本里也没有它
+    expect(bad.checks[0].deviations.map(d => d.key)).toEqual(['contradiction:model.nowhere', 'missing-module:model.nowhere'])
+    expect(() => s.sketchArchive(undefined, 'gate')).toThrow('不能归档')
+    expect(() => s.sketchCheck(undefined, 'nope')).toThrow('没有草图')
+    write('sketch.yaml', 'sketch:\n  id: gate\n  modules:\n    - { id: model.intent, parent: model, name: 意图 }\n')
+    const r = s.sketchArchive(undefined, 'gate')
+    expect(r).toMatchObject({ project: 'h5p-arch-desk', outcome: 'archive', reviewed: { count: 1, pending: true } })
+    expect(fs.readFileSync(path.join(design, 'design.yaml'), 'utf8')).toContain('status: implemented')
+  })
+})

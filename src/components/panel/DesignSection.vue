@@ -9,6 +9,7 @@ import Section from './Section.vue'
 import ChangeList from './ChangeList.vue'
 import { useOpenPreview } from '../shared/preview'
 import WriteForm from './WriteForm.vue'
+import SketchCheckSection from './SketchCheckSection.vue'
 
 const desk = useDesk()
 const route = useRoute()
@@ -67,6 +68,8 @@ function openRevision(id: string) {
         <li v-for="q in r.questions" :key="q"><Markdown :text="q" /></li>
       </ol>
     </Section>
+
+    <SketchCheckSection v-if="d.sketch" />
 
     <ChangeList />
 

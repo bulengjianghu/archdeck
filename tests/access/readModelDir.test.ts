@@ -138,7 +138,7 @@ describe('接入层 · 多项目读取', () => {
     expect(designs.find(d => d.id === 'plain')!.sketch).toBeUndefined()
     const current = readProject(modelRoot, 'gamma', root)!
     expect(current.files.map(f => f.path)).toEqual(['intent/skeleton.yaml', 'm.yml', 'system.yaml'])
-    expect(current.sketches?.map(s => [s.design, s.file.path])).toEqual([['sk', 'sketch.yaml']])
+    expect(current.sketches?.map(s => [s.design, s.file.path])).toEqual([['sk', 'designs/sk/sketch.yaml']])
     expect(readDesignRevision(modelRoot, 'gamma', 'sk', 'r1', root)!.sketches?.map(s => s.design)).toEqual(['sk'])
     expect(readDesignRevision(modelRoot, 'gamma', 'plain', 'r1', root)!.sketches).toBeUndefined()
     expect(designSketch(path.join(modelRoot, 'gamma'), 'plain')).toBeNull()

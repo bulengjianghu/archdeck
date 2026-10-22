@@ -6,7 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { WriteError, appendAllow, appendFeedback, appendIgnore } from '../../vite/writeModel'
+import { WriteError, appendAccepted, appendAllow, appendFeedback, appendIgnore, archiveDesign } from '../../vite/writeModel'
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-write-'))
 const modelRoot = path.join(root, 'model')
@@ -92,5 +92,57 @@ describe('B1 只写人拥有的文件', () => {
     expect(read('modules/m.yaml')).toBe(m)
     expect(read('system.yaml')).toBe(s)
     expect(() => appendIgnore(modelRoot, 'nope', 'a/*', root)).toThrow('项目不存在')
+  })
+})
+
+describe('X4 认可偏差 · X3 归档 / 晋升', () => {
+  const SKETCH = 'sketch:\n  id: d\n  modules:\n    - { id: a.x, name: X, parent: a }\n  relations:\n    - { id: rel.d.x-b, from: a.x, to: b, type: calls }\n'
+  it('认可偏差追加到 design.accepted（键、理由、日期）；理由必填；重复的拒绝', () => {
+    appendAccepted(modelRoot, 'p', 'd', 'missing-relation:rel.d.x-b', '经注入', root)
+    const acc = parse(read('designs/d/design.yaml')).design.accepted
+    expect(acc).toEqual([{ deviation: 'missing-relation:rel.d.x-b', reason: '经注入', at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }])
+    expect(read('designs/d/design.yaml')).toContain('# 设计')
+    expect(() => appendAccepted(modelRoot, 'p', 'd', 'missing-relation:rel.d.x-b', '再来一次', root)).toThrow('已经认可过')
+    expect(() => appendAccepted(modelRoot, 'p', 'd', 'field:a', ' ', root)).toThrow('理由')
+    expect(() => appendAccepted(modelRoot, 'p', 'nope', 'field:a', 'x', root)).toThrow('设计不存在')
+  })
+
+  it('归档：没有草图、已归档、核验不一致都拒绝；一致后状态改为 implemented，确认记录经 appendReviewed（桩：pending），指纹随之更新', () => {
+    expect(() => archiveDesign(modelRoot, 'p', 'd', root)).toThrow('没有草图')
+    write('designs/d/sketch.yaml', SKETCH)
+    // a.x 不存在：error，拒绝
+    expect(() => archiveDesign(modelRoot, 'p', 'd', root)).toThrow('不能归档：核验不一致（1 个错误')
+    write(
+      'modules/m.yaml',
+      'modules:\n  - { id: a, name: A, responsibility: x }\n  - { id: b, name: B, responsibility: y }\n  - { id: a.x, name: X, parent: a, responsibility: z }\n',
+    )
+    // 关系没有对应：warning，认可后一致
+    expect(() => archiveDesign(modelRoot, 'p', 'd', root)).toThrow('1 个未认可的提醒')
+    appendAccepted(modelRoot, 'p', 'd', 'missing-relation:rel.d.x-b', '经注入', root)
+    const r = archiveDesign(modelRoot, 'p', 'd', root)
+    expect(r).toMatchObject({ file: 'model/p/designs/d/design.yaml', outcome: 'archive', reviewed: { count: 1, pending: true } })
+    expect(parse(read('designs/d/design.yaml')).design.status).toBe('implemented')
+    expect(() => archiveDesign(modelRoot, 'p', 'd', root)).toThrow('已归档')
+    expect(fs.existsSync(path.join(modelRoot, 'p', 'governance', 'owned.json'))).toBe(true)
+  })
+
+  it('晋升：声明 supersedes 的草图整份替换 intent/<ID>.yaml（id、lifetime 改写，去掉 supersedes），设计同样归档', () => {
+    write(
+      'intent/skeleton.yaml',
+      'sketch:\n  id: skeleton\n  lifetime: persistent\n  closed: [a]\n  modules:\n    - { id: a, name: A, kind: layer, order: 1, abstraction: x, responsibility: x }\n    - { id: b, name: B, kind: layer, order: 2, abstraction: y, responsibility: y }\n',
+    )
+    write(
+      'designs/d/sketch.yaml',
+      '# 新骨架\nsketch:\n  id: d\n  supersedes: skeleton\n  closed: [a]\n  modules:\n    - { id: a, name: A, kind: layer, order: 1, abstraction: x, responsibility: x }\n    - { id: b, name: B, kind: layer, order: 2, abstraction: y, responsibility: y }\n    - { id: a.x, name: X, parent: a }\n',
+    )
+    write('modules/m.yaml', 'modules:\n  - { id: a.x, name: X, parent: a, responsibility: z }\n')
+    const r = archiveDesign(modelRoot, 'p', 'd', root)
+    expect(r).toMatchObject({ outcome: 'promote', promoted: 'model/p/intent/skeleton.yaml' })
+    const text = read('intent/skeleton.yaml')
+    expect(text).toContain('# 新骨架')
+    expect(parse(text).sketch).toMatchObject({ id: 'skeleton', lifetime: 'persistent' })
+    expect(parse(text).sketch.supersedes).toBeUndefined()
+    expect(parse(text).sketch.modules).toHaveLength(3)
+    expect(parse(read('designs/d/design.yaml')).design.status).toBe('implemented')
   })
 })

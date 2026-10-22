@@ -340,6 +340,11 @@ describe('DeskState · 写入人拥有的文件（B1–B4）', () => {
         { ok: true as const, file: 'rules.yaml' }
       ),
       ignore: async (b: { pattern: string }) => (calls.push(`i:${b.pattern}`), { ok: true as const, file: 'source-ignore.yaml' }),
+      accept: async (b: { design: string; deviation: string; reason: string }) => (
+        calls.push(`c:${b.design}:${b.deviation}:${b.reason}`),
+        { ok: true as const, file: 'design.yaml' }
+      ),
+      archive: async (b: { design: string }) => (calls.push(`z:${b.design}`), { ok: true as const, file: 'design.yaml' }),
     }
     const cur = createDeskState(async () => ({ dir: 'x', files: sampleFiles() }), { writer })
     expect([cur.write.canEditRules, cur.write.canFeedback]).toEqual([true, false])
@@ -350,7 +355,13 @@ describe('DeskState · 写入人拥有的文件（B1–B4）', () => {
     expect([design.write.canEditRules, design.write.canFeedback]).toEqual([false, true])
     expect(await design.write.ignore('a')).toMatchObject({ ok: false })
     await design.write.feedback('同意')
-    expect(calls).toEqual(['a:app->infra:过渡期', 'i:docs/*', 'f:next/r2:同意'])
+    // X3、X4：认可偏差与归档只对设计版本打开的那个设计
+    expect(await cur.write.accept('missing-relation:r', 'x')).toMatchObject({ ok: false })
+    expect(await cur.write.archive()).toMatchObject({ ok: false })
+    await design.write.accept('missing-relation:r', '经注入')
+    await design.write.archive()
+    expect(calls.slice(-2)).toEqual(['c:next:missing-relation:r:经注入', 'z:next'])
+    expect(calls).toEqual(['a:app->infra:过渡期', 'i:docs/*', 'f:next/r2:同意', 'c:next:missing-relation:r:经注入', 'z:next'])
   })
 })
 

@@ -1,5 +1,5 @@
 # 架构规则（U1–U5、Y3）：架构师的意图，AI 重新生成当前版本时不改动（ADR-0015，docs/04-description-format.md §3.8）。
-# 层规则来自骨架 modules/layers.yaml 的 mayDependOn。
+# 层规则来自骨架 intent/skeleton.yaml 的 mayDependOn（X1）。
 rules:
   modules:
     - module: present
@@ -12,8 +12,8 @@ rules:
       mayDependOn: [model.types, model.pipeline, model.projector, model.source]
       reason: 架构治理只复用索引、端点映射与归属，不依赖场景与版本对比
     - module: access.agent
-      mayDependOn: [model, access.reader, access.source, access.deps, access.governance-store]
-      reason: agent 接口只是查询核心加两层外壳，不经开发服务器
+      mayDependOn: [model, access.reader, access.source, access.deps, access.governance-store, access.writer]
+      reason: agent 接口只是查询核心加两层外壳，不经开发服务器；归档 / 晋升（sketch archive，X3、X8）与页面同一个写入函数，不另写一套
     - module: model
       exposes: [entry]
       reason: 模型层对外只经入口 src/model/index.ts（03 §3「模型层入口：文本 → 校验后的索引」）；类型、设计版本元信息与项目摘要都由入口导出，外部不直达内部文件

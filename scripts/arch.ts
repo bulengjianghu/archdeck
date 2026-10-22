@@ -13,12 +13,14 @@
  *   report                        拦截报告（Q4）
  *   baseline                      生成基线 governance/baseline.json（U7，由人执行并提交）
  *   own                           登记人拥有文件的指纹 governance/owned.json（X6，人改完草图 / 规则 / 忽略清单后执行）
+ *   sketch-check [--design <设计>] [--revision <轮次>]   草图核验（X4）：缺省为活动草图对当前版本
+ *   sketch archive <设计>         归档 / 晋升（X3）：对当前版本核验一致才执行
  *
  * check 与 rescan 写拦截记录。出错时退出码为 2；check 为 denied 时退出码为 1。
  */
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { REWORK_CATEGORIES, RULE_LABELS, type CheckResult, type ReworkCategory } from '../src/model'
+import { REWORK_CATEGORIES, RULE_LABELS, type CheckResult, type ReworkCategory, type SketchCheck } from '../src/model'
 import { ServiceError, createService } from './agent/service'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -28,7 +30,7 @@ const args: string[] = []
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (!a.startsWith('--')) args.push(a)
-  else if (['--project', '--names', '--category'].includes(a)) flags.set(a.slice(2), argv[++i] ?? '')
+  else if (['--project', '--names', '--category', '--design', '--revision'].includes(a)) flags.set(a.slice(2), argv[++i] ?? '')
   else flags.set(a.slice(2), true)
 }
 const [cmd, ...rest] = args
@@ -37,6 +39,20 @@ const asJson = flags.has('json')
 const svc = createService({ root, client: 'cli' })
 
 const VERDICT: Record<string, string> = { allowed: '允许', denied: '拒绝', unconstrained: '无约束' }
+const SEV: Record<string, string> = { error: '错误', warning: '提醒', info: '已认可' }
+const str = (k: string) => (typeof flags.get(k) === 'string' ? (flags.get(k) as string) : undefined)
+
+function printChecks(r: { target: string; checks: SketchCheck[] }) {
+  console.log(`核验对象：${r.target}`)
+  if (!r.checks.length) console.log('  没有活动草图')
+  for (const c of r.checks) {
+    const who = c.design ? `设计「${c.design}」的草图` : `持久草图「${c.sketch}」`
+    console.log(
+      `\n${who}（${c.lifetime}${c.supersedes ? `，替换 ${c.supersedes}` : ''}）：${c.consistent ? '一致' : `偏差 ${c.counts.error + c.counts.warning}`}（错误 ${c.counts.error} · 提醒 ${c.counts.warning} · 已认可 ${c.counts.info}）`,
+    )
+    for (const d of c.deviations) console.log(`  ${SEV[d.severity]}  ${d.key}  ${d.message}${d.accepted ? `（已认可：${d.accepted.reason}）` : ''}`)
+  }
+}
 
 function printCheck(r: CheckResult & { external?: string }) {
   console.log(`判定：${VERDICT[r.verdict]}（${r.verdict}）`)
@@ -88,6 +104,27 @@ function run(): number {
     }
     case 'report':
       return out(svc.report(project))
+    case 'sketch-check': {
+      const r = svc.sketchCheck(project, str('design'), str('revision'))
+      if (asJson) console.log(JSON.stringify(r, null, 2))
+      else printChecks(r)
+      return r.checks.some(c => c.counts.error) ? 1 : 0
+    }
+    case 'sketch': {
+      if (rest[0] !== 'archive' || !rest[1]) throw new ServiceError('用法：npm run arch -- sketch archive <设计>')
+      const r = svc.sketchArchive(project, rest[1])
+      if (asJson) console.log(JSON.stringify(r, null, 2))
+      else {
+        console.log(
+          r.outcome === 'promote'
+            ? `已晋升：草图替换了 ${r.promoted}；设计「${rest[1]}」状态改为 implemented（${r.file}）`
+            : `已归档：设计「${rest[1]}」状态改为 implemented（${r.file}）`,
+        )
+        if (r.reviewed)
+          console.log(`确认记录 ${r.reviewed.count} 条${r.reviewed.pending ? '——确认层的写入端点待联调，尚未写入 reviewed.yaml' : `已写入 ${r.reviewed.file}`}`)
+      }
+      return 0
+    }
     case 'own': {
       const r = svc.own(project)
       console.log(`已写入 ${r.file}：${r.files.length} 个人拥有的文件（${r.files.join('、')}）`)

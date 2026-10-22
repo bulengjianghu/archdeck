@@ -7,7 +7,8 @@
  *   文件变化时推送 `arch-model:changed`，载荷 { project } 指明哪个项目变了；
  * - 源码（G1、G2、G17、G11，docs/architecture/source.md §2.1）：GET /source/<项目>.json（文件清单）、
  *   /source/<项目>/file.json?path=（单个文件）、/source/<项目>/exports.json?path=（导出）、/source/<项目>/facts.json（代码事实、基线与拦截记录，K8）。
- * 写入（B1–B5，ADR-0019）：POST /write/<项目>/feedback | allow | ignore，只追加人拥有的文件（评审意见、例外、忽略项），写后照常推送变化。
+ * 写入（B1–B6，ADR-0019、ADR-0023）：POST /write/<项目>/feedback | allow | ignore | accept | archive，只追加人拥有的文件（评审意见、例外、忽略项、认可偏差），
+ *   archive 为归档 / 晋升（X3）；写后照常推送变化。
  * 项目内容只搬运原始文本，解析与校验都在页面侧的模型层完成，与命令行同一套报错。
  */
 import path from 'node:path'
@@ -16,7 +17,7 @@ import { isModelFile, listProjects, readDesignRevision, readProject, type ModelP
 import { readExports, readSourceFile, readSourceTree } from './readSource'
 import { readCodeDeps } from './readDeps'
 import { readHealth } from './readHealth'
-import { WriteError, appendAllow, appendFeedback, appendIgnore } from './writeModel'
+import { WriteError, appendAccepted, appendAllow, appendFeedback, appendIgnore, archiveDesign } from './writeModel'
 import { listModelCommits, readCommitVersion } from './readGit'
 import { LEDGER_PAGE_LIMIT, governanceDir, readBaseline, readLedger } from './governanceStore'
 import type { FactsPayload, RuleKind, SourcePayload } from '../src/model'
@@ -69,7 +70,7 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
       // B1–B5：人拥有的文件的追加写入，只收同源的 JSON POST
       server.middlewares.use((req, res, next) => {
         const [url] = (req.url ?? '').split('?')
-        const w = /^\/write\/([^/]+)\/(feedback|allow|ignore)$/.exec(url)
+        const w = /^\/write\/([^/]+)\/(feedback|allow|ignore|accept|archive)$/.exec(url)
         if (!w) return next()
         if (req.method !== 'POST') return json(res, { error: '只接受 POST' }, 405)
         const origin = req.headers.origin
@@ -94,7 +95,11 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
                       { from: body.from, to: body.to, rule: (body.rule || undefined) as RuleKind | undefined, reason: body.reason },
                       root,
                     )
-                  : appendIgnore(modelRoot, project, body.pattern, root)
+                  : w[2] === 'ignore'
+                    ? appendIgnore(modelRoot, project, body.pattern, root)
+                    : w[2] === 'accept'
+                      ? appendAccepted(modelRoot, project, body.design, body.deviation, body.reason, root)
+                      : archiveDesign(modelRoot, project, body.design, root)
             json(res, out)
           } catch (e) {
             json(res, { error: e instanceof Error ? e.message : String(e) }, e instanceof WriteError ? 400 : 500)

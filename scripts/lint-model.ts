@@ -6,13 +6,28 @@
  * 当前版本附带源码归属警告（G9：未归属、归属冲突、entry 不存在）与架构治理（K、U、Y）：
  * 基线外的新增违规、环度上升为 error（U8，棘轮），其余为 warning；读不到源码为 error（G1，源码在本地是前提）；设计版本不对应代码，不报。
  * 当前版本另比对人拥有文件的指纹（X6）：登记后被改动为 error owned.changed，未登记为 warning。
+ * 活动草图的核验（X4）：持久草图对每个版本、已定稿设计的草图对当前版本、设计的草图对本设计各轮；偏差按严重度报出（已认可的不报）。
  * 有 error 时退出码为 1；只有 warning 时为 0。
  */
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { assignFiles, compareOwned, governanceReport, loadModel, sourceIssues, type GovernanceReport, type Issue } from '../src/model'
+import {
+  assignFiles,
+  checkSketches,
+  compareOwned,
+  governanceReport,
+  loadModel,
+  parseDesignSketches,
+  sourceIssues,
+  type AcceptedDeviation,
+  type GovernanceReport,
+  type Issue,
+  type RawFile,
+  type SketchCheck,
+} from '../src/model'
 import {
   DESIGNS_DIR,
+  designSketch,
   SKETCH_FILE,
   listDesigns,
   listProjectIds,
@@ -31,21 +46,38 @@ const modelRoot = resolveModelRoot(root)
 const projectDirs = arg ? [path.resolve(process.cwd(), arg)] : listProjectIds(modelRoot).map(id => path.join(modelRoot, id))
 /** 当前版本目录 → 项目 ID（只有它们附带源码归属警告） */
 const currentOf = new Map<string, string>()
-/** 要校验的目录；草图版本不是目录，由 readSketchVersion 给出载荷 */
-const dirs: (string | { dir: string; payload: Pick<ModelPayload, 'dir' | 'files'> })[] = []
+/** 要校验的目录；草图版本不是目录，由 readSketchVersion 给出载荷；设计各轮附本设计的草图与认可的偏差（X4） */
+interface Entry {
+  dir: string
+  payload?: Pick<ModelPayload, 'dir' | 'files'>
+  sketches?: { design: string; file: RawFile }[]
+  accepted?: Map<string, readonly AcceptedDeviation[]>
+  /** 草图版本自己是尺子，不核验 */
+  skipSketches?: boolean
+  /** 项目描述目录（草图偏差的位置相对它） */
+  project?: string
+}
+const dirs: Entry[] = []
 let totalErrors = 0
 for (const dir of projectDirs) {
-  dirs.push(dir)
   const projectId = path.dirname(dir) === modelRoot ? path.basename(dir) : undefined
   if (projectId) currentOf.set(dir, projectId)
-  for (const d of listDesigns(dir)) {
+  const designs = listDesigns(dir)
+  const accepted = new Map(designs.map(d => [d.id, d.accepted ?? []]))
+  // X3、X4：已定稿、未归档的设计的草图约束当前版本
+  dirs.push({ dir, sketches: designs.filter(d => d.sketch && d.status === 'accepted').flatMap(d => designSketch(dir, d.id) ?? []), accepted, project: dir })
+  for (const d of designs) {
     for (const p of d.problems) {
       console.log(`  error   ${path.relative(root, path.join(dir, DESIGNS_DIR, d.id, 'design.yaml'))}  ${p}  [design]`)
       totalErrors++
     }
     const sketch = d.sketch && projectId ? readSketchVersion(modelRoot, projectId, d.id, root) : null
-    if (sketch) dirs.push({ dir: path.join(dir, DESIGNS_DIR, d.id, SKETCH_FILE), payload: sketch })
-    for (const r of d.revisions) dirs.push(path.join(dir, DESIGNS_DIR, d.id, r.id))
+    if (sketch) dirs.push({ dir: path.join(dir, DESIGNS_DIR, d.id, SKETCH_FILE), payload: sketch, skipSketches: true })
+    // X4：设计的草图只对最新一轮把关（早先各轮是演进的历史，页面上照常看它们的偏差）
+    const own = d.sketch ? designSketch(dir, d.id) : null
+    const latest = d.revisions[d.revisions.length - 1]?.id
+    for (const r of d.revisions)
+      dirs.push({ dir: path.join(dir, DESIGNS_DIR, d.id, r.id), sketches: own && r.id === latest ? [own] : [], accepted, project: dir })
   }
 }
 
@@ -55,8 +87,8 @@ if (projectDirs.length === 0) {
 }
 
 for (const entry of dirs) {
-  const dir = typeof entry === 'string' ? entry : entry.dir
-  const payload = typeof entry === 'string' ? readModelDir(dir, root) : entry.payload
+  const dir = entry.dir
+  const payload = entry.payload ?? readModelDir(dir, root)
   if (payload.files.length === 0) {
     console.error(`模型目录中没有 YAML 文件：${dir}`)
     totalErrors++
@@ -65,6 +97,17 @@ for (const entry of dirs) {
   const loaded = loadModel(payload.files)
   const { index } = loaded
   const issues = [...loaded.issues]
+  // X4：活动草图的核验，偏差按严重度报出（已认可的为 info，不报）
+  const checks: SketchCheck[] = entry.skipSketches ? [] : checkSketches(index, parseDesignSketches(entry.sketches ?? []), entry.accepted)
+  for (const c of checks)
+    for (const d of c.deviations)
+      if (d.severity !== 'info')
+        issues.push({
+          severity: d.severity,
+          code: d.code,
+          message: `${c.design ? `设计「${c.design}」的草图` : `持久草图「${c.sketch}」`}：${d.message}`,
+          ...(d.at ? { file: d.at.file, path: d.at.path } : {}),
+        })
   let sourceNote = ''
   let governanceNote = ''
   const project = currentOf.get(dir)
@@ -93,6 +136,7 @@ for (const entry of dirs) {
       (index.actors.size || index.scenarios.size ? `，${index.actors.size} 个参与者，${index.scenarios.size} 个场景` : '') +
       sourceNote +
       governanceNote +
+      (checks.length ? `；草图 ${checks.map(c => `${c.sketch}${c.consistent ? ' 一致' : ` 偏差 ${c.counts.error + c.counts.warning}`}`).join('、')}` : '') +
       '；' +
       `${errors.length} 个错误，${warnings.length} 个提醒`,
   )

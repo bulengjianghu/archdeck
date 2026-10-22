@@ -10,7 +10,9 @@ import { createHash } from 'node:crypto'
 import {
   assignFiles,
   checkDependency,
+  checkSketches,
   compareOwned,
+  parseDesignSketches,
   describeModule,
   governanceReport,
   loadModel,
@@ -23,6 +25,7 @@ import {
   reworkMarkdown,
   type ReworkCategory,
   type ReworkList,
+  type SketchCheck,
   type CheckResult,
   type CheckTarget,
   type EntryOf,
@@ -33,7 +36,8 @@ import {
   type ModelIndex,
   type SourceOwnership,
 } from '../../src/model'
-import { listProjectIds, readProject, resolveModelRoot } from '../../vite/readModelDir'
+import { designSketch, listProjectIds, readDesignRevision, readProject, resolveModelRoot } from '../../vite/readModelDir'
+import { archiveDesign, WriteError } from '../../vite/writeModel'
 import { readSourceTree } from '../../vite/readSource'
 import { readCodeDeps, resolveImport } from '../../vite/readDeps'
 import {
@@ -67,6 +71,8 @@ export interface Loaded {
   own: SourceOwnership
   entryOf: EntryOf
   report: GovernanceReport
+  /** X4：活动草图对当前版本的核验 */
+  checks: SketchCheck[]
   /** 输入的指纹（stampOf） */
   stamp: string
 }
@@ -116,7 +122,15 @@ export function createService(opts: ServiceOptions) {
     // G1：源码在本地是前提，读不到是配置错误
     if (!tree || tree.status !== 'local') throw new ServiceError(`项目 ${project} 读不到源码：${tree?.reason ?? '项目不存在'}`)
     const gov = governanceDir(modelRoot, project)
-    const stamp = stampOf(payload.files, tree, gov)
+    const stamp = stampOf(
+      [
+        ...payload.files,
+        ...(payload.sketches ?? []).map(s => s.file),
+        ...(payload.designs ?? []).map(d => ({ path: `designs/${d.id}/design.yaml`, text: JSON.stringify(d.accepted ?? []) })),
+      ],
+      tree,
+      gov,
+    )
     const hit = cache.get(project)
     if (hit && !fresh && hit.stamp === stamp) return hit
     const { index, issues: loadIssues } = loadModel(payload.files)
@@ -125,7 +139,8 @@ export function createService(opts: ServiceOptions) {
     const own = assignFiles(index, tree.files, index.model.sourceIgnore)
     const deps = readCodeDeps(tree.root, tree.files, tree.packages)
     const report = governanceReport(index, own, tree, deps, readBaseline(gov))
-    const loaded: Loaded = { project, index, issues, tree, files: new Set(tree.files), own, entryOf: entryResolver(index, own, tree), report, stamp }
+    const checks = checkSketches(index, parseDesignSketches(payload.sketches ?? []), new Map((payload.designs ?? []).map(d => [d.id, d.accepted ?? []])))
+    const loaded: Loaded = { project, index, issues, tree, files: new Set(tree.files), own, entryOf: entryResolver(index, own, tree), report, checks, stamp }
     cache.set(project, loaded)
     // Q3：本会话还没扫描过时，「上一次扫描」是首次加载的结果，不随自动重建移动
     if (!lastScan.has(project)) lastScan.set(project, violationKeys(report))
@@ -285,7 +300,7 @@ export function createService(opts: ServiceOptions) {
     /** Q7–Q9：返工清单；同一份结果给 JSON 与 Markdown */
     issues(p?: string, category?: ReworkCategory): { project: string; list: ReworkList; markdown: string } {
       const l = load(p)
-      const all = reworkList({ index: l.index, issues: l.issues, source: { own: l.own, tree: l.tree }, report: l.report })
+      const all = reworkList({ index: l.index, issues: l.issues, source: { own: l.own, tree: l.tree }, report: l.report, sketches: l.checks })
       const items = category ? all.items.filter(i => i.category === category) : all.items
       const list: ReworkList = category ? { ...all, items } : all
       const modelDir = path.relative(opts.root, path.join(modelRoot, l.project)).split(path.sep).join('/')
@@ -296,6 +311,45 @@ export function createService(opts: ServiceOptions) {
     report(p?: string) {
       const project = projectId(p)
       return { project, ...summarizeLedger(readLedger(governanceDir(modelRoot, project))) }
+    },
+
+    /** X4：草图核验——缺省为活动草图对当前版本；给了 design 时为该设计的草图对当前版本（revision 为某一轮时对那一轮） */
+    sketchCheck(p?: string, design?: string, revision?: string): { project: string; target: string; checks: SketchCheck[] } {
+      const project = projectId(p)
+      if (!design) {
+        const l = load(project)
+        return { project, target: '当前版本', checks: l.checks }
+      }
+      const dir = path.join(modelRoot, project)
+      const sketch = designSketch(dir, design)
+      if (!sketch) throw new ServiceError(`设计「${design}」没有草图（designs/${design}/sketch.yaml）`)
+      const info = readProject(modelRoot, project, opts.root)!.designs?.find(d => d.id === design)
+      const accepted = new Map([[design, info?.accepted ?? []]])
+      if (!revision) {
+        const l = load(project)
+        return { project, target: '当前版本', checks: checkSketches(l.index, parseDesignSketches([sketch]), accepted).filter(c => c.design === design) }
+      }
+      const payload = readDesignRevision(modelRoot, project, design, revision, opts.root)
+      if (!payload || revision === 'sketch') throw new ServiceError(`轮次不存在：${design} / ${revision}`)
+      const { index } = loadModel(payload.files)
+      return {
+        project,
+        target: `${design} / ${revision}`,
+        checks: checkSketches(index, parseDesignSketches([sketch]), accepted).filter(c => c.design === design),
+      }
+    },
+
+    /** X3、X8：归档 / 晋升，与页面同一函数；不一致即拒绝 */
+    sketchArchive(p: string | undefined, design: string) {
+      const project = projectId(p)
+      try {
+        const r = archiveDesign(modelRoot, project, design, opts.root)
+        cache.delete(project)
+        return { project, ...r }
+      } catch (e) {
+        if (e instanceof WriteError) throw new ServiceError(e.message)
+        throw e
+      }
     },
 
     /** X6：登记人拥有文件的指纹，只给命令行、由人执行 */

@@ -6,6 +6,7 @@ import Section from './Section.vue'
 import DesignSection from './DesignSection.vue'
 import CommitSection from './CommitSection.vue'
 import GovernanceSection from './GovernanceSection.vue'
+import IntentSection from './IntentSection.vue'
 
 const desk = useDesk()
 const idx = computed(() => desk.index.value!)
@@ -26,6 +27,7 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
       </div>
     </header>
     <GovernanceSection part="summary" />
+    <IntentSection />
     <Section :title="layered ? '分层' : '顶层模块'" :count="top.length">
       <ul class="plain">
         <li v-for="m in top" :key="m.id" class="top">

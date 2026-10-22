@@ -18,6 +18,7 @@ import {
   type Issue,
   type LevelView,
   type ModelIndex,
+  type RawFile,
   type ScenarioPlan,
   reworkList,
   reworkItemMarkdown,
@@ -50,6 +51,7 @@ import { createRun } from './desk/run'
 import { createFiles } from './desk/files'
 import { createVersions } from './desk/versions'
 import { createFacts } from './desk/facts'
+import { createIntent } from './desk/intent'
 
 export type { Selection, Toggles } from './transition'
 export { encodeSelection, decodeSelection } from './transition'
@@ -75,6 +77,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const baselines = shallowRef<{ current?: Baseline; previous?: Baseline }>({})
   /** DV-10：草图版本的「交给 AI」指令 */
   const sketchPrompt = shallowRef('')
+  /** X4：载荷附带的设计草图 */
+  const sketches = shallowRef<{ design: string; file: RawFile }[]>([])
   const state = shallowRef<ViewState>({ levelId: '', selection: null, hover: null, toggles: DEFAULT_TOGGLES(RELATION_TYPES), playback: null })
   /** 每次层次切换递增，界面据此决定是否适应画布 */
   const levelVersion = ref(0)
@@ -146,8 +150,9 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const run = createRun({ state, index, levelId, plan, view, positioned, fileOwners: files.owners })
   const versions = createVersions({ state, index, designs, commits, baselines, version: options.version, sketchPrompt })
   const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version })
+  const intent = createIntent({ index, designs, sketches, version: options.version })
   const allIssues = computed(() => [...issues.value, ...files.warnings.value, ...facts.gateIssues.value])
-  /** W-6、Q7：返工清单——问题页签与画布角标；源码归属与代码事实只对当前版本（G9、K8） */
+  /** W-6、Q7：返工清单——问题页签与画布角标；源码归属与代码事实只对当前版本（G9、K8），草图偏差对设计各轮也有（X4） */
   const rework = computed<ReworkList | null>(() => {
     const idx = index.value
     if (!idx) return null
@@ -155,7 +160,14 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     const own = files.ownership.value
     const source = !options.version && own && p?.status === 'local' ? { own, tree: p } : undefined
     const report = options.version ? null : facts.report.value
-    return reworkList({ index: idx, issues: issues.value, ...(source ? { source } : {}), ...(report ? { report } : {}) })
+    const checks = intent.checks.value
+    return reworkList({
+      index: idx,
+      issues: issues.value,
+      ...(source ? { source } : {}),
+      ...(report ? { report } : {}),
+      ...(checks.length ? { sketches: checks } : {}),
+    })
   })
   // ── 写入人拥有的文件（B1–B5，ADR-0019）：只发意图，结果由文件变化推送回来（N5）──
   const writer = options.writer ?? NO_WRITER
@@ -170,6 +182,12 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       options.version ? Promise.resolve({ ok: false, error: '例外只加在当前版本' }) : writer.allow(input),
     ignore: (pattern: string): Promise<WriteOutcome> =>
       options.version ? Promise.resolve({ ok: false, error: '忽略项只加在当前版本' }) : writer.ignore({ pattern }),
+    /** X4：认可偏差——只对设计版本（轮次或草图）打开的那个设计 */
+    canAccept: !!dv,
+    accept: (deviation: string, reason: string): Promise<WriteOutcome> =>
+      dv ? writer.accept({ design: dv.design, deviation, reason }) : Promise.resolve({ ok: false, error: '只有设计版本能认可偏差' }),
+    /** X3：归档 / 晋升——对设计版本打开的那个设计，以当前版本的核验为准 */
+    archive: (): Promise<WriteOutcome> => (dv ? writer.archive({ design: dv.design }) : Promise.resolve({ ok: false, error: '只有设计版本能归档' })),
   }
   /** W-6、Q9：给 agent 的指令（Markdown）；不给返工项时为整份清单 */
   function reworkPrompt(item?: ReworkItem): string {
@@ -203,6 +221,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       designs.value = loaded.payload.designs ?? []
       commits.value = loaded.payload.commits ?? []
       sketchPrompt.value = loaded.payload.sketchPrompt ?? ''
+      sketches.value = loaded.payload.sketches ?? []
       baselines.value = loaded.baselines
       index.value = loaded.model.index
       status.value = 'ready'
@@ -301,6 +320,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     files,
     versions,
     facts,
+    intent,
     // 操作
     dispatch,
     init,
