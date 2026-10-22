@@ -161,3 +161,21 @@ type PaneLayout =
 | 属性面板 | `panel/**`（含 ChangeList（设计版本与提交版本共用的变更清单）、CommitSection、ActorPanel、FilePanel、ModuleSource、ScenarioPanel、StepPanel、RunSection、DepPanel、GovernanceSection、ModuleGovernance、RelationFact、FileDepList） |
 | 导航 | `Breadcrumb.vue`、`Toolbar.vue` |
 | 呈现共用件 | `shared/**`：`labels.ts`（参与者类别、设计状态、变更字段的显示名；呈现层对模型层只依赖契约，U10）、`highlight.ts`（Shiki 封装，签名与源代码预览共用）、`preview.ts`（「在副栏预览」的注入键，项目视图提供、面板取用）、`navTab.ts`（导航树页签的注入键，项目视图提供，问题角标切页签用）；只当叶子，不依赖其他呈现子系统（Y4） |
+
+## 12. 编辑态（待实现，ADR-0024）
+
+只在草图版本上开启（设计的草图 `/d/<设计>/sketch`、持久草图 `/i/<ID>`，X7a）；画布与面板只发编辑操作，不保存坐标，编辑后自动布局（X7）。
+
+| 位置 | 编辑态下 | 需求 |
+|---|---|---|
+| 信息条 | 「编辑草图：<名>」、未保存标记 ●、保存 / 放弃 / 校验、撤销 / 重做；已过时时「重新加载并重放」，重放有失败时列出失败的操作与「放弃本次改动」；版本切换旁「新建设计」（底稿缺省空草图，「改骨架（定稿后晋升替换骨架）」说明后果）；当前版本上「编辑骨架」 | SK-6、SK-9、SK-10 |
+| 画布 | 分层总览带之间与末尾的插入条「+ 层」、拖动带头排序；带内与父模块框内「+ 模块」就地输入名称；拖动模块到另一条带或父模块即移动（改 ID 时确认，列出影响条数）；从节点拖线建关系，松手选类型与说明；带到带拖线改可依赖的层；右键核心（只第二级）、封闭、删除；Delete、⌘Z / ⇧⌘Z。落点位置来自画布场景 `canvasScene({ editing: true })` | SK-7 |
+| 属性面板 | 按选中显示层 / 模块（含对外接口）/ 关系表单，无选中时为草图元信息（含改动摘要与晋升预览）；顶部常驻即时校验与「实现后将有 N 处偏差」，单击定位；文本字段失焦或回车提交（撤销的一步，X7g）；模块的 ID 只改短名（即父不变的移动） | SK-8、SK-9、SK-11 |
+| 导航树 | 「模块」页签只列草图实体（编辑中的草图即索引） | SK-6 |
+| 「显示」面板 | 隐藏代码事实与演化组（草图不对应代码） | SK-6 |
+
+| 模块 | 组件 |
+|---|---|
+| 画布编辑态 | `edit/canvas/**`：InsertSlot · InlineName · useEditDrag · MoveConfirm · useEditConnect · ConnectPopover · EditMenu · useEditKeys |
+| 编辑表单 | `edit/panel/**`：EditPanel · LayerForm · ModuleForm · InterfaceForm · RelationForm · SketchMetaForm · EditChecks |
+| 编辑信息条 | `edit/EditBar.vue`、`edit/NewDesignDialog.vue` |

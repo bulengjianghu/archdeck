@@ -40,6 +40,7 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计或提交)──▶ Mod
 | `GET projects.json` | `ProjectSummary[]` |
 | `GET models/<项目>.json` | 当前版本的 `ModelPayload`；不存在时 404 |
 | `GET models/<项目>/designs/<设计>/<轮次>.json` | 设计某一轮的 `ModelPayload`，带 `compare` 与该设计的草图 `sketches`；轮次为 `sketch` 时为草图版本（DV-10，带 `sketchPrompt`） |
+| `GET models/<项目>/intent/<草图 ID>.json` | 持久草图版本的 `ModelPayload`（`system.yaml` + `intent/**`，带 `compare.current` 与 `sketch { file, hash }`，供「编辑骨架」；待实现，ADR-0024） |
 | `GET models/<项目>/commits/<提交>.json?base=<提交｜worktree>` | 提交版本的 `ModelPayload`（`version: { commit, base }`，带 `compare.current`，E5、E6）；提交不存在或当时没有该项目时 404 |
 | ws `arch-model:changed` | `{ project }`；同一项目 150ms 内的多次变化合并为一次（含设计版本目录） |
 | `GET source/<项目>…` | 被描述项目的源码清单、文件与导出，见[源码接入与归属 §2.1](./source.md#21-端点) |
@@ -50,12 +51,22 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计或提交)──▶ Mod
 
 | 端点 | 函数 | 写什么 |
 |---|---|---|
-| `POST write/<项目>/feedback` `{ design, revision, text }` | `appendFeedback` | 该轮 `design.yaml` 的 `feedback` 末尾追加一段（带日期） |
+| `POST write/<项目>/feedback` `{ design, revision, text }` | `appendFeedback` | 该轮 `design.yaml` 的 `feedback` 末尾追加一段（带日期）；`revisions[]` 里还没有该轮的条目时新建 `{ id, feedback }`（E8，待实现） |
 | `POST write/<项目>/allow` `{ from, to, rule?, reason }` | `appendAllow` | `rules` 所在文件的 `rules.allow` 追加一条（校验两端模块存在、理由必填、不重复） |
 | `POST write/<项目>/ignore` `{ pattern }` | `appendIgnore` | `source-ignore.yaml` 的 `sourceIgnore` 追加一项（没有文件时新建） |
 | `POST write/<项目>/reviewed` `{ entries: [{ module, at, hash, summary, source, note? }] }`（也接受单条或数组） | `appendReviewed(modelRoot, project, entries)` | `reviewed.yaml` 的 `reviewed`：逐条按 `module` 更新已有记录或追加（没有文件时新建）；校验模块存在、`hash` 等于当前描述的 `reviewHash`（任一条不符整次拒绝）、`source` 为 `manual` 或 `sketch:<设计 ID>`；写后在 `governance/ledger.jsonl` 追加一行（来源 `page`）；草图归档批量调用同一函数（来源 `archive`，Z1、Z6） |
 | `POST write/<项目>/accept` `{ design, deviation, reason }` | `appendAccepted` | 该设计 `design.yaml` 的 `accepted` 追加一条认可的偏差（键、理由、日期；同一键已有时拒绝，X4） |
 | `POST write/<项目>/archive` `{ design }` | `archiveDesign` | 归档 / 晋升（X3）：先对当前版本跑 `sketchCheck`，不一致即拒绝；`until-implemented` → `design.yaml` 的 `status` 改为 `implemented`，并经确认层写入草图覆盖的模块的确认记录（`reviewEntries` 算指纹与摘要、`appendReviewed` 逐条更新或追加，来源 `sketch:<设计 ID>`；先写记录、后改状态，记录校验不过整次归档不生效）；`supersedes` → 草图整份替换 `intent/<ID>.yaml`（ID 改为被替换者、`lifetime: persistent`），状态同样改为 `implemented` |
+
+草图的整份写回与新建设计（`vite/writeSketch.ts`，B6、X7i，待实现，ADR-0024）：
+
+| 端点 | 函数 | 写什么 |
+|---|---|---|
+| `POST write/<项目>/sketch` `{ target: { kind: 'persistent', id }, sketch, baseHash }` | `saveSketch` | 持久草图 `intent/<ID>.yaml` 整份写回：文件指纹 ≠ `baseHash` → 409；以持久草图为上下文跑 `validateSketch`，有 error → 422（附问题列表）；否则用文档模型合并（映射逐键、带 `id` 的列表按 `id` 对齐、标量值变了才替换，注释只在未改动的节点保留），写回、更新指纹、拦截记录一行，返回新指纹 |
+| `POST write/<项目>/designs/<设计>/sketch` `{ target: { kind: 'design', design }, sketch, baseHash }` | `saveSketch` | 设计的草图 `designs/<设计>/sketch.yaml`，同上 |
+| `POST write/<项目>/designs` `{ id, name, goal?, sketch }` | `createDesign` | 新建设计：ID 合法且目录不存在（否则 409）；写 `design.yaml`（`status: draft`、`base.commit` 取当前版本）与 `sketch.yaml`（底稿由页面经 `seedSketch` 给出：缺省空草图，「改骨架」时复制骨架并 `supersedes`），两者登记指纹 |
+
+文档的打开与保存（`openDoc` / `save`）与追加写入同一份（`writeModel.ts` 导出）。
 
 - 只收同源 JSON POST；用 `yaml` 的文档模型（`parseDocument`）修改并写回，保留注释与原有格式；解析失败、校验不过时返回 400 与原因，不写。
 - 每次写人拥有的文件后更新 `governance/owned.json` 里该文件的指纹（X6，`governanceStore.ts` 的 `touchOwned`）。
@@ -94,12 +105,13 @@ sequenceDiagram
     A->>F: 画草图 sketch.yaml（核心与骨架、自选深度）；lint:model 校验
     A->>UI: 打开草图：分层总览、对比当前版本；「交给 AI」生成指令
     A->>AI: 草图全文 + 04 §5「按草图扩展」
-    AI->>F: 确认当前版本与代码一致；复制为 r1 并按草图扩展；写 design.yaml；sketch-check 零 error
+    AI->>F: 确认当前版本与代码一致；复制为 r1 并按草图扩展；本轮说明写 r1/revision.yaml（不碰 design.yaml）；sketch-check 零 error
     F-->>UI: 文件变化 → 刷新
     A->>UI: 打开 r1：看新增 / 修改，下钻，读设计说明、变更清单与草图偏差
     A->>AI: 疑问与评审意见；提醒级偏差可「认可偏差（写理由）」
     AI-->>A: 澄清、分析利弊、给出建议（全部意见定下来之前不出新一轮）
-    AI->>F: 意见原样记入上一轮 feedback；复制为 r(N+1) 修改
+    A->>F: 意见原样记入上一轮 feedback（页面「记录评审意见」，或写 design.yaml 后 arch own）
+    AI->>F: 复制为 r(N+1) 修改，改写 r(N+1)/revision.yaml
     Note over A,F: 重复直到定稿：status = accepted；结论记 ADR，并同步到需求 / 领域 / 架构文档
     Note over A,UI: 实现并重新生成当前版本后，核验对象变为当前版本；一致即「归档」或「晋升」（X3）
 ```
@@ -111,7 +123,19 @@ sequenceDiagram
 - 对比基线只有当前版本：相对当前版本标出草图新增 / 修改的实体，当前版本里草图没画的实体全部列为删除项——这是局部描述的本意，不是问题。
 - 设计信息条标「草图」，没有轮次、变更计数照常；「交给 AI」把 `sketchPrompt` 放进剪贴板。
 
-### 4.3 活动草图与核验（X4）
+### 4.3 轮次从目录发现（E8，待实现，ADR-0024）
+
+- `listRevisionDirs(designDir)`：含 `system.yaml` 的 `r<N>/` 即一轮，按 N 的数字排序（r10 在 r9 之后）。
+- `readRevisionNote(designDir, revision)`：读该轮的 `revision.yaml`（顶层键 `revision`：`date`、`summary`、`questions`）；没有文件时说明为空。`readModelDir` 读一轮的描述时跳过 `revision.yaml`（与跳过 `designs/`、`governance/` 同理），`lint:model` 因此不把它当描述文件。
+- `readDesignInfo` 把发现的轮次与 `design.yaml` 的 `revisions[]` 按 `id` 合并：`feedback` 取 `design.yaml`；`date` / `summary` / `questions` 取 `revision.yaml`，旧设计只在 `design.yaml` 里写的照常取，两处都写时以 `revision.yaml` 为准并记一条 `problems`；`revisions[]` 有、目录没有的 id 记 `problems`；只有草图、没有轮次的设计不记问题。
+- 结果：AI 起草新一轮只写 `r<N>/`，人拥有的 `design.yaml` 不变，指纹门禁不被打扰（X6）。
+
+### 4.4 持久草图版本（待实现，ADR-0024）
+
+- 路由 `/p/<项目>/i/<草图 ID>`，端点 `models/<项目>/intent/<草图 ID>.json`：`system.yaml` + `intent/**`，对比基线为当前版本，版本切换里排在当前版本之后、各设计之前。当前版本上「编辑骨架」打开 `/i/skeleton`。
+- 草图版本（设计的草图与持久草图）的载荷都附 `sketch { file, hash }`：草图文件路径与读取时的指纹（SHA-1，与 `owned.json` 同一算法），编辑态保存时带回比对（X7i）。
+
+### 4.5 活动草图与核验（X4）
 
 DeskState 的 `intent` 组：活动草图 = `index.model.sketches` 里的持久草图 + 载荷里的 `sketches`（当前版本：已定稿、未归档的设计的草图；设计某一轮：该设计的草图；草图版本：无——它自己就是尺子）。每张活动草图调用模型层 `sketchCheck(草图, index, { persistent, accepted })`，结果进返工清单（`desk.rework`，类别 `sketch`）、系统面板「意图」一节与设计面板。
 

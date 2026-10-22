@@ -1,0 +1,57 @@
+scenario:
+  id: sc.open-and-play
+  name: 打开场景并回放
+  description: |
+    架构师在顶部「运行」中选定一个场景：进入运行视角、层次不变、停在开头，导航树切到步骤树；
+    每按一次「下一步」前进一条本层可见消息，结构图、时序图、步骤树同步高亮；到 alt 未选分支处展开全部选项，
+    选一支后继续；在步骤树中单击之前的一步，选中它，进度后退到那一步。回放只由用户驱动，没有自动播放（ADR-0006）。
+  cause: 架构师想看某条执行链路这一次怎么走
+  evidence:
+    - tests/acceptance/run-perspective.test.ts
+    - tests/acceptance/unified-selection.test.ts
+    - tests/state/playback.test.ts
+    - e2e/run-default.spec.ts
+    - e2e/selection.spec.ts
+  steps:
+    - call: {id: pick, from: actor.architect, to: present.perspective, label: 点「运行」}
+    - call: {from: present.perspective, to: present.scenarios, label: 弹出场景列表（本层相关 / 全部 / 按发起者）}
+    - call: {id: choose, from: actor.architect, to: present.scenarios, label: 选定场景}
+    - call: {id: open, from: present.scenarios, to: state.desk.actions, label: openScenario(id)}
+    - call: {from: state.desk.actions, to: state.transition.playback, label: transition(openScenario)：运行视角、停在开头、选中场景}
+    - return: {from: state.transition.playback, to: state.desk.actions, label: 新的视图状态}
+    - async: {from: state.desk.actions, to: state.desk.url-sync, label: 地址 = encode(新状态)，进浏览器历史, payload: ds.ViewState}
+    - call: {from: state.desk.projection, to: model.scenario.flatten, relation: rel.p2.projection-plan, label: planScenario：步骤树展开为回放计划}
+    - call: {from: state.desk.projection, to: model.projector.endpoints, label: projectLevel（舞台：补齐场景端点）}
+    - call: {from: state.desk.projection, to: model.scenario.path, label: resolvePath}
+    - call: {from: state.desk.projection, to: model.scenario.level, label: projectScenario：本层可见消息}
+    - call: {from: state.desk.projection, to: model.scenario.sequence, label: buildSequence}
+    - call: {from: state.desk.projection, to: state.layout.sequence, label: layoutSequence}
+    - call: {id: outline, from: state.desk.projection, to: model.scenario.outline, label: outlineScenario：步骤大纲}
+    - call: {from: state.desk.projection, to: model.scenario.participation, label: scenarioModules：参与模块}
+    - call: {from: present.sequence.interact, to: state.desk.projection, label: 读取定位好的时序图, payload: ds.PositionedSequence}
+    - call: {from: present.nav-tree.steps, to: state.desk.projection, label: 读取步骤大纲，切到步骤页签, payload: ds.OutlineNode}
+    - loop:
+        while: 每按一次「下一步」
+        steps:
+          - call: {id: next, from: actor.architect, to: present.player, label: 按「下一步」（或 →）}
+          - call: {from: present.player, to: state.desk.actions, label: next()}
+          - call: {from: state.desk.actions, to: state.transition.playback, label: transition(next)：选中下一步}
+          - call: {from: state.transition.playback, to: model.scenario.level, label: stepAfter：本层下一条可见消息, payload: ds.ScenarioLevelView}
+          - call: {from: state.desk.projection, to: state.layout.stage, label: stageOverlay：走过的边、当前消息}
+          - call: {from: present.canvas.flow, to: state.desk.projection, label: 当前消息沿方向流动，走过的边标序号, payload: ds.StageOverlay}
+          - call: {from: present.nav-tree.steps, to: state.desk.projection, label: 选中的步骤高亮并滚到可见，序号与时序图一致, payload: ds.ScenarioLevelView}
+    - alt:
+        - when: 停在 alt 未选分支处
+          steps:
+            - call: {id: branch, from: actor.architect, to: present.player, label: 在展开的选项中选一支}
+            - call: {from: present.player, to: state.desk.actions, label: 'chooseBranch(point, option)'}
+            - call: {from: state.desk.actions, to: state.transition.playback, label: transition(chooseBranch)}
+            - call: {from: state.transition.playback, to: model.scenario.path, label: chooseBranch：改选丢弃其后的选择, payload: ds.ScenarioPlan}
+        - when: 到场景末尾
+          steps: []
+    - call: {id: seek, from: actor.architect, to: present.nav-tree.steps, label: 在步骤树中单击之前的一步}
+    - call: {from: present.nav-tree.steps, to: state.desk.actions, label: seek(frameId)}
+    - call: {from: state.desk.actions, to: state.transition.playback, label: transition(seek)：选中该步}
+    - call: {from: state.transition.playback, to: model.scenario.path, label: choicesFor：到达该帧需要的分支选择, payload: ds.ScenarioPlan}
+    - call: {from: state.transition.playback, to: model.scenario.level, label: landing：落在可见消息的第一帧, payload: ds.ScenarioLevelView}
+    - async: {from: state.desk.actions, to: state.desk.url-sync, label: 地址替换为新的步骤, payload: ds.ViewState}

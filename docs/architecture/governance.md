@@ -163,6 +163,15 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 | `sketchModules(sketch, index)` | 归档时写确认记录的对象：草图覆盖的、版本里存在的模块；记录本身（指纹、摘要）由确认层的 `reviewEntries` 按它的口径生成，经 `appendReviewed` 写入（`archiveDesign` 直接调用） | X3 |
 | `compareOwned(record, hashes)` | 指纹比对：已登记的文件内容不符或已不存在 → error `owned.changed`；人拥有的文件未登记 → warning `owned.unregistered`；没有记录 → warning `owned.none` | X6 |
 
+意图分三个子模块（ADR-0024）：**核验与生命周期**（`check.ts` · `lifecycle.ts` · `owned.ts`，即上表，已实现；矛盾检查另以 `sketchContradictions(sketch, persistent)` 导出，供草图校验共用，待实现）、**草图编辑**与**草图校验**（下表，待实现）。
+
+| 函数 | 做什么 | 规则 |
+|---|---|---|
+| `applyEdit(sketch, op, ctx)`（`edit/`） | 草图的纯函数编辑：输入草图定义、一个编辑操作 `EditOp`（加 / 删 / 排序层、改可依赖的层；加 / 删 / 改模块、核心与封闭；移动与改 ID；连 / 改 / 删关系；增删改接口；改元信息）与上下文（持久草图），输出新草图与影响 `{ created, renamed, removed }`，或拒绝原因；按操作族分 `locate`（寻址与 ID 生成）· `layers` · `modules` · `move` · `relations` · `seed` | X7b–X7e |
+| `idImpact(sketch, id, newParent, current?)` | 移动前的影响：草图内改写的 ID 与引用条数、当前版本里仍引用旧 ID 的实体条数 | X7d |
+| `seedSketch(id, from)` | 新建设计的底稿：空草图，或复制持久草图的层与第二级并声明 `supersedes` | B6 |
+| `validateSketch(sketch, { persistent, file })`（`validate.ts`） | 草图本身的校验：格式、ID 格式与唯一、前缀、引用完整（本草图 ∪ 持久草图）、不连祖先与后代、层依赖无环、与持久草图矛盾（调用 `sketchContradictions`）；error 拒绝保存。与 `sketchCheck` 的分工：校验只看草图本身，核验只看版本对草图，两边都有的只有矛盾检查（同一函数、同一稳定键） | X7f |
+
 ```ts
 interface SketchDeviation {
   key: string                           // `<种类>:<实体 ID>`，稳定

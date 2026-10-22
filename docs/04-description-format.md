@@ -20,7 +20,7 @@ model/<项目>/
   source-ignore.yaml       忽略清单 sourceIgnore：不属于任何模块的源码文件（§3.7）
   rules.yaml               架构规则 rules：架构师的意图，AI 重新生成时不改动（§3.8）
   reviewed.yaml            确认记录 reviewed：架构师确认过哪些模块、确认时的指纹与摘要，AI 重新生成时不改动（§3.9）
-  designs/<设计>/          设计版本（§5）：sketch.yaml（架构师的草图）+ design.yaml + r<N>/（AI 展开的各轮），读取当前版本时跳过
+  designs/<设计>/          设计版本（§5）：sketch.yaml（架构师的草图）+ design.yaml + r<N>/（AI 展开的各轮，每轮的说明在 r<N>/revision.yaml），读取当前版本时跳过
   governance/              基线 baseline.json、拦截记录 ledger.jsonl、人拥有文件的指纹 owned.json，由命令行与 agent 接口写，不属于描述，读取时跳过（§4）
 ```
 
@@ -28,8 +28,8 @@ model/<项目>/
 
 | 拥有者 | 文件 | 页面 | 指纹 |
 |---|---|---|---|
-| AI（按代码生成） | `system.yaml`、`modules/`（骨架之下）、`actors.yaml`、`scenarios/`；设计版本各轮快照 `designs/<设计>/r<N>/` | 只读 | — |
-| 人（架构师、负责人） | 草图：`intent/*.yaml`（骨架等持久草图）、`designs/<设计>/sketch.yaml`；`rules.yaml`（AI 重新生成时不改动，§3.8）；`source-ignore.yaml`（忽略项）；`designs/<设计>/design.yaml`（评审意见 `feedback`、认可偏差 `accepted`）；`reviewed.yaml`（确认记录，§3.9） | 只追加：例外、忽略项、评审意见、认可偏差；确认记录追加或按模块更新（Z1）；归档 / 晋升改设计状态、晋升时整份替换持久草图；草图整份覆盖为后续（X7）；其余由人编辑 | 记在 `governance/owned.json`：人改完后 `npm run arch -- own` 登记，页面写入自动更新，`lint:model` 不符即报错 `owned.changed` |
+| AI（按代码生成） | `system.yaml`、`modules/`（骨架之下）、`actors.yaml`、`scenarios/`；设计版本各轮快照 `designs/<设计>/r<N>/`，含该轮说明 `revision.yaml`（E8，待实现） | 只读 | — |
+| 人（架构师、负责人） | 草图：`intent/*.yaml`（骨架等持久草图）、`designs/<设计>/sketch.yaml`；`rules.yaml`（AI 重新生成时不改动，§3.8）；`source-ignore.yaml`（忽略项）；`designs/<设计>/design.yaml`（目标、状态、基线、ADR、认可偏差 `accepted`、评审意见 `revisions[].feedback`——不含每轮说明，E8）；`reviewed.yaml`（确认记录，§3.9） | 只追加：例外、忽略项、评审意见（该轮没有条目时新建，B2）、认可偏差；确认记录追加或按模块更新（Z1）；归档 / 晋升改设计状态、晋升时整份替换持久草图；草图在画布编辑后整份覆盖、新建设计（B6、X7，待实现）；其余由人编辑 | 记在 `governance/owned.json`：人改完后 `npm run arch -- own` 登记，页面写入自动更新，`lint:model` 不符即报错 `owned.changed` |
 | 命令行与 agent 接口 | `governance/` | 只读 | — |
 
 - 骨架只描述层和第二级模块；AI 只能用 `parent: <第二级 ID>` 往骨架之下挂子模块，对骨架里的模块只能补草图没写的字段，不得重定义已写的字段（X1，`lint:model` 报 `sketch-redefined`）。没有 `intent/skeleton.yaml` 的旧描述仍可把层写在 `modules/layers.yaml`（兼容期）。
@@ -361,6 +361,7 @@ sketch:
 - **加载**：草图先于其他文件进入 Loader；其他文件对草图实体只能补充（往下挂子模块、补草图没写的字段），不能重定义（X1）。打开设计的草图时按普通描述加载：`system.yaml` + 持久草图 + 该草图，对比基线为当前版本（DV-10）。
 - **核验**（X4）：对设计各轮与当前版本（`lint:model` 只对最新一轮与当前版本把关），只比草图写了的——缺模块、封闭子树多出子模块、父模块 / `kind` / `core` / `mayDependOn` 不一致为错误；关系没有对应（两端 + 类型，深层提升也算）、接口不存在或 `owner` 不同为提醒；职责等文字由 AI 展开，不判。`npm run arch -- sketch-check [--design <设计>]` 与页面问题页签「草图偏差」同一份结果。
 - **写什么**：只写架构师要钉住的——层与核心模块、它们之间的关系、必须存在的接口；覆盖到哪一层由架构师决定，其余留给 AI。职责一两句话即可，AI 展开时会补全。
+- **在画布上画**（X7、ADR-0024，待实现）：草图版本（设计的草图、持久草图 `/i/<ID>`）上点「编辑」，增删改层、模块、关系、接口，标核心（只第二级）与封闭；保存为整份写回（B6）。写回用 YAML 文档模型合并：**注释只在未改动的节点上保留**——改过的标量保留行尾注释，删掉的条目注释随之消失，新条目没有注释；条目的嵌套或平铺写法与顺序保持不变，新模块跟随父模块的写法。手写与画布编辑可以交替，保存时文件已被外部改动会被拒绝（X7i）。
 - **代码落点（`codeRefs`）只写目录级**（议，外部评审 D1）：草图里的 `codeRefs` 只写架构师想钉住的目录级 glob（如 `src/model/review/**`），或者不写；细到文件的落点由 AI 在 `modules/` 对应的区域文件里补充（X1：为草图模块补草图没写的字段，没有其他字段要补时写一个只含 `id`、`name`、`codeRefs` 的补充条目）。代码在目录内挪文件不必改人拥有的文件、不必重新登记指纹。同一模块的 `codeRefs` 只能一处写：草图写了，区域文件再写不同的值即 `sketch-redefined`。
 
 ## 4. 校验与提交
@@ -387,8 +388,8 @@ npm run arch -- baseline --project <项目>   # 写 model/<项目>/governance/ba
 ```text
 model/<项目>/designs/<设计 ID>/
   sketch.yaml                    架构师的草图（§3.10，人拥有）；版本切换中排在 r1 之前
-  design.yaml
-  r1/   system.yaml、intent/、modules/…   第 1 轮：AI 从当前版本完整复制后按草图扩展
+  design.yaml                    人拥有：目标、状态、基线、ADR、认可偏差、各轮的评审意见
+  r1/   system.yaml、intent/、modules/…、revision.yaml   第 1 轮：AI 从当前版本完整复制后按草图扩展；revision.yaml 为本轮说明（AI 拥有）
   r2/   …                        第 2 轮：从上一轮完整复制后按评审意见修改
 ```
 
@@ -401,17 +402,24 @@ design:
   base: { commit: <起草时当前版本的 source.commit>, generatedAt: … }
   accepted:                     # 认可的偏差（X4）：由面板「认可偏差（写理由）」追加；只能认可提醒级偏差
     - { deviation: 'missing-relation:rel.sk.desk-plan', reason: 调用经 DeskState 的派生，不单独建关系, at: '2026-10-22' }
-  revisions:
+  revisions:                    # 只承载评审意见，按 id 对上轮次；条目由「记录评审意见」按需建立（B2、E8）
     - id: r1
-      date: '2026-10-20'
-      summary: |                # 本轮做了什么；定稿轮附领域规则清单
-      questions: [ … ]          # 待评审确认的问题，每条给出推荐
       feedback: |               # 架构师对本轮的评审意见，原样记录
 ```
 
+```yaml
+# designs/<设计>/r1/revision.yaml —— 本轮说明（AI 拥有，不登记指纹；读这一轮的描述时跳过，E8）
+revision:
+  date: '2026-10-20'
+  summary: |                    # 本轮做了什么；定稿轮附领域规则清单
+  questions: [ … ]              # 待评审确认的问题，每条给出推荐
+```
+
+轮次从目录发现：含 `system.yaml` 的 `r<N>/` 即一轮，按 N 的数字排序（E8，待实现）。早先的设计把 `date`、`summary`、`questions` 写在 `design.yaml` 的 `revisions[]` 里，照常读取；新的轮次一律写 `revision.yaml`。
+
 流程：
 
-1. **画草图**：架构师写 `sketch.yaml`（§3.10；二期可在画布上画），`lint:model` 校验格式与 ID；草图不得与持久草图矛盾，要改骨架就声明 `supersedes`。
+1. **画草图**：架构师写 `sketch.yaml`（§3.10；可在画布上画，「新建设计」创建 `design.yaml` 与草图，底稿缺省为空，SK-10），`lint:model` 校验格式与 ID；草图不得与持久草图矛盾，要改骨架就声明 `supersedes`。
 2. **交给 AI**：设计信息条「交给 AI」生成指令——草图全文 + 下面的「按草图扩展」一节；AI 据此在当前版本上起草 r1。
 3. **评审循环**：每一轮都跑核验（`sketch-check`），偏差进返工清单；AI 起草后自己先跑一遍，零 error 才交评审。架构师在架构台上对比、下钻、记评审意见；提醒级偏差确属合理时「认可偏差（写理由）」。
 4. **定稿与实现**：`status: accepted`，结论记 ADR，同步 01–04；实现、重新生成当前版本后，核验对象变为当前版本；一致即「归档」（`until-implemented`：状态 `implemented`，草图覆盖的模块写入确认记录）或「晋升」（`supersedes`：草图替换对应的持久草图）。归档由人显式发起（面板或 `arch sketch archive`）。
@@ -421,7 +429,8 @@ design:
 - **起草**：先确认当前版本与代码一致（不一致先重新生成并提交），再把当前版本整份复制为 `r1/`，在副本上按草图扩展；不改当前版本。复制的是描述本身（`system.yaml`、`intent/`、`modules/`、`actors.yaml`、`scenarios/` 等）；**不含** `designs/`（设计不嵌套）、`governance/`（基线、拦截记录与指纹只对当前版本）、`reviewed.yaml`（确认只对当前版本，Z1）。`intent/` 要复制：每一轮只读自己目录里的文件，持久草图（含骨架）不会自动带进各轮，不复制则该轮没有层与骨架约束。
 - **只改要改的**：新增实体按 §3 写；已有实体只在设计确实要调整时改，ID 保持不变（界面按 ID 对比）；删除就直接删。
 - **设计说明**：每个新增或修改的实体写 `designNote`，说清为什么这样设计、取舍是什么。
-- **新一轮**：先把评审意见原样记到上一轮的 `feedback`，再把上一轮整份复制为新一轮修改；旧轮次不再改动。
+- **本轮说明**：写在该轮的 `revision.yaml`（`date`、`summary`、`questions`）；AI 起草或修改任何一轮都**不碰 `design.yaml`**——它是人拥有的文件，改了即 `owned.changed`（X6）。
+- **新一轮**：评审意见由人记到上一轮（页面「记录评审意见」或直接写 `design.yaml` 后 `arch own`），再由 AI 把上一轮整份复制为新一轮修改（复制后改写新一轮的 `revision.yaml`）；旧轮次不再改动。
 - 设计版本同样要求 `lint:model` 0 个错误（逐轮校验）。
 
 ### 按草图扩展
@@ -432,5 +441,5 @@ design:
 2. 声明 `closed` 的子树下，直接子模块的集合必须与草图相等——不多不少；没声明的子树可以加子模块。
 3. 没写的字段由你展开：职责、实现原理、接口签名、数据结构、更深层的子模块与关系，都按 §3 的生成规范写全。
 4. ID 纪律（X5）：草图里的 ID 由架构师起，你只能沿用；你新增的实体只能挂在草图实体之下，ID 以其为前缀（如草图有 `model.scenario`，你可以加 `model.scenario.plan`，不能加 `model.playback`）；不得重命名、移动草图里出现过的实体，要改就把问题写进 `design.yaml` 的 `questions` 交给架构师改草图。
-5. 从当前版本整份复制为新一轮，只改要改的；每个新增或修改的实体写 `designNote`。
+5. 从当前版本整份复制为新一轮，只改要改的；每个新增或修改的实体写 `designNote`；本轮说明与待确认问题写在新一轮的 `revision.yaml`，不改 `design.yaml`。
 6. 起草后运行 `npm run lint:model` 与 `npm run arch -- sketch-check --design <设计>`：零 error 才算完成；提醒级偏差如确有理由，写进 `questions` 由架构师认可，不要自己改草图。

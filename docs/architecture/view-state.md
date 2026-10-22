@@ -197,3 +197,29 @@ encodeView(state: ViewState, index: ModelIndex, plan?: ScenarioPlan): Record<str
 // 解码即 transition(state, { type: 'restore', query }, ctx)：丢弃无效值，恢复到最接近的合法状态
 keyIntent(state, index, key: 'Escape' | 'Backspace'): ViewAction | 'leave' | null      // N7、N9：Esc 只取消选中，Backspace 返回上级；'leave' = 回项目列表
 ```
+
+## 7. 编辑态（待实现，ADR-0024）
+
+编辑态只在草图版本上开启（X7a）。状态分两处，各管各的：
+
+| 状态 | 在哪 | 为什么 |
+|---|---|---|
+| 正在编辑哪张草图 `editing: SketchTarget \| null` | 视图状态 `ViewState` | 与视角、文件选中互斥，要和它们在同一个值里由转移函数约束；不进 URL |
+| 编辑会话 `EditSession`：读取时的草图与指纹、编辑中的草图、撤销 / 重做栈、已过时 | DeskState 的 `edit` 组 | 一次编辑会话的内容，与浏览的层次、选中只经「影响」相互作用；不进 URL，换成命令行也不需要（原则 3） |
+
+- **会话规则**（`transition/edit.ts`）：`enterEdit` / `exitEdit` 与互斥（X7a）；`edited { effects }`——改名换成新 ID、删除退到最近仍存在的祖先、新建即选中（X7h）；`leaveGuard(脏) → 放行 / 需要确认`。
+- **编辑会话的纯函数**（`desk/edit/session.ts`）：`begin`、`apply`（调用模型层 `applyEdit`，成功则压撤销栈）、`undo` / `redo`、`saved`、`reloaded`（指纹不同且不是刚保存的 → 已过时）、`replay`（把本次的操作按序重放到新读到的草图上，返回失败的操作）。撤销粒度见 X7g；「脏」由编辑中的草图与读取时的草图是否相同推出。
+- **派生**（`desk/edit/derive.ts`）：编辑中的草图序列化为一份虚拟的 `sketch.yaml`，与 `system.yaml`、持久草图一起经 `loadModel` 成为索引——编辑态下它就是 DeskState 的 `index`，投影、布局、导航树、面板照常工作；另派生 `validateSketch`（X7f）、对当前版本的 `sketchCheck`（L-1）、改动摘要与晋升预览（`diffModels`）。
+- **同步**（`desk/edit/save.ts`）：保存与新建设计经注入的 `ModelWriter`（新增 `saveSketch`、`createDesign`）发往写入端点；成功 → `saved`，文件变化推送回来后按 N5 重新加载、`reloaded` 识别为刚保存的；409 → 已过时，可重新加载并重放、失败时放弃本次改动（X7i）；422 → 服务端的校验问题交给派生定位。
+
+```ts
+interface EditSession {
+  target: { kind: 'design'; design: string } | { kind: 'persistent'; id: string }
+  base: { sketch: SketchDef; hash: string }
+  draft: SketchDef
+  past: { op: EditOp; before: SketchDef }[]; future: { op: EditOp; after: SketchDef }[]
+  stale: boolean
+}
+// desk.edit：{ session, draft, dirty, canUndo, canRedo, validation, check, changes, promotion, saving,
+//   enterEdit, exitEdit, edit(op), undo, redo, previewMove, save, discard, replayOnReload, createDesign, canLeave }
+```
