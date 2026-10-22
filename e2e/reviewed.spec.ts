@@ -7,7 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
-import { openDesk } from './helpers'
+import { restoreOwned, openDesk } from './helpers'
 
 const MODEL = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 const LAYERS = path.join(MODEL, 'intent/skeleton.yaml')
@@ -82,9 +82,14 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
     fs.writeFileSync(LAYERS, layers0)
     if (reviewed0 === null) fs.rmSync(REVIEWED, { force: true })
     else fs.writeFileSync(REVIEWED, reviewed0)
+    // 指纹与拦截记录只撤销本测试的写入（reviewed.yaml 的指纹、页面确认的那几行）：其他 spec 并行时也在写这两个文件，整份恢复会把对方的临时写入写回去
     if (owned0 === null) fs.rmSync(OWNED, { force: true })
-    else fs.writeFileSync(OWNED, owned0)
+    else restoreOwned(OWNED, owned0, ['reviewed.yaml'])
     if (ledger0 === null) fs.rmSync(LEDGER, { force: true })
-    else fs.writeFileSync(LEDGER, ledger0)
+    else {
+      const old = new Set(ledger0.split('\n'))
+      const lines = fs.readFileSync(LEDGER, 'utf8').split('\n')
+      fs.writeFileSync(LEDGER, lines.filter(l => old.has(l) || !l.includes('"tool":"reviewed","origin":"page"')).join('\n'))
+    }
   }
 })

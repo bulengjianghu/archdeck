@@ -89,6 +89,13 @@ void router.isReady().then(() =>
     if (route.query.edit === '1') desk.edit.enterEdit()
   }),
 )
+// 同一个版本的视图被复用时（地址只多了 ?edit=1）也进入编辑态；enterEdit 在已是编辑态或不是草图版本时无效
+watch(
+  () => route.query.edit,
+  v => {
+    if (v === '1' && desk.status.value === 'ready') desk.edit.enterEdit()
+  },
+)
 
 // X7a：有未保存的草图改动时，离开（切换版本、回项目列表、关闭页面）要确认
 const leaveOk = () => desk.edit.canLeave() === 'free' || window.confirm('草图有未保存的改动，离开会丢失。确定离开？')

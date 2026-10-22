@@ -5,7 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
-import { openDesk } from './helpers'
+import { openDesk, restoreOwned } from './helpers'
 
 const DESIGN = path.resolve(import.meta.dirname, '../model/h5p-arch-desk/designs/phase2-dynamic')
 const EXTRA = path.join(DESIGN, 'r4/modules/zz-e2e-deviation.yaml')
@@ -56,6 +56,6 @@ test('X4：r4 与草图一致；故意制造偏差（封闭子树多出子模块
   } finally {
     if (fs.existsSync(EXTRA)) fs.rmSync(EXTRA)
     fs.writeFileSync(designYaml, before)
-    fs.writeFileSync(OWNED, owned)
+    restoreOwned(OWNED, owned, ['designs/phase2-dynamic/design.yaml'])
   }
 })

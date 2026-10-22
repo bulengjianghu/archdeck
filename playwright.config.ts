@@ -9,6 +9,8 @@ const PORT = Number(process.env.E2E_PORT ?? 5393)
 
 export default defineConfig({
   testDir: 'e2e',
+  // 整轮结束后原样写回指纹与拦截记录（各 spec 并行写它们，见 e2e/global-setup.ts）
+  globalSetup: './e2e/global-setup.ts',
   // 首次打开项目时布局在 Worker 中计算、开发服务器按需编译，留足余量
   timeout: 60_000,
   expect: { timeout: 10_000 },

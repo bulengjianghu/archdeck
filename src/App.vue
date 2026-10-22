@@ -3,11 +3,11 @@ import { RouterView } from 'vue-router'
 </script>
 
 <template>
-  <!-- 切换项目或版本时重建视图，每个项目的每个版本一份独立状态 -->
+  <!-- 切换项目或版本时重建视图，每个项目的每个版本一份独立状态；版本含持久草图版本（intent，ADR-0024） -->
   <RouterView v-slot="{ Component, route }">
     <component
       :is="Component"
-      :key="[route.params.project ?? 'home', route.params.design, route.params.revision, route.params.commit, route.params.base].join('|')"
+      :key="[route.params.project ?? 'home', route.params.design, route.params.revision, route.params.commit, route.params.base, route.params.intent].join('|')"
     />
   </RouterView>
 </template>

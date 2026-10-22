@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 import { parse } from 'yaml'
-import { graphNode, openDesk } from './helpers'
+import { graphNode, openDesk, restoreOwned } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 const GOV = path.join(PROJECT, 'governance')
@@ -17,18 +17,24 @@ const LEDGER = path.join(GOV, 'ledger.jsonl')
 test.describe.configure({ mode: 'serial' })
 test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
 
-/** 跑完恢复指纹与拦截记录、删掉临时设计 */
+/**
+ * 跑完删掉临时设计，并只撤销它自己留下的痕迹：owned.json 里该设计目录下的指纹、ledger.jsonl 里涉及该设计的行。
+ * 不整份恢复这两个文件——其他 spec（如确认层）并行时也在写它们，整份恢复会把对方的临时写入写回去。
+ */
 function sandbox(design: string) {
-  const owned = fs.readFileSync(OWNED, 'utf8')
-  const ledger = fs.existsSync(LEDGER) ? fs.readFileSync(LEDGER, 'utf8') : null
   const dir = path.join(PROJECT, 'designs', design)
+  const prefix = `designs/${design}/`
+  const owned0 = fs.readFileSync(OWNED, 'utf8')
   return {
     dir,
     restore() {
       fs.rmSync(dir, { recursive: true, force: true })
-      fs.writeFileSync(OWNED, owned)
-      if (ledger === null) fs.rmSync(LEDGER, { force: true })
-      else fs.writeFileSync(LEDGER, ledger)
+      restoreOwned(OWNED, owned0, [prefix])
+      if (fs.existsSync(LEDGER)) {
+        const lines = fs.readFileSync(LEDGER, 'utf8').split('\n')
+        const rest = lines.filter(l => !l.includes(`"design":"${design}"`) && !l.includes(`"file":"${prefix}`))
+        if (rest.length !== lines.length) fs.writeFileSync(LEDGER, rest.join('\n'))
+      }
     },
   }
 }
@@ -189,4 +195,32 @@ test('X7d、X7g、X7i：改 ID（父不变的移动）级联到后代并确认�
   } finally {
     box.restore()
   }
+})
+
+test('E-1：从当前版本点「编辑骨架」进入持久草图的编辑态；版本切换里选「骨架 · 持久草图」后画布只有骨架的实体（同一个视图组件换版本也要重建）', async ({
+  page,
+}) => {
+  await openDesk(page, '/p/h5p-arch-desk')
+  await page.getByRole('button', { name: '编辑骨架' }).click()
+  await expect(page).toHaveURL(/\/p\/h5p-arch-desk\/i\/skeleton/)
+  await expect(page.locator('.edit-bar .title')).toContainText('编辑草图：骨架')
+  await expect(page.locator('.insert-slot').first()).toBeVisible()
+  await page.locator('.edit-bar').getByRole('button', { name: '退出编辑' }).click()
+  await expect(page.locator('.edit-bar').getByRole('button', { name: '编辑' })).toBeVisible()
+
+  // 回到当前版本，再经版本切换选持久草图
+  await page.locator('select[aria-label="切换版本"]').selectOption('')
+  await expect(page.locator('.intent-bar')).toHaveCount(0)
+  // 当前视图的模型索引里有没有这个模块（加载中为 null）
+  const has = (id: string) =>
+    page.evaluate(
+      x => (globalThis as unknown as { __desk?: { index: { value: { modules: Map<string, unknown> } | null } } }).__desk?.index.value?.modules.has(x) ?? null,
+      id,
+    )
+  await expect.poll(() => has('state.desk.edit')).toBe(true)
+  await page.locator('select[aria-label="切换版本"]').selectOption('i:skeleton')
+  await expect(page.locator('.intent-bar')).toContainText('持久草图')
+  await expect.poll(() => has('state.desk.edit')).toBe(false)
+  await expect.poll(() => has('state.desk')).toBe(true)
+  await expect(page.locator('.vue-flow__node-band')).toHaveCount(4)
 })
