@@ -49,6 +49,7 @@ import { createRun } from './desk/run'
 import { createFiles } from './desk/files'
 import { createVersions } from './desk/versions'
 import { createFacts } from './desk/facts'
+import { createReview } from './desk/review'
 
 export type { Selection, Toggles } from './transition'
 export { encodeSelection, decodeSelection } from './transition'
@@ -168,6 +169,9 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     ignore: (pattern: string): Promise<WriteOutcome> =>
       options.version ? Promise.resolve({ ok: false, error: '忽略项只加在当前版本' }) : writer.ignore({ pattern }),
   }
+  // ── 人确认层（Z1–Z6，ADR-0023）：确认状态的派生与确认的写入意图；只对当前版本 ──
+  const review = createReview({ index, version: options.version, writer })
+
   /** W-6、Q9：给 agent 的指令（Markdown）；不给返工项时为整份清单 */
   function reworkPrompt(item?: ReworkItem): string {
     const list = rework.value
@@ -297,6 +301,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     files,
     versions,
     facts,
+    review,
     // 操作
     dispatch,
     init,

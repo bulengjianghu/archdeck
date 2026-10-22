@@ -314,6 +314,7 @@ describe('DeskState · 写入人拥有的文件（B1–B4）', () => {
         { ok: true as const, file: 'rules.yaml' }
       ),
       ignore: async (b: { pattern: string }) => (calls.push(`i:${b.pattern}`), { ok: true as const, file: 'source-ignore.yaml' }),
+      reviewed: async () => ({ ok: true as const, file: 'reviewed.yaml' }),
     }
     const cur = createDeskState(async () => ({ dir: 'x', files: sampleFiles() }), { writer })
     expect([cur.write.canEditRules, cur.write.canFeedback]).toEqual([true, false])

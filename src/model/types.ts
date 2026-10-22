@@ -167,6 +167,8 @@ export interface ArchFileDef {
   sourceLimits?: SourceLimits
   /** U1：架构规则（约定文件 rules.yaml），只能声明一次 */
   rules?: RulesDef
+  /** Z1：确认记录（约定文件 reviewed.yaml），人拥有，由页面与草图归档写入 */
+  reviewed?: ReviewedEntryDef[]
 }
 
 /** G20：源码文件的限制；maxLines 缺省 500 */
@@ -203,6 +205,28 @@ export interface RulesDef {
   modules?: ModuleRuleDef[]
   allow?: AllowDef[]
   cycles?: { tolerated?: string[] }
+}
+
+/** Z2、Z3：确认时的摘要——指纹覆盖的内容的一份副本，需复核时据此显示差异 */
+export interface ReviewSummaryDef {
+  responsibility?: string
+  includes?: string[]
+  excludes?: string[]
+  mayDependOn?: string[]
+  provides?: { id: string; signature?: string }[]
+  children?: string[]
+}
+
+/** Z1、Z6：一条确认记录；source 为 `manual` 或 `sketch:<设计 ID>` */
+export interface ReviewedEntryDef {
+  module: string
+  /** 确认日期 YYYY-MM-DD */
+  at: string
+  /** 指纹（Z2） */
+  hash: string
+  source?: string
+  note?: string
+  summary?: ReviewSummaryDef
 }
 
 // ── 加载产物 ─────────────────────────────────────────────────
@@ -249,6 +273,10 @@ export interface ActorEntity extends ActorDef {
   src: SourceLoc
 }
 
+export interface ReviewedEntry extends ReviewedEntryDef {
+  src: SourceLoc
+}
+
 export type MessageKind = 'call' | 'async' | 'return'
 
 export interface Message extends Omit<MessageDef, 'payload'> {
@@ -291,6 +319,8 @@ export interface ArchModel {
   rules?: RulesDef
   /** U1：rules 的出处 */
   rulesSrc?: SourceLoc
+  /** Z1：各文件 reviewed 的合并（Validator 去掉坏引用、按模块去重），不参与版本对比 */
+  reviewed: ReviewedEntry[]
 }
 
 export type IssueSeverity = 'error' | 'warning'

@@ -36,5 +36,5 @@ export function httpModelWriter(project: string, base = ''): ModelWriter {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
     }
   }
-  return { feedback: b => post('feedback', b), allow: b => post('allow', b), ignore: b => post('ignore', b) }
+  return { feedback: b => post('feedback', b), allow: b => post('allow', b), ignore: b => post('ignore', b), reviewed: b => post('reviewed', b) }
 }

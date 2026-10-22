@@ -126,6 +126,17 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
             </template>
           </dl>
           <p v-if="p.health?.note" class="note warn">{{ p.health.note }}</p>
+          <dl v-if="p.health?.reviewed" class="health reviewed" aria-label="确认">
+            <div
+              :class="p.health.reviewed.stale ? 'warn' : 'ok'"
+              :title="`核心模块与第二级模块（Z4）：已确认 ${p.health.reviewed.reviewed} / ${p.health.reviewed.scope}，需复核 ${p.health.reviewed.stale}`"
+            >
+              <dt>核心模块已确认</dt>
+              <dd>
+                {{ p.health.reviewed.reviewed }} / {{ p.health.reviewed.scope }}<small> · 需复核 {{ p.health.reviewed.stale }}</small>
+              </dd>
+            </div>
+          </dl>
 
           <p class="scale">
             模块 {{ p.counts.modules }} · 关系 {{ p.counts.relations }} · 接口 {{ p.counts.interfaces }} · 数据结构 {{ p.counts.dataStructures
@@ -280,6 +291,11 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin: 0;
+}
+
+.health.reviewed {
+  grid-template-columns: 1fr;
+  margin-top: 8px;
 }
 
 .health div {

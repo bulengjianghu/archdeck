@@ -142,6 +142,81 @@
           }
         }
       }
+    },
+    "reviewed": {
+      "type": "array",
+      "description": "确认记录（Z1–Z6，ADR-0023）：架构师确认过的模块，约定写在 reviewed.yaml，由页面与草图归档写入；AI 重新生成当前版本时不改动",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "module",
+          "at",
+          "hash"
+        ],
+        "properties": {
+          "module": {
+            "$ref": "#/definitions/id"
+          },
+          "at": {
+            "type": "string",
+            "description": "确认日期 YYYY-MM-DD"
+          },
+          "hash": {
+            "type": "string",
+            "description": "确认内容的指纹（Z2）"
+          },
+          "source": {
+            "type": "string",
+            "pattern": "^(manual|sketch:[A-Za-z0-9][A-Za-z0-9._:-]*)$",
+            "description": "来源（Z6）：manual 或 sketch:<设计 ID>"
+          },
+          "note": {
+            "type": "string",
+            "description": "架构师自己的话（可选）"
+          },
+          "summary": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "确认时的摘要（Z3）：需复核时据此显示差异",
+            "properties": {
+              "responsibility": {
+                "type": "string"
+              },
+              "includes": {
+                "$ref": "#/definitions/textList"
+              },
+              "excludes": {
+                "$ref": "#/definitions/textList"
+              },
+              "mayDependOn": {
+                "$ref": "#/definitions/idList"
+              },
+              "provides": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "$ref": "#/definitions/id"
+                    },
+                    "signature": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "children": {
+                "$ref": "#/definitions/idList"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "definitions": {

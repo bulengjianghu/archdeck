@@ -4,7 +4,7 @@
  * - 状态 → 树：当前层次的祖先链展开并标出当前层次，选中的模块高亮、展开到它并滚到可见；
  *   运行视角下标出参与本场景的模块与当前步骤的两端；选中文件时标出其归属模块并展开到它（G14）。
  * - 树 → 意图：单击定位（N4），单击系统回根层，双击有子模块的下钻（N1、N2）；悬停本层可见的模块等同悬停画布节点。
- * 展开状态只属于这块界面。
+ * 展开状态只属于这块界面。「只看需复核」（Z3）只列含需复核模块的分支，并展开到它们。
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -17,7 +17,13 @@ const run = computed(() => desk.perspective.value === 'run')
 
 /** T2：结构视角下「只看现状」开启时不列目标态模块及其后代；运行视角不受开关影响（L9） */
 const hideTarget = computed(() => !run.value && desk.toggles.currentOnly)
-const childrenOf = (id: string) => (idx.value.childrenOf.get(id) ?? []).filter(c => !(hideTarget.value && idx.value.modules.get(c)?.status === 'target'))
+/** Z3：「只看需复核」时只列祖先链上有需复核模块的分支 */
+const onlyStale = ref(false)
+const staleBranches = computed(() => new Set([...desk.review.stale.value].flatMap(id => idx.value.pathOf.get(id) ?? [])))
+const childrenOf = (id: string) =>
+  (idx.value.childrenOf.get(id) ?? []).filter(
+    c => !(hideTarget.value && idx.value.modules.get(c)?.status === 'target') && !(onlyStale.value && !staleBranches.value.has(c)),
+  )
 
 const selectedId = computed(() => (desk.selection.value?.kind === 'module' ? desk.selection.value.id : null))
 /** T5：当前步骤两端的祖先链 */
@@ -29,6 +35,7 @@ const active = computed(() => {
 const viewNodes = computed(() => new Set(desk.view.value?.nodes.map(n => n.id) ?? []))
 
 const expanded = ref(new Set<string>())
+watch(onlyStale, on => on && (expanded.value = new Set([...expanded.value, ...staleBranches.value])))
 /** T3：展开到当前层次与选中的模块 */
 function reveal(id: string | null) {
   if (!id) return
@@ -65,6 +72,8 @@ const ctx = computed(() => ({
   participants: run.value ? desk.run.participants.value : new Set<string>(),
   active: active.value,
   fileOwners: new Set(desk.files.owners.value),
+  stale: desk.review.stale.value,
+  reviewed: new Set([...desk.review.states.value].filter(([, s]) => s.status === 'reviewed').map(([id]) => id)),
 }))
 
 function pick(id: string) {
@@ -80,6 +89,10 @@ function hover(id: string | null) {
 </script>
 
 <template>
+  <div v-if="desk.review.stale.value.size || onlyStale" class="tools">
+    <label><input v-model="onlyStale" type="checkbox" /> 只看需复核</label>
+    <span class="warn">需复核 {{ desk.review.stale.value.size }}</span>
+  </div>
   <ul ref="root" class="tree" role="tree" @mouseleave="hover(null)">
     <ModuleTreeNode :id="idx.rootId" :depth="0" :ctx="ctx" @pick="pick" @drill="drill" @toggle="toggle" @hover="hover" />
   </ul>
@@ -90,5 +103,19 @@ function hover(id: string | null) {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 2px 10px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  font-size: 11.5px;
+}
+
+.tools .warn {
+  color: var(--warning);
 }
 </style>

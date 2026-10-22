@@ -6,8 +6,8 @@ import type { IssueSeverity } from '../types'
 import type { ViolationStatus } from '../governance/types'
 
 /** 返工项的类别，按呈现顺序 */
-export type ReworkCategory = 'description' | 'violation' | 'cycle' | 'ownership' | 'unconfirmed' | 'undescribed' | 'unmodeled'
-export const REWORK_CATEGORIES: readonly ReworkCategory[] = ['description', 'violation', 'cycle', 'ownership', 'unconfirmed', 'undescribed', 'unmodeled']
+export type ReworkCategory = 'description' | 'violation' | 'cycle' | 'ownership' | 'unconfirmed' | 'undescribed' | 'unmodeled' | 'review'
+export const REWORK_CATEGORIES: readonly ReworkCategory[] = ['description', 'violation', 'cycle', 'ownership', 'unconfirmed', 'undescribed', 'unmodeled', 'review']
 
 /** 严重度：error 卡门禁或剔除了实体；warning 描述与代码不一致；info 只提示（未描述依赖、已豁免） */
 export type ReworkSeverity = IssueSeverity | 'info'
@@ -26,6 +26,7 @@ export type ReworkActionKind =
   | 'fix-code' // 改代码
   | 'add-step-relation' // 补步骤的 relation
   | 'rebaseline' // 评审后重新生成基线
+  | 'review' // Z3：在面板上复核并确认（人的动作，不交给 agent）
 
 export interface ReworkAction {
   kind: ReworkActionKind
@@ -94,6 +95,7 @@ export const REWORK_CATEGORY_LABELS: Record<ReworkCategory, string> = {
   unconfirmed: '未证实的关系',
   undescribed: '未描述依赖',
   unmodeled: '结构中未建模的步骤',
+  review: '需复核',
 }
 
 export const REWORK_SEVERITY_LABELS: Record<ReworkSeverity, string> = { error: '错误', warning: '提醒', info: '提示' }

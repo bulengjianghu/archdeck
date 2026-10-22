@@ -1,7 +1,7 @@
 # 专题：架构治理
 
 > 回答：代码依赖从哪里来；描述的关系对不对；架构规则怎么判、门禁怎么卡；agent 怎么在写代码前询问。
-> 覆盖模块：接入层的「依赖提取」「治理存储」「agent 接口」；模型层的「架构治理」「返工清单」。规则见 [02-domain.md](../02-domain.md) 的 K、U、Y、Q（返工清单 Q7–Q9）；决策见 [ADR-0015](../adr/0015-architecture-governance.md)；界面见[工作台界面](./workbench.md)；归属与入口复用[源码接入与归属](./source.md)。
+> 覆盖模块：接入层的「依赖提取」「治理存储」「agent 接口」；模型层的「架构治理」「返工清单」「确认」。规则见 [02-domain.md](../02-domain.md) 的 K、U、Y、Q（返工清单 Q7–Q9）、Z（人确认层）；决策见 [ADR-0015](../adr/0015-architecture-governance.md)、[ADR-0023](../adr/0023-sketch-reviewed-and-evolution.md)；界面见[工作台界面](./workbench.md)；归属与入口复用[源码接入与归属](./source.md)。
 
 ## 1. 分工
 
@@ -124,6 +124,25 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 - 聚合的判据是「改一处能消掉几条」：同一组重叠的 codeRefs、同一目录的漏写、越过同一条边界依赖同一个模块（常见于契约放错了层）、同一对端点之间缺的关系。h5player 的 178 条违规由此收成 13 条。
 - 建议动作只给方向与片段，不替人决定：加例外、收紧基线由架构师决定（U5、U7）。
 
+### 4.3 确认（模型层，`src/model/review/`）
+
+人确认层（Z1–Z6，ADR-0023）：架构师看过并认可了什么。记录在人拥有的 `reviewed.yaml`（写法见 [04 §3.9](../04-description-format.md)），指纹与状态判定是纯函数，页面、命令行与草图归档同一份。
+
+| 函数 | 做什么 | 规则 |
+|---|---|---|
+| `reviewSummary(index, moduleId)` | 架构师应当理解的部分：`responsibility`（去首尾空白）、`includes` / `excludes`（声明顺序）、`mayDependOn`（排序）、`provides`（按 ID 排序的 `{ id, signature }`，接口不存在时 `signature` 为空）、`children`（直接子模块 ID，排序） | Z2 |
+| `reviewHash(index, moduleId)` · `summaryHash(summary)` | 摘要规范化拼接后的 64 位哈希（两段 32 位 cyrb 混合，16 位十六进制）；内容相同必得相同指纹 | Z2 |
+| `reviewStatus(index, entry, moduleId)` → `'reviewed' \| 'stale' \| 'unreviewed'` | 有记录且指纹一致 / 有记录、指纹不一致 / 没有记录 | Z3 |
+| `reviewDiff(before, now)` | 两份摘要的差异：职责按行增删、`includes` / `excludes` / `mayDependOn` 按项增删、接口按 ID 增 / 删 / 改（带前后签名）、子模块按 ID 增删 | Z3 |
+| `reviewScope(index)` | 默认提供确认的模块：核心模块与第二级模块（根的子模块的子模块） | Z4 |
+| `reviewStates(index)` | 每个模块的 `{ status, entry?, diff? }`；记录来自 `index.model.reviewed`（Validator 已去掉引用不存在模块的记录并按模块去重，Z1） | Z1、Z3 |
+| `reviewCounts(index)` | 范围内的 `{ scope, reviewed, stale }`，根层健康度与项目卡片同一口径 | Z5 |
+| `reviewEntries(index, ids, { source, note?, at? })` | 为一组模块生成当天的确认记录（hash、summary），页面「确认」与草图归档都用它构造写入 | Z4、Z6 |
+
+- 返工清单（§4.2）多一类 `review`（「需复核」）：一个需复核的模块一条，warning，规则 Z3，`detail` 为差异摘要，建议动作 `{ kind: 'review', text: '在面板上复核并确认' }`——人的动作，没有 `snippet`。`lint:model` 不列它，只在摘要给出「确认：已确认 a / b · 需复核 c」。
+- `projectHealth` 另给 `reviewed: { scope, reviewed, stale }`（Z5），它只读描述，读不到代码事实时也有。
+- 写入：`POST write/<项目>/reviewed`（[加载与版本 §2.2](./loading-and-versions.md#22-写入人拥有的文件vitewritemodelts-b1b5-adr-0019)）与 `appendReviewed(modelRoot, project, entries)`：逐条按 `module` 更新已有记录或追加；`entries` 的字段 `module`、`at`、`hash`、`summary`、`source`、`note?`；草图归档（X 组）调用同一个函数一次写多条。
+
 ## 5. agent 接口（接入层，`scripts/agent/`、`scripts/arch.ts`、`scripts/arch-mcp.ts`）
 
 查询核心 `createService({ modelRoot, root })`：按项目加载描述、源码清单、依赖、基线，算出 `GovernanceReport` 并缓存。每次查询前重新列出源码清单，比对输入的指纹（描述文本、清单与其中每个文件的修改时间与大小、基线文件的修改时间），有变化就重建（依赖提取按文件缓存，只重解析变了的文件），所以 MCP 长驻时新建文件、新加依赖后无需 `rescan` 即可 `locate`、`check`。`rescan` 总是重建，并与本会话上一次扫描（还没扫描过时为首次加载的结果）、与基线比较。两种外壳只做参数解析与输出格式。
@@ -170,3 +189,4 @@ sequenceDiagram
 - 画布：`canvasScene` 多两个输入——视图边的证实与违规标记、叠加线（坐标由 `linkRoute` 算，不参与布局）；节点数据多 `cycle` 编号（K9、Y4）。
 - 选中 `{ kind: 'dep', id: '<A>-><B>' }`：URL `sel=d:`，面板 `DepPanel`（K10）；运行视角下按选中关系的方式突出两端泳道。
 - 本层环可解释（Y5）：模块面板「架构治理」一节列出 `selectedCycle`，单击一条本层依赖即 `select`——有 `edgeId` 时选中视图边（`sel=e:`），否则选中代码依赖（`sel=d:`），画布按已有的选中规则高亮视图边或叠加线。
+- 人确认层（Z）：DeskState 的 `review` 分组——`states`（每个模块的状态与差异，`reviewStates`）、`counts`（Z5）、`scope`（Z4）、`canReview`（只对当前版本）；写入意图 `review.confirm(ids, note?)` 经 `ModelWriter.reviewed` 发 `POST write/<项目>/reviewed`，结果由文件变化推送回来（N5）。模块面板（`ReviewSection.vue`）：标题旁状态标记、需复核时「自上次确认以来的改动」、底部「确认 / 复核并确认」与「也确认子模块」；模块树需复核标记与「只看需复核」；根层健康度与项目卡片「核心模块已确认 a / b · 需复核 c」；返工清单「需复核」项。

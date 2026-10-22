@@ -13,6 +13,9 @@ export interface ModuleTreeContext {
   active: ReadonlySet<string>
   /** G14：选中文件的归属模块 */
   fileOwners: ReadonlySet<string>
+  /** Z3：需复核的模块与已确认的模块 */
+  stale: ReadonlySet<string>
+  reviewed: ReadonlySet<string>
 }
 
 /** 文件树（G13）：展开状态、选中与高亮、归属标记 */
