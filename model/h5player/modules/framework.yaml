@@ -739,11 +739,13 @@ relations:
     type: notifies
     description: 插件订阅的事件经总线送达插件回调，销毁时自动退订；回调抛错包装为 PluginEventUnknownError
     payload: ds.EventInfo
+    via: callback
   - id: rel.framework.plugin-events-publish
     from: infra.framework.plugin
     to: infra.framework.kernel.event-bus
     type: notifies
     description: 插件经 PluginApi 发布事件
+    via: inject
   - id: rel.framework.plugin-error-chain
     from: infra.framework.plugin
     to: infra.framework.kernel.error-chain
