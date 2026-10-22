@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 文件面板（SR-7）：路径、行数与是否超长（G21）、归属模块（冲突时全部列出）或未归属 / 已忽略、当前层次中的投影（G14）、作为哪些模块的入口、导出。
- * 页面只读：未归属文件只提示怎么处理，不提供忽略操作（ADR-0007）。
+ * 未归属文件可「加入忽略」：只追加 source-ignore.yaml（人拥有的文件，B4、ADR-0019）；属于某个模块时仍由人或 AI 补 codeRefs。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -9,6 +9,7 @@ import { isLong, moduleName } from '@/model'
 import { useOpenPreview } from '../shared/preview'
 import Section from './Section.vue'
 import ExportSection from './ExportSection.vue'
+import WriteForm from './WriteForm.vue'
 
 const props = defineProps<{ path: string }>()
 const desk = useDesk()
@@ -22,6 +23,7 @@ const hits = computed(() => desk.files.hits.value)
 const entries = computed(() => desk.files.entryModulesOf(props.path))
 const script = computed(() => /\.(m|c)?(t|j)sx?$/i.test(props.path))
 const name = computed(() => props.path.split('/').pop())
+const dir = computed(() => props.path.split('/').slice(0, -1).join('/'))
 const lineCount = computed(() => desk.files.lines.value[props.path])
 const long = computed(() => isLong(lineCount.value, desk.files.maxLines.value))
 const levelName = computed(() => moduleName(idx.value, desk.levelId.value))
@@ -71,6 +73,21 @@ const pathOf = (id: string) =>
         <p v-else-if="!owners.length" class="warn-text">
           没有模块的 codeRefs 匹配这个文件：属于某个模块就补进它的 codeRefs，否则写进 <code>source-ignore.yaml</code> 的 sourceIgnore。
         </p>
+        <WriteForm
+          v-if="exists && !owners.length && !ignored && desk.write.canEditRules"
+          label="加入忽略"
+          :initial="path"
+          placeholder="glob，相对源码根目录"
+          :presets="
+            dir
+              ? [
+                  { label: '这个文件', value: path },
+                  { label: `整个目录 ${dir}/*`, value: `${dir}/*` },
+                ]
+              : []
+          "
+          :submit="p => desk.write.ignore(p)"
+        />
       </Section>
 
       <Section v-if="owners.length" title="当前层次">

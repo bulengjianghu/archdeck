@@ -7,6 +7,7 @@
  *   文件变化时推送 `arch-model:changed`，载荷 { project } 指明哪个项目变了；
  * - 源码（G1、G2、G17、G11，docs/architecture/source.md §2.1）：GET /source/<项目>.json（文件清单）、
  *   /source/<项目>/file.json?path=（单个文件）、/source/<项目>/exports.json?path=（导出）、/source/<项目>/facts.json（代码事实、基线与拦截记录，K8）。
+ * 写入（B1–B5，ADR-0019）：POST /write/<项目>/feedback | allow | ignore，只追加人拥有的文件（评审意见、例外、忽略项），写后照常推送变化。
  * 项目内容只搬运原始文本，解析与校验都在页面侧的模型层完成，与命令行同一套报错。
  */
 import path from 'node:path'
@@ -15,9 +16,10 @@ import { isModelFile, listProjects, readDesignRevision, readProject, type ModelP
 import { readExports, readSourceFile, readSourceTree } from './readSource'
 import { readCodeDeps } from './readDeps'
 import { readHealth } from './readHealth'
+import { WriteError, appendAllow, appendFeedback, appendIgnore } from './writeModel'
 import { listModelCommits, readCommitVersion } from './readGit'
 import { LEDGER_PAGE_LIMIT, governanceDir, readBaseline, readLedger } from './governanceStore'
-import type { FactsPayload, SourcePayload } from '../src/model'
+import type { FactsPayload, RuleKind, SourcePayload } from '../src/model'
 
 export const MODEL_CHANGED_EVENT = 'arch-model:changed'
 export const PROJECTS_FILE = 'projects.json'
@@ -64,6 +66,41 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
         trees.set(project, { at: Date.now(), tree })
         return tree
       }
+      // B1–B5：人拥有的文件的追加写入，只收同源的 JSON POST
+      server.middlewares.use((req, res, next) => {
+        const [url] = (req.url ?? '').split('?')
+        const w = /^\/write\/([^/]+)\/(feedback|allow|ignore)$/.exec(url)
+        if (!w) return next()
+        if (req.method !== 'POST') return json(res, { error: '只接受 POST' }, 405)
+        const origin = req.headers.origin
+        if (origin && new URL(origin).host !== req.headers.host) return json(res, { error: '只接受同源请求' }, 403)
+        if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return json(res, { error: '只接受 JSON' }, 415)
+        let raw = ''
+        req.on('data', (c: Buffer) => {
+          raw += c.toString('utf8')
+          if (raw.length > 64 * 1024) req.destroy()
+        })
+        req.on('end', () => {
+          try {
+            const body = JSON.parse(raw || '{}') as Record<string, string>
+            const project = decodeURIComponent(w[1])
+            const out =
+              w[2] === 'feedback'
+                ? appendFeedback(modelRoot, project, body.design, body.revision, body.text, root)
+                : w[2] === 'allow'
+                  ? appendAllow(
+                      modelRoot,
+                      project,
+                      { from: body.from, to: body.to, rule: (body.rule || undefined) as RuleKind | undefined, reason: body.reason },
+                      root,
+                    )
+                  : appendIgnore(modelRoot, project, body.pattern, root)
+            json(res, out)
+          } catch (e) {
+            json(res, { error: e instanceof Error ? e.message : String(e) }, e instanceof WriteError ? 400 : 500)
+          }
+        })
+      })
       server.middlewares.use((req, res, next) => {
         const [url, search = ''] = (req.url ?? '').split('?')
         if (url === `/${PROJECTS_FILE}`)

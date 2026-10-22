@@ -158,6 +158,11 @@ modules:
         core: true
         responsibility: 约定「模型根目录下含 system.yaml 的子目录即项目、其下 designs/<设计>/ 是设计版本」，读取项目当前版本（跳过 designs/ 与 governance/）或设计某一轮的描述文件（YAML / JSON）及对比基线，读 design.yaml，并跑一遍模型层生成项目摘要。
         codeRefs: [vite/readModelDir.ts, vite/readGit.ts]
+      - id: access.writer
+        name: 描述写入
+        kind: subsystem
+        responsibility: 只追加人拥有的三类内容（B1–B5，ADR-0019）：设计某一轮的评审意见（design.yaml feedback）、架构规则的例外（rules.yaml 的 rules.allow，两端须为存在的模块、理由必填）、源码忽略项（source-ignore.yaml）；AI 生成的 modules/、scenarios/、system.yaml 不写；用 YAML 文档模型修改，保留注释与其他内容。端点由 ModelSource 插件挂载，只收同源的 JSON POST。
+        codeRefs: [vite/writeModel.ts]
       - id: access.source
         name: 源码读取
         kind: subsystem

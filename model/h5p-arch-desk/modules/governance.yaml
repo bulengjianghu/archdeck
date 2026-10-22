@@ -200,6 +200,10 @@ relations:
   - {id: rel.gv.source-health-own, from: access.model-source, to: model.source.ownership, type: calls, interface: if.model.assignFiles, description: 健康度：归属（Q10）}
   - {id: rel.gv.source-health-report, from: access.model-source, to: model.governance.report, type: calls, interface: if.governance.report, description: 健康度：治理报告（Q10）}
   - {id: rel.gv.desk-rework, from: state.desk, to: model.rework, type: calls, interface: if.rework.list, payload: [ds.ReworkItem], description: 问题页签的返工清单与「复制给 agent」的 Markdown（W-6）}
+  - {id: rel.gv.source-writer, from: access.model-source, to: access.writer, type: calls, description: POST /write/<项目>/feedback | allow | ignore（B1–B5）}
+  - {id: rel.gv.writer-reader, from: access.writer, to: access.reader, type: depends, description: isProjectId、DESIGNS_DIR、readModelDir：校验 ID 与读描述}
+  - {id: rel.gv.writer-model, from: access.writer, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 加例外前校验两端模块存在、找 rules 所在文件（B3）}
+  - {id: rel.gv.writer-types, from: access.writer, to: model.types, type: depends, description: RULE_KINDS：校验例外的规则种类}
   - {id: rel.gv.agent-rework, from: access.agent, to: model.rework, type: calls, interface: if.rework.list, payload: [ds.ReworkItem], description: 命令行与 MCP 的 issues（Q9）}
   - {id: rel.gv.rework-source, from: model.rework, to: model.source, type: calls, description: matchRef、moduleEntry：冲突的 codeRefs 组合与 entry 是否存在}
   - {id: rel.gv.rework-scenario, from: model.rework, to: model.scenario, type: calls, description: bindRelation、forEachStep：未建模的步骤（S13、P11）}

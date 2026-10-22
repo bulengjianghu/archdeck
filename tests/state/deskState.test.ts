@@ -301,6 +301,33 @@ describe('DeskState · 提交版本（E5、E6）', () => {
   })
 })
 
+describe('DeskState · 写入人拥有的文件（B1–B4）', () => {
+  it('当前版本可加例外与忽略项、不能记评审意见；设计版本只能记评审意见；都交给注入的写入来源', async () => {
+    const calls: string[] = []
+    const writer = {
+      feedback: async (b: { design: string; revision: string; text: string }) => (
+        calls.push(`f:${b.design}/${b.revision}:${b.text}`),
+        { ok: true as const, file: 'd.yaml' }
+      ),
+      allow: async (b: { from: string; to: string; reason: string }) => (
+        calls.push(`a:${b.from}->${b.to}:${b.reason}`),
+        { ok: true as const, file: 'rules.yaml' }
+      ),
+      ignore: async (b: { pattern: string }) => (calls.push(`i:${b.pattern}`), { ok: true as const, file: 'source-ignore.yaml' }),
+    }
+    const cur = createDeskState(async () => ({ dir: 'x', files: sampleFiles() }), { writer })
+    expect([cur.write.canEditRules, cur.write.canFeedback]).toEqual([true, false])
+    expect(await cur.write.feedback('x')).toMatchObject({ ok: false })
+    await cur.write.allow({ from: 'app', to: 'infra', reason: '过渡期' })
+    await cur.write.ignore('docs/*')
+    const design = createDeskState(async () => ({ dir: 'x', files: sampleFiles() }), { writer, version: { design: 'next', revision: 'r2' } })
+    expect([design.write.canEditRules, design.write.canFeedback]).toEqual([false, true])
+    expect(await design.write.ignore('a')).toMatchObject({ ok: false })
+    await design.write.feedback('同意')
+    expect(calls).toEqual(['a:app->infra:过渡期', 'i:docs/*', 'f:next/r2:同意'])
+  })
+})
+
 describe('DeskState · 运行视角', () => {
   async function openDesk(url = '/') {
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })

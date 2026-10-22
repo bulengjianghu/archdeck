@@ -89,6 +89,11 @@ modules:
     parent: state.desk
     responsibility: 同步适配器之一：取回项目描述并调用 loadModel，把加载结果作为动作交给 dispatch（首次加载 / 重新加载）；监听本项目的变更通知触发重新加载。「保留层次与选中、失效时退到上级」不在这里，是转移规则。
     codeRefs: [src/state/sync/modelSource.ts]
+  - id: state.desk.writer
+    name: 描述写入同步
+    parent: state.desk
+    responsibility: 同步适配器之一（B1–B5，ADR-0019）：把「记录评审意见」「加例外」「加入忽略」交给注入的写入来源（开发服务器的 HTTP 端点），只追加人拥有的文件；写后不改视图状态，结果由文件变化推送回来，按 N5 重新加载。
+    codeRefs: [src/state/sync/writer.ts]
   # 分组派生在 src/state/desk/（ADR-0013）；dispatch 与操作是 useDeskState.ts 内的概念划分，不写 codeRefs，文件归 DeskState（避免归属冲突，G6）
   - id: state.desk.versions
     name: 版本与对比基线（desk.versions）

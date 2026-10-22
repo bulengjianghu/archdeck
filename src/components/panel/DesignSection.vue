@@ -7,6 +7,7 @@ import { DESIGN_STATUS_LABELS } from '../shared/labels'
 import Markdown from './Markdown.vue'
 import Section from './Section.vue'
 import ChangeList from './ChangeList.vue'
+import WriteForm from './WriteForm.vue'
 
 const desk = useDesk()
 const route = useRoute()
@@ -59,6 +60,13 @@ function openRevision(id: string) {
             <Markdown :text="x.feedback" />
           </div>
           <div v-else-if="x.id === d.revisions[d.revisions.length - 1]?.id" class="muted small-note">等待评审意见</div>
+          <WriteForm
+            v-if="x.id === r.id && desk.write.canFeedback"
+            label="记录评审意见"
+            multiline
+            placeholder="评审意见（Markdown），追加到本轮 design.yaml 的 feedback"
+            :submit="t => desk.write.feedback(t)"
+          />
         </li>
       </ol>
     </Section>

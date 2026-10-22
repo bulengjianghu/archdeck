@@ -7,7 +7,7 @@ import { computed, onBeforeUnmount, onMounted, provide, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { createDeskState, type ModelPayload } from '@/state/useDeskState'
 import { isCommitVersion, type VersionRef } from '@/model'
-import { httpSourceFetcher } from './source/httpSource'
+import { httpModelWriter, httpSourceFetcher } from './source/httpSource'
 import { DESK_STATE } from '@/state/inject'
 import GraphCanvas from './GraphCanvas.vue'
 import Breadcrumb from './Breadcrumb.vue'
@@ -54,7 +54,12 @@ async function fetchModel(): Promise<ModelPayload> {
   return res.json()
 }
 
-const desk = createDeskState(fetchModel, { project: props.project, version, source: httpSourceFetcher(props.project, import.meta.env.BASE_URL) })
+const desk = createDeskState(fetchModel, {
+  project: props.project,
+  version,
+  source: httpSourceFetcher(props.project, import.meta.env.BASE_URL),
+  writer: httpModelWriter(props.project, import.meta.env.BASE_URL),
+})
 desk.attachRouter(router)
 provide(DESK_STATE, desk)
 // 开发态便于在浏览器控制台检查状态

@@ -45,6 +45,17 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计或提交)──▶ Mod
 
 全部由开发服务器的 Vite 插件实时读取，没有构建态输出（本地开发工具，ADR-0007 修订）。命令行校验 `lint:model` 使用同样的读取函数，逐项目、逐设计轮次校验，`design.yaml` 的问题按 error 计；当前版本附带归属警告（G9，`readSourceTree` + `sourceIssues`）。
 
+### 2.2 写入人拥有的文件（`vite/writeModel.ts`，B1–B5，ADR-0019）
+
+| 端点 | 函数 | 写什么 |
+|---|---|---|
+| `POST write/<项目>/feedback` `{ design, revision, text }` | `appendFeedback` | 该轮 `design.yaml` 的 `feedback` 末尾追加一段（带日期） |
+| `POST write/<项目>/allow` `{ from, to, rule?, reason }` | `appendAllow` | `rules` 所在文件的 `rules.allow` 追加一条（校验两端模块存在、理由必填、不重复） |
+| `POST write/<项目>/ignore` `{ pattern }` | `appendIgnore` | `source-ignore.yaml` 的 `sourceIgnore` 追加一项（没有文件时新建） |
+
+- 只收同源 JSON POST；用 `yaml` 的文档模型（`parseDocument`）修改并写回，保留注释与原有格式；解析失败、校验不过时返回 400 与原因，不写。
+- 页面侧：`ModelWriter`（`src/state/sync/writer.ts`）由项目视图注入 `httpModelWriter`；`desk.write` 按版本放开——设计版本只能记录评审意见，当前版本只能加例外与忽略项；写后不改视图状态，文件监听推送 `arch-model:changed` 后按 N5 重新加载。
+
 ## 3. 加载流水线（模型层）
 
 | 步骤 | 做什么 | 规则 |

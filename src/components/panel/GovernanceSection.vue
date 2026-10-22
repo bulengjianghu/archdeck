@@ -8,6 +8,7 @@ import { useDesk } from '@/state/inject'
 import { RULE_LABELS, moduleName, type Violation, type ViolationStatus } from '@/model'
 import Section from './Section.vue'
 import FileDepList from './FileDepList.vue'
+import WriteForm from './WriteForm.vue'
 
 const desk = useDesk()
 const f = desk.facts
@@ -87,6 +88,13 @@ const ledger = computed(() => f.ledger.value)
               {{ v.reason }}<template v-if="v.allowReason">；例外理由：{{ v.allowReason }}</template>
             </p>
             <FileDepList :deps="v.files" />
+            <WriteForm
+              v-if="v.status !== 'allowed' && desk.write.canEditRules"
+              label="加例外（写理由）"
+              multiline
+              placeholder="为什么允许这条依赖（必填，写进 rules.yaml 的 allow，由架构师决定）"
+              :submit="reason => desk.write.allow({ from: v.from, to: v.to, rule: v.kind, reason })"
+            />
           </div>
         </li>
         <li v-if="g.list.length > 30" class="muted">另 {{ g.list.length - 30 }} 条，见 npm run arch -- violations</li>

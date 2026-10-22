@@ -24,6 +24,8 @@ import {
   reworkMarkdown,
   type ReworkItem,
   type ReworkList,
+  isDesignVersion,
+  type RuleKind,
 } from '@/model'
 import {
   DEFAULT_TOGGLES,
@@ -41,6 +43,7 @@ import { createRouterSync, type RouterSync, type RouterSyncOptions } from './syn
 import { fetchAndLoad, watchModelChanges, type Baseline, type ChangeEvents, type FetchModel } from './sync/modelSource'
 import { createLayoutSync } from './sync/layout'
 import { NO_SOURCE, createSourceSync, type SourceFetcher } from './sync/source'
+import { NO_WRITER, type ModelWriter, type WriteOutcome } from './sync/writer'
 import { createRun } from './desk/run'
 import { createFiles } from './desk/files'
 import { createVersions } from './desk/versions'
@@ -50,10 +53,13 @@ export type { Selection, Toggles } from './transition'
 export { encodeSelection, decodeSelection } from './transition'
 export type { CompareSource, ModelPayload, FetchModel } from './sync/modelSource'
 export type { SourceFetcher, Resource } from './sync/source'
+export type { ModelWriter, WriteOutcome } from './sync/writer'
 
 export type DeskOptions = RouterSyncOptions & {
   /** 被描述项目的源码（G1、G2）；缺省为没有源码来源（只看描述的测试） */
   source?: SourceFetcher
+  /** 人拥有的文件的追加写入（B1–B5）；缺省没有写入来源 */
+  writer?: ModelWriter
 }
 
 export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {}) {
@@ -134,6 +140,20 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     const report = options.version ? null : facts.report.value
     return reworkList({ index: idx, issues: issues.value, ...(source ? { source } : {}), ...(report ? { report } : {}) })
   })
+  // ── 写入人拥有的文件（B1–B5，ADR-0019）：只发意图，结果由文件变化推送回来（N5）──
+  const writer = options.writer ?? NO_WRITER
+  const dv = isDesignVersion(options.version) ? options.version : undefined
+  const write = {
+    /** 设计版本可记录评审意见；当前版本可加例外与忽略项（B2–B4） */
+    canFeedback: !!dv,
+    canEditRules: !options.version,
+    feedback: (text: string): Promise<WriteOutcome> =>
+      dv ? writer.feedback({ design: dv.design, revision: dv.revision, text }) : Promise.resolve({ ok: false, error: '只有设计版本能记录评审意见' }),
+    allow: (input: { from: string; to: string; rule?: RuleKind; reason: string }): Promise<WriteOutcome> =>
+      options.version ? Promise.resolve({ ok: false, error: '例外只加在当前版本' }) : writer.allow(input),
+    ignore: (pattern: string): Promise<WriteOutcome> =>
+      options.version ? Promise.resolve({ ok: false, error: '忽略项只加在当前版本' }) : writer.ignore({ pattern }),
+  }
   /** W-6、Q9：给 agent 的指令（Markdown）；不给返工项时为整份清单 */
   function reworkPrompt(item?: ReworkItem): string {
     const list = rework.value
@@ -242,6 +262,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     allIssues,
     rework,
     reworkPrompt,
+    write,
     modelDir,
     levelId,
     levelPath,

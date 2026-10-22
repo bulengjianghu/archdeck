@@ -21,6 +21,14 @@ model/<项目>/
   governance/              基线 baseline.json 与拦截记录 ledger.jsonl，由命令行与 agent 接口写，不属于描述，读取时跳过（§4）
 ```
 
+**谁拥有哪个文件**（B1，ADR-0019）：
+
+| 拥有者 | 文件 | 页面 |
+|---|---|---|
+| AI（按代码生成） | `system.yaml`、`modules/`、`actors.yaml`、`scenarios/`；设计版本各轮快照 `designs/<设计>/r<N>/` | 只读 |
+| 人（架构师、负责人） | `rules.yaml`（AI 重新生成时不改动，§3.8）、`source-ignore.yaml`（忽略项）、`designs/<设计>/design.yaml` 的评审意见 `feedback` | 只追加：例外、忽略项、评审意见；其余由人编辑 |
+| 命令行与 agent 接口 | `governance/` | 只读 |
+
 - 骨架只描述层和第二级模块；区域文件**不得重复定义**它们，只能用 `parent: <第二级 ID>` 往下挂子模块。
 - 一个区域文件对应一位生成者负责的范围，互不改写，便于并行生成和局部重新生成。
 
