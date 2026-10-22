@@ -2,16 +2,16 @@
  * 演化事实（J1–J4、J6、J8，docs/architecture/evolution.md §3）：把接入层读到的 git 历史按源码归属提升为模块的修改热度、缺陷热度与时间耦合。
  * 关于被描述系统的知识：页面、命令行与 MCP 共用同一份结果（Q6）。纯函数，不依赖 Vue 与文件系统。
  */
-import { within } from '../governance/facts'
-import type { GovernanceReport } from '../governance/types'
-import { moduleFiles, moduleLines } from '../source/ownership'
-import type { SourceOwnership } from '../source/types'
+import { within, type GovernanceReport } from '../governance'
+import { moduleFiles, moduleLines, type SourceOwnership } from '../source'
 import type { ModelIndex, SystemDef } from '../types'
 import {
   DEFAULT_COUPLING,
   DEFAULT_HISTORY_DAYS,
   type Coupling,
   type CouplingThreshold,
+  heatCount,
+  heatValue,
   type EvolutionStats,
   type HeatKind,
   type HistoryOptions,
@@ -54,10 +54,6 @@ export const coupleEnds = (id: string): [string, string] | null => {
   const i = id.indexOf('~')
   return i > 0 && i < id.length - 1 ? [id.slice(0, i), id.slice(i + 1)] : null
 }
-
-/** 模块的热度值（按种类） */
-export const heatValue = (m: ModuleHistory, kind: HeatKind): number => (kind === 'fixes' ? m.fixHeat : m.heat)
-export const heatCount = (m: ModuleHistory, kind: HeatKind): number => (kind === 'fixes' ? m.fixes : m.changes)
 
 /**
  * J2：每条提交的文件按归属取模块（未归属、已忽略、冲突文件不计，与 K4 同口径），加上祖先链去重；

@@ -73,7 +73,7 @@ flowchart TB
 
 | 模块 | 职责 | 状态 | 专题 |
 |---|---|---|---|
-| 类型与 Schema（核心） | 模型层的契约：描述文件的格式（JSON Schema）与各阶段的数据类型声明（加载、索引、投影、版本对比在 `types.ts`，场景投影、源码归属、架构治理、返工清单分别在 `scenario/`、`source/`、`governance/`、`rework/` 下的 `types.ts`）、领域枚举、只查表的名称查询与小谓词（`names.ts`：`moduleName`、`isLong`、`RULE_LABELS`；`design.ts`：`isArchived`）；不含投影与计算，呈现层对模型层只依赖它（U10） | 已实现 | 加载与版本 |
+| 类型与 Schema（核心） | 模型层的契约：描述文件的格式（JSON Schema）与各阶段的数据类型声明（加载、索引、投影、版本对比在 `types.ts`，场景投影、源码归属、架构治理、返工清单、演化事实分别在 `scenario/`、`source/`、`governance/`、`rework/`、`evolution/` 下的 `types.ts`）、领域枚举、只查表的名称查询与小谓词（`names.ts`：`moduleName`、`isLong`、`RULE_LABELS`；`design.ts`：`isArchived`）；不含投影与计算，呈现层对模型层只依赖它（U10） | 已实现 | 加载与版本 |
 | 加载流水线（核心） | Loader → Validator → Indexer，入口 `loadModel`；规则 M、S5–S13 | 已实现 | 加载与版本 |
 | Projector（核心） | 层次投影与分层总览（L、O），端点映射 `mapEndpoint`，最近可见层次，层次顺序 `hierarchyKey`（P9、L4），最近公共祖先 `lowestCommonAncestor`（N3、S9） | 已实现 | 结构投影 |
 | 场景投影（核心） | 回放计划（含调用与返回配对 F7、步骤继承关系的接口与数据 S14）、回放路径（含路线与直选分支，F6e、F6f）、帧的层次投影、参与查询、步骤大纲、时序模型（泳道层次顺序与所属，P9、P13）（S、F、P、R7、R13、T5、T6） | 已实现 | 场景 |

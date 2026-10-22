@@ -4,8 +4,6 @@ export {
   isFixSubject,
   historyOptions,
   heatOf,
-  heatValue,
-  heatCount,
   coupleId,
   coupleEnds,
   touchedModules,

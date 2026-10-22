@@ -1,10 +1,10 @@
 /**
  * 演化事实在当前层次的投影（J3、J4、J5）：每个视图节点的热度档位、本层的耦合线。与结构图、帧共用 mapEndpoint（P1、G14）。
  */
-import { nodeOf } from '../governance/level'
+import { nodeOf } from '../governance'
 import type { LevelView, ModelIndex } from '../types'
-import { coupleId, heatCount, heatValue } from './history'
-import type { EvolutionStats, HeatKind, HeatTier, LevelCoupling, LevelEvolution, NodeHeat } from './types'
+import { coupleId } from './history'
+import { heatCount, heatValue, type EvolutionStats, type HeatKind, type HeatTier, type LevelCoupling, type LevelEvolution, type NodeHeat } from './types'
 
 /** J3：三档按分位数——按值排序三等分（低 / 中 / 高）；0 不分档（返回 null） */
 export function heatTiers(values: readonly number[]): (value: number) => HeatTier | null {

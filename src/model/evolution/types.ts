@@ -96,6 +96,10 @@ export type HeatKind = 'changes' | 'fixes'
 export const HEAT_KINDS: readonly HeatKind[] = ['changes', 'fixes']
 export type HeatTier = 1 | 2 | 3
 
+/** 模块的热度值与次数（按种类）：只查表的小谓词，呈现层可直接用（U10） */
+export const heatValue = (m: ModuleHistory, kind: HeatKind): number => (kind === 'fixes' ? m.fixHeat : m.heat)
+export const heatCount = (m: ModuleHistory, kind: HeatKind): number => (kind === 'fixes' ? m.fixes : m.changes)
+
 /** J3：一个视图节点的热度角标 */
 export interface NodeHeat {
   tier: HeatTier
