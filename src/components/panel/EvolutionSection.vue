@@ -20,6 +20,7 @@ const REASON: Record<string, string> = {
 <template>
   <Section title="演化（git 历史）">
     <p v-if="!stats" class="muted">{{ e.error.value ? `没有演化事实：${e.error.value}` : REASON[e.status.value] }}</p>
+    <p v-else-if="e.history.value?.note" class="muted">{{ e.history.value.note }}。</p>
     <template v-else>
       <p class="muted window">
         近 {{ stats.days }} 天：{{ stats.commits }} 次提交触及源码，其中缺陷修复 {{ stats.fixes }} 次；时间耦合 {{ stats.couplings.length }} 对

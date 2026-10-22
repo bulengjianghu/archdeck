@@ -33,7 +33,7 @@ evolutionStats(index, own, history, lines, report?, opts)    模型层：纯函�
 | 函数 | 做什么 | 规则 |
 |---|---|---|
 | `historyOptions(system)` | 从 `system.source.history` 取窗口天数（缺省 180）、补充的缺陷匹配正则、耦合阈值 | J1、J4 |
-| `readSourceHistory(root, files, opts)` | 在源码根目录执行 `git log --no-merges --numstat --no-renames --since=<窗口起点> --format=…`（参数经 `execFile`，不经 shell，`core.quotePath=false`）；每条提交记哈希、短哈希、日期、标题、是否缺陷修复、涉及的文件及增删行数（二进制为 0）；路径按 `git rev-parse --show-prefix` 换算为相对源码根目录，只保留源码清单中的文件，没有清单内文件的提交不记；按 `<根目录>|<HEAD>|<天数>|<起点日期>` 缓存；不在 git 仓库内、没有提交、git 不可用时返回 `{ status: 'error', reason }`，不抛异常 | J1 |
+| `readSourceHistory(root, files, opts)` | 在源码根目录执行 `git log --no-merges --numstat --no-renames --since=<窗口起点> --format=…`（参数经 `execFile`，不经 shell，`core.quotePath=false`）；每条提交记哈希、短哈希、日期、标题、是否缺陷修复、涉及的文件及增删行数（二进制为 0）；路径按 `git rev-parse --show-prefix` 换算为相对源码根目录，只保留源码清单中的文件，没有清单内文件的提交不记；按 `<根目录>|<HEAD>|<天数>|<起点日期>` 缓存；先查 `git rev-parse --is-shallow-repository`，为 true 时原因「浅克隆，历史不完整」；不在 git 仓库内、没有提交、浅克隆、git 不可用时返回 `{ status: 'error', reason }`，不抛异常；窗口内 0 提交时结果带 `note`（「近 N 天没有触及源码的提交」） | J1 |
 | `isFixSubject(subject, extra)` | 标题匹配 `^(fix|hotfix|bugfix)\b`（不分大小写）或含「修复」，或命中项目补充的正则 | J1 |
 | `readCommitMessage(root, hash)` | 一个提交的完整说明（`git show -s --format=%B`，提交号只收十六进制），面板展开时按需取 | — |
 
@@ -64,7 +64,7 @@ evolutionStats(index, own, history, lines, report?, opts)    模型层：纯函�
 ```ts
 interface HistoryCommit { hash: string; short: string; date: string; subject: string; fix: boolean; files: { path: string; added: number; deleted: number }[] }
 type SourceHistory =
-  | { status: 'ok'; head: string; days: number; since: string; commits: HistoryCommit[] }   // commits 新的在前
+  | { status: 'ok'; head: string; days: number; since: string; commits: HistoryCommit[]; note?: string }   // commits 新的在前；0 提交时带 note
   | { status: 'error'; reason: string }
 interface HistoryOptions { days: number; fixPatterns: string[]; coupling: { min: number; ratio: number } }
 

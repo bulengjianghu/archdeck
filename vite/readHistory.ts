@@ -1,7 +1,8 @@
 /**
  * 源码历史读取（J1，docs/architecture/evolution.md §2）：读被描述项目源码仓库的 git 历史，交给模型层算热度与时间耦合。
  * 只搬运 git log 的输出：每条提交的哈希、日期、标题、是否缺陷修复、涉及的源码清单内文件及增删行数；不判断归属（在模型层）。
- * 参数经 execFile 传给 git，不经 shell；不在 git 仓库内、没有提交、git 不可用时返回原因，不抛异常。按 HEAD 与窗口缓存。
+ * 参数经 execFile 传给 git，不经 shell；不在 git 仓库内、没有提交、浅克隆、git 不可用时返回原因，不抛异常。按 HEAD 与窗口缓存。
+ * 窗口内没有触及清单内文件的提交时照常 ok，带一句 note。
  */
 import { execFileSync } from 'node:child_process'
 import { historyOptions, isFixSubject, type HistoryCommit, type HistoryOptions, type SourceHistory } from '../src/model'
@@ -58,6 +59,11 @@ export function onlyListed(commits: readonly HistoryCommit[], files: ReadonlySet
   return commits.map(c => ({ ...c, files: c.files.filter(f => files.has(f.path)) })).filter(c => c.files.length > 0)
 }
 
+/** J1：成功的结果；窗口内 0 提交时带 note */
+function okHistory(head: string, days: number, since: string, commits: HistoryCommit[]): SourceHistory {
+  return { status: 'ok', head, days, since, commits, ...(commits.length ? {} : { note: `近 ${days} 天没有触及源码的提交` }) }
+}
+
 /**
  * J1：窗口内的提交（新的在前），不计合并提交本身，只取源码清单内的文件；按 HEAD 与窗口缓存。
  * now 只供测试指定窗口起点。
@@ -71,10 +77,17 @@ export function readSourceHistory(root: string, files: readonly string[], opts: 
   } catch {
     return { status: 'error', reason: `源码根目录不是 git 仓库或没有提交（git rev-parse HEAD 失败）：${root}` }
   }
+  // 浅克隆下 --since 只能看到截断处之后的提交，结果看似正常实则缺历史：不给演化事实
+  try {
+    if (git(root, ['rev-parse', '--is-shallow-repository']).trim() === 'true')
+      return { status: 'error', reason: `浅克隆，历史不完整（git fetch --unshallow 后刷新源码）：${root}` }
+  } catch {
+    /* 老版本 git 不认这个参数：按非浅克隆处理 */
+  }
   const since = sinceOf(opts.days, now)
   const key = `${root}|${head}|${opts.days}|${since.slice(0, 10)}|${opts.fixPatterns.join('|')}`
   const hit = cache.get(key)
-  if (hit) return { status: 'ok', head, days: opts.days, since: hit.since, commits: onlyListed(hit.commits, new Set(files)) }
+  if (hit) return okHistory(head, opts.days, hit.since, onlyListed(hit.commits, new Set(files)))
   let out: string
   try {
     out = git(root, [
@@ -93,7 +106,7 @@ export function readSourceHistory(root: string, files: readonly string[], opts: 
   }
   const all = parseNumstat(out, prefix, null, opts.fixPatterns)
   cache.set(key, { head, since, commits: all })
-  return { status: 'ok', head, days: opts.days, since, commits: onlyListed(all, new Set(files)) }
+  return okHistory(head, opts.days, since, onlyListed(all, new Set(files)))
 }
 
 /** 一个提交的完整说明（面板展开时按需取）；提交号只收十六进制，不存在为 null */

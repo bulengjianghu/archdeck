@@ -24,7 +24,8 @@ export interface HistoryCommit {
 
 /** 接入层读到的 git 历史；读不到时为 error 并带原因（J1） */
 export type SourceHistory =
-  | { status: 'ok'; head: string; days: number; since: string; commits: HistoryCommit[] }
+  /** note：窗口内没有触及源码清单的提交时的说明（面板显示它而不是空表） */
+  | { status: 'ok'; head: string; days: number; since: string; commits: HistoryCommit[]; note?: string }
   | { status: 'error'; reason: string }
 
 export type OkHistory = Extract<SourceHistory, { status: 'ok' }>

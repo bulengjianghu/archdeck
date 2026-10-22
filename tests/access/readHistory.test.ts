@@ -128,6 +128,26 @@ describe('J1 源码历史读取', () => {
     }
   })
 
+  it('浅克隆：给出原因「浅克隆，历史不完整」、没有演化事实，不报错', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-shallow-'))
+    try {
+      execFileSync('git', ['clone', '-q', '--depth', '1', `file://${repo}`, dir], { stdio: ['ignore', 'pipe', 'ignore'] })
+      const h = readSourceHistory(dir, FILES, OPTS)
+      expect(h.status).toBe('error')
+      expect(h.status === 'error' && h.reason).toContain('浅克隆，历史不完整')
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('窗口内 0 提交：照常 ok、提交为空，带 note「近 N 天没有触及源码的提交」；有提交时没有 note', () => {
+    const h = readSourceHistory(repo, ['src/nope.ts'], { ...OPTS, days: 30 })
+    expect(h).toMatchObject({ status: 'ok', days: 30, commits: [], note: '近 30 天没有触及源码的提交' })
+    // 命中缓存时同样
+    expect(readSourceHistory(repo, ['src/nope.ts'], { ...OPTS, days: 30 })).toMatchObject({ note: '近 30 天没有触及源码的提交' })
+    expect(readSourceHistory(repo, FILES, OPTS)).not.toHaveProperty('note')
+  })
+
   it('源码根目录是仓库的子目录时路径换算为相对根目录（--show-prefix）', () => {
     const sub = path.join(repo, 'src')
     const h = readSourceHistory(sub, ['a/a.ts', 'b/b.ts'], OPTS)
