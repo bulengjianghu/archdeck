@@ -2,7 +2,7 @@
  * 意图的数据类型与小谓词（X1–X6，docs/architecture/governance.md §4.4）：属于模型层的契约，呈现层、命令行与 MCP 直接引用。
  * 草图定义本身（SketchDef、SketchEntity）在 ../types.ts，与描述文件的形状放在一起。
  */
-import type { IssueSeverity, SourceLoc } from '../types'
+import type { IssueSeverity, ModuleDef, RelationType, SketchDef, SketchEntity, SketchLifetime, SourceLoc } from '../types'
 
 /** X1：草图文件——持久草图 intent/**\/*.yaml 与设计的 sketch.yaml；它们先于其他文件进入 Loader */
 export const isSketchFile = (path: string): boolean => /(^|\/)intent\/[^/]+\.ya?ml$/.test(path) || /(^|\/)sketch\.ya?ml$/.test(path)
@@ -90,4 +90,87 @@ export const SKETCH_DEVIATION_LABELS: Record<SketchDeviationCode, string> = {
   'sketch.missing-relation': '草图的关系没有对应',
   'sketch.missing-interface': '草图的接口不存在',
   'sketch.interface-owner': '接口的提供方与草图不同',
+}
+
+// ── 草图的编辑与校验（X7、X7a–X7i，ADR-0024）──
+
+/** 编辑目标：设计的草图或持久草图（X7a） */
+export type SketchTarget = { kind: 'design'; design: string } | { kind: 'persistent'; id: string }
+
+/** 模块可改的字段（X7、P-1、P-2）；值为 undefined 表示删掉该字段 */
+export type ModulePatch = Partial<Pick<ModuleDef, 'name' | 'responsibility' | 'kind' | 'codeRefs' | 'abstraction' | 'includes' | 'excludes' | 'core'>>
+
+/** 一个编辑操作 = 一次用户意图 = 撤销的一步（X7b、X7g）；可序列化，保存冲突后可重放（X7i） */
+export type EditOp =
+  | { op: 'addLayer'; name: string; id?: string; at: number }
+  | { op: 'reorderLayer'; id: string; to: number }
+  | { op: 'setMayDependOn'; id: string; layers: string[] }
+  | { op: 'addModule'; parent: string; name: string; id?: string; kind?: string }
+  | { op: 'updateModule'; id: string; patch: ModulePatch }
+  | { op: 'setClosed'; id: string; closed: boolean }
+  | { op: 'moveModule'; id: string; parent: string; newId?: string }
+  /** 父不变的移动：只改短名（X7d） */
+  | { op: 'renameModule'; id: string; newId: string }
+  | { op: 'removeModule'; id: string }
+  | { op: 'connect'; from: string; to: string; type: RelationType; description?: string; interface?: string }
+  | { op: 'updateRelation'; id: string; patch: { type?: RelationType; description?: string; interface?: string } }
+  | { op: 'removeRelation'; id: string }
+  | { op: 'addInterface'; owner: string; name: string; signature?: string }
+  | { op: 'updateInterface'; id: string; patch: { name?: string; signature?: string } }
+  | { op: 'removeInterface'; id: string }
+  | { op: 'setMeta'; patch: { lifetime?: SketchLifetime; supersedes?: string | null } }
+
+/** 编辑的影响：供选中跟随（X7h）与二次确认的提示（X7d、X7e） */
+export interface EditEffects {
+  created: string[]
+  renamed: [from: string, to: string][]
+  removed: string[]
+}
+
+export type EditRejectCode = 'not-found' | 'id-taken' | 'id-prefix' | 'id-format' | 'duplicate-relation' | 'ancestor' | 'persistent' | 'invalid'
+
+export type EditResult = { ok: true; sketch: SketchDef; effects: EditEffects } | { ok: false; code: EditRejectCode; reason: string }
+
+/** 编辑的上下文：持久草图（引用范围与「设计草图不能动持久草图的实体」） */
+export interface EditContext {
+  persistent: readonly SketchEntity[]
+  /** 编辑的是设计的草图（false：编辑的是持久草图本身） */
+  designSketch: boolean
+}
+
+/** 移动前的影响预览（X7d） */
+export interface IdImpact {
+  renamed: [from: string, to: string][]
+  /** 草图内改写的引用条数（关系两端、接口 owner、closed、mayDependOn） */
+  references: number
+  /** 当前版本里仍引用旧 ID 的实体（AI 生成） */
+  outside: { modules: number; relations: number; interfaces: number; messages: number }
+  rejected?: string
+}
+
+export type SketchValidationCode =
+  | 'sketch.schema'
+  | 'sketch.id'
+  | 'sketch.id-dup'
+  | 'sketch.id-prefix'
+  | 'sketch.ref'
+  | 'sketch.ancestor'
+  | 'sketch.layer-cycle'
+  | 'sketch.contradiction'
+  | 'sketch.empty'
+
+export interface SketchValidationIssue {
+  severity: 'error' | 'warning'
+  code: SketchValidationCode
+  message: string
+  /** 定位到实体（P-6） */
+  target: { module?: string; relation?: string; interface?: string }
+  /** 草图里的位置，如 sketch.modules.2.children.0 */
+  path?: string
+}
+
+/** 草图本身的校验结果（X7f）：ok = 没有 error，能保存 */
+export interface SketchValidation {
+  ok: boolean
+  issues: SketchValidationIssue[]
 }

@@ -103,6 +103,7 @@ export function toggle(state: ViewState, index: ModelIndex, patch: Partial<Toggl
 export function keyIntent(state: ViewState, index: ModelIndex, key: string): ViewAction | 'leave' | null {
   const atRoot = (index.pathOf.get(state.levelId) ?? []).length <= 1
   if (key === 'Escape') return state.selection ? { type: 'select', selection: null } : null
-  if (key === 'Backspace') return atRoot ? 'leave' : { type: 'goUp' }
+  // X7a：编辑态下 Backspace 留给删除选中对象，不返回上级
+  if (key === 'Backspace') return state.editing ? null : atRoot ? 'leave' : { type: 'goUp' }
   return null
 }

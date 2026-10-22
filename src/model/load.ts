@@ -288,6 +288,12 @@ function parseFile(file: RawFile, issues: Issue[]): ParsedFile | null {
   return { data, locate }
 }
 
+/** X7f：草图定义的形状（按同一份 JSON Schema 检查 { sketch: def }）；返回每处问题的位置与说明 */
+export function sketchShapeIssues(def: unknown): { path: string; message: string }[] {
+  if (validateFile({ sketch: def })) return []
+  return dedupeErrors(validateFile.errors ?? []).map(err => ({ path: err.instancePath.split('/').slice(1).join('.'), message: describeSchemaError(err) }))
+}
+
 function makeLocator(file: string, doc: Document, lineCounter: LineCounter) {
   return (path: (string | number)[]): SourceLoc => {
     const node = doc.getIn(path, true) as { range?: [number, number, number] } | undefined

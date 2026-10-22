@@ -2,7 +2,7 @@
  * 视图状态：用户此刻在看什么，一个值（docs/architecture/view-state.md §1）。
  * 只经 transition() 改变；视角与选中由它推出，不另存字段（运行视角下 selection 为空即选中进度所在的步骤 / 场景，ADR-0012）。
  */
-import type { HeatKind, LevelView, ModelIndex, RelationType, ScenarioLevelView, ScenarioPlan } from '@/model'
+import type { EditEffects, HeatKind, LevelView, ModelIndex, RelationType, ScenarioLevelView, ScenarioPlan, SketchTarget } from '@/model'
 
 export type Selection =
   | { kind: 'module'; id: string }
@@ -49,6 +49,8 @@ export interface ViewState {
   toggles: Toggles
   /** null = 结构视角；非 null = 运行视角（V1） */
   playback: PlaybackState | null
+  /** 编辑态（X7a）：正在编辑的草图；与运行视角互斥，不进 URL。缺省（undefined）同 null */
+  editing?: SketchTarget | null
 }
 
 export type Query = Record<string, string | undefined>
@@ -73,6 +75,11 @@ export type ViewAction =
   /** 指向某一步；null = 回到开头 */
   | { type: 'seek'; frameId: string | null }
   | { type: 'chooseBranch'; pointId: string; option: number }
+  /** X7a：进入 / 退出编辑态 */
+  | { type: 'enterEdit'; target: SketchTarget }
+  | { type: 'exitEdit' }
+  /** X7h：一次编辑（或撤销 / 重做）的影响；previousPath 是编辑前当前层次的路径 */
+  | { type: 'edited'; effects: EditEffects; previousPath: readonly string[] }
 
 export interface TransitionContext {
   index: ModelIndex
@@ -80,6 +87,8 @@ export interface TransitionContext {
   plan?: ScenarioPlan | null
   levelView?: LevelView | null
   scenarioView?: ScenarioLevelView | null
+  /** X7a：打开的版本是草图版本（设计的草图、持久草图），可进入编辑态 */
+  editable?: boolean
 }
 
 export interface TransitionResult {

@@ -6,17 +6,27 @@ import * as nav from './navigation'
 import * as pb from './playback'
 import { asPointing } from './selected'
 import { restore } from './url'
+import * as edit from './edit'
 import type { TransitionContext, TransitionResult, ViewAction, ViewState } from './types'
 
 export * from './types'
 export { selectionExists, keyIntent } from './navigation'
 export { encodeSelection, decodeSelection, encodeView, sameQuery } from './url'
 export { perspectiveOf, selectedOf, emphasisOf } from './selected'
+export { leaveGuard, isEditing } from './edit'
 export type { Perspective, Selected, Emphasis, EmphasisContext } from './selected'
 
 export function transition(state: ViewState, action: ViewAction, ctx: TransitionContext): TransitionResult {
   const { index } = ctx
+  // X7a：编辑态下打开场景、选中文件、打开代码事实与演化叠加为无效动作
+  if (edit.blocked(state, action)) return { state, history: 'replace' }
   switch (action.type) {
+    case 'enterEdit':
+      return edit.enterEdit(state, ctx, action.target)
+    case 'exitEdit':
+      return edit.exitEdit(state)
+    case 'edited':
+      return edit.edited(state, index, action.effects, action.previousPath)
     case 'restore':
       return restore(state, ctx, action.query)
     case 'reloaded': {

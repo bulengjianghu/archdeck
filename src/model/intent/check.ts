@@ -4,6 +4,7 @@
  * 纯函数：输入草图定义与模型索引，页面、lint:model 与 agent 接口同一份结果。
  */
 import { load } from '../load'
+import { locateAll } from './edit/locate'
 import type { ModelIndex, ModuleDef, RawFile, SketchEntity, SketchLifetime, SourceLoc } from '../types'
 import type { AcceptedDeviation, SketchCheck, SketchDeviation, SketchDeviationCode } from './types'
 
@@ -17,17 +18,13 @@ export interface FlatSketchModule {
   src?: SourceLoc
 }
 
-/** 草图定义展开为模块清单（嵌套位置、parent，否则根） */
+/** 草图定义展开为模块清单（嵌套位置、parent，否则根）；寻址与草图编辑同一套（locateAll） */
 export function flattenSketch(sketch: SketchEntity): FlatSketchModule[] {
-  const out: FlatSketchModule[] = []
-  const push = (m: ModuleDef, parentId: string | undefined, path: string) => {
-    const { children, parent, ...def } = m
+  return locateAll(sketch.def).map(m => {
+    const { children: _children, parent: _parent, ...def } = m.node as ModuleDef
     const written = new Set(Object.keys(def).filter(k => k !== 'id' && def[k as keyof typeof def] !== undefined))
-    out.push({ id: m.id, parentId: parentId ?? parent, def, written, src: { file: sketch.file, path } })
-    children?.forEach((c, i) => push(c, m.id, `${path}.children.${i}`))
-  }
-  sketch.def.modules?.forEach((m, i) => push(m, undefined, `sketch.modules.${i}`))
-  return out
+    return { id: m.id, parentId: m.parentId, def, written, src: { file: sketch.file, path: m.path } }
+  })
 }
 
 /** X3：生命周期——intent/ 下缺省 persistent，设计的草图缺省 until-implemented */
@@ -46,19 +43,26 @@ const sameSet = (a: readonly string[] | undefined, b: readonly string[] | undefi
   return x === y
 }
 
-export function sketchCheck(sketch: SketchEntity, index: ModelIndex, opts: SketchCheckOptions = {}): SketchCheck {
-  const deviations: SketchDeviation[] = []
-  const push = (code: SketchDeviationCode, severity: 'error' | 'warning', entity: string, message: string, extra: Partial<SketchDeviation> = {}) =>
-    deviations.push({ key: `${code.slice('sketch.'.length)}:${entity}`, code, severity, rules: ['X4'], message, target: {}, ...extra })
-  const rootId = index.rootId
-  const parentOf = (m: FlatSketchModule) => m.parentId ?? rootId
-  const name = (id: string) => index.modules.get(id)?.name ?? id
-  const modules = flattenSketch(sketch)
-  const byId = new Map(modules.map(m => [m.id, m]))
-  const closed = new Set(sketch.def.closed ?? [])
+const deviation = (code: SketchDeviationCode, severity: 'error' | 'warning', entity: string, message: string, extra: Partial<SketchDeviation> = {}): SketchDeviation => ({
+  key: `${code.slice('sketch.'.length)}:${entity}`,
+  code,
+  severity,
+  rules: ['X4'],
+  message,
+  target: {},
+  ...extra,
+})
 
-  // ── 与持久草图的矛盾（X4）：两边都写的字段不一致，或往封闭子树下加直接子模块；声明 supersedes 的跳过 ──
-  for (const p of opts.persistent ?? []) {
+/**
+ * X4、X7f：草图与持久草图的矛盾——同一模块两边都写的 kind / core / mayDependOn / 父模块不一致，或往持久草图封闭的子树下加直接子模块；
+ * 声明 supersedes 的、草图自己跳过。核验（sketchCheck）与草图校验（validateSketch）共用这一份，稳定键 contradiction:<实体 ID>。
+ */
+export function sketchContradictions(sketch: SketchEntity, persistent: readonly SketchEntity[]): SketchDeviation[] {
+  const out: SketchDeviation[] = []
+  const push = (...a: Parameters<typeof deviation>) => out.push(deviation(...a))
+  const modules = flattenSketch(sketch)
+  const parentOf = (m: FlatSketchModule) => m.parentId ?? ''
+  for (const p of persistent) {
     if (p.def.id === sketch.def.id || p.file === sketch.file || sketch.def.supersedes === p.def.id) continue
     const pm = flattenSketch(p)
     const pById = new Map(pm.map(m => [m.id, m]))
@@ -87,6 +91,18 @@ export function sketchCheck(sketch: SketchEntity, index: ModelIndex, opts: Sketc
       })
     }
   }
+  return out
+}
+
+export function sketchCheck(sketch: SketchEntity, index: ModelIndex, opts: SketchCheckOptions = {}): SketchCheck {
+  const deviations: SketchDeviation[] = sketchContradictions(sketch, opts.persistent ?? [])
+  const push = (...a: Parameters<typeof deviation>) => deviations.push(deviation(...a))
+  const rootId = index.rootId
+  const parentOf = (m: FlatSketchModule) => m.parentId ?? rootId
+  const name = (id: string) => index.modules.get(id)?.name ?? id
+  const modules = flattenSketch(sketch)
+  const byId = new Map(modules.map(m => [m.id, m]))
+  const closed = new Set(sketch.def.closed ?? [])
 
   // ── 模块：存在、父模块 / kind / core / mayDependOn（写了才比）──
   for (const m of modules) {

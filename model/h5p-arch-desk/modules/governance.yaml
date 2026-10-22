@@ -29,7 +29,7 @@ modules:
     codeRefs: [src/model/evolution/index.ts, src/model/evolution/history.ts, src/model/evolution/level.ts]
   - id: model.intent
     name: 意图
-    codeRefs: [src/model/intent/index.ts, src/model/intent/check.ts, src/model/intent/lifecycle.ts, src/model/intent/owned.ts]
+    codeRefs: [src/model/intent/index.ts]
 
   # ── 呈现层 ──────────────────────────────────────────────
   - id: present.panel.governance

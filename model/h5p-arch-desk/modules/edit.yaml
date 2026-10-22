@@ -1,0 +1,147 @@
+# 草图的编辑与校验（ADR-0024）：意图下的子模块、编辑规则、草图写回、画布与面板的编辑态。
+# 规则编号（X7、X7a–X7i、B6、E8）见 docs/02-domain.md §2.21；机制见 docs/architecture/governance.md §4.4、view-state.md §7、workbench.md §12。
+
+modules:
+  - id: model.intent.check
+    name: 草图核验与生命周期
+    parent: model.intent
+    kind: component
+    responsibility: |
+      一期已有的意图计算（草图修订后归这里）：草图与持久草图的矛盾检查 sketchContradictions（供草图校验共用）；核验 sketchCheck / checkSketches——按口径比对设计某一轮或当前版本得出偏差、应用认可偏差（X2、X4）；
+      归档判定 archiveVerdict 与草图覆盖的模块 sketchModules（X3，交给确认层写确认记录）；人拥有文件的指纹比对 compareOwned（X6）。输入是草图定义与模型索引，不碰文件系统。
+    codeRefs: [src/model/intent/check.ts, src/model/intent/lifecycle.ts, src/model/intent/owned.ts]
+  - id: model.intent.edit
+    name: 草图编辑
+    parent: model.intent
+    kind: component
+    responsibility: |
+      对草图定义的纯函数编辑：输入一份草图（ds.SketchDef）、一个编辑操作（ds.EditOp）与上下文（持久草图、当前版本索引），输出新草图与这次编辑的影响（新建、改名、删除了哪些 ID），或拒绝原因。
+      操作族：层（加、删、排序、可依赖的层）、模块（加、删、改字段、核心与封闭）、移动与改 ID（ID 前缀级联到后代、关系两端、接口 owner、closed 与 mayDependOn 中的引用）、关系与接口（连、改、删；接口 owner 固定为所在模块）、草图元信息（lifetime、supersedes）、新建草图的底稿。
+      不碰文件、YAML 文本与界面；不判断草图整体是否合法（那是校验的事）。
+    principle: |
+      - **只拒绝不成立的操作**：目标不存在、新 ID 已被占用、显式给的 ID 不以父 ID 为前缀（X5）、同一对模块同类型的关系已存在（C-8）、连祖先与后代（M6）——这些操作做了也没有意义，直接拒绝并给原因；
+        其余结构问题（层依赖成环、与持久草图矛盾、封闭子树多了子模块）照常应用，交给校验即时报出，允许架构师经过中间不合法的状态（如先加后连）。
+      - **保持作者的写法**：草图里的模块可以嵌套在 children 里，也可以平铺并写 parent；新模块跟随父模块的写法（父模块在本草图里就嵌进它的 children，否则平铺并写 parent），移动时按新父模块的写法重新安放，其余条目的顺序与形状不动，写回时未改动的节点才能保住注释。
+      - **值进值出**：不修改输入，在副本上按操作族修改（structuredClone）；草图只有几十个实体，撤销栈存快照的代价可以忽略。
+    codeRefs: [src/model/intent/edit/index.ts, src/model/intent/edit/shared.ts]
+  - id: model.intent.edit.locate
+    name: 草图寻址与 ID 生成
+    parent: model.intent.edit
+    responsibility: 在嵌套或平铺写法的草图里按 ID 找到模块并给出它在草图里的位置（所在列表与下标、是嵌套还是平铺）；平铺展开带父 ID 与位置；新 ID 的生成——模块 ID 为父 ID 加名称转成的 kebab-case 短名（中文名无可转写时为 m1、m2…，可改，C-4），关系 ID 为 rel.<from 短名>-<to 短名>，已被占用（同一对模块已有别的类型的关系，L5 允许）时加类型后缀 rel.<from 短名>-<to 短名>-<type>，仍冲突时再加序号（X7c，C-8），接口 ID 为 if.<owner 短路径>.<名称>（04 §3.3）。
+    codeRefs: [src/model/intent/edit/locate.ts]
+  - id: model.intent.edit.layers
+    name: 层操作
+    parent: model.intent.edit
+    responsibility: 加层（C-1：按插入位置给 order，其后的层顺延；只在草图根下或持久草图的根下）、层排序（C-2：重排 order，保持连续）、删层（C-3：连子树一起删，级联同删除模块）、改可依赖的层（C-9：mayDependOn 集合，元素必须是层）；层的抽象原则、包含 / 不包含经模块的改字段。
+    codeRefs: [src/model/intent/edit/layers.ts]
+  - id: model.intent.edit.modules
+    name: 模块操作
+    parent: model.intent.edit
+    responsibility: 新建模块（C-4：在层或父模块下，名称必填，ID 缺省由名称生成）、改字段（名称、职责、kind、代码落点、抽象原则、包含 / 不包含，P-1、P-2）、标核心与封闭（C-7：core 字段；closed 列表增删该 ID）、删除模块（C-6：删子树，级联删除两端落在子树内的关系、owner 落在子树内的接口，并从 closed、mayDependOn 中去掉）；影响里列出级联删掉的实体，供二次确认的提示。
+    codeRefs: [src/model/intent/edit/modules.ts]
+  - id: model.intent.edit.move
+    name: 移动与改 ID
+    parent: model.intent.edit
+    responsibility: 移动模块（C-5、P-2 所属父）与改 ID：新 ID 缺省为新父 ID 加原短名；级联改写后代的 ID、关系两端、接口 owner、closed 与 mayDependOn 中的引用（关系与接口自身的 ID 不改，保持引用稳定）；移动的影响预览 idImpact——草图内要改写的 ID 与引用条数，以及当前版本里还引用旧 ID 的实体条数（AI 生成的子模块、关系、场景消息），供「移动会改 ID」的二次确认（X5：移动只经草图）。
+    principle: |
+      - 移动 = 改父 + 改 ID，一个操作完成，撤销一步即全部回到原样。
+      - 不跨到持久草图：设计草图不能移动持久草图里的模块（那是改骨架，要 supersedes），拒绝并说明。
+      - 当前版本里的旧 ID 不由这里改：那些是 AI 生成的文件，保存后经「交给 AI」由 AI 按新草图重新生成；预览里给出条数让架构师知道代价。
+    codeRefs: [src/model/intent/edit/move.ts]
+  - id: model.intent.edit.relations
+    name: 关系与接口操作
+    parent: model.intent.edit
+    responsibility: 连关系（C-8：两端、类型、说明、经由接口；同一对同类型已存在时拒绝）、改关系（C-10、P-3：类型、说明、经由接口）、删关系；加接口（P-4：名称、签名，owner 固定为所在模块，ID 自动生成）、改接口、删接口（同时去掉关系上对它的引用）。
+    codeRefs: [src/model/intent/edit/relations.ts]
+  - id: model.intent.edit.seed
+    name: 草图底稿与元信息
+    parent: model.intent.edit
+    responsibility: 新建设计时的底稿（S-4、L-3）：缺省为空草图（只有 id 与 lifetime）；另一选项「改骨架（定稿后晋升替换骨架）」——持久草图的层与第二级模块（含 closed、core、mayDependOn）复制进来并声明 supersedes 该持久草图；改草图元信息（P-5：lifetime、supersedes，持久草图的 ID 只读）。
+    codeRefs: [src/model/intent/edit/seed.ts]
+  - id: model.intent.validate
+    name: 草图校验
+    parent: model.intent
+    kind: component
+    responsibility: |
+      草图的即时校验，编辑态每次操作后与保存前（页面与写入端点）共用同一函数：
+      格式（按 JSON Schema 检查草图的形状，未知字段即错）；ID 规则（格式、在本草图与持久草图中唯一、子模块 ID 以父 ID 为前缀，X5）；引用完整（parent、关系两端、接口 owner、关系的经由接口、closed 与 mayDependOn 的元素都要在本草图或持久草图中找到；草图之间不引用 AI 生成的实体）；
+      关系不连祖先与后代（M6）；层依赖无环；与持久草图的矛盾（复用 model.intent.check 的矛盾检查，只有一份）。
+      输出按实体定位的问题列表（error 拒绝保存，warning 只提示），不改草图。
+    principle: |
+      - **只看草图本身**：不对照任何版本（那是核验 sketchCheck 的事），所以设计草图编辑中「实现后将有 N 处偏差」另由核验算。
+      - **引用的范围**：本草图 ∪ 持久草图。设计草图可以引用骨架里的层与第二级模块，不能引用只在当前版本里出现的 AI 模块——草图是尺子，尺子不能依赖被量的东西。
+    codeRefs: [src/model/intent/validate.ts]
+  - id: state.transition.edit
+    name: 编辑规则
+    parent: state.transition
+    kind: component
+    responsibility: |
+      编辑态的会话规则（纯函数）：进入编辑态（只在草图版本上、视图状态里记下编辑目标）与退出；编辑态与运行视角、文件选中、代码事实互斥（E-4：进入编辑态时退出场景、清掉文件选中，编辑态下打开场景、选中文件的动作无效）；
+      Esc 只取消选中（N7 不变，编辑态下不另赋含义）；有未保存改动时离开（切换版本、退出编辑、关闭页面）要确认（E-3）；编辑改名与删除后层次与选中怎么跟随。
+    codeRefs: [src/state/transition/edit.ts]
+  - id: state.transition.edit.mode
+    name: 进入、退出与互斥
+    parent: state.transition.edit
+    responsibility: enterEdit（版本不是草图版本时无效；进入时关闭场景、清掉文件选中，保留层次与模块选中）、exitEdit；编辑态下 openScenario、选中文件、打开代码事实叠加为无效动作；leaveGuard(是否脏) → 放行 / 需要确认；编辑态不进 URL（地址只编码层次与选中，刷新即退出编辑态，有未保存改动时由页面的离开确认拦住）。
+  - id: state.transition.edit.follow
+    name: 改名与删除的跟随
+    parent: state.transition.edit
+    responsibility: edited 动作（携带编辑的影响）：当前层次或选中的模块被改名 → 换成新 ID；被删除 → 层次退到 draft 里最近仍存在的祖先、选中清空；选中的关系被删除 → 清空；新建的模块 → 选中它，便于接着在面板里填写（C-4 就地输入之后）；撤销 / 重做的影响按同样规则跟随。不进浏览器历史。
+relations:
+  # ── 模型层：意图内部 ──
+  - {id: rel.ed.layers-locate, from: model.intent.edit.layers, to: model.intent.edit.locate, type: calls, description: 寻址与 ID 生成}
+  - {id: rel.ed.modules-locate, from: model.intent.edit.modules, to: model.intent.edit.locate, type: calls, description: 寻址、ID 生成、子树范围}
+  - {id: rel.ed.move-locate, from: model.intent.edit.move, to: model.intent.edit.locate, type: calls, description: 寻址、子树的全部 ID}
+  - {id: rel.ed.relations-locate, from: model.intent.edit.relations, to: model.intent.edit.locate, type: calls, description: 关系与接口 ID 生成}
+  - {id: rel.ed.layers-modules, from: model.intent.edit.layers, to: model.intent.edit.modules, type: calls, description: 删层 = 删除模块的级联}
+  - {id: rel.ed.move-modules, from: model.intent.edit.move, to: model.intent.edit.modules, type: calls, description: placeModule：按新父模块的写法安放}
+  - {id: rel.ed.validate-check, from: model.intent.validate, to: model.intent.check, type: depends, interface: if.intent.sketchCheck, description: 矛盾检查只有一份，校验复用核验的 sketchContradictions}
+  - {id: rel.ed.validate-locate, from: model.intent.validate, to: model.intent.edit.locate, type: calls, description: 带位置的平铺：问题定位到草图里的条目}
+  - {id: rel.ed.check-locate, from: model.intent.check, to: model.intent.edit.locate, type: calls, description: flattenSketch 调用寻址的平铺}
+  - {id: rel.ed.validate-schema, from: model.intent.validate, to: model.pipeline.loader, type: calls, description: sketchShapeIssues：复用 Loader 的 JSON Schema 校验检查草图形状}
+  - {id: rel.ed.check-load, from: model.intent.check, to: model.pipeline.loader, type: calls, description: parseDesignSketches：载荷附带的设计草图经 load 解析}
+  - {id: rel.ed.intent-edit-types, from: model.intent.edit, to: model.types, type: depends}
+  - {id: rel.ed.validate-types, from: model.intent.validate, to: model.types, type: depends}
+  - {id: rel.ed.check-types, from: model.intent.check, to: model.types, type: depends}
+  # ── 视图状态层：编辑规则 ──
+  - {id: rel.ed.follow-existing, from: state.transition.edit, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: nearestExisting：删除后层次退到草图里最近仍存在的祖先}
+  - {id: rel.ed.edit-navigation, from: state.transition.edit, to: state.transition.navigation, type: calls, description: withLevel：跟随后的层次与选中}
+  - {id: rel.ed.mode-types, from: state.transition.edit, to: model.types, type: depends, payload: [ds.ViewState], description: SketchTarget、EditEffects}
+
+interfaces:
+  - id: if.intent.applyEdit
+    name: applyEdit
+    owner: model.intent.edit
+    signature: |
+      applyEdit(sketch: SketchDef, op: EditOp, ctx: EditContext): EditResult
+      // EditContext: { persistent: readonly SketchEntity[]; designSketch: boolean }
+      sketchText(def: SketchDef): string   // 顶层键 sketch 的 YAML，编辑中的草图交给加载流水线
+    semantics: |
+      - 纯函数，不修改输入；生成的 ID 只取决于草图内容
+      - 只拒绝不成立的操作（X7b），结构合法性交给 validateSketch
+  - id: if.intent.idImpact
+    name: idImpact
+    owner: model.intent.edit.move
+    signature: |
+      idImpact(sketch: SketchDef, ctx: EditContext, id: string, newParent: string, newId?: string, current?: ModelIndex | null): IdImpact
+  - id: if.intent.seedSketch
+    name: seedSketch
+    owner: model.intent.edit.seed
+    signature: |
+      seedSketch(id: string, from: 'empty' | { persistent: SketchEntity }): SketchDef   // 复制时声明 supersedes
+  - id: if.intent.validateSketch
+    name: validateSketch
+    owner: model.intent.validate
+    signature: |
+      validateSketch(sketch: SketchDef, ctx: { persistent: readonly SketchEntity[]; file: string }): SketchValidation
+    semantics: 纯函数；页面每次操作后、保存前与写入端点调用同一函数（X7f）；引用范围为本草图 ∪ 持久草图
+  - id: if.intent.sketchCheck
+    name: sketchCheck
+    owner: model.intent.check
+    signature: |
+      sketchCheck(sketch: SketchEntity, index: ModelIndex, opts?: { persistent?; accepted? }): SketchCheck
+      checkSketches(index: ModelIndex, sketches: readonly SketchEntity[], accepted?: Map<string, AcceptedDeviation[]>): SketchCheck[]
+      sketchContradictions(sketch: SketchEntity, persistent: readonly SketchEntity[]): SketchDeviation[]
+      archiveVerdict(check: SketchCheck): ArchiveVerdict; sketchModules(sketch: SketchEntity, index: ModelIndex): string[]
+      compareOwned(record: OwnedRecord | null, hashes: Record<string, string>): Issue[]
+    semantics: 纯函数；页面、lint:model、sketch-check 与写入端点同一套结果（X4）
