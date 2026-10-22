@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** 场景证据（S15、D-20）：场景面板的「证据」一节与场景列表的 ✓ */
+/** 场景证据（S15、D-20）：场景面板的「证据」一节与场景列表的「测试 N」 */
 import { describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -59,14 +59,14 @@ describe('场景面板的证据', () => {
   })
 })
 
-describe('场景列表的 ✓', () => {
-  it('声明了证据的场景名后标 ✓，其余没有', async () => {
+describe('场景列表的「测试 N」', () => {
+  it('声明了证据的场景名后标「测试 N」（N 为证据文件数），其余没有', async () => {
     const { global } = await setup('/')
     const wrapper = mount(ScenarioList, { global })
     await wrapper.findAll('.seg button')[1].trigger('click')
     const items = wrapper.findAll('.item')
     const byName = (n: string) => items.find(i => i.find('.name').text().startsWith(`▶ ${n}`))!
-    expect(byName('有证据').find('.evidence').text()).toBe('✓')
+    expect(byName('有证据').find('.evidence').text()).toBe('测试 2')
     expect(byName('有证据').find('.evidence').attributes('title')).toContain('2 个证据文件')
     expect(byName('播放').find('.evidence').exists()).toBe(false)
   })
