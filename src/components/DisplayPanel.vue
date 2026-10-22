@@ -98,7 +98,8 @@ const factsHint = computed(() => (factsReady.value ? '' : FACTS_HINT[desk.facts.
 /** 折叠时的摘要：只列非默认的设置 */
 const summary = computed(() => {
   const t = desk.toggles
-  if (run.value) return stage.mode.value === 'hide' ? [] : [`静态关系：${MODE_LABEL[stage.mode.value]}`]
+  // 运行视角缺省折叠为一行：总是给出静态关系的显示方式
+  if (run.value) return [`静态关系：${MODE_LABEL[stage.mode.value]}`]
   return [
     hiddenTypes.value ? `隐藏 ${hiddenTypes.value} 类关系` : '',
     t.showBoundaries ? '' : '无边界节点',

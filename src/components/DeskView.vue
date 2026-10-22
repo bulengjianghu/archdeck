@@ -3,7 +3,7 @@
  * 单个项目的架构视图：导航树 + 画布区 + 属性面板（W-1）；「专注」一键收起两侧栏。每次进入项目创建一份独立的 DeskState，
  * 其 watch 都在本组件作用域内，离开项目时随组件销毁。
  */
-import { computed, onBeforeUnmount, onMounted, provide, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { createDeskState, type ModelPayload } from '@/state/useDeskState'
 import { isCommitVersion, type VersionRef } from '@/model'
@@ -73,7 +73,8 @@ void router.isReady().then(() => desk.init())
 // 导航树与属性面板：宽度可拖动、可折叠，记在本地（W-1）
 function readNumber(key: string, min: number, max: number, fallback: number): number {
   try {
-    const w = Number(localStorage.getItem(key))
+    const raw = localStorage.getItem(key)
+    const w = raw === null ? NaN : Number(raw)
     return w >= min && w <= max ? w : fallback
   } catch {
     return fallback
@@ -95,10 +96,17 @@ function togglePanel() {
 }
 
 const navWidth = ref(readNumber('h5p-arch-desk:nav-width', 180, 520, 260))
-const navCollapsed = ref(readNumber('h5p-arch-desk:nav-collapsed', 0, 1, 0) === 1)
+// W-1：导航树的收起按视角分别记在本地——运行视角缺省收起（让出宽度给结构图与时序图），退出场景恢复结构视角的状态
+const navKey = (run: boolean) => (run ? 'h5p-arch-desk:nav-collapsed:run' : 'h5p-arch-desk:nav-collapsed')
+const navCollapsedOf = (run: boolean) => readNumber(navKey(run), 0, 1, run ? 1 : 0) === 1
+const navCollapsed = ref(navCollapsedOf(desk.perspective.value === 'run'))
+watch(
+  () => desk.perspective.value,
+  p => (navCollapsed.value = navCollapsedOf(p === 'run')),
+)
 function toggleNav() {
   navCollapsed.value = !navCollapsed.value
-  store('h5p-arch-desk:nav-collapsed', navCollapsed.value ? '1' : '0')
+  store(navKey(desk.perspective.value === 'run'), navCollapsed.value ? '1' : '0')
 }
 // W-1：专注——任一侧栏展开时全部收起；都已收起时全部恢复
 const focused = computed(() => navCollapsed.value && collapsed.value)
