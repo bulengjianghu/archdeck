@@ -11,6 +11,12 @@ rules:
     - module: model.governance
       mayDependOn: [model.types, model.pipeline, model.projector, model.source]
       reason: 架构治理只复用索引、端点映射与归属，不依赖场景与版本对比
+    - module: model.evolution
+      mayDependOn: [model.types, model.governance, model.source]
+      reason: 演化事实只复用归属（文件 → 模块、行数）与治理的子树判定、端点映射，不依赖场景、版本对比与确认（议，外部评审 F3）
+    - module: model.review
+      mayDependOn: [model.types]
+      reason: 确认层只读索引的类型契约，指纹、状态与差异是纯计算，不依赖治理、归属与历史（议，外部评审 F3）
     - module: access.agent
       mayDependOn: [model, access.reader, access.source, access.deps, access.governance-store, access.history, access.writer]
       reason: agent 接口只是查询核心加两层外壳，不经开发服务器；归档 / 晋升（sketch archive，X3、X8）与页面同一个写入函数，不另写一套
