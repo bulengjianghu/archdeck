@@ -49,10 +49,10 @@ describe('回放计划', () => {
     ])
   })
 
-  it('S13：帧绑定推断的关系并标明推断；显式引用不算推断；event 与 return 反向', () => {
+  it('S13：帧绑定推断的关系并标明推断；显式引用不算推断；通知与关系同向、只有 return 反向（S12）', () => {
     expect(plan.frames.get('sc.play#update')).toMatchObject({ relation: 'r6', relationInferred: true, reverse: false })
     expect(plan.frames.get('sc.play#2')).toMatchObject({ relation: 'r1', relationInferred: false })
-    expect(plan.frames.get('sc.play#done')).toMatchObject({ relation: 're1', relationInferred: true, reverse: true })
+    expect(plan.frames.get('sc.play#done')).toMatchObject({ relation: 're1', relationInferred: true, reverse: false })
     expect(plan.frames.get('sc.play#4/1')).toMatchObject({ kind: 'return', relation: 'r2', reverse: true })
   })
 })

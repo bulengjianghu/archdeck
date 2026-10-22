@@ -8,14 +8,21 @@
 
 // ── YAML 文件形状 ─────────────────────────────────────────────
 
-export type RelationType = 'depends' | 'calls' | 'dataflow' | 'event' | 'implements'
-export const RELATION_TYPES: readonly RelationType[] = ['depends', 'calls', 'dataflow', 'event', 'implements']
-/** 运行时关系（§1.1）：步骤只对应这三类（S12）；画布上饱和、编译期两类降权（L10） */
+/** 关系类型（§1.1、ADR-0022）：运行时关系的箭头一律是控制流方向 */
+export type RelationType = 'depends' | 'calls' | 'notifies' | 'streams' | 'implements'
+export const RELATION_TYPES: readonly RelationType[] = ['depends', 'calls', 'notifies', 'streams', 'implements']
+/** 旧名（M12）：加载时映射，event 同时翻转两端；一轮后删除 */
+export type LegacyRelationType = 'event' | 'dataflow'
+export const LEGACY_RELATION_TYPES: Readonly<Record<LegacyRelationType, { to: RelationType; flip: boolean }>> = {
+  event: { to: 'notifies', flip: true },
+  dataflow: { to: 'streams', flip: false },
+}
 /** 关系经由什么传递、静态导入在原理上证实不了（K5b） */
-export type RelationVia = 'http' | 'hmr' | 'inject' | 'router' | 'callback'
-export const RELATION_VIAS: readonly RelationVia[] = ['http', 'hmr', 'inject', 'router', 'callback']
+export type RelationVia = 'http' | 'hmr' | 'inject' | 'router' | 'callback' | 'port'
+export const RELATION_VIAS: readonly RelationVia[] = ['http', 'hmr', 'inject', 'router', 'callback', 'port']
 
-export const RUNTIME_RELATION_TYPES: readonly RelationType[] = ['calls', 'dataflow', 'event']
+/** 运行时关系（§1.1）：命令、通知、流；步骤只对应这三类（S12）；画布上饱和、编译期两类降权（L10） */
+export const RUNTIME_RELATION_TYPES: readonly RelationType[] = ['calls', 'notifies', 'streams']
 
 export type ModuleStatus = 'current' | 'target' | 'deprecated'
 
@@ -66,8 +73,11 @@ export interface RelationDef {
   id: string
   from: string
   to: string
-  type: RelationType
+  /** 文件里也可能写旧名（M12），Loader 映射后只剩 RelationType */
+  type: RelationType | LegacyRelationType
   mode?: 'sync' | 'async'
+  /** 只用于 streams：拉取型流，箭头仍指数据去向（M13） */
+  pull?: boolean
   /** K5b：经此传递，静态导入在原理上证实不了；有它的关系不判定 */
   via?: RelationVia
   interface?: string
@@ -217,7 +227,8 @@ export interface ModuleEntity extends Omit<ModuleDef, 'children' | 'parent'> {
   src: SourceLoc
 }
 
-export interface RelationEntity extends Omit<RelationDef, 'payload'> {
+export interface RelationEntity extends Omit<RelationDef, 'payload' | 'type'> {
+  type: RelationType
   payload: string[]
   seq: number
   src: SourceLoc

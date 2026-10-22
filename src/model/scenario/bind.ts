@@ -3,11 +3,10 @@
  *
  * 关系是静态的「会这样交互」，消息步骤是运行时关系的一次发生。关系与消息的端点都写在「能表达清楚的最深模块」上，
  * 两者可能写在不同深度，所以「对得上」指关系两端分别是消息两端自身或其祖先（参与者只能是它自己）。
- * 方向：call / async 沿控制流 from → to；event 关系的箭头是订阅方 → 发布方，消息由发布方发出，与箭头相反；
- * return 再反一次。
+ * 方向：运行时关系的箭头是控制流方向（ADR-0022），call / async 与关系同向；return 与关系相反。
  */
 import { RUNTIME_RELATION_TYPES } from '../types'
-import type { MessageKind, ModelIndex, RelationEntity, RelationType } from '../types'
+import type { ModelIndex, RelationEntity } from '../types'
 import type { MessageEnds, Binding } from './types'
 
 export { RUNTIME_RELATION_TYPES }
@@ -18,11 +17,9 @@ function covers(index: ModelIndex, a: string, id: string): boolean {
   return index.pathOf.get(id)?.includes(a) ?? false
 }
 
-const expectsReverse = (type: RelationType, kind: MessageKind) => (type === 'event') !== (kind === 'return')
-
-/** 关系 r 能否对应这条消息；能则返回方向是否与箭头相反 */
+/** 关系 r 能否对应这条消息；能则返回方向是否与箭头相反（只有 return） */
 function orient(index: ModelIndex, r: RelationEntity, m: MessageEnds): { reverse: boolean } | null {
-  const reverse = expectsReverse(r.type, m.kind)
+  const reverse = m.kind === 'return'
   const [from, to] = reverse ? [m.to, m.from] : [m.from, m.to]
   return covers(index, r.from, from) && covers(index, r.to, to) ? { reverse } : null
 }
@@ -51,7 +48,7 @@ export function bindRelation(index: ModelIndex, m: MessageEnds): Binding {
   const between = [...relationsAround(index, m.to)].filter(id => around.has(id)).map(id => index.relations.get(id)!)
   const linked = between.filter(r => (covers(index, r.from, m.from) && covers(index, r.to, m.to)) || (covers(index, r.from, m.to) && covers(index, r.to, m.from)))
   const candidates = linked.filter(r => RUNTIME_RELATION_TYPES.includes(r.type) && orient(index, r, m))
-  // S13：两端之间恰好一条运行时关系即认定；恰好连在两端上的优先于连在祖先上的
+  // S13：两端之间恰好一条同向（return 反向）的运行时关系即认定；恰好连在两端上的优先于连在祖先上的
   const exact = candidates.filter(r => (r.from === m.from && r.to === m.to) || (r.from === m.to && r.to === m.from))
   const pick = exact.length === 1 ? exact[0] : exact.length === 0 && candidates.length === 1 ? candidates[0] : undefined
   if (pick) return { relation: pick.id, inferred: true, reverse: orient(index, pick, m)!.reverse }

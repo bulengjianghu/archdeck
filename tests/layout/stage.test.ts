@@ -18,11 +18,11 @@ describe('stageOverlay', () => {
     const { sv, pv } = await setup('infra', new Map([['sc.play#3', 0]]))
     const o = stageOverlay(sv, pv, 'sc.play#done')
     expect([...o.active].sort()).toEqual(['actor.biz', 'boundary:app', 'infra.framework', 'infra.mus', 'infra.player'])
-    // P17：同一对节点的 calls 与 event 两条边，结果事件（绑定 event 关系）落在 event 边上
+    // P17：同一对节点的 calls 与 notifies 两条边，结果通知（绑定 notifies 关系）落在 notifies 边上，与箭头同向
     expect(o.walked.get('infra.player->infra.framework:calls')!.steps).toEqual([2])
-    expect(o.walked.get('infra.player->infra.framework:event')!.steps).toEqual([6])
+    expect(o.walked.get('infra.framework->infra.player:notifies')!.steps).toEqual([6])
     expect(o.walked.get('node:infra.framework')!.steps).toEqual([4])
-    expect(o.current).toMatchObject({ index: 5, at: { kind: 'edge', reverse: true } })
+    expect(o.current).toMatchObject({ index: 5, at: { kind: 'edge', reverse: false } })
     expect(o.hiddenCurrent).toBe(false)
   })
 

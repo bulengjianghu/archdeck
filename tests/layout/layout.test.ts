@@ -269,7 +269,7 @@ describe('L10：标签、线宽档、平行边', () => {
   })
 
   it('同一对节点（不论方向）的多条边对称错开，单条为 0', () => {
-    const o = parallelOffsets([ve('a', 'x', 'y', 1), ve('b', 'x', 'y', 1, 'depends'), ve('c', 'y', 'x', 1, 'event'), ve('d', 'x', 'z', 1)])
+    const o = parallelOffsets([ve('a', 'x', 'y', 1), ve('b', 'x', 'y', 1, 'depends'), ve('c', 'y', 'x', 1, 'notifies'), ve('d', 'x', 'z', 1)])
     expect([o.get('a'), o.get('b'), o.get('c'), o.get('d')]).toEqual([-PARALLEL_GAP, 0, PARALLEL_GAP, 0])
   })
 

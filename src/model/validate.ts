@@ -197,6 +197,7 @@ const isEndpoint = (c: Checked, id: string) => c.modules.has(id) || c.actors.has
 function checkRelations(input: ArchModel, c: Checked): RelationEntity[] {
   const relations: RelationEntity[] = []
   const relationIds = new Set<string>()
+  let contracts: Set<string> | undefined
   for (const r0 of input.relations) {
     const r = { ...r0, payload: [...r0.payload] }
     if (relationIds.has(r.id)) {
@@ -209,10 +210,28 @@ function checkRelations(input: ArchModel, c: Checked): RelationEntity[] {
       r.interface = undefined
     }
     r.payload = keepKnown(r.payload, c.dataStructures, id => c.warn('unknown-data-structure', `关系「${r.id}」引用的数据结构「${id}」不存在`, r.src))
+    // M13：pull 只对 streams 有意义
+    if (r.pull !== undefined && r.type !== 'streams') {
+      c.warn('pull-not-streams', `关系「${r.id}」是 ${r.type}，pull 只用于 streams（拉取型流），已忽略`, r.src)
+      delete r.pull
+    }
+    // M11：implements 的目标须声明接口
+    if (r.type === 'implements' && c.modules.has(r.to) && !(contracts ??= modulesWithInterfaces(c)).has(r.to))
+      c.warn('implements-no-interface', `关系「${r.id}」实现「${r.to}」，但它没有声明任何接口（provides 或 owner 为它的接口）；没有可实现的契约时应为 depends，否则补上接口声明`, r.src)
     relationIds.add(r.id)
     relations.push(r)
   }
   return relations
+}
+
+/** M11：声明了接口的模块——provides 非空，或是某个接口 owner 的自身或祖先（同 G12 的 moduleInterfaces） */
+function modulesWithInterfaces(c: Checked): Set<string> {
+  const out = new Set<string>()
+  for (const m of c.modules.values()) if (m.provides?.length) out.add(m.id)
+  for (const x of c.interfaces.values()) {
+    for (let cur: string | undefined = x.owner; cur !== undefined && cur !== c.rootId; cur = c.modules.get(cur)?.parentId) out.add(cur)
+  }
+  return out
 }
 
 /** 关系的两端：报错并返回 false 表示剔除 */
@@ -326,7 +345,7 @@ function checkBinding(index: ModelIndex, c: Checked, sc: ScenarioEntity, steps: 
     const where = `场景「${sc.id}」步骤 ${s.path}（${s.msg.from} → ${s.msg.to}）`
     if (b.issue === 'not-runtime') {
       const t = index.relations.get(b.relation!)!.type
-      c.err('step-relation-not-runtime', `${where} 引用了 ${t} 关系「${b.relation}」；步骤只对应运行时关系（calls / dataflow / event）`, s.src)
+      c.err('step-relation-not-runtime', `${where} 引用了 ${t} 关系「${b.relation}」；步骤只对应运行时关系（calls / notifies / streams）`, s.src)
       return { ...s, msg: { ...s.msg, relation: undefined } }
     }
     if (b.issue === 'mismatch') {

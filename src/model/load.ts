@@ -6,6 +6,7 @@
 import Ajv, { type ErrorObject } from 'ajv'
 import { LineCounter, parseDocument, type Document } from 'yaml'
 import schema from '../../schema/arch-file.schema.json'
+import { LEGACY_RELATION_TYPES } from './types'
 import type {
   ActorEntity,
   ArchFileDef,
@@ -14,9 +15,12 @@ import type {
   InterfaceEntity,
   Issue,
   ModuleDef,
+  LegacyRelationType,
   ModuleEntity,
   RawFile,
+  RelationDef,
   RelationEntity,
+  RelationType,
   ScenarioEntity,
   SourceLoc,
   Step,
@@ -76,7 +80,8 @@ export function load(files: readonly RawFile[]): LoadResult {
 
     data.relations?.forEach((r, i) => {
       const payload = r.payload === undefined ? [] : Array.isArray(r.payload) ? r.payload : [r.payload]
-      relations.push({ ...r, payload, seq: seq++, src: locate(['relations', i]) })
+      const src = locate(['relations', i])
+      relations.push({ ...r, ...currentType(r, src, issues), payload, seq: seq++, src })
     })
     data.interfaces?.forEach((x, i) => interfaces.push({ ...x, src: locate(['interfaces', i]) }))
     data.dataStructures?.forEach((x, i) => dataStructures.push({ ...x, src: locate(['dataStructures', i]) }))
@@ -116,6 +121,19 @@ export function load(files: readonly RawFile[]): LoadResult {
     },
     issues,
   }
+}
+
+/** M12：旧名映射为新类型（event 同时翻转两端），每条提醒迁移 */
+function currentType(r: RelationDef, src: SourceLoc, issues: Issue[]): Pick<RelationEntity, 'type' | 'from' | 'to'> {
+  if (!(r.type in LEGACY_RELATION_TYPES)) return { type: r.type as RelationType, from: r.from, to: r.to }
+  const legacy = LEGACY_RELATION_TYPES[r.type as LegacyRelationType]
+  issues.push({
+    severity: 'warning',
+    code: 'relation-type-renamed',
+    message: `关系「${r.id}」的类型「${r.type}」已改名为「${legacy.to}」${legacy.flip ? '，箭头改为控制流方向（发布者 → 订阅者），from / to 已按翻转读取' : ''}；请迁移（npm run migrate:relations）`,
+    ...src,
+  })
+  return legacy.flip ? { type: legacy.to, from: r.to, to: r.from } : { type: legacy.to, from: r.from, to: r.to }
 }
 
 /** 步骤树规整为 Step：记录路径（F2）与出处，payload 规整为数组 */

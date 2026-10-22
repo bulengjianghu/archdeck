@@ -26,7 +26,7 @@ function designed() {
       }
     return f
   })
-  files.push({ path: 'extra.yaml', text: 'relations:\n  - { id: r8, from: infra.framework.tracer, to: domain.models, type: dataflow }\n' })
+  files.push({ path: 'extra.yaml', text: 'relations:\n  - { id: r8, from: infra.framework.tracer, to: domain.models, type: streams }\n' })
   return loadModel(files).index
 }
 

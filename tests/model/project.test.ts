@@ -73,7 +73,7 @@ describe('projectLevel · 普通层次', () => {
     expect(nodeIds(view, 'boundary')).toEqual(['boundary:app', 'boundary:domain'])
     expect(edgeSummary(view.edges)).toEqual([
       'infra.framework->boundary:app:calls:aggregate:r1',
-      'infra.framework->infra.mus:dataflow:aggregate:r4',
+      'infra.framework->infra.mus:streams:aggregate:r4',
       'infra.mus->boundary:domain:depends:aggregate:r7',
       'infra.player->boundary:app:depends:aggregate:r3',
     ])
@@ -85,7 +85,7 @@ describe('projectLevel · 普通层次', () => {
     // L4：边界节点按层次顺序——infra（order 1）下的 infra.mus 在 app（order 2）之前
     expect(nodeIds(view, 'boundary')).toEqual(['boundary:infra.mus', 'boundary:app'])
     expect(edgeSummary(view.edges)).toEqual([
-      'infra.framework.pipeline->boundary:infra.mus:dataflow:direct:r4',
+      'infra.framework.pipeline->boundary:infra.mus:streams:direct:r4',
       'infra.framework.sm->boundary:app:calls:aggregate:r1',
       'infra.framework.sm->infra.framework.pipeline:calls:direct:r6',
     ])
@@ -100,7 +100,7 @@ describe('projectLevel · 普通层次', () => {
   it('关闭边界节点后，指向外部的边一起隐藏', () => {
     const view = projectLevel(index, 'infra', { showBoundaries: false })
     expect(nodeIds(view, 'boundary')).toEqual([])
-    expect(edgeSummary(view.edges)).toEqual(['infra.framework->infra.mus:dataflow:aggregate:r4'])
+    expect(edgeSummary(view.edges)).toEqual(['infra.framework->infra.mus:streams:aggregate:r4'])
   })
 
   it('未知层次抛错', () => {
@@ -139,16 +139,16 @@ describe('projectLevel · 过滤与汇总', () => {
       'z.yaml': [
         'relations:',
         '  - { id: x1, from: infra.framework.sm, to: infra.mus, type: calls }',
-        '  - { id: x2, from: infra.framework.sm, to: infra.mus, type: event }',
+        '  - { id: x2, from: infra.framework.sm, to: infra.mus, type: notifies }',
         '  - { id: x3, from: infra.framework.sm, to: infra.mus, type: calls, mode: async }',
       ].join('\n'),
     }))
     const view = projectLevel(idx, 'infra', { showBoundaries: true })
     const pair = view.edges.filter(x => x.from === 'infra.framework' && x.to === 'infra.mus')
     expect(pair.map(e => [e.id, e.type, e.relationIds, e.mode])).toEqual([
-      ['infra.framework->infra.mus:dataflow', 'dataflow', ['r4'], 'sync'],
+      ['infra.framework->infra.mus:streams', 'streams', ['r4'], 'sync'],
       ['infra.framework->infra.mus:calls', 'calls', ['x1', 'x3'], 'mixed'],
-      ['infra.framework->infra.mus:event', 'event', ['x2'], 'sync'],
+      ['infra.framework->infra.mus:notifies', 'notifies', ['x2'], 'sync'],
     ])
     expect(pair.every(e => !('types' in e))).toBe(true)
     const root = projectLevel(idx, 'sys', { showBoundaries: true })

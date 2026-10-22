@@ -10,8 +10,11 @@ import {
   gateIssues as gateOf,
   governanceReport,
   levelFacts,
+  portTriad,
   summarizeLedger,
+  type Confirmation,
   type GovernanceReport,
+  type PortTriad,
   type Issue,
   type LedgerSummary,
   type LevelCycle,
@@ -19,7 +22,6 @@ import {
   type LevelView,
   type ModelIndex,
   type ModuleDep,
-  type RelationVia,
   type ModuleDetail,
 } from '@/model'
 import type { ViewState } from '../transition'
@@ -105,16 +107,15 @@ export function createFacts({ state, index, view, files, sync, design }: FactsIn
       : null
 
   /** K5：关系的证实与依据的模块依赖 */
-  const relationFact = (
-    id: string,
-  ): { status: 'confirmed' | 'unconfirmed' | 'skipped'; deps: ModuleDep[]; host?: string; via?: RelationVia; isolated?: boolean } | null => {
+  const relationFact = (id: string): (Omit<Confirmation, 'deps'> & { deps: ModuleDep[] }) | null => {
     const c = report.value?.relations.get(id)
-    return c
-      ? { status: c.status, deps: c.deps.map(k => report.value!.moduleDeps.get(k)!).filter(Boolean), host: c.host, via: c.via, isolated: c.isolated }
-      : null
+    return c ? { ...c, deps: c.deps.map(k => report.value!.moduleDeps.get(k)!).filter(Boolean) } : null
   }
 
-  return { status, error, report, level, gateIssues, ledger, entryOf, selectedDep, selectedCycle, moduleDetail, relationFact }
+  /** K11：端口三角；没有代码事实时不带证实状态（设计版本也有） */
+  const portTriadOf = (id: string): PortTriad | null => (index.value ? portTriad(index.value, report.value, id) : null)
+
+  return { status, error, report, level, gateIssues, ledger, entryOf, selectedDep, selectedCycle, moduleDetail, relationFact, portTriadOf }
 }
 
 export type FactsDerivations = ReturnType<typeof createFacts>

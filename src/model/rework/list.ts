@@ -5,7 +5,7 @@
 import { RULE_LABELS, moduleName } from '../names'
 import { bindRelation, forEachStep, RUNTIME_RELATION_TYPES } from '../scenario'
 import { matchRef, moduleEntry, type LocalSource, type SourceOwnership } from '../source'
-import { unconfirmedReason, unconfirmedWarns, type FileDep, type GovernanceReport, type Violation } from '../governance'
+import { unconfirmedCode, unconfirmedReason, unconfirmedWarns, type FileDep, type GovernanceReport, type Violation } from '../governance'
 import type { Issue, ModelIndex, SourceLoc } from '../types'
 import { REWORK_CATEGORIES, REWORK_SEVERITIES, type ReworkAction, type ReworkItem, type ReworkList, type ReworkLoc, type ReworkSeverity } from './types'
 
@@ -45,6 +45,9 @@ const ISSUE_RULES: Record<string, string[]> = {
   'layer-missing-abstraction': ['M8'],
   'mixed-layer-siblings': ['M8'],
   'nested-parent-ignored': ['M10'],
+  'implements-no-interface': ['M11'],
+  'relation-type-renamed': ['M12'],
+  'pull-not-streams': ['M13'],
   'missing-responsibility': ['M9'],
   'step-relation-mismatch': ['S5a'],
   'step-relation-not-runtime': ['S12'],
@@ -57,6 +60,13 @@ const ISSUE_RULES: Record<string, string[]> = {
   'duplicate-rules': ['U1'],
   'unknown-rule-module': ['U1'],
   'allow-without-reason': ['U1'],
+}
+
+/** Q8：描述问题的建议动作 */
+function descriptionFix(i: Issue): string {
+  if (i.code === 'relation-type-renamed') return '迁移旧名：npm run migrate:relations -- <项目目录>（event 同时翻转 from / to），再核对说明里的方向字样'
+  if (i.code === 'implements-no-interface') return '确实实现了契约时在目标模块声明接口（interfaces 的 owner 或 provides）；只是使用对方时改为 depends'
+  return i.severity === 'error' ? '改正描述：这一处的实体已被剔除，图上看不到它' : '改正描述：坏引用已被去掉'
 }
 
 /** 由下面的材料重新算、不从 issues 取的问题：未建模的步骤（S5a 的 warning）、源码归属、门禁与事实 */
@@ -87,7 +97,7 @@ export function reworkList(input: ReworkInput): ReworkList {
       title: i.message,
       ...(at ? { at } : {}),
       affected: at ? [at] : [],
-      actions: [{ kind: 'fix-description', text: i.severity === 'error' ? '改正描述：这一处的实体已被剔除，图上看不到它' : '改正描述：坏引用已被去掉', ...(i.file ? { file: i.file } : {}) }],
+      actions: [{ kind: 'fix-description', text: descriptionFix(i), ...(i.file ? { file: i.file } : {}) }],
       target: {},
     })
   }
@@ -315,7 +325,7 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
       target: {},
     })
 
-  // K6：报警的未证实关系（编译期关系，以及两端之间没有任何依赖的运行时关系）；一条关系一个根因
+  // K6：报警的未证实关系（编译期关系——含证据像 depends 的 implements，K5——以及两端之间没有任何依赖的运行时关系）；一条关系一个根因
   for (const [id, c] of report.relations) {
     const r = index.relations.get(id)!
     if (!unconfirmedWarns(r, c)) continue
@@ -325,14 +335,30 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
       category: 'unconfirmed',
       severity: 'warning',
       rules: ['K5', 'K6'],
-      code: 'fact.unconfirmed',
-      title: `关系「${id}」（${r.type}，${name(r.from)} → ${name(r.to)}）${unconfirmedReason(r)}`,
+      code: unconfirmedCode(c),
+      title: `关系「${id}」（${r.type}，${name(r.from)} → ${name(r.to)}）${unconfirmedReason(r, c)}`,
       ...(at ? { at } : {}),
-      affected: at ? [at] : [],
-      actions: [
-        { kind: 'fix-relation', text: '代码里确实没有这条依赖时，删掉或改正这条关系（端点、方向或类型）', file: r.src.file },
-        { kind: 'add-code-refs', text: '代码里有这条依赖时，检查两端的 codeRefs 是否覆盖了依赖所在的文件' },
+      // 证据像 depends：受影响的是引用了对方非接口名字的那些导入
+      affected: [
+        ...(at ? [at] : []),
+        ...(c.likeDepends
+          ? c.deps.flatMap(k => report.moduleDeps.get(k)?.files ?? []).map(f => ({ in: 'source' as const, file: f.from, line: f.line, note: `→ ${f.to}${f.names?.length ? `（${f.names.join(', ')}）` : ''}` }))
+          : []),
       ],
+      actions: c.likeDepends
+        ? [
+            {
+              kind: 'to-depends',
+              text: '代码是在使用对方的实现而不是实现它的契约时，改为 depends',
+              file: r.src.file,
+              snippet: `- { id: ${id}, from: ${r.from}, to: ${r.to}, type: depends }`,
+            },
+            { kind: 'fix-description', text: `确实实现了契约时，在「${name(r.to)}」的描述里声明被实现的接口（interfaces 的 owner 或 provides），名称与代码一致` },
+          ]
+        : [
+            { kind: 'fix-relation', text: '代码里确实没有这条依赖时，删掉或改正这条关系（端点、方向或类型）', file: r.src.file },
+            { kind: 'add-code-refs', text: '代码里有这条依赖时，检查两端的 codeRefs 是否覆盖了依赖所在的文件' },
+          ],
       target: { relation: id, modules: [r.from, r.to] },
     })
   }
@@ -399,7 +425,7 @@ function unmodeledItems(index: ModelIndex, name: (id: string) => string): Rework
       : [
           {
             kind: 'add-relation',
-            text: '补一条两端之间的运行时关系（调用 calls、推送 dataflow、事件 event）；端点写能表达清楚的最深模块',
+            text: '补一条两端之间的运行时关系（命令 calls、通知 notifies、流 streams，箭头为控制流方向）；端点写能表达清楚的最深模块',
             ...(index.modules.get(g.a) ? { file: index.modules.get(g.a)!.src.file } : {}),
             snippet: `relations:\n  - { id: rel.${g.a}--${g.b}, from: ${g.a}, to: ${g.b}, type: calls }`,
           },

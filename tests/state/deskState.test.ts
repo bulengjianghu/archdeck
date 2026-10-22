@@ -146,8 +146,8 @@ describe('DeskState', () => {
     expect(desk.view.value!.nodes.some(n => n.role === 'boundary')).toBe(true)
     desk.toggles.showBoundaries = false
     expect(desk.view.value!.nodes.some(n => n.role === 'boundary')).toBe(false)
-    desk.toggles.relationTypes = ['dataflow']
-    expect(desk.view.value!.edges.map(e => e.type)).toEqual(['dataflow'])
+    desk.toggles.relationTypes = ['streams']
+    expect(desk.view.value!.edges.map(e => e.type)).toEqual(['streams'])
   })
 
   it('视图变化后异步产出布局结果', async () => {

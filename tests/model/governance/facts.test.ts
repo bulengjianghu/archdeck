@@ -7,6 +7,7 @@ import {
   hostOf,
   liftDeps,
   loadModel,
+  reworkList,
   undescribedDeps,
   unconfirmedWarns,
   type FileDep,
@@ -46,7 +47,7 @@ describe('K4 模块依赖', () => {
 })
 
 describe('K5、K6 关系的证实', () => {
-  it('有对应模块依赖为已证实；dataflow 反向也算；目标态不判定', () => {
+  it('有对应模块依赖为已证实；streams 反向也算；目标态不判定', () => {
     const { report } = setup()
     const st = (id: string) => report.relations.get(id)!.status
     expect(st('rel.1')).toBe('confirmed')
@@ -127,8 +128,59 @@ describe('K5、K6 关系的证实', () => {
   })
 })
 
+describe('K5 通知与流的方向、implements 的证据（ADR-0022）', () => {
+  const withRelations = (extra: string) => {
+    const { index } = loadModel([files()[0], { path: 'modules/layers.yaml', text: LAYERS.replace('relations:\n', `relations:\n${extra}`) }])
+    const own = assignFiles(index, SRC, [])
+    return { index, own }
+  }
+  const confirm = (extra: string, deps: FileDep[]) => {
+    const { index, own } = withRelations(extra)
+    return confirmRelations(index, liftDeps(index, own, deps).moduleDeps, own.direct)
+  }
+
+  it('notifies 接受反向的依赖（订阅者导入发布者）为证实，知识方向为反向；calls 只有反向依赖时未证实', () => {
+    const c = confirm(
+      '  - { id: rel.n, from: core.util, to: ui.store, type: notifies }\n  - { id: rel.k, from: core.util, to: ui.view, type: calls }\n',
+      [dep('src/ui/store/s.ts', 'src/core/util/u.ts'), dep('src/ui/view/a.ts', 'src/core/util/u.ts')],
+    )
+    expect(c.get('rel.n')).toMatchObject({ status: 'confirmed', knows: 'reverse' })
+    expect(c.get('rel.k')).toMatchObject({ status: 'unconfirmed' })
+    expect(c.get('rel.k')!.isolated).toBeUndefined()
+  })
+
+  it('同向依赖证实时知识方向为同向；两个方向都有时为 both', () => {
+    const { report } = setup()
+    expect(report.relations.get('rel.1')!.knows).toBe('forward')
+    const c = confirm('', [dep('src/ui/store/s.ts', 'src/core/util/u.ts'), dep('src/core/util/u.ts', 'src/ui/store/s.ts')])
+    expect(c.get('rel.6')!.knows).toBe('both')
+  })
+
+  it('implements 只由引用目标声明的接口名、或类 implements / extends 证实；只有其他导入时为「证据像 depends」', () => {
+    const rel = '  - { id: rel.i, from: ui.store, to: core.api, type: implements }\n'
+    const plain = dep('src/ui/store/s.ts', 'src/core/api/client.ts')
+    expect(confirm(rel, [{ ...plain, names: ['makeClient'] }]).get('rel.i')).toMatchObject({ status: 'unconfirmed', likeDepends: true, deps: ['ui.store->core.api'] })
+    expect(confirm(rel, [plain]).get('rel.i')).toMatchObject({ status: 'unconfirmed', likeDepends: true })
+    expect(confirm(rel, [{ ...plain, kind: 'type', names: ['get'] }]).get('rel.i')).toMatchObject({ status: 'confirmed', deps: ['ui.store->core.api'] })
+    expect(confirm(rel, [{ ...plain, names: ['Base'], heritage: true }]).get('rel.i')!.status).toBe('confirmed')
+    expect(confirm(rel, []).get('rel.i')!.likeDepends).toBeUndefined()
+  })
+
+  it('证据像 depends 报 fact.like-depends（代替 fact.unconfirmed），返工清单建议改为 depends', () => {
+    const { index, own } = withRelations('  - { id: rel.i, from: ui.store, to: core.api, type: implements }\n')
+    const tree = { files: SRC, packages: {} }
+    const report = governanceReport(index, own, tree, { ...CODE, deps: DEPS.map(d => ({ ...d, names: ['makeClient'] })) }, null)
+    const issue = report.issues.find(i => i.message.includes('rel.i'))!
+    expect(issue).toMatchObject({ severity: 'warning', code: 'fact.like-depends' })
+    const item = reworkList({ index, report, issues: [] }).items.find(x => x.id === 'unconfirmed:rel.i')!
+    expect(item.code).toBe('fact.like-depends')
+    expect(item.actions[0]).toMatchObject({ kind: 'to-depends', snippet: expect.stringContaining('type: depends') })
+    expect(item.affected.some(a => a.in === 'source' && a.file === 'src/ui/store/s.ts')).toBe(true)
+  })
+})
+
 describe('K7 未描述依赖', () => {
-  it('没有关系覆盖（方向一致，dataflow 不论方向）', () => {
+  it('没有关系覆盖（方向一致，streams 不论方向）', () => {
     const { index, own } = setup()
     const { moduleDeps } = liftDeps(index, own, DEPS)
     expect(
@@ -136,6 +188,13 @@ describe('K7 未描述依赖', () => {
         .map(d => d.key)
         .sort(),
     ).toEqual(['core.impl->ui.view', 'core.util->ui.view', 'ui.view->core.util'])
+  })
+
+  it('notifies 与 streams 覆盖两个方向的依赖；calls 只覆盖同向', () => {
+    const { index } = loadModel([files()[0], { path: 'modules/layers.yaml', text: LAYERS.replace('relations:\n', 'relations:\n  - { id: rel.n, from: core.impl, to: ui.view, type: notifies }\n') }])
+    const md = (from: string, to: string) => new Map([[`${from}->${to}`, { key: `${from}->${to}`, from, to, files: [dep('x', 'y')] }]])
+    expect(undescribedDeps(index, md('ui.view', 'core.impl'))).toEqual([])
+    expect(undescribedDeps(index, md('core.api', 'ui.store')).map(d => d.key)).toEqual(['core.api->ui.store'])
   })
 
   it('只引用类型的模块依赖不算；有一条值依赖就算', () => {

@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createResolver, parseImports, parseVueImports, readCodeDeps, resolveImport } from '../../vite/readDeps'
+import { createResolver, importTargetKinds, parseImports, parseVueImports, readCodeDeps, resolveImport } from '../../vite/readDeps'
 import { appendLedger, readBaseline, readLedger, writeBaseline } from '../../vite/governanceStore'
 import { listSourceFiles } from '../../vite/readSource'
 import { readModelDir } from '../../vite/readModelDir'
@@ -119,6 +119,39 @@ describe('K1 提取导入', () => {
       // Mode 没写 type，但声明是 type 别名：engine.ts 只承接类型名；assist 落在 helper.ts：value
       '2:packages/core/src/engine.ts:type',
       '2:packages/core/src/helper.ts:value',
+    ])
+  })
+})
+
+describe('K1 implements 证据（ADR-0022）', () => {
+  it('类声明的 implements / extends 引用的导入名记入 heritage；默认与命名空间导入被引用时为 *', () => {
+    const imps = parseImports(
+      'a.ts',
+      [
+        "import { Base, type Port, helper } from './x'",
+        "import Def from './d'",
+        "import * as ns from './n'",
+        "import { Other } from './o'",
+        'class A extends Base implements Port {}',
+        'class B extends ns.Thing {}',
+        'const C = class extends Def {}',
+        'helper(Other)',
+      ].join('\n'),
+    )
+    expect(imps.map(i => `${i.spec}:${(i.heritage ?? []).join(',')}`)).toEqual(['./x:Base,Port', './d:*', './n:*', './o:'])
+  })
+
+  it('每个目标记落到它的导入名与是否被 implements / extends 引用', () => {
+    const exportsOf = () => [
+      { name: 'Port', kind: 'interface', from: 'src/port.ts' },
+      { name: 'make', kind: 'function', from: 'src/impl.ts' },
+    ]
+    expect(importTargetKinds({ kind: 'value', names: ['Port', 'make'], types: [], heritage: ['Port'] }, 'src/index.ts', exportsOf)).toEqual([
+      { to: 'src/port.ts', kind: 'type', names: ['Port'], heritage: true },
+      { to: 'src/impl.ts', kind: 'value', names: ['make'] },
+    ])
+    expect(importTargetKinds({ kind: 'value', names: [], types: [], heritage: ['*'] }, 'src/base.ts', exportsOf)).toEqual([
+      { to: 'src/base.ts', kind: 'value', heritage: true },
     ])
   })
 })

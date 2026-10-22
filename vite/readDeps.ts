@@ -19,6 +19,7 @@ const DECLARATION = /\.d\.(m|c)?ts$/i
 /**
  * 一条导入语句的语法摘要；names 为空数组表示不按名称穿透（默认、命名空间、副作用、export *、动态导入）。
  * kind 为整条语句的种类（全部为类型时 type）；types 为写成只引类型的名字（`type X` 或整条 `import type`）。
+ * heritage 为本文件类声明的 implements / extends 引用到的导入名；默认或命名空间导入被引用时为 `*`（K5 的 implements 证据，ADR-0022）。
  */
 export interface ParsedImport {
   spec: string
@@ -26,6 +27,25 @@ export interface ParsedImport {
   kind: DepKind
   names: string[]
   types: string[]
+  heritage?: string[]
+}
+
+/** 类声明 implements / extends 子句引用的标识符（取 `a.b.C` 最左边的 a） */
+function heritageLocals(sf: ts.SourceFile): Set<string> {
+  const out = new Set<string>()
+  const leftmost = (e: ts.Expression): string | undefined =>
+    ts.isIdentifier(e) ? e.text : ts.isPropertyAccessExpression(e) ? leftmost(e.expression) : undefined
+  const visit = (n: ts.Node) => {
+    if ((ts.isClassDeclaration(n) || ts.isClassExpression(n)) && n.heritageClauses)
+      for (const h of n.heritageClauses)
+        for (const t of h.types) {
+          const id = leftmost(t.expression)
+          if (id) out.add(id)
+        }
+    ts.forEachChild(n, visit)
+  }
+  visit(sf)
+  return out
 }
 
 const parseCache = new Map<string, { mtimeMs: number; size: number; imports: ParsedImport[] }>()
@@ -41,6 +61,7 @@ export function parseImports(file: string, text: string, kind = scriptKind(file)
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kind)
   const out: ParsedImport[] = []
   const lineOf = (n: ts.Node) => sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1 + lineOffset
+  const inHeritage = heritageLocals(sf)
   const literal = (n: ts.Node | undefined) => (n && ts.isStringLiteralLike(n) ? n.text : undefined)
   for (const st of sf.statements) {
     if (ts.isImportDeclaration(st)) {
@@ -52,7 +73,12 @@ export function parseImports(file: string, text: string, kind = scriptKind(file)
       // 只有命名导入时按名称穿透；带默认或命名空间导入时以经由文件为目标
       const names = clause && !clause.name && named ? named.map(e => (e.propertyName ?? e.name).text) : []
       const types = clause && !clause.name && named ? named.filter(e => typeOnly || e.isTypeOnly).map(e => (e.propertyName ?? e.name).text) : []
-      out.push({ spec, line: lineOf(st), kind: typeOnly ? 'type' : 'value', names, types })
+      const ns = clause?.namedBindings && ts.isNamespaceImport(clause.namedBindings) ? clause.namedBindings.name.text : undefined
+      const heritage = [
+        ...(names.length ? named!.filter(e => inHeritage.has(e.name.text)).map(e => (e.propertyName ?? e.name).text) : []),
+        ...((clause?.name && inHeritage.has(clause.name.text)) || (ns && inHeritage.has(ns)) ? ['*'] : []),
+      ]
+      out.push({ spec, line: lineOf(st), kind: typeOnly ? 'type' : 'value', names, types, ...(heritage.length ? { heritage } : {}) })
     } else if (ts.isExportDeclaration(st)) {
       const spec = literal(st.moduleSpecifier)
       if (!spec) continue
@@ -159,6 +185,14 @@ export function importTargets(via: string, names: readonly string[], exportsOf: 
   return importTargetKinds({ kind: 'value', names, types: [] }, via, exportsOf).map(t => t.to)
 }
 
+/** 一条导入落到一个目标：种类，以及落到它的导入名与是否被类的 implements / extends 引用（K1，供 K5 的 implements 证据） */
+export interface ImportTarget {
+  to: string
+  kind: DepKind
+  names?: string[]
+  heritage?: true
+}
+
 /** 声明为类型的导出（K1）：interface 与 type 别名 */
 const TYPE_DECL = new Set(['interface', 'type'])
 
@@ -167,20 +201,24 @@ const TYPE_DECL = new Set(['interface', 'type'])
  * 一个目标只承接类型名时为 type，否则为 value。不按名称穿透的导入以经由文件为目标、取整条语句的种类。
  */
 export function importTargetKinds(
-  imp: { kind: DepKind; names: readonly string[]; types: readonly string[] },
+  imp: { kind: DepKind; names: readonly string[]; types: readonly string[]; heritage?: readonly string[] },
   via: string,
   exportsOf: ExportsOf,
-): { to: string; kind: DepKind }[] {
-  if (!imp.names.length) return [{ to: via, kind: imp.kind }]
+): ImportTarget[] {
+  if (!imp.names.length) return [{ to: via, kind: imp.kind, ...(imp.heritage?.includes('*') ? { heritage: true as const } : {}) }]
   const syms = exportsOf(via)
-  const out = new Map<string, DepKind>()
+  const out = new Map<string, ImportTarget & { names: string[] }>()
   for (const n of imp.names) {
     const sym = syms.find(s => s.name === n)
     const to = sym?.from ?? via
     const kind: DepKind = imp.kind === 'type' || imp.types.includes(n) || TYPE_DECL.has(sym?.kind ?? '') ? 'type' : 'value'
-    out.set(to, out.get(to) === 'value' ? 'value' : kind)
+    const hit = out.get(to) ?? { to, kind, names: [] }
+    if (hit.kind !== 'value') hit.kind = kind
+    hit.names.push(n)
+    if (imp.heritage?.includes(n)) hit.heritage = true
+    out.set(to, hit)
   }
-  return [...out].map(([to, kind]) => ({ to, kind }))
+  return [...out.values()]
 }
 
 /** K1–K3：全部文件依赖与外部依赖 */
@@ -200,7 +238,7 @@ export function readCodeDeps(root: string, files: readonly string[], packages: R
         external[key] = (external[key] ?? 0) + 1
         continue
       }
-      for (const t of importTargetKinds(imp, via, exportsOf)) if (t.to !== from) deps.push({ from, to: t.to, via, kind: t.kind, line: imp.line })
+      for (const t of importTargetKinds(imp, via, exportsOf)) if (t.to !== from) deps.push({ from, line: imp.line, via, ...t })
     }
   }
   return { deps, external, parsed }

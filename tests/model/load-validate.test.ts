@@ -39,7 +39,33 @@ describe('load', () => {
     expect(model.modules.some(m => m.id === 'x')).toBe(false)
   })
 
-  it('K5b：关系的 via 只收枚举值（http / hmr / inject / router / callback），其余为格式错误', () => {
+  it('M12：旧名 event 映射为 notifies 并翻转两端，dataflow 映射为 streams；各报一条迁移提醒（带行号）', () => {
+    const { model, issues } = load(
+      sampleFiles({
+        'old.yaml': [
+          'relations:',
+          '  - { id: ro1, from: infra.player, to: infra.framework.sm, type: event, mode: async }',
+          '  - { id: ro2, from: infra.framework.pipeline, to: infra.mus, type: dataflow }',
+        ].join('\n'),
+      }),
+    )
+    expect(model.relations.find(r => r.id === 'ro1')).toMatchObject({ type: 'notifies', from: 'infra.framework.sm', to: 'infra.player' })
+    expect(model.relations.find(r => r.id === 'ro2')).toMatchObject({ type: 'streams', from: 'infra.framework.pipeline', to: 'infra.mus' })
+    const renamed = issues.filter(i => i.code === 'relation-type-renamed')
+    expect(renamed.map(i => [i.severity, i.file, i.line])).toEqual([
+      ['warning', 'old.yaml', 2],
+      ['warning', 'old.yaml', 3],
+    ])
+    expect(renamed[0].message).toContain('notifies')
+  })
+
+  it('M12：未知类型仍是格式错误，提示新的五类', () => {
+    const bad = load(sampleFiles({ 'b.yaml': 'relations:\n  - { id: rb, from: infra.player, to: infra.mus, type: emits }\n' }))
+    expect(bad.issues.find(i => i.code === 'schema')!.message).toContain('depends / calls / notifies / streams / implements')
+  })
+
+  it('K5b：关系的 via 只收枚举值（http / hmr / inject / router / callback / port），其余为格式错误', () => {
+    expect(load(sampleFiles({ 'p.yaml': 'relations:\n  - { id: rp2, from: infra.framework.pipeline, to: infra.mus, type: streams, via: port }\n' })).issues).toEqual([])
     const ok = load(sampleFiles({ 'v.yaml': 'relations:\n  - { id: rv, from: infra.framework.sm, to: infra.framework.pipeline, type: calls, via: http }\n' }))
     expect(ok.issues).toEqual([])
     expect(ok.model.relations.find(r => r.id === 'rv')!.via).toBe('http')
@@ -128,6 +154,24 @@ describe('validate', () => {
 
     const mixed = run({ 'z.yaml': 'modules: [{ id: misc, name: Misc, responsibility: x }]' })
     expect(codes(mixed.issues)).toEqual(['mixed-layer-siblings'])
+  })
+
+  it('M11：implements 的目标没有声明任何接口时提醒；目标子树内有 owner 指向它的接口、或有 provides 时不提醒', () => {
+    const codesOf = (yaml: string) => codes(loadModel(sampleFiles({ 'i.yaml': yaml })).issues)
+    expect(codesOf('relations:\n  - { id: ri, from: infra.player, to: infra.mus, type: implements }\n')).toEqual(['implements-no-interface'])
+    // if.sm 的 owner 是 infra.framework.sm：它与它的祖先 infra.framework 都算声明了接口
+    expect(codesOf('relations:\n  - { id: ri, from: infra.player, to: infra.framework, type: implements }\n')).toEqual([])
+    expect(codesOf('relations:\n  - { id: ri, from: infra.player, to: infra.framework.sm, type: implements }\n')).toEqual([])
+    expect(codesOf('relations:\n  - { id: ri, from: infra.player, to: infra.framework.pipeline, type: implements }\n')).toEqual(['implements-no-interface'])
+  })
+
+  it('M13：pull 只对 streams 有意义，写在其他类型上提醒并去掉', () => {
+    const ok = loadModel(sampleFiles({ 'p.yaml': 'relations:\n  - { id: rq, from: infra.mus, to: infra.framework.pipeline, type: streams, pull: true }\n' }))
+    expect(ok.issues).toEqual([])
+    expect(ok.index.relations.get('rq')!.pull).toBe(true)
+    const bad = loadModel(sampleFiles({ 'p.yaml': 'relations:\n  - { id: rq, from: infra.mus, to: infra.framework.pipeline, type: calls, pull: true }\n' }))
+    expect(codes(bad.issues)).toEqual(['pull-not-streams'])
+    expect(bad.index.relations.get('rq')!.pull).toBeUndefined()
   })
 
   it('职责为空时提醒', () => {

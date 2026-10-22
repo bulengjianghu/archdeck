@@ -303,13 +303,29 @@
           "$ref": "#/definitions/id"
         },
         "type": {
-          "enum": [
-            "depends",
-            "calls",
-            "dataflow",
-            "event",
-            "implements"
+          "description": "关系类型（02 §1.1、ADR-0022）：运行时关系的箭头是控制流方向。event / dataflow 是已弃用的旧名（M12），加载时映射为 notifies（翻转 from / to）/ streams 并提醒迁移",
+          "anyOf": [
+            {
+              "enum": [
+                "depends",
+                "calls",
+                "notifies",
+                "streams",
+                "implements"
+              ]
+            },
+            {
+              "enum": [
+                "event",
+                "dataflow"
+              ],
+              "deprecated": true
+            }
           ]
+        },
+        "pull": {
+          "description": "只用于 streams：拉取型流，箭头仍指数据去向（M13）",
+          "type": "boolean"
         },
         "mode": {
           "enum": [
@@ -323,7 +339,8 @@
             "hmr",
             "inject",
             "router",
-            "callback"
+            "callback",
+            "port"
           ]
         },
         "interface": {

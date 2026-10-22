@@ -42,7 +42,7 @@ relations:
   - { id: rel.3, from: core.impl, to: core.util, type: depends }
   - { id: rel.4, from: core.api, to: core.impl, type: calls }
   - { id: rel.5, from: core.util, to: core.future, type: depends }
-  - { id: rel.6, from: core.util, to: ui.store, type: dataflow }
+  - { id: rel.6, from: core.util, to: ui.store, type: streams }
 `
 
 export const RULES = `
@@ -81,7 +81,7 @@ export const DEPS: FileDep[] = [
   dep('src/core/util/u.ts', 'src/ui/view/a.ts'), // 同上，但有例外（U5）
   dep('src/core/api/index.ts', 'src/core/api/client.ts'), // 同一模块
   dep('src/tests/x.ts', 'src/ui/view/a.ts'), // 一端未归属
-  dep('src/ui/store/s.ts', 'src/core/util/u.ts', 'src/core/util/u.ts', 4), // 证实 dataflow 反向
+  dep('src/ui/store/s.ts', 'src/core/util/u.ts', 'src/core/util/u.ts', 4), // 证实 streams 反向
 ]
 export const CODE: CodeDeps = { deps: DEPS, external: { vue: 2 }, parsed: 6 }
 

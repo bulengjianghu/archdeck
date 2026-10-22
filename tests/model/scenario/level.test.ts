@@ -107,7 +107,7 @@ describe('帧的层次投影', () => {
           'relations:',
           '  - { id: x2, from: infra.player, to: app.solution, type: calls }',
           '  - { id: xc, from: infra, to: app.solution, type: calls }',
-          '  - { id: xu, from: infra, to: app.solution, type: dataflow }',
+          '  - { id: xu, from: infra, to: app.solution, type: streams }',
         ].join('\n'),
         'scenarios/p17.yaml': `scenario:
   id: sc.t
@@ -124,7 +124,7 @@ describe('帧的层次投影', () => {
     const at = (f: string) => v.messages[v.messageOf.get(`sc.t#${f}`)!].at
     expect(at('own')).toMatchObject({ kind: 'edge', edgeId: 'infra.player->boundary:app:calls' })
     expect(at('same')).toMatchObject({ kind: 'edge', edgeId: 'infra.player->boundary:app:calls' })
-    // 这对节点之间有 depends 与 calls 边，但没有 dataflow 边：经由上层，不借用其他类型的边
+    // 这对节点之间有 depends 与 calls 边，但没有 streams 边：经由上层，不借用其他类型的边
     expect(at('upper')).toMatchObject({ kind: 'upper', relationId: 'xu' })
     expect(at('free')).toMatchObject({ kind: 'edge', edgeId: 'infra.player->boundary:app:calls' })
   })
@@ -132,7 +132,7 @@ describe('帧的层次投影', () => {
   it('P5：连续落在同一对节点之间、同方向的帧不论边的类型合并为一条可见消息，落在第一帧的边上', () => {
     const { index: idx } = loadModel(
       scenarioFiles({
-        'p5.yaml': 'relations: [{ id: xd, from: infra.player, to: infra.framework.sm, type: dataflow }]',
+        'p5.yaml': 'relations: [{ id: xd, from: infra.player, to: infra.framework.sm, type: streams }]',
         'scenarios/p5.yaml': `scenario:
   id: sc.p
   name: P
@@ -147,10 +147,13 @@ describe('帧的层次投影', () => {
     expect(v.messages[0].at).toMatchObject({ kind: 'edge', edgeId: 'infra.player->infra.framework:calls' })
   })
 
-  it('P10：消息按步骤自己的方向流动，与边的箭头相反时标 reverse', () => {
+  it('P10：消息按步骤自己的方向流动；通知与边的箭头同向，只有 return 相反时标 reverse', () => {
     const v = project('infra')
     const done = v.messages[v.messageOf.get('sc.play#done')!].at
-    expect(done).toMatchObject({ kind: 'edge', edgeId: 'infra.player->infra.framework:event', from: 'infra.framework', to: 'infra.player', reverse: true })
+    expect(done).toMatchObject({ kind: 'edge', edgeId: 'infra.framework->infra.player:notifies', from: 'infra.framework', to: 'infra.player', reverse: false })
+    const sys = project('sys')
+    const ret = sys.messages[sys.messageOf.get('sc.play#4/1')!].at
+    expect(ret).toMatchObject({ kind: 'edge', reverse: true })
   })
 
   it('P11：本层两节点之间没有视图边时落点为「未建模」；舞台补齐结构上没有关系的边界节点', () => {
@@ -262,7 +265,7 @@ describe('参与查询（V6）', () => {
   it('关系（含推断绑定）、视图边、参与者', () => {
     expect(participation(index, frames, v, { kind: 'relation', id: 're1' }).frames.map(f => f.frameId)).toEqual(['sc.play#done'])
     expect(participation(index, frames, v, { kind: 'edge', id: 'infra.player->infra.framework:calls' }).frames.map(f => f.frameId)).toEqual(['sc.play#1'])
-    expect(participation(index, frames, v, { kind: 'edge', id: 'infra.player->infra.framework:event' }).frames.map(f => f.frameId)).toEqual(['sc.play#done'])
+    expect(participation(index, frames, v, { kind: 'edge', id: 'infra.framework->infra.player:notifies' }).frames.map(f => f.frameId)).toEqual(['sc.play#done'])
     expect(participation(index, frames, v, { kind: 'actor', id: 'actor.biz' }).frames).toEqual([{ frameId: 'sc.play#start', seq: 0, role: 'from' }])
   })
 })

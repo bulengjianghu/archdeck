@@ -2,9 +2,9 @@
  * 代码事实与描述的比对（K4–K7）：文件依赖按归属提升为模块依赖，关系的证实，未描述依赖。
  * 关于被描述系统的知识，页面、lint:model 与 agent 接口共用。
  */
-import type { ModelIndex, RelationEntity } from '../types'
-import type { SourceOwnership } from '../source'
-import type { Confirmation, FileDep, ModuleDep } from './types'
+import type { ModelIndex, RelationEntity, RelationType } from '../types'
+import { moduleInterfaces, type SourceOwnership } from '../source'
+import type { Confirmation, FileDep, Knowledge, ModuleDep } from './types'
 
 export const depKey = (from: string, to: string) => `${from}->${to}`
 
@@ -60,27 +60,57 @@ const isTarget = (index: ModelIndex, id: string) => (index.pathOf.get(id) ?? [])
 export const judgeable = (index: ModelIndex, r: RelationEntity) =>
   index.modules.has(r.from) && index.modules.has(r.to) && !isTarget(index, r.from) && !isTarget(index, r.to)
 
-/**
- * K5：依赖方与 from、被依赖方与 to 各自相同或互为祖先后代；dataflow 两个方向都算。
- * 端点是祖先的情况：代码经祖先的文件进出（统一入口，如 useDesk() 所在的文件归 DeskState；或概念子模块的代码在祖先的文件里），依赖落在祖先上也算证实。
- */
-const supports = (index: ModelIndex, r: RelationEntity, d: ModuleDep) =>
-  (related(index, d.from, r.from) && related(index, d.to, r.to)) || (r.type === 'dataflow' && related(index, d.from, r.to) && related(index, d.to, r.from))
+/** K5、K7：两个方向的依赖都算的类型——通知的知识方向通常与箭头相反（订阅者导入发布者），流由第三方接线（ADR-0022） */
+const EITHER_WAY: readonly RelationType[] = ['notifies', 'streams']
 
 /**
- * K6：一对模块（依赖方 → 被依赖方）连着关系的两端（各自相同或互为祖先后代，同 K5），不论方向与种类。
- * 反向的依赖可由端口解释；祖先与后代之间的依赖（K4 不提升，这里计入）可由注入解释——祖先的文件组装子模块，如协调者把 dispatch 注入同步适配器。
+ * K5：依赖的方向——依赖方与 from、被依赖方与 to 各自相同或互为祖先后代为同向，反过来为反向；不相干为 undefined。
+ * 端点是祖先的情况：代码经祖先的文件进出（统一入口，如 useDesk() 所在的文件归 DeskState；或概念子模块的代码在祖先的文件里），依赖落在祖先上也算。
  */
-const linked = (index: ModelIndex, r: RelationEntity, from: string, to: string) =>
-  (related(index, from, r.from) && related(index, to, r.to)) || (related(index, from, r.to) && related(index, to, r.from))
+function directionOf(index: ModelIndex, r: RelationEntity, from: string, to: string): 'forward' | 'reverse' | undefined {
+  if (related(index, from, r.from) && related(index, to, r.to)) return 'forward'
+  if (related(index, from, r.to) && related(index, to, r.from)) return 'reverse'
+  return undefined
+}
 
-/** K6：未证实是否报警告 `fact.unconfirmed`——编译期关系一律报；运行时关系只在两端之间连类型依赖都没有（isolated）时报 */
+/** K5：模块依赖能否作为关系的依据（不看 implements 的证据收窄） */
+function supports(index: ModelIndex, r: RelationEntity, d: ModuleDep): 'forward' | 'reverse' | undefined {
+  const dir = directionOf(index, r, d.from, d.to)
+  return dir === 'forward' || (dir === 'reverse' && EITHER_WAY.includes(r.type)) ? dir : undefined
+}
+
+/** 接口名去掉括号与泛型（同 G12 的比较） */
+const bareName = (name: string) => name.replace(/[(<].*$/s, '').trim()
+
+/** K5：to 模块声明的接口名（子树内 owner 指向它的接口与 provides，G12） */
+export function contractNames(index: ModelIndex, moduleId: string): Set<string> {
+  return new Set(moduleInterfaces(index, moduleId).flatMap(id => (index.interfaces.has(id) ? [bareName(index.interfaces.get(id)!.name)] : [])))
+}
+
+/** K5：implements 的证据——文件依赖引用了 to 声明的接口名，或类的 implements / extends 解析到它 */
+export const contractEvidence = (f: FileDep, names: ReadonlySet<string>) => !!f.heritage || !!f.names?.some(n => names.has(n))
+
+/** 证实依据的知识方向：全部同向 / 全部反向 / 两个方向都有 */
+function knowledgeOf(dirs: readonly ('forward' | 'reverse')[]): Knowledge {
+  const f = dirs.includes('forward')
+  const b = dirs.includes('reverse')
+  return f && b ? 'both' : f ? 'forward' : 'reverse'
+}
+
+/** K6：未证实是否报警告——编译期关系一律报（证据像 depends 的 implements 报 `fact.like-depends`，其余 `fact.unconfirmed`）；运行时关系只在两端之间连类型依赖都没有（isolated）时报 */
 export const unconfirmedWarns = (r: RelationEntity, c: Confirmation): boolean =>
   c.status === 'unconfirmed' && (r.type === 'depends' || r.type === 'implements' || !!c.isolated)
 
+/** K5、K6：报警的问题代码 */
+export const unconfirmedCode = (c: Confirmation) => (c.likeDepends ? 'fact.like-depends' : 'fact.unconfirmed')
+
 /** K6：报警的未证实关系的说明，问题、返工项与面板共用 */
-export const unconfirmedReason = (r: RelationEntity): string =>
-  r.type === 'depends' || r.type === 'implements' ? '在代码中没有对应的依赖' : '是运行时关系，但两端之间在代码中没有任何依赖（类型依赖、反向的端口注入都没有）'
+export const unconfirmedReason = (r: RelationEntity, c?: Confirmation): string =>
+  c?.likeDepends
+    ? '证据像 depends：代码只引用了目标模块的非接口名字，没有引用它声明的接口，也没有类 implements / extends 它'
+    : r.type === 'depends' || r.type === 'implements'
+      ? '在代码中没有对应的依赖'
+      : '是运行时关系，但两端之间在代码中没有任何依赖（类型依赖、反向的端口注入都没有）'
 
 /** K5：模块的宿主——自身或最近的、有直接归属文件的祖先；都没有为 undefined */
 export function hostOf(index: ModelIndex, direct: ReadonlyMap<string, readonly string[]>, id: string): string | undefined {
@@ -112,18 +142,26 @@ export function confirmRelations(
       out.set(r.id, { status: 'skipped', deps: [], host })
       continue
     }
-    const deps = list.filter(d => supports(index, r, d)).map(d => d.key)
-    if (deps.length) out.set(r.id, { status: 'confirmed', deps })
-    else out.set(r.id, { status: 'unconfirmed', deps, ...(pairs.some(([a, b]) => linked(index, r, a, b)) ? {} : { isolated: true }) })
+    const hits = list.flatMap(d => {
+      const dir = supports(index, r, d)
+      return dir ? [{ d, dir }] : []
+    })
+    // K5：implements 的证据收窄为接口名或 implements / extends 子句
+    const names = r.type === 'implements' ? contractNames(index, r.to) : undefined
+    const evidenced = names ? hits.filter(h => h.d.files.some(f => contractEvidence(f, names))) : hits
+    if (evidenced.length) out.set(r.id, { status: 'confirmed', deps: evidenced.map(h => h.d.key), knows: knowledgeOf(evidenced.map(h => h.dir)) })
+    else if (hits.length) out.set(r.id, { status: 'unconfirmed', deps: hits.map(h => h.d.key), likeDepends: true })
+    // K6：一对模块连着关系的两端（不论方向与种类）——反向的依赖可由端口解释；祖先与后代之间的依赖（K4 不提升，这里计入）可由注入解释
+    else out.set(r.id, { status: 'unconfirmed', deps: [], ...(pairs.some(([a, b]) => directionOf(index, r, a, b)) ? {} : { isolated: true }) })
   }
   return out
 }
 
-/** K7：关系是否覆盖模块依赖——端点相同或互为祖先后代、方向一致（dataflow 不论方向），类型不限 */
+/** K7：关系是否覆盖模块依赖——端点相同或互为祖先后代、方向一致（notifies、streams 不论方向），类型不限 */
 export function covers(index: ModelIndex, r: RelationEntity, from: string, to: string): boolean {
   if (!index.modules.has(r.from) || !index.modules.has(r.to)) return false
-  if (related(index, r.from, from) && related(index, r.to, to)) return true
-  return r.type === 'dataflow' && related(index, r.from, to) && related(index, r.to, from)
+  const dir = directionOf(index, r, from, to)
+  return dir === 'forward' || (dir === 'reverse' && EITHER_WAY.includes(r.type))
 }
 
 /** K7：被某条关系覆盖的依赖；返回覆盖它的关系 ID（没有则空） */

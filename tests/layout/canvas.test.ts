@@ -110,7 +110,7 @@ describe('canvasScene', () => {
   it('P11、P15：经由上层关系的临时线取关系的类型、标「经由上层」，随关系选中；未建模的临时线标「未建模」', async () => {
     const { index: idx } = loadModel(
       scenarioFiles({
-        'upper.yaml': 'relations: [{ id: r9, from: app.solution, to: infra.framework, type: dataflow }]',
+        'upper.yaml': 'relations: [{ id: r9, from: app.solution, to: infra.framework, type: streams }]',
         'scenarios/x.yaml':
           'scenario: { id: sc.v, name: V, steps: [{ call: { id: a, from: app.solution, to: infra.framework.pipeline } }, { call: { id: c, from: infra.framework.pipeline, to: app.fragments } }] }',
       }),
@@ -124,7 +124,7 @@ describe('canvasScene', () => {
     const s = canvasScene(input)
     const upper = edge(s, 'upper:boundary:app|infra.framework.pipeline')!
     expect(upper.data).toMatchObject({ temp: 'upper', label: '经由上层', play: 'walked', selected: false })
-    expect(upper.data.edge).toMatchObject({ type: 'dataflow', relationIds: ['r9'] })
+    expect(upper.data.edge).toMatchObject({ type: 'streams', relationIds: ['r9'] })
     expect(upper.data).toMatchObject({ arrow: 'closed', weight: 1, compile: false, factState: 'confirmed' })
     expect(edge(s, 'unmodeled:infra.framework.pipeline|boundary:app')!.data).toMatchObject({ temp: 'unmodeled', label: '未建模', play: 'current' })
     expect(edge(canvasScene({ ...input, selection: { kind: 'relation', id: 'r9' } }), upper.id)!.data.selected).toBe(true)
@@ -135,7 +135,7 @@ describe('canvasScene', () => {
     const plain = canvasScene(input)
     const calls = edge(plain, 'infra.player->infra.framework:calls')!.data
     expect(calls).toMatchObject({ label: '', factState: 'confirmed', arrow: 'closed', weight: 1, compile: false })
-    expect(edge(plain, 'infra.player->infra.framework:event')!.data.arrow).toBe('open')
+    expect(edge(plain, 'infra.framework->infra.player:notifies')!.data.arrow).toBe('open')
     expect(edge(canvasScene({ ...input, hover: 'infra.player' }), 'infra.player->boundary:app:depends')!.data.compile).toBe(true)
     const selected = edge(
       canvasScene({ ...input, selection: { kind: 'edge', id: 'infra.player->infra.framework:calls' } }),
@@ -146,7 +146,7 @@ describe('canvasScene', () => {
     const facts = {
       edgeFacts: new Map([
         ['infra.player->infra.framework:calls', 'confirmed' as const],
-        ['infra.player->infra.framework:event', 'partial' as const],
+        ['infra.framework->infra.player:notifies', 'partial' as const],
       ]),
       violatedEdges: new Set<string>(),
       overlays: [
@@ -165,7 +165,7 @@ describe('canvasScene', () => {
     }
     const s = canvasScene({ ...input, facts })
     expect(edge(s, 'infra.player->infra.framework:calls')!.data).toMatchObject({ label: '', factState: 'confirmed' })
-    expect(edge(s, 'infra.player->infra.framework:event')!.data).toMatchObject({ label: '?', warn: true, factState: 'unconfirmed' })
+    expect(edge(s, 'infra.framework->infra.player:notifies')!.data).toMatchObject({ label: '?', warn: true, factState: 'unconfirmed' })
     expect(edge(s, 'dep:infra.mus->infra.player')!.data).toMatchObject({ temp: 'code', label: '未描述 2', factState: 'undescribed' })
   })
 

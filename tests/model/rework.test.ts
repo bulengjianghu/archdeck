@@ -44,7 +44,7 @@ relations:
   - { id: rel.2, from: ui.store, to: core.api, type: calls }
   - { id: rel.3, from: core.impl, to: core.util, type: depends }
   - { id: rel.4, from: ui.view, to: core.api, type: calls }
-  - { id: rel.5, from: ui.view, to: core.api, type: dataflow }
+  - { id: rel.5, from: ui.view, to: core.api, type: streams }
   - { id: rel.bad, from: ui.view, to: nowhere, type: calls }
 `
 

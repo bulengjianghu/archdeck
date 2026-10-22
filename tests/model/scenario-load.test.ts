@@ -82,7 +82,7 @@ describe('校验', () => {
     expect(r.issues[0]).toMatchObject({ severity: 'error', file: 'scenarios/x.yaml', line: 1 })
   })
 
-  it('S5a：event 关系按反向比对（发布方 → 订阅方的消息对得上订阅方 → 发布方的关系）', () => {
+  it('S5a、S12：notifies 与消息同向比对（发布者 → 订阅者的消息对得上发布者 → 订阅者的关系），反向的消息报不一致', () => {
     const ok = loadModel(scenario('scenario: { id: sc.x, name: X, steps: [{ async: { from: infra.framework.sm, to: infra.player, relation: re1 } }] }'))
     expect(ok.issues).toEqual([])
     const bad = loadModel(scenario('scenario: { id: sc.x, name: X, steps: [{ async: { from: infra.player, to: infra.framework.sm, relation: re1 } }] }'))
@@ -130,10 +130,10 @@ describe('bindRelation', () => {
 
   it('S13：关系写在祖先上也能认定；两端之间有多条运行时关系时不推断', () => {
     expect(bindRelation(index, { kind: 'call', from: 'actor.biz', to: 'infra.player' }).relation).toBe('rc1')
-    // infra.player ↔ infra.framework.sm 之间有 calls（rp）与 event（re1）：call 只对得上 rp
+    // infra.player ↔ infra.framework.sm 之间有 calls（rp）与 notifies（re1，sm → player）：call 只对得上 rp
     expect(bindRelation(index, { kind: 'call', from: 'infra.player', to: 'infra.framework.sm' })).toMatchObject({ relation: 'rp', inferred: true })
-    // async 发布方 → 订阅方：只对得上 re1（反向）
-    expect(bindRelation(index, { kind: 'async', from: 'infra.framework.sm', to: 'infra.player' })).toEqual({ relation: 're1', inferred: true, reverse: true })
+    // async 发布者 → 订阅者：只对得上 re1，与关系同向（S12）
+    expect(bindRelation(index, { kind: 'async', from: 'infra.framework.sm', to: 'infra.player' })).toEqual({ relation: 're1', inferred: true, reverse: false })
   })
 
   it('return 沿调用关系反向；自己发给自己不对应关系', () => {

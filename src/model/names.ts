@@ -13,7 +13,7 @@ export function moduleName(index: ModelIndex, id: string): string {
 export const isLong = (lines: number | undefined, maxLines: number): boolean => lines !== undefined && lines > maxLines
 
 /** K5b：关系经由方式的名称 */
-export const VIA_LABELS: Record<RelationVia, string> = { http: 'HTTP', hmr: 'HMR 事件', inject: '注入', router: '路由', callback: '回调' }
+export const VIA_LABELS: Record<RelationVia, string> = { http: 'HTTP', hmr: 'HMR 事件', inject: '注入', router: '路由', callback: '回调', port: '端口' }
 
 /** 规则种类的名称：门禁消息、命令行与页面共用 */
 export const RULE_LABELS: Record<RuleKind, string> = { layer: '层规则', deps: '依赖白名单', exposes: '访问面' }
