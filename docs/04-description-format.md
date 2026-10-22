@@ -17,6 +17,7 @@ model/<项目>/
   scenarios/<场景>.yaml    一个场景一个文件，也可用 .json
   source-ignore.yaml       忽略清单 sourceIgnore：不属于任何模块的源码文件（§3.7）
   rules.yaml               架构规则 rules：架构师的意图，AI 重新生成时不改动（§3.8）
+  reviewed.yaml            确认记录 reviewed：架构师确认过哪些模块、确认时的指纹与摘要，AI 重新生成时不改动（§3.9）
   designs/<设计>/          设计版本（§5），读取当前版本时跳过
   governance/              基线 baseline.json 与拦截记录 ledger.jsonl，由命令行与 agent 接口写，不属于描述，读取时跳过（§4）
 ```
@@ -26,7 +27,7 @@ model/<项目>/
 | 拥有者 | 文件 | 页面 |
 |---|---|---|
 | AI（按代码生成） | `system.yaml`、`modules/`、`actors.yaml`、`scenarios/`；设计版本各轮快照 `designs/<设计>/r<N>/` | 只读 |
-| 人（架构师、负责人） | `rules.yaml`（AI 重新生成时不改动，§3.8）、`source-ignore.yaml`（忽略项）、`designs/<设计>/design.yaml` 的评审意见 `feedback` | 只追加：例外、忽略项、评审意见；其余由人编辑 |
+| 人（架构师、负责人） | `rules.yaml`（AI 重新生成时不改动，§3.8）、`source-ignore.yaml`（忽略项）、`designs/<设计>/design.yaml` 的评审意见 `feedback`、`reviewed.yaml`（确认记录，§3.9） | 只追加：例外、忽略项、评审意见；确认记录追加或按模块更新（Z1）；其余由人编辑 |
 | 命令行与 agent 接口 | `governance/` | 只读 |
 
 - 骨架只描述层和第二级模块；区域文件**不得重复定义**它们，只能用 `parent: <第二级 ID>` 往下挂子模块。
@@ -284,6 +285,28 @@ rules:
 - 层规则写在骨架的 `mayDependOn` 上（§3.1），这里只能整体开关。
 - 先写约束少而硬的规则（层、核心模块的白名单与访问面），再逐步收紧；存量违规用基线承接（§4），不用 `allow` 掩盖——`allow` 只给有理由、长期接受的例外。
 - 设计版本可以修改 `rules`，随设计一起评审。
+
+### 3.9 确认记录
+
+`reviewed.yaml` 记架构师确认过的模块（Z1–Z6，ADR-0023），**不由代码生成、人不必手写**：页面上点「确认」或草图归档时写入。AI 按代码重新生成当前版本时不得改动它；被确认的内容变了由工具标「需复核」，不是去改记录。
+
+```yaml
+# reviewed.yaml
+reviewed:
+  - module: state.transition
+    at: '2026-10-22'
+    hash: 3f9a1c0e7b2d4a61           # 指纹：职责、包含 / 不包含、可依赖的层、接口签名、直接子模块（Z2）
+    source: manual                   # manual 或 sketch:<设计 ID>（Z6）
+    note: 确认只有转移函数能改状态     # 可选，架构师自己的话
+    summary:                         # 确认时的摘要，需复核时据此显示差异（Z3）
+      responsibility: 会话规则的纯函数……
+      provides: [{ id: if.transition, signature: 'transition(state, action, ctx): { state, history }' }]
+      children: [state.transition.navigation, state.transition.playback]
+```
+
+- 一个模块一条；再次确认时更新那一条（页面与 `appendReviewed` 都这样做），人手工编辑时也不要写两条。
+- 记录引用的模块不存在时提醒并忽略；模块改了 ID 视同未确认，重新确认即可。
+- 设计版本的快照目录里不放 `reviewed.yaml`（只对当前版本，Z1）。
 
 ## 4. 校验与提交
 
