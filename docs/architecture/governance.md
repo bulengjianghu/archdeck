@@ -124,7 +124,7 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 - 聚合的判据是「改一处能消掉几条」：同一组重叠的 codeRefs、同一目录的漏写、越过同一条边界依赖同一个模块（常见于契约放错了层）、同一对端点之间缺的关系。h5player 的 178 条违规由此收成 13 条。
 - 建议动作只给方向与片段，不替人决定：加例外、收紧基线由架构师决定（U5、U7）。
 
-### 4.3 确认（模型层，`src/model/review/`）——状态：待实现
+### 4.3 确认（模型层，`src/model/review/`）
 
 人确认层（Z1–Z6，ADR-0023）：架构师看过并认可了什么。记录在人拥有的 `reviewed.yaml`（写法见 [04 §3.9](../04-description-format.md)），指纹与状态判定是纯函数，页面、命令行与草图归档同一份。
 
@@ -189,4 +189,4 @@ sequenceDiagram
 - 画布：`canvasScene` 多两个输入——视图边的证实与违规标记、叠加线（坐标由 `linkRoute` 算，不参与布局）；节点数据多 `cycle` 编号（K9、Y4）。
 - 选中 `{ kind: 'dep', id: '<A>-><B>' }`：URL `sel=d:`，面板 `DepPanel`（K10）；运行视角下按选中关系的方式突出两端泳道。
 - 本层环可解释（Y5）：模块面板「架构治理」一节列出 `selectedCycle`，单击一条本层依赖即 `select`——有 `edgeId` 时选中视图边（`sel=e:`），否则选中代码依赖（`sel=d:`），画布按已有的选中规则高亮视图边或叠加线。
-- 人确认层（Z，待实现）：DeskState 的 `review` 分组——`states`（每个模块的状态与差异，`reviewStates`）、`counts`（Z5）、`scope`（Z4）、`canReview`（只对当前版本）；写入意图 `review.confirm(ids, note?)` 经 `ModelWriter.reviewed` 发 `POST write/<项目>/reviewed`，结果由文件变化推送回来（N5）。模块面板（`ReviewSection.vue`）：标题旁状态标记、需复核时「自上次确认以来的改动」、底部「确认 / 复核并确认」与「也确认子模块」；模块树需复核标记与「只看需复核」；根层健康度与项目卡片「核心模块已确认 a / b · 需复核 c」；返工清单「需复核」项。
+- 人确认层（Z）：DeskState 的 `review` 分组——`states`（每个模块的状态与差异，`reviewStates`）、`counts`（Z5）、`scope`（Z4）、`canReview`（只对当前版本）；写入意图 `review.confirm(ids, note?)` 经 `ModelWriter.reviewed` 发 `POST write/<项目>/reviewed`，结果由文件变化推送回来（N5）。模块面板（`ReviewSection.vue`）：标题旁状态标记、需复核时「自上次确认以来的改动」、底部「确认 / 复核并确认」与「也确认子模块」；模块树需复核标记与「只看需复核」；根层健康度与项目卡片「核心模块已确认 a / b · 需复核 c」；返工清单「需复核」项。

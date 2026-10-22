@@ -52,7 +52,7 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计或提交)──▶ Mod
 | `POST write/<项目>/feedback` `{ design, revision, text }` | `appendFeedback` | 该轮 `design.yaml` 的 `feedback` 末尾追加一段（带日期） |
 | `POST write/<项目>/allow` `{ from, to, rule?, reason }` | `appendAllow` | `rules` 所在文件的 `rules.allow` 追加一条（校验两端模块存在、理由必填、不重复） |
 | `POST write/<项目>/ignore` `{ pattern }` | `appendIgnore` | `source-ignore.yaml` 的 `sourceIgnore` 追加一项（没有文件时新建） |
-| `POST write/<项目>/reviewed` `{ entries: [{ module, at, hash, summary, source, note? }] }`（也接受单条或数组） | `appendReviewed(modelRoot, project, entries)` | `reviewed.yaml` 的 `reviewed`：逐条按 `module` 更新已有记录或追加（没有文件时新建）；校验模块存在、`source` 为 `manual` 或 `sketch:<设计 ID>`；草图归档批量调用同一函数（Z1、Z6，待实现） |
+| `POST write/<项目>/reviewed` `{ entries: [{ module, at, hash, summary, source, note? }] }`（也接受单条或数组） | `appendReviewed(modelRoot, project, entries)` | `reviewed.yaml` 的 `reviewed`：逐条按 `module` 更新已有记录或追加（没有文件时新建）；校验模块存在、`source` 为 `manual` 或 `sketch:<设计 ID>`；草图归档批量调用同一函数（Z1、Z6） |
 
 - 只收同源 JSON POST；用 `yaml` 的文档模型（`parseDocument`）修改并写回，保留注释与原有格式；解析失败、校验不过时返回 400 与原因，不写。
 - 页面侧：`ModelWriter`（`src/state/sync/writer.ts`）由项目视图注入 `httpModelWriter`；`desk.write` 按版本放开——设计版本只能记录评审意见，当前版本只能加例外、忽略项与确认记录（`desk.review.confirm`）；写后不改视图状态，文件监听推送 `arch-model:changed` 后按 N5 重新加载。
