@@ -28,8 +28,8 @@ model/<项目>/
 
 | 拥有者 | 文件 | 页面 | 指纹 |
 |---|---|---|---|
-| AI（按代码生成） | `system.yaml`、`modules/`（骨架之下）、`actors.yaml`、`scenarios/`；设计版本各轮快照 `designs/<设计>/r<N>/`，含该轮说明 `revision.yaml`（E8，待实现） | 只读 | — |
-| 人（架构师、负责人） | 草图：`intent/*.yaml`（骨架等持久草图）、`designs/<设计>/sketch.yaml`；`rules.yaml`（AI 重新生成时不改动，§3.8）；`source-ignore.yaml`（忽略项）；`designs/<设计>/design.yaml`（目标、状态、基线、ADR、认可偏差 `accepted`、评审意见 `revisions[].feedback`——不含每轮说明，E8）；`reviewed.yaml`（确认记录，§3.9） | 只追加：例外、忽略项、评审意见（该轮没有条目时新建，B2）、认可偏差；确认记录追加或按模块更新（Z1）；归档 / 晋升改设计状态、晋升时整份替换持久草图；草图在画布编辑后整份覆盖、新建设计（B6、X7，待实现）；其余由人编辑 | 记在 `governance/owned.json`：人改完后 `npm run arch -- own` 登记，页面写入自动更新，`lint:model` 不符即报错 `owned.changed` |
+| AI（按代码生成） | `system.yaml`、`modules/`（骨架之下）、`actors.yaml`、`scenarios/`；设计版本各轮快照 `designs/<设计>/r<N>/`，含该轮说明 `revision.yaml`（E8） | 只读 | — |
+| 人（架构师、负责人） | 草图：`intent/*.yaml`（骨架等持久草图）、`designs/<设计>/sketch.yaml`；`rules.yaml`（AI 重新生成时不改动，§3.8）；`source-ignore.yaml`（忽略项）；`designs/<设计>/design.yaml`（目标、状态、基线、ADR、认可偏差 `accepted`、评审意见 `revisions[].feedback`——不含每轮说明，E8）；`reviewed.yaml`（确认记录，§3.9） | 只追加：例外、忽略项、评审意见（该轮没有条目时新建，B2）、认可偏差；确认记录追加或按模块更新（Z1）；归档 / 晋升改设计状态、晋升时整份替换持久草图；草图在画布编辑后整份覆盖、新建设计（B6、X7）；其余由人编辑 | 记在 `governance/owned.json`：人改完后 `npm run arch -- own` 登记，页面写入自动更新，`lint:model` 不符即报错 `owned.changed` |
 | 命令行与 agent 接口 | `governance/` | 只读 | — |
 
 - 骨架只描述层和第二级模块；AI 只能用 `parent: <第二级 ID>` 往骨架之下挂子模块，对骨架里的模块只能补草图没写的字段，不得重定义已写的字段（X1，`lint:model` 报 `sketch-redefined`）。没有 `intent/skeleton.yaml` 的旧描述仍可把层写在 `modules/layers.yaml`（兼容期）。
@@ -361,7 +361,7 @@ sketch:
 - **加载**：草图先于其他文件进入 Loader；其他文件对草图实体只能补充（往下挂子模块、补草图没写的字段），不能重定义（X1）。打开设计的草图时按普通描述加载：`system.yaml` + 持久草图 + 该草图，对比基线为当前版本（DV-10）。
 - **核验**（X4）：对设计各轮与当前版本（`lint:model` 只对最新一轮与当前版本把关），只比草图写了的——缺模块、封闭子树多出子模块、父模块 / `kind` / `core` / `mayDependOn` 不一致为错误；关系没有对应（两端 + 类型，深层提升也算）、接口不存在或 `owner` 不同为提醒；职责等文字由 AI 展开，不判。`npm run arch -- sketch-check [--design <设计>]` 与页面问题页签「草图偏差」同一份结果。
 - **写什么**：只写架构师要钉住的——层与核心模块、它们之间的关系、必须存在的接口；覆盖到哪一层由架构师决定，其余留给 AI。职责一两句话即可，AI 展开时会补全。
-- **在画布上画**（X7、ADR-0024，待实现）：草图版本（设计的草图、持久草图 `/i/<ID>`）上点「编辑」，增删改层、模块、关系、接口，标核心（只第二级）与封闭；保存为整份写回（B6）。写回用 YAML 文档模型合并：**注释只在未改动的节点上保留**——改过的标量保留行尾注释，删掉的条目注释随之消失，新条目没有注释；条目的嵌套或平铺写法与顺序保持不变，新模块跟随父模块的写法。手写与画布编辑可以交替，保存时文件已被外部改动会被拒绝（X7i）。
+- **在画布上画**（X7、ADR-0024）：草图版本（设计的草图、持久草图 `/i/<ID>`）上点「编辑」，增删改层、模块、关系、接口，标核心（只第二级）与封闭；保存为整份写回（B6）。写回用 YAML 文档模型合并：**注释只在未改动的节点上保留**——改过的标量保留行尾注释，删掉的条目注释随之消失，新条目没有注释；条目的嵌套或平铺写法与顺序保持不变，新模块跟随父模块的写法。手写与画布编辑可以交替，保存时文件已被外部改动会被拒绝（X7i）。
 - **代码落点（`codeRefs`）只写目录级**（议，外部评审 D1）：草图里的 `codeRefs` 只写架构师想钉住的目录级 glob（如 `src/model/review/**`），或者不写；细到文件的落点由 AI 在 `modules/` 对应的区域文件里补充（X1：为草图模块补草图没写的字段，没有其他字段要补时写一个只含 `id`、`name`、`codeRefs` 的补充条目）。代码在目录内挪文件不必改人拥有的文件、不必重新登记指纹。同一模块的 `codeRefs` 只能一处写：草图写了，区域文件再写不同的值即 `sketch-redefined`。
 
 ## 4. 校验与提交
@@ -415,7 +415,7 @@ revision:
   questions: [ … ]              # 待评审确认的问题，每条给出推荐
 ```
 
-轮次从目录发现：含 `system.yaml` 的 `r<N>/` 即一轮，按 N 的数字排序（E8，待实现）。早先的设计把 `date`、`summary`、`questions` 写在 `design.yaml` 的 `revisions[]` 里，照常读取；新的轮次一律写 `revision.yaml`。
+轮次从目录发现：含 `system.yaml` 的 `r<N>/` 即一轮，按 N 的数字排序（E8）。早先的设计把 `date`、`summary`、`questions` 写在 `design.yaml` 的 `revisions[]` 里，照常读取；新的轮次一律写 `revision.yaml`。
 
 流程：
 

@@ -198,7 +198,7 @@ encodeView(state: ViewState, index: ModelIndex, plan?: ScenarioPlan): Record<str
 keyIntent(state, index, key: 'Escape' | 'Backspace'): ViewAction | 'leave' | null      // N7、N9：Esc 只取消选中，Backspace 返回上级；'leave' = 回项目列表
 ```
 
-## 7. 编辑态（待实现，ADR-0024）
+## 7. 编辑态（ADR-0024）
 
 编辑态只在草图版本上开启（X7a）。状态分两处，各管各的：
 
