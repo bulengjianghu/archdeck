@@ -50,6 +50,10 @@ export interface NodeData {
   cycle?: number
   /** J5：热度角标（右下角三档色块）：档位、种类、热度值与次数 */
   heat?: NodeHeat & { kind: HeatKind }
+  /** X7：编辑态——节点可拖动、可从连线柄拖出关系 */
+  editing?: boolean
+  /** X7：编辑落点——插入条（加层，at 为插入位置）或「+ 模块」（parent 为父模块） */
+  insert?: { kind: 'layer'; at: number } | { kind: 'module'; parent: string }
 }
 
 /** L10：线型表示的事实状态——已证实或没有代码事实（实线）/ 未证实或部分证实（虚线）/ 代码有描述无（点线） */
@@ -100,7 +104,7 @@ export interface RouteEdgeData {
   couple?: LevelCoupling
 }
 
-export type CanvasNodeType = 'frame' | 'module' | 'boundary' | 'band' | 'core' | 'more' | 'actor' | 'step' | 'preview'
+export type CanvasNodeType = 'frame' | 'module' | 'boundary' | 'band' | 'core' | 'more' | 'actor' | 'step' | 'preview' | 'insert'
 
 /** 与 Vue Flow 的节点同形 */
 export interface CanvasNode {
@@ -113,8 +117,9 @@ export interface CanvasNode {
   height: number
   style: { width: string; height: string }
   selectable: false
-  draggable: false
-  connectable: false
+  /** 编辑态下模块与带可拖动（移动、排序）、可连线（X7） */
+  draggable: boolean
+  connectable: boolean
   class?: string
 }
 
@@ -154,6 +159,8 @@ export interface CanvasInput {
   facts?: LevelFacts | null
   /** J5：结构视角下开启热度或时间耦合时的本层投影；否则为 null */
   evolution?: LevelEvolution | null
+  /** X7：编辑态——给出编辑落点（插入条、+ 模块），模块与带可拖动、可连线 */
+  editing?: boolean
 }
 
 export interface CanvasScene {

@@ -98,6 +98,14 @@ export function createCommands(i: CommandInputs) {
       ? idImpact(session.value.draft, ctx(), id, parent, newId, i.current())
       : { renamed: [], references: 0, outside: { modules: 0, relations: 0, interfaces: 0, messages: 0 }, rejected: '不在编辑态' }
 
+  /** X7e：删除前的级联范围（不改会话）；拒绝时为原因 */
+  function previewRemove(id: string): { removed: string[] } | { rejected: string } {
+    const s = session.value
+    if (!s || !loaded.value) return { rejected: '不在编辑态' }
+    const r = apply(s, { op: 'removeModule', id }, ctx()).result
+    return r.ok ? { removed: r.effects.removed } : { rejected: r.reason }
+  }
+
   const save = (): Promise<SaveOutcome> => i.sync.save()
 
   /** 放弃本次改动；已过时时先重新加载，以新文件重新开始（X7i 的兜底） */
@@ -151,6 +159,7 @@ export function createCommands(i: CommandInputs) {
     undo: step(undoSession),
     redo: step(redoSession),
     previewMove,
+    previewRemove,
     save,
     discard,
     replayOnReload,

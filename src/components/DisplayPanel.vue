@@ -7,7 +7,7 @@
  *   时序图的箭头约定不在这里，在副栏时序图标题栏的「图例」里。
  * - 折叠时标题后摘要列出非默认的设置；面板展开与各组折叠按视角记在本机（useDisplayPrefs，运行视角默认只展开「回放」）。
  */
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { RELATION_TYPES } from '@/model'
 import { useDesk } from '@/state/inject'
 import { useStage } from './stage/useStageDisplay'
@@ -25,6 +25,9 @@ const desk = useDesk()
 const stage = useStage()
 const run = computed(() => desk.perspective.value === 'run')
 const { open, groups, toggleOpen, toggleGroup } = useDisplayPrefs(desk.perspective)
+/** E-2：编辑态下草图不对应代码——隐藏代码事实与演化两组；进入编辑态时收起面板，不挡住编辑落点 */
+const editing = computed(() => desk.edit.active.value)
+watch(editing, on => on && open.value && toggleOpen(), { immediate: true })
 
 /** 折叠时的摘要：只列非默认的设置 */
 const summary = computed(() => {
@@ -60,8 +63,8 @@ const summary = computed(() => {
           <span><span class="box dashed" />目标态 / 外部</span>
         </div>
       </DisplayGroup>
-      <FactsLegend v-if="!run" :open="groups.facts" @toggle="toggleGroup('facts')" />
-      <EvolutionLegend v-if="!run" :open="groups.evo" @toggle="toggleGroup('evo')" />
+      <FactsLegend v-if="!run && !editing" :open="groups.facts" @toggle="toggleGroup('facts')" />
+      <EvolutionLegend v-if="!run && !editing" :open="groups.evo" @toggle="toggleGroup('evo')" />
       <ReplayLegend v-else :open="groups.play" @toggle="toggleGroup('play')" />
     </div>
   </div>

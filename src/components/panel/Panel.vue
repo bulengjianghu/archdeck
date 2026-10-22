@@ -2,7 +2,7 @@
 /**
  * 属性面板：按选中分派（V2，ADR-0012）。结构视角：选中的对象，无选中时为当前父模块（根层显示系统）；
  * 运行视角：选中步骤 → 步骤面板，选中场景 → 场景面板，其他对象 → 运行信息在上、结构信息折叠在下（V6）。
- * 代码依赖叠加线（K10）→ 代码依赖面板；耦合线（J7）→ 耦合面板。
+ * 代码依赖叠加线（K10）→ 代码依赖面板；耦合线（J7）→ 耦合面板。编辑态（X7）：换成编辑表单，仍按唯一的选中分派。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -14,6 +14,7 @@ import RelationPanel from './RelationPanel.vue'
 import EdgePanel from './EdgePanel.vue'
 import SystemPanel from './SystemPanel.vue'
 import ActorPanel from './ActorPanel.vue'
+import EditPanel from '../edit/panel/EditPanel.vue'
 import FilePanel from './FilePanel.vue'
 import DepPanel from './DepPanel.vue'
 import CouplePanel from './CouplePanel.vue'
@@ -40,7 +41,8 @@ const target = computed(() => {
 
 <template>
   <div class="panel">
-    <template v-if="target">
+    <EditPanel v-if="desk.edit.active.value" />
+    <template v-else-if="target">
       <StepPanel v-if="target.kind === 'step'" :key="`f:${target.id}`" />
       <ScenarioPanel v-else-if="target.kind === 'scenario'" :key="`s:${target.id}`" />
       <template v-else>

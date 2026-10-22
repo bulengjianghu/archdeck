@@ -162,6 +162,7 @@ describe('X7d 移动与改 ID', () => {
     const r = ok(DRAFT, { op: 'renameModule', id: 'core.a', newId: 'core.alpha' })
     expect(r.effects.renamed[0]).toEqual(['core.a', 'core.alpha'])
     expect(r.sketch.relations![0].from).toBe('core.alpha.x')
+    expect(r.sketch.modules!.map(m => m.id)).toEqual(['core.alpha', 'core.b', 'core.alpha.y']) // 原地改写，位置不动
     expect(no(DRAFT, { op: 'renameModule', id: 'core.a', newId: 'ui.a' }).code).toBe('id-prefix')
   })
 
@@ -272,5 +273,16 @@ describe('B6 新建设计的底稿', () => {
 
   it('sketchText 序列化后经同一条加载流水线读回同样的草图', () => {
     expect(parse(sketchText(DRAFT))).toEqual({ sketch: DRAFT })
+  })
+})
+
+describe('X7b 设计草图里的层序', () => {
+  it('有持久草图的层（只读）时，新加或移动的层取前后两层 order 的中点，不动别的层', () => {
+    const a = ok({ id: 'd' }, { op: 'addLayer', name: 'Mid', at: 1 })
+    expect(a.sketch.modules).toEqual([{ id: 'mid', name: 'Mid', kind: 'layer', order: 1.5 }])
+    const b = ok(a.sketch, { op: 'addLayer', name: 'Last', at: 3 })
+    expect(b.sketch.modules![1].order).toBe(3)
+    const c = ok(b.sketch, { op: 'reorderLayer', id: 'last', to: 0 })
+    expect(c.sketch.modules![1].order).toBe(0)
   })
 })

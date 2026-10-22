@@ -8,10 +8,11 @@
  * 选中文件时，其归属模块在本层的投影节点加文件高亮（G14）。
  * 结构视角开启「代码事实」时叠加证实标记、违规与代码依赖叠加线、本层的环（K9、Y4）；单击叠加线即选中它（K10）。
  * 开启「演化」时叠加热度角标与时间耦合的波浪线（J5）；单击耦合线即选中它（J7）。
+ * 编辑态（X7，ADR-0024）：插入条与「+ 模块」、拖动排序与移动、从连线柄拖出关系、右键菜单；每个操作只调用 desk.edit 的一个操作，不保存坐标。
  * 画什么由 Layout 的 canvasScene 算出（ADR-0013）；这里只把结果写入 Vue Flow、把交互转成操作、适应画布。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
+import { ConnectionMode, VueFlow, useVueFlow, type Connection, type Edge, type Node } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import { useDesk } from '@/state/inject'
 import { contentBounds } from '@/layout/layout'
@@ -28,6 +29,10 @@ import StepBadge from './nodes/StepBadge.vue'
 import BranchPreview from './nodes/BranchPreview.vue'
 import RouteEdge from './edges/RouteEdge.vue'
 import DisplayPanel from './DisplayPanel.vue'
+import InsertSlot from './edit/canvas/InsertSlot.vue'
+import ConnectPopover from './edit/canvas/ConnectPopover.vue'
+import EditMenu from './edit/canvas/EditMenu.vue'
+import { onDragStop as editDragStop } from './edit/canvas/useEditDrag'
 
 const desk = useDesk()
 const stageUi = useStage()
@@ -54,8 +59,10 @@ const scene = computed(() =>
     branchPointId: desk.run.branchPoint.value?.id ?? null,
     facts: desk.facts.level.value,
     evolution: desk.evolution.level.value,
+    editing: desk.edit.active.value,
   }),
 )
+const editing = computed(() => desk.edit.active.value)
 const nodes = computed<Node<NodeData>[]>(() => scene.value.nodes)
 const edges = computed<Edge<RouteEdgeData>[]>(() => scene.value.edges)
 
@@ -71,7 +78,7 @@ function onFlowError(err: unknown) {
 
 // ── 交互 ──
 function onNodeClick({ node }: { node: Node<NodeData> }) {
-  if (node.type === 'step' || node.type === 'preview') return
+  if (node.type === 'step' || node.type === 'preview' || node.type === 'insert') return
   if (node.type === 'frame') desk.select(null)
   else if (node.type === 'actor') desk.select({ kind: 'actor', id: node.data!.moduleId })
   // O6：单击带内 +N 临时展开非核心模块（再单击「收起」），不改层次、不改选中
@@ -80,7 +87,7 @@ function onNodeClick({ node }: { node: Node<NodeData> }) {
 }
 
 function onNodeDoubleClick({ node }: { node: Node<NodeData> }) {
-  if (node.type === 'actor' || node.type === 'frame' || node.type === 'step' || node.type === 'preview') return
+  if (node.type === 'actor' || node.type === 'frame' || node.type === 'step' || node.type === 'preview' || node.type === 'insert') return
   if (node.type === 'boundary') desk.revealModule(node.data!.moduleId)
   else if (node.type === 'more') desk.drillInto(node.id.slice('more:'.length))
   else desk.drillInto(node.data!.moduleId)
@@ -103,6 +110,49 @@ function onNodeEnter({ node }: { node: Node<NodeData> }) {
 
 function onNodeLeave() {
   desk.setHover(null)
+}
+
+// ── 编辑态（X7）：拖动、连线、右键菜单；结果说明在画布顶部闪一下 ──
+const notice = ref('')
+function notify(msg: string) {
+  notice.value = msg
+  setTimeout(() => notice.value === msg && (notice.value = ''), 3500)
+}
+async function onDragStop({ node }: { node: Node<NodeData> }) {
+  // 不保存坐标：节点先回到布局给出的位置，编辑成功后由自动布局重排
+  setNodes(nodes.value)
+  const msg = await editDragStop(desk, node, scene.value.nodes)
+  if (msg) notify(msg)
+}
+const connecting = ref<{ from: string; to: string } | null>(null)
+function onConnect(c: Connection) {
+  const byId = new Map(scene.value.nodes.map(n => [n.id, n]))
+  const a = byId.get(c.source)
+  const b = byId.get(c.target)
+  if (!a || !b || a.id === b.id) return
+  // C-9：分层总览上带到带拖线 = 改可依赖的层
+  if (a.type === 'band' && b.type === 'band') {
+    const cur = desk.index.value?.modules.get(a.data.moduleId)?.mayDependOn ?? []
+    const r = desk.edit.edit({ op: 'setMayDependOn', id: a.data.moduleId, layers: [...new Set([...cur, b.data.moduleId])] })
+    if (!r.ok) notify(r.reason)
+    return
+  }
+  connecting.value = { from: a.data.moduleId, to: b.data.moduleId }
+}
+const menu = ref<{ x: number; y: number; target: { kind: 'module' | 'relation'; id: string } } | null>(null)
+function onNodeMenu({ event, node }: { event: MouseEvent | TouchEvent; node: Node<NodeData> }) {
+  if (!editing.value || !['module', 'core', 'band'].includes(node.type ?? '')) return
+  event.preventDefault()
+  const e = event as MouseEvent
+  desk.select({ kind: 'module', id: node.data!.moduleId })
+  menu.value = { x: e.clientX, y: e.clientY, target: { kind: 'module', id: node.data!.moduleId } }
+}
+function onEdgeMenu({ event, edge }: { event: MouseEvent | TouchEvent; edge: Edge<RouteEdgeData> }) {
+  const e = edge.data!.edge
+  if (!editing.value || edge.data!.temp || e.kind !== 'direct') return
+  event.preventDefault()
+  desk.select({ kind: 'relation', id: e.relationIds[0] })
+  menu.value = { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, target: { kind: 'relation', id: e.relationIds[0] } }
 }
 
 // ── 视角：切换层次后自动适应画布 ──
@@ -180,8 +230,10 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       :min-zoom="0.1"
       :max-zoom="2.5"
       :zoom-on-double-click="false"
-      :nodes-draggable="false"
-      :nodes-connectable="false"
+      :nodes-draggable="editing"
+      :nodes-connectable="editing"
+      :connection-mode="ConnectionMode.Loose"
+      :connection-radius="60"
       :elements-selectable="false"
       :only-render-visible-elements="false"
       @node-click="onNodeClick"
@@ -191,6 +243,10 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       @node-mouse-enter="onNodeEnter"
       @node-mouse-leave="onNodeLeave"
       @error="onFlowError"
+      @node-drag-stop="onDragStop"
+      @connect="onConnect"
+      @node-context-menu="onNodeMenu"
+      @edge-context-menu="onEdgeMenu"
     >
       <template #node-module="p"><ModuleNode :data="p.data" /></template>
       <template #node-boundary="p"><BoundaryNode :data="p.data" /></template>
@@ -201,10 +257,14 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       <template #node-frame="p"><FrameNode :data="p.data" /></template>
       <template #node-step="p"><StepBadge :data="p.data" /></template>
       <template #node-preview="p"><BranchPreview :data="p.data" /></template>
+      <template #node-insert="p"><InsertSlot :data="p.data" /></template>
       <template #edge-route="p"><RouteEdge :id="p.id" :data="p.data" /></template>
     </VueFlow>
 
-    <div v-if="isEmpty" class="empty">这个模块没有子模块</div>
+    <div v-if="isEmpty && !editing" class="empty">这个模块没有子模块</div>
+    <div v-if="notice" class="edit-notice" role="status">{{ notice }}</div>
+    <ConnectPopover v-if="connecting" :from="connecting.from" :to="connecting.to" @close="connecting = null" />
+    <EditMenu v-if="menu" :x="menu.x" :y="menu.y" :target="menu.target" @close="menu = null" @notice="notify" />
     <div v-if="stage?.hiddenCurrent" class="play-hint">
       当前步骤在本层不可见（两端都在本层之外）：
       <button class="link" @click="desk.goTo(desk.run.frameLevel.value!)">到能看到它的层次</button>
@@ -232,6 +292,19 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
   place-content: center;
   color: var(--text-3);
   pointer-events: none;
+}
+
+.edit-notice {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  padding: 4px 12px;
+  font-size: 12.5px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: 14px;
 }
 
 .play-hint {

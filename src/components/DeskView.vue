@@ -4,7 +4,7 @@
  * 其 watch 都在本组件作用域内，离开项目时随组件销毁。
  */
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { createDeskState, type ModelPayload } from '@/state/useDeskState'
 import { isCommitVersion, isIntentVersion, type VersionRef } from '@/model'
 import { httpModelWriter, httpSourceFetcher } from './source/httpSource'
@@ -28,9 +28,13 @@ import { OPEN_PREVIEW } from './shared/preview'
 import { NAV_TAB, type NavTab } from './shared/navTab'
 import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
 import { useEvolutionPrefs } from './display/useEvolutionPrefs'
+import EditBar from './edit/EditBar.vue'
+import EditDialog from './edit/EditDialog.vue'
+import { editKey } from './edit/canvas/useEditKeys'
 
 const props = defineProps<{ project: string; design?: string; revision?: string; commit?: string; base?: string; intent?: string }>()
 const router = useRouter()
+const route = useRoute()
 // 设计版本（ADR-0002）、提交版本（E5、E6）或持久草图版本（ADR-0024）；都没有时为当前版本
 const version: VersionRef | undefined = props.commit
   ? { commit: props.commit, ...(props.base ? { base: props.base } : {}) }
@@ -78,7 +82,25 @@ const unwatchModel = desk.watchChanges(import.meta.hot)
 onBeforeUnmount(unwatchModel)
 // J5：「演化」叠加的开关按项目记在本地，模型加载后恢复
 const evolutionPrefs = useEvolutionPrefs(props.project, desk)
-void router.isReady().then(() => desk.init().then(evolutionPrefs.restore))
+void router.isReady().then(() =>
+  desk.init().then(() => {
+    evolutionPrefs.restore()
+    // 新建设计、「编辑骨架」打开草图版本时直接进入编辑态（E-1）
+    if (route.query.edit === '1') desk.edit.enterEdit()
+  }),
+)
+
+// X7a：有未保存的草图改动时，离开（切换版本、回项目列表、关闭页面）要确认
+const leaveOk = () => desk.edit.canLeave() === 'free' || window.confirm('草图有未保存的改动，离开会丢失。确定离开？')
+onBeforeRouteLeave(() => leaveOk())
+onBeforeRouteUpdate((to, from) => (JSON.stringify(to.params) === JSON.stringify(from.params) ? true : leaveOk()))
+const onUnload = (e: BeforeUnloadEvent) => {
+  if (desk.edit.canLeave() === 'confirm') e.preventDefault()
+}
+onMounted(() => window.addEventListener('beforeunload', onUnload))
+onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
+/** 编辑态快捷键的结果说明（删除被拒绝等） */
+const editNotice = ref('')
 
 // 导航树与属性面板：宽度可拖动、可折叠，记在本地（W-1）
 function readNumber(key: string, min: number, max: number, fallback: number): number {
@@ -183,6 +205,16 @@ function onToggle(slot: 'structure' | 'aside') {
 function onKey(e: KeyboardEvent) {
   const t = e.target as HTMLElement
   if (t.closest('input, textarea, select, [contenteditable="true"]')) return
+  // X7、X7g：编辑态——Delete / Backspace 删除选中对象，⌘Z / ⇧⌘Z 撤销重做
+  if (
+    editKey(desk, e, msg => {
+      editNotice.value = msg
+      setTimeout(() => editNotice.value === msg && (editNotice.value = ''), 3500)
+    })
+  ) {
+    e.preventDefault()
+    return
+  }
   if (desk.perspective.value === 'run') {
     const bp = desk.run.branchPoint.value
     if (e.key === 'ArrowRight') desk.next()
@@ -221,7 +253,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </button>
     </header>
 
-    <CommitBar v-if="isCommitVersion(version) && desk.status.value === 'ready'" class="design-bar" />
+    <div v-if="isIntentVersion(version) && desk.status.value === 'ready'" class="design-bar intent-bar">
+      <span class="kind">持久草图</span>
+      <strong>{{ version.intent === 'skeleton' ? '骨架' : version.intent }}</strong>
+      <span class="muted">intent/{{ version.intent }}.yaml · 人拥有 · 对比当前版本</span>
+      <EditBar :name="version.intent === 'skeleton' ? '骨架' : version.intent" />
+    </div>
+    <CommitBar v-else-if="isCommitVersion(version) && desk.status.value === 'ready'" class="design-bar" />
     <DesignBar v-else-if="version && desk.status.value === 'ready'" class="design-bar" />
 
     <aside v-show="!navCollapsed" class="nav-area">
@@ -284,6 +322,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <Panel v-if="desk.status.value === 'ready'" />
     </aside>
     <GuideDialog v-if="guideOpen" @close="guideOpen = false" />
+    <EditDialog />
+    <div v-if="editNotice" class="edit-key-notice" role="alert">{{ editNotice }}</div>
   </div>
 </template>
 
@@ -293,6 +333,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   grid-template-columns: var(--nav-w) auto minmax(0, 1fr) auto var(--panel-w);
   grid-template-rows: auto auto minmax(0, 1fr);
   height: 100%;
+}
+
+.edit-key-notice {
+  position: fixed;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  padding: 4px 12px;
+  font-size: 12.5px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: 14px;
 }
 
 .design-bar {

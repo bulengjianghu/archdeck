@@ -253,3 +253,31 @@ describe('canvasScene', () => {
     expect(node(s, 'infra.mus')!.data.change).toBeUndefined()
   })
 })
+
+describe('X7 编辑态的编辑落点（ADR-0024）', () => {
+  it('分层总览：带之间与末尾的插入条（at 为插入位置）、每条带的「+ 模块」；模块与带可拖动、可连线；非编辑态没有', async () => {
+    const root = await structure(index.rootId)
+    expect(canvasScene(root).nodes.some(n => n.type === 'insert')).toBe(false)
+    expect(canvasScene(root).nodes.every(n => !n.draggable && !n.connectable)).toBe(true)
+    const s = canvasScene({ ...root, editing: true })
+    const bands = s.nodes.filter(n => n.type === 'band')
+    const inserts = s.nodes.filter(n => n.type === 'insert')
+    expect(inserts.filter(n => n.data.insert?.kind === 'layer').map(n => n.data.insert)).toEqual(
+      bands.map((_, i) => ({ kind: 'layer', at: i })).concat({ kind: 'layer', at: bands.length }),
+    )
+    expect(
+      inserts
+        .filter(n => n.data.insert?.kind === 'module')
+        .map(n => (n.data.insert as { parent: string }).parent)
+        .sort(),
+    ).toEqual(bands.map(b => b.id).sort())
+    expect(bands.every(b => b.draggable && b.connectable && b.data.editing)).toBe(true)
+  })
+
+  it('普通层次：父模块框内「+ 模块」；运行视角没有编辑落点', async () => {
+    const s = canvasScene({ ...(await structure('infra')), editing: true })
+    expect(s.nodes.filter(n => n.type === 'insert').map(n => n.data.insert)).toEqual([{ kind: 'module', parent: 'infra' }])
+    const r = canvasScene({ ...(await run()), editing: true })
+    expect(r.nodes.some(n => n.type === 'insert')).toBe(false)
+  })
+})

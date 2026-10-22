@@ -32,6 +32,11 @@ export function moveModule(def: SketchDef, ctx: EditContext, id: string, parent:
   if (clash) return reject('id-taken', `移动后后代的 ID「${clash}」已被占用`)
   // 从原位置摘下（连同嵌套的子模块），改 ID 与引用，再按新父模块的写法安放
   const hit = locate(def, id)!
+  // 父不变（改 ID）：原地改写，位置与写法不动；换父：摘下后按新父模块的写法安放
+  if (hit.parentId === parent) {
+    renameAll(def, map)
+    return done({ renamed: [...map] })
+  }
   hit.list.splice(hit.index, 1)
   renameAll(def, map, [hit.node])
   placeModule(def, hit.node, parent)

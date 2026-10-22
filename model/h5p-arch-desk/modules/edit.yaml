@@ -148,8 +148,100 @@ modules:
       - **服务端再校验一遍**：页面的即时校验只是提示，写入端点是最后一道；两边调用同一个 validateSketch，结果一致。
       - **只写草图**：路径只由项目、草图 ID、设计 ID 拼出（isProjectId），不接受任意路径；AI 生成的文件一律不写。
     codeRefs: [vite/writeSketch.ts]
+  - id: present.canvas.edit
+    name: 画布编辑态
+    parent: present.canvas
+    kind: component
+    responsibility: |
+      只在编辑态开启的画布交互：带之间与末尾的插入条（+ 层）与带头拖动排序、带内与父模块框内「+ 模块」与就地输入名称、拖动模块到另一条带或另一父模块（移动，改 ID 时二次确认）、从节点拖线到另一节点建关系（松手选类型与一句说明）、分层总览上带到带拖线改可依赖的层、右键菜单（核心、封闭、删除）、删除键与撤销 / 重做快捷键。
+      每个操作只调用 state.desk.edit 的一个操作；落点的位置来自画布场景，不保存坐标、不自己算布局，编辑后由自动布局重排。
+    principle: |
+      - **意图粒度 = 编辑操作粒度**：一次拖放、一次确认只发一个操作，撤销一步恰好撤回用户的一个动作。
+      - **结构视角的交互照常**：单击选中、双击下钻（C-11 下钻编辑）、面包屑返回不变；编辑态只增加，不改变已有手势的含义。
+  - id: present.canvas.edit.insert
+    name: 插入条与新建
+    parent: present.canvas.edit
+    responsibility: 分层总览中带之间与末尾的插入条、空白处「+ 层」（C-1）；带内与父模块框内「+ 模块」（C-4），点击后就地输入名称，ID 显示为自动生成的值、可改，回车提交 addLayer / addModule，Esc 放弃输入。
+    codeRefs: [src/components/edit/canvas/InsertSlot.vue, src/components/edit/canvas/InlineName.vue]
+  - id: present.canvas.edit.drag
+    name: 拖动
+    parent: present.canvas.edit
+    responsibility: 带头上下拖动排序（C-2 → reorderLayer）；模块拖到另一条带或另一父模块框（C-5）：落点高亮合法的父，松手先取 previewMove，ID 会变时弹出「移动会改 ID」确认（列出草图内改写条数与当前版本里引用旧 ID 的条数），确认后发 moveModule。
+    codeRefs: [src/components/edit/canvas/useEditDrag.ts]
+  - id: present.canvas.edit.connect
+    name: 连线
+    parent: present.canvas.edit
+    responsibility: 从节点的连线柄拖到另一节点（Vue Flow connect），松手弹出类型选择（calls / notifies / streams / depends / implements，附 ADR-0022 的一句读法）与一句说明，确定后发 connect（C-8）；被拒绝（同一对同类型已有、祖先与后代）时就地提示原因；分层总览上带到带拖线发 setMayDependOn（C-9）。
+    codeRefs: [src/components/edit/canvas/ConnectPopover.vue]
+  - id: present.canvas.edit.menu
+    name: 右键菜单与快捷键
+    parent: present.canvas.edit
+    responsibility: 节点右键菜单：标核心、封闭（C-7）、删除（C-6，有子树或被关系引用时二次确认，列出级联删除的实体）；边右键：删除（C-10）；Delete 键删除选中对象；⌘Z / ⇧⌘Z 撤销 / 重做（C-12，焦点在输入框时让给输入框）。
+    codeRefs: [src/components/edit/canvas/EditMenu.vue, src/components/edit/canvas/useEditKeys.ts]
+  - id: present.panel.edit
+    name: 编辑表单
+    parent: present.panel
+    kind: component
+    responsibility: |
+      编辑态下属性面板换成表单：按选中显示层、模块、关系的表单，无选中时为草图元信息；顶部常驻校验结果（错误与提醒，单击定位到实体）与设计草图的实时核验「实现后将有 N 处偏差」（L-1）；字段改动即发意图（文本字段在失焦或回车时发一次，即撤销的一步，X7g）。
+      面板分派在编辑态下选这里，结构视角的模块 / 关系面板不显示。
+    codeRefs: [src/components/edit/panel/EditPanel.vue, src/components/edit/panel/Field.vue, src/components/edit/panel/form.css]
+  - id: present.panel.edit.layer
+    name: 层表单
+    parent: present.panel.edit
+    responsibility: 层的名称、抽象原则、包含 / 不包含（逐行）、可依赖的层（多选，选项为草图与持久草图里的层，P-1）；删除层（二次确认）。
+    codeRefs: [src/components/edit/panel/LayerForm.vue]
+  - id: present.panel.edit.module
+    name: 模块表单
+    parent: present.panel.edit
+    responsibility: 模块的名称、ID、一句话职责、核心（只对第二级模块显示，04 §3.2）、封闭、代码落点（目录级 glob，可选，04 §3.10）、所属父（下拉，等价于移动，走同一个确认，P-2）；「对外接口」一节增删接口（名称、签名代码块，owner 固定为该模块，P-4）。
+      ID 字段只改短名（父 ID 前缀只读）：提交即 renameModule，即「父不变的移动」——同一个级联、同一个 IdImpact 确认（有后代或当前版本里有引用时弹出）；要换父只能用「所属父」或画布拖动（X7d）。
+    codeRefs: [src/components/edit/panel/ModuleForm.vue, src/components/edit/panel/InterfaceForm.vue]
+  - id: present.panel.edit.relation
+    name: 关系表单
+    parent: present.panel.edit
+    responsibility: 选中关系时：两端（只读，可定位）、类型、说明、经由接口（可选，选项为草图与持久草图里的接口，P-3）；删除。
+    codeRefs: [src/components/edit/panel/RelationForm.vue]
+  - id: present.panel.edit.meta
+    name: 草图元信息
+    parent: present.panel.edit
+    responsibility: 无选中时：草图 ID（持久草图只读）、lifetime、supersedes（下拉持久草图，P-5）、封闭的子树列表；声明 supersedes 时显示与被替换持久草图的差异（L-4，复用变更清单的样式）；本次改动摘要（L-2，保存后「交给 AI」的指令附带它）。
+    codeRefs: [src/components/edit/panel/SketchMetaForm.vue]
+  - id: present.panel.edit.checks
+    name: 校验与核验结果
+    parent: present.panel.edit
+    responsibility: 面板顶部的即时校验结果（ID 重复、前缀不符、引用不存在、层依赖成环、与持久草图矛盾，P-6）与对当前版本的实时核验计数（L-1），单击一条定位到对应实体（下钻并选中）；保存被服务端拒绝时显示服务端给出的问题。
+    codeRefs: [src/components/edit/panel/EditChecks.vue]
+  - id: present.version.edit
+    name: 编辑信息条
+    parent: present.version
+    kind: component
+    responsibility: |
+      草图版本的信息条上出现「编辑」；编辑态下信息条变为「编辑草图：<名>」、未保存标记 ●、「保存」「放弃」「校验」、撤销 / 重做（E-2）；「放弃」有未保存改动时二次确认（E-3）；保存成功后停留在编辑态，保存失败显示原因（文件已变时给「重新加载并重放改动」；重放有失败时列出失败的操作，并给「放弃本次改动」）。
+      当前版本上「编辑骨架」打开持久草图 /i/skeleton 并进入编辑态（E-1）；版本切换旁的「新建设计」对话框：ID、名称、目标一句话、底稿（缺省「空草图」；另一选项「改骨架（定稿后晋升替换骨架）」，选中时说明后果：复制骨架的层与第二级并声明 supersedes，定稿实现后整份替换 intent/skeleton.yaml，而不是归档，S-4、L-3），创建后进入新设计的草图编辑。
+    codeRefs: [src/components/edit/EditBar.vue, src/components/edit/NewDesignDialog.vue, src/components/edit/EditDialog.vue, src/components/edit/useEditDialog.ts]
 
 relations:
+  # ── 呈现层：画布与面板只发意图 ──
+  - {id: rel.ed.architect-canvas, from: actor.architect, to: present.canvas.edit, type: calls, description: 在草图上插入、拖动、连线、右键}
+  - {id: rel.ed.architect-panel, from: actor.architect, to: present.panel.edit, type: calls, description: 在表单里填写与改字段}
+  - {id: rel.ed.architect-bar, from: actor.architect, to: present.version.edit, type: calls, description: 编辑、保存、放弃、新建设计}
+  - {id: rel.ed.insert-commands, from: present.canvas.edit.insert, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: addLayer / addModule}
+  - {id: rel.ed.drag-commands, from: present.canvas.edit.drag, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: reorderLayer；previewMove 后 moveModule / renameModule}
+  - {id: rel.ed.connect-commands, from: present.canvas.edit.connect, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: connect；被拒绝时就地提示原因}
+  - {id: rel.ed.menu-commands, from: present.canvas.edit.menu, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: 核心 / 封闭 / 删除（previewRemove 后确认）；撤销 / 重做}
+  - {id: rel.ed.forms-commands, from: present.panel.edit, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: 表单字段失焦或回车提交即一个编辑操作（X7g）}
+  - {id: rel.ed.bar-commands, from: present.version.edit, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: enterEdit / exitEdit / save / discard / replayOnReload / createDesign / undo / redo}
+  - {id: rel.ed.desk-view-commands, from: present.desk-view, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: 离开路由与关闭页面前问 canLeave（X7a）；?edit=1 时进入编辑态}
+  - {id: rel.ed.flow-edit, from: present.canvas.flow, to: present.canvas.edit, type: depends, description: 编辑态下挂上插入落点、连线弹窗与右键菜单，把 Vue Flow 的 nodeDragStop / connect / contextmenu 事件交给它}
+  - {id: rel.ed.flow-commands, from: present.canvas.flow, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: 带到带拖线 → setMayDependOn（C-9）}
+  - {id: rel.ed.canvas-scene, from: present.canvas.edit, to: state.layout.canvas, type: depends, description: NodeData：插入条、+ 模块的位置来自画布场景}
+  - {id: rel.ed.dispatch-edit, from: present.panel.dispatch, to: present.panel.edit, type: depends, description: 编辑态下按选中分派到表单}
+  - {id: rel.ed.forms-drag, from: present.panel.edit.module, to: present.canvas.edit.drag, type: calls, description: confirmMove：表单改 ID 与改所属父走同一个确认（X7d）}
+  - {id: rel.ed.forms-menu, from: present.panel.edit, to: present.canvas.edit.menu, type: calls, description: confirmRemove：表单的删除走同一个级联确认（X7e）}
+  - {id: rel.ed.drag-dialog, from: present.canvas.edit, to: present.version.edit, type: calls, description: ask：二次确认对话框（useEditDialog）}
+  - {id: rel.ed.forms-labels, from: present.panel.edit, to: present.shared, type: depends, description: RELATION_TYPE_LABELS：关系类型下拉的显示名}
+  - {id: rel.ed.connect-labels, from: present.canvas.edit.connect, to: present.shared, type: depends, description: RELATION_TYPE_LABELS / HINTS：类型与一句读法}
   # ── 模型层：意图内部 ──
   - {id: rel.ed.layers-locate, from: model.intent.edit.layers, to: model.intent.edit.locate, type: calls, description: 寻址与 ID 生成}
   - {id: rel.ed.modules-locate, from: model.intent.edit.modules, to: model.intent.edit.locate, type: calls, description: 寻址、ID 生成、子树范围}

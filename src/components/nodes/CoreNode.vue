@@ -8,7 +8,7 @@ defineProps<{ data: NodeData }>()
 
 <template>
   <div class="core" :class="{ selected: data.selected, dim: data.dim, target: data.module?.status === 'target', [`diff-${data.change}`]: !!data.change }">
-    <Handles />
+    <Handles :editing="data.editing" />
     <DiffMark :data="data" />
     <span class="name">{{ data.name }}</span>
     <span v-if="data.childCount > 0" class="drill">⌄ {{ data.childCount }}</span>

@@ -8,12 +8,14 @@
  *   跳线（L11）：画出来的折线关系边之间的交叉处，水平段起一个半圆小桥；曲线与临时线不参与。
  *   代码事实（结构视角、开关开启，K9、Y4）：关系边标证实、含违规的边红色描边、未描述依赖与违规画成不参与布局的叠加线、本层环的节点标编号。
  *   演化（结构视角、热度或耦合开启，J5）：节点的热度角标、时间耦合的波浪线（不参与布局）。
+ *   编辑态（X7，ADR-0024）：编辑落点——分层总览中带之间与末尾的插入条、带内与父模块框内的「+ 模块」；模块与带可拖动、可连线。
  * 本文件是入口，只组合各部分：共用派生 canvas/context.ts、节点 canvas/nodes.ts、边 canvas/edges.ts、对外类型 canvas/types.ts。
  */
 import { sceneContext, visibleIdsOf } from './canvas/context'
 import { evolutionEdges, factEdges, replayEdges, shownEdges, structureEdges } from './canvas/edges'
 import { outsideRoutes } from './layout'
 import { moduleNodes, replayNodes } from './canvas/nodes'
+import { editNodes } from './canvas/edit'
 import { jumpsOf } from './routing'
 import type { CanvasEdge, CanvasInput, CanvasScene } from './canvas/types'
 
@@ -26,7 +28,7 @@ export function canvasScene(input: CanvasInput): CanvasScene {
   const ctx = sceneContext(input, input.positioned)
   // L11：画出来的框外边一起走线、分配轨道；边与步骤序号都用分配后的走线
   ctx.routes = outsideRoutes(input.positioned, shownEdges(ctx))
-  const nodes = input.index ? [...moduleNodes(ctx, input.index), ...replayNodes(ctx)] : []
+  const nodes = input.index ? [...moduleNodes(ctx, input.index), ...replayNodes(ctx), ...editNodes(ctx, input.index)] : []
   // 回放叠加只在运行视角、代码事实与演化叠加只在结构视角，两者不同时出现
   const edges = [...structureEdges(ctx), ...replayEdges(ctx), ...factEdges(ctx), ...evolutionEdges(ctx)].filter((e): e is CanvasEdge => e !== null)
   return { nodes, edges: withJumps(edges), visibleIds: visibleIdsOf(ctx.display) }

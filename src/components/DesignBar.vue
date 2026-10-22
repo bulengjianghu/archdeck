@@ -1,11 +1,12 @@
 <script setup lang="ts">
 /**
  * 设计版本信息条：哪个设计、第几轮、状态；对比基线、变更计数、是否在图上标出变更（ADR-0002）。
- * 草图版本（DV-10）：标「草图」，「交给 AI」把指令（草图全文 + 04 §5「按草图扩展」）放进剪贴板。
+ * 草图版本（DV-10）：标「草图」，「交给 AI」把指令（草图全文 + 相对上一次提交的改动摘要 + 04 §5「按草图扩展」）放进剪贴板；「编辑」进入编辑态（X7）。
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
 import { DESIGN_STATUS_LABELS } from './shared/labels'
+import EditBar from './edit/EditBar.vue'
 
 const desk = useDesk()
 const d = computed(() => desk.versions.design.value)
@@ -41,9 +42,15 @@ async function handToAi() {
     <span class="status" :class="d.status">{{ DESIGN_STATUS_LABELS[d.status] }}</span>
     <span v-if="r?.date" class="muted">{{ r.date }}</span>
     <button class="link" @click="showDesignNotes">{{ sketch ? '草图说明与变更清单' : '设计说明与变更清单' }}</button>
-    <button v-if="sketch" class="hand" title="把草图全文与 04 §5「按草图扩展」一节作为指令复制到剪贴板，交给 AI 起草下一轮" @click="handToAi">
+    <button
+      v-if="sketch"
+      class="hand"
+      title="把草图全文、相对上一次提交的改动摘要与 04 §5「按草图扩展」一节作为指令复制到剪贴板，交给 AI 起草下一轮"
+      @click="handToAi"
+    >
       {{ copied ? '已复制指令' : '交给 AI' }}
     </button>
+    <EditBar v-if="sketch" :name="d.name" />
 
     <span class="spacer" />
 

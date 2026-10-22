@@ -40,19 +40,23 @@ const grow = (b: Box, d: number): Box => ({ x: b.x - d, y: b.y - d, w: b.w + 2 *
 /** 浮在激活的边（EDGE_Z）之上的节点：步骤徽标、分支预览、带内「+N」占位块（单击不被线挡住） */
 const OVER_EDGES = { step: 1003, preview: 1004, more: 1003 } as const
 
-function placeNode(ctx: SceneContext, id: string, box: Box, type: CanvasNodeType, data: NodeData, zIndex: number): CanvasNode {
+/** X7：编辑态下模块、核心模块小块与带可拖动、可连线 */
+const EDITABLE: readonly CanvasNodeType[] = ['module', 'core', 'band']
+
+export function placeNode(ctx: SceneContext, id: string, box: Box, type: CanvasNodeType, data: NodeData, zIndex: number): CanvasNode {
+  const editable = !!ctx.input.editing && EDITABLE.includes(type)
   return {
     id,
     type,
     position: { x: box.x, y: box.y },
-    data,
+    data: editable ? { ...data, editing: true } : data,
     zIndex,
     width: box.w,
     height: box.h,
     style: { width: `${box.w}px`, height: `${box.h}px` },
     selectable: false,
-    draggable: false,
-    connectable: false,
+    draggable: editable,
+    connectable: editable,
     class: [playClass(ctx, id), ctx.input.fileHits?.has(id) ? 'file-hit' : ''].filter(Boolean).join(' ') || undefined,
   }
 }

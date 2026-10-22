@@ -4,6 +4,10 @@
  */
 import { computed, shallowRef, type ShallowRef } from 'vue'
 import {
+  locate,
+  locateAll,
+  moduleId,
+  sketchLifetime,
   isIntentVersion,
   isSketchRevision,
   isSketchVersion,
@@ -58,7 +62,24 @@ export function createEdit(i: EditInputs) {
   })
   const sync = createSaveSync(i.writer, session)
   const commands = createCommands({ ...i, session, target, file, sync })
+  /** 编辑中的草图里的条目（表单显示草图写了的字段；不在本草图里的为 undefined——属于持久草图） */
+  const lookup = {
+    module: (id: string) => (session.value ? locate(session.value.draft, id)?.node : undefined),
+    relation: (id: string) => session.value?.draft.relations?.find(r => r.id === id),
+    interfacesOf: (owner: string) => session.value?.draft.interfaces?.filter(x => x.owner === owner) ?? [],
+    /** 只在持久草图里的模块所属的持久草图 ID */
+    persistentOf: (id: string) => (derive.ctx.value?.persistent.find(p => !!locate(p.def, id)) ?? null)?.def.id ?? null,
+    persistentIds: computed(() => derive.ctx.value?.persistent.map(p => p.def.id) ?? []),
+    /** 读到的描述里的持久草图（版本切换列出，可编辑） */
+    intentIds: computed(() =>
+      (i.loaded.value?.model.sketches ?? []).filter(s => s.file.startsWith('intent/') && sketchLifetime(s) === 'persistent').map(s => s.def.id),
+    ),
+    /** X7c：新模块的 ID 预览（就地输入名称时显示） */
+    previewId: (parent: string | undefined, name: string) =>
+      moduleId(parent, name, new Set([...(i.loaded.value?.modules.keys() ?? []), ...(session.value ? locateAll(session.value.draft).map(m => m.id) : [])])),
+  }
   return {
+    lookup,
     editable,
     target,
     session,
