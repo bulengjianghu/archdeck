@@ -138,12 +138,12 @@ modules:
     name: 普通层次排布
     parent: state.layout.runner
     codeRefs: [src/layout/graph.ts]
-    responsibility: 用 elkjs layered 算法排全部节点（内部模块、边界节点、参与者）与全部边：正交走线、标签内联；每条边两端各有固定朝向的端口——内部节点上进下出（自左向右时左进右出），用户只朝下，边界节点与外部系统只朝上（L11）；elk 在浏览器的 Worker 中运行（无 Worker 环境用同步打包版）；结果过于狭长时再试自左向右，取宽高比更接近画布者。
+    responsibility: 用 elkjs layered 算法排全部节点（内部模块、边界节点、参与者）与内部边、参与者的边（边界边不参与布局，图保持紧凑）：正交走线、标签内联；每条边两端各有固定朝向的端口——内部节点上进下出（自左向右时左进右出），用户只朝下，边界节点与外部系统只朝上（L11）；有参与者时画父模块虚线框，包住内部节点与走线并留出内边距；elk 在浏览器的 Worker 中运行（无 Worker 环境用同步打包版）；结果过于狭长时再试自左向右，取宽高比更接近画布者。
   - id: state.layout.runner.boundaries
     name: 边界节点排布
     parent: state.layout.runner
     codeRefs: [src/layout/routes.ts]
-    responsibility: 边界节点、外部系统与时间层约束为最后一行、用户为第一行，最后一行的先后用位置提示按视图给出的层次顺序固定（L4，与时序图泳道一致）；边界边与参与者的边由 elk 正交绕行。有参与者时内部结构外画系统边界虚线框。分层总览中参与者另行排布：用户在带的上方，外部系统与时间在右侧通道之外，边画成曲线。手工走线与编码工具也在这里（routes.ts）：参与者排布 placeActors 与曲线 linkRoute、edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、isBoundaryEdge（L10），供排布与画布场景使用。
+    responsibility: 边界节点、外部系统与时间层约束为最后一行、用户为第一行，最后一行的先后用位置提示按视图给出的层次顺序固定（L4，与时序图泳道一致）；边界边不参与布局，要画时由 edgeRoute 按需正交绕行（routing 的 detour：不穿节点、从目标上方进入，同一节点上的多条边界边错开），走线按布局记忆。有参与者时内部结构外画系统边界虚线框。分层总览中参与者另行排布：用户在带的上方，外部系统与时间在右侧通道之外，边画成曲线。手工走线与编码工具也在这里（routes.ts）：参与者排布 placeActors 与曲线 linkRoute、edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、isBoundaryEdge（L10），供排布与画布场景使用。
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.pipeline.loader

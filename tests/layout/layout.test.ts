@@ -5,6 +5,9 @@ import {
   bandColumnsFor,
   PARALLEL_GAP,
   cacheKey,
+  portSide,
+  edgeRoute,
+  isBoundaryEdge,
   LAYOUT_VERSION,
   contentBounds,
   edgeLabel,
@@ -93,7 +96,7 @@ describe('layoutLayered · 分层总览', () => {
 })
 
 describe('layoutView', () => {
-  it('普通层次用 elk 排布：节点不重叠、每条边都有走线', async () => {
+  it('普通层次用 elk 排布：节点不重叠、每条边都有走线（边界边按需走线，edgeRoute）', async () => {
     const view = projectLevel(index, 'infra')
     const pv = await layoutView(view)
     const boxes = [...pv.nodes.values()]
@@ -105,7 +108,7 @@ describe('layoutView', () => {
         const overlap = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
         expect(overlap).toBe(false)
       }
-    for (const e of view.edges) expect(pv.edges.get(e.id)!.points.length).toBeGreaterThanOrEqual(2)
+    for (const e of view.edges) expect(edgeRoute(pv, e)!.points.length).toBeGreaterThanOrEqual(2)
   })
 
   it('同样的视图命中缓存，得到同样的坐标', async () => {
@@ -128,7 +131,7 @@ describe('layoutView', () => {
 })
 
 describe('边界节点', () => {
-  it('普通层次（L4）：边界节点进 elk，排在内部结构下方同一行、按层次顺序；边界边正交绕行（不是曲线）', async () => {
+  it('普通层次（L4）：边界节点排在内部结构下方同一行、按层次顺序；边界边不参与布局，按需正交绕行、不穿节点、从目标上方进入', async () => {
     const view = projectLevel(index, 'infra', { showBoundaries: true })
     const pv = await layoutView(view)
     const inner = view.nodes.filter(n => n.role !== 'boundary').map(n => pv.nodes.get(n.id)!)
@@ -139,9 +142,26 @@ describe('边界节点', () => {
     for (const b of boundaries) expect(b.y).toBeGreaterThan(bottom)
     expect(new Set(boundaries.map(b => b.y)).size).toBe(1)
     expect([...ids].sort((a, b) => pv.nodes.get(a)!.x - pv.nodes.get(b)!.x)).toEqual(ids)
-    const r = pv.edges.get(view.edges.find(x => x.to === 'boundary:app')!.id)!
-    expect(r.curve).toBeUndefined()
-    r.points.slice(1).forEach((p, i) => expect(p.x === r.points[i].x || p.y === r.points[i].y).toBe(true))
+    for (const e of view.edges.filter(isBoundaryEdge)) {
+      expect(pv.edges.has(e.id)).toBe(false)
+      const r = edgeRoute(pv, e)!
+      expect(r.curve).toBeUndefined()
+      expect(edgeRoute(pv, e)).toBe(r)
+      r.points.slice(1).forEach((p, i) => expect(p.x === r.points[i].x || p.y === r.points[i].y).toBe(true))
+      // 进入目标的最后一段自上而下
+      const [p, q] = r.points.slice(-2)
+      expect(q.y).toBe(pv.nodes.get(e.to)!.y)
+      expect(p.y).toBeLessThan(q.y)
+      // 除进出端口的首尾两段外，不穿过任何节点（含两端自身）；首尾两段不穿过两端以外的节点
+      for (const [id, b] of pv.nodes) {
+        r.points.slice(1).forEach((p2, i) => {
+          if ((id === e.from || id === e.to) && (i === 0 || i === r.points.length - 2)) return
+          const a = r.points[i]
+          const hit = Math.max(a.x, p2.x) > b.x && Math.min(a.x, p2.x) < b.x + b.w && Math.max(a.y, p2.y) > b.y && Math.min(a.y, p2.y) < b.y + b.h
+          expect(hit).toBe(false)
+        })
+      }
+    }
   })
 })
 
@@ -294,31 +314,41 @@ describe('L11 端口方向', () => {
     expect([side(g, `${inner.id}#out`), side(g, `${inner.id}#in`)]).toEqual(['SOUTH', 'NORTH'])
     const r = toElkGraph(view, 'RIGHT')
     expect([side(r, `${inner.id}#out`), side(r, `${inner.id}#in`)]).toEqual(['EAST', 'WEST'])
-    const toB = view.edges.find(e => e.to.startsWith('boundary:'))!
-    expect(side(g, `${toB.id}#in`)).toBe('NORTH')
+    // 边界边不进 elk（按需走线）；边界节点的端口方向仍是朝上
+    expect(g.edges!.some(e => e.id.includes('boundary:'))).toBe(false)
+    expect(
+      portSide(
+        view.nodes.find(n => n.role === 'boundary')!,
+        'in',
+        'DOWN',
+      ),
+    ).toBe('NORTH')
     const fromUser = view.edges.find(e => e.from === 'actor.viewer')!
     expect(side(g, `${fromUser.id}#out`)).toBe('SOUTH')
     const fromBiz = view.edges.find(e => e.from === 'actor.biz')!
     expect(side(g, `${fromBiz.id}#out`)).toBe('NORTH')
     for (const c of g.children!) expect(c.layoutOptions!['elk.portConstraints']).toBe('FIXED_SIDE')
     const ports = g.children!.flatMap(c => c.ports!.map(p => p.id))
-    expect(new Set(ports).size).toBe(view.edges.length * 2)
+    expect(new Set(ports).size).toBe(view.edges.filter(e => !isBoundaryEdge(e)).length * 2)
   })
 
   it('用户第一行、边界节点与外部系统最后一行（层约束），最后一行按视图顺序给位置提示', () => {
     const g = toElkGraph(view, 'DOWN')
     const lc = (id: string) => g.children!.find(c => c.id === id)!.layoutOptions!['elk.layered.layering.layerConstraint']
-    expect(lc('actor.viewer')).toBe('FIRST')
-    expect(lc('actor.biz')).toBe('LAST')
+    expect(lc('actor.viewer')).toBe('FIRST_SEPARATE')
+    expect(lc('actor.biz')).toBe('LAST_SEPARATE')
     const bs = view.nodes.filter(n => n.role === 'boundary').map(n => n.id)
-    for (const id of bs) expect(lc(id)).toBe('LAST')
+    for (const id of bs) expect(lc(id)).toBe('LAST_SEPARATE')
     expect(bs.map(id => g.children!.find(c => c.id === id)!.layoutOptions!['elk.position'])).toEqual(bs.map((_, i) => `(${i * 1000},0)`))
     expect(
       g.children!.find(c => c.id === view.nodes.find(n => n.role === 'module')!.id)?.layoutOptions?.['elk.layered.layering.layerConstraint'],
     ).toBeUndefined()
   })
 
-  it('布局缓存键带布局算法版本', () => {
+  it('布局缓存键带布局算法版本；两级缓存——普通层次的边界边不进布局的键，走线按布局另行记忆', () => {
     expect(cacheKey(view)).toContain(LAYOUT_VERSION)
+    const noBoundaryEdges = { ...view, edges: view.edges.filter(e => !isBoundaryEdge(e)) }
+    expect(cacheKey(noBoundaryEdges)).toBe(cacheKey(view))
+    expect(cacheKey({ ...view, edges: view.edges.slice(1) })).not.toBe(cacheKey(view))
   })
 })

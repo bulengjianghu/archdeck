@@ -46,3 +46,61 @@ export function jumpsOf(lines: readonly JumpLine[]): Map<string, Point[]> {
   }
   return out
 }
+
+// ── 按需的正交绕行（L4：边界边显示时才走线）──────────────────────
+
+/** 端口：盒子某条边上的出入点；dir 为离开盒子的方向（向下 +1、向上 −1；RIGHT 布局时转置为左右） */
+export interface PortAt {
+  x: number
+  y: number
+  dir: 1 | -1
+  /** 短桩加长量：同一节点同一侧的多条边各走一条水平线，不重叠 */
+  lane?: number
+}
+
+/** 离开端口先走的短桩，落在层间空隙里 */
+export const STUB = 14
+/** 绕到所有节点外侧时离外框的距离 */
+const OUTSIDE = 28
+
+const crossesBox = (a: Point, b: Point, box: { x: number; y: number; w: number; h: number }) => {
+  const x1 = Math.min(a.x, b.x)
+  const x2 = Math.max(a.x, b.x)
+  const y1 = Math.min(a.y, b.y)
+  const y2 = Math.max(a.y, b.y)
+  return x2 > box.x - 2 && x1 < box.x + box.w + 2 && y2 > box.y - 2 && y1 < box.y + box.h + 2
+}
+
+/**
+ * 在固定的节点之间画一条正交折线（自上而下的坐标系；RIGHT 布局由调用方转置）：
+ * 起点端口 → 短桩 → 横到一条竖直通道 x → 竖直到终点短桩的高度 → 横到终点 → 进终点端口。
+ * 通道 x 取起终点自身、障碍之间空隙的中线与外框两侧，选中间三段都不穿障碍（含两端节点自身）、总长最短的；都不行时走外框外侧。
+ */
+export function detour(from: PortAt, to: PortAt, obstacles: readonly { x: number; y: number; w: number; h: number }[]): Point[] {
+  const p1 = { x: from.x, y: from.y + from.dir * (STUB + (from.lane ?? 0)) }
+  const p2 = { x: to.x, y: to.y + to.dir * (STUB + (to.lane ?? 0)) }
+  const xs = obstacles.flatMap(o => [o.x, o.x + o.w])
+  const left = Math.min(from.x, to.x, ...xs) - OUTSIDE
+  const right = Math.max(from.x, to.x, ...xs) + OUTSIDE
+  const sorted = [...obstacles].sort((a, b) => a.x - b.x)
+  const gaps = sorted.slice(1).map((o, i) => (sorted[i].x + sorted[i].w + o.x) / 2)
+  const candidates = [p1.x, p2.x, ...gaps, left, right]
+  const pathOf = (x: number): Point[] => [{ x: from.x, y: from.y }, p1, { x, y: p1.y }, { x, y: p2.y }, p2, { x: to.x, y: to.y }]
+  const free = (pts: Point[]) => pts.slice(2, 5).every((b, i) => obstacles.every(o => !crossesBox(pts[i + 1], b, o)))
+  const cost = (x: number) => Math.abs(x - p1.x) + Math.abs(x - p2.x)
+  const best = candidates.sort((a, b) => cost(a) - cost(b)).find(x => free(pathOf(x))) ?? (cost(left) < cost(right) ? left : right)
+  return simplify(pathOf(best))
+}
+
+/** 去掉重合点与共线的中间点 */
+function simplify(pts: Point[]): Point[] {
+  const out: Point[] = []
+  for (const p of pts) {
+    if (out.length && Math.abs(out[out.length - 1].x - p.x) < 0.5 && Math.abs(out[out.length - 1].y - p.y) < 0.5) continue
+    const a = out[out.length - 2]
+    const b = out[out.length - 1]
+    if (a && b && ((Math.abs(a.x - b.x) < 0.5 && Math.abs(b.x - p.x) < 0.5) || (Math.abs(a.y - b.y) < 0.5 && Math.abs(b.y - p.y) < 0.5))) out.pop()
+    out.push(p)
+  }
+  return out
+}

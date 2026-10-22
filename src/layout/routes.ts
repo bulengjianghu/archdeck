@@ -2,7 +2,8 @@
  * 手工走线与边界：参与者排布与曲线（A7）、边的标签与线宽档、平行边错开（L10），边界边的判定（L4）。
  */
 import type { LevelView, ViewEdge } from '@/model'
-import { NODE_SIZE, type Box, type EdgeRoute, type Point } from './geometry'
+import { NODE_SIZE, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
+import { detour, type PortAt } from './routing'
 
 // ── 外部参与者（A7）────────────────────────────────────────────
 
@@ -141,4 +142,58 @@ const isBoundary = (id: string) => id.startsWith('boundary:')
 /** 内部边（两端都不是边界节点）交给 elk；边界边另行绘制 */
 export function isBoundaryEdge(e: ViewEdge): boolean {
   return isBoundary(e.from) || isBoundary(e.to)
+}
+
+// ── 边界边按需走线（L4、L11）────────────────────────────────────
+
+/** 同一节点上多条边界边的短桩逐条加长量（px） */
+const LANE_GAP = 6
+/** 加长量的上限：短桩不超出层间空隙（72）的一半 */
+const MAX_LANE = 22
+
+/** 边界边的走线按节点布局记忆：同一份布局里每条边只算一次（布局本身另按视图内容缓存） */
+const boundaryMemo = new WeakMap<Map<string, Box>, Map<string, EdgeRoute | undefined>>()
+
+/**
+ * 一条边的走线：布局给出的直接用；普通层次的边界边不参与布局，第一次要画时按端口方向正交绕行（不穿节点，从目标的入口侧进入）。
+ * 端口：内部节点出边在下、进边在上，边界节点在上（RIGHT 布局为右 / 左 / 左，L11）；同一节点上的多条边界边沿该边错开。
+ */
+export function edgeRoute(pv: PositionedView, e: ViewEdge): EdgeRoute | undefined {
+  const laid = pv.edges.get(e.id)
+  if (laid || pv.view.mode === 'layered' || !isBoundaryEdge(e)) return laid
+  let memo = boundaryMemo.get(pv.nodes)
+  if (!memo) boundaryMemo.set(pv.nodes, (memo = new Map()))
+  // 走线依赖同一节点上其他边界边的序号：视图的边界边（如关系类型筛选后）不同则另算
+  const key = `${e.id}|${pv.view.edges
+    .filter(isBoundaryEdge)
+    .map(x => x.id)
+    .join(',')}`
+  if (!memo.has(key)) memo.set(key, boundaryRoute(pv, e))
+  return memo.get(key)
+}
+
+function boundaryRoute(pv: PositionedView, e: ViewEdge): EdgeRoute | undefined {
+  const a = pv.nodes.get(e.from)
+  const b = pv.nodes.get(e.to)
+  if (!a || !b) return undefined
+  // RIGHT 布局转置成自上而下来算，算完再转回
+  const t = pv.direction === 'RIGHT'
+  const tp = (p: Point): Point => (t ? { x: p.y, y: p.x } : p)
+  const tb = (x: Box): Box => (t ? { x: x.y, y: x.x, w: x.h, h: x.w } : x)
+  /** 同一节点上的边界边：沿该边错开 PARALLEL_GAP，短桩按序号加长 LANE_GAP，各走一条水平线 */
+  const slot = (node: string, box: Box) => {
+    const mine = pv.view.edges.filter(x => isBoundaryEdge(x) && (x.from === node || x.to === node))
+    const i = mine.findIndex(x => x.id === e.id)
+    return { dx: Math.max(-box.w / 2 + 8, Math.min(box.w / 2 - 8, (i - (mine.length - 1) / 2) * PARALLEL_GAP)), lane: Math.min(i * LANE_GAP, MAX_LANE) }
+  }
+  const A = tb(a)
+  const B = tb(b)
+  const out = isBoundary(e.from)
+  const s = slot(e.from, A)
+  const d = slot(e.to, B)
+  const from: PortAt = { x: A.x + A.w / 2 + s.dx, y: out ? A.y : A.y + A.h, dir: out ? -1 : 1, lane: s.lane }
+  const to: PortAt = { x: B.x + B.w / 2 + d.dx, y: B.y, dir: -1, lane: d.lane }
+  // 两端自身也是障碍：中间三段（横、竖通道、横）都在两端的短桩之外，不能穿过它们
+  const obstacles = [...pv.nodes.values()].map(tb)
+  return { points: detour(from, to, obstacles).map(tp) }
 }

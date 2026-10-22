@@ -26,6 +26,8 @@ export interface PositionedView {
   edges: Map<string, EdgeRoute>
   /** layered：核心跨层边的走线 */
   coreEdges: Map<string, EdgeRoute>
+  /** 普通层次：elk 的布局方向，按需走线（边界边）随之转置 */
+  direction?: 'DOWN' | 'RIGHT'
   /** 有外部参与者时：内部结构外的边界框（根层为系统边界，A7） */
   frame?: Box
 }

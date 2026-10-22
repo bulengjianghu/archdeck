@@ -11,12 +11,12 @@ export const BAND = {
   minMiddle: 520,
   chip: { w: 168, h: 46 },
   chipGap: 14,
-  padY: 18,
+  padY: 24,
   minH: 104,
   gap: 64,
   lane: 22,
-  /** 系统边界框与带、右侧通道之间的留白 */
-  framePad: 20,
+  /** 系统边界框与带、右侧通道之间的留白：与普通层次父模块框的 FRAME_PAD 同量级 */
+  framePad: 28,
   /** O7：带内每行模块块的上限 */
   maxColumns: 8,
 }

@@ -3,7 +3,7 @@
  * 代码事实叠加线（K9）。显隐、变淡、回放态、选中突出的灰化，以及视觉通道（L10：线型、箭头、线宽档、标签）都在这里定。
  */
 import { RUNTIME_RELATION_TYPES, type EdgeFact, type ModelDiff, type ModelIndex, type ViewEdge } from '@/model'
-import { edgeLabel, edgeWeight, isBoundaryEdge, linkRoute, type EdgeRoute } from '../layout'
+import { edgeLabel, edgeRoute, edgeWeight, isBoundaryEdge, linkRoute, type EdgeRoute } from '../layout'
 import { isTemp, landingId } from '../stage'
 import type { SceneContext } from './context'
 import type { CanvasEdge, EdgeArrow, FactState, RouteEdgeData } from './types'
@@ -140,7 +140,7 @@ function boundaryShown(ctx: SceneContext, e: ViewEdge): boolean {
 /** 关系边：本层视图边，分层总览另加显示的核心跨层边 */
 export function structureEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   const { pv } = ctx
-  const list = pv.view.edges.filter(e => stageShown(ctx, e) && boundaryShown(ctx, e)).map(e => makeEdge(ctx, e, pv.edges.get(e.id), false))
+  const list = pv.view.edges.filter(e => stageShown(ctx, e) && boundaryShown(ctx, e)).map(e => makeEdge(ctx, e, edgeRoute(pv, e), false))
   if (ctx.layered) list.push(...ctx.visibleCoreEdges.map(e => makeEdge(ctx, e, pv.coreEdges.get(e.id), true)))
   return list
 }

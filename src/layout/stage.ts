@@ -5,7 +5,7 @@
  */
 import { currentMessage, walkedCount, type Landing, type ScenarioLevelView, type VisibleLanding } from '@/model'
 import type { LevelView } from '@/model'
-import { linkRoute, type Box, type EdgeRoute, type PositionedView } from './layout'
+import { edgeRoute, linkRoute, type Box, type EdgeRoute, type PositionedView } from './layout'
 
 export interface StageMark {
   /** 视图边 ID；临时线为 `<种类>:<from>|<to>`（tempId），内部活动为 `node:<节点>` */
@@ -70,7 +70,10 @@ export function stageOverlay(
     if (m.at.lanes) for (const id of [m.at.lanes.from, m.at.lanes.to]) active.add(id)
   }
   const routeOf = (at: VisibleLanding): { id: string; route?: EdgeRoute } => {
-    if (at.kind === 'edge') return { id: at.edgeId, route: at.core ? pv.coreEdges.get(at.edgeId) : pv.edges.get(at.edgeId) }
+    if (at.kind === 'edge') {
+      const ve = pv.view.edges.find(e => e.id === at.edgeId)
+      return { id: at.edgeId, route: at.core ? pv.coreEdges.get(at.edgeId) : ve ? edgeRoute(pv, ve) : pv.edges.get(at.edgeId) }
+    }
     if (isTemp(at)) return { id: tempId(at), route: linkRoute(pv.nodes.get(at.from), pv.nodes.get(at.to)) }
     return { id: landingId(at) }
   }

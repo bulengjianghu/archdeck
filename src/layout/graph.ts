@@ -4,11 +4,12 @@
 import type { ELK, ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk-api'
 import type { LevelView, ViewNode } from '@/model'
 import { NODE_SIZE, contentBounds, sizeOf, type Box, type EdgeRoute, type PositionedView } from './geometry'
-import { LABEL_SLOT, edgeLabel, hasActors, nearPoints, spreadEnds } from './routes'
+import { LABEL_SLOT, edgeLabel, hasActors, isBoundaryEdge, nearPoints, spreadEnds } from './routes'
 
 /**
- * L4、L11：普通层次全部节点交给 elk——用户在第一行（DOWN；RIGHT 为第一列），内部子模块居中，边界节点与外部系统、时间在最后一行，
- * 最后一行的顺序按视图节点顺序（边界节点按层次顺序，P9）；边由 elk 正交绕行，不穿节点。
+ * L4、L11：普通层次的节点都交给 elk——用户在第一行（DOWN；RIGHT 为第一列），内部子模块居中，边界节点与外部系统、时间在最后一行，
+ * 最后一行的顺序按视图节点顺序（边界节点按层次顺序，P9）。边只交内部边与参与者的边，由 elk 正交绕行；
+ * 边界边不参与布局（不为它们留通道，图保持紧凑），显示时才按需走线（routes.ts boundaryRoute）。
  * 用层约束（FIRST / LAST）而不用分区：分区时边界节点会被排成两行；最后一行的顺序用 semiInteractive 的位置提示固定。
  */
 export type Row = 'first' | 'inner' | 'last'
@@ -38,7 +39,7 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
     return id
   }
   const edges = view.edges
-    .filter(e => byId.has(e.from) && byId.has(e.to))
+    .filter(e => byId.has(e.from) && byId.has(e.to) && !isBoundaryEdge(e))
     // L5：同一对节点按类型的平行边各有端口，由 elk 错开。
     // 每条边都申请一个至少放得下「?」或「×N」的标签槽：事实标记在布局后才叠加，槽太小时 elk 可能不给坐标（画布另有中点兜底）
     .map<ElkExtendedEdge>(e => {
@@ -57,6 +58,8 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
       'elk.direction': direction,
       'elk.edgeRouting': 'ORTHOGONAL',
       'elk.layered.crossingMinimization.semiInteractive': 'true',
+      // 边界节点在 elk 里没有边：不拆成独立的连通分量，层约束（LAST）才对它们生效
+      'elk.separateConnectedComponents': 'false',
       'elk.layered.spacing.nodeNodeBetweenLayers': '72',
       'elk.spacing.nodeNode': '44',
       'elk.spacing.edgeNode': '24',
@@ -79,7 +82,7 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
         ports: ports.get(n.id),
         layoutOptions: {
           'elk.portConstraints': 'FIXED_SIDE',
-          ...(row === 'inner' ? {} : { 'elk.layered.layering.layerConstraint': row === 'first' ? 'FIRST' : 'LAST' }),
+          ...(row === 'inner' ? {} : { 'elk.layered.layering.layerConstraint': row === 'first' ? 'FIRST_SEPARATE' : 'LAST_SEPARATE' }),
           // 位置提示只用来定最后一行的先后：边界节点按视图顺序（层次顺序），其后是外部系统与时间
           ...(last >= 0 ? { 'elk.position': direction === 'DOWN' ? `(${last * 1000},0)` : `(0,${last * 1000})` } : {}),
         },
@@ -88,6 +91,10 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
     edges,
   }
 }
+
+/** 父模块虚线框的内边距：到内部节点 / 到走线（px），与 elk.spacing.nodeNode 同量级 */
+export const FRAME_PAD = 28
+export const FRAME_EDGE_PAD = 12
 
 export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
   const nodes = new Map<string, Box>()
@@ -103,18 +110,26 @@ export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
     edges.set(e.id, { points, ...(label && nearPoints(label, points, LABEL_SLOT.w + LABEL_SLOT.h) ? { label } : {}) })
   }
   spreadEnds(view.edges, edges)
-  if (!hasActors(view)) return { view, nodes, edges, coreEdges: new Map() }
-  // A7：有参与者时画内部结构的边界框（不含边界节点与参与者）
+  const direction = graph.layoutOptions?.['elk.direction'] === 'RIGHT' ? 'RIGHT' : 'DOWN'
+  if (!hasActors(view)) return { view, nodes, edges, coreEdges: new Map(), direction }
+  // A7：有参与者时画内部结构的边界框（父模块虚线框）：包住内部节点（留 FRAME_PAD）与已布局的走线（留 FRAME_EDGE_PAD，参与者那一端的点除外）——
+  // 框线不压在走线上，参与者与框线之间至少隔开半条层间通道
   const inner = view.nodes.filter(n => rowOf(n) === 'inner').map(n => nodes.get(n.id)!)
-  const pad = 28
+  const actors = view.nodes.filter(n => n.role === 'actor').map(n => nodes.get(n.id)!)
+  const inActor = (p: { x: number; y: number }) => actors.some(b => p.x >= b.x - 1 && p.x <= b.x + b.w + 1 && p.y >= b.y - 1 && p.y <= b.y + b.h + 1)
+  const pts = [...edges.values()].flatMap(r => r.points).filter(p => !inActor(p))
+  const boxes = [
+    ...inner.map(b => ({ x1: b.x - FRAME_PAD, y1: b.y - FRAME_PAD, x2: b.x + b.w + FRAME_PAD, y2: b.y + b.h + FRAME_PAD })),
+    ...pts.map(p => ({ x1: p.x - FRAME_EDGE_PAD, y1: p.y - FRAME_EDGE_PAD, x2: p.x + FRAME_EDGE_PAD, y2: p.y + FRAME_EDGE_PAD })),
+  ]
   const frame = inner.length
     ? (() => {
-        const x1 = Math.min(...inner.map(b => b.x)) - pad
-        const y1 = Math.min(...inner.map(b => b.y)) - pad
-        return { x: x1, y: y1, w: Math.max(...inner.map(b => b.x + b.w)) + pad - x1, h: Math.max(...inner.map(b => b.y + b.h)) + pad - y1 }
+        const x1 = Math.min(...boxes.map(b => b.x1))
+        const y1 = Math.min(...boxes.map(b => b.y1))
+        return { x: x1, y: y1, w: Math.max(...boxes.map(b => b.x2)) - x1, h: Math.max(...boxes.map(b => b.y2)) - y1 }
       })()
     : { x: 0, y: 0, w: NODE_SIZE.module.w, h: NODE_SIZE.module.h }
-  return { view, nodes, edges, coreEdges: new Map(), frame }
+  return { view, nodes, edges, coreEdges: new Map(), direction, frame }
 }
 
 let elkPromise: Promise<ELK> | undefined
