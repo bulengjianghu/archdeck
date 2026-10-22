@@ -1,13 +1,17 @@
 /**
- * 描述写入（B1–B5，ADR-0019）：页面只能追加人拥有的三类内容——设计某一轮的评审意见（design.yaml feedback）、
- * 架构规则的例外（rules.yaml 的 rules.allow）、源码忽略项（source-ignore.yaml 的 sourceIgnore）。
- * AI 生成的部分（modules/、scenarios/、system.yaml 等）不写。只追加、不删改；用 YAML 文档模型修改，保留注释与其他内容。
+ * 描述写入（B1–B5，ADR-0019；Z1、Z6，ADR-0023）：页面只能追加人拥有的内容——设计某一轮的评审意见（design.yaml feedback）、
+ * 架构规则的例外（rules.yaml 的 rules.allow）、源码忽略项（source-ignore.yaml 的 sourceIgnore）、确认记录（reviewed.yaml 的 reviewed，
+ * 同一模块再次确认时更新那一条）。AI 生成的部分（modules/、scenarios/、system.yaml 等）不写。用 YAML 文档模型修改，保留注释与其他内容。
  * 写后由开发服务器的文件监听推送 arch-model:changed，页面按 N5 重新加载。
+ *
+ * 约定（草图归档调用，Z6）：`appendReviewed(modelRoot, project, entries)` 一次写多条，entries 的每条为
+ * `{ module, at, hash, summary, source, note? }`（ReviewedInput，由模型层 `reviewEntries(index, ids, { source: 'sketch:<设计 ID>' })` 构造）；
+ * 同一模块已有记录时更新那一条，否则追加；返回写进的文件与更新 / 追加的模块 ID。
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { isMap, isSeq, parseDocument, type Document } from 'yaml'
-import { RULE_KINDS, loadModel, type RuleKind } from '../src/model'
+import { RULE_KINDS, isReviewSource, loadModel, type ReviewedInput, type RuleKind } from '../src/model'
 import { DESIGNS_DIR, isProjectId, readModelDir } from './readModelDir'
 
 export class WriteError extends Error {}
@@ -95,4 +99,63 @@ export function appendIgnore(modelRoot: string, project: string, pattern: string
     list.items.push(doc.createNode(p))
   } else doc.set('sourceIgnore', doc.createNode([p]))
   return save(file, doc, root)
+}
+
+export interface ReviewedWriteResult extends WriteResult {
+  /** 更新了已有记录的模块 */
+  updated: string[]
+  /** 新追加记录的模块 */
+  added: string[]
+}
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/
+
+/** 一条记录的校验与规整；坏的抛 WriteError */
+function cleanEntry(raw: unknown, exists: (id: string) => boolean): ReviewedInput {
+  const e = (raw && typeof raw === 'object' ? raw : {}) as Partial<ReviewedInput>
+  if (typeof e.module !== 'string' || !exists(e.module)) throw new WriteError(`模块不存在：${String(e.module)}`)
+  if (typeof e.hash !== 'string' || !e.hash.trim()) throw new WriteError(`模块「${e.module}」的记录缺少 hash`)
+  if (!isReviewSource(e.source)) throw new WriteError(`模块「${e.module}」的记录 source 只能是 manual 或 sketch:<设计 ID>`)
+  const at = e.at === undefined ? today() : e.at
+  if (typeof at !== 'string' || !DATE.test(at)) throw new WriteError(`模块「${e.module}」的记录 at 必须是 YYYY-MM-DD`)
+  if (e.summary !== undefined && (typeof e.summary !== 'object' || e.summary === null || Array.isArray(e.summary)))
+    throw new WriteError(`模块「${e.module}」的记录 summary 必须是对象`)
+  const note = typeof e.note === 'string' ? e.note.trim() : ''
+  return { module: e.module, at, hash: e.hash.trim(), source: e.source, ...(note ? { note } : {}), summary: e.summary ?? {} }
+}
+
+/**
+ * Z1、Z6：在 reviewed.yaml 的 reviewed 里按模块更新或追加一条或多条记录；没有文件时新建。
+ * 同一批里同一模块出现多次时取最后一条。全部记录校验通过才写，否则一条都不写。
+ */
+export function appendReviewed(modelRoot: string, project: string, entries: readonly unknown[], root: string = path.dirname(modelRoot)): ReviewedWriteResult {
+  const dir = projectDir(modelRoot, project)
+  if (!Array.isArray(entries) || !entries.length) throw new WriteError('没有要写的确认记录')
+  const { index } = loadModel(readModelDir(dir, root).files)
+  const byModule = new Map<string, ReviewedInput>()
+  for (const raw of entries) {
+    const e = cleanEntry(raw, id => index.modules.has(id))
+    byModule.set(e.module, e)
+  }
+  const file = path.join(dir, 'reviewed.yaml')
+  const doc = openDoc(file, '# 确认记录（Z1，ADR-0023）：架构师确认过的模块，由页面与草图归档写入；AI 重新生成描述时不改动\nreviewed: []\n')
+  if (!doc.has('reviewed')) doc.set('reviewed', doc.createNode([]))
+  const list = doc.get('reviewed')
+  if (!isSeq(list)) throw new WriteError('reviewed 不是列表')
+  list.flow = false
+  const updated: string[] = []
+  const added: string[] = []
+  for (const e of byModule.values()) {
+    const node = doc.createNode({ module: e.module, at: e.at, hash: e.hash, source: e.source, ...(e.note ? { note: e.note } : {}), summary: e.summary })
+    node.flow = false
+    const at = list.items.findIndex(i => isMap(i) && i.get('module') === e.module)
+    if (at >= 0) {
+      list.items[at] = node
+      updated.push(e.module)
+    } else {
+      list.items.push(node)
+      added.push(e.module)
+    }
+  }
+  return { ...save(file, doc, root), updated, added }
 }
