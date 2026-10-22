@@ -75,9 +75,10 @@ describe('导航规则', () => {
     expect(run(base, { type: 'goUp' }).state).toBe(base)
   })
 
-  it('N9：Esc 先取消选中，无选中再返回上级', () => {
+  it('N9：Esc 只取消选中，无选中时无动作（不返回上级）', () => {
     expect(keyIntent(at('infra', { selection: { kind: 'module', id: 'infra.mus' } }), index, 'Escape')).toEqual({ type: 'select', selection: null })
-    expect(keyIntent(at('infra'), index, 'Escape')).toEqual({ type: 'goUp' })
+    expect(keyIntent(at('infra'), index, 'Escape')).toBeNull()
+    expect(keyIntent(base, index, 'Escape')).toBeNull()
     expect(keyIntent(at('infra'), index, 'a')).toBeNull()
   })
 

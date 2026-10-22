@@ -1,4 +1,4 @@
-/** 运行视角的统一选中（§6.8、ADR-0012）：选中样式唯一、配对标记、泳道突出、进度小标记、Esc 回到进度所在的步骤 */
+/** 运行视角的统一选中（§6.8、ADR-0012）：选中样式唯一、配对标记、泳道突出、进度小标记、Esc 回到进度所在的步骤、再按无动作 */
 import { expect, test } from '@playwright/test'
 import { graphNode, openDesk, query } from './helpers'
 
@@ -32,11 +32,16 @@ test('选中模块：突出它所在的泳道、不突出消息，进度只剩�
   await expect(page.locator('.panel')).not.toContainText('已钉住')
 })
 
-test('Esc 回到选中进度所在的步骤；「下一步」从进度处继续并选中下一步', async ({ page }) => {
+test('Esc 回到选中进度所在的步骤，再按无动作（N9）；「下一步」从进度处继续并选中下一步', async ({ page }) => {
   await openDesk(page, HOOK)
   await graphNode(page, 'infra.framework.state-machine').click()
   await page.keyboard.press('Escape')
   expect(query(page).get('sel')).toBeNull()
+  await expect(page.locator('.msg.selected')).toContainText('pre / post hook')
+  // 已是进度所在的步骤：再按 Esc 无动作，不返回上级（N9）
+  const level = query(page).get('level')
+  await page.keyboard.press('Escape')
+  expect(query(page).get('level')).toBe(level)
   await expect(page.locator('.msg.selected')).toContainText('pre / post hook')
 
   await graphNode(page, 'infra.framework.state-machine').click()

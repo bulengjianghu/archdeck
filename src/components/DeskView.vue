@@ -169,7 +169,7 @@ function onToggle(slot: 'structure' | 'aside') {
   saveLayout(props.project, paneLayout.value)
 }
 
-// 键盘：Esc 先取消选中，再返回上级；Backspace 返回上级，根层回项目列表（N7、N9）；
+// 键盘：Esc 只取消选中；Backspace 返回上级，根层回项目列表（N7、N9）；
 // 运行视角：← → 单步，数字键选分支
 function onKey(e: KeyboardEvent) {
   const t = e.target as HTMLElement

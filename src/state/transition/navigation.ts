@@ -94,10 +94,10 @@ export function toggle(state: ViewState, index: ModelIndex, patch: Partial<Toggl
   return replace(level === state.levelId ? next : withLevel(next, index, level, { keepSelection: true }))
 }
 
-/** 键盘意图：N9 Esc 先取消选中、无选中再返回上级；N7 Backspace 返回上级，根层回项目列表（'leave'） */
+/** 键盘意图：N9 Esc 只取消选中，无选中时无动作；N7 Backspace 返回上级，根层回项目列表（'leave'） */
 export function keyIntent(state: ViewState, index: ModelIndex, key: string): ViewAction | 'leave' | null {
   const atRoot = (index.pathOf.get(state.levelId) ?? []).length <= 1
-  if (key === 'Escape') return state.selection ? { type: 'select', selection: null } : { type: 'goUp' }
+  if (key === 'Escape') return state.selection ? { type: 'select', selection: null } : null
   if (key === 'Backspace') return atRoot ? 'leave' : { type: 'goUp' }
   return null
 }

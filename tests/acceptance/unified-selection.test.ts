@@ -76,7 +76,7 @@ describe('§6.8 统一选中验收', () => {
     expect(desk.run.emphasis.value!.lanes).toEqual(lanes)
   })
 
-  it('5. 选中模块后 Esc 回到选中进度所在的步骤；再按 Esc 返回上级', async () => {
+  it('5. 选中模块后 Esc 回到选中进度所在的步骤；再按 Esc 无动作（N9），Backspace 才返回上级', async () => {
     const { desk } = await open('/p/h5player?level=infra&sc=sc.command')
     desk.next()
     const at = desk.playback.value!.frameId
@@ -84,6 +84,9 @@ describe('§6.8 统一选中验收', () => {
     desk.pressKey('Escape')
     expect(desk.selected.value).toEqual({ kind: 'step', id: at })
     desk.pressKey('Escape')
+    expect(desk.levelId.value).toBe('infra')
+    expect(desk.selected.value).toEqual({ kind: 'step', id: at })
+    desk.pressKey('Backspace')
     expect(desk.levelId.value).toBe(desk.index.value!.rootId)
     expect(desk.selected.value).toEqual({ kind: 'module', id: 'infra' })
   })

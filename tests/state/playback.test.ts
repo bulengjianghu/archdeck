@@ -87,12 +87,12 @@ describe('视角与选中', () => {
     expect(run(base, { type: 'drill', id: 'infra' }).state.selection).toBeNull()
   })
 
-  it('V4：取消选中即选中进度所在的步骤（在开头时为场景），进度不动；已是它时 Esc 返回上级（N9）', () => {
+  it('V4：取消选中即选中进度所在的步骤（在开头时为场景），进度不动；已是它时 Esc 无动作（N9）', () => {
     const pinned = open('infra', next, { type: 'select', selection: { kind: 'module', id: 'infra.mus' } }).state
     expect(keyIntent(pinned, index, 'Escape')).toEqual({ type: 'select', selection: null })
     const unpinned = run(pinned, { type: 'select', selection: null }).state
     expect(selectedOf(unpinned)).toEqual({ kind: 'step', id: 'sc.play#start' })
-    expect(keyIntent(unpinned, index, 'Escape')).toEqual({ type: 'goUp' })
+    expect(keyIntent(unpinned, index, 'Escape')).toBeNull()
     const atStart = run(open('infra').state, { type: 'select', selection: { kind: 'file', id: 'x.ts' } }, { type: 'select', selection: null }).state
     expect(selectedOf(atStart)).toEqual({ kind: 'scenario', id: 'sc.play' })
   })

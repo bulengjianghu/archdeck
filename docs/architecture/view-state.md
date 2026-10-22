@@ -157,7 +157,7 @@ sequenceDiagram
 - **回放中双击下钻**（V3、R6、R7）：`drill` 在运行视角下选中被下钻的模块；层次视图变化 → 帧重新投影，本层可见消息变细；`frameId` 不变，两图停在同一帧。
 - **单步到分支点**（F6）：`dispatch(next)` 走到下一条可见消息；其后已无可见消息（路径在未选分支处截止）时回放控制条展开全部选项，「下一步」不可用 → `dispatch(chooseBranch)` → 路径延长，继续单步。
 - **直选分支**（F6e）：时序图的分支条件、路线总览、步骤树的分支标题都发 `dispatch(chooseBranch)` → 分支点不在路径上时 `choicesForBranch` 补齐到达它的选择 → 进度仍在新路径上则不动，否则停在 `pointPrefix` 的最后一帧（取其可见消息的第一帧），没有则回到开头；选中不变（选中的是步骤时随进度移到新落点，V7）。
-- **取消选中**（V4）：Esc 或单击空白 → `selection = null`，即选中进度所在的步骤（在开头时为场景）；已经是它时 Esc 返回上级（N9）。单步、拖动进度同样清空 `selection`，选中移动后的那一步（V7）。
+- **取消选中**（V4）：Esc 或单击空白 → `selection = null`，即选中进度所在的步骤（在开头时为场景）；已经是它时 Esc 无动作（N9）。单步、拖动进度同样清空 `selection`，选中移动后的那一步（V7）。
 - **返回上级**（N8）：`goUp` 在父层选中退出来的模块，运行视角下原来选中的步骤或文件随之取消，进度不动。
 
 ## 6. 动作与接口
@@ -195,5 +195,5 @@ emphasisOf(state, ctx: EmphasisContext): Emphasis | null                        
 selectedOf(state): Selected | null                     // Selected = Selection | { kind: 'step'; id: frameId } | { kind: 'scenario'; id }；null = 结构视角无选中
 encodeView(state: ViewState, index: ModelIndex, plan?: ScenarioPlan): Record<string, string>
 // 解码即 transition(state, { type: 'restore', query }, ctx)：丢弃无效值，恢复到最接近的合法状态
-keyIntent(state, index, key: 'Escape' | 'Backspace'): ViewAction | 'leave' | null      // N7、N9；'leave' = 回项目列表
+keyIntent(state, index, key: 'Escape' | 'Backspace'): ViewAction | 'leave' | null      // N7、N9：Esc 只取消选中，Backspace 返回上级；'leave' = 回项目列表
 ```
