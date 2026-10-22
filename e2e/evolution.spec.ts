@@ -55,6 +55,9 @@ test('开启时间耦合：本层出现波浪线，单击选中它，地址带 s
   // 模块面板的「演化」一节默认折叠，展开后列出提交
   await page.locator('.vue-flow__node[data-id="present.panel"]').click()
   await expect(page.locator('.panel')).toContainText('演化')
-  await page.locator('.panel').getByRole('button', { name: /^▸ 演化/ }).click()
+  await page
+    .locator('.panel')
+    .getByRole('button', { name: /^▸ 演化/ })
+    .click()
   await expect(page.locator('.panel')).toContainText('最近 10 次提交')
 })

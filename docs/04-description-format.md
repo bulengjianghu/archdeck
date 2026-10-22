@@ -252,7 +252,7 @@ sourceIgnore:
   - tsconfig*.json
 ```
 
-- **git 历史**（J1、J4，待实现）：演化事实（热度与时间耦合）缺省统计近 180 天、缺陷修复按标题 `^(fix|hotfix|bugfix)\b` 或含「修复」判定、时间耦合阈值为同提交 ≥ 5 次且占两端 ≥ 30%。项目要改时写在 `system.yaml` 的 `source.history`，都可选：
+- **git 历史**（J1、J4）：演化事实（热度与时间耦合）缺省统计近 180 天、缺陷修复按标题 `^(fix|hotfix|bugfix)\b` 或含「修复」判定、时间耦合阈值为同提交 ≥ 5 次且占两端 ≥ 30%。项目要改时写在 `system.yaml` 的 `source.history`，都可选：
 
 ```yaml
 system:

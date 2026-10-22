@@ -65,9 +65,9 @@ flowchart TB
 
 | 模块 | 职责 | 状态 | 专题 |
 |---|---|---|---|
-| DeskState（核心） | 协调者：持有视图状态、唯一写入口 `dispatch`、派生要画的数据；同步适配器（路由、模型源、布局、源码）；设计版本的对比基线与差异；文件归属与源码警告；代码事实同步与治理报告、选中节点所在的本层环（K8、U8、U9、Y5）；演化事实同步与本层投影、选中的耦合线（J1、J5、J7，待实现）。对外核心平铺，领域派生分 `run` / `files` / `versions` / `facts` / `evolution` 五组（ADR-0013） | 已实现 | 视图状态 · 架构治理 |
+| DeskState（核心） | 协调者：持有视图状态、唯一写入口 `dispatch`、派生要画的数据；同步适配器（路由、模型源、布局、源码）；设计版本的对比基线与差异；文件归属与源码警告；代码事实同步与治理报告、选中节点所在的本层环（K8、U8、U9、Y5）；演化事实同步与本层投影、选中的耦合线（J1、J5、J7）。对外核心平铺，领域派生分 `run` / `files` / `versions` / `facts` / `evolution` 五组（ADR-0013） | 已实现 | 视图状态 · 架构治理 |
 | 视图状态转移（核心） | 会话规则的纯函数：视角与选中（V）与选中突出（R15、R16）、导航（N）、回放（R、F6c、F6e、V7）、URL 编解码（含文件选中，G16） | 已实现 | 视图状态 |
-| Layout（核心） | 结构图排布（分层总览 / elkjs，Worker 中运行，按内容缓存；边界节点按层次顺序，L4）；时序图排布（泳道层次顺序与分组，P9、P13）；舞台叠加（走过的边、当前消息、经由上层与未建模的临时线、分支预览的坐标）与舞台显示（哪些节点与边隐藏、淡化、临时显示，V5、V8、V9）；画布场景 `canvasScene`（节点与边的数据、显隐、变淡、回放态与选中突出，ADR-0013；热度角标与耦合线，J5，待实现） | 已实现 | 结构投影 · 场景 · 工作台 |
+| Layout（核心） | 结构图排布（分层总览 / elkjs，Worker 中运行，按内容缓存；边界节点按层次顺序，L4）；时序图排布（泳道层次顺序与分组，P9、P13）；舞台叠加（走过的边、当前消息、经由上层与未建模的临时线、分支预览的坐标）与舞台显示（哪些节点与边隐藏、淡化、临时显示，V5、V8、V9）；画布场景 `canvasScene`（节点与边的数据、显隐、变淡、回放态与选中突出，ADR-0013；热度角标与耦合线，J5） | 已实现 | 结构投影 · 场景 · 工作台 |
 
 ### 3.3 模型层
 
@@ -80,7 +80,7 @@ flowchart TB
 | 版本对比 | 设计版本相对对比基线的差异与涉及变更数（E1、E2） | 已实现 | 加载与版本 |
 | 源码归属 | 文件按 `codeRefs` 归属模块、未归属与冲突、忽略清单、入口文件、导出与 `provides` 的对应、文件在当前层次的投影、目录树（G3–G14、G18）；路径补全、包入口与说明符解析（K2，入口、导出解析与依赖提取共用） | 已实现 | 源码 |
 | 架构治理 | 文件依赖提升为模块依赖、关系证实与未描述依赖（K4–K7）；端口三角（K11）；规则校验、违规与例外（U2–U6）；环与环度（Y）；基线门禁（U8）；本层投影与本层环的构成（K9、Y4、Y5）；agent 查询：定位、写前判定、拦截报告（Q1、Q2、Q4） | 已实现 | 架构治理 |
-| 演化事实 | git 历史提升为模块的修改热度、缺陷热度与时间耦合（J1–J4）；本层投影、热度前 N、无依赖的耦合对（J5、J6、J8）；与架构治理同属第三类事实的对照（ADR-0023） | 待实现 | 演化事实 |
+| 演化事实 | git 历史提升为模块的修改热度、缺陷热度与时间耦合（J1–J4）；本层投影、热度前 N、无依赖的耦合对（J5、J6、J8）；与架构治理同属第三类事实的对照（ADR-0023） | 已实现 | 演化事实 |
 | 返工清单 | 把描述问题、源码归属、代码事实、违规与未建模的步骤汇总为按根因聚合的返工项，每条带文件行号、规则编号与建议动作；渲染给 agent 的 Markdown（Q7–Q9）；项目健康度计数（Q10）。只读其他模型子模块的结果，不新增事实 | 已实现 | 架构治理 |
 
 ### 3.4 接入层
@@ -94,7 +94,7 @@ flowchart TB
 | 源码读取 | 解析源码根目录、列出文件清单与包入口、读取单个文件、用 TypeScript 解析导出，端点由 ModelSource 插件挂载（G1、G2、G11、G17） | 已实现 | 源码 |
 | 命令行校验 | `npm run lint:model`，含设计版本的每一轮；当前版本附带归属警告（G9）与治理门禁（U8），读不到源码为错误（G1） | 已实现 | 加载与版本 · 架构治理 |
 | 依赖提取 | 用 TypeScript 语法解析提取文件依赖、读 tsconfig paths 并经源码归属的说明符解析（K2）、穿透再导出；按修改时间缓存；端点由 ModelSource 插件挂载（K1–K3） | 已实现 | 架构治理 |
-| 源码历史读取 | 读源码仓库的 `git log --numstat`（参数经 execFile），按 HEAD 与窗口缓存，只保留源码清单内的文件；端点 `source/<项目>/history.json` 由 ModelSource 插件挂载（J1） | 待实现 | 演化事实 |
+| 源码历史读取 | 读源码仓库的 `git log --numstat`（参数经 execFile），按 HEAD 与窗口缓存，只保留源码清单内的文件；端点 `source/<项目>/history.json` 由 ModelSource 插件挂载（J1） | 已实现 | 演化事实 |
 | 治理存储 | 读写项目下 `governance/`：基线（只由命令行生成）、拦截记录（追加）；读源码根目录的 git 提交（U7、Q4） | 已实现 | 架构治理 |
 | agent 接口 | 查询核心（加载描述、源码、事实，调用模型层；每次查询前比对输入，变了就重建）与两种外壳：命令行 `npm run arch`、MCP 服务器 `npm run arch:mcp`（Q1–Q9，含返工清单 `issues`） | 已实现 | 架构治理 |
 
@@ -165,7 +165,7 @@ packages/h5p-arch-desk/
   schema/arch-file.schema.json  描述文件格式的真源
   model/<项目>/               各项目的架构描述（ADR-0001）；designs/ 下为设计版本（ADR-0002）
   vite/                       接入层：archModelPlugin.ts（端点与推送）、readModelDir.ts（读取与摘要）、readGit.ts（描述的 git 历史）、readHealth.ts（健康度）、writeModel.ts（人拥有的文件的追加写入）、readSource.ts（源码根目录、文件清单、文件、导出）、
-                              readDeps.ts（依赖提取）、governanceStore.ts（基线与拦截记录）、readHistory.ts（源码历史读取，待实现）
+                              readDeps.ts（依赖提取）、governanceStore.ts（基线与拦截记录）、readHistory.ts（源码历史读取）
   scripts/lint-model.ts       命令行校验
   scripts/agent/service.ts    agent 接口的查询核心；scripts/arch.ts（命令行）、scripts/arch-mcp.ts（MCP 服务器）
   model/<项目>/governance/    基线 baseline.json 与拦截记录 ledger.jsonl（不属于描述，ADR-0015）
@@ -175,10 +175,10 @@ packages/h5p-arch-desk/
       source/                 源码归属：types（契约）· glob · ownership（归属、入口、导出对应、投影、目录树）
       governance/             架构治理：types · facts · rules · cycles · report · level · query · ledger · ports
       rework/                 返工清单：types（契约）· list · markdown
-      evolution/              演化事实（待实现）：types（契约）· history · level
+      evolution/              演化事实：types（契约）· history · level
     state/                    视图状态层：useDeskState（协调者）· inject
       transition/             会话规则：types · navigation · selected · playback · url
-      desk/                   DeskState 的分组派生：run · files · versions · facts · evolution（待实现）
+      desk/                   DeskState 的分组派生：run · files · versions · facts · evolution
       sync/                   同步适配器：router · modelSource · layout · source
     layout/                   layout.ts（结构图）· sequence.ts（时序图）· stage.ts（舞台叠加与显示）· canvas.ts（画布场景）
     components/               呈现层（专题「工作台」列出组件分工）
@@ -202,7 +202,7 @@ packages/h5p-arch-desk/
 | [场景投影与回放](./architecture/scenario.md) | 一个场景在某一层怎么走、单步与跳转怎么算 | 场景投影、时序图排布 |
 | [源码接入与归属](./architecture/source.md) | 源码从哪读、文件属于哪个模块、入口导出什么、与描述对不对得上 | 源码读取、源码归属 |
 | [架构治理](./architecture/governance.md) | 代码依赖从哪来、描述对不对、规则怎么判、门禁怎么卡、agent 怎么问 | 依赖提取、治理存储、agent 接口、架构治理 |
-| [演化事实](./architecture/evolution.md) | git 历史从哪读、怎么提升为模块的热度与时间耦合、怎么叠加（待实现） | 源码历史读取、演化事实 |
+| [演化事实](./architecture/evolution.md) | git 历史从哪读、怎么提升为模块的热度与时间耦合、怎么叠加 | 源码历史读取、演化事实 |
 | [工作台界面](./architecture/workbench.md) | 页面怎么布置、每个组件画什么、交互意图怎么上交 | 呈现层全部 |
 
 ## 8. 价值如何涌现
