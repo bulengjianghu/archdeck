@@ -1,0 +1,42 @@
+# 设计 sketch-editor / r2（同 r1，核验所在下沉到 model.intent.check）：编辑草图并保存的主路径（E2E 计划覆盖的那一条：加层 → 加模块 → 连关系 → 保存）。
+scenario:
+  id: sc.edit-sketch
+  name: 在画布上编辑草图并保存
+  description: |
+    架构师在设计的草图版本上点「编辑」进入编辑态；在分层总览的插入条上加一层，在层内加两个模块，从一个模块拖线到另一个建关系；
+    每个操作都只发一个意图，经模型层的 applyEdit 得到新草图，画布按新草图重新投影与布局，面板顶部即时显示校验与「实现后将有 N 处偏差」；
+    最后保存：写入端点比对指纹、再校验一遍，合并进 YAML 文档写回并更新指纹，文件变化推送回来，页面停留在编辑态。
+  cause: 架构师要为下一轮迭代画草图
+  steps:
+    - call: {id: enter, from: actor.architect, to: present.version.edit, label: '点「编辑」'}
+    - call: {from: present.version.edit, to: state.desk.edit.commands, label: 'enterEdit()'}
+    - call: {from: state.desk.edit.commands, to: state.desk.actions, label: 'dispatch(enterEdit)'}
+    - call: {from: state.desk.actions, to: state.transition.edit, relation: rel.ed.dispatch-follow, label: 'transition(enterEdit)：记下编辑目标，退出场景、清掉文件选中'}
+    - loop:
+        while: 每个编辑操作（加层、加模块 ×2、连关系）
+        steps:
+          - call: {id: op, from: actor.architect, to: present.canvas.edit, label: '插入条「+ 层」/「+ 模块」并输入名称 / 拖线'}
+          - call: {from: present.canvas.edit.insert, to: state.desk.edit.commands, label: 'edit(addLayer / addModule / connect)', payload: ds.EditOp}
+          - call: {from: state.desk.edit.commands, to: state.desk.edit.session, label: 'apply(session, op)'}
+          - call: {from: state.desk.edit.session, to: model.intent.edit, label: 'applyEdit(draft, op, ctx)', payload: [ds.SketchDef, ds.EditOp]}
+          - return: {from: model.intent.edit, to: state.desk.edit.session, label: '新草图与影响', payload: ds.EditResult}
+          - call: {from: state.desk.edit.commands, to: state.desk.actions, label: 'dispatch(edited)：选中新建的模块'}
+          - call: {from: state.desk.edit.derive, to: model.pipeline.entry, label: 'loadModel(system + 持久草图 + draft)'}
+          - call: {from: state.desk.edit.derive, to: model.intent.validate, label: 'validateSketch(draft)', payload: ds.SketchValidation}
+          - call: {from: state.desk.edit.derive, to: model.intent.check, relation: rel.ed.derive-check, label: 'sketchCheck(draft, 当前版本)：实现后将有 N 处偏差', payload: ds.SketchCheck}
+    - call: {id: save, from: actor.architect, to: present.version.edit, label: '点「保存」'}
+    - call: {from: present.version.edit, to: state.desk.edit.commands, label: 'save()'}
+    - call: {from: state.desk.edit.commands, to: state.desk.edit.save, label: '整份写回'}
+    - call: {from: state.desk.edit.save, to: access.writer.sketch, label: 'POST /write/<项目>/designs/<设计>/sketch { sketch, baseHash }', payload: ds.SaveSketchRequest}
+    - call: {from: access.writer.sketch, to: model.intent.validate, label: '服务端再校验'}
+    - alt:
+        - when: 指纹相同且校验通过
+          steps:
+            - return: {id: saved, from: access.writer.sketch, to: state.desk.edit.save, label: '{ file, hash }：合并写回、更新指纹'}
+            - call: {from: state.desk.edit.save, to: state.desk.edit.session, label: 'saved(hash)：清空撤销栈，停留在编辑态'}
+            - async: {from: actor.ai, to: access.model-source, label: '（文件变化）arch-model:changed 推送'}
+            - call: {from: state.desk.loading, to: state.desk.edit.session, label: 'reloaded：指纹等于刚保存的，不变'}
+        - when: 文件已在外部改动
+          steps:
+            - return: {id: conflict, from: access.writer.sketch, to: state.desk.edit.save, label: '409「文件已变，重新加载后再改」'}
+            - call: {from: state.desk.edit.save, to: state.desk.edit.session, label: 'stale；可「重新加载并重放改动」'}

@@ -70,3 +70,6 @@ design:
         - "**7. 草图疑问：封闭的 model.intent 与 access.writer 下已有的代码放哪**：两个子树封闭后直接子模块只能是 edit / validate、sketch，已有的核验与生命周期（check.ts、lifecycle.ts、owned.ts）、追加写入（writeModel.ts）只能留在父模块自身；而校验要把矛盾检查抽给核验共用、草图写回要复用 openDoc / save——父模块与子模块之间按 M6 不能写关系，这些依赖在图上看不见（r1 只写进 designNote）。选项：A. 架构师在草图里补 model.intent.check（核验与生命周期）与 access.writer.append（追加写入），封闭集合随之扩大；B. 维持现状，接受这些依赖不可见；C. 取消这两个子树的 closed。推荐 A（AI 不能自己加，X5）。"
         - "**8. 草图疑问：第三级模块的 core**：草图给 model.intent.edit、model.intent.validate、present.canvas.edit 标了 core: true，而 04 §3.2 规定核心只用于第二级（分层总览只露出层的核心模块），第三级的 core 目前没有任何显示与规则效果。选项：A. 去掉这三处 core；B. 把 core 扩展为「任意层次的评审重点」并在 04 §3.2 与画布上定义其显示；C. 保留，不赋予含义。推荐 A，若架构师想表达「评审重点」则选 B 并登记新规则。r1 原样沿用了 core（X5）。"
         - "**9. 「编辑骨架」的入口形态**：A. 新增持久草图版本 /p/<项目>/i/<ID>（system.yaml + intent/**，对比基线为当前版本），编辑态只在它上面开启（r1）；B. 在当前版本上直接进入编辑态、只显示草图实体。推荐 A——编辑态的前提是「画的只有草图」，当前版本混有 AI 生成的模块，B 要在同一版本里切换数据来源，等于再造一个版本概念。"
+    - id: r2
+      date: '2026-10-22'
+      summary: r2 的 summary 与 questions 在 designs/sketch-editor/notes/r2.md（按评审意见 4 本应在 AI 拥有的 r2/revision.yaml，读取侧暂不支持，先放 r2/ 之外）。
