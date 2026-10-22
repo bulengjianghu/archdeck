@@ -9,7 +9,7 @@ scenario:
   cause: 业务方调用 play / switch / reset
   steps:
     - call: {id: cmd, from: actor.biz, to: infra.player-index.player-api, label: play / switch / reset}
-    - call: {from: infra.player-index.player-api, to: infra.framework.state-machine.scheduler, interface: if.framework.state-machine.sendCommand, payload: ds.CommandInfo, label: sendCommand}
+    - call: {from: infra.player-index.player-api, to: infra.framework.state-machine.scheduler, relation: rel.player-shell.api-framework-command, interface: if.framework.state-machine.sendCommand, payload: ds.CommandInfo, label: sendCommand}
     - async: {from: infra.framework.state-machine.scheduler, to: infra.framework.state-machine.engine, label: 串行取出命令执行}
     - call: {id: hook, from: infra.framework.state-machine.engine, to: app.solution.lifecycle, payload: ds.CommandHook, label: pre / post hook}
     - call: {from: app.solution.lifecycle, to: domain.services.solution-select, label: select / reconcile / policy}

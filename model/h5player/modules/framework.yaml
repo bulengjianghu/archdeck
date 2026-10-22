@@ -550,7 +550,7 @@ relations:
   - id: rel.framework.error-emit
     from: infra.framework.kernel.error-chain
     to: infra.framework.kernel.event-bus
-    type: event
+    type: notifies
     description: 未被拦截的 Warn / Recoverable / Fatal 错误发布 EventKey.Error
     payload: ds.EventInfo
   - id: rel.framework.error-fatal-command
@@ -575,13 +575,13 @@ relations:
   - id: rel.framework.domain-events-emit
     from: infra.framework.kernel.domain-events
     to: infra.framework.kernel.event-bus
-    type: event
+    type: notifies
     description: DomainEvent 映射为 PlayModeChange / SolutionChange / PlayerDataChange 对外事件
     payload: ds.EventInfo
   - id: rel.framework.profile-bus-forward
     from: infra.framework.kernel.domain-events
     to: infra.framework.context.core
-    type: event
+    type: notifies
     description: ProfileEventBus 把单例模型发布的领域事件同步转发给 handlePlaybackProfileEvents
   - id: rel.framework.domain-events-types
     from: infra.framework.kernel.domain-events
@@ -623,7 +623,7 @@ relations:
   - id: rel.framework.sm-engine-status-event
     from: infra.framework.state-machine.engine
     to: infra.framework.kernel.event-bus
-    type: event
+    type: notifies
     description: 主状态变化时发布 PlayerStatusChange
     payload: ds.PlayerStatusChangeEventPayload
   - id: rel.framework.sm-engine-error
@@ -734,11 +734,16 @@ relations:
     description: 插件注册 pre / post 命令 Hook
     interface: if.framework.state-machine.addPreCommandHook
   - id: rel.framework.plugin-events
+    from: infra.framework.kernel.event-bus
+    to: infra.framework.plugin
+    type: notifies
+    description: 插件订阅的事件经总线送达插件回调，销毁时自动退订；回调抛错包装为 PluginEventUnknownError
+    payload: ds.EventInfo
+  - id: rel.framework.plugin-events-publish
     from: infra.framework.plugin
     to: infra.framework.kernel.event-bus
-    type: event
-    description: 插件订阅 / 发布事件，销毁时自动退订；回调抛错包装为 PluginEventUnknownError
-    payload: ds.EventInfo
+    type: notifies
+    description: 插件经 PluginApi 发布事件
   - id: rel.framework.plugin-error-chain
     from: infra.framework.plugin
     to: infra.framework.kernel.error-chain
@@ -824,7 +829,7 @@ relations:
   - id: rel.framework.settings-event
     from: infra.framework.context.settings
     to: infra.framework.kernel.event-bus
-    type: event
+    type: notifies
     description: 每次写设置补发 PlayerDataChange（payload 为补丁）
     payload: ds.EventInfo
   - id: rel.framework.leg-context-base

@@ -452,11 +452,11 @@ relations:
     type: depends
     description: 读 HLS 直播追帧默认参数 HLS_LIVE_CATCHUP_DEFAULTS
   - id: rel.plugins.mse-live-events
-    from: app.plugins.buffer-strategy.mse-live
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.plugins.buffer-strategy.mse-live
+    type: notifies
     mode: async
-    description: 订阅 BufferChange / PlayerStatusChange，驱动起冲停冲、追帧与回收
+    description: 通知 BufferChange / PlayerStatusChange（插件订阅），驱动起冲停冲、追帧与回收
   - id: rel.plugins.mse-live-commands
     from: app.plugins.buffer-strategy.mse-live
     to: infra.framework
@@ -480,11 +480,11 @@ relations:
     mode: sync
     description: 看门狗判据 judgeNotRendering / judgeProgressStalled / judgeConsumeGap（fhlsPresentationHealth）
   - id: rel.plugins.fhls-live-events
-    from: app.plugins.buffer-strategy.fhls-live
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.plugins.buffer-strategy.fhls-live
+    type: notifies
     mode: async
-    description: 订阅 BufferChange / FhlsSegmentConsumed / PlayerStatusChange
+    description: 通知 BufferChange / FhlsSegmentConsumed / PlayerStatusChange（插件订阅）
   - id: rel.plugins.fhls-live-commands
     from: app.plugins.buffer-strategy.fhls-live
     to: infra.framework
@@ -499,11 +499,17 @@ relations:
     payload: [ds.BufferThresholds]
     description: 创建并喂入 SelfAdaptive / SupplyAware / CadenceSwitch 控制器与积压检测器，取回阈值结论
   - id: rel.plugins.live-adaptive-events
+    from: infra.framework
+    to: app.plugins.buffer-strategy.live-adaptive
+    type: notifies
+    mode: async
+    description: 通知 bufferSize 观测与 PlayerStatusChange（插件订阅）
+  - id: rel.plugins.live-adaptive-events-publish
     from: app.plugins.buffer-strategy.live-adaptive
     to: infra.framework
-    type: event
+    type: notifies
     mode: async
-    description: 订阅 bufferSize 观测与 PlayerStatusChange；上报 BufferThresholdChange 等 Track
+    description: 上报 BufferThresholdChange 等 Track
   - id: rel.plugins.live-adaptive-settings
     from: app.plugins.buffer-strategy.live-adaptive
     to: infra.framework
@@ -523,11 +529,11 @@ relations:
     type: depends
     description: assertHlsStreamModel 断言 HLS 流模型以查分片时长
   - id: rel.plugins.vod-adaptive-fw
-    from: app.plugins.buffer-strategy.vod-adaptive
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.plugins.buffer-strategy.vod-adaptive
+    type: notifies
     mode: async
-    description: 订阅分片 LoadStart / DataArrived / Loaded；挂 SetPlaybackRate / Seek 命令钩子；经 settings 写回阈值
+    description: 通知分片 LoadStart / DataArrived / Loaded（插件订阅）；插件另挂 SetPlaybackRate / Seek 命令钩子、经 settings 写回阈值
   - id: rel.plugins.water-level-mus
     from: app.plugins.buffer-strategy.water-level-math
     to: infra.mus
@@ -536,11 +542,17 @@ relations:
 
   # ── app.plugins · 网络 ──
   - id: rel.plugins.monitor-events
+    from: infra.framework
+    to: app.plugins.network.monitor
+    type: notifies
+    mode: async
+    description: 通知 StreamDataArrived / StreamFragmentLoaded / PlayerStatusChange / Error（插件订阅）
+  - id: rel.plugins.monitor-events-publish
     from: app.plugins.network.monitor
     to: infra.framework
-    type: event
+    type: notifies
     mode: async
-    description: 订阅 StreamDataArrived / StreamFragmentLoaded / PlayerStatusChange / Error，发布 NetworkStatusChange
+    description: 发布 NetworkStatusChange
   - id: rel.plugins.monitor-commands
     from: app.plugins.network.monitor
     to: infra.framework
@@ -553,11 +565,17 @@ relations:
     type: depends
     description: 经 modelAccess 读缓冲为空 / 帧缓冲 / 就绪度模型（点播）
   - id: rel.plugins.reconnect-events
+    from: infra.framework
+    to: app.plugins.network.reconnect
+    type: notifies
+    mode: async
+    description: 通知 Error / StreamDataArrived / FirstFrame / UserAction / PlayerStatusChange / VisibilityChange / NetworkStatusChange（插件订阅）
+  - id: rel.plugins.reconnect-events-publish
     from: app.plugins.network.reconnect
     to: infra.framework
-    type: event
+    type: notifies
     mode: async
-    description: 订阅 Error / StreamDataArrived / FirstFrame / UserAction / PlayerStatusChange / VisibilityChange / NetworkStatusChange；发布 ReconnectStateChange
+    description: 发布 ReconnectStateChange
   - id: rel.plugins.reconnect-commands
     from: app.plugins.network.reconnect
     to: infra.framework
@@ -585,11 +603,11 @@ relations:
     type: depends
     description: 经 modelAccess.requireVideoErrorModel 读 video 异常记录
   - id: rel.plugins.render-watch-fw
-    from: app.plugins.runtime-guard.render-watch
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.plugins.runtime-guard.render-watch
+    type: notifies
     mode: async
-    description: 订阅 PlayerStatusChange / VideoRendered；超限发 Stop + Play 重启
+    description: 通知 PlayerStatusChange / VideoRendered（插件订阅）；超限时插件发 Stop + Play 重启
   - id: rel.plugins.render-watch-support
     from: app.plugins.runtime-guard.render-watch
     to: app.plugins.support
@@ -597,11 +615,11 @@ relations:
     mode: sync
     interface: if.plugins.support.statusScopedIntervalTask
   - id: rel.plugins.video-quality-fw
-    from: app.plugins.runtime-guard.video-quality
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.plugins.runtime-guard.video-quality
+    type: notifies
     mode: async
-    description: 订阅 VideoInfoChange，判出损坏时 handleError
+    description: 通知 VideoInfoChange（插件订阅）；判出损坏时插件 handleError
   - id: rel.plugins.system-load-models
     from: app.plugins.runtime-guard.system-load
     to: domain.models
@@ -621,11 +639,11 @@ relations:
     mode: sync
     interface: if.plugins.support.statusScopedIntervalTask
   - id: rel.plugins.system-load-fw
-    from: app.plugins.runtime-guard.system-load
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.plugins.runtime-guard.system-load
+    type: notifies
     mode: async
-    description: 订阅 PlayerStatusChange 启停采样
+    description: 通知 PlayerStatusChange（插件订阅），启停采样
 
   # ── app.plugins · 错误处理 ──
   - id: rel.plugins.recovery-fw
@@ -635,11 +653,11 @@ relations:
     mode: sync
     description: registerErrorHandler 挂全局错误链；发 Stop{Recovery} / Play{Recovery} / Pause 命令
   - id: rel.plugins.recovery-events
-    from: app.plugins.error.recovery
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.plugins.error.recovery
+    type: notifies
     mode: async
-    description: 订阅 UserAction / PlayerStatusChange / FirstFrame / VideoRendered / StreamDataArrived（出画观察窗）
+    description: 通知 UserAction / PlayerStatusChange / FirstFrame / VideoRendered / StreamDataArrived（插件订阅，出画观察窗）
   - id: rel.plugins.recovery-index
     from: app.plugins.error.recovery
     to: infra.player-index
@@ -680,28 +698,40 @@ relations:
     type: depends
     description: 经 modelAccess.requireAvRenderPtsModel 读音画渲染 pts
   - id: rel.plugins.statistic-events
+    from: infra.framework
+    to: app.plugins.stats.statistic
+    type: notifies
+    mode: async
+    description: 通知 PlayerStatusChange / StreamDataArrived / DemuxedDataArrived / 分片事件 / Seek 事件（插件订阅）
+  - id: rel.plugins.statistic-events-publish
     from: app.plugins.stats.statistic
     to: infra.framework
-    type: event
+    type: notifies
     mode: async
-    description: 订阅 PlayerStatusChange / StreamDataArrived / DemuxedDataArrived / 分片事件 / Seek 事件，发布 NetworkSpeedChange
+    description: 发布 NetworkSpeedChange
   - id: rel.plugins.samplers-fw
     from: app.plugins.stats.samplers
     to: infra.framework
     type: depends
     description: 共享定时器 sharedIntervalTimer、Time 与 average / variance 等统计工具
   - id: rel.plugins.milestones-events
+    from: infra.framework
+    to: app.plugins.stats.milestones
+    type: notifies
+    mode: async
+    description: 通知 StreamConnected / StreamDataArrived / DemuxedDataArrived / VideoRendered（插件订阅）
+  - id: rel.plugins.milestones-events-publish
     from: app.plugins.stats.milestones
     to: infra.framework
-    type: event
+    type: notifies
     mode: async
-    description: 订阅 StreamConnected / StreamDataArrived / DemuxedDataArrived / VideoRendered，发布 FirstLoad / FirstData / FirstFrame
+    description: 发布 FirstLoad / FirstData / FirstFrame
   - id: rel.plugins.tracker-events
-    from: app.plugins.stats.tracker
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.plugins.stats.tracker
+    type: notifies
     mode: async
-    description: 订阅 UserAction / 起播里程碑 / Error / PlayerStatusChange / Track / Log 等，挂命令审计钩子
+    description: 通知 UserAction / 起播里程碑 / Error / PlayerStatusChange / Track / Log 等（插件订阅）；插件另挂命令审计钩子
   - id: rel.plugins.tracker-models
     from: app.plugins.stats.tracker
     to: domain.models
@@ -725,21 +755,21 @@ relations:
   - id: rel.plugins.visibility-events
     from: app.plugins.device.visibility
     to: infra.framework
-    type: event
+    type: notifies
     mode: async
     description: 发布 VisibilityChange；处理器订阅它并发 Pause / Resume 命令
   - id: rel.plugins.no-sleep-events
-    from: app.plugins.device.no-sleep
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.plugins.device.no-sleep
+    type: notifies
     mode: async
-    description: 订阅 PlayerStatusChange / SolutionChange / PlayModeChange / VisibilityChange
+    description: 通知 PlayerStatusChange / SolutionChange / PlayModeChange / VisibilityChange（插件订阅）
   - id: rel.plugins.logger-events
-    from: app.plugins.diagnostics.logger
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.plugins.diagnostics.logger
+    type: notifies
     mode: async
-    description: 订阅 Log 事件
+    description: 通知 Log 事件（插件订阅）
   - id: rel.plugins.debug-samplers
     from: app.plugins.diagnostics.debug
     to: app.plugins.stats.samplers
@@ -753,17 +783,17 @@ relations:
     type: depends
     description: 经 modelAccess 读帧缓冲与渲染时间线模型
   - id: rel.plugins.debug-fw
-    from: app.plugins.diagnostics.debug
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.plugins.diagnostics.debug
+    type: notifies
     mode: async
-    description: 订阅 BufferChange / Log；开启 framework performance 耗时采集
+    description: 通知 BufferChange / Log（插件订阅）；插件另开启 framework performance 耗时采集
   - id: rel.plugins.player-info-events
-    from: app.plugins.diagnostics.player-info
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.plugins.diagnostics.player-info
+    type: notifies
     mode: async
-    description: 订阅方案、播放模式、起播里程碑、网速、时长等事件刷新浮层
+    description: 通知方案、播放模式、起播里程碑、网速、时长等事件（插件订阅），刷新浮层
   - id: rel.plugins.support-fw
     from: app.plugins.support
     to: infra.framework
@@ -849,11 +879,17 @@ relations:
     interface: if.timeshift.coordinator.legPort
     description: createLeg / holdLeg / releaseLeg / switchLeg / ensureLiveLeg / revertLiveLeg / withdrawLeg 等换腿事务
   - id: rel.timeshift.coord-events
+    from: infra.framework
+    to: app.timeshift.coordinator
+    type: notifies
+    mode: async
+    description: 通知 PlayerStatusChange / BufferChange / VideoRendered / FirstData / PlayerDataChange / VideoDurationChange / StreamFragmentLoaded / SeekStart / SeekEnd（协调者订阅）
+  - id: rel.timeshift.coord-events-publish
     from: app.timeshift.coordinator
     to: infra.framework
-    type: event
+    type: notifies
     mode: async
-    description: 订阅 PlayerStatusChange / BufferChange / VideoRendered / FirstData / PlayerDataChange / VideoDurationChange / StreamFragmentLoaded / SeekStart / SeekEnd；发布 TimeShiftHandoffDone / TimeShiftStarted / TimeShiftSupplyIssue / TimeShiftFailed
+    description: 发布 TimeShiftHandoffDone / TimeShiftStarted / TimeShiftSupplyIssue / TimeShiftFailed
   - id: rel.timeshift.coord-ledger
     from: app.timeshift.coordinator
     to: app.timeshift.frame-ledger
@@ -959,11 +995,17 @@ relations:
     mode: sync
     description: buildTimeShiftInfoPayload / recordEndOnLiveAxis / shouldRaiseResumeUnavailable
   - id: rel.timeshift.source-fw
+    from: infra.framework
+    to: app.timeshift.source-wiring
+    type: notifies
+    mode: async
+    description: 通知 PlayerDataChange（timeShiftUrl，接线订阅）
+  - id: rel.timeshift.source-fw-publish
     from: app.timeshift.source-wiring
     to: infra.framework
-    type: event
+    type: notifies
     mode: async
-    description: 订阅 PlayerDataChange（timeShiftUrl）；发布时移口径 VideoDurationChange 与 Error{TimeShiftResumeUnavailable}
+    description: 发布时移口径 VideoDurationChange 与 Error{TimeShiftResumeUnavailable}
   - id: rel.timeshift.driver-strategies
     from: app.timeshift.recording-driver
     to: app.strategies

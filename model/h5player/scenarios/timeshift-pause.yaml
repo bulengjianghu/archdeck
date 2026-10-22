@@ -9,7 +9,7 @@ scenario:
   cause: 已登记时移地址的 FLV 直播中，用户调用 pause()
   steps:
     - call: {id: pause, from: actor.biz, to: infra.player-index.player-api, interface: if.player-index.pause, label: pause()}
-    - call: {from: infra.player-index.player-api, to: infra.framework.state-machine.scheduler, interface: if.framework.state-machine.sendCommand, payload: ds.CommandInfo, label: "sendCommand(Pause{origin: 'user'})"}
+    - call: {from: infra.player-index.player-api, to: infra.framework.state-machine.scheduler, relation: rel.player-shell.api-framework-command, interface: if.framework.state-machine.sendCommand, payload: ds.CommandInfo, label: "sendCommand(Pause{origin: 'user'})"}
     - async: {from: infra.framework.state-machine.scheduler, to: infra.framework.state-machine.engine, label: 串行执行 Pause}
     - call: {from: infra.framework.state-machine.engine, to: app.timeshift.coordinator, relation: rel.framework.sm-engine-timeshift-hooks, label: Pause 前置 Hook：记暂停来源 user}
     - async: {from: infra.framework.state-machine.engine, to: infra.framework.kernel.event-bus, payload: ds.PlayerStatusChangeEventPayload, label: PlayerStatusChange（Paused）}
@@ -37,7 +37,7 @@ scenario:
                     - async: {from: app.timeshift.shell, to: infra.framework.kernel.event-bus, label: TimeShiftHandoffDone}
                     - call: {from: app.timeshift.coordinator, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "withdrawLeg('primary')：提交即撤直播腿"}
                     - call: {id: resume, from: actor.biz, to: infra.player-index.player-api, interface: if.player-index.resume, label: resume()}
-                    - call: {from: infra.player-index.player-api, to: infra.framework.state-machine.scheduler, interface: if.framework.state-machine.sendCommand, label: sendCommand(Resume)}
+                    - call: {from: infra.player-index.player-api, to: infra.framework.state-machine.scheduler, relation: rel.player-shell.api-framework-command, interface: if.framework.state-machine.sendCommand, label: sendCommand(Resume)}
                     - async: {from: infra.framework.state-machine.scheduler, to: infra.framework.state-machine.engine, label: 串行执行 Resume}
                     - call: {from: infra.framework.state-machine.engine, to: app.timeshift.coordinator, relation: rel.framework.sm-engine-timeshift-hooks, label: Resume 前置 Hook：已对接，进灰度区}
                     - call: {from: app.timeshift.coordinator, to: app.timeshift.grace, label: 灰度区开始计时（每 100ms 巡检）}
@@ -49,7 +49,7 @@ scenario:
                 - when: 续播时仍未对接（录制追不上或已放弃）
                   steps:
                     - call: {id: resume-live, from: actor.biz, to: infra.player-index.player-api, interface: if.player-index.resume, label: resume()}
-                    - call: {from: infra.player-index.player-api, to: infra.framework.state-machine.scheduler, interface: if.framework.state-machine.sendCommand, label: sendCommand(Resume)}
+                    - call: {from: infra.player-index.player-api, to: infra.framework.state-machine.scheduler, relation: rel.player-shell.api-framework-command, interface: if.framework.state-machine.sendCommand, label: sendCommand(Resume)}
                     - async: {from: infra.framework.state-machine.scheduler, to: infra.framework.state-machine.engine, label: 串行执行 Resume}
                     - call: {from: infra.framework.state-machine.engine, to: app.timeshift.coordinator, relation: rel.framework.sm-engine-timeshift-hooks, label: Resume 前置 Hook：未对接，放流放阀}
                     - call: {from: app.timeshift.coordinator, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "releasePlayQueue + releaseLeg('primary')；withdrawLeg('timeshift')"}

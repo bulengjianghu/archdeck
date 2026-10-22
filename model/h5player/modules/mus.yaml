@@ -384,40 +384,40 @@ relations:
   - id: rel.mus.flow.loader-flv-demuxer
     from: infra.mus.loader.flv
     to: infra.mus.demuxer.flv
-    type: dataflow
+    type: streams
     mode: async
     payload: ds.StreamMediaData
     description: 网络回调里逐块 output 直推 FLV 字节流
   - id: rel.mus.flow.loader-hls-demuxer
     from: infra.mus.loader.hls
     to: infra.mus.demuxer.hls
-    type: dataflow
+    type: streams
     mode: async
     payload: ds.StreamMediaData
     description: 逐块下推 TS 分片字节（带分片序号）
   - id: rel.mus.flow.loader-mp4-demuxer
     from: infra.mus.loader.mp4
     to: infra.mus.demuxer.mp4
-    type: dataflow
+    type: streams
     mode: async
     payload: ds.StreamMediaData
     description: 按请求顺序下推带 byteStart 的字节区间
   - id: rel.mus.flow.demuxer-flv-buffer
     from: infra.mus.demuxer.flv
     to: infra.mus.buffer.demuxed
-    type: dataflow
+    type: streams
     payload: [ds.DemuxedVideoData, ds.DemuxedAudioData, ds.DemuxedVideoMetadata, ds.DemuxedAudioMetadata]
     description: 解封装帧与轨道元数据直推 Load 段尾缓冲（音频先于视频）
   - id: rel.mus.flow.demuxer-hls-buffer
     from: infra.mus.demuxer.hls
     to: infra.mus.buffer.demuxed
-    type: dataflow
+    type: streams
     payload: [ds.DemuxedVideoData, ds.DemuxedAudioData, ds.DemuxedVideoMetadata, ds.DemuxedAudioMetadata]
     description: 时间线归一后的帧批量直推
   - id: rel.mus.flow.demuxer-mp4-buffer
     from: infra.mus.demuxer.mp4
     to: infra.mus.buffer.demuxed
-    type: dataflow
+    type: streams
     payload: [ds.DemuxedVideoData, ds.DemuxedAudioData, ds.DemuxedVideoMetadata, ds.DemuxedAudioMetadata]
     description: 按轨聚批的样本直推
 
@@ -425,43 +425,43 @@ relations:
   - id: rel.mus.flow.demuxed-pts
     from: infra.mus.buffer.demuxed
     to: infra.mus.corrector.pts
-    type: dataflow
+    type: streams
     payload: [ds.DemuxedVideoData, ds.DemuxedAudioData]
     description: SendAllBuffer 出队后直推 Process 段首（音频与 metadata 在校正链上透传）
   - id: rel.mus.flow.demuxed-processed
     from: infra.mus.buffer.demuxed
     to: infra.mus.buffer.processed
-    type: dataflow
+    type: streams
     payload: [ds.DemuxedVideoData, ds.DemuxedAudioData]
     description: Process 段为空时 Load 段尾直连 Play 段首
   - id: rel.mus.flow.pts-nalu
     from: infra.mus.corrector.pts
     to: infra.mus.corrector.nalu-filter
-    type: dataflow
+    type: streams
     payload: ds.DemuxedVideoData
     description: 重建 pts / cts 后直推
   - id: rel.mus.flow.nalu-frameinfo
     from: infra.mus.corrector.nalu-filter
     to: infra.mus.corrector.frame-info
-    type: dataflow
+    type: streams
     payload: ds.DemuxedVideoData
     description: 剔除不可解码 NALU 后直推
   - id: rel.mus.flow.frameinfo-plugin
     from: infra.mus.corrector.frame-info
     to: infra.mus.process-plugin
-    type: dataflow
+    type: streams
     payload: ds.DemuxedVideoData
     description: 加密流时进入解密插件节点
   - id: rel.mus.flow.frameinfo-processed
     from: infra.mus.corrector.frame-info
     to: infra.mus.buffer.processed
-    type: dataflow
+    type: streams
     payload: [ds.DemuxedVideoData, ds.DemuxedAudioData]
     description: 非加密流时校正链尾直推 Play 段首
   - id: rel.mus.flow.plugin-processed
     from: infra.mus.process-plugin
     to: infra.mus.buffer.processed
-    type: dataflow
+    type: streams
     payload: [ds.DemuxedVideoData, ds.DemuxedAudioData]
     description: 插件拦截（同步或 Promise 兑现）后输出
     mode: async
@@ -470,25 +470,25 @@ relations:
   - id: rel.mus.flow.processed-mp4remuxer
     from: infra.mus.buffer.processed
     to: infra.mus.remuxer.mp4
-    type: dataflow
+    type: streams
     payload: [ds.DemuxedVideoData, ds.DemuxedAudioData, ds.DemuxedVideoMetadata, ds.DemuxedAudioMetadata]
     description: Mse 方案（Mp4Remuxer）与 Vcs 方案（Mp4FrameRemuxer，仅视频）按 SendBuffer 出队
   - id: rel.mus.flow.mp4remuxer-mse
     from: infra.mus.remuxer.mp4
     to: infra.mus.render.mse
-    type: dataflow
+    type: streams
     payload: [ds.Mp4RemuxedMetadata, ds.Mp4RemuxedData]
     description: init segment 与 media segment 直推，append 进 SourceBuffer
   - id: rel.mus.flow.mp4remuxer-vcs
     from: infra.mus.remuxer.mp4
     to: infra.mus.render.vcs
-    type: dataflow
+    type: streams
     payload: [ds.Mp4RemuxedMetadata, ds.Mp4RemuxedData]
     description: 一帧一片的 fMP4 直推 Vcs 渲染
   - id: rel.mus.flow.processed-audio
     from: infra.mus.buffer.processed
     to: infra.mus.render.audio
-    type: dataflow
+    type: streams
     payload: ds.DemuxedAudioMetadata
     description: Vcs 方案下音频元数据直达音频渲染
 
@@ -496,57 +496,57 @@ relations:
   - id: rel.mus.flow.processed-wcs
     from: infra.mus.buffer.processed
     to: infra.mus.decoder.wcs
-    type: dataflow
+    type: streams
     payload: [ds.DemuxedVideoData, ds.DemuxedVideoMetadata]
     description: Wcs 方案按送解码策略出队视频帧
   - id: rel.mus.flow.processed-wasmvideo
     from: infra.mus.buffer.processed
     to: infra.mus.decoder.wasm-video
-    type: dataflow
+    type: streams
     payload: [ds.DemuxedVideoData, ds.DemuxedVideoMetadata]
     description: Wasm 方案按送解码策略出队视频帧
   - id: rel.mus.flow.processed-wasmaudio
     from: infra.mus.buffer.processed
     to: infra.mus.decoder.wasm-audio
-    type: dataflow
+    type: streams
     payload: [ds.DemuxedAudioData, ds.DemuxedAudioMetadata, ds.DemuxedAudioCombinedData]
     description: Wcs / Wasm / Vcs 方案的音频腿
   - id: rel.mus.flow.wcs-decoded
     from: infra.mus.decoder.wcs
     to: infra.mus.buffer.decoded
-    type: dataflow
+    type: streams
     mode: async
     payload: [ds.DecodedVideoData, ds.DecodedAudioData]
     description: WebCodecs output 回调中直推解码帧
   - id: rel.mus.flow.wasmvideo-decoded
     from: infra.mus.decoder.wasm-video
     to: infra.mus.buffer.decoded
-    type: dataflow
+    type: streams
     mode: async
     payload: ds.DecodedVideoData
     description: Worker 回传 YUV 后在主线程直推
   - id: rel.mus.flow.wasmaudio-decoded
     from: infra.mus.decoder.wasm-audio
     to: infra.mus.buffer.decoded
-    type: dataflow
+    type: streams
     payload: ds.DecodedAudioData
     description: 同步软解 PCM 直推
   - id: rel.mus.flow.decoded-canvas
     from: infra.mus.buffer.decoded
     to: infra.mus.render.canvas
-    type: dataflow
+    type: streams
     payload: ds.DecodedVideoData
     description: 送渲染策略按音画同步出队，2D / WebGL / YUV 上屏
   - id: rel.mus.flow.decoded-stream
     from: infra.mus.buffer.decoded
     to: infra.mus.render.stream-sink
-    type: dataflow
+    type: streams
     payload: ds.DecodedVideoData
     description: 支持 MediaStream 视频轨的浏览器上的 Wcs 出画
   - id: rel.mus.flow.decoded-audio
     from: infra.mus.buffer.decoded
     to: infra.mus.render.audio
-    type: dataflow
+    type: streams
     payload: ds.DecodedAudioData
     description: PCM 出队给音频渲染
 
@@ -554,33 +554,33 @@ relations:
   - id: rel.mus.flow.processed-fhlsdemuxed
     from: infra.mus.buffer.processed
     to: infra.mus.buffer.fhls-demuxed
-    type: dataflow
+    type: streams
     payload: [ds.DemuxedVideoData, ds.DemuxedAudioData]
     description: 非分段（直播）Fhls 从处理后队列接数据
   - id: rel.mus.flow.fhlsdemuxed-remuxer
     from: infra.mus.buffer.fhls-demuxed
     to: infra.mus.remuxer.fhls
-    type: dataflow
+    type: streams
     payload: [ds.DemuxedVideoCombinedData, ds.DemuxedAudioCombinedData]
     description: 合流并换算渲染 DTS 后按段直推
   - id: rel.mus.flow.fhlsremuxer-buffer
     from: infra.mus.remuxer.fhls
     to: infra.mus.buffer.fhls-remuxed
-    type: dataflow
+    type: streams
     mode: async
     payload: ds.FhlsRemuxedData
     description: wasm muxer 数据回调产出 TS 分片
   - id: rel.mus.flow.fhlsremuxed-sw
     from: infra.mus.buffer.fhls-remuxed
     to: infra.workers
-    type: dataflow
+    type: streams
     mode: async
     payload: ds.FhlsRemuxedData
     description: 作为 Service Worker 服务（fhlsService / vodFhlsService）的数据提供方应答清单与分片请求
   - id: rel.mus.flow.fhlsremuxed-render
     from: infra.mus.buffer.fhls-remuxed
     to: infra.mus.render.fhls
-    type: dataflow
+    type: streams
     mode: async
     payload: ds.FhlsRemuxedData
     description: 拉模式：video 元素经 Service Worker 原生拉取 TS 分片（不经 output 直推）
@@ -769,22 +769,22 @@ relations:
   - id: rel.mus.loader-event
     from: infra.mus.loader
     to: infra.framework
-    type: event
+    type: notifies
     description: 经 context.emit 发 StreamConnected / StreamDataArrived；网络错误经 handleError 进错误路由
   - id: rel.mus.demuxer-event
     from: infra.mus.demuxer
     to: infra.framework
-    type: event
+    type: notifies
     description: 首次拿齐视频 metadata 时发 StreamInfoLoaded
   - id: rel.mus.buffer-event
     from: infra.mus.buffer
     to: infra.framework
-    type: event
+    type: notifies
     description: 入队 / 出队 / 丢弃时发 BufferChange
   - id: rel.mus.render-event
     from: infra.mus.render
     to: infra.framework
-    type: event
+    type: notifies
     description: 发 VideoRendered / VideoSeeked / SourceBufferUpdated / VideoInfoChange / BufferChange 等读数事件
   - id: rel.mus.wasmvideo-bridge
     from: infra.mus.decoder.wasm-video

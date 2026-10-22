@@ -921,11 +921,11 @@ relations:
     type: calls
     description: 经加载段控制器拉清单 / 拉数据 / 取消
   - id: rel.strategies.load-framework
-    from: app.strategies.load
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.strategies.load
+    type: notifies
     mode: async
-    description: 订阅 StreamInfoLoaded / BufferChange / Error / PlayerStatusChange；挂 Load / Play 后置命令 Hook；向 DemuxedBuffer 发 SendAllBuffer
+    description: 通知 StreamInfoLoaded / BufferChange / Error / PlayerStatusChange（策略订阅）；策略另挂 Load / Play 后置命令 Hook、向 DemuxedBuffer 发 SendAllBuffer
   - id: rel.strategies.load-domain-services
     from: app.strategies.load
     to: domain.services
@@ -985,11 +985,11 @@ relations:
     type: calls
     description: 读帧模型 / 帧缓冲模型
   - id: rel.strategies.live-frame-framework
-    from: app.strategies.live-frame
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.strategies.live-frame
+    type: notifies
     mode: async
-    description: 订阅 BufferChange / PlayerStatusChange / VideoFrameDecoded，共享定时器驱动送渲染，向 MU 派发 SendBuffer / DropBuffer
+    description: 通知 BufferChange / PlayerStatusChange / VideoFrameDecoded（策略订阅）；策略以共享定时器驱动送渲染，向 MU 派发 SendBuffer / DropBuffer
   - id: rel.strategies.live-frame-player-index
     from: app.strategies.live-frame
     to: infra.player-index
@@ -1010,11 +1010,11 @@ relations:
     type: calls
     description: 直播自适应缓冲控制器决策（送帧线落点）
   - id: rel.strategies.live-vcs-framework
-    from: app.strategies.live-vcs
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.strategies.live-vcs
+    type: notifies
     mode: async
-    description: 订阅缓冲 / 状态 / 渲染事件，派发送帧与丢音频动作
+    description: 通知缓冲 / 状态 / 渲染事件（策略订阅）；策略派发送帧与丢音频动作
   - id: rel.strategies.vod-frame-play-base
     from: app.strategies.vod-frame
     to: app.strategies.play-base
@@ -1032,11 +1032,11 @@ relations:
     type: calls
     payload: ds.FrameController
   - id: rel.strategies.vod-frame-framework
-    from: app.strategies.vod-frame
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.strategies.vod-frame
+    type: notifies
     mode: async
-    description: 订阅 BufferChange / PlayerStatusChange / VideoRendered，定时器驱动送解码与送渲染
+    description: 通知 BufferChange / PlayerStatusChange / VideoRendered（策略订阅）；策略以定时器驱动送解码与送渲染
   - id: rel.strategies.vod-frame-player-index
     from: app.strategies.vod-frame
     to: infra.player-index
@@ -1068,11 +1068,11 @@ relations:
     type: depends
     description: mseBufferWaterLevel 水位计算
   - id: rel.strategies.vod-mse-framework
-    from: app.strategies.vod-mse
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.strategies.vod-mse
+    type: notifies
     mode: async
-    description: 订阅 SourceBufferUpdated / VideoRendered / BufferChange，向 MseRender 派发 RemoveRange / Seek
+    description: 通知 SourceBufferUpdated / VideoRendered / BufferChange（策略订阅）；策略向 MseRender 派发 RemoveRange / Seek
   - id: rel.strategies.vod-mse-player-index
     from: app.strategies.vod-mse
     to: infra.player-index
@@ -1099,11 +1099,11 @@ relations:
     type: depends
     description: mseBufferWaterLevel、fhlsContinuousWatchdog
   - id: rel.strategies.vod-fhls-framework
-    from: app.strategies.vod-fhls
-    to: infra.framework
-    type: event
+    from: infra.framework
+    to: app.strategies.vod-fhls
+    type: notifies
     mode: async
-    description: 订阅处理后队列 / 解析后缓存 / 渲染事件，200ms 巡检驱动保活涓流
+    description: 通知处理后队列 / 解析后缓存 / 渲染事件（策略订阅）；策略以 200ms 巡检驱动保活涓流
   - id: rel.strategies.vod-fhls-player-index
     from: app.strategies.vod-fhls
     to: infra.player-index
@@ -1121,6 +1121,67 @@ relations:
     description: StrategyDecisionAction / StrategyBlockedBy / effectiveDeadbands
 
 interfaces:
+  # ── 契约接口（implements 的目标，M11、K5：方案控制器、段工厂、片段句柄；字段见同名数据结构） ──
+  - id: if.solution.ports.SolutionDeps
+    name: SolutionDeps
+    owner: app.solution.ports
+    signature: |
+      interface SolutionDeps { stateMachine; pipeline; models; registry; fragments; factories; legs?; context; selector; capabilities; errors; log }
+    description: Solution 需要外界注入的全部能力；组合根与片段挂载器等结构性满足其中的成员。字段见 ds.SolutionDeps。
+  - id: if.solution.ports.SolutionStageFactory
+    name: SolutionStageFactory
+    owner: app.solution.ports
+    signature: |
+      interface SolutionStageFactory { createPipeline(options); updatePipeline(options); createController() }
+    description: 段工厂契约，各加载 / 播放段工厂结构性满足。字段见 ds.SolutionStageFactory。
+  - id: if.strategies.contracts.FrameController
+    name: FrameController
+    owner: app.strategies.contracts
+    signature: |
+      interface FrameController extends PlayController { reset; resetDecoder; dropDemuxedBuffer; dropDecodedBuffer; dropAllDemuxedBuffer; dropAllDecodedBuffer; flushDecoder }
+    description: Wcs / Wasm 帧方案控制器契约，播放段工厂产出。字段见 ds.FrameController。
+  - id: if.strategies.contracts.MseController
+    name: MseController
+    owner: app.strategies.contracts
+    signature: |
+      interface MseController extends PlayController { seek(timestamp: number): void }
+    description: Mse 方案控制器契约。
+  - id: if.strategies.contracts.VideoController
+    name: VideoController
+    owner: app.strategies.contracts
+    signature: |
+      interface VideoController extends PlayController { seek(timestamp: number): void }
+    description: Video 方案控制器契约（与 Mse 同形）。
+  - id: if.strategies.contracts.VcsController
+    name: VcsController
+    owner: app.strategies.contracts
+    signature: |
+      interface VcsController extends PlayController {}
+    description: Vcs 方案控制器契约。
+  - id: if.strategies.contracts.FhlsController
+    name: FhlsController
+    owner: app.strategies.contracts
+    signature: |
+      interface FhlsController extends PlayController { seek(timestamp: number): void; presentation(): FhlsPresentation }
+    description: Fhls 方案控制器契约。
+  - id: if.strategies.contracts.HlsLoadController
+    name: HlsLoadController
+    owner: app.strategies.contracts
+    signature: |
+      interface HlsLoadController extends VodLoadController { loadData(): void }
+    description: Hls 加载段控制器契约，加载段工厂产出。
+  - id: if.strategies.contracts.Mp4LoadController
+    name: Mp4LoadController
+    owner: app.strategies.contracts
+    signature: |
+      interface Mp4LoadController extends VodLoadController { loadData(startByte: number, byteLength: number): void }
+    description: Mp4 加载段控制器契约。
+  - id: if.registry.fragment-contracts.VodLoadHandle
+    name: VodLoadHandle
+    owner: app.registry.fragment-contracts
+    signature: |
+      interface VodLoadHandle { startLoadFragment(timestamp?); loadMoreFragment(); resumeFromSegment(segmentIndex); setStartPosition(positionMs, anchor?) }
+    description: 点播加载策略对外暴露的窄句柄契约（键 VOD_LOAD_HANDLE_KEY = 'vod-load'）。字段见 ds.VodLoadHandle。
   - id: if.solution.Solution
     name: Solution 生命周期
     owner: app.solution.lifecycle

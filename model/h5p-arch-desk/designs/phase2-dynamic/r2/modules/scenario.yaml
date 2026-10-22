@@ -183,7 +183,7 @@ relations:
   # 模型层内部
   - { id: rel.p2.level-endpoints, from: model.scenario.level, to: model.projector.endpoints, type: calls, interface: if.model.mapEndpoint, description: 与结构投影共用同一套端点规则 }
   - { id: rel.p2.level-edgeid, from: model.scenario.level, to: model.projector.collector, type: depends, description: 用 edgeId 规则算出帧对应的视图边 ID }
-  - { id: rel.p2.level-sequence, from: model.scenario.level, to: model.scenario.sequence, type: dataflow, payload: [ds.ScenarioLevelView], description: 本层的可见消息交给时序模型 }
+  - { id: rel.p2.level-sequence, from: model.scenario.level, to: model.scenario.sequence, type: streams, payload: [ds.ScenarioLevelView], description: 本层的可见消息交给时序模型 }
   - { id: rel.p2.path-plan, from: model.scenario.path, to: model.scenario.flatten, type: depends, payload: [ds.ScenarioPlan] }
   - { id: rel.p2.flatten-index, from: model.scenario.flatten, to: model.pipeline.indexer, type: depends, payload: [ds.ModelIndex], description: 读取场景表以内联 ref }
   - { id: rel.p2.level-lca, from: model.scenario.level, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: 场景所在层次 = 帧端点的最近公共祖先 }

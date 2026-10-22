@@ -300,11 +300,17 @@ relations:
     mode: async
     description: 用户操作经 StateMachineController.sendCommand 投递命令；注册 Destroy / Attach 等后置 Hook；useMediaPlugin 经 PipelineController.updatePipeline 插入 external 段节点；设置类经 context.settings 写 playerData。
   - id: rel.player-shell.api-framework-event
+    from: infra.framework
+    to: infra.player-index.player-api
+    type: notifies
+    mode: async
+    description: 框架事件总线通知 FirstFrame、PlayerStatusChange、Error、TimeShift* 等，player-api 订阅后转发到对外 EventEmitter。
+  - id: rel.player-shell.api-framework-event-publish
     from: infra.player-index.player-api
     to: infra.framework
-    type: event
+    type: notifies
     mode: async
-    description: 订阅框架事件总线（FirstFrame、PlayerStatusChange、Error、TimeShift* 等）并转发到对外 EventEmitter；发布 UserAction / TogglePlayerInfo。
+    description: 发布 UserAction / TogglePlayerInfo。
   - id: rel.player-shell.api-plugins
     from: infra.player-index.player-api
     to: app.plugins
@@ -367,11 +373,17 @@ relations:
     type: calls
     description: 创建 ProfileEventBus、ModelRegistry（state / statistic 单例创建器）、Context 具体类与 Framework（绑定三 Controller）。
   - id: rel.player-shell.runtime-framework-projection
+    from: infra.framework
+    to: infra.bootstrap.player-runtime
+    type: notifies
+    mode: async
+    description: 通知 NetworkStatusChange / PlaybackScopeStarted / ReconnectStateChange（runtime 最先订阅），投影到 context.data。
+  - id: rel.player-shell.runtime-framework-projection-publish
     from: infra.bootstrap.player-runtime
     to: infra.framework
-    type: event
+    type: notifies
     mode: async
-    description: 最先订阅 NetworkStatusChange / PlaybackScopeStarted / ReconnectStateChange，投影到 context.data 并补发 PlayerDataChange。
+    description: 投影后补发 PlayerDataChange。
   - id: rel.player-shell.runtime-domain
     from: infra.bootstrap.player-runtime
     to: domain.models

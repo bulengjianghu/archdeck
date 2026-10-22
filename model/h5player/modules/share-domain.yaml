@@ -368,8 +368,8 @@ relations:
 
   # ── Domain.models ──
   - { id: rel.sd.models-base-ports, from: domain.models.base, to: domain.ports, type: depends, interface: if.ports.DomainEventPublisher, description: 聚合构造只注入 DomainEventPublisher }
-  - { id: rel.sd.ps-publish, from: domain.models.playback-state, to: domain.ports, type: event, interface: if.ports.DomainEventPublisher, payload: ds.DomainEvent, description: 叠加进出（OverlayEntered / OverlayExited）同步发布领域事件 }
-  - { id: rel.sd.stat-publish, from: domain.models.statistic, to: domain.ports, type: event, interface: if.ports.DomainEventPublisher, payload: ds.DomainEvent, description: startNewSlice 发布 StatisticSliceStarted }
+  - { id: rel.sd.ps-publish, from: domain.models.playback-state, to: domain.ports, type: notifies, interface: if.ports.DomainEventPublisher, payload: ds.DomainEvent, description: 叠加进出（OverlayEntered / OverlayExited）同步发布领域事件 }
+  - { id: rel.sd.stat-publish, from: domain.models.statistic, to: domain.ports, type: notifies, interface: if.ports.DomainEventPublisher, payload: ds.DomainEvent, description: startNewSlice 发布 StatisticSliceStarted }
   - { id: rel.sd.ps-base, from: domain.models.playback-state, to: domain.models.base, type: depends, description: 继承 ModelBase，违例抛 InvariantError }
   - { id: rel.sd.stat-base, from: domain.models.statistic, to: domain.models.base, type: depends, description: 继承 ModelBase，违例抛 InvariantError }
   - { id: rel.sd.stream-base, from: domain.models.stream, to: domain.models.base, type: depends, description: 三种流模型继承 ModelBase }
@@ -407,6 +407,19 @@ relations:
   - { id: rel.sd.sm-model-types, from: domain.rules.status-mapping, to: domain.types.model-types, type: depends, description: PlayerStatus → MuStatus }
 
 interfaces:
+  # ── 能力面契约（implements 的目标，M11、K5；字段见同名数据结构） ──
+  - id: if.domain.types.PlaybackStateMachineView
+    name: PlaybackStateMachineView
+    owner: domain.types.model-types
+    signature: |
+      interface PlaybackStateMachineView extends PlaybackStateCollectorView { /* 状态机档：迁移与快照 */ }
+    description: PlaybackState 的状态机档能力面，PlaybackState 类 implements 它。字段见 ds.PlaybackStateMachineView。
+  - id: if.domain.types.StatisticOwnerView
+    name: StatisticOwnerView
+    owner: domain.types.model-types
+    signature: |
+      interface StatisticOwnerView extends StatisticCollectorView { /* 持有档：切片与重置 */ }
+    description: Statistic 的持有档能力面（ModelViewMap.statistic），Statistic 结构性满足。字段见 ds.StatisticOwnerView。
   # ───────── Share ─────────
   - id: if.contracts.IPlugin
     name: IPlugin 插件契约

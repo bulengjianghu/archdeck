@@ -140,7 +140,7 @@ relations:
   # 模型层内部
   - { id: rel.p2.level-endpoints, from: model.scenario.level, to: model.projector.endpoints, type: calls, interface: if.model.mapEndpoint, description: 与结构投影共用同一套端点规则 }
   - { id: rel.p2.level-edgeid, from: model.scenario.level, to: model.projector.collector, type: depends, description: 用 edgeId 规则算出帧对应的视图边 ID }
-  - { id: rel.p2.level-sequence, from: model.scenario.level, to: model.scenario.sequence, type: dataflow, payload: [ds.ScenarioLevelView], description: 本层的帧投影交给时序模型 }
+  - { id: rel.p2.level-sequence, from: model.scenario.level, to: model.scenario.sequence, type: streams, payload: [ds.ScenarioLevelView], description: 本层的帧投影交给时序模型 }
   - { id: rel.p2.flatten-index, from: model.scenario.flatten, to: model.pipeline.indexer, type: depends, payload: [ds.ModelIndex], description: 读取场景表以内联 ref }
   - { id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: depends, payload: [ds.ScenarioEntity, ds.Frame, ds.ScenarioLevelView, ds.SequenceModel] }
 
