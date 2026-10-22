@@ -25,6 +25,9 @@ function playClass(ctx: SceneContext, id: string): string | undefined {
   return undefined
 }
 
+/** 步骤徽标与分支预览浮在激活的边（EDGE_Z）之上 */
+const OVER_EDGES = { step: 1003, preview: 1004 } as const
+
 function placeNode(ctx: SceneContext, id: string, box: Box, type: CanvasNodeType, data: NodeData, zIndex: number): CanvasNode {
   return {
     id,
@@ -147,13 +150,13 @@ export function replayNodes(ctx: SceneContext): CanvasNode[] {
       current: n - 1 === current,
       muted: !!emphMessages && !emphMessages.has(n - 1),
     }))
-    nodes.push(placeNode(ctx, `step:${mark.edgeId}`, { ...mark.at, w: 1, h: 1 }, 'step', { ...blank, steps }, 6))
+    nodes.push(placeNode(ctx, `step:${mark.edgeId}`, { ...mark.at, w: 1, h: 1 }, 'step', { ...blank, steps }, OVER_EDGES.step))
   }
   const pointId = ctx.input.branchPointId
   for (const p of st.previews) {
     if (!p.pos || !pointId) continue
     const preview = { pointId, option: p.option, label: p.label }
-    nodes.push(placeNode(ctx, `preview:${p.option}`, { ...p.pos, w: 1, h: 1 }, 'preview', { ...blank, preview }, 7))
+    nodes.push(placeNode(ctx, `preview:${p.option}`, { ...p.pos, w: 1, h: 1 }, 'preview', { ...blank, preview }, OVER_EDGES.preview))
   }
   return nodes
 }

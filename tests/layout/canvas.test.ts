@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { diffModels, loadModel, planScenario, projectLevel, projectScenario, stageEnds } from '../../src/model'
 import { layoutView } from '../../src/layout/layout'
 import { stageOverlay } from '../../src/layout/stage'
-import { canvasScene, routeMidpoint, type CanvasInput } from '../../src/layout/canvas'
+import { EDGE_Z, canvasScene, routeMidpoint, type CanvasInput } from '../../src/layout/canvas'
 import { scenarioFiles } from '../fixtures/sample'
 
 const { index } = loadModel(scenarioFiles())
@@ -190,6 +190,24 @@ describe('canvasScene', () => {
     expect(e.data.label).toContain('?')
     expect(e.data.route.label).toEqual(routeMidpoint({ points: route.points }))
     expect(e.data.route.label).not.toEqual({ x: 0, y: 0 })
+  })
+
+  it('激活的边浮在节点之上（高于 Vue Flow 选中节点的 1000）：与悬停节点相邻的边；其余边在模块节点之下', async () => {
+    const input = await structure('infra')
+    const e0 = [...input.positioned!.view.edges].find(e => !e.from.startsWith('boundary:') && !e.to.startsWith('boundary:'))!
+    const s = canvasScene({ ...input, hover: e0.from })
+    const mod = node(s, e0.from)!
+    for (const e of s.edges) {
+      const adj = e.source === e0.from || e.target === e0.from
+      expect(e.zIndex).toBe(adj ? EDGE_Z.active : EDGE_Z.idle)
+    }
+    expect(EDGE_Z.active).toBeGreaterThan(1000)
+    expect(EDGE_Z.idle).toBeLessThan(mod.zIndex)
+    // 回放当前步骤的边再高一档，步骤徽标仍在它之上
+    const r = canvasScene(await run())
+    const cur = r.edges.find(e => e.data.play === 'current')!
+    expect(cur.zIndex).toBe(EDGE_Z.current)
+    expect(r.nodes.filter(n => n.type === 'step').every(n => n.zIndex > EDGE_Z.current)).toBe(true)
   })
 
   it('routeMidpoint：折线按长度取一半处，曲线取两端点中点', () => {

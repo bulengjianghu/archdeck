@@ -38,6 +38,12 @@ function edgeChange(marks: ModelDiff | null, e: ViewEdge): 'added' | 'changed' |
   return kinds.includes('added') ? 'added' : kinds.includes('changed') ? 'changed' : undefined
 }
 
+/**
+ * 边的层级：激活的边（与聚焦对象相邻、选中、回放当前或走过）浮在节点之上——高于 Vue Flow 选中节点的 1000，
+ * 不被途经的节点盖住；其余边在模块节点之下、带之上。步骤徽标与分支预览（节点）再高一档（nodes.ts）。
+ */
+export const EDGE_Z = { idle: 1, active: 1001, current: 1002 } as const
+
 const touchesFocus = (ctx: SceneContext, e: ViewEdge) => !!ctx.focusId && (e.from === ctx.focusId || e.to === ctx.focusId)
 
 /** 运行视角：按舞台显示（V5、V8）；分层总览：层间边在聚焦核心模块时变淡；普通层次：与聚焦对象无关的边变淡 */
@@ -86,7 +92,7 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined,
     source: e.from,
     target: e.to,
     type: 'route',
-    zIndex: play.play === 'current' ? 5 : core ? 3 : 1,
+    zIndex: play.play === 'current' ? EDGE_Z.current : selected || play.play || touchesFocus(ctx, e) ? EDGE_Z.active : EDGE_Z.idle,
     data: {
       route,
       edge: e,
