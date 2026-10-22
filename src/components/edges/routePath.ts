@@ -1,10 +1,24 @@
 import type { Point } from '@/layout/layout'
+import { JUMP_RADIUS } from '@/layout/canvas'
 
-/** 折线，拐角处用半径 r 的圆角 */
-export function roundedPolyline(points: Point[], r = 8): string {
+/** 折线，拐角处用半径 r 的圆角；水平段上的跳点（L11，jumpsOf）处插入向上的半圆小桥 */
+export function roundedPolyline(points: Point[], r = 8, jumps: readonly Point[] = []): string {
   if (points.length === 0) return ''
   if (points.length === 1) return `M${points[0].x},${points[0].y}`
   let d = `M${points[0].x},${points[0].y}`
+  /** 从 from 画直线到 to，途经本段上的跳点 */
+  const line = (from: Point, to: Point) => {
+    if (Math.abs(from.y - to.y) < 0.5 && jumps.length) {
+      const right = to.x > from.x
+      const on = jumps.filter(j => Math.abs(j.y - from.y) < 0.5 && (right ? j.x > from.x && j.x < to.x : j.x < from.x && j.x > to.x))
+      for (const j of on.sort((p, q) => (right ? p.x - q.x : q.x - p.x))) {
+        const s = right ? -JUMP_RADIUS : JUMP_RADIUS
+        d += ` L${j.x + s},${j.y} a${JUMP_RADIUS},${JUMP_RADIUS} 0 0 ${right ? 1 : 0} ${-2 * s},0`
+      }
+    }
+    d += ` L${to.x},${to.y}`
+  }
+  let at = points[0]
   for (let i = 1; i < points.length - 1; i++) {
     const p0 = points[i - 1]
     const p1 = points[i]
@@ -12,10 +26,12 @@ export function roundedPolyline(points: Point[], r = 8): string {
     const r1 = Math.min(r, dist(p0, p1) / 2, dist(p1, p2) / 2)
     const a = toward(p1, p0, r1)
     const b = toward(p1, p2, r1)
-    d += ` L${a.x},${a.y} Q${p1.x},${p1.y} ${b.x},${b.y}`
+    line(at, a)
+    d += ` Q${p1.x},${p1.y} ${b.x},${b.y}`
+    at = b
   }
-  const last = points[points.length - 1]
-  return `${d} L${last.x},${last.y}`
+  line(at, points[points.length - 1])
+  return d
 }
 
 /** 两点之间的竖向 S 形曲线（核心模块跨层边） */

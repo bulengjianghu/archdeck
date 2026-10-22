@@ -1,6 +1,6 @@
 /**
  * Layout：给 LevelView 算坐标与边的走线。
- * - graph：elkjs layered 算法，自上而下，正交走线；
+ * - graph：elkjs layered 算法，自上而下（或自左向右），全部节点（含边界节点与参与者）进 elk，每条边两端各有固定朝向的端口，正交走线（L4、L11）；
  * - layered：按层序分带，规则排布，不调用 elk（规则 O2、O3，见 docs/02-domain.md）。
  * 结果按视图内容缓存，同样的输入得到同样的输出。
  */
@@ -19,7 +19,7 @@ export interface Box extends Point {
 
 export interface EdgeRoute {
   points: Point[]
-  /** 曲线（核心模块跨层边、边界边、参与者的边）还是折线；'h' 为从侧边出发的横向曲线 */
+  /** 曲线（分层总览的核心跨层边与参与者的边、回放临时线、代码依赖叠加线）还是折线；'h' 为从侧边出发的横向曲线 */
   curve?: boolean | 'h'
   label?: Point
 }
@@ -296,7 +296,7 @@ export const LABEL_SLOT = { w: 24, h: 18 }
 
 /**
  * L10：同一对节点之间（不论方向）的多条边按序号对称错开，序号按边在视图中的顺序；只有一条的为 0。
- * elk 排的内部边自行错开，这里用于曲线（边界边、参与者的边、核心跨层边）。
+ * elk 排的边各有端口、自行错开，这里用于分层总览的曲线（参与者的边、核心跨层边）。
  */
 export function parallelOffsets(edges: readonly ViewEdge[]): Map<string, number> {
   const groups = new Map<string, string[]>()
@@ -353,36 +353,86 @@ export function isBoundaryEdge(e: ViewEdge): boolean {
   return isBoundary(e.from) || isBoundary(e.to)
 }
 
+/**
+ * L4、L11：普通层次全部节点交给 elk——用户在第一行（DOWN；RIGHT 为第一列），内部子模块居中，边界节点与外部系统、时间在最后一行，
+ * 最后一行的顺序按视图节点顺序（边界节点按层次顺序，P9）；边由 elk 正交绕行，不穿节点。
+ * 用层约束（FIRST / LAST）而不用分区：分区时边界节点会被排成两行；最后一行的顺序用 semiInteractive 的位置提示固定。
+ */
+export type Row = 'first' | 'inner' | 'last'
+
+export function rowOf(n: ViewNode): Row {
+  if (n.role === 'boundary') return 'last'
+  if (n.role === 'actor') return n.actorKind === 'user' ? 'first' : 'last'
+  return 'inner'
+}
+
+/**
+ * L11：端口方向——每条边在两端各有自己的端口，边固定（FIXED_SIDE）、顺序由 elk 排以减少交叉。
+ * 内部节点进边在上、出边在下（RIGHT：左进右出）；最先一行的用户只朝下（右），最后几行的边界节点、外部系统只朝上（左）。
+ */
+export function portSide(n: ViewNode, end: 'in' | 'out', direction: 'DOWN' | 'RIGHT'): 'NORTH' | 'SOUTH' | 'WEST' | 'EAST' {
+  const row = rowOf(n)
+  const forward = row === 'first' ? true : row === 'inner' ? end === 'out' : false
+  return direction === 'DOWN' ? (forward ? 'SOUTH' : 'NORTH') : forward ? 'EAST' : 'WEST'
+}
+
 export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'): ElkNode {
+  const byId = new Map(view.nodes.map(n => [n.id, n]))
+  const lastRow = [...view.nodes.filter(n => n.role === 'boundary'), ...view.nodes.filter(n => n.role === 'actor' && rowOf(n) === 'last')].map(n => n.id)
+  const ports = new Map<string, { id: string; width: number; height: number; layoutOptions: Record<string, string> }[]>(view.nodes.map(n => [n.id, []]))
+  const port = (node: string, id: string, end: 'in' | 'out') => {
+    ports.get(node)!.push({ id, width: 1, height: 1, layoutOptions: { 'elk.port.side': portSide(byId.get(node)!, end, direction) } })
+    return id
+  }
+  const edges = view.edges
+    .filter(e => byId.has(e.from) && byId.has(e.to))
+    // L5：同一对节点按类型的平行边各有端口，由 elk 错开。
+    // 每条边都申请一个至少放得下「?」或「×N」的标签槽：事实标记在布局后才叠加，槽太小时 elk 可能不给坐标（画布另有中点兜底）
+    .map<ElkExtendedEdge>(e => {
+      const text = edgeLabel(e)
+      return {
+        id: e.id,
+        sources: [port(e.from, `${e.id}#out`, 'out')],
+        targets: [port(e.to, `${e.id}#in`, 'in')],
+        labels: [{ id: `${e.id}#label`, text, width: Math.max(LABEL_SLOT.w, text.length * 7 + 18), height: LABEL_SLOT.h }],
+      }
+    })
   return {
     id: 'root',
     layoutOptions: {
       'elk.algorithm': 'layered',
       'elk.direction': direction,
       'elk.edgeRouting': 'ORTHOGONAL',
+      'elk.layered.crossingMinimization.semiInteractive': 'true',
       'elk.layered.spacing.nodeNodeBetweenLayers': '72',
       'elk.spacing.nodeNode': '44',
       'elk.spacing.edgeNode': '24',
       'elk.spacing.edgeEdge': '14',
+      'elk.spacing.portPort': '12',
       'elk.layered.spacing.edgeNodeBetweenLayers': '24',
+      'elk.layered.spacing.edgeEdgeBetweenLayers': '12',
+      'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
       'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
       'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
       'elk.edgeLabels.inline': 'true',
     },
-    children: view.nodes.filter(n => n.role !== 'boundary' && n.role !== 'actor').map(n => ({ id: n.id, width: sizeOf(n).w, height: sizeOf(n).h })),
-    edges: view.edges
-      .filter(e => !isBoundaryEdge(e) && !isActorNode(view, e.from) && !isActorNode(view, e.to))
-      // L5：同一对节点按类型的平行边作为多重边一并交给 elk，由它错开。
-      // 每条边都申请一个至少放得下「?」或「×N」的标签槽：事实标记在布局后才叠加，槽太小时 elk 可能不给坐标（画布另有中点兜底）
-      .map<ElkExtendedEdge>(e => {
-        const text = edgeLabel(e)
-        return {
-          id: e.id,
-          sources: [e.from],
-          targets: [e.to],
-          labels: [{ id: `${e.id}#label`, text, width: Math.max(LABEL_SLOT.w, text.length * 7 + 18), height: LABEL_SLOT.h }],
-        }
-      }),
+    children: view.nodes.map(n => {
+      const row = rowOf(n)
+      const last = row === 'last' ? lastRow.indexOf(n.id) : -1
+      return {
+        id: n.id,
+        width: sizeOf(n).w,
+        height: sizeOf(n).h,
+        ports: ports.get(n.id),
+        layoutOptions: {
+          'elk.portConstraints': 'FIXED_SIDE',
+          ...(row === 'inner' ? {} : { 'elk.layered.layering.layerConstraint': row === 'first' ? 'FIRST' : 'LAST' }),
+          // 位置提示只用来定最后一行的先后：边界节点按视图顺序（层次顺序），其后是外部系统与时间
+          ...(last >= 0 ? { 'elk.position': direction === 'DOWN' ? `(${last * 1000},0)` : `(0,${last * 1000})` } : {}),
+        },
+      }
+    }),
+    edges,
   }
 }
 
@@ -400,8 +450,9 @@ export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
     edges.set(e.id, { points, ...(label && nearPoints(label, points, LABEL_SLOT.w + LABEL_SLOT.h) ? { label } : {}) })
   }
   spreadEnds(view.edges, edges)
-  // 边界框只包住内部结构（不含边界节点与参与者）
-  const inner = [...nodes.values()]
+  if (!hasActors(view)) return { view, nodes, edges, coreEdges: new Map() }
+  // A7：有参与者时画内部结构的边界框（不含边界节点与参与者）
+  const inner = view.nodes.filter(n => rowOf(n) === 'inner').map(n => nodes.get(n.id)!)
   const pad = 28
   const frame = inner.length
     ? (() => {
@@ -410,53 +461,7 @@ export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
         return { x: x1, y: y1, w: Math.max(...inner.map(b => b.x + b.w)) + pad - x1, h: Math.max(...inner.map(b => b.y + b.h)) + pad - y1 }
       })()
     : { x: 0, y: 0, w: NODE_SIZE.module.w, h: NODE_SIZE.module.h }
-  placeBoundaries(view, nodes, edges)
-  placeActors(view, nodes, frame)
-  const offsets = parallelOffsets(view.edges)
-  for (const e of view.edges) {
-    if (edges.has(e.id) || !(isActorNode(view, e.from) || isActorNode(view, e.to))) continue
-    const route = actorRoute(nodes.get(e.from), nodes.get(e.to))
-    if (route) edges.set(e.id, shifted(route, offsets.get(e.id) ?? 0))
-  }
-  return { view, nodes, edges, coreEdges: new Map(), ...(hasActors(view) ? { frame } : {}) }
-}
-
-export const BOUNDARY_ROW_GAP = 96
-
-/**
- * 边界节点统一放在内部结构下方一行，按视图给出的层次顺序从左到右排列（L4，与时序图泳道一致）；
- * 边界边画成从内部模块到边界节点的曲线（默认隐藏，聚焦时显示）。
- */
-export function placeBoundaries(view: LevelView, nodes: Map<string, Box>, edges: Map<string, EdgeRoute>) {
-  const sorted = view.nodes.filter(n => n.role === 'boundary')
-  if (sorted.length === 0) return
-  const inner = view.nodes
-    .filter(n => n.role !== 'boundary' && n.role !== 'actor')
-    .map(n => nodes.get(n.id))
-    .filter((b): b is Box => !!b)
-  const minX = inner.length ? Math.min(...inner.map(b => b.x)) : 0
-  const maxX = inner.length ? Math.max(...inner.map(b => b.x + b.w)) : 0
-  const bottom = inner.length ? Math.max(...inner.map(b => b.y + b.h)) : 0
-  const { w, h } = NODE_SIZE.boundary
-  const gap = 20
-  const rowW = sorted.length * w + (sorted.length - 1) * gap
-  let x = (minX + maxX) / 2 - rowW / 2
-  const y = bottom + BOUNDARY_ROW_GAP
-  for (const n of sorted) {
-    nodes.set(n.id, { x, y, w, h })
-    x += w + gap
-  }
-  const offsets = parallelOffsets(view.edges.filter(isBoundaryEdge))
-  for (const e of view.edges) {
-    if (!isBoundaryEdge(e)) continue
-    const a = nodes.get(e.from)
-    const b = nodes.get(e.to)
-    if (!a || !b) continue
-    const down = a.y < b.y
-    const p1 = { x: a.x + a.w / 2, y: down ? a.y + a.h : a.y }
-    const p2 = { x: b.x + b.w / 2, y: down ? b.y : b.y + b.h }
-    edges.set(e.id, shifted({ points: [p1, p2], curve: true, label: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } }, offsets.get(e.id) ?? 0))
-  }
+  return { view, nodes, edges, coreEdges: new Map(), frame }
 }
 
 let elkPromise: Promise<ELK> | undefined
@@ -496,8 +501,12 @@ async function layoutGraph(view: LevelView): Promise<PositionedView> {
 const cache = new Map<string, PositionedView>()
 const CACHE_LIMIT = 64
 
+/** 布局算法的版本：端口、层约束等选项改了就升，旧结果不再命中 */
+export const LAYOUT_VERSION = 'L11-ports-1'
+
 export function cacheKey(view: LevelView, opts: LayoutOptions = {}): string {
   return JSON.stringify([
+    LAYOUT_VERSION,
     view.mode === 'layered' ? (opts.bandColumns ?? DEFAULT_BAND_COLUMNS) : 0,
     view.mode,
     view.parentId,
@@ -513,7 +522,6 @@ export async function layoutView(view: LevelView, opts: LayoutOptions = {}): Pro
   let result: PositionedView
   if (view.mode === 'layered') result = layoutLayered(view, opts)
   else if (view.nodes.length === 0) result = { view, nodes: new Map(), edges: new Map(), coreEdges: new Map() }
-  else if (!view.nodes.some(n => n.role !== 'boundary' && n.role !== 'actor')) result = fromElkGraph(view, { id: 'root', children: [], edges: [] })
   else result = await layoutGraph(view)
   if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value!)
   cache.set(key, result)

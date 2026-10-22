@@ -5,6 +5,7 @@ import {
   bandColumnsFor,
   PARALLEL_GAP,
   cacheKey,
+  LAYOUT_VERSION,
   contentBounds,
   edgeLabel,
   edgeWeight,
@@ -12,12 +13,10 @@ import {
   layoutView,
   moreChipId,
   parallelOffsets,
-  placeBoundaries,
   toElkGraph,
   fromElkGraph,
   LABEL_SLOT,
   spreadEnds,
-  type Box,
   type EdgeRoute,
 } from '../../src/layout/layout'
 import type { ViewEdge } from '../../src/model'
@@ -129,17 +128,20 @@ describe('layoutView', () => {
 })
 
 describe('边界节点', () => {
-  it('普通层次：边界节点排在内部结构下方一行，边界边为曲线', async () => {
+  it('普通层次（L4）：边界节点进 elk，排在内部结构下方同一行、按层次顺序；边界边正交绕行（不是曲线）', async () => {
     const view = projectLevel(index, 'infra', { showBoundaries: true })
     const pv = await layoutView(view)
     const inner = view.nodes.filter(n => n.role !== 'boundary').map(n => pv.nodes.get(n.id)!)
     const bottom = Math.max(...inner.map(b => b.y + b.h))
-    const boundaries = view.nodes.filter(n => n.role === 'boundary').map(n => pv.nodes.get(n.id)!)
+    const ids = view.nodes.filter(n => n.role === 'boundary').map(n => n.id)
+    const boundaries = ids.map(id => pv.nodes.get(id)!)
     expect(boundaries.length).toBe(2)
     for (const b of boundaries) expect(b.y).toBeGreaterThan(bottom)
     expect(new Set(boundaries.map(b => b.y)).size).toBe(1)
-    const e = view.edges.find(x => x.to === 'boundary:app')!
-    expect(pv.edges.get(e.id)!.curve).toBe(true)
+    expect([...ids].sort((a, b) => pv.nodes.get(a)!.x - pv.nodes.get(b)!.x)).toEqual(ids)
+    const r = pv.edges.get(view.edges.find(x => x.to === 'boundary:app')!.id)!
+    expect(r.curve).toBeUndefined()
+    r.points.slice(1).forEach((p, i) => expect(p.x === r.points[i].x || p.y === r.points[i].y).toBe(true))
   })
 })
 
@@ -158,7 +160,7 @@ describe('外部参与者（A7）', () => {
     for (const e of view.edges.filter(x => x.from.startsWith('actor'))) expect(pv.edges.get(e.id)!.curve).toBeTruthy()
   })
 
-  it('普通层次：参与者不参与 elk 排布，排在边界框外；边界框只包住内部模块', async () => {
+  it('普通层次：参与者进 elk——用户在第一行、外部系统在最后一行，都在边界框外；边界框只包住内部模块', async () => {
     const view = projectLevel(idx, 'infra', { showBoundaries: true })
     const pv = await layoutView(view)
     const f = pv.frame!
@@ -169,8 +171,8 @@ describe('外部参与者（A7）', () => {
     }
     const viewer = pv.nodes.get('actor.viewer')!
     expect(viewer.y + viewer.h).toBeLessThan(f.y)
-    expect(pv.nodes.get('actor.biz')!.x).toBeGreaterThan(f.x + f.w)
-    expect(pv.edges.get(view.edges.find(e => e.from === 'actor.biz')!.id)).toBeDefined()
+    expect(pv.nodes.get('actor.biz')!.y).toBeGreaterThan(f.y + f.h)
+    expect(pv.edges.get(view.edges.find(e => e.from === 'actor.biz')!.id)!.curve).toBeUndefined()
   })
 
   it('没有参与者时没有边界框', async () => {
@@ -203,7 +205,7 @@ describe('L10：标签、线宽档、平行边', () => {
     expect([o.get('a'), o.get('b'), o.get('c'), o.get('d')]).toEqual([-PARALLEL_GAP, 0, PARALLEL_GAP, 0])
   })
 
-  it('同一对节点按类型的平行边都交给 elk；边界边的曲线按序号错开', () => {
+  it('同一对节点按类型的平行边都交给 elk，各有端口', () => {
     const { index: idx } = loadModel(sampleFiles({ 'z.yaml': 'relations: [{ id: x1, from: infra.player, to: app.solution, type: calls }]' }))
     const view = projectLevel(idx, 'infra', { showBoundaries: true })
     const pair = view.edges.filter(e => e.from === 'infra.player' && e.to === 'boundary:app')
@@ -213,11 +215,6 @@ describe('L10：标签、线宽档、平行边', () => {
       ['p:calls', ''],
       ['p:depends', '×2'],
     ])
-    const nodes = new Map<string, Box>(view.nodes.filter(n => n.role === 'module').map((n, i) => [n.id, { x: i * 240, y: 0, w: 208, h: 76 }]))
-    const routes = new Map<string, EdgeRoute>()
-    placeBoundaries(view, nodes, routes)
-    const [a, b] = pair.map(e => routes.get(e.id)!.points[0].x)
-    expect(Math.abs(a - b)).toBe(PARALLEL_GAP)
   })
 })
 
@@ -279,5 +276,49 @@ describe('边标签与终点（L10）', () => {
     const ends = [...edges.values()].map(r => r.points.slice(-2))
     expect(ends.map(([, e]) => e.x)).toEqual([100 - PARALLEL_GAP / 2, 100 + PARALLEL_GAP / 2])
     for (const [p, e] of ends) expect(p.x).toBe(e.x)
+  })
+})
+
+describe('L11 端口方向', () => {
+  const view = projectLevel(loadModel(scenarioFiles()).index, 'infra', { showBoundaries: true })
+  const side = (g: ReturnType<typeof toElkGraph>, port: string) => {
+    const owner = g.children!.find(c => c.ports?.some(p => p.id === port))!
+    return owner.ports!.find(p => p.id === port)!.layoutOptions!['elk.port.side']
+  }
+
+  it('内部节点进边在上、出边在下（RIGHT：左进右出）；用户只朝下，边界节点与外部系统只朝上；端口固定边、各边各有端口', () => {
+    const g = toElkGraph(view, 'DOWN')
+    const inner = view.edges.find(
+      e => !e.from.startsWith('boundary:') && !e.to.startsWith('boundary:') && !e.from.startsWith('actor.') && !e.to.startsWith('actor.'),
+    )!
+    expect([side(g, `${inner.id}#out`), side(g, `${inner.id}#in`)]).toEqual(['SOUTH', 'NORTH'])
+    const r = toElkGraph(view, 'RIGHT')
+    expect([side(r, `${inner.id}#out`), side(r, `${inner.id}#in`)]).toEqual(['EAST', 'WEST'])
+    const toB = view.edges.find(e => e.to.startsWith('boundary:'))!
+    expect(side(g, `${toB.id}#in`)).toBe('NORTH')
+    const fromUser = view.edges.find(e => e.from === 'actor.viewer')!
+    expect(side(g, `${fromUser.id}#out`)).toBe('SOUTH')
+    const fromBiz = view.edges.find(e => e.from === 'actor.biz')!
+    expect(side(g, `${fromBiz.id}#out`)).toBe('NORTH')
+    for (const c of g.children!) expect(c.layoutOptions!['elk.portConstraints']).toBe('FIXED_SIDE')
+    const ports = g.children!.flatMap(c => c.ports!.map(p => p.id))
+    expect(new Set(ports).size).toBe(view.edges.length * 2)
+  })
+
+  it('用户第一行、边界节点与外部系统最后一行（层约束），最后一行按视图顺序给位置提示', () => {
+    const g = toElkGraph(view, 'DOWN')
+    const lc = (id: string) => g.children!.find(c => c.id === id)!.layoutOptions!['elk.layered.layering.layerConstraint']
+    expect(lc('actor.viewer')).toBe('FIRST')
+    expect(lc('actor.biz')).toBe('LAST')
+    const bs = view.nodes.filter(n => n.role === 'boundary').map(n => n.id)
+    for (const id of bs) expect(lc(id)).toBe('LAST')
+    expect(bs.map(id => g.children!.find(c => c.id === id)!.layoutOptions!['elk.position'])).toEqual(bs.map((_, i) => `(${i * 1000},0)`))
+    expect(
+      g.children!.find(c => c.id === view.nodes.find(n => n.role === 'module')!.id)?.layoutOptions?.['elk.layered.layering.layerConstraint'],
+    ).toBeUndefined()
+  })
+
+  it('布局缓存键带布局算法版本', () => {
+    expect(cacheKey(view)).toContain(LAYOUT_VERSION)
   })
 })

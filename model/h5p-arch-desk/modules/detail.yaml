@@ -20,7 +20,7 @@ modules:
   - id: present.canvas.edges
     name: 边组件
     parent: present.canvas
-    responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线；颜色、线宽、线型的映射在 edgeStyle，箭头 marker 在 ArrowMarker（大小随线宽档，线在箭头处回缩），都与「显示」面板的示意线共用。一个视觉通道只表一个维度（L10、ADR-0018）：颜色 = 关系类型（编译期低饱和且更细）；线型 = 事实状态（实线已证实或无事实、虚线未证实、点线为代码依赖叠加线，K9）；箭头自画 marker——同步实心、异步空心、implements 空心三角；线宽 = 聚合条数三档；×N 标签画成 pill，异常标记用警示色。晕：违规红晕优先于设计变更底色，选中为强调色窄晕（不改线宽），回放当前步骤为宽晕并沿方向流动（P10）；走过的边不加粗。临时线：经由上层关系为关系类型色的虚线（P15），未建模为红色虚线（P11）。
+    responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线；颜色、线宽、线型的映射在 edgeStyle，箭头 marker 在 ArrowMarker（大小随线宽档，线在箭头处回缩），都与「显示」面板的示意线共用；折线在跳点处插半圆小桥（L11）。一个视觉通道只表一个维度（L10、ADR-0018）：颜色 = 关系类型（编译期低饱和且更细）；线型 = 事实状态（实线已证实或无事实、虚线未证实、点线为代码依赖叠加线，K9）；箭头自画 marker——同步实心、异步空心、implements 空心三角；线宽 = 聚合条数三档；×N 标签画成 pill，异常标记用警示色。晕：违规红晕优先于设计变更底色，选中为强调色窄晕（不改线宽），回放当前步骤为宽晕并沿方向流动（P10）；走过的边不加粗。临时线：经由上层关系为关系类型色的虚线（P15），未建模为红色虚线（P11）。
     codeRefs: [src/components/edges/**]
 
   - id: present.panel.dispatch
@@ -127,7 +127,7 @@ modules:
   - id: state.layout.runner
     name: 布局入口与缓存
     parent: state.layout
-    responsibility: layoutView 按视图模式分派给三种排布；浏览器里在 Worker 中运行 elk，无 Worker 环境用同步打包版；结果按视图内容缓存。边的走线与编码工具（edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、linkRoute、isBoundaryEdge，L10）也在这里，供画布场景使用。
+    responsibility: layoutView 按视图模式分派给三种排布；浏览器里在 Worker 中运行 elk，无 Worker 环境用同步打包版；结果按视图内容与布局算法版本（LAYOUT_VERSION）缓存。边的走线与编码工具（edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、linkRoute、isBoundaryEdge，L10）也在这里，供画布场景使用。
     codeRefs: [src/layout/layout.ts]
   # 以下三个是 layout.ts 内的概念划分，代码在 Layout 入口的文件里（K5 宿主相同，关系不判定）
   - id: state.layout.runner.layered
@@ -137,11 +137,11 @@ modules:
   - id: state.layout.runner.graph
     name: 普通层次排布
     parent: state.layout.runner
-    responsibility: 用 elkjs layered 算法排内部模块与内部边（正交走线、标签内联；同一对节点按类型的平行边作为多重边一并交给 elk），elk 在 Worker 中运行；结果过于狭长时再试自左向右，取宽高比更接近画布者。
+    responsibility: 用 elkjs layered 算法排全部节点（内部模块、边界节点、参与者）与全部边：正交走线、标签内联；每条边两端各有固定朝向的端口——内部节点上进下出（自左向右时左进右出），用户只朝下，边界节点与外部系统只朝上（L11）；elk 在 Worker 中运行；结果过于狭长时再试自左向右，取宽高比更接近画布者。
   - id: state.layout.runner.boundaries
     name: 边界节点排布
     parent: state.layout.runner
-    responsibility: 边界节点统一排在内部结构下方一行，按视图给出的层次顺序从左到右排列（L4，与时序图泳道一致）；边界边画成曲线。外部参与者：用户类排在内部结构上方一行，外部系统与时间类排在右侧一列；内部结构外画系统边界虚线框。
+    responsibility: 边界节点、外部系统与时间层约束为最后一行、用户为第一行，最后一行的先后用位置提示按视图给出的层次顺序固定（L4，与时序图泳道一致）；边界边与参与者的边由 elk 正交绕行。有参与者时内部结构外画系统边界虚线框。分层总览中参与者另行排布：用户在带的上方，外部系统与时间在右侧通道之外，边画成曲线。
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.pipeline.loader

@@ -25,8 +25,8 @@ function playClass(ctx: SceneContext, id: string): string | undefined {
   return undefined
 }
 
-/** 步骤徽标与分支预览浮在激活的边（EDGE_Z）之上 */
-const OVER_EDGES = { step: 1003, preview: 1004 } as const
+/** 浮在激活的边（EDGE_Z）之上的节点：步骤徽标、分支预览、带内「+N」占位块（单击不被线挡住） */
+const OVER_EDGES = { step: 1003, preview: 1004, more: 1003 } as const
 
 function placeNode(ctx: SceneContext, id: string, box: Box, type: CanvasNodeType, data: NodeData, zIndex: number): CanvasNode {
   return {
@@ -128,8 +128,7 @@ function bandNodes(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box, ba
         more,
         'more',
         { ...base, selected: false, dim: !!ctx.st || !!ctx.near, hiddenCount: band.hiddenCount, expanded: band.expanded ?? 0 },
-        // 在核心跨层边（z 3）之上：单击「+N」/「收起」不被线挡住
-        4,
+        OVER_EDGES.more,
       ),
     )
   return out

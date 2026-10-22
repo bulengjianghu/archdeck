@@ -210,6 +210,15 @@ describe('canvasScene', () => {
     expect(r.nodes.filter(n => n.type === 'step').every(n => n.zIndex > EDGE_Z.current)).toBe(true)
   })
 
+  it('L11：画出来的折线关系边之间的交叉标跳点；隐藏的边界边不参与', async () => {
+    const input = await structure('infra')
+    const s = canvasScene(input)
+    const shown = new Set(s.edges.map(e => e.id))
+    for (const e of s.edges) for (const j of e.data.jumps ?? []) expect(e.data.route.points.some(p => p.y === j.y)).toBe(true)
+    const hiddenBoundary = input.positioned!.view.edges.filter(e => e.to.startsWith('boundary:') && !shown.has(e.id))
+    expect(hiddenBoundary.length).toBeGreaterThan(0)
+  })
+
   it('routeMidpoint：折线按长度取一半处，曲线取两端点中点', () => {
     const poly = [
       { x: 0, y: 0 },

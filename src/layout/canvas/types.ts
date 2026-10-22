@@ -1,6 +1,6 @@
 /** 画布场景的对外类型（ADR-0013）：与 Vue Flow 的节点、边同形，经 src/layout/canvas.ts 再导出 */
 import type { ActorEntity, ActorKind, DepOverlay, EdgeFact, LevelFacts, ModelDiff, ModelIndex, ModuleEntity, ScenarioLevelView, ViewEdge } from '@/model'
-import type { EdgeRoute, PositionedView } from '../layout'
+import type { EdgeRoute, Point, PositionedView } from '../layout'
 import type { StageOverlay, StaticMode, TempLine } from '../stage'
 
 /** 画布节点的公共数据 */
@@ -75,6 +75,8 @@ export interface RouteEdgeData {
   fact?: EdgeFact
   /** K9：边含违规 */
   violated?: boolean
+  /** L11：本边水平段上的跳线点（与其他可见折线边的交叉） */
+  jumps?: Point[]
   /** K9：代码依赖叠加线的内容 */
   overlay?: DepOverlay
 }

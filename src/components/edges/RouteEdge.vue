@@ -17,7 +17,7 @@ const props = defineProps<{ id: string; data: RouteEdgeData }>()
 const draw = (pts: Point[]) => {
   const c = props.data.route.curve
   if (c && pts.length === 2) return c === 'h' ? horizontalCurve(pts[0], pts[1]) : verticalCurve(pts[0], pts[1])
-  return roundedPolyline(pts)
+  return roundedPolyline(pts, 8, props.data.jumps)
 }
 
 const look = computed(() => ({ ...props.data, type: props.data.edge.type }))
