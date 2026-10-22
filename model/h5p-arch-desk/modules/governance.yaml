@@ -207,6 +207,7 @@ relations:
   - {id: rel.gv.agent-rework, from: access.agent, to: model.rework, type: calls, interface: if.rework.list, payload: [ds.ReworkItem], description: 命令行与 MCP 的 issues（Q9）}
   - {id: rel.gv.rework-source, from: model.rework, to: model.source, type: calls, description: matchRef、moduleEntry：冲突的 codeRefs 组合与 entry 是否存在}
   - {id: rel.gv.rework-scenario, from: model.rework, to: model.scenario, type: calls, description: bindRelation、forEachStep：未建模的步骤（S13、P11）}
+  - {id: rel.gv.rework-facts, from: model.rework, to: model.governance.facts, type: calls, description: unconfirmedWarns、unconfirmedReason：报警的未证实关系与说明（K6），返工清单与健康度共用}
   - {id: rel.gv.rework-types, from: model.rework, to: model.types, type: depends, description: 返工项的类型、类别与严重度名称（契约），moduleName、RULE_LABELS}
   - {id: rel.gv.store-reader, from: access.governance-store, to: access.reader, type: depends, description: GOVERNANCE_DIR：治理产物目录名与描述读取共用（读取时跳过）}
   - {id: rel.gv.dep-content, from: present.panel.dep, to: present.panel.content, type: depends, description: 复用 Section}

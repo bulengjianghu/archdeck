@@ -89,7 +89,7 @@ export const REWORK_CATEGORY_LABELS: Record<ReworkCategory, string> = {
   violation: '违规',
   cycle: '环度与基线',
   ownership: '源码归属',
-  unconfirmed: '未证实的编译期关系',
+  unconfirmed: '未证实的关系',
   undescribed: '未描述依赖',
   unmodeled: '结构中未建模的步骤',
 }

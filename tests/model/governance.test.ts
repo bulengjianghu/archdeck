@@ -24,6 +24,7 @@ import {
   stronglyConnected,
   summarizeLedger,
   undescribedDeps,
+  unconfirmedWarns,
   valueDeps,
   type Baseline,
   type CodeDeps,
@@ -189,10 +190,35 @@ describe('K5、K6 关系的证实', () => {
     expect(confirmRelations(index, liftDeps(index, own, DEPS).moduleDeps).get('rel.c1')!.status).toBe('unconfirmed')
   })
 
-  it('只有编译期关系未证实报 fact.unconfirmed', () => {
-    const { report } = setup()
-    const unconfirmed = report.issues.filter(i => i.code === 'fact.unconfirmed')
-    expect(unconfirmed.map(i => i.message.match(/「(.+?)」/)![1])).toEqual(['rel.3'])
+  it('K6：编译期关系未证实报 fact.unconfirmed；运行时关系只在两端之间没有任何依赖时报', () => {
+    // rel.8：ui.view → core.impl 只有反向依赖（core.impl → ui.view），可由端口解释，只在面板标注
+    const { index } = loadModel([...files(), { path: 'modules/z.yaml', text: 'relations: [{ id: rel.8, from: ui.view, to: core.impl, type: calls }]' }])
+    const own = assignFiles(index, SRC, [])
+    const report = governanceReport(index, own, { files: SRC, packages: {} }, CODE, null)
+    const st = (id: string) => report.relations.get(id)!
+    expect(st('rel.3')).toMatchObject({ status: 'unconfirmed', isolated: true })
+    expect(st('rel.4')).toMatchObject({ status: 'unconfirmed', isolated: true })
+    expect(st('rel.8').status).toBe('unconfirmed')
+    expect(st('rel.8').isolated).toBeUndefined()
+    const warned = report.issues.filter(i => i.code === 'fact.unconfirmed')
+    expect(warned.map(i => i.message.match(/「(.+?)」/)![1])).toEqual(['rel.3', 'rel.4'])
+    expect(warned[1].message).toContain('两端之间在代码中没有任何依赖')
+    expect(unconfirmedWarns(index.relations.get('rel.8')!, st('rel.8'))).toBe(false)
+  })
+
+  it('K6：祖先与后代之间的依赖（K4 不提升）也算两端有依赖——祖先的文件组装子模块（注入）', () => {
+    const { index } = setup()
+    const own = assignFiles(index, [...SRC, 'src/core/wire.ts'], [])
+    own.owners.set('src/core/wire.ts', ['core'])
+    // core 的组装文件同时依赖 core.api 与 core.impl：rel.4（core.api → core.impl）经注入可解释
+    const deps = [dep('src/core/wire.ts', 'src/core/api/client.ts'), dep('src/core/wire.ts', 'src/core/impl/i.ts')]
+    const { moduleDeps, nested } = liftDeps(index, own, deps)
+    expect(moduleDeps.size).toBe(0)
+    expect([...nested].sort()).toEqual(['core->core.api', 'core->core.impl'])
+    const c = confirmRelations(index, moduleDeps, own.direct, nested).get('rel.4')!
+    expect(c.status).toBe('unconfirmed')
+    expect(c.isolated).toBeUndefined()
+    expect(confirmRelations(index, moduleDeps, own.direct).get('rel.4')!.isolated).toBe(true)
   })
 })
 

@@ -108,7 +108,7 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
                   ><small v-if="cycleTrend(p.health)" class="trend">{{ cycleTrend(p.health) }}</small>
                 </dd>
               </div>
-              <div :class="p.health.unconfirmed ? 'warn' : 'ok'" title="编译期关系（depends、implements）在代码中没有对应的依赖（K6）">
+              <div :class="p.health.unconfirmed ? 'warn' : 'ok'" title="在代码中没有对应依赖的编译期关系，以及两端之间没有任何依赖的运行时关系（K6）">
                 <dt>未证实</dt>
                 <dd>{{ p.health.unconfirmed }}</dd>
               </div>

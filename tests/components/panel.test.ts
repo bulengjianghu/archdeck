@@ -232,3 +232,39 @@ modules:
     expect(based.row('违规').attributes('title')).toContain('计入门禁 1 条')
   })
 })
+
+describe('K6：关系面板的未证实分档', () => {
+  const REFS = `
+modules:
+  - { id: infra.framework.sm.impl, parent: infra.framework.sm, name: SmImpl, responsibility: x, codeRefs: [src/sm/**] }
+  - { id: infra.framework.pipeline.impl, parent: infra.framework.pipeline, name: PipeImpl, responsibility: x, codeRefs: [src/pipe/**] }
+`
+  async function relationPanel(deps: FileDep[]) {
+    const source: SourceFetcher = {
+      tree: async () => ({ status: 'local', root: '/repo', files: ['src/sm/a.ts', 'src/pipe/b.ts'], packages: {} }),
+      file: async () => null,
+      exports: async () => [],
+      facts: async () => ({ deps: { deps, external: {}, parsed: 2 }, baseline: null, ledger: [] }),
+    }
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+    await router.push('/?level=infra.framework&sel=r:r6')
+    const desk = createDeskState(async () => ({ dir: 'model/test', files: [...sampleFiles(), { path: 'modules/zz-refs.yaml', text: REFS }] }), { source })
+    desk.attachRouter(router)
+    await desk.init()
+    await flushPromises()
+    const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+    await flushPromises()
+    return wrapper.text()
+  }
+
+  it('运行时关系两端之间没有任何依赖：标红，提示按代码修正描述', async () => {
+    const text = await relationPanel([])
+    expect(text).toContain('两端之间在代码里没有任何依赖')
+  })
+
+  it('运行时关系只有反向依赖：只标注「可能经端口或注入」', async () => {
+    const text = await relationPanel([{ from: 'src/pipe/b.ts', to: 'src/sm/a.ts', via: 'src/sm/a.ts', kind: 'type', line: 1 }])
+    expect(text).toContain('可能经端口或注入')
+    expect(text).not.toContain('没有任何依赖')
+  })
+})

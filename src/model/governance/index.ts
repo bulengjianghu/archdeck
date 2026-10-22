@@ -1,5 +1,5 @@
 export * from './types'
-export { depKey, within, related, liftDeps, hostOf, confirmRelations, covers, coveringRelations, undescribedDeps } from './facts'
+export { depKey, within, related, liftDeps, hostOf, confirmRelations, unconfirmedWarns, unconfirmedReason, covers, coveringRelations, undescribedDeps } from './facts'
 export { judge, evaluateRules, rulesFor, exposesMatch, exposesText, violationKey, rulesOf } from './rules'
 export type { EntryOf, DepProbe, Judgement, ModuleRules } from './rules'
 export { stronglyConnected, valueDeps, moduleCycles, fileCycles, cyclicityOf } from './cycles'

@@ -35,6 +35,6 @@ export interface ProjectHealth {
   violations?: { count: number; new: number; resolved: number; allowed: number; delta: number | null }
   /** 模块环（Y1–Y3，不含容忍的环）：个数、最大规模、环度与基线中的环度 */
   cycles?: { count: number; maxSize: number; cyclicity: number; baseline: number | null }
-  /** 未证实的编译期关系（K6） */
+  /** 报警的未证实关系（K6）：编译期关系，以及两端之间没有任何依赖的运行时关系 */
   unconfirmed?: number
 }

@@ -98,6 +98,8 @@ export interface Confirmation {
   deps: string[]
   /** 两端宿主相同（概念拆分，同文件）而不判定时，为共同的宿主模块 */
   host?: string
+  /** 未证实且两端之间（含祖先后代）没有任何模块依赖，两个方向、值与类型都没有（K6） */
+  isolated?: boolean
 }
 
 /** 一条规则命中（U2–U4） */

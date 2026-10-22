@@ -5,7 +5,7 @@
 import { RULE_LABELS, moduleName } from '../names'
 import { bindRelation, forEachStep, RUNTIME_RELATION_TYPES } from '../scenario'
 import { matchRef, moduleEntry, type LocalSource, type SourceOwnership } from '../source'
-import type { FileDep, GovernanceReport, Violation } from '../governance'
+import { unconfirmedReason, unconfirmedWarns, type FileDep, type GovernanceReport, type Violation } from '../governance'
 import type { Issue, ModelIndex, SourceLoc } from '../types'
 import { REWORK_CATEGORIES, REWORK_SEVERITIES, type ReworkAction, type ReworkItem, type ReworkList, type ReworkLoc, type ReworkSeverity } from './types'
 
@@ -315,10 +315,10 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
       target: {},
     })
 
-  // K6：编译期关系未证实；一条关系一个根因
+  // K6：报警的未证实关系（编译期关系，以及两端之间没有任何依赖的运行时关系）；一条关系一个根因
   for (const [id, c] of report.relations) {
     const r = index.relations.get(id)!
-    if (c.status !== 'unconfirmed' || (r.type !== 'depends' && r.type !== 'implements')) continue
+    if (!unconfirmedWarns(r, c)) continue
     const at = descLoc(r.src)
     items.push({
       id: `unconfirmed:${id}`,
@@ -326,7 +326,7 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
       severity: 'warning',
       rules: ['K5', 'K6'],
       code: 'fact.unconfirmed',
-      title: `关系「${id}」（${r.type}，${name(r.from)} → ${name(r.to)}）在代码中没有对应的依赖`,
+      title: `关系「${id}」（${r.type}，${name(r.from)} → ${name(r.to)}）${unconfirmedReason(r)}`,
       ...(at ? { at } : {}),
       affected: at ? [at] : [],
       actions: [

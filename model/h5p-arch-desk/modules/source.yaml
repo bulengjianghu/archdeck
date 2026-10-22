@@ -66,7 +66,7 @@ relations:
   - {id: rel.p7.file-exports, from: present.panel.file, to: present.panel.module-source, type: depends, description: 复用导出分组列表}
   - {id: rel.p7.file-read, from: present.panel.file, to: state.desk.files, type: depends, payload: [ds.SourceOwnership, ds.FileNodes]}
   - {id: rel.p7.file-act, from: present.panel.file, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 归属模块 → revealModule}
-  - {id: rel.p7.file-preview, from: present.panel.file, to: present.desk-view.split, type: calls, description: 「预览源码」经注入请求副栏打开预览}
+  - {id: rel.p7.file-preview, from: present.panel.file, to: present.desk-view, type: calls, description: 「预览源码」调用项目视图注入的 openPreview（副栏的 aside.open），打开副栏预览}
   - {id: rel.p7.modsrc-read, from: present.panel.module-source, to: state.desk.files, type: depends, payload: [ds.ModuleEntry, ds.ExportedSymbol], description: 模块的文件、入口、导出对应}
   - {id: rel.p7.modsrc-act, from: present.panel.module-source, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击文件 → selectFile}
   - {id: rel.p7.modsrc-content, from: present.panel.module-source, to: present.panel.content, type: depends, description: 签名代码块、接口折叠项}

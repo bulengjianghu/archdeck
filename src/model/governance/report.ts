@@ -4,7 +4,7 @@
 import { RULE_LABELS, moduleName } from '../names'
 import { moduleEntry, type LocalSource, type SourceOwnership } from '../source'
 import type { Issue, ModelIndex } from '../types'
-import { confirmRelations, liftDeps, undescribedDeps } from './facts'
+import { confirmRelations, liftDeps, undescribedDeps, unconfirmedReason, unconfirmedWarns } from './facts'
 import { cyclicityOf, fileCycles, moduleCycles } from './cycles'
 import { evaluateRules, type EntryOf } from './rules'
 import type { Baseline, CodeDeps, GovernanceReport, Violation } from './types'
@@ -36,8 +36,8 @@ export function governanceReport(
   baseline: Baseline | null,
 ): GovernanceReport {
   const entryOf = entryResolver(index, own, tree)
-  const { moduleDeps, skipped, conflicted } = liftDeps(index, own, code.deps)
-  const relations = confirmRelations(index, moduleDeps, own.direct)
+  const { moduleDeps, skipped, conflicted, nested } = liftDeps(index, own, code.deps)
+  const relations = confirmRelations(index, moduleDeps, own.direct, nested)
   const undescribed = undescribedDeps(index, moduleDeps)
   const violations = withBaseline(evaluateRules(index, own, moduleDeps.values(), entryOf), baseline)
   const mc = moduleCycles(index, moduleDeps.values())
@@ -74,14 +74,14 @@ export function governanceReport(
       code: 'cycle.grew',
       message: `环度上升：模块 ${baseline!.cyclicity.modules} → ${cyclicity.modules}，文件 ${baseline!.cyclicity.files} → ${cyclicity.files}`,
     })
-  // K6：编译期关系未证实
+  // K6：编译期关系未证实；运行时关系未证实且两端之间没有任何依赖
   for (const [id, c] of relations) {
     const r = index.relations.get(id)!
-    if (c.status === 'unconfirmed' && (r.type === 'depends' || r.type === 'implements'))
+    if (unconfirmedWarns(r, c))
       issues.push({
         severity: 'warning',
         code: 'fact.unconfirmed',
-        message: `关系「${id}」（${r.type}，${name(r.from)} → ${name(r.to)}）在代码中没有对应的依赖`,
+        message: `关系「${id}」（${r.type}，${name(r.from)} → ${name(r.to)}）${unconfirmedReason(r)}`,
         ...r.src,
       })
   }

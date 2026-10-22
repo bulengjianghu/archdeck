@@ -22,8 +22,9 @@ export function liftDeps(
   index: ModelIndex,
   own: SourceOwnership,
   deps: readonly FileDep[],
-): { moduleDeps: Map<string, ModuleDep>; skipped: number; conflicted: FileDep[] } {
+): { moduleDeps: Map<string, ModuleDep>; skipped: number; conflicted: FileDep[]; nested: Set<string> } {
   const moduleDeps = new Map<string, ModuleDep>()
+  const nested = new Set<string>()
   const conflicts = new Set(own.conflicts)
   const conflicted: FileDep[] = []
   let skipped = 0
@@ -40,13 +41,16 @@ export function liftDeps(
     }
     const [a] = froms
     const [b] = tos
-    if (related(index, a, b)) continue
+    if (related(index, a, b)) {
+      if (a !== b) nested.add(depKey(a, b))
+      continue
+    }
     const key = depKey(a, b)
     const hit = moduleDeps.get(key)
     if (hit) hit.files.push(d)
     else moduleDeps.set(key, { key, from: a, to: b, files: [d] })
   }
-  return { moduleDeps, skipped, conflicted }
+  return { moduleDeps, skipped, conflicted, nested }
 }
 
 /** 模块或其祖先是目标态 */
@@ -63,19 +67,36 @@ export const judgeable = (index: ModelIndex, r: RelationEntity) =>
 const supports = (index: ModelIndex, r: RelationEntity, d: ModuleDep) =>
   (related(index, d.from, r.from) && related(index, d.to, r.to)) || (r.type === 'dataflow' && related(index, d.from, r.to) && related(index, d.to, r.from))
 
+/**
+ * K6：一对模块（依赖方 → 被依赖方）连着关系的两端（各自相同或互为祖先后代，同 K5），不论方向与种类。
+ * 反向的依赖可由端口解释；祖先与后代之间的依赖（K4 不提升，这里计入）可由注入解释——祖先的文件组装子模块，如协调者把 dispatch 注入同步适配器。
+ */
+const linked = (index: ModelIndex, r: RelationEntity, from: string, to: string) =>
+  (related(index, from, r.from) && related(index, to, r.to)) || (related(index, from, r.to) && related(index, to, r.from))
+
+/** K6：未证实是否报警告 `fact.unconfirmed`——编译期关系一律报；运行时关系只在两端之间连类型依赖都没有（isolated）时报 */
+export const unconfirmedWarns = (r: RelationEntity, c: Confirmation): boolean =>
+  c.status === 'unconfirmed' && (r.type === 'depends' || r.type === 'implements' || !!c.isolated)
+
+/** K6：报警的未证实关系的说明，问题、返工项与面板共用 */
+export const unconfirmedReason = (r: RelationEntity): string =>
+  r.type === 'depends' || r.type === 'implements' ? '在代码中没有对应的依赖' : '是运行时关系，但两端之间在代码中没有任何依赖（类型依赖、反向的端口注入都没有）'
+
 /** K5：模块的宿主——自身或最近的、有直接归属文件的祖先；都没有为 undefined */
 export function hostOf(index: ModelIndex, direct: ReadonlyMap<string, readonly string[]>, id: string): string | undefined {
   return [...(index.pathOf.get(id) ?? [id])].reverse().find(p => direct.get(p)?.length)
 }
 
-/** K5：每条关系的证实状态；两端宿主相同（概念拆分，同文件）的不判定 */
+/** K5：每条关系的证实状态；两端宿主相同（概念拆分，同文件）的不判定。K6：未证实的标出两端之间是否没有任何依赖（nested 为 K4 未提升的祖先后代依赖） */
 export function confirmRelations(
   index: ModelIndex,
   moduleDeps: ReadonlyMap<string, ModuleDep>,
   direct: ReadonlyMap<string, readonly string[]> = new Map(),
+  nested: ReadonlySet<string> = new Set(),
 ): Map<string, Confirmation> {
   const out = new Map<string, Confirmation>()
   const list = [...moduleDeps.values()]
+  const pairs = [...list.map(d => [d.from, d.to] as const), ...[...nested].map(k => k.split('->') as [string, string])]
   for (const r of index.relations.values()) {
     if (!judgeable(index, r)) {
       out.set(r.id, { status: 'skipped', deps: [] })
@@ -87,7 +108,8 @@ export function confirmRelations(
       continue
     }
     const deps = list.filter(d => supports(index, r, d)).map(d => d.key)
-    out.set(r.id, { status: deps.length ? 'confirmed' : 'unconfirmed', deps })
+    if (deps.length) out.set(r.id, { status: 'confirmed', deps })
+    else out.set(r.id, { status: 'unconfirmed', deps, ...(pairs.some(([a, b]) => linked(index, r, a, b)) ? {} : { isolated: true }) })
   }
   return out
 }

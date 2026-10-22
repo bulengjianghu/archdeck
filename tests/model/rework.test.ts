@@ -223,11 +223,12 @@ describe('Q8 返工项的内容与排序', () => {
     expect(byCode(list.items, 'source.entry')[0].actions[0].kind).toBe('fix-description')
   })
 
-  it('未证实：只列编译期关系，建议改正关系或检查 codeRefs', () => {
+  it('未证实：列编译期关系与两端之间没有任何依赖的运行时关系（K6），建议改正关系或检查 codeRefs', () => {
     const { list } = setup()
     const u = list.items.filter(i => i.category === 'unconfirmed')
-    expect(u.map(i => i.target.relation)).toEqual(['rel.3'])
-    expect(u[0].actions.map(a => a.kind)).toEqual(['fix-relation', 'add-code-refs'])
+    expect(u.map(i => i.target.relation).sort()).toEqual(['rel.2', 'rel.3', 'rel.4', 'rel.5'])
+    expect(u.every(i => i.actions.map(a => a.kind).join() === 'fix-relation,add-code-refs')).toBe(true)
+    expect(u.find(i => i.target.relation === 'rel.2')!.title).toContain('两端之间在代码中没有任何依赖')
   })
 
   it('未建模：两端之间有多条运行时关系时补步骤 relation 并列出候选，否则补关系', () => {
@@ -274,7 +275,7 @@ describe('Q10 项目健康度', () => {
     const h = health(null)
     expect(h.violations).toEqual({ count: 2, new: 0, resolved: 0, allowed: 1, delta: null })
     expect(h.cycles).toEqual({ count: 0, maxSize: 0, cyclicity: 0, baseline: null })
-    expect(h.unconfirmed).toBe(1)
+    expect(h.unconfirmed).toBe(4)
     expect(h.unowned).toBe(3)
     expect(h.conflicts).toBe(2)
   })

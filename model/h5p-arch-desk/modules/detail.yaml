@@ -301,7 +301,6 @@ relations:
   - {id: rel.ad.entry-loader, from: model.pipeline.entry, to: model.pipeline.loader, type: calls, interface: if.model.load}
   - {id: rel.ad.entry-validator, from: model.pipeline.entry, to: model.pipeline.validator, type: calls, interface: if.model.validate}
   - {id: rel.ad.entry-indexer, from: model.pipeline.entry, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex}
-  - {id: rel.ad.flow-load-validate, from: model.pipeline.loader, to: model.pipeline.validator, type: dataflow, payload: [ds.ArchModel, ds.Issue], description: 合并后的模型交给跨文件校验}
   - {id: rel.ad.flow-validate-index, from: model.pipeline.validator, to: model.pipeline.indexer, type: dataflow, payload: [ds.ArchModel], description: 剔除坏实体后的模型交给建索引}
   - {id: rel.ad.loader-schema, from: model.pipeline.loader, to: model.types, type: depends, payload: [ds.ArchFileDef, ds.RawFile]}
   - {id: rel.ad.overview-endpoints, from: model.projector.overview, to: model.projector.endpoints, type: calls}
