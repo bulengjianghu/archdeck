@@ -11,6 +11,7 @@ import DesignNote from './DesignNote.vue'
 import ModuleSource from './ModuleSource.vue'
 import ModuleGovernance from './ModuleGovernance.vue'
 import PortTriad from './PortTriad.vue'
+import ReviewSection from './ReviewSection.vue'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -44,6 +45,7 @@ function openChild(childId: string) {
         <span v-if="m.core" class="badge accent">核心</span>
         <span v-for="t in m.tags ?? []" :key="t" class="badge">{{ t }}</span>
         <ChangeBadge entity="module" :id="m.id" detail />
+        <ReviewSection :id="m.id" part="badge" />
       </div>
     </header>
     <DesignNote :text="m.designNote" />
@@ -52,6 +54,7 @@ function openChild(childId: string) {
       <Markdown v-if="m.responsibility" :text="m.responsibility" />
       <p v-else class="muted">未填写</p>
     </Section>
+    <ReviewSection :id="m.id" part="diff" />
 
     <template v-if="isLayer">
       <Section title="抽象原则">
@@ -123,6 +126,7 @@ function openChild(childId: string) {
       </ul>
     </Section>
 
+    <ReviewSection :id="m.id" part="confirm" />
     <footer class="src muted">出处：{{ desk.modelDir.value }}/{{ m.src.file }}{{ m.src.line ? `:${m.src.line}` : '' }}</footer>
   </div>
 </template>

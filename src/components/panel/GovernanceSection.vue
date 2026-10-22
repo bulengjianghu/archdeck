@@ -41,6 +41,8 @@ const externals = computed(() =>
     .slice(0, 8),
 )
 const ledger = computed(() => f.ledger.value)
+/** Z5：确认计数，与项目卡片同一口径 */
+const rc = computed(() => desk.review.counts.value)
 
 // GV-7：有基线时只显示相对基线的变化，绝对值进悬停
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '±0')
@@ -60,6 +62,12 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
 
 <template>
   <Section v-if="part !== 'detail'" title="健康度（架构治理）">
+    <dl class="kv review-line" :title="`确认范围：核心模块与第二级模块（Z4）；已确认 ${rc.reviewed} / ${rc.scope}，需复核 ${rc.stale}`">
+      <dt>确认</dt>
+      <dd>
+        核心模块已确认 {{ rc.reviewed }} / {{ rc.scope }} · <span :class="{ warn: rc.stale }">需复核 {{ rc.stale }}</span>
+      </dd>
+    </dl>
     <p v-if="!r" class="muted">{{ f.error.value ? `没有代码事实：${f.error.value}` : REASON[f.status.value] }}</p>
     <template v-else>
       <dl class="kv">

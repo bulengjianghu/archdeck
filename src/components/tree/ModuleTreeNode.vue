@@ -42,6 +42,8 @@ const name = computed(() => (isRoot.value ? props.ctx.index.model.system.name : 
       <span class="name">{{ name }}</span>
       <span v-if="mod?.kind === 'layer'" class="tag">层</span>
       <span v-if="ctx.levelId === id" class="tag here">当前层次</span>
+      <span v-if="ctx.stale.has(id)" class="tag stale" title="确认过的内容变了（Z3）">需复核</span>
+      <span v-else-if="ctx.reviewed.has(id)" class="tag reviewed" title="架构师已确认">✓</span>
     </div>
     <ul v-if="kids.length && open" role="group">
       <ModuleTreeNode
@@ -108,6 +110,17 @@ ul {
 .tag.here {
   color: var(--accent);
   border-color: var(--accent);
+}
+
+.tag.stale {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.tag.reviewed {
+  color: var(--diff-added);
+  border-color: transparent;
+  padding: 0 2px;
 }
 
 .level > .name {

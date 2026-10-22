@@ -9,6 +9,7 @@ import {
   reviewEntries,
   reviewScope,
   reviewStates,
+  subtreeOf,
   type ModelIndex,
   type ReviewCounts,
   type ReviewState,
@@ -39,6 +40,8 @@ export function createReview({ index, version, writer }: ReviewInputs) {
   const stale = computed(() => new Set([...states.value].filter(([, s]) => s.status === 'stale').map(([id]) => id)))
   const canReview = !version
   const of = (id: string): ReviewState => states.value.get(id) ?? NONE
+  /** Z4：「也确认子模块」要记入的模块（含自身） */
+  const subtree = (id: string): string[] => (index.value?.modules.has(id) ? subtreeOf(index.value, id) : [])
 
   /** Z4、Z6：把这些模块记为确认（来源 manual、当天日期、现在的指纹与摘要）；分批写，任一批失败即停止 */
   async function confirm(ids: readonly string[], note?: string): Promise<WriteOutcome> {
@@ -56,7 +59,7 @@ export function createReview({ index, version, writer }: ReviewInputs) {
     return last
   }
 
-  return { states, counts, scope, stale, canReview, of, confirm }
+  return { states, counts, scope, stale, canReview, of, subtree, confirm }
 }
 
 function chunk(entries: ReviewedInput[]): ReviewedInput[][] {
