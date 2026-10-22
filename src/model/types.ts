@@ -30,6 +30,18 @@ export interface SourceDef {
   repo?: string
   commit?: string
   generatedAt?: string
+  /** J1、J4：git 历史的窗口、补充的缺陷匹配与耦合阈值（都可选） */
+  history?: HistoryDef
+}
+
+/** J1、J4：`system.source.history` 的写法（04 §3.7） */
+export interface HistoryDef {
+  /** 窗口天数，缺省 180 */
+  days?: number
+  /** 补充的缺陷匹配正则（不分大小写），与缺省规则取并集 */
+  fixPatterns?: string[]
+  /** 时间耦合阈值：同提交次数（缺省 5）、占两端修改次数的比例（缺省 0.3） */
+  coupling?: { min?: number; ratio?: number }
 }
 
 export interface SystemDef {

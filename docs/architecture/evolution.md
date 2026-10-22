@@ -53,7 +53,7 @@ evolutionStats(index, own, history, lines, report?, opts)    模型层：纯函�
 | `heatTiers(values)` | 一组热度值的三档分位数：按值排序三等分，0 不分档；返回值 → 档位 | J3 |
 | `couplings(index, stats, report?, opts)` | 每条提交触及的模块（含祖先）两两配对，去掉祖先与后代的对；同提交次数 ≥ `min`（缺省 5）且占两端各自修改次数 ≥ `ratio`（缺省 30%）的为时间耦合；标注两端子树之间有没有模块依赖（任一方向，K4）与描述关系（任一方向，类型不限） | J4 |
 | `evolutionStats(index, own, history, lines, report?, opts)` | 组合以上：窗口、提交与缺陷数、每个模块的统计、耦合对 | J1–J4 |
-| `levelEvolution(index, view, stats, kind)` | 本层投影：每个视图节点（模块、带、边界节点）按所选热度种类取值并在本层节点间分档；耦合对两端投影到本层两个不同节点的成为耦合线（同一对节点合并，取次数之和、任一对有依赖或关系即算有） | J3、J4、J5 |
+| `levelEvolution(index, view, stats, kind)` | 本层投影：每个视图节点（模块、带、边界节点）按所选热度种类取值并在本层节点间分档；耦合对两端投影到本层两个不同节点的成为耦合线（同一对节点合并，次数为共同提交的并集、任一对有依赖或关系即算有） | J3、J4、J5 |
 | `hotspots(stats, kind, limit)` | 热度前 N：只列有直接归属文件的模块，按热度降序、同值按修改次数再按 ID | J8 |
 | `isolatedCouplings(stats)` | 无依赖且无描述关系的耦合对，按次数降序 | J6 |
 | `coupleId(a, b)` · `coupleEnds(id)` | 耦合对的稳定键 `<A>~<B>`（按 ID 排序） | J7 |

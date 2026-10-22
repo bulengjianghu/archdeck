@@ -6,6 +6,7 @@ import { RULE_LABELS, moduleName } from '../names'
 import { bindRelation, forEachStep, RUNTIME_RELATION_TYPES } from '../scenario'
 import { matchRef, moduleEntry, type LocalSource, type SourceOwnership } from '../source'
 import { contractNames, unconfirmedCode, unconfirmedReason, unconfirmedWarns, type FileDep, type GovernanceReport, type Violation } from '../governance'
+import { isolatedCouplings, type EvolutionStats } from '../evolution'
 import type { Issue, ModelIndex, SourceLoc } from '../types'
 import { REWORK_CATEGORIES, REWORK_SEVERITIES, type ReworkAction, type ReworkItem, type ReworkList, type ReworkLoc, type ReworkSeverity } from './types'
 
@@ -17,6 +18,8 @@ export interface ReworkInput {
   source?: { own: SourceOwnership; tree: Pick<LocalSource, 'files' | 'packages'> }
   /** 治理报告（K、U、Y）；没有时不含事实类返工项 */
   report?: GovernanceReport
+  /** 演化事实（J）；没有时不含「时间耦合」 */
+  evolution?: EvolutionStats
 }
 
 /** Q8：校验问题代码 → 规则编号 */
@@ -105,6 +108,7 @@ export function reworkList(input: ReworkInput): ReworkList {
   if (source) items.push(...ownershipItems(index, source.own, source.tree, name, report?.conflicted))
   if (report) items.push(...factItems(index, report, name))
   items.push(...unmodeledItems(index, name))
+  if (input.evolution) items.push(...couplingItems(index, input.evolution, name))
 
   const sev = (s: ReworkSeverity) => REWORK_SEVERITIES.indexOf(s)
   const cat = (c: ReworkItem['category']) => REWORK_CATEGORIES.indexOf(c)
@@ -408,6 +412,35 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
     })
   }
   return items
+}
+
+// ── 时间耦合（J4、J6）：无依赖且无描述关系的耦合对，一对一个根因 ──
+
+function couplingItems(index: ModelIndex, stats: EvolutionStats, name: (id: string) => string): ReworkItem[] {
+  return isolatedCouplings(stats).map(c => {
+    const ma = index.modules.get(c.a)
+    const pct = (r: number) => `${Math.round(r * 100)}%`
+    return {
+      id: `coupling:${c.id}`,
+      category: 'coupling' as const,
+      severity: 'info' as const,
+      rules: ['J4', 'J6'],
+      code: 'evolution.coupling',
+      title: `时间耦合：${name(c.a)} 与 ${name(c.b)} 同提交 ${c.shared} 次（占各自修改次数 ${pct(c.ratioA)} / ${pct(c.ratioB)}），两端之间没有依赖也没有描述关系`,
+      detail: `近 ${stats.days} 天内总是一起改，代码事实看不见：可能存在未描述的运行时关系（事件、注入、约定），或两者本应是一个模块、或该按变化原因重新拆分`,
+      affected: c.commits.slice(0, 20).map(h => ({ in: 'source' as const, file: `提交 ${h.slice(0, 8)}` })),
+      actions: [
+        {
+          kind: 'add-relation' as const,
+          text: '检查是否存在未描述的运行时关系：有则补关系（calls / notifies / streams，经注入或回调的写 via）',
+          ...(ma ? { file: ma.src.file } : {}),
+          snippet: `relations:\n  - { id: rel.${c.a}--${c.b}, from: ${c.a}, to: ${c.b}, type: calls }`,
+        },
+        { kind: 'fix-code' as const, text: '没有运行时关系时，检查两者是否应合并，或按变化原因重新拆分' },
+      ],
+      target: { modules: [c.a, c.b] },
+    }
+  })
 }
 
 // ── 结构中未建模的步骤（P11、S5a、S13） ──
