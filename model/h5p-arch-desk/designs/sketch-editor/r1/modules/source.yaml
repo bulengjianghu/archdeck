@@ -1,0 +1,218 @@
+# 源代码文件树与代码预览（ADR-0007）：源码读取、源码归属、源码同步、文件树、副栏的源代码预览、文件面板。
+# 规则编号（G）见 docs/02-domain.md §2.13；机制见 docs/architecture/source.md。
+
+modules:
+  # ── 骨架模块的代码落点（04 §3.10：骨架只写目录级，细到文件的由 AI 在这里补充，X1）──
+  - id: present.nav-tree
+    name: 导航树
+    codeRefs: [src/components/tree/NavTree.vue, src/components/tree/types.ts]
+  - id: access.source
+    name: 源码读取
+    codeRefs: [vite/readSource.ts]
+  - id: model.source
+    name: 源码归属
+    codeRefs: [src/model/source/index.ts]
+
+  # ── 呈现层 ──────────────────────────────────────────────
+  - id: present.nav-tree.files
+    name: 文件树
+    parent: present.nav-tree
+    responsibility: 导航树「文件」页签（SR-1、SR-2、G13）：被描述项目的源码目录树，目录带文件数、未归属数、行数合计与超长数，文件标出未归属、归属冲突、已忽略并带行数（超长标红，G21），内部文件全部忽略的目录同样标为已忽略（G18）；选中模块时其文件高亮并展开到第一个文件，选中文件时展开并滚到它；单击文件即选中；「只看未归属」「只看超长」筛选与「刷新」；源码清单读取失败时只显示原因（G1）。未归属文件的「加入忽略」在文件面板（B4）。
+    codeRefs: [src/components/tree/FileTree.vue, src/components/tree/FileTreeNode.vue]
+  - id: present.panel.file
+    name: 文件面板
+    parent: present.panel
+    responsibility: 选中文件时的面板（SR-7）：路径、行数与是否超长（G21）、归属模块（可定位，冲突时全部列出）或未归属 / 已忽略及处理提示（未归属文件可「加入忽略」，B4）、当前层次中的投影说明（G14）、以它为入口的模块、导出（与模块接口的对应）；「预览源码」重新打开副栏预览。
+    codeRefs: [src/components/panel/FilePanel.vue]
+  - id: present.panel.module-source
+    name: 模块的源代码
+    parent: present.panel
+    responsibility: 模块面板的「源代码」一节（SR-5）：模块的文件（子树并集，可选中，注明直接归属的子模块，带行数、超长标红）与模块行数合计、超长数（G21）、入口文件及来源（描述 entry / 约定 index.ts / package.json）、入口导出按「已对应 / 导出未描述 / 描述未导出」分组列出（G12）。
+    codeRefs: [src/components/panel/ModuleSource.vue, src/components/panel/ExportSection.vue, src/components/panel/ExportItem.vue]
+
+  # ── 视图状态层 ──────────────────────────────────────────
+  - id: state.desk.source-sync
+    name: 源码同步
+    parent: state.desk
+    responsibility: 同步适配器之一：进入项目、描述重新加载、用户刷新时经注入的 SourceFetcher 取源码清单（404 或取数失败为 error 并带原因，G1）；文件内容与导出按路径按需取、缓存，刷新清单时作废。只负责外界，归属由视图派生调用模型层计算。
+    codeRefs: [src/state/sync/source.ts]
+  - id: state.desk.files
+    name: 源码派生（desk.files）
+    parent: state.desk
+    responsibility: 由源码清单与模型派生源码相关的数据（computed，调用模型层源码归属）：归属与未归属 / 冲突、目录树、行数与超长阈值（G19、G20）、模块的行数合计与超长数（G21）、选中文件的归属模块与在本层的投影（G14）、选中模块的文件（G13）、入口与导出对应（G10–G12）、归属警告（只对当前版本，G9）；按需取文件内容与导出（转交源码同步）。
+    codeRefs: [src/state/desk/files.ts]
+
+  # ── 模型层 ──────────────────────────────────────────────
+  - id: model.source.glob
+    name: glob 匹配
+    parent: model.source
+    responsibility: codeRefs 与忽略清单的匹配（G3）：`*` 不跨 `/`、`**` 跨任意层、`?`、`{a,b}`；不含通配符的路径匹配同名文件或该目录下的全部文件；取 glob 通配符前的目录部分。模型层自己的纯函数，不依赖 Node 库。
+    codeRefs: [src/model/source/glob.ts]
+  - id: model.source.ownership
+    name: 归属与入口
+    parent: model.source
+    responsibility: 文件 → 模块的归属（G5 取最深、G6 冲突、G7 未归属、G8 忽略）、模块的文件（G4）、模块目录与入口文件（G10：有 package.json 取包入口，否则 index.*，都用路径补全与包入口那一套）、模块的接口与入口导出的对应（G12）、选中文件在当前层次的投影（G14）、归属警告（G9 由调用方决定是否报）、目录树（内部文件全部忽略的目录也是忽略状态，G18；目录带行数合计与超长数）、一组文件的行数合计与超长数（moduleLines，G21；单个文件是否超长用契约的 isLong，G20）。
+    principle: |
+      - **归属是关于被描述系统的知识**：换成命令行（lint:model）或 AI 查询同样成立，所以在模型层；接入层只给文件清单。
+      - **与结构投影同一套端点规则**：选中文件的归属模块用 mapEndpoint 提升到当前层次（与关系、帧一致）。
+    codeRefs: [src/model/source/ownership.ts]
+  - id: model.source.resolve
+    name: 路径补全与包入口
+    parent: model.source
+    responsibility: 路径补全（原样 → .js 写法换成 .ts 等 → 补扩展名 → /index.*）、相对路径说明符、工作区包入口（exports['.'] → main → types，产物 dist/… 不在清单中时换成 src/…，再退回 src/index.*、index.*）与说明符解析（tsconfig paths、工作区包名，K2）。入口文件（G10）、导出解析（G11）与依赖提取（K2、K3）共用这一套，所以 U4 看的经由文件与模块入口口径一致。输入是文件清单、包入口字段与 paths，不碰文件系统。
+    principle: |
+      - **一套口径**：「这个说明符指向哪个文件」「这个包的入口是哪个文件」只算一处；入口、导出、依赖各自补全会让访问面规则（U4）出现假违规。
+    codeRefs: [src/model/source/resolve.ts]
+
+relations:
+  # 呈现层
+  - {id: rel.p7.files-read, from: present.nav-tree.files, to: state.desk.files, type: depends, payload: [ds.SourceOwnership, ds.Selection], description: 目录树、归属标记、选中模块的文件、选中文件}
+  - {id: rel.p7.files-act, from: present.nav-tree.files, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击文件 → selectFile；刷新 → refreshSource}
+  - {id: rel.p7.split-source, from: present.desk-view.split, to: present.source, type: depends, description: 副栏「源代码」页签，有预览文件时出现}
+  - {id: rel.p7.source-read, from: present.source, to: state.desk.files, type: depends, payload: [ds.SourceOwnership], description: 预览文件的归属模块与状态}
+  - {id: rel.p7.source-file, from: present.source, to: state.desk.source-sync, type: calls, mode: async, interface: if.desk.actions, payload: [ds.SourcePayload], description: sourceFile(path) 按需取文件内容}
+  - {id: rel.p7.source-content, from: present.source, to: present.shared, type: depends, description: 复用 Shiki 高亮（按扩展名加载语法）}
+  - {id: rel.p7.panel-file, from: present.panel.dispatch, to: present.panel.file, type: depends, description: 选中文件时分派到文件面板}
+  - {id: rel.p7.module-source, from: present.panel.module, to: present.panel.module-source, type: depends}
+  - {id: rel.p7.file-exports, from: present.panel.file, to: present.panel.module-source, type: depends, description: 复用导出分组列表}
+  - {id: rel.p7.file-read, from: present.panel.file, to: state.desk.files, type: depends, payload: [ds.SourceOwnership, ds.FileNodes]}
+  - {id: rel.p7.file-act, from: present.panel.file, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 归属模块 → revealModule}
+  - {id: rel.p7.file-preview, from: present.panel.file, to: present.desk-view, type: calls, via: inject, description: 「预览源码」调用项目视图注入的 openPreview（副栏的 aside.open），打开副栏预览}
+  - {id: rel.p7.modsrc-read, from: present.panel.module-source, to: state.desk.files, type: depends, payload: [ds.ModuleEntry, ds.ExportedSymbol], description: 模块的文件、入口、导出对应}
+  - {id: rel.p7.modsrc-act, from: present.panel.module-source, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击文件 → selectFile}
+  - {id: rel.p7.modsrc-content, from: present.panel.module-source, to: present.panel.content, type: depends, description: 签名代码块、接口折叠项}
+  - {id: rel.p7.flow-file, from: present.canvas.flow, to: state.desk.files, type: depends, payload: [ds.FileNodes], description: 选中文件时高亮其归属模块在本层的投影节点}
+  - {id: rel.p7.modtree-file, from: present.nav-tree.modules, to: state.desk.files, type: depends, description: 选中文件时展开并标出归属模块}
+
+  # 视图状态层
+  - id: rel.p7.desk-source-fetch
+    from: present.desk-view
+    to: access.model-source
+    type: calls
+    via: http
+    mode: async
+    interface: if.source.sourceEndpoints
+    payload: [ds.SourcePayload, ds.ExportedSymbol]
+    description: 项目视图创建的 httpSourceFetcher：GET source/<项目>.json、file.json、exports.json（清单 404 为 error），注入给源码同步
+  - {id: rel.p7.desk-source-inject, from: present.desk-view, to: state.desk.source-sync, type: depends, description: createDeskState 时注入 SourceFetcher}
+  - {id: rel.p7.files-ownership, from: state.desk.files, to: model.source.ownership, type: calls, interface: if.model.assignFiles, payload: [ds.SourceOwnership], description: 归属、目录树、模块的文件与入口、选中文件的投影、归属警告（只对当前版本）}
+  - {id: rel.p7.projection-sync, from: state.desk.files, to: state.desk.source-sync, type: depends, payload: [ds.SourcePayload], description: 读取源码清单}
+  - {id: rel.p7.loading-source, from: state.desk.loading, to: state.desk.source-sync, type: calls, description: 描述重新加载后重新取源码清单}
+
+  # 接入层
+  - {id: rel.p7.plugin-source, from: access.model-source, to: access.source, type: calls, interface: if.source.readSourceTree, payload: [ds.SourcePayload, ds.ExportedSymbol], description: 源码端点委托源码读取}
+  - {id: rel.p7.source-entry, from: access.source, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 取 system.source.repo 解析源码根目录}
+  - {id: rel.p7.lint-source, from: access.lint, to: access.source, type: calls, interface: if.source.readSourceTree, description: 当前版本的源码清单}
+  - {id: rel.p7.lint-ownership, from: access.lint, to: model.source.ownership, type: calls, interface: if.model.assignFiles, description: 归属警告（G9）}
+  - {id: rel.p7.source-types, from: access.source, to: model.types, type: depends, description: LINE_COUNTED：统计行数的文件类型；源码载荷与导出的类型}
+  - {id: rel.p7.source-resolve, from: access.source, to: model.source.resolve, type: calls, interface: if.model.specResolver, description: 再导出的相对路径补全（G11）}
+
+  # 模型层
+  - {id: rel.p7.ownership-glob, from: model.source.ownership, to: model.source.glob, type: calls, interface: if.model.matchRef}
+  - {id: rel.p7.ownership-endpoint, from: model.source.ownership, to: model.projector.endpoints, type: calls, interface: if.model.mapEndpoint, description: 选中文件的归属模块投影到当前层次（G14）}
+  - {id: rel.p7.ownership-types, from: model.source.ownership, to: model.types, type: depends, payload: [ds.ModelIndex, ds.LevelView, ds.Issue]}
+  - {id: rel.p7.ownership-resolve, from: model.source.ownership, to: model.source.resolve, type: calls, interface: if.model.specResolver, description: 入口文件取包入口或 index.*（G10）}
+  # 呈现层与接入层补齐（K7）
+  - {id: rel.p7.source-reader, from: access.source, to: access.reader, type: calls, description: readProject：读 system.yaml 取源码位置}
+  - {id: rel.p7.filetree-ownership, from: present.nav-tree.files, to: model.types, type: depends, description: isLong：超长文件标记}
+  - {id: rel.p7.file-ownership, from: present.panel.file, to: model.types, type: depends, description: isLong：超长文件标记}
+  - {id: rel.p7.modsrc-ownership, from: present.panel.module-source, to: model.types, type: depends, description: isLong：超长文件标记}
+  - {id: rel.p7.file-content, from: present.panel.file, to: present.panel.content, type: depends, description: 复用 Section}
+  - {id: rel.p7.desk-preview-key, from: present.desk-view, to: present.shared, type: depends, description: OPEN_PREVIEW：提供「在副栏预览」的注入键}
+  - {id: rel.p7.file-preview-key, from: present.panel.file, to: present.shared, type: depends, description: useOpenPreview：取项目视图注入的「在副栏预览」}
+
+interfaces:
+  - id: if.source.readSourceTree
+    name: readSourceTree
+    owner: access.source
+    signature: |
+      readSourceTree(modelRoot: string, project: string, projectRoot: string, env?): SourcePayload | null
+      readSourceFile(root: string, files: readonly string[], path: string): SourceFile | null
+      readExports(root: string, files: readonly string[], path: string): ExportedSymbol[] | null
+    semantics: |
+      - 源码根目录 = ARCH_SOURCE_ROOT_<项目> ?? (ARCH_WORKSPACE_ROOT ?? 本包往上三级) + system.source.repo；读不到返回 error 与原因（配置错误，调用方报错），不抛异常（G1）。
+      - 路径必须在文件清单中；超过 512 KB 或含 NUL 字节只给提示（G17）；导出只做语法解析，再导出按 K2 补全、补全到非 TS / JS 文件时不追，最多追 5 层（G11）。
+  - id: if.source.sourceEndpoints
+    name: 源码端点
+    owner: access.model-source
+    signature: |
+      GET source/<项目>.json                → SourcePayload
+      GET source/<项目>/file.json?path=      → SourceFile        // 不在清单中 404
+      GET source/<项目>/exports.json?path=   → ExportedSymbol[]  // 非 TS / JS 为 []
+    semantics: 开发服务器提供；源码清单读取失败时文件与导出端点 404 并带原因。不推送变化。
+  - id: if.model.matchRef
+    name: matchRef
+    owner: model.source.glob
+    signature: |
+      matchRef(ref: string, file: string): boolean
+    semantics: G3；纯函数。
+  - id: if.model.assignFiles
+    name: assignFiles
+    owner: model.source.ownership
+    signature: |
+      assignFiles(index: ModelIndex, files: readonly string[], ignore: readonly string[]): SourceOwnership
+      moduleFiles(index, own, moduleId): string[]
+      moduleEntry(index, own, tree: { files; packages }, moduleId): ModuleEntry | null
+      sourceIssues(index, own, tree): Issue[]
+    semantics: G3–G10；纯函数，不碰文件系统。
+  - id: if.model.specResolver
+    name: specResolver
+    owner: model.source.resolve
+    signature: |
+      specResolver(files: readonly string[], packages: Record<string, PackageEntry>, aliases?: PathAlias[]): (from: string, spec: string) => string | null
+      packageEntry(dir: string, pkg: PackageEntry, files: ReadonlySet<string>): string | null
+      completePath(base: string, files: ReadonlySet<string>): string | null
+      resolveRelative(from: string, spec: string, files: ReadonlySet<string>): string | null
+      indexFile(dir: string, files: ReadonlySet<string>): string | null
+    semantics: K2；纯函数，不碰文件系统。入口文件（G10）、导出解析（G11）与依赖提取共用；解析不到（三方库、Node 内建）为 null。
+  - id: if.model.matchExports
+    name: matchExports
+    owner: model.source.ownership
+    signature: |
+      matchExports(index: ModelIndex, moduleId: string, exports: readonly ExportedSymbol[]): ExportMatch
+      // ExportMatch { matched: { interfaceId, symbol }[]; undescribed: ExportedSymbol[]; unexported: string[] }
+    semantics: G12：模块的接口 = provides + owner 在本模块子树内的接口；按名称（去掉括号与泛型）对应，默认导出不参与。
+  - id: if.model.fileNodes
+    name: fileNodes
+    owner: model.source.ownership
+    signature: |
+      fileNodes(index: ModelIndex, view: LevelView, owners: readonly string[]): FileNodes
+    semantics: G14：归属模块经 mapEndpoint 落到本层的子模块或边界节点；分层总览另加路径上的核心模块；归属模块是当前父模块或其祖先时 self 为真。
+
+dataStructures:
+  - id: ds.SourcePayload
+    name: SourcePayload
+    definition: |
+      type SourcePayload =
+        | { status: 'local'; root: string; files: string[]; packages: Record<string, { main?: string; exports?: unknown; name?: string; types?: string }>; lines?: Record<string, number> }   // lines：TS / JS / Vue 文件的行数（G19）
+        | { status: 'error'; reason: string; tried?: string }   // G1：源码根目录读不到（配置错误），或页面侧取清单失败
+    description: 被描述项目的源码清单；路径相对源码根目录，packages 的键为 package.json 所在目录。
+  - id: ds.SourceOwnership
+    name: SourceOwnership
+    definition: |
+      interface SourceOwnership {
+        owners: Map<string, string[]>      // 文件 → 归属模块（冲突时多个）
+        direct: Map<string, string[]>      // 模块 → 直接归属它的文件
+        unowned: string[]; ignored: Set<string>; conflicts: string[]
+      }
+    description: 文件归属的结果（G3–G8）。
+  - id: ds.ExportedSymbol
+    name: ExportedSymbol
+    definition: |
+      interface ExportedSymbol {
+        name: string                       // 默认导出为 'default'
+        kind: 'function' | 'class' | 'interface' | 'type' | 'enum' | 'const' | 'namespace' | 'default' | 'reexport'
+        signature?: string; line: number
+        from?: string                      // 经再导出时声明所在的文件
+      }
+    description: 入口导出的一个符号（G11）。
+  - id: ds.ModuleEntry
+    name: ModuleEntry
+    definition: |
+      interface ModuleEntry { file: string; via: 'entry' | 'index' | 'package'; missing?: boolean }
+    description: 模块的入口文件及来源（G10）。
+  - id: ds.FileNodes
+    name: FileNodes
+    definition: |
+      interface FileNodes { nodes: Set<string>; self: boolean }
+    description: 选中文件在当前层次要高亮的视图节点（G14）。

@@ -1,0 +1,280 @@
+# 骨架（持久草图，X1、X2，ADR-0023）：4 个层 + 第二级模块，人拥有、AI 重新生成时不改动；第二级封闭（closed），AI 只能在这些模块之下挂子模块。
+# 依赖方向：呈现 → 视图状态 → 模型 ← 接入（docs/03-architecture.md §2–§3）。从 modules/layers.yaml 机械拆出，ID 与内容不变。
+
+sketch:
+  id: skeleton
+  lifetime: persistent
+  closed: [present, state, access, model]
+  modules:
+    - id: present
+      name: 呈现层
+      kind: layer
+      order: 1
+      abstraction: 把状态画出来、把用户操作上交：只读 DeskState、只调它的操作，不做投影与布局计算
+      responsibility: 应用外壳与路由、项目列表、项目视图（含分屏与副栏）、导航树（模块 / 文件 / 步骤 / 问题）、画布（含回放与文件高亮）、时序图、源代码预览、场景列表与回放控制、属性面板（含写入人拥有的文件）、导航与入门页。
+      includes: [Vue 组件, 路由, 交互事件, 样式]
+      excludes: [层次投影规则, 布局算法, 文件读取]
+      mayDependOn: [state, model]
+      docRefs: [docs/03-architecture.md]
+      children:
+        - id: present.shell
+          name: 应用外壳与路由
+          kind: subsystem
+          responsibility: 应用入口与 hash 路由：`/` 是项目列表，`/p/<项目>` 是项目当前版本，`/p/<项目>/d/<设计>/<轮次>` 是设计版本；切换项目或版本时重建视图。
+        - id: present.project-list
+          name: 项目列表主页
+          kind: subsystem
+          core: true
+          responsibility: 列出模型根目录下的全部项目，卡片以健康度为主（描述错误与提醒、违规相对基线 ±N 或「无基线」、模块环个数与最大规模、未证实、未归属，H-1、Q10），简介、分层、规模、生成来源为次，及各项目推进中的设计版本（已实现、已放弃的设计归档，只注明个数，DV-6），点击进入项目当前版本或设计的最新一轮。
+        - id: present.desk-view
+          name: 项目视图
+          kind: subsystem
+          core: true
+          responsibility: 单个项目某个版本的工作台：按项目 + 版本创建并注入一份 DeskState，布置左侧导航树、中间画布区、设计信息条与右侧属性面板（两侧宽度可拖动、可折叠，宽度与折叠状态记在本地；「专注」一键收起两侧栏，W-1）；创建并注入舞台显示（静态关系显示方式、在画布上显示，V8、V9）；处理键盘意图；打开场景后画布区交给分屏容器放入结构图与时序图（默认左右，可切换为上下），底部出现回放控制条。
+        - id: present.version
+          name: 版本切换与设计信息条
+          kind: subsystem
+          responsibility: 在当前版本、各设计的各轮（已归档的合为一组）与改动过描述的 git 提交之间切换（保留层次与选中，E5）；设计版本下显示设计名、轮次、状态，选择对比基线（当前版本 / 上一轮），显示变更计数、标出变更开关与基线漂移提示；提交版本下显示提交说明，对比基线可选任一提交或当前版本（E6）。
+          docRefs: [docs/adr/0002-design-versions.md]
+        - id: present.scenarios
+          name: 场景列表
+          kind: subsystem
+          responsibility: 列出项目的场景（D-1）：默认只列与当前层次相关的（有帧端点落在当前父模块子树内，规则 R4a），可切到全部，可按发起者（外部参与者）筛选；显示名称、触发者、消息数；选定即进入运行视角（不改层次，规则 R5）。
+        - id: present.perspective
+          name: 视角切换
+          kind: subsystem
+          responsibility: 顶部显式展示当前视角「结构 ｜ 运行：<场景名>」（V1）：结构视角下点「运行」弹出场景列表；运行视角下可换场景或「退出场景」回到结构视角（保留层次与选中）。
+        - id: present.sequence
+          name: 时序图
+          kind: subsystem
+          core: true
+          responsibility: 运行视角下把定位好坐标的时序模型画成 SVG（D-2）：泳道为当前层次的参与者，互不包含（P14），按层次顺序排列，同一父模块的泳道有分组框（P9、P13），泳道头固定在顶部、底部另有一份（D-2），外部参与者固定在最左并以竖线隔开系统边界；消息自上而下，alt / loop / par / ref 画成组合框；同步实线实心箭头、异步虚线开放箭头（D-6），只画显式 return（S10a）；选中突出：只有选中的步骤用选中样式、配对返回加浅色标记，选中模块等对象时突出相关泳道（R15、R16）；单击消息 = 指向这一步即选中它（R13），单击 alt 的分支条件 = 改走这一支（F6e）；只在用户移动进度后滚动（D-7）；不做悬停弹出（W-1）；当前层次看不到任何帧时提示并提供「跳到场景所在层次」。
+          codeRefs: [src/components/sequence/**]
+          docRefs: [docs/02-tech-selection.md]
+        - id: present.player
+          name: 回放控制条
+          kind: subsystem
+          responsibility: 回放控制（D-3）：回放只由用户驱动，不提供自动播放（R1）。上一步 / 下一步（按本层可见消息，规则 R7；在第一步后退回到开头）、进度条拖动到已走路径上任意位置（拖到 0 即回到开头）；显示「第 i / N 步」（停在开头为 0，分支点之后未定时为「≥ N」）；常驻路线总览，可逐个分支点改选（F6f）；到达 alt 分支点时展开全部选项（条件 + 首条消息）供选择，未选时「下一步」不可用；键盘 ← → 单步，数字键选分支。
+        - id: present.nav-tree
+          name: 导航树
+          kind: subsystem
+          responsibility: 工作台左侧的全局目录（W-7、T1）：「模块」页签列出模块树，「文件」页签列出被描述项目的源码文件树，「步骤」页签（只在运行视角出现）列出步骤树，「问题」页签列出返工清单（W-6）；进入运行视角切到步骤页签，退出切回模块页签，选中文件切到文件页签，画布的问题角标切到问题页签。层次、选中、参与模块、当前步骤、选中模块的文件在树上同步展开与高亮；单击 / 双击 / 悬停复用画布与时序图的同一套操作，不新增会话规则。
+          principle: 页签、展开 / 折叠状态只属于这块界面，不进视图状态与 URL；树上显示的「谁参与了场景」「步骤怎样嵌套」「文件属于哪个模块」由模型层回答（scenarioModules、outlineScenario、assignFiles），呈现层只画。
+          docRefs: [docs/adr/0006-workbench-navigation.md, docs/adr/0007-source-files.md]
+        - id: present.source
+          name: 源代码预览
+          kind: subsystem
+          responsibility: 在副栏只读预览选中的源码文件（SR-8、G17）：路径、归属模块（可定位）、行数，按扩展名语法高亮（Shiki，与签名高亮共用）并带行号；过大、二进制、文件不存在、源码清单读取失败时只给提示。没有编辑、保存等 IDE 功能。
+          codeRefs: [src/components/source/**]
+          docRefs: [docs/adr/0007-source-files.md]
+        - id: present.canvas
+          name: 画布
+          kind: subsystem
+          core: true
+          responsibility: 把带坐标的视图画成节点和边；处理平移、缩放、单击、双击、悬停；聚焦时只显示相关的边、其余变淡；运行视角下结构图作为舞台：默认只显示参与本场景的节点与走过的边，不参与的节点与静态边按显示方式隐藏 / 淡显 / 全显，布局不变（V5、V8），「在画布上显示」的对象的静态边照常（V9）；叠加回放；选中步骤时其余走过的边变灰（D-3、R15）；右下角浮动的「显示」面板（显示设置与图例）。 分层总览中单击带内「+N」临时展开该层全部模块（O6）；容器宽度交给协调者换算成带内列数（O7）。
+        - id: present.panel
+          name: 属性面板
+          kind: subsystem
+          core: true
+          responsibility: 显示**选中**（唯一的主语，ADR-0012）的对象：结构视角下为选中的对象，无选中时为当前父模块；运行视角下选中步骤时为步骤（作用、输入、输出在前），选中场景时为场景概览，选中模块 / 关系 / 边 / 参与者时先回答「在这次流程中做了什么」，结构信息折叠在下方，可在画布上显示（V9）。对象种类：系统（设计版本另含设计说明与变更清单）、模块、关系、聚合边、外部参与者、场景、步骤；设计版本中标出新增 / 修改与设计说明。 信息顺序（§4.3）：模块为职责 → 对外接口 → 子模块 → 出入边 → 架构治理 → 源代码，实现原理、核心数据结构、代码与文档引用默认折叠；根层为健康度 → 分层 → 简介 → 生成来源与规模 → 治理明细。人拥有的文件的追加写入在这里发起（WriteForm：加例外、加入忽略、记录评审意见，B1–B4）。
+          codeRefs: [src/components/panel/**]
+        - id: present.nav
+          name: 导航
+          kind: subsystem
+          responsibility: 面包屑（含返回项目列表）、搜索跳转、显示开关。
+        - id: present.issues
+          name: 问题页签
+          kind: subsystem
+          responsibility: 导航树「问题」页签（W-6）：返工清单按严重度排序、可按严重度筛选；展开一条看根因所在、受影响位置（源码文件可选中）与建议动作（含 YAML 片段），可定位到关系 / 文件 / 模块，「复制给 agent」把这一条或整份清单的 Markdown 指令放进剪贴板（Q7–Q9）。画布左上角只留错误与提醒的计数角标，单击切到这个页签。
+        - id: present.shared
+          name: 呈现共用件
+          kind: subsystem
+          responsibility: 多个子系统共用、自身不依赖其他呈现子系统的叶子：界面文案（领域枚举的中文显示名：参与者类别、设计状态、变更字段，labels.ts）、代码高亮（Shiki 封装，签名与源代码预览共用，highlight.ts）、「在副栏预览」的注入键（项目视图提供、面板取用，preview.ts）。
+          principle: |
+            - **只放叶子**：共用件不 import 其他呈现子系统，被谁用都不会成环（Y4）。
+            - **注入键放共用件**：键由提供方（项目视图）与取用方（面板）共同引用；放在项目视图会让面板依赖项目视图，而项目视图本就渲染面板，成环。
+            - **文案不进模型层**：命令行与门禁消息也要用的名称（规则名）属于模型层的契约（U10）。
+          codeRefs: [src/components/shared/**]
+
+    - id: state
+      name: 视图状态层
+      kind: layer
+      order: 2
+      abstraction: 关于**一次浏览会话**的规则与协调：「现在看哪里、选中了什么、走到哪一步、怎么摆」。视图状态是一个值，会话规则是纯函数，一个协调者负责持有、派生与和外界同步；关于被描述系统的问题一律问模型层
+      responsibility: 会话规则（视图状态转移，纯函数）决定视角、选中与进度的关系、浏览器历史与 URL；DeskState 持有视图状态、派生要画的数据、经同步适配器与路由 / 描述文件 / 布局保持一致；Layout 把层次视图与时序模型排成坐标与走线。
+      includes: [视图状态与会话规则, URL 编解码, 协调与同步适配器, 布局与缓存]
+      excludes: [DOM 渲染, 关于被描述系统的知识（投影、最近祖先、本层下一步等，属于模型层）, 文件读取]
+      mayDependOn: [model]
+      children:
+        - id: state.desk
+          name: DeskState
+          kind: subsystem
+          core: true
+          responsibility: 当前项目当前版本的唯一状态持有者：层次、选中（含文件）、悬停、显示开关、加载状态，当前场景与回放进度，设计版本与提交版本的对比基线与差异，被描述项目的源码清单与文件归属，返工清单（W-6）与写入人拥有的文件（B1–B4），分层总览的临时展开与带内列数（O6、O7）；对外提供唯一一组操作，并经同步适配器与路由、描述文件、布局、源码保持一致。对外核心平铺，运行视角、源码、版本、架构治理的派生分为 run / files / versions / facts 四组（ADR-0013、ADR-0015）。
+        - id: state.transition
+          name: 视图状态转移
+          kind: subsystem
+          core: true
+          responsibility: 会话规则的纯函数：给定视图状态、动作与上下文，算出下一个视图状态及是否进浏览器历史。管视角与选中（V）、选中与进度（播放头）、悬停的关系、开关、浏览器历史与 URL 编解码；凡是关于被描述系统的问题（最近存在 / 可见的祖先、本层的下一步、到达某帧需要的分支选择、谁参与了哪一步）都调用模型层的架构查询，自己不实现。不依赖 Vue、路由、计时器。
+          principle: |
+            - **一个事实一个值**：层次、选中、开关、场景、进度、已选分支互相约束，是同一个视图状态（ds.ViewState），不拆成多个有状态模块。
+            - **一个主语**：选中是唯一且排他的主语，含步骤与场景；进度只是内部的「走到哪一步」，选中的步骤就是进度所在的一步（ADR-0012）；回放只由用户驱动，状态里没有「播放中」（ADR-0006）。
+            - **规则即知识**：每条规则编号、注明来源与所在模块（见设计说明的「领域规则清单」），单测按清单穷举。
+          codeRefs: [src/state/transition/**]
+        - id: state.layout
+          name: Layout
+          kind: subsystem
+          core: true
+          responsibility: 给层次视图算坐标与边的走线：分层总览按层序分带规则排布（带内列数按画布宽度换算，O7），普通层次用 elkjs；框外的角色按方位摆放（A7、L4），交叉处画跳线（L11）；给时序模型算泳道与步骤坐标；舞台叠加与舞台显示；画布场景（节点与边的数据、显隐、变淡、回放态，ADR-0013）；结果按视图内容缓存。
+          codeRefs: [src/layout/**]
+          docRefs: [docs/02-tech-selection.md]
+
+    - id: access
+      name: 接入层
+      kind: layer
+      order: 3
+      abstraction: 把磁盘上的 YAML 交给页面与命令行：只搬运文本与做摘要，不解释描述的含义
+      responsibility: 开发服务器（Vite 插件）提供项目列表（附健康度）、项目描述与描述的 git 历史，实时读取并推送变更；读取被描述项目的本地源码（文件清单、文件、导出）与代码事实（依赖）；只追加人拥有的文件（评审意见、例外、忽略项）；命令行校验，以及给 AI agent 的接口（命令行与 MCP）。本地开发工具，没有构建态（ADR-0020）。
+      includes: [文件读取, 源码清单与导出解析, 依赖提取, 治理存储（基线、拦截记录）, 开发服务器端点, 变更通知, git 历史读取, 人拥有的文件的追加写入, 命令行, agent 接口]
+      excludes: [解析规则与文件归属（交给模型层）, 界面]
+      mayDependOn: [model]
+      children:
+        - id: access.model-source
+          name: ModelSource 插件
+          kind: subsystem
+          core: true
+          responsibility: 提供 /projects.json（附健康度，Q10）、/models/<项目>.json、/models/<项目>/designs/<设计>/<轮次>.json、/models/<项目>/commits/<提交>.json（E5、E6），各版本附改动过描述的最近提交，并按项目推送 arch-model:changed（含设计版本的变化）；另提供 /source/<项目>.json、/source/<项目>/file.json、/source/<项目>/exports.json、/source/<项目>/facts.json（代码事实、基线与拦截记录，K8；源码清单短暂缓存）；挂载 POST /write/<项目>/feedback | allow | ignore（只收同源 JSON，B1–B5）。
+        - id: access.reader
+          name: 描述读取
+          kind: subsystem
+          core: true
+          responsibility: 约定「模型根目录下含 system.yaml 的子目录即项目、其下 designs/<设计>/ 是设计版本」，读取项目当前版本（跳过 designs/ 与 governance/）或设计某一轮的描述文件（YAML / JSON）及对比基线，读 design.yaml，并跑一遍模型层生成项目摘要。
+        - id: access.writer
+          name: 描述写入
+          kind: subsystem
+          responsibility: 只追加人拥有的三类内容（B1–B5，ADR-0019）：设计某一轮的评审意见（design.yaml feedback）、架构规则的例外（rules.yaml 的 rules.allow，两端须为存在的模块、理由必填）、源码忽略项（source-ignore.yaml）；AI 生成的 modules/、scenarios/、system.yaml 不写；用 YAML 文档模型修改，保留注释与其他内容。端点由 ModelSource 插件挂载，只收同源的 JSON POST。
+        - id: access.source
+          name: 源码读取
+          kind: subsystem
+          responsibility: 按 system.source.repo 解析被描述项目的源码根目录（工作区根目录 + repo，环境变量可覆盖；源码在本地是前提，读不到是配置错误，返回原因与尝试的路径，G1）；列出文件清单（git 仓库内按 git 的忽略规则，否则排除依赖与产物目录，G2）与各 package.json 的入口字段；读取单个文件（必须在清单中，过大或二进制只给提示，G17）；用 TypeScript 语法树解析导出的名称、类别与签名，顺着相对路径的再导出往下找（路径补全用模型层那一套，G11）。不判断文件属于哪个模块；统计 TS / JS / Vue 文件的物理行数，按修改时间与大小缓存（G19）。
+          docRefs: [docs/architecture/source.md]
+        - id: access.lint
+          name: 命令行校验
+          kind: subsystem
+          responsibility: npm run lint:model：校验全部项目或指定目录（含各设计版本的每一轮与 design.yaml），源码在本地时附带当前版本的源码归属警告（G9）与架构治理（代码事实、规则违规、环度，按基线棘轮：新增违规与环度上升为错误，U8），按文件:行号输出问题，有错误时非零退出，可接入 CI。
+        - id: access.deps
+          name: 依赖提取
+          kind: subsystem
+          responsibility: 用 TypeScript 语法树提取被描述项目的文件依赖（import / import type / export … from / import() / require，Vue 取 <script> 块，K1）；把说明符解析到清单中的文件——读出 tsconfig paths，交给模型层的说明符解析（相对路径补全、工作区包名与包入口，K2）；命名导入沿再导出链追到声明文件，记目标与经由（K3），类型与值按每个名字区分（K1a）；每个目标另记落到它的导入名与是否被类的 implements / extends 引用（K5 的 implements 证据）；按修改时间与大小缓存。不判断归属与规则。
+          docRefs: [docs/architecture/governance.md]
+        - id: access.governance-store
+          name: 治理存储
+          kind: subsystem
+          responsibility: 读写项目下 governance/（不属于描述）：基线 baseline.json（只由命令行生成，U7）、拦截记录 ledger.jsonl（追加，Q4）；读源码根目录的 git 提交。
+        - id: access.history
+          name: 源码历史读取
+          kind: subsystem
+          responsibility: 读被描述项目源码仓库的 git 历史（git log --no-merges --numstat，参数经 execFile 不经 shell）：每条提交的哈希、日期、标题、是否缺陷修复、涉及的源码清单内文件及增删行数，按 HEAD 与窗口缓存；按需读一个提交的说明；不在 git 仓库内或 git 不可用时给出原因、不报错（J1）。端点 /source/<项目>/history.json、commit.json 由 ModelSource 插件挂载。不判断归属（在模型层）。
+          docRefs: [docs/architecture/evolution.md]
+        - id: access.agent
+          name: agent 接口
+          kind: subsystem
+          core: true
+          responsibility: 给 AI coding agent 与人用的架构查询：查询核心按项目加载描述、源码清单、代码事实与基线并调用模型层的架构治理（定位、写前判定、违规、环、重新扫描、拦截报告，Q1–Q4）；每次查询前比对输入（描述、源码清单与各文件的修改时间与大小、基线），变了就重建，长驻时新建文件、新加依赖后无需重新扫描即可判定；两层外壳——命令行 npm run arch（另有生成基线）与 MCP 服务器 npm run arch:mcp（stdio），同一输入同一结果（Q6）；只读描述、规则与基线，只写拦截记录（Q5）。
+          principle: |
+            - **写前判定**：agent 在写下 import 之前询问；判定之外附上目标模块的职责、访问面与接口签名，让它知道该走哪里，而不只是「不行」。
+            - **架构师的意图只读**：不提供改规则、生成基线的工具，规则由人或设计版本定；拦截记录让效果可量化。
+          docRefs: [docs/architecture/governance.md, docs/adr/0015-architecture-governance.md]
+
+    - id: model
+      name: 模型层
+      kind: layer
+      order: 4
+      abstraction: 关于**被描述系统**的知识，脱离工作台仍成立：输入描述、输出数据，不依赖 Vue / DOM / 布局库，可在 Node 中纯输入输出测试
+      responsibility: 把多个描述文件变成校验过的模型与索引（含参与者与场景），按层次投影出要画的节点与边，把场景展开、按层次投影成回放帧与时序模型，并回答关于被描述系统的架构查询（最近存在 / 可见的祖先、本层的下一步、到达某帧需要的分支选择、谁参与了哪一步）。
+      includes: [文件格式与类型, 解析与合并, 引用校验, 索引, 层次投影, 场景展开与投影, 架构查询, 版本对比, 源码归属, 架构治理, 返工清单]
+      excludes: [Vue, DOM, elkjs, 文件系统]
+      mayDependOn: []
+      entry: src/model/index.ts
+      docRefs: [docs/03-architecture.md]
+      children:
+        - id: model.types
+          name: 类型与 Schema
+          kind: subsystem
+          core: true
+          responsibility: 模型层的契约：描述文件的形状（JSON Schema 与对应的 TS 类型；顶层键含 actors、scenario / scenarios 与步骤树），加载、索引、投影、场景投影、源码归属、架构治理各阶段的数据类型（声明收在 types.ts、scenario/types.ts、source/types.ts、governance/types.ts），领域枚举，以及只查表的名称查询与小谓词（moduleName、isLong、isArchived、RULE_LABELS）。不含投影与计算；呈现层对模型层只依赖它（U10）。
+        - id: model.pipeline
+          name: 加载流水线
+          kind: subsystem
+          core: true
+          responsibility: 文本 → 模型 → 索引：Loader 解析与单文件格式检查，Validator 跨文件引用检查，Indexer 建查询结构；入口 loadModel 串起三步并汇总问题。模块、关系与场景走同一条流水线。
+        - id: model.projector
+          name: Projector 层次投影
+          kind: subsystem
+          core: true
+          responsibility: 给定当前父模块，算出这一层的节点、直接边、聚合边、边界节点、外部参与者；子模块都是层时算出分层总览（带、核心模块、核心跨层边；临时展开的层全部子模块按核心模块露出，O6）。
+          docRefs: [docs/01-requirements.md]
+        - id: model.scenario
+          name: 场景投影
+          kind: subsystem
+          core: true
+          responsibility: 运行视角的核心规则：把场景的步骤树展开成回放计划（帧树，alt 处分叉），按已选分支求出回放路径，再按当前层次投影——每帧落到本层哪条边（本层没有视图边时为「经由上层关系」或「结构中未建模」）、哪个节点（内部活动）或不可见，合并出本层的可见消息；产出本层的时序模型与场景所在层次；回答场景相关的架构查询：本层的下一步 / 上一步、到达某帧需要的分支选择、某个模块 / 关系 / 边在本场景中参与了哪些步骤。
+          principle: |
+            - **术语**：**步骤**是描述里的树（消息步骤为叶子，组合步骤为容器，时序图上画成组合框）；**帧**是一条消息步骤展开后的回放单位；
+              **回放计划**是展开后的帧树；**回放路径**是按已选分支走出的线性帧序列；**可见消息**是本层投影后合并出的单步单位，一条覆盖一段连续的帧。
+            - **步骤与关系**：关系是静态的「会这样交互」，步骤是场景里按时间发生的**一次**交互——运行时关系（calls / notifies / streams，箭头为控制流方向，与消息同向）的一次发生（S12）；
+              一条关系可被多次经过，一个步骤最多对应一条关系，也可能没有对应（S5a、S13）。两条投影链平行：关系 → 视图边，帧 → 可见消息；可见消息画在连接同一对节点的视图边上，按步骤自己的方向流动（P10）。
+            - **与结构投影同一套端点规则**：帧端点用 Projector 的端点映射提升到当前层次（D-4，规则 P1）。
+            - **只写一套最细步骤**（S3）：各层投影合并；时序图与单步粒度都随层次变化，下钻后变细（规则 R7）。
+            - **不知道坐标**：输出纯数据，坐标交给 Layout。
+          docRefs: [docs/01-requirements.md]
+        - id: model.diff
+          name: 版本对比
+          kind: subsystem
+          responsibility: 设计版本相对对比基线新增 / 修改 / 删除了哪些模块、关系、接口、数据结构（逐字段比较），以及每个模块涉及多少处变更。
+          principle: |
+            - 按实体 ID 对齐；出处与 designNote 不算修改，缺省与空数组视为相同。
+            - 「涉及变更」：子树内模块的增删改计入各祖先；关系的增删改计入两端及其祖先；接口 / 数据结构计入提供方与持有它的模块。删除项按基线中的位置计入目标模型里仍存在的祖先。
+          docRefs: [docs/adr/0002-design-versions.md]
+        - id: model.source
+          name: 源码归属
+          kind: subsystem
+          responsibility: 被描述项目的源码文件与模块对上：文件按 codeRefs 归属模块（祖先与后代同时匹配取最深的，互不包含的模块同时匹配为冲突），未归属与忽略清单，模块的文件（子树并集）与入口文件，路径补全与包入口（入口、导出与依赖提取共用，K2），入口导出与模块接口的对应，选中文件在当前层次的投影，目录树，以及归属警告。输入是模型索引与接入层给的文件清单，不碰文件系统。
+          docRefs: [docs/architecture/source.md, docs/adr/0007-source-files.md]
+        - id: model.governance
+          name: 架构治理
+          kind: subsystem
+          core: true
+          responsibility: 代码事实与架构规则：文件依赖按归属提升为模块依赖，与描述比对（关系已证实 / 未证实、未描述依赖，K4–K7）；按 rules 与层的 mayDependOn 判定违规（层规则、依赖白名单、访问面、例外，U2–U6）；模块环与文件环、环度（Y）；按基线给出门禁问题（U8）；投影到当前层次（K9、Y4）；agent 查询（定位、模块说明、写前判定、拦截统计，Q1、Q2、Q4）。输入是索引、归属与接入层给的依赖，不碰文件系统。
+          principle: |
+            - **事实与意图分开**：事实来自代码（确定、可复现），意图来自架构师（rules.yaml），描述来自 AI；三者对照才能发现偏航。
+            - **默认拒绝**：写了白名单或访问面即只许这些；存量违规由基线承接，只许不增加（棘轮）。
+            - **与结构投影同一套规则**：访问面的入口用 G10，本层投影用 mapEndpoint。
+          docRefs: [docs/architecture/governance.md, docs/adr/0015-architecture-governance.md]
+        - id: model.rework
+          name: 返工清单
+          kind: subsystem
+          responsibility: 把描述错误与提醒、违规（新增 / 已知 / 已豁免）、环度上升与可收紧基线、源码归属（冲突项注明因冲突未计入的依赖条数）、报警的未证实关系（K6）、未描述依赖、结构中未建模的步骤汇总为返工项，按根因聚合（同一组重叠的 codeRefs、同一目录的漏写、越过同一条边界依赖同一模块、同一对端点之间缺的关系），每条带描述文件行号、受影响位置、规则编号与建议动作（含 YAML 片段）；渲染给 agent 的 Markdown（Q7–Q9）。只汇总其他模型子模块已有的结果，不新增事实。
+          principle: |
+            - **按根因聚合**：判据是「改一处能消掉几条」，h5player 的 287 条违规收成 17 条。
+            - **只给方向不替人决定**：加例外、收紧基线由架构师决定（U5、U7），建议里只给片段。
+            - 未建模的步骤与回放用同一套关系绑定（bindRelation，S13），与层次无关（P11）。
+          entry: src/model/rework/index.ts
+          docRefs: [docs/architecture/governance.md]
+        - id: model.review
+          name: 确认
+          kind: subsystem
+          responsibility: 人确认层的架构查询（Z1–Z6）：模块的确认摘要与指纹（覆盖职责、包含 / 不包含、可依赖的层、接口签名、直接子模块，Z2）、确认状态三档与「上次确认时 vs 现在」的差异（Z3）、确认范围（核心与第二级模块，Z4）、健康度计数（Z5）、为一组模块生成确认记录（Z6）。纯函数，页面、命令行与草图归档同一份。
+          entry: src/model/review/index.ts
+          docRefs: [docs/architecture/governance.md]
+        - id: model.evolution
+          name: 演化事实
+          kind: subsystem
+          responsibility: git 历史提升为模块的第三类事实（ADR-0023）：文件级提交按源码归属提升到模块（一次提交一个模块只计一次，上级为子树并集，J2），修改热度与缺陷热度（次数 × √当前行数，J3），时间耦合（同提交次数与占比达到阈值，标注两端有无模块依赖或描述关系，J4），在当前层次的投影（角标分档与耦合线，J5）、热度前 N 与无依赖无关系的耦合对（J6、J8）。输入是索引、归属、行数与接入层给的历史，不碰文件系统。
+          docRefs: [docs/architecture/evolution.md, docs/adr/0023-sketch-reviewed-and-evolution.md]
+        - id: model.intent
+          name: 意图
+          kind: subsystem
+          responsibility: 草图核验（X2、X4）：草图与持久草图的矛盾检查、按口径比对设计某一轮或当前版本得出偏差、应用认可偏差；归档判定（X3）与交给确认层的确认记录；人拥有文件的指纹比对（X6）。输入是草图定义与模型索引，不碰文件系统。
+          entry: src/model/intent/index.ts
+          docRefs: [docs/architecture/governance.md, docs/adr/0023-sketch-reviewed-and-evolution.md]

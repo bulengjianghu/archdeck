@@ -13,4 +13,45 @@ design:
   base:
     commit: 9bc567f4bf79418f7bfa17136aa2ba74257b51eb
     generatedAt: '2026-10-22'
-  revisions: []
+  revisions:
+    - id: r1
+      date: '2026-10-22'
+      summary: |
+        按草图展开（对比「当前版本」看全部改动；草图核验见设计面板）。
+
+        **影响面判断：不大面积调整架构。** 新增的 29 个模块全部挂在草图的 8 个模块之下（4 层各一处，按依赖从内到外：意图 → DeskState / 视图状态转移 → 描述写入 → 画布 / 属性面板 / 版本切换），
+        已有模块只改职责与接口签名、不改 ID 与父子关系；骨架、规则与已有的加载 / 投影 / 布局流水线不动——编辑态下把编辑中的草图加载成索引，交给已有的投影、布局、导航树与面板，这是改动面小的根本原因。
+
+        - **模型层 · 意图**：草图编辑 `model.intent.edit` 按操作族拆 6 个子模块（寻址与 ID 生成、层、模块、移动与改 ID、关系与接口、底稿与元信息），入口 `applyEdit(草图, 操作, 上下文) → 新草图 + 影响 | 拒绝原因`；
+          草图校验 `model.intent.validate`（格式、ID、前缀、引用、祖先后代、层依赖环、与持久草图矛盾），矛盾检查从核验中抽出、两边共用。数据结构 EditOp、EditResult、IdImpact、SketchValidation。
+        - **视图状态层**：DeskState 加编辑分组 `state.desk.edit`（会话值与纯函数、派生、操作、写回同步 4 个子模块），编辑会话 EditSession 是一个值（草图、撤销 / 重做栈、读取时的指纹、stale）；
+          视图状态 ViewState 只多一个 `editing`（编辑哪张草图），由编辑规则 `state.transition.edit`（进入 / 退出与互斥、改名与删除的跟随）约束；画布场景 canvasScene 加编辑落点。
+        - **接入层**：草图写回 `access.writer.sketch`（指纹比对 → 服务端校验 → YAML 文档合并 → 更新指纹 → 拦截记录）与新建设计；描述读取给草图版本附文件指纹、新增持久草图版本 `/i/<ID>`；三个写端点。
+        - **呈现层**：画布编辑态 `present.canvas.edit`（插入条与新建、拖动、连线、右键菜单与快捷键）、编辑表单 `present.panel.edit`（层、模块含接口、关系、草图元信息、校验与核验结果）、编辑信息条 `present.version.edit`（含新建设计对话框）。
+        - **场景**：新增「在画布上编辑草图并保存」（sc.edit-sketch），即 08 §7 计划的 E2E 主路径。
+
+        改动过的已有实体（都写了 designNote）：present.shell、present.version、state.desk、access.writer、access.reader、access.model-source（骨架模块，只补说明）；state.desk.writer、present.panel.dispatch、state.layout.canvas；
+        接口 if.source.endpoints、if.desk.createDeskState、if.reader.projects、if.layout.canvasScene；数据结构 ds.ViewState、ds.ViewAction、ds.ModelPayload；补登已有的 ds.SketchCheck。
+
+        规模：模块 119 → 148（+29），关系 304 → 363（+59），接口 42 → 50（+8），数据结构 45 → 53（+8），场景 1 → 2；`lint:model` 本轮 0 错误 0 提醒；`sketch-check --revision r1` 0 错误 0 提醒。
+
+        新增规则草案（来源均为「议」，定稿前盘点，X7 细化为 X7a–X7h）：
+        X7a 编辑态只在草图版本（设计的草图、持久草图）上开启，与运行视角、文件选中互斥，不进 URL；
+        X7b 编辑操作是纯函数，只拒绝不成立的操作（目标不存在、ID 冲突、前缀不符、同一对同类型关系已有、连祖先与后代、设计草图移动持久草图的模块），其余交给校验；
+        X7c ID 生成：模块 = 父 ID + kebab-case 短名，关系 rel.<from 短名>-<to 短名>，接口 if.<owner 短路径>.<名称>；
+        X7d 移动 = 改父 + 改 ID，级联后代、关系两端、接口 owner、closed、mayDependOn，关系与接口自身 ID 不变，移动前预览影响并确认；
+        X7e 删除级联子树、两端落在子树内的关系、owner 在子树内的接口与 closed / mayDependOn 中的引用，有级联时确认；
+        X7f 校验的引用范围为本草图 ∪ 持久草图，error 拒绝保存，页面与写入端点同一函数；
+        X7g 撤销 / 重做只在本次未保存的编辑内，一个操作一步，保存即清空；
+        X7h 编辑后的跟随：改名换成新 ID，删除退到最近仍存在的祖先，新建即选中；
+        B6 细化：整份写回 = 指纹比对 → 校验 → 文档合并（注释只在未改动的节点保留）→ 更新指纹 → 拦截记录一行。
+      questions:
+        - "**1. 编辑会话（草图 + 撤销栈）放哪**：A. DeskState 的编辑分组 state.desk.edit.session，一个值、纯函数（r1）；B. 整个放进 ViewState，由 state.transition.edit 转移；C. 模型层。推荐 A——撤销栈是一次编辑会话的事，换成命令行不需要（原则 3），排除 C；它不进 URL、与浏览的层次和选中只经「影响」相互作用（改名、删除后的跟随），而那部分已在 ViewState 的 editing + edited 动作里由转移函数管，排除 B。选 B 需要改草图：rel.se.desk-edit 的起点要从 state.desk.edit 改到 state.transition.edit。"
+        - "**2. 移动模块级联改 ID 的实现位置与范围**：A. 模型层 model.intent.edit.move，纯函数，级联后代、关系两端、接口 owner、closed、mayDependOn，关系与接口自身的 ID 不改（r1）；B. 写回时对 YAML 文本做 ID 替换；C. 视图状态层。推荐 A——B 会误伤职责文字里提到的 ID、也无法在保存前预览与撤销；C 让将来的命令行（arch sketch mv）用不上。另请确认：关系 / 接口 ID 不随模块改名（保持 AI 文件里的引用稳定），以及确认框里给出「当前版本里还有 N 处引用旧 ID、保存后需交给 AI 重新生成」。"
+        - "**3. 保存时指纹冲突（文件已在外部改动）**：A. 拒绝（409），会话标 stale，提供「重新加载并重放改动」——把撤销栈里的操作按顺序重放到新文件上，失败的操作列出来（r1）；B. 拒绝并丢弃本次改动（08 S-3 字面）；C. 三方合并；D. 二次确认后强制覆盖。推荐 A——操作是意图级的，重放代价小、成功率高；C 对 YAML 结构做三方合并复杂且难解释；D 违背 X6（人拥有的文件被静默覆盖）。"
+        - "**4. 编辑态的画布数据**：A. 复用 canvasScene，输入加 editing、输出多编辑落点（插入条、+ 模块、连线柄、移动目标）的伪节点；编辑中的草图经 loadModel 成为 DeskState 的 index，投影与布局照常（r1）；B. 单独的 editScene 与编辑专用的投影。推荐 A——显隐、变淡、选中突出、设计标记在编辑态一样需要，B 会复制一套并逐渐分叉；代价是 canvasScene 多一个输入。"
+        - "**5. 新建设计「从当前版本复制第二级」的语义**：A. 复制持久草图（骨架）的层与第二级模块并自动声明 supersedes: skeleton（r1）；B. 只复制、不声明 supersedes；C. 只复制 ID 与名称作为引用。推荐 A——复制来的实体与骨架重复，B 下改任何已写字段或往封闭的层下加模块都是矛盾（X4 error），底稿等于不能改；C 同样不能在封闭的层下加模块。代价：这份设计定稿实现后是「晋升」替换骨架而不是「归档」，需要架构师知情。也请确认负责人「缺省复制」的裁决在这个语义下仍成立（否则缺省改为空草图）。"
+        - "**6. 编辑操作拒绝什么、放过什么**：A. applyEdit 只拒绝做不成的操作，结构问题（层依赖成环、与持久草图矛盾、封闭子树多了子模块）照常应用、由即时校验标出，保存前拦住（r1）；B. 任何会让草图不合法的操作都拒绝。推荐 A——B 下架构师常被「这一步不让做」卡住（如想先加层再连依赖、或先移出再删），而不知道该先做哪步；A 的中间不合法状态有面板顶部的即时校验与保存前校验兜住。"
+        - "**7. 草图疑问：封闭的 model.intent 与 access.writer 下已有的代码放哪**：两个子树封闭后直接子模块只能是 edit / validate、sketch，已有的核验与生命周期（check.ts、lifecycle.ts、owned.ts）、追加写入（writeModel.ts）只能留在父模块自身；而校验要把矛盾检查抽给核验共用、草图写回要复用 openDoc / save——父模块与子模块之间按 M6 不能写关系，这些依赖在图上看不见（r1 只写进 designNote）。选项：A. 架构师在草图里补 model.intent.check（核验与生命周期）与 access.writer.append（追加写入），封闭集合随之扩大；B. 维持现状，接受这些依赖不可见；C. 取消这两个子树的 closed。推荐 A（AI 不能自己加，X5）。"
+        - "**8. 草图疑问：第三级模块的 core**：草图给 model.intent.edit、model.intent.validate、present.canvas.edit 标了 core: true，而 04 §3.2 规定核心只用于第二级（分层总览只露出层的核心模块），第三级的 core 目前没有任何显示与规则效果。选项：A. 去掉这三处 core；B. 把 core 扩展为「任意层次的评审重点」并在 04 §3.2 与画布上定义其显示；C. 保留，不赋予含义。推荐 A，若架构师想表达「评审重点」则选 B 并登记新规则。r1 原样沿用了 core（X5）。"
+        - "**9. 「编辑骨架」的入口形态**：A. 新增持久草图版本 /p/<项目>/i/<ID>（system.yaml + intent/**，对比基线为当前版本），编辑态只在它上面开启（r1）；B. 在当前版本上直接进入编辑态、只显示草图实体。推荐 A——编辑态的前提是「画的只有草图」，当前版本混有 AI 生成的模块，B 要在同一版本里切换数据来源，等于再造一个版本概念。"
