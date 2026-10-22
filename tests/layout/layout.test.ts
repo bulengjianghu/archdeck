@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { loadModel, projectLevel } from '../../src/model'
+import type { Box } from '../../src/layout/geometry'
 import {
   BAND,
   bandColumnsFor,
