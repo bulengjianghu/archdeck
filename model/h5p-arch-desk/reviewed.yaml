@@ -187,3 +187,116 @@ reviewed:
         - model.governance.query
         - model.governance.report
         - model.governance.rules
+  - module: model.intent.edit
+    at: 2026-10-22
+    hash: 98afdd2af151b51f
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        对草图定义的纯函数编辑：输入一份草图（ds.SketchDef）、一个编辑操作（ds.EditOp）与上下文（持久草图、当前版本索引），输出新草图与这次编辑的影响（新建、改名、删除了哪些 ID），或拒绝原因。
+        操作族：层（加、删、排序、可依赖的层）、模块（加、删、改字段、核心与封闭）、移动与改 ID（ID 前缀级联到后代、关系两端、接口 owner、closed 与 mayDependOn 中的引用）、关系与接口（连、改、删；接口 owner 固定为所在模块）、草图元信息（lifetime、supersedes）、新建草图的底稿。
+        不碰文件、YAML 文本与界面；不判断草图整体是否合法（那是校验的事）。
+      children:
+        - model.intent.edit.layers
+        - model.intent.edit.locate
+        - model.intent.edit.modules
+        - model.intent.edit.move
+        - model.intent.edit.relations
+        - model.intent.edit.seed
+  - module: model.intent.validate
+    at: 2026-10-22
+    hash: 7e0ac1d0c29bc159
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        草图的即时校验，编辑态每次操作后与保存前（页面与写入端点）共用同一函数：
+        格式（按 JSON Schema 检查草图的形状，未知字段即错）；ID 规则（格式、在本草图与持久草图中唯一、子模块 ID 以父 ID 为前缀，X5）；引用完整（parent、关系两端、接口 owner、关系的经由接口、closed 与 mayDependOn 的元素都要在本草图或持久草图中找到；草图之间不引用 AI 生成的实体）；
+        关系不连祖先与后代（M6）；层依赖无环；与持久草图的矛盾（复用 model.intent.check 的矛盾检查，只有一份）。
+        输出按实体定位的问题列表（error 拒绝保存，warning 只提示），不改草图。
+  - module: model.intent.check
+    at: 2026-10-22
+    hash: 66806509f00507a6
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        一期已有的意图计算（草图修订后归这里）：草图与持久草图的矛盾检查 sketchContradictions（供草图校验共用）；核验 sketchCheck / checkSketches——按口径比对设计某一轮或当前版本得出偏差、应用认可偏差（X2、X4）；
+        归档判定 archiveVerdict 与草图覆盖的模块 sketchModules（X3，交给确认层写确认记录）；人拥有文件的指纹比对 compareOwned（X6）。输入是草图定义与模型索引，不碰文件系统。
+  - module: state.desk.edit
+    at: 2026-10-22
+    hash: ca97798c479dccfa
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        DeskState 的编辑分组（desk.edit）：持有编辑会话（ds.EditSession，一个值：编辑目标、读取时的草图与文件指纹、编辑中的草图、撤销 / 重做栈），由纯函数改变；
+        对外提供编辑操作（每个画布 / 面板意图一个，经 model.intent.edit 应用）、撤销 / 重做、保存、放弃、新建设计；
+        编辑态下把编辑中的草图加载成模型索引，作为 DeskState 的 index 交给已有的投影、布局、导航树与面板——派生给画布与面板的只有草图本身；并派生即时校验、对当前版本的实时核验（L-1）、本次改动摘要（L-2）与晋升预览（L-4）。
+      children:
+        - state.desk.edit.commands
+        - state.desk.edit.derive
+        - state.desk.edit.save
+        - state.desk.edit.session
+  - module: state.transition.edit
+    at: 2026-10-22
+    hash: 663e8e54a7187978
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        编辑态的会话规则（纯函数）：进入编辑态（只在草图版本上、视图状态里记下编辑目标）与退出；编辑态与运行视角、文件选中、代码事实互斥（E-4：进入编辑态时退出场景、清掉文件选中，编辑态下打开场景、选中文件的动作无效）；
+        Esc 只取消选中（N7 不变，编辑态下不另赋含义）；有未保存改动时离开（切换版本、退出编辑、关闭页面）要确认（E-3）；编辑改名与删除后层次与选中怎么跟随。
+      children:
+        - state.transition.edit.follow
+        - state.transition.edit.mode
+  - module: access.writer.sketch
+    at: 2026-10-22
+    hash: 499e5a1cb1cca457
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        人拥有的草图的整份写回（B6）与新建设计：
+        saveSketch——目标为持久草图 intent/<ID>.yaml 或设计的草图 designs/<设计>/sketch.yaml；先比对文件当前指纹与读取时的指纹（X6 同一算法），不同即拒绝（409，「文件已变，重新加载后再改」，S-3）；再从磁盘读持久草图、用 validateSketch 校验，有 error 即拒绝（422，附问题列表，S-2）；
+        然后用 YAML 文档模型把新草图合并进原文档：映射逐键、带 id 的列表按 id 对齐、标量只在值变了才替换，没变的节点原样保留（连同注释）；写回后更新 owned.json 的指纹并在 ledger.jsonl 记一行（来源 page、种类 sketch）。
+        createDesign——设计 ID 合法且目录不存在；写 design.yaml（名称、目标、status: draft、base.commit 取当前版本 system.source.commit）与 sketch.yaml（底稿），两者都登记指纹。
+        端点由 ModelSource 插件挂载：POST /write/<项目>/sketch（持久草图，正文带草图 ID）、/write/<项目>/designs/<设计>/sketch、/write/<项目>/designs（新建），只收同源 JSON（B5）。
+  - module: access.writer.append
+    at: 2026-10-22
+    hash: e5d8ae85de3f021d
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        一期已有的写入（草图修订后归这里）：人拥有文件的追加写入——评审意见（B2）、例外（B3）、忽略项（B4）、确认记录（Z1、Z6，同一模块更新那一条）、认可偏差（X4）——与归档 / 晋升（X3）；
+        YAML 文档模型的打开（openDoc：解析失败拒绝写）与保存（save：写回并更新指纹，X6）这两个件供草图写回共用。只追加、不删改。
+  - module: present.canvas.edit
+    at: 2026-10-22
+    hash: d69cc7ab66f16f95
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        只在编辑态开启的画布交互：带之间与末尾的插入条（+ 层）与带头拖动排序、带内与父模块框内「+ 模块」与就地输入名称、拖动模块到另一条带或另一父模块（移动，改 ID 时二次确认）、从节点拖线到另一节点建关系（松手选类型与一句说明）、分层总览上带到带拖线改可依赖的层、右键菜单（核心、封闭、删除）、删除键与撤销 / 重做快捷键。
+        每个操作只调用 state.desk.edit 的一个操作；落点的位置来自画布场景，不保存坐标、不自己算布局，编辑后由自动布局重排。
+      children:
+        - present.canvas.edit.connect
+        - present.canvas.edit.drag
+        - present.canvas.edit.insert
+        - present.canvas.edit.menu
+  - module: present.panel.edit
+    at: 2026-10-22
+    hash: 3fc73d985f3affcb
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        编辑态下属性面板换成表单：按选中显示层、模块、关系的表单，无选中时为草图元信息；顶部常驻校验结果（错误与提醒，单击定位到实体）与设计草图的实时核验「实现后将有 N 处偏差」（L-1）；字段改动即发意图（文本字段在失焦或回车时发一次，即撤销的一步，X7g）。
+        面板分派在编辑态下选这里，结构视角的模块 / 关系面板不显示。
+      children:
+        - present.panel.edit.checks
+        - present.panel.edit.layer
+        - present.panel.edit.meta
+        - present.panel.edit.module
+        - present.panel.edit.relation
+  - module: present.version.edit
+    at: 2026-10-22
+    hash: 8d58aece51979c1a
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        草图版本的信息条上出现「编辑」；编辑态下信息条变为「编辑草图：<名>」、未保存标记 ●、「保存」「放弃」「校验」、撤销 / 重做（E-2）；「放弃」有未保存改动时二次确认（E-3）；保存成功后停留在编辑态，保存失败显示原因（文件已变时给「重新加载并重放改动」；重放有失败时列出失败的操作，并给「放弃本次改动」）。
+        当前版本上「编辑骨架」打开持久草图 /i/skeleton 并进入编辑态（E-1）；版本切换旁的「新建设计」对话框：ID、名称、目标一句话、底稿（缺省「空草图」；另一选项「改骨架（定稿后晋升替换骨架）」，选中时说明后果：复制骨架的层与第二级并声明 supersedes，定稿实现后整份替换 intent/skeleton.yaml，而不是归档，S-4、L-3），创建后进入新设计的草图编辑。
