@@ -59,14 +59,14 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 | `undescribedDeps(index, moduleDeps)` | 含 `value` 文件依赖、且没有关系覆盖的模块依赖（端点相同或互为祖先后代、方向一致，`dataflow` 不论方向）；只引类型的不算 | K7 |
 | `judge(index, rules, entryOf, dep)` | 一条（依赖方模块，被依赖方模块，经由文件及其归属）对全部规则的判定：层规则、白名单、访问面，返回命中的 `{ kind, at, reason }` 与是否有规则约束；`allow` 匹配的标为已豁免 | U2–U5 |
 | `evaluateRules(index, own, moduleDeps, entryOf)` | 对每条模块依赖的每条文件证据 `judge`，按 `<种类>:<规则所在>:<A>-><B>` 合并为 `Violation` | U6 |
-| `cycles(nodes, edges)` | Tarjan 强连通分量，返回规模 ≥ 2 的分量，成员按名称排序 | Y1 |
+| `stronglyConnected(edges)` · `valueDeps(moduleDeps)` · `moduleCycles` · `fileCycles` | Tarjan 强连通分量，返回规模 ≥ 2 的分量，成员按名称排序；环只按值依赖：`valueDeps` 只留含 `value` 文件依赖的模块依赖（证据也只留 `value`），文件环只取 `value` 文件依赖——模块环、文件环、本层环（Y4、Y5）与写前判定的环影响（Q2）同一口径 | Y1 |
 | `cyclicity(cycles)` | 未容忍的环的 Σ 规模² | Y2、Y3 |
 | `governanceReport(index, own, tree, deps, baseline)` | 组合以上：事实、比对、违规（带基线状态）、模块环与文件环、环度、门禁问题与摘要 | K4–K7、U8、Y |
-| `levelFacts(index, view, report)` | 当前层次：视图边的证实标记与违规；未描述依赖与违规投影成的叠加线；本层的环编号；每个本层环的构成（环内节点按视图顺序，环内每条本层依赖带同方向视图边与投影来的模块依赖）——与环编号同一次投影得出，不另取事实 | K9、Y4、Y5 |
+| `levelFacts(index, view, report)` | 当前层次：视图边的证实标记与违规；未描述依赖与违规投影成的叠加线；本层的环编号；每个本层环的构成（环内节点按视图顺序，环内每条本层依赖带同方向视图边与投影来的模块依赖，均只取值依赖 `valueDeps`）——与环编号同一次投影得出，不另取事实 | K9、Y4、Y5 |
 | `depsBetween(index, view, report, from, to)` | 叠加线选中时的内容：投影到这对节点的模块依赖、违规与文件证据 | K10 |
 | `rulesFor(index, moduleId)` | 对一个模块生效的规则：所在各级层的 `mayDependOn`、祖先链上的白名单与访问面 | Q1 |
 | `describeModule(index, own, report, entryOf, id)` · `locate(…, file)` | agent 用的模块 / 文件说明：路径与各级职责、生效的规则、接口签名、入口、出入关系与违规 | Q1 |
-| `checkDependency(index, own, report, entryOf, from, targets)` | 写前判定：对每个目标 `judge`，取最严；环影响为在模块依赖图上加边后重算包含两端的强连通分量；附覆盖关系与目标模块语义 | Q2 |
+| `checkDependency(index, own, report, entryOf, from, targets)` | 写前判定：对每个目标 `judge`，取最严；环影响为在值依赖的模块图（`valueDeps`）上加边后重算包含两端的强连通分量；附覆盖关系与目标模块语义 | Q2 |
 | `summarizeLedger(entries)` | 按判定统计次数；扫描的违规数与环度首末值 | Q4 |
 
 ### 4.1 数据结构

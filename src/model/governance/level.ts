@@ -5,7 +5,7 @@
 import { mapEndpoint } from '../project'
 import { RELATION_TYPES } from '../types'
 import type { LevelView, ModelIndex } from '../types'
-import { stronglyConnected } from './cycles'
+import { stronglyConnected, valueDeps } from './cycles'
 import { depKey } from './facts'
 import type { GovernanceReport, LevelCycle, ModuleDep, Violation } from './types'
 
@@ -95,9 +95,9 @@ export function levelFacts(index: ModelIndex, view: LevelView, report: Governanc
       overlays.push({ id: `dep:${k}`, ...p, fromModule: moduleOfNode(view, p.from), toModule: moduleOfNode(view, p.to) })
   }
 
-  // Y4：本层的环；Y5：按节点对记下投影来的模块依赖，环的构成由此给出
+  // Y4：本层的环（值依赖，Y1）；Y5：按节点对记下投影来的模块依赖，环的构成由此给出
   const levelDeps = new Map<string, { from: string; to: string; deps: ModuleDep[] }>()
-  for (const d of report.moduleDeps.values()) {
+  for (const d of valueDeps(report.moduleDeps.values())) {
     const p = project(d)
     if (!p) continue
     const k = depKey(p[0], p[1])

@@ -4,7 +4,7 @@
 import { moduleName } from '../names'
 import { moduleFiles, moduleInterfaces, type SourceOwnership } from '../source'
 import type { ModelIndex, RuleKind } from '../types'
-import { stronglyConnected } from './cycles'
+import { stronglyConnected, valueDeps } from './cycles'
 import { coveringRelations, related } from './facts'
 import { judge, rulesFor, type EntryOf } from './rules'
 import type { GovernanceReport, RuleHit, Verdict } from './types'
@@ -205,7 +205,7 @@ export function checkDependency(
     return []
   }
   const froms = ownersOf(from, '依赖方')
-  const graph = [...(report?.moduleDeps.values() ?? [])].map(d => [d.from, d.to] as [string, string])
+  const graph = valueDeps(report?.moduleDeps.values() ?? []).map(d => [d.from, d.to] as [string, string])
   const sizeWith = (edges: [string, string][], a: string, b: string) => stronglyConnected(edges).find(c => c.includes(a) && c.includes(b))?.length ?? 0
   const sizeOf = (a: string) => stronglyConnected(graph).find(c => c.includes(a))?.length ?? 0
 

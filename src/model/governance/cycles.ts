@@ -1,5 +1,5 @@
 /**
- * 环（Y1–Y3）：强连通分量与环度。
+ * 环（Y1–Y3）：强连通分量与环度。环只按值依赖计算，只引类型的依赖不是环的边（同 K7 口径）。
  */
 import type { ModelIndex } from '../types'
 import type { SourceOwnership } from '../source'
@@ -62,20 +62,30 @@ export function stronglyConnected(edges: Iterable<readonly [string, string]>): s
   return out.sort((a, b) => a[0].localeCompare(b[0]))
 }
 
+/** Y1：只看值依赖——模块依赖只留值导入的文件证据，全是类型导入的整条去掉 */
+export function valueDeps(moduleDeps: Iterable<ModuleDep>): ModuleDep[] {
+  const out: ModuleDep[] = []
+  for (const d of moduleDeps) {
+    const files = d.files.filter(f => f.kind === 'value')
+    if (files.length) out.push(files.length === d.files.length ? d : { ...d, files })
+  }
+  return out
+}
+
 /** Y3：模块是否在容忍的子树内 */
 const toleratedModule = (index: ModelIndex, id: string) => (index.model.rules?.cycles?.tolerated ?? []).some(t => within(index, id, t))
 
-/** Y1、Y3：模块环 */
+/** Y1、Y3：模块环（值依赖图） */
 export function moduleCycles(index: ModelIndex, moduleDeps: Iterable<ModuleDep>): Cycle[] {
-  return stronglyConnected([...moduleDeps].map(d => [d.from, d.to] as const)).map(members => ({
+  return stronglyConnected(valueDeps(moduleDeps).map(d => [d.from, d.to] as const)).map(members => ({
     members,
     tolerated: members.every(m => toleratedModule(index, m)),
   }))
 }
 
-/** Y1、Y3：文件环（终点为目标文件） */
+/** Y1、Y3：文件环（值依赖图，终点为目标文件） */
 export function fileCycles(index: ModelIndex, own: SourceOwnership, deps: readonly FileDep[]): Cycle[] {
-  return stronglyConnected(deps.map(d => [d.from, d.to] as const)).map(members => ({
+  return stronglyConnected(deps.filter(d => d.kind === 'value').map(d => [d.from, d.to] as const)).map(members => ({
     members,
     tolerated: members.every(f => {
       const owners = own.owners.get(f)
