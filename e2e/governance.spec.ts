@@ -1,12 +1,12 @@
 /**
  * 架构治理（§6.10 第 5、6 条）：开启「代码事实」，只标异常——未证实的关系边为虚线并标 ?、已证实的不标；单击代码依赖叠加线看证据；根层面板有架构治理。
- * 本项目的描述已无未描述依赖，叠加线用 h5player 验证（源码在本地是前提，G1，不设跳过）。
+ * 本项目的描述已无未描述依赖、根层也没有未证实的边（经 HTTP 等的写了 via，K5b），? 与叠加线用 h5player 验证（源码在本地是前提，G1，不设跳过）。
  */
 import { expect, test } from '@playwright/test'
 import { openDesk, query } from './helpers'
 
 test('开启代码事实：未证实的边标 ?，已证实的不标 ✓（K9、L10）', async ({ page }) => {
-  await openDesk(page, '/p/h5p-arch-desk')
+  await openDesk(page, '/p/h5player')
   await expect(page.locator('.panel')).toContainText('架构治理')
   await expect(page.locator('.panel')).toContainText(/已证实 \d+/)
   const toggle = page.locator('label.facts input')
