@@ -159,7 +159,7 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 | `sketchCheck(sketch, index, { persistent?, accepted? })` | 核验：先查与持久草图的矛盾（同一模块两边都写的 `kind` / `core` / `mayDependOn` / 父模块不一致，或往封闭子树下加直接子模块 → `sketch.contradiction`，`supersedes` 时跳过）；再逐项比对版本——缺模块 `sketch.missing-module`、封闭子树多出的直接子模块 `sketch.extra-child`、字段不一致 `sketch.field`（error）；关系没有对应 `sketch.missing-relation`（两端 + 类型，版本里两端落在草图两端子树内也算）、接口不存在 / `owner` 不同 `sketch.missing-interface` / `sketch.interface-owner`（warning）。每条偏差带稳定键 `<种类>:<实体 ID>`、所在实体与建议；`accepted` 里的 warning 降为 info 并带理由；结果 `SketchCheck { sketch, deviations, counts, consistent }`，`consistent` = 零 error 且提醒都已认可 | X2、X4 |
 | `activeSketches(index, extra)` | 对一个版本有约束力的草图：`index.model.sketches` 里的持久草图 + 载荷附带的设计草图；持久草图另给核验用 | X3、X4 |
 | `archiveVerdict(sketch, index, accepted)` | 归档判定：核验一致才能归档；结局按 `supersedes` 为「晋升」、否则「归档」；持久草图不能归档 | X3 |
-| `sketchModules(sketch, index)` | 归档时写确认记录的对象：草图覆盖的、版本里存在的模块；记录本身（指纹、摘要）由确认层的 `reviewEntries` 按它的口径生成，经 `appendReviewed` 写入（接入点 `vite/reviewedHook.ts`，待联调） | X3 |
+| `sketchModules(sketch, index)` | 归档时写确认记录的对象：草图覆盖的、版本里存在的模块；记录本身（指纹、摘要）由确认层的 `reviewEntries` 按它的口径生成，经 `appendReviewed` 写入（`archiveDesign` 直接调用） | X3 |
 | `compareOwned(record, hashes)` | 指纹比对：已登记的文件内容不符或已不存在 → error `owned.changed`；人拥有的文件未登记 → warning `owned.unregistered`；没有记录 → warning `owned.none` | X6 |
 
 ```ts

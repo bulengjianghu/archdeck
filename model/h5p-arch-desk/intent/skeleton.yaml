@@ -167,7 +167,7 @@ sketch:
           name: 描述写入
           kind: subsystem
           responsibility: 只追加人拥有的三类内容（B1–B5，ADR-0019）：设计某一轮的评审意见（design.yaml feedback）、架构规则的例外（rules.yaml 的 rules.allow，两端须为存在的模块、理由必填）、源码忽略项（source-ignore.yaml）；AI 生成的 modules/、scenarios/、system.yaml 不写；用 YAML 文档模型修改，保留注释与其他内容。端点由 ModelSource 插件挂载，只收同源的 JSON POST。
-          codeRefs: [vite/writeModel.ts, vite/reviewedHook.ts]
+          codeRefs: [vite/writeModel.ts]
         - id: access.source
           name: 源码读取
           kind: subsystem

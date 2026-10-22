@@ -128,8 +128,7 @@ function run(): number {
             ? `已晋升：草图替换了 ${r.promoted}；设计「${rest[1]}」状态改为 implemented（${r.file}）`
             : `已归档：设计「${rest[1]}」状态改为 implemented（${r.file}）`,
         )
-        if (r.reviewed)
-          console.log(`确认记录 ${r.reviewed.count} 条${r.reviewed.pending ? '——确认层的写入端点待联调，尚未写入 reviewed.yaml' : `已写入 ${r.reviewed.file}`}`)
+        if (r.reviewed) console.log(`确认记录 ${r.reviewed.count} 条已写入 ${r.reviewed.file}（来源 sketch:${rest[1]}）`)
       }
       return 0
     }

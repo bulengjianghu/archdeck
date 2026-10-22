@@ -32,14 +32,14 @@ export function httpModelWriter(project: string, base = ''): ModelWriter {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const out = (await res.json()) as { file?: string; error?: string; outcome?: string; reviewed?: { count: number; pending?: true }; promoted?: string }
+      const out = (await res.json()) as { file?: string; error?: string; outcome?: string; reviewed?: { count: number; file: string }; promoted?: string }
       if (!res.ok || !out.file) return { ok: false, error: out.error ?? `HTTP ${res.status}` }
       // X3：归档 / 晋升的结果说明
       const note =
         out.outcome === 'promote'
           ? `已晋升：草图替换了 ${out.promoted}`
           : out.outcome === 'archive'
-            ? `已归档：${out.reviewed?.count ?? 0} 条确认记录${out.reviewed?.pending ? '（确认层写入端点待联调，尚未写入 reviewed.yaml）' : ''}`
+            ? `已归档：${out.reviewed?.count ?? 0} 条确认记录写入 ${out.reviewed?.file ?? 'reviewed.yaml'}`
             : undefined
       return { ok: true, file: out.file, ...(note ? { note } : {}) }
     } catch (e) {

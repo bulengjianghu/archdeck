@@ -81,7 +81,7 @@ h5player 的架构信息分散在几处：
 | DV-8 | 看见演化：版本切换中增加「提交」入口，列出改动过本项目描述的最近提交；打开一个提交看它当时的描述，与设计版本一样相对对比基线（缺省为更早的一个提交，可改选任一提交或当前版本）标出新增 / 修改 / 删除、涉及变更数与变更清单 | E5、E6 | P2 | 已实现 |
 | DV-9 | 设计 ↔ ADR：`design.yaml` 可写 `adr`（定稿结论所在的 ADR 路径），设计面板显示「ADR-<编号>」并可在副栏预览 | E7 | P2 | 已实现 |
 | DV-10 | 草图作为版本：打开设计的草图时按普通描述加载（`system.yaml` + 持久草图 + 该草图），分层总览可看、可选中、可下钻，相对当前版本标出增删改（复用版本对比）；设计信息条标「草图」，「交给 AI」把指令（草图全文 + 04 §5「按草图扩展」）放进剪贴板，AI 据此在当前版本上起草 r1 | X1、X5、E1 | P0 | 已实现 |
-| DV-11 | 归档 / 晋升：设计面板显示本设计草图对当前打开版本的核验结果与「认可偏差」；对当前版本核验一致（零 error，提醒已认可）后可「归档」（`until-implemented`：状态改为 `implemented`，并为草图覆盖的模块写入确认记录）或「晋升」（`supersedes`：草图替换对应的持久草图，设计归档）；命令行 `arch sketch archive` 同一动作 | X3、X4 | P0 | 已实现（归档写确认记录：待联调） |
+| DV-11 | 归档 / 晋升：设计面板显示本设计草图对当前打开版本的核验结果与「认可偏差」；对当前版本核验一致（零 error，提醒已认可）后可「归档」（`until-implemented`：状态改为 `implemented`，并为草图覆盖的模块写入确认记录）或「晋升」（`supersedes`：草图替换对应的持久草图，设计归档）；命令行 `arch sketch archive` 同一动作 | X3、X4 | P0 | 已实现 |
 
 ### 4.2 工作台
 
@@ -239,7 +239,7 @@ h5player 的架构信息分散在几处：
 | SK-2 | 骨架是持久草图：两个项目的层与第二级模块从 `modules/layers.yaml` 机械拆到 `intent/skeleton.yaml`（ID 与内容不变，第二级声明 `closed`），`layers.yaml` 只留必要内容或删除；设计版本各轮快照里的 `layers.yaml` 原样保留，由兼容期覆盖；迁移后图与迁移前完全一致 | X1、X2 | P0 | 已实现 |
 | SK-3 | 指纹门禁：人拥有文件的内容指纹记在 `governance/owned.json`，命令行 `npm run arch -- own` 在人改完后登记；`lint:model` 比对指纹，不符报错 `owned.changed`（未登记的只提醒）；页面写入人拥有的文件后自动更新该文件的指纹 | X6 | P0 | 已实现 |
 | SK-4 | 核验：模型层纯函数 `sketchCheck(草图, 版本)`，对象可以是设计的某一轮或当前版本，口径与严重度见 X4；草图与持久草图矛盾即 error（除非 `supersedes`）；结果进返工清单类别「草图偏差」；系统面板「意图」一节列出每张活动草图的偏差计数与「查看偏差」；项目卡片上该设计条目标「偏差 N」；命令行 `sketch-check` 与 MCP `sketch_check` | X4、X5 | P0 | 已实现 |
-| SK-5 | 生命周期：设计面板「认可偏差（写理由）」把提醒级偏差记入 `design.yaml` 的 `accepted` 后视为一致；核验一致后「归档 / 晋升」（DV-11）——`until-implemented` 归档并为草图覆盖的模块写确认记录（经确认层的写入端点），`supersedes` 替换对应持久草图；持久草图不归档；归档由人显式发起，不自动 | X3、X4 | P0 | 已实现（归档写确认记录：待联调） |
+| SK-5 | 生命周期：设计面板「认可偏差（写理由）」把提醒级偏差记入 `design.yaml` 的 `accepted` 后视为一致；核验一致后「归档 / 晋升」（DV-11）——`until-implemented` 归档并为草图覆盖的模块写确认记录（经确认层的写入端点），`supersedes` 替换对应持久草图；持久草图不归档；归档由人显式发起，不自动 | X3、X4 | P0 | 已实现 |
 | SK-6 | 画布编辑：只在草图下开启编辑态，只改草图自身内容（层、模块、关系、接口），保存为整份写回、保存前校验 | X7、B6 | P1 | 后续 |
 
 ### 4.7 初始内容
@@ -396,7 +396,7 @@ h5player 的架构信息分散在几处：
 4. 选中一个模块，「演化」一节（默认折叠）给出修改与缺陷次数、窗口、最近 10 次提交（可展开看提交说明）与耦合对端。
 5. `npm run arch -- hotspots --fixes` 与 `coupling --isolated` 的结果与页面一致；`source.history.days` 改为 30 后窗口随之变化。
 
-### 6.13 意图：草图（已通过，第 6 条待联调）
+### 6.13 意图：草图（已通过）
 
 以 h5p-arch-desk 自身验收（自动化验收：`tests/model/intent.test.ts`、`tests/access/owned.test.ts`、`tests/access/writeModel.test.ts`、`tests/acceptance/governance.test.ts`，浏览器端 `e2e/sketch.spec.ts`）：
 
@@ -405,7 +405,7 @@ h5player 的架构信息分散在几处：
 3. 改 `rules.yaml` 后不运行 `npm run arch -- own`：`lint:model` 报错 `owned.changed`；运行后 0 个错误；在页面加一条例外后指纹自动更新（SK-3）。
 4. 版本切换里 `phase2-dynamic` 的草图排在 r1 之前；打开草图看到分层总览，对比当前版本标出增删改；「交给 AI」得到草图全文加「按草图扩展」一节（DV-10）。
 5. 往 r4 快照里塞一个挂在封闭的「场景投影」之下的模块：问题页签出现「草图偏差」error，删掉即消失；对 `phase2-dynamic` 跑 `npm run arch -- sketch-check --design phase2-dynamic`：r4 一致、r1 有 10 条历史偏差、当前版本多出「步骤大纲」；把 r1 的一条提醒级偏差「认可」后它从问题页签消失、设计面板标「已认可」（SK-4、SK-5）。
-6. 归档：对当前版本核验一致后「归档」，设计状态变为 `implemented`、卡片不再列出（`tests/access/writeModel.test.ts` 以临时项目验证归档、拒绝与晋升）；`reviewed.yaml` 多出草图覆盖的模块的确认记录（待联调：`vite/reviewedHook.ts` 是桩，由确认层的 `appendReviewed` 替换）。
+6. 归档：对当前版本核验一致后「归档」，设计状态变为 `implemented`、卡片不再列出（`tests/access/writeModel.test.ts` 以临时项目验证归档、拒绝与晋升）；`reviewed.yaml` 多出草图覆盖的模块的确认记录（`source: sketch:<设计 ID>`，指纹与摘要按确认层的口径，这些模块随即为「已确认」；`tests/access/writeModel.test.ts`、`tests/acceptance/governance.test.ts`）。
 
 ## 7. 后续方向
 

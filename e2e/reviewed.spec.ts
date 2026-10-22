@@ -1,7 +1,8 @@
 /**
- * 人确认层的核心路径（§6.11，RV-1–RV-4）：确认一个模块 → reviewed.yaml 多一条 → 改描述的职责一行（模拟 AI 重新生成）→
+ * 人确认层的核心路径（§6.11，RV-1–RV-4）：确认一个模块 → reviewed.yaml 多一条 → 改描述的职责一行（模拟内容被改动）→
  * 树与面板出现「需复核」且差异只有那一行、返工清单多一条 → 复核并确认后消失、记录仍是一条。
  * 直接改真实的 model/h5p-arch-desk/，结束时原样恢复（其他 spec 只读这份描述，临时改一行职责不影响它们的断言）。
+ * 第二级模块的职责写在骨架 intent/skeleton.yaml（X1）；页面写入会更新指纹 governance/owned.json（X6），一并恢复。
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -9,7 +10,8 @@ import { expect, test } from '@playwright/test'
 import { openDesk } from './helpers'
 
 const MODEL = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
-const LAYERS = path.join(MODEL, 'modules/layers.yaml')
+const LAYERS = path.join(MODEL, 'intent/skeleton.yaml')
+const OWNED = path.join(MODEL, 'governance/owned.json')
 const REVIEWED = path.join(MODEL, 'reviewed.yaml')
 /** 第二级、非核心的模块：不在自举样本（核心模块）里，确认后文件应多一条 */
 const MODULE = 'access.writer'
@@ -19,6 +21,7 @@ const NEW_LINE = '只收同源的 JSON POST（E2E 临时改的一行）。'
 test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复核并确认（Z1、Z3）', async ({ page }) => {
   const layers0 = fs.readFileSync(LAYERS, 'utf8')
   const reviewed0 = fs.existsSync(REVIEWED) ? fs.readFileSync(REVIEWED, 'utf8') : null
+  const owned0 = fs.existsSync(OWNED) ? fs.readFileSync(OWNED, 'utf8') : null
   expect(layers0).toContain(OLD_LINE)
   const count = () => (fs.readFileSync(REVIEWED, 'utf8').match(/^ {2}- module: /gm) ?? []).length
   const entry = () => /module: access\.writer\n\s+at: [^\n]+\n\s+hash: (\S+)/.exec(fs.readFileSync(REVIEWED, 'utf8'))?.[1]
@@ -35,7 +38,8 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
 
     // 确认：文件多一条，标题旁「已确认 <日期>」
     await panel.getByLabel('确认说明').fill('E2E 确认')
-    await panel.getByRole('button', { name: '确认', exact: true }).click()
+    // 面板里可能还有名为「确认」的模块链接（模型层「确认」子模块），按钮在确认表单里
+    await panel.locator('form').getByRole('button', { name: '确认', exact: true }).click()
     await expect.poll(count).toBe(before + 1)
     await expect(badge).toHaveText(/^已确认 \d{4}-\d{2}-\d{2}$/)
     const hash1 = entry()
@@ -43,7 +47,7 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
     expect(fs.readFileSync(REVIEWED, 'utf8')).toContain('note: E2E 确认')
     await expect(treeRow.locator('.tag.reviewed')).toHaveText('✓')
 
-    // AI 重新生成：职责改一行 → 需复核，差异只有那一行
+    // 职责改一行 → 需复核，差异只有那一行
     fs.writeFileSync(LAYERS, layers0.replace(OLD_LINE, NEW_LINE))
     await expect(badge).toHaveText('需复核')
     await expect(treeRow.locator('.tag.stale')).toHaveText('需复核')
@@ -71,5 +75,7 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
     fs.writeFileSync(LAYERS, layers0)
     if (reviewed0 === null) fs.rmSync(REVIEWED, { force: true })
     else fs.writeFileSync(REVIEWED, reviewed0)
+    if (owned0 === null) fs.rmSync(OWNED, { force: true })
+    else fs.writeFileSync(OWNED, owned0)
   }
 })

@@ -55,7 +55,7 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计或提交)──▶ Mod
 | `POST write/<项目>/ignore` `{ pattern }` | `appendIgnore` | `source-ignore.yaml` 的 `sourceIgnore` 追加一项（没有文件时新建） |
 | `POST write/<项目>/reviewed` `{ entries: [{ module, at, hash, summary, source, note? }] }`（也接受单条或数组） | `appendReviewed(modelRoot, project, entries)` | `reviewed.yaml` 的 `reviewed`：逐条按 `module` 更新已有记录或追加（没有文件时新建）；校验模块存在、`source` 为 `manual` 或 `sketch:<设计 ID>`；草图归档批量调用同一函数（Z1、Z6） |
 | `POST write/<项目>/accept` `{ design, deviation, reason }` | `appendAccepted` | 该设计 `design.yaml` 的 `accepted` 追加一条认可的偏差（键、理由、日期；同一键已有时拒绝，X4） |
-| `POST write/<项目>/archive` `{ design }` | `archiveDesign` | 归档 / 晋升（X3）：先对当前版本跑 `sketchCheck`，不一致即拒绝；`until-implemented` → `design.yaml` 的 `status` 改为 `implemented`，并经确认层的写入端点（接入点 `vite/reviewedHook.ts`：`reviewEntries` + `appendReviewed`，待联调）写入草图覆盖的模块的确认记录；`supersedes` → 草图整份替换 `intent/<ID>.yaml`（ID 改为被替换者、`lifetime: persistent`），状态同样改为 `implemented` |
+| `POST write/<项目>/archive` `{ design }` | `archiveDesign` | 归档 / 晋升（X3）：先对当前版本跑 `sketchCheck`，不一致即拒绝；`until-implemented` → `design.yaml` 的 `status` 改为 `implemented`，并经确认层写入草图覆盖的模块的确认记录（`reviewEntries` 算指纹与摘要、`appendReviewed` 逐条更新或追加，来源 `sketch:<设计 ID>`；先写记录、后改状态，记录校验不过整次归档不生效）；`supersedes` → 草图整份替换 `intent/<ID>.yaml`（ID 改为被替换者、`lifetime: persistent`），状态同样改为 `implemented` |
 
 - 只收同源 JSON POST；用 `yaml` 的文档模型（`parseDocument`）修改并写回，保留注释与原有格式；解析失败、校验不过时返回 400 与原因，不写。
 - 每次写人拥有的文件后更新 `governance/owned.json` 里该文件的指纹（X6，`governanceStore.ts` 的 `touchOwned`）。

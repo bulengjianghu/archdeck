@@ -1,11 +1,13 @@
 /**
- * 描述写入（B1–B5，ADR-0019）：只追加人拥有的文件，保留注释与其他内容；校验不过的拒绝且不写。
+ * 描述写入（B1–B6，ADR-0019、ADR-0023）：只追加人拥有的文件，保留注释与其他内容；校验不过的拒绝且不写；归档经确认层写确认记录（X3、Z6）。
  */
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { loadModel, reviewHash, reviewStates } from '../../src/model'
+import { readModelDir } from '../../vite/readModelDir'
 import { WriteError, appendAccepted, appendAllow, appendFeedback, appendIgnore, appendReviewed, archiveDesign } from '../../vite/writeModel'
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-write-'))
@@ -173,7 +175,7 @@ describe('X4 认可偏差 · X3 归档 / 晋升', () => {
     expect(() => appendAccepted(modelRoot, 'p', 'nope', 'field:a', 'x', root)).toThrow('设计不存在')
   })
 
-  it('归档：没有草图、已归档、核验不一致都拒绝；一致后状态改为 implemented，确认记录经 appendReviewed（桩：pending），指纹随之更新', () => {
+  it('归档：没有草图、已归档、核验不一致都拒绝；一致后状态改为 implemented，为草图覆盖的模块写确认记录（来源 sketch:<设计>，Z6），指纹随之更新', () => {
     expect(() => archiveDesign(modelRoot, 'p', 'd', root)).toThrow('没有草图')
     write('designs/d/sketch.yaml', SKETCH)
     // a.x 不存在：error，拒绝
@@ -185,9 +187,25 @@ describe('X4 认可偏差 · X3 归档 / 晋升', () => {
     // 关系没有对应：warning，认可后一致
     expect(() => archiveDesign(modelRoot, 'p', 'd', root)).toThrow('1 个未认可的提醒')
     appendAccepted(modelRoot, 'p', 'd', 'missing-relation:rel.d.x-b', '经注入', root)
+    write('reviewed.yaml', '# 架构师的确认\nreviewed:\n  - { module: b, at: "2026-10-01", hash: keep, source: manual }\n')
     const r = archiveDesign(modelRoot, 'p', 'd', root)
-    expect(r).toMatchObject({ file: 'model/p/designs/d/design.yaml', outcome: 'archive', reviewed: { count: 1, pending: true } })
+    expect(r).toMatchObject({ file: 'model/p/designs/d/design.yaml', outcome: 'archive', reviewed: { count: 1, file: 'model/p/reviewed.yaml' } })
     expect(parse(read('designs/d/design.yaml')).design.status).toBe('implemented')
+    // 联调：确认层按它的口径算指纹与摘要；草图没画的 b 原样保留
+    const { index } = loadModel(readModelDir(P, root).files)
+    const list = parse(read('reviewed.yaml')).reviewed
+    expect(read('reviewed.yaml')).toContain('# 架构师的确认')
+    expect(list).toHaveLength(2)
+    expect(list[0]).toMatchObject({ module: 'b', hash: 'keep', source: 'manual' })
+    expect(list[1]).toEqual({
+      module: 'a.x',
+      at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      hash: reviewHash(index, 'a.x'),
+      source: 'sketch:d',
+      summary: { responsibility: 'z' },
+    })
+    expect(reviewStates(index).get('a.x')).toMatchObject({ status: 'reviewed' })
+    expect(JSON.parse(read('governance/owned.json')).files['reviewed.yaml']).toBeTruthy()
     expect(() => archiveDesign(modelRoot, 'p', 'd', root)).toThrow('已归档')
     expect(fs.existsSync(path.join(modelRoot, 'p', 'governance', 'owned.json'))).toBe(true)
   })

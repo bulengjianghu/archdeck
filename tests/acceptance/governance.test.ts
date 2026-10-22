@@ -7,6 +7,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
+import { parse } from 'yaml'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { nextTick } from 'vue'
@@ -188,7 +189,7 @@ describe('§6.13 意图验收（X4、X8）：命令行 / MCP 的 sketch-check �
   }
   afterAll(() => fs.rmSync(design, { recursive: true, force: true }))
 
-  it('活动草图对当前版本：骨架一致；设计的草图不一致时归档被拒绝，一致后归档改状态、确认记录经桩（pending）', () => {
+  it('活动草图对当前版本：骨架一致；设计的草图不一致时归档被拒绝，一致后归档改状态、为草图覆盖的模块写确认记录（source: sketch:gate）', () => {
     const s = svc()
     expect(s.sketchCheck().checks.map(c => [c.sketch, c.consistent])).toEqual([['skeleton', true]])
     write('design.yaml', 'design:\n  name: 门禁\n  status: accepted\n  revisions: []\n')
@@ -204,7 +205,17 @@ describe('§6.13 意图验收（X4、X8）：命令行 / MCP 的 sketch-check �
     expect(() => s.sketchCheck(undefined, 'nope')).toThrow('没有草图')
     write('sketch.yaml', 'sketch:\n  id: gate\n  modules:\n    - { id: model.intent, parent: model, name: 意图 }\n')
     const r = s.sketchArchive(undefined, 'gate')
-    expect(r).toMatchObject({ project: 'h5p-arch-desk', outcome: 'archive', reviewed: { count: 1, pending: true } })
+    expect(r).toMatchObject({
+      project: 'h5p-arch-desk',
+      outcome: 'archive',
+      reviewed: { count: 1, file: expect.stringMatching(/h5p-arch-desk\/reviewed\.yaml$/) },
+    })
     expect(fs.readFileSync(path.join(design, 'design.yaml'), 'utf8')).toContain('status: implemented')
+    const reviewed = parse(fs.readFileSync(path.join(tmp, 'h5p-arch-desk', 'reviewed.yaml'), 'utf8')).reviewed as {
+      module: string
+      source: string
+      hash: string
+    }[]
+    expect(reviewed.filter(e => e.source === 'sketch:gate')).toEqual([expect.objectContaining({ module: 'model.intent', hash: expect.any(String) })])
   })
 })

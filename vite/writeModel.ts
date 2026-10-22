@@ -19,6 +19,7 @@ import {
   isReviewSource,
   loadModel,
   parseDesignSketches,
+  reviewEntries,
   sketchModules,
   type ArchiveVerdict,
   type ReviewedInput,
@@ -26,7 +27,6 @@ import {
 } from '../src/model'
 import { DESIGNS_DIR, SKETCH_FILE, designSketch, isProjectId, readDesignInfo, readModelDir } from './readModelDir'
 import { touchOwned } from './governanceStore'
-import { appendSketchReviewed } from './reviewedHook'
 
 export class WriteError extends Error {}
 
@@ -140,15 +140,16 @@ export function appendAccepted(modelRoot: string, project: string, design: strin
 
 export interface ArchiveResult extends WriteResult {
   outcome: ArchiveVerdict['outcome']
-  /** 归档：写入的确认记录条数；桩时 pending */
-  reviewed?: { count: number; file: string; pending?: true }
+  /** 归档：写入的确认记录条数（更新 + 追加）与文件；草图没有覆盖现有模块时为 0、不写文件 */
+  reviewed?: { count: number; file: string }
   /** 晋升：被替换的持久草图文件 */
   promoted?: string
 }
 
 /**
  * X3：归档 / 晋升。先对当前版本核验（含认可的偏差），不一致即拒绝；
- * until-implemented → design.yaml 的 status 改为 implemented，并经确认层的写入端点（vite/reviewedHook.ts，待联调）写入草图覆盖的模块的确认记录；
+ * until-implemented → design.yaml 的 status 改为 implemented，并经确认层写入草图覆盖的模块的确认记录（reviewEntries 按确认层的口径算指纹与摘要，appendReviewed 逐条更新或追加，来源 sketch:<设计 ID>，Z6）；
+ * 确认记录先写、设计状态后改：记录校验不过时整次归档不生效。
  * supersedes → 草图整份替换 intent/<ID>.yaml（id 改为被替换者、lifetime persistent、去掉 supersedes），状态同样改为 implemented。
  */
 export function archiveDesign(modelRoot: string, project: string, design: string, root: string): ArchiveResult {
@@ -184,8 +185,11 @@ export function archiveDesign(modelRoot: string, project: string, design: string
     fs.mkdirSync(path.dirname(dest), { recursive: true })
     promoted = save(dest, sdoc, root, modelRoot, project).file
   } else {
-    const r = appendSketchReviewed(modelRoot, project, root, { index, modules: sketchModules(entity, index), design, at })
-    reviewed = { count: r.count, file: r.file, ...(r.pending ? { pending: true } : {}) }
+    const modules = sketchModules(entity, index)
+    if (modules.length) {
+      const r = appendReviewed(modelRoot, project, reviewEntries(index, modules, { source: `sketch:${design}`, at }), root)
+      reviewed = { count: r.added.length + r.updated.length, file: r.file }
+    } else reviewed = { count: 0, file: path.relative(root, path.join(dir, 'reviewed.yaml')).split(path.sep).join('/') }
   }
   doc.setIn(['design', 'status'], 'implemented')
   const out = save(file, doc, root, modelRoot, project)

@@ -92,7 +92,7 @@ flowchart TB
 | ModelSource 插件（核心） | 开发服务器端点（描述与源码）与按项目的变更推送；本工具只有开发服务器这一种运行形态，没有构建态输出（ADR-0007 修订） | 已实现 | 加载与版本 · 源码 |
 | 描述读取（核心） | 发现项目与设计版本，读取描述文件（YAML / JSON，含 `intent/`），发现设计的 `sketch.yaml` 并作为版本提供（`system.yaml` + 持久草图 + 草图，附当前版本为对比基线与「交给 AI」的指令，DV-10），为设计各轮附上草图、为当前版本附上已定稿设计的草图（X4），生成项目摘要（含各设计的偏差计数）；开发服务器为摘要附上健康度（`readHealth`：源码清单、代码事实与基线，Q10） | 已实现 | 加载与版本 |
 | git 读取 | 列出改动过项目描述的提交、读描述在某个提交时的快照并附对比基线（`git log` / `ls-tree` / `show`，参数不经 shell，E5、E6） | 已实现 | 加载与版本 |
-| 描述写入 | 只追加人拥有的内容：评审意见与认可偏差（`design.yaml`）、例外（`rules.yaml`）、忽略项（`source-ignore.yaml`）、确认记录（`reviewed.yaml`，同一模块更新那一条，支持批量，Z1、Z6），用 YAML 文档模型保留注释；归档 / 晋升（改设计状态、晋升时整份替换持久草图、归档时经确认层的 `appendReviewed` 写确认记录，X3）；写后更新指纹（X6）；端点由 ModelSource 插件挂载，只收同源 JSON POST（B1–B6） | 已实现（写确认记录：待联调） | 加载与版本 |
+| 描述写入 | 只追加人拥有的内容：评审意见与认可偏差（`design.yaml`）、例外（`rules.yaml`）、忽略项（`source-ignore.yaml`）、确认记录（`reviewed.yaml`，同一模块更新那一条，支持批量，Z1、Z6），用 YAML 文档模型保留注释；归档 / 晋升（改设计状态、晋升时整份替换持久草图、归档时经确认层的 `appendReviewed` 写确认记录，X3）；写后更新指纹（X6）；端点由 ModelSource 插件挂载，只收同源 JSON POST（B1–B6） | 已实现 | 加载与版本 |
 | 源码读取 | 解析源码根目录、列出文件清单与包入口、读取单个文件、用 TypeScript 解析导出，端点由 ModelSource 插件挂载（G1、G2、G11、G17） | 已实现 | 源码 |
 | 命令行校验 | `npm run lint:model`，含设计版本的每一轮；当前版本附带归属警告（G9）、治理门禁（U8）、指纹比对（X6）与活动草图的核验（X4），读不到源码为错误（G1） | 已实现 | 加载与版本 · 架构治理 |
 | 依赖提取 | 用 TypeScript 语法解析提取文件依赖、读 tsconfig paths 并经源码归属的说明符解析（K2）、穿透再导出；按修改时间缓存；端点由 ModelSource 插件挂载（K1–K3） | 已实现 | 架构治理 |
@@ -131,7 +131,7 @@ flowchart TB
 | 演化事实 → 源码归属、架构治理、Projector | `moduleLines`、`within`、`mapEndpoint` | 归属与行数（J2、J3）、有无依赖（J4）与本层投影（J5）复用同一套规则 |
 | 返工清单 → 演化事实 | `isolatedCouplings` | 无依赖无关系的耦合对（J6） |
 | DeskState、命令行校验、agent 接口 → 意图 | `sketchCheck`、`activeSketches`、`archiveVerdict`、`compareOwned` | 页面、`lint:model` 与 `sketch-check` 同一套核验（X4）；归档前的判定与命令行同一函数（X3） |
-| 描述写入 → 意图、确认层写入 | `archiveVerdict`、`sketchModules`、`appendSketchReviewed`（→ 确认层的 `reviewEntries` + `appendReviewed`） | 归档时先核验当前版本，一致才写；确认记录经确认层的写入端点（X3，待联调） |
+| 描述写入 → 意图、确认 | `archiveVerdict`、`sketchModules`、`reviewEntries`（写入用同一文件里确认层的 `appendReviewed`） | 归档时先核验当前版本，一致才写；确认记录的指纹与摘要按确认层的口径，来源 `sketch:<设计 ID>`（X3、Z6） |
 | 返工清单 → 加载流水线、源码归属、架构治理、场景投影、意图 | 校验问题、`SourceOwnership`、`GovernanceReport`、`bindRelation`、`SketchCheck` | 只汇总已有结果；未建模的步骤与回放同一套绑定（S13、P11）；草图偏差一条一个根因（X4） |
 | 命令行校验、agent 接口 → 治理存储 | `readOwned`、`ownedHashes` | 指纹比对的输入（X6） |
 | DeskState → 架构治理 | `governanceReport`、`levelFacts` | 派生；事实经源码同步按需取（`source/<项目>/facts.json`） |
@@ -170,7 +170,7 @@ packages/h5p-arch-desk/
   schema/arch-file.schema.json  描述文件格式的真源
   model/<项目>/               各项目的架构描述（ADR-0001）；intent/ 下为持久草图（骨架 skeleton.yaml，ADR-0023）；designs/ 下为设计版本（ADR-0002），每个设计可有 sketch.yaml
   vite/                       接入层：archModelPlugin.ts（端点与推送）、readModelDir.ts（读取与摘要，含草图版本）、readGit.ts（描述的 git 历史）、readHealth.ts（健康度）、writeModel.ts（人拥有的文件的追加写入与归档）、
-                              reviewedHook.ts（归档写确认记录的接入点：由确认层的 appendReviewed 实现，待联调）、readSource.ts（源码根目录、文件清单、文件、导出）、readDeps.ts（依赖提取）、
+                              readSource.ts（源码根目录、文件清单、文件、导出）、readDeps.ts（依赖提取）、
                               governanceStore.ts（基线、拦截记录与指纹）、readHistory.ts（源码历史读取）
   scripts/lint-model.ts       命令行校验
   scripts/agent/service.ts    agent 接口的查询核心；scripts/arch.ts（命令行）、scripts/arch-mcp.ts（MCP 服务器）
