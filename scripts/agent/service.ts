@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto'
 import {
   assignFiles,
   checkDependency,
+  compareOwned,
   describeModule,
   governanceReport,
   loadModel,
@@ -35,7 +36,7 @@ import {
 import { listProjectIds, readProject, resolveModelRoot } from '../../vite/readModelDir'
 import { readSourceTree } from '../../vite/readSource'
 import { readCodeDeps, resolveImport } from '../../vite/readDeps'
-import { appendLedger, BASELINE_FILE, governanceDir, readBaseline, readLedger, sourceCommit, writeBaseline } from '../../vite/governanceStore'
+import { appendLedger, BASELINE_FILE, OWNED_FILE, governanceDir, ownedHashes, readBaseline, readLedger, readOwned, registerOwned, sourceCommit, writeBaseline } from '../../vite/governanceStore'
 
 export interface ServiceOptions {
   /** 本包根目录 */
@@ -74,6 +75,7 @@ function stampOf(model: readonly { path: string; text: string }[], tree: LocalSo
   for (const f of model) h.update(`${f.path}\0${f.text}\0`)
   for (const f of tree.files) h.update(`${f}\0${stat(path.join(tree.root, f))}\0`)
   h.update(`baseline\0${stat(path.join(gov, BASELINE_FILE))}`)
+  h.update(`owned\0${stat(path.join(gov, OWNED_FILE))}`)
   return h.digest('hex')
 }
 
@@ -105,7 +107,9 @@ export function createService(opts: ServiceOptions) {
     const stamp = stampOf(payload.files, tree, gov)
     const hit = cache.get(project)
     if (hit && !fresh && hit.stamp === stamp) return hit
-    const { index, issues } = loadModel(payload.files)
+    const { index, issues: loadIssues } = loadModel(payload.files)
+    // X6：人拥有文件的指纹比对，与 lint:model 同一函数
+    const issues = [...loadIssues, ...compareOwned(readOwned(gov), ownedHashes(path.join(modelRoot, project)))]
     const own = assignFiles(index, tree.files, index.model.sourceIgnore)
     const deps = readCodeDeps(tree.root, tree.files, tree.packages)
     const report = governanceReport(index, own, tree, deps, readBaseline(gov))
@@ -280,6 +284,14 @@ export function createService(opts: ServiceOptions) {
     report(p?: string) {
       const project = projectId(p)
       return { project, ...summarizeLedger(readLedger(governanceDir(modelRoot, project))) }
+    },
+
+    /** X6：登记人拥有文件的指纹，只给命令行、由人执行 */
+    own(p?: string) {
+      const project = projectId(p)
+      const r = registerOwned(modelRoot, project)
+      cache.delete(project)
+      return { file: path.relative(opts.root, r.file), files: r.files }
     },
 
     /** U7：只给命令行，由人执行 */

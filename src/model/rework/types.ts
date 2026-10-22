@@ -6,8 +6,8 @@ import type { IssueSeverity } from '../types'
 import type { ViolationStatus } from '../governance/types'
 
 /** 返工项的类别，按呈现顺序 */
-export type ReworkCategory = 'description' | 'violation' | 'cycle' | 'ownership' | 'unconfirmed' | 'undescribed' | 'unmodeled'
-export const REWORK_CATEGORIES: readonly ReworkCategory[] = ['description', 'violation', 'cycle', 'ownership', 'unconfirmed', 'undescribed', 'unmodeled']
+export type ReworkCategory = 'description' | 'violation' | 'cycle' | 'ownership' | 'unconfirmed' | 'undescribed' | 'unmodeled' | 'sketch' | 'owned'
+export const REWORK_CATEGORIES: readonly ReworkCategory[] = ['description', 'violation', 'cycle', 'ownership', 'unconfirmed', 'undescribed', 'unmodeled', 'sketch', 'owned']
 
 /** 严重度：error 卡门禁或剔除了实体；warning 描述与代码不一致；info 只提示（未描述依赖、已豁免） */
 export type ReworkSeverity = IssueSeverity | 'info'
@@ -26,6 +26,9 @@ export type ReworkActionKind =
   | 'fix-code' // 改代码
   | 'add-step-relation' // 补步骤的 relation
   | 'rebaseline' // 评审后重新生成基线
+  | 'follow-sketch' // 按草图改描述（X4）
+  | 'accept-deviation' // 架构师认可偏差或改草图（X4）
+  | 'register-owned' // 人确认后登记指纹（X6）
 
 export interface ReworkAction {
   kind: ReworkActionKind
@@ -94,6 +97,8 @@ export const REWORK_CATEGORY_LABELS: Record<ReworkCategory, string> = {
   unconfirmed: '未证实的关系',
   undescribed: '未描述依赖',
   unmodeled: '结构中未建模的步骤',
+  sketch: '草图偏差',
+  owned: '指纹不符',
 }
 
 export const REWORK_SEVERITY_LABELS: Record<ReworkSeverity, string> = { error: '错误', warning: '提醒', info: '提示' }

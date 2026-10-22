@@ -12,7 +12,7 @@ export const isSketchFile = (path: string): boolean => /(^|\/)intent\/[^/]+\.ya?
  * 路径相对项目描述目录（含 designs/<设计>/…）。
  */
 export const isOwnedFile = (path: string): boolean =>
-  isSketchFile(path) || /^(rules|source-ignore|reviewed)\.ya?ml$/.test(path) || /^designs\/[^/]+\/design\.ya?ml$/.test(path)
+  /^intent\/[^/]+\.ya?ml$/.test(path) || /^designs\/[^/]+\/(sketch|design)\.ya?ml$/.test(path) || /^(rules|source-ignore|reviewed)\.ya?ml$/.test(path)
 
 /** 核验的偏差种类（X4） */
 export type SketchDeviationCode =

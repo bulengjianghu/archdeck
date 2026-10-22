@@ -12,6 +12,7 @@
  *   issues [--category <类别>]    返工清单：按根因聚合的问题、文件行号、规则编号与建议动作（Q7–Q9），默认 Markdown
  *   report                        拦截报告（Q4）
  *   baseline                      生成基线 governance/baseline.json（U7，由人执行并提交）
+ *   own                           登记人拥有文件的指纹 governance/owned.json（X6，人改完草图 / 规则 / 忽略清单后执行）
  *
  * check 与 rescan 写拦截记录。出错时退出码为 2；check 为 denied 时退出码为 1。
  */
@@ -87,6 +88,12 @@ function run(): number {
     }
     case 'report':
       return out(svc.report(project))
+    case 'own': {
+      const r = svc.own(project)
+      console.log(`已写入 ${r.file}：${r.files.length} 个人拥有的文件（${r.files.join('、')}）`)
+      console.log('此后 lint:model 对这些文件的改动报错 owned.changed；人改完再运行一次本命令。')
+      return 0
+    }
     case 'baseline': {
       const b = svc.baseline(project)
       console.log(
@@ -96,7 +103,7 @@ function run(): number {
       return 0
     }
     default:
-      console.error('用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|report|baseline> [参数] [--project <项目>] [--json]')
+      console.error('用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|report|baseline|own> [参数] [--project <项目>] [--json]')
       return 2
   }
 }

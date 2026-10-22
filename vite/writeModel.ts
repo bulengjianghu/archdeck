@@ -9,6 +9,7 @@ import path from 'node:path'
 import { isMap, isSeq, parseDocument, type Document } from 'yaml'
 import { RULE_KINDS, loadModel, type RuleKind } from '../src/model'
 import { DESIGNS_DIR, isProjectId, readModelDir } from './readModelDir'
+import { touchOwned } from './governanceStore'
 
 export class WriteError extends Error {}
 
@@ -23,8 +24,10 @@ function openDoc(file: string, empty: string): Document {
   return doc
 }
 
-function save(file: string, doc: Document, root: string): WriteResult {
+/** 写回并更新指纹（X6）：file 为绝对路径，modelRoot / project 给出它相对项目描述目录的位置 */
+function save(file: string, doc: Document, root: string, modelRoot: string, project: string): WriteResult {
   fs.writeFileSync(file, doc.toString({ lineWidth: 0 }))
+  touchOwned(modelRoot, project, path.relative(path.join(modelRoot, project), file).split(path.sep).join('/'))
   return { file: path.relative(root, file).split(path.sep).join('/') }
 }
 
@@ -48,7 +51,7 @@ export function appendFeedback(modelRoot: string, project: string, design: strin
   const before = rev.get('feedback')
   const entry = `（${today()} 页面记录）${body}`
   rev.set('feedback', typeof before === 'string' && before.trim() ? `${before.trimEnd()}\n\n${entry}\n` : `${entry}\n`)
-  return save(file, doc, root)
+  return save(file, doc, root, modelRoot, project)
 }
 
 export interface AllowInput {
@@ -77,7 +80,7 @@ export function appendAllow(modelRoot: string, project: string, input: AllowInpu
   node.flow = true
   if (isSeq(allow)) allow.items.push(node)
   else doc.setIn(['rules', 'allow'], doc.createNode([node]))
-  return save(file, doc, root)
+  return save(file, doc, root, modelRoot, project)
 }
 
 /** B4：在 source-ignore.yaml 的 sourceIgnore 追加一个 glob；没有文件时新建；已存在的拒绝 */
@@ -94,5 +97,5 @@ export function appendIgnore(modelRoot: string, project: string, pattern: string
     list.flow = false
     list.items.push(doc.createNode(p))
   } else doc.set('sourceIgnore', doc.createNode([p]))
-  return save(file, doc, root)
+  return save(file, doc, root, modelRoot, project)
 }

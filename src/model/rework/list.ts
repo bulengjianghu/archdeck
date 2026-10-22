@@ -60,10 +60,16 @@ const ISSUE_RULES: Record<string, string[]> = {
   'duplicate-rules': ['U1'],
   'unknown-rule-module': ['U1'],
   'allow-without-reason': ['U1'],
+  'sketch-redefined': ['X1'],
+  'sketch-misplaced': ['X1'],
+  'owned.changed': ['X6'],
+  'owned.unregistered': ['X6'],
+  'owned.none': ['X6'],
 }
 
 /** Q8：描述问题的建议动作 */
 function descriptionFix(i: Issue): string {
+  if (i.code === 'sketch-redefined') return '草图里的实体由架构师定：去掉这里对已写字段的重定义，只补草图没写的字段或往下挂子模块；要改草图本身请交给架构师（X1、X5）'
   if (i.code === 'relation-type-renamed') return '改为新名：event → notifies 并对调 from / to，dataflow → streams；再核对说明里的方向字样'
   if (i.code === 'implements-no-interface') return '确实实现了契约时在目标模块声明接口（interfaces 的 owner 或 provides）；只是使用对方时改为 depends'
   return i.severity === 'error' ? '改正描述：这一处的实体已被剔除，图上看不到它' : '改正描述：坏引用已被去掉'
@@ -84,20 +90,23 @@ export function reworkList(input: ReworkInput): ReworkList {
   const name = (id: string) => moduleName(index, id)
   const items: ReworkItem[] = []
 
-  // ── 描述问题（M、S、U1）：一条问题一个根因 ──
+  // ── 描述问题（M、S、U1、X1）：一条问题一个根因；指纹不符（X6）另归一类 ──
   for (const i of input.issues) {
     if (recomputed(i.code)) continue
     const at = descLoc(i)
+    const owned = i.code.startsWith('owned.')
     items.push({
-      id: `description:${i.code}:${i.file ?? ''}:${i.path ?? ''}:${i.message}`,
-      category: 'description',
+      id: `${owned ? 'owned' : 'description'}:${i.code}:${i.file ?? ''}:${i.path ?? ''}:${i.message}`,
+      category: owned ? 'owned' : 'description',
       severity: i.severity,
       rules: ISSUE_RULES[i.code] ?? ['M9'],
       code: i.code,
       title: i.message,
       ...(at ? { at } : {}),
       affected: at ? [at] : [],
-      actions: [{ kind: 'fix-description', text: descriptionFix(i), ...(i.file ? { file: i.file } : {}) }],
+      actions: owned
+        ? [{ kind: 'register-owned', text: i.code === 'owned.changed' ? '由人核对改动：不该改的恢复文件；确认改动后运行 npm run arch -- own 重新登记' : '人确认内容后运行 npm run arch -- own 登记指纹', file: 'governance/owned.json' }]
+        : [{ kind: 'fix-description', text: descriptionFix(i), ...(i.file ? { file: i.file } : {}) }],
       target: {},
     })
   }
