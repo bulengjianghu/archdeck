@@ -10,7 +10,8 @@
  * 本文件是入口，只组合各部分：共用派生 canvas/context.ts、节点 canvas/nodes.ts、边 canvas/edges.ts、对外类型 canvas/types.ts。
  */
 import { sceneContext, visibleIdsOf } from './canvas/context'
-import { factEdges, replayEdges, structureEdges } from './canvas/edges'
+import { factEdges, replayEdges, shownEdges, structureEdges } from './canvas/edges'
+import { outsideRoutes } from './layout'
 import { moduleNodes, replayNodes } from './canvas/nodes'
 import { jumpsOf } from './routing'
 import type { CanvasEdge, CanvasInput, CanvasScene } from './canvas/types'
@@ -22,6 +23,8 @@ export { JUMP_RADIUS } from './routing'
 export function canvasScene(input: CanvasInput): CanvasScene {
   if (!input.positioned) return { nodes: [], edges: [], visibleIds: null }
   const ctx = sceneContext(input, input.positioned)
+  // L11：画出来的框外边一起走线、分配轨道；边与步骤序号都用分配后的走线
+  ctx.routes = outsideRoutes(input.positioned, shownEdges(ctx))
   const nodes = input.index ? [...moduleNodes(ctx, input.index), ...replayNodes(ctx)] : []
   // 回放叠加只在运行视角、代码事实叠加只在结构视角，两者不同时出现
   const edges = [...structureEdges(ctx), ...replayEdges(ctx), ...factEdges(ctx)].filter((e): e is CanvasEdge => e !== null)

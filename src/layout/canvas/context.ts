@@ -1,6 +1,6 @@
 /** 画布场景各部分共用的派生（ADR-0013）：聚焦对象、选中的边、回放经过的边、舞台显示、选中突出与相邻节点 */
 import type { LevelFacts, ScenarioLevelView, ViewEdge, VisibleLanding } from '@/model'
-import type { PositionedView } from '../layout'
+import type { EdgeRoute, PositionedView } from '../layout'
 import { landingId, stageDisplay, type StageDisplay, type StageOverlay } from '../stage'
 import type { CanvasInput } from './types'
 
@@ -29,6 +29,8 @@ export interface SceneContext {
   visibleCoreEdges: ViewEdge[]
   /** 与聚焦对象相邻的节点 ID；无聚焦对象时为 null（不变淡） */
   near: Set<string> | null
+  /** L11：当前画出来的框外边按可见集分配轨道后的走线（普通层次；canvasScene 在算节点与边之前填入） */
+  routes: Map<string, EdgeRoute>
 }
 
 export function sceneContext(input: CanvasInput, pv: PositionedView): SceneContext {
@@ -62,6 +64,7 @@ export function sceneContext(input: CanvasInput, pv: PositionedView): SceneConte
     emphEdges: emphEdgesOf(emphMessages, sv),
     visibleCoreEdges,
     near: nearOf(pv, layered, focusId, visibleCoreEdges),
+    routes: new Map(),
   }
 }
 

@@ -22,6 +22,7 @@ export {
   isBoundaryEdge,
   compassOf,
   edgeRoute,
+  outsideRoutes,
   isOutsideEdge,
   placeOutside,
   type Compass,

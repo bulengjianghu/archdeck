@@ -3,7 +3,7 @@
  */
 import type { LevelView, ViewEdge } from '@/model'
 import { NODE_SIZE, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
-import { ARRIVE, detour, type PortAt } from './routing'
+import { ARRIVE, allocateTracks, detour, placeLabels, type PortAt } from './routing'
 
 // ── 外部参与者（A7）────────────────────────────────────────────
 
@@ -266,14 +266,43 @@ export function slotOf(edges: readonly ViewEdge[], node: string, id: string): { 
   }
 }
 
-function outsideRoute(pv: PositionedView, e: ViewEdge): EdgeRoute | undefined {
+/** 按可见集分配轨道的结果按节点布局与可见集记忆 */
+const trackMemo = new WeakMap<Map<string, Box>, Map<string, Map<string, EdgeRoute>>>()
+
+/**
+ * L11：当前可见的框外边（悬停 / 选中相邻节点、全显、违规，以及常驻的参与者的边）一起走线并分配轨道——
+ * 端口错开只在这一组里算，走廊里重合的横段、竖段按边 ID 依次错开 PARALLEL_GAP（allocateTracks），同一对节点的平行边与同走廊的不同边一样处理。
+ * 不对本层全部框外边预分配（会把走廊撑开），不影响内部布局与缓存键。分层总览的框外边在排布时已走好，这里不给。
+ */
+export function outsideRoutes(pv: PositionedView, visible: readonly ViewEdge[]): Map<string, EdgeRoute> {
+  if (pv.view.mode === 'layered') return new Map()
+  const group = visible.filter(e => isOutsideEdge(pv.view, e)).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  if (!group.length) return new Map()
+  let memo = trackMemo.get(pv.nodes)
+  if (!memo) trackMemo.set(pv.nodes, (memo = new Map()))
+  const key = group.map(e => e.id).join(',')
+  const hit = memo.get(key)
+  if (hit) return hit
+  const base = group.flatMap(e => {
+    const r = outsideRoute(pv, e, group)
+    return r ? [{ id: e.id, points: r.points }] : []
+  })
+  const tracks = allocateTracks(base, PARALLEL_GAP)
+  // 标签放在各自的轨道上、互不相碰
+  const labels = placeLabels([...tracks].map(([id, points]) => ({ id, points })))
+  const result = new Map([...tracks].map(([id, points]) => [id, { points, label: labels.get(id)! }]))
+  memo.set(key, result)
+  return result
+}
+
+function outsideRoute(pv: PositionedView, e: ViewEdge, group?: readonly ViewEdge[]): EdgeRoute | undefined {
   const a = pv.nodes.get(e.from)
   const b = pv.nodes.get(e.to)
   const na = pv.view.nodes.find(n => n.id === e.from)
   const nb = pv.view.nodes.find(n => n.id === e.to)
   if (!a || !b || !na || !nb) return undefined
   const dir = pv.direction ?? 'DOWN'
-  const outside = pv.view.edges.filter(x => isOutsideEdge(pv.view, x))
+  const outside = group ?? pv.view.edges.filter(x => isOutsideEdge(pv.view, x))
   const fs = slotOf(outside, e.from, e.id)
   const from = portFor(a, compassOf(na), 'out', dir, fs)
   // 终点短桩加长到 ARRIVE：箭头前留出直段，拐弯不贴着箭头

@@ -6,6 +6,7 @@ import { moduleName, type ModelDiff, type ModelIndex, type ModuleEntity, type Vi
 import { moreChipId, type Box } from '../layout'
 import type { Visibility } from '../stage'
 import type { SceneContext } from './context'
+import { routeMidpoint } from './edges'
 import type { CanvasNode, CanvasNodeType, NodeData } from './types'
 
 const visOf = (ctx: SceneContext, id: string): Visibility => ctx.display?.nodes.get(id) ?? 'show'
@@ -156,20 +157,25 @@ export function replayNodes(ctx: SceneContext): CanvasNode[] {
   const nodes: CanvasNode[] = []
   const current = st.current?.index
   for (const mark of st.walked.values()) {
-    if (!mark.at) continue
+    // 框外边的走线在画布场景里按可见集分配了轨道：序号跟着画出来的线
+    const allocated = ctx.routes.get(mark.edgeId)
+    const at = allocated ? routeMidpoint(allocated) : mark.at
+    if (!at) continue
     const steps = mark.steps.map(n => ({
       n,
       frameId: sv.messages[n - 1].frameIds[0],
       current: n - 1 === current,
       muted: !!emphMessages && !emphMessages.has(n - 1),
     }))
-    nodes.push(placeNode(ctx, `step:${mark.edgeId}`, { ...mark.at, w: 1, h: 1 }, 'step', { ...blank, steps }, OVER_EDGES.step))
+    nodes.push(placeNode(ctx, `step:${mark.edgeId}`, { ...at, w: 1, h: 1 }, 'step', { ...blank, steps }, OVER_EDGES.step))
   }
   const pointId = ctx.input.branchPointId
   for (const p of st.previews) {
-    if (!p.pos || !pointId) continue
+    const allocated = p.at?.kind === 'edge' ? ctx.routes.get(p.at.edgeId) : undefined
+    const pos = allocated ? routeMidpoint(allocated) : p.pos
+    if (!pos || !pointId) continue
     const preview = { pointId, option: p.option, label: p.label }
-    nodes.push(placeNode(ctx, `preview:${p.option}`, { ...p.pos, w: 1, h: 1 }, 'preview', { ...blank, preview }, OVER_EDGES.preview))
+    nodes.push(placeNode(ctx, `preview:${p.option}`, { ...pos, w: 1, h: 1 }, 'preview', { ...blank, preview }, OVER_EDGES.preview))
   }
   return nodes
 }

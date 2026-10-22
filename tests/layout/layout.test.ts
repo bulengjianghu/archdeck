@@ -10,6 +10,7 @@ import {
   edgeRoute,
   isBoundaryEdge,
   isOutsideEdge,
+  outsideRoutes,
   compassOf,
   LAYOUT_VERSION,
   contentBounds,
@@ -240,6 +241,26 @@ describe('方位表示角色、框表示边界（A7、L4）', () => {
     )!
     const viewer = pv.nodes.get('actor.viewer')!
     expect(fromViewer.points[0].y).toBe(viewer.y + viewer.h)
+  })
+
+  it('L11：可见的框外边一起走线、分配轨道——任两条边没有共线且重叠的中间段，标签在各自的线上', async () => {
+    const view = projectLevel(idx, 'infra', { showBoundaries: true })
+    const pv = await layoutView(view)
+    const visible = view.edges.filter(e => isOutsideEdge(view, e))
+    const routes = outsideRoutes(pv, visible)
+    expect(routes.size).toBe(visible.length)
+    const segs = [...routes].flatMap(([id, r]) => r.points.slice(2, -1).map((b, i) => ({ id, a: r.points[i + 1], b })))
+    for (const s1 of segs)
+      for (const s2 of segs) {
+        if (s1.id >= s2.id) continue
+        const h = (s: typeof s1) => Math.abs(s.a.y - s.b.y) < 0.5
+        if (h(s1) && h(s2) && Math.abs(s1.a.y - s2.a.y) < 0.5) {
+          const [l1, r1] = [Math.min(s1.a.x, s1.b.x), Math.max(s1.a.x, s1.b.x)]
+          const [l2, r2] = [Math.min(s2.a.x, s2.b.x), Math.max(s2.a.x, s2.b.x)]
+          expect(l1 < r2 - 1 && l2 < r1 - 1).toBe(false)
+        }
+      }
+    for (const r of routes.values()) expect(r.label).toBeDefined()
   })
 
   it('没有框外元素时没有系统框，只有父模块框', async () => {

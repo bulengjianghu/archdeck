@@ -122,3 +122,108 @@ function simplify(pts: Point[]): Point[] {
   }
   return out
 }
+
+// ── 通道分配（L11：可见的框外边各占一条轨道）──────────────────────
+
+export interface TrackLine {
+  id: string
+  points: readonly Point[]
+}
+
+interface Seg {
+  id: string
+  /** 线段序号：points[i] → points[i + 1] */
+  i: number
+  /** 横段为 y、竖段为 x */
+  at: number
+  lo: number
+  hi: number
+  /** 想让出的方向（离开起点 / 让出进终点的直段）；0 为无偏好 */
+  away: number
+}
+
+/**
+ * 把同一走廊里重合的线段分到各自的轨道：横段按 y、竖段按 x 分组（同一坐标、区间重叠），组内按边 ID 依次错开 gap。
+ * 只动中间的线段——首段（离开起点）与末段（进终点）不动，端口与进节点前的直段保持；
+ * 紧接首段的横段倾向继续远离起点，紧接末段的横段倾向远离终点（不压缩箭头前的直段），组内偏好一致时单向错开，否则居中错开。
+ * 结果确定：同样的输入（线与顺序）得到同样的轨道。
+ */
+export function allocateTracks(lines: readonly TrackLine[], gap: number): Map<string, Point[]> {
+  const out = new Map(lines.map(l => [l.id, l.points.map(p => ({ ...p }))]))
+  for (const axis of ['h', 'v'] as const) {
+    const segs: Seg[] = []
+    for (const [id, pts] of out) {
+      for (let i = 1; i < pts.length - 2; i++) {
+        const a = pts[i]
+        const b = pts[i + 1]
+        const horizontal = Math.abs(a.y - b.y) < 0.5 && Math.abs(a.x - b.x) >= 0.5
+        const vertical = Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) >= 0.5
+        if ((axis === 'h' && !horizontal) || (axis === 'v' && !vertical)) continue
+        const first = pts[1].y - pts[0].y + (pts[1].x - pts[0].x)
+        const last = pts[pts.length - 1].y - pts[pts.length - 2].y + (pts[pts.length - 1].x - pts[pts.length - 2].x)
+        const away = axis === 'h' ? (i === pts.length - 3 ? -Math.sign(last) : i === 1 ? Math.sign(first) : 0) : 0
+        segs.push(
+          axis === 'h'
+            ? { id, i, at: a.y, lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x), away }
+            : { id, i, at: a.x, lo: Math.min(a.y, b.y), hi: Math.max(a.y, b.y), away },
+        )
+      }
+    }
+    // 同一坐标、区间重叠的线段连成一组
+    const groups: Seg[][] = []
+    for (const s of [...segs].sort((p, q) => p.at - q.at || p.lo - q.lo)) {
+      const g = groups.find(x => x.some(t => Math.abs(t.at - s.at) < 0.5 && t.lo < s.hi - 1 && s.lo < t.hi - 1))
+      if (g) g.push(s)
+      else groups.push([s])
+    }
+    for (const g of groups) {
+      const members = [...g].sort((p, q) => (p.id < q.id ? -1 : p.id > q.id ? 1 : p.i - q.i))
+      if (new Set(members.map(m => m.id)).size < 2) continue
+      const pref = Math.sign(members.reduce((n, m) => n + m.away, 0))
+      members.forEach((m, k) => {
+        const d = pref ? pref * k * gap : (k - (members.length - 1) / 2) * gap
+        if (!d) return
+        const pts = out.get(m.id)!
+        for (const p of [pts[m.i], pts[m.i + 1]]) {
+          if (axis === 'h') p.y += d
+          else p.x += d
+        }
+      })
+    }
+  }
+  return out
+}
+
+/** 折线上按长度比例 t（0–1）取点 */
+export function pointAlong(points: readonly Point[], t: number): Point {
+  const lens = points.slice(1).map((p, i) => Math.hypot(p.x - points[i].x, p.y - points[i].y))
+  let rest = lens.reduce((n, l) => n + l, 0) * t
+  for (let i = 0; i < lens.length; i++) {
+    if (rest <= lens[i] && lens[i] > 0) {
+      const k = rest / lens[i]
+      return { x: points[i].x + (points[i + 1].x - points[i].x) * k, y: points[i].y + (points[i + 1].y - points[i].y) * k }
+    }
+    rest -= lens[i]
+  }
+  return points[points.length - 1] ?? { x: 0, y: 0 }
+}
+
+/** 标签的避让范围（px）：×N 标签约 24 × 18 */
+const LABEL_CLEAR = { x: 28, y: 20 }
+
+/**
+ * 标签放在各自的线上：按 ID 顺序，沿线在 0.5、0.35、0.65、0.2、0.8 处挑第一个不与已放标签相碰的位置；都碰时取中点。
+ */
+export function placeLabels(lines: readonly TrackLine[]): Map<string, Point> {
+  const placed: Point[] = []
+  const out = new Map<string, Point>()
+  for (const l of [...lines].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
+    const at =
+      [0.5, 0.35, 0.65, 0.2, 0.8]
+        .map(t => pointAlong(l.points, t))
+        .find(p => placed.every(q => Math.abs(p.x - q.x) >= LABEL_CLEAR.x || Math.abs(p.y - q.y) >= LABEL_CLEAR.y)) ?? pointAlong(l.points, 0.5)
+    placed.push(at)
+    out.set(l.id, at)
+  }
+  return out
+}

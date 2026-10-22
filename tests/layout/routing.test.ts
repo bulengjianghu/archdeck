@@ -1,6 +1,6 @@
 /** 跳线（L11）：水平段跳过竖直段；同一对节点的边、曲线、端点附近的交叉不跳；路径在跳点处插半圆小桥 */
 import { describe, expect, it } from 'vitest'
-import { JUMP_MARGIN, JUMP_RADIUS, jumpsOf } from '../../src/layout/routing'
+import { JUMP_MARGIN, JUMP_RADIUS, allocateTracks, jumpsOf, placeLabels } from '../../src/layout/routing'
 import { roundedPolyline } from '../../src/components/edges/routePath'
 
 const h = (id: string, y: number, x1: number, x2: number, pair = id) => ({
@@ -67,5 +67,56 @@ describe('roundedPolyline 的小桥', () => {
         { x: 200, y: 50 },
       ]),
     ).toBe('M0,50 L200,50')
+  })
+})
+
+describe('allocateTracks 与 placeLabels（L11：可见的框外边各占一条轨道）', () => {
+  const a = {
+    id: 'a',
+    points: [
+      { x: 0, y: 0 },
+      { x: 0, y: 50 },
+      { x: 200, y: 50 },
+      { x: 200, y: 120 },
+    ],
+  }
+  const b = {
+    id: 'b',
+    points: [
+      { x: 10, y: 0 },
+      { x: 10, y: 50 },
+      { x: 190, y: 50 },
+      { x: 190, y: 120 },
+    ],
+  }
+
+  it('同一走廊里重合的横段按 ID 错开 gap，首末段（端口与进节点前的直段）不动', () => {
+    const t = allocateTracks([b, a], 10)
+    const ya = t.get('a')![1].y
+    const yb = t.get('b')![1].y
+    expect(Math.abs(ya - yb)).toBe(10)
+    expect(t.get('a')![0]).toEqual(a.points[0])
+    expect(t.get('a')![3]).toEqual(a.points[3])
+    expect(allocateTracks([a, b], 10)).toEqual(t)
+  })
+
+  it('不重合的线不动', () => {
+    const c = {
+      id: 'c',
+      points: [
+        { x: 0, y: 0 },
+        { x: 0, y: 80 },
+        { x: 200, y: 80 },
+        { x: 200, y: 120 },
+      ],
+    }
+    expect(allocateTracks([a, c], 10).get('c')).toEqual(c.points)
+  })
+
+  it('标签沿各自的线放，互不相碰', () => {
+    const t = allocateTracks([a, b], 10)
+    const labels = placeLabels([...t].map(([id, points]) => ({ id, points })))
+    const [la, lb] = [labels.get('a')!, labels.get('b')!]
+    expect(Math.abs(la.x - lb.x) >= 28 || Math.abs(la.y - lb.y) >= 20).toBe(true)
   })
 })
