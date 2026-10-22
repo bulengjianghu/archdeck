@@ -10,7 +10,8 @@ test('打开自身的场景：面板有「证据」一节，单击文件在副�
   await expect(section.locator('.missing')).toHaveCount(0)
   await section.getByRole('button', { name: 'e2e/run-default.spec.ts' }).click()
   await expect(page.locator('.aside .tab.on')).toContainText('run-default.spec.ts')
-  await expect(page.locator('.source-view')).toContainText('打开场景导航树自动收起')
+  // 全量并行跑时首次读源码与加载语法可能超过 10s，留足余量
+  await expect(page.locator('.source-view')).toContainText('打开场景导航树自动收起', { timeout: 20_000 })
   await page.getByRole('button', { name: /^运行：/ }).click()
   await expect(page.locator('.scenario-list .item .evidence')).toHaveCount(1)
 })

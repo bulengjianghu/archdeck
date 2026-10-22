@@ -29,6 +29,9 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
     const treeRow = page.locator(`.nav-tree [data-id="${MODULE}"]`)
     await expect(badge).toHaveText('未确认')
     const before = count()
+    // 描述里可能已有别的需复核模块（如合并后指纹变了的），只断言本次多出一个
+    const tools = page.locator('.nav-tree .tools')
+    const stale0 = (await tools.count()) ? Number(/需复核 (\d+)/.exec(await tools.innerText())?.[1] ?? 0) : 0
 
     // 确认：文件多一条，标题旁「已确认 <日期>」
     await panel.getByLabel('确认说明').fill('E2E 确认')
@@ -44,7 +47,7 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
     fs.writeFileSync(LAYERS, layers0.replace(OLD_LINE, NEW_LINE))
     await expect(badge).toHaveText('需复核')
     await expect(treeRow.locator('.tag.stale')).toHaveText('需复核')
-    await expect(page.locator('.nav-tree .tools')).toContainText('需复核 1')
+    await expect(tools).toContainText(`需复核 ${stale0 + 1}`)
     const diff = panel.locator('.diff')
     await expect(diff.locator('dt')).toHaveText(['职责'])
     await expect(diff.locator('.change')).toHaveCount(2)
