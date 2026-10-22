@@ -4,7 +4,8 @@
  */
 import { defineConfig } from '@playwright/test'
 
-const PORT = 5393
+// 多个工作副本并行跑 E2E 时用 E2E_PORT 各用各的端口，避免复用到别的副本的开发服务器
+const PORT = Number(process.env.E2E_PORT ?? 5393)
 
 export default defineConfig({
   testDir: 'e2e',
