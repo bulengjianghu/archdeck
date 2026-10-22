@@ -2,9 +2,10 @@ system:
   id: h5p-arch-desk
   name: h5p-arch-desk
   description: |
-    架构可视化工具：AI 把项目代码压缩成模块级的 YAML 描述，本工具把描述按层次画成可下钻、可点选、可回放执行链路的图。
+    本地架构工作台：看见 · 对照 · 守住。AI 把项目代码压缩成模块级的 YAML 描述，本工具按层次画成可下钻、可点选、可回放执行链路的图（看见），
+    与本地源码的代码事实对照并把问题汇总成返工清单（对照），用架构规则、环与棘轮门禁、agent 写前判定管住演化（守住）。
     按依赖方向分为呈现 / 视图状态 / 接入 / 模型四层，模型层是不依赖 Vue 与布局库的纯逻辑核心（见 docs/03-architecture.md）。
   source:
     repo: h5player-demo/packages/h5p-arch-desk
-    commit: 9828fc0563c3b5f66847eda76ddc5eccd07c20a0
+    commit: 1c3260728ee1179719c2a22d01b94701643c57f6
     generatedAt: '2026-10-22'

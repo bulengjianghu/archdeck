@@ -51,7 +51,7 @@ modules:
   - id: present.panel.design
     name: 设计面板
     parent: present.panel
-    responsibility: 设计版本根层：设计目标与范围、本轮做了什么、待评审确认的问题、按实体分组的变更清单（点击跳转，删除项只列出）、各轮评审意见与轮次切换。
+    responsibility: 设计版本与提交版本的根层：设计目标与范围、定稿结论的 ADR 链接（E7）、本轮做了什么、待评审确认的问题、按实体分组的变更清单（点击跳转，删除项只列出；与提交版本共用 ChangeList）、各轮评审意见与轮次切换、「记录评审意见」（B2）；提交版本为提交说明与变更清单（E5、E6）。
     codeRefs: [src/components/panel/DesignSection.vue, src/components/panel/CommitSection.vue, src/components/panel/ChangeList.vue]
   - id: present.panel.content
     name: 内容组件
@@ -80,7 +80,7 @@ modules:
   - id: present.canvas.legend
     name: 显示面板（显示设置与图例）
     parent: present.canvas
-    responsibility: 画布右下角的「显示」面板，先「设置」后「图例」（ADR-0017）：设置只放没有图例的开关（结构视角为边界节点、只看现状；运行视角为静态关系显示方式）；图例按画布对象分组、每组可折叠——关系（类型行按运行时在前、编译期在后，颜色与粗细示意，结构视角下每行兼作类型筛选；线型、箭头、线宽与 ×N 的说明，L10）、节点、代码事实（结构视角，开关在组标题）、回放（运行视角）；一行一项，示意与画布同款。折叠时摘要列出非默认的设置；面板展开与各组折叠按视角记在本机，运行视角默认只展开「回放」。
+    responsibility: 画布右下角的「显示」面板，先「设置」后「图例」（ADR-0017）：设置只放没有图例的开关（结构视角为边界节点、只看现状；运行视角为静态关系显示方式）；图例按画布对象分组、每组可折叠——关系（类型行按运行时在前、编译期在后，颜色与粗细示意，结构视角下每行兼作类型筛选；线型、箭头、线宽与 ×N 的说明，L10）、节点、代码事实（结构视角，开关在组标题）、回放（运行视角）；一行一项，示意与画布同款。折叠时摘要列出非默认的设置（运行视角缺省折叠，摘要总是「静态关系：<方式>」）；面板展开与各组折叠按视角记在本机，运行视角默认只展开「回放」。
     codeRefs: [src/components/DisplayPanel.vue]
 
   # ── 视图状态层 ──────────────────────────────────────────
@@ -445,7 +445,7 @@ interfaces:
       GET models/<项目>.json       → ModelPayload        // 当前版本；不存在时 404
       GET models/<项目>/designs/<设计>/<轮次>.json → ModelPayload  // 设计版本某一轮，附 compare 对比基线
       ws  arch-model:changed       → { project: string }  // 仅开发态，按项目合并 150ms 内的变化
-    semantics: 开发态实时读取；构建态为同名静态文件，页面无需区分。
+    semantics: 开发服务器实时读取（本地开发工具，没有构建态输出，ADR-0020）。
   - id: if.reader.projects
     name: 项目读取
     owner: access.reader

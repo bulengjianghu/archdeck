@@ -222,6 +222,11 @@ relations:
     description: 唯一写入口：dispatch → transition → 写入新状态
   - {id: rel.p2.router-codec, from: state.desk.url-sync, to: state.transition.url, type: calls, interface: if.state.urlCodec, description: 状态 ↔ 查询参数}
   - {id: rel.p2.layoutsync-runner, from: state.desk.layout-sync, to: state.layout.runner, type: calls, mode: async, interface: if.layout.layoutView, payload: [ds.LevelView, ds.PositionedView]}
+  # 呈现层读派生数据：每次读 computed 都是一次运行时调用（S12：步骤只对应运行时关系）
+  - {id: rel.p2.seq-calls, from: present.sequence.interact, to: state.desk.projection, type: calls, payload: [ds.PositionedSequence], description: 读取定位好的时序图（computed）}
+  - {id: rel.p6.steps-calls, from: present.nav-tree.steps, to: state.desk.projection, type: calls, payload: [ds.OutlineNode], description: 读取步骤大纲与本层投影，高亮进度所在的步骤}
+  - {id: rel.p2.flow-calls, from: present.canvas.flow, to: state.desk.projection, type: calls, payload: [ds.StageOverlay], description: 读取舞台叠加：当前消息与走过的边}
+  - {id: rel.p3.perspective-opens, from: present.perspective, to: present.scenarios, type: calls, description: 单击「运行」弹出场景列表}
   - {id: rel.p2.layoutsync-read, from: state.desk.projection, to: state.desk.layout-sync, type: dataflow, payload: [ds.LevelView], description: 层次视图（Ref）交给布局同步，变化触发布局，结果回填}
   - id: rel.p2.projection-plan
     from: state.desk.projection

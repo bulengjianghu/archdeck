@@ -6,7 +6,7 @@ modules:
     kind: layer
     order: 1
     abstraction: 把状态画出来、把用户操作上交：只读 DeskState、只调它的操作，不做投影与布局计算
-    responsibility: 应用外壳与路由、项目列表、项目视图（含分屏与副栏）、导航树（模块 / 文件 / 步骤）、画布（含回放与文件高亮）、时序图、源代码预览、场景列表与回放控制、属性面板、导航与问题提示。
+    responsibility: 应用外壳与路由、项目列表、项目视图（含分屏与副栏）、导航树（模块 / 文件 / 步骤 / 问题）、画布（含回放与文件高亮）、时序图、源代码预览、场景列表与回放控制、属性面板（含写入人拥有的文件）、导航与入门页。
     includes: [Vue 组件, 路由, 交互事件, 样式]
     excludes: [层次投影规则, 布局算法, 文件读取]
     mayDependOn: [state, model]
@@ -21,7 +21,7 @@ modules:
         name: 项目列表主页
         kind: subsystem
         core: true
-        responsibility: 列出模型根目录下的全部项目（简介、分层、规模、生成来源、问题数）及各项目推进中的设计版本（已实现、已放弃的设计归档，只注明个数，DV-6），点击进入项目当前版本或设计的最新一轮。
+        responsibility: 列出模型根目录下的全部项目，卡片以健康度为主（描述错误与提醒、违规相对基线 ±N 或「无基线」、模块环个数与最大规模、未证实、未归属，H-1、Q10），简介、分层、规模、生成来源为次，及各项目推进中的设计版本（已实现、已放弃的设计归档，只注明个数，DV-6），点击进入项目当前版本或设计的最新一轮。
         codeRefs: [src/components/ProjectList.vue]
       - id: present.desk-view
         name: 项目视图
@@ -32,7 +32,7 @@ modules:
       - id: present.version
         name: 版本切换与设计信息条
         kind: subsystem
-        responsibility: 在当前版本与各设计的各轮之间切换（保留层次与选中）；设计版本下显示设计名、轮次、状态，选择对比基线（当前版本 / 上一轮），显示变更计数、标出变更开关与基线漂移提示。
+        responsibility: 在当前版本、各设计的各轮（已归档的合为一组）与改动过描述的 git 提交之间切换（保留层次与选中，E5）；设计版本下显示设计名、轮次、状态，选择对比基线（当前版本 / 上一轮），显示变更计数、标出变更开关与基线漂移提示；提交版本下显示提交说明，对比基线可选任一提交或当前版本（E6）。
         codeRefs: [src/components/VersionSwitcher.vue, src/components/DesignBar.vue, src/components/CommitBar.vue]
         docRefs: [docs/adr/0002-design-versions.md]
       - id: present.scenarios
@@ -60,27 +60,27 @@ modules:
       - id: present.nav-tree
         name: 导航树
         kind: subsystem
-        responsibility: 工作台左侧的全局目录（W-7、T1）：「模块」页签列出模块树，「文件」页签列出被描述项目的源码文件树，「步骤」页签（只在运行视角出现）列出步骤树；进入运行视角切到步骤页签，退出切回模块页签，选中文件切到文件页签。层次、选中、参与模块、当前步骤、选中模块的文件在树上同步展开与高亮；单击 / 双击 / 悬停复用画布与时序图的同一套操作，不新增会话规则。
+        responsibility: 工作台左侧的全局目录（W-7、T1）：「模块」页签列出模块树，「文件」页签列出被描述项目的源码文件树，「步骤」页签（只在运行视角出现）列出步骤树，「问题」页签列出返工清单（W-6）；进入运行视角切到步骤页签，退出切回模块页签，选中文件切到文件页签，画布的问题角标切到问题页签。层次、选中、参与模块、当前步骤、选中模块的文件在树上同步展开与高亮；单击 / 双击 / 悬停复用画布与时序图的同一套操作，不新增会话规则。
         principle: 页签、展开 / 折叠状态只属于这块界面，不进视图状态与 URL；树上显示的「谁参与了场景」「步骤怎样嵌套」「文件属于哪个模块」由模型层回答（scenarioModules、outlineScenario、assignFiles），呈现层只画。
         codeRefs: [src/components/tree/NavTree.vue, src/components/tree/types.ts]
         docRefs: [docs/adr/0006-workbench-navigation.md, docs/adr/0007-source-files.md]
       - id: present.source
         name: 源代码预览
         kind: subsystem
-        responsibility: 在副栏只读预览选中的源码文件（SR-8、G17）：路径、归属模块（可定位）、行数，按扩展名语法高亮（Shiki，与签名高亮共用）并带行号；过大、二进制、文件不存在、源码不在本地、构建态时只给提示。没有编辑、保存等 IDE 功能。
+        responsibility: 在副栏只读预览选中的源码文件（SR-8、G17）：路径、归属模块（可定位）、行数，按扩展名语法高亮（Shiki，与签名高亮共用）并带行号；过大、二进制、文件不存在、源码清单读取失败时只给提示。没有编辑、保存等 IDE 功能。
         codeRefs: [src/components/source/**]
         docRefs: [docs/adr/0007-source-files.md]
       - id: present.canvas
         name: 画布
         kind: subsystem
         core: true
-        responsibility: 把带坐标的视图画成节点和边；处理平移、缩放、单击、双击、悬停；聚焦时只显示相关的边、其余变淡；运行视角下结构图作为舞台：默认只显示参与本场景的节点与走过的边，不参与的节点与静态边按显示方式隐藏 / 淡显 / 全显，布局不变（V5、V8），「在画布上显示」的对象的静态边照常（V9）；叠加回放；选中步骤时其余走过的边变灰（D-3、R15）；右下角浮动的「显示」面板（显示设置与图例）。
+        responsibility: 把带坐标的视图画成节点和边；处理平移、缩放、单击、双击、悬停；聚焦时只显示相关的边、其余变淡；运行视角下结构图作为舞台：默认只显示参与本场景的节点与走过的边，不参与的节点与静态边按显示方式隐藏 / 淡显 / 全显，布局不变（V5、V8），「在画布上显示」的对象的静态边照常（V9）；叠加回放；选中步骤时其余走过的边变灰（D-3、R15）；右下角浮动的「显示」面板（显示设置与图例）。 分层总览中单击带内「+N」临时展开该层全部模块（O6）；容器宽度交给协调者换算成带内列数（O7）。
         codeRefs: [src/components/GraphCanvas.vue, src/components/DisplayPanel.vue, src/components/nodes/**, src/components/edges/**, src/components/stage/**]
       - id: present.panel
         name: 属性面板
         kind: subsystem
         core: true
-        responsibility: 显示**选中**（唯一的主语，ADR-0012）的对象：结构视角下为选中的对象，无选中时为当前父模块；运行视角下选中步骤时为步骤（作用、输入、输出在前），选中场景时为场景概览，选中模块 / 关系 / 边 / 参与者时先回答「在这次流程中做了什么」，结构信息折叠在下方，可在画布上显示（V9）。对象种类：系统（设计版本另含设计说明与变更清单）、模块、关系、聚合边、外部参与者、场景、步骤；设计版本中标出新增 / 修改与设计说明。
+        responsibility: 显示**选中**（唯一的主语，ADR-0012）的对象：结构视角下为选中的对象，无选中时为当前父模块；运行视角下选中步骤时为步骤（作用、输入、输出在前），选中场景时为场景概览，选中模块 / 关系 / 边 / 参与者时先回答「在这次流程中做了什么」，结构信息折叠在下方，可在画布上显示（V9）。对象种类：系统（设计版本另含设计说明与变更清单）、模块、关系、聚合边、外部参与者、场景、步骤；设计版本中标出新增 / 修改与设计说明。 信息顺序（§4.3）：模块为职责 → 对外接口 → 子模块 → 出入边 → 架构治理 → 源代码，实现原理、核心数据结构、代码与文档引用默认折叠；根层为健康度 → 分层 → 简介 → 生成来源与规模 → 治理明细。人拥有的文件的追加写入在这里发起（WriteForm：加例外、加入忽略、记录评审意见，B1–B4）。
         codeRefs: [src/components/panel/**]
       - id: present.nav
         name: 导航
@@ -116,7 +116,7 @@ modules:
         name: DeskState
         kind: subsystem
         core: true
-        responsibility: 当前项目当前版本的唯一状态持有者：层次、选中（含文件）、悬停、显示开关、加载状态，当前场景与回放进度，设计版本的对比基线与差异，被描述项目的源码清单与文件归属；对外提供唯一一组操作，并经同步适配器与路由、描述文件、布局、源码保持一致。对外核心平铺，运行视角、源码、版本、架构治理的派生分为 run / files / versions / facts 四组（ADR-0013、ADR-0015）。
+        responsibility: 当前项目当前版本的唯一状态持有者：层次、选中（含文件）、悬停、显示开关、加载状态，当前场景与回放进度，设计版本与提交版本的对比基线与差异，被描述项目的源码清单与文件归属，返工清单（W-6）与写入人拥有的文件（B1–B4），分层总览的临时展开与带内列数（O6、O7）；对外提供唯一一组操作，并经同步适配器与路由、描述文件、布局、源码保持一致。对外核心平铺，运行视角、源码、版本、架构治理的派生分为 run / files / versions / facts 四组（ADR-0013、ADR-0015）。
         codeRefs: [src/state/useDeskState.ts, src/state/inject.ts]
       - id: state.transition
         name: 视图状态转移
@@ -132,7 +132,7 @@ modules:
         name: Layout
         kind: subsystem
         core: true
-        responsibility: 给层次视图算坐标与边的走线：分层总览按层序分带规则排布，普通层次用 elkjs；给时序模型算泳道与步骤坐标；舞台叠加与舞台显示；画布场景（节点与边的数据、显隐、变淡、回放态，ADR-0013）；结果按视图内容缓存。
+        responsibility: 给层次视图算坐标与边的走线：分层总览按层序分带规则排布（带内列数按画布宽度换算，O7），普通层次用 elkjs；给时序模型算泳道与步骤坐标；舞台叠加与舞台显示；画布场景（节点与边的数据、显隐、变淡、回放态，ADR-0013）；结果按视图内容缓存。
         codeRefs: [src/layout/**]
         docRefs: [docs/02-tech-selection.md]
 
@@ -141,8 +141,8 @@ modules:
     kind: layer
     order: 3
     abstraction: 把磁盘上的 YAML 交给页面与命令行：只搬运文本与做摘要，不解释描述的含义
-    responsibility: Vite 插件提供项目列表与项目描述（开发态实时读取并推送变更，构建态固化为静态文件），开发态读取被描述项目的源码（文件清单、文件、导出）与代码事实（依赖），命令行校验，以及给 AI agent 的接口（命令行与 MCP）。
-    includes: [文件读取, 源码清单与导出解析, 依赖提取, 治理存储（基线、拦截记录）, 开发服务器端点, 变更通知, 构建产物, 命令行, agent 接口]
+    responsibility: 开发服务器（Vite 插件）提供项目列表（附健康度）、项目描述与描述的 git 历史，实时读取并推送变更；读取被描述项目的本地源码（文件清单、文件、导出）与代码事实（依赖）；只追加人拥有的文件（评审意见、例外、忽略项）；命令行校验，以及给 AI agent 的接口（命令行与 MCP）。本地开发工具，没有构建态（ADR-0020）。
+    includes: [文件读取, 源码清单与导出解析, 依赖提取, 治理存储（基线、拦截记录）, 开发服务器端点, 变更通知, git 历史读取, 人拥有的文件的追加写入, 命令行, agent 接口]
     excludes: [解析规则与文件归属（交给模型层）, 界面]
     mayDependOn: [model]
     children:
@@ -150,7 +150,7 @@ modules:
         name: ModelSource 插件
         kind: subsystem
         core: true
-        responsibility: 开发态提供 /projects.json、/models/<项目>.json、/models/<项目>/designs/<设计>/<轮次>.json 并按项目推送 arch-model:changed（含设计版本的变化）；开发态另提供 /source/<项目>.json、/source/<项目>/file.json、/source/<项目>/exports.json、/source/<项目>/facts.json（代码事实、基线与拦截记录，K8；源码清单短暂缓存）；构建态只输出描述的同名静态文件，不含源码。
+        responsibility: 提供 /projects.json（附健康度，Q10）、/models/<项目>.json、/models/<项目>/designs/<设计>/<轮次>.json、/models/<项目>/commits/<提交>.json（E5、E6），各版本附改动过描述的最近提交，并按项目推送 arch-model:changed（含设计版本的变化）；另提供 /source/<项目>.json、/source/<项目>/file.json、/source/<项目>/exports.json、/source/<项目>/facts.json（代码事实、基线与拦截记录，K8；源码清单短暂缓存）；挂载 POST /write/<项目>/feedback | allow | ignore（只收同源 JSON，B1–B5）。
         codeRefs: [vite/archModelPlugin.ts, vite/readHealth.ts, vite.config.ts]
       - id: access.reader
         name: 描述读取
@@ -166,7 +166,7 @@ modules:
       - id: access.source
         name: 源码读取
         kind: subsystem
-        responsibility: 按 system.source.repo 解析被描述项目的源码根目录（工作区根目录 + repo，环境变量可覆盖；不在本地时给出原因与尝试的路径，G1）；列出文件清单（git 仓库内按 git 的忽略规则，否则排除依赖与产物目录，G2）与各 package.json 的入口字段；读取单个文件（必须在清单中，过大或二进制只给提示，G17）；用 TypeScript 语法树解析导出的名称、类别与签名，顺着相对路径的再导出往下找（路径补全用模型层那一套，G11）。不判断文件属于哪个模块；统计 TS / JS / Vue 文件的物理行数，按修改时间与大小缓存（G19）。
+        responsibility: 按 system.source.repo 解析被描述项目的源码根目录（工作区根目录 + repo，环境变量可覆盖；源码在本地是前提，读不到是配置错误，返回原因与尝试的路径，G1）；列出文件清单（git 仓库内按 git 的忽略规则，否则排除依赖与产物目录，G2）与各 package.json 的入口字段；读取单个文件（必须在清单中，过大或二进制只给提示，G17）；用 TypeScript 语法树解析导出的名称、类别与签名，顺着相对路径的再导出往下找（路径补全用模型层那一套，G11）。不判断文件属于哪个模块；统计 TS / JS / Vue 文件的物理行数，按修改时间与大小缓存（G19）。
         codeRefs: [vite/readSource.ts]
         docRefs: [docs/architecture/source.md]
       - id: access.lint
@@ -224,7 +224,7 @@ modules:
         name: Projector 层次投影
         kind: subsystem
         core: true
-        responsibility: 给定当前父模块，算出这一层的节点、直接边、聚合边、边界节点、外部参与者；子模块都是层时算出分层总览（带、核心模块、核心跨层边）。
+        responsibility: 给定当前父模块，算出这一层的节点、直接边、聚合边、边界节点、外部参与者；子模块都是层时算出分层总览（带、核心模块、核心跨层边；临时展开的层全部子模块按核心模块露出，O6）。
         codeRefs: [src/model/project.ts]
         docRefs: [docs/01-requirements.md]
       - id: model.scenario
