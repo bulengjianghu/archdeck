@@ -1,7 +1,8 @@
 design:
   id: sketch-editor
   name: 草图的画布编辑
-  status: draft
+  status: accepted
+  adr: docs/adr/0024-sketch-editor.md
   goal: |
     任务 A 二期（ADR-0023）：让架构师在画布上编辑草图——层、模块、关系、接口、封闭与核心标记——保存为整份写回，
     编辑中即时校验并对当前版本实时核验。功能清单与边界见 plans/arch-desk-round3/08-sketch-editor-features.md（不进仓库），
@@ -85,3 +86,6 @@ design:
         4. X7f「校验 error 拒绝保存」与核验（X4）的 error 集合是什么关系：矛盾检查共用一份，但「封闭子树多出子模块」「层依赖成环」只在校验里？请在 r3 的规则清单里把两者的 error 项并排列出，避免同一问题两处口径。
 
         **定稿指示**：r3 为定稿轮——落实意见 1、2，答复疑问 4，附完整规则清单（X7a–X7i、B6 细化、DV 新规则，仍标「议」），`status: accepted`；结论记 ADR-0024「草图的画布编辑」；01–04 同步最终态标「待实现」。问题 2（缺省空草图）由协调者代为接受，另报负责人复核。
+    - id: r3
+      date: '2026-10-22'
+      # 定稿轮；本轮说明在 notes/r3.md（E8 实现前读取侧只认这里的条目，由协调者代架构师登记；E8 实现后此条目只需承载 feedback）
