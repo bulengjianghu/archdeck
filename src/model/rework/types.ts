@@ -21,6 +21,7 @@ export type ReworkActionKind =
   | 'add-relation' // 补关系
   | 'fix-relation' // 改正或删除关系
   | 'to-depends' // implements 证据像 depends：改为 depends（K5）
+  | 'add-implements' // 结构性实现：在类上写明 implements <接口>（K5）
   | 'add-exception' // 加例外（rules.yaml allow）
   | 'fix-code' // 改代码
   | 'add-step-relation' // 补步骤的 relation

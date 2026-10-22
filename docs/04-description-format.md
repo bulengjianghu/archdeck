@@ -212,8 +212,9 @@ import 是**证据**，`depends` / `implements` 是**主张**。按代码里看�
 | 代码里看到的 | 写 | 说明 |
 |---|---|---|
 | 只导入对方的数据类型 | `depends` | 只引类型不算未描述（K7），写不写都可以；有接口语义时写 |
-| 导入对方描述里声明的接口，或类 `implements` / `extends` 对方的类型 | `implements` | K5 只认这两种证据；对方的接口要在描述里声明（`interfaces[].owner` 或 `provides`） |
-| 导入对方的函数、类并调用 | `depends`（编译期），运行时另写 `calls` 等 | 写成 `implements` 会报「证据像 depends」（`fact.like-depends`） |
+| 导入对方描述里声明的接口，或类 `implements` / `extends` 对方的类型 | `implements` | K5 只认这两种证据（已证实）；对方的接口要在描述里声明（`interfaces[].owner` 或 `provides`） |
+| 结构性满足对方的契约，代码只引了对方的数据类型（TS 不要求写 implements 子句） | `implements` | 标「结构性实现（代码未显式声明）」，只提示（info），建议在类上加 implements <接口>；描述不用改 |
+| 导入对方的函数、类并调用 | `depends`（编译期），运行时另写 `calls` 等 | 写成 `implements` 会报「证据像 depends」（`fact.like-depends`，warning） |
 
 一个声明了接口的模块在面板上有「端口三角」（K11）：定义 · 实现者 · 使用者，用来检查契约是否有人实现、有人使用。
 

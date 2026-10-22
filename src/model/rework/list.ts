@@ -5,7 +5,7 @@
 import { RULE_LABELS, moduleName } from '../names'
 import { bindRelation, forEachStep, RUNTIME_RELATION_TYPES } from '../scenario'
 import { matchRef, moduleEntry, type LocalSource, type SourceOwnership } from '../source'
-import { unconfirmedCode, unconfirmedReason, unconfirmedWarns, type FileDep, type GovernanceReport, type Violation } from '../governance'
+import { contractNames, unconfirmedCode, unconfirmedReason, unconfirmedWarns, type FileDep, type GovernanceReport, type Violation } from '../governance'
 import type { Issue, ModelIndex, SourceLoc } from '../types'
 import { REWORK_CATEGORIES, REWORK_SEVERITIES, type ReworkAction, type ReworkItem, type ReworkList, type ReworkLoc, type ReworkSeverity } from './types'
 
@@ -325,11 +325,36 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
       target: {},
     })
 
-  // K6：报警的未证实关系（编译期关系——含证据像 depends 的 implements，K5——以及两端之间没有任何依赖的运行时关系）；一条关系一个根因
+  // K6：报警的未证实关系（编译期关系——含证据像 depends 的 implements，K5；结构性实现为 info——以及两端之间没有任何依赖的运行时关系）；一条关系一个根因
   for (const [id, c] of report.relations) {
     const r = index.relations.get(id)!
-    if (!unconfirmedWarns(r, c)) continue
+    if (!unconfirmedWarns(r, c) && !c.structural) continue
     const at = descLoc(r.src)
+    const evidence = () =>
+      c.deps.flatMap(k => report.moduleDeps.get(k)?.files ?? []).map(f => ({ in: 'source' as const, file: f.from, line: f.line, note: `→ ${f.to}${f.names?.length ? `（${f.names.join(', ')}）` : ''}` }))
+    // K5：结构性实现（只引了数据类型）只提示，建议在类上写明 implements
+    if (c.structural) {
+      const candidates = [...contractNames(index, r.to)]
+      items.push({
+        id: `unconfirmed:${id}`,
+        category: 'unconfirmed',
+        severity: 'info',
+        rules: ['K5'],
+        code: 'fact.structural',
+        title: `关系「${id}」（${r.type}，${name(r.from)} → ${name(r.to)}）${unconfirmedReason(r, c)}`,
+        ...(at ? { at } : {}),
+        affected: [...(at ? [at] : []), ...evidence()],
+        actions: [
+          {
+            kind: 'add-implements',
+            text: `在实现方的类上写明 implements <接口>，让代码显式声明契约；「${name(r.to)}」声明的接口：${candidates.join('、') || '（无）'}`,
+            ...(candidates.length ? { snippet: candidates.map(n => `class … implements ${n} {`).join('   # 或\n') } : {}),
+          },
+        ],
+        target: { relation: id, modules: [r.from, r.to] },
+      })
+      continue
+    }
     items.push({
       id: `unconfirmed:${id}`,
       category: 'unconfirmed',
@@ -339,12 +364,7 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
       title: `关系「${id}」（${r.type}，${name(r.from)} → ${name(r.to)}）${unconfirmedReason(r, c)}`,
       ...(at ? { at } : {}),
       // 证据像 depends：受影响的是引用了对方非接口名字的那些导入
-      affected: [
-        ...(at ? [at] : []),
-        ...(c.likeDepends
-          ? c.deps.flatMap(k => report.moduleDeps.get(k)?.files ?? []).map(f => ({ in: 'source' as const, file: f.from, line: f.line, note: `→ ${f.to}${f.names?.length ? `（${f.names.join(', ')}）` : ''}` }))
-          : []),
-      ],
+      affected: [...(at ? [at] : []), ...(c.likeDepends ? evidence() : [])],
       actions: c.likeDepends
         ? [
             {

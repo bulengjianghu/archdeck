@@ -141,17 +141,19 @@ describe('K1 implements 证据（ADR-0022）', () => {
     expect(imps.map(i => `${i.spec}:${(i.heritage ?? []).join(',')}`)).toEqual(['./x:Base,Port', './d:*', './n:*', './o:'])
   })
 
-  it('每个目标记落到它的导入名与是否被 implements / extends 引用', () => {
+  it('每个目标记落到它的导入名、是否被 implements / extends 引用、是否引用了实现（函数、类、变量；类型与枚举不算）', () => {
     const exportsOf = () => [
       { name: 'Port', kind: 'interface', from: 'src/port.ts' },
       { name: 'make', kind: 'function', from: 'src/impl.ts' },
+      { name: 'Mode', kind: 'enum', from: 'src/mode.ts' },
     ]
-    expect(importTargetKinds({ kind: 'value', names: ['Port', 'make'], types: [], heritage: ['Port'] }, 'src/index.ts', exportsOf)).toEqual([
+    expect(importTargetKinds({ kind: 'value', names: ['Port', 'make', 'Mode'], types: [], heritage: ['Port'] }, 'src/index.ts', exportsOf)).toEqual([
       { to: 'src/port.ts', kind: 'type', names: ['Port'], heritage: true },
-      { to: 'src/impl.ts', kind: 'value', names: ['make'] },
+      { to: 'src/impl.ts', kind: 'value', names: ['make'], uses: true },
+      { to: 'src/mode.ts', kind: 'value', names: ['Mode'] },
     ])
     expect(importTargetKinds({ kind: 'value', names: [], types: [], heritage: ['*'] }, 'src/base.ts', exportsOf)).toEqual([
-      { to: 'src/base.ts', kind: 'value', heritage: true },
+      { to: 'src/base.ts', kind: 'value', heritage: true, uses: true },
     ])
   })
 })

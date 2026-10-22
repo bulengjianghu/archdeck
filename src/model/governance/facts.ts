@@ -97,17 +97,19 @@ function knowledgeOf(dirs: readonly ('forward' | 'reverse')[]): Knowledge {
   return f && b ? 'both' : f ? 'forward' : 'reverse'
 }
 
-/** K6：未证实是否报警告——编译期关系一律报（证据像 depends 的 implements 报 `fact.like-depends`，其余 `fact.unconfirmed`）；运行时关系只在两端之间连类型依赖都没有（isolated）时报 */
+/** K6：未证实是否报警告——编译期关系一律报，结构性实现除外（info，只进返工清单；证据像 depends 的 implements 报 `fact.like-depends`，其余 `fact.unconfirmed`）；运行时关系只在两端之间连类型依赖都没有（isolated）时报 */
 export const unconfirmedWarns = (r: RelationEntity, c: Confirmation): boolean =>
-  c.status === 'unconfirmed' && (r.type === 'depends' || r.type === 'implements' || !!c.isolated)
+  c.status === 'unconfirmed' && !c.structural && (r.type === 'depends' || r.type === 'implements' || !!c.isolated)
 
 /** K5、K6：报警的问题代码 */
 export const unconfirmedCode = (c: Confirmation) => (c.likeDepends ? 'fact.like-depends' : 'fact.unconfirmed')
 
 /** K6：报警的未证实关系的说明，问题、返工项与面板共用 */
 export const unconfirmedReason = (r: RelationEntity, c?: Confirmation): string =>
-  c?.likeDepends
-    ? '证据像 depends：代码只引用了目标模块的非接口名字，没有引用它声明的接口，也没有类 implements / extends 它'
+  c?.structural
+    ? '结构性实现（代码未显式声明）：只引了目标模块的数据类型，没有引用它声明的接口，也没有类 implements / extends 它'
+    : c?.likeDepends
+    ? '证据像 depends：代码引用了目标模块的函数、类或变量，没有引用它声明的接口，也没有类 implements / extends 它'
     : r.type === 'depends' || r.type === 'implements'
       ? '在代码中没有对应的依赖'
       : '是运行时关系，但两端之间在代码中没有任何依赖（类型依赖、反向的端口注入都没有）'
@@ -150,7 +152,11 @@ export function confirmRelations(
     const names = r.type === 'implements' ? contractNames(index, r.to) : undefined
     const evidenced = names ? hits.filter(h => h.d.files.some(f => contractEvidence(f, names))) : hits
     if (evidenced.length) out.set(r.id, { status: 'confirmed', deps: evidenced.map(h => h.d.key), knows: knowledgeOf(evidenced.map(h => h.dir)) })
-    else if (hits.length) out.set(r.id, { status: 'unconfirmed', deps: hits.map(h => h.d.key), likeDepends: true })
+    // 没有契约证据时按导入分档：引用了实现（函数、类、变量）像 depends，只引数据类型为结构性实现
+    else if (hits.length) {
+      const uses = hits.some(h => h.d.files.some(f => f.uses))
+      out.set(r.id, { status: 'unconfirmed', deps: hits.map(h => h.d.key), ...(uses ? { likeDepends: true as const } : { structural: true as const }) })
+    }
     // K6：一对模块连着关系的两端（不论方向与种类）——反向的依赖可由端口解释；祖先与后代之间的依赖（K4 不提升，这里计入）可由注入解释
     else out.set(r.id, { status: 'unconfirmed', deps: [], ...(pairs.some(([a, b]) => directionOf(index, r, a, b)) ? {} : { isolated: true }) })
   }

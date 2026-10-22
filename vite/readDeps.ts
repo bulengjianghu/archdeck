@@ -191,7 +191,12 @@ export interface ImportTarget {
   kind: DepKind
   names?: string[]
   heritage?: true
+  /** 引用了实现：值导入的名字声明为函数、类或变量（不是类型、枚举），或不按名称穿透的值导入（K5 的 implements 证据分档） */
+  uses?: true
 }
+
+/** 数据类型的声明：interface、type 别名、枚举——只引它们不算使用实现 */
+const DATA_DECL = new Set(['interface', 'type', 'enum'])
 
 /** 声明为类型的导出（K1）：interface 与 type 别名 */
 const TYPE_DECL = new Set(['interface', 'type'])
@@ -205,7 +210,15 @@ export function importTargetKinds(
   via: string,
   exportsOf: ExportsOf,
 ): ImportTarget[] {
-  if (!imp.names.length) return [{ to: via, kind: imp.kind, ...(imp.heritage?.includes('*') ? { heritage: true as const } : {}) }]
+  if (!imp.names.length)
+    return [
+      {
+        to: via,
+        kind: imp.kind,
+        ...(imp.heritage?.includes('*') ? { heritage: true as const } : {}),
+        ...(imp.kind === 'value' ? { uses: true as const } : {}),
+      },
+    ]
   const syms = exportsOf(via)
   const out = new Map<string, ImportTarget & { names: string[] }>()
   for (const n of imp.names) {
@@ -216,6 +229,7 @@ export function importTargetKinds(
     if (hit.kind !== 'value') hit.kind = kind
     hit.names.push(n)
     if (imp.heritage?.includes(n)) hit.heritage = true
+    if (kind === 'value' && !DATA_DECL.has(sym?.kind ?? '')) hit.uses = true
     out.set(to, hit)
   }
   return [...out.values()]

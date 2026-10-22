@@ -156,20 +156,36 @@ describe('K5 通知与流的方向、implements 的证据（ADR-0022）', () => 
     expect(c.get('rel.6')!.knows).toBe('both')
   })
 
-  it('implements 只由引用目标声明的接口名、或类 implements / extends 证实；只有其他导入时为「证据像 depends」', () => {
+  it('implements 证据三档：① 接口名或类 implements / extends → 已证实；② 只引数据类型 → 结构性实现；③ 引用了实现 → 证据像 depends', () => {
     const rel = '  - { id: rel.i, from: ui.store, to: core.api, type: implements }\n'
     const plain = dep('src/ui/store/s.ts', 'src/core/api/client.ts')
-    expect(confirm(rel, [{ ...plain, names: ['makeClient'] }]).get('rel.i')).toMatchObject({ status: 'unconfirmed', likeDepends: true, deps: ['ui.store->core.api'] })
-    expect(confirm(rel, [plain]).get('rel.i')).toMatchObject({ status: 'unconfirmed', likeDepends: true })
+    // ③ 值导入了对方的函数
+    expect(confirm(rel, [{ ...plain, names: ['makeClient'], uses: true }]).get('rel.i')).toMatchObject({ status: 'unconfirmed', likeDepends: true, deps: ['ui.store->core.api'] })
+    // ② 只引了数据类型（类型或枚举），没有引用实现
+    const structural = confirm(rel, [{ ...plain, kind: 'type', names: ['Plan'] }, { ...plain, names: ['Mode'] }]).get('rel.i')!
+    expect(structural).toMatchObject({ status: 'unconfirmed', structural: true })
+    expect(structural.likeDepends).toBeUndefined()
     expect(confirm(rel, [{ ...plain, kind: 'type', names: ['get'] }]).get('rel.i')).toMatchObject({ status: 'confirmed', deps: ['ui.store->core.api'] })
     expect(confirm(rel, [{ ...plain, names: ['Base'], heritage: true }]).get('rel.i')!.status).toBe('confirmed')
     expect(confirm(rel, []).get('rel.i')!.likeDepends).toBeUndefined()
   })
 
+  it('结构性实现只提示（info）：不报 lint 问题、不进角标，返工清单建议在类上写明 implements 并列出候选接口', () => {
+    const { index, own } = withRelations('  - { id: rel.i, from: ui.store, to: core.api, type: implements }\n')
+    const tree = { files: SRC, packages: {} }
+    const report = governanceReport(index, own, tree, { ...CODE, deps: DEPS.map(d => ({ ...d, kind: 'type' as const, names: ['Item'] })) }, null)
+    expect(report.relations.get('rel.i')!.structural).toBe(true)
+    expect(report.issues.some(i => i.message.includes('rel.i'))).toBe(false)
+    const item = reworkList({ index, report, issues: [] }).items.find(x => x.id === 'unconfirmed:rel.i')!
+    expect(item).toMatchObject({ severity: 'info', code: 'fact.structural' })
+    expect(item.actions[0]).toMatchObject({ kind: 'add-implements', snippet: 'class … implements get {' })
+    expect(item.actions[0].text).toContain('get')
+  })
+
   it('证据像 depends 报 fact.like-depends（代替 fact.unconfirmed），返工清单建议改为 depends', () => {
     const { index, own } = withRelations('  - { id: rel.i, from: ui.store, to: core.api, type: implements }\n')
     const tree = { files: SRC, packages: {} }
-    const report = governanceReport(index, own, tree, { ...CODE, deps: DEPS.map(d => ({ ...d, names: ['makeClient'] })) }, null)
+    const report = governanceReport(index, own, tree, { ...CODE, deps: DEPS.map(d => ({ ...d, names: ['makeClient'], uses: true as const })) }, null)
     const issue = report.issues.find(i => i.message.includes('rel.i'))!
     expect(issue).toMatchObject({ severity: 'warning', code: 'fact.like-depends' })
     const item = reworkList({ index, report, issues: [] }).items.find(x => x.id === 'unconfirmed:rel.i')!

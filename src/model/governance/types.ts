@@ -20,6 +20,8 @@ export interface FileDep {
   names?: string[]
   /** 依赖方文件的类声明 implements / extends 引用了落到这个目标的名字（K1，K5 的 implements 证据） */
   heritage?: true
+  /** 引用了 to 文件的实现：函数、类或变量（不是类型、枚举），或不按名称穿透的值导入（K1，K5 的 implements 证据分档） */
+  uses?: true
 }
 
 /** 接入层提取的代码依赖（K1–K3） */
@@ -110,6 +112,8 @@ export interface Confirmation {
   knows?: Knowledge
   /** implements 有对应的模块依赖，却没有接口名或 implements / extends 的证据：证据像 depends（K5） */
   likeDepends?: true
+  /** implements 有对应的模块依赖，只引了对方的数据类型（类型、枚举），没有接口名或 implements / extends：结构性实现（代码未显式声明，K5） */
+  structural?: true
 }
 
 /** 知识方向相对关系箭头：同向 / 反向 / 两个方向都有 */

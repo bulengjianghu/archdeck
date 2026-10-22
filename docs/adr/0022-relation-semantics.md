@@ -56,7 +56,7 @@ A 与 B 可以相反：事件的控制流是发布者 → 订阅者，知识却�
 | 实现契约 | 导入 B 声明的接口，或类的 `implements` / `extends` 指向 B | `implements` |
 | 使用实现 | 导入 B 的函数、类等值并调用 | `depends`（或运行时的 `calls` 等） |
 
-- **K5 对 `implements` 的证据收窄**：依据的文件依赖中至少一条引用了 B 声明的接口名（`interfaces[].owner` 在 B 的子树内，或 B 的 `provides`），或 A 的类声明 `implements` / `extends` 解析到 B 的文件；只有别的导入时标「证据像 depends」（`fact.like-depends`，warning），进返工清单，建议动作「改为 depends」。
+- **K5 对 `implements` 的证据收窄**：依据的文件依赖中至少一条引用了 B 声明的接口名（`interfaces[].owner` 在 B 的子树内，或 B 的 `provides`），或 A 的类声明 `implements` / `extends` 解析到 B 的文件，为已证实；只有别的导入时按导入分档（修订，见下）。
 - **`implements` 的目标须声明接口**（M11，与 M7 同级的提醒）：没有声明任何接口的模块无「契约」可实现。
 - **端口三角**（K11）：选中声明了接口的模块时，面板列出定义（本模块的接口）· 实现者（入边 `implements`）· 使用者（入边 `depends` / `calls` / `streams`，含经 `via` 的）。
 
@@ -86,5 +86,18 @@ A 与 B 可以相反：事件的控制流是发布者 → 订阅者，知识却�
 
 - 描述迁移：h5player 40 条 `event` 翻转为 `notifies`、31 条 `dataflow` 改为 `streams`；h5p-arch-desk 当前版本 2 + 6 条，设计版本 phase2-dynamic 各轮 8 + 16 条。场景无需改动：步骤方向本来就是控制流。
 - S12 / S5a 的 event 特例删除，`bindRelation` 只为 `return` 反向比对；S13 推断只看三类运行时关系。
-- 原本被一次值导入「证实」的 `implements` 变为「证据像 depends」，需要逐条按代码改为 `depends` 或补接口声明。
+- 原本被一次值导入「证实」的 `implements` 变为「证据像 depends」或「结构性实现」，前者需要逐条按代码改为 `depends` 或补接口声明。
 - 违规键不含关系类型，h5player 的基线不变。
+
+## 修订：implements 的证据三档（负责人 2026-10-22）
+
+负责人核实了 h5player 三条「证据像 depends」（rel.sd.stat-impl、rel.factories.base-ports、rel.strategies.vod-load-contracts）：都是真正的结构性实现，只是 TS 不要求写 implements 子句、代码只引了对方的数据类型。描述不改，改 K5 的分档：
+
+| 档 | 代码里看到的 | 结论 | 严重度与建议 |
+|---|---|---|---|
+| ① | A 引用了 B 声明的接口名，或类 `implements` / `extends` 解析到 B | 已证实 | — |
+| ② | A 对 B 只引数据类型（类型、枚举），没有引用函数、类或变量 | 结构性实现（代码未显式声明），`fact.structural` | info，不报 lint 问题、不进角标；返工清单建议「在类上加 implements <接口>」，列出 B 声明的接口候选 |
+| ③ | A 引用了 B 的函数、类或变量（或不按名称穿透的值导入） | 证据像 depends，`fact.like-depends` | warning，建议「改为 depends」或补接口声明 |
+
+实现细化（来源「推」）：枚举虽是值，但属于数据类型，归 ②（Statistic 只引了 model.ts 的枚举与类型）；文件依赖为此记 `uses`（落到目标的值导入名声明为函数、类或变量）。h5player 三条落到 ②，lint:model 提醒 316 → 313。
+
