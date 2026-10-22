@@ -28,6 +28,8 @@ export interface PositionedView {
   coreEdges: Map<string, EdgeRoute>
   /** 普通层次：elk 的布局方向，内部节点的入口 / 出口侧随之而定 */
   direction?: 'DOWN' | 'RIGHT'
+  /** 普通层次：elk 排出的端口位置（`<边 ID>#in` / `#out`，含框外边在内部节点上的占位端口，L11） */
+  ports?: Map<string, Point>
   /** 父模块框：包住当前层的内部结构（分层总览为全部带与右侧通道）；根层就是系统框 */
   parentFrame?: Box
   /** 系统框：有边界节点或参与者时给出，包住父模块框与边界节点行；参与者在它之外（A7、L4） */

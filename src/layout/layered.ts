@@ -3,7 +3,7 @@
  */
 import type { LevelView, ViewEdge } from '@/model'
 import type { Box, EdgeRoute, LayoutOptions, PositionedView } from './geometry'
-import { compassOf, isOutsideEdge, parallelOffsets, placeOutside, portFor, shifted, slotOf, withSourceLane } from './routes'
+import { compassOf, isDynamic, isOutsideEdge, parallelOffsets, placeOutside, portFor, shifted, slotOf, withSourceLane } from './routes'
 import { detour, type PortAt } from './routing'
 
 export const BAND = {
@@ -184,17 +184,23 @@ function outsideRouter(view: LevelView, nodes: Map<string, Box>, bands: readonly
       const box = nodes.get(id)
       const n = byId.get(id)
       if (!box) return undefined
-      const slot = slotOf(group, id, e.id)
+      // L11 左动右静：同一类的边在同一半边里错开
+      const dyn = isDynamic(e)
+      const slot = slotOf(
+        group.filter(x => isDynamic(x) === dyn),
+        id,
+        e.id,
+      )
       const c = n ? compassOf(n) : 'inner'
-      if (c !== 'inner') return portFor(box, c, end, 'DOWN', slot)
+      if (c !== 'inner') return portFor(box, c, end, 'DOWN', slot, undefined, dyn)
       const i = bandOf.get(id)
-      if (i === undefined) return portFor(box, 'inner', end, 'DOWN', slot)
+      if (i === undefined) return portFor(box, 'inner', end, 'DOWN', slot, undefined, dyn)
       const isBand = bands[i].layerId === id
       const oc = byId.get(other) ? compassOf(byId.get(other)!) : 'inner'
       // 带：朝向对端所在的方位；核心模块：上进下出
-      if (isBand && oc === 'right') return portFor(box, 'inner', 'out', 'RIGHT', slot)
+      if (isBand && oc === 'right') return portFor(box, 'inner', 'out', 'RIGHT', slot, undefined, dyn)
       const goesUp = isBand ? oc === 'top' : end === 'in'
-      const p = portFor(box, 'inner', goesUp ? 'in' : 'out', 'DOWN', slot)
+      const p = portFor(box, 'inner', goesUp ? 'in' : 'out', 'DOWN', slot, undefined, dyn)
       return { ...p, stub: goesUp ? box.y - above(i) : below(i) - (box.y + box.h) }
     }
     const from = port(e.from, e.to, 'out')

@@ -9,7 +9,6 @@ import type { LevelView } from '@/model'
 import { DEFAULT_BAND_COLUMNS, layoutLayered } from './layered'
 import { layoutGraph } from './graph'
 import type { LayoutOptions, PositionedView } from './geometry'
-import { isOutsideEdge } from './routes'
 
 export * from './geometry'
 export { BAND, DEFAULT_BAND_COLUMNS, bandColumnsFor, layoutLayered, moreChipId } from './layered'
@@ -38,7 +37,7 @@ const cache = new Map<string, PositionedView>()
 const CACHE_LIMIT = 64
 
 /** 布局算法的版本：端口、层约束等选项改了就升，旧结果不再命中 */
-export const LAYOUT_VERSION = 'A7-compass-2'
+export const LAYOUT_VERSION = 'L11-halves-1'
 
 export function cacheKey(view: LevelView, opts: LayoutOptions = {}): string {
   return JSON.stringify([
@@ -47,8 +46,8 @@ export function cacheKey(view: LevelView, opts: LayoutOptions = {}): string {
     view.mode,
     view.parentId,
     view.nodes.map(n => (n.actorKind ? `${n.id}:${n.actorKind}` : n.id)),
-    // 两级缓存：这里是节点布局，普通层次中框外元素的边（参与者的边、边界边）不参与布局、不进键；它们的走线按布局另行记忆（edgeRoute）
-    view.edges.filter(e => view.mode === 'layered' || !isOutsideEdge(view, e)).map(e => [e.id, e.relationIds.length]),
+    // 两级缓存：这里是节点布局；普通层次中框外元素的边不参与路由，只在内部节点上占端口（左动右静），所以也进键；它们的走线按布局与可见集另行记忆（outsideRoutes）
+    view.edges.map(e => [e.id, e.relationIds.length]),
   ])
 }
 

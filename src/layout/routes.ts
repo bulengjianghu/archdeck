@@ -1,7 +1,7 @@
 /**
  * 手工走线与边界：参与者排布与曲线（A7）、边的标签与线宽档、平行边错开（L10），边界边的判定（L4）。
  */
-import type { LevelView, ViewEdge } from '@/model'
+import { RUNTIME_RELATION_TYPES, type LevelView, type ViewEdge } from '@/model'
 import { NODE_SIZE, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
 import { ARRIVE, allocateTracks, detour, placeLabels, type PortAt } from './routing'
 
@@ -198,6 +198,9 @@ const LANE_GAP = 6
 /** 加长量的上限：短桩不超出层间空隙（72）的一半 */
 const MAX_LANE = 22
 
+/** L11 左动右静：运行时关系（calls / notifies / streams）的边为动态，编译期（depends / implements）为静态 */
+export const isDynamic = (e: ViewEdge) => RUNTIME_RELATION_TYPES.includes(e.type)
+
 /** 框外元素的边（参与者的边、边界边）：普通层次不参与布局，要画时才走线 */
 export const isOutsideEdge = (view: LevelView, e: ViewEdge) => isBoundaryEdge(e) || isActorNode(view, e.from) || isActorNode(view, e.to)
 
@@ -223,10 +226,23 @@ export function edgeRoute(pv: PositionedView, e: ViewEdge): EdgeRoute | undefine
 
 /**
  * 端口按方位：用户在底边朝下、外部系统在左边朝左、边界节点在顶边朝上；内部节点进边在入口侧（自上而下为顶边，自左向右为左边）、
- * 出边在出口侧（底边 / 右边，L11）。同一节点同一侧的多条边沿该边错开 PARALLEL_GAP，短桩逐条加长。
+ * 出边在出口侧（底边 / 右边，L11）；给出 dynamic 时左动右静（上动下静）。同一节点同一侧同一类的多条边沿该边错开 PARALLEL_GAP，短桩逐条加长。
  */
-export function portFor(box: Box, compass: Compass, end: 'in' | 'out', direction: 'DOWN' | 'RIGHT', slot: { i: number; n: number }, stub?: number): PortAt {
-  const along = (len: number) => Math.max(-len / 2 + 8, Math.min(len / 2 - 8, (slot.i - (slot.n - 1) / 2) * PARALLEL_GAP))
+export function portFor(
+  box: Box,
+  compass: Compass,
+  end: 'in' | 'out',
+  direction: 'DOWN' | 'RIGHT',
+  slot: { i: number; n: number },
+  stub?: number,
+  dynamic?: boolean,
+): PortAt {
+  // L11 左动右静：给出 dynamic 时端口落在该侧的前半（顶边 / 底边的左半、左边 / 右边的上半）或后半，在半边内错开
+  const along = (len: number) => {
+    const span = dynamic === undefined ? len / 2 : len / 4
+    const center = dynamic === undefined ? 0 : dynamic ? -len / 4 : len / 4
+    return center + Math.max(-span + 8, Math.min(span - 8, (slot.i - (slot.n - 1) / 2) * PARALLEL_GAP))
+  }
   const lane = Math.min(slot.i * LANE_GAP, MAX_LANE)
   const side =
     compass === 'top'
@@ -302,11 +318,18 @@ function outsideRoute(pv: PositionedView, e: ViewEdge, group?: readonly ViewEdge
   const nb = pv.view.nodes.find(n => n.id === e.to)
   if (!a || !b || !na || !nb) return undefined
   const dir = pv.direction ?? 'DOWN'
-  const outside = group ?? pv.view.edges.filter(x => isOutsideEdge(pv.view, x))
+  // 端口错开只在同一类（动态 / 静态）里算：两类各占半边
+  const dyn = isDynamic(e)
+  const outside = (group ?? pv.view.edges.filter(x => isOutsideEdge(pv.view, x))).filter(x => isDynamic(x) === dyn)
   const fs = slotOf(outside, e.from, e.id)
-  const from = portFor(a, compassOf(na), 'out', dir, fs)
+  // 内部节点那一端用 elk 排出的占位端口（与内部边的端口一起左动右静）；没有时按半边错开
+  const at = (p: PortAt, id: string): PortAt => {
+    const q = pv.ports?.get(id)
+    return q ? { ...p, x: q.x, y: q.y } : p
+  }
+  const from = at(portFor(a, compassOf(na), 'out', dir, fs, undefined, dyn), `${e.id}#out`)
   // 终点短桩加长到 ARRIVE：箭头前留出直段，拐弯不贴着箭头
-  const to = withSourceLane(portFor(b, compassOf(nb), 'in', dir, slotOf(outside, e.to, e.id), ARRIVE), fs)
+  const to = at(withSourceLane(portFor(b, compassOf(nb), 'in', dir, slotOf(outside, e.to, e.id), ARRIVE, dyn), fs), `${e.id}#in`)
   // 两端自身也是障碍：中间三段（横、竖通道、横）都在两端的短桩之外，不能穿过它们
   return { points: detour(from, to, [...pv.nodes.values()]) }
 }

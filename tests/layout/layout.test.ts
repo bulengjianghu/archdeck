@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { loadModel, projectLevel } from '../../src/model'
+import { RUNTIME_RELATION_TYPES, loadModel, projectLevel } from '../../src/model'
 import type { Box } from '../../src/layout/geometry'
 import {
   BAND,
@@ -398,9 +398,45 @@ describe('L11 端口方向', () => {
     const r = toElkGraph(view, 'RIGHT')
     expect([side(r, `${inner.id}#out`), side(r, `${inner.id}#in`)]).toEqual(['EAST', 'WEST'])
     expect(portSide('in', 'DOWN')).toBe('NORTH')
-    for (const c of g.children!) expect(c.layoutOptions!['elk.portConstraints']).toBe('FIXED_SIDE')
+    for (const c of g.children!) expect(c.layoutOptions!['elk.portConstraints']).toBe('FIXED_ORDER')
+    // 内部边两端各一个端口；框外边在内部节点那一端只占位（不连线，L11 左动右静一起排序）
     const ports = g.children!.flatMap(c => c.ports!.map(p => p.id))
-    expect(new Set(ports).size).toBe(g.edges!.length * 2)
+    const innerIds = new Set(g.children!.map(c => c.id))
+    const placeholders = view.edges.filter(e => isOutsideEdge(view, e) && (innerIds.has(e.from) || innerIds.has(e.to)))
+    expect(new Set(ports).size).toBe(g.edges!.length * 2 + placeholders.length)
+    // 顶边：动态端口的序号都小于静态（顶边的顺时针序即自左向右）
+    for (const c of g.children!) {
+      const north = c.ports!.filter(p => p.layoutOptions!['elk.port.side'] === 'NORTH')
+      const kind = (id: string) => RUNTIME_RELATION_TYPES.includes(view.edges.find(e => `${e.id}#in` === id)!.type)
+      const d = north.filter(p => kind(p.id)).map(p => Number(p.layoutOptions!['elk.port.index']))
+      const st = north.filter(p => !kind(p.id)).map(p => Number(p.layoutOptions!['elk.port.index']))
+      if (d.length && st.length) expect(Math.max(...d)).toBeLessThan(Math.min(...st))
+    }
+  })
+
+  it('左动右静：同一节点的动态入边（calls / notifies / streams）进点都在静态入边（depends / implements）左边，出边同理；框外边同一规则', async () => {
+    const idx2 = loadModel(scenarioFiles()).index
+    for (const level of ['infra', 'infra.framework', 'app']) {
+      const v = projectLevel(idx2, level, { showBoundaries: true })
+      const pv = await layoutView(v)
+      const allocated = outsideRoutes(pv, v.edges)
+      const route = (e: (typeof v.edges)[number]) => allocated.get(e.id) ?? pv.edges.get(e.id)
+      for (const n of v.nodes.filter(x => compassOf(x) === 'inner')) {
+        for (const end of ['in', 'out'] as const) {
+          const mine = v.edges.filter(e => (end === 'in' ? e.to : e.from) === n.id && route(e))
+          const xs = (dyn: boolean) =>
+            mine
+              .filter(e => RUNTIME_RELATION_TYPES.includes(e.type) === dyn)
+              .map(e => {
+                const pts = route(e)!.points
+                return (end === 'in' ? pts[pts.length - 1] : pts[0]).x
+              })
+          const d = xs(true)
+          const st = xs(false)
+          if (d.length && st.length) expect(Math.max(...d)).toBeLessThan(Math.min(...st))
+        }
+      }
+    }
   })
 
   it('方位：用户 top、外部系统 right、边界节点 bottom、其余 inner', () => {
@@ -411,10 +447,10 @@ describe('L11 端口方向', () => {
     expect(compassOf(view.nodes.find(n => n.role === 'module')!)).toBe('inner')
   })
 
-  it('布局缓存键带布局算法版本；两级缓存——普通层次的边界边不进布局的键，走线按布局另行记忆', () => {
+  it('布局缓存键带布局算法版本；框外边只在内部节点上占端口也进键（左动右静的排序随之变），它们的走线按布局与可见集另行记忆', () => {
     expect(cacheKey(view)).toContain(LAYOUT_VERSION)
     const innerOnly = { ...view, edges: view.edges.filter(e => !isOutsideEdge(view, e)) }
-    expect(cacheKey(innerOnly)).toBe(cacheKey(view))
-    expect(cacheKey({ ...view, edges: innerOnly.edges.slice(1) })).not.toBe(cacheKey(view))
+    expect(cacheKey(innerOnly)).not.toBe(cacheKey(view))
+    expect(cacheKey({ ...view })).toBe(cacheKey(view))
   })
 })

@@ -3,25 +3,31 @@
  */
 import type { ELK, ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk-api'
 import type { LevelView } from '@/model'
-import { NODE_SIZE, contentBounds, sizeOf, type Box, type EdgeRoute, type PositionedView } from './geometry'
-import { LABEL_SLOT, compassOf, edgeLabel, nearPoints, placeOutside, spreadEnds } from './routes'
+import { NODE_SIZE, contentBounds, sizeOf, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
+import { LABEL_SLOT, compassOf, edgeLabel, isDynamic, nearPoints, placeOutside, spreadEnds } from './routes'
 
 /**
  * L11：elk 只排父模块框内的子模块与它们之间的边；框外的元素（用户、外部系统与时间、边界节点）在布局后按方位摆放（routes.ts placeOutside，A7、L4），
  * 它们的边不参与布局，要画时才按需正交走线（edgeRoute）。
- * 端口方向——每条边在两端各有自己的端口，边固定（FIXED_SIDE）、顺序由 elk 排以减少交叉：进边在入口侧、出边在出口侧
- * （自上而下为上进下出，自左向右为左进右出）。
+ * 端口方向——每条边在两端各有自己的端口：进边在入口侧、出边在出口侧（自上而下为上进下出，自左向右为左进右出）；
+ * 同一侧左动右静（自左向右布局时上动下静）：动态（calls / notifies / streams）在前半、静态（depends / implements）在后半，用 FIXED_ORDER 固定。
  */
-export function portSide(end: 'in' | 'out', direction: 'DOWN' | 'RIGHT'): 'NORTH' | 'SOUTH' | 'WEST' | 'EAST' {
+type Side = 'NORTH' | 'SOUTH' | 'WEST' | 'EAST'
+/** elk 端口序号按边分段：顺时针的 上、右、下、左 */
+const SIDE_BASE: Record<Side, number> = { NORTH: 0, EAST: 1000, SOUTH: 2000, WEST: 3000 }
+
+export function portSide(end: 'in' | 'out', direction: 'DOWN' | 'RIGHT'): Side {
   return direction === 'DOWN' ? (end === 'out' ? 'SOUTH' : 'NORTH') : end === 'out' ? 'EAST' : 'WEST'
 }
 
 export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'): ElkNode {
   const inner = view.nodes.filter(n => compassOf(n) === 'inner')
   const ids = new Set(inner.map(n => n.id))
-  const ports = new Map<string, { id: string; width: number; height: number; layoutOptions: Record<string, string> }[]>(inner.map(n => [n.id, []]))
-  const port = (node: string, id: string, end: 'in' | 'out') => {
-    ports.get(node)!.push({ id, width: 1, height: 1, layoutOptions: { 'elk.port.side': portSide(end, direction) } })
+  type Port = { id: string; width: number; height: number; side: Side; dynamic: boolean; layoutOptions: Record<string, string> }
+  const ports = new Map<string, Port[]>(inner.map(n => [n.id, []]))
+  const port = (node: string, id: string, end: 'in' | 'out', dynamic: boolean) => {
+    const side = portSide(end, direction)
+    ports.get(node)!.push({ id, width: 1, height: 1, side, dynamic, layoutOptions: { 'elk.port.side': side } })
     return id
   }
   const edges = view.edges
@@ -30,13 +36,29 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
     // 每条边都申请一个至少放得下「?」或「×N」的标签槽：事实标记在布局后才叠加，槽太小时 elk 可能不给坐标（画布另有中点兜底）
     .map<ElkExtendedEdge>(e => {
       const text = edgeLabel(e)
+      const dyn = isDynamic(e)
       return {
         id: e.id,
-        sources: [port(e.from, `${e.id}#out`, 'out')],
-        targets: [port(e.to, `${e.id}#in`, 'in')],
+        sources: [port(e.from, `${e.id}#out`, 'out', dyn)],
+        targets: [port(e.to, `${e.id}#in`, 'in', dyn)],
         labels: [{ id: `${e.id}#label`, text, width: Math.max(LABEL_SLOT.w, text.length * 7 + 18), height: LABEL_SLOT.h }],
       }
     })
+  // 框外边（参与者的边、边界边）在内部节点上的那一端只占一个端口、不连线：与内部边的端口一起排左右顺序，
+  // 按需走线时直接用 elk 给出的端口位置，同一侧的所有出入点才统一左动右静
+  for (const e of view.edges) {
+    if (ids.has(e.from) && !ids.has(e.to)) port(e.from, `${e.id}#out`, 'out', isDynamic(e))
+    if (ids.has(e.to) && !ids.has(e.from)) port(e.to, `${e.id}#in`, 'in', isDynamic(e))
+  }
+  // L11 左动右静：每条边上动态（运行时）端口在前——顶边 / 底边的左半，左边 / 右边的上半；elk 的端口序是顺时针（上边从左到右、右边从上到下、
+  // 下边从右到左、左边从下到上），按这个方向给 FIXED_ORDER 的序号
+  for (const list of ports.values()) {
+    for (const side of ['NORTH', 'EAST', 'SOUTH', 'WEST'] as const) {
+      const visual = [...list.filter(p => p.side === side && p.dynamic), ...list.filter(p => p.side === side && !p.dynamic)]
+      const clockwise = side === 'SOUTH' || side === 'WEST' ? [...visual].reverse() : visual
+      clockwise.forEach((p, i) => (p.layoutOptions['elk.port.index'] = String(SIDE_BASE[side] + i)))
+    }
+  }
   return {
     id: 'root',
     layoutOptions: {
@@ -60,8 +82,8 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
       id: n.id,
       width: sizeOf(n).w,
       height: sizeOf(n).h,
-      ports: ports.get(n.id),
-      layoutOptions: { 'elk.portConstraints': 'FIXED_SIDE' },
+      ports: ports.get(n.id)!.map(({ id, width, height, layoutOptions }) => ({ id, width, height, layoutOptions })),
+      layoutOptions: { 'elk.portConstraints': 'FIXED_ORDER' },
     })),
     edges,
   }
@@ -73,7 +95,11 @@ export const FRAME_EDGE_PAD = 12
 
 export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
   const nodes = new Map<string, Box>()
-  for (const c of graph.children ?? []) nodes.set(c.id, { x: c.x ?? 0, y: c.y ?? 0, w: c.width ?? 0, h: c.height ?? 0 })
+  const ports = new Map<string, Point>()
+  for (const c of graph.children ?? []) {
+    nodes.set(c.id, { x: c.x ?? 0, y: c.y ?? 0, w: c.width ?? 0, h: c.height ?? 0 })
+    for (const p of c.ports ?? []) ports.set(p.id, { x: (c.x ?? 0) + (p.x ?? 0) + (p.width ?? 0) / 2, y: (c.y ?? 0) + (p.y ?? 0) + (p.height ?? 0) / 2 })
+  }
   const edges = new Map<string, EdgeRoute>()
   for (const e of (graph.edges ?? []) as ElkExtendedEdge[]) {
     const s = e.sections?.[0]
@@ -102,7 +128,7 @@ export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
     : { x: 0, y: 0, w: NODE_SIZE.module.w, h: NODE_SIZE.module.h }
   // A7、L4：框外的元素按方位摆放
   const frame = placeOutside(view, nodes, parentFrame)
-  return { view, nodes, edges, coreEdges: new Map(), direction, parentFrame, ...(frame ? { frame } : {}) }
+  return { view, nodes, edges, coreEdges: new Map(), direction, parentFrame, ports, ...(frame ? { frame } : {}) }
 }
 
 let elkPromise: Promise<ELK> | undefined
