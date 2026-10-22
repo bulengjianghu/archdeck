@@ -185,6 +185,12 @@ modules:
         kind: subsystem
         responsibility: 读写项目下 governance/（不属于描述）：基线 baseline.json（只由命令行生成，U7）、拦截记录 ledger.jsonl（追加，Q4）；读源码根目录的 git 提交。
         codeRefs: [vite/governanceStore.ts]
+      - id: access.history
+        name: 源码历史读取
+        kind: subsystem
+        responsibility: 读被描述项目源码仓库的 git 历史（git log --no-merges --numstat，参数经 execFile 不经 shell）：每条提交的哈希、日期、标题、是否缺陷修复、涉及的源码清单内文件及增删行数，按 HEAD 与窗口缓存；按需读一个提交的说明；不在 git 仓库内或 git 不可用时给出原因、不报错（J1）。端点 /source/<项目>/history.json、commit.json 由 ModelSource 插件挂载。不判断归属（在模型层）。
+        codeRefs: [vite/readHistory.ts]
+        docRefs: [docs/architecture/evolution.md]
       - id: access.agent
         name: agent 接口
         kind: subsystem
@@ -213,7 +219,7 @@ modules:
         kind: subsystem
         core: true
         responsibility: 模型层的契约：描述文件的形状（JSON Schema 与对应的 TS 类型；顶层键含 actors、scenario / scenarios 与步骤树），加载、索引、投影、场景投影、源码归属、架构治理各阶段的数据类型（声明收在 types.ts、scenario/types.ts、source/types.ts、governance/types.ts），领域枚举，以及只查表的名称查询与小谓词（moduleName、isLong、isArchived、RULE_LABELS）。不含投影与计算；呈现层对模型层只依赖它（U10）。
-        codeRefs: [src/model/types.ts, src/model/names.ts, src/model/project-summary.ts, src/model/design.ts, src/model/scenario/types.ts, src/model/source/types.ts, src/model/governance/types.ts, src/model/rework/types.ts, src/model/review/types.ts, schema/arch-file.schema.json]
+        codeRefs: [src/model/types.ts, src/model/names.ts, src/model/project-summary.ts, src/model/design.ts, src/model/scenario/types.ts, src/model/source/types.ts, src/model/governance/types.ts, src/model/rework/types.ts, src/model/review/types.ts, src/model/evolution/types.ts, schema/arch-file.schema.json]
       - id: model.pipeline
         name: 加载流水线
         kind: subsystem
@@ -268,3 +274,9 @@ modules:
           - **与结构投影同一套规则**：访问面的入口用 G10，本层投影用 mapEndpoint。
         codeRefs: [src/model/governance/index.ts]
         docRefs: [docs/architecture/governance.md, docs/adr/0015-architecture-governance.md]
+      - id: model.evolution
+        name: 演化事实
+        kind: subsystem
+        responsibility: git 历史提升为模块的第三类事实（ADR-0023）：文件级提交按源码归属提升到模块（一次提交一个模块只计一次，上级为子树并集，J2），修改热度与缺陷热度（次数 × √当前行数，J3），时间耦合（同提交次数与占比达到阈值，标注两端有无模块依赖或描述关系，J4），在当前层次的投影（角标分档与耦合线，J5）、热度前 N 与无依赖无关系的耦合对（J6、J8）。输入是索引、归属、行数与接入层给的历史，不碰文件系统。
+        codeRefs: [src/model/evolution/index.ts, src/model/evolution/history.ts, src/model/evolution/level.ts]
+        docRefs: [docs/architecture/evolution.md, docs/adr/0023-sketch-reviewed-and-evolution.md]

@@ -6,7 +6,8 @@
  *   各版本附上改动过描述的最近提交（版本切换用）；
  *   文件变化时推送 `arch-model:changed`，载荷 { project } 指明哪个项目变了；
  * - 源码（G1、G2、G17、G11，docs/architecture/source.md §2.1）：GET /source/<项目>.json（文件清单）、
- *   /source/<项目>/file.json?path=（单个文件）、/source/<项目>/exports.json?path=（导出）、/source/<项目>/facts.json（代码事实、基线与拦截记录，K8）。
+ *   /source/<项目>/file.json?path=（单个文件）、/source/<项目>/exports.json?path=（导出）、/source/<项目>/facts.json（代码事实、基线与拦截记录，K8）、
+ *   /source/<项目>/history.json（git 历史，J1）、/source/<项目>/commit.json?hash=（一个提交的说明）。
  * 写入（B1–B5，ADR-0019；Z1、Z6）：POST /write/<项目>/feedback | allow | ignore | reviewed，只追加人拥有的文件（评审意见、例外、忽略项、确认记录——
  *   一条或多条 { module, at, hash, summary, source, note? }，同一模块更新那一条），写后照常推送变化。
  * 项目内容只搬运原始文本，解析与校验都在页面侧的模型层完成，与命令行同一套报错。
@@ -19,6 +20,8 @@ import { readCodeDeps } from './readDeps'
 import { readHealth } from './readHealth'
 import { WriteError, appendAllow, appendFeedback, appendIgnore, appendReviewed } from './writeModel'
 import { listModelCommits, readCommitVersion } from './readGit'
+import { historyOptions, readCommitMessage, readSourceHistory } from './readHistory'
+import { loadModel } from '../src/model'
 import { LEDGER_PAGE_LIMIT, governanceDir, readBaseline, readLedger } from './governanceStore'
 import type { FactsPayload, RuleKind, SourcePayload } from '../src/model'
 
@@ -119,7 +122,7 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
             res,
             listProjects(modelRoot, root, p => readHealth(modelRoot, p.project, p.files, root)),
           )
-        const src = /^\/source\/([^/]+?)(?:\/(file|exports|facts))?\.json$/.exec(url)
+        const src = /^\/source\/([^/]+?)(?:\/(file|exports|facts|history|commit))?\.json$/.exec(url)
         if (src) {
           const project = decodeURIComponent(src[1])
           const tree = treeOf(project, !src[2])
@@ -139,6 +142,17 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
             } catch (e) {
               return json(res, { error: `提取失败：${e instanceof Error ? e.message : String(e)}` }, 500)
             }
+          }
+          // J1：git 历史，窗口与缺陷匹配取自描述的 system.source.history
+          if (src[2] === 'history') {
+            const payload = readProject(modelRoot, project, root)
+            const system = payload ? loadModel(payload.files).index.model.system : undefined
+            return json(res, readSourceHistory(tree.root, tree.files, historyOptions(system)))
+          }
+          if (src[2] === 'commit') {
+            const hash = new URLSearchParams(search).get('hash') ?? ''
+            const message = readCommitMessage(tree.root, hash)
+            return message === null ? json(res, { error: `提交不存在：${hash}` }, 404) : json(res, { hash, message })
           }
           let out: unknown
           try {

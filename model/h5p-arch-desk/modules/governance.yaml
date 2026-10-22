@@ -25,6 +25,11 @@ modules:
     parent: state.desk
     responsibility: 由源码同步取得的代码事实派生（computed，调用模型层架构治理）：事实状态（设计版本或历史提交、取数中、失败——源码清单读取失败也算，K8、G1）、治理报告、结构视角开关开启时（缺省开启）的本层投影（只取基线外的违规，K9、Y4）、门禁错误（U9）、拦截记录摘要（Q4）、选中的代码依赖叠加线（K10）、选中节点所在的本层环（Y5）、模块治理信息、关系证实（含知识方向与「证据像 depends」）与端口三角（K11）。
     codeRefs: [src/state/desk/facts.ts]
+  - id: state.desk.evolution
+    name: 演化事实派生（desk.evolution）
+    parent: state.desk
+    responsibility: 由源码同步取得的 git 历史派生（computed，调用模型层演化事实）：演化状态（设计版本、取数中、读不到 git 历史带原因，J1）、模块统计与时间耦合、结构视角下热度或耦合开关开启时的本层投影（J5）、选中的耦合线（J7）、模块的统计与耦合对端、热度前 N、无依赖无关系的耦合对、提交说明按需取。
+    codeRefs: [src/state/desk/evolution.ts]
 
   - id: state.desk.review
     name: 人确认层派生（desk.review）

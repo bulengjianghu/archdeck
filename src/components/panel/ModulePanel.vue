@@ -10,6 +10,7 @@ import ChangeBadge from './ChangeBadge.vue'
 import DesignNote from './DesignNote.vue'
 import ModuleSource from './ModuleSource.vue'
 import ModuleGovernance from './ModuleGovernance.vue'
+import ModuleEvolution from './ModuleEvolution.vue'
 import PortTriad from './PortTriad.vue'
 import ReviewSection from './ReviewSection.vue'
 
@@ -108,6 +109,7 @@ function openChild(childId: string) {
 
     <PortTriad :id="m.id" />
     <ModuleGovernance :id="m.id" />
+    <ModuleEvolution :id="m.id" />
     <ModuleSource :id="m.id" />
     <Section v-if="m.principle" title="实现原理" fold><Markdown :text="m.principle" /></Section>
     <Section v-if="m.dataStructures?.length" title="核心数据结构" fold :count="m.dataStructures.length">

@@ -6,6 +6,7 @@ import Section from './Section.vue'
 import DesignSection from './DesignSection.vue'
 import CommitSection from './CommitSection.vue'
 import GovernanceSection from './GovernanceSection.vue'
+import EvolutionSection from './EvolutionSection.vue'
 
 const desk = useDesk()
 const idx = computed(() => desk.index.value!)
@@ -68,6 +69,7 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
       </dl>
     </Section>
     <GovernanceSection part="detail" />
+    <EvolutionSection />
     <footer class="src muted">描述目录：{{ desk.modelDir.value }}</footer>
   </div>
 </template>

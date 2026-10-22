@@ -2,7 +2,7 @@
 /**
  * 属性面板：按选中分派（V2，ADR-0012）。结构视角：选中的对象，无选中时为当前父模块（根层显示系统）；
  * 运行视角：选中步骤 → 步骤面板，选中场景 → 场景面板，其他对象 → 运行信息在上、结构信息折叠在下（V6）。
- * 代码依赖叠加线（K10）→ 代码依赖面板。
+ * 代码依赖叠加线（K10）→ 代码依赖面板；耦合线（J7）→ 耦合面板。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -16,6 +16,7 @@ import SystemPanel from './SystemPanel.vue'
 import ActorPanel from './ActorPanel.vue'
 import FilePanel from './FilePanel.vue'
 import DepPanel from './DepPanel.vue'
+import CouplePanel from './CouplePanel.vue'
 
 const desk = useDesk()
 const run = computed(() => desk.perspective.value === 'run')
@@ -31,6 +32,7 @@ const target = computed(() => {
   if (s?.kind === 'actor' && idx.actors.has(s.id)) return { kind: 'actor' as const, id: s.id }
   if (s?.kind === 'file') return { kind: 'file' as const, id: s.id }
   if (s?.kind === 'dep') return { kind: 'dep' as const, id: s.id }
+  if (s?.kind === 'couple') return { kind: 'couple' as const, id: s.id }
   const level = desk.levelId.value
   return level && level !== idx.rootId ? { kind: 'module' as const, id: level } : { kind: 'system' as const, id: idx.rootId }
 })
@@ -44,8 +46,14 @@ const target = computed(() => {
       <template v-else>
         <FilePanel v-if="target.kind === 'file'" :key="`f:${target.id}`" :path="target.id" />
         <DepPanel v-else-if="target.kind === 'dep'" :key="`d:${target.id}`" />
-        <RunSection v-if="run && target.kind !== 'file' && target.kind !== 'dep'" />
-        <component :is="run ? 'details' : 'div'" v-if="target.kind !== 'file' && target.kind !== 'dep'" class="structure" :open="run ? false : undefined">
+        <CouplePanel v-else-if="target.kind === 'couple'" :key="`c:${target.id}`" />
+        <RunSection v-if="run && target.kind !== 'file' && target.kind !== 'dep' && target.kind !== 'couple'" />
+        <component
+          :is="run ? 'details' : 'div'"
+          v-if="target.kind !== 'file' && target.kind !== 'dep' && target.kind !== 'couple'"
+          class="structure"
+          :open="run ? false : undefined"
+        >
           <summary v-if="run" class="structure-head">结构信息</summary>
           <ModulePanel v-if="target.kind === 'module'" :id="target.id" :key="`m:${target.id}`" />
           <RelationPanel v-else-if="target.kind === 'relation'" :id="target.id" :key="`r:${target.id}`" />
@@ -118,6 +126,12 @@ const target = computed(() => {
   background: var(--danger-soft, var(--warning-soft));
   color: var(--danger);
   border-color: transparent;
+}
+
+.panel button.badge.couple {
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
 }
 
 .panel .badge.warn {

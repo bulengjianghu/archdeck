@@ -1,9 +1,9 @@
 /**
  * 画布场景的边（ADR-0013）：关系边（本层视图边与分层总览的核心跨层边）、回放叠加的临时线（P11、P15）与分支预览、
- * 代码事实叠加线（K9）。显隐、变淡、回放态、选中突出的灰化，以及视觉通道（L10：线型、箭头、线宽档、标签）都在这里定。
+ * 代码事实叠加线（K9）、时间耦合的波浪线（J5）。显隐、变淡、回放态、选中突出的灰化，以及视觉通道（L10：线型、箭头、线宽档、标签）都在这里定。
  */
 import { RUNTIME_RELATION_TYPES, type EdgeFact, type ModelDiff, type ModelIndex, type ViewEdge } from '@/model'
-import { edgeLabel, edgeRoute, edgeWeight, isBoundaryEdge, linkRoute, type EdgeRoute } from '../layout'
+import { edgeLabel, edgeRoute, edgeWeight, isBoundaryEdge, linkRoute, type Box, type EdgeRoute, type Point } from '../layout'
 import { isTemp, landingId } from '../stage'
 import type { SceneContext } from './context'
 import type { CanvasEdge, EdgeArrow, FactState, RouteEdgeData } from './types'
@@ -172,6 +172,44 @@ export function replayEdges(ctx: SceneContext): (CanvasEdge | null)[] {
       )
   }
   return list
+}
+
+/** 盒子边框上朝向另一点的出口（中心连线与边框的交点） */
+function borderPoint(box: Box, toward: Point): Point {
+  const cx = box.x + box.w / 2
+  const cy = box.y + box.h / 2
+  const dx = toward.x - cx
+  const dy = toward.y - cy
+  if (dx === 0 && dy === 0) return { x: cx, y: cy }
+  const t = Math.min(dx === 0 ? Infinity : box.w / 2 / Math.abs(dx), dy === 0 ? Infinity : box.h / 2 / Math.abs(dy))
+  return { x: cx + dx * t, y: cy + dy * t }
+}
+
+/** J5：耦合线的走线——两框中心连线裁到边框，直线两点（画布按它画波浪线），不参与布局 */
+export function coupleRoute(a?: Box, b?: Box): EdgeRoute | undefined {
+  if (!a || !b) return undefined
+  const ca = { x: a.x + a.w / 2, y: a.y + a.h / 2 }
+  const cb = { x: b.x + b.w / 2, y: b.y + b.h / 2 }
+  const p1 = borderPoint(a, cb)
+  const p2 = borderPoint(b, ca)
+  return { points: [p1, p2], label: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } }
+}
+
+/** 时间耦合（J5）：本层两端之间的灰色波浪线，标 ×N，无依赖无关系的更深色；不参与布局、不算跳线 */
+export function evolutionEdges(ctx: SceneContext): (CanvasEdge | null)[] {
+  return (ctx.evo?.couplings ?? []).map(l => {
+    const ve: ViewEdge = { id: l.id, kind: 'direct', from: l.from, to: l.to, type: 'depends', relationIds: [], mode: 'sync' }
+    const route = coupleRoute(ctx.pv.nodes.get(l.from), ctx.pv.nodes.get(l.to))
+    return makeEdge(ctx, ve, route, false, {
+      temp: 'couple',
+      label: `×${l.shared}`,
+      pill: true,
+      warn: false,
+      factState: 'confirmed',
+      couple: l,
+      violated: false,
+    })
+  })
 }
 
 /** 代码事实叠加（K9）：代码依赖叠加线，不参与布局 */

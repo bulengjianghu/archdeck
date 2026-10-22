@@ -16,6 +16,8 @@ export interface ModuleTreeContext {
   /** Z3：需复核的模块与已确认的模块 */
   stale: ReadonlySet<string>
   reviewed: ReadonlySet<string>
+  /** J8：「按热度」排序时每个模块的次数（显示在行尾）；描述顺序时为 null */
+  heatCount?: ((id: string) => number) | null
 }
 
 /** 文件树（G13）：展开状态、选中与高亮、归属标记 */

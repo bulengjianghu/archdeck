@@ -4,7 +4,7 @@
  * 取数的方式由项目视图注入（开发服务器的 HTTP 端点，见 components/source/httpSource.ts）；源码在本地是前提，取不到清单为 error（G1）。
  */
 import { shallowRef, type ShallowRef } from 'vue'
-import type { ExportedSymbol, FactsPayload, SourceFile, SourcePayload } from '@/model'
+import type { ExportedSymbol, FactsPayload, SourceFile, SourceHistory, SourcePayload } from '@/model'
 
 export interface SourceFetcher {
   tree(): Promise<SourcePayload>
@@ -12,7 +12,13 @@ export interface SourceFetcher {
   exports(path: string): Promise<ExportedSymbol[] | null>
   /** K8：代码事实、基线与拦截记录；没有注入时为 null */
   facts?(): Promise<FactsPayload | null>
+  /** J1：git 历史；没有注入时为 null */
+  history?(): Promise<SourceHistory | null>
+  /** 一个提交的完整说明（面板展开时按需取）；不存在为 null */
+  commit?(hash: string): Promise<{ hash: string; message: string } | null>
 }
+
+export type CommitMessage = { hash: string; message: string }
 
 export type Resource<T> = { status: 'loading' } | { status: 'ok'; value: T } | { status: 'missing' } | { status: 'error'; message: string }
 
@@ -28,14 +34,18 @@ export function createSourceSync(fetcher: SourceFetcher) {
   const tree = shallowRef<SourcePayload | null>(null)
   /** K8：清单取到后随后取代码事实；null = 没有（清单读取失败、未注入） */
   const facts = shallowRef<Resource<FactsPayload> | null>(null)
+  /** J1：清单取到后随事实一起取 git 历史；null = 没有（清单读取失败、未注入） */
+  const history = shallowRef<Resource<SourceHistory> | null>(null)
   let files = new Map<string, ShallowRef<Resource<SourceFile>>>()
   let exports = new Map<string, ShallowRef<Resource<ExportedSymbol[]>>>()
+  let commits = new Map<string, ShallowRef<Resource<CommitMessage>>>()
   let seq = 0
 
   async function refresh() {
     const my = ++seq
     files = new Map()
     exports = new Map()
+    commits = new Map()
     let next: SourcePayload
     try {
       next = await fetcher.tree()
@@ -44,17 +54,33 @@ export function createSourceSync(fetcher: SourceFetcher) {
     }
     if (my !== seq) return
     tree.value = next
-    if (next.status !== 'local' || !fetcher.facts) {
+    if (next.status !== 'local') {
       facts.value = null
+      history.value = null
       return
     }
-    facts.value = { status: 'loading' }
-    try {
-      const f = await fetcher.facts()
-      if (my === seq) facts.value = f ? { status: 'ok', value: f } : null
-    } catch (e) {
-      if (my === seq) facts.value = { status: 'error', message: e instanceof Error ? e.message : String(e) }
+    // 事实与历史各自取、互不等待
+    const fetchFacts = async () => {
+      if (!fetcher.facts) return (facts.value = null)
+      facts.value = { status: 'loading' }
+      try {
+        const f = await fetcher.facts()
+        if (my === seq) facts.value = f ? { status: 'ok', value: f } : null
+      } catch (e) {
+        if (my === seq) facts.value = { status: 'error', message: e instanceof Error ? e.message : String(e) }
+      }
     }
+    const fetchHistory = async () => {
+      if (!fetcher.history) return (history.value = null)
+      history.value = { status: 'loading' }
+      try {
+        const h = await fetcher.history()
+        if (my === seq) history.value = h ? { status: 'ok', value: h } : null
+      } catch (e) {
+        if (my === seq) history.value = { status: 'error', message: e instanceof Error ? e.message : String(e) }
+      }
+    }
+    await Promise.all([fetchFacts(), fetchHistory()])
   }
 
   function cached<T>(cache: Map<string, ShallowRef<Resource<T>>>, path: string, get: (p: string) => Promise<T | null>): ShallowRef<Resource<T>> {
@@ -73,8 +99,10 @@ export function createSourceSync(fetcher: SourceFetcher) {
   return {
     tree,
     facts,
+    history,
     refresh,
     file: (path: string) => cached(files, path, fetcher.file),
     exports: (path: string) => cached(exports, path, fetcher.exports),
+    commit: (hash: string) => cached(commits, hash, fetcher.commit ?? (async () => null)),
   }
 }

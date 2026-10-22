@@ -2,7 +2,7 @@
  * 按 HTTP 端点取被描述项目的源码（开发态由 ModelSource 插件提供，docs/architecture/source.md §2.1），注入给 DeskState 的源码同步。
  * 与 fetchModel 一样由项目视图创建：外界的地址只在呈现层出现。取不到清单时为 error（附原因）。
  */
-import type { ExportedSymbol, FactsPayload, SourceFile, SourcePayload } from '@/model'
+import type { ExportedSymbol, FactsPayload, SourceFile, SourceHistory, SourcePayload } from '@/model'
 import type { ModelWriter, SourceFetcher, WriteOutcome } from '@/state/useDeskState'
 
 export function httpSourceFetcher(project: string, base = ''): SourceFetcher {
@@ -18,6 +18,8 @@ export function httpSourceFetcher(project: string, base = ''): SourceFetcher {
     file: path => get<SourceFile>(`source/${enc(project)}/file.json?path=${enc(path)}`),
     exports: path => get<ExportedSymbol[]>(`source/${enc(project)}/exports.json?path=${enc(path)}`),
     facts: () => get<FactsPayload>(`source/${enc(project)}/facts.json`),
+    history: () => get<SourceHistory>(`source/${enc(project)}/history.json`),
+    commit: hash => get<{ hash: string; message: string }>(`source/${enc(project)}/commit.json?hash=${enc(hash)}`),
   }
 }
 

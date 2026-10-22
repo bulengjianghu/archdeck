@@ -7,6 +7,7 @@
  * 选中步骤时其余走过的边与步骤序号淡为灰色；选中其他对象时不变灰，舞台始终按进度（R15、R16）。
  * 选中文件时，其归属模块在本层的投影节点加文件高亮（G14）。
  * 结构视角开启「代码事实」时叠加证实标记、违规与代码依赖叠加线、本层的环（K9、Y4）；单击叠加线即选中它（K10）。
+ * 开启「演化」时叠加热度角标与时间耦合的波浪线（J5）；单击耦合线即选中它（J7）。
  * 画什么由 Layout 的 canvasScene 算出（ADR-0013）；这里只把结果写入 Vue Flow、把交互转成操作、适应画布。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -52,6 +53,7 @@ const scene = computed(() =>
     fileHits: desk.files.hits.value?.nodes ?? null,
     branchPointId: desk.run.branchPoint.value?.id ?? null,
     facts: desk.facts.level.value,
+    evolution: desk.evolution.level.value,
   }),
 )
 const nodes = computed<Node<NodeData>[]>(() => scene.value.nodes)
@@ -88,6 +90,8 @@ function onEdgeClick({ edge }: { edge: Edge<RouteEdgeData> }) {
   if (edge.data!.temp === 'unmodeled') return
   const o = edge.data!.overlay
   if (o) return desk.select({ kind: 'dep', id: `${o.fromModule}->${o.toModule}` })
+  const c = edge.data!.couple
+  if (c) return desk.select({ kind: 'couple', id: c.primary })
   const e = edge.data!.edge
   if (e.kind === 'direct') desk.select({ kind: 'relation', id: e.relationIds[0] })
   else desk.select({ kind: 'edge', id: e.id })

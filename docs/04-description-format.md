@@ -9,7 +9,7 @@
 
 ```text
 model/<项目>/
-  system.yaml              系统根 + 生成来源 source { repo, commit, generatedAt }；repo 也决定源码根目录（§3.7）
+  system.yaml              系统根 + 生成来源 source { repo, commit, generatedAt, history }；repo 也决定源码根目录（§3.7），history 为 git 历史的窗口与缺陷匹配（§3.7）
   modules/
     layers.yaml            骨架：全部层 + 第二级模块（ID 固定，见 §3.1）
     <区域>.yaml            各区域的子树：第二级模块之下的模块、本区域的关系、接口、数据结构
@@ -252,6 +252,18 @@ sourceIgnore:
   - tests/**
   - '*.md'
   - tsconfig*.json
+```
+
+- **git 历史**（J1、J4）：演化事实（热度与时间耦合）缺省统计近 180 天、缺陷修复按标题 `^(fix|hotfix|bugfix)\b` 或含「修复」判定、时间耦合阈值为同提交 ≥ 5 次且占两端 ≥ 30%。项目要改时写在 `system.yaml` 的 `source.history`，都可选：
+
+```yaml
+system:
+  source:
+    repo: h5player
+    history:
+      days: 365                              # 窗口天数，缺省 180
+      fixPatterns: ['^(bug|hotfix)[:(]', '缺陷']   # 补充的缺陷匹配正则（不分大小写），与缺省规则取并集
+      coupling: { min: 5, ratio: 0.3 }       # 时间耦合阈值：同提交次数、占两端修改次数的比例
 ```
 
 - **超长阈值**（G20）：文件树把超过 `sourceLimits.maxLines` 行（缺省 500）的 TS / JS / Vue 文件标红；项目需要别的阈值时写在 `source-ignore.yaml`，只写一处：

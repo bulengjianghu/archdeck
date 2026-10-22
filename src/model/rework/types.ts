@@ -6,8 +6,8 @@ import type { IssueSeverity } from '../types'
 import type { ViolationStatus } from '../governance/types'
 
 /** 返工项的类别，按呈现顺序 */
-export type ReworkCategory = 'description' | 'violation' | 'cycle' | 'ownership' | 'unconfirmed' | 'undescribed' | 'unmodeled' | 'review'
-export const REWORK_CATEGORIES: readonly ReworkCategory[] = ['description', 'violation', 'cycle', 'ownership', 'unconfirmed', 'undescribed', 'unmodeled', 'review']
+export type ReworkCategory = 'description' | 'violation' | 'cycle' | 'ownership' | 'unconfirmed' | 'undescribed' | 'unmodeled' | 'review' | 'coupling'
+export const REWORK_CATEGORIES: readonly ReworkCategory[] = ['description', 'violation', 'cycle', 'ownership', 'unconfirmed', 'undescribed', 'unmodeled', 'review', 'coupling']
 
 /** 严重度：error 卡门禁或剔除了实体；warning 描述与代码不一致；info 只提示（未描述依赖、已豁免） */
 export type ReworkSeverity = IssueSeverity | 'info'
@@ -96,6 +96,7 @@ export const REWORK_CATEGORY_LABELS: Record<ReworkCategory, string> = {
   undescribed: '未描述依赖',
   unmodeled: '结构中未建模的步骤',
   review: '需复核',
+  coupling: '时间耦合',
 }
 
 export const REWORK_SEVERITY_LABELS: Record<ReworkSeverity, string> = { error: '错误', warning: '提醒', info: '提示' }

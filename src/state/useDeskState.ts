@@ -2,7 +2,7 @@
  * DeskState：协调者（docs/architecture/view-state.md §2）。
  * - 持有视图状态（一个值）、加载后的模型与对比基线；
  * - 唯一写入口 dispatch(action) → transition() → 写入新状态；对外的操作都是构造动作并 dispatch 的包装；
- * - 派生要画的数据：核心（层次、选中、视角、层次视图）平铺，领域派生分组——run 运行视角、files 源码、versions 版本、facts 架构治理（ADR-0013、ADR-0015，见 ./desk/）；
+ * - 派生要画的数据：核心（层次、选中、视角、层次视图）平铺，领域派生分组——run 运行视角、files 源码、versions 版本、facts 架构治理、evolution 演化事实（ADR-0013、ADR-0015、ADR-0023，见 ./desk/）；
  * - 与外界的交互交给同步适配器：路由（sync/router）、模型源（sync/modelSource）、布局（sync/layout）、源码（sync/source）。
  * 呈现层只读这里的状态、只调这里的操作，不直接调用模型层的计算。
  */
@@ -50,6 +50,7 @@ import { createFiles } from './desk/files'
 import { createVersions } from './desk/versions'
 import { createFacts } from './desk/facts'
 import { createReview } from './desk/review'
+import { createEvolution } from './desk/evolution'
 
 export type { Selection, Toggles } from './transition'
 export { encodeSelection, decodeSelection } from './transition'
@@ -144,6 +145,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const run = createRun({ state, index, levelId, plan, view, positioned, fileOwners: files.owners })
   const versions = createVersions({ state, index, designs, commits, baselines, version: options.version })
   const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version })
+  const evolution = createEvolution({ state, index, view, files, facts, sync: sourceSync, design: !!options.version })
   const allIssues = computed(() => [...issues.value, ...files.warnings.value, ...facts.gateIssues.value])
   /** W-6、Q7：返工清单——问题页签与画布角标；源码归属与代码事实只对当前版本（G9、K8） */
   const rework = computed<ReworkList | null>(() => {
@@ -153,7 +155,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     const own = files.ownership.value
     const source = !options.version && own && p?.status === 'local' ? { own, tree: p } : undefined
     const report = options.version ? null : facts.report.value
-    return reworkList({ index: idx, issues: issues.value, ...(source ? { source } : {}), ...(report ? { report } : {}) })
+    const evo = options.version ? null : evolution.stats.value
+    return reworkList({ index: idx, issues: issues.value, ...(source ? { source } : {}), ...(report ? { report } : {}), ...(evo ? { evolution: evo } : {}) })
   })
   // ── 写入人拥有的文件（B1–B5，ADR-0019）：只发意图，结果由文件变化推送回来（N5）──
   const writer = options.writer ?? NO_WRITER
@@ -302,6 +305,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     versions,
     facts,
     review,
+    evolution,
     // 操作
     dispatch,
     init,

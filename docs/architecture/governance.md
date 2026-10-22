@@ -26,6 +26,7 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 
 - 「这条依赖违不违规」「这条关系是真是假」是关于被描述系统的知识，换成命令行、MCP 同样需要，所以全部在模型层（原则 6）；页面、`lint:model`、agent 接口三处结果一致（Q6）。
 - 接入层只做两件事：读懂 TypeScript 的导入语法，以及读写 `governance/` 下的两个文件。
+- git 历史（修改热度、缺陷热度、时间耦合）是与代码事实并列的第三类事实，见[演化事实](./evolution.md)（ADR-0023）；返工清单多一类「时间耦合」（J6）。
 
 ## 2. 依赖提取（接入层，`vite/readDeps.ts`）
 
@@ -109,7 +110,7 @@ interface LevelCycle { id: number; nodes: { id: string; module: string }[]; edge
 | `reworkMarkdown(list, title, { modelDir, sourceRoot, limit })` · `reworkItemMarkdown(item, opts)` | 给 agent 的指令：摘要、每条的规则、位置、受影响（缺省最多 20 处）、建议与 YAML 片段；描述文件路径加模型目录前缀 | Q9 |
 
 ```ts
-type ReworkCategory = 'description' | 'violation' | 'cycle' | 'ownership' | 'unconfirmed' | 'undescribed' | 'unmodeled'
+type ReworkCategory = 'description' | 'violation' | 'cycle' | 'ownership' | 'unconfirmed' | 'undescribed' | 'unmodeled' | 'coupling'   // coupling：时间耦合（J6）
 interface ReworkLoc { in: 'description' | 'source'; file: string; line?: number; note?: string }
 interface ReworkAction { kind: ReworkActionKind; text: string; file?: string; snippet?: string }
 interface ReworkItem {

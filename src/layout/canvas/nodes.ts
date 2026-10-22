@@ -26,6 +26,12 @@ function playClass(ctx: SceneContext, id: string): string | undefined {
   return undefined
 }
 
+/** J5：热度角标——本层投影里有这个节点时给出档位与种类 */
+function heatOf(ctx: SceneContext, id: string): Pick<NodeData, 'heat'> {
+  const h = ctx.evo?.heat.get(id)
+  return h ? { heat: { ...h, kind: ctx.evo!.kind } } : {}
+}
+
 /** 两框重合时系统框外扩的量（px） */
 const FRAME_GAP = 16
 const sameBox = (a: Box, b: Box) => a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h
@@ -113,6 +119,7 @@ function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box): 
     dim: dimmed(ctx, n.id, farFromFocus(ctx, n.id) && !(ctx.layered && n.role === 'layer')),
     ...diffOf(ctx.input.diff, n.moduleId),
     ...(ctx.facts?.cycles.has(n.id) ? { cycle: ctx.facts.cycles.get(n.id) } : {}),
+    ...heatOf(ctx, n.id),
   }
   if (n.role === 'boundary') {
     const path = (idx.pathOf.get(n.moduleId) ?? []).slice(1, -1).map(id => idx.modules.get(id)?.name ?? id)

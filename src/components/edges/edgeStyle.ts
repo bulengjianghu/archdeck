@@ -27,7 +27,11 @@ export const arrowDepth = (size: number): number => (size * 8) / 10
 /** 回放当前步骤：强调色底线上走一串浅色短点（P10） */
 export const FLOW = { baseWidth: 4, width: 1.6, dash: '3 9' } as const
 
-export function strokeColor(d: StrokeLook): string {
+/** J5：耦合线——灰色波浪线，无依赖无关系的更深色 */
+export type CoupleLook = StrokeLook & { isolated?: boolean }
+
+export function strokeColor(d: CoupleLook): string {
+  if (d.temp === 'couple') return d.isolated ? 'var(--edge-couple-strong)' : 'var(--edge-couple)'
   if (d.temp === 'code') return d.violated ? 'var(--danger)' : 'var(--edge-code)'
   if (d.temp === 'unmodeled') return 'var(--danger)'
   if (d.play === 'preview') return 'var(--warning)'
@@ -35,8 +39,9 @@ export function strokeColor(d: StrokeLook): string {
   return `var(--rel-${d.type ?? 'calls'})`
 }
 
-export function strokeStyle(d: StrokeLook) {
+export function strokeStyle(d: CoupleLook) {
   const stroke = strokeColor(d)
+  if (d.temp === 'couple') return { stroke, strokeWidth: d.isolated ? 2 : 1.5, strokeLinecap: 'round' as const, opacity: d.dim ? 0.12 : 0.9 }
   if (d.temp === 'code') return { stroke, strokeWidth: 2, strokeDasharray: DOTTED, strokeLinecap: 'round' as const, opacity: d.dim ? 0.12 : 0.95 }
   if (d.temp === 'unmodeled') return { stroke, strokeWidth: 1.5, strokeDasharray: '5 5', opacity: d.play === 'preview' ? 0.7 : 0.9 }
   return {

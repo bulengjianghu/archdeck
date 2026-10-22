@@ -4,12 +4,13 @@
  * 可加箭头（同步实心 / 异步空心 / implements 空心三角，与画布同一个 ArrowMarker，线同样回缩一个箭头深度）、违规红晕、回放流动、×N 标签与异常标记。
  */
 import { computed, useId } from 'vue'
-import { FLOW, arrowDepth, arrowSize, strokeColor, strokeStyle, type ArrowKind, type StrokeLook } from '../edges/edgeStyle'
+import { FLOW, arrowDepth, arrowSize, strokeColor, strokeStyle, type ArrowKind, type CoupleLook } from '../edges/edgeStyle'
+import { wavyPath } from '../edges/routePath'
 import ArrowMarker from '../edges/ArrowMarker.vue'
 
 const props = withDefaults(
   defineProps<{
-    look?: StrokeLook
+    look?: CoupleLook
     /** 覆盖线色：不表示某种类型的通道说明用中性色 */
     color?: string
     width?: number
@@ -34,6 +35,8 @@ const size = computed(() => arrowSize(props.look.weight))
 /** 线的终点：给箭头、标签或标记留位置；有箭头时再回缩一个箭头深度，箭头尖落在 tip */
 const tip = computed(() => props.width - 1 - (props.pill ? 10 : 0) - (props.mark ? 7 : 0))
 const end = computed(() => tip.value - (props.arrow ? arrowDepth(size.value) : 0))
+/** J5：耦合线的示意是波浪线 */
+const wavy = computed(() => (props.look.temp === 'couple' ? wavyPath({ x: 1, y: 5 }, { x: end.value, y: 5 }, 2.5, 8) : null))
 </script>
 
 <template>
@@ -56,6 +59,7 @@ const end = computed(() => tip.value - (props.arrow ? arrowDepth(size.value) : 0
         stroke-linecap="round"
       />
     </template>
+    <path v-else-if="wavy" :d="wavy" fill="none" :stroke="style.stroke" :stroke-width="style.strokeWidth" stroke-linecap="round" stroke-linejoin="round" />
     <line
       v-else
       x1="1"

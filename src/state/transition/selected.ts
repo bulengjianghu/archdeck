@@ -6,7 +6,7 @@
  *          结构视角：无（面板显示当前父模块）
  * 选中是唯一的主语；步骤与场景不存进 selection，「选中的步骤就是进度所在的一步」（V7）由表示本身保证。
  */
-import { lanesOf, type LevelView, type ModelIndex, type ReturnPairs, type ScenarioLevelView, type SequenceModel } from '@/model'
+import { coupleEnds, lanesOf, type LevelView, type ModelIndex, type ReturnPairs, type ScenarioLevelView, type SequenceModel } from '@/model'
 import type { Selection, TransitionResult, ViewState } from './types'
 
 export type Perspective = 'structure' | 'run'
@@ -84,6 +84,10 @@ export function emphasisOf(state: ViewState, ctx: EmphasisContext): Emphasis | n
     }
     case 'dep':
       s.id.split('->').forEach(add)
+      break
+    // J7：耦合线按选中关系的方式突出两端泳道
+    case 'couple':
+      coupleEnds(s.id)?.forEach(add)
       break
     case 'edge': {
       // 视图边的两端是视图节点：模块节点（含边界节点、带）按其模块取泳道，参与者节点即其泳道
