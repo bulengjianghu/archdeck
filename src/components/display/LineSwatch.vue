@@ -3,11 +3,9 @@
  * 图例的示意线：按 look（关系类型、事实状态、线宽档、临时线种类）取与画布 RouteEdge 同一套样式（edgeStyle），不手写示意样式。
  * 可加箭头（同步实心 / 异步空心 / implements 空心三角，与画布同一个 ArrowMarker，线同样回缩一个箭头深度）、违规红晕、回放流动、×N 标签与异常标记。
  */
-import { computed } from 'vue'
+import { computed, useId } from 'vue'
 import { FLOW, arrowDepth, arrowSize, strokeColor, strokeStyle, type ArrowKind, type StrokeLook } from '../edges/edgeStyle'
 import ArrowMarker from '../edges/ArrowMarker.vue'
-
-let seq = 0
 
 const props = withDefaults(
   defineProps<{
@@ -30,7 +28,8 @@ const props = withDefaults(
 
 const style = computed(() => ({ ...strokeStyle(props.look), ...(props.color ? { stroke: props.color } : {}) }))
 const stroke = computed(() => props.color ?? strokeColor(props.look))
-const markerId = `swatch-arrow-${++seq}`
+// <script setup> 每个实例都会重跑，模块级计数器在这里不唯一；用 useId 保证每条示意引用自己的箭头
+const markerId = `swatch-arrow-${useId()}`
 const size = computed(() => arrowSize(props.look.weight))
 /** 线的终点：给箭头、标签或标记留位置；有箭头时再回缩一个箭头深度，箭头尖落在 tip */
 const tip = computed(() => props.width - 1 - (props.pill ? 10 : 0) - (props.mark ? 7 : 0))

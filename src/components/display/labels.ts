@@ -11,7 +11,7 @@ export const MODE_HINT: Record<StaticMode, string> = {
 }
 
 export const TYPE_LABEL: Record<RelationType, string> = {
-  depends: '依赖（编译期）',
+  depends: '依赖',
   calls: '调用（控制权转移）',
   dataflow: '数据推送',
   event: '事件',

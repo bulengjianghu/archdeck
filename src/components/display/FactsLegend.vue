@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 「显示」面板 · 代码事实（结构视角，K9）：组标题右侧是开关；开启后说明证实、未证实、本层环、未描述依赖与违规怎么画 */
+/** 「显示」面板 · 代码事实（线型通道，结构视角，K9）：组标题右侧是开关；开启后说明证实、未证实、未描述依赖、违规与本层环怎么画。线型只在这一组讲（ADR-0017 第三轮） */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import DisplayGroup from './DisplayGroup.vue'
@@ -16,14 +16,14 @@ const hint = computed(() => (ready.value ? '' : FACTS_HINT[desk.facts.status.val
 </script>
 
 <template>
-  <DisplayGroup title="代码事实" :open="open" @toggle="emit('toggle')">
+  <DisplayGroup title="代码事实 · 线型" :open="open" @toggle="emit('toggle')">
     <template #actions>
       <label class="switch facts" :class="{ off: !ready }" :title="hint || '在图上叠加代码事实：关系是否被代码证实、未描述的依赖、违规与环'">
         <input v-model="desk.toggles.showFacts" type="checkbox" role="switch" :disabled="!ready" aria-label="代码事实" />
       </label>
     </template>
     <div v-if="!ready" class="item muted">{{ hint }}</div>
-    <div v-else-if="!desk.toggles.showFacts" class="item muted">打开后在图上叠加代码证实、未描述依赖、违规与环</div>
+    <div v-else-if="!desk.toggles.showFacts" class="item muted">已关闭：所有关系为实线；打开后叠加代码证实、未描述依赖、违规与环</div>
     <template v-else>
       <div class="item">
         <span class="sw"><LineSwatch :color="NEUTRAL" /></span>
@@ -34,16 +34,16 @@ const hint = computed(() => (ready.value ? '' : FACTS_HINT[desk.facts.status.val
         <span>虚线 + ? = 未证实（含部分证实）</span>
       </div>
       <div class="item">
-        <span class="sw"><span class="cycle">↻N</span></span
-        ><span>本层的环</span>
-      </div>
-      <div class="item">
         <span class="sw"><LineSwatch :look="{ temp: 'code' }" /></span>
         <span>点线 = 代码有、描述无（未描述的依赖）</span>
       </div>
       <div class="item">
         <span class="sw"><LineSwatch :look="{ temp: 'code', violated: true }" halo /></span>
         <span>违规（红色点线；关系边加红晕）</span>
+      </div>
+      <div class="item">
+        <span class="sw"><span class="cycle">↻N</span></span
+        ><span>本层的环</span>
       </div>
     </template>
   </DisplayGroup>

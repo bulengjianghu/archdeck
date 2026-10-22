@@ -5,9 +5,12 @@ import { openDesk } from './helpers'
 test('结构视角：关系类型筛选与边界节点开关在面板里，折叠后摘要列出', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk')
   const panel = page.getByRole('region', { name: '显示' })
-  // L10：图例按通道说明线型、箭头与线宽
-  await expect(panel).toContainText('箭头实心 = 同步，空心 = 异步')
-  await expect(panel).toContainText('线越粗 = 聚合的关系越多')
+  // L10、ADR-0017 第三轮：一个通道一组——颜色 = 关系类型（可筛选），箭头与粗细在「线的读法」卡片（不可点击），线型只在「代码事实」组讲
+  const reading = panel.getByLabel('线的读法')
+  await expect(reading).toContainText('同步')
+  await expect(reading).toContainText('≥5')
+  await expect(reading.getByRole('button')).toHaveCount(0)
+  await expect(panel.getByText('实线 = 已证实', { exact: false })).toHaveCount(1)
   const depends = panel.getByRole('button', { name: /依赖/ })
   await depends.click()
   await expect(depends).toHaveAttribute('aria-pressed', 'false')

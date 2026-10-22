@@ -1,5 +1,11 @@
 <script setup lang="ts">
-/** 「显示」面板 · 关系：类型行既是图例又是筛选（结构视角点击筛选，L8）；线型、箭头、线宽各一行说明（L10） */
+/**
+ * 「显示」面板 · 关系类型（颜色通道，ADR-0018 / ADR-0017 第三轮）：
+ * - 类型列表是主体：按运行时 / 编译期两段，行既是图例又是筛选（结构视角点击筛选，L8）；示意带该类关系在画布上的箭头
+ *   （箭头按同步 / 异步取，只有 implements 固定为空心三角，arrowOf），所以类型行一律画实心、implements 画三角。
+ * - 「线的读法」是修饰：对任意类型都适用的箭头与粗细，放在浅底卡片里、中性色示意、不可点击。
+ * 线型（事实状态）不在这里讲，只在「代码事实」组。
+ */
 import { computed } from 'vue'
 import { RELATION_TYPES, RUNTIME_RELATION_TYPES, type RelationType } from '@/model'
 import { useDesk } from '@/state/inject'
@@ -12,7 +18,13 @@ const emit = defineEmits<{ toggle: [] }>()
 const desk = useDesk()
 
 const NEUTRAL = 'var(--text-2)'
-const lookOf = (t: RelationType, off = false) => ({ type: t, compile: !RUNTIME_RELATION_TYPES.includes(t), weight: 2 as const, muted: off })
+const isRuntime = (t: RelationType) => RUNTIME_RELATION_TYPES.includes(t)
+const SECTIONS = [
+  { title: '运行时', types: TYPE_ORDER.filter(isRuntime) },
+  { title: '编译期', types: TYPE_ORDER.filter(t => !isRuntime(t)) },
+]
+const lookOf = (t: RelationType, off = false) => ({ type: t, compile: !isRuntime(t), weight: 2 as const, muted: off })
+const arrowOf = (t: RelationType) => (t === 'implements' ? 'triangle' : 'closed')
 const shown = (t: RelationType) => desk.toggles.relationTypes.includes(t)
 const hiddenTypes = computed(() => RELATION_TYPES.length - desk.toggles.relationTypes.length)
 function toggleType(t: RelationType) {
@@ -23,58 +35,101 @@ const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] 
 </script>
 
 <template>
-  <DisplayGroup title="关系" :open="open" @toggle="emit('toggle')">
+  <DisplayGroup title="关系类型 · 颜色" :open="open" @toggle="emit('toggle')">
     <template v-if="!run && open" #actions>
       <button v-if="hiddenTypes" class="link" @click="showAllTypes">全部显示</button>
       <span v-else class="aside-note">点击筛选</span>
     </template>
-    <div v-if="!run" role="group" aria-label="关系类型筛选">
-      <button
-        v-for="t in TYPE_ORDER"
-        :key="t"
-        class="item type"
-        :class="{ off: !shown(t) }"
-        :aria-pressed="shown(t)"
-        :title="shown(t) ? '点击隐藏这类关系' : '点击显示这类关系'"
-        @click="toggleType(t)"
-      >
-        <span class="sw"><LineSwatch :look="lookOf(t, !shown(t))" /></span>
-        <span>{{ TYPE_LABEL[t] }}</span>
-      </button>
+    <div class="type-list" :role="run ? undefined : 'group'" :aria-label="run ? undefined : '关系类型筛选'">
+      <template v-for="sec in SECTIONS" :key="sec.title">
+        <div class="section">{{ sec.title }}</div>
+        <template v-if="!run">
+          <button
+            v-for="t in sec.types"
+            :key="t"
+            class="item type"
+            :class="{ off: !shown(t) }"
+            :aria-pressed="shown(t)"
+            :title="shown(t) ? '点击隐藏这类关系' : '点击显示这类关系'"
+            @click="toggleType(t)"
+          >
+            <span class="sw"><LineSwatch :look="lookOf(t, !shown(t))" :arrow="arrowOf(t)" :width="36" /></span>
+            <span>{{ TYPE_LABEL[t] }}</span>
+          </button>
+        </template>
+        <template v-else>
+          <div v-for="t in sec.types" :key="t" class="item">
+            <span class="sw"><LineSwatch :look="lookOf(t)" :arrow="arrowOf(t)" :width="36" /></span>
+            <span>{{ TYPE_LABEL[t] }}</span>
+          </div>
+        </template>
+      </template>
     </div>
-    <template v-else>
-      <div v-for="t in TYPE_ORDER" :key="t" class="item">
-        <span class="sw"><LineSwatch :look="lookOf(t)" /></span>
-        <span>{{ TYPE_LABEL[t] }}</span>
+
+    <div class="reading" aria-label="线的读法">
+      <div class="reading-title">线的读法 · 适用于任意类型</div>
+      <div class="reading-row">
+        <span class="dim">箭头</span>
+        <span class="pair"><LineSwatch :color="NEUTRAL" :width="18" arrow="closed" />同步</span>
+        <span class="pair"><LineSwatch :color="NEUTRAL" :width="18" arrow="open" />异步</span>
+        <span class="pair"><LineSwatch :color="NEUTRAL" :width="18" arrow="triangle" />实现</span>
       </div>
-    </template>
-    <div class="item">
-      <span class="sw pair"><LineSwatch :color="NEUTRAL" :width="13" /><LineSwatch :color="NEUTRAL" :width="13" :look="{ factState: 'unconfirmed' }" /></span>
-      <span>实线 = 已证实，虚线 = 未证实</span>
-    </div>
-    <div class="item">
-      <span class="sw pair wide"><LineSwatch :color="NEUTRAL" :width="24" arrow="closed" /><LineSwatch :color="NEUTRAL" :width="24" arrow="open" /></span>
-      <span>箭头实心 = 同步，空心 = 异步</span>
-    </div>
-    <div class="item">
-      <span class="sw"><LineSwatch :look="{ type: 'implements', compile: true }" arrow="triangle" /></span>
-      <span>空心三角 = 实现端口 / 契约</span>
-    </div>
-    <div class="item">
-      <span class="sw"><LineSwatch :color="NEUTRAL" :look="{ weight: 3 }" pill /></span>
-      <span>线越粗 = 聚合的关系越多（×N）</span>
+      <div class="reading-row">
+        <span class="dim">粗细</span>
+        <span class="pair"><LineSwatch :color="NEUTRAL" :width="16" :look="{ weight: 1 }" />1 条</span>
+        <span class="pair"><LineSwatch :color="NEUTRAL" :width="16" :look="{ weight: 2 }" />2–4</span>
+        <span class="pair"><LineSwatch :color="NEUTRAL" :width="22" :look="{ weight: 3 }" pill />≥5 · ×N</span>
+      </div>
     </div>
   </DisplayGroup>
 </template>
 
 <style scoped>
-.sw.pair {
-  gap: 2px;
+/* 带箭头的类型示意比通用示意列宽一些，线不被箭头吃掉 */
+.type-list .sw {
+  width: 36px;
 }
 
-/* 箭头与画布同大（14 px 起），两段并排放不进 28 px 的示意列 */
-.sw.wide {
-  width: auto;
+.section {
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+
+.reading {
+  margin-top: 6px;
+  padding: 5px 8px 6px;
+  background: var(--surface-2);
+  border-radius: 6px;
+  color: var(--text-2);
+  font-size: 11.5px;
+}
+
+.reading-title {
+  margin-bottom: 2px;
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+
+.reading-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 20px;
+  white-space: nowrap;
+}
+
+.reading-row .dim {
+  width: 24px;
+  flex: none;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .aside-note {

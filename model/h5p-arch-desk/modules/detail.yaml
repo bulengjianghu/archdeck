@@ -80,7 +80,7 @@ modules:
   - id: present.canvas.legend
     name: 显示面板（显示设置与图例）
     parent: present.canvas
-    responsibility: 画布右下角的「显示」面板，先「设置」后「图例」（ADR-0017）：设置只放没有图例的开关（结构视角为边界节点、只看现状；运行视角为静态关系显示方式）；图例按画布对象分组、每组可折叠——关系（类型行按运行时在前、编译期在后，颜色与粗细示意，结构视角下每行兼作类型筛选；线型、箭头、线宽与 ×N 的说明，L10）、节点、代码事实（结构视角，开关在组标题）、回放（运行视角）；一行一项，示意线由 LineSwatch 按与边组件共用的 edgeStyle 画出，与画布同款。各组为子组件（NodeSettings、RelationLegend、FactsLegend、ReplayLegend，外壳 DisplayGroup）。折叠时摘要列出非默认的设置（运行视角缺省折叠，摘要总是「静态关系：<方式>」）；面板展开与各组折叠按视角记在本机（useDisplayPrefs），运行视角默认只展开「回放」。
+    responsibility: 画布右下角的「显示」面板，先「设置」后「图例」（ADR-0017）：设置只放没有图例的开关（结构视角为边界节点、只看现状；运行视角为静态关系显示方式）；图例一个视觉通道一组、每组可折叠（ADR-0017 第三轮）——关系类型 · 颜色（类型列表按运行时 / 编译期两段，示意带该类箭头，结构视角下每行兼作类型筛选；下方「线的读法」卡片说明对任意类型适用的箭头与粗细、×N，L10）、节点、代码事实 · 线型（结构视角，开关在组标题；线型只在这一组讲）、回放（运行视角）；一行一项，示意线由 LineSwatch 按与边组件共用的 edgeStyle 画出，与画布同款。各组为子组件（NodeSettings、RelationLegend、FactsLegend、ReplayLegend，外壳 DisplayGroup）。折叠时摘要列出非默认的设置（运行视角缺省折叠，摘要总是「静态关系：<方式>」）；面板展开与各组折叠按视角记在本机（useDisplayPrefs），运行视角默认只展开「回放」。
     codeRefs: [src/components/DisplayPanel.vue, src/components/display/**]
 
   # ── 视图状态层 ──────────────────────────────────────────
