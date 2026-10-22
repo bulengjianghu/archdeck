@@ -174,11 +174,6 @@ modules:
         kind: subsystem
         responsibility: npm run lint:model：校验全部项目或指定目录（含各设计版本的每一轮与 design.yaml），源码在本地时附带当前版本的源码归属警告（G9）与架构治理（代码事实、规则违规、环度，按基线棘轮：新增违规与环度上升为错误，U8），按文件:行号输出问题，有错误时非零退出，可接入 CI。
         codeRefs: [scripts/lint-model.ts]
-      - id: access.migrate
-        name: 关系类型迁移
-        kind: subsystem
-        responsibility: npm run migrate:relations：把描述（含设计版本各轮）里关系类型的旧名改为新名——event → notifies 并翻转 from / to，dataflow → streams（M12、ADR-0022）；用 YAML 文档模型定位节点、只替换这几个值在原文中的字符，注释与排版不动；列出说明里有方向字样、需要人工核对的条目。不进只读的 agent 接口（Q5）。
-        codeRefs: [scripts/migrate-relations.ts, vite/migrateRelations.ts]
       - id: access.deps
         name: 依赖提取
         kind: subsystem

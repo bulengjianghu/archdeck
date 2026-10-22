@@ -92,7 +92,6 @@ flowchart TB
 | 描述写入 | 只追加人拥有的三类内容：评审意见（`design.yaml`）、例外（`rules.yaml`）、忽略项（`source-ignore.yaml`），用 YAML 文档模型保留注释；端点由 ModelSource 插件挂载，只收同源 JSON POST（B1–B5） | 已实现 | 加载与版本 |
 | 源码读取 | 解析源码根目录、列出文件清单与包入口、读取单个文件、用 TypeScript 解析导出，端点由 ModelSource 插件挂载（G1、G2、G11、G17） | 已实现 | 源码 |
 | 命令行校验 | `npm run lint:model`，含设计版本的每一轮；当前版本附带归属警告（G9）与治理门禁（U8），读不到源码为错误（G1） | 已实现 | 加载与版本 · 架构治理 |
-| 关系类型迁移 | `npm run migrate:relations`：描述（含设计版本各轮）里的旧名 `event` → `notifies` 并翻转两端、`dataflow` → `streams`，只替换这几个值、保留注释与排版，列出说明里有方向字样的条目（M12、ADR-0022） | 已实现 | 加载与版本 |
 | 依赖提取 | 用 TypeScript 语法解析提取文件依赖、读 tsconfig paths 并经源码归属的说明符解析（K2）、穿透再导出；按修改时间缓存；端点由 ModelSource 插件挂载（K1–K3） | 已实现 | 架构治理 |
 | 治理存储 | 读写项目下 `governance/`：基线（只由命令行生成）、拦截记录（追加）；读源码根目录的 git 提交（U7、Q4） | 已实现 | 架构治理 |
 | agent 接口 | 查询核心（加载描述、源码、事实，调用模型层；每次查询前比对输入，变了就重建）与两种外壳：命令行 `npm run arch`、MCP 服务器 `npm run arch:mcp`（Q1–Q9，含返工清单 `issues`） | 已实现 | 架构治理 |
@@ -163,7 +162,6 @@ packages/h5p-arch-desk/
   vite/                       接入层：archModelPlugin.ts（端点与推送）、readModelDir.ts（读取与摘要）、readGit.ts（描述的 git 历史）、readHealth.ts（健康度）、writeModel.ts（人拥有的文件的追加写入）、readSource.ts（源码根目录、文件清单、文件、导出）、
                               readDeps.ts（依赖提取）、governanceStore.ts（基线与拦截记录）
   scripts/lint-model.ts       命令行校验
-  scripts/migrate-relations.ts  关系类型迁移（改写在 vite/migrateRelations.ts，M12）
   scripts/agent/service.ts    agent 接口的查询核心；scripts/arch.ts（命令行）、scripts/arch-mcp.ts（MCP 服务器）
   model/<项目>/governance/    基线 baseline.json 与拦截记录 ledger.jsonl（不属于描述，ADR-0015）
   src/

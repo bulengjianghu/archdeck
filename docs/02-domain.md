@@ -173,7 +173,7 @@
 | M9 | 有错也继续：error 级问题的实体被剔除，warning 级只去掉坏引用，问题带文件、路径与行号 | 定 | Validator | 已实现 |
 | M10 | 内联子模块的 `parent` 字段被忽略并提醒 | 定 | Loader | 已实现 |
 | M11 | `implements` 的 `to` 模块没有声明任何接口（子树内没有 `owner` 指向它的接口，`provides` 也为空）时提醒：没有可实现的契约，多半应为 `depends` 或漏了接口声明（与 M7 同级） | 定（负责人 2026-10-22 裁决，ADR-0022） | Validator | 已实现 |
-| M12 | 关系类型的旧名是别名：`event` 映射为 `notifies` 并翻转 `from` / `to`，`dataflow` 映射为 `streams`；每条报提醒「请迁移」（带文件行号），迁移用 `npm run migrate:relations`；一轮后删除别名 | 定（负责人 2026-10-22 裁决，ADR-0022） | Loader | 已实现 |
+| M12 | 关系类型的旧名是别名：`event` 映射为 `notifies` 并翻转 `from` / `to`，`dataflow` 映射为 `streams`；每条报提醒（带文件行号），按提醒手工改（`event` 同时对调两端）；一轮后删除别名 | 定（负责人 2026-10-22 裁决，ADR-0022） | Loader | 已实现 |
 | M13 | `pull` 只对 `streams` 有意义，写在其他类型上提醒并去掉 | 推（ADR-0022） | Validator | 已实现 |
 
 ### 2.2 L 层次投影

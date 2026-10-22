@@ -217,8 +217,6 @@ relations:
   - {id: rel.gv.ports-source, from: model.governance.ports, to: model.source.ownership, type: calls, description: moduleInterfaces：模块的接口（G12）}
   - {id: rel.gv.facts-ports-source, from: model.governance.facts, to: model.source.ownership, type: calls, description: moduleInterfaces：implements 目标声明的接口名（K5 的证据）}
   - {id: rel.gv.facts-ports, from: state.desk.facts, to: model.governance.ports, type: calls, description: portTriad：模块面板的端口三角（K11）}
-  - {id: rel.gv.migrate-model, from: access.migrate, to: model.types, type: depends, description: LEGACY_RELATION_TYPES：旧名与新名、是否翻转（M12）}
-  - {id: rel.gv.migrate-reader, from: access.migrate, to: access.reader, type: calls, description: resolveModelRoot、listProjectIds：找到要迁移的项目目录}
   - {id: rel.gv.rework-types, from: model.rework, to: model.types, type: depends, description: 返工项的类型、类别与严重度名称（契约），moduleName、RULE_LABELS}
   - {id: rel.gv.store-reader, from: access.governance-store, to: access.reader, type: depends, description: GOVERNANCE_DIR：治理产物目录名与描述读取共用（读取时跳过）}
   - {id: rel.gv.dep-content, from: present.panel.dep, to: present.panel.content, type: depends, description: 复用 Section}

@@ -130,7 +130,7 @@ function currentType(r: RelationDef, src: SourceLoc, issues: Issue[]): Pick<Rela
   issues.push({
     severity: 'warning',
     code: 'relation-type-renamed',
-    message: `关系「${r.id}」的类型「${r.type}」已改名为「${legacy.to}」${legacy.flip ? '，箭头改为控制流方向（发布者 → 订阅者），from / to 已按翻转读取' : ''}；请迁移（npm run migrate:relations）`,
+    message: `关系「${r.id}」的类型「${r.type}」已改名为「${legacy.to}」${legacy.flip ? '，箭头改为控制流方向（发布者 → 订阅者），from / to 已按翻转读取' : ''}；请按提醒改为新名${legacy.flip ? '并对调 from / to' : ''}（别名一轮后删除）`,
     ...src,
   })
   return legacy.flip ? { type: legacy.to, from: r.to, to: r.from } : { type: legacy.to, from: r.from, to: r.to }

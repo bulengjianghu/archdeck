@@ -64,7 +64,7 @@ const ISSUE_RULES: Record<string, string[]> = {
 
 /** Q8：描述问题的建议动作 */
 function descriptionFix(i: Issue): string {
-  if (i.code === 'relation-type-renamed') return '迁移旧名：npm run migrate:relations -- <项目目录>（event 同时翻转 from / to），再核对说明里的方向字样'
+  if (i.code === 'relation-type-renamed') return '改为新名：event → notifies 并对调 from / to，dataflow → streams；再核对说明里的方向字样'
   if (i.code === 'implements-no-interface') return '确实实现了契约时在目标模块声明接口（interfaces 的 owner 或 provides）；只是使用对方时改为 depends'
   return i.severity === 'error' ? '改正描述：这一处的实体已被剔除，图上看不到它' : '改正描述：坏引用已被去掉'
 }

@@ -15,8 +15,7 @@
     "format": "prettier --write . && eslint . --fix",
     "lint:model": "vite-node scripts/lint-model.ts --",
     "arch": "vite-node scripts/arch.ts --",
-    "arch:mcp": "vite-node scripts/arch-mcp.ts",
-    "migrate:relations": "vite-node scripts/migrate-relations.ts --"
+    "arch:mcp": "vite-node scripts/arch-mcp.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
