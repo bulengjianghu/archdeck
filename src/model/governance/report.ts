@@ -36,7 +36,7 @@ export function governanceReport(
   baseline: Baseline | null,
 ): GovernanceReport {
   const entryOf = entryResolver(index, own, tree)
-  const { moduleDeps, skipped } = liftDeps(index, own, code.deps)
+  const { moduleDeps, skipped, conflicted } = liftDeps(index, own, code.deps)
   const relations = confirmRelations(index, moduleDeps, own.direct)
   const undescribed = undescribedDeps(index, moduleDeps)
   const violations = withBaseline(evaluateRules(index, own, moduleDeps.values(), entryOf), baseline)
@@ -89,6 +89,7 @@ export function governanceReport(
   return {
     moduleDeps,
     skipped,
+    conflicted,
     fileDeps: code.deps.length,
     external: code.external,
     relations,

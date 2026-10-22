@@ -54,7 +54,7 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 
 | 函数 | 做什么 | 规则 |
 |---|---|---|
-| `liftDeps(index, own, deps)` | 文件依赖两端取归属模块（冲突时全部），去掉同模块与祖先后代，按 `A->B` 合并为 `ModuleDep`；返回 `{ moduleDeps, skipped }` | K4 |
+| `liftDeps(index, own, deps)` | 文件依赖两端取归属模块，去掉同模块与祖先后代，按 `A->B` 合并为 `ModuleDep`；一端未归属或已忽略的计入 `skipped`，一端是归属冲突文件的不提升、列入 `conflicted`；返回 `{ moduleDeps, skipped, conflicted }` | K4 |
 | `hostOf(index, direct, id)` · `confirmRelations(index, moduleDeps, direct)` | 宿主：自身或最近的、有直接归属文件的祖先。每条关系：端点有参与者或目标态 → `skipped`；两端宿主相同 → `skipped` 并带 `host`（概念拆分，同文件，面板说明）；有 `from` 子树 → `to` 子树的模块依赖（`dataflow` 两向）→ `confirmed`，带依据的模块依赖键；否则 `unconfirmed` | K5、K5a |
 | `undescribedDeps(index, moduleDeps)` | 含 `value` 文件依赖、且没有关系覆盖的模块依赖（端点相同或互为祖先后代、方向一致，`dataflow` 不论方向）；只引类型的不算 | K7 |
 | `judge(index, rules, entryOf, dep)` | 一条（依赖方模块，被依赖方模块，经由文件及其归属）对全部规则的判定：层规则、白名单、访问面，返回命中的 `{ kind, at, reason }` 与是否有规则约束；`allow` 匹配的标为已豁免 | U2–U5 |
@@ -83,7 +83,7 @@ interface Violation {
 interface Cycle { members: string[]; tolerated: boolean }
 interface Baseline { createdAt: string; commit?: string; violations: string[]; cyclicity: { modules: number; files: number } }
 interface GovernanceReport {
-  moduleDeps: Map<string, ModuleDep>; skipped: number; external: Record<string, number>
+  moduleDeps: Map<string, ModuleDep>; skipped: number; conflicted: FileDep[]; external: Record<string, number>
   relations: Map<string, { status: 'confirmed' | 'unconfirmed' | 'skipped'; deps: string[] }>
   undescribed: ModuleDep[]; violations: Violation[]
   moduleCycles: Cycle[]; fileCycles: Cycle[]; cyclicity: { modules: number; files: number }
@@ -104,7 +104,7 @@ interface LevelCycle { id: number; nodes: { id: string; module: string }[]; edge
 
 | 函数 | 做什么 | 规则 |
 |---|---|---|
-| `reworkList({ index, issues, source?, report? })` | 汇总：校验问题（跳过归属、门禁、事实与 S5a 未建模，它们由下列材料重新算）、归属（冲突按匹配的 codeRefs 组合、未归属按目录、entry 不存在）、违规（按基线状态 · 种类 · 规则所在 · 被依赖方）、环度上升与可收紧基线、未证实的编译期关系、未描述依赖、未建模的步骤（`bindRelation` 绑定不到关系的消息步骤，按两端聚合）；排序后给出各严重度与类别的计数 | Q7、Q8 |
+| `reworkList({ index, issues, source?, report? })` | 汇总：校验问题（跳过归属、门禁、事实与 S5a 未建模，它们由下列材料重新算）、归属（冲突按匹配的 codeRefs 组合，`detail` 注明一端是这组文件、因冲突未计入的依赖条数（`report.conflicted`，K4）；未归属按目录；entry 不存在）、违规（按基线状态 · 种类 · 规则所在 · 被依赖方）、环度上升与可收紧基线、未证实的编译期关系、未描述依赖、未建模的步骤（`bindRelation` 绑定不到关系的消息步骤，按两端聚合）；排序后给出各严重度与类别的计数 | Q7、Q8 |
 | `reworkMarkdown(list, title, { modelDir, sourceRoot, limit })` · `reworkItemMarkdown(item, opts)` | 给 agent 的指令：摘要、每条的规则、位置、受影响（缺省最多 20 处）、建议与 YAML 片段；描述文件路径加模型目录前缀 | Q9 |
 
 ```ts
@@ -120,7 +120,7 @@ interface ReworkItem {
 interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; byCategory: Record<ReworkCategory, number>; facts: boolean }
 ```
 
-- 聚合的判据是「改一处能消掉几条」：同一组重叠的 codeRefs、同一目录的漏写、越过同一条边界依赖同一个模块（常见于契约放错了层）、同一对端点之间缺的关系。h5player 的 287 条违规由此收成 17 条。
+- 聚合的判据是「改一处能消掉几条」：同一组重叠的 codeRefs、同一目录的漏写、越过同一条边界依赖同一个模块（常见于契约放错了层）、同一对端点之间缺的关系。h5player 的 178 条违规由此收成 13 条。
 - 建议动作只给方向与片段，不替人决定：加例外、收紧基线由架构师决定（U5、U7）。
 
 ## 5. agent 接口（接入层，`scripts/agent/`、`scripts/arch.ts`、`scripts/arch-mcp.ts`）

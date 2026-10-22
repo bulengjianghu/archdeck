@@ -5,7 +5,7 @@
 import { RULE_LABELS, moduleName } from '../names'
 import { bindRelation, forEachStep, RUNTIME_RELATION_TYPES } from '../scenario'
 import { matchRef, moduleEntry, type LocalSource, type SourceOwnership } from '../source'
-import type { GovernanceReport, Violation } from '../governance'
+import type { FileDep, GovernanceReport, Violation } from '../governance'
 import type { Issue, ModelIndex, SourceLoc } from '../types'
 import { REWORK_CATEGORIES, REWORK_SEVERITIES, type ReworkAction, type ReworkItem, type ReworkList, type ReworkLoc, type ReworkSeverity } from './types'
 
@@ -92,7 +92,7 @@ export function reworkList(input: ReworkInput): ReworkList {
     })
   }
 
-  if (source) items.push(...ownershipItems(index, source.own, source.tree, name))
+  if (source) items.push(...ownershipItems(index, source.own, source.tree, name, report?.conflicted))
   if (report) items.push(...factItems(index, report, name))
   items.push(...unmodeledItems(index, name))
 
@@ -107,7 +107,13 @@ export function reworkList(input: ReworkInput): ReworkList {
 
 // ── 源码归属（G6、G7、G10） ──
 
-function ownershipItems(index: ModelIndex, own: SourceOwnership, tree: Pick<LocalSource, 'files' | 'packages'>, name: (id: string) => string): ReworkItem[] {
+function ownershipItems(
+  index: ModelIndex,
+  own: SourceOwnership,
+  tree: Pick<LocalSource, 'files' | 'packages'>,
+  name: (id: string) => string,
+  conflicted?: readonly FileDep[],
+): ReworkItem[] {
   const items: ReworkItem[] = []
 
   // G6：按「哪几个模块的哪几条 codeRefs 同时匹配」聚合，同一对重叠的 codeRefs 只算一个根因
@@ -125,13 +131,17 @@ function ownershipItems(index: ModelIndex, own: SourceOwnership, tree: Pick<Loca
   for (const [key, c] of conflicts) {
     const first = index.modules.get(c.refs[0].module)
     const at = descLoc(first?.src)
+    // K4：一端是这些冲突文件的依赖不提升到任何模块；冲突解决后自然计入
+    const inGroup = new Set(c.files)
+    const uncounted = conflicted?.filter(d => inGroup.has(d.from) || inGroup.has(d.to)).length ?? 0
     items.push({
       id: `ownership:conflict:${key}`,
       category: 'ownership',
       severity: 'warning',
-      rules: ['G6'],
+      rules: uncounted ? ['G6', 'K4'] : ['G6'],
       code: 'source.conflict',
       title: `codeRefs 重叠：${c.refs.map(r => `${name(r.module)}「${r.refs.join('、')}」`).join(' 与 ')} 同时匹配 ${c.files.length} 个文件`,
+      ...(uncounted ? { detail: `${uncounted} 条依赖因冲突未计入（不提升到任何模块，K4）；冲突解决后自然计入` } : {}),
       ...(at ? { at } : {}),
       affected: c.files.map(file => ({ in: 'source', file })),
       actions: [

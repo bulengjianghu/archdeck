@@ -145,6 +145,8 @@ export interface GovernanceReport {
   moduleDeps: Map<string, ModuleDep>
   /** 有一端未归属或已忽略、未提升的文件依赖条数（K4） */
   skipped: number
+  /** 有一端是归属冲突文件（G6）、未提升的文件依赖（K4）；返工清单按冲突项计数 */
+  conflicted: FileDep[]
   fileDeps: number
   external: Record<string, number>
   relations: Map<string, Confirmation>

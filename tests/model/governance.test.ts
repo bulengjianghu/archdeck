@@ -131,12 +131,19 @@ describe('K4 模块依赖', () => {
     expect(skipped).toBe(1)
   })
 
-  it('归属冲突时每个归属模块都算', () => {
+  it('一端是归属冲突文件（G6）的依赖不提升到任何模块，单独列出；冲突解决后自然计入', () => {
     const { index } = setup()
     const own = assignFiles(index, SRC, [])
     own.owners.set('src/core/util/u.ts', ['core.util', 'core.impl'])
-    const { moduleDeps } = liftDeps(index, own, [dep('src/ui/view/a.ts', 'src/core/util/u.ts')])
-    expect([...moduleDeps.keys()].sort()).toEqual(['ui.view->core.impl', 'ui.view->core.util'])
+    own.conflicts.push('src/core/util/u.ts')
+    const deps = [dep('src/ui/view/a.ts', 'src/core/util/u.ts'), dep('src/core/util/u.ts', 'src/ui/view/a.ts'), dep('src/ui/view/a.ts', 'src/ui/store/s.ts')]
+    const { moduleDeps, skipped, conflicted } = liftDeps(index, own, deps)
+    expect([...moduleDeps.keys()]).toEqual(['ui.view->ui.store'])
+    expect(conflicted).toEqual(deps.slice(0, 2))
+    expect(skipped).toBe(0)
+    const fixed = liftDeps(index, assignFiles(index, SRC, []), deps)
+    expect([...fixed.moduleDeps.keys()].sort()).toEqual(['core.util->ui.view', 'ui.view->core.util', 'ui.view->ui.store'])
+    expect(fixed.conflicted).toEqual([])
   })
 })
 

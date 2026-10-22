@@ -166,5 +166,9 @@ describe('§6.10 架构治理验收', () => {
     expect(violations.length).toBeLessThan(total.new + total.known + total.open)
     expect(violations[0].affected.length).toBeGreaterThan(100)
     expect(violations[0].actions.map(a => a.kind)).toEqual(['fix-code', 'add-exception'])
+    // K4：归属冲突文件的依赖不提升，冲突项注明未计入的条数
+    const conflicts = r.list.items.filter(i => i.code === 'source.conflict')
+    expect(conflicts.length).toBeGreaterThan(0)
+    expect(conflicts.every(i => /^\d+ 条依赖因冲突未计入/.test(i.detail ?? ''))).toBe(true)
   })
 })

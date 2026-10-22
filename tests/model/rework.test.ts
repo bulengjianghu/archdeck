@@ -93,6 +93,8 @@ const DEPS: FileDep[] = [
   dep('src/core/util/u.ts', 'src/ui/store/s.ts', 6), // 已豁免
   dep('src/ui/view/a.ts', 'src/ui/store/s.ts'), // rel.1 证实
   dep('src/ui/view/a.ts', 'src/ui/panel/p.ts', 7), // 未描述依赖
+  dep('src/core/impl/i.ts', 'src/shared/x.ts', 8), // 一端归属冲突：不提升（K4），不衍生违规
+  dep('src/shared/y.ts', 'src/ui/view/a.ts', 9), // 同上
 ]
 
 function setup(baseline: Baseline | null = null, withFacts = true) {
@@ -114,6 +116,16 @@ describe('Q7 内容与按根因聚合', () => {
     expect(c.title).toContain('View「src/shared/**」')
     expect(c.title).toContain('Store「src/shared/**」')
     expect(c.target.modules).toEqual(['ui.store', 'ui.view'])
+  })
+
+  it('K4：归属冲突项注明因冲突未计入的依赖条数，这些依赖不衍生违规与未描述依赖', () => {
+    const { list } = setup()
+    const [c] = byCode(list.items, 'source.conflict')
+    expect(c.detail).toBe('2 条依赖因冲突未计入（不提升到任何模块，K4）；冲突解决后自然计入')
+    expect(c.rules).toEqual(['G6', 'K4'])
+    const sources = list.items.filter(i => i.category === 'violation' || i.category === 'undescribed').flatMap(i => i.affected.map(a => `${a.file} ${a.note ?? ''}`))
+    expect(sources.some(f => f.includes('src/shared/'))).toBe(false)
+    expect(setup(null, false).list.items.find(i => i.code === 'source.conflict')!.detail).toBeUndefined()
   })
 
   it('未归属文件按所在目录聚合', () => {

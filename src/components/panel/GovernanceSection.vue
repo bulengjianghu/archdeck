@@ -65,7 +65,8 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
       <dl class="kv">
         <dt>文件依赖</dt>
         <dd>
-          {{ r.fileDeps }}<span v-if="r.skipped" class="muted">（一端未归属或已忽略 {{ r.skipped }}）</span>
+          {{ r.fileDeps }}<span v-if="r.skipped" class="muted">（一端未归属或已忽略 {{ r.skipped }}）</span
+          ><span v-if="r.conflicted.length" class="muted">（因归属冲突未计入 {{ r.conflicted.length }}）</span>
         </dd>
         <dt>模块依赖</dt>
         <dd>{{ r.moduleDeps.size }}</dd>

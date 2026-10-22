@@ -14,9 +14,18 @@ export const within = (index: ModelIndex, a: string, b: string): boolean => !!in
 /** a 与 b 相同或互为祖先后代 */
 export const related = (index: ModelIndex, a: string, b: string): boolean => within(index, a, b) || within(index, b, a)
 
-/** K4：文件依赖两端取归属模块（冲突时每个都算），去掉同模块与祖先后代，按依赖方 → 被依赖方合并 */
-export function liftDeps(index: ModelIndex, own: SourceOwnership, deps: readonly FileDep[]): { moduleDeps: Map<string, ModuleDep>; skipped: number } {
+/**
+ * K4：文件依赖两端取归属模块，去掉同模块与祖先后代，按依赖方 → 被依赖方合并。
+ * 有一端未归属或已忽略的单独计数（skipped）；有一端是归属冲突文件（G6）的不提升到任何模块，单独列出（conflicted）——冲突是描述问题，不衍生违规与未描述依赖。
+ */
+export function liftDeps(
+  index: ModelIndex,
+  own: SourceOwnership,
+  deps: readonly FileDep[],
+): { moduleDeps: Map<string, ModuleDep>; skipped: number; conflicted: FileDep[] } {
   const moduleDeps = new Map<string, ModuleDep>()
+  const conflicts = new Set(own.conflicts)
+  const conflicted: FileDep[] = []
   let skipped = 0
   for (const d of deps) {
     const froms = own.owners.get(d.from)
@@ -25,16 +34,19 @@ export function liftDeps(index: ModelIndex, own: SourceOwnership, deps: readonly
       skipped++
       continue
     }
-    for (const a of froms)
-      for (const b of tos) {
-        if (related(index, a, b)) continue
-        const key = depKey(a, b)
-        const hit = moduleDeps.get(key)
-        if (hit) hit.files.push(d)
-        else moduleDeps.set(key, { key, from: a, to: b, files: [d] })
-      }
+    if (conflicts.has(d.from) || conflicts.has(d.to)) {
+      conflicted.push(d)
+      continue
+    }
+    const [a] = froms
+    const [b] = tos
+    if (related(index, a, b)) continue
+    const key = depKey(a, b)
+    const hit = moduleDeps.get(key)
+    if (hit) hit.files.push(d)
+    else moduleDeps.set(key, { key, from: a, to: b, files: [d] })
   }
-  return { moduleDeps, skipped }
+  return { moduleDeps, skipped, conflicted }
 }
 
 /** 模块或其祖先是目标态 */
