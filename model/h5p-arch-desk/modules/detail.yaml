@@ -127,7 +127,7 @@ modules:
   - id: state.layout.runner
     name: 布局入口与缓存
     parent: state.layout
-    responsibility: Layout 的入口（layout.ts，对外只经它引用）：layoutView 按视图模式分派给分层总览或普通层次排布，结果按视图内容（普通层次不含框外元素的边）与布局算法版本（LAYOUT_VERSION）缓存；几何类型（点、盒子、走线、带坐标的视图与它的父模块框 parentFrame、系统框 frame）、节点尺寸与内容外框 contentBounds（含两种框，geometry.ts）。
+    responsibility: Layout 的入口（layout.ts，对外只经它引用）：layoutView 按视图模式分派给分层总览或普通层次排布，结果按视图内容与布局算法版本（LAYOUT_VERSION）缓存；几何类型（点、盒子、走线、带坐标的视图与它的父模块框 parentFrame、系统框 frame）、节点尺寸与内容外框 contentBounds（含两种框，geometry.ts）。
     codeRefs: [src/layout/layout.ts, src/layout/geometry.ts]
   - id: state.layout.runner.layered
     name: 分层总览排布
@@ -138,12 +138,12 @@ modules:
     name: 普通层次排布
     parent: state.layout.runner
     codeRefs: [src/layout/graph.ts]
-    responsibility: 用 elkjs layered 算法只排父模块框内的子模块与它们之间的边：正交走线、标签内联；每条边两端各有固定朝向的端口——上进下出（自左向右时左进右出，L11）；父模块框包住内部节点与走线并留出内边距，框外的元素在布局后按方位摆放（placeOutside，A7、L4）；elk 在浏览器的 Worker 中运行（无 Worker 环境用同步打包版）；结果过于狭长时再试自左向右，取宽高比更接近画布者。
+    responsibility: 用 elkjs layered 算法只排父模块框内的子模块与它们之间的边：正交走线、标签内联；每条边两端各有固定朝向的端口——上进下出（自左向右时左进右出），同一侧左动右静（动态关系在前半、静态在后半，FIXED_ORDER，L11）；框外边在内部节点那一端给不连线的占位端口一起排序，端口位置随布局给出；父模块框包住内部节点与走线并留出内边距，框外的元素在布局后按方位摆放（placeOutside，A7、L4）；elk 在浏览器的 Worker 中运行（无 Worker 环境用同步打包版）；结果过于狭长时再试自左向右，取宽高比更接近画布者。
   - id: state.layout.runner.boundaries
     name: 框外元素与手工走线
     parent: state.layout.runner
     codeRefs: [src/layout/routes.ts]
-    responsibility: 方位表示角色（A7、L4）：用户在系统框上方、外部系统与时间在系统框右侧（placeActors），边界节点在父模块框下方一行、按视图给出的层次顺序（与时序图泳道一致），系统框包住父模块框与边界节点行（placeOutside）；方位固定在屏幕上，不随布局方向改变。普通层次中框外元素的边（参与者的边、边界边）不参与布局，要画时由 edgeRoute 按需正交绕行（routing 的 detour：用户底边、外部系统左边、边界节点顶边出入，不穿节点，从目标的入口侧进入，同一节点上的多条边错开、同一起点的边各走一条横线），走线按布局记忆。手工走线与编码工具也在这里（routes.ts）：回放临时线与叠加线的曲线 linkRoute、edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、isBoundaryEdge（L10），供排布与画布场景使用。
+    responsibility: 方位表示角色（A7、L4）：用户在系统框上方、外部系统与时间在系统框右侧（placeActors），边界节点在父模块框下方一行、按视图给出的层次顺序（与时序图泳道一致），系统框包住父模块框与边界节点行（placeOutside）；方位固定在屏幕上，不随布局方向改变。普通层次中框外元素的边（参与者的边、边界边）不参与布局，要画时由 edgeRoute 按需正交绕行（routing 的 detour：用户底边、外部系统左边、边界节点顶边出入，不穿节点，从目标的入口侧进入，同一节点上的多条边错开、同一起点的边各走一条横线；内部节点那一端取 elk 的占位端口，框外元素自身的端口同样左动右静）。画布每次只对当前画出来的那组框外边一起走线并分配轨道（outsideRoutes + routing 的 allocateTracks：走廊里重合的中间段按边 ID 错开，placeLabels 让标签互不相碰），按布局与可见集记忆。手工走线与编码工具也在这里（routes.ts）：回放临时线与叠加线的曲线 linkRoute、edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、isBoundaryEdge（L10），供排布与画布场景使用。
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.pipeline.loader
