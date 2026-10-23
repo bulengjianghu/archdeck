@@ -11,7 +11,10 @@ import {
   locate,
   locateAll,
   referenceNodes,
+  referenceRelations,
+  ROOT_MOUNT,
   sketchLifetime,
+  type ChangeKind,
   type CompareMode,
   type ModelIndex,
   type RawFile,
@@ -40,6 +43,8 @@ export interface EditInputs {
   current: () => ModelIndex | null
   /** 设计的基线（载荷没有给出时为当前版本） */
   baseline: () => ModelIndex | null
+  /** 05 裁决 3：载荷给出了基线（base.commit 那一版）；没有时相对基线退化为相对当前版本 */
+  hasBase?: () => boolean
   prompt: () => string
   selection: () => Selection | null
   showDiff: () => boolean
@@ -95,6 +100,10 @@ export function createEdit(i: EditInputs) {
   const lookup = {
     module: (id: string) => (derive.sketch.value ? locate(derive.sketch.value, id)?.node : undefined),
     relation: (id: string) => derive.sketch.value?.relations?.find(r => r.id === id),
+    /** X19、05 裁决 4：折叠进一个引用节点的精确关系 */
+    referenceRelations: (id: string) => (derive.sketch.value ? referenceRelations(derive.sketch.value, id) : []),
+    /** 本张里某模块提供的对外接口（X10） */
+    interfaces: (owner: string) => (derive.sketch.value?.interfaces ?? []).filter(x => x.owner === owner),
     /** 读到的描述里的持久草图（版本切换列出，可编辑） */
     intentIds: computed(() =>
       (i.loaded.value?.model.sketches ?? []).filter(s => s.file.startsWith('intent/') && sketchLifetime(s) === 'persistent').map(s => s.def.id),
@@ -112,8 +121,76 @@ export function createEdit(i: EditInputs) {
       .filter(m => m.kind !== 'layer' && !here.has(m.id))
       .map(m => ({ id: m.id, name: m.name, path: (cur.pathOf.get(m.id) ?? []).slice(1, -1).map(x => cur.modules.get(x)?.name ?? x) }))
   })
+  /**
+   * F-40、#3：父模块（挂载点）对外的一面——名称与职责属上一层：取上一层草图（会话里的）；那里职责为空时取当前版本的文字并标出；
+   * 现有原则（「带入现有原则」）取当前版本挂载点模块的 abstraction。根草图没有父模块。
+   */
+  const parent = computed(() => {
+    const s = session.value
+    const m = s?.mount
+    if (!s || !m || m === ROOT_MOUNT) return null
+    const dot = m.lastIndexOf('.')
+    const up = dot > 0 && m.slice(0, dot).includes('.') ? m.slice(0, dot) : ROOT_MOUNT
+    const upper = s.doc.sketches[up] ? locate(s.doc.sketches[up], m)?.node : undefined
+    const cur = i.current()?.modules.get(m)
+    const resp = upper?.responsibility?.trim()
+    return {
+      id: m,
+      name: upper?.name ?? cur?.name ?? derive.nameOf(m) ?? m,
+      responsibility: resp || cur?.responsibility || '',
+      fromCurrent: !resp && !!cur?.responsibility,
+      upper: up,
+      currentAbstraction: cur?.abstraction ?? '',
+    }
+  })
+  /** T1 裁决 10：非层模块的 abstraction（对内的原则）属挂在它身上的草图——会话里有那张时取它，否则取当前版本 */
+  function principleOf(id: string): { text: string; from: 'sketch' | 'current' } | null {
+    const own = session.value?.doc.sketches[id]?.abstraction?.trim()
+    if (own) return { text: own, from: 'sketch' }
+    const cur = i.current()?.modules.get(id)?.abstraction?.trim()
+    return cur ? { text: cur, from: 'current' } : null
+  }
+  /** F-41：模块的血缘读法（相对基线的本张变更）：合并 / 拆分 / 改 ID / 移动；没有血缘为 null */
+  function lineageOf(id: string): ChangeKind | null {
+    for (const c of derive.vsBaseline.value?.sheet?.changes ?? []) {
+      if (c.entity !== 'module') continue
+      if (c.kind === 'split' && c.to?.includes(id)) return 'split'
+      if (c.id === id && (c.kind === 'merged' || c.kind === 'renamed' || c.kind === 'moved')) return c.kind
+    }
+    return null
+  }
+  /** F-43：模块在当前版本里的位置（祖先名称链） */
+  function placeOf(id: string): string[] {
+    const cur = i.current()
+    return (cur?.pathOf.get(id) ?? []).slice(1, -1).map(x => cur?.modules.get(x)?.name ?? x)
+  }
+  /** F-2、F-10：设计的各张草图（挂载点、模块数、脏、名称），根草图在前 */
+  const sheets = computed(() => {
+    const s = session.value
+    if (!s) return []
+    const dirty = new Set(derive.dirtySketches.value)
+    return Object.entries(s.doc.sketches)
+      .map(([mount, def]) => ({
+        mount,
+        name: mount === ROOT_MOUNT ? '根（层与第二级）' : (derive.nameOf(mount) ?? mount),
+        modules: mount === ROOT_MOUNT ? locateAll(def).filter(m => m.parentId !== undefined).length : (def.modules ?? []).length,
+        dirty: dirty.has(mount),
+        current: mount === s.mount,
+        // 有文件（读自文件的，含级联改名后的）；没有的是会话里推出的
+        file: s.doc.origin[mount] !== undefined,
+      }))
+      .sort((a, b) => (a.mount === ROOT_MOUNT ? -1 : b.mount === ROOT_MOUNT ? 1 : a.mount.localeCompare(b.mount)))
+  })
   return {
     lookup,
+    parent,
+    principleOf,
+    lineageOf,
+    placeOf,
+    sheets,
+    /** 05 裁决 3：没有基线提交（无 git 或 HEAD 不含描述）时相对基线退化为相对当前版本 */
+    baselineFallback: computed(() => !!session.value && !(i.hasBase?.() ?? true)),
+    currentIndex: computed(() => i.current()),
     suggestShort,
     referenceCandidates,
     editable,

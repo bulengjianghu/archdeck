@@ -25,7 +25,7 @@ import PartsDialog from './PartsDialog.vue'
 import ConnectPopover from './ConnectPopover.vue'
 import ReferencePicker from './ReferencePicker.vue'
 import { CHANGE_BADGES } from './labels'
-import { SKETCH_ACTIONS } from './actions'
+import { SKETCH_ACTIONS, sketchRequest } from './actions'
 
 const desk = useDesk()
 const e = desk.edit
@@ -277,6 +277,14 @@ function onParts(rows: { name: string; id: string }[]) {
   if (p.kind === 'merge') notify('已合并：来源成为新模块的子模块，双击进入继续设计内部')
   else if (e.pending.value.length) notify(`已拆分：${e.pending.value.length} 条关系待重连`)
 }
+
+// 面板请求的合并 / 拆分 / 删除（对话框与级联确认都在画布里）
+watch(sketchRequest, r => {
+  if (!r) return
+  sketchRequest.value = null
+  if (r.kind === 'remove') void removeIds(r.ids)
+  else parts.value = { kind: r.kind, ids: r.ids }
+})
 
 /** F-30：删除（有级联时二次确认并列出） */
 async function removeIds(ids: string[]) {

@@ -437,6 +437,25 @@ describe('desk.edit：草图画布与 DeskState', () => {
     expect(desk.edit.sketch.value!.layout!.modules!['share.b']).toBeUndefined()
   })
 
+  it('F-40、F-41、#3：面板的父模块（上一层没写职责时取当前版本并标出、现有原则）、血缘读法、各张草图（推出的标出）', async () => {
+    const cur = {
+      path: 'modules.yaml',
+      text: BASE.text.replace('        name: A\n', '        name: A\n        responsibility: 甲的职责\n        abstraction: 甲的原则\n'),
+    }
+    const { desk } = await setup(SKETCH_VERSION, fakeWriter().writer, { compare: { current: { label: '当前版本', dir: 'x', files: [SYSTEM, cur] } } })
+    expect(desk.edit.parent.value).toMatchObject({ id: 'core.a', name: 'A', responsibility: '甲的职责', fromCurrent: true, currentAbstraction: '甲的原则' })
+    expect(desk.edit.principleOf('core.a')).toEqual({ text: '甲的原则', from: 'current' })
+    ok(desk.edit.setAbstraction('本张的原则'))
+    expect(desk.edit.principleOf('core.a')).toEqual({ text: '本张的原则', from: 'sketch' })
+    ok(desk.edit.merge(['core.a.x', 'core.a.y'], 'XY', 'xy'))
+    expect([desk.edit.lineageOf('core.a.xy'), desk.edit.lineageOf('core.a.z')]).toEqual(['merged', null])
+    expect(desk.edit.sheets.value.map(x => [x.mount, x.file, x.dirty])).toEqual([
+      ['core.a', true, true],
+      ['core.a.xy', false, false],
+    ])
+    expect(desk.edit.baselineFallback.value).toBe(true)
+  })
+
   it('F-11、X18：新建设计按挂载点从基线复制一层（不带文字），带一次初始布局', async () => {
     const { writer, created } = fakeWriter()
     const { desk } = await setup(undefined, writer)
