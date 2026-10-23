@@ -15,14 +15,17 @@
  *   report                        拦截报告（Q4）
  *   baseline                      生成基线 governance/baseline.json（U7，由人执行并提交）
  *   own                           登记人拥有文件的指纹 governance/owned.json（X6，人改完草图 / 规则 / 忽略清单后执行）
- *   sketch-check [--design <设计>] [--revision <轮次>]   草图核验（X4）：缺省为活动草图对当前版本
- *   sketch archive <设计>         归档 / 晋升（X3）：对当前版本核验一致才执行
+ *   sketch-check [--design <设计>] [--revision <轮次>]   草图核验（X4、X17）：缺省为活动草图对当前版本；给了设计时逐张报告，
+ *                                 并附两个对比（相对基线、相对当前版本 / 该轮），按血缘表述
+ *   sketch list <设计>            设计的各张草图（挂载点、文件、是否需要初始布局）
+ *   sketch archive <设计>         归档 / 晋升（X3）：对当前版本逐张核验一致才执行；晋升连 layout 一并替换持久草图
  *
  * check 与 rescan 写拦截记录。出错时退出码为 2；check 为 denied 时退出码为 1。
  */
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { REWORK_CATEGORIES, RULE_LABELS, type CheckResult, type ReworkCategory, type SketchCheck } from '../src/model'
+import { CHANGE_KINDS, CHANGE_KIND_LABELS, REWORK_CATEGORIES, RULE_LABELS, type CheckResult, type ReworkCategory, type SketchCheck } from '../src/model'
+import type { DesignComparison } from './agent/service'
 import { ServiceError, createService } from './agent/service'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -44,16 +47,29 @@ const VERDICT: Record<string, string> = { allowed: '允许', denied: '拒绝', u
 const SEV: Record<string, string> = { error: '错误', warning: '提醒', info: '已认可' }
 const str = (k: string) => (typeof flags.get(k) === 'string' ? (flags.get(k) as string) : undefined)
 
-function printChecks(r: { target: string; checks: SketchCheck[] }) {
+function printChecks(r: { target: string; checks: SketchCheck[]; compare?: { baseline?: DesignComparison; current: DesignComparison; base?: string } }) {
   console.log(`核验对象：${r.target}`)
   if (!r.checks.length) console.log('  没有活动草图')
   for (const c of r.checks) {
-    const who = c.design ? `设计「${c.design}」的草图` : `持久草图「${c.sketch}」`
+    const who = c.design ? `设计「${c.design}」挂在「${c.mount ?? '?'}」上的草图` : `持久草图「${c.sketch}」（挂在「${c.mount ?? '?'}」）`
     console.log(
       `\n${who}（${c.lifetime}${c.supersedes ? `，替换 ${c.supersedes}` : ''}）：${c.consistent ? '一致' : `偏差 ${c.counts.error + c.counts.warning}`}（错误 ${c.counts.error} · 提醒 ${c.counts.warning} · 已认可 ${c.counts.info}）`,
     )
     for (const d of c.deviations) console.log(`  ${SEV[d.severity]}  ${d.key}  ${d.message}${d.accepted ? `（已认可：${d.accepted.reason}）` : ''}`)
   }
+  const show = (title: string, cmp: DesignComparison | undefined) => {
+    if (!cmp) return
+    const counts = CHANGE_KINDS.filter(k => cmp.counts[k]).map(k => `${CHANGE_KIND_LABELS[k]} ${cmp.counts[k]}`)
+    console.log(`\n${title}（全设计）：${counts.length ? counts.join(' · ') : '没有变化'}${cmp.pending ? ` · 待重连 ${cmp.pending}` : ''}`)
+    for (const s of cmp.sketches) {
+      if (!s.changes.length && !s.pending.length) continue
+      console.log(`  挂在「${s.mount}」上（本张）：`)
+      for (const x of s.changes) console.log(`    ${x.message}`)
+      for (const id of s.pending) console.log(`    待重连：关系「${id}」`)
+    }
+  }
+  show(`相对基线${r.compare?.base ? ` ${r.compare.base.slice(0, 7)}` : ''}`, r.compare?.baseline)
+  show(`相对${r.target}`, r.compare?.current)
 }
 
 function printCheck(r: CheckResult & { external?: string }) {
@@ -119,13 +135,14 @@ function run(): number {
       return r.checks.some(c => c.counts.error) ? 1 : 0
     }
     case 'sketch': {
-      if (rest[0] !== 'archive' || !rest[1]) throw new ServiceError('用法：npm run arch -- sketch archive <设计>')
+      if (rest[0] === 'list' && rest[1]) return out(svc.designSketches(project, rest[1]))
+      if (rest[0] !== 'archive' || !rest[1]) throw new ServiceError('用法：npm run arch -- sketch archive <设计> | sketch list <设计>')
       const r = svc.sketchArchive(project, rest[1])
       if (asJson) console.log(JSON.stringify(r, null, 2))
       else {
         console.log(
           r.outcome === 'promote'
-            ? `已晋升：草图替换了 ${r.promoted}；设计「${rest[1]}」状态改为 implemented（${r.file}）`
+            ? `已晋升：草图（连 layout）替换了 ${(r.promotedAll ?? [r.promoted]).join('、')}；设计「${rest[1]}」状态改为 implemented（${r.file}）`
             : `已归档：设计「${rest[1]}」状态改为 implemented（${r.file}）`,
         )
         if (r.reviewed) console.log(`确认记录 ${r.reviewed.count} 条已写入 ${r.reviewed.file}（来源 sketch:${rest[1]}）`)

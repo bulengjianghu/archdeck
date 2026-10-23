@@ -13,6 +13,7 @@ import {
   checkSketches,
   compareOwned,
   parseDesignSketches,
+  compareDesign,
   describeModule,
   governanceReport,
   loadModel,
@@ -42,7 +43,16 @@ import {
   type ModelIndex,
   type SourceOwnership,
 } from '../../src/model'
-import { designSketch, listProjectIds, readDesignRevision, readProject, resolveModelRoot } from '../../vite/readModelDir'
+import {
+  designSketchFiles,
+  designSketches,
+  listProjectIds,
+  readDesignRevision,
+  readProject,
+  resolveModelRoot,
+  type SketchFileRef,
+} from '../../vite/readModelDir'
+import { readModelAt } from '../../vite/readGit'
 import { archiveDesign, WriteError } from '../../vite/writeModel'
 import { readSourceTree } from '../../vite/readSource'
 import { readCodeDeps, resolveImport } from '../../vite/readDeps'
@@ -403,30 +413,53 @@ export function createService(opts: ServiceOptions) {
       return { project, summary: `写前判定 ${s.checks} 次 · 重新扫描 ${s.rescans} 次 · 确认写入 ${s.reviewedWrites} 次 · 草图写回 ${s.sketchWrites} 次`, ...s }
     },
 
-    /** X4：草图核验——缺省为活动草图对当前版本；给了 design 时为该设计的草图对当前版本（revision 为某一轮时对那一轮） */
-    sketchCheck(p?: string, design?: string, revision?: string): { project: string; target: string; checks: SketchCheck[] } {
+    /**
+     * X4、X17：草图核验——缺省为活动草图对当前版本；给了 design 时为该设计的各张草图逐张对当前版本（revision 为某一轮时对那一轮），
+     * 并附两个对比（相对基线：架构师改了什么；相对当前版本 / 该轮：实现还差什么），按血缘表述；基线读设计 base.commit 那一版描述（git）。
+     */
+    sketchCheck(
+      p?: string,
+      design?: string,
+      revision?: string,
+    ): { project: string; target: string; checks: SketchCheck[]; compare?: { baseline?: DesignComparison; current: DesignComparison; base?: string } } {
       const project = projectOfDesign(p, design)
       if (!design) {
         const l = load(project)
         return { project, target: '当前版本', checks: l.checks }
       }
       const dir = path.join(modelRoot, project)
-      const sketch = designSketch(dir, design)
-      if (!sketch) throw new ServiceError(`设计「${design}」没有草图（designs/${design}/sketch.yaml）`)
+      const files = designSketches(dir, design)
+      if (!files.length) throw new ServiceError(`设计「${design}」没有草图（designs/${design}/sketches/*.yaml）`)
+      const entities = parseDesignSketches(files)
       const info = readProject(modelRoot, project, opts.root)!.designs?.find(d => d.id === design)
       const accepted = new Map([[design, info?.accepted ?? []]])
-      if (!revision) {
-        const l = load(project)
-        return { project, target: '当前版本', checks: checkSketches(l.index, parseDesignSketches([sketch]), accepted).filter(c => c.design === design) }
-      }
-      const payload = readDesignRevision(modelRoot, project, design, revision, opts.root)
-      if (!payload || revision === 'sketch') throw new ServiceError(`轮次不存在：${design} / ${revision}`)
-      const { index } = loadModel(payload.files)
+      const commit = info?.base?.commit
+      const baseFiles = commit ? readModelAt(dir, commit) : null
+      const baseline = baseFiles ? loadModel(baseFiles).index : null
+      const baselines = new Map([[design, baseline]])
+      let target = '当前版本'
+      let index: ModelIndex
+      if (revision) {
+        const payload = readDesignRevision(modelRoot, project, design, revision, opts.root)
+        if (!payload || revision === 'sketch') throw new ServiceError(`轮次不存在：${design} / ${revision}`)
+        index = loadModel(payload.files).index
+        target = `${design} / ${revision}`
+      } else index = load(project).index
       return {
         project,
-        target: `${design} / ${revision}`,
-        checks: checkSketches(index, parseDesignSketches([sketch]), accepted).filter(c => c.design === design),
+        target,
+        checks: checkSketches(index, entities, accepted, baselines).filter(c => c.design === design),
+        compare: {
+          ...(baseline ? { baseline: compareDesign(entities, baseline, 'baseline'), base: commit } : {}),
+          current: compareDesign(entities, index, 'current'),
+        },
       }
+    },
+
+    /** X9：设计的草图清单（设计面板用）：挂载点、文件、指纹、是否需要初始布局 */
+    designSketches(p: string | undefined, design: string): { project: string; design: string; sketches: SketchFileRef[] } {
+      const project = projectOfDesign(p, design)
+      return { project, design, sketches: designSketchFiles(path.join(modelRoot, project), design) }
     },
 
     /** X3、X8：归档 / 晋升，与页面同一函数；不一致即拒绝 */
@@ -462,3 +495,6 @@ export function createService(opts: ServiceOptions) {
 }
 
 export type ArchService = ReturnType<typeof createService>
+
+/** X17：一个设计对同一对象的两个对比之一（全设计 = 各张的并集） */
+export type DesignComparison = ReturnType<typeof compareDesign>
