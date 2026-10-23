@@ -156,7 +156,7 @@ test('SK-14–SK-19 主路径：新建设计选挂载点 → 底稿复制 → �
   }
 })
 
-test('E-1：从当前版本点「编辑骨架」打开持久草图即进入草图画布（层画成节点）；退出回到进入前的版本；版本切换选「骨架 · 持久草图」后索引只有骨架的实体', async ({
+test('E-1：从当前版本点「编辑骨架」打开持久草图即进入草图画布（层画成带）；退出回到进入前的版本；版本切换选「骨架 · 持久草图」后索引只有骨架的实体', async ({
   page,
 }) => {
   await openDesk(page, '/p/h5p-arch-desk')
@@ -164,7 +164,7 @@ test('E-1：从当前版本点「编辑骨架」打开持久草图即进入草�
   await expect(page).toHaveURL(/\/p\/h5p-arch-desk\/i\/skeleton/)
   await expect(page.locator('.sketch-canvas')).toBeVisible()
   await expect(page.locator('.edit-bar .title')).toContainText('编辑草图：骨架')
-  await expect(page.locator('.sk-node.layer')).toHaveCount(4)
+  await expect(page.locator('.sk-band')).toHaveCount(4)
   await page.locator('.edit-bar').getByRole('button', { name: '退出' }).click()
   await expect(page).not.toHaveURL(/\/i\/skeleton/)
   await expect(page.locator('.sketch-canvas')).toHaveCount(0)
@@ -180,5 +180,5 @@ test('E-1：从当前版本点「编辑骨架」打开持久草图即进入草�
   await expect(page.locator('.intent-bar')).toContainText('持久草图')
   await expect.poll(() => has('state.desk.edit')).toBe(false)
   await expect.poll(() => has('state.desk')).toBe(true)
-  await expect(page.locator('.sk-node.layer')).toHaveCount(4)
+  await expect(page.locator('.sk-band')).toHaveCount(4)
 })

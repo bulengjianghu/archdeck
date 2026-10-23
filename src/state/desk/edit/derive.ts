@@ -151,6 +151,8 @@ export function createDerive(i: DeriveInputs) {
   const designWarnings = computed(() => Object.entries(validations.value).flatMap(([m, v]) => v.warnings.map(e => ({ mount: m, ...e }))))
   /** X13：超七 */
   const overSeven = computed(() => validation.value?.hints.find(h => h.code === 'sketch.over-seven') ?? null)
+  /** X13、X21：本张的全部超七提示（根草图按每条层带各一条） */
+  const overSevens = computed(() => validation.value?.hints.filter(h => h.code === 'sketch.over-seven') ?? [])
   /** X16：待重连 */
   const pending = computed(() => validation.value?.pending ?? [])
 
@@ -238,6 +240,7 @@ export function createDerive(i: DeriveInputs) {
     designErrors,
     designWarnings,
     overSeven,
+    overSevens,
     pending,
     vsBaseline,
     vsCurrent,

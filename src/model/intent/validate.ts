@@ -167,8 +167,13 @@ export function validateSketch(sketch: SketchDef, ctx: ValidateContext): SketchV
     push('warning', 'sketch.contradiction', d.message, { module: d.target.modules?.[0] }, d.at?.path)
 
   // ── 只提示：超七（X13）、没写职责 ──
-  const count = root ? own.filter(m => m.parentId !== undefined).length : own.length
-  if (count > SKETCH_SOFT_LIMIT) push('hint', 'sketch.over-seven', `${count} 个模块，考虑归并（X13）`)
+  // X13、X21：根草图按每条层带算（骨架整体天然超七），其余草图按本层
+  if (root)
+    for (const layer of own.filter(m => m.parentId === undefined)) {
+      const n = (layer.node.children ?? []).length
+      if (n > SKETCH_SOFT_LIMIT) push('hint', 'sketch.over-seven', `「${layer.node.name || layer.id}」${n} 个模块，考虑归并（X13）`, { module: layer.id }, layer.path)
+    }
+  else if (own.length > SKETCH_SOFT_LIMIT) push('hint', 'sketch.over-seven', `${own.length} 个模块，考虑归并（X13）`)
   for (const m of own)
     if (m.node.kind !== 'layer' && !m.node.responsibility?.trim()) push('hint', 'sketch.empty', `「${m.node.name || m.id}」还没写职责`, { module: m.id }, m.path)
 

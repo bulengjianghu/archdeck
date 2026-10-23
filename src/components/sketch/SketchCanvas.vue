@@ -7,12 +7,14 @@
  * - 从节点右侧的连线柄拖到另一节点：松手选类型 + 一句说明；选中的边可拖标签；双击模块下钻；
  * - 工具条：＋ 模块、引用外部模块、重新排列、本层数与超七提示；快捷键 ⌘Z / ⇧⌘Z、Delete / Backspace、⌘S、Esc（只取消选中）。
  * 图上标出变更时右下角有角标的图例（数据来自派生的对比）。
+ * 根草图（X21）：层画成横向带（按 order），第二级模块在带内横向自由摆放（只记 x）；拖到另一条带 = 移入；双击带内空白 = 在该层新建；
+ * 带头编辑名称与 abstraction、「＋ 模块」「删层」；工具条「＋ 层」。
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { ConnectionMode, VueFlow, useVueFlow, type Connection, type Edge, type GraphNode, type Node, type NodeMouseEvent } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import { ROOT_MOUNT, type SketchPoint } from '@/model'
-import type { SketchEdgeData, SketchNodeData } from '@/layout/layout'
+import { bandAt, type SketchEdgeData, type SketchNodeData } from '@/layout/layout'
 import { useDesk } from '@/state/inject'
 import { ask } from '../edit/useEditDialog'
 import SketchNode from './SketchNode.vue'
@@ -23,6 +25,7 @@ import PartsDialog from './PartsDialog.vue'
 import ConnectPopover from './ConnectPopover.vue'
 import ReferencePicker from './ReferencePicker.vue'
 import { CHANGE_BADGES } from './labels'
+import { SKETCH_ACTIONS } from './actions'
 
 const desk = useDesk()
 const e = desk.edit
@@ -50,9 +53,12 @@ const nodes = computed<Node<SketchNodeData & { drop?: boolean }>[]>(() =>
     data: { ...n.data, selected: n.data.selected || picked.value.has(n.id), drop: dropTarget.value === n.id },
     width: n.data.w,
     height: n.data.h,
-    style: { width: `${n.data.w}px`, height: `${n.data.h}px` },
+    // 层带在模块之下、不接收指针（带头除外），框选与双击新建落到画布上（X21）
+    style: { width: `${n.data.w}px`, height: `${n.data.h}px`, ...(n.data.kind === 'layer' ? { pointerEvents: 'none' as const } : {}) },
+    zIndex: n.data.kind === 'layer' ? 0 : 1,
     selected: !!n.data.selected || picked.value.has(n.id),
-    draggable: true,
+    selectable: n.data.kind !== 'layer',
+    draggable: n.data.kind !== 'layer',
     connectable: n.data.kind !== 'layer',
   })),
 )
@@ -122,21 +128,26 @@ function overParentCrumb(ev: MouseEvent | TouchEvent): boolean {
   const pt = 'clientX' in ev ? ev : (ev.touches[0] ?? ev.changedTouches[0])
   return document.elementsFromPoint(pt.clientX, pt.clientY).some(el => (el as HTMLElement).dataset?.parent === '1')
 }
+const root = computed(() => e.mount.value === ROOT_MOUNT)
+/** X21：根草图里第二级模块所在的层（ID 的第一段） */
+const layerOf = (id: string) => id.split('.')[0]
 function onNodeDrag({ event, nodes: dragged }: { event: MouseEvent | TouchEvent; nodes: GraphNode[] }) {
   const p = flowPoint(event)
   const moving = new Set(dragged.map(n => n.id))
+  // 落到另一个模块上 = 降级；根草图里落到另一条层带上 = 移入
   const hit = (scene.value?.nodes ?? []).find(
     n =>
       !moving.has(n.id) &&
-      n.data.kind !== 'reference' &&
+      n.data.kind === 'module' &&
       p.x >= n.position.x &&
       p.x <= n.position.x + n.data.w &&
       p.y >= n.position.y &&
       p.y <= n.position.y + n.data.h,
   )
   const single = dragged.length === 1 && scene.value?.nodes.find(n => n.id === dragged[0].id)?.data.kind === 'module'
-  dropTarget.value = single && hit ? hit.id : null
-  dropParent.value = !!single && e.mount.value !== ROOT_MOUNT && overParentCrumb(event)
+  const band = root.value && single && !hit ? bandAt(scene.value?.bands ?? [], p.y) : null
+  dropTarget.value = single && hit ? hit.id : band && band !== layerOf(dragged[0].id) ? band : null
+  dropParent.value = !!single && !root.value && overParentCrumb(event)
 }
 function onNodeDragStop({ nodes: dragged }: { event: MouseEvent | TouchEvent; nodes: GraphNode[] }) {
   const target = dropTarget.value
@@ -147,7 +158,7 @@ function onNodeDragStop({ nodes: dragged }: { event: MouseEvent | TouchEvent; no
   if (parent) r = e.promote(dragged[0].id)
   else if (target) {
     const kind = scene.value?.nodes.find(n => n.id === target)?.data.kind
-    r = kind === 'layer' ? e.moveIn(dragged[0].id, target) : e.demote(dragged[0].id, target)
+    r = kind === 'layer' ? e.moveIn(dragged[0].id, target, Math.round(dragged[0].position.x)) : e.demote(dragged[0].id, target)
   } else r = e.moveNode(Object.fromEntries(dragged.map(n => [n.id, { x: Math.round(n.position.x), y: Math.round(n.position.y) }])))
   if (!r.ok) notify(r.reason ?? '做不成')
   // 被拒绝或改成降级 / 升级时，节点回到草图里的位置
@@ -161,9 +172,14 @@ function onNodeDoubleClick({ node }: NodeMouseEvent) {
   const r = e.openChild(node.id)
   if (!r.ok) notify(r.reason)
 }
-const creating = ref<{ screen: { x: number; y: number }; at: SketchPoint; error?: string } | null>(null)
+/** 就地新建：位置（没给时由布局放到空位）；根草图里 layer 为所在层带（没有 = 新建一层，X21） */
+const creating = ref<{ screen: { x: number; y: number }; at?: SketchPoint; layer?: string; error?: string } | null>(null)
 function startCreate(ev: MouseEvent) {
-  creating.value = { screen: { x: ev.clientX, y: ev.clientY }, at: flowPoint(ev) }
+  const at = flowPoint(ev)
+  if (!root.value) return void (creating.value = { screen: { x: ev.clientX, y: ev.clientY }, at })
+  const layer = bandAt(scene.value?.bands ?? [], at.y)
+  if (!layer) return notify('双击层带内的空白处在该层新建模块；新建一层用工具条「＋ 层」')
+  creating.value = { screen: { x: ev.clientX, y: ev.clientY }, at, layer }
 }
 function onHostDblClick(ev: MouseEvent) {
   if (!(ev.target as HTMLElement).closest('.vue-flow__pane') || (ev.target as HTMLElement).closest('.vue-flow__node')) return
@@ -172,14 +188,20 @@ function onHostDblClick(ev: MouseEvent) {
 function createAtCenter() {
   const r = host.value!.getBoundingClientRect()
   const screen = { x: r.left + r.width / 2 - 120, y: r.top + r.height / 2 - 60 }
-  creating.value = { screen, at: project({ x: r.width / 2, y: r.height / 2 }) }
+  creating.value = root.value ? { screen } : { screen, at: project({ x: r.width / 2, y: r.height / 2 }) }
 }
 function create(rows: { name: string; id: string }[]) {
   const c = creating.value!
-  const r = e.addModule(rows[0].name, rows[0].id, { x: Math.round(c.at.x), y: Math.round(c.at.y) })
+  const at = c.at ? { x: Math.round(c.at.x), y: Math.round(c.at.y) } : undefined
+  const r = e.addModule(rows[0].name, rows[0].id, at, c.layer)
   if (!r.ok) creating.value = { ...c, error: r.reason }
   else creating.value = null
 }
+provide(SKETCH_ACTIONS, {
+  addIn: (layer, screen) => (creating.value = { screen: { x: screen.x - 40, y: screen.y + 12 }, layer }),
+  removeLayer: layer => void removeIds([layer]),
+  notify,
+})
 
 // ── 连线 ──
 const connecting = ref<{ from: string; to: string } | null>(null)
@@ -227,12 +249,15 @@ function onEdgeMenu({ event, edge }: { event: MouseEvent | TouchEvent; edge: { i
 }
 function onPaneMenu(ev: MouseEvent) {
   ev.preventDefault()
-  menu.value = { x: ev.clientX, y: ev.clientY, items: [{ key: 'create', label: '在这里新建模块' }], pane: ev }
+  const inBand = root.value && !!bandAt(scene.value?.bands ?? [], flowPoint(ev).y)
+  const items: MenuItem[] = root.value && !inBand ? [{ key: 'create-layer', label: '新建一层' }] : [{ key: 'create', label: '在这里新建模块' }]
+  menu.value = { x: ev.clientX, y: ev.clientY, items, pane: ev }
 }
 async function onMenu(key: string) {
   const m = menu.value!
   menu.value = null
   if (key === 'create' && m.pane) return startCreate(m.pane)
+  if (key === 'create-layer') return createAtCenter()
   if (key === 'remove-edge' && m.edge) return void removeIds(relationsOf(m.edge))
   const id = m.node!
   const group = picked.value.has(id) ? [...picked.value] : [id]
@@ -317,6 +342,11 @@ const legend = computed(() => {
   return [...kinds].map(k => CHANGE_BADGES[k!])
 })
 const prefix = computed(() => (e.mount.value === ROOT_MOUNT ? '' : (e.mount.value ?? '')))
+/** 合并 / 拆分的新 ID 前缀：所选模块的父（根草图里为所在层） */
+const partsPrefix = computed(() => {
+  const id = parts.value?.ids[0]
+  return id && id.includes('.') ? id.slice(0, id.lastIndexOf('.')) : prefix.value
+})
 const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(parts.value.ids[0]) ?? parts.value.ids[0]) : ''))
 </script>
 
@@ -326,10 +356,16 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
       <SketchCrumbs :drop-parent="dropParent" @notice="notify" />
       <span class="spacer" />
       <div class="sk-tools" role="toolbar" aria-label="草图工具条">
-        <button title="新建一个模块（也可双击空白处）" @click="createAtCenter">＋ 模块</button>
-        <button title="搜索当前版本的模块，放上画布作为待连端点" @click="picking = !picking">引用外部模块</button>
-        <button title="网格重新排列本张草图（可撤销）" @click="arrange">重新排列</button>
-        <span class="count" :class="{ over: !!e.overSeven.value }" :title="e.overSeven.value?.message ?? '本层模块数'">
+        <button v-if="root" title="新建一层（排在最后；层的子模块在带内双击新建）" @click="createAtCenter">＋ 层</button>
+        <button v-else title="新建一个模块（也可双击空白处）" @click="createAtCenter">＋ 模块</button>
+        <button v-if="!root" title="搜索当前版本的模块，放上画布作为待连端点" @click="picking = !picking">引用外部模块</button>
+        <button title="重新排列本张草图（可撤销）" @click="arrange">重新排列</button>
+        <span v-if="root" class="count" :class="{ over: !!e.overSeven.value }" :title="e.overSeven.value?.message ?? '第二级模块数'">
+          {{ scene?.bands.length ?? 0 }} 层 · {{ scene?.count ?? 0 }} 个模块<template v-if="e.overSevens.value.length">
+            · {{ e.overSevens.value.length }} 层超七</template
+          >
+        </span>
+        <span v-else class="count" :class="{ over: !!e.overSeven.value }" :title="e.overSeven.value?.message ?? '本层模块数'">
           本层 {{ scene?.count ?? 0 }} 个模块<template v-if="e.overSeven.value"> · 考虑归并</template>
         </span>
       </div>
@@ -388,8 +424,8 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
     <SketchMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menu.items" @choose="onMenu" @close="menu = null" />
     <PartsDialog
       v-if="creating"
-      :title="e.mount.value === ROOT_MOUNT ? '新建层' : '新建模块'"
-      :prefix="prefix"
+      :title="root && !creating.layer ? '新建层' : '新建模块'"
+      :prefix="creating.layer ?? prefix"
       ok="新建"
       :at="creating.screen"
       :error="creating.error"
@@ -399,7 +435,7 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
     <PartsDialog
       v-if="parts?.kind === 'merge'"
       title="合并为新模块"
-      :prefix="prefix"
+      :prefix="partsPrefix"
       ok="合并"
       :error="parts.error"
       :hint="`来源 ${parts.ids.map(id => e.nameOf(id) ?? id).join('、')} 成为新模块的子模块`"
@@ -409,7 +445,7 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
     <PartsDialog
       v-if="parts?.kind === 'split'"
       :title="`拆分「${splitName}」`"
-      :prefix="prefix"
+      :prefix="partsPrefix"
       :rows="2"
       extendable
       ok="拆分"

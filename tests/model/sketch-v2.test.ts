@@ -144,6 +144,23 @@ describe('X14 两级校验', () => {
     expect(codes(r8.hints)).toContain('sketch.empty')
   })
 
+  it('X13、X21：根草图的超七按每条层带算——两条带各 5 个不提示，一条带 8 个提示一次并定位到该层', () => {
+    const kids = (layer: string, n: number) => Array.from({ length: n }, (_, i) => ({ id: `${layer}.m${i}`, name: `M${i}`, kind: 'subsystem' }))
+    const root = (a: number, b: number): SketchDef => ({
+      id: 'd1',
+      mount: 'root',
+      modules: [
+        { id: 'fe', name: 'Front', kind: 'layer', order: 1, children: kids('fe', a) },
+        { id: 'core', name: 'Core', kind: 'layer', order: 2, children: kids('core', b) },
+      ],
+    })
+    expect(codes(v(root(5, 5), 'designs/d1/sketches/root.yaml').hints)).not.toContain('sketch.over-seven')
+    const over = v(root(2, 8), 'designs/d1/sketches/root.yaml').hints.filter(h => h.code === 'sketch.over-seven')
+    expect(over).toHaveLength(1)
+    expect(over[0]).toMatchObject({ target: { module: 'core' } })
+    expect(over[0].message).toContain('Core')
+  })
+
   it('格式错误：ID 重复 / 格式、不在挂载点下（前缀、嵌套、parent）、挂载点是层、文件名与 mount 不一致、引用不存在、缺名称、关系不在本层', () => {
     const def: SketchDef = {
       id: 'd1',

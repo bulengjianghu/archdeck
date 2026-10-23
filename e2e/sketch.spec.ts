@@ -22,7 +22,7 @@ test('DV-10：版本切换里草图排在 r1 之前；打开草图即草图画�
   await page.locator('select[aria-label="切换版本"]').selectOption('phase2-dynamic/sketch')
   await expect(page.locator('.design-bar .kind')).toHaveText('草图')
   await expect(page.locator('.sketch-canvas')).toBeVisible()
-  await expect(page.locator('.sk-node.layer')).toHaveCount(3)
+  await expect(page.locator('.sk-band')).toHaveCount(3)
   await expect(page.locator('.design-bar .hand')).toHaveText('交给 AI')
   await expect(page.locator('[data-testid="sketch-panel"]')).toBeVisible()
 })
