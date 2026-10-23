@@ -30,6 +30,7 @@ import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
 import { useEvolutionPrefs } from './display/useEvolutionPrefs'
 import EditBar from './edit/EditBar.vue'
 import EditDialog from './edit/EditDialog.vue'
+import SketchCanvas from './sketch/SketchCanvas.vue'
 
 const props = defineProps<{ project: string; design?: string; revision?: string; commit?: string; base?: string; intent?: string }>()
 const router = useRouter()
@@ -259,6 +260,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <button @click="router.push('/')">返回项目列表</button>
         </div>
       </div>
+      <!-- X7a：进入草图即草图画布（ADR-0025） -->
+      <SketchCanvas v-else-if="desk.edit.active.value" />
       <template v-else>
         <SplitView :layout="paneLayout" :hidden="aside.hidden.value ? ['aside'] : []" @resize="onResize" @toggle="onToggle">
           <template #structure>

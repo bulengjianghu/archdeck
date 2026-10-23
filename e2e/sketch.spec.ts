@@ -14,17 +14,17 @@ const designYaml = path.join(DESIGN, 'design.yaml')
 
 test.describe.configure({ mode: 'serial' })
 
-test('DV-10：版本切换里草图排在 r1 之前；打开草图是分层总览，对比当前版本，信息条有「交给 AI」', async ({ page }) => {
+test('DV-10：版本切换里草图排在 r1 之前；打开草图即草图画布（ADR-0025），信息条有「交给 AI」', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk/d/phase2-dynamic/r4')
   const options = await page.locator('select[aria-label="切换版本"] option').allTextContents()
   const r1 = options.findIndex(o => o.includes('· r1'))
   expect(options[r1 + 1]).toContain('草图')
   await page.locator('select[aria-label="切换版本"]').selectOption('phase2-dynamic/sketch')
   await expect(page.locator('.design-bar .kind')).toHaveText('草图')
-  await expect(page.locator('.vue-flow__node-band')).toHaveCount(4)
-  await expect(page.locator('.design-bar .counts')).toContainText('删除')
+  await expect(page.locator('.sketch-canvas')).toBeVisible()
+  await expect(page.locator('.sk-node.layer')).toHaveCount(3)
   await expect(page.locator('.design-bar .hand')).toHaveText('交给 AI')
-  await expect(page.locator('.panel')).toContainText('草图核验')
+  await expect(page.locator('[data-testid="sketch-panel"]')).toBeVisible()
 })
 
 test('X4：r4 与草图一致；故意制造偏差（封闭子树多出子模块）后问题页签出现「草图偏差」error；认可提醒级偏差后它从问题页签消失', async ({ page }) => {

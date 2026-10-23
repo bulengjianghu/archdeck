@@ -27,24 +27,28 @@ export function referenceNodes(def: SketchDef): string[] {
   return out
 }
 
-/** X15：网格布局——本层模块在前、引用节点在后；根挂载时每层一行（层在行首，第二级随后） */
+/** X15：网格布局——本层模块在前、引用节点在后（另起几行，按本层宽度折行）；根挂载时每层一行（层在行首，第二级随后） */
 export function gridLayout(def: SketchDef): SketchLayout {
   const modules: Record<string, SketchPoint> = {}
   const at = (col: number, row: number): SketchPoint => ({ x: ORIGIN + col * GAP_X, y: ORIGIN + row * GAP_Y })
   let rows = 0
+  let cols = 1
   if (def.mount === ROOT_MOUNT) {
     ;(def.modules ?? []).forEach((layer, row) => {
       modules[layer.id] = at(0, row)
       ;(layer.children ?? []).forEach((kid, col) => (modules[kid.id] = at(col + 1, row)))
       rows = row + 1
+      cols = Math.max(cols, (layer.children ?? []).length + 1)
     })
   } else {
     const own = (def.modules ?? []).map(m => m.id)
-    const cols = Math.max(1, Math.ceil(Math.sqrt(own.length)))
+    cols = Math.max(1, Math.ceil(Math.sqrt(own.length)))
     own.forEach((id, i) => (modules[id] = at(i % cols, Math.floor(i / cols))))
     rows = Math.ceil(own.length / cols)
   }
-  referenceNodes(def).forEach((id, i) => (modules[id] = at(i, rows + 1)))
+  // 引用节点在本层模块之下另起几行，按本层的宽度折行（至少 4 列），不拉成一长条
+  const refCols = Math.max(4, cols)
+  referenceNodes(def).forEach((id, i) => (modules[id] = at(i % refCols, rows + 1 + Math.floor(i / refCols))))
   return { modules }
 }
 

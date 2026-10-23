@@ -161,6 +161,19 @@ modules:
       - **服务端再校验一遍**：页面的即时校验只是提示，写入端点是最后一道；两边调用同一个 validateSketch，结果一致。
       - **只写草图**：路径只由项目、草图 ID、设计 ID 拼出（isProjectId），不接受任意路径；AI 生成的文件一律不写。
     codeRefs: [vite/writeSketch.ts]
+  - id: present.canvas.sketch
+    name: 草图画布
+    parent: present.canvas
+    kind: component
+    responsibility: |
+      草图版本打开即进入的编辑画布（ADR-0025，SK-15、SK-16）：Vue Flow 自由模式，不走 elk、不走分层投影——节点（本层模块、根草图里的层、灰色虚线的只读引用节点）与两端之间的直线边来自草图布局，位置来自草图的 layout；
+      拖节点（多选一起拖）松手 = moveNode 一步，拖到同层节点上 = 降级（根草图里拖到层上 = 移入），拖到面包屑父级 = 升级；框选 / ⇧ 多选；右键合并为新模块（≥2）、拆分、进入下一层、删除（有级联时二次确认）；双击空白或「＋ 模块」就地输入名称与 ID 短名（英文自动、中文必填）；
+      从节点右侧连线柄拖到另一节点松手选类型 + 一句说明；选中的边可拖标签；双击模块下钻；工具条（＋ 模块、引用外部模块、重新排列、本层数与超七提示）；⌘Z / ⇧⌘Z、Delete / Backspace、⌘S、Esc；图上标出变更时的角标与图例；
+      画布顶部的临时面包屑（返回与升级落点）、草图下的导航树（只列本张的模块与引用）、最小的草图面板（两级校验、选中模块的名称 / ID / 职责）。
+    principle: |
+      - **每个手势只发编辑分组的一个操作**：撤销一步恰好撤回用户的一个动作；画布不自己算规则与布局，被拒绝时就地提示原因。
+      - 目标位置是呈现层下的第二级模块 present.sketch（设计 sketch-v2 的根草图），骨架晋升前暂挂在画布之下。
+    codeRefs: [src/components/sketch/**]
   - id: present.version.edit
     name: 编辑信息条
     parent: present.version
@@ -168,10 +181,18 @@ modules:
     responsibility: |
       草图版本的信息条上出现「编辑」；编辑态下信息条变为「编辑草图：<名>」、未保存标记 ●、「保存」「放弃」「校验」、撤销 / 重做（E-2）；「放弃」有未保存改动时二次确认（E-3）；保存成功后停留在编辑态，保存失败显示原因（文件已变时给「重新加载并重放改动」；重放有失败时列出失败的操作，并给「放弃本次改动」）。
       当前版本上「编辑骨架」打开持久草图 /i/skeleton 并进入编辑态（E-1）；版本切换旁的「新建设计」对话框：ID、名称、目标一句话、底稿（缺省「空草图」；另一选项「改骨架（定稿后晋升替换骨架）」，选中时说明后果：复制骨架的层与第二级并声明 supersedes，定稿实现后整份替换 intent/skeleton.yaml，而不是归档，S-4、L-3），创建后进入新设计的草图编辑。
-    codeRefs: [src/components/edit/EditBar.vue, src/components/edit/NewDesignDialog.vue, src/components/edit/EditDialog.vue, src/components/edit/useEditDialog.ts, src/components/sketch/leave.ts]
+    codeRefs: [src/components/edit/EditBar.vue, src/components/edit/NewDesignDialog.vue, src/components/edit/EditDialog.vue, src/components/edit/useEditDialog.ts, src/components/edit/leave.ts]
 
 relations:
   # ── 呈现层：画布与面板只发意图 ──
+  - {id: rel.v4.architect-sketch, from: actor.architect, to: present.canvas.sketch, type: calls, description: 在草图画布上拖、连、合并、拆分、下钻}
+  - {id: rel.v4.sketch-commands, from: present.canvas.sketch, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: 每个手势一个操作（moveNode / addModule / connect / merge / split / demote / promote / moveIn / remove / openChild / goUp / undo / redo / save）}
+  - {id: rel.v4.sketch-scene, from: present.canvas.sketch, to: state.layout.sketch, type: depends, description: SketchNodeData、SketchEdgeData；straightEdge：直线裁到节点边框}
+  - {id: rel.v4.sketch-labels, from: present.canvas.sketch, to: present.shared, type: depends, description: RELATION_TYPE_LABELS / HINTS：关系类型与一句读法}
+  - {id: rel.v4.sketch-dialog, from: present.canvas.sketch, to: present.version.edit, type: calls, description: ask：删除级联的二次确认（useEditDialog）}
+  - {id: rel.v4.desk-view-sketch, from: present.desk-view, to: present.canvas.sketch, type: depends, description: 草图画布下画布区换成草图画布}
+  - {id: rel.v4.dispatch-sketch, from: present.panel.dispatch, to: present.canvas.sketch, type: depends, description: 草图画布下面板换成草图面板}
+  - {id: rel.v4.nav-tree-sketch, from: present.nav-tree, to: present.canvas.sketch, type: depends, description: 草图画布下模块页签只列本张草图的模块与引用}
   - {id: rel.ed.architect-bar, from: actor.architect, to: present.version.edit, type: calls, description: 编辑、保存、放弃、新建设计}
   - {id: rel.ed.bar-commands, from: present.version.edit, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: exit / save / discard / replayOnReload / createDesign / undo / redo}
   - {id: rel.ed.desk-view-commands, from: present.desk-view, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: 离开路由与关闭页面前问 canLeave（X7a）}

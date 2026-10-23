@@ -7,7 +7,10 @@ import {
   isIntentVersion,
   isSketchRevision,
   isSketchVersion,
+  kebab,
   locate,
+  locateAll,
+  referenceNodes,
   sketchLifetime,
   type CompareMode,
   type ModelIndex,
@@ -97,8 +100,22 @@ export function createEdit(i: EditInputs) {
       (i.loaded.value?.model.sketches ?? []).filter(s => s.file.startsWith('intent/') && sketchLifetime(s) === 'persistent').map(s => s.def.id),
     ),
   }
+  /** X7c：名称能转写为 kebab-case（只含 ASCII）时给出 ID 短名建议；中文名为空串（必须手填，不用拼音） */
+  const suggestShort = (name: string): string => (/^[\x20-\x7e]*$/.test(name) ? kebab(name) : '')
+  /** F-28：「引用外部模块」的候选——当前版本里不在本张、不是挂载点、不是层的模块 */
+  const referenceCandidates = computed(() => {
+    const def = derive.sketch.value
+    const cur = i.current()
+    if (!def || !cur) return []
+    const here = new Set([...locateAll(def).map(m => m.id), ...referenceNodes(def), def.mount])
+    return [...cur.modules.values()]
+      .filter(m => m.kind !== 'layer' && !here.has(m.id))
+      .map(m => ({ id: m.id, name: m.name, path: (cur.pathOf.get(m.id) ?? []).slice(1, -1).map(x => cur.modules.get(x)?.name ?? x) }))
+  })
   return {
     lookup,
+    suggestShort,
+    referenceCandidates,
     editable,
     target,
     session,

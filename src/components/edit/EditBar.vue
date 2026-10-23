@@ -7,7 +7,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDesk } from '@/state/inject'
 import { ask } from './useEditDialog'
-import { leaveSketch } from '../sketch/leave'
+import { leaveSketch } from './leave'
 
 const props = defineProps<{ name: string }>()
 const desk = useDesk()

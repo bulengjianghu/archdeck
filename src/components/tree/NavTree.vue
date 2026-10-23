@@ -11,6 +11,7 @@ import ModuleTree from './ModuleTree.vue'
 import StepTree from './StepTree.vue'
 import FileTree from './FileTree.vue'
 import IssueList from './IssueList.vue'
+import SketchTree from '../sketch/SketchTree.vue'
 
 const desk = useDesk()
 const tab = useNavTab(desk.files.selected.value ? 'files' : desk.perspective.value === 'run' ? 'steps' : 'modules')
@@ -42,6 +43,7 @@ watch(
       <IssueList v-if="tab === 'issues'" />
       <StepTree v-else-if="tab === 'steps' && desk.perspective.value === 'run'" />
       <FileTree v-else-if="tab === 'files'" />
+      <SketchTree v-else-if="desk.edit.active.value" />
       <ModuleTree v-else />
     </div>
   </nav>
