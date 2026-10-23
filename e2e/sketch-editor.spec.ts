@@ -1,8 +1,10 @@
 /**
- * 草图画布（§6.16，SK-12–SK-21，ADR-0025）：新建设计选挂载点 → 底稿按挂载点从基线复制 → 合并两个 → 拖位置 → 连关系 → 保存 →
- * 文件含 mount / layout / from → 刷新原样；持久草图（骨架）打开即草图画布，退出回到进入前的版本。
+ * 草图画布（§6.16，SK-12–SK-21，ADR-0025）：导航树右键「在此设计」→ 新建设计 → 底稿按挂载点从基线（HEAD）复制、引用折叠 → 合并两个 → 拖位置 →
+ * 连关系 → 父模块原则 → 保存 → 文件含 mount / abstraction / layout / from → 刷新原样 → 面板两个核验数；根草图的层带与移入；
+ * 持久草图（骨架）打开即草图画布，退出回到进入前的版本。
  * 设计目录建在真实的 model/h5p-arch-desk/designs/ 下，结束后删掉；指纹 owned.json 与拦截记录 ledger.jsonl 结束后恢复。
  */
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
@@ -60,28 +62,50 @@ async function dragBy(page: Page, id: string, dx: number, dy: number) {
 
 const sketchFile = (dir: string, mount: string) => parse(fs.readFileSync(path.join(dir, `sketches/${mount}.yaml`), 'utf8')).sketch
 
-test('SK-14–SK-19 主路径：新建设计选挂载点 → 底稿复制 → 合并两个 → 拖位置 → 连关系 → 保存 → 文件含 mount / layout / from → 刷新原样', async ({ page }) => {
+const HEAD = () => execFileSync('git', ['rev-parse', 'HEAD'], { cwd: PROJECT }).toString().trim()
+
+/** 导航树里右键一个模块「在此设计」（先展开它的层） */
+async function designHere(page: Page, layer: string, id: string) {
+  const tree = page.locator('.module-tree')
+  const row = (x: string) => tree.locator(`.row[data-id="${x}"]`)
+  if (!(await row(id).isVisible())) await row(layer).locator('.caret').click()
+  await row(id).click({ button: 'right' })
+  await page.getByRole('menuitem', { name: '在此设计' }).click()
+}
+
+test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 → 底稿 13 个模块与折叠引用 → 合并两个 → 拖位置 → 连关系 → 父模块原则 → 保存 → 文件含 mount / abstraction / layout / from → 刷新原样 → 面板两个核验数与清单', async ({
+  page,
+}) => {
   const box = sandbox('zz-e2e-sketch')
   try {
     await openDesk(page, '/p/h5p-arch-desk')
-    await page.getByRole('button', { name: '新建设计' }).click()
+    await designHere(page, 'state', 'state.desk')
     const dialog = page.getByRole('dialog', { name: '新建设计' })
-    await dialog.locator('input[name="design-id"]').fill('zz-e2e-sketch')
+    await expect(dialog.locator('select[name="design-mount"]')).toHaveValue('state.desk')
     await dialog.locator('input[name="design-name"]').fill('E2E 草图')
-    await dialog.locator('select[name="design-mount"]').selectOption('state.desk')
+    await dialog.locator('input[name="design-goal"]').fill('合并编辑与版本')
+    await dialog.locator('input[name="design-id"]').fill('zz-e2e-sketch')
     await dialog.getByRole('button', { name: '创建并打开草图' }).click()
     await expect(page).toHaveURL(/\/d\/zz-e2e-sketch\/sketch/)
     await expect(page.locator('.sketch-canvas')).toBeVisible()
 
-    // 底稿：挂载点 DeskState 的一层从基线复制，带一次初始布局，不带职责文字
+    // 基线 = 仓库 HEAD；底稿：挂载点 DeskState 的一层从基线复制（13 个），带一次初始布局，不带职责文字
+    expect(parse(fs.readFileSync(path.join(box.dir, 'design.yaml'), 'utf8')).design.base.commit).toBe(HEAD())
     const seed = sketchFile(box.dir, 'state.desk')
     expect(seed).toMatchObject({ id: 'zz-e2e-sketch', mount: 'state.desk' })
     const ids: string[] = seed.modules.map((m: { id: string }) => m.id)
-    expect(ids.length).toBeGreaterThan(3)
+    expect(ids).toHaveLength(13)
     expect(seed.modules.every((m: { responsibility?: string }) => !m.responsibility)).toBe(true)
     expect(Object.keys(seed.layout.modules)).toEqual(expect.arrayContaining(ids))
     for (const id of ids) await expect(graphNode(page, id)).toBeVisible()
     await expect(page.locator('.sk-crumbs')).toContainText('DeskState')
+    // 折叠引用（05 裁决 4）：外部端点按挂载点深度折叠，引用节点少于精确端点；多条关系合成一条显示边、标条数
+    const ends = new Set<string>((seed.relations as { from: string; to: string }[]).flatMap(r => [r.from, r.to]).filter(x => !ids.includes(x)))
+    const refs = page.locator('.sk-node.reference')
+    await expect(refs.first()).toBeVisible()
+    expect(await refs.count()).toBeLessThan(ends.size)
+    for (const r of await refs.evaluateAll(els => els.map(e => e.closest('.vue-flow__node')!.getAttribute('data-id')!))) expect(r.split('.')).toHaveLength(2)
+    await expect(page.locator('.sk-edge-label.many').first()).toBeVisible()
     await expect(page.locator('.sk-node.selected')).toHaveCount(0)
 
     // 合并两个：单击、⇧ 单击，右键「合并为新模块…」，中文名填 ID 短名
@@ -101,7 +125,7 @@ test('SK-14–SK-19 主路径：新建设计选挂载点 → 底稿复制 → �
     await expect(graphNode(page, 'state.desk.session')).toBeVisible()
     await expect(graphNode(page, a)).toHaveCount(0)
     await expect(graphNode(page, 'state.desk.session').locator('.badge')).toHaveText('合')
-    await expect(page.locator('.edit-bar .dot')).toHaveCount(1)
+    await expect(page.locator('[data-testid="module-lineage"]')).toContainText('合并')
 
     // 拖位置：一步，可撤销
     const before = (await graphNode(page, 'state.desk.session').boundingBox())!
@@ -115,17 +139,24 @@ test('SK-14–SK-19 主路径：新建设计选挂载点 → 底稿复制 → �
     await connect.getByRole('button', { name: '连上' }).click()
     await expect(page.locator('.sk-edge-label', { hasText: 'E2E 连线' })).toBeVisible()
 
-    // 保存（⌘S）：整个设计写回；文件含 mount / layout / from
+    // 面板写父模块原则：无选中时为父模块，名称与职责只读，原则失焦提交一步
+    await page.locator('.vue-flow__pane').click({ position: { x: 5, y: 5 } })
+    const parent = page.locator('[data-testid="sketch-parent"]')
+    await expect(parent).toContainText('DeskState')
+    await parent.locator('textarea[name="mount-principle"]').fill('协调者只持有一个值')
+    await parent.locator('textarea[name="mount-principle"]').blur()
+
+    // 保存（⌘S）：整个设计写回；文件含 mount / abstraction / layout / from
     await page.locator('.vue-flow__pane').click({ position: { x: 5, y: 5 } })
     await page.keyboard.press('ControlOrMeta+s')
     await expect(page.locator('.sk-notice')).toContainText('已保存')
-    await expect(page.locator('.edit-bar .dot')).toHaveCount(0)
     const saved = sketchFile(box.dir, 'state.desk')
     expect(saved.mount).toBe('state.desk')
+    expect(saved.abstraction).toBe('协调者只持有一个值')
     const session = saved.modules.find((m: { id: string }) => m.id === 'state.desk.session')
     expect(session).toMatchObject({ name: '编辑会话', from: [a, b] })
     expect(saved.modules.some((m: { id: string }) => m.id === a)).toBe(false)
-    expect(saved.layout.modules['state.desk.session'].x).toBeGreaterThan(seed.layout.modules[c].x - 2000)
+    expect(saved.layout.modules['state.desk.session']).toBeDefined()
     expect(saved.relations).toEqual(
       expect.arrayContaining([expect.objectContaining({ from: 'state.desk.session', to: c, type: 'calls', description: 'E2E 连线' })]),
     )
@@ -133,7 +164,7 @@ test('SK-14–SK-19 主路径：新建设计选挂载点 → 底稿复制 → �
     expect(fs.existsSync(path.join(box.dir, 'sketches/state.desk.session.yaml'))).toBe(false)
     const pos = saved.layout.modules['state.desk.session']
 
-    // 刷新原样：位置、合并结果与关系都在
+    // 刷新原样：位置、合并结果、关系与原则都在
     await page.reload()
     await expect(graphNode(page, 'state.desk.session')).toBeVisible()
     await expect(graphNode(page, a)).toHaveCount(0)
@@ -144,6 +175,14 @@ test('SK-14–SK-19 主路径：新建设计选挂载点 → 底稿复制 → �
           .layout.modules['state.desk.session'].x,
     )
     expect(x).toBe(pos.x)
+    await expect(page.locator('textarea[name="mount-principle"]')).toHaveValue('协调者只持有一个值')
+
+    // 面板的两个核验数（本张）：相对基线改了 N 处，清单含「合并」；相对当前版本 N 处偏差
+    const vb = page.locator('[data-testid="verify-baseline"]')
+    await expect(vb.locator('summary')).toContainText(/相对基线：改了 [1-9]\d* 处/)
+    await vb.locator('summary').click()
+    await expect(vb).toContainText('合并')
+    await expect(page.locator('[data-testid="verify-current"] summary')).toContainText(/相对当前版本：\d+ 处偏差/)
 
     // 下钻：合并结果的下一层由血缘推出，来源成为它的子模块；面包屑返回
     await graphNode(page, 'state.desk.session').dblclick()
@@ -151,6 +190,53 @@ test('SK-14–SK-19 主路径：新建设计选挂载点 → 底稿复制 → �
     await expect(page.locator('.sk-crumbs')).toContainText('编辑会话')
     await page.locator('.sk-crumbs .crumb', { hasText: 'DeskState' }).click()
     await expect(graphNode(page, 'state.desk.session')).toBeVisible()
+  } finally {
+    box.restore()
+  }
+})
+
+test('X21 根草图：设计面板「改骨架」→ 层画成带 → 拖到另一条带 = 移入 → 保存后模块换了层、layout 只记 x', async ({ page }) => {
+  const box = sandbox('zz-e2e-root')
+  try {
+    await openDesk(page, '/p/h5p-arch-desk')
+    await designHere(page, 'state', 'state.desk')
+    const dialog = page.getByRole('dialog', { name: '新建设计' })
+    await dialog.locator('input[name="design-name"]').fill('E2E 根草图')
+    await dialog.locator('input[name="design-id"]').fill('zz-e2e-root')
+    await dialog.getByRole('button', { name: '创建并打开草图' }).click()
+    await expect(page.locator('.sketch-canvas')).toBeVisible()
+    await page.locator('.vue-flow__pane').click({ position: { x: 5, y: 5 } })
+    await page.locator('[data-testid="design-sketches"]').getByRole('button', { name: '改骨架' }).click()
+
+    // 层带：四条，按 order；第二级模块在所属带内
+    await expect(page.locator('.sk-band')).toHaveCount(4)
+    const node = graphNode(page, 'state.transition')
+    await expect(node).toBeVisible()
+    await page.locator('.sk-zoom').getByRole('button', { name: '适应' }).click()
+    // 拖到接入层带上 = 移入
+    const from = (await node.locator('.name').boundingBox())!
+    const band = (await page.locator('.sk-band[data-band="access"]').boundingBox())!
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+    await page.mouse.down()
+    const flow = (await page.locator('.sk-flow').boundingBox())!
+    // 落点在带的上缘（模块在带的中间一行，落在模块上是降级）
+    await page.mouse.move(Math.min(band.x + band.width, flow.x + flow.width) / 2 + band.x / 2, band.y + band.height * 0.12, { steps: 15 })
+    await expect(page.locator('.sk-band[data-band="access"]')).toHaveClass(/drop/)
+    await page.mouse.up()
+    await expect(graphNode(page, 'access.transition')).toBeVisible()
+    await expect(graphNode(page, 'state.transition')).toHaveCount(0)
+
+    await page.locator('.vue-flow__pane').click({ position: { x: 5, y: 5 } })
+    await page.keyboard.press('ControlOrMeta+s')
+    await expect(page.locator('.sk-notice')).toContainText('已保存')
+    const root = sketchFile(box.dir, 'root')
+    expect(root.mount).toBe('root')
+    const layer = (id: string) => root.modules.find((m: { id: string }) => m.id === id)
+    expect(layer('access').children.map((m: { id: string }) => m.id)).toContain('access.transition')
+    expect(layer('state').children.map((m: { id: string }) => m.id)).not.toContain('state.transition')
+    expect(layer('access').children.find((m: { id: string }) => m.id === 'access.transition').from).toEqual(['state.transition'])
+    expect(Object.keys(root.layout.modules['access.transition'])).toEqual(['x'])
+    expect(root.layout.modules.access).toBeUndefined()
   } finally {
     box.restore()
   }

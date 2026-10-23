@@ -144,6 +144,14 @@ describe('X14 两级校验', () => {
     expect(codes(r8.hints)).toContain('sketch.empty')
   })
 
+  it('X12：前缀级联改了 ID、没有草图覆盖的后代（由前缀映射推出）在别的草图里被引用时不算「引用不存在」', () => {
+    const ui: SketchDef = { ...seedUi(), relations: [{ id: 'r.impl', from: 'fe.ui.view', to: 'core.api.impl', type: 'calls' }] }
+    const moved = run({ root: seedFromBaseline('root', baseline, { id: 'd1' }), 'fe.ui': ui }, { op: 'moveIn', id: 'core.api', layer: 'fe' }).design
+    expect(moved['fe.ui'].relations![0].to).toBe('fe.api.impl')
+    const r = v(moved['fe.ui'], undefined, moved)
+    expect(r.errors.filter(e => e.code === 'sketch.ref')).toEqual([])
+  })
+
   it('X13、X21：根草图的超七按每条层带算——两条带各 5 个不提示，一条带 8 个提示一次并定位到该层', () => {
     const kids = (layer: string, n: number) => Array.from({ length: n }, (_, i) => ({ id: `${layer}.m${i}`, name: `M${i}`, kind: 'subsystem' }))
     const root = (a: number, b: number): SketchDef => ({

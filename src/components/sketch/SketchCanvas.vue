@@ -119,9 +119,11 @@ function clearSelection() {
 
 // ── 拖动：落点一步；拖到节点上 = 降级 / 移入；拖到面包屑父级 = 升级 ──
 const host = ref<HTMLElement | null>(null)
+/** Vue Flow 容器的屏幕矩形（project 的原点；不含画布顶部的工具条） */
+const flowRect = () => ((host.value!.querySelector('.vue-flow') as HTMLElement | null) ?? host.value!).getBoundingClientRect()
 function flowPoint(ev: MouseEvent | TouchEvent): SketchPoint {
   const pt = 'clientX' in ev ? ev : (ev.touches[0] ?? ev.changedTouches[0])
-  const r = host.value!.getBoundingClientRect()
+  const r = flowRect()
   return project({ x: pt.clientX - r.left, y: pt.clientY - r.top })
 }
 function overParentCrumb(ev: MouseEvent | TouchEvent): boolean {
@@ -186,7 +188,7 @@ function onHostDblClick(ev: MouseEvent) {
   startCreate(ev)
 }
 function createAtCenter() {
-  const r = host.value!.getBoundingClientRect()
+  const r = flowRect()
   const screen = { x: r.left + r.width / 2 - 120, y: r.top + r.height / 2 - 60 }
   creating.value = root.value ? { screen } : { screen, at: project({ x: r.width / 2, y: r.height / 2 }) }
 }

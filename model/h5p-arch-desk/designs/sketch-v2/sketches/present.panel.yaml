@@ -162,10 +162,6 @@ sketch:
       from: present.panel.dispatch
       to: present.panel.edit
       type: depends
-    - id: rel.ed.forms-menu
-      from: present.panel.edit
-      to: present.canvas.edit.menu
-      type: calls
     - id: rel.ed.forms-labels
       from: present.panel.edit
       to: present.shared

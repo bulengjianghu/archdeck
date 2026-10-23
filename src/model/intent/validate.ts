@@ -10,6 +10,7 @@ import { sketchShapeIssues } from '../load'
 import { ROOT_MOUNT, type ModelIndex, type SketchDef, type SketchEntity } from '../types'
 import { sketchContradictions } from './check'
 import { ID_PATTERN, knownModules, locateAll } from './edit/locate'
+import { prefixMap, sketchLineage, unmapId } from './lineage'
 import { looksLocal } from './scope'
 import { mountOfSketchFile, type SketchSet, type SketchValidation, type SketchValidationIssue } from './types'
 
@@ -53,7 +54,14 @@ export function validateSketch(sketch: SketchDef, ctx: ValidateContext): SketchV
   const local = new Set(own.map(m => m.id))
   const fromPersistent = knownModules({ id: '', mount: ROOT_MOUNT }, persistent)
   const fromDesign = new Set(others.flatMap(d => locateAll(d).map(m => m.id)))
-  const known = (id: string) => local.has(id) || fromPersistent.has(id) || fromDesign.has(id) || !!ctx.index?.modules.has(id) || !!ctx.index?.actors.has(id)
+  const plain = (id: string) => local.has(id) || fromPersistent.has(id) || fromDesign.has(id) || !!ctx.index?.modules.has(id) || !!ctx.index?.actors.has(id)
+  // X12：前缀级联换了 ID、没有草图覆盖的后代（由前缀映射推出）也算存在——按映射回到基线里的 ID 查
+  const prefixes = prefixMap(sketchLineage([sketch, ...others]))
+  const known = (id: string) => {
+    if (plain(id)) return true
+    const was = prefixes.size ? unmapId(prefixes, id) : id
+    return was !== id && plain(was)
+  }
   const isLayer = (id: string) =>
     (fromPersistent.get(id)?.node.kind ?? own.find(m => m.id === id)?.node.kind ?? ctx.index?.modules.get(id)?.kind) === 'layer'
   const layers = new Set([...fromPersistent].filter(([, m]) => m.node.kind === 'layer').map(([id]) => id))
