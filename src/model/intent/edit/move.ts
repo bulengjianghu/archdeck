@@ -45,7 +45,7 @@ export function moveModule(def: SketchDef, ctx: EditContext, id: string, parent:
 
 /** 草图里（含已摘下的 extra 子树）全部模块按 map 改 ID，并改写引用 */
 function renameAll(def: SketchDef, map: ReadonlyMap<string, string>, extra: ModuleDef[] = []): void {
-  for (const m of [...locateAll(def), ...locateAll({ id: def.id, modules: extra })]) m.node.id = map.get(m.node.id) ?? m.node.id
+  for (const m of [...locateAll(def), ...locateAll({ id: def.id, mount: def.mount, modules: extra })]) m.node.id = map.get(m.node.id) ?? m.node.id
   rewriteRefs(def, map)
 }
 

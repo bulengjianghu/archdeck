@@ -4,14 +4,16 @@
  */
 import type { RelationType, SketchDef } from '../../types'
 import type { EditContext } from '../types'
-import { interfaceId, knownModules, relationId, takenIds } from './locate'
-import { done, isAncestor, reject, type OpOutcome } from './shared'
+import { interfaceId, locateAll, relationId, takenIds } from './locate'
+import { done, isAncestor, isKnown, reject, type OpOutcome } from './shared'
 
 const allRelations = (def: SketchDef, ctx: EditContext) => [...(def.relations ?? []), ...ctx.persistent.flatMap(p => p.def.relations ?? [])]
 
 function checkPair(def: SketchDef, ctx: EditContext, from: string, to: string, type: RelationType, except?: string): OpOutcome | null {
-  const known = knownModules(def, ctx.persistent)
-  for (const x of [from, to]) if (!known.has(x)) return reject('not-found', `草图里没有模块「${x}」`)
+  for (const x of [from, to]) if (!isKnown(def, ctx, x)) return reject('not-found', `草图里没有模块「${x}」`)
+  // X19：两端都是引用节点（都不在本草图）的关系不能建
+  const own = new Set(locateAll(def).map(m => m.id))
+  if (def.mount && !own.has(from) && !own.has(to)) return reject('invalid', '两端都是引用节点的关系不能建：关系只写本层（X9、X19）')
   if (from === to || isAncestor(def, ctx, from, to) || isAncestor(def, ctx, to, from)) return reject('ancestor', '关系不能连自己、祖先或后代（M6）')
   if (allRelations(def, ctx).some(r => r.id !== except && r.from === from && r.to === to && r.type === type))
     return reject('duplicate-relation', `「${from}」→「${to}」的 ${type} 关系已经有了（C-8）`)
@@ -46,12 +48,13 @@ export function updateRelation(def: SketchDef, ctx: EditContext, id: string, pat
 export function removeRelation(def: SketchDef, _ctx: EditContext, id: string): OpOutcome {
   if (!def.relations?.some(r => r.id === id)) return reject('not-found', `草图里没有关系「${id}」`)
   def.relations = def.relations.filter(r => r.id !== id)
+  if (def.layout?.relations) delete def.layout.relations[id]
   return done({ removed: [id] })
 }
 
 export function addInterface(def: SketchDef, ctx: EditContext, owner: string, name: string, signature?: string): OpOutcome {
   if (!name.trim()) return reject('invalid', '接口名称不能为空')
-  if (!knownModules(def, ctx.persistent).has(owner)) return reject('not-found', `草图里没有模块「${owner}」`)
+  if (!isKnown(def, ctx, owner)) return reject('not-found', `草图里没有模块「${owner}」`)
   const id = interfaceId(owner, name, takenIds(def, ctx.persistent))
   ;(def.interfaces ??= []).push({ id, name: name.trim(), owner, ...(signature?.trim() ? { signature: signature.trim() } : {}) })
   return done({ created: [id] })

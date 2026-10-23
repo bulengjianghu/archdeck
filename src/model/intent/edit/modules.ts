@@ -3,13 +3,17 @@
  */
 import type { ModuleDef, SketchDef } from '../../types'
 import type { EditContext, ModulePatch } from '../types'
-import { knownModules, locate, locateAll, moduleId, subtreeIds, takenIds } from './locate'
-import { checkNewId, done, ownModule, reject, type OpOutcome } from './shared'
+import { locate, locateAll, moduleId, mountOf, subtreeIds, takenIds } from './locate'
+import { checkNewId, done, isKnown, ownModule, reject, type OpOutcome } from './shared'
 
 /** 新模块跟随父模块的写法：父模块在本草图里就嵌进它的 children，否则平铺并写 parent */
 export function placeModule(def: SketchDef, node: ModuleDef, parent: string | undefined): void {
   const host = parent ? locate(def, parent) : undefined
-  if (host) {
+  // X9：非根草图的模块挂在 mount 下，不写 parent
+  if (parent && parent === mountOf(def)) {
+    delete node.parent
+    ;(def.modules ??= []).push(node)
+  } else if (host) {
     delete node.parent
     ;(host.node.children ??= []).push(node)
   } else {
@@ -21,8 +25,10 @@ export function placeModule(def: SketchDef, node: ModuleDef, parent: string | un
 
 export function addModule(def: SketchDef, ctx: EditContext, parent: string, name: string, id?: string, kind?: string): OpOutcome {
   if (!name.trim()) return reject('invalid', '模块名称不能为空')
-  if (!knownModules(def, ctx.persistent).has(parent)) return reject('not-found', `父模块「${parent}」不在草图里`)
-  const newId = id?.trim() || moduleId(parent, name, takenIds(def, ctx.persistent))
+  if (!isKnown(def, ctx, parent)) return reject('not-found', `父模块「${parent}」不在草图里`)
+  const given = id?.trim()
+  // X7c：给的是短名时补上父 ID 前缀
+  const newId = given ? (given.startsWith(`${parent}.`) || !given.length || given.includes('.') ? given : `${parent}.${given}`) : moduleId(parent, name, takenIds(def, ctx.persistent))
   const bad = checkNewId(def, ctx, newId, parent)
   if (bad) return bad
   placeModule(def, { id: newId, name: name.trim(), ...(kind ? { kind } : {}) }, parent)
@@ -44,7 +50,7 @@ export function updateModule(def: SketchDef, ctx: EditContext, id: string, patch
 }
 
 export function setClosed(def: SketchDef, ctx: EditContext, id: string, closed: boolean): OpOutcome {
-  if (!knownModules(def, ctx.persistent).has(id)) return reject('not-found', `草图里没有模块「${id}」`)
+  if (!isKnown(def, ctx, id)) return reject('not-found', `草图里没有模块「${id}」`)
   const list = (def.closed ?? []).filter(x => x !== id)
   if (closed) list.push(id)
   if (list.length) def.closed = list
@@ -70,5 +76,8 @@ export function removeModule(def: SketchDef, ctx: EditContext, id: string): OpOu
   if (def.closed) def.closed = def.closed.filter(x => !gone.has(x))
   if (def.closed?.length === 0) delete def.closed
   for (const m of locateAll(def)) if (m.node.mayDependOn) m.node.mayDependOn = m.node.mayDependOn.filter(x => !gone.has(x))
+  // X7e：它的布局一并删
+  if (def.layout?.modules) for (const x of gone) delete def.layout.modules[x]
+  if (def.layout?.relations) for (const r of relations) delete def.layout.relations[r.id]
   return done({ removed: [...removed, ...relations.map(r => r.id), ...interfaces.map(x => x.id)] })
 }

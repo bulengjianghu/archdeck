@@ -3,12 +3,17 @@
  */
 import type { ModuleDef, SketchDef } from '../../types'
 import type { EditContext, EditEffects, EditRejectCode } from '../types'
-import { ID_PATTERN, knownModules, locate, subtreeIds, takenIds } from './locate'
+import { ID_PATTERN, knownModules, locate, mountOf, subtreeIds, takenIds } from './locate'
 
 export type OpOutcome = { effects: EditEffects } | { reject: { code: EditRejectCode; reason: string } }
 
 export const done = (effects: Partial<EditEffects> = {}): OpOutcome => ({ effects: { created: [], renamed: [], removed: [], ...effects } })
 export const reject = (code: EditRejectCode, reason: string): OpOutcome => ({ reject: { code, reason } })
+
+/** X9：模块在编辑中可见——本草图、持久草图、挂载点或上下文给出的外部模块 */
+export function isKnown(def: SketchDef, ctx: EditContext, id: string): boolean {
+  return id === mountOf(def) || knownModules(def, ctx.persistent).has(id) || !!ctx.known?.(id)
+}
 
 /** 要改的模块必须在本草图里；只在持久草图里的，设计草图不能动它（X7b） */
 export function ownModule(def: SketchDef, ctx: EditContext, id: string): { ok: true; node: ModuleDef } | { ok: false; out: OpOutcome } {
@@ -52,6 +57,9 @@ export function rewriteRefs(def: SketchDef, map: ReadonlyMap<string, string>): n
   }
   for (const x of def.interfaces ?? []) if (x.owner) x.owner = sub(x.owner)
   if (def.closed) def.closed = def.closed.map(sub)
+  // X12、X15：布局按模块 ID 记，键随之改写
+  if (def.layout?.modules)
+    def.layout.modules = Object.fromEntries(Object.entries(def.layout.modules).map(([id, p]) => [map.get(id) ?? id, p]))
   const walk = (list: ModuleDef[]) =>
     list.forEach(m => {
       if (m.mayDependOn) m.mayDependOn = m.mayDependOn.map(sub)

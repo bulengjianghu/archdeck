@@ -1,0 +1,462 @@
+/**
+ * 设计级编辑（X7b、X7d、X7e、X7j、X7k、X11、X12，ADR-0025）：applyDesignEdit(设计的全部草图, 操作, 上下文) → 新的草图集合 + 影响 | 拒绝原因。
+ * 一个操作可以改多张草图：合并（来源降为新模块的子模块，写入新模块的下一层草图）、拆分、降级（写入目标的下一层草图，不存在则推出）、
+ * 升级（写入父层草图，下一层的关系不带上来、留作待重连）、移入（根草图里换层）、改 ID、删除（连同挂在它与后代上的草图）。
+ * ID 变了一律前缀级联：设计里挂在它或它后代上的草图改挂载点与其中模块 ID，被改写的模块记 from（指向基线）；
+ * 关系两端、接口 owner、closed、layout 的键随之改写。from 一律指向基线 ID：沿血缘求闭包写入（X11）。纯函数，输入不动。
+ */
+import { ROOT_MOUNT, type ModuleDef, type SketchDef } from '../../types'
+import { lineageSources, sketchLineage } from '../lineage'
+import type { DesignEditContext, DesignEditEffects, DesignEditOp, DesignEditResult, EditContext, EditOp, EditRejectCode, SketchSet } from '../types'
+import { applyEdit } from './apply'
+import { gridLayout } from './layout'
+import { ID_PATTERN, locate, locateAll, shortName, type LocatedModule } from './locate'
+import { deriveChildSketch, seedFromBaseline } from './seed'
+
+type Draft = Record<string, SketchDef>
+type Reject = { code: EditRejectCode; reason: string }
+const no = (code: EditRejectCode, reason: string): Reject => ({ code, reason })
+
+const under = (id: string, prefix: string) => id === prefix || id.startsWith(`${prefix}.`)
+const swap = (id: string, from: string, to: string) => (under(id, from) ? `${to}${id.slice(from.length)}` : id)
+
+/** 设计里挂在 id 或它后代上的草图（挂载点） */
+export const sketchesUnder = (design: SketchSet, id: string): string[] => Object.keys(design).filter(m => m !== ROOT_MOUNT && under(m, id))
+
+/** 挂载点的父草图：父模块是层（顶层 ID）时为根挂载 */
+function parentMount(mount: string): { mount: string; parent: string } | null {
+  const dot = mount.lastIndexOf('.')
+  if (mount === ROOT_MOUNT || dot < 0) return null
+  const parent = mount.slice(0, dot)
+  return { mount: parent.includes('.') ? parent : ROOT_MOUNT, parent }
+}
+
+class Session {
+  readonly fx: DesignEditEffects = { created: [], renamed: [], removed: [], sketches: [], renamedSketches: [], removedSketches: [], createdSketches: [] }
+  constructor(
+    readonly draft: Draft,
+    readonly ctx: DesignEditContext,
+  ) {}
+
+  touch(...mounts: string[]) {
+    for (const m of mounts) if (!this.fx.sketches.includes(m)) this.fx.sketches.push(m)
+  }
+
+  /** 模块是否基线模块（没有基线时：没写 from 的都当作基线模块） */
+  isBase(id: string) {
+    return this.ctx.baseline ? this.ctx.baseline.modules.has(id) : true
+  }
+
+  /** X11：一个模块的基线来源闭包 */
+  closureOf(node: ModuleDef): string[] {
+    if (node.from?.length) return [...node.from]
+    return this.isBase(node.id) ? [node.id] : []
+  }
+
+  /** 单张草图编辑的上下文：范围外可引用设计里其他草图与基线的模块 */
+  editContext(): EditContext {
+    const all = new Set(Object.values(this.draft).flatMap(d => locateAll(d).map(m => m.id)))
+    return { persistent: this.ctx.persistent, designSketch: true, known: id => all.has(id) || !!this.ctx.baseline?.modules.has(id) }
+  }
+
+  /** 已占用的模块 ID：设计里的，加上基线里没有被血缘带走的 */
+  taken(except: readonly string[] = []): Set<string> {
+    const out = new Set(Object.values(this.draft).flatMap(d => locateAll(d).map(m => m.id)))
+    const gone = lineageSources(sketchLineage(Object.values(this.draft)))
+    for (const id of this.ctx.baseline?.modules.keys() ?? []) if (![...gone].some(g => under(id, g))) out.add(id)
+    for (const x of except) out.delete(x)
+    return out
+  }
+
+  checkId(id: string, parent: string, except: readonly string[] = []): Reject | null {
+    if (!ID_PATTERN.test(id)) return no('id-format', `ID「${id}」只能包含字母、数字和 . _ : -，且以字母或数字开头`)
+    if (!id.startsWith(`${parent}.`) || id.slice(parent.length + 1).includes('.') || id.length === parent.length + 1)
+      return no('id-prefix', `ID「${id}」必须是「${parent}.<短名>」（X7c、X9）`)
+    if (this.taken(except).has(id)) return no('id-taken', `ID「${id}」已被占用`)
+    return null
+  }
+
+  sketch(mount: string): SketchDef | Reject {
+    return this.draft[mount] ?? no('not-found', `设计里没有挂在「${mount}」上的草图`)
+  }
+
+  /** X18：没有时推出一张（基线的子树 + 血缘）；没有基线时为空草图 */
+  ensure(mount: string): SketchDef {
+    const hit = this.draft[mount]
+    if (hit) return hit
+    const opts = { id: this.ctx.design }
+    const b = this.ctx.baseline
+    const def: SketchDef = b
+      ? mount === ROOT_MOUNT
+        ? seedFromBaseline(ROOT_MOUNT, b, opts)
+        : deriveChildSketch(mount, b, this.draft, opts)
+      : { id: this.ctx.design, mount, lifetime: 'until-implemented', modules: [] }
+    this.draft[mount] = def
+    this.fx.createdSketches.push(mount)
+    return def
+  }
+
+  /**
+   * X12：前缀级联——from 及其后代换成 to：模块 ID（被改写的基线模块记 from）、挂载点（草图改挂）、关系两端、接口 owner、closed、layout 的键。
+   * skipRelationsIn：不改写这张草图的关系两端（升级时下一层的关系留作待重连）。
+   */
+  cascade(from: string, to: string, skipRelationsIn?: string) {
+    if (from === to) return
+    for (const key of Object.keys(this.draft)) {
+      const def = this.draft[key]
+      let changed = false
+      for (const m of locateAll(def)) {
+        if (!under(m.id, from)) continue
+        if (!m.node.from?.length && this.isBase(m.id)) m.node.from = [m.id]
+        const next = swap(m.id, from, to)
+        if (m.node.from?.length === 1 && m.node.from[0] === next) delete m.node.from
+        this.fx.renamed.push([m.id, next])
+        m.node.id = next
+        changed = true
+      }
+      if (key !== skipRelationsIn)
+        for (const r of def.relations ?? []) {
+          const [f, t] = [swap(r.from, from, to), swap(r.to, from, to)]
+          if (f !== r.from || t !== r.to) changed = true
+          r.from = f
+          r.to = t
+        }
+      for (const x of def.interfaces ?? [])
+        if (x.owner && under(x.owner, from)) {
+          x.owner = swap(x.owner, from, to)
+          changed = true
+        }
+      if (def.closed?.some(c => under(c, from))) {
+        def.closed = def.closed.map(c => swap(c, from, to))
+        changed = true
+      }
+      if (def.layout?.modules && Object.keys(def.layout.modules).some(id => under(id, from))) {
+        def.layout.modules = Object.fromEntries(Object.entries(def.layout.modules).map(([id, p]) => [swap(id, from, to), p]))
+        changed = true
+      }
+      if (key !== ROOT_MOUNT && under(key, from)) {
+        const mount = swap(key, from, to)
+        delete this.draft[key]
+        def.mount = mount
+        this.draft[mount] = def
+        this.fx.renamedSketches.push([key, mount])
+        this.touch(mount)
+      } else if (changed) this.touch(key)
+    }
+  }
+
+  /** 去掉一张草图里同一对模块同类型的重复关系（保留先出现的）与连自己的关系 */
+  dedupe(def: SketchDef) {
+    const seen = new Set<string>()
+    def.relations = (def.relations ?? []).filter(r => {
+      const k = `${r.from}\0${r.to}\0${r.type}`
+      if (r.from === r.to || seen.has(k)) {
+        this.fx.removed.push(r.id)
+        if (def.layout?.relations) delete def.layout.relations[r.id]
+        return false
+      }
+      seen.add(k)
+      return true
+    })
+    if (!def.relations.length) delete def.relations
+  }
+
+  /** 把一组本草图的模块从原位置摘下（同一列表从后往前） */
+  detach(hits: readonly LocatedModule[]) {
+    for (const h of [...hits].sort((a, b) => b.index - a.index)) h.list.splice(h.index, 1)
+  }
+}
+
+const fullId = (parent: string, id: string) => (id.startsWith(`${parent}.`) ? id : `${parent}.${id.trim()}`)
+const nodeCopy = (node: ModuleDef, id: string, from: readonly string[]): ModuleDef => {
+  const { children: _c, parent: _p, from: _f, ...rest } = node
+  return { ...rest, id, ...(from.length && !(from.length === 1 && from[0] === id) ? { from: [...from] } : {}) }
+}
+
+/** 本草图的一个模块（层除外时 notLayer） */
+function own(def: SketchDef, id: string, notLayer = true): LocatedModule | Reject {
+  const hit = locate(def, id)
+  if (!hit) return no('not-found', `草图里没有模块「${id}」`)
+  if (notLayer && hit.node.kind === 'layer') return no('invalid', `「${id}」是层：层只在根草图里增删改排序`)
+  return hit
+}
+const isReject = (x: unknown): x is Reject => !!x && typeof x === 'object' && 'code' in x && 'reason' in x
+
+/** 移走模块时：它的接口跟着走（owner 换新 ID），closed 里的它搬到目标草图 */
+function carry(s: Session, src: SketchDef, dst: SketchDef, id: string, to: string) {
+  const ifaces = (src.interfaces ?? []).filter(x => x.owner && under(x.owner, id))
+  if (ifaces.length) {
+    src.interfaces = src.interfaces!.filter(x => !ifaces.includes(x))
+    if (!src.interfaces.length) delete src.interfaces
+    ;(dst.interfaces ??= []).push(...ifaces.map(x => ({ ...x, owner: swap(x.owner!, id, to) })))
+  }
+  if (src.closed?.includes(id)) {
+    src.closed = src.closed.filter(c => c !== id)
+    if (!src.closed.length) delete src.closed
+    ;(dst.closed ??= []).push(to)
+  }
+  if (src.layout?.modules?.[id]) delete src.layout.modules[id]
+  void s
+}
+
+/** 新模块在目标草图里的位置：目标有布局时取网格里的空位 */
+function place(dst: SketchDef, id: string) {
+  if (!dst.layout?.modules) return
+  dst.layout.modules[id] ??= gridLayout(dst).modules![id]
+}
+
+function merge(s: Session, op: Extract<DesignEditOp, { op: 'merge' }>): Reject | null {
+  const def = s.sketch(op.sketch)
+  if (isReject(def)) return def
+  const ids = [...new Set(op.ids)]
+  if (ids.length < 2) return no('too-few', '合并至少要选两个模块（X7j）')
+  if (!op.name.trim()) return no('invalid', '模块名称不能为空')
+  const hits: LocatedModule[] = []
+  for (const id of ids) {
+    const h = own(def, id)
+    if (isReject(h)) return h
+    hits.push(h)
+  }
+  const parent = hits[0].parentId
+  if (!parent || hits.some(h => h.parentId !== parent)) return no('invalid', '只能合并同一层的模块（X7j）')
+  const newId = fullId(parent, op.id)
+  const bad = s.checkId(newId, parent)
+  if (bad) return bad
+  const closure = [...new Set(hits.flatMap(h => s.closureOf(h.node)))]
+  const kinds = new Set(hits.map(h => h.node.kind))
+  const kind = op.kind ?? (kinds.size === 1 ? [...kinds][0] : undefined)
+  const node: ModuleDef = { id: newId, name: op.name.trim(), ...(kind ? { kind } : {}), ...(closure.length >= 2 ? { from: closure } : {}) }
+  const first = hits[0]
+  first.list.splice(first.index, 0, node)
+  const shifted = hits.map(h => (h.list === first.list && h.index >= first.index ? { ...h, index: h.index + 1 } : h))
+  s.detach(shifted)
+  // 位置：选中节点的重心；来源的相对位置带进下一层
+  const pos = ids.map(id => def.layout?.modules?.[id]).filter(p => !!p)
+  const childLayout: Record<string, { x: number; y: number }> = {}
+  for (const id of ids) if (def.layout?.modules?.[id]) childLayout[`${newId}.${shortName(id)}`] = def.layout.modules[id]
+  if (pos.length) {
+    def.layout!.modules![newId] = { x: pos.reduce((a, p) => a + p.x, 0) / pos.length, y: pos.reduce((a, p) => a + p.y, 0) / pos.length }
+  }
+  // 下一层草图：来源各成一个子模块（from 指向基线来源），来源之间的关系、来源的接口与 closed 随来源进入
+  const child = s.ensure(newId)
+  const as = (id: string) => `${newId}.${shortName(id)}`
+  child.modules = (child.modules ?? []).filter(m => !ids.some(id => m.id === as(id)))
+  for (const h of hits) child.modules.push(nodeCopy(h.node, as(h.id), s.closureOf(h.node)))
+  const inside = (def.relations ?? []).filter(r => ids.includes(r.from) && ids.includes(r.to))
+  if (inside.length) {
+    def.relations = def.relations!.filter(r => !inside.includes(r))
+    child.relations = [...(child.relations ?? []).filter(r => !inside.some(x => x.id === r.id)), ...inside.map(r => ({ ...r, from: as(r.from), to: as(r.to) }))]
+  }
+  for (const id of ids) carry(s, def, child, id, as(id))
+  if (Object.keys(childLayout).length) child.layout = { ...(child.layout ?? {}), modules: { ...(child.layout?.modules ?? {}), ...childLayout } }
+  // 来源与外界的关系重指向新模块、同对同类型去重
+  for (const r of def.relations ?? []) {
+    if (ids.includes(r.from)) r.from = newId
+    if (ids.includes(r.to)) r.to = newId
+  }
+  s.dedupe(def)
+  s.fx.created.push(newId)
+  s.touch(op.sketch, newId)
+  // 前缀级联：来源的子树与挂在它们上的草图换成「新模块.来源短名」
+  for (const id of ids) s.cascade(id, as(id))
+  return null
+}
+
+function split(s: Session, op: Extract<DesignEditOp, { op: 'split' }>): Reject | null {
+  const def = s.sketch(op.sketch)
+  if (isReject(def)) return def
+  const hit = own(def, op.id)
+  if (isReject(hit)) return hit
+  if (op.parts.length < 2) return no('too-few', '拆分至少要拆成两个模块（X7k）')
+  const parent = hit.parentId!
+  const ids = op.parts.map(p => fullId(parent, p.id))
+  if (new Set(ids).size !== ids.length) return no('id-taken', '拆分出的 ID 重复')
+  for (const [i, id] of ids.entries()) {
+    if (!op.parts[i].name.trim()) return no('invalid', '模块名称不能为空')
+    const bad = s.checkId(id, parent, [op.id])
+    if (bad) return bad
+  }
+  const closure = s.closureOf(hit.node)
+  const nodes = op.parts.map((p, i) => ({
+    id: ids[i],
+    name: p.name.trim(),
+    ...(hit.node.kind ? { kind: hit.node.kind } : {}),
+    ...(closure.length && !(closure.length === 1 && closure[0] === ids[i]) ? { from: [...closure] } : {}),
+  }))
+  hit.list.splice(hit.index, 1, ...nodes)
+  const at = def.layout?.modules?.[op.id]
+  if (at) {
+    delete def.layout!.modules![op.id]
+    nodes.forEach((n, i) => (def.layout!.modules![n.id] = { x: at.x + (i - (nodes.length - 1) / 2) * 200, y: at.y }))
+  }
+  // 原模块的关系不自动分配（待重连，X16）；它的下一层草图随它删除（保留同 ID 的拆分结果时除外）
+  if (!ids.includes(op.id))
+    for (const m of sketchesUnder(s.draft, op.id)) {
+      delete s.draft[m]
+      s.fx.removedSketches.push(m)
+    }
+  s.fx.created.push(...ids.filter(id => id !== op.id))
+  if (!ids.includes(op.id)) s.fx.removed.push(op.id)
+  s.touch(op.sketch)
+  return null
+}
+
+function demote(s: Session, op: Extract<DesignEditOp, { op: 'demote' }>): Reject | null {
+  const def = s.sketch(op.sketch)
+  if (isReject(def)) return def
+  if (op.id === op.target) return no('ancestor', '不能降级到自己之下')
+  const a = own(def, op.id)
+  if (isReject(a)) return a
+  const c = own(def, op.target)
+  if (isReject(c)) return isReject(c) && c.code === 'invalid' ? no('invalid', '拖到层上是移入（根草图里换层），不是降级') : c
+  if (a.parentId !== c.parentId) return no('invalid', '只能降级到同一层的另一个模块之下（X7d）')
+  const newId = `${op.target}.${shortName(op.id)}`
+  const bad = s.checkId(newId, op.target)
+  if (bad) return bad
+  const child = s.ensure(op.target)
+  ;(child.modules ??= []).push(nodeCopy(a.node, newId, s.closureOf(a.node)))
+  place(child, newId)
+  carry(s, def, child, op.id, newId)
+  s.detach([a])
+  // 关系重指向目标、去重；与目标之间的关系成了连祖先，去掉
+  for (const r of def.relations ?? []) {
+    if (r.from === op.id) r.from = op.target
+    if (r.to === op.id) r.to = op.target
+  }
+  s.dedupe(def)
+  s.touch(op.sketch, op.target)
+  s.cascade(op.id, newId)
+  return null
+}
+
+function promote(s: Session, op: Extract<DesignEditOp, { op: 'promote' }>): Reject | null {
+  const def = s.sketch(op.sketch)
+  if (isReject(def)) return def
+  const up = parentMount(op.sketch)
+  if (!up) return no('invalid', '根草图里的模块没有上一层')
+  const x = own(def, op.id)
+  if (isReject(x)) return x
+  const target = s.ensure(up.mount)
+  const newId = `${up.parent}.${shortName(op.id)}`
+  const bad = s.checkId(newId, up.parent)
+  if (bad) return bad
+  const node = nodeCopy(x.node, newId, s.closureOf(x.node))
+  if (up.mount === ROOT_MOUNT) {
+    const layer = locate(target, up.parent)
+    if (!layer) return no('not-found', `根草图里没有层「${up.parent}」`)
+    ;(layer.node.children ??= []).push(node)
+  } else (target.modules ??= []).push(node)
+  place(target, newId)
+  carry(s, def, target, op.id, newId)
+  s.detach([x])
+  s.touch(op.sketch, up.mount)
+  // 下一层的关系不带上来：留在原草图里成为待重连（X16）
+  s.cascade(op.id, newId, op.sketch)
+  return null
+}
+
+function moveIn(s: Session, op: Extract<DesignEditOp, { op: 'moveIn' }>): Reject | null {
+  const root = s.ensure(ROOT_MOUNT)
+  const a = own(root, op.id)
+  if (isReject(a)) return a
+  const layer = locate(root, op.layer)
+  if (!layer || layer.node.kind !== 'layer' || layer.parentId !== undefined) return no('not-found', `根草图里没有层「${op.layer}」`)
+  if (a.parentId === op.layer) return null
+  if (!a.parentId || a.nested === false) return no('root-only', '移入只用于根草图里层的直接子模块（X7d）')
+  const newId = `${op.layer}.${shortName(op.id)}`
+  const bad = s.checkId(newId, op.layer)
+  if (bad) return bad
+  s.detach([a])
+  ;(layer.node.children ??= []).push(nodeCopy(a.node, newId, s.closureOf(a.node)))
+  if (root.layout?.modules?.[op.id]) {
+    root.layout.modules[newId] = root.layout.modules[op.id]
+    delete root.layout.modules[op.id]
+  }
+  s.touch(ROOT_MOUNT)
+  s.cascade(op.id, newId)
+  return null
+}
+
+function rename(s: Session, op: Extract<DesignEditOp, { op: 'rename' }>): Reject | null {
+  const def = s.sketch(op.sketch)
+  if (isReject(def)) return def
+  const x = own(def, op.id, false)
+  if (isReject(x)) return x
+  const newId = x.parentId ? fullId(x.parentId, op.newId) : op.newId.trim()
+  if (newId === op.id) return null
+  const bad = x.parentId
+    ? s.checkId(newId, x.parentId)
+    : !ID_PATTERN.test(newId) || newId.includes('.')
+      ? no('id-format', `层 ID「${newId}」不合法`)
+      : s.taken().has(newId)
+        ? no('id-taken', `ID「${newId}」已被占用`)
+        : null
+  if (bad) return bad
+  s.touch(op.sketch)
+  s.cascade(op.id, newId)
+  return null
+}
+
+function remove(s: Session, op: Extract<DesignEditOp, { op: 'remove' }>): Reject | null {
+  const def = s.sketch(op.sketch)
+  if (isReject(def)) return def
+  const r = applyEdit(def, { op: 'removeModule', id: op.id }, s.editContext())
+  if (!r.ok) return no(r.code, r.reason)
+  s.draft[op.sketch] = r.sketch
+  s.fx.removed.push(...r.effects.removed)
+  s.touch(op.sketch)
+  // X7e：挂在它或它后代上的草图一并删；其他草图里以它（或后代）为端点的关系、它提供的接口一并删
+  for (const m of sketchesUnder(s.draft, op.id)) {
+    delete s.draft[m]
+    s.fx.removedSketches.push(m)
+  }
+  for (const [key, d] of Object.entries(s.draft)) {
+    const rels = (d.relations ?? []).filter(x => under(x.from, op.id) || under(x.to, op.id))
+    const ifs = (d.interfaces ?? []).filter(x => x.owner && under(x.owner, op.id))
+    if (!rels.length && !ifs.length) continue
+    if (rels.length) d.relations = d.relations!.filter(x => !rels.includes(x))
+    if (ifs.length) d.interfaces = d.interfaces!.filter(x => !ifs.includes(x))
+    s.fx.removed.push(...rels.map(x => x.id), ...ifs.map(x => x.id))
+    s.touch(key)
+  }
+  return null
+}
+
+function single(s: Session, mount: string, edit: EditOp): Reject | null {
+  if (edit.op === 'renameModule') return rename(s, { op: 'rename', sketch: mount, id: edit.id, newId: edit.newId })
+  if (edit.op === 'removeModule') return remove(s, { op: 'remove', sketch: mount, id: edit.id })
+  const def = s.sketch(mount)
+  if (isReject(def)) return def
+  if (mount !== ROOT_MOUNT && (edit.op === 'addLayer' || edit.op === 'reorderLayer' || edit.op === 'setMayDependOn'))
+    return no('root-only', '层的增删改排序只在根草图里做（X7）')
+  const r = applyEdit(def, edit, s.editContext())
+  if (!r.ok) return no(r.code, r.reason)
+  s.draft[mount] = r.sketch
+  s.fx.created.push(...r.effects.created)
+  s.fx.renamed.push(...r.effects.renamed)
+  s.fx.removed.push(...r.effects.removed)
+  s.touch(mount)
+  return null
+}
+
+export function applyDesignEdit(design: SketchSet, op: DesignEditOp, ctx: DesignEditContext): DesignEditResult {
+  const s = new Session(structuredClone({ ...design }) as Draft, ctx)
+  const out =
+    op.op === 'edit'
+      ? single(s, op.sketch, op.edit)
+      : op.op === 'merge'
+        ? merge(s, op)
+        : op.op === 'split'
+          ? split(s, op)
+          : op.op === 'demote'
+            ? demote(s, op)
+            : op.op === 'promote'
+              ? promote(s, op)
+              : op.op === 'moveIn'
+                ? moveIn(s, op)
+                : op.op === 'rename'
+                  ? rename(s, op)
+                  : remove(s, op)
+  if (out) return { ok: false, ...out }
+  return { ok: true, design: s.draft, effects: s.fx }
+}

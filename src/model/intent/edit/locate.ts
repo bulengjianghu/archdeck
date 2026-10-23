@@ -2,7 +2,7 @@
  * 草图寻址与 ID 生成（X7c，ADR-0024）：在嵌套或平铺写法的草图里按 ID 找到模块、带位置平铺；新 ID 的生成。
  * 各操作族、草图校验与核验（flattenSketch）共用这一套。纯函数。
  */
-import type { ModuleDef, SketchDef, SketchEntity } from '../../types'
+import { ROOT_MOUNT, type ModuleDef, type SketchDef, type SketchEntity } from '../../types'
 
 /** 描述里 ID 的写法（与 schema 的 pattern 一致） */
 export const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/
@@ -21,13 +21,20 @@ export interface LocatedModule {
   path: string
 }
 
-/** 草图的模块按写的顺序平铺（嵌套位置决定父模块，平铺的取 parent 字段） */
+/** X9：非根草图的挂载点（根挂载为 undefined：层挂在系统根下） */
+export const mountOf = (def: Pick<SketchDef, 'mount'>): string | undefined => (def.mount && def.mount !== ROOT_MOUNT ? def.mount : undefined)
+
+/** X9：根挂载 */
+export const isRootSketch = (def: Pick<SketchDef, 'mount'>): boolean => def.mount === ROOT_MOUNT
+
+/** 草图的模块按写的顺序平铺（嵌套位置决定父模块；平铺的由 mount 推出，根挂载的层挂在根下） */
 export function locateAll(def: SketchDef): LocatedModule[] {
   const out: LocatedModule[] = []
+  const top = mountOf(def)
   const walk = (list: ModuleDef[], parentId: string | undefined, nested: boolean, path: string) =>
     list.forEach((node, index) => {
       const at = `${path}.${index}`
-      out.push({ id: node.id, parentId: nested ? parentId : node.parent, node, list, index, nested, path: at })
+      out.push({ id: node.id, parentId: nested ? parentId : (top ?? node.parent), node, list, index, nested, path: at })
       if (node.children) walk(node.children, node.id, true, `${at}.children`)
     })
   if (def.modules) walk(def.modules, undefined, false, 'sketch.modules')
