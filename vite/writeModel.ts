@@ -29,7 +29,7 @@ import {
   type ReviewedOrigin,
   type RuleKind,
 } from '../src/model'
-import { DESIGNS_DIR, SKETCH_FILE, designSketch, isProjectId, listRevisionDirs, readDesignInfo, readModelDir } from './readModelDir'
+import { DESIGNS_DIR, designSketches, isProjectId, listRevisionDirs, readDesignInfo, readModelDir } from './readModelDir'
 import { appendLedger, governanceDir, touchOwned } from './governanceStore'
 
 export class WriteError extends Error {}
@@ -158,15 +158,18 @@ export interface ArchiveResult extends WriteResult {
   outcome: ArchiveVerdict['outcome']
   /** 归档：写入的确认记录条数（更新 + 追加）与文件；草图没有覆盖现有模块时为 0、不写文件 */
   reviewed?: { count: number; file: string }
-  /** 晋升：被替换的持久草图文件 */
+  /** 晋升：被替换的持久草图文件（第一张；多张时见 promotedAll） */
   promoted?: string
+  /** 晋升：全部被替换的持久草图文件 */
+  promotedAll?: string[]
 }
 
 /**
  * X3：归档 / 晋升。先对当前版本核验（含认可的偏差），不一致即拒绝；
  * until-implemented → design.yaml 的 status 改为 implemented，并经确认层写入草图覆盖的模块的确认记录（reviewEntries 按确认层的口径算指纹与摘要，appendReviewed 逐条更新或追加，来源 sketch:<设计 ID>，Z6）；
  * 确认记录先写、设计状态后改：记录校验不过时整次归档不生效。
- * supersedes → 草图整份替换 intent/<ID>.yaml（id 改为被替换者、lifetime persistent、去掉 supersedes），状态同样改为 implemented。
+ * supersedes → 草图整份（含 layout，X15）替换 intent/<ID>.yaml（id 改为被替换者、lifetime persistent、去掉 supersedes），状态同样改为 implemented。
+ * 设计有多张草图（X9）时逐张核验（血缘与封闭按全设计），全部一致才归档；声明 supersedes 的那些晋升，其余为覆盖的模块写确认记录。
  */
 export function archiveDesign(modelRoot: string, project: string, design: string, root: string): ArchiveResult {
   const dir = projectDir(modelRoot, project)
@@ -175,41 +178,46 @@ export function archiveDesign(modelRoot: string, project: string, design: string
   const file = path.join(designDir, 'design.yaml')
   if (!fs.existsSync(file)) throw new WriteError(`设计不存在：${design}`)
   const info = readDesignInfo(designDir, design)
-  const sketch = designSketch(dir, design)
-  if (!sketch) throw new WriteError(`设计「${design}」没有草图（${DESIGNS_DIR}/${design}/${SKETCH_FILE}），没有可归档的意图`)
+  const files = designSketches(dir, design)
+  if (!files.length) throw new WriteError(`设计「${design}」没有草图（${DESIGNS_DIR}/${design}/sketches/*.yaml），没有可归档的意图`)
   if (info.status === 'implemented' || info.status === 'abandoned') throw new WriteError(`设计「${design}」已归档（${info.status}）`)
   const { index } = loadModel(readModelDir(dir, root).files)
-  const entity = parseDesignSketches([sketch])[0]
-  if (!entity) throw new WriteError('草图解析失败，先运行 npm run lint:model')
-  const check = checkSketches(index, [entity], new Map([[design, info.accepted ?? []]])).find(c => c.design === design)!
-  const verdict = archiveVerdict(check)
-  if (!verdict.ok) throw new WriteError(`不能归档：${verdict.reason}`)
+  const entities = parseDesignSketches(files)
+  if (entities.length !== files.length) throw new WriteError('草图解析失败，先运行 npm run lint:model')
+  // X3：逐张核验（血缘与封闭按全设计），全部一致才归档；有 supersedes 的那些晋升
+  const checks = checkSketches(index, entities, new Map([[design, info.accepted ?? []]])).filter(c => c.design === design)
+  const verdicts = checks.map(archiveVerdict)
+  const bad = verdicts.find(v => !v.ok)
+  if (bad) throw new WriteError(`不能归档：草图「${bad.check.mount ?? bad.check.sketch}」${bad.reason}`)
   const at = today()
   const doc = openDoc(file, '')
   if (!isMap(doc.get('design'))) throw new WriteError('design.yaml 缺少顶层键 design')
-  let promoted: string | undefined
+  const promotedAll: string[] = []
+  const covered: string[] = []
+  entities.forEach((entity, i) => {
+    if (verdicts[i].outcome === 'promote') {
+      // 晋升：草图整份（含 layout，X15）替换同挂载点的持久草图（B6）
+      const target = entity.def.supersedes!
+      if (!isProjectId(target)) throw new WriteError(`supersedes 不合法：${target}`)
+      const sdoc = openDoc(path.join(dir, entity.file), '')
+      sdoc.setIn(['sketch', 'id'], target)
+      sdoc.setIn(['sketch', 'lifetime'], 'persistent')
+      sdoc.deleteIn(['sketch', 'supersedes'])
+      const dest = path.join(dir, 'intent', `${target}.yaml`)
+      fs.mkdirSync(path.dirname(dest), { recursive: true })
+      promotedAll.push(save(dest, sdoc, root, modelRoot, project).file)
+    } else covered.push(...sketchModules(entity, index).filter(id => !covered.includes(id)))
+  })
   let reviewed: ArchiveResult['reviewed']
-  if (verdict.outcome === 'promote') {
-    // 晋升：草图整份替换对应的持久草图（B6）
-    const target = entity.def.supersedes!
-    if (!isProjectId(target)) throw new WriteError(`supersedes 不合法：${target}`)
-    const sdoc = openDoc(path.join(designDir, SKETCH_FILE), '')
-    sdoc.setIn(['sketch', 'id'], target)
-    sdoc.setIn(['sketch', 'lifetime'], 'persistent')
-    sdoc.deleteIn(['sketch', 'supersedes'])
-    const dest = path.join(dir, 'intent', `${target}.yaml`)
-    fs.mkdirSync(path.dirname(dest), { recursive: true })
-    promoted = save(dest, sdoc, root, modelRoot, project).file
-  } else {
-    const modules = sketchModules(entity, index)
-    if (modules.length) {
-      const r = appendReviewed(modelRoot, project, reviewEntries(index, modules, { source: `sketch:${design}`, at }), root, { origin: 'archive', design })
-      reviewed = { count: r.added.length + r.updated.length, file: r.file }
-    } else reviewed = { count: 0, file: path.relative(root, path.join(dir, 'reviewed.yaml')).split(path.sep).join('/') }
-  }
+  if (covered.length) {
+    const r = appendReviewed(modelRoot, project, reviewEntries(index, covered, { source: `sketch:${design}`, at }), root, { origin: 'archive', design })
+    reviewed = { count: r.added.length + r.updated.length, file: r.file }
+  } else if (!promotedAll.length) reviewed = { count: 0, file: path.relative(root, path.join(dir, 'reviewed.yaml')).split(path.sep).join('/') }
+  const outcome: ArchiveResult['outcome'] = promotedAll.length ? 'promote' : 'archive'
+  const promoted = promotedAll[0]
   doc.setIn(['design', 'status'], 'implemented')
   const out = save(file, doc, root, modelRoot, project)
-  return { ...out, outcome: verdict.outcome, ...(reviewed ? { reviewed } : {}), ...(promoted ? { promoted } : {}) }
+  return { ...out, outcome, ...(reviewed ? { reviewed } : {}), ...(promoted ? { promoted, promotedAll } : {}) }
 }
 
 export interface ReviewedWriteResult extends WriteResult {

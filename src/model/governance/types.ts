@@ -60,8 +60,8 @@ export type LedgerEntry =
   | { at: string; tool: 'check_dependency'; client: LedgerClient; from: string; to: string; verdict: Verdict; rules: RuleKind[]; cycle: boolean }
   | { at: string; tool: 'rescan'; client: LedgerClient; violations: number; newViolations: number; cyclicity: Cyclicity }
   | { at: string; tool: 'reviewed'; origin: ReviewedOrigin; modules: number; design?: string }
-  /** B6：草图整份写回与新建设计（ADR-0024） */
-  | { at: string; tool: 'sketch'; origin: 'page' | 'cli'; file: string; design?: string; created?: boolean }
+  /** B6、B7：草图整份写回、新建、级联改名（renamedFrom 为旧文件）与删除（ADR-0024、ADR-0025） */
+  | { at: string; tool: 'sketch'; origin: 'page' | 'cli'; file: string; design?: string; created?: boolean; removed?: boolean; renamedFrom?: string }
 
 /** 开发态端点 source/<项目>/facts.json 的内容（K8） */
 export interface FactsPayload {
