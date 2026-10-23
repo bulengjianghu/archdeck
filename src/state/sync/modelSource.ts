@@ -21,7 +21,7 @@ export interface ModelPayload {
   commits?: ModelCommit[]
   /** 打开的是设计版本（ADR-0002，轮次或草图 DV-10）或提交版本（E5）时给出 */
   version?: VersionRef
-  compare?: { current: CompareSource; previous?: CompareSource }
+  compare?: { current: CompareSource; previous?: CompareSource; baseline?: CompareSource }
   /** X4：对本版本有约束力的设计草图 */
   sketches?: { design: string; file: RawFile }[]
   /** DV-10：草图版本的「交给 AI」指令 */
@@ -43,7 +43,8 @@ export interface Baseline {
 export interface LoadedSource {
   payload: ModelPayload
   model: LoadedModel
-  baselines: { current?: Baseline; previous?: Baseline }
+  /** current：当前版本；previous：上一轮；base：设计的基线（X17，载荷给出时） */
+  baselines: { current?: Baseline; previous?: Baseline; base?: Baseline }
 }
 
 /** 取一次描述并加载（设计版本同时加载对比基线） */
@@ -53,7 +54,7 @@ export async function fetchAndLoad(fetchModel: FetchModel): Promise<LoadedSource
   return {
     payload,
     model: loadModel(payload.files),
-    baselines: { current: toBaseline(payload.compare?.current), previous: toBaseline(payload.compare?.previous) },
+    baselines: { current: toBaseline(payload.compare?.current), previous: toBaseline(payload.compare?.previous), base: toBaseline(payload.compare?.baseline) },
   }
 }
 

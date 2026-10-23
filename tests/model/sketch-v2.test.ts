@@ -385,6 +385,18 @@ describe('X15 位置、X19 引用节点', () => {
     const both = applyEdit(seedUi(), { op: 'connect', from: 'core.api', to: 'core.store', type: 'calls' }, { persistent, designSketch: true })
     expect(both).toMatchObject({ ok: false, code: 'invalid' })
   })
+
+  it('删引用节点 = 删以它为端点的关系与它的位置；本草图的模块不是引用', () => {
+    const c = { persistent, designSketch: true, known: (id: string) => baseline.modules.has(id) }
+    const placed = applyEdit(seedUi(), { op: 'addReference', id: 'core.api', at: { x: 1, y: 2 } }, c)
+    if (!placed.ok) throw new Error(placed.reason)
+    const r = applyEdit(placed.sketch, { op: 'removeReference', id: 'core.api' }, c)
+    if (!r.ok) throw new Error(r.reason)
+    expect(r.sketch.relations?.some(x => x.from === 'core.api' || x.to === 'core.api')).toBe(false)
+    expect(r.sketch.layout?.modules?.['core.api']).toBeUndefined()
+    expect(r.effects.removed).toEqual(expect.arrayContaining(['core.api', 'rel.view-api', 'rel.list-api']))
+    expect(applyEdit(seedUi(), { op: 'removeReference', id: 'fe.ui.view' }, c)).toMatchObject({ ok: false, code: 'invalid' })
+  })
 })
 
 describe('X17 两个对比按血缘', () => {

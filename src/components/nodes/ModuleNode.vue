@@ -18,7 +18,7 @@ defineProps<{ data: NodeData }>()
       [`diff-${data.change}`]: !!data.change,
     }"
   >
-    <Handles :editing="data.editing" />
+    <Handles />
     <DiffMark :data="data" />
     <div class="head">
       <span class="name">{{ data.name }}</span>

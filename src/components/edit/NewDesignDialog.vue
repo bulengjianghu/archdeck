@@ -1,31 +1,50 @@
 <script setup lang="ts">
 /**
- * 新建设计（S-4、L-3、SK-10，ADR-0024）：ID、名称、目标一句话、底稿——缺省「空草图」；「改骨架（定稿后晋升替换骨架）」复制骨架的层与第二级并声明 supersedes。
- * 创建后打开新设计的草图并进入编辑态。
+ * 新建设计（S-4、F-11，ADR-0025）：ID、名称、目标一句话、挂载点（入口带入，可改；根挂载即「改骨架」）。
+ * 底稿一律按挂载点从基线复制（X18）；创建后打开新设计的草图（进入草图画布）。
  */
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ROOT_MOUNT } from '@/model'
 import { useDesk } from '@/state/inject'
 
+const props = defineProps<{ mount?: string }>()
 const emit = defineEmits<{ close: [] }>()
 const desk = useDesk()
 const router = useRouter()
 const id = ref('')
 const name = ref('')
 const goal = ref('')
-const base = ref<'empty' | 'copy'>('empty')
+/** 缺省挂载点：入口带入的，否则选中的模块，否则根 */
+const selectedModule = desk.selection.value?.kind === 'module' ? desk.selection.value.id : undefined
+const mount = ref(props.mount ?? selectedModule ?? ROOT_MOUNT)
 const error = ref('')
 const busy = ref(false)
-const valid = computed(() => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id.value.trim()) && !!name.value.trim())
+/** 可选的挂载点：根与非层的模块（层的直接子模块由根草图画，X9） */
+const mounts = computed(() => {
+  const idx = desk.index.value
+  if (!idx) return []
+  return [...idx.modules.values()]
+    .filter(m => m.kind !== 'layer')
+    .map(m => ({
+      id: m.id,
+      label: `${(idx.pathOf.get(m.id) ?? [])
+        .slice(1)
+        .map(x => idx.modules.get(x)?.name ?? x)
+        .join(' › ')}`,
+    }))
+})
+const mountOk = computed(() => mount.value === ROOT_MOUNT || mounts.value.some(m => m.id === mount.value))
+const valid = computed(() => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id.value.trim()) && !!name.value.trim() && mountOk.value)
 
 async function create() {
   if (!valid.value || busy.value) return
   busy.value = true
-  const r = await desk.edit.createDesign({ id: id.value.trim(), name: name.value.trim(), goal: goal.value.trim() || undefined, base: base.value })
+  const r = await desk.edit.createDesign({ id: id.value.trim(), name: name.value.trim(), goal: goal.value.trim() || undefined, mount: mount.value })
   busy.value = false
   if (!r.ok) return void (error.value = r.error)
   emit('close')
-  void router.push({ name: 'design', params: { project: desk.project!, design: id.value.trim(), revision: 'sketch' }, query: { edit: '1' } })
+  void router.push({ name: 'design', params: { project: desk.project!, design: id.value.trim(), revision: 'sketch' } })
 }
 </script>
 
@@ -36,19 +55,18 @@ async function create() {
       <label>ID <input v-model="id" name="design-id" placeholder="如 sketch-editor" autofocus /></label>
       <label>名称 <input v-model="name" name="design-name" placeholder="如 草图的画布编辑" /></label>
       <label>目标（一句话） <input v-model="goal" name="design-goal" /></label>
-      <fieldset>
-        <legend>底稿</legend>
-        <label class="radio"><input v-model="base" type="radio" value="empty" /> 空草图</label>
-        <label class="radio"><input v-model="base" type="radio" value="copy" /> 改骨架（定稿后晋升替换骨架）</label>
-        <p v-if="base === 'copy'" class="warn">
-          复制骨架的层与第二级（含封闭与核心）并声明 supersedes: skeleton：可以改骨架里写了的字段、往封闭的层下加模块；定稿实现后这张草图会整份替换
-          intent/skeleton.yaml，而不是归档。
-        </p>
-      </fieldset>
+      <label>
+        挂载点（在哪个模块下设计这一层）
+        <select v-model="mount" name="design-mount">
+          <option :value="ROOT_MOUNT">根（层与第二级，改骨架）</option>
+          <option v-for="m in mounts" :key="m.id" :value="m.id">{{ m.label }}（{{ m.id }}）</option>
+        </select>
+      </label>
+      <p class="hint">底稿从基线复制挂载点下的一层：模块的 ID、名称、核心与本层关系，不带职责文字（X18）。</p>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <div class="actions">
         <button type="button" @click="emit('close')">取消</button>
-        <button type="submit" class="ok" :disabled="!valid || busy">创建并编辑草图</button>
+        <button type="submit" class="ok" :disabled="!valid || busy">创建并打开草图</button>
       </div>
     </form>
   </div>
@@ -87,20 +105,10 @@ label {
   gap: 3px;
 }
 
-label.radio {
-  flex-direction: row;
-  align-items: center;
-}
-
-fieldset {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-
-.warn {
-  margin: 4px 0 0;
+.hint {
+  margin: 0;
   font-size: 12px;
-  color: var(--warning);
+  color: var(--text-3);
 }
 
 .error {

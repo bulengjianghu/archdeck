@@ -19,8 +19,8 @@ scenario:
     - loop:
         while: 每个编辑操作（加层、加模块 ×2、连关系）
         steps:
-          - call: {id: op, from: actor.architect, to: present.canvas.edit, label: '插入条「+ 层」/「+ 模块」并输入名称 / 拖线'}
-          - call: {from: present.canvas.edit.insert, to: state.desk.edit.commands, label: 'edit(addLayer / addModule / connect)', payload: ds.EditOp}
+          - call: {id: op, from: actor.architect, to: present.version.edit, label: '在草图画布上新建 / 合并 / 拖位置 / 连线'}
+          - call: {from: present.version.edit, to: state.desk.edit.commands, label: 'addModule / merge / moveNode / connect', payload: ds.EditOp}
           - call: {from: state.desk.edit.commands, to: state.desk.edit.session, label: 'apply(session, op)'}
           - call: {from: state.desk.edit.session, to: model.intent.edit, label: 'applyEdit(draft, op, ctx)', payload: [ds.SketchDef, ds.EditOp]}
           - return: {from: model.intent.edit, to: state.desk.edit.session, label: '新草图与影响', payload: ds.EditResult}

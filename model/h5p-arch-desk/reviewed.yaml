@@ -265,33 +265,6 @@ reviewed:
       responsibility: |-
         一期已有的写入（草图修订后归这里）：人拥有文件的追加写入——评审意见（B2）、例外（B3）、忽略项（B4）、确认记录（Z1、Z6，同一模块更新那一条）、认可偏差（X4）——与归档 / 晋升（X3）；
         YAML 文档模型的打开（openDoc：解析失败拒绝写）与保存（save：写回并更新指纹，X6）这两个件供草图写回共用。只追加、不删改。
-  - module: present.canvas.edit
-    at: 2026-10-22
-    hash: d69cc7ab66f16f95
-    source: sketch:sketch-editor
-    summary:
-      responsibility: |-
-        只在编辑态开启的画布交互：带之间与末尾的插入条（+ 层）与带头拖动排序、带内与父模块框内「+ 模块」与就地输入名称、拖动模块到另一条带或另一父模块（移动，改 ID 时二次确认）、从节点拖线到另一节点建关系（松手选类型与一句说明）、分层总览上带到带拖线改可依赖的层、右键菜单（核心、封闭、删除）、删除键与撤销 / 重做快捷键。
-        每个操作只调用 state.desk.edit 的一个操作；落点的位置来自画布场景，不保存坐标、不自己算布局，编辑后由自动布局重排。
-      children:
-        - present.canvas.edit.connect
-        - present.canvas.edit.drag
-        - present.canvas.edit.insert
-        - present.canvas.edit.menu
-  - module: present.panel.edit
-    at: 2026-10-22
-    hash: 3fc73d985f3affcb
-    source: sketch:sketch-editor
-    summary:
-      responsibility: |-
-        编辑态下属性面板换成表单：按选中显示层、模块、关系的表单，无选中时为草图元信息；顶部常驻校验结果（错误与提醒，单击定位到实体）与设计草图的实时核验「实现后将有 N 处偏差」（L-1）；字段改动即发意图（文本字段在失焦或回车时发一次，即撤销的一步，X7g）。
-        面板分派在编辑态下选这里，结构视角的模块 / 关系面板不显示。
-      children:
-        - present.panel.edit.checks
-        - present.panel.edit.layer
-        - present.panel.edit.meta
-        - present.panel.edit.module
-        - present.panel.edit.relation
   - module: present.version.edit
     at: 2026-10-22
     hash: 8d58aece51979c1a

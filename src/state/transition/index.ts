@@ -18,15 +18,17 @@ export type { Perspective, Selected, Emphasis, EmphasisContext } from './selecte
 
 export function transition(state: ViewState, action: ViewAction, ctx: TransitionContext): TransitionResult {
   const { index } = ctx
-  // X7a：编辑态下打开场景、选中文件、打开代码事实与演化叠加为无效动作
+  // X7a：草图画布下打开场景、选中文件、代码事实与演化叠加、模型画布的层次导航为无效动作
   if (edit.blocked(state, action)) return { state, history: 'replace' }
   switch (action.type) {
     case 'enterEdit':
-      return edit.enterEdit(state, ctx, action.target)
+      return edit.enterEdit(state, ctx, action.target, action.level)
     case 'exitEdit':
       return edit.exitEdit(state)
     case 'edited':
-      return edit.edited(state, index, action.effects, action.previousPath)
+      return edit.edited(state, index, action.effects, action.previousPath, action.level)
+    case 'openSketch':
+      return edit.openSketch(state, index, action.level)
     case 'restore':
       return restore(state, ctx, action.query)
     case 'reloaded': {

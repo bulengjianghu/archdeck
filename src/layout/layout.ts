@@ -63,3 +63,7 @@ export async function layoutView(view: LevelView, opts: LayoutOptions = {}): Pro
   cache.set(key, result)
   return result
 }
+
+// 草图布局（state.layout.sketch，ADR-0025）：草图画布的节点、直线边与显示位置，经本入口访问
+export { sketchScene, sketchPositions, straightEdge, SKETCH_NODE, SKETCH_LAYER, SKETCH_PARALLEL_GAP } from './sketch'
+export type { SketchScene, SketchNode, SketchEdge, SketchNodeData, SketchEdgeData, SketchNodeKind, SketchSceneInput } from './sketch'

@@ -8,7 +8,7 @@ defineProps<{ data: NodeData }>()
 
 <template>
   <div class="band" :class="{ selected: data.selected, dim: data.dim, target: data.module?.status === 'target', [`diff-${data.change}`]: !!data.change }">
-    <Handles :editing="data.editing" />
+    <Handles />
     <DiffMark :data="data" />
     <div class="left">
       <div class="name">{{ data.name }}</div>

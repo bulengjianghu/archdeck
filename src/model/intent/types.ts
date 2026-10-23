@@ -153,6 +153,8 @@ export type EditOp =
   | { op: 'autoArrange' }
   /** X19：把外部模块放上画布作为待连端点（只是布局里的位置；保存时没有关系的丢弃） */
   | { op: 'addReference'; id: string; at?: SketchPoint }
+  /** X19：删引用节点 = 删以它为端点的关系与它的位置 */
+  | { op: 'removeReference'; id: string }
 
 /**
  * X7b、X7d、X7j、X7k：设计级的编辑操作——输入输出为一个设计的全部草图，一个操作可以改多张（ADR-0025）。

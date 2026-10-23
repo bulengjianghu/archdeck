@@ -1,90 +1,261 @@
 /**
- * 编辑操作（if.desk.edit，ADR-0024）：对呈现层的唯一一组编辑操作。操作本身不含规则——
- * 编辑规则在模型层（applyEdit），会话规则在视图状态转移（enterEdit / exitEdit / edited），撤销栈在编辑会话（session.ts）。
+ * 草图画布的操作（if.desk.edit，ADR-0024、ADR-0025）：对呈现层的唯一一组编辑操作。操作本身不含规则——
+ * 编辑规则在模型层（applyDesignEdit），会话规则在视图状态转移（enterEdit / openSketch / edited / exitEdit），撤销栈在编辑会话（session.ts）。
+ * 单张草图上的操作包装成 { op: 'edit', sketch: <当前张> }；一个手势一步（双击空白新建 = 新建 + 落位）。
  */
 import type { ShallowRef } from 'vue'
 import {
-  idImpact,
+  gridLayout,
   load,
+  locateAll,
+  referenceNodes,
   ROOT_MOUNT,
   seedFromBaseline,
-  type EditEffects,
+  type DesignEditEffects,
+  type DesignEditOp,
   type EditOp,
-  type IdImpact,
   type ModelIndex,
+  type ModulePatch,
   type RawFile,
+  type RelationType,
   type SketchDef,
+  type SketchPoint,
   type SketchTarget,
 } from '@/model'
+import { sketchPositions } from '@/layout/layout'
 import type { WriteOutcome } from '../../sync/writer'
 import { leaveGuard, type ViewAction } from '../../transition'
 import type { createSaveSync, SaveOutcome } from './save'
-import { apply, begin, discard as discardSession, isDirty, redo as redoSession, reloaded, replay, undo as undoSession, type EditSession } from './session'
-import { draftIndex, editContext } from './derive'
+import type { EditDerivations } from './derive'
+import {
+  apply,
+  begin,
+  discard as discardSession,
+  isDirty,
+  NO_DESIGN_EFFECTS,
+  open,
+  redo as redoSession,
+  reloaded,
+  replay,
+  undo as undoSession,
+  type EditSession,
+  type ReadSketch,
+} from './session'
+
+/** 载荷里的一张草图文件：挂载点、在载荷里的路径、读取时的指纹 */
+export interface PayloadSketch {
+  mount?: string
+  file: string
+  path?: string
+  hash: string
+}
 
 export interface CommandInputs {
   session: ShallowRef<EditSession | null>
+  /** 画布上的多选（框选 / ⇧ 点选，合并用） */
+  picked: ShallowRef<string[]>
   loaded: ShallowRef<ModelIndex | null>
   files: ShallowRef<RawFile[]>
-  /** 载荷里的草图文件与读取时的指纹（草图版本才有） */
-  sketch: ShallowRef<{ file: string; hash: string; path?: string } | undefined>
+  /** 载荷里的草图文件与读取时的指纹：设计为全部草图，持久草图为它自己 */
+  sketchFiles: () => readonly PayloadSketch[]
   /** 编辑目标；不是草图版本时为 undefined */
   target?: SketchTarget
-  /** 草图在载荷里的路径（设计的草图为主草图的 sketches/<mount>.yaml，载荷读到后才知道） */
-  file: () => string | undefined
-  current: () => ModelIndex | null
+  baseline: () => ModelIndex | null
   /** 当前层次的路径（跟随用） */
   levelPath: () => readonly string[]
   dispatch: (action: ViewAction) => boolean
-  /** 把要显示的索引交给 DeskState（编辑态为草图的索引，否则为读到的） */
+  /** 把要显示的索引交给 DeskState（草图下为设计的索引，否则为读到的） */
   show: (index: ModelIndex | null) => void
   reload: () => Promise<void>
+  /** DV-10：载荷里的「交给 AI」指令 */
+  prompt: () => string
   sync: ReturnType<typeof createSaveSync>
+  derive: EditDerivations
 }
 
-export type EditOutcome = { ok: true } | { ok: false; reason: string }
+export type EditOutcome = { ok: true; effects: DesignEditEffects } | { ok: false; reason: string }
+const fail = (reason: string): EditOutcome => ({ ok: false, reason })
 
 export function createCommands(i: CommandInputs) {
-  const { session, loaded, files, target } = i
-  const ctx = () => editContext(loaded.value!, session.value!.file, target?.kind === 'design')
-  /** 载荷里读到的那份草图 */
-  const loadedSketch = () => {
-    const file = i.file()
-    return file ? load(files.value.filter(f => f.path === file)).model.sketches[0]?.def : undefined
-  }
-  const showDraft = () => i.show(session.value ? draftIndex(files.value, session.value.file, session.value.draft) : loaded.value)
-  const follow = (effects: EditEffects, previousPath: readonly string[]) => i.dispatch({ type: 'edited', effects, previousPath })
+  const { session, loaded, target, derive } = i
+  const ctx = () => derive.ctx.value!
 
-  function enterEdit(): boolean {
-    const def = loadedSketch()
-    const file = i.file()
-    if (!target || !file || !def || !loaded.value || !i.sketch.value) return false
-    session.value = session.value ?? begin(target, file, def, i.sketch.value.hash)
-    if (!i.dispatch({ type: 'enterEdit', target })) return false
-    showDraft()
-    return true
+  /** 载荷里读到的各张草图（按挂载点） */
+  function readSketches(): Record<string, ReadSketch> | null {
+    if (!target) return null
+    const out: Record<string, ReadSketch> = {}
+    for (const f of i.sketchFiles()) {
+      const path = f.path ?? f.file
+      const def = load(i.files.value.filter(x => x.path === path)).model.sketches[0]?.def
+      if (def) out[def.mount] = { file: path, hash: f.hash, def }
+    }
+    return Object.keys(out).length ? out : null
   }
 
-  /** 有未保存改动时返回 'confirm'，由呈现层确认后 force 退出（X7a） */
-  function exitEdit(force = false): 'confirm' | 'done' {
+  /** 挂载点的层次：根挂载为系统根 */
+  const levelOf = (mount: string) => (mount === ROOT_MOUNT ? (loaded.value?.rootId ?? '') : mount)
+  const showSession = () => i.show(session.value ? derive.index.value : loaded.value)
+  const follow = (effects: DesignEditEffects, previousPath: readonly string[]) =>
+    i.dispatch({ type: 'edited', effects, previousPath, level: levelOf(session.value?.mount ?? ROOT_MOUNT) })
+
+  /** X7a：进入草图画布（草图版本打开即进入）；会话已在时只同步层次 */
+  function enter(): boolean {
+    const read = readSketches()
+    if (!target || !read || !loaded.value) return false
+    const id = target.kind === 'design' ? target.design : target.id
+    session.value = session.value ?? begin(target, id, read)
+    showSession()
+    return i.dispatch({ type: 'enterEdit', target, level: levelOf(session.value.mount) })
+  }
+
+  /** X7a：有未保存改动时返回 'confirm'，由呈现层确认（保存 / 放弃 / 取消）后 force 退出；退出后回到进入草图之前的版本由呈现层导航 */
+  function exit(force = false): 'confirm' | 'done' {
     if (!force && canLeave() === 'confirm') return 'confirm'
     session.value = null
+    i.picked.value = []
     i.dispatch({ type: 'exitEdit' })
     i.show(loaded.value)
     return 'done'
   }
 
-  function edit(op: EditOp): EditOutcome {
+  /** 应用一步（一个或几个操作） */
+  function run(ops: DesignEditOp | DesignEditOp[]): EditOutcome {
     const s = session.value
-    if (!s || !loaded.value) return { ok: false, reason: '不在编辑态' }
+    if (!s || !loaded.value) return fail('不在草图里')
     const previousPath = i.levelPath()
-    const r = apply(s, op, ctx())
-    if (!r.result.ok) return { ok: false, reason: r.result.reason }
+    const r = apply(s, ops, ctx())
+    if (!r.ok) return fail(r.reason)
     session.value = r.session
-    showDraft()
-    follow(r.result.effects, previousPath)
-    return { ok: true }
+    i.picked.value = i.picked.value.filter(id => !r.effects.removed.includes(id) && !r.effects.renamed.some(([a]) => a === id))
+    showSession()
+    follow(r.effects, previousPath)
+    return { ok: true, effects: r.effects }
   }
+
+  const mount = () => session.value?.mount ?? ROOT_MOUNT
+  const sheet = (): SketchDef | undefined => session.value?.doc.sketches[mount()]
+  /** 单张草图上的操作 */
+  const single = (op: EditOp): DesignEditOp => ({ op: 'edit', sketch: mount(), edit: op })
+  const edit = (op: EditOp) => run(single(op))
+
+  /** X15：写位置时补齐还没写进 layout 的节点当前显示的位置（没有 layout 的草图第一次拖动即落下整张的初始布局），一步 */
+  function positionsWith(def: SketchDef, given: Record<string, SketchPoint>): Record<string, SketchPoint> {
+    const ids = [...locateAll(def).map(m => m.id), ...referenceNodes(def)]
+    const shown = sketchPositions(def, ids)
+    const have = def.layout?.modules ?? {}
+    const missing = Object.fromEntries(ids.filter(id => !have[id] && !given[id]).map(id => [id, shown[id]]))
+    return { ...missing, ...given }
+  }
+
+  /** F-20：拖节点（多选一起拖）的落点，一步 */
+  function moveNode(positions: Record<string, SketchPoint>): EditOutcome {
+    const def = sheet()
+    if (!def) return fail('不在草图里')
+    return edit({ op: 'moveNode', positions: positionsWith(def, positions) })
+  }
+
+  /**
+   * F-23：新建模块（双击空白 / 工具条「＋ 模块」）——非根草图为挂载点的子模块（ID = <挂载点>.<短名>）；根草图为一条新层。
+   * 给了位置时新建与落位是一步。
+   */
+  function addModule(name: string, short: string, at?: SketchPoint): EditOutcome {
+    const def = sheet()
+    if (!def) return fail('不在草图里')
+    const m = mount()
+    const root = m === ROOT_MOUNT
+    const sid = short.trim()
+    if (!sid) return fail('ID 短名不能为空（X7c：中文名请填英文短名）')
+    const id = root ? sid : `${m}.${sid}`
+    const add: DesignEditOp = root ? single({ op: 'addLayer', name, id, at: (def.modules ?? []).length }) : single({ op: 'addModule', parent: m, name, id })
+    const ops: DesignEditOp[] = [add]
+    if (at) ops.push(single({ op: 'moveNode', positions: positionsWith(def, { [id]: at }) }))
+    return run(ops)
+  }
+
+  /** F-21：连线 */
+  const connect = (from: string, to: string, type: RelationType, description?: string) =>
+    edit({ op: 'connect', from, to, type, ...(description?.trim() ? { description } : {}) })
+
+  /** F-24：合并（≥2 个同层模块 → 新模块，名称 + ID 短名） */
+  const merge = (ids: readonly string[], name: string, short: string) => run({ op: 'merge', sketch: mount(), ids: [...ids], name, id: short })
+  /** F-25：拆分（若干名称 + ID 短名） */
+  const split = (id: string, parts: { name: string; id: string }[]) => run({ op: 'split', sketch: mount(), id, parts })
+  /** F-26：降级——拖到同层另一节点上 */
+  const demote = (id: string, onto: string) => run({ op: 'demote', sketch: mount(), id, target: onto })
+  /** F-26：升级——拖到面包屑的父级 */
+  const promote = (id: string) => run({ op: 'promote', sketch: mount(), id })
+  /** F-26：移入——根草图里拖到另一条层带 */
+  const moveIn = (id: string, layer: string) => run({ op: 'moveIn', id, layer })
+  /** 改 ID（只改短名，前缀级联） */
+  const rename = (id: string, newId: string) => run({ op: 'rename', sketch: mount(), id, newId })
+  const updateModule = (id: string, patch: ModulePatch) => edit({ op: 'updateModule', id, patch })
+  /** F-22：拖关系标签 */
+  const relabel = (id: string, label: SketchPoint | null) => edit({ op: 'relabel', id, label })
+  /** F-31：重新排列 */
+  const autoArrange = () => edit({ op: 'autoArrange' })
+  /** F-28：引用外部模块（放上画布作为待连端点） */
+  const addReference = (id: string, at?: SketchPoint) => edit({ op: 'addReference', id, ...(at ? { at } : {}) })
+  /** F-40：父模块原则 */
+  const setAbstraction = (text: string) => edit({ op: 'setAbstraction', text })
+
+  /** 删除的操作：模块（级联）、关系、引用节点（= 删它的关系与它的位置） */
+  function removeOps(id: string): DesignEditOp[] | string {
+    const def = sheet()
+    if (!def) return '不在草图里'
+    if (def.relations?.some(r => r.id === id)) return [single({ op: 'removeRelation', id })]
+    if (locateAll(def).some(m => m.id === id)) return [{ op: 'remove', sketch: mount(), id }]
+    if (referenceNodes(def).includes(id)) return [single({ op: 'removeReference', id })]
+    return `草图里没有「${id}」`
+  }
+
+  /** F-30：删除选中的（若干个一步） */
+  function remove(ids: readonly string[]): EditOutcome {
+    const ops: DesignEditOp[] = []
+    for (const id of ids) {
+      const o = removeOps(id)
+      if (typeof o === 'string') return fail(o)
+      ops.push(...o)
+    }
+    return run(ops)
+  }
+
+  /** X7e：删除前的级联范围（不改会话）：将删的实体与草图；拒绝时为原因 */
+  function previewRemove(ids: readonly string[]): { removed: string[]; sketches: string[] } | { rejected: string } {
+    const s = session.value
+    if (!s || !loaded.value) return { rejected: '不在草图里' }
+    const ops: DesignEditOp[] = []
+    for (const id of ids) {
+      const o = removeOps(id)
+      if (typeof o === 'string') return { rejected: o }
+      ops.push(...o)
+    }
+    const r = apply(s, ops, ctx())
+    return r.ok ? { removed: r.effects.removed, sketches: r.effects.removedSketches } : { rejected: r.reason }
+  }
+
+  /** 切到另一张草图（会话里没有时按 X18 推出） */
+  function openMount(m: string): EditOutcome {
+    const s = session.value
+    if (!s || !loaded.value) return fail('不在草图里')
+    const r = open(s, m, ctx())
+    if (!r.ok) return fail(r.reason)
+    session.value = r.session
+    i.picked.value = []
+    showSession()
+    i.dispatch({ type: 'openSketch', level: levelOf(m) })
+    return { ok: true, effects: NO_DESIGN_EFFECTS }
+  }
+
+  /** F-27：下钻——打开挂在这个模块上的草图（层不是层次：层的子模块在根草图里） */
+  function openChild(id: string): EditOutcome {
+    const def = sheet()
+    if (!def || !locateAll(def).some(m => m.id === id)) return fail(`「${id}」不是本层的模块`)
+    if (mount() === ROOT_MOUNT && !id.includes('.')) return fail('层的子模块就画在根草图里（层是带，不是层次）')
+    return openMount(id)
+  }
+
+  /** 面包屑：回到某一级（会话里没有时推出） */
+  const goUp = (m: string) => openMount(m)
 
   const step = (fn: typeof undoSession) => () => {
     const s = session.value
@@ -92,86 +263,107 @@ export function createCommands(i: CommandInputs) {
     if (!r) return false
     const previousPath = i.levelPath()
     session.value = r.session
-    showDraft()
+    i.picked.value = []
+    showSession()
     follow(r.effects, previousPath)
     return true
   }
 
-  /** X7d：移动前的影响 */
-  const previewMove = (id: string, parent: string, newId?: string): IdImpact =>
-    session.value && loaded.value
-      ? idImpact(session.value.draft, ctx(), id, parent, newId, i.current())
-      : { renamed: [], references: 0, outside: { modules: 0, relations: 0, interfaces: 0, messages: 0 }, rejected: '不在编辑态' }
-
-  /** X7e：删除前的级联范围（不改会话）；拒绝时为原因 */
-  function previewRemove(id: string): { removed: string[] } | { rejected: string } {
-    const s = session.value
-    if (!s || !loaded.value) return { rejected: '不在编辑态' }
-    const r = apply(s, { op: 'removeModule', id }, ctx()).result
-    return r.ok ? { removed: r.effects.removed } : { rejected: r.reason }
-  }
-
   const save = (): Promise<SaveOutcome> => i.sync.save()
+
+  /** F-52、X20：保存并交给 AI——有格式错误或语义提示时不做并说明；有未保存改动先保存，再取新读到的指令 */
+  async function saveAndHandToAi(): Promise<{ ok: true; prompt: string } | { ok: false; reason: string }> {
+    if (!session.value) return { ok: false, reason: '不在草图里' }
+    const errors = derive.designErrors.value
+    if (errors.length) return { ok: false, reason: `有 ${errors.length} 个格式错误，先改正（${errors[0].message}）` }
+    const warnings = derive.designWarnings.value
+    if (warnings.length) return { ok: false, reason: `有 ${warnings.length} 个语义提示，处理后才能交给 AI（${warnings[0].message}）` }
+    if (derive.dirty.value) {
+      const r = await save()
+      if (!r.ok) return { ok: false, reason: r.conflict ? '文件已在外部改动，重新加载并重放后再交给 AI' : `保存失败：${r.error}` }
+      await i.reload()
+    }
+    return { ok: true, prompt: i.prompt() }
+  }
 
   /** 放弃本次改动；已过时时先重新加载，以新文件重新开始（X7i 的兜底） */
   async function discard(): Promise<void> {
     const s = session.value
     if (!s) return
     if (s.stale) await i.reload()
-    const def = loadedSketch()
-    session.value = def && i.sketch.value ? discardSession(session.value!, def, i.sketch.value.hash) : discardSession(session.value!)
+    const read = readSketches()
+    const previousPath = i.levelPath()
+    session.value = discardSession(session.value!, read ?? undefined)
+    i.picked.value = []
     i.sync.serverIssues.value = []
-    showDraft()
-    follow({ created: [], renamed: [], removed: [] }, i.levelPath())
+    showSession()
+    follow(NO_DESIGN_EFFECTS, previousPath)
   }
 
-  /** X7i：重新加载并把本次的操作按序重放到新文件上，返回失败的操作 */
-  async function replayOnReload(): Promise<{ failed: EditOp[] }> {
-    if (!session.value) return { failed: [] }
-    const ops = session.value
+  /** X7i：重新加载并把本次的每一步按序重放到新文件上，返回失败的操作 */
+  async function replayOnReload(): Promise<{ failed: DesignEditOp[] }> {
+    const s = session.value
+    if (!s) return { failed: [] }
     await i.reload()
-    const def = loadedSketch()
-    if (!def || !i.sketch.value) return { failed: ops.past.map(p => p.op) }
-    const r = replay(ops, def, i.sketch.value.hash, ctx())
+    const read = readSketches()
+    if (!read) return { failed: s.past.flatMap(p => p.ops) }
+    const previousPath = i.levelPath()
+    const r = replay(s, read, ctx())
     session.value = r.session
-    showDraft()
-    follow({ created: [], renamed: [], removed: [] }, i.levelPath())
+    showSession()
+    follow(NO_DESIGN_EFFECTS, previousPath)
     return { failed: r.failed }
   }
 
   /**
-   * S-4、L-3：新建设计（第三波替换为「在此设计」）——旧对话框的两种底稿都落成根挂载的草图：
-   * copy 为从当前版本复制根一层（X18，supersedes skeleton），empty 为空的根草图
+   * F-11、F-12、X18：新建设计——底稿按挂载点从基线复制（新建时基线即打开的当前版本），初始位置用一次网格布局；创建后由呈现层打开它的草图。
    */
-  function createDesign(input: { id: string; name: string; goal?: string; base: 'empty' | 'copy' }): Promise<WriteOutcome> {
+  function createDesign(input: { id: string; name: string; goal?: string; mount: string }): Promise<WriteOutcome> {
     const base = loaded.value
-    const sketch: SketchDef =
-      input.base === 'copy' && base
-        ? seedFromBaseline(ROOT_MOUNT, base, { id: input.id })
-        : { id: input.id, mount: ROOT_MOUNT, lifetime: 'until-implemented', modules: [] }
+    if (!base) return Promise.resolve({ ok: false, error: '描述还没加载' })
+    const seed = seedFromBaseline(input.mount, base, { id: input.id })
+    const sketch: SketchDef = { ...seed, layout: gridLayout(seed) }
     return i.sync.createDesign({ id: input.id, name: input.name, ...(input.goal ? { goal: input.goal } : {}), sketch })
   }
 
   /** X7a：离开前是否要确认 */
-  const canLeave = (): 'free' | 'confirm' => leaveGuard(!!session.value && isDirty(session.value))
+  const canLeave = (): 'free' | 'confirm' => leaveGuard(!!session.value && isDirty(session.value, i.baseline()))
 
   /** 描述重新加载后：编辑会话认出刚保存的或标为已过时；返回要显示的索引 */
   function onReloaded(): ModelIndex | null {
     const s = session.value
-    const def = loadedSketch()
-    if (s && def && i.sketch.value) session.value = reloaded(s, def, i.sketch.value.hash)
-    return session.value ? draftIndex(files.value, session.value.file, session.value.draft) : loaded.value
+    const read = readSketches()
+    if (s && read) session.value = reloaded(s, read)
+    return session.value ? derive.index.value : loaded.value
   }
 
   return {
-    enterEdit,
-    exitEdit,
+    enter,
+    exit,
+    run,
     edit,
+    addModule,
+    connect,
+    merge,
+    split,
+    demote,
+    promote,
+    moveIn,
+    rename,
+    updateModule,
+    moveNode,
+    relabel,
+    autoArrange,
+    addReference,
+    setAbstraction,
+    remove,
+    previewRemove,
+    openChild,
+    goUp,
     undo: step(undoSession),
     redo: step(redoSession),
-    previewMove,
-    previewRemove,
     save,
+    saveAndHandToAi,
     discard,
     replayOnReload,
     createDesign,

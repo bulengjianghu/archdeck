@@ -84,6 +84,20 @@ export function addReference(def: SketchDef, ctx: EditContext, id: string, at?: 
   return done({ created: [id] })
 }
 
+/** X19：删引用节点——以它为端点的关系与它在布局里的位置一并删 */
+export function removeReference(def: SketchDef, id: string): OpOutcome {
+  if (locateAll(def).some(m => m.id === id)) return reject('invalid', `「${id}」是本草图的模块，不是引用`)
+  if (!referenceNodes(def).includes(id)) return reject('not-found', `画布上没有引用节点「${id}」`)
+  const gone = (def.relations ?? []).filter(r => r.from === id || r.to === id).map(r => r.id)
+  if (def.relations) {
+    def.relations = def.relations.filter(r => !gone.includes(r.id))
+    if (!def.relations.length) delete def.relations
+  }
+  if (def.layout?.modules) delete def.layout.modules[id]
+  for (const r of gone) if (def.layout?.relations) delete def.layout.relations[r]
+  return done({ removed: [id, ...gone] })
+}
+
 export function setAbstraction(def: SketchDef, text: string): OpOutcome {
   if (def.mount === ROOT_MOUNT) return reject('invalid', '根挂载没有父模块原则：各层的原则写在层的 abstraction 等字段（X10）')
   if (text.trim()) def.abstraction = text.trim()

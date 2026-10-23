@@ -3,7 +3,7 @@
  * 与 fetchModel 一样由项目视图创建：外界的地址只在呈现层出现。取不到清单时为 error（附原因）。
  */
 import type { ExportedSymbol, FactsPayload, SourceFile, SourceHistory, SourcePayload } from '@/model'
-import type { ModelWriter, SketchSaveOutcome, SourceFetcher, WriteOutcome } from '@/state/useDeskState'
+import type { DesignSaveOutcome, ModelWriter, SketchSaveOutcome, SourceFetcher, WriteOutcome } from '@/state/useDeskState'
 
 export function httpSourceFetcher(project: string, base = ''): SourceFetcher {
   const enc = encodeURIComponent
@@ -72,8 +72,32 @@ export function httpModelWriter(project: string, base = ''): ModelWriter {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
     }
   }
+  /** X20：按设计写回——POST /write/<项目>/designs/<设计>/sketches；409 为某个文件已在外部改动，422 带服务端校验的问题 */
+  const saveDesignSketches: ModelWriter['saveDesignSketches'] = async ({ design, ...body }) => {
+    try {
+      const res = await fetch(`${base}write/${encodeURIComponent(project)}/designs/${encodeURIComponent(design)}/sketches`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const out = (await res.json()) as Partial<Extract<DesignSaveOutcome, { ok: true }>> & {
+        error?: string
+        issues?: NonNullable<Extract<DesignSaveOutcome, { ok: false }>['issues']>
+      }
+      if (res.ok && out.files) return { ok: true, files: out.files, removed: out.removed ?? [], dropped: out.dropped ?? [] }
+      return {
+        ok: false,
+        error: out.error ?? `HTTP ${res.status}`,
+        ...(res.status === 409 ? { conflict: true as const } : {}),
+        ...(out.issues ? { issues: out.issues } : {}),
+      }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
   return {
     saveSketch,
+    saveDesignSketches,
     createDesign: b => post('designs', b),
     feedback: b => post('feedback', b),
     allow: b => post('allow', b),

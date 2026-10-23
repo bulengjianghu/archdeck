@@ -89,54 +89,54 @@ modules:
     parent: state.transition
     kind: component
     responsibility: |
-      编辑态的会话规则（纯函数）：进入编辑态（只在草图版本上、视图状态里记下编辑目标）与退出；编辑态与运行视角、文件选中、代码事实互斥（E-4：进入编辑态时退出场景、清掉文件选中，编辑态下打开场景、选中文件的动作无效）；
-      Esc 只取消选中（N7 不变，编辑态下不另赋含义）；有未保存改动时离开（切换版本、退出编辑、关闭页面）要确认（E-3）；编辑改名与删除后层次与选中怎么跟随。
+      草图画布的会话规则（纯函数，X7a、X7h）：进入草图即进入编辑画布（只在草图版本上；层次换成当前张的挂载点）与退出；草图画布与运行视角、文件选中、代码事实互斥（进入时退出场景、清掉文件选中，其下打开场景、选中文件 / 依赖线 / 耦合线、开代码事实与演化叠加为无效动作）；
+      层次只由当前张决定：模型画布的下钻、返回上级、跳转、按 URL 恢复为无效动作，下钻与面包屑返回经 openSketch 切换且不进浏览器历史；Esc 只取消选中；有未保存改动时离开要确认；编辑后层次与选中怎么跟随。
     codeRefs: [src/state/transition/edit.ts]
   - id: state.transition.edit.mode
     name: 进入、退出与互斥
     parent: state.transition.edit
-    responsibility: enterEdit（版本不是草图版本时无效；进入时关闭场景、清掉文件选中，保留层次与模块选中）、exitEdit；编辑态下 openScenario、选中文件、打开代码事实叠加为无效动作；leaveGuard(是否脏) → 放行 / 需要确认；编辑态不进 URL（地址只编码层次与选中，刷新即退出编辑态，有未保存改动时由页面的离开确认拦住）。
+    responsibility: enterEdit（版本不是草图版本时无效；进入时关闭场景、清掉文件选中，层次为当前张的挂载点，保留仍在的模块与关系选中）、exitEdit、openSketch（切到另一张草图：层次换成它的挂载点、清空选中）；blocked 列出草图画布下无效的动作；leaveGuard(是否脏) → 放行 / 需要确认；编辑目标不进 URL。
   - id: state.transition.edit.follow
     name: 改名与删除的跟随
     parent: state.transition.edit
-    responsibility: edited 动作（携带编辑的影响）：当前层次或选中的模块被改名 → 换成新 ID；被删除 → 层次退到 draft 里最近仍存在的祖先、选中清空；选中的关系被删除 → 清空；新建的模块 → 选中它，便于接着在面板里填写（C-4 就地输入之后）；撤销 / 重做的影响按同样规则跟随。不进浏览器历史。
+    responsibility: edited 动作（携带编辑的影响与编辑后当前张的层次）：选中的被改名（含前缀级联）→ 换成新 ID；被删除 → 清空；新建、合并、拆分 → 选中结果；层次为编辑后的当前张（不在索引里时退到旧路径上最近仍存在的祖先）；撤销 / 重做同样跟随。不进浏览器历史。
   - id: state.desk.edit
     name: 编辑中的草图
     parent: state.desk
     kind: component
     responsibility: |
-      DeskState 的编辑分组（desk.edit）：持有编辑会话（ds.EditSession，一个值：编辑目标、读取时的草图与文件指纹、编辑中的草图、撤销 / 重做栈），由纯函数改变；
-      对外提供编辑操作（每个画布 / 面板意图一个，经 model.intent.edit 应用）、撤销 / 重做、保存、放弃、新建设计；
-      编辑态下把编辑中的草图加载成模型索引，作为 DeskState 的 index 交给已有的投影、布局、导航树与面板——派生给画布与面板的只有草图本身；并派生即时校验、对当前版本的实时核验（L-1）、本次改动摘要（L-2）与晋升预览（L-4）。
+      DeskState 的编辑分组（desk.edit，X7、X20）：持有按设计的编辑会话（ds.EditSession，一个值：设计的全部草图、当前张、设计级撤销 / 重做栈、各张读取时的指纹），由纯函数改变；画布多选与对比口径（相对基线 / 相对当前版本）也在这里；
+      对外提供草图画布的操作（每个手势一个，经 model.intent.edit 的 applyDesignEdit 应用）、下钻与面包屑、撤销 / 重做、保存（整个设计）、保存并交给 AI、退出、新建设计；
+      打开草图版本即进入：各张草图连同 system.yaml、持久草图与引用的外部模块加载成设计的索引，作为 DeskState 的 index；并派生当前张的画布数据、两级校验、两个对比的计数、超七提示、待重连、脏与面包屑。
     principle: |
-      - **一个值**：草图、撤销栈、读取时的指纹互相约束（撤销回到读取时的草图即不脏），合成一个 EditSession，不拆成多个 ref；「脏」由 draft 与读取时的草图是否相同推出，不另存（原则 6）。
-      - **复用而不分叉**：编辑态不另做一套画布数据——draft 经 loadModel 成为索引，后面的 projectLevel、layoutView、canvasScene、导航树照常工作；画布只多出编辑用的落点（插入条、连线柄）。
-      - **编辑态只对草图版本开启**（X7）：设计的草图（/d/<设计>/sketch）与持久草图（/i/<ID>）；当前版本、设计轮次、提交版本上没有编辑态。
+      - **一个值**：各张草图、撤销栈、读取时的指纹互相约束（撤销回到读取时即不脏），合成一个 EditSession；「脏」由文档与读取时的草图推出，不另存（原则 6）。
+      - **按设计**（X20）：撤销、脏、保存、交给 AI 都以设计为单位；会话里推出的草图未改动不算脏、不写文件。
+      - **只对草图版本开启**（X7）：设计的草图（/d/<设计>/sketch）与持久草图（/i/<ID>，只有这一张）；当前版本、设计轮次、提交版本上没有会话。
     codeRefs: [src/state/desk/edit.ts]
   - id: state.desk.edit.session
     name: 编辑会话
     parent: state.desk.edit
-    responsibility: 编辑会话的值与纯函数：begin（以读取到的草图与指纹开始）、apply（调用 applyEdit；成功则把编辑前的草图连同操作压入撤销栈、清空重做栈，拒绝则会话不变并返回原因）、undo / redo、saved（保存成功：读取时的草图与指纹更新为刚保存的，清空两个栈）、reloaded（描述重新加载：指纹相同则不变，否则标记 stale——文件已在外部改动）、replay（把撤销栈里的操作按顺序重放到新读取的草图上，用于 stale 后继续，返回重放失败的操作）；撤销栈深度上限 200。
+    responsibility: 编辑会话的值与纯函数：begin（以读到的各张草图与指纹开始，当前张为根挂载或第一张）、apply（一步 = 一个或几个设计级操作，原子；成功压撤销栈、清空重做栈，记前后的当前张；当前张被改名或删除时跟着走）、undo / redo（撤销的一步在别的草图上时切过去）、open（下钻 / 面包屑：会话里没有的草图按 X18 推出，不进撤销栈）、sketchDirty / isDirty（读自文件的与读取时比；推出的与此刻推出的结果比结构、与出现时比位置）、saved、reloaded、replay、discard；撤销栈深度上限 200；持久草图不能下钻、不能改动下一层草图。
     principle: |
-      - 撤销栈存「编辑前的草图快照 + 操作」：快照让撤销与重做是 O(1) 的值替换；操作让 stale 之后能把本次改动重放到新文件上（S-3 的「重新加载后再改」不必从头再画）。
-      - **撤销粒度（X7g）**：一个 EditOp 一步。文本字段从获得焦点到失焦或回车是一次提交，产生一个 updateModule / updateRelation，即一步；其间的多次击键不进撤销栈；值未变时不提交；Esc 还原字段、不提交。同一字段的连续两次提交是两步，不合并（可预测优先于省步数）。
-      - **重放失败的兜底**（评审意见 5）：replay 列出失败的操作，会话仍为 stale；此时可以「放弃本次改动」（discard：以新读到的草图重新 begin，清空两个栈），不会卡在 stale 状态。
+      - 撤销栈存「编辑前后的会话文档 + 操作 + 前后的当前张」：快照让撤销与重做是值替换（降级 / 升级一步回滚两张）；操作让 stale 之后能重放到新文件上。
+      - **撤销粒度（X7g）**：一个手势一步（双击空白新建 = 新建 + 落位）；拖位置、拖标签、重新排列各一步；文本字段失焦或回车提交一次即一步。
+      - **重放失败的兜底**：replay 列出失败的操作，会话仍为 stale；可「放弃本次改动」以新读到的草图重新开始。
     codeRefs: [src/state/desk/edit/session.ts]
   - id: state.desk.edit.derive
     name: 编辑态派生
     parent: state.desk.edit
-    responsibility: 由编辑会话派生（computed）：draft 连同 system.yaml 与持久草图加载成模型索引（编辑态下作为 DeskState 的 index）；即时校验 validateSketch（P-6、S-2）；对当前版本的实时核验 sketchCheck（L-1，「实现后将有 N 处偏差」，当前版本取自载荷附带的对比基线）；本次未保存改动与上次保存相比的摘要（L-2，diffModels 比较两份草图的索引：新增 / 修改 / 删除了哪些实体）；声明 supersedes 时与被替换持久草图的差异（L-4，diffModels）；是否脏、能否撤销 / 重做 / 保存。
-    principle: draft → 索引走 loadModel：把 draft 序列化成一份虚拟的 sketch.yaml 原文交给同一条加载流水线，草图实体的加载、补充与校验规则与读文件时完全一致（X1）；草图只有几十个实体，每次操作重算一遍的代价可以忽略。
+    responsibility: 由编辑会话派生（computed）：设计的索引（各张草图序列化后与 system.yaml、持久草图、引用的外部模块一起加载，草图画布下作为 DeskState 的 index）；当前张的画布数据（草图布局 sketchScene，图上标出变更时带角标）；各张的两级校验 validateSketch 与全设计的格式错误 / 语义提示、超七提示、待重连；两个对比 compareDesign（相对基线、相对当前版本）的全设计计数与本张清单；是否脏、改过的草图、能否撤销 / 重做；面包屑；编辑的上下文（持久草图与设计的基线）。
+    principle: 草图只有几十个实体，每次操作重算一遍的代价可以忽略；位置与校验都调同一组模型层函数，与写入端点、命令行一致。
     codeRefs: [src/state/desk/edit/derive.ts]
   - id: state.desk.edit.commands
     name: 编辑操作
     parent: state.desk.edit
-    responsibility: 对呈现层的唯一一组编辑操作（if.desk.edit）：enterEdit / exitEdit（经 dispatch 交给编辑规则）、edit(op)（会话 apply，成功后把影响以 edited 动作 dispatch，让层次与选中跟随改名与删除）、undo / redo（同样 dispatch 影响）、previewMove（移动前的 ID 影响预览）、save / discard / createDesign（交给写回同步）、canLeave（离开前是否需要确认，问编辑规则）。操作本身不含规则。
+    responsibility: 对呈现层的唯一一组编辑操作（if.desk.edit）：enter / exit、edit(单张操作，包装成设计级操作)、addModule（新建 + 落位一步）、connect、merge、split、demote、promote、moveIn、rename、updateModule、moveNode（写位置时补齐还没写进 layout 的节点）、relabel、autoArrange、addReference、setAbstraction、remove（模块级联 / 关系 / 引用节点）与 previewRemove、openChild（下钻）、goUp（面包屑）、undo / redo、save、saveAndHandToAi、discard、replayOnReload、createDesign（按挂载点从基线复制底稿并初始布局）、canLeave、onReloaded。每次成功后经 dispatch 交给编辑规则跟随。操作本身不含规则。
     codeRefs: [src/state/desk/edit/commands.ts]
   - id: state.desk.edit.save
     name: 草图写回同步
     parent: state.desk.edit
-    responsibility: 同步适配器（与路由、模型源、布局同列）：保存时把 draft 与读取时的指纹经注入的 ModelWriter POST 给写入端点（整份写回，B6）；新建设计时 POST 设计 ID、名称、目标与底稿；结果——成功则会话 saved 并等文件变化推送回来（N5），指纹不符则会话 stale 并提示「文件已变，重新加载后再改」（S-3），校验不过则把服务端的问题列表交给派生定位到实体（S-2）。stale 后「重新加载并重放」：取最新载荷、replay，部分失败时列出失败的操作，并提供「放弃本次改动」作兜底。保存成功后停留在编辑态。
+    responsibility: 同步适配器：保存整个设计（X20）——saveRequest 列出要写的草图（读自文件且改过的带读取时的指纹，级联改名的带 renamedFrom，会话里推出且改过的为新文件，删掉的列入 removed），写前丢掉没有关系的引用节点并给出清单（X19）；经注入的 ModelWriter POST 给按设计写回的端点（持久草图走单张写回）；成功则会话 saved（新指纹），指纹不符则 stale，校验不过则把服务端的问题交给面板。新建设计时 POST 设计 ID、名称、目标与底稿。
     codeRefs: [src/state/desk/edit/save.ts]
   - id: access.writer.append
     name: 追加写入
@@ -161,70 +161,6 @@ modules:
       - **服务端再校验一遍**：页面的即时校验只是提示，写入端点是最后一道；两边调用同一个 validateSketch，结果一致。
       - **只写草图**：路径只由项目、草图 ID、设计 ID 拼出（isProjectId），不接受任意路径；AI 生成的文件一律不写。
     codeRefs: [vite/writeSketch.ts]
-  - id: present.canvas.edit
-    name: 画布编辑态
-    parent: present.canvas
-    kind: component
-    responsibility: |
-      只在编辑态开启的画布交互：带之间与末尾的插入条（+ 层）与带头拖动排序、带内与父模块框内「+ 模块」与就地输入名称、拖动模块到另一条带或另一父模块（移动，改 ID 时二次确认）、从节点拖线到另一节点建关系（松手选类型与一句说明）、分层总览上带到带拖线改可依赖的层、右键菜单（核心、封闭、删除）、删除键与撤销 / 重做快捷键。
-      每个操作只调用 state.desk.edit 的一个操作；落点的位置来自画布场景，不保存坐标、不自己算布局，编辑后由自动布局重排。
-    principle: |
-      - **意图粒度 = 编辑操作粒度**：一次拖放、一次确认只发一个操作，撤销一步恰好撤回用户的一个动作。
-      - **结构视角的交互照常**：单击选中、双击下钻（C-11 下钻编辑）、面包屑返回不变；编辑态只增加，不改变已有手势的含义。
-  - id: present.canvas.edit.insert
-    name: 插入条与新建
-    parent: present.canvas.edit
-    responsibility: 分层总览中带之间与末尾的插入条、空白处「+ 层」（C-1）；带内与父模块框内「+ 模块」（C-4），点击后就地输入名称，ID 显示为自动生成的值、可改，回车提交 addLayer / addModule，Esc 放弃输入。
-    codeRefs: [src/components/edit/canvas/InsertSlot.vue, src/components/edit/canvas/InlineName.vue]
-  - id: present.canvas.edit.drag
-    name: 拖动
-    parent: present.canvas.edit
-    responsibility: 带头上下拖动排序（C-2 → reorderLayer）；模块拖到另一条带或另一父模块框（C-5）：落点高亮合法的父，松手先取 previewMove，ID 会变时弹出「移动会改 ID」确认（列出草图内改写条数与当前版本里引用旧 ID 的条数），确认后发 moveModule。
-    codeRefs: [src/components/edit/canvas/useEditDrag.ts]
-  - id: present.canvas.edit.connect
-    name: 连线
-    parent: present.canvas.edit
-    responsibility: 从节点的连线柄拖到另一节点（Vue Flow connect），松手弹出类型选择（calls / notifies / streams / depends / implements，附 ADR-0022 的一句读法）与一句说明，确定后发 connect（C-8）；被拒绝（同一对同类型已有、祖先与后代）时就地提示原因；分层总览上带到带拖线发 setMayDependOn（C-9）。
-    codeRefs: [src/components/edit/canvas/ConnectPopover.vue]
-  - id: present.canvas.edit.menu
-    name: 右键菜单与快捷键
-    parent: present.canvas.edit
-    responsibility: 节点右键菜单：标核心、封闭（C-7）、删除（C-6，有子树或被关系引用时二次确认，列出级联删除的实体）；边右键：删除（C-10）；Delete 键删除选中对象；⌘Z / ⇧⌘Z 撤销 / 重做（C-12，焦点在输入框时让给输入框）。
-    codeRefs: [src/components/edit/canvas/EditMenu.vue, src/components/edit/canvas/useEditKeys.ts]
-  - id: present.panel.edit
-    name: 编辑表单
-    parent: present.panel
-    kind: component
-    responsibility: |
-      编辑态下属性面板换成表单：按选中显示层、模块、关系的表单，无选中时为草图元信息；顶部常驻校验结果（错误与提醒，单击定位到实体）与设计草图的实时核验「实现后将有 N 处偏差」（L-1）；字段改动即发意图（文本字段在失焦或回车时发一次，即撤销的一步，X7g）。
-      面板分派在编辑态下选这里，结构视角的模块 / 关系面板不显示。
-    codeRefs: [src/components/edit/panel/EditPanel.vue, src/components/edit/panel/Field.vue, src/components/edit/panel/form.css]
-  - id: present.panel.edit.layer
-    name: 层表单
-    parent: present.panel.edit
-    responsibility: 层的名称、抽象原则、包含 / 不包含（逐行）、可依赖的层（多选，选项为草图与持久草图里的层，P-1）；删除层（二次确认）。
-    codeRefs: [src/components/edit/panel/LayerForm.vue]
-  - id: present.panel.edit.module
-    name: 模块表单
-    parent: present.panel.edit
-    responsibility: 模块的名称、ID、一句话职责、核心（只对第二级模块显示，04 §3.2）、封闭、代码落点（目录级 glob，可选，04 §3.10）、所属父（下拉，等价于移动，走同一个确认，P-2）；「对外接口」一节增删接口（名称、签名代码块，owner 固定为该模块，P-4）。
-      ID 字段只改短名（父 ID 前缀只读）：提交即 renameModule，即「父不变的移动」——同一个级联、同一个 IdImpact 确认（有后代或当前版本里有引用时弹出）；要换父只能用「所属父」或画布拖动（X7d）。
-    codeRefs: [src/components/edit/panel/ModuleForm.vue, src/components/edit/panel/InterfaceForm.vue]
-  - id: present.panel.edit.relation
-    name: 关系表单
-    parent: present.panel.edit
-    responsibility: 选中关系时：两端（只读，可定位）、类型、说明、经由接口（可选，选项为草图与持久草图里的接口，P-3）；删除。
-    codeRefs: [src/components/edit/panel/RelationForm.vue]
-  - id: present.panel.edit.meta
-    name: 草图元信息
-    parent: present.panel.edit
-    responsibility: 无选中时：草图 ID（持久草图只读）、lifetime、supersedes（下拉持久草图，P-5）、封闭的子树列表；声明 supersedes 时显示与被替换持久草图的差异（L-4，复用变更清单的样式）；本次改动摘要（L-2，保存后「交给 AI」的指令附带它）。
-    codeRefs: [src/components/edit/panel/SketchMetaForm.vue]
-  - id: present.panel.edit.checks
-    name: 校验与核验结果
-    parent: present.panel.edit
-    responsibility: 面板顶部的即时校验结果（ID 重复、前缀不符、引用不存在、层依赖成环、与持久草图矛盾，P-6）与对当前版本的实时核验计数（L-1），单击一条定位到对应实体（下钻并选中）；保存被服务端拒绝时显示服务端给出的问题。
-    codeRefs: [src/components/edit/panel/EditChecks.vue]
   - id: present.version.edit
     name: 编辑信息条
     parent: present.version
@@ -232,29 +168,13 @@ modules:
     responsibility: |
       草图版本的信息条上出现「编辑」；编辑态下信息条变为「编辑草图：<名>」、未保存标记 ●、「保存」「放弃」「校验」、撤销 / 重做（E-2）；「放弃」有未保存改动时二次确认（E-3）；保存成功后停留在编辑态，保存失败显示原因（文件已变时给「重新加载并重放改动」；重放有失败时列出失败的操作，并给「放弃本次改动」）。
       当前版本上「编辑骨架」打开持久草图 /i/skeleton 并进入编辑态（E-1）；版本切换旁的「新建设计」对话框：ID、名称、目标一句话、底稿（缺省「空草图」；另一选项「改骨架（定稿后晋升替换骨架）」，选中时说明后果：复制骨架的层与第二级并声明 supersedes，定稿实现后整份替换 intent/skeleton.yaml，而不是归档，S-4、L-3），创建后进入新设计的草图编辑。
-    codeRefs: [src/components/edit/EditBar.vue, src/components/edit/NewDesignDialog.vue, src/components/edit/EditDialog.vue, src/components/edit/useEditDialog.ts]
+    codeRefs: [src/components/edit/EditBar.vue, src/components/edit/NewDesignDialog.vue, src/components/edit/EditDialog.vue, src/components/edit/useEditDialog.ts, src/components/sketch/leave.ts]
 
 relations:
   # ── 呈现层：画布与面板只发意图 ──
-  - {id: rel.ed.architect-canvas, from: actor.architect, to: present.canvas.edit, type: calls, description: 在草图上插入、拖动、连线、右键}
-  - {id: rel.ed.architect-panel, from: actor.architect, to: present.panel.edit, type: calls, description: 在表单里填写与改字段}
   - {id: rel.ed.architect-bar, from: actor.architect, to: present.version.edit, type: calls, description: 编辑、保存、放弃、新建设计}
-  - {id: rel.ed.insert-commands, from: present.canvas.edit.insert, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: addLayer / addModule}
-  - {id: rel.ed.drag-commands, from: present.canvas.edit.drag, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: reorderLayer；previewMove 后 moveModule / renameModule}
-  - {id: rel.ed.connect-commands, from: present.canvas.edit.connect, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: connect；被拒绝时就地提示原因}
-  - {id: rel.ed.menu-commands, from: present.canvas.edit.menu, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: 核心 / 封闭 / 删除（previewRemove 后确认）；撤销 / 重做}
-  - {id: rel.ed.forms-commands, from: present.panel.edit, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: 表单字段失焦或回车提交即一个编辑操作（X7g）}
-  - {id: rel.ed.bar-commands, from: present.version.edit, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: enterEdit / exitEdit / save / discard / replayOnReload / createDesign / undo / redo}
-  - {id: rel.ed.desk-view-commands, from: present.desk-view, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: 离开路由与关闭页面前问 canLeave（X7a）；?edit=1 时进入编辑态}
-  - {id: rel.ed.flow-edit, from: present.canvas.flow, to: present.canvas.edit, type: depends, description: 编辑态下挂上插入落点、连线弹窗与右键菜单，把 Vue Flow 的 nodeDragStop / connect / contextmenu 事件交给它}
-  - {id: rel.ed.flow-commands, from: present.canvas.flow, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: 带到带拖线 → setMayDependOn（C-9）}
-  - {id: rel.ed.canvas-scene, from: present.canvas.edit, to: state.layout.canvas, type: depends, description: NodeData：插入条、+ 模块的位置来自画布场景}
-  - {id: rel.ed.dispatch-edit, from: present.panel.dispatch, to: present.panel.edit, type: depends, description: 编辑态下按选中分派到表单}
-  - {id: rel.ed.forms-drag, from: present.panel.edit.module, to: present.canvas.edit.drag, type: calls, description: confirmMove：表单改 ID 与改所属父走同一个确认（X7d）}
-  - {id: rel.ed.forms-menu, from: present.panel.edit, to: present.canvas.edit.menu, type: calls, description: confirmRemove：表单的删除走同一个级联确认（X7e）}
-  - {id: rel.ed.drag-dialog, from: present.canvas.edit, to: present.version.edit, type: calls, description: ask：二次确认对话框（useEditDialog）}
-  - {id: rel.ed.forms-labels, from: present.panel.edit, to: present.shared, type: depends, description: RELATION_TYPE_LABELS：关系类型下拉的显示名}
-  - {id: rel.ed.connect-labels, from: present.canvas.edit.connect, to: present.shared, type: depends, description: RELATION_TYPE_LABELS / HINTS：类型与一句读法}
+  - {id: rel.ed.bar-commands, from: present.version.edit, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: exit / save / discard / replayOnReload / createDesign / undo / redo}
+  - {id: rel.ed.desk-view-commands, from: present.desk-view, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: 离开路由与关闭页面前问 canLeave（X7a）}
   # ── 模型层：意图内部 ──
   - {id: rel.ed.layers-locate, from: model.intent.edit.layers, to: model.intent.edit.locate, type: calls, description: 寻址与 ID 生成}
   - {id: rel.ed.modules-locate, from: model.intent.edit.modules, to: model.intent.edit.locate, type: calls, description: 寻址、ID 生成、子树范围}
@@ -285,12 +205,11 @@ relations:
   - {id: rel.ed.derive-session, from: state.desk.edit.derive, to: state.desk.edit.session, type: calls, description: isDirty}
   - {id: rel.ed.reload-edit, from: state.desk.actions, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: 重新加载后 onReloaded：认出刚保存的或标为已过时，给出要显示的索引（编辑态下为草图的索引）}
   - {id: rel.ed.session-apply, from: state.desk.edit.session, to: model.intent.edit, type: calls, interface: if.intent.applyEdit, description: 应用一个编辑操作得到新草图与影响}
-  - {id: rel.ed.commands-preview, from: state.desk.edit.commands, to: model.intent.edit, type: calls, interface: if.intent.idImpact, description: previewMove；seedSketch：新建设计的底稿}
+  - {id: rel.ed.commands-preview, from: state.desk.edit.commands, to: model.intent.edit, type: calls, interface: if.intent.idImpact, description: seedFromBaseline、gridLayout：新建设计的底稿与初始布局}
   - {id: rel.ed.commands-load, from: state.desk.edit.commands, to: model.pipeline.loader, type: calls, description: 从载荷原文读出草图定义}
   - {id: rel.ed.derive-validate, from: state.desk.edit.derive, to: model.intent.validate, type: calls, interface: if.intent.validateSketch, description: 每次操作后即时校验（与写入端点同一函数）}
   - {id: rel.ed.derive-check, from: state.desk.edit.derive, to: model.intent.check, type: calls, interface: if.intent.sketchCheck, description: 对当前版本实时跑 sketchCheck（L-1）}
   - {id: rel.ed.derive-load, from: state.desk.edit.derive, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 编辑中的草图序列化为虚拟 sketch.yaml，与 system.yaml、持久草图一起加载成索引}
-  - {id: rel.ed.derive-diff, from: state.desk.edit.derive, to: model.diff, type: calls, interface: if.model.diffModels, description: 未保存改动（L-2）与晋升预览（L-4）}
   - {id: rel.ed.derive-edit, from: state.desk.edit.derive, to: model.intent.edit, type: calls, description: sketchText：草图交给加载流水线}
   # ── 接入层：草图写回 ──
   - {id: rel.ed.sketch-types, from: access.writer.sketch, to: model.types, type: depends, description: 草图目标与校验结果的类型（SketchTarget、SketchValidation）}
@@ -321,6 +240,14 @@ relations:
   - {id: rel.v2.diff-check, from: model.diff, to: model.intent.check, type: depends, description: 版本对比按血缘读（lineageKind、前缀映射）}
   - {id: rel.v2.lint-validate, from: access.lint, to: model.intent.validate, type: calls, description: 设计的各张草图逐张两级校验（X14）}
   - {id: rel.v2.reader-loader, from: access.reader, to: model.pipeline.loader, type: calls, description: 读设计草图的挂载点与是否需要初始布局（load）}
+  - {id: rel.v4.commands-sketch-layout, from: state.desk.edit.commands, to: state.layout.sketch, type: calls, description: sketchPositions：写位置时补齐当前显示的位置（X15）}
+  - {id: rel.v4.derive-sketch-layout, from: state.desk.edit.derive, to: state.layout.sketch, type: calls, description: sketchScene：当前张的节点、直线边与位置}
+  - {id: rel.v4.save-layout, from: state.desk.edit.save, to: model.intent.edit.layout, type: calls, description: dropOrphanReferences：保存前丢掉没有关系的引用（X19）}
+  - {id: rel.v4.sketch-layout-model, from: state.layout.sketch, to: model.intent.edit.layout, type: calls, description: gridLayout、referenceNodes：初始网格与引用节点}
+  - {id: rel.v4.runner-sketch-layout, from: state.layout.runner, to: state.layout.sketch, type: depends, description: 布局入口 layout.ts 转出草图布局（Layout 的访问面）}
+  - {id: rel.v4.sketch-layout-types, from: state.layout.sketch, to: model.types, type: depends, description: SketchDef、SketchPoint、ChangeKind}
+  - {id: rel.v4.sketch-layout-locate, from: state.layout.sketch, to: model.intent.edit.locate, type: calls, description: locateAll：本层模块}
+  - {id: rel.v4.versions-lineage, from: state.desk.versions, to: model.intent.check, type: calls, description: parseDesignSketches、sketchLineage：设计版本的差异按血缘表述（X11）}
   - {id: rel.v2.writer-entry, from: access.writer.sketch, to: model.pipeline.entry, type: calls, description: 按设计写回时以当前版本为校验的引用范围（loadModel）}
 
 interfaces:

@@ -49,7 +49,7 @@ export interface ViewState {
   toggles: Toggles
   /** null = 结构视角；非 null = 运行视角（V1） */
   playback: PlaybackState | null
-  /** 编辑态（X7a）：正在编辑的草图；与运行视角互斥，不进 URL。缺省（undefined）同 null */
+  /** 草图画布（X7a，ADR-0025）：打开的草图版本的编辑目标——进入草图即编辑；与运行视角互斥，不进 URL。缺省（undefined）同 null */
   editing?: SketchTarget | null
 }
 
@@ -75,11 +75,13 @@ export type ViewAction =
   /** 指向某一步；null = 回到开头 */
   | { type: 'seek'; frameId: string | null }
   | { type: 'chooseBranch'; pointId: string; option: number }
-  /** X7a：进入 / 退出编辑态 */
-  | { type: 'enterEdit'; target: SketchTarget }
+  /** X7a：进入草图画布（level 为当前张挂载点的层次：根挂载为系统根）/ 退出 */
+  | { type: 'enterEdit'; target: SketchTarget; level: string }
   | { type: 'exitEdit' }
-  /** X7h：一次编辑（或撤销 / 重做）的影响；previousPath 是编辑前当前层次的路径 */
-  | { type: 'edited'; effects: EditEffects; previousPath: readonly string[] }
+  /** X7h：一次编辑（或撤销 / 重做）的影响；previousPath 是编辑前当前层次的路径，level 是编辑后当前张的层次 */
+  | { type: 'edited'; effects: EditEffects; previousPath: readonly string[]; level: string }
+  /** X7h：下钻 / 面包屑返回切到另一张草图（level 为它的挂载点层次）；不进浏览器历史 */
+  | { type: 'openSketch'; level: string }
 
 export interface TransitionContext {
   index: ModelIndex

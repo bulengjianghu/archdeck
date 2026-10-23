@@ -9,7 +9,7 @@ import { addModule, removeModule, setClosed, updateModule } from './modules'
 import { moveModule, renameModule } from './move'
 import { addInterface, connect, removeInterface, removeRelation, updateInterface, updateRelation } from './relations'
 import { setMeta } from './seed'
-import { addReference, autoArrange, moveNode, relabel, setAbstraction } from './layout'
+import { addReference, autoArrange, moveNode, relabel, removeReference, setAbstraction } from './layout'
 import type { OpOutcome } from './shared'
 
 function run(def: SketchDef, ctx: EditContext, op: EditOp): OpOutcome {
@@ -56,6 +56,8 @@ function run(def: SketchDef, ctx: EditContext, op: EditOp): OpOutcome {
       return autoArrange(def)
     case 'addReference':
       return addReference(def, ctx, op.id, op.at)
+    case 'removeReference':
+      return removeReference(def, op.id)
   }
 }
 

@@ -7,10 +7,14 @@ import {
   isCommitVersion,
   isDesignVersion,
   isSketchRevision,
+  parseDesignSketches,
+  sketchLifetime,
+  sketchLineage,
   type DesignInfo,
   type ModelCommit,
   type ModelDiff,
   type ModelIndex,
+  type RawFile,
   type VersionRef,
 } from '@/model'
 import type { ViewState } from '../transition'
@@ -27,9 +31,11 @@ export interface VersionsInputs {
   version?: VersionRef
   /** DV-10：草图版本的「交给 AI」指令 */
   sketchPrompt: ShallowRef<string>
+  /** X4：载荷附带的设计草图（血缘的来源） */
+  sketches: ShallowRef<{ design: string; file: RawFile }[]>
 }
 
-export function createVersions({ state, index, designs, commits, baselines, version, sketchPrompt }: VersionsInputs) {
+export function createVersions({ state, index, designs, commits, baselines, version, sketchPrompt, sketches }: VersionsInputs) {
   const dv = isDesignVersion(version) ? version : undefined
   const cv = isCommitVersion(version) ? version : undefined
   /** 打开的设计（不是设计版本时为 null） */
@@ -47,8 +53,18 @@ export function createVersions({ state, index, designs, commits, baselines, vers
     const b = baselines.value
     return (state.value.toggles.compareTo === 'previous' ? b.previous : undefined) ?? b.current ?? null
   })
-  /** 相对对比基线的差异；当前版本时为 null */
-  const diff = computed<ModelDiff | null>(() => (index.value && baseline.value ? diffModels(baseline.value.index, index.value) : null))
+  /** X11：打开的设计的血缘——设计的各张草图（草图版本里在索引中，轮次里随载荷附带）的 from */
+  const lineage = computed(() => {
+    if (!dv || !index.value) return undefined
+    const own = index.value.model.sketches.filter(s => sketchLifetime(s) !== 'persistent').map(s => s.def)
+    const attached = parseDesignSketches(sketches.value.filter(s => s.design === dv.design)).map(s => s.def)
+    const l = sketchLineage([...own, ...attached])
+    return l.size ? l : undefined
+  })
+  /** 相对对比基线的差异（设计版本按血缘表述）；当前版本时为 null */
+  const diff = computed<ModelDiff | null>(() =>
+    index.value && baseline.value ? diffModels(baseline.value.index, index.value, lineage.value ? { lineage: lineage.value } : {}) : null,
+  )
   /** E4：设计起草时的基线提交与当前版本不一致——当前版本已按新代码重新生成 */
   const drift = computed(() => {
     const was = design.value?.base?.commit

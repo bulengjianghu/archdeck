@@ -28,7 +28,7 @@ const value = computed(() =>
 /** 持久草图（骨架等）：读到的描述里带着 intent/ */
 const intents = desk.edit.lookup.intentIds
 const creating = ref(false)
-const editSkeleton = () => void router.push({ name: 'intent', params: { project: desk.project!, intent: 'skeleton' }, query: { edit: '1' } })
+const editSkeleton = () => void router.push({ name: 'intent', params: { project: desk.project!, intent: 'skeleton' } })
 const commits = computed(() => desk.versions.commits.value)
 /** DV-6：推进中的设计各自一组，已归档的（已实现、已放弃）合为一组放在后面 */
 const active = computed(() => desk.versions.designs.value.filter(d => !isArchived(d.status)))

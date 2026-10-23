@@ -61,7 +61,7 @@ export type { Selection, Toggles } from './transition'
 export { encodeSelection, decodeSelection } from './transition'
 export type { CompareSource, ModelPayload, FetchModel } from './sync/modelSource'
 export type { SourceFetcher, Resource } from './sync/source'
-export type { ModelWriter, WriteOutcome, SketchSaveOutcome } from './sync/writer'
+export type { ModelWriter, WriteOutcome, SketchSaveOutcome, DesignSaveOutcome, DesignSketchWrite } from './sync/writer'
 
 export type DeskOptions = RouterSyncOptions & {
   /** 被描述项目的源码（G1、G2）；缺省为没有源码来源（只看描述的测试） */
@@ -78,7 +78,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const modelDir = ref('')
   const designs = shallowRef<DesignInfo[]>([])
   const commits = shallowRef<ModelCommit[]>([])
-  const baselines = shallowRef<{ current?: Baseline; previous?: Baseline }>({})
+  const baselines = shallowRef<{ current?: Baseline; previous?: Baseline; base?: Baseline }>({})
   /** DV-10：草图版本的「交给 AI」指令 */
   const sketchPrompt = shallowRef('')
   /** X4：载荷附带的设计草图 */
@@ -88,6 +88,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   /** 载荷的原文与草图文件的指纹（编辑态加载草图、保存时比对用） */
   const payloadFiles = shallowRef<RawFile[]>([])
   const payloadSketch = shallowRef<{ file: string; hash: string; path?: string } | undefined>(undefined)
+  const payloadSketchFiles = shallowRef<{ mount?: string; file: string; path?: string; hash: string }[] | undefined>(undefined)
   const state = shallowRef<ViewState>({ levelId: '', selection: null, hover: null, toggles: DEFAULT_TOGGLES(RELATION_TYPES), playback: null })
   /** 每次层次切换递增，界面据此决定是否适应画布 */
   const levelVersion = ref(0)
@@ -141,9 +142,11 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     const bandColumns = bandColumnsFor(px)
     if (layoutOpts.value.bandColumns !== bandColumns) layoutOpts.value = { bandColumns }
   }
+  const editing = computed(() => !!state.value.editing)
   const view = computed<LevelView | null>(() => {
     const t = togglesNow.value
-    if (!index.value || !levelId.value) return null
+    // 草图画布（ADR-0025）自己布局，不走层次投影与 elk
+    if (!index.value || !levelId.value || editing.value) return null
     try {
       // L9：运行视角下舞台不受显示开关影响，并补齐场景帧端点的边界节点与参与者（P12）
       const expanded = expandedBands.value.length ? { expandedBands: expandedBands.value } : {}
@@ -165,19 +168,23 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   // 步骤的代码证据（S16、S17）：时序图的「?」由 run 交给 Layout，所以先于 run 创建
   const evidence = createEvidence({ state, index, plan, planOf: planScenario, files, sync: sourceSync, design: !!options.version })
   const run = createRun({ state, index, levelId, plan, view, positioned, fileOwners: files.owners, evidence: evidence.levels })
-  const versions = createVersions({ state, index, designs, commits, baselines, version: options.version, sketchPrompt })
+  const versions = createVersions({ state, index, designs, commits, baselines, version: options.version, sketchPrompt, sketches })
   const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version })
   const evolution = createEvolution({ state, index, view, files, facts, sync: sourceSync, design: !!options.version })
   const intent = createIntent({ index, designs, sketches, version: options.version })
-  // ── 编辑草图（X7，ADR-0024）：只在草图版本上可用 ──
+  // ── 草图画布（X7，ADR-0024、ADR-0025）：只在草图版本上，打开即进入 ──
   const edit = createEdit({
     version: options.version,
     loaded: loadedIndex,
     files: payloadFiles,
     sketch: payloadSketch,
+    sketchFiles: payloadSketchFiles,
     current: () => baselines.value.current?.index ?? null,
-    accepted: () =>
-      isDesignVersion(options.version) ? (designs.value.find(d => d.id === (options.version as { design: string }).design)?.accepted ?? []) : [],
+    // X17：设计的基线——载荷给出 base.commit 那一版时用它，否则为当前版本（新建设计时底稿即从当前版本复制）
+    baseline: () => baselines.value.base?.index ?? baselines.value.current?.index ?? null,
+    prompt: () => sketchPrompt.value,
+    selection: () => state.value.selection,
+    showDiff: () => state.value.toggles.showDiff,
     levelPath: () => levelPath.value,
     dispatch: action => dispatch(action),
     show: idx => (index.value = idx),
@@ -265,6 +272,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       baselines.value = loaded.baselines
       payloadFiles.value = loaded.payload.files
       payloadSketch.value = loaded.payload.sketch
+      payloadSketchFiles.value = loaded.payload.sketchFiles
       loadedIndex.value = loaded.model.index
       index.value = edit.onReloaded()
       status.value = 'ready'
@@ -296,6 +304,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     await reload()
     if (!index.value) return
     dispatch({ type: 'restore', query: router?.query() ?? {} })
+    // X7a：草图版本打开即进入草图画布
+    if (edit.editable) edit.enter()
     levelVersion.value++
   }
 

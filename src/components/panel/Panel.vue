@@ -14,7 +14,6 @@ import RelationPanel from './RelationPanel.vue'
 import EdgePanel from './EdgePanel.vue'
 import SystemPanel from './SystemPanel.vue'
 import ActorPanel from './ActorPanel.vue'
-import EditPanel from '../edit/panel/EditPanel.vue'
 import FilePanel from './FilePanel.vue'
 import DepPanel from './DepPanel.vue'
 import CouplePanel from './CouplePanel.vue'
@@ -41,8 +40,7 @@ const target = computed(() => {
 
 <template>
   <div class="panel">
-    <EditPanel v-if="desk.edit.active.value" />
-    <template v-else-if="target">
+    <template v-if="target">
       <StepPanel v-if="target.kind === 'step'" :key="`f:${target.id}`" />
       <ScenarioPanel v-else-if="target.kind === 'scenario'" :key="`s:${target.id}`" />
       <template v-else>
