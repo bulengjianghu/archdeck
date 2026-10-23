@@ -36,8 +36,8 @@ export interface ModelWriter {
   saveSketch(input: { target: SketchTarget; sketch: SketchDef; baseHash: string }): Promise<SketchSaveOutcome>
   /** X20：按设计写回若干张草图（新文件、改名、删除），带各自读取时的指纹 */
   saveDesignSketches(input: { design: string; sketches: DesignSketchWrite[]; removed?: { mount: string; baseHash: string }[] }): Promise<DesignSaveOutcome>
-  /** B6：新建设计（design.yaml 与草图） */
-  createDesign(input: { id: string; name: string; goal?: string; sketch: SketchDef }): Promise<WriteOutcome>
+  /** B6、05 裁决 3：新建设计（design.yaml 与草图）——给挂载点时底稿由服务端从基线（仓库 HEAD）复制；也可直接给草图 */
+  createDesign(input: { id: string; name: string; goal?: string; mount?: string; sketch?: SketchDef }): Promise<WriteOutcome>
 }
 
 const none = async (): Promise<{ ok: false; error: string }> => ({ ok: false, error: '没有注入写入来源' })

@@ -78,7 +78,7 @@ export function createSaveSync(writer: ModelWriter, session: ShallowRef<EditSess
     }
   }
 
-  function createDesign(input: { id: string; name: string; goal?: string; sketch: SketchDef }): Promise<WriteOutcome> {
+  function createDesign(input: { id: string; name: string; goal?: string; mount: string }): Promise<WriteOutcome> {
     return writer.createDesign(input)
   }
 

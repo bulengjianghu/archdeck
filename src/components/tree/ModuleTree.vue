@@ -4,6 +4,7 @@
  * - 状态 → 树：当前层次的祖先链展开并标出当前层次，选中的模块高亮、展开到它并滚到可见；
  *   运行视角下标出参与本场景的模块与当前步骤的两端；选中文件时标出其归属模块并展开到它（G14）。
  * - 树 → 意图：单击定位（N4），单击系统回根层，双击有子模块的下钻（N1、N2）；悬停本层可见的模块等同悬停画布节点。
+ * 右键：「在此设计」（F-10：以该模块为挂载点新建设计，只在当前版本、不能是层）。
  * 「只看需复核」（Z3）只列含需复核模块的分支，并展开到它们。
  * 排序「描述顺序 / 按热度」（J8）：按热度时同一父模块下的子模块按热度降序、同值保持描述顺序，热度种类取「显示」面板所选（关闭时按修改热度）。
  * 展开状态、筛选与排序只属于这块界面。
@@ -12,6 +13,8 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { heatCount, heatValue, type HeatKind } from '@/model'
 import { useDesk } from '@/state/inject'
 import ModuleTreeNode from './ModuleTreeNode.vue'
+import SketchMenu from '../sketch/SketchMenu.vue'
+import { canDesignAt, openNewDesign } from '../edit/designHere'
 
 const desk = useDesk()
 const root = ref<HTMLElement>()
@@ -105,6 +108,17 @@ function drill(id: string) {
 function hover(id: string | null) {
   desk.setHover(id && viewNodes.value.has(id) ? id : null)
 }
+/** F-10：右键菜单 */
+const menu = ref<{ x: number; y: number; id: string } | null>(null)
+function onMenu(id: string, ev: MouseEvent) {
+  if (desk.version || id === idx.value.rootId) return
+  menu.value = { x: ev.clientX, y: ev.clientY, id }
+}
+function onChoose(key: string) {
+  const id = menu.value?.id
+  menu.value = null
+  if (key === 'design' && id) openNewDesign(id)
+}
 </script>
 
 <template>
@@ -129,8 +143,16 @@ function hover(id: string | null) {
       <span class="warn">需复核 {{ desk.review.stale.value.size }}</span>
     </div>
     <ul ref="root" class="tree" role="tree" @mouseleave="hover(null)">
-      <ModuleTreeNode :id="idx.rootId" :depth="0" :ctx="ctx" @pick="pick" @drill="drill" @toggle="toggle" @hover="hover" />
+      <ModuleTreeNode :id="idx.rootId" :depth="0" :ctx="ctx" @pick="pick" @drill="drill" @toggle="toggle" @hover="hover" @menu="onMenu" />
     </ul>
+    <SketchMenu
+      v-if="menu"
+      :x="menu.x"
+      :y="menu.y"
+      :items="[{ key: 'design', label: '在此设计', disabled: !canDesignAt(desk, menu.id) }]"
+      @choose="onChoose"
+      @close="menu = null"
+    />
   </div>
 </template>
 

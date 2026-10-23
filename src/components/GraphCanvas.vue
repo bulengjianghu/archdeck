@@ -8,6 +8,7 @@
  * 选中文件时，其归属模块在本层的投影节点加文件高亮（G14）。
  * 结构视角开启「代码事实」时叠加证实标记、违规与代码依赖叠加线、本层的环（K9、Y4）；单击叠加线即选中它（K10）。
  * 开启「演化」时叠加热度角标与时间耦合的波浪线（J5）；单击耦合线即选中它（J7）。
+ * 节点右键：「在此设计」（F-10：以该模块为挂载点新建设计，只在当前版本、不能是层）。
  * 画什么由 Layout 的 canvasScene 算出（ADR-0013）；这里只把结果写入 Vue Flow、把交互转成操作、适应画布。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -28,6 +29,8 @@ import StepBadge from './nodes/StepBadge.vue'
 import BranchPreview from './nodes/BranchPreview.vue'
 import RouteEdge from './edges/RouteEdge.vue'
 import DisplayPanel from './DisplayPanel.vue'
+import SketchMenu from './sketch/SketchMenu.vue'
+import { canDesignAt, openNewDesign } from './edit/designHere'
 
 const desk = useDesk()
 const stageUi = useStage()
@@ -84,6 +87,21 @@ function onNodeDoubleClick({ node }: { node: Node<NodeData> }) {
   if (node.type === 'boundary') desk.revealModule(node.data!.moduleId)
   else if (node.type === 'more') desk.drillInto(node.id.slice('more:'.length))
   else desk.drillInto(node.data!.moduleId)
+}
+
+/** F-10：节点右键「在此设计」 */
+const menu = ref<{ x: number; y: number; id: string } | null>(null)
+function onNodeMenu({ event, node }: { event: MouseEvent | TouchEvent; node: Node<NodeData> }) {
+  const id = node.type === 'module' || node.type === 'boundary' || node.type === 'core' ? node.data?.moduleId : undefined
+  if (!id || desk.version) return
+  event.preventDefault()
+  const ev = event as MouseEvent
+  menu.value = { x: ev.clientX, y: ev.clientY, id }
+}
+function onMenu(key: string) {
+  const id = menu.value?.id
+  menu.value = null
+  if (key === 'design' && id) openNewDesign(id)
 }
 
 function onEdgeClick({ edge }: { edge: Edge<RouteEdgeData> }) {
@@ -186,6 +204,7 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       :only-render-visible-elements="false"
       @node-click="onNodeClick"
       @node-double-click="onNodeDoubleClick"
+      @node-context-menu="onNodeMenu"
       @edge-click="onEdgeClick"
       @pane-click="desk.select(null)"
       @node-mouse-enter="onNodeEnter"
@@ -205,6 +224,14 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
     </VueFlow>
 
     <div v-if="isEmpty" class="empty">这个模块没有子模块</div>
+    <SketchMenu
+      v-if="menu"
+      :x="menu.x"
+      :y="menu.y"
+      :items="[{ key: 'design', label: '在此设计', disabled: !canDesignAt(desk, menu.id) }]"
+      @choose="onMenu"
+      @close="menu = null"
+    />
     <div v-if="stage?.hiddenCurrent" class="play-hint">
       当前步骤在本层不可见（两端都在本层之外）：
       <button class="link" @click="desk.goTo(desk.run.frameLevel.value!)">到能看到它的层次</button>

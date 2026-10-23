@@ -5,12 +5,10 @@
  */
 import type { ShallowRef } from 'vue'
 import {
-  gridLayout,
   load,
   locateAll,
   referenceNodes,
   ROOT_MOUNT,
-  seedFromBaseline,
   shortName,
   type DesignEditEffects,
   type DesignEditOp,
@@ -323,14 +321,15 @@ export function createCommands(i: CommandInputs) {
   }
 
   /**
-   * F-11、F-12、X18：新建设计——底稿按挂载点从基线复制（新建时基线即打开的当前版本），初始位置用一次网格布局；创建后由呈现层打开它的草图。
+   * F-10、F-11、F-12、X18、05 裁决 3：新建设计——服务端写 base.commit = 仓库 HEAD，底稿按挂载点从那一版描述复制并初始布局一次
+   * （与「相对基线」同一份；没有 git 时从当前版本复制、省略 base.commit）；创建后由呈现层打开它的草图。挂载点不能是层。
    */
   function createDesign(input: { id: string; name: string; goal?: string; mount: string }): Promise<WriteOutcome> {
-    const base = loaded.value
-    if (!base) return Promise.resolve({ ok: false, error: '描述还没加载' })
-    const seed = seedFromBaseline(input.mount, base, { id: input.id })
-    const sketch: SketchDef = { ...seed, layout: gridLayout(seed) }
-    return i.sync.createDesign({ id: input.id, name: input.name, ...(input.goal ? { goal: input.goal } : {}), sketch })
+    const idx = loaded.value
+    if (!idx) return Promise.resolve({ ok: false, error: '描述还没加载' })
+    if (input.mount !== ROOT_MOUNT && idx.modules.get(input.mount)?.kind === 'layer')
+      return Promise.resolve({ ok: false, error: '挂载点不能是层：层的直接子模块画在根草图里（X9）' })
+    return i.sync.createDesign({ id: input.id, name: input.name, ...(input.goal ? { goal: input.goal } : {}), mount: input.mount })
   }
 
   /** X7a：离开前是否要确认 */

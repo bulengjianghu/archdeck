@@ -75,6 +75,22 @@ export function readModelAt(projectDir: string, rev: string): RawFile[] | null {
 }
 
 /**
+ * 05 裁决 3：新建设计的基线——项目描述目录所在仓库的 HEAD，且 HEAD 里有该项目的描述（system.yaml）；
+ * 不在 git 仓库内、还没有提交或 HEAD 不含描述时为 null（基线省略，相对基线退化为相对当前版本）
+ */
+export function headModel(projectDir: string): { commit: string; files: RawFile[] } | null {
+  const at = locate(projectDir)
+  if (!at) return null
+  try {
+    const commit = git(at.top, ['rev-parse', 'HEAD']).trim()
+    const files = readModelAt(projectDir, commit)
+    return files ? { commit, files } : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * E5、E6：提交版本的描述，附对比基线（作为 compare.current）：base 为另一个提交、`worktree`（当前版本），
  * 缺省为历史中更早的一个改动过描述的提交，没有时为当前版本。提交不存在返回 null。
  */

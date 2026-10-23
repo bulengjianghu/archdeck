@@ -93,7 +93,7 @@ modules:
     name: 设计面板
     parent: present.panel
     responsibility: 设计版本与提交版本的根层：设计目标与范围、定稿结论的 ADR 链接（E7）、本轮做了什么、待评审确认的问题、按实体分组的变更清单（点击跳转，删除项只列出；与提交版本共用 ChangeList）、各轮评审意见与轮次切换、「记录评审意见」（B2）；提交版本为提交说明与变更清单（E5、E6）。
-    codeRefs: [src/components/panel/DesignSection.vue, src/components/panel/CommitSection.vue, src/components/panel/ChangeList.vue]
+    codeRefs: [src/components/panel/DesignSection.vue, src/components/panel/DesignSketches.vue, src/components/panel/CommitSection.vue, src/components/panel/ChangeList.vue]
   - id: present.panel.content
     name: 内容组件
     parent: present.panel

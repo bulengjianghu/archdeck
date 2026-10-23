@@ -207,7 +207,7 @@ describe('编辑会话的纯函数（X7g、X7i、X20）', () => {
 function fakeWriter(over: Partial<ModelWriter> = {}) {
   const designs: { design: string; sketches: DesignSketchWrite[]; removed?: unknown[] }[] = []
   const saves: { sketch: SketchDef; baseHash: string }[] = []
-  const created: { id: string; sketch: SketchDef }[] = []
+  const created: { id: string; mount?: string; sketch?: SketchDef }[] = []
   const writer: ModelWriter = {
     ...NO_WRITER,
     saveSketch: async b => (saves.push(b), { ok: true, file: 'x', hash: 'k1' }),
@@ -456,12 +456,13 @@ describe('desk.edit：草图画布与 DeskState', () => {
     expect(desk.edit.baselineFallback.value).toBe(true)
   })
 
-  it('F-11、X18：新建设计按挂载点从基线复制一层（不带文字），带一次初始布局', async () => {
+  it('F-11、05 裁决 3：新建设计只发挂载点（底稿由服务端从基线复制）；挂载点不能是层', async () => {
     const { writer, created } = fakeWriter()
     const { desk } = await setup(undefined, writer)
     await desk.edit.createDesign({ id: 'n', name: 'N', mount: 'core.a' })
-    expect(created[0].sketch).toMatchObject({ id: 'n', mount: 'core.a', modules: [{ id: 'core.a.x' }, { id: 'core.a.y' }, { id: 'core.a.z' }] })
-    expect(Object.keys(created[0].sketch.layout!.modules!)).toContain('core.b')
+    expect(created[0]).toEqual({ id: 'n', name: 'N', mount: 'core.a' })
+    expect(await desk.edit.createDesign({ id: 'm', name: 'M', mount: 'core' })).toMatchObject({ ok: false })
+    expect(created).toHaveLength(1)
   })
 
   it('X11：设计版本的差异按血缘表述（versions.diff 带设计草图的 from）', async () => {

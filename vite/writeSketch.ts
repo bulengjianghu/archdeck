@@ -12,6 +12,10 @@ import { isMap, isScalar, isSeq, stringify, type Document, type Node } from 'yam
 import {
   designSketchPath,
   dropOrphanReferences,
+  gridLayout,
+  ROOT_MOUNT,
+  seedFromBaseline,
+  type RawFile,
   isSketchFile,
   load,
   loadModel,
@@ -213,12 +217,23 @@ ${sketchText(clean.sketch)}`,
   return { files, removed: gone.map(f => path.relative(root, abs(f)).split(path.sep).join('/')), dropped }
 }
 
-/** S-4、X18：新建设计——design.yaml（status: draft、base 取当前版本）与草图（底稿由调用方经 seedFromBaseline 给出，可多张），全部登记指纹 */
+/** 新建设计的选项：基线的来源（开发服务器为 git HEAD，readGit.headModel） */
+export interface CreateDesignOptions {
+  /** 05 裁决 3：仓库 HEAD 与那时的描述文件；没有（无 git、HEAD 不含描述）时为 null */
+  base?: (projectDir: string) => { commit: string; files: RawFile[] } | null
+}
+
+/**
+ * S-4、X18、05 裁决 3：新建设计——design.yaml（status: draft；base.commit = 仓库 HEAD，没有时省略）与草图，全部登记指纹。
+ * 给挂载点时底稿在这里按挂载点从基线（HEAD 那一版描述，没有时为当前版本）复制并初始布局一次——与「相对基线」读的是同一份；
+ * 也可由调用方直接给出草图（可多张）。
+ */
 export function createDesign(
   modelRoot: string,
   project: string,
-  req: { id: string; name: string; goal?: string; sketch?: SketchDef; sketches?: SketchDef[] },
+  req: { id: string; name: string; goal?: string; mount?: string; sketch?: SketchDef; sketches?: SketchDef[] },
   root: string,
+  opts: CreateDesignOptions = {},
 ): { file: string; files: string[] } {
   const dir = projectDir(modelRoot, project)
   const id = req?.id?.trim()
@@ -226,7 +241,17 @@ export function createDesign(
   if (!req.name?.trim()) throw new WriteError('设计名称不能为空')
   const designDir = path.join(dir, DESIGNS_DIR, id)
   if (fs.existsSync(designDir)) throw new WriteConflict(`设计已存在：${id}`)
-  const given = req.sketches?.length ? req.sketches : req.sketch ? [req.sketch] : []
+  const base = opts.base?.(dir) ?? null
+  const current = readModelDir(dir, root).files
+  let given = req.sketches?.length ? req.sketches : req.sketch ? [req.sketch] : []
+  if (!given.length && req.mount) {
+    const index = loadModel(base?.files ?? current).index
+    const m = index.modules.get(req.mount)
+    if (req.mount !== ROOT_MOUNT && (!m || m.kind === 'layer'))
+      throw new WriteError(m ? `挂载点不能是层：「${req.mount}」的直接子模块画在根草图里（X9）` : `基线里没有模块「${req.mount}」`)
+    const seed = seedFromBaseline(req.mount, index, { id })
+    given = [{ ...seed, layout: gridLayout(seed) }]
+  }
   if (!given.length) throw new WriteError('新建设计至少要有一张草图（挂载点与底稿）')
   const sketches = given.map(s => ({ ...s, id }))
   const mounts = sketches.map(s => s.mount)
@@ -234,14 +259,14 @@ export function createDesign(
   const ctx = context(dir, root)
   const set = Object.fromEntries(sketches.map(s => [s.mount, s]))
   for (const s of sketches) check(s, { ...ctx, file: designSketchPath(id, s.mount), design: set })
-  const system = load(readModelDir(dir, root).files.filter(f => f.path === 'system.yaml')).model.system
+  const system = load((base?.files ?? current).filter(f => f.path === 'system.yaml')).model.system
   const design = {
     design: {
       id,
       name: req.name.trim(),
       status: 'draft',
       ...(req.goal?.trim() ? { goal: req.goal.trim() } : {}),
-      base: { ...(system.source?.commit ? { commit: system.source.commit } : {}), generatedAt: system.source?.generatedAt ?? today() },
+      base: { ...(base ? { commit: base.commit } : {}), generatedAt: system.source?.generatedAt ?? today() },
     },
   }
   fs.mkdirSync(path.join(designDir, SKETCHES_DIR), { recursive: true })

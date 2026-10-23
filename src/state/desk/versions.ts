@@ -26,7 +26,7 @@ export interface VersionsInputs {
   designs: ShallowRef<DesignInfo[]>
   /** 改动过描述的最近提交（E5），新的在前 */
   commits: ShallowRef<ModelCommit[]>
-  baselines: ShallowRef<{ current?: Baseline; previous?: Baseline }>
+  baselines: ShallowRef<{ current?: Baseline; previous?: Baseline; base?: Baseline }>
   /** 打开的设计版本或提交版本；当前版本时为 undefined */
   version?: VersionRef
   /** DV-10：草图版本的「交给 AI」指令 */
@@ -65,9 +65,13 @@ export function createVersions({ state, index, designs, commits, baselines, vers
   const diff = computed<ModelDiff | null>(() =>
     index.value && baseline.value ? diffModels(baseline.value.index, index.value, lineage.value ? { lineage: lineage.value } : {}) : null,
   )
-  /** E4：设计起草时的基线提交与当前版本不一致——当前版本已按新代码重新生成 */
+  /**
+   * E4：设计起草时的基线与当前版本不一致——当前版本已按新代码重新生成。载荷带了基线那一版描述（草图版本，05 裁决 3：base.commit 为仓库提交）时
+   * 比两版描述的 source.commit；否则按旧口径把 base.commit 当作 source.commit 比
+   */
   const drift = computed(() => {
-    const was = design.value?.base?.commit
+    const b = baselines.value.base
+    const was = b ? b.index.model.system.source?.commit : design.value?.base?.commit
     const now = baselines.value.current?.index.model.system.source?.commit
     return !!was && !!now && was !== now
   })

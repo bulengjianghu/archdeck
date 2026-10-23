@@ -6,7 +6,7 @@ import type { ModuleTreeContext } from './types'
 
 defineOptions({ name: 'ModuleTreeNode' })
 const props = defineProps<{ id: string; depth: number; ctx: ModuleTreeContext }>()
-const emit = defineEmits<{ pick: [id: string]; drill: [id: string]; toggle: [id: string]; hover: [id: string | null] }>()
+const emit = defineEmits<{ pick: [id: string]; drill: [id: string]; toggle: [id: string]; hover: [id: string | null]; menu: [id: string, ev: MouseEvent] }>()
 
 const kids = computed(() => props.ctx.childrenOf(props.id))
 const open = computed(() => props.ctx.expanded.has(props.id))
@@ -34,6 +34,7 @@ const name = computed(() => (isRoot.value ? props.ctx.index.model.system.name : 
       @click="emit('pick', id)"
       @dblclick="emit('drill', id)"
       @mouseenter="emit('hover', id)"
+      @contextmenu.prevent="emit('menu', id, $event)"
     >
       <button v-if="kids.length" class="caret" :aria-label="open ? '折叠' : '展开'" @click.stop="emit('toggle', id)" @dblclick.stop>
         {{ open ? '▾' : '▸' }}
@@ -57,6 +58,7 @@ const name = computed(() => (isRoot.value ? props.ctx.index.model.system.name : 
         @drill="i => emit('drill', i)"
         @toggle="i => emit('toggle', i)"
         @hover="i => emit('hover', i)"
+        @menu="(i, ev) => emit('menu', i, ev)"
       />
     </ul>
   </li>

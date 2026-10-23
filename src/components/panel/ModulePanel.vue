@@ -13,6 +13,7 @@ import ModuleGovernance from './ModuleGovernance.vue'
 import ModuleEvolution from './ModuleEvolution.vue'
 import PortTriad from './PortTriad.vue'
 import ReviewSection from './ReviewSection.vue'
+import { canDesignAt, openNewDesign } from '../edit/designHere'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -38,6 +39,7 @@ function openChild(childId: string) {
       <div class="title">
         <h2>{{ m.name }}</h2>
         <button v-if="children.length && !isCurrentLevel" class="drill" @click="desk.drillInto(m.id)">进入 ⌄</button>
+        <button v-if="canDesignAt(desk, m.id)" class="drill" title="以这个模块为挂载点新建设计（F-10）" @click="openNewDesign(m.id)">在此设计</button>
       </div>
       <div class="badges">
         <code>{{ m.id }}</code>

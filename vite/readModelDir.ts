@@ -71,8 +71,8 @@ export interface ModelPayload {
   commits?: ModelCommit[]
   /** 打开的是设计版本时给出 */
   version?: VersionRef
-  /** 设计版本的对比基线：当前版本，以及上一轮（若有） */
-  compare?: { current: CompareSource; previous?: CompareSource }
+  /** 设计版本的对比基线：当前版本、上一轮（若有）、设计的基线（草图版本给出 base.commit 那一版时，05 裁决 3） */
+  compare?: { current: CompareSource; previous?: CompareSource; baseline?: CompareSource }
   /** X4：对本版本有约束力的设计草图——当前版本：已定稿、未归档的设计的；设计某一轮：本设计的 */
   sketches?: { design: string; file: RawFile }[]
   /** DV-10：草图版本的「交给 AI」指令 */
@@ -369,7 +369,11 @@ export function readSketchVersion(
     files: [...base, ...files, ...(stubs ? [stubs] : [])],
     designs: current.designs,
     version: { design, revision: SKETCH_REVISION },
-    compare: { current: { label: '当前版本', dir: current.dir, files: current.files } },
+    // 05 裁决 3：底稿与「相对基线」都读 base.commit 那一版；读不到时省略，相对基线退化为相对当前版本
+    compare: {
+      current: { label: '当前版本', dir: current.dir, files: current.files },
+      ...(baselineFiles ? { baseline: { label: `基线 ${commit!.slice(0, 8)}`, dir: `${current.dir}@${commit!.slice(0, 8)}`, files: baselineFiles } } : {}),
+    },
     sketchPrompt: sketchPrompt(
       design,
       sketches.map(s => ({ path: s.file.path, text: s.file.text })),

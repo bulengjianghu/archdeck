@@ -262,7 +262,7 @@ describe('X20、B7 按设计写回', () => {
 })
 
 describe('B6 新建设计', () => {
-  it('写 design.yaml（status: draft、base 取当前版本）与草图，两者登记指纹；没有轮次也能列出', () => {
+  it('写 design.yaml（status: draft；没有 git 时省略 base.commit）与草图，两者登记指纹；没有轮次也能列出', () => {
     const r = createDesign(
       modelRoot,
       'p',
@@ -275,12 +275,27 @@ describe('B6 新建设计', () => {
       name: '新设计',
       status: 'draft',
       goal: '一句话',
-      base: { commit: 'abc123', generatedAt: '2026-10-22' },
+      base: { generatedAt: '2026-10-22' },
     })
     expect(parse(read('designs/n/sketches/core.a.yaml')).sketch).toEqual({ id: 'n', mount: 'core.a', lifetime: 'until-implemented', modules: [] })
     const owned = readOwned(path.join(P, 'governance'))!.files
     expect(Object.keys(owned)).toEqual(expect.arrayContaining(['designs/n/design.yaml', 'designs/n/sketches/core.a.yaml']))
     expect(listDesigns(P).find(d => d.id === 'n')).toMatchObject({ status: 'draft', sketch: true, problems: [] })
+  })
+
+  it('05 裁决 3：给挂载点时 base.commit = 仓库 HEAD，底稿从 HEAD 那一版描述复制（不带文字）并初始布局；挂载点不能是层', () => {
+    const base = () => ({
+      commit: 'f00dcafe',
+      files: [...readModelDir(P, root).files, { path: 'modules/q.yaml', text: 'modules:\n  - { id: core.a.q, name: Q, parent: core.a, responsibility: q }\n' }],
+    })
+    createDesign(modelRoot, 'p', { id: 'm', name: 'M', mount: 'core.a' }, root, { base })
+    expect(parse(read('designs/m/design.yaml')).design.base).toEqual({ commit: 'f00dcafe', generatedAt: '2026-10-22' })
+    const seed = parse(read('designs/m/sketches/core.a.yaml')).sketch
+    expect(seed).toMatchObject({ id: 'm', mount: 'core.a', modules: [{ id: 'core.a.q', name: 'Q' }] })
+    expect(seed.modules[0].responsibility).toBeUndefined()
+    expect(Object.keys(seed.layout.modules)).toEqual(['core.a.q'])
+    expect(() => createDesign(modelRoot, 'p', { id: 'l', name: 'L', mount: 'core' }, root, { base })).toThrow(WriteError)
+    expect(() => createDesign(modelRoot, 'p', { id: 'l', name: 'L', mount: 'core.zz' }, root, { base })).toThrow(WriteError)
   })
 
   it('设计已存在（409）、ID 不合法、名称为空、底稿校验不过：拒绝', () => {
@@ -335,9 +350,13 @@ describe('草图版本的指纹、持久草图版本与改动摘要', () => {
       { path: 'intent/skeleton.yaml', text: SKELETON },
       { path: 'modules/a.yaml', text: 'modules:\n  - { id: core.a.x, name: X, parent: core.a }\n  - { id: core.a.y, name: Y, parent: core.a }\n' },
     ]
-    const prompt = readDesignRevision(modelRoot, 'p', 'd', 'sketch', root, { baseline: () => base })!.sketchPrompt!
+    const payload = readDesignRevision(modelRoot, 'p', 'd', 'sketch', root, { baseline: () => base })!
+    const prompt = payload.sketchPrompt!
     expect(prompt).toContain('## 草图（designs/d/sketches/core.a.yaml）')
     expect(prompt).toContain('## 相对基线的变更（按血缘）\n\n- 合并 X、Y 为 XY')
+    // 05 裁决 3：载荷带基线（底稿与「相对基线」读同一份）；读不到时省略
+    expect(payload.compare?.baseline?.files).toEqual(base)
+    expect(readDesignRevision(modelRoot, 'p', 'd', 'sketch', root, { baseline: () => null })!.compare?.baseline).toBeUndefined()
   })
 })
 

@@ -181,7 +181,7 @@ modules:
     responsibility: |
       草图版本的信息条上出现「编辑」；编辑态下信息条变为「编辑草图：<名>」、未保存标记 ●、「保存」「放弃」「校验」、撤销 / 重做（E-2）；「放弃」有未保存改动时二次确认（E-3）；保存成功后停留在编辑态，保存失败显示原因（文件已变时给「重新加载并重放改动」；重放有失败时列出失败的操作，并给「放弃本次改动」）。
       当前版本上「编辑骨架」打开持久草图 /i/skeleton 并进入编辑态（E-1）；版本切换旁的「新建设计」对话框：ID、名称、目标一句话、底稿（缺省「空草图」；另一选项「改骨架（定稿后晋升替换骨架）」，选中时说明后果：复制骨架的层与第二级并声明 supersedes，定稿实现后整份替换 intent/skeleton.yaml，而不是归档，S-4、L-3），创建后进入新设计的草图编辑。
-    codeRefs: [src/components/edit/EditBar.vue, src/components/edit/NewDesignDialog.vue, src/components/edit/EditDialog.vue, src/components/edit/useEditDialog.ts, src/components/edit/leave.ts]
+    codeRefs: [src/components/edit/EditBar.vue, src/components/edit/NewDesignDialog.vue, src/components/edit/designHere.ts, src/components/edit/EditDialog.vue, src/components/edit/useEditDialog.ts, src/components/edit/leave.ts]
 
 relations:
   # ── 呈现层：画布与面板只发意图 ──
@@ -196,6 +196,12 @@ relations:
   - {id: rel.ed.architect-bar, from: actor.architect, to: present.version.edit, type: calls, description: 编辑、保存、放弃、新建设计}
   - {id: rel.ed.bar-commands, from: present.version.edit, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: exit / save / discard / replayOnReload / createDesign / undo / redo}
   - {id: rel.ed.desk-view-commands, from: present.desk-view, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: 离开路由与关闭页面前问 canLeave（X7a）}
+  - {id: rel.v4.flow-design-here, from: present.canvas.flow, to: present.version.edit, type: calls, description: 节点右键「在此设计」打开新建设计对话框（designHere，F-10）}
+  - {id: rel.v4.flow-sketch-menu, from: present.canvas.flow, to: present.canvas.sketch, type: depends, description: 右键菜单组件 SketchMenu}
+  - {id: rel.v4.tree-design-here, from: present.nav-tree.modules, to: present.version.edit, type: calls, description: 模块树右键「在此设计」（designHere，F-10）}
+  - {id: rel.v4.module-panel-design-here, from: present.panel.module, to: present.version.edit, type: calls, description: 模块面板「在此设计」（designHere，F-10）}
+  - {id: rel.v4.sketch-design-sketches, from: present.canvas.sketch, to: present.panel.design, type: depends, description: 草图面板里的设计草图列表 DesignSketches（各张草图、点击切张、改骨架）}
+  - {id: rel.v4.sketch-layout-soft-limit, from: state.layout.sketch, to: model.intent.validate, type: depends, description: SKETCH_SOFT_LIMIT：层带头的超七标记（X13、X21）}
   # ── 模型层：意图内部 ──
   - {id: rel.ed.layers-locate, from: model.intent.edit.layers, to: model.intent.edit.locate, type: calls, description: 寻址与 ID 生成}
   - {id: rel.ed.modules-locate, from: model.intent.edit.modules, to: model.intent.edit.locate, type: calls, description: 寻址、ID 生成、子树范围}

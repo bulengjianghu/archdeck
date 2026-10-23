@@ -31,6 +31,8 @@ import { useEvolutionPrefs } from './display/useEvolutionPrefs'
 import EditBar from './edit/EditBar.vue'
 import EditDialog from './edit/EditDialog.vue'
 import SketchCanvas from './sketch/SketchCanvas.vue'
+import NewDesignDialog from './edit/NewDesignDialog.vue'
+import { closeNewDesign, newDesignRequest } from './edit/designHere'
 
 const props = defineProps<{ project: string; design?: string; revision?: string; commit?: string; base?: string; intent?: string }>()
 const router = useRouter()
@@ -308,6 +310,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     </aside>
     <GuideDialog v-if="guideOpen" @close="guideOpen = false" />
     <EditDialog />
+    <!-- F-10：「在此设计」（导航树、模型画布节点右键、属性面板）打开的新建设计对话框 -->
+    <NewDesignDialog v-if="newDesignRequest" :mount="newDesignRequest.mount" @close="closeNewDesign" />
   </div>
 </template>
 

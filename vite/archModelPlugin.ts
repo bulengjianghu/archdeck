@@ -23,7 +23,7 @@ import { readCodeDeps } from './readDeps'
 import { readHealth } from './readHealth'
 import { WriteError, appendAccepted, appendAllow, appendFeedback, appendIgnore, appendReviewed, archiveDesign } from './writeModel'
 import { SketchInvalid, WriteConflict, createDesign, saveDesignSketches, saveSketch, type SaveDesignRequest, type SaveSketchRequest } from './writeSketch'
-import { listModelCommits, readCommitVersion, readFileAtHead, readModelAt } from './readGit'
+import { headModel, listModelCommits, readCommitVersion, readFileAtHead, readModelAt } from './readGit'
 import { historyOptions, readCommitMessage, readSourceHistory } from './readHistory'
 import { loadModel } from '../src/model'
 import { LEDGER_PAGE_LIMIT, governanceDir, readBaseline, readLedger } from './governanceStore'
@@ -126,7 +126,7 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
                           : w[2] === 'sketches'
                             ? saveDesignSketches(modelRoot, project, decodeURIComponent(many![2]), parsed as SaveDesignRequest, root)
                             : w[2] === 'designs'
-                              ? createDesign(modelRoot, project, parsed as Parameters<typeof createDesign>[2], root)
+                              ? createDesign(modelRoot, project, parsed as Parameters<typeof createDesign>[2], root, { base: headModel })
                               : archiveDesign(modelRoot, project, body.design, root)
             json(res, out)
           } catch (e) {
