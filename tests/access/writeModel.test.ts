@@ -195,7 +195,7 @@ describe('Z1、Z6 确认记录（appendReviewed）', () => {
 })
 
 describe('X4 认可偏差 · X3 归档 / 晋升', () => {
-  const SKETCH = 'sketch:\n  id: d\n  modules:\n    - { id: a.x, name: X, parent: a }\n  relations:\n    - { id: rel.d.x-b, from: a.x, to: b, type: calls }\n'
+  const SKETCH = 'sketch:\n  id: d\n  mount: a\n  modules:\n    - { id: a.x, name: X }\n  relations:\n    - { id: rel.d.x-b, from: a.x, to: b, type: calls }\n'
   it('认可偏差追加到 design.accepted（键、理由、日期）；理由必填；重复的拒绝', () => {
     appendAccepted(modelRoot, 'p', 'd', 'missing-relation:rel.d.x-b', '经注入', root)
     const acc = parse(read('designs/d/design.yaml')).design.accepted
@@ -208,9 +208,9 @@ describe('X4 认可偏差 · X3 归档 / 晋升', () => {
 
   it('归档：没有草图、已归档、核验不一致都拒绝；一致后状态改为 implemented，为草图覆盖的模块写确认记录（来源 sketch:<设计>，Z6），指纹随之更新', () => {
     expect(() => archiveDesign(modelRoot, 'p', 'd', root)).toThrow('没有草图')
-    write('designs/d/sketch.yaml', SKETCH)
+    write('designs/d/sketches/a.yaml', SKETCH)
     // a.x 不存在：error，拒绝
-    expect(() => archiveDesign(modelRoot, 'p', 'd', root)).toThrow('不能归档：核验不一致（1 个错误')
+    expect(() => archiveDesign(modelRoot, 'p', 'd', root)).toThrow('不能归档：草图「a」核验不一致（1 个错误')
     write(
       'modules/m.yaml',
       'modules:\n  - { id: a, name: A, responsibility: x }\n  - { id: b, name: B, responsibility: y }\n  - { id: a.x, name: X, parent: a, responsibility: z }\n',
@@ -250,20 +250,23 @@ describe('X4 认可偏差 · X3 归档 / 晋升', () => {
   it('晋升：声明 supersedes 的草图整份替换 intent/<ID>.yaml（id、lifetime 改写，去掉 supersedes），设计同样归档', () => {
     write(
       'intent/skeleton.yaml',
-      'sketch:\n  id: skeleton\n  lifetime: persistent\n  closed: [a]\n  modules:\n    - { id: a, name: A, kind: layer, order: 1, abstraction: x, responsibility: x }\n    - { id: b, name: B, kind: layer, order: 2, abstraction: y, responsibility: y }\n',
+      'sketch:\n  id: skeleton\n  mount: root\n  lifetime: persistent\n  closed: [a]\n  modules:\n    - { id: a, name: A, kind: layer, order: 1, abstraction: x, responsibility: x }\n    - { id: b, name: B, kind: layer, order: 2, abstraction: y, responsibility: y }\n',
     )
     write(
-      'designs/d/sketch.yaml',
-      '# 新骨架\nsketch:\n  id: d\n  supersedes: skeleton\n  closed: [a]\n  modules:\n    - { id: a, name: A, kind: layer, order: 1, abstraction: x, responsibility: x }\n    - { id: b, name: B, kind: layer, order: 2, abstraction: y, responsibility: y }\n    - { id: a.x, name: X, parent: a }\n',
+      'designs/d/sketches/root.yaml',
+      '# 新骨架\nsketch:\n  id: d\n  mount: root\n  supersedes: skeleton\n  closed: [a]\n  modules:\n    - { id: a, name: A, kind: layer, order: 1, abstraction: x, responsibility: x, children: [{ id: a.x, name: X }] }\n    - { id: b, name: B, kind: layer, order: 2, abstraction: y, responsibility: y }\n  layout:\n    modules: { a: { x: 1, y: 2 } }\n',
     )
     write('modules/m.yaml', 'modules:\n  - { id: a.x, name: X, parent: a, responsibility: z }\n')
     const r = archiveDesign(modelRoot, 'p', 'd', root)
-    expect(r).toMatchObject({ outcome: 'promote', promoted: 'model/p/intent/skeleton.yaml' })
+    expect(r).toMatchObject({ outcome: 'promote', promoted: 'model/p/intent/skeleton.yaml', promotedAll: ['model/p/intent/skeleton.yaml'] })
     const text = read('intent/skeleton.yaml')
     expect(text).toContain('# 新骨架')
     expect(parse(text).sketch).toMatchObject({ id: 'skeleton', lifetime: 'persistent' })
     expect(parse(text).sketch.supersedes).toBeUndefined()
-    expect(parse(text).sketch.modules).toHaveLength(3)
+    expect(parse(text).sketch.modules).toHaveLength(2)
+    expect(parse(text).sketch.modules[0].children).toEqual([{ id: 'a.x', name: 'X' }])
+    // X15：晋升连 layout 一并替换
+    expect(parse(text).sketch.layout).toEqual({ modules: { a: { x: 1, y: 2 } } })
     expect(parse(read('designs/d/design.yaml')).design.status).toBe('implemented')
   })
 })

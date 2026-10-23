@@ -157,30 +157,25 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 |---|---|---|
 | `isSketchFile(path)` · `isOwnedFile(path)` | 契约小谓词：`intent/**/*.yaml` 与 `sketch.yaml` 是草图文件；人拥有的文件清单（草图、`rules.yaml`、`source-ignore.yaml`、`designs/*/design.yaml`、`reviewed.yaml`） | X1、X6 |
 | `flattenSketch(def)` | 草图定义展开为实体清单：模块（带父 ID：嵌套位置、`parent`，否则根）、关系、接口、数据结构，每条记住写了哪些字段 | X2 |
-| `sketchCheck(sketch, index, { persistent?, accepted? })` | 核验：先查与持久草图的矛盾（同一模块两边都写的 `kind` / `core` / `mayDependOn` / 父模块不一致，或往封闭子树下加直接子模块 → `sketch.contradiction`，`supersedes` 时跳过）；再逐项比对版本——缺模块 `sketch.missing-module`、封闭子树多出的直接子模块 `sketch.extra-child`、字段不一致 `sketch.field`（error）；关系没有对应 `sketch.missing-relation`（两端 + 类型，版本里两端落在草图两端子树内也算）、接口不存在 / `owner` 不同 `sketch.missing-interface` / `sketch.interface-owner`（warning）。每条偏差带稳定键 `<种类>:<实体 ID>`、所在实体与建议；`accepted` 里的 warning 降为 info 并带理由；结果 `SketchCheck { sketch, deviations, counts, consistent }`，`consistent` = 零 error 且提醒都已认可 | X2、X4 |
+| `sketchCheck(sketch, index, { persistent?, accepted?, design?, baseline? })` | 核验（相对当前版本，v2 口径见下文）：先查与持久草图的矛盾（同挂载点、未声明 `supersedes` → `sketch.contradiction`）；再逐项比对版本——缺模块 `sketch.missing-module`、封闭子树多出的直接子模块 `sketch.extra-child`、字段不一致 `sketch.field`（error）；关系没有对应 `sketch.missing-relation`（两端 + 类型，版本里两端落在草图两端子树内也算）、接口不存在 / `owner` 不同 `sketch.missing-interface` / `sketch.interface-owner`（warning）。每条偏差带稳定键 `<种类>:<实体 ID>`、所在实体与建议；`accepted` 里的 warning 降为 info 并带理由；结果 `SketchCheck { sketch, deviations, counts, consistent }`，`consistent` = 零 error 且提醒都已认可 | X2、X4 |
 | `parseDesignSketches(files)` · `checkSketches(index, designSketches, accepted?)` | 载荷附带的设计草图解析为草图实体（记所属设计）；对一个版本有约束力的草图逐张核验：版本自带的持久草图（`index.model.sketches` 里 `lifetime` 为 `persistent` 的）+ 载荷附带的设计草图，持久草图另作矛盾检查的依据；返回每张的 `SketchCheck`，`accepted` 按设计给出 | X3、X4 |
 | `archiveVerdict(check)` | 归档判定（输入为 `checkSketches` 给出的那张设计草图的核验结果）：核验一致才能归档；结局按 `supersedes` 为「晋升」、否则「归档」；持久草图不能归档 | X3 |
 | `sketchModules(sketch, index)` | 归档时写确认记录的对象：草图覆盖的、版本里存在的模块；记录本身（指纹、摘要）由确认层的 `reviewEntries` 按它的口径生成，经 `appendReviewed` 写入（`archiveDesign` 直接调用） | X3 |
 | `compareOwned(record, hashes)` | 指纹比对：已登记的文件内容不符或已不存在 → error `owned.changed`；人拥有的文件未登记 → warning `owned.unregistered`；没有记录 → warning `owned.none` | X6 |
 
-意图分三个子模块（ADR-0024）：**核验与生命周期**（`check.ts` · `lifecycle.ts` · `owned.ts`，即上表，已实现；矛盾检查另以 `sketchContradictions(sketch, persistent)` 导出，供草图校验共用）、**草图编辑**与**草图校验**（下表）。
+意图分三个子模块（ADR-0024、ADR-0025）：**核验与生命周期**（`check.ts` · `lifecycle.ts` · `owned.ts` · `lineage.ts` · `scope.ts`，即上表与下表的对比；矛盾检查另以 `sketchContradictions(sketch, persistent)` 导出，只比同挂载点，供草图校验共用）、**草图编辑**与**草图校验**（下表，格式 v2 已实现）。
 
 | 函数 | 做什么 | 规则 |
 |---|---|---|
-| `applyEdit(sketch, op, ctx)`（`edit/`） | 草图的纯函数编辑：输入草图定义、一个编辑操作 `EditOp`（加 / 删 / 排序层、改可依赖的层；加 / 删 / 改模块、核心与封闭；移动与改 ID；连 / 改 / 删关系；增删改接口；改元信息）与上下文（持久草图），输出新草图与影响 `{ created, renamed, removed }`，或拒绝原因；按操作族分 `locate`（寻址与 ID 生成）· `layers` · `modules` · `move` · `relations` · `seed` | X7b–X7e |
+| `applyEdit(sketch, op, ctx)`（`edit/apply.ts`） | 单张草图的纯函数编辑：输入草图定义、一个编辑操作 `EditOp`（层；模块；移动与改 ID；关系与接口；元信息；ADR-0025 起加挂载点原则 `setAbstraction`、位置 `moveNode` / `relabel` / `autoArrange`、引用 `addReference`）与上下文（持久草图、范围外可引用的模块 `known`），输出新草图与影响 `{ created, renamed, removed }`，或拒绝原因；按操作族分 `locate` · `layers` · `modules` · `move` · `relations` · `layout` · `seed` | X7b–X7e、X15、X19 |
+| `applyDesignEdit(sketches, op, ctx)`（`edit/design.ts`） | 设计级编辑：输入输出为一个设计的全部草图（按挂载点）；`DesignEditOp` 为单张操作（`edit`）或跨草图的**合并 / 拆分 / 降级 / 升级 / 移入 / 改 ID / 删除**；ID 变了一律前缀级联（子草图改挂载点与模块 ID，被改写的记 `from`，关系两端、接口 `owner`、`closed`、`layout` 的键随之改写），`from` 沿血缘求闭包；影响另列涉及的草图、改挂载点的草图、删掉与新出现的草图 | X7b、X7d、X7e、X7j、X7k、X11、X12 |
+| `seedFromBaseline(mount, baseline, { id })` · `deriveChildSketch(mount, baseline, sketches, { id })`（`edit/seed.ts`） | 底稿从基线复制挂载点的一层（结构字段与显式写在本层的关系，不带文字；根挂载 `supersedes` 骨架）；下一层草图不存在时由「基线子树 + 血缘」推出 | X18 |
+| `gridLayout` · `referenceNodes` · `dropOrphanReferences`（`edit/layout.ts`） | 网格布局（重新排列）；引用节点由关系派生；保存前丢掉没有关系的引用 | X15、X19 |
 | `idImpact(sketch, id, newParent, current?)` | 移动前的影响：草图内改写的 ID 与引用条数、当前版本里仍引用旧 ID 的实体条数 | X7d |
-| `seedSketch(id, from)` | 新建设计的底稿：空草图，或复制持久草图的层与第二级并声明 `supersedes` | B6 |
-| `validateSketch(sketch, { persistent, file })`（`validate.ts`） | 草图本身的校验：格式、ID 格式与唯一、前缀、引用完整（本草图 ∪ 持久草图）、不连祖先与后代、层依赖无环、与持久草图矛盾（调用 `sketchContradictions`）；error 拒绝保存。与 `sketchCheck` 的分工：校验只看草图本身，核验只看版本对草图，两边都有的只有矛盾检查（同一函数、同一稳定键） | X7f |
+| `validateSketch(sketch, { persistent, file, index?, design? })`（`validate.ts`） | 两级：`errors`（schema、ID、不在挂载点下、挂载点是层、文件名与 `mount` 不一致、引用不存在、缺名称、关系不在本层，拦保存）与 `warnings`（根草图层依赖成环、非根草图本层 `depends` 成环、同挂载点矛盾、待重连，拦交给 AI 与定稿）；`hints`（超七、没写职责）不进两级；另给 `pending`（待重连的关系） | X7f、X9、X13、X14、X16 |
+| `compareSketch(sketch, target, { mode, lineage? })` · `compareDesign(sketches, target, mode)` · `changeSummary`（`check.ts`） | 两个对比共用：按挂载点取对象版本的同一范围（`mountScope`，`scope.ts`），按血缘（`lineage.ts`：`sketchLineage`、`prefixMap`、`lineageKind`）读作新增 / 修改 / 合并 / 拆分 / 改 ID / 移动 / 删除；`baseline` 比结构与写了的文字，`current` 只比结构；全设计 = 各张并集，血缘按全设计算；摘要措辞「合并 A、B 为 N」 | X11、X12、X17 |
 
-
-**草图编辑 v2（ADR-0025，待实现）**——上表各函数的目标态：
-
-| 函数 | 变化 | 规则 |
-|---|---|---|
-| `applyEdit(sheets, op, ctx)` | 输入输出改为一个设计的全部草图（按挂载点），一个操作可改多张；新增操作族**合并 / 拆分**（X7j、X7k）、**降级 / 升级 / 移入**（X7d）、**位置**（移动节点、移动标签、重新排列的结果，X15）；改 ID 与移动共用跨草图的**前缀级联**（改文件名对应的 `mount`、后代 ID、关系两端、接口 `owner`、`closed`、`layout` 的键）并沿闭包写 `from`（X11、X12）；拆分、升级留下的关系标为待重连（X16） | X7b–X7k、X11、X12、X16 |
-| `seedFromBase(mount, base, sheets)` | 取代 `seedSketch`：新建草图与推出的下一层草图一律从设计的基线复制本层结构与显式写在本层的关系，不带文字；下一层不存在时由「基线子树 + `from` 收进来的模块」推出 | X18 |
-| `validateSketch(sketch, ctx)` | 两级：`errors`（格式、挂载点约束、引用、缺名称，拦保存）与 `warnings`（根草图层依赖成环、非根草图本层 `depends` 成环、同挂载点矛盾、待重连，拦交给 AI 与定稿）；超七单列为提示 | X9、X13、X14 |
-| `sketchCheck(sketch, target, …)` | 按挂载点取范围，矛盾只比同挂载点；对象可以是基线或当前版本（两个对比共用）；相对当前版本只比结构；结果带按血缘的变更分类（合并 / 拆分 / 改 ID / 移动 / 新增 / 删除） | X4、X11、X17 |
+`sketchCheck` 的 v2 口径：按挂载点取范围（封闭与「多出」只看挂载点与本层模块的直接子模块，本层模块的看挂在它上的草图），矛盾只比同挂载点（X10），缺模块的措辞按血缘，另报血缘的来源仍在原处（`sketch.not-applied`）与给了基线时「草图删掉、版本里还在」（`sketch.not-removed`）；`checkSketches` 按设计分组传全设计的血缘与可选的基线。`diffModels(base, target, { lineage })` 给了血缘时变更条目带 `kind: merged / split / renamed / moved` 与 `from` / `to`，被吸收的来源、级联改名的后代与只因血缘改了端点的关系不另列。
 
 ```ts
 interface SketchDeviation {

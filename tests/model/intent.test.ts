@@ -1,5 +1,5 @@
 /**
- * 意图：草图（docs/02-domain.md §2.21 X1–X6、B6）。按规则清单逐条穷举。
+ * 意图：草图（docs/02-domain.md §2.21 X1–X6、B6；格式 v2，ADR-0025）。按规则清单逐条穷举；v2 新增规则（X9–X20）在 sketch-v2.test.ts。
  */
 import { describe, expect, it } from 'vitest'
 import { isOwnedFile, isSketchFile, load, loadModel, type RawFile } from '../../src/model'
@@ -8,6 +8,7 @@ import { sampleFiles } from '../fixtures/sample'
 const SKETCH = `
 sketch:
   id: skeleton
+  mount: root
   lifetime: persistent
   closed: [ui]
   modules:
@@ -85,7 +86,7 @@ describe('X1 草图先入、其他文件只能补充', () => {
   })
 
   it('草图之间不算重定义：设计的草图在持久草图之后，对同一实体的不同值以后者为准（矛盾由核验报出）', () => {
-    const { index, issues } = loadModel(files({ 'sketch.yaml': 'sketch: { id: d1, modules: [{ id: ui, name: UI, kind: layer, order: 1, abstraction: 界面, mayDependOn: [] }] }' }))
+    const { index, issues } = loadModel(files({ 'sketches/root.yaml': 'sketch: { id: d1, mount: root, modules: [{ id: ui, name: UI, kind: layer, order: 1, abstraction: 界面, mayDependOn: [] }] }' }))
     expect(codes(issues)).not.toContain('sketch-redefined')
     expect(index.modules.get('ui')?.mayDependOn).toEqual([])
     expect(index.model.sketches.map(s => s.def.id)).toEqual(['skeleton', 'd1'])
@@ -99,16 +100,16 @@ describe('X1 草图先入、其他文件只能补充', () => {
   })
 
   it('草图写在别处时提醒 sketch-misplaced，仍照常加载', () => {
-    const { model, issues } = load(files({ 'modules/odd.yaml': 'sketch: { id: odd, modules: [{ id: x, name: X }] }' }))
+    const { model, issues } = load(files({ 'modules/odd.yaml': 'sketch: { id: odd, mount: ui, modules: [{ id: ui.x, name: X }] }' }))
     expect(codes(issues)).toEqual(['sketch-misplaced'])
     expect(model.sketches.map(s => s.def.id)).toEqual(['skeleton', 'odd'])
   })
 
-  it('isSketchFile：intent/*.yaml 与 sketch.yaml；isOwnedFile：草图、rules、source-ignore、design.yaml、reviewed.yaml（X6）', () => {
-    expect(['intent/skeleton.yaml', 'intent/core.yml', 'sketch.yaml', 'designs/d/sketch.yaml'].every(isSketchFile)).toBe(true)
-    expect(['modules/layers.yaml', 'intent/x/y.yaml', 'system.yaml'].some(isSketchFile)).toBe(false)
-    expect(['intent/skeleton.yaml', 'designs/d/sketch.yaml', 'rules.yaml', 'source-ignore.yaml', 'designs/d/design.yaml', 'reviewed.yaml'].every(isOwnedFile)).toBe(true)
-    expect(['modules/x.yaml', 'system.yaml', 'designs/d/r1/rules.yaml', 'actors.yaml'].some(isOwnedFile)).toBe(false)
+  it('isSketchFile：intent/*.yaml 与 sketches/<mount>.yaml；isOwnedFile：草图、rules、source-ignore、design.yaml、reviewed.yaml（X6）', () => {
+    expect(['intent/skeleton.yaml', 'intent/core.yml', 'sketches/root.yaml', 'designs/d/sketches/ui.view.yaml'].every(isSketchFile)).toBe(true)
+    expect(['modules/layers.yaml', 'intent/x/y.yaml', 'system.yaml', 'sketch.yaml', 'designs/d/sketch.yaml'].some(isSketchFile)).toBe(false)
+    expect(['intent/skeleton.yaml', 'designs/d/sketches/root.yaml', 'rules.yaml', 'source-ignore.yaml', 'designs/d/design.yaml', 'reviewed.yaml'].every(isOwnedFile)).toBe(true)
+    expect(['modules/x.yaml', 'system.yaml', 'designs/d/r1/rules.yaml', 'actors.yaml', 'designs/d/sketch.yaml'].some(isOwnedFile)).toBe(false)
   })
 })
 
@@ -118,113 +119,104 @@ import { archiveVerdict, checkSketches, parseDesignSketches, sketchCheck, sketch
 const DESIGN_SKETCH = `
 sketch:
   id: d1
+  mount: ui.view
   closed: [ui.view]
   modules:
-    - id: ui.view
-      parent: ui
-      name: View
-      core: true
-      children:
-        - { id: ui.view.list, name: List, responsibility: 列表 }
-        - { id: ui.view.detail, name: Detail }
-    - { id: core.api, parent: core, name: Api, kind: component }
+    - { id: ui.view.list, name: List, responsibility: 列表 }
+    - { id: ui.view.detail, name: Detail, kind: component }
   relations:
-    - { id: rel.d1.view-api, from: ui.view, to: core.api, type: calls }
-    - { id: rel.d1.api-view, from: core.api, to: ui.view, type: notifies }
+    - { id: rel.d1.list-core, from: ui.view.list, to: core, type: calls }
+    - { id: rel.d1.core-detail, from: core, to: ui.view.detail, type: notifies }
   interfaces:
-    - { id: if.api.run, name: run, owner: core.api }
-    - { id: if.core.stop, name: stop }
+    - { id: if.list.run, name: run, owner: ui.view.list }
+    - { id: if.detail.stop, name: stop, owner: ui.view.detail }
 `
 /** r1：按草图展开、但有几处偏差的版本 */
 const R1 = `
 modules:
-  - { id: ui.view.list, name: List, parent: ui.view, responsibility: 列表 }
-  - { id: ui.view.detail, name: Detail, parent: ui.view, responsibility: 详情 }
+  - { id: ui.view.list, name: List, parent: ui.view, responsibility: 列表的另一种说法 }
+  - { id: ui.view.detail, name: Detail, parent: ui.view, kind: package, responsibility: 详情 }
   - { id: ui.view.extra, name: Extra, parent: ui.view, responsibility: 多出来的 }
-  - { id: core.api, name: Api, parent: core, kind: package, responsibility: 接口 }
-  - { id: core.api.impl, name: Impl, parent: core.api, responsibility: 实现 }
+  - { id: core.impl, name: Impl, parent: core, responsibility: 实现 }
 relations:
-  - { id: rel.r1.list-impl, from: ui.view.list, to: core.api.impl, type: calls }
+  - { id: rel.r1.list-impl, from: ui.view.list, to: core.impl, type: calls }
 interfaces:
-  - { id: if.api.run, name: run, owner: core.api.impl }
+  - { id: if.list.run, name: run, owner: core.impl }
 `
-const design = (text = DESIGN_SKETCH): SketchEntity => parseDesignSketches([{ design: 'd1', file: { path: 'designs/d1/sketch.yaml', text } }])[0]
+const design = (text = DESIGN_SKETCH): SketchEntity => parseDesignSketches([{ design: 'd1', file: { path: 'designs/d1/sketches/ui.view.yaml', text } }])[0]
 const keys = (c: { deviations: { severity: string; key: string }[] }) => c.deviations.map(d => `${d.severity} ${d.key}`)
 
-describe('X4 核验 sketchCheck', () => {
-  it('只比草图写了的：缺模块、封闭子树多出子模块、字段不一致为错误；关系没有对应（深层提升算对应）、接口不存在 / owner 不同为提醒', () => {
+describe('X4 核验 sketchCheck（相对当前版本，按挂载点取范围）', () => {
+  it('结构不一致、封闭子树多出子模块为错误；关系没有对应（深层提升算对应）、接口不存在 / owner 不同为提醒；职责等文字不判', () => {
     const { index } = loadModel(files({ 'modules/r1.yaml': R1 }))
     const c = sketchCheck(design(), index)
-    expect(c).toMatchObject({ sketch: 'd1', design: 'd1', lifetime: 'until-implemented', consistent: false, counts: { error: 2, warning: 3, info: 0 } })
+    expect(c).toMatchObject({ sketch: 'd1', mount: 'ui.view', design: 'd1', lifetime: 'until-implemented', consistent: false, counts: { error: 2, warning: 3, info: 0 } })
     expect(keys(c)).toEqual([
-      'error field:core.api',
+      'error field:ui.view.detail',
       'error extra-child:ui.view.extra',
-      'warning missing-relation:rel.d1.api-view',
-      'warning interface-owner:if.api.run',
-      'warning missing-interface:if.core.stop',
+      'warning missing-relation:rel.d1.core-detail',
+      'warning interface-owner:if.list.run',
+      'warning missing-interface:if.detail.stop',
     ])
-    // ui.view.list 的职责文字不同、ui.view.detail 没写职责：文字字段不判；core.api 下多出 impl：没封闭的子树开放
-    expect(c.deviations.find(d => d.key === 'field:core.api')!.message).toContain('kind（草图 component，版本 package）')
+    expect(c.deviations.find(d => d.key === 'field:ui.view.detail')!.message).toContain('kind（草图 component，版本 package）')
     expect(c.deviations.find(d => d.key === 'extra-child:ui.view.extra')).toMatchObject({ rules: ['X2', 'X4'], target: { modules: ['ui.view.extra', 'ui.view'] } })
-    expect(c.deviations.find(d => d.key === 'missing-relation:rel.d1.api-view')!.at).toEqual({ file: 'designs/d1/sketch.yaml', path: 'sketch.relations.1' })
+    expect(c.deviations.find(d => d.key === 'missing-relation:rel.d1.core-detail')!.at).toEqual({ file: 'designs/d1/sketches/ui.view.yaml', path: 'sketch.relations.1' })
   })
 
   it('X5 草图有、版本没有的模块是 error，父模块变了也是 error', () => {
-    const { index } = loadModel(files({ 'modules/r1.yaml': 'modules:\n  - { id: core.api, name: Api, parent: ui, kind: component, responsibility: x }\n' }))
+    const { index } = loadModel(files({ 'modules/r1.yaml': 'modules:\n  - { id: ui.view.detail, name: Detail, parent: ui, kind: component, responsibility: x }\n' }))
     const c = sketchCheck(design(), index)
-    expect(keys(c).filter(k => k.startsWith('error'))).toEqual(['error missing-module:ui.view.list', 'error missing-module:ui.view.detail', 'error field:core.api'])
+    expect(keys(c).filter(k => k.startsWith('error'))).toEqual(['error missing-module:ui.view.list', 'error field:ui.view.detail'])
     expect(c.deviations[0]).toMatchObject({ rules: ['X4', 'X5'], target: { modules: ['ui.view'] } })
-    expect(c.deviations.find(d => d.key === 'field:core.api')!.message).toContain('父模块（草图 core，版本 ui）')
+    expect(c.deviations.find(d => d.key === 'field:ui.view.detail')!.message).toContain('父模块（草图 ui.view，版本 ui）')
   })
 
   it('一致：按草图展开的版本零偏差；认可的提醒降为 info 且不计入，error 不能认可', () => {
     const good = `
 modules:
   - { id: ui.view.list, name: List, parent: ui.view, responsibility: 列表 }
-  - { id: ui.view.detail, name: Detail, parent: ui.view, responsibility: 详情 }
-  - { id: core.api, name: Api, parent: core, kind: component, responsibility: 接口 }
+  - { id: ui.view.detail, name: Detail, parent: ui.view, kind: component, responsibility: 详情 }
+  - { id: core.impl, name: Impl, parent: core, responsibility: 实现 }
 relations:
-  - { id: rel.x1, from: ui.view.list, to: core.api, type: calls }
-  - { id: rel.x2, from: core.api, to: ui.view.detail, type: notifies }
+  - { id: rel.x1, from: ui.view.list, to: core.impl, type: calls }
+  - { id: rel.x2, from: core.impl, to: ui.view.detail, type: notifies }
 interfaces:
-  - { id: if.api.run, name: run, owner: core.api }
-  - { id: if.core.stop, name: stop, owner: core.api }
+  - { id: if.list.run, name: run, owner: ui.view.list }
+  - { id: if.detail.stop, name: stop, owner: ui.view.detail }
 `
     const { index } = loadModel(files({ 'modules/good.yaml': good }))
     expect(sketchCheck(design(), index)).toMatchObject({ consistent: true, counts: { error: 0, warning: 0, info: 0 }, deviations: [] })
     const { index: r1 } = loadModel(files({ 'modules/r1.yaml': R1 }))
     const accepted = [
-      { deviation: 'missing-relation:rel.d1.api-view', reason: '经注入', at: '2026-10-22' },
-      { deviation: 'field:core.api', reason: '想认可 error' },
+      { deviation: 'missing-relation:rel.d1.core-detail', reason: '经注入', at: '2026-10-22' },
+      { deviation: 'field:ui.view.detail', reason: '想认可 error' },
     ]
     const c = sketchCheck(design(), r1, { accepted })
     expect(c.counts).toEqual({ error: 2, warning: 2, info: 1 })
-    expect(c.deviations.find(d => d.key === 'missing-relation:rel.d1.api-view')).toMatchObject({ severity: 'info', accepted: { reason: '经注入', at: '2026-10-22' } })
-    expect(c.deviations.find(d => d.key === 'field:core.api')!.severity).toBe('error')
+    expect(c.deviations.find(d => d.key === 'missing-relation:rel.d1.core-detail')).toMatchObject({ severity: 'info', accepted: { reason: '经注入', at: '2026-10-22' } })
+    expect(c.deviations.find(d => d.key === 'field:ui.view.detail')!.severity).toBe('error')
   })
 
-  it('X4 与持久草图矛盾即 error（字段不一致、往封闭子树下加直接子模块），声明 supersedes 时跳过；X3 生命周期缺省', () => {
+  it('X4、X10 同挂载点矛盾：根挂载的设计草图不声明 supersedes skeleton 即 error，声明后跳过；不同挂载点互不比对；X3 生命周期缺省', () => {
     const { index } = loadModel(files({}))
     const skeleton = index.model.sketches[0]
     expect(sketchLifetime(skeleton)).toBe('persistent')
-    const bad = design('sketch:\n  id: d1\n  modules:\n    - { id: ui, name: UI, kind: layer, order: 1, abstraction: 界面, mayDependOn: [], responsibility: x }\n    - { id: ui.panel, parent: ui, name: Panel }\n')
-    expect(sketchLifetime(bad)).toBe('until-implemented')
-    const c = sketchCheck(bad, index, { persistent: [skeleton] })
-    expect(keys(c).filter(k => k.includes('contradiction'))).toEqual(['error contradiction:ui', 'error contradiction:ui.panel'])
-    expect(c.deviations[0].message).toContain('mayDependOn')
-    expect(c.deviations[1].message).toContain('封闭的「ui」')
-    const ok = design('sketch:\n  id: d1\n  supersedes: skeleton\n  modules:\n    - { id: ui, name: UI, kind: layer, order: 1, abstraction: 界面, mayDependOn: [], responsibility: x }\n    - { id: ui.panel, parent: ui, name: Panel }\n')
-    expect(sketchCheck(ok, index, { persistent: [skeleton] }).deviations.filter(d => d.code === 'sketch.contradiction')).toEqual([])
+    const root = (extra = '') =>
+      parseDesignSketches([{ design: 'd1', file: { path: 'designs/d1/sketches/root.yaml', text: `sketch:\n  id: d1\n  mount: root\n${extra}  modules:\n    - { id: ui, name: UI, kind: layer, order: 1, mayDependOn: [] }\n` } }])[0]
+    expect(sketchLifetime(root())).toBe('until-implemented')
+    expect(keys(sketchCheck(root(), index, { persistent: [skeleton] })).filter(k => k.includes('contradiction'))).toEqual(['error contradiction:root'])
+    expect(sketchCheck(root('  supersedes: skeleton\n'), index, { persistent: [skeleton] }).deviations.filter(d => d.code === 'sketch.contradiction')).toEqual([])
+    expect(sketchCheck(design(), index, { persistent: [skeleton] }).deviations.filter(d => d.code === 'sketch.contradiction')).toEqual([])
   })
 
   it('checkSketches：持久草图约束版本（封闭的第二级），设计草图附带认可；草图版本里打开的那张不算', () => {
     const { index } = loadModel(files({ 'modules/x.yaml': 'modules: [{ id: ui.extra, name: E, parent: ui, responsibility: x }]', 'modules/r1.yaml': R1 }))
-    const checks = checkSketches(index, [design()], new Map([['d1', [{ deviation: 'missing-interface:if.core.stop', reason: '后补' }]]]))
+    const checks = checkSketches(index, [design()], new Map([['d1', [{ deviation: 'missing-interface:if.detail.stop', reason: '后补' }]]]))
     expect(checks.map(c => c.sketch)).toEqual(['skeleton', 'd1'])
     expect(keys(checks[0])).toEqual(['error extra-child:ui.extra'])
-    expect(checks[1].deviations.find(d => d.key === 'missing-interface:if.core.stop')!.severity).toBe('info')
+    expect(checks[1].deviations.find(d => d.key === 'missing-interface:if.detail.stop')!.severity).toBe('info')
     // 草图版本：打开的那张（非持久）在版本里，不算活动草图
-    const { index: sv } = loadModel(files({ 'sketch.yaml': DESIGN_SKETCH }))
+    const { index: sv } = loadModel(files({ 'sketches/ui.view.yaml': DESIGN_SKETCH }))
     expect(checkSketches(sv, []).map(c => c.sketch)).toEqual(['skeleton'])
   })
 })
@@ -243,6 +235,6 @@ describe('X3 归档判定与确认记录', () => {
 
   it('确认记录的对象：草图覆盖的、版本里存在的模块（按草图顺序）；指纹与摘要由确认层算', () => {
     const { index } = loadModel(files({ 'modules/r1.yaml': R1 }))
-    expect(sketchModules(design(), index)).toEqual(['ui.view', 'ui.view.list', 'ui.view.detail', 'core.api'])
+    expect(sketchModules(design(), index)).toEqual(['ui.view.list', 'ui.view.detail'])
   })
 })

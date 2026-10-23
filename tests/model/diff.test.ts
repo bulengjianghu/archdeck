@@ -34,7 +34,7 @@ describe('模型层 · 版本对比 diffModels', () => {
   it('同一份模型没有变更', () => {
     const d = diffModels(base, loadModel(sampleFiles()).index)
     expect(d.changes).toEqual([])
-    expect(d.counts).toEqual({ added: 0, changed: 0, removed: 0 })
+    expect(d.counts).toEqual({ added: 0, changed: 0, removed: 0, merged: 0, split: 0, renamed: 0, moved: 0 })
   })
 
   it('按实体对齐，区分新增 / 修改 / 删除，并给出修改的字段', () => {
@@ -50,7 +50,7 @@ describe('模型层 · 版本对比 diffModels', () => {
     expect(d.module.get('infra.framework.pipeline')?.fields).toEqual(['responsibility']) // designNote 不算修改
     expect(d.interface.get('if.sm')?.fields).toEqual(['signature'])
     expect(d.relation.has('r7')).toBe(false) // 删除项只出现在 changes 里
-    expect(d.counts).toEqual({ added: 2, changed: 2, removed: 1 })
+    expect(d.counts).toEqual({ added: 2, changed: 2, removed: 1, merged: 0, split: 0, renamed: 0, moved: 0 })
   })
 
   it('关系的显示名是「起点 → 终点」，删除项取基线中的名字', () => {

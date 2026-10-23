@@ -62,7 +62,8 @@ test('SK-6–SK-11 主路径：新建设计（缺省空草图）→ 加层 → �
     await dialog.getByRole('button', { name: '创建并编辑草图' }).click()
     await expect(page).toHaveURL(/\/d\/zz-e2e-edit\/sketch/)
     await expect(page.locator('.edit-bar .title')).toContainText('编辑草图：E2E 编辑')
-    expect(parse(fs.readFileSync(path.join(box.dir, 'sketch.yaml'), 'utf8')).sketch).toEqual({ id: 'zz-e2e-edit', lifetime: 'until-implemented', modules: [] })
+    // 二期对话框的「空草图」在格式 v2 下落成空的根挂载草图（第三波换成「在此设计」）
+    expect(parse(fs.readFileSync(path.join(box.dir, 'sketches/root.yaml'), 'utf8')).sketch).toEqual({ id: 'zz-e2e-edit', mount: 'root', lifetime: 'until-implemented', modules: [] })
 
     // 加层：末尾的插入条
     const bands = page.locator('.vue-flow__node-band')
@@ -95,7 +96,7 @@ test('SK-6–SK-11 主路径：新建设计（缺省空草图）→ 加层 → �
     // 保存：整份写回，文件内容与操作一致
     await page.locator('.edit-bar').getByRole('button', { name: '保存' }).click()
     await expect(page.locator('.edit-bar .note')).toHaveText('已保存')
-    const saved = parse(fs.readFileSync(path.join(box.dir, 'sketch.yaml'), 'utf8')).sketch
+    const saved = parse(fs.readFileSync(path.join(box.dir, 'sketches/root.yaml'), 'utf8')).sketch
     expect(saved.modules).toEqual([
       {
         id: 'edge',
@@ -151,7 +152,9 @@ sketch:
     - { id: rel.deep-beta, from: edge.alpha.deep, to: edge.beta, type: calls }
 `
 
-test('X7d、X7g、X7i：改 ID（父不变的移动）级联到后代并确认；撤销 / 重做；文件在外部改动后重新加载并重放，保存保留注释', async ({ page }) => {
+// 第三波替换：这条用二期编辑态在一张草图里改三层深的 ID（edge.alpha.deep），格式 v2 下一张草图只画一个层次（X9），
+// 根挂载草图嵌到第三层即格式错误、保存被拒绝；草图画布的改 ID / 级联 / 重放由第三波的 E2E 覆盖
+test.skip('X7d、X7g、X7i：改 ID（父不变的移动）级联到后代并确认；撤销 / 重做；文件在外部改动后重新加载并重放，保存保留注释', async ({ page }) => {
   const box = sandbox('zz-e2e-mv')
   try {
     fs.mkdirSync(box.dir, { recursive: true })

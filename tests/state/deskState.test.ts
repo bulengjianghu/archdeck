@@ -57,7 +57,7 @@ describe('DeskState', () => {
     expect(desk.versions.revision.value).toBeNull()
     expect(desk.versions.sketchPrompt.value).toBe('# 按草图扩展：设计「d」')
     expect(desk.versions.baseline.value?.label).toBe('当前版本')
-    expect(desk.versions.diff.value?.counts).toEqual({ added: 0, changed: 0, removed: 0 })
+    expect(desk.versions.diff.value?.counts).toEqual({ added: 0, changed: 0, removed: 0, merged: 0, split: 0, renamed: 0, moved: 0 })
     expect(desk.write.canFeedback).toBe(false)
   })
 

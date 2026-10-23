@@ -6,13 +6,14 @@ import type { ShallowRef } from 'vue'
 import {
   idImpact,
   load,
-  seedSketch,
-  sketchLifetime,
+  ROOT_MOUNT,
+  seedFromBaseline,
   type EditEffects,
   type EditOp,
   type IdImpact,
   type ModelIndex,
   type RawFile,
+  type SketchDef,
   type SketchTarget,
 } from '@/model'
 import type { WriteOutcome } from '../../sync/writer'
@@ -26,11 +27,11 @@ export interface CommandInputs {
   loaded: ShallowRef<ModelIndex | null>
   files: ShallowRef<RawFile[]>
   /** 载荷里的草图文件与读取时的指纹（草图版本才有） */
-  sketch: ShallowRef<{ file: string; hash: string } | undefined>
+  sketch: ShallowRef<{ file: string; hash: string; path?: string } | undefined>
   /** 编辑目标；不是草图版本时为 undefined */
   target?: SketchTarget
-  /** 草图在载荷里的路径（设计的草图为 sketch.yaml） */
-  file?: string
+  /** 草图在载荷里的路径（设计的草图为主草图的 sketches/<mount>.yaml，载荷读到后才知道） */
+  file: () => string | undefined
   current: () => ModelIndex | null
   /** 当前层次的路径（跟随用） */
   levelPath: () => readonly string[]
@@ -44,15 +45,19 @@ export interface CommandInputs {
 export type EditOutcome = { ok: true } | { ok: false; reason: string }
 
 export function createCommands(i: CommandInputs) {
-  const { session, loaded, files, target, file } = i
+  const { session, loaded, files, target } = i
   const ctx = () => editContext(loaded.value!, session.value!.file, target?.kind === 'design')
   /** 载荷里读到的那份草图 */
-  const loadedSketch = () => (file ? load(files.value.filter(f => f.path === file)).model.sketches[0]?.def : undefined)
+  const loadedSketch = () => {
+    const file = i.file()
+    return file ? load(files.value.filter(f => f.path === file)).model.sketches[0]?.def : undefined
+  }
   const showDraft = () => i.show(session.value ? draftIndex(files.value, session.value.file, session.value.draft) : loaded.value)
   const follow = (effects: EditEffects, previousPath: readonly string[]) => i.dispatch({ type: 'edited', effects, previousPath })
 
   function enterEdit(): boolean {
     const def = loadedSketch()
+    const file = i.file()
     if (!target || !file || !def || !loaded.value || !i.sketch.value) return false
     session.value = session.value ?? begin(target, file, def, i.sketch.value.hash)
     if (!i.dispatch({ type: 'enterEdit', target })) return false
@@ -134,10 +139,16 @@ export function createCommands(i: CommandInputs) {
     return { failed: r.failed }
   }
 
-  /** S-4、L-3：新建设计——底稿缺省空草图；copy 为「改骨架（定稿后晋升替换骨架）」 */
+  /**
+   * S-4、L-3：新建设计（第三波替换为「在此设计」）——旧对话框的两种底稿都落成根挂载的草图：
+   * copy 为从当前版本复制根一层（X18，supersedes skeleton），empty 为空的根草图
+   */
   function createDesign(input: { id: string; name: string; goal?: string; base: 'empty' | 'copy' }): Promise<WriteOutcome> {
-    const skeleton = loaded.value?.model.sketches.find(s => s.def.id === 'skeleton' && sketchLifetime(s) === 'persistent')
-    const sketch = seedSketch(input.id, input.base === 'copy' && skeleton ? { persistent: skeleton } : 'empty')
+    const base = loaded.value
+    const sketch: SketchDef =
+      input.base === 'copy' && base
+        ? seedFromBaseline(ROOT_MOUNT, base, { id: input.id })
+        : { id: input.id, mount: ROOT_MOUNT, lifetime: 'until-implemented', modules: [] }
     return i.sync.createDesign({ id: input.id, name: input.name, ...(input.goal ? { goal: input.goal } : {}), sketch })
   }
 

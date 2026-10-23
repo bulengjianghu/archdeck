@@ -32,7 +32,7 @@ export interface EditInputs {
   version?: VersionRef
   loaded: ShallowRef<ModelIndex | null>
   files: ShallowRef<RawFile[]>
-  sketch: ShallowRef<{ file: string; hash: string } | undefined>
+  sketch: ShallowRef<{ file: string; hash: string; path?: string } | undefined>
   current: () => ModelIndex | null
   accepted: () => readonly AcceptedDeviation[]
   levelPath: () => readonly string[]
@@ -49,8 +49,8 @@ export function createEdit(i: EditInputs) {
     : isIntentVersion(i.version)
       ? { kind: 'persistent', id: i.version.intent }
       : undefined
-  /** 草图在载荷里的路径：设计的草图版本里为 sketch.yaml，持久草图为 intent/<ID>.yaml */
-  const file = target?.kind === 'design' ? 'sketch.yaml' : target ? `intent/${target.id}.yaml` : undefined
+  /** 草图在载荷里的路径：设计的草图版本里为主草图的 sketches/<mount>.yaml（载荷给出），持久草图为 intent/<ID>.yaml */
+  const file = () => (target?.kind === 'design' ? (i.sketch.value?.path ?? 'sketches/root.yaml') : target ? `intent/${target.id}.yaml` : undefined)
   const session = shallowRef<EditSession | null>(null)
   const derive = createDerive({
     session,

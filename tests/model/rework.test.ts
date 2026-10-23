@@ -314,11 +314,22 @@ describe('X4 草图偏差进返工清单', () => {
   it('一条偏差一个根因，类别 sketch；错误只能按草图改，提醒可认可；已认可的不进清单', () => {
     const files: RawFile[] = [
       { path: 'system.yaml', text: 'system: { id: s, name: S }' },
-      { path: 'intent/skeleton.yaml', text: 'sketch:\n  id: skeleton\n  closed: [ui]\n  modules:\n    - { id: ui, name: UI, kind: layer, order: 1, abstraction: a, responsibility: x }\n' },
-      { path: 'modules/m.yaml', text: 'modules:\n  - { id: ui.extra, name: E, parent: ui, responsibility: x }\n' },
+      {
+        path: 'intent/skeleton.yaml',
+        text: 'sketch:\n  id: skeleton\n  mount: root\n  closed: [ui]\n  modules:\n    - { id: ui, name: UI, kind: layer, order: 1, abstraction: a, responsibility: x }\n    - { id: core, name: Core, kind: layer, order: 2, abstraction: b, responsibility: y }\n',
+      },
+      { path: 'modules/m.yaml', text: 'modules:\n  - { id: ui.extra, name: E, parent: ui, responsibility: x }\n  - { id: ui.extra.a, name: A, parent: ui.extra, responsibility: a }\n' },
     ]
     const { index, issues } = loadModel(files)
-    const sketch = parseDesignSketches([{ design: 'd', file: { path: 'designs/d/sketch.yaml', text: 'sketch:\n  id: d\n  relations:\n    - { id: rel.d.a, from: ui, to: ui.extra, type: calls }\n' } }])
+    const sketch = parseDesignSketches([
+      {
+        design: 'd',
+        file: {
+          path: 'designs/d/sketches/ui.extra.yaml',
+          text: 'sketch:\n  id: d\n  mount: ui.extra\n  modules:\n    - { id: ui.extra.a, name: A }\n  relations:\n    - { id: rel.d.a, from: ui.extra.a, to: core, type: calls }\n',
+        },
+      },
+    ])
     const checks = checkSketches(index, sketch, new Map([['d', [{ deviation: 'missing-relation:rel.d.a', reason: '经注入' }]]]))
     const list = reworkList({ index, issues, sketches: checks })
     expect(list.byCategory.sketch).toBe(1)
@@ -330,7 +341,7 @@ describe('X4 草图偏差进返工清单', () => {
     // 未认可时提醒进清单，带认可的建议
     const open = reworkList({ index, issues, sketches: checkSketches(index, sketch) })
     const warn = open.items.find(i => i.id === 'sketch:d:missing-relation:rel.d.a')!
-    expect(warn).toMatchObject({ severity: 'warning', category: 'sketch', at: { in: 'description', file: 'designs/d/sketch.yaml' } })
+    expect(warn).toMatchObject({ severity: 'warning', category: 'sketch', at: { in: 'description', file: 'designs/d/sketches/ui.extra.yaml' } })
     expect(warn.actions[1]).toMatchObject({ kind: 'accept-deviation', file: 'designs/d/design.yaml' })
     expect(reworkMarkdown(open, 'T')).toContain('### [提醒] 设计「d」的草图偏差')
   })

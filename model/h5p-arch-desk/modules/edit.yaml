@@ -7,9 +7,11 @@ modules:
     parent: model.intent
     kind: component
     responsibility: |
-      一期已有的意图计算（草图修订后归这里）：草图与持久草图的矛盾检查 sketchContradictions（供草图校验共用）；核验 sketchCheck / checkSketches——按口径比对设计某一轮或当前版本得出偏差、应用认可偏差（X2、X4）；
+      意图计算（格式 v2，ADR-0025）：同挂载点矛盾 sketchContradictions（供草图校验共用，X4、X10）；两个对比共用的 compareSketch / compareDesign——按挂载点取对象版本的同一范围（mountScope，X9），
+      按血缘（from 指向基线、前缀映射，X11、X12）把差别读作新增 / 修改 / 合并 / 拆分 / 改 ID / 移动 / 删除，相对基线比结构与写了的文字、相对当前版本只比结构（X17），changeSummary 按血缘措辞；
+      相对当前版本的偏差 sketchCheck / checkSketches（缺模块、结构字段、封闭子树多出、血缘未落实、关系与接口的对应，应用认可偏差，X2、X4）；
       归档判定 archiveVerdict 与草图覆盖的模块 sketchModules（X3，交给确认层写确认记录）；人拥有文件的指纹比对 compareOwned（X6）。输入是草图定义与模型索引，不碰文件系统。
-    codeRefs: [src/model/intent/check.ts, src/model/intent/lifecycle.ts, src/model/intent/owned.ts]
+    codeRefs: [src/model/intent/check.ts, src/model/intent/lifecycle.ts, src/model/intent/owned.ts, src/model/intent/lineage.ts, src/model/intent/scope.ts]
   - id: model.intent.edit
     name: 草图编辑
     parent: model.intent
@@ -23,7 +25,7 @@ modules:
         其余结构问题（层依赖成环、与持久草图矛盾、封闭子树多了子模块）照常应用，交给校验即时报出，允许架构师经过中间不合法的状态（如先加后连）。
       - **保持作者的写法**：草图里的模块可以嵌套在 children 里，也可以平铺并写 parent；新模块跟随父模块的写法（父模块在本草图里就嵌进它的 children，否则平铺并写 parent），移动时按新父模块的写法重新安放，其余条目的顺序与形状不动，写回时未改动的节点才能保住注释。
       - **值进值出**：不修改输入，在副本上按操作族修改（structuredClone）；草图只有几十个实体，撤销栈存快照的代价可以忽略。
-    codeRefs: [src/model/intent/edit/index.ts, src/model/intent/edit/shared.ts]
+    codeRefs: [src/model/intent/edit/index.ts, src/model/intent/edit/apply.ts, src/model/intent/edit/shared.ts]
   - id: model.intent.edit.locate
     name: 草图寻址与 ID 生成
     parent: model.intent.edit
@@ -56,14 +58,25 @@ modules:
   - id: model.intent.edit.seed
     name: 草图底稿与元信息
     parent: model.intent.edit
-    responsibility: 新建设计时的底稿（S-4、L-3）：缺省为空草图（只有 id 与 lifetime）；另一选项「改骨架（定稿后晋升替换骨架）」——持久草图的层与第二级模块（含 closed、core、mayDependOn）复制进来并声明 supersedes 该持久草图；改草图元信息（P-5：lifetime、supersedes，持久草图的 ID 只读）。
+    responsibility: 底稿从基线复制（X18）seedFromBaseline：挂载点一层的 ID、名称、kind、core、closed 与显式写在本层的关系，不复制职责、接口、原则，根挂载 supersedes 骨架；下一层草图不存在时由「基线子树 + 血缘」推出 deriveChildSketch；改草图元信息（P-5：lifetime、supersedes）。
     codeRefs: [src/model/intent/edit/seed.ts]
+  - id: model.intent.edit.design
+    name: 设计级编辑
+    parent: model.intent.edit
+    responsibility: applyDesignEdit——输入输出为一个设计的全部草图（X7b）：合并（X7j）、拆分（X7k）、降级 / 升级 / 移入（X7d）、改 ID、删除（连同挂在它与后代上的草图，X7e），一律前缀级联（X12：子草图改挂载点与模块 ID、被改写的记 from），from 沿血缘求闭包（X11）；单张草图上的操作转给 applyEdit；影响里列出涉及的草图、改挂载点的草图与删掉的草图（设计级撤销的一步与写回层的改名据此）。
+    codeRefs: [src/model/intent/edit/design.ts]
+  - id: model.intent.edit.layout
+    name: 位置与引用节点
+    parent: model.intent.edit
+    responsibility: 布局节的编辑（X15）：拖动节点、拖动关系标签、重新排列（网格 gridLayout）；引用节点（X19）由关系派生、只在布局里记位置，addReference 放上画布，保存前 dropOrphanReferences 丢掉没有关系的；挂载点的原则 setAbstraction（X10）。
+    codeRefs: [src/model/intent/edit/layout.ts]
   - id: model.intent.validate
     name: 草图校验
     parent: model.intent
     kind: component
     responsibility: |
-      草图的即时校验，编辑态每次操作后与保存前（页面与写入端点）共用同一函数：
+      草图的两级校验（X14，ADR-0025）：格式错误拦保存、语义提示（层 / 本层依赖成环、同挂载点矛盾、待重连）拦交给 AI 与定稿、超七与没写职责只提示；
+      以下为二期写法，格式 v2 另加挂载点约束（X9：模块是挂载点的直接子节点、挂载点不能是层、文件名与 mount 一致、关系只写本层）。编辑态每次操作后与保存前（页面与写入端点）共用同一函数：
       格式（按 JSON Schema 检查草图的形状，未知字段即错）；ID 规则（格式、在本草图与持久草图中唯一、子模块 ID 以父 ID 为前缀，X5）；引用完整（parent、关系两端、接口 owner、关系的经由接口、closed 与 mayDependOn 的元素都要在本草图或持久草图中找到；草图之间不引用 AI 生成的实体）；
       关系不连祖先与后代（M6）；层依赖无环；与持久草图的矛盾（复用 model.intent.check 的矛盾检查，只有一份）。
       输出按实体定位的问题列表（error 拒绝保存，warning 只提示），不改草图。
@@ -297,6 +310,18 @@ relations:
   - {id: rel.ed.sketch-reader, from: access.writer.sketch, to: access.reader, type: depends, description: isProjectId、SKETCH_FILE、DESIGNS_DIR、readModelDir、sketchHash}
   - {id: rel.ed.sketch-store, from: access.writer.sketch, to: access.governance-store, type: calls, description: 更新指纹（touchOwned）、记拦截记录一行}
   - {id: rel.ed.sketch-intent, from: access.writer.sketch, to: model.intent, type: calls, description: sketchLifetime、sketchText}
+  # ── 草图格式 v2（ADR-0025）：设计级编辑、两个对比与多草图读写的依赖 ──
+  - {id: rel.v2.seed-check, from: model.intent.edit.seed, to: model.intent.check, type: depends, description: 底稿按挂载点取基线的一层（mountScope）、推出下一层草图按血缘（前缀映射）}
+  - {id: rel.v2.design-check, from: model.intent.edit.design, to: model.intent.check, type: depends, description: 已占用 ID 排除被血缘带走的基线模块（血缘）}
+  - {id: rel.v2.design-layout, from: model.intent.edit.design, to: model.intent.edit.layout, type: depends, description: 降级、升级写入下一层草图时取网格里的空位}
+  - {id: rel.v2.design-locate, from: model.intent.edit.design, to: model.intent.edit.locate, type: depends, description: 寻址、ID 格式与短名}
+  - {id: rel.v2.design-seed, from: model.intent.edit.design, to: model.intent.edit.seed, type: calls, description: 降级 / 升级的目标草图不存在时推出（X18）}
+  - {id: rel.v2.seed-locate, from: model.intent.edit.seed, to: model.intent.edit.locate, type: depends, description: 合并结果的子模块 ID 取来源短名}
+  - {id: rel.v2.layout-locate, from: model.intent.edit.layout, to: model.intent.edit.locate, type: depends, description: 本草图的模块与引用节点}
+  - {id: rel.v2.diff-check, from: model.diff, to: model.intent.check, type: depends, description: 版本对比按血缘读（lineageKind、前缀映射）}
+  - {id: rel.v2.lint-validate, from: access.lint, to: model.intent.validate, type: calls, description: 设计的各张草图逐张两级校验（X14）}
+  - {id: rel.v2.reader-loader, from: access.reader, to: model.pipeline.loader, type: calls, description: 读设计草图的挂载点与是否需要初始布局（load）}
+  - {id: rel.v2.writer-entry, from: access.writer.sketch, to: model.pipeline.entry, type: calls, description: 按设计写回时以当前版本为校验的引用范围（loadModel）}
 
 interfaces:
   - id: if.intent.applyEdit

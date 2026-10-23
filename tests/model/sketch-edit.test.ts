@@ -1,5 +1,6 @@
 /**
- * 草图的编辑与校验（docs/02-domain.md §2.21 X7b–X7f，ADR-0024）。按规则清单逐条穷举。
+ * 单张草图上的编辑操作族（docs/02-domain.md §2.21 X7b–X7e，ADR-0024）：二期编辑态仍在用的操作（第三波替换为草图画布后按 v2 收窄）。
+ * 草图按根挂载写（顶层为层，平铺的模块可写 parent）。v2 的两级校验、底稿、跨草图操作见 sketch-v2.test.ts。
  */
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
@@ -8,9 +9,6 @@ import {
   idImpact,
   load,
   loadModel,
-  seedSketch,
-  sketchCheck,
-  sketchContradictions,
   sketchText,
   validateSketch,
   type EditContext,
@@ -21,6 +19,7 @@ import {
 
 const SKELETON: SketchDef = {
   id: 'skeleton',
+  mount: 'root',
   lifetime: 'persistent',
   closed: ['ui'],
   modules: [
@@ -34,6 +33,7 @@ const own: EditContext = { persistent: [], designSketch: false }
 
 const DRAFT: SketchDef = {
   id: 'd',
+  mount: 'root',
   modules: [
     {
       id: 'core.a',
@@ -86,7 +86,7 @@ describe('X7b 编辑操作是纯函数，只拒绝不成立的操作', () => {
   it('结构问题照常应用、交给校验：层依赖成环可以先连上', () => {
     const r = ok(SKELETON, { op: 'setMayDependOn', id: 'core', layers: ['ui'] }, own)
     expect(r.sketch.modules![1].mayDependOn).toEqual(['ui'])
-    expect(validateSketch(r.sketch, { persistent: [], file: 'intent/skeleton.yaml' }).issues.map(i => i.code)).toContain('sketch.layer-cycle')
+    expect(validateSketch(r.sketch, { persistent: [], file: 'intent/skeleton.yaml' }).warnings.map(i => i.code)).toContain('sketch.layer-cycle')
   })
 
   it('新模块跟随父模块的写法：父在本草图里就嵌进 children，否则平铺写 parent', () => {
@@ -155,7 +155,7 @@ describe('X7d 移动与改 ID', () => {
   it('撤销 = 回到移动前的值（同一个操作的反向）', () => {
     const moved = ok(DRAFT, { op: 'moveModule', id: 'core.a', parent: 'ui' }).sketch
     const back = ok(moved, { op: 'moveModule', id: 'ui.a', parent: 'core' }).sketch
-    expect(new Set(load([{ path: 'sketch.yaml', text: sketchText(back) }]).model.modules.map(m => m.id))).toEqual(new Set(['core.a', 'core.a.x', 'core.b', 'core.a.y']))
+    expect(new Set(load([{ path: 'sketches/root.yaml', text: sketchText(back) }]).model.modules.map(m => m.id))).toEqual(new Set(['core.a', 'core.a.x', 'core.b', 'core.a.y']))
   })
 
   it('改 ID 只改短名 = 父不变的移动，同一级联；换父前缀被拒绝', () => {
@@ -205,72 +205,7 @@ describe('X7e 删除级联', () => {
   })
 })
 
-describe('X7f 草图校验', () => {
-  const v = (s: SketchDef) => validateSketch(s, { persistent, file: 'designs/d/sketch.yaml' })
-  const codes = (s: SketchDef) => v(s).issues.map(i => i.code)
-
-  it('合法草图：ok，没有 error', () => {
-    expect(v(DRAFT)).toEqual({ ok: true, issues: [] })
-  })
-
-  it('格式错误（schema）：不认识的字段', () => {
-    expect(codes({ ...DRAFT, modules: [{ id: 'core.q', parent: 'core', name: 'Q', bogus: 1 } as never] })).toEqual(['sketch.schema'])
-  })
-
-  it('ID 格式、重复、前缀', () => {
-    const bad: SketchDef = { id: 'd', modules: [{ id: 'core.a', parent: 'core', name: 'A', responsibility: 'a' }, { id: 'core.a', parent: 'core', name: 'A2', responsibility: 'a' }, { id: 'ui.z', parent: 'core', name: 'Z', responsibility: 'z' }] }
-    expect(codes(bad)).toEqual(expect.arrayContaining(['sketch.id-dup', 'sketch.id-prefix']))
-  })
-
-  it('引用完整（范围：本草图 ∪ 持久草图）、不连祖先与后代', () => {
-    const s: SketchDef = {
-      id: 'd',
-      modules: [{ id: 'core.a', parent: 'core', name: 'A', responsibility: 'a', children: [{ id: 'core.a.x', name: 'X', responsibility: 'x' }] }],
-      relations: [
-        { id: 'r1', from: 'core.a', to: 'ui.view', type: 'calls' },
-        { id: 'r2', from: 'core.a', to: 'gone', type: 'calls' },
-        { id: 'r3', from: 'core.a', to: 'core.a.x', type: 'calls' },
-      ],
-      closed: ['nope'],
-    }
-    const issues = v(s).issues
-    expect(issues.filter(i => i.code === 'sketch.ref').map(i => i.path)).toEqual(['sketch.relations.1', 'sketch.closed.0'])
-    expect(issues.find(i => i.code === 'sketch.ancestor')?.target).toEqual({ relation: 'r3' })
-  })
-
-  it('层依赖成环（本草图的写法优先）；可依赖的不是层', () => {
-    const s: SketchDef = { id: 'd', modules: [{ id: 'core', name: 'Core', kind: 'layer', order: 2, mayDependOn: ['ui'], responsibility: 'c' }] }
-    expect(codes(s)).toContain('sketch.layer-cycle')
-    expect(codes({ id: 'd', modules: [{ id: 'core', name: 'Core', kind: 'layer', order: 2, mayDependOn: ['ui.view'], responsibility: 'c' }] })).toContain('sketch.ref')
-  })
-
-  it('与持久草图矛盾：与核验同一函数、同一稳定键', () => {
-    const s: SketchDef = { id: 'd', modules: [{ id: 'ui.extra', parent: 'ui', name: 'E', responsibility: 'e' }] }
-    expect(codes(s)).toEqual(['sketch.contradiction'])
-    const entity = { def: s, file: 'designs/d/sketch.yaml', src: { file: 'designs/d/sketch.yaml', path: 'sketch' } }
-    const viaCheck = sketchCheck(entity, loadModel([]).index, { persistent }).deviations.filter(d => d.code === 'sketch.contradiction')
-    expect(viaCheck.map(d => d.key)).toEqual(sketchContradictions(entity, persistent).map(d => d.key))
-    expect(viaCheck[0].key).toBe('contradiction:ui.extra')
-    expect(v({ ...s, supersedes: 'skeleton' }).ok).toBe(true)
-  })
-
-  it('没写职责只是提醒，不拦保存', () => {
-    const r = v({ id: 'd', modules: [{ id: 'core.q', parent: 'core', name: 'Q' }] })
-    expect(r.ok).toBe(true)
-    expect(r.issues.map(i => [i.severity, i.code])).toEqual([['warning', 'sketch.empty']])
-  })
-})
-
-describe('B6 新建设计的底稿', () => {
-  it('缺省空草图；「改骨架」复制层与第二级（含 closed）并声明 supersedes', () => {
-    expect(seedSketch('n', 'empty')).toEqual({ id: 'n', lifetime: 'until-implemented', modules: [] })
-    const copy = seedSketch('n', { persistent: persistent[0] })
-    expect(copy).toMatchObject({ id: 'n', supersedes: 'skeleton', closed: ['ui'], modules: [{ id: 'ui', children: [{ id: 'ui.view' }] }, { id: 'core' }] })
-    expect(validateSketch(copy, { persistent, file: 'designs/n/sketch.yaml' }).ok).toBe(true)
-    copy.modules![0].children!.push({ id: 'ui.more', name: 'More', responsibility: 'm' })
-    expect(validateSketch(copy, { persistent, file: 'designs/n/sketch.yaml' }).ok).toBe(true)
-  })
-
+describe('sketchText', () => {
   it('sketchText 序列化后经同一条加载流水线读回同样的草图', () => {
     expect(parse(sketchText(DRAFT))).toEqual({ sketch: DRAFT })
   })
@@ -278,7 +213,7 @@ describe('B6 新建设计的底稿', () => {
 
 describe('X7b 设计草图里的层序', () => {
   it('有持久草图的层（只读）时，新加或移动的层取前后两层 order 的中点，不动别的层', () => {
-    const a = ok({ id: 'd' }, { op: 'addLayer', name: 'Mid', at: 1 })
+    const a = ok({ id: 'd', mount: 'root' }, { op: 'addLayer', name: 'Mid', at: 1 })
     expect(a.sketch.modules).toEqual([{ id: 'mid', name: 'Mid', kind: 'layer', order: 1.5 }])
     const b = ok(a.sketch, { op: 'addLayer', name: 'Last', at: 3 })
     expect(b.sketch.modules![1].order).toBe(3)

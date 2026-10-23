@@ -193,17 +193,23 @@ describe('§6.13 意图验收（X4、X8）：命令行 / MCP 的 sketch-check �
     const s = svc()
     expect(s.sketchCheck().checks.map(c => [c.sketch, c.consistent])).toEqual([['skeleton', true]])
     write('design.yaml', 'design:\n  name: 门禁\n  status: accepted\n  revisions: []\n')
+    write('sketches/root.yaml', 'sketch:\n  id: gate\n  mount: root\n  modules:\n    - { id: model, name: 模型层, kind: layer }\n')
     write(
-      'sketch.yaml',
-      'sketch:\n  id: gate\n  modules:\n    - { id: model.intent, parent: model, name: 意图 }\n    - { id: model.nowhere, parent: model, name: 不存在 }\n',
+      'sketches/model.intent.yaml',
+      'sketch:\n  id: gate\n  mount: model.intent\n  modules:\n    - { id: model.intent.check, name: 核验 }\n    - { id: model.intent.nowhere, name: 不存在 }\n',
     )
     const bad = s.sketchCheck(undefined, 'gate')
     expect(bad.target).toBe('当前版本')
-    // 骨架封闭了模型层的第二级：没声明 supersedes 就往下加模块既与持久草图矛盾，版本里也没有它
-    expect(bad.checks[0].deviations.map(d => d.key)).toEqual(['contradiction:model.nowhere', 'missing-module:model.nowhere'])
+    // 根挂载的设计草图与骨架同挂载点、没声明 supersedes 即矛盾（X4、X10）；挂在 model.intent 上的那张缺模块
+    expect(bad.checks.map(c => [c.mount, c.deviations.map(d => d.key)])).toEqual([
+      ['root', ['contradiction:root']],
+      ['model.intent', ['missing-module:model.intent.nowhere']],
+    ])
+    expect(bad.compare?.current.counts.added).toBe(1)
     expect(() => s.sketchArchive(undefined, 'gate')).toThrow('不能归档')
     expect(() => s.sketchCheck(undefined, 'nope')).toThrow('没有草图')
-    write('sketch.yaml', 'sketch:\n  id: gate\n  modules:\n    - { id: model.intent, parent: model, name: 意图 }\n')
+    fs.rmSync(path.join(design, 'sketches/root.yaml'))
+    write('sketches/model.intent.yaml', 'sketch:\n  id: gate\n  mount: model.intent\n  modules:\n    - { id: model.intent.check, name: 核验 }\n')
     const r = s.sketchArchive(undefined, 'gate')
     expect(r).toMatchObject({
       project: 'h5p-arch-desk',
@@ -216,6 +222,6 @@ describe('§6.13 意图验收（X4、X8）：命令行 / MCP 的 sketch-check �
       source: string
       hash: string
     }[]
-    expect(reviewed.filter(e => e.source === 'sketch:gate')).toEqual([expect.objectContaining({ module: 'model.intent', hash: expect.any(String) })])
+    expect(reviewed.filter(e => e.source === 'sketch:gate')).toEqual([expect.objectContaining({ module: 'model.intent.check', hash: expect.any(String) })])
   })
 })

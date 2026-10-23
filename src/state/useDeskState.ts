@@ -87,7 +87,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const loadedIndex = shallowRef<ModelIndex | null>(null)
   /** 载荷的原文与草图文件的指纹（编辑态加载草图、保存时比对用） */
   const payloadFiles = shallowRef<RawFile[]>([])
-  const payloadSketch = shallowRef<{ file: string; hash: string } | undefined>(undefined)
+  const payloadSketch = shallowRef<{ file: string; hash: string; path?: string } | undefined>(undefined)
   const state = shallowRef<ViewState>({ levelId: '', selection: null, hover: null, toggles: DEFAULT_TOGGLES(RELATION_TYPES), playback: null })
   /** 每次层次切换递增，界面据此决定是否适应画布 */
   const levelVersion = ref(0)

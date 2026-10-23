@@ -20,7 +20,7 @@ model/<项目>/
   source-ignore.yaml       忽略清单 sourceIgnore：不属于任何模块的源码文件（§3.7）
   rules.yaml               架构规则 rules：架构师的意图，AI 重新生成时不改动（§3.8）
   reviewed.yaml            确认记录 reviewed：架构师确认过哪些模块、确认时的指纹与摘要，AI 重新生成时不改动（§3.9）
-  designs/<设计>/          设计版本（§5）：sketches/<挂载点>.yaml（架构师的草图，每个挂载点一张；一期为单个 sketch.yaml）+ design.yaml + r<N>/（AI 展开的各轮，每轮的说明在 r<N>/revision.yaml），读取当前版本时跳过
+  designs/<设计>/          设计版本（§5）：sketches/<挂载点>.yaml（架构师的草图，每个挂载点一张）+ design.yaml + r<N>/（AI 展开的各轮，每轮的说明在 r<N>/revision.yaml），读取当前版本时跳过
   governance/              基线 baseline.json、拦截记录 ledger.jsonl、人拥有文件的指纹 owned.json，由命令行与 agent 接口写，不属于描述，读取时跳过（§4）
 ```
 
@@ -29,7 +29,7 @@ model/<项目>/
 | 拥有者 | 文件 | 页面 | 指纹 |
 |---|---|---|---|
 | AI（按代码生成） | `system.yaml`、`modules/`（骨架之下）、`actors.yaml`、`scenarios/`；设计版本各轮快照 `designs/<设计>/r<N>/`，含该轮说明 `revision.yaml`（E8） | 只读 | — |
-| 人（架构师、负责人） | 草图：`intent/*.yaml`（骨架等持久草图）、`designs/<设计>/sketches/*.yaml`（一期为 `designs/<设计>/sketch.yaml`）；`rules.yaml`（AI 重新生成时不改动，§3.8）；`source-ignore.yaml`（忽略项）；`designs/<设计>/design.yaml`（目标、状态、基线、ADR、认可偏差 `accepted`、评审意见 `revisions[].feedback`——不含每轮说明，E8）；`reviewed.yaml`（确认记录，§3.9） | 只追加：例外、忽略项、评审意见（该轮没有条目时新建，B2）、认可偏差；确认记录追加或按模块更新（Z1）；归档 / 晋升改设计状态、晋升时整份替换持久草图；草图在画布编辑后整份覆盖、新建设计（B6、X7）；其余由人编辑 | 记在 `governance/owned.json`：人改完后 `npm run arch -- own` 登记，页面写入自动更新，`lint:model` 不符即报错 `owned.changed` |
+| 人（架构师、负责人） | 草图：`intent/*.yaml`（骨架等持久草图）、`designs/<设计>/sketches/*.yaml`；`rules.yaml`（AI 重新生成时不改动，§3.8）；`source-ignore.yaml`（忽略项）；`designs/<设计>/design.yaml`（目标、状态、基线、ADR、认可偏差 `accepted`、评审意见 `revisions[].feedback`——不含每轮说明，E8）；`reviewed.yaml`（确认记录，§3.9） | 只追加：例外、忽略项、评审意见（该轮没有条目时新建，B2）、认可偏差；确认记录追加或按模块更新（Z1）；归档 / 晋升改设计状态、晋升时整份替换持久草图；草图在画布编辑后按设计整份覆盖、新建设计，级联改名与删除只限 `designs/<设计>/sketches/*`（B6、B7、X7）；其余由人编辑 | 记在 `governance/owned.json`：人改完后 `npm run arch -- own` 登记，页面写入自动更新，`lint:model` 不符即报错 `owned.changed` |
 | 命令行与 agent 接口 | `governance/` | 只读 | — |
 
 - 骨架只描述层和第二级模块；AI 只能用 `parent: <第二级 ID>` 往骨架之下挂子模块，对骨架里的模块只能补草图没写的字段，不得重定义已写的字段（X1，`lint:model` 报 `sketch-redefined`）。没有 `intent/skeleton.yaml` 的旧描述仍可把层写在 `modules/layers.yaml`（兼容期）。
@@ -37,7 +37,7 @@ model/<项目>/
 
 ## 2. 文件格式
 
-一个文件的顶层键都可选、可任意组合：`system`、`module`（单个模块，可带 `parent`）、`modules`、`relations`、`interfaces`、`dataStructures`、`actors`、`scenario` / `scenarios`、`sourceIgnore`、`sourceLimits`、`rules`、`reviewed`（确认记录，§3.9）、`sketch`（草图，只在 `intent/` 与 `designs/<设计>/sketches/`（一期为 `sketch.yaml`）里用，§3.10）。未知字段即格式错误，整份文件被跳过（M1）。
+一个文件的顶层键都可选、可任意组合：`system`、`module`（单个模块，可带 `parent`）、`modules`、`relations`、`interfaces`、`dataStructures`、`actors`、`scenario` / `scenarios`、`sourceIgnore`、`sourceLimits`、`rules`、`reviewed`（确认记录，§3.9）、`sketch`（草图，只在 `intent/` 与 `designs/<设计>/sketches/` 里用，§3.10）。未知字段即格式错误，整份文件被跳过（M1）。
 
 ```yaml
 # modules/infra.yaml —— 模块子树 + 本区域的关系
@@ -335,7 +335,7 @@ reviewed:
 
 草图是架构师的意图载体，也是思考的介质（02 §1.10，X1–X5、X9–X20，ADR-0023、ADR-0025）：一份人拥有的**局部描述**，**一张草图挂在一个模块下、只画一个层次**——挂载点的直接子模块、它们之间的关系、跨边界的关系、父模块的原则，加上架构师摆放的位置。没写的字段不约束；AI 必须沿用它的 ID 与父子关系，只在它之下展开。
 
-> 状态：格式 v2（`mount`、`principle`、`from`、`layout`、`sketches/` 目录）待实现（ADR-0025）；实现前读取侧只认一期格式（见本节末「一期格式」），一期的草图在 v2 实现后照常读取。
+> 状态：格式 v2 的读取、校验、编辑操作、两个对比与按设计写回已实现（模型层与接入层，ADR-0025）；草图画布与草图面板待实现。一期格式已迁移、不再读取（见本节末「迁移」）。
 
 #### 文件与位置
 
@@ -345,7 +345,7 @@ reviewed:
 | 其他持久草图 | `intent/<ID>.yaml` | 它所设计的模块 ID |
 | 设计的草图 | `designs/<设计>/sketches/<mount>.yaml`：文件名 = 挂载点 ID，根挂载为 `root.yaml`；一个设计可有多张，每个挂载点至多一张 | 与文件名一致 |
 
-全部人拥有，纳入指纹门禁（§4）。一期的 `designs/<设计>/sketch.yaml` 照常读取（视为该设计唯一的一张、按一期口径核验）。
+全部人拥有，纳入指纹门禁（§4）。
 
 #### 示例
 
@@ -356,7 +356,7 @@ sketch:
   mount: state.desk              # 挂载点：模块 ID 或 root（X9）；不能是层
   lifetime: until-implemented    # persistent / until-implemented（设计的草图缺省）
   # supersedes: <持久草图 ID>    # 同挂载点已有持久草图时必须声明（X4、X10）；本例没有
-  principle: |                   # 父模块（挂载点）的原则：对内的一面，属本草图（X10）
+  abstraction: |                 # 父模块（挂载点）的原则：对内的一面，属本草图（X10）；字段名与层的 abstraction 一致
     协调者只持有一个值；编辑会话与浏览会话分开，互不改写。
   closed: [state.desk]           # 可选：挂载点的直接子模块集合必须与本草图相等（X2）
   modules:                       # 必须是挂载点的直接子节点：ID 以 `state.desk.` 为前缀，不写 parent、不嵌套 children（X9）
@@ -399,7 +399,7 @@ sketch:
     - id: present
       kind: layer
       order: 1
-      abstraction: …             # 根挂载时，各层的 abstraction / includes / excludes / mayDependOn 就是「原则」，不写 principle
+      abstraction: …             # 根挂载时，各层的 abstraction / includes / excludes / mayDependOn 就是「原则」，草图顶层不写 abstraction
       children:                  # 根挂载是唯一允许嵌套的情形：层下嵌套第二级模块
         - { id: present.version, name: 版本切换与设计信息条, kind: subsystem }
 ```
@@ -408,8 +408,8 @@ sketch:
 
 | 字段 | 含义 | 规则 |
 |---|---|---|
-| `mount` | 挂载点：模块 ID 或 `root`；不能是层。没有 `mount` 的草图按一期口径读取 | X9 |
-| `principle` | 父模块（挂载点）对内的原则，加载为挂载点模块的 `principle`；根挂载时不用，改用各层的 `abstraction` 等字段 | X10 |
+| `mount` | 挂载点：模块 ID 或 `root`；不能是层；必填 | X9 |
+| `abstraction` | 父模块（挂载点）对内的原则，加载为挂载点模块的 `abstraction`（与层的抽象原则同一字段，非层模块的 `abstraction` 只由挂在它身上的草图写）；根挂载时不用，改用各层的 `abstraction` 等字段（写了即格式错误） | X10 |
 | `modules[]` | 挂载点的直接子模块（根挂载：层及层的直接子模块）；字段同普通模块，可带 `from`；不写 `parent`（由 `mount` 推出），不嵌套 `children`（根挂载的层除外） | X9 |
 | `modules[].from` | 血缘：这个模块由哪些**基线**模块而来（合并、拆分、改 ID、移动）；全新模块不写 | X11 |
 | `relations[]` | 显式写在本层的关系：两端都是本草图的模块，或一端是本草图的模块、另一端是范围外的模块（外部端点画成引用节点，不另存）；两端都在范围外的关系不写 | X9、X19 |
@@ -450,20 +450,22 @@ sketch:
 
 #### 加载、核验与写回
 
-- **加载**：草图先于其他文件进入 Loader；其他文件对草图实体只能补充（往下挂子模块、补草图没写的字段），不能重定义（X1）。`mount` 推出模块的 `parent`；`principle` 即挂载点模块的 `principle` 字段（对内的一面，其他文件不得重定义）；`from`、`layout` 不进模型索引（它们是设计信息，不是被描述系统的事实）。
-- **校验**（X14）：格式错误拦保存——schema、ID 格式与重复、模块不是挂载点的直接子节点、引用不存在、缺名称；语义提示拦「交给 AI」与定稿——根草图的层依赖成环、非根草图的本层 `depends` 成环、同挂载点与持久草图矛盾、待重连（X16）。
+- **加载**：草图先于其他文件进入 Loader；其他文件对草图实体只能补充（往下挂子模块、补草图没写的字段），不能重定义（X1）。`mount` 推出模块的 `parent`；草图的 `abstraction` 即挂载点模块的 `abstraction` 字段（对内的一面，其他文件写了不同的值即 `sketch-redefined`；挂载点不在描述里时提醒 `sketch-mount-missing`）；`from`、`layout` 不进模型索引（它们是设计信息，不是被描述系统的事实）。
+- **校验**（X14）：格式错误拦保存——schema、ID 格式与重复、模块不是挂载点的直接子节点、引用不存在、缺名称；语义提示拦「交给 AI」与定稿——根草图的层依赖成环、非根草图的本层 `depends` 成环、同挂载点与持久草图矛盾、待重连（X16）。超七（X13）与没写职责只提示（hint），不进两级。
 - **核验**（X4、X17）：同一个函数做两个对比——相对基线（我改了什么）与相对当前版本（实现还差什么）；按挂载点取对象版本的同一范围比对，按血缘识别合并 / 拆分 / 改 ID / 移动；相对当前版本只比结构（模块、父子、`kind`、`core`、`closed`、关系两端与类型、接口与 `owner`），职责等文字只参与相对基线。`npm run arch -- sketch-check [--design <设计>]` 对设计逐张报告，与页面问题页签「草图偏差」同一份结果。
-- **写回**（B6、X20）：在草图画布上编辑，保存整个设计——改过的草图整份写回（含 `layout`），会话里推出并改过的草图作为新文件写出；写回用 YAML 文档模型合并，**注释只在未改动的节点上保留**；保存时任一文件已被外部改动则整次拒绝（X7i）。手写与画布编辑可以交替。
+- **写回**（B6、X20）：在草图画布上编辑，保存整个设计——改过的草图整份写回（含 `layout`），会话里推出并改过的草图作为新文件写出；写回用 YAML 文档模型合并，**注释只在未改动的节点上保留**；保存时任一文件已被外部改动则整次拒绝（X7i）；没有关系的引用节点保存时丢弃（X19）。级联改名（X12）写到新文件名并删旧文件，删带下一层草图的模块（人确认后）删子草图文件——只限 `designs/<设计>/sketches/*`，永不动 `intent/*`，每个文件照记拦截记录（B7）。手写与画布编辑可以交替。
 
-#### 一期格式（兼容）
+#### 迁移
 
-ADR-0023 / ADR-0024 时期的草图没有 `mount`、`principle`、`from`、`layout`：设计的草图是 `designs/<设计>/sketch.yaml`（ID 即设计 ID），模块可用 `parent` 挂在骨架之下、也可在 `modules` 里嵌套 `children`，范围由出现的实体决定、可跨多个层次（如 `designs/phase2-dynamic/sketch.yaml`）。读取、核验（与持久草图的矛盾按整份比）、归档照常；在页面上打开时是只读的草图版本，不进草图画布。新的设计一律写 v2。
+- 一期格式（ADR-0023 / ADR-0024：没有 `mount`，`designs/<设计>/sketch.yaml`，可跨层次嵌套）**不再读取**：仓库里的一期草图已按挂载点机械拆成 v2（`designs/phase2-dynamic/`、`designs/sketch-editor/` 的 `sketches/`；`sketch-v2` 改为根挂载的 `root.yaml` 与 `present.panel.yaml`），骨架加了 `mount: root`。
+- 唯一的读取例外：`intent/` 下没有 `mount`、顶层全是层的草图按根挂载读取，并提醒 `sketch-legacy-mount`——历史提交、设计基线（`base.commit`）与各轮快照里的骨架都是这个形状，改不了。其余没有 `mount` 的草图是格式错误，整份跳过。
+- 草图版本（页面上把一个设计的草图当版本打开）载荷为 `system.yaml` + 持久草图 + 该设计的各张草图（`sketches/<mount>.yaml`）+ `references.yaml`（草图引用、草图里没有的外部模块，取自当前版本，只读，X19），自成一份可加载的描述。
 
 ## 4. 校验与提交
 
 ```bash
 npm run lint:model
-npm run arch -- own            # 人改完 intent/、sketch.yaml、rules.yaml、source-ignore.yaml、design.yaml、reviewed.yaml 后登记指纹（X6）
+npm run arch -- own            # 人改完 intent/、designs/*/sketches/、rules.yaml、source-ignore.yaml、design.yaml、reviewed.yaml 后登记指纹（X6）
 ```
 
 - 必须 0 个错误；提醒逐条处理：缺职责要补；引用其他区域尚未定义的接口 / 数据结构时可暂留；源码归属警告按 §3.7 处理；场景证据文件不存在（`scenario.evidence`）按 §3.6 改正路径。
@@ -482,7 +484,7 @@ npm run arch -- baseline --project <项目>   # 写 model/<项目>/governance/ba
 
 ```text
 model/<项目>/designs/<设计 ID>/
-  sketches/<挂载点>.yaml         架构师的草图（§3.10，人拥有），每个挂载点一张；版本切换中排在 r1 之前（一期为单个 sketch.yaml）
+  sketches/<挂载点>.yaml         架构师的草图（§3.10，人拥有），每个挂载点一张；版本切换中排在 r1 之前
   design.yaml                    人拥有：目标、状态、基线、ADR、认可偏差、各轮的评审意见
   r1/   system.yaml、intent/、modules/…、revision.yaml   第 1 轮：AI 从当前版本完整复制后按草图扩展；revision.yaml 为本轮说明（AI 拥有）
   r2/   …                        第 2 轮：从上一轮完整复制后按评审意见修改
@@ -537,5 +539,5 @@ revision:
 3. 没写的字段由你展开：职责、实现原理、接口签名、数据结构、更深层的子模块与关系，都按 §3 的生成规范写全。
 4. ID 纪律（X5）：草图里的 ID 由架构师起，你只能沿用；你新增的实体只能挂在草图实体之下，ID 以其为前缀（如草图有 `model.scenario`，你可以加 `model.scenario.plan`，不能加 `model.playback`）；不得重命名、移动草图里出现过的实体，要改就把问题写进 `design.yaml` 的 `questions` 交给架构师改草图。
 5. 从当前版本整份复制为新一轮，只改要改的；每个新增或修改的实体写 `designNote`；本轮说明与待确认问题写在新一轮的 `revision.yaml`，不改 `design.yaml`。
-6. 按血缘执行变更摘要（X11、X12）：合并——来源模块降为合并结果的子模块，它们的整棵子树、关系两端、接口 `owner`、代码落点换成新前缀；拆分——原模块的子模块、接口与代码落点按新模块的职责分配，分配不了的写进 `questions`；改 ID 与移动——同样换前缀。草图的 `principle` 是挂载点模块对内的原则，展开它的子模块时遵守。
+6. 按血缘执行变更摘要（X11、X12）：合并——来源模块降为合并结果的子模块，它们的整棵子树、关系两端、接口 `owner`、代码落点换成新前缀；拆分——原模块的子模块、接口与代码落点按新模块的职责分配，分配不了的写进 `questions`；改 ID 与移动——同样换前缀。草图的 `abstraction` 是挂载点模块对内的原则，展开它的子模块时遵守。
 7. 起草后运行 `npm run lint:model` 与 `npm run arch -- sketch-check --design <设计>`：零 error 才算完成；提醒级偏差如确有理由，写进 `questions` 由架构师认可，不要自己改草图。

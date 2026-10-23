@@ -8,9 +8,10 @@ import { DEFAULT_TOGGLES, keyIntent, leaveGuard, transition, type ViewState } fr
 const { index } = loadModel([
   { path: 'system.yaml', text: 'system: { id: sys, name: S }' },
   {
-    path: 'sketch.yaml',
+    path: 'sketches/root.yaml',
     text: `sketch:
   id: d
+  mount: root
   modules:
     - { id: core, name: Core, kind: layer, order: 1, children: [{ id: core.a, name: A, children: [{ id: core.a.x, name: X }] }, { id: core.b, name: B }] }
   relations:

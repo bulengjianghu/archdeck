@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /** 草图元信息（P-5、L-2、L-4）：ID（持久草图只读）、lifetime、supersedes（下拉持久草图）、封闭的子树；未保存改动的摘要；声明 supersedes 时与被替换持久草图的差异 */
 import { computed } from 'vue'
-import type { SketchLifetime } from '@/model'
+import { CHANGE_KIND_LABELS, type SketchLifetime } from '@/model'
 import { useDesk } from '@/state/inject'
 
 const emit = defineEmits<{ notice: [msg: string] }>()
@@ -9,7 +9,7 @@ const desk = useDesk()
 const e = desk.edit
 const d = computed(() => e.draft.value)
 const design = computed(() => e.target?.kind === 'design')
-const KIND = { added: '新增', changed: '修改', removed: '删除' } as const
+const KIND = CHANGE_KIND_LABELS
 const done = (x: { ok: boolean; reason?: string }) => !x.ok && emit('notice', x.reason ?? '')
 const meta = (patch: { lifetime?: SketchLifetime; supersedes?: string | null }) => done(e.edit({ op: 'setMeta', patch }))
 </script>

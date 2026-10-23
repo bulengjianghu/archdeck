@@ -14,18 +14,19 @@ const SKELETON = {
   path: 'intent/skeleton.yaml',
   text: `sketch:
   id: skeleton
+  mount: root
   lifetime: persistent
   closed: [core]
   modules:
     - { id: core, name: Core, kind: layer, order: 1, responsibility: c, children: [{ id: core.a, name: A, responsibility: a }] }
 `,
 }
-const SKETCH = { path: 'sketch.yaml', text: 'sketch:\n  id: d\n  modules:\n    - { id: core.a.x, parent: core.a, name: X, responsibility: x }\n' }
+const SKETCH = { path: 'sketches/core.a.yaml', text: 'sketch:\n  id: d\n  mount: core.a\n  modules:\n    - { id: core.a.x, name: X, responsibility: x }\n' }
 const def = (): SketchDef => load([SKETCH]).model.sketches[0].def
 const ctx = { persistent: load([SKELETON]).model.sketches, designSketch: true }
 
 describe('编辑会话的纯函数（X7g、X7i）', () => {
-  const s0 = begin({ kind: 'design', design: 'd' }, 'sketch.yaml', def(), 'h0')
+  const s0 = begin({ kind: 'design', design: 'd' }, 'sketches/core.a.yaml', def(), 'h0')
 
   it('apply 成功压撤销栈、清空重做栈；拒绝时会话不变；脏由草图推出', () => {
     expect(isDirty(s0)).toBe(false)
@@ -66,12 +67,12 @@ describe('编辑会话的纯函数（X7g、X7i）', () => {
   it('X7i：把本次的操作重放到新文件上；失败的列出、仍为已过时', () => {
     let a = apply(s0, { op: 'addModule', parent: 'core.a', name: 'Y' }, ctx).session
     a = apply(a, { op: 'updateModule', id: 'core.a.x', patch: { name: 'X2' } }, ctx).session
-    const external: SketchDef = { ...def(), modules: [...def().modules!, { id: 'core.a.w', parent: 'core.a', name: 'W' }] }
+    const external: SketchDef = { ...def(), modules: [...def().modules!, { id: 'core.a.w', name: 'W' }] }
     const ok = replay(a, external, 'h2', ctx)
     expect(ok.failed).toEqual([])
     expect(ok.session.draft.modules!.map(m => m.id)).toEqual(['core.a.x', 'core.a.w', 'core.a.y'])
     expect(ok.session).toMatchObject({ stale: false, base: { hash: 'h2' } })
-    const gone: SketchDef = { id: 'd', modules: [] }
+    const gone: SketchDef = { id: 'd', mount: 'core.a', modules: [] }
     const bad = replay(a, gone, 'h3', ctx)
     expect(bad.failed).toEqual([{ op: 'updateModule', id: 'core.a.x', patch: { name: 'X2' } }])
     expect(bad.session.stale).toBe(true)
@@ -97,7 +98,7 @@ async function setup(version: { design: string; revision: string } | { intent: s
     dir: 'x',
     files: [SYSTEM, SKELETON, SKETCH],
     compare: { current: { label: '当前版本', dir: 'x', files: [SYSTEM, SKELETON] } },
-    sketch: { file: 'designs/d/sketch.yaml', hash: 'h0' },
+    sketch: { file: 'designs/d/sketches/core.a.yaml', path: 'sketches/core.a.yaml', hash: 'h0' },
     designs: [{ id: 'd', name: 'D', status: 'draft', revisions: [], problems: [] }],
   }
   const desk = createDeskState(async () => payload, { version, writer })
@@ -170,8 +171,8 @@ describe('desk.edit：编辑态与 DeskState', () => {
     expect(await desk.edit.save()).toMatchObject({ ok: false, conflict: true })
     expect(desk.edit.stale.value).toBe(true)
     setPayload({
-      files: [SYSTEM, SKELETON, { path: 'sketch.yaml', text: 'sketch: { id: d, modules: [] }\n' }],
-      sketch: { file: 'designs/d/sketch.yaml', hash: 'h5' },
+      files: [SYSTEM, SKELETON, { path: 'sketches/core.a.yaml', text: 'sketch: { id: d, mount: core.a, modules: [] }\n' }],
+      sketch: { file: 'designs/d/sketches/core.a.yaml', path: 'sketches/core.a.yaml', hash: 'h5' },
     })
     expect((await desk.edit.replayOnReload()).failed).toHaveLength(1)
     expect(desk.edit.stale.value).toBe(true)
@@ -196,7 +197,7 @@ describe('desk.edit：编辑态与 DeskState', () => {
     const { desk } = await setup(undefined, writer)
     await desk.edit.createDesign({ id: 'n', name: 'N', base: 'empty' })
     await desk.edit.createDesign({ id: 'm', name: 'M', base: 'copy' })
-    expect(created[0].sketch).toEqual({ id: 'n', lifetime: 'until-implemented', modules: [] })
-    expect(created[1].sketch).toMatchObject({ id: 'm', supersedes: 'skeleton', closed: ['core'] })
+    expect(created[0].sketch).toEqual({ id: 'n', mount: 'root', lifetime: 'until-implemented', modules: [] })
+    expect(created[1].sketch).toMatchObject({ id: 'm', mount: 'root', supersedes: 'skeleton', closed: ['core'] })
   })
 })

@@ -25,33 +25,34 @@ beforeEach(() => {
   write('system.yaml', 'system: { id: p, name: P }')
   write(
     'intent/skeleton.yaml',
-    'sketch:\n  id: skeleton\n  modules:\n    - { id: a, name: A, kind: layer, order: 1, abstraction: x, responsibility: x }\n    - { id: b, name: B, kind: layer, order: 2, abstraction: y, responsibility: y }\n',
+    'sketch:\n  id: skeleton\n  mount: root\n  modules:\n    - { id: a, name: A, kind: layer, order: 1, abstraction: x, responsibility: x }\n    - { id: b, name: B, kind: layer, order: 2, abstraction: y, responsibility: y }\n',
   )
   write('modules/m.yaml', 'modules:\n  - { id: a.x, name: X, parent: a, responsibility: x }\n')
   write('rules.yaml', 'rules:\n  allow: []\n')
   write('designs/d/design.yaml', 'design:\n  name: D\n  revisions:\n    - { id: r1 }\n')
-  write('designs/d/sketch.yaml', 'sketch: { id: d, modules: [{ id: a.y, name: Y, parent: a }] }\n')
+  write('designs/d/sketches/root.yaml', 'sketch: { id: d, mount: root, modules: [{ id: a, name: A, kind: layer, children: [{ id: a.y, name: Y }] }] }\n')
+  write('designs/d/sketch.yaml', 'sketch: { id: d }\n')
   write('designs/d/r1/system.yaml', 'system: { id: p, name: P }')
   write('designs/d/r1/intent/skeleton.yaml', 'sketch: { id: skeleton }')
 })
 
 describe('X6 指纹门禁', () => {
-  it('人拥有的文件：草图、rules、source-ignore、design.yaml、reviewed.yaml；设计各轮快照里的不算', () => {
-    expect(Object.keys(ownedHashes(P)).sort()).toEqual(['designs/d/design.yaml', 'designs/d/sketch.yaml', 'intent/skeleton.yaml', 'rules.yaml'])
+  it('人拥有的文件：草图（intent/、designs/<设计>/sketches/）、rules、source-ignore、design.yaml、reviewed.yaml；设计各轮快照里的、一期的 sketch.yaml 不算', () => {
+    expect(Object.keys(ownedHashes(P)).sort()).toEqual(['designs/d/design.yaml', 'designs/d/sketches/root.yaml', 'intent/skeleton.yaml', 'rules.yaml'])
     expect(ownedHashes(P)['rules.yaml']).toBe(ownedFingerprint('rules:\n  allow: []\n'))
   })
 
   it('没有登记时提醒 owned.none；arch own 登记后 0 个问题；登记后改动报错 owned.changed，删除也算；新加的文件未登记只提醒', () => {
     expect(lint().map(i => i.code)).toEqual(['owned.none'])
     const r = registerOwned(modelRoot, 'p', '2026-10-22T00:00:00Z')
-    expect(r.files).toEqual(['designs/d/design.yaml', 'designs/d/sketch.yaml', 'intent/skeleton.yaml', 'rules.yaml'])
+    expect(r.files).toEqual(['designs/d/design.yaml', 'designs/d/sketches/root.yaml', 'intent/skeleton.yaml', 'rules.yaml'])
     expect(JSON.parse(fs.readFileSync(r.file, 'utf8'))).toMatchObject({ updatedAt: '2026-10-22T00:00:00Z' })
     expect(lint()).toEqual([])
     write('rules.yaml', 'rules:\n  allow: [{ from: a, to: b, reason: AI 偷偷加的 }]\n')
-    fs.rmSync(path.join(P, 'designs/d/sketch.yaml'))
+    fs.rmSync(path.join(P, 'designs/d/sketches/root.yaml'))
     write('source-ignore.yaml', 'sourceIgnore: []')
     expect(lint().map(i => [i.severity, i.code, i.file])).toEqual([
-      ['error', 'owned.changed', 'designs/d/sketch.yaml'],
+      ['error', 'owned.changed', 'designs/d/sketches/root.yaml'],
       ['error', 'owned.changed', 'rules.yaml'],
       ['warning', 'owned.unregistered', 'source-ignore.yaml'],
     ])
