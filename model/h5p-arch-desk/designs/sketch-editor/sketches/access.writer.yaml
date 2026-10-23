@@ -1,0 +1,26 @@
+# 设计 sketch-editor 挂在「access.writer」上的草图：由一期的 designs/sketch-editor/sketch.yaml 按挂载点机械拆出（ADR-0025 迁移，内容不变），同设计另有 model.intent、state.desk、state.transition、present.canvas、present.panel、present.version。
+sketch:
+  id: sketch-editor
+  mount: access.writer
+  lifetime: until-implemented
+  modules:
+    - id: access.writer.sketch
+      name: 草图写回
+      kind: component
+      responsibility: 持久草图与设计草图的整份写回（B6）：用 YAML 文档模型重写、保留未改动节点的注释，写前校验并比对读取时的指纹（外部已改动则拒绝），写后更新 owned.json；新建设计时创建 design.yaml 与空草图。
+    - id: access.writer.append
+      name: 追加写入
+      kind: component
+      responsibility: 一期已有的代码归这里：人拥有文件的追加写入（评审意见、例外、忽略项、确认记录、认可偏差）与归档 / 晋升（B1–B5、Z6、X3）；YAML 文档模型的打开与保存供草图写回共用。
+  relations:
+    - id: rel.se.sketch-append
+      from: access.writer.sketch
+      to: access.writer.append
+      type: depends
+      description: YAML 文档模型的打开与保存只有一份
+  interfaces:
+    - id: if.writer.saveSketch
+      name: saveSketch
+      owner: access.writer.sketch
+  closed:
+    - access.writer

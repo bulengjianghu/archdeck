@@ -46,8 +46,10 @@ export interface DesignInfo {
   adr?: string[]
   /** 按先后排列，最后一轮为最新 */
   revisions: RevisionInfo[]
-  /** DV-5、DV-10：有 sketch.yaml（架构师的草图） */
+  /** DV-5、DV-10：有草图（designs/<设计>/sketches/*.yaml） */
   sketch?: boolean
+  /** X9：设计的各张草图（挂载点、相对项目描述目录的路径；needsLayout：没有 layout），设计面板列出 */
+  sketches?: { mount: string; file: string; needsLayout?: boolean }[]
   /** X4：认可的偏差（design.yaml 的 accepted） */
   accepted?: { deviation: string; reason: string; at?: string }[]
   /** X4：项目摘要里的偏差计数（未认可的 error 与 warning；草图对最新一轮核验，已定稿的对当前版本） */

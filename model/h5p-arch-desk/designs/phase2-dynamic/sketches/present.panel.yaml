@@ -1,0 +1,12 @@
+# 设计 phase2-dynamic 挂在「present.panel」上的草图：由一期的 designs/phase2-dynamic/sketch.yaml 按挂载点机械拆出（ADR-0025 迁移，内容不变），同设计另有 root、model.scenario、state.transition、state.layout。
+sketch:
+  id: phase2-dynamic
+  mount: present.panel
+  lifetime: until-implemented
+  modules:
+    - id: present.panel.step
+      name: 步骤面板
+      responsibility: 选中步骤时：作用、输入、输出在前
+    - id: present.panel.scenario
+      name: 场景面板
+      responsibility: 选中场景时的场景概览

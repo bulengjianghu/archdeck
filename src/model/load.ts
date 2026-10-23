@@ -2,13 +2,14 @@
  * Loader：解析 YAML / JSON（同一解析器，S8）、按 JSON Schema 检查单文件格式、把多个文件合并成一个模型。
  *
  * 单文件格式不合法时整份文件跳过并报错；跨文件的引用完整性交给 validate.ts。
- * 草图文件（intent/*.yaml、sketch.yaml，X1）先于其他文件进入：草图里的实体既作为普通实体进模型，又整份记入 model.sketches 供核验；
+ * 草图文件（intent/*.yaml、designs/<设计>/sketches/<mount>.yaml，X1）先于其他文件进入：草图里的实体既作为普通实体进模型，又整份记入 model.sketches 供核验；
  * 其他文件对草图实体只能补充（往下挂子模块、补草图没写的字段），对草图已写的字段给出不同的值即重定义，报错并以草图为准。
+ * 草图格式 v2（X9、X10，ADR-0025）：非根草图的模块挂在 mount 下；草图的 abstraction 是挂载点模块对内的原则；from、layout 不进模型。
  */
 import Ajv, { type ErrorObject } from 'ajv'
 import { LineCounter, parseDocument, type Document } from 'yaml'
 import schema from '../../schema/arch-file.schema.json'
-import { LEGACY_RELATION_TYPES } from './types'
+import { LEGACY_RELATION_TYPES, ROOT_MOUNT } from './types'
 import { isSketchFile } from './intent/types'
 import type {
   ActorEntity,
@@ -62,6 +63,9 @@ export function load(files: readonly RawFile[]): LoadResult {
   const sketches: SketchEntity[] = []
   /** X1：草图里的实体，按「种类:ID」记住实体与草图写了哪些字段，供其他文件补充时比对 */
   const sketched = new Map<string, { entity: Record<string, unknown>; written: Set<string>; file: string }>()
+  /** X10：草图写给挂载点模块的原则（加载完再落到模块上）与非草图文件写过 abstraction 的模块 */
+  const mountAbstractions: { mount: string; value: string; src: SourceLoc }[] = []
+  const otherAbstraction = new Map<string, SourceLoc>()
   let seq = 0
 
   // X1：草图文件先入；其余按路径排序
@@ -72,7 +76,12 @@ export function load(files: readonly RawFile[]): LoadResult {
     const { data, locate } = parsed
     const sketch = data.sketch
     if (sketch && !isSketchFile(file.path))
-      issues.push({ severity: 'warning', code: 'sketch-misplaced', message: `草图应放在 intent/<ID>.yaml 或 designs/<设计>/sketch.yaml，这里的照常加载`, ...locate(['sketch']) })
+      issues.push({
+        severity: 'warning',
+        code: 'sketch-misplaced',
+        message: `草图应放在 intent/<ID>.yaml 或 designs/<设计>/sketches/<mount>.yaml，这里的照常加载`,
+        ...locate(['sketch']),
+      })
 
     if (data.system) systems.push({ def: data.system, src: locate(['system']) })
 
@@ -113,7 +122,9 @@ export function load(files: readonly RawFile[]): LoadResult {
     }
 
     const pushModule = (def: ModuleDef, parentId: string | undefined, path: (string | number)[], nested: boolean) => {
-      const { children, parent, ...rest } = def
+      // X11：血缘是设计信息，不进模型
+      const { children, parent, from: _from, ...rest } = def
+      if (!sketch && rest.abstraction !== undefined) otherAbstraction.set(def.id, locate([...path, 'abstraction']))
       if (nested && parent !== undefined) {
         issues.push({
           severity: 'warning',
@@ -160,11 +171,14 @@ export function load(files: readonly RawFile[]): LoadResult {
 
     // X1：草图的内容先进模型，再整份记入 sketches 供核验
     if (sketch) {
-      sketch.modules?.forEach((m, i) => pushModule(m, undefined, ['sketch', 'modules', i], false))
+      // X9：根挂载的模块是层（子模块嵌套）；其余草图的模块挂在 mount 下
+      const mount = sketch.mount === ROOT_MOUNT ? undefined : sketch.mount
+      sketch.modules?.forEach((m, i) => pushModule(m, mount, ['sketch', 'modules', i], mount !== undefined))
+      if (mount && sketch.abstraction !== undefined) mountAbstractions.push({ mount, value: sketch.abstraction, src: locate(['sketch', 'abstraction']) })
       sketch.relations?.forEach((r, i) => pushRelation(r, ['sketch', 'relations', i]))
       sketch.interfaces?.forEach((x, i) => pushInterface(x, ['sketch', 'interfaces', i]))
       sketch.dataStructures?.forEach((x, i) => pushDataStructure(x, ['sketch', 'dataStructures', i]))
-      sketches.push({ def: sketch, file: file.path, src: locate(['sketch']) })
+      sketches.push({ def: sketch, file: file.path, src: locate(['sketch']), mount: sketch.mount, needsLayout: !sketch.layout })
     }
     if (data.module) pushModule(data.module, undefined, ['module'], false)
     data.modules?.forEach((m, i) => pushModule(m, undefined, ['modules', i], false))
@@ -202,6 +216,23 @@ export function load(files: readonly RawFile[]): LoadResult {
     }
   }
   for (const m of modules) if (m.parentId === undefined) m.parentId = system.id
+  // X10：挂载点模块对内的原则以草图为准；非草图文件写了不同的值即重定义
+  for (const a of mountAbstractions) {
+    const host = modules.find(m => m.id === a.mount)
+    if (!host) {
+      issues.push({ severity: 'warning', code: 'sketch-mount-missing', message: `草图的挂载点「${a.mount}」不在描述里，它的原则（abstraction）没有落处`, ...a.src })
+      continue
+    }
+    const other = otherAbstraction.get(a.mount)
+    if (other && host.abstraction !== undefined && host.abstraction !== a.value)
+      issues.push({
+        severity: 'error',
+        code: 'sketch-redefined',
+        message: `「${a.mount}」的原则（abstraction）由挂在它身上的草图（${a.src.file}）写，这里重定义了它（X1、X10）；以草图为准`,
+        ...other,
+      })
+    host.abstraction = a.value
+  }
 
   return {
     model: {
@@ -278,6 +309,13 @@ function parseFile(file: RawFile, issues: Issue[]): ParsedFile | null {
   if (data === null || data === undefined) return null
 
   const locate = makeLocator(file.path, doc, lineCounter)
+  if (upgradeLegacySkeleton(data, file.path))
+    issues.push({
+      severity: 'warning',
+      code: 'sketch-legacy-mount',
+      message: '草图没有 mount：一期的骨架（顶层全是层）按根挂载读取（X9）；请加 mount: root',
+      ...locate(['sketch']),
+    })
   if (!validateFile(data)) {
     for (const err of dedupeErrors(validateFile.errors ?? [])) {
       const path = err.instancePath.split('/').slice(1).map(seg => (/^\d+$/.test(seg) ? Number(seg) : seg))
@@ -286,6 +324,19 @@ function parseFile(file: RawFile, issues: Issue[]): ParsedFile | null {
     return null
   }
   return { data, locate }
+}
+
+/**
+ * X9：一期骨架的读取——intent/ 下没有 mount、顶层模块全是层的草图按根挂载读取（历史提交与设计基线里的骨架都是这个形状）。
+ * 其余没有 mount 的草图不升级，按格式错误跳过。返回是否升级了。
+ */
+function upgradeLegacySkeleton(data: unknown, path: string): boolean {
+  const sketch = (data as { sketch?: Record<string, unknown> } | null)?.sketch
+  if (!sketch || typeof sketch !== 'object' || 'mount' in sketch || !/(^|\/)intent\/[^/]+\.ya?ml$/.test(path)) return false
+  const modules = sketch.modules
+  if (!Array.isArray(modules) || !modules.length || !modules.every(m => m && typeof m === 'object' && (m as { kind?: unknown }).kind === 'layer')) return false
+  sketch.mount = ROOT_MOUNT
+  return true
 }
 
 /** X7f：草图定义的形状（按同一份 JSON Schema 检查 { sketch: def }）；返回每处问题的位置与说明 */

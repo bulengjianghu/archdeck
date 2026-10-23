@@ -1,0 +1,337 @@
+# 设计 sketch-v2 挂在「属性面板」present.panel 上的一层（ADR-0025）：底稿从基线 5285286 复制（X18），新增「草图面板」present.panel.sketch 与它和草图画布之间的关系。
+sketch:
+  id: sketch-v2
+  mount: present.panel
+  lifetime: until-implemented
+  modules:
+    - id: present.panel.dispatch
+      name: 面板分派
+    - id: present.panel.module
+      name: 模块面板
+    - id: present.panel.relation
+      name: 关系面板
+    - id: present.panel.edge
+      name: 聚合边面板
+    - id: present.panel.system
+      name: 系统面板
+    - id: present.panel.design
+      name: 设计面板
+    - id: present.panel.content
+      name: 内容组件
+    - id: present.panel.edit
+      name: 编辑表单
+      kind: component
+    - id: present.panel.governance
+      name: 架构治理面板
+    - id: present.panel.dep
+      name: 代码依赖面板
+    - id: present.panel.scenario
+      name: 场景面板
+    - id: present.panel.step
+      name: 步骤面板
+    - id: present.panel.run
+      name: 运行信息
+    - id: present.panel.actor
+      name: 参与者面板
+    - id: present.panel.file
+      name: 文件面板
+    - id: present.panel.module-source
+      name: 模块的源代码
+    - id: present.panel.sketch
+      name: 草图面板
+      kind: component
+      responsibility: 草图画布下的属性面板：父模块原则、模块（ID 与血缘）、关系、引用节点、元信息，顶部两级校验、待重连与本张的两个核验数（SK-17）。
+  relations:
+    - id: rel.ad.desk-panel
+      from: present.desk-view
+      to: present.panel.dispatch
+      type: depends
+    - id: rel.ad.panel-module
+      from: present.panel.dispatch
+      to: present.panel.module
+      type: depends
+    - id: rel.ad.panel-relation
+      from: present.panel.dispatch
+      to: present.panel.relation
+      type: depends
+    - id: rel.ad.panel-edge
+      from: present.panel.dispatch
+      to: present.panel.edge
+      type: depends
+    - id: rel.ad.panel-system
+      from: present.panel.dispatch
+      to: present.panel.system
+      type: depends
+    - id: rel.ad.module-content
+      from: present.panel.module
+      to: present.panel.content
+      type: depends
+    - id: rel.ad.relation-content
+      from: present.panel.relation
+      to: present.panel.content
+      type: depends
+    - id: rel.ad.edge-content
+      from: present.panel.edge
+      to: present.panel.content
+      type: depends
+    - id: rel.ad.system-content
+      from: present.panel.system
+      to: present.panel.content
+      type: depends
+    - id: rel.ad.system-design
+      from: present.panel.system
+      to: present.panel.design
+      type: depends
+    - id: rel.ad.design-content
+      from: present.panel.design
+      to: present.panel.content
+      type: depends
+    - id: rel.ad.panel-read
+      from: present.panel.dispatch
+      to: state.desk.projection
+      type: depends
+    - id: rel.ad.edgepanel-read
+      from: present.panel.edge
+      to: state.desk.projection
+      type: depends
+    - id: rel.ad.module-act
+      from: present.panel.module
+      to: state.desk.actions
+      type: calls
+    - id: rel.ad.relation-act
+      from: present.panel.relation
+      to: state.desk.actions
+      type: calls
+    - id: rel.ad.content-act
+      from: present.panel.content
+      to: state.desk.actions
+      type: calls
+    - id: rel.ad.design-read
+      from: present.panel.design
+      to: state.desk.versions
+      type: depends
+    - id: rel.ad.design-act
+      from: present.panel.design
+      to: state.desk.actions
+      type: calls
+    - id: rel.ad.content-diff
+      from: present.panel.content
+      to: state.desk.versions
+      type: depends
+    - id: rel.ad.content-labels
+      from: present.panel.content
+      to: present.shared
+      type: depends
+    - id: rel.ad.relation-type-labels
+      from: present.panel.relation
+      to: present.shared
+      type: depends
+    - id: rel.ad.edge-type-labels
+      from: present.panel.edge
+      to: present.shared
+      type: depends
+    - id: rel.gv.ports-type-labels
+      from: present.panel.governance
+      to: present.shared
+      type: depends
+    - id: rel.ad.design-labels
+      from: present.panel.design
+      to: present.shared
+      type: depends
+    - id: rel.ad.actor-labels
+      from: present.panel.actor
+      to: present.shared
+      type: depends
+    - id: rel.ad.system-read
+      from: present.panel.system
+      to: state.desk.projection
+      type: depends
+    - id: rel.ad.system-act
+      from: present.panel.system
+      to: state.desk.actions
+      type: calls
+    - id: rel.ed.architect-panel
+      from: actor.architect
+      to: present.panel.edit
+      type: calls
+    - id: rel.ed.forms-commands
+      from: present.panel.edit
+      to: state.desk.edit.commands
+      type: calls
+    - id: rel.ed.dispatch-edit
+      from: present.panel.dispatch
+      to: present.panel.edit
+      type: depends
+    - id: rel.ed.forms-menu
+      from: present.panel.edit
+      to: present.canvas.edit.menu
+      type: calls
+    - id: rel.ed.forms-labels
+      from: present.panel.edit
+      to: present.shared
+      type: depends
+    - id: rel.gv.dispatch-dep
+      from: present.panel.dispatch
+      to: present.panel.dep
+      type: depends
+    - id: rel.gv.system-gov
+      from: present.panel.system
+      to: present.panel.governance
+      type: depends
+    - id: rel.gv.module-gov
+      from: present.panel.module
+      to: present.panel.governance
+      type: depends
+    - id: rel.gv.relation-gov
+      from: present.panel.relation
+      to: present.panel.governance
+      type: depends
+    - id: rel.gv.dep-gov
+      from: present.panel.dep
+      to: present.panel.governance
+      type: depends
+    - id: rel.gv.panel-read
+      from: present.panel.governance
+      to: state.desk.facts
+      type: depends
+    - id: rel.gv.dep-read
+      from: present.panel.dep
+      to: state.desk.facts
+      type: depends
+    - id: rel.gv.dep-content
+      from: present.panel.dep
+      to: present.panel.content
+      type: depends
+    - id: rel.gv.panel-content
+      from: present.panel.governance
+      to: present.panel.content
+      type: depends
+    - id: rel.gv.scenario-panel-shared
+      from: present.panel.scenario
+      to: present.shared
+      type: depends
+    - id: rel.gv.step-panel-shared
+      from: present.panel.step
+      to: present.shared
+      type: depends
+    - id: rel.p3.dispatch-run
+      from: present.panel.dispatch
+      to: present.panel.run
+      type: depends
+    - id: rel.p3.run-read
+      from: present.panel.run
+      to: state.desk.projection
+      type: depends
+    - id: rel.p3.run-act
+      from: present.panel.run
+      to: state.desk.actions
+      type: calls
+    - id: rel.p8.step-stage
+      from: present.panel.step
+      to: present.canvas
+      type: depends
+    - id: rel.p8.run-stage
+      from: present.panel.run
+      to: present.canvas
+      type: depends
+    - id: rel.p2.panel-scenario
+      from: present.panel.dispatch
+      to: present.panel.scenario
+      type: depends
+    - id: rel.p2.panel-step
+      from: present.panel.dispatch
+      to: present.panel.step
+      type: depends
+    - id: rel.p2.panel-actor
+      from: present.panel.dispatch
+      to: present.panel.actor
+      type: depends
+    - id: rel.p2.step-content
+      from: present.panel.step
+      to: present.panel.content
+      type: depends
+    - id: rel.p2.scenario-content
+      from: present.panel.scenario
+      to: present.panel.content
+      type: depends
+    - id: rel.p2.step-read
+      from: present.panel.step
+      to: state.desk.projection
+      type: depends
+    - id: rel.p2.step-act
+      from: present.panel.step
+      to: state.desk.actions
+      type: calls
+    - id: rel.p2.scenario-act
+      from: present.panel.scenario
+      to: state.desk.actions
+      type: calls
+    - id: rel.p2.actor-act
+      from: present.panel.actor
+      to: state.desk.actions
+      type: calls
+    - id: rel.p2.actor-content
+      from: present.panel.actor
+      to: present.panel.content
+      type: depends
+    - id: rel.p3.run-content
+      from: present.panel.run
+      to: present.panel.content
+      type: depends
+    - id: rel.p7.panel-file
+      from: present.panel.dispatch
+      to: present.panel.file
+      type: depends
+    - id: rel.p7.module-source
+      from: present.panel.module
+      to: present.panel.module-source
+      type: depends
+    - id: rel.p7.file-exports
+      from: present.panel.file
+      to: present.panel.module-source
+      type: depends
+    - id: rel.p7.file-read
+      from: present.panel.file
+      to: state.desk.files
+      type: depends
+    - id: rel.p7.file-act
+      from: present.panel.file
+      to: state.desk.actions
+      type: calls
+    - id: rel.p7.file-preview
+      from: present.panel.file
+      to: present.desk-view
+      type: calls
+    - id: rel.p7.modsrc-read
+      from: present.panel.module-source
+      to: state.desk.files
+      type: depends
+    - id: rel.p7.modsrc-act
+      from: present.panel.module-source
+      to: state.desk.actions
+      type: calls
+    - id: rel.p7.modsrc-content
+      from: present.panel.module-source
+      to: present.panel.content
+      type: depends
+    - id: rel.p7.file-ownership
+      from: present.panel.file
+      to: model.types
+      type: depends
+    - id: rel.p7.modsrc-ownership
+      from: present.panel.module-source
+      to: model.types
+      type: depends
+    - id: rel.p7.file-content
+      from: present.panel.file
+      to: present.panel.content
+      type: depends
+    - id: rel.p7.file-preview-key
+      from: present.panel.file
+      to: present.shared
+      type: depends
+    - id: rel.sketch-panel
+      from: present.sketch
+      to: present.panel.sketch
+      type: notifies
+      description: 选中变化时面板跟随

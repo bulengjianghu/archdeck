@@ -222,13 +222,18 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "id"
+        "id",
+        "mount"
       ],
-      "description": "草图（X1、X2，ADR-0023）：人拥有的局部描述，只在 intent/*.yaml 与 designs/<设计>/sketch.yaml 里用；内容与普通描述同形，没写的字段不约束",
+      "description": "草图（X1、X2、X9，ADR-0023、ADR-0025）：人拥有的局部描述，只在 intent/*.yaml 与 designs/<设计>/sketches/<mount>.yaml 里用；一张草图挂在一个模块下、只画一个层次，内容与普通描述同形，没写的字段不约束",
       "properties": {
         "id": {
           "$ref": "#/definitions/id",
           "description": "持久草图有固定 ID（骨架为 skeleton）；设计的草图 ID 即设计 ID"
+        },
+        "mount": {
+          "$ref": "#/definitions/id",
+          "description": "挂载点（X9）：模块 ID 或 root；不能是层。非根草图的模块是挂载点的直接子节点，根挂载为层与层的直接子模块"
         },
         "lifetime": {
           "enum": [
@@ -245,10 +250,14 @@
           "$ref": "#/definitions/id",
           "description": "定稿实现后替换的持久草图 ID（晋升，X3）"
         },
+        "abstraction": {
+          "type": "string",
+          "description": "挂载点模块对内的原则（X10），加载为挂载点模块的 abstraction；根挂载不用，改用各层的 abstraction 等字段"
+        },
         "modules": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/module"
+            "$ref": "#/definitions/sketchModule"
           }
         },
         "relations": {
@@ -267,6 +276,37 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/dataStructure"
+          }
+        },
+        "layout": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "布局（X15）：模块坐标（引用节点按它的模块 ID 记）与关系标签位置；人拥有，随草图归档",
+          "properties": {
+            "modules": {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/definitions/id"
+              },
+              "additionalProperties": {
+                "$ref": "#/definitions/point"
+              }
+            },
+            "relations": {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/definitions/id"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "label": {
+                    "$ref": "#/definitions/point"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -441,6 +481,96 @@
           "description": "设计版本专用：为什么这样设计 / 调整（Markdown）"
         }
       }
+    },
+    "sketchModule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parent": {
+          "$ref": "#/definitions/id"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "current",
+            "target",
+            "deprecated"
+          ]
+        },
+        "core": {
+          "type": "boolean"
+        },
+        "responsibility": {
+          "type": "string"
+        },
+        "principle": {
+          "type": "string"
+        },
+        "dataStructures": {
+          "$ref": "#/definitions/idList"
+        },
+        "provides": {
+          "$ref": "#/definitions/idList"
+        },
+        "codeRefs": {
+          "$ref": "#/definitions/textList"
+        },
+        "entry": {
+          "type": "string",
+          "description": "对外入口文件，相对源码根目录；不写时按约定推出（G10）"
+        },
+        "docRefs": {
+          "$ref": "#/definitions/textList"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "tags": {
+          "$ref": "#/definitions/textList"
+        },
+        "order": {
+          "type": "number"
+        },
+        "abstraction": {
+          "type": "string"
+        },
+        "includes": {
+          "$ref": "#/definitions/textList"
+        },
+        "excludes": {
+          "$ref": "#/definitions/textList"
+        },
+        "mayDependOn": {
+          "$ref": "#/definitions/idList"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/sketchModule"
+          }
+        },
+        "designNote": {
+          "type": "string",
+          "description": "设计版本专用：为什么这样设计 / 调整（Markdown）"
+        },
+        "from": {
+          "$ref": "#/definitions/idList",
+          "description": "血缘（X11）：这个模块由哪些基线模块而来，一律指向基线 ID；全新模块不写"
+        }
+      },
+      "description": "草图里的模块（X9、X11）：字段同普通模块，可带血缘 from"
     },
     "relation": {
       "type": "object",
@@ -838,6 +968,22 @@
           }
         }
       ]
+    },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      }
     }
   }
 }

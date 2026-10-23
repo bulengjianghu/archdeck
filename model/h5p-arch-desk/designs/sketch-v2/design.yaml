@@ -1,6 +1,5 @@
 # 设计：草图编辑 v2（第四轮，ADR-0025）。人拥有：目标、状态、基线、ADR；各轮说明由 AI 写在 r<N>/revision.yaml。
-# 草图暂以一期格式写在 sketch.yaml：读取侧还不认 sketches/<mount>.yaml 与 mount 字段（04 §3.10，SK-12、SK-13 待实现）。
-# 按 v2 它应是 sketches/present.yaml（mount: present）；实现 v2 读取后迁过去。
+# 草图（格式 v2，04 §3.10）：sketches/root.yaml（根挂载，骨架复制 + 呈现层的变化，supersedes: skeleton）与 sketches/present.panel.yaml（属性面板一层，新增草图面板）。
 design:
   id: sketch-v2
   name: 草图编辑 v2

@@ -1,0 +1,15 @@
+# 设计 phase2-dynamic 挂在「state.transition」上的草图：由一期的 designs/phase2-dynamic/sketch.yaml 按挂载点机械拆出（ADR-0025 迁移，内容不变），同设计另有 root、model.scenario、state.layout、present.panel。
+sketch:
+  id: phase2-dynamic
+  mount: state.transition
+  lifetime: until-implemented
+  modules:
+    - id: state.transition.navigation
+      name: 导航规则
+      responsibility: 下钻、返回、定位、重新加载后的回退（N）
+    - id: state.transition.playback
+      name: 回放规则
+      responsibility: 打开 / 退出场景、单步、指向、选分支（R、F6）
+    - id: state.transition.url
+      name: URL 编解码
+      responsibility: 视图状态 ↔ 查询参数

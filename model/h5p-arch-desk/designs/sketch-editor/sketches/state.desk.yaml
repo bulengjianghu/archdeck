@@ -1,0 +1,42 @@
+# 设计 sketch-editor 挂在「state.desk」上的草图：由一期的 designs/sketch-editor/sketch.yaml 按挂载点机械拆出（ADR-0025 迁移，内容不变），同设计另有 model.intent、state.transition、access.writer、present.canvas、present.panel、present.version。
+sketch:
+  id: sketch-editor
+  mount: state.desk
+  lifetime: until-implemented
+  modules:
+    - id: state.desk.edit
+      name: 编辑中的草图
+      kind: component
+      responsibility: 持有编辑中的草图（一个值）、撤销 / 重做栈、脏标记与读取时的指纹；对外提供编辑操作（经 model.intent.edit 应用）、保存与放弃意图；编辑态下派生给画布与面板的只有草图本身。
+  relations:
+    - id: rel.se.canvas-desk
+      from: present.canvas.edit
+      to: state.desk.edit
+      type: calls
+      description: 画布的每个编辑操作只发一个意图
+    - id: rel.se.panel-desk
+      from: present.panel.edit
+      to: state.desk.edit
+      type: calls
+      description: 表单改动即发意图
+    - id: rel.se.bar-desk
+      from: present.version.edit
+      to: state.desk.edit
+      type: calls
+      description: 保存 / 放弃 / 新建设计
+    - id: rel.se.desk-check
+      from: state.desk.edit
+      to: model.intent
+      type: calls
+      description: 编辑中对当前版本实时跑 sketchCheck（L-1）
+    - id: rel.se.desk-transition
+      from: state.desk.edit
+      to: state.transition.edit
+      type: calls
+      description: 进入 / 退出编辑态经转移函数
+    - id: rel.se.desk-writer
+      from: state.desk.edit
+      to: access.writer.sketch
+      type: calls
+      via: http
+      description: 保存：整份写回与新建设计，经开发服务器端点

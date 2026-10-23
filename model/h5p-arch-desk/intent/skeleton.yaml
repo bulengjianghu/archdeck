@@ -3,6 +3,7 @@
 
 sketch:
   id: skeleton
+  mount: root
   lifetime: persistent
   closed: [present, state, access, model]
   modules:

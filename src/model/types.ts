@@ -70,8 +70,9 @@ export interface ModuleDef {
   docRefs?: string[]
   owner?: string
   tags?: string[]
-  // 以下仅 kind: layer
+  // 以下仅 kind: layer（abstraction 例外：非层模块的对内原则由挂在它身上的草图写入，X10）
   order?: number
+  /** 层的抽象；非层模块为对内的原则（来自挂在它身上的草图的 abstraction，X10） */
   abstraction?: string
   includes?: string[]
   excludes?: string[]
@@ -79,6 +80,8 @@ export interface ModuleDef {
   children?: ModuleDef[]
   /** 设计版本专用：为什么这样设计 / 调整（Markdown） */
   designNote?: string
+  /** 只在草图里：血缘——这个模块由哪些基线模块而来，一律指向基线 ID（X11）；不进模型索引 */
+  from?: string[]
 }
 
 export interface RelationDef {
@@ -181,7 +184,7 @@ export interface ArchFileDef {
   rules?: RulesDef
   /** Z1：确认记录（约定文件 reviewed.yaml），人拥有，由页面与草图归档写入 */
   reviewed?: ReviewedEntryDef[]
-  /** X1：草图（只在 intent/*.yaml 与 designs/<设计>/sketch.yaml 里用） */
+  /** X1：草图（只在 intent/*.yaml 与 designs/<设计>/sketches/<mount>.yaml 里用） */
   sketch?: SketchDef
 }
 
@@ -189,20 +192,44 @@ export interface ArchFileDef {
 export type SketchLifetime = 'persistent' | 'until-implemented'
 export const SKETCH_LIFETIMES: readonly SketchLifetime[] = ['persistent', 'until-implemented']
 
-/** X1、X2：草图——人拥有的局部描述，内容与普通描述同形，没写的字段不约束 */
+/** X9：根挂载——层与层的直接子模块（骨架即根挂载的持久草图） */
+export const ROOT_MOUNT = 'root'
+
+/** X15：草图里的一个位置 */
+export interface SketchPoint {
+  x: number
+  y: number
+}
+
+/** X15：草图的布局——模块坐标（引用节点按它的模块 ID 记）与关系标签位置；人拥有，随草图归档，不进模型索引 */
+export interface SketchLayout {
+  modules?: Record<string, SketchPoint>
+  relations?: Record<string, { label?: SketchPoint }>
+}
+
+/**
+ * X1、X2、X9：草图（格式 v2，ADR-0025）——人拥有的局部描述：一张草图挂在一个模块下、只画一个层次；
+ * 内容与普通描述同形，没写的字段不约束。
+ */
 export interface SketchDef {
   /** 持久草图有固定 ID（骨架为 skeleton）；设计的草图 ID 即设计 ID */
   id: string
+  /** X9：挂载点——模块 ID 或 root；不能是层。非根草图的模块是挂载点的直接子节点，根挂载为层与层的直接子模块 */
+  mount: string
   /** intent/ 下缺省 persistent，设计的草图缺省 until-implemented（X3） */
   lifetime?: SketchLifetime
-  /** 封闭的子树：这些草图模块的直接子模块集合必须与草图相等（X2） */
+  /** 封闭的子树：这些模块（挂载点或本草图的模块）的直接子模块集合必须与草图相等（X2） */
   closed?: string[]
-  /** 定稿实现后替换的持久草图 ID（晋升，X3） */
+  /** 定稿实现后替换的持久草图 ID（晋升，X3）；同挂载点已有持久草图时必须声明（X4） */
   supersedes?: string
+  /** X10：挂载点模块对内的原则（加载为挂载点模块的 abstraction）；根挂载不用，改用各层的 abstraction 等字段 */
+  abstraction?: string
   modules?: ModuleDef[]
   relations?: RelationDef[]
   interfaces?: InterfaceDef[]
   dataStructures?: DataStructureDef[]
+  /** X15：人摆放的位置 */
+  layout?: SketchLayout
 }
 
 /** G20：源码文件的限制；maxLines 缺省 500 */
@@ -364,6 +391,10 @@ export interface SketchEntity {
   def: SketchDef
   file: string
   src: SourceLoc
+  /** X9：挂载点（即 def.mount） */
+  mount?: string
+  /** X15：没有 layout——打开时自动布局一次，不因此写回 */
+  needsLayout?: boolean
   /** 设计的草图：所属设计 ID（由接入层按路径或载荷给出，模型层只透传） */
   design?: string
 }
@@ -471,7 +502,18 @@ export interface ProjectOptions {
 
 // ── 版本对比（E1、E2）：计算在 diff.ts ──
 
-export type ChangeKind = 'added' | 'changed' | 'removed'
+/** 变更种类：按 ID 的新增 / 修改 / 删除，与按血缘的合并 / 拆分 / 改 ID / 移动（X11、X17） */
+export type ChangeKind = 'added' | 'changed' | 'removed' | 'merged' | 'split' | 'renamed' | 'moved'
+export const CHANGE_KINDS: readonly ChangeKind[] = ['added', 'changed', 'merged', 'split', 'renamed', 'moved', 'removed']
+export const CHANGE_KIND_LABELS: Readonly<Record<ChangeKind, string>> = {
+  added: '新增',
+  changed: '修改',
+  merged: '合并',
+  split: '拆分',
+  renamed: '改 ID',
+  moved: '移动',
+  removed: '删除',
+}
 export type EntityKind = 'module' | 'relation' | 'interface' | 'dataStructure'
 
 export interface Change {
@@ -482,6 +524,10 @@ export interface Change {
   name: string
   /** 修改了哪些字段（字段名；显示名在呈现层） */
   fields?: string[]
+  /** 合并 / 改 ID / 移动：来源的基线 ID（X11）；拆分时 id 为被拆的基线 ID */
+  from?: string[]
+  /** 拆分的结果 ID */
+  to?: string[]
 }
 
 export interface ModelDiff {
