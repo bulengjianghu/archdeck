@@ -172,6 +172,16 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 | `seedSketch(id, from)` | 新建设计的底稿：空草图，或复制持久草图的层与第二级并声明 `supersedes` | B6 |
 | `validateSketch(sketch, { persistent, file })`（`validate.ts`） | 草图本身的校验：格式、ID 格式与唯一、前缀、引用完整（本草图 ∪ 持久草图）、不连祖先与后代、层依赖无环、与持久草图矛盾（调用 `sketchContradictions`）；error 拒绝保存。与 `sketchCheck` 的分工：校验只看草图本身，核验只看版本对草图，两边都有的只有矛盾检查（同一函数、同一稳定键） | X7f |
 
+
+**草图编辑 v2（ADR-0025，待实现）**——上表各函数的目标态：
+
+| 函数 | 变化 | 规则 |
+|---|---|---|
+| `applyEdit(sheets, op, ctx)` | 输入输出改为一个设计的全部草图（按挂载点），一个操作可改多张；新增操作族**合并 / 拆分**（X7j、X7k）、**降级 / 升级 / 移入**（X7d）、**位置**（移动节点、移动标签、重新排列的结果，X15）；改 ID 与移动共用跨草图的**前缀级联**（改文件名对应的 `mount`、后代 ID、关系两端、接口 `owner`、`closed`、`layout` 的键）并沿闭包写 `from`（X11、X12）；拆分、升级留下的关系标为待重连（X16） | X7b–X7k、X11、X12、X16 |
+| `seedFromBase(mount, base, sheets)` | 取代 `seedSketch`：新建草图与推出的下一层草图一律从设计的基线复制本层结构与显式写在本层的关系，不带文字；下一层不存在时由「基线子树 + `from` 收进来的模块」推出 | X18 |
+| `validateSketch(sketch, ctx)` | 两级：`errors`（格式、挂载点约束、引用、缺名称，拦保存）与 `warnings`（根草图层依赖成环、非根草图本层 `depends` 成环、同挂载点矛盾、待重连，拦交给 AI 与定稿）；超七单列为提示 | X9、X13、X14 |
+| `sketchCheck(sketch, target, …)` | 按挂载点取范围，矛盾只比同挂载点；对象可以是基线或当前版本（两个对比共用）；相对当前版本只比结构；结果带按血缘的变更分类（合并 / 拆分 / 改 ID / 移动 / 新增 / 删除） | X4、X11、X17 |
+
 ```ts
 interface SketchDeviation {
   key: string                           // `<种类>:<实体 ID>`，稳定

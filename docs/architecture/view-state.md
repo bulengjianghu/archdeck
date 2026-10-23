@@ -198,28 +198,31 @@ encodeView(state: ViewState, index: ModelIndex, plan?: ScenarioPlan): Record<str
 keyIntent(state, index, key: 'Escape' | 'Backspace'): ViewAction | 'leave' | null      // N7、N9：Esc 只取消选中，Backspace 返回上级；'leave' = 回项目列表
 ```
 
-## 7. 编辑态（ADR-0024）
+## 7. 编辑态（ADR-0025，待实现）
 
-编辑态只在草图版本上开启（X7a）。状态分两处，各管各的：
+> 状态：待实现。现有实现（ADR-0024）是按张的编辑会话：编辑中的草图经 `loadModel` 成为 DeskState 的 `index`，复用模型画布的投影与布局，撤销栈按张；ADR-0025 改为按设计的会话与独立的草图画布，下面是目标态。
+
+打开草图即进入草图画布（X7a）。状态分两处，各管各的：
 
 | 状态 | 在哪 | 为什么 |
 |---|---|---|
-| 正在编辑哪张草图 `editing: SketchTarget \| null` | 视图状态 `ViewState` | 与视角、文件选中互斥，要和它们在同一个值里由转移函数约束；不进 URL |
-| 编辑会话 `EditSession`：读取时的草图与指纹、编辑中的草图、撤销 / 重做栈、已过时 | DeskState 的 `edit` 组 | 一次编辑会话的内容，与浏览的层次、选中只经「影响」相互作用；不进 URL，换成命令行也不需要（原则 3） |
+| 正在编辑什么 `editing: { target: 设计 \| 持久草图; mount: 当前张的挂载点; returnTo: 进入前的版本 } \| null` | 视图状态 `ViewState` | 与视角、文件选中互斥，要和它们在同一个值里由转移函数约束；下钻与面包屑只改 `mount`；不进 URL |
+| 编辑会话 `EditSession`：一个设计的全部草图（文件里读到的与会话里推出的）、各文件读取时的指纹、一条设计级撤销栈、已过时 | DeskState 的 `edit` 组 | 一次编辑会话的内容，与浏览的层次、选中只经「影响」相互作用；不进 URL，换成命令行也不需要（原则 3） |
 
-- **会话规则**（`transition/edit.ts`）：`enterEdit` / `exitEdit` 与互斥（X7a）；`edited { effects }`——改名换成新 ID、删除退到最近仍存在的祖先、新建即选中（X7h）；`leaveGuard(脏) → 放行 / 需要确认`。
-- **编辑会话的纯函数**（`desk/edit/session.ts`）：`begin`、`apply`（调用模型层 `applyEdit`，成功则压撤销栈）、`undo` / `redo`、`saved`、`reloaded`（指纹不同且不是刚保存的 → 已过时）、`replay`（把本次的操作按序重放到新读到的草图上，返回失败的操作）。撤销粒度见 X7g；「脏」由编辑中的草图与读取时的草图是否相同推出。
-- **派生**（`desk/edit/derive.ts`）：编辑中的草图序列化为一份虚拟的 `sketch.yaml`，与 `system.yaml`、持久草图一起经 `loadModel` 成为索引——编辑态下它就是 DeskState 的 `index`，投影、布局、导航树、面板照常工作；另派生 `validateSketch`（X7f）、对当前版本的 `sketchCheck`（L-1）、改动摘要与晋升预览（`diffModels`）。
-- **同步**（`desk/edit/save.ts`）：保存与新建设计经注入的 `ModelWriter`（新增 `saveSketch`、`createDesign`）发往写入端点；成功 → `saved`，文件变化推送回来后按 N5 重新加载、`reloaded` 识别为刚保存的；409 → 已过时，可重新加载并重放、失败时放弃本次改动（X7i）；422 → 服务端的校验问题交给派生定位。
+- **会话规则**（`transition/edit.ts`）：`enterSketch` / `exitSketch`（退出回到 `returnTo`）与互斥（X7a）；`openChild` / `openParent`（下钻与面包屑）；`edited { effects }`——改名（含级联）换成新 ID、删除清空选中、当前张被删除回到父草图、新建 / 合并 / 拆分选中结果、撤销到别的张时切过去（X7h、X7g）；`leaveGuard(脏) → 放行 / 需要确认（保存 / 放弃 / 取消）`。
+- **编辑会话的纯函数**（`desk/edit/session.ts`）：`begin(设计, 读到的草图与指纹, 基线索引)`、`ensure(mount)`（下一层草图不存在时按「基线子树 + 血缘」推出，X18；推出的不算脏）、`apply`（调用模型层 `applyEdit(草图集合, op, ctx)`，成功则压撤销栈，一步记涉及的草图）、`undo` / `redo`、`saved`、`reloaded`、`replay`。「脏」= 任一张与读取时不同（推出且未改动的不算，X20）。
+- **派生**（`desk/edit/derive.ts`）：当前张的画布节点与边（模块、由关系派生的引用节点、子树间关系的聚合线，X18、X19），位置取草图 `layout`、没有的经草图布局补齐（X15）；两级校验（X14）、待重连（X16）、超七（X13）；两个对比（相对基线 / 相对当前版本，本张与全设计，X17）与按血缘的变更清单（X11）。不再经 `loadModel` 成为核心的 `index`。
+- **同步**（`desk/edit/save.ts`）：保存整个设计，经注入的 `ModelWriter` 一次发出改过的草图与各自指纹（含新文件与级联改名）；只拦格式错误；409 → 已过时，可重新加载并重放（X7i）；`saveAndHandOff` = 保存成功且无语义提示时生成交给 AI 的指令（X20）。
 
 ```ts
 interface EditSession {
   target: { kind: 'design'; design: string } | { kind: 'persistent'; id: string }
-  base: { sketch: SketchDef; hash: string }
-  draft: SketchDef
-  past: { op: EditOp; before: SketchDef }[]; future: { op: EditOp; after: SketchDef }[]
+  base: ModelIndex                                    // 设计的基线（base.commit），底稿与相对基线用
+  sheets: Record<string /* mount */, { read?: { sketch: SketchDef; hash: string }; draft: SketchDef; derived: boolean }>
+  past: { op: EditOp; mounts: string[]; before: Record<string, SketchDef> }[]
+  future: { op: EditOp; mounts: string[]; after: Record<string, SketchDef> }[]
   stale: boolean
 }
-// desk.edit：{ session, draft, dirty, canUndo, canRedo, validation, check, changes, promotion, saving,
-//   enterEdit, exitEdit, edit(op), undo, redo, previewMove, save, discard, replayOnReload, createDesign, canLeave }
+// desk.edit：{ session, current, dirty, canUndo, canRedo, scene, validation, checks, changes, pendingRewire, overSeven, saving,
+//   enterSketch, exitSketch, openChild, openParent, edit(op), undo, redo, previewMove, save, saveAndHandOff, replayOnReload, createDesign, canLeave }
 ```

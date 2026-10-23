@@ -123,6 +123,8 @@ sequenceDiagram
 - 对比基线只有当前版本：相对当前版本标出草图新增 / 修改的实体，当前版本里草图没画的实体全部列为删除项——这是局部描述的本意，不是问题。
 - 设计信息条标「草图」，没有轮次、变更计数照常；「交给 AI」把 `sketchPrompt` 放进剪贴板。
 
+- **多草图（ADR-0025，待实现）**：设计的草图改为 `designs/<设计>/sketches/<mount>.yaml`，每个挂载点一张，一期的单个 `sketch.yaml` 照常读取；草图版本的载荷附各张草图的 `{ file, hash }` 与设计基线（`base.commit` 时的描述，经 git 读取）供底稿与相对基线；打开 v2 草图进入草图画布（[工作台 §12](./workbench.md)），一期草图只读（X9、X18）。
+
 ### 4.3 轮次从目录发现（E8，ADR-0024）
 
 - `listRevisionDirs(designDir)`：含 `system.yaml` 的 `r<N>/` 即一轮，按 N 的数字排序（r10 在 r9 之后）。
