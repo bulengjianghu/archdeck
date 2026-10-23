@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { isOwnedFile, type Baseline, type LedgerEntry, type OwnedRecord } from '../src/model'
+import { SKETCHES_DIR, isOwnedFile, type Baseline, type LedgerEntry, type OwnedRecord } from '../src/model'
 import { DESIGNS_DIR, GOVERNANCE_DIR, isModelFile } from './readModelDir'
 
 export { GOVERNANCE_DIR }
@@ -96,7 +96,12 @@ export function ownedHashes(projectDir: string): Record<string, string> {
     else if (ent.isDirectory() && ent.name === DESIGNS_DIR)
       for (const d of fs.readdirSync(path.join(projectDir, DESIGNS_DIR), { withFileTypes: true })) {
         if (!d.isDirectory()) continue
-        for (const f of fs.readdirSync(path.join(projectDir, DESIGNS_DIR, d.name))) add(`${DESIGNS_DIR}/${d.name}/${f}`)
+        for (const f of fs.readdirSync(path.join(projectDir, DESIGNS_DIR, d.name), { withFileTypes: true })) {
+          if (f.isFile()) add(`${DESIGNS_DIR}/${d.name}/${f.name}`)
+          // X9：设计的草图 designs/<设计>/sketches/<mount>.yaml
+          else if (f.isDirectory() && f.name === SKETCHES_DIR)
+            for (const g of fs.readdirSync(path.join(projectDir, DESIGNS_DIR, d.name, SKETCHES_DIR))) add(`${DESIGNS_DIR}/${d.name}/${SKETCHES_DIR}/${g}`)
+        }
       }
   }
   return out

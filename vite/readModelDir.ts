@@ -10,18 +10,25 @@
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { parse as parseYaml } from 'yaml'
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import {
+  CHANGE_KIND_LABELS,
   DESIGN_STATUSES,
   REVISION_FILE,
+  ROOT_MOUNT,
+  SKETCHES_DIR,
   SKETCH_REVISION,
+  changeSummary,
   checkSketches,
+  compareDesign,
   diffModels,
   isArchived,
   isSketchFile,
+  load,
   loadModel,
   parseDesignSketches,
   revisionNumber,
+  sketchLineage,
   versionLabel,
 } from '../src/model'
 import type {
@@ -40,8 +47,8 @@ import type {
 export type { ProjectSummary }
 
 export const DESIGNS_DIR = 'designs'
-/** 设计的草图（X1、DV-10） */
-export const SKETCH_FILE = 'sketch.yaml'
+/** 设计的草图目录（X9）：designs/<设计>/sketches/<mount>.yaml */
+export { SKETCHES_DIR }
 /** 基线与拦截记录（ADR-0015），不属于描述 */
 export const GOVERNANCE_DIR = 'governance'
 
@@ -70,8 +77,23 @@ export interface ModelPayload {
   sketches?: { design: string; file: RawFile }[]
   /** DV-10：草图版本的「交给 AI」指令 */
   sketchPrompt?: string
-  /** X7i：草图版本（设计的草图、持久草图）的草图文件（相对项目描述目录）与读取时的指纹，编辑保存时带回比对 */
-  sketch?: { file: string; hash: string }
+  /**
+   * X7i：草图版本（设计的草图、持久草图）里可编辑的那张草图（相对项目描述目录）、它在载荷里的路径与读取时的指纹，编辑保存时带回比对；
+   * 设计有多张草图时为主草图（根挂载的那张，没有时为第一张）
+   */
+  sketch?: SketchFileRef
+  /** X9、X20：设计的全部草图（按挂载点）与各自读取时的指纹——设计级会话与按设计写回用 */
+  sketchFiles?: SketchFileRef[]
+}
+
+/** 一张草图文件：挂载点、相对项目描述目录的路径、在载荷里的路径、读取时的指纹 */
+export interface SketchFileRef {
+  mount?: string
+  file: string
+  path?: string
+  hash: string
+  /** X15：没有 layout，打开时自动布局一次、不写回 */
+  needsLayout?: boolean
 }
 
 /** X7i：草图文件的指纹——与 owned.json 同一算法（SHA-1）；不引治理存储，避免读取 ↔ 治理存储成环 */
@@ -124,15 +146,33 @@ export function readProject(modelRoot: string, id: string, projectRoot: string):
   const dir = path.join(modelRoot, id)
   const designs = listDesigns(dir)
   // X3、X4：已定稿、未归档的设计的草图约束当前版本
-  const sketches = designs.filter(d => d.sketch && d.status === 'accepted').flatMap(d => designSketch(dir, d.id) ?? [])
+  const sketches = designs.filter(d => d.sketch && d.status === 'accepted').flatMap(d => designSketches(dir, d.id))
   return { project: id, ...readModelDir(dir, projectRoot), designs, ...(sketches.length ? { sketches } : {}) }
 }
 
-/** 设计的草图文件（没有时为 null） */
-export function designSketch(projectDir: string, design: string): { design: string; file: RawFile } | null {
-  const file = path.join(projectDir, DESIGNS_DIR, design, SKETCH_FILE)
-  if (!isProjectId(design) || !fs.existsSync(file)) return null
-  return { design, file: { path: `${DESIGNS_DIR}/${design}/${SKETCH_FILE}`, text: fs.readFileSync(file, 'utf8') } }
+/** X9：设计的全部草图文件 designs/<设计>/sketches/*.yaml（按挂载点排序，根挂载在前）；没有时为空 */
+export function designSketches(projectDir: string, design: string): { design: string; file: RawFile }[] {
+  const dir = path.join(projectDir, DESIGNS_DIR, design, SKETCHES_DIR)
+  if (!isProjectId(design) || !fs.existsSync(dir)) return []
+  return fs
+    .readdirSync(dir)
+    .filter(f => /\.ya?ml$/.test(f))
+    .sort((a, b) => Number(b.startsWith(`${ROOT_MOUNT}.`)) - Number(a.startsWith(`${ROOT_MOUNT}.`)) || a.localeCompare(b))
+    .map(f => ({ design, file: { path: `${DESIGNS_DIR}/${design}/${SKETCHES_DIR}/${f}`, text: fs.readFileSync(path.join(dir, f), 'utf8') } }))
+}
+
+/** X9、X15：设计的草图清单（设计面板列出、按设计写回用）：挂载点、路径、指纹、是否需要初始布局 */
+export function designSketchFiles(projectDir: string, design: string): SketchFileRef[] {
+  return designSketches(projectDir, design).map(({ file }) => {
+    const parsed = load([file]).model.sketches[0]
+    return {
+      ...(parsed ? { mount: parsed.def.mount } : {}),
+      file: file.path,
+      path: `${SKETCHES_DIR}/${path.basename(file.path)}`,
+      hash: sketchHash(file.text),
+      ...(parsed?.needsLayout ? { needsLayout: true } : {}),
+    }
+  })
 }
 
 // ── 设计版本 ──
@@ -207,7 +247,8 @@ export function readDesignInfo(designDir: string, id: string): DesignInfo {
     if (deviation && reason) accepted.push({ deviation, reason, at: str(a.at) ?? (a.at instanceof Date ? a.at.toISOString().slice(0, 10) : undefined) })
     else problems.push('accepted 中有条目缺少 deviation 或 reason')
   }
-  const sketch = fs.existsSync(path.join(designDir, SKETCH_FILE))
+  const files = designSketchFiles(path.dirname(path.dirname(designDir)), id)
+  const sketch = files.length > 0
   return {
     id,
     name: str(raw.name) ?? id,
@@ -216,7 +257,7 @@ export function readDesignInfo(designDir: string, id: string): DesignInfo {
     base,
     ...(adr.length ? { adr } : {}),
     revisions,
-    ...(sketch ? { sketch } : {}),
+    ...(sketch ? { sketch, sketches: files.map(f => ({ mount: f.mount ?? '', file: f.file, ...(f.needsLayout ? { needsLayout: true } : {}) })) } : {}),
     ...(accepted.length ? { accepted } : {}),
     problems,
   }
@@ -269,7 +310,7 @@ export function readDesignRevision(
   if (!info || at < 0) return null
   const designDir = path.join(modelRoot, project, DESIGNS_DIR, design)
   const prev = info.revisions[at - 1]
-  const sketch = designSketch(path.join(modelRoot, project), design)
+  const sketches = designSketches(path.join(modelRoot, project), design)
   return {
     project,
     ...readModelDir(path.join(designDir, revision), projectRoot),
@@ -279,17 +320,19 @@ export function readDesignRevision(
       current: { label: '当前版本', dir: current.dir, files: current.files },
       ...(prev ? { previous: { label: versionLabel(info, prev.id), ...readModelDir(path.join(designDir, prev.id), projectRoot) } } : {}),
     },
-    ...(sketch ? { sketches: [sketch] } : {}),
+    ...(sketches.length ? { sketches } : {}),
   }
 }
 
 /**
- * DV-10：草图作为版本——文件 = 当前版本的 system.yaml + 持久草图（intent/）+ 该设计的 sketch.yaml，对比基线为当前版本；
- * 附「交给 AI」的指令（草图全文 + 04 §5「按草图扩展」，docsRoot 缺省为本包根目录）。没有草图时返回 null。
+ * DV-10：草图作为版本——文件 = 当前版本的 system.yaml + 持久草图（intent/）+ 该设计的全部草图（载荷里为 sketches/<mount>.yaml），对比基线为当前版本；
+ * 附「交给 AI」的指令（各张草图全文 + 相对基线的变更摘要 + 04 §5「按草图扩展」，docsRoot 缺省为本包根目录）。没有草图时返回 null。
  */
 export interface SketchVersionOptions {
   /** L-2：草图文件在上一次提交时的内容（相对项目描述目录的路径 → 文本；没有提交过为 null），「交给 AI」据此附改动摘要；开发服务器经 git 读取 */
   committed?: (projectDir: string, rel: string) => string | null
+  /** X17：设计的基线（base.commit 那一版描述的文件）；给了时「交给 AI」附相对基线的变更摘要（按血缘） */
+  baseline?: (projectDir: string, commit: string) => RawFile[] | null
 }
 
 export function readSketchVersion(
@@ -302,21 +345,83 @@ export function readSketchVersion(
 ): ModelPayload | null {
   const current = readProject(modelRoot, project, projectRoot)
   const projectDir = path.join(modelRoot, project)
-  const sketch = current && designSketch(projectDir, design)
-  if (!current || !sketch) return null
+  const sketches = current ? designSketches(projectDir, design) : []
+  if (!current || !sketches.length) return null
   const designDir = path.join(projectDir, DESIGNS_DIR, design)
   const base = current.files.filter(f => f.path === 'system.yaml' || isSketchFile(f.path))
-  const changes = opts.committed ? sketchChanges(base, SKETCH_FILE, opts.committed(projectDir, sketch.file.path), sketch.file.text) : ''
+  const refs = designSketchFiles(projectDir, design)
+  const files = sketches.map(s => ({ path: `${SKETCHES_DIR}/${path.basename(s.file.path)}`, text: s.file.text }))
+  const info = current.designs?.find(d => d.id === design)
+  const commit = info?.base?.commit
+  const baselineFiles = commit && opts.baseline ? opts.baseline(projectDir, commit) : null
+  const lineageNote = baselineFiles ? baselineChanges(baselineFiles, parseDesignSketches(sketches)) : ''
+  const changes = opts.committed
+    ? sketches
+        .map(s => sketchChanges(base, s.file.path, opts.committed!(projectDir, s.file.path), s.file.text))
+        .filter(Boolean)
+        .join('\n')
+    : ''
+  const primary = refs.find(r => r.mount === ROOT_MOUNT) ?? refs[0]
+  const stubs = referenceStubs(loadModel(current.files).index, [...base, ...files])
   return {
     project,
     dir: path.relative(projectRoot, designDir) || '.',
-    files: [...base, { ...sketch.file, path: SKETCH_FILE }],
+    files: [...base, ...files, ...(stubs ? [stubs] : [])],
     designs: current.designs,
     version: { design, revision: SKETCH_REVISION },
     compare: { current: { label: '当前版本', dir: current.dir, files: current.files } },
-    sketchPrompt: sketchPrompt(design, sketch.file.text, docsRoot, changes),
-    sketch: { file: sketch.file.path, hash: sketchHash(sketch.file.text) },
+    sketchPrompt: sketchPrompt(
+      design,
+      sketches.map(s => ({ path: s.file.path, text: s.file.text })),
+      docsRoot,
+      changes,
+      lineageNote,
+    ),
+    sketch: primary,
+    sketchFiles: refs,
   }
+}
+
+/** X19：草图版本里的引用文件——草图引用、但草图与持久草图都没有定义的模块（与它们缺的祖先）与参与者，取当前版本的名称与位置，让草图版本自成一份可加载的描述 */
+export const REFERENCES_FILE = 'references.yaml'
+
+export function referenceStubs(current: ModelIndex, files: readonly RawFile[]): RawFile | null {
+  const { index } = loadModel(files)
+  const need = new Set<string>()
+  for (const s of index.model.sketches) {
+    for (const r of s.def.relations ?? []) for (const e of [r.from, r.to]) need.add(e)
+    for (const x of s.def.interfaces ?? []) if (x.owner) need.add(x.owner)
+    if (s.def.mount !== ROOT_MOUNT) need.add(s.def.mount)
+  }
+  const modules: { id: string; name: string; parent?: string; kind?: string; responsibility?: string }[] = []
+  const actors: { id: string; name: string; kind: string }[] = []
+  const add = (id: string) => {
+    if (index.modules.has(id) || modules.some(m => m.id === id)) return
+    const m = current.modules.get(id)
+    if (!m) return
+    if (m.parentId !== current.rootId) add(m.parentId)
+    modules.push({
+      id,
+      name: m.name,
+      ...(m.parentId !== current.rootId ? { parent: m.parentId } : {}),
+      ...(m.kind ? { kind: m.kind } : {}),
+      ...(m.responsibility ? { responsibility: m.responsibility } : {}),
+    })
+  }
+  for (const id of need) {
+    const a = current.actors.get(id)
+    if (a && !index.actors.has(id)) actors.push({ id, name: a.name, kind: a.kind })
+    else add(id)
+  }
+  if (!modules.length && !actors.length) return null
+  const text = stringifyYaml({ ...(modules.length ? { modules } : {}), ...(actors.length ? { actors } : {}) }, { lineWidth: 0 })
+  return { path: REFERENCES_FILE, text: `# 草图引用的外部模块（取自当前版本，只读，X19）\n${text}` }
+}
+
+/** X17：设计的各张草图相对基线的变更摘要（按血缘措辞）；没有变更时为空串 */
+export function baselineChanges(baselineFiles: readonly RawFile[], sketches: Parameters<typeof compareDesign>[0]): string {
+  const { index } = loadModel(baselineFiles)
+  return changeSummary(compareDesign(sketches, index, 'baseline').sketches)
 }
 
 /** 持久草图版本（ADR-0024）：system.yaml + intent/**，对比基线为当前版本；附该草图文件的指纹（编辑骨架用） */
@@ -332,17 +437,18 @@ export function readIntentVersion(modelRoot: string, project: string, sketchId: 
     designs: current.designs,
     version: { intent: sketchId },
     compare: { current: { label: '当前版本', dir: current.dir, files: current.files } },
-    sketch: { file: rel, hash: sketchHash(file.text) },
+    sketch: { file: rel, path: rel, hash: sketchHash(file.text) },
   }
 }
 
 /** L-2：草图相对上一次提交的改动摘要（新增 / 修改 / 删除了哪些实体）；没有改动时为空串 */
 export function sketchChanges(base: readonly RawFile[], path: string, before: string | null, after: string): string {
-  const empty = 'sketch: { id: base, modules: [] }\n'
+  const empty = 'sketch: { id: base, mount: root, modules: [] }\n'
   const at = (text: string) => loadModel([...base, { path, text }]).index
-  const diff = diffModels(at(before ?? empty), at(after))
+  const lineage = sketchLineage(load([{ path, text: after }]).model.sketches.map(s => s.def))
+  const diff = diffModels(at(before ?? empty), at(after), { lineage })
   if (!diff.changes.length) return ''
-  const KIND = { added: '新增', changed: '修改', removed: '删除' } as const
+  const KIND = CHANGE_KIND_LABELS
   const ENTITY: Record<string, string> = { module: '模块', relation: '关系', interface: '接口', dataStructure: '数据结构' }
   return diff.changes
     .map(
@@ -352,8 +458,8 @@ export function sketchChanges(base: readonly RawFile[], path: string, before: st
     .join('\n')
 }
 
-/** DV-10：「交给 AI」的指令——草图全文 + 04 §5「按草图扩展」一节（从本包 docs 截取；读不到时只给草图） */
-export function sketchPrompt(design: string, sketchText: string, docsRoot: string, changes = ''): string {
+/** DV-10、X20：「交给 AI」的指令——各张草图全文 + 相对基线的变更摘要（按血缘）+ 04 §5「按草图扩展」一节（从本包 docs 截取；读不到时只给草图） */
+export function sketchPrompt(design: string, sketches: readonly { path: string; text: string }[], docsRoot: string, changes = '', lineage = ''): string {
   let section = ''
   try {
     const doc = fs.readFileSync(path.join(docsRoot, 'docs', '04-description-format.md'), 'utf8')
@@ -367,12 +473,8 @@ export function sketchPrompt(design: string, sketchText: string, docsRoot: strin
     '',
     `请在当前版本上起草设计 \`${design}\` 的下一轮（没有轮次时为 r1）：把当前版本整份复制为新一轮，按下面的草图扩展，草图是约束、不是建议。`,
     '',
-    `## 草图（designs/${design}/sketch.yaml）`,
-    '',
-    '```yaml',
-    sketchText.trimEnd(),
-    '```',
-    '',
+    ...sketches.flatMap(s => [`## 草图（${s.path}）`, '', '```yaml', s.text.trimEnd(), '```', '']),
+    ...(lineage ? ['## 相对基线的变更（按血缘）', '', lineage, ''] : []),
     ...(changes ? ['## 本次改动（草图相对上一次提交）', '', changes, ''] : []),
     '## 规范（docs/04-description-format.md §5「按草图扩展」）',
     '',
@@ -384,12 +486,12 @@ export function sketchPrompt(design: string, sketchText: string, docsRoot: strin
 /** X4：有草图的设计的偏差计数——未归档的对最新一轮核验（已定稿的对当前版本），卡片标「偏差 N」 */
 function designDeviations(modelRoot: string, project: string, current: ModelIndex, d: DesignInfo, projectRoot: string): DesignInfo['deviations'] | undefined {
   const dir = path.join(modelRoot, project)
-  const sketch = d.sketch && !isArchived(d.status) ? designSketch(dir, d.id) : null
-  if (!sketch) return undefined
+  const sketches = d.sketch && !isArchived(d.status) ? designSketches(dir, d.id) : []
+  if (!sketches.length) return undefined
   const last = d.revisions[d.revisions.length - 1]
   const target = d.status === 'accepted' || !last ? current : loadModel(readModelDir(path.join(dir, DESIGNS_DIR, d.id, last.id), projectRoot).files).index
-  const check = checkSketches(target, parseDesignSketches([sketch]), new Map([[d.id, d.accepted ?? []]])).find(c => c.design === d.id)
-  return check ? { errors: check.counts.error, warnings: check.counts.warning } : undefined
+  const checks = checkSketches(target, parseDesignSketches(sketches), new Map([[d.id, d.accepted ?? []]])).filter(c => c.design === d.id)
+  return checks.length ? { errors: checks.reduce((n, c) => n + c.counts.error, 0), warnings: checks.reduce((n, c) => n + c.counts.warning, 0) } : undefined
 }
 
 /** 项目列表页用的摘要：直接跑一遍模型层，统计规模与问题数；健康度（Q10）由调用方另算后附上；有草图的设计附偏差计数（X4） */

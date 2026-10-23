@@ -26,8 +26,10 @@ export interface ModelPayload {
   sketches?: { design: string; file: RawFile }[]
   /** DV-10：草图版本的「交给 AI」指令 */
   sketchPrompt?: string
-  /** X7i：草图版本的草图文件与读取时的指纹 */
-  sketch?: { file: string; hash: string }
+  /** X7i：草图版本的草图文件、它在载荷里的路径与读取时的指纹（设计有多张时为主草图） */
+  sketch?: { file: string; hash: string; path?: string }
+  /** X9、X20：设计的全部草图（第三波的设计级会话用） */
+  sketchFiles?: { mount?: string; file: string; path?: string; hash: string; needsLayout?: boolean }[]
 }
 
 export type FetchModel = () => Promise<ModelPayload>
