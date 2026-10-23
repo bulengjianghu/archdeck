@@ -63,7 +63,12 @@ test('SK-6–SK-11 主路径：新建设计（缺省空草图）→ 加层 → �
     await expect(page).toHaveURL(/\/d\/zz-e2e-edit\/sketch/)
     await expect(page.locator('.edit-bar .title')).toContainText('编辑草图：E2E 编辑')
     // 二期对话框的「空草图」在格式 v2 下落成空的根挂载草图（第三波换成「在此设计」）
-    expect(parse(fs.readFileSync(path.join(box.dir, 'sketches/root.yaml'), 'utf8')).sketch).toEqual({ id: 'zz-e2e-edit', mount: 'root', lifetime: 'until-implemented', modules: [] })
+    expect(parse(fs.readFileSync(path.join(box.dir, 'sketches/root.yaml'), 'utf8')).sketch).toEqual({
+      id: 'zz-e2e-edit',
+      mount: 'root',
+      lifetime: 'until-implemented',
+      modules: [],
+    })
 
     // 加层：末尾的插入条
     const bands = page.locator('.vue-flow__node-band')
