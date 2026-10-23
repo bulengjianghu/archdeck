@@ -11,6 +11,7 @@ import {
   referenceNodes,
   ROOT_MOUNT,
   seedFromBaseline,
+  shortName,
   type DesignEditEffects,
   type DesignEditOp,
   type EditOp,
@@ -155,20 +156,22 @@ export function createCommands(i: CommandInputs) {
   }
 
   /**
-   * F-23：新建模块（双击空白 / 工具条「＋ 模块」）——非根草图为挂载点的子模块（ID = <挂载点>.<短名>）；根草图为一条新层。
+   * F-23：新建模块（双击空白 / 工具条「＋ 模块」）——非根草图为挂载点的子模块（ID = <挂载点>.<短名>）；
+   * 根草图（X21）给了层带时为该层的第二级模块（ID = <层>.<短名>），没给时为一条新层（「＋ 层」，排在最后）。
    * 给了位置时新建与落位是一步。
    */
-  function addModule(name: string, short: string, at?: SketchPoint): EditOutcome {
+  function addModule(name: string, short: string, at?: SketchPoint, layer?: string): EditOutcome {
     const def = sheet()
     if (!def) return fail('不在草图里')
     const m = mount()
     const root = m === ROOT_MOUNT
     const sid = short.trim()
     if (!sid) return fail('ID 短名不能为空（X7c：中文名请填英文短名）')
-    const id = root ? sid : `${m}.${sid}`
-    const add: DesignEditOp = root ? single({ op: 'addLayer', name, id, at: (def.modules ?? []).length }) : single({ op: 'addModule', parent: m, name, id })
+    const parent = root ? layer : m
+    const id = parent ? `${parent}.${sid}` : sid
+    const add: DesignEditOp = parent ? single({ op: 'addModule', parent, name, id }) : single({ op: 'addLayer', name, id, at: (def.modules ?? []).length })
     const ops: DesignEditOp[] = [add]
-    if (at) ops.push(single({ op: 'moveNode', positions: positionsWith(def, { [id]: at }) }))
+    if (at && parent) ops.push(single({ op: 'moveNode', positions: positionsWith(def, { [id]: at }) }))
     return run(ops)
   }
 
@@ -184,8 +187,12 @@ export function createCommands(i: CommandInputs) {
   const demote = (id: string, onto: string) => run({ op: 'demote', sketch: mount(), id, target: onto })
   /** F-26：升级——拖到面包屑的父级 */
   const promote = (id: string) => run({ op: 'promote', sketch: mount(), id })
-  /** F-26：移入——根草图里拖到另一条层带 */
-  const moveIn = (id: string, layer: string) => run({ op: 'moveIn', id, layer })
+  /** F-26、X21：移入——根草图里拖到另一条层带；给了 x 时落位与移入是一步（新 ID = <层>.<短名>） */
+  function moveIn(id: string, layer: string, x?: number): EditOutcome {
+    const ops: DesignEditOp[] = [{ op: 'moveIn', id, layer }]
+    if (x !== undefined) ops.push({ op: 'edit', sketch: ROOT_MOUNT, edit: { op: 'moveNode', positions: { [`${layer}.${shortName(id)}`]: { x, y: 0 } } } })
+    return run(ops)
+  }
   /** 改 ID（只改短名，前缀级联） */
   const rename = (id: string, newId: string) => run({ op: 'rename', sketch: mount(), id, newId })
   const updateModule = (id: string, patch: ModulePatch) => edit({ op: 'updateModule', id, patch })

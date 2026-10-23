@@ -3,7 +3,7 @@
  * 引用节点由关系派生；同一对节点的多条直线平移错开；直线裁到两端节点的边框。
  */
 import { describe, expect, it } from 'vitest'
-import { sketchPositions, sketchScene, straightEdge, SKETCH_PARALLEL_GAP, SKETCH_NODE } from '../../src/layout/sketch'
+import { bandAt, sketchPositions, sketchScene, straightEdge, SKETCH_BAND, SKETCH_PARALLEL_GAP, SKETCH_NODE } from '../../src/layout/sketch'
 import type { SketchDef } from '../../src/model'
 
 const DEF: SketchDef = {
@@ -70,5 +70,61 @@ describe('草图布局', () => {
     expect(e.to).toEqual({ x: 350, y: 0 })
     const o = straightEdge({ x: 0, y: 0 }, { x: 400, y: 0 }, { w: 100, h: 50 }, { w: 100, h: 50 }, 10)
     expect([o.from.y, o.to.y, o.mid.x]).toEqual([10, 10, 200])
+  })
+
+  it('05 裁决 4：外部端点折叠显示，同一对（本层模块、折叠节点）同方向的多条关系合成一条显示边并带全部关系；折叠节点的位置可取精确端点记下的', () => {
+    const def: SketchDef = {
+      id: 'd',
+      mount: 'core.a',
+      modules: [
+        { id: 'core.a.x', name: 'X' },
+        { id: 'core.a.y', name: 'Y' },
+      ],
+      relations: [
+        { id: 'r1', from: 'core.a.x', to: 'access.w.s', type: 'calls' },
+        { id: 'r2', from: 'core.a.x', to: 'access.w.t', type: 'depends' },
+        { id: 'r3', from: 'access.w.s', to: 'core.a.x', type: 'notifies' },
+        { id: 'r4', from: 'core.a.y', to: 'access.r', type: 'calls', description: '读' },
+      ],
+      layout: { modules: { 'access.w.s': { x: 900, y: 90 } } },
+    }
+    const s = sketchScene({ def, nameOf: () => undefined, selected: new Set(['access.w']) })
+    expect(s.nodes.filter(n => n.data.kind === 'reference').map(n => [n.id, n.data.relations, n.data.members])).toEqual([
+      ['access.w', 3, ['access.w.s', 'access.w.t']],
+      ['access.r', 1, undefined],
+    ])
+    expect(s.nodes.find(n => n.id === 'access.w')!.position).toEqual({ x: 900, y: 90 })
+    const agg = s.edges.find(e => e.source === 'core.a.x' && e.target === 'access.w')!
+    expect(agg.id).toBe('agg:core.a.x>access.w')
+    expect(agg.data).toMatchObject({ relationIds: ['r1', 'r2'], reference: 'access.w', type: 'mixed', label: null })
+    expect(s.edges.find(e => e.source === 'access.w')!.id).toBe('r3')
+    expect(s.edges.find(e => e.target === 'access.r')!.data.description).toBe('读')
+  })
+
+  it('X21 根草图：层画成横向带（按 order），第二级模块在所属带内，x 取 layout、y 由带算；带头标模块数与超七', () => {
+    const kids = Array.from({ length: 8 }, (_, i) => ({ id: `b.m${i}`, name: `M${i}` }))
+    const def: SketchDef = {
+      id: 'd',
+      mount: 'root',
+      modules: [
+        { id: 'b', name: 'B', kind: 'layer', order: 2, children: kids },
+        { id: 'a', name: 'A', kind: 'layer', order: 1, abstraction: '上层', children: [{ id: 'a.x', name: 'X' }] },
+      ],
+      layout: { modules: { 'a.x': { x: 600 } } },
+    }
+    const s = sketchScene({ def, nameOf: () => undefined })
+    expect(s.bands.map(b => b.id)).toEqual(['a', 'b'])
+    const [ba, bb] = s.bands
+    const ax = s.nodes.find(n => n.id === 'a.x')!
+    expect(ax.position).toEqual({ x: 600, y: ba.y + (SKETCH_BAND.h - SKETCH_NODE.h) / 2 })
+    expect(s.nodes.find(n => n.id === 'b.m0')!.position.y).toBe(bb.y + (SKETCH_BAND.h - SKETCH_NODE.h) / 2)
+    const la = s.nodes.find(n => n.id === 'a')!.data
+    expect(la).toMatchObject({ kind: 'layer', abstraction: '上层', count: 1 })
+    expect(s.nodes.find(n => n.id === 'b')!.data).toMatchObject({ count: 8, over: true })
+    expect(bandAt(s.bands, bb.y + 5)).toBe('b')
+    expect(bandAt(s.bands, ba.y + ba.h + SKETCH_BAND.gap / 2)).toBeNull()
+    // 带内不重叠：没记位置的往右找空位
+    const xs = kids.map(k => s.nodes.find(n => n.id === k.id)!.position.x)
+    expect(new Set(xs).size).toBe(xs.length)
   })
 })

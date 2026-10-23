@@ -2,6 +2,7 @@
 /**
  * 草图画布的边（F-22、X15）：两端中心之间的直线，裁到两端节点的边框；同一对节点的多条线按草图布局给的平移量错开；
  * 不走线、不避让。标签在中点或 layout.relations 记下的位置；选中的边可拖动标签，松手为一步（relabel）。待重连的线为红色虚线。
+ * 聚合边（05 裁决 4：本层模块与同一个折叠引用之间的多条关系）标「N 条」，点它选中引用节点（面板展开精确关系），标签不能拖。
  */
 import { computed, ref } from 'vue'
 import { EdgeLabelRenderer, useVueFlow } from '@vue-flow/core'
@@ -38,12 +39,18 @@ const arrow = computed(() => {
 /** 拖动中的标签位置（松手才写回） */
 const dragging = ref<{ x: number; y: number } | null>(null)
 const label = computed(() => dragging.value ?? props.data.label ?? geo.value.mid)
-const typeLabel = computed(() => RELATION_TYPE_LABELS[props.data.type as RelationType] ?? props.data.type)
-/** 标签：写了说明的显示说明；没写的只在选中时显示类型（线多时不堆满画布） */
-const text = computed(() => props.data.description || (props.data.selected ? typeLabel.value : ''))
+const many = computed(() => props.data.relationIds?.length ?? 0)
+const typeLabel = computed(() => (many.value ? `${many.value} 条关系（折叠显示）` : (RELATION_TYPE_LABELS[props.data.type as RelationType] ?? props.data.type)))
+/** 标签：聚合边标条数；写了说明的显示说明；没写的只在选中时显示类型（线多时不堆满画布） */
+const text = computed(() => (many.value ? `${many.value} 条` : props.data.description || (props.data.selected ? typeLabel.value : '')))
 
 let start: { px: number; py: number; x: number; y: number } | null = null
 function onDown(e: PointerEvent) {
+  if (many.value) {
+    e.stopPropagation()
+    if (props.data.reference) desk.select({ kind: 'module', id: props.data.reference })
+    return
+  }
   desk.select({ kind: 'relation', id: props.id })
   if (!props.data.selected) return
   e.stopPropagation()
@@ -64,7 +71,7 @@ function onUp() {
 </script>
 
 <template>
-  <g class="sk-edge" :class="[data.type, { selected: data.selected, pending: data.pending, changed: !!data.change }]">
+  <g class="sk-edge" :class="[data.type, { selected: data.selected, pending: data.pending, changed: !!data.change, many: many > 1 }]">
     <path :d="path" class="hit" />
     <path :d="path" class="line" />
     <polygon :points="arrow" class="head" />
@@ -72,7 +79,7 @@ function onUp() {
   <EdgeLabelRenderer v-if="text">
     <div
       class="sk-edge-label nodrag nopan"
-      :class="{ selected: data.selected, pending: data.pending }"
+      :class="{ selected: data.selected, pending: data.pending, many: many > 1 }"
       :style="{ transform: `translate(-50%, -50%) translate(${label.x}px, ${label.y}px)` }"
       :data-relation="id"
       :title="`${typeLabel}${data.selected ? '（拖动可移动标签）' : ''}`"
@@ -100,6 +107,10 @@ function onUp() {
 
 .head {
   fill: var(--text-3);
+}
+
+.sk-edge.many .line {
+  stroke-width: 2.5;
 }
 
 .sk-edge.depends .line {
@@ -144,6 +155,11 @@ function onUp() {
   border-color: var(--accent);
   color: var(--accent);
   cursor: move;
+}
+
+.sk-edge-label.many {
+  font-weight: 600;
+  color: var(--text-3);
 }
 
 .sk-edge-label.pending {

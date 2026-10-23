@@ -289,7 +289,7 @@
                 "$ref": "#/definitions/id"
               },
               "additionalProperties": {
-                "$ref": "#/definitions/point"
+                "$ref": "#/definitions/spot"
               }
             },
             "relations": {
@@ -968,6 +968,22 @@
           }
         }
       ]
+    },
+    "spot": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "布局里模块的位置（X15）：根草图的第二级模块只记 x（y 由层带算，X21）",
+      "required": [
+        "x"
+      ],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      }
     },
     "point": {
       "type": "object",

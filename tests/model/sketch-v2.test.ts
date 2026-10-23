@@ -12,7 +12,12 @@ import {
   deriveChildSketch,
   diffModels,
   dropOrphanReferences,
+  foldReference,
   gridLayout,
+  referenceNodes,
+  referenceRelations,
+  ROOT_BAND_GAP,
+  ROOT_BAND_X0,
   load,
   loadModel,
   prefixMap,
@@ -370,8 +375,68 @@ describe('X15 位置、X19 引用节点', () => {
     expect(s.layout).toMatchObject({ modules: { 'fe.ui.view': { x: 5, y: 6 } }, relations: { 'rel.view-api': { label: { x: 1, y: 1 } } } })
     const r = run({ 'fe.ui': s }, { op: 'rename', sketch: 'fe.ui', id: 'fe.ui.view', newId: 'screen' })
     expect(r.design['fe.ui'].layout!.modules!['fe.ui.screen']).toEqual({ x: 5, y: 6 })
-    expect(gridLayout(seedFromBaseline('root', baseline, { id: 'd1' })).modules!.core).toEqual({ x: 40, y: 180 })
-    expect(gridLayout(seedFromBaseline('root', baseline, { id: 'd1' })).modules!['core.store']).toEqual({ x: 480, y: 180 })
+  })
+
+  it('X21 根草图：layout 对层不记位置，带内的第二级模块只记 x（初始布局与拖动都是）', () => {
+    const root = seedFromBaseline('root', baseline, { id: 'd1' })
+    const grid = gridLayout(root).modules!
+    expect(grid.core).toBeUndefined()
+    expect(grid['core.store']).toEqual({ x: ROOT_BAND_X0 + ROOT_BAND_GAP })
+    const r = applyEdit(root, { op: 'moveNode', positions: { 'core.api': { x: 300, y: 999 }, core: { x: 1, y: 2 } } }, { persistent, designSketch: true })
+    if (!r.ok) throw new Error(r.reason)
+    expect(r.sketch.layout!.modules).toEqual({ 'core.api': { x: 300 } })
+    const moved = run({ root: r.sketch }, { op: 'moveIn', id: 'core.api', layer: 'fe' })
+    expect(moved.design.root.layout!.modules).toEqual({ 'fe.api': { x: 300 } })
+  })
+
+  it('05 裁决 4：外部端点按与挂载点同深度的祖先折叠——引用节点显示折叠后的 ID，数据仍记精确端点；根草图不折叠', () => {
+    expect(foldReference('fe.ui', 'core.api.impl')).toBe('core.api')
+    expect(foldReference('fe.ui', 'core.api')).toBe('core.api')
+    expect(foldReference('fe.ui', 'core')).toBe('core')
+    expect(foldReference('fe.ui.view', 'core.api.impl.x')).toBe('core.api.impl')
+    expect(foldReference('fe.ui', 'fe.ui.view.header')).toBe('fe.ui.view')
+    expect(foldReference('root', 'core.api.impl')).toBe('core.api.impl')
+    const def: SketchDef = {
+      ...seedUi(),
+      relations: [
+        { id: 'r1', from: 'fe.ui.view', to: 'core.api.impl', type: 'calls' },
+        { id: 'r2', from: 'fe.ui.list', to: 'core.api.cache', type: 'calls' },
+        { id: 'r3', from: 'core.store', to: 'fe.ui.form', type: 'notifies' },
+      ],
+    }
+    expect(referenceNodes(def)).toEqual(['core.api', 'core.store'])
+    expect(referenceRelations(def, 'core.api').map(r => r.id)).toEqual(['r1', 'r2'])
+    // 折叠节点的位置按折叠后的 ID 记，保存时不当作无关系的引用丢掉
+    const placed: SketchDef = { ...def, layout: { modules: { 'core.api': { x: 1, y: 2 } } } }
+    expect(dropOrphanReferences(placed).dropped).toEqual([])
+    // 删折叠的引用节点 = 删折叠进它的全部关系
+    const r = applyEdit(placed, { op: 'removeReference', id: 'core.api' }, { persistent, designSketch: true, known: id => baseline.modules.has(id) })
+    if (!r.ok) throw new Error(r.reason)
+    expect(r.sketch.relations!.map(x => x.id)).toEqual(['r3'])
+    expect(r.sketch.layout).toBeUndefined()
+    expect(applyEdit(seedFromBaseline('root', baseline, { id: 'd1' }), { op: 'addReference', id: 'core.api.impl' }, { persistent, designSketch: true, known: () => true })).toMatchObject({
+      ok: false,
+      code: 'root-only',
+    })
+  })
+
+  it('05 裁决 4 初始布局：本层模块居中网格，入边引用在左列、出边在右列、双向在左', () => {
+    const def: SketchDef = {
+      ...seedUi(),
+      relations: [
+        { id: 'r1', from: 'fe.ui.view', to: 'core.api', type: 'calls' },
+        { id: 'r2', from: 'core.store', to: 'fe.ui.form', type: 'notifies' },
+        { id: 'r3', from: 'fe.ui.list', to: 'core.cache', type: 'calls' },
+        { id: 'r4', from: 'core.cache', to: 'fe.ui.list', type: 'notifies' },
+      ],
+    }
+    const g = gridLayout(def).modules!
+    const own = ['fe.ui.view', 'fe.ui.list', 'fe.ui.form'].map(id => g[id].x)
+    const [lo, hi] = [Math.min(...own), Math.max(...own)]
+    expect(g['core.store'].x).toBeLessThan(lo)
+    expect(g['core.cache'].x).toBeLessThan(lo)
+    expect(g['core.api'].x).toBeGreaterThan(hi)
+    for (const p of Object.values(g)) expect(p.x).toBeGreaterThanOrEqual(0)
   })
 
   it('引用外部模块：只是布局里的位置；保存时没有关系的引用丢弃并给出清单；两端都是引用的关系不能建', () => {

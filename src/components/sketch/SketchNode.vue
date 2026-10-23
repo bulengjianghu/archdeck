@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * 草图画布的节点（present.sketch，F-20–F-28）：本层模块、根草图里的层、由关系派生的引用节点（灰色虚线、只读）。
+ * 草图画布的节点（present.sketch，F-20–F-28）：本层模块、根草图里的层、由关系派生的引用节点（灰色虚线、只读；
+ * 按挂载点深度折叠，标折叠进来的关系条数，05 裁决 4）。
  * 句柄：中心的两个隐藏句柄给直线边定位；模块与引用节点右侧的蓝色小圆点拖出连线（F-21）。
  * 拖到别的节点上时目标高亮「放下 = 降级为其子模块」（层为「放下 = 移入这一层」，F-26）；图上标出变更时右上角角标（新 / 改 / 合 / 拆 / 移）。
  */
@@ -18,7 +19,9 @@ const badge = computed(() => (props.data.change ? CHANGE_BADGES[props.data.chang
     <Handle id="t" type="target" :position="Position.Top" class="sk-center" :connectable="true" />
     <Handle id="c" type="source" :position="Position.Bottom" class="sk-center" :connectable="false" />
     <span v-if="data.kind === 'layer'" class="tag">层</span>
-    <span v-else-if="data.kind === 'reference'" class="tag">引用</span>
+    <span v-else-if="data.kind === 'reference'" class="tag" :title="data.members ? `折叠显示：${data.members.join('、')}` : undefined"
+      >引用<template v-if="(data.relations ?? 0) > 1"> · {{ data.relations }} 条</template></span
+    >
     <strong class="name">{{ data.name }}<span v-if="data.core" class="star" title="核心">★</span></strong>
     <code class="id">{{ data.id }}</code>
     <span v-if="data.deeper" class="deeper" title="有下一层：双击进入">›</span>

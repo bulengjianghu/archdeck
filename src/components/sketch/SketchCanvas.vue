@@ -211,11 +211,19 @@ function onNodeMenu({ event, node }: NodeMouseEvent) {
   items.push({ key: 'remove', label: kind === 'reference' ? '删除（连同它的关系）' : '删除', danger: true })
   menu.value = { x: ev.clientX, y: ev.clientY, items, node: node.id }
 }
+/** 聚合边（05 裁决 4）合进来的关系；单条为它自己 */
+const relationsOf = (edgeId: string): string[] => scene.value?.edges.find(x => x.id === edgeId)?.data.relationIds ?? [edgeId]
+function onEdgeClick(edgeId: string) {
+  const x = scene.value?.edges.find(y => y.id === edgeId)
+  if (x?.data.relationIds && x.data.reference) desk.select({ kind: 'module', id: x.data.reference })
+  else desk.select({ kind: 'relation', id: edgeId })
+}
 function onEdgeMenu({ event, edge }: { event: MouseEvent | TouchEvent; edge: { id: string } }) {
   event.preventDefault()
-  desk.select({ kind: 'relation', id: edge.id })
+  onEdgeClick(edge.id)
   const ev = event as MouseEvent
-  menu.value = { x: ev.clientX, y: ev.clientY, items: [{ key: 'remove-edge', label: '删除关系', danger: true }], edge: edge.id }
+  const n = relationsOf(edge.id).length
+  menu.value = { x: ev.clientX, y: ev.clientY, items: [{ key: 'remove-edge', label: n > 1 ? `删除这 ${n} 条关系` : '删除关系', danger: true }], edge: edge.id }
 }
 function onPaneMenu(ev: MouseEvent) {
   ev.preventDefault()
@@ -225,7 +233,7 @@ async function onMenu(key: string) {
   const m = menu.value!
   menu.value = null
   if (key === 'create' && m.pane) return startCreate(m.pane)
-  if (key === 'remove-edge' && m.edge) return void removeIds([m.edge])
+  if (key === 'remove-edge' && m.edge) return void removeIds(relationsOf(m.edge))
   const id = m.node!
   const group = picked.value.has(id) ? [...picked.value] : [id]
   if (key === 'merge') parts.value = { kind: 'merge', ids: group }
@@ -348,7 +356,7 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
       @node-drag="onNodeDrag"
       @node-drag-stop="onNodeDragStop"
       @node-context-menu="onNodeMenu"
-      @edge-click="({ edge }) => desk.select({ kind: 'relation', id: edge.id })"
+      @edge-click="({ edge }) => onEdgeClick(edge.id)"
       @edge-context-menu="onEdgeMenu"
       @pane-click="clearSelection"
       @pane-context-menu="onPaneMenu"

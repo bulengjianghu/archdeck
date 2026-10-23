@@ -201,9 +201,15 @@ export interface SketchPoint {
   y: number
 }
 
-/** X15：草图的布局——模块坐标（引用节点按它的模块 ID 记）与关系标签位置；人拥有，随草图归档，不进模型索引 */
+/** X15：布局里记的模块位置——根草图的第二级模块只记 x（y 由所在层带算出，X21），其余草图记 x、y */
+export interface SketchSpot {
+  x: number
+  y?: number
+}
+
+/** X15：草图的布局——模块坐标（引用节点按它显示的模块 ID 记，X19）与关系标签位置；人拥有，随草图归档，不进模型索引 */
 export interface SketchLayout {
-  modules?: Record<string, SketchPoint>
+  modules?: Record<string, SketchSpot>
   relations?: Record<string, { label?: SketchPoint }>
 }
 

@@ -232,10 +232,17 @@ function merge(s: Session, op: Extract<DesignEditOp, { op: 'merge' }>): Reject |
   s.detach(shifted)
   // 位置：选中节点的重心；来源的相对位置带进下一层
   const pos = ids.map(id => def.layout?.modules?.[id]).filter(p => !!p)
+  // 根草图的位置只有 x（X21）：带进下一层（非根草图）的只取 x、y 都有的
   const childLayout: Record<string, { x: number; y: number }> = {}
-  for (const id of ids) if (def.layout?.modules?.[id]) childLayout[`${newId}.${shortName(id)}`] = def.layout.modules[id]
+  for (const id of ids) {
+    const p = def.layout?.modules?.[id]
+    if (p && p.y !== undefined) childLayout[`${newId}.${shortName(id)}`] = { x: p.x, y: p.y }
+  }
+  for (const id of ids) if (def.layout?.modules?.[id]) delete def.layout.modules[id]
   if (pos.length) {
-    def.layout!.modules![newId] = { x: pos.reduce((a, p) => a + p.x, 0) / pos.length, y: pos.reduce((a, p) => a + p.y, 0) / pos.length }
+    const x = Math.round(pos.reduce((a, p) => a + p.x, 0) / pos.length)
+    const ys = pos.map(p => p.y).filter((y): y is number => y !== undefined)
+    def.layout!.modules![newId] = op.sketch === ROOT_MOUNT || ys.length < pos.length ? { x } : { x, y: Math.round(ys.reduce((a, y) => a + y, 0) / ys.length) }
   }
   // 下一层草图：来源各成一个子模块（from 指向基线来源），来源之间的关系、来源的接口与 closed 随来源进入
   const child = s.ensure(newId)
@@ -287,7 +294,7 @@ function split(s: Session, op: Extract<DesignEditOp, { op: 'split' }>): Reject |
   const at = def.layout?.modules?.[op.id]
   if (at) {
     delete def.layout!.modules![op.id]
-    nodes.forEach((n, i) => (def.layout!.modules![n.id] = { x: at.x + (i - (nodes.length - 1) / 2) * 200, y: at.y }))
+    nodes.forEach((n, i) => (def.layout!.modules![n.id] = { x: at.x + (i - (nodes.length - 1) / 2) * 200, ...(at.y !== undefined ? { y: at.y } : {}) }))
   }
   // 原模块的关系不自动分配（待重连，X16）；它的下一层草图随它删除（保留同 ID 的拆分结果时除外）
   if (!ids.includes(op.id))
