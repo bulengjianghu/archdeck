@@ -32,11 +32,24 @@ export interface PositionedView {
   ports?: Map<string, Point>
   /** 父模块框：包住当前层的内部结构（分层总览为全部带与右侧通道）；根层就是系统框 */
   parentFrame?: Box
+  /** O9：普通层次的共用件架（父模块框底部的一行）；没有共用件时不给 */
+  shelf?: Box
   /** 系统框：有边界节点或参与者时给出，包住父模块框与边界节点行；参与者在它之外（A7、L4） */
   frame?: Box
 }
 
-export const NODE_SIZE = { module: { w: 208, h: 76 }, boundary: { w: 176, h: 48 }, actor: { w: 160, h: 52 } }
+export const NODE_SIZE = {
+  module: { w: 208, h: 76 },
+  /** ADR-0027：普通层次的核心模块大块常显 */
+  core: { w: 248, h: 96 },
+  /** O8：普通层次的「+N 个其他模块」占位 */
+  more: { w: 208, h: 48 },
+  boundary: { w: 176, h: 48 },
+  actor: { w: 160, h: 52 },
+}
+
+/** O9：共用件架——架上的紧凑块、块间距、架左侧「共用件」字样的宽度、与上方内容的间距 */
+export const SHELF = { w: 140, h: 30, gap: 8, label: 60, top: 18 }
 
 export interface LayoutOptions {
   /** O7：分层总览的带内列数（bandColumnsFor 由画布宽度得出） */
@@ -44,7 +57,11 @@ export interface LayoutOptions {
 }
 
 export function sizeOf(n: ViewNode): { w: number; h: number } {
-  return n.role === 'boundary' ? NODE_SIZE.boundary : n.role === 'actor' ? NODE_SIZE.actor : NODE_SIZE.module
+  if (n.role === 'boundary') return NODE_SIZE.boundary
+  if (n.role === 'actor') return NODE_SIZE.actor
+  if (n.role === 'shared') return { w: SHELF.w, h: SHELF.h }
+  if (n.role === 'more') return NODE_SIZE.more
+  return n.core ? NODE_SIZE.core : NODE_SIZE.module
 }
 
 export function contentBounds(pv: PositionedView, only?: ReadonlySet<string>): Box | null {

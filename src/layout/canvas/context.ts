@@ -29,6 +29,8 @@ export interface SceneContext {
   emphEdges: Set<string> | null
   /** 分层总览中显示的核心跨层边：与聚焦对象相连的、被选中的，或回放落在其上的（P7） */
   visibleCoreEdges: ViewEdge[]
+  /** O10：显示的共用件的边——与聚焦对象相连的、被选中的，或回放落在其上的 */
+  visibleShelfEdges: ViewEdge[]
   /** 与聚焦对象相邻的节点 ID；无聚焦对象时为 null（不变淡） */
   near: Set<string> | null
   /** L11：当前画出来的框外边按可见集分配轨道后的走线（普通层次；canvasScene 在算节点与边之前填入） */
@@ -48,9 +50,10 @@ export function sceneContext(input: CanvasInput, pv: PositionedView): SceneConte
   if (hoverLanding?.kind === 'edge') playEdges.add(hoverLanding.edgeId)
   const em = input.emphasis
   const emphMessages = em?.selected == null ? null : new Set([em.selected, ...em.paired])
-  const visibleCoreEdges = (pv.view.coreEdges ?? []).filter(
-    e => (focusId && (e.from === focusId || e.to === focusId)) || selectedEdgeIds.has(e.id) || playEdges.has(e.id),
-  )
+  const shown = (e: ViewEdge) => (focusId && (e.from === focusId || e.to === focusId)) || selectedEdgeIds.has(e.id) || playEdges.has(e.id)
+  const visibleCoreEdges = (pv.view.coreEdges ?? []).filter(shown)
+  // O10：运行视角不画共用件的临时线（P18）
+  const visibleShelfEdges = st ? [] : (pv.view.shelfEdges ?? []).filter(shown)
   return {
     input,
     pv,
@@ -67,7 +70,8 @@ export function sceneContext(input: CanvasInput, pv: PositionedView): SceneConte
     emphMessages,
     emphEdges: emphEdgesOf(emphMessages, sv),
     visibleCoreEdges,
-    near: nearOf(pv, layered, focusId, visibleCoreEdges),
+    visibleShelfEdges,
+    near: nearOf(pv, layered, focusId, [...visibleCoreEdges, ...visibleShelfEdges]),
     routes: new Map(),
   }
 }
@@ -92,7 +96,7 @@ function selectedEdgesOf({ selection: sel, stage: st }: CanvasInput, pv: Positio
   // J7：选中的耦合对所在的耦合线
   if (sel?.kind === 'couple') return new Set((evo?.couplings ?? []).filter(l => l.pairs.includes(sel.id)).map(l => l.id))
   if (sel?.kind === 'relation') {
-    const ids = [...pv.view.edges, ...(pv.view.coreEdges ?? [])].filter(e => e.relationIds.includes(sel.id)).map(e => e.id)
+    const ids = [...pv.view.edges, ...(pv.view.coreEdges ?? []), ...(pv.view.shelfEdges ?? [])].filter(e => e.relationIds.includes(sel.id)).map(e => e.id)
     // P15：经由上层关系的临时线同样随关系选中
     return new Set([...ids, ...(st?.temps ?? []).filter(t => t.relationId === sel.id).map(t => t.edgeId)])
   }
@@ -120,12 +124,12 @@ function emphEdgesOf(emphMessages: ReadonlySet<number> | null, sv: ScenarioLevel
   return ids
 }
 
-function nearOf(pv: PositionedView, layered: boolean, f: string | null, visibleCoreEdges: readonly ViewEdge[]): Set<string> | null {
+function nearOf(pv: PositionedView, layered: boolean, f: string | null, extra: readonly ViewEdge[]): Set<string> | null {
   if (!f || !pv.nodes.has(f)) return null
-  // 分层总览中只有核心模块与参与者参与聚焦，选中层（带）不让其他内容变淡
-  if (layered && !pv.view.nodes.some(n => n.id === f && (n.role === 'core' || n.role === 'actor'))) return null
+  // 分层总览中只有核心模块、共用件与参与者参与聚焦，选中层（带）不让其他内容变淡
+  if (layered && !pv.view.nodes.some(n => n.id === f && (n.role === 'core' || n.role === 'shared' || n.role === 'actor'))) return null
   const set = new Set([f])
-  for (const e of layered ? visibleCoreEdges : pv.view.edges) {
+  for (const e of layered ? extra : [...pv.view.edges, ...extra]) {
     if (e.from === f) set.add(e.to)
     if (e.to === f) set.add(e.from)
   }

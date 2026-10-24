@@ -15,6 +15,7 @@ defineProps<{ data: NodeData }>()
       target: data.module?.status === 'target',
       deprecated: data.module?.status === 'deprecated',
       drillable: data.childCount > 0,
+      core: !!data.core,
       [`diff-${data.change}`]: !!data.change,
     }"
   >
@@ -47,6 +48,16 @@ defineProps<{ data: NodeData }>()
   box-shadow:
     3px 3px 0 -1px var(--surface),
     3px 3px 0 0 var(--border-strong);
+}
+
+.module-node.core {
+  padding: 12px 14px;
+  border-width: 2px;
+  border-color: var(--accent);
+}
+
+.module-node.core .name {
+  font-size: 15px;
 }
 
 .module-node.selected {

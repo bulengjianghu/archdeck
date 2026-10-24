@@ -18,7 +18,20 @@ export * from './rework'
 export * from './review'
 export * from './evolution'
 export * from './intent'
-export { projectLevel, mapEndpoint, nearestVisibleLevel, edgeId, hierarchyKey, compareKeys, lowestCommonAncestor, DEFAULT_PROJECT_OPTIONS } from './project'
+export {
+  projectLevel,
+  mapEndpoint,
+  nearestVisibleLevel,
+  edgeId,
+  hierarchyKey,
+  compareKeys,
+  lowestCommonAncestor,
+  DEFAULT_PROJECT_OPTIONS,
+  FOLD_LIMIT,
+  moreNodeId,
+  viewNodeOf,
+  shelfOf,
+} from './project'
 export type { Endpoint } from './project'
 export { diffModels } from './diff'
 

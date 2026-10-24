@@ -92,7 +92,7 @@ export function emphasisOf(state: ViewState, ctx: EmphasisContext): Emphasis | n
     case 'edge': {
       // 视图边的两端是视图节点：模块节点（含边界节点、带）按其模块取泳道，参与者节点即其泳道
       const lv = ctx.levelView
-      const e = [...(lv?.edges ?? []), ...(lv?.coreEdges ?? [])].find(x => x.id === s.id)
+      const e = [...(lv?.edges ?? []), ...(lv?.coreEdges ?? []), ...(lv?.shelfEdges ?? [])].find(x => x.id === s.id)
       if (e) for (const n of [e.from, e.to]) add(lv?.nodes.find(x => x.id === n)?.moduleId ?? n)
       break
     }

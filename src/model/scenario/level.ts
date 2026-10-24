@@ -2,7 +2,7 @@
  * 帧的层次投影（P1–P5、P7、P10、P11、P15、P16、S9、R7、R13）：把回放路径上的每一帧映射到当前层次，合并为可见消息。
  * 端点映射与结构投影共用 mapEndpoint（P1），落点的视图边 ID 与 projectLevel 一致。
  */
-import { lowestCommonAncestor, mapEndpoint } from '../project'
+import { lowestCommonAncestor, mapEndpoint, viewNodeOf } from '../project'
 import { RUNTIME_RELATION_TYPES } from '../types'
 import type { LevelView, ModelIndex, ViewEdge } from '../types'
 import type { Frame, PlanNode, ScenarioPlan, Choices, Landing, VisibleLanding, VisibleMessage, ScenarioLevelView, FrameStatus } from './types'
@@ -11,7 +11,8 @@ import type { Frame, PlanNode, ScenarioPlan, Choices, Landing, VisibleLanding, V
 function viewNode(index: ModelIndex, view: LevelView, ids: ReadonlySet<string>, id: string): { node: string; local: boolean } | null {
   const ep = mapEndpoint(index, view.parentId, id)
   if (ep.kind === 'skip') return null
-  const node = ep.kind === 'external' ? `boundary:${ep.node}` : ep.node
+  // O8：折叠进「+N」的子模块落在占位上
+  const node = ep.kind === 'external' ? `boundary:${ep.node}` : viewNodeOf(view, ep.node)
   return ids.has(node) ? { node, local: ep.kind === 'local' } : null
 }
 

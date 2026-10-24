@@ -11,7 +11,7 @@ import { layoutGraph } from './graph'
 import type { LayoutOptions, PositionedView } from './geometry'
 
 export * from './geometry'
-export { BAND, DEFAULT_BAND_COLUMNS, bandColumnsFor, layoutLayered, moreChipId } from './layered'
+export { BAND, DEFAULT_BAND_COLUMNS, bandColumnsFor, bandShelfTop, layoutLayered, moreChipId } from './layered'
 export {
   ACTOR_GAP,
   LABEL_SLOT,
@@ -31,13 +31,13 @@ export {
   placeActors,
   spreadEnds,
 } from './routes'
-export { fromElkGraph, portSide, toElkGraph } from './graph'
+export { fromElkGraph, placeShelf, portSide, toElkGraph } from './graph'
 
 const cache = new Map<string, PositionedView>()
 const CACHE_LIMIT = 64
 
 /** 布局算法的版本：端口、层约束等选项改了就升，旧结果不再命中 */
-export const LAYOUT_VERSION = 'L11-halves-1'
+export const LAYOUT_VERSION = 'O9-shelf-1'
 
 export function cacheKey(view: LevelView, opts: LayoutOptions = {}): string {
   return JSON.stringify([

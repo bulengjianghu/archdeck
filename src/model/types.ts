@@ -463,7 +463,8 @@ export interface ModelIndex {
 
 export type ViewMode = 'graph' | 'layered'
 
-export type ViewNodeRole = 'module' | 'boundary' | 'layer' | 'core' | 'actor'
+/** layer / core 只在分层总览；shared 为共用件架上的共用件（O9）；more 为普通层次的「+N」占位（O8） */
+export type ViewNodeRole = 'module' | 'boundary' | 'layer' | 'core' | 'actor' | 'shared' | 'more'
 
 export interface ViewNode {
   /** 视图内唯一 ID；module / layer / core 用模块 ID，boundary 用 `boundary:<模块ID>`，actor 用参与者 ID */
@@ -472,10 +473,18 @@ export interface ViewNode {
   moduleId: string
   role: ViewNodeRole
   hasChildren: boolean
-  /** core 节点所在的层 ID */
+  /** core 节点（与分层总览中 shared 节点）所在的层 ID */
   layerId?: string
   /** actor 节点的类别，决定排布位置（A7） */
   actorKind?: ActorKind
+  /** 普通层次的核心模块（role: core）：大块常显（ADR-0027） */
+  core?: true
+  /** O10：「共用 ×N」——它连到的共用件个数（共用件架上的节点不带） */
+  sharedCount?: number
+  /** O8：more 节点折叠的普通模块数（展开时为 0） */
+  hiddenCount?: number
+  /** O8：more 节点临时展开出来的模块数（占位变为「收起 N 个」） */
+  expanded?: number
 }
 
 export type ViewEdgeKind = 'direct' | 'aggregate'
@@ -500,6 +509,8 @@ export interface Band {
   hiddenCount: number
   /** O6：临时展开时，展开出来的非核心模块数（已并入 coreModuleIds，hiddenCount 为 0） */
   expanded?: number
+  /** O9：该层的共用件（role: shared / bus），收进带底的共用件架 */
+  shelf: string[]
 }
 
 export interface LevelView {
@@ -511,6 +522,16 @@ export interface LevelView {
   bands?: Band[]
   /** 仅 layered：核心模块的跨层关系，默认不画，悬停/选中时显示 */
   coreEdges?: ViewEdge[]
+  /** O9：仅普通层次——本层的共用件（视图节点 ID，节点 role 为 shared），收进父模块框底部的共用件架；分层总览的在各带的 shelf */
+  shelf?: string[]
+  /** O10：共用件与本层其他节点之间的边（任一方向、任一类型），默认不画，悬停 / 选中一端时画 */
+  shelfEdges?: ViewEdge[]
+  /** O8：仅普通层次——普通模块的「+N」占位：节点 ID、折叠的模块（展开时为空）、是否临时展开 */
+  fold?: { id: string; members: string[]; expanded: boolean }
+  /** O8：本层没有核心模块、普通模块超过七个时不折叠，只提示这个数（「N 个模块，考虑标出核心」） */
+  foldHint?: number
+  /** O8：折叠进占位的模块 → 占位节点 ID（端点映射到本层后再经它换成视图节点，viewNodeOf） */
+  alias?: Record<string, string>
 }
 
 export interface ProjectOptions {

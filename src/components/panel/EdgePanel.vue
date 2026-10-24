@@ -10,7 +10,7 @@ const props = defineProps<{ id: string }>()
 const desk = useDesk()
 const edge = computed(() => {
   const v = desk.view.value
-  return [...(v?.edges ?? []), ...(v?.coreEdges ?? [])].find(e => e.id === props.id)
+  return [...(v?.edges ?? []), ...(v?.coreEdges ?? []), ...(v?.shelfEdges ?? [])].find(e => e.id === props.id)
 })
 function endName(nodeId: string): string {
   const boundary = nodeId.startsWith('boundary:')

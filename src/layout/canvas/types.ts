@@ -48,6 +48,16 @@ export interface NodeData {
   preview?: { pointId: string; option: number; label: string }
   /** Y4：本层环的编号 */
   cycle?: number
+  /** ADR-0027：普通层次的核心模块（大块） */
+  core?: boolean
+  /** O10：「共用 ×N」角标 */
+  sharedCount?: number
+  /** O11：本层框（父模块框、分层总览的带）常驻计数「共用件 N · 折叠 M」 */
+  counts?: { shared: number; folded: number }
+  /** O9：共用件架在本框 / 带内的纵向位置（相对框顶，px），画「共用件」字样 */
+  shelfAt?: number
+  /** O8：普通层次的「+N」占位（双击无动作；分层总览的占位双击下钻到层） */
+  graphFold?: boolean
   /** J5：热度角标（右下角三档色块）：档位、种类、热度值与次数 */
   heat?: NodeHeat & { kind: HeatKind }
 }
@@ -78,6 +88,8 @@ export interface RouteEdgeData {
   dim: boolean
   /** 核心跨层边，只在悬停/选中时出现 */
   core?: boolean
+  /** O10：共用件的边，只在悬停/选中一端时出现 */
+  shelf?: boolean
   /** 设计版本：边包含新增或修改的关系 */
   change?: 'added' | 'changed'
   /** 运行视角：当前消息、走过、分支预览、时序图悬停预览 */
@@ -100,7 +112,7 @@ export interface RouteEdgeData {
   couple?: LevelCoupling
 }
 
-export type CanvasNodeType = 'frame' | 'module' | 'boundary' | 'band' | 'core' | 'more' | 'actor' | 'step' | 'preview'
+export type CanvasNodeType = 'frame' | 'module' | 'boundary' | 'band' | 'core' | 'more' | 'shared' | 'actor' | 'step' | 'preview'
 
 /** 与 Vue Flow 的节点同形 */
 export interface CanvasNode {

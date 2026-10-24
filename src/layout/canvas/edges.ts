@@ -140,11 +140,13 @@ function boundaryShown(ctx: SceneContext, e: ViewEdge): boolean {
 /** 本层画出来的视图边（舞台显示与边界边的显隐之后） */
 export const shownEdges = (ctx: SceneContext): ViewEdge[] => ctx.pv.view.edges.filter(e => stageShown(ctx, e) && boundaryShown(ctx, e))
 
-/** 关系边：本层视图边，分层总览另加显示的核心跨层边；框外边取按可见集分配轨道后的走线（ctx.routes） */
+/** 关系边：本层视图边，分层总览另加显示的核心跨层边，另加显示的共用件的边（O10）；框外边取按可见集分配轨道后的走线（ctx.routes） */
 export function structureEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   const { pv } = ctx
   const list = shownEdges(ctx).map(e => makeEdge(ctx, e, ctx.routes.get(e.id) ?? edgeRoute(pv, e), false))
   if (ctx.layered) list.push(...ctx.visibleCoreEdges.map(e => makeEdge(ctx, e, pv.coreEdges.get(e.id), true)))
+  // O10：共用件的边不参与布局，悬停 / 选中一端时画成曲线
+  list.push(...ctx.visibleShelfEdges.map(e => makeEdge(ctx, e, linkRoute(pv.nodes.get(e.from), pv.nodes.get(e.to)), false, { shelf: true, dim: false })))
   return list
 }
 

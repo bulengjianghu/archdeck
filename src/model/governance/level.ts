@@ -2,7 +2,7 @@
  * 代码事实在当前层次的投影（K9、K10、Y4、Y5）：视图边的证实与违规、代码依赖叠加线、本层的环及其构成。
  * 投影与结构图、帧共用 mapEndpoint（P1、G14）。
  */
-import { mapEndpoint } from '../project'
+import { mapEndpoint, viewNodeOf } from '../project'
 import { RELATION_TYPES } from '../types'
 import type { LevelView, ModelIndex } from '../types'
 import { stronglyConnected, valueDeps } from './cycles'
@@ -39,7 +39,8 @@ export interface LevelFacts {
 /** 模块投影到本层的节点 ID；本层没有对应节点（如未显示的边界节点）时为 null */
 export function nodeOf(index: ModelIndex, view: LevelView, present: ReadonlySet<string>, moduleId: string): string | null {
   const e = mapEndpoint(index, view.parentId, moduleId)
-  if (e.kind === 'local' && present.has(e.node)) return e.node
+  // O8：折叠进「+N」的模块落在占位上
+  if (e.kind === 'local' && present.has(viewNodeOf(view, e.node))) return viewNodeOf(view, e.node)
   if (e.kind === 'external' && present.has(`boundary:${e.node}`)) return `boundary:${e.node}`
   return null
 }

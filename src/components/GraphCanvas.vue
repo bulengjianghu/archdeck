@@ -23,6 +23,7 @@ import BoundaryNode from './nodes/BoundaryNode.vue'
 import BandNode from './nodes/BandNode.vue'
 import CoreNode from './nodes/CoreNode.vue'
 import MoreNode from './nodes/MoreNode.vue'
+import SharedNode from './nodes/SharedNode.vue'
 import ActorNode from './nodes/ActorNode.vue'
 import FrameNode from './nodes/FrameNode.vue'
 import StepBadge from './nodes/StepBadge.vue'
@@ -77,7 +78,7 @@ function onNodeClick({ node }: { node: Node<NodeData> }) {
   if (node.type === 'step' || node.type === 'preview') return
   if (node.type === 'frame') desk.select(null)
   else if (node.type === 'actor') desk.select({ kind: 'actor', id: node.data!.moduleId })
-  // O6：单击带内 +N 临时展开非核心模块（再单击「收起」），不改层次、不改选中
+  // O6、O8：单击 +N 临时展开（再单击「收起」），不改层次、不改选中；普通层次的占位 ID 是 more:<父模块>
   else if (node.type === 'more') desk.toggleBand(node.id.slice('more:'.length))
   else desk.select({ kind: 'module', id: node.data!.moduleId })
 }
@@ -85,14 +86,16 @@ function onNodeClick({ node }: { node: Node<NodeData> }) {
 function onNodeDoubleClick({ node }: { node: Node<NodeData> }) {
   if (node.type === 'actor' || node.type === 'frame' || node.type === 'step' || node.type === 'preview') return
   if (node.type === 'boundary') desk.revealModule(node.data!.moduleId)
-  else if (node.type === 'more') desk.drillInto(node.id.slice('more:'.length))
-  else desk.drillInto(node.data!.moduleId)
+  // O5：带内的 +N 双击下钻到这一层；O8：普通层次的 +N 双击无动作
+  else if (node.type === 'more') {
+    if (!node.data!.graphFold) desk.drillInto(node.id.slice('more:'.length))
+  } else desk.drillInto(node.data!.moduleId)
 }
 
 /** F-10：节点右键「在此设计」 */
 const menu = ref<{ x: number; y: number; id: string } | null>(null)
 function onNodeMenu({ event, node }: { event: MouseEvent | TouchEvent; node: Node<NodeData> }) {
-  const id = node.type === 'module' || node.type === 'boundary' || node.type === 'core' ? node.data?.moduleId : undefined
+  const id = node.type === 'module' || node.type === 'boundary' || node.type === 'core' || node.type === 'shared' ? node.data?.moduleId : undefined
   if (!id || desk.version) return
   event.preventDefault()
   const ev = event as MouseEvent
@@ -116,7 +119,7 @@ function onEdgeClick({ edge }: { edge: Edge<RouteEdgeData> }) {
 }
 
 function onNodeEnter({ node }: { node: Node<NodeData> }) {
-  if (node.type === 'core' || node.type === 'module' || node.type === 'boundary' || node.type === 'actor') desk.setHover(node.id)
+  if (node.type === 'core' || node.type === 'module' || node.type === 'shared' || node.type === 'boundary' || node.type === 'actor') desk.setHover(node.id)
 }
 
 function onNodeLeave() {
@@ -188,6 +191,8 @@ watch(
   },
 )
 
+/** O8：本层没有核心模块、普通模块超过七个时不折叠，只在画布角提示 */
+const foldHint = computed(() => (desk.perspective.value === 'structure' ? (desk.positioned.value?.view.foldHint ?? 0) : 0))
 const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned.value.view.nodes.length === 0)
 </script>
 
@@ -216,6 +221,7 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       <template #node-band="p"><BandNode :data="p.data" /></template>
       <template #node-core="p"><CoreNode :data="p.data" /></template>
       <template #node-more="p"><MoreNode :data="p.data" /></template>
+      <template #node-shared="p"><SharedNode :data="p.data" /></template>
       <template #node-actor="p"><ActorNode :data="p.data" /></template>
       <template #node-frame="p"><FrameNode :data="p.data" /></template>
       <template #node-step="p"><StepBadge :data="p.data" /></template>
@@ -224,6 +230,7 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
     </VueFlow>
 
     <div v-if="isEmpty" class="empty">这个模块没有子模块</div>
+    <div v-if="foldHint" class="fold-hint" data-testid="fold-hint">{{ foldHint }} 个模块，考虑标出核心</div>
     <SketchMenu
       v-if="menu"
       :x="menu.x"
@@ -273,6 +280,20 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
   color: var(--warning);
   background: var(--warning-soft);
   border-radius: 14px;
+}
+
+.fold-hint {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 5;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  pointer-events: none;
 }
 
 .zoom {

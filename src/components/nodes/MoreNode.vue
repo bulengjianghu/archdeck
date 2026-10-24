@@ -8,7 +8,7 @@ defineProps<{ data: NodeData }>()
   <div
     class="more"
     :class="{ dim: data.dim, expanded: !!data.expanded }"
-    :title="data.expanded ? '收起临时展开的模块' : '单击临时展开（不改层次），双击下钻到这一层'"
+    :title="data.expanded ? '收起临时展开的模块' : data.graphFold ? '单击临时展开（不改层次）' : '单击临时展开（不改层次），双击下钻到这一层'"
   >
     {{ data.expanded ? `收起 ${data.expanded} 个` : `+${data.hiddenCount} 个其他模块` }}
   </div>

@@ -2,7 +2,7 @@
  * 分层总览排布（O1–O7）：按层序分带，规则排布，不调用 elk；核心模块之间的跨层边画成曲线，框外元素（参与者、边界节点）按方位摆放、边正交走线（A7、L4）。
  */
 import type { LevelView, ViewEdge } from '@/model'
-import type { Box, EdgeRoute, LayoutOptions, PositionedView } from './geometry'
+import { SHELF, type Box, type EdgeRoute, type LayoutOptions, type PositionedView } from './geometry'
 import { compassOf, isDynamic, isOutsideEdge, parallelOffsets, placeOutside, portFor, shifted, slotOf, withSourceLane } from './routes'
 import { detour, type PortAt } from './routing'
 
@@ -20,6 +20,8 @@ export const BAND = {
   framePad: 28,
   /** O7：带内每行模块块的上限 */
   maxColumns: 8,
+  /** O9：共用件架与上方核心模块行之间的距离 */
+  shelfGap: 12,
 }
 
 /** 没有画布宽度时的带内列数 */
@@ -41,6 +43,12 @@ export function bandColumnsFor(canvasWidth: number): number {
 /** 带内有占位块（「+N 个其他模块」或展开后的「收起」） */
 const hasChip = (b: { hiddenCount: number; expanded?: number }) => b.hiddenCount > 0 || !!b.expanded
 
+/** O9：带底共用件架的外框（带内左侧「共用件」字样起，到最后一块止），给画布画字样 */
+export function bandShelfTop(nodes: ReadonlyMap<string, Box>, band: { shelf?: readonly string[] }): number | undefined {
+  const first = band.shelf?.[0]
+  return first ? nodes.get(first)?.y : undefined
+}
+
 export function layoutLayered(view: LevelView, opts: LayoutOptions = {}): PositionedView {
   const bands = view.bands ?? []
   const nodes = new Map<string, Box>()
@@ -57,9 +65,24 @@ export function layoutLayered(view: LevelView, opts: LayoutOptions = {}): Positi
     bandIndex.set(band.layerId, i)
     const slots = band.coreModuleIds.length + (hasChip(band) ? 1 : 0)
     const rows = Math.max(1, Math.ceil(slots / perRow))
-    const h = Math.max(BAND.minH, rows * BAND.chip.h + (rows - 1) * BAND.chipGap + 2 * BAND.padY)
+    // O9：带底的共用件架，紧凑一行（放不下换行），左侧留出「共用件」字样
+    const shelf = band.shelf ?? []
+    const shelfPerRow = Math.max(1, Math.floor((middle - BAND.chipGap - SHELF.label + SHELF.gap) / (SHELF.w + SHELF.gap)))
+    const shelfRows = Math.ceil(shelf.length / shelfPerRow)
+    const shelfH = shelfRows ? shelfRows * (SHELF.h + SHELF.gap) - SHELF.gap + BAND.shelfGap : 0
+    const coreH = rows * BAND.chip.h + (rows - 1) * BAND.chipGap
+    const h = Math.max(BAND.minH, coreH + 2 * BAND.padY + shelfH)
     nodes.set(band.layerId, { x: 0, y, w: width, h })
-    const rowTop = y + (h - (rows * BAND.chip.h + (rows - 1) * BAND.chipGap)) / 2
+    const rowTop = y + (h - shelfH - coreH) / 2
+    const shelfTop = y + h - BAND.padY / 2 - (shelfH - BAND.shelfGap)
+    shelf.forEach((id, k) =>
+      nodes.set(id, {
+        x: BAND.left + BAND.chipGap + SHELF.label + (k % shelfPerRow) * (SHELF.w + SHELF.gap),
+        y: shelfTop + Math.floor(k / shelfPerRow) * (SHELF.h + SHELF.gap),
+        w: SHELF.w,
+        h: SHELF.h,
+      }),
+    )
     const chipBox = (k: number): Box => ({
       x: BAND.left + BAND.chipGap + (k % perRow) * (BAND.chip.w + BAND.chipGap),
       y: rowTop + Math.floor(k / perRow) * (BAND.chip.h + BAND.chipGap),

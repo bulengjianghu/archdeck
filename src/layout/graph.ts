@@ -3,7 +3,7 @@
  */
 import type { ELK, ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk-api'
 import type { LevelView } from '@/model'
-import { NODE_SIZE, contentBounds, sizeOf, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
+import { NODE_SIZE, SHELF, contentBounds, sizeOf, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
 import { LABEL_SLOT, compassOf, edgeLabel, isDynamic, nearPoints, placeOutside, spreadEnds } from './routes'
 
 /**
@@ -21,7 +21,8 @@ export function portSide(end: 'in' | 'out', direction: 'DOWN' | 'RIGHT'): Side {
 }
 
 export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'): ElkNode {
-  const inner = view.nodes.filter(n => compassOf(n) === 'inner')
+  // O9：共用件不参与 elk 布局，布局后收进父模块框底部的共用件架（placeShelf）
+  const inner = view.nodes.filter(n => compassOf(n) === 'inner' && n.role !== 'shared')
   const ids = new Set(inner.map(n => n.id))
   type Port = { id: string; width: number; height: number; side: Side; dynamic: boolean; layoutOptions: Record<string, string> }
   const ports = new Map<string, Port[]>(inner.map(n => [n.id, []]))
@@ -126,9 +127,43 @@ export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
         return { x: x1, y: y1, w: Math.max(...boxes.map(b => b.x2)) - x1, h: Math.max(...boxes.map(b => b.y2)) - y1 }
       })()
     : { x: 0, y: 0, w: NODE_SIZE.module.w, h: NODE_SIZE.module.h }
+  // O9：共用件架在父模块框底部，框随之加高
+  const shelved = placeShelf(view.shelf ?? [], nodes, parentFrame)
   // A7、L4：框外的元素按方位摆放
-  const frame = placeOutside(view, nodes, parentFrame)
-  return { view, nodes, edges, coreEdges: new Map(), direction, parentFrame, ports, ...(frame ? { frame } : {}) }
+  const frame = placeOutside(view, nodes, shelved.frame)
+  return {
+    view,
+    nodes,
+    edges,
+    coreEdges: new Map(),
+    direction,
+    parentFrame: shelved.frame,
+    ports,
+    ...(shelved.shelf ? { shelf: shelved.shelf } : {}),
+    ...(frame ? { frame } : {}),
+  }
+}
+
+/** O9：一行至少放这么多共用件（框太窄时加宽框，不让架竖成一列） */
+const SHELF_MIN_PER_ROW = 4
+
+/**
+ * O9：普通层次的共用件架——父模块框底部紧凑排开（左侧留出「共用件」字样），放不下时换行；框向下（必要时向右）撑开包住架。
+ * 返回撑开后的框与架的外框。
+ */
+export function placeShelf(ids: readonly string[], nodes: Map<string, Box>, parentFrame: Box): { frame: Box; shelf?: Box } {
+  if (!ids.length) return { frame: parentFrame }
+  const step = SHELF.w + SHELF.gap
+  const fit = Math.floor((parentFrame.w - 2 * FRAME_PAD - SHELF.label + SHELF.gap) / step)
+  const perRow = Math.max(1, Math.min(ids.length, Math.max(fit, SHELF_MIN_PER_ROW)))
+  const rows = Math.ceil(ids.length / perRow)
+  const x0 = parentFrame.x + FRAME_PAD + SHELF.label
+  const y0 = parentFrame.y + parentFrame.h - FRAME_PAD + SHELF.top
+  ids.forEach((id, i) => nodes.set(id, { x: x0 + (i % perRow) * step, y: y0 + Math.floor(i / perRow) * (SHELF.h + SHELF.gap), w: SHELF.w, h: SHELF.h }))
+  const shelf = { x: parentFrame.x + FRAME_PAD, y: y0, w: SHELF.label + perRow * step - SHELF.gap, h: rows * (SHELF.h + SHELF.gap) - SHELF.gap }
+  const right = Math.max(parentFrame.x + parentFrame.w, shelf.x + shelf.w + FRAME_PAD)
+  const bottom = shelf.y + shelf.h + FRAME_PAD / 2
+  return { frame: { x: parentFrame.x, y: parentFrame.y, w: right - parentFrame.x, h: bottom - parentFrame.y }, shelf }
 }
 
 let elkPromise: Promise<ELK> | undefined

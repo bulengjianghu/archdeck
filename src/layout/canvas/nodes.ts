@@ -3,7 +3,7 @@
  * 结构视角按聚焦变淡，运行视角按舞台显示（V5、V8、V9）；回放态与文件高亮（G14）写进类名。
  */
 import { moduleName, type ModelDiff, type ModelIndex, type ModuleEntity, type ViewNode, type VisibleLanding } from '@/model'
-import { moreChipId, type Box } from '../layout'
+import { SHELF, bandShelfTop, moreChipId, type Box, type PositionedView } from '../layout'
 import type { Visibility } from '../stage'
 import type { SceneContext } from './context'
 import { routeMidpoint } from './edges'
@@ -71,18 +71,27 @@ export function moduleNodes(ctx: SceneContext, idx: ModelIndex): CanvasNode[] {
   const { pv } = ctx
   const nodes: CanvasNode[] = []
   // A7、L4：框表示边界——根层只有系统框；下钻后外框为系统边界、内框为当前父模块，边界节点在两框之间，参与者在外框之外。
-  // 没有框外元素时不画框（内容即全部）
+  // 没有框外元素时不画框（内容即全部）；本层有共用件或折叠时画父模块框，承载共用件架与计数（O9、O11）
+  const graded = levelCounts(pv)
+  const frameData = (id: string): NodeData => ({ moduleId: id, name: moduleName(idx, id), childCount: 0, selected: false, dim: false })
+  // O11：计数与架的字样挂在代表当前父模块的框上
+  const ownFrame = (id: string): NodeData => ({
+    ...frameData(id),
+    ...(graded ? { counts: graded } : {}),
+    ...(pv.shelf && pv.parentFrame ? { shelfAt: pv.shelf.y - pv.parentFrame.y + SHELF.h / 2 } : {}),
+  })
+  const root = pv.view.parentId === idx.rootId
   if (pv.frame) {
-    const frameData = (id: string) => ({ moduleId: id, name: moduleName(idx, id), childCount: 0, selected: false, dim: false })
-    const root = pv.view.parentId === idx.rootId
-    if (root || !pv.parentFrame) nodes.push(placeNode(ctx, 'frame', root ? (pv.parentFrame ?? pv.frame) : pv.frame, 'frame', frameData(idx.rootId), -2))
+    if (root || !pv.parentFrame)
+      nodes.push(placeNode(ctx, 'frame', root ? (pv.parentFrame ?? pv.frame) : pv.frame, 'frame', root ? ownFrame(idx.rootId) : frameData(idx.rootId), -2))
     else {
       // 没有边界节点时两框重合：系统框向外让出一圈，内外框都看得见
       const sys = sameBox(pv.frame, pv.parentFrame) ? grow(pv.frame, FRAME_GAP) : pv.frame
       nodes.push(placeNode(ctx, 'frame', sys, 'frame', frameData(idx.rootId), -2))
-      nodes.push(placeNode(ctx, 'frame:parent', pv.parentFrame, 'frame', frameData(pv.view.parentId), -1))
+      nodes.push(placeNode(ctx, 'frame:parent', pv.parentFrame, 'frame', ownFrame(pv.view.parentId), -1))
     }
-  }
+  } else if (graded && pv.parentFrame && pv.view.mode !== 'layered')
+    nodes.push(placeNode(ctx, root ? 'frame' : 'frame:parent', pv.parentFrame, 'frame', ownFrame(root ? idx.rootId : pv.view.parentId), -1))
   for (const n of pv.view.nodes) {
     const box = pv.nodes.get(n.id)
     if (!box || (ctx.st && visOf(ctx, n.id) === 'hide')) continue
@@ -90,6 +99,14 @@ export function moduleNodes(ctx: SceneContext, idx: ModelIndex): CanvasNode[] {
     else nodes.push(...moduleNode(ctx, idx, n, box))
   }
   return nodes
+}
+
+/** O11：普通层次的本层计数——共用件数与折叠在「+N」里的模块数；两者都为 0 时为 null（分层总览的计数在各带上） */
+export function levelCounts(pv: PositionedView): { shared: number; folded: number } | null {
+  if (pv.view.mode === 'layered') return null
+  const shared = pv.view.shelf?.length ?? 0
+  const folded = pv.view.fold && !pv.view.fold.expanded ? pv.view.fold.members.length : 0
+  return shared || folded ? { shared, folded } : null
 }
 
 function actorNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box): CanvasNode {
@@ -120,12 +137,28 @@ function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box): 
     ...diffOf(ctx.input.diff, n.moduleId),
     ...(ctx.facts?.cycles.has(n.id) ? { cycle: ctx.facts.cycles.get(n.id) } : {}),
     ...heatOf(ctx, n.id),
+    ...(n.sharedCount ? { sharedCount: n.sharedCount } : {}),
+    ...(n.core ? { core: true } : {}),
   }
   if (n.role === 'boundary') {
     const path = (idx.pathOf.get(n.moduleId) ?? []).slice(1, -1).map(id => idx.modules.get(id)?.name ?? id)
     return [placeNode(ctx, n.id, box, 'boundary', { ...base, path: path.length ? path.join(' / ') : idx.model.system.name }, 1)]
   }
   if (n.role === 'layer') return bandNodes(ctx, idx, n, box, base, m)
+  // O8：普通层次的「+N」占位（单击临时展开；z 序在边之上，单击不被线挡住）
+  if (n.role === 'more')
+    return [
+      placeNode(
+        ctx,
+        n.id,
+        box,
+        'more',
+        { ...base, name: '', selected: false, dim: !!ctx.st || !!ctx.near, hiddenCount: n.hiddenCount ?? 0, expanded: n.expanded ?? 0, graphFold: true },
+        OVER_EDGES.more,
+      ),
+    ]
+  // O9：共用件架上的紧凑块；运行视角下照常显示但淡化（P18）
+  if (n.role === 'shared') return [placeNode(ctx, n.id, box, 'shared', { ...base, dim: base.dim || (!!ctx.st && !playClass(ctx, n.id)) }, 2)]
   return [placeNode(ctx, n.id, box, n.role === 'core' ? 'core' : 'module', base, 2)]
 }
 
@@ -139,6 +172,9 @@ function bandNodes(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box, ba
       mayDependOn: (m?.mayDependOn ?? []).map(id => idx.modules.get(id)?.name ?? id),
       hiddenCount: band?.hiddenCount ?? 0,
     },
+    // O11：带右上角常驻「共用件 N · 折叠 M」
+    ...(band && (band.shelf?.length || band.hiddenCount) ? { counts: { shared: band.shelf?.length ?? 0, folded: band.hiddenCount } } : {}),
+    ...(band && bandShelfTop(ctx.pv.nodes, band) !== undefined ? { shelfAt: bandShelfTop(ctx.pv.nodes, band)! - box.y + SHELF.h / 2 } : {}),
   }
   const out = [placeNode(ctx, n.id, box, 'band', data, 0)]
   const more = ctx.pv.nodes.get(moreChipId(n.id))

@@ -3,7 +3,7 @@
  * 关于被描述系统的知识，换成命令行或 AI 查询同样成立；输入是模型索引与接入层给的文件清单，不碰文件系统。
  */
 import { isLong } from '../names'
-import { mapEndpoint } from '../project'
+import { mapEndpoint, viewNodeOf } from '../project'
 import type { Issue, LevelView, ModelIndex, ModuleEntity, ScenarioEntity } from '../types'
 import { hasWildcard, matchRef, normalizeRef, staticPrefix } from './glob'
 import { indexFile, packageEntry } from './resolve'
@@ -121,12 +121,12 @@ export function fileNodes(index: ModelIndex, view: LevelView, owners: readonly s
   let self = false
   for (const o of owners) {
     const e = mapEndpoint(index, view.parentId, o)
-    if (e.kind === 'local' && present.has(e.node)) nodes.add(e.node)
+    if (e.kind === 'local' && present.has(viewNodeOf(view, e.node))) nodes.add(viewNodeOf(view, e.node))
     else if (e.kind === 'external' && present.has(`boundary:${e.node}`)) nodes.add(`boundary:${e.node}`)
     else if (e.kind === 'skip' && index.pathOf.get(view.parentId)?.includes(o)) self = true
     if (view.mode === 'layered') {
       const path = index.pathOf.get(o) ?? []
-      for (const n of view.nodes) if (n.role === 'core' && path.includes(n.moduleId)) nodes.add(n.id)
+      for (const n of view.nodes) if ((n.role === 'core' || n.role === 'shared') && path.includes(n.moduleId)) nodes.add(n.id)
     }
   }
   return { nodes, self }

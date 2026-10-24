@@ -119,8 +119,11 @@ describe('§6.4 源代码验收', () => {
         .find(r => r.attributes('data-id') === 'present.nav-tree.files')!
         .classes(),
     ).toContain('owner')
-    // 下钻到呈现层：高亮导航树
+    // 下钻到呈现层：导航树是普通模块，折叠在「+N」里（O8）——高亮占位；临时展开后高亮导航树
     desk.goTo('present', { kind: 'file', id: file })
+    await settle()
+    expect([...desk.files.hits.value!.nodes]).toEqual(['more:present'])
+    desk.toggleBand('present')
     await settle()
     expect([...desk.files.hits.value!.nodes]).toEqual(['present.nav-tree'])
     // 副栏：选中文件即预览

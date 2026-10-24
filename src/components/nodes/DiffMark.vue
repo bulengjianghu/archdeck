@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 节点角标，骑在节点上边框：设计版本的「新增 / 修改」与「涉及 N 处变更」（左）；代码事实开启时本层环的编号（右，Y4）；热度开启时右下角的三档色块（J5） */
+/** 节点角标，骑在节点上边框：设计版本的「新增 / 修改」与「涉及 N 处变更」（左）；代码事实开启时本层环的编号（右，Y4）；用到共用件的「共用 ×N」（右，O10）；热度开启时右下角的三档色块（J5） */
 import type { NodeData } from './types'
 
 defineProps<{ data: NodeData }>()
@@ -11,6 +11,13 @@ defineProps<{ data: NodeData }>()
     <span v-else-if="data.change === 'changed'" class="diff-tag changed">修改</span>
     <span v-if="data.touched" class="diff-tag touched">△ {{ data.touched }}</span>
   </div>
+  <span
+    v-if="data.sharedCount"
+    class="shared-mark"
+    :class="{ shifted: !!data.cycle }"
+    :title="`用到本层共用件架上的 ${data.sharedCount} 个共用件：悬停或选中时画线（O10）`"
+    >共用 ×{{ data.sharedCount }}</span
+  >
   <span v-if="data.cycle" class="cycle-mark" :title="`本层的环 ${data.cycle}：与同编号的节点互相依赖`">↻ {{ data.cycle }}</span>
   <span
     v-if="data.heat"
@@ -60,6 +67,25 @@ defineProps<{ data: NodeData }>()
   border: 1px solid var(--danger);
   border-radius: 8px;
   pointer-events: none;
+}
+
+.shared-mark {
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  z-index: 1;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.shared-mark.shifted {
+  right: 52px;
 }
 
 .diff-mark {

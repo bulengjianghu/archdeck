@@ -14,6 +14,8 @@ defineProps<{ data: NodeData }>()
       <div class="name">{{ data.name }}</div>
       <div class="abstraction">{{ data.band?.abstraction || '（未填写抽象原则）' }}</div>
     </div>
+    <span v-if="data.counts" class="counts" data-testid="band-counts">共用件 {{ data.counts.shared }} · 折叠 {{ data.counts.folded }}</span>
+    <span v-if="data.shelfAt !== undefined" class="shelf-label" :style="{ top: `${data.shelfAt}px` }">共用件</span>
     <div class="right">
       <div class="label">可依赖</div>
       <div class="deps">{{ data.band?.mayDependOn.length ? data.band.mayDependOn.join(' · ') : '无' }}</div>
@@ -81,6 +83,26 @@ defineProps<{ data: NodeData }>()
   justify-content: center;
   border-left: 1px solid var(--layer-border);
   padding-left: 12px;
+}
+
+.counts {
+  position: absolute;
+  top: -9px;
+  right: 170px;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-3);
+  background: var(--layer-bg);
+  border-radius: 8px;
+}
+
+.shelf-label {
+  position: absolute;
+  left: 250px;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--text-3);
 }
 
 .label {

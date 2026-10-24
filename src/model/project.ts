@@ -7,6 +7,7 @@
  * - 一端在 P 外部：外部端点提升为「最近公共祖先下、它那一侧的子模块」作为边界节点。
  * 同一 (from, to, type) 的关系合并成一条边（L5：同一对节点之间不同类型的关系各成一条）。
  */
+import { isSharedRole } from './types'
 import type {
   Band,
   ModelIndex,
@@ -48,6 +49,20 @@ export function mapEndpoint(index: ModelIndex, parentId: string, id: string): En
 
 export const DEFAULT_PROJECT_OPTIONS: ProjectOptions = { showBoundaries: true }
 
+/** O8：本层普通模块超过这个数（且有核心模块）时折叠为「+N」；与草图的软限同一个数（X13） */
+export const FOLD_LIMIT = 7
+
+/** O6、O8：「+N 个其他模块」占位的视图节点 ID（分层总览为层 ID，普通层次为父模块 ID） */
+export const moreNodeId = (id: string): string => `more:${id}`
+
+/** O8：本层子模块端点（mapEndpoint 的 local / external 结果）在视图里对应的节点：折叠进「+N」的换成占位 */
+export const viewNodeOf = (view: Pick<LevelView, 'alias'>, node: string): string => view.alias?.[node] ?? node
+
+/** O9、P18：本层共用件架上的视图节点（普通层次的 shelf 与分层总览各带的 shelf） */
+export function shelfOf(view: Pick<LevelView, 'shelf' | 'bands'>): Set<string> {
+  return new Set([...(view.shelf ?? []), ...(view.bands ?? []).flatMap(b => b.shelf)])
+}
+
 /** 一个层次的投影输入：父模块、可见性与其可见子模块 */
 interface LevelScope {
   index: ModelIndex
@@ -55,68 +70,129 @@ interface LevelScope {
   opts: ProjectOptions
   visible: (id: string) => boolean
   children: string[]
+  /** O8：本层子模块 → 视图节点（折叠进「+N」的换成占位） */
+  rep: (node: string) => string
+  /** O9：本层共用件（普通层次） */
+  shelf: ReadonlySet<string>
 }
 
-/** 关系投影到本层的结果：视图边、出现的参与者与边界节点 */
+/** 关系投影到本层的结果：视图边、共用件的边、出现的参与者与边界节点 */
 interface Projected {
   edges: EdgeCollector
+  shelfEdges: EdgeCollector
   actorIds: Set<string>
   boundaryOrder: string[]
 }
+
+const roleOf = (index: ModelIndex, id: string) => index.modules.get(id)!.role
 
 export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectOptions = DEFAULT_PROJECT_OPTIONS): LevelView {
   const visible = makeVisibility(index, opts)
   if (!index.pathOf.has(parentId) || !visible(parentId)) throw new Error(`未知或已隐藏的层次：${parentId}`)
   const children = (index.childrenOf.get(parentId) ?? []).filter(visible)
-  const scope: LevelScope = { index, parentId, opts, visible, children }
   const layered = children.length > 0 && children.every(id => index.modules.get(id)!.kind === 'layer')
+
+  // ADR-0027：普通层次按 role 分三类——核心、普通、共用件（分层总览在带内分，layeredOverview）
+  const shelf = layered ? [] : children.filter(id => isSharedRole(roleOf(index, id)))
+  const cores = layered ? [] : children.filter(id => roleOf(index, id) === 'core')
+  const normal = layered ? [] : children.filter(id => !shelf.includes(id) && !cores.includes(id))
+  const over = normal.length > FOLD_LIMIT
+  // O8：有核心模块时折叠（单击临时展开，同 O6 的 expandedBands）；没有核心时不折叠，只提示
+  const folding = over && cores.length > 0
+  const expanded = folding && (opts.expandedBands ?? []).includes(parentId)
+  const alias: Record<string, string> = {}
+  if (folding && !expanded) for (const id of normal) alias[id] = moreNodeId(parentId)
+  const scope: LevelScope = { index, parentId, opts, visible, children, rep: n => alias[n] ?? n, shelf: new Set(shelf) }
 
   const relations = index.model.relations.filter(r => {
     if (opts.relationTypes && opts.relationTypes.length > 0 && !opts.relationTypes.includes(r.type)) return false
     return (index.actors.has(r.from) || visible(r.from)) && (index.actors.has(r.to) || visible(r.to))
   })
-  const proj: Projected = { edges: new EdgeCollector(), actorIds: new Set(), boundaryOrder: [] }
+  const proj: Projected = { edges: new EdgeCollector(), shelfEdges: new EdgeCollector(), actorIds: new Set(), boundaryOrder: [] }
   for (const r of relations) projectRelation(scope, proj, r)
   addScenarioEnds(scope, proj)
 
   const tail = [...boundaryNodes(scope, proj.boundaryOrder), ...actorNodes(index, proj.actorIds)]
   if (!layered) {
-    const nodes = children.map(id => childNode(scope, id, 'module'))
-    return { mode: 'graph', parentId, nodes: [...nodes, ...tail], edges: proj.edges.result() }
+    const nodes: ViewNode[] = []
+    for (const id of children) {
+      if (alias[id]) continue
+      if (scope.shelf.has(id)) nodes.push({ ...childNode(scope, id, 'module'), role: 'shared' })
+      else nodes.push({ ...childNode(scope, id, 'module'), ...(cores.includes(id) ? { core: true as const } : {}) })
+    }
+    if (folding) nodes.push({ id: moreNodeId(parentId), moduleId: parentId, role: 'more', hasChildren: false, hiddenCount: expanded ? 0 : normal.length, expanded: expanded ? normal.length : 0 })
+    const shelfEdges = proj.shelfEdges.result()
+    return withSharedCounts({
+      mode: 'graph',
+      parentId,
+      nodes: [...nodes, ...tail],
+      edges: proj.edges.result(),
+      ...(shelf.length ? { shelf } : {}),
+      ...(shelfEdges.length ? { shelfEdges } : {}),
+      ...(folding ? { fold: { id: moreNodeId(parentId), members: expanded ? [] : normal, expanded } } : {}),
+      ...(over && !folding ? { foldHint: normal.length } : {}),
+      ...(Object.keys(alias).length ? { alias } : {}),
+    })
   }
   return layeredOverview(scope, relations, proj, tail)
 }
 
-/** 关系 a → b 投影到本层：参与者与本层子树之间的边、本层子模块之间的边、与外部的边界边 */
-function projectRelation({ index, parentId, opts }: LevelScope, proj: Projected, r: RelationEntity) {
-  const a = mapEndpoint(index, parentId, r.from)
-  const b = mapEndpoint(index, parentId, r.to)
-  if (a.kind === 'skip' || b.kind === 'skip') return
-  if (a.kind === 'external' && b.kind === 'external') return
+/** O10：每个非共用件节点连到的共用件个数（「共用 ×N」） */
+function withSharedCounts(view: LevelView): LevelView {
+  const shelf = shelfOf(view)
+  if (!shelf.size || !view.shelfEdges?.length) return view
+  const users = new Map<string, Set<string>>()
+  for (const e of view.shelfEdges)
+    for (const [a, b] of [
+      [e.from, e.to],
+      [e.to, e.from],
+    ])
+      if (!shelf.has(a) && shelf.has(b)) users.set(a, (users.get(a) ?? new Set()).add(b))
+  return { ...view, nodes: view.nodes.map(n => (users.has(n.id) ? { ...n, sharedCount: users.get(n.id)!.size } : n)) }
+}
+
+/** 关系 a → b 投影到本层：参与者与本层子树之间的边、本层子模块之间的边、与外部的边界边；一端在共用件架上的进 shelfEdges（O10） */
+function projectRelation({ index, parentId, opts, rep, shelf }: LevelScope, proj: Projected, r: RelationEntity) {
+  const a0 = mapEndpoint(index, parentId, r.from)
+  const b0 = mapEndpoint(index, parentId, r.to)
+  if (a0.kind === 'skip' || b0.kind === 'skip') return
+  if (a0.kind === 'external' && b0.kind === 'external') return
+  // O8：折叠进「+N」的子模块换成占位节点（边按 L5 聚合到占位上）
+  const a = a0.kind === 'local' ? { ...a0, node: rep(a0.node), exact: a0.exact && rep(a0.node) === a0.node } : a0
+  const b = b0.kind === 'local' ? { ...b0, node: rep(b0.node), exact: b0.exact && rep(b0.node) === b0.node } : b0
+  const into = (x: string, y: string) => (shelf.has(x) || shelf.has(y) ? proj.shelfEdges : proj.edges)
 
   // L6、A2：参与者与本层子树之间的关系；与本层子树无关的参与者不出现
   if (a.kind === 'actor' || b.kind === 'actor') {
     const local = a.kind === 'local' ? a : b.kind === 'local' ? b : null
     if (!local) return
     proj.actorIds.add(a.kind === 'actor' ? a.node : b.node)
-    proj.edges.add(a.node, b.node, r, local.exact)
+    into(a.node, b.node).add(a.node, b.node, r, local.exact)
     return
   }
   if (a.kind === 'local' && b.kind === 'local') {
-    if (a.node !== b.node) proj.edges.add(a.node, b.node, r, a.exact && b.exact)
+    if (a.node !== b.node) into(a.node, b.node).add(a.node, b.node, r, a.exact && b.exact)
     return
   }
-  if (opts.showBoundaries) addBoundaryEdge(proj, a, b, r)
+  if (opts.showBoundaries) addBoundaryEdge(proj, a, b, r, shelf)
 }
 
 /** 一端在本层外：外部端点画成边界节点 */
-function addBoundaryEdge(proj: Projected, a: Exclude<Endpoint, { kind: 'skip' }>, b: Exclude<Endpoint, { kind: 'skip' }>, r: RelationEntity) {
+function addBoundaryEdge(
+  proj: Projected,
+  a: Exclude<Endpoint, { kind: 'skip' }>,
+  b: Exclude<Endpoint, { kind: 'skip' }>,
+  r: RelationEntity,
+  shelf: ReadonlySet<string>,
+) {
   const ext = a.kind === 'external' ? a : b
+  const local = a.kind === 'external' ? b : a
   const boundaryId = `boundary:${ext.node}`
   if (!proj.boundaryOrder.includes(ext.node)) proj.boundaryOrder.push(ext.node)
   const exact = a.exact && b.exact
-  if (a.kind === 'external') proj.edges.add(boundaryId, b.node, r, exact)
-  else proj.edges.add(a.node, boundaryId, r, exact)
+  const into = shelf.has(local.node) ? proj.shelfEdges : proj.edges
+  if (a.kind === 'external') into.add(boundaryId, b.node, r, exact)
+  else into.add(a.node, boundaryId, r, exact)
 }
 
 /** 舞台：场景中的帧走到本层外或来自参与者时，即使结构上没有关系也补上对应的边界节点 / 参与者（P2、P11） */
@@ -149,35 +225,66 @@ function actorNodes(index: ModelIndex, actorIds: ReadonlySet<string>): ViewNode[
   return index.model.actors.filter(a => actorIds.has(a.id)).map(a => ({ id: a.id, moduleId: a.id, role: 'actor', hasChildren: false, actorKind: a.kind }))
 }
 
-/** 分层总览（O）：层画成带，带内只画核心模块，另算核心模块之间的核心跨层边 */
+/** 分层总览中一个端点在带内的代表：核心模块、共用件，否则为层本身 */
+type Rep = { node: string; core: boolean; shelf: boolean; exact: boolean }
+
+/** 分层总览（O）：层画成带，带内只画核心模块、共用件进带底的共用件架（O9），另算核心模块之间的核心跨层边与共用件的边 */
 function layeredOverview(scope: LevelScope, relations: readonly RelationEntity[], proj: Projected, tail: ViewNode[]): LevelView {
   const { index, parentId, children } = scope
   const coreOf = new Map<string, Set<string>>()
-  // O6：临时展开的层，全部子模块都按核心模块露出
+  const shelfOfLayer = new Map<string, Set<string>>()
+  // O6：临时展开的层，全部非共用件子模块都按核心模块露出
   const expanded = new Set(scope.opts.expandedBands ?? [])
-  for (const l of children) coreOf.set(l, new Set(visibleChildren(scope, l).filter(c => expanded.has(l) || index.modules.get(c)!.role === 'core')))
+  for (const l of children) {
+    const kids = visibleChildren(scope, l)
+    shelfOfLayer.set(l, new Set(kids.filter(c => isSharedRole(roleOf(index, c)))))
+    coreOf.set(l, new Set(kids.filter(c => !shelfOfLayer.get(l)!.has(c) && (expanded.has(l) || roleOf(index, c) === 'core'))))
+  }
   const nodes = children.map(id => childNode(scope, id, 'layer'))
   const bands: Band[] = children.map(l => {
     const m = index.modules.get(l)!
     const kids = visibleChildren(scope, l)
     const core = kids.filter(c => coreOf.get(l)!.has(c))
+    const shelf = kids.filter(c => shelfOfLayer.get(l)!.has(c))
     for (const c of core) nodes.push({ id: c, moduleId: c, role: 'core', hasChildren: visibleChildren(scope, c).length > 0, layerId: l })
-    const declared = kids.filter(c => index.modules.get(c)!.role === 'core').length
+    for (const c of shelf) nodes.push({ id: c, moduleId: c, role: 'shared', hasChildren: visibleChildren(scope, c).length > 0, layerId: l })
+    const declared = kids.filter(c => roleOf(index, c) === 'core').length
     return {
       layerId: l,
       order: m.order ?? Infinity,
       coreModuleIds: core,
-      hiddenCount: kids.length - core.length,
+      hiddenCount: kids.length - core.length - shelf.length,
       ...(expanded.has(l) && core.length > declared ? { expanded: core.length - declared } : {}),
+      shelf,
     }
   })
   const coreEdges = new EdgeCollector()
-  for (const r of relations) projectCoreRelation(scope, coreOf, coreEdges, r)
-  return { mode: 'layered', parentId, nodes: [...nodes, ...tail], edges: proj.edges.result(), bands, coreEdges: coreEdges.result() }
+  const shelfEdges = new EdgeCollector()
+  for (const r of relations) projectCoreRelation(scope, coreOf, shelfOfLayer, coreEdges, shelfEdges, r)
+  const shelfList = shelfEdges.result()
+  return withSharedCounts({
+    mode: 'layered',
+    parentId,
+    nodes: [...nodes, ...tail],
+    edges: proj.edges.result(),
+    bands,
+    coreEdges: coreEdges.result(),
+    ...(shelfList.length ? { shelfEdges: shelfList } : {}),
+  })
 }
 
-/** 核心跨层边：关系端点在层内落到核心模块时用核心模块；两端都没落到核心模块时与层间边重复，不记录 */
-function projectCoreRelation({ index, parentId }: LevelScope, coreOf: Map<string, Set<string>>, coreEdges: EdgeCollector, r: RelationEntity) {
+/**
+ * 核心跨层边：关系端点在层内落到核心模块时用核心模块；两端都没落到核心模块时与层间边重复，不记录。
+ * O10：一端落到共用件的进共用件的边（同一层内核心与共用件之间的也算；共用件与自己所在的带之间不算）。
+ */
+function projectCoreRelation(
+  { index, parentId }: LevelScope,
+  coreOf: Map<string, Set<string>>,
+  shelfOfLayer: Map<string, Set<string>>,
+  coreEdges: EdgeCollector,
+  shelfEdges: EdgeCollector,
+  r: RelationEntity,
+) {
   const depth = index.pathOf.get(parentId)!.length - 1
   const a = mapEndpoint(index, parentId, r.from)
   const b = mapEndpoint(index, parentId, r.to)
@@ -185,22 +292,34 @@ function projectCoreRelation({ index, parentId }: LevelScope, coreOf: Map<string
   if (a.kind === 'actor' || b.kind === 'actor') {
     const local = a.kind === 'local' ? a : b.kind === 'local' ? b : null
     if (!local) return
-    const c = coreRep(index.pathOf.get(local === a ? r.from : r.to)!, depth, coreOf)
-    if (c.core) coreEdges.add(a.kind === 'actor' ? a.node : c.node, b.kind === 'actor' ? b.node : c.node, r, c.exact)
+    const c = coreRep(index.pathOf.get(local === a ? r.from : r.to)!, depth, coreOf, shelfOfLayer)
+    const from = a.kind === 'actor' ? a.node : c.node
+    const to = b.kind === 'actor' ? b.node : c.node
+    if (c.shelf) shelfEdges.add(from, to, r, c.exact)
+    else if (c.core) coreEdges.add(from, to, r, c.exact)
     return
   }
-  if (a.kind !== 'local' || b.kind !== 'local' || a.node === b.node) return
-  const ca = coreRep(index.pathOf.get(r.from)!, depth, coreOf)
-  const cb = coreRep(index.pathOf.get(r.to)!, depth, coreOf)
+  if (a.kind !== 'local' || b.kind !== 'local') return
+  const ca = coreRep(index.pathOf.get(r.from)!, depth, coreOf, shelfOfLayer)
+  const cb = coreRep(index.pathOf.get(r.to)!, depth, coreOf, shelfOfLayer)
+  if (ca.node === cb.node) return
+  if (ca.shelf || cb.shelf) {
+    // 共用件与它所在的带之间（同层的普通模块用它）不画：带就是它的框
+    if (a.node === b.node && (!ca.core && !ca.shelf ? true : !cb.core && !cb.shelf)) return
+    shelfEdges.add(ca.node, cb.node, r, ca.exact && cb.exact)
+    return
+  }
+  if (a.node === b.node) return
   if (ca.core || cb.core) coreEdges.add(ca.node, cb.node, r, ca.exact && cb.exact)
 }
 
-/** 端点在层内落到核心模块时用核心模块，否则用层本身 */
-function coreRep(path: string[], depth: number, coreOf: Map<string, Set<string>>): { node: string; core: boolean; exact: boolean } {
+/** 端点在层内落到核心模块或共用件时用它，否则用层本身 */
+function coreRep(path: string[], depth: number, coreOf: Map<string, Set<string>>, shelfOfLayer: Map<string, Set<string>>): Rep {
   const layer = path[depth + 1]
   const second = path[depth + 2]
-  if (second !== undefined && coreOf.get(layer)?.has(second)) return { node: second, core: true, exact: path.length === depth + 3 }
-  return { node: layer, core: false, exact: path.length === depth + 2 }
+  if (second !== undefined && coreOf.get(layer)?.has(second)) return { node: second, core: true, shelf: false, exact: path.length === depth + 3 }
+  if (second !== undefined && shelfOfLayer.get(layer)?.has(second)) return { node: second, core: false, shelf: true, exact: path.length === depth + 3 }
+  return { node: layer, core: false, shelf: false, exact: path.length === depth + 2 }
 }
 
 /** L5：按 (from, to, type) 收集视图边，同类型内聚合并汇总同步 / 异步 */
