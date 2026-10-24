@@ -198,7 +198,7 @@ const LANE_GAP = 6
 /** 加长量的上限：短桩不超出层间空隙（72）的一半 */
 const MAX_LANE = 22
 
-/** L11 左动右静：运行时关系（calls / notifies / streams）的边为动态，编译期（depends / implements）为静态 */
+/** L11 左动右静：运行时关系（calls / notifies / streams）的边为动态，编译期（implements，ADR-0026 起只有这一类）为静态 */
 export const isDynamic = (e: ViewEdge) => RUNTIME_RELATION_TYPES.includes(e.type)
 
 /** 框外元素的边（参与者的边、边界边）：普通层次不参与布局，要画时才走线 */
