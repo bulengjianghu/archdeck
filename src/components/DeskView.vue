@@ -90,8 +90,8 @@ if (props.design)
     on => {
       const m = on ? takeSheet(props.design!) : null
       if (!m) return
-      const r = desk.edit.goUp(m)
-      if (!r.ok) window.alert(`没能切到挂在「${m}」上的草图：${r.reason}`)
+      const r = desk.edit.openMount(m)
+      if (!r.ok) desk.edit.notice.value = `没能切到挂在「${m}」上的草图：${r.reason}`
     },
     { immediate: true },
   )
@@ -237,7 +237,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         {{ navCollapsed ? '导航 ›' : '‹ 导航' }}
       </button>
       <VersionSwitcher />
-      <PerspectiveSwitch v-if="desk.status.value === 'ready'" />
+      <!-- 草图画布下没有运行视角（场景不在草图里画） -->
+      <PerspectiveSwitch v-if="desk.status.value === 'ready' && !desk.edit.active.value" />
       <Breadcrumb />
       <Toolbar />
       <button class="collapse guide-btn" title="怎么读这张图" aria-label="怎么读这张图" @click="guideOpen = true">帮助</button>

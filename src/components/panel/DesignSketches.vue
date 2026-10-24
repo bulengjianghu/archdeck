@@ -13,7 +13,7 @@ const e = desk.edit
 const sheets = computed(() => e.sheets.value)
 const hasRoot = computed(() => sheets.value.some(s => s.mount === ROOT_MOUNT))
 function go(mount: string) {
-  const r = e.goUp(mount)
+  const r = e.openMount(mount)
   emit('note', r.ok ? '' : r.reason)
 }
 </script>

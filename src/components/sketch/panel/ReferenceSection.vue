@@ -30,7 +30,7 @@ function view() {
 }
 const designable = computed(() => !!cur.value && cur.value.kind !== 'layer')
 function designHere() {
-  const r = e.goUp(props.id)
+  const r = e.openMount(props.id)
   emit('note', r.ok ? '' : r.reason)
 }
 </script>

@@ -42,7 +42,7 @@ import {
   type ViewState,
 } from './transition'
 import { createRouterSync, type RouterSync, type RouterSyncOptions } from './sync/router'
-import { fetchAndLoad, watchModelChanges, type Baseline, type ChangeEvents, type FetchModel } from './sync/modelSource'
+import { fetchAndLoad, watchModelChanges, type Baselines, type ChangeEvents, type FetchModel } from './sync/modelSource'
 import { createLayoutSync } from './sync/layout'
 import { bandColumnsFor, layoutView, type LayoutOptions } from '@/layout/layout'
 import { NO_SOURCE, createSourceSync, type SourceFetcher } from './sync/source'
@@ -78,7 +78,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const modelDir = ref('')
   const designs = shallowRef<DesignInfo[]>([])
   const commits = shallowRef<ModelCommit[]>([])
-  const baselines = shallowRef<{ current?: Baseline; previous?: Baseline; base?: Baseline }>({})
+  const baselines = shallowRef<Baselines>({})
   /** DV-10：草图版本的「交给 AI」指令 */
   const sketchPrompt = shallowRef('')
   /** X4：载荷附带的设计草图 */
@@ -180,6 +180,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     sketch: payloadSketch,
     sketchFiles: payloadSketchFiles,
     current: () => baselines.value.current?.index ?? null,
+    // 持久草图：相对当前版本与「去掉这张草图贡献后的当前版本」比（同服务端）
+    compareCurrent: () => baselines.value.own?.index ?? baselines.value.current?.index ?? null,
     hasBase: () => !!baselines.value.base,
     // X17：设计的基线——载荷给出 base.commit 那一版时用它，否则为当前版本（新建设计时底稿即从当前版本复制）
     baseline: () => baselines.value.base?.index ?? baselines.value.current?.index ?? null,

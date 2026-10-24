@@ -266,9 +266,6 @@ export function createCommands(i: CommandInputs) {
     return openMount(id)
   }
 
-  /** 面包屑：回到某一级（会话里没有时推出） */
-  const goUp = (m: string) => openMount(m)
-
   const step = (fn: typeof undoSession) => () => {
     const s = session.value
     const r = s && fn(s)
@@ -372,7 +369,8 @@ export function createCommands(i: CommandInputs) {
     remove,
     previewRemove,
     openChild,
-    goUp,
+    /** 切到挂在某个模块上的草图（面包屑回到某一级、设计面板点一张、引用节点「打开」；会话里没有时按基线推出） */
+    openMount,
     undo: step(undoSession),
     redo: step(redoSession),
     save,

@@ -43,18 +43,36 @@ export interface Baseline {
 export interface LoadedSource {
   payload: ModelPayload
   model: LoadedModel
-  /** current：当前版本；previous：上一轮；base：设计的基线（X17，载荷给出时） */
-  baselines: { current?: Baseline; previous?: Baseline; base?: Baseline }
+  /**
+   * current：当前版本；previous：上一轮；base：设计的基线（X17，载荷给出时）；
+   * own：持久草图版本里「去掉这张草图贡献后的当前版本」——持久草图本身也进当前版本（X1），相对当前版本与它比，口径同服务端 intentChanges
+   */
+  baselines: Baselines
+}
+
+export interface Baselines {
+  current?: Baseline
+  previous?: Baseline
+  base?: Baseline
+  own?: Baseline
 }
 
 /** 取一次描述并加载（设计版本同时加载对比基线） */
 export async function fetchAndLoad(fetchModel: FetchModel): Promise<LoadedSource> {
   const payload = await fetchModel()
   const toBaseline = (src?: CompareSource): Baseline | undefined => (src ? { label: src.label, index: loadModel(src.files).index } : undefined)
+  const current = payload.compare?.current
+  // 持久草图版本：主草图在 intent/ 下（设计的草图在 sketches/ 下）
+  const own = payload.sketch?.path?.startsWith('intent/') ? payload.sketch.path : undefined
   return {
     payload,
     model: loadModel(payload.files),
-    baselines: { current: toBaseline(payload.compare?.current), previous: toBaseline(payload.compare?.previous), base: toBaseline(payload.compare?.baseline) },
+    baselines: {
+      current: toBaseline(current),
+      previous: toBaseline(payload.compare?.previous),
+      base: toBaseline(payload.compare?.baseline),
+      ...(own && current ? { own: toBaseline({ ...current, files: current.files.filter(f => f.path !== own) }) } : {}),
+    },
   }
 }
 

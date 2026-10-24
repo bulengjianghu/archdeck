@@ -171,15 +171,16 @@ type PaneLayout =
 | 位置 | 草图画布下 | 需求 |
 |---|---|---|
 | 入口 | 导航树、模型画布节点、属性面板的模块上「在此设计」（以该模块为挂载点新建设计，或向打开的草稿设计加一张）；设计面板「改骨架」（根挂载）；版本切换选中草图即进入；新建设计对话框：设计 ID、名称、目标一句话、挂载点 | SK-13、SK-14 |
-| 信息条 | 三区：身份（kind 标签 + 名称 + 状态；一条挂载点面包屑「挂在：视图状态层 › DeskState」，点击返回上层，也是升级的落点，下钻后随当前张变；「编辑中 ●」按设计算）· 动作（保存 ⌘S、撤销 / 重做、保存并交给 AI——有语义提示时禁用并悬停说明、说明、退出——回到进入前的版本，脏时问保存 / 放弃 / 取消）· 对比（一个按钮「对比 相对基线 · +a ~m ⇄n −d」，弹层放基线切换、六类计数、图上标出变更、漂移警告、全设计清单）；已过时时「重新加载并重放」 | SK-19、SK-20 |
-| 画布 | 模块节点与灰色引用节点（由跨边界关系派生）；两端之间的直线（同对多条平移错开）、可拖动的关系标签、子树间关系的浅色只读聚合线；自由拖拽（多选一起拖）；从连线柄拖到另一节点，松手选类型与说明；双击空白 / 工具条「＋ 模块」/ 空白处右键新建（名称 + ID 短名）；框选与 ⇧ 多选；右键：合并为新模块…、拆分…、删除、进入下一层（没有「在此设计」）；拖到另一节点上 = 降级（目标出现虚线框与提示）；拖到面包屑父级 = 升级；根草图里拖到另一条层带 = 移入；双击节点下钻；工具条：引用外部模块（搜索）、重新排列、本层数；超过 7 个模块时画布角提示「考虑归并」；Delete / Backspace、⌘Z / ⇧⌘Z | SK-15、SK-16 |
+| 信息条 | 三区：身份（kind 标签 + 名称 + 状态；一条挂载点面包屑「挂在：视图状态层 › DeskState」，点击返回上层，也是升级的落点，下钻后随当前张变；「编辑中 ●」按设计算）· 动作（保存 ⌘S、撤销 / 重做、保存并交给 AI——有语义提示时禁用并悬停说明、说明、退出——回到进入前的版本，脏时问保存 / 放弃 / 取消）· 对比（一个按钮「对比 相对基线 · +a ~m」，合并 / 拆分 / 移动 / 删除只在非 0 时出现；弹层放基线切换、六类计数、图上标出变更、漂移警告、全设计清单；持久草图只有「相对当前版本」，对象是去掉这张草图贡献后的当前版本）；已过时时「重新加载并重放」 | SK-19、SK-20 |
+| 画布 | 模块节点与灰色引用节点（由跨边界关系派生）；两端之间的直线（同对多条平移错开）、可拖动的关系标签（子树间关系的浅色只读聚合线未做）；自由拖拽（多选一起拖）；从连线柄拖到另一节点，松手选类型与说明；双击空白 / 工具条「＋ 模块」/ 空白处右键新建（名称 + ID 短名）；框选与 ⇧ 多选；右键：合并为新模块…、拆分…、删除、进入下一层（没有「在此设计」）；拖到另一节点上 = 降级（目标出现虚线框与提示）；拖到面包屑父级 = 升级；根草图里拖到另一条层带 = 移入；双击节点下钻；工具条：引用外部模块（搜索）、重新排列、本层数；超过 7 个模块时画布角提示「考虑归并」；Delete / Backspace、⌘Z / ⇧⌘Z | SK-15、SK-16 |
 | 草图面板 | 无选中：父模块——原则可编辑、「带入现有原则」，名称与职责只读（上一层没写时显示当前版本的文字并标「取自当前版本」）；根草图无选中为设计概览（全设计计数与各张草图）；层（根草图）：名称、ID、抽象原则、包含 / 不包含、可依赖的层；模块：名称、ID（前缀与唯一校验）、职责、核心、封闭、代码落点、对外接口、血缘只读（来自 A、B · 合并 / 拆分 / 改 ID / 移动）、「进入下一层 →」；关系：类型、说明、经由接口；引用节点：当前版本里的职责与位置、「在模型里查看」；元信息：挂载点、lifetime、supersedes。顶部：格式错误（红）与语义提示（黄），单击定位（跨草图也能定位）；「待重连 N 条」；「本张」的两个核验数（相对当前版本 / 相对基线），可展开清单；超七提示 | SK-17、SK-18 |
-| 导航树 | 「模块」页签只列当前张的模块与引用节点，与画布选中同步，双击下钻 | SK-15 |
+| 导航树 | 「模块」页签只列当前张的模块与引用节点，与画布选中同步，双击下钻；顶部不另列路径（面包屑只在身份区） | SK-15 |
+| 视角切换 | 不出现（草图里不画场景，没有运行视角） | — |
 | 「显示」面板 | 不出现（草图画布不叠加代码事实与演化） | — |
 
 | 模块 | 组件 |
 |---|---|
-| 草图画布 `present.sketch` | `sketch/**`：SketchCanvas（Vue Flow 自由模式）· SketchNode · RefNode · StraightEdge · SketchToolbar · SketchMenu · NameIdDialog（新建 / 合并 / 拆分共用）· useSketchDrag（摆位置、降级、升级、移入的落点）· useSketchConnect · useSketchKeys |
+| 草图画布 `present.sketch` | `sketch/SketchCanvas.vue`（Vue Flow 自由模式；工具条、快捷键、拖放落点——摆位置、降级、升级、移入——都在这里）· `SketchNode.vue`（模块、引用与根草图的层带）· `StraightEdge.vue` · `SketchMenu.vue`（右键菜单）· `PartsDialog.vue`（名称 + ID 短名，新建 / 合并 / 拆分共用）· `ConnectPopover.vue`（连线选类型）· `ReferencePicker.vue`（引用外部模块）· `SketchTree.vue`（草图下的导航树）· `actions.ts`（面板与节点向画布请求对话框、升级落点高亮）· `labels.ts`（角标与六类计数）；布局为 `layout/sketch.ts`（`state.layout.sketch`） |
 | 草图面板 `present.panel.sketch` | `sketch/SketchPanel.vue` 与 `sketch/panel/**`：ChecksSection（两级校验、待重连、本张核验）· ParentSection · ModuleForm · LayerForm · RelationForm · ReferenceSection · MetaSection；合并 / 拆分 / 删除经 `sketch/actions.ts` 请求画布的对话框 |
 | 设计面板的草图列表 `present.panel.design` | `panel/DesignSketches.vue`：各张草图（挂载点、模块数、推出 / 脏标记），点击切张；「改骨架」 |
-| 信息条（三区） `present.version` · `present.version.edit` | `infobar/InfoBar.vue`（身份区与面包屑，父级带 `data-parent` 作升级落点）· `infobar/ActionZone.vue`（动作区，按模式，F-61）· `infobar/CompareZone.vue`（对比按钮与弹层，F-62）· `infobar/ChangeGroups.vue`（全设计变更清单按血缘分组，F-53）；`edit/NewDesignDialog.vue`（挂载点）、`edit/leave.ts`（退出回到进入前的版本） |
+| 信息条（三区） `present.version` | `infobar/InfoBar.vue`（身份区与面包屑，父级带 `data-parent` 作升级落点）· `infobar/ActionZone.vue`（动作区，按模式，F-61）· `infobar/CompareZone.vue`（对比按钮与弹层，F-62）· `infobar/ChangeGroups.vue`（全设计变更清单按血缘分组，F-53）；`edit/NewDesignDialog.vue` 与 `edit/designHere.ts`（「在此设计」与挂载点、「加到设计」）、`edit/EditDialog.vue` 与 `edit/useEditDialog.ts`（确认 / 三选对话框）、`edit/leave.ts`（退出回到进入前的版本） |

@@ -3,7 +3,7 @@
  * 顶部信息条（F-60–F-63）：提交版本、设计轮次、草图（设计的草图与持久草图）共用，分三区——
  * 身份（kind 标签 + 名称 + 状态 chip；名称只出现这一次；草图下追加唯一一条面包屑「挂在：…」与「编辑中 ●」，#15）、
  * 动作（按模式，ActionZone）、对比（一个按钮弹层，CompareZone）。
- * 面包屑：desk.edit.breadcrumb，点一级 goUp（会话里没有时推出）；父级带 data-parent="1"，是升级的落点（画布拖动时检测，经 dragOverParent 高亮）。
+ * 面包屑：desk.edit.breadcrumb，点一级 openMount（会话里没有时推出）；父级带 data-parent="1"，是升级的落点（画布拖动时检测，经 dragOverParent 高亮）。
  */
 import { computed, ref } from 'vue'
 import { isCommitVersion, isIntentVersion, isSketchVersion } from '@/model'
@@ -36,7 +36,7 @@ const statusClass = computed(() => (mode === 'commit' || !d.value ? '' : d.value
 const crumbs = computed(() => desk.edit.breadcrumb.value)
 const crumbNote = ref('')
 function go(mount: string) {
-  const r = desk.edit.goUp(mount)
+  const r = desk.edit.openMount(mount)
   if (r.ok) return
   crumbNote.value = r.reason
   setTimeout(() => crumbNote.value === r.reason && (crumbNote.value = ''), 3000)

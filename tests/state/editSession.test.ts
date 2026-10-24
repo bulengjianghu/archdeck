@@ -307,7 +307,7 @@ describe('desk.edit：草图画布与 DeskState', () => {
     expect(desk.edit.scene.value!.nodes.map(n => n.id)).toEqual(['core.a.xy.x', 'core.a.xy.y'])
     expect(desk.edit.breadcrumb.value.map(b => b.mount)).toEqual(['root', 'core.a', 'core.a.xy'])
     expect(desk.edit.dirty.value).toBe(true) // 本层的合并
-    ok(desk.edit.goUp('core.a'))
+    ok(desk.edit.openMount('core.a'))
     expect(desk.levelId.value).toBe('core.a')
     expect(desk.edit.openChild('nope').ok).toBe(false)
   })
@@ -413,6 +413,24 @@ describe('desk.edit：草图画布与 DeskState', () => {
     expect(desk.edit.openChild('core.a').ok).toBe(false)
     await desk.edit.save()
     expect(saves[0]).toMatchObject({ target: { kind: 'persistent', id: 'skeleton' }, baseHash: 'k0' })
+  })
+
+  it('X17：持久草图只有「相对当前版本」，对象是去掉这张草图贡献后的当前版本（同服务端）', async () => {
+    const LEAF = { path: 'modules/leaf.yaml', text: 'modules:\n  - { id: core.a.x, name: X, parent: core.a }\n' }
+    const { desk } = await setup({ intent: 'skeleton' }, fakeWriter().writer, {
+      files: [SYSTEM, SKELETON],
+      compare: { current: { label: '当前版本', dir: 'x', files: [SYSTEM, SKELETON, LEAF] } },
+      sketch: { file: 'intent/skeleton.yaml', path: 'intent/skeleton.yaml', hash: 'k0' },
+      sketchFiles: undefined,
+    })
+    expect([desk.edit.twoBases, desk.edit.compareMode.value, desk.edit.vsBaseline.value]).toEqual([false, 'current', null])
+    desk.edit.setCompareMode('baseline')
+    expect(desk.edit.compareMode.value).toBe('current')
+    expect(desk.edit.baselineFallback.value).toBe(false)
+    // 当前版本里的骨架就是这张草图本身：去掉它之后层与第二级都不在，全部计为新增；名称与位置仍取完整的当前版本
+    expect(desk.edit.vsCurrent.value!.counts.added).toBeGreaterThan(0)
+    expect(desk.edit.comparison.value).toBe(desk.edit.vsCurrent.value)
+    expect(desk.edit.currentIndex.value!.modules.has('core.a')).toBe(true)
   })
 
   it('X21 根草图的层带：带内新建与落位一步（y 记相对带顶）；拖到另一条带 = 移入，与落位是一步（y 相对目标带顶）；层带按 order、带内模块数', async () => {

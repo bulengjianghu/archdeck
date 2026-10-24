@@ -115,8 +115,12 @@ export interface DeriveInputs {
   session: ShallowRef<EditSession | null>
   loaded: ShallowRef<ModelIndex | null>
   files: ShallowRef<RawFile[]>
-  /** 当前版本（相对当前版本的对象、引用外部模块的来源） */
+  /** 当前版本（引用外部模块、名称与位置的来源） */
   current: () => ModelIndex | null
+  /** 相对当前版本的对象：持久草图为去掉它贡献后的当前版本，设计的草图为当前版本 */
+  compareCurrent: () => ModelIndex | null
+  /** 有相对基线（设计的草图）；持久草图没有，vsBaseline 为 null */
+  twoBases: boolean
   /** 设计的基线（相对基线的对象、底稿与推出的来源） */
   baseline: () => ModelIndex | null
   /** 对比口径与是否在图上标出（对比弹层设定） */
@@ -164,8 +168,8 @@ export function createDerive(i: DeriveInputs) {
     return { mode, counts: r.counts, pending: r.pending, sheet: r.sketches.find(c => c.mount === s.mount) ?? null, sheets: r.sketches }
   }
   /** X17：两个对比——相对基线（我改了什么）与相对当前版本（实现还差什么） */
-  const vsBaseline = computed(() => compare('baseline', i.baseline()))
-  const vsCurrent = computed(() => compare('current', i.current()))
+  const vsBaseline = computed(() => (i.twoBases ? compare('baseline', i.baseline()) : null))
+  const vsCurrent = computed(() => compare('current', i.compareCurrent()))
   const comparison = computed(() => (i.compareMode() === 'baseline' ? vsBaseline.value : vsCurrent.value))
 
   const dirty = computed(() => (session.value ? isDirty(session.value, i.baseline()) : false))

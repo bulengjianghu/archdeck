@@ -41,6 +41,8 @@ export interface EditInputs {
   /** 载荷里设计的全部草图 */
   sketchFiles: ShallowRef<PayloadSketch[] | undefined>
   current: () => ModelIndex | null
+  /** 相对当前版本的对象：持久草图为「去掉这张草图贡献后的当前版本」（同服务端），设计的草图为当前版本；缺省为 current */
+  compareCurrent?: () => ModelIndex | null
   /** 设计的基线（载荷没有给出时为当前版本） */
   baseline: () => ModelIndex | null
   /** 05 裁决 3：载荷给出了基线（base.commit 那一版）；没有时相对基线退化为相对当前版本 */
@@ -63,16 +65,22 @@ export function createEdit(i: EditInputs) {
       ? { kind: 'persistent', id: i.version.intent }
       : undefined
   const session = shallowRef<EditSession | null>(null)
+  /** 面板内的一条提示（如「加到设计」后没能切到那张草图），草图面板顶部显示，可关闭 */
+  const notice = shallowRef('')
   /** 画布上的多选（框选 / ⇧ 点选）：合并的输入；单选仍是视图状态的 selection */
   const picked = shallowRef<string[]>([])
-  /** 对比口径（对比弹层设定，缺省相对基线） */
-  const compareMode = shallowRef<CompareMode>('baseline')
+  /** 持久草图只有「相对当前版本」一个对比：它没有基线（不属于设计），相对当前版本 = 与去掉它贡献后的当前版本比 */
+  const twoBases = target?.kind !== 'persistent'
+  /** 对比口径（对比弹层设定，设计的草图缺省相对基线，持久草图固定相对当前版本） */
+  const compareMode = shallowRef<CompareMode>(twoBases ? 'baseline' : 'current')
   const derive = createDerive({
     session,
     loaded: i.loaded,
     files: i.files,
     current: i.current,
+    compareCurrent: i.compareCurrent ?? i.current,
     baseline: i.baseline,
+    twoBases,
     compareMode: () => compareMode.value,
     showDiff: i.showDiff,
     selection: i.selection,
@@ -188,8 +196,10 @@ export function createEdit(i: EditInputs) {
     lineageOf,
     placeOf,
     sheets,
-    /** 05 裁决 3：没有基线提交（无 git 或 HEAD 不含描述）时相对基线退化为相对当前版本 */
-    baselineFallback: computed(() => !!session.value && !(i.hasBase?.() ?? true)),
+    /** 05 裁决 3：没有基线提交（无 git 或 HEAD 不含描述）时相对基线退化为相对当前版本；持久草图没有相对基线，不提示 */
+    baselineFallback: computed(() => twoBases && !!session.value && !(i.hasBase?.() ?? true)),
+    /** 有「相对基线」与「相对当前版本」两个对比（设计的草图）；持久草图只有相对当前版本 */
+    twoBases,
     currentIndex: computed(() => i.current()),
     suggestShort,
     referenceCandidates,
@@ -197,8 +207,9 @@ export function createEdit(i: EditInputs) {
     target,
     session,
     picked,
+    notice,
     compareMode,
-    setCompareMode: (m: CompareMode) => (compareMode.value = m),
+    setCompareMode: (m: CompareMode) => (compareMode.value = twoBases ? m : 'current'),
     pick: (ids: readonly string[]) => (picked.value = [...new Set(ids)]),
     active: computed(() => !!session.value),
     stale: computed(() => !!session.value?.stale),

@@ -36,6 +36,9 @@ const designName = computed(() => desk.versions.design.value?.name ?? e.session.
 
 <template>
   <div class="sk-panel" data-testid="sketch-panel">
+    <p v-if="e.notice.value" class="err notice" role="alert" data-testid="sketch-notice">
+      {{ e.notice.value }} <button class="link" aria-label="关闭提示" @click="e.notice.value = ''">×</button>
+    </p>
     <ChecksSection />
 
     <section v-if="picked.length > 1" class="skp-body">
@@ -55,12 +58,14 @@ const designName = computed(() => desk.versions.design.value?.name ?? e.session.
     <template v-else-if="root">
       <section class="skp-body" data-testid="design-overview">
         <h3>{{ designName }} <span class="muted small">设计概览</span></h3>
-        <p class="cap">全设计 · 相对基线</p>
-        <ul class="counts">
-          <li v-for="c in countsOf(e.vsBaseline.value?.counts)" :key="c.label" :class="{ zero: !c.n }">
-            {{ c.label }} <b>{{ c.n }}</b>
-          </li>
-        </ul>
+        <template v-if="e.twoBases">
+          <p class="cap">全设计 · 相对基线</p>
+          <ul class="counts">
+            <li v-for="c in countsOf(e.vsBaseline.value?.counts)" :key="c.label" :class="{ zero: !c.n }">
+              {{ c.label }} <b>{{ c.n }}</b>
+            </li>
+          </ul>
+        </template>
         <p class="cap">全设计 · 相对当前版本</p>
         <ul class="counts">
           <li v-for="c in countsOf(e.vsCurrent.value?.counts)" :key="c.label" :class="{ zero: !c.n }">

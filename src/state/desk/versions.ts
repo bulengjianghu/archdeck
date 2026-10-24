@@ -18,7 +18,7 @@ import {
   type VersionRef,
 } from '@/model'
 import type { ViewState } from '../transition'
-import type { Baseline } from '../sync/modelSource'
+import type { Baseline, Baselines } from '../sync/modelSource'
 
 export interface VersionsInputs {
   state: ShallowRef<ViewState>
@@ -26,7 +26,7 @@ export interface VersionsInputs {
   designs: ShallowRef<DesignInfo[]>
   /** 改动过描述的最近提交（E5），新的在前 */
   commits: ShallowRef<ModelCommit[]>
-  baselines: ShallowRef<{ current?: Baseline; previous?: Baseline; base?: Baseline }>
+  baselines: ShallowRef<Baselines>
   /** 打开的设计版本或提交版本；当前版本时为 undefined */
   version?: VersionRef
   /** DV-10：草图版本的「交给 AI」指令 */

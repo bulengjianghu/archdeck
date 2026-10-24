@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 草图下的导航树（present.sketch，原型任务说明 3）：只列本张草图的模块与引用（根草图里层下列第二级）；
- * 单击选中、与画布同步；双击下钻；⇧ 单击多选（合并的输入）。
+ * 单击选中、与画布同步；双击下钻；⇧ 单击多选（合并的输入）。顶部不再列「本张草图 · 路径」：面包屑只在信息条身份区（#15）。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -34,7 +34,6 @@ function open(id: string, kind: string) {
 
 <template>
   <div class="sk-tree" data-testid="sketch-tree">
-    <p class="head">本张草图 · {{ e.breadcrumb.value[e.breadcrumb.value.length - 1]?.name }}</p>
     <ul>
       <li
         v-for="it in items.filter(x => x.kind !== 'reference')"

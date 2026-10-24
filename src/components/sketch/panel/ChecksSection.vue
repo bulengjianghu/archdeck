@@ -2,7 +2,7 @@
 /**
  * 草图面板顶部（present.panel.sketch，F-45、F-46、F-34，X14、X16、X17）：两级校验——红色格式错误（拦保存）、黄色语义提示（拦交给 AI 与定稿）、
  * 灰色提示（超七、没写职责，不进两级）；常驻「待重连 N 条」可展开；本张的两个核验数「相对当前版本 N 处偏差」「相对基线 改了 N 处」可展开清单。
- * 点一条问题定位到对应的模块或关系。没有基线提交时说明相对基线退化为相对当前版本（05 裁决 3）。
+ * 点一条问题定位到对应的模块或关系。没有基线提交时说明相对基线退化为相对当前版本（05 裁决 3）；持久草图只有相对当前版本（与去掉它贡献后的当前版本比）。
  */
 import { computed } from 'vue'
 import type { SketchValidationIssue } from '@/model'
@@ -81,7 +81,7 @@ const vsBaseline = computed(() => e.vsBaseline.value?.sheet ?? null)
           <li v-if="!vsCurrent?.changes.length" class="muted">0 偏差</li>
         </ul>
       </details>
-      <details data-testid="verify-baseline">
+      <details v-if="e.twoBases" data-testid="verify-baseline">
         <summary>
           相对基线：改了 <b>{{ vsBaseline?.changes.length ?? 0 }}</b> 处 <span class="tag">本张</span>
         </summary>
