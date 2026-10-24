@@ -47,6 +47,20 @@
   --diff-changed-soft: #fbefd9;
   --diff-removed: #c93a3a;
 
+  /* 结构视角（ADR-0031，L16、L17、K15、U16）：画布结构边（depStyle）与「显示」面板图例（StructureSwatch、MetricLegend）、
+     节点角标（StructMarks）、模块「结构」一节共用这一套；依赖的档用明度（引用正文三档灰），色相只给允许边、不稳定度与影响面 */
+  --dep-tier-invokes: var(--text);
+  --dep-tier-value: var(--text-2);
+  --dep-tier-type: var(--text-3);
+  --dep-fact: var(--text-2);
+  --dep-allowed: #2f8f6a;
+  --stability-stable: #4a8fd6;
+  --stability-mid: #a3abb8;
+  --stability-unstable: #e08a2e;
+  --impact-in: #c8562a;
+  --impact-out: #1f8a8a;
+  --impact-both: #8a5cc7;
+
   --radius: 8px;
   --font: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', 'Microsoft YaHei', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -94,6 +108,13 @@
     --diff-changed: #e2a646;
     --diff-changed-soft: #3a2f1c;
     --diff-removed: #ef7a7a;
+    --dep-allowed: #4cc49a;
+    --stability-stable: #6ba6eb;
+    --stability-mid: #6c7686;
+    --stability-unstable: #eba052;
+    --impact-in: #ef8a5e;
+    --impact-out: #45c0c0;
+    --impact-both: #b08ae6;
     color-scheme: dark;
   }
 }

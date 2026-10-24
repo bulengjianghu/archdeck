@@ -3,7 +3,8 @@
  * 线型：依赖虚线、子类实线、端口实现虚线、组装实线；允许边（U16）点线。
  * 端点：依赖开口箭头；子类、端口实现在被依赖方一端空心三角；组装在依赖方（组装者）一端实心菱形、被依赖方一端开口箭头。
  * 色相中性；依赖的档用明度（交互使用深、值使用中、只引类型浅），不用透明度（透明度属共享通道「聚焦变淡」）。
- * 线宽 = 共享通道「聚合条数」（与交互边同一套 WIDTH）。画布的 DepEdge 与「显示」面板的图例共用。
+ * 线宽 = 共享通道「聚合条数」（与交互边同一套 WIDTH）。画布的 DepEdge 与「显示」面板的图例（StructureSwatch）共用；
+ * 颜色变量（--dep-tier-* / --dep-fact / --dep-allowed）定义在 styles.css，亮色暗色各一套。
  */
 import type { DepTier } from '@/model'
 import type { DepEdgeKind } from '@/layout/canvas'
@@ -18,14 +19,14 @@ export interface DepStrokeLook {
 
 /** 三档明度：交互使用深、值使用中、只引类型浅 */
 export const TIER_COLOR: Readonly<Record<DepTier, string>> = {
-  invokes: 'var(--dep-invokes, var(--text))',
-  value: 'var(--dep-value, var(--text-2))',
-  type: 'var(--dep-type, var(--text-3))',
+  invokes: 'var(--dep-tier-invokes)',
+  value: 'var(--dep-tier-value)',
+  type: 'var(--dep-tier-type)',
 }
 /** 组装、子类、端口实现：中性中灰 */
-export const FACT_COLOR = 'var(--dep-fact, var(--text-2))'
+export const FACT_COLOR = 'var(--dep-fact)'
 /** U16 允许边的颜色（意图色） */
-export const ALLOWED_COLOR = 'var(--dep-allowed, #2f8f6a)'
+export const ALLOWED_COLOR = 'var(--dep-allowed)'
 
 export function depColor(d: DepStrokeLook): string {
   if (d.kind === 'allowed') return ALLOWED_COLOR

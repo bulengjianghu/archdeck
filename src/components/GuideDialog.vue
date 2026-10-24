@@ -328,11 +328,11 @@ svg {
 }
 
 .bar.stable {
-  fill: var(--stability-stable, #4a8fd6);
+  fill: var(--stability-stable);
 }
 
 .bar.unstable {
-  fill: var(--stability-unstable, #e08a2e);
+  fill: var(--stability-unstable);
 }
 
 .foot {

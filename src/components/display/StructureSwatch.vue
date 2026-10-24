@@ -2,11 +2,12 @@
 /**
  * 结构视图图例的示意线（L16，UML 类图惯例）：依赖虚线 + 开口箭头、子类实线 + 空心三角、端口实现虚线 + 空心三角、组装实线 + 实心菱形（组装者一端）与开口箭头；
  * 依赖的档用明度（交互使用深、值使用中、只引类型浅，不用透明度——透明度是共享通道「变淡」）；allowed 为没有代码事实时的允许边（U16：点线、意图色）。
- * 线型取画布同一套常量（edgeStyle 的 DASHED / DOTTED）；结构边的颜色与端点形状待画布（第七轮 T2）的结构边样式落定后改为共用。
+ * 颜色与线型取画布结构边同一套（depStyle 的 depColor / depDash，颜色变量在 styles.css，亮色暗色各一套）。
  */
 import { computed } from 'vue'
 import type { DepTier, StructureKind } from '@/model'
-import { DASHED, DOTTED, WIDTH } from '../edges/edgeStyle'
+import { WIDTH } from '../edges/edgeStyle'
+import { depColor, depDash } from '../edges/depStyle'
 
 const props = withDefaults(defineProps<{ kind?: StructureKind | 'allowed'; tier?: DepTier; width?: number; halo?: boolean; muted?: boolean }>(), {
   kind: 'dependency',
@@ -14,18 +15,8 @@ const props = withDefaults(defineProps<{ kind?: StructureKind | 'allowed'; tier?
   width: 36,
 })
 
-/** 档的明度（L16）；结构记号（组装、子类、端口实现）用中性深色 */
-const TIER_COLOR: Record<DepTier, string> = { invokes: 'var(--text)', value: 'var(--text-2)', type: 'var(--text-3)' }
-const color = computed(() =>
-  props.kind === 'allowed'
-    ? 'var(--edge-allowed, var(--accent))'
-    : props.tier
-      ? TIER_COLOR[props.tier]
-      : props.kind === 'dependency'
-        ? TIER_COLOR.invokes
-        : 'var(--text-2)',
-)
-const dash = computed(() => (props.kind === 'allowed' ? DOTTED : props.kind === 'dependency' || props.kind === 'implements' ? DASHED : undefined))
+const color = computed(() => depColor({ kind: props.kind, ...(props.tier ? { tier: props.tier } : {}) }))
+const dash = computed(() => depDash(props.kind))
 const triangle = computed(() => props.kind === 'subclass' || props.kind === 'implements')
 const diamond = computed(() => props.kind === 'assembly')
 const w = computed(() => props.width)

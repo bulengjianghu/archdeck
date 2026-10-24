@@ -242,11 +242,11 @@ const relText = (id: string) => {
 }
 
 .band-stable {
-  color: var(--stability-stable, #4a8fd6);
+  color: var(--stability-stable);
 }
 
 .band-unstable {
-  color: var(--stability-unstable, #e08a2e);
+  color: var(--stability-unstable);
 }
 
 .values-only {

@@ -49,15 +49,15 @@ const pct = (x: number) => x.toFixed(2)
 
 .stable,
 .t-stable {
-  background: var(--stability-stable, #4a8fd6);
+  background: var(--stability-stable);
 }
 
 .balanced {
-  background: var(--stability-balanced, #b8bfca);
+  background: var(--stability-mid);
 }
 
 .unstable {
-  background: var(--stability-unstable, #e08a2e);
+  background: var(--stability-unstable);
 }
 
 .t-stable,
@@ -68,7 +68,7 @@ const pct = (x: number) => x.toFixed(2)
 }
 
 .t-stable {
-  color: var(--stability-stable, #4a8fd6);
+  color: var(--stability-stable);
 }
 
 .t-balanced {
@@ -76,6 +76,6 @@ const pct = (x: number) => x.toFixed(2)
 }
 
 .t-unstable {
-  color: var(--stability-unstable, #e08a2e);
+  color: var(--stability-unstable);
 }
 </style>

@@ -51,15 +51,15 @@ const impactTitle = computed(() => {
 }
 
 .stability.stable {
-  background: var(--stability-stable, #5b8def);
+  background: var(--stability-stable);
 }
 
 .stability.balanced {
-  background: var(--stability-balanced, #a3abb8);
+  background: var(--stability-mid);
 }
 
 .stability.unstable {
-  background: var(--stability-unstable, #e08a3c);
+  background: var(--stability-unstable);
 }
 
 .metrics {
@@ -103,17 +103,17 @@ const impactTitle = computed(() => {
 
 .impact-ring,
 .impact-mark {
-  --impact-color: var(--impact-in, #c8562a);
+  --impact-color: var(--impact-in);
 }
 
 .impact-ring.out,
 .impact-mark.out {
-  --impact-color: var(--impact-out, #1f8a8a);
+  --impact-color: var(--impact-out);
 }
 
 .impact-ring.both,
 .impact-mark.both {
-  --impact-color: var(--impact-both, #8a5cc7);
+  --impact-color: var(--impact-both);
 }
 
 .impact-mark {
