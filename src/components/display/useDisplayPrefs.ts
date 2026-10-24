@@ -7,12 +7,12 @@
 import { ref, shallowRef, watch, type Ref } from 'vue'
 import type { Perspective } from '@/state/transition'
 
-export type DisplayGroup = 'rel' | 'node' | 'facts' | 'asm' | 'evo' | 'play'
+export type DisplayGroup = 'rel' | 'node' | 'facts' | 'asm' | 'evo' | 'play' | 'struct' | 'rule' | 'metric' | 'shared'
 
 const DEFAULT_GROUPS: Record<Perspective, Record<DisplayGroup, boolean>> = {
-  interaction: { rel: true, node: true, facts: true, asm: true, evo: true, play: true },
-  structure: { rel: true, node: true, facts: true, asm: true, evo: true, play: true },
-  run: { rel: false, node: false, facts: true, asm: true, evo: true, play: true },
+  interaction: { rel: true, node: true, facts: true, asm: true, evo: true, play: true, struct: true, rule: true, metric: true, shared: false },
+  structure: { rel: true, node: true, facts: true, asm: true, evo: true, play: true, struct: true, rule: true, metric: true, shared: false },
+  run: { rel: false, node: false, facts: true, asm: true, evo: true, play: true, struct: true, rule: true, metric: true, shared: false },
 }
 
 function read<T>(key: string, fallback: T): T {

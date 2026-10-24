@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** V9：在画布上临时显示这些视图节点的静态关系；再按一次收起。进度、选中、层次变化后自动收回 */
+/** V9：在画布上临时显示这些视图节点的交互关系；再按一次收起。进度、选中、层次变化后自动收回 */
 import { computed } from 'vue'
 import { useStage } from '../stage/useStageDisplay'
 
@@ -10,7 +10,7 @@ const on = computed(() => props.nodes.length > 0 && props.nodes.every(id => stag
 
 <template>
   <button v-if="nodes.length" class="small reveal" :class="{ on }" @click="stage.toggleReveal(nodes)">
-    {{ on ? '收起画布上的结构关系' : '在画布上显示结构关系' }}
+    {{ on ? '收起画布上的交互关系' : '在画布上显示交互关系' }}
   </button>
 </template>
 

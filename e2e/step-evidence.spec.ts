@@ -11,9 +11,14 @@ test('单步到 transition(openScenario)：面板按名字匹配到 useDeskState
   await expect(title).toHaveText(/^transition\(openScenario\)/)
 
   const section = page.locator('.step-panel .section').filter({ has: page.locator('h3', { hasText: '代码证据' }) })
+  // D-25：证据等级之上是包含链「这一步 → 交互 → 依赖」
+  const chain = section.getByRole('list', { name: '包含链' })
+  await expect(chain).toContainText('这一步')
+  await expect(chain.locator('.link-interaction')).toContainText('交互')
+  await expect(chain.locator('.link-dependency')).toContainText(/依赖.*处/)
   await expect(section).toContainText('按名字匹配')
   await expect(section).toContainText('导入名含接口名「transition」')
-  const candidate = section.getByRole('button', { name: /^src\/state\/useDeskState\.ts:\d+$/ })
+  const candidate = section.locator('.candidates').getByRole('button', { name: /^src\/state\/useDeskState\.ts:\d+$/ })
   await expect(candidate).toHaveCount(1)
   const line = Number((await candidate.textContent())!.split(':')[1])
 

@@ -110,7 +110,7 @@ describe('属性面板 · 运行视角', () => {
     expect(s).toContain('引用了')
   })
 
-  it('选中模块：运行信息在上，结构信息折叠在下；没有「已钉住」提示（ADR-0012）', async () => {
+  it('选中模块：运行信息在上，模块信息折叠在下；没有「已钉住」提示（ADR-0012）', async () => {
     const { wrapper } = await mountPanel('/?sc=sc.play&step=sc.play%23done&alt=0&sel=m:infra.framework.sm&level=infra.framework', scenarioFiles())
     const text = wrapper.text()
     expect(text).not.toContain('已钉住')
@@ -137,10 +137,11 @@ describe('P15：经由上层关系', () => {
     expect(desk.levelId.value).not.toBe('infra.framework')
   })
 
-  it('未绑定关系的步骤仍为「结构中未建模」，不显示上层关系', async () => {
+  it('未绑定关系的步骤仍为「交互中未建模」（附录 B 改名），不显示上层关系', async () => {
     const files = scenarioFiles({ 'scenarios/x.yaml': 'scenario: { id: sc.u, name: U, steps: [{ call: { id: a, from: infra.mus, to: app.fragments } }] }' })
     const { wrapper } = await mountPanel('/?level=infra&sc=sc.u&step=sc.u%23a', files)
-    expect(wrapper.text()).toContain('（结构中未建模）')
+    expect(wrapper.text()).toContain('（交互中未建模）')
+    expect(wrapper.text()).not.toContain('结构中未建模')
     expect(wrapper.text()).not.toContain('对应关系建在上层')
   })
 })

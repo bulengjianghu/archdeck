@@ -1,13 +1,18 @@
 <script setup lang="ts">
-/** 代码依赖叠加线的面板（K10）：投影到这对节点的模块依赖、其中的违规与文件证据 */
+/**
+ * 代码依赖叠加线的面板（K10）：投影到这对节点的模块依赖、其中的违规与文件证据。
+ * 结构视角（ADR-0031）下即依赖边面板：先列结构边的种类与档、交互覆盖、规则判定与两端的不稳定度（DepStructure），再列违规与模块依赖。
+ */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { RULE_LABELS, moduleName } from '@/model'
 import Section from './Section.vue'
 import FileDepList from './FileDepList.vue'
 import StructureFacts, { type StructureGroup } from './StructureFacts.vue'
+import DepStructure from './DepStructure.vue'
 
 const desk = useDesk()
+const structureView = computed(() => desk.perspective.value === 'structure')
 const sel = computed(() => desk.facts.selectedDep.value)
 const name = (id: string) => (desk.index.value ? moduleName(desk.index.value, id) : id)
 const STATUS: Record<string, string> = { new: '新增', known: '已知', open: '违规', allowed: '已豁免' }
@@ -27,7 +32,7 @@ const structure = computed<StructureGroup[]>(() => {
     <header class="head">
       <h2 v-if="sel">{{ name(sel.from) }} → {{ name(sel.to) }}</h2>
       <div class="badges">
-        <span class="badge">代码依赖</span>
+        <span class="badge">{{ structureView ? '依赖边' : '代码依赖' }}</span>
         <template v-if="structure.some(g => g.list.length)"><span class="muted">知识</span><StructureFacts :groups="structure" /></template>
       </div>
     </header>
@@ -35,6 +40,7 @@ const structure = computed<StructureGroup[]>(() => {
       <p class="muted">本层没有这对节点之间的代码依赖（层次已变化，或代码事实已刷新）。</p>
     </Section>
     <template v-else>
+      <DepStructure v-if="structureView" :from="sel.from" :to="sel.to" />
       <Section v-if="sel.detail.violations.length" title="违规" :count="sel.detail.violations.length">
         <ul class="plain">
           <li v-for="v in sel.detail.violations" :key="v.key" class="item">

@@ -89,7 +89,7 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
           :marker-end="`url(#seq-${m.kind === 'call' ? 'solid' : 'open'})`"
         />
         <text :x="(cx(m.from) + cx(m.to)) / 2" :y="ps.messages[i].y - 5" text-anchor="middle" class="label">
-          {{ m.label }}<tspan v-if="m.temp === 'unmodeled'" class="tag"> · 结构中未建模</tspan
+          {{ m.label }}<tspan v-if="m.temp === 'unmodeled'" class="tag"> · 交互中未建模</tspan
           ><tspan v-else-if="m.temp === 'upper'" class="upper-tag"> · 经由上层关系</tspan
           ><tspan v-if="ps.messages[i].evidence === 'none'" class="no-evidence"> ?</tspan
           ><tspan v-if="state(m).includes('paired')" class="pair-tag"> · 配对</tspan>
