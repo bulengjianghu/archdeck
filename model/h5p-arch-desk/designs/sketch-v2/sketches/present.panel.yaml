@@ -1,4 +1,4 @@
-# 设计 sketch-v2 挂在「属性面板」present.panel 上的一层（ADR-0025）：底稿从基线 5285286 复制（X18），新增「草图面板」present.panel.sketch 与它和草图画布之间的关系。
+# 设计 sketch-v2 挂在「属性面板」present.panel 上的一层（ADR-0025）：底稿从基线 5285286 复制（X18），新增「草图面板」present.panel.sketch 与它和草图画布之间的关系；移除二期的「编辑表单」present.panel.edit 及其关系（ADR-0025 结论 9，T3 核验时按已定的设计补上）。
 sketch:
   id: sketch-v2
   mount: present.panel
@@ -18,9 +18,6 @@ sketch:
       name: 设计面板
     - id: present.panel.content
       name: 内容组件
-    - id: present.panel.edit
-      name: 编辑表单
-      kind: component
     - id: present.panel.governance
       name: 架构治理面板
     - id: present.panel.dep
@@ -150,22 +147,6 @@ sketch:
       from: present.panel.system
       to: state.desk.actions
       type: calls
-    - id: rel.ed.architect-panel
-      from: actor.architect
-      to: present.panel.edit
-      type: calls
-    - id: rel.ed.forms-commands
-      from: present.panel.edit
-      to: state.desk.edit.commands
-      type: calls
-    - id: rel.ed.dispatch-edit
-      from: present.panel.dispatch
-      to: present.panel.edit
-      type: depends
-    - id: rel.ed.forms-labels
-      from: present.panel.edit
-      to: present.shared
-      type: depends
     - id: rel.gv.dispatch-dep
       from: present.panel.dispatch
       to: present.panel.dep
