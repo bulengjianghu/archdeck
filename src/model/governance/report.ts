@@ -4,7 +4,7 @@
 import { RULE_LABELS, moduleName } from '../names'
 import { moduleEntry, type LocalSource, type SourceOwnership } from '../source'
 import type { Issue, ModelIndex } from '../types'
-import { confirmRelations, liftDeps, undescribedDeps, unconfirmedCode, unconfirmedReason, unconfirmedWarns } from './facts'
+import { assemblyFacts, confirmImplementers, confirmRelations, heritageFacts, implementerReason, implementerWarns, liftDeps, portIssues, undescribedDeps, unconfirmedCode, unconfirmedReason, unconfirmedWarns } from './facts'
 import { cyclicityOf, fileCycles, moduleCycles } from './cycles'
 import { evaluateRules, type EntryOf } from './rules'
 import { sharedHostOf, sharedReverse, sharedSuggestions } from './roles'
@@ -38,8 +38,10 @@ export function governanceReport(
 ): GovernanceReport {
   const entryOf = entryResolver(index, own, tree)
   const { moduleDeps, skipped, conflicted, nested } = liftDeps(index, own, code.deps)
-  const relations = confirmRelations(index, moduleDeps, own.direct, nested)
-  const undescribed = undescribedDeps(index, moduleDeps)
+  const implementers = confirmImplementers(index, moduleDeps, own.direct, nested)
+  const relations = confirmRelations(index, moduleDeps, own.direct, nested, implementers)
+  const undescribed = undescribedDeps(index, moduleDeps, implementers)
+  const assembly = assemblyFacts(moduleDeps)
   const shared = sharedReverse(index, moduleDeps.values())
   const violations = withBaseline(evaluateRules(index, own, moduleDeps.values(), entryOf), baseline)
   const mc = moduleCycles(index, moduleDeps.values())
@@ -76,7 +78,19 @@ export function governanceReport(
       code: 'cycle.grew',
       message: `环度上升：模块 ${baseline!.cyclicity.modules} → ${cyclicity.modules}，文件 ${baseline!.cyclicity.files} → ${cyclicity.files}`,
     })
-  // K6：implements 未证实（证据像使用时为 fact.like-depends，K5）；运行时关系未证实且两端之间没有任何依赖
+  // K5c、K6：端口实现者未证实（证据像使用时为 fact.like-depends；结构性实现只进返工清单）
+  for (const [port, p] of implementers)
+    for (const i of p.implementers) {
+      if (!i.described || !implementerWarns(i)) continue
+      const x = index.interfaces.get(port)!
+      issues.push({
+        severity: 'warning',
+        code: unconfirmedCode(i),
+        message: `接口「${x.name}」（${port}）的实现者「${name(i.module)}」${implementerReason(i)}（K5c）`,
+        ...x.src,
+      })
+    }
+  // K6：交互关系未证实且两端之间没有任何依赖
   for (const [id, c] of relations) {
     const r = index.relations.get(id)!
     if (unconfirmedWarns(r, c))
@@ -99,6 +113,9 @@ export function governanceReport(
     })
   }
 
+  // U14：端口孤立（无实现者 warning、无使用者 info）
+  issues.push(...portIssues(index, { relations, implementers }))
+
   return {
     moduleDeps,
     skipped,
@@ -106,6 +123,10 @@ export function governanceReport(
     fileDeps: code.deps.length,
     external: code.external,
     relations,
+    implementers,
+    subclasses: heritageFacts(index, moduleDeps),
+    assembly: assembly.facts,
+    assemblyRoots: assembly.roots,
     undescribed,
     sharedReverse: shared,
     sharedSuggestions: sharedSuggestions(index, moduleDeps.values()),

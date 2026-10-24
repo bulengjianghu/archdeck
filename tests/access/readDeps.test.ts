@@ -176,11 +176,11 @@ describe('K1 implements 证据（ADR-0022）', () => {
     ]
     expect(importTargetKinds({ kind: 'value', names: ['Port', 'make', 'Mode'], types: [], heritage: ['Port'] }, 'src/index.ts', exportsOf)).toEqual([
       { to: 'src/port.ts', kind: 'type', names: ['Port'], heritage: true },
-      { to: 'src/impl.ts', kind: 'value', names: ['make'], uses: true, invokes: true },
+      { to: 'src/impl.ts', kind: 'value', names: ['make'], uses: true, invokes: true, invokeKinds: ['call'] },
       { to: 'src/mode.ts', kind: 'value', names: ['Mode'] },
     ])
     expect(importTargetKinds({ kind: 'value', names: [], types: [], heritage: ['*'] }, 'src/base.ts', exportsOf)).toEqual([
-      { to: 'src/base.ts', kind: 'value', heritage: true, uses: true, invokes: true },
+      { to: 'src/base.ts', kind: 'value', heritage: true, uses: true, invokes: true, invokeKinds: ['call'] },
     ])
   })
 
@@ -233,7 +233,78 @@ describe('K1 implements 证据（ADR-0022）', () => {
     })
     // 只读成员的命名空间导入是纯值读取；默认导入的组件交给路由算交互
     expect(importTargetKinds(imps[1], 'src/n.ts', exportsOf)).toEqual([{ to: 'src/n.ts', kind: 'value', uses: true }])
-    expect(importTargetKinds(imps[2], 'src/C.vue', exportsOf)).toEqual([{ to: 'src/C.vue', kind: 'value', uses: true, invokes: true }])
+    expect(importTargetKinds(imps[2], 'src/C.vue', exportsOf)).toEqual([{ to: 'src/C.vue', kind: 'value', uses: true, invokes: true, invokeKinds: ['call'] }])
+  })
+
+  it('K1（ADR-0029）：继承子句另记种类——implements 还是 extends，目标声明的种类随穿透给出（K5c、K12）', () => {
+    const [imp, def] = parseImports(
+      'a.ts',
+      ["import { Base, Port, Other } from './x'", "import Def from './d'", 'class A extends Base implements Port, Other {}', 'class B extends Def {}'].join(
+        '\n',
+      ),
+    )
+    expect(imp.inherits).toEqual([
+      { name: 'Base', clause: 'extends' },
+      { name: 'Port', clause: 'implements' },
+      { name: 'Other', clause: 'implements' },
+    ])
+    expect(def.inherits).toEqual([{ name: '*', clause: 'extends' }])
+    const exportsOf = () => [
+      { name: 'Base', kind: 'class', from: 'src/base.ts' },
+      { name: 'Port', kind: 'interface', from: 'src/port.ts' },
+      { name: 'Other', kind: 'interface', from: 'src/port.ts' },
+    ]
+    const t = importTargetKinds(imp, 'src/x.ts', exportsOf)
+    expect(t.find(x => x.to === 'src/base.ts')).toMatchObject({ inherits: [{ name: 'Base', clause: 'extends', decl: 'class' }], invokeKinds: ['extends'] })
+    expect(t.find(x => x.to === 'src/port.ts')!.inherits).toEqual([
+      { name: 'Port', clause: 'implements', decl: 'interface' },
+      { name: 'Other', clause: 'implements', decl: 'interface' },
+    ])
+  })
+
+  it('K1、K13（ADR-0030、T0 裁决 6）：交互使用另记组装使用——new、按工厂命名的调用、交给 register* / provide / bind / use 的函数或类；其余为 call', () => {
+    const imps = parseImports(
+      'boot.ts',
+      [
+        "import { Player, createLoader, makeX, buildY, LoaderFactory, Plugin, Svc, helper, KEY, cfg } from './x'",
+        "import * as ns from './n'",
+        'new Player()',
+        'createLoader()',
+        'makeX(); buildY(); LoaderFactory()',
+        'container.register(Plugin)',
+        'app.provide(KEY, Svc)',
+        'helper()',
+        'ns.createThing()',
+        'app.use(cfg)',
+        'creator()',
+      ].join('\n'),
+    )
+    const exportsOf = () => [
+      { name: 'Player', kind: 'class', from: 'src/player.ts' },
+      { name: 'createLoader', kind: 'function', from: 'src/loader.ts' },
+      { name: 'makeX', kind: 'function', from: 'src/x1.ts' },
+      { name: 'buildY', kind: 'function', from: 'src/x1.ts' },
+      { name: 'LoaderFactory', kind: 'function', from: 'src/x1.ts' },
+      { name: 'Plugin', kind: 'class', from: 'src/plugin.ts' },
+      { name: 'Svc', kind: 'class', from: 'src/svc.ts' },
+      { name: 'helper', kind: 'function', from: 'src/helper.ts' },
+      { name: 'KEY', kind: 'const', from: 'src/keys.ts' },
+      { name: 'cfg', kind: 'const', from: 'src/cfg.ts' },
+    ]
+    const kinds = Object.fromEntries(importTargetKinds(imps[0], 'src/x.ts', exportsOf).map(t => [t.to, t.invokeKinds]))
+    expect(kinds).toEqual({
+      'src/player.ts': ['new'],
+      'src/loader.ts': ['factory'],
+      'src/x1.ts': ['factory'],
+      'src/plugin.ts': ['register'],
+      'src/svc.ts': ['register'],
+      'src/helper.ts': ['call'],
+      // 交出常量（注入键、配置对象）是纯值读取，不是组装也不是交互
+      'src/keys.ts': undefined,
+      'src/cfg.ts': undefined,
+    })
+    // 命名空间导入的成员调用按被调的名字判定工厂
+    expect(importTargetKinds(imps[1], 'src/n.ts', exportsOf)[0].invokeKinds).toEqual(['factory'])
   })
 
   it('Vue 模板：组件标签与调用为交互，X.a / X[k] 为成员读取，其余出现为读取', () => {

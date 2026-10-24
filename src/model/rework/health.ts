@@ -1,7 +1,7 @@
 /**
  * 项目健康度（Q10）：项目卡片上的一行摘要，与返工清单同一批材料，只计数不列明细。
  */
-import { sharedHostOf, unconfirmedWarns, type GovernanceReport } from '../governance'
+import { implementerWarns, sharedHostOf, unconfirmedWarns, type GovernanceReport } from '../governance'
 import { reviewCounts } from '../review'
 import type { ProjectHealth, SharedHealth } from '../project-summary'
 import { moduleFiles, type SourceOwnership } from '../source'
@@ -57,6 +57,8 @@ export function projectHealth(
     const r = index.relations.get(id)
     if (r && unconfirmedWarns(r, c)) unconfirmed++
   }
+  // K5c、K6：描述写了、报警的端口实现者
+  for (const p of report.implementers.values()) unconfirmed += p.implementers.filter(i => i.described && implementerWarns(i)).length
   return {
     unowned: own.unowned.length,
     conflicts: own.conflicts.length,

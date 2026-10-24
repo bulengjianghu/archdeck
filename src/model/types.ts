@@ -59,8 +59,8 @@ export function parseVia(via: string | undefined): ParsedVia | undefined {
   return m ? { kind: m[1] as ViaKind, target: m[2] } : undefined
 }
 
-/** 运行时关系（§1.1）：ADR-0029 起关系全是交互；步骤只对应它们（S12）。迁移期含未分类 */
-export const RUNTIME_RELATION_TYPES: readonly RelationType[] = RELATION_TYPES
+/** 运行时关系（§1.1）：ADR-0029 起关系全是交互，与 RELATION_TYPES 相同；步骤只对应它们（S12）。迁移期含未分类 */
+export const RUNTIME_RELATION_TYPES: readonly RelationType[] = ['queries', 'commands', 'notifies', 'streams', 'calls']
 
 export type ModuleStatus = 'current' | 'target' | 'deprecated'
 export type ModuleRole = 'core' | 'shared' | 'bus' | 'port' | 'adapter'

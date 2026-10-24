@@ -2,7 +2,7 @@
  * 名称查询与小谓词：只按 ID 或枚举查表，不做投影与计算。属于模型层的契约（与类型、枚举一起），
  * 呈现层、命令行与模型层内部共用同一套显示名。
  */
-import { isUnclassified, parseVia, type ModelIndex, type RelationEntity, type RuleKind } from './types'
+import { parseVia, type ModelIndex, type RuleKind } from './types'
 
 /** 模块、参与者或系统根的显示名 */
 export function moduleName(index: ModelIndex, id: string): string {
@@ -34,26 +34,3 @@ export const VIA_LABELS: Readonly<Record<string, string>> = new Proxy({} as Reco
 
 /** 规则种类的名称：门禁消息、命令行与页面共用 */
 export const RULE_LABELS: Record<RuleKind, string> = { layer: '层规则', deps: '依赖白名单', exposes: '访问面' }
-
-// ── 四类交互（ADR-0029）：未分类关系与「核心之间」（M17） ──
-
-/** M17：模块自身及祖先中的核心模块（role: core）；参与者与没有核心祖先的模块为空 */
-export function coresOf(index: ModelIndex, id: string): string[] {
-  return (index.pathOf.get(id) ?? []).filter(p => index.modules.get(p)?.role === 'core')
-}
-
-/**
- * M17（T0 裁决 12）：核心之间——两端各自是核心模块或在核心模块的子树内，且没有一个核心模块的子树同时包含两端。
- * 架构师只确认这些线的分类（写进草图即确认，X23）。
- */
-export function isCoreBetween(index: ModelIndex, r: Pick<RelationEntity, 'from' | 'to'>): boolean {
-  const a = coresOf(index, r.from)
-  const b = coresOf(index, r.to)
-  return a.length > 0 && b.length > 0 && !a.some(x => b.includes(x))
-}
-
-/** M17：未分类（calls）的关系与其中核心之间的，按声明顺序 */
-export function unclassifiedRelations(index: ModelIndex): { all: RelationEntity[]; core: RelationEntity[] } {
-  const all = [...index.relations.values()].filter(r => isUnclassified(r.type)).sort((a, b) => a.seq - b.seq)
-  return { all, core: all.filter(r => isCoreBetween(index, r)) }
-}

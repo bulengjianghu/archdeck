@@ -5,11 +5,25 @@
 import { RULE_LABELS, moduleName } from '../names'
 import { bindRelation, forEachStep, planScenario, RUNTIME_RELATION_TYPES } from '../scenario'
 import { matchRef, missingEvidence, moduleEntry, type LocalSource, type SourceOwnership } from '../source'
-import { contractNames, sharedHostOf, stepEvidence, unconfirmedCode, unconfirmedReason, unconfirmedWarns, type FileDep, type GovernanceReport, type Violation } from '../governance'
+import {
+  implementerReason,
+  implementerWarns,
+  isCoreBetween,
+  plainInteraction,
+  portIssues,
+  sharedHostOf,
+  stepEvidence,
+  unconfirmedCode,
+  unconfirmedReason,
+  unconfirmedWarns,
+  type FileDep,
+  type GovernanceReport,
+  type Violation,
+} from '../governance'
 import { reviewDiffText, reviewStates, REVIEW_FIELD_LABELS, REVIEW_FIELDS } from '../review'
 import { isolatedCouplings, type EvolutionStats } from '../evolution'
 import { SKETCH_DEVIATION_LABELS, type SketchCheck } from '../intent'
-import type { Issue, ModelIndex, SourceLoc } from '../types'
+import { isUnclassified, type Issue, type ModelIndex, type SourceLoc } from '../types'
 import { REWORK_CATEGORIES, REWORK_SEVERITIES, type ReworkAction, type ReworkItem, type ReworkList, type ReworkLoc, type ReworkSeverity } from './types'
 
 export interface ReworkInput {
@@ -54,9 +68,19 @@ const ISSUE_RULES: Record<string, string[]> = {
   'layer-missing-abstraction': ['M8'],
   'mixed-layer-siblings': ['M8'],
   'nested-parent-ignored': ['M10'],
-  'implements-no-interface': ['M11'],
+  'relation.via-target': ['M11'],
   'relation-type-renamed': ['M12'],
   'pull-not-streams': ['M13'],
+  'relation.mode-ignored': ['M13'],
+  'relation.bus-endpoint': ['M14'],
+  'relation.depends-removed': ['M15'],
+  'module.core-legacy': ['M16'],
+  'roles.shadowed': ['M16'],
+  'roles.unknown-module': ['M16'],
+  'relation.implements-migrated': ['M17'],
+  'unknown-implementer': ['M18'],
+  'relation.via-legacy': ['M20'],
+  'step.sync-mismatch': ['S19'],
   'missing-responsibility': ['M9'],
   'step-relation-mismatch': ['S5a'],
   'step-relation-not-runtime': ['S12'],
@@ -80,12 +104,16 @@ const ISSUE_RULES: Record<string, string[]> = {
 function descriptionFix(i: Issue): string {
   if (i.code === 'sketch-redefined') return '草图里的实体由架构师定：去掉这里对已写字段的重定义，只补草图没写的字段或往下挂子模块；要改草图本身请交给架构师（X1、X5）'
   if (i.code === 'relation-type-renamed') return '改为新名：event → notifies 并对调 from / to，dataflow → streams；再核对说明里的方向字样'
-  if (i.code === 'implements-no-interface') return '确实实现了契约时在目标模块声明接口（interfaces 的 owner 或 provides）；使用对方的实现时改为 calls，只是知道对方时删除关系'
+  if (i.code === 'relation.implements-migrated') return '删去这条 implements 关系：实现端口的在接口的 implementedBy 写上实现者；有交互的按三问写 queries / commands（M17）'
+  if (i.code === 'relation.via-legacy') return "把 via 改写为四形态：port:<接口 ID> / bus:<总线模块 ID> / channel:<通道名>（如 via: 'channel:http'，M20）"
   return i.severity === 'error' ? '改正描述：这一处的实体已被剔除，图上看不到它' : '改正描述：坏引用已被去掉'
 }
 
-/** 由下面的材料重新算、不从 issues 取的问题：未建模的步骤（S5a 的 warning）、源码归属、场景证据（S15）、门禁与事实 */
-const recomputed = (code: string) => code === 'step-unmodeled' || /^(source|scenario|rule|cycle|fact)\./.test(code)
+/**
+ * 由下面的材料重新算、不从 issues 取的问题：未建模的步骤（S5a 的 warning）、源码归属、场景证据（S15）、门禁与事实、端口孤立（U14）；
+ * 未分类（M17）只列核心之间的，也由下面重新算
+ */
+const recomputed = (code: string) => code === 'step-unmodeled' || code === 'relation.unclassified' || /^(source|scenario|rule|cycle|fact|port)\./.test(code)
 
 const RULE_OF_KIND: Record<Violation['kind'], string> = { layer: 'U2', deps: 'U3', exposes: 'U4' }
 
@@ -122,6 +150,7 @@ export function reworkList(input: ReworkInput): ReworkList {
 
   if (source) items.push(...ownershipItems(index, source.own, source.tree, name, report?.conflicted), ...evidenceItems(index, source.tree))
   if (report) items.push(...factItems(index, report, name))
+  items.push(...portItems(index, report ?? null), ...unclassifiedItems(index, name))
   items.push(...unmodeledItems(index, name))
   items.push(...reviewItems(index, name))
   if (input.evolution) items.push(...couplingItems(index, input.evolution, name))
@@ -367,36 +396,11 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
       target: {},
     })
 
-  // K6：报警的未证实关系（implements——含证据像使用的，K5；结构性实现为 info——以及两端之间没有任何依赖的运行时关系）；一条关系一个根因
+  // K6：报警的未证实交互关系（两端之间没有任何依赖）；一条关系一个根因
   for (const [id, c] of report.relations) {
     const r = index.relations.get(id)!
-    if (!unconfirmedWarns(r, c) && !c.structural) continue
+    if (!unconfirmedWarns(r, c)) continue
     const at = descLoc(r.src)
-    const evidence = () =>
-      c.deps.flatMap(k => report.moduleDeps.get(k)?.files ?? []).map(f => ({ in: 'source' as const, file: f.from, line: f.line, note: `→ ${f.to}${f.names?.length ? `（${f.names.join(', ')}）` : ''}` }))
-    // K5：结构性实现（只引了数据类型）只提示，建议在类上写明 implements
-    if (c.structural) {
-      const candidates = [...contractNames(index, r.to)]
-      items.push({
-        id: `unconfirmed:${id}`,
-        category: 'unconfirmed',
-        severity: 'info',
-        rules: ['K5'],
-        code: 'fact.structural',
-        title: `关系「${id}」（${r.type}，${name(r.from)} → ${name(r.to)}）${unconfirmedReason(r, c)}`,
-        ...(at ? { at } : {}),
-        affected: [...(at ? [at] : []), ...evidence()],
-        actions: [
-          {
-            kind: 'add-implements',
-            text: `在实现方的类上写明 implements <接口>，让代码显式声明契约；「${name(r.to)}」声明的接口：${candidates.join('、') || '（无）'}`,
-            ...(candidates.length ? { snippet: candidates.map(n => `class … implements ${n} {`).join('   # 或\n') } : {}),
-          },
-        ],
-        target: { relation: id, modules: [r.from, r.to] },
-      })
-      continue
-    }
     items.push({
       id: `unconfirmed:${id}`,
       category: 'unconfirmed',
@@ -405,25 +409,67 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
       code: unconfirmedCode(c),
       title: `关系「${id}」（${r.type}，${name(r.from)} → ${name(r.to)}）${unconfirmedReason(r, c)}`,
       ...(at ? { at } : {}),
-      // 证据像使用：受影响的是引用了对方非接口名字的那些导入
-      affected: [...(at ? [at] : []), ...(c.likeDepends ? evidence() : [])],
-      actions: c.likeDepends
-        ? [
-            {
-              kind: 'to-calls',
-              text: '代码是在使用对方的实现而不是实现它的契约时，按这次使用的交互改为 calls（异步的加 mode: async）',
-              file: r.src.file,
-              snippet: `- { id: ${id}, from: ${r.from}, to: ${r.to}, type: calls }`,
-            },
-            { kind: 'fix-relation', text: '只是知道对方、没有交互时删除这条关系（谁知道谁由代码事实给出，ADR-0026）', file: r.src.file },
-            { kind: 'fix-description', text: `确实实现了契约时，在「${name(r.to)}」的描述里声明被实现的接口（interfaces 的 owner 或 provides），名称与代码一致` },
-          ]
-        : [
-            { kind: 'fix-relation', text: '代码里确实没有这条依赖时，删掉或改正这条关系（端点、方向或类型）', file: r.src.file },
-            { kind: 'add-code-refs', text: '代码里有这条依赖时，检查两端的 codeRefs 是否覆盖了依赖所在的文件' },
-          ],
+      affected: at ? [at] : [],
+      actions: [
+        { kind: 'fix-relation', text: '代码里确实没有这条依赖时，删掉或改正这条关系（端点、方向或类型）', file: r.src.file },
+        { kind: 'add-code-refs', text: '代码里有这条依赖时，检查两端的 codeRefs 是否覆盖了依赖所在的文件' },
+      ],
       target: { relation: id, modules: [r.from, r.to] },
     })
+  }
+
+  // K5c、K6：端口实现者——证据像使用、未证实为 warning，结构性实现为 info；一个（端口，实现者）一个根因；只列描述写了的实现者（「仅代码事实」的不要求补写）
+  for (const [port, p] of report.implementers) {
+    const x = index.interfaces.get(port)!
+    for (const i of p.implementers) {
+      if (!i.described || !(implementerWarns(i) || i.structural)) continue
+      const at = descLoc(x.src)
+      const evidence = i.deps
+        .flatMap(k => report.moduleDeps.get(k)?.files ?? [])
+        .map(f => ({ in: 'source' as const, file: f.from, line: f.line, note: `→ ${f.to}${f.names?.length ? `（${f.names.join(', ')}）` : ''}` }))
+      const title = `接口「${x.name}」（${port}）的实现者「${name(i.module)}」${implementerReason(i)}`
+      const target = { modules: [i.module, ...(p.owner ? [p.owner] : [])] }
+      if (i.structural) {
+        items.push({
+          id: `unconfirmed:${port}#${i.module}`,
+          category: 'unconfirmed',
+          severity: 'info',
+          rules: ['K5c'],
+          code: 'fact.structural',
+          title,
+          ...(at ? { at } : {}),
+          affected: [...(at ? [at] : []), ...evidence],
+          actions: [{ kind: 'add-implements', text: `在「${name(i.module)}」的类上写明 implements ${x.name}，让代码显式声明契约`, snippet: `class … implements ${x.name} {` }],
+          target,
+        })
+        continue
+      }
+      items.push({
+        id: `unconfirmed:${port}#${i.module}`,
+        category: 'unconfirmed',
+        severity: 'warning',
+        rules: ['K5c', 'K6'],
+        code: unconfirmedCode(i),
+        title,
+        ...(at ? { at } : {}),
+        affected: [...(at ? [at] : []), ...(i.likeDepends ? evidence : [])],
+        actions: i.likeDepends
+          ? [
+              {
+                kind: 'drop-implementer',
+                text: `是在使用「${p.owner ? name(p.owner) : port}」而不是实现这个端口时，从 implementedBy 去掉「${i.module}」，按这次使用的交互写关系（查询或委托）`,
+                file: x.src.file,
+                snippet: `relations:\n  - { id: rel.${i.module}--${p.owner ?? port}, from: ${i.module}, to: ${p.owner ?? port}, type: queries }   # 或 commands`,
+              },
+              { kind: 'fix-description', text: '确实实现了这个端口时，核对接口名与代码一致（类 implements / extends 它，或引用它的名字）' },
+            ]
+          : [
+              { kind: 'fix-description', text: `代码里确实没有实现时，从接口的 implementedBy 去掉「${i.module}」`, file: x.src.file },
+              { kind: 'add-code-refs', text: '代码里有实现时，检查实现者与定义模块的 codeRefs 是否覆盖了实现所在的文件' },
+            ],
+        target,
+      })
+    }
   }
 
   // U12：共用件反向依赖；一条模块依赖一个根因（ADR-0027）
@@ -450,7 +496,7 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
   // K7：未解释的交互；一条模块依赖一个根因
   for (const d of report.undescribed) {
     const m = index.modules.get(d.from)
-    const values = d.files.filter(f => f.invokes)
+    const values = d.files.filter(plainInteraction)
     items.push({
       id: `undescribed:${d.key}`,
       category: 'undescribed',
@@ -462,9 +508,9 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
       actions: [
         {
           kind: 'add-relation',
-          text: '这次使用是哪种交互就补哪种（多为 calls；异步的加 mode: async）；只是借用工具函数、常量而没有架构含义的可不补（K7）',
+          text: '这次使用是哪种交互就补哪种（按三问：取值无副作用为 queries，交出一件事为 commands；异步的加 mode: async）；只是借用工具函数、常量而没有架构含义的可不补（K7）',
           ...(m ? { file: m.src.file } : {}),
-          snippet: `relations:\n  - { id: rel.${d.from}--${d.to}, from: ${d.from}, to: ${d.to}, type: calls }`,
+          snippet: `relations:\n  - { id: rel.${d.from}--${d.to}, from: ${d.from}, to: ${d.to}, type: queries }   # 或 commands`,
         },
         { kind: 'fix-code', text: '不该有这条依赖时改代码' },
       ],
@@ -472,6 +518,61 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
     })
   }
   return items
+}
+
+// ── 端口孤立（U14）：一个端口一个根因；有代码事实时含「仅代码事实」的实现者，没有时只按描述（K8） ──
+
+function portItems(index: ModelIndex, report: GovernanceReport | null): ReworkItem[] {
+  return portIssues(index, report).map(i => {
+    const at = descLoc(i)
+    return {
+      id: `port:${i.code}:${i.file ?? ''}:${i.path ?? ''}`,
+      category: 'port' as const,
+      severity: i.severity,
+      rules: ['U14'],
+      code: i.code,
+      title: i.message,
+      ...(at ? { at } : {}),
+      affected: at ? [at] : [],
+      actions: [
+        {
+          kind: 'fix-port' as const,
+          text: i.code === 'port.no-implementer' ? '补实现者（接口的 implementedBy，或代码里类 implements 它）、删去指向它的 via: port:，或确认端口是否多余' : '对外端口时不用改；否则确认端口是否多余',
+          ...(i.file ? { file: i.file } : {}),
+        },
+      ],
+      target: {},
+    }
+  })
+}
+
+// ── 未分类（M17）：只列核心之间的（裁决 12），其余只计数 ──
+
+function unclassifiedItems(index: ModelIndex, name: (id: string) => string): ReworkItem[] {
+  return [...index.relations.values()]
+    .filter(r => isUnclassified(r.type) && isCoreBetween(index, r))
+    .map(r => {
+      const at = descLoc(r.src)
+      return {
+        id: `unclassified:${r.id}`,
+        category: 'unclassified' as const,
+        severity: 'info' as const,
+        rules: ['M17', 'X23'],
+        code: 'relation.unclassified',
+        title: `未分类：关系「${r.id}」（${name(r.from)} → ${name(r.to)}）是核心之间的 calls`,
+        ...(at ? { at } : {}),
+        affected: at ? [at] : [],
+        actions: [
+          {
+            kind: 'classify' as const,
+            text: '按三问定为 queries（要结果、无副作用）或 commands（交出一件事、被调方拥有后果），写进草图即确认（X23）',
+            file: r.src.file,
+            snippet: `- { id: ${r.id}, from: ${r.from}, to: ${r.to}, type: queries }   # 或 commands`,
+          },
+        ],
+        target: { relation: r.id, modules: [r.from, r.to] },
+      }
+    })
 }
 
 // ── 时间耦合（J4、J6）：无依赖且无描述关系的耦合对，一对一个根因 ──
@@ -588,9 +689,9 @@ function unmodeledItems(index: ModelIndex, name: (id: string) => string): Rework
       : [
           {
             kind: 'add-relation',
-            text: '补一条两端之间的运行时关系（命令 calls、通知 notifies、流 streams，箭头为控制流方向）；端点写能表达清楚的最深模块',
+            text: '补一条两端之间的交互关系（查询 queries、委托 commands、通知 notifies、流 streams，箭头为控制流方向）；端点写能表达清楚的最深模块',
             ...(index.modules.get(g.a) ? { file: index.modules.get(g.a)!.src.file } : {}),
-            snippet: `relations:\n  - { id: rel.${g.a}--${g.b}, from: ${g.a}, to: ${g.b}, type: calls }`,
+            snippet: `relations:\n  - { id: rel.${g.a}--${g.b}, from: ${g.a}, to: ${g.b}, type: commands }`,
           },
           { kind: 'add-step-relation', text: '步骤端点写错了时改正步骤的 from / to', file: first?.file },
         ]

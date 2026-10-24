@@ -17,7 +17,9 @@ import {
   compareOwned,
   governanceReport,
   loadModel,
+  portIssues,
   reviewCounts,
+  unclassifiedRelations,
   parseDesignSketches,
   sketchLifetime,
   validateSketch,
@@ -144,6 +146,11 @@ for (const entry of dirs) {
     issues.push(...report.issues)
     governanceNote = governanceSummary(report)
   } else if (tree) issues.push({ severity: 'error', code: 'source.missing', message: `读不到源码（源码在本地是前提，G1）：${tree.reason}` })
+  // U14：设计版本没有代码事实（K8），端口孤立只按描述判定
+  else issues.push(...portIssues(index, null))
+  // M17：未分类只提示，摘要给出条数与其中核心之间的条数（裁决 12）
+  const unclassified = unclassifiedRelations(index)
+  const unclassifiedNote = `；未分类 ${unclassified.all.length}（核心之间 ${unclassified.core.length}）`
   // Z3、Z5：需复核是人的待办，不报错，只在摘要给计数（只对当前版本）
   const rc = project ? reviewCounts(index) : null
   const reviewNote = rc ? `；确认：已确认 ${rc.reviewed} / ${rc.scope} · 需复核 ${rc.stale}` : ''
@@ -159,6 +166,7 @@ for (const entry of dirs) {
     `${payload.dir}：${payload.files.length} 个文件，${index.modules.size} 个模块（根下 ${top} 个），` +
       `${index.relations.size} 条关系，${index.interfaces.size} 个接口，${index.dataStructures.size} 个数据结构` +
       (index.actors.size || index.scenarios.size ? `，${index.actors.size} 个参与者，${index.scenarios.size} 个场景` : '') +
+      unclassifiedNote +
       sourceNote +
       governanceNote +
       reviewNote +
@@ -175,10 +183,12 @@ function governanceSummary(r: GovernanceReport): string {
   const conf = [...r.relations.values()]
   const n = (s: string) => conf.filter(c => c.status === s).length
   const allowed = r.violations.filter(v => v.status === 'allowed').length
+  const impl = [...r.implementers.values()].flatMap(p => p.implementers)
   const open = r.violations.filter(v => v.status === 'open').length
   const b = r.baseline
   return (
     `；代码事实：文件依赖 ${r.fileDeps}、模块依赖 ${r.moduleDeps.size}，关系已证实 ${n('confirmed')} / 未证实 ${n('unconfirmed')}，未解释的交互 ${r.undescribed.length}` +
+    `；有实现者的端口 ${r.implementers.size}（实现者 ${impl.length}，仅代码事实 ${impl.filter(i => !i.described).length}）、子类 ${r.subclasses.length}、组装 ${r.assembly.length}（组装根 ${r.assemblyRoots.length}）` +
     `；违规 ${b ? `新增 ${r.gate.newViolations} / 已知 ${r.gate.knownViolations}` : `${open}（无基线）`}${allowed ? ` / 已豁免 ${allowed}` : ''}` +
     `；环度 模块 ${r.cyclicity.modules} / 文件 ${r.cyclicity.files}${b ? `（基线 ${b.cyclicity.modules} / ${b.cyclicity.files}）` : ''}` +
     (r.gate.resolved ? `；基线中 ${r.gate.resolved} 条违规已消除，可运行 npm run arch -- baseline 收紧基线` : '')

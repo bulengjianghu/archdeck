@@ -6,6 +6,14 @@ import type { Issue, ModuleRole, RelationType, RelationVia, RuleKind } from '../
 
 export type DepKind = 'value' | 'type'
 
+/**
+ * K1：交互使用的种类——call 调用、渲染或把函数、类、组件作为值交出；extends 类的 extends（子类事实，K12）；
+ * new、factory、register 为组装使用（组装事实，K13）。K7 只把 call 算作要由关系解释的交互。
+ */
+export type InvokeKind = 'call' | 'extends' | 'new' | 'factory' | 'register'
+/** K13：组装使用的种类 */
+export const ASSEMBLY_KINDS: readonly InvokeKind[] = ['new', 'factory', 'register']
+
 /** 一条文件依赖（K1、K3） */
 export interface FileDep {
   /** 依赖方文件 */
@@ -22,8 +30,12 @@ export interface FileDep {
   heritage?: true
   /** 引用了 to 文件的实现：函数、类或变量（不是类型、枚举），或不按名称穿透的值导入；`export … from` 再导出不算（K1，K5 的 implements 证据分档、U11、U12 的值使用） */
   uses?: true
-  /** 交互使用：引用了实现且不只是纯值读取——被调用、new、extends、渲染，或把函数、类、组件作为值交出；只读常量、只读成员不算（K1，K7 只看它） */
+  /** 交互使用：引用了实现且不只是纯值读取——被调用、new、extends、渲染，或把函数、类、组件作为值交出；只读常量、只读成员不算（K1） */
   invokes?: true
+  /** 交互使用的种类（K1）；没有时按 call（只调用）看待 */
+  invokeKinds?: InvokeKind[]
+  /** 继承子句引用的落到这个目标的名字、子句种类（implements / extends）与目标声明的种类（interface / type / class …；K5c、K12） */
+  inherits?: { name: string; clause: 'implements' | 'extends'; decl?: string }[]
 }
 
 /** 接入层提取的代码依赖（K1–K3） */
@@ -114,16 +126,80 @@ export interface Confirmation {
   deps: string[]
   /** 两端宿主相同（概念拆分，同文件）而不判定时，为共同的宿主模块 */
   host?: string
-  /** 关系写了 via（K5b）而不判定时，为经由的方式 */
+  /** 关系写了 via（K5b）：不判定时为经由的机制；经端口而证实时也带上 */
   via?: RelationVia
+  /** K5b：经端口证实（发起方 → 端口定义模块的依赖 + 接收方是已证实的实现者）时为端口（接口 ID） */
+  port?: string
   /** 未证实且两端之间（含祖先后代）没有任何模块依赖，两个方向、值与类型都没有（K6） */
   isolated?: boolean
   /** 已证实时，依据的依赖相对关系箭头的方向（面板「知识」一行，ADR-0022） */
   knows?: Knowledge
-  /** implements 有对应的模块依赖，却没有接口名或 implements / extends 的证据：证据像使用（K5，原名证据像 depends） */
+  /** 端口实现者有对应的模块依赖，却没有接口名或 implements / extends 的证据：证据像使用（K5c，原名证据像 depends） */
   likeDepends?: true
-  /** implements 有对应的模块依赖，只引了对方的数据类型（类型、枚举），没有接口名或 implements / extends：结构性实现（代码未显式声明，K5） */
+  /** 端口实现者有对应的模块依赖，只引了对方的数据类型（类型、枚举），没有接口名或 implements / extends：结构性实现（代码未显式声明，K5c） */
   structural?: true
+}
+
+/** K5c：端口的一个实现者与证据档（status：confirmed ① / unconfirmed 带 structural ② 或 likeDepends ③，否则未证实 / skipped 不判定） */
+export interface ImplementerFact extends Confirmation {
+  module: string
+  /** 描述写了（接口的 implementedBy） */
+  described: boolean
+  /** 代码事实里有类 implements / extends 解析到该接口（K5c ①）；描述没写的即「仅代码事实」的实现者 */
+  code: boolean
+}
+
+/** K5c：一个接口（端口）的实现者——描述与代码事实的并集；owner 为定义模块（owner，没有时取 provides 它的模块） */
+export interface PortFacts {
+  port: string
+  owner?: string
+  implementers: ImplementerFact[]
+}
+
+/** K12：子类事实——from 的类 extends to 的类（不是端口）；按模块对聚合 */
+export interface SubclassFact {
+  key: string
+  from: string
+  to: string
+  files: FileDep[]
+}
+
+/** K13：组装事实——from 组装 to（new、工厂、容器注册）；按模块对聚合 */
+export interface AssemblyFact {
+  key: string
+  from: string
+  to: string
+  kinds: InvokeKind[]
+  files: FileDep[]
+}
+
+/** K11：端口面板的实现者（描述的与「仅代码事实」的，各带证据档） */
+export interface PortImplementer {
+  module: string
+  described: boolean
+  code: boolean
+  /** 有代码事实时的证实状态（K5c） */
+  status?: ConfirmStatus
+  structural?: true
+  likeDepends?: true
+}
+
+/** K11：端口面板的使用者——经端口（via: port:<P>）或直接（interface 为 P、to 在定义模块子树内）的交互关系的发起方 */
+export interface PortUser {
+  relation: string
+  module: string
+  type: RelationType
+  how: 'port' | 'direct'
+  status?: ConfirmStatus
+}
+
+/** K11：一个接口的端口面板：定义 · 实现者 · 使用者；isPort 为裁决 4 的「算端口」（被 via: port: 引用、或有实现者） */
+export interface PortPanel {
+  port: string
+  owner?: string
+  isPort: boolean
+  implementers: PortImplementer[]
+  users: PortUser[]
 }
 
 /** 知识方向相对关系箭头：同向 / 反向 / 两个方向都有 */
@@ -179,6 +255,13 @@ export interface GovernanceReport {
   fileDeps: number
   external: Record<string, number>
   relations: Map<string, Confirmation>
+  /** K5c：端口（接口 ID）→ 实现者与证据档；只列有实现者（描述或代码事实）的接口 */
+  implementers: Map<string, PortFacts>
+  /** K12：子类事实 */
+  subclasses: SubclassFact[]
+  /** K13：组装事实与组装根（模块级组装图入度 0、出度 ≥ 1） */
+  assembly: AssemblyFact[]
+  assemblyRoots: string[]
   undescribed: ModuleDep[]
   /** U12：共用件反向依赖（ADR-0027） */
   sharedReverse: ModuleDep[]

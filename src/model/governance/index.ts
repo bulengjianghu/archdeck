@@ -1,5 +1,33 @@
 export * from './types'
-export { depKey, within, related, liftDeps, hostOf, confirmRelations, contractNames, contractEvidence, unconfirmedWarns, unconfirmedCode, unconfirmedReason, covers, coveringRelations, undescribedDeps } from './facts'
+export {
+  depKey,
+  within,
+  related,
+  liftDeps,
+  hostOf,
+  confirmRelations,
+  confirmImplementers,
+  heritageFacts,
+  assemblyFacts,
+  portOwner,
+  plainInteraction,
+  contractNames,
+  contractEvidence,
+  unconfirmedWarns,
+  implementerWarns,
+  unconfirmedCode,
+  unconfirmedReason,
+  implementerReason,
+  covers,
+  coveringRelations,
+  undescribedDeps,
+  portEntry,
+  portPanel,
+  portIssues,
+  coresOf,
+  isCoreBetween,
+  unclassifiedRelations,
+} from './facts'
 export { judge, evaluateRules, rulesFor, exposesMatch, exposesText, violationKey, rulesOf } from './rules'
 export type { EntryOf, DepProbe, Judgement, ModuleRules } from './rules'
 export { stronglyConnected, valueDeps, moduleCycles, fileCycles, cyclicityOf } from './cycles'

@@ -2,7 +2,9 @@
  * 返工清单（docs/02-domain.md §2.17 Q7–Q9）：按根因聚合、每条的内容与建议动作、Markdown 输出。
  */
 import { describe, expect, it } from 'vitest'
+import { sampleFiles } from '../fixtures/sample'
 import {
+  REWORK_CATEGORIES,
   assignFiles,
   checkSketches,
   governanceReport,
@@ -174,10 +176,11 @@ describe('Q7 内容与按根因聚合', () => {
     expect(setup().list.items.map(i => i.id)).toEqual(setup().list.items.map(i => i.id))
   })
 
-  it('没有代码事实时只含描述、归属与未建模', () => {
+  it('没有代码事实时只含描述、归属、未建模与按描述判定的端口孤立（U14：rel.3 读作 if.util 的实现者，没有使用者）', () => {
     const { list } = setup(null, false)
     expect(list.facts).toBe(false)
-    expect(new Set(list.items.map(i => i.category))).toEqual(new Set(['description', 'ownership', 'unmodeled']))
+    expect(new Set(list.items.map(i => i.category))).toEqual(new Set(['description', 'ownership', 'unmodeled', 'port']))
+    expect(list.items.find(i => i.category === 'port')).toMatchObject({ severity: 'info', code: 'port.no-user' })
   })
 })
 
@@ -228,12 +231,16 @@ describe('Q8 返工项的内容与排序', () => {
     expect(byCode(list.items, 'source.entry')[0].actions[0].kind).toBe('fix-description')
   })
 
-  it('未证实：列编译期关系与两端之间没有任何依赖的运行时关系（K6），建议改正关系或检查 codeRefs', () => {
+  it('未证实：列两端之间没有任何依赖的交互关系（K6），建议改正关系或检查 codeRefs；未证实的端口实现者（K5c，原 implements）建议从 implementedBy 去掉', () => {
     const { list } = setup()
     const u = list.items.filter(i => i.category === 'unconfirmed')
-    expect(u.map(i => i.target.relation).sort()).toEqual(['rel.2', 'rel.3', 'rel.4', 'rel.5'])
-    expect(u.every(i => i.actions.map(a => a.kind).join() === 'fix-relation,add-code-refs')).toBe(true)
+    expect(u.map(i => i.id).sort()).toEqual(['unconfirmed:if.util#core.impl', 'unconfirmed:rel.2', 'unconfirmed:rel.4', 'unconfirmed:rel.5'])
+    const rels = u.filter(i => i.target.relation)
+    expect(rels.every(i => i.actions.map(a => a.kind).join() === 'fix-relation,add-code-refs')).toBe(true)
     expect(u.find(i => i.target.relation === 'rel.2')!.title).toContain('两端之间在代码中没有任何依赖')
+    const impl = u.find(i => i.id === 'unconfirmed:if.util#core.impl')!
+    expect(impl).toMatchObject({ severity: 'warning', rules: ['K5c', 'K6'], target: { modules: ['core.impl', 'core.util'] } })
+    expect(impl.actions.map(a => a.kind)).toEqual(['fix-description', 'add-code-refs'])
   })
 
   it('未建模：两端之间有多条运行时关系时补步骤 relation 并列出候选，否则补关系', () => {
@@ -363,5 +370,19 @@ describe('S17 步骤无证据', () => {
     expect(items[0].actions.map(a => a.kind)).toEqual(['fix-description', 'add-code-refs', 'fix-relation'])
     expect(list.byCategory.unevidenced).toBe(3)
     expect(byCode(reworkList({ index, issues, source: { own, tree } }).items, 'step.no-evidence')).toEqual([])
+  })
+})
+
+describe('Q7、Q8（ADR-0029）：未分类、端口孤立、查询副作用三个新类别', () => {
+  it('未分类只列核心之间的 calls（裁决 12，info，建议按三问定类型、写进草图即确认），其余只计数；类别排在未解释的交互之后', () => {
+    const { index, issues } = loadModel(sampleFiles())
+    const list = reworkList({ index, issues })
+    const u = list.items.filter(i => i.category === 'unclassified')
+    expect(u.map(i => i.target.relation)).toEqual(['r1', 'r2'])
+    expect(u[0]).toMatchObject({ severity: 'info', code: 'relation.unclassified', rules: ['M17', 'X23'] })
+    expect(u[0].actions[0]).toMatchObject({ kind: 'classify', snippet: expect.stringContaining('type: queries') })
+    // 逐条的 relation.unclassified 提示不进「描述」类
+    expect(list.items.some(i => i.category === 'description' && i.code === 'relation.unclassified')).toBe(false)
+    expect(REWORK_CATEGORIES.slice(5, 11)).toEqual(['unconfirmed', 'port', 'query-side-effect', 'undescribed', 'unclassified', 'unmodeled'])
   })
 })
