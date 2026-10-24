@@ -220,7 +220,7 @@ describe('DeskState · 设计版本', () => {
   const withSource = (commit: string) => sampleFiles({ 'system.yaml': `system: { id: sys, name: Sys, source: { commit: ${commit} } }` })
   const r2Files = sampleFiles({ 'system.yaml': 'system: { id: sys, name: Sys }', 'extra.yaml': 'modules: [{ id: infra.new, name: New, parent: infra }]' })
 
-  async function open(initialUrl: string) {
+  async function open(initialUrl: string, baseline?: { label: string; dir: string; files: ReturnType<typeof withSource> }) {
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [
@@ -239,6 +239,7 @@ describe('DeskState · 设计版本', () => {
         compare: {
           current: { label: '当前版本', dir: 'model/demo', files: withSource('new') },
           previous: { label: '下一期 · r1', dir: 'x', files: r2Files },
+          ...(baseline ? { baseline } : {}),
         },
       }),
       { project: 'demo', version: { design: 'next', revision: 'r2' } },
@@ -260,9 +261,10 @@ describe('DeskState · 设计版本', () => {
     expect(desk.versions.diff.value?.changes).toEqual([])
   })
 
-  it('基线提交与当前版本不一致时提示漂移', async () => {
-    const { desk } = await open('/p/demo/d/next/r2')
-    expect(desk.versions.drift.value).toBe(true)
+  it('E4、T2b 裁决 1：轮次载荷带基线时比两版描述的 source.commit——不一致提示漂移，一致不提示；没带基线时不判断（base.commit 是仓库提交，不和 source.commit 比）', async () => {
+    expect((await open('/p/demo/d/next/r2', { label: '基线 old', dir: 'b', files: withSource('gen-old') })).desk.versions.drift.value).toBe(true)
+    expect((await open('/p/demo/d/next/r2', { label: '基线 old', dir: 'b', files: withSource('new') })).desk.versions.drift.value).toBe(false)
+    expect((await open('/p/demo/d/next/r2')).desk.versions.drift.value).toBe(false)
   })
 
   it('只响应同一版本路由上的变化', async () => {

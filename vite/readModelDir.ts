@@ -311,6 +311,8 @@ export function readDesignRevision(
   const designDir = path.join(modelRoot, project, DESIGNS_DIR, design)
   const prev = info.revisions[at - 1]
   const sketches = designSketches(path.join(modelRoot, project), design)
+  // T2b 裁决 1：轮次也带基线（base.commit 那一版描述），基线漂移一律比两版描述的 source.commit；读不到时省略
+  const base = baselineSource(path.join(modelRoot, project), current.dir, info.base?.commit, opts)
   return {
     project,
     ...readModelDir(path.join(designDir, revision), projectRoot),
@@ -319,6 +321,7 @@ export function readDesignRevision(
     compare: {
       current: { label: '当前版本', dir: current.dir, files: current.files },
       ...(prev ? { previous: { label: versionLabel(info, prev.id), ...readModelDir(path.join(designDir, prev.id), projectRoot) } } : {}),
+      ...(base ? { baseline: base } : {}),
     },
     ...(sketches.length ? { sketches } : {}),
   }
@@ -333,6 +336,17 @@ export interface SketchVersionOptions {
   committed?: (projectDir: string, rel: string) => string | null
   /** X17：设计的基线（base.commit 那一版描述的文件）；给了时「交给 AI」附相对基线的变更摘要（按血缘） */
   baseline?: (projectDir: string, commit: string) => RawFile[] | null
+}
+
+/** 05 裁决 3、T2b 裁决 1：设计的基线——base.commit 那一版描述（经 opts.baseline 读 git）；没有 base.commit 或读不到时为 null */
+function baselineSource(
+  projectDir: string,
+  dir: string,
+  commit: string | undefined,
+  opts: SketchVersionOptions,
+): { label: string; dir: string; files: RawFile[] } | null {
+  const files = commit && opts.baseline ? opts.baseline(projectDir, commit) : null
+  return files ? { label: `基线 ${commit!.slice(0, 8)}`, dir: `${dir}@${commit!.slice(0, 8)}`, files } : null
 }
 
 export function readSketchVersion(
@@ -352,9 +366,8 @@ export function readSketchVersion(
   const refs = designSketchFiles(projectDir, design)
   const files = sketches.map(s => ({ path: `${SKETCHES_DIR}/${path.basename(s.file.path)}`, text: s.file.text }))
   const info = current.designs?.find(d => d.id === design)
-  const commit = info?.base?.commit
-  const baselineFiles = commit && opts.baseline ? opts.baseline(projectDir, commit) : null
-  const lineageNote = baselineFiles ? baselineChanges(baselineFiles, parseDesignSketches(sketches)) : ''
+  const baseSrc = baselineSource(projectDir, current.dir, info?.base?.commit, opts)
+  const lineageNote = baseSrc ? baselineChanges(baseSrc.files, parseDesignSketches(sketches)) : ''
   const changes = opts.committed
     ? sketches
         .map(s => sketchChanges(base, s.file.path, opts.committed!(projectDir, s.file.path), s.file.text))
@@ -372,7 +385,7 @@ export function readSketchVersion(
     // 05 裁决 3：底稿与「相对基线」都读 base.commit 那一版；读不到时省略，相对基线退化为相对当前版本
     compare: {
       current: { label: '当前版本', dir: current.dir, files: current.files },
-      ...(baselineFiles ? { baseline: { label: `基线 ${commit!.slice(0, 8)}`, dir: `${current.dir}@${commit!.slice(0, 8)}`, files: baselineFiles } } : {}),
+      ...(baseSrc ? { baseline: baseSrc } : {}),
     },
     sketchPrompt: sketchPrompt(
       design,

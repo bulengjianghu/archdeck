@@ -197,6 +197,16 @@ describe('接入层 · 多项目读取', () => {
     expect(readDesignRevision(modelRoot, 'alpha', '..', 'r1', root)).toBeNull()
   })
 
+  it('T2b 裁决 1：轮次也带基线（base.commit 那一版描述，经 git 读取）；读不到或没给读取器时省略', () => {
+    const files = [{ path: 'system.yaml', text: 'system: { id: alpha, name: Alpha, source: { commit: g0 } }' }]
+    const asked: string[] = []
+    const r2 = readDesignRevision(modelRoot, 'alpha', 'next', 'r2', root, { baseline: (_dir, commit) => (asked.push(commit), files) })!
+    expect(asked).toEqual(['c0'])
+    expect(r2.compare?.baseline).toEqual({ label: '基线 c0', dir: 'model/alpha@c0', files })
+    expect(readDesignRevision(modelRoot, 'alpha', 'next', 'r2', root, { baseline: () => null })!.compare?.baseline).toBeUndefined()
+    expect(readDesignRevision(modelRoot, 'alpha', 'next', 'r2', root)!.compare?.baseline).toBeUndefined()
+  })
+
   it('模型根目录默认是项目内 model/，可用 ARCH_MODEL_ROOT 覆盖', () => {
     expect(resolveModelRoot('/p', {})).toBe(path.resolve('/p/model'))
     expect(resolveModelRoot('/p', { ARCH_MODEL_ROOT: 'other' })).toBe(path.resolve('/p/other'))

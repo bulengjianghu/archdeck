@@ -139,7 +139,7 @@ modules:
   - id: state.desk.versions
     name: 版本与对比基线（desk.versions）
     parent: state.desk
-    responsibility: 设计版本下持有设计信息与本轮、对比基线（当前版本 / 上一轮）的索引；派生差异与基线漂移（起草时的基线提交与当前版本不一致）。
+    responsibility: 设计版本下持有设计信息与本轮、对比基线（当前版本 / 上一轮）的索引；派生差异与基线漂移（载荷带的基线——base.commit 那一版描述——与当前版本的 source.commit 不一致；没带基线时不判断，E4）。
     codeRefs: [src/state/desk/versions.ts]
   - id: state.desk.projection
     name: 视图派生（核心与 desk.run）

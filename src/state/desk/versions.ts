@@ -66,12 +66,11 @@ export function createVersions({ state, index, designs, commits, baselines, vers
     index.value && baseline.value ? diffModels(baseline.value.index, index.value, lineage.value ? { lineage: lineage.value } : {}) : null,
   )
   /**
-   * E4：设计起草时的基线与当前版本不一致——当前版本已按新代码重新生成。载荷带了基线那一版描述（草图版本，05 裁决 3：base.commit 为仓库提交）时
-   * 比两版描述的 source.commit；否则按旧口径把 base.commit 当作 source.commit 比
+   * E4：设计起草时的基线与当前版本不一致——当前版本已按新代码重新生成。一律比两版描述的 source.commit：载荷带的基线（base.commit 那一版描述，
+   * 草图版本与轮次都带，05 裁决 3、T2b 裁决 1）与当前版本；载荷没带基线（没有 base.commit、没有 git 或读不到）时不判断
    */
   const drift = computed(() => {
-    const b = baselines.value.base
-    const was = b ? b.index.model.system.source?.commit : design.value?.base?.commit
+    const was = baselines.value.base?.index.model.system.source?.commit
     const now = baselines.value.current?.index.model.system.source?.commit
     return !!was && !!now && was !== now
   })
