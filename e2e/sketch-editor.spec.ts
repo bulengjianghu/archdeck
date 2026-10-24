@@ -383,3 +383,35 @@ test('F-60–F-62、#15、#20b：草图的信息条只出现一次名称、唯�
     box.restore()
   }
 })
+
+test('T2b 裁决 6：当前版本上「在此设计」的对话框有「加到设计 <名>」（有草稿设计时）——选中后打开那个设计的草图并切到挂在该模块上的一张（按基线推出，未改动不写文件）', async ({
+  page,
+}) => {
+  const box = sandbox('zz-e2e-add')
+  try {
+    fs.mkdirSync(path.join(box.dir, 'sketches'), { recursive: true })
+    fs.writeFileSync(path.join(box.dir, 'design.yaml'), 'design:\n  name: E2E 加一张\n  status: draft\n')
+    fs.writeFileSync(path.join(box.dir, 'sketches/state.desk.yaml'), BAR_SKETCH.replace('id: zz-e2e-bar', 'id: zz-e2e-add'))
+    await openDesk(page, '/p/h5p-arch-desk')
+    await designHere(page, 'state', 'state.transition')
+    const dialog = page.getByRole('dialog', { name: '新建设计' })
+    await expect(dialog.getByLabel('新建设计')).toBeChecked()
+    await dialog.getByRole('radio', { name: /加到设计/ }).check()
+    const target = dialog.locator('select[name="design-target"]')
+    if (await target.count()) await target.selectOption('zz-e2e-add')
+    await expect(dialog.locator('input[name="design-name"]')).toHaveCount(0)
+    await expect(dialog.locator('select[name="design-mount"]')).toHaveValue('state.transition')
+    await dialog.getByRole('button', { name: '加到设计并打开草图' }).click()
+
+    await expect(page).toHaveURL(/\/d\/zz-e2e-add\/sketch/)
+    await expect(page.locator('.sketch-canvas')).toBeVisible()
+    const crumbs = page.locator('.info-bar .mount')
+    await expect(crumbs.locator('.here')).toHaveAttribute('data-crumb', 'state.transition')
+    await expect(page.locator('.info-bar .name')).toHaveText('E2E 加一张')
+    // 推出的那张没改动：不脏、不写文件
+    await expect(page.locator('.info-bar .dirty')).toHaveCount(0)
+    expect(fs.existsSync(path.join(box.dir, 'sketches/state.transition.yaml'))).toBe(false)
+  } finally {
+    box.restore()
+  }
+})

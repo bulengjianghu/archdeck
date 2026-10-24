@@ -3,11 +3,14 @@
  * 新建设计（S-4、F-10、F-11，ADR-0025）：名称、目标一句话、挂载点（「在此设计」的入口带入，可改；下拉或搜索；不能选层）、设计 ID。
  * 根挂载（改骨架）只在入口带入 root 时可选（设计面板「改骨架」）。底稿一律按挂载点从基线复制（X18）——服务端把 base.commit 记为
  * 仓库 HEAD 并从那一版描述复制（05 裁决 3）；创建后打开新设计的草图（进入草图画布）。
+ * 有草稿设计（status: draft、有草图）时多一个选项「加到设计 <名>」（T2b 裁决 6）：不新建，打开那个设计的草图并切到挂在这个模块上的一张
+ * （会话里没有时按基线推出，改了才在保存时写出）。
  */
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ROOT_MOUNT } from '@/model'
 import { useDesk } from '@/state/inject'
+import { requestSheet } from './designHere'
 
 const props = defineProps<{ mount?: string }>()
 const emit = defineEmits<{ close: [] }>()
@@ -56,10 +59,22 @@ watch(name, n => {
 })
 const idOk = computed(() => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id.value.trim()))
 const taken = computed(() => desk.versions.designs.value.some(d => d.id === id.value.trim()))
-const valid = computed(() => idOk.value && !taken.value && !!name.value.trim() && usable(mount.value))
+/** T2b 裁决 6：可以加进去的草稿设计（有草图） */
+const drafts = computed(() => desk.versions.designs.value.filter(d => d.status === 'draft' && d.sketch))
+const into = ref<'new' | 'add'>('new')
+const target = ref(drafts.value[0]?.id ?? '')
+const adding = computed(() => into.value === 'add' && !!target.value)
+const valid = computed(() => (adding.value ? usable(mount.value) : idOk.value && !taken.value && !!name.value.trim() && usable(mount.value)))
+
+function addTo() {
+  requestSheet(target.value, mount.value)
+  emit('close')
+  void router.push({ name: 'design', params: { project: desk.project!, design: target.value, revision: 'sketch' } })
+}
 
 async function create() {
   if (!valid.value || busy.value) return
+  if (adding.value) return addTo()
   busy.value = true
   const r = await desk.edit.createDesign({ id: id.value.trim(), name: name.value.trim(), goal: goal.value.trim() || undefined, mount: mount.value })
   busy.value = false
@@ -73,8 +88,23 @@ async function create() {
   <div class="mask" role="dialog" aria-modal="true" aria-label="新建设计" @click.self="emit('close')" @keydown.esc="emit('close')">
     <form class="box" @submit.prevent="create">
       <h3>{{ mount === ROOT_MOUNT ? '改骨架：新建设计' : '新建设计' }}</h3>
-      <label>名称 <input v-model="name" name="design-name" placeholder="如 草图的画布编辑" autofocus /></label>
-      <label>目标（一句话） <input v-model="goal" name="design-goal" /></label>
+      <div v-if="drafts.length" class="into" role="radiogroup" aria-label="新建或加到已有设计">
+        <label class="row"><input v-model="into" type="radio" value="new" name="design-into" /> 新建设计</label>
+        <label class="row">
+          <input v-model="into" type="radio" value="add" name="design-into" />
+          <template v-if="drafts.length === 1">加到设计 {{ drafts[0].name }}</template>
+          <template v-else>
+            加到设计
+            <select v-model="target" name="design-target" @focus="into = 'add'">
+              <option v-for="d in drafts" :key="d.id" :value="d.id">{{ d.name }}</option>
+            </select>
+          </template>
+        </label>
+      </div>
+      <template v-if="!adding">
+        <label>名称 <input v-model="name" name="design-name" placeholder="如 草图的画布编辑" autofocus /></label>
+        <label>目标（一句话） <input v-model="goal" name="design-goal" /></label>
+      </template>
       <label>
         挂载点（在哪个模块下设计这一层）
         <input v-model="search" name="design-mount-search" placeholder="搜索模块名称或 ID" />
@@ -85,17 +115,18 @@ async function create() {
         </select>
         <span class="hint">层不能作为挂载点：层的直接子模块画在根草图里</span>
       </label>
-      <label>
+      <label v-if="!adding">
         设计 ID
         <input v-model="id" name="design-id" placeholder="如 sketch-editor" @input="touchId" />
         <span v-if="id.trim() && !idOk" class="error small">只能包含字母、数字和 . _ -，以字母或数字开头</span>
         <span v-else-if="taken" class="error small">设计「{{ id.trim() }}」已存在</span>
       </label>
-      <p class="hint">底稿从基线复制挂载点下的一层：模块的 ID、名称、核心与本层关系，不带职责文字（X18）；基线为仓库当前提交（HEAD）的描述。</p>
+      <p v-if="adding" class="hint">打开这个设计的草图并切到挂在所选模块上的一张：设计里还没有时按设计的基线推出，改了才在保存时写出（X18、X20）。</p>
+      <p v-else class="hint">底稿从基线复制挂载点下的一层：模块的 ID、名称、核心与本层关系，不带职责文字（X18）；基线为仓库当前提交（HEAD）的描述。</p>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <div class="actions">
         <button type="button" @click="emit('close')">取消</button>
-        <button type="submit" class="ok" :disabled="!valid || busy">创建并打开草图</button>
+        <button type="submit" class="ok" :disabled="!valid || busy">{{ adding ? '加到设计并打开草图' : '创建并打开草图' }}</button>
       </div>
     </form>
   </div>
@@ -138,6 +169,21 @@ label {
   margin: 0;
   font-size: 12px;
   color: var(--text-3);
+}
+
+.into {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+
+label.row {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
 }
 
 .error {

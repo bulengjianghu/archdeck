@@ -30,7 +30,7 @@ import { useEvolutionPrefs } from './display/useEvolutionPrefs'
 import EditDialog from './edit/EditDialog.vue'
 import SketchCanvas from './sketch/SketchCanvas.vue'
 import NewDesignDialog from './edit/NewDesignDialog.vue'
-import { closeNewDesign, newDesignRequest } from './edit/designHere'
+import { closeNewDesign, newDesignRequest, takeSheet } from './edit/designHere'
 
 const props = defineProps<{ project: string; design?: string; revision?: string; commit?: string; base?: string; intent?: string }>()
 const router = useRouter()
@@ -82,6 +82,19 @@ onBeforeUnmount(unwatchModel)
 // J5：「演化」叠加的开关按项目记在本地，模型加载后恢复
 const evolutionPrefs = useEvolutionPrefs(props.project, desk)
 void router.isReady().then(() => desk.init().then(() => evolutionPrefs.restore()))
+
+// T2b 裁决 6：从当前版本「加到设计 <名>」过来的——进入草图画布后切到挂在那个模块上的一张（会话里没有时按基线推出）
+if (props.design)
+  watch(
+    () => desk.edit.active.value,
+    on => {
+      const m = on ? takeSheet(props.design!) : null
+      if (!m) return
+      const r = desk.edit.goUp(m)
+      if (!r.ok) window.alert(`没能切到挂在「${m}」上的草图：${r.reason}`)
+    },
+    { immediate: true },
+  )
 
 // X7a：有未保存的草图改动时，离开（切换版本、回项目列表、关闭页面）要确认
 const leaveOk = () => desk.edit.canLeave() === 'free' || window.confirm('草图有未保存的改动，离开会丢失。确定离开？')

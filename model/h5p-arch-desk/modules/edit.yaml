@@ -181,7 +181,7 @@ modules:
     responsibility: |
       信息条动作区（F-61）：草图（打开即编辑）上为「保存（⌘S）」、撤销 / 重做图标（E-2）、「保存并交给 AI」（没有未保存改动时为「交给 AI」；全设计有格式错误或语义提示时禁用并悬停说明，F-52）、「说明」（全设计变更清单按血缘分组的弹层，F-53）、「退出」——有未保存改动时三选保存 / 放弃 / 取消，退出回到进入草图之前的版本（#20b）；保存失败显示原因；文件已在外部改动时整个动作区换成横幅「重新加载并重放 / 放弃本次改动」，重放有失败时列出失败的操作。
       身份区草图下的唯一一条面包屑「挂在：…」（#15）：点一级返回（goUp，会话里没有时推出），父级也是升级的落点（data-parent，画布拖动时检测并高亮）。
-      当前版本上「编辑骨架」打开持久草图 /i/skeleton（E-1）；「在此设计」（导航树、模型画布节点右键、模块面板）打开新建设计对话框：名称、目标一句话、挂载点（入口带入可改）、设计 ID；创建后进入新设计的草图。
+      当前版本上「编辑骨架」打开持久草图 /i/skeleton（E-1）；「在此设计」（导航树、模型画布节点右键、模块面板）打开新建设计对话框：名称、目标一句话、挂载点（入口带入可改）、设计 ID；有草稿设计时可选「加到设计 <名>」——打开那个设计的草图，项目视图进入草图画布后切到挂在该模块上的一张（designHere 的 pendingSheet，会话里没有时按基线推出）；创建后进入新设计的草图。
     codeRefs: [src/components/infobar/ActionZone.vue, src/components/infobar/ChangeGroups.vue, src/components/edit/NewDesignDialog.vue, src/components/edit/designHere.ts, src/components/edit/EditDialog.vue, src/components/edit/useEditDialog.ts, src/components/edit/leave.ts]
 
 relations:
