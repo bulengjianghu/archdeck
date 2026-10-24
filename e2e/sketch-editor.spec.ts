@@ -7,7 +7,7 @@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { parse } from 'yaml'
 import { graphNode, openDesk, restoreOwned } from './helpers'
 
@@ -43,11 +43,33 @@ function sandbox(design: string) {
 /** 信息条动作区的「保存」（与「保存并交给 AI」区分） */
 const saveButton = (page: Page) => page.locator('.info-bar').getByRole('button', { name: '保存', exact: true })
 
+/**
+ * 元素落定后的位置：连续两次读到的包围盒相同才返回。打开 / 切换草图后的「适应画布」要等节点量好尺寸（每 50ms 重试），
+ * 节点可见时视野可能还没适应；原始鼠标拖动按旧坐标按下会落在空白处。
+ */
+async function settledBox(loc: Locator) {
+  let prev = ''
+  let box: Awaited<ReturnType<Locator['boundingBox']>> = null
+  await expect
+    .poll(
+      async () => {
+        box = await loc.boundingBox()
+        const cur = JSON.stringify(box)
+        const same = !!box && cur === prev
+        prev = cur
+        return same
+      },
+      { intervals: [120] },
+    )
+    .toBe(true)
+  return box!
+}
+
 /** 从一个节点的连线柄拖到另一个节点中心（Vue Flow connect） */
 async function dragConnect(page: Page, from: string, to: string) {
   const handle = graphNode(page, from).locator('.sk-out')
-  const a = (await handle.boundingBox())!
-  const b = (await graphNode(page, to).boundingBox())!
+  const a = await settledBox(handle)
+  const b = await settledBox(graphNode(page, to))
   await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2)
   await page.mouse.down()
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 12 })
@@ -56,7 +78,7 @@ async function dragConnect(page: Page, from: string, to: string) {
 
 /** 按住节点拖动 (dx, dy) 像素 */
 async function dragBy(page: Page, id: string, dx: number, dy: number) {
-  const b = (await graphNode(page, id).locator('.name').boundingBox())!
+  const b = await settledBox(graphNode(page, id).locator('.name'))
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2)
   await page.mouse.down()
   await page.mouse.move(b.x + b.width / 2 + dx, b.y + b.height / 2 + dy, { steps: 10 })
@@ -199,8 +221,8 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     const child = `state.desk.session.${b.split('.').pop()}`
     const parentCrumb = crumbs.locator('[data-parent="1"]')
     await expect(parentCrumb).toContainText('DeskState')
-    const from = (await graphNode(page, child).locator('.name').boundingBox())!
-    const to = (await parentCrumb.boundingBox())!
+    const from = await settledBox(graphNode(page, child).locator('.name'))
+    const to = await settledBox(parentCrumb)
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
     await page.mouse.down()
     await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 15 })
