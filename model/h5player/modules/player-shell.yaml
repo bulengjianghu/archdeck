@@ -105,6 +105,7 @@ modules:
     responsibility: >-
       SDK 包对外再导出的类型与基类（SolutionType / EventKey / LogLevel / ErrorCode / PlayerConfig、PluginBase），三方库类型声明补丁，
       以及 RMS 上报 SDK 的独立 IIFE 打包入口（对接方用 script 注入 self.RMS，主包不内嵌该 SDK）。
+    provides: [if.framework.plugin.PluginBase]
     codeRefs:
       - packages/player/src/types.ts
       - packages/player/src/types/**

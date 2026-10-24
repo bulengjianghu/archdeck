@@ -1025,6 +1025,14 @@ relations:
     mode: sync
     description: countsAsUncoveredTry；resolveAnchor / trackKeyFrame 以注入方式使用
 
+  # ── 补充的交互（ADR-0026：有值使用的模块依赖按交互补全，K7）──
+  - { id: rel.plugins.buffer-plugin-base, from: app.plugins.buffer-strategy.live-adaptive, to: infra.player-index.public-surface, type: implements, description: 自适应缓冲插件继承 SDK 转出的 PluginBase }
+  - { id: rel.timeshift.recording-contracts, from: app.timeshift.recording-driver, to: infra.framework.contracts, type: calls, description: 按 MuKey / MediaType 键寻址录制腿的 MU 与媒体类型 }
+  - { id: rel.timeshift.shell-plugin-base, from: app.timeshift.shell, to: infra.player-index.public-surface, type: implements, description: 时移外壳插件继承 SDK 转出的 PluginBase }
+  - { id: rel.timeshift.recovery-contracts, from: app.timeshift.live-recovery, to: infra.framework.contracts, type: calls, description: 按 MuKey 键寻址直播腿的 MU }
+  - { id: rel.timeshift.ledger-contracts, from: app.timeshift.frame-ledger, to: infra.framework.contracts, type: calls, description: 总线接线按 MuKey / MediaType 键过滤帧事件 }
+  - { id: rel.timeshift.seek-coordinator-helpers, from: app.timeshift.seek-switch, to: app.timeshift.coordinator, type: calls, description: 调用 describeError / segmentIndexForCut 辅助函数 }
+
 interfaces:
   # ── app.plugins ──
   - id: if.plugins.reconnect.decide

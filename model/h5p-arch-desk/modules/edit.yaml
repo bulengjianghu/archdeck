@@ -80,7 +80,7 @@ modules:
     responsibility: |
       草图的两级校验 validateSketch（X14，ADR-0025），画布每次操作后、保存前与写入端点、lint:model 共用同一函数：
       格式错误（error，拦保存）——按 JSON Schema 检查草图形状（未知字段即错）、ID 格式与重复、模块不是挂载点的直接子节点（父、前缀、嵌套不对，X9）、挂载点是层或不存在、设计草图的文件名与 mount 不一致、引用不存在、缺名称、关系不在本层（两端都不在本草图，或另一端是本层模块的后代）、连祖先与后代；
-      语义提示（warning，拦「保存并交给 AI」与定稿）——根草图的层依赖成环、非根草图的本层 depends 成环、同挂载点与持久草图矛盾（复用 model.intent.check 的矛盾检查，X4、X10）、待重连（X16）；
+      语义提示（warning，拦「保存并交给 AI」与定稿）——根草图的层依赖成环、同挂载点与持久草图矛盾（复用 model.intent.check 的矛盾检查，X4、X10）、待重连（X16）；
       只提示（hint，不进两级）——超七（X13，SKETCH_SOFT_LIMIT）、没写职责。输出 ok（能保存）、ready（能交给 AI）、三级问题列表（按实体定位）与待重连的关系，不改草图。
     principle: |
       - **只看草图本身**：不对照版本的偏差（那是核验 sketchCheck 的事）；只有矛盾检查两边都有，同一函数与稳定键。
@@ -583,7 +583,7 @@ dataStructures:
         severity: 'error' | 'warning' | 'hint'
         code: 'sketch.schema' | 'sketch.id' | 'sketch.id-dup' | 'sketch.id-prefix' | 'sketch.mount' | 'sketch.file' | 'sketch.nested' | 'sketch.parent'
             | 'sketch.scope' | 'sketch.name' | 'sketch.ref' | 'sketch.ancestor'            // error
-            | 'sketch.layer-cycle' | 'sketch.depends-cycle' | 'sketch.contradiction' | 'sketch.pending'   // warning
+            | 'sketch.layer-cycle' | 'sketch.contradiction' | 'sketch.pending'   // warning
             | 'sketch.over-seven' | 'sketch.empty'                                       // hint
         message: string; target: { module?; relation?; interface? }; path?: string
       }

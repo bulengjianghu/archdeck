@@ -191,19 +191,20 @@ modules:
   - id: model.pipeline.loader
     name: Loader
     parent: model.pipeline
-    responsibility: 解析 YAML / JSON、按 JSON Schema 检查单文件格式（未知字段即报错）、把多个文件合并成一个模型并记录每个实体的出处（文件 / 路径 / 行号）；解析外部参与者、场景与嵌套步骤树（每个步骤记录路径与出处）；sourceLimits 只取第一处声明，重复时提醒（G20）；关系类型的旧名 event / dataflow 映射为 notifies（翻转两端）/ streams 并逐条提醒迁移（M12）。
+    responsibility: 解析 YAML / JSON、按 JSON Schema 检查单文件格式（未知字段即报错）、把多个文件合并成一个模型并记录每个实体的出处（文件 / 路径 / 行号）；解析外部参与者、场景与嵌套步骤树（每个步骤记录路径与出处）；sourceLimits 只取第一处声明，重复时提醒（G20）；关系类型的旧名 event / dataflow 映射为 notifies（翻转两端）/ streams 并逐条提醒迁移（M12）；类型为 depends 的关系在格式检查前丢弃并逐条提醒（M15，ADR-0026）。
     codeRefs: [src/model/load.ts]
   - id: model.pipeline.validator
     name: Validator
     parent: model.pipeline
-    responsibility: 跨文件检查：ID 唯一、父模块存在且父链无环、关系端点有效、不连祖先与后代、接口 / 数据结构引用存在、层字段完整；检查外部参与者（ID 与模块不重复）与场景：消息端点是模块或参与者、引用的关系 / 接口 / 数据结构存在且与端点一致、步骤 id 在场景内唯一、ref 指向的场景存在且无循环引用；implements 的目标须声明接口（M11）、pull 只用于 streams（M13）。
+    responsibility: 跨文件检查：ID 唯一、父模块存在且父链无环、关系端点有效、不连祖先与后代、接口 / 数据结构引用存在、层字段完整；检查外部参与者（ID 与模块不重复）与场景：消息端点是模块或参与者、引用的关系 / 接口 / 数据结构存在且与端点一致、步骤 id 在场景内唯一、ref 指向的场景存在且无循环引用；implements 的目标须声明接口（M11）、pull 只用于 streams（M13）、notifies 的端点不得是角色为 bus 的总线（M14）；场景消息与对应 calls 的同步性不一致时提醒（S19）。
     principle: |
       不抛异常：error 级问题的实体被剔除，warning 级只去掉坏引用，返回一份可以安全建索引的模型和问题列表。
 
       步骤与结构一致性（规则 S5 / S5a）：
       - 引用了 relation：端点与方向必须与关系一致，否则 error；运行时关系的箭头是控制流方向，与消息同向，只有 return 反向比对（S12、ADR-0022）。
       - 没引用 relation：按 S13 推断（两端之间恰好一条运行时关系即认定）；推断不到且两端（及其祖先之间）结构上没有任何关系时报 warning「结构图中没有对应关系」。
-      - 引用了 depends / implements 关系：error（S12，只有运行时关系会「发生一次」）。
+      - 引用了 implements 关系：error（S12，只有运行时关系会「发生一次」）。
+      - async 消息对应同步的 calls、call 消息对应异步的 calls：warning，不改绑定（S19）。
     codeRefs: [src/model/validate.ts]
   - id: model.pipeline.indexer
     name: Indexer

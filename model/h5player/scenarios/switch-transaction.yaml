@@ -16,7 +16,7 @@ scenario:
     - loop:
         while: 每个新增 MU
         steps:
-          - call: {from: infra.framework.pipeline.transaction, to: infra.framework.media-unit, interface: if.framework.media-unit.MediaUnit, label: lifecycle catch-up}
+          - async: {from: infra.framework.pipeline.transaction, to: infra.framework.media-unit, interface: if.framework.media-unit.MediaUnit, label: lifecycle catch-up}
     - alt:
         - when: pipeline success
           steps:

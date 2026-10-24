@@ -807,6 +807,17 @@ relations:
     interface: if.framework.utils.performance
 
 # ═══════════════════════════════ 接口 ═══════════════════════════════
+
+  # ── 补充的交互（ADR-0026：有值使用的模块依赖按交互补全，K7）──
+  - { id: rel.framework.context-utils, from: infra.framework.context.core, to: infra.framework.utils, type: calls, description: 创建上下文时调用 Time 取时间戳 }
+  - { id: rel.framework.contracts-polyfill, from: infra.framework.contracts, to: infra.framework.utils, type: calls, description: 公共入口加载即执行 utils/polyfill，安装运行时补丁 }
+  - { id: rel.framework.misc-observe, from: infra.framework.utils.misc, to: infra.framework.utils.observe, type: calls, description: 共享定时器经 TrackInfo 记录采样与埋点 }
+  - { id: rel.framework.worker-env-probe, from: infra.framework.utils.worker-wasm, to: infra.framework.utils.env-probe, type: calls, description: 线程桥按 Feature 探测结果选择 Worker / 主线程通道 }
+  - { id: rel.framework.plugin-controller-base, from: infra.framework.plugin, to: infra.framework.kernel.facade, type: implements, description: PluginController 继承 ControllerBase 控制器基类 }
+  - { id: rel.framework.scheduler-utils, from: infra.framework.state-machine.scheduler, to: infra.framework.utils, type: calls, description: 命令对象经 Generator 生成命令 ID、经 Time 记录时间 }
+  - { id: rel.framework.scheduler-controller-base, from: infra.framework.state-machine.scheduler, to: infra.framework.kernel.facade, type: implements, description: StateMachineController 继承 ControllerBase 控制器基类 }
+  - { id: rel.framework.mu-error-chain, from: infra.framework.media-unit, to: infra.framework.kernel.error-chain, type: calls, description: MU 基类经 errorWrapper 包装处理异常并走错误路由链 }
+
 interfaces:
   - id: if.framework.kernel.Framework
     name: Framework

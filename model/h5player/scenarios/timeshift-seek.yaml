@@ -11,16 +11,16 @@ scenario:
     - call: {id: seek, from: actor.biz, to: infra.player-index.player-api, interface: if.player-index.seek, label: seek(ms)}
     - call: {from: infra.player-index.player-api, to: app.timeshift.shell, label: canSeekSwitch() → seekSwitch(ms)}
     - call: {from: app.timeshift.shell, to: app.timeshift.coordinator, label: 交给协调器持有的拖进度流程}
-    - call: {id: flow, from: app.timeshift.coordinator, to: app.timeshift.seek-switch, label: seek(ms)}
+    - async: {id: flow, from: app.timeshift.coordinator, to: app.timeshift.seek-switch, label: seek(ms)}
     - call: {from: app.timeshift.seek-switch, to: domain.services.timeshift, interface: if.services.timeshift.shouldSeekSwitch, label: shouldSeekSwitch（有时移地址、主腿、FLV 直播、方案受支持）}
     - alt:
         - when: 事务前在播
           steps:
-            - call: {from: app.timeshift.seek-switch, to: infra.framework.state-machine.scheduler, interface: if.framework.state-machine.sendCommand, label: "内部 Pause{origin: 'seek-switch'}：冻结当前帧"}
+            - async: {from: app.timeshift.seek-switch, to: infra.framework.state-machine.scheduler, interface: if.framework.state-machine.sendCommand, label: "内部 Pause{origin: 'seek-switch'}：冻结当前帧"}
         - when: 已暂停
           steps: []
-    - call: {id: hold, from: app.timeshift.seek-switch, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "holdLeg('primary') + 截流"}
-    - call: {id: create, from: app.timeshift.seek-switch, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "createLeg('timeshift', Hls / Vod，C = 0)"}
+    - async: {id: hold, from: app.timeshift.seek-switch, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "holdLeg('primary') + 截流"}
+    - async: {id: create, from: app.timeshift.seek-switch, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "createLeg('timeshift', Hls / Vod，C = 0)"}
     - call: {from: app.solution.legs, to: infra.framework.pipeline.legs, interface: if.framework.pipeline.PipelineLegHandle, label: openLeg + updatePipeline：录制腿 Load 段进图（待命）}
     - call: {from: app.timeshift.seek-switch, to: app.timeshift.recording-driver, interface: if.timeshift.recording-driver.driver, label: start：按清单轴毫秒取含落点的片，开 8s 首帧定时器}
     - async: {from: app.timeshift.recording-driver, to: infra.mus.loader.hls, label: 'LoadStreamInfo / LoadData：拉录制清单与落点分片'}
@@ -32,17 +32,17 @@ scenario:
     - alt:
         - when: 首帧可用，提交换边
           steps:
-            - call: {id: switch, from: app.timeshift.seek-switch, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "seekSwitchLeg('timeshift', {landingPts: keyPts, originPts})"}
+            - async: {id: switch, from: app.timeshift.seek-switch, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "seekSwitchLeg('timeshift', {landingPts: keyPts, originPts})"}
             - ref: sc.timeshift-leg-switch
             - return: {from: app.solution.legs, to: app.timeshift.seek-switch, payload: ds.LegSwitchOutcome, label: 换边提交}
             - async: {from: app.timeshift.shell, to: infra.framework.kernel.event-bus, label: TimeShiftHandoffDone}
-            - call: {from: app.timeshift.seek-switch, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "withdrawLeg('primary')：提交即撤直播腿"}
-            - call: {from: app.timeshift.seek-switch, to: infra.framework.state-machine.scheduler, interface: if.framework.state-machine.sendCommand, label: "内部 Seek{timestamp, source: 'Internal'}：点播定位"}
+            - async: {from: app.timeshift.seek-switch, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "withdrawLeg('primary')：提交即撤直播腿"}
+            - async: {from: app.timeshift.seek-switch, to: infra.framework.state-machine.scheduler, interface: if.framework.state-machine.sendCommand, label: "内部 Seek{timestamp, source: 'Internal'}：点播定位"}
             - async: {from: infra.framework.kernel.event-bus, to: app.timeshift.coordinator, label: SeekEnd（Fhls 不等）}
             - alt:
                 - when: 有续播意图（事务前在播或期间用户 resume）
                   steps:
-                    - call: {from: app.timeshift.seek-switch, to: infra.framework.state-machine.scheduler, interface: if.framework.state-machine.sendCommand, label: 内部 Resume：解冻}
+                    - async: {from: app.timeshift.seek-switch, to: infra.framework.state-machine.scheduler, interface: if.framework.state-machine.sendCommand, label: 内部 Resume：解冻}
                 - when: 期间用户 pause
                   steps: []
             - return: {id: ok, from: infra.player-index.player-api, to: actor.biz, label: 'true：落到目标位置'}
@@ -51,6 +51,6 @@ scenario:
             - async: {from: infra.framework.kernel.event-bus, to: infra.player-index.player-api, label: 转发 TimeShift 事件}
         - when: 提交前失败（建腿 / 清单 / 拉片连败 / 首帧超时）
           steps:
-            - call: {from: app.timeshift.seek-switch, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "withdrawLeg('timeshift') → 放流 → releaseLeg('primary')"}
+            - async: {from: app.timeshift.seek-switch, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "withdrawLeg('timeshift') → 放流 → releaseLeg('primary')"}
             - async: {from: app.timeshift.shell, to: infra.framework.kernel.event-bus, label: "TimeShiftFailed{stage: seek-switch, outcome: stayed-live}"}
             - return: {id: fail, from: infra.player-index.player-api, to: actor.biz, label: 'false：留在直播'}

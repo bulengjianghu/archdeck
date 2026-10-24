@@ -149,7 +149,7 @@ modules:
     responsibility: 把步骤树展开成回放计划（帧树）：ref 内联子场景并记为 ref 组合框（F3）；loop 展开一遍并标注循环条件（F4）；par 各分支按书写顺序串行并标注并行（F5）；alt 处分叉为分支点，每个选项一棵子树（F6）。每帧带 ID、所在组合框路径，以及对应的结构关系（显式引用或按 S13 推断，标明是否推断）；步骤没写的接口与数据取自对应关系（返回只取接口），并标明继承（S14）。调用与显式返回配对（pairReturns，F7）：按书写顺序以栈匹配，alt 各分支从进入分支点时的栈开始，async 不配对。
     principle: |
       帧 ID = 场景 ID + 步骤 id；步骤没写 id 时用它在树中的路径（如 `sc.open#4.alt0.1`）（F2）。ref 内联时 ID 加上引用处前缀，同一子场景被引用两次也不冲突。
-      绑定关系 bindRelation（S12、S13）：显式引用优先；否则两端之间恰好一条与消息同向的运行时关系（calls / notifies / streams；关系箭头是控制流方向，只有 return 反向比对，ADR-0022）即认定并标为推断；Validator 用同一个函数，校验与界面结果一致。
+      绑定关系 bindRelation（S12、S13）：显式引用优先；否则两端之间恰好一条与消息同向的运行时关系（calls / notifies / streams；关系箭头是控制流方向，只有 return 反向比对，ADR-0022）即认定并标为推断；多条全是 calls 时同步性与消息一致的恰好一条也认定（S19）；Validator 用同一个函数，校验与界面结果一致。
     codeRefs: [src/model/scenario/plan.ts, src/model/scenario/bind.ts, src/model/scenario/steps.ts]
   - id: model.scenario.path
     name: 回放路径

@@ -3,7 +3,17 @@
 # 骨架模块（share.contracts 等第二级）在 layers.yaml 中定义，本文件只用 parent 往下挂。
 
 modules:
+  # ───────────────────────── share（层的包入口）─────────────────────────
+  - id: share
+    name: Share
+    codeRefs: [packages/share/src/index.ts]
+
   # ───────────────────────── domain.types ─────────────────────────
+  - id: domain.types.ambient
+    parent: domain.types
+    name: 宿主类型补丁
+    responsibility: domain 的 lib 收窄为 ES2020 后按 lib.dom.d.ts 契约补的最小全局类型面（WHATWG URL），供分片地址归一化使用；只有类型，不构造任何 I/O 对象。
+    codeRefs: [packages/domain/src/globals.d.ts]
   - id: domain.types.modes
     parent: domain.types
     name: 方案三元组与模式枚举

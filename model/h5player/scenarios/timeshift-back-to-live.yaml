@@ -10,28 +10,28 @@ scenario:
     - call: {id: api, from: actor.biz, to: infra.player-index.player-api, interface: if.player-index.backToLive, label: backToLive()}
     - call: {from: infra.player-index.player-api, to: app.timeshift.shell, label: backToLive()}
     - call: {from: app.timeshift.shell, to: app.timeshift.coordinator, label: backToLive()：已接管、无恢复流程在途}
-    - call: {id: recover, from: app.timeshift.coordinator, to: app.timeshift.live-recovery, label: "recover('user')"}
-    - call: {from: app.timeshift.live-recovery, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: ensureLiveLeg()：新建 FLV 直播腿}
+    - async: {id: recover, from: app.timeshift.coordinator, to: app.timeshift.live-recovery, label: "recover('user')"}
+    - async: {from: app.timeshift.live-recovery, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: ensureLiveLeg()：新建 FLV 直播腿}
     - async: {from: app.timeshift.live-recovery, to: infra.mus.loader.flv, label: 经新腿句柄定向 LoadData，开 8s 首帧定时器}
     - loop:
         while: 新腿首帧未可用（关键帧起水位 < 直播起播水位）
         steps:
-          - call: {from: app.timeshift.coordinator, to: app.timeshift.live-recovery, label: 新腿 DemuxedBuffer 视频帧到达，判首帧可用}
+          - async: {from: app.timeshift.coordinator, to: app.timeshift.live-recovery, label: 新腿 DemuxedBuffer 视频帧到达，判首帧可用}
     - alt:
         - when: 首帧在 8s 内可用
           steps:
             - alt:
                 - when: 当前 Paused（用户暂停中回直播）
                   steps:
-                    - call: {from: app.timeshift.shell, to: infra.framework.state-machine.scheduler, interface: if.framework.state-machine.sendCommand, label: 内部 Resume（协调器经外壳发命令）}
+                    - async: {from: app.timeshift.shell, to: infra.framework.state-machine.scheduler, interface: if.framework.state-machine.sendCommand, label: 内部 Resume（协调器经外壳发命令）}
                 - when: 在播
                   steps: []
-            - call: {id: revert, from: app.timeshift.live-recovery, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: revertLiveLeg()：revert-live 方向换回}
+            - async: {id: revert, from: app.timeshift.live-recovery, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: revertLiveLeg()：revert-live 方向换回}
             - ref: sc.timeshift-leg-switch
             - return: {from: app.solution.legs, to: app.timeshift.live-recovery, payload: ds.LegSwitchOutcome, label: 换回成功}
-            - call: {from: app.timeshift.live-recovery, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "withdrawLeg('timeshift')：撤录制腿，会话收口"}
+            - async: {from: app.timeshift.live-recovery, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "withdrawLeg('timeshift')：撤录制腿，会话收口"}
             - return: {id: ok, from: infra.player-index.player-api, to: actor.biz, label: 'true：已回到直播边缘'}
         - when: 建腿失败或首帧超时
           steps:
-            - call: {from: app.timeshift.live-recovery, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "withdrawLeg('primary')：撤新腿，录制腿继续供数"}
+            - async: {from: app.timeshift.live-recovery, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "withdrawLeg('primary')：撤新腿，录制腿继续供数"}
             - return: {id: fail, from: infra.player-index.player-api, to: actor.biz, label: 'false：留在时移，不发 TimeShiftFailed'}
