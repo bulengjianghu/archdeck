@@ -19,14 +19,20 @@
  *                                 并附两个对比（相对基线、相对当前版本 / 该轮），按血缘表述
  *   sketch list <设计>            设计的各张草图（挂载点、文件、是否需要初始布局）
  *   sketch archive <设计>         归档 / 晋升（X3）：对当前版本逐张核验一致才执行；晋升连 layout 一并替换持久草图
+ *   classify [--design <设计> [--revision <轮次|sketch>] | --all-designs] [--core-only] [--override <文件>] [--write]
+ *                                 未分类（calls）关系的查询 / 委托建议（ADR-0029 §5）：关系、两端、建议类型、置信度与依据；
+ *                                 --override 为人工核对后的覆盖（关系 ID → 类型）；--write 把类型写回描述文件、说明改为交互口吻（只改 type 与 description 两个值；草图只改 type）
  *
  * check 与 rescan 写拦截记录。出错时退出码为 2；check 为 denied 时退出码为 1。
  */
+import fs from 'node:fs'
 import path from 'node:path'
+import { parse as parseYaml } from 'yaml'
 import { fileURLToPath } from 'node:url'
 import { CHANGE_KINDS, CHANGE_KIND_LABELS, REWORK_CATEGORIES, RULE_LABELS, type CheckResult, type ReworkCategory, type SketchCheck } from '../src/model'
 import type { DesignComparison } from './agent/service'
 import { ServiceError, createService } from './agent/service'
+import { printClassify, runClassify } from './agent/classify'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2).filter(a => a !== '--')
@@ -35,7 +41,7 @@ const args: string[] = []
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (!a.startsWith('--')) args.push(a)
-  else if (['--project', '--names', '--category', '--limit', '--design', '--revision'].includes(a)) flags.set(a.slice(2), argv[++i] ?? '')
+  else if (['--project', '--names', '--category', '--limit', '--design', '--revision', '--override'].includes(a)) flags.set(a.slice(2), argv[++i] ?? '')
   else flags.set(a.slice(2), true)
 }
 const [cmd, ...rest] = args
@@ -149,6 +155,23 @@ function run(): number {
       }
       return 0
     }
+    case 'classify': {
+      if (!project)
+        throw new ServiceError('用法：npm run arch -- classify --project <项目> [--design <设计> [--revision <轮次>] | --all-designs] [--core-only] [--write]')
+      const r = runClassify({
+        root,
+        project,
+        design: str('design'),
+        revision: str('revision'),
+        allDesigns: flags.has('all-designs'),
+        write: flags.has('write'),
+        coreOnly: flags.has('core-only'),
+        overrides: readOverrides(str('override')),
+      })
+      if (asJson) console.log(JSON.stringify(r, null, 2))
+      else printClassify(r)
+      return 0
+    }
     case 'own': {
       const r = svc.own(project)
       console.log(`已写入 ${r.file}：${r.files.length} 个人拥有的文件（${r.files.join('、')}）`)
@@ -165,10 +188,23 @@ function run(): number {
     }
     default:
       console.error(
-        '用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|hotspots|coupling|report|baseline|own|sketch-check|sketch> [参数] [--project <项目>] [--json]',
+        '用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|hotspots|coupling|report|baseline|own|sketch-check|sketch|classify> [参数] [--project <项目>] [--json]',
       )
       return 2
   }
+}
+
+/** classify --override <文件>：YAML 映射「关系 ID: queries | commands」或「关系 ID: { type, why }」 */
+function readOverrides(file: string | undefined) {
+  if (!file) return undefined
+  const raw = (parseYaml(fs.readFileSync(path.resolve(process.cwd(), file), 'utf8')) ?? {}) as Record<string, string | { type: string; why?: string }>
+  const out = new Map<string, { type: 'queries' | 'commands'; why?: string }>()
+  for (const [id, v] of Object.entries(raw)) {
+    const o = typeof v === 'string' ? { type: v } : v
+    if (o.type !== 'queries' && o.type !== 'commands') throw new ServiceError(`覆盖文件里「${id}」的类型只能是 queries / commands`)
+    out.set(id, { type: o.type, ...(o.why ? { why: o.why } : {}) })
+  }
+  return out
 }
 
 function need(n: number, usage: string) {

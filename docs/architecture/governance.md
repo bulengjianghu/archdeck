@@ -77,6 +77,7 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 | `checkDependency(index, own, report, entryOf, from, targets)` | 写前判定：对每个目标 `judge`，取最严；环影响为在值依赖的模块图（`valueDeps`）上加边后重算包含两端的强连通分量；附覆盖关系与目标模块语义 | Q2 |
 | `stepEvidence(frame, index, own, deps, entryOf)` · `scenarioEvidence(plan, …)` | 步骤的候选调用点与证据等级（按名字匹配 / 按模块依赖 / 无证据 / 不判定）、场景各等级计数；算法见[场景投影与回放 §10](./scenario.md#10-步骤的代码证据) | S16 |
 | `summarizeLedger(entries)` | 按判定统计次数；扫描的违规数与环度首末值 | Q4 |
+| `classifyRelation(index, report, relation, code?)` · `classifyRelations(…)`（`classify.ts`） | 查询 / 委托的分类建议（ADR-0029 §5「分类是主张」）：按第一问「被调方拥有后果吗」打分，证据为代码事实（交互种类、调用点的结果是否被使用、被调函数签名的返回形态、目标文件的状态持有，`code` 由接入层 `readClassifyCode` 提取）、描述（目标是共用件、目标会发出通知、接口签名、目标模块名）与名字（被调函数名、成员名、说明里的动词）；输出建议类型、置信度（高 / 中 / 低）、依据，只有继承或只有组装的标 `factOnly`；平分或没有证据时按委托、低置信度。`interactionDescription` 把说明改为交互口吻（查询「A 向 B 取：…」，委托「A 交给 B：…」） | M17 |
 
 > 第六轮（ADR-0029、ADR-0030）：已实现——`confirmRelations` 按四类交互判定（迁移期未分类同原 `calls`），`via` 按四形态（K5b，经端口的证实带 `port`）；`confirmImplementers`（端口实现者三档与「仅代码事实」的实现者，K5c，结果在报告的 `implementers`）、`heritageFacts`（子类事实，K12，报告的 `subclasses`）、`assemblyFacts`（组装事实与组装根，K13，报告的 `assembly` / `assemblyRoots`）、`portEntry` / `portPanel`（K11）与 `portIssues`（U14）都在 `facts.ts`；`undescribedDeps` 加三种覆盖（K7）；描述查询 `unclassifiedRelations` / `isCoreBetween`（M17）。`portTriad`（`ports.ts`）保留为迁移期兼容。待实现：`levelFacts` 的组装叠加线（O12，T3）。
 
@@ -217,6 +218,7 @@ interface SketchCheck { sketch: string; design?: string; deviations: SketchDevia
 | `own` | —（X6） | 登记人拥有文件的指纹 `governance/owned.json`，由人执行 | — |
 | `sketch-check [--design <设计>] [--revision <轮次>]` | `sketch_check` | X4：活动草图对当前版本（缺省）或设计某一轮的核验，命令行缺省给人看的文本、`--json` 为结构化结果 | — |
 | `sketch archive <设计>` | `sketch_archive` | X3、X8：归档 / 晋升，与页面同一函数 `archiveDesign`；不一致即拒绝 | — |
+| `classify [--design <设计> [--revision <轮次>] \| --all-designs] [--core-only] [--override <文件>] [--write]` | — | 未分类关系的查询 / 委托建议（`classifyRelation`）：关系、两端、建议类型、置信度与依据；设计各轮没有代码事实，同 ID 的关系沿用当前版本的分类；`--override` 为人工核对后的覆盖（关系 ID → 类型）；`--write` 只改描述文件里 `type` 与 `description` 两个值（没有说明的补一个），草图（人拥有）只改 `type`，草图写了说明的关系各处都不改说明 | — |
 
 - 查询核心加载时一并比对指纹（`compareOwned`），`owned.*` 问题进 `issues`。
 
