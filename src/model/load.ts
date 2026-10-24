@@ -23,6 +23,7 @@ import type {
   ModuleDef,
   LegacyRelationType,
   ModuleEntity,
+  ModuleRole,
   RawFile,
   RelationDef,
   RelationEntity,
@@ -66,6 +67,8 @@ export function load(files: readonly RawFile[]): LoadResult {
   /** X10：草图写给挂载点模块的原则（加载完再落到模块上）与非草图文件写过 abstraction 的模块 */
   const mountAbstractions: { mount: string; value: string; src: SourceLoc }[] = []
   const otherAbstraction = new Map<string, SourceLoc>()
+  /** M16：intent/roles.yaml 的角色（模块 ID → role 与出处），加载完再落到模块上 */
+  const roles: { id: string; role: ModuleRole; src: SourceLoc }[] = []
   let seq = 0
 
   // X1：草图文件先入；其余按路径排序
@@ -195,6 +198,7 @@ export function load(files: readonly RawFile[]): LoadResult {
     if (data.scenario) pushScenario(data.scenario, ['scenario'])
     data.scenarios?.forEach((x, i) => pushScenario(x, ['scenarios', i]))
     if (data.sourceIgnore) sourceIgnore.push(...data.sourceIgnore)
+    for (const [id, role] of Object.entries(data.roles ?? {})) roles.push({ id, role, src: locate(['roles', id]) })
     // Z1：各文件的确认记录合并（约定只在 reviewed.yaml）
     data.reviewed?.forEach((x, i) => reviewed.push({ ...x, src: locate(['reviewed', i]) }))
     // G20：sourceLimits 只能声明一次，重复时用第一处
@@ -234,6 +238,7 @@ export function load(files: readonly RawFile[]): LoadResult {
       })
     host.abstraction = a.value
   }
+  applyRoles(roles, modules, sketched, issues)
 
   return {
     model: {
@@ -242,6 +247,39 @@ export function load(files: readonly RawFile[]): LoadResult {
       sketches,
     },
     issues,
+  }
+}
+
+/**
+ * M16：intent/roles.yaml 的角色落到模块上——草图里写了 role 的以草图为准（不同时提醒），没写的取 roles.yaml；
+ * 指向不存在的模块提醒。AI 生成的 modules/ 不写 role（04 §3.2），写了也被 roles.yaml 覆盖。
+ */
+function applyRoles(
+  roles: readonly { id: string; role: ModuleRole; src: SourceLoc }[],
+  modules: ModuleEntity[],
+  sketched: ReadonlyMap<string, { written: Set<string>; file: string }>,
+  issues: Issue[],
+) {
+  const byId = new Map(modules.map(m => [m.id, m]))
+  for (const { id, role, src } of roles) {
+    const m = byId.get(id)
+    if (!m) {
+      issues.push({ severity: 'warning', code: 'roles.unknown-module', message: `roles 里的模块「${id}」不在描述里，这条角色没有落处（M16）`, ...src })
+      continue
+    }
+    const sk = sketched.get(`module:${id}`)
+    if (sk?.written.has('role')) {
+      if (m.role !== role)
+        issues.push({
+          severity: 'warning',
+          code: 'roles.shadowed',
+          message: `「${id}」的 role 已由草图（${sk.file}）写为 ${m.role}，roles 里的 ${role} 不生效（草图为准，M16）`,
+          ...src,
+        })
+      continue
+    }
+    m.role = role
+    m.roleFrom = 'roles'
   }
 }
 
@@ -317,6 +355,15 @@ function parseFile(file: RawFile, issues: Issue[]): ParsedFile | null {
       message: '草图没有 mount：一期的骨架（顶层全是层）按根挂载读取（X9）；请加 mount: root',
       ...locate(['sketch']),
     })
+  for (const { at, both } of migrateCore(data))
+    issues.push({
+      severity: 'warning',
+      code: 'module.core-legacy',
+      message: both
+        ? '同时写了旧写法 core 与 role：以 role 为准；请删除 core（M16）'
+        : 'core: true 是旧写法，已按 role: core 读取；请改为 role: core（M16）',
+      ...locate(at),
+    })
   for (const loc of dropRemovedRelations(data).map(locate))
     issues.push({
       severity: 'warning',
@@ -332,6 +379,31 @@ function parseFile(file: RawFile, issues: Issue[]): ParsedFile | null {
     return null
   }
   return { data, locate }
+}
+
+/**
+ * M16：模块的旧写法 `core`——`core: true` 映射为 `role: core`，`core: false` 去掉；同时写了 role 的以 role 为准。
+ * 覆盖文件顶层的 module / modules 与草图的 modules，含内联子模块；返回每处的路径（先取位置、后改写）。
+ */
+function migrateCore(data: unknown): { at: (string | number)[]; both: boolean }[] {
+  const out: { at: (string | number)[]; both: boolean }[] = []
+  const visit = (m: unknown, at: (string | number)[]) => {
+    if (!m || typeof m !== 'object') return
+    const mod = m as { core?: unknown; role?: unknown; children?: unknown }
+    if ('core' in mod) {
+      const both = mod.role !== undefined
+      if (mod.core === true || both) out.push({ at: [...at, 'core'], both })
+      if (mod.core === true && !both) mod.role = 'core'
+      delete mod.core
+    }
+    if (Array.isArray(mod.children)) mod.children.forEach((c, i) => visit(c, [...at, 'children', i]))
+  }
+  if (!data || typeof data !== 'object') return out
+  const d = data as { module?: unknown; modules?: unknown; sketch?: { modules?: unknown } }
+  visit(d.module, ['module'])
+  if (Array.isArray(d.modules)) d.modules.forEach((m, i) => visit(m, ['modules', i]))
+  if (d.sketch && Array.isArray(d.sketch.modules)) d.sketch.modules.forEach((m, i) => visit(m, ['sketch', 'modules', i]))
+  return out
 }
 
 /**

@@ -16,7 +16,7 @@ sketch:
         - id: model.scenario
           name: 场景投影
           kind: subsystem
-          core: true
+          role: core
           responsibility: 运行视角的核心规则：场景的步骤树展开成回放计划，按已选分支求出回放路径，再按当前层次投影成可见消息与时序模型；回答本层的下一步、到达某帧需要的分支选择、谁参与了哪一步。
     - id: state
       name: 视图状态层
@@ -25,7 +25,7 @@ sketch:
         - id: state.transition
           name: 视图状态转移
           kind: subsystem
-          core: true
+          role: core
           responsibility: 会话规则的纯函数：给定视图状态、动作与上下文算出下一个视图状态；关于被描述系统的问题一律问模型层。
     - id: present
       name: 呈现层
@@ -34,7 +34,7 @@ sketch:
         - id: present.sequence
           name: 时序图
           kind: subsystem
-          core: true
+          role: core
           responsibility: 运行视角下把定位好坐标的时序模型画成 SVG，单击消息指向该步。
         - id: present.player
           name: 回放控制条

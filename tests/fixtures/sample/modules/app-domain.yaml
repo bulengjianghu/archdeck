@@ -7,7 +7,7 @@ modules:
     mayDependOn: [domain]
     responsibility: 编排
     children:
-      - { id: app.solution, name: Solution, core: true, responsibility: 方案编排 }
+      - { id: app.solution, name: Solution, role: core, responsibility: 方案编排 }
       - { id: app.fragments, name: Fragments, responsibility: 片段 }
   - id: domain
     name: Domain
@@ -16,5 +16,5 @@ modules:
     abstraction: 规则与事实
     responsibility: 规则
     children:
-      - { id: domain.services, name: Services, core: true, responsibility: 服务 }
+      - { id: domain.services, name: Services, role: core, responsibility: 服务 }
       - { id: domain.models, name: Models, responsibility: 模型 }

@@ -41,7 +41,7 @@ modules:
     responsibility: 应用层
     codeRefs: [src/app/**]
     children:
-      - { id: app.ui, name: UI, core: true, responsibility: 界面, codeRefs: [src/app/ui/**] }
+      - { id: app.ui, name: UI, role: core, responsibility: 界面, codeRefs: [src/app/ui/**] }
       - { id: app.api, name: API, responsibility: 接口, codeRefs: ['src/app/api/{client,server}.ts', src/app/api/index.ts], provides: [if.fetch, if.post] }
       - { id: app.pkg, name: Pkg, responsibility: 子包, codeRefs: [src/app/pkg] }
       - { id: app.entry, name: Entry, responsibility: 指定入口, codeRefs: [src/app/entry/**], entry: src/app/entry/main.ts }

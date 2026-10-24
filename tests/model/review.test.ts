@@ -34,7 +34,7 @@ modules:
     excludes: [业务规则]
     mayDependOn: [core]
     children:
-      - { id: ui.view, name: View, core: true, responsibility: "画视图\\n不持有状态", provides: [if.render, if.mount], principle: 用 Vue, codeRefs: [src/ui/**] }
+      - { id: ui.view, name: View, role: core, responsibility: "画视图\\n不持有状态", provides: [if.render, if.mount], principle: 用 Vue, codeRefs: [src/ui/**] }
       - id: ui.store
         name: Store
         responsibility: 状态
@@ -238,7 +238,7 @@ describe('Z3 状态三档与差异', () => {
 describe('Z4 确认范围与子树', () => {
   it('范围为核心模块与第二级模块（分层时即各层的直接子模块），按声明顺序', () => {
     expect(reviewScope(idx)).toEqual(['ui.view', 'ui.store', 'core.api'])
-    const flat = load('', `modules:\n  - { id: a, name: A, responsibility: a, children: [{ id: a.b, name: B, responsibility: b, children: [{ id: a.b.c, name: C, responsibility: c, core: true }] }] }\n`).index
+    const flat = load('', `modules:\n  - { id: a, name: A, responsibility: a, children: [{ id: a.b, name: B, responsibility: b, children: [{ id: a.b.c, name: C, responsibility: c, role: core }] }] }\n`).index
     expect(reviewScope(flat)).toEqual(['a.b', 'a.b.c'])
   })
   it('「也确认子模块」：子树内每个模块各一条独立记录', () => {

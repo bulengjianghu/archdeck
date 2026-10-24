@@ -8,7 +8,7 @@
  * - 源码（G1、G2、G17、G11，docs/architecture/source.md §2.1）：GET /source/<项目>.json（文件清单）、
  *   /source/<项目>/file.json?path=（单个文件）、/source/<项目>/exports.json?path=（导出）、/source/<项目>/facts.json（代码事实、基线与拦截记录，K8）、
  *   /source/<项目>/history.json（git 历史，J1）、/source/<项目>/commit.json?hash=（一个提交的说明）。
- * 写入（B1–B6，ADR-0019、ADR-0023；Z1、Z6）：POST /write/<项目>/feedback | allow | ignore | reviewed | accept | archive，只追加人拥有的文件（评审意见、例外、忽略项、
+ * 写入（B1–B6，ADR-0019、ADR-0023；Z1、Z6）：POST /write/<项目>/feedback | allow | ignore | reviewed | accept | archive | role，只追加人拥有的文件（评审意见、例外、忽略项、
  *   确认记录——一条或多条 { module, at, hash, summary, source, note? }，同一模块更新那一条——、认可偏差）；archive 为归档 / 晋升（X3）；
  *   草图整份写回 POST /write/<项目>/sketch（持久草图）、/write/<项目>/designs/<设计>/sketch（设计的一张草图），
  *   按设计写回 POST /write/<项目>/designs/<设计>/sketches（多张、改名、删除，B6、B7、X20），新建设计 POST /write/<项目>/designs（B6，ADR-0024、ADR-0025）；
@@ -21,13 +21,13 @@ import { isModelFile, listProjects, readDesignRevision, readIntentVersion, readP
 import { readExports, readSourceFile, readSourceTree } from './readSource'
 import { readCodeDeps } from './readDeps'
 import { readHealth } from './readHealth'
-import { WriteError, appendAccepted, appendAllow, appendFeedback, appendIgnore, appendReviewed, archiveDesign } from './writeModel'
+import { WriteError, appendAccepted, appendAllow, appendFeedback, appendIgnore, appendReviewed, appendRole, archiveDesign } from './writeModel'
 import { SketchInvalid, WriteConflict, createDesign, saveDesignSketches, saveSketch, type SaveDesignRequest, type SaveSketchRequest } from './writeSketch'
 import { headModel, listModelCommits, readCommitVersion, readFileAtHead, readModelAt } from './readGit'
 import { historyOptions, readCommitMessage, readSourceHistory } from './readHistory'
 import { loadModel } from '../src/model'
 import { LEDGER_PAGE_LIMIT, governanceDir, readBaseline, readLedger } from './governanceStore'
-import type { FactsPayload, RuleKind, SourcePayload } from '../src/model'
+import type { FactsPayload, ModuleRole, RuleKind, SourcePayload } from '../src/model'
 
 export const MODEL_CHANGED_EVENT = 'arch-model:changed'
 export const PROJECTS_FILE = 'projects.json'
@@ -86,7 +86,7 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
         const [url] = (req.url ?? '').split('?')
         const many = /^\/write\/([^/]+)\/designs\/([^/]+)\/sketches$/.exec(url)
         const w =
-          /^\/write\/([^/]+)\/(feedback|allow|ignore|reviewed|accept|archive|sketch|designs)$/.exec(url) ??
+          /^\/write\/([^/]+)\/(feedback|allow|ignore|reviewed|accept|archive|sketch|designs|role)$/.exec(url) ??
           (/^\/write\/([^/]+)\/designs\/[^/]+\/sketch$/.test(url) ? [url, /^\/write\/([^/]+)\//.exec(url)![1], 'sketch'] : null) ??
           (many ? [url, many[1], 'sketches'] : null)
         if (!w) return next()
@@ -121,13 +121,15 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
                       ? appendReviewed(modelRoot, project, reviewedBatch(parsed), root, { origin: 'page' })
                       : w[2] === 'accept'
                         ? appendAccepted(modelRoot, project, body.design, body.deviation, body.reason, root)
-                        : w[2] === 'sketch'
-                          ? saveSketch(modelRoot, project, parsed as SaveSketchRequest, root)
-                          : w[2] === 'sketches'
-                            ? saveDesignSketches(modelRoot, project, decodeURIComponent(many![2]), parsed as SaveDesignRequest, root)
-                            : w[2] === 'designs'
-                              ? createDesign(modelRoot, project, parsed as Parameters<typeof createDesign>[2], root, { base: headModel })
-                              : archiveDesign(modelRoot, project, body.design, root)
+                        : w[2] === 'role'
+                          ? appendRole(modelRoot, project, { module: body.module, role: body.role as ModuleRole }, root)
+                          : w[2] === 'sketch'
+                            ? saveSketch(modelRoot, project, parsed as SaveSketchRequest, root)
+                            : w[2] === 'sketches'
+                              ? saveDesignSketches(modelRoot, project, decodeURIComponent(many![2]), parsed as SaveDesignRequest, root)
+                              : w[2] === 'designs'
+                                ? createDesign(modelRoot, project, parsed as Parameters<typeof createDesign>[2], root, { base: headModel })
+                                : archiveDesign(modelRoot, project, body.design, root)
             json(res, out)
           } catch (e) {
             const status = e instanceof WriteConflict ? 409 : e instanceof SketchInvalid ? 422 : e instanceof WriteError ? 400 : 500

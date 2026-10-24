@@ -20,7 +20,7 @@ sketch:
       responsibility: 界面层
       mayDependOn: [core]
       children:
-        - { id: ui.view, name: View, core: true, responsibility: 视图 }
+        - { id: ui.view, name: View, role: core, responsibility: 视图 }
     - id: core
       name: Core
       kind: layer

@@ -25,6 +25,7 @@ import {
   type ChangeKind,
   type GridArea,
   type ModuleDef,
+  type ModuleRole,
   type SketchDef,
   type SketchPoint,
 } from '@/model'
@@ -58,7 +59,8 @@ export interface SketchNodeData {
   id: string
   kind: SketchNodeKind
   name: string
-  core?: boolean
+  /** ADR-0027：核心大块、共用件收进架（SK-22） */
+  role?: ModuleRole
   /** 有下一层（设计里有挂在它身上的草图，或基线里有子模块）：双击下钻有内容 */
   deeper?: boolean
   /** 图上标出变更时的角标 */
@@ -461,7 +463,7 @@ export function sketchScene(input: SketchSceneInput): SketchScene {
         id: m.id,
         kind: 'module' as const,
         name: m.node.name || m.id,
-        ...(m.node.core ? { core: true } : {}),
+        ...(m.node.role ? { role: m.node.role } : {}),
         ...(input.deeper?.(m.id) ? { deeper: true } : {}),
         ...(input.changes?.get(m.id) ? { change: input.changes.get(m.id) } : {}),
         ...(sel.has(m.id) ? { selected: true } : {}),

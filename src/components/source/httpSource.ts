@@ -104,6 +104,7 @@ export function httpModelWriter(project: string, base = ''): ModelWriter {
     ignore: b => post('ignore', b),
     reviewed: b => post('reviewed', b),
     accept: b => post('accept', b),
+    role: b => post('role', b),
     archive: b => post('archive', b),
   }
 }

@@ -46,7 +46,7 @@ function openChild(childId: string) {
         <code>{{ m.id }}</code>
         <span v-if="m.kind" class="badge">{{ isLayer ? '层' : m.kind }}</span>
         <span v-if="m.status && m.status !== 'current'" class="badge warn">{{ STATUS[m.status] }}</span>
-        <span v-if="m.core" class="badge accent">核心</span>
+        <span v-if="m.role === 'core'" class="badge accent">核心</span>
         <span v-for="t in m.tags ?? []" :key="t" class="badge">{{ t }}</span>
         <ChangeBadge entity="module" :id="m.id" detail />
         <ReviewSection :id="m.id" part="badge" />
@@ -93,7 +93,7 @@ function openChild(childId: string) {
         <li v-for="c in children" :key="c.id" class="child">
           <button class="link" @click="openChild(c.id)">{{ c.name }}</button>
           <ChangeBadge entity="module" :id="c.id" />
-          <span v-if="c.core" class="badge accent">核心</span>
+          <span v-if="c.role === 'core'" class="badge accent">核心</span>
           <span v-if="(idx.childrenOf.get(c.id) ?? []).length" class="muted">⌄ {{ idx.childrenOf.get(c.id)!.length }}</span>
           <span class="resp">{{ c.responsibility }}</span>
         </li>

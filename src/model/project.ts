@@ -155,14 +155,14 @@ function layeredOverview(scope: LevelScope, relations: readonly RelationEntity[]
   const coreOf = new Map<string, Set<string>>()
   // O6：临时展开的层，全部子模块都按核心模块露出
   const expanded = new Set(scope.opts.expandedBands ?? [])
-  for (const l of children) coreOf.set(l, new Set(visibleChildren(scope, l).filter(c => expanded.has(l) || index.modules.get(c)!.core)))
+  for (const l of children) coreOf.set(l, new Set(visibleChildren(scope, l).filter(c => expanded.has(l) || index.modules.get(c)!.role === 'core')))
   const nodes = children.map(id => childNode(scope, id, 'layer'))
   const bands: Band[] = children.map(l => {
     const m = index.modules.get(l)!
     const kids = visibleChildren(scope, l)
     const core = kids.filter(c => coreOf.get(l)!.has(c))
     for (const c of core) nodes.push({ id: c, moduleId: c, role: 'core', hasChildren: visibleChildren(scope, c).length > 0, layerId: l })
-    const declared = kids.filter(c => index.modules.get(c)!.core).length
+    const declared = kids.filter(c => index.modules.get(c)!.role === 'core').length
     return {
       layerId: l,
       order: m.order ?? Infinity,

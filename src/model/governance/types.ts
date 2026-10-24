@@ -2,7 +2,7 @@
  * 架构治理的数据类型（docs/architecture/governance.md §4.1）：接入层产出的文件依赖、基线与拦截记录，模型层产出的比对、违规与环。
  * 路径一律相对源码根目录、以 `/` 分隔。
  */
-import type { Issue, RelationType, RelationVia, RuleKind } from '../types'
+import type { Issue, ModuleRole, RelationType, RelationVia, RuleKind } from '../types'
 
 export type DepKind = 'value' | 'type'
 
@@ -62,6 +62,8 @@ export type LedgerEntry =
   | { at: string; tool: 'reviewed'; origin: ReviewedOrigin; modules: number; design?: string }
   /** B6、B7：草图整份写回、新建、级联改名（renamedFrom 为旧文件）与删除（ADR-0024、ADR-0025） */
   | { at: string; tool: 'sketch'; origin: 'page' | 'cli'; file: string; design?: string; created?: boolean; removed?: boolean; renamedFrom?: string }
+  /** U11、M16：在 intent/roles.yaml 认可一个模块的角色（ADR-0027） */
+  | { at: string; tool: 'roles'; origin: 'page' | 'cli'; file: string; module: string; role: ModuleRole }
 
 /** 开发态端点 source/<项目>/facts.json 的内容（K8） */
 export interface FactsPayload {

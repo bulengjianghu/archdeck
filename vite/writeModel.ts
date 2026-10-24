@@ -14,6 +14,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { isMap, isSeq, parseDocument, type Document } from 'yaml'
 import {
+  MODULE_ROLES,
+  ROLES_FILE,
   RULE_KINDS,
   archiveVerdict,
   checkSketches,
@@ -25,6 +27,7 @@ import {
   sketchModules,
   type ArchiveVerdict,
   type ModelIndex,
+  type ModuleRole,
   type ReviewedInput,
   type ReviewedOrigin,
   type RuleKind,
@@ -294,4 +297,37 @@ export function appendReviewed(
     ...(opts.design ? { design: opts.design } : {}),
   })
   return { ...out, updated, added }
+}
+
+/**
+ * U11、M16：在 intent/roles.yaml（人拥有）记一个模块的角色——一键认可疑似共用件（ADR-0027，T0 裁决 6）。
+ * 模块必须存在于当前版本；同一模块已有不同的角色时拒绝（只追加，B1）；相同时不重复写。没有文件时新建。
+ * 草图里写了 role 的模块以草图为准（M16），这里拒绝，免得写了不生效。写后更新指纹（X6）、记拦截记录（Q4）。
+ */
+export function appendRole(modelRoot: string, project: string, input: { module: string; role: ModuleRole }, root: string): WriteResult {
+  const dir = projectDir(modelRoot, project)
+  if (!MODULE_ROLES.includes(input.role)) throw new WriteError(`role 只能是 ${MODULE_ROLES.join(' / ')}`)
+  const { index } = loadModel(readModelDir(dir, root).files)
+  const m = index.modules.get(input.module)
+  if (!m) throw new WriteError(`模块不存在：${input.module}`)
+  if (m.role && m.roleFrom !== 'roles') throw new WriteError(`「${input.module}」的 role 已由草图写为 ${m.role}，请在草图里改（M16）`)
+  const file = path.join(dir, ROLES_FILE)
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  const doc = openDoc(file, 'roles: {}\n')
+  if (!doc.has('roles') || !isMap(doc.get('roles'))) doc.set('roles', doc.createNode({}))
+  const roles = doc.get('roles') as { get(k: string): unknown; set(k: string, v: unknown): void; flow?: boolean }
+  const before = roles.get(input.module)
+  if (before !== undefined && before !== input.role) throw new WriteError(`roles 里已把「${input.module}」记为 ${String(before)}，页面只追加不改（B1）`)
+  roles.flow = false
+  roles.set(input.module, input.role)
+  const out = save(file, doc, root, modelRoot, project)
+  appendLedger(governanceDir(modelRoot, project), {
+    at: new Date().toISOString(),
+    tool: 'roles',
+    origin: 'page',
+    file: ROLES_FILE,
+    module: input.module,
+    role: input.role,
+  })
+  return out
 }

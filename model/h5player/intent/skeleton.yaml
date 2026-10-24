@@ -20,7 +20,7 @@ sketch:
     - id: infra.player-index
       name: PlayerIndex
       kind: subsystem
-      core: true
+      role: core
       responsibility: SDK 入口 Player：把用户操作转成状态机命令，把框架事件按白名单转发并做对外状态投影，提供 getStats 只读快照；另含模型能力收窄助手（modelAccess）与对外转出面。不含播放决策。
       provides: [if.player-index.play, if.player-index.switch, if.player-index.reset, if.player-index.destroy, if.player-index.getStats, if.player-index.on]
       dataStructures: [ds.PlayerStatsSnapshot, ds.StatsCapability]
@@ -37,7 +37,7 @@ sketch:
     - id: infra.framework
       name: Framework 机制内核
       kind: subsystem
-      core: true
+      role: core
       responsibility: 通用机制：状态机、Pipeline 事务（含多腿）、插件生命周期、事件 / 错误路由、ModelRegistry（含待命槽位）、Context 与设置端口、MediaUnit 基类与公共类型契约；不含方案选择与播放策略。
       provides: [if.framework.kernel.Framework, if.framework.state-machine.sendCommand, if.framework.state-machine.addPreCommandHook, if.framework.pipeline.updatePipeline, if.framework.pipeline.Dispatcher, if.framework.plugin.PluginBase, if.framework.model-registry.beginStreamModelSwitch, if.framework.context.Context, if.framework.media-unit.MediaUnit]
       dataStructures: [ds.CommandInfo, ds.Action, ds.PipelineDiff, ds.PipelineUpdateResult, ds.PlaybackModelSwitch, ds.EventInfo, ds.PlayerConfig, ds.PlayerData, ds.MediaPacket]
@@ -46,7 +46,7 @@ sketch:
     - id: infra.mus
       name: MUs 媒体单元
       kind: subsystem
-      core: true
+      role: core
       responsibility: 数据面三段流水线上的节点与其工厂：Load（加载 / 解封装 / 段尾缓冲）、Process（校正 / 外部插件如解密）、Play（重封装 / 解码 / 缓冲 / 渲染）。上游 output 直接调用下游 input，逐帧零间接直推；缓冲位按策略动作出队，Fhls 分片经 Service Worker 转为拉模式。只执行，不做水位、追帧、seek 等决策。
       provides: [if.mus.mu-lifecycle, if.mus.factory.createMu, if.mus.buffer.release-actions, if.mus.render.display-actions]
       dataStructures: [ds.VcsModel, ds.MediaInfo, ds.MediaSegmentInfo]
@@ -80,7 +80,7 @@ sketch:
     - id: app.solution
       name: Solution
       kind: subsystem
-      core: true
+      role: core
       responsibility: 方案选择结果的执行者：初始化、段换代、换腿事务、流事实到达后的协调；只做编排不做决策。依赖倒置：只依赖组合根注入的 SolutionDeps 端口，不 import Framework / plugins；对外暴露 LegPort，换腿十步事务在 SwitchLeg 前置 Hook 内执行。
       provides: [if.solution.Solution, if.solution.LegPort, if.solution.switchLeg, if.solution.createStreamFactReporter, if.solution.playStageStart]
       dataStructures: [ds.SolutionDeps, ds.SolutionStageFactory, ds.StagePipelinePlan, ds.LegSwitchOutcome, ds.CreatedLeg]
@@ -96,7 +96,7 @@ sketch:
     - id: app.factories
       name: 三段工厂
       kind: subsystem
-      core: true
+      role: core
       responsibility: 按方案产出 Load / Process / Play 三段的候选计划（MU 图描述），由 Solution 的切换事务统一提交；同时产出段控制器，支持 quiesce / resume / destroy 与就地差量重配。
       provides: [if.factories.StageFactory, if.factories.configureBufferLimits]
       dataStructures: [ds.FactoryDiffResult, ds.FrameController, ds.MseController]
@@ -105,7 +105,7 @@ sketch:
     - id: app.strategies
       name: 运行时驾驶策略
       kind: subsystem
-      core: true
+      role: core
       responsibility: 作为方案片段挂载，运行期间驾驶各方案的加载与播放：加载段上报流事实并开闸放水、拉流节奏、直播追帧 / 丢帧 / 充水、点播 seek 与回退。Mse / Fhls 的直播主缓冲策略在横向用例插件中。
       provides: [if.strategies.vodLoad, if.strategies.playStage, if.strategies.HlsPlaylistRefreshScheduler]
       codeRefs: [packages/player/src/plugins/solution/strategy/**, packages/player/src/plugins/solution/vod/**]
@@ -144,14 +144,14 @@ sketch:
     - id: domain.ports
       name: 领域端口
       kind: subsystem
-      core: true
+      role: core
       responsibility: 签名引用领域类型的端口：领域事件发布、模型注册表、流事实上报与播放段启动入口，由 Infrastructure / Application 实现。
       provides: [if.ports.DomainEventPublisher, if.ports.IModelRegistry, if.ports.StreamFactReporter, if.ports.PlayStageStart]
       codeRefs: [packages/domain/src/ports.ts]
     - id: domain.models
       name: 领域模型
       kind: subsystem
-      core: true
+      role: core
       responsibility: PlaybackState 播放状态聚合、Statistic 统计聚合、流模型（Flv / Hls / Mp4）与按方案一一对应的播放模型：持有事实、守住不变量、提供语义方法与只读视图；只存值快照，不持 DOM 句柄。
       dataStructures: [ds.PlaybackState, ds.Statistic, ds.StreamModelUnion, ds.PlaybackModelUnion]
       codeRefs: [packages/domain/src/models/**]
@@ -159,7 +159,7 @@ sketch:
     - id: domain.services
       name: 决策服务
       kind: subsystem
-      core: true
+      role: core
       responsibility: 方案选型与流事实裁决、基线 / 直播自适应 / 点播缓冲控制律、HLS 与 Fhls 专属规则、时移换腿判定等纯决策；控制律通过 host 注入，写回由宿主插件完成。
       codeRefs: [packages/domain/src/services/**]
     - id: domain.algorithms
@@ -186,7 +186,7 @@ sketch:
     - id: share.contracts
       name: 跨层契约
       kind: subsystem
-      core: true
+      role: core
       responsibility: 跨层最小契约：IPlugin 插件契约与 Result / ok / err。
       provides: [if.contracts.IPlugin, if.contracts.Result]
       dataStructures: [ds.Result]
@@ -194,7 +194,7 @@ sketch:
     - id: share.errors
       name: 错误原语
       kind: subsystem
-      core: true
+      role: core
       responsibility: ErrorBase 错误基类、错误码及 ErrorCode → (ErrorType, ErrorLevel) 的查表映射、异常归一。
       provides: [if.errors.ErrorBase, if.errors.errorWrapper]
       dataStructures: [ds.ErrorBase, ds.ErrorCode, ds.ErrorLevel, ds.ErrorType, ds.ErrorDetail]

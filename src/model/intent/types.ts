@@ -119,7 +119,7 @@ export const SKETCH_DEVIATION_LABELS: Record<SketchDeviationCode, string> = {
 export type SketchTarget = { kind: 'design'; design: string } | { kind: 'persistent'; id: string }
 
 /** 模块可改的字段（X7、P-1、P-2）；值为 undefined 表示删掉该字段 */
-export type ModulePatch = Partial<Pick<ModuleDef, 'name' | 'responsibility' | 'kind' | 'codeRefs' | 'abstraction' | 'includes' | 'excludes' | 'core' | 'adrs'>>
+export type ModulePatch = Partial<Pick<ModuleDef, 'name' | 'responsibility' | 'kind' | 'codeRefs' | 'abstraction' | 'includes' | 'excludes' | 'role' | 'adrs'>>
 
 /** X7b：一个设计的全部草图（文件里的与会话里推出的），按挂载点 */
 export type SketchSet = Readonly<Record<string, SketchDef>>

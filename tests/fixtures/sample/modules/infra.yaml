@@ -9,11 +9,11 @@ module:
   children:
     - id: infra.player
       name: Player
-      core: true
+      role: core
       responsibility: 组合根
     - id: infra.framework
       name: Framework
-      core: true
+      role: core
       responsibility: 机制内核
       children:
         - { id: infra.framework.sm, name: StateMachine, responsibility: 状态机, provides: [if.sm] }

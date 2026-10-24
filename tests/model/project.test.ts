@@ -117,7 +117,7 @@ describe('projectLevel · 过滤与汇总', () => {
 
   it('只看现状时，target 模块及其后代、相关关系都隐藏', () => {
     const { index: idx } = loadModel(sampleFiles({
-      'z.yaml': 'modules: [{ id: app.next, name: Next, parent: app, status: target, core: true, responsibility: x }]\nrelations: [{ id: x1, from: app.next, to: domain.services, type: calls }]',
+      'z.yaml': 'modules: [{ id: app.next, name: Next, parent: app, status: target, role: core, responsibility: x }]\nrelations: [{ id: x1, from: app.next, to: domain.services, type: calls }]',
     }))
     const all = projectLevel(idx, 'sys')
     expect(all.bands![1].coreModuleIds).toContain('app.next')

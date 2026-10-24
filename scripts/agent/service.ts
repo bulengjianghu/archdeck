@@ -410,7 +410,11 @@ export function createService(opts: ServiceOptions) {
     report(p?: string) {
       const project = projectId(p)
       const s = summarizeLedger(readLedger(governanceDir(modelRoot, project)))
-      return { project, summary: `写前判定 ${s.checks} 次 · 重新扫描 ${s.rescans} 次 · 确认写入 ${s.reviewedWrites} 次 · 草图写回 ${s.sketchWrites} 次`, ...s }
+      return {
+        project,
+        summary: `写前判定 ${s.checks} 次 · 重新扫描 ${s.rescans} 次 · 确认写入 ${s.reviewedWrites} 次 · 草图写回 ${s.sketchWrites} 次 · 角色认可 ${s.roleWrites} 次`,
+        ...s,
+      }
     },
 
     /**

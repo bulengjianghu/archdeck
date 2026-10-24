@@ -2,7 +2,7 @@
  * 描述写入的同步适配器（B1–B6，ADR-0019、ADR-0024）：页面只追加人拥有的内容，草图可整份写回；写入方式由项目视图注入（开发服务器的 HTTP 端点）。
  * 写后不改视图状态：开发服务器推送描述变化，模型源同步按 N5 重新加载。
  */
-import type { ReviewedInput, RuleKind, SketchDef, SketchTarget, SketchValidationIssue } from '@/model'
+import type { ModuleRole, ReviewedInput, RuleKind, SketchDef, SketchTarget, SketchValidationIssue } from '@/model'
 
 export type WriteOutcome = { ok: true; file: string; note?: string } | { ok: false; error: string }
 
@@ -30,6 +30,8 @@ export interface ModelWriter {
   reviewed(input: { entries: ReviewedInput[] }): Promise<WriteOutcome>
   /** X4：认可一条偏差 */
   accept(input: { design: string; deviation: string; reason: string }): Promise<WriteOutcome>
+  /** U11、M16：在 intent/roles.yaml 认可一个模块的角色（ADR-0027） */
+  role(input: { module: string; role: ModuleRole }): Promise<WriteOutcome>
   /** X3：归档 / 晋升 */
   archive(input: { design: string }): Promise<WriteOutcome>
   /** B6：草图整份写回，带读取时的指纹 */
@@ -49,6 +51,7 @@ export const NO_WRITER: ModelWriter = {
   ignore: none,
   reviewed: none,
   accept: none,
+  role: none,
   archive: none,
   saveSketch: none,
   saveDesignSketches: none,

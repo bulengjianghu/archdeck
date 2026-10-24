@@ -54,7 +54,7 @@ sketch:
       abstraction: 界面
       mayDependOn: [core]
       children:
-        - { id: fe.ui, name: UI, kind: subsystem, core: true, responsibility: 界面 }
+        - { id: fe.ui, name: UI, kind: subsystem, role: core, responsibility: 界面 }
     - id: core
       name: Core
       kind: layer
@@ -66,7 +66,7 @@ sketch:
 `
 const MODULES = `
 modules:
-  - { id: fe.ui.view, name: View, parent: fe.ui, kind: component, core: true, responsibility: 视图 }
+  - { id: fe.ui.view, name: View, parent: fe.ui, kind: component, role: core, responsibility: 视图 }
   - { id: fe.ui.list, name: List, parent: fe.ui, kind: component, responsibility: 列表 }
   - { id: fe.ui.form, name: Form, parent: fe.ui, kind: component, responsibility: 表单 }
   - { id: fe.ui.view.header, name: Header, parent: fe.ui.view, responsibility: 页头 }
@@ -228,7 +228,7 @@ describe('X14 两级校验', () => {
 })
 
 describe('X18 底稿从基线复制', () => {
-  it('复制挂载点一层的 ID、名称、kind、core 与显式写在本层的关系（含跨边界），不复制职责、接口、原则；更深的关系不复制', () => {
+  it('复制挂载点一层的 ID、名称、kind、role 与显式写在本层的关系（含跨边界），不复制职责、接口、原则；更深的关系不复制', () => {
     const s = seedFromBaseline('core.api', baseline, { id: 'd1' })
     expect(s).toEqual({
       id: 'd1',
@@ -242,7 +242,7 @@ describe('X18 底稿从基线复制', () => {
     })
     const ui = seedUi()
     expect(ui.modules!.map(m => m.id)).toEqual(['fe.ui.view', 'fe.ui.list', 'fe.ui.form'])
-    expect(ui.modules![0]).toEqual({ id: 'fe.ui.view', name: 'View', kind: 'component', core: true })
+    expect(ui.modules![0]).toEqual({ id: 'fe.ui.view', name: 'View', kind: 'component', role: 'core' })
     // 跨边界：fe.ui.view → core.api（另一端在挂载点之外）；fe.ui.view.header → core.store 端点更深，不复制
     expect(ui.relations!.map(r => r.id)).toEqual(['rel.view-api', 'rel.list-api', 'rel.view-list', 'rel.form-store'])
     expect(ui.closed).toBeUndefined()
@@ -383,7 +383,7 @@ describe('X7d 降级 / 升级 / 移入', () => {
     expect(Object.keys(r.design).sort()).toEqual(['fe.ui', 'fe.ui.screen'])
     expect(r.design['fe.ui.screen'].modules![0]).toMatchObject({ id: 'fe.ui.screen.header', from: ['fe.ui.view.header'] })
     const back = run(r.design, { op: 'rename', sketch: 'fe.ui', id: 'fe.ui.screen', newId: 'view' })
-    expect(back.design['fe.ui'].modules![0]).toEqual({ id: 'fe.ui.view', name: 'View', kind: 'component', core: true })
+    expect(back.design['fe.ui'].modules![0]).toEqual({ id: 'fe.ui.view', name: 'View', kind: 'component', role: 'core' })
     const del = run(set, { op: 'remove', sketch: 'fe.ui', id: 'fe.ui.view' })
     expect(del.effects.removedSketches).toEqual(['fe.ui.view'])
     expect(del.design['fe.ui'].relations!.map(x => x.id)).toEqual(['rel.list-api', 'rel.form-store'])
@@ -549,11 +549,11 @@ describe('X17 两个对比按血缘', () => {
   it('职责只参与相对基线，相对当前版本只比结构', () => {
     const s = seedUi()
     s.modules![1].responsibility = '新的列表职责'
-    s.modules![2].core = true
+    s.modules![2].role = 'core'
     const b = compareSketch(entity(s), baseline, { mode: 'baseline' })
     expect(b.changes.map(c => [c.id, c.fields])).toEqual([
       ['fe.ui.list', ['responsibility']],
-      ['fe.ui.form', ['core']],
+      ['fe.ui.form', ['role']],
     ])
     const cur = sketchCheck(entity(s), baseline)
     expect(cur.deviations.map(d => d.key)).toEqual(['field:fe.ui.form'])
@@ -586,7 +586,7 @@ describe('版本对比 diffModels 按血缘', () => {
     const AFTER = `
 modules:
   - { id: fe.ui.show, name: Show, parent: fe.ui, kind: component, responsibility: 展示 }
-  - { id: fe.ui.show.view, name: View, parent: fe.ui.show, kind: component, core: true, responsibility: 视图 }
+  - { id: fe.ui.show.view, name: View, parent: fe.ui.show, kind: component, role: core, responsibility: 视图 }
   - { id: fe.ui.show.list, name: List, parent: fe.ui.show, kind: component, responsibility: 列表 }
   - { id: fe.ui.form, name: Form, parent: fe.ui, kind: component, responsibility: 表单 }
   - { id: fe.ui.show.view.header, name: Header, parent: fe.ui.show.view, responsibility: 页头 }

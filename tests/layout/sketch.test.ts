@@ -30,7 +30,7 @@ const DEF: SketchDef = {
   id: 'd',
   mount: 'core.a',
   modules: [
-    { id: 'core.a.x', name: 'X', core: true },
+    { id: 'core.a.x', name: 'X', role: 'core' },
     { id: 'core.a.y', name: 'Y' },
   ],
   relations: [
@@ -53,7 +53,7 @@ describe('草图布局', () => {
       ['core.a.y', 'module', 'Y'],
       ['core.b', 'reference', 'B'],
     ])
-    expect(node(s, 'core.a.x').data).toMatchObject({ core: true, deeper: true })
+    expect(node(s, 'core.a.x').data).toMatchObject({ role: 'core', deeper: true })
     expect(s.count).toBe(2)
   })
 

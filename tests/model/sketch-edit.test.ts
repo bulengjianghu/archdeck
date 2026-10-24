@@ -108,8 +108,8 @@ describe('X7b 编辑操作是纯函数，只拒绝不成立的操作', () => {
   })
 
   it('改字段：空值删掉字段；setClosed 增删 closed；setMeta 改 lifetime / supersedes', () => {
-    const r = ok(DRAFT, { op: 'updateModule', id: 'core.b', patch: { responsibility: '', core: true, name: ' B2 ' } }).sketch
-    expect(r.modules![1]).toEqual({ id: 'core.b', parent: 'core', name: 'B2', core: true })
+    const r = ok(DRAFT, { op: 'updateModule', id: 'core.b', patch: { responsibility: '', role: 'core', name: ' B2 ' } }).sketch
+    expect(r.modules![1]).toEqual({ id: 'core.b', parent: 'core', name: 'B2', role: 'core' })
     expect(ok(DRAFT, { op: 'setClosed', id: 'core.a', closed: false }).sketch.closed).toBeUndefined()
     expect(ok(DRAFT, { op: 'setClosed', id: 'core.b', closed: true }).sketch.closed).toEqual(['core.a', 'core.b'])
     expect(ok(DRAFT, { op: 'setMeta', patch: { supersedes: 'skeleton' } }).sketch.supersedes).toBe('skeleton')

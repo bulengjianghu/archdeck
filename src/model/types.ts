@@ -28,6 +28,11 @@ export const RUNTIME_RELATION_TYPES: readonly RelationType[] = ['calls', 'notifi
 
 export type ModuleStatus = 'current' | 'target' | 'deprecated'
 export type ModuleRole = 'core' | 'shared' | 'bus'
+export const MODULE_ROLES: readonly ModuleRole[] = ['core', 'shared', 'bus']
+/** O9、P18、U12：共用件——`shared` 与 `bus` 同样收进共用件架 */
+export const isSharedRole = (role: ModuleRole | undefined): boolean => role === 'shared' || role === 'bus'
+/** M16、U11：模块角色的约定文件（人拥有） */
+export const ROLES_FILE = 'intent/roles.yaml'
 
 export interface SourceDef {
   repo?: string
@@ -63,8 +68,7 @@ export interface ModuleDef {
   parent?: string
   kind?: string
   status?: ModuleStatus
-  core?: boolean
-  /** 角色（§1.1、ADR-0027）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）；不写为普通 */
+  /** 角色（§1.1、ADR-0027）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）；不写为普通。旧写法 `core: true` 由 Loader 映射（M16） */
   role?: ModuleRole
   responsibility?: string
   principle?: string
@@ -195,6 +199,8 @@ export interface ArchFileDef {
   reviewed?: ReviewedEntryDef[]
   /** X1：草图（只在 intent/*.yaml 与 designs/<设计>/sketches/<mount>.yaml 里用） */
   sketch?: SketchDef
+  /** M16、U11：模块角色（约定文件 intent/roles.yaml，人拥有）：模块 ID → role；草图里写了的以草图为准 */
+  roles?: Record<string, ModuleRole>
 }
 
 /** X3：草图的生命周期 */
@@ -250,6 +256,8 @@ export interface SketchDef {
 /** G20：源码文件的限制；maxLines 缺省 500 */
 export interface SourceLimits {
   maxLines?: number
+  /** Q13：共用件子树行数占已归属行数的提醒阈值，缺省 0.2 */
+  sharedRatio?: number
 }
 
 /** 架构规则的种类：层规则（U2）、依赖白名单（U3）、访问面（U4） */
@@ -324,6 +332,8 @@ export interface SourceLoc {
 export interface ModuleEntity extends Omit<ModuleDef, 'children' | 'parent'> {
   /** 父模块 ID；直接挂在系统下时为 system.id */
   parentId: string
+  /** M16：role 取自 intent/roles.yaml（不是草图或模块文件写的）；核验不把它当草图偏差（X4） */
+  roleFrom?: 'roles'
   /** 声明顺序，用于稳定排序 */
   seq: number
   src: SourceLoc

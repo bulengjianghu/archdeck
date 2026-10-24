@@ -60,11 +60,11 @@ export function reviewDiff(before: ReviewSummary, now: ReviewSummary): ReviewDif
   return { ...diff, count: REVIEW_FIELDS.reduce((n, f) => n + diff[f].length, 0) }
 }
 
-/** Z4：默认提供「确认」的模块——核心模块与第二级模块（根的子模块的子模块），按声明顺序 */
+/** Z4：默认提供「确认」的模块——任意层次的核心模块（role: core，ADR-0027）与第二级模块（根的子模块的子模块），按声明顺序 */
 export function reviewScope(index: ModelIndex): string[] {
   const second = new Set((index.childrenOf.get(index.rootId) ?? []).flatMap(id => index.childrenOf.get(id) ?? []))
   return [...index.modules.values()]
-    .filter(m => m.core || second.has(m.id))
+    .filter(m => m.role === 'core' || second.has(m.id))
     .sort((a, b) => a.seq - b.seq)
     .map(m => m.id)
 }

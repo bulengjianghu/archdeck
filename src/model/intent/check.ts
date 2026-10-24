@@ -116,11 +116,12 @@ export interface CompareOptions {
 
 const TEXT_FIELDS = ['name', 'responsibility', 'abstraction', 'includes', 'excludes', 'principle', 'codeRefs', 'docRefs', 'adrs', 'entry', 'owner', 'tags', 'status'] as const
 
-/** 写了的字段与对象版本的差别：结构（kind、core、mayDependOn）两种口径都比；文字只在相对基线时比（X17） */
+/** 写了的字段与对象版本的差别：结构（kind、role、mayDependOn）两种口径都比；文字只在相对基线时比（X17） */
 function moduleFields(k: ModuleDef, t: ModuleEntity, mode: CompareMode): string[] {
   const out: string[] = []
   if (k.kind !== undefined && k.kind !== t.kind) out.push('kind')
-  if (!!k.core !== !!t.core) out.push('core')
+  // X4、M16：role 按值比（没写即普通）；版本的 role 取自 intent/roles.yaml 而草图没写时不算偏差
+  if ((k.role ?? null) !== (t.role ?? null) && !(k.role === undefined && t.roleFrom === 'roles')) out.push('role')
   if (k.mayDependOn !== undefined && !sameSet(k.mayDependOn, t.mayDependOn)) out.push('mayDependOn')
   if (mode === 'baseline') for (const f of TEXT_FIELDS) if (k[f] !== undefined && !same(k[f], t[f])) out.push(f)
   return out
@@ -321,7 +322,7 @@ export function sketchCheck(sketch: SketchEntity, index: ModelIndex, opts: Sketc
   const rootId = index.rootId
   const at = (path?: string): SourceLoc | undefined => (path ? { file: sketch.file, path } : undefined)
 
-  // ── 模块：存在（按血缘措辞）、父模块 / kind / core / mayDependOn ──
+  // ── 模块：存在（按血缘措辞）、父模块 / kind / role / mayDependOn ──
   for (const c of cmp.changes) {
     if (c.entity !== 'module') continue
     const m = own.find(x => x.id === c.id)
@@ -332,7 +333,7 @@ export function sketchCheck(sketch: SketchEntity, index: ModelIndex, opts: Sketc
           ? `父模块（草图 ${m?.parentId ?? rootId}，版本 ${actual.parentId}）`
           : f === 'mayDependOn'
             ? `mayDependOn（草图 [${(m?.node.mayDependOn ?? []).join(', ')}]，版本 [${(actual.mayDependOn ?? []).join(', ')}]）`
-            : `${f}（草图 ${String((m?.node as Record<string, unknown> | undefined)?.[f] ?? (f === 'core' ? false : undefined))}，版本 ${String((actual as unknown as Record<string, unknown>)[f] ?? (f === 'core' ? false : undefined))}）`,
+            : `${f}（草图 ${String((m?.node as Record<string, unknown> | undefined)?.[f] ?? (f === 'role' ? '普通' : undefined))}，版本 ${String((actual as unknown as Record<string, unknown>)[f] ?? (f === 'role' ? '普通' : undefined))}）`,
       )
       push('sketch.field', 'error', c.id, `「${name(c.id)}」与草图不一致：${detail.join('；')}`, { target: { modules: [c.id] }, at: c.at, detail: '写了才比：草图没写的字段不约束（X2）' })
       continue

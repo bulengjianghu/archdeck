@@ -58,11 +58,16 @@
     "sourceLimits": {
       "type": "object",
       "additionalProperties": false,
-      "description": "源码限制（G20）：maxLines 为超长阈值，缺省 500；只能声明一次",
+      "description": "源码限制（G20、Q13）：maxLines 为超长阈值，缺省 500；sharedRatio 为共用件行数占比的提醒阈值，缺省 0.2；只能声明一次",
       "properties": {
         "maxLines": {
           "type": "integer",
           "minimum": 1
+        },
+        "sharedRatio": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
         }
       }
     },
@@ -310,6 +315,20 @@
           }
         }
       }
+    },
+    "roles": {
+      "description": "模块角色（ADR-0027，M16；约定文件 intent/roles.yaml，人拥有）：模块 ID → core / shared / bus；草图里写了 role 的以草图为准",
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/definitions/id"
+      },
+      "additionalProperties": {
+        "enum": [
+          "core",
+          "shared",
+          "bus"
+        ]
+      }
     }
   },
   "definitions": {
@@ -428,9 +447,6 @@
             "deprecated"
           ]
         },
-        "core": {
-          "type": "boolean"
-        },
         "role": {
           "description": "角色（02 §1.1、ADR-0027）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）；不写为普通",
           "enum": [
@@ -529,9 +545,6 @@
             "target",
             "deprecated"
           ]
-        },
-        "core": {
-          "type": "boolean"
         },
         "role": {
           "description": "角色（02 §1.1、ADR-0027）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）；不写为普通",

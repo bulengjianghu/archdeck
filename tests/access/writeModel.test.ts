@@ -8,7 +8,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { loadModel, reviewHash, reviewStates } from '../../src/model'
 import { readModelDir } from '../../vite/readModelDir'
-import { WriteError, appendAccepted, appendAllow, appendFeedback, appendIgnore, appendReviewed, archiveDesign } from '../../vite/writeModel'
+import { WriteError, appendAccepted, appendAllow, appendFeedback, appendIgnore, appendReviewed, appendRole, archiveDesign } from '../../vite/writeModel'
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-write-'))
 const modelRoot = path.join(root, 'model')
@@ -268,5 +268,35 @@ describe('X4 认可偏差 · X3 归档 / 晋升', () => {
     // X15：晋升连 layout 一并替换
     expect(parse(text).sketch.layout).toEqual({ modules: { a: { x: 1, y: 2 } } })
     expect(parse(read('designs/d/design.yaml')).design.status).toBe('implemented')
+  })
+})
+
+describe('U11、M16 认可角色（appendRole → intent/roles.yaml）', () => {
+  it('没有文件时新建；保留注释、只追加；加载后模块带 role；记指纹与拦截记录；不存在的模块、已有不同角色、草图写了 role 的拒绝', () => {
+    appendRole(modelRoot, 'p', { module: 'a', role: 'shared' }, root)
+    expect(parse(read('intent/roles.yaml'))).toEqual({ roles: { a: 'shared' } })
+    write('intent/roles.yaml', `# 人拥有\n${read('intent/roles.yaml')}`)
+    appendRole(modelRoot, 'p', { module: 'b', role: 'core' }, root)
+    expect(read('intent/roles.yaml')).toContain('# 人拥有')
+    expect(parse(read('intent/roles.yaml'))).toEqual({ roles: { a: 'shared', b: 'core' } })
+    const { index } = loadModel(readModelDir(P, root).files)
+    expect([index.modules.get('a')!.role, index.modules.get('b')!.role]).toEqual(['shared', 'core'])
+    expect(() => appendRole(modelRoot, 'p', { module: 'a', role: 'core' }, root)).toThrow('只追加')
+    expect(() => appendRole(modelRoot, 'p', { module: 'zz', role: 'shared' }, root)).toThrow('模块不存在')
+    expect(() => appendRole(modelRoot, 'p', { module: 'a', role: 'x' as never }, root)).toThrow(WriteError)
+    const ledger = read('governance/ledger.jsonl')
+      .trim()
+      .split('\n')
+      .map(l => JSON.parse(l))
+    expect(ledger.filter(e => e.tool === 'roles').map(e => [e.module, e.role])).toEqual([
+      ['a', 'shared'],
+      ['b', 'core'],
+    ])
+    expect(JSON.parse(read('governance/owned.json')).files['intent/roles.yaml']).toMatch(/^[0-9a-f]{40}$/)
+    write(
+      'intent/skeleton.yaml',
+      'sketch:\n  id: skeleton\n  mount: root\n  modules:\n    - { id: c, name: C, kind: layer, order: 1, children: [{ id: c.x, name: X, role: core }] }\n',
+    )
+    expect(() => appendRole(modelRoot, 'p', { module: 'c.x', role: 'shared' }, root)).toThrow('草图')
   })
 })

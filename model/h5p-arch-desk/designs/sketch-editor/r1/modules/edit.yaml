@@ -13,7 +13,7 @@ modules:
     name: 草图编辑
     parent: model.intent
     kind: component
-    core: true
+    role: core
     responsibility: |
       对草图定义的纯函数编辑：输入一份草图（ds.SketchDef）、一个编辑操作（ds.EditOp）与上下文（持久草图、当前版本索引），输出新草图与这次编辑的影响（新建、改名、删除了哪些 ID），或拒绝原因。
       操作族：层（加、删、排序、可依赖的层）、模块（加、删、改字段、核心与封闭）、移动与改 ID（ID 前缀级联到后代、关系两端、接口 owner、closed 与 mayDependOn 中的引用）、关系与接口（连、改、删；接口 owner 固定为所在模块）、草图元信息（lifetime、supersedes）、新建草图的底稿。
@@ -74,7 +74,7 @@ modules:
     name: 草图校验
     parent: model.intent
     kind: component
-    core: true
+    role: core
     responsibility: |
       草图的即时校验，编辑态每次操作后与保存前（页面与写入端点）共用同一函数：
       格式（按 JSON Schema 检查草图的形状，未知字段即错）；ID 规则（格式、在本草图与持久草图中唯一、子模块 ID 以父 ID 为前缀，X5）；引用完整（parent、关系两端、接口 owner、关系的经由接口、closed 与 mayDependOn 的元素都要在本草图或持久草图中找到；草图之间不引用 AI 生成的实体）；
@@ -176,7 +176,7 @@ modules:
     name: 画布编辑态
     parent: present.canvas
     kind: component
-    core: true
+    role: core
     responsibility: |
       只在编辑态开启的画布交互：带之间与末尾的插入条（+ 层）与带头拖动排序、带内与父模块框内「+ 模块」与就地输入名称、拖动模块到另一条带或另一父模块（移动，改 ID 时二次确认）、从节点拖线到另一节点建关系（松手选类型与一句说明）、分层总览上带到带拖线改可依赖的层、右键菜单（核心、封闭、删除）、删除键与撤销 / 重做快捷键。
       每个操作只调用 state.desk.edit 的一个操作；落点的位置来自画布场景，不保存坐标、不自己算布局，编辑后由自动布局重排。

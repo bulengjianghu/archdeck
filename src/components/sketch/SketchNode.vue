@@ -117,10 +117,15 @@ const scaled = computed(() => {
       title="拖到本层模块上建关系"
     />
   </div>
-  <div v-else class="sk-node" :class="[data.kind, { selected: data.selected, drop: data.drop, core: data.core }]" :title="`${data.name}（${data.id}）`">
+  <div
+    v-else
+    class="sk-node"
+    :class="[data.kind, { selected: data.selected, drop: data.drop, core: data.role === 'core' }]"
+    :title="`${data.name}（${data.id}）`"
+  >
     <Handle id="t" type="target" :position="Position.Top" class="sk-center" :connectable="true" />
     <Handle id="c" type="source" :position="Position.Bottom" class="sk-center" :connectable="false" />
-    <strong class="name">{{ data.name }}<span v-if="data.core" class="star" title="核心">★</span></strong>
+    <strong class="name">{{ data.name }}<span v-if="data.role === 'core'" class="star" title="核心">★</span></strong>
     <code class="id">{{ data.id }}</code>
     <span v-if="data.deeper" class="deeper" title="有下一层：双击进入">›</span>
     <span v-if="badge" class="badge" :class="data.change" :title="badge.title">{{ badge.text }}</span>

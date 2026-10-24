@@ -16,6 +16,8 @@ export interface LedgerSummary {
   reviewedWrites: number
   /** B6：草图整份写回与新建设计的次数（ADR-0024） */
   sketchWrites: number
+  /** U11：intent/roles.yaml 的角色认可次数（ADR-0027） */
+  roleWrites: number
   first?: { at: string; violations: number; cyclicity: Cyclicity }
   last?: { at: string; violations: number; cyclicity: Cyclicity }
 }
@@ -29,6 +31,7 @@ export function summarizeLedger(entries: readonly LedgerEntry[]): LedgerSummary 
     rescans: 0,
     reviewedWrites: 0,
     sketchWrites: 0,
+    roleWrites: 0,
   }
   for (const e of entries) {
     if (e.tool === 'check_dependency') {
@@ -38,6 +41,7 @@ export function summarizeLedger(entries: readonly LedgerEntry[]): LedgerSummary 
       if (e.cycle) s.cycleFlags++
     } else if (e.tool === 'reviewed') s.reviewedWrites++
     else if (e.tool === 'sketch') s.sketchWrites++
+    else if (e.tool === 'roles') s.roleWrites++
     else {
       s.rescans++
       const point = { at: e.at, violations: e.violations, cyclicity: e.cyclicity }

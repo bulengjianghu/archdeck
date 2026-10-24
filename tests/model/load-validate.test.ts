@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { load, loadModel, validate } from '../../src/model'
+import { load, loadModel, sketchCheck, validate } from '../../src/model'
 import { sampleFiles } from '../fixtures/sample'
 
 const codes = (issues: { code: string }[]) => issues.map(i => i.code)
@@ -192,5 +192,46 @@ describe('loadModel', () => {
   it('层按 order 排序，与文件顺序无关', () => {
     const { index } = loadModel(sampleFiles({ 'modules/app-domain.yaml': sampleFiles().find(f => f.path === 'modules/app-domain.yaml')!.text.replace('order: 2', 'order: 0') }))
     expect(index.childrenOf.get('sys')).toEqual(['app', 'infra', 'domain'])
+  })
+})
+
+describe('M16 role 字段与旧写法 core 的迁移', () => {
+  const files = (extra: Record<string, string> = {}) =>
+    Object.entries({ 'system.yaml': 'system: { id: s, name: S }', ...extra }).map(([path, text]) => ({ path, text }))
+  it('core: true 映射为 role: core 并提醒（带行号）；core: false 去掉；与 role 同写时以 role 为准；role 其余取值为格式错误', () => {
+    const { index, issues } = loadModel(
+      files({
+        'modules/a.yaml':
+          'modules:\n  - id: a\n    name: A\n    core: true\n    children:\n      - { id: a.x, name: X, core: false }\n      - { id: a.y, name: Y, core: true, role: shared }\n',
+        'modules/b.yaml': 'modules:\n  - { id: b, name: B, role: boss }\n',
+      }),
+    )
+    expect(index.modules.get('a')!.role).toBe('core')
+    expect(index.modules.get('a.x')!.role).toBeUndefined()
+    expect(index.modules.get('a.y')!.role).toBe('shared')
+    expect('core' in index.modules.get('a')!).toBe(false)
+    const legacy = issues.filter(i => i.code === 'module.core-legacy')
+    expect(legacy.map(i => [i.line, i.message.includes('以 role 为准')])).toEqual([
+      [4, false],
+      [7, true],
+    ])
+    expect(issues.some(i => i.code === 'schema' && i.file === 'modules/b.yaml')).toBe(true)
+  })
+
+  it('intent/roles.yaml 作为 role 的来源：草图写了的以草图为准（不同时提醒），没写的取它；不存在的模块提醒；核验不把它当草图偏差', () => {
+    const { index, issues } = loadModel(
+      files({
+        'intent/skeleton.yaml': 'sketch:\n  id: skeleton\n  mount: root\n  modules:\n    - { id: l, name: L, kind: layer, order: 1, children: [{ id: l.a, name: A, role: core }, { id: l.b, name: B }] }\n',
+        'intent/roles.yaml': 'roles:\n  l.a: shared\n  l.b: shared\n  l.c: core\n  nope: bus\n',
+        'modules/l.yaml': 'modules:\n  - { id: l.c, name: C, parent: l }\n',
+      }),
+    )
+    expect(['l.a', 'l.b', 'l.c'].map(id => index.modules.get(id)!.role)).toEqual(['core', 'shared', 'core'])
+    expect(index.modules.get('l.b')!.roleFrom).toBe('roles')
+    expect(issues.filter(i => i.code.startsWith('roles.')).map(i => [i.code, i.line])).toEqual([
+      ['roles.shadowed', 2],
+      ['roles.unknown-module', 5],
+    ])
+    expect(sketchCheck(index.model.sketches[0], index).deviations.filter(d => d.code === 'sketch.field')).toEqual([])
   })
 })

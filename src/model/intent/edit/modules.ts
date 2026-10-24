@@ -43,7 +43,7 @@ export function updateModule(def: SketchDef, ctx: EditContext, id: string, patch
   if (patch.name !== undefined && !patch.name.trim()) return reject('invalid', '模块名称不能为空')
   const node = own.node as unknown as Record<string, unknown>
   for (const [k, v] of Object.entries(patch)) {
-    if (EMPTY(v) || v === false) delete node[k]
+    if (EMPTY(v)) delete node[k]
     else node[k] = typeof v === 'string' ? v.trim() : v
   }
   return done()

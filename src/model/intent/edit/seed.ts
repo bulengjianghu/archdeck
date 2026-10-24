@@ -1,5 +1,5 @@
 /**
- * 草图底稿与元信息（X18，ADR-0025；S-4、B6）。底稿一律从设计的基线复制挂载点的一层：直接子模块的 ID、名称、kind、core、
+ * 草图底稿与元信息（X18，ADR-0025；S-4、B6）。底稿一律从设计的基线复制挂载点的一层：直接子模块的 ID、名称、kind、role、
  * closed，与显式写在本层的关系及类型；不复制职责文字、接口、原则（根挂载时层的 abstraction / includes / excludes 也不复制，
  * 可依赖的层 mayDependOn 与 order 是结构，照复制）。同挂载点在基线里已有持久草图时声明 supersedes（根挂载即 supersedes skeleton）。
  * 复制后「相对基线」为 0。下一层草图不存在时由「基线里的子树 + 血缘指向的模块」推出（deriveChildSketch）。
@@ -24,7 +24,7 @@ function structural(index: ModelIndex, id: string, as = id): ModuleDef {
     id: as,
     name: m.name,
     ...(m.kind ? { kind: m.kind } : {}),
-    ...(m.core ? { core: true } : {}),
+    ...(m.role ? { role: m.role } : {}),
     ...(m.kind === 'layer' && m.order !== undefined ? { order: m.order } : {}),
     ...(m.kind === 'layer' && m.mayDependOn?.length ? { mayDependOn: [...m.mayDependOn] } : {}),
   }

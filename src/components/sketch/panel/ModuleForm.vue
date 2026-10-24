@@ -102,7 +102,7 @@ function commitAdrs() {
   if (now.join(',') !== (m.value.adrs ?? []).join(',')) report(e.updateModule(m.value.id, { adrs: now.length ? now : undefined }))
 }
 const closed = computed(() => !!e.sketch.value?.closed?.includes(m.value.id))
-const setCore = (v: boolean) => report(e.updateModule(m.value.id, { core: v || undefined }))
+const setCore = (v: boolean) => report(e.updateModule(m.value.id, { role: v ? 'core' : undefined }))
 const setClosed = (v: boolean) => report(e.edit({ op: 'setClosed', id: m.value.id, closed: v }))
 
 // ── 血缘与原则 ──
@@ -146,7 +146,9 @@ const blur = (ev: KeyboardEvent) => (ev.target as HTMLElement).blur()
       <textarea v-model="resp" name="module-responsibility" rows="2" placeholder="它对外负责什么（底稿不复制职责文字）" @blur="commitResp" />
     </label>
     <div class="f checks">
-      <label><input type="checkbox" name="module-core" :checked="!!m.core" @change="setCore(($event.target as HTMLInputElement).checked)" /> 核心</label>
+      <label
+        ><input type="checkbox" name="module-core" :checked="m.role === 'core'" @change="setCore(($event.target as HTMLInputElement).checked)" /> 核心</label
+      >
       <label
         ><input type="checkbox" name="module-closed" :checked="closed" @change="setClosed(($event.target as HTMLInputElement).checked)" /> 封闭
         <span class="muted">（直接子模块必须与下一层草图相等）</span></label
