@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 编辑态的二次确认对话框（useEditDialog）：标题、影响清单、确认 / 取消；Esc 取消、回车确认 */
+/** 编辑态的二次确认对话框（useEditDialog）：标题、影响清单、确认 / 取消（可带第三个选项）；Esc 取消、回车确认 */
 import { nextTick, ref, watch } from 'vue'
 import { answer, editDialog } from './useEditDialog'
 
@@ -24,6 +24,7 @@ function onKey(e: KeyboardEvent) {
       </ul>
       <div class="actions">
         <button @click="answer(false)">取消</button>
+        <button v-if="editDialog.alt" class="alt" @click="answer('alt')">{{ editDialog.alt }}</button>
         <button ref="okBtn" class="ok" :class="{ danger: editDialog.danger }" @click="answer(true)">{{ editDialog.ok }}</button>
       </div>
     </div>
@@ -71,6 +72,11 @@ ul {
   border-color: var(--accent);
   background: var(--accent);
   color: #fff;
+}
+
+.alt {
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .ok.danger {

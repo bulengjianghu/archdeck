@@ -29,6 +29,9 @@ export interface VersionsInputs {
   sketchPrompt: ShallowRef<string>
 }
 
+/** 草图的对比基线：相对基线 / 相对当前版本 */
+export type SketchCompare = 'baseline' | 'current'
+
 export function createVersions({ state, index, designs, commits, baselines, version, sketchPrompt }: VersionsInputs) {
   const dv = isDesignVersion(version) ? version : undefined
   const cv = isCommitVersion(version) ? version : undefined
@@ -49,6 +52,18 @@ export function createVersions({ state, index, designs, commits, baselines, vers
   })
   /** 相对对比基线的差异；当前版本时为 null */
   const diff = computed<ModelDiff | null>(() => (index.value && baseline.value ? diffModels(baseline.value.index, index.value) : null))
+  /**
+   * 草图的两种对比（F-62）：相对基线（我改了什么）与相对当前版本（实现还差什么）的基线与差异。
+   * 底稿的基线快照还没接入，两者都先指向当前版本；接入后只改这里，信息条的弹层不用动。
+   */
+  const sketchBaselines = computed<Record<SketchCompare, Baseline | null>>(() => ({
+    baseline: baselines.value.current ?? null,
+    current: baselines.value.current ?? null,
+  }))
+  const sketchDiffs = computed<Record<SketchCompare, ModelDiff | null>>(() => {
+    const of = (b: Baseline | null) => (b === baseline.value ? diff.value : b && index.value ? diffModels(b.index, index.value) : null)
+    return { baseline: of(sketchBaselines.value.baseline), current: of(sketchBaselines.value.current) }
+  })
   /** E4：设计起草时的基线提交与当前版本不一致——当前版本已按新代码重新生成 */
   const drift = computed(() => {
     const was = design.value?.base?.commit
@@ -56,7 +71,7 @@ export function createVersions({ state, index, designs, commits, baselines, vers
     return !!was && !!now && was !== now
   })
 
-  return { designs, design, revision, sketch, sketchPrompt, commits, commit, baseCommit, baselines, baseline, diff, drift }
+  return { designs, design, revision, sketch, sketchPrompt, commits, commit, baseCommit, baselines, baseline, sketchBaselines, diff, sketchDiffs, drift }
 }
 
 export type VersionDerivations = ReturnType<typeof createVersions>
