@@ -7,7 +7,7 @@
  * - 从节点右侧的连线柄拖到另一节点：松手选类型 + 一句说明；选中的边可拖标签；双击模块下钻；
  * - 工具条：＋ 模块、引用外部模块、重新排列、本层数与超七提示；快捷键 ⌘Z / ⇧⌘Z、Delete / Backspace、⌘S、Esc（只取消选中）。
  * 图上标出变更时右下角有角标的图例（数据来自派生的对比）。
- * 根草图（X21）：层画成横向带（按 order），第二级模块在带内横向自由摆放（只记 x）；拖到另一条带 = 移入；双击带内空白 = 在该层新建；
+ * 根草图（X21）：层画成横向带（按 order），第二级模块在带内自由摆放（记 x 与相对带顶的 y，带高随内容增长）；拖到另一条带 = 移入；双击带内空白 = 在该层新建；
  * 带头编辑名称与 abstraction、「＋ 模块」「删层」；工具条「＋ 层」。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
@@ -160,7 +160,10 @@ function onNodeDragStop({ nodes: dragged }: { event: MouseEvent | TouchEvent; no
   if (parent) r = e.promote(dragged[0].id)
   else if (target) {
     const kind = scene.value?.nodes.find(n => n.id === target)?.data.kind
-    r = kind === 'layer' ? e.moveIn(dragged[0].id, target, Math.round(dragged[0].position.x)) : e.demote(dragged[0].id, target)
+    r =
+      kind === 'layer'
+        ? e.moveIn(dragged[0].id, target, { x: Math.round(dragged[0].position.x), y: Math.round(dragged[0].position.y) })
+        : e.demote(dragged[0].id, target)
   } else r = e.moveNode(Object.fromEntries(dragged.map(n => [n.id, { x: Math.round(n.position.x), y: Math.round(n.position.y) }])))
   if (!r.ok) notify(r.reason ?? '做不成')
   // 被拒绝或改成降级 / 升级时，节点回到草图里的位置

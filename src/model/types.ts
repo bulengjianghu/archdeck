@@ -201,7 +201,7 @@ export interface SketchPoint {
   y: number
 }
 
-/** X15：布局里记的模块位置——根草图的第二级模块只记 x（y 由所在层带算出，X21），其余草图记 x、y */
+/** X15：布局里记的模块位置——根草图的第二级模块的 y 相对所在层带的顶（X21；旧草图只记 x 时取带内第一行），其余草图记 x、y */
 export interface SketchSpot {
   x: number
   y?: number

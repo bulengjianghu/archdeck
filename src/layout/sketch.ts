@@ -3,7 +3,7 @@
  * 位置取草图的 layout；没有 layout 时用一次初始布局（gridLayout：本层居中网格，入边引用在左、出边在右，只用于显示、不写回，「需初始布局」），
  * 只缺几个位置的（新建、推出的模块）放到不与已有节点重叠的空位。
  * 引用节点按「与挂载点同深度的祖先」折叠（05 裁决 4）：同一对（本层模块、折叠节点）同方向的多条关系合成一条显示边并标条数。
- * 根草图（X21）：层画成横向带（按 order），第二级模块在所属带内，x 取 layout、y 由带算。
+ * 根草图（X21）：层画成横向带（按 order），第二级模块在所属带内，位置取 layout（y 相对带顶），带高随内容增长。
  * 边是两端中心之间的直线，同一对节点的多条线平移错开；标签位置取 layout.relations，没写时在中点。纯函数，草图画布只把结果写入 Vue Flow。
  */
 import {
@@ -12,7 +12,10 @@ import {
   locateAll,
   referenceNodes,
   referenceRelations,
+  ROOT_BAND_COLS,
   ROOT_BAND_GAP,
+  ROOT_BAND_PAD,
+  ROOT_BAND_ROW,
   ROOT_BAND_X0,
   ROOT_MOUNT,
   SKETCH_SOFT_LIMIT,
@@ -127,33 +130,58 @@ export function rootLayers(def: SketchDef): ModuleDef[] {
   return layers.sort((a, b) => (a.m.order ?? 1e6 + a.i) - (b.m.order ?? 1e6 + b.i)).map(x => x.m)
 }
 
-/** X21：根草图的层带几何与带内模块位置（x 取 layout，缺的往右找空位；y 由带算） */
+/**
+ * X21（T2b 裁决 3）：根草图的层带几何与带内模块位置——layout 里有的照用（y 相对带顶；旧草图只记 x 的取第一行），
+ * 缺的按带内网格（ROOT_BAND_COLS 列，多了折行）找不重叠的空位；带高随内容增长（不小于缺省带高）
+ */
 function bandLayout(def: SketchDef): { bands: SketchBand[]; pos: Record<string, SketchPoint>; width: number } {
   const given = def.layout?.modules ?? {}
   const pos: Record<string, SketchPoint> = {}
   const bands: SketchBand[] = []
   let right: number = SKETCH_BAND.minW
-  rootLayers(def).forEach((layer, i) => {
-    const y = ORIGIN + i * (SKETCH_BAND.h + SKETCH_BAND.gap)
-    bands.push({ id: layer.id, y, h: SKETCH_BAND.h })
-    const top = y + (SKETCH_BAND.h - SKETCH_NODE.h) / 2
-    const taken: number[] = []
+  let top = ORIGIN
+  for (const layer of rootLayers(def)) {
+    const taken: SketchPoint[] = []
     const kids = layer.children ?? []
     for (const k of kids)
       if (given[k.id]) {
-        pos[k.id] = { x: given[k.id].x, y: top }
-        taken.push(given[k.id].x)
+        pos[k.id] = { x: given[k.id].x, y: top + Math.max(0, given[k.id].y ?? ROOT_BAND_PAD) }
+        taken.push(pos[k.id])
       }
-    let next = ROOT_BAND_X0
+    const clash = (p: SketchPoint) => taken.some(q => Math.abs(q.x - p.x) < SKETCH_NODE.w + 8 && Math.abs(q.y - p.y) < SKETCH_NODE.h + 8)
+    let slot = 0
     for (const k of kids) {
       if (pos[k.id]) continue
-      while (taken.some(x => Math.abs(x - next) < SKETCH_NODE.w + 8)) next += ROOT_BAND_GAP
-      pos[k.id] = { x: next, y: top }
-      taken.push(next)
+      let p: SketchPoint
+      do {
+        p = { x: ROOT_BAND_X0 + (slot % ROOT_BAND_COLS) * ROOT_BAND_GAP, y: top + ROOT_BAND_PAD + Math.floor(slot / ROOT_BAND_COLS) * ROOT_BAND_ROW }
+        slot++
+      } while (clash(p) && slot < 1000)
+      pos[k.id] = p
+      taken.push(p)
     }
-    for (const x of taken) right = Math.max(right, x + SKETCH_NODE.w + 60)
-  })
+    const bottom = Math.max(0, ...taken.map(p => p.y + SKETCH_NODE.h - top))
+    const h = Math.max(SKETCH_BAND.h, bottom + ROOT_BAND_PAD)
+    bands.push({ id: layer.id, y: top, h })
+    for (const p of taken) right = Math.max(right, p.x + SKETCH_NODE.w + 60)
+    top += h + SKETCH_BAND.gap
+  }
   return { bands, pos, width: right }
+}
+
+/**
+ * X21：根草图里把画布上的位置（绝对坐标）换成 layout 里记的样子——第二级模块的 y 相对所属层带的顶（不小于 0）；层原样（layout 不记层）。
+ * 所属层取 ID 的第一段（移入时传目标层）；非根草图原样返回。
+ */
+export function bandRelative(def: SketchDef, positions: Readonly<Record<string, SketchPoint>>, layerOf?: (id: string) => string): Record<string, SketchPoint> {
+  if (def.mount !== ROOT_MOUNT) return { ...positions }
+  const tops = new Map(bandLayout(def).bands.map(b => [b.id, b.y]))
+  return Object.fromEntries(
+    Object.entries(positions).map(([id, p]) => {
+      const top = id.includes('.') ? tops.get(layerOf?.(id) ?? id.split('.')[0]) : undefined
+      return [id, top === undefined ? p : { x: Math.round(p.x), y: Math.max(0, Math.round(p.y - top)) }]
+    }),
+  )
 }
 
 /** 显示用的位置：layout 里有的照用；缺的放到初始布局的位置，与已有节点重叠时往下找空位。折叠的引用节点没记位置时取它某个精确端点记下的位置 */

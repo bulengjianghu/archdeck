@@ -68,6 +68,7 @@ export async function layoutView(view: LevelView, opts: LayoutOptions = {}): Pro
 export {
   sketchScene,
   sketchPositions,
+  bandRelative,
   straightEdge,
   bandAt,
   rootLayers,

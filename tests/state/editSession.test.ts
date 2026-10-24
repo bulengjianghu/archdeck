@@ -415,7 +415,7 @@ describe('desk.edit：草图画布与 DeskState', () => {
     expect(saves[0]).toMatchObject({ target: { kind: 'persistent', id: 'skeleton' }, baseHash: 'k0' })
   })
 
-  it('X21 根草图的层带：带内新建与落位一步（只记 x）；拖到另一条带 = 移入，与落位是一步；层带按 order、带内模块数', async () => {
+  it('X21 根草图的层带：带内新建与落位一步（y 记相对带顶）；拖到另一条带 = 移入，与落位是一步（y 相对目标带顶）；层带按 order、带内模块数', async () => {
     const { desk } = await setup({ intent: 'skeleton' }, fakeWriter().writer, {
       files: [SYSTEM, SKELETON],
       sketch: { file: 'intent/skeleton.yaml', path: 'intent/skeleton.yaml', hash: 'k0' },
@@ -423,12 +423,14 @@ describe('desk.edit：草图画布与 DeskState', () => {
     })
     ok(desk.edit.addModule('Share', 'share'))
     expect(desk.edit.scene.value!.bands.map(b => b.id)).toEqual(['core', 'share'])
-    ok(desk.edit.addModule('N', 'n', { x: 520, y: 999 }, 'core'))
-    expect(desk.edit.sketch.value!.layout!.modules!['core.n']).toEqual({ x: 520 })
+    const coreTop = desk.edit.scene.value!.bands.find(b => b.id === 'core')!.y
+    ok(desk.edit.addModule('N', 'n', { x: 520, y: coreTop + 40 }, 'core'))
+    expect(desk.edit.sketch.value!.layout!.modules!['core.n']).toEqual({ x: 520, y: 40 })
     const past = desk.edit.session.value!.past.length
-    ok(desk.edit.moveIn('core.b', 'share', 300))
+    const shareTop = desk.edit.scene.value!.bands.find(b => b.id === 'share')!.y
+    ok(desk.edit.moveIn('core.b', 'share', { x: 300, y: shareTop + 30 }))
     expect(desk.edit.session.value!.past.length).toBe(past + 1)
-    expect(desk.edit.sketch.value!.layout!.modules!['share.b']).toEqual({ x: 300 })
+    expect(desk.edit.sketch.value!.layout!.modules!['share.b']).toEqual({ x: 300, y: 30 })
     const band = desk.edit.scene.value!.bands.find(b => b.id === 'share')!
     expect(desk.edit.scene.value!.nodes.find(n => n.id === 'share.b')!.position).toMatchObject({ x: 300 })
     expect(desk.edit.scene.value!.nodes.find(n => n.id === 'share.b')!.position.y).toBeGreaterThan(band.y)

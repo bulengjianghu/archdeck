@@ -2,7 +2,7 @@
  * 位置与引用节点（X15、X19、X21，ADR-0025）：拖动节点、拖动关系标签、重新排列、把外部模块放上画布；挂载点的原则（X10）。
  * 引用节点不单独存：它是一端在范围外的关系的外部端点，按「与挂载点同深度的祖先」折叠显示（05 裁决 4）——同一折叠节点的多条关系在画布上
  * 合成一条显示边，数据仍记精确端点；位置按折叠后的 ID 记在 layout.modules。还没有关系的引用只在会话里，保存前由 dropOrphanReferences 丢弃并给出清单。
- * 根草图（X21）：层画成横向带，layout 对层不记位置，带内的第二级模块只记 x（y 由带算）。纯函数。
+ * 根草图（X21）：层画成横向带，layout 对层不记位置，带内的第二级模块记 x 与 y（y 相对带顶），带高随内容增长。纯函数。
  */
 import { ROOT_MOUNT, type ModuleDef, type RelationDef, type SketchDef, type SketchLayout, type SketchPoint, type SketchSpot } from '../../types'
 import type { EditContext } from '../types'
@@ -21,6 +21,11 @@ const REF_MARGIN = 280
 export const ROOT_BAND_X0 = 240
 /** X21：根草图层带里模块之间的横向间距 */
 export const ROOT_BAND_GAP = 200
+/** X21（T2b 裁决 3）：根草图层带里初始布局每行的列数（多了折行） */
+export const ROOT_BAND_COLS = 5
+/** X21：带内第一行模块距带顶（y 相对带顶）与行距 */
+export const ROOT_BAND_PAD = 28
+export const ROOT_BAND_ROW = 84
 
 /** X19、05 裁决 4：外部端点显示为「与挂载点同深度的祖先」；挂载点子树内（本层模块的后代）折叠到本层模块；根草图不折叠 */
 export function foldReference(mount: string, id: string): string {
@@ -80,12 +85,19 @@ function referenceSide(def: SketchDef, own: ReadonlySet<string>): Map<string, 'i
 /**
  * X15、05 裁决 4：初始布局——本层模块居中成网格；引用节点按方向分到两侧：入边（引用 → 本层）与双向在左列、出边在右列，
  * 每列不高于本层网格（至少 6 行），多了往外再开一列。
- * X21：根草图按层带——第二级模块只给 x（带内横向依次排开），层不记位置。
+ * X21：根草图按层带——第二级模块在带内按 ROOT_BAND_COLS 列排开、多了折行（y 相对带顶），层不记位置。
  */
 export function gridLayout(def: SketchDef): SketchLayout {
   const modules: Record<string, SketchSpot> = {}
   if (def.mount === ROOT_MOUNT) {
-    for (const layer of def.modules ?? []) (layer.children ?? []).forEach((kid, col) => (modules[kid.id] = { x: ROOT_BAND_X0 + col * ROOT_BAND_GAP }))
+    for (const layer of def.modules ?? [])
+      (layer.children ?? []).forEach(
+        (kid, i) =>
+          (modules[kid.id] = {
+            x: ROOT_BAND_X0 + (i % ROOT_BAND_COLS) * ROOT_BAND_GAP,
+            y: ROOT_BAND_PAD + Math.floor(i / ROOT_BAND_COLS) * ROOT_BAND_ROW,
+          }),
+      )
     return { modules }
   }
   const own = (def.modules ?? []).map(m => m.id)
@@ -113,11 +125,11 @@ export function gridLayout(def: SketchDef): SketchLayout {
   return { modules }
 }
 
-/** X21：根草图里一个模块在布局里记的样子——层不记，第二级只记 x */
+/** X21：根草图里一个模块在布局里记的样子——层不记，第二级记 x 与 y（y 相对带顶，不小于 0；调用方换算好） */
 function spotFor(def: SketchDef, layers: ReadonlySet<string>, id: string, p: SketchPoint | SketchSpot): SketchSpot | null {
   if (def.mount !== ROOT_MOUNT) return { x: p.x, y: p.y ?? 0 }
   if (layers.has(id)) return null
-  return { x: p.x }
+  return { x: p.x, y: Math.max(0, p.y ?? ROOT_BAND_PAD) }
 }
 
 const layerIds = (def: SketchDef): Set<string> =>

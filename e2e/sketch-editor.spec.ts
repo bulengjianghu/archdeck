@@ -226,7 +226,7 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
   }
 })
 
-test('X21 根草图：设计面板「改骨架」→ 层画成带 → 拖到另一条带 = 移入 → 保存后模块换了层、layout 只记 x', async ({ page }) => {
+test('X21 根草图：设计面板「改骨架」→ 层画成带 → 拖到另一条带 = 移入 → 保存后模块换了层、layout 记 x 与相对带顶的 y', async ({ page }) => {
   const box = sandbox('zz-e2e-root')
   try {
     await openDesk(page, '/p/h5p-arch-desk')
@@ -266,7 +266,7 @@ test('X21 根草图：设计面板「改骨架」→ 层画成带 → 拖到另�
     expect(layer('access').children.map((m: { id: string }) => m.id)).toContain('access.transition')
     expect(layer('state').children.map((m: { id: string }) => m.id)).not.toContain('state.transition')
     expect(layer('access').children.find((m: { id: string }) => m.id === 'access.transition').from).toEqual(['state.transition'])
-    expect(Object.keys(root.layout.modules['access.transition'])).toEqual(['x'])
+    expect(Object.keys(root.layout.modules['access.transition'])).toEqual(['x', 'y'])
     expect(root.layout.modules.access).toBeUndefined()
   } finally {
     box.restore()

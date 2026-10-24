@@ -3,7 +3,8 @@
  * 引用节点由关系派生；同一对节点的多条直线平移错开；直线裁到两端节点的边框。
  */
 import { describe, expect, it } from 'vitest'
-import { bandAt, sketchPositions, sketchScene, straightEdge, SKETCH_BAND, SKETCH_PARALLEL_GAP, SKETCH_NODE } from '../../src/layout/sketch'
+import { ROOT_BAND_COLS, ROOT_BAND_PAD, ROOT_BAND_ROW, ROOT_BAND_X0 } from '../../src/model'
+import { bandAt, bandRelative, sketchPositions, sketchScene, straightEdge, SKETCH_BAND, SKETCH_PARALLEL_GAP, SKETCH_NODE } from '../../src/layout/sketch'
 import type { SketchDef } from '../../src/model'
 
 const DEF: SketchDef = {
@@ -101,7 +102,7 @@ describe('草图布局', () => {
     expect(s.edges.find(e => e.target === 'access.r')!.data.description).toBe('读')
   })
 
-  it('X21 根草图：层画成横向带（按 order），第二级模块在所属带内，x 取 layout、y 由带算；带头标模块数与超七', () => {
+  it('X21 根草图：层画成横向带（按 order），第二级模块在所属带内，位置取 layout（y 相对带顶，只记 x 的旧草图取第一行）；带头标模块数与超七', () => {
     const kids = Array.from({ length: 8 }, (_, i) => ({ id: `b.m${i}`, name: `M${i}` }))
     const def: SketchDef = {
       id: 'd',
@@ -123,8 +124,35 @@ describe('草图布局', () => {
     expect(s.nodes.find(n => n.id === 'b')!.data).toMatchObject({ count: 8, over: true })
     expect(bandAt(s.bands, bb.y + 5)).toBe('b')
     expect(bandAt(s.bands, ba.y + ba.h + SKETCH_BAND.gap / 2)).toBeNull()
-    // 带内不重叠：没记位置的往右找空位
-    const xs = kids.map(k => s.nodes.find(n => n.id === k.id)!.position.x)
-    expect(new Set(xs).size).toBe(xs.length)
+    // 带内不重叠：没记位置的按带内网格找空位（ROOT_BAND_COLS 列，多了折行）
+    const ps = kids.map(k => s.nodes.find(n => n.id === k.id)!.position)
+    expect(new Set(ps.map(p => `${p.x},${p.y}`)).size).toBe(ps.length)
+  })
+
+  it('X21（T2b 裁决 3）：带内换行——没记位置的按列数折行，带高随内容增长、下面的带往下推；layout 的 y 相对带顶', () => {
+    const kids = Array.from({ length: ROOT_BAND_COLS + 2 }, (_, i) => ({ id: `a.m${i}`, name: `M${i}` }))
+    const def: SketchDef = {
+      id: 'd',
+      mount: 'root',
+      modules: [
+        { id: 'a', name: 'A', kind: 'layer', order: 1, children: kids },
+        { id: 'b', name: 'B', kind: 'layer', order: 2, children: [{ id: 'b.x', name: 'X' }] },
+      ],
+      layout: { modules: { 'b.x': { x: 300, y: 200 } } },
+    }
+    const s = sketchScene({ def, nameOf: () => undefined })
+    const [ba, bb] = s.bands
+    const pos = (id: string) => s.nodes.find(n => n.id === id)!.position
+    expect(pos(`a.m${ROOT_BAND_COLS}`)).toEqual({ x: ROOT_BAND_X0, y: ba.y + ROOT_BAND_PAD + ROOT_BAND_ROW })
+    expect(ba.h).toBeGreaterThan(SKETCH_BAND.h)
+    expect(ba.h).toBe(ROOT_BAND_PAD + ROOT_BAND_ROW + SKETCH_NODE.h + ROOT_BAND_PAD)
+    expect(bb.y).toBe(ba.y + ba.h + SKETCH_BAND.gap)
+    expect(pos('b.x')).toEqual({ x: 300, y: bb.y + 200 })
+    expect(bb.h).toBe(200 + SKETCH_NODE.h + ROOT_BAND_PAD)
+    // 画布位置换回 layout：y 相对所属带顶（移入时按目标带），不小于 0；层原样
+    expect(bandRelative(def, { 'b.x': { x: 310.4, y: bb.y + 90 } })).toEqual({ 'b.x': { x: 310, y: 90 } })
+    expect(bandRelative(def, { 'a.m0': { x: 0, y: bb.y + 5 } }, () => 'b')).toEqual({ 'a.m0': { x: 0, y: 5 } })
+    expect(bandRelative(def, { 'b.x': { x: 0, y: bb.y - 30 } })['b.x'].y).toBe(0)
+    expect(bandRelative({ ...def, mount: 'a' }, { 'a.m0': { x: 1, y: 2 } })).toEqual({ 'a.m0': { x: 1, y: 2 } })
   })
 })

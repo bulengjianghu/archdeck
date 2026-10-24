@@ -972,7 +972,7 @@
     "spot": {
       "type": "object",
       "additionalProperties": false,
-      "description": "布局里模块的位置（X15）：根草图的第二级模块只记 x（y 由层带算，X21）",
+      "description": "布局里模块的位置（X15）：根草图的第二级模块的 y 相对所在层带的顶（只记 x 时取带内第一行，X21）",
       "required": [
         "x"
       ],

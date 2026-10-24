@@ -16,7 +16,10 @@ import {
   gridLayout,
   referenceNodes,
   referenceRelations,
+  ROOT_BAND_COLS,
   ROOT_BAND_GAP,
+  ROOT_BAND_PAD,
+  ROOT_BAND_ROW,
   ROOT_BAND_X0,
   load,
   loadModel,
@@ -402,16 +405,26 @@ describe('X15 位置、X19 引用节点', () => {
     expect(r.design['fe.ui'].layout!.modules!['fe.ui.screen']).toEqual({ x: 5, y: 6 })
   })
 
-  it('X21 根草图：layout 对层不记位置，带内的第二级模块只记 x（初始布局与拖动都是）', () => {
+  it('X21（T2b 裁决 3）根草图：layout 对层不记位置，带内的第二级模块记 x 与相对带顶的 y（不小于 0）；初始布局按列数折行；移入带走位置', () => {
     const root = seedFromBaseline('root', baseline, { id: 'd1' })
     const grid = gridLayout(root).modules!
     expect(grid.core).toBeUndefined()
-    expect(grid['core.store']).toEqual({ x: ROOT_BAND_X0 + ROOT_BAND_GAP })
-    const r = applyEdit(root, { op: 'moveNode', positions: { 'core.api': { x: 300, y: 999 }, core: { x: 1, y: 2 } } }, { persistent, designSketch: true })
+    expect(grid['core.store']).toEqual({ x: ROOT_BAND_X0 + ROOT_BAND_GAP, y: ROOT_BAND_PAD })
+    const r = applyEdit(root, { op: 'moveNode', positions: { 'core.api': { x: 300, y: 120 }, core: { x: 1, y: 2 } } }, { persistent, designSketch: true })
     if (!r.ok) throw new Error(r.reason)
-    expect(r.sketch.layout!.modules).toEqual({ 'core.api': { x: 300 } })
+    expect(r.sketch.layout!.modules).toEqual({ 'core.api': { x: 300, y: 120 } })
+    const neg = applyEdit(root, { op: 'moveNode', positions: { 'core.api': { x: 300, y: -5 } } }, { persistent, designSketch: true })
+    if (!neg.ok) throw new Error(neg.reason)
+    expect(neg.sketch.layout!.modules!['core.api']).toEqual({ x: 300, y: 0 })
     const moved = run({ root: r.sketch }, { op: 'moveIn', id: 'core.api', layer: 'fe' })
-    expect(moved.design.root.layout!.modules).toEqual({ 'fe.api': { x: 300 } })
+    expect(moved.design.root.layout!.modules).toEqual({ 'fe.api': { x: 300, y: 120 } })
+    // 折行：一条带里超过 ROOT_BAND_COLS 个时，第 COLS+1 个到第二行行首
+    const wide: SketchDef = {
+      id: 'w',
+      mount: 'root',
+      modules: [{ id: 'l', name: 'L', kind: 'layer', children: Array.from({ length: ROOT_BAND_COLS + 1 }, (_, i) => ({ id: `l.m${i}`, name: `M${i}` })) }],
+    }
+    expect(gridLayout(wide).modules![`l.m${ROOT_BAND_COLS}`]).toEqual({ x: ROOT_BAND_X0, y: ROOT_BAND_PAD + ROOT_BAND_ROW })
   })
 
   it('05 裁决 4：外部端点按与挂载点同深度的祖先折叠——引用节点显示折叠后的 ID，数据仍记精确端点；根草图不折叠', () => {

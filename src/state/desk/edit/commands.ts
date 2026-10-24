@@ -21,7 +21,7 @@ import {
   type SketchPoint,
   type SketchTarget,
 } from '@/model'
-import { sketchPositions } from '@/layout/layout'
+import { bandRelative, sketchPositions } from '@/layout/layout'
 import type { WriteOutcome } from '../../sync/writer'
 import { leaveGuard, type ViewAction } from '../../transition'
 import type { createSaveSync, SaveOutcome } from './save'
@@ -137,13 +137,16 @@ export function createCommands(i: CommandInputs) {
   const single = (op: EditOp): DesignEditOp => ({ op: 'edit', sketch: mount(), edit: op })
   const edit = (op: EditOp) => run(single(op))
 
-  /** X15：写位置时补齐还没写进 layout 的节点当前显示的位置（没有 layout 的草图第一次拖动即落下整张的初始布局），一步 */
+  /**
+   * X15：写位置时补齐还没写进 layout 的节点当前显示的位置（没有 layout 的草图第一次拖动即落下整张的初始布局），一步。
+   * 给的是画布上的位置；根草图（X21）换成相对所属层带顶的 y
+   */
   function positionsWith(def: SketchDef, given: Record<string, SketchPoint>): Record<string, SketchPoint> {
     const ids = [...locateAll(def).map(m => m.id), ...referenceNodes(def)]
     const shown = sketchPositions(def, ids)
     const have = def.layout?.modules ?? {}
-    const missing = Object.fromEntries(ids.filter(id => !have[id] && !given[id]).map(id => [id, shown[id]]))
-    return { ...missing, ...given }
+    const missing = Object.fromEntries(ids.filter(id => !have[id] && !given[id] && shown[id]).map(id => [id, shown[id]]))
+    return bandRelative(def, { ...missing, ...given })
   }
 
   /** F-20：拖节点（多选一起拖）的落点，一步 */
@@ -185,10 +188,14 @@ export function createCommands(i: CommandInputs) {
   const demote = (id: string, onto: string) => run({ op: 'demote', sketch: mount(), id, target: onto })
   /** F-26：升级——拖到面包屑的父级 */
   const promote = (id: string) => run({ op: 'promote', sketch: mount(), id })
-  /** F-26、X21：移入——根草图里拖到另一条层带；给了 x 时落位与移入是一步（新 ID = <层>.<短名>） */
-  function moveIn(id: string, layer: string, x?: number): EditOutcome {
+  /** F-26、X21：移入——根草图里拖到另一条层带；给了落点（画布上的位置）时落位与移入是一步（新 ID = <层>.<短名>，y 换成相对目标带顶） */
+  function moveIn(id: string, layer: string, at?: SketchPoint): EditOutcome {
     const ops: DesignEditOp[] = [{ op: 'moveIn', id, layer }]
-    if (x !== undefined) ops.push({ op: 'edit', sketch: ROOT_MOUNT, edit: { op: 'moveNode', positions: { [`${layer}.${shortName(id)}`]: { x, y: 0 } } } })
+    const def = sheet()
+    if (at && def) {
+      const to = `${layer}.${shortName(id)}`
+      ops.push({ op: 'edit', sketch: ROOT_MOUNT, edit: { op: 'moveNode', positions: bandRelative(def, { [to]: at }, () => layer) } })
+    }
     return run(ops)
   }
   /** 改 ID（只改短名，前缀级联） */
