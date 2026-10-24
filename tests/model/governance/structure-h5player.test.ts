@@ -30,6 +30,18 @@ describe('h5player 结构视图', () => {
     for (const e of deps) expect(!!e.unexplained).toBe(e.deps.some(k => undescribed.has(k)))
   })
 
+  it('L15、K14（T3 裁决 9 核对）：根层只引类型计数为 0——每对带之间都有交互使用，按「取最强一档」聚合成交互使用；下钻后有只引类型的边', () => {
+    const root = levelDeps(l.index, projectLevel(l.index, l.index.rootId), l.report)
+    const deps = root.edges.filter(e => e.kind === 'dependency')
+    expect(deps.length).toBeGreaterThan(0)
+    expect(deps.every(e => e.tier === 'invokes')).toBe(true)
+    expect(root.typeOnly).toBe(0)
+    const counts = [...l.index.childrenOf.get(l.index.rootId)!].flatMap(layer => [layer, ...(l.index.childrenOf.get(layer) ?? [])]).map(
+      id => levelDeps(l.index, projectLevel(l.index, id, { showBoundaries: true }), l.report).typeOnly,
+    )
+    expect(counts.some(n => n > 0)).toBe(true)
+  })
+
   it('K16、Q14：扇入最高的叶子模块是框架公共类型契约（Ca 99），I 稳定；metrics --top 与模型层同一结果', () => {
     const m = structureMetrics(l.index, l.report)
     expect(m.get('infra.framework.contracts')).toMatchObject({ ca: 99, band: 'stable' })
