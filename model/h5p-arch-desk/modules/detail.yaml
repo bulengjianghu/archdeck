@@ -29,6 +29,7 @@ modules:
     codeRefs: [vite/readModelDir.ts, vite/readGit.ts]
   - id: access.lint
     name: 命令行校验
+    principle: 摘要给出未分类关系的条数与其中核心之间的条数（M17），以及有实现者的端口、子类、组装与组装根（K5c、K12、K13）；设计版本没有代码事实（K8），端口孤立只按描述判定（U14）。
     codeRefs: [scripts/lint-model.ts]
   - id: model.types
     name: 类型与 Schema
@@ -39,6 +40,7 @@ modules:
     codeRefs: [src/model/load.ts, src/model/validate.ts, src/model/indexer.ts, src/model/index.ts]
   - id: model.projector
     name: Projector 层次投影
+    principle: 边界角色（L14，ADR-0030）：role 为 port / adapter 的模块同核心常显、不折叠进「+N」也不算普通模块，视图节点带 rim 标记，由 Layout 压在框的上边 / 右边；视图边仍按 (from, to, type) 分（L5），类型为四类交互。
     codeRefs: [src/model/project.ts]
   - id: model.diff
     name: 版本对比
@@ -48,7 +50,7 @@ modules:
   - id: present.canvas.flow
     name: 视图转换与交互
     parent: present.canvas
-    responsibility: 把 Layout 的画布场景（canvasScene：节点与边的数据、显隐、变淡、回放态与选中突出）写入 Vue Flow 的 store；把单击 / 双击 / 悬停转成 DeskState 操作；切换层次后按布局外框适应画布。画什么不在这里算（ADR-0013）。单击「+N」临时展开 / 收起（分层总览与普通层次同一手势，O6、O8）；普通层次没有核心而普通模块超过七个时在画布角提示「N 个模块，考虑标出核心」。
+    responsibility: 把 Layout 的画布场景（canvasScene：节点与边的数据、显隐、变淡、回放态与选中突出）写入 Vue Flow 的 store；把单击 / 双击 / 悬停转成 DeskState 操作；切换层次后按布局外框适应画布。画什么不在这里算（ADR-0013）。单击「+N」临时展开 / 收起（分层总览与普通层次同一手势，O6、O8）；普通层次没有核心而普通模块超过七个时在画布角提示「N 个模块，考虑标出核心」。把端口记号（L13）、组装叠加线与组装根（O12）交给画布场景；单击组装叠加线落到这对节点的代码依赖（K10）。
     principle: |
       - **写 store 而非传属性**：节点与边通过 setNodes / setEdges 写入；属性同步在「上一层有选中、切回总览」时会被跳过。
       - **适应画布**：内容外框直接取自布局结果，不依赖 Vue Flow 对节点尺寸的测量，只等画布容器有尺寸；运行视角隐藏静态内容时只取画布场景给出的可见节点；切换层次、画布容器尺寸变化（进入运行视角、切换分屏方向、拖动分隔条、折叠两侧栏）后重新适应。
@@ -58,28 +60,46 @@ modules:
   - id: present.canvas.nodes
     name: 节点组件
     parent: present.canvas
-    responsibility: 七种节点：模块（职责摘要、可下钻标识、目标态虚线）、边界（系统内、本层外的模块与所在路径）、外部参与者（用户 / 外部系统 / 时间图标，系统外）、边界框（系统框与当前父模块框，FrameNode）、带（层名、抽象原则、可依赖层）、核心模块小块、「+N 个其他模块」占位；设计版本中新增 / 修改描边与「△N」变更角标。分级（ADR-0027）：普通层次的核心模块画成大块，共用件画成架上的紧凑块（SharedNode，O9），用到共用件的节点右上角「共用 ×N」角标（O10），父模块框与带右上角常驻「共用件 N · 折叠 M」并标出架的「共用件」字样（O11）；普通层次的「+N」占位双击无动作（O8）。
+    responsibility: '七种节点：模块（职责摘要、可下钻标识、目标态虚线）、边界（系统内、本层外的模块与所在路径）、外部参与者（用户 / 外部系统 / 时间图标，系统外）、边界框（系统框与当前父模块框，FrameNode）、带（层名、抽象原则、可依赖层）、核心模块小块、「+N 个其他模块」占位；设计版本中新增 / 修改描边与「△N」变更角标。分级（ADR-0027）：普通层次的核心模块画成大块，共用件画成架上的紧凑块（SharedNode，O9），用到共用件的节点右上角「共用 ×N」角标（O10），父模块框与带右上角常驻「共用件 N · 折叠 M」并标出架的「共用件」字样（O11）；普通层次的「+N」占位双击无动作（O8）。边界与端口（ADR-0029、ADR-0030）：role: port / adapter 的模块名后带边界角色记号（L14），模块、核心小块与边界节点骑着端口记号（L13）；节点角标统一布局（DiffMark）——上边框左侧为新增 / 修改、「△N」与「组装根」角标（O12），上边框右半为端口记号，顶边有端口记号时环编号与「共用 ×N」移到下边框、热度色块让到左下角。'
     codeRefs: [src/components/nodes/**]
+  - id: present.canvas.nodes.ports
+    name: 端口记号
+    parent: present.canvas.nodes
+    adrs: [29]
+    responsibility: 节点定义的端口记号（L13，ADR-0029）：骑在进边一侧（顶边，普通层次自左向右布局时为左边）的后半，每个端口一个小记号（插座半圆 + 实现者数，没有实现者的标出），超过 3 个合成一个「端口 ×N」；单击端口即选中它（V2，URL sel=p:<接口 ID>），单击合成的记号选中定义模块（面板「端口」一节逐个列出）。不参与布局：位置是布局在进边一侧后半留出的保留端口（L11）。
+    codeRefs: [src/components/nodes/PortMarks.vue]
+  - id: present.canvas.nodes.rim
+    name: 边界角色记号
+    parent: present.canvas.nodes
+    adrs: [30]
+    responsibility: '边界角色的记号（L14，ADR-0030）：role: port 的模块名后标「端口」（对外端口，压在框上边、用户一侧），role: adapter 的标「适配器」（接外部技术，贴框右边、外部系统一侧），悬停说明位置的含义；模型画布的模块与核心小块、草图画布的模块节点共用。'
+    codeRefs: [src/components/nodes/RimTag.vue]
   - id: present.canvas.edges
     name: 边组件
     parent: present.canvas
-    responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线；颜色、线宽、线型的映射在 edgeStyle，箭头 marker 在 ArrowMarker（大小随线宽档，线在箭头处回缩），都与「显示」面板的示意线共用；折线在跳点处插半圆小桥（L11）。一个视觉通道只表一个维度（L10、ADR-0018）：颜色 = 关系类型（编译期低饱和且更细）；线型 = 事实状态（实线已证实或无事实、虚线未证实、点线为代码依赖叠加线，K9）；箭头自画 marker——同步实心、异步空心、implements 空心三角；线宽 = 聚合条数三档；×N 标签画成 pill，异常标记用警示色。晕：违规红晕优先于设计变更底色，选中为强调色窄晕（不改线宽），回放当前步骤为宽晕并沿方向流动（P10）；走过的边不加粗。临时线：经由上层关系为关系类型色的虚线（P15），未建模为红色虚线（P11）。
+    responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线；颜色、线宽、线型的映射在 edgeStyle，箭头 marker 在 ArrowMarker（大小随线宽档，线在箭头处回缩），都与「显示」面板的示意线共用；折线在跳点处插半圆小桥（L11）。一个视觉通道只表一个维度（L10、ADR-0018、ADR-0029）：颜色 = 关系类型（四类各一色相——查询低饱和且半透明，只「淡」不「细」；委托实色；迁移期的未分类中性灰）；线型 = 事实状态（实线已证实或无事实、虚线未证实、点线为代码依赖叠加线，K9）；箭头自画 marker——同步实心、异步空心「V」；插座 = 经端口（L12，目标端与箭头叠放）；线宽 = 聚合条数三档；×N 标签画成 pill，异常标记用警示色。晕：违规红晕优先于设计变更底色，选中为强调色窄晕（不改线宽），回放当前步骤为宽晕并沿方向流动（P10）；走过的边不加粗。临时线：经由上层关系为关系类型色的虚线（P15），未建模为红色虚线（P11）；组装叠加线为组装专用色的点划线（O12）。
     codeRefs: [src/components/edges/**]
+  - id: present.canvas.edges.socket
+    name: 插座记号
+    parent: present.canvas.edges
+    adrs: [29]
+    responsibility: 经端口的线在目标端的插座记号（L12，ADR-0029）：开口半圆凸向目标、开口朝发起方，顶点略过箭头尖端，把箭头「插」在里面——与箭头叠放、不替换箭头；半径随箭头大小。画布的关系边与「显示」面板的示意线共用同一个 marker。
+    codeRefs: [src/components/edges/SocketMarker.vue]
 
   - id: present.panel.dispatch
     name: 面板分派
     parent: present.panel
-    responsibility: 按选中选择面板（V2）：结构视角下为选中的对象，无选中时为当前父模块（根层为系统）；运行视角下选中步骤时为步骤面板、选中场景时为场景面板，选中模块 / 关系 / 聚合边 / 参与者 / 文件时为该对象的面板；没有「已钉住」之类的提示（ADR-0012）。运行视角下模块、关系、聚合边面板顶部加「运行信息」，结构信息折叠在下方（V6）。草图画布下整个面板换成草图面板（present.panel.sketch）。
+    responsibility: 按选中选择面板（V2）：结构视角下为选中的对象，无选中时为当前父模块（根层为系统）；运行视角下选中步骤时为步骤面板、选中场景时为场景面板，选中模块 / 关系 / 聚合边 / 参与者 / 文件时为该对象的面板；没有「已钉住」之类的提示（ADR-0012）。选中端口（L13）时为端口面板（K11）。运行视角下模块、关系、聚合边面板顶部加「运行信息」，结构信息折叠在下方（V6）。草图画布下整个面板换成草图面板（present.panel.sketch）。
     codeRefs: [src/components/panel/Panel.vue]
   - id: present.panel.module
     name: 模块面板
     parent: present.panel
-    responsibility: 模块的职责、实现原理、对外接口、核心数据结构、子模块、出入边、声明了接口时的端口三角（K11）、代码与文档引用；层额外显示抽象原则、包含 / 不包含、可依赖的层。
+    responsibility: 模块的职责、实现原理、对外接口、核心数据结构、子模块、出入边、「端口」一节（声明的每个端口一份端口面板，K11，渲染端口面板的 ModulePorts）、代码事实里的子类 / 基类与组装 / 被组装于（K12、K13）、代码与文档引用；层额外显示抽象原则、包含 / 不包含、可依赖的层。
     codeRefs: [src/components/panel/ModulePanel.vue]
   - id: present.panel.relation
     name: 关系面板
     parent: present.panel
-    responsibility: 关系的两端与类型；「关系」一节按五个维度各一行——控制流、知识（由代码事实给出：同向 / 反向 / 经端口 / 不判定）、语义、同步性、平面（ADR-0022）；经由接口、交换的数据结构；不在当前视图时提供「定位到所在层次」。
+    responsibility: 关系的两端与类型；「关系」一节按维度各一行——控制流、知识（由代码事实给出：同向 / 反向 / 经端口——发起方只知道端口、接收方是它的实现者 / 不判定，K5b；旁标两端之间的子类与组装事实，K12、K13）、语义（查询 / 委托 / 通知 / 流，ADR-0029）、同步性（通知一律异步，查询与委托按 mode）、机制（直接 / 端口 / 总线 / 通道，标题处另标「经 …」与拉取）、平面（ADR-0022）；经由接口、交换的数据结构；不在当前视图时提供「定位到所在层次」。
     codeRefs: [src/components/panel/RelationPanel.vue]
   - id: present.panel.edge
     name: 聚合边面板
@@ -99,7 +119,7 @@ modules:
   - id: present.panel.content
     name: 内容组件
     parent: present.panel
-    responsibility: 面板共用的内容块：Markdown（禁用原始 HTML）、TS 代码块（高亮用呈现共用件）、接口与数据结构折叠项、关系行、分节。
+    responsibility: 面板共用的内容块：Markdown（禁用原始 HTML）、TS 代码块（高亮用呈现共用件）、接口与数据结构折叠项（算端口的接口带「端口 · 实现者 N」，单击打开端口面板，K11、L13）、关系行、分节。
     codeRefs:
       - src/components/panel/Markdown.vue
       - src/components/panel/CodeBlock.vue
@@ -123,8 +143,14 @@ modules:
   - id: present.canvas.legend
     name: 显示面板（显示设置与图例）
     parent: present.canvas
-    responsibility: 画布右下角的「显示」面板，先「设置」后「图例」（ADR-0017）：设置只放没有图例的开关（结构视角为边界节点、只看现状；运行视角为静态关系显示方式）；图例一个视觉通道一组、每组可折叠（ADR-0017 第三轮）——关系类型 · 颜色（类型列表按运行时 / 编译期两段，示意带该类箭头，每行类型名后一句读法——命令 = 要结果、通知 = 不要结果、一对多、箭头指向被通知方、流 = 连续数据、箭头指向数据去向（ADR-0022），结构视角下每行兼作类型筛选；下方「线的读法」卡片说明对任意类型适用的箭头与粗细、×N，L10）、节点、代码事实 · 线型（结构视角，开关在组标题；线型只在这一组讲）、回放（运行视角）；一行一项，示意线由 LineSwatch 按与边组件共用的 edgeStyle 画出，与画布同款。各组为子组件（NodeSettings、RelationLegend、FactsLegend、ReplayLegend，外壳 DisplayGroup）。折叠时摘要列出非默认的设置（运行视角缺省折叠，摘要总是「静态关系：<方式>」）；面板展开与各组折叠按视角记在本机（useDisplayPrefs），运行视角默认只展开「回放」。
+    responsibility: 画布右下角的「显示」面板，先「设置」后「图例」（ADR-0017）：设置只放没有图例的开关（结构视角为边界节点、只看现状；运行视角为静态关系显示方式）；图例一个视觉通道一组、每组可折叠（ADR-0017 第三轮）——关系 · 颜色按「三问四修饰」组织（ADR-0029 §3）：三个判断题（被调方拥有后果吗 / 发起方知道接收方吗 / 传的是连续数据吗）各落到一类，类型行示意按画布同一套样式（查询淡、委托实色、带该类箭头）并附一句读法，结构视角下每行兼作类型筛选（L8），迁移期的未分类单列一行中性灰；读完类型再读的修饰——机制（直接 / 端口的插座 / 总线 / 通道）、异步（空心箭头）、拉取——与粗细（聚合条数）、×N 放在浅底卡片里、中性色示意、不可点击（L10、L12）；节点；代码事实 · 线型（结构视角，开关在组标题；线型只在这一组讲）；组装（结构视角，开关在组标题，O12）；回放（运行视角）；一行一项，示意线由 LineSwatch 按与边组件共用的 edgeStyle 画出，与画布同款。各组为子组件（NodeSettings、RelationLegend、FactsLegend、AssemblyLegend、ReplayLegend，外壳 DisplayGroup）。折叠时摘要列出非默认的设置（运行视角缺省折叠，摘要总是「静态关系：<方式>」）；面板展开与各组折叠按视角记在本机（useDisplayPrefs），运行视角默认只展开「回放」。
     codeRefs: [src/components/DisplayPanel.vue, src/components/display/**]
+  - id: present.canvas.legend.assembly
+    name: 组装开关与图例
+    parent: present.canvas.legend
+    adrs: [30]
+    responsibility: 「显示」面板的「组装」一组（O12，ADR-0030，结构视角）：组标题右侧是「组装」开关（缺省关），开启后画布把组装事实（K13）投影到本层画点划叠加线（不参与布局，单击落到代码依赖），组装根所在的节点标「组装根」角标；图例说明线型与角标。开关在视图状态里（toggles.assembly，不进 URL），按项目记在本机（useAssemblyPrefs：模型加载后恢复，之后每次变化写回，同演化叠加的本机记忆）。
+    codeRefs: [src/components/display/AssemblyLegend.vue, src/components/display/useAssemblyPrefs.ts]
 
   # ── 视图状态层 ──────────────────────────────────────────
   - id: state.desk.loading
@@ -176,36 +202,36 @@ modules:
     name: 分层总览排布
     parent: state.layout.runner
     codeRefs: [src/layout/layered.ts]
-    responsibility: 按层序自上而下分带，带内核心模块横向排开（含 +N 占位）；相邻层间的边画在带间空隙并横向错开，跨多层的边走右侧通道；核心模块之间的跨层边画成曲线。父模块框（根层即系统框）包住全部带与右侧通道；框外元素（用户、外部系统与时间、边界节点）按方位摆放，它们的边（含到核心模块的跨层边）由 outsideRouter 正交走线：带按对端方位取顶边 / 右边 / 底边，核心模块上进下出、短桩先到带间空隙的中线，不贴着带的边框（A7、L4）。带内的共用件排在带底一行的共用件架（带随之加高，O9）。
+    responsibility: '按层序自上而下分带，带内核心模块横向排开（含 +N 占位）；相邻层间的边画在带间空隙并横向错开，跨多层的边走右侧通道；核心模块之间的跨层边画成曲线。父模块框（根层即系统框）包住全部带与右侧通道；框外元素（用户、外部系统与时间、边界节点）按方位摆放，它们的边（含到核心模块的跨层边）由 outsideRouter 正交走线：带按对端方位取顶边 / 右边 / 底边，核心模块上进下出、短桩先到带间空隙的中线，不贴着带的边框（A7、L4）。带内的共用件排在带底一行的共用件架（带随之加高，O9）。边界角色（L14）：role: port 的块一半压在带的上边（核心模块行随之下让），role: adapter 在带内最右一列、紧贴右侧「可依赖」栏（外部系统一侧）；关系边一律在该侧的前半错开，后半留给端口记号（L11、L13）。'
   - id: state.layout.runner.graph
     name: 普通层次排布
     parent: state.layout.runner
     codeRefs: [src/layout/graph.ts]
-    responsibility: 用 elkjs layered 算法只排父模块框内的子模块与它们之间的边：正交走线、标签内联；每条边两端各有固定朝向的端口——上进下出（自左向右时左进右出），同一侧左动右静（动态关系在前半、静态在后半，FIXED_ORDER，L11）；框外边在内部节点那一端给不连线的占位端口一起排序，端口位置随布局给出；父模块框包住内部节点与走线并留出内边距，框外的元素在布局后按方位摆放（placeOutside，A7、L4）；elk 在浏览器的 Worker 中运行（无 Worker 环境用同步打包版）；结果过于狭长时再试自左向右，取宽高比更接近画布者。共用件不参与 elk，布局后由 placeShelf 收进父模块框底部一行的共用件架（框随之撑开，O9）；核心模块与「+N」占位按各自尺寸参与布局。
+    responsibility: 用 elkjs layered 算法只排父模块框内的子模块与它们之间的边：正交走线、标签内联；每条边两端各有固定朝向的端口——上进下出（自左向右时左进右出），同一侧左动右静（动态关系在前半、静态在后半，FIXED_ORDER，L11）；框外边在内部节点那一端给不连线的占位端口一起排序，端口位置随布局给出；父模块框包住内部节点与走线并留出内边距，框外的元素在布局后按方位摆放（placeOutside，A7、L4）；elk 在浏览器的 Worker 中运行（无 Worker 环境用同步打包版）；结果过于狭长时再试自左向右，取宽高比更接近画布者。共用件不参与 elk，布局后由 placeShelf 收进父模块框底部一行的共用件架（框随之撑开，O9）；核心模块与「+N」占位按各自尺寸参与布局。关系全是交互（ADR-0029），出入点都排在该侧的前半：每个内部节点在进边一侧的末尾占一个半边长的保留端口（不连边，FIXED_ORDER 固定），留给端口记号（L11、L13）。边界角色（L14）不交给 elk，布局后由 placeRims 压在父模块框线上——port 一行横跨上边、adapter 一列横跨右边，按所连节点的位置排序，框线先向外让出半个节点；它们的边同框外边按需走线。
   - id: state.layout.runner.boundaries
     name: 框外元素与手工走线
     parent: state.layout.runner
     codeRefs: [src/layout/routes.ts]
-    responsibility: 方位表示角色（A7、L4）：用户在系统框上方、外部系统与时间在系统框右侧（placeActors），边界节点在父模块框下方一行、按视图给出的层次顺序（与时序图泳道一致），系统框包住父模块框与边界节点行（placeOutside）；方位固定在屏幕上，不随布局方向改变。普通层次中框外元素的边（参与者的边、边界边）不参与布局，要画时由 edgeRoute 按需正交绕行（routing 的 detour：用户底边、外部系统左边、边界节点顶边出入，不穿节点，从目标的入口侧进入，同一节点上的多条边错开、同一起点的边各走一条横线；内部节点那一端取 elk 的占位端口，框外元素自身的端口同样左动右静）。画布每次只对当前画出来的那组框外边一起走线并分配轨道（outsideRoutes + routing 的 allocateTracks：走廊里重合的中间段按边 ID 错开，placeLabels 让标签互不相碰），按布局与可见集记忆。手工走线与编码工具也在这里（routes.ts）：回放临时线与叠加线的曲线 linkRoute、edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、isBoundaryEdge（L10），供排布与画布场景使用。
+    responsibility: 方位表示角色（A7、L4）：用户在系统框上方、外部系统与时间在系统框右侧（placeActors），边界节点在父模块框下方一行、按视图给出的层次顺序（与时序图泳道一致），系统框包住父模块框与边界节点行（placeOutside）；方位固定在屏幕上，不随布局方向改变。普通层次中框外元素的边（参与者的边、边界边）不参与布局，要画时由 edgeRoute 按需正交绕行（routing 的 detour：用户底边、外部系统左边、边界节点顶边出入，不穿节点，从目标的入口侧进入，同一节点上的多条边错开、同一起点的边各走一条横线；内部节点那一端取 elk 的占位端口，框外元素自身的端口同样左动右静）。画布每次只对当前画出来的那组框外边一起走线并分配轨道（outsideRoutes + routing 的 allocateTracks：走廊里重合的中间段按边 ID 错开，placeLabels 让标签互不相碰），按布局与可见集记忆。手工走线与编码工具也在这里（routes.ts）：回放临时线与叠加线的曲线 linkRoute、edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、isBoundaryEdge（L10），供排布与画布场景使用。L14：placeRims 把普通层次的边界角色压在父模块框线上；框线上的 port 对端在上方（用户）时走顶边、否则走底边，adapter 对端在右侧（外部系统）时走右边、否则走左边；关系边的出入点在该侧前半错开，后半留给端口记号（L11、L13）。
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.pipeline.loader
     name: Loader
     parent: model.pipeline
-    responsibility: 解析 YAML / JSON、按 JSON Schema 检查单文件格式（未知字段即报错）、把多个文件合并成一个模型并记录每个实体的出处（文件 / 路径 / 行号）；解析外部参与者、场景与嵌套步骤树（每个步骤记录路径与出处）；sourceLimits 只取第一处声明，重复时提醒（G20）；关系类型的旧名 event / dataflow 映射为 notifies（翻转两端）/ streams 并逐条提醒迁移（M12）；类型为 depends 的关系在格式检查前丢弃并逐条提醒（M15，ADR-0026）。
+    responsibility: 解析 YAML / JSON、按 JSON Schema 检查单文件格式（未知字段即报错）、把多个文件合并成一个模型并记录每个实体的出处（文件 / 路径 / 行号）；解析外部参与者、场景与嵌套步骤树（每个步骤记录路径与出处）；sourceLimits 只取第一处声明，重复时提醒（G20）；关系类型的旧名 event / dataflow 映射为 notifies（翻转两端）/ streams 并逐条提醒迁移（M12）；类型为 depends（M15，ADR-0026）与 implements（M17，ADR-0029：实现者已改写在接口的 implementedBy）的关系在格式检查前丢弃并逐条提醒——供读历史提交，文件不整份跳过；via 原样带入，旧的平铺取值由 Validator 读成四形态（M20）；场景的 kind 由 schema 校验（M19）。
     codeRefs: [src/model/load.ts]
   - id: model.pipeline.validator
     name: Validator
     parent: model.pipeline
-    responsibility: 跨文件检查：ID 唯一、父模块存在且父链无环、关系端点有效、不连祖先与后代、接口 / 数据结构引用存在、层字段完整；检查外部参与者（ID 与模块不重复）与场景：消息端点是模块或参与者、引用的关系 / 接口 / 数据结构存在且与端点一致、步骤 id 在场景内唯一、ref 指向的场景存在且无循环引用；implements 的目标须声明接口（M11）、pull 只用于 streams（M13）、notifies 的端点不得是角色为 bus 的总线（M14）；场景消息与对应 calls 的同步性不一致时提醒（S19）。
+    responsibility: '跨文件检查：ID 唯一、父模块存在且父链无环、关系端点有效、不连祖先与后代、接口 / 数据结构引用存在、层字段完整；检查外部参与者（ID 与模块不重复）与场景：消息端点是模块或参与者、引用的关系 / 接口 / 数据结构存在且与端点一致、步骤 id 在场景内唯一、ref 指向的场景存在且无循环引用；关系的机制与修饰（ADR-0029）：via 按四形态——旧的平铺取值读成 channel:<同名> / bus:<唯一的总线> / 端口未指明并提醒（M20），port:<P> 的 P 须是已声明的接口、bus:<M> 的 M 须是 role: bus 的模块，否则提醒并去掉（M11）；mode 只用于查询与委托、pull 只用于 streams，用错的提醒并去掉（M13）；notifies 的端点不得是角色为 bus 的总线（M14）；迁移期的 calls 读作未分类（info relation.unclassified，M17）；接口的 implementedBy 每项须是存在的模块，坏引用提醒并去掉、重复去重（M18）；被 via: port: 引用或写了实现者的接口标为端口（T0 裁决 4）；场景消息与对应关系的形态不一致时提醒（查询与委托按 mode、通知一律 async，S19）；查询的场景闭包里有委托或通知时提醒查询有副作用（U13，一对只报一次）。'
     principle: |
       不抛异常：error 级问题的实体被剔除，warning 级只去掉坏引用，返回一份可以安全建索引的模型和问题列表。
 
       步骤与结构一致性（规则 S5 / S5a）：
       - 引用了 relation：端点与方向必须与关系一致，否则 error；运行时关系的箭头是控制流方向，与消息同向，只有 return 反向比对（S12、ADR-0022）。
       - 没引用 relation：按 S13 推断（两端之间恰好一条运行时关系即认定）；推断不到且两端（及其祖先之间）结构上没有任何关系时报 warning「结构图中没有对应关系」。
-      - 引用了 implements 关系：error（S12，只有运行时关系会「发生一次」）。
-      - async 消息对应同步的 calls、call 消息对应异步的 calls：warning，不改绑定（S19）。
+      - 只对应四类交互（迁移期的未分类同查询 / 委托，S12）。
+      - 消息形态与关系类型不一致（查询、委托与未分类按 mode：同步为 call、异步为 async；通知一律 async；return 与流不比）：warning，不改绑定（S19）。
     codeRefs: [src/model/validate.ts]
   - id: model.pipeline.indexer
     name: Indexer
@@ -230,11 +256,11 @@ modules:
   - id: model.projector.collector
     name: 边汇总
     parent: model.projector
-    responsibility: 把映射后的关系按 (from, to, type) 收集成视图边（L5）：同一对节点之间不同类型的关系各成一条，同类型内聚合并记条数（L2）；汇总同步 / 异步。
+    responsibility: 把映射后的关系按 (from, to, type) 收集成视图边（L5）：同一对节点之间不同类型（四类交互，迁移期的未分类单成一类）的关系各成一条，同类型内聚合并记条数（L2）；汇总同步 / 异步（通知一律异步）。
   - id: model.projector.overview
     name: 分层总览
     parent: model.projector
-    responsibility: 子模块全是层时产出带（层序、核心模块、隐藏数）与核心跨层边（端点落到核心模块，否则落到层）。
+    responsibility: '子模块全是层时产出带（层序、核心模块、隐藏数）与核心跨层边（端点落到核心模块，否则落到层）；role: port / adapter 的第二级模块同核心模块常显在带内、不折叠进「+N」，视图节点带边界角色（L14）。'
   - id: model.projector.hierarchy
     name: 层次顺序与公共祖先
     parent: model.projector
@@ -247,7 +273,7 @@ relations:
   - {id: rel.ad.flow-nodes, from: present.canvas.flow, to: present.canvas.nodes, type: commands, description: 视图转换与交互交给节点组件：渲染 ModuleNode、BoundaryNode、BandNode、CoreNode}
   - {id: rel.ad.flow-edges, from: present.canvas.flow, to: present.canvas.edges, type: commands, description: 视图转换与交互交给边组件：渲染 RouteEdge}
   - { id: rel.ad.flow-legend, from: present.canvas.flow, to: present.canvas.legend, type: commands, description: 视图转换与交互交给显示面板（显示设置与图例）：画布渲染右下角的图例与显示面板（DisplayPanel） }
-  - { id: rel.ad.legend-edge-style, from: present.canvas.legend, to: present.canvas.edges, type: queries, description: 显示面板（显示设置与图例）向边组件取：图例的示意线调用画布边的 edgeStyle 与箭头组件，按同一套颜色、线宽、线型绘制（L10） }
+  - { id: rel.ad.legend-edge-style, from: present.canvas.legend, to: present.canvas.edges, type: queries, description: 显示面板（显示设置与图例）向边组件取：图例的示意线调用画布边的 edgeStyle 与箭头、插座组件，按同一套颜色、线宽、线型与查询的半透明绘制（L10、L12） }
   - {id: rel.ad.panel-module, from: present.panel.dispatch, to: present.panel.module, type: commands, description: 面板分派交给模块面板：渲染 ModulePanel}
   - {id: rel.ad.panel-relation, from: present.panel.dispatch, to: present.panel.relation, type: commands, description: 面板分派交给关系面板：渲染 RelationPanel}
   - {id: rel.ad.panel-edge, from: present.panel.dispatch, to: present.panel.edge, type: commands, description: 面板分派交给聚合边面板：渲染 EdgePanel}
@@ -354,6 +380,7 @@ relations:
   - { id: rel.ad.design-labels, from: present.panel.design, to: present.shared, type: commands, description: 设计面板交给呈现共用件：调用 intentName 显示持久草图名，经 useOpenPreview 在副栏预览 ADR 与草图文件 }
   - { id: rel.ad.actor-labels, from: present.panel.actor, to: present.shared, type: commands, description: 参与者面板交给呈现共用件：经 useOpenPreview / useNavTab 打开证据文件与切换页签 }
   - {id: rel.ad.nodes-act, from: present.canvas.nodes, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 节点组件交给 dispatch 与操作：分支预览选这一支（chooseBranch）、步骤序号指向这一步（seek）}
+  - { id: rel.ad.port-marks-act, from: present.canvas.nodes.ports, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 端口记号交给 dispatch 与操作：单击端口 select 端口（L13），单击合成的「端口 ×N」select 定义模块 }
   - {id: rel.ad.system-read, from: present.panel.system, to: state.desk.projection, type: queries, description: 系统面板向视图派生（核心与 desk.run）取：读索引、层次视图与版本}
   - {id: rel.ad.system-act, from: present.panel.system, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 系统面板交给 dispatch 与操作：选中模块或问题}
   - { id: rel.ad.projection-names, from: state.desk.projection, to: model.pipeline.indexer, type: queries, description: 视图派生（核心与 desk.run）向 Indexer 取：派生场景列表时调用 triggerOf 取每个场景的触发者 }
@@ -589,7 +616,7 @@ dataStructures:
         id: string                   // from->to:type（L5），重新加载后不变
         kind: 'direct' | 'aggregate'
         from: string; to: string
-        type: RelationType
+        type: RelationType           // queries | commands | notifies | streams（迁移期另有 calls = 未分类，M17）
         relationIds: string[]        // 条数即其长度
         mode: 'sync' | 'async' | 'mixed'
       }
@@ -618,8 +645,10 @@ dataStructures:
         | { kind: 'edge'; id: string }     // 视图中的边（多为聚合边）
         | { kind: 'actor'; id: string }
         | { kind: 'file'; id: string }     // 源码文件，id 为相对源码根目录的路径（G16）
+        | { kind: 'port'; id: string }     // 端口，id 为接口 ID（L13）
+        // … 另有代码依赖叠加线 dep、耦合线 couple
       // 推出的选中（selectedOf，ADR-0012）：Selected = Selection | { kind: 'step'; id: frameId } | { kind: 'scenario'; id }
-    description: "显式选中的对象，编码进 URL 的 sel 参数（m: / r: / e: / a: / f: 前缀）。运行视角下为空即选中进度所在的步骤（URL 只有 step），进度在开头时选中场景（sel 与 step 都没有）。"
+    description: "显式选中的对象，编码进 URL 的 sel 参数（m: / r: / e: / a: / f: / d: / c: / p: 前缀）。运行视角下为空即选中进度所在的步骤（URL 只有 step），进度在开头时选中场景（sel 与 step 都没有）。"
   - id: ds.ModelPayload
     name: ModelPayload
     definition: |

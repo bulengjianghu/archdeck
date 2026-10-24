@@ -5,9 +5,13 @@ modules:
   # ── 骨架模块的代码落点（04 §3.10：骨架只写目录级，细到文件的由 AI 在这里补充，X1）──
   - id: present.desk-view
     name: 项目视图
+    principle: |
+      - 「怎么读这张图」（GuideDialog）按三问四修饰讲一条线（ADR-0029 §3）：三个判断题定类型，再读机制（插座 = 经端口）、异步、拉取；查询淡、委托实色，端口是方框进边一侧的小记号。
+      - 「组装」叠加开关同演化叠加，按项目记在本机：模型加载后恢复，之后每次变化写回（useAssemblyPrefs，O12）。
     codeRefs: [src/components/DeskView.vue, src/components/GuideDialog.vue]
   - id: present.scenarios
     name: 场景列表
+    principle: 场景按类别筛选（R17，ADR-0030）：默认只列主流程（kind 缺省 main），可切到「全部类别」，切换记在本机、所有项目共用、不进 URL；非主流程项在名字后标「异常」/「维护」；类别筛选与层次、发起者筛选叠加（filterScenariosByKind）。
     codeRefs: [src/components/ScenarioList.vue]
   - id: present.perspective
     name: 视角切换
@@ -92,7 +96,7 @@ modules:
   - id: state.transition.selection
     name: 视角与选中规则
     parent: state.transition
-    responsibility: 视角（结构 / 运行，由是否打开场景决定）与选中由视图状态推出（V1、V2、selectedOf）：选中是唯一且排他的主语——显式选中的对象，否则运行视角下为进度所在的步骤，进度在开头时为场景（ADR-0012）；运行视角下「指向」对象即选中它，下钻选中被下钻的模块（V3）；取消选中即回到进度所在的步骤（V4）。选中突出（emphasisOf，R15、R16）同样由状态推出：选中步骤时为它所在的可见消息与配对帧所在的消息；选中模块 / 文件 / 关系 / 视图边 / 参与者时为相关泳道（问模型层 lanesOf），不突出消息；选中场景不突出。
+    responsibility: 视角（结构 / 运行，由是否打开场景决定）与选中由视图状态推出（V1、V2、selectedOf）：选中是唯一且排他的主语——显式选中的对象，否则运行视角下为进度所在的步骤，进度在开头时为场景（ADR-0012）；运行视角下「指向」对象即选中它，下钻选中被下钻的模块（V3）；取消选中即回到进度所在的步骤（V4）。选中突出（emphasisOf，R15、R16）同样由状态推出：选中步骤时为它所在的可见消息与配对帧所在的消息；选中模块 / 文件 / 关系 / 视图边 / 参与者时为相关泳道（问模型层 lanesOf；选中端口时按它的定义模块，L13），不突出消息；选中场景不突出。
     principle: |
       - 步骤与场景不存进 selection：运行视角下 selection 为空即「选中进度所在的步骤 / 场景」，不变式「选中的步骤就是进度所在的一步」（V7）由表示本身保证，不需要同步两个指针。
       - 「某个模块在本层是哪条泳道」是关于被描述系统的知识，归模型层时序模型；「选中什么就突出什么」是会话规则，归这里。
@@ -100,7 +104,7 @@ modules:
   - id: state.transition.navigation
     name: 导航规则
     parent: state.transition
-    responsibility: 层次与选中的会话规则：下钻、跳转、返回上级、选中、定位关系 / 模块时选中与层次怎么变、Esc 只取消选中、进不进浏览器历史（规则 N1–N13；跳转与定位只在层次改变时进历史，N10）；「重新加载后退到哪」「被『只看现状』隐藏时退到哪」等定位问题调用模型层的 nearestExisting / nearestVisibleLevel。
+    responsibility: 层次与选中的会话规则：下钻、跳转、返回上级、选中（含端口——端口就是接口，选中后层次不变，L13、V2）、定位关系 / 模块时选中与层次怎么变、Esc 只取消选中、进不进浏览器历史（规则 N1–N13；跳转与定位只在层次改变时进历史，N10）；「重新加载后退到哪」「被『只看现状』隐藏时退到哪」等定位问题调用模型层的 nearestExisting / nearestVisibleLevel。
     codeRefs: [src/state/transition/navigation.ts]
   - id: state.transition.playback
     name: 回放规则
@@ -114,7 +118,7 @@ modules:
   - id: state.transition.url
     name: URL 编解码
     parent: state.transition
-    responsibility: 视图状态与查询参数互相转换：`level` `sel` `sc` `step` `alt`（已选分支，按分支点有序编码）；选中步骤时只有 `step`，选中场景时两者都没有，选中其他对象时 `sel` 与表示进度的 `step` 并存（ADR-0012）；解码时丢弃无效值并给出最接近的合法状态；标注一次转移是否进浏览器历史（N10、R10）。
+    responsibility: '视图状态与查询参数互相转换：`level` `sel`（m: / r: / e: / a: / f: / d: / c: / p: 前缀，p: 为端口，L13）`sc` `step` `alt`（已选分支，按分支点有序编码）；「组装」等叠加开关不进 URL（O12）；选中步骤时只有 `step`，选中场景时两者都没有，选中其他对象时 `sel` 与表示进度的 `step` 并存（ADR-0012）；解码时丢弃无效值并给出最接近的合法状态；标注一次转移是否进浏览器历史（N10、R10）。'
     codeRefs: [src/state/transition/url.ts]
 
   - id: state.layout.sequence
@@ -132,14 +136,14 @@ modules:
   - id: state.layout.canvas
     name: 画布场景
     parent: state.layout
-    responsibility: 把带坐标的层次视图换成画布要画的节点与边（canvasScene，ADR-0013）：位置、类型、数据与类名、层级，以及运行视角下适应画布用的可见节点；框：根层只画系统框，下钻后外框为系统、内框为当前父模块，边界节点在两框之间（两框重合时外框外扩，A7、L4）；要标 ×N 或 ? 而走线没有标签位置时取走线中点（routeMidpoint）。边的层级：与聚焦对象相邻、选中、回放经过的边浮在节点之上（EDGE_Z）。框外边：先对当前画出来的这组调用 outsideRoutes 分配轨道，边与运行视角的步骤序号、分支预览都用分配后的走线。跳线：对画出来的折线关系边调用 routing 的 jumpsOf，交叉处的水平段标跳点（L11）。结构视角：聚焦对象（悬停优先、其次选中）不相邻的节点与边变淡，分层总览中带不参与变淡；核心跨层边只在聚焦核心模块、被选中或回放落在其上时出现（O4、P7）；边界边只在聚焦其一端、被选中或回放经过时出现（L4）。运行视角：按舞台显示（stageDisplay）决定显隐与淡化（V5、V8、V9、V10）；回放叠加——当前消息的边带方向流动、端点节点为活动态、走过的边标步骤序号、临时线（经由上层关系取关系的类型色画虚线、标「经由上层」、随关系选中，P15；未建模画红色虚线，P11）、分支预览（P7、P10、P11、F6）；选中步骤时其余走过的边与步骤序号变灰（R15、R16）。边的视觉通道（L10）：线型取事实状态（结构视角开启代码事实时未证实为虚线并标 ?，已证实不标，K9）、箭头取同步 / 异步 / implements、线宽档取条数、编译期降权，标签只有 ×N 与异常；选中不改线宽。选中文件时投影节点加文件高亮（G14）；设计版本标出新增 / 修改与涉及变更数。模型画布上没有编辑态（草图编辑在草图画布，ADR-0025）。分级（ADR-0027）：共用件的边（shelfEdges）默认不画、悬停或选中一端时画成曲线（O10）；本层框计数（levelCounts，O11）；运行视角下当前步骤经过的共用件高亮、不画共用件的临时线（P18）。
+    responsibility: 把带坐标的层次视图换成画布要画的节点与边（canvasScene，ADR-0013）：位置、类型、数据与类名、层级，以及运行视角下适应画布用的可见节点；框：根层只画系统框，下钻后外框为系统、内框为当前父模块，边界节点在两框之间（两框重合时外框外扩，A7、L4）；要标 ×N 或 ? 而走线没有标签位置时取走线中点（routeMidpoint）。边的层级：与聚焦对象相邻、选中、回放经过的边浮在节点之上（EDGE_Z）。框外边：先对当前画出来的这组调用 outsideRoutes 分配轨道，边与运行视角的步骤序号、分支预览都用分配后的走线。跳线：对画出来的折线关系边调用 routing 的 jumpsOf，交叉处的水平段标跳点（L11）。结构视角：聚焦对象（悬停优先、其次选中）不相邻的节点与边变淡，分层总览中带不参与变淡；核心跨层边只在聚焦核心模块、被选中或回放落在其上时出现（O4、P7）；边界边只在聚焦其一端、被选中或回放经过时出现（L4）。运行视角：按舞台显示（stageDisplay）决定显隐与淡化（V5、V8、V9、V10）；回放叠加——当前消息的边带方向流动、端点节点为活动态、走过的边标步骤序号、临时线（经由上层关系取关系的类型色画虚线、标「经由上层」、随关系选中，P15；未建模画红色虚线，P11）、分支预览（P7、P10、P11、F6）；选中步骤时其余走过的边与步骤序号变灰（R15、R16）。边的视觉通道（L10、ADR-0029）：颜色取关系类型（查询再乘半透明，只「淡」不「细」）、线型取事实状态（结构视角开启代码事实时未证实为虚线并标 ?，已证实不标，K9）、箭头取同步 / 异步（通知一律异步）、线宽档取条数，视图边（含聚合边、经由上层的临时线）里有一条经端口的关系即带插座（L12），标签只有 ×N 与异常；选中不改线宽。端口与边界（ADR-0029、ADR-0030）：节点带它定义的端口记号（L13：画在进边一侧的后半，超过 3 个合成「端口 ×N」，实现者数为描述与代码事实的并集，运行视角不画）与边界角色（L14）；结构视角开启「组装」时画组装叠加线（O12：组装事实投影到本层的点划线，同一对节点合并标 ×N，不参与布局，单击落到这对节点的代码依赖）与节点上的「组装根」角标。选中文件时投影节点加文件高亮（G14）；设计版本标出新增 / 修改与涉及变更数。模型画布上没有编辑态（草图编辑在草图画布，ADR-0025）。分级（ADR-0027）：共用件的边（shelfEdges）默认不画、悬停或选中一端时画成曲线（O10）；本层框计数（levelCounts，O11）；运行视角下当前步骤经过的共用件高亮、不画共用件的临时线（P18）。
     principle: 纯函数，与 stageOverlay、stageDisplay 对称：呈现层只按结果写入 Vue Flow，不自己判断显隐、变淡与回放态；节点与边的数据类型（NodeData、RouteEdgeData）因此归 Layout。
     codeRefs: [src/layout/canvas.ts, src/layout/canvas/**]
   - id: state.layout.sketch
     name: 草图布局
     adrs: [25]
     parent: state.layout
-    responsibility: 草图画布要画的节点与边（sketchScene，ADR-0025、X15、X19、X22）：本层模块（根草图里层与第二级）与由关系派生的引用节点。非根草图画成按规则排布的边界（X22）：系统框的尺寸随草图画布的可用区域（视口去掉面板、信息条后的宽高）自适应，可用区域变化时重算引用列与中心区、本层模块坐标不随之改写；连引用列加最小中心区都放不下时按视口宽高比放大再排；外部引用按所属层在骨架里的 order 成列（referenceColumns：靠前的层在左、同层的一列标「同层」紧贴中心区右侧、靠后的在右、不在任何层的在最右「外部」），每列单列不换列、放不下整列按比例缩小、列内按相连模块的平均高度排，引用位置只由规则算；中心区（挂载点框）可用宽度 = 画布宽 − 两侧引用列宽，本层模块的位置取 layout（相对中心区的内容原点 origin），没有 layout 时按中心区可用区域 gridArea 网格布局一次（只用于显示、不写回，标「需初始布局」），只缺几个位置的放到网格里不与已有节点重叠的空位（sketchPositions，写位置时补齐用同一函数）；框线（系统框、中心区、引用列）作为不接收指针的节点给出；隐藏外部引用时不出引用列与引用线、中心区占满画布宽；outsideCenter 判定拖出中心区（升级的落点）。本层之间的边是两端中心之间的直线，同一对节点的多条线垂直平移错开，标签位置取 layout.relations；引用线标出引用在哪一侧与哪一端（模块走那一侧的端口）；straightEdge 把直线裁到两端节点的边框。根草图为层带（X21）。带选中、待重连与变更角标。角色（SK-22）：核心画成大块；共用件（shared / bus）收进本层框底部一行的「共用件」架（非根草图在中心区底部、根草图在所属层带底部），位置由规则算；超七只数非共用件（X13）。
+    responsibility: 草图画布要画的节点与边（sketchScene，ADR-0025、X15、X19、X22）：本层模块（根草图里层与第二级）与由关系派生的引用节点。非根草图画成按规则排布的边界（X22）：系统框的尺寸随草图画布的可用区域（视口去掉面板、信息条后的宽高）自适应，可用区域变化时重算引用列与中心区、本层模块坐标不随之改写；连引用列加最小中心区都放不下时按视口宽高比放大再排；外部引用按所属层在骨架里的 order 成列（referenceColumns：靠前的层在左、同层的一列标「同层」紧贴中心区右侧、靠后的在右、不在任何层的在最右「外部」），每列单列不换列、放不下整列按比例缩小、列内按相连模块的平均高度排，引用位置只由规则算；中心区（挂载点框）可用宽度 = 画布宽 − 两侧引用列宽，本层模块的位置取 layout（相对中心区的内容原点 origin），没有 layout 时按中心区可用区域 gridArea 网格布局一次（只用于显示、不写回，标「需初始布局」），只缺几个位置的放到网格里不与已有节点重叠的空位（sketchPositions，写位置时补齐用同一函数）；框线（系统框、中心区、引用列）作为不接收指针的节点给出；隐藏外部引用时不出引用列与引用线、中心区占满画布宽；outsideCenter 判定拖出中心区（升级的落点）。本层之间的边是两端中心之间的直线，同一对节点的多条线垂直平移错开，标签位置取 layout.relations；引用线标出引用在哪一侧与哪一端（模块走那一侧的端口）；straightEdge 把直线裁到两端节点的边框。根草图为层带（X21）。带选中、待重连与变更角标。角色（SK-22）：核心画成大块；共用件（shared / bus）收进本层框底部一行的「共用件」架（非根草图在中心区底部、根草图在所属层带底部），位置由规则算；超七只数非共用件（X13）。四类交互与端口（X23、X24）：边上有一条经端口的关系时终点画插座（L12）；模块定义的接口（本张写的，接口写在定义模块所在的草图，X10）给出端口记号与实现者条数，供拖线声明实现者。
     principle: 不走 elk、不走分层投影：草图的布局由人拥有，自动布局只在初始与「重新排列」时各一次（X15）；纯函数，经 Layout 的入口 layout.ts 访问。
     codeRefs: [src/layout/sketch.ts]
 
@@ -150,7 +154,8 @@ modules:
     responsibility: 把步骤树展开成回放计划（帧树）：ref 内联子场景并记为 ref 组合框（F3）；loop 展开一遍并标注循环条件（F4）；par 各分支按书写顺序串行并标注并行（F5）；alt 处分叉为分支点，每个选项一棵子树（F6）。每帧带 ID、所在组合框路径，以及对应的结构关系（显式引用或按 S13 推断，标明是否推断）；步骤没写的接口与数据取自对应关系（返回只取接口），并标明继承（S14）。调用与显式返回配对（pairReturns，F7）：按书写顺序以栈匹配（call 与 async 入栈，写了显式返回的 async 同样配对），alt 各分支从进入分支点时的栈开始。
     principle: |
       帧 ID = 场景 ID + 步骤 id；步骤没写 id 时用它在树中的路径（如 `sc.open#4.alt0.1`）（F2）。ref 内联时 ID 加上引用处前缀，同一子场景被引用两次也不冲突。
-      绑定关系 bindRelation（S12、S13）：显式引用优先；否则两端之间恰好一条与消息同向的运行时关系（calls / notifies / streams；关系箭头是控制流方向，只有 return 反向比对，ADR-0022）即认定并标为推断；多条全是 calls 时同步性与消息一致的恰好一条也认定（S19）；Validator 用同一个函数，校验与界面结果一致。
+      绑定关系 bindRelation（S12、S13，ADR-0029）：显式引用优先；否则两端之间恰好一条与消息同向的交互关系（queries / commands / notifies / streams，迁移期的未分类同查询 / 委托；关系箭头是控制流方向，只有 return 反向比对，ADR-0022）即认定并标为推断，恰好连在两端上的优先于连在祖先上的；候选多条时消息形态与关系类型一致（查询与委托按 mode，通知一律 async，流不比）的恰好一条也认定（S19）；Validator 用同一个函数，校验与界面结果一致。
+      查询有副作用 querySideEffects（U13，T0 裁决 14）：沿 alt 各选项展开全部线性帧序列（loop 一遍、par 串行、ref 内联，路径数有上限），从绑定到查询的一帧 A → B 起，闭包为其后发送方落在接收集合（从 B 的子树开始，闭包内每帧的接收方加入）的连续帧，到配对的 return 为止、没有显式返回时到第一条发送方不在集合中的帧为止；闭包里绑定到委托或通知的帧即副作用，一对（查询，副作用）一条。按场景判定，不按结构闭包。
     codeRefs: [src/model/scenario/plan.ts, src/model/scenario/bind.ts, src/model/scenario/steps.ts]
   - id: model.scenario.path
     name: 回放路径
@@ -405,7 +410,7 @@ interfaces:
       canvasScene(input: CanvasInput): CanvasScene
       // CanvasInput: { positioned; index; selection; hover; stage: StageOverlay | null; scenarioView; emphasis: { selected; paired } | null;
       //                participants; mode: 'hide' | 'dim' | 'show'; reveal: string[]; diff: ModelDiff | null; fileHits: Set<string> | null; branchPointId;
-      //                facts?; evolution? }   // 草图不经这里：草图画布用草图布局（sketchScene，state.layout.sketch）
+      //                facts?; evolution?; ports?; assembly?; assemblyRoots? }   // ports：L13 端口记号；assembly / assemblyRoots：O12 组装叠加   // 草图不经这里：草图画布用草图布局（sketchScene，state.layout.sketch）
     semantics: 纯函数（ADR-0013）；结构视角的聚焦变淡与边的显隐、运行视角的舞台显示与回放叠加、选中步骤时的灰化（R15、R16）、文件高亮（G14）、设计版本标记都在这里算。
   - id: if.layout.stageDisplay
     name: stageDisplay
@@ -434,6 +439,7 @@ dataStructures:
         name: string
         description?: string
         cause?: string                 // 触发原因（文字）；触发者由第一条消息的发送方推出
+        kind?: 'main' | 'exception' | 'maintenance'   // 场景类别，缺省 main；运行视角默认只列主流程（M19、R17）
         steps: StepDef[]
       }
     description: 场景文件（`scenarios/*.yaml|json`）中一个场景的形状。不写默认层次与触发者（规则 S9、A6）。

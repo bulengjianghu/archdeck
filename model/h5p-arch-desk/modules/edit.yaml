@@ -10,6 +10,7 @@ modules:
       意图计算（格式 v2，ADR-0025）：同挂载点矛盾 sketchContradictions（供草图校验共用，X4、X10）；两个对比共用的 compareSketch / compareDesign——按挂载点取对象版本的同一范围（mountScope，X9），
       按血缘（from 指向基线、前缀映射，X11、X12）把差别读作新增 / 修改 / 合并 / 拆分 / 改 ID / 移动 / 删除，相对基线比结构与写了的文字、相对当前版本只比结构（X17），changeSummary 按血缘措辞；
       相对当前版本的偏差 sketchCheck / checkSketches（缺模块、结构字段、封闭子树多出、血缘未落实、给了基线时范围内删掉的仍在、关系与接口的对应，应用认可偏差，X2、X4）；
+      四类交互与端口（ADR-0029）：关系按两端与类型对应——相同，或迁移期的未分类对查询 / 委托视为对应（X23）；草图声明的端口实现者在版本的 implementedBy 与代码事实的实现者（K5c，给了时）里都没有即偏差 sketch.missing-implementer（X24）；相对基线另比关系的机制（via）、同步性、拉取与接口的实现者（写了才比，X17），相对当前版本不比类型与机制；
       归档判定 archiveVerdict 与草图覆盖的模块 sketchModules（X3，交给确认层写确认记录）；人拥有文件的指纹比对 compareOwned（X6）。输入是草图定义与模型索引，不碰文件系统。
     principle: |
       - **一个函数换对象**：相对基线（我改了什么）与相对当前版本（实现还差什么）共用 compareSketch，只差对象版本与要不要比文字；页面、命令行与交给 AI 的摘要同一套结果。
@@ -56,7 +57,7 @@ modules:
   - id: model.intent.edit.relations
     name: 关系与接口操作
     parent: model.intent.edit
-    responsibility: 连关系（两端、类型、说明、经由接口；同一对同类型已存在、连自己、两端都是引用时拒绝，X7c）、改关系（类型、说明、经由接口；改成同对同类型重复时拒绝）、删关系；加接口（名称、签名，owner 固定为所在模块，ID 自动生成）、改接口、删接口（同时去掉关系上对它的引用）。
+    responsibility: 连关系（两端、类型——四类交互、说明、经由接口与修饰；同一对同类型已存在、连自己、两端都是引用时拒绝，X7c、X23）、改关系（类型、修饰、说明、经由接口；改成同对同类型重复时拒绝）、删关系；写修饰（X23、M13）——via 空串为直接（去掉），mode 只留在查询 / 委托上且只记 async（同步缺省，经 relationMode 判定），pull 只留在流上，改了类型后不再适用的修饰一并去掉；加接口（名称、签名，owner 固定为所在模块，ID 自动生成）、改接口、删接口（同时去掉关系上对它的引用）；声明 / 撤销端口的实现者 implement（X24：写进本草图接口的 implementedBy，实现者是本层模块或引用节点、不能是定义模块自己）。
     codeRefs: [src/model/intent/edit/relations.ts]
   - id: model.intent.edit.seed
     name: 草图底稿与元信息
@@ -79,9 +80,9 @@ modules:
     kind: component
     responsibility: |
       草图的两级校验 validateSketch（X14，ADR-0025），画布每次操作后、保存前与写入端点、lint:model 共用同一函数：
-      格式错误（error，拦保存）——按 JSON Schema 检查草图形状（未知字段即错）、ID 格式与重复、模块不是挂载点的直接子节点（父、前缀、嵌套不对，X9）、挂载点是层或不存在、设计草图的文件名与 mount 不一致、引用不存在、缺名称、关系不在本层（两端都不在本草图，或另一端是本层模块的后代）、连祖先与后代；
+      格式错误（error，拦保存）——按 JSON Schema 检查草图形状（未知字段即错）、ID 格式与重复、模块不是挂载点的直接子节点（父、前缀、嵌套不对，X9）、挂载点是层或不存在、设计草图的文件名与 mount 不一致、引用不存在、缺名称、关系不在本层（两端都不在本草图，或另一端是本层模块的后代）、连祖先与后代；连线的类型与修饰（X23：类型取四类，via 合四形态、port:<P> 的 P 是已知接口、bus:<M> 的 M 是已知模块，mode 只用于查询 / 委托、pull 只用于流，sketch.relation-type / sketch.via）、端口实现者是已知模块（X24）；
       语义提示（warning，拦「保存并交给 AI」与定稿）——根草图的层依赖成环、同挂载点与持久草图矛盾（复用 model.intent.check 的矛盾检查，X4、X10）、待重连（X16）；
-      只提示（hint，不进两级）——超七（X13，SKETCH_SOFT_LIMIT）、没写职责。输出 ok（能保存）、ready（能交给 AI）、三级问题列表（按实体定位）与待重连的关系，不改草图。
+      只提示（hint，不进两级）——超七（X13，SKETCH_SOFT_LIMIT）、没写职责、迁移期的 calls「待分类」与旧的平铺 via（X23）。输出 ok（能保存）、ready（能交给 AI）、三级问题列表（按实体定位）与待重连的关系，不改草图。
     principle: |
       - **只看草图本身**：不对照版本的偏差（那是核验 sketchCheck 的事）；只有矛盾检查两边都有，同一函数与稳定键。
       - **引用的范围**：本草图 ∪ 持久草图 ∪ 同一设计的其他草图 ∪ 范围外的模块（当前版本或基线，作为引用节点的端点，X19）；前缀推出的后代认作存在（X12）。
@@ -91,7 +92,7 @@ modules:
     parent: state.transition
     kind: component
     responsibility: |
-      草图画布的会话规则（纯函数，X7a、X7h，ADR-0025）：打开草图版本即进入草图画布（没有「查看态」；层次换成当前张的挂载点）与退出；草图画布与运行视角、文件选中、代码事实互斥（进入时退出场景、清掉文件选中，其下打开场景、选中文件 / 依赖线 / 耦合线 / 聚合边、开代码事实与演化叠加为无效动作）；
+      草图画布的会话规则（纯函数，X7a、X7h，ADR-0025）：打开草图版本即进入草图画布（没有「查看态」；层次换成当前张的挂载点）与退出；草图画布与运行视角、文件选中、代码事实互斥（进入时退出场景、清掉文件选中，其下打开场景、选中文件 / 依赖线 / 耦合线 / 聚合边 / 端口、开代码事实与演化、组装叠加为无效动作——草图不对应代码）；
       层次只由当前张决定：模型画布的下钻、返回上级、跳转、按 URL 恢复为无效动作，下钻与面包屑返回经 openSketch 切换且不进浏览器历史；Esc 只取消选中；有未保存改动时离开要确认；编辑后层次与选中怎么跟随。
     codeRefs: [src/state/transition/edit.ts]
   - id: state.transition.edit.mode
@@ -110,7 +111,7 @@ modules:
     responsibility: |
       DeskState 的编辑分组（desk.edit，X7、X20，ADR-0025）：持有按设计的编辑会话（ds.EditSession，一个值：设计的全部草图、当前张、设计级撤销 / 重做栈、各张读取时的指纹），由纯函数改变；画布多选、对比口径（相对基线 / 相对当前版本）、面板内提示与「隐藏外部引用」（hideReferences，只在会话里、不进 URL、不写文件，X22）也在这里；
       对外提供草图画布的操作（每个手势一个，经 model.intent.edit 的 applyDesignEdit 应用）、下钻与切张、撤销 / 重做、保存（整个设计）、保存并交给 AI、退出、新建设计；
-      打开草图版本即进入：各张草图连同 system.yaml、持久草图与引用的外部模块加载成设计的索引，作为 DeskState 的 index；并派生当前张的画布数据、两级校验、两个对比的计数、超七提示、待重连、脏与面包屑；面板用的查询（当前张里的条目、父模块对外的一面、模块的原则与血缘读法、各张草图、引用外部模块的候选）。
+      打开草图版本即进入：各张草图连同 system.yaml、持久草图与引用的外部模块加载成设计的索引，作为 DeskState 的 index；并派生当前张的画布数据、两级校验、两个对比的计数、超七提示、待重连、脏与面包屑；面板用的查询（当前张里的条目、父模块对外的一面、模块的原则与血缘读法、各张草图、引用外部模块的候选；连线「经端口」可选的端口——本张写的接口与当前版本的接口，「经总线」可选的 role: bus 模块，X23）。
     principle: |
       - **一个值**：各张草图、撤销栈、读取时的指纹互相约束（撤销回到读取时即不脏），合成一个 EditSession；「脏」由文档与读取时的草图推出，不另存（原则 6）。
       - **按设计**（X20）：撤销、脏、保存、交给 AI 都以设计为单位；会话里推出的草图未改动不算脏、不写文件。
@@ -135,7 +136,7 @@ modules:
   - id: state.desk.edit.commands
     name: 编辑操作
     parent: state.desk.edit
-    responsibility: 对呈现层的唯一一组编辑操作（if.desk.edit）：enter / exit、run（设计级操作）与 edit（单张操作，包装成设计级操作）、addModule（新建 + 落位一步）、connect、merge、split、demote、promote、moveIn（换层 + 落位一步）、rename、updateModule、moveNode（写位置时补齐还没写进 layout 的节点）、relabel、autoArrange、addReference、setAbstraction、remove（模块级联 / 关系 / 引用节点）与 previewRemove、previewSplit（X7k）、openChild（下钻）、openMount（切到挂在某个模块上的草图：面包屑、设计面板、「加到设计」）、undo / redo、save、saveAndHandToAi、discard、replayOnReload、createDesign（只发挂载点，底稿由服务端从基线复制）、canLeave（X7a：有未保存改动时离开要确认）、onReloaded（描述重新加载后认出刚保存的或标为已过时；保存进行中到达的推迟到保存完再比对，X7i）。每次成功后经 dispatch 交给编辑规则跟随。操作本身不含规则。
+    responsibility: 对呈现层的唯一一组编辑操作（if.desk.edit）：enter / exit、run（设计级操作）与 edit（单张操作，包装成设计级操作）、addModule（新建 + 落位一步）、connect（类型取四类、带修饰——机制 via、异步、拉取，X23）、merge、split、demote、promote、moveIn（换层 + 落位一步）、rename、updateModule、moveNode（写位置时补齐还没写进 layout 的节点）、relabel、autoArrange、addReference、setAbstraction、remove（模块级联 / 关系 / 引用节点）与 previewRemove、previewSplit（X7k）、openChild（下钻）、openMount（切到挂在某个模块上的草图：面包屑、设计面板、「加到设计」）、undo / redo、save、saveAndHandToAi、discard、replayOnReload、createDesign（只发挂载点，底稿由服务端从基线复制）、canLeave（X7a：有未保存改动时离开要确认）、onReloaded（描述重新加载后认出刚保存的或标为已过时；保存进行中到达的推迟到保存完再比对，X7i）。每次成功后经 dispatch 交给编辑规则跟随。操作本身不含规则。
     codeRefs: [src/state/desk/edit/commands.ts]
   - id: state.desk.edit.save
     name: 草图写回同步
@@ -185,14 +186,14 @@ modules:
     kind: component
     responsibility: |
       把草图布局写入 Vue Flow 并把手势转成编辑操作：拖节点（多选一起拖）松手 = moveNode 一步（位置换成相对中心区内容原点的坐标），拖到同层节点上 = 降级（根草图里拖到另一条层带 = 移入），拖到信息条面包屑父级或拖出中心区 = 升级（X22）；引用节点不可拖；框选（空白处拖动）/ ⇧ 多选；按住空格拖动 = 平移（节点暂不可拖，焦点在输入框时不拦截），Ctrl + 滚轮 = 缩放；
-      右键合并为新模块（≥2）、拆分（原模块有下一层草图时二次确认，X7k）、进入下一层、删除（有级联时二次确认），没有「在此设计」（#20c）；双击空白、空白处右键或「＋ 模块」就地输入名称与 ID 短名；从连线柄拖到另一节点松手选类型 + 一句说明；双击模块下钻；
+      右键合并为新模块（≥2）、拆分（原模块有下一层草图时二次确认，X7k）、进入下一层、删除（有级联时二次确认），没有「在此设计」（#20c）；双击空白、空白处右键或「＋ 模块」就地输入名称与 ID 短名；从连线柄拖到另一节点松手选类型、机制与修饰 + 一句说明（X23），拖到端口记号上松手 = 声明实现者（implement，写进接口的 implementedBy、不建关系，X24）；双击模块下钻；
       层级：框线在最底、本层的线在模块之下、引用线在模块之上（不接收指针，相关节点选中或悬停时实色）；工具条（＋ 模块、引用外部模块、隐藏外部引用——只在会话里、隐藏后适应画布、重新排列——按中心区可用区域、本层数与超七提示）；⌘Z / ⇧⌘Z、Delete / Backspace、⌘S、Esc（只取消选中）；图上标出变更时的图例。
     codeRefs: [src/components/sketch/SketchCanvas.vue]
   - id: present.sketch.elements
     name: 节点与边
     parent: present.sketch
     kind: component
-    responsibility: 草图画布的节点（模块：名称、ID、下一层标识、变更角标；引用：紧凑一行的名字 + ID + ×N，淡色虚线只读，列缩小时内容整体缩放，连线柄只在悬停时出现；框线：系统框、中心区、带层名与「同层」标注的引用列，拖出中心区时系统框高亮「松手 = 升级」；根草图的层带：带头可改名称与原则、「＋ 模块」「删层」、超七标记）与边（本层：两端中心连线裁到边框、同对多条平移错开、类型色、可拖动的标签与条数；引用线：从模块朝引用列一侧的端口到引用节点、水平切线的曲线，细、半透明、无标签，hot 时实色）。核心模块画成大块，共用件画成架上的紧凑块，非根草图的共用件架有标「共用件」的浅框（SK-22）。
+    responsibility: '草图画布的节点（模块：名称、ID、下一层标识、变更角标；引用：紧凑一行的名字 + ID + ×N，淡色虚线只读，列缩小时内容整体缩放，连线柄只在悬停时出现；框线：系统框、中心区、带层名与「同层」标注的引用列，拖出中心区时系统框高亮「松手 = 升级」；根草图的层带：带头可改名称与原则、「＋ 模块」「删层」、超七标记）与边（本层：两端中心连线裁到边框、同对多条平移错开、类型色、可拖动的标签与条数；引用线：从模块朝引用列一侧的端口到引用节点、水平切线的曲线，细、半透明、无标签，hot 时实色）。核心模块画成大块，共用件画成架上的紧凑块，非根草图的共用件架有标「共用件」的浅框（SK-22）。四类交互与边界（ADR-0029、ADR-0030）：本层的线按四类着色、查询淡，经端口的线终点画插座（L12、X23）；模块定义的接口画成端口记号（同 L13，本张写了的都画，供拖线落点，X24）；role: port / adapter 的模块名后带边界角色记号（RimTag，L14）。'
     codeRefs: [src/components/sketch/SketchNode.vue, src/components/sketch/StraightEdge.vue]
   - id: present.sketch.contracts
     name: 画布的约定与显示名
@@ -205,7 +206,7 @@ modules:
     name: 菜单与对话框
     parent: present.sketch
     kind: component
-    responsibility: 右键菜单（SketchMenu，模型画布与模块树的「在此设计」也用它）；名称 + ID 短名的输入（PartsDialog：新建、合并为新模块、拆分若干行；英文名自动填 kebab-case 短名，中文名必须手填，#13）；连线选类型与一句说明（ConnectPopover，被拒绝时就地说明）；引用外部模块的搜索（ReferencePicker）。
+    responsibility: 右键菜单（SketchMenu，模型画布与模块树的「在此设计」也用它）；名称 + ID 短名的输入（PartsDialog：新建、合并为新模块、拆分若干行；英文名自动填 kebab-case 短名，中文名必须手填，#13）；连线（ConnectPopover，X23）：类型选查 / 托 / 通知 / 流（附一句读法）、机制选直接 / 端口 / 总线 / 通道、异步 / 拉取 + 一句说明，缺省为直接的委托，被拒绝时就地说明（类型与修饰的表单与草图面板共用 RelationKindFields）；引用外部模块的搜索（ReferencePicker）。
     codeRefs: [src/components/sketch/SketchMenu.vue, src/components/sketch/PartsDialog.vue, src/components/sketch/ConnectPopover.vue, src/components/sketch/ReferencePicker.vue]
   - id: present.sketch.tree
     name: 草图导航树
@@ -221,7 +222,7 @@ modules:
     responsibility: |
       草图画布下的属性面板（SK-17、SK-18）：顶部两级校验（红色格式错误、黄色语义提示，单击定位，跨草图也能定位）、常驻「待重连 N 条」、不进两级的提示、本张的两个核验数（相对当前版本 N 处偏差 / 相对基线改了 N 处，可展开清单；持久草图只有前者）与面板内提示；
       无选中时为父模块——原则可编辑、「带入现有原则」，名称与职责只读（上一层没写时显示当前版本的文字并标出来源）；根草图无选中时为设计概览（全设计计数与各张草图）；多选时合并 / 删除所选；
-      层：名称、ID、抽象原则、包含 / 不包含、可依赖的层、删层；模块：名称、ID（前缀与唯一校验；改 ID 前列出影响——级联条数、子草图文件名、当前版本引用数——并二次确认，X7d）、职责、相关决策 adrs（E9）、角色（下拉：普通 / 核心 / 共用件 / 事件总线，SK-22）、封闭、代码落点、对外接口、原则、血缘只读（来自 A、B · 合并 / 拆分 / 改 ID / 移动）、「进入下一层 →」；关系：类型、说明、经由接口；引用节点：当前版本里的职责与位置、折叠进来的精确关系、「在模型里查看」「打开挂在它身上的草图」；元信息：挂载点、lifetime、supersedes。
+      层：名称、ID、抽象原则、包含 / 不包含、可依赖的层、删层；模块：名称、ID（前缀与唯一校验；改 ID 前列出影响——级联条数、子草图文件名、当前版本引用数——并二次确认，X7d）、职责、相关决策 adrs（E9）、角色（下拉：普通 / 核心 / 共用件 / 事件总线，SK-22）、封闭、代码落点、对外接口、原则、血缘只读（来自 A、B · 合并 / 拆分 / 改 ID / 移动）、「进入下一层 →」、端口的实现者（增删，写进接口的 implementedBy，X24）；关系：类型（查 / 托 / 通知 / 流）与修饰（机制、异步、拉取；表单 RelationKindFields，新建连线也用，X23）、说明、经由接口，待分类（迁移期的 calls）与待重连标出；引用节点：当前版本里的职责与位置、折叠进来的精确关系、「在模型里查看」「打开挂在它身上的草图」；元信息：挂载点、lifetime、supersedes。
     principle: 面板只发编辑分组的操作；合并 / 拆分 / 删除这类要对话框的，经 sketchRequest 交给画布。
     codeRefs: [src/components/sketch/SketchPanel.vue, src/components/sketch/panel/**]
   - id: present.version.identity
@@ -263,6 +264,8 @@ relations:
   - {id: rel.v4.elements-actions, from: present.sketch.elements, to: present.sketch.canvas, type: commands, via: 'channel:inject', description: 节点与边交给画布与手势：层带头的「＋ 模块」「删层」经注入的 SKETCH_ACTIONS 交给画布（就地新建、级联确认）}
   - {id: rel.v4.elements-commands, from: present.sketch.elements, to: state.desk.edit.commands, type: commands, interface: if.desk.edit, description: 节点与边交给编辑操作：层带头改名称与原则（updateModule）、标签拖动（relabel）}
   - {id: rel.v4.dialogs-commands, from: present.sketch.dialogs, to: state.desk.edit.commands, type: commands, interface: if.desk.edit, description: 菜单与对话框交给编辑操作：connect（连线被拒绝时就地说明）、addReference；读 suggestShort、referenceCandidates}
+  - { id: rel.v4.dialogs-kind-fields, from: present.sketch.dialogs, to: present.panel.sketch, type: commands, description: 菜单与对话框交给草图面板：连线弹层渲染草图面板的类型与修饰表单 RelationKindFields（X23） }
+  - { id: rel.v4.elements-rim, from: present.sketch.elements, to: present.canvas.nodes.rim, type: commands, description: 节点与边交给边界角色记号：草图的模块节点角色为 port / adapter 时渲染 RimTag（L14） }
   - {id: rel.v4.tree-commands, from: present.sketch.tree, to: state.desk.edit.commands, type: commands, interface: if.desk.edit, description: 草图导航树交给编辑操作：读当前张的画布数据；⇧ 单击多选（pick）、双击下钻（openChild）}
   - {id: rel.v4.sketch-dialog, from: present.sketch.canvas, to: present.version.actions, type: commands, description: 画布与手势交给动作区：ask：删除级联与拆分前（X7k）的二次确认（useEditDialog）}
   - { id: rel.v4.desk-view-sketch, from: present.desk-view, to: present.sketch.canvas, type: commands, description: 项目视图交给画布与手势：进入草图时项目视图把画布区渲染为草图画布 }
@@ -300,6 +303,7 @@ relations:
   - {id: rel.ed.layers-locate, from: model.intent.edit.layers, to: model.intent.edit.locate, type: queries, description: 层操作向草图寻址与 ID 生成取：寻址与 ID 生成}
   - {id: rel.ed.modules-locate, from: model.intent.edit.modules, to: model.intent.edit.locate, type: queries, description: 模块操作向草图寻址与 ID 生成取：寻址、ID 生成、子树范围}
   - {id: rel.ed.move-locate, from: model.intent.edit.move, to: model.intent.edit.locate, type: queries, description: 单张草图内的改 ID 向草图寻址与 ID 生成取：寻址、子树的全部 ID}
+  - { id: rel.ed.relations-types, from: model.intent.edit.relations, to: model.types, type: queries, description: 关系与接口操作向类型与 Schema 取：写修饰时调用 relationMode 判同步性，同步的 mode 不记（M13、X23） }
   - {id: rel.ed.relations-locate, from: model.intent.edit.relations, to: model.intent.edit.locate, type: queries, description: 关系与接口操作向草图寻址与 ID 生成取：关系与接口 ID 生成}
   - {id: rel.ed.layers-modules, from: model.intent.edit.layers, to: model.intent.edit.modules, type: commands, description: 层操作交给模块操作：删层 = 删除模块的级联}
   - {id: rel.ed.move-modules, from: model.intent.edit.move, to: model.intent.edit.modules, type: commands, description: 单张草图内的改 ID 交给模块操作：placeModule：按新父模块的写法安放}

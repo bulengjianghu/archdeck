@@ -46,7 +46,7 @@ scenario:
           steps:
             - return: {id: saved, from: access.writer.sketch, to: state.desk.edit.save, label: '合并写回、更新指纹、记拦截记录'}
             - call: {from: state.desk.edit.save, to: state.desk.edit.session, label: 'saved：清空撤销栈，接上新指纹'}
-            - call: {from: present.desk-view, to: access.model-source, label: '重新读入草图版本'}
+            - async: {from: present.desk-view, to: access.model-source, relation: rel.ad.desk-fetch, label: '重新读入草图版本'}
             - call: {from: access.model-source, to: access.reader, label: 'readSketchVersion：指令 = 草图全文 + 相对基线的变更（按血缘）'}
             - return: {from: state.desk.edit.commands, to: present.version.actions, label: '指令，复制到剪贴板'}
         - when: 文件已在外部改动
