@@ -458,6 +458,37 @@ describe('desk.edit：草图画布与 DeskState', () => {
     expect([desk.edit.stale.value, desk.edit.dirty.value, desk.edit.session.value!.read['core.a'].hash]).toEqual([false, false, 'h5'])
   })
 
+  it('保存期间到达的重新加载（本次写回触发的热更新）推迟到保存完再比对，不把自己的写回认成外部改动（第五轮 T4）', async () => {
+    let release!: () => void
+    const gate = new Promise<void>(r => (release = r))
+    const { writer } = fakeWriter({
+      saveDesignSketches: async b => {
+        await gate
+        return {
+          ok: true,
+          files: b.sketches.map(w => ({ mount: w.mount, file: `designs/d/sketches/${w.mount}.yaml`, hash: 'h-saved' })),
+          removed: [],
+          dropped: [],
+        }
+      },
+    })
+    const { desk, setPayload } = await setup(SKETCH_VERSION, writer)
+    ok(desk.edit.updateModule('core.a.z', { name: 'Z2' }))
+    const written = desk.edit.sketch.value!
+    const saving = desk.edit.save()
+    // 保存进行中继续编辑，同时热更新送来刚写下的文件
+    ok(desk.edit.updateModule('core.a.y', { name: 'Y2' }))
+    setPayload({
+      files: [SYSTEM, SKELETON, { path: 'sketches/core.a.yaml', text: sketchText(written) }],
+      sketchFiles: [{ mount: 'core.a', file: 'designs/d/sketches/core.a.yaml', path: 'sketches/core.a.yaml', hash: 'h-saved' }],
+    })
+    await desk.reload()
+    expect(desk.edit.stale.value).toBe(false)
+    release()
+    expect(await saving).toMatchObject({ ok: true })
+    expect([desk.edit.stale.value, desk.edit.session.value!.read['core.a'].hash, desk.edit.dirty.value]).toEqual([false, 'h-saved', true])
+  })
+
   it('F-52：保存并交给 AI——有语义提示时不做并说明；有未保存改动先保存，再给出指令', async () => {
     const { writer, designs } = fakeWriter()
     const { desk } = await setup(SKETCH_VERSION, writer)

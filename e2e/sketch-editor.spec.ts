@@ -795,6 +795,10 @@ test('E9、DV-13（第五轮 T3）：模块面板「相关决策」列编号与�
   await expect(panel.locator('[data-testid="module-adrs"]')).toHaveCount(0)
   await panel.getByRole('button', { name: /上级模块的决策 2 条/ }).click()
   await expect(panel).toContainText('ADR-0024')
+  // 上级决策同样列标题、单击在副栏预览（第五轮 T4）
+  await expect(panel.locator('[data-adr="24"]')).toContainText('草图的画布编辑')
+  await panel.locator('[data-adr="24"] button').click()
+  await expect(page.locator('.source-view')).toContainText('ADR-0024')
 
   const box = sandbox('zz-e2e-adrs')
   try {

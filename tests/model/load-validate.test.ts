@@ -233,5 +233,14 @@ describe('M16 role 字段与旧写法 core 的迁移', () => {
       ['roles.unknown-module', 5],
     ])
     expect(sketchCheck(index.model.sketches[0], index).deviations.filter(d => d.code === 'sketch.field')).toEqual([])
+    // 只有草图的版本（没有 modules/，DV-10）本来只画一部分模块：指向本版本没有的模块不提醒
+    const sketchOnly = loadModel(
+      files({
+        'intent/skeleton.yaml': 'sketch:\n  id: skeleton\n  mount: root\n  modules:\n    - { id: l, name: L, kind: layer, order: 1, children: [{ id: l.a, name: A }] }\n',
+        'intent/roles.yaml': 'roles:\n  l.a: shared\n  l.a.deep: core\n',
+      }),
+    )
+    expect(sketchOnly.index.modules.get('l.a')!.role).toBe('shared')
+    expect(sketchOnly.issues.filter(i => i.code === 'roles.unknown-module')).toEqual([])
   })
 })

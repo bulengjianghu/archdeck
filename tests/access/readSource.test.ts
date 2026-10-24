@@ -158,9 +158,10 @@ describe('G17 读单个文件', () => {
 })
 
 describe('E9 ADR 标题', () => {
-  it('标题取文件第一行 # 之后的文字，去掉「ADR-0025：」前缀', () => {
+  it('标题取文件首个 # 行之后的文字（前面可有 front matter 或说明），去掉「ADR-0025：」前缀；## 不算', () => {
     expect(adrTitle('# ADR-0025：草图是思考的介质\n\n正文')).toBe('草图是思考的介质')
     expect(adrTitle('\n# 模块分级')).toBe('模块分级')
+    expect(adrTitle('---\nstatus: accepted\n---\n\n## 小节\n# ADR-0028：定位与原则\n')).toBe('定位与原则')
     expect(adrTitle('正文没有标题')).toBeUndefined()
   })
   it('只读文件名以四位编号开头的 .md，读不出标题的不列', () => {

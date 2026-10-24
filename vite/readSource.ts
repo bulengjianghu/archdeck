@@ -122,7 +122,7 @@ export function readAdrTitles(root: string, files: readonly string[]): Record<st
   for (const f of files) {
     if (!/(^|\/)\d{4}[^/]*\.md$/.test(f)) continue
     try {
-      const title = adrTitle(fs.readFileSync(path.join(root, f), 'utf8').slice(0, 2048))
+      const title = adrTitle(fs.readFileSync(path.join(root, f), 'utf8').slice(0, 4096))
       if (title) out[f] = title
     } catch {
       /* 读不了就不给标题 */
@@ -131,10 +131,12 @@ export function readAdrTitles(root: string, files: readonly string[]): Record<st
   return out
 }
 
-/** E9：ADR 文件第一行 `# ` 之后的文字，去掉「ADR-0025：」式前缀；读不出为 undefined */
+/** E9：ADR 文件首个 `# ` 行（一级标题；前面可以有空行、front matter 等）之后的文字，去掉与编号重复的「ADR-0025：」式前缀；读不出为 undefined */
 export function adrTitle(text: string): string | undefined {
-  const first = text.split('\n').find(l => l.trim())
-  const m = first ? /^#\s+(.*)$/.exec(first.trim()) : null
+  const m = text
+    .split('\n')
+    .map(l => /^#\s+(.*)$/.exec(l.trim()))
+    .find(x => !!x)
   if (!m) return undefined
   return m[1].replace(/^ADR[-\s]?\d+\s*[：:]\s*/, '').trim() || undefined
 }

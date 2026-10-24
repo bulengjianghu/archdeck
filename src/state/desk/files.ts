@@ -15,6 +15,8 @@ import {
   moduleAdrs,
   ancestorAdrs,
   adrLabel,
+  adrDir,
+  adrFile,
   type DirNode,
   type ExportMatch,
   type ExportedSymbol,
@@ -79,8 +81,17 @@ export function createFiles({ state, index, view, sync, design }: FilesInputs) {
 
   /** E9：模块自己写的相关决策（编号、文件、标题）与祖先写的（不继承，面板折叠成一行） */
   const adrsOf = (moduleId: string) => (index.value ? moduleAdrs(index.value, moduleId, local.value?.files ?? [], local.value?.adrTitles) : [])
-  const ancestorAdrsOf = (moduleId: string) =>
-    index.value ? ancestorAdrs(index.value, moduleId).map(x => ({ ...x, label: adrLabel(x.n), name: index.value?.modules.get(x.id)?.name ?? x.id })) : []
+  /** E9：祖先写的决策（折叠行展开后列出），带文件与标题，单击同样在副栏预览 */
+  const ancestorAdrsOf = (moduleId: string) => {
+    const ix = index.value
+    if (!ix) return []
+    const dir = adrDir(ix.model.system)
+    const files = local.value?.files ?? []
+    return ancestorAdrs(ix, moduleId).map(x => {
+      const file = adrFile(files, dir, x.n)
+      return { ...x, label: adrLabel(x.n), name: ix.modules.get(x.id)?.name ?? x.id, file, title: file ? local.value?.adrTitles?.[file] : undefined }
+    })
+  }
 
   return {
     payload,

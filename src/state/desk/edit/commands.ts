@@ -304,7 +304,19 @@ export function createCommands(i: CommandInputs) {
     return true
   }
 
-  const save = (): Promise<SaveOutcome> => i.sync.save()
+  /** 保存期间到达的描述重新加载（多半是本次写回触发的热更新）：先不比对，保存完、会话接上新指纹后再比（第五轮 T4，免得把自己的写回认成外部改动） */
+  let reloadWhileSaving = false
+
+  async function save(): Promise<SaveOutcome> {
+    try {
+      return await i.sync.save()
+    } finally {
+      if (reloadWhileSaving) {
+        reloadWhileSaving = false
+        reconcile()
+      }
+    }
+  }
 
   /** F-52、X20：保存并交给 AI——有格式错误或语义提示时不做并说明；有未保存改动先保存，再取新读到的指令 */
   async function saveAndHandToAi(): Promise<{ ok: true; prompt: string } | { ok: false; reason: string }> {
@@ -365,11 +377,17 @@ export function createCommands(i: CommandInputs) {
   /** X7a：离开前是否要确认 */
   const canLeave = (): 'free' | 'confirm' => leaveGuard(!!session.value && isDirty(session.value, i.baseline()))
 
-  /** 描述重新加载后：编辑会话认出刚保存的或标为已过时；返回要显示的索引 */
-  function onReloaded(): ModelIndex | null {
+  /** 会话与新读到的草图比对：认出刚保存的，或标为已过时 */
+  function reconcile() {
     const s = session.value
     const read = readSketches()
     if (s && read) session.value = reloaded(s, read)
+  }
+
+  /** 描述重新加载后：编辑会话认出刚保存的或标为已过时（保存进行中时推迟到保存完）；返回要显示的索引 */
+  function onReloaded(): ModelIndex | null {
+    if (i.sync.saving.value && session.value) reloadWhileSaving = true
+    else reconcile()
     return session.value ? derive.index.value : loaded.value
   }
 

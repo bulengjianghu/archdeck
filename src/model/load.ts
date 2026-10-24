@@ -238,7 +238,9 @@ export function load(files: readonly RawFile[]): LoadResult {
       })
     host.abstraction = a.value
   }
-  applyRoles(roles, modules, sketched, issues)
+  // 只有草图的版本（草图作为版本，DV-10：没有 modules/）本来就只画了一部分模块：roles 指向本版本没有的模块不提醒
+  const sketchOnly = !files.some(f => f.path.startsWith('modules/'))
+  applyRoles(roles, modules, sketched, issues, sketchOnly)
 
   return {
     model: {
@@ -252,19 +254,20 @@ export function load(files: readonly RawFile[]): LoadResult {
 
 /**
  * M16：intent/roles.yaml 的角色落到模块上——草图里写了 role 的以草图为准（不同时提醒），没写的取 roles.yaml；
- * 指向不存在的模块提醒。AI 生成的 modules/ 不写 role（04 §3.2），写了也被 roles.yaml 覆盖。
+ * 指向不存在的模块提醒（只有草图的版本不提醒）。AI 生成的 modules/ 不写 role（04 §3.2），写了也被 roles.yaml 覆盖。
  */
 function applyRoles(
   roles: readonly { id: string; role: ModuleRole; src: SourceLoc }[],
   modules: ModuleEntity[],
   sketched: ReadonlyMap<string, { written: Set<string>; file: string }>,
   issues: Issue[],
+  sketchOnly = false,
 ) {
   const byId = new Map(modules.map(m => [m.id, m]))
   for (const { id, role, src } of roles) {
     const m = byId.get(id)
     if (!m) {
-      issues.push({ severity: 'warning', code: 'roles.unknown-module', message: `roles 里的模块「${id}」不在描述里，这条角色没有落处（M16）`, ...src })
+      if (!sketchOnly) issues.push({ severity: 'warning', code: 'roles.unknown-module', message: `roles 里的模块「${id}」不在描述里，这条角色没有落处（M16）`, ...src })
       continue
     }
     const sk = sketched.get(`module:${id}`)
