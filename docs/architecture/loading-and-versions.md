@@ -102,8 +102,8 @@ sequenceDiagram
     participant F as designs/<设计>/
     participant UI as h5p-arch-desk
 
-    A->>F: 画草图 sketch.yaml（核心与骨架、自选深度）；lint:model 校验
-    A->>UI: 打开草图：分层总览、对比当前版本；「交给 AI」生成指令
+    A->>F: 在此设计：按挂载点画草图 sketches/<挂载点>.yaml（底稿从基线复制，草图画布上编辑）；lint:model 校验
+    A->>UI: 草图画布：两个对比（相对基线 / 相对当前版本）；「保存并交给 AI」生成指令
     A->>AI: 草图全文 + 04 §5「按草图扩展」
     AI->>F: 确认当前版本与代码一致；复制为 r1 并按草图扩展；本轮说明写 r1/revision.yaml（不碰 design.yaml）；sketch-check 零 error
     F-->>UI: 文件变化 → 刷新
@@ -119,11 +119,9 @@ sequenceDiagram
 ### 4.2 草图作为版本（DV-10）
 
 - 路由 `/p/<项目>/d/<设计>/sketch`，与设计的轮次同一个项目视图；`DesignVersionRef.revision === 'sketch'`。
-- 内容：`system.yaml` + `intent/**`（持久草图）+ 该设计的 `sketch.yaml`，走同一条加载流水线——草图里只写了的实体出现在图上，设计的草图在持久草图之后进入 Loader，对同一实体的不同值以设计的草图为准（草图之间不算重定义，矛盾由核验报出）。
-- 对比基线只有当前版本：相对当前版本标出草图新增 / 修改的实体，当前版本里草图没画的实体全部列为删除项——这是局部描述的本意，不是问题。
-- 设计信息条标「草图」，没有轮次、变更计数照常；「交给 AI」把 `sketchPrompt` 放进剪贴板。
-
-- **多草图（ADR-0025，待实现）**：设计的草图改为 `designs/<设计>/sketches/<mount>.yaml`，每个挂载点一张，一期的单个 `sketch.yaml` 照常读取；草图版本的载荷附各张草图的 `{ file, hash }` 与设计基线（`base.commit` 时的描述，经 git 读取）供底稿与相对基线；打开 v2 草图进入草图画布（[工作台 §12](./workbench.md)），一期草图只读（X9、X18）。
+- 内容：`system.yaml` + `intent/**`（持久草图）+ 该设计的各张草图 `sketches/<mount>.yaml`（每个挂载点一张，根挂载在前）+ `references.yaml`（草图引用的外部模块，取自当前版本，只读，X19），走同一条加载流水线；设计的草图在持久草图之后进入 Loader，对同一实体的不同值以设计的草图为准（草图之间不算重定义，矛盾由核验报出）。
+- 载荷另附各张草图的 `{ mount, file, hash, needsLayout }`（保存时比对，X7i）、当前版本与设计基线（`base.commit` 那一版描述，经 git 读取，X18）两份对比原文，以及「交给 AI」的指令（各张草图全文 + 相对基线的变更摘要，按血缘，X20）。
+- 打开即进入草图画布（[工作台 §12](./workbench.md)、[视图状态 §7](./view-state.md)）：对比只有「相对基线」与「相对当前版本」两种，按挂载点取同一范围、按血缘计数，「删除」只算范围内的主动删除（X17）。持久草图版本（`/p/<项目>/i/<ID>`）同理，只有相对当前版本（对象为去掉它贡献后的当前版本）。
 
 ### 4.3 轮次从目录发现（E8，ADR-0024）
 

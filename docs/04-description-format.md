@@ -32,7 +32,7 @@ model/<项目>/
 | 人（架构师、负责人） | 草图：`intent/*.yaml`（骨架等持久草图）、`designs/<设计>/sketches/*.yaml`；`rules.yaml`（AI 重新生成时不改动，§3.8）；`source-ignore.yaml`（忽略项）；`designs/<设计>/design.yaml`（目标、状态、基线、ADR、认可偏差 `accepted`、评审意见 `revisions[].feedback`——不含每轮说明，E8）；`reviewed.yaml`（确认记录，§3.9） | 只追加：例外、忽略项、评审意见（该轮没有条目时新建，B2）、认可偏差；确认记录追加或按模块更新（Z1）；归档 / 晋升改设计状态、晋升时整份替换持久草图；草图在画布编辑后按设计整份覆盖、新建设计，级联改名与删除只限 `designs/<设计>/sketches/*`（B6、B7、X7）；其余由人编辑 | 记在 `governance/owned.json`：人改完后 `npm run arch -- own` 登记，页面写入自动更新，`lint:model` 不符即报错 `owned.changed` |
 | 命令行与 agent 接口 | `governance/` | 只读 | — |
 
-- 骨架只描述层和第二级模块；AI 只能用 `parent: <第二级 ID>` 往骨架之下挂子模块，对骨架里的模块只能补草图没写的字段，不得重定义已写的字段（X1，`lint:model` 报 `sketch-redefined`）。没有 `intent/skeleton.yaml` 的旧描述仍可把层写在 `modules/layers.yaml`（兼容期）。
+- 骨架只描述层、第二级模块与第二级之间的关系（自草图 v2 起，根草图带第二级关系，晋升后由骨架拥有；`modules/` 里同 ID 的关系只能补 `interface`、`payload`、`via` 等骨架没写的字段）；AI 只能用 `parent: <第二级 ID>` 往骨架之下挂子模块，对骨架里的模块只能补草图没写的字段，不得重定义已写的字段（X1，`lint:model` 报 `sketch-redefined`）。没有 `intent/skeleton.yaml` 的旧描述仍可把层写在 `modules/layers.yaml`（兼容期）。
 - 一个区域文件对应一位生成者负责的范围，互不改写，便于并行生成和局部重新生成。
 
 ## 2. 文件格式
@@ -335,7 +335,7 @@ reviewed:
 
 草图是架构师的意图载体，也是思考的介质（02 §1.10，X1–X5、X9–X20，ADR-0023、ADR-0025）：一份人拥有的**局部描述**，**一张草图挂在一个模块下、只画一个层次**——挂载点的直接子模块、它们之间的关系、跨边界的关系、父模块的原则，加上架构师摆放的位置。没写的字段不约束；AI 必须沿用它的 ID 与父子关系，只在它之下展开。
 
-> 状态：格式 v2 的读取、校验、编辑操作、两个对比与按设计写回已实现（模型层与接入层，ADR-0025）；草图画布与草图面板待实现。一期格式已迁移、不再读取（见本节末「迁移」）。
+> 状态：已实现（ADR-0025）——格式 v2 的读取、校验、编辑操作、两个对比、按设计写回、草图画布与草图面板；本项目的设计 `sketch-v2` 已按此归档，根草图晋升为骨架。一期格式已迁移、不再读取（见本节末「迁移」）。
 
 #### 文件与位置
 
@@ -402,6 +402,8 @@ sketch:
       abstraction: …             # 根挂载时，各层的 abstraction / includes / excludes / mayDependOn 就是「原则」，草图顶层不写 abstraction
       children:                  # 根挂载是唯一允许嵌套的情形：层下嵌套第二级模块
         - { id: present.version, name: 版本切换与设计信息条, kind: subsystem }
+  relations:                     # 自 v2 起骨架包含第二级之间的关系（显式写在本层，X18）
+    - { id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: depends }
 ```
 
 #### 字段

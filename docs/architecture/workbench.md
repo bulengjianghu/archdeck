@@ -46,12 +46,12 @@ type PaneLayout =
 
 | 组件 | 内容 |
 |---|---|
-| 版本切换 | 当前版本与各设计各轮的下拉；切换时带上当前 `level` / `sel` |
-| 视角切换 | 「结构 ｜ 运行：<场景名>」；结构视角下「运行」弹出场景列表；运行视角下可换场景或退出（V1） |
+| 版本切换 | 当前版本、持久草图（「✎ 名称」）、各设计的草图与各轮、改动过描述的提交的下拉；选中后只显示名称、kind 用图标（F-63）；切换时带上当前 `level` / `sel` |
+| 视角切换 | 「结构 ｜ 运行：<场景名>」；结构视角下「运行」弹出场景列表；运行视角下可换场景或退出（V1）；草图画布下不出现 |
 | 场景列表 | 默认只列与当前层次相关的场景，可切到全部、按发起者筛选；显示名称、触发者、消息数（R4、R4a） |
 | 面包屑 | 「项目 / 系统 / … / 当前层次」，点击任一级返回 |
 | 工具栏 | 搜索模块名或 ID 并跳转（N4）。画布显示设置不在工具栏，统一在画布右下角「显示」面板（W-2、ADR-0017） |
-| 设计信息条 | 设计名、轮次、状态、日期；「设计说明与变更清单」入口；对比基线（当前版本 / 上一轮）；新增 / 修改 / 删除计数；标出变更开关；基线漂移提示 |
+| 信息条（三区） | 提交版本、设计轮次与草图下出现。身份区：kind 标签 + 名称（只出现一次）+ 状态 / 轮次 / 提交日期；动作区：「说明」（草图下另有保存、撤销 / 重做、保存并交给 AI、退出，见 §12）；对比区：一个按钮「对比 <基线> · 计数」，弹层放基线选择（提交版本为任一提交或当前版本，轮次为当前版本或上一轮）、计数、标出变更开关、基线漂移提示（F-60–F-62） |
 
 ## 4. 画布（结构图）
 
@@ -180,7 +180,7 @@ type PaneLayout =
 
 | 模块 | 组件 |
 |---|---|
-| 草图画布 `present.sketch` | `sketch/SketchCanvas.vue`（Vue Flow 自由模式；工具条、快捷键、拖放落点——摆位置、降级、升级、移入——都在这里）· `SketchNode.vue`（模块、引用与根草图的层带）· `StraightEdge.vue` · `SketchMenu.vue`（右键菜单）· `PartsDialog.vue`（名称 + ID 短名，新建 / 合并 / 拆分共用）· `ConnectPopover.vue`（连线选类型）· `ReferencePicker.vue`（引用外部模块）· `SketchTree.vue`（草图下的导航树）· `actions.ts`（面板与节点向画布请求对话框、升级落点高亮）· `labels.ts`（角标与六类计数）；布局为 `layout/sketch.ts`（`state.layout.sketch`） |
+| 草图画布 `present.sketch` | 画布与手势 `present.sketch.canvas`：`sketch/SketchCanvas.vue`（Vue Flow 自由模式；工具条、快捷键、拖放落点——摆位置、降级、升级、移入）· 节点与边 `.elements`：`SketchNode.vue`（模块、引用与根草图的层带）、`StraightEdge.vue` · 菜单与对话框 `.dialogs`：`SketchMenu.vue`（右键菜单）、`PartsDialog.vue`（名称 + ID 短名，新建 / 合并 / 拆分共用）、`ConnectPopover.vue`（连线选类型）、`ReferencePicker.vue`（引用外部模块）· 草图导航树 `.tree`：`SketchTree.vue` · 约定与显示名 `.contracts`：`actions.ts`（层带头动作的注入键、面板请求画布的对话框、升级落点高亮）、`labels.ts`（角标、六类计数、变更分组）；布局为 `layout/sketch.ts`（`state.layout.sketch`） |
 | 草图面板 `present.panel.sketch` | `sketch/SketchPanel.vue` 与 `sketch/panel/**`：ChecksSection（两级校验、待重连、本张核验）· ParentSection · ModuleForm · LayerForm · RelationForm · ReferenceSection · MetaSection；合并 / 拆分 / 删除经 `sketch/actions.ts` 请求画布的对话框 |
 | 设计面板的草图列表 `present.panel.design` | `panel/DesignSketches.vue`：各张草图（挂载点、模块数、推出 / 脏标记），点击切张；「改骨架」 |
-| 信息条（三区） `present.version` | `infobar/InfoBar.vue`（身份区与面包屑，父级带 `data-parent` 作升级落点）· `infobar/ActionZone.vue`（动作区，按模式，F-61）· `infobar/CompareZone.vue`（对比按钮与弹层，F-62）· `infobar/ChangeGroups.vue`（全设计变更清单按血缘分组，F-53）；`edit/NewDesignDialog.vue` 与 `edit/designHere.ts`（「在此设计」与挂载点、「加到设计」）、`edit/EditDialog.vue` 与 `edit/useEditDialog.ts`（确认 / 三选对话框）、`edit/leave.ts`（退出回到进入前的版本） |
+| 信息条三区 `present.version.*` | 身份区 `.identity`：`infobar/InfoBar.vue`（身份与面包屑，父级带 `data-parent` 作升级落点）· 动作区 `.actions`：`infobar/ActionZone.vue`（按模式，F-61）、`infobar/ChangeGroups.vue`（全设计变更清单按血缘分组，F-53）、`edit/EditDialog.vue` 与 `edit/useEditDialog.ts`（确认 / 三选对话框）、`edit/leave.ts`（退出回到进入前的版本）· 对比区 `.compare`：`infobar/CompareZone.vue`（F-62）· 新建设计 `.new-design`：`edit/NewDesignDialog.vue`、`edit/designHere.ts`（「在此设计」与挂载点、「加到设计」）；版本切换 `VersionSwitcher.vue` 在 `present.version` 自身 |
