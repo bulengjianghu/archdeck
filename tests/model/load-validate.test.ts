@@ -284,30 +284,14 @@ describe('第六轮：四类交互、via、端口实体、角色与场景类别�
     expect(issuesOf(r, 'relation.unclassified')).toHaveLength(4)
   })
 
-  it('M17：implements 不进关系索引——有 interface 时读作该接口的实现者，并提醒 relation.implements-migrated（warning，带行号）', () => {
+  it('M17：迁移完成后（第六轮 T2）implements 为格式错误（M1）：整份文件跳过，实现者写在接口的 implementedBy', () => {
     const r = lm('relations:\n  - { id: ri, from: infra.mus, to: infra.framework, type: implements, interface: if.sm }\n')
     expect(r.index.relations.has('ri')).toBe(false)
-    expect(r.index.interfaces.get('if.sm')!.implementedBy).toEqual(['infra.mus'])
-    expect(issuesOf(r, 'relation.implements-migrated').map(i => [i.severity, i.line])).toEqual([['warning', 2]])
-  })
-
-  it('M17：没写 interface 时，目标子树内恰声明一个接口（G12 口径）即对应它；没有或多于一个时丢弃并提醒', () => {
-    // infra.framework 子树内只有 if.sm
-    const one = lm('relations:\n  - { id: ri, from: infra.player, to: infra.framework, type: implements }\n')
-    expect(one.index.interfaces.get('if.sm')!.implementedBy).toEqual(['infra.player'])
-    // infra.framework.pipeline 没有声明接口
-    const none = lm('relations:\n  - { id: ri, from: infra.player, to: infra.framework.pipeline, type: implements }\n')
-    expect(issuesOf(none, 'relation.implements-migrated')[0].message).toContain('没有声明任何接口')
-    expect([...none.index.interfaces.values()].every(x => !x.implementedBy?.includes('infra.player') || x.id === 'if.plan')).toBe(true)
-    // 根下 infra 子树只有 if.sm；domain 子树 if.model——app 子树 if.plan；整个 sys 不是模块。造一个声明两个接口的模块
-    const two = lm('interfaces:\n  - { id: if.a, name: A, owner: domain.services }\n  - { id: if.b, name: B, owner: domain.services }\nrelations:\n  - { id: ri, from: app.fragments, to: domain.services, type: implements }\n')
-    expect(issuesOf(two, 'relation.implements-migrated')[0].message).toContain('2 个接口')
-    expect(two.index.interfaces.get('if.a')!.implementedBy).toBeUndefined()
-    // 引用这条已废除关系的步骤按「引用不存在的关系」处理（S12、S5b）
-    const step = lm(
-      'relations:\n  - { id: ri, from: infra.player, to: infra.framework, type: implements }\nscenario:\n  id: sc.x\n  name: X\n  steps:\n    - call: { from: infra.player, to: infra.framework, relation: ri }\n',
-    )
-    expect(codes(step.issues)).toContain('unknown-relation')
+    expect(issuesOf(r, 'schema').map(i => [i.severity, i.file])).toEqual([['error', 'z.yaml']])
+    expect(issuesOf(r, 'relation.implements-migrated')).toEqual([])
+    // 写在接口上的实现者照常读取
+    const ok = lm('interfaces:\n  - { id: if.x, name: X, owner: infra.framework, implementedBy: [infra.mus] }\n')
+    expect(ok.index.interfaces.get('if.x')!.implementedBy).toEqual(['infra.mus'])
   })
 
   it('M18：implementedBy 每项须是存在的模块（参与者不可），不是时提醒并去掉；重复的去重', () => {

@@ -116,13 +116,13 @@ describe('校验', () => {
     expect(steps.map(s => s.msg.id)).toEqual(['a', undefined])
   })
 
-  it('S12：implements 不再是关系（M17 读作端口实现者），步骤引用它按「引用不存在的关系」提醒并去掉（S5b）', () => {
+  it('S12：implements 不再是关系（M17，格式错误），步骤引用不存在的关系按「引用不存在的关系」提醒并去掉（S5b）', () => {
     const r = loadModel(
       scenarioFiles({
-        'scenarios/x.yaml': 'relations: [{ id: ri, from: infra.player, to: app.solution, type: implements }]\nscenario: { id: sc.x, name: X, steps: [{ call: { from: infra.player, to: app.solution, relation: ri } }] }',
+        'scenarios/x.yaml': 'scenario: { id: sc.x, name: X, steps: [{ call: { from: infra.player, to: app.solution, relation: ri } }] }',
       }),
     )
-    expect(codes(r.issues)).toEqual(['relation.implements-migrated', 'unknown-relation'])
+    expect(codes(r.issues)).toEqual(['unknown-relation'])
     expect((r.index.scenarios.get('sc.x')!.steps[0] as MessageStep).msg.relation).toBeUndefined()
   })
 })

@@ -53,9 +53,12 @@ describe('属性面板', () => {
 
   it('K11：声明了接口的模块有端口三角——定义 · 实现者（implementedBy，ADR-0029 迁移期兼容）· 使用者（经端口），单击使用者选中那条关系；没有接口的模块没有', async () => {
     const files = sampleFiles({
-      'ports.yaml':
-        "relations:\n  - { id: rpi, from: app.solution, to: infra.framework.sm, type: implements }\n  - { id: rpu, from: infra.player, to: infra.framework.sm, type: commands, via: 'port:if.sm' }\n",
-    })
+      'ports.yaml': "relations:\n  - { id: rpu, from: infra.player, to: infra.framework.sm, type: commands, via: 'port:if.sm' }\n",
+    }).map(f =>
+      f.path === 'relations.yaml'
+        ? { ...f, text: f.text.replace("'sendCommand(cmd: Command): Result' }", "'sendCommand(cmd: Command): Result', implementedBy: [app.solution] }") }
+        : f,
+    )
     const { wrapper, desk } = await mountPanel('/?level=infra.framework&sel=m:infra.framework.sm', files)
     const section = wrapper.findAll('section').find(x => x.text().includes('端口（定义 · 实现者 · 使用者）'))!
     expect(section.text()).toContain('sendCommand')

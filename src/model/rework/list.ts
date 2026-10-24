@@ -77,7 +77,6 @@ const ISSUE_RULES: Record<string, string[]> = {
   'module.core-legacy': ['M16'],
   'roles.shadowed': ['M16'],
   'roles.unknown-module': ['M16'],
-  'relation.implements-migrated': ['M17'],
   'unknown-implementer': ['M18'],
   'relation.via-legacy': ['M20'],
   'step.sync-mismatch': ['S19'],
@@ -104,7 +103,6 @@ const ISSUE_RULES: Record<string, string[]> = {
 function descriptionFix(i: Issue): string {
   if (i.code === 'sketch-redefined') return '草图里的实体由架构师定：去掉这里对已写字段的重定义，只补草图没写的字段或往下挂子模块；要改草图本身请交给架构师（X1、X5）'
   if (i.code === 'relation-type-renamed') return '改为新名：event → notifies 并对调 from / to，dataflow → streams；再核对说明里的方向字样'
-  if (i.code === 'relation.implements-migrated') return '删去这条 implements 关系：实现端口的在接口的 implementedBy 写上实现者；有交互的按三问写 queries / commands（M17）'
   if (i.code === 'relation.via-legacy') return "把 via 改写为四形态：port:<接口 ID> / bus:<总线模块 ID> / channel:<通道名>（如 via: 'channel:http'，M20）"
   return i.severity === 'error' ? '改正描述：这一处的实体已被剔除，图上看不到它' : '改正描述：坏引用已被去掉'
 }

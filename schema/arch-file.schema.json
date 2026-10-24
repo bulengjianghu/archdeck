@@ -649,7 +649,7 @@
           "$ref": "#/definitions/id"
         },
         "type": {
-          "description": "关系类型（02 §1.1、ADR-0029）：四类交互 queries 查询 / commands 委托 / notifies 通知 / streams 流，箭头是控制流方向。迁移期：calls 读作「未分类」（M17，提示）；implements 读作端口的实现者（接口的 implementedBy，M17，提醒）；depends 已不是关系类型（M15）；event / dataflow 是已弃用的旧名（M12）",
+          "description": "关系类型（02 §1.1、ADR-0029）：四类交互 queries 查询 / commands 委托 / notifies 通知 / streams 流，箭头是控制流方向。迁移期：calls 读作「未分类」（M17，提示）；implements 已不是关系类型，实现者写进接口的 implementedBy（M17，读到为格式错误）；depends 已不是关系类型（M15）；event / dataflow 是已弃用的旧名（M12）",
           "anyOf": [
             {
               "enum": [
@@ -661,8 +661,7 @@
             },
             {
               "enum": [
-                "calls",
-                "implements"
+                "calls"
               ],
               "deprecated": true
             },

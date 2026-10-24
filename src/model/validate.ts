@@ -224,7 +224,7 @@ function checkImplementers({ modules, actors, interfaces, warn }: Checked) {
   }
 }
 
-/** 关系：ID 唯一、端点有效、不连自身 / 两个参与者 / 祖先与后代；接口与数据结构引用存在；修饰与机制（M11、M13、M20）；迁移期映射（M17） */
+/** 关系：ID 唯一、端点有效、不连自身 / 两个参与者 / 祖先与后代；接口与数据结构引用存在；修饰与机制（M11、M13、M20）；迁移期的未分类（M17；implements 已是格式错误，由 schema 拒绝） */
 function checkRelations(input: ArchModel, c: Checked): RelationEntity[] {
   const relations: RelationEntity[] = []
   const relationIds = new Set<string>()
@@ -236,12 +236,6 @@ function checkRelations(input: ArchModel, c: Checked): RelationEntity[] {
       continue
     }
     if (!relationEndsValid(c, r)) continue
-    // M17：implements 不再是关系类型，读作对应接口的实现者，不进关系索引
-    if (r.type === 'implements') {
-      relationIds.add(r.id)
-      migrateImplements(c, r)
-      continue
-    }
     if (r.interface && !c.interfaces.has(r.interface)) {
       c.warn('unknown-interface', `关系「${r.id}」引用的接口「${r.interface}」不存在`, r.src)
       r.interface = undefined
@@ -308,42 +302,6 @@ function checkVia(c: Checked, r: RelationEntity, buses: readonly string[]): Rela
     return undefined
   }
   return via
-}
-
-/** M17：G12 口径下模块声明的接口——provides，加上 owner 在子树内的接口 */
-function declaredInterfaces(c: Checked, moduleId: string): string[] {
-  const out = new Set(c.modules.get(moduleId)?.provides ?? [])
-  const inside = (id: string | undefined) => {
-    for (let cur = id; cur !== undefined && cur !== c.rootId; cur = c.modules.get(cur)?.parentId) if (cur === moduleId) return true
-    return false
-  }
-  for (const x of c.interfaces.values()) if (inside(x.owner)) out.add(x.id)
-  return [...out]
-}
-
-/**
- * M17：implements 关系 A → B 读作端口的实现者——有 interface 时记 A 为它的实现者；没写而 B 子树内恰声明一个接口（G12 口径）时记为它的；
- * 都不是时丢弃。每条提醒迁移。
- */
-function migrateImplements(c: Checked, r: RelationEntity) {
-  const ifId = r.interface && c.interfaces.has(r.interface) ? r.interface : undefined
-  const candidates = ifId ? [ifId] : c.modules.has(r.to) ? declaredInterfaces(c, r.to) : []
-  const target = candidates.length === 1 ? c.interfaces.get(candidates[0]) : undefined
-  if (target && c.modules.has(r.from)) {
-    if (!target.implementedBy?.includes(r.from)) target.implementedBy = [...(target.implementedBy ?? []), r.from]
-    c.warn(
-      'relation.implements-migrated',
-      `关系「${r.id}」（implements）已不是关系类型，已读作接口「${target.id}」的实现者「${r.from}」；请删去这条关系，在该接口的 implementedBy 写上它（M17）`,
-      r.src,
-    )
-    return
-  }
-  const why = !c.modules.has(r.from)
-    ? `发起方「${r.from}」不是模块`
-    : candidates.length === 0
-      ? `「${r.to}」没有声明任何接口`
-      : `「${r.to}」声明了 ${candidates.length} 个接口，没写 interface 无法对应`
-  c.warn('relation.implements-migrated', `关系「${r.id}」（implements）已不是关系类型，${why}，已丢弃：实现端口的写进接口的 implementedBy，有交互的按三问写 queries / commands（M17）`, r.src)
 }
 
 /** 裁决 4：被 via: port: 引用、或描述写了实现者的接口是端口 */
