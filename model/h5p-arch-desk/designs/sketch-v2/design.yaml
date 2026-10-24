@@ -3,7 +3,7 @@
 design:
   id: sketch-v2
   name: 草图编辑 v2
-  status: draft
+  status: implemented
   adr: docs/adr/0025-sketch-as-thinking-medium.md
   goal: |
     把草图编辑重做为「思考的介质」：一张草图挂在一个模块下、只画一个层次、自由布局，拆合是设计动作并记血缘，

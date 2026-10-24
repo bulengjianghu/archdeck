@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-23T16:18:02.318Z",
+  "updatedAt": "2026-10-24T01:38:23.063Z",
   "files": {
     "designs/phase2-dynamic/design.yaml": "6516452b564ba19af25d3966b1d462226c04bc50",
     "designs/phase2-dynamic/sketches/model.scenario.yaml": "a995723ac57e941231284740095a28894699c7b8",
@@ -15,8 +15,9 @@
     "designs/sketch-editor/sketches/present.version.yaml": "decb6bdfbb19e28f2238a4ee237642906b6f53a6",
     "designs/sketch-editor/sketches/state.desk.yaml": "28be8f721790937377ceddf4fd19be6b5f21793d",
     "designs/sketch-editor/sketches/state.transition.yaml": "50fa541560439058344f6d120aa818134d8af9ae",
-    "intent/skeleton.yaml": "d015777cbe2ae0b284e41f8db7580e1c8450816e",
-    "reviewed.yaml": "33fcc00e3a9fb0f2cea595fc9527be0cf7cb7d36",
+    "designs/sketch-v2/design.yaml": "168e2021850d6abe9af948dcff96962df8b0e47f",
+    "intent/skeleton.yaml": "d54d862b0d82719b3f7554a0fd4e5c574f29a2a0",
+    "reviewed.yaml": "4a13787c9222bb1e7c0242b8ae04d7517f1428c0",
     "rules.yaml": "a13c7fdc7f24544c64076910eab98367580b6f7c",
     "source-ignore.yaml": "308aa1e447d02c2521eb9bb6803faa300d2f3860"
   }

@@ -1,11 +1,11 @@
-# 骨架（持久草图，X1、X2，ADR-0023）：4 个层 + 第二级模块，人拥有、AI 重新生成时不改动；第二级封闭（closed），AI 只能在这些模块之下挂子模块。
-# 依赖方向：呈现 → 视图状态 → 模型 ← 接入（docs/03-architecture.md §2–§3）。从 modules/layers.yaml 机械拆出，ID 与内容不变。
+# 设计 sketch-v2 的根挂载草图（ADR-0025，协调者裁决 6）：骨架整份复制 + 呈现层下新增「草图画布」present.sketch、改「版本切换与设计信息条」present.version；
+# 第二级之间的关系按 X18 从基线 5285286 复制（显式写在本层），复制后相对基线只剩上述变化。supersedes: skeleton——定稿实现后晋升替换骨架。呈现层之外的变化（模型层、视图状态层、接入层）由 AI 按 ADR-0025 与 02 X9–X20 展开。
 
 sketch:
   id: skeleton
   mount: root
   lifetime: persistent
-  closed: [present, state, access, model]
+  closed: [ present, state, access, model ]
   modules:
     - id: present
       name: 呈现层
@@ -13,10 +13,10 @@ sketch:
       order: 1
       abstraction: 把状态画出来、把用户操作上交：只读 DeskState、只调它的操作，不做投影与布局计算
       responsibility: 应用外壳与路由、项目列表、项目视图（含分屏与副栏）、导航树（模块 / 文件 / 步骤 / 问题）、画布（含回放与文件高亮）、时序图、源代码预览、场景列表与回放控制、属性面板（含写入人拥有的文件）、导航与入门页。
-      includes: [Vue 组件, 路由, 交互事件, 样式]
-      excludes: [层次投影规则, 布局算法, 文件读取]
-      mayDependOn: [state, model]
-      docRefs: [docs/03-architecture.md]
+      includes: [ Vue 组件, 路由, 交互事件, 样式 ]
+      excludes: [ 层次投影规则, 布局算法, 文件读取 ]
+      mayDependOn: [ state, model ]
+      docRefs: [ docs/03-architecture.md ]
       children:
         - id: present.shell
           name: 应用外壳与路由
@@ -35,8 +35,12 @@ sketch:
         - id: present.version
           name: 版本切换与设计信息条
           kind: subsystem
-          responsibility: 在当前版本、各设计的各轮（已归档的合为一组）与改动过描述的 git 提交之间切换（保留层次与选中，E5）；设计版本下显示设计名、轮次、状态，选择对比基线（当前版本 / 上一轮），显示变更计数、标出变更开关与基线漂移提示；提交版本下显示提交说明，对比基线可选任一提交或当前版本（E6）。
-          docRefs: [docs/adr/0002-design-versions.md]
+          responsibility: 信息条三区（身份 / 动作 / 对比）；草图下一条挂载点面包屑，也是升级的落点；保存并交给 AI（SK-20）。
+          docRefs: [ docs/adr/0002-design-versions.md ]
+        - id: present.sketch
+          name: 草图画布
+          kind: subsystem
+          responsibility: 独立于模型画布的草图编辑画布：一张草图一个挂载点一个层次，自由布局、直线边、引用节点，合并 / 拆分 / 降级 / 升级手势与下钻；只发编辑操作（SK-15、SK-16）。
         - id: present.scenarios
           name: 场景列表
           kind: subsystem
@@ -50,8 +54,8 @@ sketch:
           kind: subsystem
           core: true
           responsibility: 运行视角下把定位好坐标的时序模型画成 SVG（D-2）：泳道为当前层次的参与者，互不包含（P14），按层次顺序排列，同一父模块的泳道有分组框（P9、P13），泳道头固定在顶部、底部另有一份（D-2），外部参与者固定在最左并以竖线隔开系统边界；消息自上而下，alt / loop / par / ref 画成组合框；同步实线实心箭头、异步虚线开放箭头（D-6），只画显式 return（S10a）；选中突出：只有选中的步骤用选中样式、配对返回加浅色标记，选中模块等对象时突出相关泳道（R15、R16）；单击消息 = 指向这一步即选中它（R13），单击 alt 的分支条件 = 改走这一支（F6e）；只在用户移动进度后滚动（D-7）；不做悬停弹出（W-1）；当前层次看不到任何帧时提示并提供「跳到场景所在层次」。
-          codeRefs: [src/components/sequence/**]
-          docRefs: [docs/02-tech-selection.md]
+          codeRefs: [ src/components/sequence/** ]
+          docRefs: [ docs/02-tech-selection.md ]
         - id: present.player
           name: 回放控制条
           kind: subsystem
@@ -61,13 +65,13 @@ sketch:
           kind: subsystem
           responsibility: 工作台左侧的全局目录（W-7、T1）：「模块」页签列出模块树，「文件」页签列出被描述项目的源码文件树，「步骤」页签（只在运行视角出现）列出步骤树，「问题」页签列出返工清单（W-6）；进入运行视角切到步骤页签，退出切回模块页签，选中文件切到文件页签，画布的问题角标切到问题页签。层次、选中、参与模块、当前步骤、选中模块的文件在树上同步展开与高亮；单击 / 双击 / 悬停复用画布与时序图的同一套操作，不新增会话规则。
           principle: 页签、展开 / 折叠状态只属于这块界面，不进视图状态与 URL；树上显示的「谁参与了场景」「步骤怎样嵌套」「文件属于哪个模块」由模型层回答（scenarioModules、outlineScenario、assignFiles），呈现层只画。
-          docRefs: [docs/adr/0006-workbench-navigation.md, docs/adr/0007-source-files.md]
+          docRefs: [ docs/adr/0006-workbench-navigation.md, docs/adr/0007-source-files.md ]
         - id: present.source
           name: 源代码预览
           kind: subsystem
           responsibility: 在副栏只读预览选中的源码文件（SR-8、G17）：路径、归属模块（可定位）、行数，按扩展名语法高亮（Shiki，与签名高亮共用）并带行号；过大、二进制、文件不存在、源码清单读取失败时只给提示。没有编辑、保存等 IDE 功能。
-          codeRefs: [src/components/source/**]
-          docRefs: [docs/adr/0007-source-files.md]
+          codeRefs: [ src/components/source/** ]
+          docRefs: [ docs/adr/0007-source-files.md ]
         - id: present.canvas
           name: 画布
           kind: subsystem
@@ -78,7 +82,7 @@ sketch:
           kind: subsystem
           core: true
           responsibility: 显示**选中**（唯一的主语，ADR-0012）的对象：结构视角下为选中的对象，无选中时为当前父模块；运行视角下选中步骤时为步骤（作用、输入、输出在前），选中场景时为场景概览，选中模块 / 关系 / 边 / 参与者时先回答「在这次流程中做了什么」，结构信息折叠在下方，可在画布上显示（V9）。对象种类：系统（设计版本另含设计说明与变更清单）、模块、关系、聚合边、外部参与者、场景、步骤；设计版本中标出新增 / 修改与设计说明。 信息顺序（§4.3）：模块为职责 → 对外接口 → 子模块 → 出入边 → 架构治理 → 源代码，实现原理、核心数据结构、代码与文档引用默认折叠；根层为健康度 → 分层 → 简介 → 生成来源与规模 → 治理明细。人拥有的文件的追加写入在这里发起（WriteForm：加例外、加入忽略、记录评审意见，B1–B4）。
-          codeRefs: [src/components/panel/**]
+          codeRefs: [ src/components/panel/** ]
         - id: present.nav
           name: 导航
           kind: subsystem
@@ -95,7 +99,7 @@ sketch:
             - **只放叶子**：共用件不 import 其他呈现子系统，被谁用都不会成环（Y4）。
             - **注入键放共用件**：键由提供方（项目视图）与取用方（面板）共同引用；放在项目视图会让面板依赖项目视图，而项目视图本就渲染面板，成环。
             - **文案不进模型层**：命令行与门禁消息也要用的名称（规则名）属于模型层的契约（U10）。
-          codeRefs: [src/components/shared/**]
+          codeRefs: [ src/components/shared/** ]
 
     - id: state
       name: 视图状态层
@@ -103,9 +107,9 @@ sketch:
       order: 2
       abstraction: 关于**一次浏览会话**的规则与协调：「现在看哪里、选中了什么、走到哪一步、怎么摆」。视图状态是一个值，会话规则是纯函数，一个协调者负责持有、派生与和外界同步；关于被描述系统的问题一律问模型层
       responsibility: 会话规则（视图状态转移，纯函数）决定视角、选中与进度的关系、浏览器历史与 URL；DeskState 持有视图状态、派生要画的数据、经同步适配器与路由 / 描述文件 / 布局保持一致；Layout 把层次视图与时序模型排成坐标与走线。
-      includes: [视图状态与会话规则, URL 编解码, 协调与同步适配器, 布局与缓存]
-      excludes: [DOM 渲染, 关于被描述系统的知识（投影、最近祖先、本层下一步等，属于模型层）, 文件读取]
-      mayDependOn: [model]
+      includes: [ 视图状态与会话规则, URL 编解码, 协调与同步适配器, 布局与缓存 ]
+      excludes: [ DOM 渲染, 关于被描述系统的知识（投影、最近祖先、本层下一步等，属于模型层）, 文件读取 ]
+      mayDependOn: [ model ]
       children:
         - id: state.desk
           name: DeskState
@@ -121,14 +125,14 @@ sketch:
             - **一个事实一个值**：层次、选中、开关、场景、进度、已选分支互相约束，是同一个视图状态（ds.ViewState），不拆成多个有状态模块。
             - **一个主语**：选中是唯一且排他的主语，含步骤与场景；进度只是内部的「走到哪一步」，选中的步骤就是进度所在的一步（ADR-0012）；回放只由用户驱动，状态里没有「播放中」（ADR-0006）。
             - **规则即知识**：每条规则编号、注明来源与所在模块（见设计说明的「领域规则清单」），单测按清单穷举。
-          codeRefs: [src/state/transition/**]
+          codeRefs: [ src/state/transition/** ]
         - id: state.layout
           name: Layout
           kind: subsystem
           core: true
           responsibility: 给层次视图算坐标与边的走线：分层总览按层序分带规则排布（带内列数按画布宽度换算，O7），普通层次用 elkjs；框外的角色按方位摆放（A7、L4），交叉处画跳线（L11）；给时序模型算泳道与步骤坐标；舞台叠加与舞台显示；画布场景（节点与边的数据、显隐、变淡、回放态，ADR-0013）；结果按视图内容缓存。
-          codeRefs: [src/layout/**]
-          docRefs: [docs/02-tech-selection.md]
+          codeRefs: [ src/layout/** ]
+          docRefs: [ docs/02-tech-selection.md ]
 
     - id: access
       name: 接入层
@@ -136,9 +140,9 @@ sketch:
       order: 3
       abstraction: 把磁盘上的 YAML 交给页面与命令行：只搬运文本与做摘要，不解释描述的含义
       responsibility: 开发服务器（Vite 插件）提供项目列表（附健康度）、项目描述与描述的 git 历史，实时读取并推送变更；读取被描述项目的本地源码（文件清单、文件、导出）与代码事实（依赖）；只追加人拥有的文件（评审意见、例外、忽略项）；命令行校验，以及给 AI agent 的接口（命令行与 MCP）。本地开发工具，没有构建态（ADR-0020）。
-      includes: [文件读取, 源码清单与导出解析, 依赖提取, 治理存储（基线、拦截记录）, 开发服务器端点, 变更通知, git 历史读取, 人拥有的文件的追加写入, 命令行, agent 接口]
-      excludes: [解析规则与文件归属（交给模型层）, 界面]
-      mayDependOn: [model]
+      includes: [ 文件读取, 源码清单与导出解析, 依赖提取, 治理存储（基线、拦截记录）, 开发服务器端点, 变更通知, git 历史读取, 人拥有的文件的追加写入, 命令行, agent 接口 ]
+      excludes: [ 解析规则与文件归属（交给模型层）, 界面 ]
+      mayDependOn: [ model ]
       children:
         - id: access.model-source
           name: ModelSource 插件
@@ -158,7 +162,7 @@ sketch:
           name: 源码读取
           kind: subsystem
           responsibility: 按 system.source.repo 解析被描述项目的源码根目录（工作区根目录 + repo，环境变量可覆盖；源码在本地是前提，读不到是配置错误，返回原因与尝试的路径，G1）；列出文件清单（git 仓库内按 git 的忽略规则，否则排除依赖与产物目录，G2）与各 package.json 的入口字段；读取单个文件（必须在清单中，过大或二进制只给提示，G17）；用 TypeScript 语法树解析导出的名称、类别与签名，顺着相对路径的再导出往下找（路径补全用模型层那一套，G11）。不判断文件属于哪个模块；统计 TS / JS / Vue 文件的物理行数，按修改时间与大小缓存（G19）。
-          docRefs: [docs/architecture/source.md]
+          docRefs: [ docs/architecture/source.md ]
         - id: access.lint
           name: 命令行校验
           kind: subsystem
@@ -167,7 +171,7 @@ sketch:
           name: 依赖提取
           kind: subsystem
           responsibility: 用 TypeScript 语法树提取被描述项目的文件依赖（import / import type / export … from / import() / require，Vue 取 <script> 块，K1）；把说明符解析到清单中的文件——读出 tsconfig paths，交给模型层的说明符解析（相对路径补全、工作区包名与包入口，K2）；命名导入沿再导出链追到声明文件，记目标与经由（K3），类型与值按每个名字区分（K1a）；每个目标另记落到它的导入名与是否被类的 implements / extends 引用（K5 的 implements 证据）；按修改时间与大小缓存。不判断归属与规则。
-          docRefs: [docs/architecture/governance.md]
+          docRefs: [ docs/architecture/governance.md ]
         - id: access.governance-store
           name: 治理存储
           kind: subsystem
@@ -176,7 +180,7 @@ sketch:
           name: 源码历史读取
           kind: subsystem
           responsibility: 读被描述项目源码仓库的 git 历史（git log --no-merges --numstat，参数经 execFile 不经 shell）：每条提交的哈希、日期、标题、是否缺陷修复、涉及的源码清单内文件及增删行数，按 HEAD 与窗口缓存；按需读一个提交的说明；不在 git 仓库内或 git 不可用时给出原因、不报错（J1）。端点 /source/<项目>/history.json、commit.json 由 ModelSource 插件挂载。不判断归属（在模型层）。
-          docRefs: [docs/architecture/evolution.md]
+          docRefs: [ docs/architecture/evolution.md ]
         - id: access.agent
           name: agent 接口
           kind: subsystem
@@ -185,7 +189,7 @@ sketch:
           principle: |
             - **写前判定**：agent 在写下 import 之前询问；判定之外附上目标模块的职责、访问面与接口签名，让它知道该走哪里，而不只是「不行」。
             - **架构师的意图只读**：不提供改规则、生成基线的工具，规则由人或设计版本定；拦截记录让效果可量化。
-          docRefs: [docs/architecture/governance.md, docs/adr/0015-architecture-governance.md]
+          docRefs: [ docs/architecture/governance.md, docs/adr/0015-architecture-governance.md ]
 
     - id: model
       name: 模型层
@@ -193,11 +197,11 @@ sketch:
       order: 4
       abstraction: 关于**被描述系统**的知识，脱离工作台仍成立：输入描述、输出数据，不依赖 Vue / DOM / 布局库，可在 Node 中纯输入输出测试
       responsibility: 把多个描述文件变成校验过的模型与索引（含参与者与场景），按层次投影出要画的节点与边，把场景展开、按层次投影成回放帧与时序模型，并回答关于被描述系统的架构查询（最近存在 / 可见的祖先、本层的下一步、到达某帧需要的分支选择、谁参与了哪一步）。
-      includes: [文件格式与类型, 解析与合并, 引用校验, 索引, 层次投影, 场景展开与投影, 架构查询, 版本对比, 源码归属, 架构治理, 返工清单]
-      excludes: [Vue, DOM, elkjs, 文件系统]
+      includes: [ 文件格式与类型, 解析与合并, 引用校验, 索引, 层次投影, 场景展开与投影, 架构查询, 版本对比, 源码归属, 架构治理, 返工清单 ]
+      excludes: [ Vue, DOM, elkjs, 文件系统 ]
       mayDependOn: []
       entry: src/model/index.ts
-      docRefs: [docs/03-architecture.md]
+      docRefs: [ docs/03-architecture.md ]
       children:
         - id: model.types
           name: 类型与 Schema
@@ -214,7 +218,7 @@ sketch:
           kind: subsystem
           core: true
           responsibility: 给定当前父模块，算出这一层的节点、直接边、聚合边、边界节点、外部参与者；子模块都是层时算出分层总览（带、核心模块、核心跨层边；临时展开的层全部子模块按核心模块露出，O6）。
-          docRefs: [docs/01-requirements.md]
+          docRefs: [ docs/01-requirements.md ]
         - id: model.scenario
           name: 场景投影
           kind: subsystem
@@ -228,7 +232,7 @@ sketch:
             - **与结构投影同一套端点规则**：帧端点用 Projector 的端点映射提升到当前层次（D-4，规则 P1）。
             - **只写一套最细步骤**（S3）：各层投影合并；时序图与单步粒度都随层次变化，下钻后变细（规则 R7）。
             - **不知道坐标**：输出纯数据，坐标交给 Layout。
-          docRefs: [docs/01-requirements.md]
+          docRefs: [ docs/01-requirements.md ]
         - id: model.diff
           name: 版本对比
           kind: subsystem
@@ -236,12 +240,12 @@ sketch:
           principle: |
             - 按实体 ID 对齐；出处与 designNote 不算修改，缺省与空数组视为相同。
             - 「涉及变更」：子树内模块的增删改计入各祖先；关系的增删改计入两端及其祖先；接口 / 数据结构计入提供方与持有它的模块。删除项按基线中的位置计入目标模型里仍存在的祖先。
-          docRefs: [docs/adr/0002-design-versions.md]
+          docRefs: [ docs/adr/0002-design-versions.md ]
         - id: model.source
           name: 源码归属
           kind: subsystem
           responsibility: 被描述项目的源码文件与模块对上：文件按 codeRefs 归属模块（祖先与后代同时匹配取最深的，互不包含的模块同时匹配为冲突），未归属与忽略清单，模块的文件（子树并集）与入口文件，路径补全与包入口（入口、导出与依赖提取共用，K2），入口导出与模块接口的对应，选中文件在当前层次的投影，目录树，以及归属警告。输入是模型索引与接入层给的文件清单，不碰文件系统。
-          docRefs: [docs/architecture/source.md, docs/adr/0007-source-files.md]
+          docRefs: [ docs/architecture/source.md, docs/adr/0007-source-files.md ]
         - id: model.governance
           name: 架构治理
           kind: subsystem
@@ -251,7 +255,7 @@ sketch:
             - **事实与意图分开**：事实来自代码（确定、可复现），意图来自架构师（rules.yaml），描述来自 AI；三者对照才能发现偏航。
             - **默认拒绝**：写了白名单或访问面即只许这些；存量违规由基线承接，只许不增加（棘轮）。
             - **与结构投影同一套规则**：访问面的入口用 G10，本层投影用 mapEndpoint。
-          docRefs: [docs/architecture/governance.md, docs/adr/0015-architecture-governance.md]
+          docRefs: [ docs/architecture/governance.md, docs/adr/0015-architecture-governance.md ]
         - id: model.rework
           name: 返工清单
           kind: subsystem
@@ -261,21 +265,99 @@ sketch:
             - **只给方向不替人决定**：加例外、收紧基线由架构师决定（U5、U7），建议里只给片段。
             - 未建模的步骤与回放用同一套关系绑定（bindRelation，S13），与层次无关（P11）。
           entry: src/model/rework/index.ts
-          docRefs: [docs/architecture/governance.md]
+          docRefs: [ docs/architecture/governance.md ]
         - id: model.review
           name: 确认
           kind: subsystem
           responsibility: 人确认层的架构查询（Z1–Z6）：模块的确认摘要与指纹（覆盖职责、包含 / 不包含、可依赖的层、接口签名、直接子模块，Z2）、确认状态三档与「上次确认时 vs 现在」的差异（Z3）、确认范围（核心与第二级模块，Z4）、健康度计数（Z5）、为一组模块生成确认记录（Z6）。纯函数，页面、命令行与草图归档同一份。
           entry: src/model/review/index.ts
-          docRefs: [docs/architecture/governance.md]
+          docRefs: [ docs/architecture/governance.md ]
         - id: model.evolution
           name: 演化事实
           kind: subsystem
           responsibility: git 历史提升为模块的第三类事实（ADR-0023）：文件级提交按源码归属提升到模块（一次提交一个模块只计一次，上级为子树并集，J2），修改热度与缺陷热度（次数 × √当前行数，J3），时间耦合（同提交次数与占比达到阈值，标注两端有无模块依赖或描述关系，J4），在当前层次的投影（角标分档与耦合线，J5）、热度前 N 与无依赖无关系的耦合对（J6、J8）。输入是索引、归属、行数与接入层给的历史，不碰文件系统。
-          docRefs: [docs/architecture/evolution.md, docs/adr/0023-sketch-reviewed-and-evolution.md]
+          docRefs: [ docs/architecture/evolution.md, docs/adr/0023-sketch-reviewed-and-evolution.md ]
         - id: model.intent
           name: 意图
           kind: subsystem
           responsibility: 草图核验（X2、X4）：草图与持久草图的矛盾检查、按口径比对设计某一轮或当前版本得出偏差、应用认可偏差；归档判定（X3）与交给确认层的确认记录；人拥有文件的指纹比对（X6）。输入是草图定义与模型索引，不碰文件系统。
           entry: src/model/intent/index.ts
-          docRefs: [docs/architecture/governance.md, docs/adr/0023-sketch-reviewed-and-evolution.md]
+          docRefs: [ docs/architecture/governance.md, docs/adr/0023-sketch-reviewed-and-evolution.md ]
+  relations:
+    - { id: rel.ad.shell-list, from: present.shell, to: present.project-list, type: depends }
+    - { id: rel.ad.shell-desk, from: present.shell, to: present.desk-view, type: depends }
+    - { id: rel.ad.desk-nav, from: present.desk-view, to: present.nav, type: depends }
+    - { id: rel.ad.desk-issues, from: present.nav-tree, to: present.issues, type: depends }
+    - { id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: depends }
+    - { id: rel.ad.version-shell, from: present.version, to: present.shell, type: calls }
+    - { id: rel.ad.list-fetch, from: present.project-list, to: access.model-source, type: calls }
+    - { id: rel.ad.list-changed, from: access.model-source, to: present.project-list, type: notifies }
+    - { id: rel.ad.desk-fetch, from: present.desk-view, to: access.model-source, type: calls }
+    - { id: rel.ad.desk-changed, from: access.model-source, to: present.desk-view, type: notifies }
+    - { id: rel.ad.list-types, from: present.project-list, to: model.types, type: depends }
+    - { id: rel.ad.source-reader, from: access.model-source, to: access.reader, type: calls }
+    - { id: rel.ad.lint-reader, from: access.lint, to: access.reader, type: calls }
+    - { id: rel.ad.reader-types, from: access.reader, to: model.types, type: depends }
+    - { id: rel.ad.diff-index, from: model.diff, to: model.types, type: depends }
+    - { id: rel.ad.projector-types, from: model.projector, to: model.types, type: depends }
+    - { id: rel.ad.present-names, from: present, to: model.types, type: depends }
+    - { id: rel.ad.version-labels, from: present.version, to: present.shared, type: depends }
+    - { id: rel.ad.navtree-tab, from: present.nav-tree, to: present.shared, type: depends }
+    - { id: rel.ad.list-labels, from: present.project-list, to: present.shared, type: depends }
+    - { id: rel.ad.desk-labels, from: state.desk, to: model.types, type: depends }
+    - { id: rel.gv.source-deps, from: access.model-source, to: access.deps, type: calls }
+    - { id: rel.gv.source-store, from: access.model-source, to: access.governance-store, type: calls }
+    - { id: rel.gv.deps-exports, from: access.deps, to: access.source, type: calls }
+    - { id: rel.gv.agent-deps, from: access.agent, to: access.deps, type: calls }
+    - { id: rel.gv.agent-store, from: access.agent, to: access.governance-store, type: calls }
+    - { id: rel.gv.agent-reader, from: access.agent, to: access.reader, type: calls }
+    - { id: rel.gv.agent-source, from: access.agent, to: access.source, type: calls }
+    - { id: rel.gv.agent-model, from: access.agent, to: model.governance, type: calls }
+    - { id: rel.gv.lint-deps, from: access.lint, to: access.deps, type: calls }
+    - { id: rel.gv.lint-store, from: access.lint, to: access.governance-store, type: calls }
+    - { id: rel.gv.lint-model, from: access.lint, to: model.governance, type: calls }
+    - { id: rel.gv.model-source, from: model.governance, to: model.source, type: depends }
+    - { id: rel.gv.model-types, from: model.governance, to: model.types, type: depends }
+    - { id: rel.gv.pipeline-rules, from: model.pipeline, to: model.types, type: depends }
+    - { id: rel.gv.agent-pipeline, from: access.agent, to: model.pipeline, type: calls }
+    - { id: rel.gv.agent-types, from: access.agent, to: model.types, type: depends }
+    - { id: rel.gv.source-health, from: access.model-source, to: model.rework, type: calls }
+    - { id: rel.gv.desk-rework, from: state.desk, to: model.rework, type: calls }
+    - { id: rel.gv.agent-rework, from: access.agent, to: model.rework, type: calls }
+    - { id: rel.gv.rework-source, from: model.rework, to: model.source, type: calls }
+    - { id: rel.gv.rework-scenario, from: model.rework, to: model.scenario, type: calls }
+    - { id: rel.gv.rework-types, from: model.rework, to: model.types, type: depends }
+    - { id: rel.gv.store-reader, from: access.governance-store, to: access.reader, type: depends }
+    - { id: rel.gv.evolution-types, from: model.evolution, to: model.types, type: depends }
+    - { id: rel.gv.review-types, from: model.review, to: model.types, type: depends }
+    - { id: rel.gv.rework-review, from: model.rework, to: model.review, type: depends }
+    - { id: rel.gv.rework-evolution, from: model.rework, to: model.evolution, type: depends }
+    - { id: rel.gv.agent-history, from: access.agent, to: access.history, type: depends }
+    - { id: rel.gv.agent-evolution, from: access.agent, to: model.evolution, type: depends }
+    - { id: rel.gv.lint-review, from: access.lint, to: model.review, type: depends }
+    - { id: rel.gv.store-types, from: access.governance-store, to: model.types, type: depends }
+    - { id: rel.gv.history-reader, from: access.history, to: access.reader, type: depends }
+    - { id: rel.gv.history-evolution, from: access.history, to: model.evolution, type: depends }
+    - { id: rel.gv.source-history, from: access.model-source, to: access.history, type: calls }
+    - { id: rel.gv.source-review, from: access.model-source, to: model.review, type: depends }
+    - { id: rel.gv.reader-diff, from: access.reader, to: model.diff, type: depends }
+    - { id: rel.p6.desk-nav-tree, from: present.desk-view, to: present.nav-tree, type: depends }
+    - { id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: depends }
+    - { id: rel.p3.desk-perspective, from: present.desk-view, to: present.perspective, type: depends }
+    - { id: rel.p3.perspective-scenarios, from: present.perspective, to: present.scenarios, type: depends }
+    - { id: rel.p8.desk-stage, from: present.desk-view, to: present.canvas, type: depends }
+    - { id: rel.p3.perspective-opens, from: present.perspective, to: present.scenarios, type: calls }
+    - { id: rel.p2.transition-types, from: state.transition, to: model.types, type: depends }
+    - { id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: depends }
+    - { id: rel.p7.source-content, from: present.source, to: present.shared, type: depends }
+    - { id: rel.p7.desk-source-fetch, from: present.desk-view, to: access.model-source, type: calls }
+    - { id: rel.p7.plugin-source, from: access.model-source, to: access.source, type: calls }
+    - { id: rel.p7.lint-source, from: access.lint, to: access.source, type: calls }
+    - { id: rel.p7.source-types, from: access.source, to: model.types, type: depends }
+    - { id: rel.p7.source-reader, from: access.source, to: access.reader, type: calls }
+    - { id: rel.p7.desk-preview-key, from: present.desk-view, to: present.shared, type: depends }
+    - id: rel.version-sketch
+      from: present.version
+      to: present.sketch
+      type: calls
+      description: 面包屑返回、升级落点、撤销重做与保存

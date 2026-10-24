@@ -273,3 +273,102 @@ reviewed:
       responsibility: |-
         草图版本的信息条上出现「编辑」；编辑态下信息条变为「编辑草图：<名>」、未保存标记 ●、「保存」「放弃」「校验」、撤销 / 重做（E-2）；「放弃」有未保存改动时二次确认（E-3）；保存成功后停留在编辑态，保存失败显示原因（文件已变时给「重新加载并重放改动」；重放有失败时列出失败的操作，并给「放弃本次改动」）。
         当前版本上「编辑骨架」打开持久草图 /i/skeleton 并进入编辑态（E-1）；版本切换旁的「新建设计」对话框：ID、名称、目标一句话、底稿（缺省「空草图」；另一选项「改骨架（定稿后晋升替换骨架）」，选中时说明后果：复制骨架的层与第二级并声明 supersedes，定稿实现后整份替换 intent/skeleton.yaml，而不是归档，S-4、L-3），创建后进入新设计的草图编辑。
+  - module: present.panel.dispatch
+    at: 2026-10-24
+    hash: d001d198ab14dc1e
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 按选中选择面板（V2）：结构视角下为选中的对象，无选中时为当前父模块（根层为系统）；运行视角下选中步骤时为步骤面板、选中场景时为场景面板，选中模块 / 关系 / 聚合边 / 参与者 / 文件时为该对象的面板；没有「已钉住」之类的提示（ADR-0012）。运行视角下模块、关系、聚合边面板顶部加「运行信息」，结构信息折叠在下方（V6）。草图画布下整个面板换成草图面板（present.panel.sketch）。
+  - module: present.panel.module
+    at: 2026-10-24
+    hash: 570bc70c13dbef34
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 模块的职责、实现原理、对外接口、核心数据结构、子模块、出入边、声明了接口时的端口三角（K11）、代码与文档引用；层额外显示抽象原则、包含 / 不包含、可依赖的层。
+  - module: present.panel.relation
+    at: 2026-10-24
+    hash: f53611859ba948c1
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 关系的两端与类型；「关系」一节按五个维度各一行——控制流、知识（由代码事实给出：同向 / 反向 / 经端口 / 不判定）、语义、同步性、平面（ADR-0022）；经由接口、交换的数据结构；不在当前视图时提供「定位到所在层次」。
+  - module: present.panel.edge
+    at: 2026-10-24
+    hash: 4c3af555f9cd290c
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 列出聚合边背后的原始关系与各类型条数，点击任一条跳到它所在的层次并选中。
+  - module: present.panel.system
+    at: 2026-10-24
+    hash: a8dfe549162904f6
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 系统简介、生成来源（仓库 / 提交 / 时间）、规模统计与顶层模块列表。
+  - module: present.panel.design
+    at: 2026-10-24
+    hash: 54393529b3563c35
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 设计版本与提交版本的根层：设计目标与范围、定稿结论的 ADR 链接（E7）、本轮做了什么、待评审确认的问题、按实体分组的变更清单（点击跳转，删除项只列出；与提交版本共用 ChangeList）、各轮评审意见与轮次切换、「记录评审意见」（B2）；提交版本为提交说明与变更清单（E5、E6）；设计的各张草图（挂载点、模块数、推出 / 脏标记，点击切张）与「改骨架」（DesignSketches，草图面板里也用，F-2）。
+  - module: present.panel.content
+    at: 2026-10-24
+    hash: c30d7f8440e8400f
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 面板共用的内容块：Markdown（禁用原始 HTML）、TS 代码块（高亮用呈现共用件）、接口与数据结构折叠项、关系行、分节。
+  - module: present.panel.governance
+    at: 2026-10-24
+    hash: c58a7b7835ae3bf9
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 面板中的「架构治理」：根层先给健康度摘要（事实统计；违规相对基线 ±N、环度 ↑↓、模块环个数与最大规模，绝对值在悬停中，GV-7），明细里违规按新增 / 已知 / 已豁免分组（可展开文件证据，未豁免的可「加例外（写理由）」，B3）、模块环与外部依赖、拦截记录摘要（GV-7）；模块的生效规则、出入违规与未描述依赖、所在环（Q1）；选中带环编号的节点时所在的本层环：环内节点、构成环的每条本层依赖（展开见模块依赖与文件证据，单击选中对应的视图边或代码依赖，GV-9、Y5）；关系的证实与文件证据（K5、K6，implements 另有「证据像 depends」）；声明了接口的模块的端口三角：定义 · 实现者 · 使用者，每项带证实标记、单击选中关系（K11）；关系行上的证实标记。文件证据可单击选中文件。
+  - module: present.panel.dep
+    at: 2026-10-24
+    hash: 81e99d7cde77f167
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 选中代码依赖叠加线时的面板（K10）：投影到这对节点的模块依赖（已描述 / 未描述）、其中的违规与理由、文件证据；层次变化后不再存在时说明原因。
+  - module: present.panel.scenario
+    at: 2026-10-24
+    hash: 74d054ed8ff48d15
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 选中场景时（进度在开头且没有选中其他对象，V2、R12）显示：场景名称、说明、触发者（第一条消息的发送方）与触发原因、场景所在层次（可跳转）、参与模块；ref 引用了哪些场景、被哪些场景引用。步骤目录在导航树的步骤树里。
+  - module: present.panel.step
+    at: 2026-10-24
+    hash: fadeb866cd5ce835
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 先回答「这一步做什么」（D-5）：作用（标签与说明）；输入（携带的数据）与输出（配对返回的数据，本步是返回时为回应的调用，异步为「不等待返回」，没写显式返回时指向接口签名，F7）；数据结构；经由接口。其后是真实端点与本层投影（经由上层关系时注明对应关系建在上层，可「定位到这条关系」，P15）、本层一条可见消息覆盖的多帧；结构关系（对应关系与「推断」标记）默认折叠，可「在画布上显示」这条消息两端的静态关系（V9）；最后是出处。
+  - module: present.panel.run
+    at: 2026-10-24
+    hash: f063b167b54bad20
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 运行视角下选中模块、关系、聚合边、参与者时面板顶部的一节，回答「在这次流程中做了什么」（V6）：本场景中参与的步骤（按顺序，可单击选中，标出离进度最近的一步）、在本层投影下收发的消息、本场景中用到的接口与数据；模块与参与者可「在画布上显示」它在本层节点的静态关系（V9）；面板原有的结构信息折叠在其下方。
+  - module: present.panel.actor
+    at: 2026-10-24
+    hash: 1b92e1962259e095
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 外部参与者的名称、类别（用户 / 外部系统 / 时间）、说明；与系统的入口关系；由它触发的场景（可打开）。
+  - module: present.panel.file
+    at: 2026-10-24
+    hash: 6ff014bc5173fe6e
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 选中文件时的面板（SR-7）：路径、行数与是否超长（G21）、归属模块（可定位，冲突时全部列出）或未归属 / 已忽略及处理提示（未归属文件可「加入忽略」，B4）、当前层次中的投影说明（G14）、以它为入口的模块、导出（与模块接口的对应）；「预览源码」重新打开副栏预览。
+  - module: present.panel.module-source
+    at: 2026-10-24
+    hash: 838193f4400fb96f
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 模块面板的「源代码」一节（SR-5）：模块的文件（子树并集，可选中，注明直接归属的子模块，带行数、超长标红）与模块行数合计、超长数（G21）、入口文件及来源（描述 entry / 约定 index.ts / package.json）、入口导出按「已对应 / 导出未描述 / 描述未导出」分组列出（G12）。
+  - module: present.panel.sketch
+    at: 2026-10-24
+    hash: e2f760192bb5c7bf
+    source: sketch:sketch-v2
+    summary:
+      responsibility: |-
+        草图画布下的属性面板（SK-17、SK-18）：顶部两级校验（红色格式错误、黄色语义提示，单击定位，跨草图也能定位）、常驻「待重连 N 条」、不进两级的提示、本张的两个核验数（相对当前版本 N 处偏差 / 相对基线改了 N 处，可展开清单；持久草图只有前者）与面板内提示；
+        无选中时为父模块——原则可编辑、「带入现有原则」，名称与职责只读（上一层没写时显示当前版本的文字并标出来源）；根草图无选中时为设计概览（全设计计数与各张草图）；多选时合并 / 删除所选；
+        层：名称、ID、抽象原则、包含 / 不包含、可依赖的层、删层；模块：名称、ID（前缀与唯一校验）、职责、核心、封闭、代码落点、对外接口、原则、血缘只读（来自 A、B · 合并 / 拆分 / 改 ID / 移动）、「进入下一层 →」；关系：类型、说明、经由接口；引用节点：当前版本里的职责与位置、折叠进来的精确关系、「在模型里查看」「打开挂在它身上的草图」；元信息：挂载点、lifetime、supersedes。
