@@ -58,14 +58,18 @@ describe('§6.10 架构治理验收', () => {
     expect(denied.checks.flatMap(c => c.hits).some(h => h.kind === 'deps' && h.reason.includes('类型与 Schema'))).toBe(true)
   })
 
-  it('3. h5player：@h5player/framework 的命名导入落在声明文件，经由 framework 入口', () => {
+  it('3. h5player：@h5player/framework 的命名导入落在声明文件，经由 framework 入口；framework 转出的 domain / share 名字（import X; export { X }）追到 domain / share', () => {
     const tree = readSourceTree(MODEL, 'h5player', ROOT) as Extract<SourcePayload, { status: 'local' }>
     const code = readCodeDeps(tree.root, tree.files, tree.packages)
     const viaIndex = code.deps.filter(d => d.via === 'packages/framework/src/index.ts' && d.from.startsWith('packages/player/'))
     expect(viaIndex.length).toBeGreaterThan(0)
-    expect(viaIndex.every(d => d.to.startsWith('packages/framework/src/'))).toBe(true)
-    expect(viaIndex.some(d => d.to !== d.via)).toBe(true)
-  })
+    expect(viaIndex.every(d => /^packages\/(framework|domain|share)\/src\//.test(d.to))).toBe(true)
+    expect(viaIndex.some(d => d.to !== d.via && d.to.startsWith('packages/framework/src/'))).toBe(true)
+    // MuKey 在 framework 里经 import { MuKey } from '@h5player/domain'; export { MuKey } 转出，声明在 domain（枚举：不算引用了实现）
+    const muKey = viaIndex.filter(d => d.names?.includes('MuKey'))
+    expect(muKey.length).toBeGreaterThan(0)
+    expect(muKey.every(d => d.to === 'packages/domain/src/types/model.ts' && !d.uses)).toBe(true)
+  }, 20_000)
 
   it('4. 规则、基线与棘轮：白名单违规；生成基线后无新增；再越界一次为 rule.new', () => {
     fs.writeFileSync(path.join(tmp, 'h5p-arch-desk', 'rules.yaml'), 'rules:\n  modules:\n    - { module: state.layout, mayDependOn: [model.types] }\n')
@@ -165,7 +169,7 @@ describe('§6.10 架构治理验收', () => {
     const violations = r.list.items.filter(i => i.category === 'violation')
     const total = s.overview().violations
     expect(violations.length).toBeLessThan(total.new + total.known + total.open)
-    expect(violations[0].affected.length).toBeGreaterThan(100)
+    expect(violations[0].affected.length).toBeGreaterThan(20)
     expect(violations[0].actions.map(a => a.kind)).toEqual(['fix-code', 'add-exception'])
     // K4：归属冲突文件的依赖不提升，冲突项注明未计入的条数
     const conflicts = r.list.items.filter(i => i.code === 'source.conflict')

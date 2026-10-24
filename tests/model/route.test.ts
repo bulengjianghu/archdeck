@@ -85,9 +85,29 @@ describe('F7：调用与显式返回配对', () => {
     expect(pairs.get(id('a'))).toBe(id('ra'))
   })
 
-  it('async 不配对；分支内未配对的调用不影响分支之后的匹配', () => {
+  it('没写返回的 async 不配对；分支内未配对的调用不影响分支之后的匹配', () => {
     expect(pairs.has(id('w1'))).toBe(false)
     expect(pairs.get(id('rb'))).toBe(id('b'))
+  })
+
+  it('async 写了显式返回（await 取回结果）时与 call 一样配对（F7，S19 修订）', () => {
+    const text = `scenario:
+  id: sc.await
+  name: 异步取回
+  steps:
+    - call: { id: c, from: infra.player, to: infra.framework.sm }
+    - async: { id: a, from: infra.framework.sm, to: app.solution }
+    - async: { id: n, from: app.solution, to: domain.services }
+    - return: { id: ra, from: app.solution, to: infra.framework.sm }
+    - return: { id: rc, from: infra.framework.sm, to: infra.player }
+`
+    const { index: ix } = loadModel(scenarioFiles({ 'scenarios/await.yaml': text }))
+    const p = planScenario(ix, 'sc.await')
+    const pp = pairReturns(p)
+    const fid = (k: string) => `sc.await#${k}`
+    expect(pp.get(fid('ra'))).toBe(fid('a'))
+    expect(pp.get(fid('rc'))).toBe(fid('c'))
+    expect(pp.has(fid('n'))).toBe(false)
   })
 
   it('跨 ref 内联照常匹配（样例 sc.play 引用 sc.decide）', () => {

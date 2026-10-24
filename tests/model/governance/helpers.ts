@@ -71,7 +71,7 @@ export const SRC = [
 ]
 
 /** 值依赖：缺省引用了对方的实现（K1 的 uses，K7 的值使用） */
-export const dep = (from: string, to: string, via = to, line = 1): FileDep => ({ from, to, via, kind: 'value', line, uses: true })
+export const dep = (from: string, to: string, via = to, line = 1): FileDep => ({ from, to, via, kind: 'value', line, uses: true, invokes: true })
 
 export const DEPS: FileDep[] = [
   dep('src/ui/view/a.ts', 'src/ui/store/s.ts'), // ui.view → ui.store：rel.1

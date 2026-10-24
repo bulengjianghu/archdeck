@@ -201,11 +201,11 @@ relations:
   # 外部参与者
   - {id: rel.gv.ai-agent, from: actor.ai, to: access.agent, type: calls, interface: if.agent.mcp, payload: [ds.CheckResult], description: coding agent 写代码前判定依赖、写完重新扫描（MCP 或命令行）}
   # 呈现层
-  - {id: rel.gv.dispatch-dep, from: present.panel.dispatch, to: present.panel.dep, type: calls, description: 选中代码依赖叠加线时分派到代码依赖面板}
+  - { id: rel.gv.dispatch-dep, from: present.panel.dispatch, to: present.panel.dep, type: calls, description: 选中代码依赖叠加线时面板分派渲染代码依赖面板 }
   - {id: rel.gv.system-gov, from: present.panel.system, to: present.panel.governance, type: calls}
   - {id: rel.gv.module-gov, from: present.panel.module, to: present.panel.governance, type: calls}
   - {id: rel.gv.relation-gov, from: present.panel.relation, to: present.panel.governance, type: calls}
-  - {id: rel.gv.dep-gov, from: present.panel.dep, to: present.panel.governance, type: calls, description: 复用文件证据列表}
+  - { id: rel.gv.dep-gov, from: present.panel.dep, to: present.panel.governance, type: calls, description: 代码依赖面板渲染治理面板的文件证据列表（FileDepList） }
   - {id: rel.gv.panel-read, from: present.panel.governance, to: state.desk.facts, type: calls, payload: [ds.GovernanceReport], description: 治理报告、模块治理信息、关系证实、拦截摘要}
   - {id: rel.gv.dep-read, from: present.panel.dep, to: state.desk.facts, type: calls, description: 选中的代码依赖叠加线}
   - {id: rel.gv.canvas-read, from: present.canvas.flow, to: state.desk.facts, type: calls, description: 本层投影（K9、Y4）}
@@ -228,7 +228,7 @@ relations:
   - {id: rel.gv.lint-store, from: access.lint, to: access.governance-store, type: calls, description: 读基线}
   - {id: rel.gv.lint-model, from: access.lint, to: model.governance, type: calls, interface: if.governance.report, description: 门禁问题与摘要（U8）}
   # 模型层
-  - {id: rel.gv.model-projector, from: model.governance.level, to: model.projector, type: calls, description: mapEndpoint（K9、Y4）}
+  - { id: rel.gv.model-projector, from: model.governance.level, to: model.projector, type: calls, description: 本层投影调用 mapEndpoint / viewNodeOf 把模块依赖的两端映射到本层节点（K9、Y4） }
   # 架构治理内部与名称、标签（K7 按代码补齐）
   - {id: rel.gv.cycles-facts, from: model.governance.cycles, to: model.governance.facts, type: calls, description: within：环按模块子树判断}
   - {id: rel.gv.level-facts, from: model.governance.level, to: model.governance.facts, type: calls, description: depKey：本层叠加线按模块依赖键取依据}
@@ -248,9 +248,9 @@ relations:
   - {id: rel.gv.source-health-report, from: access.model-source, to: model.governance.report, type: calls, interface: if.governance.report, description: 健康度：治理报告（Q10）}
   - {id: rel.gv.desk-rework, from: state.desk, to: model.rework, type: calls, interface: if.rework.list, payload: [ds.ReworkItem], description: 问题页签的返工清单与「复制给 agent」的 Markdown（W-6）}
   - {id: rel.gv.source-writer, from: access.model-source, to: access.writer.append, type: calls, description: POST /write/<项目>/feedback | allow | ignore（B1–B5）}
-  - {id: rel.gv.writer-reader, from: access.writer.append, to: access.reader, type: calls, description: isProjectId、DESIGNS_DIR、readModelDir：校验 ID 与读描述}
+  - { id: rel.gv.writer-reader, from: access.writer.append, to: access.reader, type: calls, description: 写回端点调用 isProjectId 校验项目、readModelDir / readDesignInfo / designSketches 读描述与设计 }
   - {id: rel.gv.writer-model, from: access.writer.append, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 加例外前校验两端模块存在、找 rules 所在文件（B3）}
-  - {id: rel.gv.writer-types, from: access.writer.append, to: model.types, type: calls, description: RULE_KINDS：校验例外的规则种类}
+  - { id: rel.gv.writer-types, from: access.writer.append, to: model.types, type: calls, description: 写确认记录前调用 isReviewSource 校验来源（Z6） }
   - {id: rel.gv.agent-rework, from: access.agent, to: model.rework, type: calls, interface: if.rework.list, payload: [ds.ReworkItem], description: 命令行与 MCP 的 issues（Q9）}
   - {id: rel.gv.rework-source, from: model.rework, to: model.source, type: calls, description: matchRef、moduleEntry：冲突的 codeRefs 组合与 entry 是否存在}
   - {id: rel.gv.rework-scenario, from: model.rework, to: model.scenario, type: calls, description: bindRelation、forEachStep：未建模的步骤（S13、P11）}
@@ -258,23 +258,24 @@ relations:
   - {id: rel.gv.ports-source, from: model.governance.ports, to: model.source.ownership, type: calls, description: moduleInterfaces：模块的接口（G12）}
   - {id: rel.gv.facts-ports-source, from: model.governance.facts, to: model.source.ownership, type: calls, description: moduleInterfaces：implements 目标声明的接口名（K5 的证据）}
   - {id: rel.gv.facts-ports, from: state.desk.facts, to: model.governance.ports, type: calls, description: portTriad：模块面板的端口三角（K11）}
-  - {id: rel.gv.dep-content, from: present.panel.dep, to: present.panel.content, type: calls, description: 复用 Section}
-  - {id: rel.gv.panel-content, from: present.panel.governance, to: present.panel.content, type: calls, description: 复用 Section}
+  - { id: rel.gv.dep-content, from: present.panel.dep, to: present.panel.content, type: calls, description: 代码依赖面板渲染分节组件 Section }
+  - { id: rel.gv.panel-content, from: present.panel.governance, to: present.panel.content, type: calls, description: 治理面板渲染分节组件 Section }
   # 按代码补齐（K7，2026-10-23 重新生成）
-  - {id: rel.gv.agent-check, from: access.agent, to: model.intent.check, type: calls, description: checkSketches、compareDesign、compareOwned：sketch-check --design 逐张偏差与两个对比（相对基线 / 相对当前版本）、指纹比对（X4、X6、X17）}
-  - {id: rel.gv.agent-append, from: access.agent, to: access.writer.append, type: calls, description: archiveDesign：sketch archive 与页面同一函数（X8）}
-  - {id: rel.gv.lint-check, from: access.lint, to: model.intent.check, type: calls, description: checkSketches、compareOwned：活动草图核验与指纹门禁（X4、X6）}
-  - {id: rel.gv.append-check, from: access.writer.append, to: model.intent.check, type: calls, description: checkSketches、archiveVerdict、sketchModules：归档前核验当前版本（X3）}
-  - {id: rel.gv.append-review, from: access.writer.append, to: model.review, type: calls, description: reviewEntries、reviewHash：确认记录的指纹与摘要（Z6）}
-  - {id: rel.gv.append-store, from: access.writer.append, to: access.governance-store, type: calls, description: touchOwned、appendLedger：写后更新指纹、记拦截记录（X6、Z6）}
+  - { id: rel.gv.agent-check, from: access.agent, to: model.intent.check, type: calls, description: sketch-check --design 调用 checkSketches 逐张核验、compareDesign 做两个对比（相对基线 / 相对当前版本）、compareOwned 比对指纹（X4、X6、X17） }
+  - { id: rel.gv.agent-append, from: access.agent, to: access.writer.append, type: calls, description: sketch archive 调用与页面同一个 archiveDesign（X8） }
+  - { id: rel.gv.lint-check, from: access.lint, to: model.intent.check, type: calls, description: 'lint:model 调用 checkSketches 核验活动草图、compareOwned 比对人拥有文件的指纹（X4、X6）' }
+  - { id: rel.gv.append-check, from: access.writer.append, to: model.intent.check, type: calls, description: 归档前调用 checkSketches / archiveVerdict 核验当前版本，sketchModules 取草图覆盖的模块（X3） }
+  - { id: rel.gv.append-review, from: access.writer.append, to: model.review, type: calls, description: 写确认记录时调用 reviewEntries / reviewHash 算条目与指纹（Z6） }
+  - { id: rel.gv.append-store, from: access.writer.append, to: access.governance-store, type: calls, description: 写后调用 touchOwned 更新指纹、appendLedger 记拦截记录（X6、Z6） }
   - {id: rel.gv.source-history, from: access.model-source, to: access.history, type: calls, description: GET source/<项目>/history.json、commit.json（J1）}
-  - {id: rel.gv.reader-check, from: access.reader, to: model.intent.check, type: calls, description: checkSketches：项目卡片上设计的偏差计数（X4）}
-  - {id: rel.gv.evolution-facts, from: model.evolution, to: model.governance.facts, type: calls, description: within：耦合两端有无模块依赖（J4）}
-  - {id: rel.gv.evolution-level, from: model.evolution, to: model.governance.level, type: calls, description: 本层投影的节点映射（J5）}
-  - {id: rel.gv.evolution-ownership, from: model.evolution, to: model.source.ownership, type: calls, description: 文件按归属提升为模块（J2）}
+  - { id: rel.gv.reader-check, from: access.reader, to: model.intent.check, type: calls, description: 读项目摘要时调用 checkSketches / compareDesign 算项目卡片上设计的偏差计数（X4） }
+  - { id: rel.gv.evolution-facts, from: model.evolution, to: model.governance.facts, type: calls, description: 耦合统计调用 within 判两端之间有无模块依赖（J4） }
+  - { id: rel.gv.evolution-level, from: model.evolution, to: model.governance.level, type: calls, description: 本层热度调用 nodeOf 把模块映射到本层节点（J5） }
+  - { id: rel.gv.evolution-ownership, from: model.evolution, to: model.source.ownership, type: calls, description: 按归属调用 moduleFiles / moduleLines 把文件的改动提升为模块（J2） }
   - {id: rel.gv.desk-evolution-model, from: state.desk.evolution, to: model.evolution, type: calls, description: evolutionStats、levelEvolution：热度与耦合的派生（J5）}
+  - {id: rel.gv.source-history-options, from: access.model-source, to: model.evolution, type: calls, description: 读源码历史与健康度前调用 historyOptions，按 system.source.history 取统计窗口与耦合阈值（J1）}
   - {id: rel.gv.desk-review-model, from: state.desk.review, to: model.review, type: calls, interface: if.review.query, description: reviewStates、reviewCounts、reviewEntries（Z3–Z5）}
-  - {id: rel.gv.navigation-evolution, from: state.transition.navigation, to: model.evolution, type: calls, description: coupleEnds：耦合线选中的两端（J7）}
-  - {id: rel.gv.selection-evolution, from: state.transition.selection, to: model.evolution, type: calls, description: coupleEnds：选中耦合线时突出的两端（J7）}
-  - {id: rel.gv.scenario-panel-shared, from: present.panel.scenario, to: present.shared, type: calls, description: OPEN_PREVIEW、证据标签：证据文件在副栏预览（S15）}
-  - {id: rel.gv.step-panel-shared, from: present.panel.step, to: present.shared, type: calls, description: OPEN_PREVIEW、证据等级标签：代码证据在副栏预览（S16）}
+  - { id: rel.gv.navigation-evolution, from: state.transition.navigation, to: model.evolution, type: calls, description: 选中耦合线时调用 coupleEnds 取两端（J7） }
+  - { id: rel.gv.selection-evolution, from: state.transition.selection, to: model.evolution, type: calls, description: 选中耦合线时调用 coupleEnds 取要突出的两端（J7） }
+  - { id: rel.gv.scenario-panel-shared, from: present.panel.scenario, to: present.shared, type: calls, description: 场景面板经 useOpenPreview 在副栏预览证据文件（S15） }
+  - { id: rel.gv.step-panel-shared, from: present.panel.step, to: present.shared, type: calls, description: 步骤面板经 useOpenPreview 在副栏预览代码证据（S16） }

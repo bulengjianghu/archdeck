@@ -101,9 +101,9 @@ export function firstFrame(nodes: readonly PlanNode[]): Frame | undefined {
 }
 
 /**
- * F7：调用与显式返回配对。按书写顺序以栈匹配：call 入栈；return（X → Y）匹配栈中最近的 Y → X 调用，
+ * F7：调用与显式返回配对。按书写顺序以栈匹配：call 与 async 入栈；return（X → Y）匹配栈中最近的 Y → X 调用，
  * 并弹出它及其上的调用（它们没有显式返回）。alt 的每个选项从进入分支点时的栈副本开始，选项内未配对的调用随选项结束丢弃，
- * 分支点之后继续用进入时的栈；async 不配对。与层次、已选分支无关。
+ * 分支点之后继续用进入时的栈；async 与 call 一样入栈，写了显式返回的配对、没写的不配对（第五轮 T4 修订）。与层次、已选分支无关。
  */
 export function pairReturns(plan: ScenarioPlan): ReturnPairs {
   const pairs = new Map<string, string>()
@@ -114,7 +114,8 @@ export function pairReturns(plan: ScenarioPlan): ReturnPairs {
         continue
       }
       const f = n.frame
-      if (f.kind === 'call') stack.push(f)
+      // F7：async 也入栈——await 取回结果的请求可以有显式返回（S19 修订）；没写返回的 async 不配对
+      if (f.kind === 'call' || f.kind === 'async') stack.push(f)
       else if (f.kind === 'return') {
         let i = stack.length - 1
         while (i >= 0 && !(stack[i].from === f.to && stack[i].to === f.from)) i--

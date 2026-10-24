@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { assignFiles, governanceReport, loadModel, projectHealth, reviewScope, reworkList, sharedHealth, type FileDep, type OkHistory, type RawFile } from '@/model'
 
-const dep = (from: string, to: string, uses = true, line = 1): FileDep => ({ from, to, via: to, kind: 'value', line, ...(uses ? { uses: true as const } : {}) })
+const dep = (from: string, to: string, uses = true, line = 1): FileDep => ({ from, to, via: to, kind: 'value', line, ...(uses ? { uses: true as const, invokes: true as const } : {}) })
 const SRC = ['src/ui/view.ts', 'src/ui/store.ts', 'src/ui/labels.ts', 'src/core/api.ts', 'src/core/util.ts', 'src/core/impl.ts', 'src/core/x.ts']
 const files = (extra: Record<string, string> = {}): RawFile[] =>
   Object.entries({

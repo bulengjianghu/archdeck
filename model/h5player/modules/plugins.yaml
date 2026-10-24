@@ -428,7 +428,7 @@ relations:
     from: app.plugins.buffer-strategy.mse-live
     to: app.strategies
     type: calls
-    description: 继承 PluginBasePlayStrategy，复用追帧判定报告 mseChasingDecision
+    description: MSE 直播缓冲策略继承 PluginBasePlayStrategy，并调用 mseChasingDecision 做追帧判定
   - id: rel.plugins.mse-live-math
     from: app.plugins.buffer-strategy.mse-live
     to: app.plugins.buffer-strategy.water-level-math
@@ -440,17 +440,12 @@ relations:
     from: app.plugins.buffer-strategy.mse-live
     to: infra.mus
     type: calls
-    description: 直接 import mus/render/mse 的 bufferGapDecision、bufferRecycleRange 纯判定
+    description: MSE 直播缓冲策略调用 decideBufferGapTarget / decidePlayedDataRemoveEnd 判缓冲空洞与回收范围
   - id: rel.plugins.mse-live-index
     from: app.plugins.buffer-strategy.mse-live
     to: infra.player-index
     type: calls
     description: 经 modelAccess.requireMseModel 取 MSE 播放模型
-  - id: rel.plugins.mse-live-domain
-    from: app.plugins.buffer-strategy.mse-live
-    to: domain.services
-    type: calls
-    description: 读 HLS 直播追帧默认参数 HLS_LIVE_CATCHUP_DEFAULTS
   - id: rel.plugins.mse-live-events
     from: infra.framework
     to: app.plugins.buffer-strategy.mse-live
@@ -467,7 +462,7 @@ relations:
     from: app.plugins.buffer-strategy.fhls-live
     to: app.strategies
     type: calls
-    description: 继承 PluginBasePlayStrategy
+    description: Fhls 直播缓冲策略继承 PluginBasePlayStrategy，经 super 调用基类的 init、命令 Hook 与销毁
   - id: rel.plugins.fhls-live-index
     from: app.plugins.buffer-strategy.fhls-live
     to: infra.player-index
@@ -538,7 +533,7 @@ relations:
     from: app.plugins.buffer-strategy.water-level-math
     to: infra.mus
     type: calls
-    description: resolveMseChasingSeekMs 包装 mus/render/mse/chasingFrameAmount 的 decideChasingFrameTarget
+    description: resolveMseChasingSeekMs 调用 decideChasingFrameTarget 求追帧目标
 
   # ── app.plugins · 网络 ──
   - id: rel.plugins.monitor-events
@@ -707,7 +702,7 @@ relations:
     from: app.plugins.stats.samplers
     to: infra.framework
     type: calls
-    description: 共享定时器 sharedIntervalTimer、Time 与 average / variance 等统计工具
+    description: 采样插件调用 sharedIntervalTimer 共享定时、Time 取时间、average / variance / standardDeviation 做统计
   - id: rel.plugins.milestones-events
     from: infra.framework
     to: app.plugins.stats.milestones
@@ -733,11 +728,6 @@ relations:
     mode: sync
     payload: [ds.StatisticCollectorView]
     description: 周期读取统计与流模型生成 gauge
-  - id: rel.plugins.tracker-support
-    from: app.plugins.stats.tracker
-    to: app.plugins.support
-    type: calls
-    description: 复用 PLAYBACK_SESSION_STATUSES 会话状态集合
   - id: rel.plugins.time-calibrator-fw
     from: app.plugins.stats.time-calibrator
     to: infra.framework
@@ -792,7 +782,7 @@ relations:
     from: app.plugins.support
     to: infra.framework
     type: calls
-    description: sharedIntervalTimer、PluginBase（经 player 本地 pluginBase 转发导出）
+    description: 支撑件调用 sharedIntervalTimer 共享定时与 Time 取时间，基类经 player 本地 pluginBase 继承 PluginBase
   - id: rel.plugins.support-index
     from: app.plugins.support
     to: infra.player-index
@@ -838,7 +828,7 @@ relations:
     from: app.timeshift.shell
     to: app.strategies
     type: calls
-    description: probeInfo 复用 hlsSegmentChores、playlistTargetDurationMs、vodLoadFailureBackoffMs
+    description: 协调器外壳的 probeInfo 调用 loadSegmentAt、handleFragmentLoaded / handleHlsDiscontinuity 等 HLS 分片辅助与 playlistTargetDurationMs、vodLoadFailureBackoffMs
   - id: rel.timeshift.shell-domain
     from: app.timeshift.shell
     to: domain.services
@@ -1055,11 +1045,10 @@ relations:
 
   # ── 补充的交互（ADR-0026：有值使用的模块依赖按交互补全，K7）──
   - { id: rel.plugins.buffer-plugin-base, from: app.plugins.buffer-strategy.live-adaptive, to: infra.player-index.public-surface, type: implements, description: 自适应缓冲插件继承 SDK 转出的 PluginBase }
-  - { id: rel.timeshift.recording-contracts, from: app.timeshift.recording-driver, to: infra.framework.contracts, type: calls, description: 按 MuKey / MediaType 键寻址录制腿的 MU 与媒体类型 }
   - { id: rel.timeshift.shell-plugin-base, from: app.timeshift.shell, to: infra.player-index.public-surface, type: implements, description: 时移外壳插件继承 SDK 转出的 PluginBase }
-  - { id: rel.timeshift.recovery-contracts, from: app.timeshift.live-recovery, to: infra.framework.contracts, type: calls, description: 按 MuKey 键寻址直播腿的 MU }
-  - { id: rel.timeshift.ledger-contracts, from: app.timeshift.frame-ledger, to: infra.framework.contracts, type: calls, description: 总线接线按 MuKey / MediaType 键过滤帧事件 }
   - { id: rel.timeshift.seek-coordinator-helpers, from: app.timeshift.seek-switch, to: app.timeshift.coordinator, type: calls, description: 调用 describeError / segmentIndexForCut 辅助函数 }
+  - { id: rel.plugins.errors, from: app.plugins, to: share.errors, type: calls, description: 缓冲、错误恢复、重连与运行守护插件以 new ErrorBase / errorWrapper 构造带 ErrorCode 的错误再上报 }
+  - { id: rel.timeshift.errors, from: app.timeshift, to: share.errors, type: calls, description: 时移协调器、外壳与源接线把换腿与录制失败包装为 ErrorBase（errorWrapper）上报或作为结果返回 }
 
 interfaces:
   # ── app.plugins ──

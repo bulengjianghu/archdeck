@@ -302,7 +302,6 @@ sketch:
     - { id: rel.ad.present-names, from: present, to: model.types, type: calls }
     - { id: rel.ad.version-labels, from: present.version, to: present.shared, type: calls }
     - { id: rel.ad.navtree-tab, from: present.nav-tree, to: present.shared, type: calls }
-    - { id: rel.ad.list-labels, from: present.project-list, to: present.shared, type: calls }
     - { id: rel.ad.desk-labels, from: state.desk, to: model.types, type: calls }
     - { id: rel.gv.source-deps, from: access.model-source, to: access.deps, type: calls }
     - { id: rel.gv.source-store, from: access.model-source, to: access.governance-store, type: calls }
@@ -352,7 +351,6 @@ sketch:
     - { id: rel.p7.lint-source, from: access.lint, to: access.source, type: calls }
     - { id: rel.p7.source-types, from: access.source, to: model.types, type: calls }
     - { id: rel.p7.source-reader, from: access.source, to: access.reader, type: calls }
-    - { id: rel.p7.desk-preview-key, from: present.desk-view, to: present.shared, type: calls }
     - id: rel.version-sketch
       from: present.version
       to: present.sketch

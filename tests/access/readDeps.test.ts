@@ -176,12 +176,85 @@ describe('K1 implements 证据（ADR-0022）', () => {
     ]
     expect(importTargetKinds({ kind: 'value', names: ['Port', 'make', 'Mode'], types: [], heritage: ['Port'] }, 'src/index.ts', exportsOf)).toEqual([
       { to: 'src/port.ts', kind: 'type', names: ['Port'], heritage: true },
-      { to: 'src/impl.ts', kind: 'value', names: ['make'], uses: true },
+      { to: 'src/impl.ts', kind: 'value', names: ['make'], uses: true, invokes: true },
       { to: 'src/mode.ts', kind: 'value', names: ['Mode'] },
     ])
     expect(importTargetKinds({ kind: 'value', names: [], types: [], heritage: ['*'] }, 'src/base.ts', exportsOf)).toEqual([
-      { to: 'src/base.ts', kind: 'value', heritage: true, uses: true },
+      { to: 'src/base.ts', kind: 'value', heritage: true, uses: true, invokes: true },
     ])
+  })
+
+  it('交互使用（invokes）：调用、new、extends、成员调用、模板渲染为交互；只读常量、只读成员是纯值读取；交出函数、类、组件算交互，交出常量不算（K1、K7）', () => {
+    const imps = parseImports(
+      'a.ts',
+      [
+        "import { call, Klass, Base, store, LABELS, KEY, fn, Cls, cb, TYPES } from './x'",
+        "import * as ns from './n'",
+        "import Comp from './C.vue'",
+        'call()',
+        'new Klass()',
+        'class A extends Base {}',
+        'store.save()',
+        'const t = LABELS[k] + Cls.VERSION',
+        'inject(KEY)',
+        'register(fn)',
+        'list.map(cb)',
+        'const n = ns.LIMIT',
+        'const names = TYPES.map(t => t)',
+        'const routes = [{ component: Comp }]',
+      ].join('\n'),
+    )
+    const exportsOf = () => [
+      { name: 'call', kind: 'function' },
+      { name: 'Klass', kind: 'class' },
+      { name: 'Base', kind: 'class' },
+      { name: 'store', kind: 'const' },
+      { name: 'LABELS', kind: 'const' },
+      { name: 'KEY', kind: 'const' },
+      { name: 'fn', kind: 'function' },
+      { name: 'Cls', kind: 'class' },
+      { name: 'cb', kind: 'const', callable: true as const },
+      { name: 'TYPES', kind: 'const', data: true as const },
+    ]
+    const byName = (names: string[]) =>
+      Object.fromEntries(names.map(n => [n, !!importTargetKinds({ ...imps[0], names: [n] }, 'src/x.ts', exportsOf)[0].invokes]))
+    expect(byName(['call', 'Klass', 'Base', 'store', 'LABELS', 'KEY', 'fn', 'Cls', 'cb', 'TYPES'])).toEqual({
+      call: true,
+      Klass: true,
+      Base: true,
+      store: true,
+      LABELS: false,
+      KEY: false,
+      fn: true,
+      Cls: false,
+      cb: true,
+      // 纯数据常量：成员调用（TYPES.map(…)）也只是读它
+      TYPES: false,
+    })
+    // 只读成员的命名空间导入是纯值读取；默认导入的组件交给路由算交互
+    expect(importTargetKinds(imps[1], 'src/n.ts', exportsOf)).toEqual([{ to: 'src/n.ts', kind: 'value', uses: true }])
+    expect(importTargetKinds(imps[2], 'src/C.vue', exportsOf)).toEqual([{ to: 'src/C.vue', kind: 'value', uses: true, invokes: true }])
+  })
+
+  it('Vue 模板：组件标签与调用为交互，X.a / X[k] 为成员读取，其余出现为读取', () => {
+    const vue = [
+      '<template><Child /><span>{{ LABELS[x] }} {{ fmt(y) }} {{ api.get(z) }} {{ FLAG }}</span></template>',
+      '<script setup lang="ts">',
+      "import Child from './Child.vue'",
+      "import { LABELS, fmt, api, FLAG } from './x'",
+      '</script>',
+    ].join('\n')
+    const [child, named] = parseVueImports('a.vue', vue)
+    expect(child.reads).toBeUndefined()
+    expect(named.reads).toEqual([
+      { name: 'LABELS', how: 'member' },
+      { name: 'FLAG', how: 'bare' },
+    ])
+  })
+
+  it('本地再导出 export default x 只是转出，不算使用', () => {
+    const [imp] = parseImports('p.ts', "import { PluginBase } from '@fw'\nexport { PluginBase }\nexport default PluginBase")
+    expect(imp.inert).toEqual(['PluginBase'])
   })
 
   it('再导出（export … from、export *）只转出名字，不算引用了实现（K1、K7 的值使用）', () => {

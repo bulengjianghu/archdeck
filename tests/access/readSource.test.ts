@@ -14,6 +14,7 @@ import {
   langOf,
   listSourceFiles,
   readExports,
+  exportsResolver,
   readSourceFile,
   readSourceTree,
   resolveSourceRoot,
@@ -211,6 +212,35 @@ describe('G11 导出解析', () => {
     write(dir, 'View.vue', '<script setup lang="ts">\nexport const notParsed = 1\n</script>\n')
     const e = readExports(dir, listSourceFiles(dir), 'index.ts')!
     expect(e.map(s => `${s.name}<${s.from ?? ''}:${s.kind}`)).toEqual(['s<sub/index.mts:const', 'm<m.mjs:function', 'V<View.vue:reexport'])
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+  it('先导入再本地导出（import { X } from …; export { X }、import D from …; export { D }）按再导出追到声明文件；裸说明符由调用方给的解析追（K3）；成环时不缓存截断的结果', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-import-export-'))
+    write(dir, 'shim.ts', "import { Key } from '@dom'\nimport Base from './base'\nimport { local } from './loop'\nexport { Key }\nexport { Base, local }\n")
+    write(dir, 'dom/index.ts', 'export enum Key { A }\n')
+    write(
+      dir,
+      'base.ts',
+      "export default class Base {}\nexport const make = () => new Base()\nexport const LIST = ['a', 'b'] as const\nexport const KEY = Symbol('k')\nexport const api = { save() {} }\n",
+    )
+    write(dir, 'loop.ts', "export { Key } from './shim'\nexport const local = 1\n")
+    const files = listSourceFiles(dir)
+    const resolve = (_from: string, spec: string) => (spec === '@dom' ? 'dom/index.ts' : null)
+    const of = exportsResolver(dir, files, resolve)
+    // 先从成环的一侧进来：loop.ts 的结果因成环被截断，不缓存
+    expect(of('loop.ts').find(s => s.name === 'Key')).toMatchObject({ kind: 'enum', from: 'dom/index.ts' })
+    const e = of('shim.ts')
+    expect(e.map(s => `${s.name}<${s.from ?? ''}:${s.kind}`)).toEqual(['Key<dom/index.ts:enum', 'Base<base.ts:default', 'local<loop.ts:const'])
+    // 不给裸说明符的解析时，按名字记为再导出
+    expect(readExports(dir, files, 'shim.ts')!.find(s => s.name === 'Key')).toMatchObject({ kind: 'reexport' })
+    // 初始值是函数或类的变量记 callable（K1 的交互使用）
+    expect(of('base.ts').find(s => s.name === 'make')).toMatchObject({ kind: 'const', callable: true })
+    // 初始值是纯数据的常量记 data（字面量、数组、Symbol）；含方法的对象不算
+    expect(
+      of('base.ts')
+        .filter(s => s.data)
+        .map(s => s.name),
+    ).toEqual(['LIST', 'KEY'])
     fs.rmSync(dir, { recursive: true, force: true })
   })
   it('非 TS / JS 文件为空数组，不在清单中为 null', () => {

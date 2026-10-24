@@ -348,11 +348,6 @@ relations:
     to: domain.models
     type: calls
     description: 调用领域模型的 assert* / has*Capability 能力断言，收窄为 FrameModel / MseModel / FhlsModel / VideoPlayModel 等。
-  - id: rel.player-shell.public-surface-framework
-    from: infra.player-index.public-surface
-    to: infra.framework
-    type: calls
-    description: 再导出框架的枚举、PlayerConfig 类型与 PluginBase 基类。
 
   # ── Bootstrap 内部 ──
   - id: rel.player-shell.runtime-model-creators
@@ -430,7 +425,7 @@ relations:
     from: infra.bootstrap.solution-bootstrap
     to: domain.services
     type: calls
-    description: 把 selectSolution 方案选型服务注入 SolutionDeps.selector。
+    description: 装配时把 selectSolution 作为 SolutionDeps.selector 注入，Solution 运行时经它调用方案选型
 
   # ── Workers 内部 ──
   - id: rel.player-shell.fhls-sw-channel
@@ -458,7 +453,7 @@ relations:
     from: infra.workers.worker-task
     to: infra.framework
     type: calls
-    description: 使用框架的 WorkerMessageBridge 作为线程内 RPC 桥。
+    description: Worker 任务通道 new WorkerMessageBridge 作线程内 RPC 桥
   - id: rel.player-shell.worker-task-mus
     from: infra.workers.worker-task
     to: infra.mus
@@ -469,7 +464,7 @@ relations:
     from: infra.workers.sw-channel
     to: infra.framework
     type: calls
-    description: 使用 Generator 生成配对 hash、LogLevel 打日志。
+    description: Service Worker 通道调用 Generator 生成配对 hash
   - id: rel.player-shell.fhls-mus
     from: infra.workers.fhls-services
     to: infra.mus
@@ -481,7 +476,7 @@ relations:
     from: infra.workers.fhls-services
     to: infra.framework
     type: calls
-    description: 使用 SegmentEncryptionConfig、Time 单调钟与 Tool 工具。
+    description: Fhls 解密调用 Time 单调钟计时、Tool 工具函数处理密钥与分片
 
   # ── Third-party 出边 ──
   - id: rel.player-shell.sonic-framework
@@ -494,6 +489,16 @@ relations:
     to: infra.framework
     type: implements
     description: 实现框架的 MediaPlugin 契约（key + init + interceptorAsync），处理 MediaPacket。
+  - id: rel.player-shell.bootstrap-errors
+    from: infra.bootstrap.solution-bootstrap
+    to: share.errors
+    type: calls
+    description: Solution 装配把方案层返回的错误还原为具体的 ErrorBase（new ErrorBase）再交给错误链
+  - id: rel.player-shell.api-errors
+    from: infra.player-index.player-api
+    to: share.errors
+    type: calls
+    description: Player 对外 API 启动时写入 ErrorBase.buildVersion，媒体插件插入失败时构造 ErrorBase 交给 handleError
 
 interfaces:
   # ── Player 对外 API ──

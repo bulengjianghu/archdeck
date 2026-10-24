@@ -162,6 +162,25 @@ describe('P15：经由上层关系', () => {
   })
 })
 
+describe('D-5、F7：步骤的输出', () => {
+  it('stepOutput：异步调用写了显式返回时为配对（同 call），没写时为异步', async () => {
+    const { stepOutput } = await import('../../src/components/panel/runText')
+    const f = (id: string, kind: 'call' | 'async' | 'return') => ({ id, kind, from: 'a', to: 'b' }) as never
+    const frames = new Map([
+      ['a1', f('a1', 'async')],
+      ['r1', f('r1', 'return')],
+      ['a2', f('a2', 'async')],
+    ])
+    const pairs = new Map([
+      ['a1', 'r1'],
+      ['r1', 'a1'],
+    ])
+    expect(stepOutput(frames.get('a1')!, pairs, frames)).toMatchObject({ kind: 'pair', frame: { id: 'r1' } })
+    expect(stepOutput(frames.get('r1')!, pairs, frames)).toMatchObject({ kind: 'reply', frame: { id: 'a1' } })
+    expect(stepOutput(frames.get('a2')!, pairs, frames)).toEqual({ kind: 'async' })
+  })
+})
+
 describe('D-5：步骤的输入', () => {
   it('signatureLine：按标签开头的调用名在接口签名中找到对应的一行或一段', async () => {
     const { signatureLine } = await import('../../src/components/panel/runText')

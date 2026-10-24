@@ -57,6 +57,10 @@ export interface ExportedSymbol {
   line: number
   /** 经再导出时，声明所在的文件 */
   from?: string
+  /** 变量的初始值是函数或类（`const f = () => …`）：作为值交出时按函数算（K1 的交互使用） */
+  callable?: true
+  /** 常量的初始值是纯数据（字面量、数组、不含函数的对象字面量、Symbol(…)、new Map / Set(…)）：对它的任何使用（含 `X.map(…)` 这类成员调用）都是纯值读取（K1） */
+  data?: true
 }
 
 /** 文件归属（G3–G8） */

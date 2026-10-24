@@ -28,7 +28,7 @@ moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
 | `listSourceFiles(root)` | 在 git 仓库内执行 `git ls-files --cached --others --exclude-standard`（相对 `root`），失败时遍历目录并排除 `node_modules`、`.git`、`dist`、`coverage` 等；按路径排序 | G2 |
 | `readSourceTree(modelRoot, project, …)` | 组合以上两步，并读取清单中每个 `package.json` 的 `name` / `main` / `exports` / `types`，交给包入口（`packageEntry`）用；统计 TS / JS / Vue 文件的物理行数（按修改时间与大小缓存）；读文件名以四位编号开头的 `.md` 第一行 `# ` 之后的标题（去掉「ADR-0025：」前缀，`readAdrTitles`） | G1、G2、G10、G19、E9 |
 | `readSourceFile(root, files, path)` | 路径必须在清单中（防穿越）；超过 512 KB 或含 NUL 字节时只返回 `{ tooLarge }` / `{ binary }` | G17 |
-| `readExports(root, files, path)` | TypeScript `createSourceFile` 做语法解析：`export` 声明、`export { a as b }`、`export default`；相对路径的 `export *` / `export … from` 用 `resolveRelative` 补全（K2），补全到非 TS / JS 文件时不追，最多追 5 层，记录来源文件；签名为声明文本去掉函数体与类成员体，最多 25 行 | G11 |
+| `readExports(root, files, path)` | TypeScript `createSourceFile` 做语法解析：`export` 声明、`export { a as b }`、`export default`；相对路径的 `export *` / `export … from` 与先导入再本地导出（`import { x } from './a'; export { x }`）用 `resolveRelative` 补全（K2），补全到非 TS / JS 文件时不追，最多追 5 层，记录来源文件；`exportsResolver(root, files, resolve?)` 另收依赖提取的说明符解析，裸说明符（工作区包、路径别名）也追（K3）；再导出成环时，被截断的中间结果不缓存；初始值为函数或类的变量记 `callable`；签名为声明文本去掉函数体与类成员体，最多 25 行 | G11 |
 
 ### 2.1 端点
 

@@ -89,7 +89,7 @@ const SRC = [
   'docs/readme.md',
 ]
 
-const dep = (from: string, to: string, line = 1): FileDep => ({ from, to, via: to, kind: 'value', line, uses: true })
+const dep = (from: string, to: string, line = 1): FileDep => ({ from, to, via: to, kind: 'value', line, uses: true, invokes: true })
 
 const DEPS: FileDep[] = [
   dep('src/core/impl/i.ts', 'src/ui/view/a.ts', 3), // core → ui：违规（U2）

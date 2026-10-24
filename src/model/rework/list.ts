@@ -450,14 +450,14 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
   // K7：未解释的交互；一条模块依赖一个根因
   for (const d of report.undescribed) {
     const m = index.modules.get(d.from)
-    const values = d.files.filter(f => f.uses)
+    const values = d.files.filter(f => f.invokes)
     items.push({
       id: `undescribed:${d.key}`,
       category: 'undescribed',
       severity: 'info',
       rules: ['K7'],
       code: 'fact.undescribed',
-      title: `未解释的交互：${name(d.from)} → ${name(d.to)}（${values.length} 处值使用）`,
+      title: `未解释的交互：${name(d.from)} → ${name(d.to)}（${values.length} 处交互使用）`,
       affected: values.map(f => ({ in: 'source', file: f.from, line: f.line, note: f.via === f.to ? `→ ${f.to}` : `→ ${f.via} ⇒ ${f.to}` })),
       actions: [
         {

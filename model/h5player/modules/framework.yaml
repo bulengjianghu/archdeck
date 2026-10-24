@@ -520,6 +520,11 @@ relations:
     type: calls
     description: 经 binder 惰性创建 StateMachineController；ControllerBase.sendCommand 经它发内部命令
     interface: if.framework.state-machine.sendCommand
+  - id: rel.framework.facade-creates-pipeline
+    from: infra.framework.kernel.facade
+    to: infra.framework.pipeline
+    type: calls
+    description: '组合根装配时 bindFrameworkControllers 首个 new PipelineController，Framework 取它作全局 Dispatcher 注入其余控制器（bindControllers.ts:18、index.ts:43）'
   - id: rel.framework.facade-plugin-api
     from: infra.framework.kernel.facade
     to: infra.framework.plugin
@@ -531,6 +536,16 @@ relations:
     to: infra.framework.context.core
     type: calls
     description: 构造期把 emit / hasEventListener / handleError 回填到 Context
+  - id: rel.framework.facade-event-bus
+    from: infra.framework.kernel.facade
+    to: infra.framework.kernel.event-bus
+    type: calls
+    description: 'Framework 构造时 new EventEmitter，事件经它 emit，PluginApi 的 on / off 转交给它（index.ts:42–51、125–126）'
+  - id: rel.framework.facade-error-chain
+    from: infra.framework.kernel.facade
+    to: infra.framework.kernel.error-chain
+    type: calls
+    description: 'Framework 的 handleError 依次交给已登记的 errorHandlers，未被拦截的致命错误经 observeInternalCommand 下发错误命令（index.ts:79–108）'
   # ── 错误链 ──
   - id: rel.framework.error-emit
     from: infra.framework.kernel.error-chain
@@ -579,11 +594,6 @@ relations:
     type: calls
     description: 白名单命令走 sendCommandImmediate 同步直达 dispatch（不经状态迁移）
     interface: if.framework.pipeline.Dispatcher
-  - id: rel.framework.sm-engine-rules
-    from: infra.framework.state-machine.engine
-    to: infra.framework.state-machine.rules
-    type: calls
-    description: 按 StateMachineMode 载入迁移规则表
   - id: rel.framework.sm-engine-dispatch
     from: infra.framework.state-machine.engine
     to: infra.framework.pipeline.dispatch
@@ -631,6 +641,11 @@ relations:
     via: callback
     description: 命令执行前回调时移协调器注册的前置 Hook（观察 Pause 来源、Resume、Seek、Switch、Destroy），逐个 await；Resume 时在状态迁移前放流放阀
     payload: ds.CommandInfo
+  - id: rel.framework.sm-errors
+    from: infra.framework.state-machine
+    to: share.errors
+    type: calls
+    description: '命令被 Hook 阻断、取消或无匹配迁移时构造带 ErrorCode 的 ErrorBase 作为命令结果（stateMachine.ts:209–241）'
   # ── Pipeline ──
   - id: rel.framework.pipeline-validate
     from: infra.framework.pipeline.transaction
@@ -670,6 +685,11 @@ relations:
     type: calls
     description: 活动腿转发全局 dispatch，非活动腿走 dispatchForLeg
     interface: if.framework.pipeline.Dispatcher
+  - id: rel.framework.pipeline-result
+    from: infra.framework.pipeline.transaction
+    to: share.errors
+    type: calls
+    description: '事务失败时构造 ErrorBase（PipelineNotWorkError）放进 Result 返回（pipelineController.ts:534）'
   # ── 插件 ──
   - id: rel.framework.plugin-implements-iplugin
     from: infra.framework.plugin
@@ -797,12 +817,17 @@ relations:
     type: calls
     description: 处理与动作耗时采样、账本告警埋点
     interface: if.framework.utils.performance
+  - id: rel.framework.mu-errors
+    from: infra.framework.media-unit
+    to: share.errors
+    type: calls
+    description: 'process / doAction 抛出的未知异常经 errorWrapper 包装为 MuProcessUnknownError / MuActionUnknownError（mediaUnit.ts:208、295）'
   # ── 契约与工具 ──
   - id: rel.framework.env-probe-domain
     from: infra.framework.utils.env-probe
     to: domain.services
     type: calls
-    description: 再导出方案选型的 inferSourceModes 与 SolutionCapabilities 等类型，能力表交给 Domain 选型
+    description: 环境探测调用 Domain 的 inferSourceModes 推断源模式，把能力表交给方案选型
   - id: rel.framework.event-bus-perf
     from: infra.framework.kernel.event-bus
     to: infra.framework.utils.observe
@@ -816,11 +841,11 @@ relations:
   - { id: rel.framework.context-utils, from: infra.framework.context.core, to: infra.framework.utils, type: calls, description: 创建上下文时调用 Time 取时间戳 }
   - { id: rel.framework.contracts-polyfill, from: infra.framework.contracts, to: infra.framework.utils, type: calls, description: 公共入口加载即执行 utils/polyfill，安装运行时补丁 }
   - { id: rel.framework.misc-observe, from: infra.framework.utils.misc, to: infra.framework.utils.observe, type: calls, description: 共享定时器经 TrackInfo 记录采样与埋点 }
-  - { id: rel.framework.worker-env-probe, from: infra.framework.utils.worker-wasm, to: infra.framework.utils.env-probe, type: calls, description: 线程桥按 Feature 探测结果选择 Worker / 主线程通道 }
   - { id: rel.framework.plugin-controller-base, from: infra.framework.plugin, to: infra.framework.kernel.facade, type: implements, description: PluginController 继承 ControllerBase 控制器基类 }
   - { id: rel.framework.scheduler-utils, from: infra.framework.state-machine.scheduler, to: infra.framework.utils, type: calls, description: 命令对象经 Generator 生成命令 ID、经 Time 记录时间 }
   - { id: rel.framework.scheduler-controller-base, from: infra.framework.state-machine.scheduler, to: infra.framework.kernel.facade, type: implements, description: StateMachineController 继承 ControllerBase 控制器基类 }
   - { id: rel.framework.mu-error-chain, from: infra.framework.media-unit, to: infra.framework.kernel.error-chain, type: calls, description: MU 基类经 errorWrapper 包装处理异常并走错误路由链 }
+  - { id: rel.framework.plugin-errors, from: infra.framework.plugin, to: share.errors, type: calls, description: 插件控制器与插件基类把插件回调里的异常经 errorWrapper 包装为 ErrorBase 交给错误链 }
 
 interfaces:
   - id: if.framework.kernel.Framework

@@ -246,8 +246,8 @@ relations:
   - {id: rel.ad.desk-panel, from: present.desk-view, to: present.panel.dispatch, type: calls}
   - {id: rel.ad.flow-nodes, from: present.canvas.flow, to: present.canvas.nodes, type: calls}
   - {id: rel.ad.flow-edges, from: present.canvas.flow, to: present.canvas.edges, type: calls}
-  - {id: rel.ad.flow-legend, from: present.canvas.flow, to: present.canvas.legend, type: calls, description: 图例浮在画布右下角}
-  - {id: rel.ad.legend-edge-style, from: present.canvas.legend, to: present.canvas.edges, type: calls, description: 图例的示意线（LineSwatch）与画布的边共用 edgeStyle（颜色、线宽、线型，L10）}
+  - { id: rel.ad.flow-legend, from: present.canvas.flow, to: present.canvas.legend, type: calls, description: 画布渲染右下角的图例与显示面板（DisplayPanel） }
+  - { id: rel.ad.legend-edge-style, from: present.canvas.legend, to: present.canvas.edges, type: calls, description: 图例的示意线调用画布边的 edgeStyle 与箭头组件，按同一套颜色、线宽、线型绘制（L10） }
   - {id: rel.ad.panel-module, from: present.panel.dispatch, to: present.panel.module, type: calls}
   - {id: rel.ad.panel-relation, from: present.panel.dispatch, to: present.panel.relation, type: calls}
   - {id: rel.ad.panel-edge, from: present.panel.dispatch, to: present.panel.edge, type: calls}
@@ -256,7 +256,7 @@ relations:
   - {id: rel.ad.relation-content, from: present.panel.relation, to: present.panel.content, type: calls}
   - {id: rel.ad.edge-content, from: present.panel.edge, to: present.panel.content, type: calls}
   - {id: rel.ad.system-content, from: present.panel.system, to: present.panel.content, type: calls}
-  - {id: rel.ad.system-design, from: present.panel.system, to: present.panel.design, type: calls, description: 设计版本根层先显示设计面板}
+  - { id: rel.ad.system-design, from: present.panel.system, to: present.panel.design, type: calls, description: 设计版本的根层由系统面板先渲染设计面板与提交信息（DesignSection、CommitSection） }
   - {id: rel.ad.design-content, from: present.panel.design, to: present.panel.content, type: calls}
   - {id: rel.ad.version-shell, from: present.version, to: present.shell, type: calls, via: router, description: 切换版本即导航到对应路由，带上当前 level / sel}
 
@@ -287,7 +287,6 @@ relations:
   - {id: rel.ad.desk-keys, from: present.desk-view, to: state.desk.actions, type: calls, interface: if.desk.actions, description: Esc 只取消选中，Backspace 返回上级（N7、N9）}
   - {id: rel.ad.flow-act, from: present.canvas.flow, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击 → select，双击 → drillInto / revealModule，悬停 → setHover}
   - {id: rel.ad.flow-bounds, from: present.canvas.flow, to: state.layout.runner, type: calls, interface: if.layout.contentBounds, description: 适应画布时取内容外框}
-  - {id: rel.ad.edges-route, from: present.canvas.edges, to: state.layout.runner, type: calls, payload: [ds.PositionedView], description: 使用 Layout 给出的走线点}
   - {id: rel.ad.panel-read, from: present.panel.dispatch, to: state.desk.projection, type: calls, payload: [ds.Selection]}
   - {id: rel.ad.edgepanel-read, from: present.panel.edge, to: state.desk.projection, type: calls, payload: [ds.LevelView], description: 在当前视图里查找聚合边}
   - {id: rel.ad.module-act, from: present.panel.module, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 子模块点击、进入、可依赖层跳转}
@@ -330,7 +329,6 @@ relations:
     description: 视图变化后异步布局，用序号丢弃过期结果
   - {id: rel.ad.graph-boundaries, from: state.layout.runner.graph, to: state.layout.runner.boundaries, type: calls, description: placeOutside、compassOf、edgeLabel、spreadEnds：框外元素按方位摆放、端口方向与标签}
   - {id: rel.ad.layered-boundaries, from: state.layout.runner.layered, to: state.layout.runner.boundaries, type: calls, description: placeOutside、portFor、slotOf、parallelOffsets：分层总览中框外元素的位置、正交走线的端口与错开、核心跨层边的平行曲线}
-  - {id: rel.ad.layout-types, from: state.layout.runner, to: model.types, type: calls, payload: [ds.LevelView]}
 
   # 接入层
   - {id: rel.ad.source-reader, from: access.model-source, to: access.reader, type: calls, interface: if.reader.projects, payload: [ds.ProjectSummary, ds.ModelPayload]}
@@ -349,18 +347,16 @@ relations:
   - {id: rel.ad.overview-collector, from: model.projector.overview, to: model.projector.collector, type: calls, description: 核心跨层边单独汇总}
   # 模型层入口的再导出与名称、标签（K7 按代码补齐）
   - {id: rel.ad.indexer-steps, from: model.pipeline.indexer, to: model.scenario.flatten, type: calls, description: messagesOf：建索引时收集场景消息}
-  - {id: rel.ad.content-labels, from: present.panel.content, to: present.shared, type: calls, description: FIELD_LABELS：变更角标的字段名}
-  - {id: rel.ad.legend-type-labels, from: present.canvas.legend, to: present.shared, type: calls, description: RELATION_TYPE_LABELS / RELATION_TYPE_HINTS：关系类型名与一句话读法（ADR-0022）}
-  - {id: rel.ad.relation-type-labels, from: present.panel.relation, to: present.shared, type: calls, description: RELATION_TYPE_LABELS / RELATION_TYPE_HINTS：类型名与「语义」一行}
-  - {id: rel.ad.edge-type-labels, from: present.panel.edge, to: present.shared, type: calls, description: RELATION_TYPE_LABELS：聚合边与关系行的类型名}
-  - {id: rel.gv.ports-type-labels, from: present.panel.governance, to: present.shared, type: calls, description: RELATION_TYPE_LABELS：端口三角各项的类型名}
-  - {id: rel.ad.design-labels, from: present.panel.design, to: present.shared, type: calls, description: DESIGN_STATUS_LABELS、intentName：设计状态与持久草图的显示名}
-  - {id: rel.ad.actor-labels, from: present.panel.actor, to: present.shared, type: calls, description: ACTOR_KIND_LABELS：参与者类别的显示名}
-  - {id: rel.ad.actor-node-labels, from: present.canvas.nodes, to: present.shared, type: calls, description: ACTOR_KIND_LABELS：参与者类别的显示名}
+  - { id: rel.ad.content-labels, from: present.panel.content, to: present.shared, type: calls, description: 内容组件渲染变更角标与代码块时调用 useOpenPreview 在副栏预览文件、useNavTab 切页签、highlightTs 高亮签名 }
+  - { id: rel.ad.relation-type-labels, from: present.panel.relation, to: present.shared, type: calls, description: 关系面板经 useOpenPreview / useNavTab 打开证据文件与切换页签 }
+  - { id: rel.ad.edge-type-labels, from: present.panel.edge, to: present.shared, type: calls, description: 聚合边面板经 useOpenPreview / useNavTab 打开证据文件与切换页签 }
+  - { id: rel.gv.ports-type-labels, from: present.panel.governance, to: present.shared, type: calls, description: 治理面板经 useOpenPreview / useNavTab 打开证据文件与切换页签 }
+  - { id: rel.ad.design-labels, from: present.panel.design, to: present.shared, type: calls, description: 设计面板调用 intentName 显示持久草图名，经 useOpenPreview 在副栏预览 ADR 与草图文件 }
+  - { id: rel.ad.actor-labels, from: present.panel.actor, to: present.shared, type: calls, description: 参与者面板经 useOpenPreview / useNavTab 打开证据文件与切换页签 }
   - {id: rel.ad.nodes-act, from: present.canvas.nodes, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 分支预览选这一支（chooseBranch）、步骤序号指向这一步（seek）}
   - {id: rel.ad.system-read, from: present.panel.system, to: state.desk.projection, type: calls, description: 系统面板读索引、层次视图与版本}
   - {id: rel.ad.system-act, from: present.panel.system, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 选中模块或问题}
-  - {id: rel.ad.projection-names, from: state.desk.projection, to: model.pipeline.indexer, type: calls, description: triggerOf：场景列表的触发者}
+  - { id: rel.ad.projection-names, from: state.desk.projection, to: model.pipeline.indexer, type: calls, description: 派生场景列表时调用 triggerOf 取每个场景的触发者 }
 
 interfaces:
   - id: if.model.loadModel

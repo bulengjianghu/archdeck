@@ -254,7 +254,36 @@ function variableSignature(decl: ts.VariableDeclaration, list: ts.VariableDeclar
 
 const hasModifier = (node: ts.Node, kind: ts.SyntaxKind) => !!(ts.canHaveModifiers(node) && ts.getModifiers(node)?.some(m => m.kind === kind))
 
-type Local = { kind: ExportedSymbol['kind']; signature: string; line: number }
+type Local = { kind: ExportedSymbol['kind']; signature: string; line: number; callable?: true; data?: true }
+
+/** 初始值的外壳（`as`、`satisfies`、括号、`Object.freeze(…)`）去掉后的表达式 */
+function unwrapInit(e: ts.Expression): ts.Expression {
+  for (;;) {
+    if (ts.isAsExpression(e) || ts.isSatisfiesExpression(e) || ts.isParenthesizedExpression(e) || ts.isTypeAssertionExpression(e)) e = e.expression
+    else if (ts.isCallExpression(e) && e.arguments.length === 1 && e.expression.getText() === 'Object.freeze') e = e.arguments[0]
+    else return e
+  }
+}
+
+/** 初始值是纯数据（字面量、数组、不含函数的对象字面量、Symbol(…)、new Map / Set(…)）的常量：对它的任何使用都是纯值读取（K1） */
+function isDataInit(init: ts.Expression | undefined, depth = 0): boolean {
+  if (!init || depth > 4) return false
+  const e = unwrapInit(init)
+  if (ts.isStringLiteralLike(e) || ts.isNumericLiteral(e) || ts.isBigIntLiteral(e) || ts.isRegularExpressionLiteral(e)) return true
+  if (e.kind === ts.SyntaxKind.TrueKeyword || e.kind === ts.SyntaxKind.FalseKeyword || e.kind === ts.SyntaxKind.NullKeyword) return true
+  if (ts.isPrefixUnaryExpression(e) && ts.isNumericLiteral(e.operand)) return true
+  if (ts.isTemplateExpression(e)) return true
+  // 枚举成员（`Kind.A`）当作数据；标识符可能是函数或组件，不算
+  const leaf = (x: ts.Expression) => isDataInit(x, depth + 1) || (ts.isPropertyAccessExpression(x) && ts.isIdentifier(x.expression))
+  if (ts.isArrayLiteralExpression(e)) return e.elements.every(x => !ts.isSpreadElement(x) && leaf(x))
+  if (ts.isObjectLiteralExpression(e)) return e.properties.every(p => ts.isPropertyAssignment(p) && leaf(p.initializer))
+  if (ts.isCallExpression(e) && ts.isIdentifier(e.expression) && e.expression.text === 'Symbol') return true
+  if (ts.isNewExpression(e) && ts.isIdentifier(e.expression) && ['Map', 'Set'].includes(e.expression.text)) return true
+  return false
+}
+
+/** 说明符解析：相对路径之外（工作区包名、路径别名）的解析由调用方给出（K2）；不给时只追相对路径 */
+type SpecResolve = (from: string, spec: string) => string | null
 
 /** memo：本次解析中已算过的文件；stack：当前再导出链（防环） */
 function collectExports(
@@ -264,16 +293,26 @@ function collectExports(
   depth: number,
   memo: Map<string, ExportedSymbol[]>,
   stack: ReadonlySet<string>,
+  resolve?: SpecResolve,
+  cuts: Set<string> = new Set(),
 ): ExportedSymbol[] {
-  if (stack.has(file)) return []
+  if (stack.has(file)) {
+    cuts.add(file)
+    return []
+  }
   const done = memo.get(file)
   if (done) return done
+  // 再导出成环时，环内比本文件更早进栈的文件被截断：本文件的结果不完整，不缓存（否则后续从别处进来的查询会丢名字）；
+  // 截断的只有本文件自己时，本文件的导出表是完整的，照常缓存
+  const own = new Set<string>()
   const chain = new Set(stack).add(file)
   const text = fs.readFileSync(path.join(root, file), 'utf8')
   const kind = /x$/i.test(file) ? ts.ScriptKind.TSX : /\.(m|c)?js$/i.test(file) ? ts.ScriptKind.JS : ts.ScriptKind.TS
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kind)
   const lineOf = (n: ts.Node) => sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1
   const locals = new Map<string, Local>()
+  /** 本文件的导入绑定：本地名 → 说明符与导出名（默认导入为 default）；供 `import { X } from '…'; export { X }` 按再导出解析（K3） */
+  const imported = new Map<string, { spec: string; name: string }>()
   const out: ExportedSymbol[] = []
   const add = (s: ExportedSymbol) => {
     if (!out.some(o => o.name === s.name)) out.push(s)
@@ -283,9 +322,17 @@ function collectExports(
   for (const st of sf.statements) {
     const exported = hasModifier(st, ts.SyntaxKind.ExportKeyword)
     const isDefault = hasModifier(st, ts.SyntaxKind.DefaultKeyword)
-    const declare = (name: string | undefined, k: ExportedSymbol['kind'], node: ts.Node, signature = signatureOf(node, sf)) => {
-      if (name) locals.set(name, { kind: k, signature, line: lineOf(node) })
-      if (exported) add({ name: isDefault ? 'default' : (name ?? 'default'), kind: isDefault ? 'default' : k, signature, line: lineOf(node) })
+    const declare = (name: string | undefined, k: ExportedSymbol['kind'], node: ts.Node, signature = signatureOf(node, sf), callable = false, data = false) => {
+      const c = { ...(callable ? { callable: true as const } : {}), ...(data ? { data: true as const } : {}) }
+      if (name) locals.set(name, { kind: k, signature, line: lineOf(node), ...c })
+      if (exported) add({ name: isDefault ? 'default' : (name ?? 'default'), kind: isDefault ? 'default' : k, signature, line: lineOf(node), ...c })
+    }
+    if (ts.isImportDeclaration(st) && st.importClause && !st.importClause.isTypeOnly && ts.isStringLiteral(st.moduleSpecifier)) {
+      const spec = st.moduleSpecifier.text
+      const c = st.importClause
+      if (c.name) imported.set(c.name.text, { spec, name: 'default' })
+      if (c.namedBindings && ts.isNamedImports(c.namedBindings))
+        for (const e of c.namedBindings.elements) if (!e.isTypeOnly) imported.set(e.name.text, { spec, name: (e.propertyName ?? e.name).text })
     }
     if (ts.isFunctionDeclaration(st)) declare(st.name?.text, 'function', st)
     else if (ts.isClassDeclaration(st)) declare(st.name?.text, 'class', st)
@@ -295,7 +342,12 @@ function collectExports(
     else if (ts.isModuleDeclaration(st)) declare(st.name.getText(sf), 'namespace', st, `namespace ${st.name.getText(sf)}`)
     else if (ts.isVariableStatement(st))
       for (const d of st.declarationList.declarations)
-        if (ts.isIdentifier(d.name)) declare(d.name.text, 'const', d, variableSignature(d, st.declarationList, sf))
+        if (ts.isIdentifier(d.name)) {
+          const init = d.initializer
+          const callable = !!init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init) || ts.isClassExpression(init))
+          const data = !!(st.declarationList.flags & ts.NodeFlags.Const) && isDataInit(init)
+          declare(d.name.text, 'const', d, variableSignature(d, st.declarationList, sf), callable, data)
+        }
   }
 
   for (const st of sf.statements) {
@@ -305,9 +357,12 @@ function collectExports(
     }
     if (!ts.isExportDeclaration(st)) continue
     const spec = st.moduleSpecifier && ts.isStringLiteral(st.moduleSpecifier) ? st.moduleSpecifier.text : undefined
-    const target = spec?.startsWith('.') ? resolveRelative(file, spec, files) : null
+    const targetOf = (sp: string) => (sp.startsWith('.') ? resolveRelative(file, sp, files) : (resolve?.(file, sp) ?? null))
+    const target = spec ? targetOf(spec) : null
     // 补全到非 TS / JS 文件（如 .vue）时不追
-    const sub = () => (target && SCRIPT_EXT.test(target) && depth < MAX_REEXPORT_DEPTH ? collectExports(root, target, files, depth + 1, memo, chain) : [])
+    const subOf = (t: string | null) =>
+      t && SCRIPT_EXT.test(t) && depth < MAX_REEXPORT_DEPTH ? collectExports(root, t, files, depth + 1, memo, chain, resolve, own) : []
+    const sub = () => subOf(target)
     const clause = st.exportClause
     if (!clause) {
       // export * from './x'：不含默认导出
@@ -334,23 +389,29 @@ function collectExports(
           )
         } else {
           const l = locals.get(local)
-          add(l ? { name, ...l } : { name, kind: 'reexport', line: lineOf(el) })
+          const imp = l ? undefined : imported.get(local)
+          // `import { X } from '…'; export { X }`：与 `export { X } from '…'` 同样追到声明文件（K3）
+          const t = imp ? targetOf(imp.spec) : null
+          const hit = imp ? subOf(t).find(s => s.name === imp.name) : undefined
+          add(l ? { name, ...l } : hit ? { ...hit, name, from: hit.from ?? t! } : { name, kind: 'reexport', line: lineOf(el), ...(t ? { from: t } : {}) })
         }
       }
     }
   }
-  memo.set(file, out)
+  own.delete(file)
+  if (own.size) for (const f of own) cuts.add(f)
+  else memo.set(file, out)
   return out
 }
 
 /** K3：同一批文件共用解析结果的导出查询（再导出带声明文件 from）；非脚本或不在清单中为空数组 */
-export function exportsResolver(root: string, files: readonly string[]): (file: string) => ExportedSymbol[] {
+export function exportsResolver(root: string, files: readonly string[], resolve?: SpecResolve): (file: string) => ExportedSymbol[] {
   const set = new Set(files)
   const memo = new Map<string, ExportedSymbol[]>()
   return file => {
     if (!set.has(file) || !SCRIPT_EXT.test(file)) return []
     try {
-      return collectExports(root, file, set, 0, memo, new Set())
+      return collectExports(root, file, set, 0, memo, new Set(), resolve)
     } catch {
       return []
     }

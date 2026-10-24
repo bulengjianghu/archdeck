@@ -590,37 +590,37 @@ relations:
     from: infra.mus.factory
     to: infra.mus.loader
     type: calls
-    description: 按 MuKey 实例化加载 MU
+    description: createMu 按 MuKey new 出 HTTP / MP4 / HLS 加载 MU
   - id: rel.mus.factory-demuxer
     from: infra.mus.factory
     to: infra.mus.demuxer
     type: calls
-    description: 按 MuKey 实例化解封装 MU
+    description: createMu 按 MuKey new 出 FLV / MP4 / TS 解封装 MU
   - id: rel.mus.factory-corrector
     from: infra.mus.factory
     to: infra.mus.corrector
     type: calls
-    description: 按 MuKey 实例化校正 MU
+    description: createMu 按 MuKey new 出 PTS / NALU / 帧信息校正 MU
   - id: rel.mus.factory-plugin
     from: infra.mus.factory
     to: infra.mus.process-plugin
     type: calls
-    description: MuType.Plugin 一律包装为插件节点
+    description: createMu 遇到 MuType.Plugin 一律 new MuPluginWrapper 包装为插件节点
   - id: rel.mus.factory-buffer
     from: infra.mus.factory
     to: infra.mus.buffer
     type: calls
-    description: 按 MuKey 实例化缓冲 MU
+    description: createMu 按 MuKey new 出解封装后 / 解码后 / Fhls 等缓冲 MU
   - id: rel.mus.factory-remuxer
     from: infra.mus.factory
     to: infra.mus.remuxer
     type: calls
-    description: 按 MuKey 实例化重封装 MU
+    description: createMu 按 MuKey new 出 MP4 / 帧 / Fhls 重封装 MU
   - id: rel.mus.factory-decoder
     from: infra.mus.factory
     to: infra.mus.decoder
     type: calls
-    description: 按 MuKey 实例化解码 MU
+    description: createMu 按 MuKey new 出 WebCodecs / Wasm 音视频解码 MU
   - id: rel.mus.factory-render
     from: infra.mus.factory
     to: infra.mus.render
@@ -662,17 +662,17 @@ relations:
     from: infra.mus.render.mse
     to: infra.mus.render.video-element
     type: calls
-    description: 继承 VideoElementRender（元素、音量、挂载、截图）
+    description: MSE 渲染继承 VideoElementRender，经基类方法挂载 video 元素、设音量、截图与销毁
   - id: rel.mus.fhls-videoelement
     from: infra.mus.render.fhls
     to: infra.mus.render.video-element
     type: calls
-    description: 继承 VideoElementRender
+    description: Fhls 渲染继承 VideoElementRender，并调用 createSnapshotCover 生成截图封面
   - id: rel.mus.video-videoelement
     from: infra.mus.render.video
     to: infra.mus.render.video-element
     type: calls
-    description: 继承 VideoElementRender
+    description: Video 渲染继承 VideoElementRender，经 super 调用基类的初始化元素、播放 / 停止、挂载、音量与销毁
   - id: rel.mus.videoelement-keeplastframe
     from: infra.mus.render.video-element
     to: infra.mus.render.keep-last-frame
@@ -682,12 +682,7 @@ relations:
     from: infra.mus.render.mse
     to: infra.mus.remuxer.mp4
     type: calls
-    description: 复用 MP4 箱体生成（如补生成 init segment）
-  - id: rel.mus.fhlsrender-fhlsremuxed
-    from: infra.mus.render.fhls
-    to: infra.mus.buffer.fhls-remuxed
-    type: calls
-    description: 共用分片请求超时常量 FILE_REQUEST_TIMEOUT
+    description: MSE 渲染调用 MP4 箱体生成函数补生成 init segment
   - id: rel.mus.vcs-controller-model
     from: infra.mus.render.vcs.controller
     to: infra.mus.render.vcs.model
@@ -749,12 +744,6 @@ relations:
     type: implements
     interface: if.mus.mu-lifecycle
     description: 继承 MediaUnit 基类
-  - id: rel.mus.factory-framework
-    from: infra.mus.factory
-    to: infra.framework
-    type: calls
-    payload: ds.MuConfig
-    description: 以 MuConfig / MuKey / MuType 为输入、MediaUnit 为产出类型
   - id: rel.mus.keeplastframe-framework
     from: infra.mus.render.keep-last-frame
     to: infra.framework
@@ -866,7 +855,7 @@ relations:
     from: infra.mus.render.vcs.model
     to: domain.models
     type: calls
-    description: VcsModel 继承 ModelBase，组合 RenderTimeline 与 FrameBufferLedger
+    description: VcsModel 继承 ModelBase、new 出 RenderTimeline 与 FrameBufferLedger 组合，违例抛 InvariantError
 
   # ═════════ 出边：其他 infra / share ═════════
   - id: rel.mus.render-modelaccess
@@ -909,6 +898,36 @@ relations:
     to: infra.third-party
     type: calls
     description: ScriptProcessor / AudioWorklet 渲染使用 sonic 变速（JS 与 wasm）
+  - id: rel.mus.errors
+    from: infra.mus.loader
+    to: share.errors
+    type: calls
+    description: 加载 MU 把网络与任务异常经 errorWrapper / new ErrorBase 包装为带 ErrorCode 的错误
+  - id: rel.mus.decoder-errors
+    from: infra.mus.decoder
+    to: share.errors
+    type: calls
+    description: 解码 MU 把解码器异常经 errorWrapper / new ErrorBase 包装为带 ErrorCode 的错误
+  - id: rel.mus.demuxer-errors
+    from: infra.mus.demuxer
+    to: share.errors
+    type: calls
+    description: 解封装 MU 把解析异常经 errorWrapper / new ErrorBase 包装为 MuDemuxerError 等
+  - id: rel.mus.render-errors
+    from: infra.mus.render
+    to: share.errors
+    type: calls
+    description: 各渲染 MU（video 元素、MSE、画布、MediaStream、音频、Fhls、Vcs）把出画与播放异常以 new ErrorBase 构造带 ErrorCode 的错误
+  - id: rel.mus.fhls-remux-errors
+    from: infra.mus.buffer.fhls-remuxed
+    to: share.errors
+    type: calls
+    description: Fhls 分片缓冲把分片请求与重封装失败构造为 ErrorBase
+  - id: rel.mus.remuxer-errors
+    from: infra.mus.remuxer.fhls
+    to: share.errors
+    type: calls
+    description: TS 重封装（Wasm）初始化失败时抛出 ErrorBase（MuRemuxerError）
 
 interfaces:
   - id: if.mus.mu-lifecycle

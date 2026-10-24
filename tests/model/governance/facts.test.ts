@@ -217,13 +217,23 @@ describe('K7 未解释的交互', () => {
 
   it('只引类型（含枚举）的模块依赖不算；有一条值使用（uses）就算', () => {
     const { index, own } = setup()
-    const type = (from: string, to: string): FileDep => ({ ...dep(from, to), kind: 'type', uses: undefined })
+    const type = (from: string, to: string): FileDep => ({ ...dep(from, to), kind: 'type', uses: undefined, invokes: undefined })
     const onlyTypes = liftDeps(index, own, [type('src/ui/view/a.ts', 'src/core/impl/i.ts')]).moduleDeps
     expect(undescribedDeps(index, onlyTypes)).toEqual([])
     // 值导入了枚举：kind 为 value，但没有引用函数、类或变量
-    const enumOnly = liftDeps(index, own, [{ ...dep('src/ui/view/a.ts', 'src/core/impl/i.ts'), names: ['Mode'], uses: undefined }]).moduleDeps
+    const enumOnly = liftDeps(index, own, [{ ...dep('src/ui/view/a.ts', 'src/core/impl/i.ts'), names: ['Mode'], uses: undefined, invokes: undefined }]).moduleDeps
     expect(undescribedDeps(index, enumOnly)).toEqual([])
     const mixed = liftDeps(index, own, [type('src/ui/view/a.ts', 'src/core/impl/i.ts'), dep('src/ui/view/a.ts', 'src/core/impl/i.ts', undefined, 2)]).moduleDeps
     expect(undescribedDeps(index, mixed).map(d => d.key)).toEqual(['ui.view->core.impl'])
+  })
+
+  it('纯值读取（常量、只读值、只读成员：uses 而没有 invokes）不算，由事实承载；有一处交互使用（invokes）就算（第五轮 T4 口径）', () => {
+    const { index, own } = setup()
+    const read = (line: number): FileDep => ({ ...dep('src/ui/view/a.ts', 'src/core/impl/i.ts', undefined, line), names: ['LABELS'], invokes: undefined })
+    const onlyReads = liftDeps(index, own, [read(1), read(2)]).moduleDeps
+    expect([...onlyReads.values()].some(d => d.files.some(f => f.uses))).toBe(true)
+    expect(undescribedDeps(index, onlyReads)).toEqual([])
+    const withCall = liftDeps(index, own, [read(1), dep('src/ui/view/a.ts', 'src/core/impl/i.ts', undefined, 3)]).moduleDeps
+    expect(undescribedDeps(index, withCall).map(d => d.key)).toEqual(['ui.view->core.impl'])
   })
 })

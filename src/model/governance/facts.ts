@@ -175,8 +175,11 @@ export function coveringRelations(index: ModelIndex, from: string, to: string): 
   return [...index.relations.values()].filter(r => covers(index, r, from, to)).map(r => r.id)
 }
 
-/** K7：未解释的交互——有值使用（某条文件依赖引用了对方的函数、类或变量，K1 的 uses）却没有任何交互关系覆盖的模块依赖；只引类型（含枚举）的不算 */
+/**
+ * K7：未解释的交互——有交互使用（某条文件依赖调用、new、extends、渲染了对方的实现，或把对方的函数、类、组件作为值交出，K1 的 invokes）
+ * 却没有任何交互关系覆盖的模块依赖；只引类型（含枚举）的、纯值读取（常量、只读值、只读成员）的不算，由事实承载
+ */
 export function undescribedDeps(index: ModelIndex, moduleDeps: ReadonlyMap<string, ModuleDep>): ModuleDep[] {
   const relations = [...index.relations.values()]
-  return [...moduleDeps.values()].filter(d => d.files.some(f => f.uses) && !relations.some(r => covers(index, r, d.from, d.to)))
+  return [...moduleDeps.values()].filter(d => d.files.some(f => f.invokes) && !relations.some(r => covers(index, r, d.from, d.to)))
 }

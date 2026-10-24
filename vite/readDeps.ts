@@ -32,7 +32,17 @@ export interface ParsedImport {
   reexport?: true
   /** 值导入里没有在值的位置被引用的导入名（只在类型位置出现，或只转出）；不按名称穿透的导入为 ['*']（K1：不算值使用） */
   inert?: string[]
+  /** 被引用、但从没被调用的导入名（不按名称穿透的导入为 '*'）：只作为成员读取的基（`X.a`、`X[k]`）记 member，其余（读变量、作为值交出）记 bare（K1：交互使用的判定） */
+  reads?: { name: string; how: RefKind }[]
 }
+
+/**
+ * K1：一个导入名在值位置的引用方式。invoke：调用、new、标签模板、类的 extends、成员调用（`X.a()` 的 X）、模板里渲染为组件或调用；
+ * member：成员读取的基（`X.a`、`X[k]`，没有调用）；bare：其余值位置（读取、赋值、作为参数或属性值交出）。
+ */
+export type RefKind = 'invoke' | 'member' | 'bare'
+const RANK: Record<RefKind, number> = { member: 0, bare: 1, invoke: 2 }
+const stronger = (a: RefKind | undefined, b: RefKind): RefKind => (a && RANK[a] >= RANK[b] ? a : b)
 
 /** 类声明 implements / extends 子句引用的标识符（取 `a.b.C` 最左边的 a） */
 function heritageLocals(sf: ts.SourceFile): Set<string> {
@@ -63,11 +73,32 @@ function inTypePosition(n: ts.Node): boolean {
   return false
 }
 
-/** K1：在值的位置被引用的标识符（不含导入声明、类型位置、属性名、本地再导出 export { x }、instanceof 右侧——只引类不调用） */
-function valueRefs(sf: ts.SourceFile): Set<string> {
-  const out = new Set<string>()
+/** 标识符在值位置的引用方式（K1）：沿成员访问链上溯，链顶被调用为 invoke，链非空为 member，否则 bare；extends 子句为 invoke */
+function refKind(n: ts.Identifier): RefKind {
+  let top: ts.Node = n
+  while (
+    (ts.isPropertyAccessExpression(top.parent) || ts.isElementAccessExpression(top.parent) || ts.isNonNullExpression(top.parent)) &&
+    top.parent.expression === top
+  )
+    top = top.parent
+  const q = top.parent
+  if (
+    (ts.isCallExpression(q) && q.expression === top) ||
+    (ts.isNewExpression(q) && q.expression === top) ||
+    (ts.isTaggedTemplateExpression(q) && q.tag === top)
+  )
+    return 'invoke'
+  if (ts.isExpressionWithTypeArguments(q) && ts.isHeritageClause(q.parent) && q.parent.token === ts.SyntaxKind.ExtendsKeyword) return 'invoke'
+  if ((ts.isJsxOpeningElement(q) || ts.isJsxSelfClosingElement(q) || ts.isJsxClosingElement(q)) && q.tagName === top) return 'invoke'
+  return top === n ? 'bare' : 'member'
+}
+
+/** K1：在值的位置被引用的标识符及最强的引用方式（不含导入声明、类型位置、属性名、本地再导出 export { x } 与 export default x、instanceof 右侧——只引类不调用） */
+function valueRefs(sf: ts.SourceFile): Map<string, RefKind> {
+  const out = new Map<string, RefKind>()
   const visit = (n: ts.Node) => {
-    if (ts.isImportDeclaration(n) || ts.isExportSpecifier(n)) return
+    // 本地再导出 `export { x }`、`export default x` 只是转出，不是使用
+    if (ts.isImportDeclaration(n) || ts.isExportSpecifier(n) || (ts.isExportAssignment(n) && ts.isIdentifier(n.expression))) return
     if (ts.isIdentifier(n)) {
       const p = n.parent
       const isName =
@@ -75,7 +106,7 @@ function valueRefs(sf: ts.SourceFile): Set<string> {
         ((ts.isPropertyAssignment(p) || ts.isMethodDeclaration(p) || ts.isPropertyDeclaration(p) || ts.isPropertySignature(p)) && p.name === n) ||
         (ts.isQualifiedName(p) && p.right === n) ||
         (ts.isBinaryExpression(p) && p.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword && p.right === n)
-      if (!isName && !inTypePosition(n)) out.add(n.text)
+      if (!isName && !inTypePosition(n)) out.set(n.text, stronger(out.get(n.text), refKind(n)))
     }
     ts.forEachChild(n, visit)
   }
@@ -91,12 +122,23 @@ function scriptKind(file: string): ts.ScriptKind {
   return ts.ScriptKind.TS
 }
 
-/** K1：解析一段脚本的导入；lineOffset 为它在文件中的起始行（Vue 的 <script> 块）；extraRefs 为脚本之外引用到的名字（Vue 模板） */
-export function parseImports(file: string, text: string, kind = scriptKind(file), lineOffset = 0, extraRefs?: (name: string) => boolean): ParsedImport[] {
+/** K1：解析一段脚本的导入；lineOffset 为它在文件中的起始行（Vue 的 <script> 块）；extraRefs 为脚本之外引用到的名字及引用方式（Vue 模板） */
+export function parseImports(
+  file: string,
+  text: string,
+  kind = scriptKind(file),
+  lineOffset = 0,
+  extraRefs?: (name: string) => RefKind | undefined,
+): ParsedImport[] {
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kind)
   const out: ParsedImport[] = []
   const refs = valueRefs(sf)
-  const referenced = (local: string) => refs.has(local) || !!extraRefs?.(local)
+  const how = (local: string): RefKind | undefined => {
+    const a = refs.get(local)
+    const b = extraRefs?.(local)
+    return a && b ? stronger(a, b) : (a ?? b)
+  }
+  const referenced = (local: string) => !!how(local)
   const lineOf = (n: ts.Node) => sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1 + lineOffset
   const inHeritage = heritageLocals(sf)
   const literal = (n: ts.Node | undefined) => (n && ts.isStringLiteralLike(n) ? n.text : undefined)
@@ -125,6 +167,20 @@ export function parseImports(file: string, text: string, kind = scriptKind(file)
         : []
       const inert =
         typeOnly || !clause ? [] : names.length ? locals.filter(([l]) => !referenced(l)).map(([, x]) => x) : locals.some(([l]) => referenced(l)) ? [] : ['*']
+      // 被引用却从没被调用的名字（K1 的交互使用判定）；不按名称穿透时取各本地名中最强的引用方式
+      const reads: { name: string; how: RefKind }[] = []
+      if (!typeOnly && clause) {
+        if (names.length) {
+          for (const [l, x] of locals) {
+            const h = how(l)
+            if (h && h !== 'invoke') reads.push({ name: x, how: h })
+          }
+        } else {
+          const hs = locals.map(([l]) => how(l)).filter((h): h is RefKind => !!h)
+          const h = hs.reduce<RefKind | undefined>((a, b) => stronger(a, b), undefined)
+          if (h && h !== 'invoke') reads.push({ name: '*', how: h })
+        }
+      }
       out.push({
         spec,
         line: lineOf(st),
@@ -133,6 +189,7 @@ export function parseImports(file: string, text: string, kind = scriptKind(file)
         types,
         ...(heritage.length ? { heritage } : {}),
         ...(inert.length ? { inert } : {}),
+        ...(reads.length ? { reads } : {}),
       })
     } else if (ts.isExportDeclaration(st)) {
       const spec = literal(st.moduleSpecifier)
@@ -177,7 +234,14 @@ export function parseVueImports(file: string, text: string): ParsedImport[] {
   // 模板里出现的名字（组件标签的 PascalCase 与 kebab-case、表达式里的标识符）都算值引用
   const template = /<template\b[^>]*>([\s\S]*)<\/template>/i.exec(text)?.[1] ?? ''
   const kebab = (s: string) => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
-  const inTemplate = (name: string) => new RegExp(`\\b(${name}|${kebab(name)})\\b`).test(template)
+  // 组件标签与调用（含成员调用 X.a(…)）为 invoke；X.a / X[…] 为 member；其余出现为 bare
+  const inTemplate = (name: string): RefKind | undefined => {
+    const n = name.replace(/\$/g, '\\$')
+    if (new RegExp(`<(${n}|${kebab(name)})[\\s/>]`).test(template) || new RegExp(`(^|[^\\w$.])${n}(\\s*\\??\\.\\s*[\\w$]+)*\\s*\\(`).test(template))
+      return 'invoke'
+    if (new RegExp(`(^|[^\\w$.])${n}\\s*(\\??\\.|\\[)`).test(template)) return 'member'
+    return new RegExp(`\\b(${n}|${kebab(name)})\\b`).test(template) ? 'bare' : undefined
+  }
   const re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi
   for (let m = re.exec(text); m; m = re.exec(text)) {
     const attrs = m[1]
@@ -238,7 +302,7 @@ export function createResolver(root: string, files: readonly string[], packages:
   return { resolve: specResolver(files, packages, readPathAliases(root, files)) }
 }
 
-type ExportsOf = (file: string) => { name: string; kind?: string; from?: string }[]
+type ExportsOf = (file: string) => { name: string; kind?: string; from?: string; callable?: true; data?: true }[]
 
 /** K3：一条导入的目标：命名导入按名称追到声明文件，其余为经由文件 */
 export function importTargets(via: string, names: readonly string[], exportsOf: ExportsOf): string[] {
@@ -251,8 +315,21 @@ export interface ImportTarget {
   kind: DepKind
   names?: string[]
   heritage?: true
-  /** 引用了实现：值导入的名字声明为函数、类或变量（不是类型、枚举），或不按名称穿透的值导入；再导出不算（K5 的 implements 证据分档、K7 的值使用） */
+  /** 引用了实现：值导入的名字声明为函数、类或变量（不是类型、枚举），或不按名称穿透的值导入；再导出不算（K5 的 implements 证据分档、U11、U12 的值使用） */
   uses?: true
+  /** 交互使用：引用了实现，且不只是纯值读取——被调用、new、extends、渲染，或把函数、类、组件作为值交出；只读常量、只读成员不算（K1，K7 的口径） */
+  invokes?: true
+}
+
+/** K1：纯值读取——声明为纯数据常量；或从没被调用，且只作为成员读取的基，或声明不是函数、类、组件（常量、只读值）而被读取或交出 */
+function pureRead(read: { how: RefKind } | undefined, sym: { kind?: string; callable?: true; data?: true } | undefined, whole: boolean): boolean {
+  // 纯数据常量（字面量、数组、对象字面量、Symbol）：连 `X.map(…)` 这类成员调用也只是读它
+  if (sym?.data) return true
+  if (!read) return false
+  if (read.how === 'member') return true
+  // bare：交出函数、类、组件（运行时分派）算交互；不按名称穿透的默认 / 命名空间导入保守地算交互
+  if (whole) return false
+  return !!sym && !sym.callable && !['function', 'class', 'default', 'reexport', 'namespace'].includes(sym.kind ?? '')
 }
 
 /** 数据类型的声明：interface、type 别名、枚举——只引它们不算使用实现 */
@@ -266,19 +343,31 @@ const TYPE_DECL = new Set(['interface', 'type'])
  * 一个目标只承接类型名时为 type，否则为 value。不按名称穿透的导入以经由文件为目标、取整条语句的种类。
  */
 export function importTargetKinds(
-  imp: { kind: DepKind; names: readonly string[]; types: readonly string[]; heritage?: readonly string[]; reexport?: true; inert?: readonly string[] },
+  imp: {
+    kind: DepKind
+    names: readonly string[]
+    types: readonly string[]
+    heritage?: readonly string[]
+    reexport?: true
+    inert?: readonly string[]
+    reads?: readonly { name: string; how: RefKind }[]
+  },
   via: string,
   exportsOf: ExportsOf,
 ): ImportTarget[] {
-  if (!imp.names.length)
+  const readOf = (n: string) => imp.reads?.find(r => r.name === n)
+  if (!imp.names.length) {
+    const uses = imp.kind === 'value' && !imp.reexport && !imp.inert?.includes('*')
     return [
       {
         to: via,
         kind: imp.kind,
         ...(imp.heritage?.includes('*') ? { heritage: true as const } : {}),
-        ...(imp.kind === 'value' && !imp.reexport && !imp.inert?.includes('*') ? { uses: true as const } : {}),
+        ...(uses ? { uses: true as const } : {}),
+        ...(uses && !pureRead(readOf('*'), undefined, true) ? { invokes: true as const } : {}),
       },
     ]
+  }
   const syms = exportsOf(via)
   const out = new Map<string, ImportTarget & { names: string[] }>()
   for (const n of imp.names) {
@@ -289,7 +378,10 @@ export function importTargetKinds(
     if (hit.kind !== 'value') hit.kind = kind
     hit.names.push(n)
     if (imp.heritage?.includes(n)) hit.heritage = true
-    if (kind === 'value' && !imp.reexport && !imp.inert?.includes(n) && !DATA_DECL.has(sym?.kind ?? '')) hit.uses = true
+    if (kind === 'value' && !imp.reexport && !imp.inert?.includes(n) && !DATA_DECL.has(sym?.kind ?? '')) {
+      hit.uses = true
+      if (!pureRead(readOf(n), sym, false)) hit.invokes = true
+    }
     out.set(to, hit)
   }
   return [...out.values()]
@@ -298,7 +390,7 @@ export function importTargetKinds(
 /** K1–K3：全部文件依赖与外部依赖 */
 export function readCodeDeps(root: string, files: readonly string[], packages: Record<string, PackageEntry>): CodeDeps {
   const resolver = createResolver(root, files, packages)
-  const exportsOf = exportsResolver(root, files)
+  const exportsOf = exportsResolver(root, files, resolver.resolve)
   const deps: FileDep[] = []
   const external: Record<string, number> = {}
   let parsed = 0
@@ -327,7 +419,8 @@ export function resolveImport(
   spec: string,
   names: readonly string[] = [],
 ) {
-  const via = createResolver(root, files, packages).resolve(from, spec)
+  const resolver = createResolver(root, files, packages)
+  const via = resolver.resolve(from, spec)
   if (!via) return []
-  return importTargets(via, names, exportsResolver(root, files)).map(to => ({ to, via }))
+  return importTargets(via, names, exportsResolver(root, files, resolver.resolve)).map(to => ({ to, via }))
 }
