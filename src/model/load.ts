@@ -148,9 +148,10 @@ export function load(files: readonly RawFile[]): LoadResult {
       const src = locate(path)
       const payload = r.payload === undefined ? [] : Array.isArray(r.payload) ? r.payload : [r.payload]
       const typed = currentType(r, src, issues)
-      const fields = { ...r, ...typed, payload }
+      // 没写 payload 不算写了：草图里的关系（晋升后的骨架拥有第二级关系）由其他文件补 payload 不是重定义（X1）
+      const fields = { ...r, ...typed, ...(r.payload === undefined ? {} : { payload }) }
       if (supplement('relation', r.id, fields, src, [])) return
-      const entity: RelationEntity = { ...fields, seq: seq++, src }
+      const entity: RelationEntity = { ...fields, payload, seq: seq++, src }
       relations.push(entity)
       remember('relation', r.id, entity, fields, [])
     }

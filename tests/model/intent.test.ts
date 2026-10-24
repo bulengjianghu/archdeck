@@ -79,6 +79,15 @@ describe('X1 草图先入、其他文件只能补充', () => {
     expect(codes(issues)).not.toContain('duplicate-module')
   })
 
+  it('补充关系：草图里的关系没写 payload、interface、via 时，其他文件补上不是重定义（晋升后的骨架拥有第二级关系）', () => {
+    const { index, issues } = loadModel(
+      files({ 'modules/rel.yaml': 'relations: [{ id: rel.sk.view-core, from: ui.view, to: core, type: calls, interface: if.core.run, payload: [ds.X], via: inject }]\ndataStructures: [{ id: ds.X, name: X }]' }),
+    )
+    expect(codes(issues)).not.toContain('sketch-redefined')
+    expect(index.relations.get('rel.sk.view-core')).toMatchObject({ interface: 'if.core.run', payload: ['ds.X'], via: 'inject' })
+    expect(loadModel(files({})).index.relations.get('rel.sk.view-core')?.payload).toEqual([])
+  })
+
   it('父子关系由草图决定：把草图模块搬到别的父模块下也是重定义', () => {
     const { index, issues } = loadModel(files({ 'modules/move.yaml': 'module: { id: core, name: Core, children: [{ id: ui, name: UI }] }' }))
     expect(codes(issues)).toContain('sketch-redefined')
