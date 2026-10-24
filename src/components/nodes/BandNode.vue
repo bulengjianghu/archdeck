@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Handles from './Handles.vue'
 import DiffMark from './DiffMark.vue'
+import StructMarks from './StructMarks.vue'
 import type { NodeData } from './types'
 
 defineProps<{ data: NodeData }>()
@@ -10,6 +11,7 @@ defineProps<{ data: NodeData }>()
   <div class="band" :class="{ selected: data.selected, dim: data.dim, target: data.module?.status === 'target', [`diff-${data.change}`]: !!data.change }">
     <Handles />
     <DiffMark :data="data" />
+    <StructMarks :data="data" />
     <div class="left">
       <div class="name">{{ data.name }}</div>
       <div class="abstraction">{{ data.band?.abstraction || '（未填写抽象原则）' }}</div>

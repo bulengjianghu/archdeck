@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Handles from './Handles.vue'
 import DiffMark from './DiffMark.vue'
+import StructMarks from './StructMarks.vue'
 import PortMarks from './PortMarks.vue'
 import RimTag from './RimTag.vue'
 import type { NodeData } from './types'
@@ -24,6 +25,7 @@ defineProps<{ data: NodeData }>()
   >
     <Handles />
     <DiffMark :data="data" />
+    <StructMarks :data="data" />
     <PortMarks v-if="data.ports" :ports="data.ports" :module-id="data.moduleId" />
     <div class="head">
       <span class="name">{{ data.name }}</span>

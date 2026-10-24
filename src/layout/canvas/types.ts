@@ -1,6 +1,13 @@
 /** 画布场景的对外类型（ADR-0013）：与 Vue Flow 的节点、边同形，经 src/layout/canvas.ts 再导出 */
 import type {
   ActorEntity,
+  DepTier,
+  GovernanceReport,
+  Impact,
+  ModuleMetrics,
+  StabilityBand,
+  StructureKind,
+  StructureView,
   AssemblyOverlay,
   ActorKind,
   DepOverlay,
@@ -68,6 +75,39 @@ export interface NodeData {
   heat?: NodeHeat & { kind: HeatKind }
   /** L13：节点定义的端口记号——画在进边一侧（side）的后半；超过 PORT_MERGE 个时合成一个「端口 ×N」（merged 为端口数） */
   ports?: NodePorts
+  /** L17：结构视角的指标角标「入 Ca · 出 Ce」与不稳定度三档色条；共用件架上的块只标入（inOnly）；Ca + Ce = 0 时不给 */
+  metrics?: { ca: number; ce: number; instability: number | null; band: StabilityBand | null; inOnly?: boolean }
+  /** K15：结构视角选中模块时，本节点在影响面（传入）/ 依赖面（传出）里的方向与最短距离 */
+  impact?: { direction: 'in' | 'out' | 'both'; distance: number; inCycle: boolean }
+  /** K15：影响面的中心（选中的模块所在的节点） */
+  impactSelf?: boolean
+}
+
+/** L16：结构边的种类——依赖、组装、子类、端口实现；没有代码事实时的允许边（U16） */
+export type DepEdgeKind = StructureKind | 'allowed'
+
+/** U15：违规红晕三档——新增或无基线（红晕）、已知（淡红晕）、已豁免（灰描边）；共享通道（L18） */
+export type DepViolation = 'new' | 'known' | 'allowed'
+
+/** L16：结构边（依赖边）的画法——结构视图私有的编码（UML 类图惯例），与交互边的 L10 互不相干 */
+export interface DepEdgeLook {
+  kind: DepEdgeKind
+  /** 依赖边的档（K14）：交互使用深、值使用中、只引类型浅（明度） */
+  tier?: DepTier
+  /** 两端节点对应的模块 ID：选中落到 `sel=d:<fromModule>-><toModule>`（K10） */
+  fromModule: string
+  toModule: string
+  /** 聚合的模块依赖条数（线宽 = 共享通道「聚合条数」三档，L18）；允许边为 1 */
+  deps: number
+  /** 文件依赖条数（只进悬停与面板） */
+  files?: number
+  violation?: DepViolation
+  /** K17：未解释（K7 同口径） */
+  unexplained?: boolean
+  /** U17：逆稳定——两端的 I */
+  against?: { from: number; to: number }
+  /** 悬停说明：种类与档、条数、覆盖、规则判定 */
+  title: string
 }
 
 /** L13：一个端口记号——接口 ID、名称、实现者数（描述与代码事实的并集） */
@@ -137,6 +177,8 @@ export interface RouteEdgeData {
   couple?: LevelCoupling
   /** O12：组装叠加线的内容 */
   assembly?: AssemblyOverlay
+  /** L15、L16：结构视角的结构边（依赖边）；有它时由 DepEdge 按结构视图的编码画 */
+  dep?: DepEdgeLook
 }
 
 export type CanvasNodeType = 'frame' | 'module' | 'boundary' | 'band' | 'core' | 'more' | 'shared' | 'actor' | 'step' | 'preview'
@@ -158,12 +200,12 @@ export interface CanvasNode {
   class?: string
 }
 
-/** 与 Vue Flow 的边同形；箭头由 RouteEdge 按 data.arrow 自画（L10） */
+/** 与 Vue Flow 的边同形；箭头由 RouteEdge 按 data.arrow 自画（L10）；结构边（type 'dep'）由 DepEdge 按 data.dep 画（L16） */
 export interface CanvasEdge {
   id: string
   source: string
   target: string
-  type: 'route'
+  type: 'route' | 'dep'
   zIndex: number
   data: RouteEdgeData
 }
@@ -200,11 +242,35 @@ export interface CanvasInput {
   assembly?: readonly AssemblyOverlay[] | null
   /** O12：本层节点 ID → 落在它上面的组装根个数（「组装根」角标）；开关关闭时为空 */
   assemblyRoots?: ReadonlyMap<string, number> | null
+  /** ADR-0031：结构视角的输入；交互视角与运行视角为 null（照交互图画） */
+  structure?: StructureInput | null
+}
+
+/** 结构视角（ADR-0031）画什么：本层结构视图与显示偏好、指标、影响面、本层的环 */
+export interface StructureInput {
+  /** 本层的结构边（有代码事实）或允许依赖图（U16）；代码事实还在读取时为 null（不画边，画布角说明） */
+  view: StructureView | null
+  /** L15：只引类型的依赖边是否画出（缺省收起，显示偏好 typeOnly） */
+  typeOnly: boolean
+  /** L17：各模块的 Ca / Ce / I（没有代码事实时为 null） */
+  metrics: ReadonlyMap<string, ModuleMetrics> | null
+  /** K15：选中模块的影响面（全系统）；没有选中模块或没有代码事实时为 null */
+  impact: Impact | null
+  /** K15：画哪个方向——影响面（传入）、依赖面（传出）或两者（显示偏好 impactMode） */
+  impactMode: 'in' | 'out' | 'both'
+  /** Y4：本层的环（节点 → 编号），结构视角常显 */
+  cycles: ReadonlyMap<string, number> | null
+  /** O13③：分层总览中核心模块的跨层依赖（聚焦核心模块时画）要用的模块依赖与违规；没有代码事实时为 null */
+  report?: Pick<GovernanceReport, 'moduleDeps' | 'violations'> | null
+  /** 画布角的说明（没有代码事实、正在读取） */
+  note?: string | null
 }
 
 export interface CanvasScene {
   nodes: CanvasNode[]
   edges: CanvasEdge[]
+  /** 结构视角：画布角的计数与说明——收起的只引类型依赖边条数（L15）、没有代码事实时的说明（U16）；其余视角不给 */
+  structure?: { typeOnlyHidden: number; note: string | null }
   /** V5：运行视角隐藏了静态内容时只按这些节点适应画布；否则为 null（取全部内容） */
   visibleIds: Set<string> | null
 }

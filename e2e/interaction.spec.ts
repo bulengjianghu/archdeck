@@ -1,4 +1,4 @@
-/** 结构视角（§6.1、§6.3）：首页进入项目、分层总览、下钻与返回、单击选中 */
+/** 交互视角（§6.1、§6.3，ADR-0031 之前称结构视角）：首页进入项目、分层总览、下钻与返回、单击选中 */
 import { expect, test } from '@playwright/test'
 import { graphNode, openDesk, query } from './helpers'
 

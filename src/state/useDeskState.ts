@@ -181,7 +181,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const evidence = createEvidence({ state, index, plan, planOf: planScenario, files, sync: sourceSync, design: !!options.version })
   const run = createRun({ state, index, levelId, plan, view, positioned, fileOwners: files.owners, evidence: evidence.levels })
   const versions = createVersions({ state, index, designs, commits, baselines, version: options.version, sketchPrompt, sketches })
-  const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version })
+  const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version, sketches })
   const evolution = createEvolution({ state, index, view, files, facts, sync: sourceSync, design: !!options.version })
   const intent = createIntent({ index, designs, sketches, version: options.version })
   // ── 草图画布（X7，ADR-0024、ADR-0025）：只在草图版本上，打开即进入 ──

@@ -7,11 +7,12 @@
  *   选中文件：归属模块在本层的投影节点加文件高亮（G14）。
  *   跳线（L11）：画出来的折线关系边之间的交叉处，水平段起一个半圆小桥；曲线与临时线不参与。
  *   代码事实（结构视角、开关开启，K9、Y4）：关系边标证实、含违规的边红色描边、未解释的交互与违规画成不参与布局的叠加线、本层环的节点标编号。
- *   演化（结构视角、热度或耦合开启，J5）：节点的热度角标、时间耦合的波浪线（不参与布局）。
+ *   演化（交互与结构视角、热度或耦合开启，J5）：节点的热度角标、时间耦合的波浪线（不参与布局）。
+ *   结构视角（ADR-0031）：交互边换成结构边（L15、L16，canvas/structure.ts），节点不动（V12），角标换成指标、影响面与常显的环（L17、K15、Y4）。
  * 本文件是入口，只组合各部分：共用派生 canvas/context.ts、节点 canvas/nodes.ts、边 canvas/edges.ts、对外类型 canvas/types.ts。
  */
 import { sceneContext, visibleIdsOf } from './canvas/context'
-import { assemblyEdges, evolutionEdges, factEdges, replayEdges, shownEdges, structureEdges } from './canvas/edges'
+import { assemblyEdges, depEdges, evolutionEdges, factEdges, interactionEdges, replayEdges, shownEdges } from './canvas/edges'
 import { outsideRoutes } from './layout'
 import { moduleNodes, replayNodes } from './canvas/nodes'
 import { jumpsOf } from './routing'
@@ -23,13 +24,18 @@ export type {
   CanvasNode,
   CanvasNodeType,
   CanvasScene,
+  DepEdgeKind,
+  DepEdgeLook,
+  DepViolation,
   EdgeArrow,
   FactState,
   NodeData,
   NodePorts,
   PortMark,
   RouteEdgeData,
+  StructureInput,
 } from './canvas/types'
+export { DEP_KIND_LABELS, DEP_TIER_LABELS, depWeight, violationLook } from './canvas/structure'
 export { PORT_MERGE } from './canvas/nodes'
 export { EDGE_Z, routeMidpoint } from './canvas/edges'
 export { JUMP_RADIUS } from './routing'
@@ -38,13 +44,19 @@ export function canvasScene(input: CanvasInput): CanvasScene {
   if (!input.positioned) return { nodes: [], edges: [], visibleIds: null }
   const ctx = sceneContext(input, input.positioned)
   // L11：画出来的框外边一起走线、分配轨道；边与步骤序号都用分配后的走线
-  ctx.routes = outsideRoutes(input.positioned, shownEdges(ctx))
+  ctx.routes = ctx.structure ? ctx.structure.routes : outsideRoutes(input.positioned, shownEdges(ctx))
   const nodes = input.index ? [...moduleNodes(ctx, input.index), ...replayNodes(ctx)] : []
-  // 回放叠加只在运行视角、代码事实与演化叠加只在结构视角，两者不同时出现
-  const edges = [...structureEdges(ctx), ...replayEdges(ctx), ...factEdges(ctx), ...assemblyEdges(ctx), ...evolutionEdges(ctx)].filter(
+  // 回放叠加只在运行视角；代码事实与组装叠加只在交互视角；结构边只在结构视角；演化叠加在交互与结构视角（共享通道）
+  const edges = [...interactionEdges(ctx), ...depEdges(ctx), ...replayEdges(ctx), ...factEdges(ctx), ...assemblyEdges(ctx), ...evolutionEdges(ctx)].filter(
     (e): e is CanvasEdge => e !== null,
   )
-  return { nodes, edges: withJumps(edges), visibleIds: visibleIdsOf(ctx.display) }
+  const sc = ctx.structure
+  return {
+    nodes,
+    edges: withJumps(edges),
+    visibleIds: visibleIdsOf(ctx.display),
+    ...(sc ? { structure: { typeOnlyHidden: sc.typeOnlyHidden, note: sc.note } } : {}),
+  }
 }
 
 /** L11：只在画出来的折线关系边之间算交叉（隐藏的边界边、舞台隐藏的边本就不在这里） */

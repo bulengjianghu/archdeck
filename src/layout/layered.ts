@@ -3,7 +3,7 @@
  */
 import type { LevelView, ViewEdge } from '@/model'
 import { SHELF, type Box, type EdgeRoute, type LayoutOptions, type PositionedView } from './geometry'
-import { compassOf, isOutsideEdge, parallelOffsets, placeOutside, portFor, shifted, slotOf, withSourceLane } from './routes'
+import { compassOf, isOutsideEdge, parallelOffsets, placeOutside, portFor, shifted, slotOf, withSourceLane, type DepLink } from './routes'
 import { detour, type PortAt } from './routing'
 
 export const BAND = {
@@ -249,4 +249,75 @@ function outsideRouter(view: LevelView, nodes: Map<string, Box>, bands: readonly
     const to = toPort && withSourceLane(toPort, slotOf(group, e.from, e.id))
     return from && to ? { points: detour(from, to, obstacles) } : undefined
   }
+}
+
+/** O13③：带间结构边在空隙里的横向间距（px）；同一对带的各种类紧挨着 */
+const DEP_GAP_STEP = 44
+
+/**
+ * O13③、L15：分层总览中带与带之间的结构边，走线同 O3——相邻两层画在带间空隙里的竖线（同一空隙的多条边以中线为轴左右错开），
+ * 跨多层走右侧通道、每条一条车道（结构视角不画交互边，通道从第一条车道起）。节点不动（V12）。
+ */
+export function bandDepRoutes(pv: PositionedView, links: readonly DepLink[]): Map<string, EdgeRoute> {
+  const bands = pv.view.bands ?? []
+  const out = new Map<string, EdgeRoute>()
+  if (!bands.length) return out
+  const order = new Map(bands.map((b, i) => [b.layerId, i]))
+  const width = pv.nodes.get(bands[0].layerId)?.w ?? 0
+  const center = BAND.left + (width - BAND.left - BAND.right) / 2
+  const sorted = [...links].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  // 同一空隙里的边按两端成对排在一起：先数每个空隙的条数，再以中线为轴铺开
+  const adjacent = sorted.filter(e => {
+    const ia = order.get(e.from)
+    const ib = order.get(e.to)
+    return ia !== undefined && ib !== undefined && Math.abs(ia - ib) === 1
+  })
+  const perGap = new Map<number, DepLink[]>()
+  for (const e of adjacent) {
+    const g = Math.min(order.get(e.from)!, order.get(e.to)!)
+    perGap.set(g, [...(perGap.get(g) ?? []), e])
+  }
+  for (const list of perGap.values()) {
+    const ranked = [...list].sort((p, q) => {
+      const kp = [p.from, p.to].sort().join('|')
+      const kq = [q.from, q.to].sort().join('|')
+      return kp < kq ? -1 : kp > kq ? 1 : p.id < q.id ? -1 : 1
+    })
+    ranked.forEach((e, k) => {
+      const a = pv.nodes.get(e.from)!
+      const b = pv.nodes.get(e.to)!
+      const x = center + (k - (ranked.length - 1) / 2) * DEP_GAP_STEP
+      const down = a.y < b.y
+      const y1 = down ? a.y + a.h : a.y
+      const y2 = down ? b.y : b.y + b.h
+      out.set(e.id, {
+        points: [
+          { x, y: y1 },
+          { x, y: y2 },
+        ],
+        label: { x, y: (y1 + y2) / 2 },
+      })
+    })
+  }
+  let lane = 0
+  for (const e of sorted) {
+    if (out.has(e.id)) continue
+    const a = pv.nodes.get(e.from)
+    const b = pv.nodes.get(e.to)
+    if (!a || !b || !order.has(e.from) || !order.has(e.to)) continue
+    const x = width + 28 + lane * BAND.lane
+    const y1 = a.y + a.h / 2 + (lane % 3) * 8 - 8
+    const y2 = b.y + b.h / 2 + (lane % 3) * 8 - 8
+    lane++
+    out.set(e.id, {
+      points: [
+        { x: a.x + a.w, y: y1 },
+        { x, y: y1 },
+        { x, y: y2 },
+        { x: b.x + b.w, y: y2 },
+      ],
+      label: { x, y: (y1 + y2) / 2 },
+    })
+  }
+  return out
 }

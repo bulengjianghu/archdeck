@@ -1,0 +1,107 @@
+<script setup lang="ts">
+/**
+ * 结构边（L15、L16，ADR-0031）：结构视图私有的编码按 depStyle（UML 类图惯例：线型与端点表种类，明度表依赖的档，色相中性）；
+ * 共享通道与交互边同义（L18）——线宽 = 聚合条数三档、选中 = 强调色窄晕、聚焦变淡 = 透明度、违规 = 红晕（已知为淡红晕、已豁免为灰描边）。
+ * 标签只有异常标记（未解释、逆稳定）；种类、档、条数、覆盖与规则判定在悬停说明里。
+ */
+import { computed } from 'vue'
+import { BaseEdge } from '@vue-flow/core'
+import type { RouteEdgeData } from '@/layout/canvas'
+import type { Point } from '@/layout/layout'
+import { horizontalCurve, retractEnd, roundedPolyline, verticalCurve } from './routePath'
+import { arrowSize } from './edgeStyle'
+import { depEnds, depStroke, umlDepth } from './depStyle'
+import UmlMarker from './UmlMarker.vue'
+
+const props = defineProps<{ id: string; data: RouteEdgeData }>()
+const look = computed(() => props.data.dep!)
+const draw = (pts: Point[]) => {
+  const c = props.data.route.curve
+  if (c && pts.length === 2) return c === 'h' ? horizontalCurve(pts[0], pts[1]) : verticalCurve(pts[0], pts[1])
+  return roundedPolyline(pts, 8, props.data.jumps)
+}
+const style = computed(() => ({ ...depStroke({ ...look.value, weight: props.data.weight, dim: props.data.dim }), transition: 'opacity 0.15s' }))
+const size = computed(() => arrowSize(props.data.weight) + (look.value.kind === 'subclass' || look.value.kind === 'implements' ? 2 : 0))
+const ends = computed(() => depEnds(look.value.kind))
+const path = computed(() => draw(props.data.route.points))
+/** 线在两端的记号处回缩，记号从回缩处画到原端点（晕仍沿完整走线） */
+const linePath = computed(() => {
+  const { points, curve } = props.data.route
+  let pts = retractEnd(points, curve, umlDepth(ends.value.end, size.value))
+  if (ends.value.start) pts = retractEnd([...pts].reverse(), curve, umlDepth(ends.value.start, size.value)).reverse()
+  return draw(pts)
+})
+const safe = computed(() => props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)}`))
+</script>
+
+<template>
+  <defs>
+    <UmlMarker :id="`dep-end-${safe}`" :end="ends.end" :color="style.stroke" :size="size" :line-width="style.strokeWidth" />
+    <UmlMarker v-if="ends.start" :id="`dep-start-${safe}`" :end="ends.start" :color="style.stroke" :size="size" :line-width="style.strokeWidth" start />
+  </defs>
+  <g class="dep-edge" :data-kind="look.kind" :data-tier="look.tier" :data-violation="look.violation">
+    <title>{{ look.title }}</title>
+    <path
+      v-if="look.violation"
+      :d="path"
+      class="dep-violation"
+      :class="look.violation"
+      fill="none"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      :opacity="data.dim ? 0.06 : undefined"
+    />
+    <path v-if="data.selected" :d="path" class="edge-selected-glow" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    <g :class="{ 'edge-label-warn': data.warn, 'dep-label-soft': !data.warn }">
+      <BaseEdge
+        :id="id"
+        :path="linePath"
+        :marker-end="`url(#dep-end-${safe})`"
+        :marker-start="ends.start ? `url(#dep-start-${safe})` : undefined"
+        :style="style"
+        :interaction-width="16"
+        :label="data.dim || !data.label ? undefined : data.label"
+        :label-x="data.route.label?.x"
+        :label-y="data.route.label?.y"
+        :label-show-bg="true"
+        :label-bg-padding="[4, 2]"
+        :label-bg-border-radius="4"
+        :class="{ 'edge-selected': data.selected }"
+      />
+    </g>
+  </g>
+</template>
+
+<style scoped>
+.dep-violation {
+  pointer-events: none;
+  stroke-width: 8;
+}
+
+.dep-violation.new {
+  stroke: var(--danger);
+  opacity: 0.3;
+}
+
+.dep-violation.known {
+  stroke: var(--danger);
+  opacity: 0.13;
+}
+
+.dep-violation.allowed {
+  stroke: var(--text-3);
+  stroke-width: 6;
+  opacity: 0.25;
+}
+
+.edge-selected-glow {
+  pointer-events: none;
+  stroke: var(--accent);
+  stroke-width: 6;
+  opacity: 0.35;
+}
+
+.dep-label-soft :deep(.vue-flow__edge-text) {
+  fill: var(--text-3);
+}
+</style>

@@ -6,7 +6,9 @@
  * 舞台按静态关系显示方式（在「显示」面板切换）隐藏或淡化不参与的节点与静态边（V5、V8），「在画布上显示」的对象照常（V9）；
  * 选中步骤时其余走过的边与步骤序号淡为灰色；选中其他对象时不变灰，舞台始终按进度（R15、R16）。
  * 选中文件时，其归属模块在本层的投影节点加文件高亮（G14）。
- * 结构视角开启「代码事实」时叠加证实标记、违规与代码依赖叠加线、本层的环（K9、Y4）；单击叠加线即选中它（K10）。
+ * 交互视角开启「代码事实」时叠加证实标记、违规与代码依赖叠加线、本层的环（K9、Y4）；单击叠加线即选中它（K10）。
+ * 结构视角（ADR-0031）：节点不动，交互边换成结构边（L15、L16），单击结构边即选中这对节点的代码依赖（`sel=d:`）；节点标指标与不稳定度（L17）、
+ * 选中模块时标影响面（K15）、本层的环常显（Y4）；画布角计收起的只引类型依赖边（L15），没有代码事实时说明只画允许依赖（U16）。
  * 开启「演化」时叠加热度角标与时间耦合的波浪线（J5）；单击耦合线即选中它（J7）。
  * 节点右键：「在此设计」（F-10：以该模块为挂载点新建设计，只在当前版本、不能是层）。
  * 画什么由 Layout 的 canvasScene 算出（ADR-0013）；这里只把结果写入 Vue Flow、把交互转成操作、适应画布。
@@ -16,7 +18,7 @@ import { VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import { useDesk } from '@/state/inject'
 import { contentBounds } from '@/layout/layout'
-import { canvasScene, type NodeData, type RouteEdgeData } from '@/layout/canvas'
+import { canvasScene, type NodeData, type RouteEdgeData, type StructureInput } from '@/layout/canvas'
 import { useStage } from './stage/useStageDisplay'
 import ModuleNode from './nodes/ModuleNode.vue'
 import BoundaryNode from './nodes/BoundaryNode.vue'
@@ -29,6 +31,8 @@ import FrameNode from './nodes/FrameNode.vue'
 import StepBadge from './nodes/StepBadge.vue'
 import BranchPreview from './nodes/BranchPreview.vue'
 import RouteEdge from './edges/RouteEdge.vue'
+import DepEdge from './edges/DepEdge.vue'
+import { useStructurePrefs } from './display/useDisplayPrefs'
 import DisplayPanel from './DisplayPanel.vue'
 import SketchMenu from './sketch/SketchMenu.vue'
 import { canDesignAt, openNewDesign } from './edit/designHere'
@@ -37,8 +41,31 @@ const desk = useDesk()
 const stageUi = useStage()
 const { setViewport, zoomIn, zoomOut, dimensions, setNodes, setEdges } = useVueFlow('arch-desk')
 
-/** 运行视角的舞台叠加；结构视角为 null */
+/** 运行视角的舞台叠加；结构 / 交互视角为 null */
 const stage = computed(() => (desk.perspective.value === 'run' ? desk.run.overlay.value : null))
+const interaction = computed(() => desk.perspective.value === 'interaction')
+/** ADR-0031：结构视角的显示偏好（只引类型、影响面方向、只看值依赖），与「显示」面板共享 */
+const structurePrefs = useStructurePrefs(desk.project)
+
+/** 结构视角的画布输入；其余视角为 null */
+const structure = computed<StructureInput | null>(() => {
+  if (desk.perspective.value !== 'structure') return null
+  const f = desk.facts
+  const p = structurePrefs.prefs.value
+  const sel = desk.selection.value
+  const loading = f.status.value === 'loading'
+  const hit = sel?.kind === 'module' && !loading ? f.impactOf(sel.id, p.valuesOnly) : null
+  return {
+    view: loading ? null : f.structure.value,
+    typeOnly: p.typeOnly,
+    metrics: (p.valuesOnly ? f.valueMetrics.value : f.metrics.value) ?? null,
+    impact: hit?.impact ?? null,
+    impactMode: p.impactMode,
+    cycles: f.level.value?.cycles ?? null,
+    report: f.report.value,
+    note: loading ? '正在读取代码事实…' : null,
+  }
+})
 
 /** 画布场景（Layout 的纯函数 canvasScene，ADR-0013）：节点与边的数据、显隐、变淡、回放态与选中突出 */
 const scene = computed(() =>
@@ -56,11 +83,13 @@ const scene = computed(() =>
     diff: desk.toggles.showDiff ? desk.versions.diff.value : null,
     fileHits: desk.files.hits.value?.nodes ?? null,
     branchPointId: desk.run.branchPoint.value?.id ?? null,
-    facts: desk.facts.level.value,
+    // 代码事实与组装叠加只在交互视角（K9、O12）；结构视角另给 structure
+    facts: interaction.value ? desk.facts.level.value : null,
     evolution: desk.evolution.level.value,
     ports: desk.facts.portMarks.value,
-    assembly: desk.facts.assembly.value?.overlays ?? null,
-    assemblyRoots: desk.facts.assembly.value?.roots ?? null,
+    assembly: interaction.value ? (desk.facts.assembly.value?.overlays ?? null) : null,
+    assemblyRoots: interaction.value ? (desk.facts.assembly.value?.roots ?? null) : null,
+    structure: structure.value,
   }),
 )
 const nodes = computed<Node<NodeData>[]>(() => scene.value.nodes)
@@ -112,6 +141,9 @@ function onMenu(key: string) {
 
 function onEdgeClick({ edge }: { edge: Edge<RouteEdgeData> }) {
   if (edge.data!.temp === 'unmodeled') return
+  // L15：结构边落到这对节点的代码依赖（K10 的 sel=d:），同一对节点的各种类同一个键
+  const d = edge.data!.dep
+  if (d) return desk.select({ kind: 'dep', id: `${d.fromModule}->${d.toModule}` })
   const o = edge.data!.overlay
   if (o) return desk.select({ kind: 'dep', id: `${o.fromModule}->${o.toModule}` })
   // O12：组装叠加线同样落到这对节点的代码依赖（K10）
@@ -197,8 +229,10 @@ watch(
   },
 )
 
-/** O8：本层没有核心模块、普通模块超过七个时不折叠，只在画布角提示 */
-const foldHint = computed(() => (desk.perspective.value === 'interaction' ? (desk.positioned.value?.view.foldHint ?? 0) : 0))
+/** O8：本层没有核心模块、普通模块超过七个时不折叠，只在画布角提示（结构 / 交互视角同一套节点，V12） */
+const foldHint = computed(() => (desk.perspective.value !== 'run' ? (desk.positioned.value?.view.foldHint ?? 0) : 0))
+/** L15、U16：结构视角的画布角——收起的只引类型依赖边条数、没有代码事实时的说明 */
+const structureCorner = computed(() => scene.value.structure ?? null)
 const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned.value.view.nodes.length === 0)
 </script>
 
@@ -233,10 +267,23 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       <template #node-step="p"><StepBadge :data="p.data" /></template>
       <template #node-preview="p"><BranchPreview :data="p.data" /></template>
       <template #edge-route="p"><RouteEdge :id="p.id" :data="p.data" /></template>
+      <template #edge-dep="p"><DepEdge :id="p.id" :data="p.data" /></template>
     </VueFlow>
 
     <div v-if="isEmpty" class="empty">这个模块没有子模块</div>
-    <div v-if="foldHint" class="fold-hint" data-testid="fold-hint">{{ foldHint }} 个模块，考虑标出核心</div>
+    <div v-if="foldHint || structureCorner" class="corner">
+      <div v-if="foldHint" class="fold-hint" data-testid="fold-hint">{{ foldHint }} 个模块，考虑标出核心</div>
+      <div v-if="structureCorner?.note" class="structure-note" data-testid="structure-note">{{ structureCorner.note }}</div>
+      <button
+        v-if="structureCorner?.typeOnlyHidden"
+        class="type-only"
+        data-testid="type-only-count"
+        title="只引类型的依赖边缺省收起（L15）；单击画出，「显示」面板里可再收起"
+        @click="structurePrefs.setTypeOnly(true)"
+      >
+        只引类型 ×{{ structureCorner.typeOnlyHidden }} 已收起
+      </button>
+    </div>
     <SketchMenu
       v-if="menu"
       :x="menu.x"
@@ -288,11 +335,34 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
   border-radius: 14px;
 }
 
-.fold-hint {
+.corner {
   position: absolute;
   top: 10px;
   right: 12px;
   z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.structure-note,
+.type-only {
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+}
+
+.type-only {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.fold-hint {
   padding: 3px 10px;
   font-size: 12px;
   color: var(--text-2);

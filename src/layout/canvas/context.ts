@@ -2,6 +2,7 @@
 import type { LevelEvolution, LevelFacts, ScenarioLevelView, ViewEdge, VisibleLanding } from '@/model'
 import type { EdgeRoute, PositionedView } from '../layout'
 import { landingId, stageDisplay, type StageDisplay, type StageOverlay } from '../stage'
+import { structureScene, type StructureScene } from './structure'
 import type { CanvasInput } from './types'
 
 /** 画布场景各部分（节点、关系边、回放叠加、代码事实叠加）共用的派生 */
@@ -35,25 +36,31 @@ export interface SceneContext {
   near: Set<string> | null
   /** L11：当前画出来的框外边按可见集分配轨道后的走线（普通层次；canvasScene 在算节点与边之前填入） */
   routes: Map<string, EdgeRoute>
+  /** ADR-0031：结构视角的派生（结构边、影响面、角标）；交互视角与运行视角为 null */
+  structure: StructureScene | null
 }
 
 export function sceneContext(input: CanvasInput, pv: PositionedView): SceneContext {
   const { stage: st, scenarioView: sv } = input
   const layered = pv.view.mode === 'layered'
-  const facts = st ? null : (input.facts ?? null)
+  // 结构视角：交互图的叠加（代码事实 K9、组装 O12）不画；演化（J5）是共享通道照画
+  const structure = !st && input.structure ? structureScene(input, pv, focusOf(input, pv)) : null
+  const facts = st || structure ? null : (input.facts ?? null)
   const evo = st ? null : (input.evolution ?? null)
   const hoverLanding = hoverLandingOf(input.hover, sv)
   const focusId = focusOf(input, pv)
   const selectedEdgeIds = selectedEdgesOf(input, pv, facts, evo)
+  for (const id of structure?.selected ?? []) selectedEdgeIds.add(id)
   const playEdges = new Set<string>(st?.walked.keys() ?? [])
   for (const p of st?.previews ?? []) if (p.at?.kind === 'edge') playEdges.add(p.at.edgeId)
   if (hoverLanding?.kind === 'edge') playEdges.add(hoverLanding.edgeId)
   const em = input.emphasis
   const emphMessages = em?.selected == null ? null : new Set([em.selected, ...em.paired])
   const shown = (e: ViewEdge) => (focusId && (e.from === focusId || e.to === focusId)) || selectedEdgeIds.has(e.id) || playEdges.has(e.id)
-  const visibleCoreEdges = (pv.view.coreEdges ?? []).filter(shown)
+  // 结构视角不画交互图的核心跨层边与共用件的边（换成结构边，O13）
+  const visibleCoreEdges = structure ? [] : (pv.view.coreEdges ?? []).filter(shown)
   // O10：运行视角不画共用件的临时线（P18）
-  const visibleShelfEdges = st ? [] : (pv.view.shelfEdges ?? []).filter(shown)
+  const visibleShelfEdges = st || structure ? [] : (pv.view.shelfEdges ?? []).filter(shown)
   return {
     input,
     pv,
@@ -71,8 +78,9 @@ export function sceneContext(input: CanvasInput, pv: PositionedView): SceneConte
     emphEdges: emphEdgesOf(emphMessages, sv),
     visibleCoreEdges,
     visibleShelfEdges,
-    near: nearOf(pv, layered, focusId, [...visibleCoreEdges, ...visibleShelfEdges]),
+    near: structure ? structure.near : nearOf(pv, layered, focusId, [...visibleCoreEdges, ...visibleShelfEdges]),
     routes: new Map(),
+    structure,
   }
 }
 

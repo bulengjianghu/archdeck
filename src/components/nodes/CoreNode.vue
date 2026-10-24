@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Handles from './Handles.vue'
 import DiffMark from './DiffMark.vue'
+import StructMarks from './StructMarks.vue'
 import PortMarks from './PortMarks.vue'
 import RimTag from './RimTag.vue'
 import type { NodeData } from './types'
@@ -12,6 +13,7 @@ defineProps<{ data: NodeData }>()
   <div class="core" :class="{ selected: data.selected, dim: data.dim, target: data.module?.status === 'target', [`diff-${data.change}`]: !!data.change }">
     <Handles />
     <DiffMark :data="data" />
+    <StructMarks :data="data" />
     <PortMarks v-if="data.ports" :ports="data.ports" :module-id="data.moduleId" />
     <span class="name">{{ data.name }}</span>
     <RimTag v-if="data.rim" :rim="data.rim" />

@@ -1,5 +1,8 @@
 <script setup lang="ts">
-/** 视角切换（V1、W-3）：「结构 ｜ 运行：<场景名>」；结构视角下「运行」弹出场景列表，运行视角下可换场景或退出 */
+/**
+ * 视角切换（V1、V11、W-3）：「结构 ｜ 交互 ｜ 运行：<场景名>」——不开场景时结构 / 交互单击切换（setMode）；运行视角下单击结构或交互即退出场景并进入该模式（V11a）；
+ * 「运行」弹出场景列表，运行视角下可换场景或退出（回到进入前的视角）。草图画布下不出现（DeskView）。
+ */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useDesk } from '@/state/inject'
 import ScenarioList from './ScenarioList.vue'
@@ -17,8 +20,25 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick))
 
 <template>
   <div ref="root" class="perspective" role="group" aria-label="视角">
-    <button class="seg" :class="{ on: desk.perspective.value === 'interaction' }" title="结构视角：系统由什么组成、怎么连接" @click="desk.closeScenario()">
+    <button
+      class="seg"
+      data-mode="structure"
+      :class="{ on: desk.perspective.value === 'structure' }"
+      :aria-pressed="desk.perspective.value === 'structure'"
+      title="结构视角：谁依赖谁、改哪牵动哪里"
+      @click="desk.setMode('structure')"
+    >
       结构
+    </button>
+    <button
+      class="seg mid"
+      data-mode="interaction"
+      :class="{ on: desk.perspective.value === 'interaction' }"
+      :aria-pressed="desk.perspective.value === 'interaction'"
+      title="交互视角：谁调谁、谁负责后果"
+      @click="desk.setMode('interaction')"
+    >
+      交互
     </button>
     <button
       class="seg run"
@@ -29,7 +49,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick))
     >
       运行<template v-if="desk.run.scenario.value">：{{ desk.run.scenario.value.name }}</template> ▾
     </button>
-    <button v-if="desk.run.scenario.value" class="exit" title="退出场景，回到结构视角（保留层次与选中）" @click="desk.closeScenario()">×</button>
+    <button v-if="desk.run.scenario.value" class="exit" title="回到进入前的视角" @click="desk.closeScenario()">×</button>
     <ScenarioList v-if="open" @picked="open = false" />
   </div>
 </template>
@@ -54,6 +74,10 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick))
 
 .seg:first-child {
   border-radius: 6px 0 0 6px;
+}
+
+.seg.mid {
+  margin-left: -1px;
 }
 
 .seg.run {

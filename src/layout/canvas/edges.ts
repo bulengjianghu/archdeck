@@ -6,6 +6,7 @@ import { parseVia, relationMode, type EdgeFact, type ModelDiff, type ModelIndex,
 import { edgeLabel, edgeRoute, edgeWeight, isBoundaryEdge, linkRoute, type Box, type EdgeRoute, type Point } from '../layout'
 import { isTemp, landingId } from '../stage'
 import type { SceneContext } from './context'
+import { depWeight, inImpact } from './structure'
 import type { CanvasEdge, EdgeArrow, FactState, RouteEdgeData } from './types'
 
 /** K9、L10：只标异常——未证实与部分证实画虚线并标 ?，已证实与没有事实的照常 */
@@ -141,12 +142,13 @@ function boundaryShown(ctx: SceneContext, e: ViewEdge): boolean {
   )
 }
 
-/** 本层画出来的视图边（舞台显示与边界边的显隐之后） */
-export const shownEdges = (ctx: SceneContext): ViewEdge[] => ctx.pv.view.edges.filter(e => stageShown(ctx, e) && boundaryShown(ctx, e))
+/** 本层画出来的视图边（舞台显示与边界边的显隐之后）；结构视角不画交互边 */
+export const shownEdges = (ctx: SceneContext): ViewEdge[] => (ctx.structure ? [] : ctx.pv.view.edges.filter(e => stageShown(ctx, e) && boundaryShown(ctx, e)))
 
-/** 关系边：本层视图边，分层总览另加显示的核心跨层边，另加显示的共用件的边（O10）；框外边取按可见集分配轨道后的走线（ctx.routes） */
-export function structureEdges(ctx: SceneContext): (CanvasEdge | null)[] {
+/** 交互边：本层视图边，分层总览另加显示的核心跨层边，另加显示的共用件的边（O10）；框外边取按可见集分配轨道后的走线（ctx.routes）。结构视角为空 */
+export function interactionEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   const { pv } = ctx
+  if (ctx.structure) return []
   const list = shownEdges(ctx).map(e => makeEdge(ctx, e, ctx.routes.get(e.id) ?? edgeRoute(pv, e), false))
   if (ctx.layered) list.push(...ctx.visibleCoreEdges.map(e => makeEdge(ctx, e, pv.coreEdges.get(e.id), true)))
   // O10：共用件的边不参与布局，悬停 / 选中一端时画成曲线
@@ -238,7 +240,7 @@ export function factEdges(ctx: SceneContext): (CanvasEdge | null)[] {
 
 /** O12：组装叠加线——组装事实投影到本层的点划线（组装专用色），不参与布局；同一对节点合并标 ×N；单击落到这对节点的代码依赖（K10） */
 export function assemblyEdges(ctx: SceneContext): (CanvasEdge | null)[] {
-  if (ctx.st) return []
+  if (ctx.st || ctx.structure) return []
   return (ctx.input.assembly ?? []).map(o => {
     const ve: ViewEdge = { id: o.id, kind: 'direct', from: o.from, to: o.to, type: 'calls', relationIds: [], mode: 'sync' }
     const route = linkRoute(ctx.pv.nodes.get(o.from), ctx.pv.nodes.get(o.to))
@@ -251,5 +253,45 @@ export function assemblyEdges(ctx: SceneContext): (CanvasEdge | null)[] {
       assembly: o,
       violated: false,
     })
+  })
+}
+
+/**
+ * L15、L16：结构视角的结构边——画出来的（structureScene 的显隐之后），编码数据交给 DepEdge（UML 类图惯例）。
+ * 标签只有异常标记：未解释（K17）、逆稳定（U17，浅色）；变淡：影响面生效时两端不都在闭包里的边，否则与聚焦节点无关的边（共享通道）。
+ */
+export function depEdges(ctx: SceneContext): (CanvasEdge | null)[] {
+  const sc = ctx.structure
+  if (!sc) return []
+  const nodeOf = (id: string) => ctx.pv.view.nodes.find(n => n.id === id) ?? { id }
+  return sc.shown.map(e => {
+    const route0 = sc.routes.get(e.id)
+    if (!route0) return null
+    const selected = sc.selected.has(e.id)
+    const touches = !!ctx.focusId && (e.from === ctx.focusId || e.to === ctx.focusId)
+    const dim = sc.impact ? !(inImpact(sc, nodeOf(e.from)) && inImpact(sc, nodeOf(e.to))) && !selected : !!ctx.near && !touches && !selected
+    const label = [e.look.unexplained ? '未解释' : '', e.look.against ? '逆稳定' : ''].filter(Boolean).join(' · ')
+    const route = label && !route0.label ? { ...route0, label: routeMidpoint(route0) } : route0
+    const ve: ViewEdge = { id: e.id, kind: 'direct', from: e.from, to: e.to, type: 'calls', relationIds: [], mode: 'sync' }
+    return {
+      id: e.id,
+      source: e.from,
+      target: e.to,
+      type: 'dep' as const,
+      zIndex: selected || touches ? EDGE_Z.active : EDGE_Z.idle,
+      data: {
+        route,
+        edge: ve,
+        label,
+        ...(e.look.unexplained ? { warn: true } : {}),
+        factState: 'confirmed' as const,
+        arrow: 'open' as const,
+        weight: depWeight(e.look.deps),
+        selected,
+        dim,
+        ...(e.chip ? { core: true } : {}),
+        dep: e.look,
+      },
+    }
   })
 }

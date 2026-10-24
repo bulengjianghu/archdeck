@@ -41,6 +41,10 @@ import {
   type ModuleMetricsDetail,
   type Impact,
   type StructureView,
+  flattenSketch,
+  parseDesignSketches,
+  sketchLifetime,
+  type RawFile,
 } from '@/model'
 import type { ViewState } from '../transition'
 import type { createSourceSync } from '../sync/source'
@@ -54,12 +58,14 @@ export interface FactsInputs {
   sync: ReturnType<typeof createSourceSync>
   /** 设计版本没有代码事实（K8） */
   design: boolean
+  /** X4：载荷附带的设计草图（U16：活动草图里层的 mayDependOn 一并画进允许依赖图） */
+  sketches?: ShallowRef<{ design: string; file: RawFile }[]>
 }
 
 /** 为什么没有代码事实，或正在取；源码清单读取失败也是 error（源码在本地是前提，G1） */
 export type FactsStatus = 'ready' | 'loading' | 'design' | 'error'
 
-export function createFacts({ state, index, view, files, sync, design }: FactsInputs) {
+export function createFacts({ state, index, view, files, sync, design, sketches }: FactsInputs) {
   const resource = sync.facts
   const status = computed<FactsStatus>(() => {
     if (design) return 'design'
@@ -80,9 +86,9 @@ export function createFacts({ state, index, view, files, sync, design }: FactsIn
     return governanceReport(index.value, files.ownership.value, p, r.value.deps, r.value.baseline)
   })
 
-  /** K9、Y4：交互视角、开关开启时的本层投影 */
+  /** K9、Y4：交互视角、开关开启时的本层投影；结构视角常有（本层的环常显，T0 裁决 3） */
   const level = computed<LevelFacts | null>(() =>
-    report.value && index.value && view.value && !state.value.playback && state.value.toggles.showFacts
+    report.value && index.value && view.value && !state.value.playback && (state.value.toggles.showFacts || state.value.mode === 'structure')
       ? levelFacts(index.value, view.value, report.value)
       : null,
   )
@@ -202,10 +208,24 @@ export function createFacts({ state, index, view, files, sync, design }: FactsIn
     report.value && index.value ? structureMetrics(index.value, report.value, { valuesOnly: true }) : null,
   )
 
+  /**
+   * U16：活动草图（X3）里层的 mayDependOn——版本自带的草图与载荷附带的设计草图（与意图核验同一组，desk.intent）。
+   * 只在没有代码事实时用到。
+   */
+  const sketchLayers = computed(() => {
+    if (!index.value) return []
+    const own = index.value.model.sketches.filter(s => sketchLifetime(s) === 'persistent' || design)
+    const all = [...own, ...parseDesignSketches(sketches?.value ?? [])]
+    return all.flatMap(s =>
+      flattenSketch(s).flatMap(m => (m.def.kind === 'layer' && m.def.mayDependOn?.length ? [{ layer: m.id, mayDependOn: m.def.mayDependOn }] : [])),
+    )
+  })
+
   /** L15、U16：结构视角下本层的结构视图；其余视角为 null（不参与布局，节点位置取交互视角的布局，V12） */
   const structure = computed<StructureView | null>(() => {
     if (!index.value || !view.value || state.value.playback || state.value.mode !== 'structure') return null
-    return structureView(index.value, view.value, report.value, metrics.value ? { metrics: metrics.value } : {})
+    if (report.value) return structureView(index.value, view.value, report.value, metrics.value ? { metrics: metrics.value } : {})
+    return structureView(index.value, view.value, null, { sketch: sketchLayers.value })
   })
 
   /** K16：面板「结构」一节——模块的 Ca / Ce / I、贡献最多的依赖方 / 被依赖方、本层节点数；没有代码事实时为 null */

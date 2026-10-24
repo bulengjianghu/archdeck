@@ -2,6 +2,7 @@
 /** O9：共用件架上的共用件——紧凑一行的小块；单击选中、双击下钻，悬停或选中时画出它与使用者之间的边（O10） */
 import Handles from './Handles.vue'
 import DiffMark from './DiffMark.vue'
+import StructMarks from './StructMarks.vue'
 import type { NodeData } from './types'
 
 defineProps<{ data: NodeData }>()
@@ -15,6 +16,7 @@ defineProps<{ data: NodeData }>()
   >
     <Handles />
     <DiffMark :data="data" />
+    <StructMarks :data="data" compact />
     <span class="name">{{ data.name }}</span>
     <span v-if="data.childCount > 0" class="drill">⌄ {{ data.childCount }}</span>
   </div>
