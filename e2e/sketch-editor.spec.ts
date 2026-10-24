@@ -526,3 +526,62 @@ test('T2b 裁决 6：当前版本上「在此设计」的对话框有「加到�
     box.restore()
   }
 })
+
+test('草图画布手势：按住空格拖动空白处 = 平移（视口变、不框选、不移动节点、不变脏），松开空格恢复框选；光标为抓手', async ({ page }) => {
+  await openDesk(page, '/p/h5p-arch-desk')
+  await page.getByRole('button', { name: '编辑骨架' }).click()
+  await expect(page.locator('.sk-band')).toHaveCount(4)
+  await expect(page.locator('.sk-zoom')).toContainText('空格 + 拖动 = 平移，Ctrl + 滚轮 = 缩放')
+  const viewport = page.locator('.sk-flow .vue-flow__transformationpane')
+  const transform = () => viewport.getAttribute('style')
+  const pane = page.locator('.sk-flow .vue-flow__pane')
+  const node = graphNode(page, 'state.transition')
+  await settledBox(node)
+  const t0 = await transform()
+  const n0 = await page.evaluate(() => JSON.stringify((globalThis as unknown as { __desk: { edit: { sketch: { value: unknown } } } }).__desk.edit.sketch.value))
+  const flow = (await page.locator('.sk-flow').boundingBox())!
+  // 起点取画布左上角的空白处（适应画布后四周留白）
+  const sx = flow.x + 16
+  const sy = flow.y + 16
+
+  await page.keyboard.down('Space')
+  await expect(page.locator('.sketch-canvas')).toHaveClass(/panning/)
+  await expect(pane).toHaveCSS('cursor', 'grab')
+  await page.mouse.move(sx, sy)
+  await page.mouse.down()
+  await page.mouse.move(sx + 160, sy + 90, { steps: 10 })
+  await page.mouse.up()
+  await page.keyboard.up('Space')
+  await expect(page.locator('.sketch-canvas')).not.toHaveClass(/panning/)
+
+  await expect.poll(transform).not.toBe(t0)
+  await expect(page.locator('.vue-flow__selection, .vue-flow__nodesselection')).toHaveCount(0)
+  await expect(page.locator('.sk-node.selected')).toHaveCount(0)
+  await expect(page.locator('.info-bar .dirty')).toHaveCount(0)
+  expect(
+    await page.evaluate(() => JSON.stringify((globalThis as unknown as { __desk: { edit: { sketch: { value: unknown } } } }).__desk.edit.sketch.value)),
+  ).toBe(n0)
+  // 页面不因空格滚动
+  expect(await page.evaluate<number[]>('[window.scrollY, document.scrollingElement?.scrollTop ?? 0]')).toEqual([0, 0])
+
+  // 松开空格后空白处拖动恢复框选：框住整张画布，视口不动、选中模块
+  const t1 = await transform()
+  await page.mouse.move(flow.x + 8, flow.y + 8)
+  await page.mouse.down()
+  await page.mouse.move(flow.x + flow.width - 8, flow.y + flow.height - 8, { steps: 10 })
+  await page.mouse.up()
+  expect(await transform()).toBe(t1)
+  await expect(page.locator('.sk-node.selected').first()).toBeVisible()
+
+  // 焦点在面板输入框时空格照常输入，不进入平移
+  await page.keyboard.press('Escape')
+  await graphNode(page, 'state.transition').locator('.name').click()
+  const input = page.locator('[data-testid="sketch-panel"] textarea[name="module-responsibility"]')
+  await input.click()
+  await page.keyboard.type('a')
+  await page.keyboard.down('Space')
+  await expect(page.locator('.sketch-canvas')).not.toHaveClass(/panning/)
+  await page.keyboard.up('Space')
+  await page.keyboard.type('b')
+  await expect(input).toHaveValue(/a b/)
+})

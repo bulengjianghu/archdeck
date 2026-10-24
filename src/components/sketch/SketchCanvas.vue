@@ -3,7 +3,7 @@
  * 草图画布（present.sketch，SK-15、SK-16，X7、X7c–X7e、X7j、X7k、X13、X15、X19，ADR-0025）：Vue Flow 自由模式——不走 elk、不走分层投影，
  * 位置来自草图的 layout（草图布局 state.layout.sketch 给出节点与直线边）。每个手势只发 DeskState 编辑分组的一个操作：
  * - 拖节点（多选一起拖）松手 = moveNode 一步；拖到同层另一节点上 = 降级（根草图里拖到层上 = 移入）；拖到信息条面包屑的父级或拖出中心区（挂载点框）= 升级；
- * - 框选（在空白处拖）/ ⇧ 点选多选；右键：合并为新模块（≥2）、拆分、进入下一层、删除；空白处右键或双击：新建模块（就地输入名称与 ID 短名）；
+ * - 框选（在空白处拖）/ ⇧ 点选多选；按住空格拖动 = 平移（中键拖动同），Ctrl + 滚轮 = 缩放；右键：合并为新模块（≥2）、拆分、进入下一层、删除；空白处右键或双击：新建模块（就地输入名称与 ID 短名）；
  * - 从节点右侧的连线柄拖到另一节点：松手选类型 + 一句说明；选中的边可拖标签；双击模块下钻；
  * - 工具条：＋ 模块、引用外部模块、隐藏外部引用（X22，只在会话里）、重新排列、本层数与超七提示；快捷键 ⌘Z / ⇧⌘Z、Delete / Backspace、⌘S、Esc（只取消选中）。
  * 非根草图（X22）：框线（系统框、中心区、带层名的引用列）在最底、不接收指针；引用节点在所属层的列里，位置由规则算、不可拖；
@@ -403,6 +403,39 @@ function onKey(ev: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
+// ── 按住空格 = 平移 ──
+// Vue Flow 的 panActivationKeyCode（缺省 Space）在 panOnDrag 为按键数组时仍只放行数组里的键，左键拖空白照旧是框选；
+// 所以自己跟踪空格：按住时 panOnDrag 为 true（左键拖动平移、节点不可拖），松开回到 [1]（中键平移、左键框选）。
+// 焦点在输入框或有对话框 / 菜单时不拦截；拦截时阻止缺省动作，空格不滚动页面。
+const spaceHeld = ref(false)
+function spaceIgnored(ev: KeyboardEvent) {
+  const t = ev.target as HTMLElement | null
+  return (
+    !!t?.closest?.('input, textarea, select, [contenteditable="true"]') || !!(menu.value || parts.value || creating.value || connecting.value || picking.value)
+  )
+}
+function onSpaceDown(ev: KeyboardEvent) {
+  if (ev.code !== 'Space' || ev.metaKey || ev.ctrlKey || ev.altKey || spaceIgnored(ev)) return
+  ev.preventDefault()
+  spaceHeld.value = true
+}
+function onSpaceUp(ev: KeyboardEvent) {
+  if (ev.code !== 'Space' || !spaceHeld.value) return
+  ev.preventDefault()
+  spaceHeld.value = false
+}
+const releaseSpace = () => (spaceHeld.value = false)
+onMounted(() => {
+  window.addEventListener('keydown', onSpaceDown)
+  window.addEventListener('keyup', onSpaceUp)
+  window.addEventListener('blur', releaseSpace)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onSpaceDown)
+  window.removeEventListener('keyup', onSpaceUp)
+  window.removeEventListener('blur', releaseSpace)
+})
+
 const legend = computed(() => {
   const kinds = new Set((scene.value?.nodes ?? []).map(n => n.data.change).filter(Boolean))
   return [...kinds].map(k => CHANGE_BADGES[k!])
@@ -417,7 +450,7 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
 </script>
 
 <template>
-  <div ref="host" class="sketch-canvas" @dblclick="onHostDblClick">
+  <div ref="host" class="sketch-canvas" :class="{ panning: spaceHeld }" @dblclick="onHostDblClick">
     <header class="sk-top">
       <span class="spacer" />
       <div class="sk-tools" role="toolbar" aria-label="草图工具条">
@@ -457,11 +490,11 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
       :min-zoom="0.1"
       :max-zoom="2.5"
       :zoom-on-double-click="false"
-      :nodes-draggable="true"
-      :nodes-connectable="true"
+      :nodes-draggable="!spaceHeld"
+      :nodes-connectable="!spaceHeld"
       :elements-selectable="true"
-      :selection-on-drag="true"
-      :pan-on-drag="[1]"
+      :selection-key-code="true"
+      :pan-on-drag="spaceHeld ? true : [1]"
       :pan-on-scroll="true"
       :multi-selection-key-code="null"
       :delete-key-code="null"
@@ -493,6 +526,7 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
       <button title="放大" @click="zoomIn()">＋</button>
       <button title="缩小" @click="zoomOut()">－</button>
       <button title="适应画布" @click="fitView({ padding: 0.2, maxZoom: 1.1 })">适应</button>
+      <span class="gesture">空格 + 拖动 = 平移，Ctrl + 滚轮 = 缩放</span>
     </div>
     <div v-if="scene && !scene.nodes.length" class="sk-empty">这一层还没有模块：从加一个模块开始（双击空白处或「＋ 模块」）</div>
     <div v-if="e.needsLayout.value && scene?.nodes.length" class="sk-hint">初始布局：拖动任一节点后位置写进草图</div>
@@ -623,10 +657,28 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
   padding: 3px 8px;
 }
 
+.sk-zoom .gesture {
+  align-self: center;
+  margin-left: 6px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  pointer-events: none;
+}
+
+/* 按住空格：抓手光标（节点上也是，节点此时不可拖） */
+.sketch-canvas.panning :deep(.vue-flow__pane),
+.sketch-canvas.panning :deep(.vue-flow__node) {
+  cursor: grab;
+}
+
+.sketch-canvas.panning :deep(.vue-flow__pane.dragging) {
+  cursor: grabbing;
+}
+
 .sk-hint {
   position: absolute;
-  left: 140px;
-  bottom: 16px;
+  left: 12px;
+  bottom: 44px;
   font-size: 11.5px;
   color: var(--text-3);
 }

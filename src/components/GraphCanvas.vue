@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * GraphCanvas：把 PositionedView 画成节点和边；处理平移、缩放、单击、双击、悬停。
+ * GraphCanvas：把 PositionedView 画成节点和边；处理平移（拖空白处或按住空格拖动）、缩放（Ctrl + 滚轮）、单击、双击、悬停。
  * 运行视角下作为舞台（V5）：本层参与的节点与走过的边突出、其余变淡，当前消息沿步骤方向流动（P10），
  * 本层没有视图边的消息画临时线（经由上层关系 P15 / 未建模 P11），步骤序号可单击指向（R13），停在分支点时预览各选项（F6）。
  * 舞台按静态关系显示方式（在「显示」面板切换）隐藏或淡化不参与的节点与静态边（V5、V8），「在画布上显示」的对象照常（V9）；
@@ -241,6 +241,7 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       <button title="放大" @click="zoomIn()">＋</button>
       <button title="缩小" @click="zoomOut()">－</button>
       <button title="适应画布" @click="fitNow()">适应</button>
+      <span class="gesture">空格 + 拖动 = 平移，Ctrl + 滚轮 = 缩放</span>
     </div>
     <DisplayPanel />
   </div>
@@ -287,5 +288,14 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
   min-width: 30px;
   font-size: 12px;
   padding: 3px 8px;
+}
+
+/* 空白处直接拖动即平移（Vue Flow 缺省 panOnDrag），按住空格拖动同样平移（缺省 panActivationKeyCode） */
+.zoom .gesture {
+  align-self: center;
+  margin-left: 6px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  pointer-events: none;
 }
 </style>
