@@ -96,7 +96,7 @@ flowchart TB
 | 描述写入 | 只追加人拥有的内容：评审意见与认可偏差（`design.yaml`）、例外（`rules.yaml`）、忽略项（`source-ignore.yaml`）、模块角色（`intent/roles.yaml`，U11 一键认可）、确认记录（`reviewed.yaml`，同一模块更新那一条，支持批量，Z1、Z6），用 YAML 文档模型保留注释；归档 / 晋升（改设计状态、晋升时整份替换持久草图、归档时经确认层的 `appendReviewed` 写确认记录，X3）；写后更新指纹（X6）；端点由 ModelSource 插件挂载，只收同源 JSON POST（B1–B6）。两个子模块（ADR-0024）：**追加写入**（一期已有的追加、归档 / 晋升，YAML 文档的打开与保存；记录评审意见时按需新建轮次条目，E8）与**草图写回**（整份写回：指纹比对 → 服务端校验 → 文档合并 → 更新指纹；新建设计，B6、X7i；按设计一次写若干张 `sketches/<mount>.yaml`，含新文件、级联改名与删除（只限本设计的 `sketches/`，B7），写回 `layout`；新建设计按挂载点从仓库 HEAD 复制底稿，X18） | 已实现 | 加载与版本 |
 | 源码读取 | 解析源码根目录、列出文件清单与包入口、读取单个文件、用 TypeScript 解析导出，端点由 ModelSource 插件挂载（G1、G2、G11、G17） | 已实现 | 源码 |
 | 命令行校验 | `npm run lint:model`，含设计版本的每一轮；当前版本附带归属警告（G9）、治理门禁（U8）、指纹比对（X6）与活动草图的核验（X4），读不到源码为错误（G1） | 已实现 | 加载与版本 · 架构治理 |
-| 依赖提取 | 用 TypeScript 语法解析提取文件依赖、读 tsconfig paths 并经源码归属的说明符解析（K2）、穿透再导出；按修改时间缓存；端点由 ModelSource 插件挂载（K1–K3） | 已实现 | 架构治理 |
+| 依赖提取 | 用 TypeScript 语法解析提取文件依赖、读 tsconfig paths 并经源码归属的说明符解析（K2）、穿透再导出（含先导入再本地导出与裸说明符，K3）；每条记引用了实现（`uses`）与交互使用（`invokes`，纯值读取不算，K7 的口径）；按修改时间缓存；端点由 ModelSource 插件挂载（K1–K3） | 已实现 | 架构治理 |
 | 源码历史读取 | 读源码仓库的 `git log --numstat`（参数经 execFile），按 HEAD 与窗口缓存，只保留源码清单内的文件；端点 `source/<项目>/history.json` 由 ModelSource 插件挂载（J1） | 已实现 | 演化事实 |
 | 治理存储 | 读写项目下 `governance/`：基线（只由命令行生成）、拦截记录（追加）、人拥有文件的指纹 `owned.json`（命令行登记、写入端点更新，X6）；读源码根目录的 git 提交（U7、Q4） | 已实现 | 架构治理 |
 | agent 接口 | 查询核心（加载描述、源码、事实，调用模型层；每次查询前比对输入，变了就重建）与两种外壳：命令行 `npm run arch`、MCP 服务器 `npm run arch:mcp`（Q1–Q9，含返工清单 `issues`）；草图核验 `sketch-check` 与归档 `sketch archive`（X3、X4、X8）；命令行另有 `own`（X6）；`sketch-check` 不带 `--project` 时由设计 ID 推出项目（Q11）；`sketch-check` 按挂载点与血缘、多草图逐张报告并附两个对比（相对基线 / 相对当前版本），`sketch list <设计>` 列出各张草图（X17、X20） | 已实现 | 架构治理 |

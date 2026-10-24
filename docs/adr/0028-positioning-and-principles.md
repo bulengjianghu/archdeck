@@ -1,6 +1,6 @@
 # ADR-0028：产品定位与原则
 
-- 状态：已采纳
+- 状态：已采纳（已实现，第五轮 T0–T4）
 - 日期：2026-10-24
 - 决策人：项目负责人（第四轮后与协调者四轮问答，2026-10-24 认可）
 - 关联：[docs/system/README.md](../system/README.md)（正文）；[docs/README.md](../README.md) §1、§2；01 §1、§2；修订 [ADR-0020](./0020-local-workbench.md) 的定位叙事（「看见 · 对照 · 守住」保留为功能分组，产品目标以 docs/system 为准）；由本文引出 [ADR-0026](./0026-relations-are-interactions.md)、[ADR-0027](./0027-module-roles.md)；与 [ADR-0019](./0019-human-owned-writes.md)、[ADR-0022](./0022-relation-semantics.md)、[ADR-0023](./0023-sketch-reviewed-and-evolution.md)、[ADR-0025](./0025-sketch-as-thinking-medium.md) 的结论一致，原则上溯到本文
@@ -39,3 +39,5 @@
 - 01 §1、§2 改为引用 docs/system 的定位、目标与原则，只保留 h5player 起点与功能目标分组（看见 · 对照 · 守住）。
 - docs/system §4 每条原则的「落点」指向 02 的规则编号或文档位置；新增规则若找不到对应原则，先问它是否该做（原则 SP1）。
 - 已知缺口（docs/system §5）中「depends 仍是关系」「第二级以下无分级」由 ADR-0026、ADR-0027 解决；「决策不是一等对象」的第一步是模块 `adrs` 字段（规则 E9，需求 DV-13）；「行为没有目标态」不在第五轮范围。
+- 实施结果（第五轮）：docs/system 定稿为最高层真源，原则编号 SP1–SP9（T3 改名，避开场景规则 S）；01 目标节与各文档改为引用原则编号；E9 决策链接第一步已实现（T3：模块 `adrs`、面板「相关决策」、草图表单可编辑；T4：标题取 ADR 文件首个 `# ` 行、上级模块的决策可单击预览）；SP6「事实求全、描述求准、呈现求少」落为 Q12，并在 T4 以「纯值读取不是交互」收紧 K7。
+- 已知限制：决策链接只有模块 → ADR 一个方向（从 ADR 看模块不做）；行为的目标态（场景草图）不做；「议」规则汇总在第五轮的待裁决清单（仓库外 plans/arch-desk-round3/06-pending-rulings.md「第五轮」节）。
