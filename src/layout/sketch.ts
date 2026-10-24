@@ -1,6 +1,6 @@
 /**
  * 草图布局（state.layout.sketch，X15、X19、X21、X22，ADR-0025）：草图画布要画的节点与边——不走 elk、不走分层投影。
- * 非根草图（X22）：画布是一块名义尺寸（SKETCH_CANVAS）的系统框；外部引用按所属层在骨架里的 order 从左到右排成列，挂载点所在层的位置是中心区
+ * 非根草图（X22）：画布是一块系统框，尺寸随草图画布的可用区域（area：画布容器的实际尺寸，流坐标 = 像素）自适应，没量到时取 SKETCH_CANVAS_FALLBACK；外部引用按所属层在骨架里的 order 从左到右排成列，挂载点所在层的位置是中心区
  * （挂载点框），与挂载点同层的引用在中心区右侧单列一列「同层」；每列单列不换列，放不下时整列按比例缩小；引用的位置只由规则算，不写回。
  * 中心区可用宽度 = 画布宽 − 两侧引用列宽，本层模块的位置取 layout（相对中心区的内容原点），没有 layout 时按可用宽度排一次网格
  * （gridLayout，只用于显示、不写回，「需初始布局」），只缺几个位置的（新建、推出的模块）放到不与已有节点重叠的空位；隐藏外部引用时中心区占满画布宽。
@@ -30,8 +30,8 @@ import {
 } from '@/model'
 
 export const SKETCH_NODE = { w: 168, h: 56 } as const
-/** X22：非根草图画布的名义尺寸（流坐标；打开时适应画布缩放到视口） */
-export const SKETCH_CANVAS = { w: 1760, h: 860 } as const
+/** X22：可用区域还没量到（单测、首帧）时的缺省尺寸；画布量到容器尺寸后系统框按实际可用区域排 */
+export const SKETCH_CANVAS_FALLBACK = { w: 1760, h: 860 } as const
 /** X22：紧凑的引用节点（一行：名字 + ID，高度约为模块节点一半）与列内间距 */
 export const SKETCH_REF = { w: 196, h: 28, gap: 6 } as const
 /** X22：引用列的宽、列间距与列内上下留白（列名在框线上） */
@@ -39,6 +39,8 @@ export const SKETCH_COLUMN = { w: 220, gap: 18, pad: 16 } as const
 /** X22：系统框与中心区（挂载点框）的内边距 */
 export const SKETCH_FRAME_PAD = 28
 export const SKETCH_CENTER_PAD = 32
+/** X22：中心区的最小宽度（两列网格）：可用区域连它都放不下时画布按视口的宽高比放大，适应画布时整体缩小 */
+export const SKETCH_CENTER_MIN_W = 2 * SKETCH_CENTER_PAD + 220 + SKETCH_NODE.w
 /** X21：层带的高度、带间距与带头宽度 */
 export const SKETCH_BAND = { h: 112, gap: 14, head: 200, minW: 1100 } as const
 /** 兼容：层在非带布局下的尺寸 */
@@ -135,6 +137,8 @@ export interface SketchSceneInput {
   mountName?: string
   /** X22：隐藏外部引用——引用列与引用线都不画，中心区占满画布宽 */
   hideReferences?: boolean
+  /** X22：草图画布的可用区域（画布容器的实际宽高，缩放 1 时流坐标 = 像素）；没给时取 SKETCH_CANVAS_FALLBACK */
+  area?: { w: number; h: number }
 }
 
 /** X22：一列引用（按层；与挂载点同层的标「同层」；不在任何层的为「外部」） */
@@ -302,6 +306,16 @@ export function referenceColumns(
   return [...cols.values()].sort((a, b) => a.rank - b.rank).map(({ rank: _rank, ...c }) => c)
 }
 
+/**
+ * X22：可用区域——量到的画布尺寸，太小时取下限（中心区至少放得下一个模块、两侧各一列引用），没量到时取缺省
+ */
+export function canvasArea(area?: { w: number; h: number }): { w: number; h: number } {
+  if (!area || !(area.w > 0) || !(area.h > 0)) return { ...SKETCH_CANVAS_FALLBACK }
+  const minW = 2 * SKETCH_FRAME_PAD + 2 * SKETCH_CENTER_PAD + SKETCH_NODE.w
+  const minH = 2 * SKETCH_FRAME_PAD + 2 * SKETCH_CENTER_PAD + SKETCH_NODE.h
+  return { w: Math.max(minW, Math.round(area.w)), h: Math.max(minH, Math.round(area.h)) }
+}
+
 /** X22：非根草图的框与引用列的几何——中心区按可用宽度与本层模块的范围取大，引用列在两侧，列内单列、放不下整列按比例缩小 */
 function boundaryLayout(
   input: SketchSceneInput,
@@ -323,15 +337,30 @@ function boundaryLayout(
   const left = columns.filter(c => c.side === 'left')
   const right = columns.filter(c => c.side === 'right')
   const step = SKETCH_COLUMN.w + SKETCH_COLUMN.gap
-  const availW = SKETCH_CANVAS.w - 2 * SKETCH_FRAME_PAD - (left.length + right.length) * step
-  const gridArea = { w: availW - 2 * SKETCH_CENTER_PAD, h: SKETCH_CANVAS.h - 2 * SKETCH_FRAME_PAD - 2 * SKETCH_CENTER_PAD }
-  const rel = sketchPositions(def, own, gridArea)
-  const ps = Object.values(rel)
-  const minX = Math.min(0, ...ps.map(p => p.x))
-  const minY = Math.min(0, ...ps.map(p => p.y))
-  const maxX = Math.max(0, ...ps.map(p => p.x + SKETCH_NODE.w))
-  const maxY = Math.max(0, ...ps.map(p => p.y + SKETCH_NODE.h))
-  const h = Math.max(SKETCH_CANVAS.h - 2 * SKETCH_FRAME_PAD, maxY - minY + 2 * SKETCH_CENTER_PAD)
+  const fixedW = 2 * SKETCH_FRAME_PAD + (left.length + right.length) * step
+  /** 按一块画布尺寸排：中心区可用区域、本层模块位置（相对内容原点）与内容范围、需要的画布尺寸 */
+  const measure = (canvas: { w: number; h: number }) => {
+    const availW = canvas.w - fixedW
+    const gridArea = { w: availW - 2 * SKETCH_CENTER_PAD, h: canvas.h - 2 * SKETCH_FRAME_PAD - 2 * SKETCH_CENTER_PAD }
+    const rel = sketchPositions(def, own, gridArea)
+    const ps = Object.values(rel)
+    const box = {
+      minX: Math.min(0, ...ps.map(p => p.x)),
+      minY: Math.min(0, ...ps.map(p => p.y)),
+      maxX: Math.max(0, ...ps.map(p => p.x + SKETCH_NODE.w)),
+      maxY: Math.max(0, ...ps.map(p => p.y + SKETCH_NODE.h)),
+    }
+    const needW = fixedW + Math.max(SKETCH_CENTER_MIN_W, box.maxX - box.minX + 2 * SKETCH_CENTER_PAD)
+    const needH = 2 * SKETCH_FRAME_PAD + box.maxY - box.minY + 2 * SKETCH_CENTER_PAD
+    return { canvas, availW, gridArea, rel, ...box, needW, needH }
+  }
+  // 可用区域放不下（引用列 + 最小中心区，或人摆的本层模块）时，按视口的宽高比放大画布再排：适应画布后系统框仍占满视口，不留空白带
+  const base = canvasArea(input.area)
+  let m = measure(base)
+  const k = Math.max(1, m.needW / base.w, m.needH / base.h)
+  if (k > 1) m = measure({ w: Math.ceil(base.w * k), h: Math.ceil(base.h * k) })
+  const { canvas, availW, gridArea, rel, minX, minY, maxX, maxY } = m
+  const h = Math.max(canvas.h - 2 * SKETCH_FRAME_PAD, maxY - minY + 2 * SKETCH_CENTER_PAD)
   const center: SketchRect = { x: SKETCH_FRAME_PAD + left.length * step, y: SKETCH_FRAME_PAD, w: Math.max(availW, maxX - minX + 2 * SKETCH_CENTER_PAD), h }
   const origin = { x: center.x + SKETCH_CENTER_PAD - minX, y: center.y + SKETCH_CENTER_PAD - minY }
   const pos = Object.fromEntries(Object.entries(rel).map(([id, p]) => [id, { x: p.x + origin.x, y: p.y + origin.y }]))
@@ -378,7 +407,7 @@ function boundaryLayout(
   }
   left.forEach((c, i) => place(c, SKETCH_FRAME_PAD + i * step))
   right.forEach((c, i) => place(c, center.x + center.w + SKETCH_COLUMN.gap + i * step))
-  const width = (right.length ? center.x + center.w + right.length * step - SKETCH_COLUMN.gap : center.x + center.w) + SKETCH_FRAME_PAD
+  const width = center.x + center.w + right.length * step + SKETCH_FRAME_PAD
   frames.unshift(
     frame('system', 'system', input.system ?? '系统', { x: 0, y: 0, w: width, h: h + 2 * SKETCH_FRAME_PAD }),
     frame('center', 'center', input.mountName ?? def.mount, center),

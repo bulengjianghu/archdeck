@@ -71,6 +71,8 @@ export function createEdit(i: EditInputs) {
   const picked = shallowRef<string[]>([])
   /** X22：草图画布「隐藏外部引用」——只在会话里，不进 URL、不写文件 */
   const hideReferences = shallowRef(false)
+  /** X22：草图画布的可用区域（画布容器的实际尺寸，草图画布用 ResizeObserver 量；只在会话里） */
+  const area = shallowRef<{ w: number; h: number } | null>(null)
   /** 持久草图只有「相对当前版本」一个对比（偏差，同 sketchCheck）：它没有基线（不属于设计）；交给 AI 的改动摘要另算（handoff） */
   const twoBases = target?.kind !== 'persistent'
   /** 对比口径（对比弹层设定，设计的草图缺省相对基线，持久草图固定相对当前版本） */
@@ -88,6 +90,7 @@ export function createEdit(i: EditInputs) {
     selection: i.selection,
     multi: () => picked.value,
     hideReferences: () => hideReferences.value,
+    area: () => area.value,
   })
   const sync = createSaveSync(i.writer, session, i.baseline)
   const sketchFiles = () => (target?.kind === 'design' ? (i.sketchFiles.value ?? []) : i.sketch.value ? [i.sketch.value] : [])
@@ -216,6 +219,13 @@ export function createEdit(i: EditInputs) {
     pick: (ids: readonly string[]) => (picked.value = [...new Set(ids)]),
     hideReferences,
     toggleReferences: () => (hideReferences.value = !hideReferences.value),
+    area,
+    /** X22：量到的可用区域（只在变了时更新，避免重复派生） */
+    setArea: (a: { w: number; h: number } | null) => {
+      const cur = area.value
+      if (a && cur && Math.round(a.w) === Math.round(cur.w) && Math.round(a.h) === Math.round(cur.h)) return
+      area.value = a ? { w: Math.round(a.w), h: Math.round(a.h) } : null
+    },
     active: computed(() => !!session.value),
     stale: computed(() => !!session.value?.stale),
     ...derive,

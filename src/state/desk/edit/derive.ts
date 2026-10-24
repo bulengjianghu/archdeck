@@ -131,6 +131,8 @@ export interface DeriveInputs {
   multi: () => readonly string[]
   /** X22：隐藏外部引用（工具条的切换，只在会话里） */
   hideReferences: () => boolean
+  /** X22：草图画布的可用区域（画布容器的实际尺寸；没量到为 null） */
+  area?: () => { w: number; h: number } | null
 }
 
 export function createDerive(i: DeriveInputs) {
@@ -233,6 +235,7 @@ export function createDerive(i: DeriveInputs) {
       ...boundary.value,
       mountName: def.mount === ROOT_MOUNT ? undefined : (nameOf(def.mount) ?? def.mount),
       hideReferences: i.hideReferences(),
+      ...(i.area?.() ? { area: i.area()! } : {}),
     })
   })
   /** X15：当前张没有 layout（显示的是一次网格布局，不写回） */

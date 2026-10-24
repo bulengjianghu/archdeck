@@ -13,8 +13,10 @@ import {
   sketchScene,
   straightEdge,
   SKETCH_BAND,
-  SKETCH_CANVAS,
+  SKETCH_CANVAS_FALLBACK as SKETCH_CANVAS,
+  canvasArea,
   SKETCH_CENTER_PAD,
+  SKETCH_CENTER_MIN_W,
   SKETCH_COLUMN,
   SKETCH_FRAME_PAD,
   SKETCH_PARALLEL_GAP,
@@ -299,5 +301,74 @@ describe('X22 引用按规则排布的边界', () => {
     }
     const s = sketchScene({ def, nameOf: () => undefined, layers: LAYERS, layerOf })
     expect(node(s, 'model.a').position.y).toBeLessThan(node(s, 'model.b').position.y)
+  })
+
+  describe('X22 系统框随可用区域自适应（第五轮 T3）', () => {
+    const SIX: SketchDef = {
+      ...DESK,
+      modules: Array.from({ length: 6 }, (_, i) => ({ id: `state.desk.m${i}`, name: `M${i}` })),
+      relations: [
+        { id: 'r1', from: 'present.sketch', to: 'state.desk.m0', type: 'calls' },
+        { id: 'r2', from: 'state.desk.m1', to: 'model.intent', type: 'calls' },
+      ],
+    }
+    const at = (area: { w: number; h: number } | undefined, extra: Partial<Parameters<typeof sketchScene>[0]> = {}) =>
+      sketchScene({ def: SIX, nameOf: () => undefined, layers: LAYERS, layerOf, area, ...extra })
+    const frame = (s: SketchScene, kind: string) => s.nodes.find(n => n.data.frame === kind)!
+    const step = SKETCH_COLUMN.w + SKETCH_COLUMN.gap
+
+    it.each([
+      [1000, 700],
+      [1440, 820],
+      [1900, 980],
+    ])('可用区域 %i×%i：系统框正好占满，中心区 = 画布宽 − 两侧引用列宽、高占满', (w, h) => {
+      const s = at({ w, h })
+      const sys = frame(s, 'system')
+      expect([sys.position.x, sys.position.y, sys.data.w, sys.data.h]).toEqual([0, 0, w, h])
+      expect(s.center!.w).toBe(w - 2 * SKETCH_FRAME_PAD - 2 * step)
+      expect(s.center!.h).toBe(h - 2 * SKETCH_FRAME_PAD)
+      expect(s.gridArea).toEqual({ w: s.center!.w - 2 * SKETCH_CENTER_PAD, h: h - 2 * SKETCH_FRAME_PAD - 2 * SKETCH_CENTER_PAD })
+      // 右侧引用列贴着中心区，最右一列到系统框右边只剩内边距（没有空白带）
+      const cols = s.nodes.filter(n => n.data.frame === 'column')
+      const rightmost = Math.max(...cols.map(c => c.position.x + c.data.w))
+      expect(rightmost).toBe(w - SKETCH_FRAME_PAD)
+      for (const c of cols) expect(c.data.h).toBe(s.center!.h)
+    })
+
+    it('带内换行列数按中心宽算：窄的区域一行放得少、行数多；宽的一行放下全部', () => {
+      const rows = (s: SketchScene) => new Set(s.nodes.filter(n => n.data.kind === 'module').map(n => n.position.y)).size
+      expect(rows(at({ w: 1000, h: 700 }))).toBeGreaterThan(rows(at({ w: 1900, h: 980 })))
+      expect(rows(at({ w: 1900, h: 980 }))).toBe(1)
+    })
+
+    it('可用区域变化只重算框与引用列：本层模块相对中心区内容原点的坐标（layout）不变；中心区装不下时随之变大', () => {
+      const layout = { modules: Object.fromEntries(SIX.modules!.map((m, i) => [m.id, { x: i * 200, y: 0 }])) }
+      const def = { ...SIX, layout }
+      const a = sketchScene({ def, nameOf: () => undefined, layers: LAYERS, layerOf, area: { w: 1900, h: 900 } })
+      const b = sketchScene({ def, nameOf: () => undefined, layers: LAYERS, layerOf, area: { w: 1000, h: 600 } })
+      for (const m of SIX.modules!) {
+        const rel = (s: SketchScene) => ({ x: node(s, m.id).position.x - s.origin.x, y: node(s, m.id).position.y - s.origin.y })
+        expect(rel(a)).toEqual(layout.modules[m.id])
+        expect(rel(b)).toEqual(layout.modules[m.id])
+      }
+      // 1000 宽装不下 6 个横排的模块：中心区变大到放下它们，系统框随之变大（画布可平移）
+      expect(b.center!.w).toBe(5 * 200 + SKETCH_NODE.w + 2 * SKETCH_CENTER_PAD)
+      expect(frame(b, 'system').data.w).toBeGreaterThan(1000)
+    })
+
+    it('可用区域放不下引用列与最小中心区：画布按视口的宽高比放大再排（适应画布后系统框仍占满视口、无空白带）', () => {
+      const many = sketchScene({ def: DESK, nameOf: () => undefined, layers: LAYERS, layerOf, area: { w: 750, h: 774 } })
+      const sys = frame(many, 'system')
+      expect(sys.data.w).toBeGreaterThan(750)
+      expect(sys.data.w / sys.data.h).toBeCloseTo(750 / 774, 2)
+      expect(many.center!.w).toBeGreaterThanOrEqual(SKETCH_CENTER_MIN_W)
+    })
+
+    it('隐藏外部引用：中心区占满可用宽度；太小的区域取下限；没量到时取缺省尺寸', () => {
+      expect(at({ w: 1200, h: 700 }, { hideReferences: true }).center!.w).toBe(1200 - 2 * SKETCH_FRAME_PAD)
+      expect(canvasArea({ w: 10, h: 10 }).w).toBeGreaterThanOrEqual(SKETCH_NODE.w + 2 * SKETCH_CENTER_PAD)
+      expect(canvasArea(undefined)).toEqual({ w: SKETCH_CANVAS.w, h: SKETCH_CANVAS.h })
+      expect(canvasArea({ w: 0, h: 500 })).toEqual({ w: SKETCH_CANVAS.w, h: SKETCH_CANVAS.h })
+    })
   })
 })

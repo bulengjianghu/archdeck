@@ -585,3 +585,100 @@ test('草图画布手势：按住空格拖动空白处 = 平移（视口变、�
   await page.keyboard.type('b')
   await expect(input).toHaveValue(/a b/)
 })
+
+const SIZE_SKETCH = `sketch:
+  id: zz-e2e-size
+  mount: state.desk
+  lifetime: until-implemented
+  modules:
+    - { id: state.desk.alpha, name: Alpha }
+    - { id: state.desk.beta, name: Beta }
+    - { id: state.desk.gamma, name: Gamma }
+    - { id: state.desk.delta, name: Delta }
+    - { id: state.desk.epsilon, name: Epsilon }
+  relations:
+    - { id: rel.zz-alpha-beta, from: state.desk.alpha, to: state.desk.beta, type: calls }
+    - { id: rel.zz-present, from: present.sketch, to: state.desk.alpha, type: calls }
+    - { id: rel.zz-layout, from: state.desk.beta, to: state.layout, type: calls }
+    - { id: rel.zz-writer, from: state.desk.gamma, to: access.writer, type: calls }
+    - { id: rel.zz-intent, from: state.desk.delta, to: model.intent, type: calls }
+  layout:
+    modules:
+      state.desk.alpha: { x: 0, y: 0 }
+      state.desk.beta: { x: 220, y: 0 }
+      state.desk.gamma: { x: 440, y: 0 }
+      state.desk.delta: { x: 0, y: 160 }
+      state.desk.epsilon: { x: 220, y: 160 }
+`
+
+/** 设了 E2E_SHOTS（目录）时把各宽度下的草图画布截图存进去，供评审 */
+const SHOTS = process.env.E2E_SHOTS
+
+test('X22（第五轮 T3）：草图画布的系统框随可用区域自适应——1000 / 1440 / 1900 宽下系统框占满画布、中心区占满高、最右一列贴着系统框；改窗口尺寸后重算，本层坐标不动', async ({
+  page,
+}) => {
+  const box = sandbox('zz-e2e-size')
+  try {
+    fs.mkdirSync(path.join(box.dir, 'sketches'), { recursive: true })
+    fs.writeFileSync(path.join(box.dir, 'design.yaml'), 'design:\n  name: E2E 画布尺寸\n  status: draft\n')
+    fs.writeFileSync(path.join(box.dir, 'sketches/state.desk.yaml'), SIZE_SKETCH)
+    await openDesk(page, '/p/h5p-arch-desk')
+    await page.locator('select[aria-label="切换版本"]').selectOption('zz-e2e-size/sketch')
+    await expect(page.locator('.sketch-canvas')).toBeVisible()
+    const sys = graphNode(page, 'frame:system')
+    const center = graphNode(page, 'frame:center')
+    const desk = () =>
+      page.evaluate(() => {
+        const d = (
+          globalThis as unknown as {
+            __desk: { edit: { scene: { value: { origin: { x: number; y: number }; nodes: { id: string; position: { x: number; y: number } }[] } } } }
+          }
+        ).__desk
+        const s = d.edit.scene.value
+        const m = s.nodes.find(n => n.id === 'state.desk.alpha')!
+        return { x: m.position.x - s.origin.x, y: m.position.y - s.origin.y }
+      })
+    let rel0: { x: number; y: number } | null = null
+    for (const width of [1440, 1000, 1900]) {
+      await page.setViewportSize({ width, height: width === 1000 ? 760 : width === 1440 ? 900 : 1040 })
+      const flow = page.locator('.sk-flow')
+      // 系统框与画布容器重合（无空白带）：等 ResizeObserver 量到、重算并重新适应
+      await expect
+        .poll(async () => {
+          const f = (await flow.boundingBox())!
+          const s = (await sys.boundingBox())!
+          return Math.max(Math.abs(f.x - s.x), Math.abs(f.y - s.y), Math.abs(f.width - s.width), Math.abs(f.height - s.height))
+        })
+        .toBeLessThan(3)
+      const f = (await flow.boundingBox())!
+      const c = (await settledBox(center))!
+      const style = (await page.locator('.sk-flow .vue-flow__transformationpane').getAttribute('style')) ?? ''
+      const zoom = Number(/scale\(([\d.]+)\)/.exec(style)?.[1] ?? 1)
+      // 放不下四列引用与最小中心区时整体缩小，但系统框仍占满画布
+      // 中心区占满高（只留系统框内边距），宽 = 画布宽 − 两侧引用列宽
+      expect(Math.abs(c.height - (f.height - 2 * 28 * zoom))).toBeLessThan(3)
+      const cols = page.locator('.vue-flow__node[data-id^="frame:col:"]')
+      await expect(cols).toHaveCount(4)
+      const right = Math.max(...(await Promise.all((await cols.all()).map(async x => (await x.boundingBox())!))).map(b => b.x + b.width))
+      expect(Math.abs(f.x + f.width - 28 * zoom - right)).toBeLessThan(3)
+      const rel = await desk()
+      if (rel0) expect(rel).toEqual(rel0)
+      rel0 = rel
+      if (SHOTS) {
+        fs.mkdirSync(SHOTS, { recursive: true })
+        await page.screenshot({ path: path.join(SHOTS, `sketch-canvas-${width}.png`) })
+      }
+    }
+    // 「适应」按内容外框：视野回到系统框
+    await page.locator('.sk-zoom').getByRole('button', { name: '适应' }).click()
+    await expect
+      .poll(async () => {
+        const f = (await page.locator('.sk-flow').boundingBox())!
+        const s = (await sys.boundingBox())!
+        return Math.abs(f.width - s.width)
+      })
+      .toBeLessThan(3)
+  } finally {
+    box.restore()
+  }
+})

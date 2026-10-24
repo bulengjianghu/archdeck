@@ -98,24 +98,54 @@ const edges = computed<Edge<SketchEdgeData & { sizes: { a: { w: number; h: numbe
 watch(nodes, n => setNodes(n), { immediate: true })
 watch(edges, x => setEdges(x), { immediate: true })
 
-// ── 视野：打开、切换草图后适应画布（等节点量好尺寸、容器有尺寸）──
+// ── 视野（X22）：系统框按画布容器的实际尺寸排（ResizeObserver 量可用区域），缩放 1 时正好占满画布；
+// 打开、切换草图、隐藏外部引用后适应画布（按内容外框：系统框，中心区装不下本层模块时更大）；
+// 窗口或侧栏变化时可用区域随之重算，视野还是「适应」的结果（没被人平移、缩放过）就再适应一次 ──
+/** 适应画布：按内容外框——非根草图缩放不超过 1（系统框按可用区域排，原大即占满）；根草图的层带四周留白 */
+const fitContent = () => (root.value ? fitView({ padding: 0.2, maxZoom: 1.1 }) : fitView({ padding: 0, maxZoom: 1 }))
 let pendingFit = true
+/** 当前视野是「适应」的结果（人平移、缩放后为 false，可用区域变化时不再动视野） */
+let fitted = false
 function tryFit(attempt = 0) {
   if (!pendingFit) return
   if (dimensions.value.width && nodes.value.length && getNodes.value.every(n => n.dimensions.width > 0)) {
     pendingFit = false
-    void fitView({ padding: 0.2, maxZoom: 1.1 })
+    void fitContent().then(() => (fitted = true))
   } else if (attempt < 40) setTimeout(() => tryFit(attempt + 1), 50)
 }
+/** 等新的框线量好尺寸（Vue Flow 在下一帧量节点）再适应 */
+function refit() {
+  pendingFit = true
+  void nextTick(() => setTimeout(() => tryFit(), 60))
+}
+watch(() => [e.mount.value, e.hideReferences.value], refit)
 watch(
-  () => [e.mount.value, e.hideReferences.value],
-  async () => {
-    pendingFit = true
-    await nextTick()
-    tryFit()
+  () => e.area.value,
+  () => {
+    if (fitted) refit()
   },
 )
-onMounted(() => tryFit())
+/** 人拖动或滚轮平移、缩放（有源事件）：视野不再是「适应」的结果 */
+function onMoveStart({ event }: { event: unknown }) {
+  const src = event && typeof event === 'object' && 'sourceEvent' in event ? (event as { sourceEvent: unknown }).sourceEvent : event
+  if (src) fitted = false
+}
+function fitClicked() {
+  pendingFit = true
+  tryFit()
+}
+let observer: ResizeObserver | null = null
+onMounted(() => {
+  const el = host.value?.querySelector('.sk-flow') as HTMLElement | null
+  if (el) {
+    const measure = () => e.setArea({ w: el.clientWidth, h: el.clientHeight })
+    measure()
+    observer = new ResizeObserver(measure)
+    observer.observe(el)
+  }
+  tryFit()
+})
+onBeforeUnmount(() => observer?.disconnect())
 
 // ── 选中：单选为视图状态的选中；多选（框选 / ⇧ 点选）记在编辑分组 ──
 function onNodeClick({ event, node }: NodeMouseEvent) {
@@ -515,6 +545,7 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
       @selection-end="onSelectionEnd"
       @connect="onConnect"
       @nodes-initialized="tryFit()"
+      @move-start="onMoveStart"
     >
       <template #node-sketch="p"><SketchNode :data="p.data" /></template>
       <template #edge-straight="p">
@@ -525,7 +556,7 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
     <div class="sk-zoom">
       <button title="放大" @click="zoomIn()">＋</button>
       <button title="缩小" @click="zoomOut()">－</button>
-      <button title="适应画布" @click="fitView({ padding: 0.2, maxZoom: 1.1 })">适应</button>
+      <button title="适应画布（按内容外框）" @click="fitClicked">适应</button>
       <span class="gesture">空格 + 拖动 = 平移，Ctrl + 滚轮 = 缩放</span>
     </div>
     <div v-if="scene && !scene.nodes.length" class="sk-empty">这一层还没有模块：从加一个模块开始（双击空白处或「＋ 模块」）</div>
