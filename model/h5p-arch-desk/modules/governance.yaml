@@ -326,3 +326,13 @@ relations:
   - { id: rel.gv.selection-evolution, from: state.transition.selection, to: model.evolution, type: queries, description: 视角与选中规则向演化事实取：选中耦合线时调用 coupleEnds 取要突出的两端（J7） }
   - { id: rel.gv.scenario-panel-shared, from: present.panel.scenario, to: present.shared, type: commands, description: 场景面板交给呈现共用件：经 useOpenPreview 在副栏预览证据文件（S15） }
   - { id: rel.gv.step-panel-shared, from: present.panel.step, to: present.shared, type: commands, description: 步骤面板交给呈现共用件：经 useOpenPreview 在副栏预览代码证据（S16） }
+  # 结构视图（ADR-0031）：结构边、指标与影响面暂随 structure.ts 归在本层投影（第七轮 T5 拆子模块）
+  - { id: rel.gv.panel-structure-level, from: present.panel, to: model.governance.level, type: queries, description: 属性面板向本层投影取：模块「结构」一节调用 againstStability 列逆稳定的依赖，依赖边面板调用 fileKinds 把文件证据按结构边的种类分组（U17、K14） }
+  - { id: rel.gv.panel-structure-facts, from: present.panel, to: model.governance.facts, type: queries, description: 属性面板向事实比对取：交互图互查调用 within 判断关系是否涉及本模块子树，依赖边面板调用 contractNames 取被依赖方的端口名（K17、K14） }
+  - { id: rel.gv.panel-structure-ownership, from: present.panel, to: model.source.ownership, type: queries, description: 属性面板向归属与入口取：影响面清单调用 moduleFiles 给每个模块的文件数（K15） }
+  - { id: rel.gv.canvas-structure-level, from: state.layout.canvas, to: model.governance.level, type: queries, description: 画布场景向本层投影取：结构视角调用 chipDeps 取分层总览核心模块的跨层依赖、levelImpact 把影响面投到本层、nodeOf 定位选中模块所在的节点（O13、K15） }
+  - { id: rel.gv.canvas-structure-projector, from: state.layout.canvas, to: model.projector, type: queries, description: 画布场景向 Projector 层次投影取：结构视角调用 shelfOf 取共用件架上的节点，决定共用件边的折叠（O13） }
+  - { id: rel.gv.transition-structure-level, from: state.transition, to: model.governance.level, type: queries, description: 视图状态转移向本层投影取：切换结构 / 交互视角时调用 nodeOf 与 interactionEdgeBetween 把选中映射到对面视图的边（V12） }
+  - { id: rel.gv.level-rules, from: model.governance.level, to: model.governance.rules, type: queries, description: 本层投影向规则判定取：结构边的规则叠加调用 rulesOf 列出约束这对节点的层规则、白名单与访问面（U15） }
+  - { id: rel.gv.rework-structure-level, from: model.rework, to: model.governance.level, type: queries, description: 返工清单向本层投影取：共用件健康度调用 structureMetrics 算入度最高的共用件（Q15） }
+  - { id: rel.gv.desk-facts-intent, from: state.desk.facts, to: model.intent.check, type: queries, description: 架构治理派生（desk.facts）向草图核验与生命周期取：没有代码事实时调用 sketchLifetime、flattenSketch 把活动草图里层的 mayDependOn 接进允许依赖图（U16） }
