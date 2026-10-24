@@ -418,7 +418,7 @@ describe('DeskState · 运行视角', () => {
     expect(desk.run.participation.value!.frames.length).toBeGreaterThan(0)
     desk.closeScenario()
     await settle()
-    expect(desk.perspective.value).toBe('structure')
+    expect(desk.perspective.value).toBe('interaction')
     expect(desk.selection.value).toEqual({ kind: 'module', id: 'infra.framework' })
     expect(router.currentRoute.value.query.sc).toBeUndefined()
   })

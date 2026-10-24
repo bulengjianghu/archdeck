@@ -244,7 +244,7 @@ export function confirmImplementers(
 }
 
 /** K5c、K7：模块 a 是不是 b 子树内（或祖先、后代）某端口的实现者（描述或「仅代码事实」） */
-function implementsInto(index: ModelIndex, implementers: ReadonlyMap<string, PortFacts>, a: string, b: string): boolean {
+export function implementsInto(index: ModelIndex, implementers: ReadonlyMap<string, PortFacts>, a: string, b: string): boolean {
   for (const p of implementers.values()) if (p.owner && related(index, p.owner, b) && p.implementers.some(i => related(index, i.module, a))) return true
   return false
 }

@@ -6,7 +6,7 @@ import type { DeskState } from '../../src/state/useDeskState'
 
 function fakeDesk() {
   const selected = ref<string | null>(null)
-  const perspective = ref<'structure' | 'run'>('run')
+  const perspective = ref<'interaction' | 'run'>('run')
   const playback = shallowRef<{ scenarioId: string; frameId: string } | null>({ scenarioId: 'sc', frameId: 'f1' })
   const desk = { files: { selected }, perspective, playback } as unknown as Pick<DeskState, 'files' | 'perspective' | 'playback'>
   return { desk, perspective, playback }
@@ -38,7 +38,7 @@ describe('useAside 页签', () => {
     const { desk, perspective } = fakeDesk()
     const aside = useAside(desk)
     aside.open('src/a.ts')
-    perspective.value = 'structure'
+    perspective.value = 'interaction'
     await nextTick()
     expect(aside.tab.value).toBe('source')
   })

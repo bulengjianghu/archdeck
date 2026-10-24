@@ -100,8 +100,8 @@ modules:
   - id: model.governance.level
     name: 本层投影
     parent: model.governance
-    responsibility: 代码事实投影到当前层次：视图边的证实与违规、未解释的交互与违规的叠加线、本层的环及其构成——环内节点与每条本层依赖的视图边、模块依赖（K9、Y4、Y5）；叠加线选中时的模块依赖（K10）。组装事实的本层投影 levelAssembly（O12，ADR-0030）：同 K9 的叠加线按 mapEndpoint 落到本层节点，同一对节点合并为一条组装叠加线（单击落到这对节点的代码依赖），组装根按最深模块算、聚合到本层最深的可见节点。与结构图、帧共用 mapEndpoint。
-    codeRefs: [src/model/governance/level.ts]
+    responsibility: 代码事实投影到当前层次：视图边的证实与违规、未解释的交互与违规的叠加线、本层的环及其构成——环内节点与每条本层依赖的视图边、模块依赖（K9、Y4、Y5）；叠加线选中时的模块依赖（K10）。组装事实的本层投影 levelAssembly（O12，ADR-0030）：同 K9 的叠加线按 mapEndpoint 落到本层节点，同一对节点合并为一条组装叠加线（单击落到这对节点的代码依赖），组装根按最深模块算、聚合到本层最深的可见节点。与结构图、帧共用 mapEndpoint。结构视图（ADR-0031）的依赖边投影 levelDeps、影响面 impactOf、扇入扇出与不稳定度 structureMetrics、稳定依赖方向、无事实时的允许依赖图（K14–K17、U15–U17）暂随本模块，待第七轮 T4 重新生成描述时拆分。
+    codeRefs: [src/model/governance/level.ts, src/model/governance/structure.ts]
   - id: model.governance.query
     name: agent 查询
     parent: model.governance

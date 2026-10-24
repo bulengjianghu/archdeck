@@ -24,7 +24,10 @@ import {
   entryResolver,
   evolutionStats,
   hotspots,
+  impactOf,
   listedCouplings,
+  moduleMetrics,
+  structureMetrics,
   reworkList,
   reworkMarkdown,
   type EvolutionStats,
@@ -41,6 +44,7 @@ import {
   type LedgerClient,
   type LocalSource,
   type ModelIndex,
+  type ModuleMetrics,
   type SourceOwnership,
 } from '../../src/model'
 import {
@@ -197,6 +201,15 @@ export function createService(opts: ServiceOptions) {
   const record = (project: string, entry: Parameters<typeof appendLedger>[1]) => appendLedger(governanceDir(modelRoot, project), entry)
   const now = () => new Date().toISOString()
   const name = (l: Loaded, id: string) => moduleName(l.index, id)
+  /** K16：一行指标；I 保留两位小数 */
+  const metricsRow = (l: Loaded, m: ModuleMetrics) => ({
+    id: m.module,
+    name: name(l, m.module),
+    ca: m.ca,
+    ce: m.ce,
+    instability: m.instability === null ? null : Math.round(m.instability * 100) / 100,
+    band: m.band,
+  })
 
   return {
     modelRoot,
@@ -403,6 +416,72 @@ export function createService(opts: ServiceOptions) {
             relation: c.relation,
             commits: c.commits.slice(0, 5).map(h => h.slice(0, 8)),
           })),
+      }
+    },
+
+    /**
+     * Q14、K15：影响面——传入闭包（改它牵动谁）与传出闭包（它要谁才能工作），按距离分组、标出环成员（Y1）；附该模块的 Ca / Ce / I（K16）。
+     * direction 只给一个方向；valuesOnly 去掉只引类型（同 Y1）。只读，不写拦截记录（同 Q1）。
+     */
+    impact(target: string, p?: string, opts: { direction?: 'in' | 'out'; valuesOnly?: boolean } = {}) {
+      const l = load(p)
+      if (!l.index.modules.has(target) || target === l.index.rootId) throw new ServiceError(`「${target}」不是模块`)
+      const valuesOnly = !!opts.valuesOnly
+      const imp = impactOf(l.index, l.report, target, { valuesOnly, own: l.own })!
+      const m = moduleMetrics(l.index, l.report, target, { valuesOnly })!
+      const side = (list: typeof imp.incoming, files: number) => ({
+        modules: list.length,
+        files,
+        byDistance: [...new Set(list.map(e => e.distance))].map(distance => ({
+          distance,
+          modules: list.filter(e => e.distance === distance).map(e => ({ id: e.module, name: name(l, e.module), ...(e.inCycle ? { inCycle: true } : {}) })),
+        })),
+      })
+      return {
+        project: l.project,
+        module: target,
+        name: name(l, target),
+        valuesOnly,
+        inCycle: imp.inCycle,
+        metrics: metricsRow(l, m),
+        ...(opts.direction !== 'out' ? { incoming: side(imp.incoming, imp.files!.incoming) } : {}),
+        ...(opts.direction !== 'in' ? { outgoing: side(imp.outgoing, imp.files!.outgoing) } : {}),
+      }
+    },
+
+    /**
+     * Q14、K16：扇入 Ca、扇出 Ce 与不稳定度 I。给模块时为它的明细（含贡献最多的 5 个依赖方 / 被依赖方）；
+     * 给 level 时为该父模块的子模块；都不给时为全系统的叶子模块。top 按 Ca 降序（并列按 Ce 降序）取前 N。只读。
+     */
+    metrics(p?: string, opts: { module?: string; level?: string; top?: number; valuesOnly?: boolean } = {}) {
+      const l = load(p)
+      const valuesOnly = !!opts.valuesOnly
+      if (opts.module) {
+        if (!l.index.modules.has(opts.module) || opts.module === l.index.rootId) throw new ServiceError(`「${opts.module}」不是模块`)
+        const d = moduleMetrics(l.index, l.report, opts.module, { valuesOnly })!
+        return {
+          kind: 'module' as const,
+          project: l.project,
+          valuesOnly,
+          module: metricsRow(l, d),
+          topDependents: d.topDependents.map(x => ({ id: x.module, name: name(l, x.module), files: x.files })),
+          topDependencies: d.topDependencies.map(x => ({ id: x.module, name: name(l, x.module), files: x.files })),
+        }
+      }
+      if (opts.level && !l.index.pathOf.has(opts.level)) throw new ServiceError(`「${opts.level}」不是模块`)
+      const all = structureMetrics(l.index, l.report, { valuesOnly })
+      const ids = opts.level
+        ? (l.index.childrenOf.get(opts.level) ?? [])
+        : [...l.index.modules.keys()].filter(id => id !== l.index.rootId && !(l.index.childrenOf.get(id) ?? []).length)
+      let rows = ids.map(id => all.get(id)!).filter(Boolean)
+      if (opts.top) rows = [...rows].sort((a, b) => b.ca - a.ca || b.ce - a.ce || a.module.localeCompare(b.module)).slice(0, opts.top)
+      return {
+        kind: 'list' as const,
+        project: l.project,
+        valuesOnly,
+        scope: opts.level ? `${opts.level}（${name(l, opts.level)}）的子模块` : '全系统的叶子模块',
+        total: ids.length,
+        modules: rows.map(m => metricsRow(l, m)),
       }
     },
 

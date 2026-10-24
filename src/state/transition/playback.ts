@@ -23,7 +23,7 @@ export function openScenario(state: ViewState, ctx: TransitionContext, id: strin
   return push({ ...state, selection: null, playback: { scenarioId: id, frameId: null, choices: new Map() } })
 }
 
-/** V1：退出场景回到结构视角，层次与选中保留（R10：进历史） */
+/** V1、V11：退出场景回到进入前的模式（mode 在回放期间保留），层次与选中保留（R10：进历史） */
 export function closeScenario(state: ViewState): TransitionResult {
   return state.playback ? push({ ...state, playback: null }) : replace(state)
 }

@@ -1,22 +1,25 @@
 /**
- * 视角与选中（V1–V4、V7）：由视图状态推出，不另存字段（ADR-0012）。
- *   视角 = playback 为 null ? 结构 : 运行
+ * 视角与选中（V1–V4、V7、V11）：由视图状态推出，不另存字段（ADR-0012）。
+ *   视角 = playback 为 null ? mode（结构 / 交互，缺省交互） : 运行
  *   选中 = selection ≠ null ? selection
  *          运行视角：frameId ≠ null ? 步骤(frameId) : 场景
- *          结构视角：无（面板显示当前父模块）
+ *          结构 / 交互视角：无（面板显示当前父模块）
  * 选中是唯一的主语；步骤与场景不存进 selection，「选中的步骤就是进度所在的一步」（V7）由表示本身保证。
  */
 import { coupleEnds, lanesOf, type LevelView, type ModelIndex, type ReturnPairs, type ScenarioLevelView, type SequenceModel } from '@/model'
 import type { Selection, TransitionResult, ViewState } from './types'
 
-export type Perspective = 'structure' | 'run'
+/** V11：结构视角（结构图）/ 交互视角（交互图）/ 运行视角（场景） */
+export type Perspective = 'structure' | 'interaction' | 'run'
 
 /** 选中的对象：显式选中，或运行视角下进度所在的步骤 / 场景 */
 export type Selected = Selection | { kind: 'step'; id: string } | { kind: 'scenario'; id: string }
 
-export const perspectiveOf = (state: ViewState): Perspective => (state.playback ? 'run' : 'structure')
+/** V11：草图画布（X7a）画的是交互图，按交互视角 */
+export const perspectiveOf = (state: ViewState): Perspective =>
+  state.playback ? 'run' : state.mode === 'structure' && !state.editing ? 'structure' : 'interaction'
 
-/** V2、V7：选中的对象；null = 结构视角无选中（面板显示当前父模块，N13） */
+/** V2、V7：选中的对象；null = 结构 / 交互视角无选中（面板显示当前父模块，N13） */
 export function selectedOf(state: ViewState): Selected | null {
   if (state.selection) return state.selection
   const pb = state.playback
@@ -46,7 +49,7 @@ export interface Emphasis {
 const NONE: Emphasis = { selected: null, paired: new Set(), lanes: new Set() }
 
 /**
- * R15、R16：选中突出——任何时刻只有被选中的那一个对象用选中样式；结构视角为 null。
+ * R15、R16：选中突出——任何时刻只有被选中的那一个对象用选中样式；结构 / 交互视角为 null。
  * 选中步骤：它所在的可见消息 + 配对帧所在的可见消息（本层不可见时都没有）；
  * 选中模块 / 文件（归属模块）/ 关系（两端）/ 视图边（两端）/ 参与者：突出泳道（lanesOf），不突出消息；选中场景：不突出。
  */
@@ -107,7 +110,7 @@ export function emphasisOf(state: ViewState, ctx: EmphasisContext): Emphasis | n
 }
 
 /**
- * V3：下钻作为「指向」：运行视角下选中被下钻的模块（结构视角按 N2 清空选中）。
+ * V3：下钻作为「指向」：运行视角下选中被下钻的模块（结构 / 交互视角按 N2 清空选中）。
  * 其余导航（选中、跳转、定位、返回上级）本身就设定了选中，无需改写。
  */
 export function asPointing(before: ViewState, result: TransitionResult, drilled: string): TransitionResult {

@@ -17,7 +17,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick))
 
 <template>
   <div ref="root" class="perspective" role="group" aria-label="视角">
-    <button class="seg" :class="{ on: desk.perspective.value === 'structure' }" title="结构视角：系统由什么组成、怎么连接" @click="desk.closeScenario()">
+    <button class="seg" :class="{ on: desk.perspective.value === 'interaction' }" title="结构视角：系统由什么组成、怎么连接" @click="desk.closeScenario()">
       结构
     </button>
     <button

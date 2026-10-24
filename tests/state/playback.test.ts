@@ -40,14 +40,14 @@ const prev: ViewAction = { type: 'prev' }
 
 describe('视角与选中', () => {
   it('V1：视角由是否打开场景决定；打开不改层次（R5）、进历史（R10），退出后回到结构视角并保留层次与选中、进历史', () => {
-    expect(perspectiveOf(base)).toBe('structure')
+    expect(perspectiveOf(base)).toBe('interaction')
     const r = open('infra')
     expect(perspectiveOf(r.state)).toBe('run')
     expect(r.state.levelId).toBe('infra')
     expect(r.history).toBe('push')
     const pinned = run(r.state, { type: 'select', selection: { kind: 'module', id: 'infra.mus' } })
     const closed = run(pinned.state, { type: 'closeScenario' })
-    expect(perspectiveOf(closed.state)).toBe('structure')
+    expect(perspectiveOf(closed.state)).toBe('interaction')
     expect(closed.state).toMatchObject({ levelId: 'infra', selection: { kind: 'module', id: 'infra.mus' } })
     expect(closed.history).toBe('push')
     expect(run(base, { type: 'openScenario', id: 'nope' }).state).toBe(base)

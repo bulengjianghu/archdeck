@@ -1,9 +1,16 @@
 /**
  * DeskState 的架构治理派生（desk.facts，ADR-0015）：代码事实由源码同步取得，治理报告、本层投影与门禁问题调用模型层（K、U、Y）。
- * 只对当前版本（K8）；画布叠加只在结构视角、「代码事实」开启时（K9）。
+ * 只对当前版本（K8）；画布叠加只在交互视角、「代码事实」开启时（K9）。
+ * 结构视图（ADR-0031）：本层结构边、指标与影响面；没有代码事实时只有允许依赖图（U16）。
  */
 import { computed, type ComputedRef, type ShallowRef } from 'vue'
 import {
+  hasStructureEdge,
+  impactOf,
+  levelImpact,
+  moduleMetrics,
+  structureMetrics,
+  structureView,
   depsBetween,
   describeModule,
   entryResolver,
@@ -30,6 +37,10 @@ import {
   type ModelIndex,
   type ModuleDep,
   type ModuleDetail,
+  type ModuleMetrics,
+  type ModuleMetricsDetail,
+  type Impact,
+  type StructureView,
 } from '@/model'
 import type { ViewState } from '../transition'
 import type { createSourceSync } from '../sync/source'
@@ -69,14 +80,14 @@ export function createFacts({ state, index, view, files, sync, design }: FactsIn
     return governanceReport(index.value, files.ownership.value, p, r.value.deps, r.value.baseline)
   })
 
-  /** K9、Y4：结构视角、开关开启时的本层投影 */
+  /** K9、Y4：交互视角、开关开启时的本层投影 */
   const level = computed<LevelFacts | null>(() =>
     report.value && index.value && view.value && !state.value.playback && state.value.toggles.showFacts
       ? levelFacts(index.value, view.value, report.value)
       : null,
   )
 
-  /** O12：结构视角、「组装」开关开启时组装事实与组装根在本层的投影（不参与布局） */
+  /** O12：交互视角、「组装」开关开启时组装事实与组装根在本层的投影（不参与布局） */
   const assembly = computed<LevelAssembly | null>(() =>
     report.value && index.value && view.value && !state.value.playback && state.value.toggles.assembly
       ? levelAssembly(index.value, view.value, report.value)
@@ -183,10 +194,46 @@ export function createFacts({ state, index, view, files, sync, design }: FactsIn
     return { subclass: r.subclasses.filter(pair), assembly: r.assembly.filter(pair) }
   }
 
+  // ── 结构视图（ADR-0031）：本层结构边（K14、K17、U15、U17）或允许依赖图（U16）、指标（K16）与影响面（K15） ──
+
+  /** K16：全系统各模块的 Ca / Ce / I（只看值依赖时另算）；没有代码事实时为 null（U16 不适用） */
+  const metrics = computed<Map<string, ModuleMetrics> | null>(() => (report.value && index.value ? structureMetrics(index.value, report.value) : null))
+  const valueMetrics = computed<Map<string, ModuleMetrics> | null>(() =>
+    report.value && index.value ? structureMetrics(index.value, report.value, { valuesOnly: true }) : null,
+  )
+
+  /** L15、U16：结构视角下本层的结构视图；其余视角为 null（不参与布局，节点位置取交互视角的布局，V12） */
+  const structure = computed<StructureView | null>(() => {
+    if (!index.value || !view.value || state.value.playback || state.value.mode !== 'structure') return null
+    return structureView(index.value, view.value, report.value, metrics.value ? { metrics: metrics.value } : {})
+  })
+
+  /** K16：面板「结构」一节——模块的 Ca / Ce / I、贡献最多的依赖方 / 被依赖方、本层节点数；没有代码事实时为 null */
+  const metricsOf = (id: string, valuesOnly = false): ModuleMetricsDetail | null =>
+    report.value && index.value ? moduleMetrics(index.value, report.value, id, { valuesOnly, ...(view.value ? { view: view.value } : {}) }) : null
+
+  /** K15：模块的影响面（全系统）与它在本层的投影；没有代码事实时为 null */
+  const impactOfModule = (id: string, valuesOnly = false): { impact: Impact; level: ReturnType<typeof levelImpact> | null } | null => {
+    if (!report.value || !index.value) return null
+    const impact = impactOf(index.value, report.value, id, { valuesOnly, ...(files.ownership.value ? { own: files.ownership.value } : {}) })
+    if (!impact) return null
+    return { impact, level: view.value ? levelImpact(index.value, view.value, impact) : null }
+  }
+
+  /** V12：本层这对节点之间有没有结构边——模式切换时把关系 / 视图边的选中映射成依赖边；没有代码事实时不给 */
+  const structurePair = (fromModule: string, toModule: string): boolean =>
+    !!report.value && !!index.value && !!view.value && hasStructureEdge(index.value, view.value, report.value, fromModule, toModule)
+
   return {
     status,
     error,
     report,
+    structure,
+    metrics,
+    valueMetrics,
+    metricsOf,
+    impactOf: impactOfModule,
+    structurePair,
     level,
     assembly,
     gateIssues,

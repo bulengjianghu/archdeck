@@ -45,14 +45,22 @@ export interface PlaybackState {
   choices: ReadonlyMap<string, number>
 }
 
+/**
+ * V11（ADR-0031）：不开场景时画布的模式——交互视角画交互图（四类交互），结构视角画结构图（依赖事实）。
+ * 打开场景即运行视角，模式保留，退出场景回到进入前的模式。
+ */
+export type CanvasMode = 'interaction' | 'structure'
+
 export interface ViewState {
   /** 当前层次（父模块 ID）；未加载时为空串 */
   levelId: string
   selection: Selection | null
   hover: string | null
   toggles: Toggles
-  /** null = 结构视角；非 null = 运行视角（V1） */
+  /** null = 结构 / 交互视角（按 mode）；非 null = 运行视角（V1、V11） */
   playback: PlaybackState | null
+  /** V11：画布模式；只在结构视角时写 'structure'，缺省（undefined）为交互视角。URL `v=s` */
+  mode?: CanvasMode
   /** 草图画布（X7a，ADR-0025）：打开的草图版本的编辑目标——进入草图即编辑；与运行视角互斥，不进 URL。缺省（undefined）同 null */
   editing?: SketchTarget | null
 }
@@ -72,6 +80,8 @@ export type ViewAction =
   | { type: 'revealModule'; id: string }
   | { type: 'hover'; id: string | null }
   | { type: 'toggle'; patch: Partial<Toggles> }
+  /** V11、V12：切到结构 / 交互视角（运行视角下即退出场景）；进历史 */
+  | { type: 'setMode'; mode: CanvasMode }
   | { type: 'openScenario'; id: string }
   | { type: 'closeScenario' }
   | { type: 'next' }
@@ -95,12 +105,16 @@ export interface TransitionContext {
   scenarioView?: ScenarioLevelView | null
   /** X7a：打开的版本是草图版本（设计的草图、持久草图），可进入编辑态 */
   editable?: boolean
+  /** V12：本层这对节点（以两端的模块 ID 指明）之间有没有结构边（K14）；没有代码事实时不给，关系与视图边切到结构视角即清空 */
+  structurePair?: (fromModule: string, toModule: string) => boolean
 }
 
 export interface TransitionResult {
   state: ViewState
   /** 地址变化进不进浏览器历史（N10、R10） */
   history: 'push' | 'replace'
+  /** V12：模式切换时映射不过去而被清空的选中（面板据此说明原因） */
+  dropped?: Selection
 }
 
 export const DEFAULT_TOGGLES = (relationTypes: readonly RelationType[]): Toggles => ({
