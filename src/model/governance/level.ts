@@ -82,7 +82,7 @@ export function levelFacts(index: ModelIndex, view: LevelView, report: Governanc
     const p = project(v)
     if (p) bump(p[0], p[1], 'violations')
   }
-  // 同方向有多条视图边（L5 按类型分边）时取关系类型声明顺序中的第一条（依赖优先），违规红晕与 Y5 都只标它
+  // 同方向有多条视图边（L5 按类型分边）时取关系类型声明顺序中的第一条（calls 优先），违规红晕与 Y5 都只标它
   const edgeByPair = new Map<string, string>()
   for (const e of [...view.edges].sort((x, y) => RELATION_TYPES.indexOf(x.type) - RELATION_TYPES.indexOf(y.type)))
     if (!edgeByPair.has(depKey(e.from, e.to))) edgeByPair.set(depKey(e.from, e.to), e.id)

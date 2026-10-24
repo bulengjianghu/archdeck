@@ -20,7 +20,7 @@ export interface FileDep {
   names?: string[]
   /** 依赖方文件的类声明 implements / extends 引用了落到这个目标的名字（K1，K5 的 implements 证据） */
   heritage?: true
-  /** 引用了 to 文件的实现：函数、类或变量（不是类型、枚举），或不按名称穿透的值导入（K1，K5 的 implements 证据分档） */
+  /** 引用了 to 文件的实现：函数、类或变量（不是类型、枚举），或不按名称穿透的值导入；`export … from` 再导出不算（K1，K5 的 implements 证据分档、K7 的值使用） */
   uses?: true
 }
 

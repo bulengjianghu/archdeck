@@ -41,4 +41,4 @@
 
 - 行为没有目标态：草图只画结构，场景没有草图，行为只有现状没有验收。
 - 决策不是模型里的一等对象：ADR 与模块、草图之间没有链接。第一步：模块的 `adrs` 字段与面板「相关决策」（E9，待实现）。
-- depends 仍是关系、第二级以下无分级：分别由 [ADR-0026](../adr/0026-relations-are-interactions.md)、[ADR-0027](../adr/0027-module-roles.md) 解决（待实现）。
+- depends 仍是关系、第二级以下无分级：分别由 [ADR-0026](../adr/0026-relations-are-interactions.md)、[ADR-0027](../adr/0027-module-roles.md) 解决（ADR-0026 已实现，ADR-0027 待实现）。

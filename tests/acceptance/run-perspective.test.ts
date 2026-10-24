@@ -158,16 +158,18 @@ describe('§6.2 运行视角验收', () => {
     expect(desk.selected.value).toEqual({ kind: 'step', id: at })
   })
 
-  it('6. 与结构不一致的步骤：端点与引用关系不符、两端无任何关系 → 错误 / 提醒；引用 depends → 错误；无关系的一步回放时画「结构中未建模」', async () => {
+  it('6. 与结构不一致的步骤：端点与引用关系不符、两端无任何关系 → 错误 / 提醒；引用 implements → 错误；无关系的一步回放时画「结构中未建模」', async () => {
     const bad: RawFile = {
       path: 'scenarios/bad.yaml',
-      text: `scenario:
+      text: `relations:
+  - {id: rel.bad.impl, from: access.lint, to: access.deps, type: implements}
+scenario:
   id: sc.bad
   name: 不一致的步骤
   steps:
     - call: {from: model.diff, to: access.lint, relation: rel.ad.list-fetch}
     - call: {from: model.diff, to: model.evolution}
-    - call: {from: present.shell, to: present.project-list, relation: rel.ad.shell-list}
+    - call: {from: access.lint, to: access.deps, relation: rel.bad.impl}
 `,
     }
     const issues = loadModel([...payload('h5p-arch-desk').files, bad]).issues.map(i => [i.severity, i.code])
