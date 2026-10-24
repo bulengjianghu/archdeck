@@ -12,6 +12,10 @@
  *   issues [--category <类别>]    返工清单：按根因聚合的问题、文件行号、规则编号与建议动作（Q7–Q9），默认 Markdown
  *   hotspots [--fixes] [--limit N] 热度前 N 的模块（J8；--fixes 为缺陷热度，缺省修改热度）
  *   coupling [--isolated]         时间耦合的模块对（J4）；--isolated 只列无依赖无关系的对（J6）
+ *   impact <模块> [--direction in|out] [--values-only]
+ *                                 影响面（K15、Q14）：传入闭包（改它牵动谁）与传出闭包（它要谁才能工作），按距离分组，附 Ca / Ce / I
+ *   metrics [<模块> | --level <父模块>] [--top N] [--values-only]
+ *                                 扇入 Ca、扇出 Ce 与不稳定度 I（K16、Q14）：给模块为明细，--level 为该层的子模块，缺省全系统的叶子模块；--top 按 Ca 取前 N
  *   report                        拦截报告（Q4）
  *   baseline                      生成基线 governance/baseline.json（U7，由人执行并提交）
  *   own                           登记人拥有文件的指纹 governance/owned.json（X6，人改完草图 / 规则 / 忽略清单后执行）
@@ -41,7 +45,8 @@ const args: string[] = []
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (!a.startsWith('--')) args.push(a)
-  else if (['--project', '--names', '--category', '--limit', '--design', '--revision', '--override'].includes(a)) flags.set(a.slice(2), argv[++i] ?? '')
+  else if (['--project', '--names', '--category', '--limit', '--design', '--revision', '--override', '--direction', '--level', '--top'].includes(a))
+    flags.set(a.slice(2), argv[++i] ?? '')
   else flags.set(a.slice(2), true)
 }
 const [cmd, ...rest] = args
@@ -96,6 +101,32 @@ function printCheck(r: CheckResult & { external?: string }) {
   }
 }
 
+const I_BAND: Record<string, string> = { stable: '稳定', balanced: '居中', unstable: '易变' }
+type MetricsRow = { id: string; name: string; ca: number; ce: number; instability: number | null; band: string | null }
+const metricsText = (m: MetricsRow) => `Ca ${m.ca} · Ce ${m.ce} · I ${m.instability ?? '—'}${m.band ? `（${I_BAND[m.band]}）` : ''}`
+
+function printImpact(r: ReturnType<typeof svc.impact>) {
+  console.log(`影响面：${r.name}（${r.module}）${r.valuesOnly ? '，只看值依赖' : ''}${r.inCycle ? '，在模块环中' : ''}`)
+  console.log(`  ${metricsText(r.metrics)}`)
+  const side = (title: string, s: NonNullable<typeof r.incoming>) => {
+    console.log(`\n${title}：${s.modules} 个模块 · ${s.files} 个文件`)
+    for (const g of s.byDistance) console.log(`  距离 ${g.distance}（${g.modules.length}）：${g.modules.map(m => `${m.id}${m.inCycle ? '⟳' : ''}`).join('、')}`)
+  }
+  if (r.incoming) side('传入（改它会牵动）', r.incoming)
+  if (r.outgoing) side('传出（它要这些才能工作）', r.outgoing)
+}
+
+function printMetrics(r: ReturnType<typeof svc.metrics>) {
+  if (r.kind === 'module') {
+    console.log(`${r.module.name}（${r.module.id}）：${metricsText(r.module)}${r.valuesOnly ? '（只看值依赖）' : ''}`)
+    console.log(`  依赖它最多的：${r.topDependents.map(x => `${x.id} ×${x.files}`).join('、') || '无'}`)
+    console.log(`  它依赖最多的：${r.topDependencies.map(x => `${x.id} ×${x.files}`).join('、') || '无'}`)
+    return
+  }
+  console.log(`${r.scope}：${r.modules.length} / ${r.total}${r.valuesOnly ? '（只看值依赖）' : ''}`)
+  for (const m of r.modules) console.log(`  ${m.id}（${m.name}）  ${metricsText(m)}`)
+}
+
 function run(): number {
   switch (cmd) {
     case 'projects':
@@ -132,6 +163,23 @@ function run(): number {
     }
     case 'coupling':
       return out(svc.coupling(project, flags.has('isolated')))
+    case 'impact': {
+      need(1, '<模块> [--direction in|out] [--values-only]')
+      const d = str('direction')
+      if (d !== undefined && d !== 'in' && d !== 'out') throw new ServiceError('--direction 只能是 in / out')
+      const r = svc.impact(rest[0], project, { direction: d, valuesOnly: flags.has('values-only') })
+      if (asJson) console.log(JSON.stringify(r, null, 2))
+      else printImpact(r)
+      return 0
+    }
+    case 'metrics': {
+      const top = str('top') !== undefined ? Number(str('top')) : undefined
+      if (top !== undefined && !(Number.isInteger(top) && top > 0)) throw new ServiceError('--top 须为正整数')
+      const r = svc.metrics(project, { module: rest[0], level: str('level'), top, valuesOnly: flags.has('values-only') })
+      if (asJson) console.log(JSON.stringify(r, null, 2))
+      else printMetrics(r)
+      return 0
+    }
     case 'report':
       return out(svc.report(project))
     case 'sketch-check': {
@@ -188,7 +236,7 @@ function run(): number {
     }
     default:
       console.error(
-        '用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|hotspots|coupling|report|baseline|own|sketch-check|sketch|classify> [参数] [--project <项目>] [--json]',
+        '用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|hotspots|coupling|impact|metrics|report|baseline|own|sketch-check|sketch|classify> [参数] [--project <项目>] [--json]',
       )
       return 2
   }

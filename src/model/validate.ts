@@ -429,7 +429,7 @@ function checkBinding(index: ModelIndex, c: Checked, sc: ScenarioEntity, steps: 
       c.err('step-relation-mismatch', `${where} 与引用的关系「${r.id}」（${r.from} → ${r.to}，${r.type}）端点或方向不一致`, s.src)
       return { ...s, msg: { ...s.msg, relation: undefined } }
     }
-    if (b.issue === 'unrelated') c.warn('step-unmodeled', `${where} 在结构图中没有对应关系，两端之间也没有任何关系`, s.src)
+    if (b.issue === 'unrelated') c.warn('step-unmodeled', `${where} 在交互图中没有对应关系，两端之间也没有任何关系`, s.src)
     // S19：同步性一致——只提醒，不改绑定
     const bound = b.relation ? index.relations.get(b.relation) : undefined
     if (bound && syncMismatch(bound, s.kind))

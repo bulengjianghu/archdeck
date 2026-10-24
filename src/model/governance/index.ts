@@ -20,6 +20,7 @@ export {
   implementerReason,
   covers,
   coveringRelations,
+  implementsInto,
   undescribedDeps,
   coresOf,
   isCoreBetween,
@@ -32,6 +33,50 @@ export { stronglyConnected, valueDeps, moduleCycles, fileCycles, cyclicityOf } f
 export { governanceReport, gateIssues, makeBaseline, entryResolver } from './report'
 export { levelFacts, levelAssembly, depsBetween, nodeOf } from './level'
 export type { AssemblyOverlay, DepOverlay, EdgeFact, LevelAssembly, LevelFacts } from './level'
+export {
+  structureView,
+  levelDeps,
+  allowedDeps,
+  impactOf,
+  levelImpact,
+  structureMetrics,
+  moduleMetrics,
+  againstStability,
+  hasStructureEdge,
+  interactionEdgeBetween,
+  ruleBasis,
+  fileKinds,
+  tierOf,
+  stabilityBand,
+  STRUCTURE_KINDS,
+  DEP_TIERS,
+  STABILITY_BANDS,
+  STABLE_DIRECTION_THRESHOLD,
+  TOP_CONTRIBUTORS,
+  ALLOWED_ONLY_NOTE,
+  NO_ALLOWED_NOTE,
+  NO_FACTS_REASON,
+} from './structure'
+export type {
+  StructureKind,
+  DepTier,
+  EdgeVerdict,
+  RuleBasis,
+  EdgeRuling,
+  EdgeCoverage,
+  StructureEdge,
+  LevelDeps,
+  LevelDepsOptions,
+  StructureView,
+  AllowedEdge,
+  AllowedDeps,
+  Impact,
+  ImpactEntry,
+  ModuleMetrics,
+  ModuleMetricsDetail,
+  MetricsOptions,
+  StabilityBand,
+} from './structure'
 export { moduleBrief, describeModule, locateFile, checkDependency } from './query'
 export type { ModuleBrief, ModuleDetail, FileStatus, CheckTarget, CheckResult, PairCheck, CycleImpact } from './query'
 export { sharedSuggestions, sharedReverse, sharedHostOf, SHARED_NAME_HINTS } from './roles'

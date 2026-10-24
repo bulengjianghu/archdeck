@@ -57,4 +57,6 @@ export interface SharedHealth {
   limits: { lines: number; changes: number }
   /** 体量异常增长：任一占比超过阈值 */
   over: boolean
+  /** Q15：扇入 Ca（K16）最大的共用件、它的 Ca 与 Ca 占系统模块数（不含系统根）的比例；没有代码事实或共用件都无人依赖时不给 */
+  topFanIn?: { module: string; ca: number; ratio: number }
 }

@@ -1,7 +1,7 @@
 /**
  * 项目健康度（Q10）：项目卡片上的一行摘要，与返工清单同一批材料，只计数不列明细。
  */
-import { implementerWarns, sharedHostOf, unconfirmedWarns, type GovernanceReport } from '../governance'
+import { implementerWarns, sharedHostOf, structureMetrics, unconfirmedWarns, type GovernanceReport } from '../governance'
 import { reviewCounts } from '../review'
 import type { ProjectHealth, SharedHealth } from '../project-summary'
 import { moduleFiles, type SourceOwnership } from '../source'
@@ -13,13 +13,28 @@ export const DEFAULT_SHARED_RATIO = 0.2
 export const SHARED_CHANGE_RATIO = 0.3
 
 /**
+ * Q15：入度最高的共用件——共用件（不含共用件内的子模块）中扇入 Ca（K16，全部种类）最大的，并列时取声明在前的；
+ * 比例的分母为系统模块数（不含系统根）。只计数、不卡门禁。
+ */
+export function topSharedFanIn(index: ModelIndex, report: Pick<GovernanceReport, 'moduleDeps'>, shared: readonly string[]): SharedHealth['topFanIn'] {
+  const metrics = structureMetrics(index, report)
+  let best: { module: string; ca: number } | undefined
+  for (const id of shared) {
+    const ca = metrics.get(id)?.ca ?? 0
+    if (ca > 0 && (!best || ca > best.ca)) best = { module: id, ca }
+  }
+  const total = index.modules.size - (index.modules.has(index.rootId) ? 1 : 0)
+  return best && total > 0 ? { ...best, ratio: best.ca / total } : undefined
+}
+
+/**
  * Q13：共用件的两条提醒——反向依赖条数（U12）；体量异常增长：共用件子树的行数合计（G19）占已归属行数的比例超过阈值，
  * 或近 J1 窗口内触及共用件文件的提交占全部提交的比例超过 30%。只计数、不卡门禁。没有共用件时为 null。
  */
 export function sharedHealth(
   index: ModelIndex,
   own: SourceOwnership,
-  report: Pick<GovernanceReport, 'sharedReverse'> | null,
+  report: (Pick<GovernanceReport, 'sharedReverse'> & Partial<Pick<GovernanceReport, 'moduleDeps'>>) | null,
   lines?: Readonly<Record<string, number>> | null,
   history?: OkHistory | null,
 ): SharedHealth | null {
@@ -32,6 +47,7 @@ export function sharedHealth(
   const commits = history?.commits ?? []
   const changeRatio = history && commits.length ? commits.filter(c => c.files.some(f => files.has(f.path))).length / commits.length : null
   const limits = { lines: index.model.sourceLimits?.sharedRatio ?? DEFAULT_SHARED_RATIO, changes: SHARED_CHANGE_RATIO }
+  const top = report?.moduleDeps ? topSharedFanIn(index, { moduleDeps: report.moduleDeps }, shared) : undefined
   return {
     modules: shared.length,
     reverse: report?.sharedReverse.length ?? 0,
@@ -39,6 +55,7 @@ export function sharedHealth(
     changeRatio,
     limits,
     over: (lineRatio ?? 0) > limits.lines || (changeRatio ?? 0) > limits.changes,
+    ...(top ? { topFanIn: top } : {}),
   }
 }
 

@@ -145,6 +145,39 @@ server.registerTool(
 )
 
 server.registerTool(
+  'impact',
+  {
+    title: '影响面',
+    description:
+      '改一个模块会牵动谁（传入闭包）、它要谁才能工作（传出闭包）：模块依赖（含只引类型——改类型也会传播）上的闭包，按距离分组、标出模块环成员；附该模块的扇入 Ca、扇出 Ce 与不稳定度 I。改一个模块的接口或数据类型之前先看它，按距离 1 的清单安排连带修改。',
+    inputSchema: {
+      module: z.string().describe('模块 ID'),
+      direction: z.enum(['in', 'out']).optional().describe('只看一个方向：in 传入（牵动谁）/ out 传出（依赖谁）；缺省两个都给'),
+      valuesOnly: z.boolean().optional().describe('只看值依赖（去掉只引类型）'),
+      project,
+    },
+  },
+  ({ module, direction, valuesOnly, project }) => reply(() => svc.impact(module, project, { direction, valuesOnly })),
+)
+
+server.registerTool(
+  'metrics',
+  {
+    title: '扇入扇出与不稳定度',
+    description:
+      '模块的扇入 Ca（子树外依赖它的不同模块数）、扇出 Ce（它依赖的子树外不同模块数）与不稳定度 I = Ce ÷ (Ca + Ce)，按系统内模块计、与层次无关。I 高不等于坏（入口、组装根天然易变），I 低的模块被大量依赖、改动牵动广。给 module 为明细（含贡献最多的依赖方 / 被依赖方）；给 level 为该父模块的子模块；缺省全系统的叶子模块；top 按 Ca 取前 N。',
+    inputSchema: {
+      module: z.string().optional().describe('模块 ID：只看这个模块的明细'),
+      level: z.string().optional().describe('父模块 ID：列它的子模块'),
+      top: z.number().int().positive().optional().describe('按 Ca 降序取前 N'),
+      valuesOnly: z.boolean().optional().describe('只看值依赖（去掉只引类型）'),
+      project,
+    },
+  },
+  ({ module, level, top, valuesOnly, project }) => reply(() => svc.metrics(project, { module, level, top, valuesOnly })),
+)
+
+server.registerTool(
   'sketch_check',
   {
     title: '草图核验',
