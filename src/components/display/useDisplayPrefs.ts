@@ -8,6 +8,7 @@ import type { Perspective } from '@/state/transition'
 export type DisplayGroup = 'rel' | 'node' | 'facts' | 'asm' | 'evo' | 'play'
 
 const DEFAULT_GROUPS: Record<Perspective, Record<DisplayGroup, boolean>> = {
+  interaction: { rel: true, node: true, facts: true, asm: true, evo: true, play: true },
   structure: { rel: true, node: true, facts: true, asm: true, evo: true, play: true },
   run: { rel: false, node: false, facts: true, asm: true, evo: true, play: true },
 }

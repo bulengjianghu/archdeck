@@ -8,8 +8,10 @@
  * | `sc`    | 打开的场景（有即运行视角）                        |
  * | `step`  | 播放头帧 ID                                       |
  * | `alt`   | 已选分支：路径上依次经过的分支点的选项，以 `.` 连接 |
+ * | `v`     | 画布模式：`s` 为结构视角，交互视角缺省不写（V11）；运行视角下照写进入前的模式 |
  */
 import { choiceList, choicesFromList, planScenario, resolvePath, type ModelIndex, type ScenarioPlan } from '@/model'
+import { withMode } from './mode'
 import { selectionExists, withLevel } from './navigation'
 import type { PlaybackState, Query, Selection, TransitionContext, TransitionResult, ViewState } from './types'
 
@@ -33,6 +35,7 @@ export function encodeView(state: ViewState, index: ModelIndex, plan?: ScenarioP
   if (state.levelId && state.levelId !== index.rootId) query.level = state.levelId
   const sel = encodeSelection(state.selection)
   if (sel) query.sel = sel
+  if (state.mode === 'structure') query.v = 's'
   const pb = state.playback
   if (pb) {
     query.sc = pb.scenarioId
@@ -51,7 +54,7 @@ export function restore(state: ViewState, ctx: TransitionContext, query: Query):
   const { index } = ctx
   const level = query.level ?? index.rootId
   const sel = decodeSelection(query.sel)
-  const next = withLevel(state, index, level, { select: selectionExists(index, sel) ? sel : null })
+  const next = withMode(withLevel(state, index, level, { select: selectionExists(index, sel) ? sel : null }), query.v === 's' ? 'structure' : 'interaction')
   return { state: { ...next, playback: restorePlayback(state, ctx, query) }, history: 'replace' }
 }
 

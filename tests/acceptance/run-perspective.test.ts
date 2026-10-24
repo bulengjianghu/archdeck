@@ -204,7 +204,7 @@ describe('§6.2 运行视角验收', () => {
     desk.openScenario('sc.command')
     desk.select({ kind: 'module', id: 'infra.framework' })
     desk.closeScenario()
-    expect(desk.perspective.value).toBe('structure')
+    expect(desk.perspective.value).toBe('interaction')
     expect(desk.levelId.value).toBe('infra')
     expect(desk.selection.value).toEqual({ kind: 'module', id: 'infra.framework' })
     expect(desk.run.sequence.value).toBeNull()

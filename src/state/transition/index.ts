@@ -7,6 +7,7 @@ import * as pb from './playback'
 import { asPointing } from './selected'
 import { restore } from './url'
 import * as edit from './edit'
+import { setMode } from './mode'
 import type { TransitionContext, TransitionResult, ViewAction, ViewState } from './types'
 
 export * from './types'
@@ -14,6 +15,7 @@ export { selectionExists, keyIntent } from './navigation'
 export { encodeSelection, decodeSelection, encodeView, sameQuery } from './url'
 export { perspectiveOf, selectedOf, emphasisOf } from './selected'
 export { leaveGuard, isEditing } from './edit'
+export { mapSelection, withMode } from './mode'
 export type { Perspective, Selected, Emphasis, EmphasisContext } from './selected'
 
 export function transition(state: ViewState, action: ViewAction, ctx: TransitionContext): TransitionResult {
@@ -48,6 +50,8 @@ export function transition(state: ViewState, action: ViewAction, ctx: Transition
       return nav.revealRelation(state, index, action.id)
     case 'revealModule':
       return nav.revealModule(state, index, action.id)
+    case 'setMode':
+      return setMode(state, ctx, action.mode)
     case 'openScenario':
       return pb.openScenario(state, ctx, action.id)
     case 'closeScenario':

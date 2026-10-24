@@ -37,6 +37,7 @@ import {
   perspectiveOf,
   selectedOf,
   transition,
+  type CanvasMode,
   type Selection,
   type Toggles,
   type ViewAction,
@@ -58,7 +59,7 @@ import { createIntent } from './desk/intent'
 import { createEvidence } from './desk/evidence'
 import { createEdit } from './desk/edit'
 
-export type { Selection, Toggles } from './transition'
+export type { CanvasMode, Selection, Toggles } from './transition'
 export { encodeSelection, decodeSelection } from './transition'
 export type { CompareSource, ModelPayload, FetchModel } from './sync/modelSource'
 export type { SourceFetcher, Resource } from './sync/source'
@@ -91,6 +92,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const payloadSketch = shallowRef<{ file: string; hash: string; path?: string } | undefined>(undefined)
   const payloadSketchFiles = shallowRef<{ mount?: string; file: string; path?: string; hash: string }[] | undefined>(undefined)
   const state = shallowRef<ViewState>({ levelId: '', selection: null, hover: null, toggles: DEFAULT_TOGGLES(RELATION_TYPES), playback: null })
+  /** V12：最近一次模式切换映射不过去而清空的选中（面板说明原因）；下一次改变状态的动作即收回 */
+  const droppedSelection = shallowRef<Selection | null>(null)
   /** 每次层次切换递增，界面据此决定是否适应画布 */
   const levelVersion = ref(0)
   let router: RouterSync | null = null
@@ -102,14 +105,20 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     const idx = index.value
     if (!idx) return false
     const prev = state.value
-    const { state: next, history } = transition(prev, action, {
+    const {
+      state: next,
+      history,
+      dropped,
+    } = transition(prev, action, {
       index: idx,
       plan: plan.value,
       levelView: view.value,
       scenarioView: run.scenarioView.value,
       editable: edit.editable,
+      structurePair: facts.structurePair,
     })
     if (next === prev) return false
+    droppedSelection.value = dropped ?? null
     state.value = next
     if (next.levelId !== prev.levelId) levelVersion.value++
     router?.write(encodeView(next, idx, plan.value), history)
@@ -122,8 +131,10 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const hoverId = computed(() => state.value.hover)
   const playback = computed(() => state.value.playback)
   const levelPath = computed(() => (index.value && levelId.value ? (index.value.pathOf.get(levelId.value) ?? []) : []))
-  /** 视角与选中（V1、V2、V7），由视图状态推出 */
+  /** 视角与选中（V1、V2、V7、V11），由视图状态推出 */
   const perspective = computed(() => perspectiveOf(state.value))
+  /** V11：画布模式（运行视角下为进入前的模式，退出场景即回到它） */
+  const mode = computed<CanvasMode>(() => state.value.mode ?? 'interaction')
   const selected = computed(() => selectedOf(state.value))
 
   /** 打开的场景的回放计划：只随场景与模型变化 */
@@ -327,6 +338,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const setToggles = (patch: Partial<Toggles>) => void dispatch({ type: 'toggle', patch })
   const openScenario = (id: string) => void dispatch({ type: 'openScenario', id })
   const closeScenario = () => void dispatch({ type: 'closeScenario' })
+  /** V11：切到结构 / 交互视角（运行视角下即退出场景） */
+  const setMode = (m: CanvasMode) => void dispatch({ type: 'setMode', mode: m })
   const next = () => void dispatch({ type: 'next' })
   const prev = () => void dispatch({ type: 'prev' })
   const seek = (frameId: string | null) => void dispatch({ type: 'seek', frameId })
@@ -370,6 +383,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     selected,
     hoverId,
     perspective,
+    mode,
+    droppedSelection,
     toggles,
     view,
     positioned,
@@ -402,6 +417,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     pressKey,
     openScenario,
     closeScenario,
+    setMode,
     next,
     prev,
     seek,

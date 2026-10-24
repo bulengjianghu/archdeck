@@ -12,13 +12,14 @@ const replace = (state: ViewState): TransitionResult => ({ state, history: 'repl
 export const isEditing = (state: ViewState): boolean => !!state.editing
 
 /**
- * X7a：草图画布下无效的动作——打开场景、选中文件 / 代码依赖 / 耦合线、打开代码事实、演化与组装叠加（草图不对应代码）；
+ * X7a：草图画布下无效的动作——打开场景、切换结构 / 交互视角（草图画的是交互图，V11）、选中文件 / 代码依赖 / 耦合线、打开代码事实、演化与组装叠加（草图不对应代码）；
  * 模型画布的层次导航（下钻、返回上级、跳转、按 URL 恢复）：草图下的层次只由当前张决定，经 openSketch 切换。
  */
 export function blocked(state: ViewState, action: ViewAction): boolean {
   if (!state.editing) return false
   switch (action.type) {
     case 'openScenario':
+    case 'setMode':
     case 'drill':
     case 'goUp':
     case 'revealModule':

@@ -198,7 +198,7 @@ watch(
 )
 
 /** O8：本层没有核心模块、普通模块超过七个时不折叠，只在画布角提示 */
-const foldHint = computed(() => (desk.perspective.value === 'structure' ? (desk.positioned.value?.view.foldHint ?? 0) : 0))
+const foldHint = computed(() => (desk.perspective.value === 'interaction' ? (desk.positioned.value?.view.foldHint ?? 0) : 0))
 const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned.value.view.nodes.length === 0)
 </script>
 
