@@ -4,7 +4,7 @@
  * 基线：提交版本为任一提交或当前版本（E6，经路由）；设计轮次为当前版本或上一轮（E3）；
  * 草图为相对基线或相对当前版本（desk.edit.setCompareMode / compareMode，结果为全设计的 desk.edit.comparison）：六类计数（改 ID 并入修改，F-51、T1 裁决 2），
  * 「删除」只算范围内的主动删除；「图上标出变更」跟随当前口径（画布角标来自同一个 comparison）；弹层里列全设计清单（F-53）；
- * 没有基线提交时提示「相对基线 = 相对当前版本」（05 裁决 3）；持久草图只有相对当前版本，对象是去掉这张草图贡献后的当前版本（与服务端同一口径）。弹层点外面或 Esc 关闭。
+ * 没有基线提交时提示「相对基线 = 相对当前版本」（05 裁决 3）；持久草图只有相对当前版本（偏差，与 sketchCheck 同一口径；交给 AI 的改动摘要另在「说明」里）。弹层点外面或 Esc 关闭。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -27,7 +27,7 @@ const SKETCH_BASES: Record<CompareMode, { label: string; hint: string }> = {
   current: { label: '相对当前版本', hint: '实现还差什么' },
 }
 
-/** 持久草图只有「相对当前版本」（与去掉它贡献后的当前版本比，同服务端） */
+/** 持久草图只有「相对当前版本」（偏差，同 sketchCheck） */
 const sketchBases = computed(() => (e.twoBases ? SKETCH_BASES : { current: SKETCH_BASES.current }))
 
 const c = computed(() => desk.versions.commit.value)

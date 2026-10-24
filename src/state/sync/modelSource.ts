@@ -45,7 +45,7 @@ export interface LoadedSource {
   model: LoadedModel
   /**
    * current：当前版本；previous：上一轮；base：设计的基线（X17，载荷给出时）；
-   * own：持久草图版本里「去掉这张草图贡献后的当前版本」——持久草图本身也进当前版本（X1），相对当前版本与它比，口径同服务端 intentChanges
+   * own：持久草图版本里「去掉这张草图贡献后的当前版本」——持久草图本身也进当前版本（X1），交给 AI 时的改动摘要与它比（口径同服务端 intentChanges）；偏差仍相对 current
    */
   baselines: Baselines
 }

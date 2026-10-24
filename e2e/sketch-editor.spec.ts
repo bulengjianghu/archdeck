@@ -332,9 +332,16 @@ test('E-1、#20b：从当前版本点「编辑骨架」打开持久草图即进�
   await expect(page.locator('.info-bar .name')).toHaveText('骨架')
   await expect(saveButton(page)).toBeVisible()
   await expect(page.locator('.sk-band')).toHaveCount(4)
-  // 持久草图只有「相对当前版本」（对象是去掉它贡献后的当前版本，X17）；草图下没有视角切换、导航树不另列路径
+  // 持久草图只有「相对当前版本」（偏差，与命令行 sketch-check 同一口径，X17）：骨架与当前版本一致时 0 偏差、按钮 +0 ~0；草图下没有视角切换、导航树不另列路径
+  await expect(page.locator('[data-testid="verify-current"] summary')).toContainText('相对当前版本：0 处偏差')
   const cmp = page.locator('.info-bar .cmp-btn')
   await expect(cmp).toContainText('对比 相对当前版本')
+  await expect(cmp.locator('b[title="新增"]')).toHaveText('+0')
+  await expect(cmp.locator('b[title="修改"]')).toHaveText('~0')
+  // 「交给 AI 时的改动摘要」（与去掉这张草图后的当前版本比）只在「说明」里单独一节，不进计数
+  await page.locator('.info-bar').getByRole('button', { name: '说明', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: '变更清单' }).locator('[data-testid="handoff-summary"]')).toContainText('交给 AI 时的改动摘要')
+  await page.keyboard.press('Escape')
   await cmp.click()
   await expect(page.getByRole('dialog', { name: '对比设置' }).getByLabel('相对基线')).toHaveCount(0)
   await page.keyboard.press('Escape')

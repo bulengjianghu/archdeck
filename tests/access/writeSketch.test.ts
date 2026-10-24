@@ -330,7 +330,7 @@ describe('草图版本的指纹、持久草图版本与改动摘要', () => {
     expect(readIntentVersion(modelRoot, 'p', 'nope', root)).toBeNull()
   })
 
-  it('F-52：持久草图也有「交给 AI」的指令——草图全文 + 相对当前版本的改动摘要（当前版本没有的模块算新增）', () => {
+  it('F-52：持久草图也有「交给 AI」的指令——草图全文 + 交给 AI 时的改动摘要（与去掉这张草图后的当前版本比，其余描述没有的模块算新增）', () => {
     write(
       'modules/core.yaml',
       'modules:\n  - { id: core, name: Core, kind: layer, order: 1, responsibility: 内核 }\n  - { id: core.b, name: B, parent: core, responsibility: b }\n',
@@ -339,13 +339,13 @@ describe('草图版本的指纹、持久草图版本与改动摘要', () => {
     expect(prompt).toContain('# 按草图扩展：持久草图「skeleton」')
     expect(prompt).toContain('## 草图（intent/skeleton.yaml）')
     expect(prompt).toContain('- id: core   # 内核层')
-    expect(prompt).toContain('## 相对当前版本的改动（按血缘）')
+    expect(prompt).toContain('## 交给 AI 时的改动摘要（与去掉这张草图后的当前版本比，按血缘）')
     expect(prompt).toContain('- 新增 A')
     write(
       'modules/core.yaml',
       'modules:\n  - { id: core, name: Core, kind: layer, order: 1, responsibility: 内核 }\n  - { id: core.a, name: A, parent: core, responsibility: a }\n',
     )
-    expect(readIntentVersion(modelRoot, 'p', 'skeleton', root)!.sketchPrompt).not.toContain('## 相对当前版本的改动')
+    expect(readIntentVersion(modelRoot, 'p', 'skeleton', root)!.sketchPrompt).not.toContain('## 交给 AI 时的改动摘要')
   })
 
   it('L-2：「交给 AI」附草图相对上一次提交的改动摘要；没有提交过时全部算新增', () => {

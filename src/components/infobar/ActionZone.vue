@@ -3,7 +3,7 @@
  * 信息条的动作区（F-61，E-1–E-3、SK-6、SK-9、DV-10，ADR-0024、ADR-0025）：
  * - 提交版本 / 设计轮次：说明（根层的设计说明与变更清单）；
  * - 草图（打开即编辑，X7a）：保存（⌘S）、撤销 / 重做、保存并交给 AI（没有未保存改动时为「交给 AI」；全设计有格式错误或语义提示时禁用，F-52）、
- *   说明（全设计变更清单按血缘分组的弹层，F-53）、退出（脏时三选保存 / 放弃 / 取消，退出回到进入草图之前的版本，#20b、leave.ts）；
+ *   说明（全设计变更清单按血缘分组的弹层，F-53；持久草图另有一节「交给 AI 时的改动摘要」——与去掉这张草图贡献后的当前版本比，不进计数，X17）、退出（脏时三选保存 / 放弃 / 取消，退出回到进入草图之前的版本，#20b、leave.ts）；
  * - 文件已在外部改动：整个区换成横幅「重新加载并重放 / 放弃本次改动」，重放有失败时列出失败的操作。
  * ⌘S 与撤销 / 重做的快捷键由草图画布处理；输入框里的 ⌘S 在这里接：先失焦提交，再保存。
  * 窄屏（< 1100px）按钮只剩图标，名称在 aria-label 与 title 里。
@@ -188,6 +188,10 @@ onBeforeUnmount(() => {
             <span v-if="e.baselineFallback.value && e.compareMode.value === 'baseline'" class="muted">（没有基线提交，即相对当前版本）</span>
           </p>
           <ChangeGroups :view="e.comparison.value" :name-of="e.nameOf" />
+          <section v-if="e.handoff.value" class="handoff" data-testid="handoff-summary">
+            <p class="cap">交给 AI 时的改动摘要 <span class="muted">与去掉这张草图后的当前版本比，不是偏差</span></p>
+            <ChangeGroups :view="e.handoff.value" :name-of="e.nameOf" />
+          </section>
         </div>
       </span>
       <button v-if="editing" class="ghost" aria-label="退出" title="退出草图，回到进入草图之前的版本" @click="exit">
@@ -286,6 +290,12 @@ kbd {
   margin: 0 0 6px;
   font-size: 11.5px;
   color: var(--text-2);
+}
+
+.handoff {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
 }
 
 .ghost {

@@ -442,8 +442,8 @@ export function baselineChanges(baselineFiles: readonly RawFile[], sketches: Par
 }
 
 /**
- * F-52：持久草图相对当前版本的改动摘要（按血缘）；没有改动时为空串。持久草图本身也进当前版本（X1），
- * 所以对象是去掉这张草图之后的当前版本（其余描述说的样子），否则草图总是和自己一致。
+ * F-52：持久草图交给 AI 时的改动摘要（按血缘）；没有改动时为空串。持久草图本身也进当前版本（X1），
+ * 所以对象是去掉这张草图之后的当前版本（其余描述说的样子），否则草图总是和自己一致。它不是偏差（偏差相对完整的当前版本，同 sketchCheck，X17），页面「说明」里同一口径单列一节。
  */
 export function intentChanges(currentFiles: readonly RawFile[], file: RawFile): string {
   const { index } = loadModel(currentFiles.filter(f => f.path !== file.path))
@@ -464,7 +464,7 @@ export function readIntentVersion(modelRoot: string, project: string, sketchId: 
     version: { intent: sketchId },
     compare: { current: { label: '当前版本', dir: current.dir, files: current.files } },
     sketch: { file: rel, path: rel, hash: sketchHash(file.text) },
-    // F-52：持久草图也能交给 AI（草图全文 + 相对当前版本的改动摘要）
+    // F-52：持久草图也能交给 AI（草图全文 + 交给 AI 时的改动摘要）
     sketchPrompt: intentPrompt(sketchId, { path: rel, text: file.text }, projectRoot, intentChanges(current.files, file)),
   }
 }
@@ -533,13 +533,13 @@ export function sketchPrompt(design: string, sketches: readonly { path: string; 
   )
 }
 
-/** F-52：持久草图的「交给 AI」指令——草图全文 + 相对当前版本的改动摘要（按血缘）+ 04 §5「按草图扩展」一节 */
+/** F-52：持久草图的「交给 AI」指令——草图全文 + 交给 AI 时的改动摘要（与去掉这张草图后的当前版本比，按血缘；不是偏差，X17）+ 04 §5「按草图扩展」一节 */
 export function intentPrompt(id: string, sketch: { path: string; text: string }, docsRoot: string, vsCurrent = ''): string {
   return promptText(
     `# 按草图扩展：持久草图「${id}」`,
-    `持久草图 \`${sketch.path}\` 由人拥有，是当前版本的约束：请按它修正当前版本的描述（必要时连同代码），使「相对当前版本」的改动消失；草图是约束、不是建议。`,
+    `持久草图 \`${sketch.path}\` 由人拥有，是当前版本的约束：请按它修正当前版本的描述（必要时连同代码），使下面「交给 AI 时的改动摘要」所列在其余描述里落实；草图是约束、不是建议。`,
     [sketch],
-    [['相对当前版本的改动（按血缘）', vsCurrent]],
+    [['交给 AI 时的改动摘要（与去掉这张草图后的当前版本比，按血缘）', vsCurrent]],
     docsRoot,
   )
 }

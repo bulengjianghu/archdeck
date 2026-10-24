@@ -115,10 +115,10 @@ export interface DeriveInputs {
   session: ShallowRef<EditSession | null>
   loaded: ShallowRef<ModelIndex | null>
   files: ShallowRef<RawFile[]>
-  /** 当前版本（引用外部模块、名称与位置的来源） */
+  /** 当前版本（相对当前版本的对象——偏差，与 sketchCheck 同一口径；引用外部模块、名称与位置的来源） */
   current: () => ModelIndex | null
-  /** 相对当前版本的对象：持久草图为去掉它贡献后的当前版本，设计的草图为当前版本 */
-  compareCurrent: () => ModelIndex | null
+  /** 持久草图「交给 AI 时的改动摘要」的对象：去掉这张草图贡献后的当前版本（同服务端 intentChanges）；不进计数 */
+  handoffCurrent: () => ModelIndex | null
   /** 有相对基线（设计的草图）；持久草图没有，vsBaseline 为 null */
   twoBases: boolean
   /** 设计的基线（相对基线的对象、底稿与推出的来源） */
@@ -169,7 +169,12 @@ export function createDerive(i: DeriveInputs) {
   }
   /** X17：两个对比——相对基线（我改了什么）与相对当前版本（实现还差什么） */
   const vsBaseline = computed(() => (i.twoBases ? compare('baseline', i.baseline()) : null))
-  const vsCurrent = computed(() => compare('current', i.compareCurrent()))
+  const vsCurrent = computed(() => compare('current', i.current()))
+  /**
+   * X17：持久草图交给 AI 时的改动摘要——与去掉这张草图贡献后的当前版本比（它本身也进当前版本，X1），只用于「说明」里单独一节，
+   * 不是偏差、不进计数；设计的草图为 null（交给 AI 的摘要是相对基线）
+   */
+  const handoff = computed(() => (i.twoBases ? null : compare('current', i.handoffCurrent())))
   const comparison = computed(() => (i.compareMode() === 'baseline' ? vsBaseline.value : vsCurrent.value))
 
   const dirty = computed(() => (session.value ? isDirty(session.value, i.baseline()) : false))
@@ -248,6 +253,7 @@ export function createDerive(i: DeriveInputs) {
     pending,
     vsBaseline,
     vsCurrent,
+    handoff,
     comparison,
     dirty,
     dirtySketches,

@@ -180,8 +180,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     sketch: payloadSketch,
     sketchFiles: payloadSketchFiles,
     current: () => baselines.value.current?.index ?? null,
-    // 持久草图：相对当前版本与「去掉这张草图贡献后的当前版本」比（同服务端）
-    compareCurrent: () => baselines.value.own?.index ?? baselines.value.current?.index ?? null,
+    // 持久草图交给 AI 时的改动摘要：与「去掉这张草图贡献后的当前版本」比（同服务端 intentChanges）；偏差仍相对当前版本
+    handoffCurrent: () => baselines.value.own?.index ?? baselines.value.current?.index ?? null,
     hasBase: () => !!baselines.value.base,
     // X17：设计的基线——载荷给出 base.commit 那一版时用它，否则为当前版本（新建设计时底稿即从当前版本复制）
     baseline: () => baselines.value.base?.index ?? baselines.value.current?.index ?? null,

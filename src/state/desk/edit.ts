@@ -41,8 +41,8 @@ export interface EditInputs {
   /** 载荷里设计的全部草图 */
   sketchFiles: ShallowRef<PayloadSketch[] | undefined>
   current: () => ModelIndex | null
-  /** 相对当前版本的对象：持久草图为「去掉这张草图贡献后的当前版本」（同服务端），设计的草图为当前版本；缺省为 current */
-  compareCurrent?: () => ModelIndex | null
+  /** 持久草图「交给 AI 时的改动摘要」的对象：去掉这张草图贡献后的当前版本（同服务端 intentChanges）；缺省为 current。偏差一律相对 current */
+  handoffCurrent?: () => ModelIndex | null
   /** 设计的基线（载荷没有给出时为当前版本） */
   baseline: () => ModelIndex | null
   /** 05 裁决 3：载荷给出了基线（base.commit 那一版）；没有时相对基线退化为相对当前版本 */
@@ -69,7 +69,7 @@ export function createEdit(i: EditInputs) {
   const notice = shallowRef('')
   /** 画布上的多选（框选 / ⇧ 点选）：合并的输入；单选仍是视图状态的 selection */
   const picked = shallowRef<string[]>([])
-  /** 持久草图只有「相对当前版本」一个对比：它没有基线（不属于设计），相对当前版本 = 与去掉它贡献后的当前版本比 */
+  /** 持久草图只有「相对当前版本」一个对比（偏差，同 sketchCheck）：它没有基线（不属于设计）；交给 AI 的改动摘要另算（handoff） */
   const twoBases = target?.kind !== 'persistent'
   /** 对比口径（对比弹层设定，设计的草图缺省相对基线，持久草图固定相对当前版本） */
   const compareMode = shallowRef<CompareMode>(twoBases ? 'baseline' : 'current')
@@ -78,7 +78,7 @@ export function createEdit(i: EditInputs) {
     loaded: i.loaded,
     files: i.files,
     current: i.current,
-    compareCurrent: i.compareCurrent ?? i.current,
+    handoffCurrent: i.handoffCurrent ?? i.current,
     baseline: i.baseline,
     twoBases,
     compareMode: () => compareMode.value,

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { load, loadModel, seedFromBaseline, sketchText, type DesignEditContext, type SketchDef } from '../../src/model'
+import { load, loadModel, seedFromBaseline, sketchCheck, sketchText, type DesignEditContext, type SketchDef } from '../../src/model'
 import { createDeskState, type DesignSketchWrite, type ModelPayload, type ModelWriter } from '../../src/state/useDeskState'
 import { NO_WRITER } from '../../src/state/sync/writer'
 import {
@@ -438,7 +438,7 @@ describe('desk.edit：草图画布与 DeskState', () => {
     expect(saves[0]).toMatchObject({ target: { kind: 'persistent', id: 'skeleton' }, baseHash: 'k0' })
   })
 
-  it('X17：持久草图只有「相对当前版本」，对象是去掉这张草图贡献后的当前版本（同服务端）', async () => {
+  it('X17：持久草图只有「相对当前版本」——偏差与 sketchCheck 同一口径（骨架与当前版本一致时为 0）；交给 AI 的改动摘要另算，对象是去掉这张草图贡献后的当前版本（同服务端）', async () => {
     const LEAF = { path: 'modules/leaf.yaml', text: 'modules:\n  - { id: core.a.x, name: X, parent: core.a }\n' }
     const { desk } = await setup({ intent: 'skeleton' }, fakeWriter().writer, {
       files: [SYSTEM, SKELETON],
@@ -450,9 +450,15 @@ describe('desk.edit：草图画布与 DeskState', () => {
     desk.edit.setCompareMode('baseline')
     expect(desk.edit.compareMode.value).toBe('current')
     expect(desk.edit.baselineFallback.value).toBe(false)
-    // 当前版本里的骨架就是这张草图本身：去掉它之后层与第二级都不在，全部计为新增；名称与位置仍取完整的当前版本
-    expect(desk.edit.vsCurrent.value!.counts.added).toBeGreaterThan(0)
+    // 偏差：骨架与当前版本一致（当前版本里的骨架就是这张草图本身），页面侧计数与本张清单都为 0，同命令行 sketch-check
+    const zero = { added: 0, changed: 0, renamed: 0, merged: 0, split: 0, moved: 0, removed: 0 }
+    expect(desk.edit.vsCurrent.value!.counts).toMatchObject(zero)
+    expect(desk.edit.vsCurrent.value!.sheet!.changes).toEqual([])
+    expect(sketchCheck(load([SKELETON]).model.sketches[0], desk.edit.currentIndex.value!).consistent).toBe(true)
     expect(desk.edit.comparison.value).toBe(desk.edit.vsCurrent.value)
+    // 交给 AI 时的改动摘要：去掉这张草图之后层与第二级都不在，全部计为新增；不进计数（comparison 仍是偏差）
+    expect(desk.edit.handoff.value!.counts.added).toBeGreaterThan(0)
+    // 名称与位置仍取完整的当前版本
     expect(desk.edit.currentIndex.value!.modules.has('core.a')).toBe(true)
   })
 

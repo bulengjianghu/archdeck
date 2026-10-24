@@ -114,7 +114,7 @@ modules:
       - **一个值**：各张草图、撤销栈、读取时的指纹互相约束（撤销回到读取时即不脏），合成一个 EditSession；「脏」由文档与读取时的草图推出，不另存（原则 6）。
       - **按设计**（X20）：撤销、脏、保存、交给 AI 都以设计为单位；会话里推出的草图未改动不算脏、不写文件。
       - **只对草图版本开启**（X7）：设计的草图（/d/<设计>/sketch）与持久草图（/i/<ID>，只有这一张，不能下钻）；当前版本、设计轮次、提交版本上没有会话。
-      - **持久草图只有一个对比**（X17）：它不属于设计、没有基线，相对当前版本的对象是去掉它贡献后的当前版本（与服务端同一口径）。
+      - **持久草图只有一个对比**（X17）：它不属于设计、没有基线，只有相对当前版本（偏差，与 sketchCheck 同一口径，骨架一致时为 0）；交给 AI 时的改动摘要另算（对象是去掉它贡献后的当前版本，同服务端），只在「说明」里单列、不进计数。
     codeRefs: [src/state/desk/edit.ts]
   - id: state.desk.edit.session
     name: 编辑会话
@@ -128,7 +128,7 @@ modules:
   - id: state.desk.edit.derive
     name: 编辑会话的派生
     parent: state.desk.edit
-    responsibility: 由编辑会话派生（computed）：设计的索引（各张草图序列化后与 system.yaml、持久草图、引用的外部模块一起加载，草图画布下作为 DeskState 的 index）；当前张的画布数据（草图布局 sketchScene，图上标出变更时带角标）；各张的两级校验 validateSketch 与全设计的格式错误 / 语义提示、超七提示、待重连；两个对比 compareDesign（相对基线、相对当前版本——持久草图只有后者，对象为去掉它贡献后的当前版本）的全设计计数与本张清单；是否脏、改过的草图、能否撤销 / 重做；面包屑（层的名称作第二级的前缀）；编辑的上下文（持久草图与设计的基线）。
+    responsibility: 由编辑会话派生（computed）：设计的索引（各张草图序列化后与 system.yaml、持久草图、引用的外部模块一起加载，草图画布下作为 DeskState 的 index）；当前张的画布数据（草图布局 sketchScene，图上标出变更时带角标）；各张的两级校验 validateSketch 与全设计的格式错误 / 语义提示、超七提示、待重连；两个对比 compareDesign（相对基线、相对当前版本——持久草图只有后者，即偏差，与 sketchCheck 同一口径）的全设计计数与本张清单；持久草图交给 AI 时的改动摘要（handoff：与去掉它贡献后的当前版本比，不进计数）；是否脏、改过的草图、能否撤销 / 重做；面包屑（层的名称作第二级的前缀）；编辑的上下文（持久草图与设计的基线）。
     principle: 草图只有几十个实体，每次操作重算一遍的代价可以忽略；校验与对比都调同一组模型层函数，与写入端点、命令行一致。
     codeRefs: [src/state/desk/edit/derive.ts]
   - id: state.desk.edit.commands
@@ -445,10 +445,10 @@ interfaces:
       sketchPrompt(design: string, sketches: { path; text }[], docsRoot: string, changes?: string, lineage?: string): string
       intentPrompt(id: string, sketch: { path; text }, docsRoot: string, vsCurrent?: string): string
       baselineChanges(baselineFiles: RawFile[], sketches: SketchEntity[]): string   // 各张草图相对基线的变更摘要（按血缘）
-      intentChanges(currentFiles: RawFile[], file: RawFile): string                  // 持久草图相对「去掉它贡献后的当前版本」
+      intentChanges(currentFiles: RawFile[], file: RawFile): string                  // 持久草图交给 AI 时的改动摘要：相对「去掉它贡献后的当前版本」（不是偏差）
     semantics: |
       - 「交给 AI」的指令（X20、F-52）：各张草图全文 + 相对基线的变更摘要（按血缘：合并 / 拆分 / 改 ID / 移动、待重连）+ 草图相对上一次提交的改动 + 04 §5「按草图扩展」一节
-      - 持久草图：草图全文 + 相对当前版本的改动（对象是去掉这张草图贡献后的当前版本）
+      - 持久草图：草图全文 + 交给 AI 时的改动摘要（对象是去掉这张草图贡献后的当前版本；不是偏差，偏差相对完整的当前版本，X17）
   - id: if.desk.edit
     name: 编辑操作（desk.edit）
     owner: state.desk.edit.commands
