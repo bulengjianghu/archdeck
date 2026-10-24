@@ -2,7 +2,7 @@
  * 帧的层次投影（P1–P5、P7、P10、P11、P15、P16、S9、R7、R13）：把回放路径上的每一帧映射到当前层次，合并为可见消息。
  * 端点映射与结构投影共用 mapEndpoint（P1），落点的视图边 ID 与 projectLevel 一致。
  */
-import { lowestCommonAncestor, mapEndpoint, viewNodeOf } from '../project'
+import { lowestCommonAncestor, mapEndpoint, shelfOf, viewNodeOf } from '../project'
 import { RUNTIME_RELATION_TYPES } from '../types'
 import type { LevelView, ModelIndex, ViewEdge } from '../types'
 import type { Frame, PlanNode, ScenarioPlan, Choices, Landing, VisibleLanding, VisibleMessage, ScenarioLevelView, FrameStatus } from './types'
@@ -16,11 +16,11 @@ function viewNode(index: ModelIndex, view: LevelView, ids: ReadonlySet<string>, 
   return ids.has(node) ? { node, local: ep.kind === 'local' } : null
 }
 
-/** 分层总览：端点落在核心模块的子树内时用核心模块 */
+/** 分层总览：端点落在核心模块（或带底共用件架上的共用件，O9）的子树内时用它 */
 function coreNode(index: ModelIndex, view: LevelView, id: string): string | null {
   const parentDepth = (index.pathOf.get(view.parentId) ?? []).length - 1
   const second = index.pathOf.get(id)?.[parentDepth + 2]
-  return second !== undefined && view.nodes.some(n => n.role === 'core' && n.id === second) ? second : null
+  return second !== undefined && view.nodes.some(n => (n.role === 'core' || n.role === 'shared') && n.id === second) ? second : null
 }
 
 /**
@@ -46,6 +46,14 @@ export function landFrame(index: ModelIndex, view: LevelView, frame: Frame, node
   // P3、P7、P14：分层总览先看核心模块——端点在核心模块的子树内时，它的泳道是核心模块
   const ca = layered ? (index.actors.has(frame.from) ? frame.from : (coreNode(index, view, frame.from) ?? a?.node)) : a?.node
   const cb = layered ? (index.actors.has(frame.to) ? frame.to : (coreNode(index, view, frame.to) ?? b?.node)) : b?.node
+  // P18：共用件不开泳道——一端是本层共用件架上的共用件时按另一端的内部活动处理并记下共用件；两端都是（或另一端不在本层）时本层不可见
+  const shelf = shelfOf(view)
+  const sa = !!ca && shelf.has(ca)
+  const sb = !!cb && shelf.has(cb)
+  if (sa || sb) {
+    const other = sa ? (b && !sb ? cb : undefined) : a ? ca : undefined
+    return other && other !== (sa ? ca : cb) ? { kind: 'internal', node: other, shared: [sa ? ca! : cb!] } : { kind: 'hidden' }
+  }
   if (!a || !b) return { kind: 'internal', node: ((a ? ca : cb) ?? (a ?? b)!.node)! }
   if (ca === cb) return { kind: 'internal', node: ca! }
   // 只在泳道与结构图落点节点不同时给出
@@ -149,6 +157,9 @@ export function mergeEntries(index: ModelIndex, view: LevelView, entries: readon
     const key = `${landingKey(at)}#${contextKey(e.frame)}#${e.status}`
     if (open && open.key === key) {
       open.msg.frames.push(e.frame)
+      // P18：合并的内部活动带上经过的全部共用件
+      if (at.kind === 'internal' && at.shared && open.msg.at.kind === 'internal')
+        open.msg.at = { ...open.msg.at, shared: [...new Set([...(open.msg.at.shared ?? []), ...at.shared])] }
       // P16：合并的帧中有未绑定关系的，整条消息判为未建模
       if (at.kind === 'unmodeled') open.msg.at = at
       continue

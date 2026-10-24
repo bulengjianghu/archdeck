@@ -72,7 +72,11 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
       <template v-else-if="m.kind === 'internal'">
         <rect :x="cx(m.from) - 5" :y="ps.messages[i].y - 10" width="10" height="20" rx="2" class="activation" />
         <text :x="cx(m.from) + 10" :y="ps.messages[i].y + 4" class="label"
-          >{{ m.label || '内部活动' }}<tspan v-if="ps.messages[i].evidence === 'none'" class="no-evidence"> ?</tspan></text
+          >{{ m.label || '内部活动' }}<tspan v-if="ps.messages[i].evidence === 'none'" class="no-evidence"> ?</tspan
+          ><tspan v-if="m.shared?.length" class="shared-tag" data-testid="shared-badge">
+            · {{ m.shared.length > 1 ? `共用 ×${m.shared.length}` : `共用 ${m.shared[0].name}`
+            }}<title>经过共用件：{{ m.shared.map(s => s.name).join('、') }}（P18）</title></tspan
+          ></text
         >
       </template>
       <template v-else>
@@ -99,6 +103,11 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
 </template>
 
 <style scoped>
+.shared-tag {
+  fill: var(--text-3);
+  font-size: 11px;
+}
+
 .sys-boundary {
   stroke: var(--actor);
   stroke-dasharray: 4 4;

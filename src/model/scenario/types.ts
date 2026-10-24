@@ -118,8 +118,9 @@ export type Landing =
   | { kind: 'upper'; from: string; to: string; relationId: string; lanes?: Lanes }
   /** 本层两节点之间没有视图边，帧没有绑定任何关系：结构中未建模（P11） */
   | { kind: 'unmodeled'; from: string; to: string; lanes?: Lanes }
-  /** 两端落在本层同一个节点（P3）；带 lanes 时是分层总览中同一层不同泳道之间的消息，时序图画成泳道间的箭头 */
-  | { kind: 'internal'; node: string; lanes?: Lanes }
+  /** 两端落在本层同一个节点（P3）；带 lanes 时是分层总览中同一层不同泳道之间的消息，时序图画成泳道间的箭头；
+   *  带 shared 时一端是本层共用件架上的共用件，按另一端的内部活动处理（P18，共用件不开泳道） */
+  | { kind: 'internal'; node: string; lanes?: Lanes; shared?: string[] }
   /** 两端都在本层外（P4） */
   | { kind: 'hidden' }
 
@@ -214,6 +215,8 @@ export interface SequenceMessage {
   temp?: 'upper' | 'unmodeled'
   /** 经由上层关系时对应的关系 */
   relationId?: string
+  /** P18：一端是共用件的消息折叠为另一端的内部活动，这里是经过的共用件（模块 ID 与名称），步骤上画「共用」角标 */
+  shared?: { id: string; name: string }[]
 }
 
 export interface SequenceFragment {

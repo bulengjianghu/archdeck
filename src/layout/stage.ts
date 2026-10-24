@@ -132,7 +132,7 @@ export interface StageDisplay {
  * - 回放边始终显示；参与路径的节点显示，只在未选分支 / 未到达处出现的节点淡化；
  * - 其余节点与静态边：隐藏 / 淡化 / 照常（按显示方式）；「在画布上显示」的节点的静态边及对端节点照常；
  * - 悬停的可见节点：「隐藏」时它的静态边及对端节点淡显，「淡显」时它的静态边照常；「全显」不变；
- * - 分层总览的带始终显示（它是骨架）。
+ * - 分层总览的带始终显示（它是骨架）；共用件架上的共用件照常显示但淡化（P18）。
  */
 export function stageDisplay(input: StageDisplayInput): StageDisplay {
   const { view, participants, playEdges, mode, reveal, hover } = input
@@ -145,6 +145,8 @@ export function stageDisplay(input: StageDisplayInput): StageDisplay {
     const p = participants.get(n.id)
     if (p === 'path') nodes.set(n.id, 'show')
     else if (n.role === 'layer' || revealedNodes.has(n.id)) nodes.set(n.id, 'show')
+    // P18：共用件架照常显示但淡化（共用件不开泳道，经过它的步骤落在另一端）
+    else if (n.role === 'shared') nodes.set(n.id, 'dim')
     else if (p === 'other') nodes.set(n.id, mode === 'show' ? 'show' : 'dim')
     else nodes.set(n.id, rest)
   }

@@ -68,6 +68,7 @@ export function buildSequence(index: ModelIndex, view: LevelView, plan: Scenario
       status: it.status,
       ...(it.status === 'path' ? { pathIndex: pathView.messageOf.get(first.id) } : {}),
       ...(at.kind === 'unmodeled' ? { temp: at.kind } : at.kind === 'upper' ? { temp: at.kind, relationId: at.relationId } : {}),
+      ...(at.kind === 'internal' && at.shared?.length ? { shared: at.shared.map(id => ({ id, name: moduleName(index, id) })) } : {}),
     }
   })
 

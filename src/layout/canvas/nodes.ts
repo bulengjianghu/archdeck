@@ -19,9 +19,11 @@ function playClass(ctx: SceneContext, id: string): string | undefined {
   if (!ctx.st) return undefined
   const cur = ctx.st.current?.at
   // P7：分层总览中同一层不同泳道之间的消息，带与两端的核心模块小块都标为活动
+  // P18：一端是共用件的消息落在另一端，架上经过的共用件同样高亮（不画临时线）
   const touches = (at: VisibleLanding | null | undefined) =>
-    !!at && ((at.kind === 'internal' ? at.node === id : at.from === id || at.to === id) || at.lanes?.from === id || at.lanes?.to === id)
-  if (touches(cur)) return cur!.kind === 'internal' ? 'play-current play-internal' : 'play-current'
+    !!at &&
+    ((at.kind === 'internal' ? at.node === id || !!at.shared?.includes(id) : at.from === id || at.to === id) || at.lanes?.from === id || at.lanes?.to === id)
+  if (touches(cur)) return cur!.kind === 'internal' && cur!.node === id ? 'play-current play-internal' : 'play-current'
   if (touches(ctx.hoverLanding)) return 'play-hover'
   return undefined
 }
@@ -158,7 +160,7 @@ function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box): 
       ),
     ]
   // O9：共用件架上的紧凑块；运行视角下照常显示但淡化（P18）
-  if (n.role === 'shared') return [placeNode(ctx, n.id, box, 'shared', { ...base, dim: base.dim || (!!ctx.st && !playClass(ctx, n.id)) }, 2)]
+  if (n.role === 'shared') return [placeNode(ctx, n.id, box, 'shared', { ...base, dim: ctx.st ? !playClass(ctx, n.id) : base.dim }, 2)]
   return [placeNode(ctx, n.id, box, n.role === 'core' ? 'core' : 'module', base, 2)]
 }
 

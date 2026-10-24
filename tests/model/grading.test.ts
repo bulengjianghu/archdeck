@@ -1,6 +1,7 @@
 /** 任意层次的模块分级（ADR-0027）：核心、普通、共用件——投影（O2、O4、O8–O11）、布局（共用件架）与画布场景（角标、计数、按需画线） */
 import { describe, expect, it } from 'vitest'
-import { loadModel, projectLevel, shelfOf, viewNodeOf, type RawFile } from '../../src/model'
+import { buildSequence, loadModel, planScenario, projectLevel, projectScenario, shelfOf, stageEnds, viewNodeOf, type RawFile } from '../../src/model'
+import { stageOverlay } from '../../src/layout/stage'
 import { layoutView } from '../../src/layout/layout'
 import { canvasScene, type CanvasInput } from '../../src/layout/canvas'
 import { levelCounts } from '../../src/layout/canvas/nodes'
@@ -172,5 +173,47 @@ describe('布局与画布：共用件架、计数与按需画线', () => {
     expect(levelCounts(expanded)).toEqual({ shared: 2, folded: 0 })
     const band = canvasScene(await input('sys')).nodes.find(n => n.id === 'l')!
     expect(band.data.counts).toEqual({ shared: 1, folded: 1 })
+  })
+})
+
+describe('P18 共用件不画泳道', () => {
+  const sc = `scenarios:
+  - id: sc.s
+    name: S
+    steps:
+      - call: { from: p.c1, to: p.labels, relation: r4, label: 取名 }
+      - call: { from: p.c1, to: p.bus, relation: r7, label: 发事件 }
+      - call: { from: p.c1, to: p.c2, relation: r1, label: 调用 }
+      - call: { from: p.labels, to: p.bus, label: 两端都是共用件 }
+`
+  const idx = loadModel(files(sc)).index
+
+  it('一端是共用件的帧按另一端的内部活动处理并带共用件（连续的合并、共用件取并集）；两端都是共用件的本层不可见；时序图不为共用件开泳道，步骤带「共用」角标', () => {
+    const plan = planScenario(idx, 'sc.s')
+    const view = projectLevel(idx, 'p', { showBoundaries: true, scenarioEnds: stageEnds(plan) })
+    const sv = projectScenario(idx, view, plan, new Map())
+    expect(sv.messages.map(m => m.at)).toEqual([
+      { kind: 'internal', node: 'p.c1', shared: ['p.labels', 'p.bus'] },
+      expect.objectContaining({ kind: 'edge', edgeId: 'p.c1->p.c2:calls' }),
+    ])
+    expect(sv.hidden).toHaveLength(1)
+    const seq = buildSequence(idx, view, plan, new Map(), sv)
+    expect(seq.participants.map(p => p.nodeId)).toEqual(['p.c1', 'p.c2'])
+    expect(seq.messages[0]).toMatchObject({ kind: 'internal', shared: [{ id: 'p.labels', name: 'Labels' }, { id: 'p.bus', name: 'Bus' }] })
+  })
+
+  it('运行视角舞台：共用件架照常显示但淡化，当前步骤经过的共用件高亮，不画共用件的临时线', async () => {
+    const plan = planScenario(idx, 'sc.s')
+    const view = projectLevel(idx, 'p', { showBoundaries: true, scenarioEnds: stageEnds(plan) })
+    const sv = projectScenario(idx, view, plan, new Map())
+    const positioned = await layoutView(view)
+    const stage = stageOverlay(sv, positioned, sv.messages[0].frameIds[0])
+    const s = canvasScene({ ...(await input('p')), positioned, scenarioView: sv, stage, participants: new Map([['p.c1', 'path' as const]]) })
+    expect(s.nodes.find(n => n.id === 'p.labels')).toMatchObject({ data: { dim: false }, class: expect.stringContaining('play-current') })
+    expect(s.nodes.find(n => n.id === 'p.c1')!.class).toContain('play-internal')
+    expect(s.edges.some(e => e.data.shelf)).toBe(false)
+    const later = stageOverlay(sv, positioned, sv.messages[1].frameIds[0])
+    const s2 = canvasScene({ ...(await input('p')), positioned, scenarioView: sv, stage: later, participants: new Map([['p.c1', 'path' as const]]) })
+    expect(s2.nodes.find(n => n.id === 'p.labels')!.data.dim).toBe(true)
   })
 })
