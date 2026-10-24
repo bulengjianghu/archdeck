@@ -12,6 +12,7 @@ import {
   hotspots,
   isolatedCouplings,
   levelEvolution,
+  sharedHealth,
   type Coupling,
   type EvolutionStats,
   type HeatKind,
@@ -22,6 +23,7 @@ import {
   type ModelIndex,
   type ModuleHistory,
   type OkHistory,
+  type SharedHealth,
 } from '@/model'
 import type { ViewState } from '../transition'
 import type { createSourceSync } from '../sync/source'
@@ -108,6 +110,12 @@ export function createEvolution({ state, index, view, files, facts, sync, design
   const hotspotsOf = (kind: HeatKind, limit = 10): ModuleHistory[] => (stats.value ? hotspots(stats.value, kind, limit) : [])
   /** J6：无依赖无关系的耦合对 */
   const isolated = computed<Coupling[]>(() => (stats.value ? isolatedCouplings(stats.value) : []))
+  /** Q13：共用件的两条提醒（反向依赖、体量）；修改占比要 git 历史，没取到时只给行数占比；没有共用件时为 null */
+  const shared = computed<SharedHealth | null>(() => {
+    const idx = index.value
+    const own = files.ownership.value
+    return idx && own && !design ? sharedHealth(idx, own, facts.report.value, files.lines.value, history.value) : null
+  })
   /** 一条提交（哈希 → 记录） */
   const commitOf = (hash: string): HistoryCommit | undefined => history.value?.commits.find(c => c.hash === hash)
 
@@ -124,6 +132,7 @@ export function createEvolution({ state, index, view, files, facts, sync, design
     between,
     hotspotsOf,
     isolated,
+    shared,
     commitOf,
     commitMessage: sync.commit,
   }

@@ -115,7 +115,7 @@ interface LevelCycle { id: number; nodes: { id: string; module: string }[]; edge
 | `reworkMarkdown(list, title, { modelDir, sourceRoot, limit })` · `reworkItemMarkdown(item, opts)` | 给 agent 的指令：摘要、每条的规则、位置、受影响（缺省最多 20 处）、建议与 YAML 片段；描述文件路径加模型目录前缀 | Q9 |
 
 ```ts
-type ReworkCategory = 'description' | 'violation' | 'cycle' | 'ownership' | 'unconfirmed' | 'undescribed' | 'unmodeled' | 'review' | 'coupling' | 'sketch' | 'owned' | 'unevidenced'   // review：需复核（Z3）；coupling：时间耦合（J6）；sketch：草图偏差（X4）；owned：指纹不符（X6）；unevidenced：步骤无证据（S17）
+type ReworkCategory = 'description' | 'violation' | 'shared' | 'cycle' | 'ownership' | 'unconfirmed' | 'undescribed' | 'unmodeled' | 'review' | 'coupling' | 'sketch' | 'owned' | 'unevidenced'   // shared：共用件反向依赖（U12）；review：需复核（Z3）；coupling：时间耦合（J6）；sketch：草图偏差（X4）；owned：指纹不符（X6）；unevidenced：步骤无证据（S17）
 interface ReworkLoc { in: 'description' | 'source'; file: string; line?: number; note?: string }
 interface ReworkAction { kind: ReworkActionKind; text: string; file?: string; snippet?: string }
 interface ReworkItem {
@@ -140,14 +140,14 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 | `reviewHash(index, moduleId)` · `summaryHash(summary)` | 摘要规范化拼接后的 64 位哈希（两段 32 位 cyrb 混合，16 位十六进制）；内容相同必得相同指纹 | Z2 |
 | `reviewStatus(index, entry, moduleId)` → `'reviewed' \| 'stale' \| 'unreviewed'` | 有记录且指纹一致 / 有记录、指纹不一致 / 没有记录 | Z3 |
 | `reviewDiff(before, now)` | 两份摘要的差异：职责按行增删、`includes` / `excludes` / `mayDependOn` 按项增删、接口按 ID 增 / 删 / 改（带前后签名）、子模块按 ID 增删 | Z3 |
-| `reviewScope(index)` | 默认提供确认的模块：核心模块（任意层次的 `role: core`，ADR-0027 待实现；现为第二级的 `core`）与第二级模块（根的子模块的子模块） | Z4 |
-| `sharedSuggestions(index, moduleDeps, plans)`（待实现） | 疑似共用件：没有 `role`、入度来自 ≥2 层或 ≥3 兄弟、没有运行时出边、不在任何场景帧上、`kind: library` 或名含 shared / util / labels，每个带四条依据；`sharedReverse(index, moduleDeps)`：共用件子树对子树外非共用件的值依赖（ADR-0027） | U11、U12 |
+| `reviewScope(index)` | 默认提供确认的模块：核心模块（任意层次的 `role: core`，ADR-0027）与第二级模块（根的子模块的子模块） | Z4 |
+| `sharedSuggestions(index, moduleDeps)`（`governance/roles.ts`） | 疑似共用件：没有 `role`（自身与祖先都不是共用件）的非层模块，入度来自 ≥2 层或 ≥3 兄弟（只算值使用）、子树没有指向外部的运行时关系、子树不在任何场景帧上（`scenariosOf`）、`kind: library` 或 ID / 名称含 shared / util / labels / contracts，每个带四条依据；`sharedReverse(index, moduleDeps)`：共用件子树对子树外、不在任何共用件子树内的模块的值依赖；两者都进治理报告（`sharedSuggestions`、`sharedReverse`），反向依赖另报 warning `role.shared-reverse`（ADR-0027） | U11、U12 |
 | `reviewStates(index)` | 每个模块的 `{ status, entry?, diff? }`；记录来自 `index.model.reviewed`（Validator 已去掉引用不存在模块的记录并按模块去重，Z1） | Z1、Z3 |
 | `reviewCounts(index)` | 范围内的 `{ scope, reviewed, stale }`，根层健康度与项目卡片同一口径 | Z5 |
 | `reviewEntries(index, ids, { source, note?, at? })` | 为一组模块生成当天的确认记录（hash、summary），页面「确认」与草图归档都用它构造写入 | Z4、Z6 |
 
 - 返工清单（§4.2）多一类 `review`（「需复核」）：一个需复核的模块一条，warning，规则 Z3，`detail` 为差异摘要，建议动作 `{ kind: 'review', text: '在面板上复核并确认' }`——人的动作，没有 `snippet`。`lint:model` 不列它，只在摘要给出「确认：已确认 a / b · 需复核 c」。
-- `projectHealth` 另给 `reviewed: { scope, reviewed, stale }`（Z5），它只读描述，读不到代码事实时也有。
+- `projectHealth` 另给 `reviewed: { scope, reviewed, stale }`（Z5），它只读描述，读不到代码事实时也有；有共用件时给 `shared`（Q13，`sharedHealth(index, own, report, lines?, history?)`：共用件个数、反向依赖条数、行数占比（G19，阈值 `sourceLimits.sharedRatio`，缺省 0.2）、近窗口修改占比（J2 口径，阈值 0.3）与是否超阈值）；开发服务器的 `readHealth` 在有共用件时读 git 历史（按 HEAD 缓存），根层面板在演化事实加载后才有修改占比。
 - 写入：`POST write/<项目>/reviewed`（[加载与版本 §2.2](./loading-and-versions.md#22-写入人拥有的文件vitewritemodelts-b1b5-adr-0019)）与 `appendReviewed(modelRoot, project, entries, root?, { origin?, design? })`：逐条按 `module` 更新已有记录或追加；每条 `hash` 必须等于当前 `reviewHash`，不符整次拒绝；写后在 `ledger.jsonl` 追加 `{ at, tool: 'reviewed', origin, modules, design? }`（`origin`：端点为 `page`、归档为 `archive`、其余 Node 侧调用缺省 `cli`，Z6）；`entries` 的字段 `module`、`at`、`hash`、`summary`、`source`、`note?`；草图归档（X 组）调用同一个函数一次写多条。
 
 ### 4.4 意图（模型层，`src/model/intent/`）

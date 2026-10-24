@@ -2,8 +2,8 @@
  * 项目健康度（Q10，H-1）：读源码清单、代码事实与基线，交给模型层 projectHealth 计数。项目列表每次刷新时调用；
  * 依赖提取按文件的修改时间缓存，重复调用只重解析变了的文件。
  */
-import { assignFiles, governanceReport, historyOptions, loadModel, projectHealth, reviewCounts, type ProjectHealth, type RawFile } from '../src/model'
-import { readSourceHistory } from './readHistory'
+import { assignFiles, governanceReport, loadModel, projectHealth, reviewCounts, type ProjectHealth, type RawFile } from '../src/model'
+import { historyOptions, readSourceHistory } from './readHistory'
 import { readSourceTree } from './readSource'
 import { readCodeDeps } from './readDeps'
 import { governanceDir, readBaseline } from './governanceStore'

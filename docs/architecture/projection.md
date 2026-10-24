@@ -19,12 +19,12 @@
 
 **分层总览**（O1–O4）：P 的可见子模块全是层时 `mode = layered`：
 
-- 按 `order` 生成带，带上该层 `role: core`（旧写法 `core: true`，M16）的子模块，共用件（`role: shared` / `bus`）进带底的共用件架（O9，待实现），其余计入 `hiddenCount`（显示为 `+N`）；`expandedBands` 中的层（O6，临时展开）全部子模块都按核心模块露出，`hiddenCount` 为 0、`expanded` 记展开数。
+- 按 `order` 生成带，带上该层 `role: core`（旧写法 `core: true`，M16）的子模块，共用件（`role: shared` / `bus`）作 `shared` 节点（带 `layerId`）进该层 `Band.shelf`（O9），其余计入 `hiddenCount`（显示为 `+N`）；`expandedBands` 中的层（O6，临时展开）全部非共用件子模块都按核心模块露出，`hiddenCount` 为 0、`expanded` 记展开数。
 - 布局（`layoutLayered(view, { bandColumns })`）：带内每行的模块块数由画布宽度换算（`bandColumnsFor`，3–8，O7），带宽按列数撑满；缓存键含列数。
 - 层与层之间的边按上面的规则算出，作为带间的聚合边。
 - 再对每个核心模块算一次跨层关系，端点落到对方层内的核心模块；对方不是核心模块时落到对方所在的层；两端都没落到核心模块的与层间边重复，不记录。结果放在 `coreEdges`，默认不画。
 
-**分级**（O8–O11，ADR-0027，状态：待实现）：普通层次（`mode` 不是 `layered`）同样按 `role` 分三类——核心与普通作为普通节点参与布局；普通模块超过 7 个且本层有核心模块时全部并入一个「+N」占位节点（与它们相连的边按 L5 聚合到占位节点上，`expandedBands` 同一机制记临时展开）；共用件不进节点，列入 `LevelView.shelf`（本层框底部一行，不参与 elk 布局），它们与本层节点的边列入 `shelfEdges`、默认不画，节点带 `sharedCount`（「共用 ×N」）；本层框计数取 `shelf.length` 与折叠数。
+**分级**（O8–O11，ADR-0027）：普通层次（`mode` 不是 `layered`）同样按 `role` 分三类——核心（`ViewNode.core`，大块）与普通作为 `module` 节点参与布局；普通模块超过 7 个（`FOLD_LIMIT`）且本层有核心模块时全部并入一个 `more:<父模块>` 占位节点（`role: more`，带 `hiddenCount` / `expanded`；与它们相连的边按 L5 聚合到占位上，两端都折叠的不画；`expandedBands` 以父模块 ID 记临时展开；`LevelView.fold` 记占位与成员，`alias` 记成员 → 占位，端点映射之后经 `viewNodeOf` 落到占位——场景落点、代码事实、演化、文件高亮共用）；没有核心模块时不折叠，给 `foldHint`（普通模块数）。共用件作 `shared` 节点、ID 列入 `LevelView.shelf`（父模块框底部一行，不参与 elk 布局）；一端是共用件的边（任一方向、任一类型，含边界边与参与者的边）列入 `shelfEdges`、不进 `edges`，非共用件节点带 `sharedCount`（「共用 ×N」，连到的共用件个数）。分层总览的 `shelfEdges` 由核心跨层边同一遍算出：端点落到共用件时代表为共用件，核心与共用件之间（跨层或同层）的进 `shelfEdges`，共用件与自己所在的带之间不画。`shelfOf(view)` 给出本层全部共用件节点（普通层次的 `shelf` 与各带的 `shelf`），场景投影（P18）与画布共用。
 
 **参与者**（L6 / A2）：某一层出现与本层子树有关系的参与者（根层为全部有关系的参与者），参与者与本层子模块之间的关系按上面的规则投影成边（不受边界节点开关影响，受关系类型筛选）；分层总览中入口落在核心模块上时另记一条核心跨层边。
 
@@ -45,8 +45,8 @@
 
 | 模式 | 排布 |
 |---|---|
-| `layered` | 不调用 elk。按层序自上而下分带，带内核心模块横向排开（含 `+N` 占位）；相邻层间的边画在带间空隙并横向错开；跨多层的边走右侧通道（O3）；核心跨层边画成曲线 |
-| `graph` | elkjs layered 算法只排父模块框内的子模块与它们之间的边（正交走线、标签内联）。每条边两端各有自己的端口：进边在入口侧、出边在出口侧（自上而下为上进下出，RIGHT 时左进右出）；同一侧左动右静（RIGHT 时上动下静），用 `FIXED_ORDER` 按 elk 的顺时针端口序给序号（L11）。框外边在内部节点那一端也给一个不连线的占位端口，与内部边一起排序，按需走线时取 elk 排出的位置（`PositionedView.ports`）；缓存键因此含框外边。先自上而下排，结果过于狭长时再试自左向右，取宽高比更接近画布者。布局后：父模块框 `parentFrame` 包住内部节点（留 28）与内部走线（留 12），框外的元素由 `placeOutside` 按方位摆放（A7、L4） |
+| `layered` | 不调用 elk。按层序自上而下分带，带内核心模块横向排开（含 `+N` 占位），共用件在带底一行（共用件架，带随之加高）；相邻层间的边画在带间空隙并横向错开；跨多层的边走右侧通道（O3）；核心跨层边画成曲线 |
+| `graph` | elkjs layered 算法只排父模块框内的子模块（不含共用件）与它们之间的边（正交走线、标签内联）。每条边两端各有自己的端口：进边在入口侧、出边在出口侧（自上而下为上进下出，RIGHT 时左进右出）；同一侧左动右静（RIGHT 时上动下静），用 `FIXED_ORDER` 按 elk 的顺时针端口序给序号（L11）。框外边在内部节点那一端也给一个不连线的占位端口，与内部边一起排序，按需走线时取 elk 排出的位置（`PositionedView.ports`）；缓存键因此含框外边。先自上而下排，结果过于狭长时再试自左向右，取宽高比更接近画布者。布局后：父模块框 `parentFrame` 包住内部节点（留 28）与内部走线（留 12）；有共用件时 `placeShelf` 在框底部排一行共用件架（`SHELF`，左侧留「共用件」字样，放不下换行，至少 4 个一行、框随之撑开，`PositionedView.shelf`），框外的元素再由 `placeOutside` 按方位摆放（A7、L4） |
 | 边界节点 | 在父模块框下方一行（间隔 72，放得下进边界节点的终点短桩），按视图给出的层次顺序从左到右排列（与时序图泳道一致）；系统框 `frame` 包住父模块框与边界节点行并留 44（L4）。边界边不参与布局，要画时才由 `edgeRoute` 按需走线（`routing.ts` 的 `detour`） |
 | 平行边 | elk 排的边各有端口、由 elk 错开，终点仍重合的按 `spreadEnds` 错开；分层总览中参与者的边、核心跨层边的曲线：同一对节点之间的多条边（不论方向）按序号横向（侧边出发的曲线为纵向）错开 10px（`parallelOffsets`，L10） |
 | 外部参与者 | 方位固定、所有层次一致（A7）：用户在系统框上方一行、外部系统与时间在系统框右侧一列（分层总览在右侧通道之外），按所连节点的位置排序（`placeActors`）；没有边界节点时系统框与父模块框重合。参与者的边常驻显示、正交走线：普通层次按需走线（`edgeRoute`），分层总览在排布时走线（`outsideRouter`：带按对端方位取顶边 / 右边 / 底边，核心模块上进下出、短桩一直走到带间空隙的中线）。画布按是否根层画框：根层只画系统框，下钻后外框为系统、内框为当前父模块（`canvas/nodes.ts`；两框重合时外框再外扩 16） |
@@ -72,10 +72,15 @@ interface ProjectOptions {
 interface LevelView {
   mode: 'graph' | 'layered'
   parentId: string
-  nodes: ViewNode[]          // role: module | boundary | layer | core | actor（actor 带 actorKind）
+  nodes: ViewNode[]          // role: module | boundary | layer | core | actor | shared | more（actor 带 actorKind；module 可带 core；sharedCount）
   edges: ViewEdge[]
   bands?: Band[]             // 仅 layered
   coreEdges?: ViewEdge[]     // 仅 layered，聚焦时显示
+  shelf?: string[]           // 仅 graph：共用件架（O9）
+  shelfEdges?: ViewEdge[]    // 共用件的边，悬停 / 选中一端时显示（O10）
+  fold?: { id: string; members: string[]; expanded: boolean }  // 仅 graph：「+N」占位（O8）
+  foldHint?: number          // 仅 graph：没有核心、普通超过 7 个时的提示数
+  alias?: Record<string, string>  // 折叠成员 → 占位（viewNodeOf）
 }
 
 interface ViewEdge {
@@ -87,7 +92,7 @@ interface ViewEdge {
   mode: 'sync' | 'async' | 'mixed'
 }
 
-interface Band { layerId: string; order: number; coreModuleIds: string[]; hiddenCount: number; expanded?: number }
+interface Band { layerId: string; order: number; coreModuleIds: string[]; hiddenCount: number; expanded?: number; shelf: string[] }
 
 interface PositionedView {
   view: LevelView

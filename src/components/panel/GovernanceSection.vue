@@ -5,7 +5,7 @@
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
-import { RULE_LABELS, moduleName, sharedHealth, type Violation, type ViolationStatus } from '@/model'
+import { RULE_LABELS, moduleName, type Violation, type ViolationStatus } from '@/model'
 import Section from './Section.vue'
 import FileDepList from './FileDepList.vue'
 import WriteForm from './WriteForm.vue'
@@ -56,11 +56,7 @@ const violationTitle = computed(() => {
   return `计入门禁 ${counted.value} 条（新增 ${x.gate.newViolations} · 已知 ${x.gate.knownViolations}）${allowed ? `，已豁免 ${allowed}` : ''}${x.baseline ? `，基线 ${x.baseline.violations.length} 条` : ''}`
 })
 // Q13：共用件的两条提醒（反向依赖、体量）；修改占比要 git 历史，演化事实没加载时只给行数占比
-const shared = computed(() => {
-  const idx = desk.index.value
-  const own = desk.files.ownership.value
-  return idx && own ? sharedHealth(idx, own, r.value, desk.files.lines.value, desk.evolution.history.value) : null
-})
+const shared = computed(() => desk.evolution.shared.value)
 const pct = (x: number | null) => (x === null ? '—' : `${Math.round(x * 100)}%`)
 // U11：疑似共用件，一键认可写到 intent/roles.yaml（人拥有）
 const suggestions = computed(() => r.value?.sharedSuggestions ?? [])

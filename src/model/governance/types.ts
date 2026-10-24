@@ -3,7 +3,6 @@
  * 路径一律相对源码根目录、以 `/` 分隔。
  */
 import type { Issue, ModuleRole, RelationType, RelationVia, RuleKind } from '../types'
-import type { SharedSuggestion } from './roles'
 
 export type DepKind = 'value' | 'type'
 
@@ -229,4 +228,15 @@ export type StepEvidence =
 export interface ScenarioEvidence {
   frames: Map<string, StepEvidence>
   counts: Record<EvidenceLevel, number>
+}
+
+/** U11：一个疑似共用件与四条依据 */
+export interface SharedSuggestion {
+  module: string
+  /** ①入度广：依赖它的模块所在的层（≥2 个即满足）与依赖它的兄弟模块（≥3 个即满足） */
+  fanIn: { layers: string[]; siblings: string[]; dependents: string[] }
+  /** ④像工具模块：命中的词，或 kind: library */
+  nameHit: string
+  /** 四条依据的文字（面板逐条列出） */
+  reasons: string[]
 }

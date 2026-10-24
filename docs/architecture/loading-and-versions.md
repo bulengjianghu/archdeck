@@ -56,6 +56,7 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计或提交)──▶ Mod
 | `POST write/<项目>/ignore` `{ pattern }` | `appendIgnore` | `source-ignore.yaml` 的 `sourceIgnore` 追加一项（没有文件时新建） |
 | `POST write/<项目>/reviewed` `{ entries: [{ module, at, hash, summary, source, note? }] }`（也接受单条或数组） | `appendReviewed(modelRoot, project, entries)` | `reviewed.yaml` 的 `reviewed`：逐条按 `module` 更新已有记录或追加（没有文件时新建）；校验模块存在、`hash` 等于当前描述的 `reviewHash`（任一条不符整次拒绝）、`source` 为 `manual` 或 `sketch:<设计 ID>`；写后在 `governance/ledger.jsonl` 追加一行（来源 `page`）；草图归档批量调用同一函数（来源 `archive`，Z1、Z6） |
 | `POST write/<项目>/accept` `{ design, deviation, reason }` | `appendAccepted` | 该设计 `design.yaml` 的 `accepted` 追加一条认可的偏差（键、理由、日期；同一键已有时拒绝，X4） |
+| `POST write/<项目>/role` `{ module, role }` | `appendRole` | `intent/roles.yaml` 的 `roles` 追加 `模块 ID: role`（没有文件时新建）：模块须存在于当前版本，已记为别的角色、或草图已写 `role` 的拒绝（M16）；写后更新指纹、在 `governance/ledger.jsonl` 追加一行（`tool: roles`，U11） |
 | `POST write/<项目>/archive` `{ design }` | `archiveDesign` | 归档 / 晋升（X3）：先对当前版本跑 `sketchCheck`，不一致即拒绝；`until-implemented` → `design.yaml` 的 `status` 改为 `implemented`，并经确认层写入草图覆盖的模块的确认记录（`reviewEntries` 算指纹与摘要、`appendReviewed` 逐条更新或追加，来源 `sketch:<设计 ID>`；先写记录、后改状态，记录校验不过整次归档不生效）；`supersedes` → 草图整份替换 `intent/<ID>.yaml`（ID 改为被替换者、`lifetime: persistent`），状态同样改为 `implemented` |
 
 草图的整份写回与新建设计（`vite/writeSketch.ts`，B6、X7i，ADR-0024）：
@@ -70,7 +71,7 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计或提交)──▶ Mod
 
 - 只收同源 JSON POST；用 `yaml` 的文档模型（`parseDocument`）修改并写回，保留注释与原有格式；解析失败、校验不过时返回 400 与原因，不写。
 - 每次写人拥有的文件后更新 `governance/owned.json` 里该文件的指纹（X6，`governanceStore.ts` 的 `touchOwned`）。
-- 页面侧：`ModelWriter`（`src/state/sync/writer.ts`）由项目视图注入 `httpModelWriter`；`desk.write` 按版本放开——设计版本可记录评审意见、认可偏差、归档 / 晋升（草图版本与各轮都可），当前版本只能加例外、忽略项与确认记录（`desk.review.confirm`）；写后不改视图状态，文件监听推送 `arch-model:changed` 后按 N5 重新加载。
+- 页面侧：`ModelWriter`（`src/state/sync/writer.ts`）由项目视图注入 `httpModelWriter`；`desk.write` 按版本放开——设计版本可记录评审意见、认可偏差、归档 / 晋升（草图版本与各轮都可），当前版本只能加例外、忽略项、模块角色（`desk.write.role`，U11）与确认记录（`desk.review.confirm`）；写后不改视图状态，文件监听推送 `arch-model:changed` 后按 N5 重新加载。
 
 ## 3. 加载流水线（模型层）
 

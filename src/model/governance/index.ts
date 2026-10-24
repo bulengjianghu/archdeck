@@ -10,7 +10,6 @@ export { moduleBrief, describeModule, locateFile, checkDependency } from './quer
 export type { ModuleBrief, ModuleDetail, FileStatus, CheckTarget, CheckResult, PairCheck, CycleImpact } from './query'
 export { portTriad } from './ports'
 export { sharedSuggestions, sharedReverse, sharedHostOf, SHARED_NAME_HINTS } from './roles'
-export type { SharedSuggestion } from './roles'
 export { summarizeLedger } from './ledger'
 export type { LedgerSummary } from './ledger'
 export { stepEvidence, scenarioEvidence, interfaceName, EVIDENCE_LIMIT } from './evidence'

@@ -4,21 +4,10 @@
  */
 import { RUNTIME_RELATION_TYPES, isSharedRole, type ModelIndex } from '../types'
 import { within } from './facts'
-import type { ModuleDep } from './types'
+import type { ModuleDep, SharedSuggestion } from './types'
 
 /** U11 ④：名称 / ID 里像工具模块的词（不分大小写；T0 裁决 7：kind: library 无人用，照写但主要按名字） */
 export const SHARED_NAME_HINTS: readonly string[] = ['shared', 'util', 'labels', 'contracts']
-
-/** U11：一个疑似共用件与四条依据 */
-export interface SharedSuggestion {
-  module: string
-  /** ①入度广：依赖它的模块所在的层（≥2 个即满足）与依赖它的兄弟模块（≥3 个即满足） */
-  fanIn: { layers: string[]; siblings: string[]; dependents: string[] }
-  /** ④像工具模块：命中的词，或 kind: library */
-  nameHit: string
-  /** 四条依据的文字（面板逐条列出） */
-  reasons: string[]
-}
 
 /** U11、U12：只算值使用（K1 的 uses）的模块依赖 */
 const valueUse = (d: ModuleDep) => d.files.some(f => f.uses)
