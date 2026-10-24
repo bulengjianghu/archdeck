@@ -11,7 +11,9 @@ import {
   compareSketch,
   deriveChildSketch,
   diffModels,
-  dropOrphanReferences,
+  layoutForSave,
+  GRID_GAP_X,
+  GRID_GAP_Y,
   foldReference,
   gridLayout,
   referenceNodes,
@@ -397,7 +399,8 @@ describe('X15 位置、X19 引用节点', () => {
       s = r.sketch
     }
     step({ op: 'autoArrange' })
-    expect(Object.keys(s.layout!.modules!)).toEqual(['fe.ui.view', 'fe.ui.list', 'fe.ui.form', 'core.api', 'core.store'])
+    // X22：引用节点的位置由规则算，重新排列只排本层模块
+    expect(Object.keys(s.layout!.modules!)).toEqual(['fe.ui.view', 'fe.ui.list', 'fe.ui.form'])
     step({ op: 'moveNode', positions: { 'fe.ui.view': { x: 5, y: 6 } } })
     step({ op: 'relabel', id: 'rel.view-api', label: { x: 1, y: 1 } })
     expect(s.layout).toMatchObject({ modules: { 'fe.ui.view': { x: 5, y: 6 } }, relations: { 'rel.view-api': { label: { x: 1, y: 1 } } } })
@@ -444,9 +447,10 @@ describe('X15 位置、X19 引用节点', () => {
     }
     expect(referenceNodes(def)).toEqual(['core.api', 'core.store'])
     expect(referenceRelations(def, 'core.api').map(r => r.id)).toEqual(['r1', 'r2'])
-    // 折叠节点的位置按折叠后的 ID 记，保存时不当作无关系的引用丢掉
+    // X22：旧草图里折叠节点记下的坐标——它有关系，保存时不算无关系的引用丢掉，但坐标去掉（不写回）
     const placed: SketchDef = { ...def, layout: { modules: { 'core.api': { x: 1, y: 2 } } } }
-    expect(dropOrphanReferences(placed).dropped).toEqual([])
+    expect(layoutForSave(placed)).toMatchObject({ dropped: [], sketch: { relations: def.relations } })
+    expect(layoutForSave(placed).sketch.layout).toBeUndefined()
     // 删折叠的引用节点 = 删折叠进它的全部关系
     const r = applyEdit(placed, { op: 'removeReference', id: 'core.api' }, { persistent, designSketch: true, known: id => baseline.modules.has(id) })
     if (!r.ok) throw new Error(r.reason)
@@ -458,23 +462,41 @@ describe('X15 位置、X19 引用节点', () => {
     })
   })
 
-  it('05 裁决 4 初始布局：本层模块居中网格，入边引用在左列、出边在右列、双向在左', () => {
+  it('X22 初始布局：本层模块按中心区的可用宽度排网格、整块水平居中（坐标相对中心区的内容原点），引用节点不进 layout', () => {
     const def: SketchDef = {
       ...seedUi(),
       relations: [
         { id: 'r1', from: 'fe.ui.view', to: 'core.api', type: 'calls' },
         { id: 'r2', from: 'core.store', to: 'fe.ui.form', type: 'notifies' },
-        { id: 'r3', from: 'fe.ui.list', to: 'core.cache', type: 'calls' },
-        { id: 'r4', from: 'core.cache', to: 'fe.ui.list', type: 'notifies' },
       ],
     }
     const g = gridLayout(def).modules!
-    const own = ['fe.ui.view', 'fe.ui.list', 'fe.ui.form'].map(id => g[id].x)
-    const [lo, hi] = [Math.min(...own), Math.max(...own)]
-    expect(g['core.store'].x).toBeLessThan(lo)
-    expect(g['core.cache'].x).toBeLessThan(lo)
-    expect(g['core.api'].x).toBeGreaterThan(hi)
-    for (const p of Object.values(g)) expect(p.x).toBeGreaterThanOrEqual(0)
+    expect(Object.keys(g)).toEqual(['fe.ui.view', 'fe.ui.list', 'fe.ui.form'])
+    // 没给宽度：近似方阵（3 个 → 2 列）
+    expect([g['fe.ui.view'], g['fe.ui.list'], g['fe.ui.form']]).toEqual([
+      { x: 0, y: 0 },
+      { x: GRID_GAP_X, y: 0 },
+      { x: 0, y: GRID_GAP_Y },
+    ])
+    // 宽度只够两列：两列，居中
+    const two = gridLayout(def, { w: 168 + GRID_GAP_X + 40 }).modules!
+    expect([two['fe.ui.view'], two['fe.ui.list'], two['fe.ui.form']]).toEqual([
+      { x: 20, y: 0 },
+      { x: 20 + GRID_GAP_X, y: 0 },
+      { x: 20, y: GRID_GAP_Y },
+    ])
+    const wide = gridLayout(def, { w: 2000, h: 456 }).modules!
+    // 宽度够：一行排开；给了高度时整块垂直居中
+    expect(new Set(Object.values(wide).map(p => p.y))).toEqual(new Set([200]))
+  })
+
+  it('X22：拖动只记本层模块的位置——引用节点不记，只拖引用时拒绝', () => {
+    const c = { persistent, designSketch: true, known: (id: string) => baseline.modules.has(id) }
+    const def: SketchDef = { ...seedUi(), relations: [{ id: 'r1', from: 'fe.ui.view', to: 'core.api', type: 'calls' }] }
+    const r = applyEdit(def, { op: 'moveNode', positions: { 'fe.ui.view': { x: 5, y: 6 }, 'core.api': { x: 900, y: 9 } } }, c)
+    if (!r.ok) throw new Error(r.reason)
+    expect(r.sketch.layout!.modules).toEqual({ 'fe.ui.view': { x: 5, y: 6 } })
+    expect(applyEdit(def, { op: 'moveNode', positions: { 'core.api': { x: 900, y: 9 } } }, c)).toMatchObject({ ok: false, code: 'invalid' })
   })
 
   it('引用外部模块：只是布局里的位置；保存时没有关系的引用丢弃并给出清单；两端都是引用的关系不能建', () => {
@@ -482,7 +504,7 @@ describe('X15 位置、X19 引用节点', () => {
     expect(add.ok).toBe(true)
     if (!add.ok) return
     expect(add.sketch.layout!.modules!['core.api.impl']).toBeDefined()
-    const { sketch, dropped } = dropOrphanReferences(add.sketch)
+    const { sketch, dropped } = layoutForSave(add.sketch)
     expect(dropped).toEqual(['core.api.impl'])
     expect(sketch.layout).toBeUndefined()
     const both = applyEdit(seedUi(), { op: 'connect', from: 'core.api', to: 'core.store', type: 'calls' }, { persistent, designSketch: true })
@@ -491,7 +513,7 @@ describe('X15 位置、X19 引用节点', () => {
 
   it('删引用节点 = 删以它为端点的关系与它的位置；本草图的模块不是引用', () => {
     const c = { persistent, designSketch: true, known: (id: string) => baseline.modules.has(id) }
-    const placed = applyEdit(seedUi(), { op: 'addReference', id: 'core.api', at: { x: 1, y: 2 } }, c)
+    const placed = applyEdit(seedUi(), { op: 'addReference', id: 'core.api' }, c)
     if (!placed.ok) throw new Error(placed.reason)
     const r = applyEdit(placed.sketch, { op: 'removeReference', id: 'core.api' }, c)
     if (!r.ok) throw new Error(r.reason)

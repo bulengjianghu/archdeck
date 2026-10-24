@@ -1,10 +1,13 @@
 /**
- * 草图布局（state.layout.sketch，X15、X19、X21，ADR-0025）：草图画布要画的节点与边——不走 elk、不走分层投影。
- * 位置取草图的 layout；没有 layout 时用一次初始布局（gridLayout：本层居中网格，入边引用在左、出边在右，只用于显示、不写回，「需初始布局」），
- * 只缺几个位置的（新建、推出的模块）放到不与已有节点重叠的空位。
+ * 草图布局（state.layout.sketch，X15、X19、X21、X22，ADR-0025）：草图画布要画的节点与边——不走 elk、不走分层投影。
+ * 非根草图（X22）：画布是一块名义尺寸（SKETCH_CANVAS）的系统框；外部引用按所属层在骨架里的 order 从左到右排成列，挂载点所在层的位置是中心区
+ * （挂载点框），与挂载点同层的引用在中心区右侧单列一列「同层」；每列单列不换列，放不下时整列按比例缩小；引用的位置只由规则算，不写回。
+ * 中心区可用宽度 = 画布宽 − 两侧引用列宽，本层模块的位置取 layout（相对中心区的内容原点），没有 layout 时按可用宽度排一次网格
+ * （gridLayout，只用于显示、不写回，「需初始布局」），只缺几个位置的（新建、推出的模块）放到不与已有节点重叠的空位；隐藏外部引用时中心区占满画布宽。
  * 引用节点按「与挂载点同深度的祖先」折叠（05 裁决 4）：同一对（本层模块、折叠节点）同方向的多条关系合成一条显示边并标条数。
  * 根草图（X21）：层画成横向带（按 order），第二级模块在所属带内，位置取 layout（y 相对带顶），带高随内容增长。
- * 边是两端中心之间的直线，同一对节点的多条线平移错开；标签位置取 layout.relations，没写时在中点。纯函数，草图画布只把结果写入 Vue Flow。
+ * 本层之间的边是两端中心之间的直线，同一对节点的多条线平移错开；标签位置取 layout.relations，没写时在中点。
+ * 引用线（X22）从模块朝引用列的一侧端口进出（左侧列进左端口、右侧列进右端口）。纯函数，草图画布只把结果写入 Vue Flow。
  */
 import {
   foldReference,
@@ -20,12 +23,22 @@ import {
   ROOT_MOUNT,
   SKETCH_SOFT_LIMIT,
   type ChangeKind,
+  type GridArea,
   type ModuleDef,
   type SketchDef,
   type SketchPoint,
 } from '@/model'
 
 export const SKETCH_NODE = { w: 168, h: 56 } as const
+/** X22：非根草图画布的名义尺寸（流坐标；打开时适应画布缩放到视口） */
+export const SKETCH_CANVAS = { w: 1760, h: 860 } as const
+/** X22：紧凑的引用节点（一行：名字 + ID，高度约为模块节点一半）与列内间距 */
+export const SKETCH_REF = { w: 196, h: 28, gap: 6 } as const
+/** X22：引用列的宽、列间距与列内上下留白（列名在框线上） */
+export const SKETCH_COLUMN = { w: 220, gap: 18, pad: 16 } as const
+/** X22：系统框与中心区（挂载点框）的内边距 */
+export const SKETCH_FRAME_PAD = 28
+export const SKETCH_CENTER_PAD = 32
 /** X21：层带的高度、带间距与带头宽度 */
 export const SKETCH_BAND = { h: 112, gap: 14, head: 200, minW: 1100 } as const
 /** 兼容：层在非带布局下的尺寸 */
@@ -34,7 +47,10 @@ export const SKETCH_LAYER = { w: 168, h: 56 } as const
 export const SKETCH_PARALLEL_GAP = 16
 const ORIGIN = 40
 
-export type SketchNodeKind = 'module' | 'reference' | 'layer'
+export type SketchNodeKind = 'module' | 'reference' | 'layer' | 'frame'
+
+/** X22：框线——最外的系统框、中心区（挂载点框）、引用列 */
+export type SketchFrameKind = 'system' | 'center' | 'column'
 
 export interface SketchNodeData {
   id: string
@@ -54,6 +70,13 @@ export interface SketchNodeData {
   abstraction?: string
   count?: number
   over?: boolean
+  /** X22：框线的种类；引用列的标注（「同层」） */
+  frame?: SketchFrameKind
+  tag?: string
+  /** X22：引用节点所在列的缩放（列高放不下时整列按比例缩小；1 为原大） */
+  scale?: number
+  /** X22：引用节点在中心区的哪一侧 */
+  side?: 'left' | 'right'
   w: number
   h: number
 }
@@ -81,6 +104,9 @@ export interface SketchEdgeData {
   pending?: boolean
   change?: ChangeKind
   selected?: boolean
+  /** X22：引用线——引用在中心区的哪一侧（模块从这一侧的端口进出），引用是起点还是终点 */
+  external?: 'left' | 'right'
+  refEnd?: 'source' | 'target'
 }
 
 export interface SketchEdge {
@@ -101,6 +127,30 @@ export interface SketchSceneInput {
   selected?: ReadonlySet<string>
   /** 待重连的关系 */
   pending?: readonly string[]
+  /** X22：骨架里的层（按 order）与一个模块所属的层；没给时引用都放在「外部」一列 */
+  layers?: readonly { id: string; name: string }[]
+  layerOf?: (id: string) => string | undefined
+  /** X22：系统框的标题（项目名）与中心区的标题（挂载点名） */
+  system?: string
+  mountName?: string
+  /** X22：隐藏外部引用——引用列与引用线都不画，中心区占满画布宽 */
+  hideReferences?: boolean
+}
+
+/** X22：一列引用（按层；与挂载点同层的标「同层」；不在任何层的为「外部」） */
+export interface SketchColumn {
+  id: string
+  name: string
+  side: 'left' | 'right'
+  tag?: string
+  refs: string[]
+}
+
+export interface SketchRect {
+  x: number
+  y: number
+  w: number
+  h: number
 }
 
 /** X21：根草图的一条层带 */
@@ -119,6 +169,14 @@ export interface SketchScene {
   needsLayout: boolean
   /** 本层模块数（根草图为第二级模块数之和不计层） */
   count: number
+  /** X22：中心区（挂载点框）的矩形，拖出它松手 = 升级；根草图为 null */
+  center: SketchRect | null
+  /** X22：layout 里本层模块坐标的原点（中心区的内容原点）；根草图为 (0, 0) */
+  origin: SketchPoint
+  /** X22：中心区排网格的可用区域（初始布局与「重新排列」）；根草图为 undefined */
+  gridArea?: GridArea
+  /** X22：引用列（隐藏外部引用时为空） */
+  columns: SketchColumn[]
 }
 
 /** 聚合边的 ID（05 裁决 4） */
@@ -184,31 +242,28 @@ export function bandRelative(def: SketchDef, positions: Readonly<Record<string, 
   )
 }
 
-/** 显示用的位置：layout 里有的照用；缺的放到初始布局的位置，与已有节点重叠时往下找空位。折叠的引用节点没记位置时取它某个精确端点记下的位置 */
-export function sketchPositions(def: SketchDef, ids: readonly string[]): Record<string, SketchPoint> {
+/**
+ * 显示用的位置（非根草图为本层模块，相对中心区的内容原点）：layout 里有的照用；缺的放到初始布局（按中心区可用区域 area 排的网格）的位置，
+ * 与已有节点重叠时往下找空位。引用节点不在这里（X22：位置由规则算）
+ */
+export function sketchPositions(def: SketchDef, ids: readonly string[], area?: GridArea): Record<string, SketchPoint> {
   if (def.mount === ROOT_MOUNT) return bandLayout(def).pos
-  const grid = gridLayout(def).modules ?? {}
+  const grid = gridLayout(def, area).modules ?? {}
   const given = def.layout?.modules ?? {}
   const out: Record<string, SketchPoint> = {}
   const taken: SketchPoint[] = []
-  const known = (id: string): SketchPoint | undefined => {
-    const p = given[id]
-    if (p && p.y !== undefined) return { x: p.x, y: p.y }
-    for (const [k, q] of Object.entries(given)) if (k !== id && q.y !== undefined && foldReference(def.mount, k) === id) return { x: q.x, y: q.y }
-    return undefined
-  }
   for (const id of ids) {
-    const p = known(id)
-    if (p) {
-      out[id] = p
-      taken.push(p)
+    const p = given[id]
+    if (p && p.y !== undefined) {
+      out[id] = { x: p.x, y: p.y }
+      taken.push(out[id])
     }
   }
   const clash = (p: SketchPoint) => taken.some(q => Math.abs(q.x - p.x) < SKETCH_NODE.w && Math.abs(q.y - p.y) < SKETCH_NODE.h + 8)
   for (const id of ids) {
     if (out[id]) continue
     const g = grid[id]
-    let p: SketchPoint = g && g.y !== undefined ? { x: g.x, y: g.y } : { x: ORIGIN, y: ORIGIN }
+    let p: SketchPoint = g && g.y !== undefined ? { x: g.x, y: g.y } : { x: 0, y: 0 }
     for (let i = 0; i < 200 && clash(p); i++) p = { x: p.x, y: p.y + SKETCH_NODE.h + 24 }
     out[id] = p
     taken.push(p)
@@ -216,15 +271,137 @@ export function sketchPositions(def: SketchDef, ids: readonly string[]): Record<
   return out
 }
 
+/**
+ * X22：引用列——按所属层在骨架里的 order 从左到右：比挂载点所在层靠前的在左，同层的紧贴中心区右侧单列一列（标「同层」），靠后的在右；
+ * 不在任何层的（外部参与者等）在最右一列「外部」。只列有引用的列；列内的顺序由调用方排
+ */
+export function referenceColumns(
+  refs: readonly string[],
+  mountLayer: string | undefined,
+  layers: readonly { id: string; name: string }[],
+  layerOf: (id: string) => string | undefined,
+): SketchColumn[] {
+  const at = (id: string | undefined) => (id === undefined ? -1 : layers.findIndex(l => l.id === id))
+  const home = at(mountLayer)
+  const cols = new Map<string, SketchColumn & { rank: number }>()
+  for (const ref of refs) {
+    const i = at(layerOf(ref))
+    const key = i < 0 ? 'other' : layers[i].id
+    let col = cols.get(key)
+    if (!col) {
+      col =
+        i < 0
+          ? { id: 'other', name: '外部', side: 'right', refs: [], rank: 1e6 }
+          : i === home
+            ? { id: layers[i].id, name: layers[i].name, side: 'right', tag: '同层', refs: [], rank: home + 0.5 }
+            : { id: layers[i].id, name: layers[i].name, side: i < home ? 'left' : 'right', refs: [], rank: i }
+      cols.set(key, col)
+    }
+    col.refs.push(ref)
+  }
+  return [...cols.values()].sort((a, b) => a.rank - b.rank).map(({ rank: _rank, ...c }) => c)
+}
+
+/** X22：非根草图的框与引用列的几何——中心区按可用宽度与本层模块的范围取大，引用列在两侧，列内单列、放不下整列按比例缩小 */
+function boundaryLayout(
+  input: SketchSceneInput,
+  own: readonly string[],
+  refs: readonly string[],
+): {
+  frames: SketchNode[]
+  references: Map<string, { position: SketchPoint; w: number; h: number; scale: number; side: 'left' | 'right' }>
+  pos: Record<string, SketchPoint>
+  center: SketchRect
+  origin: SketchPoint
+  gridArea: GridArea
+  columns: SketchColumn[]
+} {
+  const { def } = input
+  const layers = input.layers ?? []
+  const layerOf = input.layerOf ?? (() => undefined)
+  const columns = input.hideReferences ? [] : referenceColumns(refs, layerOf(def.mount) ?? def.mount.split('.')[0], layers, layerOf)
+  const left = columns.filter(c => c.side === 'left')
+  const right = columns.filter(c => c.side === 'right')
+  const step = SKETCH_COLUMN.w + SKETCH_COLUMN.gap
+  const availW = SKETCH_CANVAS.w - 2 * SKETCH_FRAME_PAD - (left.length + right.length) * step
+  const gridArea = { w: availW - 2 * SKETCH_CENTER_PAD, h: SKETCH_CANVAS.h - 2 * SKETCH_FRAME_PAD - 2 * SKETCH_CENTER_PAD }
+  const rel = sketchPositions(def, own, gridArea)
+  const ps = Object.values(rel)
+  const minX = Math.min(0, ...ps.map(p => p.x))
+  const minY = Math.min(0, ...ps.map(p => p.y))
+  const maxX = Math.max(0, ...ps.map(p => p.x + SKETCH_NODE.w))
+  const maxY = Math.max(0, ...ps.map(p => p.y + SKETCH_NODE.h))
+  const h = Math.max(SKETCH_CANVAS.h - 2 * SKETCH_FRAME_PAD, maxY - minY + 2 * SKETCH_CENTER_PAD)
+  const center: SketchRect = { x: SKETCH_FRAME_PAD + left.length * step, y: SKETCH_FRAME_PAD, w: Math.max(availW, maxX - minX + 2 * SKETCH_CENTER_PAD), h }
+  const origin = { x: center.x + SKETCH_CENTER_PAD - minX, y: center.y + SKETCH_CENTER_PAD - minY }
+  const pos = Object.fromEntries(Object.entries(rel).map(([id, p]) => [id, { x: p.x + origin.x, y: p.y + origin.y }]))
+
+  // 列内顺序：按相连的本层模块的平均高度（重心），线少交叉；没有关系的按 ID 排在后面
+  const ownSet = new Set(own)
+  const ys = new Map<string, number[]>()
+  for (const r of def.relations ?? []) {
+    const ends = ownSet.has(r.from) && !ownSet.has(r.to) ? [r.from, r.to] : ownSet.has(r.to) && !ownSet.has(r.from) ? [r.to, r.from] : null
+    if (!ends) continue
+    const [inside, outside] = ends
+    const ref = foldReference(def.mount, outside)
+    ys.set(ref, [...(ys.get(ref) ?? []), pos[inside].y])
+  }
+  const bary = (id: string) => {
+    const v = ys.get(id)
+    return v ? v.reduce((a, b) => a + b, 0) / v.length : Infinity
+  }
+  const references = new Map<string, { position: SketchPoint; w: number; h: number; scale: number; side: 'left' | 'right' }>()
+  const frames: SketchNode[] = []
+  const frame = (id: string, kind: SketchFrameKind, name: string, r: SketchRect, extra: Partial<SketchNodeData> = {}): SketchNode => ({
+    id: `frame:${id}`,
+    position: { x: r.x, y: r.y },
+    data: { id: `frame:${id}`, kind: 'frame', frame: kind, name, ...extra, w: r.w, h: r.h },
+  })
+  const place = (col: SketchColumn, x: number) => {
+    const rect: SketchRect = { x, y: center.y, w: SKETCH_COLUMN.w, h }
+    frames.push(frame(`col:${col.id}`, 'column', col.name, rect, col.tag ? { tag: col.tag } : {}))
+    col.refs.sort((a, b) => bary(a) - bary(b) || (a < b ? -1 : a > b ? 1 : 0))
+    const room = h - 2 * SKETCH_COLUMN.pad
+    const full = col.refs.length * SKETCH_REF.h + (col.refs.length - 1) * SKETCH_REF.gap
+    const scale = full > room ? room / full : 1
+    const top = rect.y + SKETCH_COLUMN.pad + (room - full * scale) / 2
+    const w = SKETCH_REF.w * scale
+    col.refs.forEach((id, i) =>
+      references.set(id, {
+        position: { x: rect.x + (SKETCH_COLUMN.w - w) / 2, y: top + i * (SKETCH_REF.h + SKETCH_REF.gap) * scale },
+        w,
+        h: SKETCH_REF.h * scale,
+        scale,
+        side: col.side,
+      }),
+    )
+  }
+  left.forEach((c, i) => place(c, SKETCH_FRAME_PAD + i * step))
+  right.forEach((c, i) => place(c, center.x + center.w + SKETCH_COLUMN.gap + i * step))
+  const width = (right.length ? center.x + center.w + right.length * step - SKETCH_COLUMN.gap : center.x + center.w) + SKETCH_FRAME_PAD
+  frames.unshift(
+    frame('system', 'system', input.system ?? '系统', { x: 0, y: 0, w: width, h: h + 2 * SKETCH_FRAME_PAD }),
+    frame('center', 'center', input.mountName ?? def.mount, center),
+  )
+  return { frames, references, pos, center, origin, gridArea, columns }
+}
+
 export function sketchScene(input: SketchSceneInput): SketchScene {
   const { def } = input
   const root = def.mount === ROOT_MOUNT
   const own = locateAll(def)
   const ownIds = new Set(own.map(m => m.id))
-  const refs = root ? [] : referenceNodes(def)
-  const ids = [...own.filter(m => !(root && m.parentId === undefined)).map(m => m.id), ...refs]
+  const allRefs = root ? [] : referenceNodes(def)
+  const refs = input.hideReferences ? [] : allRefs
   const band = root ? bandLayout(def) : null
-  const pos = band ? band.pos : sketchPositions(def, ids)
+  const bounds = root
+    ? null
+    : boundaryLayout(
+        input,
+        own.map(m => m.id),
+        allRefs,
+      )
+  const pos = band ? band.pos : bounds!.pos
   const sel = input.selected ?? new Set<string>()
   const layers: SketchNode[] = (band?.bands ?? []).map(b => {
     const layer = own.find(m => m.id === b.id)!.node
@@ -266,9 +443,10 @@ export function sketchScene(input: SketchSceneInput): SketchScene {
   const references: SketchNode[] = refs.map(id => {
     const rels = referenceRelations(def, id)
     const members = [...new Set(rels.map(r => (ownIds.has(r.from) ? r.to : r.from)))]
+    const at = bounds!.references.get(id)!
     return {
       id,
-      position: pos[id],
+      position: at.position,
       data: {
         id,
         kind: 'reference' as const,
@@ -276,15 +454,18 @@ export function sketchScene(input: SketchSceneInput): SketchScene {
         ...(rels.length ? { relations: rels.length } : {}),
         ...(members.some(x => x !== id) ? { members } : {}),
         ...(sel.has(id) ? { selected: true } : {}),
-        w: SKETCH_NODE.w,
-        h: SKETCH_NODE.h,
+        scale: at.scale,
+        side: at.side,
+        w: at.w,
+        h: at.h,
       },
     }
   })
-  const nodes = [...layers, ...modules, ...references]
+  const nodes = [...(bounds?.frames ?? []), ...layers, ...modules, ...references]
+  const sideOf = new Map(references.map(n => [n.id, n.data.side!]))
 
   // 边：本层之间的关系一条一条画；一端是引用的按（显示起点、显示终点）聚合
-  const shown = new Set(nodes.map(n => n.id))
+  const shown = new Set([...layers, ...modules, ...references].map(n => n.id))
   const display = (id: string) => (ownIds.has(id) ? id : foldReference(def.mount, id))
   const pending = new Set(input.pending ?? [])
   type Group = { source: string; target: string; rels: NonNullable<SketchDef['relations']> }
@@ -336,11 +517,29 @@ export function sketchScene(input: SketchSceneInput): SketchScene {
         ...(g.rels.some(x => pending.has(x.id)) ? { pending: true } : {}),
         ...(change ? { change } : {}),
         ...(sel.has(id) || (!many && sel.has(r.id)) ? { selected: true } : {}),
+        ...(sideOf.has(g.source) ? { external: sideOf.get(g.source), refEnd: 'source' as const } : {}),
+        ...(sideOf.has(g.target) ? { external: sideOf.get(g.target), refEnd: 'target' as const } : {}),
       },
     }
   })
   const count = root ? own.filter(m => m.parentId !== undefined).length : own.length
-  return { nodes, edges, bands: band?.bands ?? [], needsLayout: !def.layout?.modules, count }
+  return {
+    nodes,
+    edges,
+    bands: band?.bands ?? [],
+    needsLayout: !own.some(m => def.layout?.modules?.[m.id]),
+    count,
+    center: bounds?.center ?? null,
+    origin: bounds?.origin ?? { x: 0, y: 0 },
+    ...(bounds ? { gridArea: bounds.gridArea } : {}),
+    columns: bounds?.columns ?? [],
+  }
+}
+
+/** X22：拖动的落点离开了中心区（挂载点框）——松手 = 升级到上一层；根草图没有中心区 */
+export function outsideCenter(scene: Pick<SketchScene, 'center'>, p: SketchPoint): boolean {
+  const c = scene.center
+  return !!c && (p.x < c.x || p.x > c.x + c.w || p.y < c.y || p.y > c.y + c.h)
 }
 
 /** X21：根草图里一个点落在哪条层带（不在任何带上为 null） */

@@ -140,12 +140,12 @@ export function createCommands(i: CommandInputs) {
   const edit = (op: EditOp) => run(single(op))
 
   /**
-   * X15：写位置时补齐还没写进 layout 的节点当前显示的位置（没有 layout 的草图第一次拖动即落下整张的初始布局），一步。
-   * 给的是画布上的位置；根草图（X21）换成相对所属层带顶的 y
+   * X15：写位置时补齐还没写进 layout 的本层模块当前显示的位置（没有 layout 的草图第一次拖动即落下整张的初始布局），一步；引用节点不记（X22）。
+   * 根草图（X21）给的是画布上的位置，换成相对所属层带顶的 y；非根草图给的已是相对中心区内容原点的位置（画布换算，X22）
    */
   function positionsWith(def: SketchDef, given: Record<string, SketchPoint>): Record<string, SketchPoint> {
-    const ids = [...locateAll(def).map(m => m.id), ...referenceNodes(def)]
-    const shown = sketchPositions(def, ids)
+    const ids = locateAll(def).map(m => m.id)
+    const shown = sketchPositions(def, ids, i.derive.scene.value?.gridArea)
     const have = def.layout?.modules ?? {}
     const missing = Object.fromEntries(ids.filter(id => !have[id] && !given[id] && shown[id]).map(id => [id, shown[id]]))
     return bandRelative(def, { ...missing, ...given })
@@ -212,10 +212,13 @@ export function createCommands(i: CommandInputs) {
   const updateModule = (id: string, patch: ModulePatch) => edit({ op: 'updateModule', id, patch })
   /** F-22：拖关系标签 */
   const relabel = (id: string, label: SketchPoint | null) => edit({ op: 'relabel', id, label })
-  /** F-31：重新排列 */
-  const autoArrange = () => edit({ op: 'autoArrange' })
-  /** F-28：引用外部模块（放上画布作为待连端点） */
-  const addReference = (id: string, at?: SketchPoint) => edit({ op: 'addReference', id, ...(at ? { at } : {}) })
+  /** F-31、X22：重新排列——非根草图按中心区的可用区域排网格 */
+  const autoArrange = () => {
+    const area = i.derive.scene.value?.gridArea
+    return edit({ op: 'autoArrange', ...(area ? { area } : {}) })
+  }
+  /** F-28：引用外部模块（放上画布作为待连端点，位置按所属层排布） */
+  const addReference = (id: string) => edit({ op: 'addReference', id })
   /** F-40：父模块原则 */
   const setAbstraction = (text: string) => edit({ op: 'setAbstraction', text })
 

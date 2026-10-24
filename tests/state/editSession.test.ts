@@ -153,8 +153,21 @@ describe('编辑会话的纯函数（X7g、X7i、X20）', () => {
     expect(saveRequest(d, baseline).removed).toEqual([{ mount: 'core.a.x', baseHash: 'hx' }])
   })
 
+  it('X22：引用节点的位置不写回——旧草图里记下的引用坐标保存时去掉，有关系的引用不算丢掉', () => {
+    const def = s0.doc.sketches['core.a']
+    const old = { ...def, layout: { modules: { 'core.a.x': { x: 1, y: 2 }, 'core.b': { x: 900, y: 40 } } } }
+    const r = ok(apply(s0, { op: 'edit', sketch: 'core.a', edit: { op: 'moveNode', positions: { 'core.a.y': { x: 5, y: 6 } } } }, ctx)).session
+    const withOld = {
+      ...r,
+      doc: { ...r.doc, sketches: { ...r.doc.sketches, 'core.a': { ...old, layout: { modules: { ...old.layout.modules, 'core.a.y': { x: 5, y: 6 } } } } } },
+    }
+    const req = saveRequest(withOld, baseline)
+    expect(req.sketches[0].sketch.layout!.modules).toEqual({ 'core.a.x': { x: 1, y: 2 }, 'core.a.y': { x: 5, y: 6 } })
+    expect(req.dropped).toEqual([])
+  })
+
   it('X19：保存前丢掉没有关系的引用节点，并列出', () => {
-    const r = ok(apply(s0, { op: 'edit', sketch: 'core.a', edit: { op: 'addReference', id: 'core.b.q', at: { x: 1, y: 1 } } }, ctx)).session
+    const r = ok(apply(s0, { op: 'edit', sketch: 'core.a', edit: { op: 'addReference', id: 'core.b.q' } }, ctx)).session
     const req = saveRequest(r, baseline)
     expect(req.dropped).toEqual([{ mount: 'core.a', ids: ['core.b.q'] }])
     expect(req.sketches[0].sketch.layout?.modules?.['core.b.q']).toBeUndefined()
@@ -287,7 +300,8 @@ describe('desk.edit：草图画布与 DeskState', () => {
     expect(desk.index.value!.modules.has('core.a.x')).toBe(true)
     expect(desk.index.value!.modules.has('core.b')).toBe(true)
     const scene = desk.edit.scene.value!
-    expect(scene.nodes.map(n => [n.id, n.data.kind])).toEqual([
+    expect(scene.nodes.filter(n => n.data.kind === 'frame').map(n => n.data.frame)).toEqual(['system', 'center', 'column'])
+    expect(scene.nodes.filter(n => n.data.kind !== 'frame').map(n => [n.id, n.data.kind])).toEqual([
       ['core.a.x', 'module'],
       ['core.a.y', 'module'],
       ['core.a.z', 'module'],
@@ -297,10 +311,24 @@ describe('desk.edit：草图画布与 DeskState', () => {
     expect([desk.edit.needsLayout.value, desk.edit.dirty.value]).toEqual([true, false])
   })
 
+  it('X22：「隐藏外部引用」只改会话里的显示——引用与引用线不画、中心区变宽，草图不变、不算脏', async () => {
+    const { desk } = await setup(SKETCH_VERSION, fakeWriter().writer)
+    const before = desk.edit.scene.value!
+    const def = desk.edit.sketch.value
+    desk.edit.toggleReferences()
+    const after = desk.edit.scene.value!
+    expect(after.nodes.some(n => n.data.kind === 'reference')).toBe(false)
+    expect(after.edges.map(e => e.id)).toEqual(['r.xy'])
+    expect(after.center!.w).toBeGreaterThan(before.center!.w)
+    expect([desk.edit.sketch.value, desk.edit.dirty.value, desk.edit.session.value!.past.length]).toEqual([def, false, 0])
+    desk.edit.toggleReferences()
+    expect(desk.edit.scene.value!.nodes.some(n => n.data.kind === 'reference')).toBe(true)
+  })
+
   it('X15：第一次拖动落下整张的初始布局，一步；新建（双击空白）与落位是一步并选中新模块', async () => {
     const { desk } = await setup(SKETCH_VERSION, fakeWriter().writer)
     ok(desk.edit.moveNode({ 'core.a.x': { x: 500, y: 500 } }))
-    expect(Object.keys(desk.edit.sketch.value!.layout!.modules!).sort()).toEqual(['core.a.x', 'core.a.y', 'core.a.z', 'core.b'])
+    expect(Object.keys(desk.edit.sketch.value!.layout!.modules!).sort()).toEqual(['core.a.x', 'core.a.y', 'core.a.z'])
     expect(desk.edit.session.value!.past).toHaveLength(1)
     ok(desk.edit.addModule('Wide', 'wide', { x: 10, y: 20 }))
     expect(desk.edit.sketch.value!.layout!.modules!['core.a.wide']).toEqual({ x: 10, y: 20 })
@@ -327,7 +355,7 @@ describe('desk.edit：草图画布与 DeskState', () => {
     ok(desk.edit.merge(['core.a.x', 'core.a.y'], 'XY', 'xy'))
     ok(desk.edit.openChild('core.a.xy'))
     expect([desk.edit.mount.value, desk.levelId.value, desk.selection.value]).toEqual(['core.a.xy', 'core.a.xy', null])
-    expect(desk.edit.scene.value!.nodes.map(n => n.id)).toEqual(['core.a.xy.x', 'core.a.xy.y'])
+    expect(desk.edit.scene.value!.nodes.filter(n => n.data.kind === 'module').map(n => n.id)).toEqual(['core.a.xy.x', 'core.a.xy.y'])
     expect(desk.edit.breadcrumb.value.map(b => b.mount)).toEqual(['root', 'core.a', 'core.a.xy'])
     expect(desk.edit.dirty.value).toBe(true) // 本层的合并
     ok(desk.edit.openMount('core.a'))

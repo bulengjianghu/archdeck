@@ -64,18 +64,35 @@ export async function layoutView(view: LevelView, opts: LayoutOptions = {}): Pro
   return result
 }
 
-// 草图布局（state.layout.sketch，ADR-0025）：草图画布的节点、直线边与显示位置，经本入口访问
+// 草图布局（state.layout.sketch，ADR-0025）：草图画布的节点、直线边、引用列与框线（X22）与显示位置，经本入口访问
 export {
   sketchScene,
   sketchPositions,
   bandRelative,
   straightEdge,
   bandAt,
+  outsideCenter,
+  referenceColumns,
   rootLayers,
   aggregateEdgeId,
   SKETCH_NODE,
   SKETCH_LAYER,
   SKETCH_BAND,
   SKETCH_PARALLEL_GAP,
+  SKETCH_CANVAS,
+  SKETCH_REF,
+  SKETCH_COLUMN,
 } from './sketch'
-export type { SketchScene, SketchNode, SketchEdge, SketchNodeData, SketchEdgeData, SketchNodeKind, SketchSceneInput, SketchBand } from './sketch'
+export type {
+  SketchScene,
+  SketchNode,
+  SketchEdge,
+  SketchNodeData,
+  SketchEdgeData,
+  SketchNodeKind,
+  SketchSceneInput,
+  SketchBand,
+  SketchColumn,
+  SketchRect,
+  SketchFrameKind,
+} from './sketch'

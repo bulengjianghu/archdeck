@@ -129,6 +129,8 @@ export interface DeriveInputs {
   selection: () => Selection | null
   /** 画布上额外选中的（框选 / ⇧ 多选） */
   multi: () => readonly string[]
+  /** X22：隐藏外部引用（工具条的切换，只在会话里） */
+  hideReferences: () => boolean
 }
 
 export function createDerive(i: DeriveInputs) {
@@ -203,6 +205,18 @@ export function createDerive(i: DeriveInputs) {
     return has(i.baseline()) || has(i.current())
   }
 
+  /** X22：引用按层成列的依据——设计的索引（没有时为当前版本）里的层（按 order）、模块所属的层与系统名 */
+  const boundary = computed(() => {
+    const idx = index.value ?? i.current()
+    if (!idx) return {}
+    const layers = (idx.childrenOf.get(idx.rootId) ?? []).map(id => idx.modules.get(id)!).filter(m => m?.kind === 'layer')
+    const ids = new Set(layers.map(l => l.id))
+    const layerOf = (id: string) => {
+      const top = idx.pathOf.get(id)?.[1] ?? id.split('.')[0]
+      return ids.has(top) ? top : undefined
+    }
+    return { layers: layers.map(l => ({ id: l.id, name: l.name })), layerOf, system: idx.model.system.name }
+  })
   /** 当前张的画布数据 */
   const scene = computed<SketchScene | null>(() => {
     const def = sketch.value
@@ -216,10 +230,13 @@ export function createDerive(i: DeriveInputs) {
       changes: i.showDiff() ? changeMarks(comparison.value?.sheet ?? null) : null,
       selected,
       pending: pending.value,
+      ...boundary.value,
+      mountName: def.mount === ROOT_MOUNT ? undefined : (nameOf(def.mount) ?? def.mount),
+      hideReferences: i.hideReferences(),
     })
   })
   /** X15：当前张没有 layout（显示的是一次网格布局，不写回） */
-  const needsLayout = computed(() => !!sketch.value && !sketch.value.layout?.modules)
+  const needsLayout = computed(() => !!scene.value?.needsLayout)
 
   /** 面包屑：从根到当前张的挂载点（层不是层次，跳过：层的子模块画在根草图里） */
   const breadcrumb = computed<{ mount: string; name: string; open: boolean }[]>(() => {

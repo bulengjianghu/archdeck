@@ -149,10 +149,10 @@ export type EditOp =
   | { op: 'moveNode'; positions: Record<string, SketchPoint> }
   /** X15：拖动关系标签；null 清掉 */
   | { op: 'relabel'; id: string; label: SketchPoint | null }
-  /** X15：重新排列——网格布局覆盖本张 layout */
-  | { op: 'autoArrange' }
-  /** X19：把外部模块放上画布作为待连端点（只是布局里的位置；保存时没有关系的丢弃） */
-  | { op: 'addReference'; id: string; at?: SketchPoint }
+  /** X15、X22：重新排列——网格布局覆盖本张 layout；area 为中心区的可用区域（缺省取近似方阵） */
+  | { op: 'autoArrange'; area?: { w: number; h?: number } }
+  /** X19、X22：把外部模块放上画布作为待连端点（会话里的占位，位置按所属层排布；保存时去掉，没有关系的提示丢弃） */
+  | { op: 'addReference'; id: string }
   /** X19：删引用节点 = 删以它为端点的关系与它的位置 */
   | { op: 'removeReference'; id: string }
 

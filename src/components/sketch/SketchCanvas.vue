@@ -2,10 +2,12 @@
 /**
  * 草图画布（present.sketch，SK-15、SK-16，X7、X7c–X7e、X7j、X7k、X13、X15、X19，ADR-0025）：Vue Flow 自由模式——不走 elk、不走分层投影，
  * 位置来自草图的 layout（草图布局 state.layout.sketch 给出节点与直线边）。每个手势只发 DeskState 编辑分组的一个操作：
- * - 拖节点（多选一起拖）松手 = moveNode 一步；拖到同层另一节点上 = 降级（根草图里拖到层上 = 移入）；拖到信息条面包屑的父级 = 升级；
+ * - 拖节点（多选一起拖）松手 = moveNode 一步；拖到同层另一节点上 = 降级（根草图里拖到层上 = 移入）；拖到信息条面包屑的父级或拖出中心区（挂载点框）= 升级；
  * - 框选（在空白处拖）/ ⇧ 点选多选；右键：合并为新模块（≥2）、拆分、进入下一层、删除；空白处右键或双击：新建模块（就地输入名称与 ID 短名）；
  * - 从节点右侧的连线柄拖到另一节点：松手选类型 + 一句说明；选中的边可拖标签；双击模块下钻；
- * - 工具条：＋ 模块、引用外部模块、重新排列、本层数与超七提示；快捷键 ⌘Z / ⇧⌘Z、Delete / Backspace、⌘S、Esc（只取消选中）。
+ * - 工具条：＋ 模块、引用外部模块、隐藏外部引用（X22，只在会话里）、重新排列、本层数与超七提示；快捷键 ⌘Z / ⇧⌘Z、Delete / Backspace、⌘S、Esc（只取消选中）。
+ * 非根草图（X22）：框线（系统框、中心区、带层名的引用列）在最底、不接收指针；引用节点在所属层的列里，位置由规则算、不可拖；
+ * 引用线画在模块之上、不接收指针，相关节点选中或悬停时实色；本层之间的线仍在模块之下。layout 的坐标相对中心区的内容原点（scene.origin）。
  * 图上标出变更时右下角有角标的图例（数据来自派生的对比）。
  * 根草图（X21）：层画成横向带（按 order），第二级模块在带内自由摆放（记 x 与相对带顶的 y，带高随内容增长）；拖到另一条带 = 移入；双击带内空白 = 在该层新建；
  * 带头编辑名称与 abstraction、「＋ 模块」「删层」；工具条「＋ 层」。
@@ -14,7 +16,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } f
 import { ConnectionMode, VueFlow, useVueFlow, type Connection, type Edge, type GraphNode, type Node, type NodeMouseEvent } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import { ROOT_MOUNT, type SketchPoint } from '@/model'
-import { bandAt, type SketchEdgeData, type SketchNodeData } from '@/layout/layout'
+import { bandAt, outsideCenter, type SketchEdgeData, type SketchNodeData } from '@/layout/layout'
 import { useDesk } from '@/state/inject'
 import { ask } from '../edit/useEditDialog'
 import SketchNode from './SketchNode.vue'
@@ -45,24 +47,38 @@ const dropParent = dragOverParent
 const picked = computed(() => new Set(e.picked.value))
 const scene = computed(() => e.scene.value)
 const sizeOf = computed(() => new Map((scene.value?.nodes ?? []).map(n => [n.id, { w: n.data.w, h: n.data.h }])))
+/** X22：悬停的节点（引用线实色显示） */
+const hovered = ref<string | null>(null)
 const nodes = computed<Node<SketchNodeData & { drop?: boolean }>[]>(() =>
-  (scene.value?.nodes ?? []).map(n => ({
-    id: n.id,
-    type: 'sketch',
-    position: { ...n.position },
-    data: { ...n.data, selected: n.data.selected || picked.value.has(n.id), drop: dropTarget.value === n.id },
-    width: n.data.w,
-    height: n.data.h,
-    // 层带在模块之下、不接收指针（带头除外），框选与双击新建落到画布上（X21）
-    style: { width: `${n.data.w}px`, height: `${n.data.h}px`, ...(n.data.kind === 'layer' ? { pointerEvents: 'none' as const } : {}) },
-    zIndex: n.data.kind === 'layer' ? 0 : 1,
-    selected: !!n.data.selected || picked.value.has(n.id),
-    selectable: n.data.kind !== 'layer',
-    draggable: n.data.kind !== 'layer',
-    connectable: n.data.kind !== 'layer',
-  })),
+  (scene.value?.nodes ?? []).map(n => {
+    const kind = n.data.kind
+    const passive = kind === 'layer' || kind === 'frame'
+    // X22：拖出中心区（或到面包屑父级）时系统框高亮升级的落点
+    const drop = dropTarget.value === n.id || (kind === 'frame' && n.data.frame === 'system' && dropParent.value)
+    return {
+      id: n.id,
+      type: 'sketch',
+      position: { ...n.position },
+      data: { ...n.data, selected: n.data.selected || picked.value.has(n.id), drop },
+      width: n.data.w,
+      height: n.data.h,
+      // 层带与框线在模块之下、不接收指针（带头除外），框选与双击新建落到画布上（X21、X22）
+      style: { width: `${n.data.w}px`, height: `${n.data.h}px`, ...(passive ? { pointerEvents: 'none' as const } : {}) },
+      zIndex: kind === 'frame' ? -1 : kind === 'layer' ? 0 : 1,
+      selected: !!n.data.selected || picked.value.has(n.id),
+      selectable: !passive,
+      // X22：引用节点的位置由规则算，不可拖
+      draggable: !passive && kind !== 'reference',
+      connectable: !passive,
+    }
+  }),
 )
-const edges = computed<Edge<SketchEdgeData & { sizes: { a: { w: number; h: number }; b: { w: number; h: number } } }>[]>(() =>
+/** X22：引用线实色的条件——两端之一被选中（含多选）或悬停 */
+const hotIds = computed(() => {
+  const sel = desk.selection.value
+  return new Set([...picked.value, ...(sel?.kind === 'module' ? [sel.id] : []), ...(hovered.value ? [hovered.value] : [])])
+})
+const edges = computed<Edge<SketchEdgeData & { sizes: { a: { w: number; h: number }; b: { w: number; h: number } }; hot?: boolean }>[]>(() =>
   (scene.value?.edges ?? []).map(x => ({
     id: x.id,
     type: 'straight',
@@ -70,7 +86,13 @@ const edges = computed<Edge<SketchEdgeData & { sizes: { a: { w: number; h: numbe
     target: x.target,
     sourceHandle: 'c',
     targetHandle: 't',
-    data: { ...x.data, sizes: { a: sizeOf.value.get(x.source)!, b: sizeOf.value.get(x.target)! } },
+    data: {
+      ...x.data,
+      sizes: { a: sizeOf.value.get(x.source)!, b: sizeOf.value.get(x.target)! },
+      ...(x.data.external ? { hot: hotIds.value.has(x.source) || hotIds.value.has(x.target) } : {}),
+    },
+    // X22：引用线在模块之上、不接收指针；本层之间的线在模块之下
+    ...(x.data.external ? { zIndex: 3, selectable: false, focusable: false, class: 'sk-ref-edge' } : {}),
   })),
 )
 watch(nodes, n => setNodes(n), { immediate: true })
@@ -86,7 +108,7 @@ function tryFit(attempt = 0) {
   } else if (attempt < 40) setTimeout(() => tryFit(attempt + 1), 50)
 }
 watch(
-  () => e.mount.value,
+  () => [e.mount.value, e.hideReferences.value],
   async () => {
     pendingFit = true
     await nextTick()
@@ -131,6 +153,12 @@ function overParentCrumb(ev: MouseEvent | TouchEvent): boolean {
   return document.elementsFromPoint(pt.clientX, pt.clientY).some(el => (el as HTMLElement).dataset?.parent === '1')
 }
 const root = computed(() => e.mount.value === ROOT_MOUNT)
+/** X22：画布上的位置换成 layout 记的样子——非根草图相对中心区的内容原点（根草图由编辑操作按层带换算） */
+function toLayout(p: SketchPoint): SketchPoint {
+  const o = root.value ? { x: 0, y: 0 } : (scene.value?.origin ?? { x: 0, y: 0 })
+  return { x: Math.round(p.x - o.x), y: Math.round(p.y - o.y) }
+}
+
 /** X21：根草图里第二级模块所在的层（ID 的第一段） */
 const layerOf = (id: string) => id.split('.')[0]
 function onNodeDrag({ event, nodes: dragged }: { event: MouseEvent | TouchEvent; nodes: GraphNode[] }) {
@@ -149,7 +177,8 @@ function onNodeDrag({ event, nodes: dragged }: { event: MouseEvent | TouchEvent;
   const single = dragged.length === 1 && scene.value?.nodes.find(n => n.id === dragged[0].id)?.data.kind === 'module'
   const band = root.value && single && !hit ? bandAt(scene.value?.bands ?? [], p.y) : null
   dropTarget.value = single && hit ? hit.id : band && band !== layerOf(dragged[0].id) ? band : null
-  dropParent.value = !!single && !root.value && overParentCrumb(event)
+  // 升级：拖到面包屑父级，或拖出中心区（X22）
+  dropParent.value = !!single && !root.value && !hit && (overParentCrumb(event) || (!!scene.value && outsideCenter(scene.value, p)))
 }
 function onNodeDragStop({ nodes: dragged }: { event: MouseEvent | TouchEvent; nodes: GraphNode[] }) {
   const target = dropTarget.value
@@ -164,7 +193,10 @@ function onNodeDragStop({ nodes: dragged }: { event: MouseEvent | TouchEvent; no
       kind === 'layer'
         ? e.moveIn(dragged[0].id, target, { x: Math.round(dragged[0].position.x), y: Math.round(dragged[0].position.y) })
         : e.demote(dragged[0].id, target)
-  } else r = e.moveNode(Object.fromEntries(dragged.map(n => [n.id, { x: Math.round(n.position.x), y: Math.round(n.position.y) }])))
+  } else {
+    const moved = dragged.filter(n => scene.value?.nodes.find(x => x.id === n.id)?.data.kind !== 'reference')
+    r = moved.length ? e.moveNode(Object.fromEntries(moved.map(n => [n.id, toLayout(n.position)]))) : { ok: true }
+  }
   if (!r.ok) notify(r.reason ?? '做不成')
   // 被拒绝或改成降级 / 升级时，节点回到草图里的位置
   setNodes(nodes.value)
@@ -197,7 +229,7 @@ function createAtCenter() {
 }
 function create(rows: { name: string; id: string }[]) {
   const c = creating.value!
-  const at = c.at ? { x: Math.round(c.at.x), y: Math.round(c.at.y) } : undefined
+  const at = c.at ? toLayout(c.at) : undefined
   const r = e.addModule(rows[0].name, rows[0].id, at, c.layer)
   if (!r.ok) creating.value = { ...c, error: r.reason }
   else creating.value = null
@@ -324,6 +356,10 @@ async function removeIds(ids: string[]) {
 
 // ── 工具条 ──
 const picking = ref(false)
+function toggleReferences() {
+  picking.value = false
+  e.toggleReferences()
+}
 function arrange() {
   const r = e.autoArrange()
   if (!r.ok) notify(r.reason)
@@ -387,7 +423,23 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
       <div class="sk-tools" role="toolbar" aria-label="草图工具条">
         <button v-if="root" title="新建一层（排在最后；层的子模块在带内双击新建）" @click="createAtCenter">＋ 层</button>
         <button v-else title="新建一个模块（也可双击空白处）" @click="createAtCenter">＋ 模块</button>
-        <button v-if="!root" title="搜索当前版本的模块，放上画布作为待连端点" @click="picking = !picking">引用外部模块</button>
+        <button
+          v-if="!root"
+          title="搜索当前版本的模块，放上画布作为待连端点（排在所属层的引用列里）"
+          :disabled="e.hideReferences.value"
+          @click="picking = !picking"
+        >
+          引用外部模块
+        </button>
+        <button
+          v-if="!root"
+          :aria-pressed="e.hideReferences.value"
+          :class="{ on: e.hideReferences.value }"
+          title="隐藏引用列与引用线，中心区占满画布（只在本次会话）"
+          @click="toggleReferences"
+        >
+          {{ e.hideReferences.value ? '显示外部引用' : '隐藏外部引用' }}
+        </button>
         <button title="重新排列本张草图（可撤销）" @click="arrange">重新排列</button>
         <span v-if="root" class="count" :class="{ over: !!e.overSeven.value }" :title="e.overSeven.value?.message ?? '第二级模块数'">
           {{ scene?.bands.length ?? 0 }} 层 · {{ scene?.count ?? 0 }} 个模块<template v-if="e.overSevens.value.length">
@@ -420,6 +472,8 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
       @node-double-click="onNodeDoubleClick"
       @node-drag="onNodeDrag"
       @node-drag-stop="onNodeDragStop"
+      @node-mouse-enter="({ node }) => (hovered = node.id)"
+      @node-mouse-leave="hovered = null"
       @node-context-menu="onNodeMenu"
       @edge-click="({ edge }) => onEdgeClick(edge.id)"
       @edge-context-menu="onEdgeMenu"
@@ -525,6 +579,11 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
   padding: 2px 8px;
 }
 
+.sk-tools button.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .count {
   font-size: 12px;
   color: var(--text-3);
@@ -601,5 +660,12 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
 
 .sk-legend b {
   color: var(--accent);
+}
+</style>
+
+<style>
+/* X22：引用线不接收指针（Vue Flow 的边容器缺省接收描边上的指针） */
+.vue-flow__edge.sk-ref-edge {
+  pointer-events: none;
 }
 </style>

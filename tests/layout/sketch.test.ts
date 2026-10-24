@@ -4,7 +4,24 @@
  */
 import { describe, expect, it } from 'vitest'
 import { ROOT_BAND_COLS, ROOT_BAND_PAD, ROOT_BAND_ROW, ROOT_BAND_X0 } from '../../src/model'
-import { bandAt, bandRelative, sketchPositions, sketchScene, straightEdge, SKETCH_BAND, SKETCH_PARALLEL_GAP, SKETCH_NODE } from '../../src/layout/sketch'
+import {
+  bandAt,
+  bandRelative,
+  outsideCenter,
+  referenceColumns,
+  sketchPositions,
+  sketchScene,
+  straightEdge,
+  SKETCH_BAND,
+  SKETCH_CANVAS,
+  SKETCH_CENTER_PAD,
+  SKETCH_COLUMN,
+  SKETCH_FRAME_PAD,
+  SKETCH_PARALLEL_GAP,
+  SKETCH_NODE,
+  SKETCH_REF,
+  type SketchScene,
+} from '../../src/layout/sketch'
 import type { SketchDef } from '../../src/model'
 
 const DEF: SketchDef = {
@@ -21,30 +38,30 @@ const DEF: SketchDef = {
   ],
 }
 
+/** 画布上的节点（不含框线） */
+const shown = (s: SketchScene) => s.nodes.filter(n => n.data.kind !== 'frame')
+const node = (s: SketchScene, id: string) => s.nodes.find(n => n.id === id)!
+
 describe('草图布局', () => {
   it('没有 layout：网格布局一次、标为需初始布局；节点为本层模块与由关系派生的引用节点', () => {
     const s = sketchScene({ def: DEF, nameOf: id => (id === 'core.b' ? 'B' : undefined), deeper: id => id === 'core.a.x' })
     expect(s.needsLayout).toBe(true)
-    expect(s.nodes.map(n => [n.id, n.data.kind, n.data.name])).toEqual([
+    expect(shown(s).map(n => [n.id, n.data.kind, n.data.name])).toEqual([
       ['core.a.x', 'module', 'X'],
       ['core.a.y', 'module', 'Y'],
       ['core.b', 'reference', 'B'],
     ])
-    expect(s.nodes[0].data).toMatchObject({ core: true, deeper: true })
+    expect(node(s, 'core.a.x').data).toMatchObject({ core: true, deeper: true })
     expect(s.count).toBe(2)
   })
 
-  it('有 layout：位置照用；缺的放到网格里不与已有节点重叠的位置', () => {
+  it('有 layout：位置照用（相对中心区的内容原点，X22）；缺的放到网格里不与已有节点重叠的位置', () => {
     const def: SketchDef = { ...DEF, layout: { modules: { 'core.a.x': { x: 260, y: 40 } } } }
     const s = sketchScene({ def, nameOf: () => undefined })
     expect(s.needsLayout).toBe(false)
-    expect(s.nodes[0].position).toEqual({ x: 260, y: 40 })
-    const pos = sketchPositions(def, ['core.a.x', 'core.a.y', 'core.b'])
-    for (const [a, b] of [
-      ['core.a.x', 'core.a.y'],
-      ['core.a.x', 'core.b'],
-      ['core.a.y', 'core.b'],
-    ])
+    expect(node(s, 'core.a.x').position).toEqual({ x: s.origin.x + 260, y: s.origin.y + 40 })
+    const pos = sketchPositions(def, ['core.a.x', 'core.a.y'])
+    for (const [a, b] of [['core.a.x', 'core.a.y']])
       expect(Math.abs(pos[a].x - pos[b].x) >= SKETCH_NODE.w || Math.abs(pos[a].y - pos[b].y) >= SKETCH_NODE.h).toBe(true)
   })
 
@@ -73,7 +90,7 @@ describe('草图布局', () => {
     expect([o.from.y, o.to.y, o.mid.x]).toEqual([10, 10, 200])
   })
 
-  it('05 裁决 4：外部端点折叠显示，同一对（本层模块、折叠节点）同方向的多条关系合成一条显示边并带全部关系；折叠节点的位置可取精确端点记下的', () => {
+  it('05 裁决 4：外部端点折叠显示，同一对（本层模块、折叠节点）同方向的多条关系合成一条显示边并带全部关系；旧草图里记下的引用坐标不用（X22）', () => {
     const def: SketchDef = {
       id: 'd',
       mount: 'core.a',
@@ -94,7 +111,7 @@ describe('草图布局', () => {
       ['access.w', 3, ['access.w.s', 'access.w.t']],
       ['access.r', 1, undefined],
     ])
-    expect(s.nodes.find(n => n.id === 'access.w')!.position).toEqual({ x: 900, y: 90 })
+    expect(node(s, 'access.w').position).not.toEqual({ x: 900, y: 90 })
     const agg = s.edges.find(e => e.source === 'core.a.x' && e.target === 'access.w')!
     expect(agg.id).toBe('agg:core.a.x>access.w')
     expect(agg.data).toMatchObject({ relationIds: ['r1', 'r2'], reference: 'access.w', type: 'mixed', label: null })
@@ -154,5 +171,133 @@ describe('草图布局', () => {
     expect(bandRelative(def, { 'a.m0': { x: 0, y: bb.y + 5 } }, () => 'b')).toEqual({ 'a.m0': { x: 0, y: 5 } })
     expect(bandRelative(def, { 'b.x': { x: 0, y: bb.y - 30 } })['b.x'].y).toBe(0)
     expect(bandRelative({ ...def, mount: 'a' }, { 'a.m0': { x: 1, y: 2 } })).toEqual({ 'a.m0': { x: 1, y: 2 } })
+  })
+})
+
+describe('X22 引用按规则排布的边界', () => {
+  const LAYERS = [
+    { id: 'present', name: '呈现层' },
+    { id: 'state', name: '视图状态层' },
+    { id: 'access', name: '接入层' },
+    { id: 'model', name: '模型层' },
+  ]
+  const layerOf = (id: string) => (LAYERS.some(l => l.id === id.split('.')[0]) ? id.split('.')[0] : undefined)
+  const DESK: SketchDef = {
+    id: 'd',
+    mount: 'state.desk',
+    modules: [
+      { id: 'state.desk.edit', name: '编辑' },
+      { id: 'state.desk.run', name: '运行' },
+    ],
+    relations: [
+      { id: 'r1', from: 'present.sketch', to: 'state.desk.edit', type: 'calls' },
+      { id: 'r2', from: 'state.desk.edit', to: 'model.intent', type: 'calls' },
+      { id: 'r3', from: 'state.desk.run', to: 'access.reader', type: 'calls' },
+      { id: 'r4', from: 'state.desk.run', to: 'state.layout', type: 'calls' },
+      { id: 'r5', from: 'dev', to: 'state.desk.edit', type: 'calls' },
+    ],
+  }
+  const scene = (extra: Partial<Parameters<typeof sketchScene>[0]> = {}) =>
+    sketchScene({ def: DESK, nameOf: () => undefined, layers: LAYERS, layerOf, system: '架构台', mountName: 'DeskState', ...extra })
+
+  it('引用按所属层的 order 从左到右成列：靠前的层在左，同层紧贴中心区右侧标「同层」，靠后的在右，不在任何层的在最右「外部」', () => {
+    const cols = referenceColumns(['model.intent', 'state.layout', 'present.sketch', 'access.reader', 'dev'], 'state', LAYERS, layerOf)
+    expect(cols.map(c => [c.id, c.side, c.tag])).toEqual([
+      ['present', 'left', undefined],
+      ['state', 'right', '同层'],
+      ['access', 'right', undefined],
+      ['model', 'right', undefined],
+      ['other', 'right', undefined],
+    ])
+    expect(cols.find(c => c.id === 'other')!.name).toBe('外部')
+    const s = scene()
+    const x = (id: string) => node(s, id).position.x
+    expect(x('present.sketch')).toBeLessThan(s.center!.x)
+    for (const id of ['state.layout', 'access.reader', 'model.intent', 'dev']) expect(x(id)).toBeGreaterThan(s.center!.x + s.center!.w)
+    expect(x('state.layout')).toBeLessThan(x('access.reader'))
+    expect(x('access.reader')).toBeLessThan(x('model.intent'))
+    expect(x('model.intent')).toBeLessThan(x('dev'))
+  })
+
+  it('框线：最外的系统框（项目名）、中心区带挂载点名、每列带层名；本层模块都在中心区里', () => {
+    const s = scene()
+    const frames = s.nodes.filter(n => n.data.kind === 'frame')
+    expect(frames.map(f => [f.data.frame, f.data.name, f.data.tag])).toEqual([
+      ['system', '架构台', undefined],
+      ['center', 'DeskState', undefined],
+      ['column', '呈现层', undefined],
+      ['column', '视图状态层', '同层'],
+      ['column', '接入层', undefined],
+      ['column', '模型层', undefined],
+      ['column', '外部', undefined],
+    ])
+    const c = s.center!
+    for (const m of s.nodes.filter(n => n.data.kind === 'module')) {
+      expect(m.position.x).toBeGreaterThanOrEqual(c.x)
+      expect(m.position.x + m.data.w).toBeLessThanOrEqual(c.x + c.w)
+    }
+  })
+
+  it('中心区可用宽度 = 画布宽 − 两侧引用列宽；隐藏外部引用时不画引用与引用线，中心区占满画布宽，可用宽度重新算', () => {
+    const s = scene()
+    const step = SKETCH_COLUMN.w + SKETCH_COLUMN.gap
+    expect(s.center!.w).toBe(SKETCH_CANVAS.w - 2 * SKETCH_FRAME_PAD - 5 * step)
+    expect(s.gridArea!.w).toBe(s.center!.w - 2 * SKETCH_CENTER_PAD)
+    const h = scene({ hideReferences: true })
+    expect(h.nodes.some(n => n.data.kind === 'reference' || n.data.frame === 'column')).toBe(false)
+    expect(h.edges.some(e => e.data.external)).toBe(false)
+    expect(h.columns).toEqual([])
+    expect(h.center!.w).toBe(SKETCH_CANVAS.w - 2 * SKETCH_FRAME_PAD)
+    expect(h.gridArea!.w).toBeGreaterThan(s.gridArea!.w)
+    // 没有 layout：初始布局按可用宽度排——隐藏后一行放得下两个
+    const ys = h.nodes.filter(n => n.data.kind === 'module').map(n => n.position.y)
+    expect(new Set(ys).size).toBe(1)
+  })
+
+  it('引用节点紧凑（高度约为模块一半）；列高放不下时整列按比例缩小、不换列', () => {
+    const s = scene()
+    expect(node(s, 'present.sketch').data).toMatchObject({ kind: 'reference', w: SKETCH_REF.w, h: SKETCH_REF.h, scale: 1, side: 'left' })
+    expect(SKETCH_REF.h * 2).toBeLessThanOrEqual(SKETCH_NODE.h)
+    const many = Array.from({ length: 40 }, (_, i) => ({ id: `rx${i}`, from: 'state.desk.edit', to: `model.m${i}`, type: 'calls' as const }))
+    const t = sketchScene({ def: { ...DESK, relations: many }, nameOf: () => undefined, layers: LAYERS, layerOf })
+    const refs = t.nodes.filter(n => n.data.kind === 'reference')
+    expect(new Set(refs.map(n => n.position.x)).size).toBe(1)
+    const k = refs[0].data.scale!
+    expect(k).toBeLessThan(1)
+    expect(refs[0].data.h).toBeCloseTo(SKETCH_REF.h * k)
+    const col = t.nodes.find(n => n.data.frame === 'column')!
+    const bottom = Math.max(...refs.map(n => n.position.y + n.data.h))
+    expect(bottom).toBeLessThanOrEqual(col.position.y + col.data.h)
+  })
+
+  it('引用线标出引用在哪一侧与哪一端（模块从朝向引用列的端口进出）；本层之间的线不标', () => {
+    const s = scene()
+    const e = (id: string) => s.edges.find(x => x.id === id)!.data
+    expect([e('r1').external, e('r1').refEnd]).toEqual(['left', 'source'])
+    expect([e('r2').external, e('r2').refEnd]).toEqual(['right', 'target'])
+    expect([e('r4').external, e('r4').refEnd]).toEqual(['right', 'target'])
+  })
+
+  it('拖出中心区（挂载点框）的落点 = 升级的落点；根草图没有中心区', () => {
+    const s = scene()
+    const c = s.center!
+    expect(outsideCenter(s, { x: c.x + 10, y: c.y + 10 })).toBe(false)
+    expect(outsideCenter(s, { x: c.x - 5, y: c.y + 10 })).toBe(true)
+    expect(outsideCenter(s, { x: c.x + c.w + 5, y: c.y + 10 })).toBe(true)
+    expect(outsideCenter(s, { x: c.x + 10, y: c.y + c.h + 5 })).toBe(true)
+    expect(outsideCenter({ center: null }, { x: -1e4, y: -1e4 })).toBe(false)
+  })
+
+  it('列内按相连的本层模块的平均高度排（线少交叉）', () => {
+    const def: SketchDef = {
+      ...DESK,
+      relations: [
+        { id: 'a', from: 'state.desk.edit', to: 'model.b', type: 'calls' },
+        { id: 'b', from: 'state.desk.run', to: 'model.a', type: 'calls' },
+      ],
+      layout: { modules: { 'state.desk.edit': { x: 0, y: 300 }, 'state.desk.run': { x: 0, y: 0 } } },
+    }
+    const s = sketchScene({ def, nameOf: () => undefined, layers: LAYERS, layerOf })
+    expect(node(s, 'model.a').position.y).toBeLessThan(node(s, 'model.b').position.y)
   })
 })

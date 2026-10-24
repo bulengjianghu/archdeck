@@ -1,5 +1,6 @@
 /**
- * 草图画布（§6.16，SK-12–SK-21，ADR-0025）：导航树右键「在此设计」→ 新建设计 → 底稿按挂载点从基线（HEAD）复制、引用折叠 → 合并两个 → 拖位置 →
+ * 草图画布（§6.16，SK-12–SK-21，X22，ADR-0025）：导航树右键「在此设计」→ 新建设计 → 底稿按挂载点从基线（HEAD）复制、引用折叠、引用按层成列 →
+ * 隐藏外部引用 → 合并两个 → 拖位置 →
  * 连关系 → 父模块原则 → 保存 → 文件含 mount / abstraction / layout / from → 刷新原样 → 面板两个核验数；根草图的层带与移入；
  * 持久草图（骨架）打开即草图画布，退出回到进入前的版本。
  * 设计目录建在真实的 model/h5p-arch-desk/designs/ 下，结束后删掉；指纹 owned.json 与拦截记录 ledger.jsonl 结束后恢复。
@@ -98,7 +99,7 @@ async function designHere(page: Page, layer: string, id: string) {
   await page.getByRole('menuitem', { name: '在此设计' }).click()
 }
 
-test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 → 底稿 13 个模块与折叠引用 → 合并两个 → 拖位置 → 连关系 → 父模块原则 → 保存 → 文件含 mount / abstraction / layout / from → 刷新原样 → 面板两个核验数与清单 → 拆分前二次确认（X7k）', async ({
+test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 → 底稿 13 个模块与折叠引用、引用按层成列、隐藏外部引用（X22）→ 合并两个 → 拖位置 → 连关系 → 父模块原则 → 保存 → 文件含 mount / abstraction / layout / from → 刷新原样 → 面板两个核验数与清单 → 拆分前二次确认（X7k）→ 拖出挂载点框 = 升级（X22）', async ({
   page,
 }) => {
   const box = sandbox('zz-e2e-sketch')
@@ -116,23 +117,44 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     await expect(page.locator('.info-bar .name')).toHaveText('E2E 草图')
     await expect(saveButton(page)).toBeVisible()
 
-    // 基线 = 仓库 HEAD；底稿：挂载点 DeskState 的一层从基线复制（13 个），带一次初始布局，不带职责文字
+    // 基线 = 仓库 HEAD；底稿：挂载点 DeskState 的一层从基线复制（13 个），不带职责文字；不写初始布局（X22：画布按中心区宽度排一次）
     expect(parse(fs.readFileSync(path.join(box.dir, 'design.yaml'), 'utf8')).design.base.commit).toBe(HEAD())
     const seed = sketchFile(box.dir, 'state.desk')
     expect(seed).toMatchObject({ id: 'zz-e2e-sketch', mount: 'state.desk' })
     const ids: string[] = seed.modules.map((m: { id: string }) => m.id)
     expect(ids).toHaveLength(13)
     expect(seed.modules.every((m: { responsibility?: string }) => !m.responsibility)).toBe(true)
-    expect(Object.keys(seed.layout.modules)).toEqual(expect.arrayContaining(ids))
+    expect(seed.layout).toBeUndefined()
     for (const id of ids) await expect(graphNode(page, id)).toBeVisible()
     await expect(page.locator('.info-bar .mount')).toContainText('DeskState')
     // 折叠引用（05 裁决 4）：外部端点按挂载点深度折叠，引用节点少于精确端点；多条关系合成一条显示边、标条数
     const ends = new Set<string>((seed.relations as { from: string; to: string }[]).flatMap(r => [r.from, r.to]).filter(x => !ids.includes(x)))
-    const refs = page.locator('.sk-node.reference')
+    const refs = page.locator('.sk-ref')
     await expect(refs.first()).toBeVisible()
     expect(await refs.count()).toBeLessThan(ends.size)
     for (const r of await refs.evaluateAll(els => els.map(e => e.closest('.vue-flow__node')!.getAttribute('data-id')!))) expect(r.split('.')).toHaveLength(2)
-    await expect(page.locator('.sk-edge-label.many').first()).toBeVisible()
+    await expect(page.locator('.sk-ref .ref-count').first()).toBeVisible()
+    // X22：引用按所属层成列——呈现层在中心区（挂载点框）左侧，同层的一列标「同层」在右侧，模型层在更右；框线带层名与挂载点名
+    const frame = (kind: string, name?: string) =>
+      page.locator(`.sk-frame[data-frame="${kind}"]`, name ? { has: page.locator('.frame-label', { hasText: name }) } : {})
+    await expect(frame('center')).toContainText('DeskState')
+    await expect(frame('system')).toContainText('h5p-arch-desk')
+    const center = (await frame('center').boundingBox())!
+    const presentCol = (await frame('column', '呈现层').boundingBox())!
+    const sameCol = (await frame('column', '同层').boundingBox())!
+    const modelCol = (await frame('column', '模型层').boundingBox())!
+    expect(presentCol.x + presentCol.width).toBeLessThanOrEqual(center.x)
+    expect(sameCol.x).toBeGreaterThanOrEqual(center.x + center.width)
+    expect(modelCol.x).toBeGreaterThan(sameCol.x)
+    expect(await graphNode(page, 'present.panel').evaluate(el => el.classList.contains('draggable'))).toBe(false)
+    // X22：隐藏外部引用——引用列与引用线都不画，中心区占满；再点恢复；不改草图
+    await page.getByRole('button', { name: '隐藏外部引用' }).click()
+    await expect(refs).toHaveCount(0)
+    await expect(frame('column')).toHaveCount(0)
+    await expect(page.locator('.sk-edge.external')).toHaveCount(0)
+    await page.getByRole('button', { name: '显示外部引用' }).click()
+    await expect(refs.first()).toBeVisible()
+    await expect(page.locator('.info-bar .dirty')).toHaveCount(0)
     await expect(page.locator('.sk-node.selected')).toHaveCount(0)
 
     // 合并两个：单击、⇧ 单击，右键「合并为新模块…」，中文名填 ID 短名
@@ -156,8 +178,9 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
 
     // 拖位置：一步，可撤销
     const before = (await graphNode(page, 'state.desk.session').boundingBox())!
-    await dragBy(page, 'state.desk.session', 160, 90)
-    await expect.poll(async () => (await graphNode(page, 'state.desk.session').boundingBox())!.x).toBeGreaterThan(before.x + 100)
+    // 小步拖动：画布按名义尺寸适应视口，缩放后相邻模块很近，拖远了会落到别的模块上（= 降级）
+    await dragBy(page, 'state.desk.session', 40, 20)
+    await expect.poll(async () => (await graphNode(page, 'state.desk.session').boundingBox())!.x).toBeGreaterThan(before.x + 25)
 
     // 连关系：从连线柄拖到另一个节点，选类型 + 一句说明
     await dragConnect(page, 'state.desk.session', c)
@@ -184,6 +207,8 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     expect(session).toMatchObject({ name: '编辑会话', from: [a, b] })
     expect(saved.modules.some((m: { id: string }) => m.id === a)).toBe(false)
     expect(saved.layout.modules['state.desk.session']).toBeDefined()
+    // X22：引用节点的位置不写回——layout 只有本层模块
+    expect(Object.keys(saved.layout.modules).every(id => id.startsWith('state.desk.'))).toBe(true)
     expect(saved.relations).toEqual(
       expect.arrayContaining([expect.objectContaining({ from: 'state.desk.session', to: c, type: 'calls', description: 'E2E 连线' })]),
     )
@@ -259,6 +284,25 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     await page.keyboard.press('ControlOrMeta+z')
     await expect(graphNode(page, 'state.desk.session')).toBeVisible()
     await expect(graphNode(page, 'state.desk.sess-read')).toHaveCount(0)
+
+    // X22：拖出中心区（挂载点框）松手 = 升级——系统框高亮落点，下一层的模块回到父层；撤销一步恢复
+    await graphNode(page, 'state.desk.session').dblclick()
+    const rest = `state.desk.session.${a.split('.').pop()}`
+    await expect(graphNode(page, rest)).toBeVisible()
+    const grip = await settledBox(graphNode(page, rest).locator('.name'))
+    const frameBox = await settledBox(frame('center'))
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(frameBox.x - 12, frameBox.y + frameBox.height / 2, { steps: 15 })
+    await expect(frame('system')).toHaveClass(/drop/)
+    await expect(parentCrumb).toHaveClass(/drop/)
+    await page.mouse.up()
+    await expect(graphNode(page, rest)).toHaveCount(0)
+    await page.locator('.vue-flow__pane').click({ position: { x: 5, y: 5 } })
+    await page.keyboard.press('ControlOrMeta+z')
+    await expect(graphNode(page, rest)).toBeVisible()
+    await crumbs.locator('.crumb', { hasText: 'DeskState' }).click()
+    await expect(graphNode(page, 'state.desk.session')).toBeVisible()
 
     // 保存并交给 AI（#20a）：有未保存改动时一步保存再复制指令；指令含草图全文与相对基线的变更
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])

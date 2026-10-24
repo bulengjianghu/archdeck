@@ -1,11 +1,11 @@
 /**
  * 草图写回同步（B6、X7i、X19、X20，ADR-0024、ADR-0025）：保存**整个设计**——改过的草图逐张整份写回（含 layout），会话里推出且改过的作为新文件，
- * 级联改名的写到新文件名并删旧文件，删掉的草图一并删；没有关系的引用节点保存前丢弃并提示。经注入的 ModelWriter 发往写入端点。
+ * 级联改名的写到新文件名并删旧文件，删掉的草图一并删；引用节点的位置不写回（X22），没有关系的引用节点保存前丢弃并提示。经注入的 ModelWriter 发往写入端点。
  * 成功 → 会话 saved（新指纹），文件变化推送回来后按 N5 重新加载；409 → 已过时；422 → 服务端的校验问题交给面板定位。
  * 持久草图只有一张，走单张写回。
  */
 import { shallowRef, type ShallowRef } from 'vue'
-import { dropOrphanReferences, type DesignEditContext, type SketchDef, type SketchValidationIssue } from '@/model'
+import { layoutForSave, type DesignEditContext, type SketchDef, type SketchValidationIssue } from '@/model'
 import type { DesignSketchWrite, ModelWriter, WriteOutcome } from '../../sync/writer'
 import { removedMounts, saved, sketchDirty, type EditSession } from './session'
 
@@ -19,13 +19,13 @@ export interface SaveRequest {
   dropped: { mount: string; ids: string[] }[]
 }
 
-/** X20：要写的草图——读自文件且改过的（改名的带 renamedFrom）、会话里推出且改过的（baseHash: null）、删掉的；写前丢掉无关系的引用 */
+/** X20：要写的草图——读自文件且改过的（改名的带 renamedFrom）、会话里推出且改过的（baseHash: null）、删掉的；写前去掉引用节点的位置、丢掉无关系的引用（X19、X22） */
 export function saveRequest(s: EditSession, baseline?: DesignEditContext['baseline']): SaveRequest {
   const sketches: DesignSketchWrite[] = []
   const dropped: SaveRequest['dropped'] = []
   for (const [mount, def] of Object.entries(s.doc.sketches)) {
     if (!sketchDirty(s, mount, baseline)) continue
-    const clean = dropOrphanReferences(def)
+    const clean = layoutForSave(def)
     if (clean.dropped.length) dropped.push({ mount, ids: clean.dropped })
     const o = s.doc.origin[mount]
     sketches.push({

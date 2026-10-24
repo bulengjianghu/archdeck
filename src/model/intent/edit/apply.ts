@@ -53,9 +53,9 @@ function run(def: SketchDef, ctx: EditContext, op: EditOp): OpOutcome {
     case 'relabel':
       return relabel(def, ctx, op.id, op.label)
     case 'autoArrange':
-      return autoArrange(def)
+      return autoArrange(def, op.area)
     case 'addReference':
-      return addReference(def, ctx, op.id, op.at)
+      return addReference(def, ctx, op.id)
     case 'removeReference':
       return removeReference(def, op.id)
   }

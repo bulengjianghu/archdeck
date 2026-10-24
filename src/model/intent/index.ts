@@ -32,7 +32,9 @@ export {
   ROOT_BAND_COLS,
   ROOT_BAND_PAD,
   ROOT_BAND_ROW,
-  dropOrphanReferences,
+  GRID_GAP_X,
+  GRID_GAP_Y,
+  layoutForSave,
   locate,
   locateAll,
   knownModules,
@@ -45,7 +47,7 @@ export {
   isRootSketch,
   ID_PATTERN,
 } from './edit'
-export type { LocatedModule, SeedOptions } from './edit'
+export type { LocatedModule, SeedOptions, GridArea } from './edit'
 export { validateSketch, SKETCH_SOFT_LIMIT } from './validate'
 export type { ValidateContext } from './validate'
 export { mountScope, underMount, looksLocal } from './scope'

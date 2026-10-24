@@ -283,7 +283,7 @@ describe('B6 新建设计', () => {
     expect(listDesigns(P).find(d => d.id === 'n')).toMatchObject({ status: 'draft', sketch: true, problems: [] })
   })
 
-  it('05 裁决 3：给挂载点时 base.commit = 仓库 HEAD，底稿从 HEAD 那一版描述复制（不带文字）并初始布局；挂载点不能是层', () => {
+  it('05 裁决 3：给挂载点时 base.commit = 仓库 HEAD，底稿从 HEAD 那一版描述复制（不带文字），不写初始布局（X22：画布按中心区宽度排）；挂载点不能是层', () => {
     const base = () => ({
       commit: 'f00dcafe',
       files: [...readModelDir(P, root).files, { path: 'modules/q.yaml', text: 'modules:\n  - { id: core.a.q, name: Q, parent: core.a, responsibility: q }\n' }],
@@ -293,7 +293,7 @@ describe('B6 新建设计', () => {
     const seed = parse(read('designs/m/sketches/core.a.yaml')).sketch
     expect(seed).toMatchObject({ id: 'm', mount: 'core.a', modules: [{ id: 'core.a.q', name: 'Q' }] })
     expect(seed.modules[0].responsibility).toBeUndefined()
-    expect(Object.keys(seed.layout.modules)).toEqual(['core.a.q'])
+    expect(seed.layout).toBeUndefined()
     expect(() => createDesign(modelRoot, 'p', { id: 'l', name: 'L', mount: 'core' }, root, { base })).toThrow(WriteError)
     expect(() => createDesign(modelRoot, 'p', { id: 'l', name: 'L', mount: 'core.zz' }, root, { base })).toThrow(WriteError)
   })

@@ -1,7 +1,9 @@
 /**
- * 位置与引用节点（X15、X19、X21，ADR-0025）：拖动节点、拖动关系标签、重新排列、把外部模块放上画布；挂载点的原则（X10）。
+ * 位置与引用节点（X15、X19、X21、X22，ADR-0025）：拖动节点、拖动关系标签、重新排列、把外部模块放上画布；挂载点的原则（X10）。
  * 引用节点不单独存：它是一端在范围外的关系的外部端点，按「与挂载点同深度的祖先」折叠显示（05 裁决 4）——同一折叠节点的多条关系在画布上
- * 合成一条显示边，数据仍记精确端点；位置按折叠后的 ID 记在 layout.modules。还没有关系的引用只在会话里，保存前由 dropOrphanReferences 丢弃并给出清单。
+ * 合成一条显示边，数据仍记精确端点。引用节点的位置由规则算（X22：按所属层成列，草图布局 state.layout.sketch），layout 不记；
+ * 还没有关系的引用在会话里以 layout.modules 的键占位（值不用），保存前由 layoutForSave 去掉全部引用的键并给出没有关系而丢掉的清单。
+ * 非根草图的模块坐标相对中心区（挂载点框）的内容原点（X22）。
  * 根草图（X21）：层画成横向带，layout 对层不记位置，带内的第二级模块记 x 与 y（y 相对带顶），带高随内容增长。纯函数。
  */
 import { ROOT_MOUNT, type ModuleDef, type RelationDef, type SketchDef, type SketchLayout, type SketchPoint, type SketchSpot } from '../../types'
@@ -9,14 +11,12 @@ import type { EditContext } from '../types'
 import { locateAll } from './locate'
 import { done, isKnown, reject, type OpOutcome } from './shared'
 
-const GAP_X = 220
-const GAP_Y = 140
-const ORIGIN = 40
-/** 引用列：行距与列距 */
-const REF_GAP_Y = 80
-const REF_GAP_X = 220
-/** 引用列与本层模块之间的空隙 */
-const REF_MARGIN = 280
+/** 本层网格（非根草图）：列距与行距 */
+export const GRID_GAP_X = 220
+export const GRID_GAP_Y = 120
+/** 网格里一个模块的宽与高（与画布的模块节点同尺寸） */
+const GRID_NODE_W = 168
+const GRID_NODE_H = 56
 /** X21：根草图层带里第一个模块的 x（左边留给带头） */
 export const ROOT_BAND_X0 = 240
 /** X21：根草图层带里模块之间的横向间距 */
@@ -71,23 +71,18 @@ export function referenceRelations(def: SketchDef, ref: string): RelationDef[] {
     .map(e => e.rel)
 }
 
-/** 一个引用节点相对本层的方向：只有入边（引用 → 本层）、只有出边、双向；没有关系为 null */
-function referenceSide(def: SketchDef, own: ReadonlySet<string>): Map<string, 'in' | 'out' | 'both'> {
-  const out = new Map<string, 'in' | 'out' | 'both'>()
-  for (const e of externalEnds(def, own)) {
-    const id = foldReference(def.mount, e.end)
-    const was = out.get(id)
-    out.set(id, !was || was === e.dir ? e.dir : 'both')
-  }
-  return out
+/** X22：中心区排网格的可用区域（画布宽 − 两侧引用列宽；高可缺省） */
+export interface GridArea {
+  w: number
+  h?: number
 }
 
 /**
- * X15、05 裁决 4：初始布局——本层模块居中成网格；引用节点按方向分到两侧：入边（引用 → 本层）与双向在左列、出边在右列，
- * 每列不高于本层网格（至少 6 行），多了往外再开一列。
+ * X15、X22：初始布局——非根草图的本层模块在中心区里排成网格（坐标相对中心区的内容原点）：给了可用区域时每行放得下几个就放几个、
+ * 整块居中，没给时取近似方阵；引用节点不进 layout（位置由规则算）。
  * X21：根草图按层带——第二级模块在带内按 ROOT_BAND_COLS 列排开、多了折行（y 相对带顶），层不记位置。
  */
-export function gridLayout(def: SketchDef): SketchLayout {
+export function gridLayout(def: SketchDef, area?: GridArea): SketchLayout {
   const modules: Record<string, SketchSpot> = {}
   if (def.mount === ROOT_MOUNT) {
     for (const layer of def.modules ?? [])
@@ -101,27 +96,12 @@ export function gridLayout(def: SketchDef): SketchLayout {
     return { modules }
   }
   const own = (def.modules ?? []).map(m => m.id)
-  const cols = Math.max(1, Math.ceil(Math.sqrt(own.length)))
-  const rows = Math.max(1, Math.ceil(own.length / cols))
-  const refs = referenceNodes(def)
-  const side = referenceSide(def, new Set(own))
-  const left = refs.filter(id => side.get(id) !== 'out')
-  const right = refs.filter(id => side.get(id) === 'out')
-  const perCol = Math.max(6, Math.ceil(((rows - 1) * GAP_Y + 56) / REF_GAP_Y))
-  const leftCols = Math.ceil(left.length / perCol)
-  // 本层网格的左上角：给左侧引用列留出位置
-  const x0 = ORIGIN + (leftCols ? (leftCols - 1) * REF_GAP_X + REF_MARGIN : 0)
-  const blockH = (rows - 1) * GAP_Y
-  own.forEach((id, i) => (modules[id] = { x: x0 + (i % cols) * GAP_X, y: ORIGIN + Math.floor(i / cols) * GAP_Y }))
-  const column = (ids: string[], x: (col: number) => number) =>
-    ids.forEach((id, i) => {
-      const col = Math.floor(i / perCol)
-      const n = Math.min(perCol, ids.length - col * perCol)
-      const top = ORIGIN + Math.max(0, (blockH - (n - 1) * REF_GAP_Y) / 2)
-      modules[id] = { x: x(col), y: Math.round(top + (i % perCol) * REF_GAP_Y) }
-    })
-  column(left, col => x0 - REF_MARGIN - col * REF_GAP_X)
-  column(right, col => x0 + (cols - 1) * GAP_X + REF_MARGIN + col * REF_GAP_X)
+  const fit = area ? Math.max(1, Math.floor((area.w - GRID_NODE_W) / GRID_GAP_X) + 1) : Math.ceil(Math.sqrt(own.length))
+  const cols = Math.max(1, Math.min(own.length, fit))
+  const rows = Math.ceil(own.length / cols)
+  const x0 = area ? Math.max(0, Math.round((area.w - ((cols - 1) * GRID_GAP_X + GRID_NODE_W)) / 2)) : 0
+  const y0 = area?.h ? Math.max(0, Math.round((area.h - ((rows - 1) * GRID_GAP_Y + GRID_NODE_H)) / 2)) : 0
+  own.forEach((id, i) => (modules[id] = { x: x0 + (i % cols) * GRID_GAP_X, y: y0 + Math.floor(i / cols) * GRID_GAP_Y }))
   return { modules }
 }
 
@@ -142,9 +122,13 @@ export function moveNode(def: SketchDef, ctx: EditContext, positions: Readonly<R
   if (!ids.length) return reject('invalid', '没有要移动的节点')
   const missing = ids.filter(id => !isKnown(def, ctx, id) && !referenceNodes(def).includes(id))
   if (missing.length) return reject('not-found', `画布上没有：${missing.join('、')}`)
+  // X22：引用节点的位置由规则算，layout 不记
+  const own = new Set(locateAll(def).map(m => m.id))
+  const placed = ids.filter(id => own.has(id))
+  if (!placed.length) return reject('invalid', '引用节点的位置按所属层排布，不能拖动（X22）')
   const modules = (layoutOf(def).modules ??= {})
   const layers = layerIds(def)
-  for (const id of ids) {
+  for (const id of placed) {
     const spot = spotFor(def, layers, id, positions[id])
     if (spot) modules[id] = spot
   }
@@ -162,19 +146,26 @@ export function relabel(def: SketchDef, _ctx: EditContext, id: string, label: Sk
   return done()
 }
 
-/** X15：重新排列覆盖本张的模块坐标（关系标签回到缺省位置） */
-export function autoArrange(def: SketchDef): OpOutcome {
-  def.layout = gridLayout(def)
+/**
+ * X15、X22：重新排列覆盖本张的模块坐标（关系标签回到缺省位置）；area 为中心区的可用区域（宽 = 画布宽 − 两侧引用列宽）。
+ * 还没有关系的引用的占位保留（它们只在会话里，保存时去掉）
+ */
+export function autoArrange(def: SketchDef, area?: GridArea): OpOutcome {
+  const own = new Set(locateAll(def).map(m => m.id))
+  const marks = Object.keys(def.layout?.modules ?? {}).filter(id => !own.has(id))
+  def.layout = gridLayout(def, area)
+  for (const id of marks) def.layout.modules![id] = { x: 0, y: 0 }
   return done()
 }
 
-export function addReference(def: SketchDef, ctx: EditContext, id: string, at?: SketchPoint): OpOutcome {
+/** X19、X22：把外部模块放上画布作为待连端点——会话里以 layout.modules 的键占位（值不用；位置按所属层排布），连上关系前保存即丢掉 */
+export function addReference(def: SketchDef, ctx: EditContext, id: string): OpOutcome {
   if (locateAll(def).some(m => m.id === id)) return reject('invalid', `「${id}」是本草图的模块，不是引用`)
   if (def.mount === ROOT_MOUNT) return reject('root-only', '根草图没有外部引用：两端都是层或第二级模块（X19）')
   if (id === def.mount) return reject('invalid', '挂载点不能作为引用节点')
   if (!isKnown(def, ctx, id)) return reject('not-found', `找不到模块「${id}」`)
   const modules = (layoutOf(def).modules ??= {})
-  if (!modules[id]) modules[id] = at ?? gridLayout(def).modules![id] ?? { x: ORIGIN, y: ORIGIN }
+  modules[id] ??= { x: 0, y: 0 }
   return done({ created: [id] })
 }
 
@@ -208,19 +199,20 @@ export function setAbstraction(def: SketchDef, text: string): OpOutcome {
 }
 
 /**
- * X19：保存前丢弃没有关系的引用节点（布局里既不是本草图模块、也不是任何关系端点或其折叠的位置）与已不存在的关系的标签位置；
- * 返回丢弃后的草图与丢弃的引用（供提示）。
+ * X19、X22：保存前的 layout——去掉全部引用节点的键（引用的位置由规则算，旧草图里记下的坐标也在这里去掉）与已不存在的关系的标签位置；
+ * 返回去掉后的草图与其中没有关系而丢掉的引用（供提示；有关系的引用只是不记坐标，关系照存）。
  */
-export function dropOrphanReferences(def: SketchDef): { sketch: SketchDef; dropped: string[] } {
+export function layoutForSave(def: SketchDef): { sketch: SketchDef; dropped: string[] } {
   if (!def.layout) return { sketch: def, dropped: [] }
   const own = new Set(locateAll(def).map(m => m.id))
   const ends = new Set((def.relations ?? []).flatMap(r => [r.from, r.to]).flatMap(e => [e, foldReference(def.mount, e)]))
-  const dropped = Object.keys(def.layout.modules ?? {}).filter(id => !own.has(id) && !ends.has(id))
+  const foreign = Object.keys(def.layout.modules ?? {}).filter(id => !own.has(id))
+  const dropped = foreign.filter(id => !ends.has(id))
   const relIds = new Set((def.relations ?? []).map(r => r.id))
   const staleLabels = Object.keys(def.layout.relations ?? {}).filter(id => !relIds.has(id))
-  if (!dropped.length && !staleLabels.length) return { sketch: def, dropped }
+  if (!foreign.length && !staleLabels.length) return { sketch: def, dropped }
   const sketch = structuredClone(def)
-  for (const id of dropped) delete sketch.layout!.modules![id]
+  for (const id of foreign) delete sketch.layout!.modules![id]
   for (const id of staleLabels) delete sketch.layout!.relations![id]
   if (sketch.layout!.modules && !Object.keys(sketch.layout!.modules).length) delete sketch.layout!.modules
   if (sketch.layout!.relations && !Object.keys(sketch.layout!.relations).length) delete sketch.layout!.relations

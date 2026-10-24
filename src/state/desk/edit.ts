@@ -69,6 +69,8 @@ export function createEdit(i: EditInputs) {
   const notice = shallowRef('')
   /** 画布上的多选（框选 / ⇧ 点选）：合并的输入；单选仍是视图状态的 selection */
   const picked = shallowRef<string[]>([])
+  /** X22：草图画布「隐藏外部引用」——只在会话里，不进 URL、不写文件 */
+  const hideReferences = shallowRef(false)
   /** 持久草图只有「相对当前版本」一个对比（偏差，同 sketchCheck）：它没有基线（不属于设计）；交给 AI 的改动摘要另算（handoff） */
   const twoBases = target?.kind !== 'persistent'
   /** 对比口径（对比弹层设定，设计的草图缺省相对基线，持久草图固定相对当前版本） */
@@ -85,6 +87,7 @@ export function createEdit(i: EditInputs) {
     showDiff: i.showDiff,
     selection: i.selection,
     multi: () => picked.value,
+    hideReferences: () => hideReferences.value,
   })
   const sync = createSaveSync(i.writer, session, i.baseline)
   const sketchFiles = () => (target?.kind === 'design' ? (i.sketchFiles.value ?? []) : i.sketch.value ? [i.sketch.value] : [])
@@ -211,6 +214,8 @@ export function createEdit(i: EditInputs) {
     compareMode,
     setCompareMode: (m: CompareMode) => (compareMode.value = twoBases ? m : 'current'),
     pick: (ids: readonly string[]) => (picked.value = [...new Set(ids)]),
+    hideReferences,
+    toggleReferences: () => (hideReferences.value = !hideReferences.value),
     active: computed(() => !!session.value),
     stale: computed(() => !!session.value?.stale),
     ...derive,

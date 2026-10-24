@@ -11,8 +11,7 @@ import path from 'node:path'
 import { isMap, isScalar, isSeq, stringify, type Document, type Node } from 'yaml'
 import {
   designSketchPath,
-  dropOrphanReferences,
-  gridLayout,
+  layoutForSave,
   ROOT_MOUNT,
   seedFromBaseline,
   type RawFile,
@@ -118,7 +117,7 @@ export function saveSketch(modelRoot: string, project: string, req: SaveSketchRe
   if (sketchHash(fs.readFileSync(file, 'utf8')) !== req.baseHash) throw new WriteConflict('文件已变，重新加载后再改（X7i）')
   const ctx = context(dir, root)
   check(req.sketch, { ...ctx, file: rel })
-  const { sketch } = dropOrphanReferences(req.sketch)
+  const { sketch } = layoutForSave(req.sketch)
   const doc = openDoc(file, '')
   if (!isMap(doc.get('sketch'))) throw new WriteError(`${rel} 缺少顶层键 sketch`)
   doc.set('sketch', merge(doc, doc.get('sketch', true) as Node, sketch))
@@ -178,7 +177,7 @@ export function saveDesignSketches(modelRoot: string, project: string, design: s
   const files: SaveDesignResult['files'] = []
   const dropped: SaveDesignResult['dropped'] = []
   for (const { w, from, to } of plan) {
-    const clean = dropOrphanReferences(w.sketch)
+    const clean = layoutForSave(w.sketch)
     if (clean.dropped.length) dropped.push({ mount: w.mount, ids: clean.dropped })
     fs.mkdirSync(path.dirname(abs(to)), { recursive: true })
     if (w.baseHash === null) {
@@ -250,7 +249,8 @@ export function createDesign(
     if (req.mount !== ROOT_MOUNT && (!m || m.kind === 'layer'))
       throw new WriteError(m ? `挂载点不能是层：「${req.mount}」的直接子模块画在根草图里（X9）` : `基线里没有模块「${req.mount}」`)
     const seed = seedFromBaseline(req.mount, index, { id })
-    given = [{ ...seed, layout: gridLayout(seed) }]
+    // X22：不写初始布局——画布按中心区的可用宽度排一次（需初始布局），第一次拖动时落下
+    given = [seed]
   }
   if (!given.length) throw new WriteError('新建设计至少要有一张草图（挂载点与底稿）')
   const sketches = given.map(s => ({ ...s, id }))
@@ -277,7 +277,7 @@ export function createDesign(
     },
     ...sketches.map(s => ({
       rel: designSketchPath(id, s.mount),
-      text: `# 草图（人拥有）：挂在「${s.mount}」下的一层，架构师的意图，AI 按它展开各轮（ADR-0023、ADR-0025）\n${sketchText(dropOrphanReferences(s).sketch)}`,
+      text: `# 草图（人拥有）：挂在「${s.mount}」下的一层，架构师的意图，AI 按它展开各轮（ADR-0023、ADR-0025）\n${sketchText(layoutForSave(s).sketch)}`,
     })),
   ]
   for (const f of files) {
