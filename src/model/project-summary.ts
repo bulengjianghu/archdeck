@@ -40,4 +40,21 @@ export interface ProjectHealth {
   unconfirmed?: number
   /** 人确认层（Z5）：确认范围内的已确认与需复核；只读描述即可算出，读不到代码事实时也有 */
   reviewed?: ReviewCounts
+  /** Q13：共用件的两条提醒（ADR-0027） */
+  shared?: SharedHealth
+}
+
+/** Q13：共用件反向依赖条数（U12）与共用件体量——行数占比（G19）、近窗口修改次数占比（J2）；超阈值时 over */
+export interface SharedHealth {
+  /** 共用件个数（role: shared / bus，不含共用件内的子模块） */
+  modules: number
+  reverse: number
+  /** 共用件子树行数 / 已归属行数；没有行数时为 null */
+  lineRatio: number | null
+  /** 近 J1 窗口内触及共用件的提交 / 全部提交；没有 git 历史时为 null */
+  changeRatio: number | null
+  /** 阈值：行数占比（sourceLimits.sharedRatio，缺省 0.2）与修改占比（0.3） */
+  limits: { lines: number; changes: number }
+  /** 体量异常增长：任一占比超过阈值 */
+  over: boolean
 }

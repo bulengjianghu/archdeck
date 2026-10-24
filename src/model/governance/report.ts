@@ -7,6 +7,7 @@ import type { Issue, ModelIndex } from '../types'
 import { confirmRelations, liftDeps, undescribedDeps, unconfirmedCode, unconfirmedReason, unconfirmedWarns } from './facts'
 import { cyclicityOf, fileCycles, moduleCycles } from './cycles'
 import { evaluateRules, type EntryOf } from './rules'
+import { sharedHostOf, sharedReverse, sharedSuggestions } from './roles'
 import type { Baseline, CodeDeps, GovernanceReport, Violation } from './types'
 
 /** G10：入口文件（不存在的 entry 不算） */
@@ -39,6 +40,7 @@ export function governanceReport(
   const { moduleDeps, skipped, conflicted, nested } = liftDeps(index, own, code.deps)
   const relations = confirmRelations(index, moduleDeps, own.direct, nested)
   const undescribed = undescribedDeps(index, moduleDeps)
+  const shared = sharedReverse(index, moduleDeps.values())
   const violations = withBaseline(evaluateRules(index, own, moduleDeps.values(), entryOf), baseline)
   const mc = moduleCycles(index, moduleDeps.values())
   const fc = fileCycles(index, own, code.deps)
@@ -86,6 +88,17 @@ export function governanceReport(
       })
   }
 
+  // U12：共用件反向依赖（warning，不进门禁与基线）
+  for (const d of shared) {
+    const first = d.files.find(f => f.uses) ?? d.files[0]
+    issues.push({
+      severity: 'warning',
+      code: 'role.shared-reverse',
+      message: `共用件反向依赖：${name(d.from)} → ${name(d.to)}（共用件「${name(sharedHostOf(index, d.from)!)}」用到了普通或核心模块）；${d.files.length} 处，如 ${first.from}:${first.line}（U12）`,
+      ...index.modules.get(d.from)?.src,
+    })
+  }
+
   return {
     moduleDeps,
     skipped,
@@ -94,6 +107,8 @@ export function governanceReport(
     external: code.external,
     relations,
     undescribed,
+    sharedReverse: shared,
+    sharedSuggestions: sharedSuggestions(index, moduleDeps.values()),
     violations,
     moduleCycles: mc,
     fileCycles: fc,

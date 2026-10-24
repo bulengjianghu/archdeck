@@ -27,6 +27,7 @@ import {
   type ReworkList,
   isDesignVersion,
   isSketchRevision,
+  type ModuleRole,
   type RuleKind,
 } from '@/model'
 import {
@@ -229,6 +230,9 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       options.version ? Promise.resolve({ ok: false, error: '例外只加在当前版本' }) : writer.allow(input),
     ignore: (pattern: string): Promise<WriteOutcome> =>
       options.version ? Promise.resolve({ ok: false, error: '忽略项只加在当前版本' }) : writer.ignore({ pattern }),
+    /** U11、M16：一键认可疑似共用件——写到 intent/roles.yaml，只对当前版本 */
+    role: (module: string, role: ModuleRole): Promise<WriteOutcome> =>
+      options.version ? Promise.resolve({ ok: false, error: '角色只在当前版本认可' }) : writer.role({ module, role }),
     /** X4：认可偏差——只对设计版本（轮次或草图）打开的那个设计 */
     canAccept: !!dv,
     accept: (deviation: string, reason: string): Promise<WriteOutcome> =>

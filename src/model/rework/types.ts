@@ -9,6 +9,7 @@ import type { ViolationStatus } from '../governance/types'
 export type ReworkCategory =
   | 'description'
   | 'violation'
+  | 'shared'
   | 'cycle'
   | 'ownership'
   | 'unconfirmed'
@@ -19,7 +20,7 @@ export type ReworkCategory =
   | 'sketch'
   | 'owned'
   | 'unevidenced'
-export const REWORK_CATEGORIES: readonly ReworkCategory[] = ['description', 'violation', 'cycle', 'ownership', 'unconfirmed', 'undescribed', 'unmodeled', 'review', 'coupling', 'sketch', 'owned', 'unevidenced']
+export const REWORK_CATEGORIES: readonly ReworkCategory[] = ['description', 'violation', 'shared', 'cycle', 'ownership', 'unconfirmed', 'undescribed', 'unmodeled', 'review', 'coupling', 'sketch', 'owned', 'unevidenced']
 
 /** 严重度：error 卡门禁或剔除了实体；warning 描述与代码不一致；info 只提示（未解释的交互、已豁免） */
 export type ReworkSeverity = IssueSeverity | 'info'
@@ -42,6 +43,7 @@ export type ReworkActionKind =
   | 'follow-sketch' // 按草图改描述（X4）
   | 'accept-deviation' // 架构师认可偏差或改草图（X4）
   | 'register-owned' // 人确认后登记指纹（X6）
+  | 'drop-role' // U12：取消共用件角色（改 intent/roles.yaml 或草图，架构师决定）
 
 export interface ReworkAction {
   kind: ReworkActionKind
@@ -105,6 +107,7 @@ export interface ReworkList {
 export const REWORK_CATEGORY_LABELS: Record<ReworkCategory, string> = {
   description: '描述错误与提醒',
   violation: '违规',
+  shared: '共用件反向依赖',
   cycle: '环度与基线',
   ownership: '源码归属',
   unconfirmed: '未证实的关系',

@@ -3,6 +3,7 @@
  * 路径一律相对源码根目录、以 `/` 分隔。
  */
 import type { Issue, ModuleRole, RelationType, RelationVia, RuleKind } from '../types'
+import type { SharedSuggestion } from './roles'
 
 export type DepKind = 'value' | 'type'
 
@@ -178,6 +179,10 @@ export interface GovernanceReport {
   external: Record<string, number>
   relations: Map<string, Confirmation>
   undescribed: ModuleDep[]
+  /** U12：共用件反向依赖（ADR-0027） */
+  sharedReverse: ModuleDep[]
+  /** U11：疑似共用件（建议，不改描述；ADR-0027） */
+  sharedSuggestions: SharedSuggestion[]
   violations: Violation[]
   moduleCycles: Cycle[]
   fileCycles: Cycle[]

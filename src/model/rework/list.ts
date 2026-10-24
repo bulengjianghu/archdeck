@@ -5,7 +5,7 @@
 import { RULE_LABELS, moduleName } from '../names'
 import { bindRelation, forEachStep, planScenario, RUNTIME_RELATION_TYPES } from '../scenario'
 import { matchRef, missingEvidence, moduleEntry, type LocalSource, type SourceOwnership } from '../source'
-import { contractNames, stepEvidence, unconfirmedCode, unconfirmedReason, unconfirmedWarns, type FileDep, type GovernanceReport, type Violation } from '../governance'
+import { contractNames, sharedHostOf, stepEvidence, unconfirmedCode, unconfirmedReason, unconfirmedWarns, type FileDep, type GovernanceReport, type Violation } from '../governance'
 import { reviewDiffText, reviewStates, REVIEW_FIELD_LABELS, REVIEW_FIELDS } from '../review'
 import { isolatedCouplings, type EvolutionStats } from '../evolution'
 import { SKETCH_DEVIATION_LABELS, type SketchCheck } from '../intent'
@@ -423,6 +423,27 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
             { kind: 'add-code-refs', text: '代码里有这条依赖时，检查两端的 codeRefs 是否覆盖了依赖所在的文件' },
           ],
       target: { relation: id, modules: [r.from, r.to] },
+    })
+  }
+
+  // U12：共用件反向依赖；一条模块依赖一个根因（ADR-0027）
+  for (const d of report.sharedReverse) {
+    const host = sharedHostOf(index, d.from)!
+    const m = index.modules.get(host)
+    items.push({
+      id: `shared:${d.key}`,
+      category: 'shared',
+      severity: 'warning',
+      rules: ['U12'],
+      code: 'role.shared-reverse',
+      title: `共用件反向依赖：${name(d.from)} → ${name(d.to)}（共用件「${name(host)}」用到了普通或核心模块）`,
+      ...(m ? { at: descLoc(m.src)! } : {}),
+      affected: d.files.map(f => ({ in: 'source' as const, file: f.from, line: f.line, note: f.via === f.to ? `→ ${f.to}` : `→ ${f.via} ⇒ ${f.to}` })),
+      actions: [
+        { kind: 'fix-code', text: `把「${name(d.to)}」里被用到的部分下沉进共用件，或改由使用方传入` },
+        { kind: 'drop-role', text: `确实不是共用件时取消它的角色（由架构师决定）`, file: m?.roleFrom === 'roles' ? 'intent/roles.yaml' : m?.src.file },
+      ],
+      target: { modules: [d.from, d.to], dep: d.key },
     })
   }
 

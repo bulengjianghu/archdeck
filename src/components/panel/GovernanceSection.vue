@@ -5,7 +5,7 @@
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
-import { RULE_LABELS, moduleName, type Violation, type ViolationStatus } from '@/model'
+import { RULE_LABELS, moduleName, sharedHealth, type Violation, type ViolationStatus } from '@/model'
 import Section from './Section.vue'
 import FileDepList from './FileDepList.vue'
 import WriteForm from './WriteForm.vue'
@@ -55,6 +55,24 @@ const violationTitle = computed(() => {
   const allowed = x.violations.length - counted.value
   return `计入门禁 ${counted.value} 条（新增 ${x.gate.newViolations} · 已知 ${x.gate.knownViolations}）${allowed ? `，已豁免 ${allowed}` : ''}${x.baseline ? `，基线 ${x.baseline.violations.length} 条` : ''}`
 })
+// Q13：共用件的两条提醒（反向依赖、体量）；修改占比要 git 历史，演化事实没加载时只给行数占比
+const shared = computed(() => {
+  const idx = desk.index.value
+  const own = desk.files.ownership.value
+  return idx && own ? sharedHealth(idx, own, r.value, desk.files.lines.value, desk.evolution.history.value) : null
+})
+const pct = (x: number | null) => (x === null ? '—' : `${Math.round(x * 100)}%`)
+// U11：疑似共用件，一键认可写到 intent/roles.yaml（人拥有）
+const suggestions = computed(() => r.value?.sharedSuggestions ?? [])
+const accepting = ref<string | null>(null)
+const acceptError = ref('')
+async function acceptShared(id: string) {
+  accepting.value = id
+  acceptError.value = ''
+  const out = await desk.write.role(id, 'shared')
+  accepting.value = null
+  if (!out.ok) acceptError.value = out.error
+}
 const liveCycles = computed(() => (r.value?.moduleCycles ?? []).filter(c => !c.tolerated))
 const maxCycle = computed(() => Math.max(0, ...liveCycles.value.map(c => c.members.length)))
 const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c.tolerated).length)
@@ -109,6 +127,17 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
           </template>
           <template v-else>模块 {{ r.cyclicity.modules }} · 文件 {{ r.cyclicity.files }} <span class="muted">（无基线）</span></template>
         </dd>
+        <template v-if="shared">
+          <dt>共用件</dt>
+          <dd
+            data-testid="shared-health"
+            :title="`共用件 ${shared.modules} 个；行数占比阈值 ${pct(shared.limits.lines)}、修改占比阈值 ${pct(shared.limits.changes)}（Q13）`"
+          >
+            <span :class="{ warn: shared.reverse }">反向依赖 {{ shared.reverse }}</span> · 体量
+            <span :class="{ warn: shared.over }">行数 {{ pct(shared.lineRatio) }} · 修改 {{ pct(shared.changeRatio) }}</span>
+            <span v-if="shared.over" class="warn">（超阈值）</span>
+          </dd>
+        </template>
         <dt>基线</dt>
         <dd v-if="r.baseline">
           {{ r.baseline.createdAt.slice(0, 10) }}<code v-if="r.baseline.commit"> {{ r.baseline.commit.slice(0, 8) }}</code>
@@ -145,6 +174,29 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
         <li v-if="g.list.length > 30" class="muted">另 {{ g.list.length - 30 }} 条，见 npm run arch -- violations</li>
       </ul>
     </div>
+  </Section>
+
+  <Section v-if="part !== 'summary' && r && suggestions.length" :title="`疑似共用件 ${suggestions.length} 个`">
+    <p class="muted hint">入度广、没有运行时出边、不在场景路径上、名字像工具模块（U11）。认可后写进 intent/roles.yaml，收进本层的共用件架。</p>
+    <ul class="plain" data-testid="shared-suggestions">
+      <li v-for="s in suggestions" :key="s.module" class="suggestion" :data-module="s.module">
+        <button class="link" @click="desk.revealModule(s.module)">{{ name(s.module) }}</button>
+        <button v-if="desk.write.canEditRules" class="accept" :disabled="accepting === s.module" @click="acceptShared(s.module)">认可为共用件</button>
+        <ul class="reasons muted">
+          <li v-for="(t, i) in s.reasons" :key="i">{{ t }}</li>
+        </ul>
+      </li>
+    </ul>
+    <p v-if="acceptError" class="warn">{{ acceptError }}</p>
+  </Section>
+
+  <Section v-if="part !== 'summary' && r && r.sharedReverse.length" title="共用件反向依赖" :count="r.sharedReverse.length">
+    <ul class="plain">
+      <li v-for="d in r.sharedReverse" :key="d.key" class="violation">
+        <button class="link" @click="desk.select({ kind: 'dep', id: d.key })">{{ name(d.from) }} → {{ name(d.to) }}</button>
+        <span class="muted">{{ d.files.length }} 处</span>
+      </li>
+    </ul>
   </Section>
 
   <Section v-if="part !== 'summary' && r && r.moduleCycles.length" title="模块环" :count="r.moduleCycles.length">
@@ -246,6 +298,22 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
 
 .detail p {
   margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.suggestion {
+  padding: 3px 0;
+}
+
+.suggestion .accept {
+  margin-left: 8px;
+  font-size: 12px;
+  padding: 1px 8px;
+}
+
+.reasons {
+  margin: 2px 0 0 14px;
+  padding: 0;
   font-size: 12px;
 }
 

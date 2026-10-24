@@ -35,6 +35,8 @@ const archivedCount = (p: ProjectSummary) => (p.designs ?? []).filter(d => isArc
 type Health = NonNullable<ProjectSummary['health']>
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '±0')
 const violationText = (h: Health) => (h.violations!.delta === null ? String(h.violations!.count) : signed(h.violations!.delta))
+/** Q13：占比的百分数；没有数据时为 — */
+const pct = (x: number | null) => (x === null ? '—' : `${Math.round(x * 100)}%`)
 const violationTone = (h: Health) => (h.violations!.new ? 'bad' : h.violations!.delta === null && h.violations!.count ? 'warn' : 'ok')
 const violationTitle = (h: Health) => {
   const v = h.violations!
@@ -121,6 +123,17 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
                 <dt>未归属</dt>
                 <dd>
                   {{ p.health.unowned }}<small v-if="p.health.conflicts"> · 冲突 {{ p.health.conflicts }}</small>
+                </dd>
+              </div>
+              <div
+                v-if="p.health.shared"
+                class="shared"
+                :class="p.health.shared.reverse || p.health.shared.over ? 'warn' : 'ok'"
+                :title="`共用件 ${p.health.shared.modules} 个：反向依赖 ${p.health.shared.reverse} 条；行数占比 ${pct(p.health.shared.lineRatio)}（阈值 ${pct(p.health.shared.limits.lines)}）、修改占比 ${pct(p.health.shared.changeRatio)}（阈值 ${pct(p.health.shared.limits.changes)}）（Q13）`"
+              >
+                <dt>共用件</dt>
+                <dd>
+                  反向 {{ p.health.shared.reverse }}<small> · 体量 {{ pct(p.health.shared.lineRatio) }}{{ p.health.shared.over ? ' 超' : '' }}</small>
                 </dd>
               </div>
             </template>

@@ -1,0 +1,6 @@
+# 模块角色（M16、U11，人拥有，ADR-0027）：模块 ID → core / shared / bus。第二级写在骨架里，更深的写在这里或挂在父模块上的草图里（草图为准）。
+# 第五轮 T2 由执行会话提出 DeskState 的三个核心（视图派生、dispatch 与操作、编辑中的草图），待负责人确认后 npm run arch -- own 登记。
+roles:
+  state.desk.projection: core
+  state.desk.actions: core
+  state.desk.edit: core
