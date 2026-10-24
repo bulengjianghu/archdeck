@@ -88,7 +88,7 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计或提交)──▶ Mod
 
 ## 4. 设计版本与对比
 
-设计版本的存放与流程见 [ADR-0002](../adr/0002-design-versions.md) 与 [04-description-format.md §5](../04-description-format.md#5-设计版本)：每轮一份完整快照，所以设计版本走与当前版本完全相同的加载流水线，只多一步对比。
+设计版本的存放与流程见 [ADR-0002](../adr/0002-design-versions.md) 与 [04-description-format.md §5](../04-description-format.md#5-设计版本草图--轮次)：每轮一份完整快照，所以设计版本走与当前版本完全相同的加载流水线，只多一步对比。
 
 `diffModels(base, target) → ModelDiff`（规则 E1、E2）：
 

@@ -13,7 +13,8 @@ interface ViewState {
   selection: Selection | null        // 显式选中的对象 { kind: 'module' | 'relation' | 'edge' | 'actor' | 'file' | 'dep'; id }（文件的 id 为相对源码根目录的路径；dep 为代码依赖叠加线，id 为 `<依赖方模块>-><被依赖方模块>`，K10）；运行视角下为 null 即选中进度所在的步骤 / 场景
   hover: string | null
   toggles: Toggles                   // showBoundaries · currentOnly · relationTypes · showDiff · compareTo · showFacts（代码事实叠加，K9）
-  playback: PlaybackState | null     // null = 结构 / 交互视角
+  playback: PlaybackState | null     // null = 结构 / 交互视角（按 mode）
+  mode?: 'structure'                 // 不开场景时的画布模式：'structure' 为结构视角，缺省（不写）为交互视角；URL `v=s`（V11）
 }
 
 interface PlaybackState {
@@ -26,13 +27,13 @@ interface PlaybackState {
 视角与选中由状态推出，不另存字段（V1、V2、V7）：
 
 ```text
-视角 = playback 为 null ? 结构 / 交互 : 运行
+视角 = playback ≠ null ? 运行 : (mode = 'structure' 且不在草图画布 ? 结构 : 交互)
 选中 = selection ≠ null ? selection
        运行视角：frameId ≠ null ? 步骤(frameId) : 场景(scenarioId)
        结构 / 交互视角：无（面板显示当前父模块，N13）
 ```
 
-> 第七轮（ADR-0031，待实现）：不开场景时的视角是视图状态里的一个**模式值**（结构 / 交互，缺省交互），进 URL（`v=s` 为结构视角，交互不写），切换进历史；打开场景即运行视角，退出回到进入前的模式（V11）。结构与交互之间切换时层次、节点位置与开关不变，只换边与角标；选中映射：关系与视图边 → 同一对节点同方向的依赖边（`dep`，没有依赖时清空），端口 → 定义模块，依赖边切回交互视角时仍为 `dep`（V12）。DeskState 另派生结构视角的本层依赖边、影响面与指标（K14–K17、U15–U17）。
+> 第七轮（ADR-0031）：不开场景时的视角是视图状态里的**模式值** `ViewState.mode`（`'structure'` 为结构，不写为交互），进 URL（`v=s` 为结构视角，交互不写），切换进历史；打开场景即运行视角，退出回到进入前的模式（V11）。结构与交互之间切换时层次、节点位置与开关不变，只换边与角标；选中映射：关系与视图边 → 同一对节点同方向的依赖边（`dep`，没有依赖时清空），端口 → 定义模块，依赖边切回交互视角时仍为 `dep`（V12）。DeskState 另派生结构视角的本层依赖边、影响面与指标（K14–K17、U15–U17）。
 
 选中是唯一的主语（ADR-0012）。步骤与场景不存进 `selection`：运行视角下 `selection` 为空即「选中进度所在的步骤」，进度在开头时即「选中场景」。不变式「选中的步骤就是进度所在的一步」（V7）因此由表示本身保证——单步、指向、拖动进度只需移动 `frameId` 并清空 `selection`；选中其他对象只设 `selection`，进度不动；取消选中（V4）就回到进度所在的步骤。
 

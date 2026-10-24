@@ -165,7 +165,7 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 
 - 返工清单（§4.2）多一类 `review`（「需复核」）：一个需复核的模块一条，warning，规则 Z3，`detail` 为差异摘要，建议动作 `{ kind: 'review', text: '在面板上复核并确认' }`——人的动作，没有 `snippet`。`lint:model` 不列它，只在摘要给出「确认：已确认 a / b · 需复核 c」。
 - `projectHealth` 另给 `reviewed: { scope, reviewed, stale }`（Z5），它只读描述，读不到代码事实时也有；有共用件时给 `shared`（Q13，`sharedHealth(index, own, report, lines?, history?)`：共用件个数、反向依赖条数、行数占比（G19，阈值 `sourceLimits.sharedRatio`，缺省 0.2）、近窗口修改占比（J2 口径，阈值 0.3）与是否超阈值）；开发服务器的 `readHealth` 在有共用件时读 git 历史（按 HEAD 缓存），根层面板在演化事实加载后才有修改占比。
-- 写入：`POST write/<项目>/reviewed`（[加载与版本 §2.2](./loading-and-versions.md#22-写入人拥有的文件vitewritemodelts-b1b5-adr-0019)）与 `appendReviewed(modelRoot, project, entries, root?, { origin?, design? })`：逐条按 `module` 更新已有记录或追加；每条 `hash` 必须等于当前 `reviewHash`，不符整次拒绝；写后在 `ledger.jsonl` 追加 `{ at, tool: 'reviewed', origin, modules, design? }`（`origin`：端点为 `page`、归档为 `archive`、其余 Node 侧调用缺省 `cli`，Z6）；`entries` 的字段 `module`、`at`、`hash`、`summary`、`source`、`note?`；草图归档（X 组）调用同一个函数一次写多条。
+- 写入：`POST write/<项目>/reviewed`（[加载与版本 §2.2](./loading-and-versions.md#22-写入人拥有的文件vitewritemodeltsb1b5adr-0019)）与 `appendReviewed(modelRoot, project, entries, root?, { origin?, design? })`：逐条按 `module` 更新已有记录或追加；每条 `hash` 必须等于当前 `reviewHash`，不符整次拒绝；写后在 `ledger.jsonl` 追加 `{ at, tool: 'reviewed', origin, modules, design? }`（`origin`：端点为 `page`、归档为 `archive`、其余 Node 侧调用缺省 `cli`，Z6）；`entries` 的字段 `module`、`at`、`hash`、`summary`、`source`、`note?`；草图归档（X 组）调用同一个函数一次写多条。
 
 ### 4.4 意图（模型层，`src/model/intent/`）
 
