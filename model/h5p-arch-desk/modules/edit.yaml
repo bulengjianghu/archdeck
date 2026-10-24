@@ -71,7 +71,7 @@ modules:
   - id: model.intent.edit.layout
     name: 位置与引用节点
     parent: model.intent.edit
-    responsibility: 布局节的编辑（X15）：拖动节点（多选一起是一步）、拖动关系标签、重新排列（网格 gridLayout：本层居中网格，入边引用在左、出边在右；根草图按层带折行，X21）；引用节点（X19）由关系派生、按与挂载点同深度的祖先折叠显示（foldReference、referenceNodes、referenceRelations），addReference 放上画布、removeReference 连同它的关系删掉，保存前 dropOrphanReferences 丢掉没有关系的；挂载点的原则 setAbstraction（X10）。
+    responsibility: 布局节的编辑（X15、X22）：拖动节点（多选一起是一步，只记本层模块——引用节点的位置由规则算，只拖引用时拒绝）、拖动关系标签、重新排列（网格 gridLayout：非根草图按中心区的可用区域排、整块居中，坐标相对中心区的内容原点，引用不进 layout；根草图按层带折行，X21）；引用节点（X19）由关系派生、按与挂载点同深度的祖先折叠显示（foldReference、referenceNodes、referenceRelations），addReference 放上画布（会话里在 layout 占位）、removeReference 连同它的关系删掉，保存前 layoutForSave 去掉全部引用的键并列出没有关系而丢掉的；挂载点的原则 setAbstraction（X10）。
     codeRefs: [src/model/intent/edit/layout.ts]
   - id: model.intent.validate
     name: 草图校验
@@ -107,7 +107,7 @@ modules:
     parent: state.desk
     kind: component
     responsibility: |
-      DeskState 的编辑分组（desk.edit，X7、X20，ADR-0025）：持有按设计的编辑会话（ds.EditSession，一个值：设计的全部草图、当前张、设计级撤销 / 重做栈、各张读取时的指纹），由纯函数改变；画布多选、对比口径（相对基线 / 相对当前版本）与面板内提示也在这里；
+      DeskState 的编辑分组（desk.edit，X7、X20，ADR-0025）：持有按设计的编辑会话（ds.EditSession，一个值：设计的全部草图、当前张、设计级撤销 / 重做栈、各张读取时的指纹），由纯函数改变；画布多选、对比口径（相对基线 / 相对当前版本）、面板内提示与「隐藏外部引用」（hideReferences，只在会话里、不进 URL、不写文件，X22）也在这里；
       对外提供草图画布的操作（每个手势一个，经 model.intent.edit 的 applyDesignEdit 应用）、下钻与切张、撤销 / 重做、保存（整个设计）、保存并交给 AI、退出、新建设计；
       打开草图版本即进入：各张草图连同 system.yaml、持久草图与引用的外部模块加载成设计的索引，作为 DeskState 的 index；并派生当前张的画布数据、两级校验、两个对比的计数、超七提示、待重连、脏与面包屑；面板用的查询（当前张里的条目、父模块对外的一面、模块的原则与血缘读法、各张草图、引用外部模块的候选）。
     principle: |
@@ -128,7 +128,7 @@ modules:
   - id: state.desk.edit.derive
     name: 编辑会话的派生
     parent: state.desk.edit
-    responsibility: 由编辑会话派生（computed）：设计的索引（各张草图序列化后与 system.yaml、持久草图、引用的外部模块一起加载，草图画布下作为 DeskState 的 index）；当前张的画布数据（草图布局 sketchScene，图上标出变更时带角标）；各张的两级校验 validateSketch 与全设计的格式错误 / 语义提示、超七提示、待重连；两个对比 compareDesign（相对基线、相对当前版本——持久草图只有后者，即偏差，与 sketchCheck 同一口径）的全设计计数与本张清单；持久草图交给 AI 时的改动摘要（handoff：与去掉它贡献后的当前版本比，不进计数）；是否脏、改过的草图、能否撤销 / 重做；面包屑（层的名称作第二级的前缀）；编辑的上下文（持久草图与设计的基线）。
+    responsibility: 由编辑会话派生（computed）：设计的索引（各张草图序列化后与 system.yaml、持久草图、引用的外部模块一起加载，草图画布下作为 DeskState 的 index）；当前张的画布数据（草图布局 sketchScene，图上标出变更时带角标；层的顺序、模块所属的层与系统名取设计的索引，给引用按层成列与框线，X22）；各张的两级校验 validateSketch 与全设计的格式错误 / 语义提示、超七提示、待重连；两个对比 compareDesign（相对基线、相对当前版本——持久草图只有后者，即偏差，与 sketchCheck 同一口径）的全设计计数与本张清单；持久草图交给 AI 时的改动摘要（handoff：与去掉它贡献后的当前版本比，不进计数）；是否脏、改过的草图、能否撤销 / 重做；面包屑（层的名称作第二级的前缀）；编辑的上下文（持久草图与设计的基线）。
     principle: 草图只有几十个实体，每次操作重算一遍的代价可以忽略；校验与对比都调同一组模型层函数，与写入端点、命令行一致。
     codeRefs: [src/state/desk/edit/derive.ts]
   - id: state.desk.edit.commands
@@ -155,10 +155,10 @@ modules:
     kind: component
     responsibility: |
       人拥有的草图的整份写回（B6、B7、X20）与新建设计：
-      saveDesignSketches——一次写一个设计的若干张草图（designs/<设计>/sketches/<mount>.yaml，文件名 = 挂载点）：先全部比对指纹（新文件不得已存在、级联改名的比旧文件、删掉的比读取时），任一不符整次拒绝（409）；再逐张两级校验，只拦格式错误（422，附问题列表）；写前丢掉没有关系的引用并列出；
+      saveDesignSketches——一次写一个设计的若干张草图（designs/<设计>/sketches/<mount>.yaml，文件名 = 挂载点）：先全部比对指纹（新文件不得已存在、级联改名的比旧文件、删掉的比读取时），任一不符整次拒绝（409）；再逐张两级校验，只拦格式错误（422，附问题列表）；写前去掉引用节点的位置、丢掉没有关系的引用并列出（layoutForSave，X19、X22）；
       用 YAML 文档模型把每张合并进原文档（映射逐键、带 id 的列表按 id 对齐、标量只在值变了才替换，没变的节点连同注释原样保留）；级联改名写到新文件名并删旧文件、删掉的草图删文件，只限 designs/<设计>/sketches/*（B7）；写后更新 owned.json 的指纹，ledger.jsonl 每个文件记一行（来源 page、种类 sketch，改名带 renamedFrom、删除带 removed）。
       saveSketch——持久草图 intent/<ID>.yaml 单张写回（同一套指纹、校验与合并）；设计的一张转给 saveDesignSketches。
-      createDesign——设计 ID 合法且目录不存在；写 design.yaml（名称、目标、status: draft、base.commit = 仓库 HEAD，读不到时省略）与草图：给挂载点时在这里从基线（HEAD 那一版描述，没有时为当前版本）复制底稿并初始布局一次，与「相对基线」读的是同一份（X18）；全部登记指纹。
+      createDesign——设计 ID 合法且目录不存在；写 design.yaml（名称、目标、status: draft、base.commit = 仓库 HEAD，读不到时省略）与草图：给挂载点时在这里从基线（HEAD 那一版描述，没有时为当前版本）复制底稿（不写 layout：画布按中心区宽度排一次，X22），与「相对基线」读的是同一份（X18）；全部登记指纹。
       端点由 ModelSource 插件挂载：POST /write/<项目>/sketch（持久草图）、/write/<项目>/designs/<设计>/sketch（设计的一张）、/write/<项目>/designs/<设计>/sketches（按设计）、/write/<项目>/designs（新建），只收同源 JSON（B5）。
     principle: |
       - **注释的限度**（负责人裁决接受）：注释挂在节点上，节点没变注释就在；改过的标量保留其行尾注释，删掉的条目注释随之消失，新条目没有注释。写进 04 §3.10。
@@ -175,21 +175,22 @@ modules:
     principle: |
       - 草图版本打开即进入（SK-15、SK-16），Vue Flow 自由模式，不走 elk、不走分层投影：节点与直线边来自草图布局（state.layout.sketch），位置来自草图的 layout；模型画布上没有编辑态。
       - **每个手势只发编辑分组的一个操作**：撤销一步恰好撤回用户的一个动作；画布不自己算规则与布局，被拒绝时就地提示原因。
-      - **对话框都在画布里**：面板经 sketchRequest 请求合并 / 拆分 / 删除，画布打开名称 + ID 对话框或级联确认；升级的落点在信息条的面包屑，经 dragOverParent 让它高亮。
+      - **对话框都在画布里**：面板经 sketchRequest 请求合并 / 拆分 / 删除，画布打开名称 + ID 对话框或级联确认；升级的落点在信息条的面包屑与中心区之外，经 dragOverParent 让面包屑与系统框一起高亮。
+      - **引用是按规则排布的边界**（X22）：引用列、框线与中心区都由草图布局算出，画布不让人摆引用；引用线在模块之上、不接收指针，本层的线在模块之下。
   - id: present.sketch.canvas
     name: 画布与手势
     parent: present.sketch
     kind: component
     responsibility: |
-      把草图布局写入 Vue Flow 并把手势转成编辑操作：拖节点（多选一起拖）松手 = moveNode 一步，拖到同层节点上 = 降级（根草图里拖到另一条层带 = 移入），拖到信息条面包屑父级 = 升级；框选 / ⇧ 多选；
+      把草图布局写入 Vue Flow 并把手势转成编辑操作：拖节点（多选一起拖）松手 = moveNode 一步（位置换成相对中心区内容原点的坐标），拖到同层节点上 = 降级（根草图里拖到另一条层带 = 移入），拖到信息条面包屑父级或拖出中心区 = 升级（X22）；引用节点不可拖；框选 / ⇧ 多选；
       右键合并为新模块（≥2）、拆分（原模块有下一层草图时二次确认，X7k）、进入下一层、删除（有级联时二次确认），没有「在此设计」（#20c）；双击空白、空白处右键或「＋ 模块」就地输入名称与 ID 短名；从连线柄拖到另一节点松手选类型 + 一句说明；双击模块下钻；
-      工具条（＋ 模块、引用外部模块、重新排列、本层数与超七提示）；⌘Z / ⇧⌘Z、Delete / Backspace、⌘S、Esc（只取消选中）；图上标出变更时的图例。
+      层级：框线在最底、本层的线在模块之下、引用线在模块之上（不接收指针，相关节点选中或悬停时实色）；工具条（＋ 模块、引用外部模块、隐藏外部引用——只在会话里、隐藏后适应画布、重新排列——按中心区可用区域、本层数与超七提示）；⌘Z / ⇧⌘Z、Delete / Backspace、⌘S、Esc（只取消选中）；图上标出变更时的图例。
     codeRefs: [src/components/sketch/SketchCanvas.vue]
   - id: present.sketch.elements
     name: 节点与边
     parent: present.sketch
     kind: component
-    responsibility: 草图画布的节点（模块：名称、ID、下一层标识、变更角标；引用：灰色虚线只读，折叠的标条数；根草图的层带：带头可改名称与原则、「＋ 模块」「删层」、超七标记）与直线边（两端中心连线裁到边框、同对多条平移错开、类型色、可拖动的标签与条数）。
+    responsibility: 草图画布的节点（模块：名称、ID、下一层标识、变更角标；引用：紧凑一行的名字 + ID + ×N，淡色虚线只读，列缩小时内容整体缩放，连线柄只在悬停时出现；框线：系统框、中心区、带层名与「同层」标注的引用列，拖出中心区时系统框高亮「松手 = 升级」；根草图的层带：带头可改名称与原则、「＋ 模块」「删层」、超七标记）与边（本层：两端中心连线裁到边框、同对多条平移错开、类型色、可拖动的标签与条数；引用线：从模块朝引用列一侧的端口到引用节点、水平切线的曲线，细、半透明、无标签，hot 时实色）。
     codeRefs: [src/components/sketch/SketchNode.vue, src/components/sketch/StraightEdge.vue]
   - id: present.sketch.contracts
     name: 画布的约定与显示名
@@ -363,9 +364,9 @@ relations:
   - {id: rel.v2.lint-validate, from: access.lint, to: model.intent.validate, type: calls, description: 设计的各张草图逐张两级校验（X14）}
   - {id: rel.v2.reader-loader, from: access.reader, to: model.pipeline.loader, type: calls, description: 读设计草图的挂载点与是否需要初始布局（load）}
   - {id: rel.v4.commands-sketch-layout, from: state.desk.edit.commands, to: state.layout.sketch, type: calls, description: sketchPositions：写位置时补齐当前显示的位置（X15）}
-  - {id: rel.v4.derive-sketch-layout, from: state.desk.edit.derive, to: state.layout.sketch, type: calls, description: sketchScene：当前张的节点、直线边与位置}
-  - {id: rel.v4.save-layout, from: state.desk.edit.save, to: model.intent.edit.layout, type: calls, description: dropOrphanReferences：保存前丢掉没有关系的引用（X19）}
-  - {id: rel.v4.sketch-layout-model, from: state.layout.sketch, to: model.intent.edit.layout, type: calls, description: gridLayout、referenceNodes：初始网格与引用节点}
+  - {id: rel.v4.derive-sketch-layout, from: state.desk.edit.derive, to: state.layout.sketch, type: calls, description: sketchScene：当前张的节点、直线边、引用列与框线（层顺序与所属层取设计的索引）}
+  - {id: rel.v4.save-layout, from: state.desk.edit.save, to: model.intent.edit.layout, type: calls, description: layoutForSave：保存前去掉引用节点的位置、丢掉没有关系的引用（X19、X22）}
+  - {id: rel.v4.sketch-layout-model, from: state.layout.sketch, to: model.intent.edit.layout, type: calls, description: gridLayout、referenceNodes、foldReference：按中心区可用区域的初始网格、引用节点与引用列的重心}
   - {id: rel.v4.runner-sketch-layout, from: state.layout.runner, to: state.layout.sketch, type: depends, description: 布局入口 layout.ts 转出草图布局（Layout 的访问面）}
   - {id: rel.v4.sketch-layout-types, from: state.layout.sketch, to: model.types, type: depends, description: SketchDef、SketchPoint、ChangeKind}
   - {id: rel.v4.sketch-layout-locate, from: state.layout.sketch, to: model.intent.edit.locate, type: calls, description: locateAll：本层模块}
@@ -457,7 +458,7 @@ interfaces:
       run(ops: DesignEditOp | DesignEditOp[]): EditOutcome; edit(op: EditOp): EditOutcome   // EditOutcome = { ok: true; effects } | { ok: false; reason }
       addModule(name, short, at?, layer?); connect(from, to, type, description?)
       merge(ids, name, short); split(id, parts); demote(id, onto); promote(id); moveIn(id, layer, at?); rename(id, newId)
-      updateModule(id, patch); moveNode(positions); relabel(id, label); autoArrange(); addReference(id, at?); setAbstraction(text)
+      updateModule(id, patch); moveNode(positions); relabel(id, label); autoArrange(); addReference(id); setAbstraction(text); hideReferences / toggleReferences()（X22，只在会话里）
       remove(ids); previewRemove(ids): { removed; sketches } | { rejected }
       openChild(id); openMount(mount); undo(): boolean; redo(): boolean
       save(): Promise<SaveOutcome>; saveAndHandToAi(): Promise<{ ok: true; prompt } | { ok: false; reason }>
@@ -503,7 +504,7 @@ dataStructures:
         modules?: ModuleDef[]          // 挂载点的直接子节点（根挂载为层与层的 children）；可带 from: string[]（血缘，指向基线 ID，X11）
         relations?: RelationDef[]      // 显式写在本层（两端在本层，或一端为外部模块——引用节点，X19）
         interfaces?: InterfaceDef[]; dataStructures?: DataStructureDef[]
-        layout?: { modules?: Record<id, { x; y }>; relations?: Record<id, { label?: { x; y } }> }   // X15；根草图带内 y 相对带顶（X21）
+        layout?: { modules?: Record<id, { x; y }>; relations?: Record<id, { label?: { x; y } }> }   // X15；只记本层模块，非根草图相对中心区的内容原点、引用不记（X22）；根草图带内 y 相对带顶（X21）
       }
     description: 草图定义（格式 v2，04 §3.10，已在 src/model/types.ts）；会话里的每张草图就是这样一个值。
   - id: ds.EditOp
@@ -516,8 +517,8 @@ dataStructures:
         | { op: 'connect'; from; to; type; description?; interface? } | { op: 'updateRelation'; id; patch } | { op: 'removeRelation'; id }
         | { op: 'addInterface'; owner; name; signature? } | { op: 'updateInterface'; id; patch } | { op: 'removeInterface'; id }
         | { op: 'setMeta'; patch: { lifetime?; supersedes? } } | { op: 'setAbstraction'; text }
-        | { op: 'moveNode'; positions: Record<id, SketchPoint> } | { op: 'relabel'; id; label: SketchPoint | null } | { op: 'autoArrange' }
-        | { op: 'addReference'; id; at? } | { op: 'removeReference'; id }
+        | { op: 'moveNode'; positions: Record<id, SketchPoint> } | { op: 'relabel'; id; label: SketchPoint | null } | { op: 'autoArrange'; area?: { w; h? } }
+        | { op: 'addReference'; id } | { op: 'removeReference'; id }
     description: 一张草图上的编辑操作；设计级操作的 edit 一类包装它。可序列化，文件已变后可重放。
   - id: ds.DesignEditOp
     name: DesignEditOp
