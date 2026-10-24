@@ -35,10 +35,10 @@ scenario:
             - async: {id: switch, from: app.timeshift.seek-switch, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "seekSwitchLeg('timeshift', {landingPts: keyPts, originPts})"}
             - ref: sc.timeshift-leg-switch
             - return: {from: app.solution.legs, to: app.timeshift.seek-switch, payload: ds.LegSwitchOutcome, label: 换边提交}
-            - async: {from: app.timeshift.shell, to: infra.framework.kernel.event-bus, label: TimeShiftHandoffDone}
+            - async: {from: app.timeshift.seek-switch, to: infra.player-index.player-api, relation: rel.timeshift.seek-switch-events-api, label: TimeShiftHandoffDone, note: 经事件总线（via bus，M14）}
             - async: {from: app.timeshift.seek-switch, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "withdrawLeg('primary')：提交即撤直播腿"}
             - async: {from: app.timeshift.seek-switch, to: infra.framework.state-machine.scheduler, interface: if.framework.state-machine.sendCommand, label: "内部 Seek{timestamp, source: 'Internal'}：点播定位"}
-            - async: {from: infra.framework.kernel.event-bus, to: app.timeshift.coordinator, label: SeekEnd（Fhls 不等）}
+            - async: {from: app.strategies.play-base, to: app.timeshift.coordinator, relation: rel.timeshift.seek-end, label: SeekEnd（Fhls 不等）, note: 经事件总线（via bus，M14）}
             - alt:
                 - when: 有续播意图（事务前在播或期间用户 resume）
                   steps:
@@ -46,11 +46,10 @@ scenario:
                 - when: 期间用户 pause
                   steps: []
             - return: {id: ok, from: infra.player-index.player-api, to: actor.biz, label: 'true：落到目标位置'}
-            - async: {from: infra.framework.kernel.event-bus, to: app.timeshift.coordinator, label: VideoRendered：首个 pts ≥ 落点的录像帧出画}
-            - async: {from: app.timeshift.shell, to: infra.framework.kernel.event-bus, label: "TimeShiftStarted{trigger: 'seek'}"}
-            - async: {from: infra.framework.kernel.event-bus, to: infra.player-index.player-api, label: 转发 TimeShift 事件}
+            - async: {from: infra.mus.render, to: app.timeshift.coordinator, relation: rel.timeshift.render-video-rendered, label: VideoRendered：首个 pts ≥ 落点的录像帧出画, note: 经事件总线（via bus，M14）}
+            - async: {from: app.timeshift.coordinator, to: infra.player-index.player-api, relation: rel.timeshift.events-api, label: "TimeShiftStarted{trigger: 'seek'}（转发业务方）", note: 经事件总线（via bus，M14）}
         - when: 提交前失败（建腿 / 清单 / 拉片连败 / 首帧超时）
           steps:
             - async: {from: app.timeshift.seek-switch, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "withdrawLeg('timeshift') → 放流 → releaseLeg('primary')"}
-            - async: {from: app.timeshift.shell, to: infra.framework.kernel.event-bus, label: "TimeShiftFailed{stage: seek-switch, outcome: stayed-live}"}
+            - async: {from: app.timeshift.seek-switch, to: infra.player-index.player-api, relation: rel.timeshift.seek-switch-events-api, label: "TimeShiftFailed{stage: seek-switch, outcome: stayed-live}", note: 经事件总线（via bus，M14）}
             - return: {id: fail, from: infra.player-index.player-api, to: actor.biz, label: 'false：留在直播'}

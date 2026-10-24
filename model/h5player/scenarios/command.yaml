@@ -24,6 +24,5 @@ scenario:
     - return: {from: app.solution.lifecycle, to: infra.framework.state-machine.engine, payload: ds.ErrorBase, label: success / ErrorBase}
     - async: {id: dispatch, from: infra.framework.state-machine.engine, to: infra.framework.pipeline.dispatch, interface: if.framework.pipeline.Dispatcher, label: dispatch generated actions}
     - call: {from: infra.framework.pipeline.dispatch, to: infra.framework.media-unit, interface: if.framework.media-unit.MediaUnit, label: handleAction}
-    - async: {from: infra.framework.state-machine.engine, to: infra.framework.kernel.event-bus, label: PlayerStatusChange}
-    - async: {from: infra.framework.kernel.event-bus, to: infra.player-index.player-api, label: 转发框架事件}
+    - async: {from: infra.framework.state-machine.engine, to: infra.player-index.player-api, relation: rel.framework.sm-engine-status-event, label: PlayerStatusChange（转发业务方）, note: 经事件总线（via bus，M14）}
     - return: {id: result, from: infra.player-index.player-api, to: actor.biz, payload: ds.CommandResponse, label: command result / event}

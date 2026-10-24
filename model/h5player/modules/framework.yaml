@@ -534,10 +534,11 @@ relations:
   # ── 错误链 ──
   - id: rel.framework.error-emit
     from: infra.framework.kernel.error-chain
-    to: infra.framework.kernel.event-bus
+    to: infra.player-index.player-api
     type: notifies
-    description: 未被拦截的 Warn / Recoverable / Fatal 错误发布 EventKey.Error
+    description: 未被拦截的 Warn / Recoverable / Fatal 错误发布 EventKey.Error，经事件总线送达 Player 对外 API（订阅后转发业务方；插件侧的订阅者见 infra.framework → 各插件的通知）
     payload: ds.EventInfo
+    via: bus
   - id: rel.framework.error-fatal-command
     from: infra.framework.kernel.error-chain
     to: infra.framework.state-machine.scheduler
@@ -554,10 +555,11 @@ relations:
   # ── 领域事件适配 ──
   - id: rel.framework.domain-events-emit
     from: infra.framework.kernel.domain-events
-    to: infra.framework.kernel.event-bus
+    to: infra.player-index.player-api
     type: notifies
-    description: DomainEvent 映射为 PlayModeChange / SolutionChange / PlayerDataChange 对外事件
+    description: DomainEvent 映射为 PlayModeChange / SolutionChange 对外事件，经事件总线送达 Player 对外 API（订阅后转发业务方；同时映射出的 PlayerDataChange 只有播放器信息浮层订阅）
     payload: ds.EventInfo
+    via: bus
   - id: rel.framework.profile-bus-forward
     from: infra.framework.kernel.domain-events
     to: infra.framework.context.core
@@ -597,10 +599,18 @@ relations:
     description: PlaybackState 三段式迁移 begin / commit / endTransition、snapshotState；Play 受理时计播放尝试
   - id: rel.framework.sm-engine-status-event
     from: infra.framework.state-machine.engine
-    to: infra.framework.kernel.event-bus
+    to: infra.player-index.player-api
     type: notifies
-    description: 主状态变化时发布 PlayerStatusChange
+    description: 主状态变化时发布 PlayerStatusChange，经事件总线送达 Player 对外 API（订阅后转发业务方）
     payload: ds.PlayerStatusChangeEventPayload
+    via: bus
+  - id: rel.framework.sm-engine-status-timeshift
+    from: infra.framework.state-machine.engine
+    to: app.timeshift.coordinator
+    type: notifies
+    description: PlayerStatusChange 经事件总线送达时移会话协调器（进入 Paused 即用户暂停入口；协调器经外壳注入的 on 订阅）
+    payload: ds.PlayerStatusChangeEventPayload
+    via: bus
   - id: rel.framework.sm-engine-error
     from: infra.framework.state-machine.engine
     to: infra.framework.kernel.error-chain
@@ -679,17 +689,10 @@ relations:
     description: 插件注册 pre / post 命令 Hook
     interface: if.framework.state-machine.addPreCommandHook
   - id: rel.framework.plugin-events
-    from: infra.framework.kernel.event-bus
-    to: infra.framework.plugin
-    type: notifies
-    description: 插件订阅的事件经总线送达插件回调，销毁时自动退订；回调抛错包装为 PluginEventUnknownError
-    payload: ds.EventInfo
-    via: callback
-  - id: rel.framework.plugin-events-publish
     from: infra.framework.plugin
     to: infra.framework.kernel.event-bus
-    type: notifies
-    description: 插件经 PluginApi 发布事件
+    type: calls
+    description: 插件基类经 PluginApi 在总线上订阅 / 退订（销毁时自动退订，回调抛错包装为 PluginEventUnknownError）与发布事件；事件本身按事件名写在真实的发布者与订阅者之间（M14）
     via: inject
   - id: rel.framework.plugin-error-chain
     from: infra.framework.plugin
@@ -760,10 +763,11 @@ relations:
     description: 构造期 createPlayerSettings(data, emit) 作为 context.settings
   - id: rel.framework.settings-event
     from: infra.framework.context.settings
-    to: infra.framework.kernel.event-bus
+    to: app.plugins.diagnostics.player-info
     type: notifies
-    description: 每次写设置补发 PlayerDataChange（payload 为补丁）
+    description: 每次写设置补发 PlayerDataChange（payload 为补丁），经事件总线送达唯一的订阅者播放器信息浮层
     payload: ds.EventInfo
+    via: bus
   - id: rel.framework.leg-context-base
     from: infra.framework.context.leg-context
     to: infra.framework.context.core

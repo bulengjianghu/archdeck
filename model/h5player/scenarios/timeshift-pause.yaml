@@ -12,8 +12,7 @@ scenario:
     - async: {from: infra.player-index.player-api, to: infra.framework.state-machine.scheduler, relation: rel.player-shell.api-framework-command, interface: if.framework.state-machine.sendCommand, payload: ds.CommandInfo, label: "sendCommand(Pause{origin: 'user'})"}
     - async: {from: infra.framework.state-machine.scheduler, to: infra.framework.state-machine.engine, label: 串行执行 Pause}
     - call: {from: infra.framework.state-machine.engine, to: app.timeshift.coordinator, relation: rel.framework.sm-engine-timeshift-hooks, label: Pause 前置 Hook：记暂停来源 user}
-    - async: {from: infra.framework.state-machine.engine, to: infra.framework.kernel.event-bus, payload: ds.PlayerStatusChangeEventPayload, label: PlayerStatusChange（Paused）}
-    - async: {from: infra.framework.kernel.event-bus, to: app.timeshift.coordinator, label: 进入 Paused：用户暂停入口}
+    - async: {from: infra.framework.state-machine.engine, to: app.timeshift.coordinator, relation: rel.framework.sm-engine-status-timeshift, payload: ds.PlayerStatusChangeEventPayload, label: PlayerStatusChange（Paused）：用户暂停入口, note: 经事件总线（via bus，M14）}
     - call: {id: arm, from: app.timeshift.coordinator, to: domain.services.timeshift, label: shouldArm（有时移地址、FLV 直播、方案受支持、主腿）}
     - alt:
         - when: 满足 shouldArm，进时移会话
@@ -34,17 +33,16 @@ scenario:
                     - async: {id: switch, from: app.timeshift.coordinator, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "switchLeg('timeshift', {cutPts: K})"}
                     - ref: sc.timeshift-leg-switch
                     - return: {from: app.solution.legs, to: app.timeshift.coordinator, payload: ds.LegSwitchOutcome, label: 对接完成}
-                    - async: {from: app.timeshift.shell, to: infra.framework.kernel.event-bus, label: TimeShiftHandoffDone}
+                    - async: {from: app.timeshift.coordinator, to: infra.player-index.player-api, relation: rel.timeshift.events-api, label: TimeShiftHandoffDone, note: 经事件总线（via bus，M14）}
                     - async: {from: app.timeshift.coordinator, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "withdrawLeg('primary')：提交即撤直播腿"}
                     - call: {id: resume, from: actor.biz, to: infra.player-index.player-api, interface: if.player-index.resume, label: resume()}
                     - async: {from: infra.player-index.player-api, to: infra.framework.state-machine.scheduler, relation: rel.player-shell.api-framework-command, interface: if.framework.state-machine.sendCommand, label: sendCommand(Resume)}
                     - async: {from: infra.framework.state-machine.scheduler, to: infra.framework.state-machine.engine, label: 串行执行 Resume}
                     - call: {from: infra.framework.state-machine.engine, to: app.timeshift.coordinator, relation: rel.framework.sm-engine-timeshift-hooks, label: Resume 前置 Hook：已对接，进灰度区}
                     - call: {from: app.timeshift.coordinator, to: app.timeshift.grace, label: 灰度区开始计时（每 100ms 巡检）}
-                    - async: {from: infra.framework.kernel.event-bus, to: app.timeshift.coordinator, label: VideoRendered：首个 pts ≥ K 的录像帧出画}
+                    - async: {from: infra.mus.render, to: app.timeshift.coordinator, relation: rel.timeshift.render-video-rendered, label: VideoRendered：首个 pts ≥ K 的录像帧出画, note: 经事件总线（via bus，M14）}
                     - call: {from: app.timeshift.grace, to: domain.services.timeshift, interface: if.services.timeshift.decideGrace, label: decideGrace → on-screen}
-                    - async: {from: app.timeshift.shell, to: infra.framework.kernel.event-bus, label: "TimeShiftStarted{trigger: 'pause'}"}
-                    - async: {from: infra.framework.kernel.event-bus, to: infra.player-index.player-api, label: 转发 TimeShift 事件}
+                    - async: {from: app.timeshift.coordinator, to: infra.player-index.player-api, relation: rel.timeshift.events-api, label: "TimeShiftStarted{trigger: 'pause'}（转发业务方）", note: 经事件总线（via bus，M14）}
                     - ref: sc.timeshift-back-to-live
                 - when: 续播时仍未对接（录制追不上或已放弃）
                   steps:
@@ -53,7 +51,7 @@ scenario:
                     - async: {from: infra.framework.state-machine.scheduler, to: infra.framework.state-machine.engine, label: 串行执行 Resume}
                     - call: {from: infra.framework.state-machine.engine, to: app.timeshift.coordinator, relation: rel.framework.sm-engine-timeshift-hooks, label: Resume 前置 Hook：未对接，放流放阀}
                     - async: {from: app.timeshift.coordinator, to: app.solution.legs, interface: if.timeshift.coordinator.legPort, label: "releasePlayQueue + releaseLeg('primary')；withdrawLeg('timeshift')"}
-                    - async: {from: app.timeshift.shell, to: infra.framework.kernel.event-bus, label: "TimeShiftFailed{not-catching-up}：按普通直播续播"}
+                    - async: {from: app.timeshift.coordinator, to: infra.player-index.player-api, relation: rel.timeshift.events-api, label: "TimeShiftFailed{not-catching-up}：按普通直播续播", note: 经事件总线（via bus，M14）}
         - when: 不满足（未登记地址、非 FLV 直播或方案不支持）
           steps:
             - call: {from: app.timeshift.coordinator, to: app.timeshift.source-wiring, label: 只做一次预解析，普通直播暂停}

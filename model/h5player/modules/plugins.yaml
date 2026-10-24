@@ -884,6 +884,34 @@ relations:
     type: notifies
     mode: async
     description: 发布 TimeShiftHandoffDone / TimeShiftStarted / TimeShiftSupplyIssue / TimeShiftFailed
+  - id: rel.timeshift.events-api
+    from: app.timeshift.coordinator
+    to: infra.player-index.player-api
+    type: notifies
+    mode: async
+    description: TimeShiftHandoffDone / TimeShiftStarted / TimeShiftFailed 经外壳注入的 emit 发布、经事件总线送达 Player 对外 API（订阅后转发业务方）
+    via: bus
+  - id: rel.timeshift.seek-switch-events-api
+    from: app.timeshift.seek-switch
+    to: infra.player-index.player-api
+    type: notifies
+    mode: async
+    description: 拖进度换腿提交时发布 TimeShiftHandoffDone、提交前失败时发布 TimeShiftFailed（stage 为 seek-switch），经事件总线送达 Player 对外 API
+    via: bus
+  - id: rel.timeshift.render-video-rendered
+    from: infra.mus.render
+    to: app.timeshift.coordinator
+    type: notifies
+    mode: async
+    description: 渲染单元出画即发布 VideoRendered，经事件总线送达时移会话协调器（判首个 pts ≥ 接点 / 落点的录像帧出画）
+    via: bus
+  - id: rel.timeshift.seek-end
+    from: app.strategies.play-base
+    to: app.timeshift.coordinator
+    type: notifies
+    mode: async
+    description: video 定位完成发布 SeekEnd，经事件总线送达时移会话协调器（拖进度换腿后的点播定位；Fhls 不等）
+    via: bus
   - id: rel.timeshift.coord-ledger
     from: app.timeshift.coordinator
     to: app.timeshift.frame-ledger
