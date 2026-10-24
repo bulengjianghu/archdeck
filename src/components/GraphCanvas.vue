@@ -281,7 +281,7 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
         title="只引类型的依赖边缺省收起（L15）；单击画出，「显示」面板里可再收起"
         @click="structurePrefs.setTypeOnly(true)"
       >
-        只引类型 ×{{ structureCorner.typeOnlyHidden }} 已收起
+        只引类型 {{ structureCorner.typeOnlyHidden }} 条已收起
       </button>
     </div>
     <SketchMenu
