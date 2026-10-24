@@ -154,7 +154,8 @@ export function load(files: readonly RawFile[]): LoadResult {
       // 没写 payload 不算写了：草图里的关系（晋升后的骨架拥有第二级关系）由其他文件补 payload 不是重定义（X1）
       const fields = { ...r, ...typed, ...(r.payload === undefined ? {} : { payload }) }
       if (supplement('relation', r.id, fields, src, [])) return
-      const entity: RelationEntity = { ...fields, payload, seq: seq++, src }
+      // via 原样带入（M20 的旧写法由 Validator 读成四形态）
+      const entity = { ...fields, payload, seq: seq++, src } as RelationEntity
       relations.push(entity)
       remember('relation', r.id, entity, fields, [])
     }
@@ -371,7 +372,7 @@ function parseFile(file: RawFile, issues: Issue[]): ParsedFile | null {
     issues.push({
       severity: 'warning',
       code: 'relation.depends-removed',
-      message: `depends 已不是关系类型（ADR-0026），这条关系已丢弃：谁知道谁由代码事实给出；有交互的改写为 calls / notifies / streams，实现契约的写 implements（M15）`,
+      message: `depends 已不是关系类型（ADR-0026），这条关系已丢弃：谁知道谁由代码事实给出；有交互的按三问写 queries / commands / notifies / streams，实现端口的写进接口的 implementedBy（M15）`,
       ...loc,
     })
   if (!validateFile(data)) {

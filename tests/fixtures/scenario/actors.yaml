@@ -6,4 +6,4 @@ relations:
   - { id: rc1, from: actor.biz, to: infra.player, type: calls }
   - { id: rc2, from: actor.viewer, to: infra.player, type: calls }
   - { id: rp, from: infra.player, to: infra.framework.sm, type: calls }
-  - { id: re1, from: infra.framework.sm, to: infra.player, type: notifies, mode: async }
+  - { id: re1, from: infra.framework.sm, to: infra.player, type: notifies }

@@ -20,6 +20,7 @@ import type {
   SourceLoc,
   Step,
 } from './types'
+import { LEGACY_VIAS, isCallLike, isUnclassified, parseVia, type RelationVia } from './types'
 import { buildIndex } from './indexer'
 import { bindRelation, forEachStep, mapChildren, syncMismatch } from './scenario'
 
@@ -35,6 +36,7 @@ interface Checked {
   rootId: string
   err: Report
   warn: Report
+  info: Report
   modules: Map<string, ModuleEntity>
   actors: Map<string, ActorEntity>
   interfaces: Map<string, InterfaceEntity>
@@ -45,6 +47,7 @@ export function validate(input: ArchModel): ValidateResult {
   const issues: Issue[] = []
   const err: Report = (code, message, src) => issues.push({ severity: 'error', code, message, ...src })
   const warn: Report = (code, message, src) => issues.push({ severity: 'warning', code, message, ...src })
+  const info: Report = (code, message, src) => issues.push({ severity: 'info', code, message, ...src })
   const rootId = input.system.id
 
   const modules = checkModules(input, err)
@@ -52,10 +55,12 @@ export function validate(input: ArchModel): ValidateResult {
   // ── 接口、数据结构：ID 唯一 ──
   const interfaces = dedupe(input.interfaces, 'interface', err)
   const dataStructures = dedupe(input.dataStructures, 'data-structure', err)
-  const c: Checked = { rootId, err, warn, modules, actors, interfaces, dataStructures }
+  const c: Checked = { rootId, err, warn, info, modules, actors, interfaces, dataStructures }
   checkModuleRefs(c)
   checkLayers(c)
+  checkImplementers(c)
   const relations = checkRelations(input, c)
+  markPorts(c, relations)
 
   const structural: ArchModel = {
     system: input.system,
@@ -196,11 +201,29 @@ function checkLayers({ modules, warn }: Checked) {
 
 const isEndpoint = (c: Checked, id: string) => c.modules.has(id) || c.actors.has(id)
 
-/** 关系：ID 唯一、端点有效、不连自身 / 两个参与者 / 祖先与后代；接口与数据结构引用存在 */
+/** M18：接口的 implementedBy——每项是存在的模块（参与者不可），坏引用提醒并去掉；重复的去重 */
+function checkImplementers({ modules, actors, interfaces, warn }: Checked) {
+  for (const x of interfaces.values()) {
+    if (!x.implementedBy) continue
+    const kept = new Set<string>()
+    for (const id of x.implementedBy) {
+      if (modules.has(id)) kept.add(id)
+      else
+        warn(
+          'unknown-implementer',
+          `接口「${x.id}」的实现者「${id}」${actors.has(id) ? '是外部参与者，实现者只能是模块' : '不存在'}，已去掉（M18）`,
+          x.src,
+        )
+    }
+    x.implementedBy = [...kept]
+  }
+}
+
+/** 关系：ID 唯一、端点有效、不连自身 / 两个参与者 / 祖先与后代；接口与数据结构引用存在；修饰与机制（M11、M13、M20）；迁移期映射（M17） */
 function checkRelations(input: ArchModel, c: Checked): RelationEntity[] {
   const relations: RelationEntity[] = []
   const relationIds = new Set<string>()
-  let contracts: Set<string> | undefined
+  const buses = [...c.modules.values()].filter(m => m.role === 'bus').map(m => m.id)
   for (const r0 of input.relations) {
     const r = { ...r0, payload: [...r0.payload] }
     if (relationIds.has(r.id)) {
@@ -208,6 +231,12 @@ function checkRelations(input: ArchModel, c: Checked): RelationEntity[] {
       continue
     }
     if (!relationEndsValid(c, r)) continue
+    // M17：implements 不再是关系类型，读作对应接口的实现者，不进关系索引
+    if (r.type === 'implements') {
+      relationIds.add(r.id)
+      migrateImplements(c, r)
+      continue
+    }
     if (r.interface && !c.interfaces.has(r.interface)) {
       c.warn('unknown-interface', `关系「${r.id}」引用的接口「${r.interface}」不存在`, r.src)
       r.interface = undefined
@@ -218,37 +247,104 @@ function checkRelations(input: ArchModel, c: Checked): RelationEntity[] {
       c.warn('pull-not-streams', `关系「${r.id}」是 ${r.type}，pull 只用于 streams（拉取型流），已忽略`, r.src)
       delete r.pull
     }
-    // M14：总线不作通知的端点——两端写真正的发布者与订阅者，可写 via: bus 留痕
+    // M13：mode 只对查询与委托（含未分类）有意义——通知一律异步、流不比同步性
+    if (r.mode !== undefined && !isCallLike(r.type)) {
+      c.warn(
+        'relation.mode-ignored',
+        `关系「${r.id}」是 ${r.type}，${r.type === 'notifies' ? '通知一律异步' : '流不比同步性'}，mode 只用于 queries / commands，已忽略（M13）`,
+        r.src,
+      )
+      delete r.mode
+    }
+    // M14：总线不作通知的端点——两端写真正的发布者与订阅者，可写 via: bus:<总线模块> 留痕
     const bus = r.type === 'notifies' ? [r.from, r.to].find(id => c.modules.get(id)?.role === 'bus') : undefined
     if (bus !== undefined) {
       c.err(
         'relation.bus-endpoint',
-        `关系「${r.id}」的${bus === r.from ? '发布者' : '订阅者'}「${bus}」是事件总线（role: bus）；总线是传递机制不是参与者，两端写真正的发布者与订阅者，可写 via: bus 留痕（M14）`,
+        `关系「${r.id}」的${bus === r.from ? '发布者' : '订阅者'}「${bus}」是事件总线（role: bus）；总线是传递机制不是参与者，两端写真正的发布者与订阅者，可写 via: 'bus:${bus}' 留痕（M14）`,
         r.src,
       )
       continue
     }
-    // M11：implements 的目标须声明接口
-    if (r.type === 'implements' && c.modules.has(r.to) && !(contracts ??= modulesWithInterfaces(c)).has(r.to))
-      c.warn(
-        'implements-no-interface',
-        `关系「${r.id}」实现「${r.to}」，但它没有声明任何接口（provides 或 owner 为它的接口）；使用对方的实现时改为 calls，只是知道对方时删除关系（由代码事实承载），否则补上接口声明`,
-        r.src,
-      )
+    if (r.via !== undefined) {
+      const via = checkVia(c, r, buses)
+      if (via) r.via = via
+      else delete r.via
+    }
+    // M17：calls 读作未分类（按查询或委托处理），只提示
+    if (isUnclassified(r.type))
+      c.info('relation.unclassified', `关系「${r.id}」是 calls（未分类）：按三问定为 queries（查询）或 commands（委托）；迁移期按查询或委托处理（M17）`, r.src)
     relationIds.add(r.id)
     relations.push(r)
   }
   return relations
 }
 
-/** M11：声明了接口的模块——provides 非空，或是某个接口 owner 的自身或祖先（同 G12 的 moduleInterfaces） */
-function modulesWithInterfaces(c: Checked): Set<string> {
-  const out = new Set<string>()
-  for (const m of c.modules.values()) if (m.provides?.length) out.add(m.id)
-  for (const x of c.interfaces.values()) {
-    for (let cur: string | undefined = x.owner; cur !== undefined && cur !== c.rootId; cur = c.modules.get(cur)?.parentId) out.add(cur)
+/**
+ * M20：旧的平铺取值读成四形态并提醒——http / hmr / inject / router / callback → channel:<同名>；bus 在恰有一个总线模块时 → bus:<它>，否则「总线未指明」；port →「端口未指明」。
+ * M11：port:<P> 的 P 须是已声明的接口，bus:<M> 的 M 须是 role: bus 的模块；不是时提醒并去掉（返回 undefined）。
+ */
+function checkVia(c: Checked, r: RelationEntity, buses: readonly string[]): RelationVia | undefined {
+  const raw = r.via as string
+  let via = raw as RelationVia
+  if (LEGACY_VIAS.includes(raw)) {
+    via = raw === 'port' ? 'port' : raw === 'bus' ? (buses.length === 1 ? `bus:${buses[0]}` : 'bus') : `channel:${raw}`
+    const read = via === 'port' ? '端口未指明（不判定）' : via === 'bus' ? `总线未指明（系统里有 ${buses.length} 个总线模块，不判定）` : `via: '${via}'`
+    c.warn('relation.via-legacy', `关系「${r.id}」的 via: ${raw} 是旧写法，已按 ${read} 读取；请改写为 port:<接口 ID> / bus:<总线模块 ID> / channel:<通道名>（M20）`, r.src)
+    return via
   }
-  return out
+  const v = parseVia(via)
+  if (v?.kind === 'port' && v.target && !c.interfaces.has(v.target)) {
+    c.warn('relation.via-target', `关系「${r.id}」经端口「${v.target}」，它不是已声明的接口；已去掉 via（M11）`, r.src)
+    return undefined
+  }
+  if (v?.kind === 'bus' && v.target && c.modules.get(v.target)?.role !== 'bus') {
+    c.warn('relation.via-target', `关系「${r.id}」经总线「${v.target}」，它${c.modules.has(v.target) ? '不是 role: bus 的模块' : '不存在'}；已去掉 via（M11）`, r.src)
+    return undefined
+  }
+  return via
+}
+
+/** M17：G12 口径下模块声明的接口——provides，加上 owner 在子树内的接口 */
+function declaredInterfaces(c: Checked, moduleId: string): string[] {
+  const out = new Set(c.modules.get(moduleId)?.provides ?? [])
+  const inside = (id: string | undefined) => {
+    for (let cur = id; cur !== undefined && cur !== c.rootId; cur = c.modules.get(cur)?.parentId) if (cur === moduleId) return true
+    return false
+  }
+  for (const x of c.interfaces.values()) if (inside(x.owner)) out.add(x.id)
+  return [...out]
+}
+
+/**
+ * M17：implements 关系 A → B 读作端口的实现者——有 interface 时记 A 为它的实现者；没写而 B 子树内恰声明一个接口（G12 口径）时记为它的；
+ * 都不是时丢弃。每条提醒迁移。
+ */
+function migrateImplements(c: Checked, r: RelationEntity) {
+  const ifId = r.interface && c.interfaces.has(r.interface) ? r.interface : undefined
+  const candidates = ifId ? [ifId] : c.modules.has(r.to) ? declaredInterfaces(c, r.to) : []
+  const target = candidates.length === 1 ? c.interfaces.get(candidates[0]) : undefined
+  if (target && c.modules.has(r.from)) {
+    if (!target.implementedBy?.includes(r.from)) target.implementedBy = [...(target.implementedBy ?? []), r.from]
+    c.warn(
+      'relation.implements-migrated',
+      `关系「${r.id}」（implements）已不是关系类型，已读作接口「${target.id}」的实现者「${r.from}」；请删去这条关系，在该接口的 implementedBy 写上它（M17）`,
+      r.src,
+    )
+    return
+  }
+  const why = !c.modules.has(r.from)
+    ? `发起方「${r.from}」不是模块`
+    : candidates.length === 0
+      ? `「${r.to}」没有声明任何接口`
+      : `「${r.to}」声明了 ${candidates.length} 个接口，没写 interface 无法对应`
+  c.warn('relation.implements-migrated', `关系「${r.id}」（implements）已不是关系类型，${why}，已丢弃：实现端口的写进接口的 implementedBy，有交互的按三问写 queries / commands（M17）`, r.src)
+}
+
+/** 裁决 4：被 via: port: 引用、或描述写了实现者的接口是端口 */
+function markPorts(c: Checked, relations: readonly RelationEntity[]) {
+  const viaPorts = new Set(relations.flatMap(r => (parseVia(r.via)?.kind === 'port' && parseVia(r.via)!.target ? [parseVia(r.via)!.target!] : [])))
+  for (const x of c.interfaces.values()) if (x.implementedBy?.length || viaPorts.has(x.id)) x.port = true
 }
 
 /** 关系的两端：报错并返回 false 表示剔除 */

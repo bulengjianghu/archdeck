@@ -34,7 +34,7 @@ sketch:
 `
 const files = (extra: Record<string, string>): RawFile[] =>
   Object.entries({ 'system.yaml': 'system: { id: sys, name: S }', 'intent/skeleton.yaml': SKETCH, ...extra }).map(([path, text]) => ({ path, text }))
-const codes = (issues: { code: string }[]) => issues.map(i => i.code)
+const codes = (issues: { code: string; severity: string }[]) => issues.filter(i => i.severity !== 'info').map(i => i.code)
 
 describe('X1 草图先入、其他文件只能补充', () => {
   it('草图文件先于其他文件进入 Loader（不论路径排序），内容既是普通实体又整份记入 sketches', () => {
@@ -84,7 +84,7 @@ describe('X1 草图先入、其他文件只能补充', () => {
       files({ 'modules/rel.yaml': 'relations: [{ id: rel.sk.view-core, from: ui.view, to: core, type: calls, interface: if.core.run, payload: [ds.X], via: inject }]\ndataStructures: [{ id: ds.X, name: X }]' }),
     )
     expect(codes(issues)).not.toContain('sketch-redefined')
-    expect(index.relations.get('rel.sk.view-core')).toMatchObject({ interface: 'if.core.run', payload: ['ds.X'], via: 'inject' })
+    expect(index.relations.get('rel.sk.view-core')).toMatchObject({ interface: 'if.core.run', payload: ['ds.X'], via: 'channel:inject' })
     expect(loadModel(files({})).index.relations.get('rel.sk.view-core')?.payload).toEqual([])
   })
 
@@ -103,7 +103,7 @@ describe('X1 草图先入、其他文件只能补充', () => {
 
   it('没有骨架时退回从 modules/ 读层（兼容期）：旧描述照常加载，sketches 为空', () => {
     const { index, issues } = loadModel(sampleFiles())
-    expect(issues).toEqual([])
+    expect(codes(issues)).toEqual([])
     expect(index.model.sketches).toEqual([])
     expect(index.childrenOf.get(index.rootId)?.length).toBeGreaterThan(0)
   })

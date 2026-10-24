@@ -317,7 +317,7 @@
       }
     },
     "roles": {
-      "description": "模块角色（ADR-0027，M16；约定文件 intent/roles.yaml，人拥有）：模块 ID → core / shared / bus；草图里写了 role 的以草图为准",
+      "description": "模块角色（ADR-0027、ADR-0030，M16；约定文件 intent/roles.yaml，人拥有）：模块 ID → core / shared / bus / port / adapter；草图里写了 role 的以草图为准",
       "type": "object",
       "propertyNames": {
         "$ref": "#/definitions/id"
@@ -326,7 +326,9 @@
         "enum": [
           "core",
           "shared",
-          "bus"
+          "bus",
+          "port",
+          "adapter"
         ]
       }
     }
@@ -448,11 +450,13 @@
           ]
         },
         "role": {
-          "description": "角色（02 §1.1、ADR-0027）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）；不写为普通",
+          "description": "角色（02 §1.1、ADR-0027、ADR-0030）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）/ port 对外端口模块 / adapter 适配器（L14）；不写为普通",
           "enum": [
             "core",
             "shared",
-            "bus"
+            "bus",
+            "port",
+            "adapter"
           ]
         },
         "responsibility": {
@@ -547,11 +551,13 @@
           ]
         },
         "role": {
-          "description": "角色（02 §1.1、ADR-0027）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）；不写为普通",
+          "description": "角色（02 §1.1、ADR-0027、ADR-0030）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）/ port 对外端口模块 / adapter 适配器（L14）；不写为普通",
           "enum": [
             "core",
             "shared",
-            "bus"
+            "bus",
+            "port",
+            "adapter"
           ]
         },
         "responsibility": {
@@ -643,15 +649,22 @@
           "$ref": "#/definitions/id"
         },
         "type": {
-          "description": "关系类型（02 §1.1、ADR-0022、ADR-0026）：关系是交互，运行时关系的箭头是控制流方向；depends 已不是关系类型（M15，读取时丢弃并提醒）。event / dataflow 是已弃用的旧名（M12），加载时映射为 notifies（翻转 from / to）/ streams 并提醒迁移",
+          "description": "关系类型（02 §1.1、ADR-0029）：四类交互 queries 查询 / commands 委托 / notifies 通知 / streams 流，箭头是控制流方向。迁移期：calls 读作「未分类」（M17，提示）；implements 读作端口的实现者（接口的 implementedBy，M17，提醒）；depends 已不是关系类型（M15）；event / dataflow 是已弃用的旧名（M12）",
           "anyOf": [
             {
               "enum": [
-                "calls",
+                "queries",
+                "commands",
                 "notifies",
-                "streams",
-                "implements"
+                "streams"
               ]
+            },
+            {
+              "enum": [
+                "calls",
+                "implements"
+              ],
+              "deprecated": true
             },
             {
               "enum": [
@@ -667,21 +680,31 @@
           "type": "boolean"
         },
         "mode": {
-          "description": "同步性：对 calls 区分同步命令与异步命令（Promise、异步回调、postMessage、定时器回调，ADR-0026）；不写为同步",
+          "description": "同步性：只用于 queries / commands（迁移期含未分类 calls）——同步缺省，异步（Promise、异步回调、postMessage、定时器回调）写 async（M13）；notifies 一律异步、streams 不比",
           "enum": [
             "sync",
             "async"
           ]
         },
         "via": {
-          "enum": [
-            "http",
-            "hmr",
-            "inject",
-            "router",
-            "callback",
-            "port",
-            "bus"
+          "description": "机制（K5b、ADR-0029）：port:<接口 ID> 经端口 / bus:<总线模块 ID> 经总线 / channel:<通道名> 经通道；旧的平铺取值 http / hmr / inject / router / callback / port / bus 是迁移期别名（M20）",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(port|bus|channel):[^\\s:]\\S*$"
+            },
+            {
+              "enum": [
+                "http",
+                "hmr",
+                "inject",
+                "router",
+                "callback",
+                "port",
+                "bus"
+              ],
+              "deprecated": true
+            }
           ]
         },
         "interface": {
@@ -731,6 +754,10 @@
         },
         "semantics": {
           "type": "string"
+        },
+        "implementedBy": {
+          "description": "端口的实现者模块（ADR-0029、M18）：AI 的主张，代码事实是裁判（K5c）",
+          "$ref": "#/definitions/idList"
         },
         "designNote": {
           "type": "string",
@@ -815,6 +842,14 @@
         },
         "name": {
           "type": "string"
+        },
+        "kind": {
+          "description": "场景的类别（M19、ADR-0030）：main 主流程（缺省）/ exception 异常 / maintenance 维护；运行视角默认只列主流程（R17）",
+          "enum": [
+            "main",
+            "exception",
+            "maintenance"
+          ]
         },
         "description": {
           "type": "string"

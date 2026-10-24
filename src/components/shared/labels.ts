@@ -1,20 +1,24 @@
 /** 界面文案：领域枚举的中文显示名。只是呈现关注点，不进模型层（模型层只给枚举与类型）。 */
 import type { ActorKind, DesignStatus, EvidenceLevel, RelationType } from '@/model'
 
-/** 关系类型（02 §1.1、ADR-0022、ADR-0026）：图例、面板、边的类型标签共用 */
+/** 关系类型（02 §1.1、ADR-0029）：图例、面板、边的类型标签共用；calls 为迁移期的未分类（M17），implements 已不是关系（只为迁移期编译保留） */
 export const RELATION_TYPE_LABELS: Record<RelationType, string> = {
-  calls: '命令',
+  queries: '查询',
+  commands: '委托',
   notifies: '通知',
   streams: '流',
+  calls: '未分类',
   implements: '实现契约',
 }
 
-/** 每类关系一句话读法：运行时三类是图例的三句话，箭头一律指控制流方向 */
+/** 每类关系一句话读法（三问四修饰）：箭头一律指控制流方向 */
 export const RELATION_TYPE_HINTS: Record<RelationType, string> = {
-  calls: '要结果（可同步或异步）',
-  notifies: '不要结果、一对多，箭头指向被通知方',
+  queries: '要结果、无副作用，后果归调用方',
+  commands: '交出控制权，被调方拥有状态与副作用；可同步或异步',
+  notifies: '不要结果、一对多，一律异步，箭头指向被通知方',
   streams: '连续数据，箭头指向数据去向',
-  implements: '实现对方声明的接口',
+  calls: '未分类：按三问定为查询或委托（迁移期）',
+  implements: '实现对方声明的接口（已改为端口的实现者）',
 }
 
 /** 步骤的证据等级（S16）：步骤面板、场景面板共用 */

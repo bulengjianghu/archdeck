@@ -179,8 +179,8 @@ describe('§6.10 架构治理验收', () => {
 
   it('11. 关系的 via（K5b）：本项目经 HTTP / HMR / 路由 / 注入 / 回调的关系不判定，lint 0 个提醒', () => {
     const l = svc().load()
-    expect(l.report.relations.get('rel.ad.desk-fetch')).toMatchObject({ status: 'skipped', via: 'http' })
-    expect(l.report.relations.get('rel.p7.file-preview')).toMatchObject({ status: 'skipped', via: 'inject' })
+    expect(l.report.relations.get('rel.ad.desk-fetch')).toMatchObject({ status: 'skipped', via: 'channel:http' })
+    expect(l.report.relations.get('rel.p7.file-preview')).toMatchObject({ status: 'skipped', via: 'channel:inject' })
     expect(l.report.issues.filter(i => i.severity !== 'error' && i.code.startsWith('fact.'))).toEqual([])
   })
 })

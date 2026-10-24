@@ -51,8 +51,8 @@ describe('canvasScene', () => {
     expect(node(hover, 'infra.player')!.data.dim).toBe(false)
     expect(node(hover, 'infra.framework')!.data.dim).toBe(false)
     expect(node(hover, 'infra.mus')!.data.dim).toBe(true)
-    expect(edge(canvasScene(input), 'infra.mus->boundary:domain:implements')).toBeUndefined()
-    expect(edge(canvasScene({ ...input, hover: 'infra.mus' }), 'infra.mus->boundary:domain:implements')).toBeDefined()
+    expect(edge(canvasScene(input), 'infra.mus->boundary:domain:queries')).toBeUndefined()
+    expect(edge(canvasScene({ ...input, hover: 'infra.mus' }), 'infra.mus->boundary:domain:queries')).toBeDefined()
     expect(s.visibleIds).toBeNull()
   })
 
@@ -136,7 +136,8 @@ describe('canvasScene', () => {
     const calls = edge(plain, 'infra.player->infra.framework:calls')!.data
     expect(calls).toMatchObject({ label: '', factState: 'confirmed', arrow: 'closed', weight: 1, compile: false })
     expect(edge(plain, 'infra.framework->infra.player:notifies')!.data.arrow).toBe('open')
-    expect(edge(canvasScene({ ...input, hover: 'infra.player' }), 'infra.player->boundary:app:implements')!.data.compile).toBe(true)
+    // ADR-0029 起关系全是交互：没有编译期降权（implements 已降为端口的实现者事实）
+    expect(edge(canvasScene({ ...input, hover: 'infra.player' }), 'infra.player->boundary:app:queries')!.data.compile).toBe(false)
     const selected = edge(
       canvasScene({ ...input, selection: { kind: 'edge', id: 'infra.player->infra.framework:calls' } }),
       'infra.player->infra.framework:calls',

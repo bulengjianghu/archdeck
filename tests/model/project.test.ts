@@ -45,10 +45,10 @@ describe('projectLevel · 分层总览（根层）', () => {
   it('层间边：同一对层、同一类型的关系聚合成一条，层内关系不画', () => {
     expect(edgeSummary(view.edges)).toEqual([
       'app->domain:calls:aggregate:r2',
-      'app->domain:implements:aggregate:r5',
+      'app->domain:queries:aggregate:r5',
       'infra->app:calls:aggregate:r1',
-      'infra->app:implements:aggregate:r3',
-      'infra->domain:implements:aggregate:r7',
+      'infra->app:queries:aggregate:r3',
+      'infra->domain:queries:aggregate:r7',
     ])
   })
 
@@ -56,7 +56,7 @@ describe('projectLevel · 分层总览（根层）', () => {
     expect(edgeSummary(view.coreEdges!)).toEqual([
       'app.solution->domain.services:calls:direct:r2',
       'infra.framework->app.solution:calls:aggregate:r1',
-      'infra.player->app.solution:implements:direct:r3',
+      'infra.player->app.solution:queries:direct:r3',
     ])
   })
 
@@ -74,8 +74,8 @@ describe('projectLevel · 普通层次', () => {
     expect(edgeSummary(view.edges)).toEqual([
       'infra.framework->boundary:app:calls:aggregate:r1',
       'infra.framework->infra.mus:streams:aggregate:r4',
-      'infra.mus->boundary:domain:implements:aggregate:r7',
-      'infra.player->boundary:app:implements:aggregate:r3',
+      'infra.mus->boundary:domain:queries:aggregate:r7',
+      'infra.player->boundary:app:queries:aggregate:r3',
     ])
     expect(view.bands).toBeUndefined()
   })
@@ -110,8 +110,8 @@ describe('projectLevel · 普通层次', () => {
 
 describe('projectLevel · 过滤与汇总', () => {
   it('按关系类型过滤', () => {
-    const view = projectLevel(index, 'sys', { showBoundaries: true, relationTypes: ['implements'] })
-    expect(view.edges.every(e => e.type === 'implements')).toBe(true)
+    const view = projectLevel(index, 'sys', { showBoundaries: true, relationTypes: ['queries'] })
+    expect(view.edges.every(e => e.type === 'queries')).toBe(true)
     expect(view.edges).toHaveLength(3)
   })
 
@@ -148,7 +148,7 @@ describe('projectLevel · 过滤与汇总', () => {
     expect(pair.map(e => [e.id, e.type, e.relationIds, e.mode])).toEqual([
       ['infra.framework->infra.mus:streams', 'streams', ['r4'], 'sync'],
       ['infra.framework->infra.mus:calls', 'calls', ['x1', 'x3'], 'mixed'],
-      ['infra.framework->infra.mus:notifies', 'notifies', ['x2'], 'sync'],
+      ['infra.framework->infra.mus:notifies', 'notifies', ['x2'], 'async'], // 通知一律异步（M13）
     ])
     expect(pair.every(e => !('types' in e))).toBe(true)
     const root = projectLevel(idx, 'sys', { showBoundaries: true })
@@ -158,10 +158,10 @@ describe('projectLevel · 过滤与汇总', () => {
   it('单条关系、两端恰好是本层模块时才是直接边', () => {
     const view = projectLevel(index, 'app')
     expect(edgeSummary(view.edges)).toEqual([
-      'app.fragments->boundary:domain:implements:aggregate:r5',
+      'app.fragments->boundary:domain:queries:aggregate:r5',
       'app.solution->boundary:domain:calls:aggregate:r2',
       'boundary:infra->app.solution:calls:aggregate:r1',
-      'boundary:infra->app.solution:implements:aggregate:r3',
+      'boundary:infra->app.solution:queries:aggregate:r3',
     ])
   })
 })
@@ -210,7 +210,7 @@ describe('外部参与者（L6、A2）', () => {
   })
 
   it('关系类型筛选同样作用于参与者的边', () => {
-    expect(nodeIds(projectLevel(idx, 'sys', { showBoundaries: true, relationTypes: ['implements'] }), 'actor')).toEqual([])
+    expect(nodeIds(projectLevel(idx, 'sys', { showBoundaries: true, relationTypes: ['queries'] }), 'actor')).toEqual([])
   })
 })
 

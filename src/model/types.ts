@@ -8,27 +8,65 @@
 
 // ── YAML 文件形状 ─────────────────────────────────────────────
 
-/** 关系类型（§1.1、ADR-0022、ADR-0026）：关系是交互——运行时关系的箭头一律是控制流方向；「谁知道谁」是代码事实，不是关系 */
-export type RelationType = 'calls' | 'notifies' | 'streams' | 'implements'
-export const RELATION_TYPES: readonly RelationType[] = ['calls', 'notifies', 'streams', 'implements']
+/** 四类交互（§1.1、ADR-0029）：查询 / 委托 / 通知 / 流；箭头一律是控制流方向，「谁知道谁」是代码事实，不是关系 */
+export type InteractionType = 'queries' | 'commands' | 'notifies' | 'streams'
+export const INTERACTION_TYPES: readonly InteractionType[] = ['queries', 'commands', 'notifies', 'streams']
+/**
+ * 关系类型：四类交互，加迁移期的 `calls`——「未分类」（M17：按查询或委托参与证实、覆盖与场景绑定）。
+ * `implements` 只出现在描述文件里（M17：Loader / Validator 转成接口的 implementedBy，不进关系索引）；留在联合里只为迁移期的呈现代码能编译（T3 去掉）。
+ */
+export type RelationType = InteractionType | 'calls' | 'implements'
+/** 关系索引里可能出现的类型（四类 + 未分类），按图例顺序 */
+export const RELATION_TYPES: readonly RelationType[] = ['queries', 'commands', 'notifies', 'streams', 'calls']
+/** M17：迁移期的「未分类」 */
+export const UNCLASSIFIED = 'calls' as const
+export const isUnclassified = (t: RelationType): boolean => t === UNCLASSIFIED
+/** M13、K5、S19：查询或委托（含未分类）——发起方 → 接收方的依赖即证实；mode 只对它们有意义 */
+export const CALL_LIKE_TYPES: readonly RelationType[] = ['queries', 'commands', 'calls']
+export const isCallLike = (t: RelationType): boolean => CALL_LIKE_TYPES.includes(t)
+/** M13、S19、L10：关系的同步性——通知一律异步；查询与委托按 mode（缺省同步）；流不比，按 mode 缺省同步 */
+export const relationMode = (r: { type: RelationType; mode?: 'sync' | 'async' }): 'sync' | 'async' => (r.type === 'notifies' ? 'async' : (r.mode ?? 'sync'))
 /** M15：已不是关系类型的旧类型（ADR-0026），读取时丢弃并提醒 */
 export const REMOVED_RELATION_TYPE = 'depends'
+/** M17：已不是关系类型、读作端口实现者的旧类型（ADR-0029） */
+export const MIGRATED_RELATION_TYPE = 'implements'
 /** 旧名（M12）：加载时映射，event 同时翻转两端；一轮后删除 */
 export type LegacyRelationType = 'event' | 'dataflow'
 export const LEGACY_RELATION_TYPES: Readonly<Record<LegacyRelationType, { to: RelationType; flip: boolean }>> = {
   event: { to: 'notifies', flip: true },
   dataflow: { to: 'streams', flip: false },
 }
-/** 关系经由什么传递、静态导入在原理上证实不了（K5b） */
-export type RelationVia = 'http' | 'hmr' | 'inject' | 'router' | 'callback' | 'port' | 'bus'
-export const RELATION_VIAS: readonly RelationVia[] = ['http', 'hmr', 'inject', 'router', 'callback', 'port', 'bus']
 
-/** 运行时关系（§1.1）：命令、通知、流；步骤只对应这三类（S12）；画布上饱和、编译期的 implements 降权（L10） */
-export const RUNTIME_RELATION_TYPES: readonly RelationType[] = ['calls', 'notifies', 'streams']
+/**
+ * 机制维度 via（ADR-0029、K5b）：`port:<接口 ID>` 经端口 / `bus:<模块 ID>` 经总线 / `channel:<名>` 经通道；
+ * 迁移期另有 `port`「端口未指明」与 `bus`「总线未指明」（M20），不判定。
+ */
+export type RelationVia = `port:${string}` | `bus:${string}` | `channel:${string}` | 'port' | 'bus'
+export type ViaKind = 'port' | 'bus' | 'channel'
+export const VIA_KINDS: readonly ViaKind[] = ['port', 'bus', 'channel']
+/** M20：旧的平铺取值（迁移期别名） */
+export const LEGACY_VIAS: readonly string[] = ['http', 'hmr', 'inject', 'router', 'callback', 'port', 'bus']
+/** 解析后的机制：target 为接口 ID、总线模块 ID 或通道名；端口 / 总线未指明（M20）时没有 target */
+export interface ParsedVia {
+  kind: ViaKind
+  target?: string
+}
+/** 解析 via；不合四形态（含旧的平铺取值）为 undefined */
+export function parseVia(via: string | undefined): ParsedVia | undefined {
+  if (via === undefined) return undefined
+  if (via === 'port' || via === 'bus') return { kind: via }
+  const m = /^(port|bus|channel):(.+)$/.exec(via)
+  return m ? { kind: m[1] as ViaKind, target: m[2] } : undefined
+}
+
+/** 运行时关系（§1.1）：ADR-0029 起关系全是交互；步骤只对应它们（S12）。迁移期含未分类 */
+export const RUNTIME_RELATION_TYPES: readonly RelationType[] = RELATION_TYPES
 
 export type ModuleStatus = 'current' | 'target' | 'deprecated'
-export type ModuleRole = 'core' | 'shared' | 'bus'
-export const MODULE_ROLES: readonly ModuleRole[] = ['core', 'shared', 'bus']
+export type ModuleRole = 'core' | 'shared' | 'bus' | 'port' | 'adapter'
+export const MODULE_ROLES: readonly ModuleRole[] = ['core', 'shared', 'bus', 'port', 'adapter']
+/** L14、O8：边界角色（ADR-0030）——port 对外端口模块、adapter 适配器；常显、不折叠 */
+export const isBoundaryRole = (role: ModuleRole | undefined): boolean => role === 'port' || role === 'adapter'
 /** O9、P18、U12：共用件——`shared` 与 `bus` 同样收进共用件架 */
 export const isSharedRole = (role: ModuleRole | undefined): boolean => role === 'shared' || role === 'bus'
 /** M16、U11：模块角色的约定文件（人拥有） */
@@ -68,7 +106,7 @@ export interface ModuleDef {
   parent?: string
   kind?: string
   status?: ModuleStatus
-  /** 角色（§1.1、ADR-0027）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）；不写为普通。旧写法 `core: true` 由 Loader 映射（M16） */
+  /** 角色（§1.1、ADR-0027、ADR-0030）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）/ port 对外端口模块 / adapter 适配器；不写为普通。旧写法 `core: true` 由 Loader 映射（M16） */
   role?: ModuleRole
   responsibility?: string
   principle?: string
@@ -101,13 +139,14 @@ export interface RelationDef {
   id: string
   from: string
   to: string
-  /** 文件里也可能写旧名（M12），Loader 映射后只剩 RelationType */
+  /** 文件里也可能写旧名（M12）与迁移期的 calls / implements（M17）；Loader 映射旧名，Validator 把 implements 转成接口的 implementedBy */
   type: RelationType | LegacyRelationType
+  /** 只用于 queries / commands（迁移期含未分类）：同步缺省，异步写 async（M13） */
   mode?: 'sync' | 'async'
   /** 只用于 streams：拉取型流，箭头仍指数据去向（M13） */
   pull?: boolean
-  /** K5b：经此传递，静态导入在原理上证实不了；有它的关系不判定 */
-  via?: RelationVia
+  /** 机制（K5b、ADR-0029）：port:<接口 ID> / bus:<模块 ID> / channel:<名>；旧的平铺取值按 M20 读入 */
+  via?: string
   interface?: string
   payload?: string | string[]
   description?: string
@@ -117,8 +156,11 @@ export interface RelationDef {
 export interface InterfaceDef {
   id: string
   name: string
+  /** 定义模块（端口的定义模块，ADR-0029） */
   owner?: string
   signature?: string
+  /** 端口的实现者模块（ADR-0029、M18）：AI 的主张，代码事实是裁判（K5c） */
+  implementedBy?: string[]
   description?: string
   semantics?: string
   designNote?: string
@@ -166,9 +208,17 @@ export type StepDef =
   | { par: { steps: StepDef[] }[] }
   | { ref: string }
 
+/** 场景的类别（M19、ADR-0030）：主流程 / 异常 / 维护；不写为 main */
+export type ScenarioKind = 'main' | 'exception' | 'maintenance'
+export const SCENARIO_KINDS: readonly ScenarioKind[] = ['main', 'exception', 'maintenance']
+/** M19：场景的类别，缺省 main */
+export const scenarioKind = (sc: { kind?: ScenarioKind }): ScenarioKind => sc.kind ?? 'main'
+
 export interface ScenarioDef {
   id: string
   name: string
+  /** M19：main 主流程（缺省）/ exception 异常 / maintenance 维护 */
+  kind?: ScenarioKind
   description?: string
   /** 触发原因（文字）；触发者由第一条消息的发送方推出（A6） */
   cause?: string
@@ -339,14 +389,19 @@ export interface ModuleEntity extends Omit<ModuleDef, 'children' | 'parent'> {
   src: SourceLoc
 }
 
-export interface RelationEntity extends Omit<RelationDef, 'payload' | 'type'> {
+export interface RelationEntity extends Omit<RelationDef, 'payload' | 'type' | 'via'> {
+  /** 校验后只有四类与未分类（implements 已转成实现者，M17） */
   type: RelationType
+  /** 校验后为四形态或迁移期的「端口 / 总线未指明」（M20） */
+  via?: RelationVia
   payload: string[]
   seq: number
   src: SourceLoc
 }
 
 export interface InterfaceEntity extends InterfaceDef {
+  /** 是端口（裁决 4）：被 via: port: 引用、或描述写了实现者；代码事实发现的实现者另由架构治理合并（K5c、K11）。由 Validator 推出，不参与版本对比 */
+  port?: true
   src: SourceLoc
 }
 
@@ -424,7 +479,8 @@ export interface SketchEntity {
   design?: string
 }
 
-export type IssueSeverity = 'error' | 'warning'
+/** info：只提示，不计入错误与提醒数（如未分类，M17） */
+export type IssueSeverity = 'error' | 'warning' | 'info'
 
 export interface Issue {
   severity: IssueSeverity

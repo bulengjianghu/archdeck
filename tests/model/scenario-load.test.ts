@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { bindRelation, load, loadModel, triggerOf, type Issue, type MessageStep, type Step } from '../../src/model'
 import { scenarioFiles } from '../fixtures/sample'
 
-const codes = (issues: Issue[]) => issues.map(i => i.code)
+/** 只看错误与提醒：未分类（M17）是 info */
+const real = (issues: Issue[]) => issues.filter(i => i.severity !== 'info')
+const codes = (issues: Issue[]) => real(issues).map(i => i.code)
 const scenario = (extra: string) => scenarioFiles({ 'scenarios/x.yaml': extra })
 
 describe('加载', () => {
@@ -42,7 +44,7 @@ describe('加载', () => {
 
 describe('校验', () => {
   it('样例场景没有问题', () => {
-    expect(loadModel(scenarioFiles()).issues).toEqual([])
+    expect(real(loadModel(scenarioFiles()).issues)).toEqual([])
   })
 
   it('M3：参与者 ID 不与模块重复、自身唯一；场景 ID 唯一', () => {
@@ -79,21 +81,21 @@ describe('校验', () => {
   it('S5a：引用了关系而端点不一致 → error，去掉引用', () => {
     const r = loadModel(scenario('scenario: { id: sc.x, name: X, steps: [{ call: { from: app.solution, to: infra.framework.sm, relation: r1 } }] }'))
     expect(codes(r.issues)).toEqual(['step-relation-mismatch'])
-    expect(r.issues[0]).toMatchObject({ severity: 'error', file: 'scenarios/x.yaml', line: 1 })
+    expect(real(r.issues)[0]).toMatchObject({ severity: 'error', file: 'scenarios/x.yaml', line: 1 })
   })
 
   it('S5a、S12：notifies 与消息同向比对（发布者 → 订阅者的消息对得上发布者 → 订阅者的关系），反向的消息报不一致', () => {
     const ok = loadModel(scenario('scenario: { id: sc.x, name: X, steps: [{ async: { from: infra.framework.sm, to: infra.player, relation: re1 } }] }'))
-    expect(ok.issues).toEqual([])
+    expect(real(ok.issues)).toEqual([])
     const bad = loadModel(scenario('scenario: { id: sc.x, name: X, steps: [{ async: { from: infra.player, to: infra.framework.sm, relation: re1 } }] }'))
     expect(codes(bad.issues)).toEqual(['step-relation-mismatch'])
   })
 
-  it('S5a：推断不到且两端结构上无任何关系 → warning；有关系（哪怕是 implements）则不提醒', () => {
+  it('S5a：推断不到且两端结构上无任何关系 → warning；有关系则不提醒', () => {
     const none = loadModel(scenario('scenario: { id: sc.x, name: X, steps: [{ call: { from: infra.mus, to: app.solution } }] }'))
-    expect(none.issues.map(i => [i.code, i.severity])).toEqual([['step-unmodeled', 'warning']])
+    expect(real(none.issues).map(i => [i.code, i.severity])).toEqual([['step-unmodeled', 'warning']])
     const dep = loadModel(scenario('scenario: { id: sc.x, name: X, steps: [{ call: { from: infra.player, to: app.solution } }] }'))
-    expect(dep.issues).toEqual([])
+    expect(real(dep.issues)).toEqual([])
   })
 
   it('S6：ref 的目标必须存在、无循环引用', () => {
@@ -114,9 +116,14 @@ describe('校验', () => {
     expect(steps.map(s => s.msg.id)).toEqual(['a', undefined])
   })
 
-  it('S12：引用 implements 关系报错（depends 已不是关系，M15）', () => {
-    const r = loadModel(scenario('scenario: { id: sc.x, name: X, steps: [{ call: { from: infra.player, to: app.solution, relation: r3 } }] }'))
-    expect(codes(r.issues)).toEqual(['step-relation-not-runtime'])
+  it('S12：implements 不再是关系（M17 读作端口实现者），步骤引用它按「引用不存在的关系」提醒并去掉（S5b）', () => {
+    const r = loadModel(
+      scenarioFiles({
+        'scenarios/x.yaml': 'relations: [{ id: ri, from: infra.player, to: app.solution, type: implements }]\nscenario: { id: sc.x, name: X, steps: [{ call: { from: infra.player, to: app.solution, relation: ri } }] }',
+      }),
+    )
+    expect(codes(r.issues)).toEqual(['relation.implements-migrated', 'unknown-relation'])
+    expect((r.index.scenarios.get('sc.x')!.steps[0] as MessageStep).msg.relation).toBeUndefined()
   })
 })
 

@@ -9,7 +9,9 @@ import { sampleFiles } from '../fixtures/sample'
 import { CODE, DEPS, LAYERS, SRC, dep, files, setup } from './governance/helpers'
 import { assignFiles } from '@/model'
 
-const codes = (issues: { code: string }[]) => issues.map(i => i.code)
+/** 只看错误与提醒：未分类（M17）是 info */
+const real = <T extends { severity: string }>(issues: T[]) => issues.filter(i => i.severity !== 'info')
+const codes = (issues: { code: string; severity: string }[]) => real(issues).map(i => i.code)
 
 describe('M15 depends 已不是关系类型', () => {
   it('读取时丢弃 type: depends 的关系并提醒（带文件与行号），其余照常加载；草图里的同样处理', () => {
@@ -60,14 +62,15 @@ describe('M14 总线不作通知的端点', () => {
     expect(r.index.relations.has('n2')).toBe(false)
   })
 
-  it('两端写真正的发布者与订阅者、via: bus 留痕不报；对总线的 calls 不受限', () => {
+  it("两端写真正的发布者与订阅者、via: 'bus:<总线>' 留痕不报；对总线的委托不受限；旧写法 via: bus 在恰有一个总线时读作它（M20）", () => {
     const r = loadModel(
       sampleFiles({
-        'bus.yaml': `${BUS}relations:\n  - { id: n3, from: infra.player, to: app.solution, type: notifies, via: bus }\n  - { id: c3, from: infra.player, to: infra.bus, type: calls }\n`,
+        'bus.yaml': `${BUS}relations:\n  - { id: n3, from: infra.player, to: app.solution, type: notifies, via: 'bus:infra.bus' }\n  - { id: c3, from: infra.player, to: infra.bus, type: commands }\n  - { id: n4, from: infra.player, to: app.fragments, type: notifies, via: bus }\n`,
       }),
     )
-    expect(r.issues).toEqual([])
-    expect(r.index.relations.get('n3')!.via).toBe('bus')
+    expect(codes(r.issues)).toEqual(['relation.via-legacy'])
+    expect(r.index.relations.get('n3')!.via).toBe('bus:infra.bus')
+    expect(r.index.relations.get('n4')!.via).toBe('bus:infra.bus')
   })
 })
 
@@ -77,7 +80,7 @@ describe('S19 场景消息与 calls 的同步性一致', () => {
 
   it('async 消息对应同步的 calls、call 消息对应异步的 calls → warning step.sync-mismatch，不改绑定', () => {
     const a = loadModel(sampleFiles({ 'x.yaml': rel(''), 'scenarios/x.yaml': step('async') }))
-    expect(a.issues.map(i => [i.code, i.severity])).toEqual([['step.sync-mismatch', 'warning']])
+    expect(real(a.issues).map(i => [i.code, i.severity])).toEqual([['step.sync-mismatch', 'warning']])
     const steps = a.index.scenarios.get('sc.x')!.steps
     expect(bindRelation(a.index, { kind: 'async', ...(steps[0] as { msg: { from: string; to: string } }).msg }).relation).toBe('cx')
     const b = loadModel(sampleFiles({ 'x.yaml': rel(', mode: async'), 'scenarios/x.yaml': step('call') }))
@@ -85,10 +88,10 @@ describe('S19 场景消息与 calls 的同步性一致', () => {
   })
 
   it('一致时不提醒；notifies / streams 与 return 不比同步性', () => {
-    expect(loadModel(sampleFiles({ 'x.yaml': rel(', mode: async'), 'scenarios/x.yaml': step('async') })).issues).toEqual([])
-    expect(loadModel(sampleFiles({ 'x.yaml': rel(''), 'scenarios/x.yaml': step('call') })).issues).toEqual([])
+    expect(codes(loadModel(sampleFiles({ 'x.yaml': rel(', mode: async'), 'scenarios/x.yaml': step('async') })).issues)).toEqual([])
+    expect(codes(loadModel(sampleFiles({ 'x.yaml': rel(''), 'scenarios/x.yaml': step('call') })).issues)).toEqual([])
     const n = 'relations:\n  - { id: nx, from: infra.player, to: infra.mus, type: notifies }\n'
-    expect(loadModel(sampleFiles({ 'x.yaml': n, 'scenarios/x.yaml': step('call') })).issues).toEqual([])
+    expect(codes(loadModel(sampleFiles({ 'x.yaml': n, 'scenarios/x.yaml': step('async') })).issues)).toEqual([])
   })
 
   it('S13 推断：两端之间同向的 calls 有多条时，同步性与消息一致的恰好一条即认定', () => {
@@ -111,7 +114,7 @@ describe('K5、K6：异步 calls 与运行时关系的未证实', () => {
     const { index, own } = withRelations('  - { id: rel.a, from: ui.view, to: ui.store, type: calls, mode: async }\n  - { id: rel.cb, from: core.impl, to: ui.store, type: calls, mode: async, via: callback }\n')
     const c = confirmRelations(index, liftDeps(index, own, DEPS).moduleDeps)
     expect(c.get('rel.a')!.status).toBe('confirmed')
-    expect(c.get('rel.cb')).toMatchObject({ status: 'skipped', via: 'callback' })
+    expect(c.get('rel.cb')).toMatchObject({ status: 'skipped', via: 'channel:callback' })
   })
 
   it('K6：编译期一档只剩 implements；运行时关系只有反向依赖时不报警告，两端之间没有任何依赖时报', () => {

@@ -7,7 +7,7 @@
  * - 一端在 P 外部：外部端点提升为「最近公共祖先下、它那一侧的子模块」作为边界节点。
  * 同一 (from, to, type) 的关系合并成一条边（L5：同一对节点之间不同类型的关系各成一条）。
  */
-import { isSharedRole } from './types'
+import { isSharedRole, relationMode } from './types'
 import type {
   Band,
   ModelIndex,
@@ -335,7 +335,7 @@ class EdgeCollector {
     }
     e.relationIds.push(r.id)
     e.allExact &&= exact
-    e.modes.add(r.mode ?? 'sync')
+    e.modes.add(relationMode(r))
   }
 
   result(): ViewEdge[] {

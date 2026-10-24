@@ -72,13 +72,13 @@ describe('layoutLayered · 分层总览', () => {
     const adjacent = pv.edges.get('infra->app:calls')!
     expect(adjacent.points).toHaveLength(2)
     expect(adjacent.points[0].x).toBe(adjacent.points[1].x)
-    const skip = pv.edges.get('infra->domain:implements')!
+    const skip = pv.edges.get('infra->domain:queries')!
     expect(skip.points).toHaveLength(4)
     expect(skip.points[1].x).toBeGreaterThan(pv.nodes.get('infra')!.w)
   })
 
   it('同一空隙里的多条边横向错开', () => {
-    const xs = ['infra->app:calls', 'infra->app:implements'].map(id => pv.edges.get(id)!.points[0].x)
+    const xs = ['infra->app:calls', 'infra->app:queries'].map(id => pv.edges.get(id)!.points[0].x)
     expect(xs[0]).not.toBe(xs[1])
   })
 
@@ -93,7 +93,7 @@ describe('layoutLayered · 分层总览', () => {
 
   it('外框包含所有节点与右侧通道', () => {
     const b = contentBounds(pv)!
-    const lane = pv.edges.get('infra->domain:implements')!.points[1].x
+    const lane = pv.edges.get('infra->domain:queries')!.points[1].x
     // 外框含父模块框（留 BAND.framePad，标题在框线上方）
     expect(b.x).toBe(-BAND.framePad)
     expect(b.x + b.w).toBeGreaterThanOrEqual(lane)
@@ -299,7 +299,7 @@ describe('L10：标签、线宽档、平行边', () => {
     const { index: idx } = loadModel(sampleFiles({ 'z.yaml': 'relations: [{ id: x1, from: infra.player, to: app.solution, type: calls }]' }))
     const view = projectLevel(idx, 'infra', { showBoundaries: true })
     const pair = view.edges.filter(e => e.from === 'infra.player' && e.to === 'boundary:app')
-    expect(pair.map(e => e.type).sort()).toEqual(['calls', 'implements'])
+    expect(pair.map(e => e.type).sort()).toEqual(['calls', 'queries'])
     const inner = {
       ...view,
       edges: [ve('p:calls', 'infra.player', 'infra.framework', 1), ve('p:implements', 'infra.player', 'infra.framework', 2, 'implements')],

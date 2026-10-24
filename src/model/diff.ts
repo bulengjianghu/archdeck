@@ -10,7 +10,7 @@
 import { isMergeResult, lineageKind, lineageSources, mapId, prefixMap, unmapId, type Lineage } from './intent/lineage'
 import { CHANGE_KINDS, type Change, type ChangeKind, type EntityKind, type ModelDiff, type ModelIndex } from './types'
 
-const IGNORED = new Set(['src', 'seq', 'designNote', 'roleFrom'])
+const IGNORED = new Set(['src', 'seq', 'designNote', 'roleFrom', 'port'])
 const ENTITY_ORDER: EntityKind[] = ['module', 'relation', 'interface', 'dataStructure']
 
 export interface DiffOptions {

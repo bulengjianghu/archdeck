@@ -11,7 +11,7 @@ modules:
 interfaces:
   - { id: if.ui.render, name: 渲染界面, owner: ui.view, signature: 'render(): void' }
 relations:
-  - { id: rel.inject, from: ui.view, to: core.impl, type: calls, via: inject }
+  - { id: rel.inject, from: ui.view, to: core.impl, type: commands, via: 'channel:inject' }
   - { id: rel.notify, from: core.impl, to: ui.store, type: notifies }
 `
 
@@ -80,7 +80,7 @@ describe('S16 步骤的候选调用点', () => {
     expect(stepEvidence({ kind: 'call', from: 'ui.view', to: 'core.impl', relation: 'rel.inject' }, index, own, DEPS)).toEqual({
       level: 'skipped',
       reason: 'via',
-      via: 'inject',
+      via: 'channel:inject',
     })
   })
 
