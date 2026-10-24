@@ -283,6 +283,14 @@ test('E-1、#20b：从当前版本点「编辑骨架」打开持久草图即进�
   await expect(page.locator('.info-bar .name')).toHaveText('骨架')
   await expect(saveButton(page)).toBeVisible()
   await expect(page.locator('.sk-band')).toHaveCount(4)
+  // 持久草图只有「相对当前版本」（对象是去掉它贡献后的当前版本，X17）；草图下没有视角切换、导航树不另列路径
+  const cmp = page.locator('.info-bar .cmp-btn')
+  await expect(cmp).toContainText('对比 相对当前版本')
+  await cmp.click()
+  await expect(page.getByRole('dialog', { name: '对比设置' }).getByLabel('相对基线')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('group', { name: '视角' })).toHaveCount(0)
+  await expect(page.locator('[data-testid="sketch-tree"]')).not.toContainText('本张草图')
   // 退出：没有改动，直接回到进入草图之前的版本（当前版本）
   await page.locator('.info-bar').getByRole('button', { name: '退出', exact: true }).click()
   await expect(page).not.toHaveURL(/\/i\/skeleton/)
@@ -347,10 +355,13 @@ test('F-60–F-62、#15、#20b：草图的信息条只出现一次名称、唯�
     await expect(bar.locator('.dirty')).toHaveText('编辑中 ●')
     await expect(bar.getByRole('button', { name: '保存并交给 AI' })).toBeVisible()
 
-    // 对比：一个按钮、六类计数；弹层里切口径，没有基线提交时提示退化；全设计清单按血缘分组
+    // 对比：一个按钮——新增 / 修改始终显示，合并 / 拆分 / 移动 / 删除只在非 0 时显示；弹层里六类计数、切口径，没有基线提交时提示退化；全设计清单按血缘分组
     const cmp = bar.locator('.cmp-btn')
     await expect(cmp).toContainText('对比 相对基线')
-    for (const t of ['新增', '修改', '合并', '拆分', '移动', '删除']) await expect(cmp.locator(`b[title="${t}"]`)).toHaveCount(1)
+    for (const t of ['新增', '修改']) await expect(cmp.locator(`b[title="${t}"]`)).toHaveCount(1)
+    for (const t of ['合并', '拆分', '移动']) await expect(cmp.locator(`b[title="${t}"]`)).toHaveCount(0)
+    // 这张草图只画了 DeskState 的两个子模块、又没有基线提交（相对基线 = 相对当前版本）：范围内没画的计为删除，非 0 即显示
+    await expect(cmp.locator('b[title="删除"]')).not.toHaveText('−0')
     await cmp.click()
     const pop = page.getByRole('dialog', { name: '对比设置' })
     for (const t of ['新增', '修改', '合并', '拆分', '移动', '删除']) await expect(pop.locator('.counts')).toContainText(t)
@@ -395,7 +406,7 @@ test('T2b 裁决 6：当前版本上「在此设计」的对话框有「加到�
     await openDesk(page, '/p/h5p-arch-desk')
     await designHere(page, 'state', 'state.transition')
     const dialog = page.getByRole('dialog', { name: '新建设计' })
-    await expect(dialog.getByLabel('新建设计')).toBeChecked()
+    await expect(dialog.getByRole('radio', { name: '新建设计' })).toBeChecked()
     await dialog.getByRole('radio', { name: /加到设计/ }).check()
     const target = dialog.locator('select[name="design-target"]')
     if (await target.count()) await target.selectOption('zz-e2e-add')
