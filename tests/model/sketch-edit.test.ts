@@ -48,7 +48,7 @@ const DRAFT: SketchDef = {
   closed: ['core.a'],
   relations: [
     { id: 'rel.x-b', from: 'core.a.x', to: 'core.b', type: 'calls', interface: 'if.a.run' },
-    { id: 'rel.b-view', from: 'core.b', to: 'ui.view', type: 'depends' },
+    { id: 'rel.b-view', from: 'core.b', to: 'ui.view', type: 'calls' },
   ],
   interfaces: [{ id: 'if.a.run', name: 'run', owner: 'core.a' }],
 }

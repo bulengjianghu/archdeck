@@ -100,7 +100,7 @@ export function createFacts({ state, index, view, files, sync, design }: FactsIn
     return id === undefined ? null : (lv.levelCycles.find(c => c.id === id) ?? null)
   })
 
-  /** Q1：模块的治理信息（生效的规则、出入的违规与未描述依赖、所在的环） */
+  /** Q1：模块的治理信息（生效的规则、出入的违规与未解释的交互、所在的环） */
   const moduleDetail = (id: string): ModuleDetail | null =>
     report.value && index.value && files.ownership.value && entryOf.value
       ? describeModule(index.value, files.ownership.value, report.value, entryOf.value, id)

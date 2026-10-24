@@ -82,7 +82,7 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
         <dd>
           已证实 {{ confirm.confirmed }} · <span :class="{ warn: confirm.unconfirmed }">未证实 {{ confirm.unconfirmed }}</span>
         </dd>
-        <dt>未描述依赖</dt>
+        <dt>未解释的交互</dt>
         <dd>{{ r.undescribed.length }}</dd>
         <dt>违规</dt>
         <dd :title="violationTitle">
@@ -116,7 +116,7 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
         </dd>
         <dd v-else class="muted">无（npm run arch -- baseline 生成）</dd>
       </dl>
-      <p class="hint muted">图上缺省叠加代码事实（「显示」面板可关闭）：虚线加 ? 为未证实的关系，点线为未描述的依赖，红色为基线外的违规，↻ 为本层的环。</p>
+      <p class="hint muted">图上缺省叠加代码事实（「显示」面板可关闭）：虚线加 ? 为未证实的关系，点线为未解释的交互，红色为基线外的违规，↻ 为本层的环。</p>
     </template>
   </Section>
 

@@ -34,7 +34,7 @@ server.registerTool(
   'overview',
   {
     title: '架构治理概览',
-    description: '规模、关系的证实情况、未描述依赖、违规（新增 / 已知）、环度与基线。开始一项改动前先看一眼。',
+    description: '规模、关系的证实情况、未解释的交互、违规（新增 / 已知）、环度与基线。开始一项改动前先看一眼。',
     inputSchema: { project },
   },
   ({ project }) => reply(() => svc.overview(project)),
@@ -98,7 +98,7 @@ server.registerTool(
   {
     title: '返工清单',
     description:
-      '当前版本里需要人或 AI 修正的问题，按根因聚合（同一对 codeRefs 重叠的冲突文件、同一目录的未归属文件、同一对端点间未建模的步骤各为一条）：描述错误与提醒、违规（新增 / 已知 / 已豁免）、环度上升、源码归属、未证实的关系（编译期关系，以及两端之间没有任何依赖的运行时关系）、未描述依赖、结构中未建模的步骤。每条带文件行号、规则编号与建议动作（含可粘贴的 YAML 片段）。修正描述前先看它，改完用 rescan 或 lint:model 自检。',
+      '当前版本里需要人或 AI 修正的问题，按根因聚合（同一对 codeRefs 重叠的冲突文件、同一目录的未归属文件、同一对端点间未建模的步骤各为一条）：描述错误与提醒、违规（新增 / 已知 / 已豁免）、环度上升、源码归属、未证实的关系（编译期关系，以及两端之间没有任何依赖的运行时关系）、未解释的交互、结构中未建模的步骤。每条带文件行号、规则编号与建议动作（含可粘贴的 YAML 片段）。修正描述前先看它，改完用 rescan 或 lint:model 自检。',
     inputSchema: {
       format: z.enum(['markdown', 'json']).optional().describe('缺省 markdown（与命令行 npm run arch -- issues 相同）；json 为结构化结果（与 --json 相同）'),
       category: z

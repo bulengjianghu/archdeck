@@ -11,7 +11,7 @@ import type { GovernanceReport, LevelCycle, ModuleDep, Violation } from './types
 
 export type EdgeFact = 'confirmed' | 'partial' | 'unconfirmed'
 
-/** 一条代码依赖叠加线：本层两个节点之间的未描述依赖与基线外的违规（K9） */
+/** 一条代码依赖叠加线：本层两个节点之间的未解释的交互与基线外的违规（K9） */
 export interface DepOverlay {
   /** `dep:<依赖方节点>-><被依赖方节点>` */
   id: string
@@ -64,7 +64,7 @@ export function levelFacts(index: ModelIndex, view: LevelView, report: Governanc
     edgeFacts.set(e.id, ok === st.length ? 'confirmed' : ok === 0 ? 'unconfirmed' : 'partial')
   }
 
-  // 违规与未描述依赖按节点对汇总
+  // 违规与未解释的交互按节点对汇总
   const pairs = new Map<string, { from: string; to: string; undescribed: number; violations: number }>()
   const bump = (a: string, b: string, field: 'undescribed' | 'violations') => {
     const k = depKey(a, b)

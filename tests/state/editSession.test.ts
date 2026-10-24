@@ -440,7 +440,7 @@ describe('desk.edit：草图画布与 DeskState', () => {
         { name: 'Z2', id: 'z2' },
       ]),
     )
-    ok(desk.edit.connect('core.a.z1', 'core.a.x', 'depends'))
+    ok(desk.edit.connect('core.a.z1', 'core.a.x', 'calls'))
     expect(await desk.edit.saveAndHandToAi()).toMatchObject({ ok: true, prompt: 'PROMPT' })
     expect(designs).toHaveLength(1)
     ok(

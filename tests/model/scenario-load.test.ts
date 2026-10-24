@@ -89,7 +89,7 @@ describe('校验', () => {
     expect(codes(bad.issues)).toEqual(['step-relation-mismatch'])
   })
 
-  it('S5a：推断不到且两端结构上无任何关系 → warning；有关系（哪怕是 depends）则不提醒', () => {
+  it('S5a：推断不到且两端结构上无任何关系 → warning；有关系（哪怕是 implements）则不提醒', () => {
     const none = loadModel(scenario('scenario: { id: sc.x, name: X, steps: [{ call: { from: infra.mus, to: app.solution } }] }'))
     expect(none.issues.map(i => [i.code, i.severity])).toEqual([['step-unmodeled', 'warning']])
     const dep = loadModel(scenario('scenario: { id: sc.x, name: X, steps: [{ call: { from: infra.player, to: app.solution } }] }'))
@@ -114,7 +114,7 @@ describe('校验', () => {
     expect(steps.map(s => s.msg.id)).toEqual(['a', undefined])
   })
 
-  it('S12：引用 depends / implements 关系报错', () => {
+  it('S12：引用 implements 关系报错（depends 已不是关系，M15）', () => {
     const r = loadModel(scenario('scenario: { id: sc.x, name: X, steps: [{ call: { from: infra.player, to: app.solution, relation: r3 } }] }'))
     expect(codes(r.issues)).toEqual(['step-relation-not-runtime'])
   })

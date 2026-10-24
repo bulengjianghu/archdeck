@@ -1,4 +1,4 @@
-/** 架构治理 · 事实比对（K4–K7）：模块依赖、关系的证实与未证实的分档、未描述依赖 */
+/** 架构治理 · 事实比对（K4–K7）：模块依赖、关系的证实与未证实的分档、未解释的交互 */
 import { describe, expect, it } from 'vitest'
 import {
   assignFiles,
@@ -156,9 +156,9 @@ describe('K5 通知与流的方向、implements 的证据（ADR-0022）', () => 
     expect(c.get('rel.6')!.knows).toBe('both')
   })
 
-  it('implements 证据三档：① 接口名或类 implements / extends → 已证实；② 只引数据类型 → 结构性实现；③ 引用了实现 → 证据像 depends', () => {
+  it('implements 证据三档：① 接口名或类 implements / extends → 已证实；② 只引数据类型 → 结构性实现；③ 引用了实现 → 证据像使用', () => {
     const rel = '  - { id: rel.i, from: ui.store, to: core.api, type: implements }\n'
-    const plain = dep('src/ui/store/s.ts', 'src/core/api/client.ts')
+    const plain: FileDep = { ...dep('src/ui/store/s.ts', 'src/core/api/client.ts'), uses: undefined }
     // ③ 值导入了对方的函数
     expect(confirm(rel, [{ ...plain, names: ['makeClient'], uses: true }]).get('rel.i')).toMatchObject({ status: 'unconfirmed', likeDepends: true, deps: ['ui.store->core.api'] })
     // ② 只引了数据类型（类型或枚举），没有引用实现
@@ -173,7 +173,7 @@ describe('K5 通知与流的方向、implements 的证据（ADR-0022）', () => 
   it('结构性实现只提示（info）：不报 lint 问题、不进角标，返工清单建议在类上写明 implements 并列出候选接口', () => {
     const { index, own } = withRelations('  - { id: rel.i, from: ui.store, to: core.api, type: implements }\n')
     const tree = { files: SRC, packages: {} }
-    const report = governanceReport(index, own, tree, { ...CODE, deps: DEPS.map(d => ({ ...d, kind: 'type' as const, names: ['Item'] })) }, null)
+    const report = governanceReport(index, own, tree, { ...CODE, deps: DEPS.map(d => ({ ...d, kind: 'type' as const, names: ['Item'], uses: undefined })) }, null)
     expect(report.relations.get('rel.i')!.structural).toBe(true)
     expect(report.issues.some(i => i.message.includes('rel.i'))).toBe(false)
     const item = reworkList({ index, report, issues: [] }).items.find(x => x.id === 'unconfirmed:rel.i')!
@@ -182,7 +182,7 @@ describe('K5 通知与流的方向、implements 的证据（ADR-0022）', () => 
     expect(item.actions[0].text).toContain('get')
   })
 
-  it('证据像 depends 报 fact.like-depends（代替 fact.unconfirmed），返工清单建议改为 depends', () => {
+  it('证据像使用报 fact.like-depends（代替 fact.unconfirmed），返工清单建议改为 calls 或删除关系（ADR-0026）', () => {
     const { index, own } = withRelations('  - { id: rel.i, from: ui.store, to: core.api, type: implements }\n')
     const tree = { files: SRC, packages: {} }
     const report = governanceReport(index, own, tree, { ...CODE, deps: DEPS.map(d => ({ ...d, names: ['makeClient'], uses: true as const })) }, null)
@@ -190,12 +190,14 @@ describe('K5 通知与流的方向、implements 的证据（ADR-0022）', () => 
     expect(issue).toMatchObject({ severity: 'warning', code: 'fact.like-depends' })
     const item = reworkList({ index, report, issues: [] }).items.find(x => x.id === 'unconfirmed:rel.i')!
     expect(item.code).toBe('fact.like-depends')
-    expect(item.actions[0]).toMatchObject({ kind: 'to-depends', snippet: expect.stringContaining('type: depends') })
+    expect(item.actions[0]).toMatchObject({ kind: 'to-calls', snippet: expect.stringContaining('type: calls') })
+    expect(item.actions[1]).toMatchObject({ kind: 'fix-relation' })
+    expect(issue.message).toContain('证据像使用')
     expect(item.affected.some(a => a.in === 'source' && a.file === 'src/ui/store/s.ts')).toBe(true)
   })
 })
 
-describe('K7 未描述依赖', () => {
+describe('K7 未解释的交互', () => {
   it('没有关系覆盖（方向一致，streams 不论方向）', () => {
     const { index, own } = setup()
     const { moduleDeps } = liftDeps(index, own, DEPS)
@@ -213,11 +215,14 @@ describe('K7 未描述依赖', () => {
     expect(undescribedDeps(index, md('core.api', 'ui.store')).map(d => d.key)).toEqual(['core.api->ui.store'])
   })
 
-  it('只引用类型的模块依赖不算；有一条值依赖就算', () => {
+  it('只引类型（含枚举）的模块依赖不算；有一条值使用（uses）就算', () => {
     const { index, own } = setup()
-    const type = (from: string, to: string): FileDep => ({ ...dep(from, to), kind: 'type' })
+    const type = (from: string, to: string): FileDep => ({ ...dep(from, to), kind: 'type', uses: undefined })
     const onlyTypes = liftDeps(index, own, [type('src/ui/view/a.ts', 'src/core/impl/i.ts')]).moduleDeps
     expect(undescribedDeps(index, onlyTypes)).toEqual([])
+    // 值导入了枚举：kind 为 value，但没有引用函数、类或变量
+    const enumOnly = liftDeps(index, own, [{ ...dep('src/ui/view/a.ts', 'src/core/impl/i.ts'), names: ['Mode'], uses: undefined }]).moduleDeps
+    expect(undescribedDeps(index, enumOnly)).toEqual([])
     const mixed = liftDeps(index, own, [type('src/ui/view/a.ts', 'src/core/impl/i.ts'), dep('src/ui/view/a.ts', 'src/core/impl/i.ts', undefined, 2)]).moduleDeps
     expect(undescribedDeps(index, mixed).map(d => d.key)).toEqual(['ui.view->core.impl'])
   })

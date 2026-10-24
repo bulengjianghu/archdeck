@@ -23,7 +23,7 @@ export interface Binding {
   /**
    * 与结构不一致之处（供 Validator 报告）：
    * - mismatch：引用了关系但端点或方向对不上（error）
-   * - not-runtime：引用了 depends / implements（error）
+   * - not-runtime：引用了 implements（error）
    * - unrelated：没写 relation、推断不到，且两端结构上没有任何关系（warning）
    */
   issue?: 'mismatch' | 'not-runtime' | 'unrelated'

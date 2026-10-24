@@ -74,7 +74,7 @@ export function governanceReport(
       code: 'cycle.grew',
       message: `环度上升：模块 ${baseline!.cyclicity.modules} → ${cyclicity.modules}，文件 ${baseline!.cyclicity.files} → ${cyclicity.files}`,
     })
-  // K6：编译期关系未证实（implements 证据像 depends 时为 fact.like-depends，K5）；运行时关系未证实且两端之间没有任何依赖
+  // K6：implements 未证实（证据像使用时为 fact.like-depends，K5）；运行时关系未证实且两端之间没有任何依赖
   for (const [id, c] of relations) {
     const r = index.relations.get(id)!
     if (unconfirmedWarns(r, c))

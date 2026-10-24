@@ -1,12 +1,14 @@
 relations:
   - { id: r1, from: infra.framework.sm, to: app.solution, type: calls, interface: if.sm }
   - { id: r2, from: app.solution, to: domain.services, type: calls }
-  - { id: r3, from: infra.player, to: app.solution, type: depends }
+  - { id: r3, from: infra.player, to: app.solution, type: implements }
   - { id: r4, from: infra.framework.pipeline, to: infra.mus, type: streams }
-  - { id: r5, from: app.fragments, to: domain.models, type: depends, mode: async }
+  - { id: r5, from: app.fragments, to: domain.models, type: implements }
   - { id: r6, from: infra.framework.sm, to: infra.framework.pipeline, type: calls, payload: ds.cmd }
-  - { id: r7, from: infra.mus, to: domain.models, type: depends }
+  - { id: r7, from: infra.mus, to: domain.models, type: implements }
 interfaces:
   - { id: if.sm, name: sendCommand, owner: infra.framework.sm, signature: 'sendCommand(cmd: Command): Result' }
+  - { id: if.plan, name: Plan, owner: app.solution, signature: 'interface Plan { run(): void }' }
+  - { id: if.model, name: Model, owner: domain.models, signature: 'interface Model { id: string }' }
 dataStructures:
   - { id: ds.cmd, name: Command, definition: 'interface Command { type: string }' }

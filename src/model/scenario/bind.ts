@@ -34,6 +34,10 @@ function relationsAround(index: ModelIndex, id: string): Set<string> {
   return out
 }
 
+/** S19：消息与 calls 的同步性不一致——async 消息对应同步的 calls，或 call 消息对应异步的 calls；return、notifies、streams 不比 */
+export const syncMismatch = (r: RelationEntity, kind: MessageEnds['kind']): boolean =>
+  r.type === 'calls' && kind !== 'return' && (r.mode === 'async') !== (kind === 'async')
+
 export function bindRelation(index: ModelIndex, m: MessageEnds): Binding {
   if (m.relation) {
     const r = index.relations.get(m.relation)
@@ -49,8 +53,15 @@ export function bindRelation(index: ModelIndex, m: MessageEnds): Binding {
   const linked = between.filter(r => (covers(index, r.from, m.from) && covers(index, r.to, m.to)) || (covers(index, r.from, m.to) && covers(index, r.to, m.from)))
   const candidates = linked.filter(r => RUNTIME_RELATION_TYPES.includes(r.type) && orient(index, r, m))
   // S13：两端之间恰好一条同向（return 反向）的运行时关系即认定；恰好连在两端上的优先于连在祖先上的
+  // S19：多条全是 calls 时，同步性与消息一致的恰好一条也认定
+  const unique = (list: RelationEntity[]) => {
+    if (list.length === 1) return list[0]
+    if (m.kind === 'return' || !list.every(r => r.type === 'calls')) return undefined
+    const same = list.filter(r => !syncMismatch(r, m.kind))
+    return same.length === 1 ? same[0] : undefined
+  }
   const exact = candidates.filter(r => (r.from === m.from && r.to === m.to) || (r.from === m.to && r.to === m.from))
-  const pick = exact.length === 1 ? exact[0] : exact.length === 0 && candidates.length === 1 ? candidates[0] : undefined
+  const pick = exact.length ? unique(exact) : unique(candidates)
   if (pick) return { relation: pick.id, inferred: true, reverse: orient(index, pick, m)!.reverse }
   return { inferred: false, reverse: false, ...(linked.length === 0 ? { issue: 'unrelated' as const } : {}) }
 }

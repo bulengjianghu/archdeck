@@ -21,7 +21,7 @@ export type ReworkCategory =
   | 'unevidenced'
 export const REWORK_CATEGORIES: readonly ReworkCategory[] = ['description', 'violation', 'cycle', 'ownership', 'unconfirmed', 'undescribed', 'unmodeled', 'review', 'coupling', 'sketch', 'owned', 'unevidenced']
 
-/** 严重度：error 卡门禁或剔除了实体；warning 描述与代码不一致；info 只提示（未描述依赖、已豁免） */
+/** 严重度：error 卡门禁或剔除了实体；warning 描述与代码不一致；info 只提示（未解释的交互、已豁免） */
 export type ReworkSeverity = IssueSeverity | 'info'
 export const REWORK_SEVERITIES: readonly ReworkSeverity[] = ['error', 'warning', 'info']
 
@@ -32,7 +32,7 @@ export type ReworkActionKind =
   | 'add-ignore' // 加忽略（source-ignore.yaml）
   | 'add-relation' // 补关系
   | 'fix-relation' // 改正或删除关系
-  | 'to-depends' // implements 证据像 depends：改为 depends（K5）
+  | 'to-calls' // implements 证据像使用：有交互时改为 calls（K5，ADR-0026）
   | 'add-implements' // 结构性实现：在类上写明 implements <接口>（K5）
   | 'add-exception' // 加例外（rules.yaml allow）
   | 'fix-code' // 改代码
@@ -108,7 +108,7 @@ export const REWORK_CATEGORY_LABELS: Record<ReworkCategory, string> = {
   cycle: '环度与基线',
   ownership: '源码归属',
   unconfirmed: '未证实的关系',
-  undescribed: '未描述依赖',
+  undescribed: '未解释的交互',
   unmodeled: '结构中未建模的步骤',
   review: '需复核',
   coupling: '时间耦合',

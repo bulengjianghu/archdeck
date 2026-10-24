@@ -46,7 +46,7 @@ export function reworkMarkdown(list: ReworkList, title: string, opts: ReworkMark
     '',
     `共 ${list.items.length} 条：错误 ${list.counts.error}、提醒 ${list.counts.warning}、提示 ${list.counts.info}。` +
       (opts.sourceRoot ? `源码文件路径相对 \`${opts.sourceRoot}\`。` : '') +
-      (list.facts ? '' : '没有代码事实，未含违规、未证实与未描述依赖。'),
+      (list.facts ? '' : '没有代码事实，未含违规、未证实与未解释的交互。'),
     '',
     '修正描述后运行 `npm run lint:model` 自检；按代码修正描述，不改 rules.yaml 迁就代码（加例外由架构师决定）。',
   ]

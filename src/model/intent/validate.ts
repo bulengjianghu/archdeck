@@ -2,7 +2,7 @@
  * 草图校验（X7f、X14，ADR-0024、ADR-0025）：只看草图本身，两级——
  * 格式错误（error，拦保存）：schema、ID 格式与重复、模块不是挂载点的直接子节点（父、前缀、嵌套不对）、挂载点是层或不存在、
  * 文件名与 mount 不一致、引用不存在、缺名称、关系不在本层（两端都不在本草图，或另一端是本层模块的后代）；
- * 语义提示（warning，拦「保存并交给 AI」与定稿）：根草图的层依赖成环、非根草图的本层 depends 成环、同挂载点与持久草图矛盾（X4）、待重连（X16）；
+ * 语义提示（warning，拦「保存并交给 AI」与定稿）：根草图的层依赖成环、同挂载点与持久草图矛盾（X4）、待重连（X16）；本层的环由代码事实给出（Y4，ADR-0026）；
  * 只提示（hint，不进两级）：超七（X13）、没写职责。
  * 与核验（sketchCheck，版本对草图）分工：两边都有的只有矛盾检查（同一函数与稳定键）。画布每次操作后、保存前与写入端点调用同一函数。
  */
@@ -156,18 +156,13 @@ export function validateSketch(sketch: SketchDef, ctx: ValidateContext): SketchV
       else if (!isLayer(d)) err('sketch.ref', `「${m.id}」可依赖的「${d}」不是层`, { module: m.id }, `${m.path}.mayDependOn.${i}`)
     })
 
-  // ── 语义：成环（根草图为层依赖；非根草图为本层 depends）──
+  // ── 语义：根草图的层依赖成环（mayDependOn 图，X14）；非根草图本层的环由代码事实给出（Y4，ADR-0026）──
   if (root) {
     const deps = new Map<string, string[]>()
     for (const [id, m] of fromPersistent) if (m.node.kind === 'layer' && m.parentId === undefined) deps.set(id, m.node.mayDependOn ?? [])
     for (const m of own) if (m.parentId === undefined && m.node.kind === 'layer') deps.set(m.id, m.node.mayDependOn ?? [])
     const cycle = findCycle(deps)
     if (cycle) push('warning', 'sketch.layer-cycle', `层依赖成环：${[...cycle, cycle[0]].join(' → ')}（X14）`, { module: cycle.find(id => local.has(id)) ?? cycle[0] })
-  } else {
-    const deps = new Map<string, string[]>([...local].map(id => [id, []]))
-    for (const r of sketch.relations ?? []) if (r.type === 'depends' && local.has(r.from) && local.has(r.to)) deps.get(r.from)!.push(r.to)
-    const cycle = findCycle(deps)
-    if (cycle) push('warning', 'sketch.depends-cycle', `本层 depends 成环：${[...cycle, cycle[0]].join(' → ')}（X14）`, { module: cycle[0] })
   }
 
   // ── 语义：同挂载点与持久草图矛盾（X4，与核验同一函数）──

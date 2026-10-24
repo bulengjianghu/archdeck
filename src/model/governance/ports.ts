@@ -1,5 +1,5 @@
 /**
- * 端口三角（K11、ADR-0022）：一个声明了接口的模块的三方——定义（它的接口）· 实现者（implements 它）· 使用者（depends / calls / streams 它）。
+ * 端口三角（K11、ADR-0022）：一个声明了接口的模块的三方——定义（它的接口）· 实现者（implements 它）· 使用者（calls / streams 它）。
  * 只看描述；给了治理报告时每一项带该关系的证实状态（K5）。
  */
 import { moduleInterfaces } from '../source'
@@ -7,7 +7,7 @@ import type { ModelIndex, RelationType } from '../types'
 import type { GovernanceReport, PortParty, PortTriad } from './types'
 
 /** 使用一个端口的关系类型：编译期知道它、命令它、经它取送数据流；通知的箭头指向订阅者，不是使用 */
-const USES: readonly RelationType[] = ['depends', 'calls', 'streams']
+const USES: readonly RelationType[] = ['calls', 'streams']
 
 /** K11：没有声明接口的模块返回 null */
 export function portTriad(index: ModelIndex, report: Pick<GovernanceReport, 'relations'> | null, moduleId: string): PortTriad | null {

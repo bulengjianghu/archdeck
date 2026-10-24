@@ -223,7 +223,7 @@ a {
   font-weight: 600;
 }
 
-/* 异常标记（? / 未描述 / 违规） */
+/* 异常标记（? / 未解释 / 违规） */
 .edge-label-warn .vue-flow__edge-text {
   fill: var(--warning);
   font-weight: 600;

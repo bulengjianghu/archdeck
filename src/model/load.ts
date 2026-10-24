@@ -9,7 +9,7 @@
 import Ajv, { type ErrorObject } from 'ajv'
 import { LineCounter, parseDocument, type Document } from 'yaml'
 import schema from '../../schema/arch-file.schema.json'
-import { LEGACY_RELATION_TYPES, ROOT_MOUNT } from './types'
+import { LEGACY_RELATION_TYPES, REMOVED_RELATION_TYPE, ROOT_MOUNT } from './types'
 import { isSketchFile } from './intent/types'
 import type {
   ActorEntity,
@@ -317,6 +317,13 @@ function parseFile(file: RawFile, issues: Issue[]): ParsedFile | null {
       message: '草图没有 mount：一期的骨架（顶层全是层）按根挂载读取（X9）；请加 mount: root',
       ...locate(['sketch']),
     })
+  for (const loc of dropRemovedRelations(data).map(locate))
+    issues.push({
+      severity: 'warning',
+      code: 'relation.depends-removed',
+      message: `depends 已不是关系类型（ADR-0026），这条关系已丢弃：谁知道谁由代码事实给出；有交互的改写为 calls / notifies / streams，实现契约的写 implements（M15）`,
+      ...loc,
+    })
   if (!validateFile(data)) {
     for (const err of dedupeErrors(validateFile.errors ?? [])) {
       const path = err.instancePath.split('/').slice(1).map(seg => (/^\d+$/.test(seg) ? Number(seg) : seg))
@@ -325,6 +332,28 @@ function parseFile(file: RawFile, issues: Issue[]): ParsedFile | null {
     return null
   }
   return { data, locate }
+}
+
+/**
+ * M15：丢弃 `type: depends` 的关系（文件顶层与草图里的 relations），返回它们在文件中的路径（先取位置、后删除）。
+ * 迁移期的读取方式：提醒而不整份跳过；schema 里已没有 depends。
+ */
+function dropRemovedRelations(data: unknown): (string | number)[][] {
+  const at: (string | number)[][] = []
+  const sweep = (holder: unknown, base: (string | number)[]) => {
+    const list = (holder as { relations?: unknown } | null)?.relations
+    if (!Array.isArray(list)) return
+    const kept = list.filter((r, i) => {
+      const removed = !!r && typeof r === 'object' && (r as { type?: unknown }).type === REMOVED_RELATION_TYPE
+      if (removed) at.push([...base, 'relations', i])
+      return !removed
+    })
+    if (kept.length !== list.length) (holder as { relations: unknown[] }).relations = kept
+  }
+  if (!data || typeof data !== 'object') return at
+  sweep(data, [])
+  sweep((data as { sketch?: unknown }).sketch, ['sketch'])
+  return at
 }
 
 /**

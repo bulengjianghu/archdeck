@@ -80,7 +80,7 @@ const ISSUE_RULES: Record<string, string[]> = {
 function descriptionFix(i: Issue): string {
   if (i.code === 'sketch-redefined') return '草图里的实体由架构师定：去掉这里对已写字段的重定义，只补草图没写的字段或往下挂子模块；要改草图本身请交给架构师（X1、X5）'
   if (i.code === 'relation-type-renamed') return '改为新名：event → notifies 并对调 from / to，dataflow → streams；再核对说明里的方向字样'
-  if (i.code === 'implements-no-interface') return '确实实现了契约时在目标模块声明接口（interfaces 的 owner 或 provides）；只是使用对方时改为 depends'
+  if (i.code === 'implements-no-interface') return '确实实现了契约时在目标模块声明接口（interfaces 的 owner 或 provides）；使用对方的实现时改为 calls，只是知道对方时删除关系'
   return i.severity === 'error' ? '改正描述：这一处的实体已被剔除，图上看不到它' : '改正描述：坏引用已被去掉'
 }
 
@@ -367,7 +367,7 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
       target: {},
     })
 
-  // K6：报警的未证实关系（编译期关系——含证据像 depends 的 implements，K5；结构性实现为 info——以及两端之间没有任何依赖的运行时关系）；一条关系一个根因
+  // K6：报警的未证实关系（implements——含证据像使用的，K5；结构性实现为 info——以及两端之间没有任何依赖的运行时关系）；一条关系一个根因
   for (const [id, c] of report.relations) {
     const r = index.relations.get(id)!
     if (!unconfirmedWarns(r, c) && !c.structural) continue
@@ -405,16 +405,17 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
       code: unconfirmedCode(c),
       title: `关系「${id}」（${r.type}，${name(r.from)} → ${name(r.to)}）${unconfirmedReason(r, c)}`,
       ...(at ? { at } : {}),
-      // 证据像 depends：受影响的是引用了对方非接口名字的那些导入
+      // 证据像使用：受影响的是引用了对方非接口名字的那些导入
       affected: [...(at ? [at] : []), ...(c.likeDepends ? evidence() : [])],
       actions: c.likeDepends
         ? [
             {
-              kind: 'to-depends',
-              text: '代码是在使用对方的实现而不是实现它的契约时，改为 depends',
+              kind: 'to-calls',
+              text: '代码是在使用对方的实现而不是实现它的契约时，按这次使用的交互改为 calls（异步的加 mode: async）',
               file: r.src.file,
-              snippet: `- { id: ${id}, from: ${r.from}, to: ${r.to}, type: depends }`,
+              snippet: `- { id: ${id}, from: ${r.from}, to: ${r.to}, type: calls }`,
             },
+            { kind: 'fix-relation', text: '只是知道对方、没有交互时删除这条关系（谁知道谁由代码事实给出，ADR-0026）', file: r.src.file },
             { kind: 'fix-description', text: `确实实现了契约时，在「${name(r.to)}」的描述里声明被实现的接口（interfaces 的 owner 或 provides），名称与代码一致` },
           ]
         : [
@@ -425,24 +426,24 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
     })
   }
 
-  // K7：未描述依赖；一条模块依赖一个根因
+  // K7：未解释的交互；一条模块依赖一个根因
   for (const d of report.undescribed) {
     const m = index.modules.get(d.from)
-    const values = d.files.filter(f => f.kind === 'value')
+    const values = d.files.filter(f => f.uses)
     items.push({
       id: `undescribed:${d.key}`,
       category: 'undescribed',
       severity: 'info',
       rules: ['K7'],
       code: 'fact.undescribed',
-      title: `未描述依赖：${name(d.from)} → ${name(d.to)}（${values.length} 处值导入）`,
+      title: `未解释的交互：${name(d.from)} → ${name(d.to)}（${values.length} 处值使用）`,
       affected: values.map(f => ({ in: 'source', file: f.from, line: f.line, note: f.via === f.to ? `→ ${f.to}` : `→ ${f.via} ⇒ ${f.to}` })),
       actions: [
         {
           kind: 'add-relation',
-          text: '依赖合理时补一条关系（运行时调用写 calls，编译期依赖写 depends）',
+          text: '这次使用是哪种交互就补哪种（多为 calls；异步的加 mode: async）；只是借用工具函数、常量而没有架构含义的可不补（K7）',
           ...(m ? { file: m.src.file } : {}),
-          snippet: `relations:\n  - { id: rel.${d.from}--${d.to}, from: ${d.from}, to: ${d.to}, type: depends }`,
+          snippet: `relations:\n  - { id: rel.${d.from}--${d.to}, from: ${d.from}, to: ${d.to}, type: calls }`,
         },
         { kind: 'fix-code', text: '不该有这条依赖时改代码' },
       ],

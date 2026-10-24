@@ -116,7 +116,7 @@ export interface Confirmation {
   isolated?: boolean
   /** 已证实时，依据的依赖相对关系箭头的方向（面板「知识」一行，ADR-0022） */
   knows?: Knowledge
-  /** implements 有对应的模块依赖，却没有接口名或 implements / extends 的证据：证据像 depends（K5） */
+  /** implements 有对应的模块依赖，却没有接口名或 implements / extends 的证据：证据像使用（K5，原名证据像 depends） */
   likeDepends?: true
   /** implements 有对应的模块依赖，只引了对方的数据类型（类型、枚举），没有接口名或 implements / extends：结构性实现（代码未显式声明，K5） */
   structural?: true

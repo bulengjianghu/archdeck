@@ -198,7 +198,7 @@ export function coupleRoute(a?: Box, b?: Box): EdgeRoute | undefined {
 /** 时间耦合（J5）：本层两端之间的灰色波浪线，标 ×N，无依赖无关系的更深色；不参与布局、不算跳线 */
 export function evolutionEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   return (ctx.evo?.couplings ?? []).map(l => {
-    const ve: ViewEdge = { id: l.id, kind: 'direct', from: l.from, to: l.to, type: 'depends', relationIds: [], mode: 'sync' }
+    const ve: ViewEdge = { id: l.id, kind: 'direct', from: l.from, to: l.to, type: 'calls', relationIds: [], mode: 'sync' }
     const route = coupleRoute(ctx.pv.nodes.get(l.from), ctx.pv.nodes.get(l.to))
     return makeEdge(ctx, ve, route, false, {
       temp: 'couple',
@@ -215,8 +215,8 @@ export function evolutionEdges(ctx: SceneContext): (CanvasEdge | null)[] {
 /** 代码事实叠加（K9）：代码依赖叠加线，不参与布局 */
 export function factEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   return (ctx.facts?.overlays ?? []).map(o => {
-    const label = [o.undescribed ? `未描述 ${o.undescribed}` : '', o.violations ? `违规 ${o.violations}` : ''].filter(Boolean).join(' · ')
-    const ve: ViewEdge = { id: o.id, kind: 'direct', from: o.from, to: o.to, type: 'depends', relationIds: [], mode: 'sync' }
+    const label = [o.undescribed ? `未解释 ${o.undescribed}` : '', o.violations ? `违规 ${o.violations}` : ''].filter(Boolean).join(' · ')
+    const ve: ViewEdge = { id: o.id, kind: 'direct', from: o.from, to: o.to, type: 'calls', relationIds: [], mode: 'sync' }
     const route = linkRoute(ctx.pv.nodes.get(o.from), ctx.pv.nodes.get(o.to))
     return makeEdge(ctx, ve, route, false, {
       temp: 'code',

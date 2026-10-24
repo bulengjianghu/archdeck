@@ -427,6 +427,14 @@
         "core": {
           "type": "boolean"
         },
+        "role": {
+          "description": "角色（02 §1.1、ADR-0027）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）；不写为普通",
+          "enum": [
+            "core",
+            "shared",
+            "bus"
+          ]
+        },
         "responsibility": {
           "type": "string"
         },
@@ -512,6 +520,14 @@
         "core": {
           "type": "boolean"
         },
+        "role": {
+          "description": "角色（02 §1.1、ADR-0027）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）；不写为普通",
+          "enum": [
+            "core",
+            "shared",
+            "bus"
+          ]
+        },
         "responsibility": {
           "type": "string"
         },
@@ -592,11 +608,10 @@
           "$ref": "#/definitions/id"
         },
         "type": {
-          "description": "关系类型（02 §1.1、ADR-0022）：运行时关系的箭头是控制流方向。event / dataflow 是已弃用的旧名（M12），加载时映射为 notifies（翻转 from / to）/ streams 并提醒迁移",
+          "description": "关系类型（02 §1.1、ADR-0022、ADR-0026）：关系是交互，运行时关系的箭头是控制流方向；depends 已不是关系类型（M15，读取时丢弃并提醒）。event / dataflow 是已弃用的旧名（M12），加载时映射为 notifies（翻转 from / to）/ streams 并提醒迁移",
           "anyOf": [
             {
               "enum": [
-                "depends",
                 "calls",
                 "notifies",
                 "streams",
@@ -617,6 +632,7 @@
           "type": "boolean"
         },
         "mode": {
+          "description": "同步性：对 calls 区分同步命令与异步命令（Promise、异步回调、postMessage、定时器回调，ADR-0026）；不写为同步",
           "enum": [
             "sync",
             "async"
@@ -629,7 +645,8 @@
             "inject",
             "router",
             "callback",
-            "port"
+            "port",
+            "bus"
           ]
         },
         "interface": {

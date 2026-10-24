@@ -37,11 +37,11 @@ modules:
 interfaces:
   - { id: if.get, name: get, owner: core.api, signature: 'get(id: string): Item' }
 relations:
-  - { id: rel.1, from: ui.view, to: ui.store, type: depends }
+  - { id: rel.1, from: ui.view, to: ui.store, type: calls }
   - { id: rel.2, from: ui.store, to: core.api, type: calls }
-  - { id: rel.3, from: core.impl, to: core.util, type: depends }
+  - { id: rel.3, from: core.impl, to: core.util, type: calls }
   - { id: rel.4, from: core.api, to: core.impl, type: calls }
-  - { id: rel.5, from: core.util, to: core.future, type: depends }
+  - { id: rel.5, from: core.util, to: core.future, type: calls }
   - { id: rel.6, from: core.util, to: ui.store, type: streams }
 `
 
@@ -70,7 +70,8 @@ export const SRC = [
   'src/tests/x.ts',
 ]
 
-export const dep = (from: string, to: string, via = to, line = 1): FileDep => ({ from, to, via, kind: 'value', line })
+/** 值依赖：缺省引用了对方的实现（K1 的 uses，K7 的值使用） */
+export const dep = (from: string, to: string, via = to, line = 1): FileDep => ({ from, to, via, kind: 'value', line, uses: true })
 
 export const DEPS: FileDep[] = [
   dep('src/ui/view/a.ts', 'src/ui/store/s.ts'), // ui.view → ui.store：rel.1

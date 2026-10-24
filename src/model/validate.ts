@@ -21,7 +21,7 @@ import type {
   Step,
 } from './types'
 import { buildIndex } from './indexer'
-import { bindRelation, forEachStep, mapChildren } from './scenario'
+import { bindRelation, forEachStep, mapChildren, syncMismatch } from './scenario'
 
 export interface ValidateResult {
   model: ArchModel
@@ -218,9 +218,23 @@ function checkRelations(input: ArchModel, c: Checked): RelationEntity[] {
       c.warn('pull-not-streams', `关系「${r.id}」是 ${r.type}，pull 只用于 streams（拉取型流），已忽略`, r.src)
       delete r.pull
     }
+    // M14：总线不作通知的端点——两端写真正的发布者与订阅者，可写 via: bus 留痕
+    const bus = r.type === 'notifies' ? [r.from, r.to].find(id => c.modules.get(id)?.role === 'bus') : undefined
+    if (bus !== undefined) {
+      c.err(
+        'relation.bus-endpoint',
+        `关系「${r.id}」的${bus === r.from ? '发布者' : '订阅者'}「${bus}」是事件总线（role: bus）；总线是传递机制不是参与者，两端写真正的发布者与订阅者，可写 via: bus 留痕（M14）`,
+        r.src,
+      )
+      continue
+    }
     // M11：implements 的目标须声明接口
     if (r.type === 'implements' && c.modules.has(r.to) && !(contracts ??= modulesWithInterfaces(c)).has(r.to))
-      c.warn('implements-no-interface', `关系「${r.id}」实现「${r.to}」，但它没有声明任何接口（provides 或 owner 为它的接口）；没有可实现的契约时应为 depends，否则补上接口声明`, r.src)
+      c.warn(
+        'implements-no-interface',
+        `关系「${r.id}」实现「${r.to}」，但它没有声明任何接口（provides 或 owner 为它的接口）；使用对方的实现时改为 calls，只是知道对方时删除关系（由代码事实承载），否则补上接口声明`,
+        r.src,
+      )
     relationIds.add(r.id)
     relations.push(r)
   }
@@ -357,6 +371,14 @@ function checkBinding(index: ModelIndex, c: Checked, sc: ScenarioEntity, steps: 
       return { ...s, msg: { ...s.msg, relation: undefined } }
     }
     if (b.issue === 'unrelated') c.warn('step-unmodeled', `${where} 在结构图中没有对应关系，两端之间也没有任何关系`, s.src)
+    // S19：同步性一致——只提醒，不改绑定
+    const bound = b.relation ? index.relations.get(b.relation) : undefined
+    if (bound && syncMismatch(bound, s.kind))
+      c.warn(
+        'step.sync-mismatch',
+        `${where} 是${s.kind === 'async' ? '异步' : '同步'}消息，对应的命令「${bound.id}」却是${bound.mode === 'async' ? '异步' : '同步'}的；按代码改消息或关系的 mode（S19）`,
+        s.src,
+      )
     return s
   })
 }

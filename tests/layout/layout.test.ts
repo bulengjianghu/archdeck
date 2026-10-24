@@ -72,13 +72,13 @@ describe('layoutLayered · 分层总览', () => {
     const adjacent = pv.edges.get('infra->app:calls')!
     expect(adjacent.points).toHaveLength(2)
     expect(adjacent.points[0].x).toBe(adjacent.points[1].x)
-    const skip = pv.edges.get('infra->domain:depends')!
+    const skip = pv.edges.get('infra->domain:implements')!
     expect(skip.points).toHaveLength(4)
     expect(skip.points[1].x).toBeGreaterThan(pv.nodes.get('infra')!.w)
   })
 
   it('同一空隙里的多条边横向错开', () => {
-    const xs = ['infra->app:calls', 'infra->app:depends'].map(id => pv.edges.get(id)!.points[0].x)
+    const xs = ['infra->app:calls', 'infra->app:implements'].map(id => pv.edges.get(id)!.points[0].x)
     expect(xs[0]).not.toBe(xs[1])
   })
 
@@ -93,7 +93,7 @@ describe('layoutLayered · 分层总览', () => {
 
   it('外框包含所有节点与右侧通道', () => {
     const b = contentBounds(pv)!
-    const lane = pv.edges.get('infra->domain:depends')!.points[1].x
+    const lane = pv.edges.get('infra->domain:implements')!.points[1].x
     // 外框含父模块框（留 BAND.framePad，标题在框线上方）
     expect(b.x).toBe(-BAND.framePad)
     expect(b.x + b.w).toBeGreaterThanOrEqual(lane)
@@ -283,7 +283,7 @@ describe('L10：标签、线宽档、平行边', () => {
 
   it('标签只标聚合条数：含多条关系为 ×N，其余为空，不写类型名', () => {
     expect(edgeLabel(ve('a', 'x', 'y', 1))).toBe('')
-    expect(edgeLabel(ve('a', 'x', 'y', 3, 'depends'))).toBe('×3')
+    expect(edgeLabel(ve('a', 'x', 'y', 3, 'implements'))).toBe('×3')
   })
 
   it('线宽三档：1 / 2–4 / ≥5', () => {
@@ -291,7 +291,7 @@ describe('L10：标签、线宽档、平行边', () => {
   })
 
   it('同一对节点（不论方向）的多条边对称错开，单条为 0', () => {
-    const o = parallelOffsets([ve('a', 'x', 'y', 1), ve('b', 'x', 'y', 1, 'depends'), ve('c', 'y', 'x', 1, 'notifies'), ve('d', 'x', 'z', 1)])
+    const o = parallelOffsets([ve('a', 'x', 'y', 1), ve('b', 'x', 'y', 1, 'implements'), ve('c', 'y', 'x', 1, 'notifies'), ve('d', 'x', 'z', 1)])
     expect([o.get('a'), o.get('b'), o.get('c'), o.get('d')]).toEqual([-PARALLEL_GAP, 0, PARALLEL_GAP, 0])
   })
 
@@ -299,11 +299,14 @@ describe('L10：标签、线宽档、平行边', () => {
     const { index: idx } = loadModel(sampleFiles({ 'z.yaml': 'relations: [{ id: x1, from: infra.player, to: app.solution, type: calls }]' }))
     const view = projectLevel(idx, 'infra', { showBoundaries: true })
     const pair = view.edges.filter(e => e.from === 'infra.player' && e.to === 'boundary:app')
-    expect(pair.map(e => e.type).sort()).toEqual(['calls', 'depends'])
-    const inner = { ...view, edges: [ve('p:calls', 'infra.player', 'infra.framework', 1), ve('p:depends', 'infra.player', 'infra.framework', 2, 'depends')] }
+    expect(pair.map(e => e.type).sort()).toEqual(['calls', 'implements'])
+    const inner = {
+      ...view,
+      edges: [ve('p:calls', 'infra.player', 'infra.framework', 1), ve('p:implements', 'infra.player', 'infra.framework', 2, 'implements')],
+    }
     expect(toElkGraph(inner).edges!.map(e => [e.id, e.labels![0].text])).toEqual([
       ['p:calls', ''],
-      ['p:depends', '×2'],
+      ['p:implements', '×2'],
     ])
   })
 })
@@ -350,7 +353,7 @@ describe('边标签与终点（L10）', () => {
         },
       ],
       [
-        'p:depends',
+        'p:implements',
         {
           points: [
             { x: 50, y: 0 },
@@ -362,7 +365,7 @@ describe('边标签与终点（L10）', () => {
       ],
     ])
     const ve = (id: string): ViewEdge => ({ id, kind: 'direct', from: 'a', to: 'b', type: 'calls', relationIds: [], mode: 'sync' })
-    spreadEnds([ve('p:calls'), ve('p:depends')], edges)
+    spreadEnds([ve('p:calls'), ve('p:implements')], edges)
     const ends = [...edges.values()].map(r => r.points.slice(-2))
     expect(ends.map(([, e]) => e.x)).toEqual([100 - PARALLEL_GAP / 2, 100 + PARALLEL_GAP / 2])
     for (const [p, e] of ends) expect(p.x).toBe(e.x)
@@ -414,7 +417,7 @@ describe('L11 端口方向', () => {
     }
   })
 
-  it('左动右静：同一节点的动态入边（calls / notifies / streams）进点都在静态入边（depends / implements）左边，出边同理；框外边同一规则', async () => {
+  it('左动右静：同一节点的动态入边（calls / notifies / streams）进点都在静态入边（implements）左边，出边同理；框外边同一规则', async () => {
     const idx2 = loadModel(scenarioFiles()).index
     for (const level of ['infra', 'infra.framework', 'app']) {
       const v = projectLevel(idx2, level, { showBoundaries: true })
