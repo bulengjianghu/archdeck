@@ -589,37 +589,37 @@ relations:
   - id: rel.mus.factory-loader
     from: infra.mus.factory
     to: infra.mus.loader
-    type: depends
+    type: calls
     description: 按 MuKey 实例化加载 MU
   - id: rel.mus.factory-demuxer
     from: infra.mus.factory
     to: infra.mus.demuxer
-    type: depends
+    type: calls
     description: 按 MuKey 实例化解封装 MU
   - id: rel.mus.factory-corrector
     from: infra.mus.factory
     to: infra.mus.corrector
-    type: depends
+    type: calls
     description: 按 MuKey 实例化校正 MU
   - id: rel.mus.factory-plugin
     from: infra.mus.factory
     to: infra.mus.process-plugin
-    type: depends
+    type: calls
     description: MuType.Plugin 一律包装为插件节点
   - id: rel.mus.factory-buffer
     from: infra.mus.factory
     to: infra.mus.buffer
-    type: depends
+    type: calls
     description: 按 MuKey 实例化缓冲 MU
   - id: rel.mus.factory-remuxer
     from: infra.mus.factory
     to: infra.mus.remuxer
-    type: depends
+    type: calls
     description: 按 MuKey 实例化重封装 MU
   - id: rel.mus.factory-decoder
     from: infra.mus.factory
     to: infra.mus.decoder
-    type: depends
+    type: calls
     description: 按 MuKey 实例化解码 MU
   - id: rel.mus.factory-render
     from: infra.mus.factory
@@ -661,17 +661,17 @@ relations:
   - id: rel.mus.mse-videoelement
     from: infra.mus.render.mse
     to: infra.mus.render.video-element
-    type: depends
+    type: calls
     description: 继承 VideoElementRender（元素、音量、挂载、截图）
   - id: rel.mus.fhls-videoelement
     from: infra.mus.render.fhls
     to: infra.mus.render.video-element
-    type: depends
+    type: calls
     description: 继承 VideoElementRender
   - id: rel.mus.video-videoelement
     from: infra.mus.render.video
     to: infra.mus.render.video-element
-    type: depends
+    type: calls
     description: 继承 VideoElementRender
   - id: rel.mus.videoelement-keeplastframe
     from: infra.mus.render.video-element
@@ -681,12 +681,12 @@ relations:
   - id: rel.mus.mse-mp4remuxer
     from: infra.mus.render.mse
     to: infra.mus.remuxer.mp4
-    type: depends
+    type: calls
     description: 复用 MP4 箱体生成（如补生成 init segment）
   - id: rel.mus.fhlsrender-fhlsremuxed
     from: infra.mus.render.fhls
     to: infra.mus.buffer.fhls-remuxed
-    type: depends
+    type: calls
     description: 共用分片请求超时常量 FILE_REQUEST_TIMEOUT
   - id: rel.mus.vcs-controller-model
     from: infra.mus.render.vcs.controller
@@ -699,12 +699,6 @@ relations:
     to: infra.mus.render.vcs.view
     type: calls
     description: 驱动 video 代理装载 / 播放 / 切换
-  - id: rel.mus.vcs-view-model
-    from: infra.mus.render.vcs.view
-    to: infra.mus.render.vcs.model
-    type: depends
-    payload: ds.FragmentModel
-    description: 视图按分片模型呈现
 
   # ═════════ 出边：infra.framework（MU 基类 / 事件 / 错误路由） ═════════
   - id: rel.mus.loader-framework
@@ -758,7 +752,7 @@ relations:
   - id: rel.mus.factory-framework
     from: infra.mus.factory
     to: infra.framework
-    type: depends
+    type: calls
     payload: ds.MuConfig
     description: 以 MuConfig / MuKey / MuType 为输入、MediaUnit 为产出类型
   - id: rel.mus.keeplastframe-framework
@@ -871,34 +865,29 @@ relations:
   - id: rel.mus.vcsmodel-models
     from: infra.mus.render.vcs.model
     to: domain.models
-    type: depends
+    type: calls
     description: VcsModel 继承 ModelBase，组合 RenderTimeline 与 FrameBufferLedger
-  - id: rel.mus.types
-    from: infra.mus.factory
-    to: domain.types
-    type: depends
-    description: MuKey 枚举在 Domain 类型中声明
 
   # ═════════ 出边：其他 infra / share ═════════
   - id: rel.mus.render-modelaccess
     from: infra.mus.render
     to: infra.player-index
-    type: depends
+    type: calls
     description: 经 modelAccess 的 require*/read* 函数把 playModel 收窄为 MseModel / FhlsModel / VideoPlayModel 等
   - id: rel.mus.buffer-modelaccess
     from: infra.mus.buffer
     to: infra.player-index
-    type: depends
+    type: calls
     description: 经 modelAccess 读帧账本 / FhlsModel
   - id: rel.mus.decoder-modelaccess
     from: infra.mus.decoder
     to: infra.player-index
-    type: depends
+    type: calls
     description: 经 modelAccess 取 FrameModel
   - id: rel.mus.remuxer-modelaccess
     from: infra.mus.remuxer
     to: infra.player-index
-    type: depends
+    type: calls
     description: 经 modelAccess 取 FhlsModel
   - id: rel.mus.loader-mp4box
     from: infra.mus.loader.mp4
@@ -920,21 +909,6 @@ relations:
     to: infra.third-party
     type: calls
     description: ScriptProcessor / AudioWorklet 渲染使用 sonic 变速（JS 与 wasm）
-  - id: rel.mus.errors
-    from: infra.mus.loader
-    to: share.errors
-    type: depends
-    description: 经 framework 再导出使用 ErrorBase / ErrorCode / errorWrapper 包装网络与任务错误
-  - id: rel.mus.decoder-errors
-    from: infra.mus.decoder
-    to: share.errors
-    type: depends
-    description: 解码错误包装为 ErrorBase
-  - id: rel.mus.demuxer-errors
-    from: infra.mus.demuxer
-    to: share.errors
-    type: depends
-    description: 解析异常包装为 MuDemuxerError 等
 
 interfaces:
   - id: if.mus.mu-lifecycle

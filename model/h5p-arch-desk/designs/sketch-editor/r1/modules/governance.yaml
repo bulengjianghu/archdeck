@@ -199,22 +199,19 @@ relations:
   # 外部参与者
   - {id: rel.gv.ai-agent, from: actor.ai, to: access.agent, type: calls, interface: if.agent.mcp, payload: [ds.CheckResult], description: coding agent 写代码前判定依赖、写完重新扫描（MCP 或命令行）}
   # 呈现层
-  - {id: rel.gv.dispatch-dep, from: present.panel.dispatch, to: present.panel.dep, type: depends, description: 选中代码依赖叠加线时分派到代码依赖面板}
-  - {id: rel.gv.system-gov, from: present.panel.system, to: present.panel.governance, type: depends}
-  - {id: rel.gv.module-gov, from: present.panel.module, to: present.panel.governance, type: depends}
-  - {id: rel.gv.relation-gov, from: present.panel.relation, to: present.panel.governance, type: depends}
-  - {id: rel.gv.dep-gov, from: present.panel.dep, to: present.panel.governance, type: depends, description: 复用文件证据列表}
-  - {id: rel.gv.panel-read, from: present.panel.governance, to: state.desk.facts, type: depends, payload: [ds.GovernanceReport], description: 治理报告、模块治理信息、关系证实、拦截摘要}
-  - {id: rel.gv.dep-read, from: present.panel.dep, to: state.desk.facts, type: depends, description: 选中的代码依赖叠加线}
-  - {id: rel.gv.canvas-read, from: present.canvas.flow, to: state.desk.facts, type: depends, description: 本层投影（K9、Y4）}
-  - {id: rel.gv.toolbar-read, from: present.nav.toolbar, to: state.desk.facts, type: depends, description: 事实状态决定「代码事实」开关是否可用}
-  - {id: rel.gv.legend-read, from: present.canvas.legend, to: state.desk.facts, type: depends}
+  - {id: rel.gv.dispatch-dep, from: present.panel.dispatch, to: present.panel.dep, type: calls, description: 选中代码依赖叠加线时分派到代码依赖面板}
+  - {id: rel.gv.system-gov, from: present.panel.system, to: present.panel.governance, type: calls}
+  - {id: rel.gv.module-gov, from: present.panel.module, to: present.panel.governance, type: calls}
+  - {id: rel.gv.relation-gov, from: present.panel.relation, to: present.panel.governance, type: calls}
+  - {id: rel.gv.dep-gov, from: present.panel.dep, to: present.panel.governance, type: calls, description: 复用文件证据列表}
+  - {id: rel.gv.panel-read, from: present.panel.governance, to: state.desk.facts, type: calls, payload: [ds.GovernanceReport], description: 治理报告、模块治理信息、关系证实、拦截摘要}
+  - {id: rel.gv.dep-read, from: present.panel.dep, to: state.desk.facts, type: calls, description: 选中的代码依赖叠加线}
+  - {id: rel.gv.canvas-read, from: present.canvas.flow, to: state.desk.facts, type: calls, description: 本层投影（K9、Y4）}
+  - {id: rel.gv.toolbar-read, from: present.nav.toolbar, to: state.desk.facts, type: calls, description: 事实状态决定「代码事实」开关是否可用}
+  - {id: rel.gv.legend-read, from: present.canvas.legend, to: state.desk.facts, type: calls}
   - {id: rel.gv.canvas-select, from: present.canvas.flow, to: state.desk.actions, type: calls, interface: if.desk.actions, description: "单击代码依赖叠加线 → select(kind: dep)"}
   # 视图状态层
-  - {id: rel.gv.facts-sync, from: state.desk.facts, to: state.desk.source-sync, type: depends, description: 代码事实随源码清单取得（facts.json）}
-  - {id: rel.gv.facts-files, from: state.desk.facts, to: state.desk.files, type: depends, payload: [ds.SourceOwnership], description: 归属与源码清单}
   - {id: rel.gv.facts-model, from: state.desk.facts, to: model.governance, type: calls, interface: if.governance.report, payload: [ds.GovernanceReport]}
-  - {id: rel.gv.canvas-types, from: state.layout.canvas, to: model.governance.level, type: depends, description: 叠加线与证实标记的数据类型}
   # 接入层
   - {id: rel.gv.source-deps, from: access.model-source, to: access.deps, type: calls, interface: if.access.deps, payload: [ds.FileDep], description: /source/<项目>/facts.json}
   - {id: rel.gv.source-store, from: access.model-source, to: access.governance-store, type: calls, description: 基线与最近的拦截记录}
@@ -229,10 +226,10 @@ relations:
   - {id: rel.gv.lint-store, from: access.lint, to: access.governance-store, type: calls, description: 读基线}
   - {id: rel.gv.lint-model, from: access.lint, to: model.governance, type: calls, interface: if.governance.report, description: 门禁问题与摘要（U8）}
   # 模型层
-  - {id: rel.gv.model-source, from: model.governance, to: model.source, type: depends, description: 归属与入口（G3–G10）}
-  - {id: rel.gv.model-projector, from: model.governance.level, to: model.projector, type: depends, description: mapEndpoint（K9、Y4）}
-  - {id: rel.gv.model-types, from: model.governance, to: model.types, type: depends, payload: [ds.ModelIndex], description: moduleName、RULE_LABELS：违规、判定与报告的说明文字用模块名与规则名}
-  - {id: rel.gv.pipeline-rules, from: model.pipeline, to: model.types, type: depends, description: rules 的加载与校验（U1）}
+  - {id: rel.gv.model-source, from: model.governance, to: model.source, type: calls, description: 归属与入口（G3–G10）}
+  - {id: rel.gv.model-projector, from: model.governance.level, to: model.projector, type: calls, description: mapEndpoint（K9、Y4）}
+  - {id: rel.gv.model-types, from: model.governance, to: model.types, type: calls, payload: [ds.ModelIndex], description: moduleName、RULE_LABELS：违规、判定与报告的说明文字用模块名与规则名}
+  - {id: rel.gv.pipeline-rules, from: model.pipeline, to: model.types, type: calls, description: rules 的加载与校验（U1）}
   # 架构治理内部与名称、标签（K7 按代码补齐）
   - {id: rel.gv.cycles-facts, from: model.governance.cycles, to: model.governance.facts, type: calls, description: within：环按模块子树判断}
   - {id: rel.gv.level-facts, from: model.governance.level, to: model.governance.facts, type: calls, description: depKey：本层叠加线按模块依赖键取依据}
@@ -245,18 +242,17 @@ relations:
   - {id: rel.gv.report-rules, from: model.governance.report, to: model.governance.rules, type: calls, description: evaluateRules（U2–U4）}
   - {id: rel.gv.rules-facts, from: model.governance.rules, to: model.governance.facts, type: calls, description: within：规则按模块子树匹配}
   - {id: rel.gv.agent-pipeline, from: access.agent, to: model.pipeline, type: calls, interface: if.model.loadModel, description: loadModel 加载描述}
-  - {id: rel.gv.agent-types, from: access.agent, to: model.types, type: depends, description: moduleName、RULE_LABELS：生成回答与命令行输出}
+  - {id: rel.gv.agent-types, from: access.agent, to: model.types, type: calls, description: moduleName、RULE_LABELS：生成回答与命令行输出}
   - {id: rel.gv.agent-ownership, from: access.agent, to: model.source.ownership, type: calls, interface: if.model.assignFiles, description: 按 codeRefs 归属源码（G3–G8）}
-  - {id: rel.gv.entry-reexport-rework, from: model.pipeline.entry, to: model.rework, type: depends, description: 模型层入口再导出返工清单}
   - {id: rel.gv.source-health, from: access.model-source, to: model.rework, type: calls, description: projectHealth：项目卡片的健康度（Q10）}
   - {id: rel.gv.source-health-model, from: access.model-source, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 健康度：加载描述（Q10）}
   - {id: rel.gv.source-health-own, from: access.model-source, to: model.source.ownership, type: calls, interface: if.model.assignFiles, description: 健康度：归属（Q10）}
   - {id: rel.gv.source-health-report, from: access.model-source, to: model.governance.report, type: calls, interface: if.governance.report, description: 健康度：治理报告（Q10）}
   - {id: rel.gv.desk-rework, from: state.desk, to: model.rework, type: calls, interface: if.rework.list, payload: [ds.ReworkItem], description: 问题页签的返工清单与「复制给 agent」的 Markdown（W-6）}
   - {id: rel.gv.source-writer, from: access.model-source, to: access.writer, type: calls, description: POST /write/<项目>/feedback | allow | ignore（B1–B5）}
-  - {id: rel.gv.writer-reader, from: access.writer, to: access.reader, type: depends, description: isProjectId、DESIGNS_DIR、readModelDir：校验 ID 与读描述}
+  - {id: rel.gv.writer-reader, from: access.writer, to: access.reader, type: calls, description: isProjectId、DESIGNS_DIR、readModelDir：校验 ID 与读描述}
   - {id: rel.gv.writer-model, from: access.writer, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 加例外前校验两端模块存在、找 rules 所在文件（B3）}
-  - {id: rel.gv.writer-types, from: access.writer, to: model.types, type: depends, description: RULE_KINDS：校验例外的规则种类}
+  - {id: rel.gv.writer-types, from: access.writer, to: model.types, type: calls, description: RULE_KINDS：校验例外的规则种类}
   - {id: rel.gv.agent-rework, from: access.agent, to: model.rework, type: calls, interface: if.rework.list, payload: [ds.ReworkItem], description: 命令行与 MCP 的 issues（Q9）}
   - {id: rel.gv.rework-source, from: model.rework, to: model.source, type: calls, description: matchRef、moduleEntry：冲突的 codeRefs 组合与 entry 是否存在}
   - {id: rel.gv.rework-scenario, from: model.rework, to: model.scenario, type: calls, description: bindRelation、forEachStep：未建模的步骤（S13、P11）}
@@ -264,7 +260,7 @@ relations:
   - {id: rel.gv.ports-source, from: model.governance.ports, to: model.source.ownership, type: calls, description: moduleInterfaces：模块的接口（G12）}
   - {id: rel.gv.facts-ports-source, from: model.governance.facts, to: model.source.ownership, type: calls, description: moduleInterfaces：implements 目标声明的接口名（K5 的证据）}
   - {id: rel.gv.facts-ports, from: state.desk.facts, to: model.governance.ports, type: calls, description: portTriad：模块面板的端口三角（K11）}
-  - {id: rel.gv.rework-types, from: model.rework, to: model.types, type: depends, description: 返工项的类型、类别与严重度名称（契约），moduleName、RULE_LABELS}
-  - {id: rel.gv.store-reader, from: access.governance-store, to: access.reader, type: depends, description: GOVERNANCE_DIR：治理产物目录名与描述读取共用（读取时跳过）}
-  - {id: rel.gv.dep-content, from: present.panel.dep, to: present.panel.content, type: depends, description: 复用 Section}
-  - {id: rel.gv.panel-content, from: present.panel.governance, to: present.panel.content, type: depends, description: 复用 Section}
+  - {id: rel.gv.rework-types, from: model.rework, to: model.types, type: calls, description: 返工项的类型、类别与严重度名称（契约），moduleName、RULE_LABELS}
+  - {id: rel.gv.store-reader, from: access.governance-store, to: access.reader, type: calls, description: GOVERNANCE_DIR：治理产物目录名与描述读取共用（读取时跳过）}
+  - {id: rel.gv.dep-content, from: present.panel.dep, to: present.panel.content, type: calls, description: 复用 Section}
+  - {id: rel.gv.panel-content, from: present.panel.governance, to: present.panel.content, type: calls, description: 复用 Section}

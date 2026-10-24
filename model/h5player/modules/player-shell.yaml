@@ -331,12 +331,6 @@ relations:
     to: infra.mus
     type: calls
     description: useMediaPlugin 经 muFactory 把外部 MediaPlugin 包装成插件 MU；Destroy 时销毁 video 元素池 / 备用元素。
-  - id: rel.player-shell.status-projection-framework
-    from: infra.player-index.status-projection
-    to: infra.framework
-    type: depends
-    payload: ds.PlayerStatusChangeEventPayload
-    description: 使用 CommandKey / PlayerStatus 与 PlayerStatusChange 事件载荷类型。
   - id: rel.player-shell.stats-domain
     from: infra.player-index.stats
     to: domain.models
@@ -351,12 +345,12 @@ relations:
   - id: rel.player-shell.model-access-domain
     from: infra.player-index.model-access
     to: domain.models
-    type: depends
+    type: calls
     description: 调用领域模型的 assert* / has*Capability 能力断言，收窄为 FrameModel / MseModel / FhlsModel / VideoPlayModel 等。
   - id: rel.player-shell.public-surface-framework
     from: infra.player-index.public-surface
     to: infra.framework
-    type: depends
+    type: calls
     description: 再导出框架的枚举、PlayerConfig 类型与 PluginBase 基类。
 
   # ── Bootstrap 内部 ──
@@ -434,7 +428,7 @@ relations:
   - id: rel.player-shell.solution-bootstrap-domain
     from: infra.bootstrap.solution-bootstrap
     to: domain.services
-    type: depends
+    type: calls
     description: 把 selectSolution 方案选型服务注入 SolutionDeps.selector。
 
   # ── Workers 内部 ──
@@ -462,7 +456,7 @@ relations:
   - id: rel.player-shell.worker-task-framework
     from: infra.workers.worker-task
     to: infra.framework
-    type: depends
+    type: calls
     description: 使用框架的 WorkerMessageBridge 作为线程内 RPC 桥。
   - id: rel.player-shell.worker-task-mus
     from: infra.workers.worker-task
@@ -473,7 +467,7 @@ relations:
   - id: rel.player-shell.sw-channel-framework
     from: infra.workers.sw-channel
     to: infra.framework
-    type: depends
+    type: calls
     description: 使用 Generator 生成配对 hash、LogLevel 打日志。
   - id: rel.player-shell.fhls-mus
     from: infra.workers.fhls-services
@@ -485,7 +479,7 @@ relations:
   - id: rel.player-shell.fhls-framework
     from: infra.workers.fhls-services
     to: infra.framework
-    type: depends
+    type: calls
     description: 使用 SegmentEncryptionConfig、Time 单调钟与 Tool 工具。
 
   # ── Third-party 出边 ──
@@ -494,11 +488,6 @@ relations:
     to: infra.framework
     type: calls
     description: 经框架的 wasm 加载工具（getWasmLoaderUrl / getWasmFile / sonicInitConfig）获取并实例化 libsonic。
-  - id: rel.player-shell.hls-utils-framework
-    from: infra.third-party.hls-utils
-    to: infra.framework
-    type: depends
-    description: 使用 AACAudioData / AVCVideoData / MediaAudioTrackData 媒体数据类型。
   - id: rel.player-shell.decrypt-framework
     from: infra.third-party.decrypt-plugins
     to: infra.framework

@@ -103,34 +103,26 @@ modules:
 
 relations:
   # 呈现层内部
-  - { id: rel.p2.split-canvas, from: present.desk-view.split, to: present.canvas.flow, type: depends, description: 上方槽位 }
-  - { id: rel.p2.split-sequence, from: present.desk-view.split, to: present.sequence.interact, type: depends, description: 下方槽位，打开场景时出现 }
-  - { id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: depends }
-  - { id: rel.p2.toolbar-scenarios, from: present.nav.toolbar, to: present.scenarios, type: depends, description: 「场景」按钮弹出场景列表 }
-  - { id: rel.p2.seq-lanes, from: present.sequence.interact, to: present.sequence.lanes, type: depends }
-  - { id: rel.p2.seq-fragments, from: present.sequence.interact, to: present.sequence.fragments, type: depends }
-  - { id: rel.p2.panel-scenario, from: present.panel.dispatch, to: present.panel.scenario, type: depends }
-  - { id: rel.p2.panel-step, from: present.panel.dispatch, to: present.panel.step, type: depends }
-  - { id: rel.p2.panel-actor, from: present.panel.dispatch, to: present.panel.actor, type: depends }
-  - { id: rel.p2.step-content, from: present.panel.step, to: present.panel.content, type: depends, description: 接口与数据结构折叠项复用一期内容组件 }
-  - { id: rel.p2.scenario-content, from: present.panel.scenario, to: present.panel.content, type: depends }
+  - { id: rel.p2.split-canvas, from: present.desk-view.split, to: present.canvas.flow, type: calls, description: 上方槽位 }
+  - { id: rel.p2.split-sequence, from: present.desk-view.split, to: present.sequence.interact, type: calls, description: 下方槽位，打开场景时出现 }
+  - { id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: calls }
+  - { id: rel.p2.seq-lanes, from: present.sequence.interact, to: present.sequence.lanes, type: calls }
+  - { id: rel.p2.seq-fragments, from: present.sequence.interact, to: present.sequence.fragments, type: calls }
+  - { id: rel.p2.panel-scenario, from: present.panel.dispatch, to: present.panel.scenario, type: calls }
+  - { id: rel.p2.panel-step, from: present.panel.dispatch, to: present.panel.step, type: calls }
+  - { id: rel.p2.panel-actor, from: present.panel.dispatch, to: present.panel.actor, type: calls }
+  - { id: rel.p2.step-content, from: present.panel.step, to: present.panel.content, type: calls, description: 接口与数据结构折叠项复用一期内容组件 }
+  - { id: rel.p2.scenario-content, from: present.panel.scenario, to: present.panel.content, type: calls }
 
   # 呈现 → 视图状态（只读派生、只 dispatch）
-  - { id: rel.p2.list-read, from: present.scenarios, to: state.desk.projection, type: depends, payload: [ds.ModelIndex], description: 按 scenariosOf(当前层次) 与 triggeredBy 筛选 }
+  - { id: rel.p2.list-read, from: present.scenarios, to: state.desk.projection, type: calls, payload: [ds.ModelIndex], description: 按 scenariosOf(当前层次) 与 triggeredBy 筛选 }
   - { id: rel.p2.list-open, from: present.scenarios, to: state.desk.actions, type: calls, interface: if.desk.actions, description: openScenario(id) }
-  - { id: rel.p2.player-read, from: present.player, to: state.desk.projection, type: depends, payload: [ds.ViewState, ds.ScenarioLevelView], description: 当前位置、本层可见消息数、是否停在分支点及其选项 }
+  - { id: rel.p2.player-read, from: present.player, to: state.desk.projection, type: calls, payload: [ds.ViewState, ds.ScenarioLevelView], description: 当前位置、本层可见消息数、是否停在分支点及其选项 }
   - { id: rel.p2.player-act, from: present.player, to: state.desk.actions, type: calls, interface: if.desk.actions, description: prev / next / play / pause / seek / setSpeed / chooseBranch }
-  - { id: rel.p2.seq-read, from: present.sequence.interact, to: state.desk.projection, type: depends, payload: [ds.PositionedSequence, ds.ViewState], description: 读取定位好的时序图与当前位置 }
+  - { id: rel.p2.seq-read, from: present.sequence.interact, to: state.desk.projection, type: calls, payload: [ds.PositionedSequence, ds.ViewState], description: 读取定位好的时序图与当前位置 }
   - { id: rel.p2.seq-act, from: present.sequence.interact, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击消息 → seek + select(null)；单击未选分支 → chooseBranch + seek；悬停 → setHover }
-  - id: rel.p2.flow-playback
-    from: present.canvas.flow
-    to: state.desk.projection
-    type: depends
-    payload: [ds.ScenarioLevelView, ds.ViewState]
-    description: 当前消息落在哪条视图边 / 哪个节点、已走过哪些、分支点各选项的预览边
-    designNote: 画布通过派生数据读帧投影，不自己映射端点，保持「呈现层不直接调用模型层的计算」。
   - { id: rel.p2.flow-step, from: present.canvas.flow, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 回放中单击带序号的边 → seek；单击分支预览边 → chooseBranch }
-  - { id: rel.p2.step-read, from: present.panel.step, to: state.desk.projection, type: depends, payload: [ds.Frame, ds.ScenarioLevelView] }
+  - { id: rel.p2.step-read, from: present.panel.step, to: state.desk.projection, type: calls, payload: [ds.Frame, ds.ScenarioLevelView] }
   - { id: rel.p2.step-act, from: present.panel.step, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 端点点击 → revealModule；关系点击 → revealRelation }
   - { id: rel.p2.scenario-act, from: present.panel.scenario, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 步骤目录 → seek；ref → openScenario；「跳到场景所在层次」→ goTo }
   - { id: rel.p2.actor-act, from: present.panel.actor, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 打开由它触发的场景 }
@@ -145,9 +137,7 @@ relations:
     description: 唯一写入口：dispatch → transition → 写入新状态
   - { id: rel.p2.router-codec, from: state.desk.url-sync, to: state.transition.url, type: calls, interface: if.state.urlCodec, description: 状态 ↔ 查询参数 }
   - { id: rel.p2.clock-actions, from: state.desk.clock, to: state.desk.actions, type: calls, mode: async, interface: if.desk.actions, description: 到点 dispatch(next) }
-  - { id: rel.p2.clock-read, from: state.desk.clock, to: state.desk.actions, type: depends, payload: [ds.ViewState], description: 观察 playing 与 speed }
   - { id: rel.p2.layoutsync-runner, from: state.desk.layout-sync, to: state.layout.runner, type: calls, mode: async, interface: if.layout.layoutView, payload: [ds.LevelView, ds.PositionedView] }
-  - { id: rel.p2.layoutsync-read, from: state.desk.layout-sync, to: state.desk.projection, type: depends, payload: [ds.LevelView], description: 层次视图变化触发布局，结果回填 }
   - id: rel.p2.projection-plan
     from: state.desk.projection
     to: model.scenario.flatten
@@ -171,23 +161,17 @@ relations:
     interface: if.layout.layoutSequence
     payload: [ds.SequenceModel, ds.PositionedSequence]
     description: 同步计算；泳道顺序参考结构图布局
-  - { id: rel.p2.seqlayout-positions, from: state.layout.sequence, to: state.layout.runner, type: depends, payload: [ds.PositionedView], description: 读取结构图中节点的横坐标决定泳道顺序 }
-  - { id: rel.p2.seqlayout-types, from: state.layout.sequence, to: model.types, type: depends, payload: [ds.SequenceModel] }
+  - { id: rel.p2.seqlayout-types, from: state.layout.sequence, to: model.types, type: calls, payload: [ds.SequenceModel] }
 
   # 视图状态 → 模型（转移规则需要的查询）
   - { id: rel.p2.playback-path, from: state.transition.playback, to: model.scenario.path, type: calls, interface: if.model.resolvePath, description: 前进到截止处时判断是否停在分支点 }
-  - { id: rel.p2.playback-level, from: state.transition.playback, to: model.scenario.level, type: depends, payload: [ds.ScenarioLevelView], description: 单步按本层可见消息（由上下文传入） }
-  - { id: rel.p2.nav-projector, from: state.transition.navigation, to: model.projector, type: depends, description: N12：判断层次是否被「只看现状」隐藏 }
-  - { id: rel.p2.transition-types, from: state.transition, to: model.types, type: depends, payload: [ds.ViewState, ds.ViewAction] }
+  - { id: rel.p2.playback-level, from: state.transition.playback, to: model.scenario.level, type: calls, payload: [ds.ScenarioLevelView], description: 单步按本层可见消息（由上下文传入） }
 
   # 模型层内部
   - { id: rel.p2.level-endpoints, from: model.scenario.level, to: model.projector.endpoints, type: calls, interface: if.model.mapEndpoint, description: 与结构投影共用同一套端点规则 }
-  - { id: rel.p2.level-edgeid, from: model.scenario.level, to: model.projector.collector, type: depends, description: 用 edgeId 规则算出帧对应的视图边 ID }
   - { id: rel.p2.level-sequence, from: model.scenario.level, to: model.scenario.sequence, type: streams, payload: [ds.ScenarioLevelView], description: 本层的可见消息交给时序模型 }
-  - { id: rel.p2.path-plan, from: model.scenario.path, to: model.scenario.flatten, type: depends, payload: [ds.ScenarioPlan] }
-  - { id: rel.p2.flatten-index, from: model.scenario.flatten, to: model.pipeline.indexer, type: depends, payload: [ds.ModelIndex], description: 读取场景表以内联 ref }
   - { id: rel.p2.level-lca, from: model.scenario.level, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: 场景所在层次 = 帧端点的最近公共祖先 }
-  - { id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: depends, payload: [ds.ScenarioEntity, ds.ScenarioPlan, ds.Frame, ds.ScenarioLevelView, ds.SequenceModel] }
+  - { id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: calls, payload: [ds.ScenarioEntity, ds.ScenarioPlan, ds.Frame, ds.ScenarioLevelView, ds.SequenceModel] }
 
 interfaces:
   - id: if.state.transition

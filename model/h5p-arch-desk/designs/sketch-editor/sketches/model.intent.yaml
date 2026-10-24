@@ -35,7 +35,7 @@ sketch:
     - id: rel.se.validate-check
       from: model.intent.validate
       to: model.intent.check
-      type: depends
+      type: calls
       description: 矛盾检查只有一份，校验复用核验的
   interfaces:
     - id: if.intent.applyEdit

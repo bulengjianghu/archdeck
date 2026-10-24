@@ -520,11 +520,6 @@ relations:
     type: calls
     description: 经 binder 惰性创建 StateMachineController；ControllerBase.sendCommand 经它发内部命令
     interface: if.framework.state-machine.sendCommand
-  - id: rel.framework.facade-creates-pipeline
-    from: infra.framework.kernel.facade
-    to: infra.framework.pipeline
-    type: depends
-    description: 首个创建 PipelineController 并把它作为全局 Dispatcher 注入其余控制器
   - id: rel.framework.facade-plugin-api
     from: infra.framework.kernel.facade
     to: infra.framework.plugin
@@ -536,16 +531,6 @@ relations:
     to: infra.framework.context.core
     type: calls
     description: 构造期把 emit / hasEventListener / handleError 回填到 Context
-  - id: rel.framework.facade-event-bus
-    from: infra.framework.kernel.facade
-    to: infra.framework.kernel.event-bus
-    type: depends
-    description: 持有 EventEmitter 并以其 on / off / emit 组装 PluginApi
-  - id: rel.framework.facade-error-chain
-    from: infra.framework.kernel.facade
-    to: infra.framework.kernel.error-chain
-    type: depends
-    description: 持有 errorHandlers 链并暴露 register / removeErrorHandler
   # ── 错误链 ──
   - id: rel.framework.error-emit
     from: infra.framework.kernel.error-chain
@@ -566,11 +551,6 @@ relations:
     to: infra.framework.context.core
     type: calls
     description: 非 Ignore 级错误经 context.track 埋点、按级别记日志
-  - id: rel.framework.error-share
-    from: infra.framework.kernel.error-chain
-    to: share.errors
-    type: depends
-    description: errorWrapper / ErrorBase / ErrorLevel / ErrorCode
   # ── 领域事件适配 ──
   - id: rel.framework.domain-events-emit
     from: infra.framework.kernel.domain-events
@@ -583,11 +563,6 @@ relations:
     to: infra.framework.context.core
     type: notifies
     description: ProfileEventBus 把单例模型发布的领域事件同步转发给 handlePlaybackProfileEvents
-  - id: rel.framework.domain-events-types
-    from: infra.framework.kernel.domain-events
-    to: domain.types
-    type: depends
-    description: 消费 DomainEvent 联合类型并做穷尽性分派
   # ── 状态机 ──
   - id: rel.framework.sm-scheduler-engine
     from: infra.framework.state-machine.scheduler
@@ -605,7 +580,7 @@ relations:
   - id: rel.framework.sm-engine-rules
     from: infra.framework.state-machine.engine
     to: infra.framework.state-machine.rules
-    type: depends
+    type: calls
     description: 按 StateMachineMode 载入迁移规则表
   - id: rel.framework.sm-engine-dispatch
     from: infra.framework.state-machine.engine
@@ -646,21 +621,6 @@ relations:
     via: callback
     description: 命令执行前回调时移协调器注册的前置 Hook（观察 Pause 来源、Resume、Seek、Switch、Destroy），逐个 await；Resume 时在状态迁移前放流放阀
     payload: ds.CommandInfo
-  - id: rel.framework.sm-engine-domain-rules
-    from: infra.framework.state-machine.engine
-    to: domain.rules
-    type: depends
-    description: 再导出并使用 Domain 的状态映射规则（mappingPlayerStatus）
-  - id: rel.framework.sm-rules-types
-    from: infra.framework.state-machine.rules
-    to: domain.types
-    type: depends
-    description: 规则表以 Domain 的 PlayerStatus / State 表达状态
-  - id: rel.framework.sm-errors
-    from: infra.framework.state-machine
-    to: share.errors
-    type: depends
-    description: 命令被阻断 / 取消 / 无匹配迁移时返回带 ErrorCode 的 ErrorBase
   # ── Pipeline ──
   - id: rel.framework.pipeline-validate
     from: infra.framework.pipeline.transaction
@@ -700,21 +660,6 @@ relations:
     type: calls
     description: 活动腿转发全局 dispatch，非活动腿走 dispatchForLeg
     interface: if.framework.pipeline.Dispatcher
-  - id: rel.framework.legs-domain-types
-    from: infra.framework.pipeline.legs
-    to: domain.types
-    type: depends
-    description: LegId / NodeId / toNodeId / legSegmentKey / PRIMARY_LEG_ID 的单一事实源在 Domain
-  - id: rel.framework.pipeline-types
-    from: infra.framework.pipeline.transaction
-    to: domain.types
-    type: depends
-    description: PipelineEdge / SegmentKind / SemanticPosition / PipelineTopology 等图契约类型
-  - id: rel.framework.pipeline-result
-    from: infra.framework.pipeline.transaction
-    to: share.errors
-    type: depends
-    description: 以 Result<PipelineUpdateReport, ErrorBase> 返回事务结果
   # ── 插件 ──
   - id: rel.framework.plugin-implements-iplugin
     from: infra.framework.plugin
@@ -758,11 +703,6 @@ relations:
     type: calls
     description: 插件经 getDispatcher 直接下发 Action，经 describePipeline 读取图诊断
     interface: if.framework.pipeline.Dispatcher
-  - id: rel.framework.plugin-models
-    from: infra.framework.plugin
-    to: domain.models
-    type: depends
-    description: 以 PlaybackStateCollectorView / StatisticCollectorView 等只读视图类型读取模型
   # ── ModelRegistry ──
   - id: rel.framework.registry-implements-port
     from: infra.framework.model-registry.registry
@@ -790,21 +730,11 @@ relations:
     to: infra.framework.model-registry.views
     type: calls
     description: 待命实例创建即 wrapInstance，复用「仅当前实例写入才通知」的短路
-  - id: rel.framework.registry-domain-types
-    from: infra.framework.model-registry
-    to: domain.types
-    type: depends
-    description: ModelKind / ModelViewMap / PlaybackProfile / DomainEvent / LoadMode 等
   - id: rel.framework.singletons-models
     from: infra.framework.model-registry.singletons
     to: domain.models
     type: calls
     description: new PlaybackState(publisher) / new Statistic(publisher)
-  - id: rel.framework.singletons-publisher-port
-    from: infra.framework.model-registry.singletons
-    to: domain.ports
-    type: depends
-    description: 向单例注入 DomainEventPublisher 端口
   # ── Context ──
   - id: rel.framework.context-registry
     from: infra.framework.context.core
@@ -826,7 +756,7 @@ relations:
   - id: rel.framework.context-settings
     from: infra.framework.context.core
     to: infra.framework.context.settings
-    type: depends
+    type: calls
     description: 构造期 createPlayerSettings(data, emit) 作为 context.settings
   - id: rel.framework.settings-event
     from: infra.framework.context.settings
@@ -863,31 +793,11 @@ relations:
     type: calls
     description: 处理与动作耗时采样、账本告警埋点
     interface: if.framework.utils.performance
-  - id: rel.framework.mu-errors
-    from: infra.framework.media-unit
-    to: share.errors
-    type: depends
-    description: MuProcessUnknownError / MuActionUnknownError 包装
   # ── 契约与工具 ──
-  - id: rel.framework.contracts-domain-types
-    from: infra.framework.contracts
-    to: domain.types
-    type: depends
-    description: 再导出 PlayerStatus / MuStatus / State / LoadMode / PlayMode / SolutionType / MuKey 等 Domain 类型
-  - id: rel.framework.contracts-share-errors
-    from: infra.framework.contracts
-    to: share.errors
-    type: depends
-    description: 再导出 ErrorBase / errorWrapper / ErrorCode / Result
-  - id: rel.framework.contracts-share-contracts
-    from: infra.framework.contracts
-    to: share.contracts
-    type: depends
-    description: 再导出 IPlugin 契约
   - id: rel.framework.env-probe-domain
     from: infra.framework.utils.env-probe
     to: domain.services
-    type: depends
+    type: calls
     description: 再导出方案选型的 inferSourceModes 与 SolutionCapabilities 等类型，能力表交给 Domain 选型
   - id: rel.framework.event-bus-perf
     from: infra.framework.kernel.event-bus

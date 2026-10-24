@@ -258,27 +258,27 @@ modules:
 
 relations:
   # 呈现层内部
-  - {id: rel.ad.shell-list, from: present.shell, to: present.project-list, type: depends, description: 路由 `/` 指向项目列表}
-  - {id: rel.ad.shell-desk, from: present.shell, to: present.desk-view, type: depends, description: 路由 `/p/<项目>` 指向项目视图，按项目 ID 重建}
-  - {id: rel.ad.desk-canvas, from: present.desk-view, to: present.canvas.flow, type: depends}
-  - {id: rel.ad.desk-panel, from: present.desk-view, to: present.panel.dispatch, type: depends}
-  - {id: rel.ad.desk-nav, from: present.desk-view, to: present.nav, type: depends}
-  - {id: rel.ad.desk-issues, from: present.nav-tree, to: present.issues, type: depends, description: 第四个页签「问题」}
-  - {id: rel.ad.flow-nodes, from: present.canvas.flow, to: present.canvas.nodes, type: depends}
-  - {id: rel.ad.flow-edges, from: present.canvas.flow, to: present.canvas.edges, type: depends}
-  - {id: rel.ad.flow-legend, from: present.canvas.flow, to: present.canvas.legend, type: depends, description: 图例浮在画布右下角}
-  - {id: rel.ad.legend-edge-style, from: present.canvas.legend, to: present.canvas.edges, type: depends, description: 图例的示意线（LineSwatch）与画布的边共用 edgeStyle（颜色、线宽、线型，L10）}
-  - {id: rel.ad.panel-module, from: present.panel.dispatch, to: present.panel.module, type: depends}
-  - {id: rel.ad.panel-relation, from: present.panel.dispatch, to: present.panel.relation, type: depends}
-  - {id: rel.ad.panel-edge, from: present.panel.dispatch, to: present.panel.edge, type: depends}
-  - {id: rel.ad.panel-system, from: present.panel.dispatch, to: present.panel.system, type: depends}
-  - {id: rel.ad.module-content, from: present.panel.module, to: present.panel.content, type: depends}
-  - {id: rel.ad.relation-content, from: present.panel.relation, to: present.panel.content, type: depends}
-  - {id: rel.ad.edge-content, from: present.panel.edge, to: present.panel.content, type: depends}
-  - {id: rel.ad.system-content, from: present.panel.system, to: present.panel.content, type: depends}
-  - {id: rel.ad.system-design, from: present.panel.system, to: present.panel.design, type: depends, description: 设计版本根层先显示设计面板}
-  - {id: rel.ad.design-content, from: present.panel.design, to: present.panel.content, type: depends}
-  - {id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: depends}
+  - {id: rel.ad.shell-list, from: present.shell, to: present.project-list, type: calls, description: 路由 `/` 指向项目列表}
+  - {id: rel.ad.shell-desk, from: present.shell, to: present.desk-view, type: calls, description: 路由 `/p/<项目>` 指向项目视图，按项目 ID 重建}
+  - {id: rel.ad.desk-canvas, from: present.desk-view, to: present.canvas.flow, type: calls}
+  - {id: rel.ad.desk-panel, from: present.desk-view, to: present.panel.dispatch, type: calls}
+  - {id: rel.ad.desk-nav, from: present.desk-view, to: present.nav, type: calls}
+  - {id: rel.ad.desk-issues, from: present.nav-tree, to: present.issues, type: calls, description: 第四个页签「问题」}
+  - {id: rel.ad.flow-nodes, from: present.canvas.flow, to: present.canvas.nodes, type: calls}
+  - {id: rel.ad.flow-edges, from: present.canvas.flow, to: present.canvas.edges, type: calls}
+  - {id: rel.ad.flow-legend, from: present.canvas.flow, to: present.canvas.legend, type: calls, description: 图例浮在画布右下角}
+  - {id: rel.ad.legend-edge-style, from: present.canvas.legend, to: present.canvas.edges, type: calls, description: 图例的示意线（LineSwatch）与画布的边共用 edgeStyle（颜色、线宽、线型，L10）}
+  - {id: rel.ad.panel-module, from: present.panel.dispatch, to: present.panel.module, type: calls}
+  - {id: rel.ad.panel-relation, from: present.panel.dispatch, to: present.panel.relation, type: calls}
+  - {id: rel.ad.panel-edge, from: present.panel.dispatch, to: present.panel.edge, type: calls}
+  - {id: rel.ad.panel-system, from: present.panel.dispatch, to: present.panel.system, type: calls}
+  - {id: rel.ad.module-content, from: present.panel.module, to: present.panel.content, type: calls}
+  - {id: rel.ad.relation-content, from: present.panel.relation, to: present.panel.content, type: calls}
+  - {id: rel.ad.edge-content, from: present.panel.edge, to: present.panel.content, type: calls}
+  - {id: rel.ad.system-content, from: present.panel.system, to: present.panel.content, type: calls}
+  - {id: rel.ad.system-design, from: present.panel.system, to: present.panel.design, type: calls, description: 设计版本根层先显示设计面板}
+  - {id: rel.ad.design-content, from: present.panel.design, to: present.panel.content, type: calls}
+  - {id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: calls}
   - {id: rel.ad.version-shell, from: present.version, to: present.shell, type: calls, via: router, description: 切换版本即导航到对应路由，带上当前 level / sel}
 
   # 呈现 ↔ 接入（HTTP 请求；变更通知 notifies 由接入层发往页面，控制流方向）
@@ -306,27 +306,25 @@ relations:
   # 呈现 → 视图状态
   - {id: rel.ad.desk-create, from: present.desk-view, to: state.desk.loading, type: calls, interface: if.desk.createDeskState, description: 进入项目时创建并注入 DeskState，调用 init；变更通知时调用 reload}
   - {id: rel.ad.desk-keys, from: present.desk-view, to: state.desk.actions, type: calls, interface: if.desk.actions, description: Esc 只取消选中，Backspace 返回上级（N7、N9）}
-  - {id: rel.ad.flow-read, from: present.canvas.flow, to: state.desk.projection, type: depends, payload: [ds.PositionedView, ds.Selection], description: 读取带坐标的视图、选中与悬停}
   - {id: rel.ad.flow-act, from: present.canvas.flow, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击 → select，双击 → drillInto / revealModule，悬停 → setHover}
   - {id: rel.ad.flow-bounds, from: present.canvas.flow, to: state.layout.runner, type: calls, interface: if.layout.contentBounds, description: 适应画布时取内容外框}
-  - {id: rel.ad.edges-route, from: present.canvas.edges, to: state.layout.runner, type: depends, payload: [ds.PositionedView], description: 使用 Layout 给出的走线点}
-  - {id: rel.ad.panel-read, from: present.panel.dispatch, to: state.desk.projection, type: depends, payload: [ds.Selection]}
-  - {id: rel.ad.edgepanel-read, from: present.panel.edge, to: state.desk.projection, type: depends, payload: [ds.LevelView], description: 在当前视图里查找聚合边}
+  - {id: rel.ad.edges-route, from: present.canvas.edges, to: state.layout.runner, type: calls, payload: [ds.PositionedView], description: 使用 Layout 给出的走线点}
+  - {id: rel.ad.panel-read, from: present.panel.dispatch, to: state.desk.projection, type: calls, payload: [ds.Selection]}
+  - {id: rel.ad.edgepanel-read, from: present.panel.edge, to: state.desk.projection, type: calls, payload: [ds.LevelView], description: 在当前视图里查找聚合边}
   - {id: rel.ad.module-act, from: present.panel.module, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 子模块点击、进入、可依赖层跳转}
   - {id: rel.ad.relation-act, from: present.panel.relation, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 端点跳转、定位到所在层次}
   - {id: rel.ad.content-act, from: present.panel.content, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 关系行点击 → revealRelation}
   - {id: rel.ad.crumb-act, from: present.nav.breadcrumb, to: state.desk.actions, type: calls, interface: if.desk.actions}
   - {id: rel.ad.toolbar-act, from: present.nav.toolbar, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 搜索结果 → revealModule；显示开关写入 toggles}
-  - {id: rel.ad.issues-read, from: present.issues, to: state.desk.loading, type: depends, payload: [ds.Issue]}
-  - {id: rel.ad.version-read, from: present.version, to: state.desk.versions, type: depends, payload: [ds.DesignInfo, ds.ModelDiff], description: 设计、轮次、对比基线、变更计数；对比基线与标出变更写入 toggles}
-  - {id: rel.ad.flow-diff, from: present.canvas.flow, to: state.desk.versions, type: depends, payload: [ds.ModelDiff], description: 节点与边的变更标记}
-  - {id: rel.ad.design-read, from: present.panel.design, to: state.desk.versions, type: depends, payload: [ds.DesignInfo, ds.ModelDiff]}
+  - {id: rel.ad.issues-read, from: present.issues, to: state.desk.loading, type: calls, payload: [ds.Issue]}
+  - {id: rel.ad.version-read, from: present.version, to: state.desk.versions, type: calls, payload: [ds.DesignInfo, ds.ModelDiff], description: 设计、轮次、对比基线、变更计数；对比基线与标出变更写入 toggles}
+  - {id: rel.ad.flow-diff, from: present.canvas.flow, to: state.desk.versions, type: calls, payload: [ds.ModelDiff], description: 节点与边的变更标记}
+  - {id: rel.ad.design-read, from: present.panel.design, to: state.desk.versions, type: calls, payload: [ds.DesignInfo, ds.ModelDiff]}
   - {id: rel.ad.design-act, from: present.panel.design, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 变更清单点击 → revealModule / revealRelation}
-  - {id: rel.ad.content-diff, from: present.panel.content, to: state.desk.versions, type: depends, payload: [ds.ModelDiff], description: 新增 / 修改标记与改了哪些字段}
+  - {id: rel.ad.content-diff, from: present.panel.content, to: state.desk.versions, type: calls, payload: [ds.ModelDiff], description: 新增 / 修改标记与改了哪些字段}
 
   # 呈现 → 模型（只依赖契约「类型与 Schema」，U10）
-  - {id: rel.ad.list-types, from: present.project-list, to: model.types, type: depends, payload: [ds.ProjectSummary]}
-  - {id: rel.ad.toolbar-types, from: present.nav.toolbar, to: model.types, type: depends, description: RELATION_TYPES 枚举}
+  - {id: rel.ad.list-types, from: present.project-list, to: model.types, type: calls, payload: [ds.ProjectSummary]}
   - {id: rel.ad.crumb-name, from: present.nav.breadcrumb, to: model.types, type: calls, description: moduleName 取显示名}
 
   # 视图状态内部与 → 模型
@@ -354,50 +352,44 @@ relations:
     description: 视图变化后异步布局，用序号丢弃过期结果
   - {id: rel.ad.graph-boundaries, from: state.layout.runner.graph, to: state.layout.runner.boundaries, type: calls, description: placeOutside、compassOf、edgeLabel、spreadEnds：框外元素按方位摆放、端口方向与标签}
   - {id: rel.ad.layered-boundaries, from: state.layout.runner.layered, to: state.layout.runner.boundaries, type: calls, description: placeOutside、portFor、slotOf、parallelOffsets：分层总览中框外元素的位置、正交走线的端口与错开、核心跨层边的平行曲线}
-  - {id: rel.ad.layout-types, from: state.layout.runner, to: model.types, type: depends, payload: [ds.LevelView]}
+  - {id: rel.ad.layout-types, from: state.layout.runner, to: model.types, type: calls, payload: [ds.LevelView]}
 
   # 接入层
   - {id: rel.ad.source-reader, from: access.model-source, to: access.reader, type: calls, interface: if.reader.projects, payload: [ds.ProjectSummary, ds.ModelPayload]}
   - {id: rel.ad.lint-reader, from: access.lint, to: access.reader, type: calls, interface: if.reader.projects}
   - {id: rel.ad.lint-entry, from: access.lint, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, payload: [ds.Issue]}
   - {id: rel.ad.reader-entry, from: access.reader, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 生成项目摘要时跑一遍模型层}
-  - {id: rel.ad.reader-types, from: access.reader, to: model.types, type: depends, payload: [ds.RawFile, ds.ProjectSummary, ds.DesignInfo]}
+  - {id: rel.ad.reader-types, from: access.reader, to: model.types, type: calls, payload: [ds.RawFile, ds.ProjectSummary, ds.DesignInfo]}
 
   # 模型层内部
   - {id: rel.ad.entry-loader, from: model.pipeline.entry, to: model.pipeline.loader, type: calls, interface: if.model.load}
   - {id: rel.ad.entry-validator, from: model.pipeline.entry, to: model.pipeline.validator, type: calls, interface: if.model.validate}
   - {id: rel.ad.entry-indexer, from: model.pipeline.entry, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex}
   - {id: rel.ad.flow-validate-index, from: model.pipeline.validator, to: model.pipeline.indexer, type: streams, payload: [ds.ArchModel], description: 剔除坏实体后的模型交给建索引}
-  - {id: rel.ad.loader-schema, from: model.pipeline.loader, to: model.types, type: depends, payload: [ds.ArchFileDef, ds.RawFile]}
+  - {id: rel.ad.loader-schema, from: model.pipeline.loader, to: model.types, type: calls, payload: [ds.ArchFileDef, ds.RawFile]}
   - {id: rel.ad.overview-endpoints, from: model.projector.overview, to: model.projector.endpoints, type: calls}
   - {id: rel.ad.endpoints-collector, from: model.projector.endpoints, to: model.projector.collector, type: calls}
   - {id: rel.ad.overview-collector, from: model.projector.overview, to: model.projector.collector, type: calls, description: 核心跨层边单独汇总}
-  - {id: rel.ad.diff-index, from: model.diff, to: model.types, type: depends, payload: [ds.ModelIndex], description: 按 ID 对齐两份索引，用路径计入祖先}
-  - {id: rel.ad.projector-types, from: model.projector, to: model.types, type: depends, payload: [ds.ModelIndex, ds.LevelView, ds.ViewEdge, ds.Band]}
+  - {id: rel.ad.diff-index, from: model.diff, to: model.types, type: calls, payload: [ds.ModelIndex], description: 按 ID 对齐两份索引，用路径计入祖先}
   # 模型层入口的再导出与名称、标签（K7 按代码补齐）
-  - {id: rel.ad.entry-reexport-diff, from: model.pipeline.entry, to: model.diff, type: depends, description: 模型层入口再导出 diffModels}
-  - {id: rel.ad.entry-reexport-governance, from: model.pipeline.entry, to: model.governance, type: depends, description: 模型层入口再导出架构治理}
-  - {id: rel.ad.entry-reexport-projector, from: model.pipeline.entry, to: model.projector, type: depends, description: 模型层入口再导出 projectLevel、mapEndpoint 等}
-  - {id: rel.ad.entry-reexport-scenario, from: model.pipeline.entry, to: model.scenario, type: depends, description: 模型层入口再导出场景投影}
-  - {id: rel.ad.entry-reexport-source, from: model.pipeline.entry, to: model.source, type: depends, description: 模型层入口再导出源码归属}
   - {id: rel.ad.indexer-steps, from: model.pipeline.indexer, to: model.scenario.flatten, type: calls, description: messagesOf：建索引时收集场景消息}
-  - {id: rel.ad.present-names, from: present, to: model.types, type: depends, description: 契约（U10）：名称查询 moduleName（各处显示模块名）、小谓词 isLong / isArchived、枚举 RELATION_TYPES、规则名 RULE_LABELS}
-  - {id: rel.ad.content-labels, from: present.panel.content, to: present.shared, type: depends, description: FIELD_LABELS：变更角标的字段名}
-  - {id: rel.ad.version-labels, from: present.version, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS：设计状态的显示名}
-  - {id: rel.ad.legend-type-labels, from: present.canvas.legend, to: present.shared, type: depends, description: RELATION_TYPE_LABELS / RELATION_TYPE_HINTS：关系类型名与一句话读法（ADR-0022）}
-  - {id: rel.ad.relation-type-labels, from: present.panel.relation, to: present.shared, type: depends, description: RELATION_TYPE_LABELS / RELATION_TYPE_HINTS：类型名与「语义」一行}
-  - {id: rel.ad.edge-type-labels, from: present.panel.edge, to: present.shared, type: depends, description: RELATION_TYPE_LABELS：聚合边与关系行的类型名}
-  - {id: rel.gv.ports-type-labels, from: present.panel.governance, to: present.shared, type: depends, description: RELATION_TYPE_LABELS：端口三角各项的类型名}
-  - {id: rel.ad.navtree-tab, from: present.nav-tree, to: present.shared, type: depends, description: NAV_TAB：页签由项目视图持有，问题角标可切到「问题」页签（W-6）}
-  - {id: rel.ad.list-labels, from: present.project-list, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS：设计状态的显示名}
-  - {id: rel.ad.design-labels, from: present.panel.design, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS：设计状态的显示名}
-  - {id: rel.ad.actor-labels, from: present.panel.actor, to: present.shared, type: depends, description: ACTOR_KIND_LABELS：参与者类别的显示名}
-  - {id: rel.ad.actor-node-labels, from: present.canvas.nodes, to: present.shared, type: depends, description: ACTOR_KIND_LABELS：参与者类别的显示名}
+  - {id: rel.ad.present-names, from: present, to: model.types, type: calls, description: 契约（U10）：名称查询 moduleName（各处显示模块名）、小谓词 isLong / isArchived、枚举 RELATION_TYPES、规则名 RULE_LABELS}
+  - {id: rel.ad.content-labels, from: present.panel.content, to: present.shared, type: calls, description: FIELD_LABELS：变更角标的字段名}
+  - {id: rel.ad.version-labels, from: present.version, to: present.shared, type: calls, description: DESIGN_STATUS_LABELS：设计状态的显示名}
+  - {id: rel.ad.legend-type-labels, from: present.canvas.legend, to: present.shared, type: calls, description: RELATION_TYPE_LABELS / RELATION_TYPE_HINTS：关系类型名与一句话读法（ADR-0022）}
+  - {id: rel.ad.relation-type-labels, from: present.panel.relation, to: present.shared, type: calls, description: RELATION_TYPE_LABELS / RELATION_TYPE_HINTS：类型名与「语义」一行}
+  - {id: rel.ad.edge-type-labels, from: present.panel.edge, to: present.shared, type: calls, description: RELATION_TYPE_LABELS：聚合边与关系行的类型名}
+  - {id: rel.gv.ports-type-labels, from: present.panel.governance, to: present.shared, type: calls, description: RELATION_TYPE_LABELS：端口三角各项的类型名}
+  - {id: rel.ad.navtree-tab, from: present.nav-tree, to: present.shared, type: calls, description: NAV_TAB：页签由项目视图持有，问题角标可切到「问题」页签（W-6）}
+  - {id: rel.ad.list-labels, from: present.project-list, to: present.shared, type: calls, description: DESIGN_STATUS_LABELS：设计状态的显示名}
+  - {id: rel.ad.design-labels, from: present.panel.design, to: present.shared, type: calls, description: DESIGN_STATUS_LABELS：设计状态的显示名}
+  - {id: rel.ad.actor-labels, from: present.panel.actor, to: present.shared, type: calls, description: ACTOR_KIND_LABELS：参与者类别的显示名}
+  - {id: rel.ad.actor-node-labels, from: present.canvas.nodes, to: present.shared, type: calls, description: ACTOR_KIND_LABELS：参与者类别的显示名}
   - {id: rel.ad.nodes-act, from: present.canvas.nodes, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 分支预览选这一支（chooseBranch）、步骤序号指向这一步（seek）}
-  - {id: rel.ad.system-read, from: present.panel.system, to: state.desk.projection, type: depends, description: 系统面板读索引、层次视图与版本}
+  - {id: rel.ad.system-read, from: present.panel.system, to: state.desk.projection, type: calls, description: 系统面板读索引、层次视图与版本}
   - {id: rel.ad.system-act, from: present.panel.system, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 选中模块或问题}
-  - {id: rel.ad.desk-labels, from: state.desk, to: model.types, type: depends, description: RELATION_TYPES：关系类型开关的初值}
-  - {id: rel.ad.projection-names, from: state.desk.projection, to: model.pipeline.indexer, type: depends, description: triggerOf：场景列表的触发者}
+  - {id: rel.ad.desk-labels, from: state.desk, to: model.types, type: calls, description: RELATION_TYPES：关系类型开关的初值}
+  - {id: rel.ad.projection-names, from: state.desk.projection, to: model.pipeline.indexer, type: calls, description: triggerOf：场景列表的触发者}
 
 interfaces:
   - id: if.model.loadModel

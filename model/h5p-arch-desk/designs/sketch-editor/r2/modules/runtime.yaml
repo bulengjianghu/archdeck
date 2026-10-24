@@ -178,54 +178,44 @@ modules:
 
 relations:
   # 呈现层内部
-  - {id: rel.p2.split-canvas, from: present.desk-view.split, to: present.canvas.flow, type: depends, description: 结构图槽位（左 / 上）}
-  - {id: rel.p2.split-sequence, from: present.desk-view.split, to: present.sequence.interact, type: depends, description: 副栏「时序图」页签（右 / 下），运行视角下出现；副栏标题栏切换方向}
-  - {id: rel.p6.desk-nav-tree, from: present.desk-view, to: present.nav-tree, type: depends, description: 左侧固定栏，可折叠}
-  - {id: rel.p6.nav-perspective, from: present.nav-tree, to: state.desk.projection, type: depends, payload: [ds.ViewState], description: 视角变化时切换页签（T1）}
-  - {id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: depends}
-  - {id: rel.p3.desk-perspective, from: present.desk-view, to: present.perspective, type: depends}
-  - {id: rel.p3.perspective-scenarios, from: present.perspective, to: present.scenarios, type: depends, description: 「运行」入口弹出场景列表}
+  - {id: rel.p2.split-canvas, from: present.desk-view.split, to: present.canvas.flow, type: calls, description: 结构图槽位（左 / 上）}
+  - {id: rel.p2.split-sequence, from: present.desk-view.split, to: present.sequence.interact, type: calls, description: 副栏「时序图」页签（右 / 下），运行视角下出现；副栏标题栏切换方向}
+  - {id: rel.p6.desk-nav-tree, from: present.desk-view, to: present.nav-tree, type: calls, description: 左侧固定栏，可折叠}
+  - {id: rel.p6.nav-perspective, from: present.nav-tree, to: state.desk.projection, type: calls, payload: [ds.ViewState], description: 视角变化时切换页签（T1）}
+  - {id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: calls}
+  - {id: rel.p3.desk-perspective, from: present.desk-view, to: present.perspective, type: calls}
   - {id: rel.p3.perspective-act, from: present.perspective, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 退出场景 → closeScenario}
-  - {id: rel.p3.perspective-read, from: present.perspective, to: state.desk.projection, type: depends, payload: [ds.ViewState], description: 当前视角与场景名}
-  - {id: rel.p3.dispatch-run, from: present.panel.dispatch, to: present.panel.run, type: depends, description: 运行视角下选中模块、关系、聚合边、参与者时，运行信息在结构信息之上（V6）}
-  - {id: rel.p3.run-read, from: present.panel.run, to: state.desk.projection, type: depends, payload: [ds.Participation]}
+  - {id: rel.p3.perspective-read, from: present.perspective, to: state.desk.projection, type: calls, payload: [ds.ViewState], description: 当前视角与场景名}
+  - {id: rel.p3.dispatch-run, from: present.panel.dispatch, to: present.panel.run, type: calls, description: 运行视角下选中模块、关系、聚合边、参与者时，运行信息在结构信息之上（V6）}
+  - {id: rel.p3.run-read, from: present.panel.run, to: state.desk.projection, type: calls, payload: [ds.Participation]}
   - {id: rel.p3.run-act, from: present.panel.run, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击参与的步骤 → seek（R13）}
-  - {id: rel.p2.seq-lanes, from: present.sequence.interact, to: present.sequence.lanes, type: depends}
-  - {id: rel.p2.seq-fragments, from: present.sequence.interact, to: present.sequence.fragments, type: depends}
-  - {id: rel.p9.seq-heads, from: present.sequence.interact, to: present.sequence.heads, type: depends, description: 顶部与底部各一份}
-  - {id: rel.p8.desk-stage, from: present.desk-view, to: present.canvas, type: depends, description: 创建并注入舞台显示（静态关系显示方式按项目记在本地；在画布上显示的临时对象，V8、V9）}
-  - {id: rel.p8.step-stage, from: present.panel.step, to: present.canvas, type: depends, description: 「在画布上显示」当前消息两端的静态关系（V9）}
-  - {id: rel.p8.run-stage, from: present.panel.run, to: present.canvas, type: depends, description: 「在画布上显示」选中对象的静态关系（V9）}
-  - {id: rel.p2.panel-scenario, from: present.panel.dispatch, to: present.panel.scenario, type: depends}
-  - {id: rel.p2.panel-step, from: present.panel.dispatch, to: present.panel.step, type: depends}
-  - {id: rel.p2.panel-actor, from: present.panel.dispatch, to: present.panel.actor, type: depends}
-  - {id: rel.p2.step-content, from: present.panel.step, to: present.panel.content, type: depends, description: 接口与数据结构折叠项复用内容组件}
-  - {id: rel.p2.scenario-content, from: present.panel.scenario, to: present.panel.content, type: depends}
+  - {id: rel.p2.seq-lanes, from: present.sequence.interact, to: present.sequence.lanes, type: calls}
+  - {id: rel.p2.seq-fragments, from: present.sequence.interact, to: present.sequence.fragments, type: calls}
+  - {id: rel.p9.seq-heads, from: present.sequence.interact, to: present.sequence.heads, type: calls, description: 顶部与底部各一份}
+  - {id: rel.p8.desk-stage, from: present.desk-view, to: present.canvas, type: calls, description: 创建并注入舞台显示（静态关系显示方式按项目记在本地；在画布上显示的临时对象，V8、V9）}
+  - {id: rel.p8.step-stage, from: present.panel.step, to: present.canvas, type: calls, description: 「在画布上显示」当前消息两端的静态关系（V9）}
+  - {id: rel.p8.run-stage, from: present.panel.run, to: present.canvas, type: calls, description: 「在画布上显示」选中对象的静态关系（V9）}
+  - {id: rel.p2.panel-scenario, from: present.panel.dispatch, to: present.panel.scenario, type: calls}
+  - {id: rel.p2.panel-step, from: present.panel.dispatch, to: present.panel.step, type: calls}
+  - {id: rel.p2.panel-actor, from: present.panel.dispatch, to: present.panel.actor, type: calls}
+  - {id: rel.p2.step-content, from: present.panel.step, to: present.panel.content, type: calls, description: 接口与数据结构折叠项复用内容组件}
+  - {id: rel.p2.scenario-content, from: present.panel.scenario, to: present.panel.content, type: calls}
 
   # 呈现 → 视图状态（只读派生、只 dispatch）
-  - {id: rel.p2.list-read, from: present.scenarios, to: state.desk.projection, type: depends, payload: [ds.ModelIndex], description: desk.run 派生的场景列表（触发者、消息数），按 scenariosOf(当前层次) 与触发者筛选}
+  - {id: rel.p2.list-read, from: present.scenarios, to: state.desk.projection, type: calls, payload: [ds.ModelIndex], description: desk.run 派生的场景列表（触发者、消息数），按 scenariosOf(当前层次) 与触发者筛选}
   - {id: rel.p2.list-open, from: present.scenarios, to: state.desk.actions, type: calls, interface: if.desk.actions, description: openScenario(id)}
-  - {id: rel.p2.player-read, from: present.player, to: state.desk.projection, type: depends, payload: [ds.ViewState, ds.ScenarioLevelView], description: 当前位置、本层可见消息数、是否停在分支点及其选项}
+  - {id: rel.p2.player-read, from: present.player, to: state.desk.projection, type: calls, payload: [ds.ViewState, ds.ScenarioLevelView], description: 当前位置、本层可见消息数、是否停在分支点及其选项}
   - {id: rel.p2.player-act, from: present.player, to: state.desk.actions, type: calls, interface: if.desk.actions, description: prev / next / seek（拖动进度，0 = 回到开头）/ chooseBranch}
-  - {id: rel.p6.modules-read, from: present.nav-tree.modules, to: state.desk.projection, type: depends, payload: [ds.ModelIndex, ds.ViewState, ds.Frame], description: 模块层级、当前层次与选中、参与模块、进度所在步骤的两端}
+  - {id: rel.p6.modules-read, from: present.nav-tree.modules, to: state.desk.projection, type: calls, payload: [ds.ModelIndex, ds.ViewState, ds.Frame], description: 模块层级、当前层次与选中、参与模块、进度所在步骤的两端}
   - {id: rel.p6.modules-act, from: present.nav-tree.modules, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击 → revealModule / goTo(根)；双击 → drillInto；悬停 → setHover}
-  - {id: rel.p6.steps-read, from: present.nav-tree.steps, to: state.desk.projection, type: depends, payload: [ds.OutlineNode, ds.ScenarioLevelView, ds.ViewState], description: 步骤大纲、本层可见消息序号、进度与选中}
   - {id: rel.p6.steps-act, from: present.nav-tree.steps, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击帧 → seek（R13）；单击分支标题 → chooseBranch；「开头」→ seek(null)；悬停 → setHover}
-  - {id: rel.p2.seq-read, from: present.sequence.interact, to: state.desk.projection, type: depends, payload: [ds.PositionedSequence, ds.ViewState], description: 读取定位好的时序图与进度}
   - {id: rel.p2.seq-act, from: present.sequence.interact, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击消息（含未选分支上的）→ seek（R13）；单击 alt 分支条件 → chooseBranch（F6e）；悬停 → setHover}
-  - {id: rel.p8.seq-emphasis, from: present.sequence.interact, to: state.desk.projection, type: depends, payload: [ds.Emphasis], description: 选中突出：选中消息、配对消息、突出的泳道（R15、R16）}
-  - {id: rel.p8.route-read, from: present.player.route, to: state.desk.projection, type: depends, payload: [ds.RouteItem], description: 路线（F6f）}
+  - {id: rel.p8.route-read, from: present.player.route, to: state.desk.projection, type: calls, payload: [ds.RouteItem], description: 路线（F6f）}
   - {id: rel.p8.route-act, from: present.player.route, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 下拉改选 → chooseBranch，返回被丢弃的选择个数用于提示（F6f）}
   - {id: rel.p13.flow-canvas, from: present.canvas.flow, to: state.layout.canvas, type: calls, interface: if.layout.canvasScene, payload: [ds.PositionedView, ds.StageOverlay, ds.Emphasis, ds.CanvasScene], description: 画布要画的节点与边（ADR-0013）}
   - {id: rel.p8.flow-stage-display, from: state.layout.canvas, to: state.layout.stage, type: calls, interface: if.layout.stageDisplay, payload: [ds.LevelView, ds.StageDisplay], description: 每个节点与边显示、淡化还是隐藏（V5、V8、V9）}
-  - id: rel.p2.flow-playback
-    from: present.canvas.flow
-    to: state.desk.projection
-    type: depends
-    payload: [ds.ScenarioLevelView, ds.ViewState]
-    description: 当前消息落在哪条视图边 / 哪个节点、已走过哪些、分支点各选项的预览边
   - {id: rel.p2.flow-step, from: present.canvas.flow, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击步骤序号 → seek（R13）；单击分支预览序号 → chooseBranch；单击节点 / 边仍是 select（运行视角同样只是选中，V3）}
-  - {id: rel.p2.step-read, from: present.panel.step, to: state.desk.projection, type: depends, payload: [ds.Frame, ds.ScenarioLevelView, ds.ReturnPairs], description: 当前帧、本层投影与配对返回（输出，F7）}
+  - {id: rel.p2.step-read, from: present.panel.step, to: state.desk.projection, type: calls, payload: [ds.Frame, ds.ScenarioLevelView, ds.ReturnPairs], description: 当前帧、本层投影与配对返回（输出，F7）}
   - {id: rel.p2.step-act, from: present.panel.step, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 端点点击 → revealModule；关系点击 → revealRelation}
   - {id: rel.p2.scenario-act, from: present.panel.scenario, to: state.desk.actions, type: calls, interface: if.desk.actions, description: ref → openScenario；「跳到场景所在层次」→ goTo；参与模块 → revealModule}
   - {id: rel.p2.actor-act, from: present.panel.actor, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 打开由它触发的场景}
@@ -273,39 +263,36 @@ relations:
     payload: [ds.SequenceModel, ds.PositionedSequence]
     description: 同步计算；泳道顺序参考结构图布局
   - {id: rel.p5.projection-stage, from: state.desk.projection, to: state.layout.stage, type: calls, interface: if.layout.stageOverlay, payload: [ds.ScenarioLevelView, ds.PositionedView, ds.StageOverlay], description: 运行视角下派生舞台叠加}
-  - {id: rel.p5.stage-runner, from: state.layout.stage, to: state.layout.runner, type: depends, payload: [ds.PositionedView], description: 用结构图坐标算步骤序号与临时线的位置}
-  - {id: rel.p2.seqlayout-positions, from: state.layout.sequence, to: state.layout.runner, type: depends, payload: [ds.PositionedView], description: 同一父模块内的本层子模块按结构图中节点的横坐标排（P9）}
-  - {id: rel.p2.seqlayout-types, from: state.layout.sequence, to: model.types, type: depends, payload: [ds.SequenceModel], description: 时序模型的类型}
+  - {id: rel.p5.stage-runner, from: state.layout.stage, to: state.layout.runner, type: calls, payload: [ds.PositionedView], description: 用结构图坐标算步骤序号与临时线的位置}
+  - {id: rel.p2.seqlayout-types, from: state.layout.sequence, to: model.types, type: calls, payload: [ds.SequenceModel], description: 时序模型的类型}
 
   # 视图状态 → 模型（转移规则需要的查询）
   - {id: rel.p2.playback-path, from: state.transition.playback, to: model.scenario.path, type: calls, interface: if.model.resolvePath, description: 是否停在分支点；改选后保留哪些选择（F6b）；到达某帧需要的选择（R13）；直选分支需要的选择与分支点之前的帧（F6e）}
   - {id: rel.p2.playback-level, from: state.transition.playback, to: model.scenario.level, type: calls, interface: if.model.projectScenario, description: 本层的下一步 / 上一步（R7）；指向某帧时的落点（R13）}
   - {id: rel.p2.nav-projector, from: state.transition.navigation, to: model.projector, type: calls, interface: if.model.projectLevel, description: nearestVisibleLevel（N12）}
   - {id: rel.p3.nav-existing, from: state.transition.navigation, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: nearestExisting（N5、N11）}
-  - {id: rel.p3.selection-types, from: state.transition.selection, to: model.types, type: depends, payload: [ds.ViewState, ds.Selection]}
   - {id: rel.p3.projection-participation, from: state.desk.projection, to: model.scenario.participation, type: calls, interface: if.model.participation, payload: [ds.Participation], description: 运行视角下选中模块、关系、视图边、参与者时派生其运行信息；打开场景时派生参与模块（scenarioModules，T5）}
   - {id: rel.p6.projection-outline, from: state.desk.projection, to: model.scenario.outline, type: calls, interface: if.model.outlineScenario, payload: [ds.OutlineNode], description: 打开场景或已选分支变化时派生步骤大纲（T6）}
-  - {id: rel.p2.transition-types, from: state.transition, to: model.types, type: depends, payload: [ds.ViewState, ds.ViewAction]}
 
   # 模型层内部
   - {id: rel.p2.level-endpoints, from: model.scenario.level, to: model.projector.endpoints, type: calls, interface: if.model.mapEndpoint, description: 与结构投影共用同一套端点规则}
-  - {id: rel.p2.level-edgeid, from: model.scenario.level, to: model.projector.collector, type: depends, description: 用 edgeId 规则算出帧对应的视图边 ID}
+  - {id: rel.p2.level-edgeid, from: model.scenario.level, to: model.projector.collector, type: calls, description: 用 edgeId 规则算出帧对应的视图边 ID}
   - {id: rel.p2.level-sequence, from: model.scenario.level, to: model.scenario.sequence, type: streams, payload: [ds.ScenarioLevelView], description: 本层的可见消息交给时序模型}
   - {id: rel.p8.sequence-hierarchy, from: model.scenario.sequence, to: model.projector.hierarchy, type: calls, interface: if.model.hierarchyKey, description: 参与者的层次排序键（P9）}
-  - {id: rel.p2.flatten-index, from: model.scenario.flatten, to: model.types, type: depends, payload: [ds.ModelIndex], description: 读取场景表以内联 ref；读取关系表以绑定关系（S13）}
+  - {id: rel.p2.flatten-index, from: model.scenario.flatten, to: model.types, type: calls, payload: [ds.ModelIndex], description: 读取场景表以内联 ref；读取关系表以绑定关系（S13）}
   - {id: rel.p3.validator-bind, from: model.pipeline.validator, to: model.scenario.flatten, type: calls, description: S5a / S13 与回放共用 bindRelation}
   - {id: rel.p2.level-lca, from: model.scenario.level, to: model.projector.hierarchy, type: calls, interface: if.model.lowestCommonAncestor, description: 场景所在层次 = 帧端点的最近公共祖先}
-  - {id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: depends, payload: [ds.ScenarioEntity, ds.ScenarioPlan, ds.Frame, ds.ScenarioLevelView, ds.SequenceModel, ds.OutlineNode]}
+  - {id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: calls, payload: [ds.ScenarioEntity, ds.ScenarioPlan, ds.Frame, ds.ScenarioLevelView, ds.SequenceModel, ds.OutlineNode]}
   # 场景投影、时序图与视图状态转移补齐（K7）
   - {id: rel.p2.seqmodel-path, from: model.scenario.sequence, to: model.scenario.path, type: calls, description: resolvePath：按选择展开路径}
-  - {id: rel.p2.seqmodel-names, from: model.scenario.sequence, to: model.types, type: depends, description: moduleName：泳道与消息的显示名}
-  - {id: rel.p6.steps-text, from: present.nav-tree.steps, to: present.panel, type: depends, description: fragmentText、frameText：步骤树与面板共用的步骤文字}
-  - {id: rel.p2.actor-content, from: present.panel.actor, to: present.panel.content, type: depends, description: 复用 Markdown、Section、RelationRow}
-  - {id: rel.p3.run-content, from: present.panel.run, to: present.panel.content, type: depends, description: 复用 Section}
-  - {id: rel.p2.seq-geometry, from: present.sequence, to: state.layout.sequence, type: depends, payload: [ds.PositionedSequence], description: SEQ、headsHeight：时序图的几何常量与定位结果}
-  - {id: rel.p8.canvas-names, from: state.layout.canvas, to: model.types, type: depends, payload: [ds.ModelDiff], description: moduleName：节点与边界的显示名；ModelDiff：节点的新增 / 修改标记与涉及变更数}
+  - {id: rel.p2.seqmodel-names, from: model.scenario.sequence, to: model.types, type: calls, description: moduleName：泳道与消息的显示名}
+  - {id: rel.p6.steps-text, from: present.nav-tree.steps, to: present.panel, type: calls, description: fragmentText、frameText：步骤树与面板共用的步骤文字}
+  - {id: rel.p2.actor-content, from: present.panel.actor, to: present.panel.content, type: calls, description: 复用 Markdown、Section、RelationRow}
+  - {id: rel.p3.run-content, from: present.panel.run, to: present.panel.content, type: calls, description: 复用 Section}
+  - {id: rel.p2.seq-geometry, from: present.sequence, to: state.layout.sequence, type: calls, payload: [ds.PositionedSequence], description: SEQ、headsHeight：时序图的几何常量与定位结果}
+  - {id: rel.p8.canvas-names, from: state.layout.canvas, to: model.types, type: calls, payload: [ds.ModelDiff], description: moduleName：节点与边界的显示名；ModelDiff：节点的新增 / 修改标记与涉及变更数}
   - {id: rel.p8.canvas-route, from: state.layout.canvas, to: state.layout.runner, type: calls, description: outsideRoutes、edgeRoute、edgeLabel、edgeWeight、linkRoute、isBoundaryEdge：边的走线（框外元素的边按可见集分配轨道）、标签与线宽档}
-  - {id: rel.p2.seqlayout-keys, from: state.layout.sequence, to: model.projector, type: depends, description: compareKeys：泳道按层次键排序（L4）}
+  - {id: rel.p2.seqlayout-keys, from: state.layout.sequence, to: model.projector, type: calls, description: compareKeys：泳道按层次键排序（L4）}
   - {id: rel.p8.stage-level, from: state.layout.stage, to: model.scenario.level, type: calls, description: currentMessage、walkedCount：舞台叠加的当前一步与走过的步数}
   - {id: rel.p2.url-plan, from: state.transition.url, to: model.scenario.flatten, type: calls, description: planScenario、choiceList：地址里的分支选择编解码}
   - {id: rel.p2.url-path, from: state.transition.url, to: model.scenario.path, type: calls, description: resolvePath：恢复时校验选中的步骤}
