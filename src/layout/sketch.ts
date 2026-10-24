@@ -22,6 +22,7 @@ import {
   ROOT_BAND_X0,
   ROOT_MOUNT,
   SKETCH_SOFT_LIMIT,
+  isSharedRole,
   type ChangeKind,
   type GridArea,
   type ModuleDef,
@@ -31,6 +32,9 @@ import {
 } from '@/model'
 
 export const SKETCH_NODE = { w: 168, h: 56 } as const
+/** SK-22（ADR-0027）：核心模块画成大块；共用件（shared / bus）画成本层框底部一行「共用件」架上的紧凑块 */
+export const SKETCH_CORE = { w: 188, h: 64 } as const
+export const SKETCH_SHELF = { w: 132, h: 28, gap: 8, label: 56, top: 16 } as const
 /** X22：可用区域还没量到（单测、首帧）时的缺省尺寸；画布量到容器尺寸后系统框按实际可用区域排 */
 export const SKETCH_CANVAS_FALLBACK = { w: 1760, h: 860 } as const
 /** X22：紧凑的引用节点（一行：名字 + ID，高度约为模块节点一半）与列内间距 */
@@ -53,7 +57,7 @@ const ORIGIN = 40
 export type SketchNodeKind = 'module' | 'reference' | 'layer' | 'frame'
 
 /** X22：框线——最外的系统框、中心区（挂载点框）、引用列 */
-export type SketchFrameKind = 'system' | 'center' | 'column'
+export type SketchFrameKind = 'system' | 'center' | 'column' | 'shelf'
 
 export interface SketchNodeData {
   id: string
@@ -61,6 +65,8 @@ export interface SketchNodeData {
   name: string
   /** ADR-0027：核心大块、共用件收进架（SK-22） */
   role?: ModuleRole
+  /** SK-22：在本层框底部的共用件架上（位置由规则算，不随 layout） */
+  shelf?: boolean
   /** 有下一层（设计里有挂在它身上的草图，或基线里有子模块）：双击下钻有内容 */
   deeper?: boolean
   /** 图上标出变更时的角标 */
@@ -206,7 +212,9 @@ function bandLayout(def: SketchDef): { bands: SketchBand[]; pos: Record<string, 
   let top = ORIGIN
   for (const layer of rootLayers(def)) {
     const taken: SketchPoint[] = []
-    const kids = layer.children ?? []
+    // SK-22：共用件不占网格，排在带底的共用件架
+    const shelf = (layer.children ?? []).filter(k => isSharedRole(k.role))
+    const kids = (layer.children ?? []).filter(k => !isSharedRole(k.role))
     for (const k of kids)
       if (given[k.id]) {
         pos[k.id] = { x: given[k.id].x, y: top + Math.max(0, given[k.id].y ?? ROOT_BAND_PAD) }
@@ -225,7 +233,10 @@ function bandLayout(def: SketchDef): { bands: SketchBand[]; pos: Record<string, 
       taken.push(p)
     }
     const bottom = Math.max(0, ...taken.map(p => p.y + SKETCH_NODE.h - top))
-    const h = Math.max(SKETCH_BAND.h, bottom + ROOT_BAND_PAD)
+    const shelfY = top + bottom + SKETCH_SHELF.top
+    shelf.forEach((k, i) => (pos[k.id] = { x: ROOT_BAND_X0 + SKETCH_SHELF.label + i * (SKETCH_SHELF.w + SKETCH_SHELF.gap), y: shelfY }))
+    for (const k of shelf) right = Math.max(right, pos[k.id].x + SKETCH_SHELF.w + 60)
+    const h = Math.max(SKETCH_BAND.h, bottom + (shelf.length ? SKETCH_SHELF.top + SKETCH_SHELF.h : 0) + ROOT_BAND_PAD)
     bands.push({ id: layer.id, y: top, h })
     for (const p of taken) right = Math.max(right, p.x + SKETCH_NODE.w + 60)
     top += h + SKETCH_BAND.gap
@@ -323,6 +334,7 @@ function boundaryLayout(
   input: SketchSceneInput,
   own: readonly string[],
   refs: readonly string[],
+  shelf: readonly string[] = [],
 ): {
   frames: SketchNode[]
   references: Map<string, { position: SketchPoint; w: number; h: number; scale: number; side: 'left' | 'right' }>
@@ -340,6 +352,8 @@ function boundaryLayout(
   const right = columns.filter(c => c.side === 'right')
   const step = SKETCH_COLUMN.w + SKETCH_COLUMN.gap
   const fixedW = 2 * SKETCH_FRAME_PAD + (left.length + right.length) * step
+  // SK-22：共用件架在中心区底部一行，中心区为它留出高度
+  const shelfH = shelf.length ? SKETCH_SHELF.top + SKETCH_SHELF.h : 0
   /** 按一块画布尺寸排：中心区可用区域、本层模块位置（相对内容原点）与内容范围、需要的画布尺寸 */
   const measure = (canvas: { w: number; h: number }) => {
     const availW = canvas.w - fixedW
@@ -353,7 +367,7 @@ function boundaryLayout(
       maxY: Math.max(0, ...ps.map(p => p.y + SKETCH_NODE.h)),
     }
     const needW = fixedW + Math.max(SKETCH_CENTER_MIN_W, box.maxX - box.minX + 2 * SKETCH_CENTER_PAD)
-    const needH = 2 * SKETCH_FRAME_PAD + box.maxY - box.minY + 2 * SKETCH_CENTER_PAD
+    const needH = 2 * SKETCH_FRAME_PAD + box.maxY - box.minY + 2 * SKETCH_CENTER_PAD + shelfH
     return { canvas, availW, gridArea, rel, ...box, needW, needH }
   }
   // 可用区域放不下（引用列 + 最小中心区，或人摆的本层模块）时，按视口的宽高比放大画布再排：适应画布后系统框仍占满视口，不留空白带
@@ -362,10 +376,23 @@ function boundaryLayout(
   const k = Math.max(1, m.needW / base.w, m.needH / base.h)
   if (k > 1) m = measure({ w: Math.ceil(base.w * k), h: Math.ceil(base.h * k) })
   const { canvas, availW, gridArea, rel, minX, minY, maxX, maxY } = m
-  const h = Math.max(canvas.h - 2 * SKETCH_FRAME_PAD, maxY - minY + 2 * SKETCH_CENTER_PAD)
-  const center: SketchRect = { x: SKETCH_FRAME_PAD + left.length * step, y: SKETCH_FRAME_PAD, w: Math.max(availW, maxX - minX + 2 * SKETCH_CENTER_PAD), h }
+  const h = Math.max(canvas.h - 2 * SKETCH_FRAME_PAD, maxY - minY + 2 * SKETCH_CENTER_PAD + shelfH)
+  const shelfW = SKETCH_SHELF.label + shelf.length * (SKETCH_SHELF.w + SKETCH_SHELF.gap)
+  const center: SketchRect = {
+    x: SKETCH_FRAME_PAD + left.length * step,
+    y: SKETCH_FRAME_PAD,
+    w: Math.max(availW, maxX - minX + 2 * SKETCH_CENTER_PAD, shelfW + 2 * SKETCH_CENTER_PAD),
+    h,
+  }
   const origin = { x: center.x + SKETCH_CENTER_PAD - minX, y: center.y + SKETCH_CENTER_PAD - minY }
   const pos = Object.fromEntries(Object.entries(rel).map(([id, p]) => [id, { x: p.x + origin.x, y: p.y + origin.y }]))
+  shelf.forEach(
+    (id, i) =>
+      (pos[id] = {
+        x: center.x + SKETCH_CENTER_PAD + SKETCH_SHELF.label + i * (SKETCH_SHELF.w + SKETCH_SHELF.gap),
+        y: center.y + center.h - SKETCH_CENTER_PAD - SKETCH_SHELF.h,
+      }),
+  )
 
   // 列内顺序：按相连的本层模块的平均高度（重心），线少交叉；没有关系的按 ID 排在后面
   const ownSet = new Set(own)
@@ -414,6 +441,16 @@ function boundaryLayout(
     frame('system', 'system', input.system ?? '系统', { x: 0, y: 0, w: width, h: h + 2 * SKETCH_FRAME_PAD }),
     frame('center', 'center', input.mountName ?? def.mount, center),
   )
+  // SK-22：共用件架——中心区底部一行的浅框，标「共用件」
+  if (shelf.length)
+    frames.push(
+      frame('shelf', 'shelf', '共用件', {
+        x: center.x + SKETCH_CENTER_PAD - 8,
+        y: center.y + center.h - SKETCH_CENTER_PAD - SKETCH_SHELF.h - 8,
+        w: shelfW + 16 - SKETCH_SHELF.gap,
+        h: SKETCH_SHELF.h + 16,
+      }),
+    )
   return { frames, references, pos, center, origin, gridArea, columns }
 }
 
@@ -425,18 +462,22 @@ export function sketchScene(input: SketchSceneInput): SketchScene {
   const allRefs = root ? [] : referenceNodes(def)
   const refs = input.hideReferences ? [] : allRefs
   const band = root ? bandLayout(def) : null
+  // SK-22：本层的共用件（根草图为层的直接子模块）收进架
+  const shelf = new Set(own.filter(m => isSharedRole(m.node.role) && (root ? m.parentId !== undefined : !m.nested)).map(m => m.id))
   const bounds = root
     ? null
     : boundaryLayout(
         input,
-        own.map(m => m.id),
+        own.filter(m => !shelf.has(m.id)).map(m => m.id),
         allRefs,
+        [...shelf],
       )
   const pos = band ? band.pos : bounds!.pos
   const sel = input.selected ?? new Set<string>()
   const layers: SketchNode[] = (band?.bands ?? []).map(b => {
     const layer = own.find(m => m.id === b.id)!.node
-    const count = (layer.children ?? []).length
+    // X13：七的软限只数非共用件
+    const count = (layer.children ?? []).filter(k => !isSharedRole(k.role)).length
     return {
       id: b.id,
       position: { x: 0, y: b.y },
@@ -467,8 +508,12 @@ export function sketchScene(input: SketchSceneInput): SketchScene {
         ...(input.deeper?.(m.id) ? { deeper: true } : {}),
         ...(input.changes?.get(m.id) ? { change: input.changes.get(m.id) } : {}),
         ...(sel.has(m.id) ? { selected: true } : {}),
-        w: SKETCH_NODE.w,
-        h: SKETCH_NODE.h,
+        ...(shelf.has(m.id) ? { shelf: true } : {}),
+        ...(shelf.has(m.id)
+          ? { w: SKETCH_SHELF.w, h: SKETCH_SHELF.h }
+          : m.node.role === 'core'
+            ? { w: SKETCH_CORE.w, h: SKETCH_CORE.h }
+            : { w: SKETCH_NODE.w, h: SKETCH_NODE.h }),
       },
     }))
   const references: SketchNode[] = refs.map(id => {
@@ -553,7 +598,7 @@ export function sketchScene(input: SketchSceneInput): SketchScene {
       },
     }
   })
-  const count = root ? own.filter(m => m.parentId !== undefined).length : own.length
+  const count = (root ? own.filter(m => m.parentId !== undefined) : own).filter(m => !shelf.has(m.id)).length
   return {
     nodes,
     edges,

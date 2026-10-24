@@ -221,3 +221,13 @@ describe('X7b 设计草图里的层序', () => {
     expect(c.sketch.modules![1].order).toBe(0)
   })
 })
+
+describe('X13 七的软限只数非共用件（ADR-0027）', () => {
+  it('本层 9 个模块里 2 个共用件：不提示超七；去掉共用件的角色后提示', () => {
+    const mods = [...Array.from({ length: 7 }, (_, i) => ({ id: `a.n${i}`, name: `N${i}`, responsibility: 'x' })), { id: 'a.s', name: 'S', responsibility: 'x', role: 'shared' as const }, { id: 'a.b', name: 'B', responsibility: 'x', role: 'bus' as const }]
+    const hint = (modules: SketchDef['modules']) =>
+      validateSketch({ id: 'd', mount: 'a', modules }, { persistent: [], file: 'designs/d/sketches/a.yaml' }).hints.filter(h => h.code === 'sketch.over-seven')
+    expect(hint(mods)).toEqual([])
+    expect(hint(mods.map(m => ({ ...m, role: undefined }))).map(h => h.message)).toEqual(['9 个模块，考虑归并（X13）'])
+  })
+})

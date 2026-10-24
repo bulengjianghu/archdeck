@@ -7,7 +7,7 @@
  * 与核验（sketchCheck，版本对草图）分工：两边都有的只有矛盾检查（同一函数与稳定键）。画布每次操作后、保存前与写入端点调用同一函数。
  */
 import { sketchShapeIssues } from '../load'
-import { ROOT_MOUNT, type ModelIndex, type SketchDef, type SketchEntity } from '../types'
+import { ROOT_MOUNT, isSharedRole, type ModelIndex, type SketchDef, type SketchEntity } from '../types'
 import { sketchContradictions } from './check'
 import { ID_PATTERN, knownModules, locateAll } from './edit/locate'
 import { prefixMap, sketchLineage, unmapId } from './lineage'
@@ -170,13 +170,14 @@ export function validateSketch(sketch: SketchDef, ctx: ValidateContext): SketchV
     push('warning', 'sketch.contradiction', d.message, { module: d.target.modules?.[0] }, d.at?.path)
 
   // ── 只提示：超七（X13）、没写职责 ──
-  // X13、X21：根草图按每条层带算（骨架整体天然超七），其余草图按本层
+  // X13、X21：根草图按每条层带算（骨架整体天然超七），其余草图按本层；七的软限只数非共用件（ADR-0027）
   if (root)
     for (const layer of own.filter(m => m.parentId === undefined)) {
-      const n = (layer.node.children ?? []).length
+      const n = (layer.node.children ?? []).filter(k => !isSharedRole(k.role)).length
       if (n > SKETCH_SOFT_LIMIT) push('hint', 'sketch.over-seven', `「${layer.node.name || layer.id}」${n} 个模块，考虑归并（X13）`, { module: layer.id }, layer.path)
     }
-  else if (own.length > SKETCH_SOFT_LIMIT) push('hint', 'sketch.over-seven', `${own.length} 个模块，考虑归并（X13）`)
+  else if (own.filter(m => !isSharedRole(m.node.role)).length > SKETCH_SOFT_LIMIT)
+    push('hint', 'sketch.over-seven', `${own.filter(m => !isSharedRole(m.node.role)).length} 个模块，考虑归并（X13）`)
   for (const m of own)
     if (m.node.kind !== 'layer' && !m.node.responsibility?.trim()) push('hint', 'sketch.empty', `「${m.node.name || m.id}」还没写职责`, { module: m.id }, m.path)
 

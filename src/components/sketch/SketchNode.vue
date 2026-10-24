@@ -120,8 +120,8 @@ const scaled = computed(() => {
   <div
     v-else
     class="sk-node"
-    :class="[data.kind, { selected: data.selected, drop: data.drop, core: data.role === 'core' }]"
-    :title="`${data.name}（${data.id}）`"
+    :class="[data.kind, { selected: data.selected, drop: data.drop, core: data.role === 'core', shelf: data.shelf }]"
+    :title="`${data.name}（${data.id}）${data.shelf ? '\n共用件：收在本层框底部的共用件架（SK-22）' : ''}`"
   >
     <Handle id="t" type="target" :position="Position.Top" class="sk-center" :connectable="true" />
     <Handle id="c" type="source" :position="Position.Bottom" class="sk-center" :connectable="false" />
@@ -155,6 +155,19 @@ const scaled = computed(() => {
   border: 1px dashed var(--border);
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface-2) 35%, transparent);
+}
+
+.sk-frame.shelf {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-2) 50%, transparent);
+}
+
+.sk-frame.shelf .frame-label {
+  top: 50%;
+  left: 6px;
+  transform: translateY(-50%);
+  background: transparent;
 }
 
 .sk-frame.drop {
@@ -397,7 +410,32 @@ const scaled = computed(() => {
 }
 
 .sk-node.core {
+  border-width: 2px;
   border-color: var(--accent);
+}
+
+.sk-node.core .name {
+  font-size: 14px;
+}
+
+/* SK-22：共用件架上的紧凑块——只显示名称 */
+.sk-node.shelf {
+  padding: 2px 8px;
+  justify-content: center;
+  background: var(--surface-2);
+  border-width: 1px;
+  border-color: var(--border);
+  border-radius: 6px;
+}
+
+.sk-node.shelf .id,
+.sk-node.shelf .deeper {
+  display: none;
+}
+
+.sk-node.shelf .name {
+  font-size: 12px;
+  color: var(--text-2);
 }
 
 .sk-node.selected {

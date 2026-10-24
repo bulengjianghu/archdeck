@@ -5,7 +5,7 @@
  * 对内的原则只读（属挂在它身上的下一层草图）；对外接口增删；「进入下一层 →」、合并（多选时）/ 拆分 / 删除经画布的对话框。
  */
 import { computed, ref, watch } from 'vue'
-import type { ModuleDef } from '@/model'
+import type { ModuleDef, ModuleRole } from '@/model'
 import { useDesk } from '@/state/inject'
 import { CHANGE_BADGES } from '../labels'
 import { requestSketch } from '../actions'
@@ -102,7 +102,14 @@ function commitAdrs() {
   if (now.join(',') !== (m.value.adrs ?? []).join(',')) report(e.updateModule(m.value.id, { adrs: now.length ? now : undefined }))
 }
 const closed = computed(() => !!e.sketch.value?.closed?.includes(m.value.id))
-const setCore = (v: boolean) => report(e.updateModule(m.value.id, { role: v ? 'core' : undefined }))
+/** SK-22（ADR-0027）：角色属对外的一面，写在本张草图；「普通」即不写 */
+const ROLE_OPTIONS: { value: '' | ModuleRole; label: string }[] = [
+  { value: '', label: '普通' },
+  { value: 'core', label: '核心' },
+  { value: 'shared', label: '共用件' },
+  { value: 'bus', label: '事件总线（共用件）' },
+]
+const setRole = (v: string) => report(e.updateModule(m.value.id, { role: (v || undefined) as ModuleRole | undefined }))
 const setClosed = (v: boolean) => report(e.edit({ op: 'setClosed', id: m.value.id, closed: v }))
 
 // ── 血缘与原则 ──
@@ -147,7 +154,10 @@ const blur = (ev: KeyboardEvent) => (ev.target as HTMLElement).blur()
     </label>
     <div class="f checks">
       <label
-        ><input type="checkbox" name="module-core" :checked="m.role === 'core'" @change="setCore(($event.target as HTMLInputElement).checked)" /> 核心</label
+        >角色
+        <select name="module-role" :value="m.role ?? ''" @change="setRole(($event.target as HTMLSelectElement).value)">
+          <option v-for="o in ROLE_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select></label
       >
       <label
         ><input type="checkbox" name="module-closed" :checked="closed" @change="setClosed(($event.target as HTMLInputElement).checked)" /> 封闭

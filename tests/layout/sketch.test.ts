@@ -22,6 +22,8 @@ import {
   SKETCH_PARALLEL_GAP,
   SKETCH_NODE,
   SKETCH_REF,
+  SKETCH_CORE,
+  SKETCH_SHELF,
   type SketchScene,
 } from '../../src/layout/sketch'
 import type { SketchDef } from '../../src/model'
@@ -370,5 +372,50 @@ describe('X22 引用按规则排布的边界', () => {
       expect(canvasArea(undefined)).toEqual({ w: SKETCH_CANVAS.w, h: SKETCH_CANVAS.h })
       expect(canvasArea({ w: 0, h: 500 })).toEqual({ w: SKETCH_CANVAS.w, h: SKETCH_CANVAS.h })
     })
+  })
+})
+
+describe('SK-22 草图画布的角色（ADR-0027）', () => {
+  const many: SketchDef = {
+    id: 'd',
+    mount: 'core.a',
+    modules: [
+      { id: 'core.a.x', name: 'X', role: 'core' },
+      ...Array.from({ length: 7 }, (_, i) => ({ id: `core.a.n${i}`, name: `N${i}` })),
+      { id: 'core.a.labels', name: 'Labels', role: 'shared' },
+      { id: 'core.a.bus', name: 'Bus', role: 'bus' },
+    ],
+  }
+
+  it('核心画成大块；共用件（shared / bus）画成中心区底部一行的架（浅框标「共用件」），位置由规则算；本层模块数只数非共用件', () => {
+    const s = sketchScene({ def: many, nameOf: () => undefined })
+    expect(node(s, 'core.a.x').data).toMatchObject({ role: 'core', w: SKETCH_CORE.w, h: SKETCH_CORE.h })
+    const shelf = ['core.a.labels', 'core.a.bus'].map(id => node(s, id))
+    expect(shelf.map(n => [n.data.shelf, n.data.w])).toEqual([
+      [true, SKETCH_SHELF.w],
+      [true, SKETCH_SHELF.w],
+    ])
+    expect(shelf[0].position.y).toBe(shelf[1].position.y)
+    expect(shelf[0].position.y + SKETCH_SHELF.h).toBeLessThanOrEqual(s.center!.y + s.center!.h)
+    const others = shown(s).filter(n => n.data.kind === 'module' && !n.data.shelf)
+    expect(Math.max(...others.map(n => n.position.y + n.data.h))).toBeLessThan(shelf[0].position.y)
+    expect(s.nodes.find(n => n.id === 'frame:shelf')!.data).toMatchObject({ frame: 'shelf', name: '共用件' })
+    expect(s.count).toBe(8)
+  })
+
+  it('根草图：共用件排在所属层带底部的架，带随之加高；带内计数（X13 超七）只数非共用件', () => {
+    const def: SketchDef = {
+      id: 'skeleton',
+      mount: 'root',
+      modules: [{ id: 'l', name: 'L', kind: 'layer', order: 1, children: [...many.modules!.map(m => ({ ...m, id: m.id.replace('core.a', 'l') }))] }],
+    }
+    const s = sketchScene({ def, nameOf: () => undefined })
+    const band = s.bands[0]
+    const labels = node(s, 'l.labels')
+    expect(labels.position.y + SKETCH_SHELF.h).toBeLessThanOrEqual(band.y + band.h)
+    expect(labels.position.y).toBeGreaterThan(node(s, 'l.n6').position.y)
+    expect(node(s, 'l').data).toMatchObject({ count: 8, over: true })
+    const seven = { ...def, modules: [{ ...def.modules![0], children: def.modules![0].children!.filter(m => m.id !== 'l.n0') }] }
+    expect(node(sketchScene({ def: seven, nameOf: () => undefined }), 'l').data.over).toBeUndefined()
   })
 })
