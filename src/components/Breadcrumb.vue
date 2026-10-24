@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 顶部的层次面包屑（N 系列）：「项目 / 系统 / … / 当前层次」。草图画布下不列层次——草图的唯一一条面包屑在信息条身份区（#15），
+ * 这里只留回项目列表的入口。
+ */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
@@ -6,7 +10,7 @@ import { moduleName } from '@/model'
 const desk = useDesk()
 const crumbs = computed(() => {
   const idx = desk.index.value
-  if (!idx) return []
+  if (!idx || desk.edit.active.value) return []
   return desk.levelPath.value.map(id => ({ id, name: moduleName(idx, id) }))
 })
 </script>
@@ -14,7 +18,7 @@ const crumbs = computed(() => {
 <template>
   <nav class="crumbs" aria-label="当前层次">
     <RouterLink class="crumb home" to="/" title="返回项目列表">项目</RouterLink>
-    <span class="sep">/</span>
+    <span v-if="crumbs.length" class="sep">/</span>
     <template v-for="(c, i) in crumbs" :key="c.id">
       <span v-if="i > 0" class="sep">/</span>
       <button v-if="i < crumbs.length - 1" class="crumb" @click="desk.goTo(c.id, { kind: 'module', id: crumbs[i + 1].id })">{{ c.name }}</button>
