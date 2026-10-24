@@ -74,62 +74,62 @@ modules:
 
 relations:
   # 呈现层内部
-  - { id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: calls }
-  - { id: rel.p2.seq-lanes, from: present.sequence.interact, to: present.sequence.lanes, type: calls }
-  - { id: rel.p2.seq-fragments, from: present.sequence.interact, to: present.sequence.fragments, type: calls }
-  - { id: rel.p2.panel-scenario, from: present.panel.dispatch, to: present.panel.scenario, type: calls }
-  - { id: rel.p2.panel-step, from: present.panel.dispatch, to: present.panel.step, type: calls }
-  - { id: rel.p2.step-content, from: present.panel.step, to: present.panel.content, type: calls, description: 接口与数据结构折叠项复用一期内容组件 }
-  - { id: rel.p2.scenario-content, from: present.panel.scenario, to: present.panel.content, type: calls }
+  - { id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: commands, description: 项目视图让回放控制条接手处理 }
+  - { id: rel.p2.seq-lanes, from: present.sequence.interact, to: present.sequence.lanes, type: commands, description: 时序图交互让泳道与消息接手处理 }
+  - { id: rel.p2.seq-fragments, from: present.sequence.interact, to: present.sequence.fragments, type: commands, description: 时序图交互让组合框接手处理 }
+  - { id: rel.p2.panel-scenario, from: present.panel.dispatch, to: present.panel.scenario, type: commands, description: 面板分派让场景面板接手处理 }
+  - { id: rel.p2.panel-step, from: present.panel.dispatch, to: present.panel.step, type: commands, description: 面板分派让步骤面板接手处理 }
+  - { id: rel.p2.step-content, from: present.panel.step, to: present.panel.content, type: commands, description: 步骤面板交给内容组件：接口与数据结构折叠项复用一期内容组件 }
+  - { id: rel.p2.scenario-content, from: present.panel.scenario, to: present.panel.content, type: commands, description: 场景面板让内容组件接手处理 }
 
   # 呈现 → 视图状态
   - id: rel.p2.list-read
     from: present.scenarios
     to: state.desk.loading
-    type: calls
+    type: queries
     payload: [ds.ModelIndex]
-    description: 用索引的 scenariosOf(当前层次) 筛出相关场景
-  - { id: rel.p2.list-open, from: present.scenarios, to: state.desk.playback, type: calls, interface: if.desk.playback, description: openScenario(id) }
-  - { id: rel.p2.player-act, from: present.player, to: state.desk.playback, type: calls, interface: if.desk.playback, description: prev / next / play / pause / stepTo / setSpeed }
-  - { id: rel.p2.seq-read, from: present.sequence.interact, to: state.desk.projection, type: calls, payload: [ds.PositionedSequence, ds.PlaybackState], description: 读取定位好的时序图与当前帧 }
-  - { id: rel.p2.seq-act, from: present.sequence.interact, to: state.desk.playback, type: calls, interface: if.desk.playback, description: 单击消息 → stepTo(frameId)，同时选中该步骤 }
-  - { id: rel.p2.seq-hover, from: present.sequence.interact, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 悬停消息 → setHover(对应视图边的端点) }
-  - { id: rel.p2.flow-step, from: present.canvas.flow, to: state.desk.playback, type: calls, interface: if.desk.playback, description: 回放中单击带序号的边 → 跳到该步 }
-  - { id: rel.p2.step-read, from: present.panel.step, to: state.desk.projection, type: calls, payload: [ds.Frame, ds.ScenarioLevelView] }
-  - { id: rel.p2.step-act, from: present.panel.step, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 端点点击 → revealModule；关系点击 → revealRelation }
-  - { id: rel.p2.scenario-act, from: present.panel.scenario, to: state.desk.playback, type: calls, interface: if.desk.playback, description: 步骤目录点击 → stepTo；ref 点击 → openScenario }
+    description: 场景列表向加载与重新加载取：用索引的 scenariosOf(当前层次) 筛出相关场景
+  - { id: rel.p2.list-open, from: present.scenarios, to: state.desk.playback, type: commands, interface: if.desk.playback, description: 场景列表交给回放：openScenario(id) }
+  - { id: rel.p2.player-act, from: present.player, to: state.desk.playback, type: commands, interface: if.desk.playback, description: 回放控制条交给回放：prev / next / play / pause / stepTo / setSpeed }
+  - { id: rel.p2.seq-read, from: present.sequence.interact, to: state.desk.projection, type: queries, payload: [ds.PositionedSequence, ds.PlaybackState], description: 时序图交互向视图派生取：读取定位好的时序图与当前帧 }
+  - { id: rel.p2.seq-act, from: present.sequence.interact, to: state.desk.playback, type: commands, interface: if.desk.playback, description: 时序图交互交给回放：单击消息 → stepTo(frameId)，同时选中该步骤 }
+  - { id: rel.p2.seq-hover, from: present.sequence.interact, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 时序图交互交给操作：悬停消息 → setHover(对应视图边的端点) }
+  - { id: rel.p2.flow-step, from: present.canvas.flow, to: state.desk.playback, type: commands, interface: if.desk.playback, description: 视图转换与交互交给回放：回放中单击带序号的边 → 跳到该步 }
+  - { id: rel.p2.step-read, from: present.panel.step, to: state.desk.projection, type: queries, payload: [ds.Frame, ds.ScenarioLevelView], description: 步骤面板向视图派生取结果 }
+  - { id: rel.p2.step-act, from: present.panel.step, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 步骤面板交给操作：端点点击 → revealModule；关系点击 → revealRelation }
+  - { id: rel.p2.scenario-act, from: present.panel.scenario, to: state.desk.playback, type: commands, interface: if.desk.playback, description: 场景面板交给回放：步骤目录点击 → stepTo；ref 点击 → openScenario }
 
   # 视图状态内部与 → 模型
-  - { id: rel.p2.playback-url, from: state.desk.playback, to: state.desk.url-sync, type: calls, description: 场景与步骤写进 sc / step }
-  - { id: rel.p2.url-playback, from: state.desk.url-sync, to: state.desk.playback, type: calls, description: 后退 / 分享链接回写场景与步骤 }
-  - { id: rel.p2.playback-actions, from: state.desk.playback, to: state.desk.actions, type: calls, description: 打开场景时若当前层次无关则 goTo(默认层次)；跳到某帧时选中该步骤 }
+  - { id: rel.p2.playback-url, from: state.desk.playback, to: state.desk.url-sync, type: commands, description: 回放交给 URL 同步：场景与步骤写进 sc / step }
+  - { id: rel.p2.url-playback, from: state.desk.url-sync, to: state.desk.playback, type: commands, description: URL 同步交给回放：后退 / 分享链接回写场景与步骤 }
+  - { id: rel.p2.playback-actions, from: state.desk.playback, to: state.desk.actions, type: commands, description: 回放交给操作：打开场景时若当前层次无关则 goTo(默认层次)；跳到某帧时选中该步骤 }
   - id: rel.p2.playback-flatten
     from: state.desk.playback
     to: model.scenario.flatten
-    type: calls
+    type: queries
     interface: if.model.flattenScenario
     payload: [ds.Frame]
-    description: 打开场景时展开一次得到帧序列，与层次无关
+    description: 回放向场景展开取：打开场景时展开一次得到帧序列，与层次无关
   - id: rel.p2.projection-level
     from: state.desk.projection
     to: model.scenario.level
-    type: calls
+    type: queries
     interface: if.model.projectScenario
     payload: [ds.LevelView, ds.Frame, ds.ScenarioLevelView]
-    description: 层次视图或场景变化时重新投影帧
+    description: 视图派生向帧的层次投影取：层次视图或场景变化时重新投影帧
   - id: rel.p2.projection-seqlayout
     from: state.desk.projection
     to: state.layout.sequence
-    type: calls
+    type: queries
     interface: if.layout.layoutSequence
     payload: [ds.SequenceModel, ds.PositionedSequence]
-    description: 同步计算；参与者左右顺序参考结构图布局
-  - { id: rel.p2.seqlayout-types, from: state.layout.sequence, to: model.types, type: calls, payload: [ds.SequenceModel] }
+    description: 视图派生向时序图排布取：同步计算；参与者左右顺序参考结构图布局
+  - { id: rel.p2.seqlayout-types, from: state.layout.sequence, to: model.types, type: queries, payload: [ds.SequenceModel], description: 时序图排布向类型与 Schema 取结果 }
 
   # 模型层内部
-  - { id: rel.p2.level-endpoints, from: model.scenario.level, to: model.projector.endpoints, type: calls, interface: if.model.mapEndpoint, description: 与结构投影共用同一套端点规则 }
+  - { id: rel.p2.level-endpoints, from: model.scenario.level, to: model.projector.endpoints, type: queries, interface: if.model.mapEndpoint, description: 帧的层次投影向端点映射取：与结构投影共用同一套端点规则 }
   - { id: rel.p2.level-sequence, from: model.scenario.level, to: model.scenario.sequence, type: streams, payload: [ds.ScenarioLevelView], description: 本层的帧投影交给时序模型 }
-  - { id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: calls, payload: [ds.ScenarioEntity, ds.Frame, ds.ScenarioLevelView, ds.SequenceModel] }
+  - { id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: queries, payload: [ds.ScenarioEntity, ds.Frame, ds.ScenarioLevelView, ds.SequenceModel], description: 场景投影向类型与 Schema 取结果 }
 
 interfaces:
   - id: if.model.flattenScenario

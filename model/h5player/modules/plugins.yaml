@@ -427,628 +427,597 @@ relations:
   - id: rel.plugins.mse-live-strategies
     from: app.plugins.buffer-strategy.mse-live
     to: app.strategies
-    type: calls
-    description: MSE 直播缓冲策略继承 PluginBasePlayStrategy，并调用 mseChasingDecision 做追帧判定
+    type: queries
+    description: MSE 直播水位策略向运行时驾驶策略取：MSE 直播缓冲策略继承 PluginBasePlayStrategy，并调用 mseChasingDecision 做追帧判定
   - id: rel.plugins.mse-live-math
     from: app.plugins.buffer-strategy.mse-live
     to: app.plugins.buffer-strategy.water-level-math
-    type: calls
+    type: queries
     mode: sync
     interface: if.plugins.buffer.resolveMseChasingSeekMs
-    description: 追帧偏移换算成渲染 Seek 绝对毫秒
+    description: MSE 直播水位策略向 MSE 水位与追帧换算取：追帧偏移换算成渲染 Seek 绝对毫秒
   - id: rel.plugins.mse-live-mus
     from: app.plugins.buffer-strategy.mse-live
     to: infra.mus
-    type: calls
-    description: MSE 直播缓冲策略调用 decideBufferGapTarget / decidePlayedDataRemoveEnd 判缓冲空洞与回收范围
+    type: queries
+    description: MSE 直播水位策略向 MUs 媒体单元取：MSE 直播缓冲策略调用 decideBufferGapTarget / decidePlayedDataRemoveEnd 判缓冲空洞与回收范围
   - id: rel.plugins.mse-live-index
     from: app.plugins.buffer-strategy.mse-live
     to: infra.player-index
-    type: calls
-    description: 经 modelAccess.requireMseModel 取 MSE 播放模型
+    type: queries
+    description: MSE 直播水位策略向 PlayerIndex 取：经 modelAccess.requireMseModel 取 MSE 播放模型
   - id: rel.plugins.mse-live-events
     from: infra.framework
     to: app.plugins.buffer-strategy.mse-live
     type: notifies
-    mode: async
     description: 通知 BufferChange / PlayerStatusChange（插件订阅），驱动起冲停冲、追帧与回收
   - id: rel.plugins.mse-live-commands
     from: app.plugins.buffer-strategy.mse-live
     to: infra.framework
-    type: calls
+    type: commands
     mode: async
-    description: 发 FillBuffer / StopFillBuffer 命令与渲染 Seek、SourceBuffer 清理动作
+    description: MSE 直播水位策略交给 Framework 机制内核：发 FillBuffer / StopFillBuffer 命令与渲染 Seek、SourceBuffer 清理动作
   - id: rel.plugins.fhls-live-strategies
     from: app.plugins.buffer-strategy.fhls-live
     to: app.strategies
-    type: calls
-    description: Fhls 直播缓冲策略继承 PluginBasePlayStrategy，经 super 调用基类的 init、命令 Hook 与销毁
+    type: commands
+    description: Fhls 连续呈现水位策略交给运行时驾驶策略：Fhls 直播缓冲策略继承 PluginBasePlayStrategy，经 super 调用基类的 init、命令 Hook 与销毁
   - id: rel.plugins.fhls-live-index
     from: app.plugins.buffer-strategy.fhls-live
     to: infra.player-index
-    type: calls
-    description: 经 modelAccess.requireFhlsModel 读渲染轴零点等 Fhls 播放模型
+    type: queries
+    description: Fhls 连续呈现水位策略向 PlayerIndex 取：经 modelAccess.requireFhlsModel 读渲染轴零点等 Fhls 播放模型
   - id: rel.plugins.fhls-live-domain
     from: app.plugins.buffer-strategy.fhls-live
     to: domain.services
-    type: calls
+    type: queries
     mode: sync
-    description: 看门狗判据 judgeNotRendering / judgeProgressStalled / judgeConsumeGap（fhlsPresentationHealth）
+    description: Fhls 连续呈现水位策略向决策服务取：看门狗判据 judgeNotRendering / judgeProgressStalled / judgeConsumeGap（fhlsPresentationHealth）
   - id: rel.plugins.fhls-live-events
     from: infra.framework
     to: app.plugins.buffer-strategy.fhls-live
     type: notifies
-    mode: async
     description: 通知 BufferChange / FhlsSegmentConsumed / PlayerStatusChange（插件订阅）
   - id: rel.plugins.fhls-live-commands
     from: app.plugins.buffer-strategy.fhls-live
     to: infra.framework
-    type: calls
+    type: commands
     mode: async
-    description: SendBuffer 命令与动作、看门狗判出时 handleError
+    description: Fhls 连续呈现水位策略交给 Framework 机制内核：SendBuffer 命令与动作、看门狗判出时 handleError
   - id: rel.plugins.live-adaptive-domain
     from: app.plugins.buffer-strategy.live-adaptive
     to: domain.services
-    type: calls
+    type: queries
     mode: sync
     payload: [ds.BufferThresholds]
-    description: 创建并喂入 SelfAdaptive / SupplyAware / CadenceSwitch 控制器与积压检测器，取回阈值结论
+    description: 直播自适应阈值向决策服务取：创建并喂入 SelfAdaptive / SupplyAware / CadenceSwitch 控制器与积压检测器，取回阈值结论
   - id: rel.plugins.live-adaptive-events
     from: infra.framework
     to: app.plugins.buffer-strategy.live-adaptive
     type: notifies
-    mode: async
     description: 通知 bufferSize 观测与 PlayerStatusChange（插件订阅）
   - id: rel.plugins.live-adaptive-events-publish
     from: app.plugins.buffer-strategy.live-adaptive
     to: infra.framework
     type: notifies
-    mode: async
     description: 上报 BufferThresholdChange 等 Track
   - id: rel.plugins.live-adaptive-settings
     from: app.plugins.buffer-strategy.live-adaptive
     to: infra.framework
-    type: calls
+    type: commands
     mode: sync
     payload: [ds.BufferThresholds]
-    description: 经 context.settings 写回缓冲四阈值与 latencyDropAllowed，卸载时还原
+    description: 直播自适应阈值交给 Framework 机制内核：经 context.settings 写回缓冲四阈值与 latencyDropAllowed，卸载时还原
   - id: rel.plugins.vod-adaptive-domain
     from: app.plugins.buffer-strategy.vod-adaptive
     to: domain.services
-    type: calls
+    type: queries
     mode: sync
-    description: vodAdaptiveBufferPolicy：EWMA 更新、T_load 预测、deriveVodBufferThresholds
+    description: 点播自适应阈值向决策服务取：vodAdaptiveBufferPolicy：EWMA 更新、T_load 预测、deriveVodBufferThresholds
   - id: rel.plugins.vod-adaptive-models
     from: app.plugins.buffer-strategy.vod-adaptive
     to: domain.models
-    type: calls
-    description: assertHlsStreamModel 断言 HLS 流模型以查分片时长
+    type: queries
+    description: 点播自适应阈值向领域模型取：assertHlsStreamModel 断言 HLS 流模型以查分片时长
   - id: rel.plugins.vod-adaptive-fw
     from: infra.framework
     to: app.plugins.buffer-strategy.vod-adaptive
     type: notifies
-    mode: async
     description: 通知分片 LoadStart / DataArrived / Loaded（插件订阅）；插件另挂 SetPlaybackRate / Seek 命令钩子、经 settings 写回阈值
   - id: rel.plugins.water-level-mus
     from: app.plugins.buffer-strategy.water-level-math
     to: infra.mus
-    type: calls
-    description: resolveMseChasingSeekMs 调用 decideChasingFrameTarget 求追帧目标
+    type: queries
+    description: MSE 水位与追帧换算向 MUs 媒体单元取：resolveMseChasingSeekMs 调用 decideChasingFrameTarget 求追帧目标
 
   # ── app.plugins · 网络 ──
   - id: rel.plugins.monitor-events
     from: infra.framework
     to: app.plugins.network.monitor
     type: notifies
-    mode: async
     description: 通知 StreamDataArrived / StreamFragmentLoaded / PlayerStatusChange / Error（插件订阅）
   - id: rel.plugins.monitor-events-publish
     from: app.plugins.network.monitor
     to: infra.framework
     type: notifies
-    mode: async
     description: 发布 NetworkStatusChange
   - id: rel.plugins.monitor-commands
     from: app.plugins.network.monitor
     to: infra.framework
-    type: calls
+    type: commands
     mode: async
-    description: 点播缓冲耗尽时发 Pause{origin:network}
+    description: 网络状态监测交给 Framework 机制内核：点播缓冲耗尽时发 Pause{origin:network}
   - id: rel.plugins.monitor-index
     from: app.plugins.network.monitor
     to: infra.player-index
-    type: calls
-    description: 经 modelAccess 读缓冲为空 / 帧缓冲 / 就绪度模型（点播）
+    type: queries
+    description: 网络状态监测向 PlayerIndex 取：经 modelAccess 读缓冲为空 / 帧缓冲 / 就绪度模型（点播）
   - id: rel.plugins.reconnect-events
     from: infra.framework
     to: app.plugins.network.reconnect
     type: notifies
-    mode: async
     description: 通知 Error / StreamDataArrived / FirstFrame / UserAction / PlayerStatusChange / VisibilityChange / NetworkStatusChange（插件订阅）
   - id: rel.plugins.reconnect-events-publish
     from: app.plugins.network.reconnect
     to: infra.framework
     type: notifies
-    mode: async
     description: 发布 ReconnectStateChange
   - id: rel.plugins.reconnect-commands
     from: app.plugins.network.reconnect
     to: infra.framework
-    type: calls
+    type: commands
     mode: async
-    description: 执行判定效果：Stop / Play 命令、终态错误上报
+    description: 直播重连交给 Framework 机制内核：执行判定效果：Stop / Play 命令、终态错误上报
   - id: rel.plugins.reconnect-support
     from: app.plugins.network.reconnect
     to: app.plugins.support
-    type: calls
+    type: queries
     mode: sync
     interface: if.plugins.support.statusScopedIntervalTask
-    description: 断流计时周期任务绑定播放会话状态
+    description: 直播重连向插件公共支撑取：断流计时周期任务绑定播放会话状态
 
   # ── app.plugins · 运行守护 ──
   - id: rel.plugins.render-watch-index
     from: app.plugins.runtime-guard.render-watch
     to: infra.player-index
-    type: calls
-    description: 经 modelAccess.requireVideoErrorModel 读 video 异常记录
+    type: queries
+    description: 出画停滞守护向 PlayerIndex 取：经 modelAccess.requireVideoErrorModel 读 video 异常记录
   - id: rel.plugins.render-watch-fw
     from: infra.framework
     to: app.plugins.runtime-guard.render-watch
     type: notifies
-    mode: async
     description: 通知 PlayerStatusChange / VideoRendered（插件订阅）；超限时插件发 Stop + Play 重启
   - id: rel.plugins.render-watch-support
     from: app.plugins.runtime-guard.render-watch
     to: app.plugins.support
-    type: calls
+    type: queries
+    description: 出画停滞守护向插件公共支撑取：has、createStatusScopedIntervalTask
     mode: sync
     interface: if.plugins.support.statusScopedIntervalTask
   - id: rel.plugins.video-quality-fw
     from: infra.framework
     to: app.plugins.runtime-guard.video-quality
     type: notifies
-    mode: async
     description: 通知 VideoInfoChange（插件订阅）；判出损坏时插件 handleError
   - id: rel.plugins.system-load-models
     from: app.plugins.runtime-guard.system-load
     to: domain.models
-    type: calls
+    type: commands
     mode: sync
     payload: [ds.StatisticCollectorView]
-    description: 把负载档位与平均定时器间隔写入统计模型
+    description: 系统负载采样交给领域模型：把负载档位与平均定时器间隔写入统计模型
   - id: rel.plugins.system-load-index
     from: app.plugins.runtime-guard.system-load
     to: infra.player-index
-    type: calls
-    description: 经 modelAccess.requireFrameModel 取帧间隔
+    type: queries
+    description: 系统负载采样向 PlayerIndex 取：经 modelAccess.requireFrameModel 取帧间隔
   - id: rel.plugins.system-load-support
     from: app.plugins.runtime-guard.system-load
     to: app.plugins.support
-    type: calls
+    type: queries
+    description: 系统负载采样向插件公共支撑取：createStatusScopedIntervalTask
     mode: sync
     interface: if.plugins.support.statusScopedIntervalTask
   - id: rel.plugins.system-load-fw
     from: infra.framework
     to: app.plugins.runtime-guard.system-load
     type: notifies
-    mode: async
     description: 通知 PlayerStatusChange（插件订阅），启停采样
 
   # ── app.plugins · 错误处理 ──
   - id: rel.plugins.recovery-fw
     from: app.plugins.error.recovery
     to: infra.framework
-    type: calls
+    type: commands
     mode: sync
-    description: registerErrorHandler 挂全局错误链；发 Stop{Recovery} / Play{Recovery} / Pause 命令
+    description: 错误恢复交给 Framework 机制内核：registerErrorHandler 挂全局错误链；发 Stop{Recovery} / Play{Recovery} / Pause 命令
   - id: rel.plugins.recovery-events
     from: infra.framework
     to: app.plugins.error.recovery
     type: notifies
-    mode: async
     description: 通知 UserAction / PlayerStatusChange / FirstFrame / VideoRendered / StreamDataArrived（插件订阅，出画观察窗）
   - id: rel.plugins.recovery-index
     from: app.plugins.error.recovery
     to: infra.player-index
-    type: calls
-    description: 经 modelAccess 读播放位置与倍速
+    type: queries
+    description: 错误恢复向 PlayerIndex 取：经 modelAccess 读播放位置与倍速
   - id: rel.plugins.recovery-models
     from: app.plugins.error.recovery
     to: domain.models
-    type: calls
+    type: commands
     mode: sync
     payload: [ds.StatisticCollectorView]
-    description: 重启 / 重启失败 / 播放失败计数写入统计模型
+    description: 错误恢复交给领域模型：重启 / 重启失败 / 播放失败计数写入统计模型
   - id: rel.plugins.global-capture-fw
     from: app.plugins.error.global-capture
     to: infra.framework
-    type: calls
+    type: commands
     mode: sync
-    description: 经插件基类记 Error 级日志
+    description: 全局异常兜底交给 Framework 机制内核：经插件基类记 Error 级日志
 
   # ── app.plugins · 统计 ──
   - id: rel.plugins.statistic-samplers
     from: app.plugins.stats.statistic
     to: app.plugins.stats.samplers
-    type: calls
+    type: commands
     mode: sync
     interface: if.plugins.stats.recordSampler
-    description: 码率 / 帧率 / 标准差等周期采样
+    description: 播放统计采集交给统计采样器：码率 / 帧率 / 标准差等周期采样
   - id: rel.plugins.statistic-models
     from: app.plugins.stats.statistic
     to: domain.models
-    type: calls
+    type: commands
     mode: sync
     payload: [ds.StatisticCollectorView]
-    description: 采集结果写入统计模型（码率、延迟、卡顿、字节 / 请求数等）
+    description: 播放统计采集交给领域模型：采集结果写入统计模型（码率、延迟、卡顿、字节 / 请求数等）
   - id: rel.plugins.statistic-index
     from: app.plugins.stats.statistic
     to: infra.player-index
-    type: calls
-    description: 经 modelAccess.requireAvRenderPtsModel 读音画渲染 pts
+    type: queries
+    description: 播放统计采集向 PlayerIndex 取：经 modelAccess.requireAvRenderPtsModel 读音画渲染 pts
   - id: rel.plugins.statistic-events
     from: infra.framework
     to: app.plugins.stats.statistic
     type: notifies
-    mode: async
     description: 通知 PlayerStatusChange / StreamDataArrived / DemuxedDataArrived / 分片事件 / Seek 事件（插件订阅）
   - id: rel.plugins.statistic-events-publish
     from: app.plugins.stats.statistic
     to: infra.framework
     type: notifies
-    mode: async
     description: 发布 NetworkSpeedChange
   - id: rel.plugins.samplers-fw
     from: app.plugins.stats.samplers
     to: infra.framework
-    type: calls
-    description: 采样插件调用 sharedIntervalTimer 共享定时、Time 取时间、average / variance / standardDeviation 做统计
+    type: queries
+    description: 统计采样器向 Framework 机制内核取：采样插件调用 sharedIntervalTimer 共享定时、Time 取时间、average / variance / standardDeviation 做统计
   - id: rel.plugins.milestones-events
     from: infra.framework
     to: app.plugins.stats.milestones
     type: notifies
-    mode: async
     description: 通知 StreamConnected / StreamDataArrived / DemuxedDataArrived / VideoRendered（插件订阅）
   - id: rel.plugins.milestones-events-publish
     from: app.plugins.stats.milestones
     to: infra.framework
     type: notifies
-    mode: async
     description: 发布 FirstLoad / FirstData / FirstFrame
   - id: rel.plugins.tracker-events
     from: infra.framework
     to: app.plugins.stats.tracker
     type: notifies
-    mode: async
     description: 通知 UserAction / 起播里程碑 / Error / PlayerStatusChange / Track / Log 等（插件订阅）；插件另挂命令审计钩子
   - id: rel.plugins.tracker-models
     from: app.plugins.stats.tracker
     to: domain.models
-    type: calls
+    type: queries
     mode: sync
     payload: [ds.StatisticCollectorView]
-    description: 周期读取统计与流模型生成 gauge
+    description: 会话埋点上报向领域模型取：周期读取统计与流模型生成 gauge
   - id: rel.plugins.time-calibrator-fw
     from: app.plugins.stats.time-calibrator
     to: infra.framework
-    type: calls
+    type: commands
     mode: async
-    description: 把服务器墙钟估计与单调钟锚点写入 framework Time（getServerNow）
+    description: 时间校准交给 Framework 机制内核：把服务器墙钟估计与单调钟锚点写入 framework Time（getServerNow）
 
   # ── app.plugins · 设备 / 调试 / 支撑 ──
   - id: rel.plugins.visibility-events
     from: app.plugins.device.visibility
     to: infra.framework
     type: notifies
-    mode: async
     description: 发布 VisibilityChange；处理器订阅它并发 Pause / Resume 命令
   - id: rel.plugins.no-sleep-events
     from: infra.framework
     to: app.plugins.device.no-sleep
     type: notifies
-    mode: async
     description: 通知 PlayerStatusChange / SolutionChange / PlayModeChange / VisibilityChange（插件订阅）
   - id: rel.plugins.logger-events
     from: infra.framework
     to: app.plugins.diagnostics.logger
     type: notifies
-    mode: async
     description: 通知 Log 事件（插件订阅）
   - id: rel.plugins.debug-samplers
     from: app.plugins.diagnostics.debug
     to: app.plugins.stats.samplers
-    type: calls
+    type: queries
     mode: sync
     interface: if.plugins.stats.recordSampler
-    description: 帧缓冲快照用 SumRecord 统计
+    description: 调试快照与上报向统计采样器取：帧缓冲快照用 SumRecord 统计
   - id: rel.plugins.debug-index
     from: app.plugins.diagnostics.debug
     to: infra.player-index
-    type: calls
-    description: 经 modelAccess 读帧缓冲与渲染时间线模型
+    type: queries
+    description: 调试快照与上报向 PlayerIndex 取：经 modelAccess 读帧缓冲与渲染时间线模型
   - id: rel.plugins.debug-fw
     from: infra.framework
     to: app.plugins.diagnostics.debug
     type: notifies
-    mode: async
     description: 通知 BufferChange / Log（插件订阅）；插件另开启 framework performance 耗时采集
   - id: rel.plugins.player-info-events
     from: infra.framework
     to: app.plugins.diagnostics.player-info
     type: notifies
-    mode: async
     description: 通知方案、播放模式、起播里程碑、网速、时长等事件（插件订阅），刷新浮层
   - id: rel.plugins.support-fw
     from: app.plugins.support
     to: infra.framework
-    type: calls
-    description: 支撑件调用 sharedIntervalTimer 共享定时与 Time 取时间，基类经 player 本地 pluginBase 继承 PluginBase
+    type: queries
+    description: 插件公共支撑向 Framework 机制内核取：支撑件调用 sharedIntervalTimer 共享定时与 Time 取时间，基类经 player 本地 pluginBase 继承 PluginBase
   - id: rel.plugins.support-index
     from: app.plugins.support
     to: infra.player-index
-    type: calls
-    description: 旧帧策略基类 PluginStrategyBase 经 modelAccess.requireFrameModel 读帧模型（无引用方）
+    type: queries
+    description: 插件公共支撑向 PlayerIndex 取：旧帧策略基类 PluginStrategyBase 经 modelAccess.requireFrameModel 读帧模型（无引用方）
 
   # ── app.timeshift ──
   - id: rel.timeshift.shell-coordinator
     from: app.timeshift.shell
     to: app.timeshift.coordinator
-    type: calls
+    type: commands
     mode: sync
     interface: if.timeshift.coordinator.lifecycle
     payload: [ds.TimeShiftCoordinatorDeps]
-    description: apply 时 new TimeShiftCoordinator(deps).start()，destroy 时 dispose()
+    description: 协调器插件外壳交给时移会话协调器：apply 时 new TimeShiftCoordinator(deps).start()，destroy 时 dispose()
   - id: rel.timeshift.shell-driver
     from: app.timeshift.shell
     to: app.timeshift.recording-driver
-    type: calls
+    type: commands
     mode: sync
     interface: if.timeshift.recording-driver.driver
-    description: createDriver 工厂产出真实 RecordingLegDriver
+    description: 协调器插件外壳交给回看腿待命驱动：createDriver 工厂产出真实 RecordingLegDriver
   - id: rel.timeshift.shell-bg-resume
     from: app.timeshift.shell
     to: app.timeshift.background-resume
-    type: calls
+    type: commands
     mode: sync
-    description: 组合持有切后台续播；用户 Resume / 出画 / 分片入缓存时驱动它
+    description: 协调器插件外壳交给 Fhls 切后台续播：组合持有切后台续播；用户 Resume / 出画 / 分片入缓存时驱动它
   - id: rel.timeshift.shell-fw
     from: app.timeshift.shell
     to: infra.framework
-    type: calls
+    type: commands
     mode: async
-    description: 继承 PluginBase；addPreCommandHook、registerErrorHandler / handleError、emit、sendCommand、读 context（data / config / streamModel / playModel）
+    description: 协调器插件外壳交给 Framework 机制内核：继承 PluginBase；addPreCommandHook、registerErrorHandler / handleError、emit、sendCommand、读 context（data / config / streamModel / playModel）
   - id: rel.timeshift.shell-solution
     from: app.timeshift.shell
     to: app.solution
-    type: calls
+    type: commands
     mode: async
     interface: if.timeshift.coordinator.legPort
-    description: 现取 getSolution().legs 作腿端口薄代理；按运行时形状窄读 SolutionLegs.records 取腿内总线与流模型；probeInfo 建 / 撤探测腿
+    description: 协调器插件外壳交给 Solution：现取 getSolution().legs 作腿端口薄代理；按运行时形状窄读 SolutionLegs.records 取腿内总线与流模型；probeInfo 建 / 撤探测腿
   - id: rel.timeshift.shell-strategies
     from: app.timeshift.shell
     to: app.strategies
-    type: calls
-    description: 协调器外壳的 probeInfo 调用 loadSegmentAt、handleFragmentLoaded / handleHlsDiscontinuity 等 HLS 分片辅助与 playlistTargetDurationMs、vodLoadFailureBackoffMs
+    type: commands
+    description: 协调器插件外壳交给运行时驾驶策略：协调器外壳的 probeInfo 调用 loadSegmentAt、handleFragmentLoaded / handleHlsDiscontinuity 等 HLS 分片辅助与 playlistTargetDurationMs、vodLoadFailureBackoffMs
   - id: rel.timeshift.shell-domain
     from: app.timeshift.shell
     to: domain.services
-    type: calls
+    type: queries
     mode: sync
-    description: explicitProgramDateTimeMs / recordEndWallFromPdt 求录制末端墙钟
+    description: 协调器插件外壳向决策服务取：explicitProgramDateTimeMs / recordEndWallFromPdt 求录制末端墙钟
   - id: rel.timeshift.shell-models
     from: app.timeshift.shell
     to: domain.models
-    type: calls
+    type: commands
     mode: sync
     payload: [ds.StatisticCollectorView]
-    description: 非活动腿字节计量 countMediaBytes 写入统计模型
+    description: 协调器插件外壳交给领域模型：非活动腿字节计量 countMediaBytes 写入统计模型
   - id: rel.timeshift.shell-mus
     from: app.timeshift.shell
     to: infra.mus
-    type: calls
+    type: commands
     mode: async
-    description: 经播放段 dispatch Fhls 渲染动作（ProbePresentation / SnapshotCover / ReinstallPresentation / Seek）与探测腿 LoadStreamInfo
+    description: 协调器插件外壳交给 MUs 媒体单元：经播放段 dispatch Fhls 渲染动作（ProbePresentation / SnapshotCover / ReinstallPresentation / Seek）与探测腿 LoadStreamInfo
   - id: rel.timeshift.coord-domain
     from: app.timeshift.coordinator
     to: domain.services
-    type: calls
+    type: queries
     mode: sync
-    description: shouldArm / decideLeg / resolveAnchor / toLiveAxis / trackKeyFrame / segmentIndexForLivePts 等时移判定纯函数
+    description: 时移会话协调器向决策服务取：shouldArm / decideLeg / resolveAnchor / toLiveAxis / trackKeyFrame / segmentIndexForLivePts 等时移判定纯函数
   - id: rel.timeshift.coord-solution
     from: app.timeshift.coordinator
     to: app.solution
-    type: calls
-    via: inject
+    type: commands
+    via: 'channel:inject'
     mode: async
     interface: if.timeshift.coordinator.legPort
-    description: createLeg / holdLeg / releaseLeg / switchLeg / ensureLiveLeg / revertLiveLeg / withdrawLeg 等换腿事务
+    description: 时移会话协调器交给 Solution：createLeg / holdLeg / releaseLeg / switchLeg / ensureLiveLeg / revertLiveLeg / withdrawLeg 等换腿事务
   - id: rel.timeshift.coord-events
     from: infra.framework
     to: app.timeshift.coordinator
     type: notifies
-    mode: async
     description: 通知 PlayerStatusChange / BufferChange / VideoRendered / FirstData / PlayerDataChange / VideoDurationChange / StreamFragmentLoaded / SeekStart / SeekEnd（协调者订阅）
   - id: rel.timeshift.coord-events-publish
     from: app.timeshift.coordinator
     to: infra.framework
     type: notifies
-    mode: async
     description: 发布 TimeShiftHandoffDone / TimeShiftStarted / TimeShiftSupplyIssue / TimeShiftFailed
   - id: rel.timeshift.events-api
     from: app.timeshift.coordinator
     to: infra.player-index.player-api
     type: notifies
-    mode: async
     description: TimeShiftHandoffDone / TimeShiftStarted / TimeShiftFailed 经外壳注入的 emit 发布、经事件总线送达 Player 对外 API（订阅后转发业务方）
-    via: bus
+    via: 'bus:infra.framework.kernel.event-bus'
   - id: rel.timeshift.seek-switch-events-api
     from: app.timeshift.seek-switch
     to: infra.player-index.player-api
     type: notifies
-    mode: async
     description: 拖进度换腿提交时发布 TimeShiftHandoffDone、提交前失败时发布 TimeShiftFailed（stage 为 seek-switch），经事件总线送达 Player 对外 API
-    via: bus
+    via: 'bus:infra.framework.kernel.event-bus'
   - id: rel.timeshift.render-video-rendered
     from: infra.mus.render
     to: app.timeshift.coordinator
     type: notifies
-    mode: async
     description: 渲染单元出画即发布 VideoRendered，经事件总线送达时移会话协调器（判首个 pts ≥ 接点 / 落点的录像帧出画）
-    via: bus
+    via: 'bus:infra.framework.kernel.event-bus'
   - id: rel.timeshift.seek-end
     from: app.strategies.play-base
     to: app.timeshift.coordinator
     type: notifies
-    mode: async
     description: video 定位完成发布 SeekEnd，经事件总线送达时移会话协调器（拖进度换腿后的点播定位；Fhls 不等）
-    via: bus
+    via: 'bus:infra.framework.kernel.event-bus'
   - id: rel.timeshift.coord-ledger
     from: app.timeshift.coordinator
     to: app.timeshift.frame-ledger
-    type: calls
+    type: commands
     mode: sync
     payload: [ds.RawFrame]
-    description: 喂入直播 / 录制帧批次，读接点与录制快照；截流放流记账
+    description: 时移会话协调器交给接点与帧队列记账：喂入直播 / 录制帧批次，读接点与录制快照；截流放流记账
   - id: rel.timeshift.coord-driver
     from: app.timeshift.coordinator
     to: app.timeshift.recording-driver
-    type: calls
+    type: commands
     mode: sync
     interface: if.timeshift.recording-driver.driver
     payload: [ds.RecordingAnchorSnapshot]
-    description: start / poke / dispose，提供接点快照取值器；读 recordEnded / anchorRolledOut
+    description: 时移会话协调器交给回看腿待命驱动：start / poke / dispose，提供接点快照取值器；读 recordEnded / anchorRolledOut
   - id: rel.timeshift.coord-grace
     from: app.timeshift.coordinator
     to: app.timeshift.grace
-    type: calls
+    type: commands
     mode: sync
-    description: 换腿提交后进入灰度区，转发出画 / 暂停 / 拉片结果 / 错误
+    description: 时移会话协调器交给灰度区控制：换腿提交后进入灰度区，转发出画 / 暂停 / 拉片结果 / 错误
   - id: rel.timeshift.coord-recovery
     from: app.timeshift.coordinator
     to: app.timeshift.live-recovery
-    type: calls
+    type: commands
     mode: async
-    description: 上屏后 tick 喂停滞监视；回直播 / 灰度回退 / 落点超时触发恢复流程
+    description: 时移会话协调器交给上屏后监视与回直播：上屏后 tick 喂停滞监视；回直播 / 灰度回退 / 落点超时触发恢复流程
   - id: rel.timeshift.coord-seek
     from: app.timeshift.coordinator
     to: app.timeshift.seek-switch
-    type: calls
+    type: commands
     mode: async
-    description: 直播态 seek 交拖进度换腿事务；用户暂停 / 续播 / 回直播 / stop 转发撤销
+    description: 时移会话协调器交给拖进度换腿：直播态 seek 交拖进度换腿事务；用户暂停 / 续播 / 回直播 / stop 转发撤销
   - id: rel.timeshift.coord-source
     from: app.timeshift.coordinator
     to: app.timeshift.source-wiring
-    type: calls
+    type: commands
     mode: sync
     payload: [ds.TimeShiftProbeResult]
-    description: 预解析、清单概况记账与补发、续播不可用、位置换算
+    description: 时移会话协调器交给时移源接线：预解析、清单概况记账与补发、续播不可用、位置换算
   - id: rel.timeshift.grace-domain
     from: app.timeshift.grace
     to: domain.services
-    type: calls
+    type: queries
     mode: sync
-    description: decideGrace
+    description: 灰度区控制向决策服务取：decideGrace
   - id: rel.timeshift.recovery-domain
     from: app.timeshift.live-recovery
     to: domain.services
-    type: calls
+    type: queries
     mode: sync
-    description: starvationEvent / isStarved
+    description: 上屏后监视与回直播向决策服务取：starvationEvent / isStarved
   - id: rel.timeshift.recovery-solution
     from: app.timeshift.live-recovery
     to: app.solution
-    type: calls
-    via: inject
+    type: commands
+    via: 'channel:inject'
     mode: async
     interface: if.timeshift.coordinator.legPort
-    description: 经协调器注入的腿端口：ensureLiveLeg 新建直播腿、revertLiveLeg 换回、失败或撤销时 withdrawLeg('primary')
+    description: 上屏后监视与回直播交给 Solution：经协调器注入的腿端口：ensureLiveLeg 新建直播腿、revertLiveLeg 换回、失败或撤销时 withdrawLeg('primary')
   - id: rel.timeshift.recovery-mus
     from: app.timeshift.live-recovery
     to: infra.mus
-    type: calls
+    type: commands
     mode: async
-    description: 经新直播腿句柄定向 dispatch LoadData / Stop 给 HttpLoader
+    description: 上屏后监视与回直播交给 MUs 媒体单元：经新直播腿句柄定向 dispatch LoadData / Stop 给 HttpLoader
   - id: rel.timeshift.seek-domain
     from: app.timeshift.seek-switch
     to: domain.services
-    type: calls
+    type: queries
     mode: sync
-    description: shouldSeekSwitch / resolveSeekSwitchTarget / seekSwitchReady / seekSwitchUnfreezeGate
+    description: 拖进度换腿向决策服务取：shouldSeekSwitch / resolveSeekSwitchTarget / seekSwitchReady / seekSwitchUnfreezeGate
   - id: rel.timeshift.seek-fw
     from: app.timeshift.seek-switch
     to: infra.framework
-    type: calls
+    type: commands
     mode: async
-    description: 发内部 Pause{origin:'seek-switch'} / Seek{source:'Internal'} / Resume 命令
+    description: 拖进度换腿交给 Framework 机制内核：发内部 Pause{origin:'seek-switch'} / Seek{source:'Internal'} / Resume 命令
   - id: rel.timeshift.seek-solution
     from: app.timeshift.seek-switch
     to: app.solution
-    type: calls
-    via: inject
+    type: commands
+    via: 'channel:inject'
     mode: async
     interface: if.timeshift.coordinator.legPort
-    description: 经协调器注入的腿端口：holdLeg('primary') 冻结、createLeg 建录制腿、seekSwitchLeg 换边、提交后 withdrawLeg('primary')；提交前失败撤录制腿、releaseLeg 放直播阀
+    description: 拖进度换腿交给 Solution：经协调器注入的腿端口：holdLeg('primary') 冻结、createLeg 建录制腿、seekSwitchLeg 换边、提交后 withdrawLeg('primary')；提交前失败撤录制腿、releaseLeg 放直播阀
   - id: rel.timeshift.seek-driver
     from: app.timeshift.seek-switch
     to: app.timeshift.recording-driver
-    type: calls
+    type: commands
     interface: if.timeshift.recording-driver.driver
-    description: 经 createDriver 建录制腿驱动并 start，快照带 positionMs 时按清单轴毫秒直接取片
+    description: 拖进度换腿交给回看腿待命驱动：经 createDriver 建录制腿驱动并 start，快照带 positionMs 时按清单轴毫秒直接取片
   - id: rel.timeshift.bg-domain
     from: app.timeshift.background-resume
     to: domain.services
-    type: calls
+    type: queries
     mode: sync
-    description: decideBackgroundResume / resumeProgressStalled / shouldRetryReinstall
+    description: Fhls 切后台续播向决策服务取：decideBackgroundResume / resumeProgressStalled / shouldRetryReinstall
   - id: rel.timeshift.source-domain
     from: app.timeshift.source-wiring
     to: domain.services
-    type: calls
+    type: queries
     mode: sync
-    description: buildTimeShiftInfoPayload / recordEndOnLiveAxis / shouldRaiseResumeUnavailable
+    description: 时移源接线向决策服务取：buildTimeShiftInfoPayload / recordEndOnLiveAxis / shouldRaiseResumeUnavailable
   - id: rel.timeshift.source-fw
     from: infra.framework
     to: app.timeshift.source-wiring
     type: notifies
-    mode: async
     description: 通知 PlayerDataChange（timeShiftUrl，接线订阅）
   - id: rel.timeshift.source-fw-publish
     from: app.timeshift.source-wiring
     to: infra.framework
     type: notifies
-    mode: async
     description: 发布时移口径 VideoDurationChange 与 Error{TimeShiftResumeUnavailable}
   - id: rel.timeshift.driver-strategies
     from: app.timeshift.recording-driver
     to: app.strategies
-    type: calls
+    type: commands
     mode: sync
-    description: 复用 hlsSegmentChores（loadSegmentAt / handleFragmentLoaded / handleHlsDiscontinuity）、HlsPlaylistRefreshScheduler、vodLoadFailureBackoffMs
+    description: 回看腿待命驱动交给运行时驾驶策略：复用 hlsSegmentChores（loadSegmentAt / handleFragmentLoaded / handleHlsDiscontinuity）、HlsPlaylistRefreshScheduler、vodLoadFailureBackoffMs
   - id: rel.timeshift.driver-domain
     from: app.timeshift.recording-driver
     to: domain.services
-    type: calls
+    type: queries
     mode: sync
-    description: decidePrefetch / resolveLegPlaybackBuffer / segmentIndexForLivePts / stepPtsLocate / playlistOriginPts
+    description: 回看腿待命驱动向决策服务取：decidePrefetch / resolveLegPlaybackBuffer / segmentIndexForLivePts / stepPtsLocate / playlistOriginPts
   - id: rel.timeshift.driver-mus
     from: app.timeshift.recording-driver
     to: infra.mus
-    type: calls
+    type: commands
     mode: async
-    description: 经腿句柄 dispatch LoadStreamInfo / UpdatePlaylist / DropAllBuffer 给 HlsHttpLoader、TsDemuxer、DemuxedBuffer；订阅腿内总线的 BufferChange / 分片事件
+    description: 回看腿待命驱动交给 MUs 媒体单元：经腿句柄 dispatch LoadStreamInfo / UpdatePlaylist / DropAllBuffer 给 HlsHttpLoader、TsDemuxer、DemuxedBuffer；订阅腿内总线的 BufferChange / 分片事件
   - id: rel.timeshift.ledger-domain
     from: app.timeshift.frame-ledger
     to: domain.services
-    type: calls
+    type: queries
     mode: sync
-    description: countsAsUncoveredTry；resolveAnchor / trackKeyFrame 以注入方式使用
+    description: 接点与帧队列记账向决策服务取：countsAsUncoveredTry；resolveAnchor / trackKeyFrame 以注入方式使用
 
   # ── 补充的交互（ADR-0026：有值使用的模块依赖按交互补全，K7）──
-  - { id: rel.plugins.buffer-plugin-base, from: app.plugins.buffer-strategy.live-adaptive, to: infra.player-index.public-surface, type: implements, description: 自适应缓冲插件继承 SDK 转出的 PluginBase }
-  - { id: rel.timeshift.shell-plugin-base, from: app.timeshift.shell, to: infra.player-index.public-surface, type: implements, description: 时移外壳插件继承 SDK 转出的 PluginBase }
-  - { id: rel.timeshift.seek-coordinator-helpers, from: app.timeshift.seek-switch, to: app.timeshift.coordinator, type: calls, description: 调用 describeError / segmentIndexForCut 辅助函数 }
-  - { id: rel.plugins.errors, from: app.plugins, to: share.errors, type: calls, description: 缓冲、错误恢复、重连与运行守护插件以 new ErrorBase / errorWrapper 构造带 ErrorCode 的错误再上报 }
-  - { id: rel.timeshift.errors, from: app.timeshift, to: share.errors, type: calls, description: 时移协调器、外壳与源接线把换腿与录制失败包装为 ErrorBase（errorWrapper）上报或作为结果返回 }
+  - { id: rel.timeshift.seek-coordinator-helpers, from: app.timeshift.seek-switch, to: app.timeshift.coordinator, type: queries, description: 拖进度换腿向时移会话协调器取：调用 describeError / segmentIndexForCut 辅助函数 }
+  - { id: rel.plugins.errors, from: app.plugins, to: share.errors, type: queries, description: 横向用例插件向错误原语取：缓冲、错误恢复、重连与运行守护插件以 new ErrorBase / errorWrapper 构造带 ErrorCode 的错误再上报 }
+  - { id: rel.timeshift.errors, from: app.timeshift, to: share.errors, type: queries, description: 时移向错误原语取：协调器、外壳与源接线把换腿与录制失败包装为 ErrorBase（errorWrapper）上报或作为结果返回 }
 
 interfaces:
   # ── app.plugins ──

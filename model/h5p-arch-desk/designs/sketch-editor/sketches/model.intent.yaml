@@ -25,17 +25,17 @@ sketch:
     - id: rel.se.desk-edit
       from: state.desk.edit
       to: model.intent.edit
-      type: calls
+      type: queries
       description: 应用一个编辑操作得到新草图
     - id: rel.se.desk-validate
       from: state.desk.edit
       to: model.intent.validate
-      type: calls
+      type: queries
       description: 每次操作后与保存前校验
     - id: rel.se.validate-check
       from: model.intent.validate
       to: model.intent.check
-      type: calls
+      type: queries
       description: 矛盾检查只有一份，校验复用核验的
   interfaces:
     - id: if.intent.applyEdit

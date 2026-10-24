@@ -369,44 +369,44 @@ relations:
   # ── Domain.models ──
   - { id: rel.sd.ps-publish, from: domain.models.playback-state, to: domain.ports, type: notifies, interface: if.ports.DomainEventPublisher, payload: ds.DomainEvent, description: 叠加进出（OverlayEntered / OverlayExited）同步发布领域事件 }
   - { id: rel.sd.stat-publish, from: domain.models.statistic, to: domain.ports, type: notifies, interface: if.ports.DomainEventPublisher, payload: ds.DomainEvent, description: startNewSlice 发布 StatisticSliceStarted }
-  - { id: rel.sd.ps-base, from: domain.models.playback-state, to: domain.models.base, type: calls, description: 播放状态模型继承 ModelBase，违例时抛 InvariantError }
-  - { id: rel.sd.stat-base, from: domain.models.statistic, to: domain.models.base, type: calls, description: 统计模型继承 ModelBase，违例时抛 InvariantError }
-  - { id: rel.sd.stream-base, from: domain.models.stream, to: domain.models.base, type: calls, description: 三种流模型继承 ModelBase，违例时抛 InvariantError }
-  - { id: rel.sd.play-base, from: domain.models.play, to: domain.models.base, type: calls, description: 播放模型继承 ModelBase，违例时抛 InvariantError }
-  - { id: rel.sd.comp-base, from: domain.models.components, to: domain.models.base, type: calls, description: 帧台账与渲染时间轴继承 ModelBase，违例时抛 InvariantError }
-  - { id: rel.sd.ps-impl, from: domain.models.playback-state, to: domain.types.model-types, type: implements, payload: ds.PlaybackStateMachineView, description: PlaybackState 实现状态机档能力面 }
-  - { id: rel.sd.stat-impl, from: domain.models.statistic, to: domain.types.model-types, type: implements, payload: ds.StatisticOwnerView, description: Statistic 结构上满足持有档能力面（ModelViewMap.statistic） }
-  - { id: rel.sd.ps-status-map, from: domain.models.playback-state, to: domain.rules.status-mapping, type: calls, interface: if.rules.status-mapping.mappingPlayerStatus, description: addMu 时按基态推 MU 状态 }
-  - { id: rel.sd.stream-comp, from: domain.models.stream, to: domain.models.components, type: calls, payload: ds.StreamFactsCore, description: 流模型把公共流事实委托给 StreamFactsCore }
-  - { id: rel.sd.stream-hls-policy, from: domain.models.stream, to: domain.services.hls-live, type: calls, interface: if.services.hls-live.getHlsLiveBufferPolicy, description: HlsModel 按清单分片时长与目标延迟推直播缓冲策略 }
-  - { id: rel.sd.stream-utils, from: domain.models.stream, to: share.utils, type: calls, interface: if.utils.lastOf, description: 取清单 / 样本末项 }
-  - { id: rel.sd.play-comp, from: domain.models.play, to: domain.models.components, type: calls, description: 播放模型 new 出 FrameBufferLedger / RenderTimeline / VideoPlaybackSnapshot 并委托给它们 }
-  - { id: rel.sd.play-fhls-clock, from: domain.models.play, to: domain.services.fhls-presentation, type: calls, interface: if.services.fhls-presentation.presentationClock, payload: ds.PresentationClockFacts, description: FhlsModel 的呈现时钟分代与媒体原点换算 }
-  - { id: rel.sd.comp-utils, from: domain.models.components, to: share.utils, type: calls, interface: if.utils.lastOf, description: StreamFactsCore 取末帧 }
+  - { id: rel.sd.ps-base, from: domain.models.playback-state, to: domain.models.base, type: commands, description: PlaybackState 播放状态聚合交给聚合基类：播放状态模型继承 ModelBase，违例时抛 InvariantError }
+  - { id: rel.sd.stat-base, from: domain.models.statistic, to: domain.models.base, type: commands, description: Statistic 统计聚合交给聚合基类：统计模型继承 ModelBase，违例时抛 InvariantError }
+  - { id: rel.sd.stream-base, from: domain.models.stream, to: domain.models.base, type: commands, description: 流模型交给聚合基类：三种流模型继承 ModelBase，违例时抛 InvariantError }
+  - { id: rel.sd.play-base, from: domain.models.play, to: domain.models.base, type: commands, description: 播放模型交给聚合基类：继承 ModelBase，违例时抛 InvariantError }
+  - { id: rel.sd.comp-base, from: domain.models.components, to: domain.models.base, type: commands, description: 模型组件交给聚合基类：帧台账与渲染时间轴继承 ModelBase，违例时抛 InvariantError }
+  - { id: rel.sd.ps-status-map, from: domain.models.playback-state, to: domain.rules.status-mapping, type: queries, interface: if.rules.status-mapping.mappingPlayerStatus, description: PlaybackState 播放状态聚合向状态映射规则取：addMu 时按基态推 MU 状态 }
+  - { id: rel.sd.stream-comp, from: domain.models.stream, to: domain.models.components, type: commands, payload: ds.StreamFactsCore, description: 流模型交给模型组件：把公共流事实委托给 StreamFactsCore }
+  - { id: rel.sd.stream-hls-policy, from: domain.models.stream, to: domain.services.hls-live, type: queries, interface: if.services.hls-live.getHlsLiveBufferPolicy, description: 流模型向 HLS 直播与清单节律取：HlsModel 按清单分片时长与目标延迟推直播缓冲策略 }
+  - { id: rel.sd.stream-utils, from: domain.models.stream, to: share.utils, type: queries, interface: if.utils.lastOf, description: 流模型向通用原语取：取清单 / 样本末项 }
+  - { id: rel.sd.play-comp, from: domain.models.play, to: domain.models.components, type: commands, description: 播放模型交给模型组件：new 出 FrameBufferLedger / RenderTimeline / VideoPlaybackSnapshot 并委托给它们 }
+  - { id: rel.sd.play-fhls-clock, from: domain.models.play, to: domain.services.fhls-presentation, type: queries, interface: if.services.fhls-presentation.presentationClock, payload: ds.PresentationClockFacts, description: 播放模型向 Fhls 呈现规则取：FhlsModel 的呈现时钟分代与媒体原点换算 }
+  - { id: rel.sd.comp-utils, from: domain.models.components, to: share.utils, type: queries, interface: if.utils.lastOf, description: 模型组件向通用原语取：StreamFactsCore 取末帧 }
 
   # ── Domain.services ──
-  - { id: rel.sd.sel-errors, from: domain.services.solution-select, to: share.errors, type: calls, description: 冲突 / 不支持时构造 ErrorBase(ConfigError / UnsupportedError) }
-  - { id: rel.sd.sel-result, from: domain.services.solution-select, to: share.contracts, type: calls, interface: if.contracts.Result, payload: ds.Result, description: 选型与裁决调用 ok / err 构造 Result 返回 }
-  - { id: rel.sd.ts-baseline, from: domain.services.timeshift, to: domain.services.buffer-baseline, type: calls, interface: if.services.buffer-baseline.resolvePlaybackBuffer, description: 交接余量与录制停更阈值取点播档基线 }
+  - { id: rel.sd.sel-errors, from: domain.services.solution-select, to: share.errors, type: queries, description: 方案选型与流事实裁决向错误原语取：冲突 / 不支持时构造 ErrorBase(ConfigError / UnsupportedError) }
+  - { id: rel.sd.sel-result, from: domain.services.solution-select, to: share.contracts, type: queries, interface: if.contracts.Result, payload: ds.Result, description: 方案选型与流事实裁决向跨层契约取：选型与裁决调用 ok / err 构造 Result 返回 }
+  - { id: rel.sd.ts-baseline, from: domain.services.timeshift, to: domain.services.buffer-baseline, type: queries, interface: if.services.buffer-baseline.resolvePlaybackBuffer, description: 时移换腿决策向基线缓冲阈值取：交接余量与录制停更阈值取点播档基线 }
 
   # ── Domain.algorithms ──
-  - { id: rel.sd.codec-errors, from: domain.algorithms.codec-syntax, to: share.errors, type: calls, description: 位读取越界抛 ErrorBase }
-  - { id: rel.sd.container-errors, from: domain.algorithms.container, to: share.errors, type: calls, description: AMF 数据非法抛 ErrorBase(DemuxFormatError) }
+  - { id: rel.sd.codec-errors, from: domain.algorithms.codec-syntax, to: share.errors, type: queries, description: H.264 位流语法向错误原语取：位读取越界抛 ErrorBase }
+  - { id: rel.sd.container-errors, from: domain.algorithms.container, to: share.errors, type: queries, description: 容器元数据解析向错误原语取：AMF 数据非法抛 ErrorBase(DemuxFormatError) }
 
   # ── Domain.rules ──
-  - { id: rel.sd.pr-result, from: domain.rules.pipeline-rules, to: share.contracts, type: calls, interface: if.contracts.Result, payload: ds.Result, description: validateDiff 调用 ok / err 返回目标拓扑或 TopologyError 列表 }
+  - { id: rel.sd.pr-result, from: domain.rules.pipeline-rules, to: share.contracts, type: queries, interface: if.contracts.Result, payload: ds.Result, description: Pipeline 图规则向跨层契约取：validateDiff 调用 ok / err 返回目标拓扑或 TopologyError 列表 }
 
 interfaces:
   # ── 能力面契约（implements 的目标，M11、K5；字段见同名数据结构） ──
   - id: if.domain.types.PlaybackStateMachineView
     name: PlaybackStateMachineView
     owner: domain.types.model-types
+    implementedBy: [domain.models.playback-state]
     signature: |
       interface PlaybackStateMachineView extends PlaybackStateCollectorView { /* 状态机档：迁移与快照 */ }
     description: PlaybackState 的状态机档能力面，PlaybackState 类 implements 它。字段见 ds.PlaybackStateMachineView。
   - id: if.domain.types.StatisticOwnerView
     name: StatisticOwnerView
     owner: domain.types.model-types
+    implementedBy: [domain.models.statistic]
     signature: |
       interface StatisticOwnerView extends StatisticCollectorView { /* 持有档：切片与重置 */ }
     description: Statistic 的持有档能力面（ModelViewMap.statistic），Statistic 结构性满足。字段见 ds.StatisticOwnerView。
@@ -414,6 +414,7 @@ interfaces:
   - id: if.contracts.IPlugin
     name: IPlugin 插件契约
     owner: share.contracts
+    implementedBy: [infra.framework.plugin]
     signature: |
       interface IPlugin<TApi> {
         readonly name: string;
@@ -475,6 +476,7 @@ interfaces:
   - id: if.ports.IModelRegistry
     name: IModelRegistry 模型注册表端口
     owner: domain.ports
+    implementedBy: [infra.framework.model-registry.registry]
     signature: |
       interface IModelRegistry {
         getView<K extends ModelKind>(kind: K): ModelViewMap[K];

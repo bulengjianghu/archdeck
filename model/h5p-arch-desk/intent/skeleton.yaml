@@ -284,75 +284,75 @@ sketch:
           entry: src/model/intent/index.ts
           docRefs: [ docs/architecture/governance.md, docs/adr/0023-sketch-reviewed-and-evolution.md ]
   relations:
-    - { id: rel.ad.shell-list, from: present.shell, to: present.project-list, type: calls }
-    - { id: rel.ad.shell-desk, from: present.shell, to: present.desk-view, type: calls }
-    - { id: rel.ad.desk-nav, from: present.desk-view, to: present.nav, type: calls }
-    - { id: rel.ad.desk-issues, from: present.nav-tree, to: present.issues, type: calls }
-    - { id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: calls }
-    - { id: rel.ad.version-shell, from: present.version, to: present.shell, type: calls }
-    - { id: rel.ad.list-fetch, from: present.project-list, to: access.model-source, type: calls }
+    - { id: rel.ad.shell-list, from: present.shell, to: present.project-list, type: commands }
+    - { id: rel.ad.shell-desk, from: present.shell, to: present.desk-view, type: commands }
+    - { id: rel.ad.desk-nav, from: present.desk-view, to: present.nav, type: commands }
+    - { id: rel.ad.desk-issues, from: present.nav-tree, to: present.issues, type: commands }
+    - { id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: commands }
+    - { id: rel.ad.version-shell, from: present.version, to: present.shell, type: commands }
+    - { id: rel.ad.list-fetch, from: present.project-list, to: access.model-source, type: queries }
     - { id: rel.ad.list-changed, from: access.model-source, to: present.project-list, type: notifies }
-    - { id: rel.ad.desk-fetch, from: present.desk-view, to: access.model-source, type: calls }
+    - { id: rel.ad.desk-fetch, from: present.desk-view, to: access.model-source, type: queries }
     - { id: rel.ad.desk-changed, from: access.model-source, to: present.desk-view, type: notifies }
-    - { id: rel.ad.list-types, from: present.project-list, to: model.types, type: calls }
-    - { id: rel.ad.source-reader, from: access.model-source, to: access.reader, type: calls }
-    - { id: rel.ad.lint-reader, from: access.lint, to: access.reader, type: calls }
-    - { id: rel.ad.reader-types, from: access.reader, to: model.types, type: calls }
-    - { id: rel.ad.diff-index, from: model.diff, to: model.types, type: calls }
-    - { id: rel.ad.present-names, from: present, to: model.types, type: calls }
-    - { id: rel.ad.version-labels, from: present.version, to: present.shared, type: calls }
-    - { id: rel.ad.navtree-tab, from: present.nav-tree, to: present.shared, type: calls }
-    - { id: rel.ad.desk-labels, from: state.desk, to: model.types, type: calls }
-    - { id: rel.gv.source-deps, from: access.model-source, to: access.deps, type: calls }
-    - { id: rel.gv.source-store, from: access.model-source, to: access.governance-store, type: calls }
-    - { id: rel.gv.deps-exports, from: access.deps, to: access.source, type: calls }
-    - { id: rel.gv.agent-deps, from: access.agent, to: access.deps, type: calls }
-    - { id: rel.gv.agent-store, from: access.agent, to: access.governance-store, type: calls }
-    - { id: rel.gv.agent-reader, from: access.agent, to: access.reader, type: calls }
-    - { id: rel.gv.agent-source, from: access.agent, to: access.source, type: calls }
-    - { id: rel.gv.agent-model, from: access.agent, to: model.governance, type: calls }
-    - { id: rel.gv.lint-deps, from: access.lint, to: access.deps, type: calls }
-    - { id: rel.gv.lint-store, from: access.lint, to: access.governance-store, type: calls }
-    - { id: rel.gv.lint-model, from: access.lint, to: model.governance, type: calls }
-    - { id: rel.gv.model-source, from: model.governance, to: model.source, type: calls }
-    - { id: rel.gv.model-types, from: model.governance, to: model.types, type: calls }
-    - { id: rel.gv.pipeline-rules, from: model.pipeline, to: model.types, type: calls }
-    - { id: rel.gv.agent-pipeline, from: access.agent, to: model.pipeline, type: calls }
-    - { id: rel.gv.agent-types, from: access.agent, to: model.types, type: calls }
-    - { id: rel.gv.source-health, from: access.model-source, to: model.rework, type: calls }
-    - { id: rel.gv.desk-rework, from: state.desk, to: model.rework, type: calls }
-    - { id: rel.gv.agent-rework, from: access.agent, to: model.rework, type: calls }
-    - { id: rel.gv.rework-source, from: model.rework, to: model.source, type: calls }
-    - { id: rel.gv.rework-scenario, from: model.rework, to: model.scenario, type: calls }
-    - { id: rel.gv.rework-types, from: model.rework, to: model.types, type: calls }
-    - { id: rel.gv.store-reader, from: access.governance-store, to: access.reader, type: calls }
-    - { id: rel.gv.evolution-types, from: model.evolution, to: model.types, type: calls }
-    - { id: rel.gv.review-types, from: model.review, to: model.types, type: calls }
-    - { id: rel.gv.rework-review, from: model.rework, to: model.review, type: calls }
-    - { id: rel.gv.rework-evolution, from: model.rework, to: model.evolution, type: calls }
-    - { id: rel.gv.agent-history, from: access.agent, to: access.history, type: calls }
-    - { id: rel.gv.agent-evolution, from: access.agent, to: model.evolution, type: calls }
-    - { id: rel.gv.lint-review, from: access.lint, to: model.review, type: calls }
-    - { id: rel.gv.store-types, from: access.governance-store, to: model.types, type: calls }
-    - { id: rel.gv.history-reader, from: access.history, to: access.reader, type: calls }
-    - { id: rel.gv.history-evolution, from: access.history, to: model.evolution, type: calls }
-    - { id: rel.gv.source-history, from: access.model-source, to: access.history, type: calls }
-    - { id: rel.gv.source-review, from: access.model-source, to: model.review, type: calls }
-    - { id: rel.gv.reader-diff, from: access.reader, to: model.diff, type: calls }
-    - { id: rel.p6.desk-nav-tree, from: present.desk-view, to: present.nav-tree, type: calls }
-    - { id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: calls }
-    - { id: rel.p3.desk-perspective, from: present.desk-view, to: present.perspective, type: calls }
-    - { id: rel.p8.desk-stage, from: present.desk-view, to: present.canvas, type: calls }
-    - { id: rel.p3.perspective-opens, from: present.perspective, to: present.scenarios, type: calls }
-    - { id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: calls }
-    - { id: rel.p7.source-content, from: present.source, to: present.shared, type: calls, mode: async }
-    - { id: rel.p7.desk-source-fetch, from: present.desk-view, to: access.model-source, type: calls }
-    - { id: rel.p7.plugin-source, from: access.model-source, to: access.source, type: calls }
-    - { id: rel.p7.lint-source, from: access.lint, to: access.source, type: calls }
-    - { id: rel.p7.source-types, from: access.source, to: model.types, type: calls }
-    - { id: rel.p7.source-reader, from: access.source, to: access.reader, type: calls }
+    - { id: rel.ad.list-types, from: present.project-list, to: model.types, type: queries }
+    - { id: rel.ad.source-reader, from: access.model-source, to: access.reader, type: queries }
+    - { id: rel.ad.lint-reader, from: access.lint, to: access.reader, type: queries }
+    - { id: rel.ad.reader-types, from: access.reader, to: model.types, type: queries }
+    - { id: rel.ad.diff-index, from: model.diff, to: model.types, type: queries }
+    - { id: rel.ad.present-names, from: present, to: model.types, type: queries }
+    - { id: rel.ad.version-labels, from: present.version, to: present.shared, type: queries }
+    - { id: rel.ad.navtree-tab, from: present.nav-tree, to: present.shared, type: queries }
+    - { id: rel.ad.desk-labels, from: state.desk, to: model.types, type: queries }
+    - { id: rel.gv.source-deps, from: access.model-source, to: access.deps, type: queries }
+    - { id: rel.gv.source-store, from: access.model-source, to: access.governance-store, type: queries }
+    - { id: rel.gv.deps-exports, from: access.deps, to: access.source, type: queries }
+    - { id: rel.gv.agent-deps, from: access.agent, to: access.deps, type: queries }
+    - { id: rel.gv.agent-store, from: access.agent, to: access.governance-store, type: commands }
+    - { id: rel.gv.agent-reader, from: access.agent, to: access.reader, type: queries }
+    - { id: rel.gv.agent-source, from: access.agent, to: access.source, type: queries }
+    - { id: rel.gv.agent-model, from: access.agent, to: model.governance, type: queries }
+    - { id: rel.gv.lint-deps, from: access.lint, to: access.deps, type: queries }
+    - { id: rel.gv.lint-store, from: access.lint, to: access.governance-store, type: queries }
+    - { id: rel.gv.lint-model, from: access.lint, to: model.governance, type: queries }
+    - { id: rel.gv.model-source, from: model.governance, to: model.source, type: queries }
+    - { id: rel.gv.model-types, from: model.governance, to: model.types, type: queries }
+    - { id: rel.gv.pipeline-rules, from: model.pipeline, to: model.types, type: queries }
+    - { id: rel.gv.agent-pipeline, from: access.agent, to: model.pipeline, type: queries }
+    - { id: rel.gv.agent-types, from: access.agent, to: model.types, type: queries }
+    - { id: rel.gv.source-health, from: access.model-source, to: model.rework, type: queries }
+    - { id: rel.gv.desk-rework, from: state.desk, to: model.rework, type: queries }
+    - { id: rel.gv.agent-rework, from: access.agent, to: model.rework, type: queries }
+    - { id: rel.gv.rework-source, from: model.rework, to: model.source, type: queries }
+    - { id: rel.gv.rework-scenario, from: model.rework, to: model.scenario, type: queries }
+    - { id: rel.gv.rework-types, from: model.rework, to: model.types, type: queries }
+    - { id: rel.gv.store-reader, from: access.governance-store, to: access.reader, type: queries }
+    - { id: rel.gv.evolution-types, from: model.evolution, to: model.types, type: queries }
+    - { id: rel.gv.review-types, from: model.review, to: model.types, type: queries }
+    - { id: rel.gv.rework-review, from: model.rework, to: model.review, type: queries }
+    - { id: rel.gv.rework-evolution, from: model.rework, to: model.evolution, type: queries }
+    - { id: rel.gv.agent-history, from: access.agent, to: access.history, type: queries }
+    - { id: rel.gv.agent-evolution, from: access.agent, to: model.evolution, type: queries }
+    - { id: rel.gv.lint-review, from: access.lint, to: model.review, type: queries }
+    - { id: rel.gv.store-types, from: access.governance-store, to: model.types, type: queries }
+    - { id: rel.gv.history-reader, from: access.history, to: access.reader, type: queries }
+    - { id: rel.gv.history-evolution, from: access.history, to: model.evolution, type: queries }
+    - { id: rel.gv.source-history, from: access.model-source, to: access.history, type: queries }
+    - { id: rel.gv.source-review, from: access.model-source, to: model.review, type: queries }
+    - { id: rel.gv.reader-diff, from: access.reader, to: model.diff, type: queries }
+    - { id: rel.p6.desk-nav-tree, from: present.desk-view, to: present.nav-tree, type: commands }
+    - { id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: commands }
+    - { id: rel.p3.desk-perspective, from: present.desk-view, to: present.perspective, type: commands }
+    - { id: rel.p8.desk-stage, from: present.desk-view, to: present.canvas, type: commands }
+    - { id: rel.p3.perspective-opens, from: present.perspective, to: present.scenarios, type: commands }
+    - { id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: queries }
+    - { id: rel.p7.source-content, from: present.source, to: present.shared, type: queries, mode: async }
+    - { id: rel.p7.desk-source-fetch, from: present.desk-view, to: access.model-source, type: queries }
+    - { id: rel.p7.plugin-source, from: access.model-source, to: access.source, type: queries }
+    - { id: rel.p7.lint-source, from: access.lint, to: access.source, type: queries }
+    - { id: rel.p7.source-types, from: access.source, to: model.types, type: queries }
+    - { id: rel.p7.source-reader, from: access.source, to: access.reader, type: queries }
     - id: rel.version-sketch
       from: present.version
       to: present.sketch
-      type: calls
+      type: commands
       description: 面包屑返回、升级落点、撤销重做与保存

@@ -11,5 +11,5 @@ sketch:
     - id: rel.sk.desk-seqlayout
       from: state.desk
       to: state.layout.sequence
-      type: calls
+      type: queries
       description: 时序模型 → 坐标

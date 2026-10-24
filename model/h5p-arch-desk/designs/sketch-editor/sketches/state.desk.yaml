@@ -12,31 +12,31 @@ sketch:
     - id: rel.se.canvas-desk
       from: present.canvas.edit
       to: state.desk.edit
-      type: calls
+      type: commands
       description: 画布的每个编辑操作只发一个意图
     - id: rel.se.panel-desk
       from: present.panel.edit
       to: state.desk.edit
-      type: calls
+      type: commands
       description: 表单改动即发意图
     - id: rel.se.bar-desk
       from: present.version.edit
       to: state.desk.edit
-      type: calls
+      type: commands
       description: 保存 / 放弃 / 新建设计
     - id: rel.se.desk-check
       from: state.desk.edit
       to: model.intent
-      type: calls
+      type: queries
       description: 编辑中对当前版本实时跑 sketchCheck（L-1）
     - id: rel.se.desk-transition
       from: state.desk.edit
       to: state.transition.edit
-      type: calls
+      type: queries
       description: 进入 / 退出编辑态经转移函数
     - id: rel.se.desk-writer
       from: state.desk.edit
       to: access.writer.sketch
-      type: calls
-      via: http
+      type: commands
+      via: 'channel:http'
       description: 保存：整份写回与新建设计，经开发服务器端点

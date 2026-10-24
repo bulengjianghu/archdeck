@@ -52,17 +52,17 @@ sketch:
     - id: rel.sk.desk-scenario
       from: state.desk
       to: model.scenario
-      type: calls
+      type: queries
       description: DeskState 派生回放计划、路径与本层投影
     - id: rel.sk.desk-transition
       from: state.desk
       to: state.transition
-      type: calls
+      type: queries
       description: 唯一写入口 dispatch → transition
     - id: rel.sk.sequence-desk
       from: present.sequence
       to: state.desk
-      type: calls
+      type: queries
       description: 时序图只读派生数据、只发意图
   interfaces:
     - id: if.state.transition

@@ -42,271 +42,271 @@ sketch:
     - id: rel.ad.desk-panel
       from: present.desk-view
       to: present.panel.dispatch
-      type: calls
+      type: commands
     - id: rel.ad.panel-module
       from: present.panel.dispatch
       to: present.panel.module
-      type: calls
+      type: commands
     - id: rel.ad.panel-relation
       from: present.panel.dispatch
       to: present.panel.relation
-      type: calls
+      type: commands
     - id: rel.ad.panel-edge
       from: present.panel.dispatch
       to: present.panel.edge
-      type: calls
+      type: commands
     - id: rel.ad.panel-system
       from: present.panel.dispatch
       to: present.panel.system
-      type: calls
+      type: commands
     - id: rel.ad.module-content
       from: present.panel.module
       to: present.panel.content
-      type: calls
+      type: commands
     - id: rel.ad.relation-content
       from: present.panel.relation
       to: present.panel.content
-      type: calls
+      type: commands
     - id: rel.ad.edge-content
       from: present.panel.edge
       to: present.panel.content
-      type: calls
+      type: commands
     - id: rel.ad.system-content
       from: present.panel.system
       to: present.panel.content
-      type: calls
+      type: commands
     - id: rel.ad.system-design
       from: present.panel.system
       to: present.panel.design
-      type: calls
+      type: commands
     - id: rel.ad.design-content
       from: present.panel.design
       to: present.panel.content
-      type: calls
+      type: commands
     - id: rel.ad.panel-read
       from: present.panel.dispatch
       to: state.desk.projection
-      type: calls
+      type: queries
     - id: rel.ad.edgepanel-read
       from: present.panel.edge
       to: state.desk.projection
-      type: calls
+      type: queries
     - id: rel.ad.module-act
       from: present.panel.module
       to: state.desk.actions
-      type: calls
+      type: commands
     - id: rel.ad.relation-act
       from: present.panel.relation
       to: state.desk.actions
-      type: calls
+      type: commands
     - id: rel.ad.content-act
       from: present.panel.content
       to: state.desk.actions
-      type: calls
+      type: commands
     - id: rel.ad.design-read
       from: present.panel.design
       to: state.desk.versions
-      type: calls
+      type: queries
     - id: rel.ad.design-act
       from: present.panel.design
       to: state.desk.actions
-      type: calls
+      type: commands
     - id: rel.ad.content-diff
       from: present.panel.content
       to: state.desk.versions
-      type: calls
+      type: queries
     - id: rel.ad.content-labels
       from: present.panel.content
       to: present.shared
-      type: calls
+      type: commands
     - id: rel.ad.relation-type-labels
       from: present.panel.relation
       to: present.shared
-      type: calls
+      type: commands
     - id: rel.ad.edge-type-labels
       from: present.panel.edge
       to: present.shared
-      type: calls
+      type: commands
     - id: rel.gv.ports-type-labels
       from: present.panel.governance
       to: present.shared
-      type: calls
+      type: commands
     - id: rel.ad.design-labels
       from: present.panel.design
       to: present.shared
-      type: calls
+      type: commands
     - id: rel.ad.actor-labels
       from: present.panel.actor
       to: present.shared
-      type: calls
+      type: commands
     - id: rel.ad.system-read
       from: present.panel.system
       to: state.desk.projection
-      type: calls
+      type: queries
     - id: rel.ad.system-act
       from: present.panel.system
       to: state.desk.actions
-      type: calls
+      type: commands
     - id: rel.gv.dispatch-dep
       from: present.panel.dispatch
       to: present.panel.dep
-      type: calls
+      type: commands
     - id: rel.gv.system-gov
       from: present.panel.system
       to: present.panel.governance
-      type: calls
+      type: commands
     - id: rel.gv.module-gov
       from: present.panel.module
       to: present.panel.governance
-      type: calls
+      type: commands
     - id: rel.gv.relation-gov
       from: present.panel.relation
       to: present.panel.governance
-      type: calls
+      type: commands
     - id: rel.gv.dep-gov
       from: present.panel.dep
       to: present.panel.governance
-      type: calls
+      type: commands
     - id: rel.gv.panel-read
       from: present.panel.governance
       to: state.desk.facts
-      type: calls
+      type: queries
     - id: rel.gv.dep-read
       from: present.panel.dep
       to: state.desk.facts
-      type: calls
+      type: queries
     - id: rel.gv.dep-content
       from: present.panel.dep
       to: present.panel.content
-      type: calls
+      type: commands
     - id: rel.gv.panel-content
       from: present.panel.governance
       to: present.panel.content
-      type: calls
+      type: commands
     - id: rel.gv.scenario-panel-shared
       from: present.panel.scenario
       to: present.shared
-      type: calls
+      type: commands
     - id: rel.gv.step-panel-shared
       from: present.panel.step
       to: present.shared
-      type: calls
+      type: commands
     - id: rel.p3.dispatch-run
       from: present.panel.dispatch
       to: present.panel.run
-      type: calls
+      type: commands
     - id: rel.p3.run-read
       from: present.panel.run
       to: state.desk.projection
-      type: calls
+      type: queries
     - id: rel.p3.run-act
       from: present.panel.run
       to: state.desk.actions
-      type: calls
+      type: commands
     - id: rel.p8.step-stage
       from: present.panel.step
       to: present.canvas
-      type: calls
+      type: commands
     - id: rel.p8.run-stage
       from: present.panel.run
       to: present.canvas
-      type: calls
+      type: commands
     - id: rel.p2.panel-scenario
       from: present.panel.dispatch
       to: present.panel.scenario
-      type: calls
+      type: commands
     - id: rel.p2.panel-step
       from: present.panel.dispatch
       to: present.panel.step
-      type: calls
+      type: commands
     - id: rel.p2.panel-actor
       from: present.panel.dispatch
       to: present.panel.actor
-      type: calls
+      type: commands
     - id: rel.p2.step-content
       from: present.panel.step
       to: present.panel.content
-      type: calls
+      type: commands
     - id: rel.p2.scenario-content
       from: present.panel.scenario
       to: present.panel.content
-      type: calls
+      type: commands
     - id: rel.p2.step-read
       from: present.panel.step
       to: state.desk.projection
-      type: calls
+      type: queries
     - id: rel.p2.step-act
       from: present.panel.step
       to: state.desk.actions
-      type: calls
+      type: commands
     - id: rel.p2.scenario-act
       from: present.panel.scenario
       to: state.desk.actions
-      type: calls
+      type: commands
     - id: rel.p2.actor-act
       from: present.panel.actor
       to: state.desk.actions
-      type: calls
+      type: commands
     - id: rel.p2.actor-content
       from: present.panel.actor
       to: present.panel.content
-      type: calls
+      type: commands
     - id: rel.p3.run-content
       from: present.panel.run
       to: present.panel.content
-      type: calls
+      type: commands
     - id: rel.p7.panel-file
       from: present.panel.dispatch
       to: present.panel.file
-      type: calls
+      type: commands
     - id: rel.p7.module-source
       from: present.panel.module
       to: present.panel.module-source
-      type: calls
+      type: commands
     - id: rel.p7.file-exports
       from: present.panel.file
       to: present.panel.module-source
-      type: calls
+      type: commands
     - id: rel.p7.file-read
       from: present.panel.file
       to: state.desk.files
-      type: calls
+      type: queries
     - id: rel.p7.file-act
       from: present.panel.file
       to: state.desk.actions
-      type: calls
+      type: commands
     - id: rel.p7.file-preview
       from: present.panel.file
       to: present.desk-view
-      type: calls
+      type: commands
     - id: rel.p7.modsrc-read
       from: present.panel.module-source
       to: state.desk.files
-      type: calls
+      type: queries
     - id: rel.p7.modsrc-act
       from: present.panel.module-source
       to: state.desk.actions
-      type: calls
+      type: commands
     - id: rel.p7.modsrc-content
       from: present.panel.module-source
       to: present.panel.content
-      type: calls
+      type: commands
     - id: rel.p7.file-ownership
       from: present.panel.file
       to: model.types
-      type: calls
+      type: queries
     - id: rel.p7.modsrc-ownership
       from: present.panel.module-source
       to: model.types
-      type: calls
+      type: queries
     - id: rel.p7.file-content
       from: present.panel.file
       to: present.panel.content
-      type: calls
+      type: commands
     - id: rel.p7.file-preview-key
       from: present.panel.file
       to: present.shared
-      type: calls
+      type: queries
     - id: rel.sketch-panel
       from: present.sketch
       to: present.panel.sketch

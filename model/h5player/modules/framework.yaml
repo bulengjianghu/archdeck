@@ -517,35 +517,35 @@ relations:
   - id: rel.framework.facade-creates-state-machine
     from: infra.framework.kernel.facade
     to: infra.framework.state-machine
-    type: calls
-    description: 经 binder 惰性创建 StateMachineController；ControllerBase.sendCommand 经它发内部命令
+    type: commands
+    description: Framework 门面与控制器装配交给状态机：经 binder 惰性创建 StateMachineController；ControllerBase.sendCommand 经它发内部命令
     interface: if.framework.state-machine.sendCommand
   - id: rel.framework.facade-creates-pipeline
     from: infra.framework.kernel.facade
     to: infra.framework.pipeline
-    type: calls
-    description: '组合根装配时 bindFrameworkControllers 首个 new PipelineController，Framework 取它作全局 Dispatcher 注入其余控制器（bindControllers.ts:18、index.ts:43）'
+    type: commands
+    description: 'Framework 门面与控制器装配交给 Pipeline 事务与动作分发：组合根装配时 bindFrameworkControllers 首个 new PipelineController，Framework 取它作全局 Dispatcher 注入其余控制器（bindControllers.ts:18、index.ts:43）'
   - id: rel.framework.facade-plugin-api
     from: infra.framework.kernel.facade
     to: infra.framework.plugin
-    type: calls
-    description: 创建 PluginController 并 initApi(PluginApi)；destroy 时级联销毁插件
+    type: commands
+    description: Framework 门面与控制器装配交给插件控制器与插件基类：创建 PluginController 并 initApi(PluginApi)；destroy 时级联销毁插件
     interface: if.framework.kernel.PluginApi
   - id: rel.framework.facade-inject-context
     from: infra.framework.kernel.facade
     to: infra.framework.context.core
-    type: calls
-    description: 构造期把 emit / hasEventListener / handleError 回填到 Context
+    type: commands
+    description: Framework 门面与控制器装配交给 Context 门面：构造期把 emit / hasEventListener / handleError 回填到 Context
   - id: rel.framework.facade-event-bus
     from: infra.framework.kernel.facade
     to: infra.framework.kernel.event-bus
-    type: calls
-    description: 'Framework 构造时 new EventEmitter，事件经它 emit，PluginApi 的 on / off 转交给它（index.ts:42–51、125–126）'
+    type: commands
+    description: 'Framework 门面与控制器装配交给事件总线：Framework 构造时 new EventEmitter，事件经它 emit，PluginApi 的 on / off 转交给它（index.ts:42–51、125–126）'
   - id: rel.framework.facade-error-chain
     from: infra.framework.kernel.facade
     to: infra.framework.kernel.error-chain
-    type: calls
-    description: 'Framework 的 handleError 依次交给已登记的 errorHandlers，未被拦截的致命错误经 observeInternalCommand 下发错误命令（index.ts:79–108）'
+    type: commands
+    description: 'Framework 门面与控制器装配交给错误路由链：Framework 的 handleError 依次交给已登记的 errorHandlers，未被拦截的致命错误经 observeInternalCommand 下发错误命令（index.ts:79–108）'
   # ── 错误链 ──
   - id: rel.framework.error-emit
     from: infra.framework.kernel.error-chain
@@ -553,20 +553,20 @@ relations:
     type: notifies
     description: 未被拦截的 Warn / Recoverable / Fatal 错误发布 EventKey.Error，经事件总线送达 Player 对外 API（订阅后转发业务方；插件侧的订阅者见 infra.framework → 各插件的通知）
     payload: ds.EventInfo
-    via: bus
+    via: 'bus:infra.framework.kernel.event-bus'
   - id: rel.framework.error-fatal-command
     from: infra.framework.kernel.error-chain
     to: infra.framework.state-machine.scheduler
-    type: calls
+    type: commands
     mode: async
-    description: Fatal 错误以 immediate + abortCurrentCommand 的 Error 命令驱动状态机进入错误态
+    description: 错误路由链交给命令调度器：Fatal 错误以 immediate + abortCurrentCommand 的 Error 命令驱动状态机进入错误态
     interface: if.framework.state-machine.sendCommand
     payload: ds.CommandInfo
   - id: rel.framework.error-track
     from: infra.framework.kernel.error-chain
     to: infra.framework.context.core
-    type: calls
-    description: 非 Ignore 级错误经 context.track 埋点、按级别记日志
+    type: commands
+    description: 错误路由链交给 Context 门面：非 Ignore 级错误经 context.track 埋点、按级别记日志
   # ── 领域事件适配 ──
   - id: rel.framework.domain-events-emit
     from: infra.framework.kernel.domain-events
@@ -574,7 +574,7 @@ relations:
     type: notifies
     description: DomainEvent 映射为 PlayModeChange / SolutionChange 对外事件，经事件总线送达 Player 对外 API（订阅后转发业务方；同时映射出的 PlayerDataChange 只有播放器信息浮层订阅）
     payload: ds.EventInfo
-    via: bus
+    via: 'bus:infra.framework.kernel.event-bus'
   - id: rel.framework.profile-bus-forward
     from: infra.framework.kernel.domain-events
     to: infra.framework.context.core
@@ -584,268 +584,256 @@ relations:
   - id: rel.framework.sm-scheduler-engine
     from: infra.framework.state-machine.scheduler
     to: infra.framework.state-machine.engine
-    type: calls
+    type: commands
     mode: async
-    description: 串行取出命令交 Receiver.receive 执行；取消时 abortCommand(id)
+    description: 命令调度器交给状态迁移引擎：串行取出命令交 Receiver.receive 执行；取消时 abortCommand(id)
     payload: ds.CommandInfo
   - id: rel.framework.sm-immediate-dispatch
     from: infra.framework.state-machine.scheduler
     to: infra.framework.pipeline.dispatch
-    type: calls
-    description: 白名单命令走 sendCommandImmediate 同步直达 dispatch（不经状态迁移）
+    type: commands
+    description: 命令调度器交给动作分发器：白名单命令走 sendCommandImmediate 同步直达 dispatch（不经状态迁移）
     interface: if.framework.pipeline.Dispatcher
   - id: rel.framework.sm-engine-dispatch
     from: infra.framework.state-machine.engine
     to: infra.framework.pipeline.dispatch
-    type: calls
+    type: commands
     mode: async
-    description: 把命令生成的 Action 逐个 dispatchAsync 下发给 MU 并等待
+    description: 状态迁移引擎交给动作分发器：把命令生成的 Action 逐个 dispatchAsync 下发给 MU 并等待
     interface: if.framework.pipeline.Dispatcher
     payload: ds.Action
   - id: rel.framework.sm-engine-state-model
     from: infra.framework.state-machine.engine
     to: domain.models
-    type: calls
-    description: PlaybackState 三段式迁移 begin / commit / endTransition、snapshotState；Play 受理时计播放尝试
+    type: commands
+    description: 状态迁移引擎交给领域模型：PlaybackState 三段式迁移 begin / commit / endTransition、snapshotState；Play 受理时计播放尝试
   - id: rel.framework.sm-engine-status-event
     from: infra.framework.state-machine.engine
     to: infra.player-index.player-api
     type: notifies
     description: 主状态变化时发布 PlayerStatusChange，经事件总线送达 Player 对外 API（订阅后转发业务方）
     payload: ds.PlayerStatusChangeEventPayload
-    via: bus
+    via: 'bus:infra.framework.kernel.event-bus'
   - id: rel.framework.sm-engine-status-timeshift
     from: infra.framework.state-machine.engine
     to: app.timeshift.coordinator
     type: notifies
     description: PlayerStatusChange 经事件总线送达时移会话协调器（进入 Paused 即用户暂停入口；协调器经外壳注入的 on 订阅）
     payload: ds.PlayerStatusChangeEventPayload
-    via: bus
+    via: 'bus:infra.framework.kernel.event-bus'
   - id: rel.framework.sm-engine-error
     from: infra.framework.state-machine.engine
     to: infra.framework.kernel.error-chain
-    type: calls
-    description: 命令执行异常包装为 CommandUnknownError 交 handleError
+    type: commands
+    description: 状态迁移引擎交给错误路由链：命令执行异常包装为 CommandUnknownError 交 handleError
     interface: if.framework.kernel.handleError
   - id: rel.framework.sm-engine-solution-hooks
     from: infra.framework.state-machine.engine
     to: app.solution
-    type: calls
-    via: callback
-    description: 命令执行前后依次回调 Solution 经 SolutionDeps 注册的 pre / post 命令 Hook（CommandHook.callback(command)），逐个 await；pre Hook 返回 true 即阻断命令（CommandBlockedByHookError）
+    type: commands
+    via: 'channel:callback'
+    description: 状态迁移引擎交给 Solution：命令执行前后依次回调 Solution 经 SolutionDeps 注册的 pre / post 命令 Hook（CommandHook.callback(command)），逐个 await；pre Hook 返回 true 即阻断命令（CommandBlockedByHookError）
     payload: ds.CommandInfo
   - id: rel.framework.sm-engine-timeshift-hooks
     from: infra.framework.state-machine.engine
     to: app.timeshift
-    type: calls
-    via: callback
-    description: 命令执行前回调时移协调器注册的前置 Hook（观察 Pause 来源、Resume、Seek、Switch、Destroy），逐个 await；Resume 时在状态迁移前放流放阀
+    type: commands
+    via: 'channel:callback'
+    description: 状态迁移引擎交给时移：命令执行前回调时移协调器注册的前置 Hook（观察 Pause 来源、Resume、Seek、Switch、Destroy），逐个 await；Resume 时在状态迁移前放流放阀
     payload: ds.CommandInfo
   - id: rel.framework.sm-errors
     from: infra.framework.state-machine
     to: share.errors
-    type: calls
-    description: '命令被 Hook 阻断、取消或无匹配迁移时构造带 ErrorCode 的 ErrorBase 作为命令结果（stateMachine.ts:209–241）'
+    type: queries
+    description: '状态机向错误原语取：命令被 Hook 阻断、取消或无匹配迁移时构造带 ErrorCode 的 ErrorBase 作为命令结果（stateMachine.ts:209–241）'
   # ── Pipeline ──
   - id: rel.framework.pipeline-validate
     from: infra.framework.pipeline.transaction
     to: domain.rules
-    type: calls
-    description: 用 validateDiff 按图规则 G1–G7 与当前 nextStatus 校验 diff 并得到目标拓扑
+    type: queries
+    description: 图事务向规则表取：用 validateDiff 按图规则 G1–G7 与当前 nextStatus 校验 diff 并得到目标拓扑
   - id: rel.framework.pipeline-state-snapshot
     from: infra.framework.pipeline.transaction
     to: domain.models
-    type: calls
-    description: 事务前 PlaybackState.snapshot()、失败 restore()；改图时 addMu / removeMu / realiasMu
+    type: commands
+    description: 图事务交给领域模型：事务前 PlaybackState.snapshot()、失败 restore()；改图时 addMu / removeMu / realiasMu
   - id: rel.framework.pipeline-mu-lifecycle
     from: infra.framework.pipeline.transaction
     to: infra.framework.media-unit
-    type: calls
+    type: commands
     mode: async
-    description: 节点进图就地 Init、出图在事务成功后 Destroy；失败时对已 Init 节点补偿 Destroy
+    description: 图事务交给 MediaUnit 基类：节点进图就地 Init、出图在事务成功后 Destroy；失败时对已 Init 节点补偿 Destroy
     interface: if.framework.media-unit.MediaUnit
     payload: ds.Action
   - id: rel.framework.pipeline-dispatch-mu
     from: infra.framework.pipeline.dispatch
     to: infra.framework.media-unit
-    type: calls
-    description: 把 Action 广播 / 定向到 MU 的 handleAction / handleActionAsync
+    type: commands
+    description: 动作分发器交给 MediaUnit 基类：把 Action 广播 / 定向到 MU 的 handleAction / handleActionAsync
     interface: if.framework.media-unit.MediaUnit
     payload: ds.Action
   - id: rel.framework.legs-transaction
     from: infra.framework.pipeline.legs
     to: infra.framework.pipeline.transaction
-    type: calls
-    description: 腿句柄把裸 MuKey 确定性翻译为本腿 NodeId 后调 updatePipelineForLeg
+    type: commands
+    description: 多腿句柄交给图事务：腿句柄把裸 MuKey 确定性翻译为本腿 NodeId 后调 updatePipelineForLeg
     interface: if.framework.pipeline.updatePipeline
     payload: ds.PipelineDiff
   - id: rel.framework.legs-dispatch
     from: infra.framework.pipeline.legs
     to: infra.framework.pipeline.dispatch
-    type: calls
-    description: 活动腿转发全局 dispatch，非活动腿走 dispatchForLeg
+    type: commands
+    description: 多腿句柄交给动作分发器：活动腿转发全局 dispatch，非活动腿走 dispatchForLeg
     interface: if.framework.pipeline.Dispatcher
   - id: rel.framework.pipeline-result
     from: infra.framework.pipeline.transaction
     to: share.errors
-    type: calls
-    description: '事务失败时构造 ErrorBase（PipelineNotWorkError）放进 Result 返回（pipelineController.ts:534）'
+    type: queries
+    description: '图事务向错误原语取：事务失败时构造 ErrorBase（PipelineNotWorkError）放进 Result 返回（pipelineController.ts:534）'
   # ── 插件 ──
-  - id: rel.framework.plugin-implements-iplugin
-    from: infra.framework.plugin
-    to: share.contracts
-    type: implements
-    description: PluginBase 实现、PluginController 管理 IPlugin<PluginApi> 契约
   - id: rel.framework.plugin-commands
     from: infra.framework.plugin
     to: infra.framework.state-machine.scheduler
-    type: calls
-    description: 插件经 PluginApi 发命令、sendCommandImmediate
+    type: commands
+    description: 插件控制器与插件基类交给命令调度器：插件经 PluginApi 发命令、sendCommandImmediate
     interface: if.framework.state-machine.sendCommand
   - id: rel.framework.plugin-hooks
     from: infra.framework.plugin
     to: infra.framework.state-machine.engine
-    type: calls
-    description: 插件注册 pre / post 命令 Hook
+    type: commands
+    description: 插件控制器与插件基类交给状态迁移引擎：插件注册 pre / post 命令 Hook
     interface: if.framework.state-machine.addPreCommandHook
   - id: rel.framework.plugin-events
     from: infra.framework.plugin
     to: infra.framework.kernel.event-bus
-    type: calls
-    description: 插件基类经 PluginApi 在总线上订阅 / 退订（销毁时自动退订，回调抛错包装为 PluginEventUnknownError）与发布事件；事件本身按事件名写在真实的发布者与订阅者之间（M14）
-    via: inject
+    type: commands
+    description: 插件控制器与插件基类交给事件总线：插件基类经 PluginApi 在总线上订阅 / 退订（销毁时自动退订，回调抛错包装为 PluginEventUnknownError）与发布事件；事件本身按事件名写在真实的发布者与订阅者之间（M14）
+    via: 'channel:inject'
   - id: rel.framework.plugin-error-chain
     from: infra.framework.plugin
     to: infra.framework.kernel.error-chain
-    type: calls
-    description: 注册 / 移除 ErrorHandler；插件析构错误收集后统一 handleError
+    type: commands
+    description: 插件控制器与插件基类交给错误路由链：注册 / 移除 ErrorHandler；插件析构错误收集后统一 handleError
     interface: if.framework.kernel.handleError
   - id: rel.framework.plugin-dispatcher
     from: infra.framework.plugin
     to: infra.framework.pipeline.dispatch
-    type: calls
-    description: 插件经 getDispatcher 直接下发 Action，经 describePipeline 读取图诊断
+    type: commands
+    description: 插件控制器与插件基类交给动作分发器：插件经 getDispatcher 直接下发 Action，经 describePipeline 读取图诊断
     interface: if.framework.pipeline.Dispatcher
   # ── ModelRegistry ──
-  - id: rel.framework.registry-implements-port
-    from: infra.framework.model-registry.registry
-    to: domain.ports
-    type: implements
-    description: ModelRegistry 实现 Domain 的 IModelRegistry 端口
   - id: rel.framework.registry-models
     from: infra.framework.model-registry.registry
     to: domain.models
-    type: calls
-    description: 经创建器产出 StreamModel / PlaybackModel 实例，换代时调用其 reset / destroy 语义方法
+    type: commands
+    description: 槽位与代际切换交给领域模型：经创建器产出 StreamModel / PlaybackModel 实例，换代时调用其 reset / destroy 语义方法
   - id: rel.framework.registry-views
     from: infra.framework.model-registry.registry
     to: infra.framework.model-registry.views
-    type: calls
-    description: 构造期为每个 kind 创建稳定视图，接管实例时 wrapInstance 套写拦截
+    type: queries
+    description: 槽位与代际切换向视图代理与写拦截取：构造期为每个 kind 创建稳定视图，接管实例时 wrapInstance 套写拦截
   - id: rel.framework.registry-standby
     from: infra.framework.model-registry.registry
     to: infra.framework.model-registry.standby
-    type: calls
-    description: createStandby / beginPromote / destroyStandby 等薄委托
+    type: commands
+    description: 槽位与代际切换交给待命模型槽位：createStandby / beginPromote / destroyStandby 等薄委托
     interface: if.framework.model-registry.StandbyModelSlots
   - id: rel.framework.standby-views
     from: infra.framework.model-registry.standby
     to: infra.framework.model-registry.views
-    type: calls
-    description: 待命实例创建即 wrapInstance，复用「仅当前实例写入才通知」的短路
+    type: queries
+    description: 待命模型槽位向视图代理与写拦截取：待命实例创建即 wrapInstance，复用「仅当前实例写入才通知」的短路
   - id: rel.framework.singletons-models
     from: infra.framework.model-registry.singletons
     to: domain.models
-    type: calls
-    description: new PlaybackState(publisher) / new Statistic(publisher)
+    type: commands
+    description: 单例模型工厂交给领域模型：new PlaybackState(publisher) / new Statistic(publisher)
   # ── Context ──
   - id: rel.framework.context-registry
     from: infra.framework.context.core
     to: infra.framework.model-registry.registry
-    type: calls
-    description: 模型 getter 投影 getView；三元组投影 getPlaybackSelection；stop / reset 经 resetGeneration 收口
+    type: commands
+    description: Context 门面交给槽位与代际切换：模型 getter 投影 getView；三元组投影 getPlaybackSelection；stop / reset 经 resetGeneration 收口
     interface: if.framework.model-registry.resetGeneration
   - id: rel.framework.context-adapter
     from: infra.framework.context.core
     to: infra.framework.kernel.domain-events
-    type: calls
-    description: 构造期 attach 到 ProfileEventBus；处理领域事件时交 DomainEventAdapter 对外发布
+    type: commands
+    description: Context 门面交给领域事件适配：构造期 attach 到 ProfileEventBus；处理领域事件时交 DomainEventAdapter 对外发布
     interface: if.framework.kernel.DomainEventAdapter
   - id: rel.framework.context-buffer-policy
     from: infra.framework.context.core
     to: domain.services
-    type: calls
-    description: 播放档案换代或活动腿变化时用 resolveLegPlaybackBuffer 计算 buffer 四阈值
+    type: queries
+    description: Context 门面向决策服务取：播放档案换代或活动腿变化时用 resolveLegPlaybackBuffer 计算 buffer 四阈值
   - id: rel.framework.context-settings
     from: infra.framework.context.core
     to: infra.framework.context.settings
-    type: calls
-    description: 构造期 createPlayerSettings(data, emit) 作为 context.settings
+    type: queries
+    description: Context 门面向设置端口取：构造期 createPlayerSettings(data, emit) 作为 context.settings
   - id: rel.framework.settings-event
     from: infra.framework.context.settings
     to: app.plugins.diagnostics.player-info
     type: notifies
     description: 每次写设置补发 PlayerDataChange（payload 为补丁），经事件总线送达唯一的订阅者播放器信息浮层
     payload: ds.EventInfo
-    via: bus
+    via: 'bus:infra.framework.kernel.event-bus'
   - id: rel.framework.leg-context-base
     from: infra.framework.context.leg-context
     to: infra.framework.context.core
-    type: calls
-    description: 活动角色把各面转发到全局 Context，非活动角色路由到腿内隔离面
+    type: commands
+    description: 腿上下文交给 Context 门面：活动角色把各面转发到全局 Context，非活动角色路由到腿内隔离面
   - id: rel.framework.leg-context-standby
     from: infra.framework.context.leg-context
     to: infra.framework.model-registry.standby
-    type: calls
-    description: streamModel 按 getActiveStreamLeg 的活动腿归属路由
+    type: commands
+    description: 腿上下文交给待命模型槽位：streamModel 按 getActiveStreamLeg 的活动腿归属路由
   # ── MediaUnit ──
   - id: rel.framework.mu-context
     from: infra.framework.media-unit
     to: infra.framework.context
-    type: calls
-    via: inject
-    description: MU 经注入的 Context（或 LegContext）emit / log / track / handleError，读取配置与模型投影
+    type: commands
+    via: 'channel:inject'
+    description: MediaUnit 基类交给 Context 与设置：MU 经注入的 Context（或 LegContext）emit / log / track / handleError，读取配置与模型投影
     interface: if.framework.context.Context
   - id: rel.framework.mu-state-model
     from: infra.framework.media-unit
     to: domain.models
-    type: calls
-    description: 按 PlaybackState 中本节点 MuStatus 过滤迟到数据；读命令代次做动作账本判重
+    type: queries
+    description: MediaUnit 基类向领域模型取：按 PlaybackState 中本节点 MuStatus 过滤迟到数据；读命令代次做动作账本判重
   - id: rel.framework.mu-perf
     from: infra.framework.media-unit
     to: infra.framework.utils.observe
-    type: calls
-    description: 处理与动作耗时采样、账本告警埋点
+    type: commands
+    description: MediaUnit 基类交给性能采样与埋点载体：处理与动作耗时采样、账本告警埋点
     interface: if.framework.utils.performance
   - id: rel.framework.mu-errors
     from: infra.framework.media-unit
     to: share.errors
-    type: calls
-    description: 'process / doAction 抛出的未知异常经 errorWrapper 包装为 MuProcessUnknownError / MuActionUnknownError（mediaUnit.ts:208、295）'
+    type: queries
+    description: 'MediaUnit 基类向错误原语取：process / doAction 抛出的未知异常经 errorWrapper 包装为 MuProcessUnknownError / MuActionUnknownError（mediaUnit.ts:208、295）'
   # ── 契约与工具 ──
   - id: rel.framework.env-probe-domain
     from: infra.framework.utils.env-probe
     to: domain.services
-    type: calls
-    description: 环境探测调用 Domain 的 inferSourceModes 推断源模式，把能力表交给方案选型
+    type: queries
+    description: 环境与能力探测向决策服务取：环境探测调用 Domain 的 inferSourceModes 推断源模式，把能力表交给方案选型
   - id: rel.framework.event-bus-perf
     from: infra.framework.kernel.event-bus
     to: infra.framework.utils.observe
-    type: calls
-    description: emit 时按事件键做耗时采样
+    type: commands
+    description: 事件总线交给性能采样与埋点载体：emit 时按事件键做耗时采样
     interface: if.framework.utils.performance
 
 # ═══════════════════════════════ 接口 ═══════════════════════════════
 
   # ── 补充的交互（ADR-0026：有值使用的模块依赖按交互补全，K7）──
-  - { id: rel.framework.context-utils, from: infra.framework.context.core, to: infra.framework.utils, type: calls, description: 创建上下文时调用 Time 取时间戳 }
-  - { id: rel.framework.contracts-polyfill, from: infra.framework.contracts, to: infra.framework.utils, type: calls, description: 公共入口加载即执行 utils/polyfill，安装运行时补丁 }
-  - { id: rel.framework.misc-observe, from: infra.framework.utils.misc, to: infra.framework.utils.observe, type: calls, description: 共享定时器经 TrackInfo 记录采样与埋点 }
-  - { id: rel.framework.plugin-controller-base, from: infra.framework.plugin, to: infra.framework.kernel.facade, type: implements, description: PluginController 继承 ControllerBase 控制器基类 }
-  - { id: rel.framework.scheduler-utils, from: infra.framework.state-machine.scheduler, to: infra.framework.utils, type: calls, description: 命令对象经 Generator 生成命令 ID、经 Time 记录时间 }
-  - { id: rel.framework.scheduler-controller-base, from: infra.framework.state-machine.scheduler, to: infra.framework.kernel.facade, type: implements, description: StateMachineController 继承 ControllerBase 控制器基类 }
-  - { id: rel.framework.mu-error-chain, from: infra.framework.media-unit, to: infra.framework.kernel.error-chain, type: calls, description: MU 基类经 errorWrapper 包装处理异常并走错误路由链 }
-  - { id: rel.framework.plugin-errors, from: infra.framework.plugin, to: share.errors, type: calls, description: 插件控制器与插件基类把插件回调里的异常经 errorWrapper 包装为 ErrorBase 交给错误链 }
+  - { id: rel.framework.context-utils, from: infra.framework.context.core, to: infra.framework.utils, type: queries, description: Context 门面向通用运行时工具取：创建上下文时调用 Time 取时间戳 }
+  - { id: rel.framework.contracts-polyfill, from: infra.framework.contracts, to: infra.framework.utils, type: commands, description: 框架公共类型契约交给通用运行时工具：公共入口加载即执行 utils/polyfill，安装运行时补丁 }
+  - { id: rel.framework.misc-observe, from: infra.framework.utils.misc, to: infra.framework.utils.observe, type: commands, description: 定时、媒体与 DOM 辅助交给性能采样与埋点载体：共享定时器经 TrackInfo 记录采样与埋点 }
+  - { id: rel.framework.scheduler-utils, from: infra.framework.state-machine.scheduler, to: infra.framework.utils, type: queries, description: 命令调度器向通用运行时工具取：命令对象经 Generator 生成命令 ID、经 Time 记录时间 }
+  - { id: rel.framework.mu-error-chain, from: infra.framework.media-unit, to: infra.framework.kernel.error-chain, type: commands, description: MediaUnit 基类交给错误路由链：MU 基类经 errorWrapper 包装处理异常并走错误路由链 }
+  - { id: rel.framework.plugin-errors, from: infra.framework.plugin, to: share.errors, type: queries, description: 插件控制器与插件基类向错误原语取：把插件回调里的异常经 errorWrapper 包装为 ErrorBase 交给错误链 }
 
 interfaces:
   - id: if.framework.kernel.Framework
@@ -1047,6 +1035,7 @@ interfaces:
   - id: if.framework.plugin.PluginBase
     name: PluginBase
     owner: infra.framework.plugin
+    implementedBy: [app.plugins.buffer-strategy.live-adaptive, app.timeshift.shell, app.strategies.load.base, app.strategies.play-base]
     signature: |
       abstract class PluginBase implements IPlugin<PluginApi> {
         abstract name: string;
@@ -1232,6 +1221,19 @@ interfaces:
       }
     description: 主线程与 Worker 间的请求 / 响应调用桥。
     semantics: 只允许主线程调用子线程；桥编号不一致的旧消息被丢弃；请求默认 100s 超时。
+  - id: if.framework.contracts.MediaPlugin
+    name: MediaPlugin
+    owner: infra.framework.contracts
+    implementedBy: [infra.third-party.decrypt-plugins]
+    signature: |
+      interface MediaPlugin {
+        key: MuKey;
+        init?: () => Promise<void>;
+        reset?: () => void;                                   // 流会话边界（Load / Play / Stop）清掉残留
+        interceptorAsync?: (data: MediaPacket) => Promise<MediaPacket>;
+        interceptor?: (data: MediaPacket, output: MediaUnit<MediaPacket, MediaPacket>['output']) => void;
+      }
+    description: 外部媒体插件的契约（如直播 / 点播解密）：Process 段经 MuPluginWrapper 包装为插件 MU，拦截媒体包加工后输出。
 
 # ═══════════════════════════════ 数据结构 ═══════════════════════════════
 dataStructures:
