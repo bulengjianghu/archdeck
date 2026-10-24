@@ -1,6 +1,6 @@
 # ADR-0018：关系线的信息表达策略
 
-- 状态：已采纳（已实现）
+- 状态：已采纳（已实现）；编码被 [ADR-0031](./0031-three-views-and-structure-view.md) 限定为交互视图的编码（裁决 D：三视图各自定义边的编码与图例，共享通道见 02 L18）
 - 日期：2026-10-22
 - 决策人：项目负责人（四项裁决，2026-10-22）；实现细化（来源「议」）列在「实现细化」，负责人 2026-10-22 批量确认，见 [ADR-0020](./0020-local-workbench.md) 的「修订」节
 - 关联：需求 C-7、C-8、D-6、GV-6、W-2；领域模型 L5、L10、K9、P5、P15、P17、R2、Y5；[workbench.md](../architecture/workbench.md)「边」「显示面板」；[projection.md](../architecture/projection.md) 第 4 步；ADR-0014（经由上层关系）、ADR-0017（显示面板）
