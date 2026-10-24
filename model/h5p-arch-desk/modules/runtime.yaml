@@ -15,6 +15,7 @@ modules:
     codeRefs: [src/components/ScenarioList.vue]
   - id: present.perspective
     name: 视角切换
+    principle: 画布顶部「结构 ｜ 交互 ｜ 运行：<场景名>」三段切换（V11，ADR-0031）：不开场景时单击「结构」「交互」切换画布模式（发 setMode，结构视角写 URL `v=s`，交互为缺省）；打开场景即运行视角，单击「结构」或「交互」即退出场景并进入那个视角，退出按钮回到进入前的视角；各段的 title 说明这种视角回答什么。
     codeRefs: [src/components/PerspectiveSwitch.vue]
   - id: present.player
     name: 回放控制条
@@ -27,7 +28,7 @@ modules:
   - id: present.desk-view.split
     name: 分屏容器与副栏
     parent: present.desk-view
-    responsibility: 按布局树排布画布区的视图：结构图与副栏两块，方向可切换（默认左右，W-4），比例可拖，副栏可收起（左右排列时缩成一条竖栏）；方向、比例与收起状态按项目记在本地。副栏只有一栏标题栏（ADR-0010）：收起、页签、时序图页签下的本层不可见提示、「定位」与「图例」（时序图图例浮层）、方向切换；页签在「时序图」（运行视角）与「源代码」（有预览文件时）之间切换：选中文件切到源代码并预览它，打开场景或移动进度切到时序图，预览文件保留到关闭（G15）。
+    responsibility: 按布局树排布画布区的视图：画布与副栏两块，方向可切换（默认左右，W-4），比例可拖，副栏可收起（左右排列时缩成一条竖栏）；方向、比例与收起状态按项目记在本地。副栏只有一栏标题栏（ADR-0010）：收起、页签、时序图页签下的本层不可见提示、「定位」与「图例」（时序图图例浮层）、方向切换；页签在「时序图」（运行视角）与「源代码」（有预览文件时）之间切换：选中文件切到源代码并预览它，打开场景或移动进度切到时序图，预览文件保留到关闭（G15）。
     principle: |
       - 布局树是可序列化的值（ds.PaneLayout），视图组件只按「槽位」（structure / aside）挂载，不知道自己在哪；以后的自由拖拽分屏只需扩展布局树的编辑操作。
       - 页签与预览文件只属于这块界面（useAside），不进视图状态与 URL；副栏在运行视角或有预览文件时出现。
@@ -36,7 +37,7 @@ modules:
   - id: present.sequence.lanes
     name: 泳道与消息
     parent: present.sequence
-    responsibility: 消息区：生命线、按序自上而下画消息箭头与标签；同步 / 异步 / 显式返回三种线型（隐含的返回不画）；内部活动画成生命线上的激活条；本层没有视图边的消息在标签后标「经由上层关系」（P15）或红色箭头「结构中未建模」（P11）；外部参与者泳道在最左，用竖线隔出系统边界；选中突出（R15、R16）：只有选中的步骤用选中样式，配对的调用 / 返回加浅色「配对」标记；选中模块等对象时突出相关泳道的生命线，进度所在的消息只在序号旁加小标记；不做悬停弹出（W-1）。经过共用件的内部活动在标签后标「共用 <名>」/「共用 ×N」，悬停列出共用件（P18）。
+    responsibility: 消息区：生命线、按序自上而下画消息箭头与标签；同步 / 异步 / 显式返回三种线型（隐含的返回不画）；内部活动画成生命线上的激活条；本层没有视图边的消息在标签后标「经由上层关系」（P15）或红色箭头「交互中未建模」（P11）；外部参与者泳道在最左，用竖线隔出系统边界；选中突出（R15、R16）：只有选中的步骤用选中样式，配对的调用 / 返回加浅色「配对」标记；选中模块等对象时突出相关泳道的生命线，进度所在的消息只在序号旁加小标记；不做悬停弹出（W-1）。经过共用件的内部活动在标签后标「共用 <名>」/「共用 ×N」，悬停列出共用件（P18）。
     codeRefs: [src/components/sequence/SequenceLanes.vue]
   - id: present.sequence.fragments
     name: 组合框
@@ -46,7 +47,7 @@ modules:
   - id: present.sequence.interact
     name: 时序图交互
     parent: present.sequence
-    responsibility: 单击消息 = 指向这一步（R13）：选中它，进度前进或后退到它；在未选分支上的消息同样可单击，先改选该分支再跳转；单击 alt 的分支条件 = chooseBranch（F6e）；只在用户移动进度后把进度所在的步骤滚到纵向中间，副栏标题栏的「定位」调用这里暴露的方法，悬停、选中、切换层次都不滚动（D-7）；悬停消息时在结构图上预览对应的边；把选中突出（emphasis，R15）交给泳道头与消息区。
+    responsibility: 单击消息 = 指向这一步（R13）：选中它，进度前进或后退到它；在未选分支上的消息同样可单击，先改选该分支再跳转；单击 alt 的分支条件 = chooseBranch（F6e）；只在用户移动进度后把进度所在的步骤滚到纵向中间，副栏标题栏的「定位」调用这里暴露的方法，悬停、选中、切换层次都不滚动（D-7）；悬停消息时在交互图上预览对应的边；把选中突出（emphasis，R15）交给泳道头与消息区。
     codeRefs: [src/components/sequence/SequenceView.vue]
   - id: present.sequence.heads
     name: 泳道头
@@ -62,12 +63,12 @@ modules:
   - id: present.panel.step
     name: 步骤面板
     parent: present.panel
-    responsibility: 先回答「这一步做什么」（D-5）：作用（标签与说明）；输入（携带的数据）与输出（配对返回的数据，本步是返回时为回应的调用，异步为「不等待返回」，没写显式返回时指向接口签名，F7）；数据结构；经由接口。其后是真实端点与本层投影（经由上层关系时注明对应关系建在上层，可「定位到这条关系」，P15）、本层一条可见消息覆盖的多帧；结构关系（对应关系与「推断」标记）默认折叠，可「在画布上显示」这条消息两端的静态关系（V9）；最后是出处。
-    codeRefs: [src/components/panel/StepPanel.vue]
+    responsibility: 先回答「这一步做什么」（D-5）：作用（标签与说明）；输入（携带的数据）与输出（配对返回的数据，本步是返回时为回应的调用，异步为「不等待返回」，没写显式返回时指向接口签名，F7）；数据结构；经由接口。其后是真实端点与本层投影（经由上层关系时注明对应关系建在上层，可「定位到这条关系」，P15）、本层一条可见消息覆盖的多帧；交互关系（对应关系与「推断」标记）默认折叠，可「在画布上显示」这条消息两端的交互关系（V9）；最后是出处。「代码证据」一节在证据等级之上补一行包含链（步骤 → 交互 → 依赖，缺哪一级标哪一级，D-25、S18a）：由步骤绑定的关系、关系的证实与依据的模块依赖组合而成（chain.ts）。
+    codeRefs: [src/components/panel/StepPanel.vue, src/components/panel/chain.ts]
   - id: present.panel.run
     name: 运行信息
     parent: present.panel
-    responsibility: 运行视角下选中模块、关系、聚合边、参与者时面板顶部的一节，回答「在这次流程中做了什么」（V6）：本场景中参与的步骤（按顺序，可单击选中，标出离进度最近的一步）、在本层投影下收发的消息、本场景中用到的接口与数据；模块与参与者可「在画布上显示」它在本层节点的静态关系（V9）；面板原有的结构信息折叠在其下方。
+    responsibility: 运行视角下选中模块、关系、聚合边、参与者时面板顶部的一节，回答「在这次流程中做了什么」（V6）：本场景中参与的步骤（按顺序，可单击选中，标出离进度最近的一步）、在本层投影下收发的消息、本场景中用到的接口与数据；模块与参与者可「在画布上显示」它在本层节点的交互关系（V9）；面板原有的模块信息折叠在其下方。
     codeRefs: [src/components/panel/RunSection.vue]
   - id: present.panel.actor
     name: 参与者面板
@@ -84,19 +85,19 @@ modules:
   - id: present.nav-tree.modules
     name: 模块树
     parent: present.nav-tree
-    responsibility: 系统为根的完整模块层级（T2：层按 order；结构视角下「只看现状」开启时不列目标态模块，运行视角下不受开关影响）。状态 → 树：当前层次的祖先链展开并标出当前层次，选中的模块高亮、展开到它并滚到可见；运行视角下标出参与本场景的模块与进度所在步骤的两端（T3、T5）。树 → 意图：单击 = revealModule（N4），单击系统 = 回根层，双击有子模块的 = drillInto，悬停本层可见的模块 = setHover（T4）。
+    responsibility: 系统为根的完整模块层级（T2：层按 order；结构 / 交互视角下「只看现状」开启时不列目标态模块，运行视角下不受开关影响）。状态 → 树：当前层次的祖先链展开并标出当前层次，选中的模块高亮、展开到它并滚到可见；运行视角下标出参与本场景的模块与进度所在步骤的两端（T3、T5）。树 → 意图：单击 = revealModule（N4），单击系统 = 回根层，双击有子模块的 = drillInto，悬停本层可见的模块 = setHover（T4）。
     codeRefs: [src/components/tree/ModuleTree.vue, src/components/tree/ModuleTreeNode.vue]
   - id: present.nav-tree.steps
     name: 步骤树
     parent: present.nav-tree
-    responsibility: 步骤大纲的逐行呈现（T6）：loop、par 分支、ref 为可折叠的分组，alt 列出全部分支与条件，空分支占位。状态 → 树：帧标出已走过 / 进度所在 / 未走到 / 未选分支 / 未到达；选中步骤时它的帧为选中样式，本层合并为同一条可见消息的其他帧为「同一步」并注明「本层合并为 1 步」，选中的不是步骤时进度所在的帧只加小标记；本层可见的帧显示本层可见消息序号（与时序图、控制条一致），不可见的标「本层不可见」，进度所在的帧滚到可见（T7）。树 → 意图：单击帧 = seek，即选中它（R13），单击分支标题 = chooseBranch（F6b、F6e），「开头」= seek(null)，悬停帧在结构图上预览落点（T8）。
+    responsibility: 步骤大纲的逐行呈现（T6）：loop、par 分支、ref 为可折叠的分组，alt 列出全部分支与条件，空分支占位。状态 → 树：帧标出已走过 / 进度所在 / 未走到 / 未选分支 / 未到达；选中步骤时它的帧为选中样式，本层合并为同一条可见消息的其他帧为「同一步」并注明「本层合并为 1 步」，选中的不是步骤时进度所在的帧只加小标记；本层可见的帧显示本层可见消息序号（与时序图、控制条一致），不可见的标「本层不可见」，进度所在的帧滚到可见（T7）。树 → 意图：单击帧 = seek，即选中它（R13），单击分支标题 = chooseBranch（F6b、F6e），「开头」= seek(null)，悬停帧在交互图上预览落点（T8）。
     codeRefs: [src/components/tree/StepTree.vue, src/components/tree/StepTreeNode.vue]
 
   # ── 视图状态层 ──────────────────────────────────────────
   - id: state.transition.selection
     name: 视角与选中规则
     parent: state.transition
-    responsibility: 视角（结构 / 运行，由是否打开场景决定）与选中由视图状态推出（V1、V2、selectedOf）：选中是唯一且排他的主语——显式选中的对象，否则运行视角下为进度所在的步骤，进度在开头时为场景（ADR-0012）；运行视角下「指向」对象即选中它，下钻选中被下钻的模块（V3）；取消选中即回到进度所在的步骤（V4）。选中突出（emphasisOf，R15、R16）同样由状态推出：选中步骤时为它所在的可见消息与配对帧所在的消息；选中模块 / 文件 / 关系 / 视图边 / 参与者时为相关泳道（问模型层 lanesOf；选中端口时按它的定义模块，L13），不突出消息；选中场景不突出。
+    responsibility: 视角（结构 / 交互 / 运行：打开场景即运行视角，否则按视图状态的模式 mode，缺省交互，V1、V11）与选中由视图状态推出（V1、V2、selectedOf）：选中是唯一且排他的主语——显式选中的对象，否则运行视角下为进度所在的步骤，进度在开头时为场景（ADR-0012）；运行视角下「指向」对象即选中它，下钻选中被下钻的模块（V3）；取消选中即回到进度所在的步骤（V4）。选中突出（emphasisOf，R15、R16）同样由状态推出：选中步骤时为它所在的可见消息与配对帧所在的消息；选中模块 / 文件 / 关系 / 视图边 / 参与者时为相关泳道（问模型层 lanesOf；选中端口时按它的定义模块，L13），不突出消息；选中场景不突出。
     principle: |
       - 步骤与场景不存进 selection：运行视角下 selection 为空即「选中进度所在的步骤 / 场景」，不变式「选中的步骤就是进度所在的一步」（V7）由表示本身保证，不需要同步两个指针。
       - 「某个模块在本层是哪条泳道」是关于被描述系统的知识，归模型层时序模型；「选中什么就突出什么」是会话规则，归这里。
@@ -118,27 +119,40 @@ modules:
   - id: state.transition.url
     name: URL 编解码
     parent: state.transition
-    responsibility: '视图状态与查询参数互相转换：`level` `sel`（m: / r: / e: / a: / f: / d: / c: / p: 前缀，p: 为端口，L13）`sc` `step` `alt`（已选分支，按分支点有序编码）；「组装」等叠加开关不进 URL（O12）；选中步骤时只有 `step`，选中场景时两者都没有，选中其他对象时 `sel` 与表示进度的 `step` 并存（ADR-0012）；解码时丢弃无效值并给出最接近的合法状态；标注一次转移是否进浏览器历史（N10、R10）。'
+    responsibility: '视图状态与查询参数互相转换：`level` `sel`（m: / r: / e: / a: / f: / d: / c: / p: 前缀，p: 为端口，L13；结构视角选中依赖边为 d:）`v`（`v=s` 为结构视角，交互为缺省不写，运行视角下照写以便退出场景后回到它，V11）`sc` `step` `alt`（已选分支，按分支点有序编码）；「组装」等叠加开关不进 URL（O12）；选中步骤时只有 `step`，选中场景时两者都没有，选中其他对象时 `sel` 与表示进度的 `step` 并存（ADR-0012）；解码时丢弃无效值并给出最接近的合法状态；标注一次转移是否进浏览器历史（N10、R10）。'
     codeRefs: [src/state/transition/url.ts]
+  - id: state.transition.mode
+    name: 视角模式与选中映射
+    parent: state.transition
+    adrs: [31]
+    responsibility: 结构 / 交互视角的切换规则（V11、V12，ADR-0031）：setMode 改视图状态的 mode（打开场景时先退出场景，退出场景回到进入前的模式）；切换时把选中映射到对面视图的边——关系、交互边切到结构视角时，这对节点之间有结构边就换成依赖边（sel=d:<依赖方>-><被依赖方>），没有时保留原选中；依赖边切到交互视角时，同一对节点有交互边就换成它（取关系类型声明顺序中的第一条），没有时保留代码依赖选中（K10）；节点、层次与模块选中不动。「这对节点之间有没有结构边 / 交互边」是关于被描述系统的知识，调用模型层（hasStructureEdge 经 desk.facts 给出，interactionEdgeBetween、nodeOf 直接调用）。
+    codeRefs: [src/state/transition/mode.ts]
 
   - id: state.layout.sequence
     name: 时序图排布
     parent: state.layout
-    responsibility: 给时序模型算坐标：外部参与者泳道在最左，其余泳道按层次顺序（排序键）排列，同一父模块内的本层子模块改按结构图中节点的横坐标（P9）；父模块相同的连续泳道成一组，分组框画在泳道头上方（P13）；泳道宽度按名称自适应；消息纵向累加；组合框包住其子消息并按嵌套深度内缩。结果由协调者按输入（层次、场景、已选分支、结构图坐标）派生。
+    responsibility: 给时序模型算坐标：外部参与者泳道在最左，其余泳道按层次顺序（排序键）排列，同一父模块内的本层子模块改按画布中节点的横坐标（P9）；父模块相同的连续泳道成一组，分组框画在泳道头上方（P13）；泳道宽度按名称自适应；消息纵向累加；组合框包住其子消息并按嵌套深度内缩。结果由协调者按输入（层次、场景、已选分支、画布坐标）派生。
     principle: 规则简单、同步计算，不调用 elk（技术选型 §3.3）。
     codeRefs: [src/layout/sequence.ts]
   - id: state.layout.stage
     name: 舞台叠加
     parent: state.layout
-    responsibility: 把本层帧投影与进度换成画布要画的数据与坐标：本层参与的节点、走过的边与步骤序号的位置、当前消息、本层没有视图边时的临时线（temps：经由上层关系带对应关系 P15、未建模 P11）的走线、停在分支点时各选项首条消息的预览位置、当前帧本层不可见（V5、P7、P10、P11、P15、R11）。舞台显示 stageDisplay：按参与节点、回放边、静态关系显示方式、「在画布上显示」的对象与悬停的节点，给出每个节点与视图边显示、淡化还是隐藏（V5、V8、V9、V10）。共用件架上的共用件在运行视角照常显示但淡化（P18）。
+    responsibility: 把本层帧投影与进度换成画布要画的数据与坐标：本层参与的节点、走过的边与步骤序号的位置、当前消息、本层没有视图边时的临时线（temps：经由上层关系带对应关系 P15、未建模 P11）的走线、停在分支点时各选项首条消息的预览位置、当前帧本层不可见（V5、P7、P10、P11、P15、R11）。舞台显示 stageDisplay：按参与节点、回放边、交互关系显示方式、「在画布上显示」的对象与悬停的节点，给出每个节点与视图边显示、淡化还是隐藏（V5、V8、V9、V10）。共用件架上的共用件在运行视角照常显示但淡化（P18）。
     principle: 纯函数，与时序图排布对称——呈现层只按它着色，不自己映射端点或算坐标。
     codeRefs: [src/layout/stage.ts]
   - id: state.layout.canvas
     name: 画布场景
     parent: state.layout
-    responsibility: 把带坐标的层次视图换成画布要画的节点与边（canvasScene，ADR-0013）：位置、类型、数据与类名、层级，以及运行视角下适应画布用的可见节点；框：根层只画系统框，下钻后外框为系统、内框为当前父模块，边界节点在两框之间（两框重合时外框外扩，A7、L4）；要标 ×N 或 ? 而走线没有标签位置时取走线中点（routeMidpoint）。边的层级：与聚焦对象相邻、选中、回放经过的边浮在节点之上（EDGE_Z）。框外边：先对当前画出来的这组调用 outsideRoutes 分配轨道，边与运行视角的步骤序号、分支预览都用分配后的走线。跳线：对画出来的折线关系边调用 routing 的 jumpsOf，交叉处的水平段标跳点（L11）。结构视角：聚焦对象（悬停优先、其次选中）不相邻的节点与边变淡，分层总览中带不参与变淡；核心跨层边只在聚焦核心模块、被选中或回放落在其上时出现（O4、P7）；边界边只在聚焦其一端、被选中或回放经过时出现（L4）。运行视角：按舞台显示（stageDisplay）决定显隐与淡化（V5、V8、V9、V10）；回放叠加——当前消息的边带方向流动、端点节点为活动态、走过的边标步骤序号、临时线（经由上层关系取关系的类型色画虚线、标「经由上层」、随关系选中，P15；未建模画红色虚线，P11）、分支预览（P7、P10、P11、F6）；选中步骤时其余走过的边与步骤序号变灰（R15、R16）。边的视觉通道（L10、ADR-0029）：颜色取关系类型（查询再乘半透明，只「淡」不「细」）、线型取事实状态（结构视角开启代码事实时未证实为虚线并标 ?，已证实不标，K9）、箭头取同步 / 异步（通知一律异步）、线宽档取条数，视图边（含聚合边、经由上层的临时线）里有一条经端口的关系即带插座（L12），标签只有 ×N 与异常；选中不改线宽。端口与边界（ADR-0029、ADR-0030）：节点带它定义的端口记号（L13：画在进边一侧的后半，超过 3 个合成「端口 ×N」，实现者数为描述与代码事实的并集，运行视角不画）与边界角色（L14）；结构视角开启「组装」时画组装叠加线（O12：组装事实投影到本层的点划线，同一对节点合并标 ×N，不参与布局，单击落到这对节点的代码依赖）与节点上的「组装根」角标。选中文件时投影节点加文件高亮（G14）；设计版本标出新增 / 修改与涉及变更数。模型画布上没有编辑态（草图编辑在草图画布，ADR-0025）。分级（ADR-0027）：共用件的边（shelfEdges）默认不画、悬停或选中一端时画成曲线（O10）；本层框计数（levelCounts，O11）；运行视角下当前步骤经过的共用件高亮、不画共用件的临时线（P18）。
+    responsibility: 把带坐标的层次视图换成画布要画的节点与边（canvasScene，ADR-0013）：位置、类型、数据与类名、层级，以及运行视角下适应画布用的可见节点；框：根层只画系统框，下钻后外框为系统、内框为当前父模块，边界节点在两框之间（两框重合时外框外扩，A7、L4）；要标 ×N 或 ? 而走线没有标签位置时取走线中点（routeMidpoint）。边的层级：与聚焦对象相邻、选中、回放经过的边浮在节点之上（EDGE_Z）。框外边：先对当前画出来的这组调用 outsideRoutes 分配轨道，边与运行视角的步骤序号、分支预览都用分配后的走线。跳线：对画出来的折线关系边调用 routing 的 jumpsOf，交叉处的水平段标跳点（L11）。结构 / 交互视角：聚焦对象（悬停优先、其次选中）不相邻的节点与边变淡，分层总览中带不参与变淡；核心跨层边只在聚焦核心模块、被选中或回放落在其上时出现（O4、P7）；边界边只在聚焦其一端、被选中或回放经过时出现（L4）。运行视角：按舞台显示（stageDisplay）决定显隐与淡化（V5、V8、V9、V10）；回放叠加——当前消息的边带方向流动、端点节点为活动态、走过的边标步骤序号、临时线（经由上层关系取关系的类型色画虚线、标「经由上层」、随关系选中，P15；未建模画红色虚线，P11）、分支预览（P7、P10、P11、F6）；选中步骤时其余走过的边与步骤序号变灰（R15、R16）。边的视觉通道（L10、ADR-0029）：颜色取关系类型（查询再乘半透明，只「淡」不「细」）、线型取事实状态（交互视角开启代码事实时未证实为虚线并标 ?，已证实不标，K9）、箭头取同步 / 异步（通知一律异步）、线宽档取条数，视图边（含聚合边、经由上层的临时线）里有一条经端口的关系即带插座（L12），标签只有 ×N 与异常；选中不改线宽。端口与边界（ADR-0029、ADR-0030）：节点带它定义的端口记号（L13：画在进边一侧的后半，超过 3 个合成「端口 ×N」，实现者数为描述与代码事实的并集，运行视角不画）与边界角色（L14）；交互视角开启「组装」时画组装叠加线（O12：组装事实投影到本层的点划线，同一对节点合并标 ×N，不参与布局，单击落到这对节点的代码依赖）与节点上的「组装根」角标。选中文件时投影节点加文件高亮（G14）；设计版本标出新增 / 修改与涉及变更数。结构视角（ADR-0031）的结构边与节点角标见子模块「结构视角的画布场景」，节点位置与交互视角相同（V12）。模型画布上没有编辑态（草图编辑在草图画布，ADR-0025）。分级（ADR-0027）：共用件的边（shelfEdges）默认不画、悬停或选中一端时画成曲线（O10）；本层框计数（levelCounts，O11）；运行视角下当前步骤经过的共用件高亮、不画共用件的临时线（P18）。
     principle: 纯函数，与 stageOverlay、stageDisplay 对称：呈现层只按结果写入 Vue Flow，不自己判断显隐、变淡与回放态；节点与边的数据类型（NodeData、RouteEdgeData）因此归 Layout。
     codeRefs: [src/layout/canvas.ts, src/layout/canvas/**]
+  - id: state.layout.canvas.structure
+    name: 结构视角的画布场景
+    parent: state.layout.canvas
+    adrs: [31]
+    responsibility: 结构视角（ADR-0031）下画布要画的结构边与节点角标：节点位置全部取交互视角的布局（V12），结构边不参与布局、按直连走线（L15）；边的种类、档、条数、违规与「逆稳定」标记交给边组件按 UML 惯例编码（L16）；只引类型的依赖边缺省收起（偏好 typeOnly，画布角计数，基线外违规照画）；边界节点的边只在聚焦其一端时画（同 L4）；共用件与使用者之间的边缺省不画、聚焦任一端时画，反向依赖、违规、在环中的照画，「共用 ×N」按依赖计（O13）；分层总览带间画层间依赖、带内不画，核心模块与架上共用件的跨层依赖只在聚焦它时画（O13③，chipDeps）；选中模块时影响面按方向投影到本层，节点标方向与距离、闭包外变淡（K15，levelImpact）；节点标「入 Ca · 出 Ce」与不稳定度三档（L17），本层环编号常显（Y4）；没有代码事实时只画允许边并在画布角说明（U16）；悬停说明写种类、档、文件条数与允许或违规的规则。
+    principle: 纯函数，与交互视角的画布场景同一入口（canvasScene）：呈现层只按结果画，不自己判断显隐、折叠与影响面。
+    codeRefs: [src/layout/canvas/structure.ts]
   - id: state.layout.sketch
     name: 草图布局
     adrs: [25]
@@ -151,7 +165,7 @@ modules:
   - id: model.scenario.flatten
     name: 回放计划
     parent: model.scenario
-    responsibility: 把步骤树展开成回放计划（帧树）：ref 内联子场景并记为 ref 组合框（F3）；loop 展开一遍并标注循环条件（F4）；par 各分支按书写顺序串行并标注并行（F5）；alt 处分叉为分支点，每个选项一棵子树（F6）。每帧带 ID、所在组合框路径，以及对应的结构关系（显式引用或按 S13 推断，标明是否推断）；步骤没写的接口与数据取自对应关系（返回只取接口），并标明继承（S14）。调用与显式返回配对（pairReturns，F7）：按书写顺序以栈匹配（call 与 async 入栈，写了显式返回的 async 同样配对），alt 各分支从进入分支点时的栈开始。
+    responsibility: 把步骤树展开成回放计划（帧树）：ref 内联子场景并记为 ref 组合框（F3）；loop 展开一遍并标注循环条件（F4）；par 各分支按书写顺序串行并标注并行（F5）；alt 处分叉为分支点，每个选项一棵子树（F6）。每帧带 ID、所在组合框路径，以及对应的交互关系（显式引用或按 S13 推断，标明是否推断）；步骤没写的接口与数据取自对应关系（返回只取接口），并标明继承（S14）。调用与显式返回配对（pairReturns，F7）：按书写顺序以栈匹配（call 与 async 入栈，写了显式返回的 async 同样配对），alt 各分支从进入分支点时的栈开始。
     principle: |
       帧 ID = 场景 ID + 步骤 id；步骤没写 id 时用它在树中的路径（如 `sc.open#4.alt0.1`）（F2）。ref 内联时 ID 加上引用处前缀，同一子场景被引用两次也不冲突。
       绑定关系 bindRelation（S12、S13，ADR-0029）：显式引用优先；否则两端之间恰好一条与消息同向的交互关系（queries / commands / notifies / streams，迁移期的未分类同查询 / 委托；关系箭头是控制流方向，只有 return 反向比对，ADR-0022）即认定并标为推断，恰好连在两端上的优先于连在祖先上的；候选多条时消息形态与关系类型一致（查询与委托按 mode，通知一律 async，流不比）的恰好一条也认定（S19）；Validator 用同一个函数，校验与界面结果一致。
@@ -165,7 +179,7 @@ modules:
   - id: model.scenario.level
     name: 帧的层次投影
     parent: model.scenario
-    responsibility: 把路径上每一帧的 from / to 用 mapEndpoint 映射到当前层次：两个不同节点之间 → 对应的视图边 ID（P1、P2，含边界边、参与者边、核心跨层边 P7；按帧绑定关系的类型选边，P17）；两端在同一子模块 → 内部活动（P3）；分层总览中先看核心模块：同一核心模块才是它的内部活动，同一层的不同泳道之间带上两条泳道（lanes），时序图画成泳道间的消息、结构图按层的内部活动（P7、P14）；两端都在本层外 → 不可见（P4）。把连续的帧合并为本层的可见消息（同一对节点之间同方向的边——不论类型——或同一节点上的内部活动合并，P5），作为单步单位。算出场景所在层次（所有帧端点的最近公共祖先，S9）。共用件不开泳道（P18）：一端是本层共用件架上的共用件的帧按另一端的内部活动处理并记下共用件（合并时取并集），两端都是共用件的不可见；折叠进「+N」的模块落在占位上（viewNodeOf，O8）。
+    responsibility: 把路径上每一帧的 from / to 用 mapEndpoint 映射到当前层次：两个不同节点之间 → 对应的视图边 ID（P1、P2，含边界边、参与者边、核心跨层边 P7；按帧绑定关系的类型选边，P17）；两端在同一子模块 → 内部活动（P3）；分层总览中先看核心模块：同一核心模块才是它的内部活动，同一层的不同泳道之间带上两条泳道（lanes），时序图画成泳道间的消息、交互图按层的内部活动（P7、P14）；两端都在本层外 → 不可见（P4）。把连续的帧合并为本层的可见消息（同一对节点之间同方向的边——不论类型——或同一节点上的内部活动合并，P5），作为单步单位。算出场景所在层次（所有帧端点的最近公共祖先，S9）。共用件不开泳道（P18）：一端是本层共用件架上的共用件的帧按另一端的内部活动处理并记下共用件（合并时取并集），两端都是共用件的不可见；折叠进「+N」的模块落在占位上（viewNodeOf，O8）。
     principle: |
       视图边 ID 与 projectLevel 的边 ID 规则相同（edgeId），画布直接给已有的边加回放态；消息方向与边方向相反时标记 reverse（P10）；本层两节点之间没有视图边时按帧自身的关系绑定（显式或推断，与 S5a 同一口径）区分：已绑定为「经由上层关系」（upper，带 relationId，P15），未绑定为「未建模」（P11）；两者按两端节点照常合并，合并的帧中有未绑定的整条为未建模（P16）。关系类型筛选不作用于回放（P8 已删除）。
       「本层的下一步 / 上一步」（R7）与「指向某帧时进度落在哪条可见消息」（R13：落在其所在可见消息，合并时取这一段的第一帧）在这里回答。
@@ -189,19 +203,19 @@ modules:
 
 relations:
   # 呈现层内部
-  - { id: rel.p2.split-canvas, from: present.desk-view.split, to: present.canvas.flow, type: commands, description: 分屏容器与副栏交给视图转换与交互：分栏在结构图槽位（左 / 上）渲染结构图画布，调用 useStageDisplay 取显示设置 }
+  - { id: rel.p2.split-canvas, from: present.desk-view.split, to: present.canvas.flow, type: commands, description: 分屏容器与副栏交给视图转换与交互：分栏在画布槽位（左 / 上）渲染画布，调用 useStageDisplay 取显示设置 }
   - { id: rel.p2.split-sequence, from: present.desk-view.split, to: present.sequence.interact, type: commands, description: 分屏容器与副栏交给时序图交互：运行视角下分栏在副栏「时序图」页签（右 / 下）渲染时序图 }
   - {id: rel.p6.nav-perspective, from: present.nav-tree, to: state.desk.projection, type: queries, payload: [ds.ViewState], description: 导航树向视图派生（核心与 desk.run）取：视角变化时切换页签（T1）}
   - {id: rel.p3.perspective-act, from: present.perspective, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 视角切换交给 dispatch 与操作：退出场景 → closeScenario}
   - {id: rel.p3.perspective-read, from: present.perspective, to: state.desk.projection, type: queries, payload: [ds.ViewState], description: 视角切换向视图派生（核心与 desk.run）取：当前视角与场景名}
-  - { id: rel.p3.dispatch-run, from: present.panel.dispatch, to: present.panel.run, type: commands, description: 面板分派交给运行信息：运行视角下选中模块、关系、聚合边、参与者时，面板在结构信息之上渲染运行信息（RunSection，V6） }
+  - { id: rel.p3.dispatch-run, from: present.panel.dispatch, to: present.panel.run, type: commands, description: 面板分派交给运行信息：运行视角下选中模块、关系、聚合边、参与者时，面板在模块信息之上渲染运行信息（RunSection，V6） }
   - {id: rel.p3.run-read, from: present.panel.run, to: state.desk.projection, type: queries, payload: [ds.Participation], description: 运行信息向视图派生（核心与 desk.run）取结果}
   - {id: rel.p3.run-act, from: present.panel.run, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 运行信息交给 dispatch 与操作：单击参与的步骤 → seek（R13）}
   - {id: rel.p2.seq-lanes, from: present.sequence.interact, to: present.sequence.lanes, type: commands, description: 时序图交互交给泳道与消息：渲染 SequenceLanes}
   - {id: rel.p2.seq-fragments, from: present.sequence.interact, to: present.sequence.fragments, type: commands, description: 时序图交互交给组合框：渲染 SequenceFragments}
   - { id: rel.p9.seq-heads, from: present.sequence.interact, to: present.sequence.heads, type: commands, description: 时序图交互交给泳道头：时序图在顶部与底部各渲染一份泳道头 }
-  - { id: rel.p8.step-stage, from: present.panel.step, to: present.canvas, type: commands, description: 步骤面板交给画布：「在画布上显示」调用 useStage 显示当前消息两端的静态关系（V9） }
-  - { id: rel.p8.run-stage, from: present.panel.run, to: present.canvas, type: commands, description: 运行信息交给画布：「在画布上显示」调用 useStage 显示选中对象的静态关系（V9） }
+  - { id: rel.p8.step-stage, from: present.panel.step, to: present.canvas, type: commands, description: 步骤面板交给画布：「在画布上显示」调用 useStage 显示当前消息两端的交互关系（V9） }
+  - { id: rel.p8.run-stage, from: present.panel.run, to: present.canvas, type: commands, description: 运行信息交给画布：「在画布上显示」调用 useStage 显示选中对象的交互关系（V9） }
   - {id: rel.p2.panel-scenario, from: present.panel.dispatch, to: present.panel.scenario, type: commands, description: 面板分派交给场景面板：渲染 ScenarioPanel}
   - {id: rel.p2.panel-step, from: present.panel.dispatch, to: present.panel.step, type: commands, description: 面板分派交给步骤面板：渲染 StepPanel}
   - {id: rel.p2.panel-actor, from: present.panel.dispatch, to: present.panel.actor, type: commands, description: 面板分派交给参与者面板：渲染 ActorPanel}
@@ -268,9 +282,9 @@ relations:
     type: queries
     interface: if.layout.layoutSequence
     payload: [ds.SequenceModel, ds.PositionedSequence]
-    description: 视图派生（核心与 desk.run）向时序图排布取：同步计算；泳道顺序参考结构图布局
+    description: 视图派生（核心与 desk.run）向时序图排布取：同步计算；泳道顺序参考画布布局
   - {id: rel.p5.projection-stage, from: state.desk.projection, to: state.layout.stage, type: queries, interface: if.layout.stageOverlay, payload: [ds.ScenarioLevelView, ds.PositionedView, ds.StageOverlay], description: 视图派生（核心与 desk.run）向舞台叠加取：运行视角下派生舞台叠加}
-  - { id: rel.p5.stage-runner, from: state.layout.stage, to: state.layout.runner, type: queries, payload: [ds.PositionedView], description: 舞台叠加向布局入口与缓存取：舞台调用 edgeRoute / linkRoute 按结构图坐标算步骤序号与临时线的位置 }
+  - { id: rel.p5.stage-runner, from: state.layout.stage, to: state.layout.runner, type: queries, payload: [ds.PositionedView], description: 舞台叠加向布局入口与缓存取：舞台调用 edgeRoute / linkRoute 按画布坐标算步骤序号与临时线的位置 }
 
   # 视图状态 → 模型（转移规则需要的查询）
   - {id: rel.p2.playback-path, from: state.transition.playback, to: model.scenario.path, type: queries, interface: if.model.resolvePath, description: 回放规则向回放路径取：是否停在分支点；改选后保留哪些选择（F6b）；到达某帧需要的选择（R13）；直选分支需要的选择与分支点之前的帧（F6e）}
@@ -311,8 +325,8 @@ interfaces:
       transition(state: ViewState, action: ViewAction, ctx: TransitionContext): { state: ViewState; history: 'push' | 'replace' }
       // TransitionContext: { index: ModelIndex; plan?: ScenarioPlan; levelView?: LevelView; scenarioView?: ScenarioLevelView }
       perspectiveOf(state): 'structure' | 'run'
-      selectedOf(state): Selected | null   // Selected = Selection | { kind: 'step'; id: frameId } | { kind: 'scenario'; id }；null = 结构视角无选中（V2）
-      emphasisOf(state, ctx: EmphasisContext): Emphasis | null   // 选中突出（R15、R16）；null = 结构视角
+      selectedOf(state): Selected | null   // Selected = Selection | { kind: 'step'; id: frameId } | { kind: 'scenario'; id }；null = 结构 / 交互视角无选中（V2）
+      emphasisOf(state, ctx: EmphasisContext): Emphasis | null   // 选中突出（R15、R16）；null = 结构 / 交互视角
       // EmphasisContext: { index; levelView; scenarioView; sequence; pairs: ReturnPairs | null; fileOwners: readonly string[] }
     semantics: 纯函数；非法动作返回原状态（不抛错）；同样输入同样输出。规则清单中每条至少一个单测。
   - id: if.state.urlCodec
@@ -411,14 +425,14 @@ interfaces:
       // CanvasInput: { positioned; index; selection; hover; stage: StageOverlay | null; scenarioView; emphasis: { selected; paired } | null;
       //                participants; mode: 'hide' | 'dim' | 'show'; reveal: string[]; diff: ModelDiff | null; fileHits: Set<string> | null; branchPointId;
       //                facts?; evolution?; ports?; assembly?; assemblyRoots? }   // ports：L13 端口记号；assembly / assemblyRoots：O12 组装叠加   // 草图不经这里：草图画布用草图布局（sketchScene，state.layout.sketch）
-    semantics: 纯函数（ADR-0013）；结构视角的聚焦变淡与边的显隐、运行视角的舞台显示与回放叠加、选中步骤时的灰化（R15、R16）、文件高亮（G14）、设计版本标记都在这里算。
+    semantics: 纯函数（ADR-0013）；结构 / 交互视角的聚焦变淡与边的显隐、运行视角的舞台显示与回放叠加、选中步骤时的灰化（R15、R16）、文件高亮（G14）、设计版本标记都在这里算。
   - id: if.layout.stageDisplay
     name: stageDisplay
     owner: state.layout.stage
     signature: |
       stageDisplay(input: { view: LevelView; participants: Map<string, 'path' | 'other'>; playEdges: Set<string>;
                             mode: 'hide' | 'dim' | 'show'; reveal: Set<string> }): StageDisplay
-    semantics: 纯函数（V5、V8、V9）：回放边始终显示；参与路径的节点显示、只在未选分支处的淡化；其余按显示方式；在画布上显示的对象的静态边及对端照常；带始终显示。布局不变。
+    semantics: 纯函数（V5、V8、V9）：回放边始终显示；参与路径的节点显示、只在未选分支处的淡化；其余按显示方式；在画布上显示的对象的交互边及对端照常；带始终显示。布局不变。
 
 dataStructures:
   - id: ds.ActorDef
@@ -456,7 +470,7 @@ dataStructures:
         id?: string                    // 可选，场景内唯一；写了则帧 ID 稳定（F2）
         from: string; to: string       // 模块（写最深的）或参与者
         label?: string
-        relation?: string              // 可选：对应的结构关系，两端须是消息两端自身或其祖先，与消息同向（return 反向比对）
+        relation?: string              // 可选：对应的交互关系，两端须是消息两端自身或其祖先，与消息同向（return 反向比对）
         interface?: string
         payload?: string | string[]
         note?: string
@@ -530,7 +544,7 @@ dataStructures:
           index: number; from: string; to: string; label: string; frameIds: string[]
           kind: 'call' | 'async' | 'return' | 'internal' | 'empty'     // empty：空分支占位
           status: 'path' | 'unchosen' | 'unreached'; pathIndex?: number
-          temp?: 'upper' | 'unmodeled'; relationId?: string            // 本层无视图边：经由上层关系（P15）/ 结构中未建模（P11）
+          temp?: 'upper' | 'unmodeled'; relationId?: string            // 本层无视图边：经由上层关系（P15）/ 交互中未建模（P11）
         }[]
         fragments: {
           id: string; kind: 'alt' | 'loop' | 'par' | 'ref'; label: string; depth: number
@@ -595,7 +609,7 @@ dataStructures:
         paired: ReadonlySet<number>      // 与选中步骤配对的调用 / 返回所在的可见消息（浅色「配对」标记，F7）
         lanes: ReadonlySet<string>       // 突出的泳道（视图节点 ID）
       }
-    description: 选中突出（R15、R16）：任何时刻只有被选中的那一个对象用选中样式；结构图只在 selected 不为空时把其余走过的边变灰。
+    description: 选中突出（R15、R16）：任何时刻只有被选中的那一个对象用选中样式；交互图只在 selected 不为空时把其余走过的边变灰。
   - id: ds.RouteItem
     name: RouteItem
     definition: |
@@ -609,7 +623,7 @@ dataStructures:
         selection: Selection | null
         hover: string | null
         toggles: Toggles                  // 边界节点、只看现状、关系类型、标出变更、对比基线
-        playback: PlaybackState | null    // null = 结构视角；非 null = 运行视角（V1）
+        playback: PlaybackState | null    // null = 结构 / 交互视角（按 mode）；非 null = 运行视角（V1）
         editing?: SketchTarget | null     // 草图画布（X7a）：打开的草图版本的编辑目标，打开即进入；与 playback 互斥，不进 URL
       }
       // 选中（V2、V7）= selection ≠ null ? selection : 运行视角下进度所在的步骤（frameId 为空时为场景）

@@ -55,7 +55,7 @@ modules:
       - **写 store 而非传属性**：节点与边通过 setNodes / setEdges 写入；属性同步在「上一层有选中、切回总览」时会被跳过。
       - **适应画布**：内容外框直接取自布局结果，不依赖 Vue Flow 对节点尺寸的测量，只等画布容器有尺寸；运行视角隐藏静态内容时只取画布场景给出的可见节点；切换层次、画布容器尺寸变化（进入运行视角、切换分屏方向、拖动分隔条、折叠两侧栏）后重新适应。
       - **点击含义**：单击节点 / 边 = 选中（运行视角同样，V3）；双击 = 下钻或跳到边界节点所在层次；单击边上的步骤序号 = 指向这一步，即选中它（R13）；单击分支预览序号 = 选这一支。
-      - **静态关系显示方式**：在「显示」面板切换隐藏 / 淡显 / 全显（V8），值来自舞台显示（按项目记在本地）。
+      - **交互关系显示方式**：在「显示」面板切换隐藏 / 淡显 / 全显（V8），值来自舞台显示（按项目记在本地）。
     codeRefs: [src/components/GraphCanvas.vue]
   - id: present.canvas.nodes
     name: 节点组件
@@ -74,10 +74,16 @@ modules:
     adrs: [30]
     responsibility: '边界角色的记号（L14，ADR-0030）：role: port 的模块名后标「端口」（对外端口，压在框上边、用户一侧），role: adapter 的标「适配器」（接外部技术，贴框右边、外部系统一侧），悬停说明位置的含义；模型画布的模块与核心小块、草图画布的模块节点共用。'
     codeRefs: [src/components/nodes/RimTag.vue]
+  - id: present.canvas.nodes.metrics
+    name: 指标与影响面角标
+    parent: present.canvas.nodes
+    adrs: [31]
+    responsibility: 结构视角下节点上的角标（ADR-0031）：「入 Ca · 出 Ce」与左缘的不稳定度三档色条（L17）；选中模块时影响面的方向（牵动 / 依赖 / 双向）与距离，外圈按距离实 / 虚 / 点线（K15）；本层环编号（Y4，结构视角常显）。只读画布场景给出的数据（StructMarks），不自己算指标。
+    codeRefs: [src/components/nodes/StructMarks.vue]
   - id: present.canvas.edges
     name: 边组件
     parent: present.canvas
-    responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线；颜色、线宽、线型的映射在 edgeStyle，箭头 marker 在 ArrowMarker（大小随线宽档，线在箭头处回缩），都与「显示」面板的示意线共用；折线在跳点处插半圆小桥（L11）。一个视觉通道只表一个维度（L10、ADR-0018、ADR-0029）：颜色 = 关系类型（四类各一色相——查询低饱和且半透明，只「淡」不「细」；委托实色；迁移期的未分类中性灰）；线型 = 事实状态（实线已证实或无事实、虚线未证实、点线为代码依赖叠加线，K9）；箭头自画 marker——同步实心、异步空心「V」；插座 = 经端口（L12，目标端与箭头叠放）；线宽 = 聚合条数三档；×N 标签画成 pill，异常标记用警示色。晕：违规红晕优先于设计变更底色，选中为强调色窄晕（不改线宽），回放当前步骤为宽晕并沿方向流动（P10）；走过的边不加粗。临时线：经由上层关系为关系类型色的虚线（P15），未建模为红色虚线（P11）；组装叠加线为组装专用色的点划线（O12）。
+    responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线；颜色、线宽、线型的映射在 edgeStyle，箭头 marker 在 ArrowMarker（大小随线宽档，线在箭头处回缩），都与「显示」面板的示意线共用；折线在跳点处插半圆小桥（L11）。一个视觉通道只表一个维度（L10、ADR-0018、ADR-0029）：颜色 = 关系类型（四类各一色相——查询低饱和且半透明，只「淡」不「细」；委托实色；迁移期的未分类中性灰）；线型 = 事实状态（实线已证实或无事实、虚线未证实、点线为代码依赖叠加线，K9）；箭头自画 marker——同步实心、异步空心「V」；插座 = 经端口（L12，目标端与箭头叠放）；线宽 = 聚合条数三档；×N 标签画成 pill，异常标记用警示色。晕：违规红晕优先于设计变更底色，选中为强调色窄晕（不改线宽），回放当前步骤为宽晕并沿方向流动（P10）；走过的边不加粗。结构视角的边见子模块「结构边」（UML 惯例，ADR-0031 裁决 D）。临时线：经由上层关系为关系类型色的虚线（P15），未建模为红色虚线（P11）；组装叠加线为组装专用色的点划线（O12）。
     codeRefs: [src/components/edges/**]
   - id: present.canvas.edges.socket
     name: 插座记号
@@ -85,16 +91,22 @@ modules:
     adrs: [29]
     responsibility: 经端口的线在目标端的插座记号（L12，ADR-0029）：开口半圆凸向目标、开口朝发起方，顶点略过箭头尖端，把箭头「插」在里面——与箭头叠放、不替换箭头；半径随箭头大小。画布的关系边与「显示」面板的示意线共用同一个 marker。
     codeRefs: [src/components/edges/SocketMarker.vue]
+  - id: present.canvas.edges.dep
+    name: 结构边
+    parent: present.canvas.edges
+    adrs: [31]
+    responsibility: 结构视角的边（L16，ADR-0031 裁决 D，结构视图私有的通道）：UML 类图惯例——线型：依赖虚线、子类实线、端口实现虚线、组装实线，允许边（U16）点线；端点：依赖开口箭头，子类与端口实现在被依赖方一端空心三角，组装在依赖方一端实心菱形（UmlMarker，线在记号处回缩）；色相中性，依赖的档用明度（交互使用深、值使用中、只引类型浅），不用透明度；线宽 = 聚合的模块依赖条数（共享通道，与交互边同一套档）；违规红晕、选中窄晕、聚焦变淡同交互边（L18）。颜色、线型与记号的映射在 depStyle，与「显示」面板的 StructureSwatch 共用；按 Layout 给的直连走线画（L15）。
+    codeRefs: [src/components/edges/DepEdge.vue, src/components/edges/UmlMarker.vue, src/components/edges/depStyle.ts]
 
   - id: present.panel.dispatch
     name: 面板分派
     parent: present.panel
-    responsibility: 按选中选择面板（V2）：结构视角下为选中的对象，无选中时为当前父模块（根层为系统）；运行视角下选中步骤时为步骤面板、选中场景时为场景面板，选中模块 / 关系 / 聚合边 / 参与者 / 文件时为该对象的面板；没有「已钉住」之类的提示（ADR-0012）。选中端口（L13）时为端口面板（K11）。运行视角下模块、关系、聚合边面板顶部加「运行信息」，结构信息折叠在下方（V6）。草图画布下整个面板换成草图面板（present.panel.sketch）。
+    responsibility: 按选中选择面板（V2）：结构 / 交互视角下为选中的对象，无选中时为当前父模块（根层为系统）；运行视角下选中步骤时为步骤面板、选中场景时为场景面板，选中模块 / 关系 / 聚合边 / 参与者 / 文件时为该对象的面板；没有「已钉住」之类的提示（ADR-0012）。选中端口（L13）时为端口面板（K11）；结构视角下选中依赖边（sel=d:）时为代码依赖面板，其下是这对节点的结构边（present.panel.structure，ADR-0031）。运行视角下模块、关系、聚合边面板顶部加「运行信息」，模块信息折叠在下方（V6）。草图画布下整个面板换成草图面板（present.panel.sketch）。
     codeRefs: [src/components/panel/Panel.vue]
   - id: present.panel.module
     name: 模块面板
     parent: present.panel
-    responsibility: 模块的职责、实现原理、对外接口、核心数据结构、子模块、出入边、「端口」一节（声明的每个端口一份端口面板，K11，渲染端口面板的 ModulePorts）、代码事实里的子类 / 基类与组装 / 被组装于（K12、K13）、代码与文档引用；层额外显示抽象原则、包含 / 不包含、可依赖的层。
+    responsibility: 模块的职责、实现原理、对外接口、核心数据结构、子模块、出入边、「端口」一节（声明的每个端口一份端口面板，K11，渲染端口面板的 ModulePorts）、代码事实里的子类 / 基类与组装 / 被组装于（K12、K13）、代码与文档引用；结构视角下另有「结构」一节（指标、影响面、交互图互查，present.panel.structure）；层额外显示抽象原则、包含 / 不包含、可依赖的层。
     codeRefs: [src/components/panel/ModulePanel.vue]
   - id: present.panel.relation
     name: 关系面板
@@ -129,6 +141,12 @@ modules:
       - src/components/panel/Section.vue
       - src/components/panel/ChangeBadge.vue
       - src/components/panel/DesignNote.vue
+  - id: present.panel.structure
+    name: 结构视图面板
+    parent: present.panel
+    adrs: [31]
+    responsibility: 属性面板里结构视角的两节（ADR-0031）：模块的「结构」一节（ModuleStructure）——扇入 Ca、扇出 Ce、不稳定度 I 与三档、本层节点数、贡献最多的依赖方 / 被依赖方（K16）；影响面 / 依赖面清单按距离分组、列模块与文件数（K15，方向与「只看值依赖」写显示偏好，画布同读）；逆稳定的提示行（U17，info）；交互图互查——涉及本模块、两端之间没有任何依赖的交互关系，单击切到交互视角并选中（K17）。依赖边面板的结构部分（DepStructure，选中依赖边 sel=d:<依赖方>-><被依赖方> 时）——这对节点的结构边：种类与档、文件依赖条数与清单、聚合的模块依赖条数（K14、L16）；交互覆盖与「未解释」（K17）；规则判定（违规或允许它的规则，U15）；两端的不稳定度与「逆稳定」（U17）。全部读 desk.facts 的派生（metricsOf、impactOf、againstOf、isolatedOf、edgeFiles、structure），没有代码事实时只说明原因（K8、U16）。
+    codeRefs: [src/components/panel/ModuleStructure.vue, src/components/panel/DepStructure.vue]
 
   - id: present.nav.breadcrumb
     name: 面包屑
@@ -143,14 +161,20 @@ modules:
   - id: present.canvas.legend
     name: 显示面板（显示设置与图例）
     parent: present.canvas
-    responsibility: 画布右下角的「显示」面板，先「设置」后「图例」（ADR-0017）：设置只放没有图例的开关（结构视角为边界节点、只看现状；运行视角为静态关系显示方式）；图例一个视觉通道一组、每组可折叠（ADR-0017 第三轮）——关系 · 颜色按「三问四修饰」组织（ADR-0029 §3）：三个判断题（被调方拥有后果吗 / 发起方知道接收方吗 / 传的是连续数据吗）各落到一类，类型行示意按画布同一套样式（查询淡、委托实色、带该类箭头）并附一句读法，结构视角下每行兼作类型筛选（L8），迁移期的未分类单列一行中性灰；读完类型再读的修饰——机制（直接 / 端口的插座 / 总线 / 通道）、异步（空心箭头）、拉取——与粗细（聚合条数）、×N 放在浅底卡片里、中性色示意、不可点击（L10、L12）；节点；代码事实 · 线型（结构视角，开关在组标题；线型只在这一组讲）；组装（结构视角，开关在组标题，O12）；回放（运行视角）；一行一项，示意线由 LineSwatch 按与边组件共用的 edgeStyle 画出，与画布同款。各组为子组件（NodeSettings、RelationLegend、FactsLegend、AssemblyLegend、ReplayLegend，外壳 DisplayGroup）。折叠时摘要列出非默认的设置（运行视角缺省折叠，摘要总是「静态关系：<方式>」）；面板展开与各组折叠按视角记在本机（useDisplayPrefs），运行视角默认只展开「回放」。
+    responsibility: 画布右下角的「显示」面板，先「设置」后「图例」（ADR-0017）；图例按视角整组替换、不混列（L19、D-26，ADR-0031 裁决 D）。设置只放没有图例的开关（交互视角为边界节点、只看现状；运行视角为交互关系显示方式）；交互视角的图例一个视觉通道一组、每组可折叠——关系 · 颜色按「三问四修饰」组织（ADR-0029 §3）：三个判断题（被调方拥有后果吗 / 发起方知道接收方吗 / 传的是连续数据吗）各落到一类，类型行示意按画布同一套样式（查询淡、委托实色、带该类箭头）并附一句读法，每行兼作类型筛选（L8），迁移期的未分类单列一行中性灰；读完类型再读的修饰——机制（直接 / 端口的插座 / 总线 / 通道）、异步（空心箭头）、拉取——与粗细（聚合条数）、×N 放在浅底卡片里、中性色示意、不可点击（L10、L12）；节点；代码事实 · 线型（交互视角，开关在组标题；线型只在这一组讲）；组装（交互视角，开关在组标题，O12）。结构视角换成结构视图的几组（子模块「结构视图图例」）；运行视角为回放。共享通道（选中、违规、环、演化、条数）的说明三处同文（L18）。一行一项，示意线由 LineSwatch 按与边组件共用的 edgeStyle 画出，与画布同款。各组为子组件（NodeSettings、RelationLegend、FactsLegend、AssemblyLegend、ReplayLegend，外壳 DisplayGroup）。折叠时摘要列出非默认的设置（运行视角缺省折叠，摘要总是「交互关系：<方式>」）；面板展开与各组折叠按视角记在本机（useDisplayPrefs），运行视角默认只展开「回放」。
     codeRefs: [src/components/DisplayPanel.vue, src/components/display/**]
   - id: present.canvas.legend.assembly
     name: 组装开关与图例
     parent: present.canvas.legend
     adrs: [30]
-    responsibility: 「显示」面板的「组装」一组（O12，ADR-0030，结构视角）：组标题右侧是「组装」开关（缺省关），开启后画布把组装事实（K13）投影到本层画点划叠加线（不参与布局，单击落到代码依赖），组装根所在的节点标「组装根」角标；图例说明线型与角标。开关在视图状态里（toggles.assembly，不进 URL），按项目记在本机（useAssemblyPrefs：模型加载后恢复，之后每次变化写回，同演化叠加的本机记忆）。
+    responsibility: 「显示」面板的「组装」一组（O12，ADR-0030，交互视角）：组标题右侧是「组装」开关（缺省关），开启后画布把组装事实（K13）投影到本层画点划叠加线（不参与布局，单击落到代码依赖），组装根所在的节点标「组装根」角标；图例说明线型与角标。开关在视图状态里（toggles.assembly，不进 URL），按项目记在本机（useAssemblyPrefs：模型加载后恢复，之后每次变化写回，同演化叠加的本机记忆）。
     codeRefs: [src/components/display/AssemblyLegend.vue, src/components/display/useAssemblyPrefs.ts]
+  - id: present.canvas.legend.structure
+    name: 结构视图图例
+    parent: present.canvas.legend
+    adrs: [31]
+    responsibility: 结构视角下「显示」面板的图例组（L19、D-26，ADR-0031）：「结构边 · 种类与档」——依赖、组装、子类、端口实现四种的 UML 线型与端点，依赖的三档按明度（交互使用深、值使用中、只引类型浅），组标题右侧是「只引类型」开关（显示偏好 typeOnly，按项目记在本机、不进 URL），组内写「本层只引类型的边 N 条已收起」与口径（一对节点只按最强的一档计；含聚焦才画的）；「规则叠加」——违规红晕、允许边点线（U15、U16）；「指标 · 不稳定度与共用件」——入 Ca · 出 Ce 角标、不稳定度三档色条与阈值、共用件折叠（K16、L17、O13）。示意线由 StructureSwatch 按与边组件共用的 depStyle 画出、颜色取 styles.css 的同一套变量；没有代码事实时只说明允许依赖图（U16）。
+    codeRefs: [src/components/display/StructureLegend.vue, src/components/display/StructureSwatch.vue, src/components/display/RuleLegend.vue, src/components/display/MetricLegend.vue, src/components/display/SharedLegend.vue]
 
   # ── 视图状态层 ──────────────────────────────────────────
   - id: state.desk.loading
@@ -213,6 +237,12 @@ modules:
     parent: state.layout.runner
     codeRefs: [src/layout/routes.ts]
     responsibility: 方位表示角色（A7、L4）：用户在系统框上方、外部系统与时间在系统框右侧（placeActors），边界节点在父模块框下方一行、按视图给出的层次顺序（与时序图泳道一致），系统框包住父模块框与边界节点行（placeOutside）；方位固定在屏幕上，不随布局方向改变。普通层次中框外元素的边（参与者的边、边界边）不参与布局，要画时由 edgeRoute 按需正交绕行（routing 的 detour：用户底边、外部系统左边、边界节点顶边出入，不穿节点，从目标的入口侧进入，同一节点上的多条边错开、同一起点的边各走一条横线；内部节点那一端取 elk 的占位端口，框外元素自身的端口同样左动右静）。画布每次只对当前画出来的那组框外边一起走线并分配轨道（outsideRoutes + routing 的 allocateTracks：走廊里重合的中间段按边 ID 错开，placeLabels 让标签互不相碰），按布局与可见集记忆。手工走线与编码工具也在这里（routes.ts）：回放临时线与叠加线的曲线 linkRoute、edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、isBoundaryEdge（L10），供排布与画布场景使用。L14：placeRims 把普通层次的边界角色压在父模块框线上；框线上的 port 对端在上方（用户）时走顶边、否则走底边，adapter 对端在右侧（外部系统）时走右边、否则走左边；关系边的出入点在该侧前半错开，后半留给端口记号（L11、L13）。
+  - id: state.layout.runner.direct
+    name: 结构边的直连走线
+    parent: state.layout.runner
+    adrs: [31]
+    responsibility: 结构视角的直连走线（L15，ADR-0031）：结构边不参与布局、不走正交、不绕框，从起点节点边缘到终点节点边缘画直线，可压在其他节点下方（directRoutes）；同一对节点之间的多条（双向、按种类分的各条）沿法向平行错开、互不重合；分层总览带与带之间的边画成竖直的直线，按带对沿带宽均匀铺开（bandDirectRoutes）。交互视角与运行视角的正交走线（L11、O3）不走这里。
+    codeRefs: [src/layout/direct.ts]
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.pipeline.loader
@@ -229,7 +259,7 @@ modules:
 
       步骤与结构一致性（规则 S5 / S5a）：
       - 引用了 relation：端点与方向必须与关系一致，否则 error；运行时关系的箭头是控制流方向，与消息同向，只有 return 反向比对（S12、ADR-0022）。
-      - 没引用 relation：按 S13 推断（两端之间恰好一条运行时关系即认定）；推断不到且两端（及其祖先之间）结构上没有任何关系时报 warning「结构图中没有对应关系」。
+      - 没引用 relation：按 S13 推断（两端之间恰好一条运行时关系即认定）；推断不到且两端（及其祖先之间）结构上没有任何关系时报 warning「交互图中没有对应关系」。
       - 只对应四类交互（迁移期的未分类同查询 / 委托，S12）。
       - 消息形态与关系类型不一致（查询、委托与未分类按 mode：同步为 call、异步为 async；通知一律 async；return 与流不比）：warning，不改绑定（S19）。
     codeRefs: [src/model/validate.ts]
@@ -438,7 +468,7 @@ interfaces:
     signature: |
       hierarchyKey(index: ModelIndex, id: string): number[]   // 每级两项：[0, order]（层）或 [1, 描述顺序]；参与者为空
       compareKeys(a: number[], b: number[]): number          // 逐项比较，前缀较短者在前
-    semantics: 纯函数；结构图边界节点行与时序图泳道共用，两张图的外部模块顺序一致。
+    semantics: 纯函数；画布边界节点行与时序图泳道共用，两张图的外部模块顺序一致。
   - id: if.model.diffModels
     name: diffModels
     owner: model.diff

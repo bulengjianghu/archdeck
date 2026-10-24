@@ -62,12 +62,12 @@ modules:
   - id: state.desk.facts
     name: 架构治理派生（desk.facts）
     parent: state.desk
-    responsibility: 由源码同步取得的代码事实派生（computed，调用模型层架构治理）：事实状态（设计版本或历史提交、取数中、失败——源码清单读取失败也算，K8、G1）、治理报告、结构视角开关开启时（缺省开启）的本层投影（只取基线外的违规，K9、Y4）、门禁错误（U9）、拦截记录摘要（Q4）、选中的代码依赖叠加线（K10）、选中节点所在的本层环（Y5）、模块治理信息与关系证实（含知识方向与经端口的证实，K5b）。四类交互与端口（ADR-0029）：端口面板 portOf / portsOf（K11；有代码事实时实现者带证据档并含「仅代码事实」的，否则只按描述）、本层要画端口记号的节点 portMarks（L13，只在结构视角，分层总览只画核心模块）、端口孤立（U14，治理面板）、未分类条数与其中核心之间的（M17）；子类与组装事实 structureOf（模块的子类 / 基类、组装 / 被组装于、是否组装根）与 structureBetween（两端之间的，关系与代码依赖面板用，K12、K13）；「组装」开关开启时组装事实与组装根的本层投影 assembly（O12，不参与布局）。
+    responsibility: 由源码同步取得的代码事实派生（computed，调用模型层架构治理）：事实状态（设计版本或历史提交、取数中、失败——源码清单读取失败也算，K8、G1）、治理报告、交互视角「代码事实」开关开启时（缺省开启）或结构视角下的本层投影（只取基线外的违规，K9、Y4）、门禁错误（U9）、拦截记录摘要（Q4）、选中的代码依赖叠加线（K10）、选中节点所在的本层环（Y5）、模块治理信息与关系证实（含知识方向与经端口的证实，K5b）。四类交互与端口（ADR-0029）：端口面板 portOf / portsOf（K11；有代码事实时实现者带证据档并含「仅代码事实」的，否则只按描述）、本层要画端口记号的节点 portMarks（L13，只在交互视角，分层总览只画核心模块）、端口孤立（U14，治理面板）、未分类条数与其中核心之间的（M17）；子类与组装事实 structureOf（模块的子类 / 基类、组装 / 被组装于、是否组装根）与 structureBetween（两端之间的，关系与代码依赖面板用，K12、K13）；「组装」开关开启时组装事实与组装根的本层投影 assembly（O12，不参与布局）。结构视图（ADR-0031）：结构视角下本层的结构视图 structure（有代码事实时为结构边与只引类型计数，否则为允许依赖图，活动草图的 mayDependOn 一并投影，U16）；全系统指标 metrics / valueMetrics 与模块明细 metricsOf（K16）、模块的影响面 impactOf（K15）、面板用的结构边文件依赖 edgeFiles（K14）、逆稳定 againstOf（U17）、交互图互查 isolatedOf（K17）；视角切换用的 structurePair（V12）。
     codeRefs: [src/state/desk/facts.ts, src/state/desk/evidence.ts]
   - id: state.desk.evolution
     name: 演化事实派生（desk.evolution）
     parent: state.desk
-    responsibility: 由源码同步取得的 git 历史派生（computed，调用模型层演化事实）：演化状态（设计版本、取数中、读不到 git 历史带原因，J1）、模块统计与时间耦合、结构视角下热度或耦合开关开启时的本层投影（J5）、选中的耦合线（J7）、模块的统计与耦合对端、热度前 N、无依赖无关系的耦合对、提交说明按需取。
+    responsibility: 由源码同步取得的 git 历史派生（computed，调用模型层演化事实）：演化状态（设计版本、取数中、读不到 git 历史带原因，J1）、模块统计与时间耦合、结构 / 交互视角下热度或耦合开关开启时的本层投影（J5）、选中的耦合线（J7）、模块的统计与耦合对端、热度前 N、无依赖无关系的耦合对、提交说明按需取。
     codeRefs: [src/state/desk/evolution.ts]
 
   - id: state.desk.review
@@ -100,8 +100,14 @@ modules:
   - id: model.governance.level
     name: 本层投影
     parent: model.governance
-    responsibility: 代码事实投影到当前层次：视图边的证实与违规、未解释的交互与违规的叠加线、本层的环及其构成——环内节点与每条本层依赖的视图边、模块依赖（K9、Y4、Y5）；叠加线选中时的模块依赖（K10）。组装事实的本层投影 levelAssembly（O12，ADR-0030）：同 K9 的叠加线按 mapEndpoint 落到本层节点，同一对节点合并为一条组装叠加线（单击落到这对节点的代码依赖），组装根按最深模块算、聚合到本层最深的可见节点。与结构图、帧共用 mapEndpoint。结构视图（ADR-0031）的依赖边投影 levelDeps、影响面 impactOf、扇入扇出与不稳定度 structureMetrics、稳定依赖方向、无事实时的允许依赖图（K14–K17、U15–U17）暂随本模块，待第七轮 T4 重新生成描述时拆分。
-    codeRefs: [src/model/governance/level.ts, src/model/governance/structure.ts]
+    responsibility: 代码事实投影到当前层次：视图边的证实与违规、未解释的交互与违规的叠加线、本层的环及其构成——环内节点与每条本层依赖的视图边、模块依赖（K9、Y4、Y5）；叠加线选中时的模块依赖（K10）。组装事实的本层投影 levelAssembly（O12，ADR-0030）：同 K9 的叠加线按 mapEndpoint 落到本层节点，同一对节点合并为一条组装叠加线（单击落到这对节点的代码依赖），组装根按最深模块算、聚合到本层最深的可见节点。与交互图、帧共用 mapEndpoint；结构视图（子模块「结构视图」）复用这里的 nodeOf。
+    codeRefs: [src/model/governance/level.ts]
+  - id: model.governance.structure
+    name: 结构视图
+    parent: model.governance
+    adrs: [31]
+    responsibility: 结构视图（ADR-0031）的依赖边、影响面、指标——只读代码事实与规则，不读关系来定边。依赖边：模块依赖（K4，全部种类）按 mapEndpoint 投影到本层成结构边 levelDeps，一对节点同方向按事实种类各一条（依赖、组装、子类、端口实现），依赖边取最强的一档（交互使用 > 值使用 > 只引类型，K14）、带交互覆盖与「未解释」标记（K17）、这对节点的规则判定（违规取最严的状态 / 允许它的规则 / 无约束，U15）与逆稳定提示（U17，阈值 0.3），只引类型的条数供画布角计数；分层总览核心模块的跨层依赖 chipDeps（O13③）；归入一条结构边的文件依赖 structureEdgeFiles。影响面：模块子树的传入 / 传出闭包按最短距离、标环成员，可只看值依赖（impactOf，K15），投影到本层 levelImpact。指标：扇入 Ca、扇出 Ce、不稳定度 I 与三档，按系统内不同模块数计、与层次无关（structureMetrics、moduleMetrics，K16）；稳定依赖方向 againstStability / againstStabilityOf（U17）。交互图互查 isolatedInteractions（K17）。没有代码事实时的允许依赖图 allowedDeps（层、白名单与活动草图的 mayDependOn，U16）。视角切换的边映射 hasStructureEdge、interactionEdgeBetween（V12）。数据类型在「类型与 Schema」（governance/types.ts）。
+    codeRefs: [src/model/governance/structure.ts]
   - id: model.governance.query
     name: agent 查询
     parent: model.governance
@@ -326,13 +332,26 @@ relations:
   - { id: rel.gv.selection-evolution, from: state.transition.selection, to: model.evolution, type: queries, description: 视角与选中规则向演化事实取：选中耦合线时调用 coupleEnds 取要突出的两端（J7） }
   - { id: rel.gv.scenario-panel-shared, from: present.panel.scenario, to: present.shared, type: commands, description: 场景面板交给呈现共用件：经 useOpenPreview 在副栏预览证据文件（S15） }
   - { id: rel.gv.step-panel-shared, from: present.panel.step, to: present.shared, type: commands, description: 步骤面板交给呈现共用件：经 useOpenPreview 在副栏预览代码证据（S16） }
-  # 结构视图（ADR-0031）：结构边、指标与影响面暂随 structure.ts 归在本层投影（第七轮 T5 拆子模块）
-  - { id: rel.gv.panel-structure-level, from: present.panel, to: model.governance.level, type: queries, description: 属性面板向本层投影取：模块「结构」一节调用 againstStability 列逆稳定的依赖，依赖边面板调用 fileKinds 把文件证据按结构边的种类分组（U17、K14） }
-  - { id: rel.gv.panel-structure-facts, from: present.panel, to: model.governance.facts, type: queries, description: 属性面板向事实比对取：交互图互查调用 within 判断关系是否涉及本模块子树，依赖边面板调用 contractNames 取被依赖方的端口名（K17、K14） }
-  - { id: rel.gv.panel-structure-ownership, from: present.panel, to: model.source.ownership, type: queries, description: 属性面板向归属与入口取：影响面清单调用 moduleFiles 给每个模块的文件数（K15） }
-  - { id: rel.gv.canvas-structure-level, from: state.layout.canvas, to: model.governance.level, type: queries, description: 画布场景向本层投影取：结构视角调用 chipDeps 取分层总览核心模块的跨层依赖、levelImpact 把影响面投到本层、nodeOf 定位选中模块所在的节点（O13、K15） }
-  - { id: rel.gv.canvas-structure-projector, from: state.layout.canvas, to: model.projector, type: queries, description: 画布场景向 Projector 层次投影取：结构视角调用 shelfOf 取共用件架上的节点，决定共用件边的折叠（O13） }
-  - { id: rel.gv.transition-structure-level, from: state.transition, to: model.governance.level, type: queries, description: 视图状态转移向本层投影取：切换结构 / 交互视角时调用 nodeOf 与 interactionEdgeBetween 把选中映射到对面视图的边（V12） }
-  - { id: rel.gv.level-rules, from: model.governance.level, to: model.governance.rules, type: queries, description: 本层投影向规则判定取：结构边的规则叠加调用 rulesOf 列出约束这对节点的层规则、白名单与访问面（U15） }
-  - { id: rel.gv.rework-structure-level, from: model.rework, to: model.governance.level, type: queries, description: 返工清单向本层投影取：共用件健康度调用 structureMetrics 算入度最高的共用件（Q15） }
+  # 结构视图（ADR-0031）
+  - { id: rel.gv.canvas-structure-level, from: state.layout.canvas.structure, to: model.governance.structure, type: queries, description: 结构视角的画布场景向结构视图取：调用 chipDeps 取分层总览核心模块的跨层依赖、levelImpact 把选中模块的影响面投到本层节点（O13③、K15） }
+  - { id: rel.gv.canvas-structure-node, from: state.layout.canvas.structure, to: model.governance.level, type: queries, description: 结构视角的画布场景向本层投影取：调用 nodeOf 定位选中模块在本层所在的节点（K15） }
+  - { id: rel.gv.canvas-structure-projector, from: state.layout.canvas.structure, to: model.projector, type: queries, description: 画布场景向 Projector 层次投影取：结构视角调用 shelfOf 取共用件架上的节点，决定共用件边的折叠（O13） }
+  - { id: rel.gv.transition-structure-level, from: state.transition.mode, to: model.governance.level, type: queries, description: 视角模式与选中映射向本层投影取：切换结构 / 交互视角时调用 nodeOf 找关系两端在本层的节点（V12） }
+  - { id: rel.gv.transition-structure-edge, from: state.transition.mode, to: model.governance.structure, type: queries, description: 视角模式与选中映射向结构视图取：依赖边切到交互视角时调用 interactionEdgeBetween 取同一对节点的交互边（V12） }
+  - { id: rel.gv.level-rules, from: model.governance.structure, to: model.governance.rules, type: queries, description: 结构视图向规则判定取：结构边的规则叠加与允许依赖图调用 rulesOf 列出约束这对节点的层规则、白名单与访问面（U15、U16） }
+  - { id: rel.gv.rework-structure-level, from: model.rework, to: model.governance.structure, type: queries, description: 返工清单向结构视图取：共用件健康度调用 structureMetrics 算入度最高的共用件（Q15） }
+  - { id: rel.gv.structure-level, from: model.governance.structure, to: model.governance.level, type: queries, description: 结构视图向本层投影取：调用 nodeOf 把模块依赖、影响面与允许依赖的两端映射到本层节点（L15、K15、U16） }
+  - { id: rel.gv.structure-facts, from: model.governance.structure, to: model.governance.facts, type: queries, description: 结构视图向事实比对取：调用 coveringRelations 数覆盖依赖边的交互、implementsInto 判端口实现者覆盖、contractNames 取被依赖方的端口名、plainInteraction 判纯交互使用、within 判子树、sharedHostOf 跳过共用件（K14、K17、U17） }
+  - { id: rel.gv.structure-cycles, from: model.governance.structure, to: model.governance.cycles, type: queries, description: 结构视图向环与环度取：「只看值依赖」时调用 valueDeps 去掉只引类型的模块依赖（K15、K16） }
+  - { id: rel.gv.structure-ownership, from: model.governance.structure, to: model.source.ownership, type: queries, description: 结构视图向归属与入口取：影响面调用 moduleFiles 数闭包内模块的源码文件（K15） }
+  - { id: rel.gv.facts-structure, from: state.desk.facts, to: model.governance.structure, type: queries, description: 架构治理派生（desk.facts）向结构视图取：结构视角调用 structureView 取本层结构边或允许依赖图，structureMetrics / moduleMetrics 算指标，impactOf / levelImpact 算影响面，structureEdgeFiles、againstStabilityOf、isolatedInteractions 给面板，hasStructureEdge 给视角切换（K14–K17、U15–U17、V12） }
+  - { id: rel.gv.agent-structure, from: access.agent, to: model.governance.structure, type: queries, description: agent 接口向结构视图取：arch impact / metrics 与 MCP 同名工具调用 impactOf、structureMetrics、moduleMetrics 输出影响面与指标（Q14） }
+  - { id: rel.gv.panel-structure-read, from: present.panel.structure, to: state.desk.facts, type: queries, description: 结构视图面板向架构治理派生（desk.facts）取：metricsOf、impactOf、againstOf、isolatedOf、edgeFiles、structure、relationFact 显示指标、影响面、逆稳定、交互图互查与依赖边明细（K14–K17、U15、U17） }
+  - { id: rel.gv.panel-structure-act, from: present.panel.structure, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 结构视图面板交给 dispatch 与操作：单击交互图互查或覆盖它的关系时 setMode 切到交互视角并 select 选中，单击模块时 revealModule（K17） }
+  - { id: rel.gv.module-structure, from: present.panel.module, to: present.panel.structure, type: commands, description: 模块面板交给结构视图面板：结构视角下渲染模块的「结构」一节 ModuleStructure（K15、K16、K17、U17） }
+  - { id: rel.gv.dep-structure, from: present.panel.dep, to: present.panel.structure, type: commands, description: 代码依赖面板交给结构视图面板：结构视角选中依赖边时渲染这对节点的结构边、交互覆盖、规则与稳定性 DepStructure（K14、K17、U15、U17） }
+  - { id: rel.gv.structure-content, from: present.panel.structure, to: present.panel.content, type: commands, description: 结构视图面板交给内容组件：渲染分节组件 Section }
+  - { id: rel.gv.structure-gov, from: present.panel.structure, to: present.panel.governance, type: commands, description: 结构视图面板交给架构治理面板：渲染结构边的文件依赖清单 FileDepList }
+  - { id: rel.gv.structure-prefs, from: present.panel.structure, to: present.canvas.legend, type: commands, description: 结构视图面板交给显示面板：经 useStructurePrefs 读写影响面方向与「只看值依赖」的显示偏好（画布同读，K15） }
+  - { id: rel.gv.url-mode, from: state.transition.url, to: state.transition.mode, type: queries, description: URL 编解码向视角模式与选中映射取：解码 v=s 时调用 withMode 得到带模式的视图状态（V11） }
   - { id: rel.gv.desk-facts-intent, from: state.desk.facts, to: model.intent.check, type: queries, description: 架构治理派生（desk.facts）向草图核验与生命周期取：没有代码事实时调用 sketchLifetime、flattenSketch 把活动草图里层的 mayDependOn 接进允许依赖图（U16） }
