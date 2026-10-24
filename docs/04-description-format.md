@@ -186,23 +186,32 @@ scenario:
 
 ### 3.4 关系
 
-运行时关系的箭头一律是**控制流方向**（谁发起），与场景消息同向；谁 import 谁是代码事实，不用箭头表达（02 §1.1、ADR-0022）。
+关系表达**交互**，不表达知识：谁 import 谁是代码事实，由工具从源码算出，**不写成关系**（02 §1.1、ADR-0026）。运行时关系的箭头一律是**控制流方向**（谁发起），与场景消息同向（ADR-0022）。
+
+> 状态：待实现（ADR-0026）——去掉 `depends`、总线写法、`via: bus`；在此之前现有描述里的 `depends` 照常加载，迁移由第五轮 T1 一次完成。
 
 | type | 何时用 | `from` → `to` |
 |---|---|---|
-| `depends` | 编译期知道对方：只引数据类型，或导入对方的函数、类来使用 | 依赖方 → 被依赖方 |
 | `implements` | 实现对方声明的契约：导入它的接口，或类 `implements` / `extends` 它的类型；`to` 必须声明接口（M11） | 实现方 → 契约所在模块 |
-| `calls` | **命令**：请求并期待结果（同步返回值、Promise、异步回调） | 发起方 → 接收方 |
-| `notifies` | **通知**：不期待结果、可能一对多、发布者不知道谁在听（事件总线、emit、观察者回调） | 发布者 → 订阅者 |
+| `calls` | **命令**：请求并期待结果；同步返回值缺省，异步（Promise、异步回调、postMessage、定时器回调）加 `mode: async` | 发起方 → 接收方 |
+| `notifies` | **通知**：不期待结果、可能一对多、发布者不知道谁在听（事件总线、emit、观察者回调）；两端写真正的发布者与订阅者，不写总线（M14） | 发布者 → 订阅者 |
 | `streams` | **流**：同一通道上连续的数据项，关注吞吐与背压（帧、分片、样本流）；两端通常只知道端口、由第三方接线。拉取型（接收方按需取下一项）加 `pull: true`，箭头仍指数据去向 | 推送方 → 接收方 |
 
-判别顺序：先问「要不要结果」——要 → `calls`；不要、且是零散的一次次发生 → `notifies`；不要、且是同一通道上连续的数据 → `streams`。旧名 `event`（箭头为订阅方 → 发布方）与 `dataflow` 已改名：旧名在加载时自动映射并提醒（M12），按提醒手工改；别名一轮后删除（`event` 改成 `notifies` 时同时对调 `from` / `to`，并核对说明里的方向字样）。
+只有这四类（`implements` 见下）。导入了对方却没有交互（只引类型、只是知道）的**不写关系**——那是代码事实；`depends` 已删除（M15）。
+
+判别顺序：先问「有没有交互」——没有 → 不写；再问「要不要结果」——要 → `calls`（发起方不等结果的加 `mode: async`）；不要、且是零散的一次次发生 → `notifies`；不要、且是同一通道上连续的数据 → `streams`。旧名 `event`（箭头为订阅方 → 发布方）与 `dataflow` 已改名：旧名在加载时自动映射并提醒（M12），按提醒手工改；别名一轮后删除（`event` 改成 `notifies` 时同时对调 `from` / `to`，并核对说明里的方向字样）。
 
 - ID：`rel.<区域>.<序号或短名>`，全局唯一。
 - 端点写在能表达清楚的**最深模块**上，上层自动聚合；跨区域时对端只写对方的第二级模块 ID，不猜更深的 ID。
 - 不连祖先与后代，不为「包含」建关系（M6）。
-- 异步（Worker postMessage、通知、定时器回调）标 `mode: async`；有明确接口填 `interface`，有明确载荷填 `payload`。
-- `via`（K5b）：只在两端之间**确实不可能有导入**时写——跨进程、经框架注入或路由、经组装者注入的回调；写了即不判定证实，`lint:model` 不再为它报 `fact.unconfirmed`。取值 `http` / `hmr` / `inject` / `router` / `callback` / `port`（经端口接线：两端只知道端口契约，由组装者接上，常见于 `streams`）。拿不准的不写，留给 `fact.unconfirmed` 提醒去核对。本项目的例子：
+- 异步的 `calls`（Promise、异步回调、Worker postMessage、定时器回调）标 `mode: async`，同步的不写；场景里的 `async` 消息对应异步的 `calls`、`call` 消息对应同步的（S19）。草案里的 `async: true` 即此字段，不另加。有明确接口填 `interface`，有明确载荷填 `payload`。
+- **事件总线**：总线模块标 `role: bus`（§3.2），它**不作** `notifies` 的端点（M14）。按事件名配对：同一事件的每个发布者 → 每个订阅者各写一条 `notifies`（多个订阅者就多条），`interface` 写事件名，可加 `via: bus` 留痕（两端之间没有导入，不判定，K5b）；发布者、订阅者只与总线交互、看不出事件名的，不猜，写进 `questions` 或留给 `fact.unconfirmed` 提醒。
+
+  ```yaml
+  relations:
+    - { id: rel.app.sm-state-ui, from: infra.framework.state-machine, to: app.plugins, type: notifies, interface: if.events.stateChanged, via: bus }
+  ```
+- `via`（K5b）：只在两端之间**确实不可能有导入**时写——跨进程、经框架注入或路由、经组装者注入的回调；写了即不判定证实，`lint:model` 不再为它报 `fact.unconfirmed`。取值 `http` / `hmr` / `inject` / `router` / `callback` / `port`（经端口接线：两端只知道端口契约，由组装者接上，常见于 `streams`）/ `bus`（经事件总线，只用于 `notifies`，M14）。拿不准的不写，留给 `fact.unconfirmed` 提醒去核对。本项目的例子：
 
   | 关系 | `via` | 为什么导入证实不了 |
   |---|---|---|
@@ -212,16 +221,16 @@ scenario:
   | `rel.p7.file-preview`（文件面板 → 项目视图） | `inject` | 经共用件的注入键 provide / inject |
   | `rel.ad.url-actions`（路由同步 → dispatch） | `callback` | 协调者把 `query => dispatch(…)` 回调交给路由同步 |
 
-#### import 与 depends / implements
+#### import 与关系
 
-import 是**证据**，`depends` / `implements` 是**主张**。按代码里看到的选：
+import 是**证据**（代码事实），关系是**交互的主张**。按代码里看到的选：
 
 | 代码里看到的 | 写 | 说明 |
 |---|---|---|
-| 只导入对方的数据类型 | `depends` | 只引类型不算未描述（K7），写不写都可以；有接口语义时写 |
+| 只导入对方的数据类型（类型、枚举） | 不写 | 由代码事实承载；不算未解释的交互（K7） |
 | 导入对方描述里声明的接口，或类 `implements` / `extends` 对方的类型 | `implements` | K5 只认这两种证据（已证实）；对方的接口要在描述里声明（`interfaces[].owner` 或 `provides`） |
 | 结构性满足对方的契约，代码只引了对方的数据类型（TS 不要求写 implements 子句） | `implements` | 标「结构性实现（代码未显式声明）」，只提示（info），建议在类上加 implements <接口>；描述不用改 |
-| 导入对方的函数、类并调用 | `depends`（编译期），运行时另写 `calls` 等 | 写成 `implements` 会报「证据像 depends」（`fact.like-depends`，warning） |
+| 导入对方的函数、类、变量并使用 | 这次使用是什么交互就写什么（多为 `calls`）；借用工具函数、标签常量这类没有架构含义的可不写 | 不写时列为「未解释的交互」（K7，info，不报警告）；写成 `implements` 会报「证据像使用」（`fact.like-depends`，warning） |
 
 一个声明了接口的模块在面板上有「端口三角」（K11）：定义 · 实现者 · 使用者，用来检查契约是否有人实现、有人使用。
 
@@ -402,7 +411,7 @@ sketch:
       children:                  # 根挂载是唯一允许嵌套的情形：层下嵌套第二级模块
         - { id: present.version, name: 版本切换与设计信息条, kind: subsystem }
   relations:                     # 自 v2 起骨架包含第二级之间的关系（显式写在本层，X18）
-    - { id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: depends }
+    - { id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: calls }
 ```
 
 #### 字段
@@ -466,7 +475,7 @@ sketch:
 #### 加载、核验与写回
 
 - **加载**：草图先于其他文件进入 Loader；其他文件对草图实体只能补充（往下挂子模块、补草图没写的字段），不能重定义（X1）。`mount` 推出模块的 `parent`；草图的 `abstraction` 即挂载点模块的 `abstraction` 字段（对内的一面，其他文件写了不同的值即 `sketch-redefined`；挂载点不在描述里时提醒 `sketch-mount-missing`）；`from`、`layout` 不进模型索引（它们是设计信息，不是被描述系统的事实）。
-- **校验**（X14）：格式错误拦保存——schema、ID 格式与重复、模块不是挂载点的直接子节点、引用不存在、缺名称；语义提示拦「交给 AI」与定稿——根草图的层依赖成环、非根草图的本层 `depends` 成环、同挂载点与持久草图矛盾、待重连（X16）。超七（X13）与没写职责只提示（hint），不进两级。
+- **校验**（X14）：格式错误拦保存——schema、ID 格式与重复、模块不是挂载点的直接子节点、引用不存在、缺名称；语义提示拦「交给 AI」与定稿——根草图的层依赖（`mayDependOn`）成环、同挂载点与持久草图矛盾、待重连（X16）。超七（X13）与没写职责只提示（hint），不进两级。
 - **核验**（X4、X17）：同一个函数做两个对比——相对基线（我改了什么）与相对当前版本（实现还差什么）；按挂载点取对象版本的同一范围比对，按血缘识别合并 / 拆分 / 改 ID / 移动；相对当前版本只比结构（模块、父子、`kind`、`core`、`closed`、关系两端与类型、接口与 `owner`），职责等文字只参与相对基线。`npm run arch -- sketch-check [--design <设计>]` 对设计逐张报告，与页面问题页签「草图偏差」同一份结果。持久草图（`intent/`）的偏差同样相对完整的当前版本（草图自身也已加载进去），页面「本张核验」与对比按钮与命令行一致，骨架与实现一致时为 0；它交给 AI 的指令另带「交给 AI 时的改动摘要」，对象是去掉这张草图后的当前版本（其余描述说的样子），不是偏差、不进计数（X17）。
 - **写回**（B6、X20）：在草图画布上编辑，保存整个设计——改过的草图整份写回（含 `layout`；引用节点的键去掉，X22），会话里推出并改过的草图作为新文件写出；写回用 YAML 文档模型合并，**注释只在未改动的节点上保留**；保存时任一文件已被外部改动则整次拒绝（X7i）；没有关系的引用节点保存时丢弃（X19）。级联改名（X12）写到新文件名并删旧文件，删带下一层草图的模块（人确认后）删子草图文件——只限 `designs/<设计>/sketches/*`，永不动 `intent/*`，每个文件照记拦截记录（B7）。手写与画布编辑可以交替。
 
@@ -486,7 +495,7 @@ npm run arch -- own            # 人改完 intent/、designs/*/sketches/、rules
 - 必须 0 个错误；提醒逐条处理：缺职责要补；引用其他区域尚未定义的接口 / 数据结构时可暂留；源码归属警告按 §3.7 处理；场景证据文件不存在（`scenario.evidence`）按 §3.6 改正路径。
 - 人拥有的文件由指纹门禁守住：`lint:model` 报 `owned.changed` 时说明有人拥有的文件在登记后被改动（多半是 AI 重新生成时碰了它）——由人核对后恢复，或确认改动后再 `arch own`；`owned.unregistered` 提醒有人拥有的文件还没登记。AI 不得运行 `arch own`。
 - 按代码重新生成当前版本后，更新 `system.yaml` 的 `source.commit` 与 `source.generatedAt`；对活动草图跑 `sketch-check`，偏差按草图修正描述（X5）。
-- `lint:model` 一并检查代码事实与架构规则（K、U、Y）：基线之外的新增违规（`rule.new`）、环度上升（`cycle.grew`）是错误，要么修代码，要么由架构师裁决后改规则；`fact.unconfirmed` 提醒说明描述里的编译期关系在代码里找不到，或运行时关系的两端之间在代码里没有任何依赖（K6），按代码修正描述（确实经 HTTP、注入、路由或回调传递的写 `via`，K5b）——运行时交互经由第三个模块转交时，关系写在实际调用的两端之间（如 `entry → validator`，而不是 `loader → validator`）；未描述依赖只计有值导入的（K7），只引类型的不必补关系，名称查询、标签常量这类到处用的值依赖写在能表达清楚的最高层（如 `present → model.pipeline.indexer`）。
+- `lint:model` 一并检查代码事实与架构规则（K、U、Y）：基线之外的新增违规（`rule.new`）、环度上升（`cycle.grew`）是错误，要么修代码，要么由架构师裁决后改规则；`fact.unconfirmed` 提醒说明描述里的 `implements` 在代码里找不到，或运行时关系的两端之间在代码里没有任何依赖（K6），按代码修正描述（确实经 HTTP、注入、路由或回调传递的写 `via`，K5b）——运行时交互经由第三个模块转交时，关系写在实际调用的两端之间（如 `entry → validator`，而不是 `loader → validator`）；未解释的交互（K7，info）只计值使用（引用了函数、类、变量）而没有交互关系覆盖的；按「事实求全、描述求准、呈现求少」（Q12）**补交互，不补依赖**：这次使用是哪种交互就补哪种（多为 `calls`），只引类型的、借用名称查询与标签常量这类没有架构含义的不补。
 - 基线由人生成并提交：
 
 ```bash

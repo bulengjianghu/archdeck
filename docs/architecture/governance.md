@@ -61,14 +61,14 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 |---|---|---|
 | `liftDeps(index, own, deps)` | 文件依赖两端取归属模块，去掉同模块与祖先后代，按 `A->B` 合并为 `ModuleDep`；一端未归属或已忽略的计入 `skipped`，一端是归属冲突文件的不提升、列入 `conflicted`；另记祖先与后代之间的模块对 `nested`（K6 判定两端有无依赖用）；返回 `{ moduleDeps, skipped, conflicted, nested }` | K4 |
 | `hostOf(index, direct, id)` · `confirmRelations(index, moduleDeps, direct)` | 宿主：自身或最近的、有直接归属文件的祖先。每条关系：端点有参与者或目标态 → `skipped`；写了 `via` → `skipped` 并带 `via`（K5b，面板标「不判定：经 …」）；两端宿主相同 → `skipped` 并带 `host`（概念拆分，同文件，面板说明）；有 `from` 子树 → `to` 子树的模块依赖（`notifies`、`streams` 两向；`implements` 还要求依据的文件依赖中有 `to` 声明的接口名或类的 implements / extends 指向 `to`，没有时 `unconfirmed`，只引了数据类型带 `structural`、引用了实现（文件依赖的 `uses`）带 `likeDepends`）→ `confirmed`，带依据的模块依赖键与知识方向 `knows`；否则 `unconfirmed`，两端之间（模块依赖与 K4 未提升的祖先后代依赖 `nested`，不论方向）没有任何依赖时带 `isolated`。`unconfirmedWarns(r, c)`：编译期关系未证实、或运行时关系 `isolated` 时报 `fact.unconfirmed`（`likeDepends` 时报 `fact.like-depends`）；`unconfirmedReason(r)` 给问题、返工项共用的说明 | K5、K5a、K6 |
-| `undescribedDeps(index, moduleDeps)` | 含 `value` 文件依赖、且没有关系覆盖的模块依赖（端点相同或互为祖先后代、方向一致，`notifies`、`streams` 不论方向）；只引类型的不算 | K7 |
-| `portTriad(index, report, moduleId)` | 端口三角：定义（`moduleInterfaces`）· 实现者（`to` 在子树内的 `implements`）· 使用者（`to` 在子树内的 `depends` / `calls` / `streams`，含 `via`）；给了证实结果时每项带状态 | K11 |
+| `undescribedDeps(index, moduleDeps)` | 未解释的交互：有值使用（文件依赖的 `uses`：引用了函数、类或变量）、且没有交互关系（`calls` / `notifies` / `streams` / `implements`）覆盖的模块依赖（端点相同或互为祖先后代、方向一致，`notifies`、`streams` 不论方向）；只引类型（含枚举）的不算；info（待实现：口径由「含 `value`」改为「有值使用」，ADR-0026） | K7 |
+| `portTriad(index, report, moduleId)` | 端口三角：定义（`moduleInterfaces`）· 实现者（`to` 在子树内的 `implements`）· 使用者（`to` 在子树内的 `calls` / `streams`，含 `via`；ADR-0026 去掉 `depends`，待实现）；给了证实结果时每项带状态 | K11 |
 | `judge(index, rules, entryOf, dep)` | 一条（依赖方模块，被依赖方模块，经由文件及其归属）对全部规则的判定：层规则、白名单、访问面，返回命中的 `{ kind, at, reason }` 与是否有规则约束；`allow` 匹配的标为已豁免 | U2–U5 |
 | `evaluateRules(index, own, moduleDeps, entryOf)` | 对每条模块依赖的每条文件证据 `judge`，按 `<种类>:<规则所在>:<A>-><B>` 合并为 `Violation` | U6 |
 | `stronglyConnected(edges)` · `valueDeps(moduleDeps)` · `moduleCycles` · `fileCycles` | Tarjan 强连通分量，返回规模 ≥ 2 的分量，成员按名称排序；环只按值依赖：`valueDeps` 只留含 `value` 文件依赖的模块依赖（证据也只留 `value`），文件环只取 `value` 文件依赖——模块环、文件环、本层环（Y4、Y5）与写前判定的环影响（Q2）同一口径 | Y1 |
 | `cyclicity(cycles)` | 未容忍的环的 Σ 规模² | Y2、Y3 |
 | `governanceReport(index, own, tree, deps, baseline)` | 组合以上：事实、比对、违规（带基线状态）、模块环与文件环、环度、门禁问题与摘要 | K4–K7、U8、Y |
-| `levelFacts(index, view, report)` | 当前层次：视图边的证实标记与违规；未描述依赖与违规投影成的叠加线；本层的环编号；每个本层环的构成（环内节点按视图顺序，环内每条本层依赖带同方向视图边与投影来的模块依赖，均只取值依赖 `valueDeps`）——与环编号同一次投影得出，不另取事实 | K9、Y4、Y5 |
+| `levelFacts(index, view, report)` | 当前层次：视图边的证实标记与违规；未解释的交互与违规投影成的叠加线；本层的环编号；每个本层环的构成（环内节点按视图顺序，环内每条本层依赖带同方向视图边与投影来的模块依赖，均只取值依赖 `valueDeps`）——与环编号同一次投影得出，不另取事实 | K9、Y4、Y5 |
 | `depsBetween(index, view, report, from, to)` | 叠加线选中时的内容：投影到这对节点的模块依赖、违规与文件证据 | K10 |
 | `rulesFor(index, moduleId)` | 对一个模块生效的规则：所在各级层的 `mayDependOn`、祖先链上的白名单与访问面 | Q1 |
 | `describeModule(index, own, report, entryOf, id)` · `locate(…, file)` | agent 用的模块 / 文件说明：路径与各级职责、生效的规则、接口签名、入口、出入关系与违规 | Q1 |
@@ -111,7 +111,7 @@ interface LevelCycle { id: number; nodes: { id: string; module: string }[]; edge
 
 | 函数 | 做什么 | 规则 |
 |---|---|---|
-| `reworkList({ index, issues, source?, report?, evolution?, sketches?, deps? })` | 汇总：校验问题（跳过归属、证据、门禁、事实与 S5a 未建模，它们由下列材料重新算；`owned.*` 归入类别 `owned`）、归属（冲突按匹配的 codeRefs 组合，`detail` 注明一端是这组文件、因冲突未计入的依赖条数（`report.conflicted`，K4）；未归属按目录；entry 不存在）、不在清单里的场景证据文件（`missingEvidence`，归描述问题，S15）、违规（按基线状态 · 种类 · 规则所在 · 被依赖方）、环度上升与可收紧基线、报警的未证实关系（`unconfirmedWarns`）、未描述依赖、未建模的步骤（`bindRelation` 绑定不到关系的消息步骤，按两端聚合）、无证据的步骤（给了文件依赖 `deps` 时，`scenarioEvidence` 为 `none` 的步骤按两端与方向聚合，S17）、草图偏差（`sketches`：每张活动草图的 `SketchCheck`，一条偏差一个根因，已认可的不进清单，X4）；排序后给出各严重度与类别的计数 | Q7、Q8 |
+| `reworkList({ index, issues, source?, report?, evolution?, sketches?, deps? })` | 汇总：校验问题（跳过归属、证据、门禁、事实与 S5a 未建模，它们由下列材料重新算；`owned.*` 归入类别 `owned`）、归属（冲突按匹配的 codeRefs 组合，`detail` 注明一端是这组文件、因冲突未计入的依赖条数（`report.conflicted`，K4）；未归属按目录；entry 不存在）、不在清单里的场景证据文件（`missingEvidence`，归描述问题，S15）、违规（按基线状态 · 种类 · 规则所在 · 被依赖方）、环度上升与可收紧基线、报警的未证实关系（`unconfirmedWarns`）、未解释的交互、未建模的步骤（`bindRelation` 绑定不到关系的消息步骤，按两端聚合）、无证据的步骤（给了文件依赖 `deps` 时，`scenarioEvidence` 为 `none` 的步骤按两端与方向聚合，S17）、草图偏差（`sketches`：每张活动草图的 `SketchCheck`，一条偏差一个根因，已认可的不进清单，X4）；排序后给出各严重度与类别的计数 | Q7、Q8 |
 | `reworkMarkdown(list, title, { modelDir, sourceRoot, limit })` · `reworkItemMarkdown(item, opts)` | 给 agent 的指令：摘要、每条的规则、位置、受影响（缺省最多 20 处）、建议与 YAML 片段；描述文件路径加模型目录前缀 | Q9 |
 
 ```ts
@@ -172,7 +172,7 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 | `seedFromBaseline(mount, baseline, { id })` · `deriveChildSketch(mount, baseline, sketches, { id })`（`edit/seed.ts`） | 底稿从基线复制挂载点的一层（结构字段与显式写在本层的关系，不带文字；根挂载 `supersedes` 骨架）；下一层草图不存在时由「基线子树 + 血缘」推出 | X18 |
 | `gridLayout` · `referenceNodes` · `layoutForSave`（`edit/layout.ts`） | 网格布局（重新排列，按中心区可用区域）；引用节点由关系派生；保存前去掉引用节点的位置、丢掉没有关系的引用 | X15、X19、X22 |
 | `idImpact(sketch, id, newParent, current?)` | 移动前的影响：草图内改写的 ID 与引用条数、当前版本里仍引用旧 ID 的实体条数 | X7d |
-| `validateSketch(sketch, { persistent, file, index?, design? })`（`validate.ts`） | 两级：`errors`（schema、ID、不在挂载点下、挂载点是层、文件名与 `mount` 不一致、引用不存在、缺名称、关系不在本层，拦保存）与 `warnings`（根草图层依赖成环、非根草图本层 `depends` 成环、同挂载点矛盾、待重连，拦交给 AI 与定稿）；`hints`（超七、没写职责）不进两级；另给 `pending`（待重连的关系） | X7f、X9、X13、X14、X16 |
+| `validateSketch(sketch, { persistent, file, index?, design? })`（`validate.ts`） | 两级：`errors`（schema、ID、不在挂载点下、挂载点是层、文件名与 `mount` 不一致、引用不存在、缺名称、关系不在本层，拦保存）与 `warnings`（根草图层依赖成环、同挂载点矛盾、待重连，拦交给 AI 与定稿）；`hints`（超七、没写职责）不进两级；另给 `pending`（待重连的关系） | X7f、X9、X13、X14、X16 |
 | `compareSketch(sketch, target, { mode, lineage? })` · `compareDesign(sketches, target, mode)` · `changeSummary`（`check.ts`） | 两个对比共用：按挂载点取对象版本的同一范围（`mountScope`，`scope.ts`），按血缘（`lineage.ts`：`sketchLineage`、`prefixMap`、`lineageKind`）读作新增 / 修改 / 合并 / 拆分 / 改 ID / 移动 / 删除；`baseline` 比结构与写了的文字，`current` 只比结构；全设计 = 各张并集，血缘按全设计算；摘要措辞「合并 A、B 为 N」 | X11、X12、X17 |
 
 `sketchCheck` 的 v2 口径：按挂载点取范围（封闭与「多出」只看挂载点与本层模块的直接子模块，本层模块的看挂在它上的草图），矛盾只比同挂载点（X10），缺模块的措辞按血缘，另报血缘的来源仍在原处（`sketch.not-applied`）与给了基线时「草图删掉、版本里还在」（`sketch.not-removed`）；`checkSketches` 按设计分组传全设计的血缘与可选的基线。`diffModels(base, target, { lineage })` 给了血缘时变更条目带 `kind: merged / split / renamed / moved` 与 `from` / `to`，被吸收的来源、级联改名的后代与只因血缘改了端点的关系不另列。
