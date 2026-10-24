@@ -80,7 +80,6 @@ describe('X23 连线的类型与机制', () => {
   it('格式校验：四类之外的类型、坏的 via（schema）、未知端口 / 总线、mode 用在通知 / 流、pull 用在非流——格式错误拦保存', () => {
     const def = base()
     def.relations = [
-      { id: 'r1', from: 'fe.ui.view', to: 'core.api', type: 'implements' as never },
       { id: 'r3', from: 'fe.ui.view', to: 'core.api', type: 'commands', via: 'port:if.ghost' },
       { id: 'r4', from: 'fe.ui.view', to: 'core.api', type: 'queries', via: 'bus:core.ghost' },
       { id: 'r5', from: 'fe.ui.view', to: 'core.api', type: 'notifies', mode: 'async' },
@@ -89,15 +88,16 @@ describe('X23 连线的类型与机制', () => {
     const v = check(def)
     expect(v.ok).toBe(false)
     expect(v.errors.map(e => [e.target.relation, e.code])).toEqual([
-      ['r1', 'sketch.relation-type'],
       ['r3', 'sketch.ref'],
       ['r4', 'sketch.ref'],
       ['r5', 'sketch.relation-type'],
       ['r6', 'sketch.relation-type'],
     ])
-    // 不合四形态的 via 由 schema 拦下（格式错误）
+    // 不合四形态的 via 与四类之外的类型（implements 已不是关系类型，M17）由 schema 拦下（格式错误）
     const bad = base()
     bad.relations = [{ id: 'r2', from: 'fe.ui.view', to: 'core.api', type: 'commands', via: 'pipe' }]
+    expect(codes(check(bad).errors)).toEqual(['sketch.schema'])
+    bad.relations = [{ id: 'r1', from: 'fe.ui.view', to: 'core.api', type: 'implements' as never }]
     expect(codes(check(bad).errors)).toEqual(['sketch.schema'])
     // 合法的四形态：经端口（草图或版本里的接口）、经总线（已知模块）、经通道
     def.relations = [

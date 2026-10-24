@@ -117,15 +117,13 @@ describe('K5、K6：异步 calls 与运行时关系的未证实', () => {
     expect(c.get('rel.cb')).toMatchObject({ status: 'skipped', via: 'channel:callback' })
   })
 
-  it('K6（ADR-0029）：交互关系只有反向依赖时不报警告，两端之间没有任何依赖时报；编译期一档移到端口实现者（implements 不进关系索引）', () => {
-    const { index, own } = withRelations('  - { id: rel.r, from: ui.store, to: ui.view, type: commands, mode: async }\n  - { id: rel.i, from: ui.view, to: core.api, type: implements }\n')
+  it('K6（ADR-0029）：交互关系只有反向依赖时不报警告，两端之间没有任何依赖时报；编译期一档移到端口实现者（接口的 implementedBy）', () => {
+    const { index, own } = withRelations('  - { id: rel.r, from: ui.store, to: ui.view, type: commands, mode: async }\n')
     const c = confirmRelations(index, liftDeps(index, own, DEPS).moduleDeps)
     const r = index.relations.get('rel.r')!
     expect(c.get('rel.r')).toMatchObject({ status: 'unconfirmed' })
     expect(unconfirmedWarns(r, c.get('rel.r')!)).toBe(false)
     expect(unconfirmedWarns(r, { status: 'unconfirmed', deps: [], isolated: true })).toBe(true)
-    expect(index.relations.has('rel.i')).toBe(false)
-    expect(index.interfaces.get('if.get')!.implementedBy).toEqual(['ui.view'])
   })
 })
 

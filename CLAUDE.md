@@ -10,7 +10,7 @@ npm run lint:model   # 校验全部描述（含设计版本每一轮），0 个�
 npm run lint         # ESLint + Prettier 检查；npm run format 自动格式化
 npm run test:e2e     # 浏览器端 E2E（Playwright，本机 Chrome）
 npm run build
-npm run arch -- <命令> # 架构治理命令行（locate / check / violations / cycles / rescan / issues / report / baseline / sketch-check / sketch archive|list / own）
+npm run arch -- <命令> # 架构治理命令行（locate / check / violations / cycles / rescan / issues / report / baseline / sketch-check / sketch archive|list / own / classify）
 npm run arch:mcp     # 架构治理 MCP 服务器（stdio）
 ```
 

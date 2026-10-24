@@ -38,3 +38,5 @@ export { sharedSuggestions, sharedReverse, sharedHostOf, SHARED_NAME_HINTS } fro
 export { summarizeLedger } from './ledger'
 export type { LedgerSummary } from './ledger'
 export { stepEvidence, scenarioEvidence, interfaceName, EVIDENCE_LIMIT } from './evidence'
+export { classifyRelation, classifyRelations, interactionDescription, nameLean, returnShapeOf, signatureReturns } from './classify'
+export type { CallSiteFact, Classification, ClassifiedType, ClassifyCode, ClassifyConfidence, DeclFact, FileStateFact, ReturnShape } from './classify'

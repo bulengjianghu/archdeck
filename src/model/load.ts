@@ -9,7 +9,7 @@
 import Ajv, { type ErrorObject } from 'ajv'
 import { LineCounter, parseDocument, type Document } from 'yaml'
 import schema from '../../schema/arch-file.schema.json'
-import { LEGACY_RELATION_TYPES, REMOVED_RELATION_TYPE, ROOT_MOUNT } from './types'
+import { LEGACY_RELATION_TYPES, MIGRATED_RELATION_TYPE, REMOVED_RELATION_TYPE, ROOT_MOUNT } from './types'
 import { isSketchFile } from './intent/types'
 import type {
   ActorEntity,
@@ -375,6 +375,13 @@ function parseFile(file: RawFile, issues: Issue[]): ParsedFile | null {
       message: `depends 已不是关系类型（ADR-0026），这条关系已丢弃：谁知道谁由代码事实给出；有交互的按三问写 queries / commands / notifies / streams，实现端口的写进接口的 implementedBy（M15）`,
       ...loc,
     })
+  for (const loc of dropRemovedRelations(data, MIGRATED_RELATION_TYPE).map(locate))
+    issues.push({
+      severity: 'warning',
+      code: 'relation.implements-removed',
+      message: `implements 已不是关系类型（ADR-0029），这条关系已丢弃：实现端口的写进接口的 implementedBy；有交互的按三问写 queries / commands（M17）`,
+      ...loc,
+    })
   if (!validateFile(data)) {
     for (const err of dedupeErrors(validateFile.errors ?? [])) {
       const path = err.instancePath.split('/').slice(1).map(seg => (/^\d+$/.test(seg) ? Number(seg) : seg))
@@ -411,16 +418,16 @@ function migrateCore(data: unknown): { at: (string | number)[]; both: boolean }[
 }
 
 /**
- * M15：丢弃 `type: depends` 的关系（文件顶层与草图里的 relations），返回它们在文件中的路径（先取位置、后删除）。
- * 迁移期的读取方式：提醒而不整份跳过；schema 里已没有 depends。
+ * M15 / M17：丢弃已不是关系类型的关系（`depends`、`implements`；文件顶层与草图里的 relations），返回它们在文件中的路径（先取位置、后删除）。
+ * 读历史提交的方式：提醒而不整份跳过；schema 里已没有这两个类型。
  */
-function dropRemovedRelations(data: unknown): (string | number)[][] {
+function dropRemovedRelations(data: unknown, type: string = REMOVED_RELATION_TYPE): (string | number)[][] {
   const at: (string | number)[][] = []
   const sweep = (holder: unknown, base: (string | number)[]) => {
     const list = (holder as { relations?: unknown } | null)?.relations
     if (!Array.isArray(list)) return
     const kept = list.filter((r, i) => {
-      const removed = !!r && typeof r === 'object' && (r as { type?: unknown }).type === REMOVED_RELATION_TYPE
+      const removed = !!r && typeof r === 'object' && (r as { type?: unknown }).type === type
       if (removed) at.push([...base, 'relations', i])
       return !removed
     })

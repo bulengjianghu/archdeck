@@ -188,116 +188,116 @@ modules:
 
 relations:
   # 呈现层内部
-  - { id: rel.ad.shell-list, from: present.shell, to: present.project-list, type: calls, description: 路由 `/` 指向项目列表 }
-  - { id: rel.ad.shell-desk, from: present.shell, to: present.desk-view, type: calls, description: 路由 `/p/<项目>` 指向项目视图，按项目 ID 重建 }
-  - { id: rel.ad.desk-canvas, from: present.desk-view, to: present.canvas.flow, type: calls }
-  - { id: rel.ad.desk-panel, from: present.desk-view, to: present.panel.dispatch, type: calls }
-  - { id: rel.ad.desk-nav, from: present.desk-view, to: present.nav, type: calls }
-  - { id: rel.ad.flow-nodes, from: present.canvas.flow, to: present.canvas.nodes, type: calls }
-  - { id: rel.ad.flow-edges, from: present.canvas.flow, to: present.canvas.edges, type: calls }
-  - { id: rel.ad.panel-module, from: present.panel.dispatch, to: present.panel.module, type: calls }
-  - { id: rel.ad.panel-relation, from: present.panel.dispatch, to: present.panel.relation, type: calls }
-  - { id: rel.ad.panel-edge, from: present.panel.dispatch, to: present.panel.edge, type: calls }
-  - { id: rel.ad.panel-system, from: present.panel.dispatch, to: present.panel.system, type: calls }
-  - { id: rel.ad.module-content, from: present.panel.module, to: present.panel.content, type: calls }
-  - { id: rel.ad.relation-content, from: present.panel.relation, to: present.panel.content, type: calls }
-  - { id: rel.ad.edge-content, from: present.panel.edge, to: present.panel.content, type: calls }
-  - { id: rel.ad.system-content, from: present.panel.system, to: present.panel.content, type: calls }
-  - { id: rel.ad.system-design, from: present.panel.system, to: present.panel.design, type: calls, description: 设计版本根层先显示设计面板 }
-  - { id: rel.ad.design-content, from: present.panel.design, to: present.panel.content, type: calls }
-  - { id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: calls }
-  - { id: rel.ad.version-shell, from: present.version, to: present.shell, type: calls, description: 切换版本即导航到对应路由，带上当前 level / sel }
+  - { id: rel.ad.shell-list, from: present.shell, to: present.project-list, type: commands, description: 应用外壳与路由交给项目列表主页：路由 `/` 指向项目列表 }
+  - { id: rel.ad.shell-desk, from: present.shell, to: present.desk-view, type: commands, description: 应用外壳与路由交给项目视图：路由 `/p/<项目>` 指向项目视图，按项目 ID 重建 }
+  - { id: rel.ad.desk-canvas, from: present.desk-view, to: present.canvas.flow, type: commands, description: 项目视图让视图转换与交互接手处理 }
+  - { id: rel.ad.desk-panel, from: present.desk-view, to: present.panel.dispatch, type: commands, description: 项目视图让面板分派接手处理 }
+  - { id: rel.ad.desk-nav, from: present.desk-view, to: present.nav, type: commands, description: 项目视图让导航接手处理 }
+  - { id: rel.ad.flow-nodes, from: present.canvas.flow, to: present.canvas.nodes, type: commands, description: 视图转换与交互让节点组件接手处理 }
+  - { id: rel.ad.flow-edges, from: present.canvas.flow, to: present.canvas.edges, type: commands, description: 视图转换与交互让边组件接手处理 }
+  - { id: rel.ad.panel-module, from: present.panel.dispatch, to: present.panel.module, type: commands, description: 面板分派让模块面板接手处理 }
+  - { id: rel.ad.panel-relation, from: present.panel.dispatch, to: present.panel.relation, type: commands, description: 面板分派让关系面板接手处理 }
+  - { id: rel.ad.panel-edge, from: present.panel.dispatch, to: present.panel.edge, type: commands, description: 面板分派让聚合边面板接手处理 }
+  - { id: rel.ad.panel-system, from: present.panel.dispatch, to: present.panel.system, type: commands, description: 面板分派让系统面板接手处理 }
+  - { id: rel.ad.module-content, from: present.panel.module, to: present.panel.content, type: commands, description: 模块面板让内容组件接手处理 }
+  - { id: rel.ad.relation-content, from: present.panel.relation, to: present.panel.content, type: commands, description: 关系面板让内容组件接手处理 }
+  - { id: rel.ad.edge-content, from: present.panel.edge, to: present.panel.content, type: commands, description: 聚合边面板让内容组件接手处理 }
+  - { id: rel.ad.system-content, from: present.panel.system, to: present.panel.content, type: commands, description: 系统面板让内容组件接手处理 }
+  - { id: rel.ad.system-design, from: present.panel.system, to: present.panel.design, type: commands, description: 系统面板交给设计面板：设计版本根层先显示设计面板 }
+  - { id: rel.ad.design-content, from: present.panel.design, to: present.panel.content, type: commands, description: 设计面板让内容组件接手处理 }
+  - { id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: commands, description: 项目视图让版本切换与设计信息条接手处理 }
+  - { id: rel.ad.version-shell, from: present.version, to: present.shell, type: commands, description: 版本切换与设计信息条交给应用外壳与路由：切换版本即导航到对应路由，带上当前 level / sel }
 
   # 呈现 → 接入（HTTP 与变更通知；event 方向为订阅方 → 发布方）
   - id: rel.ad.list-fetch
     from: present.project-list
     to: access.model-source
-    type: calls
+    type: queries
     mode: async
     interface: if.source.endpoints
     payload: [ds.ProjectSummary]
-    description: GET projects.json 取项目摘要列表
-  - { id: rel.ad.list-changed, from: access.model-source, to: present.project-list, type: notifies, mode: async, interface: if.source.endpoints, description: 任一项目描述变化后刷新摘要 }
+    description: 项目列表主页向 ModelSource 插件取：GET projects.json 取项目摘要列表
+  - { id: rel.ad.list-changed, from: access.model-source, to: present.project-list, type: notifies, interface: if.source.endpoints, description: 任一项目描述变化后刷新摘要 }
   - id: rel.ad.desk-fetch
     from: present.desk-view
     to: access.model-source
-    type: calls
+    type: queries
     mode: async
     interface: if.source.endpoints
     payload: [ds.ModelPayload]
-    description: GET models/<项目>.json 取该项目全部 YAML 原文
-  - { id: rel.ad.desk-changed, from: access.model-source, to: present.desk-view, type: notifies, mode: async, interface: if.source.endpoints, description: 只响应本项目的 arch-model:changed，触发重新加载 }
+    description: 项目视图向 ModelSource 插件取：GET models/<项目>.json 取该项目全部 YAML 原文
+  - { id: rel.ad.desk-changed, from: access.model-source, to: present.desk-view, type: notifies, interface: if.source.endpoints, description: 只响应本项目的 arch-model:changed，触发重新加载 }
 
   # 呈现 → 视图状态
-  - { id: rel.ad.desk-create, from: present.desk-view, to: state.desk.loading, type: calls, interface: if.desk.createDeskState, description: 进入项目时创建并注入 DeskState，调用 init；变更通知时调用 reload }
-  - { id: rel.ad.desk-keys, from: present.desk-view, to: state.desk.actions, type: calls, interface: if.desk.actions, description: Esc 取消选中 / 返回上级，Backspace 返回上级 }
-  - { id: rel.ad.flow-read, from: present.canvas.flow, to: state.desk.projection, type: calls, payload: [ds.PositionedView, ds.Selection], description: 读取带坐标的视图、选中与悬停 }
-  - { id: rel.ad.flow-act, from: present.canvas.flow, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 单击 → select，双击 → drillInto / revealModule，悬停 → setHover }
-  - { id: rel.ad.flow-bounds, from: present.canvas.flow, to: state.layout.runner, type: calls, interface: if.layout.contentBounds, description: 适应画布时取内容外框 }
-  - { id: rel.ad.edges-route, from: present.canvas.edges, to: state.layout.runner, type: calls, payload: [ds.PositionedView], description: 使用 Layout 给出的走线点 }
-  - { id: rel.ad.panel-read, from: present.panel.dispatch, to: state.desk.projection, type: calls, payload: [ds.Selection] }
-  - { id: rel.ad.edgepanel-read, from: present.panel.edge, to: state.desk.projection, type: calls, payload: [ds.LevelView], description: 在当前视图里查找聚合边 }
-  - { id: rel.ad.module-act, from: present.panel.module, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 子模块点击、进入、可依赖层跳转 }
-  - { id: rel.ad.relation-act, from: present.panel.relation, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 端点跳转、定位到所在层次 }
-  - { id: rel.ad.content-act, from: present.panel.content, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 关系行点击 → revealRelation }
-  - { id: rel.ad.crumb-act, from: present.nav.breadcrumb, to: state.desk.actions, type: calls, interface: if.desk.actions }
-  - { id: rel.ad.toolbar-act, from: present.nav.toolbar, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 搜索结果 → revealModule；显示开关写入 toggles }
-  - { id: rel.ad.version-read, from: present.version, to: state.desk.versions, type: calls, payload: [ds.DesignInfo, ds.ModelDiff], description: 设计、轮次、对比基线、变更计数；对比基线与标出变更写入 toggles }
-  - { id: rel.ad.flow-diff, from: present.canvas.flow, to: state.desk.versions, type: calls, payload: [ds.ModelDiff], description: 节点与边的变更标记 }
-  - { id: rel.ad.design-read, from: present.panel.design, to: state.desk.versions, type: calls, payload: [ds.DesignInfo, ds.ModelDiff] }
-  - { id: rel.ad.design-act, from: present.panel.design, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 变更清单点击 → revealModule / revealRelation }
-  - { id: rel.ad.content-diff, from: present.panel.content, to: state.desk.versions, type: calls, payload: [ds.ModelDiff], description: 新增 / 修改标记与改了哪些字段 }
+  - { id: rel.ad.desk-create, from: present.desk-view, to: state.desk.loading, type: commands, interface: if.desk.createDeskState, description: 项目视图交给加载与重新加载：进入项目时创建并注入 DeskState，调用 init；变更通知时调用 reload }
+  - { id: rel.ad.desk-keys, from: present.desk-view, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 项目视图交给操作：Esc 取消选中 / 返回上级，Backspace 返回上级 }
+  - { id: rel.ad.flow-read, from: present.canvas.flow, to: state.desk.projection, type: queries, payload: [ds.PositionedView, ds.Selection], description: 视图转换与交互向视图派生取：读取带坐标的视图、选中与悬停 }
+  - { id: rel.ad.flow-act, from: present.canvas.flow, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 视图转换与交互交给操作：单击 → select，双击 → drillInto / revealModule，悬停 → setHover }
+  - { id: rel.ad.flow-bounds, from: present.canvas.flow, to: state.layout.runner, type: queries, interface: if.layout.contentBounds, description: 视图转换与交互向布局入口与缓存取：适应画布时取内容外框 }
+  - { id: rel.ad.edges-route, from: present.canvas.edges, to: state.layout.runner, type: queries, payload: [ds.PositionedView], description: 边组件向布局入口与缓存取：使用 Layout 给出的走线点 }
+  - { id: rel.ad.panel-read, from: present.panel.dispatch, to: state.desk.projection, type: queries, payload: [ds.Selection], description: 面板分派向视图派生取结果 }
+  - { id: rel.ad.edgepanel-read, from: present.panel.edge, to: state.desk.projection, type: queries, payload: [ds.LevelView], description: 聚合边面板向视图派生取：在当前视图里查找聚合边 }
+  - { id: rel.ad.module-act, from: present.panel.module, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 模块面板交给操作：子模块点击、进入、可依赖层跳转 }
+  - { id: rel.ad.relation-act, from: present.panel.relation, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 关系面板交给操作：端点跳转、定位到所在层次 }
+  - { id: rel.ad.content-act, from: present.panel.content, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 内容组件交给操作：关系行点击 → revealRelation }
+  - { id: rel.ad.crumb-act, from: present.nav.breadcrumb, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 面包屑让操作接手处理 }
+  - { id: rel.ad.toolbar-act, from: present.nav.toolbar, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 工具栏交给操作：搜索结果 → revealModule；显示开关写入 toggles }
+  - { id: rel.ad.version-read, from: present.version, to: state.desk.versions, type: commands, payload: [ds.DesignInfo, ds.ModelDiff], description: 版本切换与设计信息条交给版本与对比基线：设计、轮次、对比基线、变更计数；对比基线与标出变更写入 toggles }
+  - { id: rel.ad.flow-diff, from: present.canvas.flow, to: state.desk.versions, type: queries, payload: [ds.ModelDiff], description: 视图转换与交互向版本与对比基线取：节点与边的变更标记 }
+  - { id: rel.ad.design-read, from: present.panel.design, to: state.desk.versions, type: queries, payload: [ds.DesignInfo, ds.ModelDiff], description: 设计面板向版本与对比基线取结果 }
+  - { id: rel.ad.design-act, from: present.panel.design, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 设计面板交给操作：变更清单点击 → revealModule / revealRelation }
+  - { id: rel.ad.content-diff, from: present.panel.content, to: state.desk.versions, type: queries, payload: [ds.ModelDiff], description: 内容组件向版本与对比基线取：新增 / 修改标记与改了哪些字段 }
 
   # 呈现 → 模型（只用类型与少量纯函数）
-  - { id: rel.ad.list-types, from: present.project-list, to: model.types, type: calls, payload: [ds.ProjectSummary] }
-  - { id: rel.ad.crumb-name, from: present.nav.breadcrumb, to: model.pipeline.indexer, type: calls, description: moduleName 取显示名 }
+  - { id: rel.ad.list-types, from: present.project-list, to: model.types, type: queries, payload: [ds.ProjectSummary], description: 项目列表主页向类型与 Schema 取结果 }
+  - { id: rel.ad.crumb-name, from: present.nav.breadcrumb, to: model.pipeline.indexer, type: queries, description: 面包屑向 Indexer 取：moduleName 取显示名 }
 
   # 视图状态内部与 → 模型
-  - { id: rel.ad.loading-entry, from: state.desk.loading, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, payload: [ds.ModelIndex, ds.Issue] }
+  - { id: rel.ad.loading-entry, from: state.desk.loading, to: model.pipeline.entry, type: queries, interface: if.model.loadModel, payload: [ds.ModelIndex, ds.Issue], description: 加载与重新加载向 loadModel 入口取结果 }
   - { id: rel.ad.loading-baselines, from: state.desk.loading, to: state.desk.versions, type: streams, payload: [ds.ModelPayload], description: 设计版本的载荷附带设计信息与对比基线原文 }
-  - { id: rel.ad.versions-entry, from: state.desk.versions, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 对比基线同样走 loadModel }
-  - { id: rel.ad.versions-diff, from: state.desk.versions, to: model.diff, type: calls, interface: if.model.diffModels, payload: [ds.ModelDiff], description: 切换对比基线或重新加载时重算 }
-  - { id: rel.ad.loading-keep, from: state.desk.loading, to: state.desk.actions, type: calls, description: 重新加载后按旧路径恢复层次与选中 }
-  - { id: rel.ad.url-actions, from: state.desk.url-sync, to: state.desk.actions, type: calls, description: 外部路由变化回写层次与选中 }
-  - { id: rel.ad.actions-url, from: state.desk.actions, to: state.desk.url-sync, type: calls, description: 下钻进历史，选中替换当前地址 }
-  - { id: rel.ad.actions-lca, from: state.desk.actions, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: revealRelation 用最近公共祖先定位层次 }
+  - { id: rel.ad.versions-entry, from: state.desk.versions, to: model.pipeline.entry, type: queries, interface: if.model.loadModel, description: 版本与对比基线向 loadModel 入口取：对比基线同样走 loadModel }
+  - { id: rel.ad.versions-diff, from: state.desk.versions, to: model.diff, type: queries, interface: if.model.diffModels, payload: [ds.ModelDiff], description: 版本与对比基线向版本对比取：切换对比基线或重新加载时重算 }
+  - { id: rel.ad.loading-keep, from: state.desk.loading, to: state.desk.actions, type: commands, description: 加载与重新加载交给操作：重新加载后按旧路径恢复层次与选中 }
+  - { id: rel.ad.url-actions, from: state.desk.url-sync, to: state.desk.actions, type: commands, description: URL 同步交给操作：外部路由变化回写层次与选中 }
+  - { id: rel.ad.actions-url, from: state.desk.actions, to: state.desk.url-sync, type: commands, description: 操作交给 URL 同步：下钻进历史，选中替换当前地址 }
+  - { id: rel.ad.actions-lca, from: state.desk.actions, to: model.pipeline.indexer, type: queries, interface: if.model.buildIndex, description: 操作向 Indexer 取：revealRelation 用最近公共祖先定位层次 }
   - id: rel.ad.projection-project
     from: state.desk.projection
     to: model.projector
-    type: calls
+    type: queries
     interface: if.model.projectLevel
     payload: [ds.ProjectOptions, ds.LevelView]
-    description: 索引、层次或开关变化时重新投影
+    description: 视图派生向 Projector 层次投影取：索引、层次或开关变化时重新投影
   - id: rel.ad.projection-layout
     from: state.desk.projection
     to: state.layout.runner
-    type: calls
+    type: queries
     mode: async
     interface: if.layout.layoutView
     payload: [ds.LevelView, ds.PositionedView]
-    description: 视图变化后异步布局，用序号丢弃过期结果
-  - { id: rel.ad.runner-layered, from: state.layout.runner, to: state.layout.layered, type: calls }
-  - { id: rel.ad.runner-graph, from: state.layout.runner, to: state.layout.graph, type: calls, mode: async, description: elk 在 Worker 中运行 }
-  - { id: rel.ad.graph-boundaries, from: state.layout.graph, to: state.layout.boundaries, type: calls }
-  - { id: rel.ad.layout-types, from: state.layout.runner, to: model.types, type: calls, payload: [ds.LevelView] }
+    description: 视图派生向布局入口与缓存取：视图变化后异步布局，用序号丢弃过期结果
+  - { id: rel.ad.runner-layered, from: state.layout.runner, to: state.layout.layered, type: queries, description: 布局入口与缓存向分层总览排布取结果 }
+  - { id: rel.ad.runner-graph, from: state.layout.runner, to: state.layout.graph, type: queries, mode: async, description: 布局入口与缓存向普通层次排布取：elk 在 Worker 中运行 }
+  - { id: rel.ad.graph-boundaries, from: state.layout.graph, to: state.layout.boundaries, type: queries, description: 普通层次排布向边界节点排布取结果 }
+  - { id: rel.ad.layout-types, from: state.layout.runner, to: model.types, type: queries, payload: [ds.LevelView], description: 布局入口与缓存向类型与 Schema 取结果 }
 
   # 接入层
-  - { id: rel.ad.source-reader, from: access.model-source, to: access.reader, type: calls, interface: if.reader.projects, payload: [ds.ProjectSummary, ds.ModelPayload] }
-  - { id: rel.ad.lint-reader, from: access.lint, to: access.reader, type: calls, interface: if.reader.projects }
-  - { id: rel.ad.lint-entry, from: access.lint, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, payload: [ds.Issue] }
-  - { id: rel.ad.reader-entry, from: access.reader, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 生成项目摘要时跑一遍模型层 }
-  - { id: rel.ad.reader-types, from: access.reader, to: model.types, type: calls, payload: [ds.RawFile, ds.ProjectSummary, ds.DesignInfo] }
+  - { id: rel.ad.source-reader, from: access.model-source, to: access.reader, type: queries, interface: if.reader.projects, payload: [ds.ProjectSummary, ds.ModelPayload], description: ModelSource 插件向描述读取取结果 }
+  - { id: rel.ad.lint-reader, from: access.lint, to: access.reader, type: queries, interface: if.reader.projects, description: 命令行校验向描述读取取结果 }
+  - { id: rel.ad.lint-entry, from: access.lint, to: model.pipeline.entry, type: queries, interface: if.model.loadModel, payload: [ds.Issue], description: 命令行校验向 loadModel 入口取结果 }
+  - { id: rel.ad.reader-entry, from: access.reader, to: model.pipeline.entry, type: queries, interface: if.model.loadModel, description: 描述读取向 loadModel 入口取：生成项目摘要时跑一遍模型层 }
+  - { id: rel.ad.reader-types, from: access.reader, to: model.types, type: queries, payload: [ds.RawFile, ds.ProjectSummary, ds.DesignInfo], description: 描述读取向类型与 Schema 取结果 }
 
   # 模型层内部
-  - { id: rel.ad.entry-loader, from: model.pipeline.entry, to: model.pipeline.loader, type: calls, interface: if.model.load }
-  - { id: rel.ad.entry-validator, from: model.pipeline.entry, to: model.pipeline.validator, type: calls, interface: if.model.validate }
-  - { id: rel.ad.entry-indexer, from: model.pipeline.entry, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex }
+  - { id: rel.ad.entry-loader, from: model.pipeline.entry, to: model.pipeline.loader, type: queries, interface: if.model.load, description: loadModel 入口向 Loader 取结果 }
+  - { id: rel.ad.entry-validator, from: model.pipeline.entry, to: model.pipeline.validator, type: queries, interface: if.model.validate, description: loadModel 入口向 Validator 取结果 }
+  - { id: rel.ad.entry-indexer, from: model.pipeline.entry, to: model.pipeline.indexer, type: queries, interface: if.model.buildIndex, description: loadModel 入口向 Indexer 取结果 }
   - { id: rel.ad.flow-load-validate, from: model.pipeline.loader, to: model.pipeline.validator, type: streams, payload: [ds.ArchModel, ds.Issue], description: 合并后的模型交给跨文件校验 }
   - { id: rel.ad.flow-validate-index, from: model.pipeline.validator, to: model.pipeline.indexer, type: streams, payload: [ds.ArchModel], description: 剔除坏实体后的模型交给建索引 }
-  - { id: rel.ad.loader-schema, from: model.pipeline.loader, to: model.types, type: calls, payload: [ds.ArchFileDef, ds.RawFile] }
-  - { id: rel.ad.overview-endpoints, from: model.projector.overview, to: model.projector.endpoints, type: calls }
-  - { id: rel.ad.endpoints-collector, from: model.projector.endpoints, to: model.projector.collector, type: calls }
-  - { id: rel.ad.overview-collector, from: model.projector.overview, to: model.projector.collector, type: calls, description: 核心跨层边单独汇总 }
+  - { id: rel.ad.loader-schema, from: model.pipeline.loader, to: model.types, type: queries, payload: [ds.ArchFileDef, ds.RawFile], description: Loader 向类型与 Schema 取结果 }
+  - { id: rel.ad.overview-endpoints, from: model.projector.overview, to: model.projector.endpoints, type: queries, description: 分层总览向端点映射取结果 }
+  - { id: rel.ad.endpoints-collector, from: model.projector.endpoints, to: model.projector.collector, type: queries, description: 端点映射向边汇总取结果 }
+  - { id: rel.ad.overview-collector, from: model.projector.overview, to: model.projector.collector, type: queries, description: 分层总览向边汇总取：核心跨层边单独汇总 }
 
 interfaces:
   - id: if.model.loadModel

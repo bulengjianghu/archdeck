@@ -16,7 +16,7 @@ sketch:
     - id: rel.se.sketch-append
       from: access.writer.sketch
       to: access.writer.append
-      type: calls
+      type: commands
       description: YAML 文档模型的打开与保存只有一份
   interfaces:
     - id: if.writer.saveSketch

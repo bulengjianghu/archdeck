@@ -13,7 +13,7 @@ export type InteractionType = 'queries' | 'commands' | 'notifies' | 'streams'
 export const INTERACTION_TYPES: readonly InteractionType[] = ['queries', 'commands', 'notifies', 'streams']
 /**
  * 关系类型：四类交互，加迁移期的 `calls`——「未分类」（M17：按查询或委托参与证实、覆盖与场景绑定）。
- * `implements` 只出现在描述文件里（RelationDef，M17：Validator 转成接口的 implementedBy，不进关系索引）。
+ * `implements` 已不是关系类型（M17）：只可能出现在历史提交的描述文件里，Loader 丢弃并提醒 `relation.implements-removed`。
  */
 export type RelationType = InteractionType | 'calls'
 /** 关系索引里可能出现的类型（四类 + 未分类），按图例顺序 */
@@ -28,7 +28,7 @@ export const isCallLike = (t: RelationType): boolean => CALL_LIKE_TYPES.includes
 export const relationMode = (r: { type: RelationType; mode?: 'sync' | 'async' }): 'sync' | 'async' => (r.type === 'notifies' ? 'async' : (r.mode ?? 'sync'))
 /** M15：已不是关系类型的旧类型（ADR-0026），读取时丢弃并提醒 */
 export const REMOVED_RELATION_TYPE = 'depends'
-/** M17：已不是关系类型、读作端口实现者的旧类型（ADR-0029） */
+/** M17：已不是关系类型的旧类型（ADR-0029，实现者写进接口的 implementedBy），读取时丢弃并提醒（同 M15） */
 export const MIGRATED_RELATION_TYPE = 'implements'
 /** 旧名（M12）：加载时映射，event 同时翻转两端；一轮后删除 */
 export type LegacyRelationType = 'event' | 'dataflow'
@@ -139,7 +139,7 @@ export interface RelationDef {
   id: string
   from: string
   to: string
-  /** 文件里也可能写旧名（M12）与迁移期的 calls / implements（M17）；Loader 映射旧名，Validator 把 implements 转成接口的 implementedBy */
+  /** 文件里也可能写旧名（M12）与迁移期的 calls（M17）；历史提交里的 implements 由 Loader 丢弃（M17） */
   type: RelationType | LegacyRelationType | typeof MIGRATED_RELATION_TYPE
   /** 只用于 queries / commands（迁移期含未分类）：同步缺省，异步写 async（M13） */
   mode?: 'sync' | 'async'

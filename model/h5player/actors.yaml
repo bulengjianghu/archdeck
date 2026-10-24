@@ -9,5 +9,5 @@ relations:
   - id: rel.ctx.api
     from: actor.biz
     to: infra.player-index.player-api
-    type: calls
-    description: 调用 Player 对外 API（init / load / play / pause / stop / reset / switch / seek / destroy …）
+    type: commands
+    description: 业务方交给 Player 对外 API：调用 Player 对外 API（init / load / play / pause / stop / reset / switch / seek / destroy …）

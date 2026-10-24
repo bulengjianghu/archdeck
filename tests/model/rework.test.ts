@@ -47,12 +47,12 @@ modules:
 relations:
   - { id: rel.1, from: ui.view, to: ui.store, type: calls }
   - { id: rel.2, from: ui.store, to: core.api, type: calls }
-  - { id: rel.3, from: core.impl, to: core.util, type: implements }
+  # core.impl 实现 if.util：写在接口的 implementedBy（M17，implements 已不是关系类型）
   - { id: rel.4, from: ui.view, to: core.api, type: calls }
   - { id: rel.5, from: ui.view, to: core.api, type: streams }
   - { id: rel.bad, from: ui.view, to: nowhere, type: calls }
 interfaces:
-  - { id: if.util, name: Util, owner: core.util }
+  - { id: if.util, name: Util, owner: core.util, implementedBy: [core.impl] }
 `
 
 const SCENARIO = `
@@ -176,7 +176,7 @@ describe('Q7 内容与按根因聚合', () => {
     expect(setup().list.items.map(i => i.id)).toEqual(setup().list.items.map(i => i.id))
   })
 
-  it('没有代码事实时只含描述、归属、未建模与按描述判定的端口孤立（U14：rel.3 读作 if.util 的实现者，没有使用者）', () => {
+  it('没有代码事实时只含描述、归属、未建模与按描述判定的端口孤立（U14：if.util 的实现者 core.impl，没有使用者）', () => {
     const { list } = setup(null, false)
     expect(list.facts).toBe(false)
     expect(new Set(list.items.map(i => i.category))).toEqual(new Set(['description', 'ownership', 'unmodeled', 'port']))

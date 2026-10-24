@@ -158,12 +158,10 @@ describe('§6.2 运行视角验收', () => {
     expect(desk.selected.value).toEqual({ kind: 'step', id: at })
   })
 
-  it('6. 与结构不一致的步骤：端点与引用关系不符、两端无任何关系 → 错误 / 提醒；引用 implements（已不是关系，M17）→ 按不存在的关系提醒；无关系的一步回放时画「结构中未建模」', async () => {
+  it('6. 与结构不一致的步骤：端点与引用关系不符、两端无任何关系 → 错误 / 提醒；引用不存在的关系（如已删去的 implements，M17）→ 按不存在的关系提醒；无关系的一步回放时画「结构中未建模」', async () => {
     const bad: RawFile = {
       path: 'scenarios/bad.yaml',
-      text: `relations:
-  - {id: rel.bad.impl, from: access.lint, to: access.deps, type: implements}
-scenario:
+      text: `scenario:
   id: sc.bad
   name: 不一致的步骤
   steps:
@@ -176,13 +174,12 @@ scenario:
       .issues.filter(i => i.file === 'scenarios/bad.yaml')
       .map(i => [i.severity, i.code])
     expect(issues).toEqual([
-      ['warning', 'relation.implements-migrated'],
       ['warning', 'unknown-relation'],
       ['error', 'step-relation-mismatch'],
       ['warning', 'step-unmodeled'],
     ])
     const { desk, step } = await open('h5p-arch-desk', '/p/h5p-arch-desk?level=model', [bad])
-    expect(desk.issues.value.filter(i => i.file === 'scenarios/bad.yaml')).toHaveLength(4)
+    expect(desk.issues.value.filter(i => i.file === 'scenarios/bad.yaml')).toHaveLength(3)
     desk.openScenario('sc.bad')
     step(2)
     expect(desk.run.scenarioView.value!.messages[1].at.kind).toBe('unmodeled')
