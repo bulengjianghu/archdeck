@@ -140,7 +140,8 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 | `reviewHash(index, moduleId)` · `summaryHash(summary)` | 摘要规范化拼接后的 64 位哈希（两段 32 位 cyrb 混合，16 位十六进制）；内容相同必得相同指纹 | Z2 |
 | `reviewStatus(index, entry, moduleId)` → `'reviewed' \| 'stale' \| 'unreviewed'` | 有记录且指纹一致 / 有记录、指纹不一致 / 没有记录 | Z3 |
 | `reviewDiff(before, now)` | 两份摘要的差异：职责按行增删、`includes` / `excludes` / `mayDependOn` 按项增删、接口按 ID 增 / 删 / 改（带前后签名）、子模块按 ID 增删 | Z3 |
-| `reviewScope(index)` | 默认提供确认的模块：核心模块与第二级模块（根的子模块的子模块） | Z4 |
+| `reviewScope(index)` | 默认提供确认的模块：核心模块（任意层次的 `role: core`，ADR-0027 待实现；现为第二级的 `core`）与第二级模块（根的子模块的子模块） | Z4 |
+| `sharedSuggestions(index, moduleDeps, plans)`（待实现） | 疑似共用件：没有 `role`、入度来自 ≥2 层或 ≥3 兄弟、没有运行时出边、不在任何场景帧上、`kind: library` 或名含 shared / util / labels，每个带四条依据；`sharedReverse(index, moduleDeps)`：共用件子树对子树外非共用件的值依赖（ADR-0027） | U11、U12 |
 | `reviewStates(index)` | 每个模块的 `{ status, entry?, diff? }`；记录来自 `index.model.reviewed`（Validator 已去掉引用不存在模块的记录并按模块去重，Z1） | Z1、Z3 |
 | `reviewCounts(index)` | 范围内的 `{ scope, reviewed, stale }`，根层健康度与项目卡片同一口径 | Z5 |
 | `reviewEntries(index, ids, { source, note?, at? })` | 为一组模块生成当天的确认记录（hash、summary），页面「确认」与草图归档都用它构造写入 | Z4、Z6 |
