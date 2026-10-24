@@ -7,7 +7,7 @@
  * - K17：交互图互查——涉及本模块（含子树）、两端之间没有任何依赖的交互关系（K6），单击切到交互视角并选中它。
  * 没有代码事实（K8、U16）时只说明原因。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { againstStability, moduleFiles, moduleName, within, type ImpactEntry } from '@/model'
 import { useDesk } from '@/state/inject'
 import Section from './Section.vue'
@@ -19,6 +19,11 @@ const props = defineProps<{ id: string }>()
 const desk = useDesk()
 const { impactMode, valuesOnly } = useStructurePrefs(desk.project ?? '')
 const MODES: readonly ImpactMode[] = ['in', 'out', 'both']
+/** 每组先列前 LIMIT 个，其余单击展开 */
+const LIMIT = 15
+const expanded = ref(new Set<string>())
+const shownOf = (key: string, list: ImpactEntry[]) => (expanded.value.has(key) ? list : list.slice(0, LIMIT))
+const expand = (key: string) => (expanded.value = new Set([...expanded.value, key]))
 
 const idx = computed(() => desk.index.value!)
 const name = (id: string) => moduleName(idx.value, id)
@@ -180,10 +185,13 @@ const relText = (id: string) => {
               {{ g.label }}<span class="muted"> · {{ g.list.length }}</span>
             </summary>
             <ul class="plain">
-              <li v-for="e in g.list" :key="e.module">
+              <li v-for="e in shownOf(`${s.dir}:${g.label}`, g.list)" :key="e.module">
                 <button class="link" @click="desk.revealModule(e.module)">{{ name(e.module) }}</button>
                 <span v-if="filesOf(e.module) !== null" class="muted"> {{ filesOf(e.module) }} 个文件</span>
                 <span v-if="e.inCycle" class="cyc" title="在模块环中">↻</span>
+              </li>
+              <li v-if="shownOf(`${s.dir}:${g.label}`, g.list).length < g.list.length">
+                <button class="link more" @click="expand(`${s.dir}:${g.label}`)">另 {{ g.list.length - LIMIT }} 个，展开</button>
               </li>
             </ul>
           </details>
@@ -317,6 +325,11 @@ const relText = (id: string) => {
 .dist ul {
   padding-left: 14px;
   font-size: 12.5px;
+}
+
+.dist li .muted,
+.top-item .muted {
+  margin-left: 3px;
 }
 
 .cyc {

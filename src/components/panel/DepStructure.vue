@@ -5,7 +5,7 @@
  * 交互覆盖数与明细（覆盖它的关系可单击切到交互视角并选中，另列端口实现者 / 子类 / 组装的覆盖）、「未解释」标记（K17）；
  * 规则判定（违规含豁免，或允许它的规则，U15）；两端的不稳定度与「逆稳定」提示（U17）。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { contractNames, fileKinds, moduleName, type FileDep, type StructureEdge } from '@/model'
 import { useDesk } from '@/state/inject'
 import Section from './Section.vue'
@@ -41,6 +41,9 @@ function filesOf(e: StructureEdge): FileDep[] {
   return out
 }
 
+/** 覆盖它的关系较多时先列前 LIMIT 条 */
+const LIMIT = 10
+const allCover = ref(false)
 const STATUS: Record<string, string> = { new: '新增', known: '已知', open: '违规（无基线）', allowed: '已豁免' }
 const fmtI = (i: number | null | undefined) => (i == null ? '—' : i.toFixed(2))
 const metric = (m: string) => desk.facts.metrics.value?.get(m)
@@ -82,8 +85,11 @@ const relText = (id: string) => {
         <template v-else>没有交互覆盖它：{{ dependency.tier === 'invokes' ? '由下面的结构事实覆盖' : '值使用或只引类型，正常的知识依赖' }}</template>
       </p>
       <ul v-else class="plain">
-        <li v-for="r in dependency.coverage.relations" :key="r">
+        <li v-for="r in allCover ? dependency.coverage.relations : dependency.coverage.relations.slice(0, LIMIT)" :key="r">
           <button class="link cover-rel" title="切到交互视角并选中这条关系" @click="showInteraction(r)">{{ relText(r) }}</button>
+        </li>
+        <li v-if="!allCover && dependency.coverage.relations.length > LIMIT">
+          <button class="link more" @click="allCover = true">另 {{ dependency.coverage.relations.length - LIMIT }} 条，展开</button>
         </li>
       </ul>
       <p class="muted facts-cover">
