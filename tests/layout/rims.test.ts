@@ -69,7 +69,7 @@ describe('L14 普通层次', () => {
 })
 
 describe('L14 分层总览', () => {
-  it('port / adapter 同核心模块常显在带内（不计入 +N）；port 压在带的上边，adapter 贴带的右边，不占核心模块的行', () => {
+  it('port / adapter 同核心模块常显在带内（不计入 +N）；port 压在带的上边，adapter 在带内最右一列（紧贴「可依赖」栏），不占核心模块的行', () => {
     const view = projectLevel(index, 'sys')
     const zone = view.nodes.find(n => n.id === 'infra.zone')!
     expect(zone).toMatchObject({ role: 'core', rim: 'port' })
@@ -80,7 +80,9 @@ describe('L14 分层总览', () => {
     const z = pv.nodes.get('infra.zone')!
     const mus = pv.nodes.get('infra.mus')!
     expect(z.y + z.h / 2).toBeCloseTo(band.y)
-    expect(mus.x + mus.w).toBeCloseTo(band.x + band.w)
+    // 紧贴带右侧的「可依赖」栏（BAND.right），在所有核心模块之右
+    expect(mus.x + mus.w).toBeCloseTo(band.x + band.w - BAND.right - BAND.chipGap / 2)
+    expect(mus.x).toBeGreaterThan(Math.max(...['infra.player', 'infra.framework'].map(id => pv.nodes.get(id)!.x + pv.nodes.get(id)!.w)))
     expect(mus.w).toBe(BAND.chip.w)
     // 核心模块在 port 之下
     const core = pv.nodes.get('infra.player')!

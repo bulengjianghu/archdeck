@@ -60,7 +60,9 @@ export function layoutLayered(view: LevelView, opts: LayoutOptions = {}): Positi
   const perRow = Math.max(3, Math.min(maxCore, columns))
   // O7：带宽按画布铺开（列数给出），内容少时也不缩窄
   const middle = Math.max(BAND.minMiddle, columns * (BAND.chip.w + BAND.chipGap) - BAND.chipGap + 2 * BAND.chipGap)
-  const width = BAND.left + middle + BAND.right
+  // L14：有 adapter 时带内多一列，紧贴右侧「可依赖」栏（带的右边、外部系统一侧）
+  const adapterCol = view.nodes.some(n => n.rim === 'adapter' && n.role === 'core') ? BAND.chip.w + BAND.chipGap : 0
+  const width = BAND.left + middle + adapterCol + BAND.right
 
   let y = 0
   const bandIndex = new Map<string, number>()
@@ -87,7 +89,12 @@ export function layoutLayered(view: LevelView, opts: LayoutOptions = {}): Positi
       nodes.set(id, { x: BAND.left + BAND.chipGap + k * (BAND.chip.w + BAND.chipGap), y: y - BAND.chip.h / 2, w: BAND.chip.w, h: BAND.chip.h }),
     )
     adapters.forEach((id, k) =>
-      nodes.set(id, { x: width - BAND.chip.w, y: y + rimTop + BAND.padY + k * (BAND.chip.h + BAND.chipGap), w: BAND.chip.w, h: BAND.chip.h }),
+      nodes.set(id, {
+        x: width - BAND.right - BAND.chip.w - BAND.chipGap / 2,
+        y: y + rimTop + BAND.padY + k * (BAND.chip.h + BAND.chipGap),
+        w: BAND.chip.w,
+        h: BAND.chip.h,
+      }),
     )
     const shelfTop = y + h - BAND.padY / 2 - (shelfH - BAND.shelfGap)
     shelf.forEach((id, k) =>

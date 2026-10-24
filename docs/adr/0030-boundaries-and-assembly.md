@@ -1,6 +1,6 @@
 # ADR-0030：边界与组装
 
-- 状态：已采纳（待实现，第六轮）
+- 状态：已实现（第六轮 T4）
 - 日期：2026-10-24
 - 决策人：项目负责人（2026-10-24 认可草案，本轮做）
 - 关联：配套 [ADR-0029](./0029-interaction-kinds-and-via.md)（端口实体、继承为事实）；扩展 [ADR-0027](./0027-module-roles.md)（`role` 的取值）；原则 SP1、SP4、SP5（[docs/system](../system/README.md)）；规则见「后果」；格式 [04 §3.2、§3.6](../04-description-format.md#32-模块)

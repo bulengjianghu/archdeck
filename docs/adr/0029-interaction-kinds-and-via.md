@@ -1,6 +1,6 @@
 # ADR-0029：四类交互与机制维度
 
-- 状态：已采纳（待实现，第六轮）
+- 状态：已实现（第六轮 T1–T4）
 - 日期：2026-10-24
 - 决策人：项目负责人（2026-10-24 两次认可草案：`calls` 拆为查询 / 委托；实现契约降为端口上的事实；分类只确认核心模块之间的线）
 - 关联：修订 [ADR-0026](./0026-relations-are-interactions.md)（关系四类：`calls` 拆为 `queries` / `commands`，`implements` 降为端口事实）、[ADR-0022](./0022-relation-semantics.md)（`implements` 与端口三角）、[ADR-0018](./0018-edge-encoding.md)（线型与箭头）；配套 [ADR-0030](./0030-boundaries-and-assembly.md)（边界与组装）；原则 SP1、SP2、SP3、SP4、SP5、SP6（[docs/system](../system/README.md)）；规则见「后果」；格式 [04 §3.3、§3.4](../04-description-format.md#34-关系)
