@@ -40,6 +40,8 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 - 一个文件的解析结果：`{ line, spec, kind, names, types, heritage }[]`（`types` 为写成只引类型的名字，`heritage` 为本文件类声明的 `implements` / `extends` 引用到的导入名，ADR-0022），与文件内容一起缓存；目标解析每次按当前清单做（清单变了结果跟着变）。
 - 性能（实测）：h5player 1657 个脚本文件首次提取 1.7 秒、缓存命中 0.2 秒；本项目约 170 个文件 0.16 秒。之后只重解析变化的文件。
 
+> 第六轮（ADR-0029、ADR-0030，待实现）：解析结果的 `heritage` 另记种类（`implements` / `extends`）与目标声明的种类（接口、类型别名、类），供 K5c 与子类事实（K12）；交互使用另记组装使用（`new`、工厂命名的调用、容器注册，K13）。
+
 ## 3. 治理存储（接入层，`vite/governanceStore.ts`）
 
 | 函数 | 做什么 | 规则 |
@@ -75,6 +77,8 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 | `checkDependency(index, own, report, entryOf, from, targets)` | 写前判定：对每个目标 `judge`，取最严；环影响为在值依赖的模块图（`valueDeps`）上加边后重算包含两端的强连通分量；附覆盖关系与目标模块语义 | Q2 |
 | `stepEvidence(frame, index, own, deps, entryOf)` · `scenarioEvidence(plan, …)` | 步骤的候选调用点与证据等级（按名字匹配 / 按模块依赖 / 无证据 / 不判定）、场景各等级计数；算法见[场景投影与回放 §10](./scenario.md#10-步骤的代码证据) | S16 |
 | `summarizeLedger(entries)` | 按判定统计次数；扫描的违规数与环度首末值 | Q4 |
+
+> 第六轮（ADR-0029、ADR-0030，待实现）：`confirmRelations` 按四类交互判定（迁移期未分类同原 `calls`），`via` 按四形态（K5b，经端口的证实）；新增 `confirmImplementers`（端口实现者三档与「仅代码事实」的实现者，K5c）、`heritageFacts`（子类事实，K12）、`assemblyFacts`（组装事实与组装根，K13）、`portIssues`（端口孤立，U14）；`portTriad` 改为 `portPanel`（K11）；`undescribedDeps` 加三种覆盖（K7）；`levelFacts` 另给组装叠加线（O12）。
 
 ### 4.1 数据结构
 
@@ -129,6 +133,8 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 
 - 聚合的判据是「改一处能消掉几条」：同一组重叠的 codeRefs、同一目录的漏写、越过同一条边界依赖同一个模块（常见于契约放错了层）、同一对端点之间缺的关系。h5player 的 178 条违规由此收成 13 条。
 - 建议动作只给方向与片段，不替人决定：加例外、收紧基线、认可偏差、登记指纹由架构师决定（U5、U7、X4、X6）。
+
+> 第六轮（ADR-0029，待实现）：`ReworkCategory` 加 `unclassified`（核心之间的未分类，M17）、`query-side-effect`（U13）、`port`（U14）；「证据像使用」的建议改为「从 `implementedBy` 去掉并按交互改写」（Q8）。
 
 ### 4.3 确认（模型层，`src/model/review/`）
 
@@ -190,6 +196,8 @@ interface SketchDeviation {
 }
 interface SketchCheck { sketch: string; design?: string; deviations: SketchDeviation[]; counts: { error: number; warning: number; info: number }; consistent: boolean }
 ```
+
+> 第六轮（ADR-0029，待实现）：`sketchCheck` 按 X23 比关系类型（未分类与查询 / 委托视为对应）、按 X24 核验草图声明的端口实现者（`sketch.missing-implementer`），相对当前版本的结构对比加入 `via` 与 `implementedBy`（X17）。
 
 ## 5. agent 接口（接入层，`scripts/agent/`、`scripts/arch.ts`、`scripts/arch-mcp.ts`）
 

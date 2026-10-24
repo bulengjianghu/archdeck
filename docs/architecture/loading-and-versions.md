@@ -84,6 +84,8 @@ ModelIndex + Issue[]      ──diffModels(基线, 设计或提交)──▶ Mod
 
 名称查询与小谓词不在流水线里，属于类型与 Schema（契约，U10）：`moduleName`（模块、参与者或系统根的显示名）、`isLong`（G20）、`RULE_LABELS`（规则种类名）在 `src/model/names.ts`，`isArchived`（DV-6）在 `src/model/design.ts`。领域枚举的中文显示名（参与者类别、设计状态、变更字段）是界面文案，在呈现层 `src/components/shared/labels.ts`。
 
+> 第六轮（ADR-0029、ADR-0030，待实现）：`load` 按 M17 把 `calls` 读作未分类（索引保留迁移期取值）、把 `implements` 转成接口的 `implementedBy`（不进关系表），按 M20 把平铺 `via` 读成四形态；`validate` 加 `via` 目标（M11）、修饰适用范围（M13）、`implementedBy`（M18）与场景 `kind`（M19）的检查；`buildIndex` 另建「端口 → 实现者（描述）」表供架构治理合并代码事实。
+
 ## 4. 设计版本与对比
 
 设计版本的存放与流程见 [ADR-0002](../adr/0002-design-versions.md) 与 [04-description-format.md §5](../04-description-format.md#5-设计版本)：每轮一份完整快照，所以设计版本走与当前版本完全相同的加载流水线，只多一步对比。
