@@ -1,6 +1,6 @@
 # ADR-0030：边界与组装
 
-- 状态：已实现（第六轮 T4）
+- 状态：已采纳（已实现，第六轮）
 - 日期：2026-10-24
 - 决策人：项目负责人（2026-10-24 认可草案，本轮做）
 - 关联：配套 [ADR-0029](./0029-interaction-kinds-and-via.md)（端口实体、继承为事实）；扩展 [ADR-0027](./0027-module-roles.md)（`role` 的取值）；原则 SP1、SP4、SP5（[docs/system](../system/README.md)）；规则见「后果」；格式 [04 §3.2、§3.6](../04-description-format.md#32-模块)
@@ -40,6 +40,15 @@ ADR-0029 把端口做成了实体（可替换点）；本 ADR 补上它的另外
 
 - **02**：§1.1 `role` 加 `port` / `adapter`（M16 改写）；§1.3 场景加 `kind`（M19）；§1.7 组装事实、组装根、子类事实；新增 K13、L14、O12、R17；K7 的覆盖加上组装事实；全部「待实现」。
 - **04**：§3.2 角色表加 `port` / `adapter`；§3.6 场景 `kind`。
-- **01**：新增 C-20、C-21、D-23、GV-16（待实现）。
+- **01**：新增 C-20、C-21、D-23、GV-16（第六轮已实现）。
 - **03 与专题**：依赖提取（组装与继承的提取）、架构治理（组装事实、组装根）、Projector 与画布（边界角色的位置、组装根开关）、场景列表（按 `kind` 筛选）的职责标「待实现」。
-- **h5player 样本**（T4）：`infra.player-index` 标 `port`，`infra.third-party` 及各外部媒体插件适配器标 `adapter`，`infra.bootstrap` 应被算为组装根；写进人拥有的 `intent/roles.yaml`，由负责人核对后 `arch own`。
+- **h5player 样本**（T4，读代码核实，T4 裁决 2）：PlayerIndex 下的对外 API 与转出面（`infra.player-index.player-api`、`infra.player-index.public-surface`）标 `port`——`infra.player-index` 在骨架里仍为核心；`infra.third-party`、把外部媒体插件包成 MU 的 `infra.mus.process-plugin` 与直接用浏览器 Service Worker 的 `infra.workers.sw-channel` 标 `adapter`；`infra.bootstrap` 应被算为组装根。写进人拥有的 `intent/roles.yaml`，由负责人核对后 `arch own`。
+- 实施结果（第六轮 T1–T5）：
+  - **组装事实**（K13）：依赖提取记交互使用的种类（`new` / `factory` / `register`），模型层 `assemblyFacts` 按模块聚合；T4 收窄两处（`Error` 类的 `new` 不算组装也不算交互使用；成员调用上的工厂只认命名空间导入或 `*Factory` 对象，T4 裁决 6），h5player 组装根 17 → 12。现状：h5player 组装 145、组装根 12；本项目组装 6、组装根 6。
+  - **只组装的关系**：h5player 删去说明里只讲构造 / 注册 / 装配且没有场景绑定的 31 条（T4 裁决 1），连同 K12 删去的 17 条，关系 427 → 379；「创建并使用」的 26 条保留为委托 / 查询。
+  - **边界角色**（L14）：普通层次 `port` 压在父模块框上边、`adapter` 压在右边，常显不折叠；分层总览里 `port` 压在带的上边、`adapter` 在带内最右一列（T4 裁决 5）。「组装」开关在「显示」面板，组装叠加线落带、组装根角标落到最深的可见块（O12，T4 裁决 4）。
+  - **场景分类**（M19、R17）：`kind` 缺省 `main`，场景列表默认只列主流程、可切到全部类别（记在本机），非主流程标「异常」/「维护」；两个项目的场景都标为 `main`。
+- 已知限制：
+  - h5player 12 个组装根里有 4 个是误判（只是 `new` 了值对象或工具对象，被组装方多在通用原语与协议算法里）：组装根只是提示，本轮不收窄（T4 裁决 3）；「目标为共用件不算组装」并给 `share.utils` / `domain.algorithms` 标 `shared` 交负责人决定。
+  - 组装事实只看 `new` / 工厂 / 注册的出现，不追踪 new 出的实例之后是否被调用：「创建并使用」的 26 条关系靠描述保留，事实分不清组装与创建后使用（已登记 docs/system §5）。
+  - 两个项目都没有非主流程场景，R17 对真实数据暂不起作用；建议给 h5player 补错误恢复类场景（`kind: exception`，T4 裁决 7）。

@@ -34,13 +34,12 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 |---|---|---|
 | `readCodeDeps(root, files, packages)` | 对清单中的脚本文件逐个解析（Vue 取 `<script>` 块），收集导入语句；说明符解析与再导出穿透见下；按绝对路径的修改时间与大小缓存每个文件的解析结果 | K1–K3 |
 | `readPathAliases(root, files)` · `createResolver(root, files, packages)` | 读出清单中各 `tsconfig*.json` 的 `paths`，交给模型层的 `specResolver`（[source.md §3](source.md)）解析；解析不到返回 `null`（外部依赖） | K2 |
-| `importTargetKinds(imp, via, exportsOf)` · `importTargets(via, names, exportsOf)` · `resolveImport(…, from, spec, names?)` | 一条导入的目标与种类：命名导入沿再导出链追到声明文件（复用导出解析的 `exportsResolver`，带本次的说明符解析，裸说明符与先导入再本地导出也追，最多 5 层），每个名字按写法（`type X`）或声明（`interface` / `type`）判为类型，只承接类型名的目标为 `type`；其余以经由文件为目标、取整条语句的种类；每个目标另记落到它的导入名 `names`、是否被类的 implements / extends 引用 `heritage`、是否引用了实现 `uses`（值导入的名字声明为函数、类或变量，且在值位置被引用：解析导入时 `parseImports` 记下没有在值位置出现的导入名 `inert`——只在类型位置、`instanceof` 右侧或只本地再导出 `export { x }` / `export default x`；Vue 模板里出现的名字算引用；`export … from` 记 `reexport`，都不记 `uses`）、其中是否有交互使用 `invokes`（`parseImports` 记下被引用却从没被调用的名字 `reads` 与引用方式——`member` 只作成员读取的基、`bare` 其余；成员读取为纯值读取，`bare` 的名字声明为函数、类、默认导出或 `callable` 的变量时算交互，常量不算；调用、`new`、`extends`、成员调用、模板标签与模板里的调用都是交互）（写进文件依赖，`uses` 供 K5 的 implements 证据与 U11、U12，`invokes` 供 K7）；`importTargets` 只取目标，`resolveImport` 供写前判定按说明符解析 | K1a、K3 |
+| `importTargetKinds(imp, via, exportsOf)` · `importTargets(via, names, exportsOf)` · `resolveImport(…, from, spec, names?)` | 一条导入的目标与种类：命名导入沿再导出链追到声明文件（复用导出解析的 `exportsResolver`，带本次的说明符解析，裸说明符与先导入再本地导出也追，最多 5 层），每个名字按写法（`type X`）或声明（`interface` / `type`）判为类型，只承接类型名的目标为 `type`；其余以经由文件为目标、取整条语句的种类；每个目标另记落到它的导入名 `names`、是否被类的 implements / extends 引用 `heritage` 与继承子句明细 `inherits`（导入名、子句种类 `implements` / `extends`、穿透后的声明种类；默认导入的基类按默认导出解析，供 K5c、K12）、是否引用了实现 `uses`（值导入的名字声明为函数、类或变量，且在值位置被引用：解析导入时 `parseImports` 记下没有在值位置出现的导入名 `inert`——只在类型位置、`instanceof` 右侧或只本地再导出 `export { x }` / `export default x`；Vue 模板里出现的名字算引用；`export … from` 记 `reexport`，都不记 `uses`）、其中是否有交互使用 `invokes`（`parseImports` 记下被引用却从没被调用的名字 `reads` 与引用方式——`member` 只作成员读取的基、`bare` 其余；成员读取为纯值读取，`bare` 的名字声明为函数、类、默认导出或 `callable` 的变量时算交互，常量不算；调用、`new`、`extends`、成员调用、模板标签与模板里的调用都是交互）与交互使用的种类 `invokeKinds`（`call`；`extends`；组装使用 `new`、`factory`——调用名为 `create*` / `make*` / `build*` 或以 `Factory` 结尾，成员调用只认命名空间导入或 `*Factory` 对象、`register`——作为实参交给 `register*` / `provide` / `bind` / `use`；`Error` 类的 `new` 不算组装，T0 裁决 6、T4 裁决 6）（写进文件依赖，`uses` 供 K5c 的证据分档与 U11、U12，`invokes` 中只有 `call` 的算 K7，组装种类供 K13）；`importTargets` 只取目标，`resolveImport` 供写前判定按说明符解析 | K1a、K3 |
 
 - 路径补全与包入口只有一套，在模型层（`completePath`、`packageEntry`，K2）：入口文件（G10）、导出解析（G11）与这里共用，模块入口与依赖的经由文件口径一致。
-- 一个文件的解析结果：`{ line, spec, kind, names, types, heritage }[]`（`types` 为写成只引类型的名字，`heritage` 为本文件类声明的 `implements` / `extends` 引用到的导入名，ADR-0022），与文件内容一起缓存；目标解析每次按当前清单做（清单变了结果跟着变）。
+- 一个文件的解析结果：`{ line, spec, kind, names, types, heritage }[]`（`types` 为写成只引类型的名字，`heritage` 为本文件类声明的 `implements` / `extends` 引用到的导入名及子句种类，ADR-0022、ADR-0029），与文件内容一起缓存；目标解析每次按当前清单做（清单变了结果跟着变）。
 - 性能（实测）：h5player 1657 个脚本文件首次提取 1.7 秒、缓存命中 0.2 秒；本项目约 170 个文件 0.16 秒。之后只重解析变化的文件。
-
-> 第六轮（ADR-0029、ADR-0030，已实现）：解析结果另记 `inherits`（导入名、子句 `implements` / `extends`，目标上带穿透后的声明种类），供 K5c 与子类事实（K12）；交互使用另记 `invokeKinds`（`call` / `extends` / `new` / `factory` / `register`，命名见 T0 裁决 6），K7 只看 `call`，K13 看后三种。
+- 分类用的源码事实在 `vite/readClassifyFacts.ts`（`readClassifyCode`，只给命令行 `arch classify`）：调用点的结果是否被使用、被调函数签名的返回形态、目标文件是否持有状态（ADR-0029 §5）。
 
 ## 3. 治理存储（接入层，`vite/governanceStore.ts`）
 
@@ -62,16 +61,20 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 | 函数 | 做什么 | 规则 |
 |---|---|---|
 | `liftDeps(index, own, deps)` | 文件依赖两端取归属模块，去掉同模块与祖先后代，按 `A->B` 合并为 `ModuleDep`；一端未归属或已忽略的计入 `skipped`，一端是归属冲突文件的不提升、列入 `conflicted`；另记祖先与后代之间的模块对 `nested`（K6 判定两端有无依赖用）；返回 `{ moduleDeps, skipped, conflicted, nested }` | K4 |
-| `hostOf(index, direct, id)` · `confirmRelations(index, moduleDeps, direct)` | 宿主：自身或最近的、有直接归属文件的祖先。每条关系：端点有参与者或目标态 → `skipped`；写了 `via` → `skipped` 并带 `via`（K5b，面板标「不判定：经 …」）；两端宿主相同 → `skipped` 并带 `host`（概念拆分，同文件，面板说明）；有 `from` 子树 → `to` 子树的模块依赖（`notifies`、`streams` 两向；`implements` 还要求依据的文件依赖中有 `to` 声明的接口名或类的 implements / extends 指向 `to`，没有时 `unconfirmed`，只引了数据类型带 `structural`、引用了实现（文件依赖的 `uses`）带 `likeDepends`）→ `confirmed`，带依据的模块依赖键与知识方向 `knows`；否则 `unconfirmed`，两端之间（模块依赖与 K4 未提升的祖先后代依赖 `nested`，不论方向）没有任何依赖时带 `isolated`。`unconfirmedWarns(r, c)`：编译期关系未证实、或运行时关系 `isolated` 时报 `fact.unconfirmed`（`likeDepends` 时报 `fact.like-depends`）；`unconfirmedReason(r)` 给问题、返工项共用的说明 | K5、K5a、K6 |
-| `undescribedDeps(index, moduleDeps)` | 未解释的交互：有交互使用（文件依赖的 `invokes`）、且没有交互关系（`calls` / `notifies` / `streams` / `implements`）覆盖的模块依赖（端点相同或互为祖先后代、方向一致，`notifies`、`streams` 不论方向）；只引类型（含枚举）的、纯值读取（只有 `uses` 没有 `invokes`）的不算；info（ADR-0026，纯值读取口径：第五轮 T4） | K7 |
-| `portTriad(index, report, moduleId)` | 端口三角：定义（`moduleInterfaces`）· 实现者（`to` 在子树内的 `implements`）· 使用者（`to` 在子树内的 `calls` / `streams`，含 `via`；ADR-0026 去掉 `depends`）；给了证实结果时每项带状态 | K11 |
+| `hostOf(index, direct, id)` · `confirmRelations(index, moduleDeps, direct, nested, implementers)` | 宿主：自身或最近的、有直接归属文件的祖先。每条关系（四类交互，迁移期的未分类同查询 / 委托）：端点有参与者或目标态 → `skipped`；`via: port:<P>` 时发起方子树 → P 的定义模块有依赖、且接收方是 P 已证实的实现者 → `confirmed` 并带 `port`（经端口，K5b），否则 `skipped` 带 `via`；写了其余 `via` → `skipped` 并带 `via`（面板标「不判定：经 …」）；两端宿主相同 → `skipped` 并带 `host`（概念拆分，同文件，面板说明）；有 `from` 子树 → `to` 子树的模块依赖（`notifies`、`streams` 两向）→ `confirmed`，带依据的模块依赖键与知识方向 `knows`；否则 `unconfirmed`，两端之间（模块依赖与 K4 未提升的祖先后代依赖 `nested`，不论方向）没有任何依赖时带 `isolated`。`unconfirmedWarns(r, c)`：交互关系 `isolated` 时报 `fact.unconfirmed`；`unconfirmedReason(r)` 给问题、返工项共用的说明 | K5、K5a、K5b、K6 |
+| `confirmImplementers(index, moduleDeps, direct, nested)` · `implementerWarns(c)` · `implementerReason(c)` | 端口实现者（ADR-0029）：描述的 `implementedBy` 每项——实现者子树 → 定义模块子树的文件依赖里有类 `implements` / `extends` 解析到该接口、或引用了接口名 → 已证实；只引了数据类型 → 结构性实现（`structural`，info）；引用了实现 → 证据像使用（`likeDepends`）；否则未证实。代码事实里有、描述没写的实现者（只认继承子句解析到接口名）列为「仅代码事实」。结果在报告的 `implementers`（端口 → 实现者）；未证实报 `fact.unconfirmed`、证据像使用报 `fact.like-depends`，结构性实现只进返工清单 | K5c、K6 |
+| `heritageFacts(index, moduleDeps)` · `assemblyFacts(moduleDeps)` | 子类事实：类 `extends` 解析到别的模块的**类**（不是端口），含默认导入的基类 → 「A 继承 B」（报告的 `subclasses`）；组装事实：值位置的 `new` / 工厂 / 注册 → 「A 组装 B」，按模块聚合、带方式与文件证据（报告的 `assembly`）；组装根 = 模块级组装图入度 0、出度 ≥ 1（`assemblyRoots`，按最深模块算） | K12、K13 |
+| `undescribedDeps(index, moduleDeps, implementers)` | 未解释的交互：有调用类的交互使用（文件依赖的 `invokes`，种类含 `call` 或没记种类）、且没有交互关系（四类，迁移期含未分类）覆盖的模块依赖（端点相同或互为祖先后代、方向一致，`notifies`、`streams` 不论方向）；只引类型（含枚举）的、纯值读取（只有 `uses` 没有 `invokes`）的、只有继承或只有组装使用的（子类 / 组装事实承载）、依赖方是被依赖方子树内某端口的实现者的（K5c）不算；info | K7 |
+| `unclassifiedRelations(index)` · `isCoreBetween(index, r)` · `coresOf(index, id)` | 描述查询：未分类关系与其中「核心之间」的——两端各自是核心或在核心子树内、且不在同一核心子树内（T0 裁决 12）；`lint:model` 摘要、治理面板与返工清单共用 | M17 |
+| `portEntry(index, report, portId)` · `portPanel(index, report, moduleId)` · `portIssues(index, report)`（`ports.ts`） | 端口面板：一个接口的定义模块（`portOwner`）· 实现者（给了报告时取 `implementers`，带证据档并含「仅代码事实」的；否则为描述的 `implementedBy`）· 使用者（经端口 `via: port:<P>`，或直接以它为 `interface`、发起方在定义模块子树外的交互关系，带证实状态），`isPort` 为「被经端口引用或有实现者」（T0 裁决 4）；`portPanel` 为模块声明的每个接口（`moduleInterfaces`，G12）各一份；端口孤立：算端口而没有任何实现者 → warning `port.no-implementer`，有实现者没有使用者 → info `port.no-user`，定义模块或全部实现者是目标态的不报，没有代码事实时只按描述 | K11、U14 |
 | `judge(index, rules, entryOf, dep)` | 一条（依赖方模块，被依赖方模块，经由文件及其归属）对全部规则的判定：层规则、白名单、访问面，返回命中的 `{ kind, at, reason }` 与是否有规则约束；`allow` 匹配的标为已豁免 | U2–U5 |
 | `evaluateRules(index, own, moduleDeps, entryOf)` | 对每条模块依赖的每条文件证据 `judge`，按 `<种类>:<规则所在>:<A>-><B>` 合并为 `Violation` | U6 |
 | `stronglyConnected(edges)` · `valueDeps(moduleDeps)` · `moduleCycles` · `fileCycles` | Tarjan 强连通分量，返回规模 ≥ 2 的分量，成员按名称排序；环只按值依赖：`valueDeps` 只留含 `value` 文件依赖的模块依赖（证据也只留 `value`），文件环只取 `value` 文件依赖——模块环、文件环、本层环（Y4、Y5）与写前判定的环影响（Q2）同一口径 | Y1 |
 | `cyclicity(cycles)` | 未容忍的环的 Σ 规模² | Y2、Y3 |
-| `governanceReport(index, own, tree, deps, baseline)` | 组合以上：事实、比对、违规（带基线状态）、模块环与文件环、环度、门禁问题与摘要 | K4–K7、U8、Y |
+| `governanceReport(index, own, tree, deps, baseline)` | 组合以上：事实、比对、端口实现者、子类与组装事实、违规（带基线状态）、模块环与文件环、环度、门禁问题（含端口孤立）与摘要 | K4–K7、K5c、K12、K13、U8、U14、Y |
 | `levelFacts(index, view, report)` | 当前层次：视图边的证实标记与违规；未解释的交互与违规投影成的叠加线；本层的环编号；每个本层环的构成（环内节点按视图顺序，环内每条本层依赖带同方向视图边与投影来的模块依赖，均只取值依赖 `valueDeps`）——与环编号同一次投影得出，不另取事实 | K9、Y4、Y5 |
 | `depsBetween(index, view, report, from, to)` | 叠加线选中时的内容：投影到这对节点的模块依赖、违规与文件证据 | K10 |
+| `levelAssembly(index, view, report)` | 组装叠加：组装事实按 `mapEndpoint` 投影到本层（同 K9 的叠加线：分层总览落到带、普通层次落到子模块、折叠的落在「+N」、外部的落在边界节点），两端为本层不同节点的成为叠加线、同一对节点合并（单击落到这对节点的代码依赖，`depsBetween` 同一投影）；组装根聚合到本层最深的可见节点（T1 裁决 9） | O12 |
 | `rulesFor(index, moduleId)` | 对一个模块生效的规则：所在各级层的 `mayDependOn`、祖先链上的白名单与访问面 | Q1 |
 | `describeModule(index, own, report, entryOf, id)` · `locate(…, file)` | agent 用的模块 / 文件说明：路径与各级职责、生效的规则、接口签名、入口、出入关系与违规 | Q1 |
 | `checkDependency(index, own, report, entryOf, from, targets)` | 写前判定：对每个目标 `judge`，取最严；环影响为在值依赖的模块图（`valueDeps`）上加边后重算包含两端的强连通分量；附覆盖关系与目标模块语义 | Q2 |
@@ -79,12 +82,16 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 | `summarizeLedger(entries)` | 按判定统计次数；扫描的违规数与环度首末值 | Q4 |
 | `classifyRelation(index, report, relation, code?)` · `classifyRelations(…)`（`classify.ts`） | 查询 / 委托的分类建议（ADR-0029 §5「分类是主张」）：按第一问「被调方拥有后果吗」打分，证据为代码事实（交互种类、调用点的结果是否被使用、被调函数签名的返回形态、目标文件的状态持有，`code` 由接入层 `readClassifyCode` 提取）、描述（目标是共用件、目标会发出通知、接口签名、目标模块名）与名字（被调函数名、成员名、说明里的动词）；输出建议类型、置信度（高 / 中 / 低）、依据，只有继承或只有组装的标 `factOnly`；平分或没有证据时按委托、低置信度。`interactionDescription` 把说明改为交互口吻（查询「A 向 B 取：…」，委托「A 交给 B：…」） | M17 |
 
-> 第六轮（ADR-0029、ADR-0030）：已实现——`confirmRelations` 按四类交互判定（迁移期未分类同原 `calls`），`via` 按四形态（K5b，经端口的证实带 `port`）；`confirmImplementers`（端口实现者三档与「仅代码事实」的实现者，K5c，结果在报告的 `implementers`）、`heritageFacts`（子类事实，K12，报告的 `subclasses`）、`assemblyFacts`（组装事实与组装根，K13，报告的 `assembly` / `assemblyRoots`）、`portEntry` / `portPanel`（K11）与 `portIssues`（U14）都在 `facts.ts`；`undescribedDeps` 加三种覆盖（K7）；描述查询 `unclassifiedRelations` / `isCoreBetween`（M17）。`portTriad`（`ports.ts`）保留为迁移期兼容。待实现：`levelFacts` 的组装叠加线（O12，T3）。
 
 ### 4.1 数据结构
 
 ```ts
-interface FileDep { from: string; to: string; via: string; kind: 'value' | 'type'; line: number }
+interface FileDep {
+  from: string; to: string; via: string; kind: 'value' | 'type'; line: number; names?: string[]
+  heritage?: true; uses?: true; invokes?: true
+  invokeKinds?: ('call' | 'extends' | 'new' | 'factory' | 'register')[]                 // K7 只看 call，K13 看后三种
+  inherits?: { name: string; clause: 'implements' | 'extends'; decl?: string }[]    // K5c、K12
+}
 interface CodeDeps { deps: FileDep[]; external: Record<string, number>; parsed: number }
 interface ModuleDep { key: string; from: string; to: string; files: FileDep[] }      // key = `${from}->${to}`
 type RuleKind = 'layer' | 'deps' | 'exposes'
@@ -96,7 +103,9 @@ interface Cycle { members: string[]; tolerated: boolean }
 interface Baseline { createdAt: string; commit?: string; violations: string[]; cyclicity: { modules: number; files: number } }
 interface GovernanceReport {
   moduleDeps: Map<string, ModuleDep>; skipped: number; conflicted: FileDep[]; external: Record<string, number>
-  relations: Map<string, { status: 'confirmed' | 'unconfirmed' | 'skipped'; deps: string[]; host?: string; isolated?: boolean }>
+  relations: Map<string, { status: 'confirmed' | 'unconfirmed' | 'skipped'; deps: string[]; host?: string; isolated?: boolean; via?: string; port?: string }>
+  implementers: Map<string, PortFacts>                     // 端口 → 实现者（证据档、仅代码事实，K5c）
+  subclasses: SubclassFact[]; assembly: AssemblyFact[]; assemblyRoots: string[]   // K12、K13
   undescribed: ModuleDep[]; violations: Violation[]
   moduleCycles: Cycle[]; fileCycles: Cycle[]; cyclicity: { modules: number; files: number }
   baseline: Baseline | null
@@ -116,11 +125,11 @@ interface LevelCycle { id: number; nodes: { id: string; module: string }[]; edge
 
 | 函数 | 做什么 | 规则 |
 |---|---|---|
-| `reworkList({ index, issues, source?, report?, evolution?, sketches?, deps? })` | 汇总：校验问题（跳过归属、证据、门禁、事实与 S5a 未建模，它们由下列材料重新算；`owned.*` 归入类别 `owned`）、归属（冲突按匹配的 codeRefs 组合，`detail` 注明一端是这组文件、因冲突未计入的依赖条数（`report.conflicted`，K4）；未归属按目录；entry 不存在）、不在清单里的场景证据文件（`missingEvidence`，归描述问题，S15）、违规（按基线状态 · 种类 · 规则所在 · 被依赖方）、环度上升与可收紧基线、报警的未证实关系（`unconfirmedWarns`）、未解释的交互、未建模的步骤（`bindRelation` 绑定不到关系的消息步骤，按两端聚合）、无证据的步骤（给了文件依赖 `deps` 时，`scenarioEvidence` 为 `none` 的步骤按两端与方向聚合，S17）、草图偏差（`sketches`：每张活动草图的 `SketchCheck`，一条偏差一个根因，已认可的不进清单，X4）；排序后给出各严重度与类别的计数 | Q7、Q8 |
+| `reworkList({ index, issues, source?, report?, evolution?, sketches?, deps? })` | 汇总（另有第六轮的三类：核心之间的未分类 `unclassified`，其余只计数，M17；查询副作用 `query-side-effect`，一对（查询，委托 / 通知）一个根因并带两处步骤，U13；端口孤立 `port`，一个端口一个根因，U14；端口实现者的未证实与证据像使用归 `unconfirmed`，结构性实现为 info，建议「从 `implementedBy` 去掉并按交互改写」，K5c、Q8）：校验问题（跳过归属、证据、门禁、事实与 S5a 未建模，它们由下列材料重新算；`owned.*` 归入类别 `owned`）、归属（冲突按匹配的 codeRefs 组合，`detail` 注明一端是这组文件、因冲突未计入的依赖条数（`report.conflicted`，K4）；未归属按目录；entry 不存在）、不在清单里的场景证据文件（`missingEvidence`，归描述问题，S15）、违规（按基线状态 · 种类 · 规则所在 · 被依赖方）、环度上升与可收紧基线、报警的未证实关系（`unconfirmedWarns`）、未解释的交互、未建模的步骤（`bindRelation` 绑定不到关系的消息步骤，按两端聚合）、无证据的步骤（给了文件依赖 `deps` 时，`scenarioEvidence` 为 `none` 的步骤按两端与方向聚合，S17）、草图偏差（`sketches`：每张活动草图的 `SketchCheck`，一条偏差一个根因，已认可的不进清单，X4）；排序后给出各严重度与类别的计数 | Q7、Q8 |
 | `reworkMarkdown(list, title, { modelDir, sourceRoot, limit })` · `reworkItemMarkdown(item, opts)` | 给 agent 的指令：摘要、每条的规则、位置、受影响（缺省最多 20 处）、建议与 YAML 片段；描述文件路径加模型目录前缀 | Q9 |
 
 ```ts
-type ReworkCategory = 'description' | 'violation' | 'shared' | 'cycle' | 'ownership' | 'unconfirmed' | 'undescribed' | 'unmodeled' | 'review' | 'coupling' | 'sketch' | 'owned' | 'unevidenced'   // shared：共用件反向依赖（U12）；review：需复核（Z3）；coupling：时间耦合（J6）；sketch：草图偏差（X4）；owned：指纹不符（X6）；unevidenced：步骤无证据（S17）
+type ReworkCategory = 'description' | 'violation' | 'shared' | 'cycle' | 'ownership' | 'unconfirmed' | 'port' | 'query-side-effect' | 'undescribed' | 'unclassified' | 'unmodeled' | 'review' | 'coupling' | 'sketch' | 'owned' | 'unevidenced'   // port：端口孤立（U14）；query-side-effect：查询有副作用（U13）；unclassified：核心之间的未分类（M17）；shared：共用件反向依赖（U12）；review：需复核（Z3）；coupling：时间耦合（J6）；sketch：草图偏差（X4）；owned：指纹不符（X6）；unevidenced：步骤无证据（S17）
 interface ReworkLoc { in: 'description' | 'source'; file: string; line?: number; note?: string }
 interface ReworkAction { kind: ReworkActionKind; text: string; file?: string; snippet?: string }
 interface ReworkItem {
@@ -135,7 +144,6 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 - 聚合的判据是「改一处能消掉几条」：同一组重叠的 codeRefs、同一目录的漏写、越过同一条边界依赖同一个模块（常见于契约放错了层）、同一对端点之间缺的关系。h5player 的 178 条违规由此收成 13 条。
 - 建议动作只给方向与片段，不替人决定：加例外、收紧基线、认可偏差、登记指纹由架构师决定（U5、U7、X4、X6）。
 
-> 第六轮（ADR-0029，待实现）：`ReworkCategory` 加 `unclassified`（核心之间的未分类，M17）、`query-side-effect`（U13）、`port`（U14）；「证据像使用」的建议改为「从 `implementedBy` 去掉并按交互改写」（Q8）。
 
 ### 4.3 确认（模型层，`src/model/review/`）
 
@@ -188,7 +196,7 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 ```ts
 interface SketchDeviation {
   key: string                           // `<种类>:<实体 ID>`，稳定
-  code: 'sketch.contradiction' | 'sketch.missing-module' | 'sketch.extra-child' | 'sketch.field' | 'sketch.missing-relation' | 'sketch.missing-interface' | 'sketch.interface-owner'
+  code: 'sketch.contradiction' | 'sketch.missing-module' | 'sketch.extra-child' | 'sketch.field' | 'sketch.missing-relation' | 'sketch.missing-interface' | 'sketch.interface-owner' | 'sketch.missing-implementer' // …
   severity: 'error' | 'warning' | 'info'; rules: string[]
   message: string; detail?: string
   target: { modules?: string[]; relation?: string; interface?: string }
@@ -198,7 +206,7 @@ interface SketchDeviation {
 interface SketchCheck { sketch: string; design?: string; deviations: SketchDeviation[]; counts: { error: number; warning: number; info: number }; consistent: boolean }
 ```
 
-> 第六轮（ADR-0029，待实现）：`sketchCheck` 按 X23 比关系类型（未分类与查询 / 委托视为对应）、按 X24 核验草图声明的端口实现者（`sketch.missing-implementer`），相对当前版本的结构对比加入 `via` 与 `implementedBy`（X17）。
+- 四类交互与端口（ADR-0029）：`sketchCheck` 的关系按两端与类型对应，迁移期的未分类与查询 / 委托视为对应（X23）；草图声明的端口实现者在版本的 `implementedBy` 与代码事实的实现者（K5c，给了时）里都没有即 `sketch.missing-implementer`（X24）。相对基线的对比另比关系的 `via` / `mode` / `pull` 与接口的 `implementedBy`（写了才比）；相对当前版本不比类型与机制（X17，T3 裁决 5）。
 
 ## 5. agent 接口（接入层，`scripts/agent/`、`scripts/arch.ts`、`scripts/arch-mcp.ts`）
 

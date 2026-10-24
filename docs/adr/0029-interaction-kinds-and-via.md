@@ -1,6 +1,6 @@
 # ADR-0029：四类交互与机制维度
 
-- 状态：已实现（第六轮 T1–T4）
+- 状态：已采纳（已实现，第六轮）
 - 日期：2026-10-24
 - 决策人：项目负责人（2026-10-24 两次认可草案：`calls` 拆为查询 / 委托；实现契约降为端口上的事实；分类只确认核心模块之间的线）
 - 关联：修订 [ADR-0026](./0026-relations-are-interactions.md)（关系四类：`calls` 拆为 `queries` / `commands`，`implements` 降为端口事实）、[ADR-0022](./0022-relation-semantics.md)（`implements` 与端口三角）、[ADR-0018](./0018-edge-encoding.md)（线型与箭头）；配套 [ADR-0030](./0030-boundaries-and-assembly.md)（边界与组装）；原则 SP1、SP2、SP3、SP4、SP5、SP6（[docs/system](../system/README.md)）；规则见「后果」；格式 [04 §3.3、§3.4](../04-description-format.md#34-关系)
@@ -104,3 +104,13 @@ ADR-0026 把「谁知道谁」清出了关系，图上剩下的线都是交互�
   - **端口**：h5player 30 条 `implements` 改为接口的 `implementedBy`（16 个端口、26 个实现者；13 条按提醒对应、8 条人工指定接口、9 条没有对应接口或实现者证实不了的只删关系），补声明 `MediaPlugin` 端口；`implements` 读到即格式错误（M17）。
   - **via**：旧平铺取值 67 条改为四形态（`channel:` 57、`bus:` 9、`port:` 1）；`notifies` 上的 `mode` 删去 70 处。
   - 两个项目未分类 0、未解释的交互 0、`fact.unconfirmed` 不变（h5player 106）。
+- 实施结果（第六轮 T1–T5 收尾）：
+  - **模型层**（T1）：类型、schema、加载与校验按四类与 `via` 四形态（M11、M13、M17–M20）；端口实现者三档与「仅代码事实」（K5c）、经端口的证实（K5b）、K7 的三种新覆盖、子类事实（K12）；查询副作用（U13）与端口孤立（U14，`port.no-implementer` warning、`port.no-user` info）；场景绑定按四类（S12、S13、S19）；返工清单加未分类、查询副作用、端口三类（Q7、Q8）。
+  - **呈现**（T3）：四类各一色相、查询淡（低饱和 + 半透明，线宽仍只表条数）、异步空心箭头、经端口的插座（L10、L12）；端口记号、选中端口 `sel=p:` 与端口面板（L13、K11）；图例按三问四修饰；草图连线选四类与机制、拖线到端口记号声明实现者（X23、X24）。
+  - **T4 修正**：子类事实认默认导入的继承子句（K12），删去由子类事实承载的 12 条「继承基类经 super 调用」与 5 条「继承 + 抛错」关系；`implements` 读到即丢弃并提醒（M17，供读历史提交）；旧 `via` 别名保留为读历史的别名（M20）。
+  - **现状计数**（当前版本，T5）：本项目关系 423（查询 248 / 委托 166 / 通知 4 / 流 5，`via` 全为 `channel:` 15 条），没有端口；h5player 关系 379（查询 144 / 委托 151 / 通知 53 / 流 31；`via`：`bus:` 9、`channel:` 14、`port:` 1），`implementedBy` 写在 16 个接口上，有实现者的端口 18（实现者 68，其中仅代码事实 42），子类 23；两个项目未分类 0、未解释的交互 0（本项目 T5 补齐 T3 / T4 新代码的 6 条交互后归零）；h5player `fact.unconfirmed` 106、`port.no-user` 16（对外端口的常态）、`port.no-implementer` 0。
+- 已知限制：
+  - h5player 归属冲突（14 个文件）相关的 9 条 `implements` 只删了关系、没有写成实现者（ControllerBase 为类，由子类事实承载；context.ts 归属冲突使 VideoElement*Port 证实不了；对象字面量的结构性实现），本轮按推进策略不治理（T2 裁决 1）。
+  - 7 条说明为「经 SolutionDeps / StreamFactReporter 端口」的关系仍写 `channel:inject`，待改为 `port:<接口>`（T2 裁决 2）。
+  - 分类器靠名字与浅层代码事实判断（调用点结果是否被使用、签名的返回形态、目标文件是否持有状态），不做类型检查与数据流分析；低置信度的 134 条经人工过目，核心之间以外的分类不经人确认（T2 裁决 12）。
+  - 迁移期的 `calls`（未分类）再保留一轮，下一轮起可改为格式错误；`relation.unclassified` 提示与 `arch classify` 届时一并收口。
