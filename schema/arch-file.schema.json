@@ -281,7 +281,7 @@
         "layout": {
           "type": "object",
           "additionalProperties": false,
-          "description": "布局（X15）：模块坐标（引用节点按它的模块 ID 记）与关系标签位置；人拥有，随草图归档",
+          "description": "布局（X15、X22）：本层模块的坐标（非根草图相对中心区的内容原点；引用节点不记，读到的旧坐标忽略、保存时去掉）与关系标签位置；人拥有，随草图归档",
           "properties": {
             "modules": {
               "type": "object",
