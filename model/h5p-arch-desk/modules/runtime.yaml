@@ -423,7 +423,7 @@ interfaces:
       canvasScene(input: CanvasInput): CanvasScene
       // CanvasInput: { positioned; index; selection; hover; stage: StageOverlay | null; scenarioView; emphasis: { selected; paired } | null;
       //                participants; mode: 'hide' | 'dim' | 'show'; reveal: string[]; diff: ModelDiff | null; fileHits: Set<string> | null; branchPointId;
-      //                editing?: boolean }   // 编辑态：加插入条与「+ 模块」，模块与带可拖动、可连线（X7）
+      //                facts?; evolution? }   // 草图不经这里：草图画布用草图布局（sketchScene，state.layout.sketch）
     semantics: 纯函数（ADR-0013）；结构视角的聚焦变淡与边的显隐、运行视角的舞台显示与回放叠加、选中步骤时的灰化（R15、R16）、文件高亮（G14）、设计版本标记都在这里算。
   - id: if.layout.stageDisplay
     name: stageDisplay
@@ -622,7 +622,7 @@ dataStructures:
         hover: string | null
         toggles: Toggles                  // 边界节点、只看现状、关系类型、标出变更、对比基线
         playback: PlaybackState | null    // null = 结构视角；非 null = 运行视角（V1）
-        editing?: SketchTarget | null     // 编辑态（X7a）：正在编辑的草图；与 playback 互斥，不进 URL
+        editing?: SketchTarget | null     // 草图画布（X7a）：打开的草图版本的编辑目标，打开即进入；与 playback 互斥，不进 URL
       }
       // 选中（V2、V7）= selection ≠ null ? selection : 运行视角下进度所在的步骤（frameId 为空时为场景）
     description: 视图状态：用户此刻在看什么，一个值（C+）。由 DeskState 持有，只经 transition 改变；视角与选中由它推出，不另存字段（ADR-0012）。
@@ -646,8 +646,9 @@ dataStructures:
         | { type: 'openScenario'; id } | { type: 'closeScenario' }
         | { type: 'next' } | { type: 'prev' } | { type: 'seek'; frameId: string | null }   // null = 回到开头
         | { type: 'chooseBranch'; pointId; option }
-        | { type: 'enterEdit'; target: SketchTarget } | { type: 'exitEdit' }
-        | { type: 'edited'; effects: EditEffects; previousPath }          // 编辑的影响：层次与选中跟随改名与删除（X7h）
+        | { type: 'enterEdit'; target: SketchTarget; level } | { type: 'exitEdit' }   // level：当前张挂载点的层次（根挂载为系统根）
+        | { type: 'edited'; effects: EditEffects; previousPath; level }   // 编辑的影响：层次与选中跟随改名与删除（X7h）
+        | { type: 'openSketch'; level }                                    // 下钻 / 面包屑切到另一张草图，不进浏览器历史
     description: 用户意图与外界变化统一成动作，经 dispatch 交给 transition。
   - id: ds.Participation
     name: Participation

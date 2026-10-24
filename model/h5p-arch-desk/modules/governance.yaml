@@ -273,7 +273,7 @@ relations:
   - {id: rel.gv.review-types, from: model.review, to: model.types, type: depends, description: review/types.ts 的契约：确认状态与记录的类型}
   - {id: rel.gv.rework-review, from: model.rework, to: model.review, type: depends, description: reviewStates、reviewCounts、需复核的摘要文字（Z3、Z5）}
   - {id: rel.gv.rework-evolution, from: model.rework, to: model.evolution, type: depends, description: isolatedCouplings：无依赖无关系的耦合对（J6）}
-  - {id: rel.gv.agent-check, from: access.agent, to: model.intent.check, type: depends, description: checkSketches、compareOwned：sketch-check 与指纹比对（X4、X6）}
+  - {id: rel.gv.agent-check, from: access.agent, to: model.intent.check, type: depends, description: checkSketches、compareDesign、compareOwned：sketch-check --design 逐张偏差与两个对比（相对基线 / 相对当前版本）、指纹比对（X4、X6、X17）}
   - {id: rel.gv.agent-append, from: access.agent, to: access.writer.append, type: depends, description: archiveDesign：sketch archive 与页面同一函数（X8）}
   - {id: rel.gv.agent-history, from: access.agent, to: access.history, type: depends, description: readSourceHistory：hotspots / coupling 命令}
   - {id: rel.gv.agent-evolution, from: access.agent, to: model.evolution, type: depends, description: evolutionStats：热度与耦合（J1–J4）}

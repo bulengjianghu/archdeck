@@ -10,7 +10,8 @@ modules:
     codeRefs: [src/components/ProjectList.vue]
   - id: present.version
     name: 版本切换与设计信息条
-    codeRefs: [src/components/VersionSwitcher.vue, src/components/infobar/InfoBar.vue, src/components/infobar/CompareZone.vue]
+    principle: 版本切换（VersionSwitcher）在这一级：选中后只显示名称，kind 用图标，草图选项为「✎ 名称」（F-63）；信息条按三区拆成子模块（身份、动作、对比，F-60–F-62），另有「在此设计」的新建设计对话框。
+    codeRefs: [src/components/VersionSwitcher.vue]
   - id: present.canvas
     name: 画布
     codeRefs: [src/components/GraphCanvas.vue, src/components/DisplayPanel.vue, src/components/nodes/**, src/components/edges/**, src/components/stage/**]
@@ -67,7 +68,7 @@ modules:
   - id: present.panel.dispatch
     name: 面板分派
     parent: present.panel
-    responsibility: 按选中选择面板（V2）：结构视角下为选中的对象，无选中时为当前父模块（根层为系统）；运行视角下选中步骤时为步骤面板、选中场景时为场景面板，选中模块 / 关系 / 聚合边 / 参与者 / 文件时为该对象的面板；没有「已钉住」之类的提示（ADR-0012）。运行视角下模块、关系、聚合边面板顶部加「运行信息」，结构信息折叠在下方（V6）。编辑态下改为编辑表单（层 / 模块 / 关系，无选中时为草图元信息）。
+    responsibility: 按选中选择面板（V2）：结构视角下为选中的对象，无选中时为当前父模块（根层为系统）；运行视角下选中步骤时为步骤面板、选中场景时为场景面板，选中模块 / 关系 / 聚合边 / 参与者 / 文件时为该对象的面板；没有「已钉住」之类的提示（ADR-0012）。运行视角下模块、关系、聚合边面板顶部加「运行信息」，结构信息折叠在下方（V6）。草图画布下整个面板换成草图面板（present.panel.sketch）。
     codeRefs: [src/components/panel/Panel.vue]
   - id: present.panel.module
     name: 模块面板
@@ -92,7 +93,7 @@ modules:
   - id: present.panel.design
     name: 设计面板
     parent: present.panel
-    responsibility: 设计版本与提交版本的根层：设计目标与范围、定稿结论的 ADR 链接（E7）、本轮做了什么、待评审确认的问题、按实体分组的变更清单（点击跳转，删除项只列出；与提交版本共用 ChangeList）、各轮评审意见与轮次切换、「记录评审意见」（B2）；提交版本为提交说明与变更清单（E5、E6）。
+    responsibility: 设计版本与提交版本的根层：设计目标与范围、定稿结论的 ADR 链接（E7）、本轮做了什么、待评审确认的问题、按实体分组的变更清单（点击跳转，删除项只列出；与提交版本共用 ChangeList）、各轮评审意见与轮次切换、「记录评审意见」（B2）；提交版本为提交说明与变更清单（E5、E6）；设计的各张草图（挂载点、模块数、推出 / 脏标记，点击切张）与「改骨架」（DesignSketches，草图面板里也用，F-2）。
     codeRefs: [src/components/panel/DesignSection.vue, src/components/panel/DesignSketches.vue, src/components/panel/CommitSection.vue, src/components/panel/ChangeList.vue]
   - id: present.panel.content
     name: 内容组件
@@ -133,7 +134,7 @@ modules:
   - id: state.desk.writer
     name: 描述写入同步
     parent: state.desk
-    responsibility: 同步适配器之一（B1–B6，ADR-0019、ADR-0023）：定义写入来源 ModelWriter 并把「记录评审意见」「加例外」「加入忽略」「确认」「认可偏差」「归档」交给注入的实现（开发服务器的 HTTP 端点），只追加人拥有的文件；ModelWriter 另有 saveSketch / createDesign 两个方法，由编辑分组的草图写回同步调用（B6 整份写回）。写后不改视图状态，结果由文件变化推送回来，按 N5 重新加载。
+    responsibility: 同步适配器之一（B1–B6，ADR-0019、ADR-0023）：定义写入来源 ModelWriter 并把「记录评审意见」「加例外」「加入忽略」「确认」「认可偏差」「归档」交给注入的实现（开发服务器的 HTTP 端点），只追加人拥有的文件；ModelWriter 另有 saveSketch / saveDesignSketches / createDesign，由编辑分组的草图写回同步调用（B6、B7、X20：持久草图单张、设计按设计整份写回，新建设计只发挂载点）。写后不改视图状态，结果由文件变化推送回来，按 N5 重新加载。
     codeRefs: [src/state/sync/writer.ts]
   # 分组派生在 src/state/desk/（ADR-0013）；dispatch 与操作是 useDeskState.ts 内的概念划分，不写 codeRefs，文件归 DeskState（避免归属冲突，G6）
   - id: state.desk.versions
@@ -438,8 +439,8 @@ interfaces:
     name: diffModels
     owner: model.diff
     signature: |
-      diffModels(base: ModelIndex, target: ModelIndex): ModelDiff
-    semantics: 纯函数；变更按实体类别（模块、关系、接口、数据结构）与变更类别（新增、修改、删除）排序。
+      diffModels(base: ModelIndex, target: ModelIndex, opts?: { lineage?: Lineage }): ModelDiff   // lineage：设计草图的 from（X11）
+    semantics: 纯函数；变更按实体类别（模块、关系、接口、数据结构）与变更类别排序；给了血缘时条目带 kind（合并 / 拆分 / 改 ID / 移动）与 from / to，前缀级联与合并带走的来源被吸收。
   - id: if.layout.layoutView
     name: layoutView
     owner: state.layout.runner
@@ -460,9 +461,9 @@ interfaces:
       //   perspective, toggles, view, positioned, levelVersion, playback, dispatch, init, attachRouter, …操作（见 if.desk.actions） }
       //   + run：{ scenario, plan, path, scenarioView, currentIndex, walked, frame, overlay, sequence, positionedSequence, emphasis, participation, outline, … }
       //   + files：{ payload, ownership, tree, lines, maxLines, selected, owners, hits, moduleFiles, warnings, filesOf, entryOf, file(path), exports(path), refresh }
-      //   + versions：{ designs, design, revision, baselines, baseline, diff, drift }
-      //   + edit：{ session, draft, dirty, canUndo, canRedo, validation, check, changes, promotion, saving, …操作（见 if.desk.edit） }   // 只在草图版本上可用
-    semantics: 每个项目的每个版本一份；在组件 setup 中创建，其 watch 与同步适配器随组件销毁。编辑态下核心的 index 为 draft 的索引。
+      //   + versions：{ designs, design, revision, sketch, sketchPrompt, baselines, baseline, diff, drift }
+      //   + edit：{ session, active, dirty, scene, validation, vsBaseline, vsCurrent, comparison, breadcrumb, …操作（见 if.desk.edit） }   // 只在草图版本上有会话
+    semantics: 每个项目的每个版本一份；在组件 setup 中创建，其 watch 与同步适配器随组件销毁。草图画布下核心的 index 为设计的索引（各张草图连同 system.yaml、持久草图与引用的外部模块）。
   - id: if.desk.actions
     name: DeskState 操作
     owner: state.desk.actions
@@ -495,10 +496,12 @@ interfaces:
       GET projects.json            → ProjectSummary[]
       GET models/<项目>.json       → ModelPayload        // 当前版本；不存在时 404
       GET models/<项目>/designs/<设计>/<轮次>.json → ModelPayload  // 设计版本某一轮，附 compare 对比基线
-      GET models/<项目>/intent/<草图 ID>.json → ModelPayload  // 持久草图版本（system.yaml + intent/**），附 sketch { file, hash }
+      GET models/<项目>/designs/<设计>/sketch.json → ModelPayload  // 设计的草图版本：各张 sketches/<mount>.yaml + 引用的外部模块，附 sketchFiles（各自指纹）、基线与「交给 AI」的指令
+      GET models/<项目>/intent/<草图 ID>.json → ModelPayload  // 持久草图版本（system.yaml + intent/**），附 sketch { file, hash } 与指令
       POST write/<项目>/sketch                 { target, sketch, baseHash } → { file, hash } | 409 | 422   // B6，持久草图
-      POST write/<项目>/designs/<设计>/sketch  { target, sketch, baseHash } → { file, hash } | 409 | 422   // B6，设计的草图
-      POST write/<项目>/designs                { id, name, goal?, sketch } → { file, files } | 409          // 新建设计（S-4）
+      POST write/<项目>/designs/<设计>/sketch  { target, sketch, baseHash } → { file, hash } | 409 | 422   // B6，设计的一张草图
+      POST write/<项目>/designs/<设计>/sketches SaveDesignRequest → SaveDesignResult | 409 | 422          // X20、B7，按设计写回（多张、改名、删除）
+      POST write/<项目>/designs                { id, name, goal?, mount?, sketch? } → { file, files } | 409   // 新建设计：给挂载点时底稿从基线（仓库 HEAD）复制（X18）
       ws  arch-model:changed       → { project: string }  // 仅开发态，按项目合并 150ms 内的变化
     semantics: 开发服务器实时读取（本地开发工具，没有构建态输出，ADR-0020）。写端点只收同源 JSON（B5）。
   - id: if.reader.projects
@@ -510,7 +513,9 @@ interfaces:
       listProjects(modelRoot: string, projectRoot: string): ProjectSummary[]
       listDesigns(projectDir: string): DesignInfo[]
       readDesignRevision(modelRoot, project, design, revision, projectRoot): ModelPayload | null
+      readSketchVersion(modelRoot, project, design, projectRoot, docsRoot?, opts?): ModelPayload | null   // 设计的草图版本（X9、X19、X20）
       readIntentVersion(modelRoot, project, sketchId, projectRoot): ModelPayload | null   // 持久草图版本，附 sketch { file, hash }
+      designSketches(projectDir, design): { design; file: RawFile }[]; designSketchFiles(projectDir, design): { mount; file; hash; needsLayout? }[]   // sketches/*.yaml，根挂载在前
       readRevisionNote(designDir: string, revision: string): { date?: string; summary?: string; questions?: string[]; problems: string[] }   // r<N>/revision.yaml（AI 拥有）
       listRevisionDirs(designDir: string): string[]   // 含 system.yaml 的 r<N>/，按 N 的数字排序
     semantics: 含 system.yaml 的子目录才算项目；项目 ID、设计 ID、轮次 ID 只允许目录名安全字符。design.yaml 的问题记入 DesignInfo.problems，不抛错；只有草图、没有轮次的设计不算问题。
@@ -645,10 +650,13 @@ dataStructures:
         project?: string; dir: string; files: RawFile[]
         designs?: DesignInfo[]                       // 本项目的全部设计版本
         version?: { design: string; revision: string } // 设计版本时给出
-        compare?: { current: CompareSource; previous?: CompareSource } // { label, dir, files }
-        sketch?: { file: string; hash: string }      // 草图版本：草图文件（相对项目描述目录）与读取时的指纹（X6 同一算法），编辑保存时带回（X7i）
+        compare?: { current: CompareSource; previous?: CompareSource; baseline?: CompareSource } // { label, dir, files }；baseline 为设计 base.commit 那一版描述（X17）
+        sketch?: { file: string; hash: string; path?: string }   // 草图版本的主草图（根挂载在前）与读取时的指纹（X6 同一算法），保存时带回（X7i）
+        sketchFiles?: { mount; file; path?; hash; needsLayout? }[]   // 设计的全部草图（X9、X20）
+        sketches?: { design; file: RawFile }[]       // 对本版本有约束力的设计草图（X4）
+        sketchPrompt?: string                        // 「交给 AI」的指令（DV-10、X20）
       }
-      // version 另有 { intent: string }：持久草图版本
+      // version 另有 { design, revision: 'sketch' }：设计的草图版本；{ intent: string }：持久草图版本
     description: 一个项目某个版本的全部描述原文，由 ModelSource 交给页面；设计版本附带对比基线原文。
   - id: ds.ProjectSummary
     name: ProjectSummary
@@ -672,6 +680,8 @@ dataStructures:
         goal?: string
         base?: { commit?: string; generatedAt?: string }
         revisions: { id: string; date?: string; summary?: string; questions?: string[]; feedback?: string }[]
+        sketch?: boolean; sketches?: { mount: string; file: string; needsLayout?: boolean }[]   // designs/<设计>/sketches/*.yaml（X9）
+        deviations?: { errors: number; warnings: number }   // 有草图、未归档的设计的偏差计数（X4）
         // 轮次 = 目录 r<N>/（按 N 排序）；date / summary / questions 来自 r<N>/revision.yaml（AI 拥有）；feedback 来自 design.yaml 的 revisions[]（人拥有，按 id 对上）；旧设计的 revisions[] 兼容
         problems: string[]
       }
@@ -680,9 +690,9 @@ dataStructures:
     name: ModelDiff
     definition: |
       interface ModelDiff {
-        changes: Change[]       // { entity, id, kind: added|changed|removed, name, fields? }
+        changes: Change[]       // { entity, id, kind: added|changed|merged|split|renamed|moved|removed, name, fields?, from?, to? }
         module / relation / interface / dataStructure: Map<string, Change>  // 仅新增与修改
         touched: Map<string, number>  // 模块 → 涉及的变更条数
-        counts: { added: number; changed: number; removed: number }
+        counts: Record<ChangeKind, number>   // 七类；没有血缘时只有新增 / 修改 / 删除
       }
     description: 设计版本相对对比基线的差异。
