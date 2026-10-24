@@ -273,14 +273,31 @@ async function onMenu(key: string) {
     if (!r.ok) notify(r.reason)
   } else if (key === 'remove') await removeIds(group)
 }
-function onParts(rows: { name: string; id: string }[]) {
+async function onParts(rows: { name: string; id: string }[]) {
   const p = parts.value!
+  if (p.kind === 'split' && !(await confirmSplit(p.ids[0], rows))) return
   const r = p.kind === 'merge' ? e.merge(p.ids, rows[0].name, rows[0].id) : e.split(p.ids[0], rows)
   if (!r.ok) return void (parts.value = { ...p, error: r.reason })
   parts.value = null
   e.pick([])
   if (p.kind === 'merge') notify('已合并：来源成为新模块的子模块，双击进入继续设计内部')
   else if (e.pending.value.length) notify(`已拆分：${e.pending.value.length} 条关系待重连`)
+}
+
+/** X7k：拆分前的二次确认——原模块的下一层草图随拆分删除；拆分本身不成立时留在对话框里显示原因 */
+async function confirmSplit(id: string, rows: { name: string; id: string }[]): Promise<boolean> {
+  const pv = e.previewSplit(id, rows)
+  if ('rejected' in pv) {
+    parts.value = { ...parts.value!, error: pv.rejected }
+    return false
+  }
+  if (!pv.sketches.length) return true
+  const lines = pv.sketches.map(x =>
+    x.derived
+      ? `它的下一层（当前版本里 ${x.modules} 个模块）不再挂在它身上：子模块的去向请在拆分前用升级 / 降级安排，或交给 AI 按职责分配`
+      : `拆分会删除它的下一层草图 ${x.mount}.yaml（${x.modules} 个模块）`,
+  )
+  return ask({ title: `拆分「${e.nameOf(id) ?? id}」？`, lines, ok: '拆分', danger: true })
 }
 
 // 面板请求的合并 / 拆分 / 删除（对话框与级联确认都在画布里）

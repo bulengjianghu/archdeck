@@ -200,6 +200,36 @@ export function apply(s: EditSession, ops: DesignEditOp | DesignEditOp[], ctx: D
   return { ok: true, session: { ...s, doc, mount, past: [...s.past, step].slice(-UNDO_LIMIT), future: [] }, effects: fx }
 }
 
+/** X7k：拆分时随原模块删掉的一张下一层草图——挂载点、模块数；derived 为会话里推出且未改动的（或还没打开、按 X18 从基线推出的） */
+export interface SplitLoss {
+  mount: string
+  modules: number
+  derived: boolean
+}
+
+/**
+ * X7k：拆分前的二次确认（不改会话）——原模块的下一层草图（含更深的）随拆分删除，列出来由呈现层确认后再拆。
+ * 设计里有（读自文件或改过）的为 derived = false；推出且未改动的空草图不计；原模块的下一层还没在会话里出现、基线里有子树时按 X18 推出并计入（derived = true）。
+ * 拆分结果保留原 ID 时不删，返回空；拆分本身不成立时为原因。
+ */
+export function splitImpact(
+  s: EditSession,
+  op: Extract<DesignEditOp, { op: 'split' }>,
+  ctx: DesignEditContext,
+): { ok: true; sketches: SplitLoss[] } | { ok: false; reason: string } {
+  const r = apply(s, op, ctx)
+  if (!r.ok) return { ok: false, reason: r.reason }
+  const sketches: SplitLoss[] = [...r.effects.removedSketches]
+    .sort()
+    .map(m => ({ mount: m, modules: s.doc.sketches[m]?.modules?.length ?? 0, derived: s.doc.origin[m] === undefined && !sketchDirty(s, m, ctx.baseline) }))
+    .filter(x => !x.derived || x.modules > 0)
+  if (s.target.kind === 'design' && r.effects.removed.includes(op.id) && !s.doc.sketches[op.id] && ctx.baseline) {
+    const modules = deriveChildSketch(op.id, ctx.baseline, s.doc.sketches, { id: s.id }).modules?.length ?? 0
+    if (modules) sketches.unshift({ mount: op.id, modules, derived: true })
+  }
+  return { ok: true, sketches }
+}
+
 /** 影响的反向（撤销时的跟随）：新建的被删、改名的换回、草图的改名换回 */
 const reverse = (fx: DesignEditEffects): DesignEditEffects => ({
   created: [],

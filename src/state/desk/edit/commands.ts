@@ -36,9 +36,11 @@ import {
   redo as redoSession,
   reloaded,
   replay,
+  splitImpact,
   undo as undoSession,
   type EditSession,
   type ReadSketch,
+  type SplitLoss,
 } from './session'
 
 /** 载荷里的一张草图文件：挂载点、在载荷里的路径、读取时的指纹 */
@@ -184,6 +186,13 @@ export function createCommands(i: CommandInputs) {
   const merge = (ids: readonly string[], name: string, short: string) => run({ op: 'merge', sketch: mount(), ids: [...ids], name, id: short })
   /** F-25：拆分（若干名称 + ID 短名） */
   const split = (id: string, parts: { name: string; id: string }[]) => run({ op: 'split', sketch: mount(), id, parts })
+  /** X7k：拆分前的二次确认范围（不改会话）：随原模块删掉的下一层草图；拆分不成立时为原因 */
+  function previewSplit(id: string, parts: { name: string; id: string }[]): { sketches: SplitLoss[] } | { rejected: string } {
+    const s = session.value
+    if (!s || !loaded.value) return { rejected: '不在草图里' }
+    const r = splitImpact(s, { op: 'split', sketch: mount(), id, parts }, ctx())
+    return r.ok ? { sketches: r.sketches } : { rejected: r.reason }
+  }
   /** F-26：降级——拖到同层另一节点上 */
   const demote = (id: string, onto: string) => run({ op: 'demote', sketch: mount(), id, target: onto })
   /** F-26：升级——拖到面包屑的父级 */
@@ -368,6 +377,7 @@ export function createCommands(i: CommandInputs) {
     setAbstraction,
     remove,
     previewRemove,
+    previewSplit,
     openChild,
     /** 切到挂在某个模块上的草图（面包屑回到某一级、设计面板点一张、引用节点「打开」；会话里没有时按基线推出） */
     openMount,

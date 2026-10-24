@@ -19,6 +19,7 @@ import {
   replay,
   saved,
   sketchDirty,
+  splitImpact,
   undo,
   type ReadSketch,
 } from '../../src/state/desk/edit/session'
@@ -166,6 +167,28 @@ describe('编辑会话的纯函数（X7g、X7i、X20）', () => {
     expect(d.mount).toBe('core.a')
     const r = ok(apply(m, { op: 'rename', sketch: 'core.a', id: 'core.a.x', newId: 'ex' }, ctx)).session
     expect(r.mount).toBe('core.a.ex')
+  })
+
+  it('X7k：拆分前的二次确认——原模块有下一层草图（设计里的，或基线子树推出的）时列出、需确认；没有或保留原 ID 时不需确认；不成立时为原因', () => {
+    const split = (id: string, ids = ['p1', 'p2'], sketch = 'core.a') => ({
+      op: 'split' as const,
+      sketch,
+      id,
+      parts: ids.map(x => ({ name: x.toUpperCase(), id: x })),
+    })
+    expect(splitImpact(s0, split('core.a.x'), ctx)).toEqual({ ok: true, sketches: [] })
+    // 只下钻没改：推出的空草图不算
+    const opened = ok(open(s0, 'core.a.x', ctx)).session
+    expect(splitImpact(opened, split('core.a.x'), ctx)).toEqual({ ok: true, sketches: [] })
+    // 下一层草图改过：随拆分删除，需确认；会话不变
+    const c = ok(apply(opened, { op: 'edit', sketch: 'core.a.x', edit: { op: 'addModule', parent: 'core.a.x', name: 'K', id: 'k' } }, ctx)).session
+    expect(splitImpact(c, split('core.a.x'), ctx)).toEqual({ ok: true, sketches: [{ mount: 'core.a.x', modules: 1, derived: false }] })
+    expect(c.doc.sketches['core.a.x']).toBeDefined()
+    expect(splitImpact(c, split('core.a.x', ['x', 'p2']), ctx)).toEqual({ ok: true, sketches: [] })
+    expect(splitImpact(c, split('core.a.x', ['p1']), ctx)).toMatchObject({ ok: false })
+    // 基线里有子树、下一层还没打开：按基线推出并计入
+    const root = begin(target, 'd', read(seedFromBaseline('root', baseline, { id: 'd' })))
+    expect(splitImpact(root, split('core.b', ['p1', 'p2'], 'root'), ctx)).toEqual({ ok: true, sketches: [{ mount: 'core.b', modules: 1, derived: true }] })
   })
 
   it('持久草图只有这一张：不能下钻、不能做改动下一层草图的操作', () => {

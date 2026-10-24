@@ -119,7 +119,7 @@ modules:
   - id: state.desk.edit.session
     name: 编辑会话
     parent: state.desk.edit
-    responsibility: 编辑会话的值与纯函数（X7g、X7i、X20）：begin（以读到的各张草图与指纹开始，当前张为根挂载或主草图）、apply（一步 = 一个或几个设计级操作，原子；成功压撤销栈、清空重做栈，记前后的当前张；当前张被改名或删除时跟着走）、undo / redo（撤销的一步在别的草图上时切过去）、open（下钻 / 切张：会话里没有的草图按 X18 推出，不进撤销栈）、sketchDirty / isDirty（读自文件的与读取时比；推出的与此刻推出的结果比结构、与出现时比位置）、removedMounts、saved、reloaded、replay、discard；撤销栈深度上限 200；持久草图不能下钻、不能改动下一层草图。
+    responsibility: 编辑会话的值与纯函数（X7g、X7i、X20）：begin（以读到的各张草图与指纹开始，当前张为根挂载或主草图）、apply（一步 = 一个或几个设计级操作，原子；成功压撤销栈、清空重做栈，记前后的当前张；当前张被改名或删除时跟着走）、undo / redo（撤销的一步在别的草图上时切过去）、open（下钻 / 切张：会话里没有的草图按 X18 推出，不进撤销栈）、splitImpact（X7k：拆分前的二次确认范围，不改会话——随原模块删掉的下一层草图与模块数，下一层还没出现时按基线推出计入）、sketchDirty / isDirty（读自文件的与读取时比；推出的与此刻推出的结果比结构、与出现时比位置）、removedMounts、saved、reloaded、replay、discard；撤销栈深度上限 200；持久草图不能下钻、不能改动下一层草图。
     principle: |
       - 撤销栈存「编辑前后的会话文档 + 操作 + 前后的当前张」：快照让撤销与重做是值替换（降级 / 升级一步回滚两张）；操作让文件已变之后能重放到新文件上。
       - **撤销粒度（X7g）**：一个手势一步（双击空白新建 = 新建 + 落位）；拖位置、拖标签、重新排列各一步；文本字段失焦或回车提交一次即一步。
@@ -134,7 +134,7 @@ modules:
   - id: state.desk.edit.commands
     name: 编辑操作
     parent: state.desk.edit
-    responsibility: 对呈现层的唯一一组编辑操作（if.desk.edit）：enter / exit、run（设计级操作）与 edit（单张操作，包装成设计级操作）、addModule（新建 + 落位一步）、connect、merge、split、demote、promote、moveIn（换层 + 落位一步）、rename、updateModule、moveNode（写位置时补齐还没写进 layout 的节点）、relabel、autoArrange、addReference、setAbstraction、remove（模块级联 / 关系 / 引用节点）与 previewRemove、openChild（下钻）、openMount（切到挂在某个模块上的草图：面包屑、设计面板、「加到设计」）、undo / redo、save、saveAndHandToAi、discard、replayOnReload、createDesign（只发挂载点，底稿由服务端从基线复制）、canLeave、onReloaded。每次成功后经 dispatch 交给编辑规则跟随。操作本身不含规则。
+    responsibility: 对呈现层的唯一一组编辑操作（if.desk.edit）：enter / exit、run（设计级操作）与 edit（单张操作，包装成设计级操作）、addModule（新建 + 落位一步）、connect、merge、split、demote、promote、moveIn（换层 + 落位一步）、rename、updateModule、moveNode（写位置时补齐还没写进 layout 的节点）、relabel、autoArrange、addReference、setAbstraction、remove（模块级联 / 关系 / 引用节点）与 previewRemove、previewSplit（X7k）、openChild（下钻）、openMount（切到挂在某个模块上的草图：面包屑、设计面板、「加到设计」）、undo / redo、save、saveAndHandToAi、discard、replayOnReload、createDesign（只发挂载点，底稿由服务端从基线复制）、canLeave、onReloaded。每次成功后经 dispatch 交给编辑规则跟随。操作本身不含规则。
     codeRefs: [src/state/desk/edit/commands.ts]
   - id: state.desk.edit.save
     name: 草图写回同步
@@ -182,7 +182,7 @@ modules:
     kind: component
     responsibility: |
       把草图布局写入 Vue Flow 并把手势转成编辑操作：拖节点（多选一起拖）松手 = moveNode 一步，拖到同层节点上 = 降级（根草图里拖到另一条层带 = 移入），拖到信息条面包屑父级 = 升级；框选 / ⇧ 多选；
-      右键合并为新模块（≥2）、拆分、进入下一层、删除（有级联时二次确认），没有「在此设计」（#20c）；双击空白、空白处右键或「＋ 模块」就地输入名称与 ID 短名；从连线柄拖到另一节点松手选类型 + 一句说明；双击模块下钻；
+      右键合并为新模块（≥2）、拆分（原模块有下一层草图时二次确认，X7k）、进入下一层、删除（有级联时二次确认），没有「在此设计」（#20c）；双击空白、空白处右键或「＋ 模块」就地输入名称与 ID 短名；从连线柄拖到另一节点松手选类型 + 一句说明；双击模块下钻；
       工具条（＋ 模块、引用外部模块、重新排列、本层数与超七提示）；⌘Z / ⇧⌘Z、Delete / Backspace、⌘S、Esc（只取消选中）；图上标出变更时的图例。
     codeRefs: [src/components/sketch/SketchCanvas.vue]
   - id: present.sketch.elements
@@ -264,7 +264,7 @@ relations:
   - {id: rel.v4.tree-commands, from: present.sketch.tree, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: 读当前张的画布数据；⇧ 单击多选（pick）、双击下钻（openChild）}
   - {id: rel.v4.sketch-labels, from: present.sketch.dialogs, to: present.shared, type: depends, description: RELATION_TYPE_LABELS / HINTS：关系类型与一句读法}
   - {id: rel.v4.edge-labels, from: present.sketch.elements, to: present.shared, type: depends, description: RELATION_TYPE_LABELS：边标签的类型名}
-  - {id: rel.v4.sketch-dialog, from: present.sketch.canvas, to: present.version.actions, type: calls, description: ask：删除级联的二次确认（useEditDialog）}
+  - {id: rel.v4.sketch-dialog, from: present.sketch.canvas, to: present.version.actions, type: calls, description: ask：删除级联与拆分前（X7k）的二次确认（useEditDialog）}
   - {id: rel.v4.desk-view-sketch, from: present.desk-view, to: present.sketch.canvas, type: depends, description: 草图画布下画布区换成草图画布}
   - {id: rel.v4.dispatch-sketch, from: present.panel.dispatch, to: present.panel.sketch, type: depends, description: 草图画布下面板换成草图面板}
   - {id: rel.v4.nav-tree-sketch, from: present.nav-tree, to: present.sketch.tree, type: depends, description: 草图画布下模块页签只列本张草图的模块与引用}

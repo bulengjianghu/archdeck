@@ -98,7 +98,7 @@ async function designHere(page: Page, layer: string, id: string) {
   await page.getByRole('menuitem', { name: '在此设计' }).click()
 }
 
-test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 → 底稿 13 个模块与折叠引用 → 合并两个 → 拖位置 → 连关系 → 父模块原则 → 保存 → 文件含 mount / abstraction / layout / from → 刷新原样 → 面板两个核验数与清单', async ({
+test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 → 底稿 13 个模块与折叠引用 → 合并两个 → 拖位置 → 连关系 → 父模块原则 → 保存 → 文件含 mount / abstraction / layout / from → 刷新原样 → 面板两个核验数与清单 → 拆分前二次确认（X7k）', async ({
   page,
 }) => {
   const box = sandbox('zz-e2e-sketch')
@@ -232,6 +232,33 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     await crumbs.locator('.crumb', { hasText: 'DeskState' }).click()
     await expect(graphNode(page, 'state.desk.session')).toBeVisible()
     await expect(graphNode(page, `state.desk.${b.split('.').pop()}`)).toBeVisible()
+
+    // X7k：拆分有下一层草图的模块前二次确认（下一层已因升级改过）——取消留在拆分对话框，确认后拆分，撤销一步恢复
+    await graphNode(page, 'state.desk.session').locator('.name').click({ button: 'right' })
+    await page.getByRole('menuitem', { name: '拆分…' }).click()
+    const split = page.getByRole('dialog', { name: '拆分「编辑会话」', exact: true })
+    const names = split.locator('input[name="part-name"]')
+    const shorts = split.locator('input[name="part-id"]')
+    await names.nth(0).fill('读')
+    await shorts.nth(0).fill('sess-read')
+    await names.nth(1).fill('写')
+    await shorts.nth(1).fill('sess-write')
+    await split.getByRole('button', { name: '拆分', exact: true }).click()
+    const sure = page.getByRole('dialog', { name: '拆分「编辑会话」？' })
+    await expect(sure).toContainText('拆分会删除它的下一层草图 state.desk.session.yaml（1 个模块）')
+    await sure.getByRole('button', { name: '取消' }).click()
+    await expect(sure).toHaveCount(0)
+    await expect(split).toBeVisible()
+    await expect(graphNode(page, 'state.desk.session')).toBeVisible()
+    await split.getByRole('button', { name: '拆分', exact: true }).click()
+    await sure.getByRole('button', { name: '拆分', exact: true }).click()
+    await expect(graphNode(page, 'state.desk.sess-read')).toBeVisible()
+    // 原模块的关系列为待重连（原端点暂以引用节点显示）
+    await expect(page.locator('.sk-notice')).toContainText('待重连')
+    await page.locator('.vue-flow__pane').click({ position: { x: 5, y: 5 } })
+    await page.keyboard.press('ControlOrMeta+z')
+    await expect(graphNode(page, 'state.desk.session')).toBeVisible()
+    await expect(graphNode(page, 'state.desk.sess-read')).toHaveCount(0)
 
     // 保存并交给 AI（#20a）：有未保存改动时一步保存再复制指令；指令含草图全文与相对基线的变更
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
