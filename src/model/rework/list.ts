@@ -736,7 +736,7 @@ function unmodeledItems(index: ModelIndex, name: (id: string) => string): Rework
       severity: 'warning',
       rules: ['P11', 'S5a', 'S13'],
       code: 'step-unmodeled',
-      title: `结构中未建模：${ends} 之间 ${g.steps.length} 个步骤没有对应的关系${candidates.length ? '（候选关系不唯一）' : ''}`,
+      title: `交互中未建模：${ends} 之间 ${g.steps.length} 个步骤没有对应的关系${candidates.length ? '（候选关系不唯一）' : ''}`,
       ...(other.length && !candidates.length ? { detail: `两端之间只有编译期关系（${other.join('、')}），步骤只对应运行时关系（S12）` } : {}),
       ...(first ? { at: first } : {}),
       affected: g.steps,

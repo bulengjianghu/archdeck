@@ -30,7 +30,7 @@ const emit = defineEmits<{ toggle: [] }>()
     </div>
     <div class="item">
       <span class="sw"><LineSwatch :look="{ temp: 'unmodeled' }" /></span>
-      <span>结构中未建模</span>
+      <span>交互中未建模</span>
     </div>
     <div class="item">
       <span class="sw"><LineSwatch :look="{ play: 'preview', weight: 2 }" /></span>

@@ -5,6 +5,8 @@
  * - 图例按画布上的对象分组（RelationLegend、节点、FactsLegend、EvolutionLegend、ReplayLegend），一行一项，左列为与画布同款的示意（LineSwatch，
  *   与 RouteEdge 共用 edgeStyle）、右列为文字；既是开关又是图例的放在图例里——关系类型行点击筛选（L8），代码事实开关在组标题右侧（K9），组装开关同（O12）。
  *   时序图的箭头约定不在这里，在副栏时序图标题栏的「图例」里。
+ * - 图例按视角整体替换、不混列（L19、D-26）：交互视角为关系、代码事实、组装、演化各组；结构视角为结构边的种类与档（含「只引类型」开关与计数）、
+ *   规则叠加、指标与共用件、演化；运行视角为回放。共享通道（选中、变淡、违规、环、演化、线宽）三处同文（SharedLegend，L18）。
  * - 折叠时标题后摘要列出非默认的设置；面板展开与各组折叠按视角记在本机（useDisplayPrefs，运行视角默认只展开「回放」）。
  */
 import { computed, watch } from 'vue'
@@ -20,12 +22,18 @@ import FactsLegend from './display/FactsLegend.vue'
 import AssemblyLegend from './display/AssemblyLegend.vue'
 import EvolutionLegend from './display/EvolutionLegend.vue'
 import ReplayLegend from './display/ReplayLegend.vue'
+import StructureLegend from './display/StructureLegend.vue'
+import RuleLegend from './display/RuleLegend.vue'
+import MetricLegend from './display/MetricLegend.vue'
+import SharedLegend from './display/SharedLegend.vue'
 import './display/legend.css'
 
 const desk = useDesk()
 const stage = useStage()
 const run = computed(() => desk.perspective.value === 'run')
-const { open, groups, toggleOpen, toggleGroup } = useDisplayPrefs(desk.perspective)
+/** 结构视角（ADR-0031）：图例整组换成结构视图的 */
+const structure = computed(() => desk.perspective.value === 'structure')
+const { open, groups, toggleOpen, toggleGroup, typeOnly } = useDisplayPrefs(desk.perspective, desk.project ?? '')
 /** E-2：编辑态下草图不对应代码——隐藏代码事实与演化两组；进入编辑态时收起面板，不挡住编辑落点 */
 const editing = computed(() => desk.edit.active.value)
 watch(editing, on => on && open.value && toggleOpen(), { immediate: true })
@@ -35,6 +43,14 @@ const summary = computed(() => {
   const t = desk.toggles
   // 运行视角缺省折叠为一行：总是给出静态关系的显示方式
   if (run.value) return [`静态关系：${MODE_LABEL[stage.mode.value]}`]
+  if (structure.value)
+    return [
+      t.showBoundaries ? '' : '无边界节点',
+      t.currentOnly ? '只看现状' : '',
+      typeOnly.value ? '只引类型已显示' : '',
+      t.heat === 'off' ? '' : `热度：${HEAT_LABEL[t.heat]}`,
+      t.coupling ? '时间耦合' : '',
+    ].filter(Boolean)
   const hidden = RELATION_TYPES.length - t.relationTypes.length
   return [
     hidden ? `隐藏 ${hidden} 类关系` : '',
@@ -57,7 +73,8 @@ const summary = computed(() => {
 
     <div v-if="open" class="body">
       <NodeSettings :run="run" />
-      <RelationLegend :run="run" :open="groups.rel" @toggle="toggleGroup('rel')" />
+      <StructureLegend v-if="structure" :open="groups.struct" @toggle="toggleGroup('struct')" />
+      <RelationLegend v-else :run="run" :open="groups.rel" @toggle="toggleGroup('rel')" />
       <DisplayGroup title="节点" :open="groups.node" @toggle="toggleGroup('node')">
         <div class="item inline">
           <span><span class="box" />模块</span>
@@ -65,10 +82,17 @@ const summary = computed(() => {
           <span><span class="box dashed" />目标态 / 外部</span>
         </div>
       </DisplayGroup>
-      <FactsLegend v-if="!run && !editing" :open="groups.facts" @toggle="toggleGroup('facts')" />
-      <AssemblyLegend v-if="!run && !editing" :open="groups.asm" @toggle="toggleGroup('asm')" />
+      <template v-if="structure">
+        <RuleLegend :open="groups.rule" @toggle="toggleGroup('rule')" />
+        <MetricLegend :open="groups.metric" @toggle="toggleGroup('metric')" />
+      </template>
+      <template v-else-if="!run && !editing">
+        <FactsLegend :open="groups.facts" @toggle="toggleGroup('facts')" />
+        <AssemblyLegend :open="groups.asm" @toggle="toggleGroup('asm')" />
+      </template>
       <EvolutionLegend v-if="!run && !editing" :open="groups.evo" @toggle="toggleGroup('evo')" />
       <ReplayLegend v-else :open="groups.play" @toggle="toggleGroup('play')" />
+      <SharedLegend :open="groups.shared" @toggle="toggleGroup('shared')" />
     </div>
   </div>
 </template>

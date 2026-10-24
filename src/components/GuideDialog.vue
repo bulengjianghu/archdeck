@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
- * 「怎么读这张图」（W-10）：顶栏「帮助」打开的一页，按结构 / 运行 / 对照与治理三组各一句话加示意；
- * 只讲概念，线型、颜色等具体图例在画布右下角的「显示」面板。Esc 或单击遮罩关闭。
+ * 「怎么读这张图」（W-10）：顶栏「帮助」打开的一页，按结构 / 交互 / 运行 / 对照与治理四组各一句话加示意（ADR-0031：结构图是依赖事实，交互图是四类交互），
+ * 另一段讲三视角共享的通道（L18，文字与「显示」面板同源）；只讲概念，线型、颜色等具体图例在画布右下角的「显示」面板。Esc 或单击遮罩关闭。
  */
 import { onBeforeUnmount, onMounted } from 'vue'
 import { RELATION_TYPE_LABELS, THREE_QUESTIONS } from './shared/labels'
+import { SHARED_CHANNELS } from './display/labels'
 
 const emit = defineEmits<{ close: [] }>()
 const onKey = (e: KeyboardEvent) => {
@@ -26,7 +27,30 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
       </header>
       <p class="lead">本地架构工作台：<strong>看见</strong>结构与运行，<strong>对照</strong>描述与代码，<strong>守住</strong>规则与门禁。</p>
 
-      <div class="group">
+      <div class="group" aria-label="结构">
+        <svg viewBox="0 0 120 64" aria-hidden="true">
+          <rect x="6" y="8" width="34" height="14" rx="3" class="node" />
+          <rect x="80" y="8" width="34" height="14" rx="3" class="node" />
+          <rect x="43" y="44" width="34" height="14" rx="3" class="node" />
+          <rect x="6" y="8" width="3" height="14" class="bar unstable" />
+          <rect x="43" y="44" width="3" height="14" class="bar stable" />
+          <path d="M40 15 L76 15" class="dep" />
+          <path d="M72 11 L78 15 L72 19" class="dep-head" />
+          <path d="M23 22 L55 42" class="dep" />
+          <path d="M50 38 L56 43 L49 44" class="dep-head" />
+          <path d="M97 22 L70 42" class="dep solid" />
+          <path d="M70 42 L73 36 L77 40 Z" class="tri" />
+        </svg>
+        <div>
+          <h3>结构</h3>
+          <p>
+            顶部「结构」：模块之间的依赖事实，从源码算出、不用人写——虚线开口箭头是依赖（越深越强：交互使用 / 值使用 / 只引类型，只引类型缺省收起），
+            空心三角是继承或端口实现，实心菱形是组装。选中模块看「改它牵动谁」，块边的色条是不稳定度；只标违规。
+          </p>
+        </div>
+      </div>
+
+      <div class="group" aria-label="交互">
         <svg viewBox="0 0 120 64" aria-hidden="true">
           <rect x="4" y="6" width="112" height="22" rx="4" class="band" />
           <rect x="12" y="11" width="34" height="12" rx="3" class="node" />
@@ -40,8 +64,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
           </defs>
         </svg>
         <div>
-          <h3>结构</h3>
-          <p>方框是模块、带是层、有向线是关系（颜色表类型，×N 是聚合了几条）；一次只看一层，双击下钻，带里的「+N」单击临时展开其余模块。</p>
+          <h3>交互</h3>
+          <p>
+            顶部「交互」（缺省）：方框是模块、带是层、有向线是交互（颜色表类型，×N 是聚合了几条）；一次只看一层，双击下钻，带里的「+N」单击临时展开其余模块。
+            结构与交互两种视角节点位置不动，只换线。
+          </p>
         </div>
       </div>
 
@@ -74,7 +101,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
         </svg>
         <div>
           <h3>运行</h3>
-          <p>顶部「运行」选一个场景，结构图变成舞台、旁边出现时序图；逐步前进，每一步都是一次真实的调用或推送，下钻后步骤变细。</p>
+          <p>顶部「运行」选一个场景，交互图变成舞台、旁边出现时序图；逐步前进，每一步都是一次真实的调用或推送，下钻后步骤变细。</p>
         </div>
       </div>
 
@@ -92,13 +119,21 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
         <div>
           <h3>对照与治理</h3>
           <p>
-            代码事实缺省叠加：虚线加 ? 是代码里找不到的关系，点线是代码有而描述没写的依赖，红色是基线外新增的违规，↻
+            交互视角下代码事实缺省叠加：虚线加 ? 是代码里找不到的关系，点线是代码有而描述没写的依赖，红色是基线外新增的违规，↻
             是本层的环；所有问题汇总在导航树「问题」页签，可复制给 agent 返工。
           </p>
         </div>
       </div>
 
-      <p class="foot muted">线型、颜色与节点样式的完整图例在画布右下角的「显示」面板。</p>
+      <div class="shared" aria-label="三个视角共享">
+        <h3>三个视角共享</h3>
+        <p>线型、箭头、颜色在三个视角各有含义（看「显示」面板）；下面这些在三个视角意思一样：</p>
+        <ul>
+          <li v-for="c in SHARED_CHANNELS" :key="c.key">{{ c.text }}</li>
+        </ul>
+      </div>
+
+      <p class="foot muted">线型、颜色与节点样式的完整图例在画布右下角的「显示」面板，随视角整组切换。</p>
     </section>
   </div>
 </template>
@@ -245,6 +280,59 @@ svg {
 .mark {
   font-size: 9px;
   fill: var(--warning);
+}
+
+.shared {
+  padding: 10px 0 0;
+  border-top: 1px solid var(--border);
+}
+
+.shared h3 {
+  margin: 0 0 2px;
+  font-size: 13px;
+}
+
+.shared p,
+.shared ul {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+.shared ul {
+  padding-left: 18px;
+}
+
+.dep {
+  fill: none;
+  stroke: var(--text-2);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.dep.solid {
+  stroke-dasharray: none;
+}
+
+.dep-head {
+  fill: none;
+  stroke: var(--text-2);
+  stroke-width: 1.5;
+}
+
+.tri {
+  fill: var(--surface);
+  stroke: var(--text-2);
+  stroke-width: 1.2;
+}
+
+.bar.stable {
+  fill: var(--stability-stable, #4a8fd6);
+}
+
+.bar.unstable {
+  fill: var(--stability-unstable, #e08a2e);
 }
 
 .foot {

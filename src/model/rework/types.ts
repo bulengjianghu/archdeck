@@ -139,7 +139,7 @@ export const REWORK_CATEGORY_LABELS: Record<ReworkCategory, string> = {
   'query-side-effect': '查询副作用',
   undescribed: '未解释的交互',
   unclassified: '未分类',
-  unmodeled: '结构中未建模的步骤',
+  unmodeled: '交互中未建模的步骤',
   review: '需复核',
   coupling: '时间耦合',
   sketch: '草图偏差',

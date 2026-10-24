@@ -58,3 +58,64 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
+
+/* 组标题右侧的开关（结构视角的「只引类型」等新组用；代码事实、组装两组各自带同款样式） */
+.display .switch {
+  display: inline-flex;
+}
+
+.display .switch input {
+  appearance: none;
+  position: relative;
+  width: 26px;
+  height: 14px;
+  margin: 0;
+  border-radius: 7px;
+  background: var(--border-strong);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.display .switch input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--surface);
+  transition: transform 0.15s;
+}
+
+.display .switch input:checked {
+  background: var(--accent);
+}
+
+.display .switch input:checked::after {
+  transform: translateX(12px);
+}
+
+.display .switch.off {
+  opacity: 0.5;
+}
+
+.display .switch input:disabled {
+  cursor: not-allowed;
+}
+
+.display .section-label {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.display .chip {
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  white-space: nowrap;
+  color: var(--text-2);
+}
