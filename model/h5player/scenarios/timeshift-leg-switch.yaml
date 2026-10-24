@@ -2,6 +2,7 @@
 scenario:
   id: sc.timeshift-leg-switch
   name: 换腿事务（SwitchLeg）
+  kind: main
   description: |
     时移的 switch（暂停路径对接）、seek-switch（拖进度换边）、revert-live（回直播换回）共用的换腿事务。
     腿端口不直接改图，而是经状态机发状态内命令 SwitchLeg（只有自迁移，不经 Stop，暂停画面与播放段缓冲保留），

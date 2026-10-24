@@ -163,6 +163,8 @@ function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box): 
     ...heatOf(ctx, n.id),
     ...(n.sharedCount ? { sharedCount: n.sharedCount } : {}),
     ...(n.core ? { core: true } : {}),
+    ...(n.rim ? { rim: n.rim } : {}),
+    ...(ctx.input.assemblyRoots?.get(n.id) ? { assemblyRoot: ctx.input.assemblyRoots.get(n.id) } : {}),
     ...portsOf(ctx, idx, n),
   }
   if (n.role === 'boundary') {

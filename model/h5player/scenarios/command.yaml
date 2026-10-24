@@ -2,6 +2,7 @@
 scenario:
   id: sc.command
   name: 命令执行（play / switch / reset）
+  kind: main
   description: |
     命令是改变 Player 生命周期状态的唯一通道：业务方调用 API → 状态机串行执行命令 → Solution 的前后置 Hook 做决策与编排，
     需要改图时以一次 Pipeline 事务换代（引用「方案切换事务」）→ 状态机把命令生成的 Action 下发给 MU → 结果与事件回到业务方。

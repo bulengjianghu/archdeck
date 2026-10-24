@@ -5,11 +5,11 @@
 import { ref, watch, type Ref } from 'vue'
 import type { Perspective } from '@/state/transition'
 
-export type DisplayGroup = 'rel' | 'node' | 'facts' | 'evo' | 'play'
+export type DisplayGroup = 'rel' | 'node' | 'facts' | 'asm' | 'evo' | 'play'
 
 const DEFAULT_GROUPS: Record<Perspective, Record<DisplayGroup, boolean>> = {
-  structure: { rel: true, node: true, facts: true, evo: true, play: true },
-  run: { rel: false, node: false, facts: true, evo: true, play: true },
+  structure: { rel: true, node: true, facts: true, asm: true, evo: true, play: true },
+  run: { rel: false, node: false, facts: true, asm: true, evo: true, play: true },
 }
 
 function read<T>(key: string, fallback: T): T {

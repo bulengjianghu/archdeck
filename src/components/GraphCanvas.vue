@@ -59,6 +59,8 @@ const scene = computed(() =>
     facts: desk.facts.level.value,
     evolution: desk.evolution.level.value,
     ports: desk.facts.portMarks.value,
+    assembly: desk.facts.assembly.value?.overlays ?? null,
+    assemblyRoots: desk.facts.assembly.value?.roots ?? null,
   }),
 )
 const nodes = computed<Node<NodeData>[]>(() => scene.value.nodes)
@@ -112,6 +114,9 @@ function onEdgeClick({ edge }: { edge: Edge<RouteEdgeData> }) {
   if (edge.data!.temp === 'unmodeled') return
   const o = edge.data!.overlay
   if (o) return desk.select({ kind: 'dep', id: `${o.fromModule}->${o.toModule}` })
+  // O12：组装叠加线同样落到这对节点的代码依赖（K10）
+  const a = edge.data!.assembly
+  if (a) return desk.select({ kind: 'dep', id: `${a.fromModule}->${a.toModule}` })
   const c = edge.data!.couple
   if (c) return desk.select({ kind: 'couple', id: c.primary })
   const e = edge.data!.edge

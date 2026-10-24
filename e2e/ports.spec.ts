@@ -48,3 +48,16 @@ test('L10、L12：图例示意与画布同一套样式——查询半透明、�
   await expect(swatch('未分类')).toHaveAttribute('stroke', 'var(--rel-calls)')
   await expect(page.getByLabel('四修饰').locator('marker.socket-marker')).toHaveCount(1)
 })
+
+test('L12、L10：画布上经端口的边在目标端有插座；查询边半透明、委托实色（T2 迁移后的真实数据）', async ({ page }) => {
+  // rel.solution.stage-swap-factory-base 经 SolutionStageFactory 端口（via: port:），在 app 层聚合到 Solution → 段工厂的委托边上
+  await openDesk(page, '/p/h5player?level=app')
+  const edge = page.locator('.vue-flow__edge[data-id="app.solution->app.factories:commands"]')
+  await expect(edge).toHaveCount(1)
+  await expect(edge.locator('path.edge-socket')).toHaveCount(1)
+  await expect(edge.locator('.vue-flow__edge-path')).toHaveCSS('opacity', '1')
+  const query = page.locator('.vue-flow__edge[data-id$=":queries"] .vue-flow__edge-path').first()
+  await expect(query).toHaveCSS('opacity', '0.6')
+  // 没有经端口关系的边没有插座
+  await expect(page.locator('.vue-flow__edge[data-id$=":queries"]').first().locator('path.edge-socket')).toHaveCount(0)
+})

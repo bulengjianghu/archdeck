@@ -4,10 +4,11 @@
 import type { ELK, ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk-api'
 import type { LevelView } from '@/model'
 import { NODE_SIZE, SHELF, contentBounds, sizeOf, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
-import { LABEL_SLOT, compassOf, edgeLabel, nearPoints, placeOutside, spreadEnds } from './routes'
+import { LABEL_SLOT, compassOf, edgeLabel, nearPoints, placeOutside, placeRims, spreadEnds } from './routes'
 
 /**
  * L11：elk 只排父模块框内的子模块与它们之间的边；框外的元素（用户、外部系统与时间、边界节点）在布局后按方位摆放（routes.ts placeOutside，A7、L4），
+ * 边界角色（port / adapter，L14）在布局后压在父模块框的上边 / 右边（placeRims），
  * 它们的边不参与布局，要画时才按需正交走线（edgeRoute）。
  * 端口方向——每条边在两端各有自己的端口：进边在入口侧、出边在出口侧（自上而下为上进下出，自左向右为左进右出）；
  * 关系全是交互（ADR-0029），出入点都在该侧的前半（顶边 / 底边的左半，自左向右布局时左边 / 右边的上半）；进边一侧的后半留给端口记号（L13）：
@@ -143,15 +144,17 @@ export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
     : { x: 0, y: 0, w: NODE_SIZE.module.w, h: NODE_SIZE.module.h }
   // O9：共用件架在父模块框底部，框随之加高
   const shelved = placeShelf(view.shelf ?? [], nodes, parentFrame)
+  // L14：边界角色压在父模块框线上（port 上边、adapter 右边），框随之让出
+  const rimmed = placeRims(view, nodes, shelved.frame)
   // A7、L4：框外的元素按方位摆放
-  const frame = placeOutside(view, nodes, shelved.frame)
+  const frame = placeOutside(view, nodes, rimmed)
   return {
     view,
     nodes,
     edges,
     coreEdges: new Map(),
     direction,
-    parentFrame: shelved.frame,
+    parentFrame: rimmed,
     ports,
     ...(shelved.shelf ? { shelf: shelved.shelf } : {}),
     ...(frame ? { frame } : {}),

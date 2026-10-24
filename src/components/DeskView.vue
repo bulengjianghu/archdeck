@@ -27,6 +27,7 @@ import { OPEN_PREVIEW } from './shared/preview'
 import { NAV_TAB, type NavTab } from './shared/navTab'
 import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
 import { useEvolutionPrefs } from './display/useEvolutionPrefs'
+import { useAssemblyPrefs } from './display/useAssemblyPrefs'
 import EditDialog from './edit/EditDialog.vue'
 import { confirmLeave } from './edit/leave'
 import SketchCanvas from './sketch/SketchCanvas.vue'
@@ -82,7 +83,14 @@ const unwatchModel = desk.watchChanges(import.meta.hot)
 onBeforeUnmount(unwatchModel)
 // J5：「演化」叠加的开关按项目记在本地，模型加载后恢复
 const evolutionPrefs = useEvolutionPrefs(props.project, desk)
-void router.isReady().then(() => desk.init().then(() => evolutionPrefs.restore()))
+// O12：「组装」开关同样按项目记在本地
+const assemblyPrefs = useAssemblyPrefs(props.project, desk)
+void router.isReady().then(() =>
+  desk.init().then(() => {
+    evolutionPrefs.restore()
+    assemblyPrefs.restore()
+  }),
+)
 
 // T2b 裁决 6：从当前版本「加到设计 <名>」过来的——进入草图画布后切到挂在那个模块上的一张（会话里没有时按基线推出）
 if (props.design)

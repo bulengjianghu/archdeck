@@ -144,3 +144,52 @@ export function depsBetween(
     violations: report.violations.filter(same),
   }
 }
+
+/** 一条组装叠加线：本层两个节点之间的组装事实（O12，K13），同一对节点合并 */
+export interface AssemblyOverlay {
+  /** `asm:<组装方节点>-><被组装方节点>` */
+  id: string
+  from: string
+  to: string
+  /** 两端节点对应的模块 ID（单击落到代码依赖选中，K10） */
+  fromModule: string
+  toModule: string
+  /** 合并的模块级组装事实条数（×N） */
+  count: number
+}
+
+export interface LevelAssembly {
+  overlays: AssemblyOverlay[]
+  /** 本层节点 ID → 落在它上面的组装根个数（组装根按最深模块算，聚合到本层节点，T1 裁决 9） */
+  roots: Map<string, number>
+}
+
+/**
+ * O12：组装事实按 mapEndpoint 投影到本层（同 K9 的代码依赖叠加线：分层总览落到带，普通层次落到子模块，折叠的落在「+N」，外部的落在边界节点）；
+ * 两端为本层两个不同节点的成为组装叠加线，同一对节点合并——单击落到这对节点的代码依赖（K10，depsBetween 同一投影）。
+ * 组装根按最深模块算，聚合到本层最深的可见节点（分层总览为它所在的核心模块 / 边界角色块，否则为带，T1 裁决 9）。
+ */
+export function levelAssembly(index: ModelIndex, view: LevelView, report: Pick<GovernanceReport, 'assembly' | 'assemblyRoots'>): LevelAssembly {
+  const present = new Set(view.nodes.map(n => n.id))
+  const nodeFor = (moduleId: string): string | null => {
+    const path = index.pathOf.get(moduleId) ?? []
+    for (let i = path.length - 1; i >= 0; i--) if (present.has(path[i]) && path[i] !== view.parentId) return path[i]
+    return nodeOf(index, view, present, moduleId)
+  }
+  const pairs = new Map<string, AssemblyOverlay>()
+  for (const f of report.assembly) {
+    const a = nodeOf(index, view, present, f.from)
+    const b = nodeOf(index, view, present, f.to)
+    if (!a || !b || a === b) continue
+    const k = depKey(a, b)
+    const hit = pairs.get(k)
+    if (hit) hit.count++
+    else pairs.set(k, { id: `asm:${k}`, from: a, to: b, fromModule: moduleOfNode(view, a), toModule: moduleOfNode(view, b), count: 1 })
+  }
+  const roots = new Map<string, number>()
+  for (const r of report.assemblyRoots) {
+    const n = nodeFor(r)
+    if (n) roots.set(n, (roots.get(n) ?? 0) + 1)
+  }
+  return { overlays: [...pairs.values()], roots }
+}

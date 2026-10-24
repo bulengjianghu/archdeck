@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** 场景证据（S15、D-20）：场景面板的「证据」一节与场景列表的「测试 N」 */
+/** 场景证据（S15、D-20）：场景面板的「证据」一节与场景列表的「测试 N」；场景列表按类别筛选（R17） */
 import { describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -69,5 +69,43 @@ describe('场景列表的「测试 N」', () => {
     expect(byName('有证据').find('.evidence').text()).toBe('测试 2')
     expect(byName('有证据').find('.evidence').attributes('title')).toContain('2 个证据文件')
     expect(byName('播放').find('.evidence').exists()).toBe(false)
+  })
+})
+
+describe('R17 场景列表按类别筛选', () => {
+  const EXC = 'scenario: { id: sc.exc, name: 出错恢复, kind: exception, steps: [{ call: { from: actor.biz, to: infra.player, label: go } }] }\n'
+  const MNT = 'scenario: { id: sc.mnt, name: 清理缓存, kind: maintenance, steps: [{ call: { from: actor.biz, to: infra.player, label: go } }] }\n'
+
+  async function list() {
+    localStorage.clear()
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+    await router.push('/')
+    const desk = createDeskState(async () => ({ dir: 'model/test', files: scenarioFiles({ 'scenarios/exc.yaml': EXC, 'scenarios/mnt.yaml': MNT }) }))
+    desk.attachRouter(router)
+    await desk.init()
+    await flushPromises()
+    const global = { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] }
+    const wrapper = mount(ScenarioList, { global })
+    // 范围切到「全部」，只看类别筛选
+    await wrapper.findAll('.seg')[0].findAll('button')[1].trigger('click')
+    return { wrapper, router, global }
+  }
+  const names = (w: ReturnType<typeof mount>) => w.findAll('.item .name').map(n => n.text().replace(/^▶ /, ''))
+
+  it('默认只列主流程（kind 缺省为 main）；切到「全部类别」后非主流程项标出类别；选择记在本机、不进 URL', async () => {
+    const { wrapper, router, global } = await list()
+    const kinds = wrapper.findAll('.seg')[1].findAll('button')
+    expect(kinds[0].classes()).toContain('on')
+    expect(names(wrapper).some(n => n.startsWith('出错恢复') || n.startsWith('清理缓存'))).toBe(false)
+    expect(wrapper.findAll('.kind-tag')).toHaveLength(0)
+    await kinds[1].trigger('click')
+    expect(names(wrapper).find(n => n.startsWith('出错恢复'))).toContain('异常')
+    expect(names(wrapper).find(n => n.startsWith('清理缓存'))).toContain('维护')
+    expect(wrapper.findAll('.kind-tag').map(t => t.attributes('data-kind'))).toEqual(['exception', 'maintenance'])
+    expect(localStorage.getItem('h5p-arch-desk:scenario-kinds')).toBe('all')
+    expect(JSON.stringify(router.currentRoute.value.query)).not.toContain('all')
+    // 重新打开列表沿用本机记住的选择
+    const again = mount(ScenarioList, { global })
+    expect(again.findAll('.seg')[1].findAll('button')[1].classes()).toContain('on')
   })
 })

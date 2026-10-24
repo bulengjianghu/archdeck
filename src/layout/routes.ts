@@ -154,12 +154,56 @@ export const SYSTEM_PAD = 44
  * 方位：用户在系统框上方，外部系统与时间在系统框右侧，边界节点在父模块框下方、系统框之内，其余在父模块框内。
  * 方位固定在屏幕上，不随普通层次的布局方向（自上而下 / 自左向右）改变。
  */
-export type Compass = 'top' | 'right' | 'bottom' | 'inner'
+export type Compass = 'top' | 'right' | 'bottom' | 'inner' | 'rim-top' | 'rim-right'
 
-export function compassOf(n: { role?: string; actorKind?: string }): Compass {
+/**
+ * L14：普通层次的边界角色——port 在父模块框上边（rim-top）、adapter 在右边（rim-right）：不交给 elk，布局后压在框线上（placeRims），
+ * 边与框外元素的边一样按需正交走线、常显。分层总览里它们是带内的块（role 为 core），不走这里。
+ */
+export function compassOf(n: { role?: string; actorKind?: string; rim?: string }): Compass {
   if (n.role === 'boundary') return 'bottom'
   if (n.role === 'actor') return n.actorKind === 'user' ? 'top' : 'right'
+  if (n.role === 'module' && n.rim) return n.rim === 'port' ? 'rim-top' : 'rim-right'
   return 'inner'
+}
+
+/** L14：边界角色节点之间、框线上的间距（px） */
+export const RIM_GAP = 32
+
+/**
+ * L14：普通层次的边界角色压在父模块框线上——port 一行横跨上边（中心在框线上），adapter 一列横跨右边；按所连节点的位置排序以减少交叉。
+ * 框线先向外让出半个节点加 RIM_GAP，框内的节点与走线不被压住。返回让出后的框。
+ */
+export function placeRims(view: LevelView, nodes: Map<string, Box>, frame: Box): Box {
+  const rims = view.nodes.filter(n => compassOf(n) === 'rim-top' || compassOf(n) === 'rim-right')
+  if (!rims.length) return frame
+  const anchor = (id: string, axis: 'x' | 'y') => {
+    const vs = view.edges
+      .filter(e => e.from === id || e.to === id)
+      .map(e => nodes.get(e.from === id ? e.to : e.from))
+      .filter((b): b is Box => !!b)
+      .map(b => (axis === 'x' ? b.x + b.w / 2 : b.y + b.h / 2))
+    return vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : axis === 'x' ? frame.x + frame.w / 2 : frame.y + frame.h / 2
+  }
+  const { w, h } = NODE_SIZE.module
+  const ports = rims.filter(n => compassOf(n) === 'rim-top').sort((a, b) => anchor(a.id, 'x') - anchor(b.id, 'x'))
+  const adapters = rims.filter(n => compassOf(n) === 'rim-right').sort((a, b) => anchor(a.id, 'y') - anchor(b.id, 'y'))
+  let f = frame
+  if (ports.length) {
+    const top = f.y - h / 2 - RIM_GAP
+    const rowW = ports.length * w + (ports.length - 1) * RIM_GAP
+    const x0 = Math.max(f.x + RIM_GAP, f.x + f.w / 2 - rowW / 2)
+    ports.forEach((n, i) => nodes.set(n.id, { x: x0 + i * (w + RIM_GAP), y: top - h / 2, w, h }))
+    f = { x: f.x, y: top, w: Math.max(f.w, x0 + rowW + RIM_GAP - f.x), h: f.y + f.h - top }
+  }
+  if (adapters.length) {
+    const right = f.x + f.w + w / 2 + RIM_GAP
+    const colH = adapters.length * h + (adapters.length - 1) * RIM_GAP
+    const y0 = Math.max(f.y + h / 2 + RIM_GAP, f.y + f.h / 2 - colH / 2)
+    adapters.forEach((n, i) => nodes.set(n.id, { x: right - w / 2, y: y0 + i * (h + RIM_GAP), w, h }))
+    f = { x: f.x, y: f.y, w: right - f.x, h: Math.max(f.h, y0 + colH + RIM_GAP - f.y) }
+  }
+  return f
 }
 
 const union = (a: Box, b: Box): Box => {
@@ -198,8 +242,12 @@ const LANE_GAP = 6
 /** 加长量的上限：短桩不超出层间空隙（72）的一半 */
 const MAX_LANE = 22
 
-/** 框外元素的边（参与者的边、边界边）：普通层次不参与布局，要画时才走线 */
-export const isOutsideEdge = (view: LevelView, e: ViewEdge) => isBoundaryEdge(e) || isActorNode(view, e.from) || isActorNode(view, e.to)
+/** L14：普通层次压在框线上的边界角色节点 */
+const isRimNode = (view: LevelView, id: string) => view.nodes.some(n => n.id === id && (compassOf(n) === 'rim-top' || compassOf(n) === 'rim-right'))
+
+/** 框外元素的边（参与者的边、边界边、L14 边界角色的边）：普通层次不参与布局，要画时才走线 */
+export const isOutsideEdge = (view: LevelView, e: ViewEdge) =>
+  isBoundaryEdge(e) || isActorNode(view, e.from) || isActorNode(view, e.to) || isRimNode(view, e.from) || isRimNode(view, e.to)
 
 /** 走线按节点布局记忆：同一份布局里每条边只算一次（布局本身另按视图内容缓存） */
 const outsideMemo = new WeakMap<Map<string, Box>, Map<string, EdgeRoute | undefined>>()
@@ -243,9 +291,9 @@ export function portFor(
   }
   const lane = Math.min(slot.i * LANE_GAP, MAX_LANE)
   const side =
-    compass === 'top'
+    compass === 'top' || compass === 'rim-top'
       ? 'bottom'
-      : compass === 'right'
+      : compass === 'right' || compass === 'rim-right'
         ? 'left'
         : compass === 'bottom'
           ? 'top'
@@ -309,6 +357,25 @@ export function outsideRoutes(pv: PositionedView, visible: readonly ViewEdge[]):
   return result
 }
 
+/**
+ * L14：框线上的边界角色朝对端出入——port 对端在它上方（用户）时走顶边、否则走底边；adapter 对端在它右侧（外部系统）时走右边、否则走左边。
+ * 其余节点按方位（portFor）。
+ */
+function rimPort(
+  box: Box,
+  other: Box,
+  compass: Compass,
+  end: 'in' | 'out',
+  dir: 'DOWN' | 'RIGHT',
+  slot: { i: number; n: number },
+  stub?: number,
+  front?: boolean,
+): PortAt {
+  if (compass === 'rim-top' && other.y + other.h <= box.y) return portFor(box, 'bottom', end, dir, slot, stub, front)
+  if (compass === 'rim-right' && other.x >= box.x + box.w) return portFor(box, 'inner', 'out', 'RIGHT', slot, stub, front)
+  return portFor(box, compass, end, dir, slot, stub, front)
+}
+
 function outsideRoute(pv: PositionedView, e: ViewEdge, group?: readonly ViewEdge[]): EdgeRoute | undefined {
   const a = pv.nodes.get(e.from)
   const b = pv.nodes.get(e.to)
@@ -325,9 +392,9 @@ function outsideRoute(pv: PositionedView, e: ViewEdge, group?: readonly ViewEdge
     const q = pv.ports?.get(id)
     return q ? { ...p, x: q.x, y: q.y } : p
   }
-  const from = at(portFor(a, compassOf(na), 'out', dir, fs, undefined, dyn), `${e.id}#out`)
+  const from = at(rimPort(a, b, compassOf(na), 'out', dir, fs, undefined, dyn), `${e.id}#out`)
   // 终点短桩加长到 ARRIVE：箭头前留出直段，拐弯不贴着箭头
-  const to = at(withSourceLane(portFor(b, compassOf(nb), 'in', dir, slotOf(outside, e.to, e.id), ARRIVE, dyn), fs), `${e.id}#in`)
+  const to = at(withSourceLane(rimPort(b, a, compassOf(nb), 'in', dir, slotOf(outside, e.to, e.id), ARRIVE, dyn), fs), `${e.id}#in`)
   // 两端自身也是障碍：中间三段（横、竖通道、横）都在两端的短桩之外，不能穿过它们
   return { points: detour(from, to, [...pv.nodes.values()]) }
 }

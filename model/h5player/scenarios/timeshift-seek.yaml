@@ -2,6 +2,7 @@
 scenario:
   id: sc.timeshift-seek
   name: 拖进度条切时移
+  kind: main
   description: |
     FLV 直播登记了时移录制地址后，用户拖进度条 seek(ms)（录制清单轴毫秒）不发 Seek 命令，而是走拖进度换腿：冻结当前帧，
     建录制腿并按清单轴定位，落点关键帧之后攒够起播水位即 seekSwitchLeg 换边（丢全部残留），提交即撤直播腿；

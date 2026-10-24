@@ -11,7 +11,7 @@
  * 本文件是入口，只组合各部分：共用派生 canvas/context.ts、节点 canvas/nodes.ts、边 canvas/edges.ts、对外类型 canvas/types.ts。
  */
 import { sceneContext, visibleIdsOf } from './canvas/context'
-import { evolutionEdges, factEdges, replayEdges, shownEdges, structureEdges } from './canvas/edges'
+import { assemblyEdges, evolutionEdges, factEdges, replayEdges, shownEdges, structureEdges } from './canvas/edges'
 import { outsideRoutes } from './layout'
 import { moduleNodes, replayNodes } from './canvas/nodes'
 import { jumpsOf } from './routing'
@@ -41,7 +41,9 @@ export function canvasScene(input: CanvasInput): CanvasScene {
   ctx.routes = outsideRoutes(input.positioned, shownEdges(ctx))
   const nodes = input.index ? [...moduleNodes(ctx, input.index), ...replayNodes(ctx)] : []
   // 回放叠加只在运行视角、代码事实与演化叠加只在结构视角，两者不同时出现
-  const edges = [...structureEdges(ctx), ...replayEdges(ctx), ...factEdges(ctx), ...evolutionEdges(ctx)].filter((e): e is CanvasEdge => e !== null)
+  const edges = [...structureEdges(ctx), ...replayEdges(ctx), ...factEdges(ctx), ...assemblyEdges(ctx), ...evolutionEdges(ctx)].filter(
+    (e): e is CanvasEdge => e !== null,
+  )
   return { nodes, edges: withJumps(edges), visibleIds: visibleIdsOf(ctx.display) }
 }
 

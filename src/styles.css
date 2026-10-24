@@ -24,6 +24,8 @@
   --rel-calls: #8c8c8c;
   /* 代码依赖叠加线（K9，点线；有违规时为 --danger） */
   --edge-code: #8a4f7d;
+  /* 组装叠加线与组装根角标（O12，点划线） */
+  --assembly: #b0592a;
   /* 时间耦合的波浪线（J5）：灰；无依赖无关系的更深 */
   --edge-couple: #9aa3b2;
   --edge-couple-strong: #4b5563;
@@ -75,6 +77,7 @@
     --rel-notifies: #e2a646;
     --rel-calls: #8f8f8f;
     --edge-code: #d58cc4;
+    --assembly: #e08a5a;
     --edge-couple: #6c7686;
     --edge-couple-strong: #c5ccd8;
     --heat-1: #6b5230;

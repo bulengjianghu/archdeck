@@ -12,6 +12,7 @@ import { Handle, Position } from '@vue-flow/core'
 import type { SketchNodeData } from '@/layout/layout'
 import { useDesk } from '@/state/inject'
 import { CHANGE_BADGES } from './labels'
+import RimTag from '../nodes/RimTag.vue'
 import { SKETCH_ACTIONS } from './actions'
 
 const props = defineProps<{ data: SketchNodeData & { drop?: boolean } }>()
@@ -125,7 +126,10 @@ const scaled = computed(() => {
   >
     <Handle id="t" type="target" :position="Position.Top" class="sk-center" :connectable="true" />
     <Handle id="c" type="source" :position="Position.Bottom" class="sk-center" :connectable="false" />
-    <strong class="name">{{ data.name }}<span v-if="data.role === 'core'" class="star" title="核心">★</span></strong>
+    <strong class="name"
+      >{{ data.name }}<span v-if="data.role === 'core'" class="star" title="核心">★</span
+      ><RimTag v-if="data.role === 'port' || data.role === 'adapter'" class="rim" :rim="data.role"
+    /></strong>
     <code class="id">{{ data.id }}</code>
     <span v-if="data.deeper" class="deeper" title="有下一层：双击进入">›</span>
     <span v-if="badge" class="badge" :class="data.change" :title="badge.title">{{ badge.text }}</span>
@@ -602,5 +606,9 @@ const scaled = computed(() => {
   border: 2px solid var(--surface) !important;
   background: var(--accent) !important;
   cursor: crosshair;
+}
+.rim {
+  margin-left: 4px;
+  vertical-align: 1px;
 }
 </style>

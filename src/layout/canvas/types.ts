@@ -1,6 +1,7 @@
 /** 画布场景的对外类型（ADR-0013）：与 Vue Flow 的节点、边同形，经 src/layout/canvas.ts 再导出 */
 import type {
   ActorEntity,
+  AssemblyOverlay,
   ActorKind,
   DepOverlay,
   EdgeFact,
@@ -51,6 +52,10 @@ export interface NodeData {
   cycle?: number
   /** ADR-0027：普通层次的核心模块（大块） */
   core?: boolean
+  /** L14：边界角色记号（port 对外端口、adapter 适配器） */
+  rim?: 'port' | 'adapter'
+  /** O12：组装根角标（组装开关开启、本节点含组装根时） */
+  assemblyRoot?: number
   /** O10：「共用 ×N」角标 */
   sharedCount?: number
   /** O11：本层框（父模块框、分层总览的带）常驻计数「共用件 N · 折叠 M」 */
@@ -119,7 +124,7 @@ export interface RouteEdgeData {
   /** 当前消息与边的箭头方向相反（P10） */
   flowReverse?: boolean
   /** 本层没有视图边时的临时线：经由上层关系（P15）/ 结构中未建模（P11）；代码依赖叠加线（K9）；时间耦合的波浪线（J5） */
-  temp?: TempLine['kind'] | 'code' | 'couple'
+  temp?: TempLine['kind'] | 'code' | 'couple' | 'assembly'
   /** K9：关系边的证实 */
   fact?: EdgeFact
   /** K9：边含违规 */
@@ -130,6 +135,8 @@ export interface RouteEdgeData {
   overlay?: DepOverlay
   /** J5：耦合线的内容（次数、两端、是否无依赖无关系） */
   couple?: LevelCoupling
+  /** O12：组装叠加线的内容 */
+  assembly?: AssemblyOverlay
 }
 
 export type CanvasNodeType = 'frame' | 'module' | 'boundary' | 'band' | 'core' | 'more' | 'shared' | 'actor' | 'step' | 'preview'
@@ -189,6 +196,10 @@ export interface CanvasInput {
   evolution?: LevelEvolution | null
   /** L13：本层节点（模块 ID）定义的端口；运行视角为 null（不画） */
   ports?: ReadonlyMap<string, readonly PortPanel[]> | null
+  /** O12：结构视角下开启「组装」时的组装叠加线；否则为空 */
+  assembly?: readonly AssemblyOverlay[] | null
+  /** O12：本层节点 ID → 落在它上面的组装根个数（「组装根」角标）；开关关闭时为空 */
+  assemblyRoots?: ReadonlyMap<string, number> | null
 }
 
 export interface CanvasScene {

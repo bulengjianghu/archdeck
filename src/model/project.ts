@@ -7,7 +7,7 @@
  * - 一端在 P 外部：外部端点提升为「最近公共祖先下、它那一侧的子模块」作为边界节点。
  * 同一 (from, to, type) 的关系合并成一条边（L5：同一对节点之间不同类型的关系各成一条）。
  */
-import { isSharedRole, relationMode } from './types'
+import { isBoundaryRole, isSharedRole, relationMode } from './types'
 import type {
   Band,
   ModelIndex,
@@ -86,6 +86,12 @@ interface Projected {
 
 const roleOf = (index: ModelIndex, id: string) => index.modules.get(id)!.role
 
+/** L14：边界角色的视图标记 */
+const rimOf = (index: ModelIndex, id: string): Pick<ViewNode, 'rim'> => {
+  const role = roleOf(index, id)
+  return role === 'port' || role === 'adapter' ? { rim: role } : {}
+}
+
 export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectOptions = DEFAULT_PROJECT_OPTIONS): LevelView {
   const visible = makeVisibility(index, opts)
   if (!index.pathOf.has(parentId) || !visible(parentId)) throw new Error(`未知或已隐藏的层次：${parentId}`)
@@ -95,7 +101,9 @@ export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectO
   // ADR-0027：普通层次按 role 分三类——核心、普通、共用件（分层总览在带内分，layeredOverview）
   const shelf = layered ? [] : children.filter(id => isSharedRole(roleOf(index, id)))
   const cores = layered ? [] : children.filter(id => roleOf(index, id) === 'core')
-  const normal = layered ? [] : children.filter(id => !shelf.includes(id) && !cores.includes(id))
+  // L14：port / adapter 常显、不折叠进「+N」（O8 的例外），也不算普通模块
+  const rims = layered ? [] : children.filter(id => isBoundaryRole(roleOf(index, id)))
+  const normal = layered ? [] : children.filter(id => !shelf.includes(id) && !cores.includes(id) && !rims.includes(id))
   const over = normal.length > FOLD_LIMIT
   // O8：有核心模块时折叠（单击临时展开，同 O6 的 expandedBands）；没有核心时不折叠，只提示
   const folding = over && cores.length > 0
@@ -118,7 +126,7 @@ export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectO
     for (const id of children) {
       if (alias[id]) continue
       if (scope.shelf.has(id)) nodes.push({ ...childNode(scope, id, 'module'), role: 'shared' })
-      else nodes.push({ ...childNode(scope, id, 'module'), ...(cores.includes(id) ? { core: true as const } : {}) })
+      else nodes.push({ ...childNode(scope, id, 'module'), ...(cores.includes(id) ? { core: true as const } : {}), ...rimOf(index, id) })
     }
     if (folding) nodes.push({ id: moreNodeId(parentId), moduleId: parentId, role: 'more', hasChildren: false, hiddenCount: expanded ? 0 : normal.length, expanded: expanded ? normal.length : 0 })
     const shelfEdges = proj.shelfEdges.result()
@@ -238,7 +246,8 @@ function layeredOverview(scope: LevelScope, relations: readonly RelationEntity[]
   for (const l of children) {
     const kids = visibleChildren(scope, l)
     shelfOfLayer.set(l, new Set(kids.filter(c => isSharedRole(roleOf(index, c)))))
-    coreOf.set(l, new Set(kids.filter(c => !shelfOfLayer.get(l)!.has(c) && (expanded.has(l) || roleOf(index, c) === 'core'))))
+    // L14：port / adapter 同核心模块常显在带内
+    coreOf.set(l, new Set(kids.filter(c => !shelfOfLayer.get(l)!.has(c) && (expanded.has(l) || roleOf(index, c) === 'core' || isBoundaryRole(roleOf(index, c))))))
   }
   const nodes = children.map(id => childNode(scope, id, 'layer'))
   const bands: Band[] = children.map(l => {
@@ -246,9 +255,9 @@ function layeredOverview(scope: LevelScope, relations: readonly RelationEntity[]
     const kids = visibleChildren(scope, l)
     const core = kids.filter(c => coreOf.get(l)!.has(c))
     const shelf = kids.filter(c => shelfOfLayer.get(l)!.has(c))
-    for (const c of core) nodes.push({ id: c, moduleId: c, role: 'core', hasChildren: visibleChildren(scope, c).length > 0, layerId: l })
+    for (const c of core) nodes.push({ id: c, moduleId: c, role: 'core', hasChildren: visibleChildren(scope, c).length > 0, layerId: l, ...rimOf(index, c) })
     for (const c of shelf) nodes.push({ id: c, moduleId: c, role: 'shared', hasChildren: visibleChildren(scope, c).length > 0, layerId: l })
-    const declared = kids.filter(c => roleOf(index, c) === 'core').length
+    const declared = kids.filter(c => roleOf(index, c) === 'core' || isBoundaryRole(roleOf(index, c))).length
     return {
       layerId: l,
       order: m.order ?? Infinity,

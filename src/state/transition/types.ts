@@ -33,6 +33,8 @@ export interface Toggles {
   heat: 'off' | HeatKind
   /** J5：时间耦合的波浪线（缺省关，按项目记在本地） */
   coupling: boolean
+  /** O12：组装叠加线与组装根角标（缺省关，按项目记在本地，不进 URL） */
+  assembly: boolean
 }
 
 export interface PlaybackState {
@@ -110,4 +112,5 @@ export const DEFAULT_TOGGLES = (relationTypes: readonly RelationType[]): Toggles
   showFacts: true,
   heat: 'off',
   coupling: false,
+  assembly: false,
 })

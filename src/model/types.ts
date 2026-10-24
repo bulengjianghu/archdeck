@@ -538,6 +538,8 @@ export interface ViewNode {
   actorKind?: ActorKind
   /** 普通层次的核心模块（role: core）：大块常显（ADR-0027） */
   core?: true
+  /** L14：边界角色（ADR-0030）——port 贴父模块框（分层总览为所在的带）的上边、adapter 贴右边；常显、不折叠（O8） */
+  rim?: 'port' | 'adapter'
   /** O10：「共用 ×N」——它连到的共用件个数（共用件架上的节点不带） */
   sharedCount?: number
   /** O8：more 节点折叠的普通模块数（展开时为 0） */

@@ -12,7 +12,7 @@ const replace = (state: ViewState): TransitionResult => ({ state, history: 'repl
 export const isEditing = (state: ViewState): boolean => !!state.editing
 
 /**
- * X7a：草图画布下无效的动作——打开场景、选中文件 / 代码依赖 / 耦合线、打开代码事实与演化叠加（草图不对应代码）；
+ * X7a：草图画布下无效的动作——打开场景、选中文件 / 代码依赖 / 耦合线、打开代码事实、演化与组装叠加（草图不对应代码）；
  * 模型画布的层次导航（下钻、返回上级、跳转、按 URL 恢复）：草图下的层次只由当前张决定，经 openSketch 切换。
  */
 export function blocked(state: ViewState, action: ViewAction): boolean {
@@ -30,7 +30,7 @@ export function blocked(state: ViewState, action: ViewAction): boolean {
     case 'goTo':
       return action.id !== state.levelId || badSelection(action.select ?? null)
     case 'toggle':
-      return 'showFacts' in action.patch || 'heat' in action.patch || 'coupling' in action.patch
+      return 'showFacts' in action.patch || 'heat' in action.patch || 'coupling' in action.patch || 'assembly' in action.patch
     default:
       return false
   }

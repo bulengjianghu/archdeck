@@ -2,6 +2,7 @@
 scenario:
   id: sc.switch-transaction
   name: 方案切换事务
+  kind: main
   description: |
     切换不是「先删旧图再试着建新图」，而是候选代际与图事务协同提交：旧段先 quiesce，ModelRegistry 发起可回滚的模型切换，
     候选段计划经一次 updatePipeline 提交；成功则提交模型并销毁旧代，失败则销毁候选、回滚模型、恢复旧代。

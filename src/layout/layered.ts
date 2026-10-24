@@ -53,7 +53,10 @@ export function layoutLayered(view: LevelView, opts: LayoutOptions = {}): Positi
   const bands = view.bands ?? []
   const nodes = new Map<string, Box>()
   const columns = opts.bandColumns ?? DEFAULT_BAND_COLUMNS
-  const maxCore = Math.max(1, ...bands.map(b => b.coreModuleIds.length + (hasChip(b) ? 1 : 0)))
+  // L14：带内的边界角色——port 压在带的上边、adapter 贴带的右边（右侧留白区），不占核心模块的行
+  const rimOf = new Map(view.nodes.flatMap(n => (n.rim && n.role === 'core' ? [[n.id, n.rim] as const] : [])))
+  const regular = (b: { coreModuleIds: string[] }) => b.coreModuleIds.filter(id => !rimOf.has(id))
+  const maxCore = Math.max(1, ...bands.map(b => regular(b).length + (hasChip(b) ? 1 : 0)))
   const perRow = Math.max(3, Math.min(maxCore, columns))
   // O7：带宽按画布铺开（列数给出），内容少时也不缩窄
   const middle = Math.max(BAND.minMiddle, columns * (BAND.chip.w + BAND.chipGap) - BAND.chipGap + 2 * BAND.chipGap)
@@ -63,17 +66,29 @@ export function layoutLayered(view: LevelView, opts: LayoutOptions = {}): Positi
   const bandIndex = new Map<string, number>()
   bands.forEach((band, i) => {
     bandIndex.set(band.layerId, i)
-    const slots = band.coreModuleIds.length + (hasChip(band) ? 1 : 0)
+    const cores = regular(band)
+    const ports = band.coreModuleIds.filter(id => rimOf.get(id) === 'port')
+    const adapters = band.coreModuleIds.filter(id => rimOf.get(id) === 'adapter')
+    const slots = cores.length + (hasChip(band) ? 1 : 0)
     const rows = Math.max(1, Math.ceil(slots / perRow))
+    // port 一半压在带内：核心模块行往下让出半块
+    const rimTop = ports.length ? BAND.chip.h / 2 : 0
+    const adaptersH = adapters.length ? adapters.length * BAND.chip.h + (adapters.length - 1) * BAND.chipGap + 2 * BAND.padY + rimTop : 0
     // O9：带底的共用件架，紧凑一行（放不下换行），左侧留出「共用件」字样
     const shelf = band.shelf ?? []
     const shelfPerRow = Math.max(1, Math.floor((middle - BAND.chipGap - SHELF.label + SHELF.gap) / (SHELF.w + SHELF.gap)))
     const shelfRows = Math.ceil(shelf.length / shelfPerRow)
     const shelfH = shelfRows ? shelfRows * (SHELF.h + SHELF.gap) - SHELF.gap + BAND.shelfGap : 0
     const coreH = rows * BAND.chip.h + (rows - 1) * BAND.chipGap
-    const h = Math.max(BAND.minH, coreH + 2 * BAND.padY + shelfH)
+    const h = Math.max(BAND.minH, coreH + 2 * BAND.padY + shelfH + rimTop, adaptersH)
     nodes.set(band.layerId, { x: 0, y, w: width, h })
-    const rowTop = y + (h - shelfH - coreH) / 2
+    const rowTop = y + rimTop + (h - rimTop - shelfH - coreH) / 2
+    ports.forEach((id, k) =>
+      nodes.set(id, { x: BAND.left + BAND.chipGap + k * (BAND.chip.w + BAND.chipGap), y: y - BAND.chip.h / 2, w: BAND.chip.w, h: BAND.chip.h }),
+    )
+    adapters.forEach((id, k) =>
+      nodes.set(id, { x: width - BAND.chip.w, y: y + rimTop + BAND.padY + k * (BAND.chip.h + BAND.chipGap), w: BAND.chip.w, h: BAND.chip.h }),
+    )
     const shelfTop = y + h - BAND.padY / 2 - (shelfH - BAND.shelfGap)
     shelf.forEach((id, k) =>
       nodes.set(id, {
@@ -89,8 +104,8 @@ export function layoutLayered(view: LevelView, opts: LayoutOptions = {}): Positi
       w: BAND.chip.w,
       h: BAND.chip.h,
     })
-    band.coreModuleIds.forEach((id, k) => nodes.set(id, chipBox(k)))
-    if (hasChip(band)) nodes.set(moreChipId(band.layerId), chipBox(band.coreModuleIds.length))
+    cores.forEach((id, k) => nodes.set(id, chipBox(k)))
+    if (hasChip(band)) nodes.set(moreChipId(band.layerId), chipBox(cores.length))
     y += h + BAND.gap
   })
 

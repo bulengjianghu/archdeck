@@ -1,23 +1,59 @@
 <script setup lang="ts">
 /**
- * 场景列表（D-1、R4、R4a）：默认只列与当前层次相关的场景（有帧端点在当前子树内），可切到全部、按发起者筛选；
+ * 场景列表（D-1、R4、R4a、R17）：默认只列与当前层次相关的场景（有帧端点在当前子树内），可切到全部、按发起者筛选；
+ * R17：默认只列主流程（kind: main），可切到「全部类别」（记在本机，不进 URL），非主流程项标出类别；
  * 选定即进入运行视角，不改变层次。声明了证据文件的场景标「测试 N」（N 为证据文件数，S15、D-20）——只说明声明了测试，不说明测过了；无证据步骤标「? N」（S17）。
  */
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'
-import { moduleName } from '@/model'
+import { filterScenariosByKind, moduleName, scenarioKind, type ScenarioKind } from '@/model'
 
 const emit = defineEmits<{ picked: [] }>()
 const desk = useDesk()
 const scope = ref<'level' | 'all'>('level')
 const trigger = ref('')
 
+/** R17：类别筛选记在本机（所有项目共用），不进 URL */
+const KINDS_KEY = 'h5p-arch-desk:scenario-kinds'
+const readKinds = (): 'main' | 'all' => {
+  try {
+    return localStorage.getItem(KINDS_KEY) === 'all' ? 'all' : 'main'
+  } catch {
+    return 'main'
+  }
+}
+const kinds = ref<'main' | 'all'>(readKinds())
+watch(kinds, v => {
+  try {
+    localStorage.setItem(KINDS_KEY, v)
+  } catch {
+    /* 存不了就算了 */
+  }
+})
+const KIND_LABEL: Record<ScenarioKind, string> = { main: '主流程', exception: '异常', maintenance: '维护' }
+
 const all = computed(() =>
   desk.run.catalog.value.map(({ scenario: s, trigger: by, messages }) => ({ s, by, byName: by ? moduleName(desk.index.value!, by) : '—', count: messages })),
 )
 const related = computed(() => new Set(desk.index.value?.scenariosOf.get(desk.levelId.value) ?? []))
 const triggers = computed(() => [...new Map(all.value.filter(x => x.by).map(x => [x.by!, x.byName])).entries()])
-const shown = computed(() => all.value.filter(x => (scope.value === 'all' || related.value.has(x.s.id)) && (!trigger.value || x.by === trigger.value)))
+const inScope = computed(() => all.value.filter(x => (scope.value === 'all' || related.value.has(x.s.id)) && (!trigger.value || x.by === trigger.value)))
+const mainCount = computed(
+  () =>
+    filterScenariosByKind(
+      inScope.value.map(x => x.s),
+      'main',
+    ).length,
+)
+const shown = computed(() => {
+  const keep = new Set(
+    filterScenariosByKind(
+      inScope.value.map(x => x.s),
+      kinds.value,
+    ),
+  )
+  return inScope.value.filter(x => keep.has(x.s))
+})
 
 function pick(id: string) {
   desk.openScenario(id)
@@ -32,6 +68,10 @@ function pick(id: string) {
         <button :class="{ on: scope === 'level' }" @click="scope = 'level'">本层相关 {{ related.size }}</button>
         <button :class="{ on: scope === 'all' }" @click="scope = 'all'">全部 {{ all.length }}</button>
       </div>
+      <div class="seg" role="group" aria-label="类别">
+        <button :class="{ on: kinds === 'main' }" title="只列主流程（kind: main）" @click="kinds = 'main'">主流程 {{ mainCount }}</button>
+        <button :class="{ on: kinds === 'all' }" title="含异常处理与维护类流程" @click="kinds = 'all'">全部类别 {{ inScope.length }}</button>
+      </div>
       <select v-model="trigger" aria-label="按发起者筛选">
         <option value="">全部发起者</option>
         <option v-for="[id, name] in triggers" :key="id" :value="id">{{ name }}</option>
@@ -41,8 +81,8 @@ function pick(id: string) {
       <li v-for="x in shown" :key="x.s.id">
         <button class="item" :class="{ current: desk.playback.value?.scenarioId === x.s.id }" @click="pick(x.s.id)">
           <span class="name"
-            >▶ {{ x.s.name
-            }}<span v-if="x.s.evidence?.length" class="evidence" :title="`声明了 ${x.s.evidence.length} 个证据文件（测试 / E2E），不代表已通过`">
+            >▶ {{ x.s.name }}<span v-if="scenarioKind(x.s) !== 'main'" class="kind-tag" :data-kind="scenarioKind(x.s)">{{ KIND_LABEL[scenarioKind(x.s)] }}</span
+            ><span v-if="x.s.evidence?.length" class="evidence" :title="`声明了 ${x.s.evidence.length} 个证据文件（测试 / E2E），不代表已通过`">
               测试 {{ x.s.evidence.length }}</span
             ><span
               v-if="desk.evidence.unevidenced.value.get(x.s.id)"
@@ -58,7 +98,9 @@ function pick(id: string) {
       </li>
     </ul>
     <p v-else class="none muted">
-      {{ all.length ? '与当前层次相关的场景没有符合条件的，可切到「全部」' : '这个项目还没有场景描述' }}
+      {{
+        !all.length ? '这个项目还没有场景描述' : inScope.length ? '没有主流程场景，可切到「全部类别」' : '与当前层次相关的场景没有符合条件的，可切到「全部」'
+      }}
     </p>
   </div>
 </template>
@@ -81,6 +123,7 @@ function pick(id: string) {
 
 .filters {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 6px;
@@ -144,6 +187,21 @@ ul {
 
 .name {
   font-weight: 600;
+}
+
+.kind-tag {
+  margin-left: 6px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+}
+
+.kind-tag[data-kind='exception'] {
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .unevidenced {

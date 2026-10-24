@@ -9,6 +9,7 @@ import {
   entryResolver,
   gateIssues as gateOf,
   governanceReport,
+  levelAssembly,
   levelFacts,
   portEntry,
   portIssues,
@@ -22,6 +23,7 @@ import {
   type GovernanceReport,
   type Issue,
   type LedgerSummary,
+  type LevelAssembly,
   type LevelCycle,
   type LevelFacts,
   type LevelView,
@@ -71,6 +73,13 @@ export function createFacts({ state, index, view, files, sync, design }: FactsIn
   const level = computed<LevelFacts | null>(() =>
     report.value && index.value && view.value && !state.value.playback && state.value.toggles.showFacts
       ? levelFacts(index.value, view.value, report.value)
+      : null,
+  )
+
+  /** O12：结构视角、「组装」开关开启时组装事实与组装根在本层的投影（不参与布局） */
+  const assembly = computed<LevelAssembly | null>(() =>
+    report.value && index.value && view.value && !state.value.playback && state.value.toggles.assembly
+      ? levelAssembly(index.value, view.value, report.value)
       : null,
   )
 
@@ -179,6 +188,7 @@ export function createFacts({ state, index, view, files, sync, design }: FactsIn
     error,
     report,
     level,
+    assembly,
     gateIssues,
     ledger,
     entryOf,

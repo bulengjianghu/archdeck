@@ -2,6 +2,7 @@
 scenario:
   id: sc.timeshift-back-to-live
   name: 时移回直播
+  kind: main
   description: |
     时移中（录制腿供数）用户调 backToLive()：新建一条 FLV 直播腿，先等首帧可用、再换回（顺序硬约束，先换后等会盯黑屏），
     换回走 revert-live 方向的换腿事务，丢全部残留、从直播边缘出画；成功后撤录制腿、会话收口，时移源登记保留，再暂停可重进时移。

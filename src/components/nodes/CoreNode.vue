@@ -2,6 +2,7 @@
 import Handles from './Handles.vue'
 import DiffMark from './DiffMark.vue'
 import PortMarks from './PortMarks.vue'
+import RimTag from './RimTag.vue'
 import type { NodeData } from './types'
 
 defineProps<{ data: NodeData }>()
@@ -13,6 +14,7 @@ defineProps<{ data: NodeData }>()
     <DiffMark :data="data" />
     <PortMarks v-if="data.ports" :ports="data.ports" :module-id="data.moduleId" />
     <span class="name">{{ data.name }}</span>
+    <RimTag v-if="data.rim" :rim="data.rim" />
     <span v-if="data.childCount > 0" class="drill">⌄ {{ data.childCount }}</span>
   </div>
 </template>

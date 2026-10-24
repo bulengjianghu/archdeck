@@ -90,9 +90,15 @@ function focusOf({ hover, selection: sel }: CanvasInput, pv: PositionedView): st
   return !pv.nodes.has(sel.id) && pv.nodes.has(`boundary:${sel.id}`) ? `boundary:${sel.id}` : sel.id
 }
 
-function selectedEdgesOf({ selection: sel, stage: st }: CanvasInput, pv: PositionedView, facts: LevelFacts | null, evo: LevelEvolution | null): Set<string> {
+function selectedEdgesOf(
+  { selection: sel, stage: st, assembly }: CanvasInput,
+  pv: PositionedView,
+  facts: LevelFacts | null,
+  evo: LevelEvolution | null,
+): Set<string> {
   if (sel?.kind === 'edge') return new Set([sel.id])
-  if (sel?.kind === 'dep') return new Set((facts?.overlays ?? []).filter(o => `${o.fromModule}->${o.toModule}` === sel.id).map(o => o.id))
+  if (sel?.kind === 'dep')
+    return new Set([...(facts?.overlays ?? []), ...(st ? [] : (assembly ?? []))].filter(o => `${o.fromModule}->${o.toModule}` === sel.id).map(o => o.id))
   // J7：选中的耦合对所在的耦合线
   if (sel?.kind === 'couple') return new Set((evo?.couplings ?? []).filter(l => l.pairs.includes(sel.id)).map(l => l.id))
   if (sel?.kind === 'relation') {

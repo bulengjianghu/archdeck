@@ -16,6 +16,8 @@ export const WIDTH = [1.5, 2.5, 3.5] as const
 export const QUERY_OPACITY = 0.6
 export const DASHED = '6 4'
 export const DOTTED = '0.5 4.5'
+/** O12：组装叠加线的点划线 */
+export const DASH_DOT = '8 3 1.5 3'
 /**
  * 箭头（L10：实心 = 同步，空心「V」= 异步）：大小随线宽档走，14 / 16 / 18 px；
  * 形状画在 10×10 的 viewBox 里，底边在 x = 1、尖端在 x = 9，标记的参考点在底边中点——线回缩一个箭头深度后接在底边上，尖端落在原终点。
@@ -47,6 +49,7 @@ export type CoupleLook = StrokeLook & { isolated?: boolean }
 export function strokeColor(d: CoupleLook): string {
   if (d.temp === 'couple') return d.isolated ? 'var(--edge-couple-strong)' : 'var(--edge-couple)'
   if (d.temp === 'code') return d.violated ? 'var(--danger)' : 'var(--edge-code)'
+  if (d.temp === 'assembly') return 'var(--assembly)'
   if (d.temp === 'unmodeled') return 'var(--danger)'
   if (d.play === 'preview') return 'var(--warning)'
   if (d.muted) return 'var(--text-3)'
@@ -61,6 +64,7 @@ export function strokeStyle(d: CoupleLook) {
   if (d.temp === 'couple') return { stroke, strokeWidth: d.isolated ? 2 : 1.5, strokeLinecap: 'round' as const, opacity: d.dim ? 0.12 : 0.9 }
   if (d.temp === 'code') return { stroke, strokeWidth: 2, strokeDasharray: DOTTED, strokeLinecap: 'round' as const, opacity: d.dim ? 0.12 : 0.95 }
   if (d.temp === 'unmodeled') return { stroke, strokeWidth: 1.5, strokeDasharray: '5 5', opacity: d.play === 'preview' ? 0.7 : 0.9 }
+  if (d.temp === 'assembly') return { stroke, strokeWidth: 1.8, strokeDasharray: DASH_DOT, strokeLinecap: 'round' as const, opacity: d.dim ? 0.12 : 0.9 }
   return {
     stroke,
     strokeWidth: WIDTH[(d.weight ?? 1) - 1],

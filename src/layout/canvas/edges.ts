@@ -1,6 +1,6 @@
 /**
  * 画布场景的边（ADR-0013）：关系边（本层视图边与分层总览的核心跨层边）、回放叠加的临时线（P11、P15）与分支预览、
- * 代码事实叠加线（K9）、时间耦合的波浪线（J5）。显隐、变淡、回放态、选中突出的灰化，以及视觉通道（L10：线型、箭头、线宽档、标签）都在这里定。
+ * 代码事实叠加线（K9）、时间耦合的波浪线（J5）、组装叠加线（O12）。显隐、变淡、回放态、选中突出的灰化，以及视觉通道（L10：线型、箭头、线宽档、标签）都在这里定。
  */
 import { parseVia, relationMode, type EdgeFact, type ModelDiff, type ModelIndex, type ViewEdge } from '@/model'
 import { edgeLabel, edgeRoute, edgeWeight, isBoundaryEdge, linkRoute, type Box, type EdgeRoute, type Point } from '../layout'
@@ -232,6 +232,24 @@ export function factEdges(ctx: SceneContext): (CanvasEdge | null)[] {
       factState: 'undescribed',
       overlay: o,
       ...(o.violations ? { violated: true } : {}),
+    })
+  })
+}
+
+/** O12：组装叠加线——组装事实投影到本层的点划线（组装专用色），不参与布局；同一对节点合并标 ×N；单击落到这对节点的代码依赖（K10） */
+export function assemblyEdges(ctx: SceneContext): (CanvasEdge | null)[] {
+  if (ctx.st) return []
+  return (ctx.input.assembly ?? []).map(o => {
+    const ve: ViewEdge = { id: o.id, kind: 'direct', from: o.from, to: o.to, type: 'calls', relationIds: [], mode: 'sync' }
+    const route = linkRoute(ctx.pv.nodes.get(o.from), ctx.pv.nodes.get(o.to))
+    return makeEdge(ctx, ve, route, false, {
+      temp: 'assembly',
+      label: o.count > 1 ? `×${o.count}` : '',
+      pill: o.count > 1,
+      warn: false,
+      factState: 'confirmed',
+      assembly: o,
+      violated: false,
     })
   })
 }

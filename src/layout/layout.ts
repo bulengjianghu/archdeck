@@ -24,6 +24,7 @@ export {
   outsideRoutes,
   isOutsideEdge,
   placeOutside,
+  placeRims,
   type Compass,
   linkRoute,
   nearPoints,
@@ -37,7 +38,7 @@ const cache = new Map<string, PositionedView>()
 const CACHE_LIMIT = 64
 
 /** 布局算法的版本：端口、层约束等选项改了就升，旧结果不再命中 */
-export const LAYOUT_VERSION = 'L13-ports-1'
+export const LAYOUT_VERSION = 'L14-rims-1'
 
 export function cacheKey(view: LevelView, opts: LayoutOptions = {}): string {
   return JSON.stringify([
@@ -45,7 +46,7 @@ export function cacheKey(view: LevelView, opts: LayoutOptions = {}): string {
     view.mode === 'layered' ? (opts.bandColumns ?? DEFAULT_BAND_COLUMNS) : 0,
     view.mode,
     view.parentId,
-    view.nodes.map(n => (n.actorKind ? `${n.id}:${n.actorKind}` : n.id)),
+    view.nodes.map(n => (n.actorKind ? `${n.id}:${n.actorKind}` : n.rim ? `${n.id}:${n.rim}` : n.id)),
     // 两级缓存：这里是节点布局；普通层次中框外元素的边不参与路由，只在内部节点上占端口（左动右静），所以也进键；它们的走线按布局与可见集另行记忆（outsideRoutes）
     view.edges.map(e => [e.id, e.relationIds.length]),
   ])
