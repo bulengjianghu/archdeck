@@ -28,6 +28,10 @@ export interface ParsedImport {
   names: string[]
   types: string[]
   heritage?: string[]
+  /** `export … from`：只把对方的名字转出去，不引用它的实现（不算值使用，K1、K7） */
+  reexport?: true
+  /** 值导入里没有在值的位置被引用的导入名（只在类型位置出现，或只转出）；不按名称穿透的导入为 ['*']（K1：不算值使用） */
+  inert?: string[]
 }
 
 /** 类声明 implements / extends 子句引用的标识符（取 `a.b.C` 最左边的 a） */
@@ -48,6 +52,37 @@ function heritageLocals(sf: ts.SourceFile): Set<string> {
   return out
 }
 
+/** 名字是否在类型位置（类型节点、implements 子句、类型别名与接口声明里） */
+function inTypePosition(n: ts.Node): boolean {
+  for (let p: ts.Node | undefined = n.parent; p; p = p.parent) {
+    if (p.kind >= ts.SyntaxKind.FirstTypeNode && p.kind <= ts.SyntaxKind.LastTypeNode) return true
+    if (ts.isHeritageClause(p)) return p.token === ts.SyntaxKind.ImplementsKeyword
+    if (ts.isTypeAliasDeclaration(p) || ts.isInterfaceDeclaration(p)) return true
+    if (ts.isStatement(p) || ts.isSourceFile(p)) return false
+  }
+  return false
+}
+
+/** K1：在值的位置被引用的标识符（不含导入声明、类型位置、属性名、本地再导出 export { x }、instanceof 右侧——只引类不调用） */
+function valueRefs(sf: ts.SourceFile): Set<string> {
+  const out = new Set<string>()
+  const visit = (n: ts.Node) => {
+    if (ts.isImportDeclaration(n) || ts.isExportSpecifier(n)) return
+    if (ts.isIdentifier(n)) {
+      const p = n.parent
+      const isName =
+        (ts.isPropertyAccessExpression(p) && p.name === n) ||
+        ((ts.isPropertyAssignment(p) || ts.isMethodDeclaration(p) || ts.isPropertyDeclaration(p) || ts.isPropertySignature(p)) && p.name === n) ||
+        (ts.isQualifiedName(p) && p.right === n) ||
+        (ts.isBinaryExpression(p) && p.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword && p.right === n)
+      if (!isName && !inTypePosition(n)) out.add(n.text)
+    }
+    ts.forEachChild(n, visit)
+  }
+  visit(sf)
+  return out
+}
+
 const parseCache = new Map<string, { mtimeMs: number; size: number; imports: ParsedImport[] }>()
 
 function scriptKind(file: string): ts.ScriptKind {
@@ -56,10 +91,12 @@ function scriptKind(file: string): ts.ScriptKind {
   return ts.ScriptKind.TS
 }
 
-/** K1：解析一段脚本的导入；lineOffset 为它在文件中的起始行（Vue 的 <script> 块） */
-export function parseImports(file: string, text: string, kind = scriptKind(file), lineOffset = 0): ParsedImport[] {
+/** K1：解析一段脚本的导入；lineOffset 为它在文件中的起始行（Vue 的 <script> 块）；extraRefs 为脚本之外引用到的名字（Vue 模板） */
+export function parseImports(file: string, text: string, kind = scriptKind(file), lineOffset = 0, extraRefs?: (name: string) => boolean): ParsedImport[] {
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kind)
   const out: ParsedImport[] = []
+  const refs = valueRefs(sf)
+  const referenced = (local: string) => refs.has(local) || !!extraRefs?.(local)
   const lineOf = (n: ts.Node) => sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1 + lineOffset
   const inHeritage = heritageLocals(sf)
   const literal = (n: ts.Node | undefined) => (n && ts.isStringLiteralLike(n) ? n.text : undefined)
@@ -78,7 +115,25 @@ export function parseImports(file: string, text: string, kind = scriptKind(file)
         ...(names.length ? named!.filter(e => inHeritage.has(e.name.text)).map(e => (e.propertyName ?? e.name).text) : []),
         ...((clause?.name && inHeritage.has(clause.name.text)) || (ns && inHeritage.has(ns)) ? ['*'] : []),
       ]
-      out.push({ spec, line: lineOf(st), kind: typeOnly ? 'type' : 'value', names, types, ...(heritage.length ? { heritage } : {}) })
+      // 只在类型位置出现、或只转出的值导入名不算引用了实现（K1）；副作用导入（没有导入子句）照常算
+      const locals: [string, string][] = clause
+        ? [
+            ...(clause.name ? ([[clause.name.text, '*']] as [string, string][]) : []),
+            ...(ns ? ([[ns, '*']] as [string, string][]) : []),
+            ...(named ?? []).filter(e => !e.isTypeOnly).map(e => [e.name.text, (e.propertyName ?? e.name).text] as [string, string]),
+          ]
+        : []
+      const inert =
+        typeOnly || !clause ? [] : names.length ? locals.filter(([l]) => !referenced(l)).map(([, x]) => x) : locals.some(([l]) => referenced(l)) ? [] : ['*']
+      out.push({
+        spec,
+        line: lineOf(st),
+        kind: typeOnly ? 'type' : 'value',
+        names,
+        types,
+        ...(heritage.length ? { heritage } : {}),
+        ...(inert.length ? { inert } : {}),
+      })
     } else if (ts.isExportDeclaration(st)) {
       const spec = literal(st.moduleSpecifier)
       if (!spec) continue
@@ -92,6 +147,7 @@ export function parseImports(file: string, text: string, kind = scriptKind(file)
         kind: typeOnly ? 'type' : 'value',
         names: named?.map(name) ?? [],
         types: named?.filter(e => typeOnly || e.isTypeOnly).map(name) ?? [],
+        reexport: true,
       })
     } else if (ts.isImportEqualsDeclaration(st) && ts.isExternalModuleReference(st.moduleReference)) {
       const spec = literal(st.moduleReference.expression)
@@ -118,13 +174,17 @@ export function parseImports(file: string, text: string, kind = scriptKind(file)
 /** K1：Vue 文件的 <script> 块 */
 export function parseVueImports(file: string, text: string): ParsedImport[] {
   const out: ParsedImport[] = []
+  // 模板里出现的名字（组件标签的 PascalCase 与 kebab-case、表达式里的标识符）都算值引用
+  const template = /<template\b[^>]*>([\s\S]*)<\/template>/i.exec(text)?.[1] ?? ''
+  const kebab = (s: string) => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+  const inTemplate = (name: string) => new RegExp(`\\b(${name}|${kebab(name)})\\b`).test(template)
   const re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi
   for (let m = re.exec(text); m; m = re.exec(text)) {
     const attrs = m[1]
     const lang = /\blang\s*=\s*["']?(tsx|ts|jsx|js)/i.exec(attrs)?.[1]?.toLowerCase() ?? 'js'
     const kind = lang === 'tsx' ? ts.ScriptKind.TSX : lang === 'ts' ? ts.ScriptKind.TS : lang === 'jsx' ? ts.ScriptKind.JSX : ts.ScriptKind.JS
     const offset = text.slice(0, m.index + m[0].indexOf('>') + 1).split('\n').length - 1
-    out.push(...parseImports(file, m[2], kind, offset))
+    out.push(...parseImports(file, m[2], kind, offset, inTemplate))
   }
   return out
 }
@@ -191,7 +251,7 @@ export interface ImportTarget {
   kind: DepKind
   names?: string[]
   heritage?: true
-  /** 引用了实现：值导入的名字声明为函数、类或变量（不是类型、枚举），或不按名称穿透的值导入（K5 的 implements 证据分档） */
+  /** 引用了实现：值导入的名字声明为函数、类或变量（不是类型、枚举），或不按名称穿透的值导入；再导出不算（K5 的 implements 证据分档、K7 的值使用） */
   uses?: true
 }
 
@@ -206,7 +266,7 @@ const TYPE_DECL = new Set(['interface', 'type'])
  * 一个目标只承接类型名时为 type，否则为 value。不按名称穿透的导入以经由文件为目标、取整条语句的种类。
  */
 export function importTargetKinds(
-  imp: { kind: DepKind; names: readonly string[]; types: readonly string[]; heritage?: readonly string[] },
+  imp: { kind: DepKind; names: readonly string[]; types: readonly string[]; heritage?: readonly string[]; reexport?: true; inert?: readonly string[] },
   via: string,
   exportsOf: ExportsOf,
 ): ImportTarget[] {
@@ -216,7 +276,7 @@ export function importTargetKinds(
         to: via,
         kind: imp.kind,
         ...(imp.heritage?.includes('*') ? { heritage: true as const } : {}),
-        ...(imp.kind === 'value' ? { uses: true as const } : {}),
+        ...(imp.kind === 'value' && !imp.reexport && !imp.inert?.includes('*') ? { uses: true as const } : {}),
       },
     ]
   const syms = exportsOf(via)
@@ -229,7 +289,7 @@ export function importTargetKinds(
     if (hit.kind !== 'value') hit.kind = kind
     hit.names.push(n)
     if (imp.heritage?.includes(n)) hit.heritage = true
-    if (kind === 'value' && !DATA_DECL.has(sym?.kind ?? '')) hit.uses = true
+    if (kind === 'value' && !imp.reexport && !imp.inert?.includes(n) && !DATA_DECL.has(sym?.kind ?? '')) hit.uses = true
     out.set(to, hit)
   }
   return [...out.values()]

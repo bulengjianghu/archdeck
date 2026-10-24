@@ -44,7 +44,7 @@ const STATUS: Record<string, string> = { new: '新增', known: '已知', open: '
             <div>
               <button class="link" @click="desk.revealModule(d.from)">{{ name(d.from) }}</button> →
               <button class="link" @click="desk.revealModule(d.to)">{{ name(d.to) }}</button>
-              <span :class="d.described ? 'muted' : 'warn'">{{ d.described ? '已描述' : '未描述' }}</span>
+              <span :class="d.described ? 'muted' : 'warn'">{{ d.described ? '有交互' : '未解释' }}</span>
               <span class="muted">{{ d.files.length }} 处</span>
             </div>
             <FileDepList :deps="d.files" :limit="4" />
