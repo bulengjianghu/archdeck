@@ -144,7 +144,7 @@ describe('§6.10 架构治理验收', () => {
     // 去掉一个模块的 codeRefs：它目录下的文件成为未归属，按目录合并为一条
     const layers = path.join(tmp, 'h5p-arch-desk', 'intent', 'skeleton.yaml')
     const text = fs.readFileSync(layers, 'utf8')
-    fs.writeFileSync(layers, text.replace(/codeRefs: \[src\/components\/shared\/\*\*\]/, 'codeRefs: []'))
+    fs.writeFileSync(layers, text.replace(/codeRefs: \[\s*src\/components\/shared\/\*\*\s*\]/, 'codeRefs: []'))
     try {
       const r = svc().issues()
       const unowned = r.list.items.find(i => i.id === 'ownership:unowned:src/components/shared')!
