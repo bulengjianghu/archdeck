@@ -10,7 +10,7 @@ modules:
     codeRefs: [src/components/ProjectList.vue]
   - id: present.version
     name: 版本切换与设计信息条
-    codeRefs: [src/components/VersionSwitcher.vue, src/components/DesignBar.vue, src/components/CommitBar.vue]
+    codeRefs: [src/components/VersionSwitcher.vue, src/components/infobar/InfoBar.vue, src/components/infobar/CompareZone.vue]
   - id: present.canvas
     name: 画布
     codeRefs: [src/components/GraphCanvas.vue, src/components/DisplayPanel.vue, src/components/nodes/**, src/components/edges/**, src/components/stage/**]
@@ -364,14 +364,14 @@ relations:
   - {id: rel.ad.indexer-steps, from: model.pipeline.indexer, to: model.scenario.flatten, type: calls, description: messagesOf：建索引时收集场景消息}
   - {id: rel.ad.present-names, from: present, to: model.types, type: depends, description: 契约（U10）：名称查询 moduleName（各处显示模块名）、小谓词 isLong / isArchived、枚举 RELATION_TYPES、规则名 RULE_LABELS}
   - {id: rel.ad.content-labels, from: present.panel.content, to: present.shared, type: depends, description: FIELD_LABELS：变更角标的字段名}
-  - {id: rel.ad.version-labels, from: present.version, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS：设计状态的显示名}
+  - {id: rel.ad.version-labels, from: present.version, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS、intentName：设计状态与持久草图的显示名}
   - {id: rel.ad.legend-type-labels, from: present.canvas.legend, to: present.shared, type: depends, description: RELATION_TYPE_LABELS / RELATION_TYPE_HINTS：关系类型名与一句话读法（ADR-0022）}
   - {id: rel.ad.relation-type-labels, from: present.panel.relation, to: present.shared, type: depends, description: RELATION_TYPE_LABELS / RELATION_TYPE_HINTS：类型名与「语义」一行}
   - {id: rel.ad.edge-type-labels, from: present.panel.edge, to: present.shared, type: depends, description: RELATION_TYPE_LABELS：聚合边与关系行的类型名}
   - {id: rel.gv.ports-type-labels, from: present.panel.governance, to: present.shared, type: depends, description: RELATION_TYPE_LABELS：端口三角各项的类型名}
   - {id: rel.ad.navtree-tab, from: present.nav-tree, to: present.shared, type: depends, description: NAV_TAB：页签由项目视图持有，问题角标可切到「问题」页签（W-6）}
-  - {id: rel.ad.list-labels, from: present.project-list, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS：设计状态的显示名}
-  - {id: rel.ad.design-labels, from: present.panel.design, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS：设计状态的显示名}
+  - {id: rel.ad.list-labels, from: present.project-list, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS、intentName：设计状态与持久草图的显示名}
+  - {id: rel.ad.design-labels, from: present.panel.design, to: present.shared, type: depends, description: DESIGN_STATUS_LABELS、intentName：设计状态与持久草图的显示名}
   - {id: rel.ad.actor-labels, from: present.panel.actor, to: present.shared, type: depends, description: ACTOR_KIND_LABELS：参与者类别的显示名}
   - {id: rel.ad.actor-node-labels, from: present.canvas.nodes, to: present.shared, type: depends, description: ACTOR_KIND_LABELS：参与者类别的显示名}
   - {id: rel.ad.nodes-act, from: present.canvas.nodes, to: state.desk.actions, type: calls, interface: if.desk.actions, description: 分支预览选这一支（chooseBranch）、步骤序号指向这一步（seek）}

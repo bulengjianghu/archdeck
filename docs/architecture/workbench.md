@@ -152,7 +152,7 @@ type PaneLayout =
 | 应用外壳与路由 | `main.ts`、`App.vue`、`styles.css` |
 | 项目列表 | `ProjectList.vue` |
 | 项目视图 · 副栏 | `DeskView.vue`；分屏容器与副栏 `split/**`；舞台显示 `stage/useStageDisplay.ts` |
-| 版本切换与设计信息条 | `VersionSwitcher.vue`、`DesignBar.vue`、`CommitBar.vue`（提交版本，E5、E6） |
+| 版本切换与设计信息条 | `VersionSwitcher.vue`；信息条 `infobar/InfoBar.vue`（身份区，提交版本、设计轮次、草图共用，F-60）、`infobar/CompareZone.vue`（对比按钮与弹层，F-62） |
 | 视角切换 · 场景列表 · 回放控制条 | `PerspectiveSwitch.vue`、`ScenarioList.vue`、`PlayerBar.vue`、`RouteBar.vue`、`BranchChooser.vue` |
 | 导航树 · 问题页签 | `tree/**`（NavTree · ModuleTree · FileTree · StepTree · IssueList） |
 | 源代码预览 | `source/**`（SourceView · httpSource） |
@@ -178,4 +178,4 @@ type PaneLayout =
 |---|---|
 | 画布编辑态 | `edit/canvas/**`：InsertSlot · InlineName · useEditDrag · MoveConfirm · useEditConnect · ConnectPopover · EditMenu · useEditKeys |
 | 编辑表单 | `edit/panel/**`：EditPanel · LayerForm · ModuleForm · InterfaceForm · RelationForm · SketchMetaForm · EditChecks |
-| 编辑信息条 | `edit/EditBar.vue`、`edit/NewDesignDialog.vue` |
+| 编辑信息条 | `infobar/ActionZone.vue`（动作区，按模式，F-61）、`edit/NewDesignDialog.vue` |

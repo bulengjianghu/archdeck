@@ -13,8 +13,7 @@ import GraphCanvas from './GraphCanvas.vue'
 import Breadcrumb from './Breadcrumb.vue'
 import Toolbar from './Toolbar.vue'
 import VersionSwitcher from './VersionSwitcher.vue'
-import DesignBar from './DesignBar.vue'
-import CommitBar from './CommitBar.vue'
+import InfoBar from './infobar/InfoBar.vue'
 import GuideDialog from './GuideDialog.vue'
 import PerspectiveSwitch from './PerspectiveSwitch.vue'
 import PlayerBar from './PlayerBar.vue'
@@ -28,7 +27,6 @@ import { OPEN_PREVIEW } from './shared/preview'
 import { NAV_TAB, type NavTab } from './shared/navTab'
 import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
 import { useEvolutionPrefs } from './display/useEvolutionPrefs'
-import EditBar from './edit/EditBar.vue'
 import EditDialog from './edit/EditDialog.vue'
 import { editKey } from './edit/canvas/useEditKeys'
 
@@ -73,6 +71,8 @@ const desk = createDeskState(fetchModel, {
   writer: httpModelWriter(props.project, import.meta.env.BASE_URL),
 })
 desk.attachRouter(router)
+/** 进入这个版本之前的地址（hash 路由的历史里记着）：草图编辑态的「退出」回到那里（#20b） */
+const entry = typeof router.options.history.state.back === 'string' ? router.options.history.state.back : undefined
 provide(DESK_STATE, desk)
 // 开发态便于在浏览器控制台检查状态
 if (import.meta.env.DEV) (window as unknown as { __desk: typeof desk }).__desk = desk
@@ -260,14 +260,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </button>
     </header>
 
-    <div v-if="isIntentVersion(version) && desk.status.value === 'ready'" class="design-bar intent-bar">
-      <span class="kind">持久草图</span>
-      <strong>{{ version.intent === 'skeleton' ? '骨架' : version.intent }}</strong>
-      <span class="muted">intent/{{ version.intent }}.yaml · 人拥有 · 对比当前版本</span>
-      <EditBar :name="version.intent === 'skeleton' ? '骨架' : version.intent" />
-    </div>
-    <CommitBar v-else-if="isCommitVersion(version) && desk.status.value === 'ready'" class="design-bar" />
-    <DesignBar v-else-if="version && desk.status.value === 'ready'" class="design-bar" />
+    <InfoBar v-if="version && desk.status.value === 'ready'" class="info-bar" :back="entry" />
 
     <aside v-show="!navCollapsed" class="nav-area">
       <NavTree v-if="desk.status.value === 'ready'" />
@@ -355,7 +348,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   border-radius: 14px;
 }
 
-.design-bar {
+.info-bar {
   grid-column: 1 / -1;
 }
 

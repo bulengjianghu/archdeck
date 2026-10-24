@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
  * 版本切换：当前版本（由代码生成）、持久草图（骨架等，可编辑，ADR-0024）、某个设计的草图（DV-10，排在 r1 之前）或某一轮（ADR-0002），
- * 或描述在某个 git 提交时的快照（E5）。切换时保留层次与选中；有未保存的草图改动时离开由项目视图确认（X7a）。旁边是「新建设计」（SK-10）。
+ * 或描述在某个 git 提交时的快照（E5）。选中后下拉只显示名称，草图以 ✎ 前缀区分（#14，kind 在信息条的身份区）。切换时保留层次与选中；有未保存的草图改动时离开由项目视图确认（X7a）。旁边是「新建设计」（SK-10）。
  */
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDesk } from '@/state/inject'
 import { SKETCH_REVISION, isArchived, isCommitVersion, isDesignVersion, isIntentVersion } from '@/model'
-import { DESIGN_STATUS_LABELS } from './shared/labels'
+import { DESIGN_STATUS_LABELS, intentName } from './shared/labels'
 import NewDesignDialog from './edit/NewDesignDialog.vue'
 
 const desk = useDesk()
@@ -61,13 +61,13 @@ function onChange(e: Event) {
       <select :value="value" aria-label="切换版本" @change="onChange">
         <option value="">当前版本（代码）</option>
         <optgroup v-if="intents.length" label="持久草图（人拥有，可编辑）">
-          <option v-for="id in intents" :key="id" :value="`i:${id}`">{{ id === 'skeleton' ? '骨架' : id }} · 持久草图</option>
+          <option v-for="id in intents" :key="id" :value="`i:${id}`" title="持久草图：人拥有，可编辑">✎ {{ intentName(id) }}</option>
         </optgroup>
         <optgroup v-for="d in active" :key="d.id" :label="`设计 · ${d.name}（${DESIGN_STATUS_LABELS[d.status]}）`">
           <option v-for="(r, i) in [...d.revisions].reverse()" :key="r.id" :value="`${d.id}/${r.id}`" :title="r.date">
             {{ d.name }} · {{ r.id }}{{ i === 0 ? '（最新）' : '' }}
           </option>
-          <option v-if="d.sketch" :value="`${d.id}/${SKETCH_REVISION}`" title="架构师的草图：设计的尺子，各轮按它展开">{{ d.name }} · 草图</option>
+          <option v-if="d.sketch" :value="`${d.id}/${SKETCH_REVISION}`" title="草图：架构师画的局部描述，各轮按它展开">✎ {{ d.name }}</option>
         </optgroup>
         <optgroup v-if="archived.length" label="已归档的设计（已实现 / 已放弃）">
           <template v-for="d in archived" :key="d.id">
@@ -79,7 +79,7 @@ function onChange(e: Event) {
             >
               {{ d.name }} · {{ r.id }}
             </option>
-            <option v-if="d.sketch" :value="`${d.id}/${SKETCH_REVISION}`">{{ d.name }} · 草图</option>
+            <option v-if="d.sketch" :value="`${d.id}/${SKETCH_REVISION}`" title="草图">✎ {{ d.name }}</option>
           </template>
         </optgroup>
         <optgroup v-if="commits.length || extraCommit" label="提交（描述的历史）">
