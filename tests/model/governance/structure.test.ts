@@ -5,6 +5,7 @@ import {
   NO_ALLOWED_NOTE,
   NO_FACTS_REASON,
   againstStability,
+  againstStabilityOf,
   allowedDeps,
   assignFiles,
   chipDeps,
@@ -13,6 +14,7 @@ import {
   hasStructureEdge,
   impactOf,
   interactionEdgeBetween,
+  isolatedInteractions,
   levelDeps,
   levelImpact,
   loadModel,
@@ -21,6 +23,7 @@ import {
   sharedHealth,
   stabilityBand,
   structureMetrics,
+  structureEdgeFiles,
   structureView,
   tierOf,
   topSharedFanIn,
@@ -98,6 +101,19 @@ describe('K14 结构边的种类与档', () => {
   })
 })
 
+describe('K14 结构边的文件依赖（依赖边面板经 desk.facts 取，T5 分层修正）', () => {
+  it('structureEdgeFiles：只列归入这条边种类的文件依赖；同一对节点的组装与端口实现各自分开', () => {
+    const { index, report } = coreSetup()
+    const { edges } = levelDeps(index, projectLevel(index, 'core'), report)
+    const byId = new Map(edges.map(e => [e.id, e]))
+    const lines = (id: string) => structureEdgeFiles(index, report, byId.get(id)!).map(f => `${f.from}:${f.line}`)
+    expect(lines('assembly:core.impl->core.api')).toEqual(['src/core/impl/i.ts:1'])
+    expect(lines('implements:core.impl->core.api')).toEqual(['src/core/impl/i.ts:2'])
+    expect(lines('dependency:core.util->core.impl')).toEqual(['src/core/util/u.ts:1'])
+    expect(structureEdgeFiles(index, report, { kind: 'dependency', deps: ['no->such'] })).toEqual([])
+  })
+})
+
 describe('K17 交互覆盖数与未解释', () => {
   it('依赖边带覆盖它的关系与事实覆盖；覆盖 0 的交互使用标未解释（即 K7），值使用 / 只引类型不标', () => {
     const { index, report } = coreSetup()
@@ -121,6 +137,19 @@ describe('K17 交互覆盖数与未解释', () => {
     expect(dep('ui.view', 'boundary:core').unexplained).toBe(true)
     expect(dep('ui.store', 'boundary:core').coverage!.relations).toEqual(['rel.2', 'rel.6'])
     expect(dep('ui.store', 'boundary:core').unexplained).toBeUndefined()
+  })
+})
+
+describe('K17 交互图互查（模块面板经 desk.facts 取，T5 分层修正）', () => {
+  it('isolatedInteractions：涉及模块子树、两端之间没有任何依赖的交互关系（K6 报警的未证实）', () => {
+    const { index, report } = setup()
+    const isolated = [...report.relations].filter(([, c]) => c.status === 'unconfirmed' && c.isolated).map(([id]) => id)
+    expect(isolated).toEqual(expect.arrayContaining(['rel.3', 'rel.4']))
+    expect(isolatedInteractions(index, report, 'core.impl')).toEqual(expect.arrayContaining(['rel.3', 'rel.4']))
+    expect(isolatedInteractions(index, report, 'core.api')).toContain('rel.4')
+    expect(isolatedInteractions(index, report, 'core.api')).not.toContain('rel.3')
+    // 系统根：全部 isolated 的交互
+    expect(isolatedInteractions(index, report, index.rootId).sort()).toEqual(isolated.sort())
   })
 })
 
@@ -205,6 +234,11 @@ describe('U17 稳定依赖方向', () => {
   it('被依赖方是共用件、或 I 无定义时不提示', () => {
     expect(againstStability(index, metrics, 'a', 'c', 0.1)).toBeNull()
     expect(againstStability(index, metrics, 'a', 'zz')).toBeNull()
+  })
+
+  it('againstStabilityOf：一组直接依赖中违背方向的，带两端的 I（面板「逆稳定」提示行）', () => {
+    expect(againstStabilityOf(index, metrics, 'a', ['b', 'c', 'zz'])).toEqual([{ module: 'b', hit: { from: 0.1, to: 0.8 } }])
+    expect(againstStabilityOf(index, metrics, 'b', ['a', 'c'])).toEqual([])
   })
 
   it('标在依赖边上（sample：领域层反过来依赖应用层后，较稳定的应用层依赖较易变的领域层）', () => {

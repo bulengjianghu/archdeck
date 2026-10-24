@@ -65,15 +65,15 @@ test('结构视角（L19、D-26）：图例整组换成结构视图的，代码�
   await expect(panel.getByRole('button', { name: /代码事实/ })).toHaveCount(0)
   // 只引类型缺省收起：本层条数在组内；打开开关后改为「已显示」，折叠摘要列出
   const count = panel.getByTestId('type-only-count')
-  await expect(count).toContainText(/只引类型 \d+ 条已收起/)
-  const n = (await count.textContent())!.match(/只引类型 (\d+) 条/)![1]
+  await expect(count).toContainText(/本层只引类型的边 \d+ 条已收起/)
+  const n = (await count.textContent())!.match(/本层只引类型的边 (\d+) 条/)![1]
   await panel.getByRole('switch', { name: '只引类型' }).check()
-  await expect(count).toContainText(`只引类型 ${n} 条已显示`)
+  await expect(count).toContainText(`本层只引类型的边 ${n} 条已显示`)
   await panel.getByRole('button', { name: /^显示/ }).click()
   await expect(panel.getByRole('button', { name: /^显示/ })).toContainText('只引类型已显示')
   await panel.getByRole('button', { name: /^显示/ }).click()
   await panel.getByRole('switch', { name: '只引类型' }).uncheck()
-  await expect(count).toContainText(`只引类型 ${n} 条已收起`)
+  await expect(count).toContainText(`本层只引类型的边 ${n} 条已收起`)
 })
 
 test('时序图图例在副栏标题栏的「图例」里', async ({ page }) => {

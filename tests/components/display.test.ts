@@ -115,9 +115,11 @@ describe('L15：只引类型开关与计数', () => {
     const sv = desk.facts.structure.value!
     expect(sv.facts && sv.typeOnly).toBe(2)
     const count = wrapper.find('[data-testid="type-only-count"]')
-    expect(count.text()).toContain('只引类型 2 条已收起')
+    expect(count.text()).toContain('本层只引类型的边 2 条已收起')
+    // 口径说明（03-t4 裁决 1、02-t2-t3 T2 裁决 1）
+    expect(count.text()).toContain('一对节点只按最强的一档计；含聚焦才画的')
     await wrapper.find('input[aria-label="只引类型"]').setValue(true)
-    expect(wrapper.find('[data-testid="type-only-count"]').text()).toContain('只引类型 2 条已显示')
+    expect(wrapper.find('[data-testid="type-only-count"]').text()).toContain('本层只引类型的边 2 条已显示')
     expect(useStructurePrefs('').prefs.value.typeOnly).toBe(true)
     expect(JSON.parse(localStorage.getItem('h5p-arch-desk:structure-prefs:')!)).toMatchObject({ typeOnly: true })
     await wrapper.find('.head-btn').trigger('click')

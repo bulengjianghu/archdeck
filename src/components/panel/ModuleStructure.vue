@@ -8,7 +8,7 @@
  * 没有代码事实（K8、U16）时只说明原因。
  */
 import { computed, ref } from 'vue'
-import { againstStability, moduleFiles, moduleName, within, type ImpactEntry } from '@/model'
+import { moduleName, type ImpactEntry } from '@/model'
 import { useDesk } from '@/state/inject'
 import Section from './Section.vue'
 import { IMPACT_MODE_HINT, IMPACT_MODE_LABEL, STABILITY_LABEL } from '../display/labels'
@@ -43,7 +43,7 @@ const impact = computed(() => desk.facts.impactOf(props.id, valuesOnly.value))
 const fmtI = (i: number | null) => (i === null ? '—' : i.toFixed(2))
 
 /** 闭包内模块的文件数（归属可用时） */
-const filesOf = (m: string) => (desk.files.ownership.value ? moduleFiles(idx.value, desk.files.ownership.value, m).length : null)
+const filesOf = (m: string) => (desk.files.ownership.value ? desk.files.filesOf(m).length : null)
 
 interface Side {
   dir: 'in' | 'out'
@@ -76,28 +76,11 @@ const sides = computed<Side[]>(() => {
   })
 })
 
-/** U17：本模块直接依赖的模块中、比它更易变超过阈值的（被依赖方是共用件不提示） */
-const against = computed(() => {
-  const all = valuesOnly.value ? desk.facts.valueMetrics.value : desk.facts.metrics.value
-  const i = impact.value
-  if (!all || !i) return []
-  return i.impact.outgoing
-    .filter(e => e.distance === 1)
-    .map(e => ({ module: e.module, hit: againstStability(idx.value, all, props.id, e.module) }))
-    .filter((x): x is { module: string; hit: { from: number; to: number } } => !!x.hit)
-})
+/** U17：本模块直接依赖的模块中、比它更易变超过阈值的（被依赖方是共用件不提示；desk.facts 派生） */
+const against = computed(() => desk.facts.againstOf(props.id, valuesOnly.value))
 
-/** K17：涉及本模块（含子树）、两端之间没有任何依赖的交互关系（K6） */
-const isolated = computed(() => {
-  if (!ready.value) return []
-  const out: string[] = []
-  for (const r of idx.value.relations.values()) {
-    if (!within(idx.value, r.from, props.id) && !within(idx.value, r.to, props.id)) continue
-    const f = desk.facts.relationFact(r.id)
-    if (f?.status === 'unconfirmed' && f.isolated) out.push(r.id)
-  }
-  return out
-})
+/** K17：涉及本模块（含子树）、两端之间没有任何依赖的交互关系（K6；desk.facts 派生） */
+const isolated = computed(() => (ready.value ? desk.facts.isolatedOf(props.id) : []))
 
 /** K17：单击切到交互视角并选中这条关系（V11） */
 function showInteraction(id: string) {

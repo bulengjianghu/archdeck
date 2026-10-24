@@ -20,7 +20,7 @@ const typeOnly = computed({ get: () => sp.prefs.value.typeOnly, set: sp.setTypeO
 
 const sv = computed(() => desk.facts.structure.value)
 const facts = computed(() => desk.facts.status.value === 'ready')
-/** 本层只引类型的依赖边条数（L15 画布角计数同一个数） */
+/** 本层只引类型的依赖边条数（L15 画布角计数同一个数）：一对节点只按最强的一档计（K14），含边界节点、共用件聚焦才画的（L15a） */
 const typeCount = computed(() => (sv.value?.facts ? sv.value.typeOnly : 0))
 const hint = computed(() => (facts.value ? '' : FACTS_HINT[desk.facts.status.value]))
 </script>
@@ -50,8 +50,11 @@ const hint = computed(() => (facts.value ? '' : FACTS_HINT[desk.facts.status.val
         <span class="sw kind"
           ><span class="chip">{{ typeCount }}</span></span
         >
-        <span v-if="!typeOnly">只引类型 {{ typeCount }} 条已收起（打开右上角开关显示）</span>
-        <span v-else>只引类型 {{ typeCount }} 条已显示</span>
+        <span
+          ><template v-if="!typeOnly">本层只引类型的边 {{ typeCount }} 条已收起（打开右上角开关显示）</template
+          ><template v-else>本层只引类型的边 {{ typeCount }} 条已显示</template
+          ><span class="hint type-count-note">；一对节点只按最强的一档计；含聚焦才画的</span></span
+        >
       </div>
     </template>
     <template v-else>

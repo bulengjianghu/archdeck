@@ -6,7 +6,7 @@
  * 规则判定（违规含豁免，或允许它的规则，U15）；两端的不稳定度与「逆稳定」提示（U17）。
  */
 import { computed, ref } from 'vue'
-import { contractNames, fileKinds, moduleName, type FileDep, type StructureEdge } from '@/model'
+import { moduleName, type StructureEdge } from '@/model'
 import { useDesk } from '@/state/inject'
 import Section from './Section.vue'
 import FileDepList from './FileDepList.vue'
@@ -27,19 +27,8 @@ const dependency = computed(() => edges.value.find(e => e.kind === 'dependency')
 const ruling = computed(() => edges.value[0]?.ruling)
 const moduleDeps = computed(() => new Set(edges.value.flatMap(e => e.deps)).size)
 
-/** 归入一条结构边的文件依赖（按 K14 的种类筛） */
-function filesOf(e: StructureEdge): FileDep[] {
-  const r = desk.facts.report.value
-  if (!r) return []
-  const out: FileDep[] = []
-  for (const k of e.deps) {
-    const d = r.moduleDeps.get(k)
-    if (!d) continue
-    const ports = contractNames(idx.value, d.to)
-    for (const f of d.files) if (fileKinds(f, ports).includes(e.kind)) out.push(f)
-  }
-  return out
-}
+/** 归入一条结构边的文件依赖（按 K14 的种类筛，desk.facts 派生） */
+const filesOf = (e: StructureEdge) => desk.facts.edgeFiles(e)
 
 /** 覆盖它的关系较多时先列前 LIMIT 条 */
 const LIMIT = 10

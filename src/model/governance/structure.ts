@@ -5,23 +5,41 @@
  */
 import { moduleName } from '../names'
 import { moduleFiles, type SourceOwnership } from '../source'
-import { RELATION_TYPES, type LevelView, type ModelIndex, type RuleKind } from '../types'
+import { RELATION_TYPES, type LevelView, type ModelIndex } from '../types'
 import { valueDeps } from './cycles'
 import { contractNames, coveringRelations, depKey, implementsInto, plainInteraction, within } from './facts'
 import { nodeOf } from './level'
 import { rulesOf } from './rules'
 import { sharedHostOf } from './roles'
-import { ASSEMBLY_KINDS, type FileDep, type GovernanceReport, type ModuleDep, type Violation, type ViolationStatus } from './types'
+import {
+  ASSEMBLY_KINDS,
+  STABILITY_BANDS,
+  STRUCTURE_KINDS,
+  type AllowedDeps,
+  type AllowedEdge,
+  type ChipDep,
+  type DepTier,
+  type EdgeRuling,
+  type FileDep,
+  type GovernanceReport,
+  type Impact,
+  type ImpactEntry,
+  type LevelDeps,
+  type LevelDepsOptions,
+  type MetricsOptions,
+  type ModuleDep,
+  type ModuleMetrics,
+  type ModuleMetricsDetail,
+  type RuleBasis,
+  type StabilityBand,
+  type StructureEdge,
+  type StructureKind,
+  type StructureView,
+  type Violation,
+  type ViolationStatus,
+} from './types'
 
 // ── K14：结构边的种类与档 ──
-
-/** K14：结构边的种类——依赖、组装（K13）、子类（K12）、端口实现（K5c） */
-export type StructureKind = 'dependency' | 'assembly' | 'subclass' | 'implements'
-export const STRUCTURE_KINDS: readonly StructureKind[] = ['dependency', 'assembly', 'subclass', 'implements']
-
-/** K14：依赖边的档——交互使用 > 值使用（只有纯值读取）> 只引类型 */
-export type DepTier = 'invokes' | 'value' | 'type'
-export const DEP_TIERS: readonly DepTier[] = ['invokes', 'value', 'type']
 
 /** K14：一条文件依赖归入的结构边种类（可多种）；组装、子类、端口实现之外的使用（或什么都不是）归「依赖」 */
 export function fileKinds(f: FileDep, ports: ReadonlySet<string>): StructureKind[] {
@@ -41,25 +59,6 @@ export const tierOf = (files: readonly FileDep[]): DepTier =>
   files.some(f => f.invokes) ? 'invokes' : files.some(f => f.uses || f.kind === 'value') ? 'value' : 'type'
 
 // ── U15：规则叠加 ──
-
-/** U15：结构边的规则判定——违规（新增 / 无基线 / 已知 / 已豁免）、允许、无约束 */
-export type EdgeVerdict = 'violation' | 'allowed' | 'unconstrained'
-
-/** U15：约束一条依赖的一条规则：种类、规则所在与可读的说明 */
-export interface RuleBasis {
-  kind: RuleKind
-  at: string
-  text: string
-}
-
-export interface EdgeRuling {
-  verdict: EdgeVerdict
-  /** 违规时投影到这条边的违规里最严的状态：new > open（无基线）> known > allowed（已豁免） */
-  status?: ViolationStatus
-  violations: Violation[]
-  /** 约束这条边、且投影到它的模块依赖都通过了的规则（允许它的规则，U15 悬停与面板） */
-  allowedBy: RuleBasis[]
-}
 
 const STATUS_ORDER: readonly ViolationStatus[] = ['new', 'open', 'known', 'allowed']
 
@@ -111,27 +110,9 @@ function ruling(index: ModelIndex, deps: readonly ModuleDep[], violations: reado
 
 // ── K16：扇入、扇出与不稳定度 ──
 
-/** K16：不稳定度三档（阈值：议）——稳定 I < 1/3、居中、易变 I > 2/3；Ca + Ce = 0 时无定义 */
-export type StabilityBand = 'stable' | 'balanced' | 'unstable'
-export const STABILITY_BANDS: readonly [number, number] = [1 / 3, 2 / 3]
+/** K16：不稳定度三档（STABILITY_BANDS）；Ca + Ce = 0 时无定义 */
 export const stabilityBand = (i: number | null): StabilityBand | null =>
   i === null ? null : i < STABILITY_BANDS[0] ? 'stable' : i > STABILITY_BANDS[1] ? 'unstable' : 'balanced'
-
-export interface ModuleMetrics {
-  module: string
-  /** 扇入：子树外、依赖子树内任一模块的不同模块数 */
-  ca: number
-  /** 扇出：子树内的模块所依赖的、子树外的不同模块数 */
-  ce: number
-  /** I = Ce ÷ (Ca + Ce)；Ca + Ce = 0 时为 null（显示「—」） */
-  instability: number | null
-  band: StabilityBand | null
-}
-
-export interface MetricsOptions {
-  /** 只看值依赖：去掉只引类型的文件依赖重算（同 Y1） */
-  valuesOnly?: boolean
-}
 
 const depsOf = (report: Pick<GovernanceReport, 'moduleDeps'>, opts: MetricsOptions = {}): ModuleDep[] =>
   opts.valuesOnly ? valueDeps(report.moduleDeps.values()) : [...report.moduleDeps.values()]
@@ -158,16 +139,6 @@ export function structureMetrics(index: ModelIndex, report: Pick<GovernanceRepor
     out.set(id, { module: id, ca, ce, instability, band: stabilityBand(instability) })
   }
   return out
-}
-
-/** K16：面板「结构」一节——模块的 Ca / Ce / I，贡献最多的 5 个依赖方 / 被依赖方（按文件依赖条数），本层节点数 */
-export interface ModuleMetricsDetail extends ModuleMetrics {
-  /** 依赖它的模块，按文件依赖条数降序，最多 5 个 */
-  topDependents: { module: string; files: number }[]
-  /** 它依赖的模块，同上 */
-  topDependencies: { module: string; files: number }[]
-  /** 投影到本层后不同节点的传入 / 传出数（不含它自己所在的节点）；没给视图时不给 */
-  level?: { in: number; out: number }
 }
 
 export const TOP_CONTRIBUTORS = 5
@@ -225,53 +196,6 @@ export function againstStability(
 }
 
 // ── K14、K17、U15、U17：依赖边投影 ──
-
-/** K17：一条依赖边的交互覆盖——覆盖它的交互关系，另列由端口实现、子类、组装事实覆盖的模块依赖条数 */
-export interface EdgeCoverage {
-  relations: string[]
-  implementers: number
-  subclass: number
-  assembly: number
-}
-
-/** 一条结构边：本层一对节点同方向、一种事实（L15） */
-export interface StructureEdge {
-  /** `<种类>:<依赖方节点>-><被依赖方节点>` */
-  id: string
-  kind: StructureKind
-  from: string
-  to: string
-  /** 两端节点对应的模块 ID；选中落到 K10 的 `sel=d:<fromModule>-><toModule>` */
-  fromModule: string
-  toModule: string
-  /** 依赖边的档（K14）；其余种类不给 */
-  tier?: DepTier
-  /** 归入这条边的文件依赖条数（悬停与面板） */
-  files: number
-  /** 聚合的模块依赖键（K4）；线宽 = 条数（L18） */
-  deps: string[]
-  /** K17：依赖边的交互覆盖；其余种类不给 */
-  coverage?: EdgeCoverage
-  /** K17：K7 的未解释的交互（覆盖 0、交互使用、没有事实覆盖） */
-  unexplained?: true
-  /** U15：这对节点之间的规则判定（同一对节点的各种类共用） */
-  ruling: EdgeRuling
-  /** U17：违背稳定依赖方向时两端的 I（只给依赖边） */
-  againstStability?: { from: number; to: number }
-}
-
-export interface LevelDeps {
-  edges: StructureEdge[]
-  /** K14：只引类型的依赖边条数（缺省收起时画布角计数，L15） */
-  typeOnly: number
-}
-
-export interface LevelDepsOptions {
-  /** U17 的阈值，缺省 STABLE_DIRECTION_THRESHOLD */
-  threshold?: number
-  /** 已算好的指标（K16），省得重算 */
-  metrics?: ReadonlyMap<string, ModuleMetrics>
-}
 
 type ReportPart = Pick<GovernanceReport, 'moduleDeps' | 'violations' | 'undescribed' | 'implementers' | 'subclasses' | 'assembly'>
 
@@ -364,22 +288,6 @@ export function levelDeps(index: ModelIndex, view: LevelView, report: ReportPart
   return { edges, typeOnly }
 }
 
-/** O13③：分层总览中核心模块（或架上共用件）的一条跨层结构边 */
-export interface ChipDep {
-  /** `chip:<种类>:<依赖方节点>-><被依赖方节点>` */
-  id: string
-  kind: StructureKind
-  from: string
-  to: string
-  fromModule: string
-  toModule: string
-  tier?: DepTier
-  files: number
-  deps: string[]
-  /** 投影到这对节点的违规中最严的状态（新增 > 无基线 > 已知 > 已豁免）；没有违规时不给 */
-  violation?: ViolationStatus
-}
-
 const VIOLATION_ORDER: readonly ViolationStatus[] = ['new', 'open', 'known', 'allowed']
 
 /**
@@ -457,6 +365,43 @@ export function chipDeps(
   return out
 }
 
+/** K14：归入一条结构边的文件依赖——它聚合的模块依赖中、按 fileKinds 归入这条边种类的（依赖边面板的文件依赖清单） */
+export function structureEdgeFiles(index: ModelIndex, report: Pick<GovernanceReport, 'moduleDeps'>, edge: Pick<StructureEdge, 'kind' | 'deps'>): FileDep[] {
+  const out: FileDep[] = []
+  for (const k of edge.deps) {
+    const d = report.moduleDeps.get(k)
+    if (!d) continue
+    const ports = contractNames(index, d.to)
+    for (const f of d.files) if (fileKinds(f, ports).includes(edge.kind)) out.push(f)
+  }
+  return out
+}
+
+/** K17：交互图互查——涉及模块 M（含子树）、两端之间没有任何依赖的交互关系（K6 报警的未证实），按描述顺序 */
+export function isolatedInteractions(index: ModelIndex, report: Pick<GovernanceReport, 'relations'>, id: string): string[] {
+  const out: string[] = []
+  for (const r of index.relations.values()) {
+    if (!within(index, r.from, id) && !within(index, r.to, id)) continue
+    const c = report.relations.get(r.id)
+    if (c?.status === 'unconfirmed' && c.isolated) out.push(r.id)
+  }
+  return out
+}
+
+/** U17：模块 M 直接依赖的模块（targets）中违背稳定依赖方向的，带两端的 I */
+export function againstStabilityOf(
+  index: ModelIndex,
+  metrics: ReadonlyMap<string, ModuleMetrics>,
+  from: string,
+  targets: readonly string[],
+  threshold = STABLE_DIRECTION_THRESHOLD,
+): { module: string; hit: { from: number; to: number } }[] {
+  return targets.flatMap(module => {
+    const hit = againstStability(index, metrics, from, module, threshold)
+    return hit ? [{ module, hit }] : []
+  })
+}
+
 /** K10、V12：本层这对节点（以两端的模块 ID 指明）之间有没有结构边 */
 export function hasStructureEdge(index: ModelIndex, view: LevelView, report: Pick<GovernanceReport, 'moduleDeps'>, fromModule: string, toModule: string): boolean {
   const present = new Set(view.nodes.map(n => n.id))
@@ -468,27 +413,6 @@ export function hasStructureEdge(index: ModelIndex, view: LevelView, report: Pic
 }
 
 // ── K15：影响面 ──
-
-export interface ImpactEntry {
-  module: string
-  /** 到 M 子树的最短距离（1 = 直接依赖） */
-  distance: number
-  /** 在模块环中（Y1，只按值依赖） */
-  inCycle: boolean
-}
-
-export interface Impact {
-  module: string
-  valuesOnly: boolean
-  /** 传入闭包：改它会牵动谁（能到达 M 子树的模块） */
-  incoming: ImpactEntry[]
-  /** 传出闭包：它要谁才能工作（从 M 子树出发能到达的模块） */
-  outgoing: ImpactEntry[]
-  /** M 自己（子树内某模块）在模块环中 */
-  inCycle: boolean
-  /** 闭包内模块归属的源码文件数（给了归属时） */
-  files?: { incoming: number; outgoing: number }
-}
 
 /**
  * K15：模块 M（含其子树）的传入 / 传出闭包，各带到 M 子树的最短距离（BFS），按距离、模块 ID 排序；
@@ -578,24 +502,6 @@ export const NO_ALLOWED_NOTE = '没有代码事实，描述里也没有 mayDepen
 /** U16：K15、K16、K17、U15 不适用的原因 */
 export const NO_FACTS_REASON = '没有代码事实（设计版本、提交版本或源码读取失败，K8）：影响面、指标、交互覆盖与违规不适用'
 
-/** U16：一条允许边——本层一对节点之间、由 mayDependOn 投影来 */
-export interface AllowedEdge {
-  /** `allowed:<依赖方节点>-><被依赖方节点>` */
-  id: string
-  from: string
-  to: string
-  fromModule: string
-  toModule: string
-  /** 投影到它的规则：层规则（at 为层）、白名单（at 为写规则的模块）、草图（at 为草图里的层） */
-  rules: { kind: 'layer' | 'deps' | 'sketch'; at: string; to: string }[]
-}
-
-export interface AllowedDeps {
-  edges: AllowedEdge[]
-  /** 画布角的说明（ALLOWED_ONLY_NOTE；一条 mayDependOn 都没有时为 NO_ALLOWED_NOTE） */
-  note: string
-}
-
 /**
  * U16：没有代码事实时，层的 mayDependOn（U2，rules.layers: false 时不画）与 rules.modules[].mayDependOn（U3）按 mapEndpoint 投影为本层的允许边；
  * sketch 为活动草图里层的 mayDependOn（X3，由调用方给出）。同一对节点合并；两端落在同一节点或不在本层的不画。
@@ -622,9 +528,6 @@ export function allowedDeps(index: ModelIndex, view: LevelView, sketch: readonly
   }
   return { edges: [...pairs.values()], note: items.length ? ALLOWED_ONLY_NOTE : NO_ALLOWED_NOTE }
 }
-
-/** 结构视图在本层：有代码事实时为结构边，否则为允许依赖图（U16） */
-export type StructureView = ({ facts: true } & LevelDeps) | ({ facts: false; reason: string } & AllowedDeps)
 
 export function structureView(
   index: ModelIndex,

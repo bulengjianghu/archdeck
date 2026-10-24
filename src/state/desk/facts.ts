@@ -5,7 +5,10 @@
  */
 import { computed, type ComputedRef, type ShallowRef } from 'vue'
 import {
+  againstStabilityOf,
   hasStructureEdge,
+  isolatedInteractions,
+  structureEdgeFiles,
   impactOf,
   levelImpact,
   moduleMetrics,
@@ -40,7 +43,9 @@ import {
   type ModuleMetrics,
   type ModuleMetricsDetail,
   type Impact,
+  type StructureEdge,
   type StructureView,
+  type FileDep,
   flattenSketch,
   parseDesignSketches,
   sketchLifetime,
@@ -240,6 +245,26 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
     return { impact, level: view.value ? levelImpact(index.value, view.value, impact) : null }
   }
 
+  /** K14：归入一条结构边的文件依赖（依赖边面板的清单）；没有代码事实时为空 */
+  const edgeFiles = (edge: Pick<StructureEdge, 'kind' | 'deps'>): FileDep[] =>
+    report.value && index.value ? structureEdgeFiles(index.value, report.value, edge) : []
+
+  /** U17：模块直接依赖的模块中违背稳定依赖方向的（面板「逆稳定」提示行，只看值依赖时按值依赖的指标） */
+  const againstOf = (id: string, valuesOnly = false): { module: string; hit: { from: number; to: number } }[] => {
+    const all = valuesOnly ? valueMetrics.value : metrics.value
+    const i = impactOfModule(id, valuesOnly)
+    if (!all || !i || !index.value) return []
+    return againstStabilityOf(
+      index.value,
+      all,
+      id,
+      i.impact.outgoing.filter(e => e.distance === 1).map(e => e.module),
+    )
+  }
+
+  /** K17：交互图互查——涉及模块（含子树）、两端之间没有任何依赖的交互关系；没有代码事实时为空 */
+  const isolatedOf = (id: string): string[] => (report.value && index.value ? isolatedInteractions(index.value, report.value, id) : [])
+
   /** V12：本层这对节点之间有没有结构边——模式切换时把关系 / 视图边的选中映射成依赖边；没有代码事实时不给 */
   const structurePair = (fromModule: string, toModule: string): boolean =>
     !!report.value && !!index.value && !!view.value && hasStructureEdge(index.value, view.value, report.value, fromModule, toModule)
@@ -254,6 +279,9 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
     metricsOf,
     impactOf: impactOfModule,
     structurePair,
+    edgeFiles,
+    againstOf,
+    isolatedOf,
     level,
     assembly,
     gateIssues,
