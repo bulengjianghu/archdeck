@@ -3,7 +3,7 @@
 - 状态：已采纳（实施中）
 - 日期：2026-10-22
 - 决策人：项目负责人（产品定位评审后的裁决与方向，2026-10-22）
-- 关联：修订 [ADR-0002](./0002-design-versions.md)（设计 = 草图 + 轮次）、[ADR-0019](./0019-human-owned-writes.md)（人拥有文件新增草图与确认记录）、[ADR-0020](./0020-local-workbench.md)（定位不变，补推进策略）；需求组 SK、RV、HS 与 D 组新增条目（01）；规则 X、Z、J、S15–S18、B6（02）
+- 关联：修订 [ADR-0002](./0002-design-versions.md)（设计 = 草图 + 轮次）、[ADR-0019](./0019-human-owned-writes.md)（人拥有文件新增草图与确认记录）、[ADR-0020](./0020-local-workbench.md)（定位不变，补推进策略）；需求组 SK、RV、HS 与 D 组新增条目（01）；规则 X、Z、J、S15–S18、B6（02）；原则上溯：[ADR-0028](./0028-positioning-and-principles.md)（产品定位与原则）
 
 ## 背景
 

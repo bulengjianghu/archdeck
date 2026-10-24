@@ -3,7 +3,7 @@
 - 状态：已采纳（已实现）
 - 日期：2026-10-22
 - 决策人：项目负责人（裁决 D，2026-10-22）；写入细则（B2–B5，来源「议」）由实现者提出，负责人 2026-10-22 批量确认，见 [ADR-0020](./0020-local-workbench.md) 的「修订」节
-- 关联：规则 B1–B5、G8、U5；需求 SR-4、DV-2、GV-11、01 §5「写入范围」；修订 [ADR-0007](./0007-source-files.md) 结论 3；[ADR-0020](./0020-local-workbench.md)
+- 关联：规则 B1–B5、G8、U5；需求 SR-4、DV-2、GV-11、01 §5「写入范围」；修订 [ADR-0007](./0007-source-files.md) 结论 3；[ADR-0020](./0020-local-workbench.md)；原则上溯：[ADR-0028](./0028-positioning-and-principles.md)（产品定位与原则）
 
 ## 背景
 

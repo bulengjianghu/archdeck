@@ -3,7 +3,7 @@
 - 状态：已采纳（已实现，2026-10-24）
 - 日期：2026-10-23
 - 决策人：项目负责人（方向与原则 P1–P8，2026-10-23）；原型发现的 20 点由协调者给出裁决建议，按负责人确认的方向并入
-- 关联：修订 [ADR-0024](./0024-sketch-editor.md)（编辑画布、拖 = 移动、新建缺省空草图、撤销范围）、[ADR-0023](./0023-sketch-reviewed-and-evolution.md)（设计 = 草图 + 轮次：草图从一张变为按挂载点的若干张）；需求 SK-12–SK-21（01，SK-6–SK-11 已被替换）；规则 X4、X5、X7、X7a–X7i、B6 修订，X9–X20 新增（02）；格式 04 §3.10；设计版本 `model/h5p-arch-desk/designs/sketch-v2/`
+- 关联：修订 [ADR-0024](./0024-sketch-editor.md)（编辑画布、拖 = 移动、新建缺省空草图、撤销范围）、[ADR-0023](./0023-sketch-reviewed-and-evolution.md)（设计 = 草图 + 轮次：草图从一张变为按挂载点的若干张）；需求 SK-12–SK-21（01，SK-6–SK-11 已被替换）；规则 X4、X5、X7、X7a–X7i、B6 修订，X9–X20 新增（02）；格式 04 §3.10；设计版本 `model/h5p-arch-desk/designs/sketch-v2/`；原则上溯：[ADR-0028](./0028-positioning-and-principles.md)（产品定位与原则）
 
 ## 背景
 
