@@ -457,11 +457,6 @@ relations:
     type: commands
     mode: async
     description: MSE 直播水位策略交给 Framework 机制内核：发 FillBuffer / StopFillBuffer 命令与渲染 Seek、SourceBuffer 清理动作
-  - id: rel.plugins.fhls-live-strategies
-    from: app.plugins.buffer-strategy.fhls-live
-    to: app.strategies
-    type: commands
-    description: Fhls 连续呈现水位策略交给运行时驾驶策略：Fhls 直播缓冲策略继承 PluginBasePlayStrategy，经 super 调用基类的 init、命令 Hook 与销毁
   - id: rel.plugins.fhls-live-index
     from: app.plugins.buffer-strategy.fhls-live
     to: infra.player-index
@@ -648,12 +643,6 @@ relations:
     mode: sync
     payload: [ds.StatisticCollectorView]
     description: 错误恢复交给领域模型：重启 / 重启失败 / 播放失败计数写入统计模型
-  - id: rel.plugins.global-capture-fw
-    from: app.plugins.error.global-capture
-    to: infra.framework
-    type: commands
-    mode: sync
-    description: 全局异常兜底交给 Framework 机制内核：经插件基类记 Error 级日志
 
   # ── app.plugins · 统计 ──
   - id: rel.plugins.statistic-samplers
@@ -777,13 +766,6 @@ relations:
     interface: if.timeshift.coordinator.lifecycle
     payload: [ds.TimeShiftCoordinatorDeps]
     description: 协调器插件外壳交给时移会话协调器：apply 时 new TimeShiftCoordinator(deps).start()，destroy 时 dispose()
-  - id: rel.timeshift.shell-driver
-    from: app.timeshift.shell
-    to: app.timeshift.recording-driver
-    type: commands
-    mode: sync
-    interface: if.timeshift.recording-driver.driver
-    description: 协调器插件外壳交给回看腿待命驱动：createDriver 工厂产出真实 RecordingLegDriver
   - id: rel.timeshift.shell-bg-resume
     from: app.timeshift.shell
     to: app.timeshift.background-resume

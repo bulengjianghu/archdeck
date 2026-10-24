@@ -525,12 +525,6 @@ relations:
     to: infra.framework.pipeline
     type: commands
     description: 'Framework 门面与控制器装配交给 Pipeline 事务与动作分发：组合根装配时 bindFrameworkControllers 首个 new PipelineController，Framework 取它作全局 Dispatcher 注入其余控制器（bindControllers.ts:18、index.ts:43）'
-  - id: rel.framework.facade-plugin-api
-    from: infra.framework.kernel.facade
-    to: infra.framework.plugin
-    type: commands
-    description: Framework 门面与控制器装配交给插件控制器与插件基类：创建 PluginController 并 initApi(PluginApi)；destroy 时级联销毁插件
-    interface: if.framework.kernel.PluginApi
   - id: rel.framework.facade-inject-context
     from: infra.framework.kernel.facade
     to: infra.framework.context.core
@@ -743,11 +737,6 @@ relations:
     to: infra.framework.model-registry.views
     type: queries
     description: 待命模型槽位向视图代理与写拦截取：待命实例创建即 wrapInstance，复用「仅当前实例写入才通知」的短路
-  - id: rel.framework.singletons-models
-    from: infra.framework.model-registry.singletons
-    to: domain.models
-    type: commands
-    description: 单例模型工厂交给领域模型：new PlaybackState(publisher) / new Statistic(publisher)
   # ── Context ──
   - id: rel.framework.context-registry
     from: infra.framework.context.core
@@ -766,11 +755,6 @@ relations:
     to: domain.services
     type: queries
     description: Context 门面向决策服务取：播放档案换代或活动腿变化时用 resolveLegPlaybackBuffer 计算 buffer 四阈值
-  - id: rel.framework.context-settings
-    from: infra.framework.context.core
-    to: infra.framework.context.settings
-    type: queries
-    description: Context 门面向设置端口取：构造期 createPlayerSettings(data, emit) 作为 context.settings
   - id: rel.framework.settings-event
     from: infra.framework.context.settings
     to: app.plugins.diagnostics.player-info

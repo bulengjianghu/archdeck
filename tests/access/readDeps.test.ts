@@ -248,7 +248,7 @@ describe('K1 implements 证据（ADR-0022）', () => {
       { name: 'Port', clause: 'implements' },
       { name: 'Other', clause: 'implements' },
     ])
-    expect(def.inherits).toEqual([{ name: '*', clause: 'extends' }])
+    expect(def.inherits).toEqual([{ name: '*', clause: 'extends', local: 'Def' }])
     const exportsOf = () => [
       { name: 'Base', kind: 'class', from: 'src/base.ts' },
       { name: 'Port', kind: 'interface', from: 'src/port.ts' },
@@ -259,6 +259,67 @@ describe('K1 implements 证据（ADR-0022）', () => {
     expect(t.find(x => x.to === 'src/port.ts')!.inherits).toEqual([
       { name: 'Port', clause: 'implements', decl: 'interface' },
       { name: 'Other', clause: 'implements', decl: 'interface' },
+    ])
+  })
+
+  it('K13 收窄（T4）：new 错误类（Error* / *Error / *Exception）是构造错误值——不是组装也不是交互使用；同时有其他用法的照常记', () => {
+    const [imp] = parseImports(
+      'm.ts',
+      [
+        "import { ErrorBase, InvariantError, IllegalStateException, Loader, MyError } from './e'",
+        'new ErrorBase(1); new InvariantError(); new IllegalStateException()',
+        'new Loader()',
+        'new MyError(); MyError.wrap(1)',
+      ].join('\n'),
+    )
+    const t = importTargetKinds(imp, 'src/e.ts', () =>
+      ['ErrorBase', 'InvariantError', 'IllegalStateException', 'Loader', 'MyError'].map(name => ({ name, kind: 'class' })),
+    )
+    expect(t).toEqual([
+      {
+        to: 'src/e.ts',
+        kind: 'value',
+        names: ['ErrorBase', 'InvariantError', 'IllegalStateException', 'Loader', 'MyError'],
+        uses: true,
+        invokes: true,
+        invokeKinds: ['call', 'new'],
+      },
+    ])
+    const [only] = parseImports('m.ts', ["import { ErrorBase } from './e'", 'throw new ErrorBase(1)'].join('\n'))
+    expect(importTargetKinds(only, 'src/e.ts', () => [{ name: 'ErrorBase', kind: 'class' }])).toEqual([
+      { to: 'src/e.ts', kind: 'value', names: ['ErrorBase'], uses: true },
+    ])
+  })
+
+  it('K13 收窄（T4）：成员调用 X.createY() 只在 X 是工厂对象（*Factory / *factory）时算工厂；共享单例上的 createTask 是调用', () => {
+    const [imp] = parseImports('s.ts', ["import { muFactory, sharedTimer } from './x'", 'muFactory.createMu(k)', 'sharedTimer.createTask(fn)'].join('\n'))
+    expect(imp.forms).toEqual([
+      { name: 'muFactory', forms: ['factory'] },
+      { name: 'sharedTimer', forms: ['call'] },
+    ])
+  })
+
+  it('K12（T2 裁决 3）：默认导入的 extends 解析到目标文件的默认导出——名字取本地名、声明种类随默认导出（再导出追到声明文件）；命名空间导入仍记 *', () => {
+    const [def, ns] = parseImports(
+      'a.ts',
+      ["import Base from './base'", "import * as N from './n'", 'class A extends Base {}', 'class B extends N.X {}'].join('\n'),
+    )
+    const exportsOf = (f: string) => (f === 'src/base.ts' ? [{ name: 'default', kind: 'default', from: 'src/real-base.ts' }] : [])
+    expect(importTargetKinds(def, 'src/base.ts', exportsOf)).toEqual([
+      {
+        to: 'src/base.ts',
+        kind: 'value',
+        heritage: true,
+        uses: true,
+        invokes: true,
+        invokeKinds: ['extends'],
+        inherits: [{ name: 'Base', clause: 'extends', decl: 'default' }],
+      },
+    ])
+    expect(importTargetKinds(ns, 'src/n.ts', exportsOf)[0].inherits).toEqual([{ name: '*', clause: 'extends' }])
+    // 默认导出是类（`export { Cls as default }`）时声明种类为 class
+    expect(importTargetKinds(def, 'src/base.ts', () => [{ name: 'default', kind: 'class' }])[0].inherits).toEqual([
+      { name: 'Base', clause: 'extends', decl: 'class' },
     ])
   })
 

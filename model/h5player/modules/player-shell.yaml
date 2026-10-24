@@ -325,11 +325,6 @@ relations:
     to: app.solution
     type: commands
     description: Player 对外 API 交给 Solution：Destroy 后置 Hook 中 dispose Solution。
-  - id: rel.player-shell.api-mus
-    from: infra.player-index.player-api
-    to: infra.mus
-    type: commands
-    description: Player 对外 API 交给 MUs 媒体单元：useMediaPlugin 经 muFactory 把外部 MediaPlugin 包装成插件 MU；Destroy 时销毁 video 元素池 / 备用元素。
   - id: rel.player-shell.stats-domain
     from: infra.player-index.stats
     to: domain.models
@@ -348,12 +343,6 @@ relations:
     description: 模型能力访问向领域模型取：调用领域模型的 assert* / has*Capability 能力断言，收窄为 FrameModel / MseModel / FhlsModel / VideoPlayModel 等。
 
   # ── Bootstrap 内部 ──
-  - id: rel.player-shell.runtime-model-creators
-    from: infra.bootstrap.player-runtime
-    to: infra.bootstrap.model-creators
-    type: queries
-    interface: if.bootstrap.buildModelCreators
-    description: 运行时装配向模型创建器表取：构造 Context 后生成创建器表并 configureCreators 到 ModelRegistry。
   # ── Bootstrap 出边 ──
   - id: rel.player-shell.runtime-framework
     from: infra.bootstrap.player-runtime
@@ -375,22 +364,6 @@ relations:
     to: domain.models
     type: commands
     description: 运行时装配交给领域模型：经单例创建器构造 PlaybackState 与 Statistic 单例（注入 DomainEventPublisher）。
-  - id: rel.player-shell.runtime-mus
-    from: infra.bootstrap.player-runtime
-    to: infra.mus
-    type: commands
-    description: 运行时装配交给 MUs 媒体单元：创建 keepLastFrame video 元素池与备用 video 元素并挂到 Context。
-  - id: rel.player-shell.model-creators-domain
-    from: infra.bootstrap.model-creators
-    to: domain.models
-    type: commands
-    payload: ds.StreamModelCreatorOptions
-    description: 模型创建器表交给领域模型：构造 FlvStreamModel / Mp4StreamModel / HlsModel 与 FrameModel / MseModel / FhlsModel / VideoPlayModel。
-  - id: rel.player-shell.model-creators-mus
-    from: infra.bootstrap.model-creators
-    to: infra.mus
-    type: commands
-    description: 模型创建器表交给 MUs 媒体单元：Vcs 方案的播放模型 VcsModel 位于渲染 MU 目录下，由此构造。
   - id: rel.player-shell.model-creators-framework
     from: infra.bootstrap.model-creators
     to: infra.framework
@@ -407,11 +380,6 @@ relations:
     to: app.registry
     type: commands
     description: Solution 装配交给方案注册表：注册默认 Descriptor；适配 getLoadDescriptor / getSolutionDescriptor；创建 FragmentMounter 并代理 mount / unmount。
-  - id: rel.player-shell.solution-bootstrap-factories
-    from: infra.bootstrap.solution-bootstrap
-    to: app.factories
-    type: commands
-    description: Solution 装配交给三段工厂：按 Descriptor 创建 Load / Play 工厂（可带腿作用域），直接 new ProcessFactory。
   - id: rel.player-shell.solution-bootstrap-framework
     from: infra.bootstrap.solution-bootstrap
     to: infra.framework
@@ -445,17 +413,6 @@ relations:
     payload: ds.ServiceWorkerMessage
     description: SW 脚本 segmentProcessor 交给 Service Worker 注册与消息协议：拦下匹配的 fetch 后经 postMessage call 页面取 m3u8 / ts / 密钥应答。
   # ── Workers 出边 ──
-  - id: rel.player-shell.worker-task-framework
-    from: infra.workers.worker-task
-    to: infra.framework
-    type: commands
-    description: Dedicated Worker 任务通道交给 Framework 机制内核：Worker 任务通道 new WorkerMessageBridge 作线程内 RPC 桥
-  - id: rel.player-shell.worker-task-mus
-    from: infra.workers.worker-task
-    to: infra.mus
-    type: commands
-    mode: async
-    description: Dedicated Worker 任务通道交给 MUs 媒体单元：worker 入口注入 WasmVideoDecodeTask（继承 WorkerTaskBase），经桥接受主线程解码 MU 的 call。
   - id: rel.player-shell.sw-channel-framework
     from: infra.workers.sw-channel
     to: infra.framework

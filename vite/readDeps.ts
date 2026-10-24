@@ -45,7 +45,8 @@ export interface ParsedImport {
   /** 被引用、但从没被调用的导入名（不按名称穿透的导入为 '*'）：只作为成员读取的基（`X.a`、`X[k]`）记 member，其余（读变量、作为值交出）记 bare（K1：交互使用的判定） */
   reads?: { name: string; how: RefKind }[]
   /** 类声明继承子句引用的导入名及子句种类（K5c、K12：implements 还是 extends）；默认或命名空间导入为 `*` */
-  inherits?: { name: string; clause: HeritageClause }[]
+  /** 继承子句引用的导入名与子句种类；不按名称穿透的导入记 '*'，其中默认导入另记本地名 local（K12：按默认导出解析声明种类） */
+  inherits?: { name: string; clause: HeritageClause; local?: string }[]
   /** 在值位置的使用方式（K13 组装使用、K7 的口径）：导入名 → 出现过的方式；不按名称穿透的导入为 `*` */
   forms?: { name: string; forms: UseForm[] }[]
 }
@@ -62,6 +63,8 @@ export type UseForm = 'call' | 'new' | 'extends' | 'factory' | 'register' | 'pas
 
 /** K13：工厂函数的命名（T0 裁决 6） */
 export const FACTORY_NAME = /^(create|make|build)[A-Z]|(Factory|factory)$/
+/** K13 收窄（T4）：成员调用上的工厂对象名 */
+const FACTORY_OBJECT = /(Factory|factory)$/
 /** K13：容器注册调用的命名（T0 裁决 6） */
 export const REGISTER_NAME = /^(register\w*|provide|bind|use)$/
 
@@ -116,7 +119,7 @@ function calleeName(e: ts.Expression): string | undefined {
  * 标识符在值位置的引用方式（K1）：沿成员访问链上溯，链顶被调用为 invoke，链非空为 member，否则 bare；extends 子句为 invoke。
  * 另给出使用方式（UseForm，K13）。
  */
-function refUse(n: ts.Identifier): { how: RefKind; form: UseForm } {
+function refUse(n: ts.Identifier, namespaces: ReadonlySet<string> = new Set()): { how: RefKind; form: UseForm } {
   let top: ts.Node = n
   while (
     (ts.isPropertyAccessExpression(top.parent) || ts.isElementAccessExpression(top.parent) || ts.isNonNullExpression(top.parent)) &&
@@ -124,7 +127,13 @@ function refUse(n: ts.Identifier): { how: RefKind; form: UseForm } {
   )
     top = top.parent
   const q = top.parent
-  if (ts.isCallExpression(q) && q.expression === top) return { how: 'invoke', form: FACTORY_NAME.test(calleeName(q.expression) ?? '') ? 'factory' : 'call' }
+  // K13 收窄（T4）：成员调用 `X.createY()` 只在 X 是命名空间导入（调的就是导出的工厂函数）或本身是工厂对象（名字以 Factory / factory 结尾，
+  // 如 muFactory.createMu）时算工厂；共享单例上的 `sharedTimer.createTask()` 是普通调用
+  if (ts.isCallExpression(q) && q.expression === top)
+    return {
+      how: 'invoke',
+      form: FACTORY_NAME.test(calleeName(q.expression) ?? '') && (top === n || namespaces.has(n.text) || FACTORY_OBJECT.test(n.text)) ? 'factory' : 'call',
+    }
   if (ts.isNewExpression(q) && q.expression === top) return { how: 'invoke', form: 'new' }
   if (ts.isTaggedTemplateExpression(q) && q.tag === top) return { how: 'invoke', form: 'call' }
   if (ts.isExpressionWithTypeArguments(q) && ts.isHeritageClause(q.parent) && q.parent.token === ts.SyntaxKind.ExtendsKeyword)
@@ -139,6 +148,13 @@ function refUse(n: ts.Identifier): { how: RefKind; form: UseForm } {
 /** K1：在值的位置被引用的标识符、最强的引用方式与出现过的使用方式（不含导入声明、类型位置、属性名、本地再导出 export { x } 与 export default x、instanceof 右侧——只引类不调用） */
 function valueRefs(sf: ts.SourceFile): Map<string, { how: RefKind; forms: Set<UseForm> }> {
   const out = new Map<string, { how: RefKind; forms: Set<UseForm> }>()
+  const namespaces = new Set(
+    sf.statements.flatMap(st =>
+      ts.isImportDeclaration(st) && st.importClause?.namedBindings && ts.isNamespaceImport(st.importClause.namedBindings)
+        ? [st.importClause.namedBindings.name.text]
+        : [],
+    ),
+  )
   const visit = (n: ts.Node) => {
     // 本地再导出 `export { x }`、`export default x` 只是转出，不是使用
     if (ts.isImportDeclaration(n) || ts.isExportSpecifier(n) || (ts.isExportAssignment(n) && ts.isIdentifier(n.expression))) return
@@ -150,7 +166,7 @@ function valueRefs(sf: ts.SourceFile): Map<string, { how: RefKind; forms: Set<Us
         (ts.isQualifiedName(p) && p.right === n) ||
         (ts.isBinaryExpression(p) && p.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword && p.right === n)
       if (!isName && !inTypePosition(n)) {
-        const use = refUse(n)
+        const use = refUse(n, namespaces)
         const hit = out.get(n.text)
         if (hit) {
           hit.how = stronger(hit.how, use.how)
@@ -215,12 +231,14 @@ export function parseImports(
         ...((clause?.name && inHeritage.has(clause.name.text)) || (ns && inHeritage.has(ns)) ? ['*'] : []),
       ]
       // K5c、K12：继承子句的种类，按导入名记
-      const inherits: { name: string; clause: HeritageClause }[] = []
+      const inherits: { name: string; clause: HeritageClause; local?: string }[] = []
       if (names.length) {
         for (const e of named!) for (const c of inHeritage.get(e.name.text) ?? []) inherits.push({ name: (e.propertyName ?? e.name).text, clause: c })
-      } else
-        for (const l of [clause?.name?.text, ns])
-          for (const c of (l && inHeritage.get(l)) || []) if (!inherits.some(x => x.clause === c)) inherits.push({ name: '*', clause: c })
+      } else {
+        // K12：默认导入的继承记本地名，由 importTargetKinds 按目标文件的默认导出解析声明种类
+        for (const c of (clause?.name && inHeritage.get(clause.name.text)) || []) inherits.push({ name: '*', clause: c, local: clause!.name!.text })
+        for (const c of (ns && inHeritage.get(ns)) || []) if (!inherits.some(x => x.clause === c)) inherits.push({ name: '*', clause: c })
+      }
       // 只在类型位置出现、或只转出的值导入名不算引用了实现（K1）；副作用导入（没有导入子句）照常算
       const locals: [string, string][] = clause
         ? [
@@ -415,6 +433,9 @@ function pureRead(read: { how: RefKind } | undefined, sym: { kind?: string; call
   return !!sym && !sym.callable && !['function', 'class', 'default', 'reexport', 'namespace'].includes(sym.kind ?? '')
 }
 
+/** K13 收窄：错误类的名字——new 它是构造错误值（查询），不是组装 */
+const ERROR_CLASS = /^Error|(Error|Exception)$/
+
 /** 数据类型的声明：interface、type 别名、枚举——只引它们不算使用实现 */
 const DATA_DECL = new Set(['interface', 'type', 'enum'])
 
@@ -434,25 +455,33 @@ export function importTargetKinds(
     reexport?: true
     inert?: readonly string[]
     reads?: readonly { name: string; how: RefKind }[]
-    inherits?: readonly { name: string; clause: HeritageClause }[]
+    inherits?: readonly { name: string; clause: HeritageClause; local?: string }[]
     forms?: readonly { name: string; forms: readonly UseForm[] }[]
   },
   via: string,
   exportsOf: ExportsOf,
 ): ImportTarget[] {
   const readOf = (n: string) => imp.reads?.find(r => r.name === n)
-  /** K1：一个名字的交互使用种类；register 只在交出的是函数、类（或不按名称穿透的导入）时算组装，否则按交出 */
+  /**
+   * K1：一个名字的交互使用种类；register 只在交出的是函数、类（或不按名称穿透的导入）时算组装，否则按交出；
+   * K13 收窄（T4）：new 的是错误类（名字以 Error 开头、以 Error / Exception 结尾）是构造错误值——不是组装，也不是交互（抛错不是交互，T2 裁决 3），不记种类
+   */
+  const formsOf = (n: string) => (imp.forms?.find(f => f.name === n)?.forms ?? []).filter(f => !(f === 'new' && ERROR_CLASS.test(n)))
   const kindsOf = (n: string, sym?: { kind?: string; callable?: true }) =>
-    (imp.forms?.find(f => f.name === n)?.forms ?? []).map(f =>
-      f === 'register' && sym && !sym.callable && !['function', 'class', 'default'].includes(sym.kind ?? '') ? 'call' : INVOKE_OF[f],
-    )
+    formsOf(n).map(f => (f === 'register' && sym && !sym.callable && !['function', 'class', 'default'].includes(sym.kind ?? '') ? 'call' : INVOKE_OF[f]))
+  /** K13 收窄：只 new 了错误类的名字是构造错误值，同纯值读取 */
+  const errorValueOnly = (n: string) => ERROR_CLASS.test(n) && !!imp.forms?.find(f => f.name === n)?.forms.length && !formsOf(n).length
   if (!imp.names.length) {
     const uses = imp.kind === 'value' && !imp.reexport && !imp.inert?.includes('*')
     const invokes = uses && !pureRead(readOf('*'), undefined, true)
     const found = invokes ? [...new Set(kindsOf('*'))].sort() : []
     // 只为副作用的导入、没有记下使用方式的按调用算
     const kinds: InvokeKind[] = invokes && !found.length ? ['call'] : found
-    const inherits = imp.inherits?.filter(h => h.name === '*') ?? []
+    // K12：默认导入的继承解析到目标文件的默认导出（再导出追到声明文件）：名字取本地名、声明种类取默认导出的种类；命名空间导入仍记 '*'
+    const def = imp.inherits?.some(h => h.local) ? exportsOf(via).find(s => s.name === 'default') : undefined
+    const inherits = (imp.inherits?.filter(h => h.name === '*') ?? []).map(({ local, ...h }) =>
+      local ? { ...h, name: local, decl: def?.kind ?? 'default' } : h,
+    )
     return [
       {
         to: via,
@@ -461,7 +490,7 @@ export function importTargetKinds(
         ...(uses ? { uses: true as const } : {}),
         ...(invokes ? { invokes: true as const } : {}),
         ...(kinds.length ? { invokeKinds: kinds } : {}),
-        ...(inherits.length ? { inherits: inherits.map(h => ({ ...h })) } : {}),
+        ...(inherits.length ? { inherits } : {}),
       },
     ]
   }
@@ -478,7 +507,7 @@ export function importTargetKinds(
     for (const h of imp.inherits ?? []) if (h.name === n) (hit.inherits ??= []).push({ ...h, ...(sym?.kind ? { decl: sym.kind } : {}) })
     if (kind === 'value' && !imp.reexport && !imp.inert?.includes(n) && !DATA_DECL.has(sym?.kind ?? '')) {
       hit.uses = true
-      if (!pureRead(readOf(n), sym, false)) {
+      if (!pureRead(readOf(n), sym, false) && !errorValueOnly(n)) {
         hit.invokes = true
         const kinds = kindsOf(n, sym)
         // 交出函数、类、组件却没有记下使用方式（如只在模板里出现）按调用算

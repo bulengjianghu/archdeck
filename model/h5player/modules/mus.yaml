@@ -577,41 +577,6 @@ relations:
     description: 拉模式：video 元素经 Service Worker 原生拉取 TS 分片（不经 output 直推）
 
   # ═════════ 区域内依赖 / 调用 ═════════
-  - id: rel.mus.factory-loader
-    from: infra.mus.factory
-    to: infra.mus.loader
-    type: commands
-    description: MU 工厂交给加载器（Load 段首）：createMu 按 MuKey new 出 HTTP / MP4 / HLS 加载 MU
-  - id: rel.mus.factory-demuxer
-    from: infra.mus.factory
-    to: infra.mus.demuxer
-    type: commands
-    description: MU 工厂交给解封装器：createMu 按 MuKey new 出 FLV / MP4 / TS 解封装 MU
-  - id: rel.mus.factory-corrector
-    from: infra.mus.factory
-    to: infra.mus.corrector
-    type: commands
-    description: MU 工厂交给校正器（Process 段）：createMu 按 MuKey new 出 PTS / NALU / 帧信息校正 MU
-  - id: rel.mus.factory-plugin
-    from: infra.mus.factory
-    to: infra.mus.process-plugin
-    type: commands
-    description: MU 工厂交给外部插件节点（含解密）：createMu 遇到 MuType.Plugin 一律 new MuPluginWrapper 包装为插件节点
-  - id: rel.mus.factory-buffer
-    from: infra.mus.factory
-    to: infra.mus.buffer
-    type: commands
-    description: MU 工厂交给缓冲：createMu 按 MuKey new 出解封装后 / 解码后 / Fhls 等缓冲 MU
-  - id: rel.mus.factory-remuxer
-    from: infra.mus.factory
-    to: infra.mus.remuxer
-    type: commands
-    description: MU 工厂交给重封装器：createMu 按 MuKey new 出 MP4 / 帧 / Fhls 重封装 MU
-  - id: rel.mus.factory-decoder
-    from: infra.mus.factory
-    to: infra.mus.decoder
-    type: commands
-    description: MU 工厂交给解码器：createMu 按 MuKey new 出 WebCodecs / Wasm 音视频解码 MU
   - id: rel.mus.factory-render
     from: infra.mus.factory
     to: infra.mus.render
@@ -701,12 +666,6 @@ relations:
     description: Wasm 视频解码交给 Framework 机制内核：经 framework 的 WorkerMessageBridge 与解码 Worker 收发消息
 
   # ═════════ 出边：infra.workers ═════════
-  - id: rel.mus.fhlsremuxed-workers
-    from: infra.mus.buffer.fhls-remuxed
-    to: infra.workers
-    type: commands
-    mode: async
-    description: Fhls 分片缓冲交给 Worker 基础设施：初始化 FhlsService / VodFhlsService（Service Worker 消息通道）与 segmentProcessor 脚本
 
   # ═════════ 出边：domain ═════════
   - id: rel.mus.demuxer-algorithms

@@ -688,51 +688,16 @@ relations:
     to: app.factories.load
     type: commands
     description: 默认方案描述符表交给加载段工厂：默认加载描述符登记 Flv / Hls / Mp4 加载段工厂，组段时由注册表 new 出工厂（registry/index.ts）
-  - id: rel.registry.default-factory-play
-    from: app.registry.default-descriptors
-    to: app.factories.play
-    type: commands
-    description: 默认方案描述符表交给播放段工厂：方案描述符登记 6 个播放段工厂，组段时由注册表 new 出工厂
   - id: rel.registry.default-strategy-load
     from: app.registry.default-descriptors
     to: app.strategies.load
     type: commands
     description: '默认方案描述符表交给加载段驱动：默认加载片段登记 Flv / Mp4 / Hls 点播 / Hls 直播加载策略的构造，挂载时 new 出策略（registry/index.ts:419 起）'
-  - id: rel.registry.default-strategy-play-base
-    from: app.registry.default-descriptors
-    to: app.strategies.play-base
-    type: commands
-    description: 默认方案描述符表交给播放策略基座与 Video：Video 主片段与 Vcs 点播主片段登记播放策略类，挂载时 new 出策略
-  - id: rel.registry.default-strategy-live-frame
-    from: app.registry.default-descriptors
-    to: app.strategies.live-frame
-    type: commands
-    description: 默认方案描述符表让直播帧策略（Wcs / Wasm）接手处理
-  - id: rel.registry.default-strategy-live-vcs
-    from: app.registry.default-descriptors
-    to: app.strategies.live-vcs
-    type: commands
-    description: 默认方案描述符表让 Vcs 直播策略接手处理
-  - id: rel.registry.default-strategy-vod-frame
-    from: app.registry.default-descriptors
-    to: app.strategies.vod-frame
-    type: commands
-    description: 默认方案描述符表让点播帧策略（Wcs / Wasm）接手处理
-  - id: rel.registry.default-strategy-vod-mse
-    from: app.registry.default-descriptors
-    to: app.strategies.vod-mse
-    type: commands
-    description: 默认方案描述符表让点播 MSE 策略接手处理
   - id: rel.registry.default-strategy-vod-fhls
     from: app.registry.default-descriptors
     to: app.strategies.vod-fhls
     type: commands
     description: 默认方案描述符表交给 Fhls 点播策略：Fhls 点播主片段登记分片 / 连续两种 Fhls 点播策略类，挂载时 new 出策略
-  - id: rel.registry.default-plugins
-    from: app.registry.default-descriptors
-    to: app.plugins
-    type: commands
-    description: 默认方案描述符表交给横向用例插件：片段清单登记横向插件类（Mse / Fhls 直播缓冲、自适应 / 供需感知 / 融合缓冲、网络监测、系统负载、运行监测、帧快照、统计），挂载时 new 出插件
   - id: rel.registry.mounter-planner
     from: app.registry.fragment-mounter
     to: app.registry.fragment-planner
@@ -747,46 +712,11 @@ relations:
     description: 片段挂载器交给 Framework 机制内核：PluginController.usePlugin / useSolutionPlugin / removePlugin 挂卸片段插件；读 Context.data.activeLeg
 
   # ── app.factories ──
-  - id: rel.factories.load-base
-    from: app.factories.load
-    to: app.factories.base
-    type: commands
-    description: 加载段工厂交给段工厂基类：继承 BaseFactory：基类的 createPipeline / updatePipeline 模板方法回调本工厂的 diff 与 createController，生成本段的 MU 增删
-  - id: rel.factories.process-base
-    from: app.factories.process
-    to: app.factories.base
-    type: queries
-    description: 处理段工厂向段工厂基类取：继承 BaseFactory：基类模板方法回调本工厂的 diff 与 createController，生成解密等处理 MU
-  - id: rel.factories.play-base
-    from: app.factories.play
-    to: app.factories.base
-    type: queries
-    description: 播放段工厂向段工厂基类取：继承 BasePlayFactory / BaseFactory：基类模板方法回调本工厂的 diff 与 createController，Fhls 等经 super.createPipeline 组段
   - id: rel.factories.base-framework
     from: app.factories.base
     to: infra.framework
     type: commands
     description: 段工厂基类交给 Framework 机制内核：PipelineController.updatePipeline / getSegmentNodes / getNode / catchUpRestart；向 MU 发 Stop / Destroy
-  - id: rel.factories.load-mus
-    from: app.factories.load
-    to: infra.mus
-    type: commands
-    description: 加载段工厂交给 MUs 媒体单元：经 muFactory.createMu 创建 Loader / Demuxer / DemuxedBuffer，描述加载段 MU 图
-  - id: rel.factories.process-mus
-    from: app.factories.process
-    to: infra.mus
-    type: commands
-    description: 处理段工厂交给 MUs 媒体单元：经 muFactory.createMu 创建校正类 MU 与插件型 MU
-  - id: rel.factories.play-mus
-    from: app.factories.play
-    to: infra.mus
-    type: commands
-    description: 播放段工厂交给 MUs 媒体单元：经 muFactory.createMu 创建缓冲 / 解码 / 重封装 / 渲染 MU，描述播放段 MU 图
-  - id: rel.factories.process-third-party
-    from: app.factories.process
-    to: infra.third-party
-    type: commands
-    description: 处理段工厂交给三方库与外部媒体插件：直接 new 直播 / 点播解密媒体插件（mediaPlugins/pluginDecrypt、pluginVodDecrypt）
   - id: rel.factories.play-player-index
     from: app.factories.play
     to: infra.player-index
@@ -830,16 +760,6 @@ relations:
     mode: async
     interface: if.solution.playStageStart
     description: 加载基座与开闸交给播放段启动协调者：下一阶段就绪后以 'facts' 原因调启动协调者（流信息线触发入口）
-  - id: rel.strategies.vod-load-load-base
-    from: app.strategies.load.vod
-    to: app.strategies.load.base
-    type: commands
-    description: 点播拉片交给加载基座与开闸：点播加载基类继承 PluginBaseLoadStrategy，经 super 调用基类的 init 与销毁
-  - id: rel.strategies.hls-load-vod-load
-    from: app.strategies.load.hls
-    to: app.strategies.load.vod
-    type: commands
-    description: HLS 加载交给点播拉片：策略继承点播加载基类，经 super 调用 init、currentPts、collectStreamInfoFacts 与销毁
   - id: rel.strategies.load-factory-load
     from: app.strategies.load
     to: app.factories.load
@@ -876,11 +796,6 @@ relations:
     type: commands
     payload: ds.PlayController
     description: 播放策略基座与 Video 交给播放段工厂：经方案控制器向播放段 MU 发 Load / Play / Seek
-  - id: rel.strategies.live-frame-play-base
-    from: app.strategies.live-frame
-    to: app.strategies.play-base
-    type: commands
-    description: 直播帧策略（Wcs / Wasm）交给播放策略基座与 Video：直播帧策略继承 PluginBasePlayStrategy，经 super 调用基类的 init 与销毁
   - id: rel.strategies.live-frame-factory-play
     from: app.strategies.live-frame
     to: app.factories.play
@@ -908,11 +823,6 @@ relations:
     to: infra.player-index
     type: queries
     description: 直播帧策略（Wcs / Wasm）向 PlayerIndex 取：直播帧策略调用 requireFrameModel / requireFrameBufferModel / requireRenderTimelineReadModel 取模型能力
-  - id: rel.strategies.live-vcs-play-base
-    from: app.strategies.live-vcs
-    to: app.strategies.play-base
-    type: commands
-    description: Vcs 直播策略交给播放策略基座与 Video：继承 PluginBasePlayStrategy，经 super 调用基类的 init 与销毁
   - id: rel.strategies.live-vcs-domain-services
     from: app.strategies.live-vcs
     to: domain.services
@@ -923,11 +833,6 @@ relations:
     to: app.strategies.live-vcs
     type: notifies
     description: 通知缓冲 / 状态 / 渲染事件（策略订阅）；策略派发送帧与丢音频动作
-  - id: rel.strategies.vod-frame-play-base
-    from: app.strategies.vod-frame
-    to: app.strategies.play-base
-    type: commands
-    description: 点播帧策略（Wcs / Wasm）交给播放策略基座与 Video：点播帧策略继承 PluginBasePlayStrategy，经 super 调用基类的 init、命令 Hook 与销毁
   - id: rel.strategies.vod-frame-vod-load
     from: app.strategies.vod-frame
     to: app.strategies.load.vod
@@ -951,11 +856,6 @@ relations:
     to: infra.player-index
     type: queries
     description: 点播帧策略（Wcs / Wasm）向 PlayerIndex 取：点播帧策略调用 requireFrameModel 取帧模型
-  - id: rel.strategies.vod-mse-play-base
-    from: app.strategies.vod-mse
-    to: app.strategies.play-base
-    type: commands
-    description: 点播 MSE 策略让播放策略基座与 Video 接手处理
   - id: rel.strategies.vod-mse-vod-load
     from: app.strategies.vod-mse
     to: app.strategies.load.vod
@@ -989,11 +889,6 @@ relations:
     to: infra.player-index
     type: queries
     description: 点播 MSE 策略向 PlayerIndex 取：调用 requireMseModel / requireFrameBufferModel 取 MSE 播放模型
-  - id: rel.strategies.vod-fhls-play-base
-    from: app.strategies.vod-fhls
-    to: app.strategies.play-base
-    type: commands
-    description: Fhls 点播策略让播放策略基座与 Video 接手处理
   - id: rel.strategies.vod-fhls-vod-load
     from: app.strategies.vod-fhls
     to: app.strategies.load.vod

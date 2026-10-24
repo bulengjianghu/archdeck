@@ -369,11 +369,6 @@ relations:
   # ── Domain.models ──
   - { id: rel.sd.ps-publish, from: domain.models.playback-state, to: domain.ports, type: notifies, interface: if.ports.DomainEventPublisher, payload: ds.DomainEvent, description: 叠加进出（OverlayEntered / OverlayExited）同步发布领域事件 }
   - { id: rel.sd.stat-publish, from: domain.models.statistic, to: domain.ports, type: notifies, interface: if.ports.DomainEventPublisher, payload: ds.DomainEvent, description: startNewSlice 发布 StatisticSliceStarted }
-  - { id: rel.sd.ps-base, from: domain.models.playback-state, to: domain.models.base, type: commands, description: PlaybackState 播放状态聚合交给聚合基类：播放状态模型继承 ModelBase，违例时抛 InvariantError }
-  - { id: rel.sd.stat-base, from: domain.models.statistic, to: domain.models.base, type: commands, description: Statistic 统计聚合交给聚合基类：统计模型继承 ModelBase，违例时抛 InvariantError }
-  - { id: rel.sd.stream-base, from: domain.models.stream, to: domain.models.base, type: commands, description: 流模型交给聚合基类：三种流模型继承 ModelBase，违例时抛 InvariantError }
-  - { id: rel.sd.play-base, from: domain.models.play, to: domain.models.base, type: commands, description: 播放模型交给聚合基类：继承 ModelBase，违例时抛 InvariantError }
-  - { id: rel.sd.comp-base, from: domain.models.components, to: domain.models.base, type: commands, description: 模型组件交给聚合基类：帧台账与渲染时间轴继承 ModelBase，违例时抛 InvariantError }
   - { id: rel.sd.ps-status-map, from: domain.models.playback-state, to: domain.rules.status-mapping, type: queries, interface: if.rules.status-mapping.mappingPlayerStatus, description: PlaybackState 播放状态聚合向状态映射规则取：addMu 时按基态推 MU 状态 }
   - { id: rel.sd.stream-comp, from: domain.models.stream, to: domain.models.components, type: commands, payload: ds.StreamFactsCore, description: 流模型交给模型组件：把公共流事实委托给 StreamFactsCore }
   - { id: rel.sd.stream-hls-policy, from: domain.models.stream, to: domain.services.hls-live, type: queries, interface: if.services.hls-live.getHlsLiveBufferPolicy, description: 流模型向 HLS 直播与清单节律取：HlsModel 按清单分片时长与目标延迟推直播缓冲策略 }

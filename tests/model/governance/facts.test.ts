@@ -266,6 +266,16 @@ describe('K12 子类事实、K13 组装事实与组装根（ADR-0029、ADR-0030�
     expect(facts.map(f => [f.key, f.files.length])).toEqual([['ui.view->core.impl', 1]])
   })
 
+  it('K12（T2 裁决 3）：默认导入的 extends（解析出名字与声明种类）算子类事实；只有 * 的（命名空间导入）不算', () => {
+    const { index, own } = setup()
+    const deps = [
+      { ...dep('src/ui/view/a.ts', 'src/core/impl/i.ts'), inherits: [{ name: 'BaseView', clause: 'extends' as const, decl: 'default' }], invokeKinds: ['extends' as const] },
+      { ...dep('src/ui/store/s.ts', 'src/core/util/u.ts'), inherits: [{ name: '*', clause: 'extends' as const }], invokeKinds: ['extends' as const] },
+    ]
+    const facts = heritageFacts(index, liftDeps(index, own, deps).moduleDeps)
+    expect(facts.map(f => f.key)).toEqual(['ui.view->core.impl'])
+  })
+
   it('K13：new、工厂、容器注册 → 组装事实，按模块对聚合；组装根 = 组装图入度 0、出度 ≥ 1', () => {
     const { index, own } = setup()
     const deps = [
