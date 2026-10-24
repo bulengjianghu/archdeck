@@ -17,7 +17,20 @@ import { moduleNodes, replayNodes } from './canvas/nodes'
 import { jumpsOf } from './routing'
 import type { CanvasEdge, CanvasInput, CanvasScene } from './canvas/types'
 
-export type { CanvasEdge, CanvasInput, CanvasNode, CanvasNodeType, CanvasScene, EdgeArrow, FactState, NodeData, RouteEdgeData } from './canvas/types'
+export type {
+  CanvasEdge,
+  CanvasInput,
+  CanvasNode,
+  CanvasNodeType,
+  CanvasScene,
+  EdgeArrow,
+  FactState,
+  NodeData,
+  NodePorts,
+  PortMark,
+  RouteEdgeData,
+} from './canvas/types'
+export { PORT_MERGE } from './canvas/nodes'
 export { EDGE_Z, routeMidpoint } from './canvas/edges'
 export { JUMP_RADIUS } from './routing'
 

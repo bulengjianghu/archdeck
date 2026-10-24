@@ -12,6 +12,7 @@ import type {
   ModelIndex,
   ModuleEntity,
   NodeHeat,
+  PortPanel,
   ScenarioLevelView,
   ViewEdge,
 } from '@/model'
@@ -60,6 +61,25 @@ export interface NodeData {
   graphFold?: boolean
   /** J5：热度角标（右下角三档色块）：档位、种类、热度值与次数 */
   heat?: NodeHeat & { kind: HeatKind }
+  /** L13：节点定义的端口记号——画在进边一侧（side）的后半；超过 PORT_MERGE 个时合成一个「端口 ×N」（merged 为端口数） */
+  ports?: NodePorts
+}
+
+/** L13：一个端口记号——接口 ID、名称、实现者数（描述与代码事实的并集） */
+export interface PortMark {
+  id: string
+  name: string
+  implementers: number
+}
+
+export interface NodePorts {
+  side: 'top' | 'left'
+  /** 单独画的端口；合成时为空 */
+  items: PortMark[]
+  /** 合成「端口 ×N」时的端口数 */
+  merged?: number
+  /** 选中的端口（V2） */
+  selected?: string
 }
 
 /** L10：线型表示的事实状态——已证实或没有代码事实（实线）/ 未证实或部分证实（虚线）/ 代码有描述无（点线） */
@@ -167,6 +187,8 @@ export interface CanvasInput {
   facts?: LevelFacts | null
   /** J5：结构视角下开启热度或时间耦合时的本层投影；否则为 null */
   evolution?: LevelEvolution | null
+  /** L13：本层节点（模块 ID）定义的端口；运行视角为 null（不画） */
+  ports?: ReadonlyMap<string, readonly PortPanel[]> | null
 }
 
 export interface CanvasScene {

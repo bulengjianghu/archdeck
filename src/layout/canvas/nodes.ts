@@ -7,7 +7,7 @@ import { SHELF, bandShelfTop, moreChipId, type Box, type PositionedView } from '
 import type { Visibility } from '../stage'
 import type { SceneContext } from './context'
 import { routeMidpoint } from './edges'
-import type { CanvasNode, CanvasNodeType, NodeData } from './types'
+import type { CanvasNode, CanvasNodeType, NodeData, NodePorts } from './types'
 
 const visOf = (ctx: SceneContext, id: string): Visibility => ctx.display?.nodes.get(id) ?? 'show'
 /** 运行视角：按舞台显示（V5、V8、V9）；结构视角：与聚焦对象无关的变淡 */
@@ -125,6 +125,28 @@ function actorNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box): C
   )
 }
 
+/** L13：一个节点的端口超过这么多个时合成一个「端口 ×N」 */
+export const PORT_MERGE = 3
+
+/**
+ * L13：节点的端口记号——画在进边一侧的后半（L11：普通层次自左向右布局时为左边，其余为顶边）；运行视角不画（ports 为空）。
+ * 分层总览只画核心模块的（state 层已按层次筛好）；实现者数为描述与代码事实的并集。
+ */
+function portsOf(ctx: SceneContext, idx: ModelIndex, n: ViewNode): Pick<NodeData, 'ports'> {
+  if (ctx.st) return {}
+  const list = ctx.input.ports?.get(n.moduleId)
+  if (!list?.length) return {}
+  const side = !ctx.layered && n.role !== 'boundary' && ctx.pv.direction === 'RIGHT' ? 'left' : 'top'
+  const sel = ctx.input.selection
+  const selected = sel?.kind === 'port' && list.some(p => p.port === sel.id) ? sel.id : undefined
+  const items = list.map(p => ({ id: p.port, name: idx.interfaces.get(p.port)?.name ?? p.port, implementers: p.implementers.length }))
+  const ports: NodePorts =
+    items.length > PORT_MERGE
+      ? { side, items: [], merged: items.length, ...(selected ? { selected } : {}) }
+      : { side, items, ...(selected ? { selected } : {}) }
+  return { ports }
+}
+
 function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box): CanvasNode[] {
   const sel = ctx.input.selection
   const m = idx.modules.get(n.moduleId)
@@ -141,6 +163,7 @@ function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box): 
     ...heatOf(ctx, n.id),
     ...(n.sharedCount ? { sharedCount: n.sharedCount } : {}),
     ...(n.core ? { core: true } : {}),
+    ...portsOf(ctx, idx, n),
   }
   if (n.role === 'boundary') {
     const path = (idx.pathOf.get(n.moduleId) ?? []).slice(1, -1).map(id => idx.modules.get(id)?.name ?? id)

@@ -5,7 +5,7 @@
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
-import { RULE_LABELS, moduleName, type Violation, type ViolationStatus } from '@/model'
+import { RULE_LABELS, moduleName, unclassifiedRelations, type Issue, type Violation, type ViolationStatus } from '@/model'
 import Section from './Section.vue'
 import FileDepList from './FileDepList.vue'
 import WriteForm from './WriteForm.vue'
@@ -69,6 +69,18 @@ async function acceptShared(id: string) {
   accepting.value = null
   if (!out.ok) acceptError.value = out.error
 }
+// ADR-0029：四类交互与端口——未分类（核心之间，M17）、查询副作用（U13）、端口与端口孤立（U14，当前版本）、子类与组装（K12、K13）
+const unclassified = computed(() => {
+  const idx = desk.index.value
+  if (!idx) return { all: 0, core: 0 }
+  const u = unclassifiedRelations(idx)
+  return { all: u.all.length, core: u.core.length }
+})
+const sideEffects = computed(() => desk.issues.value.filter(i => i.code === 'query.side-effect'))
+const portCount = computed(() => [...(desk.index.value?.interfaces.keys() ?? [])].filter(id => f.portOf(id)?.isPort).length)
+const portProblems = computed(() => f.portProblems.value)
+/** 端口孤立问题对应的端口：问题的出处即接口的声明位置 */
+const portOfIssue = (i: Issue) => [...(desk.index.value?.interfaces.values() ?? [])].find(x => x.src.file === i.file && x.src.line === i.line)?.id
 const liveCycles = computed(() => (r.value?.moduleCycles ?? []).filter(c => !c.tolerated))
 const maxCycle = computed(() => Math.max(0, ...liveCycles.value.map(c => c.members.length)))
 const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c.tolerated).length)
@@ -98,6 +110,20 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
         </dd>
         <dt>未解释的交互</dt>
         <dd>{{ r.undescribed.length }}</dd>
+        <dt>交互分类</dt>
+        <dd data-testid="interaction-health" title="未分类：迁移期的 calls（M17），只确认核心之间的；查询副作用：查询的场景闭包里有委托或通知（U13）">
+          <span :class="{ warn: unclassified.core }">未分类 {{ unclassified.all }}（核心之间 {{ unclassified.core }}）</span> ·
+          <span :class="{ warn: sideEffects.length }">查询副作用 {{ sideEffects.length }}</span>
+        </dd>
+        <dt>端口</dt>
+        <dd data-testid="port-health" title="端口：被 via: port: 引用、或有实现者的接口（K11）；子类与组装是代码事实，不是关系（K12、K13）">
+          {{ portCount }} 个 ·
+          <span :class="{ warn: portProblems.some(i => i.code === 'port.no-implementer') }"
+            >无实现者 {{ portProblems.filter(i => i.code === 'port.no-implementer').length }}</span
+          >
+          · 无使用者 {{ portProblems.filter(i => i.code === 'port.no-user').length }} · 子类 {{ r.subclasses.length }} · 组装 {{ r.assembly.length }}（组装根
+          {{ r.assemblyRoots.length }}）
+        </dd>
         <dt>违规</dt>
         <dd :title="violationTitle">
           <template v-if="r.baseline">
@@ -170,6 +196,24 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
         <li v-if="g.list.length > 30" class="muted">另 {{ g.list.length - 30 }} 条，见 npm run arch -- violations</li>
       </ul>
     </div>
+  </Section>
+
+  <Section
+    v-if="part !== 'summary' && r && (portProblems.length || sideEffects.length)"
+    title="端口与查询副作用"
+    :count="portProblems.length + sideEffects.length"
+  >
+    <ul class="plain" data-testid="port-problems">
+      <li v-for="(i, k) in portProblems" :key="`p${k}`" class="violation" :class="i.severity">
+        <button v-if="portOfIssue(i)" class="link" @click="desk.select({ kind: 'port', id: portOfIssue(i)! })">{{ portOfIssue(i) }}</button>
+        <span class="chip">{{ i.code }}</span>
+        <p class="muted small">{{ i.message }}</p>
+      </li>
+      <li v-for="(i, k) in sideEffects" :key="`q${k}`" class="violation warning">
+        <span class="chip">{{ i.code }}</span>
+        <p class="muted small">{{ i.message }}</p>
+      </li>
+    </ul>
   </Section>
 
   <Section v-if="part !== 'summary' && r && suggestions.length" :title="`疑似共用件 ${suggestions.length} 个`">

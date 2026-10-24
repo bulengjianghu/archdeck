@@ -58,6 +58,7 @@ const scene = computed(() =>
     branchPointId: desk.run.branchPoint.value?.id ?? null,
     facts: desk.facts.level.value,
     evolution: desk.evolution.level.value,
+    ports: desk.facts.portMarks.value,
   }),
 )
 const nodes = computed<Node<NodeData>[]>(() => scene.value.nodes)

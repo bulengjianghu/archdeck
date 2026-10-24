@@ -237,7 +237,8 @@ export function compareSketch(sketch: SketchEntity, target: ModelIndex, opts: Co
     if (!lineageOnly(prev.from, r.from)) fields.push('from')
     if (!lineageOnly(prev.to, r.to)) fields.push('to')
     if (prev.type !== r.type) fields.push('type')
-    for (const f of ['description', 'interface', 'via', 'mode'] as const) if (r[f] !== undefined && !same(r[f], prev[f])) fields.push(f)
+    // X17、X23：机制（via）、同步性与拉取写了才比
+    for (const f of ['description', 'interface', 'via', 'mode', 'pull'] as const) if (r[f] !== undefined && !same(r[f], prev[f])) fields.push(f)
     if (fields.length)
       changes.push({ kind: 'changed', entity: 'relation', id: r.id, name: `${name(r.from)} → ${name(r.to)}`, fields, message: `修改关系 ${name(r.from)} → ${name(r.to)}：${fields.join('、')}`, at: at(`sketch.relations.${i}`) })
   })
@@ -264,6 +265,8 @@ export function compareSketch(sketch: SketchEntity, target: ModelIndex, opts: Co
       const fields: string[] = []
       if (x.owner !== undefined && prev.owner && !lineageOnly(prev.owner, x.owner)) fields.push('owner')
       for (const f of ['name', 'signature', 'description', 'semantics'] as const) if (x[f] !== undefined && !same(x[f], prev[f])) fields.push(f)
+      // X17、X24：端口的实现者（集合，按血缘映射后比）
+      if (x.implementedBy !== undefined && !sameSet(x.implementedBy, (prev.implementedBy ?? []).map(m => mapId(map, m)))) fields.push('implementedBy')
       if (fields.length) changes.push({ kind: 'changed', entity: 'interface', id: x.id, name: x.name, fields, message: `修改接口 ${x.name}：${fields.join('、')}`, at: at(`sketch.interfaces.${i}`) })
     })
     const host = tm && tm !== ROOT_MOUNT ? target.modules.get(tm) : undefined

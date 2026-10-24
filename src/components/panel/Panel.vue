@@ -2,7 +2,7 @@
 /**
  * 属性面板：按选中分派（V2，ADR-0012）。结构视角：选中的对象，无选中时为当前父模块（根层显示系统）；
  * 运行视角：选中步骤 → 步骤面板，选中场景 → 场景面板，其他对象 → 运行信息在上、结构信息折叠在下（V6）。
- * 代码依赖叠加线（K10）→ 代码依赖面板；耦合线（J7）→ 耦合面板。草图画布下（X7，ADR-0025）：换成草图面板。
+ * 代码依赖叠加线（K10）→ 代码依赖面板；耦合线（J7）→ 耦合面板；端口（L13）→ 端口面板（K11）。草图画布下（X7，ADR-0025）：换成草图面板。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -17,6 +17,7 @@ import ActorPanel from './ActorPanel.vue'
 import FilePanel from './FilePanel.vue'
 import DepPanel from './DepPanel.vue'
 import CouplePanel from './CouplePanel.vue'
+import PortPanel from './PortPanel.vue'
 import SketchPanel from '../sketch/SketchPanel.vue'
 
 const desk = useDesk()
@@ -34,6 +35,7 @@ const target = computed(() => {
   if (s?.kind === 'file') return { kind: 'file' as const, id: s.id }
   if (s?.kind === 'dep') return { kind: 'dep' as const, id: s.id }
   if (s?.kind === 'couple') return { kind: 'couple' as const, id: s.id }
+  if (s?.kind === 'port') return { kind: 'port' as const, id: s.id }
   const level = desk.levelId.value
   return level && level !== idx.rootId ? { kind: 'module' as const, id: level } : { kind: 'system' as const, id: idx.rootId }
 })
@@ -61,6 +63,7 @@ const target = computed(() => {
           <RelationPanel v-else-if="target.kind === 'relation'" :id="target.id" :key="`r:${target.id}`" />
           <EdgePanel v-else-if="target.kind === 'edge'" :id="target.id" :key="`e:${target.id}`" />
           <ActorPanel v-else-if="target.kind === 'actor'" :id="target.id" :key="`a:${target.id}`" />
+          <PortPanel v-else-if="target.kind === 'port'" :id="target.id" :key="`p:${target.id}`" />
           <SystemPanel v-else />
         </component>
       </template>

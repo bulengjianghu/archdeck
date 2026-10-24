@@ -559,6 +559,20 @@ describe('X17 两个对比按血缘', () => {
     expect(cur.deviations.map(d => d.key)).toEqual(['field:fe.ui.form'])
   })
 
+  it('X17、X23、X24：相对基线加入机制（via）、拉取与端口实现者（implementedBy）的差异', () => {
+    const ui = seedUi()
+    const r = ui.relations!.find(x => x.id === 'rel.view-list')!
+    r.type = 'commands'
+    r.via = 'channel:http'
+    const c = compareSketch(entity(ui), baseline, { mode: 'baseline' })
+    expect(c.changes.find(x => x.id === 'rel.view-list')!.fields).toEqual(['type', 'via'])
+    const core = seedFromBaseline('core', baseline, { id: 'd1' })
+    core.interfaces = [{ id: 'if.api.get', name: 'get', owner: 'core.api', implementedBy: ['core.store'] }]
+    expect(compareSketch(entity(core), baseline, { mode: 'baseline' }).changes.map(x => [x.id, x.fields])).toEqual([['if.api.get', ['implementedBy']]])
+    core.interfaces = [{ id: 'if.api.get', name: 'get', owner: 'core.api' }]
+    expect(compareSketch(entity(core), baseline, { mode: 'baseline' }).changes).toEqual([])
+  })
+
   it('相对当前版本：按挂载点取同一范围；合并未落实时报缺模块与来源仍在原处；根挂载范围 = 层 + 第二级', () => {
     const set = run({ 'fe.ui': seedUi() }, { op: 'merge', sketch: 'fe.ui', ids: ['fe.ui.view', 'fe.ui.list'], name: 'S', id: 'show' }).design
     const all = design(set)

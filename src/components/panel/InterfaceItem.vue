@@ -10,6 +10,8 @@ const props = defineProps<{ id: string; open?: boolean }>()
 const desk = useDesk()
 const x = computed(() => desk.index.value?.interfaces.get(props.id))
 const owner = computed(() => (x.value?.owner ? desk.index.value?.modules.get(x.value.owner) : undefined))
+/** K11、L13：算端口的接口可打开端口面板 */
+const port = computed(() => desk.facts.portOf(props.id))
 </script>
 
 <template>
@@ -18,6 +20,14 @@ const owner = computed(() => (x.value?.owner ? desk.index.value?.modules.get(x.v
       <span class="name">{{ x.name }}</span>
       <code class="id">{{ x.id }}</code>
       <ChangeBadge entity="interface" :id="x.id" detail />
+      <button
+        v-if="port?.isPort"
+        class="badge port-link"
+        title="打开端口面板：定义 · 实现者 · 使用者（K11）"
+        @click.prevent.stop="desk.select({ kind: 'port', id: x.id })"
+      >
+        端口 · 实现者 {{ port.implementers.length }}
+      </button>
     </summary>
     <div class="body">
       <DesignNote class="inline" :text="x.designNote" />
@@ -31,3 +41,10 @@ const owner = computed(() => (x.value?.owner ? desk.index.value?.modules.get(x.v
     </div>
   </details>
 </template>
+
+<style scoped>
+.port-link {
+  white-space: nowrap;
+  cursor: pointer;
+}
+</style>

@@ -10,7 +10,13 @@ import {
   gateIssues as gateOf,
   governanceReport,
   levelFacts,
+  portEntry,
+  portIssues,
+  portPanel,
   summarizeLedger,
+  type AssemblyFact,
+  type PortPanel,
+  type SubclassFact,
   type Confirmation,
   type GovernanceReport,
   type Issue,
@@ -110,7 +116,75 @@ export function createFacts({ state, index, view, files, sync, design }: FactsIn
     return c ? { ...c, deps: c.deps.map(k => report.value!.moduleDeps.get(k)!).filter(Boolean) } : null
   }
 
-  return { status, error, report, level, gateIssues, ledger, entryOf, selectedDep, selectedCycle, moduleDetail, relationFact }
+  // ── 端口（ADR-0029）：端口面板（K11）与画布的端口记号（L13）；有代码事实时实现者带证据档、并上「仅代码事实」的实现者，否则只按描述（设计版本） ──
+
+  /** K11：一个端口（接口）的端口面板；不是接口为 null */
+  const portOf = (id: string): PortPanel | null => (index.value ? portEntry(index.value, report.value, id) : null)
+  /** K11：模块的端口一节——它声明的接口中算端口的（裁决 4） */
+  const portsOf = (id: string): PortPanel[] => (index.value ? portPanel(index.value, report.value, id).filter(p => p.isPort) : [])
+
+  /**
+   * L13：本层要画端口记号的节点（模块 ID → 端口），结构视角才有（运行视角不画）：普通层次的子模块与边界节点，分层总览只画核心模块。
+   * 一个节点的端口为它声明的、算端口的接口（portsOf）。
+   */
+  const portMarks = computed<Map<string, PortPanel[]> | null>(() => {
+    const v = view.value
+    if (!index.value || !v || state.value.playback) return null
+    const out = new Map<string, PortPanel[]>()
+    for (const n of v.nodes) {
+      const drawn = v.mode === 'layered' ? n.role === 'core' : n.role === 'module' || n.role === 'core' || n.role === 'boundary'
+      if (!drawn || out.has(n.moduleId)) continue
+      const ports = portsOf(n.moduleId)
+      if (ports.length) out.set(n.moduleId, ports)
+    }
+    return out
+  })
+
+  /** U14：当前版本的端口孤立（治理面板；设计版本只在 lint:model 按描述报，T1 裁决 8） */
+  const portProblems = computed<Issue[]>(() => (report.value && index.value ? portIssues(index.value, report.value) : []))
+
+  /** K12、K13：模块的子类 / 基类、组装 / 被组装（模块自身或子树内的事实）；组装根标出 */
+  const structureOf = (id: string) => {
+    const r = report.value
+    const inside = (m: string) => !!index.value?.pathOf.get(m)?.includes(id)
+    const pick = <T extends SubclassFact | AssemblyFact>(list: readonly T[]) => ({
+      out: list.filter(f => inside(f.from) && !inside(f.to)),
+      in: list.filter(f => inside(f.to) && !inside(f.from)),
+    })
+    if (!r) return null
+    const sub = pick(r.subclasses)
+    const asm = pick(r.assembly)
+    return { bases: sub.out, subclasses: sub.in, assembles: asm.out, assembledBy: asm.in, root: r.assemblyRoots.includes(id) }
+  }
+
+  /** K12、K13：两端之间（自身或子树，任一方向）的子类与组装事实——关系与代码依赖面板「知识」行旁 */
+  const structureBetween = (a: string, b: string): { subclass: SubclassFact[]; assembly: AssemblyFact[] } => {
+    const r = report.value
+    if (!r || !index.value) return { subclass: [], assembly: [] }
+    const under = (m: string, anc: string) => !!index.value!.pathOf.get(m)?.includes(anc)
+    const pair = (f: { from: string; to: string }) => (under(f.from, a) && under(f.to, b)) || (under(f.from, b) && under(f.to, a))
+    return { subclass: r.subclasses.filter(pair), assembly: r.assembly.filter(pair) }
+  }
+
+  return {
+    status,
+    error,
+    report,
+    level,
+    gateIssues,
+    ledger,
+    entryOf,
+    selectedDep,
+    selectedCycle,
+    moduleDetail,
+    relationFact,
+    portOf,
+    portsOf,
+    portMarks,
+    portProblems,
+    structureOf,
+    structureBetween,
+  }
 }
 
 export type FactsDerivations = ReturnType<typeof createFacts>

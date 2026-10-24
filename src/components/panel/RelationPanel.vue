@@ -11,6 +11,7 @@ import DataStructureItem from './DataStructureItem.vue'
 import ChangeBadge from './ChangeBadge.vue'
 import DesignNote from './DesignNote.vue'
 import RelationFact from './RelationFact.vue'
+import StructureFacts, { type StructureGroup } from './StructureFacts.vue'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -52,6 +53,14 @@ const mode = computed(() => (relationMode(r.value) === 'async' ? '异步' : '同
 const viaText = computed(() => (r.value.via ? viaLabel(r.value.via, desk.index.value!) : ''))
 const plane = computed(() => (!runtime.value ? '—（编译期）' : r.value.type === 'streams' ? '数据面' : '控制面'))
 const visibleHere = computed(() => desk.view.value?.edges.some(e => e.relationIds.includes(props.id)) ?? false)
+/** K12、K13：两端之间的子类与组装事实，「知识」行旁标出 */
+const structure = computed<StructureGroup[]>(() => {
+  const b = desk.facts.structureBetween(r.value.from, r.value.to)
+  return [
+    { key: 'sub', label: '子类', title: '两端之间的继承（K12）：不是关系，由代码事实承载', list: b.subclass },
+    { key: 'asm', label: '组装', title: '两端之间的组装（K13）：new / 工厂 / 注册，不是关系', list: b.assembly },
+  ]
+})
 /** J7：两端有时间耦合时标「同提交 ×N」 */
 const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
 </script>
@@ -89,7 +98,7 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
         <dt>控制流</dt>
         <dd>{{ runtime ? `${name(r.from)} → ${name(r.to)}` : '—（编译期关系，不发生运行时交互）' }}</dd>
         <dt>知识</dt>
-        <dd>{{ knowledge }}</dd>
+        <dd>{{ knowledge }}<StructureFacts :groups="structure" /></dd>
         <dt>语义</dt>
         <dd>{{ semantics }}</dd>
         <dt>同步性</dt>

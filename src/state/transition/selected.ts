@@ -89,6 +89,12 @@ export function emphasisOf(state: ViewState, ctx: EmphasisContext): Emphasis | n
     case 'couple':
       coupleEnds(s.id)?.forEach(add)
       break
+    // L13：端口按定义模块突出泳道
+    case 'port': {
+      const owner = index.interfaces.get(s.id)?.owner
+      if (owner) add(owner)
+      break
+    }
     case 'edge': {
       // 视图边的两端是视图节点：模块节点（含边界节点、带）按其模块取泳道，参与者节点即其泳道
       const lv = ctx.levelView

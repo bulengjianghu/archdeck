@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Handles from './Handles.vue'
 import DiffMark from './DiffMark.vue'
+import PortMarks from './PortMarks.vue'
 import type { NodeData } from './types'
 
 defineProps<{ data: NodeData }>()
@@ -10,6 +11,7 @@ defineProps<{ data: NodeData }>()
   <div class="boundary-node" :class="{ selected: data.selected, dim: data.dim, [`diff-${data.change}`]: !!data.change }">
     <Handles />
     <DiffMark :data="data" />
+    <PortMarks v-if="data.ports" :ports="data.ports" :module-id="data.moduleId" />
     <div class="name">{{ data.name }}</div>
     <div class="path">外部 · {{ data.path }}</div>
   </div>

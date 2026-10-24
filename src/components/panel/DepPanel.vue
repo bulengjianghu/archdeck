@@ -5,18 +5,31 @@ import { useDesk } from '@/state/inject'
 import { RULE_LABELS, moduleName } from '@/model'
 import Section from './Section.vue'
 import FileDepList from './FileDepList.vue'
+import StructureFacts, { type StructureGroup } from './StructureFacts.vue'
 
 const desk = useDesk()
 const sel = computed(() => desk.facts.selectedDep.value)
 const name = (id: string) => (desk.index.value ? moduleName(desk.index.value, id) : id)
 const STATUS: Record<string, string> = { new: '新增', known: '已知', open: '违规', allowed: '已豁免' }
+/** K12、K13：这对节点之间的子类与组装事实 */
+const structure = computed<StructureGroup[]>(() => {
+  if (!sel.value) return []
+  const b = desk.facts.structureBetween(sel.value.from, sel.value.to)
+  return [
+    { key: 'sub', label: '子类', title: '继承（K12）：不是关系', list: b.subclass },
+    { key: 'asm', label: '组装', title: '组装（K13）：new / 工厂 / 注册，不是关系', list: b.assembly },
+  ]
+})
 </script>
 
 <template>
   <div class="dep-panel">
     <header class="head">
       <h2 v-if="sel">{{ name(sel.from) }} → {{ name(sel.to) }}</h2>
-      <div class="badges"><span class="badge">代码依赖</span></div>
+      <div class="badges">
+        <span class="badge">代码依赖</span>
+        <template v-if="structure.some(g => g.list.length)"><span class="muted">知识</span><StructureFacts :groups="structure" /></template>
+      </div>
     </header>
     <Section v-if="!sel || !sel.detail" title="说明">
       <p class="muted">本层没有这对节点之间的代码依赖（层次已变化，或代码事实已刷新）。</p>

@@ -23,6 +23,9 @@ export function selectionExists(index: ModelIndex, s: Selection | null): s is Se
       const ends = s.id.split('->')
       return ends.length === 2 && ends.every(id => index.modules.has(id) || index.actors.has(id))
     }
+    // L13、V2：端口就是接口
+    case 'port':
+      return index.interfaces.has(s.id)
     case 'couple': {
       // J7：两端都是存在的模块
       const ends = coupleEnds(s.id)

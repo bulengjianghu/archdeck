@@ -11,6 +11,8 @@ import DesignNote from './DesignNote.vue'
 import ModuleSource from './ModuleSource.vue'
 import ModuleGovernance from './ModuleGovernance.vue'
 import ModuleEvolution from './ModuleEvolution.vue'
+import ModulePorts from './ModulePorts.vue'
+import ModuleKnowledge from './ModuleKnowledge.vue'
 import ReviewSection from './ReviewSection.vue'
 import ModuleDecisions from './ModuleDecisions.vue'
 import { canDesignAt, openNewDesign } from '../edit/designHere'
@@ -110,6 +112,8 @@ function openChild(childId: string) {
       </ul>
     </Section>
 
+    <ModulePorts :id="m.id" />
+    <ModuleKnowledge :id="m.id" />
     <ModuleGovernance :id="m.id" />
     <ModuleEvolution :id="m.id" />
     <ModuleSource :id="m.id" />

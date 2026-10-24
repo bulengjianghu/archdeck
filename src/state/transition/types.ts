@@ -16,6 +16,8 @@ export type Selection =
   | { kind: 'dep'; id: string }
   /** 时间耦合（耦合线），id 为 `<A>~<B>`（两端模块 ID 按字典序，J7） */
   | { kind: 'couple'; id: string }
+  /** 端口（接口 ID，L13、V2）：结构视角单击端口记号选中，面板显示端口面板（K11） */
+  | { kind: 'port'; id: string }
 
 export interface Toggles {
   showBoundaries: boolean
