@@ -16,6 +16,7 @@ import {
   type ModelIndex,
   type ModulePatch,
   type RawFile,
+  type RelationModifiers,
   type RelationType,
   type SketchDef,
   type SketchPoint,
@@ -183,9 +184,9 @@ export function createCommands(i: CommandInputs) {
     return run(ops)
   }
 
-  /** F-21：连线 */
-  const connect = (from: string, to: string, type: RelationType, description?: string) =>
-    edit({ op: 'connect', from, to, type, ...(description?.trim() ? { description } : {}) })
+  /** F-21、X23：连线——类型（四类）与修饰（机制 via、异步、拉取） */
+  const connect = (from: string, to: string, type: RelationType, description?: string, mods: RelationModifiers = {}) =>
+    edit({ op: 'connect', from, to, type, ...(description?.trim() ? { description } : {}), ...mods })
 
   /** F-24：合并（≥2 个同层模块 → 新模块，名称 + ID 短名） */
   const merge = (ids: readonly string[], name: string, short: string) => run({ op: 'merge', sketch: mount(), ids: [...ids], name, id: short })

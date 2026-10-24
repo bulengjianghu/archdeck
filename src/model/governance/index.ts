@@ -21,13 +21,11 @@ export {
   covers,
   coveringRelations,
   undescribedDeps,
-  portEntry,
-  portPanel,
-  portIssues,
   coresOf,
   isCoreBetween,
   unclassifiedRelations,
 } from './facts'
+export { portEntry, portPanel, portIssues } from './ports'
 export { judge, evaluateRules, rulesFor, exposesMatch, exposesText, violationKey, rulesOf } from './rules'
 export type { EntryOf, DepProbe, Judgement, ModuleRules } from './rules'
 export { stronglyConnected, valueDeps, moduleCycles, fileCycles, cyclicityOf } from './cycles'

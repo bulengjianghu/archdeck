@@ -23,6 +23,7 @@ import {
   ROOT_MOUNT,
   SKETCH_SOFT_LIMIT,
   isSharedRole,
+  parseVia,
   type ChangeKind,
   type GridArea,
   type ModuleDef,
@@ -87,6 +88,8 @@ export interface SketchNodeData {
   scale?: number
   /** X22：引用节点在中心区的哪一侧 */
   side?: 'left' | 'right'
+  /** X24：本草图里这个模块定义的接口（端口记号，同 L13）——拖线到记号即声明实现者；implementers 为 implementedBy 的条数 */
+  ports?: { id: string; name: string; implementers: number }[]
   w: number
   h: number
 }
@@ -112,6 +115,8 @@ export interface SketchEdgeData {
   label: SketchPoint | null
   /** 端点之一已不在本层（待重连，X16） */
   pending?: boolean
+  /** L12、X23：边上有一条经端口（via: port:）的关系——终点画插座 */
+  port?: boolean
   change?: ChangeKind
   selected?: boolean
   /** X22：引用线——引用在中心区的哪一侧（模块从这一侧的端口进出），引用是起点还是终点 */
@@ -509,6 +514,7 @@ export function sketchScene(input: SketchSceneInput): SketchScene {
         ...(input.changes?.get(m.id) ? { change: input.changes.get(m.id) } : {}),
         ...(sel.has(m.id) ? { selected: true } : {}),
         ...(shelf.has(m.id) ? { shelf: true } : {}),
+        ...portMarks(def, m.id),
         ...(shelf.has(m.id)
           ? { w: SKETCH_SHELF.w, h: SKETCH_SHELF.h }
           : m.node.role === 'core'
@@ -591,6 +597,7 @@ export function sketchScene(input: SketchSceneInput): SketchScene {
         offset,
         label: many ? null : (def.layout?.relations?.[r.id]?.label ?? null),
         ...(g.rels.some(x => pending.has(x.id)) ? { pending: true } : {}),
+        ...(g.rels.some(x => parseVia(x.via)?.kind === 'port') ? { port: true } : {}),
         ...(change ? { change } : {}),
         ...(sel.has(id) || (!many && sel.has(r.id)) ? { selected: true } : {}),
         ...(sideOf.has(g.source) ? { external: sideOf.get(g.source), refEnd: 'source' as const } : {}),
@@ -610,6 +617,12 @@ export function sketchScene(input: SketchSceneInput): SketchScene {
     ...(bounds ? { gridArea: bounds.gridArea } : {}),
     columns: bounds?.columns ?? [],
   }
+}
+
+/** X24：草图里模块定义的接口——端口记号（接口写在定义模块所在的草图，X10；草图里写了即可声明实现者） */
+function portMarks(def: SketchDef, id: string): Pick<SketchNodeData, 'ports'> {
+  const list = (def.interfaces ?? []).filter(x => x.owner === id)
+  return list.length ? { ports: list.map(x => ({ id: x.id, name: x.name, implementers: x.implementedBy?.length ?? 0 })) } : {}
 }
 
 /** X22：拖动的落点离开了中心区（挂载点框）——松手 = 升级到上一层；根草图没有中心区 */

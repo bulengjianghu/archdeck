@@ -1,14 +1,23 @@
 <script setup lang="ts">
-/** 连线（F-21）：从连线柄拖到另一节点松手后弹出——类型（附一句读法）+ 一句说明；被拒绝（同对同类型、连自己、两端都是引用）时就地显示原因 */
+/**
+ * 连线（F-21、X23）：从连线柄拖到另一节点松手后弹出——类型（查 / 托 / 通知 / 流，附一句读法）、机制（直接 / 端口 / 总线 / 通道）、
+ * 异步 / 拉取 + 一句说明；被拒绝（同对同类型、连自己、两端都是引用）时就地显示原因。缺省为委托、直接。
+ */
 import { nextTick, onMounted, ref } from 'vue'
-import { RELATION_TYPES, type RelationType } from '@/model'
+import type { RelationModifiers, RelationType } from '@/model'
 import { useDesk } from '@/state/inject'
-import { RELATION_TYPE_HINTS, RELATION_TYPE_LABELS } from '../shared/labels'
+import RelationKindFields from './panel/RelationKindFields.vue'
 
 const props = defineProps<{ from: string; to: string }>()
 const emit = defineEmits<{ close: []; done: [] }>()
 const desk = useDesk()
-const type = ref<RelationType>('calls')
+const type = ref<RelationType>('commands')
+const mods = ref<RelationModifiers>({})
+function onKind(p: { type?: RelationType } & RelationModifiers) {
+  const { type: t, ...rest } = p
+  if (t) type.value = t
+  mods.value = { ...mods.value, ...rest }
+}
 const description = ref('')
 const error = ref('')
 const desc = ref<HTMLInputElement | null>(null)
@@ -19,7 +28,7 @@ onMounted(async () => {
 })
 
 function submit() {
-  const r = desk.edit.connect(props.from, props.to, type.value, description.value)
+  const r = desk.edit.connect(props.from, props.to, type.value, description.value, mods.value)
   if (!r.ok) return void (error.value = r.reason)
   emit('done')
 }
@@ -29,13 +38,14 @@ function submit() {
   <div class="sk-dialog-mask" @click.self="emit('close')">
     <form class="sk-dialog" role="dialog" aria-label="新建关系" @submit.prevent="submit" @keydown.stop="e => e.key === 'Escape' && emit('close')">
       <h3>{{ name(from) }} → {{ name(to) }}</h3>
-      <label>
-        类型
-        <select v-model="type" name="rel-type">
-          <option v-for="t in RELATION_TYPES" :key="t" :value="t">{{ RELATION_TYPE_LABELS[t] }}（{{ t }}）</option>
-        </select>
-      </label>
-      <p class="hint">{{ RELATION_TYPE_HINTS[type] }}</p>
+      <RelationKindFields
+        :type="type"
+        :via="mods.via || undefined"
+        :mode="mods.mode === 'async' ? 'async' : undefined"
+        :pull="mods.pull"
+        :to="to"
+        @change="onKind"
+      />
       <label>说明（一句话） <input ref="desc" v-model="description" name="rel-description" /></label>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <div class="actions">

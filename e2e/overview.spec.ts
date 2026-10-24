@@ -1,12 +1,17 @@
-/** 入门页与分层总览（W-10、O6、O7、DV-6、DV-9）：「帮助」打开「怎么读这张图」；带内 +N 单击临时展开、不改层次；版本切换里已归档的设计单独一组；设计面板链到 ADR */
+/** 入门页与分层总览（W-10、ADR-0029 三问四修饰、O6、O7、DV-6、DV-9）：「帮助」打开「怎么读这张图」；带内 +N 单击临时展开、不改层次；版本切换里已归档的设计单独一组；设计面板链到 ADR */
 import { expect, test } from '@playwright/test'
 import { openDesk, query } from './helpers'
 
-test('顶栏「帮助」打开「怎么读这张图」：结构 / 运行 / 对照与治理三组，Esc 关闭', async ({ page }) => {
+test('顶栏「帮助」打开「怎么读这张图」：结构 / 读一条线（三问四修饰）/ 运行 / 对照与治理四组，Esc 关闭', async ({ page }) => {
   await openDesk(page, '/p/h5player')
   await page.getByRole('button', { name: '怎么读这张图' }).click()
   const dialog = page.getByRole('dialog', { name: '怎么读这张图' })
-  await expect(dialog.locator('h3')).toHaveText(['结构', '运行', '对照与治理'])
+  await expect(dialog.locator('h3')).toHaveText(['结构', '读一条线：三问四修饰', '运行', '对照与治理'])
+  // ADR-0029 §3：三个判断题，第四步读修饰
+  const questions = dialog.locator('ol.questions li')
+  await expect(questions).toHaveCount(3)
+  await expect(questions.first()).toContainText('被调方拥有后果吗？否 → 查询')
+  await expect(dialog).toContainText('插座记号')
   await page.keyboard.press('Escape')
   await expect(dialog).toHaveCount(0)
   // Esc 只关掉入门页，不返回上级

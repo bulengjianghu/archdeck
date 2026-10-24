@@ -60,6 +60,22 @@ const arrow = computed(() => {
   const q = (k: number, n: number) => `${to.x - ux * k + -uy * n},${to.y - uy * k + ux * n}`
   return `${to.x},${to.y} ${q(s, s / 2)} ${q(s, -s / 2)}`
 })
+/** L12、X23：经端口的线在终点画插座（开口半圆，凸向终点、把箭头插在里面；与画布同一记号） */
+const socket = computed(() => {
+  if (!props.data.port) return ''
+  const p = ports.value
+  const to = p ? p.to : geo.value.to
+  const from = p ? { x: p.to.x + p.to.dir, y: p.to.y } : geo.value.from
+  const len = Math.hypot(to.x - from.x, to.y - from.y) || 1
+  const ux = (to.x - from.x) / len
+  const uy = (to.y - from.y) / len
+  const r = 7
+  const c = { x: to.x - ux * (r - 2), y: to.y - uy * (r - 2) }
+  const k = (4 / 3) * r
+  const a = { x: c.x - uy * r, y: c.y + ux * r }
+  const b = { x: c.x + uy * r, y: c.y - ux * r }
+  return `M ${a.x} ${a.y} C ${a.x + ux * k} ${a.y + uy * k} ${b.x + ux * k} ${b.y + uy * k} ${b.x} ${b.y}`
+})
 /** 拖动中的标签位置（松手才写回） */
 const dragging = ref<{ x: number; y: number } | null>(null)
 const label = computed(() => dragging.value ?? props.data.label ?? geo.value.mid)
@@ -104,6 +120,7 @@ function onUp() {
     <path v-if="!data.external" :d="path" class="hit" />
     <path :d="path" class="line" />
     <polygon :points="arrow" class="head" />
+    <path v-if="socket" :d="socket" class="socket" />
   </g>
   <EdgeLabelRenderer v-if="text">
     <div
@@ -136,6 +153,12 @@ function onUp() {
 
 .head {
   fill: var(--text-3);
+}
+
+.socket {
+  fill: none;
+  stroke: var(--text-2);
+  stroke-width: 1.5;
 }
 
 .sk-edge.many .line {

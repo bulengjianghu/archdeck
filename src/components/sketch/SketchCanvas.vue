@@ -274,6 +274,11 @@ provide(SKETCH_ACTIONS, {
 const connecting = ref<{ from: string; to: string } | null>(null)
 function onConnect(c: Connection) {
   const kinds = new Map((scene.value?.nodes ?? []).map(n => [n.id, n.data.kind]))
+  // X24：拖到端口记号 = 声明实现者（写进接口的 implementedBy），不建关系
+  if (c.targetHandle?.startsWith('port:')) {
+    const r = desk.edit.edit({ op: 'implement', interface: c.targetHandle.slice('port:'.length), module: c.source })
+    return void (!r.ok && notify(r.reason ?? '做不成'))
+  }
   if (c.source === c.target) return notify('关系不能连自己')
   if (kinds.get(c.source) === 'reference' && kinds.get(c.target) === 'reference') return notify('两端都是引用节点的关系不能建：关系只写本层（X19）')
   connecting.value = { from: c.source, to: c.target }

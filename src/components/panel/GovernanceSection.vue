@@ -5,7 +5,7 @@
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
-import { RULE_LABELS, moduleName, unclassifiedRelations, type Issue, type Violation, type ViolationStatus } from '@/model'
+import { RULE_LABELS, moduleName, type Issue, type Violation, type ViolationStatus } from '@/model'
 import Section from './Section.vue'
 import FileDepList from './FileDepList.vue'
 import WriteForm from './WriteForm.vue'
@@ -70,12 +70,7 @@ async function acceptShared(id: string) {
   if (!out.ok) acceptError.value = out.error
 }
 // ADR-0029：四类交互与端口——未分类（核心之间，M17）、查询副作用（U13）、端口与端口孤立（U14，当前版本）、子类与组装（K12、K13）
-const unclassified = computed(() => {
-  const idx = desk.index.value
-  if (!idx) return { all: 0, core: 0 }
-  const u = unclassifiedRelations(idx)
-  return { all: u.all.length, core: u.core.length }
-})
+const unclassified = computed(() => f.unclassified.value)
 const sideEffects = computed(() => desk.issues.value.filter(i => i.code === 'query.side-effect'))
 const portCount = computed(() => [...(desk.index.value?.interfaces.keys() ?? [])].filter(id => f.portOf(id)?.isPort).length)
 const portProblems = computed(() => f.portProblems.value)

@@ -74,6 +74,7 @@ const wavy = computed(() => (props.look.temp === 'couple' ? wavyPath({ x: 1, y: 
       :stroke="style.stroke"
       :stroke-width="style.strokeWidth"
       :stroke-dasharray="style.strokeDasharray"
+      :opacity="style.opacity"
       :stroke-linecap="'strokeLinecap' in style ? style.strokeLinecap : undefined"
       :marker-end="arrow ? `url(#${markerId})` : undefined"
     />

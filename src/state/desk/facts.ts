@@ -14,6 +14,7 @@ import {
   portIssues,
   portPanel,
   summarizeLedger,
+  unclassifiedRelations,
   type AssemblyFact,
   type PortPanel,
   type SubclassFact,
@@ -140,6 +141,13 @@ export function createFacts({ state, index, view, files, sync, design }: FactsIn
     return out
   })
 
+  /** M17：未分类关系的条数与其中核心之间的（描述查询，设计版本也有） */
+  const unclassified = computed(() => {
+    if (!index.value) return { all: 0, core: 0 }
+    const u = unclassifiedRelations(index.value)
+    return { all: u.all.length, core: u.core.length }
+  })
+
   /** U14：当前版本的端口孤立（治理面板；设计版本只在 lint:model 按描述报，T1 裁决 8） */
   const portProblems = computed<Issue[]>(() => (report.value && index.value ? portIssues(index.value, report.value) : []))
 
@@ -182,6 +190,7 @@ export function createFacts({ state, index, view, files, sync, design }: FactsIn
     portsOf,
     portMarks,
     portProblems,
+    unclassified,
     structureOf,
     structureBetween,
   }

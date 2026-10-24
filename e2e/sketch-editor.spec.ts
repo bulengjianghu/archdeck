@@ -182,7 +182,7 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     await dragBy(page, 'state.desk.session', 40, 20)
     await expect.poll(async () => (await graphNode(page, 'state.desk.session').boundingBox())!.x).toBeGreaterThan(before.x + 25)
 
-    // 连关系：从连线柄拖到另一个节点，选类型 + 一句说明
+    // 连关系：从连线柄拖到另一个节点，类型缺省为委托（X23）+ 一句说明
     await dragConnect(page, 'state.desk.session', c)
     const connect = page.getByRole('dialog', { name: '新建关系' })
     await connect.locator('input[name="rel-description"]').fill('E2E 连线')
@@ -210,7 +210,7 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     // X22：引用节点的位置不写回——layout 只有本层模块
     expect(Object.keys(saved.layout.modules).every(id => id.startsWith('state.desk.'))).toBe(true)
     expect(saved.relations).toEqual(
-      expect.arrayContaining([expect.objectContaining({ from: 'state.desk.session', to: c, type: 'calls', description: 'E2E 连线' })]),
+      expect.arrayContaining([expect.objectContaining({ from: 'state.desk.session', to: c, type: 'commands', description: 'E2E 连线' })]),
     )
     // 合并写入的下一层与推出结果相同：不写文件（X20、T1 裁决 5）
     expect(fs.existsSync(path.join(box.dir, 'sketches/state.desk.session.yaml'))).toBe(false)
@@ -828,6 +828,78 @@ test('E9、DV-13（第五轮 T3）：模块面板「相关决策」列编号与�
     await expect
       .poll(() => (sketchFile(box.dir, 'state.desk').modules as { id: string; adrs?: number[] }[]).find(m => m.id === 'state.desk.alpha')?.adrs)
       .toEqual([25, 27])
+  } finally {
+    box.restore()
+  }
+})
+
+test('X23、X24（第六轮 T3）：草图里声明端口与实现者（拖线到端口记号）、连一条经端口的委托——保存后文件含 type / via / implementedBy，重开后仍在', async ({
+  page,
+}) => {
+  const box = sandbox('zz-e2e-ports')
+  try {
+    await openDesk(page, '/p/h5p-arch-desk')
+    await designHere(page, 'state', 'state.desk')
+    const dialog = page.getByRole('dialog', { name: '新建设计' })
+    await dialog.locator('input[name="design-name"]').fill('E2E 端口')
+    await dialog.locator('input[name="design-goal"]').fill('端口与经端口的委托')
+    await dialog.locator('input[name="design-id"]').fill('zz-e2e-ports')
+    await dialog.getByRole('button', { name: '创建并打开草图' }).click()
+    await expect(page.locator('.sketch-canvas')).toBeVisible()
+    const ids: string[] = sketchFile(box.dir, 'state.desk').modules.map((m: { id: string }) => m.id)
+    const [owner, impl, user] = ids
+    for (const id of [owner, impl, user]) await expect(graphNode(page, id)).toBeVisible()
+
+    // 在定义模块上写接口：模块边上出现端口记号（实现者 0）
+    await graphNode(page, owner).locator('.name').click()
+    const form = page.locator('[data-testid="sketch-module-form"]')
+    await form.locator('input[name="interface-name"]').fill('save')
+    await form.locator('input[name="interface-name"]').press('Enter')
+    const port = graphNode(page, owner).locator('.sk-port')
+    await expect(port).toHaveCount(1)
+    await expect(port).toContainText('save · 0')
+    const portId = (await port.getAttribute('data-port'))!
+
+    // X24：从另一个模块的连线柄拖到端口记号 = 声明它实现这个端口
+    const a = await settledBox(graphNode(page, impl).locator('.sk-out'))
+    const b = await settledBox(port)
+    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 12 })
+    await page.mouse.up()
+    await expect(port).toContainText('save · 1')
+    await expect(page.getByRole('dialog', { name: '新建关系' })).toHaveCount(0)
+
+    // X23：连线选类型（缺省为委托）与机制「端口」→ 选端口
+    await dragConnect(page, user, owner)
+    const connect = page.getByRole('dialog', { name: '新建关系' })
+    await expect(connect.getByRole('radio', { name: '托' })).toHaveAttribute('aria-checked', 'true')
+    await connect.locator('select[name="rel-via-kind"]').selectOption('port')
+    await connect.locator('select[name="rel-via-port"]').selectOption(portId)
+    await connect.locator('input[name="rel-description"]').fill('经端口保存')
+    await connect.getByRole('button', { name: '连上' }).click()
+    await expect(page.locator('.sk-edge-label', { hasText: '经端口保存' })).toBeVisible()
+    // L12：经端口的线在终点画插座
+    await expect(page.locator('.sk-edge .socket')).toHaveCount(1)
+
+    await page.locator('.vue-flow__pane').click({ position: { x: 5, y: 5 } })
+    await page.keyboard.press('ControlOrMeta+s')
+    await expect(page.locator('.sk-notice')).toContainText('已保存')
+    const saved = sketchFile(box.dir, 'state.desk')
+    expect(saved.relations).toEqual(
+      expect.arrayContaining([expect.objectContaining({ from: user, to: owner, type: 'commands', via: `port:${portId}`, description: '经端口保存' })]),
+    )
+    expect(saved.interfaces).toEqual([expect.objectContaining({ id: portId, name: 'save', owner, implementedBy: [impl] })])
+
+    // 重开原样：端口记号（实现者 1）与插座都在；面板的关系表单显示机制为端口
+    await page.reload()
+    await expect(graphNode(page, owner).locator('.sk-port')).toContainText('save · 1')
+    await expect(page.locator('.sk-edge .socket')).toHaveCount(1)
+    // 标签可能被重排后的节点盖住：直接派发按下（选中这条关系）
+    await page.locator('.sk-edge-label', { hasText: '经端口保存' }).dispatchEvent('pointerdown')
+    const rf = page.locator('[data-testid="sketch-relation-form"]')
+    await expect(rf.locator('select[name="rel-via-kind"]')).toHaveValue('port')
+    await expect(rf.locator('select[name="rel-via-port"]')).toHaveValue(portId)
   } finally {
     box.restore()
   }

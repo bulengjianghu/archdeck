@@ -119,6 +119,19 @@ export function createEdit(i: EditInputs) {
     referenceRelations: (id: string) => (derive.sketch.value ? referenceRelations(derive.sketch.value, id) : []),
     /** 本张里某模块提供的对外接口（X10） */
     interfaces: (owner: string) => (derive.sketch.value?.interfaces ?? []).filter(x => x.owner === owner),
+    /** X23：连线「经端口」可选的端口——本张写的接口与当前版本的接口（ID、名称、定义模块） */
+    ports: computed(() => {
+      const out = new Map<string, { id: string; name: string; owner?: string }>()
+      for (const x of i.current()?.interfaces.values() ?? []) out.set(x.id, { id: x.id, name: x.name, ...(x.owner ? { owner: x.owner } : {}) })
+      for (const x of derive.sketch.value?.interfaces ?? []) out.set(x.id, { id: x.id, name: x.name, ...(x.owner ? { owner: x.owner } : {}) })
+      return [...out.values()]
+    }),
+    /** X23：连线「经总线」可选的总线——本张与当前版本里 role: bus 的模块 */
+    buses: computed(() => {
+      const ids = new Set([...(i.current()?.modules.values() ?? [])].filter(m => m.role === 'bus').map(m => m.id))
+      if (derive.sketch.value) for (const m of locateAll(derive.sketch.value)) if (m.node.role === 'bus') ids.add(m.id)
+      return [...ids]
+    }),
     /** 读到的描述里的持久草图（版本切换列出，可编辑） */
     intentIds: computed(() =>
       (i.loaded.value?.model.sketches ?? []).filter(s => s.file.startsWith('intent/') && sketchLifetime(s) === 'persistent').map(s => s.def.id),

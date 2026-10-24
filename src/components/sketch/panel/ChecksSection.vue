@@ -14,6 +14,8 @@ const v = computed(() => e.validation.value)
 const errors = computed(() => v.value?.errors ?? [])
 const warnings = computed(() => (v.value?.warnings ?? []).filter(w => w.code !== 'sketch.pending'))
 const hints = computed(() => v.value?.hints ?? [])
+/** X23：待分类（迁移期的 calls）只提示、不进两级 */
+const unclassified = computed(() => hints.value.filter(x => x.code === 'sketch.unclassified').length)
 const pending = computed(() => e.pending.value)
 const name = (id: string) => e.nameOf(id) ?? id
 const relText = (id: string) => {
@@ -61,7 +63,9 @@ const vsBaseline = computed(() => e.vsBaseline.value?.sheet ?? null)
       </ul>
     </details>
     <details v-if="hints.length" class="hints">
-      <summary>提示 {{ hints.length }}（不拦）</summary>
+      <summary>
+        提示 {{ hints.length }}（不拦）<span v-if="unclassified" data-testid="sketch-unclassified"> · 待分类 {{ unclassified }}</span>
+      </summary>
       <ul>
         <li v-for="(x, i) in hints" :key="`h${i}`">
           <button class="link" @click="locate(x)">{{ x.message }}</button>

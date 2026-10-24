@@ -7,7 +7,7 @@ import type { EditContext, EditOp, EditResult } from '../types'
 import { addLayer, reorderLayer, setMayDependOn } from './layers'
 import { addModule, removeModule, setClosed, updateModule } from './modules'
 import { moveModule, renameModule } from './move'
-import { addInterface, connect, removeInterface, removeRelation, updateInterface, updateRelation } from './relations'
+import { addInterface, connect, implement, removeInterface, removeRelation, updateInterface, updateRelation } from './relations'
 import { setMeta } from './seed'
 import { addReference, autoArrange, moveNode, relabel, removeReference, setAbstraction } from './layout'
 import type { OpOutcome } from './shared'
@@ -33,7 +33,7 @@ function run(def: SketchDef, ctx: EditContext, op: EditOp): OpOutcome {
     case 'removeModule':
       return removeModule(def, ctx, op.id)
     case 'connect':
-      return connect(def, ctx, op.from, op.to, op.type, op.description, op.interface)
+      return connect(def, ctx, op.from, op.to, op.type, op.description, op.interface, { via: op.via, mode: op.mode, pull: op.pull })
     case 'updateRelation':
       return updateRelation(def, ctx, op.id, op.patch)
     case 'removeRelation':
@@ -44,6 +44,8 @@ function run(def: SketchDef, ctx: EditContext, op: EditOp): OpOutcome {
       return updateInterface(def, ctx, op.id, op.patch)
     case 'removeInterface':
       return removeInterface(def, ctx, op.id)
+    case 'implement':
+      return implement(def, ctx, op.interface, op.module, op.remove)
     case 'setMeta':
       return setMeta(def, ctx, op.patch)
     case 'setAbstraction':

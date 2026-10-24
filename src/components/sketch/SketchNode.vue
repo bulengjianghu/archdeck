@@ -131,10 +131,80 @@ const scaled = computed(() => {
     <span v-if="badge" class="badge" :class="data.change" :title="badge.title">{{ badge.text }}</span>
     <span v-if="data.drop" class="drop-hint">放下 = 降级为其子模块</span>
     <Handle id="out" type="source" :position="Position.Right" class="sk-out nodrag" :connectable="true" title="拖到另一个节点上建关系" />
+    <div v-if="data.ports?.length" class="sk-ports">
+      <span
+        v-for="p in data.ports"
+        :key="p.id"
+        class="sk-port nodrag"
+        :class="{ orphan: !p.implementers }"
+        :data-port="p.id"
+        :title="`端口「${p.name}」：实现者 ${p.implementers}——从模块的连线柄拖到这里 = 声明它实现这个端口（X24）`"
+      >
+        <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1 A4 4 0 0 0 2 9" /></svg>{{ p.name }} · {{ p.implementers }}
+        <Handle :id="`port:${p.id}`" type="target" :position="Position.Top" class="sk-port-handle" :connectable="true" />
+      </span>
+    </div>
   </div>
 </template>
 
 <style scoped>
+/* X24：端口记号骑在模块顶边的后半（同 L13），整块是连线的落点 */
+.sk-ports {
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  right: 4px;
+  display: flex;
+  gap: 3px;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.sk-port {
+  position: relative;
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  height: 16px;
+  padding: 0 5px 0 3px;
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 8px;
+}
+
+.sk-port.orphan {
+  border-color: var(--warning);
+}
+
+.sk-port svg path {
+  fill: none;
+  stroke: var(--rel-commands, var(--accent));
+  stroke-width: 1.6;
+}
+
+/* 句柄铺满记号、不可见：落在记号上即连到端口 */
+.sk-port :deep(.sk-port-handle) {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  transform: none;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  opacity: 0;
+}
+
 .sk-frame {
   position: relative;
   box-sizing: border-box;

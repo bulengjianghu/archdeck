@@ -127,6 +127,13 @@ export type ModulePatch = Partial<Pick<ModuleDef, 'name' | 'responsibility' | 'k
 export type SketchSet = Readonly<Record<string, SketchDef>>
 
 /** 一个编辑操作 = 一次用户意图 = 撤销的一步（X7b、X7g）；可序列化，保存冲突后可重放（X7i） */
+/** X23：关系的修饰——机制（via，空串为直接 = 去掉）、同步性（空串去掉）、拉取 */
+export interface RelationModifiers {
+  via?: string
+  mode?: 'sync' | 'async' | ''
+  pull?: boolean
+}
+
 export type EditOp =
   | { op: 'addLayer'; name: string; id?: string; at: number }
   | { op: 'reorderLayer'; id: string; to: number }
@@ -138,12 +145,15 @@ export type EditOp =
   /** 父不变的移动：只改短名（X7d） */
   | { op: 'renameModule'; id: string; newId: string }
   | { op: 'removeModule'; id: string }
-  | { op: 'connect'; from: string; to: string; type: RelationType; description?: string; interface?: string }
-  | { op: 'updateRelation'; id: string; patch: { type?: RelationType; description?: string; interface?: string } }
+  /** X23：连线时选类型（四类）与机制（via 四形态）、异步（查询 / 委托）与拉取（流） */
+  | { op: 'connect'; from: string; to: string; type: RelationType; description?: string; interface?: string } & RelationModifiers
+  | { op: 'updateRelation'; id: string; patch: { type?: RelationType; description?: string; interface?: string } & RelationModifiers }
   | { op: 'removeRelation'; id: string }
   | { op: 'addInterface'; owner: string; name: string; signature?: string }
   | { op: 'updateInterface'; id: string; patch: { name?: string; signature?: string } }
   | { op: 'removeInterface'; id: string }
+  /** X24：声明 / 撤销端口的实现者（写进草图接口的 implementedBy；从模块拖线到端口记号即声明） */
+  | { op: 'implement'; interface: string; module: string; remove?: boolean }
   | { op: 'setMeta'; patch: { lifetime?: SketchLifetime; supersedes?: string | null } }
   /** X10：挂载点模块对内的原则（根挂载不用） */
   | { op: 'setAbstraction'; text: string }
@@ -247,6 +257,12 @@ export type SketchValidationCode =
   | 'sketch.pending'
   | 'sketch.over-seven'
   | 'sketch.empty'
+  /** X23：关系类型不是四类（迁移期的 calls 除外）、mode / pull 用在不对的类型上 */
+  | 'sketch.relation-type'
+  /** X23：via 不合四形态（旧的平铺取值只提示） */
+  | 'sketch.via'
+  /** X23：迁移期的 calls——「待分类」，只提示 */
+  | 'sketch.unclassified'
 
 /**
  * X14 两级：error 为格式错误（拦保存）；warning 为语义提示（不拦保存，拦「保存并交给 AI」与定稿）；

@@ -19,7 +19,7 @@ export const RELATION_TYPE_HINTS: Record<RelationType, string> = {
   commands: '交出控制权，被调方拥有状态与副作用；可同步或异步',
   notifies: '不要结果、一对多，一律异步，箭头指向被通知方',
   streams: '连续数据，箭头指向数据去向',
-  calls: '未分类：按三问定为查询或委托（迁移期）',
+  calls: '按三问定为查询或委托（迁移期）',
 }
 
 /**

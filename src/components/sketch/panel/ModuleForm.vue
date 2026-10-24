@@ -124,6 +124,15 @@ function addIf() {
   if (v && report(e.edit({ op: 'addInterface', owner: m.value.id, name: v }))) newIf.value = ''
 }
 const removeIf = (id: string) => report(e.edit({ op: 'removeInterface', id }))
+// ── X24：端口的实现者（写进接口的 implementedBy；画布上从模块拖线到端口记号同此）──
+/** 候选：本层模块与引用节点，除了定义模块自己 */
+const implCandidates = computed(() =>
+  (e.scene.value?.nodes ?? [])
+    .filter(n => (n.data.kind === 'module' || n.data.kind === 'reference') && n.id !== m.value.id)
+    .map(n => ({ id: n.id, name: n.data.name })),
+)
+const implement = (iface: string, module: string, remove = false) =>
+  module && report(e.edit({ op: 'implement', interface: iface, module, ...(remove ? { remove } : {}) }))
 
 const blur = (ev: KeyboardEvent) => (ev.target as HTMLElement).blur()
 </script>
@@ -187,9 +196,31 @@ const blur = (ev: KeyboardEvent) => (ev.target as HTMLElement).blur()
     <div class="f">
       <span class="lab">对外接口</span>
       <ul class="ifaces">
-        <li v-for="x in ifaces" :key="x.id">
+        <li v-for="x in ifaces" :key="x.id" :data-interface="x.id">
           <code>{{ x.name }}</code>
           <button class="mini danger" :title="`删除接口 ${x.id}`" @click="removeIf(x.id)">删</button>
+          <div class="impls">
+            <span class="muted small">实现者</span>
+            <span v-for="im in x.implementedBy ?? []" :key="im" class="impl"
+              >{{ e.nameOf(im) ?? im }}<button class="mini" :title="`撤销 ${im} 的实现声明`" @click="implement(x.id, im, true)">✕</button></span
+            >
+            <select
+              name="implementer-add"
+              :aria-label="`为 ${x.name} 加实现者`"
+              value=""
+              @change="
+                (ev: Event) => {
+                  implement(x.id, (ev.target as HTMLSelectElement).value)
+                  ;(ev.target as HTMLSelectElement).value = ''
+                }
+              "
+            >
+              <option value="">＋ 实现者…</option>
+              <option v-for="c in implCandidates.filter(c => !(x.implementedBy ?? []).includes(c.id))" :key="c.id" :value="c.id">
+                {{ c.name }}（{{ c.id }}）
+              </option>
+            </select>
+          </div>
         </li>
         <li v-if="!ifaces.length" class="muted">没有</li>
       </ul>
@@ -207,3 +238,24 @@ const blur = (ev: KeyboardEvent) => (ev.target as HTMLElement).blur()
     <p class="muted small">合并：⇧ 多选两个以上，右键或在面板里「合并为新模块…」</p>
   </div>
 </template>
+
+<style scoped>
+.impls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 2px 0 4px;
+  width: 100%;
+}
+
+.impl {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  font-size: 11.5px;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+</style>

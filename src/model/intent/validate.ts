@@ -7,7 +7,7 @@
  * 与核验（sketchCheck，版本对草图）分工：两边都有的只有矛盾检查（同一函数与稳定键）。画布每次操作后、保存前与写入端点调用同一函数。
  */
 import { sketchShapeIssues } from '../load'
-import { ROOT_MOUNT, isSharedRole, type ModelIndex, type SketchDef, type SketchEntity } from '../types'
+import { INTERACTION_TYPES, LEGACY_VIAS, ROOT_MOUNT, UNCLASSIFIED, isSharedRole, parseVia, type InteractionType, type ModelIndex, type SketchDef, type SketchEntity } from '../types'
 import { sketchContradictions } from './check'
 import { ID_PATTERN, knownModules, locateAll } from './edit/locate'
 import { prefixMap, sketchLineage, unmapId } from './lineage'
@@ -115,6 +115,29 @@ export function validateSketch(sketch: SketchDef, ctx: ValidateContext): SketchV
   const ifaces = new Set([...(sketch.interfaces ?? []), ...persistent.flatMap(p => p.def.interfaces ?? []), ...others.flatMap(d => d.interfaces ?? [])].map(x => x.id))
   for (const x of ctx.index?.interfaces.keys() ?? []) ifaces.add(x)
   const pending: string[] = []
+  /**
+   * X23：连线的类型与修饰的格式——类型取四类（迁移期的 calls 只提示「待分类」，不进两级）；via 合四形态（旧的平铺取值只提示），
+   * port:<P> 的 P 是已知接口、bus:<M> 的 M 是已知模块；mode 只用于查询 / 委托，pull 只用于流。
+   */
+  const relationFormat = (r: NonNullable<SketchDef['relations']>[number], path: string) => {
+    const t = { relation: r.id }
+    const type = r.type as string
+    if (type === UNCLASSIFIED) push('hint', 'sketch.unclassified', `关系「${r.id}」待分类：按三问定为查询（queries）或委托（commands），写进草图即确认（X23）`, t, path)
+    else if (!INTERACTION_TYPES.includes(type as InteractionType))
+      err('sketch.relation-type', `关系「${r.id}」的类型「${type}」不是四类交互之一：查询 queries / 委托 commands / 通知 notifies / 流 streams（X23）`, t, path)
+    if (r.via !== undefined) {
+      const v = parseVia(r.via)
+      if (!v) {
+        if (LEGACY_VIAS.includes(r.via)) push('hint', 'sketch.via', `关系「${r.id}」的 via: ${r.via} 是旧写法：改写为 port:<接口> / bus:<总线模块> / channel:<通道名>（M20）`, t, path)
+        else err('sketch.via', `关系「${r.id}」的 via「${r.via}」不合四形态：不写（直接）/ port:<接口 ID> / bus:<模块 ID> / channel:<通道名>（X23）`, t, path)
+      } else if (v.kind === 'port' && v.target && !ifaces.has(v.target)) err('sketch.ref', `关系「${r.id}」经由的端口「${v.target}」不存在（X23）`, t, path)
+      else if (v.kind === 'bus' && v.target && !known(v.target)) err('sketch.ref', `关系「${r.id}」经由的总线「${v.target}」不存在（X23）`, t, path)
+      else if (v.kind !== 'channel' && !v.target) push('hint', 'sketch.via', `关系「${r.id}」的 via: ${r.via} 没指明${v.kind === 'port' ? '端口' : '总线'}（M20）`, t, path)
+    }
+    if (r.mode !== undefined && (type === 'notifies' || type === 'streams'))
+      err('sketch.relation-type', `关系「${r.id}」是${type === 'notifies' ? '通知（一律异步）' : '流'}，不写 mode：mode 只用于查询与委托（M13、X23）`, t, path)
+    if (r.pull !== undefined && type !== 'streams') err('sketch.relation-type', `关系「${r.id}」不是流，不写 pull（M13、X23）`, t, path)
+  }
   sketch.relations?.forEach((r, i) => {
     const path = `sketch.relations.${i}`
     const t = { relation: r.id }
@@ -135,7 +158,15 @@ export function validateSketch(sketch: SketchDef, ctx: ValidateContext): SketchV
     else if (r.from === r.to || ends.some((e, k) => !local.has(e) && (ends[1 - k].startsWith(`${e}.`) || e.startsWith(`${ends[1 - k]}.`))))
       err('sketch.ancestor', `关系「${r.id}」连了自己、祖先或后代（M6）`, t, path)
     if (r.interface && !ifaces.has(r.interface)) err('sketch.ref', `关系「${r.id}」经由的接口「${r.interface}」不存在`, t, path)
+    relationFormat(r, path)
   })
+
+  // ── X24：草图声明的端口实现者是已知模块 ──
+  sketch.interfaces?.forEach((x, i) =>
+    x.implementedBy?.forEach(m => {
+      if (!known(m)) err('sketch.ref', `接口「${x.id}」的实现者「${m}」不存在（X24）`, { interface: x.id }, `sketch.interfaces.${i}.implementedBy`)
+    }),
+  )
 
   // ── 接口的 owner 是本草图的模块（X10）；closed 是挂载点或本草图的模块（X2）；可依赖的是层 ──
   sketch.interfaces?.forEach((x, i) => {
