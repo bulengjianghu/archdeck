@@ -41,16 +41,21 @@ const extraCommit = computed(() => {
 const subject = (s: string) => (s.length > 28 ? `${s.slice(0, 28)}…` : s)
 
 function onChange(e: Event) {
-  const val = (e.target as HTMLSelectElement).value
+  const select = e.target as HTMLSelectElement
+  const val = select.value
   const project = desk.project!
   const query = route.query
-  if (!val) void router.push({ name: 'project', params: { project }, query })
-  else if (val.startsWith('c:')) void router.push({ name: 'commit', params: { project, commit: val.slice(2) }, query })
-  else if (val.startsWith('i:')) void router.push({ name: 'intent', params: { project, intent: val.slice(2) }, query })
-  else {
-    const [design, revision] = val.split('/')
-    void router.push({ name: 'design', params: { project, design, revision }, query })
-  }
+  const go = !val
+    ? router.push({ name: 'project', params: { project }, query })
+    : val.startsWith('c:')
+      ? router.push({ name: 'commit', params: { project, commit: val.slice(2) }, query })
+      : val.startsWith('i:')
+        ? router.push({ name: 'intent', params: { project, intent: val.slice(2) }, query })
+        : router.push({ name: 'design', params: { project, design: val.split('/')[0], revision: val.split('/')[1] }, query })
+  // X7a：离开被取消（未保存改动三选里选了取消，或保存失败）时下拉回到当前版本
+  void go.then(failure => {
+    if (failure) select.value = value.value
+  })
 }
 </script>
 

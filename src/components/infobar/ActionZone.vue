@@ -11,8 +11,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDesk } from '@/state/inject'
-import { ask, choose } from '../edit/useEditDialog'
-import { leaveSketch } from '../edit/leave'
+import { ask } from '../edit/useEditDialog'
+import { confirmLeave, leaveSketch } from '../edit/leave'
 import ChangeGroups from './ChangeGroups.vue'
 
 const props = defineProps<{ mode: 'commit' | 'round' | 'sketch' }>()
@@ -89,13 +89,10 @@ async function handToAi() {
   }
 }
 
-/** X7a、#20b：脏时三选（保存 / 放弃 / 取消）；退出回到进入草图之前的版本 */
+/** X7a、#20b：脏时三选（保存 / 放弃 / 取消，与切换版本同一个对话框）；退出回到进入草图之前的版本 */
 async function exit() {
-  if (e.exit() === 'confirm') {
-    const a = await choose({ title: '有未保存的改动，退出草图？', lines: ['保存后退出，或放弃改动退出'], ok: '保存', alt: '放弃' })
-    if (a === 'cancel' || (a === 'ok' && !(await save()))) return
-    e.exit(true)
-  }
+  if (!(await confirmLeave(e, 'exit', flash))) return
+  e.exit(true)
   leaveSketch(router, desk.project!)
 }
 

@@ -682,3 +682,55 @@ test('X22（第五轮 T3）：草图画布的系统框随可用区域自适应�
     box.restore()
   }
 })
+
+test('X7a（第五轮 T3）：有未保存改动时切换版本、浏览器后退都弹「保存 / 放弃 / 取消」三选（与「退出」同一个对话框）——取消留下且下拉复原，保存后再离开，后退选放弃则丢掉改动', async ({
+  page,
+}) => {
+  const box = sandbox('zz-e2e-leave')
+  try {
+    fs.mkdirSync(path.join(box.dir, 'sketches'), { recursive: true })
+    fs.writeFileSync(path.join(box.dir, 'design.yaml'), 'design:\n  name: E2E 离开\n  status: draft\n')
+    fs.writeFileSync(path.join(box.dir, 'sketches/state.desk.yaml'), BAR_SKETCH.replace('id: zz-e2e-bar', 'id: zz-e2e-leave'))
+    const file = path.join(box.dir, 'sketches/state.desk.yaml')
+    await openDesk(page, '/p/h5p-arch-desk')
+    const switcher = page.locator('select[aria-label="切换版本"]')
+    await switcher.selectOption('zz-e2e-leave/sketch')
+    await expect(page.locator('.sketch-canvas')).toBeVisible()
+    const rename = async (text: string) => {
+      await graphNode(page, 'state.desk.beta').locator('.name').click()
+      const name = page.locator('[data-testid="sketch-module-form"] [name="module-name"]')
+      await name.fill(text)
+      await name.press('Enter')
+      await expect(page.locator('.info-bar .dirty')).toBeVisible()
+    }
+    const ask = page.getByRole('dialog', { name: /有未保存的改动/ })
+
+    // 切换版本 → 三选；取消：留在草图、仍脏、下拉回到这张草图
+    await rename('Beta 存')
+    await switcher.selectOption('')
+    await expect(ask.getByRole('button')).toHaveText(['取消', '放弃', '保存'])
+    await ask.getByRole('button', { name: '取消' }).click()
+    await expect(page).toHaveURL(/zz-e2e-leave\/sketch/)
+    await expect(page.locator('.info-bar .dirty')).toBeVisible()
+    await expect(switcher).toHaveValue('zz-e2e-leave/sketch')
+
+    // 再切换 → 保存：写进文件后离开
+    await switcher.selectOption('')
+    await ask.getByRole('button', { name: '保存' }).click()
+    await expect(page).not.toHaveURL(/zz-e2e-leave/)
+    await expect.poll(() => fs.readFileSync(file, 'utf8')).toContain('Beta 存')
+
+    // 后退回到草图（无改动不问），再改一处后浏览器后退 → 三选，放弃：改动丢掉、回到前一个地址
+    await page.goBack()
+    await expect(page).toHaveURL(/zz-e2e-leave\/sketch/)
+    await expect(page.locator('.sketch-canvas')).toBeVisible()
+    await rename('Beta 弃')
+    await page.goBack()
+    await expect(ask).toBeVisible()
+    await ask.getByRole('button', { name: '放弃' }).click()
+    await expect(page).not.toHaveURL(/zz-e2e-leave/)
+    expect(fs.readFileSync(file, 'utf8')).not.toContain('Beta 弃')
+  } finally {
+    box.restore()
+  }
+})

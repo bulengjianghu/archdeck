@@ -28,6 +28,7 @@ import { NAV_TAB, type NavTab } from './shared/navTab'
 import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
 import { useEvolutionPrefs } from './display/useEvolutionPrefs'
 import EditDialog from './edit/EditDialog.vue'
+import { confirmLeave } from './edit/leave'
 import SketchCanvas from './sketch/SketchCanvas.vue'
 import NewDesignDialog from './edit/NewDesignDialog.vue'
 import { closeNewDesign, newDesignRequest, takeSheet } from './edit/designHere'
@@ -96,8 +97,9 @@ if (props.design)
     { immediate: true },
   )
 
-// X7a：有未保存的草图改动时，离开（切换版本、回项目列表、关闭页面）要确认
-const leaveOk = () => desk.edit.canLeave() === 'free' || window.confirm('草图有未保存的改动，离开会丢失。确定离开？')
+// X7a：有未保存的草图改动时，离开（切换版本、回项目列表、浏览器前进后退）三选——保存 / 放弃 / 取消，与信息条「退出」同一个对话框；
+// 关闭页面受浏览器限制只有浏览器自己的两选（beforeunload：离开即放弃）
+const leaveOk = () => confirmLeave(desk.edit, 'switch', text => (desk.edit.notice.value = text))
 onBeforeRouteLeave(() => leaveOk())
 onBeforeRouteUpdate((to, from) => (JSON.stringify(to.params) === JSON.stringify(from.params) ? true : leaveOk()))
 const onUnload = (e: BeforeUnloadEvent) => {
