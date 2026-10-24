@@ -38,6 +38,7 @@ import {
   replay,
   splitImpact,
   renameImpact,
+  renameHasImpact,
   type RenameImpact,
   undo as undoSession,
   type EditSession,
@@ -214,11 +215,13 @@ export function createCommands(i: CommandInputs) {
   /** 改 ID（只改短名，前缀级联） */
   const rename = (id: string, newId: string) => run({ op: 'rename', sketch: mount(), id, newId })
   /** X7d：表单改 ID 提交前的影响（不改会话）：后代数、关系数、随之改名的下一层草图、当前版本里的引用；新旧相同为 null，不成立时为原因 */
-  function previewRename(id: string, newId: string): { impact: RenameImpact | null } | { rejected: string } {
+  function previewRename(id: string, newId: string): { impact: (RenameImpact & { significant: boolean }) | null } | { rejected: string } {
     const s = session.value
     if (!s || !loaded.value) return { rejected: '不在草图里' }
     const r = renameImpact(s, { op: 'rename', sketch: mount(), id, newId }, ctx(), i.current?.() ?? null)
-    return r.ok ? { impact: r.impact } : { rejected: r.reason }
+    if (!r.ok) return { rejected: r.reason }
+    // X7d：有影响（significant）才预览并二次确认，没有影响时直接应用
+    return { impact: r.impact ? { ...r.impact, significant: renameHasImpact(r.impact) } : null }
   }
   const updateModule = (id: string, patch: ModulePatch) => edit({ op: 'updateModule', id, patch })
   /** F-22：拖关系标签 */

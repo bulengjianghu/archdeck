@@ -8,6 +8,8 @@ import { execFileSync } from 'node:child_process'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   MAX_PREVIEW_BYTES,
+  adrTitle,
+  readAdrTitles,
   countLines,
   langOf,
   listSourceFiles,
@@ -151,6 +153,24 @@ describe('G17 读单个文件', () => {
   it('路径必须在清单中（防穿越）', () => {
     expect(readSourceFile(repo, files(), '../demo/packages/desk/model/app/system.yaml')).toBeNull()
     expect(readSourceFile(repo, files(), 'node_modules/dep/index.js')).toBeNull()
+  })
+})
+
+describe('E9 ADR 标题', () => {
+  it('标题取文件第一行 # 之后的文字，去掉「ADR-0025：」前缀', () => {
+    expect(adrTitle('# ADR-0025：草图是思考的介质\n\n正文')).toBe('草图是思考的介质')
+    expect(adrTitle('\n# 模块分级')).toBe('模块分级')
+    expect(adrTitle('正文没有标题')).toBeUndefined()
+  })
+  it('只读文件名以四位编号开头的 .md，读不出标题的不列', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'adr-'))
+    write(dir, 'docs/adr/0025-sketch.md', '# ADR-0025：草图\n')
+    write(dir, 'docs/adr/0026-blank.md', '没有标题\n')
+    write(dir, 'docs/adr/README.md', '# 索引\n')
+    expect(readAdrTitles(dir, ['docs/adr/0025-sketch.md', 'docs/adr/0026-blank.md', 'docs/adr/README.md', 'docs/adr/0027-gone.md'])).toEqual({
+      'docs/adr/0025-sketch.md': '草图',
+    })
+    fs.rmSync(dir, { recursive: true, force: true })
   })
 })
 

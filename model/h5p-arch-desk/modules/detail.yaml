@@ -32,6 +32,7 @@ modules:
     codeRefs: [scripts/lint-model.ts]
   - id: model.types
     name: 类型与 Schema
+    adrs: [22, 26]
     codeRefs: [src/model/types.ts, src/model/names.ts, src/model/project-summary.ts, src/model/design.ts, src/model/scenario/types.ts, src/model/source/types.ts, src/model/governance/types.ts, src/model/intent/types.ts, src/model/rework/types.ts, src/model/review/types.ts, src/model/evolution/types.ts, schema/arch-file.schema.json]
   - id: model.pipeline
     name: 加载流水线

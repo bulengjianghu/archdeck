@@ -7,7 +7,6 @@
 import { computed, ref, watch } from 'vue'
 import type { ModuleDef } from '@/model'
 import { useDesk } from '@/state/inject'
-import { renameHasImpact, type RenameImpact } from '@/state/desk/edit/session'
 import { CHANGE_BADGES } from '../labels'
 import { requestSketch } from '../actions'
 import { ask } from '../../edit/useEditDialog'
@@ -24,6 +23,7 @@ const name = ref('')
 const short = ref('')
 const resp = ref('')
 const code = ref('')
+const adrs = ref('')
 const newIf = ref('')
 watch(
   m,
@@ -32,6 +32,7 @@ watch(
     short.value = shortOf(x.id)
     resp.value = x.responsibility ?? ''
     code.value = (x.codeRefs ?? []).join(', ')
+    adrs.value = (x.adrs ?? []).join(', ')
   },
   { immediate: true },
 )
@@ -45,14 +46,15 @@ function commitName() {
   if (v !== m.value.name) report(e.updateModule(m.value.id, { name: v }))
 }
 /** X7d：改 ID 的影响（输入时即时预览，提交前有影响要确认）：级联改名的后代、受影响的关系、随之改名的下一层草图文件、当前版本里的引用 */
-const impact = computed<RenameImpact | null>(() => {
+const impact = computed(() => {
   const v = short.value.trim()
   if (!v || v === shortOf(m.value.id)) return null
   const r = e.previewRename(m.value.id, v)
   return 'impact' in r ? r.impact : null
 })
+type Impact = NonNullable<typeof impact.value>
 const sketchFile = (mount: string) => `sketches/${mount}.yaml`
-function impactLines(x: RenameImpact): string[] {
+function impactLines(x: Impact): string[] {
   return [
     `级联改名的后代模块：${x.descendants} 个`,
     `受影响的关系：${x.relations} 条`,
@@ -66,7 +68,7 @@ async function commitId() {
   const v = short.value.trim()
   if (!v || v === shortOf(m.value.id)) return
   const x = impact.value
-  if (x && renameHasImpact(x)) {
+  if (x?.significant) {
     const go = await ask({ title: `把「${m.value.id}」改为「${x.to}」？`, lines: impactLines(x), ok: '改 ID' })
     if (!go) return void (short.value = shortOf(m.value.id))
   }
@@ -86,6 +88,18 @@ const fileLike = computed(() => codeList.value.filter(x => /\.[a-z0-9]+$/i.test(
 function commitCode() {
   const now = codeList.value
   if (now.join('\n') !== (m.value.codeRefs ?? []).join('\n')) report(e.updateModule(m.value.id, { codeRefs: now.length ? now : undefined }))
+}
+/** E9：相关决策——ADR 编号（整数，逗号分隔；写 ADR-0025、0025 也认），失焦提交一步；不是正整数的报出、不提交 */
+function commitAdrs() {
+  const parts = adrs.value
+    .split(/[,，\s]+/)
+    .map(x => x.trim().replace(/^ADR-?/i, ''))
+    .filter(Boolean)
+  const bad = parts.filter(x => !/^\d+$/.test(x) || Number(x) < 1)
+  if (bad.length) return void emit('note', `ADR 编号要写正整数：${bad.join('、')}`)
+  const now = [...new Set(parts.map(Number))]
+  adrs.value = now.join(', ')
+  if (now.join(',') !== (m.value.adrs ?? []).join(',')) report(e.updateModule(m.value.id, { adrs: now.length ? now : undefined }))
 }
 const closed = computed(() => !!e.sketch.value?.closed?.includes(m.value.id))
 const setCore = (v: boolean) => report(e.updateModule(m.value.id, { core: v || undefined }))
@@ -123,7 +137,7 @@ const blur = (ev: KeyboardEvent) => (ev.target as HTMLElement).blur()
         <!-- 回车阻止缺省：否则同一次按键的 keypress 会落到确认对话框刚获得焦点的按钮上，直接确认 -->
         <input v-model="short" name="module-id" @blur="commitId" @keydown.enter.prevent="blur" />
       </span>
-      <span v-if="impact && renameHasImpact(impact)" class="impact small" data-testid="rename-impact">
+      <span v-if="impact?.significant" class="impact small" data-testid="rename-impact">
         <template v-for="line in impactLines(impact)" :key="line">{{ line }}<br /></template>
       </span>
     </label>
@@ -142,6 +156,10 @@ const blur = (ev: KeyboardEvent) => (ev.target as HTMLElement).blur()
       <span class="lab">代码落点 <span class="muted">（目录级，逗号分隔）</span></span>
       <input v-model="code" name="module-code" placeholder="src/state/desk/**" @blur="commitCode" @keydown.enter="blur" />
       <span v-if="fileLike.length" class="warn small">像是文件：{{ fileLike.join('、') }}——草图只写目录级，细到文件由 AI 补</span>
+    </label>
+    <label class="f">
+      <span class="lab">相关决策 <span class="muted">（ADR 编号，逗号分隔，如 25, 27）</span></span>
+      <input v-model="adrs" name="module-adrs" placeholder="25, 27" @blur="commitAdrs" @keydown.enter="blur" />
     </label>
     <div v-if="from.length || lineage" class="f">
       <span class="lab">血缘 <span class="muted">（只读）</span></span>

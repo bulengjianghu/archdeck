@@ -9,7 +9,7 @@
 本地源码根目录（system.source.repo，G1）     接入层：只列文件、读文件、做语法摘要，不判断归属
    │ readSourceTree / readSourceFile / readExports
    ▼
-SourceTree { files, packages, lines } · SourceFile · ExportedSymbol[]
+SourceTree { files, packages, lines, adrTitles } · SourceFile · ExportedSymbol[]
    │ （开发服务器端点；命令行直接调用）
    ▼
 assignFiles(index, files, sourceIgnore) → SourceOwnership    模型层：归属、入口、对应、投影
@@ -26,7 +26,7 @@ moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
 |---|---|---|
 | `resolveSourceRoot(system, workspaceRoot, env)` | 先看 `ARCH_SOURCE_ROOT_<ID>`，再用工作区根目录（`ARCH_WORKSPACE_ROOT`，缺省为本包往上三级）拼上 `source.repo`；返回 `{ status: 'local', root }`，或 `{ status: 'error', tried, reason }`（配置错误，调用方报错） | G1 |
 | `listSourceFiles(root)` | 在 git 仓库内执行 `git ls-files --cached --others --exclude-standard`（相对 `root`），失败时遍历目录并排除 `node_modules`、`.git`、`dist`、`coverage` 等；按路径排序 | G2 |
-| `readSourceTree(modelRoot, project, …)` | 组合以上两步，并读取清单中每个 `package.json` 的 `name` / `main` / `exports` / `types`，交给包入口（`packageEntry`）用；统计 TS / JS / Vue 文件的物理行数（按修改时间与大小缓存） | G1、G2、G10、G19 |
+| `readSourceTree(modelRoot, project, …)` | 组合以上两步，并读取清单中每个 `package.json` 的 `name` / `main` / `exports` / `types`，交给包入口（`packageEntry`）用；统计 TS / JS / Vue 文件的物理行数（按修改时间与大小缓存）；读文件名以四位编号开头的 `.md` 第一行 `# ` 之后的标题（去掉「ADR-0025：」前缀，`readAdrTitles`） | G1、G2、G10、G19、E9 |
 | `readSourceFile(root, files, path)` | 路径必须在清单中（防穿越）；超过 512 KB 或含 NUL 字节时只返回 `{ tooLarge }` / `{ binary }` | G17 |
 | `readExports(root, files, path)` | TypeScript `createSourceFile` 做语法解析：`export` 声明、`export { a as b }`、`export default`；相对路径的 `export *` / `export … from` 用 `resolveRelative` 补全（K2），补全到非 TS / JS 文件时不追，最多追 5 层，记录来源文件；签名为声明文本去掉函数体与类成员体，最多 25 行 | G11 |
 
@@ -55,7 +55,8 @@ moduleEntry · matchExports · fileNodes · sourceIssues · fileTree
 | `specResolver(files, packages, aliases)` | 说明符解析：相对路径补全；裸说明符先按 tsconfig `paths`（接入层读出的 `PathAlias`），再按工作区包名解析到包入口或包目录下的子路径；解析不到返回 `null` | K2 |
 | `matchExports(index, id, exports)` | 模块的接口（`moduleInterfaces`：`provides` 加上 `owner` 在本模块子树内的接口）的名称（去掉括号与泛型）对导出名：`matched`、`undescribed`（导出未描述）、`unexported`（描述未导出）；默认导出不参与 | G12 |
 | `fileNodes(index, view, owners)` | 归属模块逐个 `mapEndpoint` 到当前层次：`local` → 子模块节点，`external` → 边界节点（视图中有时），`skip` → 不高亮（`self: true`）；分层总览另加路径上的核心模块节点 | G14 |
-| `sourceIssues(index, own, tree)` | 每个冲突文件、未归属文件一条 warning（`source.conflict` / `source.unowned`），`entry` 不在清单中一条 warning（`source.entry`，定位到描述出处）；场景证据文件不在清单中一条 warning（`scenario.evidence`，定位到场景出处） | G6、G7、G9、G10、S15 |
+| `sourceIssues(index, own, tree)` | 每个冲突文件、未归属文件一条 warning（`source.conflict` / `source.unowned`），`entry` 不在清单中一条 warning（`source.entry`，定位到描述出处）；场景证据文件不在清单中一条 warning（`scenario.evidence`，定位到场景出处）；模块 `adrs` 在 ADR 目录下找不到文件一条 warning（`module.adr-missing`，`adr.ts` 的 adrIssues） | G6、G7、G9、G10、S15、E9 |
+| `moduleAdrs(index, id, files, titles)` · `ancestorAdrs(index, id)` | E9：模块自己写的相关决策（编号、`<adrDir>/<四位编号>-*.md` 文件、标题）；祖先写的（不继承，面板折叠成一行）；adrDir 缺省 `docs/adr`、`system.source.adrDir` 可改 | E9 |
 | `missingEvidence(index, files)` | 各场景 `evidence` 中不在文件清单里的路径，带所属场景；`sourceIssues`、返工清单与场景面板共用 | S15 |
 | `fileTree(files, own, lines?, maxLines?)` | 按 `/` 组成目录树，目录带文件数、未归属数与忽略数，内部文件全部忽略的目录标为忽略；给出行数时目录另带行数合计与超长文件数；目录在前、按名称排序 | G18、G21 |
 | `moduleLines(files, lines, maxLines)` | 一组文件（如模块的文件）的行数合计与超长数；单个文件是否超长用契约里的 `isLong`（`src/model/names.ts`，U10） | G20、G21 |

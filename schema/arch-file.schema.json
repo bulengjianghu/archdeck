@@ -362,6 +362,10 @@
             "generatedAt": {
               "type": "string"
             },
+            "adrDir": {
+              "type": "string",
+              "description": "E9：ADR 文件所在目录（相对源码根目录），缺省 docs/adr"
+            },
             "history": {
               "type": "object",
               "additionalProperties": false,
@@ -449,6 +453,15 @@
         "docRefs": {
           "$ref": "#/definitions/textList"
         },
+        "adrs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": "E9：相关架构决策的编号（整数列表，如 [25, 27]，不要写 0025）；ADR 文件在源码根目录的 docs/adr/<四位编号>-*.md"
+        },
         "owner": {
           "type": "string"
         },
@@ -533,6 +546,15 @@
         },
         "docRefs": {
           "$ref": "#/definitions/textList"
+        },
+        "adrs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": "E9：相关架构决策的编号（整数列表，如 [25, 27]，不要写 0025）；ADR 文件在源码根目录的 docs/adr/<四位编号>-*.md"
         },
         "owner": {
           "type": "string"

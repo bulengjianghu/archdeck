@@ -778,3 +778,42 @@ test('X7d（第五轮 T3）：草图面板改 ID 时提交前预览影响（后�
     box.restore()
   }
 })
+
+test('E9、DV-13（第五轮 T3）：模块面板「相关决策」列编号与标题、单击在副栏预览，子模块只给上级决策的折叠行；草图模块表单可编辑 adrs 并写进草图文件', async ({
+  page,
+}) => {
+  await openDesk(page, '/p/h5p-arch-desk?level=present&sel=m:present.sketch')
+  const adrs = page.locator('[data-testid="module-adrs"]')
+  await expect(adrs.locator('li')).toHaveCount(2)
+  await expect(adrs.locator('[data-adr="25"]')).toContainText('ADR-0025')
+  await expect(adrs.locator('[data-adr="25"]')).toContainText('草图是思考的介质')
+  await adrs.locator('[data-adr="25"] button').click()
+  await expect(page.locator('.source-view')).toContainText('ADR-0025')
+  // 不继承：子模块不列祖先的决策，只给折叠行
+  await openDesk(page, '/p/h5p-arch-desk?level=present.sketch&sel=m:present.sketch.canvas')
+  const panel = page.locator('.module-panel')
+  await expect(panel.locator('[data-testid="module-adrs"]')).toHaveCount(0)
+  await panel.getByRole('button', { name: /上级模块的决策 2 条/ }).click()
+  await expect(panel).toContainText('ADR-0024')
+
+  const box = sandbox('zz-e2e-adrs')
+  try {
+    fs.mkdirSync(path.join(box.dir, 'sketches'), { recursive: true })
+    fs.writeFileSync(path.join(box.dir, 'design.yaml'), 'design:\n  name: E2E 决策\n  status: draft\n')
+    fs.writeFileSync(path.join(box.dir, 'sketches/state.desk.yaml'), BAR_SKETCH.replace('id: zz-e2e-bar', 'id: zz-e2e-adrs'))
+    await openDesk(page, '/p/h5p-arch-desk')
+    await page.locator('select[aria-label="切换版本"]').selectOption('zz-e2e-adrs/sketch')
+    await expect(page.locator('.sketch-canvas')).toBeVisible()
+    await graphNode(page, 'state.desk.alpha').locator('.name').click()
+    const field = page.locator('[data-testid="sketch-module-form"] [name="module-adrs"]')
+    await field.fill('ADR-0025, 27, 25')
+    await field.press('Enter')
+    await expect(field).toHaveValue('25, 27')
+    await saveButton(page).click()
+    await expect
+      .poll(() => (sketchFile(box.dir, 'state.desk').modules as { id: string; adrs?: number[] }[]).find(m => m.id === 'state.desk.alpha')?.adrs)
+      .toEqual([25, 27])
+  } finally {
+    box.restore()
+  }
+})

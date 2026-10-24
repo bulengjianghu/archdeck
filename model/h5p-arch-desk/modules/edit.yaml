@@ -104,6 +104,7 @@ modules:
     responsibility: edited 动作（携带编辑的影响与编辑后当前张的层次）：选中的被改名（含前缀级联）→ 换成新 ID；被删除 → 清空；新建、合并、拆分 → 选中结果；层次为编辑后的当前张（不在索引里时退到旧路径上最近仍存在的祖先）；撤销 / 重做同样跟随，撤销的一步在别的草图上时切到那张。不进浏览器历史。
   - id: state.desk.edit
     name: 编辑中的草图
+    adrs: [24, 25]
     parent: state.desk
     kind: component
     responsibility: |
@@ -170,6 +171,7 @@ modules:
   # present.sketch 是第二级模块（名称、kind、职责属骨架，设计 sketch-v2 晋升后写在 intent/skeleton.yaml）；这里只补实现原理与子模块（X1）
   - id: present.sketch
     name: 草图画布
+    adrs: [24, 25]
     parent: present
     kind: subsystem
     principle: |
@@ -213,6 +215,7 @@ modules:
     codeRefs: [src/components/sketch/SketchTree.vue]
   - id: present.panel.sketch
     name: 草图面板
+    adrs: [25]
     parent: present.panel
     kind: component
     responsibility: |

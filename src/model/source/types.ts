@@ -27,7 +27,15 @@ export const DEFAULT_MAX_LINES = 500
 
 /** 源码清单：开发服务器实时读取（G1、G2）。源码在本地是前提，读不到是配置错误（error，附原因与尝试的路径） */
 export type SourcePayload =
-  | { status: 'local'; root: string; files: string[]; packages: Record<string, PackageEntry>; lines?: Record<string, number> }
+  | {
+      status: 'local'
+      root: string
+      files: string[]
+      packages: Record<string, PackageEntry>
+      lines?: Record<string, number>
+      /** E9：ADR 文件 → 标题（文件第一行 `# ` 之后，去掉「ADR-0025：」前缀） */
+      adrTitles?: Record<string, string>
+    }
   | { status: 'error'; reason: string; tried?: string }
 
 export type LocalSource = Extract<SourcePayload, { status: 'local' }>

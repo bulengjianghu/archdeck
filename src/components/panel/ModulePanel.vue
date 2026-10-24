@@ -13,6 +13,7 @@ import ModuleGovernance from './ModuleGovernance.vue'
 import ModuleEvolution from './ModuleEvolution.vue'
 import PortTriad from './PortTriad.vue'
 import ReviewSection from './ReviewSection.vue'
+import ModuleDecisions from './ModuleDecisions.vue'
 import { canDesignAt, openNewDesign } from '../edit/designHere'
 
 const props = defineProps<{ id: string }>()
@@ -58,6 +59,7 @@ function openChild(childId: string) {
       <p v-else class="muted">未填写</p>
     </Section>
     <ReviewSection :id="m.id" part="diff" />
+    <ModuleDecisions :id="m.id" />
 
     <template v-if="isLayer">
       <Section title="抽象原则">

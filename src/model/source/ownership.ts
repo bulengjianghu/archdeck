@@ -7,6 +7,7 @@ import { mapEndpoint } from '../project'
 import type { Issue, LevelView, ModelIndex, ModuleEntity, ScenarioEntity } from '../types'
 import { hasWildcard, matchRef, normalizeRef, staticPrefix } from './glob'
 import { indexFile, packageEntry } from './resolve'
+import { adrIssues } from './adr'
 import { DEFAULT_MAX_LINES, type DirNode, type ExportMatch, type ExportedSymbol, type FileNodes, type LocalSource, type ModuleEntry, type SourceOwnership } from './types'
 
 /** G3、G5–G8：按 codeRefs 归属每个文件 */
@@ -137,7 +138,7 @@ export function missingEvidence(index: ModelIndex, files: readonly string[]): { 
   return index.model.scenarios.flatMap(scenario => (scenario.evidence ?? []).filter(file => !set.has(file)).map(file => ({ scenario, file })))
 }
 
-/** G6、G7、G10、S15：归属警告与证据文件警告（只对当前版本报，G9 由调用方决定） */
+/** G6、G7、G10、S15、E9：归属警告、证据文件警告与找不到的相关决策（只对当前版本报，G9 由调用方决定） */
 export function sourceIssues(index: ModelIndex, own: SourceOwnership, tree: Pick<LocalSource, 'files' | 'packages'>): Issue[] {
   const issues: Issue[] = []
   const name = (id: string) => index.modules.get(id)?.name ?? id
@@ -159,6 +160,7 @@ export function sourceIssues(index: ModelIndex, own: SourceOwnership, tree: Pick
   for (const { scenario, file } of missingEvidence(index, tree.files)) {
     issues.push({ severity: 'warning', code: 'scenario.evidence', message: `场景「${scenario.name}」的证据文件「${file}」不在源码文件清单中`, ...scenario.src })
   }
+  issues.push(...adrIssues(index, tree.files))
   return issues
 }
 

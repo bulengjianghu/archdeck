@@ -20,6 +20,7 @@ modules:
     codeRefs: [scripts/agent/**, scripts/arch.ts, scripts/arch-mcp.ts, .mcp.json]
   - id: model.governance
     name: 架构治理
+    adrs: [15, 26]
     codeRefs: [src/model/governance/index.ts]
   - id: model.rework
     name: 返工清单
@@ -29,6 +30,7 @@ modules:
     codeRefs: [src/model/evolution/index.ts, src/model/evolution/history.ts, src/model/evolution/level.ts]
   - id: model.intent
     name: 意图
+    adrs: [23, 24, 25]
     codeRefs: [src/model/intent/index.ts]
 
   # ── 呈现层 ──────────────────────────────────────────────

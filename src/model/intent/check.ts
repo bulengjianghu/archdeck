@@ -114,7 +114,7 @@ export interface CompareOptions {
   names?: ReadonlyMap<string, string>
 }
 
-const TEXT_FIELDS = ['name', 'responsibility', 'abstraction', 'includes', 'excludes', 'principle', 'codeRefs', 'docRefs', 'entry', 'owner', 'tags', 'status'] as const
+const TEXT_FIELDS = ['name', 'responsibility', 'abstraction', 'includes', 'excludes', 'principle', 'codeRefs', 'docRefs', 'adrs', 'entry', 'owner', 'tags', 'status'] as const
 
 /** 写了的字段与对象版本的差别：结构（kind、core、mayDependOn）两种口径都比；文字只在相对基线时比（X17） */
 function moduleFields(k: ModuleDef, t: ModuleEntity, mode: CompareMode): string[] {

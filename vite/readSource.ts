@@ -104,7 +104,39 @@ export function readSourceTree(modelRoot: string, project: string, projectRoot: 
   const at = resolveSourceRoot(project, system, workspaceRoot(projectRoot, env), env)
   if (at.status === 'error') return at
   const files = listSourceFiles(at.root)
-  return { status: 'local', root: at.root, files, packages: readPackages(at.root, files), lines: countLines(at.root, files) }
+  return {
+    status: 'local',
+    root: at.root,
+    files,
+    packages: readPackages(at.root, files),
+    lines: countLines(at.root, files),
+    adrTitles: readAdrTitles(at.root, files),
+  }
+}
+
+/**
+ * E9：ADR 文件（文件名以四位编号开头的 .md，不论在哪个目录；模型层按 adrDir 取用）第一行的标题，供模块面板「相关决策」；读不出的不列
+ */
+export function readAdrTitles(root: string, files: readonly string[]): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const f of files) {
+    if (!/(^|\/)\d{4}[^/]*\.md$/.test(f)) continue
+    try {
+      const title = adrTitle(fs.readFileSync(path.join(root, f), 'utf8').slice(0, 2048))
+      if (title) out[f] = title
+    } catch {
+      /* 读不了就不给标题 */
+    }
+  }
+  return out
+}
+
+/** E9：ADR 文件第一行 `# ` 之后的文字，去掉「ADR-0025：」式前缀；读不出为 undefined */
+export function adrTitle(text: string): string | undefined {
+  const first = text.split('\n').find(l => l.trim())
+  const m = first ? /^#\s+(.*)$/.exec(first.trim()) : null
+  if (!m) return undefined
+  return m[1].replace(/^ADR[-\s]?\d+\s*[：:]\s*/, '').trim() || undefined
 }
 
 /** G19：行数缓存，键为绝对路径，按修改时间与大小判断是否过期 */

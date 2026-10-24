@@ -55,7 +55,7 @@ modules:
     principle: |
       - **归属是关于被描述系统的知识**：换成命令行（lint:model）或 AI 查询同样成立，所以在模型层；接入层只给文件清单。
       - **与结构投影同一套端点规则**：选中文件的归属模块用 mapEndpoint 提升到当前层次（与关系、帧一致）。
-    codeRefs: [src/model/source/ownership.ts]
+    codeRefs: [src/model/source/ownership.ts, src/model/source/adr.ts]
   - id: model.source.resolve
     name: 路径补全与包入口
     parent: model.source

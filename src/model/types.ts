@@ -30,6 +30,8 @@ export interface SourceDef {
   repo?: string
   commit?: string
   generatedAt?: string
+  /** E9：ADR 文件所在目录（相对源码根目录），缺省 docs/adr */
+  adrDir?: string
   /** J1、J4：git 历史的窗口、补充的缺陷匹配与耦合阈值（都可选） */
   history?: HistoryDef
 }
@@ -68,6 +70,8 @@ export interface ModuleDef {
   /** 对外入口文件，相对源码根目录；不写时按约定推出（G10） */
   entry?: string
   docRefs?: string[]
+  /** E9：相关架构决策的编号（整数，显示为 ADR-0025）；面板「相关决策」列出，不继承 */
+  adrs?: number[]
   owner?: string
   tags?: string[]
   // 以下仅 kind: layer（abstraction 例外：非层模块的对内原则由挂在它身上的草图写入，X10）

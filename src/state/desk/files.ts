@@ -12,6 +12,9 @@ import {
   moduleFiles,
   moduleLines,
   sourceIssues,
+  moduleAdrs,
+  ancestorAdrs,
+  adrLabel,
   type DirNode,
   type ExportMatch,
   type ExportedSymbol,
@@ -74,8 +77,15 @@ export function createFiles({ state, index, view, sync, design }: FilesInputs) {
     !design && index.value && ownership.value && local.value ? sourceIssues(index.value, ownership.value, local.value) : [],
   )
 
+  /** E9：模块自己写的相关决策（编号、文件、标题）与祖先写的（不继承，面板折叠成一行） */
+  const adrsOf = (moduleId: string) => (index.value ? moduleAdrs(index.value, moduleId, local.value?.files ?? [], local.value?.adrTitles) : [])
+  const ancestorAdrsOf = (moduleId: string) =>
+    index.value ? ancestorAdrs(index.value, moduleId).map(x => ({ ...x, label: adrLabel(x.n), name: index.value?.modules.get(x.id)?.name ?? x.id })) : []
+
   return {
     payload,
+    adrsOf,
+    ancestorAdrsOf,
     ownership,
     tree,
     lines,
