@@ -246,6 +246,9 @@ describe('编辑会话的纯函数（X7g、X7i、X20）', () => {
     expect(reloaded(a, read())).toBe(a)
     expect(reloaded(a, read(def, 'h1'))).toMatchObject({ stale: false, read: { 'core.a': { hash: 'h1' } }, past: [] })
     expect(reloaded(a, read(SEED, 'h9')).stale).toBe(true)
+    // 读到写回前的旧文件标了已过时，之后读到的指纹又与会话一致：解除（第五轮 T4）
+    const staleNow = reloaded(a, read(SEED, 'h9'))
+    expect(reloaded(staleNow, read()).stale).toBe(false)
   })
 
   it('X7i：把本次的每一步重放到新文件上；失败的列出、仍为已过时；放弃本次改动以新文件重新开始', () => {

@@ -309,7 +309,18 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     const hand = page.locator('.info-bar').getByRole('button', { name: /交给 AI$/ })
     await expect(hand.locator('.txt')).toHaveText('保存并交给 AI')
     await hand.click()
-    await expect(page.locator('.info-bar .hand .txt')).toHaveText('已复制指令')
+    // 保存、重新读入（服务端读 git 算基线与改动摘要）再复制：全量并行跑时服务端偏慢，多给等待（第五轮 T4）；失败时带出按钮文字与信息条说明
+    await expect
+      .poll(
+        async () => {
+          const txt = await page.locator('.info-bar .hand .txt').textContent()
+          if (txt === '已复制指令') return 'ok'
+          const note = page.locator('.info-bar .note')
+          return `pending: ${txt}${(await note.count()) ? ` / note: ${await note.textContent()}` : ''}`
+        },
+        { timeout: 30_000 },
+      )
+      .toBe('ok')
     const prompt = await page.evaluate<string>('navigator.clipboard.readText()')
     expect(prompt).toContain('# 按草图扩展：设计「zz-e2e-sketch」')
     expect(prompt).toContain('## 相对基线的变更（按血缘）')

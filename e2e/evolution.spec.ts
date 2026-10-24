@@ -54,7 +54,9 @@ test('开启时间耦合：本层出现波浪线，单击选中它，地址带 s
   await expect.poll(() => query(page).get('sel')).toMatch(/^c:.+~.+$/)
   await expect(page.locator('.couple-panel')).toContainText('同提交')
   await expect(page.locator('.couple-panel')).toContainText('共同的提交')
-  // 模块面板的「演化」一节默认折叠，展开后列出提交
+  // 模块面板的「演化」一节默认折叠，展开后列出提交（先收起右下角的「显示」面板，免得它盖住节点）
+  const head = panel.locator('.head-btn')
+  if ((await head.getAttribute('aria-expanded')) === 'true') await head.click()
   await page.locator('.vue-flow__node[data-id="present.panel"]').click()
   await expect(page.locator('.panel')).toContainText('演化')
   await page

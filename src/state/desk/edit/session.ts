@@ -348,7 +348,7 @@ export function saved(
 }
 
 /**
- * 描述重新加载（按设计）：指纹都相同则不变；读到的内容与会话里的一致（刚保存的）则接上新指纹；否则文件已在外部改动。
+ * 描述重新加载（按设计）：指纹都相同则不变（已过时的解除）；读到的内容与会话里的一致（刚保存的）则接上新指纹；否则文件已在外部改动。
  */
 export function reloaded(s: EditSession, read: Record<string, ReadSketch>): EditSession {
   const was = Object.entries(s.read)
@@ -357,7 +357,8 @@ export function reloaded(s: EditSession, read: Record<string, ReadSketch>): Edit
   const now = Object.entries(read)
     .map(([m, r]) => `${m}:${r.hash}`)
     .sort()
-  if (same(was, now)) return s
+  // 指纹与会话读到的一致：文件没有在外部改动——之前因读到写回前的旧文件而标的「已过时」随之解除（第五轮 T4）
+  if (same(was, now)) return s.stale ? { ...s, stale: false } : s
   const fresh = Object.entries(read).every(([m, r]) => same(r.def, s.doc.sketches[m])) && Object.keys(s.read).every(m => read[m] || !s.doc.sketches[m])
   if (fresh) {
     const origin = Object.fromEntries(Object.keys(read).map(m => [m, m]))
