@@ -1,6 +1,6 @@
 # ADR-0027：模块分级——核心、普通、共用件
 
-- 状态：已实现（第五轮 T2）
+- 状态：已实现（第五轮 T2）；`role` 的取值被 [ADR-0030](./0030-boundaries-and-assembly.md) 扩展（加 `port` / `adapter`）
 - 日期：2026-10-24
 - 决策人：项目负责人（2026-10-24 认可草案；补充裁决：共用件在时序图里不画泳道，消息折叠为步骤上的角标）
 - 关联：原则 SP4、SP5（[ADR-0028](./0028-positioning-and-principles.md)）；紧随 [ADR-0026](./0026-relations-are-interactions.md)；修订 [ADR-0023](./0023-sketch-reviewed-and-evolution.md) 的确认范围（Z4）与 [ADR-0025](./0025-sketch-as-thinking-medium.md) 的内外归属（X10）；规则 §1.1 角色、O2、O4、O6、O8–O11、P18、M16、Z4、X4、X7、X10、X17、X18、U11、U12、Q13（02）；格式 04 §3.2、§3.10；需求 C-16、C-17、D-22、GV-12、GV-13、RV-3、SK-22

@@ -1,6 +1,6 @@
 # ADR-0026：依赖是事实，关系是交互
 
-- 状态：已采纳（已实现，第五轮 T1；口径修正，第五轮 T4）
+- 状态：已采纳（已实现，第五轮 T1；口径修正，第五轮 T4）；关系四类被 [ADR-0029](./0029-interaction-kinds-and-via.md) 修订（`calls` 拆为 `queries` / `commands`，`implements` 降为端口事实）
 - 日期：2026-10-24
 - 决策人：项目负责人（2026-10-24 认可草案）
 - 关联：修订 [ADR-0022](./0022-relation-semantics.md)（`depends` 不再是关系类型）、[ADR-0016](./0016-concept-submodules-and-type-deps.md)（K7 的口径）；原则 SP2、SP5、SP6（[ADR-0028](./0028-positioning-and-principles.md)）；规则 §1.1 关系、M11、M14、M15、L10、L11、S12、S19、K5、K6、K7、K9、K11、Q7、Q8、Q12、X14（02）；格式 [04 §3.4](../04-description-format.md#34-关系)；需求 C-7、D-6、GV-2
