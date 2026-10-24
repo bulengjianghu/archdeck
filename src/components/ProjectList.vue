@@ -129,11 +129,15 @@ const shortCommit = (c?: string) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0
                 v-if="p.health.shared"
                 class="shared"
                 :class="p.health.shared.reverse || p.health.shared.over ? 'warn' : 'ok'"
-                :title="`共用件 ${p.health.shared.modules} 个：反向依赖 ${p.health.shared.reverse} 条；行数占比 ${pct(p.health.shared.lineRatio)}（阈值 ${pct(p.health.shared.limits.lines)}）、修改占比 ${pct(p.health.shared.changeRatio)}（阈值 ${pct(p.health.shared.limits.changes)}）（Q13）`"
+                :title="`共用件 ${p.health.shared.modules} 个：反向依赖 ${p.health.shared.reverse} 条；行数占比 ${pct(p.health.shared.lineRatio)}（阈值 ${pct(p.health.shared.limits.lines)}）、修改占比 ${pct(p.health.shared.changeRatio)}（阈值 ${pct(p.health.shared.limits.changes)}）（Q13）${p.health.shared.topFanIn ? `；入度最高的共用件 ${p.health.shared.topFanIn.module}：扇入 ${p.health.shared.topFanIn.ca}，占系统模块 ${pct(p.health.shared.topFanIn.ratio)}（Q15）` : ''}`"
               >
                 <dt>共用件</dt>
                 <dd>
-                  反向 {{ p.health.shared.reverse }}<small> · 体量 {{ pct(p.health.shared.lineRatio) }}{{ p.health.shared.over ? ' 超' : '' }}</small>
+                  反向 {{ p.health.shared.reverse
+                  }}<small>
+                    · 体量 {{ pct(p.health.shared.lineRatio) }}{{ p.health.shared.over ? ' 超' : ''
+                    }}<template v-if="p.health.shared.topFanIn"> · 入度 {{ p.health.shared.topFanIn.ca }}</template></small
+                  >
                 </dd>
               </div>
             </template>

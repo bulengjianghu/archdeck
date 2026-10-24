@@ -263,3 +263,30 @@ describe('D-25：步骤的包含链', () => {
     expect(wrapper.text()).not.toContain('结构关系')
   })
 })
+
+describe('Q15：根层「架构治理」共用件一行的入度最高的共用件', () => {
+  it('领域模型认作共用件时列出它的扇入与占比，单击跳到它', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+    await router.push('/')
+    const desk = createDeskState(
+      async () => ({
+        dir: 'model/test',
+        files: [...scenarioFiles(), { path: 'modules/zz-refs.yaml', text: REFS }, { path: 'intent/roles.yaml', text: 'roles:\n  domain.models: shared\n' }],
+      }),
+      { source },
+    )
+    desk.attachRouter(router)
+    await desk.init()
+    await flushPromises()
+    const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+    await flushPromises()
+    const top = desk.evolution.shared.value!.topFanIn!
+    expect(top.module).toBe('domain.models')
+    const line = wrapper.find('[data-testid="shared-top"]')
+    expect(line.text()).toContain(`Ca ${top.ca}`)
+    expect(line.text()).toContain(`${Math.round(top.ratio * 100)}%`)
+    await line.find('button').trigger('click')
+    await flushPromises()
+    expect(desk.selection.value).toEqual({ kind: 'module', id: 'domain.models' })
+  })
+})

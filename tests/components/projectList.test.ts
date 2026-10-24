@@ -71,4 +71,31 @@ describe('项目列表', () => {
     expect(b.find('.violations dd').text()).not.toContain('存量')
     expect(a.find('.scale').text()).toContain('模块 1')
   })
+
+  it('Q13、Q15：共用件一行带上入度最高的共用件（扇入与占比在悬停中）', async () => {
+    const shared = {
+      modules: 1,
+      reverse: 0,
+      lineRatio: 0.1,
+      changeRatio: null,
+      limits: { lines: 0.2, changes: 0.3 },
+      over: false,
+      topFanIn: { module: 'model.types', ca: 12, ratio: 0.4 },
+    }
+    const health = {
+      unowned: 0,
+      conflicts: 0,
+      violations: { count: 0, new: 0, resolved: 0, allowed: 0, delta: null },
+      cycles: { count: 0, maxSize: 0, cyclicity: 0 },
+      unconfirmed: 0,
+      shared,
+    }
+    vi.stubGlobal('fetch', async () => ({ ok: true, json: async () => [{ ...project, id: 'a', designs: [], health }] }))
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)', component: { render: () => null } }] })
+    const wrapper = mount(ProjectList, { global: { plugins: [router] } })
+    await flushPromises()
+    const row = wrapper.find('.shared')
+    expect(row.text()).toContain('入度 12')
+    expect(row.attributes('title')).toContain('入度最高的共用件 model.types：扇入 12，占系统模块 40%（Q15）')
+  })
 })

@@ -153,6 +153,13 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
             <span :class="{ warn: shared.reverse }">反向依赖 {{ shared.reverse }}</span> · 体量
             <span :class="{ warn: shared.over }">行数 {{ pct(shared.lineRatio) }} · 修改 {{ pct(shared.changeRatio) }}</span>
             <span v-if="shared.over" class="warn">（超阈值）</span>
+            <template v-if="shared.topFanIn">
+              ·
+              <span data-testid="shared-top" title="扇入 Ca 最大的共用件：改它牵动的模块最多；只计数、不卡门禁（Q15）"
+                >入度最高 <button class="link" @click="desk.revealModule(shared.topFanIn.module)">{{ name(shared.topFanIn.module) }}</button> Ca
+                {{ shared.topFanIn.ca }}（占 {{ pct(shared.topFanIn.ratio) }}）</span
+              >
+            </template>
           </dd>
         </template>
         <dt>基线</dt>
