@@ -72,7 +72,7 @@ modules:
   - id: model.governance.facts
     name: 事实比对
     parent: model.governance
-    responsibility: 文件依赖按归属提升为模块依赖（一端是归属冲突文件的不提升、单独列出，祖先后代之间的另记，K4）；关系的证实（端点相同或互为祖先后代，notifies 与 streams 两向；implements 只认引用目标声明的接口名或类的 implements / extends，否则只引数据类型为「结构性实现」（info）、引用了函数 / 类 / 变量为「证据像使用」；证实时给出依据相对箭头的知识方向，K5；两端宿主相同的概念拆分不判定，K5a；写了 via 的不判定，K5b）；未证实是否报警（implements，或两端之间没有任何依赖的运行时关系，K6）；未解释的交互（只计有值使用 uses 的，四类关系都算覆盖，notifies 与 streams 覆盖两个方向，K7）；模块分级的治理（ADR-0027）：疑似共用件的建议——没有 role、入度来自 ≥2 层或 ≥3 兄弟、没有运行时出边、不在场景路径上、名称像工具模块，四条依据（U11），共用件子树对子树外非共用件的值依赖（U12）。
+    responsibility: 文件依赖按归属提升为模块依赖（一端是归属冲突文件的不提升、单独列出，祖先后代之间的另记，K4）；关系的证实（端点相同或互为祖先后代，notifies 与 streams 两向；implements 只认引用目标声明的接口名或类的 implements / extends，否则只引数据类型为「结构性实现」（info）、引用了函数 / 类 / 变量为「证据像使用」；证实时给出依据相对箭头的知识方向，K5；两端宿主相同的概念拆分不判定，K5a；写了 via 的不判定，K5b）；未证实是否报警（implements，或两端之间没有任何依赖的运行时关系，K6）；未解释的交互（只计交互使用 invokes 的——调用、new、extends、渲染或交出函数 / 类 / 组件；纯值读取不算，四类关系都算覆盖，notifies 与 streams 覆盖两个方向，K7）；模块分级的治理（ADR-0027）：疑似共用件的建议——没有 role、入度来自 ≥2 层或 ≥3 兄弟、没有运行时出边、不在场景路径上、名称像工具模块，四条依据（U11），共用件子树对子树外非共用件的值依赖（U12）。
     codeRefs: [src/model/governance/facts.ts, src/model/governance/evidence.ts, src/model/governance/roles.ts]
   - id: model.governance.rules
     name: 规则判定

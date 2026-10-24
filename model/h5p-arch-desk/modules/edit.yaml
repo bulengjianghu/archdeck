@@ -135,7 +135,7 @@ modules:
   - id: state.desk.edit.commands
     name: 编辑操作
     parent: state.desk.edit
-    responsibility: 对呈现层的唯一一组编辑操作（if.desk.edit）：enter / exit、run（设计级操作）与 edit（单张操作，包装成设计级操作）、addModule（新建 + 落位一步）、connect、merge、split、demote、promote、moveIn（换层 + 落位一步）、rename、updateModule、moveNode（写位置时补齐还没写进 layout 的节点）、relabel、autoArrange、addReference、setAbstraction、remove（模块级联 / 关系 / 引用节点）与 previewRemove、previewSplit（X7k）、openChild（下钻）、openMount（切到挂在某个模块上的草图：面包屑、设计面板、「加到设计」）、undo / redo、save、saveAndHandToAi、discard、replayOnReload、createDesign（只发挂载点，底稿由服务端从基线复制）、canLeave、onReloaded。每次成功后经 dispatch 交给编辑规则跟随。操作本身不含规则。
+    responsibility: 对呈现层的唯一一组编辑操作（if.desk.edit）：enter / exit、run（设计级操作）与 edit（单张操作，包装成设计级操作）、addModule（新建 + 落位一步）、connect、merge、split、demote、promote、moveIn（换层 + 落位一步）、rename、updateModule、moveNode（写位置时补齐还没写进 layout 的节点）、relabel、autoArrange、addReference、setAbstraction、remove（模块级联 / 关系 / 引用节点）与 previewRemove、previewSplit（X7k）、openChild（下钻）、openMount（切到挂在某个模块上的草图：面包屑、设计面板、「加到设计」）、undo / redo、save、saveAndHandToAi、discard、replayOnReload、createDesign（只发挂载点，底稿由服务端从基线复制）、canLeave（X7a：有未保存改动时离开要确认）、onReloaded（描述重新加载后认出刚保存的或标为已过时；保存进行中到达的推迟到保存完再比对，X7i）。每次成功后经 dispatch 交给编辑规则跟随。操作本身不含规则。
     codeRefs: [src/state/desk/edit/commands.ts]
   - id: state.desk.edit.save
     name: 草图写回同步
@@ -221,7 +221,7 @@ modules:
     responsibility: |
       草图画布下的属性面板（SK-17、SK-18）：顶部两级校验（红色格式错误、黄色语义提示，单击定位，跨草图也能定位）、常驻「待重连 N 条」、不进两级的提示、本张的两个核验数（相对当前版本 N 处偏差 / 相对基线改了 N 处，可展开清单；持久草图只有前者）与面板内提示；
       无选中时为父模块——原则可编辑、「带入现有原则」，名称与职责只读（上一层没写时显示当前版本的文字并标出来源）；根草图无选中时为设计概览（全设计计数与各张草图）；多选时合并 / 删除所选；
-      层：名称、ID、抽象原则、包含 / 不包含、可依赖的层、删层；模块：名称、ID（前缀与唯一校验）、职责、角色（下拉：普通 / 核心 / 共用件 / 事件总线，SK-22）、封闭、代码落点、对外接口、原则、血缘只读（来自 A、B · 合并 / 拆分 / 改 ID / 移动）、「进入下一层 →」；关系：类型、说明、经由接口；引用节点：当前版本里的职责与位置、折叠进来的精确关系、「在模型里查看」「打开挂在它身上的草图」；元信息：挂载点、lifetime、supersedes。
+      层：名称、ID、抽象原则、包含 / 不包含、可依赖的层、删层；模块：名称、ID（前缀与唯一校验；改 ID 前列出影响——级联条数、子草图文件名、当前版本引用数——并二次确认，X7d）、职责、相关决策 adrs（E9）、角色（下拉：普通 / 核心 / 共用件 / 事件总线，SK-22）、封闭、代码落点、对外接口、原则、血缘只读（来自 A、B · 合并 / 拆分 / 改 ID / 移动）、「进入下一层 →」；关系：类型、说明、经由接口；引用节点：当前版本里的职责与位置、折叠进来的精确关系、「在模型里查看」「打开挂在它身上的草图」；元信息：挂载点、lifetime、supersedes。
     principle: 面板只发编辑分组的操作；合并 / 拆分 / 删除这类要对话框的，经 sketchRequest 交给画布。
     codeRefs: [src/components/sketch/SketchPanel.vue, src/components/sketch/panel/**]
   - id: present.version.identity
