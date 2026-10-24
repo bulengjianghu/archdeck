@@ -1,4 +1,4 @@
-/** 「显示」面板的名称表：静态关系显示方式（V8）、关系类型（L8、L10）、代码事实不可用的原因（K8）、结构视图的种类与档（ADR-0031）、共享通道（L18） */
+/** 「显示」面板的名称表：交互关系显示方式（V8）、关系类型（L8、L10）、代码事实不可用的原因（K8）、结构视图的种类与档（ADR-0031）、共享通道（L18） */
 import { RELATION_TYPES, RUNTIME_RELATION_TYPES, type DepTier, type HeatKind, type StabilityBand, type StructureKind } from '@/model'
 import type { StaticMode } from '@/layout/stage'
 import type { ImpactMode } from './useDisplayPrefs'

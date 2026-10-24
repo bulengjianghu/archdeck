@@ -27,7 +27,11 @@ const lowered = computed(() => props.data.ports?.side === 'top')
     v-if="data.sharedCount"
     class="shared-mark"
     :class="{ shifted: !!data.cycle, lowered }"
-    :title="`用到本层共用件架上的 ${data.sharedCount} 个共用件：悬停或选中时画线（O10）`"
+    :title="
+      data.sharedByDeps
+        ? `依赖 ×${data.sharedCount}（含只引类型）：依赖本层共用件架上的 ${data.sharedCount} 个共用件，悬停或选中时画线（O13）`
+        : `用到本层共用件架上的 ${data.sharedCount} 个共用件：悬停或选中时画线（O10）`
+    "
     >共用 ×{{ data.sharedCount }}</span
   >
   <span v-if="data.cycle" class="cycle-mark" :class="{ lowered }" :title="`本层的环 ${data.cycle}：与同编号的节点互相依赖`">↻ {{ data.cycle }}</span>

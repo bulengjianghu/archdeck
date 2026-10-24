@@ -10,7 +10,7 @@ test('打开场景导航树自动收起，退出恢复；运行视角里展开�
   await expect(page.locator('.vue-flow__node').first()).toBeVisible({ timeout: 20_000 })
   await expect(nav).toBeHidden()
   // 运行视角「显示」面板折叠为一行摘要
-  await expect(page.getByRole('region', { name: '显示' }).getByRole('button', { name: /^显示/ })).toContainText('静态关系：隐藏')
+  await expect(page.getByRole('region', { name: '显示' }).getByRole('button', { name: /^显示/ })).toContainText('交互关系：隐藏')
   await page.getByRole('button', { name: '导航 ›' }).click()
   await expect(nav).toBeVisible()
   await page.goto('./#/p/h5p-arch-desk')

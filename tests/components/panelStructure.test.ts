@@ -137,6 +137,9 @@ describe('模块面板「结构」一节（K15、K16、K17）', () => {
     await flushPromises()
     expect(desk.perspective.value).toBe('interaction')
     expect(desk.selection.value).toEqual({ kind: 'relation', id: 'r6' })
+    // 单击不跳层次：关系不在本层时面板说明「不在本层，已选中」（T3 裁决 5）
+    expect(desk.view.value!.edges.some(e => e.relationIds.includes('r6'))).toBe(false)
+    expect(wrapper.find('.not-here').text()).toBe('不在本层，已选中')
   })
 
   it('U17：稳定的模块依赖了更易变的，给出「逆稳定」提示行', async () => {

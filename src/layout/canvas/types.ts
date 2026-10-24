@@ -65,6 +65,8 @@ export interface NodeData {
   assemblyRoot?: number
   /** O10：「共用 ×N」角标 */
   sharedCount?: number
+  /** O13②：结构视角下「共用 ×N」按依赖计（含只引类型），悬停文字随之 */
+  sharedByDeps?: true
   /** O11：本层框（父模块框、分层总览的带）常驻计数「共用件 N · 折叠 M」 */
   counts?: { shared: number; folded: number }
   /** O9：共用件架在本框 / 带内的纵向位置（相对框顶，px），画「共用件」字样 */
@@ -223,7 +225,7 @@ export interface CanvasInput {
   emphasis: { selected: number | null; paired: ReadonlySet<number> } | null
   /** 参与本场景的舞台节点（V5） */
   participants: ReadonlyMap<string, 'path' | 'other'>
-  /** 静态关系显示方式与「在画布上显示」的节点（V8、V9） */
+  /** 交互关系显示方式与「在画布上显示」的节点（V8、V9） */
   mode: StaticMode
   reveal: readonly string[]
   /** 设计版本且开启「标出变更」时的差异；否则为 null */

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 「显示」面板的设置：只放没有对应图例的开关——结构视角为边界节点、只看现状；
- * 运行视角为静态关系显示方式（V8），并用一行说明运行视角下舞台不受结构类开关影响（L9）。
+ * 运行视角为交互关系显示方式（V8），并用一行说明运行视角下舞台不受结构类开关影响（L9）。
  */
 import { useDesk } from '@/state/inject'
 import { useStage } from '../stage/useStageDisplay'
@@ -19,8 +19,8 @@ const stage = useStage()
       <label class="check"><input v-model="desk.toggles.currentOnly" type="checkbox" /> 只看现状</label>
     </div>
     <template v-else>
-      <div class="setting" role="group" aria-label="静态关系">
-        <span class="setting-label">静态关系</span>
+      <div class="setting" role="group" aria-label="交互关系">
+        <span class="setting-label">交互关系</span>
         <span class="segmented">
           <button
             v-for="m in MODES"

@@ -227,6 +227,7 @@ describe('O13 共用件折叠（方案丙）', () => {
     const s = canvasScene(i)
     expect(node(s, 'core.impl').data.sharedCount).toBe(1)
     expect(node(s, 'core.api').data.sharedCount).toBe(1)
+    expect(node(s, 'core.impl').data.sharedByDeps).toBe(true)
     // 架上的块只标入
     expect(node(s, 'core.util').data.metrics?.inOnly).toBe(true)
   })

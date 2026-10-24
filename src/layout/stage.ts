@@ -105,7 +105,7 @@ export function stageOverlay(
   return { active, walked, current, temps: [...temps.values()], previews, hiddenCurrent: frameId !== null && ci === null }
 }
 
-/** V8：运行视角下静态关系的显示方式 */
+/** V8：运行视角下交互关系的显示方式 */
 export type StaticMode = 'hide' | 'dim' | 'show'
 export type Visibility = 'show' | 'dim' | 'hide'
 

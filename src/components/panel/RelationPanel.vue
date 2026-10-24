@@ -87,6 +87,7 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
         <button v-if="couple" class="badge couple" title="两端是时间耦合：单击看共同的提交（J7）" @click="desk.select({ kind: 'couple', id: couple.id })">
           同提交 ×{{ couple.shared }}
         </button>
+        <span v-if="!visibleHere" class="muted not-here">不在本层，已选中</span>
         <button v-if="!visibleHere" class="small" @click="desk.revealRelation(r.id)">定位到所在层次</button>
         <ChangeBadge entity="relation" :id="r.id" detail />
       </div>

@@ -266,9 +266,9 @@ export function structureNodeMarks(
   scene: StructureScene,
   input: CanvasInput,
   n: { id: string; moduleId: string; role: string; layerId?: string },
-): Pick<NodeData, 'metrics' | 'impact' | 'impactSelf' | 'cycle' | 'sharedCount'> {
+): Pick<NodeData, 'metrics' | 'impact' | 'impactSelf' | 'cycle' | 'sharedCount' | 'sharedByDeps'> {
   const s = input.structure!
-  const out: Pick<NodeData, 'metrics' | 'impact' | 'impactSelf' | 'cycle' | 'sharedCount'> = {}
+  const out: Pick<NodeData, 'metrics' | 'impact' | 'impactSelf' | 'cycle' | 'sharedCount' | 'sharedByDeps'> = {}
   const m = n.role === 'actor' || n.role === 'more' ? undefined : s.metrics?.get(n.moduleId)
   if (m && m.ca + m.ce > 0) out.metrics = { ca: m.ca, ce: m.ce, instability: m.instability, band: m.band, ...(n.role === 'shared' ? { inOnly: true } : {}) }
   const hit = scene.impact?.get(n.id)
@@ -278,6 +278,7 @@ export function structureNodeMarks(
   if (c !== undefined) out.cycle = c
   const shared = scene.sharedCounts.get(n.id)
   out.sharedCount = shared || undefined
+  if (shared) out.sharedByDeps = true
   return out
 }
 

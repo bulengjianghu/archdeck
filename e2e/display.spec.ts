@@ -38,7 +38,7 @@ test('结构视角：关系类型筛选与边界节点开关在面板里，折�
   await expect(page.locator('.toolbar input[type=checkbox]')).toHaveCount(0)
 })
 
-test('运行视角：静态关系显示方式在面板里，结构类开关不出现', async ({ page }) => {
+test('运行视角：交互关系显示方式在面板里，结构类开关不出现', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
   const panel = page.getByRole('region', { name: '显示' })
   await panel.getByRole('button', { name: /^显示/ }).click()
@@ -51,7 +51,7 @@ test('运行视角：静态关系显示方式在面板里，结构类开关不�
   await panel.getByRole('button', { name: '淡显' }).click()
   await expect(panel.getByRole('button', { name: '淡显' })).toHaveAttribute('aria-pressed', 'true')
   await panel.getByRole('button', { name: /^显示/ }).click()
-  await expect(panel.getByRole('button', { name: /^显示/ })).toContainText('静态关系：淡显')
+  await expect(panel.getByRole('button', { name: /^显示/ })).toContainText('交互关系：淡显')
 })
 
 test('结构视角（L19、D-26）：图例整组换成结构视图的，代码事实与关系类型筛选组不出现；只引类型开关改变计数说明', async ({ page }) => {

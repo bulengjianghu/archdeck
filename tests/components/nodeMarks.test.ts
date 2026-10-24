@@ -26,6 +26,13 @@ describe('节点角标的统一布局', () => {
     expect(left.find('.cycle-mark').classes()).not.toContain('lowered')
   })
 
+  it('O13：结构视角下「共用 ×N」按依赖计，悬停文字为「依赖 ×N（含只引类型）」；交互视角照 O10', () => {
+    const s = mount(DiffMark, { props: { data: { ...base, sharedCount: 3, sharedByDeps: true } } })
+    expect(s.find('.shared-mark').attributes('title')).toMatch(/^依赖 ×3（含只引类型）/)
+    const i = mount(DiffMark, { props: { data: { ...base, sharedCount: 3 } } })
+    expect(i.find('.shared-mark').attributes('title')).toMatch(/^用到本层共用件架上的 3 个共用件/)
+  })
+
   it('O12：组装根角标在上边框左侧（与变更角标同一组），含多个时标 ×N', () => {
     const w = mount(DiffMark, { props: { data: { ...base, change: 'added', assemblyRoot: 2 } } })
     expect(w.find('.diff-mark').text()).toContain('新增')

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 「显示」面板（W-2、ADR-0017）：画布右下角，先「设置」后「图例」。
- * - 设置（NodeSettings）：只放没有对应图例的开关；运行视角为静态关系显示方式（V8）与 L9 的说明。
+ * - 设置（NodeSettings）：只放没有对应图例的开关；运行视角为交互关系显示方式（V8）与 L9 的说明。
  * - 图例按画布上的对象分组（RelationLegend、节点、FactsLegend、EvolutionLegend、ReplayLegend），一行一项，左列为与画布同款的示意（LineSwatch，
  *   与 RouteEdge 共用 edgeStyle）、右列为文字；既是开关又是图例的放在图例里——关系类型行点击筛选（L8），代码事实开关在组标题右侧（K9），组装开关同（O12）。
  *   时序图的箭头约定不在这里，在副栏时序图标题栏的「图例」里。
@@ -41,8 +41,8 @@ watch(editing, on => on && open.value && toggleOpen(), { immediate: true })
 /** 折叠时的摘要：只列非默认的设置 */
 const summary = computed(() => {
   const t = desk.toggles
-  // 运行视角缺省折叠为一行：总是给出静态关系的显示方式
-  if (run.value) return [`静态关系：${MODE_LABEL[stage.mode.value]}`]
+  // 运行视角缺省折叠为一行：总是给出交互关系的显示方式（V8）
+  if (run.value) return [`交互关系：${MODE_LABEL[stage.mode.value]}`]
   if (structure.value)
     return [
       t.showBoundaries ? '' : '无边界节点',
