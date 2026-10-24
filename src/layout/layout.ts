@@ -11,7 +11,7 @@ import { layoutGraph } from './graph'
 import type { LayoutOptions, PositionedView } from './geometry'
 
 export * from './geometry'
-export { BAND, DEFAULT_BAND_COLUMNS, bandColumnsFor, bandDepRoutes, bandShelfTop, layoutLayered, moreChipId } from './layered'
+export { BAND, DEFAULT_BAND_COLUMNS, bandColumnsFor, bandShelfTop, layoutLayered, moreChipId } from './layered'
 export {
   ACTOR_GAP,
   LABEL_SLOT,
@@ -20,20 +20,19 @@ export {
   edgeWeight,
   isBoundaryEdge,
   compassOf,
-  depRoutes,
   edgeRoute,
   outsideRoutes,
   isOutsideEdge,
   placeOutside,
   placeRims,
   type Compass,
-  type DepLink,
   linkRoute,
   nearPoints,
   parallelOffsets,
   placeActors,
   spreadEnds,
 } from './routes'
+export { DIRECT_GAP, bandDirectRoutes, directRoute, directRoutes, rimPoint, type DepLink } from './direct'
 export { RESERVED, fromElkGraph, placeShelf, portSide, toElkGraph } from './graph'
 
 const cache = new Map<string, PositionedView>()

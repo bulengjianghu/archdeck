@@ -1,7 +1,7 @@
 /**
  * 画布场景的结构视角（ADR-0031）：结构边（依赖边）的显隐、走线与编码数据，节点的指标、影响面与环角标。
- * 节点位置全部取交互视角的布局结果（V12），结构边不参与布局（L15）：普通层次按 L11 框外边的方式按需正交走线（depRoutes），
- * 分层总览的带间边走线同 O3（bandDepRoutes），核心模块的跨层边与悬停才出现的边画成曲线。
+ * 节点位置全部取交互视角的布局结果（V12），结构边不参与布局（L15）：从起点节点边缘到终点节点边缘直连（directRoutes），
+ * 不绕框、可压在其他节点下方；分层总览的带与带之间画竖直直线（bandDirectRoutes）。
  *   L15：只引类型的依赖边缺省收起（偏好 typeOnly），画布角计数；基线外违规的照画。边界节点的边只在聚焦其一端时画（同 L4）。
  *   O13：共用件与使用者之间的边缺省不画，聚焦任一端时画；反向依赖（U12）、违规（U15）、在环中（Y4）的照画；「共用 ×N」按依赖计。
  *   O13③：分层总览带间画层间依赖，带内不画；核心模块（与架上共用件）的跨层依赖只在聚焦它时画。
@@ -28,8 +28,7 @@ import {
   type Violation,
   type ViolationStatus,
 } from '@/model'
-import { bandDepRoutes, depRoutes, linkRoute, PARALLEL_GAP, type EdgeRoute, type PositionedView } from '../layout'
-import { shifted } from '../routes'
+import { bandDirectRoutes, directRoutes, type EdgeRoute, type PositionedView } from '../layout'
 import type { CanvasInput, DepEdgeKind, DepEdgeLook, DepViolation, NodeData } from './types'
 
 /** L16：结构边种类的名称（悬停说明与图例） */
@@ -281,24 +280,18 @@ export function structureScene(input: CanvasInput, pv: PositionedView, focusId: 
     return true
   })
 
-  // 走线：普通层次一起正交走线、分配轨道；分层总览带间同 O3，其余（核心模块、边界节点、参与者的边）画成曲线并错开平行边
+  // 走线（L15，直连）：从起点节点边缘到终点节点边缘画直线，不绕框；同一对节点的各条平行错开；分层总览带与带之间画竖直直线
   const routes = new Map<string, EdgeRoute>()
   if (layered) {
     const bands = new Set((view.bands ?? []).map(b => b.layerId))
     const bandLinks = shown.filter(e => !e.chip && bands.has(e.from) && bands.has(e.to))
-    for (const [id, r] of bandDepRoutes(pv, bandLinks)) routes.set(id, r)
-    const rest = shown.filter(e => !routes.has(e.id))
-    const groups = new Map<string, DepItem[]>()
-    for (const e of rest) {
-      const k = [e.from, e.to].sort().join('|')
-      groups.set(k, [...(groups.get(k) ?? []), e])
-    }
-    for (const list of groups.values())
-      list.forEach((e, i) => {
-        const r = linkRoute(pv.nodes.get(e.from), pv.nodes.get(e.to))
-        if (r) routes.set(e.id, shifted(r, (i - (list.length - 1) / 2) * PARALLEL_GAP))
-      })
-  } else for (const [id, r] of depRoutes(pv, shown)) routes.set(id, r)
+    for (const [id, r] of bandDirectRoutes(pv, bandLinks)) routes.set(id, r)
+    for (const [id, r] of directRoutes(
+      pv,
+      shown.filter(e => !routes.has(e.id)),
+    ))
+      routes.set(id, r)
+  } else for (const [id, r] of directRoutes(pv, shown)) routes.set(id, r)
 
   // K15：影响面按方向投影到本层
   let impact: StructureScene['impact'] = null

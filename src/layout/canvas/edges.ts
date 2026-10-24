@@ -278,7 +278,8 @@ export function depEdges(ctx: SceneContext): (CanvasEdge | null)[] {
       source: e.from,
       target: e.to,
       type: 'dep' as const,
-      zIndex: selected || touches ? EDGE_Z.active : EDGE_Z.idle,
+      // L15 直连：结构边一律画在节点之下（穿过其他节点时压在下方），选中与聚焦靠晕与变淡区分
+      zIndex: EDGE_Z.idle,
       data: {
         route,
         edge: ve,

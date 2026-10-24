@@ -113,11 +113,25 @@ describe('L15 结构边的投影：换边不换节点', () => {
       'implements:core.impl->core.api',
       'subclass:core.util->core.impl',
     ])
-    // 结构边不参与布局：都有正交走线（不是曲线），两端落在两端节点上
+    // 结构边不参与布局：直连（两点直线、不是曲线），两端落在两端节点的边缘上，一律画在节点之下
+    const box = (id: string) => inS.positioned!.nodes.get(id)!
+    const onRim = (p: { x: number; y: number }, b: { x: number; y: number; w: number; h: number }) =>
+      p.x >= b.x - 0.01 &&
+      p.x <= b.x + b.w + 0.01 &&
+      p.y >= b.y - 0.01 &&
+      p.y <= b.y + b.h + 0.01 &&
+      [p.x - b.x, b.x + b.w - p.x, p.y - b.y, b.y + b.h - p.y].some(d => Math.abs(d) < 0.01)
     for (const e of deps(s)) {
       expect(e.data.route.curve).toBeFalsy()
-      expect(e.data.route.points.length).toBeGreaterThanOrEqual(2)
+      expect(e.data.route.points).toHaveLength(2)
+      expect(onRim(e.data.route.points[0], box(e.source))).toBe(true)
+      expect(onRim(e.data.route.points[1], box(e.target))).toBe(true)
+      expect(e.zIndex).toBe(1)
     }
+    // 双向（impl ⇄ util）的两条不重合
+    const a = deps(s).find(e => e.id === 'dependency:core.impl->core.util')!.data.route.points
+    const r = deps(s).find(e => e.id === 'dependency:core.util->core.impl')!.data.route.points
+    expect(JSON.stringify(a)).not.toBe(JSON.stringify([...r].reverse()))
   })
 
   it('只引类型：缺省收起并计数；打开偏好后画出、计数为 0', async () => {
@@ -264,7 +278,7 @@ describe('U16 没有代码事实时的允许依赖图', () => {
 describe('O13③ 分层总览', () => {
   const core = (b: string) => b.replace('{ id: core.api, name: Api,', '{ id: core.api, name: Api, role: core,')
 
-  it('带间画层间依赖、走线同 O3（带间空隙的竖线）；核心模块的跨层依赖只在聚焦它时画', async () => {
+  it('带间画层间依赖、直连（带与带之间的竖直直线）；核心模块的跨层依赖只在聚焦它时画', async () => {
     const b = build(core(LAYERS))
     const i = await input(b, b.index.rootId)
     expect(i.positioned!.view.mode).toBe('layered')
