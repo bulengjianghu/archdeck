@@ -47,7 +47,7 @@ test('V11、V12：顶部「结构 ｜ 交互 ｜ 运行」单击切到结构视�
 
 test('L15：只引类型的依赖边缺省收起、画布角计数；单击计数画出（边界节点的照 L4 聚焦才画），边数随之增加', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=domain&v=s')
-  const count = page.getByTestId('type-only-count')
+  const count = page.getByTestId('type-only-corner')
   await expect(count).toHaveText(/只引类型 \d+ 条已收起/)
   const hidden = Number((await count.textContent())!.match(/(\d+) 条/)![1])
   await expect(depEdges(page).first()).toBeAttached()
