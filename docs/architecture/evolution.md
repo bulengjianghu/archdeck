@@ -85,7 +85,7 @@ interface LevelCoupling { id: string /* `couple:<a>~<b>`，a、b 为节点 ID */
 ## 4. 页面
 
 - `source/<项目>/history.json`：源码清单取到后随事实一起取（源码同步 `history`）；读不到时演化状态为 `error` 并带原因，「显示」面板的「演化」组置灰并写明原因。
-- DeskState 的 `evolution` 分组：`stats = evolutionStats(…)`；`level = levelEvolution(…)`（只在结构视角、热度或耦合任一开启时用于画布，J5）；`selectedCouple`：选中的耦合线（J7）；返工清单多一类「时间耦合」（J6）。「刷新源码」同时重新取历史。
+- DeskState 的 `evolution` 分组：`stats = evolutionStats(…)`；`level = levelEvolution(…)`（只在结构 / 交互视角、热度或耦合任一开启时用于画布，J5）；`selectedCouple`：选中的耦合线（J7）；返工清单多一类「时间耦合」（J6）。「刷新源码」同时重新取历史。
 - 开关 `toggles.heat`（`off` / `changes` / `fixes`）与 `toggles.coupling` 在视图状态里（与 `showFacts` 同），不进 URL；按项目记在本地（`display/useEvolutionPrefs.ts`），进入项目时恢复。
 - 画布：`canvasScene` 多一个输入 `evolution`——节点数据多 `heat`（角标：档位、种类、值、次数），耦合线为不参与布局的波浪线（`temp: 'couple'`，标 `×N`，无依赖无关系的更深色）；单击耦合线即选中它（`sel=c:`）。
 - 面板：模块「演化」（次数、热度、窗口、最近 10 次提交——可展开看提交说明与本模块涉及的文件、耦合对端）；系统「演化」（热度前 10、无依赖的耦合对）；关系与聚合边头部「同提交 ×N」；耦合线面板 `CouplePanel`（两端、次数与占比、有无依赖 / 关系、共同的提交）。

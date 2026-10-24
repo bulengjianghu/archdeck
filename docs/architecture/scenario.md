@@ -63,11 +63,11 @@
 |---|---|---|
 | 两个不同节点，且本层有对应的视图边（P17：含帧绑定关系的边，其次同类型的边；帧未绑定关系时同方向的运行时关系边优先） | `edge`：该视图边的 ID（`edgeId` 规则），并标记方向是否与边相反；分层总览中一端落在核心模块的子树内且有对应的核心跨层边时落在核心跨层边上（`core`） | P1、P2、P7、P10、P17 |
 | 两个不同节点，本层没有对应的视图边，帧已绑定关系（`frame.relation`，显式或推断） | `upper`：经由上层关系——关系一端是当前层次本身或其祖先；带 `relationId`，回放期间画关系类型色的临时虚线 | P15 |
-| 两个不同节点，本层没有视图边，帧没有绑定关系 | `unmodeled`：结构中未建模，回放期间画临时虚线 | P11 |
+| 两个不同节点，本层没有视图边，帧没有绑定关系 | `unmodeled`：交互中未建模，回放期间画临时虚线 | P11 |
 | 同一个子模块 | `internal`：内部活动 | P3 |
 | 两端都在本层外 | 不可见 | P4 |
 | 分层总览：两端在同一核心模块 | `internal`：该核心模块的内部活动 | P3 |
-| 分层总览：两端在同一层的不同泳道（核心模块之间、核心模块与层内其他模块之间） | `internal`：结构图上是该层（带）的内部活动，另带 `lanes`（两条泳道，消息方向），时序图据此画成泳道之间的消息 | P7、P14 |
+| 分层总览：两端在同一层的不同泳道（核心模块之间、核心模块与层内其他模块之间） | `internal`：交互图上是该层（带）的内部活动，另带 `lanes`（两条泳道，消息方向），时序图据此画成泳道之间的消息 | P7、P14 |
 | 一端是当前父模块自身或其祖先 | 按另一端的内部活动 | — |
 
 然后把连续落在同一对节点之间的视图边上且方向相同（不论边的关系类型，消息落在第一帧的边上）、或同一节点内部，并在同一组合框分支中的帧合并为**可见消息**（P5），它是本层的单步单位。`upper` 与 `unmodeled` 按两端节点（含方向）合并为同一类；合并出的消息只要有一帧是 `unmodeled` 就整条为 `unmodeled`，全部是 `upper` 时为 `upper`、`relationId` 取第一帧的（P16）。合并前先把计划**线性化**（`linearize`）：回放用「路径」模式（截止于未选分支的分支点），时序图用「全貌」模式（未选分支标 `unchosen`，截止之后标 `unreached`）；两者共用同一套落点与合并规则，分支点与空分支都会断开合并，所以路径上的消息在两边一一对应。
@@ -106,7 +106,7 @@
 **时序图排布**（`layoutSequence`，视图状态层 Layout，同步计算、不调用 elk）：
 
 - 外部参与者泳道在最左，与系统内泳道之间画分隔线（A7）。
-- 其余泳道按层次顺序（P9）：逐项比较参与者的排序键；两者只在最后一级不同且都是本层的非层子模块时，改按结构图中对应节点的横坐标比较，同一父模块内两张图左右一致；没有结构图坐标时按排序键。
+- 其余泳道按层次顺序（P9）：逐项比较参与者的排序键；两者只在最后一级不同且都是本层的非层子模块时，改按画布中对应节点的横坐标比较，同一父模块内两张图左右一致；没有画布坐标时按排序键。
 - 分组（P13）：排序后父模块相同的连续泳道成一组，分组框画在泳道头上方，标父模块名；参与者不分组。
 - 泳道宽度按名称自适应；消息纵向累加；组合框包住其子消息，按嵌套深度内缩。
 - 结果按「层次 + 场景 + 路径」缓存。
@@ -136,7 +136,7 @@ type Lanes = { from: string; to: string }   // 分层总览中时序图上的两
 type Landing =
   | { kind: 'edge'; edgeId: string; from: string; to: string; reverse: boolean; core?: boolean; lanes?: Lanes }
   | { kind: 'upper'; from: string; to: string; relationId: string; lanes?: Lanes }   // P15：经由上层关系
-  | { kind: 'unmodeled'; from: string; to: string; lanes?: Lanes }                       // P11：结构中未建模
+  | { kind: 'unmodeled'; from: string; to: string; lanes?: Lanes }                       // P11：交互中未建模
   | { kind: 'internal'; node: string; lanes?: Lanes }   // lanes：分层总览中同一层不同泳道之间（P7）
   | { kind: 'hidden' }
 
@@ -169,7 +169,7 @@ interface SequenceModel {
                   parentId?: string; path: string[]; layer?: string; key: number[]; byX: boolean }[]   // path：根下到自身的模块 ID
   messages: { index: number; from: string; to: string; kind: 'call' | 'async' | 'return' | 'internal' | 'empty'; label: string;
               frameIds: string[]; status: 'path' | 'unchosen' | 'unreached'; pathIndex?: number;
-              temp?: 'upper' | 'unmodeled'; relationId?: string }[]   // 本层没有视图边：经由上层关系（P15）/ 结构中未建模（P11）
+              temp?: 'upper' | 'unmodeled'; relationId?: string }[]   // 本层没有视图边：经由上层关系（P15）/ 交互中未建模（P11）
   fragments: { id: string; kind: 'alt' | 'loop' | 'par' | 'ref'; label: string; depth: number; first: number; last: number;
                collapsed: boolean; branches?: { option: number; label: string; chosen: boolean | null; first: number; last: number }[] }[]
 }

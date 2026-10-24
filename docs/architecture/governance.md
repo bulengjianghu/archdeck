@@ -83,6 +83,8 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 | `classifyRelation(index, report, relation, code?)` · `classifyRelations(…)`（`classify.ts`） | 查询 / 委托的分类建议（ADR-0029 §5「分类是主张」）：按第一问「被调方拥有后果吗」打分，证据为代码事实（交互种类、调用点的结果是否被使用、被调函数签名的返回形态、目标文件的状态持有，`code` 由接入层 `readClassifyCode` 提取）、描述（目标是共用件、目标会发出通知、接口签名、目标模块名）与名字（被调函数名、成员名、说明里的动词）；输出建议类型、置信度（高 / 中 / 低）、依据，只有继承或只有组装的标 `factOnly`；平分或没有证据时按委托、低置信度。`interactionDescription` 把说明改为交互口吻（查询「A 向 B 取：…」，委托「A 交给 B：…」） | M17 |
 
 
+> 第七轮（ADR-0031，待实现）：结构视图的架构查询——`levelDeps`（模块依赖投影到本层的结构边：事实种类与档、事实记号、交互覆盖数、规则判定，K14、K17、U15）、`impactOf`（影响面闭包，按距离、在环标出、可只看值依赖，K15）、`structureMetrics`（Ca / Ce / I，按系统内不同模块数，K16）、稳定依赖方向提示（U17）、没有代码事实时由 `mayDependOn` 投影的允许依赖图（U16）；健康度另列入度最高的共用件（Q15）。
+
 ### 4.1 数据结构
 
 ```ts
@@ -234,6 +236,8 @@ interface SketchCheck { sketch: string; design?: string; deviations: SketchDevia
 - MCP 服务器经 stdio 通信，stdout 只留给协议；日志写 stderr。
 - 接入：在 agent 的 MCP 配置里加入 `npm --prefix <本包路径> run -s arch:mcp`；本包根目录的 `.mcp.json` 是示例（在本仓库里自举）。
 
+> 第七轮（ADR-0031，待实现）：命令行 `impact <模块> [--direction in|out] [--values-only]` 与 MCP 工具 `impact` 返回影响面（K15）与该模块的 Ca / Ce / I（K16），`metrics` 返回本层或全系统的指标（Q14）；只读，不写拦截记录。
+
 ## 6. 运行时序
 
 ```mermaid
@@ -255,8 +259,10 @@ sequenceDiagram
 
 ## 7. 页面
 
+> 第七轮（ADR-0031，待实现）：DeskState 的 `facts` 分组在结构视角下另派生 `levelDeps`、选中模块的 `impactOf` 与 `structureMetrics`，与 `levelFacts` 同源；`levelFacts` 只在交互视角用于画布。
+
 - `source/<项目>/facts.json`：`{ deps, baseline, ledger }`（拦截记录取最近 2000 行）；源码清单读取失败时 404，事实状态为 `error` 并带原因（K8、G1）。
-- DeskState 的 `facts` 分组：源码清单就绪后取事实；`report = governanceReport(…)`；`level = levelFacts(…)`（只在结构视角、「代码事实」开启时用于画布，开关缺省开启；违规只取基线外的，K9）；`selectedCycle`：选中的模块（本层节点或边界节点）所在的本层环（Y5）；返工清单（`desk.rework`，与描述、归属一起汇总）进问题页签（U9、W-6）。「刷新源码」同时重新取事实。
+- DeskState 的 `facts` 分组：源码清单就绪后取事实；`report = governanceReport(…)`；`level = levelFacts(…)`（只在交互视角、「代码事实」开启时用于画布，开关缺省开启；违规只取基线外的，K9）；`selectedCycle`：选中的模块（本层节点或边界节点）所在的本层环（Y5）；返工清单（`desk.rework`，与描述、归属一起汇总）进问题页签（U9、W-6）。「刷新源码」同时重新取事实。
 - 画布：`canvasScene` 多两个输入——视图边的证实与违规标记、叠加线（坐标由 `linkRoute` 算，不参与布局）；节点数据多 `cycle` 编号（K9、Y4）。
 - 选中 `{ kind: 'dep', id: '<A>-><B>' }`：URL `sel=d:`，面板 `DepPanel`（K10）；运行视角下按选中关系的方式突出两端泳道。
 - 本层环可解释（Y5）：模块面板「架构治理」一节列出 `selectedCycle`，单击一条本层依赖即 `select`——有 `edgeId` 时选中视图边（`sel=e:`），否则选中代码依赖（`sel=d:`），画布按已有的选中规则高亮视图边或叠加线。

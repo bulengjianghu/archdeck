@@ -13,7 +13,7 @@ interface ViewState {
   selection: Selection | null        // 显式选中的对象 { kind: 'module' | 'relation' | 'edge' | 'actor' | 'file' | 'dep'; id }（文件的 id 为相对源码根目录的路径；dep 为代码依赖叠加线，id 为 `<依赖方模块>-><被依赖方模块>`，K10）；运行视角下为 null 即选中进度所在的步骤 / 场景
   hover: string | null
   toggles: Toggles                   // showBoundaries · currentOnly · relationTypes · showDiff · compareTo · showFacts（代码事实叠加，K9）
-  playback: PlaybackState | null     // null = 结构视角
+  playback: PlaybackState | null     // null = 结构 / 交互视角
 }
 
 interface PlaybackState {
@@ -26,11 +26,13 @@ interface PlaybackState {
 视角与选中由状态推出，不另存字段（V1、V2、V7）：
 
 ```text
-视角 = playback 为 null ? 结构 : 运行
+视角 = playback 为 null ? 结构 / 交互 : 运行
 选中 = selection ≠ null ? selection
        运行视角：frameId ≠ null ? 步骤(frameId) : 场景(scenarioId)
-       结构视角：无（面板显示当前父模块，N13）
+       结构 / 交互视角：无（面板显示当前父模块，N13）
 ```
+
+> 第七轮（ADR-0031，待实现）：不开场景时的视角是视图状态里的一个**模式值**（结构 / 交互，缺省交互），进 URL（`v=s` 为结构视角，交互不写），切换进历史；打开场景即运行视角，退出回到进入前的模式（V11）。结构与交互之间切换时层次、节点位置与开关不变，只换边与角标；选中映射：关系与视图边 → 同一对节点同方向的依赖边（`dep`，没有依赖时清空），端口 → 定义模块，依赖边切回交互视角时仍为 `dep`（V12）。DeskState 另派生结构视角的本层依赖边、影响面与指标（K14–K17、U15–U17）。
 
 选中是唯一的主语（ADR-0012）。步骤与场景不存进 `selection`：运行视角下 `selection` 为空即「选中进度所在的步骤」，进度在开头时即「选中场景」。不变式「选中的步骤就是进度所在的一步」（V7）因此由表示本身保证——单步、指向、拖动进度只需移动 `frameId` 并清空 `selection`；选中其他对象只设 `selection`，进度不动；取消选中（V4）就回到进度所在的步骤。
 
@@ -39,15 +41,15 @@ URL 与此一致，编码不需区分：选中步骤时只有 `step`；选中场
 选中突出（R15、R16）同样由状态推出：
 
 ```text
-突出 = 结构视角：无
+突出 = 结构 / 交互视角：无
        选中步骤：selected = 它所在的可见消息，paired = 配对帧（F7）所在的可见消息；本层不可见时为空
        选中模块 / 文件（归属模块）/ 关系（两端）/ 视图边（两端）/ 参与者：lanes = lanesOf(…)，即突出的泳道
        选中场景：无
 ```
 
-时序图按 `selected` 画选中样式、按 `paired` 加浅色「配对」标记、按 `lanes` 突出泳道头与生命线；`selected` 为空时进度所在消息只在序号旁加小标记。结构图只在 `selected` 不为空时把不属于 `selected` / `paired` 的走过的边变灰。
+时序图按 `selected` 画选中样式、按 `paired` 加浅色「配对」标记、按 `lanes` 突出泳道头与生命线；`selected` 为空时进度所在消息只在序号旁加小标记。交互图只在 `selected` 不为空时把不属于 `selected` / `paired` 的走过的边变灰。
 
-舞台的静态关系显示方式（V8）与「在画布上显示」（V9）只属于画布这块界面，和副栏页签一样留在呈现层，不进视图状态与 URL。
+舞台的交互关系显示方式（V8）与「在画布上显示」（V9）只属于画布这块界面，和副栏页签一样留在呈现层，不进视图状态与 URL。
 
 源码（文件清单、归属）与代码事实（文件依赖、基线、拦截记录）不是视图状态：它们是关于被描述系统的数据，像模型索引一样由协调者持有、由源码同步取得。副栏的页签与预览文件只属于那块界面，留在呈现层（G15）。
 
@@ -61,11 +63,11 @@ URL 与此一致，编码不需区分：选中步骤时只有 `step`；选中场
 |---|---|
 | 持有 | `ViewState`（`shallowRef`）、加载后的模型索引与问题、设计信息与对比基线索引、源码清单 `SourcePayload` |
 | 唯一写入口 | `dispatch(action)`：`transition(state, action, ctx)` 得到新状态与历史标注，写入；对外的操作都是构造动作并 dispatch 的包装 |
-| 派生（`computed`，调用纯函数） | 选中 `selectedOf`（V2）与选中突出 `emphasisOf`（R15、R16，泳道取自时序模型的 `lanesOf`）与调用返回配对 `pairReturns`（F7）；路线 `routeOf`（F6f）；层次视图 `projectLevel`（运行视角下为舞台视图：不受显示开关影响并补齐场景端点，L9、P12）；打开场景时：回放计划 → 回放路径 → 本层帧投影与可见消息 → 时序模型 → 时序图坐标，以及步骤大纲 `outlineScenario` 与参与模块 `scenarioModules`（导航树用，T5、T6）；视角；选中对象（非步骤、非场景）的参与信息；设计版本的差异 `diffModels` 与基线漂移；源码：归属 `assignFiles`、目录树 `fileTree`、选中模块的文件 / 入口、选中文件的归属模块与本层投影 `fileNodes`（G14）、归属警告 `sourceIssues`（只在当前版本并入问题列表，G9）；架构治理：治理报告 `governanceReport`、结构视角开关开启时的本层投影 `levelFacts`（K9、Y4）、门禁错误 `gateIssues`（并入问题列表，U9）、选中叠加线的 `depsBetween`（K10）、拦截摘要 `summarizeLedger`（Q4）；人确认层：各模块的确认状态与差异 `reviewStates`、范围与计数（Z3–Z5） |
+| 派生（`computed`，调用纯函数） | 选中 `selectedOf`（V2）与选中突出 `emphasisOf`（R15、R16，泳道取自时序模型的 `lanesOf`）与调用返回配对 `pairReturns`（F7）；路线 `routeOf`（F6f）；层次视图 `projectLevel`（运行视角下为舞台视图：不受显示开关影响并补齐场景端点，L9、P12）；打开场景时：回放计划 → 回放路径 → 本层帧投影与可见消息 → 时序模型 → 时序图坐标，以及步骤大纲 `outlineScenario` 与参与模块 `scenarioModules`（导航树用，T5、T6）；视角；选中对象（非步骤、非场景）的参与信息；设计版本的差异 `diffModels` 与基线漂移；源码：归属 `assignFiles`、目录树 `fileTree`、选中模块的文件 / 入口、选中文件的归属模块与本层投影 `fileNodes`（G14）、归属警告 `sourceIssues`（只在当前版本并入问题列表，G9）；架构治理：治理报告 `governanceReport`、交互视角开关开启时的本层投影 `levelFacts`（K9、Y4）、门禁错误 `gateIssues`（并入问题列表，U9）、选中叠加线的 `depsBetween`（K10）、拦截摘要 `summarizeLedger`（Q4）；人确认层：各模块的确认状态与差异 `reviewStates`、范围与计数（Z3–Z5） |
 | 外界同步 | 交给四个同步适配器（§4） |
 | 对外的形状 | 核心平铺：视图状态与直接推出的层次、选中、视角、开关、层次视图与坐标、`playback`，以及全部操作；领域派生分四组，代码在 `src/state/desk/`（ADR-0013）：`desk.run` 运行视角、`desk.files` 源码、`desk.versions` 设计版本、提交版本与对比、`desk.facts` 架构治理（ADR-0015）、`desk.review` 人确认层（Z） |
 
-派生是一条 computed 链：层次或开关变化 → 层次视图 → 帧投影 → 时序模型 → 时序布局。结构图与时序图因此不会不同步。层次视图只依赖层次、显示开关与打开的场景，悬停、选中、进度变化不会引起重新投影与重新排布（ADR-0009）。
+派生是一条 computed 链：层次或开关变化 → 层次视图 → 帧投影 → 时序模型 → 时序布局。画布与时序图因此不会不同步。层次视图只依赖层次、显示开关与打开的场景，悬停、选中、进度变化不会引起重新投影与重新排布（ADR-0009）。
 
 ## 3. 会话规则：视图状态转移
 
@@ -134,7 +136,7 @@ AI 改写描述 → ModelSource 推送 → 模型源同步重新取并 `dispatch
 
 ### 5.4 运行视角
 
-**指向某一步（R13）**——时序图消息、结构图步骤序号、步骤树、运行信息里的步骤都走这一条：
+**指向某一步（R13）**——时序图消息、交互图步骤序号、步骤树、运行信息里的步骤都走这一条：
 
 ```mermaid
 sequenceDiagram
@@ -191,10 +193,10 @@ createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: s
 transition(state: ViewState, action: ViewAction, ctx: TransitionContext): { state: ViewState; history: 'push' | 'replace' }
 // TransitionContext: { index: ModelIndex; plan?: ScenarioPlan; levelView?: LevelView; scenarioView?: ScenarioLevelView }
 perspectiveOf(state): 'structure' | 'run'
-emphasisOf(state, ctx: EmphasisContext): Emphasis | null                               // 选中突出（R15、R16）；结构视角为 null
+emphasisOf(state, ctx: EmphasisContext): Emphasis | null                               // 选中突出（R15、R16）；结构 / 交互视角为 null
 // EmphasisContext: { index; levelView; scenarioView; sequence; pairs: ReturnPairs | null; fileOwners: readonly string[] }
 // Emphasis: { selected: number | null; paired: ReadonlySet<number>; lanes: ReadonlySet<string> }   // 选中消息、配对消息（可见消息序号）、突出的泳道（视图节点 ID）
-selectedOf(state): Selected | null                     // Selected = Selection | { kind: 'step'; id: frameId } | { kind: 'scenario'; id }；null = 结构视角无选中
+selectedOf(state): Selected | null                     // Selected = Selection | { kind: 'step'; id: frameId } | { kind: 'scenario'; id }；null = 结构 / 交互视角无选中
 encodeView(state: ViewState, index: ModelIndex, plan?: ScenarioPlan): Record<string, string>
 // 解码即 transition(state, { type: 'restore', query }, ctx)：丢弃无效值，恢复到最接近的合法状态
 keyIntent(state, index, key: 'Escape' | 'Backspace'): ViewAction | 'leave' | null      // N7、N9：Esc 只取消选中，Backspace 返回上级；'leave' = 回项目列表
