@@ -3,7 +3,7 @@
  * 每条带文件行号、规则编号与建议动作。关于被描述系统的知识，页面、命令行与 MCP 共用同一份结果。
  */
 import { RULE_LABELS, moduleName } from '../names'
-import { bindRelation, forEachStep, planScenario, RUNTIME_RELATION_TYPES } from '../scenario'
+import { bindRelation, forEachStep, planScenario, querySideEffects, RUNTIME_RELATION_TYPES } from '../scenario'
 import { matchRef, missingEvidence, moduleEntry, type LocalSource, type SourceOwnership } from '../source'
 import {
   implementerReason,
@@ -113,7 +113,7 @@ function descriptionFix(i: Issue): string {
  * 由下面的材料重新算、不从 issues 取的问题：未建模的步骤（S5a 的 warning）、源码归属、场景证据（S15）、门禁与事实、端口孤立（U14）；
  * 未分类（M17）只列核心之间的，也由下面重新算
  */
-const recomputed = (code: string) => code === 'step-unmodeled' || code === 'relation.unclassified' || /^(source|scenario|rule|cycle|fact|port)\./.test(code)
+const recomputed = (code: string) => code === 'step-unmodeled' || code === 'relation.unclassified' || /^(source|scenario|rule|cycle|fact|port|query)\./.test(code)
 
 const RULE_OF_KIND: Record<Violation['kind'], string> = { layer: 'U2', deps: 'U3', exposes: 'U4' }
 
@@ -150,7 +150,7 @@ export function reworkList(input: ReworkInput): ReworkList {
 
   if (source) items.push(...ownershipItems(index, source.own, source.tree, name, report?.conflicted), ...evidenceItems(index, source.tree))
   if (report) items.push(...factItems(index, report, name))
-  items.push(...portItems(index, report ?? null), ...unclassifiedItems(index, name))
+  items.push(...portItems(index, report ?? null), ...sideEffectItems(index, name), ...unclassifiedItems(index, name))
   items.push(...unmodeledItems(index, name))
   items.push(...reviewItems(index, name))
   if (input.evolution) items.push(...couplingItems(index, input.evolution, name))
@@ -542,6 +542,42 @@ function portItems(index: ModelIndex, report: GovernanceReport | null): ReworkIt
         },
       ],
       target: {},
+    }
+  })
+}
+
+// ── 查询副作用（U13）：一对（查询关系，委托 / 通知关系）一个根因，带两处步骤位置 ──
+
+function sideEffectItems(index: ModelIndex, name: (id: string) => string): ReworkItem[] {
+  const groups = new Map<string, { query: string; effect: string; steps: ReworkLoc[]; scenario: string }>()
+  for (const sc of index.scenarios.values())
+    for (const e of querySideEffects(index, planScenario(index, sc.id))) {
+      const key = `${e.query}->${e.effect}`
+      if (groups.has(key)) continue
+      const step = (f: typeof e.queryFrame, what: string) => descLoc(f.src, `场景「${sc.name}」步骤 ${f.stepPath}：${what}`)!
+      groups.set(key, { query: e.query, effect: e.effect, scenario: sc.id, steps: [step(e.queryFrame, '查询'), step(e.effectFrame, '副作用')] })
+    }
+  return [...groups.entries()].map(([key, g]) => {
+    const q = index.relations.get(g.query)!
+    const e = index.relations.get(g.effect)!
+    return {
+      id: `query-side-effect:${key}`,
+      category: 'query-side-effect' as const,
+      severity: 'warning' as const,
+      rules: ['U13'],
+      code: 'query.side-effect',
+      title: `查询有副作用：「${g.query}」（${name(q.from)} → ${name(q.to)}）的闭包里有${e.type === 'notifies' ? '通知' : '委托'}「${g.effect}」（${name(e.from)} → ${name(e.to)}）`,
+      at: descLoc(q.src) ?? g.steps[0],
+      affected: g.steps,
+      actions: [
+        {
+          kind: 'to-command' as const,
+          text: '被调方确实拥有后果时把这条查询改为委托（commands）；否则把副作用移出查询的链路',
+          file: q.src.file,
+          snippet: `- { id: ${q.id}, from: ${q.from}, to: ${q.to}, type: commands }`,
+        },
+      ],
+      target: { relation: g.query, modules: [q.from, q.to], scenario: g.scenario },
     }
   })
 }

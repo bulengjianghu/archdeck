@@ -7,7 +7,7 @@
  */
 import type { ModelIndex, Step } from '../types'
 import { bindRelation } from './bind'
-import type { FragmentTag, Frame, BranchPoint, PlanNode, ScenarioPlan, ReturnPairs } from './types'
+import type { FragmentTag, Frame, BranchPoint, PlanNode, ScenarioPlan, ReturnPairs, QuerySideEffect } from './types'
 
 export function planScenario(index: ModelIndex, scenarioId: string): ScenarioPlan {
   const frames = new Map<string, Frame>()
@@ -129,3 +129,47 @@ export function pairReturns(plan: ScenarioPlan): ReturnPairs {
   walk(plan.nodes, [])
   return pairs
 }
+
+/** U13：一个计划沿 alt 各选项展开的全部线性帧序列（loop 一遍、par 串行、ref 已内联）；路径数超过上限时截断 */
+function linearPaths(nodes: readonly PlanNode[], limit = 512): Frame[][] {
+  let paths: Frame[][] = [[]]
+  for (const n of nodes) {
+    if (n.kind === 'frame') {
+      for (const p of paths) p.push(n.frame)
+      continue
+    }
+    const next: Frame[][] = []
+    for (const opt of n.options) for (const tail of linearPaths(opt, limit)) for (const p of paths) if (next.length < limit) next.push([...p, ...tail])
+    paths = next.length ? next : paths
+  }
+  return paths
+}
+
+/**
+ * U13（ADR-0029）：查询有副作用——绑定（显式或推断，S13）到 queries 的一帧 A → B，它的闭包是其后发送方落在接收集合中的连续帧：
+ * 接收集合从 B 的子树开始，闭包内每帧（return 除外）的接收方加入集合；到它的配对 return（F7）为止，没有显式返回时到第一条发送方不在集合中的帧为止。
+ * alt 各分支分别算、ref 内联后算（T0 裁决 14：按场景判定，不按结构闭包）。闭包里绑定到 commands 或 notifies 的帧即副作用；一对（查询，副作用）一条。
+ */
+export function querySideEffects(index: ModelIndex, plan: ScenarioPlan): QuerySideEffect[] {
+  const pairs = pairReturns(plan)
+  const typeOf = (f: Frame) => (f.relation ? index.relations.get(f.relation)?.type : undefined)
+  const inside = (id: string, recv: ReadonlySet<string>) => (index.pathOf.get(id) ?? [id]).some(p => recv.has(p))
+  const out = new Map<string, QuerySideEffect>()
+  for (const path of linearPaths(plan.nodes)) {
+    path.forEach((q, i) => {
+      if (q.kind === 'return' || typeOf(q) !== 'queries') return
+      const recv = new Set([q.to])
+      const pair = pairs.get(q.id)
+      for (const f of path.slice(i + 1)) {
+        if (f.id === pair || !inside(f.from, recv)) break
+        if (f.kind !== 'return') recv.add(f.to)
+        const t = typeOf(f)
+        if (f.kind === 'return' || (t !== 'commands' && t !== 'notifies')) continue
+        const key = `${q.relation}->${f.relation}`
+        if (!out.has(key)) out.set(key, { query: q.relation!, effect: f.relation!, queryFrame: q, effectFrame: f })
+      }
+    })
+  }
+  return [...out.values()]
+}
+

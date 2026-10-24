@@ -40,7 +40,7 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 - 一个文件的解析结果：`{ line, spec, kind, names, types, heritage }[]`（`types` 为写成只引类型的名字，`heritage` 为本文件类声明的 `implements` / `extends` 引用到的导入名，ADR-0022），与文件内容一起缓存；目标解析每次按当前清单做（清单变了结果跟着变）。
 - 性能（实测）：h5player 1657 个脚本文件首次提取 1.7 秒、缓存命中 0.2 秒；本项目约 170 个文件 0.16 秒。之后只重解析变化的文件。
 
-> 第六轮（ADR-0029、ADR-0030，待实现）：解析结果的 `heritage` 另记种类（`implements` / `extends`）与目标声明的种类（接口、类型别名、类），供 K5c 与子类事实（K12）；交互使用另记组装使用（`new`、工厂命名的调用、容器注册，K13）。
+> 第六轮（ADR-0029、ADR-0030，已实现）：解析结果另记 `inherits`（导入名、子句 `implements` / `extends`，目标上带穿透后的声明种类），供 K5c 与子类事实（K12）；交互使用另记 `invokeKinds`（`call` / `extends` / `new` / `factory` / `register`，命名见 T0 裁决 6），K7 只看 `call`，K13 看后三种。
 
 ## 3. 治理存储（接入层，`vite/governanceStore.ts`）
 
@@ -78,7 +78,7 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 | `stepEvidence(frame, index, own, deps, entryOf)` · `scenarioEvidence(plan, …)` | 步骤的候选调用点与证据等级（按名字匹配 / 按模块依赖 / 无证据 / 不判定）、场景各等级计数；算法见[场景投影与回放 §10](./scenario.md#10-步骤的代码证据) | S16 |
 | `summarizeLedger(entries)` | 按判定统计次数；扫描的违规数与环度首末值 | Q4 |
 
-> 第六轮（ADR-0029、ADR-0030，待实现）：`confirmRelations` 按四类交互判定（迁移期未分类同原 `calls`），`via` 按四形态（K5b，经端口的证实）；新增 `confirmImplementers`（端口实现者三档与「仅代码事实」的实现者，K5c）、`heritageFacts`（子类事实，K12）、`assemblyFacts`（组装事实与组装根，K13）、`portIssues`（端口孤立，U14）；`portTriad` 改为 `portPanel`（K11）；`undescribedDeps` 加三种覆盖（K7）；`levelFacts` 另给组装叠加线（O12）。
+> 第六轮（ADR-0029、ADR-0030）：已实现——`confirmRelations` 按四类交互判定（迁移期未分类同原 `calls`），`via` 按四形态（K5b，经端口的证实带 `port`）；`confirmImplementers`（端口实现者三档与「仅代码事实」的实现者，K5c，结果在报告的 `implementers`）、`heritageFacts`（子类事实，K12，报告的 `subclasses`）、`assemblyFacts`（组装事实与组装根，K13，报告的 `assembly` / `assemblyRoots`）、`portEntry` / `portPanel`（K11）与 `portIssues`（U14）都在 `facts.ts`；`undescribedDeps` 加三种覆盖（K7）；描述查询 `unclassifiedRelations` / `isCoreBetween`（M17）。`portTriad`（`ports.ts`）保留为迁移期兼容。待实现：`levelFacts` 的组装叠加线（O12，T3）。
 
 ### 4.1 数据结构
 

@@ -12,6 +12,7 @@ export {
   compareDesign,
   changeSummary,
   byDesign,
+  typesCorrespond,
 } from './check'
 export type { FlatSketchModule, SketchCheckOptions, CompareMode, CompareOptions, SketchChange, SketchComparison } from './check'
 export { archiveVerdict, sketchModules } from './lifecycle'

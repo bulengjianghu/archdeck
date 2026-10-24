@@ -86,6 +86,17 @@ export interface ScenarioPlan {
 /** 调用与显式返回的配对：帧 ID → 配对帧 ID（双向；一条调用可能被多个分支中的返回回应，取书写顺序的第一个） */
 export type ReturnPairs = ReadonlyMap<string, string>
 
+/** U13：查询的闭包里出现了委托或通知——一对（查询关系，委托 / 通知关系）一条，带两处帧 */
+export interface QuerySideEffect {
+  /** 查询关系 */
+  query: string
+  /** 闭包里的委托或通知关系 */
+  effect: string
+  /** 查询那一帧与副作用那一帧（首次出现） */
+  queryFrame: Frame
+  effectFrame: Frame
+}
+
 // ── 回放路径（F6、F6e、F6f） ──
 
 export type Choices = ReadonlyMap<string, number>

@@ -213,6 +213,9 @@ export type ScenarioKind = 'main' | 'exception' | 'maintenance'
 export const SCENARIO_KINDS: readonly ScenarioKind[] = ['main', 'exception', 'maintenance']
 /** M19：场景的类别，缺省 main */
 export const scenarioKind = (sc: { kind?: ScenarioKind }): ScenarioKind => sc.kind ?? 'main'
+/** R17：场景列表按类别筛选——`main` 只留主流程（缺省），`all` 全部；保持原顺序 */
+export const filterScenariosByKind = <T extends { kind?: ScenarioKind }>(list: readonly T[], show: 'main' | 'all'): T[] =>
+  show === 'all' ? [...list] : list.filter(sc => scenarioKind(sc) === 'main')
 
 export interface ScenarioDef {
   id: string

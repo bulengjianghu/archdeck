@@ -20,9 +20,12 @@ import type {
   SourceLoc,
   Step,
 } from './types'
-import { LEGACY_VIAS, isCallLike, isUnclassified, parseVia, type RelationVia } from './types'
+import { LEGACY_VIAS, isCallLike, isUnclassified, parseVia, relationMode, type RelationVia } from './types'
+
+/** 问题消息里的类型名 */
+const TYPE_NAMES: Record<string, string> = { queries: '查询', commands: '委托', calls: '未分类关系', notifies: '通知', streams: '流' }
 import { buildIndex } from './indexer'
-import { bindRelation, forEachStep, mapChildren, syncMismatch } from './scenario'
+import { bindRelation, forEachStep, mapChildren, planScenario, querySideEffects, syncMismatch } from './scenario'
 
 export interface ValidateResult {
   model: ArchModel
@@ -77,7 +80,9 @@ export function validate(input: ArchModel): ValidateResult {
     ...(input.rules ? { rules: cleanRules(input.rules, id => modules.has(id), input.rulesSrc, err, warn), rulesSrc: input.rulesSrc } : {}),
   }
   const scenarios = checkScenarios(input, c, structural)
-  return { model: { ...structural, scenarios }, issues }
+  const model = { ...structural, scenarios }
+  checkQuerySideEffects(model, c)
+  return { model, issues }
 }
 
 /** 模块：ID 唯一、父模块存在、无环 */
@@ -458,7 +463,7 @@ function checkBinding(index: ModelIndex, c: Checked, sc: ScenarioEntity, steps: 
     const where = `场景「${sc.id}」步骤 ${s.path}（${s.msg.from} → ${s.msg.to}）`
     if (b.issue === 'not-runtime') {
       const t = index.relations.get(b.relation!)!.type
-      c.err('step-relation-not-runtime', `${where} 引用了 ${t} 关系「${b.relation}」；步骤只对应运行时关系（calls / notifies / streams）`, s.src)
+      c.err('step-relation-not-runtime', `${where} 引用了 ${t} 关系「${b.relation}」；步骤只对应交互关系（queries / commands / notifies / streams，S12）`, s.src)
       return { ...s, msg: { ...s.msg, relation: undefined } }
     }
     if (b.issue === 'mismatch') {
@@ -472,11 +477,32 @@ function checkBinding(index: ModelIndex, c: Checked, sc: ScenarioEntity, steps: 
     if (bound && syncMismatch(bound, s.kind))
       c.warn(
         'step.sync-mismatch',
-        `${where} 是${s.kind === 'async' ? '异步' : '同步'}消息，对应的命令「${bound.id}」却是${bound.mode === 'async' ? '异步' : '同步'}的；按代码改消息或关系的 mode（S19）`,
+        bound.type === 'notifies'
+          ? `${where} 是同步消息，对应的通知「${bound.id}」一律异步；改为 async 步骤（S19）`
+          : `${where} 是${s.kind === 'async' ? '异步' : '同步'}消息，对应的${TYPE_NAMES[bound.type] ?? bound.type}「${bound.id}」却是${relationMode(bound) === 'async' ? '异步' : '同步'}的；按代码改消息或关系的 mode（S19）`,
         s.src,
       )
     return s
   })
+}
+
+/** U13：查询有副作用——按场景闭包判定（querySideEffects），一对（查询，委托 / 通知）在全部场景里只报一次，定位到查询那一步 */
+function checkQuerySideEffects(model: ArchModel, c: Checked) {
+  if (!model.scenarios.length || !model.relations.some(r => r.type === 'queries')) return
+  const index = buildIndex(model)
+  const seen = new Set<string>()
+  for (const sc of model.scenarios)
+    for (const e of querySideEffects(index, planScenario(index, sc.id))) {
+      const key = `${e.query}->${e.effect}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const effect = index.relations.get(e.effect)!
+      c.warn(
+        'query.side-effect',
+        `查询「${e.query}」有副作用：场景「${sc.id}」中它的闭包里出现了${effect.type === 'notifies' ? '通知' : '委托'}「${e.effect}」（步骤 ${e.queryFrame.stepPath} → ${e.effectFrame.stepPath}）；改为委托，或把副作用移出查询（U13）`,
+        e.queryFrame.src,
+      )
+    }
 }
 
 function dedupe<T extends { id: string; src: SourceLoc }>(

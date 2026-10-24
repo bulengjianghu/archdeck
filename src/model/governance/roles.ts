@@ -24,7 +24,7 @@ export function sharedHostOf(index: ModelIndex, id: string): string | undefined 
 
 /**
  * U11：疑似共用件——当前版本中没有 role（自身与祖先都不是共用件）的非层模块，同时满足①入度广（依赖它子树的模块来自 ≥2 个不同的层，
- * 或是它的 ≥3 个兄弟模块的子树）、②没有运行时出边（子树内没有指向子树外的 calls / notifies / streams）、③不在任何场景路径上（子树内没有帧端点）、
+ * 或是它的 ≥3 个兄弟模块的子树）、②没有运行时出边（子树内没有指向子树外的交互关系，四类与未分类）、③不在任何场景路径上（子树内没有帧端点）、
  * ④kind: library 或 ID / 名称含 shared、util、labels、contracts（不分大小写）。条件取「且」（议）。按声明顺序。没有代码事实时不调用（K8）。
  */
 export function sharedSuggestions(index: ModelIndex, moduleDeps: Iterable<ModuleDep>): SharedSuggestion[] {
@@ -50,7 +50,7 @@ export function sharedSuggestions(index: ModelIndex, moduleDeps: Iterable<Module
       nameHit,
       reasons: [
         layers.length >= 2 ? `入度广：被 ${layers.length} 个层的模块使用（${layers.map(name).join('、')}）` : `入度广：被 ${siblings.length} 个兄弟模块使用（${siblings.map(name).join('、')}）`,
-        '没有运行时出边：不是任何 calls / notifies / streams 的发起方',
+        '没有运行时出边：不是任何交互关系（查询、委托、通知、流，迁移期含未分类）的发起方',
         '不在任何场景路径上',
         nameHit === 'kind: library' ? '像工具模块：kind: library' : `像工具模块：名称含「${nameHit}」`,
       ],

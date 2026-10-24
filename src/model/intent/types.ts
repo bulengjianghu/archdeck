@@ -38,6 +38,7 @@ export type SketchDeviationCode =
   | 'sketch.missing-relation'
   | 'sketch.missing-interface'
   | 'sketch.interface-owner'
+  | 'sketch.missing-implementer'
   | 'sketch.not-applied'
   | 'sketch.not-removed'
 
@@ -109,6 +110,7 @@ export const SKETCH_DEVIATION_LABELS: Record<SketchDeviationCode, string> = {
   'sketch.missing-relation': '草图的关系没有对应',
   'sketch.missing-interface': '草图的接口不存在',
   'sketch.interface-owner': '接口的提供方与草图不同',
+  'sketch.missing-implementer': '草图声明的实现者没有',
   'sketch.not-applied': '血缘的来源仍在原处',
   'sketch.not-removed': '草图删掉的仍在',
 }

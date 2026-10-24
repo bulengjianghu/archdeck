@@ -5,7 +5,7 @@
  * 两者可能写在不同深度，所以「对得上」指关系两端分别是消息两端自身或其祖先（参与者只能是它自己）。
  * 方向：运行时关系的箭头是控制流方向（ADR-0022），call / async 与关系同向；return 与关系相反。
  */
-import { RUNTIME_RELATION_TYPES } from '../types'
+import { RUNTIME_RELATION_TYPES, relationMode } from '../types'
 import type { ModelIndex, RelationEntity } from '../types'
 import type { MessageEnds, Binding } from './types'
 
@@ -34,9 +34,12 @@ function relationsAround(index: ModelIndex, id: string): Set<string> {
   return out
 }
 
-/** S19：消息与 calls 的同步性不一致——async 消息对应同步的 calls，或 call 消息对应异步的 calls；return、notifies、streams 不比 */
+/**
+ * S19（ADR-0029）：消息形态与关系类型不一致——查询、委托与未分类按 mode（同步为 call、异步为 async；查询缺省同步，可异步，T0 裁决 1），
+ * 通知一律 async；return 与流不比
+ */
 export const syncMismatch = (r: RelationEntity, kind: MessageEnds['kind']): boolean =>
-  r.type === 'calls' && kind !== 'return' && (r.mode === 'async') !== (kind === 'async')
+  kind !== 'return' && r.type !== 'streams' && (relationMode(r) === 'async') !== (kind === 'async')
 
 export function bindRelation(index: ModelIndex, m: MessageEnds): Binding {
   if (m.relation) {
@@ -52,11 +55,11 @@ export function bindRelation(index: ModelIndex, m: MessageEnds): Binding {
   const between = [...relationsAround(index, m.to)].filter(id => around.has(id)).map(id => index.relations.get(id)!)
   const linked = between.filter(r => (covers(index, r.from, m.from) && covers(index, r.to, m.to)) || (covers(index, r.from, m.to) && covers(index, r.to, m.from)))
   const candidates = linked.filter(r => RUNTIME_RELATION_TYPES.includes(r.type) && orient(index, r, m))
-  // S13：两端之间恰好一条同向（return 反向）的运行时关系即认定；恰好连在两端上的优先于连在祖先上的
-  // S19：多条全是 calls 时，同步性与消息一致的恰好一条也认定
+  // S13：两端之间恰好一条同向（return 反向）的交互关系即认定；恰好连在两端上的优先于连在祖先上的
+  // S19：候选多条时，消息形态与关系类型一致（syncMismatch 为假）的恰好一条也认定；return 不比
   const unique = (list: RelationEntity[]) => {
     if (list.length === 1) return list[0]
-    if (m.kind === 'return' || !list.every(r => r.type === 'calls')) return undefined
+    if (m.kind === 'return') return undefined
     const same = list.filter(r => !syncMismatch(r, m.kind))
     return same.length === 1 ? same[0] : undefined
   }

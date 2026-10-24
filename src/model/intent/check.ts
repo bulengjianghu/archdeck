@@ -7,7 +7,7 @@
  *   与持久草图的矛盾得出 error / warning，带稳定键；归档门槛（X3）。
  */
 import { load } from '../load'
-import { ROOT_MOUNT, type ChangeKind, type ModelIndex, type ModuleDef, type ModuleEntity, type RawFile, type SketchEntity, type SketchLifetime, type SourceLoc } from '../types'
+import { ROOT_MOUNT, type ChangeKind, type ModelIndex, type ModuleDef, type ModuleEntity, type RawFile, type RelationType, type SketchEntity, type SketchLifetime, type SourceLoc } from '../types'
 import { CHANGE_KINDS } from '../types'
 import { locateAll, shortName } from './edit/locate'
 import { isMergeResult, lineagePhrase, lineageSources, mapId, prefixMap, sketchLineage, unmapId, type Lineage } from './lineage'
@@ -306,6 +306,15 @@ export interface SketchCheckOptions {
   design?: readonly SketchEntity[]
   /** 设计的基线：给了时，基线里本层有、草图删掉了、版本里还在的也是偏差 */
   baseline?: ModelIndex | null
+  /** X24：代码事实里的端口实现者（K5c，接口 ID → 实现者）；没有时（设计各轮）只看描述 */
+  implementers?: ReadonlyMap<string, { implementers: readonly { module: string; code: boolean }[] }>
+}
+
+/** X4、X23：关系类型的对应——相同，或一边是未分类（calls）、另一边是查询或委托（迁移期视为对应） */
+export const typesCorrespond = (a: RelationType, b: RelationType): boolean => {
+  if (a === b) return true
+  const callLike = (t: RelationType) => t === 'queries' || t === 'commands' || t === 'calls'
+  return callLike(a) && callLike(b) && (a === 'calls' || b === 'calls')
 }
 
 export function sketchCheck(sketch: SketchEntity, index: ModelIndex, opts: SketchCheckOptions = {}): SketchCheck {
@@ -392,7 +401,7 @@ export function sketchCheck(sketch: SketchEntity, index: ModelIndex, opts: Sketc
   const within = (id: string, anc: string) => id === anc || !!index.pathOf.get(id)?.includes(anc)
   def.relations?.forEach((r, i) => {
     if (cmp.pending.includes(r.id)) return
-    const hit = [...index.relations.values()].some(x => x.type === r.type && within(x.from, r.from) && within(x.to, r.to))
+    const hit = [...index.relations.values()].some(x => typesCorrespond(x.type, r.type as RelationType) && within(x.from, r.from) && within(x.to, r.to))
     if (!hit)
       push('sketch.missing-relation', 'warning', r.id, `草图的关系「${r.id}」（${r.type}，${name(r.from)} → ${name(r.to)}）在版本里没有对应（含两端更深层之间的）`, {
         target: { relation: r.id, modules: [r.from, r.to].filter(id => index.modules.has(id)) },
@@ -407,6 +416,18 @@ export function sketchCheck(sketch: SketchEntity, index: ModelIndex, opts: Sketc
     if (!actual) push('sketch.missing-interface', 'warning', x.id, `草图的接口「${x.id}」（${x.name}）在版本里不存在`, { target: { interface: x.id, ...(x.owner ? { modules: [x.owner] } : {}) }, at: loc })
     else if (x.owner !== undefined && actual.owner !== x.owner)
       push('sketch.interface-owner', 'warning', x.id, `接口「${x.id}」的提供方与草图不同：草图 ${x.owner}，版本 ${actual.owner ?? '（未写）'}`, { target: { interface: x.id, modules: [x.owner] }, at: loc })
+    // X24：草图声明的实现者——版本里该接口的 implementedBy 与代码事实的实现者（K5c）里都没有
+    if (!actual) return
+    for (const m of x.implementedBy ?? []) {
+      const described = actual.implementedBy?.includes(m)
+      const coded = opts.implementers?.get(x.id)?.implementers.some(i => i.code && i.module === m)
+      if (!described && !coded)
+        push('sketch.missing-implementer', 'warning', `${x.id}#${m}`, `草图声明「${name(m)}」实现端口「${x.id}」（${x.name}），版本的实现者里没有它（描述与代码事实都没有）`, {
+          rules: ['X4', 'X24'],
+          target: { interface: x.id, modules: [m] },
+          at: loc,
+        })
+    }
   })
 
   // ── 认可的偏差（X4）：只有提醒能认可，降为 info ──
