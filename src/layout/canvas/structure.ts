@@ -10,22 +10,16 @@
  *   U16：没有代码事实时只画允许边（mayDependOn 的投影），画布角说明。
  */
 import {
-  contractNames,
-  fileKinds,
+  chipDeps,
   levelImpact,
   moduleName,
   nodeOf,
   shelfOf,
-  tierOf,
   type AllowedEdge,
+  type ChipDep,
   type DepTier,
-  type FileDep,
-  type GovernanceReport,
-  type LevelView,
   type ModelIndex,
   type StructureEdge,
-  type StructureKind,
-  type Violation,
   type ViolationStatus,
 } from '@/model'
 import { bandDirectRoutes, directRoutes, type EdgeRoute, type PositionedView } from '../layout'
@@ -155,86 +149,29 @@ function allowedItem(idx: ModelIndex | null, e: AllowedEdge): DepItem {
   }
 }
 
-/**
- * O13③：分层总览中核心模块（与架上共用件）的跨层依赖——模块依赖的一端落在给出的块（chips）的子树内时，
- * 这一端投到块、另一端投到它所在的块（没有时为带或边界节点）；两端同带的不画（带内）。一对节点同方向按种类各一条（同 K14）。
- */
-export function chipDeps(idx: ModelIndex, view: LevelView, report: Pick<GovernanceReport, 'moduleDeps' | 'violations'>, chips: ReadonlySet<string>): DepItem[] {
-  if (!chips.size) return []
-  const present = new Set(view.nodes.map(n => n.id))
-  const chipIds = new Set(view.nodes.filter(n => n.role === 'core' || n.role === 'shared').map(n => n.id))
-  const layerOf = new Map(view.nodes.map(n => [n.id, n.layerId ?? n.id]))
-  const chipOf = (m: string): string | null => {
-    const p = idx.pathOf.get(m) ?? []
-    for (let i = p.length - 1; i >= 0; i--) if (chipIds.has(p[i])) return p[i]
-    return null
+/** O13③：核心模块（与架上共用件）的跨层结构边（模型层 chipDeps）的编码数据与悬停说明 */
+function chipItem(idx: ModelIndex, e: ChipDep): DepItem {
+  const violation = violationLook(e.violation)
+  return {
+    id: e.id,
+    from: e.from,
+    to: e.to,
+    chip: true,
+    look: {
+      kind: e.kind,
+      ...(e.tier ? { tier: e.tier } : {}),
+      fromModule: e.fromModule,
+      toModule: e.toModule,
+      deps: e.deps.length,
+      files: e.files,
+      ...(violation ? { violation } : {}),
+      title: [
+        `${DEP_KIND_LABELS[e.kind]}${e.tier ? `（${DEP_TIER_LABELS[e.tier]}）` : ''}：${moduleName(idx, e.fromModule)} → ${moduleName(idx, e.toModule)}`,
+        `模块依赖 ${e.deps.length} 条 · 文件依赖 ${e.files} 条`,
+        ...(e.violation ? [`违规（${VIOLATION_LABELS[e.violation]}）`] : []),
+      ].join('\n'),
+    },
   }
-  const project = (d: { from: string; to: string }): [string, string] | null => {
-    const ca = chipOf(d.from)
-    const cb = chipOf(d.to)
-    if (!(ca && chips.has(ca)) && !(cb && chips.has(cb))) return null
-    const a = ca ?? nodeOf(idx, view, present, d.from)
-    const b = cb ?? nodeOf(idx, view, present, d.to)
-    if (!a || !b || a === b || layerOf.get(a) === layerOf.get(b)) return null
-    return [a, b]
-  }
-  interface Pair {
-    from: string
-    to: string
-    byKind: Map<StructureKind, { files: FileDep[]; deps: Set<string> }>
-    violations: Violation[]
-  }
-  const pairs = new Map<string, Pair>()
-  for (const d of report.moduleDeps.values()) {
-    const p = project(d)
-    if (!p) continue
-    const k = `${p[0]}->${p[1]}`
-    const pair = pairs.get(k) ?? pairs.set(k, { from: p[0], to: p[1], byKind: new Map(), violations: [] }).get(k)!
-    const ports = contractNames(idx, d.to)
-    for (const f of d.files)
-      for (const kind of fileKinds(f, ports)) {
-        const slot = pair.byKind.get(kind) ?? pair.byKind.set(kind, { files: [], deps: new Set() }).get(kind)!
-        slot.files.push(f)
-        slot.deps.add(d.key)
-      }
-  }
-  for (const v of report.violations) {
-    const p = project(v)
-    if (p) pairs.get(`${p[0]}->${p[1]}`)?.violations.push(v)
-  }
-  const moduleOf = (id: string) => view.nodes.find(n => n.id === id)?.moduleId ?? id
-  const order: readonly ViolationStatus[] = ['new', 'open', 'known', 'allowed']
-  const out: DepItem[] = []
-  for (const p of pairs.values()) {
-    const status = order.find(s => p.violations.some(v => v.status === s))
-    const violation = violationLook(status)
-    for (const [kind, slot] of [...p.byKind].sort((a, b) => a[0].localeCompare(b[0]))) {
-      const tier = kind === 'dependency' ? tierOf(slot.files) : undefined
-      const fromModule = moduleOf(p.from)
-      const toModule = moduleOf(p.to)
-      out.push({
-        id: `chip:${kind}:${p.from}->${p.to}`,
-        from: p.from,
-        to: p.to,
-        chip: true,
-        look: {
-          kind,
-          ...(tier ? { tier } : {}),
-          fromModule,
-          toModule,
-          deps: slot.deps.size,
-          files: slot.files.length,
-          ...(violation ? { violation } : {}),
-          title: [
-            `${DEP_KIND_LABELS[kind]}${tier ? `（${DEP_TIER_LABELS[tier]}）` : ''}：${moduleName(idx, fromModule)} → ${moduleName(idx, toModule)}`,
-            `模块依赖 ${slot.deps.size} 条 · 文件依赖 ${slot.files.length} 条`,
-            ...(status ? [`违规（${VIOLATION_LABELS[status]}）`] : []),
-          ].join('\n'),
-        },
-      })
-    }
-  }
-  return out
 }
 
 /** 结构视角的场景派生；结构视角之外不调用 */
@@ -253,7 +190,7 @@ export function structureScene(input: CanvasInput, pv: PositionedView, focusId: 
     const wanted = new Set<string>()
     if (focusId && chipIds.has(focusId)) wanted.add(focusId)
     if (sel?.kind === 'dep') for (const id of sel.id.split('->')) if (chipIds.has(id)) wanted.add(id)
-    items.push(...chipDeps(idx, view, s.report, wanted))
+    items.push(...chipDeps(idx, view, s.report, wanted).map(e => chipItem(idx, e)))
   }
 
   const shelf = shelfOf(view)

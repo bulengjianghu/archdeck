@@ -36,6 +36,7 @@ export type { AssemblyOverlay, DepOverlay, EdgeFact, LevelAssembly, LevelFacts }
 export {
   structureView,
   levelDeps,
+  chipDeps,
   allowedDeps,
   impactOf,
   levelImpact,
@@ -65,6 +66,7 @@ export type {
   EdgeRuling,
   EdgeCoverage,
   StructureEdge,
+  ChipDep,
   LevelDeps,
   LevelDepsOptions,
   StructureView,

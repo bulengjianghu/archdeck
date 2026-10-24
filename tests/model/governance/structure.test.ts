@@ -7,6 +7,7 @@ import {
   againstStability,
   allowedDeps,
   assignFiles,
+  chipDeps,
   fileKinds,
   governanceReport,
   hasStructureEdge,
@@ -28,7 +29,7 @@ import {
   type ModuleMetrics,
 } from '@/model'
 import { sampleFiles } from '../../fixtures/sample'
-import { dep, files, setup, SRC } from './helpers'
+import { dep, files, LAYERS, RULES, setup, SRC } from './helpers'
 
 /** 内核层内部的各种使用（helpers 的两层四模块）：每条只说明它要验证的种类 */
 const typeDep = (from: string, to: string, via = to, line = 1): FileDep => ({ from, to, via, kind: 'type', line })
@@ -335,3 +336,23 @@ function sampleSetup(extra: FileDep[] = [], domainRefs = '  - { id: domain.model
   const code: CodeDeps = { deps: [...SAMPLE_DEPS, ...extra], external: {}, parsed: 4 }
   return { index, own, report: governanceReport(index, own, { files: SAMPLE_SRC, packages: {} }, code, null) }
 }
+
+describe('O13③ 分层总览中核心模块的跨层依赖（chipDeps）', () => {
+  it('一端落在给出的核心块子树内时投到块、另一端投到所在的带；按种类各一条，带档；没给块时为空', () => {
+    const raw = [
+      { path: 'system.yaml', text: 'system: { id: sys, name: Sys }' },
+      { path: 'modules/layers.yaml', text: LAYERS.replace('{ id: core.api, name: Api,', '{ id: core.api, name: Api, role: core,') },
+      { path: 'rules.yaml', text: RULES },
+    ]
+    const { index } = loadModel(raw)
+    const own = assignFiles(index, SRC, [])
+    const deps = [...CORE, dep('src/ui/store/s.ts', 'src/core/api/client.ts', 'src/core/api/index.ts')]
+    const report = governanceReport(index, own, { files: SRC, packages: {} }, { deps, external: {}, parsed: 6 }, null)
+    const view = projectLevel(index, index.rootId, { showBoundaries: true })
+    expect(view.mode).toBe('layered')
+    expect(chipDeps(index, view, report, new Set())).toEqual([])
+    const out = chipDeps(index, view, report, new Set(['core.api']))
+    expect(out.map(e => e.id)).toEqual(['chip:dependency:ui->core.api'])
+    expect(out[0]).toMatchObject({ kind: 'dependency', from: 'ui', to: 'core.api', fromModule: 'ui', toModule: 'core.api', tier: 'invokes', files: 1 })
+  })
+})
