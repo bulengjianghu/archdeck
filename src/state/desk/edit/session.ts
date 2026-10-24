@@ -13,6 +13,7 @@ import {
   type DesignEditEffects,
   type DesignEditOp,
   type EditRejectCode,
+  type ModelIndex,
   type SketchDef,
   type SketchSet,
   type SketchTarget,
@@ -229,6 +230,53 @@ export function splitImpact(
   }
   return { ok: true, sketches }
 }
+
+/** X7d：表单改 ID 的影响（提交前预览，不改会话） */
+export interface RenameImpact {
+  /** 新的完整 ID */
+  to: string
+  /** 随之改名的后代模块数（不含它自己，各草图去重） */
+  descendants: number
+  /** 一端落在它子树里、两端随之改写的关系条数（设计的全部草图） */
+  relations: number
+  /** 随之改名的下一层草图（挂载点，旧 → 新；file 为会话里读自文件的） */
+  sketches: { from: string; to: string; file: boolean }[]
+  /** 当前版本里引用旧 ID（及其后代）的条数：模块、关系、接口 */
+  current: number
+}
+
+/**
+ * X7d：表单改 ID 的影响——按设计级的改名（前缀级联 X12，模型层 applyDesignEdit）试算一步，不进会话：
+ * 后代数取级联改名的模块（去重），关系数取各草图里一端在旧子树内的关系，下一层草图取随之改挂的，当前版本的引用按旧子树计数。
+ * 改名不成立时为原因；新旧相同为 null。
+ */
+export function renameImpact(
+  s: EditSession,
+  op: Extract<DesignEditOp, { op: 'rename' }>,
+  ctx: DesignEditContext,
+  current?: ModelIndex | null,
+): { ok: true; impact: RenameImpact | null } | { ok: false; reason: string } {
+  const r = apply(s, op, ctx)
+  if (!r.ok) return { ok: false, reason: r.reason }
+  const self = r.effects.renamed.find(([a]) => a === op.id)
+  if (!self) return { ok: true, impact: null }
+  const under = (x: string) => x === op.id || x.startsWith(`${op.id}.`)
+  const descendants = new Set(r.effects.renamed.map(([a]) => a).filter(a => a !== op.id && under(a))).size
+  const relations = Object.values(s.doc.sketches)
+    .flatMap(d => d.relations ?? [])
+    .filter(x => under(x.from) || under(x.to)).length
+  const sketches = r.effects.renamedSketches.map(([from, to]) => ({ from, to, file: s.doc.origin[from] !== undefined }))
+  let refs = 0
+  if (current) {
+    for (const m of current.modules.keys()) if (under(m)) refs++
+    for (const x of current.relations.values()) if (under(x.from) || under(x.to)) refs++
+    for (const x of current.interfaces.values()) if (x.owner && under(x.owner)) refs++
+  }
+  return { ok: true, impact: { to: self[1], descendants, relations, sketches, current: refs } }
+}
+
+/** X7d：没有影响（无子树、无关系、无下一层草图、当前版本里没有引用）时直接应用，不必确认 */
+export const renameHasImpact = (x: RenameImpact): boolean => x.descendants > 0 || x.relations > 0 || x.sketches.length > 0 || x.current > 0
 
 /** 影响的反向（撤销时的跟随）：新建的被删、改名的换回、草图的改名换回 */
 const reverse = (fx: DesignEditEffects): DesignEditEffects => ({

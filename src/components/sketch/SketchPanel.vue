@@ -233,6 +233,15 @@ const designName = computed(() => desk.versions.design.value?.name ?? e.session.
   color: var(--text-3);
 }
 
+.skp-body .impact {
+  display: block;
+  padding: 4px 8px;
+  color: var(--text-2);
+  background: var(--warning-soft);
+  border-radius: 4px;
+  line-height: 1.5;
+}
+
 .skp-body .warn {
   color: var(--warning);
 }

@@ -734,3 +734,47 @@ test('X7a（第五轮 T3）：有未保存改动时切换版本、浏览器后�
     box.restore()
   }
 })
+
+test('X7d（第五轮 T3）：草图面板改 ID 时提交前预览影响（后代、关系、下一层草图文件、当前版本的引用），有影响二次确认——取消不改，确认后前缀级联', async ({
+  page,
+}) => {
+  const box = sandbox('zz-e2e-rename')
+  try {
+    fs.mkdirSync(path.join(box.dir, 'sketches'), { recursive: true })
+    fs.writeFileSync(path.join(box.dir, 'design.yaml'), 'design:\n  name: E2E 改 ID\n  status: draft\n')
+    fs.writeFileSync(path.join(box.dir, 'sketches/state.desk.yaml'), BAR_SKETCH.replace('id: zz-e2e-bar', 'id: zz-e2e-rename'))
+    await openDesk(page, '/p/h5p-arch-desk')
+    await page.locator('select[aria-label="切换版本"]').selectOption('zz-e2e-rename/sketch')
+    await expect(page.locator('.sketch-canvas')).toBeVisible()
+    await graphNode(page, 'state.desk.alpha').locator('.name').click()
+    const form = page.locator('[data-testid="sketch-module-form"]')
+    const id = form.locator('[name="module-id"]')
+    await id.fill('alpha2')
+    // 输入时即时预览：一条关系随之改写
+    const impact = form.locator('[data-testid="rename-impact"]')
+    await expect(impact).toContainText('受影响的关系：1 条')
+    await expect(impact).toContainText('级联改名的后代模块：0 个')
+    await expect(impact).toContainText('当前版本里引用旧 ID 的：0 处')
+    await id.press('Enter')
+    const ask = page.getByRole('dialog', { name: /state\.desk\.alpha.*state\.desk\.alpha2/ })
+    await expect(ask).toContainText('受影响的关系：1 条')
+    await ask.getByRole('button', { name: '取消' }).click()
+    await expect(id).toHaveValue('alpha')
+    await expect(graphNode(page, 'state.desk.alpha')).toBeVisible()
+
+    await id.fill('alpha2')
+    await id.press('Enter')
+    await ask.getByRole('button', { name: '改 ID' }).click()
+    await expect(graphNode(page, 'state.desk.alpha2')).toBeVisible()
+    await expect(graphNode(page, 'state.desk.alpha')).toHaveCount(0)
+    expect(
+      await page.evaluate(() =>
+        (globalThis as unknown as { __desk: { edit: { sketch: { value: { relations: { from: string }[] } } } } }).__desk.edit.sketch.value.relations.map(
+          r => r.from,
+        ),
+      ),
+    ).toEqual(['state.desk.alpha2'])
+  } finally {
+    box.restore()
+  }
+})

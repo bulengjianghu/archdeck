@@ -37,6 +37,8 @@ import {
   reloaded,
   replay,
   splitImpact,
+  renameImpact,
+  type RenameImpact,
   undo as undoSession,
   type EditSession,
   type ReadSketch,
@@ -62,6 +64,8 @@ export interface CommandInputs {
   /** 编辑目标；不是草图版本时为 undefined */
   target?: SketchTarget
   baseline: () => ModelIndex | null
+  /** 当前版本（X7d 改 ID 的影响里数当前版本的引用）；没给时不数 */
+  current?: () => ModelIndex | null
   /** 当前层次的路径（跟随用） */
   levelPath: () => readonly string[]
   dispatch: (action: ViewAction) => boolean
@@ -209,6 +213,13 @@ export function createCommands(i: CommandInputs) {
   }
   /** 改 ID（只改短名，前缀级联） */
   const rename = (id: string, newId: string) => run({ op: 'rename', sketch: mount(), id, newId })
+  /** X7d：表单改 ID 提交前的影响（不改会话）：后代数、关系数、随之改名的下一层草图、当前版本里的引用；新旧相同为 null，不成立时为原因 */
+  function previewRename(id: string, newId: string): { impact: RenameImpact | null } | { rejected: string } {
+    const s = session.value
+    if (!s || !loaded.value) return { rejected: '不在草图里' }
+    const r = renameImpact(s, { op: 'rename', sketch: mount(), id, newId }, ctx(), i.current?.() ?? null)
+    return r.ok ? { impact: r.impact } : { rejected: r.reason }
+  }
   const updateModule = (id: string, patch: ModulePatch) => edit({ op: 'updateModule', id, patch })
   /** F-22：拖关系标签 */
   const relabel = (id: string, label: SketchPoint | null) => edit({ op: 'relabel', id, label })
@@ -381,6 +392,7 @@ export function createCommands(i: CommandInputs) {
     remove,
     previewRemove,
     previewSplit,
+    previewRename,
     openChild,
     /** 切到挂在某个模块上的草图（面包屑回到某一级、设计面板点一张、引用节点「打开」；会话里没有时按基线推出） */
     openMount,

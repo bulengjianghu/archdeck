@@ -7,8 +7,10 @@
 import { computed, ref, watch } from 'vue'
 import type { ModuleDef } from '@/model'
 import { useDesk } from '@/state/inject'
+import { renameHasImpact, type RenameImpact } from '@/state/desk/edit/session'
 import { CHANGE_BADGES } from '../labels'
 import { requestSketch } from '../actions'
+import { ask } from '../../edit/useEditDialog'
 
 const props = defineProps<{ module: ModuleDef }>()
 const emit = defineEmits<{ note: [text: string] }>()
@@ -42,9 +44,33 @@ function commitName() {
   if (!v) return void (name.value = m.value.name)
   if (v !== m.value.name) report(e.updateModule(m.value.id, { name: v }))
 }
-function commitId() {
+/** X7d：改 ID 的影响（输入时即时预览，提交前有影响要确认）：级联改名的后代、受影响的关系、随之改名的下一层草图文件、当前版本里的引用 */
+const impact = computed<RenameImpact | null>(() => {
   const v = short.value.trim()
-  if (v && v !== shortOf(m.value.id) && !report(e.rename(m.value.id, v))) short.value = shortOf(m.value.id)
+  if (!v || v === shortOf(m.value.id)) return null
+  const r = e.previewRename(m.value.id, v)
+  return 'impact' in r ? r.impact : null
+})
+const sketchFile = (mount: string) => `sketches/${mount}.yaml`
+function impactLines(x: RenameImpact): string[] {
+  return [
+    `级联改名的后代模块：${x.descendants} 个`,
+    `受影响的关系：${x.relations} 条`,
+    ...(x.sketches.length
+      ? [`随之改名的下一层草图：${x.sketches.map(k => `${sketchFile(k.from)} → ${sketchFile(k.to)}${k.file ? '' : '（会话里推出的）'}`).join('、')}`]
+      : []),
+    `当前版本里引用旧 ID 的：${x.current} 处（交给 AI 后按新 ID 改写）`,
+  ]
+}
+async function commitId() {
+  const v = short.value.trim()
+  if (!v || v === shortOf(m.value.id)) return
+  const x = impact.value
+  if (x && renameHasImpact(x)) {
+    const go = await ask({ title: `把「${m.value.id}」改为「${x.to}」？`, lines: impactLines(x), ok: '改 ID' })
+    if (!go) return void (short.value = shortOf(m.value.id))
+  }
+  if (!report(e.rename(m.value.id, v))) short.value = shortOf(m.value.id)
 }
 function commitResp() {
   if (resp.value.trim() !== (m.value.responsibility ?? '')) report(e.updateModule(m.value.id, { responsibility: resp.value.trim() || undefined }))
@@ -94,7 +120,11 @@ const blur = (ev: KeyboardEvent) => (ev.target as HTMLElement).blur()
       >
       <span class="id-row">
         <code>{{ prefix }}</code>
-        <input v-model="short" name="module-id" @blur="commitId" @keydown.enter="blur" />
+        <!-- 回车阻止缺省：否则同一次按键的 keypress 会落到确认对话框刚获得焦点的按钮上，直接确认 -->
+        <input v-model="short" name="module-id" @blur="commitId" @keydown.enter.prevent="blur" />
+      </span>
+      <span v-if="impact && renameHasImpact(impact)" class="impact small" data-testid="rename-impact">
+        <template v-for="line in impactLines(impact)" :key="line">{{ line }}<br /></template>
       </span>
     </label>
     <label class="f">

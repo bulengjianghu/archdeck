@@ -20,6 +20,8 @@ import {
   saved,
   sketchDirty,
   splitImpact,
+  renameImpact,
+  renameHasImpact,
   undo,
   type ReadSketch,
 } from '../../src/state/desk/edit/session'
@@ -202,6 +204,31 @@ describe('编辑会话的纯函数（X7g、X7i、X20）', () => {
     // 基线里有子树、下一层还没打开：按基线推出并计入
     const root = begin(target, 'd', read(seedFromBaseline('root', baseline, { id: 'd' })))
     expect(splitImpact(root, split('core.b', ['p1', 'p2'], 'root'), ctx)).toEqual({ ok: true, sketches: [{ mount: 'core.b', modules: 1, derived: true }] })
+  })
+
+  it('X7d 表单改 ID 的影响（提交前预览，不改会话）：后代数、关系数、随之改名的下一层草图文件、当前版本里的引用；没有影响时直接应用', () => {
+    const rename = (id: string, newId: string, sketch = 'core.a') => ({ op: 'rename' as const, sketch, id, newId })
+    // 基线模块、有关系：本张关系两条，当前版本里模块 1 + 关系 2
+    const a = ok(renameImpact(s0, rename('core.a.x', 'xx'), ctx, baseline)).impact!
+    expect(a).toMatchObject({ to: 'core.a.xx', descendants: 0, sketches: [] })
+    expect(a.relations).toBe(2)
+    expect(a.current).toBe(3)
+    expect(renameHasImpact(a)).toBe(true)
+    // 下一层草图里有子模块：后代 1 个，下一层草图随之改名（会话里推出、未读自文件）；会话不变
+    const opened = ok(open(s0, 'core.a.x', ctx)).session
+    const c = ok(apply(opened, { op: 'edit', sketch: 'core.a.x', edit: { op: 'addModule', parent: 'core.a.x', name: 'K', id: 'k' } }, ctx)).session
+    const b = ok(renameImpact({ ...c, mount: 'core.a' }, rename('core.a.x', 'xx'), ctx, baseline)).impact!
+    expect(b.descendants).toBe(1)
+    expect(b.sketches).toEqual([{ from: 'core.a.x', to: 'core.a.xx', file: false }])
+    expect(c.doc.sketches['core.a.x']).toBeDefined()
+    // 新建的模块、没有关系与下一层、当前版本里没有：没有影响
+    const n = ok(apply(s0, { op: 'edit', sketch: 'core.a', edit: { op: 'addModule', parent: 'core.a', name: 'N', id: 'n' } }, ctx)).session
+    const fresh = ok(renameImpact(n, rename('core.a.n', 'm'), ctx, baseline)).impact!
+    expect(fresh).toEqual({ to: 'core.a.m', descendants: 0, relations: 0, sketches: [], current: 0 })
+    expect(renameHasImpact(fresh)).toBe(false)
+    // 新旧相同为 null；重复的 ID 不成立
+    expect(ok(renameImpact(s0, rename('core.a.x', 'x'), ctx, baseline)).impact).toBeNull()
+    expect(renameImpact(s0, rename('core.a.x', 'y'), ctx, baseline)).toMatchObject({ ok: false })
   })
 
   it('持久草图只有这一张：不能下钻、不能做改动下一层草图的操作', () => {

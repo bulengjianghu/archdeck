@@ -102,6 +102,7 @@ export function createEdit(i: EditInputs) {
     sketchFiles,
     target,
     baseline: i.baseline,
+    current: i.current,
     levelPath: i.levelPath,
     dispatch: i.dispatch,
     show: i.show,
