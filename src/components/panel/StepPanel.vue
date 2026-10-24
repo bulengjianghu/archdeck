@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
  * 步骤面板（D-5，选中步骤时，V2）：先回答「这一步做什么」——作用、输入（签名中与标签同名的一行 + 携带的数据）、输出（配对返回，F7）、数据结构、经由接口；
- * 步骤没写的接口与数据取自对应关系并标「取自关系」（S14）；有代码事实时「经由接口」之后是代码证据：等级与候选调用点，单击在副栏预览到该行（S16、S18）；
- * 其后是真实端点与本层投影（经由上层关系时注明关系建在上层并可定位，P15）、本层一条可见消息覆盖的多帧；结构关系默认折叠，可在画布上显示（V9）；最后是出处。
+ * 步骤没写的接口与数据取自对应关系并标「取自关系」（S14）；有代码事实时「经由接口」之后是代码证据：包含链「这一步 → 交互 → 依赖」（D-25），
+ * 等级与候选调用点，单击在副栏预览到该行（S16、S18）；
+ * 其后是真实端点与本层投影（经由上层关系时注明关系建在上层并可定位，P15）、本层一条可见消息覆盖的多帧；交互关系默认折叠，可在画布上显示（V9）；最后是出处。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -15,6 +16,7 @@ import RelationRow from './RelationRow.vue'
 import RevealButton from './RevealButton.vue'
 import { useOpenPreview } from '../shared/preview'
 import { EVIDENCE_LEVEL_LABELS } from '../shared/labels'
+import { stepChain } from './chain'
 import { KIND_LABEL, dataNames, fragmentText, frameText, landingText, signatureLine, stepOutput } from './runText'
 
 const desk = useDesk()
@@ -60,6 +62,10 @@ const evNote = computed(() => {
   if (e.reason === 'target') return '一端是目标态模块，尚未落地'
   return e.host ? `两端在同一组文件里（${moduleName(idx.value, e.host)}）` : '两端在同一组文件里'
 })
+
+/** D-25：包含链（只在有代码事实时，与代码证据同一节） */
+const chain = computed(() => (ev.value ? stepChain(idx.value, f.value, f.value.relation ? desk.facts.relationFact(f.value.relation) : null) : null))
+const CHAIN_MARK = { ok: '✓', missing: '✗', skipped: '—', na: '' } as const
 
 function pointAt(id: string) {
   if (idx.value.actors.has(id)) desk.select({ kind: 'actor', id })
@@ -125,6 +131,28 @@ function pointAt(id: string) {
       <InterfaceItem :id="f.interface" open />
     </Section>
     <Section v-if="ev" title="代码证据" :count="'total' in ev ? ev.total : undefined">
+      <ol v-if="chain" class="chain" aria-label="包含链">
+        <li class="link-step">这一步</li>
+        <li class="link-interaction" :class="`st-${chain.interaction.state}`">
+          <span class="arrow">→</span><span class="lvl">交互</span>
+          <span v-if="CHAIN_MARK[chain.interaction.state]" class="mark">{{ CHAIN_MARK[chain.interaction.state] }}</span>
+          {{ chain.interaction.text }}
+        </li>
+        <li class="link-dependency" :class="`st-${chain.dependency.state}`">
+          <span class="arrow">→</span><span class="lvl">依赖</span>
+          <span v-if="CHAIN_MARK[chain.dependency.state]" class="mark">{{ CHAIN_MARK[chain.dependency.state] }}</span>
+          {{ chain.dependency.text }}
+          <template v-if="chain.dependency.deps?.[0]?.files[0]">
+            <button
+              class="link"
+              :title="`在副栏预览 ${chain.dependency.deps[0].files[0].from} 第 ${chain.dependency.deps[0].files[0].line} 行`"
+              @click="openPreview(chain.dependency.deps[0].files[0].from, chain.dependency.deps[0].files[0].line)"
+            >
+              {{ chain.dependency.deps[0].files[0].from }}:{{ chain.dependency.deps[0].files[0].line }}
+            </button>
+          </template>
+        </li>
+      </ol>
       <div class="evidence-level">
         <span class="badge" :class="`ev-${ev.level}`">{{ EVIDENCE_LEVEL_LABELS[ev.level] }}</span>
         <span class="muted">{{ evNote }}</span>
@@ -165,7 +193,7 @@ function pointAt(id: string) {
     </Section>
 
     <details class="structure">
-      <summary class="structure-head">结构关系</summary>
+      <summary class="structure-head">交互关系</summary>
       <Section title="对应关系">
         <ul v-if="f.relation" class="plain">
           <RelationRow :id="f.relation" />
@@ -173,7 +201,7 @@ function pointAt(id: string) {
             <span class="badge warn">推断</span> 描述中没写 relation，两端之间恰好一条运行时关系，自动认定
           </li>
         </ul>
-        <p v-else class="muted">结构中没有与这一步对应的关系</p>
+        <p v-else class="muted">交互中没有与这一步对应的关系</p>
         <RevealButton :nodes="revealNodes" class="reveal-row" />
       </Section>
     </details>
@@ -186,6 +214,43 @@ function pointAt(id: string) {
 </template>
 
 <style scoped>
+.chain {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  font-size: 12.5px;
+}
+
+.chain li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  padding: 1px 0;
+}
+
+.chain .arrow {
+  color: var(--text-3);
+}
+
+.chain .lvl {
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.chain .st-ok .mark {
+  color: var(--success, var(--accent));
+}
+
+.chain .st-missing {
+  color: var(--warning);
+}
+
+.chain .st-skipped,
+.chain .st-na {
+  color: var(--text-3);
+}
+
 .evidence-level {
   display: flex;
   align-items: baseline;

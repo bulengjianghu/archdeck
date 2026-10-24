@@ -1,11 +1,13 @@
 <script setup lang="ts">
 /**
  * 属性面板：按选中分派（V2，ADR-0012）。结构视角：选中的对象，无选中时为当前父模块（根层显示系统）；
- * 运行视角：选中步骤 → 步骤面板，选中场景 → 场景面板，其他对象 → 运行信息在上、结构信息折叠在下（V6）。
+ * 运行视角：选中步骤 → 步骤面板，选中场景 → 场景面板，其他对象 → 运行信息在上、模块信息折叠在下（V6）。
+ * 结构视角下模式切换映射不过去而被清空的选中（V12，droppedSelection）：顶部说明原选中没有对应的依赖边。
  * 代码依赖叠加线（K10）→ 代码依赖面板；耦合线（J7）→ 耦合面板；端口（L13）→ 端口面板（K11）。草图画布下（X7，ADR-0025）：换成草图面板。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
+import { moduleName } from '@/model'
 import ScenarioPanel from './ScenarioPanel.vue'
 import StepPanel from './StepPanel.vue'
 import RunSection from './RunSection.vue'
@@ -22,6 +24,19 @@ import SketchPanel from '../sketch/SketchPanel.vue'
 
 const desk = useDesk()
 const run = computed(() => desk.perspective.value === 'run')
+/** V12：切到结构视角时原选中（关系、视图边、端口）没有对应的依赖边，被清空 */
+const dropped = computed(() => {
+  const d = desk.droppedSelection.value
+  const idx = desk.index.value
+  if (!d || !idx || desk.perspective.value !== 'structure') return null
+  if (d.kind === 'relation') {
+    const r = idx.relations.get(d.id)
+    return r ? `关系 ${moduleName(idx, r.from)} → ${moduleName(idx, r.to)}` : '关系'
+  }
+  if (d.kind === 'edge') return '交互边'
+  if (d.kind === 'port') return `端口 ${idx.interfaces.get(d.id)?.name ?? d.id}`
+  return '选中的对象'
+})
 const target = computed(() => {
   const idx = desk.index.value
   const s = desk.selected.value
@@ -44,6 +59,7 @@ const target = computed(() => {
 <template>
   <div class="panel">
     <SketchPanel v-if="desk.edit.active.value" />
+    <p v-if="dropped && !desk.edit.active.value" class="dropped" role="note">切换视角后原选中（{{ dropped }}）没有对应的依赖边，已取消选中</p>
     <template v-else-if="target">
       <StepPanel v-if="target.kind === 'step'" :key="`f:${target.id}`" />
       <ScenarioPanel v-else-if="target.kind === 'scenario'" :key="`s:${target.id}`" />
@@ -58,7 +74,7 @@ const target = computed(() => {
           class="structure"
           :open="run ? false : undefined"
         >
-          <summary v-if="run" class="structure-head">结构信息</summary>
+          <summary v-if="run" class="structure-head">模块信息</summary>
           <ModulePanel v-if="target.kind === 'module'" :id="target.id" :key="`m:${target.id}`" />
           <RelationPanel v-else-if="target.kind === 'relation'" :id="target.id" :key="`r:${target.id}`" />
           <EdgePanel v-else-if="target.kind === 'edge'" :id="target.id" :key="`e:${target.id}`" />
@@ -72,6 +88,14 @@ const target = computed(() => {
 </template>
 
 <style>
+.panel .dropped {
+  margin: 0;
+  padding: 8px 18px;
+  font-size: 12.5px;
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
 .panel {
   font-size: 13.5px;
   padding-bottom: 24px;

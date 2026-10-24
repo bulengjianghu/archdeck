@@ -13,6 +13,7 @@ import ModuleGovernance from './ModuleGovernance.vue'
 import ModuleEvolution from './ModuleEvolution.vue'
 import ModulePorts from './ModulePorts.vue'
 import ModuleKnowledge from './ModuleKnowledge.vue'
+import ModuleStructure from './ModuleStructure.vue'
 import ReviewSection from './ReviewSection.vue'
 import ModuleDecisions from './ModuleDecisions.vue'
 import { canDesignAt, openNewDesign } from '../edit/designHere'
@@ -60,6 +61,8 @@ function openChild(childId: string) {
       <p v-else class="muted">未填写</p>
     </Section>
     <ReviewSection :id="m.id" part="diff" />
+    <!-- 结构视角（ADR-0031）：指标、影响面与交互图互查紧跟职责 -->
+    <ModuleStructure v-if="desk.perspective.value === 'structure'" :id="m.id" />
     <ModuleDecisions :id="m.id" />
 
     <template v-if="isLayer">
