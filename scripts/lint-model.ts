@@ -178,7 +178,7 @@ function governanceSummary(r: GovernanceReport): string {
   const open = r.violations.filter(v => v.status === 'open').length
   const b = r.baseline
   return (
-    `；代码事实：文件依赖 ${r.fileDeps}、模块依赖 ${r.moduleDeps.size}，关系已证实 ${n('confirmed')} / 未证实 ${n('unconfirmed')}，未描述依赖 ${r.undescribed.length}` +
+    `；代码事实：文件依赖 ${r.fileDeps}、模块依赖 ${r.moduleDeps.size}，关系已证实 ${n('confirmed')} / 未证实 ${n('unconfirmed')}，未解释的交互 ${r.undescribed.length}` +
     `；违规 ${b ? `新增 ${r.gate.newViolations} / 已知 ${r.gate.knownViolations}` : `${open}（无基线）`}${allowed ? ` / 已豁免 ${allowed}` : ''}` +
     `；环度 模块 ${r.cyclicity.modules} / 文件 ${r.cyclicity.files}${b ? `（基线 ${b.cyclicity.modules} / ${b.cyclicity.files}）` : ''}` +
     (r.gate.resolved ? `；基线中 ${r.gate.resolved} 条违规已消除，可运行 npm run arch -- baseline 收紧基线` : '')

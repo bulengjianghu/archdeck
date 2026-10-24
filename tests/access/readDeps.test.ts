@@ -102,7 +102,34 @@ describe('K1 提取导入', () => {
 
   it('Vue 取 <script> 块，行号按文件计', () => {
     const imps = parseVueImports('src/View.vue', fs.readFileSync(path.join(repo, 'src/View.vue'), 'utf8'))
-    expect(imps).toEqual([{ spec: './lib/x', line: 3, kind: 'value', names: ['x'], types: [] }])
+    // 样例只导入不使用 x：记为未在值位置引用（inert）
+    expect(imps).toEqual([{ spec: './lib/x', line: 3, kind: 'value', names: ['x'], types: [], inert: ['x'] }])
+  })
+
+  it('K1：只在类型位置或 instanceof 右侧出现、或只本地再导出的值导入名记为 inert（不算引用了实现）；调用、new、extends、Vue 模板里出现的算引用', () => {
+    const code = [
+      "import { A, B, C, D, E } from './x'",
+      "import Def from './d'",
+      "import * as ns from './n'",
+      'let a: A',
+      'new B()',
+      'class K extends C {}',
+      'export { D }',
+      'function f(e: typeof E) { return ns.run() }',
+      "import { F } from './g'",
+      'const ok = (v: unknown) => v instanceof F',
+    ].join('\n')
+    const [x, d, n, g] = parseImports('a.ts', code)
+    expect(x.inert).toEqual(['A', 'D', 'E'])
+    expect(g.inert).toEqual(['F'])
+    expect(d.inert).toEqual(['*'])
+    expect(n.inert).toBeUndefined()
+    const vue = parseVueImports(
+      'V.vue',
+      '<template><my-comp :v="fmt(1)" /></template>\n<script setup lang="ts">\nimport MyComp from "./c.vue"\nimport { fmt, Unused } from "./f"\n</script>',
+    )
+    expect(vue.map(i => i.inert)).toEqual([undefined, ['Unused']])
+    expect(importTargetKinds({ kind: 'value', names: [], types: [], inert: ['*'] }, 'src/d.ts', () => [])).toEqual([{ to: 'src/d.ts', kind: 'value' }])
   })
 
   it('K1a：类型与值按名字区分——写成只引类型的名字记入 types；整条 import type 的名字都是类型', () => {
@@ -155,6 +182,14 @@ describe('K1 implements 证据（ADR-0022）', () => {
     expect(importTargetKinds({ kind: 'value', names: [], types: [], heritage: ['*'] }, 'src/base.ts', exportsOf)).toEqual([
       { to: 'src/base.ts', kind: 'value', heritage: true, uses: true },
     ])
+  })
+
+  it('再导出（export … from、export *）只转出名字，不算引用了实现（K1、K7 的值使用）', () => {
+    const exportsOf = () => [{ name: 'make', kind: 'function', from: 'src/impl.ts' }]
+    const [named, star] = parseImports('src/index.ts', "export { make } from './impl'\nexport * from './all'")
+    expect(named.reexport).toBe(true)
+    expect(importTargetKinds(named, 'src/impl.ts', exportsOf)).toEqual([{ to: 'src/impl.ts', kind: 'value', names: ['make'] }])
+    expect(importTargetKinds(star, 'src/all.ts', exportsOf)).toEqual([{ to: 'src/all.ts', kind: 'value' }])
   })
 })
 

@@ -39,15 +39,15 @@ describe('K9、K10、Y4、Y5 本层投影', () => {
   })
 
   it('K9、Y5：同方向有多条视图边（L5 按类型分边）时，违规红晕与本层环的视图边只取类型声明顺序中的第一条', () => {
-    const { index } = loadModel([...files(), { path: 'modules/z.yaml', text: 'relations: [{ id: rel.7, from: ui.store, to: core.util, type: depends }]' }])
+    const { index } = loadModel([...files(), { path: 'modules/z.yaml', text: 'relations: [{ id: rel.7, from: ui.store, to: core.util, type: implements }]' }])
     const own = assignFiles(index, SRC, [])
     const report = governanceReport(index, own, { files: SRC, packages: {} }, CODE, null)
     const view = projectLevel(index, 'ui')
-    expect(view.edges.filter(e => e.from === 'ui.store' && e.to === 'boundary:core').map(e => e.type).sort()).toEqual(['calls', 'depends'])
+    expect(view.edges.filter(e => e.from === 'ui.store' && e.to === 'boundary:core').map(e => e.type).sort()).toEqual(['calls', 'implements'])
     const f = levelFacts(index, view, report)
-    expect([...f.violatedEdges].filter(id => id.startsWith('ui.store->boundary:core'))).toEqual(['ui.store->boundary:core:depends'])
+    expect([...f.violatedEdges].filter(id => id.startsWith('ui.store->boundary:core'))).toEqual(['ui.store->boundary:core:calls'])
     const e = f.levelCycles[0].edges.find(x => x.from === 'ui.store' && x.to === 'boundary:core')!
-    expect(e.edgeId).toBe('ui.store->boundary:core:depends')
+    expect(e.edgeId).toBe('ui.store->boundary:core:calls')
   })
 
   it('Y5：本层环的节点按视图顺序，环内的本层依赖带同方向视图边与投影来的模块依赖', () => {

@@ -18,7 +18,7 @@ scenario:
     - call: {id: create, from: actor.architect, to: present.version.new-design, label: '填设计 ID、名称、目标，点「新建」'}
     - call: {from: present.version.new-design, to: state.desk.edit.commands, label: 'createDesign({ id, name, goal, mount })'}
     - call: {from: state.desk.edit.commands, to: state.desk.edit.save, label: '交给写回同步'}
-    - call: {from: state.desk.edit.save, to: access.writer.sketch, relation: rel.ed.save-writer, label: 'POST /write/<项目>/designs { id, name, goal, mount }'}
+    - async: {from: state.desk.edit.save, to: access.writer.sketch, relation: rel.ed.save-writer, label: 'POST /write/<项目>/designs { id, name, goal, mount }'}
     - call: {from: access.writer.sketch, to: model.intent, label: 'seedFromBaseline(mount, HEAD 那一版描述) + gridLayout：底稿与初始布局'}
     - return: {from: access.writer.sketch, to: state.desk.edit.save, label: '{ file, files }：design.yaml（base.commit = HEAD）与 sketches/<mount>.yaml，登记指纹'}
     - call: {from: present.version.new-design, to: present.shell, label: '进入新设计的草图 /d/<设计>/sketch'}
@@ -38,7 +38,7 @@ scenario:
     - call: {id: hand, from: actor.architect, to: present.version.actions, label: '点「保存并交给 AI」'}
     - call: {from: present.version.actions, to: state.desk.edit.commands, label: 'saveAndHandToAi()：没有格式错误与语义提示才做'}
     - call: {from: state.desk.edit.commands, to: state.desk.edit.save, label: '保存整个设计'}
-    - call: {from: state.desk.edit.save, to: access.writer.sketch, relation: rel.ed.save-writer, label: 'POST /write/<项目>/designs/<设计>/sketches', payload: ds.SaveDesignRequest}
+    - async: {from: state.desk.edit.save, to: access.writer.sketch, relation: rel.ed.save-writer, label: 'POST /write/<项目>/designs/<设计>/sketches', payload: ds.SaveDesignRequest}
     - call: {from: access.writer.sketch, to: model.intent.validate, label: '逐张再校验（只拦格式错误）'}
     - alt:
         - when: 指纹相同且没有格式错误

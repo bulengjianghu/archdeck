@@ -32,7 +32,7 @@ beforeAll(() => {
   write(
     'beta/modules/layers.yaml',
     'modules:\n  - { id: up, name: Up, kind: layer, order: 1, abstraction: a, responsibility: x }\n  - { id: down, name: Down, kind: layer, order: 2, abstraction: b, responsibility: x }\n' +
-      'relations:\n  - { id: r1, from: up, to: down, type: depends }\n  - { id: r2, from: up, to: nope, type: calls }\n',
+      'relations:\n  - { id: r1, from: up, to: down, type: calls }\n  - { id: r2, from: up, to: nope, type: calls }\n',
   )
   write('alpha/system.yaml', 'system: { id: alpha, name: Alpha }')
   write('alpha/m.yml', 'modules: [{ id: m1, name: M1 }]')

@@ -32,7 +32,7 @@ test('单击节点选中并在面板显示属性，单击空白取消选中', as
   expect(query(page).get('sel')).toBeNull()
 })
 
-test('L11 左动右静：同一节点的动态入边（calls / notifies / streams）进点都在静态入边（depends / implements）左边', async ({ page }) => {
+test('L11 左动右静：同一节点的动态入边（calls / notifies / streams）进点都在静态入边（implements）左边', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra&sel=m:infra.framework')
   await expect(page.locator('.vue-flow__edge').first()).toBeAttached()
   const edges = page.locator('.vue-flow__edge')

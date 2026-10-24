@@ -102,7 +102,7 @@ describe('草图布局', () => {
       ],
       relations: [
         { id: 'r1', from: 'core.a.x', to: 'access.w.s', type: 'calls' },
-        { id: 'r2', from: 'core.a.x', to: 'access.w.t', type: 'depends' },
+        { id: 'r2', from: 'core.a.x', to: 'access.w.t', type: 'implements' },
         { id: 'r3', from: 'access.w.s', to: 'core.a.x', type: 'notifies' },
         { id: 'r4', from: 'core.a.y', to: 'access.r', type: 'calls', description: '读' },
       ],

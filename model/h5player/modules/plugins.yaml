@@ -427,7 +427,7 @@ relations:
   - id: rel.plugins.mse-live-strategies
     from: app.plugins.buffer-strategy.mse-live
     to: app.strategies
-    type: depends
+    type: calls
     description: 继承 PluginBasePlayStrategy，复用追帧判定报告 mseChasingDecision
   - id: rel.plugins.mse-live-math
     from: app.plugins.buffer-strategy.mse-live
@@ -439,17 +439,17 @@ relations:
   - id: rel.plugins.mse-live-mus
     from: app.plugins.buffer-strategy.mse-live
     to: infra.mus
-    type: depends
+    type: calls
     description: 直接 import mus/render/mse 的 bufferGapDecision、bufferRecycleRange 纯判定
   - id: rel.plugins.mse-live-index
     from: app.plugins.buffer-strategy.mse-live
     to: infra.player-index
-    type: depends
+    type: calls
     description: 经 modelAccess.requireMseModel 取 MSE 播放模型
   - id: rel.plugins.mse-live-domain
     from: app.plugins.buffer-strategy.mse-live
     to: domain.services
-    type: depends
+    type: calls
     description: 读 HLS 直播追帧默认参数 HLS_LIVE_CATCHUP_DEFAULTS
   - id: rel.plugins.mse-live-events
     from: infra.framework
@@ -466,12 +466,12 @@ relations:
   - id: rel.plugins.fhls-live-strategies
     from: app.plugins.buffer-strategy.fhls-live
     to: app.strategies
-    type: depends
+    type: calls
     description: 继承 PluginBasePlayStrategy
   - id: rel.plugins.fhls-live-index
     from: app.plugins.buffer-strategy.fhls-live
     to: infra.player-index
-    type: depends
+    type: calls
     description: 经 modelAccess.requireFhlsModel 读渲染轴零点等 Fhls 播放模型
   - id: rel.plugins.fhls-live-domain
     from: app.plugins.buffer-strategy.fhls-live
@@ -526,7 +526,7 @@ relations:
   - id: rel.plugins.vod-adaptive-models
     from: app.plugins.buffer-strategy.vod-adaptive
     to: domain.models
-    type: depends
+    type: calls
     description: assertHlsStreamModel 断言 HLS 流模型以查分片时长
   - id: rel.plugins.vod-adaptive-fw
     from: infra.framework
@@ -537,7 +537,7 @@ relations:
   - id: rel.plugins.water-level-mus
     from: app.plugins.buffer-strategy.water-level-math
     to: infra.mus
-    type: depends
+    type: calls
     description: resolveMseChasingSeekMs 包装 mus/render/mse/chasingFrameAmount 的 decideChasingFrameTarget
 
   # ── app.plugins · 网络 ──
@@ -562,7 +562,7 @@ relations:
   - id: rel.plugins.monitor-index
     from: app.plugins.network.monitor
     to: infra.player-index
-    type: depends
+    type: calls
     description: 经 modelAccess 读缓冲为空 / 帧缓冲 / 就绪度模型（点播）
   - id: rel.plugins.reconnect-events
     from: infra.framework
@@ -582,12 +582,6 @@ relations:
     type: calls
     mode: async
     description: 执行判定效果：Stop / Play 命令、终态错误上报
-  - id: rel.plugins.reconnect-types
-    from: app.plugins.network.reconnect
-    to: domain.types
-    type: depends
-    payload: [ds.PlayerStatus]
-    description: 判定使用领域 PlayerStatus
   - id: rel.plugins.reconnect-support
     from: app.plugins.network.reconnect
     to: app.plugins.support
@@ -600,7 +594,7 @@ relations:
   - id: rel.plugins.render-watch-index
     from: app.plugins.runtime-guard.render-watch
     to: infra.player-index
-    type: depends
+    type: calls
     description: 经 modelAccess.requireVideoErrorModel 读 video 异常记录
   - id: rel.plugins.render-watch-fw
     from: infra.framework
@@ -630,7 +624,7 @@ relations:
   - id: rel.plugins.system-load-index
     from: app.plugins.runtime-guard.system-load
     to: infra.player-index
-    type: depends
+    type: calls
     description: 经 modelAccess.requireFrameModel 取帧间隔
   - id: rel.plugins.system-load-support
     from: app.plugins.runtime-guard.system-load
@@ -661,7 +655,7 @@ relations:
   - id: rel.plugins.recovery-index
     from: app.plugins.error.recovery
     to: infra.player-index
-    type: depends
+    type: calls
     description: 经 modelAccess 读播放位置与倍速
   - id: rel.plugins.recovery-models
     from: app.plugins.error.recovery
@@ -695,7 +689,7 @@ relations:
   - id: rel.plugins.statistic-index
     from: app.plugins.stats.statistic
     to: infra.player-index
-    type: depends
+    type: calls
     description: 经 modelAccess.requireAvRenderPtsModel 读音画渲染 pts
   - id: rel.plugins.statistic-events
     from: infra.framework
@@ -712,7 +706,7 @@ relations:
   - id: rel.plugins.samplers-fw
     from: app.plugins.stats.samplers
     to: infra.framework
-    type: depends
+    type: calls
     description: 共享定时器 sharedIntervalTimer、Time 与 average / variance 等统计工具
   - id: rel.plugins.milestones-events
     from: infra.framework
@@ -742,7 +736,7 @@ relations:
   - id: rel.plugins.tracker-support
     from: app.plugins.stats.tracker
     to: app.plugins.support
-    type: depends
+    type: calls
     description: 复用 PLAYBACK_SESSION_STATUSES 会话状态集合
   - id: rel.plugins.time-calibrator-fw
     from: app.plugins.stats.time-calibrator
@@ -780,7 +774,7 @@ relations:
   - id: rel.plugins.debug-index
     from: app.plugins.diagnostics.debug
     to: infra.player-index
-    type: depends
+    type: calls
     description: 经 modelAccess 读帧缓冲与渲染时间线模型
   - id: rel.plugins.debug-fw
     from: infra.framework
@@ -797,12 +791,12 @@ relations:
   - id: rel.plugins.support-fw
     from: app.plugins.support
     to: infra.framework
-    type: depends
+    type: calls
     description: sharedIntervalTimer、PluginBase（经 player 本地 pluginBase 转发导出）
   - id: rel.plugins.support-index
     from: app.plugins.support
     to: infra.player-index
-    type: depends
+    type: calls
     description: 旧帧策略基类 PluginStrategyBase 经 modelAccess.requireFrameModel 读帧模型（无引用方）
 
   # ── app.timeshift ──
@@ -843,7 +837,7 @@ relations:
   - id: rel.timeshift.shell-strategies
     from: app.timeshift.shell
     to: app.strategies
-    type: depends
+    type: calls
     description: probeInfo 复用 hlsSegmentChores、playlistTargetDurationMs、vodLoadFailureBackoffMs
   - id: rel.timeshift.shell-domain
     from: app.timeshift.shell
@@ -1018,12 +1012,6 @@ relations:
     type: calls
     mode: sync
     description: decidePrefetch / resolveLegPlaybackBuffer / segmentIndexForLivePts / stepPtsLocate / playlistOriginPts
-  - id: rel.timeshift.driver-models
-    from: app.timeshift.recording-driver
-    to: domain.models
-    type: depends
-    payload: [ds.HlsModel]
-    description: 读回看腿 HlsModel（清单窗口、分片定位）
   - id: rel.timeshift.driver-mus
     from: app.timeshift.recording-driver
     to: infra.mus
@@ -1036,6 +1024,14 @@ relations:
     type: calls
     mode: sync
     description: countsAsUncoveredTry；resolveAnchor / trackKeyFrame 以注入方式使用
+
+  # ── 补充的交互（ADR-0026：有值使用的模块依赖按交互补全，K7）──
+  - { id: rel.plugins.buffer-plugin-base, from: app.plugins.buffer-strategy.live-adaptive, to: infra.player-index.public-surface, type: implements, description: 自适应缓冲插件继承 SDK 转出的 PluginBase }
+  - { id: rel.timeshift.recording-contracts, from: app.timeshift.recording-driver, to: infra.framework.contracts, type: calls, description: 按 MuKey / MediaType 键寻址录制腿的 MU 与媒体类型 }
+  - { id: rel.timeshift.shell-plugin-base, from: app.timeshift.shell, to: infra.player-index.public-surface, type: implements, description: 时移外壳插件继承 SDK 转出的 PluginBase }
+  - { id: rel.timeshift.recovery-contracts, from: app.timeshift.live-recovery, to: infra.framework.contracts, type: calls, description: 按 MuKey 键寻址直播腿的 MU }
+  - { id: rel.timeshift.ledger-contracts, from: app.timeshift.frame-ledger, to: infra.framework.contracts, type: calls, description: 总线接线按 MuKey / MediaType 键过滤帧事件 }
+  - { id: rel.timeshift.seek-coordinator-helpers, from: app.timeshift.seek-switch, to: app.timeshift.coordinator, type: calls, description: 调用 describeError / segmentIndexForCut 辅助函数 }
 
 interfaces:
   # ── app.plugins ──

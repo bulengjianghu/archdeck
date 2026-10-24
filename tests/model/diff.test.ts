@@ -11,7 +11,7 @@ function designed() {
       return {
         ...f,
         text: f.text
-          .replace("  - { id: r7, from: infra.mus, to: domain.models, type: depends }\n", '')
+          .replace("  - { id: r7, from: infra.mus, to: domain.models, type: implements }\n", '')
           .replace("signature: 'sendCommand(cmd: Command): Result'", "signature: 'sendCommand(cmd: Command, opts?: Opts): Result'"),
       }
     if (f.path === 'modules/infra.yaml')

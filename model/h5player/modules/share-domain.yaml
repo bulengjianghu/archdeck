@@ -3,7 +3,17 @@
 # 骨架模块（share.contracts 等第二级）在 layers.yaml 中定义，本文件只用 parent 往下挂。
 
 modules:
+  # ───────────────────────── share（层的包入口）─────────────────────────
+  - id: share
+    name: Share
+    codeRefs: [packages/share/src/index.ts]
+
   # ───────────────────────── domain.types ─────────────────────────
+  - id: domain.types.ambient
+    parent: domain.types
+    name: 宿主类型补丁
+    responsibility: domain 的 lib 收窄为 ES2020 后按 lib.dom.d.ts 契约补的最小全局类型面（WHATWG URL），供分片地址归一化使用；只有类型，不构造任何 I/O 对象。
+    codeRefs: [packages/domain/src/globals.d.ts]
   - id: domain.types.modes
     parent: domain.types
     name: 方案三元组与模式枚举
@@ -353,58 +363,38 @@ modules:
 
 relations:
   # ── Domain.types 内部 ──
-  - { id: rel.sd.types-events-modes, from: domain.types.events, to: domain.types.modes, type: depends, description: 事件载荷引用 LoadMode / PlayMode / SolutionType }
-  - { id: rel.sd.types-events-model, from: domain.types.events, to: domain.types.model-types, type: depends, description: 叠加事件引用 Overlay }
-  - { id: rel.sd.types-model-modes, from: domain.types.model-types, to: domain.types.modes, type: depends, description: PlaybackProfile 由三元组组成 }
-  - { id: rel.sd.types-model-stream, from: domain.types.model-types, to: domain.models.stream, type: depends, payload: ds.StreamModelUnion, description: ModelViewMap.stream 槽的视图类型（类型层反向引用模型） }
-  - { id: rel.sd.types-model-play, from: domain.types.model-types, to: domain.models.play, type: depends, payload: ds.PlaybackModelUnion, description: ModelViewMap.play 槽的视图类型（类型层反向引用模型） }
-  - { id: rel.sd.types-topology-model, from: domain.types.pipeline-topology, to: domain.types.model-types, type: depends, description: 节点与边以 MuKey / MuType 表达 }
 
   # ── Domain.ports ──
-  - { id: rel.sd.ports-events, from: domain.ports, to: domain.types.events, type: depends, payload: ds.DomainEvent, description: 发布端口与 Registry 变更方法以 DomainEvent 为载荷 }
-  - { id: rel.sd.ports-model-types, from: domain.ports, to: domain.types.model-types, type: depends, description: IModelRegistry 签名引用 ModelKind / ModelViewMap / PlaybackProfile }
-  - { id: rel.sd.ports-modes, from: domain.ports, to: domain.types.modes, type: depends, description: Registry 换槽与流事实上报引用三元组枚举 }
-  - { id: rel.sd.ports-stream, from: domain.ports, to: domain.models.stream, type: depends, payload: ds.StreamModelTimeline, description: replaceStreamModel 透传腿的时间基准 }
 
   # ── Domain.models ──
-  - { id: rel.sd.models-base-ports, from: domain.models.base, to: domain.ports, type: depends, interface: if.ports.DomainEventPublisher, description: 聚合构造只注入 DomainEventPublisher }
   - { id: rel.sd.ps-publish, from: domain.models.playback-state, to: domain.ports, type: notifies, interface: if.ports.DomainEventPublisher, payload: ds.DomainEvent, description: 叠加进出（OverlayEntered / OverlayExited）同步发布领域事件 }
   - { id: rel.sd.stat-publish, from: domain.models.statistic, to: domain.ports, type: notifies, interface: if.ports.DomainEventPublisher, payload: ds.DomainEvent, description: startNewSlice 发布 StatisticSliceStarted }
-  - { id: rel.sd.ps-base, from: domain.models.playback-state, to: domain.models.base, type: depends, description: 继承 ModelBase，违例抛 InvariantError }
-  - { id: rel.sd.stat-base, from: domain.models.statistic, to: domain.models.base, type: depends, description: 继承 ModelBase，违例抛 InvariantError }
-  - { id: rel.sd.stream-base, from: domain.models.stream, to: domain.models.base, type: depends, description: 三种流模型继承 ModelBase }
-  - { id: rel.sd.play-base, from: domain.models.play, to: domain.models.base, type: depends, description: 播放模型继承 ModelBase }
-  - { id: rel.sd.comp-base, from: domain.models.components, to: domain.models.base, type: depends, description: 帧台账 / 渲染时间轴继承 ModelBase }
+  - { id: rel.sd.ps-base, from: domain.models.playback-state, to: domain.models.base, type: calls, description: 继承 ModelBase，违例抛 InvariantError }
+  - { id: rel.sd.stat-base, from: domain.models.statistic, to: domain.models.base, type: calls, description: 继承 ModelBase，违例抛 InvariantError }
+  - { id: rel.sd.stream-base, from: domain.models.stream, to: domain.models.base, type: calls, description: 三种流模型继承 ModelBase }
+  - { id: rel.sd.play-base, from: domain.models.play, to: domain.models.base, type: calls, description: 播放模型继承 ModelBase }
+  - { id: rel.sd.comp-base, from: domain.models.components, to: domain.models.base, type: calls, description: 帧台账 / 渲染时间轴继承 ModelBase }
   - { id: rel.sd.ps-impl, from: domain.models.playback-state, to: domain.types.model-types, type: implements, payload: ds.PlaybackStateMachineView, description: PlaybackState 实现状态机档能力面 }
   - { id: rel.sd.stat-impl, from: domain.models.statistic, to: domain.types.model-types, type: implements, payload: ds.StatisticOwnerView, description: Statistic 结构上满足持有档能力面（ModelViewMap.statistic） }
   - { id: rel.sd.ps-status-map, from: domain.models.playback-state, to: domain.rules.status-mapping, type: calls, interface: if.rules.status-mapping.mappingPlayerStatus, description: addMu 时按基态推 MU 状态 }
-  - { id: rel.sd.stream-comp, from: domain.models.stream, to: domain.models.components, type: depends, payload: ds.StreamFactsCore, description: 公共流事实委托给 StreamFactsCore }
+  - { id: rel.sd.stream-comp, from: domain.models.stream, to: domain.models.components, type: calls, payload: ds.StreamFactsCore, description: 公共流事实委托给 StreamFactsCore }
   - { id: rel.sd.stream-hls-policy, from: domain.models.stream, to: domain.services.hls-live, type: calls, interface: if.services.hls-live.getHlsLiveBufferPolicy, description: HlsModel 按清单分片时长与目标延迟推直播缓冲策略 }
-  - { id: rel.sd.stream-modes, from: domain.models.stream, to: domain.types.modes, type: depends, description: 推断 / 强制播放模式 }
   - { id: rel.sd.stream-utils, from: domain.models.stream, to: share.utils, type: calls, interface: if.utils.lastOf, description: 取清单 / 样本末项 }
-  - { id: rel.sd.play-comp, from: domain.models.play, to: domain.models.components, type: depends, description: 组合 FrameBufferLedger / RenderTimeline / VideoPlaybackSnapshot }
+  - { id: rel.sd.play-comp, from: domain.models.play, to: domain.models.components, type: calls, description: 组合 FrameBufferLedger / RenderTimeline / VideoPlaybackSnapshot }
   - { id: rel.sd.play-fhls-clock, from: domain.models.play, to: domain.services.fhls-presentation, type: calls, interface: if.services.fhls-presentation.presentationClock, payload: ds.PresentationClockFacts, description: FhlsModel 的呈现时钟分代与媒体原点换算 }
-  - { id: rel.sd.play-modes, from: domain.models.play, to: domain.types.modes, type: depends, description: 播放模型视图以 SolutionType 判别；FhlsModel 持有 FhlsPresentation }
   - { id: rel.sd.comp-utils, from: domain.models.components, to: share.utils, type: calls, interface: if.utils.lastOf, description: StreamFactsCore 取末帧 }
-  - { id: rel.sd.ps-model-types, from: domain.models.statistic, to: domain.types.model-types, type: depends, description: 观测事实类型（AdaptiveBufferFacts 等） }
 
   # ── Domain.services ──
-  - { id: rel.sd.sel-errors, from: domain.services.solution-select, to: share.errors, type: depends, description: 冲突 / 不支持时构造 ErrorBase(ConfigError / UnsupportedError) }
-  - { id: rel.sd.sel-result, from: domain.services.solution-select, to: share.contracts, type: depends, interface: if.contracts.Result, payload: ds.Result, description: 选型与裁决结果以 Result 返回 }
-  - { id: rel.sd.sel-modes, from: domain.services.solution-select, to: domain.types.modes, type: depends, description: 输入输出均为三元组枚举 }
-  - { id: rel.sd.baseline-modes, from: domain.services.buffer-baseline, to: domain.types.modes, type: depends, description: 按 PlayMode / LoadMode 选基线 }
+  - { id: rel.sd.sel-errors, from: domain.services.solution-select, to: share.errors, type: calls, description: 冲突 / 不支持时构造 ErrorBase(ConfigError / UnsupportedError) }
+  - { id: rel.sd.sel-result, from: domain.services.solution-select, to: share.contracts, type: calls, interface: if.contracts.Result, payload: ds.Result, description: 选型与裁决结果以 Result 返回 }
   - { id: rel.sd.ts-baseline, from: domain.services.timeshift, to: domain.services.buffer-baseline, type: calls, interface: if.services.buffer-baseline.resolvePlaybackBuffer, description: 交接余量与录制停更阈值取点播档基线 }
-  - { id: rel.sd.ts-modes, from: domain.services.timeshift, to: domain.types.modes, type: depends, description: 启用条件 / 拖进度换腿按 SolutionType 判定 }
 
   # ── Domain.algorithms ──
-  - { id: rel.sd.codec-errors, from: domain.algorithms.codec-syntax, to: share.errors, type: depends, description: 位读取越界抛 ErrorBase }
-  - { id: rel.sd.container-errors, from: domain.algorithms.container, to: share.errors, type: depends, description: AMF 数据非法抛 ErrorBase(DemuxFormatError) }
+  - { id: rel.sd.codec-errors, from: domain.algorithms.codec-syntax, to: share.errors, type: calls, description: 位读取越界抛 ErrorBase }
+  - { id: rel.sd.container-errors, from: domain.algorithms.container, to: share.errors, type: calls, description: AMF 数据非法抛 ErrorBase(DemuxFormatError) }
 
   # ── Domain.rules ──
-  - { id: rel.sd.pr-topology, from: domain.rules.pipeline-rules, to: domain.types.pipeline-topology, type: depends, payload: [ds.PipelineTopology, ds.PipelineDiffSpec, ds.PipelineEdge], description: 校验与推导的输入输出形状 }
-  - { id: rel.sd.pr-model-types, from: domain.rules.pipeline-rules, to: domain.types.model-types, type: depends, description: 按 MuType 判语义锚点、按 PlayerStatus 判可删节点 }
-  - { id: rel.sd.pr-result, from: domain.rules.pipeline-rules, to: share.contracts, type: depends, interface: if.contracts.Result, payload: ds.Result, description: validateDiff 以 Result 返回目标拓扑或 TopologyError 列表 }
-  - { id: rel.sd.sm-model-types, from: domain.rules.status-mapping, to: domain.types.model-types, type: depends, description: PlayerStatus → MuStatus }
+  - { id: rel.sd.pr-result, from: domain.rules.pipeline-rules, to: share.contracts, type: calls, interface: if.contracts.Result, payload: ds.Result, description: validateDiff 以 Result 返回目标拓扑或 TopologyError 列表 }
 
 interfaces:
   # ── 能力面契约（implements 的目标，M11、K5；字段见同名数据结构） ──

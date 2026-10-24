@@ -8,11 +8,11 @@ describe('K11 端口三角', () => {
     '  - { id: rel.i, from: ui.store, to: core.api, type: implements }',
     '  - { id: rel.n, from: core.api, to: ui.view, type: notifies }',
     '  - { id: rel.s, from: ui.view, to: core.api, type: streams, via: port }',
-    '  - { id: rel.d, from: ui.view, to: core, type: depends }',
+    '  - { id: rel.d, from: ui.view, to: core, type: calls }',
   ].join('\n')
   const { index } = loadModel([files()[0], { path: 'modules/layers.yaml', text: LAYERS.replace('relations:\n', `relations:\n${extra}\n`) }])
 
-  it('定义为本模块的接口；实现者为入边 implements；使用者为入边 depends / calls / streams（含经 via 的），通知不算', () => {
+  it('定义为本模块的接口；实现者为入边 implements；使用者为入边 calls / streams（含经 via 的），通知不算', () => {
     const t = portTriad(index, null, 'core.api')!
     expect(t.defines).toEqual(['if.get'])
     expect(t.implementers.map(p => [p.relation, p.module])).toEqual([['rel.i', 'ui.store']])

@@ -51,8 +51,8 @@ describe('canvasScene', () => {
     expect(node(hover, 'infra.player')!.data.dim).toBe(false)
     expect(node(hover, 'infra.framework')!.data.dim).toBe(false)
     expect(node(hover, 'infra.mus')!.data.dim).toBe(true)
-    expect(edge(canvasScene(input), 'infra.mus->boundary:domain:depends')).toBeUndefined()
-    expect(edge(canvasScene({ ...input, hover: 'infra.mus' }), 'infra.mus->boundary:domain:depends')).toBeDefined()
+    expect(edge(canvasScene(input), 'infra.mus->boundary:domain:implements')).toBeUndefined()
+    expect(edge(canvasScene({ ...input, hover: 'infra.mus' }), 'infra.mus->boundary:domain:implements')).toBeDefined()
     expect(s.visibleIds).toBeNull()
   })
 
@@ -136,7 +136,7 @@ describe('canvasScene', () => {
     const calls = edge(plain, 'infra.player->infra.framework:calls')!.data
     expect(calls).toMatchObject({ label: '', factState: 'confirmed', arrow: 'closed', weight: 1, compile: false })
     expect(edge(plain, 'infra.framework->infra.player:notifies')!.data.arrow).toBe('open')
-    expect(edge(canvasScene({ ...input, hover: 'infra.player' }), 'infra.player->boundary:app:depends')!.data.compile).toBe(true)
+    expect(edge(canvasScene({ ...input, hover: 'infra.player' }), 'infra.player->boundary:app:implements')!.data.compile).toBe(true)
     const selected = edge(
       canvasScene({ ...input, selection: { kind: 'edge', id: 'infra.player->infra.framework:calls' } }),
       'infra.player->infra.framework:calls',
@@ -166,7 +166,7 @@ describe('canvasScene', () => {
     const s = canvasScene({ ...input, facts })
     expect(edge(s, 'infra.player->infra.framework:calls')!.data).toMatchObject({ label: '', factState: 'confirmed' })
     expect(edge(s, 'infra.framework->infra.player:notifies')!.data).toMatchObject({ label: '?', warn: true, factState: 'unconfirmed' })
-    expect(edge(s, 'dep:infra.mus->infra.player')!.data).toMatchObject({ temp: 'code', label: '未描述 2', factState: 'undescribed' })
+    expect(edge(s, 'dep:infra.mus->infra.player')!.data).toMatchObject({ temp: 'code', label: '未解释 2', factState: 'undescribed' })
   })
 
   it('L10：含多条关系的边标 ×N 并画成 pill，异常标记跟在后面；运行视角走过的边不标条数', async () => {

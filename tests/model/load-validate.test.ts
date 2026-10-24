@@ -59,12 +59,12 @@ describe('load', () => {
     expect(renamed[0].message).toContain('notifies')
   })
 
-  it('M12：未知类型仍是格式错误，提示新的五类', () => {
+  it('M12：未知类型仍是格式错误，提示四类关系（ADR-0026）', () => {
     const bad = load(sampleFiles({ 'b.yaml': 'relations:\n  - { id: rb, from: infra.player, to: infra.mus, type: emits }\n' }))
-    expect(bad.issues.find(i => i.code === 'schema')!.message).toContain('depends / calls / notifies / streams / implements')
+    expect(bad.issues.find(i => i.code === 'schema')!.message).toContain('calls / notifies / streams / implements')
   })
 
-  it('K5b：关系的 via 只收枚举值（http / hmr / inject / router / callback / port），其余为格式错误', () => {
+  it('K5b：关系的 via 只收枚举值（http / hmr / inject / router / callback / port / bus），其余为格式错误', () => {
     expect(load(sampleFiles({ 'p.yaml': 'relations:\n  - { id: rp2, from: infra.framework.pipeline, to: infra.mus, type: streams, via: port }\n' })).issues).toEqual([])
     const ok = load(sampleFiles({ 'v.yaml': 'relations:\n  - { id: rv, from: infra.framework.sm, to: infra.framework.pipeline, type: calls, via: http }\n' }))
     expect(ok.issues).toEqual([])

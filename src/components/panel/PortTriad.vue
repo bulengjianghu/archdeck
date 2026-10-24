@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 模块面板 · 端口三角（K11、ADR-0022）：声明了接口的模块列出定义（它的接口）· 实现者（入边 implements）· 使用者（入边 depends / calls / streams，含经 via 的）；单击一项选中那条关系 */
+/** 模块面板 · 端口三角（K11、ADR-0022）：声明了接口的模块列出定义（它的接口）· 实现者（入边 implements）· 使用者（入边 calls / streams，含经 via 的）；单击一项选中那条关系 */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { VIA_LABELS, moduleName, type PortParty } from '@/model'
@@ -15,7 +15,7 @@ const groups = computed(() =>
   triad.value
     ? [
         { title: '实现者', parties: triad.value.implementers, empty: '没有模块 implements 它的接口' },
-        { title: '使用者', parties: triad.value.users, empty: '没有模块 depends / calls / streams 它' },
+        { title: '使用者', parties: triad.value.users, empty: '没有模块 calls / streams 它' },
       ]
     : [],
 )

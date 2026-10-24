@@ -10,7 +10,7 @@ import { LABEL_SLOT, compassOf, edgeLabel, isDynamic, nearPoints, placeOutside, 
  * L11：elk 只排父模块框内的子模块与它们之间的边；框外的元素（用户、外部系统与时间、边界节点）在布局后按方位摆放（routes.ts placeOutside，A7、L4），
  * 它们的边不参与布局，要画时才按需正交走线（edgeRoute）。
  * 端口方向——每条边在两端各有自己的端口：进边在入口侧、出边在出口侧（自上而下为上进下出，自左向右为左进右出）；
- * 同一侧左动右静（自左向右布局时上动下静）：动态（calls / notifies / streams）在前半、静态（depends / implements）在后半，用 FIXED_ORDER 固定。
+ * 同一侧左动右静（自左向右布局时上动下静）：动态（calls / notifies / streams）在前半、静态（implements，ADR-0026 起只有这一类）在后半，用 FIXED_ORDER 固定。
  */
 type Side = 'NORTH' | 'SOUTH' | 'WEST' | 'EAST'
 /** elk 端口序号按边分段：顺时针的 上、右、下、左 */

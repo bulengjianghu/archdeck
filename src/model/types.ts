@@ -8,9 +8,11 @@
 
 // ── YAML 文件形状 ─────────────────────────────────────────────
 
-/** 关系类型（§1.1、ADR-0022）：运行时关系的箭头一律是控制流方向 */
-export type RelationType = 'depends' | 'calls' | 'notifies' | 'streams' | 'implements'
-export const RELATION_TYPES: readonly RelationType[] = ['depends', 'calls', 'notifies', 'streams', 'implements']
+/** 关系类型（§1.1、ADR-0022、ADR-0026）：关系是交互——运行时关系的箭头一律是控制流方向；「谁知道谁」是代码事实，不是关系 */
+export type RelationType = 'calls' | 'notifies' | 'streams' | 'implements'
+export const RELATION_TYPES: readonly RelationType[] = ['calls', 'notifies', 'streams', 'implements']
+/** M15：已不是关系类型的旧类型（ADR-0026），读取时丢弃并提醒 */
+export const REMOVED_RELATION_TYPE = 'depends'
 /** 旧名（M12）：加载时映射，event 同时翻转两端；一轮后删除 */
 export type LegacyRelationType = 'event' | 'dataflow'
 export const LEGACY_RELATION_TYPES: Readonly<Record<LegacyRelationType, { to: RelationType; flip: boolean }>> = {
@@ -18,13 +20,14 @@ export const LEGACY_RELATION_TYPES: Readonly<Record<LegacyRelationType, { to: Re
   dataflow: { to: 'streams', flip: false },
 }
 /** 关系经由什么传递、静态导入在原理上证实不了（K5b） */
-export type RelationVia = 'http' | 'hmr' | 'inject' | 'router' | 'callback' | 'port'
-export const RELATION_VIAS: readonly RelationVia[] = ['http', 'hmr', 'inject', 'router', 'callback', 'port']
+export type RelationVia = 'http' | 'hmr' | 'inject' | 'router' | 'callback' | 'port' | 'bus'
+export const RELATION_VIAS: readonly RelationVia[] = ['http', 'hmr', 'inject', 'router', 'callback', 'port', 'bus']
 
-/** 运行时关系（§1.1）：命令、通知、流；步骤只对应这三类（S12）；画布上饱和、编译期两类降权（L10） */
+/** 运行时关系（§1.1）：命令、通知、流；步骤只对应这三类（S12）；画布上饱和、编译期的 implements 降权（L10） */
 export const RUNTIME_RELATION_TYPES: readonly RelationType[] = ['calls', 'notifies', 'streams']
 
 export type ModuleStatus = 'current' | 'target' | 'deprecated'
+export type ModuleRole = 'core' | 'shared' | 'bus'
 
 export interface SourceDef {
   repo?: string
@@ -61,6 +64,8 @@ export interface ModuleDef {
   kind?: string
   status?: ModuleStatus
   core?: boolean
+  /** 角色（§1.1、ADR-0027）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）；不写为普通 */
+  role?: ModuleRole
   responsibility?: string
   principle?: string
   dataStructures?: string[]

@@ -99,7 +99,7 @@ async function copy(key: string, item?: ReworkItem) {
           {{ copied === '*' ? '已复制' : '复制全部给 agent' }}
         </button>
       </header>
-      <p v-if="!list.facts" class="muted pad note">没有代码事实（{{ desk.version ? '非当前版本' : '代码事实未就绪' }}），未含违规、未证实与未描述依赖。</p>
+      <p v-if="!list.facts" class="muted pad note">没有代码事实（{{ desk.version ? '非当前版本' : '代码事实未就绪' }}），未含违规、未证实与未解释的交互。</p>
       <p v-if="!shown.length" class="muted pad">{{ list.items.length ? '没有符合筛选条件的问题。' : '没有需要返工的问题。' }}</p>
       <ul class="items">
         <li v-for="i in shown" :key="i.id" class="item" :class="[i.severity, { open: open.has(i.id) }]" :data-id="i.id">

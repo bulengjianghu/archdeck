@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 模块面板的「架构治理」一节（GV-7、GV-9、Q1）：生效的规则、出入的违规与未描述依赖、所在的模块环与本层环（Y5） */
+/** 模块面板的「架构治理」一节（GV-7、GV-9、Q1）：生效的规则、出入的违规与未解释的交互、所在的模块环与本层环（Y5） */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { RULE_LABELS, moduleName, type LevelCycleEdge } from '@/model'
@@ -59,7 +59,7 @@ const empty = computed(
       </ul>
     </div>
     <div v-if="d.undescribed.out.length || d.undescribed.in.length" class="block">
-      <h4>未描述的代码依赖</h4>
+      <h4>未解释的交互</h4>
       <p class="list">
         <template v-for="m in d.undescribed.out" :key="`o:${m}`">
           <span

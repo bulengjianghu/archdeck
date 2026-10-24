@@ -513,22 +513,12 @@ relations:
     to: app.solution.legs
     type: calls
     description: 建 Load 段工厂时取当前活动腿 scope 并回写腿记账
-  - id: rel.solution.lifecycle-ports
-    from: app.solution.lifecycle
-    to: app.solution.ports
-    type: depends
-    payload: ds.SolutionDeps
   - id: rel.solution.stream-facts-stage-swap
     from: app.solution.stream-facts
     to: app.solution.stage-swap
     type: calls
     interface: if.solution.connectStage
     description: 解密翻转 / inferredPlayMode 重选后重挂段
-  - id: rel.solution.stream-facts-play-stage-start
-    from: app.solution.stream-facts
-    to: app.solution.play-stage-start
-    type: depends
-    description: 把启动入口 playStageStart 回交给加载段策略（流信息线触发）
   - id: rel.solution.legs-leg-switch
     from: app.solution.legs
     to: app.solution.leg-switch
@@ -543,15 +533,22 @@ relations:
     interface: if.solution.LegPort
     payload: ds.LegRecord
     description: 读写腿记账，hold/release 段尾阀门、撤腿
+  - id: rel.solution.leg-switch-legs-outcome
+    from: app.solution.leg-switch
+    to: app.solution.legs
+    type: calls
+    mode: async
+    payload: ds.LegSwitchOutcome
+    description: 前置 Hook 里 await performLegSwitch 之后把事务结果写入 legs.pendingOutcome 邮箱，由发命令的一方在命令完成后取回（异步回传）
   - id: rel.solution.legs-stage-swap
     from: app.solution.legs
     to: app.solution.stage-swap
-    type: depends
+    type: calls
     description: 复用段计划归一化（normalizeStagePlan）
   - id: rel.solution.leg-switch-stage-swap
     from: app.solution.leg-switch
     to: app.solution.stage-swap
-    type: depends
+    type: calls
     description: 复用段计划归一化；主腿还原时按常规路径重建 Load 段
 
   # ── app.solution → 本区域其他第二级模块 ──
@@ -637,12 +634,6 @@ relations:
     to: domain.services
     type: calls
     description: computeProcessRequirements 决定处理段是否解密 / 校正 PTS
-  - id: rel.solution.stream-facts-domain-services
-    from: app.solution.stream-facts
-    to: domain.services
-    type: depends
-    payload: ds.StreamFactsReconcileOutput
-    description: 消费 reconcile 判定结果，按需重新选型
   - id: rel.solution.leg-switch-domain-services
     from: app.solution.leg-switch
     to: domain.services
@@ -660,21 +651,6 @@ relations:
     type: implements
     payload: ds.StreamFactReporter
     description: createStreamFactReporter 产出带代次守卫的 StreamFactReporter
-  - id: rel.solution.ports-domain-ports
-    from: app.solution.ports
-    to: domain.ports
-    type: depends
-    description: 端口签名引用 StreamFactReporter、ModelViewMap 等
-  - id: rel.solution.ports-domain-types
-    from: app.solution.ports
-    to: domain.types
-    type: depends
-    description: LoadMode / PlayMode / SolutionType / DomainEvent
-  - id: rel.solution.ports-domain-models
-    from: app.solution.ports
-    to: domain.models
-    type: depends
-    payload: ds.StreamModelTimeline
   - id: rel.solution.lifecycle-framework
     from: app.solution.lifecycle
     to: infra.framework
@@ -717,53 +693,43 @@ relations:
   - id: rel.registry.default-contracts
     from: app.registry.default-descriptors
     to: app.registry.fragment-contracts
-    type: depends
+    type: calls
     payload: ds.VodLoadHandle
     description: 片段 needs / handle 共用 VOD_LOAD_HANDLE_KEY
-  - id: rel.registry.default-factory-load
-    from: app.registry.default-descriptors
-    to: app.factories.load
-    type: depends
-    description: 加载描述符绑定 Flv / Hls / Mp4 加载段工厂构造器
   - id: rel.registry.default-factory-play
     from: app.registry.default-descriptors
     to: app.factories.play
-    type: depends
+    type: calls
     description: 方案描述符绑定 6 个播放段工厂构造器
-  - id: rel.registry.default-strategy-load
-    from: app.registry.default-descriptors
-    to: app.strategies.load
-    type: depends
-    description: 加载片段构造 Flv / Mp4 / Hls 点播 / Hls 直播加载策略
   - id: rel.registry.default-strategy-play-base
     from: app.registry.default-descriptors
     to: app.strategies.play-base
-    type: depends
+    type: calls
     description: Video 主片段、Vcs 点播主片段
   - id: rel.registry.default-strategy-live-frame
     from: app.registry.default-descriptors
     to: app.strategies.live-frame
-    type: depends
+    type: calls
   - id: rel.registry.default-strategy-live-vcs
     from: app.registry.default-descriptors
     to: app.strategies.live-vcs
-    type: depends
+    type: calls
   - id: rel.registry.default-strategy-vod-frame
     from: app.registry.default-descriptors
     to: app.strategies.vod-frame
-    type: depends
+    type: calls
   - id: rel.registry.default-strategy-vod-mse
     from: app.registry.default-descriptors
     to: app.strategies.vod-mse
-    type: depends
+    type: calls
   - id: rel.registry.default-strategy-vod-fhls
     from: app.registry.default-descriptors
     to: app.strategies.vod-fhls
-    type: depends
+    type: calls
   - id: rel.registry.default-plugins
     from: app.registry.default-descriptors
     to: app.plugins
-    type: depends
+    type: calls
     description: 片段清单引用横向插件——Mse / Fhls 直播缓冲策略、自适应 / 供需感知 / 融合缓冲、网络监测、系统负载、运行监测、帧快照、统计
   - id: rel.registry.default-domain-ports
     from: app.registry.default-descriptors
@@ -771,15 +737,10 @@ relations:
     type: implements
     payload: ds.PlayStageHandle
     description: play-stage 句柄（load / play / continueDecodeInProgress）由主播放片段暴露
-  - id: rel.registry.default-framework
-    from: app.registry.default-descriptors
-    to: infra.framework
-    type: depends
-    description: 引用 SolutionType / LoadMode / PlayMode / BufferMode / PlayerConfig 等 framework 再导出类型
   - id: rel.registry.core-framework
     from: app.registry.core
     to: infra.framework
-    type: depends
+    type: calls
     description: ErrorBase / ErrorCode；FactoryDeps 引用 Context、PipelineController 具体类型
   - id: rel.registry.mounter-planner
     from: app.registry.fragment-mounter
@@ -797,25 +758,20 @@ relations:
     to: app.solution.ports
     type: implements
     description: 结构性实现 SolutionDeps.fragments（mount / unmountStage / remountSolutionScoped / getHandle）
-  - id: rel.registry.planner-domain-types
-    from: app.registry.fragment-planner
-    to: domain.types
-    type: depends
-    description: PlayMode 条件过滤
 
   # ── app.factories ──
   - id: rel.factories.load-base
     from: app.factories.load
     to: app.factories.base
-    type: depends
+    type: calls
   - id: rel.factories.process-base
     from: app.factories.process
     to: app.factories.base
-    type: depends
+    type: calls
   - id: rel.factories.play-base
     from: app.factories.play
     to: app.factories.base
-    type: depends
+    type: calls
   - id: rel.factories.base-ports
     from: app.factories.base
     to: app.solution.ports
@@ -845,12 +801,12 @@ relations:
   - id: rel.factories.process-third-party
     from: app.factories.process
     to: infra.third-party
-    type: depends
+    type: calls
     description: 直接 new 直播 / 点播解密媒体插件（mediaPlugins/pluginDecrypt、pluginVodDecrypt）
   - id: rel.factories.play-player-index
     from: app.factories.play
     to: infra.player-index
-    type: depends
+    type: calls
     description: 经 modelAccess.requireFrameModel / requireFhlsModel 取具体播放模型
   - id: rel.factories.play-domain-models
     from: app.factories.play
@@ -860,7 +816,7 @@ relations:
   - id: rel.factories.play-domain-types
     from: app.factories.play
     to: domain.types
-    type: depends
+    type: calls
     description: decidePresentation / FhlsPresentation
   - id: rel.factories.load-framework
     from: app.factories.load
@@ -904,11 +860,11 @@ relations:
   - id: rel.strategies.vod-load-load-base
     from: app.strategies.load.vod
     to: app.strategies.load.base
-    type: depends
+    type: calls
   - id: rel.strategies.hls-load-vod-load
     from: app.strategies.load.hls
     to: app.strategies.load.vod
-    type: depends
+    type: calls
   - id: rel.strategies.vod-load-contracts
     from: app.strategies.load.vod
     to: app.registry.fragment-contracts
@@ -939,18 +895,13 @@ relations:
   - id: rel.strategies.load-plugins
     from: app.strategies.load
     to: app.plugins
-    type: depends
+    type: calls
     description: isReconnectFault（重连判定）、mseChasingSeek
   - id: rel.strategies.load-mus
     from: app.strategies.load
     to: infra.mus
-    type: depends
+    type: calls
     description: Hls 直播加载直接 import mus/render/mse/bufferDurationCalc
-  - id: rel.strategies.play-base-contracts
-    from: app.strategies.play-base
-    to: app.strategies.contracts
-    type: depends
-    payload: ds.PlayController
   - id: rel.strategies.play-base-domain-ports
     from: app.strategies.play-base
     to: domain.ports
@@ -966,7 +917,7 @@ relations:
   - id: rel.strategies.live-frame-play-base
     from: app.strategies.live-frame
     to: app.strategies.play-base
-    type: depends
+    type: calls
   - id: rel.strategies.live-frame-factory-play
     from: app.strategies.live-frame
     to: app.factories.play
@@ -993,17 +944,12 @@ relations:
   - id: rel.strategies.live-frame-player-index
     from: app.strategies.live-frame
     to: infra.player-index
-    type: depends
+    type: calls
     description: modelAccess.requireFrameModel
   - id: rel.strategies.live-vcs-play-base
     from: app.strategies.live-vcs
     to: app.strategies.play-base
-    type: depends
-  - id: rel.strategies.live-vcs-mus
-    from: app.strategies.live-vcs
-    to: infra.mus
-    type: depends
-    description: 直接 import mus/render/vcs2/model/vcsModel
+    type: calls
   - id: rel.strategies.live-vcs-domain-services
     from: app.strategies.live-vcs
     to: domain.services
@@ -1018,7 +964,7 @@ relations:
   - id: rel.strategies.vod-frame-play-base
     from: app.strategies.vod-frame
     to: app.strategies.play-base
-    type: depends
+    type: calls
   - id: rel.strategies.vod-frame-vod-load
     from: app.strategies.vod-frame
     to: app.strategies.load.vod
@@ -1040,12 +986,12 @@ relations:
   - id: rel.strategies.vod-frame-player-index
     from: app.strategies.vod-frame
     to: infra.player-index
-    type: depends
+    type: calls
     description: modelAccess.requireFrameModel
   - id: rel.strategies.vod-mse-play-base
     from: app.strategies.vod-mse
     to: app.strategies.play-base
-    type: depends
+    type: calls
   - id: rel.strategies.vod-mse-vod-load
     from: app.strategies.vod-mse
     to: app.strategies.load.vod
@@ -1060,12 +1006,12 @@ relations:
   - id: rel.strategies.vod-mse-mus
     from: app.strategies.vod-mse
     to: infra.mus
-    type: depends
+    type: calls
     description: 直接 import mus/render/mse/bufferRecycleRange（过期回收判定纯函数）
   - id: rel.strategies.vod-mse-plugins
     from: app.strategies.vod-mse
     to: app.plugins
-    type: depends
+    type: calls
     description: mseBufferWaterLevel 水位计算
   - id: rel.strategies.vod-mse-framework
     from: infra.framework
@@ -1076,12 +1022,12 @@ relations:
   - id: rel.strategies.vod-mse-player-index
     from: app.strategies.vod-mse
     to: infra.player-index
-    type: depends
+    type: calls
     description: modelAccess 取 Mse 播放模型
   - id: rel.strategies.vod-fhls-play-base
     from: app.strategies.vod-fhls
     to: app.strategies.play-base
-    type: depends
+    type: calls
   - id: rel.strategies.vod-fhls-vod-load
     from: app.strategies.vod-fhls
     to: app.strategies.load.vod
@@ -1096,7 +1042,7 @@ relations:
   - id: rel.strategies.vod-fhls-plugins
     from: app.strategies.vod-fhls
     to: app.plugins
-    type: depends
+    type: calls
     description: mseBufferWaterLevel、fhlsContinuousWatchdog
   - id: rel.strategies.vod-fhls-framework
     from: infra.framework
@@ -1107,18 +1053,37 @@ relations:
   - id: rel.strategies.vod-fhls-player-index
     from: app.strategies.vod-fhls
     to: infra.player-index
-    type: depends
+    type: calls
     description: modelAccess 取 Fhls 播放模型
-  - id: rel.strategies.contracts-framework
-    from: app.strategies.contracts
-    to: infra.framework
-    type: depends
-    description: 事件载荷类型、MediaType / TimestampType
   - id: rel.strategies.contracts-domain-services
     from: app.strategies.contracts
     to: domain.services
-    type: depends
+    type: calls
     description: StrategyDecisionAction / StrategyBlockedBy / effectiveDeadbands
+
+  # ── 补充的交互（ADR-0026：有值使用的模块依赖按交互补全，K7）──
+  - { id: rel.factories.base-model-access, from: app.factories.base, to: infra.player-index.model-access, type: calls, description: 调用 requireFrameModel 取帧模型能力 }
+  - { id: rel.factories.process-contracts, from: app.factories.process, to: infra.framework.contracts, type: calls, description: 按 MuKey / MuType 键装配 MU 处理链 }
+  - { id: rel.strategies.send-decode-drop, from: app.strategies.live-frame.send-decode, to: app.strategies.live-frame.drop, type: calls, description: 送解码前调用 dispatchDropVideoPackets 丢帧 }
+  - { id: rel.strategies.load-plugin-base, from: app.strategies.load.base, to: infra.player-index.public-surface, type: implements, description: 加载策略基类继承 SDK 转出的 PluginBase }
+  - { id: rel.strategies.load-ports, from: app.strategies.load.base, to: domain.ports, type: calls, description: 调用 toPlayStageStartTarget 求播放阶段起点 }
+  - { id: rel.strategies.play-plugin-base, from: app.strategies.play-base, to: infra.player-index.public-surface, type: implements, description: 播放策略基类继承 SDK 转出的 PluginBase }
+  - { id: rel.strategies.hls-contracts, from: app.strategies.load.hls, to: app.strategies.contracts, type: calls, description: 调用 hlsCatchupDecision 做直播追帧决策 }
+  - { id: rel.strategies.hls-model-access, from: app.strategies.load.hls, to: infra.player-index.model-access, type: calls, description: 调用 requireFrameModel / requireMseModel 取模型能力 }
+  - { id: rel.strategies.vcs-contracts, from: app.strategies.live-vcs, to: app.strategies.contracts, type: calls, description: 调用 vcsBufferDecision 做缓冲决策 }
+  - { id: rel.strategies.vcs-render-fill, from: app.strategies.live-vcs, to: app.strategies.live-frame.render-fill, type: calls, description: 创建 LiveSendRenderStrategy 并委托它送渲染与充水 }
+  - { id: rel.strategies.vcs-play-model, from: app.strategies.live-vcs, to: domain.models.play, type: calls, description: 调用 assertVcsPlaybackModel 收窄播放模型 }
+  - { id: rel.strategies.vcs-invariant, from: app.strategies.live-vcs, to: domain.models.base, type: calls, description: 模型不符时抛 InvariantError }
+  - { id: rel.strategies.vcs-model-access, from: app.strategies.live-vcs, to: infra.player-index.model-access, type: calls, description: 调用 requireFrameBufferModel / requireRenderTimelineModel 取模型能力 }
+  - { id: rel.strategies.vod-model-access, from: app.strategies.load.vod, to: infra.player-index.model-access, type: calls, description: 调用 requireFrameModel / requirePlaybackPositionModel 取模型能力 }
+  - { id: rel.strategies.play-model-access, from: app.strategies.play-base, to: infra.player-index.model-access, type: calls, description: 调用 requireVideoPlayModel 取 Video 播放模型 }
+  - { id: rel.strategies.fhls-presentation, from: app.strategies.vod-fhls, to: domain.services.fhls-presentation, type: calls, description: 调用连续供给与呈现规则（decideContinuousSupply、continuousSupplyBudget、epochIndexAt、toSourcePts 等） }
+  - { id: rel.strategies.fhls-contracts, from: app.strategies.vod-fhls, to: app.strategies.contracts, type: calls, description: 读取 SEEK_RELOAD_STALL_TIMEOUT 阈值 }
+  - { id: rel.strategies.fhls-stream-model, from: app.strategies.vod-fhls, to: domain.models.stream, type: calls, description: 调用 assertHlsStreamModel 收窄流模型 }
+  - { id: rel.strategies.mse-contracts, from: app.strategies.vod-mse, to: app.strategies.contracts, type: calls, description: 读取 SEEK_RELOAD_STALL_TIMEOUT / MP4_PLAY_END_TIME_THRESHOLD 阈值 }
+  - { id: rel.strategies.frame-contracts, from: app.strategies.vod-frame, to: app.strategies.contracts, type: calls, description: 读取 MP4_PLAY_END_TIME_THRESHOLD / SEEK_RELOAD_STALL_TIMEOUT 阈值 }
+  - { id: rel.solution.legs-lifecycle, from: app.solution.legs, to: app.solution.lifecycle, type: calls, description: 调用 toSolutionSelectConfig 构造腿的方案选型配置 }
+  - { id: rel.solution.leg-switch-lifecycle, from: app.solution.leg-switch, to: app.solution.lifecycle, type: calls, description: 调用 toSolutionSelectConfig 构造接手腿的方案选型配置 }
 
 interfaces:
   # ── 契约接口（implements 的目标，M11、K5：方案控制器、段工厂、片段句柄；字段见同名数据结构） ──

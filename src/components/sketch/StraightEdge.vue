@@ -142,10 +142,6 @@ function onUp() {
   stroke-width: 2.5;
 }
 
-.sk-edge.depends .line {
-  stroke-dasharray: 6 4;
-}
-
 .sk-edge.selected .line {
   stroke: var(--accent);
   stroke-width: 2.5;

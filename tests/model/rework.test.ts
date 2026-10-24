@@ -43,12 +43,14 @@ modules:
       - { id: core.impl, name: Impl, responsibility: 实现, codeRefs: [src/core/impl/**] }
       - { id: core.util, name: Util, responsibility: 工具, codeRefs: [src/core/util/**] }
 relations:
-  - { id: rel.1, from: ui.view, to: ui.store, type: depends }
+  - { id: rel.1, from: ui.view, to: ui.store, type: calls }
   - { id: rel.2, from: ui.store, to: core.api, type: calls }
-  - { id: rel.3, from: core.impl, to: core.util, type: depends }
+  - { id: rel.3, from: core.impl, to: core.util, type: implements }
   - { id: rel.4, from: ui.view, to: core.api, type: calls }
   - { id: rel.5, from: ui.view, to: core.api, type: streams }
   - { id: rel.bad, from: ui.view, to: nowhere, type: calls }
+interfaces:
+  - { id: if.util, name: Util, owner: core.util }
 `
 
 const SCENARIO = `
@@ -87,7 +89,7 @@ const SRC = [
   'docs/readme.md',
 ]
 
-const dep = (from: string, to: string, line = 1): FileDep => ({ from, to, via: to, kind: 'value', line })
+const dep = (from: string, to: string, line = 1): FileDep => ({ from, to, via: to, kind: 'value', line, uses: true })
 
 const DEPS: FileDep[] = [
   dep('src/core/impl/i.ts', 'src/ui/view/a.ts', 3), // core → ui：违规（U2）

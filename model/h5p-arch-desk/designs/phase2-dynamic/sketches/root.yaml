@@ -62,7 +62,7 @@ sketch:
     - id: rel.sk.sequence-desk
       from: present.sequence
       to: state.desk
-      type: depends
+      type: calls
       description: 时序图只读派生数据、只发意图
   interfaces:
     - id: if.state.transition

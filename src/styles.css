@@ -15,8 +15,7 @@
   --warning: #a86a0a;
   --warning-soft: #fdf3e1;
 
-  /* 关系类型（L10）：运行时三类饱和；编译期两类低饱和、明度接近背景，与 --text-3 拉开 */
-  --rel-depends: #aeb9cc;
+  /* 关系类型（L10）：运行时三类饱和；编译期的 implements 低饱和、明度接近背景，与 --text-3 拉开 */
   --rel-calls: #2f6fe4;
   --rel-streams: #0f9b8e;
   --rel-notifies: #c98a10;
@@ -68,7 +67,6 @@
     --warning: #e2a646;
     --warning-soft: #3a2f1c;
 
-    --rel-depends: #4f5b70;
     --rel-calls: #6b9cf5;
     --rel-streams: #3cc4b5;
     --rel-notifies: #e2a646;
@@ -168,9 +166,6 @@ a {
   color: var(--text-3);
 }
 
-.rel-depends {
-  --rel: var(--rel-depends);
-}
 .rel-calls {
   --rel: var(--rel-calls);
 }
@@ -199,7 +194,6 @@ a {
   border-top: 2px solid var(--rel);
 }
 
-.rel-depends.rel-chip::before,
 .rel-implements.rel-chip::before {
   border-top-width: 1.5px;
 }
@@ -223,7 +217,7 @@ a {
   font-weight: 600;
 }
 
-/* 异常标记（? / 未描述 / 违规） */
+/* 异常标记（? / 未解释 / 违规） */
 .edge-label-warn .vue-flow__edge-text {
   fill: var(--warning);
   font-weight: 600;

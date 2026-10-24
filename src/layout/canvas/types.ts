@@ -65,13 +65,13 @@ export interface RouteEdgeData {
   label: string
   /** 标签含 ×N：画成带边框的 pill */
   pill?: boolean
-  /** 标签含异常标记（? / 未描述 / 违规） */
+  /** 标签含异常标记（? / 未解释 / 违规） */
   warn?: boolean
   factState: FactState
   arrow: EdgeArrow
   /** 线宽档位：聚合条数 1 / 2–4 / ≥5 */
   weight: 1 | 2 | 3
-  /** 编译期关系（depends、implements）：低饱和、更细 */
+  /** 编译期关系（implements，ADR-0026）：低饱和、更细 */
   compile: boolean
   /** 选中：强调色窄晕，不改线宽 */
   selected: boolean

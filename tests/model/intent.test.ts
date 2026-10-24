@@ -65,7 +65,7 @@ describe('X1 草图先入、其他文件只能补充', () => {
     const { index, issues } = loadModel(
       files({
         'modules/ui.yaml': 'modules: [{ id: ui, name: UI, kind: package, order: 1, mayDependOn: [] }]',
-        'modules/rel.yaml': 'relations: [{ id: rel.sk.view-core, from: ui.view, to: core, type: depends }]',
+        'modules/rel.yaml': 'relations: [{ id: rel.sk.view-core, from: ui.view, to: core, type: notifies }]',
       }),
     )
     const redefined = issues.filter(i => i.code === 'sketch-redefined')

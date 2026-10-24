@@ -76,7 +76,7 @@ relations:
   - { id: rel.ui-api, from: fe.ui, to: core.api, type: calls }
   - { id: rel.view-api, from: fe.ui.view, to: core.api, type: calls, description: 取数 }
   - { id: rel.list-api, from: fe.ui.list, to: core.api, type: calls }
-  - { id: rel.view-list, from: fe.ui.view, to: fe.ui.list, type: depends }
+  - { id: rel.view-list, from: fe.ui.view, to: fe.ui.list, type: calls }
   - { id: rel.form-store, from: fe.ui.form, to: core.store, type: calls }
   - { id: rel.impl-cache, from: core.api.impl, to: core.api.cache, type: calls }
   - { id: rel.header-store, from: fe.ui.view.header, to: core.store, type: calls }
@@ -199,7 +199,7 @@ describe('X14 两级校验', () => {
     expect(codes(v({ id: 'd1', mount: 'root', abstraction: 'x', modules: [] }).errors)).toEqual(['sketch.mount'])
   })
 
-  it('语义提示：根草图层依赖成环、本层 depends 成环、同挂载点矛盾、待重连——不拦保存（ok），拦交给 AI（ready 为假）', () => {
+  it('语义提示：根草图层依赖成环、同挂载点矛盾、待重连——不拦保存（ok），拦交给 AI（ready 为假）；本层关系成环不提示（本层的环由代码事实给出，ADR-0026）', () => {
     const root = seedFromBaseline('root', baseline, { id: 'd1' })
     root.modules![1].mayDependOn = ['fe']
     const rr = v(root)
@@ -213,14 +213,14 @@ describe('X14 两级校验', () => {
         { id: 'core.api.b', name: 'B' },
       ],
       relations: [
-        { id: 'r1', from: 'core.api.a', to: 'core.api.b', type: 'depends' },
-        { id: 'r2', from: 'core.api.b', to: 'core.api.a', type: 'depends' },
+        { id: 'r1', from: 'core.api.a', to: 'core.api.b', type: 'calls' },
+        { id: 'r2', from: 'core.api.b', to: 'core.api.a', type: 'calls' },
         { id: 'r3', from: 'core.api.gone', to: 'core.api.a', type: 'calls' },
       ],
     }
     const rc = v(cyc)
     expect(rc.ok).toBe(true)
-    expect(codes(rc.warnings).sort()).toEqual(['sketch.depends-cycle', 'sketch.pending'])
+    expect(codes(rc.warnings).sort()).toEqual(['sketch.pending'])
     expect(rc.pending).toEqual(['r3'])
     const contra = v({ ...seedFromBaseline('root', baseline, { id: 'd1' }), supersedes: undefined })
     expect(codes(contra.warnings)).toEqual(['sketch.contradiction'])
@@ -284,7 +284,7 @@ describe('X7j 合并', () => {
       ['fe.ui.show.view', ['fe.ui.view']],
       ['fe.ui.show.list', ['fe.ui.list']],
     ])
-    expect(child.relations).toEqual([{ id: 'rel.view-list', from: 'fe.ui.show.view', to: 'fe.ui.show.list', type: 'depends' }])
+    expect(child.relations).toEqual([{ id: 'rel.view-list', from: 'fe.ui.show.view', to: 'fe.ui.show.list', type: 'calls' }])
     expect(r.effects.sketches.sort()).toEqual(['fe.ui', 'fe.ui.show'])
     expect(r.effects.removed).toEqual(['rel.list-api'])
   })
@@ -595,7 +595,7 @@ modules:
 relations:
   - { id: rel.ui-api, from: fe.ui, to: core.api, type: calls }
   - { id: rel.view-api, from: fe.ui.show, to: core.api, type: calls, description: 取数 }
-  - { id: rel.view-list, from: fe.ui.show.view, to: fe.ui.show.list, type: depends }
+  - { id: rel.view-list, from: fe.ui.show.view, to: fe.ui.show.list, type: calls }
   - { id: rel.form-store, from: fe.ui.form, to: core.store, type: calls }
   - { id: rel.impl-cache, from: core.api.impl, to: core.api.cache, type: calls }
   - { id: rel.header-store, from: fe.ui.show.view.header, to: core.store, type: calls }

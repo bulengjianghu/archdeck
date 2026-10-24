@@ -294,18 +294,12 @@ relations:
   - {id: rel.ed.desk-view-commands, from: present.desk-view, to: state.desk.edit.commands, type: calls, interface: if.desk.edit, description: 离开路由与关闭页面前问 canLeave（E-3）}
 
   # ── 呈现读编辑态派生 ──
-  - {id: rel.ed.checks-read, from: present.panel.edit.checks, to: state.desk.edit.derive, type: depends, payload: [ds.SketchValidation, ds.SketchCheck], description: 即时校验与实时核验}
-  - {id: rel.ed.meta-read, from: present.panel.edit.meta, to: state.desk.edit.derive, type: depends, payload: [ds.ModelDiff], description: 改动摘要与晋升预览}
-  - {id: rel.ed.bar-read, from: present.version.edit, to: state.desk.edit.derive, type: depends, payload: [ds.EditSession], description: 脏标记、能否撤销 / 重做 / 保存、保存结果}
-  - {id: rel.ed.forms-read, from: present.panel.edit, to: state.desk.edit.derive, type: depends, payload: [ds.SketchDef], description: 选中实体在 draft 里的当前值}
-  - {id: rel.ed.canvas-scene, from: present.canvas.edit, to: state.layout.canvas, type: depends, payload: [ds.CanvasScene], description: 插入条、+ 模块、连线柄的位置来自画布场景}
-  - {id: rel.ed.flow-edit, from: present.canvas.flow, to: present.canvas.edit, type: depends, description: 编辑态下挂上编辑交互，把 Vue Flow 的 connect / nodeDrag / contextmenu 事件交给它}
-  - {id: rel.ed.dispatch-edit, from: present.panel.dispatch, to: present.panel.edit, type: depends, description: 编辑态下按选中分派到表单}
-  - {id: rel.ed.forms-content, from: present.panel.edit, to: present.panel.content, type: depends, description: 复用 Section、CodeBlock、ChangeList 的样式}
-  - {id: rel.ed.forms-labels, from: present.panel.edit, to: present.shared, type: depends, description: RELATION_TYPE_LABELS / HINTS：关系类型下拉的显示名与读法}
-  - {id: rel.ed.connect-labels, from: present.canvas.edit.connect, to: present.shared, type: depends, description: RELATION_TYPE_LABELS / HINTS}
-  - {id: rel.ed.edit-types, from: present.canvas.edit, to: model.types, type: depends, payload: [ds.EditOp], description: 契约（U10）：EditOp 与 RelationType 枚举}
-  - {id: rel.ed.forms-types, from: present.panel.edit, to: model.types, type: depends, payload: [ds.EditOp, ds.SketchValidation], description: 契约（U10）}
+  - {id: rel.ed.checks-read, from: present.panel.edit.checks, to: state.desk.edit.derive, type: calls, payload: [ds.SketchValidation, ds.SketchCheck], description: 即时校验与实时核验}
+  - {id: rel.ed.meta-read, from: present.panel.edit.meta, to: state.desk.edit.derive, type: calls, payload: [ds.ModelDiff], description: 改动摘要与晋升预览}
+  - {id: rel.ed.bar-read, from: present.version.edit, to: state.desk.edit.derive, type: calls, payload: [ds.EditSession], description: 脏标记、能否撤销 / 重做 / 保存、保存结果}
+  - {id: rel.ed.forms-read, from: present.panel.edit, to: state.desk.edit.derive, type: calls, payload: [ds.SketchDef], description: 选中实体在 draft 里的当前值}
+  - {id: rel.ed.forms-labels, from: present.panel.edit, to: present.shared, type: calls, description: RELATION_TYPE_LABELS / HINTS：关系类型下拉的显示名与读法}
+  - {id: rel.ed.forms-types, from: present.panel.edit, to: model.types, type: calls, payload: [ds.EditOp, ds.SketchValidation], description: 契约（U10）}
 
   # ── 视图状态层内部（草图 rel.se.desk-transition）──
   - {id: rel.ed.commands-session, from: state.desk.edit.commands, to: state.desk.edit.session, type: calls, interface: if.desk.editSession, payload: [ds.EditSession, ds.EditOp], description: apply / undo / redo / replay}
@@ -313,11 +307,9 @@ relations:
   - {id: rel.ed.commands-dispatch, from: state.desk.edit.commands, to: state.desk.actions, type: calls, interface: if.desk.actions, payload: [ds.ViewAction], description: dispatch(enterEdit / exitEdit / edited)}
   - {id: rel.ed.commands-save, from: state.desk.edit.commands, to: state.desk.edit.save, type: calls, description: save / createDesign 交给写回同步}
   - {id: rel.ed.save-session, from: state.desk.edit.save, to: state.desk.edit.session, type: calls, interface: if.desk.editSession, description: 写入结果 → saved / stale}
-  - {id: rel.ed.save-writer-port, from: state.desk.edit.save, to: state.desk.writer, type: depends, description: 注入的 ModelWriter（同一个 HTTP 写入来源，新增 saveSketch / createDesign）}
   - {id: rel.ed.loading-session, from: state.desk.loading, to: state.desk.edit.session, type: streams, payload: [ds.ModelPayload], description: 重新加载时交出新读到的草图与指纹 → reloaded（未变 / 刚保存的 / stale）}
-  - {id: rel.ed.derive-session, from: state.desk.edit.derive, to: state.desk.edit.session, type: depends, payload: [ds.EditSession], description: 派生只读会话值}
+  - {id: rel.ed.derive-session, from: state.desk.edit.derive, to: state.desk.edit.session, type: calls, payload: [ds.EditSession], description: 派生只读会话值}
   - {id: rel.ed.derive-projection, from: state.desk.edit.derive, to: state.desk.projection, type: streams, payload: [ds.ModelIndex], description: 编辑态下 draft 的索引作为 DeskState 的 index，交给已有的投影与布局}
-  - {id: rel.ed.derive-versions, from: state.desk.edit.derive, to: state.desk.versions, type: depends, payload: [ds.ModelPayload], description: 当前版本（对比基线）的索引，供实时核验}
   - {id: rel.ed.dispatch-follow, from: state.desk.actions, to: state.transition.edit, type: calls, interface: if.state.transition, payload: [ds.ViewAction], description: enterEdit / exitEdit / edited 经唯一写入口 transition 分派到编辑规则}
 
   # ── 视图状态 → 模型（草图 rel.se.desk-edit / desk-validate / desk-check）──
@@ -327,7 +319,6 @@ relations:
   - {id: rel.ed.derive-check, from: state.desk.edit.derive, to: model.intent.check, type: calls, interface: if.intent.sketchCheck, payload: [ds.SketchCheck], description: 对当前版本实时跑 sketchCheck（L-1）, designNote: r2：终点由 model.intent 下沉到 model.intent.check（核验所在）}
   - {id: rel.ed.derive-load, from: state.desk.edit.derive, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, payload: [ds.RawFile, ds.ModelIndex], description: draft 序列化为虚拟 sketch.yaml，与 system.yaml、持久草图一起加载成索引}
   - {id: rel.ed.derive-diff, from: state.desk.edit.derive, to: model.diff, type: calls, interface: if.model.diffModels, payload: [ds.ModelDiff], description: 改动摘要（L-2）与晋升预览（L-4）}
-  - {id: rel.ed.mode-types, from: state.transition.edit, to: model.types, type: depends, payload: [ds.ViewState], description: 版本种类（是否草图版本）}
   - {id: rel.ed.follow-existing, from: state.transition.edit.follow, to: model.pipeline.indexer, type: calls, interface: if.model.buildIndex, description: nearestExisting：删除后层次退到 draft 里最近仍存在的祖先}
 
   # ── 模型层内部 ──
@@ -338,13 +329,12 @@ relations:
   - {id: rel.ed.layers-modules, from: model.intent.edit.layers, to: model.intent.edit.modules, type: calls, description: 删层 = 删除模块的级联}
   - {id: rel.ed.seed-locate, from: model.intent.edit.seed, to: model.intent.edit.locate, type: calls, description: 复制底稿时的平铺与重嵌}
   - {id: rel.ed.validate-locate, from: model.intent.validate, to: model.intent.edit.locate, type: calls, description: 带位置的平铺：问题定位到草图里的条目}
-  - {id: rel.ed.validate-check, from: model.intent.validate, to: model.intent.check, type: depends, interface: if.intent.sketchCheck, description: 矛盾检查只有一份，校验复用核验的 sketchContradictions（草图 rel.se.validate-check）, designNote: r2：草图修订后新增}
+  - {id: rel.ed.validate-check, from: model.intent.validate, to: model.intent.check, type: calls, interface: if.intent.sketchCheck, description: 矛盾检查只有一份，校验复用核验的 sketchContradictions（草图 rel.se.validate-check）, designNote: r2：草图修订后新增}
   - {id: rel.ed.check-locate, from: model.intent.check, to: model.intent.edit.locate, type: calls, description: flattenSketch 改为调用寻址的平铺, designNote: r2：原先父模块与子模块之间不可写的依赖，check 独立后可见}
-  - {id: rel.ed.check-types, from: model.intent.check, to: model.types, type: depends, payload: [ds.SketchCheck, ds.SketchDef], designNote: r2：一期已有的依赖随 check.ts 下沉}
+  - {id: rel.ed.check-types, from: model.intent.check, to: model.types, type: calls, payload: [ds.SketchCheck, ds.SketchDef], designNote: r2：一期已有的依赖随 check.ts 下沉}
   - {id: rel.ed.validate-schema, from: model.intent.validate, to: model.pipeline.loader, type: calls, description: 复用 Loader 的 JSON Schema 校验检查草图形状}
-  - {id: rel.ed.intent-edit-types, from: model.intent.edit, to: model.types, type: depends, payload: [ds.SketchDef, ds.EditOp, ds.EditResult]}
-  - {id: rel.ed.validate-types, from: model.intent.validate, to: model.types, type: depends, payload: [ds.SketchDef, ds.SketchValidation]}
-  - {id: rel.ed.move-index, from: model.intent.edit.move, to: model.types, type: depends, payload: [ds.ModelIndex, ds.IdImpact], description: 当前版本里引用旧 ID 的条数}
+  - {id: rel.ed.intent-edit-types, from: model.intent.edit, to: model.types, type: calls, payload: [ds.SketchDef, ds.EditOp, ds.EditResult]}
+  - {id: rel.ed.validate-types, from: model.intent.validate, to: model.types, type: calls, payload: [ds.SketchDef, ds.SketchValidation]}
 
   # ── 接入层（草图 rel.se.desk-writer）──
   - id: rel.ed.save-writer
@@ -359,10 +349,10 @@ relations:
   - {id: rel.ed.source-sketch, from: access.model-source, to: access.writer.sketch, type: calls, interface: if.writer.saveSketch, description: 挂载 POST /write/<项目>/sketch、/write/<项目>/designs/<设计>/sketch、/write/<项目>/designs}
   - {id: rel.ed.sketch-validate, from: access.writer.sketch, to: model.intent.validate, type: calls, interface: if.intent.validateSketch, description: 写前在服务端再校验一遍（与页面同一函数）}
   - {id: rel.ed.sketch-load, from: access.writer.sketch, to: model.pipeline.entry, type: calls, interface: if.model.loadModel, description: 读持久草图作为校验上下文}
-  - {id: rel.ed.sketch-append, from: access.writer.sketch, to: access.writer.append, type: depends, description: openDoc / save：YAML 文档模型的打开与保存只有一份（草图 rel.se.sketch-append）, designNote: r2：草图修订后新增}
-  - {id: rel.ed.sketch-reader, from: access.writer.sketch, to: access.reader, type: depends, description: isProjectId、SKETCH_FILE、DESIGNS_DIR、readModelDir}
+  - {id: rel.ed.sketch-append, from: access.writer.sketch, to: access.writer.append, type: calls, description: openDoc / save：YAML 文档模型的打开与保存只有一份（草图 rel.se.sketch-append）, designNote: r2：草图修订后新增}
+  - {id: rel.ed.sketch-reader, from: access.writer.sketch, to: access.reader, type: calls, description: isProjectId、SKETCH_FILE、DESIGNS_DIR、readModelDir}
   - {id: rel.ed.sketch-store, from: access.writer.sketch, to: access.governance-store, type: calls, description: 比对与更新指纹（touchOwned）、记拦截记录一行}
-  - {id: rel.ed.sketch-seed, from: access.writer.sketch, to: model.types, type: depends, payload: [ds.SketchDef], description: 草图与设计元信息的形状}
+  - {id: rel.ed.sketch-seed, from: access.writer.sketch, to: model.types, type: calls, payload: [ds.SketchDef], description: 草图与设计元信息的形状}
 
 interfaces:
   - id: if.intent.applyEdit

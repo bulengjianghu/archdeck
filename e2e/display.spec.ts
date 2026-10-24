@@ -11,14 +11,16 @@ test('结构视角：关系类型筛选与边界节点开关在面板里，折�
   await expect(reading).toContainText('≥5')
   await expect(reading.getByRole('button')).toHaveCount(0)
   await expect(panel.getByText('实线 = 已证实', { exact: false })).toHaveCount(1)
-  // ADR-0022：运行时三类各一句读法，箭头一律指控制流方向
+  // ADR-0022、ADR-0026：运行时三类各一句读法（命令可异步），箭头一律指控制流方向
   const types = panel.getByRole('group', { name: '关系类型筛选' })
-  await expect(types).toContainText('命令 = 要结果')
+  await expect(types).toContainText('命令 = 要结果（可同步或异步）')
   await expect(types).toContainText('通知 = 不要结果、一对多，箭头指向被通知方')
   await expect(types).toContainText('流 = 连续数据，箭头指向数据去向')
-  const depends = panel.getByRole('button', { name: /依赖/ })
-  await depends.click()
-  await expect(depends).toHaveAttribute('aria-pressed', 'false')
+  // ADR-0026：没有「依赖」一类，编译期只剩实现契约
+  await expect(types.getByRole('button', { name: /依赖/ })).toHaveCount(0)
+  const impl = panel.getByRole('button', { name: /实现契约/ })
+  await impl.click()
+  await expect(impl).toHaveAttribute('aria-pressed', 'false')
   await panel.getByLabel('边界节点').uncheck()
   await panel.getByRole('button', { name: /^显示/ }).click()
   await expect(panel.getByRole('button', { name: /^显示/ })).toContainText('隐藏 1 类关系 · 无边界节点')

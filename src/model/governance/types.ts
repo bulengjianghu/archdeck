@@ -20,7 +20,7 @@ export interface FileDep {
   names?: string[]
   /** 依赖方文件的类声明 implements / extends 引用了落到这个目标的名字（K1，K5 的 implements 证据） */
   heritage?: true
-  /** 引用了 to 文件的实现：函数、类或变量（不是类型、枚举），或不按名称穿透的值导入（K1，K5 的 implements 证据分档） */
+  /** 引用了 to 文件的实现：函数、类或变量（不是类型、枚举），或不按名称穿透的值导入；`export … from` 再导出不算（K1，K5 的 implements 证据分档、K7 的值使用） */
   uses?: true
 }
 
@@ -116,7 +116,7 @@ export interface Confirmation {
   isolated?: boolean
   /** 已证实时，依据的依赖相对关系箭头的方向（面板「知识」一行，ADR-0022） */
   knows?: Knowledge
-  /** implements 有对应的模块依赖，却没有接口名或 implements / extends 的证据：证据像 depends（K5） */
+  /** implements 有对应的模块依赖，却没有接口名或 implements / extends 的证据：证据像使用（K5，原名证据像 depends） */
   likeDepends?: true
   /** implements 有对应的模块依赖，只引了对方的数据类型（类型、枚举），没有接口名或 implements / extends：结构性实现（代码未显式声明，K5） */
   structural?: true

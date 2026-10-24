@@ -1,5 +1,5 @@
 /**
- * 代码事实与描述的比对（K4–K7）：文件依赖按归属提升为模块依赖，关系的证实，未描述依赖。
+ * 代码事实与描述的比对（K4–K7）：文件依赖按归属提升为模块依赖，关系的证实，未解释的交互。
  * 关于被描述系统的知识，页面、lint:model 与 agent 接口共用。
  */
 import type { ModelIndex, RelationEntity, RelationType } from '../types'
@@ -16,7 +16,7 @@ export const related = (index: ModelIndex, a: string, b: string): boolean => wit
 
 /**
  * K4：文件依赖两端取归属模块，去掉同模块与祖先后代，按依赖方 → 被依赖方合并。
- * 有一端未归属或已忽略的单独计数（skipped）；有一端是归属冲突文件（G6）的不提升到任何模块，单独列出（conflicted）——冲突是描述问题，不衍生违规与未描述依赖。
+ * 有一端未归属或已忽略的单独计数（skipped）；有一端是归属冲突文件（G6）的不提升到任何模块，单独列出（conflicted）——冲突是描述问题，不衍生违规与未解释的交互。
  */
 export function liftDeps(
   index: ModelIndex,
@@ -97,9 +97,9 @@ function knowledgeOf(dirs: readonly ('forward' | 'reverse')[]): Knowledge {
   return f && b ? 'both' : f ? 'forward' : 'reverse'
 }
 
-/** K6：未证实是否报警告——编译期关系一律报，结构性实现除外（info，只进返工清单；证据像 depends 的 implements 报 `fact.like-depends`，其余 `fact.unconfirmed`）；运行时关系只在两端之间连类型依赖都没有（isolated）时报 */
+/** K6：未证实是否报警告——编译期关系（ADR-0026 起只有 implements）一律报，结构性实现除外（info，只进返工清单；证据像使用的报 `fact.like-depends`，其余 `fact.unconfirmed`）；运行时关系只在两端之间连类型依赖都没有（isolated）时报 */
 export const unconfirmedWarns = (r: RelationEntity, c: Confirmation): boolean =>
-  c.status === 'unconfirmed' && !c.structural && (r.type === 'depends' || r.type === 'implements' || !!c.isolated)
+  c.status === 'unconfirmed' && !c.structural && (r.type === 'implements' || !!c.isolated)
 
 /** K5、K6：报警的问题代码 */
 export const unconfirmedCode = (c: Confirmation) => (c.likeDepends ? 'fact.like-depends' : 'fact.unconfirmed')
@@ -109,8 +109,8 @@ export const unconfirmedReason = (r: RelationEntity, c?: Confirmation): string =
   c?.structural
     ? '结构性实现（代码未显式声明）：只引了目标模块的数据类型，没有引用它声明的接口，也没有类 implements / extends 它'
     : c?.likeDepends
-    ? '证据像 depends：代码引用了目标模块的函数、类或变量，没有引用它声明的接口，也没有类 implements / extends 它'
-    : r.type === 'depends' || r.type === 'implements'
+    ? '证据像使用：代码引用了目标模块的函数、类或变量，没有引用它声明的接口，也没有类 implements / extends 它；有交互时改为 calls，只是知道时删除关系（由代码事实承载）'
+    : r.type === 'implements'
       ? '在代码中没有对应的依赖'
       : '是运行时关系，但两端之间在代码中没有任何依赖（类型依赖、反向的端口注入都没有）'
 
@@ -152,7 +152,7 @@ export function confirmRelations(
     const names = r.type === 'implements' ? contractNames(index, r.to) : undefined
     const evidenced = names ? hits.filter(h => h.d.files.some(f => contractEvidence(f, names))) : hits
     if (evidenced.length) out.set(r.id, { status: 'confirmed', deps: evidenced.map(h => h.d.key), knows: knowledgeOf(evidenced.map(h => h.dir)) })
-    // 没有契约证据时按导入分档：引用了实现（函数、类、变量）像 depends，只引数据类型为结构性实现
+    // 没有契约证据时按导入分档：引用了实现（函数、类、变量）为证据像使用，只引数据类型为结构性实现
     else if (hits.length) {
       const uses = hits.some(h => h.d.files.some(f => f.uses))
       out.set(r.id, { status: 'unconfirmed', deps: hits.map(h => h.d.key), ...(uses ? { likeDepends: true as const } : { structural: true as const }) })
@@ -163,7 +163,7 @@ export function confirmRelations(
   return out
 }
 
-/** K7：关系是否覆盖模块依赖——端点相同或互为祖先后代、方向一致（notifies、streams 不论方向），类型不限 */
+/** K7：关系是否覆盖模块依赖——端点相同或互为祖先后代、方向一致（notifies、streams 不论方向），四类交互都算 */
 export function covers(index: ModelIndex, r: RelationEntity, from: string, to: string): boolean {
   if (!index.modules.has(r.from) || !index.modules.has(r.to)) return false
   const dir = directionOf(index, r, from, to)
@@ -175,8 +175,8 @@ export function coveringRelations(index: ModelIndex, from: string, to: string): 
   return [...index.relations.values()].filter(r => covers(index, r, from, to)).map(r => r.id)
 }
 
-/** K7：未描述依赖；只引用类型的（全部文件依赖都是 type）不算 */
+/** K7：未解释的交互——有值使用（某条文件依赖引用了对方的函数、类或变量，K1 的 uses）却没有任何交互关系覆盖的模块依赖；只引类型（含枚举）的不算 */
 export function undescribedDeps(index: ModelIndex, moduleDeps: ReadonlyMap<string, ModuleDep>): ModuleDep[] {
   const relations = [...index.relations.values()]
-  return [...moduleDeps.values()].filter(d => d.files.some(f => f.kind === 'value') && !relations.some(r => covers(index, r, d.from, d.to)))
+  return [...moduleDeps.values()].filter(d => d.files.some(f => f.uses) && !relations.some(r => covers(index, r, d.from, d.to)))
 }

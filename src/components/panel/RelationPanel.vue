@@ -32,7 +32,7 @@ const knowledge = computed(() => {
   if (c.host) return '不判定：概念拆分，同文件'
   if (c.status === 'skipped') return '不判定：端点是参与者或目标态'
   if (c.structural) return `同向：${from} 只引了 ${to} 的数据类型（结构性实现，代码未显式声明）`
-  if (c.likeDepends) return `同向：${from} 使用 ${to} 的实现，没有引用它的接口（证据像 depends）`
+  if (c.likeDepends) return `同向：${from} 使用 ${to} 的实现，没有引用它的接口（证据像使用）`
   if (c.knows === 'forward') return `同向：${from} 知道 ${to}`
   if (c.knows === 'reverse') return `反向：${to} 知道 ${from}`
   if (c.knows === 'both') return '双向：两端互相引用'
