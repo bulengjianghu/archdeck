@@ -39,6 +39,9 @@ function sandbox(design: string) {
   }
 }
 
+/** 信息条动作区的「保存」（与「保存并交给 AI」区分） */
+const saveButton = (page: Page) => page.locator('.info-bar').getByRole('button', { name: '保存', exact: true })
+
 /** 从一个节点的连线柄拖到另一个节点中心（Vue Flow connect） */
 async function dragConnect(page: Page, from: string, to: string) {
   const handle = graphNode(page, from).locator('.edit-handle')
@@ -61,7 +64,8 @@ test('SK-6–SK-11 主路径：新建设计（缺省空草图）→ 加层 → �
     await expect(dialog.getByLabel('空草图')).toBeChecked()
     await dialog.getByRole('button', { name: '创建并编辑草图' }).click()
     await expect(page).toHaveURL(/\/d\/zz-e2e-edit\/sketch/)
-    await expect(page.locator('.edit-bar .title')).toContainText('编辑草图：E2E 编辑')
+    await expect(page.locator('.info-bar .name')).toHaveText('E2E 编辑')
+    await expect(saveButton(page)).toBeVisible()
     expect(parse(fs.readFileSync(path.join(box.dir, 'sketch.yaml'), 'utf8')).sketch).toEqual({ id: 'zz-e2e-edit', lifetime: 'until-implemented', modules: [] })
 
     // 加层：末尾的插入条
@@ -93,8 +97,8 @@ test('SK-6–SK-11 主路径：新建设计（缺省空草图）→ 加层 → �
     await expect(page.locator('[data-testid="edit-check"]')).toContainText('实现后将有')
 
     // 保存：整份写回，文件内容与操作一致
-    await page.locator('.edit-bar').getByRole('button', { name: '保存' }).click()
-    await expect(page.locator('.edit-bar .note')).toHaveText('已保存')
+    await saveButton(page).click()
+    await expect(page.locator('.info-bar .note')).toHaveText('已保存')
     const saved = parse(fs.readFileSync(path.join(box.dir, 'sketch.yaml'), 'utf8')).sketch
     expect(saved.modules).toEqual([
       {
@@ -109,19 +113,19 @@ test('SK-6–SK-11 主路径：新建设计（缺省空草图）→ 加层 → �
       },
     ])
     expect(saved.relations).toEqual([{ id: 'rel.alpha-beta', from: 'edge.alpha', to: 'edge.beta', type: 'calls', description: 'E2E 连线' }])
-    await expect(page.locator('.edit-bar .dot')).toHaveCount(0)
+    await expect(page.locator('.info-bar .dirty')).toHaveCount(0)
 
     // 刷新后一致：不在编辑态，草图照样画出这一层、两个模块与一条边
     await page.goto('./#/p/h5p-arch-desk/d/zz-e2e-edit/sketch?level=edge')
     await page.reload()
-    await expect(page.locator('.edit-bar').getByRole('button', { name: '编辑' })).toBeVisible()
+    await expect(page.locator('.info-bar').getByRole('button', { name: '编辑', exact: true })).toBeVisible()
     await expect(graphNode(page, 'edge.alpha')).toBeVisible()
     await expect(graphNode(page, 'edge.beta')).toBeVisible()
     await expect(page.locator('.vue-flow__edge')).toHaveCount(1)
 
     // 交给 AI：指令附本次改动摘要（草图从没提交过，全部算新增）
-    await page.locator('.design-bar .hand').click()
-    await expect(page.locator('.design-bar .hand')).toHaveText('已复制指令')
+    await page.locator('.info-bar').getByRole('button', { name: '交给 AI', exact: true }).click()
+    await expect(page.locator('.info-bar .hand .txt')).toHaveText('已复制指令')
     const prompt = await page.evaluate<string>('navigator.clipboard.readText()')
     expect(prompt).toContain('## 本次改动（草图相对上一次提交）')
     expect(prompt).toContain('新增模块「edge.alpha」')
@@ -179,11 +183,12 @@ test('X7d、X7g、X7i：改 ID（父不变的移动）级联到后代并确认�
 
     // 文件在外部改动：编辑会话标为已过时；重新加载并重放后保存，外部的改动与原注释都在
     fs.writeFileSync(path.join(box.dir, 'sketch.yaml'), `${SKETCH}# 外部追加的注释\n`)
-    await expect(page.locator('.edit-bar .stale')).toContainText('文件已在外部改动')
-    await page.locator('.edit-bar .stale').getByRole('button', { name: '重新加载并重放' }).click()
-    await expect(page.locator('.edit-bar .note')).toHaveText('已重放到新文件上')
-    await page.locator('.edit-bar').getByRole('button', { name: '保存' }).click()
-    await expect(page.locator('.edit-bar .note')).toHaveText('已保存')
+    await expect(page.locator('.info-bar .stale')).toContainText('文件已变')
+    await expect(saveButton(page)).toHaveCount(0)
+    await page.locator('.info-bar .stale').getByRole('button', { name: '重新加载并重放' }).click()
+    await expect(page.locator('.info-bar .note')).toHaveText('已重放到新文件上')
+    await saveButton(page).click()
+    await expect(page.locator('.info-bar .note')).toHaveText('已保存')
     const text = fs.readFileSync(path.join(box.dir, 'sketch.yaml'), 'utf8')
     expect(text).toContain('# E2E 的草图：保留这行注释')
     expect(text).toMatch(/- id: edge +# 这一层/)
@@ -197,20 +202,19 @@ test('X7d、X7g、X7i：改 ID（父不变的移动）级联到后代并确认�
   }
 })
 
-test('E-1：从当前版本点「编辑骨架」进入持久草图的编辑态；版本切换里选「骨架 · 持久草图」后画布只有骨架的实体（同一个视图组件换版本也要重建）', async ({
+test('E-1、#20b：从当前版本点「编辑骨架」进入持久草图的编辑态，「退出」回到当前版本；版本切换里选「✎ 骨架」后画布只有骨架的实体（同一个视图组件换版本也要重建）', async ({
   page,
 }) => {
   await openDesk(page, '/p/h5p-arch-desk')
   await page.getByRole('button', { name: '编辑骨架' }).click()
   await expect(page).toHaveURL(/\/p\/h5p-arch-desk\/i\/skeleton/)
-  await expect(page.locator('.edit-bar .title')).toContainText('编辑草图：骨架')
+  await expect(page.locator('.info-bar .name')).toHaveText('骨架')
+  await expect(saveButton(page)).toBeVisible()
   await expect(page.locator('.insert-slot').first()).toBeVisible()
-  await page.locator('.edit-bar').getByRole('button', { name: '退出编辑' }).click()
-  await expect(page.locator('.edit-bar').getByRole('button', { name: '编辑' })).toBeVisible()
-
-  // 回到当前版本，再经版本切换选持久草图
-  await page.locator('select[aria-label="切换版本"]').selectOption('')
-  await expect(page.locator('.intent-bar')).toHaveCount(0)
+  // 退出：没有改动，直接回到进入草图之前的版本（当前版本）
+  await page.locator('.info-bar').getByRole('button', { name: '退出', exact: true }).click()
+  await expect(page).not.toHaveURL(/\/i\/skeleton/)
+  await expect(page.locator('.info-bar')).toHaveCount(0)
   // 当前视图的模型索引里有没有这个模块（加载中为 null）
   const has = (id: string) =>
     page.evaluate(
@@ -219,8 +223,65 @@ test('E-1：从当前版本点「编辑骨架」进入持久草图的编辑态�
     )
   await expect.poll(() => has('state.desk.edit')).toBe(true)
   await page.locator('select[aria-label="切换版本"]').selectOption('i:skeleton')
-  await expect(page.locator('.intent-bar')).toContainText('持久草图')
+  await expect(page.locator('.info-bar .kind')).toHaveText('草图')
+  await expect(page.locator('.info-bar .chip')).toContainText('持久')
   await expect.poll(() => has('state.desk.edit')).toBe(false)
   await expect.poll(() => has('state.desk')).toBe(true)
   await expect(page.locator('.vue-flow__node-band')).toHaveCount(4)
+})
+
+test('F-60–F-62、#20b：草图编辑态的信息条只出现一次名称；对比按钮打开弹层能切基线、Esc 关闭；有改动时退出弹三选，取消留下、放弃后回到进入草图之前的版本', async ({
+  page,
+}) => {
+  const box = sandbox('zz-e2e-bar')
+  try {
+    fs.mkdirSync(box.dir, { recursive: true })
+    fs.writeFileSync(path.join(box.dir, 'design.yaml'), 'design:\n  name: E2E 信息条\n  status: draft\n')
+    fs.writeFileSync(path.join(box.dir, 'sketch.yaml'), SKETCH.replace('id: zz-e2e-mv', 'id: zz-e2e-bar'))
+    await openDesk(page, '/p/h5p-arch-desk')
+    await page.locator('select[aria-label="切换版本"]').selectOption('zz-e2e-bar/sketch')
+    const bar = page.locator('.info-bar')
+    await bar.getByRole('button', { name: '编辑', exact: true }).click()
+    await expect(saveButton(page)).toBeVisible()
+
+    // 身份区：kind + 名称（只这一次）+ 状态 + 挂载点；不再有「编辑草图：」「尺子」「删除项 = 草图没画的」
+    await expect(bar.locator('.kind')).toHaveText('草图')
+    expect((await bar.innerText()).split('E2E 信息条').length - 1).toBe(1)
+    await expect(bar).toContainText('起草中')
+    await expect(bar).toContainText('挂在：根')
+    for (const gone of ['编辑草图：', '尺子', '删除项', '校验', '放弃']) await expect(bar).not.toContainText(gone)
+
+    // 改一处：编辑中 ●，「交给 AI」变成「保存并交给 AI」
+    await page.goto('./#/p/h5p-arch-desk/d/zz-e2e-bar/sketch?level=edge&sel=m:edge.beta&edit=1')
+    const name = page.locator('[data-testid="module-form"] [name="module-name"]')
+    await name.fill('Beta 改')
+    await name.press('Enter')
+    await expect(bar.locator('.dirty')).toHaveText('编辑中 ●')
+    await expect(bar.getByRole('button', { name: '保存并交给 AI' })).toBeVisible()
+
+    // 对比：一个按钮，弹层里切基线；草图不计删除
+    const cmp = bar.locator('.cmp-btn')
+    await expect(cmp).toContainText('对比 相对基线')
+    await cmp.click()
+    const pop = page.getByRole('dialog', { name: '对比设置' })
+    await expect(pop).toContainText('新增')
+    await expect(pop).not.toContainText('删除')
+    await pop.getByLabel('相对当前版本').check()
+    await expect(cmp).toContainText('对比 相对当前版本')
+    await page.keyboard.press('Escape')
+    await expect(pop).toHaveCount(0)
+
+    // 退出：有改动时三选；取消留在编辑态，放弃后回到进入草图之前的版本
+    await bar.getByRole('button', { name: '退出', exact: true }).click()
+    const ask = page.getByRole('dialog', { name: /有未保存的改动/ })
+    await expect(ask.getByRole('button')).toHaveText(['取消', '放弃', '保存'])
+    await ask.getByRole('button', { name: '取消' }).click()
+    await expect(bar.locator('.dirty')).toBeVisible()
+    await bar.getByRole('button', { name: '退出', exact: true }).click()
+    await ask.getByRole('button', { name: '放弃' }).click()
+    await expect(page).not.toHaveURL(/zz-e2e-bar/)
+    expect(fs.readFileSync(path.join(box.dir, 'sketch.yaml'), 'utf8')).not.toContain('Beta 改')
+  } finally {
+    box.restore()
+  }
 })
