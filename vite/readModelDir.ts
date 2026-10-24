@@ -428,7 +428,16 @@ export function baselineChanges(baselineFiles: readonly RawFile[], sketches: Par
   return changeSummary(compareDesign(sketches, index, 'baseline').sketches)
 }
 
-/** 持久草图版本（ADR-0024）：system.yaml + intent/**，对比基线为当前版本；附该草图文件的指纹（编辑骨架用） */
+/**
+ * F-52：持久草图相对当前版本的改动摘要（按血缘）；没有改动时为空串。持久草图本身也进当前版本（X1），
+ * 所以对象是去掉这张草图之后的当前版本（其余描述说的样子），否则草图总是和自己一致。
+ */
+export function intentChanges(currentFiles: readonly RawFile[], file: RawFile): string {
+  const { index } = loadModel(currentFiles.filter(f => f.path !== file.path))
+  return changeSummary(compareDesign(load([file]).model.sketches, index, 'current').sketches)
+}
+
+/** 持久草图版本（ADR-0024）：system.yaml + intent/**，对比基线为当前版本；附该草图文件的指纹（编辑骨架用）与「交给 AI」的指令（F-52） */
 export function readIntentVersion(modelRoot: string, project: string, sketchId: string, projectRoot: string): ModelPayload | null {
   const current = readProject(modelRoot, project, projectRoot)
   const rel = `intent/${sketchId}.yaml`
@@ -442,6 +451,8 @@ export function readIntentVersion(modelRoot: string, project: string, sketchId: 
     version: { intent: sketchId },
     compare: { current: { label: '当前版本', dir: current.dir, files: current.files } },
     sketch: { file: rel, path: rel, hash: sketchHash(file.text) },
+    // F-52：持久草图也能交给 AI（草图全文 + 相对当前版本的改动摘要）
+    sketchPrompt: intentPrompt(sketchId, { path: rel, text: file.text }, projectRoot, intentChanges(current.files, file)),
   }
 }
 
@@ -462,29 +473,62 @@ export function sketchChanges(base: readonly RawFile[], path: string, before: st
     .join('\n')
 }
 
-/** DV-10、X20：「交给 AI」的指令——各张草图全文 + 相对基线的变更摘要（按血缘）+ 04 §5「按草图扩展」一节（从本包 docs 截取；读不到时只给草图） */
-export function sketchPrompt(design: string, sketches: readonly { path: string; text: string }[], docsRoot: string, changes = '', lineage = ''): string {
-  let section = ''
+/** 04 §5「按草图扩展」一节（从本包 docs 截取；读不到时为空串） */
+function expandSection(docsRoot: string): string {
   try {
     const doc = fs.readFileSync(path.join(docsRoot, 'docs', '04-description-format.md'), 'utf8')
     const m = /^### 按草图扩展\n([\s\S]*?)(?=^#{1,3} |(?![\s\S]))/m.exec(doc)
-    section = m ? m[1].trim() : ''
+    return m ? m[1].trim() : ''
   } catch {
-    section = ''
+    return ''
   }
+}
+
+function promptText(
+  title: string,
+  intro: string,
+  sketches: readonly { path: string; text: string }[],
+  sections: readonly [string, string][],
+  docsRoot: string,
+): string {
+  const section = expandSection(docsRoot)
   return [
-    `# 按草图扩展：设计「${design}」`,
+    title,
     '',
-    `请在当前版本上起草设计 \`${design}\` 的下一轮（没有轮次时为 r1）：把当前版本整份复制为新一轮，按下面的草图扩展，草图是约束、不是建议。`,
+    intro,
     '',
     ...sketches.flatMap(s => [`## 草图（${s.path}）`, '', '```yaml', s.text.trimEnd(), '```', '']),
-    ...(lineage ? ['## 相对基线的变更（按血缘）', '', lineage, ''] : []),
-    ...(changes ? ['## 本次改动（草图相对上一次提交）', '', changes, ''] : []),
+    ...sections.filter(([, body]) => body).flatMap(([head, body]) => [`## ${head}`, '', body, '']),
     '## 规范（docs/04-description-format.md §5「按草图扩展」）',
     '',
     section || '（读不到 docs/04-description-format.md，请按 04 §5「按草图扩展」一节执行）',
     '',
   ].join('\n')
+}
+
+/** DV-10、X20：「交给 AI」的指令——各张草图全文 + 相对基线的变更摘要（按血缘）+ 04 §5「按草图扩展」一节（从本包 docs 截取；读不到时只给草图） */
+export function sketchPrompt(design: string, sketches: readonly { path: string; text: string }[], docsRoot: string, changes = '', lineage = ''): string {
+  return promptText(
+    `# 按草图扩展：设计「${design}」`,
+    `请在当前版本上起草设计 \`${design}\` 的下一轮（没有轮次时为 r1）：把当前版本整份复制为新一轮，按下面的草图扩展，草图是约束、不是建议。`,
+    sketches,
+    [
+      ['相对基线的变更（按血缘）', lineage],
+      ['本次改动（草图相对上一次提交）', changes],
+    ],
+    docsRoot,
+  )
+}
+
+/** F-52：持久草图的「交给 AI」指令——草图全文 + 相对当前版本的改动摘要（按血缘）+ 04 §5「按草图扩展」一节 */
+export function intentPrompt(id: string, sketch: { path: string; text: string }, docsRoot: string, vsCurrent = ''): string {
+  return promptText(
+    `# 按草图扩展：持久草图「${id}」`,
+    `持久草图 \`${sketch.path}\` 由人拥有，是当前版本的约束：请按它修正当前版本的描述（必要时连同代码），使「相对当前版本」的改动消失；草图是约束、不是建议。`,
+    [sketch],
+    [['相对当前版本的改动（按血缘）', vsCurrent]],
+    docsRoot,
+  )
 }
 
 /** X4：有草图的设计的偏差计数——未归档的对最新一轮核验（已定稿的对当前版本），卡片标「偏差 N」 */

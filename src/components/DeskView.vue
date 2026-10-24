@@ -13,8 +13,7 @@ import GraphCanvas from './GraphCanvas.vue'
 import Breadcrumb from './Breadcrumb.vue'
 import Toolbar from './Toolbar.vue'
 import VersionSwitcher from './VersionSwitcher.vue'
-import DesignBar from './DesignBar.vue'
-import CommitBar from './CommitBar.vue'
+import InfoBar from './infobar/InfoBar.vue'
 import GuideDialog from './GuideDialog.vue'
 import PerspectiveSwitch from './PerspectiveSwitch.vue'
 import PlayerBar from './PlayerBar.vue'
@@ -28,7 +27,6 @@ import { OPEN_PREVIEW } from './shared/preview'
 import { NAV_TAB, type NavTab } from './shared/navTab'
 import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
 import { useEvolutionPrefs } from './display/useEvolutionPrefs'
-import EditBar from './edit/EditBar.vue'
 import EditDialog from './edit/EditDialog.vue'
 import SketchCanvas from './sketch/SketchCanvas.vue'
 import NewDesignDialog from './edit/NewDesignDialog.vue'
@@ -238,14 +236,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </button>
     </header>
 
-    <div v-if="isIntentVersion(version) && desk.status.value === 'ready'" class="design-bar intent-bar">
-      <span class="kind">持久草图</span>
-      <strong>{{ version.intent === 'skeleton' ? '骨架' : version.intent }}</strong>
-      <span class="muted">intent/{{ version.intent }}.yaml · 人拥有 · 对比当前版本</span>
-      <EditBar :name="version.intent === 'skeleton' ? '骨架' : version.intent" />
-    </div>
-    <CommitBar v-else-if="isCommitVersion(version) && desk.status.value === 'ready'" class="design-bar" />
-    <DesignBar v-else-if="version && desk.status.value === 'ready'" class="design-bar" />
+    <InfoBar v-if="version && desk.status.value === 'ready'" class="info-bar" />
 
     <aside v-show="!navCollapsed" class="nav-area">
       <NavTree v-if="desk.status.value === 'ready'" />
@@ -323,7 +314,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   height: 100%;
 }
 
-.design-bar {
+.info-bar {
   grid-column: 1 / -1;
 }
 

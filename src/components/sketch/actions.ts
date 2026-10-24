@@ -29,3 +29,9 @@ export const sketchRequest = shallowRef<SketchRequest | null>(null)
 export const requestSketch = (r: SketchRequest): void => {
   sketchRequest.value = r
 }
+
+/**
+ * 升级的落点在信息条身份区的面包屑父级（带 data-parent="1"，#15）：画布拖动经过它时置真，信息条据此高亮落点。
+ * 画布与信息条是两个组件，落点的检测在画布（elementsFromPoint），显示在信息条。
+ */
+export const dragOverParent = shallowRef(false)

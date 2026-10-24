@@ -2,7 +2,7 @@
 /**
  * 草图画布（present.sketch，SK-15、SK-16，X7、X7c–X7e、X7j、X7k、X13、X15、X19，ADR-0025）：Vue Flow 自由模式——不走 elk、不走分层投影，
  * 位置来自草图的 layout（草图布局 state.layout.sketch 给出节点与直线边）。每个手势只发 DeskState 编辑分组的一个操作：
- * - 拖节点（多选一起拖）松手 = moveNode 一步；拖到同层另一节点上 = 降级（根草图里拖到层上 = 移入）；拖到面包屑父级 = 升级；
+ * - 拖节点（多选一起拖）松手 = moveNode 一步；拖到同层另一节点上 = 降级（根草图里拖到层上 = 移入）；拖到信息条面包屑的父级 = 升级；
  * - 框选（在空白处拖）/ ⇧ 点选多选；右键：合并为新模块（≥2）、拆分、进入下一层、删除；空白处右键或双击：新建模块（就地输入名称与 ID 短名）；
  * - 从节点右侧的连线柄拖到另一节点：松手选类型 + 一句说明；选中的边可拖标签；双击模块下钻；
  * - 工具条：＋ 模块、引用外部模块、重新排列、本层数与超七提示；快捷键 ⌘Z / ⇧⌘Z、Delete / Backspace、⌘S、Esc（只取消选中）。
@@ -19,13 +19,12 @@ import { useDesk } from '@/state/inject'
 import { ask } from '../edit/useEditDialog'
 import SketchNode from './SketchNode.vue'
 import StraightEdge from './StraightEdge.vue'
-import SketchCrumbs from './SketchCrumbs.vue'
 import SketchMenu, { type MenuItem } from './SketchMenu.vue'
 import PartsDialog from './PartsDialog.vue'
 import ConnectPopover from './ConnectPopover.vue'
 import ReferencePicker from './ReferencePicker.vue'
 import { CHANGE_BADGES } from './labels'
-import { SKETCH_ACTIONS, sketchRequest } from './actions'
+import { dragOverParent, SKETCH_ACTIONS, sketchRequest } from './actions'
 
 const desk = useDesk()
 const e = desk.edit
@@ -41,7 +40,8 @@ function notify(msg: string) {
 // ── 节点与边：草图布局的结果写入 Vue Flow ──
 /** 拖动经过的降级 / 移入目标与面包屑父级 */
 const dropTarget = ref<string | null>(null)
-const dropParent = ref(false)
+/** 拖到信息条面包屑的父级（升级的落点，#15）：信息条读它高亮 */
+const dropParent = dragOverParent
 const picked = computed(() => new Set(e.picked.value))
 const scene = computed(() => e.scene.value)
 const sizeOf = computed(() => new Map((scene.value?.nodes ?? []).map(n => [n.id, { w: n.data.w, h: n.data.h }])))
@@ -363,7 +363,6 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
 <template>
   <div ref="host" class="sketch-canvas" @dblclick="onHostDblClick">
     <header class="sk-top">
-      <SketchCrumbs :drop-parent="dropParent" @notice="notify" />
       <span class="spacer" />
       <div class="sk-tools" role="toolbar" aria-label="草图工具条">
         <button v-if="root" title="新建一层（排在最后；层的子模块在带内双击新建）" @click="createAtCenter">＋ 层</button>
@@ -424,7 +423,11 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
     <div v-if="scene && !scene.nodes.length" class="sk-empty">这一层还没有模块：从加一个模块开始（双击空白处或「＋ 模块」）</div>
     <div v-if="e.needsLayout.value && scene?.nodes.length" class="sk-hint">初始布局：拖动任一节点后位置写进草图</div>
     <div v-if="notice" class="sk-notice" role="status">{{ notice }}</div>
-    <div v-if="desk.toggles.showDiff && legend.length" class="sk-legend" title="图上标出变更（相对基线）">
+    <div
+      v-if="desk.toggles.showDiff && legend.length"
+      class="sk-legend"
+      :title="`图上标出变更（${e.compareMode.value === 'baseline' ? '相对基线' : '相对当前版本'}）`"
+    >
       <span v-for="b in legend" :key="b.title" class="item"
         ><b>{{ b.text }}</b> {{ b.title }}</span
       >

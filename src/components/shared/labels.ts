@@ -64,3 +64,6 @@ export const FIELD_LABELS: Record<string, string> = {
   definition: '定义',
   invariants: '不变量',
 }
+
+/** 持久草图的显示名：骨架有中文名，其余按 ID 显示 */
+export const intentName = (id: string): string => (id === 'skeleton' ? '骨架' : id)

@@ -40,6 +40,9 @@ function sandbox(design: string) {
   }
 }
 
+/** 信息条动作区的「保存」（与「保存并交给 AI」区分） */
+const saveButton = (page: Page) => page.locator('.info-bar').getByRole('button', { name: '保存', exact: true })
+
 /** 从一个节点的连线柄拖到另一个节点中心（Vue Flow connect） */
 async function dragConnect(page: Page, from: string, to: string) {
   const handle = graphNode(page, from).locator('.sk-out')
@@ -88,6 +91,8 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     await dialog.getByRole('button', { name: '创建并打开草图' }).click()
     await expect(page).toHaveURL(/\/d\/zz-e2e-sketch\/sketch/)
     await expect(page.locator('.sketch-canvas')).toBeVisible()
+    await expect(page.locator('.info-bar .name')).toHaveText('E2E 草图')
+    await expect(saveButton(page)).toBeVisible()
 
     // 基线 = 仓库 HEAD；底稿：挂载点 DeskState 的一层从基线复制（13 个），带一次初始布局，不带职责文字
     expect(parse(fs.readFileSync(path.join(box.dir, 'design.yaml'), 'utf8')).design.base.commit).toBe(HEAD())
@@ -98,7 +103,7 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     expect(seed.modules.every((m: { responsibility?: string }) => !m.responsibility)).toBe(true)
     expect(Object.keys(seed.layout.modules)).toEqual(expect.arrayContaining(ids))
     for (const id of ids) await expect(graphNode(page, id)).toBeVisible()
-    await expect(page.locator('.sk-crumbs')).toContainText('DeskState')
+    await expect(page.locator('.info-bar .mount')).toContainText('DeskState')
     // 折叠引用（05 裁决 4）：外部端点按挂载点深度折叠，引用节点少于精确端点；多条关系合成一条显示边、标条数
     const ends = new Set<string>((seed.relations as { from: string; to: string }[]).flatMap(r => [r.from, r.to]).filter(x => !ids.includes(x)))
     const refs = page.locator('.sk-node.reference')
@@ -187,9 +192,35 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     // 下钻：合并结果的下一层由血缘推出，来源成为它的子模块；面包屑返回
     await graphNode(page, 'state.desk.session').dblclick()
     await expect(graphNode(page, `state.desk.session.${a.split('.').pop()}`)).toBeVisible()
-    await expect(page.locator('.sk-crumbs')).toContainText('编辑会话')
-    await page.locator('.sk-crumbs .crumb', { hasText: 'DeskState' }).click()
+    const crumbs = page.locator('.info-bar .mount')
+    await expect(crumbs).toContainText('编辑会话')
+    await expect(crumbs.locator('.here')).toContainText('编辑会话')
+    // 升级：把下一层的一个模块拖到信息条面包屑的父级（data-parent）上 = 升级到父层（落点高亮）
+    const child = `state.desk.session.${b.split('.').pop()}`
+    const parentCrumb = crumbs.locator('[data-parent="1"]')
+    await expect(parentCrumb).toContainText('DeskState')
+    const from = (await graphNode(page, child).locator('.name').boundingBox())!
+    const to = (await parentCrumb.boundingBox())!
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 15 })
+    await expect(parentCrumb).toHaveClass(/drop/)
+    await page.mouse.up()
+    await expect(graphNode(page, child)).toHaveCount(0)
+    await crumbs.locator('.crumb', { hasText: 'DeskState' }).click()
     await expect(graphNode(page, 'state.desk.session')).toBeVisible()
+    await expect(graphNode(page, `state.desk.${b.split('.').pop()}`)).toBeVisible()
+
+    // 保存并交给 AI（#20a）：有未保存改动时一步保存再复制指令；指令含草图全文与相对基线的变更
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    const hand = page.locator('.info-bar').getByRole('button', { name: /交给 AI$/ })
+    await expect(hand.locator('.txt')).toHaveText('保存并交给 AI')
+    await hand.click()
+    await expect(page.locator('.info-bar .hand .txt')).toHaveText('已复制指令')
+    const prompt = await page.evaluate<string>('navigator.clipboard.readText()')
+    expect(prompt).toContain('# 按草图扩展：设计「zz-e2e-sketch」')
+    expect(prompt).toContain('## 相对基线的变更（按血缘）')
+    await expect(page.locator('.info-bar .dirty')).toHaveCount(0)
   } finally {
     box.restore()
   }
@@ -242,18 +273,21 @@ test('X21 根草图：设计面板「改骨架」→ 层画成带 → 拖到另�
   }
 })
 
-test('E-1：从当前版本点「编辑骨架」打开持久草图即进入草图画布（层画成带）；退出回到进入前的版本；版本切换选「骨架 · 持久草图」后索引只有骨架的实体', async ({
+test('E-1、#20b：从当前版本点「编辑骨架」打开持久草图即进入草图画布（层画成带）；信息条「退出」回到进入前的版本；版本切换选「✎ 骨架」后索引只有骨架的实体', async ({
   page,
 }) => {
   await openDesk(page, '/p/h5p-arch-desk')
   await page.getByRole('button', { name: '编辑骨架' }).click()
   await expect(page).toHaveURL(/\/p\/h5p-arch-desk\/i\/skeleton/)
   await expect(page.locator('.sketch-canvas')).toBeVisible()
-  await expect(page.locator('.edit-bar .title')).toContainText('编辑草图：骨架')
+  await expect(page.locator('.info-bar .name')).toHaveText('骨架')
+  await expect(saveButton(page)).toBeVisible()
   await expect(page.locator('.sk-band')).toHaveCount(4)
-  await page.locator('.edit-bar').getByRole('button', { name: '退出' }).click()
+  // 退出：没有改动，直接回到进入草图之前的版本（当前版本）
+  await page.locator('.info-bar').getByRole('button', { name: '退出', exact: true }).click()
   await expect(page).not.toHaveURL(/\/i\/skeleton/)
   await expect(page.locator('.sketch-canvas')).toHaveCount(0)
+  await expect(page.locator('.info-bar')).toHaveCount(0)
 
   // 当前视图的模型索引里有没有这个模块（加载中为 null）
   const has = (id: string) =>
@@ -263,8 +297,89 @@ test('E-1：从当前版本点「编辑骨架」打开持久草图即进入草�
     )
   await expect.poll(() => has('state.desk.edit')).toBe(true)
   await page.locator('select[aria-label="切换版本"]').selectOption('i:skeleton')
-  await expect(page.locator('.intent-bar')).toContainText('持久草图')
+  await expect(page.locator('.info-bar .kind')).toHaveText('草图')
+  await expect(page.locator('.info-bar .chip')).toContainText('持久')
   await expect.poll(() => has('state.desk.edit')).toBe(false)
   await expect.poll(() => has('state.desk')).toBe(true)
   await expect(page.locator('.sk-band')).toHaveCount(4)
+})
+
+const BAR_SKETCH = `sketch:
+  id: zz-e2e-bar
+  mount: state.desk
+  lifetime: until-implemented
+  modules:
+    - { id: state.desk.alpha, name: Alpha }
+    - { id: state.desk.beta, name: Beta }
+  relations:
+    - { id: rel.zz-alpha-beta, from: state.desk.alpha, to: state.desk.beta, type: calls }
+`
+
+test('F-60–F-62、#15、#20b：草图的信息条只出现一次名称、唯一一条面包屑；对比按钮六类计数、弹层切口径（图上标出跟随）、没有基线提交时提示、Esc 关闭；有改动时退出弹三选，取消留下、放弃后回到进入草图之前的版本', async ({
+  page,
+}) => {
+  const box = sandbox('zz-e2e-bar')
+  try {
+    fs.mkdirSync(path.join(box.dir, 'sketches'), { recursive: true })
+    fs.writeFileSync(path.join(box.dir, 'design.yaml'), 'design:\n  name: E2E 信息条\n  status: draft\n')
+    fs.writeFileSync(path.join(box.dir, 'sketches/state.desk.yaml'), BAR_SKETCH)
+    await openDesk(page, '/p/h5p-arch-desk')
+    await page.locator('select[aria-label="切换版本"]').selectOption('zz-e2e-bar/sketch')
+    const bar = page.locator('.info-bar')
+    await expect(page.locator('.sketch-canvas')).toBeVisible()
+    await expect(saveButton(page)).toBeVisible()
+
+    // 身份区：kind + 名称（只这一次）+ 状态 + 唯一一条面包屑；不再有「编辑草图：」「尺子」「校验」「放弃」「编辑」
+    await expect(bar.locator('.kind')).toHaveText('草图')
+    expect((await bar.innerText()).split('E2E 信息条').length - 1).toBe(1)
+    await expect(bar).toContainText('起草中')
+    await expect(bar.locator('.mount')).toContainText(/挂在：.*视图状态层 › DeskState/)
+    await expect(bar.locator('.mount [data-parent="1"]')).toHaveCount(1)
+    await expect(page.locator('.sk-crumbs')).toHaveCount(0)
+    for (const gone of ['编辑草图：', '尺子', '删除项', '校验', '放弃']) await expect(bar).not.toContainText(gone)
+    await expect(bar.getByRole('button', { name: '编辑', exact: true })).toHaveCount(0)
+
+    // 改一处：编辑中 ●，「交给 AI」变成「保存并交给 AI」
+    await graphNode(page, 'state.desk.beta').locator('.name').click()
+    const name = page.locator('[data-testid="sketch-module-form"] [name="module-name"]')
+    await name.fill('Beta 改')
+    await name.press('Enter')
+    await expect(bar.locator('.dirty')).toHaveText('编辑中 ●')
+    await expect(bar.getByRole('button', { name: '保存并交给 AI' })).toBeVisible()
+
+    // 对比：一个按钮、六类计数；弹层里切口径，没有基线提交时提示退化；全设计清单按血缘分组
+    const cmp = bar.locator('.cmp-btn')
+    await expect(cmp).toContainText('对比 相对基线')
+    for (const t of ['新增', '修改', '合并', '拆分', '移动', '删除']) await expect(cmp.locator(`b[title="${t}"]`)).toHaveCount(1)
+    await cmp.click()
+    const pop = page.getByRole('dialog', { name: '对比设置' })
+    for (const t of ['新增', '修改', '合并', '拆分', '移动', '删除']) await expect(pop.locator('.counts')).toContainText(t)
+    await expect(pop.locator('[data-testid="baseline-fallback"]')).toContainText('相对基线 = 相对当前版本')
+    await expect(pop.locator('[data-testid="change-groups"]')).toBeVisible()
+    await pop.getByLabel('相对当前版本').check()
+    await expect(cmp).toContainText('对比 相对当前版本')
+    expect(await page.evaluate(() => (globalThis as unknown as { __desk: { edit: { compareMode: { value: string } } } }).__desk.edit.compareMode.value)).toBe(
+      'current',
+    )
+    await page.keyboard.press('Escape')
+    await expect(pop).toHaveCount(0)
+
+    // 说明：全设计变更清单（按血缘分组）的弹层
+    await bar.getByRole('button', { name: '说明', exact: true }).click()
+    await expect(page.getByRole('dialog', { name: '变更清单' }).locator('[data-testid="change-groups"]')).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    // 退出：有改动时三选；取消留在草图，放弃后回到进入草图之前的版本
+    await bar.getByRole('button', { name: '退出', exact: true }).click()
+    const ask = page.getByRole('dialog', { name: /有未保存的改动/ })
+    await expect(ask.getByRole('button')).toHaveText(['取消', '放弃', '保存'])
+    await ask.getByRole('button', { name: '取消' }).click()
+    await expect(bar.locator('.dirty')).toBeVisible()
+    await bar.getByRole('button', { name: '退出', exact: true }).click()
+    await ask.getByRole('button', { name: '放弃' }).click()
+    await expect(page).not.toHaveURL(/zz-e2e-bar/)
+    expect(fs.readFileSync(path.join(box.dir, 'sketches/state.desk.yaml'), 'utf8')).not.toContain('Beta 改')
+  } finally {
+    box.restore()
+  }
 })

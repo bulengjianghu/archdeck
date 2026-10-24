@@ -5,9 +5,9 @@
  * 没有选中：非根草图为父模块（名称与职责只读、原则可编辑），根草图为设计概览（各张草图、全设计计数）；最后是草图元信息。
  */
 import { computed, ref } from 'vue'
-import { ROOT_MOUNT, type ChangeKind } from '@/model'
+import { ROOT_MOUNT } from '@/model'
 import { useDesk } from '@/state/inject'
-import { CHANGE_BADGES } from './labels'
+import { CHANGE_BADGES, sixCounts } from './labels'
 import { requestSketch } from './actions'
 import ChecksSection from './panel/ChecksSection.vue'
 import ParentSection from './panel/ParentSection.vue'
@@ -30,16 +30,7 @@ const root = computed(() => e.mount.value === ROOT_MOUNT)
 const note = ref('')
 const onNote = (t: string) => (note.value = t)
 
-/** 设计概览：全设计六类计数（改 ID 并入修改，T1 裁决 2） */
-const SIX: { label: string; kinds: ChangeKind[] }[] = [
-  { label: '新增', kinds: ['added'] },
-  { label: '修改', kinds: ['changed', 'renamed'] },
-  { label: '合并', kinds: ['merged'] },
-  { label: '拆分', kinds: ['split'] },
-  { label: '移动', kinds: ['moved'] },
-  { label: '删除', kinds: ['removed'] },
-]
-const countsOf = (c: Record<ChangeKind, number> | undefined) => SIX.map(x => ({ label: x.label, n: x.kinds.reduce((a, k) => a + (c?.[k] ?? 0), 0) }))
+const countsOf = sixCounts
 const designName = computed(() => desk.versions.design.value?.name ?? e.session.value?.id ?? '')
 </script>
 

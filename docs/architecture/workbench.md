@@ -152,7 +152,7 @@ type PaneLayout =
 | 应用外壳与路由 | `main.ts`、`App.vue`、`styles.css` |
 | 项目列表 | `ProjectList.vue` |
 | 项目视图 · 副栏 | `DeskView.vue`；分屏容器与副栏 `split/**`；舞台显示 `stage/useStageDisplay.ts` |
-| 版本切换与设计信息条 | `VersionSwitcher.vue`、`DesignBar.vue`、`CommitBar.vue`（提交版本，E5、E6） |
+| 版本切换与设计信息条 | `VersionSwitcher.vue`；信息条 `infobar/InfoBar.vue`（身份区，提交版本、设计轮次、草图共用，F-60）、`infobar/CompareZone.vue`（对比按钮与弹层，F-62） |
 | 视角切换 · 场景列表 · 回放控制条 | `PerspectiveSwitch.vue`、`ScenarioList.vue`、`PlayerBar.vue`、`RouteBar.vue`、`BranchChooser.vue` |
 | 导航树 · 问题页签 | `tree/**`（NavTree · ModuleTree · FileTree · StepTree · IssueList） |
 | 源代码预览 | `source/**`（SourceView · httpSource） |
@@ -162,9 +162,9 @@ type PaneLayout =
 | 导航 | `Breadcrumb.vue`、`Toolbar.vue` |
 | 呈现共用件 | `shared/**`：`labels.ts`（参与者类别、设计状态、变更字段的显示名；呈现层对模型层只依赖契约，U10）、`highlight.ts`（Shiki 封装，签名与源代码预览共用）、`preview.ts`（「在副栏预览」的注入键，项目视图提供、面板取用）、`navTab.ts`（导航树页签的注入键，项目视图提供，问题角标切页签用）；只当叶子，不依赖其他呈现子系统（Y4） |
 
-## 12. 草图画布（ADR-0025，待实现）
+## 12. 草图画布（ADR-0025）
 
-> 状态：待实现。现有实现是叠在分层总览上的编辑态（ADR-0024：信息条「编辑」、分层总览上的插入条与拖动移动、编辑表单，组件 `edit/canvas/**`、`edit/panel/**`、`edit/EditBar.vue`），新画布实现后整体移除。
+> 状态：已实现（子树间关系的浅色只读聚合线后续）。二期叠在分层总览上的编辑态（ADR-0024：`edit/canvas/**`、`edit/panel/**`、`edit/EditBar.vue`）已移除。
 
 草图是思考的介质：一张草图挂在一个模块下、只画一个层次（X9）。打开草图即进入**草图画布**——独立于模型画布，不复用 `canvasScene` 与 elk 布局，模型画布上没有编辑态（X7）。画布与面板只发编辑操作；位置是草图自己的 `layout`，只在初始与「重新排列」时自动布局（X15）。
 
@@ -177,9 +177,9 @@ type PaneLayout =
 | 导航树 | 「模块」页签只列当前张的模块与引用节点，与画布选中同步，双击下钻 | SK-15 |
 | 「显示」面板 | 不出现（草图画布不叠加代码事实与演化） | — |
 
-| 模块 | 组件（待实现） |
+| 模块 | 组件 |
 |---|---|
 | 草图画布 `present.sketch` | `sketch/**`：SketchCanvas（Vue Flow 自由模式）· SketchNode · RefNode · StraightEdge · SketchToolbar · SketchMenu · NameIdDialog（新建 / 合并 / 拆分共用）· useSketchDrag（摆位置、降级、升级、移入的落点）· useSketchConnect · useSketchKeys |
 | 草图面板 `present.panel.sketch` | `sketch/SketchPanel.vue` 与 `sketch/panel/**`：ChecksSection（两级校验、待重连、本张核验）· ParentSection · ModuleForm · LayerForm · RelationForm · ReferenceSection · MetaSection；合并 / 拆分 / 删除经 `sketch/actions.ts` 请求画布的对话框 |
 | 设计面板的草图列表 `present.panel.design` | `panel/DesignSketches.vue`：各张草图（挂载点、模块数、推出 / 脏标记），点击切张；「改骨架」 |
-| 信息条（三区） | `DesignBar.vue` 拆为身份 / 动作 / 对比三区；`CompareButton.vue`（对比弹层）；新建设计对话框带挂载点 |
+| 信息条（三区） `present.version` · `present.version.edit` | `infobar/InfoBar.vue`（身份区与面包屑，父级带 `data-parent` 作升级落点）· `infobar/ActionZone.vue`（动作区，按模式，F-61）· `infobar/CompareZone.vue`（对比按钮与弹层，F-62）· `infobar/ChangeGroups.vue`（全设计变更清单按血缘分组，F-53）；`edit/NewDesignDialog.vue`（挂载点）、`edit/leave.ts`（退出回到进入前的版本） |
