@@ -10,11 +10,9 @@ import {
   gateIssues as gateOf,
   governanceReport,
   levelFacts,
-  portTriad,
   summarizeLedger,
   type Confirmation,
   type GovernanceReport,
-  type PortTriad,
   type Issue,
   type LedgerSummary,
   type LevelCycle,
@@ -112,10 +110,7 @@ export function createFacts({ state, index, view, files, sync, design }: FactsIn
     return c ? { ...c, deps: c.deps.map(k => report.value!.moduleDeps.get(k)!).filter(Boolean) } : null
   }
 
-  /** K11：端口三角；没有代码事实时不带证实状态（设计版本也有） */
-  const portTriadOf = (id: string): PortTriad | null => (index.value ? portTriad(index.value, report.value, id) : null)
-
-  return { status, error, report, level, gateIssues, ledger, entryOf, selectedDep, selectedCycle, moduleDetail, relationFact, portTriadOf }
+  return { status, error, report, level, gateIssues, ledger, entryOf, selectedDep, selectedCycle, moduleDetail, relationFact }
 }
 
 export type FactsDerivations = ReturnType<typeof createFacts>

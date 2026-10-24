@@ -4,6 +4,7 @@
  * 只讲概念，线型、颜色等具体图例在画布右下角的「显示」面板。Esc 或单击遮罩关闭。
  */
 import { onBeforeUnmount, onMounted } from 'vue'
+import { RELATION_TYPE_LABELS, THREE_QUESTIONS } from './shared/labels'
 
 const emit = defineEmits<{ close: [] }>()
 const onKey = (e: KeyboardEvent) => {
@@ -41,6 +42,24 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
         <div>
           <h3>结构</h3>
           <p>方框是模块、带是层、有向线是关系（颜色表类型，×N 是聚合了几条）；一次只看一层，双击下钻，带里的「+N」单击临时展开其余模块。</p>
+        </div>
+      </div>
+
+      <div class="group" aria-label="读一条线：三问四修饰">
+        <svg viewBox="0 0 120 64" aria-hidden="true">
+          <path d="M10 18 L98 18" class="edge query" marker-end="url(#g-arrow)" />
+          <path d="M10 40 L98 40" class="edge" marker-end="url(#g-arrow)" />
+          <path d="M94 33 A7 7 0 0 1 94 47" class="socket" />
+        </svg>
+        <div>
+          <h3>读一条线：三问四修饰</h3>
+          <ol class="questions">
+            <li v-for="(x, i) in THREE_QUESTIONS" :key="i">{{ x.q }}{{ x.answers.map(a => `${a.a} → ${RELATION_TYPE_LABELS[a.type]}`).join('；') }}</li>
+          </ol>
+          <p>
+            再读修饰：经什么连（直接 / 端口——目标端的插座记号 / 总线 /
+            通道）、异步（空心箭头）、拉取。查询画得淡，委托实色；端口是方框进边一侧的小记号，单击看实现者与使用者。
+          </p>
         </div>
       </div>
 
@@ -123,6 +142,24 @@ h2 {
   font-size: 18px;
 }
 
+.questions {
+  margin: 0 0 4px;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.socket {
+  fill: none;
+  stroke: var(--rel-commands, var(--accent));
+  stroke-width: 1.5;
+}
+
+.edge.query {
+  stroke: var(--rel-queries);
+  opacity: 0.6;
+}
+
 .lead {
   margin: 6px 0 12px;
   font-size: 13px;
@@ -167,7 +204,7 @@ svg {
 
 .edge {
   fill: none;
-  stroke: var(--rel-calls, var(--accent));
+  stroke: var(--rel-commands, var(--accent));
   stroke-width: 1.5;
 }
 
@@ -197,7 +234,7 @@ svg {
 }
 
 .head {
-  fill: var(--rel-calls, var(--accent));
+  fill: var(--rel-commands, var(--accent));
 }
 
 .life {

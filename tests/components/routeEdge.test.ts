@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** 关系边的视觉通道（L10、K9、P15）：线型只表事实状态、箭头表同步 / 异步 / 实现、线宽按条数三档且编译期更细、选中为窄晕不改线宽 */
+/** 关系边的视觉通道（L10、L12、K9、P15）：四类各一色相（查询淡）、线型只表事实状态、箭头表同步 / 异步、插座表经端口、线宽只按条数三档、选中为窄晕不改线宽 */
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import RouteEdge from '../../src/components/edges/RouteEdge.vue'
@@ -19,7 +19,6 @@ const base: RouteEdgeData = {
   factState: 'confirmed',
   arrow: 'closed',
   weight: 1,
-  compile: false,
   selected: false,
   dim: false,
 }
@@ -56,18 +55,41 @@ describe('RouteEdge', () => {
     expect(s).toContain('stroke-dasharray: 6 4')
   })
 
-  it('箭头：同步实心、异步空心、implements 空心三角', () => {
+  it('箭头：同步实心、异步空心（没有空心三角）', () => {
     expect(render({}).marker.attributes('fill')).toContain('--rel-calls')
     expect(render({ arrow: 'open' }).marker.attributes('fill')).toBe('none')
-    const tri = render({ arrow: 'triangle', edge: { ...base.edge, type: 'implements' } }).marker
-    expect(tri.attributes('fill')).toBe('var(--surface)')
-    expect(tri.attributes('stroke')).toBe('var(--rel-implements)')
+    expect(render({}).w.findAll('marker path').length).toBe(1)
   })
 
-  it('线宽按条数三档、编译期更细；选中与走过不改线宽，选中加窄晕', () => {
+  it('L10：四类各一色相——查询低饱和 + 半透明、委托实色；未分类中性灰；查询不改线宽（只「淡」不「细」）', () => {
+    const of = (type: RouteEdgeData['edge']['type']) => render({ edge: { ...base.edge, type } }).style
+    expect(of('queries')).toContain('var(--rel-queries)')
+    expect(of('queries')).toContain('opacity: 0.6')
+    expect(of('queries')).toContain('stroke-width: 1.5')
+    expect(of('commands')).toContain('var(--rel-commands)')
+    expect(of('commands')).toContain('opacity: 1')
+    expect(of('notifies')).toContain('var(--rel-notifies)')
+    expect(of('streams')).toContain('var(--rel-streams)')
+    expect(of('calls')).toContain('var(--rel-calls)')
+    // 聚焦变淡照乘
+    expect(render({ dim: true, edge: { ...base.edge, type: 'queries' } }).style).toMatch(/opacity: 0\.07/)
+  })
+
+  it('L12：经端口的边在目标端加插座记号（与箭头叠放、不替换箭头），不改色相与线型', () => {
+    const plain = render({}).w
+    expect(plain.find('.edge-socket').exists()).toBe(false)
+    const p = render({ port: true })
+    expect(p.w.find('.edge-socket').exists()).toBe(true)
+    expect(p.w.find('marker.socket-marker').exists()).toBe(true)
+    // 箭头仍在主线上；插座沿完整走线的终点（箭头尖端）
+    expect(p.w.find('path.vue-flow__edge-path').attributes('marker-end')).toContain('arrow-')
+    expect(p.w.find('.edge-socket').attributes('d')!.endsWith('L0,100')).toBe(true)
+    expect(p.style).toBe(render({}).style)
+  })
+
+  it('线宽只按条数三档；选中与走过不改线宽，选中加窄晕', () => {
     const width = (d: Partial<RouteEdgeData>) => render(d).style.match(/stroke-width: ([\d.]+)/)![1]
     expect([1, 2, 3].map(weight => width({ weight: weight as 1 | 2 | 3 }))).toEqual(['1.5', '2.5', '3.5'])
-    expect(width({ weight: 3, compile: true })).toBe('2.5')
     expect(width({ selected: true })).toBe('1.5')
     expect(width({ play: 'walked' })).toBe('1.5')
     expect(render({ selected: true }).w.find('.edge-selected-glow').exists()).toBe(true)

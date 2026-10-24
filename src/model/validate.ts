@@ -20,7 +20,7 @@ import type {
   SourceLoc,
   Step,
 } from './types'
-import { LEGACY_VIAS, isCallLike, isUnclassified, parseVia, relationMode, type RelationVia } from './types'
+import { LEGACY_VIAS, MIGRATED_RELATION_TYPE, isCallLike, isUnclassified, parseVia, relationMode, type RelationVia } from './types'
 
 /** 问题消息里的类型名 */
 const TYPE_NAMES: Record<string, string> = { queries: '查询', commands: '委托', calls: '未分类关系', notifies: '通知', streams: '流' }
@@ -237,7 +237,8 @@ function checkRelations(input: ArchModel, c: Checked): RelationEntity[] {
     }
     if (!relationEndsValid(c, r)) continue
     // M17：implements 不再是关系类型，读作对应接口的实现者，不进关系索引
-    if (r.type === 'implements') {
+    // Loader 原样带过文件里的类型（load.ts currentType），这里仍可能读到 implements
+    if ((r.type as string) === MIGRATED_RELATION_TYPE) {
       relationIds.add(r.id)
       migrateImplements(c, r)
       continue

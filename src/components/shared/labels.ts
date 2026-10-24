@@ -1,15 +1,17 @@
 /** 界面文案：领域枚举的中文显示名。只是呈现关注点，不进模型层（模型层只给枚举与类型）。 */
-import type { ActorKind, DesignStatus, EvidenceLevel, RelationType } from '@/model'
+import type { ActorKind, DesignStatus, EvidenceLevel, RelationType, ViaKind } from '@/model'
 
-/** 关系类型（02 §1.1、ADR-0029）：图例、面板、边的类型标签共用；calls 为迁移期的未分类（M17），implements 已不是关系（只为迁移期编译保留） */
+/** 关系类型（02 §1.1、ADR-0029）：图例、面板、边的类型标签共用；calls 为迁移期的未分类（M17） */
 export const RELATION_TYPE_LABELS: Record<RelationType, string> = {
   queries: '查询',
   commands: '委托',
   notifies: '通知',
   streams: '流',
   calls: '未分类',
-  implements: '实现契约',
 }
+
+/** 草图连线时的短名（X23）：查 / 托 / 通知 / 流 */
+export const RELATION_TYPE_SHORT: Record<RelationType, string> = { queries: '查', commands: '托', notifies: '通知', streams: '流', calls: '待分类' }
 
 /** 每类关系一句话读法（三问四修饰）：箭头一律指控制流方向 */
 export const RELATION_TYPE_HINTS: Record<RelationType, string> = {
@@ -18,7 +20,31 @@ export const RELATION_TYPE_HINTS: Record<RelationType, string> = {
   notifies: '不要结果、一对多，一律异步，箭头指向被通知方',
   streams: '连续数据，箭头指向数据去向',
   calls: '未分类：按三问定为查询或委托（迁移期）',
-  implements: '实现对方声明的接口（已改为端口的实现者）',
+}
+
+/**
+ * 三问四修饰（ADR-0029 §3）：三个判断题定类型，第四步读修饰。图例（RelationLegend）与「怎么读这张图」（GuideDialog）共用。
+ * answer 为答案指向的类型。
+ */
+export const THREE_QUESTIONS: readonly { q: string; answers: readonly { a: string; type: RelationType }[] }[] = [
+  { q: '被调方拥有后果吗？', answers: [{ a: '否', type: 'queries' }] },
+  {
+    q: '是：发起方知道接收方吗？',
+    answers: [
+      { a: '知道', type: 'commands' },
+      { a: '不知道、一对多', type: 'notifies' },
+    ],
+  },
+  { q: '传的是连续数据吗？', answers: [{ a: '是', type: 'streams' }] },
+]
+
+/** 机制（via 的四形态，ADR-0029 §2）：不写为直接 */
+export const VIA_KIND_LABELS: Record<'direct' | ViaKind, string> = { direct: '直接', port: '端口', bus: '总线', channel: '通道' }
+export const VIA_KIND_HINTS: Record<'direct' | ViaKind, string> = {
+  direct: '发起方导入接收方',
+  port: '发起方只知道端口，接收方是它的实现者（可替换）',
+  bus: '两端只认识事件总线',
+  channel: '跨进程、框架注入、路由、回调等，静态导入证实不了',
 }
 
 /** 步骤的证据等级（S16）：步骤面板、场景面板共用 */

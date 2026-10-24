@@ -65,8 +65,8 @@ export interface NodeData {
 /** L10：线型表示的事实状态——已证实或没有代码事实（实线）/ 未证实或部分证实（虚线）/ 代码有描述无（点线） */
 export type FactState = 'confirmed' | 'unconfirmed' | 'undescribed'
 
-/** L10：箭头——同步实心、异步空心、implements 空心三角 */
-export type EdgeArrow = 'closed' | 'open' | 'triangle'
+/** L10：箭头——同步实心、异步空心 */
+export type EdgeArrow = 'closed' | 'open'
 
 export interface RouteEdgeData {
   route: EdgeRoute
@@ -81,8 +81,8 @@ export interface RouteEdgeData {
   arrow: EdgeArrow
   /** 线宽档位：聚合条数 1 / 2–4 / ≥5 */
   weight: 1 | 2 | 3
-  /** 编译期关系（implements，ADR-0026）：低饱和、更细 */
-  compile: boolean
+  /** L12：边上有一条经端口（via: port:）的关系——目标端画插座记号 */
+  port?: boolean
   /** 选中：强调色窄晕，不改线宽 */
   selected: boolean
   dim: boolean

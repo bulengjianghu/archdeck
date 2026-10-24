@@ -4,7 +4,7 @@ import { diffModels, loadModel, planScenario, projectLevel, projectScenario, sta
 import { layoutView } from '../../src/layout/layout'
 import { stageOverlay } from '../../src/layout/stage'
 import { EDGE_Z, canvasScene, routeMidpoint, type CanvasInput } from '../../src/layout/canvas'
-import { scenarioFiles } from '../fixtures/sample'
+import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
 const { index } = loadModel(scenarioFiles())
 
@@ -125,19 +125,20 @@ describe('canvasScene', () => {
     const upper = edge(s, 'upper:boundary:app|infra.framework.pipeline')!
     expect(upper.data).toMatchObject({ temp: 'upper', label: '经由上层', play: 'walked', selected: false })
     expect(upper.data.edge).toMatchObject({ type: 'streams', relationIds: ['r9'] })
-    expect(upper.data).toMatchObject({ arrow: 'closed', weight: 1, compile: false, factState: 'confirmed' })
+    expect(upper.data).toMatchObject({ arrow: 'closed', weight: 1, factState: 'confirmed' })
+    expect(upper.data.port).toBeUndefined()
     expect(edge(s, 'unmodeled:infra.framework.pipeline|boundary:app')!.data).toMatchObject({ temp: 'unmodeled', label: '未建模', play: 'current' })
     expect(edge(canvasScene({ ...input, selection: { kind: 'relation', id: 'r9' } }), upper.id)!.data.selected).toBe(true)
   })
 
-  it('L10、K9：线型只表事实状态、箭头表同步 / 异步 / 实现、线宽档按条数、编译期降权；只标异常；选中不改线宽', async () => {
+  it('L10、K9：线型只表事实状态、箭头表同步 / 异步、线宽档按条数；只标异常；选中不改线宽', async () => {
     const input = await structure('infra')
     const plain = canvasScene(input)
     const calls = edge(plain, 'infra.player->infra.framework:calls')!.data
-    expect(calls).toMatchObject({ label: '', factState: 'confirmed', arrow: 'closed', weight: 1, compile: false })
+    expect(calls).toMatchObject({ label: '', factState: 'confirmed', arrow: 'closed', weight: 1 })
     expect(edge(plain, 'infra.framework->infra.player:notifies')!.data.arrow).toBe('open')
-    // ADR-0029 起关系全是交互：没有编译期降权（implements 已降为端口的实现者事实）
-    expect(edge(canvasScene({ ...input, hover: 'infra.player' }), 'infra.player->boundary:app:queries')!.data.compile).toBe(false)
+    // ADR-0029 起关系全是交互：没有编译期降权，也没有 implements 的空心三角
+    expect(plain.edges.every(e => e.data.arrow === 'closed' || e.data.arrow === 'open')).toBe(true)
     const selected = edge(
       canvasScene({ ...input, selection: { kind: 'edge', id: 'infra.player->infra.framework:calls' } }),
       'infra.player->infra.framework:calls',
@@ -252,5 +253,22 @@ describe('canvasScene', () => {
     const s = canvasScene({ ...input, index: changed, positioned: await layoutView(view), diff: diffModels(base, changed) })
     expect(node(s, 'infra.extra')!.data.change).toBe('added')
     expect(node(s, 'infra.mus')!.data.change).toBeUndefined()
+  })
+
+  it('L12：经端口（via: port:<P>）的关系所在的视图边带插座；聚合边里有一条经端口即画；其余机制不画', async () => {
+    const { index: idx } = loadModel(
+      sampleFiles({
+        'z.yaml':
+          "relations:\n  - { id: rp, from: infra.player, to: infra.framework, type: commands, via: 'port:if.sm' }\n  - { id: rq, from: infra.player, to: infra.framework, type: commands }\n  - { id: rc, from: infra.mus, to: infra.framework, type: commands, via: 'channel:http' }\n",
+      }),
+    )
+    const view = projectLevel(idx, 'infra', { showBoundaries: true })
+    const s = canvasScene({ ...(await structure('infra')), index: idx, positioned: await layoutView(view) })
+    const agg = edge(s, 'infra.player->infra.framework:commands')!
+    expect(agg.data.edge.relationIds.sort()).toEqual(['rp', 'rq'])
+    expect(agg.data.port).toBe(true)
+    // 插座不改色相与线型（一个通道一个维度）
+    expect(agg.data.edge.type).toBe('commands')
+    expect(edge(s, 'infra.mus->infra.framework:commands')!.data.port).toBeUndefined()
   })
 })

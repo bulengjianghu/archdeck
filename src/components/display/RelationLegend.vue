@@ -1,31 +1,30 @@
 <script setup lang="ts">
 /**
- * 「显示」面板 · 关系类型（颜色通道，ADR-0018 / ADR-0017 第三轮）：
- * - 类型列表是主体：按运行时 / 编译期两段，行既是图例又是筛选（结构视角点击筛选，L8）；示意带该类关系在画布上的箭头
- *   （箭头按同步 / 异步取，只有 implements 固定为空心三角，arrowOf），所以类型行一律画实心、implements 画三角。
- * - 「线的读法」是修饰：对任意类型都适用的箭头与粗细，放在浅底卡片里、中性色示意、不可点击。
- * 每行在类型名后给一句读法（ADR-0022、ADR-0026）：命令 = 要结果（可同步或异步）；通知 = 不要结果、一对多、箭头指向被通知方；流 = 连续数据、箭头指向数据去向。
+ * 「显示」面板 · 关系（颜色通道，ADR-0018 / ADR-0017 第三轮），按「三问四修饰」组织（ADR-0029 §3）：
+ * - 三问：三个判断题定类型，每个答案落到一类；类型行既是图例又是筛选（结构视角点击筛选，L8），示意按画布同一套样式（查询淡、委托实色）。
+ * - 迁移期的未分类（calls，M17）单列一行，中性灰。
+ * - 「四修饰」是读完类型再读的修饰：机制（直接 / 端口——插座记号 L12 / 总线 / 通道——面板标出）、异步（空心箭头）、拉取（面板标出），
+ *   与粗细（聚合条数）一起放在浅底卡片里、中性色示意、不可点击。
  * 线型（事实状态）不在这里讲，只在「代码事实」组。
  */
 import { computed } from 'vue'
-import { RELATION_TYPES, RUNTIME_RELATION_TYPES, type RelationType } from '@/model'
+import { RELATION_TYPES, isUnclassified, type RelationType } from '@/model'
 import { useDesk } from '@/state/inject'
 import DisplayGroup from './DisplayGroup.vue'
 import LineSwatch from './LineSwatch.vue'
 import { TYPE_HINT, TYPE_LABEL, TYPE_ORDER } from './labels'
+import { THREE_QUESTIONS, VIA_KIND_HINTS, VIA_KIND_LABELS } from '../shared/labels'
 
 defineProps<{ run: boolean; open: boolean }>()
 const emit = defineEmits<{ toggle: [] }>()
 const desk = useDesk()
 
 const NEUTRAL = 'var(--text-2)'
-const isRuntime = (t: RelationType) => RUNTIME_RELATION_TYPES.includes(t)
-const SECTIONS = [
-  { title: '运行时', types: TYPE_ORDER.filter(isRuntime) },
-  { title: '编译期', types: TYPE_ORDER.filter(t => !isRuntime(t)) },
-]
-const lookOf = (t: RelationType, off = false) => ({ type: t, compile: !isRuntime(t), weight: 2 as const, muted: off })
-const arrowOf = (t: RelationType) => (t === 'implements' ? 'triangle' : 'closed')
+const CLASSIFIED = TYPE_ORDER.filter(t => !isUnclassified(t))
+const UNCLASSIFIED = TYPE_ORDER.filter(isUnclassified)
+const lookOf = (t: RelationType, off = false) => ({ type: t, weight: 2 as const, muted: off })
+/** 示意的箭头：通知一律异步（空心），其余按同步画实心 */
+const arrowOf = (t: RelationType) => (t === 'notifies' ? 'open' : 'closed')
 const shown = (t: RelationType) => desk.toggles.relationTypes.includes(t)
 const hiddenTypes = computed(() => RELATION_TYPES.length - desk.toggles.relationTypes.length)
 function toggleType(t: RelationType) {
@@ -36,17 +35,25 @@ const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] 
 </script>
 
 <template>
-  <DisplayGroup title="关系类型 · 颜色" :open="open" @toggle="emit('toggle')">
+  <DisplayGroup title="关系 · 三问四修饰" :open="open" @toggle="emit('toggle')">
     <template v-if="!run && open" #actions>
       <button v-if="hiddenTypes" class="link" @click="showAllTypes">全部显示</button>
       <span v-else class="aside-note">点击筛选</span>
     </template>
+    <ol class="questions" aria-label="三问定类型">
+      <li v-for="(x, i) in THREE_QUESTIONS" :key="i">
+        <span class="q">{{ x.q }}</span>
+        <span v-for="(a, k) in x.answers" :key="a.type" class="answer"
+          >{{ k ? '；' : '' }}{{ a.a }} → <b :class="`rel-${a.type}`">{{ TYPE_LABEL[a.type] }}</b></span
+        >
+      </li>
+    </ol>
     <div class="type-list" :role="run ? undefined : 'group'" :aria-label="run ? undefined : '关系类型筛选'">
-      <template v-for="sec in SECTIONS" :key="sec.title">
-        <div class="section">{{ sec.title }}</div>
+      <template v-for="sec in [CLASSIFIED, UNCLASSIFIED]" :key="sec.join()">
+        <div v-if="sec === UNCLASSIFIED" class="section">迁移期</div>
         <template v-if="!run">
           <button
-            v-for="t in sec.types"
+            v-for="t in sec"
             :key="t"
             class="item type"
             :class="{ off: !shown(t) }"
@@ -61,7 +68,7 @@ const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] 
           </button>
         </template>
         <template v-else>
-          <div v-for="t in sec.types" :key="t" class="item">
+          <div v-for="t in sec" :key="t" class="item">
             <span class="sw"><LineSwatch :look="lookOf(t)" :arrow="arrowOf(t)" :width="36" /></span>
             <span
               >{{ TYPE_LABEL[t] }}<span class="hint"> = {{ TYPE_HINT[t] }}</span></span
@@ -71,13 +78,21 @@ const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] 
       </template>
     </div>
 
-    <div class="reading" aria-label="线的读法">
-      <div class="reading-title">线的读法 · 适用于任意类型</div>
+    <div class="reading" aria-label="四修饰">
+      <div class="reading-title">四修饰 · 读完类型再读，适用于任意类型</div>
       <div class="reading-row">
-        <span class="dim">箭头</span>
+        <span class="dim">机制</span>
+        <span class="pair" :title="VIA_KIND_HINTS.direct"><LineSwatch :color="NEUTRAL" :width="22" arrow="closed" />{{ VIA_KIND_LABELS.direct }}</span>
+        <span class="pair" :title="VIA_KIND_HINTS.port"><LineSwatch :color="NEUTRAL" :width="26" arrow="closed" socket />{{ VIA_KIND_LABELS.port }}</span>
+        <span class="pair muted-text" :title="`${VIA_KIND_HINTS.bus}；${VIA_KIND_HINTS.channel}`"
+          >{{ VIA_KIND_LABELS.bus }} · {{ VIA_KIND_LABELS.channel }}：见面板</span
+        >
+      </div>
+      <div class="reading-row">
+        <span class="dim">同步</span>
         <span class="pair"><LineSwatch :color="NEUTRAL" :width="18" arrow="closed" />同步</span>
         <span class="pair"><LineSwatch :color="NEUTRAL" :width="18" arrow="open" />异步</span>
-        <span class="pair"><LineSwatch :color="NEUTRAL" :width="18" arrow="triangle" />实现</span>
+        <span class="pair muted-text" title="拉取型流（pull），箭头仍指数据去向">拉取：见面板</span>
       </div>
       <div class="reading-row">
         <span class="dim">粗细</span>
@@ -96,6 +111,30 @@ const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] 
 }
 
 .hint {
+  color: var(--text-3);
+}
+
+.questions {
+  margin: 0 0 4px;
+  padding-left: 16px;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.questions li {
+  line-height: 1.6;
+}
+
+.questions .q {
+  margin-right: 4px;
+}
+
+.questions b {
+  font-weight: 600;
+  color: var(--rel);
+}
+
+.muted-text {
   color: var(--text-3);
 }
 

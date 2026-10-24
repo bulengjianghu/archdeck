@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { VIA_LABELS, isCoreBetween, load, loadModel, parseVia, scenarioKind, sketchCheck, unclassifiedRelations, validate, viaLabel, type Issue } from '../../src/model'
+import { isCoreBetween, load, loadModel, parseVia, scenarioKind, sketchCheck, unclassifiedRelations, validate, viaLabel, type Issue } from '../../src/model'
 import { sampleFiles } from '../fixtures/sample'
 
 /** 只看错误与提醒：info（如未分类，M17）不计入 */
@@ -420,6 +420,6 @@ describe('第六轮：四类交互、via、端口实体、角色与场景类别�
       '端口（未指明）',
       '总线 MUs',
     ])
-    expect(VIA_LABELS['channel:hmr']).toBe('HMR 事件')
+    expect(viaLabel('channel:hmr')).toBe('HMR 事件')
   })
 })

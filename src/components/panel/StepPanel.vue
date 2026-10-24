@@ -6,7 +6,7 @@
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
-import { VIA_LABELS, moduleName } from '@/model'
+import { moduleName, viaLabel } from '@/model'
 import Section from './Section.vue'
 import Markdown from './Markdown.vue'
 import InterfaceItem from './InterfaceItem.vue'
@@ -56,7 +56,7 @@ const evNote = computed(() => {
     return e.name ? `导入名里没有接口名「${e.name}」，列出两端之间的依赖` : '步骤没有接口，列出两端之间的依赖'
   }
   if (e.reason === 'actor') return '一端是外部参与者'
-  if (e.reason === 'via') return `关系经 ${VIA_LABELS[e.via!]} 传递，静态导入证实不了`
+  if (e.reason === 'via') return `关系经 ${viaLabel(e.via!, idx.value)} 传递，静态导入证实不了`
   if (e.reason === 'target') return '一端是目标态模块，尚未落地'
   return e.host ? `两端在同一组文件里（${moduleName(idx.value, e.host)}）` : '两端在同一组文件里'
 })

@@ -2,7 +2,7 @@
  * 画布场景的边（ADR-0013）：关系边（本层视图边与分层总览的核心跨层边）、回放叠加的临时线（P11、P15）与分支预览、
  * 代码事实叠加线（K9）、时间耦合的波浪线（J5）。显隐、变淡、回放态、选中突出的灰化，以及视觉通道（L10：线型、箭头、线宽档、标签）都在这里定。
  */
-import { RUNTIME_RELATION_TYPES, type EdgeFact, type ModelDiff, type ModelIndex, type ViewEdge } from '@/model'
+import { parseVia, relationMode, type EdgeFact, type ModelDiff, type ModelIndex, type ViewEdge } from '@/model'
 import { edgeLabel, edgeRoute, edgeWeight, isBoundaryEdge, linkRoute, type Box, type EdgeRoute, type Point } from '../layout'
 import { isTemp, landingId } from '../stage'
 import type { SceneContext } from './context'
@@ -11,13 +11,17 @@ import type { CanvasEdge, EdgeArrow, FactState, RouteEdgeData } from './types'
 /** K9、L10：只标异常——未证实与部分证实画虚线并标 ?，已证实与没有事实的照常 */
 const factState = (fact: EdgeFact | undefined): FactState => (fact === 'unconfirmed' || fact === 'partial' ? 'unconfirmed' : 'confirmed')
 
-/** L10：implements 空心三角；同步（含同步与异步混合）实心；异步空心 */
-export const arrowOf = (e: ViewEdge): EdgeArrow => (e.type === 'implements' ? 'triangle' : e.mode === 'async' ? 'open' : 'closed')
+/** L10：同步（含同步与异步混合）实心；异步空心（通知一律异步，relationMode） */
+export const arrowOf = (e: ViewEdge): EdgeArrow => (e.mode === 'async' ? 'open' : 'closed')
 
-/** 临时线用的视图边外形；经由上层关系时取该关系的类型与同步 / 异步（P15） */
+/** L12：视图边（含聚合边、经由上层的临时线）里有任一条关系经端口（via: port:<P>，含迁移期的「端口未指明」）即画插座 */
+export const viaPort = (idx: ModelIndex | null, e: ViewEdge): boolean =>
+  !!idx && e.relationIds.some(id => parseVia(idx.relations.get(id)?.via)?.kind === 'port')
+
+/** 临时线用的视图边外形；经由上层关系时取该关系的类型与同步 / 异步（P15；通知一律异步） */
 function tempEdge(idx: ModelIndex | null, id: string, from: string, to: string, relationId?: string): ViewEdge {
   const r = relationId ? idx?.relations.get(relationId) : undefined
-  return { id, kind: 'direct', from, to, type: r?.type ?? 'calls', relationIds: relationId ? [relationId] : [], mode: r?.mode ?? 'sync' }
+  return { id, kind: 'direct', from, to, type: r?.type ?? 'calls', relationIds: relationId ? [relationId] : [], mode: r ? relationMode(r) : 'sync' }
 }
 
 /** 回放态：当前（带方向）、走过、预览、悬停 */
@@ -102,7 +106,7 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined,
       factState: state,
       arrow: arrowOf(e),
       weight: edgeWeight(e),
-      compile: !RUNTIME_RELATION_TYPES.includes(e.type),
+      ...(viaPort(ctx.input.index, e) ? { port: true } : {}),
       ...(fact ? { fact } : {}),
       ...(ctx.facts?.violatedEdges.has(e.id) ? { violated: true } : {}),
       selected,

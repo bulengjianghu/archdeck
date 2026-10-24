@@ -3,7 +3,7 @@
  */
 import type { LevelView, ViewEdge } from '@/model'
 import { SHELF, type Box, type EdgeRoute, type LayoutOptions, type PositionedView } from './geometry'
-import { compassOf, isDynamic, isOutsideEdge, parallelOffsets, placeOutside, portFor, shifted, slotOf, withSourceLane } from './routes'
+import { compassOf, isOutsideEdge, parallelOffsets, placeOutside, portFor, shifted, slotOf, withSourceLane } from './routes'
 import { detour, type PortAt } from './routing'
 
 export const BAND = {
@@ -207,13 +207,9 @@ function outsideRouter(view: LevelView, nodes: Map<string, Box>, bands: readonly
       const box = nodes.get(id)
       const n = byId.get(id)
       if (!box) return undefined
-      // L11 左动右静：同一类的边在同一半边里错开
-      const dyn = isDynamic(e)
-      const slot = slotOf(
-        group.filter(x => isDynamic(x) === dyn),
-        id,
-        e.id,
-      )
+      // L11：关系边一律在该侧的前半错开，后半留给端口记号（L13）
+      const dyn = true
+      const slot = slotOf(group, id, e.id)
       const c = n ? compassOf(n) : 'inner'
       if (c !== 'inner') return portFor(box, c, end, 'DOWN', slot, undefined, dyn)
       const i = bandOf.get(id)

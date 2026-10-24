@@ -2,7 +2,7 @@
 /** 关系面板：头部为方向与类型；「关系」一节按五个维度各一行（控制流、知识、语义、同步性、平面，ADR-0022）；其后接口、数据、代码事实 */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
-import { RUNTIME_RELATION_TYPES, VIA_LABELS, moduleName } from '@/model'
+import { RUNTIME_RELATION_TYPES, moduleName, parseVia, relationMode, viaLabel } from '@/model'
 import { RELATION_TYPE_HINTS, RELATION_TYPE_LABELS } from '../shared/labels'
 import Markdown from './Markdown.vue'
 import Section from './Section.vue'
@@ -26,8 +26,12 @@ const knowledge = computed(() => {
   const c = fact.value
   const from = name(x.from)
   const to = name(x.to)
-  if (x.via === 'port') return '经端口：两端只知道端口契约，由第三方接线'
-  if (x.via) return `不判定：经 ${VIA_LABELS[x.via]}`
+  const via = parseVia(x.via)
+  // K5b：经端口而证实——发起方依赖端口的定义模块，接收方是端口已证实的实现者
+  if (via?.kind === 'port' && c?.port)
+    return `经端口：${from} 只知道端口「${desk.index.value!.interfaces.get(via.target!)?.name ?? via.target}」，${to} 是它的实现者`
+  if (via?.kind === 'port' && !via.target) return '经端口（未指明）：两端只知道端口契约，由第三方接线'
+  if (x.via) return `不判定：经 ${viaLabel(x.via, desk.index.value!)}`
   if (!c) return '不判定：没有代码事实'
   if (c.host) return '不判定：概念拆分，同文件'
   if (c.status === 'skipped') return '不判定：端点是参与者或目标态'
@@ -42,6 +46,10 @@ const knowledge = computed(() => {
 const semantics = computed(
   () => `${RELATION_TYPE_LABELS[r.value.type]}${r.value.type === 'streams' && r.value.pull ? '（拉取型）' : ''}：${RELATION_TYPE_HINTS[r.value.type]}`,
 )
+/** L10、M13：同步性——通知一律异步，查询与委托按 mode */
+const mode = computed(() => (relationMode(r.value) === 'async' ? '异步' : '同步'))
+/** L12：经端口（插座记号）；其余机制只在面板标出 */
+const viaText = computed(() => (r.value.via ? viaLabel(r.value.via, desk.index.value!) : ''))
 const plane = computed(() => (!runtime.value ? '—（编译期）' : r.value.type === 'streams' ? '数据面' : '控制面'))
 const visibleHere = computed(() => desk.view.value?.edges.some(e => e.relationIds.includes(props.id)) ?? false)
 /** J7：两端有时间耦合时标「同提交 ×N」 */
@@ -59,8 +67,14 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
       <div class="badges">
         <code>{{ r.id }}</code>
         <span class="rel-chip" :class="`rel-${r.type}`">{{ RELATION_TYPE_LABELS[r.type] }}</span>
-        <span v-if="runtime" class="badge">{{ r.mode === 'async' ? '异步' : '同步' }}</span>
-        <span v-if="r.via" class="badge" title="经此传递，静态导入证实不了（K5b）">经 {{ VIA_LABELS[r.via] }}</span>
+        <span v-if="runtime" class="badge">{{ mode }}</span>
+        <span v-if="r.type === 'streams' && r.pull" class="badge">拉取</span>
+        <span
+          v-if="r.via"
+          class="badge via"
+          :title="r.via.startsWith('port:') ? '经端口：接收方是端口的实现者，可替换（L12）' : '经此传递，静态导入证实不了（K5b）'"
+          >经 {{ viaText }}</span
+        >
         <button v-if="couple" class="badge couple" title="两端是时间耦合：单击看共同的提交（J7）" @click="desk.select({ kind: 'couple', id: couple.id })">
           同提交 ×{{ couple.shared }}
         </button>
@@ -79,7 +93,7 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
         <dt>语义</dt>
         <dd>{{ semantics }}</dd>
         <dt>同步性</dt>
-        <dd>{{ runtime ? (r.mode === 'async' ? '异步' : '同步') : '—' }}</dd>
+        <dd>{{ runtime ? mode : '—' }}</dd>
         <dt>平面</dt>
         <dd>{{ plane }}</dd>
       </dl>

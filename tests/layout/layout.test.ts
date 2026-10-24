@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RUNTIME_RELATION_TYPES, loadModel, projectLevel } from '../../src/model'
+import { loadModel, projectLevel } from '../../src/model'
 import type { Box } from '../../src/layout/geometry'
 import {
   BAND,
@@ -23,6 +23,7 @@ import {
   toElkGraph,
   fromElkGraph,
   LABEL_SLOT,
+  RESERVED,
   spreadEnds,
   type EdgeRoute,
 } from '../../src/layout/layout'
@@ -283,7 +284,7 @@ describe('L10：标签、线宽档、平行边', () => {
 
   it('标签只标聚合条数：含多条关系为 ×N，其余为空，不写类型名', () => {
     expect(edgeLabel(ve('a', 'x', 'y', 1))).toBe('')
-    expect(edgeLabel(ve('a', 'x', 'y', 3, 'implements'))).toBe('×3')
+    expect(edgeLabel(ve('a', 'x', 'y', 3, 'queries'))).toBe('×3')
   })
 
   it('线宽三档：1 / 2–4 / ≥5', () => {
@@ -291,7 +292,7 @@ describe('L10：标签、线宽档、平行边', () => {
   })
 
   it('同一对节点（不论方向）的多条边对称错开，单条为 0', () => {
-    const o = parallelOffsets([ve('a', 'x', 'y', 1), ve('b', 'x', 'y', 1, 'implements'), ve('c', 'y', 'x', 1, 'notifies'), ve('d', 'x', 'z', 1)])
+    const o = parallelOffsets([ve('a', 'x', 'y', 1), ve('b', 'x', 'y', 1, 'queries'), ve('c', 'y', 'x', 1, 'notifies'), ve('d', 'x', 'z', 1)])
     expect([o.get('a'), o.get('b'), o.get('c'), o.get('d')]).toEqual([-PARALLEL_GAP, 0, PARALLEL_GAP, 0])
   })
 
@@ -302,11 +303,11 @@ describe('L10：标签、线宽档、平行边', () => {
     expect(pair.map(e => e.type).sort()).toEqual(['calls', 'queries'])
     const inner = {
       ...view,
-      edges: [ve('p:calls', 'infra.player', 'infra.framework', 1), ve('p:implements', 'infra.player', 'infra.framework', 2, 'implements')],
+      edges: [ve('p:calls', 'infra.player', 'infra.framework', 1), ve('p:queries', 'infra.player', 'infra.framework', 2, 'queries')],
     }
     expect(toElkGraph(inner).edges!.map(e => [e.id, e.labels![0].text])).toEqual([
       ['p:calls', ''],
-      ['p:implements', '×2'],
+      ['p:queries', '×2'],
     ])
   })
 })
@@ -353,7 +354,7 @@ describe('边标签与终点（L10）', () => {
         },
       ],
       [
-        'p:implements',
+        'p:queries',
         {
           points: [
             { x: 50, y: 0 },
@@ -365,7 +366,7 @@ describe('边标签与终点（L10）', () => {
       ],
     ])
     const ve = (id: string): ViewEdge => ({ id, kind: 'direct', from: 'a', to: 'b', type: 'calls', relationIds: [], mode: 'sync' })
-    spreadEnds([ve('p:calls'), ve('p:implements')], edges)
+    spreadEnds([ve('p:calls'), ve('p:queries')], edges)
     const ends = [...edges.values()].map(r => r.points.slice(-2))
     expect(ends.map(([, e]) => e.x)).toEqual([100 - PARALLEL_GAP / 2, 100 + PARALLEL_GAP / 2])
     for (const [p, e] of ends) expect(p.x).toBe(e.x)
@@ -402,44 +403,49 @@ describe('L11 端口方向', () => {
     expect([side(r, `${inner.id}#out`), side(r, `${inner.id}#in`)]).toEqual(['EAST', 'WEST'])
     expect(portSide('in', 'DOWN')).toBe('NORTH')
     for (const c of g.children!) expect(c.layoutOptions!['elk.portConstraints']).toBe('FIXED_ORDER')
-    // 内部边两端各一个端口；框外边在内部节点那一端只占位（不连线，L11 左动右静一起排序）
+    // 内部边两端各一个端口；框外边在内部节点那一端只占位（不连线，与内部边一起排序）；每个内部节点另有一个保留端口（L13）
     const ports = g.children!.flatMap(c => c.ports!.map(p => p.id))
     const innerIds = new Set(g.children!.map(c => c.id))
     const placeholders = view.edges.filter(e => isOutsideEdge(view, e) && (innerIds.has(e.from) || innerIds.has(e.to)))
-    expect(new Set(ports).size).toBe(g.edges!.length * 2 + placeholders.length)
-    // 顶边：动态端口的序号都小于静态（顶边的顺时针序即自左向右）
+    expect(new Set(ports).size).toBe(g.edges!.length * 2 + placeholders.length + g.children!.length)
+    // 顶边：保留端口（半边宽）排在最后——关系边的端口都在它左边（顶边的顺时针序即自左向右）
     for (const c of g.children!) {
       const north = c.ports!.filter(p => p.layoutOptions!['elk.port.side'] === 'NORTH')
-      const kind = (id: string) => RUNTIME_RELATION_TYPES.includes(view.edges.find(e => `${e.id}#in` === id)!.type)
-      const d = north.filter(p => kind(p.id)).map(p => Number(p.layoutOptions!['elk.port.index']))
-      const st = north.filter(p => !kind(p.id)).map(p => Number(p.layoutOptions!['elk.port.index']))
-      if (d.length && st.length) expect(Math.max(...d)).toBeLessThan(Math.min(...st))
+      const reserved = north.find(p => p.id === `${c.id}${RESERVED}`)!
+      expect(reserved.width).toBe(c.width! / 2)
+      const idx = (p: (typeof north)[number]) => Number(p.layoutOptions!['elk.port.index'])
+      for (const p of north) if (p !== reserved) expect(idx(p)).toBeLessThan(idx(reserved))
+    }
+    // RIGHT：左边，保留端口在下半（左边的顺时针序自下而上，序号最小）
+    for (const c of r.children!) {
+      const west = c.ports!.filter(p => p.layoutOptions!['elk.port.side'] === 'WEST')
+      const reserved = west.find(p => p.id === `${c.id}${RESERVED}`)!
+      expect(reserved.height).toBe(c.height! / 2)
+      for (const p of west)
+        if (p !== reserved) expect(Number(p.layoutOptions!['elk.port.index'])).toBeGreaterThan(Number(reserved.layoutOptions!['elk.port.index']))
     }
   })
 
-  it('左动右静：同一节点的动态入边（calls / notifies / streams）进点都在静态入边（implements）左边，出边同理；框外边同一规则', async () => {
+  it('L11：关系全是交互，进边的进点都在入口侧的前半（顶边左半 / 左边上半），后半留给端口记号；框外边同一规则', async () => {
     const idx2 = loadModel(scenarioFiles()).index
+    let checked = 0
     for (const level of ['infra', 'infra.framework', 'app']) {
       const v = projectLevel(idx2, level, { showBoundaries: true })
       const pv = await layoutView(v)
       const allocated = outsideRoutes(pv, v.edges)
       const route = (e: (typeof v.edges)[number]) => allocated.get(e.id) ?? pv.edges.get(e.id)
       for (const n of v.nodes.filter(x => compassOf(x) === 'inner')) {
-        for (const end of ['in', 'out'] as const) {
-          const mine = v.edges.filter(e => (end === 'in' ? e.to : e.from) === n.id && route(e))
-          const xs = (dyn: boolean) =>
-            mine
-              .filter(e => RUNTIME_RELATION_TYPES.includes(e.type) === dyn)
-              .map(e => {
-                const pts = route(e)!.points
-                return (end === 'in' ? pts[pts.length - 1] : pts[0]).x
-              })
-          const d = xs(true)
-          const st = xs(false)
-          if (d.length && st.length) expect(Math.max(...d)).toBeLessThan(Math.min(...st))
+        const box = pv.nodes.get(n.id)!
+        for (const e of v.edges.filter(x => x.to === n.id && route(x))) {
+          const end = route(e)!.points.at(-1)!
+          // spreadEnds 平行错开最多半个 PARALLEL_GAP
+          if (pv.direction === 'RIGHT') expect(end.y).toBeLessThanOrEqual(box.y + box.h / 2 + PARALLEL_GAP)
+          else expect(end.x).toBeLessThanOrEqual(box.x + box.w / 2 + PARALLEL_GAP)
+          checked++
         }
       }
     }
+    expect(checked).toBeGreaterThan(0)
   })
 
   it('方位：用户 top、外部系统 right、边界节点 bottom、其余 inner', () => {

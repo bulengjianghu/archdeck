@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * 关系边与临时线（L10、ADR-0018）：一个通道一个维度——
- * 颜色 = 关系类型（编译期低饱和、更细）；线型 = 事实状态（实 / 虚 / 点）；箭头 = 同步实心、异步空心、implements 空心三角；
- * 线宽 = 聚合条数三档；标签 = ×N（pill）与异常；晕 = 违规（优先）/ 设计变更、选中（强调色窄晕）、回放当前（宽晕 + 流动）。
+ * 关系边与临时线（L10、ADR-0018、ADR-0029）：一个通道一个维度——
+ * 颜色 = 关系类型（查询低饱和 + 半透明、委托实色、未分类中性灰）；线型 = 事实状态（实 / 虚 / 点）；箭头 = 同步实心、异步空心；
+ * 插座 = 经端口（L12，目标端与箭头叠放）；线宽 = 聚合条数三档；标签 = ×N（pill）与异常；晕 = 违规（优先）/ 设计变更、选中（强调色窄晕）、回放当前（宽晕 + 流动）。
  * 时间耦合（J5）：灰色波浪线、无箭头、标 ×N；无依赖无关系的更深色。
  */
 import { computed } from 'vue'
@@ -11,6 +11,7 @@ import type { RouteEdgeData } from '@/layout/canvas'
 import type { Point } from '@/layout/layout'
 import { horizontalCurve, retractEnd, roundedPolyline, verticalCurve, wavyPath } from './routePath'
 import ArrowMarker from './ArrowMarker.vue'
+import SocketMarker from './SocketMarker.vue'
 import { FLOW, arrowDepth, arrowSize, strokeColor, strokeStyle } from './edgeStyle'
 
 const props = defineProps<{ id: string; data: RouteEdgeData }>()
@@ -33,11 +34,15 @@ const linePath = computed(() => (couple.value ? path.value : draw(retractEnd(pro
 
 /** 每条边自带箭头 marker，颜色跟随线色 */
 const markerId = computed(() => `arrow-${props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)}`)}`)
+/** L12：经端口的边在目标端加插座记号（沿完整走线的终点定向，与箭头叠放） */
+const socket = computed(() => !!props.data.port && !couple.value)
+const socketId = computed(() => `socket-${markerId.value.slice('arrow-'.length)}`)
 </script>
 
 <template>
   <defs>
     <ArrowMarker :id="markerId" :kind="data.arrow" :color="color" :size="size" :line-width="style.strokeWidth" />
+    <SocketMarker v-if="socket" :id="socketId" :color="color" :size="size" />
   </defs>
   <path
     v-if="data.change && !data.violated"
@@ -69,6 +74,7 @@ const markerId = computed(() => `arrow-${props.id.replace(/[^\w-]/g, c => `_${c.
       :class="{ 'edge-selected': data.selected, 'edge-core': data.core }"
     />
   </g>
+  <path v-if="socket" :d="path" class="edge-socket" fill="none" stroke="none" :opacity="style.opacity" :marker-end="`url(#${socketId})`" />
   <template v-if="data.play === 'current'">
     <path :d="linePath" class="edge-flow-base" fill="none" stroke-linecap="round" :stroke-width="FLOW.baseWidth" />
     <path
@@ -84,7 +90,8 @@ const markerId = computed(() => `arrow-${props.id.replace(/[^\w-]/g, c => `_${c.
 </template>
 
 <style scoped>
-.edge-diff {
+.edge-diff,
+.edge-socket {
   pointer-events: none;
 }
 

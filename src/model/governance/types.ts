@@ -278,24 +278,6 @@ export interface GovernanceReport {
   issues: Issue[]
 }
 
-/** 端口三角的一方（K11）：经哪条关系、另一端、类型 */
-export interface PortParty {
-  relation: string
-  /** 另一端（模块或参与者） */
-  module: string
-  type: RelationType
-  via?: RelationVia
-  /** 有代码事实时的证实状态 */
-  status?: ConfirmStatus
-}
-
-export interface PortTriad {
-  /** 本模块的接口 ID（provides 与子树内 owner 指向它的接口，G12） */
-  defines: string[]
-  implementers: PortParty[]
-  users: PortParty[]
-}
-
 /** 步骤的证据等级（S16）：按名字匹配 / 按模块依赖 / 无证据 / 不判定 */
 export type EvidenceLevel = 'name' | 'module' | 'none' | 'skipped'
 export const EVIDENCE_LEVELS: readonly EvidenceLevel[] = ['name', 'module', 'none', 'skipped']

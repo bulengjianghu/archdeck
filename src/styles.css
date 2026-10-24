@@ -15,11 +15,13 @@
   --warning: #a86a0a;
   --warning-soft: #fdf3e1;
 
-  /* 关系类型（L10）：运行时三类饱和；编译期的 implements 低饱和、明度接近背景，与 --text-3 拉开 */
-  --rel-calls: #2f6fe4;
+  /* 关系类型（L10、ADR-0029）：四类各一色相——查询低饱和（画布上另加半透明，edgeStyle QUERY_OPACITY）、委托实色、通知与流沿用；
+     迁移期的未分类（calls，M17）为中性灰，与 --text-3 的冷灰拉开 */
+  --rel-queries: #9686c4;
+  --rel-commands: #2f6fe4;
   --rel-streams: #0f9b8e;
   --rel-notifies: #c98a10;
-  --rel-implements: #bba8e0;
+  --rel-calls: #8c8c8c;
   /* 代码依赖叠加线（K9，点线；有违规时为 --danger） */
   --edge-code: #8a4f7d;
   /* 时间耦合的波浪线（J5）：灰；无依赖无关系的更深 */
@@ -67,10 +69,11 @@
     --warning: #e2a646;
     --warning-soft: #3a2f1c;
 
-    --rel-calls: #6b9cf5;
+    --rel-queries: #9a8cc6;
+    --rel-commands: #6b9cf5;
     --rel-streams: #3cc4b5;
     --rel-notifies: #e2a646;
-    --rel-implements: #65578e;
+    --rel-calls: #8f8f8f;
     --edge-code: #d58cc4;
     --edge-couple: #6c7686;
     --edge-couple-strong: #c5ccd8;
@@ -166,6 +169,12 @@ a {
   color: var(--text-3);
 }
 
+.rel-queries {
+  --rel: var(--rel-queries);
+}
+.rel-commands {
+  --rel: var(--rel-commands);
+}
 .rel-calls {
   --rel: var(--rel-calls);
 }
@@ -174,9 +183,6 @@ a {
 }
 .rel-notifies {
   --rel: var(--rel-notifies);
-}
-.rel-implements {
-  --rel: var(--rel-implements);
 }
 
 .rel-chip {
@@ -194,8 +200,8 @@ a {
   border-top: 2px solid var(--rel);
 }
 
-.rel-implements.rel-chip::before {
-  border-top-width: 1.5px;
+.rel-queries.rel-chip::before {
+  opacity: 0.6;
 }
 
 .vue-flow__edge-textbg {

@@ -13,9 +13,9 @@ export type InteractionType = 'queries' | 'commands' | 'notifies' | 'streams'
 export const INTERACTION_TYPES: readonly InteractionType[] = ['queries', 'commands', 'notifies', 'streams']
 /**
  * 关系类型：四类交互，加迁移期的 `calls`——「未分类」（M17：按查询或委托参与证实、覆盖与场景绑定）。
- * `implements` 只出现在描述文件里（M17：Loader / Validator 转成接口的 implementedBy，不进关系索引）；留在联合里只为迁移期的呈现代码能编译（T3 去掉）。
+ * `implements` 只出现在描述文件里（RelationDef，M17：Validator 转成接口的 implementedBy，不进关系索引）。
  */
-export type RelationType = InteractionType | 'calls' | 'implements'
+export type RelationType = InteractionType | 'calls'
 /** 关系索引里可能出现的类型（四类 + 未分类），按图例顺序 */
 export const RELATION_TYPES: readonly RelationType[] = ['queries', 'commands', 'notifies', 'streams', 'calls']
 /** M17：迁移期的「未分类」 */
@@ -140,7 +140,7 @@ export interface RelationDef {
   from: string
   to: string
   /** 文件里也可能写旧名（M12）与迁移期的 calls / implements（M17）；Loader 映射旧名，Validator 把 implements 转成接口的 implementedBy */
-  type: RelationType | LegacyRelationType
+  type: RelationType | LegacyRelationType | typeof MIGRATED_RELATION_TYPE
   /** 只用于 queries / commands（迁移期含未分类）：同步缺省，异步写 async（M13） */
   mode?: 'sync' | 'async'
   /** 只用于 streams：拉取型流，箭头仍指数据去向（M13） */

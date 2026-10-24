@@ -1,6 +1,6 @@
-/** 架构治理 · 端口（ADR-0029）：端口面板（K11，原端口三角）· 端口孤立（U14）· 旧端口三角的迁移期兼容 */
+/** 架构治理 · 端口（ADR-0029）：端口面板（K11，原端口三角）· 端口孤立（U14） */
 import { describe, expect, it } from 'vitest'
-import { loadModel, portEntry, portIssues, portPanel, portTriad, reworkList } from '@/model'
+import { loadModel, portEntry, portIssues, portPanel, reworkList } from '@/model'
 import { LAYERS, files, setup } from './helpers'
 
 const load = (extra: string, implementedBy = '[ui.store]', more = '') => {
@@ -43,17 +43,6 @@ describe('K11 端口面板（定义 · 实现者 · 使用者）', () => {
     const p = portEntry(index, fake, 'if.get')!
     expect(p.implementers).toEqual([{ module: 'ui.view', described: false, code: true, status: 'confirmed' }])
     expect(p.users.find(u => u.relation === 'rel.d')!.status).toBe('confirmed')
-  })
-
-  it('迁移期兼容：旧端口三角由端口面板换算（实现者 relation 记为 <接口>#<模块>）', () => {
-    const t = portTriad(index, null, 'core.api')!
-    expect(t.defines).toEqual(['if.get'])
-    expect(t.implementers.map(p => [p.relation, p.module])).toEqual([['if.get#ui.store', 'ui.store']])
-    expect(t.users.map(p => [p.relation, p.via])).toEqual([
-      ['rel.s', 'port:if.get'],
-      ['rel.d', undefined],
-    ])
-    expect(portTriad(index, null, 'core.impl')).toBeNull()
   })
 })
 

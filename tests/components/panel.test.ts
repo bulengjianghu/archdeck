@@ -51,24 +51,6 @@ describe('属性面板', () => {
     expect(text).toContain('modules/infra.yaml')
   })
 
-  it('K11：声明了接口的模块有端口三角——定义 · 实现者（implementedBy，ADR-0029 迁移期兼容）· 使用者（经端口），单击使用者选中那条关系；没有接口的模块没有', async () => {
-    const files = sampleFiles({
-      'ports.yaml':
-        "relations:\n  - { id: rpi, from: app.solution, to: infra.framework.sm, type: implements }\n  - { id: rpu, from: infra.player, to: infra.framework.sm, type: commands, via: 'port:if.sm' }\n",
-    })
-    const { wrapper, desk } = await mountPanel('/?level=infra.framework&sel=m:infra.framework.sm', files)
-    const section = wrapper.findAll('section').find(x => x.text().includes('端口（定义 · 实现者 · 使用者）'))!
-    expect(section.text()).toContain('sendCommand')
-    expect(section.text()).toContain('实现者 1')
-    expect(section.text()).toContain('使用者 1')
-    expect(section.text()).toContain('经 端口 if.sm')
-    const links = section.findAll('.party .link')
-    await links[links.length - 1].trigger('click')
-    expect(desk.selection.value).toEqual({ kind: 'relation', id: 'rpu' })
-    const other = await mountPanel('/?level=infra.framework&sel=m:infra.framework.pipeline', files)
-    expect(other.wrapper.text()).not.toContain('端口（定义')
-  })
-
   it('选中关系：端点、类型、五个维度、经由接口、交换的数据结构', async () => {
     const { wrapper } = await mountPanel('/?level=infra.framework&sel=r:r6')
     const text = wrapper.text()

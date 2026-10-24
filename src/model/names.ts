@@ -27,10 +27,5 @@ export function viaLabel(via: string, index?: ModelIndex): string {
   return v.target ? `总线 ${index ? moduleName(index, v.target) : v.target}` : '事件总线（未指明）'
 }
 
-/** 迁移期兼容：呈现层按 `VIA_LABELS[via]` 取名（T3 改用 viaLabel） */
-export const VIA_LABELS: Readonly<Record<string, string>> = new Proxy({} as Record<string, string>, {
-  get: (_, key) => (typeof key === 'string' ? viaLabel(key) : undefined),
-})
-
 /** 规则种类的名称：门禁消息、命令行与页面共用 */
 export const RULE_LABELS: Record<RuleKind, string> = { layer: '层规则', deps: '依赖白名单', exposes: '访问面' }

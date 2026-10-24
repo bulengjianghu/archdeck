@@ -386,7 +386,7 @@ describe('DeskState · 运行视角', () => {
 
   it('打开场景：进入运行视角、层次不变、舞台不受筛选影响；派生出本层投影与时序模型', async () => {
     const { desk, router, settle } = await openDesk('/?level=infra')
-    desk.setToggles({ relationTypes: ['implements'], showBoundaries: false })
+    desk.setToggles({ relationTypes: ['streams'], showBoundaries: false })
     expect(desk.view.value!.nodes.some(n => n.role === 'boundary')).toBe(false)
     desk.openScenario('sc.play')
     await settle()

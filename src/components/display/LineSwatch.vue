@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /**
  * 图例的示意线：按 look（关系类型、事实状态、线宽档、临时线种类）取与画布 RouteEdge 同一套样式（edgeStyle），不手写示意样式。
- * 可加箭头（同步实心 / 异步空心 / implements 空心三角，与画布同一个 ArrowMarker，线同样回缩一个箭头深度）、违规红晕、回放流动、×N 标签与异常标记。
+ * 可加箭头（同步实心 / 异步空心，与画布同一个 ArrowMarker，线同样回缩一个箭头深度）、插座记号（L12，同一个 SocketMarker）、违规红晕、回放流动、×N 标签与异常标记。
  */
 import { computed, useId } from 'vue'
 import { FLOW, arrowDepth, arrowSize, strokeColor, strokeStyle, type ArrowKind, type CoupleLook } from '../edges/edgeStyle'
 import { wavyPath } from '../edges/routePath'
 import ArrowMarker from '../edges/ArrowMarker.vue'
+import SocketMarker from '../edges/SocketMarker.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -23,6 +24,8 @@ const props = withDefaults(
     pill?: boolean
     /** 线尾的异常标记，如 ? */
     mark?: string
+    /** L12：经端口的插座记号（与箭头叠放） */
+    socket?: boolean
   }>(),
   { look: () => ({}), color: undefined, width: 28, arrow: undefined, mark: undefined },
 )
@@ -31,6 +34,7 @@ const style = computed(() => ({ ...strokeStyle(props.look), ...(props.color ? { 
 const stroke = computed(() => props.color ?? strokeColor(props.look))
 // <script setup> 每个实例都会重跑，模块级计数器在这里不唯一；用 useId 保证每条示意引用自己的箭头
 const markerId = `swatch-arrow-${useId()}`
+const socketId = `${markerId}-socket`
 const size = computed(() => arrowSize(props.look.weight))
 /** 线的终点：给箭头、标签或标记留位置；有箭头时再回缩一个箭头深度，箭头尖落在 tip */
 const tip = computed(() => props.width - 1 - (props.pill ? 10 : 0) - (props.mark ? 7 : 0))
@@ -41,8 +45,9 @@ const wavy = computed(() => (props.look.temp === 'couple' ? wavyPath({ x: 1, y: 
 
 <template>
   <svg class="swatch" :width="width" height="10" :viewBox="`0 0 ${width} 10`">
-    <defs v-if="arrow">
-      <ArrowMarker :id="markerId" :kind="arrow" :color="stroke" :size="size" :line-width="style.strokeWidth" />
+    <defs v-if="arrow || socket">
+      <ArrowMarker v-if="arrow" :id="markerId" :kind="arrow" :color="stroke" :size="size" :line-width="style.strokeWidth" />
+      <SocketMarker v-if="socket" :id="socketId" :color="stroke" :size="size" />
     </defs>
     <line v-if="halo" x1="1" y1="5" :x2="end" y2="5" stroke="var(--danger)" stroke-width="7" stroke-opacity="0.3" stroke-linecap="round" />
     <template v-if="flow">
@@ -72,6 +77,7 @@ const wavy = computed(() => (props.look.temp === 'couple' ? wavyPath({ x: 1, y: 
       :stroke-linecap="'strokeLinecap' in style ? style.strokeLinecap : undefined"
       :marker-end="arrow ? `url(#${markerId})` : undefined"
     />
+    <line v-if="socket" x1="1" y1="5" :x2="tip" y2="5" stroke="none" :opacity="style.opacity" :marker-end="`url(#${socketId})`" />
     <rect v-if="pill" :x="width - 10.5" y="1" width="10" height="8" rx="4" fill="var(--surface)" stroke="var(--border-strong)" />
     <text v-if="mark" :x="width - 6" y="9" class="mark">{{ mark }}</text>
   </svg>
