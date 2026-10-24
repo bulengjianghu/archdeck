@@ -125,7 +125,7 @@ modules:
     name: 视角模式与选中映射
     parent: state.transition
     adrs: [31]
-    responsibility: 结构 / 交互视角的切换规则（V11、V12，ADR-0031）：setMode 改视图状态的 mode（打开场景时先退出场景，退出场景回到进入前的模式）；切换时把选中映射到对面视图的边——关系、交互边切到结构视角时，这对节点之间有结构边就换成依赖边（sel=d:<依赖方>-><被依赖方>），没有时保留原选中；依赖边切到交互视角时，同一对节点有交互边就换成它（取关系类型声明顺序中的第一条），没有时保留代码依赖选中（K10）；节点、层次与模块选中不动。「这对节点之间有没有结构边 / 交互边」是关于被描述系统的知识，调用模型层（hasStructureEdge 经 desk.facts 给出，interactionEdgeBetween、nodeOf 直接调用）。
+    responsibility: 结构 / 交互视角的切换规则（V11、V12，ADR-0031）：setMode 改视图状态的 mode（打开场景时先退出场景，退出场景回到进入前的模式）；切换时把选中映射到对面视图的边——关系、交互边切到结构视角时，这对节点之间有结构边就换成依赖边（sel=d:<依赖方>-><被依赖方>），没有结构边或没有代码事实时清空并交给面板说明（droppedSelection）；端口换成定义模块；依赖边切到交互视角时，同一对节点有交互边就换成它（取关系类型声明顺序中的第一条），没有时保留代码依赖选中（K10）；节点、层次与模块选中不动。「这对节点之间有没有结构边 / 交互边」是关于被描述系统的知识，调用模型层（hasStructureEdge 经 desk.facts 给出，interactionEdgeBetween、nodeOf 直接调用）。
     codeRefs: [src/state/transition/mode.ts]
 
   - id: state.layout.sequence
