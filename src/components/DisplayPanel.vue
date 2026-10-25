@@ -110,7 +110,8 @@ const summary = computed(() => {
   flex-direction: column;
   min-width: 236px;
   max-width: 300px;
-  max-height: calc(100% - 24px);
+  /* 顶部留给画布右上角的提示与计数（只引类型、折叠提示），图例再长也不压住它们 */
+  max-height: calc(100% - 72px);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
