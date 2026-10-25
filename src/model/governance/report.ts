@@ -9,7 +9,9 @@ import { portIssues } from './ports'
 import { cyclicityOf, fileCycles, moduleCycles } from './cycles'
 import { evaluateRules, type EntryOf } from './rules'
 import { sharedHostOf, sharedReverse, sharedSuggestions } from './roles'
-import type { Baseline, CodeDeps, GovernanceReport, Violation } from './types'
+import { carrierGap, carrierOf, moduleElementEdges } from './carrier'
+import { surfaceIssues } from './surface'
+import type { Baseline, CodeDeps, ElementEdge, GovernanceReport, Violation } from './types'
 
 /** G10：入口文件（不存在的 entry 不算） */
 export function entryResolver(index: ModelIndex, own: SourceOwnership, tree: Pick<LocalSource, 'files' | 'packages'>): EntryOf {
@@ -91,16 +93,20 @@ export function governanceReport(
         ...x.src,
       })
     }
-  // K6：交互关系未证实且两端之间没有任何依赖
+  // K6：交互关系未证实且两端之间没有任何依赖；D6：附承载缺段的原因（K5d）
+  const surface = { entryOf, own }
+  let elementEdges: ElementEdge[] | null = null
   for (const [id, c] of relations) {
     const r = index.relations.get(id)!
-    if (unconfirmedWarns(r, c))
-      issues.push({
-        severity: 'warning',
-        code: unconfirmedCode(c),
-        message: `关系「${id}」（${r.type}，${name(r.from)} → ${name(r.to)}）${unconfirmedReason(r, c)}`,
-        ...r.src,
-      })
+    if (!unconfirmedWarns(r, c)) continue
+    elementEdges ??= moduleElementEdges(index, { moduleDeps, implementers }, surface)
+    const gap = carrierGap(index, carrierOf(index, { moduleDeps, implementers, relations }, elementEdges, r))
+    issues.push({
+      severity: 'warning',
+      code: unconfirmedCode(c),
+      message: `关系「${id}」（${r.type}，${name(r.from)} → ${name(r.to)}）${unconfirmedReason(r, c)}${gap}`,
+      ...r.src,
+    })
   }
 
   // U12：共用件反向依赖（warning，不进门禁与基线）
@@ -116,6 +122,8 @@ export function governanceReport(
 
   // U14：端口孤立（无实现者 warning、无使用者 info）
   issues.push(...portIssues(index, { relations, implementers }))
+  // U18、U19：越过入口、热表面未声明（info，不进门禁）
+  issues.push(...surfaceIssues(index, { moduleDeps }, surface))
 
   return {
     moduleDeps,

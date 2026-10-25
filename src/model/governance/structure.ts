@@ -11,14 +11,17 @@ import { contractNames, coveringRelations, depKey, implementsInto, plainInteract
 import { nodeOf } from './level'
 import { rulesOf } from './rules'
 import { sharedHostOf } from './roles'
+import { elementSlots, slotKey, strongerForm, strongerTier, surfaceContext, surfaceWidths, tierOf } from './surface'
 import {
   ASSEMBLY_KINDS,
+  DEP_FORMS,
   STABILITY_BANDS,
   STRUCTURE_KINDS,
   type AllowedDeps,
   type AllowedEdge,
+  type Bundle,
   type ChipDep,
-  type DepTier,
+  type ElementEdge,
   type EdgeRuling,
   type FileDep,
   type GovernanceReport,
@@ -54,9 +57,7 @@ export function fileKinds(f: FileDep, ports: ReadonlySet<string>): StructureKind
   return out
 }
 
-/** K14：一组文件依赖的档——任一条有交互使用为 invokes，否则有值使用（纯值读取）为 value，其余为 type */
-export const tierOf = (files: readonly FileDep[]): DepTier =>
-  files.some(f => f.invokes) ? 'invokes' : files.some(f => f.uses || f.kind === 'value') ? 'value' : 'type'
+export { tierOf }
 
 // ── U15：规则叠加 ──
 
@@ -138,6 +139,12 @@ export function structureMetrics(index: ModelIndex, report: Pick<GovernanceRepor
     const instability = ca + ce ? ce / (ca + ce) : null
     out.set(id, { module: id, ca, ce, instability, band: stabilityBand(instability) })
   }
+  // K19：给了表面来源时，有入口的模块另带 W / B（同 valuesOnly 口径）
+  if (opts.surface)
+    for (const [m, wb] of surfaceWidths(index, report, opts.surface, opts)) {
+      const hit = out.get(m)
+      if (hit) out.set(m, { ...hit, ...wb })
+    }
   return out
 }
 
@@ -248,11 +255,13 @@ export function levelDeps(index: ModelIndex, view: LevelView, report: ReportPart
   const byOrder = (a: Pair, b: Pair) => (order.get(a.from) ?? 0) - (order.get(b.from) ?? 0) || (order.get(a.to) ?? 0) - (order.get(b.to) ?? 0)
 
   const edges: StructureEdge[] = []
+  const rulings = new Map<Pair, EdgeRuling>()
   let typeOnly = 0
   for (const p of [...pairs.values()].sort(byOrder)) {
     const fromModule = moduleOfNode(view, p.from)
     const toModule = moduleOfNode(view, p.to)
     const rul = ruling(index, p.deps, p.violations)
+    rulings.set(p, rul)
     for (const kind of STRUCTURE_KINDS) {
       const slot = p.byKind.get(kind)
       if (!slot) continue
@@ -285,7 +294,66 @@ export function levelDeps(index: ModelIndex, view: LevelView, report: ReportPart
       edges.push(edge)
     }
   }
-  return { edges, typeOnly }
+
+  // K14、A1–A4、A7：束与元素级边
+  const ctx = opts.surface ? surfaceContext(index, opts.surface, report) : null
+  const bundles: Bundle[] = []
+  const elementEdges: ElementEdge[] = []
+  for (const p of [...pairs.values()].sort(byOrder)) {
+    const fromModule = moduleOfNode(view, p.from)
+    const toModule = moduleOfNode(view, p.to)
+    const bundleId = `bundle:${depKey(p.from, p.to)}`
+    const list = elementSlots(
+      index,
+      ctx ? { src: opts.surface!, ctx } : null,
+      toModule,
+      p.deps.flatMap(d => d.files.map(f => ({ f, ports: portsOf.get(d.to)! }))),
+    )
+    const files = p.deps.reduce((n, d) => n + d.files.length, 0)
+    const own: ElementEdge[] = list.map(x => ({
+      id: `el:${depKey(p.from, p.to)}:${x.form}:${slotKey(x)}`,
+      bundle: bundleId,
+      from: p.from,
+      to: p.to,
+      fromModule,
+      toModule,
+      element: x.element,
+      ...(x.bypass ? { bypass: true as const } : {}),
+      form: x.form,
+      tier: x.tier,
+      files: x.files,
+    }))
+    elementEdges.push(...own)
+    const forms = DEP_FORMS.filter(f => own.some(e => e.form === f))
+    const bundle: Bundle = {
+      id: bundleId,
+      from: p.from,
+      to: p.to,
+      fromModule,
+      toModule,
+      form: own.map(e => e.form).reduce(strongerForm),
+      forms,
+      ...(forms.length > 1 ? { mixed: true as const } : {}),
+      tier: own.map(e => e.tier).reduce(strongerTier),
+      files,
+      elements: new Set(own.flatMap(e => (e.element ? [e.element.name] : []))).size,
+      bypass: new Set(own.filter(e => e.bypass).flatMap(e => e.files)).size,
+      edges: own.map(e => e.id),
+      deps: p.deps.map(d => d.key),
+      coverage: {
+        relations: [...new Set(p.deps.flatMap(d => coveringRelations(index, d.from, d.to)))].sort(),
+        implementers: p.deps.filter(d => implementsInto(index, report.implementers, d.from, d.to)).length,
+        subclass: p.deps.filter(d => subclass.has(d.key)).length,
+        assembly: p.deps.filter(d => assembly.has(d.key)).length,
+      },
+      ...(p.deps.some(d => undescribed.has(d.key)) ? { unexplained: true as const } : {}),
+      ruling: rulings.get(p)!,
+    }
+    const against = againstStability(index, metrics, fromModule, toModule, opts.threshold)
+    if (against) bundle.againstStability = against
+    bundles.push(bundle)
+  }
+  return { edges, typeOnly, bundles, elementEdges }
 }
 
 const VIOLATION_ORDER: readonly ViolationStatus[] = ['new', 'open', 'known', 'allowed']

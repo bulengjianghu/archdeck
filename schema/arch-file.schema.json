@@ -686,7 +686,7 @@
           ]
         },
         "via": {
-          "description": "机制（K5b、ADR-0029）：port:<接口 ID> 经端口 / bus:<总线模块 ID> 经总线 / channel:<通道名> 经通道；旧的平铺取值 http / hmr / inject / router / callback / port / bus 是迁移期别名（M20）",
+          "description": "机制（K5b、ADR-0029）：port:<接口 ID> 经端口 / bus:<总线模块 ID> 经总线 / channel:<通道名> 经通道（可加契约模块 channel:<通道名>@<模块 ID>，M21）；旧的平铺取值 http / hmr / inject / router / callback / port / bus 是迁移期别名（M20）",
           "anyOf": [
             {
               "type": "string",

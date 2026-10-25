@@ -1,0 +1,200 @@
+/**
+ * 交互的承载链（ADR-0032 D）：每条交互的承载是结构图上由元素级结构边组成的一条路径，按交互方式有模板（K20），判定齐全 / 缺段 / 无承载（K5d），
+ * 元素匹配不上而模块依赖在时回退到 K5 的模块级；通道没写契约模块时为外部承载（M21）。另给交互束按接收方表面散开的数据（D7）与束内修饰不一致（D8）。
+ * 只读代码事实、归属与描述；页面、lint 与 agent 共用。
+ */
+import { moduleName } from '../names'
+import { parseVia, type ModelIndex, type RelationEntity } from '../types'
+import { contractNames, judgeable, portOwner, related } from './facts'
+import { elementSlots, gateModule, slotKey, surfaceContext, type SurfaceContext } from './surface'
+import type {
+  Carrier,
+  CarrierRole,
+  CarrierSegment,
+  CarrierTemplate,
+  CarrierVerdict,
+  ElementEdge,
+  GovernanceReport,
+  ModuleSurface,
+  SurfaceElement,
+  SurfaceSource,
+} from './types'
+
+/** K20：模板的名称（面板、lint 消息与命令行共用） */
+export const CARRIER_TEMPLATE_LABELS: Record<CarrierTemplate, string> = { direct: '直接', port: '经端口', bus: '经总线', callback: '回调注册', channel: '经通道' }
+/** K5d：判定的名称 */
+export const CARRIER_VERDICT_LABELS: Record<CarrierVerdict, string> = {
+  complete: '齐全',
+  'module-level': '已证实（模块级）',
+  partial: '缺段',
+  none: '无承载',
+  external: '外部承载，不判定',
+}
+/** K20：承载段的说明（「A → B 的操作」之类，from / to 为两端名称） */
+export const CARRIER_ROLE_TEXT: Record<CarrierRole, (from: string, to: string) => string> = {
+  call: (a, b) => `${a} → ${b}的操作`,
+  'use-port': (a, b) => `${a} → ${b}的端口`,
+  implement: (a, b) => `${a} 实现 ${b}的端口`,
+  assemble: (_a, b) => `组装 ${b}的模块`,
+  publish: (a, b) => `${a} → ${b}的发布操作`,
+  subscribe: (a, b) => `${a} → ${b}的订阅操作`,
+  register: (a, b) => `${a} → ${b}的注册操作`,
+  'contract-from': (a, b) => `${a} → 契约 ${b}`,
+  'contract-to': (a, b) => `${a} → 契约 ${b}`,
+}
+
+type ReportPart = Pick<GovernanceReport, 'moduleDeps' | 'implementers' | 'relations'>
+
+/**
+ * K20：模块级的元素级边——每条模块依赖的文件依赖按 gateModule 定的表面接到元素（同 levelDeps 的口径，两端为模块）；
+ * 没有表面所属的模块（路径上都没有入口）时接到模块本体。顺序同模块依赖、文件依赖。
+ */
+export function moduleElementEdges(index: ModelIndex, report: Pick<GovernanceReport, 'moduleDeps' | 'implementers'>, src: SurfaceSource, ctx?: SurfaceContext): ElementEdge[] {
+  const c = ctx ?? surfaceContext(index, src, report)
+  const out: ElementEdge[] = []
+  for (const d of report.moduleDeps.values()) {
+    const g = gateModule(index, src, d)
+    const ports = contractNames(index, d.to)
+    const slots = elementSlots(index, g ? { src, ctx: c } : null, g, d.files.map(f => ({ f, ports })))
+    for (const x of slots)
+      out.push({
+        id: `el:${d.key}:${x.form}:${slotKey(x)}`,
+        bundle: `bundle:${d.key}`,
+        from: d.from,
+        to: d.to,
+        fromModule: d.from,
+        toModule: d.to,
+        element: x.element,
+        ...(x.bypass ? { bypass: true as const } : {}),
+        form: x.form,
+        tier: x.tier,
+        files: x.files,
+      })
+  }
+  return out
+}
+
+/** 接口名去掉括号与泛型（同 G12） */
+const bareName = (name: string) => name.replace(/[(<].*$/s, '').trim()
+
+/** K20：关系的模板；端口 / 总线未指明（M20）与不合四形态的为 null（不判定） */
+export function carrierTemplate(r: Pick<RelationEntity, 'type' | 'via'>): CarrierTemplate | null {
+  if (r.via !== undefined) {
+    const v = parseVia(r.via)
+    if (!v?.target) return null
+    return v.kind
+  }
+  return r.type === 'notifies' ? 'callback' : 'direct'
+}
+
+/**
+ * K5d、K20：一条交互的承载——按模板在模块级的元素级边里找各段：
+ * 直接：发起方 → 接收方的操作元素（写了接口时须是它；streams 不论方向，同 K5）；回调注册：接收方 → 发起方的注册操作（没有时发起方直接调接收方也算）；
+ * 经端口 port:<P>：发起方 → P 的定义模块的端口元素、接收方实现 P（端口实现形态）、有模块组装接收方（to 写的是定义模块时只看第一段）；
+ * 经总线 bus:<B>：发起方 → B 的发布操作、接收方 → B 的订阅操作（事件类型可选，不核）；经通道：两端各自依赖契约模块（M21，没写契约为外部承载）。
+ * 判定：各段都接到元素为齐全；都在而有的只在模块级（边接到模块本体或别的元素）为「已证实（模块级）」（K5 回退）；缺一部分为缺段；全缺为无承载。
+ * 两端在同一组文件里、一端是参与者或目标态、端口 / 总线未指明的不判定（null）。
+ */
+export function carrierOf(index: ModelIndex, report: ReportPart, edges: readonly ElementEdge[], r: RelationEntity): Carrier | null {
+  if (!judgeable(index, r) || report.relations.get(r.id)?.host) return null
+  const template = carrierTemplate(r)
+  if (!template) return null
+  const v = parseVia(r.via)
+  const between = (x: string, y: string) => edges.filter(e => related(index, e.fromModule, x) && related(index, e.toModule, y))
+  const isOp = (e: ElementEdge) => !!e.element && (e.element.kind === 'port' || (e.element.kind === 'operation' && e.tier !== 'type'))
+  const named = (id: string | undefined) => {
+    const x = id ? index.interfaces.get(id) : undefined
+    return x ? (e: ElementEdge) => !!e.element && (e.element.interfaceId === id || e.element.name === bareName(x.name)) : isOp
+  }
+  const seg = (role: CarrierRole, from: string, to: string, want: (e: ElementEdge) => boolean, element?: string): CarrierSegment => {
+    const base = { role, from, to, ...(element ? { element } : {}) }
+    // 一端在另一端子树内（同一组代码）：这一段不需要边
+    if (related(index, from, to)) return { ...base, edge: null }
+    const cands = between(from, to)
+    const hit = cands.find(want)
+    if (hit) return { ...base, edge: hit }
+    if (cands.length) return { ...base, edge: cands[0], moduleLevel: true }
+    return { ...base, edge: null, missing: true }
+  }
+  const ifName = r.interface ? bareName(index.interfaces.get(r.interface)?.name ?? r.interface) : undefined
+  const segments: CarrierSegment[] = []
+  if (template === 'direct') {
+    const fwd = seg('call', r.from, r.to, named(r.interface), ifName)
+    const back = r.type === 'streams' && (fwd.missing || fwd.moduleLevel) ? seg('register', r.to, r.from, isOp) : null
+    segments.push(back && !back.missing && !(back.moduleLevel && !fwd.missing) ? back : fwd)
+  } else if (template === 'callback') {
+    const reg = seg('register', r.to, r.from, isOp)
+    const call = reg.missing || reg.moduleLevel ? seg('call', r.from, r.to, named(r.interface), ifName) : null
+    segments.push(call && !call.missing && !(call.moduleLevel && !reg.missing) ? call : reg)
+  } else if (template === 'port') {
+    const port = v!.target!
+    const owner = portOwner(index, port)
+    const pname = bareName(index.interfaces.get(port)?.name ?? port)
+    if (!owner) return null
+    segments.push(seg('use-port', r.from, owner, e => !!e.element && (e.element.interfaceId === port || e.element.name === pname), pname))
+    if (!related(index, r.to, owner)) {
+      segments.push(seg('implement', r.to, owner, e => e.form === 'implements' && (!e.element || e.element.name === pname || e.element.interfaceId === port), pname))
+      const asm = edges.filter(e => related(index, e.toModule, r.to) && !related(index, e.fromModule, r.to) && e.form === 'assembly')
+      const hit = asm.find(e => e.element) ?? asm[0]
+      segments.push(hit ? { role: 'assemble', from: hit.fromModule, to: r.to, edge: hit, ...(hit.element ? {} : { moduleLevel: true as const }) } : { role: 'assemble', from: '*', to: r.to, edge: null, missing: true })
+    }
+  } else if (template === 'bus') {
+    const bus = v!.target!
+    segments.push(seg('publish', r.from, bus, isOp), seg('subscribe', r.to, bus, isOp))
+  } else {
+    if (!v?.contract) return { relation: r.id, template, segments: [], verdict: 'external' }
+    const any = (e: ElementEdge) => !!e.element
+    segments.push(seg('contract-from', r.from, v.contract, any), seg('contract-to', r.to, v.contract, any))
+  }
+  const missing = segments.filter(s => s.missing).length
+  const verdict: CarrierVerdict =
+    missing === segments.length ? 'none' : missing ? 'partial' : segments.some(s => s.moduleLevel) ? 'module-level' : 'complete'
+  return { relation: r.id, template, segments, verdict }
+}
+
+/** K5d：全部交互的承载（不判定的不在其中），按描述顺序 */
+export function carriersOf(index: ModelIndex, report: ReportPart, src: SurfaceSource, ctx?: SurfaceContext): Map<string, Carrier> {
+  const edges = moduleElementEdges(index, report, src, ctx)
+  const out = new Map<string, Carrier>()
+  for (const r of [...index.relations.values()].sort((a, b) => a.seq - b.seq)) {
+    const c = carrierOf(index, report, edges, r)
+    if (c) out.set(r.id, c)
+  }
+  return out
+}
+
+/** D6：缺段的说明（追加在 fact.unconfirmed 等消息之后）；没有缺段为空串 */
+export function carrierGap(index: ModelIndex, c: Carrier | null | undefined): string {
+  if (!c) return ''
+  const miss = c.segments.filter(s => s.missing)
+  if (!miss.length) return ''
+  const name = (id: string) => (id === '*' ? '某模块' : moduleName(index, id))
+  return `；承载（${CARRIER_TEMPLATE_LABELS[c.template]}）缺 ${miss.map(s => CARRIER_ROLE_TEXT[s.role](name(s.from), name(s.to))).join('、')}`
+}
+
+// ── D7、D8：交互束按接收方表面散开 ──
+
+/** D7：束里一条交互接到接收方表面的哪个元素——relation.interface 对上的声明接口；没写接口或表面上没有为 null（接到模块本体） */
+export interface InteractionSpread {
+  relation: string
+  element: SurfaceElement | null
+}
+
+/** D7、D8：一条交互束（本层一对节点、一种类型的视图边）的散开数据 */
+export interface InteractionBundle {
+  items: InteractionSpread[]
+  /** D8：束内同步 / 异步、via 不一致（只列不一致的那一项） */
+  mixed?: { mode?: true; via?: true }
+  /** M22：没写接口的交互条数（≥ 2 时提示） */
+  unnamed: number
+}
+
+/** D7、D8：交互束的散开——receiver 为接收方节点模块的表面（结构视角展开它时给出；没有时一律接到模块本体） */
+export function interactionBundle(index: ModelIndex, receiver: ModuleSurface | null, relationIds: readonly string[]): InteractionBundle {
+  const rs = relationIds.flatMap(id => (index.relations.has(id) ? [index.relations.get(id)!] : []))
+  const items = rs.map(r => ({ relation: r.id, element: (r.interface && receiver?.elements.find(e => e.interfaceId === r.interface)) || null }))
+  const modes = new Set(rs.filter(r => r.type !== 'notifies' && r.type !== 'streams').map(r => r.mode ?? 'sync'))
+  const vias = new Set(rs.map(r => r.via ?? ''))
+  const mixed = { ...(modes.size > 1 ? { mode: true as const } : {}), ...(vias.size > 1 ? { via: true as const } : {}) }
+  return { items, ...(mixed.mode || mixed.via ? { mixed } : {}), unnamed: rs.filter(r => !r.interface).length }
+}

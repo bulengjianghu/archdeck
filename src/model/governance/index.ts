@@ -58,6 +58,38 @@ export {
   NO_ALLOWED_NOTE,
   NO_FACTS_REASON,
 } from './structure'
+export {
+  HOT_SURFACE_MODULES,
+  surfaceContext,
+  surfaceOf,
+  surfaceMetrics,
+  surfaceWidths,
+  surfaceIssues,
+  bypassesOf,
+  gateOf,
+  gateModule,
+  elementSlots,
+  slotKey,
+  formOf,
+  fileForms,
+  elementTier,
+  elementKindOf,
+  strongerForm,
+  strongerTier,
+} from './surface'
+export type { SurfaceContext, SurfaceGate, EdgeSlot } from './surface'
+export {
+  CARRIER_TEMPLATE_LABELS,
+  CARRIER_VERDICT_LABELS,
+  CARRIER_ROLE_TEXT,
+  moduleElementEdges,
+  carrierTemplate,
+  carrierOf,
+  carriersOf,
+  carrierGap,
+  interactionBundle,
+} from './carrier'
+export type { InteractionBundle, InteractionSpread } from './carrier'
 export { moduleBrief, describeModule, locateFile, checkDependency } from './query'
 export type { ModuleBrief, ModuleDetail, FileStatus, CheckTarget, CheckResult, PairCheck, CycleImpact } from './query'
 export { sharedSuggestions, sharedReverse, sharedHostOf, SHARED_NAME_HINTS } from './roles'
