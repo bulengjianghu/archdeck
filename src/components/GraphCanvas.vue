@@ -182,6 +182,10 @@ onMounted(() => {
 })
 onBeforeUnmount(() => resize?.disconnect())
 watch(desk.levelVersion, () => (pendingFit.value = true))
+// L15 并集布局：代码事实读到后结构边进布局、重排一次，重排后的布局再适应一次
+watch(desk.facts.status, (now, was) => {
+  if (was === 'loading' && now !== 'loading') pendingFit.value = true
+})
 /** V5：运行视角隐藏了静态内容时只按可见节点适应画布；否则为 null（取全部内容） */
 const visibleIds = computed(() => scene.value.visibleIds)
 // 进出运行视角、切换显示方式后重新适应
