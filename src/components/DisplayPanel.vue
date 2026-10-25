@@ -5,7 +5,7 @@
  * - 图例按画布上的对象分组（RelationLegend、节点、FactsLegend、EvolutionLegend、ReplayLegend），一行一项，左列为与画布同款的示意（LineSwatch，
  *   与 RouteEdge 共用 edgeStyle）、右列为文字；既是开关又是图例的放在图例里——关系类型行点击筛选（L8），代码事实开关在组标题右侧（K9），组装开关同（O12）。
  *   时序图的箭头约定不在这里，在副栏时序图标题栏的「图例」里。
- * - 图例按视角整体替换、不混列（L19、D-26）：交互视角为关系、代码事实、组装、演化各组；结构视角为结构边的种类与档（含「只引类型」开关与计数）、
+ * - 图例按视角整体替换、不混列（L19、D-26）：交互视角为关系、代码事实、组装、演化各组；结构视角为「依赖 · 形态与档」（元素级边的形态、束、只引类型 / 只看交互使用 / 只看未解释 / 总是展开表面四个开关与计数，L21、L20）、
  *   规则叠加、指标与共用件、演化；运行视角为回放。共享通道（选中、变淡、违规、环、演化、线宽）三处同文（SharedLegend，L18）。
  * - 折叠时标题后摘要列出非默认的设置；面板展开与各组折叠按视角记在本机（useDisplayPrefs，运行视角默认只展开「回放」）。
  */
@@ -48,6 +48,9 @@ const summary = computed(() => {
       t.showBoundaries ? '' : '无边界节点',
       t.currentOnly ? '只看现状' : '',
       prefs.value.typeOnly ? '只引类型已显示' : '',
+      prefs.value.invokesOnly ? '只看交互使用' : '',
+      prefs.value.uncoveredOnly ? '只看未解释' : '',
+      prefs.value.surfaceAlways ? '总是展开表面' : '',
       t.heat === 'off' ? '' : `热度：${HEAT_LABEL[t.heat]}`,
       t.coupling ? '时间耦合' : '',
     ].filter(Boolean)
@@ -107,7 +110,8 @@ const summary = computed(() => {
   flex-direction: column;
   min-width: 236px;
   max-width: 300px;
-  max-height: calc(100% - 24px);
+  /* 顶部留给画布右上角的提示与计数（只引类型、折叠提示），图例再长也不压住它们 */
+  max-height: calc(100% - 72px);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);

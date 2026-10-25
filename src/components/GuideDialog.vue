@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 「怎么读这张图」（W-10）：顶栏「帮助」打开的一页，按结构 / 交互 / 运行 / 对照与治理四组各一句话加示意（ADR-0031：结构图是依赖事实，交互图是四类交互），
- * 另一段讲三视角共享的通道（L18，文字与「显示」面板同源）；只讲概念，线型、颜色等具体图例在画布右下角的「显示」面板。Esc 或单击遮罩关闭。
+ * 结构组另有「束与表面」「承载」两段（第八轮，C-27–C-29）；另一段讲三视角共享的通道（L18，文字与「显示」面板同源）；只讲概念，线型、颜色等具体图例在画布右下角的「显示」面板。Esc 或单击遮罩关闭。
  */
 import { onBeforeUnmount, onMounted } from 'vue'
 import { RELATION_TYPE_LABELS, THREE_QUESTIONS } from './shared/labels'
@@ -46,6 +46,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
           <p>
             顶部「结构」：模块之间的依赖事实，从源码算出、不用人写——虚线开口箭头是依赖（越深越强：交互使用 / 值使用 / 只引类型，只引类型缺省收起），
             空心三角是继承或端口实现，实心菱形是组装。选中模块看「改它牵动谁」，块边的色条是不稳定度；只标违规。
+          </p>
+          <p class="sub" data-testid="guide-bundle">
+            <b>束与表面</b>：一对模块之间的线是一条束（线宽按束内元素级边条数，形态不止一种时标「×N 元素」），展开模块看它的表面——入口导出与声明的接口；
+            依赖接到表面元素，不经入口的深层导入标「越过入口」。束与折叠都带计数，从不掩盖耦合。
+          </p>
+          <p class="sub" data-testid="guide-carrier">
+            <b>承载</b>：每条交互都应由结构图上的一段元素级依赖撑着（直接 / 经端口 / 经总线 / 回调注册 /
+            经通道五种模板），逐段判定为齐全、模块级、缺段、无承载或外部； 交互视角选中一条交互时承载临时叠加在图上，缺的段画成提示虚线。
           </p>
         </div>
       </div>
@@ -175,6 +183,10 @@ h2 {
   border: none;
   background: none;
   font-size: 18px;
+}
+
+.group p.sub {
+  margin-top: 4px;
 }
 
 .questions {

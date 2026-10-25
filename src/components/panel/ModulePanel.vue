@@ -14,6 +14,7 @@ import ModuleEvolution from './ModuleEvolution.vue'
 import ModulePorts from './ModulePorts.vue'
 import ModuleKnowledge from './ModuleKnowledge.vue'
 import ModuleStructure from './ModuleStructure.vue'
+import ModuleSurface from './ModuleSurface.vue'
 import ReviewSection from './ReviewSection.vue'
 import ModuleDecisions from './ModuleDecisions.vue'
 import { canDesignAt, openNewDesign } from '../edit/designHere'
@@ -63,6 +64,8 @@ function openChild(childId: string) {
     <ReviewSection :id="m.id" part="diff" />
     <!-- 结构视角（ADR-0031）：指标、影响面与交互图互查紧跟职责 -->
     <ModuleStructure v-if="desk.perspective.value === 'structure'" :id="m.id" />
+    <!-- 结构视角（ADR-0032 C7）：表面紧跟「结构」 -->
+    <ModuleSurface v-if="desk.perspective.value === 'structure'" :id="m.id" />
     <ModuleDecisions :id="m.id" />
 
     <template v-if="isLayer">

@@ -54,26 +54,47 @@ test('运行视角：交互关系显示方式在面板里，结构类开关不�
   await expect(panel.getByRole('button', { name: /^显示/ })).toContainText('交互关系：淡显')
 })
 
-test('结构视角（L19、D-26）：图例整组换成结构视图的，代码事实与关系类型筛选组不出现；只引类型开关改变计数说明', async ({ page }) => {
+test('结构视角（L19、L21、D-26）：图例整组换成「依赖 · 形态与档」，三个开关带收起计数、总是展开表面；代码事实与关系类型筛选组不出现', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?v=s')
   const panel = page.getByRole('region', { name: '显示' })
-  await expect(panel.getByRole('button', { name: /结构边 · 种类与档/ })).toBeVisible()
+  await expect(panel.getByRole('button', { name: /依赖 · 形态与档/ })).toBeVisible()
   await expect(panel.getByRole('button', { name: /规则叠加/ })).toBeVisible()
   await expect(panel.getByRole('button', { name: /指标 · 不稳定度/ })).toBeVisible()
-  await expect(panel).toContainText('依赖 = 虚线 + 开口箭头')
+  for (const t of ['子类 = 实线 + 空心三角', '组装 = 实线 + 实心菱形', '端口实现 = 虚线 + 空心三角', '使用 = 虚线 + 开口箭头'])
+    await expect(panel).toContainText(t)
+  await expect(panel.getByTestId('bundle-note')).toContainText('一对模块之间画一条束，线宽按束内元素级边条数；形态不止一种时标 ×N 元素')
+  await expect(panel.getByLabel('表面元素四类')).toContainText('端口')
+  await expect(panel).toContainText('越过入口')
   await expect(panel.getByRole('group', { name: '关系类型筛选' })).toHaveCount(0)
   await expect(panel.getByRole('button', { name: /代码事实/ })).toHaveCount(0)
   // 只引类型缺省收起：本层条数在组内；打开开关后改为「已显示」，折叠摘要列出
   const count = panel.getByTestId('type-only-count')
-  await expect(count).toContainText(/本层只引类型的边 \d+ 条已收起/)
-  const n = (await count.textContent())!.match(/本层只引类型的边 (\d+) 条/)![1]
+  await expect(count).toContainText(/本层只引类型的束 \d+ 条已收起/)
+  const n = (await count.textContent())!.match(/本层只引类型的束 (\d+) 条/)![1]
   await panel.getByRole('switch', { name: '只引类型' }).check()
-  await expect(count).toContainText(`本层只引类型的边 ${n} 条已显示`)
+  await expect(count).toContainText(`本层只引类型的束 ${n} 条已显示`)
+  // 只看交互使用、只看未解释：关着时给出打开后会收起的条数，打开后为已收起
+  const value = panel.getByTestId('value-count')
+  await expect(value).toContainText(/打开后收起值使用的束 \d+ 条/)
+  const v = (await value.textContent())!.match(/值使用的束 (\d+) 条/)![1]
+  await panel.getByRole('switch', { name: '只看交互使用' }).check()
+  await expect(value).toContainText(`值使用的束 ${v} 条已收起`)
+  const unc = panel.getByTestId('uncovered-count')
+  await expect(unc).toContainText(/打开后收起已解释的束 \d+ 条/)
+  await panel.getByRole('switch', { name: '只看未解释' }).check()
+  await expect(unc).toContainText(/已解释的束 \d+ 条已收起/)
+  await panel.getByRole('switch', { name: '总是展开表面' }).check()
+  await expect(panel.getByTestId('cross-count')).toContainText(/一端是边界节点的束 \d+ 条折叠/)
   await panel.getByRole('button', { name: /^显示/ }).click()
-  await expect(panel.getByRole('button', { name: /^显示/ })).toContainText('只引类型已显示')
+  await expect(panel.getByRole('button', { name: /^显示/ })).toContainText('只引类型已显示 · 只看交互使用 · 只看未解释 · 总是展开表面')
   await panel.getByRole('button', { name: /^显示/ }).click()
-  await panel.getByRole('switch', { name: '只引类型' }).uncheck()
-  await expect(count).toContainText(`本层只引类型的边 ${n} 条已收起`)
+  for (const name of ['只引类型', '只看交互使用', '只看未解释', '总是展开表面']) await panel.getByRole('switch', { name }).uncheck()
+  await expect(count).toContainText(`本层只引类型的束 ${n} 条已收起`)
+})
+
+test('交互视角「代码事实」组：承载叠加一句与缺段虚线示意（L22）', async ({ page }) => {
+  await openDesk(page, '/p/h5p-arch-desk')
+  await expect(page.getByRole('region', { name: '显示' }).getByTestId('carrier-legend')).toContainText('承载叠加')
 })
 
 test('时序图图例在副栏标题栏的「图例」里', async ({ page }) => {

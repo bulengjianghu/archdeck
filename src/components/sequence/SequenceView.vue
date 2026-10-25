@@ -12,6 +12,7 @@ import { moduleName, type SequenceMessage } from '@/model'
 import SequenceHeads from './SequenceHeads.vue'
 import SequenceLanes from './SequenceLanes.vue'
 import SequenceFragments from './SequenceFragments.vue'
+import { alignedMessageLevel } from '../panel/chain'
 
 const desk = useDesk()
 const scroller = ref<HTMLElement>()
@@ -20,6 +21,21 @@ const ps = computed(() => desk.run.positionedSequence.value)
 const homeName = computed(() => (desk.index.value && desk.run.home.value ? moduleName(desk.index.value, desk.run.home.value) : ''))
 const empty = computed(() => (desk.run.scenarioView.value?.messages.length ?? 0) === 0)
 const top = computed(() => (ps.value ? headsHeight(ps.value) : 0))
+/**
+ * S17 + D-25（裁决 T0-10）：时序图「?」的口径——各帧的证据等级按承载判定对齐（无承载才标），一条消息取合并的各帧中最弱的一档；
+ * 没有代码事实时为 null（不标）
+ */
+const noEvidence = computed<Set<number> | null>(() => {
+  const p = ps.value
+  const levels = desk.evidence.levels.value
+  const plan = desk.run.plan.value
+  if (!p || !levels || !plan) return null
+  const carrierOf = (id: string) => {
+    const f = plan.frames.get(id)
+    return f ? desk.facts.stepCarrierOf(f).carrier : null
+  }
+  return new Set(p.model.messages.flatMap((m, i) => (alignedMessageLevel(m.frameIds, levels, carrierOf) === 'none' ? [i] : [])))
+})
 const groupName = (parentId: string) => (desk.index.value ? moduleName(desk.index.value, parentId) : parentId)
 
 function pick(m: SequenceMessage) {
@@ -78,6 +94,7 @@ watch(
           <SequenceFragments :ps="ps" @branch="branch" />
           <SequenceLanes
             :ps="ps"
+            :no-evidence="noEvidence"
             :current="desk.run.currentIndex.value"
             :walked="desk.run.walked.value"
             :hover="desk.hoverId.value"

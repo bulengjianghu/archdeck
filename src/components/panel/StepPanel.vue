@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
  * 步骤面板（D-5，选中步骤时，V2）：先回答「这一步做什么」——作用、输入（签名中与标签同名的一行 + 携带的数据）、输出（配对返回，F7）、数据结构、经由接口；
- * 步骤没写的接口与数据取自对应关系并标「取自关系」（S14）；有代码事实时「经由接口」之后是代码证据：包含链「这一步 → 交互 → 依赖」（D-25），
- * 等级与候选调用点，单击在副栏预览到该行（S16、S18）；
+ * 步骤没写的接口与数据取自对应关系并标「取自关系」（S14）；有代码事实时「经由接口」之后是代码证据：包含链「这一步 → 交互（承载判定词）→ 承载段（文件:行）」（D-25、S18b），
+ * 等级由承载判定导出（与包含链同一个词，裁决 T0-10）与候选调用点，单击在副栏预览到该行（S16、S18）；
  * 其后是真实端点与本层投影（经由上层关系时注明关系建在上层并可定位，P15）、本层一条可见消息覆盖的多帧；交互关系默认折叠，可在画布上显示（V9）；最后是出处。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
-import { moduleName, viaLabel } from '@/model'
+import { CARRIER_ROLE_TEXT, moduleName, type CarrierSegment } from '@/model'
 import Section from './Section.vue'
 import Markdown from './Markdown.vue'
 import InterfaceItem from './InterfaceItem.vue'
@@ -16,7 +16,7 @@ import RelationRow from './RelationRow.vue'
 import RevealButton from './RevealButton.vue'
 import { useOpenPreview } from '../shared/preview'
 import { EVIDENCE_LEVEL_LABELS } from '../shared/labels'
-import { stepChain } from './chain'
+import { alignedEvidence, stepChain } from './chain'
 import { KIND_LABEL, dataNames, fragmentText, frameText, landingText, signatureLine, stepOutput } from './runText'
 
 const desk = useDesk()
@@ -49,23 +49,17 @@ const revealNodes = computed(() => {
 /** S16：代码证据；没有代码事实时为 null（K8） */
 const openPreview = useOpenPreview()
 const ev = computed(() => desk.evidence.step.value)
-const evNote = computed(() => {
-  const e = ev.value
-  if (!e) return ''
-  if (e.level === 'none') return '两端之间在代码里没有任何依赖：检查接口名或两端 codeRefs；确实经注入 / 回调传递的给关系写 via'
-  if (e.level !== 'skipped') {
-    if (e.level === 'name') return `导入名含接口名「${e.name}」`
-    return e.name ? `导入名里没有接口名「${e.name}」，列出两端之间的依赖` : '步骤没有接口，列出两端之间的依赖'
-  }
-  if (e.reason === 'actor') return '一端是外部参与者'
-  if (e.reason === 'via') return `关系经 ${viaLabel(e.via!, idx.value)} 传递，静态导入证实不了`
-  if (e.reason === 'target') return '一端是目标态模块，尚未落地'
-  return e.host ? `两端在同一组文件里（${moduleName(idx.value, e.host)}）` : '两端在同一组文件里'
-})
+/** S18b、K5d：步骤 → 绑定的交互 → 承载（desk.facts 派生） */
+const carrier = computed(() => desk.facts.stepCarrierOf(f.value).carrier)
+/** T0-10：等级由承载判定导出，与包含链同一个词；承载齐全时候选调用点取承载段的文件依赖 */
+const shownEv = computed(() => (ev.value ? alignedEvidence(idx.value, ev.value, carrier.value) : null))
 
 /** D-25：包含链（只在有代码事实时，与代码证据同一节） */
-const chain = computed(() => (ev.value ? stepChain(idx.value, f.value, f.value.relation ? desk.facts.relationFact(f.value.relation) : null) : null))
+const chain = computed(() =>
+  ev.value ? stepChain(idx.value, f.value, carrier.value, f.value.relation ? desk.facts.relationFact(f.value.relation) : null) : null,
+)
 const CHAIN_MARK = { ok: '✓', missing: '✗', skipped: '—', na: '' } as const
+const segText = (s: CarrierSegment) => CARRIER_ROLE_TEXT[s.role](s.from === '*' ? '某模块' : moduleName(idx.value, s.from), moduleName(idx.value, s.to))
 
 function pointAt(id: string) {
   if (idx.value.actors.has(id)) desk.select({ kind: 'actor', id })
@@ -130,35 +124,45 @@ function pointAt(id: string) {
       <span v-if="f.inherited?.interface" class="badge from-rel">取自关系</span>
       <InterfaceItem :id="f.interface" open />
     </Section>
-    <Section v-if="ev" title="代码证据" :count="'total' in ev ? ev.total : undefined">
+    <Section v-if="ev && shownEv" title="代码证据" :count="shownEv.total || undefined">
       <ol v-if="chain" class="chain" aria-label="包含链">
         <li class="link-step">这一步</li>
         <li class="link-interaction" :class="`st-${chain.interaction.state}`">
           <span class="arrow">→</span><span class="lvl">交互</span>
           <span v-if="CHAIN_MARK[chain.interaction.state]" class="mark">{{ CHAIN_MARK[chain.interaction.state] }}</span>
           {{ chain.interaction.text }}
+          <span v-if="chain.interaction.verdict" class="badge verdict" :data-verdict="carrier?.verdict">{{ chain.interaction.verdict }}</span>
         </li>
-        <li class="link-dependency" :class="`st-${chain.dependency.state}`">
-          <span class="arrow">→</span><span class="lvl">依赖</span>
-          <span v-if="CHAIN_MARK[chain.dependency.state]" class="mark">{{ CHAIN_MARK[chain.dependency.state] }}</span>
-          {{ chain.dependency.text }}
-          <template v-if="chain.dependency.deps?.[0]?.files[0]">
+        <li class="link-carrier" :class="`st-${chain.carrier.state}`">
+          <span class="arrow">→</span><span class="lvl">承载</span>
+          <span v-if="CHAIN_MARK[chain.carrier.state]" class="mark">{{ CHAIN_MARK[chain.carrier.state] }}</span>
+          {{ chain.carrier.text }}
+        </li>
+        <li v-for="(sg, i) in chain.carrier.segments ?? []" :key="i" class="link-segment" :class="{ 'st-missing': sg.missing }" :data-role="sg.role">
+          <span class="arrow">·</span>
+          <span>{{ segText(sg) }}</span>
+          <template v-if="sg.missing"><span class="mark">✗</span> 缺</template>
+          <template v-else-if="sg.edge">
+            <code v-if="sg.edge.element">{{ sg.edge.element.name }}</code>
+            <span v-if="sg.moduleLevel" class="muted">模块级</span>
             <button
+              v-if="sg.edge.files[0]"
               class="link"
-              :title="`在副栏预览 ${chain.dependency.deps[0].files[0].from} 第 ${chain.dependency.deps[0].files[0].line} 行`"
-              @click="openPreview(chain.dependency.deps[0].files[0].from, chain.dependency.deps[0].files[0].line)"
+              :title="`在副栏预览 ${sg.edge.files[0].from} 第 ${sg.edge.files[0].line} 行`"
+              @click="openPreview(sg.edge.files[0].from, sg.edge.files[0].line)"
             >
-              {{ chain.dependency.deps[0].files[0].from }}:{{ chain.dependency.deps[0].files[0].line }}
+              {{ sg.edge.files[0].from }}:{{ sg.edge.files[0].line }}
             </button>
           </template>
+          <span v-else class="muted">同一组代码</span>
         </li>
       </ol>
       <div class="evidence-level">
-        <span class="badge" :class="`ev-${ev.level}`">{{ EVIDENCE_LEVEL_LABELS[ev.level] }}</span>
-        <span class="muted">{{ evNote }}</span>
+        <span class="badge" :class="`ev-${shownEv.level}`">{{ EVIDENCE_LEVEL_LABELS[shownEv.level] }}</span>
+        <span class="muted">{{ shownEv.note }}</span>
       </div>
-      <ul v-if="'candidates' in ev" class="plain candidates">
-        <li v-for="d in ev.candidates" :key="`${d.from}:${d.line}:${d.to}`">
+      <ul v-if="shownEv.candidates.length" class="plain candidates">
+        <li v-for="d in shownEv.candidates.slice(0, 10)" :key="`${d.from}:${d.line}:${d.to}`">
           <button class="link" :title="`在副栏预览 ${d.from} 第 ${d.line} 行`" @click="openPreview(d.from, d.line)">{{ d.from }}:{{ d.line }}</button>
           <span class="muted">
             → {{ d.to }}<template v-if="d.via !== d.to">（经 {{ d.via }}）</template><template v-if="d.kind === 'type'"> · 只引类型</template></span
@@ -166,7 +170,9 @@ function pointAt(id: string) {
           <code v-if="d.names?.length" class="names">{{ d.names.join(', ') }}</code>
         </li>
       </ul>
-      <p v-if="'total' in ev && ev.total > ev.candidates.length" class="muted">另有 {{ ev.total - ev.candidates.length }} 条未列出</p>
+      <p v-if="shownEv.total > Math.min(10, shownEv.candidates.length)" class="muted">
+        另有 {{ shownEv.total - Math.min(10, shownEv.candidates.length) }} 条未列出
+      </p>
     </Section>
 
     <Section title="端点与本层投影">
@@ -244,6 +250,15 @@ function pointAt(id: string) {
 
 .chain .st-missing {
   color: var(--warning);
+}
+
+.chain .link-segment {
+  padding-left: 14px;
+  font-size: 12px;
+}
+
+.chain .verdict {
+  margin-left: 4px;
 }
 
 .chain .st-skipped,
