@@ -80,6 +80,40 @@ describe('L16 编码表', () => {
   })
 })
 
+describe('L16、L21 第八轮：按形态与档', () => {
+  it('形态：使用（第七轮的 dependency 同义）虚线 + 开口箭头；四种形态都按档定浓淡；不带档的事实形态为中性色', () => {
+    expect(depDash('use')).toBe(DASHED)
+    expect(depEnds('use')).toEqual({ end: 'open' })
+    expect(depColor({ kind: 'use', tier: 'value' })).toBe(TIER_COLOR.value)
+    expect(depColor({ kind: 'assembly', tier: 'type' })).toBe(TIER_COLOR.type)
+    expect(depColor({ kind: 'subclass', tier: 'invokes' })).toBe(TIER_COLOR.invokes)
+    expect(depColor({ kind: 'implements' })).toBe(FACT_COLOR)
+    expect(depColor({ kind: 'use' })).toBe(TIER_COLOR.invokes)
+  })
+
+  it('线宽档按束内元素级边条数：1 / 2–4 / ≥5', () => {
+    expect([1, 2, 3, 4, 5, 12].map(depWeight)).toEqual([1, 2, 2, 2, 3, 3])
+  })
+
+  it('束：「×N 元素」角标进 data-elements；元素级边带元素名；越过入口在终点画小叉', () => {
+    const b = render({ kind: 'assembly', forms: ['assembly', 'implements'], elements: 3 }, { label: '×3 元素' })
+    expect(b.w.find('g.dep-edge').attributes('data-elements')).toBe('3')
+    expect(b.w.find('g.dep-edge').attributes('data-kind')).toBe('assembly')
+    const el = render({ kind: 'use', element: { name: 'get', kind: 'port' } })
+    expect(el.w.find('g.dep-edge').attributes('data-element')).toBe('get')
+    expect(el.w.find('path.dep-bypass').exists()).toBe(false)
+    const by = render({ kind: 'use', bypass: true })
+    expect(by.w.find('g.dep-edge').attributes('data-bypass')).toBe('')
+    expect(by.w.find('path.dep-bypass').exists()).toBe(true)
+  })
+
+  it('承载段（L22）带强调色晕', () => {
+    const c = render({ kind: 'use', carrier: true }, { selected: true })
+    expect(c.w.find('g.dep-edge').classes()).toContain('dep-carrier')
+    expect(c.w.find('path.edge-selected-glow').exists()).toBe(true)
+  })
+})
+
 describe('DepEdge', () => {
   it('依赖：虚线、终点开口箭头，线在箭头处回缩；没有起点记号', () => {
     const { w, main } = render({})

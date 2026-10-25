@@ -3,6 +3,7 @@ import Handles from './Handles.vue'
 import DiffMark from './DiffMark.vue'
 import StructMarks from './StructMarks.vue'
 import PortMarks from './PortMarks.vue'
+import SurfaceMarks from './SurfaceMarks.vue'
 import RimTag from './RimTag.vue'
 import type { NodeData } from './types'
 
@@ -10,11 +11,21 @@ defineProps<{ data: NodeData }>()
 </script>
 
 <template>
-  <div class="core" :class="{ selected: data.selected, dim: data.dim, target: data.module?.status === 'target', [`diff-${data.change}`]: !!data.change }">
+  <div
+    class="core"
+    :class="{
+      selected: data.selected,
+      dim: data.dim,
+      target: data.module?.status === 'target',
+      [`diff-${data.change}`]: !!data.change,
+      [`surface-${data.surface?.side}`]: !!data.surface,
+    }"
+  >
     <Handles />
     <DiffMark :data="data" />
     <StructMarks :data="data" />
     <PortMarks v-if="data.ports" :ports="data.ports" :module-id="data.moduleId" />
+    <SurfaceMarks v-if="data.surface" :surface="data.surface" :module-id="data.moduleId" />
     <span class="name">{{ data.name }}</span>
     <RimTag v-if="data.rim" :rim="data.rim" />
     <span v-if="data.childCount > 0" class="drill">⌄ {{ data.childCount }}</span>
@@ -34,6 +45,16 @@ defineProps<{ data: NodeData }>()
   border: 1.5px solid var(--border-strong);
   border-radius: var(--radius);
   transition: opacity 0.15s;
+}
+
+/* C6：展开表面——元素名占入边一侧，名字让开 */
+.core.surface-top {
+  align-items: flex-end;
+  padding-bottom: 12px;
+}
+
+.core.surface-left {
+  padding-left: 132px;
 }
 
 .core:hover {

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
- * 结构边（L15、L16，ADR-0031）：结构视图私有的编码按 depStyle（UML 类图惯例：线型与端点表种类，明度表依赖的档，色相中性）；
- * 共享通道与交互边同义（L18）——线宽 = 聚合条数三档、选中 = 强调色窄晕、聚焦变淡 = 透明度、违规 = 红晕（已知为淡红晕、已豁免为灰描边）。
- * 标签只有异常标记（未解释、逆稳定）；种类、档、条数、覆盖与规则判定在悬停说明里。
+ * 结构边（L15、L16、L21，ADR-0031、ADR-0032）：束、散开的元素级边与承载段，结构视图私有的编码按 depStyle（UML 类图惯例：线型与端点表形态，明度表档，色相中性）；
+ * 共享通道与交互边同义（L18）——线宽 = 聚合条数三档（束内元素级边条数）、选中 = 强调色窄晕、聚焦变淡 = 透明度、违规 = 红晕（已知为淡红晕、已豁免为灰描边）。
+ * 标签只有角标与异常标记（「×N 元素」、越过入口、未解释、逆稳定）；形态、元素、档、条数、覆盖与规则判定在悬停说明里。
+ * 承载段（L22，交互视角选中交互时临时画出）带强调色晕。
  */
 import { computed } from 'vue'
 import { BaseEdge } from '@vue-flow/core'
@@ -22,6 +23,16 @@ const draw = (pts: Point[]) => {
 }
 const style = computed(() => ({ ...depStroke({ ...look.value, weight: props.data.weight, dim: props.data.dim }), transition: 'opacity 0.15s' }))
 const size = computed(() => arrowSize(props.data.weight) + (look.value.kind === 'subclass' || look.value.kind === 'implements' ? 2 : 0))
+/** C3：越过入口的元素级边在终点画一个小叉（接到节点本体，没有经过入口） */
+const bypassAt = computed(() => {
+  if (!look.value.bypass) return null
+  const pts = props.data.route.points
+  const b = pts[pts.length - 1]
+  const a = pts[pts.length - 2] ?? b
+  const len = Math.hypot(b.x - a.x, b.y - a.y) || 1
+  const t = Math.min(1, (size.value + 6) / len)
+  return { x: b.x - (b.x - a.x) * t, y: b.y - (b.y - a.y) * t }
+})
 const ends = computed(() => depEnds(look.value.kind))
 const path = computed(() => draw(props.data.route.points))
 /** 线在两端的记号处回缩，记号从回缩处画到原端点（晕仍沿完整走线） */
@@ -39,7 +50,16 @@ const safe = computed(() => props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)
     <UmlMarker :id="`dep-end-${safe}`" :end="ends.end" :color="style.stroke" :size="size" :line-width="style.strokeWidth" />
     <UmlMarker v-if="ends.start" :id="`dep-start-${safe}`" :end="ends.start" :color="style.stroke" :size="size" :line-width="style.strokeWidth" start />
   </defs>
-  <g class="dep-edge" :data-kind="look.kind" :data-tier="look.tier" :data-violation="look.violation">
+  <g
+    class="dep-edge"
+    :class="{ 'dep-carrier': look.carrier }"
+    :data-kind="look.kind"
+    :data-tier="look.tier"
+    :data-violation="look.violation"
+    :data-elements="look.elements"
+    :data-element="look.element?.name"
+    :data-bypass="look.bypass ? '' : undefined"
+  >
     <title>{{ look.title }}</title>
     <path
       v-if="look.violation"
@@ -69,6 +89,12 @@ const safe = computed(() => props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)
         :class="{ 'edge-selected': data.selected }"
       />
     </g>
+    <path
+      v-if="bypassAt"
+      class="dep-bypass"
+      :d="`M${bypassAt.x - 4},${bypassAt.y - 4} L${bypassAt.x + 4},${bypassAt.y + 4} M${bypassAt.x - 4},${bypassAt.y + 4} L${bypassAt.x + 4},${bypassAt.y - 4}`"
+      :opacity="data.dim ? 0.12 : 1"
+    />
   </g>
 </template>
 
@@ -99,6 +125,19 @@ const safe = computed(() => props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)
   stroke: var(--accent);
   stroke-width: 6;
   opacity: 0.35;
+}
+
+.dep-bypass {
+  pointer-events: none;
+  fill: none;
+  stroke: var(--warning);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.dep-carrier .edge-selected-glow {
+  stroke-width: 8;
+  opacity: 0.4;
 }
 
 .dep-label-soft :deep(.vue-flow__edge-text) {

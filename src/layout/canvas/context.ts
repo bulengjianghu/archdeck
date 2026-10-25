@@ -3,6 +3,7 @@ import type { LevelEvolution, LevelFacts, ScenarioLevelView, ViewEdge, VisibleLa
 import type { EdgeRoute, PositionedView } from '../layout'
 import { landingId, stageDisplay, type StageDisplay, type StageOverlay } from '../stage'
 import { structureScene, type StructureScene } from './structure'
+import { carrierNodes } from './edges'
 import type { CanvasInput } from './types'
 
 /** 画布场景各部分（节点、关系边、回放叠加、代码事实叠加）共用的派生 */
@@ -78,7 +79,12 @@ export function sceneContext(input: CanvasInput, pv: PositionedView): SceneConte
     emphEdges: emphEdgesOf(emphMessages, sv),
     visibleCoreEdges,
     visibleShelfEdges,
-    near: structure ? structure.near : nearOf(pv, layered, focusId, [...visibleCoreEdges, ...visibleShelfEdges]),
+    // L22：交互视角选中交互、有承载叠加时，承载涉及的节点之外变淡（悬停照常优先）
+    near: structure
+      ? structure.near
+      : !st && !input.hover && input.carrier
+        ? carrierNodes({ input, pv })
+        : nearOf(pv, layered, focusId, [...visibleCoreEdges, ...visibleShelfEdges]),
     routes: new Map(),
     structure,
   }

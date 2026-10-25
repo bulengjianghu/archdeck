@@ -1,7 +1,13 @@
 /** 画布场景的对外类型（ADR-0013）：与 Vue Flow 的节点、边同形，经 src/layout/canvas.ts 再导出 */
 import type {
   ActorEntity,
+  Bundle,
+  Carrier,
+  DepForm,
   DepTier,
+  ElementEdge,
+  ElementKind,
+  InteractionBundle,
   GovernanceReport,
   Impact,
   ModuleMetrics,
@@ -77,16 +83,42 @@ export interface NodeData {
   heat?: NodeHeat & { kind: HeatKind }
   /** L13：节点定义的端口记号——画在进边一侧（side）的后半；超过 PORT_MERGE 个时合成一个「端口 ×N」（merged 为端口数） */
   ports?: NodePorts
-  /** L17：结构视角的指标角标「入 Ca · 出 Ce」与不稳定度三档色条；共用件架上的块只标入（inOnly）；Ca + Ce = 0 时不给 */
-  metrics?: { ca: number; ce: number; instability: number | null; band: StabilityBand | null; inOnly?: boolean }
+  /** L17、L20①：结构视角的指标角标「入 Ca · 出 Ce · 表面 W」与不稳定度三档色条；共用件架上的块只标入（inOnly）；W 只在有入口时给；Ca + Ce = 0 时不给 */
+  metrics?: { ca: number; ce: number; instability: number | null; band: StabilityBand | null; inOnly?: boolean; w?: number }
   /** K15：结构视角选中模块时，本节点在影响面（传入）/ 依赖面（传出）里的方向与最短距离 */
   impact?: { direction: 'in' | 'out' | 'both'; distance: number; inCycle: boolean }
   /** K15：影响面的中心（选中的模块所在的节点） */
   impactSelf?: boolean
+  /** C6、L20、L23：展开表面的节点——元素记号在入边一侧（side），坐标相对节点左上角；交互视角只给被交互接到的元素 */
+  surface?: NodeSurface
+  /** B2、L21③：跨界折叠的束——朝外一侧的小记号「界外 入 N · 出 M」，悬停列目标 */
+  crossFold?: { in: number; out: number; side: 'top' | 'bottom' | 'left' | 'right'; title: string }
 }
 
-/** L16：结构边的种类——依赖、组装、子类、端口实现；没有代码事实时的允许边（U16） */
-export type DepEdgeKind = StructureKind | 'allowed'
+/** C6：节点上的一个表面元素记号 */
+export interface SurfaceMark {
+  name: string
+  kind?: ElementKind
+  /** K19：扇入（使用它的模块数） */
+  fanIn?: number
+  x: number
+  y: number
+  /** 本层有画出来的边接到它（结构视角：被显示偏好收起的为 false，记号变淡） */
+  used: boolean
+}
+
+export interface NodeSurface {
+  side: 'top' | 'left'
+  items: SurfaceMark[]
+  /** 没画成端口的元素数（「+N 个元素」，清单在面板「表面」一节） */
+  more?: number
+}
+
+/**
+ * L16、K14：结构边的形态——使用、组装、子类、端口实现（第八轮按形态，A2）；没有代码事实时的允许边（U16）。
+ * 第七轮的种类名 dependency 与 use 同义（图例与旧调用方仍可用）。
+ */
+export type DepEdgeKind = DepForm | StructureKind | 'allowed'
 
 /** U15：违规红晕三档——新增或无基线（红晕）、已知（淡红晕）、已豁免（灰描边）；共享通道（L18） */
 export type DepViolation = 'new' | 'known' | 'allowed'
@@ -99,10 +131,22 @@ export interface DepEdgeLook {
   /** 两端节点对应的模块 ID：选中落到 `sel=d:<fromModule>-><toModule>`（K10） */
   fromModule: string
   toModule: string
-  /** 聚合的模块依赖条数（线宽 = 共享通道「聚合条数」三档，L18）；允许边为 1 */
+  /** 线宽的条数（共享通道「聚合条数」三档，L18）：束为束内元素级边条数（T0 裁决 1）；元素级边与允许边为 1 */
   deps: number
   /** 文件依赖条数（只进悬停与面板） */
   files?: number
+  /** L21①：束内出现的形态（不止一种时束上加「×N 元素」角标） */
+  forms?: DepForm[]
+  /** L21①：「×N 元素」的 N（束内元素级边条数）；形态只有一种时不给 */
+  elements?: number
+  /** C6：元素级边接到的元素（越过入口、整模块为空） */
+  element?: { name: string; kind: ElementKind }
+  /** C3：越过入口（深层导入），接到节点本体并带记号 */
+  bypass?: boolean
+  /** C6：散开的束里接到节点本体的其余元素级边合成的一条（「×N 其余」） */
+  rest?: boolean
+  /** L22：承载叠加的一段（交互视角选中交互时临时画出并高亮） */
+  carrier?: boolean
   violation?: DepViolation
   /** K17：未解释（K7 同口径） */
   unexplained?: boolean
@@ -166,7 +210,11 @@ export interface RouteEdgeData {
   /** 当前消息与边的箭头方向相反（P10） */
   flowReverse?: boolean
   /** 本层没有视图边时的临时线：经由上层关系（P15）/ 结构中未建模（P11）；代码依赖叠加线（K9）；时间耦合的波浪线（J5） */
-  temp?: TempLine['kind'] | 'code' | 'couple' | 'assembly'
+  temp?: TempLine['kind'] | 'code' | 'couple' | 'assembly' | 'carried' | 'carrier-gap'
+  /** 悬停说明（D8：交互束内修饰不一致时列出各条；L22：缺段的说明） */
+  title?: string
+  /** D8：交互束内同步 / 异步、via 不一致（标签加「混合」） */
+  mixed?: boolean
   /** K9：关系边的证实 */
   fact?: EdgeFact
   /** K9：边含违规 */
@@ -246,14 +294,40 @@ export interface CanvasInput {
   assemblyRoots?: ReadonlyMap<string, number> | null
   /** ADR-0031：结构视角的输入；交互视角与运行视角为 null（照交互图画） */
   structure?: StructureInput | null
+  /** D7、D8：本层交互视图边 → 按接收方表面散开的数据与束内混合（交互视角用；运行视角为 null） */
+  spreads?: ReadonlyMap<string, InteractionBundle> | null
+  /** L22：交互视角选中一条交互时它的承载（不判定或没有代码事实时为 null） */
+  carrier?: Carrier | null
+  /** C6：展开表面的节点模块 → 元素名 → 种类与扇入（元素记号的悬停） */
+  surfaceInfo?: ReadonlyMap<string, ReadonlyMap<string, { kind: ElementKind; fanIn: number }>> | null
+}
+
+/**
+ * B1–B4、C6：结构视角画布要画的束（desk.facts.structureDisplay 的结果；同形，Layout 不依赖视图状态层的类型）
+ */
+export interface StructureDisplayInput {
+  shown: readonly Bundle[]
+  elementEdges: readonly ElementEdge[]
+  hidden: { type: number; value: number; covered: number; cross: number }
+  cross: ReadonlyMap<string, { in: number; out: number }>
+  reach: ReadonlyMap<string, 'sibling' | 'cross' | 'outer'>
+  anomalies: ReadonlySet<string>
+  focus: { bundle: string; nodes: readonly [string, string] | string[]; bundles: ReadonlySet<string> } | null
+  expanded: ReadonlyMap<string, ReadonlySet<string> | null>
 }
 
 /** 结构视角（ADR-0031）画什么：本层结构视图与显示偏好、指标、影响面、本层的环 */
 export interface StructureInput {
   /** 本层的结构边（有代码事实）或允许依赖图（U16）；代码事实还在读取时为 null（不画边，画布角说明） */
   view: StructureView | null
-  /** L15：只引类型的依赖边是否画出（缺省收起，显示偏好 typeOnly） */
+  /** B1–B4、C6：按显示偏好过滤后的束、收起计数、跨界折叠、聚焦与展开（desk.facts.structureDisplay）；没有代码事实时为 null */
+  display?: StructureDisplayInput | null
+  /** L15：只引类型的依赖边是否画出（缺省收起，显示偏好 typeOnly）；展开后的元素级边同样随它（T0 裁决 11） */
   typeOnly: boolean
+  /** B1：只看交互使用（展开后的元素级边同样随它） */
+  invokesOnly?: boolean
+  /** B4：只看未解释（跨界折叠的目标清单与计数同口径） */
+  uncoveredOnly?: boolean
   /** L17：各模块的 Ca / Ce / I（没有代码事实时为 null） */
   metrics: ReadonlyMap<string, ModuleMetrics> | null
   /** K15：选中模块的影响面（全系统）；没有选中模块或没有代码事实时为 null */
@@ -271,8 +345,11 @@ export interface StructureInput {
 export interface CanvasScene {
   nodes: CanvasNode[]
   edges: CanvasEdge[]
-  /** 结构视角：画布角的计数与说明——收起的只引类型依赖边条数（L15）、没有代码事实时的说明（U16）；其余视角不给 */
-  structure?: { typeOnlyHidden: number; note: string | null }
+  /**
+   * 结构视角：画布角的计数与说明——收起的只引类型束（L15、B1）、只看交互使用时收起的值使用（B1）、只看未解释时收起的已解释（B4），
+   * 没有代码事实时的说明（U16）；其余视角不给
+   */
+  structure?: { typeOnlyHidden: number; valueHidden: number; coveredHidden: number; note: string | null }
   /** V5：运行视角隐藏了静态内容时只按这些节点适应画布；否则为 null（取全部内容） */
   visibleIds: Set<string> | null
 }

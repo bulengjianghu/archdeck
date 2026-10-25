@@ -6,9 +6,9 @@ import { moduleName, type ModelDiff, type ModelIndex, type ModuleEntity, type Vi
 import { SHELF, bandShelfTop, moreChipId, type Box, type PositionedView } from '../layout'
 import type { Visibility } from '../stage'
 import type { SceneContext } from './context'
-import { routeMidpoint } from './edges'
+import { routeMidpoint, spreadHits } from './edges'
 import { inImpact, structureNodeMarks } from './structure'
-import type { CanvasNode, CanvasNodeType, NodeData, NodePorts } from './types'
+import type { CanvasNode, CanvasNodeType, NodeData, NodePorts, NodeSurface } from './types'
 
 const visOf = (ctx: SceneContext, id: string): Visibility => ctx.display?.nodes.get(id) ?? 'show'
 /** 运行视角：按舞台显示（V5、V8、V9）；结构视角：与聚焦对象无关的变淡 */
@@ -76,6 +76,7 @@ export function moduleNodes(ctx: SceneContext, idx: ModelIndex): CanvasNode[] {
   // A7、L4：框表示边界——根层只有系统框；下钻后外框为系统边界、内框为当前父模块，边界节点在两框之间，参与者在外框之外。
   // 没有框外元素时不画框（内容即全部）；本层有共用件或折叠时画父模块框，承载共用件架与计数（O9、O11）
   const graded = levelCounts(pv)
+  const hits = ctx.structure || ctx.st ? null : spreadHits(ctx)
   const frameData = (id: string): NodeData => ({ moduleId: id, name: moduleName(idx, id), childCount: 0, selected: false, dim: false })
   // O11：计数与架的字样挂在代表当前父模块的框上
   const ownFrame = (id: string): NodeData => ({
@@ -99,7 +100,7 @@ export function moduleNodes(ctx: SceneContext, idx: ModelIndex): CanvasNode[] {
     const box = pv.nodes.get(n.id)
     if (!box || (ctx.st && visOf(ctx, n.id) === 'hide')) continue
     if (n.role === 'actor') nodes.push(actorNode(ctx, idx, n, box))
-    else nodes.push(...moduleNode(ctx, idx, n, box))
+    else nodes.push(...moduleNode(ctx, idx, n, box, surfaceOf(ctx, n, box, hits)))
   }
   return nodes
 }
@@ -126,6 +127,27 @@ function actorNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box): C
   )
 }
 
+/**
+ * C6、L20、L23：展开表面的节点上的元素记号——位置取布局排出的元素端口（相对节点），种类与扇入取 surfaceInfo；
+ * 结构视角画全部元素（被显示偏好收起的变淡），交互视角只画被交互（或承载段）接到的元素；运行视角不画。
+ */
+function surfaceOf(ctx: SceneContext, n: ViewNode, box: Box, hits: Map<string, Set<string>> | null): Pick<NodeData, 'surface'> {
+  const placed = ctx.pv.elements?.get(n.id)
+  if (!placed?.length || ctx.st) return {}
+  const info = ctx.input.surfaceInfo?.get(n.moduleId)
+  const used = ctx.structure ? ctx.structure.usedElements.get(n.id) : hits?.get(n.id)
+  const items = placed
+    .filter(p => ctx.structure || used?.has(p.name))
+    .map(p => {
+      const x = info?.get(p.name)
+      return { name: p.name, x: p.x - box.x, y: p.y - box.y, used: !!used?.has(p.name), ...(x ? { kind: x.kind, fanIn: x.fanIn } : {}) }
+    })
+  if (!items.length) return {}
+  const more = ctx.structure ? ctx.pv.elementsMore?.get(n.id) : undefined
+  const surface: NodeSurface = { side: ctx.pv.direction === 'RIGHT' ? 'left' : 'top', items, ...(more ? { more } : {}) }
+  return { surface }
+}
+
 /** L13：一个节点的端口超过这么多个时合成一个「端口 ×N」 */
 export const PORT_MERGE = 3
 
@@ -134,8 +156,8 @@ export const PORT_MERGE = 3
  * 分层总览只画核心模块的（state 层已按层次筛好）；实现者数为描述与代码事实的并集。
  */
 function portsOf(ctx: SceneContext, idx: ModelIndex, n: ViewNode): Pick<NodeData, 'ports'> {
-  // 运行视角不画；结构视角也不画（端口实现画成结构边，选中端口换成其定义模块，V12）
-  if (ctx.st || ctx.structure) return {}
+  // 运行视角不画；结构视角也不画（端口实现画成结构边，选中端口换成其定义模块，V12）；展开表面的节点由元素记号代替（入边一侧被元素占用）
+  if (ctx.st || ctx.structure || ctx.pv.elements?.has(n.id)) return {}
   const list = ctx.input.ports?.get(n.moduleId)
   if (!list?.length) return {}
   const side = !ctx.layered && n.role !== 'boundary' && ctx.pv.direction === 'RIGHT' ? 'left' : 'top'
@@ -149,7 +171,7 @@ function portsOf(ctx: SceneContext, idx: ModelIndex, n: ViewNode): Pick<NodeData
   return { ports }
 }
 
-function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box): CanvasNode[] {
+function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box, surface: Pick<NodeData, 'surface'> = {}): CanvasNode[] {
   const sel = ctx.input.selection
   const m = idx.modules.get(n.moduleId)
   const base: NodeData = {
@@ -170,6 +192,7 @@ function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box): 
     ...portsOf(ctx, idx, n),
     // ADR-0031：结构视角换成指标、影响面、常显的环与按依赖计的「共用 ×N」（L17、K15、Y4、O13）
     ...(ctx.structure ? structureNodeMarks(ctx.structure, ctx.input, n) : {}),
+    ...surface,
   }
   // K15：影响面生效时闭包外的节点变淡（带也参与）
   if (ctx.structure?.impact) base.dim = !inImpact(ctx.structure, n)

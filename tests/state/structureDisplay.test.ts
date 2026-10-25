@@ -85,15 +85,19 @@ describe('L21、B1–B4 结构视角画布的束', () => {
     expect(d.elementEdges).toEqual([])
   })
 
-  it('B1：打开只引类型后画出；只看交互使用时值使用也收起。B4：只看未覆盖时收起已覆盖的', async () => {
+  it('B1：打开只引类型后画出；只看交互使用时值使用也收起。B4：只看未解释时收起已解释的', async () => {
     const desk = await open()
     expect(ids(desk.facts.structureDisplay({ ...OFF, typeOnly: true })!.shown)).toContain('bundle:b->lib')
     const inv = desk.facts.structureDisplay({ ...OFF, invokesOnly: true })!
     expect(ids(inv.shown)).toEqual(['bundle:a->lib'])
     expect(inv.hidden.value).toBe(1)
+    // B4（T0 裁决 6）：只看未解释——只有 edge → lib（有调用、没有交互覆盖，K7）未解释；它跨界折叠，悬停一端时画出
     const unc = desk.facts.structureDisplay({ ...OFF, uncoveredOnly: true })!
-    expect(ids(unc.shown)).toEqual(['bundle:a->b'])
-    expect(unc.hidden.covered).toBe(1)
+    expect(ids(unc.shown)).toEqual([])
+    expect(unc.hidden.covered).toBe(3)
+    expect(unc.hidden.cross).toBe(1)
+    desk.setHover('edge')
+    expect(ids(desk.facts.structureDisplay({ ...OFF, uncoveredOnly: true })!.shown)).toEqual(['bundle:edge->lib'])
   })
 
   it('B2：悬停或选中边界节点的一端时画出跨界的束', async () => {

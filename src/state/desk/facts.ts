@@ -67,7 +67,7 @@ import {
   sketchLifetime,
   type RawFile,
 } from '@/model'
-import type { StructureLinks } from '@/layout/layout'
+import { chipBundleId, type StructureLinks } from '@/layout/layout'
 import type { ViewState } from '../transition'
 import type { createSourceSync } from '../sync/source'
 import type { FileDerivations } from './files'
@@ -93,7 +93,7 @@ export interface StructureFilter {
   typeOnly: boolean
   /** B1：只画交互使用档 */
   invokesOnly: boolean
-  /** B4：只画交互覆盖数为 0 的束 */
+  /** B4：只画未解释的束（Bundle.unexplained，T0 裁决 6） */
   uncoveredOnly: boolean
   /** C6：本层全部模块总是展开表面 */
   surfaceAlways: boolean
@@ -108,7 +108,7 @@ export interface StructureDisplay {
   shown: Bundle[]
   /** 画出的元素级边：属于画出的束、被依赖方的表面展开且元素在展开集合里的（越过入口与整模块的边随展开一并给出） */
   elementEdges: ElementEdge[]
-  /** 收起的束的条数：只引类型（B1）、只看交互使用时收起的值使用（B1）、只看未覆盖时收起的已覆盖（B4）、跨界折叠（B2） */
+  /** 收起的束的条数：只引类型（B1）、只看交互使用时收起的值使用（B1）、只看未解释时收起的已解释（B4）、跨界折叠（B2） */
   hidden: { type: number; value: number; covered: number; cross: number }
   /** B2：本层节点 → 折叠进角标的跨界束的入 / 出条数 */
   cross: Map<string, { in: number; out: number }>
@@ -334,8 +334,9 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
   const structure = computed<StructureView | null>(() => (state.value.playback || state.value.mode !== 'structure' ? null : levelStructure.value))
 
   /**
-   * L15、V12（第七轮 T6）：交给布局的结构边——本层全部结构边（含只引类型、聚焦才画的），分层总览另加全部块的跨层依赖（chipDeps）；
-   * 没有代码事实时为允许边（U16），读取中为 null（只按交互边布局，读到后重算一次）。不论视角都给，两个视角共用同一份布局。
+   * L15、L21、V12：交给布局的结构边——本层全部束（一对节点同方向一条，含只引类型、聚焦才画的）与元素级边（C6 展开表面时换上），
+   * 分层总览另加全部块的跨层依赖（chipDeps，按对合成一条）；没有代码事实时为允许边（U16），读取中为 null（只按交互边布局，读到后重算一次）。
+   * 不论视角都给，两个视角共用同一份布局。
    */
   const layoutLinks = computed<StructureLinks | null>(() => {
     const sv = levelStructure.value
@@ -343,8 +344,19 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
     if (!sv || !v || !index.value) return null
     const link = (e: { id: string; from: string; to: string }) => ({ id: e.id, from: e.from, to: e.to })
     const chips = new Set(v.nodes.filter(n => n.role === 'core' || n.role === 'shared').map(n => n.id))
-    const core = v.mode === 'layered' && sv.facts && report.value ? chipDeps(index.value, v, report.value, chips).map(link) : []
-    return { edges: sv.edges.map(link), ...(core.length ? { core } : {}) }
+    const pairs = new Map<string, { id: string; from: string; to: string }>()
+    if (v.mode === 'layered' && sv.facts && report.value)
+      for (const c of chipDeps(index.value, v, report.value, chips))
+        pairs.set(chipBundleId(c.from, c.to), { id: chipBundleId(c.from, c.to), from: c.from, to: c.to })
+    const core = [...pairs.values()]
+    if (!sv.facts) return { edges: sv.edges.map(link) }
+    const elements = sv.elementEdges.map(e => ({
+      ...link(e),
+      bundle: e.bundle,
+      element: e.element?.name ?? null,
+      ...(e.element ? { kind: e.element.kind } : {}),
+    }))
+    return { edges: sv.bundles.map(link), ...(core.length ? { core } : {}), ...(elements.length ? { elements } : {}) }
   })
 
   /** K16：面板「结构」一节——模块的 Ca / Ce / I、贡献最多的依赖方 / 被依赖方、本层节点数；没有代码事实时为 null */
@@ -400,7 +412,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
   })
 
   /**
-   * B1–B4、C6：结构视角画布按显示偏好要画的束与元素级边。B1：只引类型档收起（typeOnly 时画），invokesOnly 时值使用也收起；B4：uncoveredOnly 时只画覆盖数为 0 的；
+   * B1–B4、C6：结构视角画布按显示偏好要画的束与元素级边。B1：只引类型档收起（typeOnly 时画），invokesOnly 时值使用也收起；B4：uncoveredOnly 时只画未解释的（Bundle.unexplained）；
    * B2：一端是边界节点的束缺省折叠、计入本层另一端节点的「入 · 出」，两端都是边界节点的只在聚焦时画；悬停或选中一端时画出。
    * 基线外违规、环上、逆稳定的束不论档位与折叠照画（B4 只看覆盖）。B3：选中束时与两端相连的束为聚焦集合。
    * C6：表面展开——选中模块 → 它的全部元素；选中束 → 被依赖方在这条束里接到的元素；surfaceAlways → 本层全部模块。
@@ -425,7 +437,8 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
       const r: BundleReach = fb && tb ? 'outer' : fb || tb ? 'cross' : 'sibling'
       reach.set(b.id, r)
       const keep = odd.has(b.id)
-      if (filter.uncoveredOnly && b.coverage.relations.length) {
+      // B4（T0 裁决 6）：只看未解释——既无交互覆盖、形态也不是端口实现 / 子类 / 组装的束（Bundle.unexplained，K7 口径）
+      if (filter.uncoveredOnly && !b.unexplained) {
         hidden.covered++
         continue
       }

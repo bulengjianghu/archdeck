@@ -3,7 +3,19 @@
  */
 import type { ELK, ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk-api'
 import type { LevelView } from '@/model'
-import { NODE_SIZE, SHELF, contentBounds, sizeOf, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
+import {
+  NODE_SIZE,
+  SHELF,
+  contentBounds,
+  elementPortId,
+  expandedSize,
+  sizeOf,
+  type Box,
+  type EdgeRoute,
+  type LayoutExpansion,
+  type Point,
+  type PositionedView,
+} from './geometry'
 import { LABEL_SLOT, compassOf, edgeLabel, nearPoints, placeOutside, placeRims, spreadEnds } from './routes'
 
 /**
@@ -25,16 +37,36 @@ export function portSide(end: 'in' | 'out', direction: 'DOWN' | 'RIGHT'): Side {
   return direction === 'DOWN' ? (end === 'out' ? 'SOUTH' : 'NORTH') : end === 'out' ? 'EAST' : 'WEST'
 }
 
-export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'): ElkNode {
+/** C6：节点在布局里的尺寸——展开表面的节点随元素数加长 */
+const boxSize = (n: LevelView['nodes'][number], direction: 'DOWN' | 'RIGHT', exp?: LayoutExpansion | null) => {
+  const els = exp?.nodes.get(n.id)
+  return els ? expandedSize(sizeOf(n), els.length, direction) : sizeOf(n)
+}
+
+export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN', exp?: LayoutExpansion | null): ElkNode {
   // O9：共用件不参与 elk 布局，布局后收进父模块框底部的共用件架（placeShelf）
   const inner = view.nodes.filter(n => compassOf(n) === 'inner' && n.role !== 'shared')
   const ids = new Set(inner.map(n => n.id))
-  type Port = { id: string; width: number; height: number; side: Side; reserved?: boolean; layoutOptions: Record<string, string> }
+  type Port = { id: string; width: number; height: number; side: Side; reserved?: boolean; element?: boolean; layoutOptions: Record<string, string> }
   const ports = new Map<string, Port[]>(inner.map(n => [n.id, []]))
   const port = (node: string, id: string, end: 'in' | 'out') => {
     const side = portSide(end, direction)
     ports.get(node)!.push({ id, width: 1, height: 1, side, layoutOptions: { 'elk.port.side': side } })
     return id
+  }
+  // C6：展开表面的节点——元素端口排在入边一侧（按给出的顺序、等距），接到元素的边连到元素端口；这样的节点不留端口记号的保留端口
+  const expanded = new Set<string>()
+  for (const n of inner) {
+    const els = exp?.nodes.get(n.id)
+    if (!els) continue
+    expanded.add(n.id)
+    const side = portSide('in', direction)
+    for (const el of els)
+      ports.get(n.id)!.push({ id: elementPortId(n.id, el), width: 1, height: 1, side, element: true, layoutOptions: { 'elk.port.side': side } })
+  }
+  const target = (e: { id: string; to: string }) => {
+    const t = exp?.targets.get(e.id)
+    return t && expanded.has(t.node) ? elementPortId(t.node, t.element) : null
   }
   const edges = view.edges
     .filter(e => ids.has(e.from) && ids.has(e.to))
@@ -42,21 +74,24 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
     // 每条边都申请一个至少放得下「?」或「×N」的标签槽：事实标记在布局后才叠加，槽太小时 elk 可能不给坐标（画布另有中点兜底）
     .map<ElkExtendedEdge>(e => {
       const text = edgeLabel(e)
+      const el = target(e)
       return {
         id: e.id,
         sources: [port(e.from, `${e.id}#out`, 'out')],
-        targets: [port(e.to, `${e.id}#in`, 'in')],
-        labels: [{ id: `${e.id}#label`, text, width: Math.max(LABEL_SLOT.w, text.length * 7 + 18), height: LABEL_SLOT.h }],
+        targets: [el ?? port(e.to, `${e.id}#in`, 'in')],
+        // 接到元素端口的元素级边不标 ×N，不占标签槽
+        labels: el ? [] : [{ id: `${e.id}#label`, text, width: Math.max(LABEL_SLOT.w, text.length * 7 + 18), height: LABEL_SLOT.h }],
       }
     })
   // 框外边（参与者的边、边界边）在内部节点上的那一端只占一个端口、不连线：与内部边的端口一起排左右顺序，
   // 按需走线时直接用 elk 给出的端口位置，同一侧的所有出入点才统一排在前半
   for (const e of view.edges) {
     if (ids.has(e.from) && !ids.has(e.to)) port(e.from, `${e.id}#out`, 'out')
-    if (ids.has(e.to) && !ids.has(e.from)) port(e.to, `${e.id}#in`, 'in')
+    if (ids.has(e.to) && !ids.has(e.from) && !target(e)) port(e.to, `${e.id}#in`, 'in')
   }
   // L11、L13：进边一侧的后半留给端口记号——末尾一个半边长的保留端口，关系边的端口只能排在它前面
   for (const n of inner) {
+    if (expanded.has(n.id)) continue
     const side = portSide('in', direction)
     const { w, h } = sizeOf(n)
     const half = (side === 'NORTH' || side === 'SOUTH' ? w : h) / 2
@@ -69,7 +104,12 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
   // 下边从右到左、左边从下到上），按这个方向给 FIXED_ORDER 的序号
   for (const list of ports.values()) {
     for (const side of ['NORTH', 'EAST', 'SOUTH', 'WEST'] as const) {
-      const visual = [...list.filter(p => p.side === side && !p.reserved), ...list.filter(p => p.side === side && p.reserved)]
+      // C6：展开的节点在入边一侧先排元素端口（按元素顺序），关系边与不接元素的边的端口在后
+      const visual = [
+        ...list.filter(p => p.side === side && p.element),
+        ...list.filter(p => p.side === side && !p.reserved && !p.element),
+        ...list.filter(p => p.side === side && p.reserved),
+      ]
       const clockwise = side === 'SOUTH' || side === 'WEST' ? [...visual].reverse() : visual
       clockwise.forEach((p, i) => (p.layoutOptions['elk.port.index'] = String(SIDE_BASE[side] + i)))
     }
@@ -95,10 +135,14 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
     },
     children: inner.map(n => ({
       id: n.id,
-      width: sizeOf(n).w,
-      height: sizeOf(n).h,
+      width: boxSize(n, direction, exp).w,
+      height: boxSize(n, direction, exp).h,
       ports: ports.get(n.id)!.map(({ id, width, height, layoutOptions }) => ({ id, width, height, layoutOptions })),
-      layoutOptions: { 'elk.portConstraints': 'FIXED_ORDER' },
+      // C6：展开的节点上元素端口按顺序等距排在入边一侧（标签画在端口处）
+      layoutOptions: {
+        'elk.portConstraints': 'FIXED_ORDER',
+        ...(expanded.has(n.id) ? { 'elk.portAlignment.default': 'DISTRIBUTED' } : {}),
+      } as Record<string, string>,
     })),
     edges,
   }
@@ -108,13 +152,31 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
 export const FRAME_PAD = 28
 export const FRAME_EDGE_PAD = 12
 
-export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
+export function fromElkGraph(view: LevelView, graph: ElkNode, exp?: LayoutExpansion | null): PositionedView {
   const nodes = new Map<string, Box>()
   const ports = new Map<string, Point>()
   for (const c of graph.children ?? []) {
     nodes.set(c.id, { x: c.x ?? 0, y: c.y ?? 0, w: c.width ?? 0, h: c.height ?? 0 })
     for (const p of c.ports ?? [])
       if (!p.id.endsWith(RESERVED)) ports.set(p.id, { x: (c.x ?? 0) + (p.x ?? 0) + (p.width ?? 0) / 2, y: (c.y ?? 0) + (p.y ?? 0) + (p.height ?? 0) / 2 })
+  }
+  // C6：元素端口的位置（按入边一侧的顺序）；框外边接到元素时，它在内部节点上的端点就是元素端口（outsideRoute 按 `<边 ID>#in` 取）
+  let elements: PositionedView['elements']
+  if (exp)
+    for (const [node, names] of exp.nodes) {
+      if (!nodes.has(node)) continue
+      elements ??= new Map()
+      elements.set(
+        node,
+        names.flatMap(name => {
+          const at = ports.get(elementPortId(node, name))
+          return at ? [{ name, ...at }] : []
+        }),
+      )
+    }
+  for (const [id, t] of exp?.targets ?? []) {
+    const at = ports.get(elementPortId(t.node, t.element))
+    if (at && !ports.has(`${id}#in`)) ports.set(`${id}#in`, at)
   }
   const edges = new Map<string, EdgeRoute>()
   for (const e of (graph.edges ?? []) as ElkExtendedEdge[]) {
@@ -126,7 +188,8 @@ export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
     // elk 有时把没放下的标签留在原点：离走线太远的标签坐标不用，交给画布按走线中点放（canvas/edges.ts routeMidpoint）
     edges.set(e.id, { points, ...(label && nearPoints(label, points, LABEL_SLOT.w + LABEL_SLOT.h) ? { label } : {}) })
   }
-  spreadEnds(view.edges, edges)
+  // 汇到同一端点的几条边错开；接到元素端口的元素级边汇在同一元素上是本意，不错开
+  spreadEnds(exp ? view.edges.filter(e => !exp.targets.has(e.id)) : view.edges, edges)
   const direction = graph.layoutOptions?.['elk.direction'] === 'RIGHT' ? 'RIGHT' : 'DOWN'
   // 父模块框：包住内部节点（留 FRAME_PAD）与内部走线（留 FRAME_EDGE_PAD），框线不压在走线上
   const inner = [...nodes.values()]
@@ -156,6 +219,8 @@ export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
     direction,
     parentFrame: rimmed,
     ports,
+    ...(elements ? { elements } : {}),
+    ...(exp?.more?.size ? { elementsMore: exp.more } : {}),
     ...(shelved.shelf ? { shelf: shelved.shelf } : {}),
     ...(frame ? { frame } : {}),
   }
@@ -204,15 +269,15 @@ const TARGET_ASPECT = 1.4
 /**
  * 普通层次先自上而下排；若结果又高又窄（依赖链长），再试自左向右，取宽高比更接近画布的一种。
  */
-export async function layoutGraph(view: LevelView): Promise<PositionedView> {
+export async function layoutGraph(view: LevelView, exp?: LayoutExpansion | null): Promise<PositionedView> {
   const elk = await getElk()
-  const down = fromElkGraph(view, await elk.layout(toElkGraph(view, 'DOWN')))
+  const down = fromElkGraph(view, await elk.layout(toElkGraph(view, 'DOWN', exp)), exp)
   const score = (pv: PositionedView) => {
     const b = contentBounds(pv)
     return b ? Math.abs(Math.log(b.w / b.h / TARGET_ASPECT)) : 0
   }
   const b = contentBounds(down)
   if (!b || b.w / b.h > TARGET_ASPECT / 2) return down
-  const right = fromElkGraph(view, await elk.layout(toElkGraph(view, 'RIGHT')))
+  const right = fromElkGraph(view, await elk.layout(toElkGraph(view, 'RIGHT', exp)), exp)
   return score(right) < score(down) ? right : down
 }

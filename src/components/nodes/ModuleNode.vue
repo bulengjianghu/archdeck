@@ -3,6 +3,7 @@ import Handles from './Handles.vue'
 import DiffMark from './DiffMark.vue'
 import StructMarks from './StructMarks.vue'
 import PortMarks from './PortMarks.vue'
+import SurfaceMarks from './SurfaceMarks.vue'
 import RimTag from './RimTag.vue'
 import type { NodeData } from './types'
 
@@ -21,12 +22,14 @@ defineProps<{ data: NodeData }>()
       core: !!data.core,
       [`rim-${data.rim}`]: !!data.rim,
       [`diff-${data.change}`]: !!data.change,
+      [`surface-${data.surface?.side}`]: !!data.surface,
     }"
   >
     <Handles />
     <DiffMark :data="data" />
     <StructMarks :data="data" />
     <PortMarks v-if="data.ports" :ports="data.ports" :module-id="data.moduleId" />
+    <SurfaceMarks v-if="data.surface" :surface="data.surface" :module-id="data.moduleId" />
     <div class="head">
       <span class="name">{{ data.name }}</span>
       <RimTag v-if="data.rim" :rim="data.rim" />
@@ -83,6 +86,15 @@ defineProps<{ data: NodeData }>()
 .module-node.deprecated .name {
   text-decoration: line-through;
   color: var(--text-3);
+}
+
+/* C6：展开表面——元素名占入边一侧（顶部竖排一带 / 左侧一列），名字与职责让开 */
+.module-node.surface-top {
+  padding-top: 82px;
+}
+
+.module-node.surface-left {
+  padding-left: 132px;
 }
 
 .head {

@@ -3,6 +3,8 @@
  * 结构视角的节点角标（ADR-0031）：
  * - L17：左缘色条 = 不稳定度三档（稳定 / 居中 / 易变），下边框左侧「入 Ca · 出 Ce」（共用件架上的块只标入）；
  * - K15：选中模块时影响面里的节点——上边框左侧标方向与距离（牵动 = 传入、依赖 = 传出、双向），外圈按距离由深到浅。
+ * - L20①：有入口的模块在同一行加「表面 W」（K19）；
+ * - B2、L21③：跨界折叠的束——朝外一侧的小记号「界外 入 N · 出 M」，悬停列目标。
  * 环的编号与「共用 ×N」仍由 DiffMark 画（共享通道）。
  */
 import { computed } from 'vue'
@@ -18,7 +20,14 @@ const metricsTitle = computed(() => {
   const x = m.value
   if (!x) return ''
   const i = x.instability === null ? '—' : x.instability.toFixed(2)
-  return `扇入 Ca ${x.ca}（子树外依赖它的模块）· 扇出 Ce ${x.ce}（它依赖的子树外模块）· 不稳定度 I ${i}${x.band ? `（${STABILITY[x.band]}）` : ''}（K16、L17）`
+  const w = x.w !== undefined ? ` · 表面宽度 W ${x.w}（子树外引用的不同表面元素数，K19）` : ''
+  return `扇入 Ca ${x.ca}（子树外依赖它的模块）· 扇出 Ce ${x.ce}（它依赖的子树外模块）· 不稳定度 I ${i}${x.band ? `（${STABILITY[x.band]}）` : ''}（K16、L17）${w}`
+})
+const cross = computed(() => props.data.crossFold)
+const crossText = computed(() => {
+  const x = cross.value
+  if (!x) return ''
+  return `界外 ${[x.in ? `入 ${x.in}` : '', x.out ? `出 ${x.out}` : ''].filter(Boolean).join(' · ')}`
 })
 const impactTitle = computed(() => {
   const x = imp.value
@@ -31,8 +40,14 @@ const impactTitle = computed(() => {
 <template>
   <span v-if="m?.band" class="stability" :class="m.band" :data-band="m.band" :title="metricsTitle" />
   <span v-if="m" class="metrics" :class="{ compact }" data-testid="node-metrics" :title="metricsTitle"
-    >入 {{ m.ca }}<template v-if="!m.inOnly"> · 出 {{ m.ce }}</template></span
+    >入 {{ m.ca }}<template v-if="!m.inOnly"> · 出 {{ m.ce }}</template
+    ><template v-if="m.w !== undefined">
+      · <span data-testid="node-surface-w">表面 {{ m.w }}</span></template
+    ></span
   >
+  <span v-if="cross" class="cross-fold" :class="cross.side" data-testid="cross-fold" :data-in="cross.in" :data-out="cross.out" :title="cross.title">{{
+    crossText
+  }}</span>
   <span v-if="imp" class="impact-ring" :class="[imp.direction, `d${Math.min(imp.distance, 3)}`]" />
   <span v-if="imp" class="impact-mark" :class="imp.direction" data-testid="impact-mark" :data-distance="dist" :title="impactTitle"
     >{{ DIRECTION[imp.direction] }} {{ dist }}<template v-if="imp.inCycle"> ↻</template></span
@@ -81,6 +96,42 @@ const impactTitle = computed(() => {
   bottom: -8px;
   font-size: 10px;
   line-height: 14px;
+}
+
+.cross-fold {
+  position: absolute;
+  z-index: 2;
+  padding: 0 5px;
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--text-3);
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: 7px;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.cross-fold.top {
+  top: -8px;
+  right: 10px;
+}
+
+.cross-fold.bottom {
+  bottom: -8px;
+  right: 10px;
+}
+
+.cross-fold.left {
+  left: -6px;
+  top: 50%;
+  transform: translate(-100%, -50%);
+}
+
+.cross-fold.right {
+  right: -6px;
+  top: 50%;
+  transform: translate(100%, -50%);
 }
 
 .impact-ring {

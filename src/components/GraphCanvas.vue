@@ -9,15 +9,19 @@
  * 交互视角开启「代码事实」时叠加证实标记、违规与代码依赖叠加线、本层的环（K9、Y4）；单击叠加线即选中它（K10）。
  * 结构视角（ADR-0031）：节点不动，交互边换成结构边（L15、L16），单击结构边即选中这对节点的代码依赖（`sel=d:`）；节点标指标与不稳定度（L17）、
  * 选中模块时标影响面（K15）、本层的环常显（Y4）；画布角计收起的只引类型依赖边（L15），没有代码事实时说明只画允许依赖（U16）。
+ * 第八轮（ADR-0032）：结构边即束，按显示偏好过滤（desk.facts.structureDisplay，L21），画布角计收起的只引类型 / 值使用 / 已解释；
+ * 表面展开（C6、L20、L23）：按选中与「总是展开表面」定展开的节点（surfaceExpansion），本层带元素端口重新布局（等同下钻），重排完成前沿用并集布局；
+ * 交互视角选中交互时叠加承载（L22），交互束按接收方表面散开、混合标记（L23）。
  * 开启「演化」时叠加热度角标与时间耦合的波浪线（J5）；单击耦合线即选中它（J7）。
  * 节点右键：「在此设计」（F-10：以该模块为挂载点新建设计，只在当前版本、不能是层）。
  * 画什么由 Layout 的 canvasScene 算出（ADR-0013）；这里只把结果写入 Vue Flow、把交互转成操作、适应画布。
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import { useDesk } from '@/state/inject'
-import { contentBounds } from '@/layout/layout'
+import { cacheKey, contentBounds, layoutView, surfaceExpansion, type PositionedView, type StructureLinks } from '@/layout/layout'
+import type { ElementKind, InteractionBundle } from '@/model'
 import { canvasScene, type NodeData, type RouteEdgeData, type StructureInput } from '@/layout/canvas'
 import { useStage } from './stage/useStageDisplay'
 import ModuleNode from './nodes/ModuleNode.vue'
@@ -44,7 +48,7 @@ const { setViewport, zoomIn, zoomOut, dimensions, setNodes, setEdges } = useVueF
 /** 运行视角的舞台叠加；结构 / 交互视角为 null */
 const stage = computed(() => (desk.perspective.value === 'run' ? desk.run.overlay.value : null))
 const interaction = computed(() => desk.perspective.value === 'interaction')
-/** ADR-0031：结构视角的显示偏好（只引类型、影响面方向、只看值依赖），与「显示」面板共享 */
+/** ADR-0031、ADR-0032：结构视角的显示偏好（只引类型、只看交互使用、只看未解释、总是展开表面、影响面方向、只看值依赖），与「显示」面板共享 */
 const structurePrefs = useStructurePrefs(desk.project)
 
 /** 结构视角的画布输入；其余视角为 null */
@@ -55,9 +59,15 @@ const structure = computed<StructureInput | null>(() => {
   const sel = desk.selection.value
   const loading = f.status.value === 'loading'
   const hit = sel?.kind === 'module' && !loading ? f.impactOf(sel.id, p.valuesOnly) : null
+  const display = loading
+    ? null
+    : f.structureDisplay({ typeOnly: p.typeOnly, invokesOnly: p.invokesOnly, uncoveredOnly: p.uncoveredOnly, surfaceAlways: p.surfaceAlways })
   return {
     view: loading ? null : f.structure.value,
+    display,
     typeOnly: p.typeOnly,
+    invokesOnly: p.invokesOnly,
+    uncoveredOnly: p.uncoveredOnly,
     metrics: (p.valuesOnly ? f.valueMetrics.value : f.metrics.value) ?? null,
     impact: hit?.impact ?? null,
     impactMode: p.impactMode,
@@ -67,10 +77,85 @@ const structure = computed<StructureInput | null>(() => {
   }
 })
 
+// ── 表面展开（C6、L20、L23）：展开的节点带元素端口重新布局；两个视角同一套规则（V12），运行视角与分层总览不展开 ──
+
+/** D7、D8：本层交互视图边按接收方表面散开的数据（两个视角都要：布局取并集；运行视角不用） */
+const spreads = computed<Map<string, InteractionBundle> | null>(() => {
+  const v = desk.view.value
+  if (desk.perspective.value === 'run' || !v || desk.facts.status.value !== 'ready') return null
+  const out = new Map<string, InteractionBundle>()
+  for (const e of v.edges) {
+    const b = desk.facts.interactionSpread(e.id)
+    if (b) out.set(e.id, b)
+  }
+  return out
+})
+
+/** C6：带表面展开的布局输入；没有展开时为 null（用 DeskState 的并集布局） */
+const expandLinks = computed<StructureLinks | null>(() => {
+  const v = desk.view.value
+  const links = desk.facts.layoutLinks.value
+  if (desk.perspective.value === 'run' || !v || !links?.elements?.length) return null
+  const x = surfaceExpansion({
+    view: v,
+    selection: desk.selection.value,
+    always: structurePrefs.prefs.value.surfaceAlways,
+    links,
+    spreads: spreads.value,
+  })
+  return x ? { ...links, expand: x.expand, interactions: x.interactions } : null
+})
+
+/** C6：展开后的布局（异步，过期的结果丢弃）；入口导出读到后元素变化即重排一次 */
+const expanded = shallowRef<{ key: string; pv: PositionedView } | null>(null)
+let expandSeq = 0
+watch(
+  [() => desk.view.value, expandLinks],
+  async ([v, l]) => {
+    const mine = ++expandSeq
+    if (!v || !l) return
+    const key = cacheKey(v, {}, l)
+    if (expanded.value?.key === key) return
+    const pv = await layoutView(v, {}, l)
+    if (mine === expandSeq) expanded.value = { key, pv }
+  },
+  { immediate: true },
+)
+
+/** 画布用的布局：有展开且展开的布局已就绪时用它，否则用 DeskState 的并集布局 */
+const positioned = computed<PositionedView | null>(() => {
+  const v = desk.view.value
+  const l = expandLinks.value
+  const e = expanded.value
+  if (v && l && e && e.pv.view === v && e.key === cacheKey(v, {}, l)) return e.pv
+  return desk.positioned.value
+})
+
+/** C6：展开节点的元素种类与扇入（元素记号的悬停） */
+const surfaceInfo = computed(() => {
+  const l = expandLinks.value
+  const v = desk.view.value
+  if (!l?.expand || !v) return null
+  const out = new Map<string, Map<string, { kind: ElementKind; fanIn: number }>>()
+  for (const x of l.expand) {
+    const m = v.nodes.find(n => n.id === x.node)?.moduleId
+    if (!m || out.has(m)) continue
+    const fan = new Map((desk.facts.surfaceMetricsOf(m)?.uses ?? []).map(u => [u.element.name, u.modules.length]))
+    out.set(m, new Map((desk.facts.surfaceOf(m)?.elements ?? []).map(e => [e.name, { kind: e.kind, fanIn: fan.get(e.name) ?? 0 }])))
+  }
+  return out
+})
+
+/** L22：交互视角选中一条交互时它的承载 */
+const carrier = computed(() => {
+  const sel = desk.selection.value
+  return interaction.value && sel?.kind === 'relation' ? desk.facts.carrierOf(sel.id) : null
+})
+
 /** 画布场景（Layout 的纯函数 canvasScene，ADR-0013）：节点与边的数据、显隐、变淡、回放态与选中突出 */
 const scene = computed(() =>
   canvasScene({
-    positioned: desk.positioned.value,
+    positioned: positioned.value,
     index: desk.index.value,
     selection: desk.selection.value,
     hover: desk.hoverId.value,
@@ -90,6 +175,9 @@ const scene = computed(() =>
     assembly: interaction.value ? (desk.facts.assembly.value?.overlays ?? null) : null,
     assemblyRoots: interaction.value ? (desk.facts.assembly.value?.roots ?? null) : null,
     structure: structure.value,
+    spreads: interaction.value ? spreads.value : null,
+    carrier: carrier.value,
+    surfaceInfo: surfaceInfo.value,
   }),
 )
 const nodes = computed<Node<NodeData>[]>(() => scene.value.nodes)
@@ -140,7 +228,14 @@ function onMenu(key: string) {
 }
 
 function onEdgeClick({ edge }: { edge: Edge<RouteEdgeData> }) {
-  if (edge.data!.temp === 'unmodeled') return
+  if (edge.data!.temp === 'unmodeled' || edge.data!.temp === 'carrier-gap') return
+  // L22 反向：结构视角里临时画出的承载交互——切到交互视角并选中它（同 K17 面板）
+  if (edge.data!.temp === 'carried' && !edge.data!.dep) {
+    desk.setMode('interaction')
+    return desk.select({ kind: 'relation', id: edge.data!.edge.relationIds[0] })
+  }
+  // L22：承载段不改选中（选中仍是那条交互）
+  if (edge.data!.dep?.carrier) return
   // L15：结构边落到这对节点的代码依赖（K10 的 sel=d:），同一对节点的各种类同一个键
   const d = edge.data!.dep
   if (d) return desk.select({ kind: 'dep', id: `${d.fromModule}->${d.toModule}` })
@@ -152,8 +247,10 @@ function onEdgeClick({ edge }: { edge: Edge<RouteEdgeData> }) {
   const c = edge.data!.couple
   if (c) return desk.select({ kind: 'couple', id: c.primary })
   const e = edge.data!.edge
-  if (e.kind === 'direct') desk.select({ kind: 'relation', id: e.relationIds[0] })
-  else desk.select({ kind: 'edge', id: e.id })
+  // D7：散开到元素的一段——一条关系即选中它，几条即选中原视图边
+  const part = e.id.includes('#to:')
+  if (e.kind === 'direct' || (part && e.relationIds.length === 1)) desk.select({ kind: 'relation', id: e.relationIds[0] })
+  else desk.select({ kind: 'edge', id: part ? e.id.replace(/#to:.*$/, '') : e.id })
 }
 
 function onNodeEnter({ node }: { node: Node<NodeData> }) {
@@ -198,7 +295,7 @@ watch(
   },
 )
 function fitNow(): boolean {
-  const pv = desk.positioned.value
+  const pv = positioned.value
   const { width, height } = dimensions.value
   if (!pv || width === 0 || height === 0) return false
   const b = contentBounds(pv, visibleIds.value ?? undefined)
@@ -214,12 +311,17 @@ function tryPendingFit(attempt = 0) {
   else if (attempt < 40) setTimeout(() => tryPendingFit(attempt + 1), 50)
 }
 watch(
-  () => desk.positioned.value,
+  () => positioned.value,
   async () => {
     await nextTick()
     tryPendingFit()
   },
   { immediate: true },
+)
+// C6：「总是展开表面」切换后本层重排，重排后适应一次（选中引起的展开不重新适应，视野保持）
+watch(
+  () => structurePrefs.prefs.value.surfaceAlways,
+  () => (pendingFit.value = true),
 )
 
 // 画布容器尺寸变化（进入 / 退出运行视角、切换分屏方向、拖动分隔条或折叠两侧栏）后重新适应
@@ -282,10 +384,28 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
         v-if="structureCorner?.typeOnlyHidden"
         class="type-only"
         data-testid="type-only-corner"
-        title="只引类型的依赖边缺省收起（L15）；单击画出，「显示」面板里可再收起"
+        title="只引类型的束缺省收起（L15、L21②）；单击画出，「显示」面板里可再收起"
         @click="structurePrefs.setTypeOnly(true)"
       >
         只引类型 {{ structureCorner.typeOnlyHidden }} 条已收起
+      </button>
+      <button
+        v-if="structureCorner?.valueHidden"
+        class="type-only"
+        data-testid="value-hidden-corner"
+        title="「只看交互使用」开启时值使用档的束收起（B1）；单击关闭这个开关"
+        @click="structurePrefs.setInvokesOnly(false)"
+      >
+        值使用 {{ structureCorner.valueHidden }} 条已收起
+      </button>
+      <button
+        v-if="structureCorner?.coveredHidden"
+        class="type-only"
+        data-testid="covered-hidden-corner"
+        title="「只看未解释」开启时已解释的束（有交互覆盖，或形态是端口实现 / 子类 / 组装）收起（B4）；单击关闭这个开关"
+        @click="structurePrefs.setUncoveredOnly(false)"
+      >
+        已解释 {{ structureCorner.coveredHidden }} 条已收起
       </button>
     </div>
     <SketchMenu

@@ -4,6 +4,7 @@
  * 颜色 = 关系类型（查询低饱和 + 半透明、委托实色、未分类中性灰）；线型 = 事实状态（实 / 虚 / 点）；箭头 = 同步实心、异步空心；
  * 插座 = 经端口（L12，目标端与箭头叠放）；线宽 = 聚合条数三档；标签 = ×N（pill）与异常；晕 = 违规（优先）/ 设计变更、选中（强调色窄晕）、回放当前（宽晕 + 流动）。
  * 时间耦合（J5）：灰色波浪线、无箭头、标 ×N；无依赖无关系的更深色。
+ * 第八轮：束内修饰不一致标「混合」、悬停列出各条（D8）；结构视角选中束时它承载的交互临时画出、带强调色晕（L22 反向）；承载缺段为提示虚线（L22）。
  */
 import { computed } from 'vue'
 import { BaseEdge } from '@vue-flow/core'
@@ -57,8 +58,14 @@ const socketId = computed(() => `socket-${markerId.value.slice('arrow-'.length)}
   />
   <path v-if="data.violated && !data.temp" :d="path" class="edge-violated" fill="none" stroke-linecap="round" :opacity="data.dim ? 0.06 : 0.3" />
   <path v-if="data.selected" :d="path" class="edge-selected-glow" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+  <path v-if="data.temp === 'carried'" :d="path" class="edge-carried-glow" fill="none" stroke-linecap="round" stroke-linejoin="round" />
   <path v-if="data.play === 'current' || data.play === 'hover'" :d="path" class="edge-glow" :class="data.play" fill="none" stroke-linecap="round" />
-  <g :class="{ 'edge-label-pill': data.pill, 'edge-label-warn': data.warn, 'edge-couple': couple, 'edge-couple-isolated': couple && data.couple?.isolated }">
+  <g
+    :class="{ 'edge-label-pill': data.pill, 'edge-label-warn': data.warn, 'edge-couple': couple, 'edge-couple-isolated': couple && data.couple?.isolated }"
+    :data-temp="data.temp"
+    :data-mixed="data.mixed ? '' : undefined"
+  >
+    <title v-if="data.title">{{ data.title }}</title>
     <BaseEdge
       :id="id"
       :path="linePath"
@@ -99,6 +106,14 @@ const socketId = computed(() => `socket-${markerId.value.slice('arrow-'.length)}
   pointer-events: none;
   stroke: var(--danger);
   stroke-width: 8;
+}
+
+/* L22：反向高亮的承载交互——强调色宽一档的晕 */
+.edge-carried-glow {
+  pointer-events: none;
+  stroke: var(--accent);
+  stroke-width: 9;
+  opacity: 0.28;
 }
 
 /* 选中：强调色窄晕，与回放当前步骤的宽晕区分；线宽不变 */

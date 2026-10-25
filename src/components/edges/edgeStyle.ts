@@ -51,6 +51,7 @@ export function strokeColor(d: CoupleLook): string {
   if (d.temp === 'code') return d.violated ? 'var(--danger)' : 'var(--edge-code)'
   if (d.temp === 'assembly') return 'var(--assembly)'
   if (d.temp === 'unmodeled') return 'var(--danger)'
+  if (d.temp === 'carrier-gap') return 'var(--warning)'
   if (d.play === 'preview') return 'var(--warning)'
   if (d.muted) return 'var(--text-3)'
   return `var(--rel-${d.type ?? 'calls'})`
@@ -65,6 +66,8 @@ export function strokeStyle(d: CoupleLook) {
   if (d.temp === 'code') return { stroke, strokeWidth: 2, strokeDasharray: DOTTED, strokeLinecap: 'round' as const, opacity: d.dim ? 0.12 : 0.95 }
   if (d.temp === 'unmodeled') return { stroke, strokeWidth: 1.5, strokeDasharray: '5 5', opacity: d.play === 'preview' ? 0.7 : 0.9 }
   if (d.temp === 'assembly') return { stroke, strokeWidth: 1.8, strokeDasharray: DASH_DOT, strokeLinecap: 'round' as const, opacity: d.dim ? 0.12 : 0.9 }
+  // L22：承载缺段的提示虚线
+  if (d.temp === 'carrier-gap') return { stroke, strokeWidth: 1.6, strokeDasharray: '5 4', strokeLinecap: 'round' as const, opacity: 0.95 }
   return {
     stroke,
     strokeWidth: WIDTH[(d.weight ?? 1) - 1],

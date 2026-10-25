@@ -2,11 +2,23 @@
  * 画布场景的边（ADR-0013）：关系边（本层视图边与分层总览的核心跨层边）、回放叠加的临时线（P11、P15）与分支预览、
  * 代码事实叠加线（K9）、时间耦合的波浪线（J5）、组装叠加线（O12）。显隐、变淡、回放态、选中突出的灰化，以及视觉通道（L10：线型、箭头、线宽档、标签）都在这里定。
  */
-import { parseVia, relationMode, type EdgeFact, type ModelDiff, type ModelIndex, type ViewEdge } from '@/model'
-import { edgeLabel, edgeRoute, edgeWeight, isBoundaryEdge, linkRoute, type Box, type EdgeRoute, type Point } from '../layout'
+import {
+  CARRIER_ROLE_TEXT,
+  CARRIER_TEMPLATE_LABELS,
+  CARRIER_VERDICT_LABELS,
+  moduleName,
+  nodeOf as nodeOfModule,
+  parseVia,
+  relationMode,
+  type EdgeFact,
+  type ModelDiff,
+  type ModelIndex,
+  type ViewEdge,
+} from '@/model'
+import { edgeLabel, edgeRoute, edgeWeight, isBoundaryEdge, linkRoute, spreadEdgeId, type Box, type EdgeRoute, type Point } from '../layout'
 import { isTemp, landingId } from '../stage'
 import type { SceneContext } from './context'
-import { depViewEdge, depWeight, inImpact } from './structure'
+import { DEP_KIND_LABELS, DEP_TIER_LABELS, ELEMENT_KIND_LABELS, depViewEdge, depWeight, elementAt, inImpact, routeToPoint } from './structure'
 import type { CanvasEdge, EdgeArrow, FactState, RouteEdgeData } from './types'
 
 /** K9、L10：只标异常——未证实与部分证实画虚线并标 ?，已证实与没有事实的照常 */
@@ -90,7 +102,8 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined,
   // 运行视角下走过的边由步骤序号标注，不标条数；K9：异常标记跟在条数后
   const count = ctx.st && play.play ? '' : edgeLabel(e)
   const mark = state === 'unconfirmed' ? '?' : ''
-  const label = extra.label ?? [count, mark].filter(Boolean).join(' ')
+  // D8：束内同步 / 异步、via 不一致时加「混合」记号
+  const label = extra.label ?? [count, mark, extra.mixed ? '混合' : ''].filter(Boolean).join(' ')
   const route = label && !route0.label ? { ...route0, label: routeMidpoint(route0) } : route0
   return {
     id: core ? `core:${e.id}` : e.id,
@@ -149,11 +162,74 @@ export const shownEdges = (ctx: SceneContext): ViewEdge[] => (ctx.structure ? []
 export function interactionEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   const { pv } = ctx
   if (ctx.structure) return []
-  const list = shownEdges(ctx).map(e => makeEdge(ctx, e, ctx.routes.get(e.id) ?? edgeRoute(pv, e), false))
-  if (ctx.layered) list.push(...ctx.visibleCoreEdges.map(e => makeEdge(ctx, e, pv.coreEdges.get(e.id), true)))
+  const list = shownEdges(ctx).flatMap(e => spreadEdges(ctx, e, ctx.routes.get(e.id) ?? edgeRoute(pv, e)))
+  if (ctx.layered) list.push(...ctx.visibleCoreEdges.map(e => makeEdge(ctx, e, pv.coreEdges.get(e.id), true, mixedOf(ctx, e))))
   // O10：共用件的边不参与布局，悬停 / 选中一端时画成曲线
-  list.push(...ctx.visibleShelfEdges.map(e => makeEdge(ctx, e, linkRoute(pv.nodes.get(e.from), pv.nodes.get(e.to)), false, { shelf: true, dim: false })))
+  list.push(
+    ...ctx.visibleShelfEdges.map(e =>
+      makeEdge(ctx, e, linkRoute(pv.nodes.get(e.from), pv.nodes.get(e.to)), false, { shelf: true, dim: false, ...mixedOf(ctx, e) }),
+    ),
+  )
   return list
+}
+
+/** D8：束内修饰不一致——「混合」记号与悬停列出各条（运行视角不标） */
+function mixedOf(ctx: SceneContext, e: ViewEdge): Partial<RouteEdgeData> {
+  const sp = ctx.st ? null : ctx.input.spreads?.get(e.id)
+  if (!sp?.mixed) return {}
+  const what = [sp.mixed.mode ? '同步 / 异步' : '', sp.mixed.via ? 'via' : ''].filter(Boolean).join('、')
+  return { mixed: true, title: [`束内${what}不一致（D8）：`, ...e.relationIds.map(id => relationText(ctx.input.index, id))].join('\n') }
+}
+
+/**
+ * D7、L23：接收方表面展开时，交互束按关系的接口散开到对应元素——每个元素一段（取布局里接到元素端口的那条走线），
+ * 没写接口（或元素不在本层展开里）的留在原视图边上接到模块本体；只画被交互接到的元素。框外边与运行视角不散开。
+ */
+function spreadEdges(ctx: SceneContext, e: ViewEdge, route: EdgeRoute | undefined): (CanvasEdge | null)[] {
+  const sp = ctx.input.spreads?.get(e.id)
+  const placed = ctx.pv.elements?.get(e.to)
+  const mixed = mixedOf(ctx, e)
+  if (ctx.st || !sp || !placed) return [makeEdge(ctx, e, route, false, mixed)]
+  const groups = new Map<string, string[]>()
+  for (const it of sp.items) {
+    const name = it.element?.name
+    if (name && placed.some(p => p.name === name) && ctx.pv.edges.has(spreadEdgeId(e.id, name))) groups.set(name, [...(groups.get(name) ?? []), it.relation])
+  }
+  if (!groups.size) return [makeEdge(ctx, e, route, false, mixed)]
+  const sel = ctx.input.selection
+  const out: (CanvasEdge | null)[] = []
+  for (const [name, rels] of groups) {
+    const id = spreadEdgeId(e.id, name)
+    if ((sel?.kind === 'relation' && rels.includes(sel.id)) || (sel?.kind === 'edge' && sel.id === e.id)) ctx.selectedEdgeIds.add(id)
+    const part: ViewEdge = { ...e, id, relationIds: rels }
+    out.push(makeEdge(ctx, part, ctx.pv.edges.get(id), false, rels.length > 1 ? {} : { label: '' }))
+  }
+  const rest = e.relationIds.filter(id => ![...groups.values()].some(r => r.includes(id)))
+  if (rest.length) out.push(makeEdge(ctx, { ...e, relationIds: rest }, route, false, mixed))
+  return out
+}
+
+/** C6、L23：交互视角里被画出来的散开段接到的元素（节点上只画这些元素记号） */
+export function spreadHits(ctx: SceneContext): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>()
+  if (ctx.st || ctx.structure) return out
+  for (const e of shownEdges(ctx)) {
+    const sp = ctx.input.spreads?.get(e.id)
+    const placed = ctx.pv.elements?.get(e.to)
+    if (!sp || !placed) continue
+    for (const it of sp.items) {
+      const name = it.element?.name
+      if (name && placed.some(p => p.name === name) && ctx.pv.edges.has(spreadEdgeId(e.id, name)))
+        (out.get(e.to) ?? out.set(e.to, new Set()).get(e.to)!).add(name)
+    }
+  }
+  // L22：承载段接到的元素也画
+  for (const seg of ctx.input.carrier?.segments ?? []) {
+    const el = seg.edge?.element?.name
+    const b = seg.edge ? projectNode(ctx, seg.edge.toModule) : null
+    if (el && b && ctx.pv.elements?.get(b)?.some(p => p.name === el)) (out.get(b) ?? out.set(b, new Set()).get(b)!).add(el)
+  }
+  return out
 }
 
 /** 回放叠加的边：P11、P15 本层没有视图边的消息画临时线，不参与布局——经由上层关系为关系类型色的虚线，未建模为红色虚线；分支预览同样画临时线 */
@@ -257,8 +333,9 @@ export function assemblyEdges(ctx: SceneContext): (CanvasEdge | null)[] {
 }
 
 /**
- * L15、L16：结构视角的结构边——画出来的（structureScene 的显隐之后），编码数据交给 DepEdge（UML 类图惯例）。
- * 标签只有异常标记：未解释（K17）、逆稳定（U17，浅色）；变淡：影响面生效时两端不都在闭包里的边，否则与聚焦节点无关的边（共享通道）。
+ * L15、L16、L21、C6：结构视角的结构边——画出来的束、散开的元素级边与跨层依赖（structureScene 的显隐之后），编码数据交给 DepEdge（UML 类图惯例）。
+ * 标签只有角标与异常标记：形态不止一种的束「×N 元素」（L21①）、越过入口（C3）、未解释（K17）、逆稳定（U17，浅色）；
+ * 变淡：影响面生效时两端不都在闭包里的边；选中束时不在聚焦里的（B3）；否则与聚焦节点无关的边（共享通道）。
  */
 export function depEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   const sc = ctx.structure
@@ -269,8 +346,16 @@ export function depEdges(ctx: SceneContext): (CanvasEdge | null)[] {
     if (!route0) return null
     const selected = sc.selected.has(e.id)
     const touches = !!ctx.focusId && (e.from === ctx.focusId || e.to === ctx.focusId)
-    const dim = sc.impact ? !(inImpact(sc, nodeOf(e.from)) && inImpact(sc, nodeOf(e.to))) && !selected : !!ctx.near && !touches && !selected
-    const label = [e.look.unexplained ? '未解释' : '', e.look.against ? '逆稳定' : ''].filter(Boolean).join(' · ')
+    const unfocused = !!sc.focus && !sc.focus.has(e.bundle ?? e.id) && !e.chip
+    const dim = sc.impact ? !(inImpact(sc, nodeOf(e.from)) && inImpact(sc, nodeOf(e.to))) && !selected : unfocused || (!!ctx.near && !touches && !selected)
+    const label = [
+      e.look.rest ? `×${e.look.elements} 其余` : e.look.elements ? `×${e.look.elements} 元素` : '',
+      e.look.bypass ? '越过入口' : '',
+      e.look.unexplained ? '未解释' : '',
+      e.look.against ? '逆稳定' : '',
+    ]
+      .filter(Boolean)
+      .join(' · ')
     const route = label && !route0.label ? { ...route0, label: routeMidpoint(route0) } : route0
     return {
       id: e.id,
@@ -283,7 +368,7 @@ export function depEdges(ctx: SceneContext): (CanvasEdge | null)[] {
         route,
         edge: depViewEdge(e),
         label,
-        ...(e.look.unexplained ? { warn: true } : {}),
+        ...(e.look.unexplained || e.look.bypass ? { warn: true } : {}),
         factState: 'confirmed' as const,
         arrow: 'open' as const,
         weight: depWeight(e.look.deps),
@@ -294,4 +379,154 @@ export function depEdges(ctx: SceneContext): (CanvasEdge | null)[] {
       },
     }
   })
+}
+
+/**
+ * L22 反向：结构视角选中一条束时，它承载的交互（K17 覆盖明细）在同一画布上临时画出并高亮——取并集布局里这些交互边的走线
+ * （两个视角共用一份布局，交互边本就有走线），不参与布局与跳线；单击选中那条交互。
+ */
+export function carriedEdges(ctx: SceneContext): (CanvasEdge | null)[] {
+  const sc = ctx.structure
+  if (!sc?.carried.length) return []
+  const { pv } = ctx
+  const want = new Set(sc.carried)
+  const seen = new Set<string>()
+  const out: (CanvasEdge | null)[] = []
+  for (const e of [...pv.view.edges, ...(pv.view.coreEdges ?? [])]) {
+    const rel = e.relationIds.filter(id => want.has(id))
+    if (!rel.length || seen.has(e.id)) continue
+    seen.add(e.id)
+    const core = !!pv.view.coreEdges?.includes(e)
+    const route = (core ? pv.coreEdges.get(e.id) : (pv.edges.get(e.id) ?? edgeRoute(pv, e))) ?? linkRoute(pv.nodes.get(e.from), pv.nodes.get(e.to))
+    if (!route) continue
+    const idx = ctx.input.index
+    const ve: ViewEdge = { ...e, id: `carried:${e.id}`, kind: 'direct', relationIds: rel }
+    out.push(
+      makeEdge(ctx, ve, route, false, {
+        temp: 'carried',
+        label: rel.length > 1 ? `承载 ×${rel.length}` : '承载',
+        pill: false,
+        warn: false,
+        factState: 'confirmed',
+        selected: false,
+        dim: false,
+        title: ['这条束承载的交互（K17 覆盖，L22）：', ...rel.map(id => relationText(idx, id))].join('\n'),
+      }),
+    )
+  }
+  return out.map(e => (e ? { ...e, zIndex: EDGE_Z.active } : e))
+}
+
+/**
+ * L22、D4：交互视角选中一条交互时它的承载段临时画在同一画布上并高亮——元素级边按结构视图的形态记号（DepEdge），
+ * 接到元素端口（被依赖方展开时）或节点本体；缺的段画成提示虚线；两端投到本层同一节点或不在本层的段不画（面板定位）。不参与布局与跳线。
+ */
+export function carrierEdges(ctx: SceneContext): (CanvasEdge | null)[] {
+  const c = ctx.input.carrier
+  const idx = ctx.input.index
+  if (!c || ctx.st || ctx.structure || !idx) return []
+  const { pv } = ctx
+  const out: (CanvasEdge | null)[] = []
+  c.segments.forEach((seg, i) => {
+    const a = projectNode(ctx, seg.edge?.fromModule ?? seg.from)
+    const b = projectNode(ctx, seg.edge?.toModule ?? seg.to)
+    if (!a || !b || a === b) return
+    const role = CARRIER_ROLE_TEXT[seg.role](moduleName(idx, seg.from === '*' ? seg.to : seg.from), moduleName(idx, seg.to))
+    const id = `carrier:${c.relation}:${i}`
+    const ve: ViewEdge = { id, kind: 'direct', from: a, to: b, type: 'calls', relationIds: [], mode: 'sync' }
+    if (seg.missing || !seg.edge) {
+      if (!seg.missing) return
+      const route = linkRoute(pv.nodes.get(a), pv.nodes.get(b))
+      out.push(
+        makeEdge(ctx, ve, route, false, {
+          temp: 'carrier-gap',
+          label: `缺：${role}`,
+          pill: false,
+          warn: true,
+          factState: 'unconfirmed',
+          selected: false,
+          dim: false,
+          title: `承载（${CARRIER_TEMPLATE_LABELS[c.template]}）缺段：${role}——代码里没有这一段依赖（K5d）`,
+        }),
+      )
+      return
+    }
+    const e = seg.edge
+    const el = e.element?.name
+    const route = routeToPoint(pv.nodes.get(a), elementAt(pv, b, el), pv.nodes.get(b))
+    if (!route) return
+    out.push({
+      id,
+      source: a,
+      target: b,
+      type: 'dep',
+      zIndex: EDGE_Z.active,
+      data: {
+        route,
+        edge: ve,
+        label: seg.moduleLevel ? '模块级' : '',
+        factState: 'confirmed',
+        arrow: 'open',
+        weight: 1,
+        selected: true,
+        dim: false,
+        temp: 'carried',
+        dep: {
+          kind: e.form,
+          tier: e.tier,
+          fromModule: e.fromModule,
+          toModule: e.toModule,
+          deps: 1,
+          files: e.files.length,
+          carrier: true,
+          ...(e.element ? { element: { name: e.element.name, kind: e.element.kind } } : {}),
+          title: [
+            `承载（${CARRIER_TEMPLATE_LABELS[c.template]} · ${CARRIER_VERDICT_LABELS[c.verdict]}）：${role}`,
+            `${DEP_KIND_LABELS[e.form]}（${DEP_TIER_LABELS[e.tier]}）：${moduleName(idx, e.fromModule)} → ${moduleName(idx, e.toModule)}${e.element ? ` · ${e.element.name}（${ELEMENT_KIND_LABELS[e.element.kind]}）` : ''}`,
+            ...(seg.moduleLevel ? ['只在模块级成立（边接到模块本体或别的元素，K5 回退）'] : []),
+            ...e.files.slice(0, 3).map(f => `${f.from}:${f.line}`),
+          ].join('\n'),
+        },
+      },
+    })
+  })
+  return out
+}
+
+/** 一条关系的一行说明：两端、类型、修饰与说明（悬停用） */
+export function relationText(idx: ModelIndex | null, id: string): string {
+  const r = idx?.relations.get(id)
+  if (!r || !idx) return id
+  const mods = [
+    r.type,
+    r.mode === 'async' ? '异步' : r.type === 'queries' || r.type === 'commands' ? '同步' : '',
+    r.via ? `via ${r.via}` : '',
+    r.interface ? `接口 ${r.interface}` : '',
+  ]
+  return `${moduleName(idx, r.from)} → ${moduleName(idx, r.to)}（${mods.filter(Boolean).join(' · ')}）${r.description ? `：${r.description}` : ''}`
+}
+
+/** 模块在本层的投影节点（自身、边界节点或所在的祖先节点）；不在本层为 null */
+export function projectNode(ctx: SceneContext, module: string): string | null {
+  const idx = ctx.input.index
+  const v = ctx.pv.view
+  if (!idx || module === '*') return null
+  return nodeOfModule(idx, v, new Set(v.nodes.map(n => n.id)), module)
+}
+
+/** L22：承载叠加涉及的节点（变淡的例外）：交互两端与各段两端在本层的投影 */
+export function carrierNodes(ctx: Pick<SceneContext, 'input' | 'pv'>): Set<string> | null {
+  const c = ctx.input.carrier
+  const idx = ctx.input.index
+  if (!c || !idx) return null
+  const v = ctx.pv.view
+  const present = new Set(v.nodes.map(n => n.id))
+  const out = new Set<string>()
+  const r = idx.relations.get(c.relation)
+  for (const m of [r?.from, r?.to, ...c.segments.flatMap(s => [s.edge?.fromModule ?? s.from, s.edge?.toModule ?? s.to])]) {
+    if (!m || m === '*') continue
+    const n = nodeOfModule(idx, v, present, m)
+    if (n) out.add(n)
+  }
+  return out
 }
