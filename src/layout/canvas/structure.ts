@@ -1,7 +1,8 @@
 /**
  * 画布场景的结构视角（ADR-0031）：结构边（依赖边）的显隐、走线与编码数据，节点的指标、影响面与环角标。
- * 节点位置全部取交互视角的布局结果（V12），结构边不参与布局（L15）：从起点节点边缘到终点节点边缘直连（directRoutes），
- * 不绕框、可压在其他节点下方；分层总览的带与带之间画竖直直线（bandDirectRoutes）。
+ * 结构边与交互边并集布局（L15，第七轮 T6）：节点位置与走线都取同一份布局（V12 由构造保证），这里只按边 ID 取走线——
+ * 内部边取 elk 的正交走线，框外边与交互视角一样按画出来的这一组走线、分配轨道（outsideRoutes），共用件的边画成曲线（同 O10），
+ * 分层总览的带间边取排布给出的竖线与右侧通道、核心模块的跨层依赖取核心跨层边的曲线（同 O4）。
  *   L15：只引类型的依赖边缺省收起（偏好 typeOnly），画布角计数；基线外违规的照画。边界节点的边只在聚焦其一端时画（同 L4）。
  *   O13：共用件与使用者之间的边缺省不画，聚焦任一端时画；反向依赖（U12）、违规（U15）、在环中（Y4）的照画；「共用 ×N」按依赖计。
  *   O13③：分层总览带间画层间依赖，带内不画；核心模块（与架上共用件）的跨层依赖只在聚焦它时画。
@@ -20,9 +21,10 @@ import {
   type DepTier,
   type ModelIndex,
   type StructureEdge,
+  type ViewEdge,
   type ViolationStatus,
 } from '@/model'
-import { bandDirectRoutes, directRoutes, type EdgeRoute, type PositionedView } from '../layout'
+import { linkRoute, outsideRoutes, type EdgeRoute, type PositionedView } from '../layout'
 import type { CanvasInput, DepEdgeKind, DepEdgeLook, DepViolation, NodeData } from './types'
 
 /** L16：结构边种类的名称（悬停说明与图例） */
@@ -174,6 +176,17 @@ function chipItem(idx: ModelIndex, e: ChipDep): DepItem {
   }
 }
 
+/** 结构边在走线器里的外形（同并集布局里的结构边） */
+export const depViewEdge = (e: Pick<DepItem, 'id' | 'from' | 'to'>): ViewEdge => ({
+  id: e.id,
+  kind: 'direct',
+  from: e.from,
+  to: e.to,
+  type: 'calls',
+  relationIds: [],
+  mode: 'sync',
+})
+
 /** 结构视角的场景派生；结构视角之外不调用 */
 export function structureScene(input: CanvasInput, pv: PositionedView, focusId: string | null): StructureScene {
   const s = input.structure!
@@ -217,18 +230,15 @@ export function structureScene(input: CanvasInput, pv: PositionedView, focusId: 
     return true
   })
 
-  // 走线（L15，直连）：从起点节点边缘到终点节点边缘画直线，不绕框；同一对节点的各条平行错开；分层总览带与带之间画竖直直线
+  // 走线（L15，并集布局）：与交互边同一个走线器——布局给出的按 ID 取；普通层次的框外边按画出来的这一组走线（同 L11），共用件的边为曲线（同 O10）
   const routes = new Map<string, EdgeRoute>()
-  if (layered) {
-    const bands = new Set((view.bands ?? []).map(b => b.layerId))
-    const bandLinks = shown.filter(e => !e.chip && bands.has(e.from) && bands.has(e.to))
-    for (const [id, r] of bandDirectRoutes(pv, bandLinks)) routes.set(id, r)
-    for (const [id, r] of directRoutes(
-      pv,
-      shown.filter(e => !routes.has(e.id)),
-    ))
-      routes.set(id, r)
-  } else for (const [id, r] of directRoutes(pv, shown)) routes.set(id, r)
+  const outside = layered ? new Map<string, EdgeRoute>() : outsideRoutes(pv, shown.map(depViewEdge))
+  for (const e of shown) {
+    const r = e.chip
+      ? pv.coreEdges.get(e.id)
+      : (outside.get(e.id) ?? pv.edges.get(e.id) ?? (shelf.has(e.from) || shelf.has(e.to) ? linkRoute(pv.nodes.get(e.from), pv.nodes.get(e.to)) : undefined))
+    if (r) routes.set(e.id, r)
+  }
 
   // K15：影响面按方向投影到本层
   let impact: StructureScene['impact'] = null

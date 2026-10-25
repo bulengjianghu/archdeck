@@ -6,7 +6,7 @@ import { parseVia, relationMode, type EdgeFact, type ModelDiff, type ModelIndex,
 import { edgeLabel, edgeRoute, edgeWeight, isBoundaryEdge, linkRoute, type Box, type EdgeRoute, type Point } from '../layout'
 import { isTemp, landingId } from '../stage'
 import type { SceneContext } from './context'
-import { depWeight, inImpact } from './structure'
+import { depViewEdge, depWeight, inImpact } from './structure'
 import type { CanvasEdge, EdgeArrow, FactState, RouteEdgeData } from './types'
 
 /** K9、L10：只标异常——未证实与部分证实画虚线并标 ?，已证实与没有事实的照常 */
@@ -272,17 +272,16 @@ export function depEdges(ctx: SceneContext): (CanvasEdge | null)[] {
     const dim = sc.impact ? !(inImpact(sc, nodeOf(e.from)) && inImpact(sc, nodeOf(e.to))) && !selected : !!ctx.near && !touches && !selected
     const label = [e.look.unexplained ? '未解释' : '', e.look.against ? '逆稳定' : ''].filter(Boolean).join(' · ')
     const route = label && !route0.label ? { ...route0, label: routeMidpoint(route0) } : route0
-    const ve: ViewEdge = { id: e.id, kind: 'direct', from: e.from, to: e.to, type: 'calls', relationIds: [], mode: 'sync' }
     return {
       id: e.id,
       source: e.from,
       target: e.to,
       type: 'dep' as const,
-      // L15 直连：结构边一律画在节点之下（穿过其他节点时压在下方），选中与聚焦靠晕与变淡区分
-      zIndex: EDGE_Z.idle,
+      // 同交互边（L11）：与聚焦对象相邻或选中的浮在节点之上，其余在节点之下
+      zIndex: selected || touches ? EDGE_Z.active : EDGE_Z.idle,
       data: {
         route,
-        edge: ve,
+        edge: depViewEdge(e),
         label,
         ...(e.look.unexplained ? { warn: true } : {}),
         factState: 'confirmed' as const,

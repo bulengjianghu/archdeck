@@ -6,6 +6,7 @@
 import { computed, type ComputedRef, type ShallowRef } from 'vue'
 import {
   againstStabilityOf,
+  chipDeps,
   hasStructureEdge,
   isolatedInteractions,
   structureEdgeFiles,
@@ -51,6 +52,7 @@ import {
   sketchLifetime,
   type RawFile,
 } from '@/model'
+import type { StructureLinks } from '@/layout/layout'
 import type { ViewState } from '../transition'
 import type { createSourceSync } from '../sync/source'
 import type { FileDerivations } from './files'
@@ -226,11 +228,28 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
     )
   })
 
-  /** L15、U16：结构视角下本层的结构视图；其余视角为 null（不参与布局，节点位置取交互视角的布局，V12） */
-  const structure = computed<StructureView | null>(() => {
-    if (!index.value || !view.value || state.value.playback || state.value.mode !== 'structure') return null
+  /** L15、U16：本层的结构视图，不论视角都算（结构边与交互边并集布局）；代码事实还在读取时为 null */
+  const levelStructure = computed<StructureView | null>(() => {
+    if (!index.value || !view.value || status.value === 'loading') return null
     if (report.value) return structureView(index.value, view.value, report.value, metrics.value ? { metrics: metrics.value } : {})
     return structureView(index.value, view.value, null, { sketch: sketchLayers.value })
+  })
+
+  /** L15、U16：结构视角下本层的结构视图；其余视角为 null */
+  const structure = computed<StructureView | null>(() => (state.value.playback || state.value.mode !== 'structure' ? null : levelStructure.value))
+
+  /**
+   * L15、V12（第七轮 T6）：交给布局的结构边——本层全部结构边（含只引类型、聚焦才画的），分层总览另加全部块的跨层依赖（chipDeps）；
+   * 没有代码事实时为允许边（U16），读取中为 null（只按交互边布局，读到后重算一次）。不论视角都给，两个视角共用同一份布局。
+   */
+  const layoutLinks = computed<StructureLinks | null>(() => {
+    const sv = levelStructure.value
+    const v = view.value
+    if (!sv || !v || !index.value) return null
+    const link = (e: { id: string; from: string; to: string }) => ({ id: e.id, from: e.from, to: e.to })
+    const chips = new Set(v.nodes.filter(n => n.role === 'core' || n.role === 'shared').map(n => n.id))
+    const core = v.mode === 'layered' && sv.facts && report.value ? chipDeps(index.value, v, report.value, chips).map(link) : []
+    return { edges: sv.edges.map(link), ...(core.length ? { core } : {}) }
   })
 
   /** K16：面板「结构」一节——模块的 Ca / Ce / I、贡献最多的依赖方 / 被依赖方、本层节点数；没有代码事实时为 null */
@@ -274,6 +293,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
     error,
     report,
     structure,
+    layoutLinks,
     metrics,
     valueMetrics,
     metricsOf,

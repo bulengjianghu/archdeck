@@ -6,7 +6,7 @@ import { createRouterSync } from '../../src/state/sync/router'
 import { createLayoutSync } from '../../src/state/sync/layout'
 import { watchModelChanges, type ChangeEvents } from '../../src/state/sync/modelSource'
 import type { LevelView } from '../../src/model'
-import type { PositionedView } from '../../src/layout/layout'
+import type { PositionedView, StructureLinks } from '../../src/layout/layout'
 
 const tick = () => new Promise(r => setTimeout(r, 0))
 
@@ -71,6 +71,25 @@ describe('布局同步', () => {
     view.value = null
     await nextTick()
     expect(positioned.value).toBeNull()
+  })
+
+  it('L15：结构边（并集布局）变化也重新布局，传给布局的是当前的结构边', async () => {
+    const v = { mode: 'graph', parentId: 'a', nodes: [], edges: [] } as LevelView
+    const view = shallowRef<LevelView | null>(v)
+    const links = shallowRef<StructureLinks | null>(null)
+    const calls: (StructureLinks | null | undefined)[] = []
+    createLayoutSync(
+      view,
+      async (x, _o, l) => {
+        calls.push(l)
+        return { view: x } as PositionedView
+      },
+      shallowRef({}),
+      links,
+    )
+    links.value = { edges: [{ id: 'dependency:a->b', from: 'a', to: 'b' }] }
+    await nextTick()
+    expect(calls).toEqual([links.value])
   })
 })
 

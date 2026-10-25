@@ -117,8 +117,20 @@ export function layoutLayered(view: LevelView, opts: LayoutOptions = {}): Positi
   })
 
   const edges = new Map<string, EdgeRoute>()
-  // 相邻层之间：带间空隙里的竖线，同一空隙内的多条边横向错开
+  // 相邻层之间：带间空隙里的竖线，同一空隙内的多条边从中线起左右交替错开 112 px；条数多（并集布局里还有结构边，L15）时
+  // 按空隙内的条数收窄间距，最外一条不超出带的中间区域
   // 跨多层：走右侧通道，每条占一条车道
+  const adjacent = (e: ViewEdge) => {
+    const ia = bandIndex.get(e.from)
+    const ib = bandIndex.get(e.to)
+    return ia !== undefined && ib !== undefined && Math.abs(ia - ib) === 1 && nodes.has(e.from) && nodes.has(e.to) && !isOutsideEdge(view, e)
+  }
+  const gapCount = new Map<string, number>()
+  for (const e of view.edges.filter(adjacent)) {
+    const key = `${Math.min(bandIndex.get(e.from)!, bandIndex.get(e.to)!)}`
+    gapCount.set(key, (gapCount.get(key) ?? 0) + 1)
+  }
+  const gapStep = (key: string) => Math.min(112, (middle / 2 - BAND.chipGap) / Math.max(1, Math.ceil(((gapCount.get(key) ?? 1) - 1) / 2)))
   const gapSlots = new Map<string, number>()
   let lane = 0
   for (const e of view.edges) {
@@ -128,11 +140,11 @@ export function layoutLayered(view: LevelView, opts: LayoutOptions = {}): Positi
     if (!a || !b || isOutsideEdge(view, e)) continue
     const ia = bandIndex.get(e.from)
     const ib = bandIndex.get(e.to)
-    if (ia !== undefined && ib !== undefined && Math.abs(ia - ib) === 1) {
+    if (ia !== undefined && ib !== undefined && adjacent(e)) {
       const key = `${Math.min(ia, ib)}`
       const slot = gapSlots.get(key) ?? 0
       gapSlots.set(key, slot + 1)
-      const x = BAND.left + middle / 2 + (slot % 2 === 0 ? 1 : -1) * Math.ceil(slot / 2) * 112
+      const x = BAND.left + middle / 2 + (slot % 2 === 0 ? 1 : -1) * Math.ceil(slot / 2) * gapStep(key)
       const down = ia < ib
       const y1 = down ? a.y + a.h : a.y
       const y2 = down ? b.y : b.y + b.h

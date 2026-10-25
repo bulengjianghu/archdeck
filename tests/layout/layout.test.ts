@@ -25,6 +25,7 @@ import {
   LABEL_SLOT,
   RESERVED,
   spreadEnds,
+  unionView,
   type EdgeRoute,
 } from '../../src/layout/layout'
 import type { ViewEdge } from '../../src/model'
@@ -43,6 +44,21 @@ describe('layoutLayered · 分层总览', () => {
     const wide = layoutLayered(view, { bandColumns: 8 }).nodes.get('infra')!.w
     expect(wide).toBeGreaterThan(narrow)
     expect(cacheKey(view, { bandColumns: 3 })).not.toBe(cacheKey(view, { bandColumns: 8 }))
+  })
+
+  it('L15 并集布局：相邻带间的竖线条数多时收窄间距，最外一条仍在带的中间区域内；缓存键含结构边', () => {
+    const links = {
+      edges: Array.from({ length: 12 }, (_, i) => ({ id: `dependency:${i}`, from: i % 2 ? 'infra' : 'app', to: i % 2 ? 'app' : 'infra' })),
+    }
+    const u = layoutLayered(unionView(view, links))
+    const band = u.nodes.get('infra')!
+    for (const l of links.edges) {
+      const x = u.edges.get(l.id)!.points[0].x
+      expect(x).toBeGreaterThan(band.x + BAND.left)
+      expect(x).toBeLessThan(band.x + band.w - BAND.right)
+    }
+    expect(new Set(links.edges.map(l => u.edges.get(l.id)!.points[0].x)).size).toBe(12)
+    expect(cacheKey(view, {}, links)).not.toBe(cacheKey(view))
   })
 
   it('O6：展开的层的占位块变为「收起」，仍占一个位置', () => {

@@ -173,15 +173,15 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       return null
     }
   })
-  const positioned = createLayoutSync(view, layoutView, layoutOpts)
-
   // ── 领域派生（ADR-0013）──
   const files = createFiles({ state, index, view, sync: sourceSync, design: !!options.version })
+  // 架构治理先于布局：结构边与交互边并集布局（L15），两个视角共用同一份布局（V12）
+  const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version, sketches })
+  const positioned = createLayoutSync(view, layoutView, layoutOpts, facts.layoutLinks)
   // 步骤的代码证据（S16、S17）：时序图的「?」由 run 交给 Layout，所以先于 run 创建
   const evidence = createEvidence({ state, index, plan, planOf: planScenario, files, sync: sourceSync, design: !!options.version })
   const run = createRun({ state, index, levelId, plan, view, positioned, fileOwners: files.owners, evidence: evidence.levels })
   const versions = createVersions({ state, index, designs, commits, baselines, version: options.version, sketchPrompt, sketches })
-  const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version, sketches })
   const evolution = createEvolution({ state, index, view, files, facts, sync: sourceSync, design: !!options.version })
   const intent = createIntent({ index, designs, sketches, version: options.version })
   // ── 草图画布（X7，ADR-0024、ADR-0025）：只在草图版本上，打开即进入 ──

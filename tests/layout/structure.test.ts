@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   assignFiles,
+  chipDeps,
   governanceReport,
   impactOf,
   levelFacts,
@@ -14,9 +15,11 @@ import {
   structureView,
   type CodeDeps,
   type FileDep,
+  type LevelView,
   type RawFile,
+  type StructureView,
 } from '@/model'
-import { layoutView } from '../../src/layout/layout'
+import { layoutView, type StructureLinks } from '../../src/layout/layout'
 import { canvasScene, type CanvasInput, type StructureInput } from '../../src/layout/canvas'
 import { LAYERS, RULES, SRC, dep } from '../model/governance/helpers'
 
@@ -57,6 +60,14 @@ function build(layers = LAYERS, deps = DEPS) {
 
 type Built = ReturnType<typeof build>
 
+/** L15：交给布局的结构边（同 DeskState 的 layoutLinks）——本层全部结构边，分层总览另加全部块的跨层依赖 */
+function linksOf(b: Built, view: LevelView, sv: StructureView | null): StructureLinks | null {
+  if (!sv) return null
+  const chips = new Set(view.nodes.filter(n => n.role === 'core' || n.role === 'shared').map(n => n.id))
+  const core = view.mode === 'layered' && sv.facts ? chipDeps(b.index, view, b.report, chips) : []
+  return { edges: sv.edges, core }
+}
+
 async function input(b: Built, level: string, s: Partial<StructureInput> = {}, rest: Partial<CanvasInput> = {}): Promise<CanvasInput> {
   const view = projectLevel(b.index, level, { showBoundaries: true })
   const structure: StructureInput = {
@@ -70,7 +81,7 @@ async function input(b: Built, level: string, s: Partial<StructureInput> = {}, r
     ...s,
   }
   return {
-    positioned: await layoutView(view),
+    positioned: await layoutView(view, {}, linksOf(b, view, structure.view)),
     index: b.index,
     selection: null,
     hover: null,
@@ -113,25 +124,63 @@ describe('L15 结构边的投影：换边不换节点', () => {
       'implements:core.impl->core.api',
       'subclass:core.util->core.impl',
     ])
-    // 结构边不参与布局：直连（两点直线、不是曲线），两端落在两端节点的边缘上，一律画在节点之下
-    const box = (id: string) => inS.positioned!.nodes.get(id)!
+    // 并集布局（第七轮 T6）：结构边的走线就是布局给出的 elk 正交走线（端点落在两端节点上），空闲时画在节点之下
+    const pv = inS.positioned!
+    const box = (id: string) => pv.nodes.get(id)!
+    // elk 的端口是 1 px 的方块，走线端点在节点边缘外 1 px 内
     const onRim = (p: { x: number; y: number }, b: { x: number; y: number; w: number; h: number }) =>
-      p.x >= b.x - 0.01 &&
-      p.x <= b.x + b.w + 0.01 &&
-      p.y >= b.y - 0.01 &&
-      p.y <= b.y + b.h + 0.01 &&
-      [p.x - b.x, b.x + b.w - p.x, p.y - b.y, b.y + b.h - p.y].some(d => Math.abs(d) < 0.01)
+      p.x >= b.x - 1.01 &&
+      p.x <= b.x + b.w + 1.01 &&
+      p.y >= b.y - 1.01 &&
+      p.y <= b.y + b.h + 1.01 &&
+      [p.x - b.x, b.x + b.w - p.x, p.y - b.y, b.y + b.h - p.y].some(d => Math.abs(d) < 1.01)
     for (const e of deps(s)) {
+      const pts = e.data.route.points
       expect(e.data.route.curve).toBeFalsy()
-      expect(e.data.route.points).toHaveLength(2)
-      expect(onRim(e.data.route.points[0], box(e.source))).toBe(true)
-      expect(onRim(e.data.route.points[1], box(e.target))).toBe(true)
+      expect(pts).toEqual(pv.edges.get(e.id)!.points)
+      expect(pts.slice(1).every((q, k) => Math.abs(q.x - pts[k].x) < 0.01 || Math.abs(q.y - pts[k].y) < 0.01)).toBe(true)
+      expect(onRim(pts[0], box(e.source))).toBe(true)
+      expect(onRim(pts[pts.length - 1], box(e.target))).toBe(true)
       expect(e.zIndex).toBe(1)
     }
-    // 双向（impl ⇄ util）的两条不重合
-    const a = deps(s).find(e => e.id === 'dependency:core.impl->core.util')!.data.route.points
+    // 双向（impl ⇄ util）与同一对的不同种类（impl → api 的组装与端口实现）由 elk 分开走线，互不重合
+    const pts = (id: string) => JSON.stringify(deps(s).find(e => e.id === id)!.data.route.points)
     const r = deps(s).find(e => e.id === 'dependency:core.util->core.impl')!.data.route.points
-    expect(JSON.stringify(a)).not.toBe(JSON.stringify([...r].reverse()))
+    expect(pts('dependency:core.impl->core.util')).not.toBe(JSON.stringify([...r].reverse()))
+    expect(pts('assembly:core.impl->core.api')).not.toBe(pts('implements:core.impl->core.api'))
+  })
+
+  it('V12：节点位置由交互边与结构边共同决定，两个视角用同一份布局、节点坐标逐个相等；交互视角不画结构边', async () => {
+    const b = build()
+    const view = projectLevel(b.index, 'core', { showBoundaries: true })
+    const sv = structureView(b.index, view, b.report)
+    const pv = await layoutView(view, {}, linksOf(b, view, sv))
+    // 布局里有两组边：交互边与结构边（含收起的只引类型）各有走线，结果的视图仍只有交互边
+    expect(pv.view).toBe(view)
+    for (const e of view.edges.filter(e => !e.from.startsWith('boundary:') && !e.to.startsWith('boundary:'))) expect(pv.edges.has(e.id)).toBe(true)
+    expect(pv.edges.has('dependency:core.util->core.api')).toBe(true)
+    const inS = await input(b, 'core')
+    const sScene = canvasScene(inS)
+    const iScene = canvasScene({ ...inS, structure: null })
+    for (const n of iScene.nodes) expect(node(sScene, n.id).position).toEqual(n.position)
+    expect(iScene.edges.some(e => e.type === 'dep' || e.id.includes(':core.'))).toBe(false)
+  })
+
+  it('只引类型开关不改布局：收起的边不画，但布局按全部结构边算，节点坐标不变', async () => {
+    const b = build()
+    const closed = canvasScene(await input(b, 'core', { typeOnly: false }))
+    const open = canvasScene(await input(b, 'core', { typeOnly: true }))
+    expect(deps(closed).map(e => e.id)).not.toContain('dependency:core.util->core.api')
+    expect(deps(open).map(e => e.id)).toContain('dependency:core.util->core.api')
+    expect(closed.nodes.map(n => [n.id, n.position])).toEqual(open.nodes.map(n => [n.id, n.position]))
+  })
+
+  it('U16：没有代码事实时并集只有交互边与允许边', async () => {
+    const b = build()
+    const view = projectLevel(b.index, b.index.rootId)
+    const pv = await layoutView(view, {}, linksOf(b, view, structureView(b.index, view, null)))
+    const ids = [...pv.edges.keys()].sort()
+    expect(ids).toEqual([...view.edges.map(e => e.id), 'allowed:ui->core'].sort())
   })
 
   it('只引类型：缺省收起并计数；打开偏好后画出、计数为 0', async () => {
@@ -279,16 +328,23 @@ describe('U16 没有代码事实时的允许依赖图', () => {
 describe('O13③ 分层总览', () => {
   const core = (b: string) => b.replace('{ id: core.api, name: Api,', '{ id: core.api, name: Api, role: core,')
 
-  it('带间画层间依赖、直连（带与带之间的竖直直线）；核心模块的跨层依赖只在聚焦它时画', async () => {
+  it('带间画层间依赖（与交互边同一个排布：相邻带间的竖线）；核心模块的跨层依赖只在聚焦它时画（同核心跨层边的曲线）', async () => {
     const b = build(core(LAYERS))
     const i = await input(b, b.index.rootId)
-    expect(i.positioned!.view.mode).toBe('layered')
+    const pv = i.positioned!
+    expect(pv.view.mode).toBe('layered')
     const quiet = canvasScene(i)
     const band = deps(quiet).find(e => e.id === 'dependency:ui->core')!
+    expect(band.data.route).toEqual(pv.edges.get('dependency:ui->core'))
     expect(band.data.route.points).toHaveLength(2)
     expect(band.data.route.points[0].x).toBe(band.data.route.points[1].x)
+    // 同一对带的交互边与结构边各占带间的一条竖线
+    const inter = pv.view.edges.find(e => e.from === 'ui' && e.to === 'core')
+    if (inter) expect(pv.edges.get(inter.id)!.points[0].x).not.toBe(band.data.route.points[0].x)
     expect(deps(quiet).some(e => e.id.startsWith('chip:'))).toBe(false)
     const hovered = canvasScene({ ...i, hover: 'core.api' })
-    expect(deps(hovered).map(e => e.id)).toContain('chip:dependency:ui->core.api')
+    const chip = deps(hovered).find(e => e.id === 'chip:dependency:ui->core.api')!
+    expect(chip.data.route).toEqual(pv.coreEdges.get(chip.id))
+    expect(chip.data.route.curve).toBe(true)
   })
 })
