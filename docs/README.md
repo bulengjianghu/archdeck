@@ -31,6 +31,9 @@
 | 基线与拦截记录 | `model/<项目>/governance/`（由命令行与 agent 接口写，不属于描述） | 面板与报告只读 |
 | 文件的拥有者（AI 生成 / 人拥有，页面能写什么） | 04 §1（规则 B1） | ADR-0019 |
 | 决策的理由与被否决的选项 | adr/ | 其他文档只写结论并链接 ADR |
+| 结构边的形态与束、结构视角的降噪（第八轮） | 理由：ADR-0031「修订（第八轮）」；规则：02 K14、L15、L16、L19、L21 | 01 C-27 引编号；专题 governance / projection / workbench 只写机制 |
+| 模块表面、越过入口、表面指标、交互的承载链（第八轮） | 理由：ADR-0032；概念：02 §1.11；规则：02 K18–K20、K5d、U18、U19、L20、L22、L23、S18b、M21、M22、Q16 | 01 C-28、C-29、D-25 引编号；04 §3.3 只讲表面与接口的写法、§3.4 只讲 `channel:<名>@<模块 ID>` 的写法；专题 governance 写 `surface.ts` 与承载判定的机制 |
+| 结构视角的显示偏好（`typeOnly`、`impactMode`、`valuesOnly`、`invokesOnly`、`uncoveredOnly`、`surfaceAlways`） | architecture/view-state.md（按项目记本地，不进 URL） | 规则 L19a、L20、L21 引字段名 |
 | 评审过程（各轮说明、问题、意见） | 设计版本的 `design.yaml` | 定稿后结论进 ADR 与 01–04 |
 | 实现进度 | 各文档的「状态」标注 | 实施计划不进仓库 |
 
