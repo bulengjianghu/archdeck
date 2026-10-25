@@ -162,19 +162,26 @@ describe('模块面板「结构」一节（K15、K16、K17）', () => {
 })
 
 describe('依赖边面板（结构视角 sel=d:）', () => {
-  it('违规的依赖边：种类与档、文件依赖条数与清单、未解释、违规判定、两端 I', async () => {
+  it('违规的依赖边（束）：「文件依赖」按元素分组（没有入口的接到模块本体，一组「整模块」）、形态与档、未解释、违规判定、两端 I', async () => {
     const { wrapper } = await open('/?v=s&sel=d:app->infra')
+    expect(wrapper.find('.dep-panel h2').text()).toBe('Application → Infrastructure')
     expect(wrapper.find('.dep-panel .badges').text()).toContain('依赖边')
-    const rows = wrapper.findAll('.dep-structure .edge-row')
-    expect(rows.map(r => r.attributes('data-kind'))).toEqual(['dependency'])
-    expect(rows[0].text()).toContain('交互使用')
-    expect(rows[0].text()).toContain('未解释')
-    expect(rows[0].text()).toContain('文件依赖 1 条 · 模块依赖 1 条')
-    expect(rows[0].text()).toContain('src/app/s.ts:9')
+    const sec = wrapper.find('.dep-files')
+    expect(sec.find('h3').text()).toContain('文件依赖')
+    expect(sec.find('.sum').text()).toContain('使用')
+    expect(sec.find('.sum').text()).toContain('交互使用')
+    expect(sec.find('.sum').text()).toContain('未解释')
+    const groups = sec.findAll('.group')
+    expect(groups.map(g => g.attributes('data-element'))).toEqual(['*'])
+    expect(groups[0].text()).toContain('整模块')
+    expect(groups[0].text()).toContain('使用 · 交互使用')
+    expect(groups[0].text()).toContain('src/app/s.ts:9')
     expect(wrapper.find('.dep-coverage').text()).toContain('没有交互覆盖它')
     expect(wrapper.find('.dep-ruling').text()).toContain('违规')
     expect(wrapper.find('.dep-ruling').text()).toContain('无基线')
     expect(wrapper.find('.dep-stability').text()).toMatch(/Application\s*I 0\.50/)
+    // 模块依赖清单已并入「文件依赖」（A6）
+    expect(wrapper.text()).not.toContain('模块依赖1')
   })
 
   it('允许的依赖边：交互覆盖明细可单击切到交互视角并选中，允许它的规则写明', async () => {
@@ -193,7 +200,7 @@ describe('依赖边面板（结构视角 sel=d:）', () => {
   it('只引类型与值使用的依赖边：档分别为只引类型 / 值使用，覆盖为 0 不标未解释', async () => {
     const t = await open('/?v=s&sel=d:domain->infra')
     expect(t.wrapper.find('.dep-structure .badge.tier').text()).toBe('只引类型')
-    expect(t.wrapper.find('.dep-structure').text()).not.toContain('未解释')
+    expect(t.wrapper.find('.dep-structure .sum').text()).not.toContain('未解释')
     expect(t.wrapper.find('.dep-coverage').text()).toContain('正常的知识依赖')
     expect(t.wrapper.find('.dep-ruling').text()).toContain('无约束')
     const v = await open('/?v=s&sel=d:app->domain')
@@ -204,6 +211,7 @@ describe('依赖边面板（结构视角 sel=d:）', () => {
     const { wrapper } = await open('/?sel=d:app->infra')
     expect(wrapper.find('.dep-panel .badges').text()).toContain('代码依赖')
     expect(wrapper.find('.dep-structure').exists()).toBe(false)
+    expect(wrapper.text()).toContain('模块依赖')
   })
 })
 
@@ -220,34 +228,34 @@ describe('V12：被清空的选中', () => {
   })
 })
 
-describe('D-25：步骤的包含链', () => {
+describe('D-25、S18b：步骤的包含链（K5 回退与不判定；承载的元素级链见 panelSurface.test.ts）', () => {
   const { index } = loadModel(scenarioFiles({ 'x.yaml': 'relations: [{ id: rb, from: infra.player, to: app.solution, type: notifies, via: "channel:http" }]' }))
   const dep: ModuleDep = { key: 'a->b', from: 'infra.framework.sm', to: 'app.solution', files: [invoke('src/sm/a.ts', 'src/app/s.ts', 5)] } as ModuleDep
 
-  it('三级都在：交互与依赖（文件:行在面板上可预览）', () => {
-    const c = stepChain(index, { relation: 'r1', relationInferred: false }, { status: 'confirmed', deps: [dep] })
+  it('承载还没算出时按 K5 回退：已证实（模块级）', () => {
+    const c = stepChain(index, { relation: 'r1', relationInferred: false }, null, { status: 'confirmed', deps: [dep] })
     expect(c.interaction).toMatchObject({ state: 'ok', relation: 'r1' })
     expect(c.interaction.text).toContain('StateMachine → Solution')
-    expect(c.dependency).toMatchObject({ state: 'ok', text: 'StateMachine → Solution · 1 处' })
+    expect(c.carrier).toMatchObject({ state: 'ok', text: '已证实（模块级）：1 条模块依赖 · 1 处' })
   })
 
-  it('未绑定交互：交互一级缺，依赖一级不适用', () => {
-    const c = stepChain(index, { relationInferred: false }, null)
+  it('未绑定交互：交互一级缺，承载一级不适用', () => {
+    const c = stepChain(index, { relationInferred: false }, null, null)
     expect(c.interaction).toMatchObject({ state: 'missing', text: '未绑定交互（交互中未建模）' })
-    expect(c.dependency.state).toBe('na')
+    expect(c.carrier.state).toBe('na')
   })
 
-  it('交互未证实：依赖一级缺', () => {
-    const c = stepChain(index, { relation: 'r6', relationInferred: true }, { status: 'unconfirmed', deps: [], isolated: true })
+  it('交互未证实：承载一级缺', () => {
+    const c = stepChain(index, { relation: 'r6', relationInferred: true }, null, { status: 'unconfirmed', deps: [], isolated: true })
     expect(c.interaction.text).toContain('（推断）')
-    expect(c.dependency).toMatchObject({ state: 'missing' })
-    expect(c.dependency.text).toContain('交互未证实')
+    expect(c.carrier).toMatchObject({ state: 'missing' })
+    expect(c.carrier.text).toContain('交互未证实')
   })
 
-  it('经总线或通道：不判定', () => {
-    const c = stepChain(index, { relation: 'rb', relationInferred: false }, { status: 'skipped', deps: [], via: 'channel:http' })
-    expect(c.dependency.state).toBe('skipped')
-    expect(c.dependency.text).toMatch(/^经 .+，越过导入图，不判定$/)
+  it('没有承载、写了 via（通道没写契约等）：不判定', () => {
+    const c = stepChain(index, { relation: 'rb', relationInferred: false }, null, { status: 'skipped', deps: [], via: 'channel:http' })
+    expect(c.carrier.state).toBe('skipped')
+    expect(c.carrier.text).toMatch(/^经 .+，不判定$/)
   })
 
   it('步骤面板「代码证据」一节在证据等级之上列包含链', async () => {
@@ -257,7 +265,7 @@ describe('D-25：步骤的包含链', () => {
     const section = chain.element.closest('section')!
     expect([...section.children].indexOf(chain.element)).toBeLessThan([...section.children].indexOf(section.querySelector('.evidence-level')!))
     expect(chain.text()).toContain('这一步')
-    expect(chain.find('.link-dependency').text()).toContain('交互未证实')
+    expect(chain.find('.link-carrier').text()).toContain('承载')
     // 附录 B：步骤面板的折叠节改名
     expect(wrapper.text()).toContain('交互关系')
     expect(wrapper.text()).not.toContain('结构关系')

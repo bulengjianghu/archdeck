@@ -11,12 +11,15 @@ test('单步到 transition(openScenario)：面板按名字匹配到 useDeskState
   await expect(title).toHaveText(/^transition\(openScenario\)/)
 
   const section = page.locator('.step-panel .section').filter({ has: page.locator('h3', { hasText: '代码证据' }) })
-  // D-25：证据等级之上是包含链「这一步 → 交互 → 依赖」
+  // D-25、S18b：证据等级之上只有一条链「这一步 → 交互（承载判定词）→ 承载段（文件:行）」，等级与判定同一个词（裁决 T0-10）
   const chain = section.getByRole('list', { name: '包含链' })
   await expect(chain).toContainText('这一步')
   await expect(chain.locator('.link-interaction')).toContainText('交互')
-  await expect(chain.locator('.link-dependency')).toContainText(/依赖.*处/)
-  await expect(section).toContainText('按名字匹配')
+  await expect(chain.locator('.link-interaction .verdict')).toHaveText('齐全')
+  await expect(chain.locator('.link-carrier')).toContainText('直接：各段都接到元素')
+  await expect(chain.locator('.link-segment').first()).toContainText(/useDeskState\.ts:\d+/)
+  await expect(chain.locator('.link-dependency')).toHaveCount(0)
+  await expect(section.locator('.evidence-level .badge')).toHaveText('按名字匹配')
   await expect(section).toContainText('导入名含接口名「transition」')
   const candidate = section.locator('.candidates').getByRole('button', { name: /^src\/state\/useDeskState\.ts:\d+$/ })
   await expect(candidate).toHaveCount(1)
@@ -33,7 +36,7 @@ test('单步到 transition(openScenario)：面板按名字匹配到 useDeskState
   await expect(title).toHaveText(/^transition\(openScenario\)/)
 })
 
-test('无证据的步骤：时序图消息带「?」，场景面板计数、场景列表「? N」，问题页签有「步骤无证据」', async ({ page }) => {
+test('无证据（无承载）的步骤：时序图消息带「?」，场景面板计数、场景列表「? N」，问题页签有「步骤无证据」', async ({ page }) => {
   await openDesk(page, '/p/h5player?sc=sc.timeshift-leg-switch')
   await expect(page.locator('svg .no-evidence').first()).toBeVisible({ timeout: 20_000 })
   const section = page.locator('.scenario-panel .section').filter({ has: page.locator('h3', { hasText: '证据' }) })

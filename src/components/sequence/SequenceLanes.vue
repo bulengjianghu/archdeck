@@ -20,6 +20,8 @@ const props = defineProps<{
   hover: string | null
   /** R15、R16：选中突出；null 表示结构视角 */
   emphasis: Emphasis | null
+  /** S17、D-25：无证据（无承载）的消息序号；不给时按排布带的等级 */
+  noEvidence?: ReadonlySet<number> | null
 }>()
 const emit = defineEmits<{ pick: [m: SequenceMessage]; hover: [m: SequenceMessage | null] }>()
 const top = computed(() => headsHeight(props.ps))
@@ -39,6 +41,8 @@ function state(m: SequenceMessage): string {
 }
 /** 选中的不是步骤时，进度所在的消息只在序号旁加小标记 */
 const isProgress = (m: SequenceMessage) => m.pathIndex !== undefined && m.pathIndex === props.current && props.emphasis?.selected == null
+/** 消息带「?」：无承载才标（T0-10） */
+const unevidenced = (i: number) => (props.noEvidence ? props.noEvidence.has(i) : props.ps.messages[i].evidence === 'none')
 const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step:${m.frameIds[0]}`
 </script>
 
@@ -72,7 +76,7 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
       <template v-else-if="m.kind === 'internal'">
         <rect :x="cx(m.from) - 5" :y="ps.messages[i].y - 10" width="10" height="20" rx="2" class="activation" />
         <text :x="cx(m.from) + 10" :y="ps.messages[i].y + 4" class="label"
-          >{{ m.label || '内部活动' }}<tspan v-if="ps.messages[i].evidence === 'none'" class="no-evidence"> ?</tspan
+          >{{ m.label || '内部活动' }}<tspan v-if="unevidenced(i)" class="no-evidence"> ?</tspan
           ><tspan v-if="m.shared?.length" class="shared-tag" data-testid="shared-badge">
             · {{ m.shared.length > 1 ? `共用 ×${m.shared.length}` : `共用 ${m.shared[0].name}`
             }}<title>经过共用件：{{ m.shared.map(s => s.name).join('、') }}（P18）</title></tspan
@@ -90,8 +94,7 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
         />
         <text :x="(cx(m.from) + cx(m.to)) / 2" :y="ps.messages[i].y - 5" text-anchor="middle" class="label">
           {{ m.label }}<tspan v-if="m.temp === 'unmodeled'" class="tag"> · 交互中未建模</tspan
-          ><tspan v-else-if="m.temp === 'upper'" class="upper-tag"> · 经由上层关系</tspan
-          ><tspan v-if="ps.messages[i].evidence === 'none'" class="no-evidence"> ?</tspan
+          ><tspan v-else-if="m.temp === 'upper'" class="upper-tag"> · 经由上层关系</tspan><tspan v-if="unevidenced(i)" class="no-evidence"> ?</tspan
           ><tspan v-if="state(m).includes('paired')" class="pair-tag"> · 配对</tspan>
         </text>
       </template>
