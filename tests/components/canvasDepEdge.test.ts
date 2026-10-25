@@ -127,12 +127,19 @@ describe('结构视角的显示偏好（useStructurePrefs）', () => {
   it('缺省：只引类型收起、影响面传入、不只看值依赖；同一项目共用一份，按项目记在本地', () => {
     const a = useStructurePrefs('p1')
     expect(a.prefs.value).toEqual(DEFAULT_STRUCTURE_PREFS)
-    expect(DEFAULT_STRUCTURE_PREFS).toEqual({ typeOnly: false, impactMode: 'in', valuesOnly: false })
+    expect(DEFAULT_STRUCTURE_PREFS).toEqual({
+      typeOnly: false,
+      impactMode: 'in',
+      valuesOnly: false,
+      invokesOnly: false,
+      uncoveredOnly: false,
+      surfaceAlways: false,
+    })
     a.setTypeOnly(true)
     a.setImpactMode('both')
     expect(useStructurePrefs('p1').prefs.value).toMatchObject({ typeOnly: true, impactMode: 'both' })
     expect(useStructurePrefs('p2').prefs.value.typeOnly).toBe(false)
     resetStructurePrefs()
-    expect(useStructurePrefs('p1').prefs.value).toEqual({ typeOnly: true, impactMode: 'both', valuesOnly: false })
+    expect(useStructurePrefs('p1').prefs.value).toEqual({ ...DEFAULT_STRUCTURE_PREFS, typeOnly: true, impactMode: 'both' })
   })
 })

@@ -107,7 +107,7 @@ modules:
     parent: model.governance
     adrs: [31]
     responsibility: 结构视图（ADR-0031）的依赖边、影响面、指标——只读代码事实与规则，不读关系来定边。依赖边：模块依赖（K4，全部种类）按 mapEndpoint 投影到本层成结构边 levelDeps，一对节点同方向按事实种类各一条（依赖、组装、子类、端口实现），依赖边取最强的一档（交互使用 > 值使用 > 只引类型，K14）、带交互覆盖与「未解释」标记（K17）、这对节点的规则判定（违规取最严的状态 / 允许它的规则 / 无约束，U15）与逆稳定提示（U17，阈值 0.3），只引类型的条数供画布角计数；分层总览核心模块的跨层依赖 chipDeps（O13③）；归入一条结构边的文件依赖 structureEdgeFiles。影响面：模块子树的传入 / 传出闭包按最短距离、标环成员，可只看值依赖（impactOf，K15），投影到本层 levelImpact。指标：扇入 Ca、扇出 Ce、不稳定度 I 与三档，按系统内不同模块数计、与层次无关（structureMetrics、moduleMetrics，K16）；稳定依赖方向 againstStability / againstStabilityOf（U17）。交互图互查 isolatedInteractions（K17）。没有代码事实时的允许依赖图 allowedDeps（层、白名单与活动草图的 mayDependOn，U16）。视角切换的边映射 hasStructureEdge、interactionEdgeBetween（V12）。数据类型在「类型与 Schema」（governance/types.ts）。
-    codeRefs: [src/model/governance/structure.ts]
+    codeRefs: [src/model/governance/structure.ts, src/model/governance/surface.ts, src/model/governance/carrier.ts]
   - id: model.governance.query
     name: agent 查询
     parent: model.governance

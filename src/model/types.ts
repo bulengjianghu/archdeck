@@ -38,7 +38,7 @@ export const LEGACY_RELATION_TYPES: Readonly<Record<LegacyRelationType, { to: Re
 }
 
 /**
- * 机制维度 via（ADR-0029、K5b）：`port:<接口 ID>` 经端口 / `bus:<模块 ID>` 经总线 / `channel:<名>` 经通道；
+ * 机制维度 via（ADR-0029、K5b）：`port:<接口 ID>` 经端口 / `bus:<模块 ID>` 经总线 / `channel:<名>` 经通道（可加契约模块 `channel:<名>@<模块 ID>`，M21）；
  * 迁移期另有 `port`「端口未指明」与 `bus`「总线未指明」（M20），不判定。
  */
 export type RelationVia = `port:${string}` | `bus:${string}` | `channel:${string}` | 'port' | 'bus'
@@ -46,17 +46,27 @@ export type ViaKind = 'port' | 'bus' | 'channel'
 export const VIA_KINDS: readonly ViaKind[] = ['port', 'bus', 'channel']
 /** M20：旧的平铺取值（迁移期别名） */
 export const LEGACY_VIAS: readonly string[] = ['http', 'hmr', 'inject', 'router', 'callback', 'port', 'bus']
-/** 解析后的机制：target 为接口 ID、总线模块 ID 或通道名；端口 / 总线未指明（M20）时没有 target */
+/**
+ * 解析后的机制：target 为接口 ID、总线模块 ID 或通道（冒号之后的原文）；端口 / 总线未指明（M20）时没有 target。
+ * M21：通道可写契约模块 `channel:<名>@<模块 ID>`——name 为通道名，contract 为契约模块；旧写法 `channel:<名>` 没有 contract
+ */
 export interface ParsedVia {
   kind: ViaKind
   target?: string
+  /** 通道名（只在通道写了契约模块时给；没写时通道名即 target） */
+  name?: string
+  /** M21：通道的契约模块（只 channel） */
+  contract?: string
 }
 /** 解析 via；不合四形态（含旧的平铺取值）为 undefined */
 export function parseVia(via: string | undefined): ParsedVia | undefined {
   if (via === undefined) return undefined
   if (via === 'port' || via === 'bus') return { kind: via }
   const m = /^(port|bus|channel):(.+)$/.exec(via)
-  return m ? { kind: m[1] as ViaKind, target: m[2] } : undefined
+  if (!m) return undefined
+  if (m[1] !== 'channel') return { kind: m[1] as ViaKind, target: m[2] }
+  const at = m[2].lastIndexOf('@')
+  return at > 0 && at < m[2].length - 1 ? { kind: 'channel', target: m[2], name: m[2].slice(0, at), contract: m[2].slice(at + 1) } : { kind: 'channel', target: m[2] }
 }
 
 /** 运行时关系（§1.1）：ADR-0029 起关系全是交互，与 RELATION_TYPES 相同；步骤只对应它们（S12）。迁移期含未分类 */

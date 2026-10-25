@@ -276,6 +276,16 @@ function checkRelations(input: ArchModel, c: Checked): RelationEntity[] {
     relationIds.add(r.id)
     relations.push(r)
   }
+  // M22：同一对端点、同一种类（画布上的一束）里有两条以上没写接口——按表面散开时接不到元素、分不出通路（info）
+  const unnamed = new Map<string, RelationEntity[]>()
+  for (const r of relations) if (!r.interface) (unnamed.get(`${r.from}->${r.to}:${r.type}`) ?? unnamed.set(`${r.from}->${r.to}:${r.type}`, []).get(`${r.from}->${r.to}:${r.type}`)!).push(r)
+  for (const list of unnamed.values())
+    if (list.length >= 2)
+      c.info(
+        'relation.indistinct',
+        `关系${list.map(r => `「${r.id}」`).join('、')}（${list[0].type}，${list[0].from} → ${list[0].to}）都没写接口：同一束里无法区分通路，建议写 interface（M22）`,
+        list[0].src,
+      )
   return relations
 }
 
@@ -296,6 +306,11 @@ function checkVia(c: Checked, r: RelationEntity, buses: readonly string[]): Rela
   if (v?.kind === 'port' && v.target && !c.interfaces.has(v.target)) {
     c.warn('relation.via-target', `关系「${r.id}」经端口「${v.target}」，它不是已声明的接口；已去掉 via（M11）`, r.src)
     return undefined
+  }
+  // M21：通道的契约模块须存在；不存在时提醒并按旧写法（不写契约，外部承载不判定）读取
+  if (v?.kind === 'channel' && v.contract && !c.modules.has(v.contract)) {
+    c.warn('relation.via-target', `关系「${r.id}」经通道「${v.name}」的契约模块「${v.contract}」不存在；已按 channel:${v.name}（不核承载）读取（M21）`, r.src)
+    return `channel:${v.name}`
   }
   if (v?.kind === 'bus' && v.target && c.modules.get(v.target)?.role !== 'bus') {
     c.warn('relation.via-target', `关系「${r.id}」经总线「${v.target}」，它${c.modules.has(v.target) ? '不是 role: bus 的模块' : '不存在'}；已去掉 via（M11）`, r.src)

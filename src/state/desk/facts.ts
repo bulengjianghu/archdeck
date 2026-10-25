@@ -2,9 +2,24 @@
  * DeskState 的架构治理派生（desk.facts，ADR-0015）：代码事实由源码同步取得，治理报告、本层投影与门禁问题调用模型层（K、U、Y）。
  * 只对当前版本（K8）；画布叠加只在交互视角、「代码事实」开启时（K9）。
  * 结构视图（ADR-0031）：本层结构边、指标与影响面；没有代码事实时只有允许依赖图（U16）。
+ * 模块表面与承载链（ADR-0032）：束与元素级边、表面、越过入口、承载，以及结构视角画布按显示偏好过滤、聚焦、跨界折叠与表面展开的派生（structureDisplay）。
  */
 import { computed, type ComputedRef, type ShallowRef } from 'vue'
 import {
+  carriersOf,
+  interactionBundle,
+  isTarget,
+  surfaceMetrics,
+  surfaceOf,
+  type Bundle,
+  type Carrier,
+  type ElementEdge,
+  type ExportedSymbol,
+  type Frame,
+  type InteractionBundle,
+  type ModuleSurface,
+  type SurfaceMetrics,
+  type SurfaceSource,
   againstStabilityOf,
   chipDeps,
   hasStructureEdge,
@@ -71,6 +86,41 @@ export interface FactsInputs {
 
 /** 为什么没有代码事实，或正在取；源码清单读取失败也是 error（源码在本地是前提，G1） */
 export type FactsStatus = 'ready' | 'loading' | 'design' | 'error'
+
+/** B1、B4、C6：结构视角画布的显示偏好（呈现层从 useStructurePrefs 读出后传入，不进视图状态） */
+export interface StructureFilter {
+  /** B1：只引类型的束画出 */
+  typeOnly: boolean
+  /** B1：只画交互使用档 */
+  invokesOnly: boolean
+  /** B4：只画交互覆盖数为 0 的束 */
+  uncoveredOnly: boolean
+  /** C6：本层全部模块总是展开表面 */
+  surfaceAlways: boolean
+}
+
+/** L21：束与边界节点的关系——两端都是本层兄弟 / 一端是边界节点（L14 边界、外部、目标态）/ 两端都是边界节点 */
+export type BundleReach = 'sibling' | 'cross' | 'outer'
+
+/** B1–B4、C6：结构视角画布要画的束与元素级边，及收起的计数、聚焦与表面展开（structureDisplay） */
+export interface StructureDisplay {
+  /** 画出的束，同 bundles 的顺序 */
+  shown: Bundle[]
+  /** 画出的元素级边：属于画出的束、被依赖方的表面展开且元素在展开集合里的（越过入口与整模块的边随展开一并给出） */
+  elementEdges: ElementEdge[]
+  /** 收起的束的条数：只引类型（B1）、只看交互使用时收起的值使用（B1）、只看未覆盖时收起的已覆盖（B4）、跨界折叠（B2） */
+  hidden: { type: number; value: number; covered: number; cross: number }
+  /** B2：本层节点 → 折叠进角标的跨界束的入 / 出条数 */
+  cross: Map<string, { in: number; out: number }>
+  /** 每条束与边界节点的关系 */
+  reach: Map<string, BundleReach>
+  /** 不论档位、过滤与折叠照画的束：基线外违规、环上、逆稳定（L15a①、B1、B2） */
+  anomalies: Set<string>
+  /** B3：选中束（K10 的 dep 选中）时与它两端相连的束；没有选中束时为 null */
+  focus: { bundle: string; nodes: [string, string]; bundles: Set<string> } | null
+  /** C6：表面展开——模块 ID → 展开的元素名（null 为全部元素） */
+  expanded: Map<string, Set<string> | null>
+}
 
 export function createFacts({ state, index, view, files, sync, design, sketches }: FactsInputs) {
   const resource = sync.facts
@@ -209,10 +259,51 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
 
   // ── 结构视图（ADR-0031）：本层结构边（K14、K17、U15、U17）或允许依赖图（U16）、指标（K16）与影响面（K15） ──
 
-  /** K16：全系统各模块的 Ca / Ce / I（只看值依赖时另算）；没有代码事实时为 null（U16 不适用） */
-  const metrics = computed<Map<string, ModuleMetrics> | null>(() => (report.value && index.value ? structureMetrics(index.value, report.value) : null))
+  // ── 模块表面（ADR-0032）：入口导出按需从源码同步取（读到前元素种类按用法推断），只对当前版本 ──
+
+  /** K18：表面的来源——入口、归属与入口导出（读取中或读不到为 null）；没有代码事实时为 null（C8） */
+  const surfaceSource = computed<SurfaceSource | null>(() => {
+    const own = files.ownership.value
+    if (!report.value || !entryOf.value || !own) return null
+    const exportsOf = (file: string): readonly ExportedSymbol[] | null => {
+      const r = sync.exports(file).value
+      return r.status === 'ok' ? r.value : null
+    }
+    return { entryOf: entryOf.value, own, exportsOf }
+  })
+
+  /** K18：模块的表面；没有代码事实时只有声明接口（C8）；不是模块为 null */
+  const surfaceOfModule = (id: string): ModuleSurface | null => (index.value ? surfaceOf(index.value, surfaceSource.value, id, report.value) : null)
+
+  /** K19、C7：模块的表面指标（W / B、元素扇入、越过入口清单）；没有代码事实时为 null */
+  const surfaceMetricsOf = (id: string, valuesOnly = false): SurfaceMetrics | null =>
+    report.value && index.value && surfaceSource.value && index.value.modules.has(id)
+      ? surfaceMetrics(index.value, report.value, surfaceSource.value, id, { valuesOnly })
+      : null
+
+  /** C3、C7：模块的越过入口清单（依赖方文件:行 → 符号）；没有代码事实时为空 */
+  const bypassesOf = (id: string): FileDep[] => surfaceMetricsOf(id)?.bypasses ?? []
+
+  /** K5d、K20：全部交互的承载（不判定的不在其中）；没有代码事实时为 null */
+  const carriers = computed<Map<string, Carrier> | null>(() =>
+    report.value && index.value && surfaceSource.value ? carriersOf(index.value, report.value, surfaceSource.value) : null,
+  )
+  /** K5d：一条交互的承载；不判定或没有代码事实时为 null */
+  const carrierOf = (relationId: string): Carrier | null => carriers.value?.get(relationId) ?? null
+  /** S18b：步骤 → 绑定的交互 → 承载段（帧没有绑定交互时 relation 为 null） */
+  const stepCarrierOf = (frame: Pick<Frame, 'relation'>): { relation: string | null; carrier: Carrier | null } => ({
+    relation: frame.relation ?? null,
+    carrier: frame.relation ? carrierOf(frame.relation) : null,
+  })
+
+  /** K16：全系统各模块的 Ca / Ce / I（只看值依赖时另算），有入口的另带 W / B（K19）；没有代码事实时为 null（U16 不适用） */
+  const metrics = computed<Map<string, ModuleMetrics> | null>(() =>
+    report.value && index.value ? structureMetrics(index.value, report.value, surfaceSource.value ? { surface: surfaceSource.value } : {}) : null,
+  )
   const valueMetrics = computed<Map<string, ModuleMetrics> | null>(() =>
-    report.value && index.value ? structureMetrics(index.value, report.value, { valuesOnly: true }) : null,
+    report.value && index.value
+      ? structureMetrics(index.value, report.value, { valuesOnly: true, ...(surfaceSource.value ? { surface: surfaceSource.value } : {}) })
+      : null,
   )
 
   /**
@@ -231,7 +322,11 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
   /** L15、U16：本层的结构视图，不论视角都算（结构边与交互边并集布局）；代码事实还在读取时为 null */
   const levelStructure = computed<StructureView | null>(() => {
     if (!index.value || !view.value || status.value === 'loading') return null
-    if (report.value) return structureView(index.value, view.value, report.value, metrics.value ? { metrics: metrics.value } : {})
+    if (report.value)
+      return structureView(index.value, view.value, report.value, {
+        ...(metrics.value ? { metrics: metrics.value } : {}),
+        ...(surfaceSource.value ? { surface: surfaceSource.value } : {}),
+      })
     return structureView(index.value, view.value, null, { sketch: sketchLayers.value })
   })
 
@@ -284,6 +379,115 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
   /** K17：交互图互查——涉及模块（含子树）、两端之间没有任何依赖的交互关系；没有代码事实时为空 */
   const isolatedOf = (id: string): string[] => (report.value && index.value ? isolatedInteractions(index.value, report.value, id) : [])
 
+  // ── 结构视角画布的派生（ADR-0032 B、C6）：束的过滤、跨界折叠、聚焦与表面展开；呈现层只读这里（工程原则 4） ──
+
+  /** L14、B2：本层的边界节点——外部（boundary:）、边界角色（port / adapter）与目标态模块 */
+  const boundaryNodes = computed<Set<string>>(() => {
+    const v = view.value
+    const idx = index.value
+    if (!v || !idx) return new Set()
+    return new Set(v.nodes.filter(n => n.role === 'boundary' || n.rim || (idx.modules.has(n.moduleId) && isTarget(idx, n.moduleId))).map(n => n.id))
+  })
+
+  /** L15a①：照画的束——基线外违规（新增 / 无基线）、环上（Y5 的本层环边）、逆稳定（U17） */
+  const anomalies = computed<Set<string>>(() => {
+    const sv = structure.value
+    if (!sv?.facts) return new Set()
+    const cyc = new Set((level.value?.levelCycles ?? []).flatMap(c => c.edges.map(e => `${e.from}->${e.to}`)))
+    return new Set(
+      sv.bundles.filter(b => b.ruling.status === 'new' || b.ruling.status === 'open' || cyc.has(`${b.from}->${b.to}`) || b.againstStability).map(b => b.id),
+    )
+  })
+
+  /**
+   * B1–B4、C6：结构视角画布按显示偏好要画的束与元素级边。B1：只引类型档收起（typeOnly 时画），invokesOnly 时值使用也收起；B4：uncoveredOnly 时只画覆盖数为 0 的；
+   * B2：一端是边界节点的束缺省折叠、计入本层另一端节点的「入 · 出」，两端都是边界节点的只在聚焦时画；悬停或选中一端时画出。
+   * 基线外违规、环上、逆稳定的束不论档位与折叠照画（B4 只看覆盖）。B3：选中束时与两端相连的束为聚焦集合。
+   * C6：表面展开——选中模块 → 它的全部元素；选中束 → 被依赖方在这条束里接到的元素；surfaceAlways → 本层全部模块。
+   * 没有代码事实（允许依赖图）或不在结构视角时为 null。
+   */
+  const structureDisplay = (filter: StructureFilter): StructureDisplay | null => {
+    const sv = structure.value
+    const v = view.value
+    if (!sv?.facts || !v) return null
+    const s = state.value
+    const bnd = boundaryNodes.value
+    const odd = anomalies.value
+    const touch = (id: string | null | undefined, node: string) => !!id && (node === id || node === `boundary:${id}`)
+    const near = (b: Bundle) => [s.hover, s.selection?.kind === 'module' ? s.selection.id : null].some(id => touch(id, b.from) || touch(id, b.to))
+    const reach = new Map<string, BundleReach>()
+    const cross = new Map<string, { in: number; out: number }>()
+    const hidden = { type: 0, value: 0, covered: 0, cross: 0 }
+    const shown: Bundle[] = []
+    for (const b of sv.bundles) {
+      const fb = bnd.has(b.from)
+      const tb = bnd.has(b.to)
+      const r: BundleReach = fb && tb ? 'outer' : fb || tb ? 'cross' : 'sibling'
+      reach.set(b.id, r)
+      const keep = odd.has(b.id)
+      if (filter.uncoveredOnly && b.coverage.relations.length) {
+        hidden.covered++
+        continue
+      }
+      if (!keep && b.tier === 'type' && !filter.typeOnly) {
+        hidden.type++
+        continue
+      }
+      if (!keep && b.tier === 'value' && filter.invokesOnly) {
+        hidden.value++
+        continue
+      }
+      if (r === 'cross' && !keep) {
+        const inner = fb ? b.to : b.from
+        const c = cross.get(inner) ?? cross.set(inner, { in: 0, out: 0 }).get(inner)!
+        if (fb) c.in++
+        else c.out++
+      }
+      if (r !== 'sibling' && !keep && !near(b)) {
+        if (r === 'cross') hidden.cross++
+        continue
+      }
+      shown.push(b)
+    }
+    // B3：选中束
+    let focus: StructureDisplay['focus'] = null
+    const sel = s.selection
+    const picked = sel?.kind === 'dep' ? sv.bundles.find(b => `${b.fromModule}->${b.toModule}` === sel.id) : undefined
+    if (picked)
+      focus = {
+        bundle: picked.id,
+        nodes: [picked.from, picked.to],
+        bundles: new Set(sv.bundles.filter(b => [b.from, b.to].some(n => n === picked.from || n === picked.to)).map(b => b.id)),
+      }
+    // C6：表面展开
+    const expanded = new Map<string, Set<string> | null>()
+    if (filter.surfaceAlways)
+      for (const n of v.nodes) if (n.role !== 'actor' && n.role !== 'more' && index.value?.modules.has(n.moduleId)) expanded.set(n.moduleId, null)
+    if (sel?.kind === 'module' && v.nodes.some(n => n.moduleId === sel.id && n.role !== 'actor')) expanded.set(sel.id, null)
+    if (picked && expanded.get(picked.toModule) !== null) {
+      const names = expanded.get(picked.toModule) ?? new Set<string>()
+      for (const e of sv.elementEdges) if (e.bundle === picked.id && e.element) names.add(e.element.name)
+      expanded.set(picked.toModule, names)
+    }
+    const drawn = new Set(shown.map(b => b.id))
+    const elementEdges = sv.elementEdges.filter(e => {
+      if (!drawn.has(e.bundle) || !expanded.has(e.toModule)) return false
+      const names = expanded.get(e.toModule)
+      return names === null || !e.element || names!.has(e.element.name)
+    })
+    return { shown, elementEdges, hidden, cross, reach, anomalies: odd, focus, expanded }
+  }
+
+  /** D7、D8：交互视图边（本层一对节点、一种类型）按接收方表面散开的数据与束内混合；不是本层的视图边为 null */
+  const interactionSpread = (edgeId: string): InteractionBundle | null => {
+    const v = view.value
+    if (!v || !index.value) return null
+    const e = [...v.edges, ...(v.coreEdges ?? []), ...(v.shelfEdges ?? [])].find(x => x.id === edgeId)
+    if (!e) return null
+    const receiver = v.nodes.find(n => n.id === e.to)?.moduleId
+    return interactionBundle(index.value, receiver ? surfaceOfModule(receiver) : null, e.relationIds)
+  }
+
   /** V12：本层这对节点之间有没有结构边——模式切换时把关系 / 视图边的选中映射成依赖边；没有代码事实时不给 */
   const structurePair = (fromModule: string, toModule: string): boolean =>
     !!report.value && !!index.value && !!view.value && hasStructureEdge(index.value, view.value, report.value, fromModule, toModule)
@@ -299,6 +503,15 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
     metricsOf,
     impactOf: impactOfModule,
     structurePair,
+    structureDisplay,
+    surfaceSource,
+    surfaceOf: surfaceOfModule,
+    surfaceMetricsOf,
+    bypassesOf,
+    carriers,
+    carrierOf,
+    stepCarrierOf,
+    interactionSpread,
     edgeFiles,
     againstOf,
     isolatedOf,

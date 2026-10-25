@@ -28,6 +28,9 @@ import {
   listedCouplings,
   moduleMetrics,
   structureMetrics,
+  surfaceMetrics,
+  surfaceOf,
+  HOT_SURFACE_MODULES,
   reworkList,
   reworkMarkdown,
   type EvolutionStats,
@@ -46,6 +49,7 @@ import {
   type ModelIndex,
   type ModuleMetrics,
   type SourceOwnership,
+  type SurfaceSource,
 } from '../../src/model'
 import {
   designSketchFiles,
@@ -58,8 +62,8 @@ import {
 } from '../../vite/readModelDir'
 import { readModelAt } from '../../vite/readGit'
 import { archiveDesign, WriteError } from '../../vite/writeModel'
-import { readSourceTree } from '../../vite/readSource'
-import { readCodeDeps, resolveImport } from '../../vite/readDeps'
+import { exportsResolver, readSourceTree } from '../../vite/readSource'
+import { createResolver, readCodeDeps, resolveImport } from '../../vite/readDeps'
 import { historyOptions, readSourceHistory } from '../../vite/readHistory'
 import {
   appendLedger,
@@ -91,6 +95,8 @@ export interface Loaded {
   files: ReadonlySet<string>
   own: SourceOwnership
   entryOf: EntryOf
+  /** K18：表面的来源（入口、归属与入口导出，Q16） */
+  surface: SurfaceSource
   report: GovernanceReport
   /** K1：文件依赖（步骤的代码证据用，S16） */
   deps: FileDep[]
@@ -178,6 +184,8 @@ export function createService(opts: ServiceOptions) {
     const history = readSourceHistory(tree.root, tree.files, hist)
     const evolution = history.status === 'ok' ? evolutionStats(index, own, history, tree.lines ?? {}, report, hist.coupling) : { error: history.reason }
     const checks = checkSketches(index, parseDesignSketches(payload.sketches ?? []), new Map((payload.designs ?? []).map(d => [d.id, d.accepted ?? []])))
+    const entryOf = entryResolver(index, own, tree)
+    const exportsOf = exportsResolver(tree.root, tree.files, createResolver(tree.root, tree.files, tree.packages).resolve)
     const loaded: Loaded = {
       project,
       index,
@@ -185,7 +193,8 @@ export function createService(opts: ServiceOptions) {
       tree,
       files: new Set(tree.files),
       own,
-      entryOf: entryResolver(index, own, tree),
+      entryOf,
+      surface: { entryOf, own, exportsOf },
       report,
       deps: deps.deps,
       evolution,
@@ -209,6 +218,8 @@ export function createService(opts: ServiceOptions) {
     ce: m.ce,
     instability: m.instability === null ? null : Math.round(m.instability * 100) / 100,
     band: m.band,
+    // K19：有入口的模块带表面宽度 W 与越过入口数 B
+    ...(m.w !== undefined ? { w: m.w, b: m.b! } : {}),
   })
 
   return {
@@ -458,7 +469,7 @@ export function createService(opts: ServiceOptions) {
       const valuesOnly = !!opts.valuesOnly
       if (opts.module) {
         if (!l.index.modules.has(opts.module) || opts.module === l.index.rootId) throw new ServiceError(`「${opts.module}」不是模块`)
-        const d = moduleMetrics(l.index, l.report, opts.module, { valuesOnly })!
+        const d = moduleMetrics(l.index, l.report, opts.module, { valuesOnly, surface: l.surface })!
         return {
           kind: 'module' as const,
           project: l.project,
@@ -469,7 +480,7 @@ export function createService(opts: ServiceOptions) {
         }
       }
       if (opts.level && !l.index.pathOf.has(opts.level)) throw new ServiceError(`「${opts.level}」不是模块`)
-      const all = structureMetrics(l.index, l.report, { valuesOnly })
+      const all = structureMetrics(l.index, l.report, { valuesOnly, surface: l.surface })
       const ids = opts.level
         ? (l.index.childrenOf.get(opts.level) ?? [])
         : [...l.index.modules.keys()].filter(id => id !== l.index.rootId && !(l.index.childrenOf.get(id) ?? []).length)
@@ -482,6 +493,61 @@ export function createService(opts: ServiceOptions) {
         scope: opts.level ? `${opts.level}（${name(l, opts.level)}）的子模块` : '全系统的叶子模块',
         total: ids.length,
         modules: rows.map(m => metricsRow(l, m)),
+      }
+    },
+
+    /**
+     * Q16、K18、K19：模块的表面——元素清单（种类 · 声明状态 · 扇入 · 使用它的模块）、W / B、越过入口清单（依赖方文件:行 → 符号）与建议
+     * （越过入口的：提升到入口导出或改经入口；导出未声明、被 HOT_SURFACE_MODULES 个以上模块使用的：声明接口；声明未导出的：导出或删去声明）。只读。
+     */
+    surface(target: string, p?: string) {
+      const l = load(p)
+      if (!l.index.modules.has(target) || target === l.index.rootId) throw new ServiceError(`「${target}」不是模块`)
+      const s = surfaceOf(l.index, l.surface, target, l.report)!
+      const m = surfaceMetrics(l.index, l.report, l.surface, target)
+      const use = new Map(m.uses.map(u => [u.element.name, u]))
+      const elements = s.elements.map(e => {
+        const u = use.get(e.name)
+        return {
+          name: e.name,
+          kind: e.kind,
+          state: e.state,
+          ...(e.interfaceId ? { interface: e.interfaceId } : {}),
+          ...(e.file ? { at: e.line ? `${e.file}:${e.line}` : e.file } : {}),
+          fanIn: u?.modules.length ?? 0,
+          modules: (u?.modules ?? []).map(id => `${id}（${name(l, id)}）`),
+        }
+      })
+      const bypasses = m.bypasses.map(f => ({
+        at: `${f.from}:${f.line}`,
+        to: f.via === f.to ? f.to : `${f.via} ⇒ ${f.to}`,
+        ...(f.names?.length ? { names: f.names } : {}),
+      }))
+      const suggestions: string[] = []
+      if (!s.entry)
+        suggestions.push('没有入口（G10：描述的 entry、包入口或模块目录下的 index.*）：表面只有声明接口，W / B 不给；需要对外的符号时给模块定一个入口')
+      const deep = [...new Set(m.bypasses.map(f => f.via))]
+      if (deep.length)
+        suggestions.push(
+          `越过入口 ${m.bypasses.length} 处（${deep.slice(0, 5).join('、')}${deep.length > 5 ? ` 等 ${deep.length} 个文件` : ''}）：把用到的符号提升到入口 ${s.entry} 导出、依赖方改经入口导入（U18）`,
+        )
+      const hot = elements.filter(e => e.state === 'exported-only' && e.fanIn >= HOT_SURFACE_MODULES)
+      if (hot.length)
+        suggestions.push(`导出未声明、被 ${HOT_SURFACE_MODULES} 个以上模块使用：${hot.map(e => `${e.name}（${e.fanIn}）`).join('、')}——在描述里声明接口（U19）`)
+      const dead = elements.filter(e => e.state === 'declared-only')
+      if (dead.length) suggestions.push(`声明了接口、入口没导出：${dead.map(e => e.name).join('、')}——导出它，或从描述里去掉（G12）`)
+      return {
+        project: l.project,
+        module: target,
+        name: name(l, target),
+        entry: s.entry,
+        exports: s.exports,
+        w: m.w,
+        b: m.b,
+        whole: m.whole,
+        elements,
+        bypasses,
+        suggestions,
       }
     },
 

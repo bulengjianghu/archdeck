@@ -3,6 +3,7 @@
  * 路径一律相对源码根目录、以 `/` 分隔。
  */
 import type { Issue, ModuleRole, RelationType, RelationVia, RuleKind } from '../types'
+import type { ExportKind, SourceOwnership, ExportedSymbol } from '../source'
 
 export type DepKind = 'value' | 'type'
 
@@ -350,11 +351,17 @@ export interface ModuleMetrics {
   /** I = Ce ÷ (Ca + Ce)；Ca + Ce = 0 时为 null（显示「—」） */
   instability: number | null
   band: StabilityBand | null
+  /** K19：表面宽度 W（给了表面来源、模块有入口时） */
+  w?: number
+  /** K19：越过入口数 B（同上） */
+  b?: number
 }
 
 export interface MetricsOptions {
   /** 只看值依赖：去掉只引类型的文件依赖重算（同 Y1） */
   valuesOnly?: boolean
+  /** K19：给了时另算 W / B（只按模块依赖的文件，与 valuesOnly 同口径） */
+  surface?: SurfaceSource
 }
 
 /** K16：面板「结构」一节——模块的 Ca / Ce / I，贡献最多的 5 个依赖方 / 被依赖方（按文件依赖条数），本层节点数 */
@@ -402,9 +409,14 @@ export interface StructureEdge {
 }
 
 export interface LevelDeps {
+  /** 第七轮的按种类结构边（画布与面板在第八轮 T2 / T3 改读 bundles / elementEdges 前沿用，T4 删除） */
   edges: StructureEdge[]
-  /** K14：只引类型的依赖边条数（缺省收起时画布角计数，L15） */
+  /** K14：只引类型的依赖边条数（第七轮口径，同上） */
   typeOnly: number
+  /** K14、A4：本层的束——一对节点同方向一条，按依赖方、被依赖方节点的视图顺序 */
+  bundles: Bundle[]
+  /** K14、A1：本层的元素级结构边，按束的顺序、束内按元素名与形态 */
+  elementEdges: ElementEdge[]
 }
 
 export interface LevelDepsOptions {
@@ -412,6 +424,179 @@ export interface LevelDepsOptions {
   threshold?: number
   /** 已算好的指标（K16），省得重算 */
   metrics?: ReadonlyMap<string, ModuleMetrics>
+  /** K18：表面的来源（入口、归属与入口导出）；不给时元素级边都接到模块本体、不判越过入口 */
+  surface?: SurfaceSource
+}
+
+// ── 模块表面（ADR-0032）：表面元素、元素级结构边与束（计算在 surface.ts、structure.ts） ──
+
+/** K14、A2：元素级结构边的形态——组装、子类、端口实现、使用；DEP_FORMS 按强到弱（束取最强） */
+export type DepForm = 'assembly' | 'subclass' | 'implements' | 'use'
+export const DEP_FORMS: readonly DepForm[] = ['subclass', 'assembly', 'implements', 'use']
+
+/** K18、C2：表面元素的四类——端口（算端口的声明接口）、操作（函数、可调用常量、类）、类型（interface / type）、数据（枚举、纯数据常量） */
+export type ElementKind = 'port' | 'operation' | 'type' | 'data'
+export const ELEMENT_KINDS: readonly ElementKind[] = ['port', 'operation', 'type', 'data']
+
+/**
+ * K18、C1：表面元素的声明状态（入口导出与声明接口按名字匹配，同 G12）——已声明且导出 / 导出未声明 / 声明未导出；
+ * 没有代码事实（K8）或入口导出还没读到、又没被引用的声明接口为 declared（导出与否未知）
+ */
+export type DeclState = 'declared-exported' | 'exported-only' | 'declared-only' | 'declared'
+
+/** K18：一个表面元素（模块入口导出的一个符号，或描述声明的一个接口） */
+export interface SurfaceElement {
+  /** 表面所属的模块（入口所在的模块） */
+  module: string
+  /** 入口导出名；声明未导出的为接口名（去掉括号与泛型） */
+  name: string
+  kind: ElementKind
+  state: DeclState
+  /** 匹配到的声明接口 */
+  interfaceId?: string
+  /** 入口导出的种类（G11）；声明未导出或未读到入口导出时不给 */
+  exportKind?: ExportKind
+  /** 声明所在的文件与行（再导出按 K3 穿透到声明文件；本文件声明的为入口文件） */
+  file?: string
+  line?: number
+  /** 入口导出还没读到，种类由用法推断 */
+  guessed?: true
+}
+
+/** K18：表面的来源——入口（G10）、文件归属（判越过入口）与入口导出（G11；null = 还没读到或读不到，按用法推断种类） */
+export interface SurfaceSource {
+  entryOf: (moduleId: string) => string | null
+  own: Pick<SourceOwnership, 'owners'>
+  exportsOf?: (file: string) => readonly ExportedSymbol[] | null
+}
+
+/** K18：一个模块的表面；entry 为 null 时没有入口，表面只有声明接口（不判越过入口，K19 的 W / B 不给） */
+export interface ModuleSurface {
+  module: string
+  entry: string | null
+  /** 有代码事实（K8）；false 时表面只有声明接口（C8） */
+  facts: boolean
+  /** 入口导出已读到（种类不是推断的） */
+  exports: boolean
+  /** 端口、操作、类型、数据各按名字排序；声明未导出的排在最后 */
+  elements: SurfaceElement[]
+}
+
+/**
+ * K14、A1：一条元素级结构边——依赖方节点 → 被依赖方的一个表面元素；越过入口的（bypass）与整模块导入（namespace、默认、`*`）、
+ * 被依赖方没有入口的接到模块本体（element 为 null）。一条边只有一种形态（A2），档取其文件依赖的最强（A3）。
+ */
+export interface ElementEdge {
+  /** `el:<依赖方节点>-><被依赖方节点>:<形态>:<元素名 | * 整模块 | ! 越过入口>` */
+  id: string
+  /** 所在的束（Bundle.id） */
+  bundle: string
+  from: string
+  to: string
+  fromModule: string
+  toModule: string
+  element: SurfaceElement | null
+  /** C3：越过入口（深层导入）；element 为 null */
+  bypass?: true
+  form: DepForm
+  tier: DepTier
+  /** 产生这条边的文件依赖（同一文件依赖可同时产生几条元素级边与越过入口边） */
+  files: FileDep[]
+}
+
+/**
+ * K14、A4：束——本层一对节点同方向的元素级边的集合。线型与端点记号取最强形态，档取最强，线宽为文件依赖合计（L18）；
+ * U15 判定、K17 覆盖、U17 逆稳定都按束（A7）。
+ */
+export interface Bundle {
+  /** `bundle:<依赖方节点>-><被依赖方节点>` */
+  id: string
+  from: string
+  to: string
+  /** 两端节点对应的模块 ID；选中落到 K10 的 `sel=d:<fromModule>-><toModule>` */
+  fromModule: string
+  toModule: string
+  /** 最强形态（DEP_FORMS 顺序） */
+  form: DepForm
+  /** 出现的形态，按 DEP_FORMS 顺序 */
+  forms: DepForm[]
+  /** 形态不止一种（束上「×N 元素」角标，A4） */
+  mixed?: true
+  tier: DepTier
+  /** 文件依赖条数合计（不重复计） */
+  files: number
+  /** 接到的不同表面元素数 */
+  elements: number
+  /** 越过入口的文件依赖条数 */
+  bypass: number
+  /** 束内的元素级边（ElementEdge.id），同 elementEdges 的顺序 */
+  edges: string[]
+  /** 聚合的模块依赖键（K4） */
+  deps: string[]
+  /** K17：交互覆盖 */
+  coverage: EdgeCoverage
+  /** K17：K7 的未解释的交互 */
+  unexplained?: true
+  ruling: EdgeRuling
+  /** U17：违背稳定依赖方向时两端的 I（全部束都判，A7） */
+  againstStability?: { from: number; to: number }
+}
+
+/** K19：表面元素的一次使用——元素、使用它的模块（扇入）与文件依赖 */
+export interface ElementUse {
+  element: SurfaceElement
+  /** 使用它的模块（子树外的依赖方模块），按 ID 排序 */
+  modules: string[]
+  files: FileDep[]
+}
+
+/** K19：模块的表面指标；没有入口时 w / b 为 null（不给） */
+export interface SurfaceMetrics {
+  module: string
+  entry: string | null
+  /** 表面宽度 W：被子树外引用的不同元素数 */
+  w: number | null
+  /** 越过入口数 B：越过入口的文件依赖条数 */
+  b: number | null
+  /** 被引用的元素，按扇入降序、名字 */
+  uses: ElementUse[]
+  /** 越过入口的文件依赖，按依赖方文件、行 */
+  bypasses: FileDep[]
+  /** 整模块导入（namespace、默认、`*`）的文件依赖条数 */
+  whole: number
+}
+
+/** K20：承载模板——直接、经端口、经总线、回调注册（直接通知）、经通道 */
+export type CarrierTemplate = 'direct' | 'port' | 'bus' | 'callback' | 'channel'
+export const CARRIER_TEMPLATES: readonly CarrierTemplate[] = ['direct', 'port', 'bus', 'callback', 'channel']
+
+/** K20：承载段的角色 */
+export type CarrierRole = 'call' | 'use-port' | 'implement' | 'assemble' | 'publish' | 'subscribe' | 'register' | 'contract-from' | 'contract-to'
+
+/** K5d：承载判定——齐全 / 缺段 / 无承载 / 外部承载不判定（通道没写契约模块）/ 已证实（模块级，K5 回退：元素匹配不上但模块依赖在） */
+export type CarrierVerdict = 'complete' | 'partial' | 'none' | 'external' | 'module-level'
+export const CARRIER_VERDICTS: readonly CarrierVerdict[] = ['complete', 'module-level', 'partial', 'none', 'external']
+
+/** K20：承载链的一段——期望 from → to（模块 ID）上的一条元素级边 */
+export interface CarrierSegment {
+  role: CarrierRole
+  from: string
+  to: string
+  /** 期望接到的元素名（写了接口、经端口时）；没有时任一操作元素即可 */
+  element?: string
+  /** 找到的元素级边（模块级：两端为模块）；缺段时为 null */
+  edge: ElementEdge | null
+  missing?: true
+  /** 只在模块级成立（边接到模块本体或别的元素，K5 回退） */
+  moduleLevel?: true
+}
+
+/** K5d、K20：一条交互的承载 */
+export interface Carrier {
+  relation: string
+  template: CarrierTemplate
+  segments: CarrierSegment[]
+  verdict: CarrierVerdict
 }
 
 /** O13③：分层总览中核心模块（或架上共用件）的一条跨层结构边 */

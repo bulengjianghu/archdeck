@@ -22,7 +22,11 @@ export const CHANNEL_LABELS: Readonly<Record<string, string>> = { http: 'HTTP', 
 export function viaLabel(via: string, index?: ModelIndex): string {
   const v = parseVia(via)
   if (!v) return CHANNEL_LABELS[via] ?? via
-  if (v.kind === 'channel') return CHANNEL_LABELS[v.target!] ?? v.target!
+  if (v.kind === 'channel') {
+    const ch = v.name ?? v.target!
+    const label = CHANNEL_LABELS[ch] ?? ch
+    return v.contract ? `${label}（契约 ${index ? moduleName(index, v.contract) : v.contract}）` : label
+  }
   if (v.kind === 'port') return v.target ? `端口 ${index?.interfaces.get(v.target)?.name ?? v.target}` : '端口（未指明）'
   return v.target ? `总线 ${index ? moduleName(index, v.target) : v.target}` : '事件总线（未指明）'
 }
