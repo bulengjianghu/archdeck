@@ -142,7 +142,7 @@ function surfaceOf(ctx: SceneContext, n: ViewNode, box: Box, hits: Map<string, S
       const x = info?.get(p.name)
       return { name: p.name, x: p.x - box.x, y: p.y - box.y, used: !!used?.has(p.name), ...(x ? { kind: x.kind, fanIn: x.fanIn } : {}) }
     })
-  if (!items.length) return {}
+  // 交互视角没有被接到的元素时也给（空的）记号层：节点按展开的尺寸布局（两个视角同一份布局，V12），入边一侧照样让出
   const more = ctx.structure ? ctx.pv.elementsMore?.get(n.id) : undefined
   const surface: NodeSurface = { side: ctx.pv.direction === 'RIGHT' ? 'left' : 'top', items, ...(more ? { more } : {}) }
   return { surface }

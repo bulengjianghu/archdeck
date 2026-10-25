@@ -37,7 +37,12 @@ test('L11：关系全是交互，进边的进点都在入口侧的前半（顶�
   await expect(page.locator('.vue-flow__edge').first()).toBeAttached()
   const nodes = await page
     .locator('.vue-flow__node-module, .vue-flow__node-core')
-    .evaluateAll(els => els.map(n => ({ id: n.getAttribute('data-id') ?? '', style: n.getAttribute('style') ?? '' })))
+    // C6、L23：展开表面的节点（这里选中的模块）入边一侧整条排元素端口，不按前半 / 后半，不在本条检查之内
+    .evaluateAll(els =>
+      els
+        .filter(n => !n.querySelector('[data-testid="surface-marks"]'))
+        .map(n => ({ id: n.getAttribute('data-id') ?? '', style: n.getAttribute('style') ?? '' })),
+    )
   const boxMap = new Map<string, { x: number; y: number; w: number; h: number }>()
   for (const n of nodes) {
     const m = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(n.style)
