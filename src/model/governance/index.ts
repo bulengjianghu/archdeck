@@ -5,6 +5,7 @@ export {
   related,
   liftDeps,
   hostOf,
+  isTarget,
   confirmRelations,
   confirmImplementers,
   heritageFacts,
