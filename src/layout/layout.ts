@@ -153,7 +153,7 @@ const cache = new Map<string, PositionedView>()
 const CACHE_LIMIT = 64
 
 /** 布局算法的版本：端口、层约束等选项改了就升，旧结果不再命中 */
-export const LAYOUT_VERSION = 'L21-bundle-2'
+export const LAYOUT_VERSION = 'L21-bundle-3'
 
 export function cacheKey(view: LevelView, opts: LayoutOptions = {}, links?: StructureLinks | null): string {
   return JSON.stringify([

@@ -6,6 +6,7 @@ import type { LevelView } from '@/model'
 import {
   NODE_SIZE,
   SHELF,
+  SURFACE,
   contentBounds,
   elementPortId,
   expandedSize,
@@ -67,6 +68,17 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
   const target = (e: { id: string; to: string }) => {
     const t = exp?.targets.get(e.id)
     return t && expanded.has(t.node) ? elementPortId(t.node, t.element) : null
+  }
+  /**
+   * C6、T2-9：展开节点的尺寸——入边一侧的端口（元素端口与其余入边的端口）在这一侧等距分布（DISTRIBUTED），
+   * 节点按这一侧的端口总数加长，保证元素端口间距不小于 SURFACE.pitch（元素名横排、两行错开时放得下）
+   */
+  const expandedBox = (n: LevelView['nodes'][number]): { width: number; height: number } => {
+    const b = boxSize(n, direction, exp)
+    if (!expanded.has(n.id)) return { width: b.w, height: b.h }
+    const side = portSide('in', direction)
+    const span = ports.get(n.id)!.filter(p => p.side === side).length * SURFACE.pitch + 2 * SURFACE.pad
+    return direction === 'DOWN' ? { width: Math.max(b.w, span), height: b.h } : { width: b.w, height: Math.max(b.h, SURFACE.head + span) }
   }
   const edges = view.edges
     .filter(e => ids.has(e.from) && ids.has(e.to))
@@ -135,8 +147,7 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
     },
     children: inner.map(n => ({
       id: n.id,
-      width: boxSize(n, direction, exp).w,
-      height: boxSize(n, direction, exp).h,
+      ...expandedBox(n),
       ports: ports.get(n.id)!.map(({ id, width, height, layoutOptions }) => ({ id, width, height, layoutOptions })),
       // C6：展开的节点上元素端口按顺序等距排在入边一侧（标签画在端口处）
       layoutOptions: {

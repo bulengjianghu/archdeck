@@ -43,7 +43,7 @@ import { canDesignAt, openNewDesign } from './edit/designHere'
 
 const desk = useDesk()
 const stageUi = useStage()
-const { setViewport, zoomIn, zoomOut, dimensions, setNodes, setEdges } = useVueFlow('arch-desk')
+const { setViewport, zoomIn, zoomOut, dimensions, setNodes, setEdges, onMoveStart } = useVueFlow('arch-desk')
 
 /** 运行视角的舞台叠加；结构 / 交互视角为 null */
 const stage = computed(() => (desk.perspective.value === 'run' ? desk.run.overlay.value : null))
@@ -247,21 +247,25 @@ function fitNow(only?: ReadonlySet<string>): boolean {
   return true
 }
 
-// T2-9：新展开表面的节点——重排完成后把视口适应到它及本层邻居一次（同代码事实读到后的那次适应）；整层适应优先
+// T2-9：新展开表面的节点——重排完成后把视口适应到它及本层邻居（整层适应优先）；入口导出到齐后的再次重排也跟着适应，
+// 直到用户自己平移缩放或展开集合变化为止
 const pendingSurface = ref<Set<string> | null>(null)
 watch(
   () => desk.facts.expansion.value,
   (now, was) => {
     const before = new Set((was?.expand ?? []).map(x => x.node))
     const fresh = (now?.expand ?? []).map(x => x.node).filter(n => !before.has(n))
-    pendingSurface.value = fresh.length ? new Set(fresh) : null
+    if (fresh.length) pendingSurface.value = new Set(fresh)
+    else if (!now) pendingSurface.value = null
   },
 )
+onMoveStart(e => {
+  if ((e.event as { sourceEvent?: unknown } | undefined)?.sourceEvent) pendingSurface.value = null
+})
 function trySurfaceFit() {
   const want = pendingSurface.value
   const pv = positioned.value
   if (!want || !pv?.elements || ![...want].some(n => pv.elements!.has(n))) return
-  pendingSurface.value = null
   const near = new Set(want)
   const shown = structure.value?.display?.shown ?? []
   for (const e of [...pv.view.edges, ...shown]) {

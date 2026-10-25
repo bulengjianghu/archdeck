@@ -64,7 +64,7 @@ describe('L14 普通层次', () => {
     expect(r1.points[0].y).toBeCloseTo(api.y + api.h)
     const r2 = edgeRoute(pv, z2)!
     expect(r2.points[r2.points.length - 1].x).toBeCloseTo(ext.x)
-    expect(LAYOUT_VERSION).toBe('L21-bundle-2')
+    expect(LAYOUT_VERSION).toBe('L21-bundle-3')
   })
 })
 
