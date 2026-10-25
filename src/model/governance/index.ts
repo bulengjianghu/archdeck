@@ -45,12 +45,10 @@ export {
   moduleMetrics,
   againstStability,
   againstStabilityOf,
-  structureEdgeFiles,
   isolatedInteractions,
   hasStructureEdge,
   interactionEdgeBetween,
   ruleBasis,
-  fileKinds,
   tierOf,
   stabilityBand,
   STABLE_DIRECTION_THRESHOLD,
@@ -60,7 +58,6 @@ export {
   NO_FACTS_REASON,
 } from './structure'
 export {
-  HOT_SURFACE_MODULES,
   surfaceContext,
   surfaceOf,
   surfaceMetrics,
@@ -80,9 +77,6 @@ export {
 } from './surface'
 export type { SurfaceContext, SurfaceGate, EdgeSlot } from './surface'
 export {
-  CARRIER_TEMPLATE_LABELS,
-  CARRIER_VERDICT_LABELS,
-  CARRIER_ROLE_TEXT,
   moduleElementEdges,
   carrierTemplate,
   carrierOf,
@@ -90,7 +84,6 @@ export {
   carrierGap,
   interactionBundle,
 } from './carrier'
-export type { InteractionBundle, InteractionSpread } from './carrier'
 export { moduleBrief, describeModule, locateFile, checkDependency } from './query'
 export type { ModuleBrief, ModuleDetail, FileStatus, CheckTarget, CheckResult, PairCheck, CycleImpact } from './query'
 export { sharedSuggestions, sharedReverse, sharedHostOf, SHARED_NAME_HINTS } from './roles'

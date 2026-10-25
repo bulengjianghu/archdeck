@@ -16,28 +16,26 @@ beforeAll(() => {
 }, 60_000)
 
 describe('h5player 结构视图', () => {
-  it('K14、K17：根层每条结构边两端是不同的带；依赖边都有档；未解释的依赖边与 K7 同口径', () => {
+  it('K14、K17：根层每条束两端是不同的带，一对节点一条；束都有档与覆盖；未解释的束与 K7 同口径', () => {
     const view = projectLevel(l.index, l.index.rootId)
-    const { edges, typeOnly } = levelDeps(l.index, view, l.report)
-    expect(edges.length).toBeGreaterThan(0)
-    expect(edges.every(e => e.from !== e.to)).toBe(true)
-    const deps = edges.filter(e => e.kind === 'dependency')
-    expect(deps.every(e => e.tier && e.coverage)).toBe(true)
-    expect(typeOnly).toBe(deps.filter(e => e.tier === 'type').length)
-    // 组装事实（K13）在 h5player 有 145 条量级，根层至少一条组装边
-    expect(edges.some(e => e.kind === 'assembly')).toBe(true)
+    const { bundles } = levelDeps(l.index, view, l.report)
+    expect(bundles.length).toBeGreaterThan(0)
+    expect(bundles.every(e => e.from !== e.to)).toBe(true)
+    expect(new Set(bundles.map(b => `${b.from}->${b.to}`)).size).toBe(bundles.length)
+    expect(bundles.every(e => e.tier && e.coverage)).toBe(true)
+    // 组装事实（K13）在 h5player 有 145 条量级，根层至少一条束含组装形态
+    expect(bundles.some(e => e.forms.includes('assembly'))).toBe(true)
     const undescribed = new Set(l.report.undescribed.map(d => d.key))
-    for (const e of deps) expect(!!e.unexplained).toBe(e.deps.some(k => undescribed.has(k)))
+    for (const e of bundles) expect(!!e.unexplained).toBe(e.deps.some(k => undescribed.has(k)))
   })
 
   it('L15、K14（T3 裁决 9 核对）：根层只引类型计数为 0——每对带之间都有交互使用，按「取最强一档」聚合成交互使用；下钻后有只引类型的边', () => {
     const root = levelDeps(l.index, projectLevel(l.index, l.index.rootId), l.report)
-    const deps = root.edges.filter(e => e.kind === 'dependency')
-    expect(deps.length).toBeGreaterThan(0)
-    expect(deps.every(e => e.tier === 'invokes')).toBe(true)
-    expect(root.typeOnly).toBe(0)
-    const counts = [...l.index.childrenOf.get(l.index.rootId)!].flatMap(layer => [layer, ...(l.index.childrenOf.get(layer) ?? [])]).map(
-      id => levelDeps(l.index, projectLevel(l.index, id, { showBoundaries: true }), l.report).typeOnly,
+    expect(root.bundles.length).toBeGreaterThan(0)
+    expect(root.bundles.every(e => e.tier === 'invokes')).toBe(true)
+    const typeOnly = (bs: readonly { tier: string }[]) => bs.filter(b => b.tier === 'type').length
+    const counts = [...l.index.childrenOf.get(l.index.rootId)!].flatMap(layer => [layer, ...(l.index.childrenOf.get(layer) ?? [])]).map(id =>
+      typeOnly(levelDeps(l.index, projectLevel(l.index, id, { showBoundaries: true }), l.report).bundles),
     )
     expect(counts.some(n => n > 0)).toBe(true)
   })

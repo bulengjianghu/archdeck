@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * 结构边的编码表（L16，ADR-0031 裁决 D）：UML 类图惯例——依赖虚线 + 开口箭头、子类实线 + 空心三角、端口实现虚线 + 空心三角、
+ * 结构边的编码表（L16，ADR-0031 裁决 D）：UML 类图惯例——使用虚线 + 开口箭头、子类实线 + 空心三角、端口实现虚线 + 空心三角、
  * 组装实线 + 组装者一端实心菱形 + 开口箭头；依赖三档用明度（不用透明度）；色相中性；线宽 = 聚合条数（共享通道 L18）；违规三档红晕（U15）；
  * 允许边（U16）点线、意图色。另含「只引类型」等结构视角显示偏好的本地记忆（useStructurePrefs）。
  */
@@ -12,7 +12,7 @@ import { DASHED, DOTTED, WIDTH, arrowSize } from '../../src/components/edges/edg
 import { DEFAULT_STRUCTURE_PREFS, resetStructurePrefs, useStructurePrefs } from '../../src/components/display/useDisplayPrefs'
 import { depWeight, violationLook, type DepEdgeLook, type RouteEdgeData } from '../../src/layout/canvas'
 
-const look = (l: Partial<DepEdgeLook>): DepEdgeLook => ({ kind: 'dependency', tier: 'invokes', fromModule: 'a', toModule: 'b', deps: 1, title: 'a → b', ...l })
+const look = (l: Partial<DepEdgeLook>): DepEdgeLook => ({ kind: 'use', tier: 'invokes', fromModule: 'a', toModule: 'b', deps: 1, title: 'a → b', ...l })
 
 function render(l: Partial<DepEdgeLook>, extra: Partial<RouteEdgeData> = {}) {
   const data: RouteEdgeData = {
@@ -39,7 +39,7 @@ function render(l: Partial<DepEdgeLook>, extra: Partial<RouteEdgeData> = {}) {
 
 describe('L16 编码表', () => {
   it('线型：依赖与端口实现虚线，子类与组装实线，允许边点线', () => {
-    expect(depDash('dependency')).toBe(DASHED)
+    expect(depDash('use')).toBe(DASHED)
     expect(depDash('implements')).toBe(DASHED)
     expect(depDash('subclass')).toBeUndefined()
     expect(depDash('assembly')).toBeUndefined()
@@ -47,26 +47,26 @@ describe('L16 编码表', () => {
   })
 
   it('端点：依赖开口箭头；子类、端口实现空心三角；组装起点实心菱形、终点开口箭头', () => {
-    expect(depEnds('dependency')).toEqual({ end: 'open' })
+    expect(depEnds('use')).toEqual({ end: 'open' })
     expect(depEnds('subclass')).toEqual({ end: 'triangle' })
     expect(depEnds('implements')).toEqual({ end: 'triangle' })
     expect(depEnds('assembly')).toEqual({ start: 'diamond', end: 'open' })
   })
 
   it('依赖三档用明度（深 / 中 / 浅），不改透明度；其余种类中性色；允许边意图色', () => {
-    expect(depColor({ kind: 'dependency', tier: 'invokes' })).toBe(TIER_COLOR.invokes)
-    expect(depColor({ kind: 'dependency', tier: 'value' })).toBe(TIER_COLOR.value)
-    expect(depColor({ kind: 'dependency', tier: 'type' })).toBe(TIER_COLOR.type)
+    expect(depColor({ kind: 'use', tier: 'invokes' })).toBe(TIER_COLOR.invokes)
+    expect(depColor({ kind: 'use', tier: 'value' })).toBe(TIER_COLOR.value)
+    expect(depColor({ kind: 'use', tier: 'type' })).toBe(TIER_COLOR.type)
     expect(new Set(Object.values(TIER_COLOR)).size).toBe(3)
     expect(depColor({ kind: 'subclass' })).toBe(FACT_COLOR)
     expect(depColor({ kind: 'allowed' })).toBe(ALLOWED_COLOR)
-    for (const tier of ['invokes', 'value', 'type'] as const) expect(depStroke({ kind: 'dependency', tier }).opacity).toBe(1)
-    expect(depStroke({ kind: 'dependency', tier: 'type', dim: true }).opacity).toBeLessThan(1)
+    for (const tier of ['invokes', 'value', 'type'] as const) expect(depStroke({ kind: 'use', tier }).opacity).toBe(1)
+    expect(depStroke({ kind: 'use', tier: 'type', dim: true }).opacity).toBeLessThan(1)
   })
 
   it('线宽 = 聚合的模块依赖条数三档（与交互边同一套宽度）', () => {
     expect([1, 2, 4, 5, 9].map(depWeight)).toEqual([1, 2, 2, 3, 3])
-    expect(depStroke({ kind: 'dependency', weight: 3 }).strokeWidth).toBe(WIDTH[2])
+    expect(depStroke({ kind: 'use', weight: 3 }).strokeWidth).toBe(WIDTH[2])
   })
 
   it('违规状态投到三档红晕：新增与无基线、已知、已豁免', () => {
@@ -115,7 +115,7 @@ describe('L16、L21 第八轮：按形态与档', () => {
 })
 
 describe('DepEdge', () => {
-  it('依赖：虚线、终点开口箭头，线在箭头处回缩；没有起点记号', () => {
+  it('使用：虚线、终点开口箭头，线在箭头处回缩；没有起点记号', () => {
     const { w, main } = render({})
     expect(main.attributes('style')).toContain('stroke-dasharray: 6 4')
     expect(main.attributes('marker-end')).toContain('dep-end-')

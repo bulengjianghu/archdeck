@@ -7,23 +7,20 @@ import { moduleName } from '../names'
 import { moduleFiles, type SourceOwnership } from '../source'
 import { RELATION_TYPES, type LevelView, type ModelIndex } from '../types'
 import { valueDeps } from './cycles'
-import { contractNames, coveringRelations, depKey, implementsInto, plainInteraction, within } from './facts'
+import { contractNames, coveringRelations, depKey, implementsInto, within } from './facts'
 import { nodeOf } from './level'
 import { rulesOf } from './rules'
 import { sharedHostOf } from './roles'
 import { elementSlots, slotKey, strongerForm, strongerTier, surfaceContext, surfaceWidths, tierOf } from './surface'
 import {
-  ASSEMBLY_KINDS,
   DEP_FORMS,
   STABILITY_BANDS,
-  STRUCTURE_KINDS,
   type AllowedDeps,
   type AllowedEdge,
   type Bundle,
   type ChipDep,
   type ElementEdge,
   type EdgeRuling,
-  type FileDep,
   type GovernanceReport,
   type Impact,
   type ImpactEntry,
@@ -35,27 +32,12 @@ import {
   type ModuleMetricsDetail,
   type RuleBasis,
   type StabilityBand,
-  type StructureEdge,
-  type StructureKind,
   type StructureView,
   type Violation,
   type ViolationStatus,
 } from './types'
 
-// ── K14：结构边的种类与档 ──
-
-/** K14：一条文件依赖归入的结构边种类（可多种）；组装、子类、端口实现之外的使用（或什么都不是）归「依赖」 */
-export function fileKinds(f: FileDep, ports: ReadonlySet<string>): StructureKind[] {
-  const out: StructureKind[] = []
-  if (f.invokeKinds?.some(k => ASSEMBLY_KINDS.includes(k))) out.push('assembly')
-  const hs = f.inherits ?? []
-  // K12 同 heritageFacts：extends 的是类（不是接口、类型别名、命名空间，也不是端口）
-  if (hs.some(h => h.clause === 'extends' && h.name !== '*' && !ports.has(h.name) && h.decl !== 'interface' && h.decl !== 'type')) out.push('subclass')
-  // K5c：继承子句指向被依赖方声明的端口（接口）
-  if (hs.some(h => ports.has(h.name))) out.push('implements')
-  if (!out.length || plainInteraction(f)) out.push('dependency')
-  return out
-}
+// ── K14：依赖的档（按元素级边取最强的在 surface.ts） ──
 
 export { tierOf }
 
@@ -210,8 +192,8 @@ const moduleOfNode = (view: LevelView, nodeId: string) => view.nodes.find(n => n
 
 /**
  * K14、K17、U15、U17：模块依赖（K4，全部种类）按 mapEndpoint 投影到本层，两端为本层两个不同节点的成为结构边；
- * 一对节点同方向按事实种类各一条（依赖、组装、子类、端口实现），依赖边带档、覆盖与未解释标记；规则判定按这对节点。
- * 边的顺序：按依赖方、被依赖方节点的视图顺序，同一对按 STRUCTURE_KINDS。
+ * 一对节点同方向一条束（A4，取最强形态与档），束内为元素级边（A1：依赖方 → 被依赖方的表面元素，一条一种形态）；
+ * 束带覆盖与未解释标记（K17）、这对节点的规则判定（U15）与逆稳定提示（U17，全部束，A7）。顺序：按依赖方、被依赖方节点的视图顺序。
  */
 export function levelDeps(index: ModelIndex, view: LevelView, report: ReportPart, opts: LevelDepsOptions = {}): LevelDeps {
   const present = new Set(view.nodes.map(n => n.id))
@@ -224,7 +206,6 @@ export function levelDeps(index: ModelIndex, view: LevelView, report: ReportPart
     from: string
     to: string
     deps: ModuleDep[]
-    byKind: Map<StructureKind, { files: FileDep[]; deps: Set<string> }>
     violations: Violation[]
   }
   const pairs = new Map<string, Pair>()
@@ -233,15 +214,9 @@ export function levelDeps(index: ModelIndex, view: LevelView, report: ReportPart
     const p = project(d)
     if (!p) continue
     const k = depKey(p[0], p[1])
-    const pair = pairs.get(k) ?? pairs.set(k, { from: p[0], to: p[1], deps: [], byKind: new Map(), violations: [] }).get(k)!
+    const pair = pairs.get(k) ?? pairs.set(k, { from: p[0], to: p[1], deps: [], violations: [] }).get(k)!
     pair.deps.push(d)
-    const ports = portsOf.get(d.to) ?? portsOf.set(d.to, contractNames(index, d.to)).get(d.to)!
-    for (const f of d.files)
-      for (const kind of fileKinds(f, ports)) {
-        const slot = pair.byKind.get(kind) ?? pair.byKind.set(kind, { files: [], deps: new Set() }).get(kind)!
-        slot.files.push(f)
-        slot.deps.add(d.key)
-      }
+    if (!portsOf.has(d.to)) portsOf.set(d.to, contractNames(index, d.to))
   }
   for (const v of report.violations) {
     const p = project(v)
@@ -254,46 +229,8 @@ export function levelDeps(index: ModelIndex, view: LevelView, report: ReportPart
   const order = new Map(view.nodes.map((n, i) => [n.id, i]))
   const byOrder = (a: Pair, b: Pair) => (order.get(a.from) ?? 0) - (order.get(b.from) ?? 0) || (order.get(a.to) ?? 0) - (order.get(b.to) ?? 0)
 
-  const edges: StructureEdge[] = []
   const rulings = new Map<Pair, EdgeRuling>()
-  let typeOnly = 0
-  for (const p of [...pairs.values()].sort(byOrder)) {
-    const fromModule = moduleOfNode(view, p.from)
-    const toModule = moduleOfNode(view, p.to)
-    const rul = ruling(index, p.deps, p.violations)
-    rulings.set(p, rul)
-    for (const kind of STRUCTURE_KINDS) {
-      const slot = p.byKind.get(kind)
-      if (!slot) continue
-      const keys = [...slot.deps]
-      const edge: StructureEdge = {
-        id: `${kind}:${depKey(p.from, p.to)}`,
-        kind,
-        from: p.from,
-        to: p.to,
-        fromModule,
-        toModule,
-        files: slot.files.length,
-        deps: keys,
-        ruling: rul,
-      }
-      if (kind === 'dependency') {
-        edge.tier = tierOf(slot.files)
-        if (edge.tier === 'type') typeOnly++
-        const ds = p.deps.filter(d => slot.deps.has(d.key))
-        edge.coverage = {
-          relations: [...new Set(ds.flatMap(d => coveringRelations(index, d.from, d.to)))].sort(),
-          implementers: ds.filter(d => implementsInto(index, report.implementers, d.from, d.to)).length,
-          subclass: ds.filter(d => subclass.has(d.key)).length,
-          assembly: ds.filter(d => assembly.has(d.key)).length,
-        }
-        if (ds.some(d => undescribed.has(d.key))) edge.unexplained = true
-        const against = againstStability(index, metrics, fromModule, toModule, opts.threshold)
-        if (against) edge.againstStability = against
-      }
-      edges.push(edge)
-    }
-  }
+  for (const p of pairs.values()) rulings.set(p, ruling(index, p.deps, p.violations))
 
   // K14、A1–A4、A7：束与元素级边
   const ctx = opts.surface ? surfaceContext(index, opts.surface, report) : null
@@ -353,15 +290,15 @@ export function levelDeps(index: ModelIndex, view: LevelView, report: ReportPart
     if (against) bundle.againstStability = against
     bundles.push(bundle)
   }
-  return { edges, typeOnly, bundles, elementEdges }
+  return { bundles, elementEdges }
 }
 
 const VIOLATION_ORDER: readonly ViolationStatus[] = ['new', 'open', 'known', 'allowed']
 
 /**
- * O13③：分层总览中核心模块（与架上共用件）的跨层依赖——模块依赖的一端落在给出的块（chips）的子树内时，
+ * O13③、L21：分层总览中核心模块（与架上共用件）的跨层依赖——模块依赖的一端落在给出的块（chips）的子树内时，
  * 这一端投到块、另一端投到它所在的块（没有时为带或边界节点，mapEndpoint）；两端同带的不画（带内）。
- * 一对节点同方向按事实种类各一条（同 K14），依赖边带档；违规取最严的状态。顺序：按节点对、同一对按种类名。
+ * 一对节点同方向一条束（同 K14 的束：最强形态与档；跨层依赖不接到元素，形态按文件依赖判）；违规取最严的状态。顺序：按节点对首次出现。
  */
 export function chipDeps(
   index: ModelIndex,
@@ -390,7 +327,7 @@ export function chipDeps(
   interface Pair {
     from: string
     to: string
-    byKind: Map<StructureKind, { files: FileDep[]; deps: Set<string> }>
+    deps: ModuleDep[]
     violations: Violation[]
   }
   const pairs = new Map<string, Pair>()
@@ -398,14 +335,7 @@ export function chipDeps(
     const p = project(d)
     if (!p) continue
     const k = depKey(p[0], p[1])
-    const pair = pairs.get(k) ?? pairs.set(k, { from: p[0], to: p[1], byKind: new Map(), violations: [] }).get(k)!
-    const ports = contractNames(index, d.to)
-    for (const f of d.files)
-      for (const kind of fileKinds(f, ports)) {
-        const slot = pair.byKind.get(kind) ?? pair.byKind.set(kind, { files: [], deps: new Set() }).get(kind)!
-        slot.files.push(f)
-        slot.deps.add(d.key)
-      }
+    ;(pairs.get(k) ?? pairs.set(k, { from: p[0], to: p[1], deps: [], violations: [] }).get(k)!).deps.push(d)
   }
   for (const v of report.violations) {
     const p = project(v)
@@ -414,33 +344,25 @@ export function chipDeps(
   const out: ChipDep[] = []
   for (const p of pairs.values()) {
     const violation = VIOLATION_ORDER.find(s => p.violations.some(v => v.status === s))
-    for (const [kind, slot] of [...p.byKind].sort((a, b) => a[0].localeCompare(b[0]))) {
-      const tier = kind === 'dependency' ? tierOf(slot.files) : undefined
-      out.push({
-        id: `chip:${kind}:${depKey(p.from, p.to)}`,
-        kind,
-        from: p.from,
-        to: p.to,
-        fromModule: moduleOfNode(view, p.from),
-        toModule: moduleOfNode(view, p.to),
-        ...(tier ? { tier } : {}),
-        files: slot.files.length,
-        deps: [...slot.deps],
-        ...(violation ? { violation } : {}),
-      })
-    }
-  }
-  return out
-}
-
-/** K14：归入一条结构边的文件依赖——它聚合的模块依赖中、按 fileKinds 归入这条边种类的（依赖边面板的文件依赖清单） */
-export function structureEdgeFiles(index: ModelIndex, report: Pick<GovernanceReport, 'moduleDeps'>, edge: Pick<StructureEdge, 'kind' | 'deps'>): FileDep[] {
-  const out: FileDep[] = []
-  for (const k of edge.deps) {
-    const d = report.moduleDeps.get(k)
-    if (!d) continue
-    const ports = contractNames(index, d.to)
-    for (const f of d.files) if (fileKinds(f, ports).includes(edge.kind)) out.push(f)
+    const files = p.deps.flatMap(d => {
+      const ports = contractNames(index, d.to)
+      return d.files.map(f => ({ f, ports }))
+    })
+    const slots = elementSlots(index, null, null, files)
+    out.push({
+      id: `chip:${depKey(p.from, p.to)}`,
+      from: p.from,
+      to: p.to,
+      fromModule: moduleOfNode(view, p.from),
+      toModule: moduleOfNode(view, p.to),
+      form: slots.map(x => x.form).reduce(strongerForm),
+      forms: DEP_FORMS.filter(f => slots.some(x => x.form === f)),
+      tier: slots.map(x => x.tier).reduce(strongerTier),
+      files: files.length,
+      edges: slots.length,
+      deps: p.deps.map(d => d.key),
+      ...(violation ? { violation } : {}),
+    })
   }
   return out
 }

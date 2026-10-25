@@ -9,7 +9,7 @@ import {
   allowedDeps,
   assignFiles,
   chipDeps,
-  fileKinds,
+  formOf,
   governanceReport,
   hasStructureEdge,
   impactOf,
@@ -23,7 +23,6 @@ import {
   sharedHealth,
   stabilityBand,
   structureMetrics,
-  structureEdgeFiles,
   structureView,
   tierOf,
   topSharedFanIn,
@@ -53,16 +52,14 @@ const coreSetup = (deps = CORE) => {
   return { index, own, report: governanceReport(index, own, { files: SRC, packages: {} }, code, null) }
 }
 
-describe('K14 结构边的种类与档', () => {
-  it('文件依赖按事实归类：组装、子类、端口实现，其余为依赖；有调用的组装 / 继承另计依赖', () => {
+describe('K14 结构边：束的形态与档', () => {
+  it('不接到元素时形态按整条文件依赖判：组装、子类、端口实现，其余为使用；extends 指向端口的是端口实现', () => {
     const ports = new Set(['get'])
-    expect(fileKinds(CORE[3], ports)).toEqual(['assembly'])
-    expect(fileKinds(CORE[4], ports)).toEqual(['implements'])
-    expect(fileKinds(CORE[6], ports)).toEqual(['subclass'])
-    expect(fileKinds(CORE[1], ports)).toEqual(['dependency'])
-    expect(fileKinds({ ...CORE[3], invokeKinds: ['new', 'call'] }, ports)).toEqual(['assembly', 'dependency'])
-    // extends 指向端口（接口名）的是端口实现，不是子类
-    expect(fileKinds({ ...CORE[6], inherits: [{ name: 'get', clause: 'extends', decl: 'class' }] }, ports)).toEqual(['implements'])
+    expect(formOf(CORE[3], null, ports)).toBe('assembly')
+    expect(formOf(CORE[4], null, ports)).toBe('implements')
+    expect(formOf(CORE[6], null, ports)).toBe('subclass')
+    expect(formOf(CORE[1], null, ports)).toBe('use')
+    expect(formOf({ ...CORE[6], inherits: [{ name: 'get', clause: 'extends', decl: 'class' }] }, null, ports)).toBe('implements')
   })
 
   it('档取最强：交互使用 > 值使用（纯值读取）> 只引类型', () => {
@@ -71,71 +68,56 @@ describe('K14 结构边的种类与档', () => {
     expect(tierOf([CORE[1]])).toBe('type')
   })
 
-  it('投影到内核层：一对节点同方向按种类各一条边，依赖边带档与文件条数，只引类型的计数', () => {
+  it('投影到内核层：一对节点同方向一条束，取最强形态与档，形态不止一种标混合', () => {
     const { index, report } = coreSetup()
-    const view = projectLevel(index, 'core')
-    const { edges, typeOnly } = levelDeps(index, view, report)
-    const brief = edges.map(e => `${e.id}${e.tier ? `/${e.tier}` : ''}×${e.files}`).sort()
+    const { bundles } = levelDeps(index, projectLevel(index, 'core'), report)
+    const brief = bundles.map(b => `${b.id}/${b.forms.join('+')}/${b.tier}×${b.files}${b.mixed ? '*' : ''}`).sort()
     expect(brief).toEqual([
-      'assembly:core.impl->core.api×1',
-      'dependency:core.api->core.util/value×1',
-      'dependency:core.impl->core.util/invokes×1',
-      'dependency:core.util->core.api/type×1',
-      'dependency:core.util->core.impl/invokes×1',
-      'implements:core.impl->core.api×1',
-      'subclass:core.util->core.impl×1',
+      'bundle:core.api->core.util/use/value×1',
+      'bundle:core.impl->core.api/assembly+implements/invokes×2*',
+      'bundle:core.impl->core.util/use/invokes×1',
+      'bundle:core.util->core.api/use/type×1',
+      'bundle:core.util->core.impl/subclass+use/invokes×2*',
     ])
-    expect(typeOnly).toBe(1)
-    // 选中落到 K10 的同一个键：两端节点的模块 ID；同一对节点的各种类共用一条模块依赖
-    const asm = edges.find(e => e.kind === 'assembly')!
+    // 只引类型的束一条（画布缺省收起它）
+    expect(bundles.filter(b => b.tier === 'type').length).toBe(1)
+    // 选中落到 K10 的同一个键：两端节点的模块 ID
+    const asm = bundles.find(b => b.id === 'bundle:core.impl->core.api')!
     expect([asm.fromModule, asm.toModule, asm.deps]).toEqual(['core.impl', 'core.api', ['core.impl->core.api']])
   })
 
-  it('sample：根层（分层总览）上模块依赖落到带，各带之间一对一条依赖边，聚合的模块依赖条数为线宽', () => {
+  it('sample：根层（分层总览）上模块依赖落到带，各带之间一对一条束，聚合的模块依赖', () => {
     const { index, report } = sampleSetup()
     const view = projectLevel(index, index.rootId)
-    const { edges } = levelDeps(index, view, report)
-    const infraToApp = edges.find(e => e.kind === 'dependency' && e.from === 'infra' && e.to === 'app')!
+    const { bundles } = levelDeps(index, view, report)
+    const infraToApp = bundles.find(b => b.from === 'infra' && b.to === 'app')!
     expect(infraToApp.deps.sort()).toEqual(['infra.framework.extra->app.solution.core', 'infra.mus.core->app.solution.core'])
     expect(infraToApp.tier).toBe('invokes')
   })
 })
 
-describe('K14 结构边的文件依赖（依赖边面板经 desk.facts 取，T5 分层修正）', () => {
-  it('structureEdgeFiles：只列归入这条边种类的文件依赖；同一对节点的组装与端口实现各自分开', () => {
-    const { index, report } = coreSetup()
-    const { edges } = levelDeps(index, projectLevel(index, 'core'), report)
-    const byId = new Map(edges.map(e => [e.id, e]))
-    const lines = (id: string) => structureEdgeFiles(index, report, byId.get(id)!).map(f => `${f.from}:${f.line}`)
-    expect(lines('assembly:core.impl->core.api')).toEqual(['src/core/impl/i.ts:1'])
-    expect(lines('implements:core.impl->core.api')).toEqual(['src/core/impl/i.ts:2'])
-    expect(lines('dependency:core.util->core.impl')).toEqual(['src/core/util/u.ts:1'])
-    expect(structureEdgeFiles(index, report, { kind: 'dependency', deps: ['no->such'] })).toEqual([])
-  })
-})
-
 describe('K17 交互覆盖数与未解释', () => {
-  it('依赖边带覆盖它的关系与事实覆盖；覆盖 0 的交互使用标未解释（即 K7），值使用 / 只引类型不标', () => {
+  it('束带覆盖它的关系与事实覆盖；覆盖 0 的交互使用标未解释（即 K7），值使用 / 只引类型不标', () => {
     const { index, report } = coreSetup()
-    const { edges } = levelDeps(index, projectLevel(index, 'core'), report)
-    const byId = new Map(edges.map(e => [e.id, e]))
-    expect(byId.get('dependency:core.impl->core.util')!.coverage).toEqual({ relations: ['rel.3'], implementers: 0, subclass: 0, assembly: 0 })
-    expect(byId.get('dependency:core.impl->core.util')!.unexplained).toBeUndefined()
-    const lone = byId.get('dependency:core.util->core.impl')!
-    expect(lone.coverage!.relations).toEqual([])
-    expect(lone.coverage!.subclass).toBe(1)
+    const { bundles } = levelDeps(index, projectLevel(index, 'core'), report)
+    const byId = new Map(bundles.map(e => [e.id, e]))
+    expect(byId.get('bundle:core.impl->core.util')!.coverage).toEqual({ relations: ['rel.3'], implementers: 0, subclass: 0, assembly: 0 })
+    expect(byId.get('bundle:core.impl->core.util')!.unexplained).toBeUndefined()
+    const lone = byId.get('bundle:core.util->core.impl')!
+    expect(lone.coverage.relations).toEqual([])
+    expect(lone.coverage.subclass).toBe(1)
     expect(lone.unexplained).toBe(true)
     expect(report.undescribed.map(d => d.key)).toContain('core.util->core.impl')
-    expect(byId.get('dependency:core.api->core.util')!.unexplained).toBeUndefined()
-    expect(byId.get('dependency:core.util->core.api')!.unexplained).toBeUndefined()
+    expect(byId.get('bundle:core.api->core.util')!.unexplained).toBeUndefined()
+    expect(byId.get('bundle:core.util->core.api')!.unexplained).toBeUndefined()
   })
 
   it('UI 层：未解释的交互与 K9 叠加线同一口径；streams 反向的关系也算覆盖', () => {
     const { index, report } = setup()
-    const { edges } = levelDeps(index, projectLevel(index, 'ui'), report)
-    const dep = (from: string, to: string) => edges.find(e => e.kind === 'dependency' && e.from === from && e.to === to)!
+    const { bundles } = levelDeps(index, projectLevel(index, 'ui'), report)
+    const dep = (from: string, to: string) => bundles.find(e => e.from === from && e.to === to)!
     expect(dep('ui.view', 'boundary:core').unexplained).toBe(true)
-    expect(dep('ui.store', 'boundary:core').coverage!.relations).toEqual(['rel.2', 'rel.6'])
+    expect(dep('ui.store', 'boundary:core').coverage.relations).toEqual(['rel.2', 'rel.6'])
     expect(dep('ui.store', 'boundary:core').unexplained).toBeUndefined()
   })
 })
@@ -156,8 +138,8 @@ describe('K17 交互图互查（模块面板经 desk.facts 取，T5 分层修正
 describe('U15 规则叠加', () => {
   it('违规（取最严的状态）、允许（列出允许它的规则）、无约束', () => {
     const { index, report } = setup()
-    const { edges } = levelDeps(index, projectLevel(index, 'ui'), report)
-    const dep = (from: string, to: string) => edges.find(e => e.kind === 'dependency' && e.from === from && e.to === to)!
+    const { bundles } = levelDeps(index, projectLevel(index, 'ui'), report)
+    const dep = (from: string, to: string) => bundles.find(e => e.from === from && e.to === to)!
     const allowed = dep('ui.view', 'ui.store').ruling
     expect(allowed.verdict).toBe('allowed')
     expect(allowed.allowedBy.map(b => `${b.kind}:${b.at}`)).toEqual(['deps:ui.view'])
@@ -175,14 +157,14 @@ describe('U15 规则叠加', () => {
     const { report: open } = setup()
     const all = open.violations.filter(v => v.status !== 'allowed').map(v => v.key)
     const { index, report } = setup(undefined, { createdAt: 't', violations: all, cyclicity: { modules: 99, files: 99 } })
-    const { edges } = levelDeps(index, projectLevel(index, 'ui'), report)
-    expect(edges.find(e => e.from === 'ui.view' && e.to === 'boundary:core')!.ruling.status).toBe('known')
+    const { bundles } = levelDeps(index, projectLevel(index, 'ui'), report)
+    expect(bundles.find(e => e.from === 'ui.view' && e.to === 'boundary:core')!.ruling.status).toBe('known')
     const c = coreSetup()
-    const core = levelDeps(c.index, projectLevel(c.index, 'core'), c.report).edges
-    expect(core.find(e => e.id === 'dependency:core.impl->core.util')!.ruling.verdict).toBe('unconstrained')
-    // 访问面：经入口的只引类型依赖是允许，绕过入口的组装是违规
-    expect(core.find(e => e.id === 'dependency:core.util->core.api')!.ruling.allowedBy.map(b => b.kind)).toEqual(['exposes'])
-    expect(core.find(e => e.id === 'assembly:core.impl->core.api')!.ruling.verdict).toBe('violation')
+    const core = levelDeps(c.index, projectLevel(c.index, 'core'), c.report).bundles
+    expect(core.find(e => e.id === 'bundle:core.impl->core.util')!.ruling.verdict).toBe('unconstrained')
+    // 访问面：经入口的只引类型依赖是允许，绕过入口的组装是违规（这对节点的束取最严）
+    expect(core.find(e => e.id === 'bundle:core.util->core.api')!.ruling.allowedBy.map(b => b.kind)).toEqual(['exposes'])
+    expect(core.find(e => e.id === 'bundle:core.impl->core.api')!.ruling.verdict).toBe('violation')
   })
 })
 
@@ -245,11 +227,11 @@ describe('U17 稳定依赖方向', () => {
     const { index: idx, report } = sampleSetup([dep('src/domain/m.ts', 'src/app/s.ts')])
     const m = structureMetrics(idx, report)
     expect([m.get('app')!.instability, m.get('domain')!.instability]).toEqual([0.25, 0.5])
-    const edges = levelDeps(idx, projectLevel(idx, idx.rootId), report, { metrics: m, threshold: 0.2 }).edges
+    const edges = levelDeps(idx, projectLevel(idx, idx.rootId), report, { metrics: m, threshold: 0.2 }).bundles
     expect(edges.find(e => e.from === 'app' && e.to === 'domain')!.againstStability).toEqual({ from: 0.25, to: 0.5 })
     expect(edges.find(e => e.from === 'domain' && e.to === 'app')!.againstStability).toBeUndefined()
     // 缺省阈值 0.3：差 0.25 不提示
-    expect(levelDeps(idx, projectLevel(idx, idx.rootId), report).edges.some(e => e.againstStability)).toBe(false)
+    expect(levelDeps(idx, projectLevel(idx, idx.rootId), report).bundles.some(e => e.againstStability)).toBe(false)
   })
 })
 
@@ -314,7 +296,7 @@ describe('U16 没有代码事实时的允许依赖图', () => {
     expect(none.facts).toBe(false)
     if (!none.facts) expect(none.reason).toBe(NO_FACTS_REASON)
     const real = structureView(index, view, report)
-    expect(real.facts && real.edges.length).toBeGreaterThan(0)
+    expect(real.facts && real.bundles.length).toBeGreaterThan(0)
   })
 })
 
@@ -372,7 +354,7 @@ function sampleSetup(extra: FileDep[] = [], domainRefs = '  - { id: domain.model
 }
 
 describe('O13③ 分层总览中核心模块的跨层依赖（chipDeps）', () => {
-  it('一端落在给出的核心块子树内时投到块、另一端投到所在的带；按种类各一条，带档；没给块时为空', () => {
+  it('一端落在给出的核心块子树内时投到块、另一端投到所在的带；一对节点一条束，带形态与档；没给块时为空', () => {
     const raw = [
       { path: 'system.yaml', text: 'system: { id: sys, name: Sys }' },
       { path: 'modules/layers.yaml', text: LAYERS.replace('{ id: core.api, name: Api,', '{ id: core.api, name: Api, role: core,') },
@@ -386,7 +368,7 @@ describe('O13③ 分层总览中核心模块的跨层依赖（chipDeps）', () =
     expect(view.mode).toBe('layered')
     expect(chipDeps(index, view, report, new Set())).toEqual([])
     const out = chipDeps(index, view, report, new Set(['core.api']))
-    expect(out.map(e => e.id)).toEqual(['chip:dependency:ui->core.api'])
-    expect(out[0]).toMatchObject({ kind: 'dependency', from: 'ui', to: 'core.api', fromModule: 'ui', toModule: 'core.api', tier: 'invokes', files: 1 })
+    expect(out.map(e => e.id)).toEqual(['chip:ui->core.api'])
+    expect(out[0]).toMatchObject({ form: 'use', forms: ['use'], from: 'ui', to: 'core.api', fromModule: 'ui', toModule: 'core.api', tier: 'invokes', files: 1, edges: 1 })
   })
 })

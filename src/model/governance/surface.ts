@@ -10,6 +10,7 @@ import { valueDeps } from './cycles'
 import { within } from './facts'
 import {
   ASSEMBLY_KINDS,
+  HOT_SURFACE_MODULES,
   DEP_FORMS,
   DEP_TIERS,
   ELEMENT_KINDS,
@@ -26,9 +27,6 @@ import {
   type SurfaceMetrics,
   type SurfaceSource,
 } from './types'
-
-/** U19：导出未声明的元素被至少这么多个模块使用时提示声明接口（C4，h5player 实测后定） */
-export const HOT_SURFACE_MODULES = 3
 
 /** K14：一组文件依赖的档——任一条有交互使用为 invokes，否则有值使用（纯值读取）为 value，其余为 type */
 export const tierOf = (files: readonly FileDep[]): DepTier =>

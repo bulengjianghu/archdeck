@@ -312,7 +312,7 @@ describe('U16 没有代码事实时的允许依赖图', () => {
     ])
     const view = projectLevel(index, index.rootId)
     const sv = structureView(index, view, null)
-    const pv = await layoutView(view, {}, { edges: sv.edges })
+    const pv = await layoutView(view, {}, { edges: sv.facts ? [] : sv.edges })
     const s = canvasScene(plain({ view: sv }, pv, index))
     expect(deps(s).map(e => [e.id, e.data.dep!.kind])).toEqual([['allowed:ui->core', 'allowed']])
     expect(s.structure!.note).toBe('没有代码事实，只画允许依赖')

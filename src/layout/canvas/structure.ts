@@ -29,17 +29,15 @@ import {
   type ElementEdge,
   type ElementKind,
   type ModelIndex,
-  type StructureKind,
   type ViewEdge,
   type ViolationStatus,
 } from '@/model'
 import { chipBundleId, linkRoute, restEdgeId, outsideRoutes, type Box, type EdgeRoute, type Point, type PositionedView } from '../layout'
 import type { CanvasInput, DepEdgeKind, DepEdgeLook, DepViolation, NodeData } from './types'
 
-/** L16：结构边形态的名称（悬停说明与图例）；第七轮的种类名 dependency 与 use 同义 */
+/** L16：结构边形态的名称（悬停说明与图例） */
 export const DEP_KIND_LABELS: Readonly<Record<DepEdgeKind, string>> = {
   use: '使用',
-  dependency: '使用',
   assembly: '组装',
   subclass: '子类',
   implements: '端口实现',
@@ -61,8 +59,6 @@ export const violationLook = (status: ViolationStatus | undefined): DepViolation
 /** 线宽档（共享通道「聚合条数」，L18）：1 / 2–4 / ≥5——束按束内元素级边条数（T0 裁决 1） */
 export const depWeight = (n: number): 1 | 2 | 3 => (n >= 5 ? 3 : n >= 2 ? 2 : 1)
 
-/** 第七轮的事实种类到第八轮形态（分层总览跨层依赖仍按种类给出） */
-const formOfKind = (k: StructureKind): DepForm => (k === 'dependency' ? 'use' : k)
 const strongest = (forms: Iterable<DepForm>): DepForm => {
   const set = new Set(forms)
   return DEP_FORMS.find(f => set.has(f)) ?? 'use'
@@ -261,40 +257,29 @@ function allowedItem(idx: ModelIndex | null, e: AllowedEdge): DepItem {
   }
 }
 
-/** O13③、L21：核心模块（与架上共用件）的跨层依赖按对合成一条（同束：最强形态与档，线宽按种类条数） */
+/** O13③、L21：核心模块（与架上共用件）的跨层依赖——一对节点一条束（chipDeps 已按对合成：最强形态与档，线宽按元素级边条数） */
 export function chipItems(idx: ModelIndex, list: readonly ChipDep[]): DepItem[] {
-  const pairs = new Map<string, ChipDep[]>()
-  for (const e of list) {
-    const k = chipBundleId(e.from, e.to)
-    pairs.set(k, [...(pairs.get(k) ?? []), e])
-  }
-  return [...pairs].map(([id, es]) => {
-    const e = es[0]
-    const forms = DEP_FORMS.filter(f => es.some(x => formOfKind(x.kind) === f))
-    const tier = strongerTier(es.flatMap(x => (x.tier ? [x.tier] : []))) ?? 'invokes'
-    const status = (['new', 'open', 'known', 'allowed'] as const).find(st => es.some(x => x.violation === st))
-    const violation = violationLook(status)
-    const deps = new Set(es.flatMap(x => x.deps)).size
-    const files = es.reduce((n, x) => n + x.files, 0)
+  return list.map(e => {
+    const violation = violationLook(e.violation)
     return {
-      id,
+      id: chipBundleId(e.from, e.to),
       from: e.from,
       to: e.to,
       chip: true,
       look: {
-        kind: strongest(forms),
-        tier,
+        kind: e.form,
+        tier: e.tier,
         fromModule: e.fromModule,
         toModule: e.toModule,
-        deps: Math.max(1, deps),
-        files,
-        forms,
-        ...(forms.length > 1 ? { elements: es.length } : {}),
+        deps: Math.max(1, e.edges),
+        files: e.files,
+        forms: e.forms,
+        ...(e.forms.length > 1 ? { elements: e.edges } : {}),
         ...(violation ? { violation } : {}),
         title: [
-          `跨层依赖：${moduleName(idx, e.fromModule)} → ${moduleName(idx, e.toModule)}（${forms.map(f => DEP_KIND_LABELS[f]).join('、')} · ${DEP_TIER_LABELS[tier]}）`,
-          `模块依赖 ${deps} 条 · 文件依赖 ${files} 条`,
-          ...(status ? [`违规（${VIOLATION_LABELS[status]}）`] : []),
+          `跨层依赖：${moduleName(idx, e.fromModule)} → ${moduleName(idx, e.toModule)}（${e.forms.map(f => DEP_KIND_LABELS[f]).join('、')} · ${DEP_TIER_LABELS[e.tier]}）`,
+          `模块依赖 ${e.deps.length} 条 · 文件依赖 ${e.files} 条`,
+          ...(e.violation ? [`违规（${VIOLATION_LABELS[e.violation]}）`] : []),
         ].join('\n'),
       },
     }

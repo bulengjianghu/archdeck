@@ -1,4 +1,4 @@
-/** 「显示」面板的名称表：交互关系显示方式（V8）、关系类型（L8、L10）、代码事实不可用的原因（K8）、结构视图的种类与档（ADR-0031）、共享通道（L18） */
+/** 「显示」面板的名称表：交互关系显示方式（V8）、关系类型（L8、L10）、代码事实不可用的原因（K8）、结构视图的形态与档（ADR-0031）、共享通道（L18） */
 import {
   RELATION_TYPES,
   RUNTIME_RELATION_TYPES,
@@ -8,7 +8,6 @@ import {
   type ElementKind,
   type HeatKind,
   type StabilityBand,
-  type StructureKind,
 } from '@/model'
 import type { StaticMode } from '@/layout/stage'
 import type { ImpactMode } from './useDisplayPrefs'
@@ -45,15 +44,8 @@ export const FACTS_HINT: Record<string, string> = {
   error: '读取源码或提取代码依赖失败',
 }
 
-// ── 结构视图（ADR-0031）：结构边的种类与档（K14、L16）、不稳定度三档（K16、L17）、影响面方向（K15） ──
+// ── 结构视图（ADR-0031）：依赖的档（K14、L16）、不稳定度三档（K16、L17）、影响面方向（K15） ──
 
-export const STRUCTURE_KIND_LABEL: Record<StructureKind, string> = { dependency: '依赖', assembly: '组装', subclass: '子类', implements: '端口实现' }
-export const STRUCTURE_KIND_HINT: Record<StructureKind, string> = {
-  dependency: '虚线 + 开口箭头，指向被依赖方',
-  subclass: '继承：实线 + 空心三角，三角在基类一端',
-  implements: '虚线 + 空心三角，三角在端口定义模块一端',
-  assembly: '实线 + 实心菱形，菱形在组装者一端',
-}
 export const DEP_TIER_LABEL: Record<DepTier, string> = { invokes: '交互使用', value: '值使用', type: '只引类型' }
 export const DEP_TIER_HINT: Record<DepTier, string> = {
   invokes: '深：调用了对方的函数或方法',
@@ -70,8 +62,6 @@ export const DEP_FORM_HINT: Record<DepForm, string> = {
   implements: '虚线 + 空心三角，三角在端口定义模块一端',
   use: '虚线 + 开口箭头，指向被依赖方',
 }
-/** 形态对应的结构边记号（图例示意与画布同一套 depStyle） */
-export const FORM_KIND: Record<DepForm, StructureKind> = { subclass: 'subclass', assembly: 'assembly', implements: 'implements', use: 'dependency' }
 /** L21：束的一句说明（图例与帮助同文） */
 export const BUNDLE_TEXT = '一对模块之间画一条束，线宽按束内元素级边条数；形态不止一种时标 ×N 元素'
 /** C2、K18：表面元素的四类 */

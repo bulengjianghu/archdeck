@@ -150,7 +150,7 @@ describe('DeskState 的画布模式', () => {
     expect(desk.perspective.value).toBe('structure')
     const sv = desk.facts.structure.value!
     expect(sv.facts).toBe(true)
-    if (sv.facts) expect(sv.edges.map(e => e.id)).toContain('dependency:infra->app')
+    if (sv.facts) expect(sv.bundles.map(e => e.id)).toContain('bundle:infra->app')
     desk.setMode('interaction')
     await flush()
     expect(desk.facts.structure.value).toBeNull()

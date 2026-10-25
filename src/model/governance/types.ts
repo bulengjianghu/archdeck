@@ -311,10 +311,6 @@ export interface SharedSuggestion {
 
 // ── 结构视图（ADR-0031）：依赖事实的本层投影与指标的数据类型（计算在 structure.ts） ──
 
-/** K14：结构边的种类——依赖、组装（K13）、子类（K12）、端口实现（K5c） */
-export type StructureKind = 'dependency' | 'assembly' | 'subclass' | 'implements'
-export const STRUCTURE_KINDS: readonly StructureKind[] = ['dependency', 'assembly', 'subclass', 'implements']
-
 /** K14：依赖边的档——交互使用 > 值使用（只有纯值读取）> 只引类型 */
 export type DepTier = 'invokes' | 'value' | 'type'
 export const DEP_TIERS: readonly DepTier[] = ['invokes', 'value', 'type']
@@ -382,37 +378,7 @@ export interface EdgeCoverage {
   assembly: number
 }
 
-/** 一条结构边：本层一对节点同方向、一种事实（L15） */
-export interface StructureEdge {
-  /** `<种类>:<依赖方节点>-><被依赖方节点>` */
-  id: string
-  kind: StructureKind
-  from: string
-  to: string
-  /** 两端节点对应的模块 ID；选中落到 K10 的 `sel=d:<fromModule>-><toModule>` */
-  fromModule: string
-  toModule: string
-  /** 依赖边的档（K14）；其余种类不给 */
-  tier?: DepTier
-  /** 归入这条边的文件依赖条数（悬停与面板） */
-  files: number
-  /** 聚合的模块依赖键（K4）；线宽 = 条数（L18） */
-  deps: string[]
-  /** K17：依赖边的交互覆盖；其余种类不给 */
-  coverage?: EdgeCoverage
-  /** K17：K7 的未解释的交互（覆盖 0、交互使用、没有事实覆盖） */
-  unexplained?: true
-  /** U15：这对节点之间的规则判定（同一对节点的各种类共用） */
-  ruling: EdgeRuling
-  /** U17：违背稳定依赖方向时两端的 I（只给依赖边） */
-  againstStability?: { from: number; to: number }
-}
-
 export interface LevelDeps {
-  /** 第七轮的按种类结构边（画布与面板在第八轮 T2 / T3 改读 bundles / elementEdges 前沿用，T4 删除） */
-  edges: StructureEdge[]
-  /** K14：只引类型的依赖边条数（第七轮口径，同上） */
-  typeOnly: number
   /** K14、A4：本层的束——一对节点同方向一条，按依赖方、被依赖方节点的视图顺序 */
   bundles: Bundle[]
   /** K14、A1：本层的元素级结构边，按束的顺序、束内按元素名与形态 */
@@ -599,17 +565,23 @@ export interface Carrier {
   verdict: CarrierVerdict
 }
 
-/** O13③：分层总览中核心模块（或架上共用件）的一条跨层结构边 */
+/** O13③、L21：分层总览中核心模块（或架上共用件）的一条跨层束——一对节点同方向一条，取最强形态与档 */
 export interface ChipDep {
-  /** `chip:<种类>:<依赖方节点>-><被依赖方节点>` */
+  /** `chip:<依赖方节点>-><被依赖方节点>` */
   id: string
-  kind: StructureKind
   from: string
   to: string
   fromModule: string
   toModule: string
-  tier?: DepTier
+  /** 最强形态（DEP_FORMS 顺序） */
+  form: DepForm
+  /** 出现的形态，按 DEP_FORMS 顺序 */
+  forms: DepForm[]
+  tier: DepTier
+  /** 文件依赖条数 */
   files: number
+  /** 元素级边条数（跨层依赖不接到元素：按形态与越过入口 / 整模块分条，线宽用） */
+  edges: number
   deps: string[]
   /** 投影到这对节点的违规中最严的状态（新增 > 无基线 > 已知 > 已豁免）；没有违规时不给 */
   violation?: ViolationStatus
@@ -656,3 +628,60 @@ export interface AllowedDeps {
 
 /** 结构视图在本层：有代码事实时为结构边，否则为允许依赖图（U16） */
 export type StructureView = ({ facts: true } & LevelDeps) | ({ facts: false; reason: string } & AllowedDeps)
+
+// ── 承载链的名称与证据对齐（ADR-0032 D；页面、lint 消息与命令行共用，放在类型与 Schema 里供呈现层只读） ──
+
+/** K20：模板的名称（面板、lint 消息与命令行共用） */
+export const CARRIER_TEMPLATE_LABELS: Record<CarrierTemplate, string> = { direct: '直接', port: '经端口', bus: '经总线', callback: '回调注册', channel: '经通道' }
+/** K5d：判定的名称 */
+export const CARRIER_VERDICT_LABELS: Record<CarrierVerdict, string> = {
+  complete: '齐全',
+  'module-level': '已证实（模块级）',
+  partial: '缺段',
+  none: '无承载',
+  external: '外部承载，不判定',
+}
+/** K20：承载段的说明（「A → B 的操作」之类，from / to 为两端名称） */
+export const CARRIER_ROLE_TEXT: Record<CarrierRole, (from: string, to: string) => string> = {
+  call: (a, b) => `${a} → ${b}的操作`,
+  'use-port': (a, b) => `${a} → ${b}的端口`,
+  implement: (a, b) => `${a} 实现 ${b}的端口`,
+  assemble: (_a, b) => `组装 ${b}的模块`,
+  publish: (a, b) => `${a} → ${b}的发布操作`,
+  subscribe: (a, b) => `${a} → ${b}的订阅操作`,
+  register: (a, b) => `${a} → ${b}的注册操作`,
+  'contract-from': (a, b) => `${a} → 契约 ${b}`,
+  'contract-to': (a, b) => `${a} → 契约 ${b}`,
+}
+
+/** T0-10、S18b：承载判定 → 步骤证据等级（齐全 ↔ 按名字匹配、模块级 / 缺段 ↔ 按模块依赖、无承载 ↔ 无证据、外部 ↔ 不判定） */
+export const VERDICT_LEVEL: Readonly<Record<CarrierVerdict, EvidenceLevel>> = {
+  complete: 'name',
+  'module-level': 'module',
+  partial: 'module',
+  none: 'none',
+  external: 'skipped',
+}
+
+/** S18b：一帧的证据等级——有承载时由承载判定导出，否则为步骤证据（S16）的等级 */
+export const alignedLevel = (level: EvidenceLevel, carrier: Pick<Carrier, 'verdict'> | null | undefined): EvidenceLevel =>
+  carrier ? VERDICT_LEVEL[carrier.verdict] : level
+
+/** D7：束里一条交互接到接收方表面的哪个元素——relation.interface 对上的声明接口；没写接口或表面上没有为 null（接到模块本体） */
+export interface InteractionSpread {
+  relation: string
+  element: SurfaceElement | null
+}
+
+/** D7、D8：一条交互束（本层一对节点、一种类型的视图边）的散开数据 */
+export interface InteractionBundle {
+  items: InteractionSpread[]
+  /** D8：束内同步 / 异步、via 不一致（只列不一致的那一项） */
+  mixed?: { mode?: true; via?: true }
+  /** M22：没写接口的交互条数（≥ 2 时提示） */
+  unnamed: number
+}
+
+
+/** U19：导出未声明的元素被至少这么多个模块使用时提示声明接口（C4，h5player 实测后定） */
+export const HOT_SURFACE_MODULES = 3

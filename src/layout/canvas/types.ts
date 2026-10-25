@@ -12,7 +12,6 @@ import type {
   Impact,
   ModuleMetrics,
   StabilityBand,
-  StructureKind,
   StructureView,
   AssemblyOverlay,
   ActorKind,
@@ -114,11 +113,8 @@ export interface NodeSurface {
   more?: number
 }
 
-/**
- * L16、K14：结构边的形态——使用、组装、子类、端口实现（第八轮按形态，A2）；没有代码事实时的允许边（U16）。
- * 第七轮的种类名 dependency 与 use 同义（图例与旧调用方仍可用）。
- */
-export type DepEdgeKind = DepForm | StructureKind | 'allowed'
+/** L16、K14：结构边的形态——使用、组装、子类、端口实现（第八轮按形态，A2）；没有代码事实时的允许边（U16） */
+export type DepEdgeKind = DepForm | 'allowed'
 
 /** U15：违规红晕三档——新增或无基线（红晕）、已知（淡红晕）、已豁免（灰描边）；共享通道（L18） */
 export type DepViolation = 'new' | 'known' | 'allowed'

@@ -3,7 +3,7 @@
  * 线型：使用虚线、子类实线、端口实现虚线、组装实线；允许边（U16）点线。束取最强形态（L21①）。
  * 端点：使用开口箭头；子类、端口实现在被依赖方一端空心三角；组装在依赖方（组装者）一端实心菱形、被依赖方一端开口箭头。
  * 色相中性；档用明度（交互使用深、值使用中、只引类型浅），四种形态都按档（第八轮：形态与档正交），不用透明度（透明度属共享通道「聚焦变淡」）；
- * 不带档时（第七轮的事实种类、图例示意）组装、子类、端口实现为中性中灰。第七轮的种类名 dependency 与 use 同义。
+ * 不带档时（图例示意）组装、子类、端口实现为中性中灰。
  * 线宽 = 共享通道「聚合条数」（与交互边同一套 WIDTH；束按束内元素级边条数）。画布的 DepEdge 与「显示」面板的图例（StructureSwatch）共用；
  * 颜色变量（--dep-tier-* / --dep-fact / --dep-allowed）定义在 styles.css，亮色暗色各一套。
  */
@@ -29,8 +29,7 @@ export const FACT_COLOR = 'var(--dep-fact)'
 /** U16 允许边的颜色（意图色） */
 export const ALLOWED_COLOR = 'var(--dep-allowed)'
 
-/** 使用（第七轮称依赖） */
-const isUse = (kind: DepEdgeKind) => kind === 'use' || kind === 'dependency'
+const isUse = (kind: DepEdgeKind) => kind === 'use'
 
 export function depColor(d: DepStrokeLook): string {
   if (d.kind === 'allowed') return ALLOWED_COLOR

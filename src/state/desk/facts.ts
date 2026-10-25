@@ -24,7 +24,6 @@ import {
   chipDeps,
   hasStructureEdge,
   isolatedInteractions,
-  structureEdgeFiles,
   impactOf,
   levelImpact,
   moduleMetrics,
@@ -59,7 +58,6 @@ import {
   type ModuleMetrics,
   type ModuleMetricsDetail,
   type Impact,
-  type StructureEdge,
   type StructureView,
   type FileDep,
   flattenSketch,
@@ -371,10 +369,6 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
     return { impact, level: view.value ? levelImpact(index.value, view.value, impact) : null }
   }
 
-  /** K14：归入一条结构边的文件依赖（依赖边面板的清单）；没有代码事实时为空 */
-  const edgeFiles = (edge: Pick<StructureEdge, 'kind' | 'deps'>): FileDep[] =>
-    report.value && index.value ? structureEdgeFiles(index.value, report.value, edge) : []
-
   /** U17：模块直接依赖的模块中违背稳定依赖方向的（面板「逆稳定」提示行，只看值依赖时按值依赖的指标） */
   const againstOf = (id: string, valuesOnly = false): { module: string; hit: { from: number; to: number } }[] => {
     const all = valuesOnly ? valueMetrics.value : metrics.value
@@ -525,7 +519,6 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
     carrierOf,
     stepCarrierOf,
     interactionSpread,
-    edgeFiles,
     againstOf,
     isolatedOf,
     level,

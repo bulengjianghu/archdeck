@@ -193,19 +193,19 @@ describe('K14 元素级结构边与束（第八轮）', () => {
     expect(elementEdges.find(e => e.id === 'el:c->lib:use:*')!.bypass).toBeUndefined()
   })
 
-  it('没给表面来源时元素级边都接到模块本体、不判越过入口；第七轮的按种类边照旧', () => {
+  it('没给表面来源时元素级边都接到模块本体、不判越过入口', () => {
     const { index, report } = setup()
     const r = levelDeps(index, projectLevel(index, 'sys'), report)
     expect(r.bundles.find(b => b.id === 'bundle:a->lib')!.edges).toEqual(['el:a->lib:use:*'])
-    expect(r.edges.map(e => e.id)).toContain('dependency:a->lib')
+    expect(r.elementEdges.every(e => !e.element && !e.bypass)).toBe(true)
   })
 
   it('K17、U15：覆盖与规则判定按束；A7：U17 逆稳定标全部束（不只依赖）', () => {
     const { index, report, src } = setup()
-    const { bundles, edges } = levelDeps(index, projectLevel(index, 'sys'), report, { surface: src, threshold: -2 })
+    const { bundles } = levelDeps(index, projectLevel(index, 'sys'), report, { surface: src, threshold: -2 })
     expect(bundles.find(b => b.id === 'bundle:a->lib')!.coverage.relations).toEqual(['r.cb', 'r.direct', 'r.loose1', 'r.loose2'])
     expect(bundles.find(b => b.id === 'bundle:main->b')!.againstStability).toBeDefined()
-    expect(edges.find(e => e.id === 'assembly:main->b')!.againstStability).toBeUndefined()
+    expect(bundles.find(b => b.id === 'bundle:main->b')!.form).toBe('assembly')
     expect(bundles.every(b => b.ruling.verdict === 'unconstrained')).toBe(true)
   })
 })

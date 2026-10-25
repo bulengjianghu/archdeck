@@ -23,7 +23,6 @@ import {
   ELEMENT_KIND_LABEL,
   ELEMENT_KIND_MARK,
   FACTS_HINT,
-  FORM_KIND,
 } from './labels'
 
 defineProps<{ open: boolean }>()
@@ -60,7 +59,7 @@ const crossCount = computed(() => hiddenWith({})?.cross ?? 0)
   <DisplayGroup title="依赖 · 形态与档" :open="open" @toggle="emit('toggle')">
     <template v-if="facts">
       <div v-for="f in DEP_FORMS" :key="f" class="item" :data-form="f">
-        <span class="sw kind"><StructureSwatch :kind="FORM_KIND[f]" /></span>
+        <span class="sw kind"><StructureSwatch :kind="f" /></span>
         <span
           >{{ DEP_FORM_LABEL[f] }}<span class="hint"> = {{ DEP_FORM_HINT[f] }}</span></span
         >

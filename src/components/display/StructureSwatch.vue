@@ -1,16 +1,16 @@
 <script setup lang="ts">
 /**
- * 结构视图图例的示意线（L16，UML 类图惯例）：依赖虚线 + 开口箭头、子类实线 + 空心三角、端口实现虚线 + 空心三角、组装实线 + 实心菱形（组装者一端）与开口箭头；
- * 依赖的档用明度（交互使用深、值使用中、只引类型浅，不用透明度——透明度是共享通道「变淡」）；allowed 为没有代码事实时的允许边（U16：点线、意图色）。
+ * 结构视图图例的示意线（L16，UML 类图惯例）：使用虚线 + 开口箭头、子类实线 + 空心三角、端口实现虚线 + 空心三角、组装实线 + 实心菱形（组装者一端）与开口箭头；
+ * 档用明度（交互使用深、值使用中、只引类型浅，不用透明度——透明度是共享通道「变淡」）；allowed 为没有代码事实时的允许边（U16：点线、意图色）。
  * 颜色与线型取画布结构边同一套（depStyle 的 depColor / depDash，颜色变量在 styles.css，亮色暗色各一套）。
  */
 import { computed } from 'vue'
-import type { DepTier, StructureKind } from '@/model'
+import type { DepForm, DepTier } from '@/model'
 import { WIDTH } from '../edges/edgeStyle'
 import { depColor, depDash } from '../edges/depStyle'
 
-const props = withDefaults(defineProps<{ kind?: StructureKind | 'allowed'; tier?: DepTier; width?: number; halo?: boolean; muted?: boolean }>(), {
-  kind: 'dependency',
+const props = withDefaults(defineProps<{ kind?: DepForm | 'allowed'; tier?: DepTier; width?: number; halo?: boolean; muted?: boolean }>(), {
+  kind: 'use',
   tier: undefined,
   width: 36,
 })
@@ -41,7 +41,7 @@ const start = computed(() => (diamond.value ? 9 : 1))
     />
     <!-- 空心三角：子类、端口实现，在被依赖方一端 -->
     <path v-if="triangle" :d="`M${w - 8},1 L${w - 1},5 L${w - 8},9 Z`" fill="var(--surface)" :stroke="color" stroke-width="1.2" stroke-linejoin="round" />
-    <!-- 开口箭头：依赖、组装（被依赖方一端）、允许边 -->
+    <!-- 开口箭头：使用、组装（被依赖方一端）、允许边 -->
     <path
       v-else
       :d="`M${w - 6},1.5 L${w - 1},5 L${w - 6},8.5`"

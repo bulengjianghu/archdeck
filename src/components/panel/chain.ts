@@ -6,6 +6,8 @@
  * 只组合已有的事实（帧的绑定 S13、承载 K5d、证据 S16），不另立规则。
  */
 import {
+  VERDICT_LEVEL,
+  alignedLevel,
   CARRIER_ROLE_TEXT,
   CARRIER_TEMPLATE_LABELS,
   CARRIER_VERDICT_LABELS,
@@ -14,7 +16,6 @@ import {
   viaLabel,
   type Carrier,
   type CarrierSegment,
-  type CarrierVerdict,
   type Confirmation,
   type EvidenceLevel,
   type FileDep,
@@ -44,17 +45,8 @@ export interface StepChain {
 
 type Fact = (Omit<Confirmation, 'deps'> & { deps: ModuleDep[] }) | null
 
-/** T0-10：承载判定 → 证据等级 */
-export const VERDICT_LEVEL: Readonly<Record<CarrierVerdict, EvidenceLevel>> = {
-  complete: 'name',
-  'module-level': 'module',
-  partial: 'module',
-  none: 'none',
-  external: 'skipped',
-}
-
-/** 一帧的证据等级：有承载时由承载判定导出，否则为步骤证据（S16）的等级 */
-export const alignedLevel = (level: EvidenceLevel, carrier: Carrier | null | undefined): EvidenceLevel => (carrier ? VERDICT_LEVEL[carrier.verdict] : level)
+/** T0-10：承载判定 → 证据等级、按承载对齐的等级（模型层类型与 Schema，状态层与面板同一口径） */
+export { VERDICT_LEVEL, alignedLevel }
 
 /** 承载段的文件依赖（去重，按段的顺序） */
 export function carrierFiles(carrier: Carrier): FileDep[] {

@@ -7,41 +7,20 @@ import { moduleName } from '../names'
 import { parseVia, type ModelIndex, type RelationEntity } from '../types'
 import { contractNames, judgeable, portOwner, related } from './facts'
 import { elementSlots, gateModule, slotKey, surfaceContext, type SurfaceContext } from './surface'
-import type {
-  Carrier,
-  CarrierRole,
-  CarrierSegment,
-  CarrierTemplate,
-  CarrierVerdict,
-  ElementEdge,
-  GovernanceReport,
-  ModuleSurface,
-  SurfaceElement,
-  SurfaceSource,
+import {
+  CARRIER_ROLE_TEXT,
+  CARRIER_TEMPLATE_LABELS,
+  type Carrier,
+  type CarrierRole,
+  type CarrierSegment,
+  type CarrierTemplate,
+  type CarrierVerdict,
+  type ElementEdge,
+  type GovernanceReport,
+  type InteractionBundle,
+  type ModuleSurface,
+  type SurfaceSource,
 } from './types'
-
-/** K20：模板的名称（面板、lint 消息与命令行共用） */
-export const CARRIER_TEMPLATE_LABELS: Record<CarrierTemplate, string> = { direct: '直接', port: '经端口', bus: '经总线', callback: '回调注册', channel: '经通道' }
-/** K5d：判定的名称 */
-export const CARRIER_VERDICT_LABELS: Record<CarrierVerdict, string> = {
-  complete: '齐全',
-  'module-level': '已证实（模块级）',
-  partial: '缺段',
-  none: '无承载',
-  external: '外部承载，不判定',
-}
-/** K20：承载段的说明（「A → B 的操作」之类，from / to 为两端名称） */
-export const CARRIER_ROLE_TEXT: Record<CarrierRole, (from: string, to: string) => string> = {
-  call: (a, b) => `${a} → ${b}的操作`,
-  'use-port': (a, b) => `${a} → ${b}的端口`,
-  implement: (a, b) => `${a} 实现 ${b}的端口`,
-  assemble: (_a, b) => `组装 ${b}的模块`,
-  publish: (a, b) => `${a} → ${b}的发布操作`,
-  subscribe: (a, b) => `${a} → ${b}的订阅操作`,
-  register: (a, b) => `${a} → ${b}的注册操作`,
-  'contract-from': (a, b) => `${a} → 契约 ${b}`,
-  'contract-to': (a, b) => `${a} → 契约 ${b}`,
-}
 
 type ReportPart = Pick<GovernanceReport, 'moduleDeps' | 'implementers' | 'relations'>
 
@@ -173,21 +152,6 @@ export function carrierGap(index: ModelIndex, c: Carrier | null | undefined): st
 }
 
 // ── D7、D8：交互束按接收方表面散开 ──
-
-/** D7：束里一条交互接到接收方表面的哪个元素——relation.interface 对上的声明接口；没写接口或表面上没有为 null（接到模块本体） */
-export interface InteractionSpread {
-  relation: string
-  element: SurfaceElement | null
-}
-
-/** D7、D8：一条交互束（本层一对节点、一种类型的视图边）的散开数据 */
-export interface InteractionBundle {
-  items: InteractionSpread[]
-  /** D8：束内同步 / 异步、via 不一致（只列不一致的那一项） */
-  mixed?: { mode?: true; via?: true }
-  /** M22：没写接口的交互条数（≥ 2 时提示） */
-  unnamed: number
-}
 
 /** D7、D8：交互束的散开——receiver 为接收方节点模块的表面（结构视角展开它时给出；没有时一律接到模块本体） */
 export function interactionBundle(index: ModelIndex, receiver: ModuleSurface | null, relationIds: readonly string[]): InteractionBundle {
