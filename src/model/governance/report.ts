@@ -9,7 +9,7 @@ import { portIssues } from './ports'
 import { cyclicityOf, fileCycles, moduleCycles } from './cycles'
 import { evaluateRules, type EntryOf } from './rules'
 import { sharedHostOf, sharedReverse, sharedSuggestions } from './roles'
-import { carrierGap, carrierOf, moduleElementEdges } from './carrier'
+import { carrierGap, carrierNote, carrierOf, moduleElementEdges } from './carrier'
 import { surfaceIssues } from './surface'
 import type { Baseline, CodeDeps, ElementEdge, GovernanceReport, Violation } from './types'
 
@@ -120,10 +120,24 @@ export function governanceReport(
     })
   }
 
+  // K5d、D6（T0 裁决 9）：写了 via 的关系承载为缺段 / 无承载 / 外部时报 info carrier.gap（不报 fact.unconfirmed 警告）；没写 via 的维持 K5
+  for (const r of [...index.relations.values()].sort((a, b) => a.seq - b.seq)) {
+    if (!r.via) continue
+    elementEdges ??= moduleElementEdges(index, { moduleDeps, implementers }, surface)
+    const c = carrierOf(index, { moduleDeps, implementers, relations }, elementEdges, r)
+    if (!c || (c.verdict !== 'partial' && c.verdict !== 'none' && c.verdict !== 'external')) continue
+    issues.push({
+      severity: 'info',
+      code: 'carrier.gap',
+      message: `关系「${r.id}」（${r.type}，${name(r.from)} → ${name(r.to)}，via ${r.via}）${carrierNote(index, c)}（K5d）`,
+      ...r.src,
+    })
+  }
+
   // U14：端口孤立（无实现者 warning、无使用者 info）
   issues.push(...portIssues(index, { relations, implementers }))
-  // U18、U19：越过入口、热表面未声明（info，不进门禁）
-  issues.push(...surfaceIssues(index, { moduleDeps }, surface))
+  // U18、U19：越过入口（已命中 U4 访问面违规的文件依赖不再报）、热表面未声明（共用件豁免）；info，不进门禁
+  issues.push(...surfaceIssues(index, { moduleDeps, violations }, surface))
 
   return {
     moduleDeps,

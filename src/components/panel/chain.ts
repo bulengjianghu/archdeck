@@ -158,13 +158,9 @@ function evidenceNote(index: ModelIndex, e: StepEvidence): string {
   return e.host ? `两端在同一组文件里（${moduleName(index, e.host)}）` : '两端在同一组文件里'
 }
 
-/** S17 + T0-10：一组帧（时序图一条可见消息）的证据等级——各帧按承载对齐后取最弱（有一帧无承载即「?」） */
+/** S17 + T0-10：一组帧（时序图一条可见消息）的证据等级——各帧的等级（状态层已按承载对齐）取最弱（有一帧无承载即「?」） */
 const WEAKEST: readonly EvidenceLevel[] = ['none', 'module', 'name', 'skipped']
-export function alignedMessageLevel(
-  frameIds: readonly string[],
-  levels: ReadonlyMap<string, EvidenceLevel>,
-  carrierOfFrame: (frameId: string) => Carrier | null,
-): EvidenceLevel | undefined {
-  const got = new Set(frameIds.flatMap(id => (levels.has(id) ? [alignedLevel(levels.get(id)!, carrierOfFrame(id))] : [])))
+export function weakestLevel(frameIds: readonly string[], levels: ReadonlyMap<string, EvidenceLevel>): EvidenceLevel | undefined {
+  const got = new Set(frameIds.flatMap(id => (levels.has(id) ? [levels.get(id)!] : [])))
   return WEAKEST.find(l => got.has(l))
 }

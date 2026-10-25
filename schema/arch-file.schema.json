@@ -690,7 +690,11 @@
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^(port|bus|channel):[^\\s:]\\S*$"
+              "pattern": "^(port|bus):[^\\s:@]\\S*$"
+            },
+            {
+              "type": "string",
+              "pattern": "^channel:[^\\s:@][^\\s@]*(@[^\\s@]+)?$"
             },
             {
               "enum": [

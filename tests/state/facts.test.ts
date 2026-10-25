@@ -163,8 +163,11 @@ describe('S16、S17 步骤的代码证据（desk.evidence）', () => {
     expect(desk.evidence.step.value).toBe(sc.frames.get(id))
     const ps = desk.run.positionedSequence.value!
     expect(ps.messages.some(m => m.evidence)).toBe(true)
-    // 场景列表：无证据帧数与汇总一致
-    expect(desk.evidence.unevidenced.value.get('sc.play') ?? 0).toBe(sc.counts.none)
+    // S18b：场景列表的无证据帧数与场景面板的计数同一口径（按承载对齐，desk.evidence.counts）
+    const counts = desk.evidence.counts.value!
+    expect(Object.values(counts).reduce((a, b) => a + b, 0)).toBe(plan.frames.size)
+    expect(desk.evidence.unevidenced.value.get('sc.play') ?? 0).toBe(counts.none)
+    expect([...desk.evidence.levels.value!.values()].filter(l => l === 'none').length).toBe(counts.none)
     const design = await setup('/?sc=sc.play', fetcher(), { design: 'd', revision: 'r1' })
     expect(design.desk.evidence.scenario.value).toBeNull()
     expect(design.desk.evidence.unevidenced.value.size).toBe(0)

@@ -14,6 +14,7 @@ export type ReworkCategory =
   | 'ownership'
   | 'unconfirmed'
   | 'port'
+  | 'surface'
   | 'query-side-effect'
   | 'undescribed'
   | 'unclassified'
@@ -31,6 +32,7 @@ export const REWORK_CATEGORIES: readonly ReworkCategory[] = [
   'ownership',
   'unconfirmed',
   'port',
+  'surface',
   'query-side-effect',
   'undescribed',
   'unclassified',
@@ -68,6 +70,7 @@ export type ReworkActionKind =
   | 'accept-deviation' // 架构师认可偏差或改草图（X4）
   | 'register-owned' // 人确认后登记指纹（X6）
   | 'drop-role' // U12：取消共用件角色（改 intent/roles.yaml 或草图，架构师决定）
+  | 'fix-surface' // U18、U19：改经入口导入或把符号提升到入口；热表面声明接口
 
 export interface ReworkAction {
   kind: ReworkActionKind
@@ -136,6 +139,7 @@ export const REWORK_CATEGORY_LABELS: Record<ReworkCategory, string> = {
   ownership: '源码归属',
   unconfirmed: '未证实的关系',
   port: '端口孤立',
+  surface: '表面',
   'query-side-effect': '查询副作用',
   undescribed: '未解释的交互',
   unclassified: '未分类',

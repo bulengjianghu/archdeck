@@ -14,6 +14,7 @@ import {
   interactionBundle,
   levelDeps,
   loadModel,
+  reworkList,
   moduleElementEdges,
   parseVia,
   projectLevel,
@@ -239,6 +240,57 @@ describe('U18 越过入口、U19 热表面未声明（info）', () => {
     // 阈值 4：不提示
     expect(surfaceIssues(index, report, src, 4).map(i => i.code)).toEqual(['surface.bypass'])
   })
+
+  it('T0-11：同一条文件依赖已命中 U4 访问面违规时 U18 不再报（其余越过入口照报）', () => {
+    const { index, report, src } = setup()
+    const exposes = [{ kind: 'exposes' as const, files: [DEPS[2]] }]
+    expect(surfaceIssues(index, { ...report, violations: exposes }, src).map(i => i.code)).toEqual(['surface.hot-undeclared'])
+    expect(surfaceIssues(index, { ...report, violations: [{ kind: 'deps' as const, files: [DEPS[2]] }] }, src).map(i => i.code)).toContain('surface.bypass')
+  })
+
+  it('T1-10：角色为共用件（shared）的模块（含子树）豁免 U19', () => {
+    const { index } = loadModel([
+      { path: 'system.yaml', text: 'system: { id: sys, name: Sys }' },
+      { path: 'modules.yaml', text: MODEL.replace('{ id: lib, name: Lib,', '{ id: lib, name: Lib, role: shared,') },
+    ])
+    const own = assignFiles(index, SRC, [])
+    const tree = { files: SRC, packages: {} }
+    const report = governanceReport(index, own, tree, { deps: DEPS, external: {}, parsed: SRC.length }, null)
+    const src: SurfaceSource = { entryOf: entryResolver(index, own, tree), own, exportsOf: (f: string) => EXPORTS[f] ?? null }
+    expect(surfaceIssues(index, report, src).map(i => i.code)).toEqual(['surface.bypass'])
+  })
+})
+
+describe('K5d、D6 carrier.gap（T0 裁决 9）', () => {
+  it('写了 via 的关系承载为缺段 / 无承载 / 外部时报 info carrier.gap，不报 fact.unconfirmed；没写 via 的维持 K5', () => {
+    const { report } = setup()
+    const gaps = report.issues.filter(i => i.code === 'carrier.gap')
+    expect(gaps.map(i => i.severity)).toEqual(['info', 'info'])
+    expect(gaps[0].message).toContain('r.ch')
+    expect(gaps[0].message).toContain('缺段：缺 C → 契约 Ctr')
+    expect(gaps[1].message).toContain('r.ext')
+    expect(gaps[1].message).toContain('外部承载')
+    const unconfirmed = report.issues.filter(i => i.code === 'fact.unconfirmed').map(i => i.message)
+    expect(unconfirmed.some(m => m.includes('r.ch') || m.includes('r.ext') || m.includes('r.bus') || m.includes('r.port'))).toBe(false)
+    expect(unconfirmed.some(m => m.includes('r.none'))).toBe(true)
+  })
+
+  it('T3-1：返工清单「表面」类别透传 U18 / U19（info），carrier.gap 进「未证实的关系」（info）', () => {
+    const { index, report } = setup()
+    const list = reworkList({ index, issues: [], report })
+    const surface = list.items.filter(i => i.category === 'surface')
+    expect(surface.map(i => `${i.severity}:${i.code}:${i.rules.join()}`)).toEqual(['info:surface.bypass:U18', 'info:surface.hot-undeclared:U19'])
+    expect(surface[0].actions[0].kind).toBe('fix-surface')
+    expect(list.byCategory.surface).toBe(2)
+    expect(list.items.filter(i => i.code === 'carrier.gap').map(i => `${i.category}:${i.severity}`)).toEqual(['unconfirmed:info', 'unconfirmed:info'])
+  })
+
+  it('经总线的承载缺段同样是 info（不骤增警告）', () => {
+    const { report } = setup(DEPS.filter((_, i) => i !== 9))
+    const gap = report.issues.find(i => i.code === 'carrier.gap' && i.message.includes('r.bus'))!
+    expect(gap.severity).toBe('info')
+    expect(gap.message).toContain('缺段：缺 C → Bus的订阅操作')
+  })
 })
 
 describe('K5d、K20 承载判定与模板', () => {
@@ -290,6 +342,13 @@ describe('K5d、K20 承载判定与模板', () => {
 describe('M21 通道的契约模块、M22 束内没写接口', () => {
   it('parseVia：channel:<名>@<模块 ID> 给出通道名与契约模块，旧写法不变；viaLabel 带契约', () => {
     expect(parseVia('channel:ws@ctr')).toEqual({ kind: 'channel', target: 'ws@ctr', name: 'ws', contract: 'ctr' })
+    // T0-12：Schema 的 via 放宽为 channel:<名>@<模块 ID>（不报 schema 问题）；port / bus 不接 @
+    expect(setup().issues.filter(i => i.code === 'schema')).toEqual([])
+    const bad = loadModel([
+      { path: 'system.yaml', text: 'system: { id: sys, name: Sys }' },
+      { path: 'modules.yaml', text: MODEL.replace("via: 'channel:http'", "via: 'channel:a@b@c'") },
+    ])
+    expect(bad.issues.some(i => i.code === 'schema')).toBe(true)
     expect(parseVia('channel:http')).toEqual({ kind: 'channel', target: 'http' })
     const { index } = setup()
     expect(viaLabel('channel:ws@ctr', index)).toBe('ws（契约 Ctr）')
@@ -302,7 +361,7 @@ describe('M21 通道的契约模块、M22 束内没写接口', () => {
     ])
     expect(index.relations.get('r.ch')!.via).toBe('channel:ws')
     expect(issues.some(i => i.code === 'relation.via-target' && i.message.includes('M21'))).toBe(true)
-    const m22 = issues.filter(i => i.code === 'relation.indistinct')
+    const m22 = issues.filter(i => i.code === 'relation.bundle-no-interface')
     expect(m22.map(i => i.severity)).toEqual(['info', 'info'])
     expect(m22[0].message).toContain('「r.loose1」、「r.loose2」')
     expect(m22[1].message).toContain('「r.ch」、「r.ext」')

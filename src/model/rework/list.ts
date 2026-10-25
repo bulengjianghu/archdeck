@@ -6,6 +6,8 @@ import { RULE_LABELS, moduleName } from '../names'
 import { bindRelation, forEachStep, planScenario, querySideEffects, RUNTIME_RELATION_TYPES } from '../scenario'
 import { matchRef, missingEvidence, moduleEntry, type LocalSource, type SourceOwnership } from '../source'
 import {
+  alignedLevel,
+  carriersOf,
   implementerReason,
   implementerWarns,
   isCoreBetween,
@@ -16,6 +18,7 @@ import {
   unconfirmedCode,
   unconfirmedReason,
   unconfirmedWarns,
+  type Carrier,
   type FileDep,
   type GovernanceReport,
   type Violation,
@@ -40,6 +43,8 @@ export interface ReworkInput {
   sketches?: readonly SketchCheck[]
   /** 文件依赖（K1）；与 source 同时给出时含「步骤无证据」（S17） */
   deps?: readonly FileDep[]
+  /** K5d：交互的承载（页面给出带入口导出的一份）；不给时有 report 就按入口与归属现算。「步骤无证据」按承载对齐（S18b） */
+  carriers?: ReadonlyMap<string, Carrier>
 }
 
 /** Q8：校验问题代码 → 规则编号 */
@@ -80,6 +85,7 @@ const ISSUE_RULES: Record<string, string[]> = {
   'roles.unknown-module': ['M16'],
   'unknown-implementer': ['M18'],
   'relation.via-legacy': ['M20'],
+  'relation.bundle-no-interface': ['M22'],
   'step.sync-mismatch': ['S19'],
   'missing-responsibility': ['M9'],
   'step-relation-mismatch': ['S5a'],
@@ -112,7 +118,7 @@ function descriptionFix(i: Issue): string {
  * 由下面的材料重新算、不从 issues 取的问题：未建模的步骤（S5a 的 warning）、源码归属、场景证据（S15）、门禁与事实、端口孤立（U14）；
  * 未分类（M17）只列核心之间的，也由下面重新算
  */
-const recomputed = (code: string) => code === 'step-unmodeled' || code === 'relation.unclassified' || /^(source|scenario|rule|cycle|fact|port|query)\./.test(code)
+const recomputed = (code: string) => code === 'step-unmodeled' || code === 'relation.unclassified' || /^(source|scenario|rule|cycle|fact|port|query|surface|carrier)\./.test(code)
 
 const RULE_OF_KIND: Record<Violation['kind'], string> = { layer: 'U2', deps: 'U3', exposes: 'U4' }
 
@@ -148,13 +154,13 @@ export function reworkList(input: ReworkInput): ReworkList {
   }
 
   if (source) items.push(...ownershipItems(index, source.own, source.tree, name, report?.conflicted), ...evidenceItems(index, source.tree))
-  if (report) items.push(...factItems(index, report, name))
+  if (report) items.push(...factItems(index, report, name), ...surfaceItems(report), ...carrierItems(report))
   items.push(...portItems(index, report ?? null), ...sideEffectItems(index, name), ...unclassifiedItems(index, name))
   items.push(...unmodeledItems(index, name))
   items.push(...reviewItems(index, name))
   if (input.evolution) items.push(...couplingItems(index, input.evolution, name))
   for (const c of input.sketches ?? []) items.push(...sketchItems(c))
-  if (source && input.deps) items.push(...unevidencedItems(index, source.own, source.tree, input.deps, name))
+  if (source && input.deps) items.push(...unevidencedItems(index, source.own, source.tree, input.deps, name, report ?? null, input.carriers))
 
   const sev = (s: ReworkSeverity) => REWORK_SEVERITIES.indexOf(s)
   const cat = (c: ReworkItem['category']) => REWORK_CATEGORIES.indexOf(c)
@@ -545,6 +551,61 @@ function portItems(index: ModelIndex, report: GovernanceReport | null): ReworkIt
   })
 }
 
+// ── 表面（U18、U19，info）：治理报告的 surface.* 问题透传，一条问题一个根因 ──
+
+function surfaceItems(report: GovernanceReport): ReworkItem[] {
+  return report.issues
+    .filter(i => i.code === 'surface.bypass' || i.code === 'surface.hot-undeclared')
+    .map(i => {
+      const at = descLoc(i)
+      const bypass = i.code === 'surface.bypass'
+      return {
+        id: `surface:${i.code}:${i.message}`,
+        category: 'surface' as const,
+        severity: i.severity,
+        rules: [bypass ? 'U18' : 'U19'],
+        code: i.code,
+        title: i.message,
+        ...(at ? { at } : {}),
+        affected: at ? [at] : [],
+        actions: [
+          bypass
+            ? { kind: 'fix-surface' as const, text: '改经入口导入，或把用到的符号提升到入口导出；确属内部协作的可在描述里补 entry 或调整归属' }
+            : { kind: 'fix-surface' as const, text: '在描述里把这个元素声明为接口（interfaces），让事实上的表面与声明的表面一致', ...(i.file ? { file: i.file } : {}) },
+        ],
+        target: {},
+      }
+    })
+}
+
+// ── 承载缺口（K5d、D6，info）：写了 via 的关系承载为缺段 / 无承载 / 外部，一条关系一个根因 ──
+
+function carrierItems(report: GovernanceReport): ReworkItem[] {
+  return report.issues
+    .filter(i => i.code === 'carrier.gap')
+    .map(i => {
+      const at = descLoc(i)
+      return {
+        id: `unconfirmed:${i.code}:${i.file ?? ''}:${i.line ?? ''}:${i.message}`,
+        category: 'unconfirmed' as const,
+        severity: i.severity,
+        rules: ['K5d', 'K20'],
+        code: i.code,
+        title: i.message,
+        ...(at ? { at } : {}),
+        affected: at ? [at] : [],
+        actions: [
+          {
+            kind: 'fix-relation' as const,
+            text: '核对 via 与两端：缺段时补上缺的依赖或改正 via；通道写契约模块（channel:<名>@<模块 ID>）后才核',
+            ...(i.file ? { file: i.file } : {}),
+          },
+        ],
+        target: {},
+      }
+    })
+}
+
 // ── 查询副作用（U13）：一对（查询关系，委托 / 通知关系）一个根因，带两处步骤位置 ──
 
 function sideEffectItems(index: ModelIndex, name: (id: string) => string): ReworkItem[] {
@@ -647,15 +708,20 @@ function unevidencedItems(
   tree: Pick<LocalSource, 'files' | 'packages'>,
   deps: readonly FileDep[],
   name: (id: string) => string,
+  report: GovernanceReport | null,
+  given?: ReadonlyMap<string, Carrier>,
 ): ReworkItem[] {
   const entryOf = (id: string) => {
     const e = moduleEntry(index, own, tree, id)
     return e && !e.missing ? e.file : null
   }
+  // S18b：帧的等级由绑定的交互的承载判定导出（同时序图的「?」与场景列表的「? N」）
+  const carriers = given ?? (report ? carriersOf(index, report, { entryOf, own }) : null)
   const groups = new Map<string, { from: string; to: string; steps: ReworkLoc[]; seen: Set<string>; scenarios: Set<string> }>()
   for (const sc of index.scenarios.values())
     for (const f of planScenario(index, sc.id).frames.values()) {
-      if (stepEvidence(f, index, own, deps, entryOf).level !== 'none') continue
+      const level = stepEvidence(f, index, own, deps, entryOf).level
+      if (alignedLevel(level, f.relation ? carriers?.get(f.relation) : null) !== 'none') continue
       const key = `${f.from}->${f.to}`
       const g = groups.get(key) ?? { from: f.from, to: f.to, steps: [], seen: new Set<string>(), scenarios: new Set<string>() }
       groups.set(key, g)
@@ -676,7 +742,7 @@ function unevidencedItems(
       rules: ['S16', 'S17'],
       code: 'step.no-evidence',
       title: `步骤无证据：${name(g.from)} → ${name(g.to)} 的 ${g.steps.length} 个步骤在代码里找不到两端之间的任何依赖`,
-      detail: '两端的文件之间没有导入（值与类型都没有）：步骤可能写错了端点或接口，或代码经注入 / 回调传递而静态导入看不见',
+      detail: '无承载（或没有绑定交互时两端的文件之间没有导入）：步骤可能写错了端点或接口，或代码经注入 / 回调传递而静态导入看不见',
       ...(first ? { at: first } : {}),
       affected: g.steps,
       actions: [

@@ -82,6 +82,7 @@ export {
   carrierOf,
   carriersOf,
   carrierGap,
+  carrierNote,
   interactionBundle,
 } from './carrier'
 export { moduleBrief, describeModule, locateFile, checkDependency } from './query'

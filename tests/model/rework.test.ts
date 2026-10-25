@@ -383,6 +383,6 @@ describe('Q7、Q8（ADR-0029）：未分类、端口孤立、查询副作用三�
     expect(u[0].actions[0]).toMatchObject({ kind: 'classify', snippet: expect.stringContaining('type: queries') })
     // 逐条的 relation.unclassified 提示不进「描述」类
     expect(list.items.some(i => i.category === 'description' && i.code === 'relation.unclassified')).toBe(false)
-    expect(REWORK_CATEGORIES.slice(5, 11)).toEqual(['unconfirmed', 'port', 'query-side-effect', 'undescribed', 'unclassified', 'unmodeled'])
+    expect(REWORK_CATEGORIES.slice(5, 12)).toEqual(['unconfirmed', 'port', 'surface', 'query-side-effect', 'undescribed', 'unclassified', 'unmodeled'])
   })
 })

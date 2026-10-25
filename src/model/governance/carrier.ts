@@ -151,6 +151,15 @@ export function carrierGap(index: ModelIndex, c: Carrier | null | undefined): st
   return `；承载（${CARRIER_TEMPLATE_LABELS[c.template]}）缺 ${miss.map(s => CARRIER_ROLE_TEXT[s.role](name(s.from), name(s.to))).join('、')}`
 }
 
+/** K5d、D6：carrier.gap 的说明——外部承载，或无承载 / 缺段与缺的段 */
+export function carrierNote(index: ModelIndex, c: Carrier): string {
+  const t = CARRIER_TEMPLATE_LABELS[c.template]
+  if (c.verdict === 'external') return `承载（${t}）为外部承载：通道没写契约模块（channel:<名>@<模块 ID>），静态导入核不了`
+  const name = (id: string) => (id === '*' ? '某模块' : moduleName(index, id))
+  const miss = c.segments.filter(s => s.missing).map(s => CARRIER_ROLE_TEXT[s.role](name(s.from), name(s.to)))
+  return `承载（${t}）${c.verdict === 'none' ? '无承载' : '缺段'}${miss.length ? `：缺 ${miss.join('、')}` : ''}`
+}
+
 // ── D7、D8：交互束按接收方表面散开 ──
 
 /** D7、D8：交互束的散开——receiver 为接收方节点模块的表面（结构视角展开它时给出；没有时一律接到模块本体） */

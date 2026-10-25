@@ -282,7 +282,7 @@ function checkRelations(input: ArchModel, c: Checked): RelationEntity[] {
   for (const list of unnamed.values())
     if (list.length >= 2)
       c.info(
-        'relation.indistinct',
+        'relation.bundle-no-interface',
         `关系${list.map(r => `「${r.id}」`).join('、')}（${list[0].type}，${list[0].from} → ${list[0].to}）都没写接口：同一束里无法区分通路，建议写 interface（M22）`,
         list[0].src,
       )

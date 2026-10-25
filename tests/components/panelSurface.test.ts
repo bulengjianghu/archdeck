@@ -11,7 +11,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import Panel from '../../src/components/panel/Panel.vue'
 import { resetStructurePrefs } from '../../src/components/display/useDisplayPrefs'
 import { focusSurfaceElement, resetSurfaceFocus } from '../../src/components/panel/surfaceFocus'
-import { VERDICT_LEVEL, alignedEvidence, alignedLevel, alignedMessageLevel, stepChain } from '../../src/components/panel/chain'
+import { VERDICT_LEVEL, alignedEvidence, alignedLevel, weakestLevel, stepChain } from '../../src/components/panel/chain'
 import { createDeskState, type SourceFetcher } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
 import { EVIDENCE_LEVEL_LABELS } from '../../src/components/shared/labels'
@@ -261,13 +261,13 @@ describe('D-25、S18b：包含链改元素级，证据等级由承载判定导�
     expect(alignedLevel('none', carrier('complete'))).toBe('name')
     expect(alignedLevel('module', carrier('none'))).toBe('none')
     expect(alignedLevel('module', null)).toBe('module')
-    // 时序图：一条消息取各帧对齐后最弱的一档，无承载才「?」
+    // 时序图：一条消息取各帧（状态层已按承载对齐）最弱的一档，无承载才「?」
     const levels = new Map([
       ['f1', 'module' as const],
-      ['f2', 'none' as const],
+      ['f2', 'name' as const],
     ])
-    expect(alignedMessageLevel(['f1', 'f2'], levels, () => carrier('complete'))).toBe('name')
-    expect(alignedMessageLevel(['f1', 'f2'], levels, id => (id === 'f2' ? carrier('none') : null))).toBe('none')
+    expect(weakestLevel(['f1', 'f2'], levels)).toBe('module')
+    expect(weakestLevel(['f1', 'f2'], new Map([...levels, ['f2', 'none' as const]]))).toBe('none')
   })
 
   it('步骤面板只有一条链：步骤 → 交互（承载判定词）→ 承载段（文件:行）；等级与链同一个词，候选调用点取承载段', async () => {

@@ -184,7 +184,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version, sketches, surfaceAlways })
   const positioned = createLayoutSync(view, layoutView, layoutOpts, facts.layoutLinks)
   // 步骤的代码证据（S16、S17）：时序图的「?」由 run 交给 Layout，所以先于 run 创建
-  const evidence = createEvidence({ state, index, plan, planOf: planScenario, files, sync: sourceSync, design: !!options.version })
+  const evidence = createEvidence({ state, index, plan, planOf: planScenario, files, sync: sourceSync, design: !!options.version, carrierOf: facts.carrierOf })
   const run = createRun({ state, index, levelId, plan, view, positioned, fileOwners: files.owners, evidence: evidence.levels })
   const versions = createVersions({ state, index, designs, commits, baselines, version: options.version, sketchPrompt, sketches })
   const evolution = createEvolution({ state, index, view, files, facts, sync: sourceSync, design: !!options.version })
@@ -231,6 +231,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       ...(evo ? { evolution: evo } : {}),
       ...(checks.length ? { sketches: checks } : {}),
       ...(deps ? { deps } : {}),
+      ...(facts.carriers.value ? { carriers: facts.carriers.value } : {}),
     })
   })
   // ── 写入人拥有的文件（B1–B5，ADR-0019）：只发意图，结果由文件变化推送回来（N5）──

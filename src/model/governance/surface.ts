@@ -8,6 +8,7 @@ import { moduleInterfaces, type ExportedSymbol } from '../source'
 import type { Issue, ModelIndex } from '../types'
 import { valueDeps } from './cycles'
 import { within } from './facts'
+import { sharedHostOf } from './roles'
 import {
   ASSEMBLY_KINDS,
   HOT_SURFACE_MODULES,
@@ -26,6 +27,7 @@ import {
   type SurfaceElement,
   type SurfaceMetrics,
   type SurfaceSource,
+  type Violation,
 } from './types'
 
 /** K14：一组文件依赖的档——任一条有交互使用为 invokes，否则有值使用（纯值读取）为 value，其余为 type */
@@ -371,10 +373,17 @@ const listNames = (xs: readonly string[], n = 3) => (xs.length > n ? `${xs.slice
 
 /**
  * U18、U19（info，不进门禁，进问题页签）：每条模块依赖按 gateModule 定表面所属的模块 G——
- * U18 越过入口：G 有文件依赖经由它子树内、不是入口的文件（一个 G 一条，列依赖方与第一处）；
- * U19 热表面未声明：G 的入口导出里没有声明为接口的元素被至少 HOT_SURFACE_MODULES 个模块使用（一个元素一条，建议声明接口）。
+ * U18 越过入口：G 有文件依赖经由它子树内、不是入口的文件（一个 G 一条，列依赖方与第一处）；同一条文件依赖已命中 U4 访问面违规的不再报（T0 裁决 11，violations 给出时）；
+ * U19 热表面未声明：G 的入口导出里没有声明为接口的元素被至少 HOT_SURFACE_MODULES 个模块使用（一个元素一条，建议声明接口）；G 自身或祖先角色为共用件（shared）的豁免（共用件本就该宽，T1 裁决 10）。
  */
-export function surfaceIssues(index: ModelIndex, report: Pick<GovernanceReport, 'moduleDeps'>, src: SurfaceSource, threshold = HOT_SURFACE_MODULES): Issue[] {
+export function surfaceIssues(
+  index: ModelIndex,
+  report: Pick<GovernanceReport, 'moduleDeps'> & { violations?: readonly Pick<Violation, 'kind' | 'files'>[] },
+  src: SurfaceSource,
+  threshold = HOT_SURFACE_MODULES,
+): Issue[] {
+  const fileKey = (f: FileDep) => `${f.from}:${f.line}:${f.to}:${f.via}`
+  const exposes = new Set((report.violations ?? []).filter(v => v.kind === 'exposes').flatMap(v => v.files.map(fileKey)))
   const bypass = new Map<string, { files: FileDep[]; from: Set<string> }>()
   const hot = new Map<string, Map<string, Set<string>>>()
   const declared = new Map<string, Set<string>>()
@@ -389,6 +398,7 @@ export function surfaceIssues(index: ModelIndex, report: Pick<GovernanceReport, 
     for (const f of d.files) {
       const k = gateOf(index, src, g, f)
       if (k === 'bypass') {
+        if (exposes.has(fileKey(f))) continue
         const b = bypass.get(g) ?? bypass.set(g, { files: [], from: new Set() }).get(g)!
         b.files.push(f)
         b.from.add(d.from)
@@ -411,7 +421,8 @@ export function surfaceIssues(index: ModelIndex, report: Pick<GovernanceReport, 
       ...index.modules.get(g)?.src,
     })
   }
-  for (const [g, byName] of [...hot].sort((x, y) => x[0].localeCompare(y[0])))
+  for (const [g, byName] of [...hot].sort((x, y) => x[0].localeCompare(y[0]))) {
+    if (sharedHostOf(index, g)) continue
     for (const [n, users] of [...byName].sort((x, y) => x[0].localeCompare(y[0]))) {
       if (users.size < threshold) continue
       out.push({
@@ -421,5 +432,6 @@ export function surfaceIssues(index: ModelIndex, report: Pick<GovernanceReport, 
         ...index.modules.get(g)?.src,
       })
     }
+  }
   return out
 }

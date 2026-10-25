@@ -11,7 +11,6 @@ import { EVIDENCE_LEVEL_LABELS } from '../shared/labels'
 import Section from './Section.vue'
 import Markdown from './Markdown.vue'
 import DesignNote from './DesignNote.vue'
-import { alignedLevel } from './chain'
 
 const desk = useDesk()
 const openPreview = useOpenPreview()
@@ -32,19 +31,8 @@ const participants = computed(() => {
 })
 const refs = desk.run.refs
 const referencedBy = desk.run.referencedBy
-/** S16：本场景各步的证据等级计数；没有代码事实时为 null */
-const evCounts = computed(() => {
-  const sc = desk.evidence.scenario.value
-  const plan = desk.run.plan.value
-  if (!sc || !plan) return null
-  // D-25（裁决 T0-10）：各步等级按承载判定对齐，与步骤面板、时序图的「?」同一口径
-  const counts = { name: 0, module: 0, none: 0, skipped: 0 }
-  for (const [id, e] of sc.frames) {
-    const f = plan.frames.get(id)
-    counts[alignedLevel(e.level, f ? desk.facts.stepCarrierOf(f).carrier : null)]++
-  }
-  return counts
-})
+/** S16、S18b：本场景各步的证据等级计数（状态层按承载判定对齐，与步骤面板、时序图的「?」、场景列表同一口径）；没有代码事实时为 null */
+const evCounts = computed(() => desk.evidence.counts.value)
 const EV_SHORT = { name: '按名字', module: '按依赖', none: '无证据', skipped: '不判定' } as const
 
 function pointAt(id: string) {
