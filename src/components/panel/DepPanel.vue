@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * 代码依赖叠加线的面板（K10）：投影到这对节点的模块依赖、其中的违规与文件证据。
- * 结构视角（ADR-0031）下即依赖边面板：先列结构边的种类与档、交互覆盖、规则判定与两端的不稳定度（DepStructure），再列违规与模块依赖。
+ * 结构视角（ADR-0031 修订）下即依赖边面板（选中束）：「文件依赖」按元素分组、交互覆盖、规则判定与两端的不稳定度（DepStructure），再列违规；
+ * 模块依赖清单已并入「文件依赖」（A6），只在交互视角的代码依赖面板列出。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -57,7 +58,7 @@ const structure = computed<StructureGroup[]>(() => {
           </li>
         </ul>
       </Section>
-      <Section title="模块依赖" :count="sel.detail.deps.length">
+      <Section v-if="!structureView" title="模块依赖" :count="sel.detail.deps.length">
         <ul class="plain">
           <li v-for="d in sel.detail.deps" :key="d.key" class="item">
             <div>
