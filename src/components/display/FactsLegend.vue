@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 「显示」面板 · 代码事实（线型通道，结构视角，K9）：组标题右侧是开关；开启后说明证实、未证实、未解释的交互、违规与本层环怎么画。线型只在这一组讲（ADR-0017 第三轮） */
+/** 「显示」面板 · 代码事实（线型通道，结构视角，K9）：组标题右侧是开关；开启后说明证实、未证实、未解释的交互、违规、本层环与承载叠加（L22）怎么画。线型只在这一组讲（ADR-0017 第三轮） */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import DisplayGroup from './DisplayGroup.vue'
@@ -45,11 +45,24 @@ const hint = computed(() => (ready.value ? '' : FACTS_HINT[desk.facts.status.val
         <span class="sw"><span class="cycle">↻N</span></span
         ><span>本层的环</span>
       </div>
+      <div class="item carrier" data-testid="carrier-legend">
+        <span class="sw"
+          ><svg width="28" height="10" viewBox="0 0 28 10" aria-hidden="true">
+            <line x1="1" y1="5" x2="27" y2="5" class="gap" /></svg
+        ></span>
+        <span>承载叠加：选中一条交互时，承载它的元素级依赖临时画在图上、其余变淡；缺的段画成提示虚线（关系面板「承载」一节列各段）</span>
+      </div>
     </template>
   </DisplayGroup>
 </template>
 
 <style scoped>
+.gap {
+  stroke: var(--warning);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 3;
+}
+
 .cycle {
   padding: 0 4px;
   font-size: 10px;
