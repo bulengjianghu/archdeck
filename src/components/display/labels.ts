@@ -72,8 +72,8 @@ export const ELEMENT_KIND_HINT: Record<ElementKind, string> = {
   type: 'interface / type',
   data: '枚举、纯数据常量',
 }
-/** 图例与面板里元素的小记号（一字，按种类） */
-export const ELEMENT_KIND_MARK: Record<ElementKind, string> = { port: '◐', operation: 'ƒ', type: 'T', data: '#' }
+/** 图例与面板里元素的小记号（一字，按种类；与画布元素记号 SurfaceMarks 同一套：端口 ◇、操作 ●、类型 ○、数据 ■） */
+export const ELEMENT_KIND_MARK: Record<ElementKind, string> = { port: '◇', operation: '●', type: '○', data: '■' }
 /** C1、K18：声明状态（入口导出与声明接口按名字匹配） */
 export const DECL_STATE_LABEL: Record<DeclState, string> = {
   'declared-exported': '已声明且导出',

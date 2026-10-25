@@ -176,7 +176,12 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   // ── 领域派生（ADR-0013）──
   const files = createFiles({ state, index, view, sync: sourceSync, design: !!options.version })
   // 架构治理先于布局：结构边与交互边并集布局（L15），两个视角共用同一份布局（V12）
-  const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version, sketches })
+  /** C6：显示偏好「总是展开表面」——呈现层的本地偏好交来（意图），表面展开并进布局同步 */
+  const surfaceAlways = shallowRef(false)
+  const setSurfaceAlways = (on: boolean) => {
+    if (surfaceAlways.value !== on) surfaceAlways.value = on
+  }
+  const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version, sketches, surfaceAlways })
   const positioned = createLayoutSync(view, layoutView, layoutOpts, facts.layoutLinks)
   // 步骤的代码证据（S16、S17）：时序图的「?」由 run 交给 Layout，所以先于 run 创建
   const evidence = createEvidence({ state, index, plan, planOf: planScenario, files, sync: sourceSync, design: !!options.version })
@@ -375,6 +380,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     expandedBands,
     toggleBand,
     setCanvasWidth,
+    setSurfaceAlways,
     write,
     modelDir,
     levelId,

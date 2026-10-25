@@ -68,7 +68,7 @@ async function open(url = '/?v=s', version?: { design: string; revision: string 
   return desk
 }
 
-const OFF: StructureFilter = { typeOnly: false, invokesOnly: false, uncoveredOnly: false, surfaceAlways: false }
+const OFF: StructureFilter = { typeOnly: false, invokesOnly: false, uncoveredOnly: false }
 const ids = (xs: { id: string }[]) => xs.map(x => x.id)
 
 describe('L21、B1–B4 结构视角画布的束', () => {
@@ -109,25 +109,32 @@ describe('L21、B1–B4 结构视角画布的束', () => {
     expect(ids(desk.facts.structureDisplay(OFF)!.shown)).toContain('bundle:edge->lib')
   })
 
-  it('B3：选中束时与两端相连的束为聚焦集合；C6：被依赖方展开这条束接到的元素', async () => {
+  it('B3：选中束时与两端相连的束为聚焦集合；T2-7：选中束不展开被依赖方（元素在面板看）', async () => {
     const desk = await open()
     desk.select({ kind: 'dep', id: 'a->lib' })
     const d = desk.facts.structureDisplay(OFF)!
     expect(d.focus!.bundle).toBe('bundle:a->lib')
     expect(d.focus!.nodes).toEqual(['a', 'lib'])
     expect([...d.focus!.bundles].sort()).toEqual(['bundle:a->b', 'bundle:a->lib', 'bundle:b->lib', 'bundle:edge->lib'])
-    expect(d.expanded.get('lib')).toEqual(new Set(['run']))
-    expect(ids(d.elementEdges)).toEqual(['el:a->lib:use:run'])
+    expect(d.expanded.size).toBe(0)
+    expect(d.elementEdges).toEqual([])
+    expect(desk.facts.expansion.value).toBeNull()
   })
 
-  it('C6：选中模块展开它的全部元素；总是展开表面时本层全部模块展开', async () => {
+  it('C6：选中模块展开它的全部元素；总是展开表面时本层有元素的模块全部展开（展开集合在 DeskState，两个视角同一份，T2-1 / T2-2）', async () => {
     const desk = await open()
     desk.select({ kind: 'module', id: 'lib' })
     const d = desk.facts.structureDisplay({ ...OFF, typeOnly: true })!
     expect(d.expanded.get('lib')).toBeNull()
     expect(ids(d.elementEdges).sort()).toEqual(['el:a->lib:use:run', 'el:b->lib:use:Item', 'el:edge->lib:use:run'])
+    expect(desk.facts.layoutLinks.value!.expand!.map(x => x.node)).toEqual(['lib'])
     desk.select(null)
-    expect([...desk.facts.structureDisplay({ ...OFF, surfaceAlways: true })!.expanded.keys()].sort()).toEqual(['a', 'b', 'edge', 'lib'])
+    expect(desk.facts.expansion.value).toBeNull()
+    desk.setSurfaceAlways(true)
+    expect([...desk.facts.structureDisplay(OFF)!.expanded.keys()].sort()).toEqual(['lib'])
+    // 交互视角同一份展开（V12）；运行视角不展开
+    desk.setMode('interaction')
+    expect(desk.facts.expansion.value!.expand.map(x => x.node)).toEqual(['lib'])
   })
 
   it('不在结构视角时为 null', async () => {

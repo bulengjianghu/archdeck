@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 /**
  * 结构视角的节点角标与表面元素记号（L17、L20、L21③、C9）：「表面 W」与「入 · 出」同一行、跨界折叠的「界外 入 N · 出 M」（悬停列目标），
- * 展开表面的元素记号（位置取元素端口，悬停写名字、种类与扇入，单击发出面板定位事件），交互束「混合」记号与悬停说明（D8）、承载反向高亮（L22）。
+ * 展开表面的元素记号（位置取元素端口，悬停写名字、种类与扇入，单击请求面板定位），交互束「混合」记号与悬停说明（D8）、承载反向高亮（L22）。
  */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import StructMarks from '../../src/components/nodes/StructMarks.vue'
 import SurfaceMarks from '../../src/components/nodes/SurfaceMarks.vue'
+import { resetSurfaceFocus, useSurfaceFocus } from '../../src/components/panel/surfaceFocus'
 import ModuleNode from '../../src/components/nodes/ModuleNode.vue'
 import RouteEdge from '../../src/components/edges/RouteEdge.vue'
 import type { NodeData, NodeSurface, RouteEdgeData } from '../../src/layout/canvas'
@@ -55,12 +56,11 @@ describe('SurfaceMarks', () => {
     expect(left.find('.element').attributes('style')).toContain('top: 30px')
   })
 
-  it('C9：单击元素发出面板定位事件（模块与元素），选中模块由节点单击照常完成', async () => {
-    const seen = vi.fn()
-    window.addEventListener('arch-desk:surface-element', (e: Event) => seen((e as CustomEvent).detail))
+  it('C9（T2-4）：单击元素直接请求面板定位（focusSurfaceElement：模块与元素），选中模块由节点单击照常完成', async () => {
+    resetSurfaceFocus()
     const w = mount(SurfaceMarks, { props: { surface, moduleId: 'm' } })
     await w.findAll('.element')[0].trigger('click')
-    expect(seen).toHaveBeenCalledWith({ module: 'm', element: 'get' })
+    expect(useSurfaceFocus().value).toMatchObject({ module: 'm', element: 'get' })
   })
 
   it('展开的模块节点画元素记号并为它让出入边一侧', () => {

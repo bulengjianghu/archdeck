@@ -51,7 +51,7 @@ describe('L15、L21 束：一对节点一条，换边不换节点', () => {
     expect(links.edges.map(e => e.id).every(id => id.startsWith('bundle:'))).toBe(true)
     expect(links.edges.map(e => e.id)).toContain('bundle:core.util->core.log')
     const key = cacheKey(desk.view.value!, {}, links)
-    expect(key).toContain('L21-bundle-1')
+    expect(key).toContain('L21-bundle-2')
     expect(key).toContain('bundle:core.util->core.log')
     const closed = (await sceneOf(desk)).scene
     const open = (await sceneOf(desk, { typeOnly: true })).scene
@@ -132,14 +132,14 @@ describe('B2 跨界折叠', () => {
 })
 
 describe('B3 选中束：聚焦与反向高亮承载的交互（L22）', () => {
-  it('选中束时它与散开的元素级边高亮，不与两端相连的束变淡；它承载的交互临时画出；取消选中恢复', async () => {
+  it('选中束时它高亮、不展开被依赖方（T2-7），不与两端相连的束变淡；它承载的交互临时画出；取消选中恢复', async () => {
     const desk = await openDesk()
     desk.select({ kind: 'dep', id: 'core.util->core.api' })
     await settle(desk)
     const { scene: s } = await sceneOf(desk)
-    // 被依赖方展开这条束接到的元素：散开为元素级边
+    // 选中束只聚焦与高亮，不散开为元素级边（元素在面板看）
     const own = deps(s).filter(e => e.data.selected)
-    expect(own.map(e => e.id)).toEqual(['el:core.util->core.api:use:get'])
+    expect(own.map(e => e.id)).toEqual(['bundle:core.util->core.api'])
     expect(dep(s, 'bundle:core.impl->core.log').data.dim).toBe(true)
     expect(dep(s, 'bundle:core.impl->core.util').data.dim).toBe(false)
     const carried = s.edges.filter(e => e.data.temp === 'carried')

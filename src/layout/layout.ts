@@ -153,7 +153,7 @@ const cache = new Map<string, PositionedView>()
 const CACHE_LIMIT = 64
 
 /** 布局算法的版本：端口、层约束等选项改了就升，旧结果不再命中 */
-export const LAYOUT_VERSION = 'L21-bundle-1'
+export const LAYOUT_VERSION = 'L21-bundle-2'
 
 export function cacheKey(view: LevelView, opts: LayoutOptions = {}, links?: StructureLinks | null): string {
   return JSON.stringify([
@@ -202,7 +202,7 @@ export async function layoutView(view: LevelView, opts: LayoutOptions = {}, link
 }
 
 // 表面展开的输入（C6、L20、L23）：哪些节点展开、元素端口与散开范围，两个视角同一套规则
-export { SURFACE_PORTS, surfaceExpansion, type Expansion, type ExpansionInput } from './surface'
+export { SURFACE_PORT_CAP, surfaceExpansion, type Expansion, type ExpansionInput } from './surface'
 
 // 草图布局（state.layout.sketch，ADR-0025）：草图画布的节点、直线边、引用列与框线（X22）与显示位置，经本入口访问
 export {

@@ -58,10 +58,10 @@ export const NODE_SIZE = {
 export const SHELF = { w: 140, h: 30, gap: 8, label: 60, top: 18 }
 
 /**
- * C6：展开表面的节点——元素端口沿入边一侧的间距、标签区的深度（自上而下时元素名竖排在节点上部，自左向右时横排在左侧一列）、
+ * C6：展开表面的节点——元素端口沿入边一侧的间距、标签区的深度（自上而下时元素名横排、相邻两个错开一行在节点上部，自左向右时横排在左侧一列）、
  * 节点名的标题行高度与两端留白。
  */
-export const SURFACE = { pitch: 20, label: 92, column: 124, head: 34, pad: 14 }
+export const SURFACE = { pitch: 28, label: 62, column: 124, head: 34, pad: 14 }
 
 /** C6：展开表面后节点的尺寸——元素沿入边一侧排开，节点随元素数加长、加一条标签区 */
 export function expandedSize(base: { w: number; h: number }, count: number, direction: 'DOWN' | 'RIGHT'): { w: number; h: number } {

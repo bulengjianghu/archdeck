@@ -4,7 +4,7 @@
  * 结构视图（ADR-0031）：本层结构边、指标与影响面；没有代码事实时只有允许依赖图（U16）。
  * 模块表面与承载链（ADR-0032）：束与元素级边、表面、越过入口、承载，以及结构视角画布按显示偏好过滤、聚焦、跨界折叠与表面展开的派生（structureDisplay）。
  */
-import { computed, type ComputedRef, type ShallowRef } from 'vue'
+import { computed, ref, type ComputedRef, type Ref, type ShallowRef } from 'vue'
 import {
   carriersOf,
   interactionBundle,
@@ -14,6 +14,7 @@ import {
   type Bundle,
   type Carrier,
   type ElementEdge,
+  type ElementKind,
   type ExportedSymbol,
   type Frame,
   type InteractionBundle,
@@ -65,8 +66,8 @@ import {
   sketchLifetime,
   type RawFile,
 } from '@/model'
-import { chipBundleId, type StructureLinks } from '@/layout/layout'
-import type { ViewState } from '../transition'
+import { chipBundleId, surfaceExpansion, type Expansion, type StructureLinks } from '@/layout/layout'
+import { perspectiveOf, type ViewState } from '../transition'
 import type { createSourceSync } from '../sync/source'
 import type { FileDerivations } from './files'
 
@@ -80,12 +81,14 @@ export interface FactsInputs {
   design: boolean
   /** X4：载荷附带的设计草图（U16：活动草图里层的 mayDependOn 一并画进允许依赖图） */
   sketches?: ShallowRef<{ design: string; file: RawFile }[]>
+  /** C6：显示偏好「总是展开表面」（呈现层的本地偏好经 desk.setSurfaceAlways 交来，表面展开并进布局同步） */
+  surfaceAlways?: Readonly<Ref<boolean>>
 }
 
 /** 为什么没有代码事实，或正在取；源码清单读取失败也是 error（源码在本地是前提，G1） */
 export type FactsStatus = 'ready' | 'loading' | 'design' | 'error'
 
-/** B1、B4、C6：结构视角画布的显示偏好（呈现层从 useStructurePrefs 读出后传入，不进视图状态） */
+/** B1、B4：结构视角画布的显示偏好（呈现层从 useStructurePrefs 读出后传入，不进视图状态；「总是展开表面」经 setSurfaceAlways 进布局同步） */
 export interface StructureFilter {
   /** B1：只引类型的束画出 */
   typeOnly: boolean
@@ -93,8 +96,6 @@ export interface StructureFilter {
   invokesOnly: boolean
   /** B4：只画未解释的束（Bundle.unexplained，T0 裁决 6） */
   uncoveredOnly: boolean
-  /** C6：本层全部模块总是展开表面 */
-  surfaceAlways: boolean
 }
 
 /** L21：束与边界节点的关系——两端都是本层兄弟 / 一端是边界节点（L14 边界、外部、目标态）/ 两端都是边界节点 */
@@ -116,11 +117,11 @@ export interface StructureDisplay {
   anomalies: Set<string>
   /** B3：选中束（K10 的 dep 选中）时与它两端相连的束；没有选中束时为 null */
   focus: { bundle: string; nodes: [string, string]; bundles: Set<string> } | null
-  /** C6：表面展开——模块 ID → 展开的元素名（null 为全部元素） */
+  /** C6：表面展开——模块 ID → 展开的元素名（null 为全部元素）；同 desk.facts.expansion */
   expanded: Map<string, Set<string> | null>
 }
 
-export function createFacts({ state, index, view, files, sync, design, sketches }: FactsInputs) {
+export function createFacts({ state, index, view, files, sync, design, sketches, surfaceAlways = ref(false) }: FactsInputs) {
   const resource = sync.facts
   const status = computed<FactsStatus>(() => {
     if (design) return 'design'
@@ -331,12 +332,8 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
   /** L15、U16：结构视角下本层的结构视图；其余视角为 null */
   const structure = computed<StructureView | null>(() => (state.value.playback || state.value.mode !== 'structure' ? null : levelStructure.value))
 
-  /**
-   * L15、L21、V12：交给布局的结构边——本层全部束（一对节点同方向一条，含只引类型、聚焦才画的）与元素级边（C6 展开表面时换上），
-   * 分层总览另加全部块的跨层依赖（chipDeps，按对合成一条）；没有代码事实时为允许边（U16），读取中为 null（只按交互边布局，读到后重算一次）。
-   * 不论视角都给，两个视角共用同一份布局。
-   */
-  const layoutLinks = computed<StructureLinks | null>(() => {
+  /** L15、L21：并集布局的基础输入——本层全部束与元素级边（不含表面展开）；没有代码事实时为允许边（U16），读取中为 null */
+  const baseLinks = computed<StructureLinks | null>(() => {
     const sv = levelStructure.value
     const v = view.value
     if (!sv || !v || !index.value) return null
@@ -355,6 +352,58 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
       ...(e.element ? { kind: e.element.kind } : {}),
     }))
     return { edges: sv.bundles.map(link), ...(core.length ? { core } : {}), ...(elements.length ? { elements } : {}) }
+  })
+
+  /** D7、D8：本层交互视图边按接收方表面散开的数据（结构 / 交互视角都给：布局取并集；运行视角与代码事实未就绪时为 null） */
+  const spreads = computed<Map<string, InteractionBundle> | null>(() => {
+    const v = view.value
+    if (perspectiveOf(state.value) === 'run' || !v || status.value !== 'ready') return null
+    const out = new Map<string, InteractionBundle>()
+    for (const e of v.edges) {
+      const b = interactionSpread(e.id)
+      if (b) out.set(e.id, b)
+    }
+    return out
+  })
+
+  /**
+   * C6、L20、L23：表面展开（两个视角同一套规则，V12）——选中模块、选中交互（接收方）或「总是展开表面」时展开的节点、元素端口与散开范围；
+   * 选中束不展开（T2-7）。运行视角、分层总览、没有元素级边时为 null。布局同步与画布、structureDisplay 同读这一份。
+   */
+  const expansion = computed<Expansion | null>(() => {
+    const v = view.value
+    const links = baseLinks.value
+    if (perspectiveOf(state.value) === 'run' || !v || !links?.elements?.length) return null
+    // 没有展开的触发（选中模块 / 交互 / 视图边或总是展开）时不取散开数据（它要读接收方的入口导出）
+    const sel = state.value.selection
+    if (!surfaceAlways.value && sel?.kind !== 'module' && sel?.kind !== 'relation' && sel?.kind !== 'edge') return null
+    return surfaceExpansion({ view: v, selection: sel, always: surfaceAlways.value, links, spreads: spreads.value })
+  })
+
+  /**
+   * L15、L21、V12：交给布局的结构边——本层全部束（一对节点同方向一条，含只引类型、聚焦才画的）与元素级边，
+   * 分层总览另加全部块的跨层依赖（chipDeps，按对合成一条）；没有代码事实时为允许边（U16），读取中为 null（只按交互边布局，读到后重算一次）。
+   * C6：有表面展开时带上展开的节点与交互束的散开（本层重排，等同下钻）。不论视角都给，两个视角共用同一份布局（布局同步适配器只读这里）。
+   */
+  const layoutLinks = computed<StructureLinks | null>(() => {
+    const base = baseLinks.value
+    const x = expansion.value
+    return base && x ? { ...base, expand: x.expand, interactions: x.interactions } : base
+  })
+
+  /** C6、L20：展开节点（模块）的元素种类与扇入（元素记号的悬停）；没有展开时为 null */
+  const surfaceInfo = computed<Map<string, Map<string, { kind: ElementKind; fanIn: number }>> | null>(() => {
+    const x = expansion.value
+    const v = view.value
+    if (!x || !v) return null
+    const out = new Map<string, Map<string, { kind: ElementKind; fanIn: number }>>()
+    for (const e of x.expand) {
+      const m = v.nodes.find(n => n.id === e.node)?.moduleId
+      if (!m || out.has(m)) continue
+      const fan = new Map((surfaceMetricsOf(m)?.uses ?? []).map(u => [u.element.name, u.modules.length]))
+      out.set(m, new Map((surfaceOfModule(m)?.elements ?? []).map(el => [el.name, { kind: el.kind, fanIn: fan.get(el.name) ?? 0 }])))
+    }
+    return out
   })
 
   /** K16：面板「结构」一节——模块的 Ca / Ce / I、贡献最多的依赖方 / 被依赖方、本层节点数；没有代码事实时为 null */
@@ -409,7 +458,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
    * B1–B4、C6：结构视角画布按显示偏好要画的束与元素级边。B1：只引类型档收起（typeOnly 时画），invokesOnly 时值使用也收起；B4：uncoveredOnly 时只画未解释的（Bundle.unexplained）；
    * B2：一端是边界节点的束缺省折叠、计入本层另一端节点的「入 · 出」，两端都是边界节点的只在聚焦时画；悬停或选中一端时画出。
    * 基线外违规、环上、逆稳定的束不论档位与折叠照画（B4 只看覆盖）。B3：选中束时与两端相连的束为聚焦集合。
-   * C6：表面展开——选中模块 → 它的全部元素；选中束 → 被依赖方在这条束里接到的元素；surfaceAlways → 本层全部模块。
+   * C6：表面展开取 expansion（选中模块 → 它的全部元素；surfaceAlways → 本层全部模块；选中束不展开，T2-7）。
    * 没有代码事实（允许依赖图）或不在结构视角时为 null。
    */
   const structureDisplay = (filter: StructureFilter): StructureDisplay | null => {
@@ -466,15 +515,11 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
         nodes: [picked.from, picked.to],
         bundles: new Set(sv.bundles.filter(b => [b.from, b.to].some(n => n === picked.from || n === picked.to)).map(b => b.id)),
       }
-    // C6：表面展开
+    // C6：表面展开（同布局同步的 expansion，两个视角一份）——模块 ID → 展开的元素名（null 为全部依赖方都散开）
     const expanded = new Map<string, Set<string> | null>()
-    if (filter.surfaceAlways)
-      for (const n of v.nodes) if (n.role !== 'actor' && n.role !== 'more' && index.value?.modules.has(n.moduleId)) expanded.set(n.moduleId, null)
-    if (sel?.kind === 'module' && v.nodes.some(n => n.moduleId === sel.id && n.role !== 'actor')) expanded.set(sel.id, null)
-    if (picked && expanded.get(picked.toModule) !== null) {
-      const names = expanded.get(picked.toModule) ?? new Set<string>()
-      for (const e of sv.elementEdges) if (e.bundle === picked.id && e.element) names.add(e.element.name)
-      expanded.set(picked.toModule, names)
+    for (const x of expansion.value?.expand ?? []) {
+      const m = v.nodes.find(n => n.id === x.node)?.moduleId
+      if (m) expanded.set(m, x.from === null ? null : new Set(x.elements))
     }
     const drawn = new Set(shown.map(b => b.id))
     const elementEdges = sv.elementEdges.filter(e => {
@@ -511,6 +556,9 @@ export function createFacts({ state, index, view, files, sync, design, sketches 
     impactOf: impactOfModule,
     structurePair,
     structureDisplay,
+    expansion,
+    spreads,
+    surfaceInfo,
     surfaceSource,
     surfaceOf: surfaceOfModule,
     surfaceMetricsOf,

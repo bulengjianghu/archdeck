@@ -88,9 +88,9 @@ defineProps<{ data: NodeData }>()
   color: var(--text-3);
 }
 
-/* C6：展开表面——元素名占入边一侧（顶部竖排一带 / 左侧一列），名字与职责让开 */
+/* C6：展开表面——元素名占入边一侧（顶部横排两行 / 左侧一列），名字与职责让开 */
 .module-node.surface-top {
-  padding-top: 82px;
+  padding-top: 44px;
 }
 
 .module-node.surface-left {

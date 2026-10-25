@@ -114,7 +114,7 @@ test('B2：一端是边界节点的束跨界折叠——节点标「界外 入 N
   await expect(page.locator('.vue-flow__edge-dep[data-id*="boundary:domain"]').first()).toBeAttached()
 })
 
-test('K10、B3：单击束选中这对节点的代码依赖（sel=d:），它高亮、不相连的束变淡；被依赖方展开这条束接到的元素', async ({ page }) => {
+test('K10、B3：单击束选中这对节点的代码依赖（sel=d:），它高亮、不相连的束变淡；被依赖方不展开（T2-7，元素在面板看）', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra&v=s')
   const edge = page.locator('.vue-flow__edge-dep[data-id="bundle:infra.mus->infra.framework"]')
   const id = (await edge.getAttribute('data-id'))!
@@ -124,8 +124,9 @@ test('K10、B3：单击束选中这对节点的代码依赖（sel=d:），它高
   await expect(page.locator('.vue-flow__edge-dep path.edge-selected-glow').first()).toBeAttached()
   // 聚焦：不与两端相连的束变淡
   await expect.poll(() => page.locator('.vue-flow__edge-dep path.vue-flow__edge-path[style*="opacity: 0.12"]').count()).toBeGreaterThan(0)
-  // 被依赖方展开：元素记号出现
-  await expect(graphNode(page, to).getByTestId('surface-marks')).toBeAttached()
+  // T2-7：选中束只聚焦与高亮，不展开被依赖方、不重排
+  await expect(graphNode(page, to).getByTestId('surface-marks')).toHaveCount(0)
+  await expect(page.locator('.vue-flow__edge-dep[data-id^="el:"]')).toHaveCount(0)
 })
 
 test('C6、L20：节点角标「表面 W」；选中模块展开表面——元素记号排在入边一侧、束散开为元素级边，取消选中收起', async ({ page }) => {
@@ -141,6 +142,18 @@ test('C6、L20：节点角标「表面 W」；选中模块展开表面——元�
   await expect(marks.first()).toHaveAttribute('title', /扇入 \d+/)
   // 节点尺寸随元素数变化（本层重新布局）
   await expect.poll(() => graphNode(page, 'infra.framework').evaluate(n => n.getBoundingClientRect().width)).not.toBe(w0)
+  // T2-9：展开后视口适应到展开节点及本层邻居——展开的节点整个落在画布内
+  await expect
+    .poll(async () => {
+      const pane = (await page.locator('.vue-flow').boundingBox())!
+      const b = (await graphNode(page, 'infra.framework').boundingBox())!
+      return b.x >= pane.x - 1 && b.y >= pane.y - 1 && b.x + b.width <= pane.x + pane.width + 1 && b.y + b.height <= pane.y + pane.height + 1
+    })
+    .toBe(true)
+  // T2-4、C9：单击元素记号直接定位到面板「表面」一节的该元素
+  const name = (await marks.first().getAttribute('data-element'))!
+  await marks.first().locator('.label').click()
+  await expect(page.locator(`li.element[data-element="${name}"]`)).toHaveClass(/flash/)
   await page.locator('.vue-flow__pane').click({ position: { x: 5, y: 5 } })
   await expect(graphNode(page, 'infra.framework').getByTestId('surface-marks')).toHaveCount(0)
   await expect(page.locator('.vue-flow__edge-dep[data-id^="el:"]')).toHaveCount(0)

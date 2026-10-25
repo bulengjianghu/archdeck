@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import type { InteractionBundle, LevelView, SurfaceElement } from '@/model'
 import {
-  SURFACE_PORTS,
+  SURFACE_PORT_CAP,
   layoutExpansion,
   restEdgeId,
   spreadEdgeId,
@@ -74,20 +74,18 @@ describe('surfaceExpansion', () => {
     expect(x.interactions).toEqual([{ edge: 'a->b:queries', elements: ['get'] }])
   })
 
-  it('选中束：只散开依赖方那一侧；选中交互：接收方、只散开发起方那一侧', () => {
+  it('选中束不展开（T2-7：只聚焦与高亮）；选中交互：接收方、只散开发起方那一侧', () => {
     const l = links([el('a', 'run'), el('c', 'Item', 'type')])
-    expect(surfaceExpansion({ view, selection: { kind: 'dep', id: 'c->b' }, always: false, links: l, spreads: null })!.expand).toEqual([
-      { node: 'b', elements: ['Item'], from: ['c'] },
-    ])
+    expect(surfaceExpansion({ view, selection: { kind: 'dep', id: 'c->b' }, always: false, links: l, spreads: null })).toBeNull()
     expect(surfaceExpansion({ view, selection: { kind: 'relation', id: 'r1' }, always: false, links: l, spreads: spread('get') })!.expand).toEqual([
       { node: 'b', elements: ['get', 'run'], from: ['a'] },
     ])
   })
 
-  it('端口封顶：多于 SURFACE_PORTS 个元素时按接到它的节点数取前若干，其余计「+N」', () => {
-    const many = Array.from({ length: SURFACE_PORTS + 4 }, (_, i) => el('a', `e${String(i).padStart(2, '0')}`))
+  it('端口封顶：多于 SURFACE_PORT_CAP 个元素时按接到它的节点数取前若干，其余计「+N」', () => {
+    const many = Array.from({ length: SURFACE_PORT_CAP + 4 }, (_, i) => el('a', `e${String(i).padStart(2, '0')}`))
     const x = surfaceExpansion({ view, selection: { kind: 'module', id: 'b' }, always: false, links: links([...many, el('c', 'e19')]), spreads: null })!
-    expect(x.expand[0].elements).toHaveLength(SURFACE_PORTS)
+    expect(x.expand[0].elements).toHaveLength(SURFACE_PORT_CAP)
     expect(x.expand[0].elements).toContain('e19')
     expect(x.expand[0].more).toBe(4)
   })

@@ -112,7 +112,7 @@ describe('L19：图例按视角整体替换', () => {
 describe('L21：三个开关与收起计数（B1、B4）、跨界折叠计数（B2），L20：总是展开表面', () => {
   it('只引类型缺省收起并给出本层束条数；打开写显示偏好 typeOnly（画布同读），折叠摘要列出', async () => {
     const { wrapper, desk } = await open('/?v=s')
-    const OFF = { typeOnly: false, invokesOnly: false, uncoveredOnly: false, surfaceAlways: false }
+    const OFF = { typeOnly: false, invokesOnly: false, uncoveredOnly: false }
     expect(desk.facts.structureDisplay(OFF)!.hidden.type).toBe(2)
     const count = wrapper.find('[data-testid="type-only-count"]')
     expect(count.text()).toContain('本层只引类型的束 2 条已收起')
@@ -127,7 +127,7 @@ describe('L21：三个开关与收起计数（B1、B4）、跨界折叠计数（
 
   it('只看交互使用、只看未解释：关着时给出打开后会收起的条数，打开后为已收起的条数（structureDisplay.hidden），写显示偏好', async () => {
     const { wrapper, desk } = await open('/?v=s')
-    const OFF = { typeOnly: false, invokesOnly: false, uncoveredOnly: false, surfaceAlways: false }
+    const OFF = { typeOnly: false, invokesOnly: false, uncoveredOnly: false }
     const value = desk.facts.structureDisplay({ ...OFF, invokesOnly: true })!.hidden.value
     const covered = desk.facts.structureDisplay({ ...OFF, uncoveredOnly: true })!.hidden.covered
     expect(wrapper.find('[data-testid="value-count"]').text()).toContain(`打开后收起值使用的束 ${value} 条`)

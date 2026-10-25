@@ -40,7 +40,7 @@ export type {
   RouteEdgeData,
   StructureInput,
 } from './canvas/types'
-export { DEP_KIND_LABELS, DEP_TIER_LABELS, ELEMENT_KIND_LABELS, depWeight, violationLook } from './canvas/structure'
+export { DEP_KIND_LABELS, DEP_TIER_LABELS, depWeight, violationLook } from './canvas/structure'
 export { PORT_MERGE } from './canvas/nodes'
 export { EDGE_Z, routeMidpoint } from './canvas/edges'
 export { JUMP_RADIUS } from './routing'

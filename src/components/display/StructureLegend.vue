@@ -8,6 +8,7 @@
  */
 import { computed } from 'vue'
 import { DEP_FORMS, DEP_TIERS, ELEMENT_KINDS } from '@/model'
+import { SURFACE_PORT_CAP } from '@/layout/layout'
 import type { StructureFilter } from '@/state/desk/facts'
 import { useDesk } from '@/state/inject'
 import DisplayGroup from './DisplayGroup.vue'
@@ -41,7 +42,6 @@ const filter = computed<StructureFilter>(() => ({
   typeOnly: typeOnly.value,
   invokesOnly: invokesOnly.value,
   uncoveredOnly: uncoveredOnly.value,
-  surfaceAlways: surfaceAlways.value,
 }))
 /** 按某个开关的取值算收起的条数（其余开关按当前取值）；没有代码事实时为 0 */
 const hiddenWith = (patch: Partial<StructureFilter>) => desk.facts.structureDisplay({ ...filter.value, ...patch })?.hidden ?? null
@@ -118,11 +118,11 @@ const crossCount = computed(() => hiddenWith({})?.cross ?? 0)
       </div>
 
       <div class="section-label">表面 · 入口导出与声明接口</div>
-      <label class="item toggle" title="本层全部模块展开表面元素（缺省只在选中模块或束时展开）">
+      <label class="item toggle" title="本层全部模块展开表面元素（缺省只在选中模块时展开）">
         <span class="sw kind"
           ><span class="switch"><input v-model="surfaceAlways" type="checkbox" role="switch" aria-label="总是展开表面" /></span
         ></span>
-        <span><b>总是展开表面</b><span class="hint"> · 关着时选中模块展开它的表面，选中束展开被依赖方用到的元素</span></span>
+        <span><b>总是展开表面</b><span class="hint"> · 关着时选中模块展开它的表面；选中束只聚焦，元素在面板看</span></span>
       </label>
       <div class="item">
         <span class="sw kind"><span class="chip">表面 W</span></span>
@@ -133,6 +133,10 @@ const crossCount = computed(() => hiddenWith({})?.cross ?? 0)
           ><span class="el-mark" :data-kind="k">{{ ELEMENT_KIND_MARK[k] }}</span
           >{{ ELEMENT_KIND_LABEL[k] }}</span
         >
+      </div>
+      <div class="item" data-testid="surface-cap">
+        <span class="sw kind"><span class="chip">+N 个元素</span></span>
+        <span>一个节点最多画 {{ SURFACE_PORT_CAP }} 个元素（本层用得最多的、交互接到的优先），其余在面板「表面」一节</span>
       </div>
       <div class="item">
         <span class="sw kind"><span class="chip bypass">越过入口</span></span>
