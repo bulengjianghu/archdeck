@@ -15,7 +15,9 @@
  *   impact <模块> [--direction in|out] [--values-only]
  *                                 影响面（K15、Q14）：传入闭包（改它牵动谁）与传出闭包（它要谁才能工作），按距离分组，附 Ca / Ce / I
  *   metrics [<模块> | --level <父模块>] [--top N] [--values-only]
- *                                 扇入 Ca、扇出 Ce 与不稳定度 I（K16、Q14）：给模块为明细，--level 为该层的子模块，缺省全系统的叶子模块；--top 按 Ca 取前 N
+ *                                 扇入 Ca、扇出 Ce 与不稳定度 I（K16、Q14）：给模块为明细，--level 为该层的子模块，缺省全系统的叶子模块；--top 按 Ca 取前 N；
+ *                                 有入口的模块另带表面宽度 W 与越过入口数 B（K19）
+ *   surface <模块>                模块表面（Q16、K18、K19）：元素清单（种类 · 声明状态 · 扇入）、W / B、越过入口清单与建议
  *   report                        拦截报告（Q4）
  *   baseline                      生成基线 governance/baseline.json（U7，由人执行并提交）
  *   own                           登记人拥有文件的指纹 governance/owned.json（X6，人改完草图 / 规则 / 忽略清单后执行）
@@ -102,8 +104,37 @@ function printCheck(r: CheckResult & { external?: string }) {
 }
 
 const I_BAND: Record<string, string> = { stable: '稳定', balanced: '居中', unstable: '易变' }
-type MetricsRow = { id: string; name: string; ca: number; ce: number; instability: number | null; band: string | null }
-const metricsText = (m: MetricsRow) => `Ca ${m.ca} · Ce ${m.ce} · I ${m.instability ?? '—'}${m.band ? `（${I_BAND[m.band]}）` : ''}`
+type MetricsRow = { id: string; name: string; ca: number; ce: number; instability: number | null; band: string | null; w?: number; b?: number }
+const metricsText = (m: MetricsRow) =>
+  `Ca ${m.ca} · Ce ${m.ce} · I ${m.instability ?? '—'}${m.band ? `（${I_BAND[m.band]}）` : ''}${m.w !== undefined ? ` · W ${m.w} · B ${m.b}` : ''}`
+
+const KIND_TEXT: Record<string, string> = { port: '端口', operation: '操作', type: '类型', data: '数据' }
+const STATE_TEXT: Record<string, string> = {
+  'declared-exported': '已声明',
+  'exported-only': '未声明',
+  'declared-only': '未导出',
+  declared: '已声明（导出未知）',
+}
+
+function printSurface(r: ReturnType<typeof svc.surface>) {
+  console.log(
+    `表面：${r.name}（${r.module}）  入口 ${r.entry ?? '无'}${r.w !== null ? `  W ${r.w} · B ${r.b}${r.whole ? ` · 整模块导入 ${r.whole}` : ''}` : ''}`,
+  )
+  console.log(`\n元素（${r.elements.length}）：`)
+  for (const e of r.elements)
+    console.log(
+      `  ${e.name}  ${KIND_TEXT[e.kind]} · ${STATE_TEXT[e.state]}${e.fanIn ? ` · 扇入 ${e.fanIn}：${e.modules.slice(0, 5).join('、')}${e.modules.length > 5 ? ' …' : ''}` : ''}`,
+    )
+  if (r.bypasses.length) {
+    console.log(`\n越过入口（${r.bypasses.length}）：`)
+    for (const b of r.bypasses.slice(0, 30)) console.log(`  ${b.at} → ${b.to}${b.names ? `（${b.names.join('、')}）` : ''}`)
+    if (r.bypasses.length > 30) console.log(`  …另 ${r.bypasses.length - 30} 处`)
+  }
+  if (r.suggestions.length) {
+    console.log('\n建议：')
+    for (const s of r.suggestions) console.log(`  - ${s}`)
+  }
+}
 
 function printImpact(r: ReturnType<typeof svc.impact>) {
   console.log(`影响面：${r.name}（${r.module}）${r.valuesOnly ? '，只看值依赖' : ''}${r.inCycle ? '，在模块环中' : ''}`)
@@ -180,6 +211,13 @@ function run(): number {
       else printMetrics(r)
       return 0
     }
+    case 'surface': {
+      need(1, '<模块>')
+      const r = svc.surface(rest[0], project)
+      if (asJson) console.log(JSON.stringify(r, null, 2))
+      else printSurface(r)
+      return 0
+    }
     case 'report':
       return out(svc.report(project))
     case 'sketch-check': {
@@ -236,7 +274,7 @@ function run(): number {
     }
     default:
       console.error(
-        '用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|hotspots|coupling|impact|metrics|report|baseline|own|sketch-check|sketch|classify> [参数] [--project <项目>] [--json]',
+        '用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|hotspots|coupling|impact|metrics|surface|report|baseline|own|sketch-check|sketch|classify> [参数] [--project <项目>] [--json]',
       )
       return 2
   }

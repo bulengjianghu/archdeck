@@ -145,6 +145,17 @@ server.registerTool(
 )
 
 server.registerTool(
+  'surface',
+  {
+    title: '模块表面',
+    description:
+      '模块的表面：入口导出的符号与描述声明的接口，逐个给出种类（端口 / 操作 / 类型 / 数据）、声明状态（已声明且导出 / 导出未声明 / 声明未导出）、扇入（使用它的模块数）与使用它的模块；表面宽度 w、越过入口数 b、越过入口的文件依赖（依赖方文件:行 → 目标）与建议（提升到入口、声明接口、改经入口）。要用另一个模块的东西时先看它的表面：只从入口导入表面上的元素，不要深层导入它的内部文件。',
+    inputSchema: { module: z.string().describe('模块 ID'), project },
+  },
+  ({ module, project }) => reply(() => svc.surface(module, project)),
+)
+
+server.registerTool(
   'impact',
   {
     title: '影响面',
@@ -165,7 +176,7 @@ server.registerTool(
   {
     title: '扇入扇出与不稳定度',
     description:
-      '模块的扇入 Ca（子树外依赖它的不同模块数）、扇出 Ce（它依赖的子树外不同模块数）与不稳定度 I = Ce ÷ (Ca + Ce)，按系统内模块计、与层次无关。I 高不等于坏（入口、组装根天然易变），I 低的模块被大量依赖、改动牵动广。给 module 为明细（含贡献最多的依赖方 / 被依赖方）；给 level 为该父模块的子模块；缺省全系统的叶子模块；top 按 Ca 取前 N。',
+      '模块的扇入 Ca（子树外依赖它的不同模块数）、扇出 Ce（它依赖的子树外不同模块数）与不稳定度 I = Ce ÷ (Ca + Ce)，按系统内模块计、与层次无关。I 高不等于坏（入口、组装根天然易变），I 低的模块被大量依赖、改动牵动广。有入口的模块另带表面宽度 w（被外部引用的不同入口导出数）与越过入口数 b（绕过入口的文件依赖条数）。给 module 为明细（含贡献最多的依赖方 / 被依赖方）；给 level 为该父模块的子模块；缺省全系统的叶子模块；top 按 Ca 取前 N。',
     inputSchema: {
       module: z.string().optional().describe('模块 ID：只看这个模块的明细'),
       level: z.string().optional().describe('父模块 ID：列它的子模块'),
