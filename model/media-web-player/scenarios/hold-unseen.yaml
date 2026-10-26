@@ -1,0 +1,32 @@
+# 取自 docs/design/02-web-live-player.md §4.3（看不见即保持）、kernel.ts 的 followHold 与 timers.ts 的 HoldUnseen / sessionTimers。
+scenario:
+  id: sc.hold-unseen
+  name: 页面隐藏与看不见即保持
+  kind: main
+  description: |
+    页面切到后台时，门面的平台适配把 visibilitychange 交给内核订阅的回调：内核把可见性转给管线（隐藏页不画，读数照走）并发 visibility 事件，
+    再判定「看不见即保持」——页面隐藏且播放器的声音没人听见（静音、音量 0、声音被拦或没有声音输出）时下发 hold-unseen：会话原地保持，
+    时钟停、律不追增长的缓冲、会话计时器与输入的重试随之停走；后台有人听的会话照常读与重连。回到前台即释放、从原处继续。
+  cause: 浏览器切到后台（visibilitychange hidden），之后回到前台
+  evidence:
+    - media-sdk-kits/tests/kernel.test.mjs
+    - media-wasm/tests/live-pipeline-session.test.mjs
+    - media-wasm/tests/stream-input.test.mjs
+  steps:
+    - async: {id: hidden, from: actor.page-lifecycle, to: kit.facade.browser-platform, label: 'visibilitychange: hidden'}
+    - async: {from: kit.facade.browser-platform, to: kit.kernel.state, label: visible(false)}
+    - call: {from: kit.kernel.state, to: kit.kernel.envelope, label: 'visibility {visible: false}'}
+    - call: {from: kit.kernel.state, to: providers.self-clocked.session, relation: rel.kit.state-self-clocked, label: "pipeline.command({type: 'visibility', visible: false})：只读数不画"}
+    - alt:
+        - when: 声音没人听见（静音、音量 0、声音被拦或无声音输出）
+          steps:
+            - call: {id: hold, from: kit.kernel.state, to: providers.self-clocked.session, relation: rel.kit.state-self-clocked, label: "pipeline.command({type: 'hold-unseen', held: true})"}
+            - call: {from: providers.self-clocked.session, to: pipeline.latency.timers, label: 'hold.hold(true)：时钟停，会话计时器停走'}
+            - call: {from: providers.self-clocked.session, to: providers.wasm-core.stream-input, label: holdUnseen(true)}
+            - call: {from: providers.wasm-core.stream-input, to: pipeline.network.pull, label: holdUnseen(true)：重试随之停走}
+        - when: 有声音在播
+          steps: []
+    - async: {from: kit.kernel.envelope, to: host.demo.app, label: visibility 事件}
+    - async: {id: visible, from: actor.page-lifecycle, to: kit.facade.browser-platform, label: 'visibilitychange: visible'}
+    - async: {from: kit.facade.browser-platform, to: kit.kernel.state, label: visible(true)}
+    - call: {id: release, from: kit.kernel.state, to: providers.self-clocked.session, relation: rel.kit.state-self-clocked, label: 'hold-unseen false + visibility true：从原处继续'}

@@ -1,0 +1,18 @@
+# 模块角色（M16、U11，人拥有，ADR-0027、ADR-0030）：模块 ID → core / shared / bus / port / adapter。第二级写在骨架里，更深的写在这里。
+# 2026-10-26 由 AI 起草（读代码核实），待负责人核对后 npm run arch -- own 登记。
+#   - port：宿主唯一的入口 createPlayer / Player（包入口 index.ts 再导出）；自建时钟族 Worker 子路径的入口 serveMediaPlayerWorker。
+#   - bus：EventHub——播放器的 events / telemetry 各是一个，通知写在真实的发布者（内核）与订阅者（宿主）之间（M14）。
+#   - adapter：把浏览器能力接进来的模块——页面 AudioContext 与 Screen Wake Lock、document 可见性与 navigator.mediaSession、
+#     WebGL 渲染、AudioWorklet / ScriptProcessor 输出、WebCodecs 解码、MediaSource 驱动。
+#   - shared：没有运行时出边、被多处使用的原语——错误原语（Worker 消息协议、样本读取用到了管线契约与模块内存，按 U12 不是纯共用件，未标）。
+roles:
+  kit.facade.player-api: port
+  kit.facade.browser-platform: adapter
+  kit.page.audio: adapter
+  kit.page.screen-wake: adapter
+  providers.self-clocked.worker-host: port
+  providers.self-clocked.presentation: adapter
+  providers.self-clocked.video: adapter
+  providers.element.mse-driver: adapter
+  share.core.primitives.fault: shared
+  share.core.primitives.event-hub: bus

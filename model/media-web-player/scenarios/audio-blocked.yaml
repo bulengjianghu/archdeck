@@ -1,0 +1,35 @@
+# 取自 page-audio.ts（声音是否真在跑）、live/pipelines.ts 的 reportingHeldSound、kernel.ts 的 reportAudioBlocked 与 SDK.md §3.2。
+scenario:
+  id: sc.audio-blocked
+  name: 声音被拦与 resumeAudio
+  kind: exception
+  description: |
+    浏览器的自动播放策略（或 iOS 的音频中断）让页面 AudioContext 不在跑：页面音频判定「声音不在跑」（上下文说 running 但时钟不走也算），
+    通知各族；族包住的会话管线报 sound-held，内核只在会话播放时把它汇成 audio-blocked 告诉宿主。宿主请用户点一下，
+    在手势内调 resumeAudio：页面音频 resume 并等时钟走动（按可见时计的超时），恢复后 sound-held 撤销、audio-blocked 结束。
+  cause: 页面没有用户手势就开始播放，或 iOS 来电等中断了音频
+  evidence:
+    - media-sdk-kits/tests/player.test.mjs
+    - media-sdk-kits/tests/kernel.test.mjs
+  steps:
+    - async: {id: suspended, from: actor.page-lifecycle, to: kit.page.audio, label: AudioContext statechange（suspended / 中断）}
+    - async: {from: kit.page.audio, to: providers.self-clocked.family, label: running(false)}
+    - async: {from: providers.self-clocked.family, to: kit.kernel.envelope, label: "sound-held {held: true}"}
+    - call: {from: kit.kernel.envelope, to: kit.kernel.state, label: 记下声音被拦，重判看不见即保持}
+    - alt:
+        - when: 会话在播放
+          steps:
+            - call: {from: kit.kernel.state, to: kit.kernel.envelope, label: 'audio-blocked {active: true}'}
+            - async: {id: blocked, from: kit.kernel.envelope, to: host.demo.app, label: audio-blocked 事件}
+        - when: 已暂停（播放时才报）
+          steps: []
+    - call: {id: gesture, from: actor.viewer, to: host.demo.app, label: 点一下放声}
+    - async: {from: host.demo.app, to: kit.facade.player-api, relation: rel.host.resume-audio, label: resumeAudio()}
+    - call: {from: kit.facade.player-api, to: kit.page.screen-wake, label: askPageScreenWake()：同一手势内补申请常亮}
+    - call: {id: resume, from: kit.facade.player-api, to: kit.page.audio, label: 'resumePageAudio()：context.resume()，等时钟走动'}
+    - async: {from: kit.page.audio, to: providers.self-clocked.family, label: onResume / running(true)}
+    - async: {from: providers.self-clocked.family, to: kit.kernel.envelope, label: "sound-held {held: false}"}
+    - call: {from: kit.kernel.envelope, to: kit.kernel.state, label: 声音恢复}
+    - call: {from: kit.kernel.state, to: kit.kernel.envelope, label: 'audio-blocked {active: false}'}
+    - async: {from: kit.kernel.envelope, to: host.demo.app, label: audio-blocked 结束}
+    - return: {id: resumed, from: kit.facade.player-api, to: host.demo.app, relation: rel.host.resume-audio, label: resolved（或 timeout 被拒）}

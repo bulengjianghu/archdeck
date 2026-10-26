@@ -1,0 +1,579 @@
+# 区域：播放器 Kit——门面、会话内核、会话规则、页面能力适配（media-sdk-kits/packages/media-player/src）
+# 第二级模块（kit.facade / kit.kernel / kit.session / kit.page）由骨架定义，此处只往下挂子模块。
+# kernel.ts 与 session.ts 各是单文件，内部子结构写成概念子模块（不写 codeRefs，§3.7）。
+
+modules:
+  # ───────────────────────── kit.facade ─────────────────────────
+  - id: kit.facade.player-api
+    parent: kit.facade
+    name: Player 对外 API
+    kind: component
+    responsibility: >-
+      宿主唯一的入口：createPlayer(options) 返回 Player，open / play / pause / seek / seekToLive / seekToWallClock /
+      setTimeshift / stop / clearLastFrame / setVolume / setMuted / destroy 各转成一条内核命令，按提交顺序以「接受或拒绝原因」回结果；
+      screenshot、state、snapshot、events、telemetry 直接取内核的。延迟预设（fixed / adaptive）在这里展开成完整的 LatencyConfig。
+    principle: |
+      - **一个方法一条命令**：门面不判断状态、不排队，`kernel.submit({type, …})` 的 Promise 就是方法的返回；是否受理由会话规则的接受表定。
+      - **手势内要的东西在门面要**：open / play 先 `screenWake.ask()`，resumeAudio 在同一手势里同时申请屏幕常亮与放声。
+      - **destroy 收尾**：内核接受 destroy 后再逐族 `destroy()` 与断开增益，第一个释放异常抛给宿主。
+    provides: [if.kit.facade.createPlayer, if.kit.facade.Player, if.kit.facade.resumeAudio]
+    dataStructures: [ds.PlayerOptions, ds.OpenOptions, ds.LatencyPreset]
+    docRefs: [media-sdk-kits/packages/media-player/SDK.md]
+
+  - id: kit.facade.assembly
+    parent: kit.facade
+    name: 播放器装配
+    kind: component
+    responsibility: >-
+      createPlayerOn(platform, options)：取页面 AudioContext 建本播放器的增益节点，以「容器 + 音频 + 可见性」的环境逐个调用宿主注入的管线族，
+      全部落定后才判失败（已建的族一并释放）；再以时钟、族、可见性、系统媒体键、音量、屏幕常亮这些适配器装配会话内核。
+    principle: |
+      - 族由宿主选、门面调（决策 15）：门面只认 PipelineFamily 端口，不导入任何 Provider。
+      - 音量是播放器级：增益节点管经页面图的声音，`family.setVolume` 管元素自己出声的族。
+
+  - id: kit.facade.browser-platform
+    parent: kit.facade
+    name: 浏览器平台适配
+    kind: component
+    responsibility: >-
+      门面交给内核的浏览器适配器：document.visibilityState 的可见性订阅，navigator.mediaSession 的系统播放 / 暂停键
+      （挂在 window 上、跨 SDK 副本共享的会话表：暂停全部、播放被系统暂停的那些或最后开始的那个），与每页随机的 playerId。
+
+  - id: kit.facade.exports
+    parent: kit.facade
+    name: 包入口
+    kind: component
+    responsibility: 包的对外转出面：再导出门面（createPlayer、resumeAudio 与选项类型）、内核与会话规则的全部导出。
+    codeRefs: [media-sdk-kits/packages/media-player/src/index.ts]
+
+  # ───────────────────────── kit.kernel（概念子模块，同在 kernel.ts） ─────────────────────────
+  - id: kit.kernel.queue
+    parent: kit.kernel
+    name: 命令队列与施用
+    kind: component
+    responsibility: >-
+      唯一的工作队列：宿主命令（submit 时先拷贝成内核自己的一份）与管线回报的结束、暂停、播放、系统媒体键、续播点、失败按序施用；
+      命令先过接受表，被拒的带原因回给调用方；一项的失败只回给它的调用方，不挡后面的工作。
+    principle: |
+      - `schedule(run)` 串行：上一项（含等待释放）落定后才施用下一项，所以一串快速命令与慢慢发的结果相同。
+      - `apply(work)` 按种类分派：open → 关旧会话、开新会话；play / pause / seek… → 转成管线命令；ended / failed 只认当前代号。
+      - screenshot 也排队（抓的是它之前那些命令之后的会话），但编码不占队列。
+    provides: [if.kit.kernel.createPlayerKernel, if.kit.kernel.PlayerKernel]
+
+  - id: kit.kernel.open
+    parent: kit.kernel
+    name: 会话打开与路线
+    kind: component
+    responsibility: >-
+      打开一个会话：按容器、route 与已排除的路线解析出族与路线（WebCodecs 失败过即排除），检查延迟硬上限与元素路线的互斥，
+      分配代号与会话号、发 session-opened，再交给所选族的 startPipeline；订阅页面可见性与系统媒体键。接续一个关闭的会话时
+      （Worker 失败交回主线程、失败后 play）带上续播点与 liveStart。
+    principle: |
+      - 无路线、Worker 不可用、startPipeline 抛错都不在这里抛：入队一个 failed，由队列按序关闭会话。
+      - 续播点 `resumePoint`：直播在边缘时不带；有墙钟就按墙钟 seek，否则只有点播按位置 seek。
+
+  - id: kit.kernel.state
+    parent: kit.kernel
+    name: 状态与意图跟随
+    kind: component
+    responsibility: >-
+      会话的唯一状态与宿主意图（wantPlaying）：play / pause 转成管线命令并改状态；跟随管线报的模式与边缘告诉宿主 playback-mode；
+      按页面可见性与声音是否被听见判定「看不见即保持」并下发 hold-unseen；声音被拦（sound-held）汇成 audio-blocked；
+      播放中持有屏幕常亮；累计卡顿、意图时长与冻结。快照由这里读出。
+
+  - id: kit.kernel.envelope
+    parent: kit.kernel
+    name: 回报与事件信封
+    kind: component
+    responsibility: >-
+      每个会话一个 PipelineSink：只收当前代号、未在关闭的会话的回报；漏斗阶段按序记一次并换算成相对 open 的毫秒，统计按路径与单位拆成遥测记录，
+      冻结、延迟报告进遥测；结束、暂停、播放、失败入队。对宿主发的每个事件都套上会话号、序号、时间戳与代号（单调）。
+    principle: |
+      - 信封：`{…body, sessionId, sequence: s.sequence++, timestampMs: 单调取整, generation}`，事件顺序契约由会话规则机检。
+      - 遥测只在有订阅时拆（`telemetry.size > 0`）。
+
+  - id: kit.kernel.release
+    parent: kit.kernel
+    name: 会话关闭与释放
+    kind: component
+    responsibility: >-
+      关闭会话：先标记关闭（之后的回报丢弃），按获取的逆序释放（管线、可见性与媒体键订阅、屏幕常亮），管线 stop 超过
+      PIPELINE_STOP_TIMEOUT_MS（按宿主时钟，页面隐藏也计）即 terminate；释放的异常报在会话上而不挡队列；最后记会话级遥测、发 session-closed。
+
+  # ───────────────────────── kit.session（概念子模块，同在 session.ts） ─────────────────────────
+  - id: kit.session.contract
+    parent: kit.session
+    name: 命令与事件契约
+    kind: component
+    responsibility: 内核的对外类型：七种状态、命令单通道的命令与拒绝原因、命令结果、会话事件（内核自己的与管线回报的）及其信封、会话与播放器快照、关闭原因。
+    dataStructures: [ds.PlayerState, ds.PlayerCommand, ds.CommandResult, ds.PlayerEvent, ds.PlayerSnapshot, ds.ClosedReason]
+
+  - id: kit.session.acceptance
+    parent: kit.session
+    name: 命令接受表
+    kind: component
+    responsibility: 纯表 commandRejection(command, context)：按命令种类、当前状态、是否 destroyed、时间轴能否 seek、源与参数形状给出拒绝原因或接受；open 的延迟配置在这里先校验，主线程会话也不会拿着跑不了的配置运行。
+    provides: [if.kit.session.commandRejection]
+
+  - id: kit.session.routes
+    parent: kit.session
+    name: 路线策略
+    kind: component
+    responsibility: 各容器 auto 的路线顺序（ROUTE_ORDER：flv 先自建时钟族，mp4 先 native，hls 把 native 放最后）与纯函数 resolveRoute（跳过排除的、族没列的路线）；延迟硬上限只许自建时钟族（elementRefusesLatency）。
+    provides: [if.kit.session.resolveRoute]
+
+  - id: kit.session.order-check
+    parent: kit.session
+    name: 事件顺序机检
+    kind: component
+    responsibility: eventOrderViolations(events)：按顺序契约检查一串事件（会话内序号连续、session-opened 在前、session-closed 在后、代号单调等），返回违例说明；测试与冒烟用。
+    provides: [if.kit.session.eventOrderViolations]
+
+  # ───────────────────────── kit.page ─────────────────────────
+  - id: kit.page.audio
+    parent: kit.page
+    name: 页面音频
+    kind: component
+    responsibility: >-
+      全页一个、永不关闭的 AudioContext（iOS 限个数），每个播放器在它上面一个增益；「声音在跑」= 上下文说 running 且时钟在走；
+      resume 在手势内调用，按可见时计的超时竞速；另含浏览器单调时钟 browserClock。
+    provides: [if.kit.page.PageAudio]
+    codeRefs: [media-sdk-kits/packages/media-player/src/page-audio.ts]
+
+  - id: kit.page.screen-wake
+    parent: kit.page
+    name: 屏幕常亮
+    kind: component
+    responsibility: 会话播放时持有 Screen Wake Lock，页面回到前台重新申请；没有 API 或被拒时报一次 warn（wake-lock-unavailable / refused）；askPageScreenWake 在用户手势内补申请。
+    provides: [if.kit.page.ScreenWake]
+    codeRefs: [media-sdk-kits/packages/media-player/src/screen-wake.ts]
+
+relations:
+  # 门面 → 内核 / 页面 / 管线族
+  - id: rel.kit.api-submit
+    from: kit.facade.player-api
+    to: kit.kernel.queue
+    type: commands
+    mode: async
+    interface: if.kit.kernel.PlayerKernel
+    payload: ds.PlayerCommand
+    description: 门面把宿主的每个方法转成一条命令交给内核排队（submit），以命令结果回给宿主；screenshot 同样排队。
+  - id: rel.kit.assembly-kernel
+    from: kit.facade.assembly
+    to: kit.kernel.queue
+    type: commands
+    interface: if.kit.kernel.createPlayerKernel
+    description: 装配时以时钟、族、可见性、媒体键、音量与屏幕常亮适配器创建会话内核（createPlayerKernel）。
+  - id: rel.kit.assembly-page-audio
+    from: kit.facade
+    to: kit.page.audio
+    type: commands
+    interface: if.kit.page.PageAudio
+    description: 装配时取页面 AudioContext（browserPageAudio）建增益；resumeAudio 交给页面音频在手势内放声（resumePageAudio）。
+  - id: rel.kit.assembly-screen-wake
+    from: kit.facade
+    to: kit.page.screen-wake
+    type: commands
+    interface: if.kit.page.ScreenWake
+    description: 装配时建屏幕常亮适配器（browserScreenWake）；open / play / resumeAudio 在手势内补申请（ask / askPageScreenWake）。
+  - id: rel.kit.assembly-self-clocked
+    from: kit.facade.assembly
+    to: providers.self-clocked
+    type: commands
+    mode: async
+    interface: if.pipeline.contract.PipelineFamily
+    via: port:if.pipeline.contract.PipelineFamily
+    description: 门面以环境（容器、音频、可见性）调用宿主注入的自建时钟族，得到它的族实例（路线清单、启动管线、音量、释放）；destroy 后逐族释放。
+  - id: rel.kit.assembly-element
+    from: kit.facade.assembly
+    to: providers.element
+    type: commands
+    mode: async
+    interface: if.pipeline.contract.PipelineFamily
+    via: port:if.pipeline.contract.PipelineFamily
+    description: 门面以同一环境调用宿主注入的元素族；音量变化经 family.setVolume 交给元素自己出声的族，destroy 后释放。
+  - id: rel.kit.assembly-fault
+    from: kit.facade
+    to: share.core
+    type: queries
+    interface: if.share.core.MediaFault
+    description: 门面在没有任何管线族时构造 invalid-argument 的 MediaFault。
+  # 内核内部（概念拆分，同文件）
+  - id: rel.kit.queue-open
+    from: kit.kernel.queue
+    to: kit.kernel.open
+    type: commands
+    description: 施用 open（及失败后的 play、Worker 交回）时打开新会话。
+  - id: rel.kit.queue-state
+    from: kit.kernel.queue
+    to: kit.kernel.state
+    type: commands
+    description: 施用 play / pause / seek / 媒体键等命令时改状态与意图并下发管线命令。
+  - id: rel.kit.queue-release
+    from: kit.kernel.queue
+    to: kit.kernel.release
+    type: commands
+    mode: async
+    description: 施用 stop / open / failed / ended / destroy 时关闭当前会话，等释放完成再施用下一项。
+  - id: rel.kit.open-envelope
+    from: kit.kernel.open
+    to: kit.kernel.envelope
+    type: commands
+    description: 打开会话时为它建 PipelineSink（sinkFor）交给管线，并发 session-opened。
+  - id: rel.kit.envelope-queue
+    from: kit.kernel.envelope
+    to: kit.kernel.queue
+    type: commands
+    mode: async
+    description: 管线回报的结束、暂停、播放、续播点与失败由信封层入队，按序施用。
+  - id: rel.kit.envelope-state
+    from: kit.kernel.envelope
+    to: kit.kernel.state
+    type: commands
+    description: 管线回报的模式、边缘、缓冲、声音被拦更新会话状态与意图跟随。
+  - id: rel.kit.state-envelope
+    from: kit.kernel.state
+    to: kit.kernel.envelope
+    type: commands
+    description: 状态与意图的变化经信封发给宿主（state、playback-mode、visibility、audio-blocked、log）。
+  - id: rel.kit.release-envelope
+    from: kit.kernel.release
+    to: kit.kernel.envelope
+    type: commands
+    description: 关闭会话时经信封发 error 与 session-closed，并记会话级遥测（卡顿、意图时长、冻结）。
+  - id: rel.kit.visibility-callback
+    from: kit.facade.browser-platform
+    to: kit.kernel.state
+    type: notifies
+    via: channel:callback@kit.kernel
+    description: 页面可见性变化经内核订阅时给的回调通知会话：转给管线、发 visibility 事件、重判看不见即保持。
+  - id: rel.kit.media-keys-callback
+    from: kit.facade.browser-platform
+    to: kit.kernel.queue
+    type: notifies
+    via: channel:callback@kit.kernel
+    description: 系统媒体键的 play / pause 经内核订阅时给的回调作为当前会话的工作入队（media-control）。
+  # 内核 → 会话规则
+  - id: rel.kit.queue-acceptance
+    from: kit.kernel.queue
+    to: kit.session.acceptance
+    type: queries
+    interface: if.kit.session.commandRejection
+    description: 每条命令到队首时查接受表，得出拒绝原因或接受。
+  - id: rel.kit.open-routes
+    from: kit.kernel.open
+    to: kit.session.routes
+    type: queries
+    interface: if.kit.session.resolveRoute
+    description: 打开会话时按容器、route 与排除集解析族与路线，并查延迟硬上限能否用于该路线。
+  - id: rel.kit.session-source-check
+    from: kit
+    to: pipeline.contract.source
+    type: queries
+    interface: if.pipeline.contract.isDecryptionKey
+    description: 内核与接受表用管线契约的形状判断（isDecryptionKey、isTimeshiftSource）检查源与时移列表、拷贝密钥。
+  - id: rel.kit.acceptance-latency
+    from: kit.session.acceptance
+    to: pipeline.latency
+    type: queries
+    interface: if.pipeline.latency.validateLatencyConfig
+    description: 接受表校验 open 的延迟配置（validateLatencyConfig），不合法即 invalid-argument。
+  # 内核 → 管线族（经端口）
+  - id: rel.kit.open-self-clocked
+    from: kit.kernel.open
+    to: providers.self-clocked
+    type: commands
+    interface: if.pipeline.contract.Pipelines
+    via: port:if.pipeline.contract.Pipelines
+    payload: ds.PipelineStart
+    description: 内核把会话交给自建时钟族启动管线（startPipeline），带代号、路线、源、选项、liveStart 与 sink。
+  - id: rel.kit.open-element
+    from: kit.kernel.open
+    to: providers.element
+    type: commands
+    interface: if.pipeline.contract.Pipelines
+    via: port:if.pipeline.contract.Pipelines
+    payload: ds.PipelineStart
+    description: 内核把会话交给元素族启动管线（startPipeline）；无会话时清最后一帧（clearLastFrame）。
+  - id: rel.kit.state-self-clocked
+    from: kit.kernel.state
+    to: providers.self-clocked
+    type: commands
+    interface: if.pipeline.contract.Pipeline
+    via: port:if.pipeline.contract.Pipeline
+    payload: ds.PipelineCommand
+    description: 内核向自建时钟族的会话管线下发命令（play / pause / seek / seek-live / seek-wall-clock / set-timeshift / visibility / hold-unseen），截图也经它取。
+  - id: rel.kit.state-element
+    from: kit.kernel.state
+    to: providers.element
+    type: commands
+    interface: if.pipeline.contract.Pipeline
+    via: port:if.pipeline.contract.Pipeline
+    payload: ds.PipelineCommand
+    description: 内核向元素族的会话管线下发同一组命令。
+  - id: rel.kit.release-self-clocked
+    from: kit.kernel.release
+    to: providers.self-clocked
+    type: commands
+    mode: async
+    interface: if.pipeline.contract.Pipeline
+    via: port:if.pipeline.contract.Pipeline
+    description: 关闭会话时让自建时钟族的管线释放（stop），超时则终止（terminate，Worker 模式即终止 Worker）。
+  - id: rel.kit.release-element
+    from: kit.kernel.release
+    to: providers.element
+    type: commands
+    mode: async
+    interface: if.pipeline.contract.Pipeline
+    via: port:if.pipeline.contract.Pipeline
+    description: 关闭会话时让元素族的管线释放（stop），超时则终止。
+  # 内核 → 注入的适配器
+  - id: rel.kit.state-adapters
+    from: kit.kernel.state
+    to: kit.facade.browser-platform
+    type: commands
+    interface: if.kit.kernel.PlayerAdapters
+    via: port:if.kit.kernel.PlayerAdapters
+    description: 会话打开时经注入的适配器订阅页面可见性与系统媒体键，读可见性判定看不见即保持；音量命令经适配器交给门面设增益与族音量。
+  - id: rel.kit.state-screen-wake
+    from: kit.kernel.state
+    to: kit.page.screen-wake
+    type: commands
+    interface: if.kit.kernel.PlayerAdapters
+    via: port:if.kit.kernel.PlayerAdapters
+    description: 会话播放时经注入的适配器持有屏幕常亮（screenWake.hold），停下时释放；拒绝报告回到会话的 warn 日志。
+  - id: rel.kit.kernel-clock
+    from: kit.kernel.release
+    to: kit.page.audio
+    type: queries
+    interface: if.kit.kernel.PlayerAdapters
+    via: port:if.kit.kernel.PlayerAdapters
+    description: 内核经注入的时钟（browserClock）取单调时间、为释放超时设定时器。
+  # 内核 → 共享基础
+  - id: rel.kit.kernel-fault
+    from: kit.kernel
+    to: share.core
+    type: queries
+    interface: if.share.core.describeError
+    description: 内核把管线与释放抛出的异常归一成 MediaError（MediaFault 的 code、describeError 的说明）。
+  - id: rel.kit.session-fault
+    from: kit.session
+    to: share.core
+    type: queries
+    interface: if.share.core.MediaFault
+    description: 会话规则校验失败时构造 MediaFault。
+  # 页面能力
+  - id: rel.kit.audio-self-clocked
+    from: kit.page.audio
+    to: providers.self-clocked.family
+    type: notifies
+    via: channel:callback@pipeline.contract.family-port
+    description: 页面声音开始或停止在跑时，经播放器给族的环境（environment.audio.subscribe）通知自建时钟族；Worker 会话再转 audio 消息。
+  - id: rel.kit.audio-element
+    from: kit.page.audio
+    to: providers.element.video
+    type: notifies
+    via: channel:callback@pipeline.contract.family-port
+    description: 页面声音状态变化与每次 resumeAudio 的手势（environment.audio.subscribe / onResume）通知元素的声音，被自动播放策略拦住的元素在手势内再试放声。
+  - id: rel.kit.page-audio-timers
+    from: kit.page.audio
+    to: pipeline.latency
+    type: commands
+    interface: if.pipeline.latency.visibleTimers
+    description: 页面音频的恢复超时用只在页面可见时计时的计时器（visibleTimers）。
+  - id: rel.kit.page-fault
+    from: kit.page
+    to: share.core
+    type: queries
+    interface: if.share.core.describeError
+    description: 页面能力适配构造超时的 MediaFault、把屏幕常亮被拒的异常转成说明。
+
+interfaces:
+  - id: if.kit.facade.createPlayer
+    name: createPlayer
+    owner: kit.facade.player-api
+    signature: |
+      createPlayer(options: PlayerOptions): Promise<Player>
+    semantics: |
+      - 至少一个管线族，否则抛 invalid-argument；各族的建立全部落定后才判失败，已建的族一并释放。
+      - 返回后宿主只经 Player 交互；同一页面的多个播放器共用一个 AudioContext。
+  - id: if.kit.facade.Player
+    name: Player
+    owner: kit.facade.player-api
+    signature: |
+      interface Player {
+        open(source: PlayerSource, options: OpenOptions): Promise<CommandResult>;
+        play(): Promise<CommandResult>;
+        pause(): Promise<CommandResult>;
+        seek(positionMs: number): Promise<CommandResult>;
+        seekToLive(): Promise<CommandResult>;
+        seekToWallClock(epochMs: number): Promise<CommandResult>;
+        setTimeshift(timeshift: TimeshiftSource | null): Promise<CommandResult>;
+        stop(): Promise<CommandResult>;
+        clearLastFrame(): Promise<CommandResult>;
+        setVolume(volume: number): Promise<CommandResult>;
+        setMuted(muted: boolean): Promise<CommandResult>;
+        screenshot(): Promise<Blob>;
+        destroy(): Promise<CommandResult>;
+        readonly state: PlayerState;
+        readonly snapshot: PlayerSnapshot;
+        readonly events: EventSource<PlayerEvent>;
+        readonly telemetry: EventSource<TelemetryRecord>;
+      }
+    semantics: |
+      - 每个命令按提交顺序施用后才回结果：accepted，或拒绝原因（not-seekable、no-session、destroyed…）。
+      - open 替换正在跑的会话，旧会话的最后一帧留到新会话出第一帧。
+  - id: if.kit.facade.resumeAudio
+    name: resumeAudio
+    owner: kit.facade.player-api
+    signature: |
+      resumeAudio(): Promise<void>
+    semantics: 在用户手势内调用：为页面上全部播放器放声，并在同一手势内补申请屏幕常亮；浏览器不回应时按超时失败。
+  - id: if.kit.kernel.createPlayerKernel
+    name: createPlayerKernel
+    owner: kit.kernel.queue
+    signature: |
+      createPlayerKernel(adapters: PlayerAdapters, options: PlayerKernelOptions): PlayerKernel
+  - id: if.kit.kernel.PlayerKernel
+    name: PlayerKernel
+    owner: kit.kernel.queue
+    signature: |
+      interface PlayerKernel {
+        submit(command: PlayerCommand): Promise<CommandResult>;
+        screenshot(): Promise<Blob>;
+        readonly state: PlayerState;
+        readonly snapshot: PlayerSnapshot;
+        readonly events: EventSource<PlayerEvent>;
+        readonly telemetry: EventSource<TelemetryRecord>;
+      }
+    semantics: |
+      - submit 先拷贝命令（源、密钥、时移列表、延迟配置），宿主之后改自己的对象不影响排队中的命令。
+      - 事件按会话顺序契约发出（eventOrderViolations 可机检）。
+  - id: if.kit.kernel.PlayerAdapters
+    name: PlayerAdapters
+    owner: kit.kernel
+    signature: |
+      interface PlayerAdapters {
+        clock: PlayerClock;                        // now() / setTimer(cb, ms)
+        families: readonly PlayerFamily[];
+        visibility: PageVisibility;
+        mediaControls: MediaControls;              // subscribe(listener, pausedBySystem)
+        soundOutput: boolean;
+        setVolume(volume: number, muted: boolean): void;
+        screenWake: { hold(report: WakeLockReport): () => void };
+      }
+    semantics: 内核不碰浏览器 API：时钟、管线族、可见性、系统媒体键、音量与屏幕常亮都经它注入；测试给假实现。
+    implementedBy: [kit.facade, kit.page]
+  - id: if.kit.session.commandRejection
+    name: commandRejection
+    owner: kit.session.acceptance
+    signature: |
+      commandRejection(command: PlayerCommand, context: CommandContext): CommandRejection | null
+    semantics: 纯函数；改变状态的被接受命令由内核施用，拒绝原因原样回给调用方。
+  - id: if.kit.session.resolveRoute
+    name: resolveRoute
+    owner: kit.session.routes
+    signature: |
+      resolveRoute(container: PlayerContainer, route: 'auto' | PlayerRoute, families: Routes[], excluded: Set<PlayerRoute>): { family: number; route: PlayerRoute } | null
+    semantics: auto 取 ROUTE_ORDER 中第一个未排除、族列出的路线；显式路线只认列出它的族；都没有返回 null（会话以 no-route 失败）。
+  - id: if.kit.session.eventOrderViolations
+    name: eventOrderViolations
+    owner: kit.session.order-check
+    signature: |
+      eventOrderViolations(events: readonly PlayerEvent[]): string[]
+  - id: if.kit.page.PageAudio
+    name: PageAudio
+    owner: kit.page.audio
+    signature: |
+      interface PageAudio {
+        readonly context: AudioContext;
+        running(): boolean;
+        subscribe(listener: (running: boolean) => void): () => void;
+        onResume(listener: () => void): () => void;
+        resume(): Promise<void>;
+      }
+      browserPageAudio(visibility: PageVisibility): PageAudio
+      resumePageAudio(): Promise<void>
+  - id: if.kit.page.ScreenWake
+    name: ScreenWake
+    owner: kit.page.screen-wake
+    signature: |
+      interface ScreenWake { hold(report: WakeLockReport): () => void; ask(): void }
+      browserScreenWake(visibility: PageVisibility): ScreenWake
+      askPageScreenWake(): void
+
+dataStructures:
+  - id: ds.PlayerOptions
+    name: PlayerOptions
+    definition: |
+      interface PlayerOptions {
+        container: HTMLElement;
+        pipelines: { selfClocked?: PipelineFamily; element?: PipelineFamily };
+        keepAwake?: boolean;      // 缺省 true
+        mediaSession?: boolean;   // 缺省 true
+      }
+  - id: ds.OpenOptions
+    name: OpenOptions
+    definition: |
+      interface OpenOptions {
+        latency: LatencyPreset | LatencyConfig;
+        autoplay?: boolean;                       // 缺省 true
+        route?: 'auto' | PlayerRoute;
+        threading?: 'auto' | PipelineThreading;
+      }
+  - id: ds.LatencyPreset
+    name: LatencyPreset
+    definition: |
+      type LatencyPreset =
+        | { preset: 'fixed'; targetMs?: number; limitMs: number }
+        | { preset: 'adaptive'; targetMs: number; limitMs: number };
+  - id: ds.PlayerState
+    name: PlayerState
+    definition: |
+      type PlayerState = 'idle' | 'loading' | 'paused' | 'playing' | 'ended' | 'failed' | 'closed';
+  - id: ds.PlayerCommand
+    name: PlayerCommand
+    definition: |
+      type PlayerCommand =
+        | { type: 'open'; source: PlayerSource; options: PlayerOpenOptions }
+        | { type: 'play' } | { type: 'pause' } | { type: 'stop' } | { type: 'reset' } | { type: 'destroy' }
+        | { type: 'seek'; positionMs: number } | { type: 'seek-live' } | { type: 'seek-wall-clock'; epochMs: number }
+        | { type: 'set-timeshift'; timeshift: TimeshiftSource | null }
+        | { type: 'volume'; volume: number } | { type: 'muted'; muted: boolean } | { type: 'clear-last-frame' };
+  - id: ds.CommandResult
+    name: CommandResult
+    definition: |
+      type CommandResult = { accepted: true; generation: number } | { accepted: false; reason: CommandRejection };
+      type CommandRejection = 'destroyed' | 'no-source' | 'no-session' | 'not-seekable' | 'session-running' | 'invalid-argument';
+  - id: ds.PlayerEvent
+    name: PlayerEvent
+    definition: |
+      type PlayerEvent = PlayerEventBody & Omit<MediaEvent, 'type'> & { generation: number };   // sessionId、sequence、timestampMs 来自 MediaEvent
+      type PlayerEventBody =
+        | { type: 'session-opened'; source: OpenedSource; route: PlayerRoute | null; latencyControl: boolean; volumeControl: boolean; threading: PipelineThreading }
+        | { type: 'threading-switched'; from: 'worker'; to: 'main'; cause: string }
+        | { type: 'state'; state: PlayerState }
+        | { type: 'playback-mode'; mode: PlaybackMode }
+        | Exclude<PipelineEvent, { type: 'sound-held' }>          // funnel / route-switched / timeline / seek / buffering / network / latency / error / log / stream-info / freeze
+        | { type: 'stats'; stats: PipelineStats }
+        | { type: 'visibility'; visible: boolean }
+        | { type: 'audio-blocked'; active: boolean }
+        | { type: 'session-closed'; reason: ClosedReason };
+  - id: ds.PlayerSnapshot
+    name: PlayerSnapshot
+    definition: |
+      interface PlayerSnapshot {
+        state: PlayerState;
+        session: SessionSnapshot | null;   // session-opened + 意图、缓冲、seek、可见性、时间轴、播放模式、卡顿、冻结、漏斗、最后的统计
+        lastClosed: ClosedReason | null;
+        volume: number;
+        muted: boolean;
+      }
+  - id: ds.ClosedReason
+    name: ClosedReason
+    definition: |
+      type ClosedReason =
+        | { type: 'stop' } | { type: 'reset' } | { type: 'destroy' }
+        | { type: 'replaced' }        // open，或结束后 play
+        | { type: 'ended' }           // 直播源结束；可 seek 的源停在 ended
+        | { type: 'failed'; cause: SessionFailureCause; error: MediaError };

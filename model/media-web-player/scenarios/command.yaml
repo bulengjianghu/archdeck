@@ -1,0 +1,36 @@
+# 取自 session.ts 的接受表与 kernel.ts 的 apply；SDK.md §4.3（方法与返回值）。
+scenario:
+  id: sc.command
+  name: 命令（play / pause / stop / seek 经接受表）
+  kind: main
+  description: |
+    宿主的每个方法都是一条命令：门面 submit 进内核的唯一队列，按提交顺序施用；到队首时先查接受表（纯表：状态、是否 destroyed、
+    时间轴能否 seek、参数形状），被拒的以原因回给调用方，接受的改状态与意图、转成管线命令下发给所选族的会话管线，
+    状态事件先于命令结果发出。一串快速命令与慢慢发的结果相同。
+  cause: 集成方页面调用 player.pause / play / seek / stop
+  evidence:
+    - media-sdk-kits/tests/session-contract.test.mjs
+    - media-sdk-kits/tests/kernel.test.mjs
+    - media-sdk-kits/tests/player.test.mjs
+  steps:
+    - async: {id: method, from: actor.host-app, to: kit.facade.player-api, label: pause() / play() / seek(ms) / stop()}
+    - async: {from: kit.facade.player-api, to: kit.kernel.queue, relation: rel.kit.api-submit, label: 'submit({type})'}
+    - call: {from: kit.kernel.queue, to: kit.session.acceptance, label: 'commandRejection(command, {state, destroyed, timeline…})'}
+    - alt:
+        - when: 被拒（no-session / not-seekable / destroyed / invalid-argument）
+          steps:
+            - return: {id: rejected, from: kit.kernel.queue, to: kit.facade.player-api, label: '{accepted: false, reason}'}
+        - when: stop
+          steps:
+            - async: {id: stop, from: kit.kernel.queue, to: kit.kernel.release, label: closeSession(stop)}
+            - async: {from: kit.kernel.release, to: providers.self-clocked.session, relation: rel.kit.release-self-clocked, label: pipeline.stop()}
+            - call: {from: kit.kernel.release, to: kit.kernel.envelope, label: 'session-closed {type: stop}'}
+        - when: play / pause / seek 被接受
+          steps:
+            - call: {id: apply, from: kit.kernel.queue, to: kit.kernel.state, label: playSession / pauseSession / 记下 seek}
+            - call: {from: kit.kernel.state, to: providers.self-clocked.session, relation: rel.kit.state-self-clocked, label: "pipeline.command({type: 'pause' | 'play' | 'seek'})"}
+            - call: {from: providers.self-clocked.session, to: providers.wasm-core.stream-input, label: 'pause(paused) / reposition(seek, positionMs)'}
+            - call: {from: kit.kernel.state, to: kit.kernel.envelope, label: 'state paused / playing'}
+            - async: {from: providers.self-clocked.session, to: kit.kernel.envelope, label: 'seek {active} / buffering（seek 的结束带落点）'}
+    - async: {from: kit.kernel.envelope, to: actor.host-app, label: 状态事件（先于命令结果）}
+    - return: {id: result, from: kit.facade.player-api, to: actor.host-app, label: '{accepted: true, generation} 或 {accepted: false, reason}'}

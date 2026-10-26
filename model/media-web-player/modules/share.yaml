@@ -1,0 +1,120 @@
+# 区域：共享基础——Web 基础媒体模型（media-web/packages/media-core/src）与跨语言契约的 TS 侧（media-specs/contracts/src）
+# 第二级模块（share.core / share.contracts）由骨架定义，此处只往下挂子模块。
+# media-core 的 index.ts 同时含错误与事件原语，在「平台原语」下写成概念子模块（不写 codeRefs，§3.7）。
+
+modules:
+  # ───────────────────────── share.core ─────────────────────────
+  - id: share.core.primitives
+    parent: share.core
+    name: 平台原语
+    kind: component
+    responsibility: 包入口里的运行时无关原语：错误、事件中心、一次性操作与媒体轨道类型；Kit 与 Provider 从包根导入它们。
+    codeRefs: [media-web/packages/media-core/src/index.ts]
+  - id: share.core.primitives.fault
+    parent: share.core.primitives
+    name: 错误原语
+    kind: component
+    responsibility: 运行时无关的平台错误 MediaFault（带契约的 ErrorCode），与把捕获值写成一行说明的 describeError（类名、cause 链，不带栈）。
+    provides: [if.share.core.MediaFault, if.share.core.describeError]
+  - id: share.core.primitives.event-hub
+    parent: share.core.primitives
+    name: 事件中心
+    kind: component
+    responsibility: Kit 与 Provider 共用的事件生命周期原语：EventHub（订阅、发布、关闭，监听者抛错时以页面未捕获错误抛出而不打断其他监听者）与只读的 EventSource。播放器的 events 与 telemetry 各是一个 EventHub。
+    provides: [if.share.core.EventHub]
+  - id: share.core.operation
+    parent: share.core
+    name: 一次性操作
+    kind: component
+    responsibility: 一次性异步操作 Operation（单一终态、可取消，取消后的迟到结果交给 disposeLate）与执行身份的校验；包入口另有一份同名的 Operation 与 MediaTrack 类型。播放器不使用。
+    codeRefs: [media-web/packages/media-core/src/operation.ts]
+  - id: share.core.configuration
+    parent: share.core
+    name: 编码配置键
+    kind: component
+    responsibility: 编码配置字典的完整身份键（含 codec description 字节与嵌套格式参数），供比较配置是否相同。播放器不使用。
+    codeRefs: [media-web/packages/media-core/src/configuration.ts]
+
+  # ───────────────────────── share.contracts ─────────────────────────
+  - id: share.contracts.types
+    parent: share.contracts
+    name: 生成的契约类型
+    kind: component
+    responsibility: 由 schemas/modules.json 与各领域 schema 生成的 TS 类型（ErrorCode、MediaError、MediaEvent、TelemetryRecord、PlaybackCommand…）与按协议分组的类型再导出；包入口另提供按契约名的运行时校验 validateContract。
+    dataStructures: [ds.MediaError, ds.MediaEvent, ds.TelemetryRecord]
+    codeRefs: [media-specs/contracts/src/index.ts, media-specs/contracts/src/types.ts, media-specs/contracts/src/protocol/**]
+  - id: share.contracts.schema
+    parent: share.contracts
+    name: Schema 本体
+    kind: component
+    responsibility: 生成的 JSON Schema 常量（$defs 即契约名）。
+    codeRefs: [media-specs/contracts/src/schema.ts]
+  - id: share.contracts.validators
+    parent: share.contracts
+    name: 运行时校验器
+    kind: component
+    responsibility: 按契约名生成的独立校验函数（Ajv 独立代码）。
+    codeRefs: [media-specs/contracts/src/validators.ts]
+
+relations:
+  - id: rel.share.fault-contracts
+    from: share.core.operation
+    to: share.core.primitives.fault
+    type: queries
+    interface: if.share.core.MediaFault
+    description: 操作被取消、执行身份不合法时构造 MediaFault。
+  - id: rel.share.configuration-fault
+    from: share.core.configuration
+    to: share.core.primitives.fault
+    type: queries
+    interface: if.share.core.MediaFault
+    description: 配置字典不合法时构造 MediaFault。
+  - id: rel.share.contracts-validators
+    from: share.contracts.types
+    to: share.contracts.validators
+    type: queries
+    interface: if.share.contracts.validateContract
+    description: validateContract 按契约名找到生成的校验函数并执行，收集错误。
+
+interfaces:
+  - id: if.share.core.MediaFault
+    name: MediaFault
+    owner: share.core.primitives.fault
+    signature: |
+      class MediaFault extends Error { readonly code: ErrorCode; constructor(code: ErrorCode, message: string) }
+    semantics: 带会话失败原因的 MediaPlayerFault 继承它（子类事实）。
+    implementedBy: [providers.wasm-core.module]
+  - id: if.share.core.describeError
+    name: describeError
+    owner: share.core.primitives.fault
+    signature: |
+      describeError(error: unknown): string
+  - id: if.share.core.EventHub
+    name: EventHub
+    owner: share.core.primitives.event-hub
+    signature: |
+      class EventHub<T> { subscribe(listener: (event: T) => void): () => void; emit(event: T): void; close(): void; readonly size: number }
+      interface EventSource<T> { subscribe(listener: (event: T) => void): () => void }
+    semantics: 关闭后 subscribe 抛 invalid-state、emit 不再分发；一个监听者抛错不影响其他监听者。
+  - id: if.share.contracts.validateContract
+    name: validateContract
+    owner: share.contracts.types
+    signature: |
+      validateContract(name: ContractName, value: unknown): { valid: boolean; errors: string[] }
+
+dataStructures:
+  - id: ds.MediaError
+    name: MediaError
+    definition: |
+      interface MediaError { code: ErrorCode; message: string; retryable: boolean; source: string }
+      type ErrorCode = 'invalid-argument' | 'invalid-state' | 'unsupported' | 'version-mismatch' | 'permission-denied' | 'device-busy'
+        | 'profile-unsupported' | 'device-lost' | 'driver-failed' | 'cancelled' | 'timeout' | 'resource-exhausted' | 'provider-failed' | 'unauthorized';
+  - id: ds.MediaEvent
+    name: MediaEvent
+    definition: |
+      interface MediaEvent { sessionId: string; sequence: number; timestampMs: number; type: string }
+  - id: ds.TelemetryRecord
+    name: TelemetryRecord
+    definition: |
+      interface TelemetryRecord { component: string; sessionId?: string; operationId?: string; timestampMs: number; name: string; value?: number; unit?: string }
+      // 播放器的记录：component 'player'，name 如 player.funnel.first-frame / player.stats.bufferMs，unit ms / count / bytes
