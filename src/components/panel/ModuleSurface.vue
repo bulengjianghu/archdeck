@@ -3,6 +3,7 @@
  * 模块面板 · 表面（结构视角，在「结构」之后；C7、L20③，ADR-0032）：
  * - K19：表面宽度 W、越过入口数 B；没有入口或没有代码事实（K8、C8）时说明原因，表面只有声明的接口；
  * - K18：元素清单——种类 · 声明状态 · 扇入 · 使用它的模块（单击定位模块），按扇入降序，长清单先列 15 条；
+ *   L20b：模块有子模块的元素时按所属子模块分组（子模块按声明顺序、本体在后），组内按扇入降序，组首标子模块名；
  *   端口类元素与「端口」一节（K11）互相定位；画布单击元素（surfaceFocus）时滚到该元素；
  * - C3：越过入口清单（依赖方文件:行 → 符号）；
  * - C4：建议——提升到入口（越过入口用到的符号）/ 声明接口（导出未声明、扇入 ≥ HOT_SURFACE_MODULES，U19）/ 改经入口（越过入口的依赖方）。
@@ -30,21 +31,33 @@ interface Row {
   element: SurfaceElement
   fanIn: number
   users: string[]
+  /** L20b：所属子模块（本体为 null） */
+  sub: string | null
 }
-/** 元素清单：按扇入降序（同扇入保持表面顺序：端口、操作、类型、数据，声明未导出在后） */
+/** 元素清单：L20b 先按所属子模块（声明顺序、本体在后），再按扇入降序（同扇入保持表面顺序：端口、操作、类型、数据，声明未导出在后） */
 const rows = computed<Row[]>(() => {
   const s = surface.value
   if (!s) return []
   const uses = new Map((sm.value?.uses ?? []).map(u => [u.element.name, u]))
+  const order = idx.value.childrenOf.get(props.id) ?? []
+  const rank = (sub: string | null) => (sub === null ? Infinity : order.indexOf(sub))
   return s.elements
     .map(element => {
       const u = uses.get(element.name)
-      return { element, fanIn: u?.modules.length ?? 0, users: u?.modules ?? [] }
+      return { element, fanIn: u?.modules.length ?? 0, users: u?.modules ?? [], sub: desk.facts.surfaceSubOf(props.id, element) }
     })
     .map((r, i) => ({ r, i }))
-    .sort((a, b) => b.r.fanIn - a.r.fanIn || a.i - b.i)
+    .sort((a, b) => rank(a.r.sub) - rank(b.r.sub) || b.r.fanIn - a.r.fanIn || a.i - b.i)
     .map(x => x.r)
 })
+/** L20b：有子模块的元素时分组，组首行标子模块名（本体为「本体」） */
+const grouped = computed(() => rows.value.some(r => r.sub !== null))
+const groupHead = (i: number) => {
+  const r = shown.value[i]
+  if (!grouped.value || (i > 0 && shown.value[i - 1].sub === r.sub)) return null
+  const n = rows.value.filter(x => x.sub === r.sub).length
+  return { name: r.sub ? name(r.sub) : '本体', count: n }
+}
 const LIMIT = 15
 const USERS = 5
 const all = ref(false)
@@ -108,7 +121,10 @@ watch([focus, rows], () => nextTick(reveal))
 
       <p v-if="!rows.length" class="muted">没有表面元素（入口没有导出，也没有声明接口）</p>
       <ul v-else class="plain elements" aria-label="表面元素">
-        <li v-for="r in shown" :key="r.element.name" class="element" :data-element="r.element.name" :data-kind="r.element.kind">
+        <li v-for="(r, i) in shown" :key="r.element.name" class="element" :data-element="r.element.name" :data-kind="r.element.kind" :data-sub="r.sub ?? ''">
+          <div v-if="groupHead(i)" class="group-head" data-testid="surface-group-head">
+            {{ groupHead(i)!.name }}<span class="muted"> · {{ groupHead(i)!.count }} 个元素</span>
+          </div>
           <div class="e-head">
             <span class="el-mark" :data-kind="r.element.kind" aria-hidden="true">{{ ELEMENT_KIND_MARK[r.element.kind] }}</span>
             <code class="el-name">{{ r.element.name }}</code>
@@ -207,6 +223,13 @@ watch([focus, rows], () => nextTick(reveal))
   from {
     background: var(--accent-soft);
   }
+}
+
+.group-head {
+  margin: 6px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
 }
 
 .e-head {

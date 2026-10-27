@@ -15,7 +15,20 @@ import {
   type ModelIndex,
   type ViewEdge,
 } from '@/model'
-import { edgeLabel, edgeRoute, edgeWeight, isBoundaryEdge, linkRoute, spreadEdgeId, type Box, type EdgeRoute, type Point } from '../layout'
+import {
+  coreHandleBadges,
+  edgeLabel,
+  edgeRoute,
+  edgeWeight,
+  handleBadge,
+  isBoundaryEdge,
+  linkRoute,
+  spreadEdgeId,
+  type Box,
+  type EdgeRoute,
+  type HandleBadge,
+  type Point,
+} from '../layout'
 import { isTemp, landingId } from '../stage'
 import type { SceneContext } from './context'
 import { DEP_KIND_LABELS, DEP_TIER_LABELS, ELEMENT_KIND_LABELS, depViewEdge, depWeight, elementAt, inImpact, routeToPoint } from './structure'
@@ -99,8 +112,8 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined,
   const play = playOf(ctx, e.id)
   const fact = ctx.facts?.edgeFacts.get(e.id)
   const state = factState(fact)
-  // 运行视角下走过的边由步骤序号标注，不标条数；K9：异常标记跟在条数后
-  const count = ctx.st && play.play ? '' : edgeLabel(e)
+  // 运行视角下走过的边由步骤序号标注，不标条数；K9：异常标记跟在条数后；L23b：收起的交互束条数带把手数
+  const count = ctx.st && play.play ? '' : (extra.handles ?? edgeLabel(e))
   const mark = state === 'unconfirmed' ? '?' : ''
   // D8：束内同步 / 异步、via 不一致时加「混合」记号
   const label = extra.label ?? [count, mark, extra.mixed ? '混合' : ''].filter(Boolean).join(' ')
@@ -163,7 +176,9 @@ export function interactionEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   const { pv } = ctx
   if (ctx.structure) return []
   const list = shownEdges(ctx).flatMap(e => spreadEdges(ctx, e, ctx.routes.get(e.id) ?? edgeRoute(pv, e)))
-  if (ctx.layered) list.push(...ctx.visibleCoreEdges.map(e => makeEdge(ctx, e, pv.coreEdges.get(e.id), true, mixedOf(ctx, e))))
+  // O4、L23b：核心跨层边带把手角标与悬停分组（总览不展开表面）
+  const badges = ctx.layered && ctx.input.index && !ctx.st ? coreHandleBadges(pv.view, ctx.input.index) : null
+  if (ctx.layered) list.push(...ctx.visibleCoreEdges.map(e => makeEdge(ctx, e, pv.coreEdges.get(e.id), true, withHandles(mixedOf(ctx, e), badges?.get(e.id)))))
   // O10：共用件的边不参与布局，悬停 / 选中一端时画成曲线
   list.push(
     ...ctx.visibleShelfEdges.map(e =>
@@ -172,6 +187,19 @@ export function interactionEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   )
   return list
 }
+
+/**
+ * L23b：收起的交互束——角标 `×N · M 把手`（M 为 0 只写 ×N）、悬停按所属子模块分组列出各条；束内修饰不一致时「混合」的说明接在后面。
+ * 散开到元素的各段与运行视角不带（ADR-0033）。
+ */
+function withHandles(extra: Partial<RouteEdgeData>, badge: HandleBadge | null | undefined): Partial<RouteEdgeData> {
+  if (!badge?.label) return extra
+  return { ...extra, handles: badge.label, title: [badge.title, extra.title].filter(Boolean).join('\n\n') }
+}
+
+/** L23b：普通层次的交互视图边的把手角标（运行视角不给） */
+const badgeOf = (ctx: SceneContext, e: ViewEdge): HandleBadge | null =>
+  ctx.st || ctx.layered || !ctx.input.index ? null : handleBadge(ctx.input.index, ctx.pv.view, e)
 
 /** D8：束内修饰不一致——「混合」记号与悬停列出各条（运行视角不标） */
 function mixedOf(ctx: SceneContext, e: ViewEdge): Partial<RouteEdgeData> {
@@ -189,13 +217,14 @@ function spreadEdges(ctx: SceneContext, e: ViewEdge, route: EdgeRoute | undefine
   const sp = ctx.input.spreads?.get(e.id)
   const placed = ctx.pv.elements?.get(e.to)
   const mixed = mixedOf(ctx, e)
-  if (ctx.st || !sp || !placed) return [makeEdge(ctx, e, route, false, mixed)]
+  const whole = () => [makeEdge(ctx, e, route, false, withHandles(mixed, badgeOf(ctx, e)))]
+  if (ctx.st || !sp || !placed) return whole()
   const groups = new Map<string, string[]>()
   for (const it of sp.items) {
     const name = it.element?.name
     if (name && placed.some(p => p.name === name) && ctx.pv.edges.has(spreadEdgeId(e.id, name))) groups.set(name, [...(groups.get(name) ?? []), it.relation])
   }
-  if (!groups.size) return [makeEdge(ctx, e, route, false, mixed)]
+  if (!groups.size) return whole()
   const sel = ctx.input.selection
   const out: (CanvasEdge | null)[] = []
   for (const [name, rels] of groups) {

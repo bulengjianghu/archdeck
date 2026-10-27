@@ -14,13 +14,16 @@ import { compassOf } from './routes'
 import { restEdgeId, spreadEdgeId, type LayoutExpansion, type LayoutOptions, type PositionedView } from './geometry'
 
 export * from './geometry'
-export { BAND, DEFAULT_BAND_COLUMNS, bandColumnsFor, bandShelfTop, layoutLayered, moreChipId } from './layered'
+export { BAND, DEFAULT_BAND_COLUMNS, bandColumnsFor, bandShelfTop, coreHandleBadges, layoutLayered, moreChipId } from './layered'
 export {
   ACTOR_GAP,
   LABEL_SLOT,
   PARALLEL_GAP,
   edgeLabel,
   edgeWeight,
+  handleBadge,
+  handleLabel,
+  type HandleBadge,
   isBoundaryEdge,
   compassOf,
   edgeRoute,

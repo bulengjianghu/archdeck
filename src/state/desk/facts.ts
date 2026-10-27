@@ -7,6 +7,7 @@
 import { computed, ref, type ComputedRef, type Ref, type ShallowRef } from 'vue'
 import {
   carriersOf,
+  elementSub,
   interactionBundle,
   isTarget,
   surfaceMetrics,
@@ -19,6 +20,7 @@ import {
   type Frame,
   type InteractionBundle,
   type ModuleSurface,
+  type SurfaceElement,
   type SurfaceMetrics,
   type SurfaceSource,
   againstStabilityOf,
@@ -83,6 +85,13 @@ export interface FactsInputs {
   sketches?: ShallowRef<{ design: string; file: RawFile }[]>
   /** C6：显示偏好「总是展开表面」（呈现层的本地偏好经 desk.setSurfaceAlways 交来，表面展开并进布局同步） */
   surfaceAlways?: Readonly<Ref<boolean>>
+}
+
+/** C6、L20b：展开节点上一个元素的种类、扇入与所属子模块（本体为 null） */
+export interface SurfaceInfo {
+  kind: ElementKind
+  fanIn: number
+  sub: string | null
 }
 
 /** 为什么没有代码事实，或正在取；源码清单读取失败也是 error（源码在本地是前提，G1） */
@@ -274,6 +283,9 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
   /** K18：模块的表面；没有代码事实时只有声明接口（C8）；不是模块为 null */
   const surfaceOfModule = (id: string): ModuleSurface | null => (index.value ? surfaceOf(index.value, surfaceSource.value, id, report.value) : null)
 
+  /** L20b：模块 m 的表面元素所属的子模块（元素 owner 在 m 之下的那一级）；本体为 null */
+  const surfaceSubOf = (m: string, el: SurfaceElement): string | null => (index.value ? elementSub(index.value, files.ownership.value, m, el) : null)
+
   /** K19、C7：模块的表面指标（W / B、元素扇入、越过入口清单）；没有代码事实时为 null */
   const surfaceMetricsOf = (id: string, valuesOnly = false): SurfaceMetrics | null =>
     report.value && index.value && surfaceSource.value && index.value.modules.has(id)
@@ -377,8 +389,29 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     // 没有展开的触发（选中模块 / 交互 / 视图边或总是展开）时不取散开数据（它要读接收方的入口导出）
     const sel = state.value.selection
     if (!surfaceAlways.value && sel?.kind !== 'module' && sel?.kind !== 'relation' && sel?.kind !== 'edge') return null
-    return surfaceExpansion({ view: v, selection: sel, always: surfaceAlways.value, links, spreads: spreads.value })
+    return surfaceExpansion({ view: v, selection: sel, always: surfaceAlways.value, links, spreads: spreads.value, groupOf: elementGroupOf(v) })
   })
+
+  /** L20b：本层展开节点的元素所属子模块（元素 owner 在节点模块之下的那一级，rank 为声明顺序）；本体为 null。按节点记忆一次计算 */
+  const elementGroupOf = (v: LevelView) => {
+    const memo = new Map<string, Map<string, { sub: string; rank: number } | null>>()
+    return (node: string, name: string) => {
+      if (!memo.has(node)) {
+        const m = v.nodes.find(n => n.id === node)?.moduleId
+        const idx = index.value
+        const out = new Map<string, { sub: string; rank: number } | null>()
+        if (m && idx) {
+          const order = idx.childrenOf.get(m) ?? []
+          for (const el of surfaceOfModule(m)?.elements ?? []) {
+            const sub = surfaceSubOf(m, el)
+            out.set(el.name, sub ? { sub, rank: order.indexOf(sub) < 0 ? order.length : order.indexOf(sub) } : null)
+          }
+        }
+        memo.set(node, out)
+      }
+      return memo.get(node)!.get(name) ?? null
+    }
+  }
 
   /**
    * L15、L21、V12：交给布局的结构边——本层全部束（一对节点同方向一条，含只引类型、聚焦才画的）与元素级边，
@@ -391,17 +424,17 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     return base && x ? { ...base, expand: x.expand, interactions: x.interactions } : base
   })
 
-  /** C6、L20：展开节点（模块）的元素种类与扇入（元素记号的悬停）；没有展开时为 null */
-  const surfaceInfo = computed<Map<string, Map<string, { kind: ElementKind; fanIn: number }>> | null>(() => {
+  /** C6、L20、L20b：展开节点（模块）的元素种类、扇入与所属子模块（元素记号的悬停与分组）；没有展开时为 null */
+  const surfaceInfo = computed<Map<string, Map<string, SurfaceInfo>> | null>(() => {
     const x = expansion.value
     const v = view.value
     if (!x || !v) return null
-    const out = new Map<string, Map<string, { kind: ElementKind; fanIn: number }>>()
+    const out = new Map<string, Map<string, SurfaceInfo>>()
     for (const e of x.expand) {
       const m = v.nodes.find(n => n.id === e.node)?.moduleId
       if (!m || out.has(m)) continue
       const fan = new Map((surfaceMetricsOf(m)?.uses ?? []).map(u => [u.element.name, u.modules.length]))
-      out.set(m, new Map((surfaceOfModule(m)?.elements ?? []).map(el => [el.name, { kind: el.kind, fanIn: fan.get(el.name) ?? 0 }])))
+      out.set(m, new Map((surfaceOfModule(m)?.elements ?? []).map(el => [el.name, { kind: el.kind, fanIn: fan.get(el.name) ?? 0, sub: surfaceSubOf(m, el) }])))
     }
     return out
   })
@@ -561,6 +594,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     surfaceInfo,
     surfaceSource,
     surfaceOf: surfaceOfModule,
+    surfaceSubOf,
     surfaceMetricsOf,
     bypassesOf,
     carriers,

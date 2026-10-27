@@ -33,6 +33,7 @@
 | 决策的理由与被否决的选项 | adr/ | 其他文档只写结论并链接 ADR |
 | 结构边的形态与束、结构视角的降噪（第八轮） | 理由：ADR-0031「修订（第八轮）」；规则：02 K14、K14a、L15、L16、L19、L21、L21a | 01 C-27 引编号；专题 governance / projection / workbench 只写机制 |
 | 模块表面、越过入口、表面指标、交互的承载链（第八轮） | 理由：ADR-0032；概念：02 §1.11；规则：02 K18–K20（细化 K18a、K20a）、K5d、U18、U19、L20、L20a、L22、L22a、L23、L23a、S18b、M21、M22、Q16 | 01 C-28、C-29、D-25 引编号；04 §3.3 只讲表面与接口的写法、§3.4 只讲 `channel:<名>@<模块 ID>` 的写法；专题 governance 写 `surface.ts` 与承载判定的机制 |
+| 把手：交互束的把手角标与悬停分组、展开元素按子模块分组（第九轮） | 理由：ADR-0033；概念：02 §1.11「把手」；规则：02 L23b、L20b、O4（细化 L20a ⑦、L23a ⑤） | 01 C-30 引编号；专题不复述 |
 | 结构视角的显示偏好（`typeOnly`、`impactMode`、`valuesOnly`、`invokesOnly`、`uncoveredOnly`、`surfaceAlways`） | architecture/view-state.md（按项目记本地，不进 URL；`surfaceAlways` 经意图交给 DeskState，表面展开并进布局同步） | 规则 L19a、L20、L21 引字段名 |
 | 评审过程（各轮说明、问题、意见） | 设计版本的 `design.yaml` | 定稿后结论进 ADR 与 01–04 |
 | 实现进度 | 各文档的「状态」标注 | 实施计划不进仓库 |

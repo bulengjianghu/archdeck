@@ -104,6 +104,10 @@ export interface SurfaceMark {
   y: number
   /** 本层有画出来的边接到它（结构视角：被显示偏好收起的为 false，记号变淡） */
   used: boolean
+  /** L20b：所属子模块的名称（悬停「属于 <子模块>」）；本体为「本体」；节点没有子模块分组时不给 */
+  owner?: string
+  /** L20b：组首——该组的子模块短名（ID 末段；本体为「本体」），画小标签；组之间画细分隔 */
+  group?: string
 }
 
 export interface NodeSurface {
@@ -111,6 +115,8 @@ export interface NodeSurface {
   items: SurfaceMark[]
   /** 没画成端口的元素数（「+N 个元素」，清单在面板「表面」一节） */
   more?: number
+  /** L20b：元素按所属子模块分了组（组首有标签） */
+  grouped?: true
 }
 
 /** L16、K14：结构边的形态——使用、组装、子类、端口实现（第八轮按形态，A2）；没有代码事实时的允许边（U16） */
@@ -211,6 +217,8 @@ export interface RouteEdgeData {
   title?: string
   /** D8：交互束内同步 / 异步、via 不一致（标签加「混合」） */
   mixed?: boolean
+  /** L23b：收起的交互束的把手角标（`×N · M 把手`）；有它时 title 为按子模块分组的悬停列表 */
+  handles?: string
   /** K9：关系边的证实 */
   fact?: EdgeFact
   /** K9：边含违规 */
@@ -295,7 +303,7 @@ export interface CanvasInput {
   /** L22：交互视角选中一条交互时它的承载（不判定或没有代码事实时为 null） */
   carrier?: Carrier | null
   /** C6：展开表面的节点模块 → 元素名 → 种类与扇入（元素记号的悬停） */
-  surfaceInfo?: ReadonlyMap<string, ReadonlyMap<string, { kind: ElementKind; fanIn: number }>> | null
+  surfaceInfo?: ReadonlyMap<string, ReadonlyMap<string, { kind: ElementKind; fanIn: number; sub?: string | null }>> | null
 }
 
 /**
