@@ -29,6 +29,8 @@ export const isDependencyLine = (d: Pick<StrokeLook, 'temp'>): boolean => d.temp
 export type ArrowKind = 'closed' | 'open'
 export const ARROW_PATH: Record<ArrowKind, string> = { closed: 'M1,1 L9,5 L1,9 Z', open: 'M1,1 L9,5 L1,9' }
 export const arrowSize = (weight: 1 | 2 | 3 = 1): number => 12 + weight * 2
+/** L20②（ADR-0036 返工）：接到端口点的一端的记号尺寸——比最细一档小，宽 8px，点距压到 9px 时 16 个并排也互不压住 */
+export const DOT_ARROW = 10
 /** 尖端到底边的距离（px） */
 export const arrowDepth = (size: number): number => (size * 8) / 10
 

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { InteractionBundle, LevelView, SurfaceElement } from '@/model'
-import { DOTS, expandSurface, fanLevels, fanRoute, surfaceDots } from '../../src/layout/dots'
+import { DOTS, expandSurface, fanLevels, surfaceDots, tapRoute } from '../../src/layout/dots'
 import {
   SURFACE_PORT_CAP,
   layoutExpansion,
@@ -163,18 +163,19 @@ describe('unionView、expandSurface：散开的束（L20a②，ADR-0036）', () 
     expect(dots.every(d => d.y === 200)).toBe(true)
     const route = pv.edges.get('el:a->b:use:run')!.points
     expect(route[0]).toEqual({ x: 60, y: 76 })
-    expect(route[route.length - 1]).toEqual({ x: dots[0].x, y: 200 })
-    expect(pv.edges.get(spreadEdgeId('a->b:queries', 'get'))!.points.at(-1)).toEqual({ x: dots[1].x, y: 200 })
-    expect(pv.ports!.get('el:a->b:use:run#in')).toEqual({ x: dots[0].x, y: 200 })
+    // 返工：终点停在点的边缘（箭头尖），框外边的端点同样
+    expect(route[route.length - 1]).toEqual({ x: dots[0].x, y: 200 - DOTS.r })
+    expect(pv.edges.get(spreadEdgeId('a->b:queries', 'get'))!.points.at(-1)).toEqual({ x: dots[1].x, y: 200 - DOTS.r })
+    expect(pv.ports!.get('el:a->b:use:run#in')).toEqual({ x: dots[0].x, y: 200 - DOTS.r })
     expect(pv.edges.get(restEdgeId('bundle:a->b'))).toEqual(trunk(60))
-    // 两条干线各用一条扇出线：交互边（进点在左）离节点 10，束离节点 16
-    expect(pv.edges.get(spreadEdgeId('a->b:queries', 'get'))!.points[1].y).toBe(200 - DOTS.fan)
-    expect(route[1].y).toBe(200 - DOTS.fan - DOTS.fanStep)
+    // 两条干线各占一段扇出线，相隔一个平行边间距
+    const turns = [pv.edges.get(spreadEdgeId('a->b:queries', 'get'))!.points[1].y, route[1].y].sort((p, q) => q - p)
+    expect(turns).toEqual([200 - DOTS.fan, 200 - DOTS.fan - DOTS.fanStep])
     expect(expandSurface(base, view, links([]))).toBe(base)
   })
 })
 
-describe('surfaceDots、fanRoute：定尺寸点阵（L20a②、L20b）', () => {
+describe('surfaceDots、tapRoute：定尺寸点阵与分叉（L20a②、L20b）', () => {
   const box = { x: 100, y: 50, w: 208, h: 76 }
   const names = (n: number) => Array.from({ length: n }, (_, i) => `e${String(i).padStart(2, '0')}`)
 
@@ -211,45 +212,88 @@ describe('surfaceDots、fanRoute：定尺寸点阵（L20a②、L20b）', () => {
     expect(Math.max(...row.placed.map(p => p.y))).toBeLessThanOrEqual(box.y + box.h - DOTS.sidePad - DOTS.more)
   })
 
-  it('fanRoute：沿干线到最后一段，在扇出线上横到点再垂直进点；自左向右同理', () => {
+  it('tapRoute：沿干线（束本身）走到最后一段，在离节点 distance 处分叉，横到点、垂直进点，终点停在点的边缘；自左向右同理', () => {
     const trunk = [
       { x: 10, y: 0 },
       { x: 10, y: 100 },
       { x: 60, y: 100 },
       { x: 60, y: 200 },
     ]
-    expect(fanRoute(trunk, { x: 90, y: 200 }, 'DOWN', 1)).toEqual([
+    expect(tapRoute(trunk, { x: 90, y: 200 }, 'DOWN', 20)).toEqual([
       { x: 10, y: 0 },
       { x: 10, y: 100 },
       { x: 60, y: 100 },
-      { x: 60, y: 200 - DOTS.fan - DOTS.fanStep },
-      { x: 90, y: 200 - DOTS.fan - DOTS.fanStep },
-      { x: 90, y: 200 },
+      { x: 60, y: 180 },
+      { x: 90, y: 180 },
+      { x: 90, y: 200 - DOTS.r },
     ])
-    const right = fanRoute(
+    const right = tapRoute(
       trunk.map(p => ({ x: p.y, y: p.x })),
       { x: 200, y: 90 },
       'RIGHT',
+      DOTS.fan,
     )
     expect(right.slice(-3)).toEqual([
       { x: 200 - DOTS.fan, y: 60 },
       { x: 200 - DOTS.fan, y: 90 },
-      { x: 200, y: 90 },
+      { x: 200 - DOTS.r, y: 90 },
     ])
-    // 最后一段太短：扇出线取它的中点，不越过它的起点
-    expect(
-      fanRoute(
+    // 点正好在干线上：直下；最后一段太短：分叉点取它与点边缘的中点，不越过它的起点
+    expect(tapRoute(trunk, { x: 60, y: 200 }, 'DOWN', 20).at(-1)).toEqual({ x: 60, y: 200 - DOTS.r })
+    const short = [
+      { x: 0, y: 0 },
+      { x: 0, y: 190 },
+      { x: 60, y: 190 },
+      { x: 60, y: 200 },
+    ]
+    expect(tapRoute(short, { x: 80, y: 200 }, 'DOWN', 40)[3]).toEqual({ x: 60, y: 192.5 })
+  })
+
+  it('返工：同一束散开到几个点，分叉后的分支两两不共用线段、同侧互不相交，分叉间距为平行边间距', () => {
+    const view2 = { ...view, edges: [] } as unknown as LevelView
+    const many = ['p', 'q', 'r', 's'].map(n => el('a', n))
+    const l: StructureLinks = { ...links(many), expand: [{ node: 'b', elements: ['p', 'q', 'r', 's'], from: null }] }
+    const base: PositionedView = {
+      view: view2,
+      direction: 'DOWN',
+      nodes: new Map([
+        ['a', { x: 0, y: 0, w: 208, h: 76 }],
+        ['b', { x: 0, y: 200, w: 208, h: 76 }],
+        ['c', { x: 300, y: 0, w: 208, h: 76 }],
+      ]),
+      edges: new Map([
         [
-          { x: 0, y: 0 },
-          { x: 0, y: 190 },
-          { x: 60, y: 190 },
-          { x: 60, y: 200 },
+          'bundle:a->b',
+          {
+            points: [
+              { x: 100, y: 76 },
+              { x: 100, y: 200 },
+            ],
+          },
         ],
-        { x: 80, y: 200 },
-        'DOWN',
-        3,
-      )[3],
-    ).toEqual({ x: 60, y: 195 })
+      ]),
+      coreEdges: new Map(),
+      ports: new Map(),
+    }
+    const pv = expandSurface(base, view2, l)
+    const branches = many.map(e => pv.edges.get(e.id)!.points.slice(-3))
+    const segs = branches.flatMap((b, i) => b.slice(1).map((q, k) => ({ i, a: b[k], b: q })))
+    const overlap = (u: (typeof segs)[number], v: (typeof segs)[number]) => {
+      const h = Math.abs(u.a.y - u.b.y) < 0.5 && Math.abs(v.a.y - v.b.y) < 0.5 && Math.abs(u.a.y - v.a.y) < 0.5
+      const w = Math.abs(u.a.x - u.b.x) < 0.5 && Math.abs(v.a.x - v.b.x) < 0.5 && Math.abs(u.a.x - v.a.x) < 0.5
+      const [p1, p2, q1, q2] = h ? [u.a.x, u.b.x, v.a.x, v.b.x] : [u.a.y, u.b.y, v.a.y, v.b.y]
+      return (h || w) && Math.min(Math.max(p1, p2), Math.max(q1, q2)) - Math.max(Math.min(p1, p2), Math.min(q1, q2)) > 0.5
+    }
+    for (const u of segs) for (const v of segs) if (u.i < v.i) expect(overlap(u, v)).toBe(false)
+    // 同一侧的分叉高度两两相隔平行边间距（两侧的分支往相反方向走，可以同高）
+    for (const side of [-1, 1]) {
+      const forks = branches
+        .filter(b => b.length === 3 && Math.sign(b[1].x - b[0].x) === side)
+        .map(b => b[0].y)
+        .sort((p, q) => p - q)
+      expect(forks.length).toBe(2)
+      expect(forks[1] - forks[0]).toBeGreaterThanOrEqual(DOTS.fanStep - 0.5)
+    }
   })
 })
 

@@ -8,7 +8,8 @@
 import { describe, expect, it } from 'vitest'
 import { loadModel, projectLevel, structureView, type FileDep } from '@/model'
 import { cacheKey, layoutView, type PositionedView } from '../../src/layout/layout'
-import { canvasScene, type CanvasInput } from '../../src/layout/canvas'
+import { DOTS } from '../../src/layout/dots'
+import { EDGE_HOVER_Z, EDGE_Z, canvasScene, type CanvasInput } from '../../src/layout/canvas'
 import { DEPS, MODEL, openDesk, sceneOf, settle } from './bundleDesk'
 
 type Scene = ReturnType<typeof canvasScene>
@@ -187,15 +188,22 @@ describe('C6、L20 表面展开', () => {
     const boxes = (sc: typeof s) => sc.nodes.map(n => [n.id, n.position, n.width, n.height])
     expect(boxes(s)).toEqual(boxes(before))
     const api = node(s, 'core.api')
+    // L20④（返工）：展开的节点画在边之上（含悬停提到最上层的边），点不被扇出线盖住
+    expect(api.zIndex).toBeGreaterThan(EDGE_HOVER_Z)
+    expect(node(s, 'core.impl').zIndex).toBeLessThan(EDGE_Z.active)
     expect(api.data.surface!.items.map(i => [i.name, i.kind, i.fanIn, i.used])).toEqual([
       ['get', 'port', 3, true],
       ['Client', 'operation', 1, true],
     ])
-    // 元素级边的终点落在各自的元素端口上
+    // 元素级边的终点落在各自的点的边缘（箭头尖，ADR-0036 返工；自左向右时在点的左侧）
+    const tip = (p: { x: number; y: number }) => (pv!.direction === 'RIGHT' ? { x: p.x - DOTS.r, y: p.y } : { x: p.x, y: p.y - DOTS.r })
     const at = (name: string) => pv!.elements!.get('core.api')!.find(p => p.name === name)!
     const end = (id: string) => dep(s, id).data.route.points.at(-1)!
-    expect(end('el:core.impl->core.api:assembly:Client')).toMatchObject({ x: expect.closeTo(at('Client').x, -1), y: expect.closeTo(at('Client').y, -1) })
-    expect(end('el:core.util->core.api:use:get')).toMatchObject({ x: expect.closeTo(at('get').x, -1), y: expect.closeTo(at('get').y, -1) })
+    expect(end('el:core.impl->core.api:assembly:Client')).toMatchObject({
+      x: expect.closeTo(tip(at('Client')).x, -1),
+      y: expect.closeTo(tip(at('Client')).y, -1),
+    })
+    expect(end('el:core.util->core.api:use:get')).toMatchObject({ x: expect.closeTo(tip(at('get')).x, -1), y: expect.closeTo(tip(at('get')).y, -1) })
     expect(dep(s, 'el:core.util->core.api:use:get').data.dep).toMatchObject({ kind: 'use', tier: 'invokes', element: { name: 'get', kind: 'port' } })
     // 束不再画；越过入口的元素级边接到节点本体、标「越过入口」
     expect(ids(s)).not.toContain('bundle:core.util->core.api')

@@ -10,6 +10,7 @@ import SurfaceMarks from '../../src/components/nodes/SurfaceMarks.vue'
 import { hoverSurfaceElement, leaveSurfaceElement, resetSurfaceFocus, useSurfaceFocus, useSurfaceHover } from '../../src/components/panel/surfaceFocus'
 import ModuleNode from '../../src/components/nodes/ModuleNode.vue'
 import RouteEdge from '../../src/components/edges/RouteEdge.vue'
+import { DOT_ARROW } from '../../src/components/edges/edgeStyle'
 import { EDGE_HOVER_Z, landsOn, withElementHover, type CanvasEdge, type NodeData, type NodeSurface, type RouteEdgeData } from '../../src/layout/canvas'
 
 const base: NodeData = { moduleId: 'm', name: 'M', childCount: 0, selected: false, dim: false }
@@ -46,33 +47,39 @@ describe('SurfaceMarks（ADR-0036 定尺寸点阵）', () => {
   const surface: NodeSurface = {
     side: 'top',
     items: [
-      { name: 'get', kind: 'port', fanIn: 2, users: ['甲', '乙'], owner: '运行（run）', group: 'run', groupRoom: 30, x: 20, y: 0, used: true },
+      { name: 'get', kind: 'port', fanIn: 2, users: ['甲', '乙'], owner: '运行（run）', x: 20, y: 0, used: true },
       { name: 'Item', kind: 'type', fanIn: 1, owner: '本体', x: 50, y: 0, used: false },
     ],
     more: 3,
-    grouped: true,
   }
 
-  it('L20②：每个元素一个按种类区分形状的点、不写名字，位置取布局排出的点；悬停写「名字 · 种类 · 所属子模块 · 扇入 N（使用它的模块）」；收起的变淡；行尾「+N」', () => {
+  it('L20②：每个元素一个按种类区分形状的点、不写名字，位置取布局排出的点；收起的变淡；行尾「+N」', () => {
     const w = mount(SurfaceMarks, { props: { surface, moduleId: 'm' } })
     const dots = w.findAll('.dot')
     expect(dots.map(e => e.attributes('data-element'))).toEqual(['get', 'Item'])
     expect(w.text()).not.toContain('get')
     expect(dots[0].attributes('style')).toContain('left: 20px')
     expect(dots[0].classes()).toContain('port')
-    expect(dots[0].attributes('title')).toBe('get · 端口 · 属于 运行（run） · 扇入 2（甲、乙）')
+    // 不靠浏览器 title（返工：选中时会被扇出线吃掉），说明进 aria-label 与画布自己的提示框
+    expect(dots[0].attributes('title')).toBeUndefined()
+    expect(dots[0].attributes('aria-label')).toBe('get · 端口 · 属于 运行（run） · 扇入 2：甲、乙')
     expect(dots[1].classes()).toEqual(expect.arrayContaining(['type', 'unused']))
     expect(w.find('[data-testid="surface-more"]').text()).toBe('+3')
     const left = mount(SurfaceMarks, { props: { surface: { side: 'left', items: [{ name: 'a', x: 0, y: 30, used: true }] }, moduleId: 'm' } })
     expect(left.find('.dot').attributes('style')).toContain('top: 30px')
   })
 
-  it('L20b：组首写子模块短名（宽度以到下一组首为限，悬停全名），本体一组不写组名', () => {
-    const w = mount(SurfaceMarks, { props: { surface, moduleId: 'm' } })
-    const groups = w.findAll('[data-testid="surface-group"]')
-    expect(groups.map(g => g.text())).toEqual(['run'])
-    expect(groups[0].attributes('style')).toContain('max-width: 30px')
-    expect(groups[0].attributes('title')).toBe('运行（run）')
+  it('L20④、L20b（ADR-0036 返工）：悬停点一定出现画布自己的提示框（名字 · 种类、属于 <子模块>、扇入与使用者），移开收起；画布上不写组名', async () => {
+    const w = mount(SurfaceMarks, { props: { surface, moduleId: 'm' }, attachTo: document.body })
+    expect(w.findAll('[data-testid="surface-group"]')).toHaveLength(0)
+    await w.findAll('.dot')[0].trigger('mouseenter')
+    const tip = document.body.querySelector('[data-testid="surface-tip"]')!
+    expect([...tip.children].map(c => c.textContent)).toEqual(['get · 端口', '属于 运行（run）', '扇入 2：甲、乙'])
+    await w.findAll('.dot')[0].trigger('mouseleave')
+    expect(document.body.querySelector('[data-testid="surface-tip"]')).toBeNull()
+    await w.findAll('.dot')[1].trigger('mouseenter')
+    expect(document.body.querySelector('[data-testid="surface-tip"]')!.textContent).toContain('本层画出来的边没有接到它')
+    w.unmount()
   })
 
   it('C9（T2-4）：单击点直接请求面板定位（focusSurfaceElement：模块与元素），选中模块由节点单击照常完成', async () => {
@@ -99,11 +106,12 @@ describe('SurfaceMarks（ADR-0036 定尺寸点阵）', () => {
     hoverSurfaceElement(null)
   })
 
-  it('展开的模块节点画点阵；节点不另留标签区，有组名时让开一行', () => {
+  it('展开的模块节点画点阵；节点尺寸与内容位置不变（返工：不再为组名让位）', () => {
     const stubs = { global: { stubs: { Handles: true } } }
     const w = mount(ModuleNode, { props: { data: { ...base, surface } }, ...stubs })
     expect(w.find('[data-testid="surface-marks"]').exists()).toBe(true)
-    expect(w.find('.module-node').classes()).toEqual(expect.arrayContaining(['surface-top', 'surface-grouped']))
+    expect(w.find('.module-node').classes()).toContain('surface-top')
+    expect(w.find('.module-node').classes()).not.toContain('surface-grouped')
     expect(
       mount(ModuleNode, { props: { data: base }, ...stubs })
         .find('[data-testid="surface-marks"]')
@@ -155,13 +163,22 @@ describe('RouteEdge 第八轮', () => {
   })
   const render = (d: RouteEdgeData) => mount({ components: { RouteEdge }, template: '<svg><RouteEdge id="e" :data="d" /></svg>', data: () => ({ d }) })
 
-  it('L23a②（ADR-0036）：散开到端口点的一段不画箭头；原视图边照画', () => {
+  it('L23a②（ADR-0036 返工）：散开到端口点的一段带箭头、小一档（DOT_ARROW）；原视图边照常', () => {
     const at = (id: string) =>
       mount({ components: { RouteEdge }, template: `<svg><RouteEdge id="${id}" :data="d" /></svg>`, data: () => ({ d: data({}) }) }).find(
         'path.vue-flow__edge-path',
       )
-    expect(at('e#to:get').attributes('marker-end')).toBeUndefined()
+    expect(at('e#to:get').attributes('marker-end')).toContain('arrow-')
     expect(at('e').attributes('marker-end')).toContain('arrow-')
+    const marker = (id: string) =>
+      mount({ components: { RouteEdge }, template: `<svg><RouteEdge id="${id}" :data="d" /></svg>`, data: () => ({ d: data({}) }) })
+        .find('marker')
+        .attributes('markerWidth') ??
+      mount({ components: { RouteEdge }, template: `<svg><RouteEdge id="${id}" :data="d" /></svg>`, data: () => ({ d: data({}) }) })
+        .find('marker')
+        .attributes('markerwidth')
+    expect(Number(marker('e#to:get'))).toBe(DOT_ARROW)
+    expect(Number(marker('e'))).toBeGreaterThan(DOT_ARROW)
   })
 
   it('D8：束内修饰不一致标「混合」，悬停列出各条', () => {

@@ -41,7 +41,7 @@ const sameBox = (a: Box, b: Box) => a.x === b.x && a.y === b.y && a.w === b.w &&
 const grow = (b: Box, d: number): Box => ({ x: b.x - d, y: b.y - d, w: b.w + 2 * d, h: b.h + 2 * d })
 
 /** 浮在激活的边（EDGE_Z）之上的节点：步骤徽标、分支预览、带内「+N」占位块（单击不被线挡住） */
-const OVER_EDGES = { step: 1003, preview: 1004, more: 1003 } as const
+const OVER_EDGES = { step: 1003, preview: 1004, more: 1003, surface: 1004 } as const
 
 export function placeNode(ctx: SceneContext, id: string, box: Box, type: CanvasNodeType, data: NodeData, zIndex: number): CanvasNode {
   return {
@@ -130,7 +130,7 @@ function actorNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box): C
 /**
  * C6、L20、L23（ADR-0036）：展开表面的节点上的端口点——位置取布局在收起态节点上排出的点（相对节点），种类、扇入与使用者取 surfaceInfo；
  * 结构视角画全部点（被显示偏好收起的变淡），交互视角只画被交互（或承载段）接到的点；运行视角不画。
- * L20b：有属于子模块的元素时按组标短名（本体一组在最后、不写组名），组名宽度以到下一组首为限。
+ * L20b：有属于子模块的元素时，悬停写「属于 <子模块>」（返工：画布上不写组名）。
  */
 function surfaceOf(ctx: SceneContext, n: ViewNode, box: Box, hits: Map<string, Set<string>> | null): Pick<NodeData, 'surface'> {
   const placed = ctx.pv.elements?.get(n.id)
@@ -152,37 +152,18 @@ function surfaceOf(ctx: SceneContext, n: ViewNode, box: Box, hits: Map<string, S
         ...(users?.length ? { users } : {}),
       }
     })
+  // L20b（ADR-0036 返工）：不写组名，所属子模块只进悬停提示（组间隙由布局按 groups 留出）
   const subOf = (name: string) => info?.get(name)?.sub ?? null
-  const grouped = items.some(m => subOf(m.name) !== null)
-  if (grouped) {
-    const top = ctx.pv.direction !== 'RIGHT'
-    const along = (m: SurfaceMark) => (top ? m.x : m.y)
-    const list = [...items].sort((a, b) => along(a) - along(b))
-    const heads: SurfaceMark[] = []
-    let last: string | null | undefined
-    for (const m of list) {
+  if (items.some(m => subOf(m.name) !== null))
+    for (const m of items) {
       const sub = subOf(m.name)
       m.owner = sub && idx ? `${moduleName(idx, sub)}（${shortName(n.moduleId, sub)}）` : '本体'
-      if (sub !== last) {
-        if (sub) m.group = shortName(n.moduleId, sub)
-        heads.push(m)
-      }
-      last = sub
     }
-    // 组名宽度：到下一组首；最后一组到节点右沿让开右上角的下钻记号（自左向右时到节点右沿）
-    heads.forEach((m, i) => {
-      if (m.group === undefined) return
-      m.groupRoom = top ? (heads[i + 1] ? along(heads[i + 1]) - 2 : box.w - GROUP_RIGHT) - along(m) : box.w - 16
-    })
-  }
   // 交互视角没有被接到的元素时也给（空的）记号层：入边一侧照样让出
   const more = ctx.structure ? ctx.pv.elementsMore?.get(n.id) : undefined
-  const surface: NodeSurface = { side: ctx.pv.direction === 'RIGHT' ? 'left' : 'top', items, ...(more ? { more } : {}), ...(grouped ? { grouped: true } : {}) }
+  const surface: NodeSurface = { side: ctx.pv.direction === 'RIGHT' ? 'left' : 'top', items, ...(more ? { more } : {}) }
   return { surface }
 }
-
-/** L20b：顶边最后一组组名到节点右沿留出的宽度（右上角的下钻记号「⌄ N」） */
-const GROUP_RIGHT = 34
 
 /** L20b：子模块短名——ID 去掉父模块前缀（`pipeline.latency.timers` → `timers`） */
 export const shortName = (parent: string, sub: string): string => (sub.startsWith(`${parent}.`) ? sub.slice(parent.length + 1) : sub.split('.').pop()!)
@@ -254,7 +235,8 @@ function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box, s
     ]
   // O9：共用件架上的紧凑块；运行视角下照常显示但淡化（P18）
   if (n.role === 'shared') return [placeNode(ctx, n.id, box, 'shared', { ...base, dim: ctx.st ? !playClass(ctx, n.id) : base.dim }, 2)]
-  return [placeNode(ctx, n.id, box, n.role === 'core' ? 'core' : 'module', base, 2)]
+  // L20④（ADR-0036 返工）：展开表面的节点画在边之上（含悬停提到最上层的边），端口点不被扇出线的命中区盖住
+  return [placeNode(ctx, n.id, box, n.role === 'core' ? 'core' : 'module', base, base.surface ? OVER_EDGES.surface : 2)]
 }
 
 /** 分层总览的带（层）与它的 +N 占位块 */

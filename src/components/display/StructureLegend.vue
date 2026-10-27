@@ -137,7 +137,7 @@ const crossCount = computed(() => hiddenWith({})?.cross ?? 0)
       <div class="item" data-testid="surface-cap">
         <span class="sw kind"><span class="chip">+N</span></span>
         <span
-          >展开的表面是一排点：点就是终点，接到点的一端不画箭头；一个节点最多
+          >展开的表面是一排点：线在节点前分叉、各带小箭头指到自己的点，悬停点看名字与使用者；一个节点最多
           {{ SURFACE_PORT_CAP }} 个点（本层用得最多的、交互接到的优先），其余收进「+N」、清单在面板「表面」一节；节点不随展开移动（L20②，ADR-0036）</span
         >
       </div>

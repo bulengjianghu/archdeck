@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import DepEdge from '../../src/components/edges/DepEdge.vue'
 import { ALLOWED_COLOR, FACT_COLOR, TIER_COLOR, depColor, depDash, depEnds, depStroke, umlDepth, umlPath } from '../../src/components/edges/depStyle'
-import { DASHED, WIDTH, arrowSize } from '../../src/components/edges/edgeStyle'
+import { DASHED, DOT_ARROW, WIDTH, arrowSize } from '../../src/components/edges/edgeStyle'
 import { DEFAULT_STRUCTURE_PREFS, resetStructurePrefs, useStructurePrefs } from '../../src/components/display/useDisplayPrefs'
 import { depWeight, violationLook, type DepEdgeLook, type RouteEdgeData } from '../../src/layout/canvas'
 
@@ -188,12 +188,17 @@ describe('结构视角的显示偏好（useStructurePrefs）', () => {
   })
 })
 
-describe('L20②（ADR-0036）：接到端口点的元素级边', () => {
-  it('终点不画记号、不回缩（点就是终点记号）；组装的起点菱形照画；不接元素的边照画终点记号', () => {
+describe('L20②（ADR-0036 返工）：接到端口点的元素级边', () => {
+  it('终点照画 L16 记号、小一档（DOT_ARROW），线回缩一个记号深度、尖落在走线终点（点的边缘）；组装的起点菱形照常大小', () => {
     const dot = render({ kind: 'assembly', element: { name: 'get', kind: 'port' } })
-    expect(dot.main.attributes('marker-end')).toBeUndefined()
+    expect(dot.main.attributes('marker-end')).toContain('dep-end-')
     expect(dot.main.attributes('marker-start')).toContain('dep-start-')
-    expect(dot.main.attributes('d')).toContain('100')
+    // 回缩：线没画到终点 y=100
+    expect(dot.main.attributes('d')).not.toMatch(/100$/)
+    // UmlMarker 的高 = 记号尺寸 + 6
+    const sizes = dot.w.findAll('marker').map(m => Number(m.attributes('markerHeight') ?? m.attributes('markerheight')) - 6)
+    expect(sizes).toContain(DOT_ARROW)
+    expect(Math.max(...sizes)).toBeGreaterThan(DOT_ARROW)
     expect(render({ kind: 'use' }).main.attributes('marker-end')).toContain('dep-end-')
   })
 })

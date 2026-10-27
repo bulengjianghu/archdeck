@@ -149,16 +149,19 @@ test('C6、L20（ADR-0036）：节点角标「表面 W」；选中模块展开�
   const marks = graphNode(page, 'infra.framework').getByTestId('surface-marks').locator('.dot')
   await expect(marks.first()).toBeAttached()
   expect(await marks.count()).toBeLessThanOrEqual(16)
-  // 点不写名字（只有子模块组名）；封顶外收进「+N」
+  // 点不写名字、不写组名；封顶外收进「+N」
   expect((await marks.allInnerTexts()).every(t => t === '')).toBe(true)
   await expect(graphNode(page, 'infra.framework').getByTestId('surface-more')).toHaveText(/^\+\d+$/)
   await expect(page.locator('.vue-flow__edge-dep[data-id^="el:"]').first()).toBeAttached()
-  await expect(marks.first()).toHaveAttribute('title', /扇入 \d+/)
+  await expect(marks.first()).toHaveAttribute('aria-label', /扇入 \d+/)
+  await expect(graphNode(page, 'infra.framework').getByTestId('surface-group')).toHaveCount(0)
   // L20②：全部节点的位置与尺寸不变，视口不动
   await expect.poll(boxes).toEqual(before)
   expect(await viewport()).toBe(vp)
-  // 接到点的元素级边终点不画记号
-  expect(await page.locator('.vue-flow__edge-dep[data-id^="el:"]:not([data-id$="#rest"]) path.vue-flow__edge-path[marker-end]').count()).toBe(0)
+  // 返工：到点的线有箭头 marker
+  const toDots = page.locator('.vue-flow__edge-dep[data-id^="el:"]:not([data-id$="#rest"]) path.vue-flow__edge-path')
+  expect(await toDots.count()).toBeGreaterThan(0)
+  expect(await toDots.evaluateAll(ps => ps.filter(p => !p.getAttribute('marker-end')).length)).toBe(0)
   // T2-4、C9：单击点直接定位到面板「表面」一节的该元素
   const name = (await marks.first().getAttribute('data-element'))!
   await marks.first().click()
@@ -166,6 +169,10 @@ test('C6、L20（ADR-0036）：节点角标「表面 W」；选中模块展开�
   // L20④：悬停点——落在它上的边高亮（衬边），面板「表面」一节同一行同亮
   await page.mouse.move(0, 0)
   await marks.first().hover()
+  // 返工：悬停点一定出现提示框（指针下就是这个点，不被扇出线盖住）
+  await expect(page.getByTestId('surface-tip')).toBeVisible()
+  await expect(page.getByTestId('surface-tip')).toContainText(name)
+  await expect(page.getByTestId('surface-tip')).toContainText(/扇入 \d+/)
   await expect(page.locator(`li.element[data-element="${name}"]`)).toHaveClass(/hot/)
   await expect(page.locator('.vue-flow__edge-dep[data-id^="el:"] path.edge-hover-casing').first()).toBeAttached()
   await page.locator('.vue-flow__pane').click({ position: { x: 5, y: 5 } })
@@ -245,4 +252,40 @@ test('§6.22、L16（ADR-0035）：结构视角的依赖全部虚线，形态只
   await expect(endPath('implements')).toHaveAttribute('d', /^M0,0 L[\d.]+,-[\d.]+ L[\d.]+,0 L[\d.]+,[\d.]+ Z$/)
   await expect(endPath('implements')).toHaveAttribute('fill', 'var(--surface)')
   if (await page.locator('g.dep-edge[data-kind="subclass"]').count()) await expect(endPath('subclass')).toHaveAttribute('d', /^M[\d.]+,0 L0,/)
+})
+
+test('L20②（ADR-0036 返工）：同一束散开到几个点，分叉后的线两两没有重合线段、都带箭头', async ({ page }) => {
+  await openDesk(page, '/p/h5p-arch-desk?level=state&v=s&sel=m:state.transition')
+  const lines = page.locator('.vue-flow__edge-dep[data-id^="el:state.desk->state.transition:"]')
+  await expect(lines.first()).toBeAttached()
+  const all = await lines.evaluateAll(gs =>
+    gs.map(g => {
+      const p = g.querySelector('path.vue-flow__edge-path')!
+      const pts: { x: number; y: number }[] = []
+      for (const m of (p.getAttribute('d') ?? '').matchAll(/([MLQ])([^MLQa]*)/g)) {
+        const v = m[2]
+          .trim()
+          .split(/[\s,]+/)
+          .map(Number)
+        if (m[1] === 'Q') pts.push({ x: v[0], y: v[1] }, { x: v[2], y: v[3] })
+        else pts.push({ x: v[0], y: v[1] })
+      }
+      return { marker: p.getAttribute('marker-end'), pts }
+    }),
+  )
+  expect(all.length).toBeGreaterThan(1)
+  expect(all.every(l => l.marker)).toBe(true)
+  // 分叉后：每条线的最后三个点（分叉点 → 点上方 → 点的边缘）
+  const segs = all.flatMap((l, i) => {
+    const b = l.pts.slice(-3)
+    return b.slice(1).map((q, k) => ({ i, a: b[k], b: q }))
+  })
+  const overlap = (u: (typeof segs)[number], v: (typeof segs)[number]) => {
+    const h = Math.abs(u.a.y - u.b.y) < 0.5 && Math.abs(v.a.y - v.b.y) < 0.5 && Math.abs(u.a.y - v.a.y) < 1
+    const w = Math.abs(u.a.x - u.b.x) < 0.5 && Math.abs(v.a.x - v.b.x) < 0.5 && Math.abs(u.a.x - v.a.x) < 1
+    if (!h && !w) return 0
+    const [p1, p2, q1, q2] = h ? [u.a.x, u.b.x, v.a.x, v.b.x] : [u.a.y, u.b.y, v.a.y, v.b.y]
+    return Math.min(Math.max(p1, p2), Math.max(q1, q2)) - Math.max(Math.min(p1, p2), Math.min(q1, q2))
+  }
+  for (const u of segs) for (const v of segs) if (u.i < v.i) expect(overlap(u, v)).toBeLessThanOrEqual(2)
 })

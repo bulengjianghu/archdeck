@@ -10,7 +10,7 @@ import { BaseEdge } from '@vue-flow/core'
 import type { RouteEdgeData } from '@/layout/canvas'
 import type { Point } from '@/layout/layout'
 import { horizontalCurve, retractEnd, roundedPolyline, verticalCurve } from './routePath'
-import { arrowSize } from './edgeStyle'
+import { DOT_ARROW, arrowSize } from './edgeStyle'
 import { depEnds, depStroke, umlDepth } from './depStyle'
 import UmlMarker from './UmlMarker.vue'
 
@@ -25,7 +25,10 @@ const base = computed(() => ({ ...depStroke({ ...look.value, weight: props.data.
 /** L25：悬停的边加粗一档、不透明度拉满；衬边比线宽 4px */
 const style = computed(() => (props.data.hovered ? { ...base.value, strokeWidth: Number(base.value.strokeWidth) + 1, opacity: 1 } : base.value))
 const casing = computed(() => (props.data.hovered ? Number(style.value.strokeWidth) + 4 : 0))
+/** L20②（ADR-0036 返工）：接到端口点的元素级边——走线终点就是点的边缘，终点记号小一档（16 个点并排不互相压住），起点记号照常 */
+const toDot = computed(() => !!look.value.element && !look.value.rest)
 const size = computed(() => arrowSize(props.data.weight) + (look.value.kind === 'subclass' || look.value.kind === 'implements' ? 2 : 0))
+const endSize = computed(() => (toDot.value ? DOT_ARROW : size.value))
 /** C3：越过入口的元素级边在终点画一个小叉（接到节点本体，没有经过入口） */
 const bypassAt = computed(() => {
   if (!look.value.bypass) return null
@@ -37,13 +40,11 @@ const bypassAt = computed(() => {
   return { x: b.x - (b.x - a.x) * t, y: b.y - (b.y - a.y) * t }
 })
 const ends = computed(() => depEnds(look.value.kind))
-/** L20②（ADR-0036）：接到端口点的元素级边终点不画记号、不回缩（点就是终点记号），起点记号照画 */
-const toDot = computed(() => !!look.value.element)
 const path = computed(() => draw(props.data.route.points))
 /** 线在两端的记号处回缩，记号从回缩处画到原端点（晕仍沿完整走线） */
 const linePath = computed(() => {
   const { points, curve } = props.data.route
-  let pts = toDot.value ? points : retractEnd(points, curve, umlDepth(ends.value.end, size.value))
+  let pts = retractEnd(points, curve, umlDepth(ends.value.end, endSize.value))
   if (ends.value.start) pts = retractEnd([...pts].reverse(), curve, umlDepth(ends.value.start, size.value)).reverse()
   return draw(pts)
 })
@@ -52,7 +53,7 @@ const safe = computed(() => props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)
 
 <template>
   <defs>
-    <UmlMarker v-if="!toDot" :id="`dep-end-${safe}`" :end="ends.end" :color="style.stroke" :size="size" :line-width="style.strokeWidth" />
+    <UmlMarker :id="`dep-end-${safe}`" :end="ends.end" :color="style.stroke" :size="endSize" :line-width="style.strokeWidth" />
     <UmlMarker v-if="ends.start" :id="`dep-start-${safe}`" :end="ends.start" :color="style.stroke" :size="size" :line-width="style.strokeWidth" start />
   </defs>
   <g
@@ -82,7 +83,7 @@ const safe = computed(() => props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)
       <BaseEdge
         :id="id"
         :path="linePath"
-        :marker-end="toDot ? undefined : `url(#dep-end-${safe})`"
+        :marker-end="`url(#dep-end-${safe})`"
         :marker-start="ends.start ? `url(#dep-start-${safe})` : undefined"
         :style="style"
         :interaction-width="16"

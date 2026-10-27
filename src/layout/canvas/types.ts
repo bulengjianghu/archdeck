@@ -106,10 +106,6 @@ export interface SurfaceMark {
   used: boolean
   /** L20b：所属子模块的名称（悬停「属于 <子模块>」）；本体为「本体」；节点没有子模块分组时不给 */
   owner?: string
-  /** L20b：组首——该组的子模块短名（ID 去掉父模块前缀），画小标签；本体一组不给（ADR-0036） */
-  group?: string
-  /** L20b：组名可用的宽度（px，到下一组首），放不下截短 */
-  groupRoom?: number
   /** L20④：使用它的模块（名称），悬停提示「扇入 N（…）」 */
   users?: string[]
 }
@@ -119,8 +115,6 @@ export interface NodeSurface {
   items: SurfaceMark[]
   /** 没画成端口的元素数（「+N 个元素」，清单在面板「表面」一节） */
   more?: number
-  /** L20b：元素按所属子模块分了组（组首有标签） */
-  grouped?: true
 }
 
 /** L16、K14：结构边的形态——使用、组装、子类、端口实现（第八轮按形态，A2）；没有代码事实时的允许边（U16） */

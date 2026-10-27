@@ -16,7 +16,7 @@ import { horizontalCurve, retractEnd, roundedPolyline, verticalCurve, wavyPath }
 import ArrowMarker from './ArrowMarker.vue'
 import SocketMarker from './SocketMarker.vue'
 import UmlMarker from './UmlMarker.vue'
-import { FLOW, arrowDepth, arrowSize, isDependencyLine, strokeColor, strokeStyle } from './edgeStyle'
+import { DOT_ARROW, FLOW, arrowDepth, arrowSize, isDependencyLine, strokeColor, strokeStyle } from './edgeStyle'
 import { depEnds, umlDepth } from './depStyle'
 
 const props = defineProps<{ id: string; data: RouteEdgeData }>()
@@ -35,15 +35,15 @@ const base = computed(() => ({ ...strokeStyle(look.value), ...(props.data.temp ?
 /** L25：悬停的边加粗一档、不透明度拉满（查询线悬停时也变实）；衬边比线宽 4px */
 const style = computed(() => (props.data.hovered ? { ...base.value, strokeWidth: Number(base.value.strokeWidth) + 1, opacity: 1 } : base.value))
 const casing = computed(() => (props.data.hovered || props.data.hoverPair ? Number(style.value.strokeWidth) + 4 : 0))
+/** L20②、L23a②（ADR-0036 返工）：散开到端口点的一段（`#to:`）——走线终点就是点的边缘，箭头小一档（16 个点并排不互相压住） */
+const toDot = computed(() => props.id.includes('#to:'))
 /** 箭头大小随线宽档；线在箭头处回缩一个箭头深度（晕与红晕仍沿完整走线） */
-const size = computed(() => arrowSize(props.data.weight))
+const size = computed(() => (toDot.value ? DOT_ARROW : arrowSize(props.data.weight)))
 const path = computed(() => draw(props.data.route.points))
 /** L18、L16：依赖类的线用依赖的端点记号——组装叠加依赖方一端实心菱形、被依赖方开口箭头；代码依赖叠加线与承载缺段开口箭头 */
 const dep = computed(() => (isDependencyLine(props.data) ? depEnds(props.data.temp === 'assembly' ? 'assembly' : 'use') : null))
-/** L20②、L23a②（ADR-0036）：散开到端口点的一段（`#to:`）不画箭头，点就是终点记号 */
-const toDot = computed(() => props.id.includes('#to:'))
 const linePath = computed(() => {
-  if (couple.value || toDot.value) return path.value
+  if (couple.value) return path.value
   const { points, curve } = props.data.route
   if (!dep.value) return draw(retractEnd(points, curve, arrowDepth(size.value)))
   let pts = retractEnd(points, curve, umlDepth(dep.value.end, size.value))
@@ -100,7 +100,7 @@ const socketId = computed(() => `socket-${markerId.value.slice('arrow-'.length)}
     <BaseEdge
       :id="id"
       :path="linePath"
-      :marker-end="couple || toDot ? undefined : `url(#${markerId})`"
+      :marker-end="couple ? undefined : `url(#${markerId})`"
       :marker-start="dep?.start ? `url(#${depStartId})` : undefined"
       :style="style"
       :interaction-width="16"

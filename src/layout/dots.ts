@@ -2,16 +2,20 @@
  * 定尺寸点阵端口（C6、L20②、L20a②、L20b、L23；ADR-0036）：展开表面不重排——节点位置、尺寸与不接元素的边的走线取收起态的布局，
  * 这里在固定的节点上补两样：入边一侧的一排端口点，与接到点的边的走线。纯函数，不调 elk。
  *   点阵：自上而下骑在顶边、自左向右骑在左边，居中排一排；组（L20b 子模块）之间多留一段；排不下先压点距与组间距，仍排不下按优先次序从末尾截掉（计入「+N」，行尾给它留位）。
- *   走线：沿束（交互段为原视图边）收起态的走线走到进节点前的最后一段，在节点外的扇出线上横到各自的点、再垂直进点；
- *   同一节点上每条束各用一条扇出线（离节点 DOTS.fan 起、每条再远 DOTS.fanStep，按进点位置排），不越过最后一段的起点。
- *   束里没画成点的元素级边合成一条接到节点本体（`#rest`），走线即束原来的走线。
+ *   走线（返工 2026-10-28）：散开的束（交互段为原视图边）在节点前分叉——束本身走到最后一段，每个点在自己的高度分出一支、横到点、垂直进点，
+ *   终点停在点的边缘（箭头尖）；分支间距 PARALLEL_GAP，同侧越往外分得越远（离节点越远），分叉后互不相交、不共用线段；
+ *   同一节点上不同的束各占一段扇出线（fanLevels 取交叉最少的次序）。束里没画成点的元素级边合成一条接到节点本体（`#rest`），走线即束原来的走线。
  */
 import type { LevelView } from '@/model'
 import { restEdgeId, spreadEdgeId, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
 import { layoutExpansion, spreadBundles, type StructureLinks } from './layout'
+import { PARALLEL_GAP } from './routes'
 
-/** 点距（压缩下限）、组间多留（压缩下限）、两端留白（自上而下 / 自左向右）、行尾「+N」占位、扇出线离节点的距离与逐条加远量 */
-export const DOTS = { pitch: 12, minPitch: 9, gap: 8, minGap: 4, pad: 12, sidePad: 8, more: 22, fan: 10, fanStep: 6 }
+/**
+ * 点距（压缩下限）、组间多留（压缩下限）、两端留白（自上而下 / 自左向右）、行尾「+N」占位、扇出线离节点的距离与逐条加远量（同平行边间距，
+ * 最后一段不够长时压缩到 minStep）、走线终点离点中心的距离（点的半宽，箭头尖落在点的边缘）
+ */
+export const DOTS = { pitch: 12, minPitch: 9, gap: 8, minGap: 4, pad: 12, sidePad: 8, more: 22, fan: 10, fanStep: PARALLEL_GAP, minStep: 4, r: 5 }
 
 export interface DotRow {
   /** 画成点的元素（按入边一侧的顺序）与绝对坐标 */
@@ -64,20 +68,22 @@ export function surfaceDots(
 const swap = (p: Point): Point => ({ x: p.y, y: p.x })
 
 /**
- * L20a②：接到点的边的走线——沿 trunk（收起态里束或视图边的走线，终点在节点的入边一侧）走到最后一段，
- * 在离节点 DOTS.fan + level × DOTS.fanStep 的扇出线上横到点、垂直进点；最后一段太短时扇出线取它的中点。
+ * L20a②（返工）：接到点的一条分支——沿干线 trunk（收起态的束或视图边的走线，即束本身）走到最后一段，在离节点 distance 处分叉，
+ * 横到点、垂直进点，终点停在点的边缘（离点中心 DOTS.r，箭头尖落在那里）；点正好在干线上时直下。分叉点不越过最后一段的起点。
  */
-export function fanRoute(trunk: readonly Point[], dot: Point, direction: 'DOWN' | 'RIGHT', level = 0): Point[] {
-  if (trunk.length < 2) return [...trunk, dot]
+export function tapRoute(trunk: readonly Point[], dot: Point, direction: 'DOWN' | 'RIGHT', distance: number): Point[] {
+  const pts0 = simplify([...trunk])
+  if (pts0.length < 2) return [...pts0, dot]
   // 在「自上而下」的坐标里算：自左向右时交换 x、y
-  const t = direction === 'DOWN' ? trunk : trunk.map(swap)
+  const t = direction === 'DOWN' ? pts0 : pts0.map(swap)
   const d = direction === 'DOWN' ? dot : swap(dot)
   const end = t[t.length - 1]
   const prev = t[t.length - 2]
+  const tip = { x: d.x, y: d.y - DOTS.r }
   const from = Math.abs(prev.x - end.x) < 0.5 ? prev.y : end.y - 2 * DOTS.fan
-  let fan = end.y - DOTS.fan - level * DOTS.fanStep
-  if (fan < from + 4) fan = (from + end.y) / 2
-  const pts = simplify([...t.slice(0, -1), { x: end.x, y: fan }, { x: d.x, y: fan }, { x: d.x, y: d.y }])
+  let turn = Math.max(end.y - distance, from + 4)
+  if (turn > tip.y - 2) turn = (from + tip.y) / 2
+  const pts = simplify(Math.abs(end.x - d.x) < 0.5 ? [...t.slice(0, -1), tip] : [...t.slice(0, -1), { x: end.x, y: turn }, { x: d.x, y: turn }, tip])
   return direction === 'DOWN' ? pts : pts.map(swap)
 }
 
@@ -137,33 +143,70 @@ export function expandSurface(base: PositionedView, view: LevelView, links: Stru
   const trunkOf = new Map<string, string>()
   for (const e of links?.elements ?? []) if (exp.targets.has(e.id)) trunkOf.set(e.id, e.bundle)
   for (const x of links?.interactions ?? []) for (const el of x.elements) trunkOf.set(spreadEdgeId(x.edge, el), x.edge)
-  // 扇出线：同一节点上每条干线一条，次序取交叉最少的一种（fanLevels）
   const along = (p: Point) => (direction === 'DOWN' ? p.x : p.y)
-  const level = new Map<string, number>()
-  const fans = new Map<string, Map<string, number[]>>()
+  // 分叉：每条干线（束本身）在节点前按点各分一支；点在干线进点同一侧的，越往外的分叉越远（离节点越远），同一束的分支互不相交、不共用线段
+  type Member = { id: string; dot: Point; at: number }
+  const trunks = new Map<string, { node: string; route: EdgeRoute; members: Member[] }>()
   for (const [id, t] of exp.targets) {
     const trunk = trunkOf.get(id)
     const dot = elements.get(t.node)?.find(p => p.name === t.element)
-    if (!trunk || !dot || !base.edges.has(trunk)) continue
-    const byTrunk = fans.get(t.node) ?? fans.set(t.node, new Map()).get(t.node)!
-    byTrunk.set(trunk, [...(byTrunk.get(trunk) ?? []), along(dot)])
+    const route = trunk ? base.edges.get(trunk) : undefined
+    if (!trunk || !dot || !route) continue
+    const x = trunks.get(trunk) ?? trunks.set(trunk, { node: t.node, route, members: [] }).get(trunk)!
+    x.members.push({ id, dot, at: along(dot) })
   }
-  for (const [node, byTrunk] of fans) {
-    const list = [...byTrunk].map(([id, drops]) => {
-      const pts = base.edges.get(id)!.points
-      return { id, end: along(pts[pts.length - 1]), drops }
+  const rank = new Map<string, number>()
+  const bands = new Map<string, number>()
+  for (const [trunk, x] of trunks) {
+    const pts = x.route.points
+    const body = along(pts[pts.length - 1])
+    const right = x.members.filter(m => m.at > body + 0.5).sort((p, q) => p.at - q.at)
+    const left = x.members.filter(m => m.at < body - 0.5).sort((p, q) => q.at - p.at)
+    right.forEach((m, k) => rank.set(m.id, k))
+    left.forEach((m, k) => rank.set(m.id, k))
+    for (const m of x.members) if (!rank.has(m.id)) rank.set(m.id, 0)
+    bands.set(trunk, Math.max(right.length, left.length, 1))
+  }
+  // 同一节点上不同干线各占一段扇出线：次序取交叉最少的一种（fanLevels），逐段叠远
+  const base0 = new Map<string, number>()
+  const byNode = new Map<string, string[]>()
+  for (const [trunk, x] of trunks) byNode.set(x.node, [...(byNode.get(x.node) ?? []), trunk])
+  const step = new Map<string, number>()
+  for (const [node, ids] of byNode) {
+    const list = ids.map(id => {
+      const pts = trunks.get(id)!.route.points
+      return { id, end: along(pts[pts.length - 1]), drops: trunks.get(id)!.members.map(m => m.at) }
     })
-    fanLevels(list).forEach((k, i) => level.set(`${node}|${list[i].id}`, k))
+    const levels = fanLevels(list)
+    let acc = 0
+    for (const i of list.map((_, i) => i).sort((p, q) => levels[p] - levels[q])) {
+      base0.set(list[i].id, acc)
+      acc += bands.get(list[i].id)!
+    }
+    // 最后一段不够长时压缩逐条加远量（不小于 minStep）：按各干线最后一段的长度取最短的
+    const box = base.nodes.get(node)!
+    const room = Math.min(
+      ...list.map(t => {
+        const pts = trunks.get(t.id)!.route.points
+        const prev = pts[pts.length - 2] ?? pts[0]
+        return direction === 'DOWN' ? box.y - prev.y : box.x - prev.x
+      }),
+    )
+    const want = DOTS.fan + (acc - 1) * DOTS.fanStep + DOTS.r + 8
+    step.set(node, acc > 1 && want > room ? Math.max(DOTS.minStep, (room - DOTS.fan - DOTS.r - 8) / (acc - 1)) : DOTS.fanStep)
   }
   const edges = new Map<string, EdgeRoute>(base.edges)
   const ports = new Map(base.ports ?? [])
   for (const [id, t] of exp.targets) {
     const dot = elements.get(t.node)?.find(p => p.name === t.element)
     if (!dot) continue
-    ports.set(`${id}#in`, { x: dot.x, y: dot.y })
+    const tip = direction === 'DOWN' ? { x: dot.x, y: dot.y - DOTS.r } : { x: dot.x - DOTS.r, y: dot.y }
+    ports.set(`${id}#in`, tip)
     const trunk = trunkOf.get(id)
-    const r = trunk ? base.edges.get(trunk) : undefined
-    if (r) edges.set(id, { points: fanRoute(r.points, dot, direction, level.get(`${t.node}|${trunk}`) ?? 0) })
+    const x = trunk ? trunks.get(trunk) : undefined
+    if (!x || !trunk) continue
+    const distance = DOTS.fan + ((base0.get(trunk) ?? 0) + (rank.get(id) ?? 0)) * (step.get(t.node) ?? DOTS.fanStep)
+    edges.set(id, { points: tapRoute(x.route.points, dot, direction, distance) })
   }
   const spread = spreadBundles(links)
   for (const b of spread) {

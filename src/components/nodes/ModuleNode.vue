@@ -23,7 +23,6 @@ defineProps<{ data: NodeData }>()
       [`rim-${data.rim}`]: !!data.rim,
       [`diff-${data.change}`]: !!data.change,
       [`surface-${data.surface?.side}`]: !!data.surface,
-      'surface-grouped': !!data.surface?.grouped,
     }"
   >
     <Handles />
@@ -87,15 +86,6 @@ defineProps<{ data: NodeData }>()
 .module-node.deprecated .name {
   text-decoration: line-through;
   color: var(--text-3);
-}
-
-/* C6、L20b（ADR-0036）：展开表面——节点尺寸不变；点骑在入边一侧的边框上，有组名时名字与职责让开一行（顶边）/ 一列（左边） */
-.module-node.surface-top.surface-grouped {
-  padding-top: 18px;
-}
-
-.module-node.surface-left.surface-grouped {
-  padding-left: 56px;
 }
 
 .head {
