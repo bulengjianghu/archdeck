@@ -198,8 +198,8 @@ export async function sceneOf(desk: Desk, prefs: Partial<Prefs> = {}, extra: Par
           invokesOnly: p.invokesOnly,
           uncoveredOnly: p.uncoveredOnly,
           metrics: f.metrics.value,
-          impact: sel?.kind === 'module' ? (f.impactOf(sel.id)?.impact ?? null) : null,
-          impactMode: 'in',
+          impact: f.queried.value?.impact ?? null,
+          impactMode: f.queried.value?.mode ?? 'in',
           cycles: f.level.value?.cycles ?? null,
           report: f.report.value,
         }

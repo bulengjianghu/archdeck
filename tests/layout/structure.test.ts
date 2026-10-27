@@ -277,10 +277,13 @@ describe('L17 指标角标、O13 共用件折叠、K15 影响面', () => {
     expect(ids((await sceneOf(desk)).scene)).toContain('bundle:core.impl->core.log')
   })
 
-  it('选中模块时影响面按方向与距离标在节点上，闭包外变淡', async () => {
+  it('K15b：选中模块不投影闭包；面板查询影响面后按方向与距离标在节点上，闭包外变淡', async () => {
     const desk = await openDesk()
     desk.select({ kind: 'module', id: 'core.log' })
     await settle(desk)
+    const { scene: quiet } = await sceneOf(desk)
+    expect(quiet.nodes.some(n => n.data.impact || n.data.impactSelf)).toBe(false)
+    desk.queryImpact({ mode: 'in', types: true })
     const { scene: s } = await sceneOf(desk)
     expect(node(s, 'core.api').data.impact).toMatchObject({ direction: 'in', distance: 1 })
     expect(node(s, 'core.log').data.impactSelf).toBe(true)

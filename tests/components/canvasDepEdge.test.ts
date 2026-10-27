@@ -158,22 +158,23 @@ describe('结构视角的显示偏好（useStructurePrefs）', () => {
     resetStructurePrefs()
   })
 
-  it('缺省：只引类型收起、影响面传入、不只看值依赖；同一项目共用一份，按项目记在本地', () => {
+  it('缺省：只引类型收起、不只看值依赖；同一项目共用一份，按项目记在本地；影响面方向不是偏好（K15b），本地旧值忽略', () => {
     const a = useStructurePrefs('p1')
     expect(a.prefs.value).toEqual(DEFAULT_STRUCTURE_PREFS)
     expect(DEFAULT_STRUCTURE_PREFS).toEqual({
       typeOnly: false,
-      impactMode: 'in',
       valuesOnly: false,
       invokesOnly: false,
       uncoveredOnly: false,
       surfaceAlways: false,
     })
     a.setTypeOnly(true)
-    a.setImpactMode('both')
-    expect(useStructurePrefs('p1').prefs.value).toMatchObject({ typeOnly: true, impactMode: 'both' })
+    expect(useStructurePrefs('p1').prefs.value).toMatchObject({ typeOnly: true })
     expect(useStructurePrefs('p2').prefs.value.typeOnly).toBe(false)
     resetStructurePrefs()
-    expect(useStructurePrefs('p1').prefs.value).toEqual({ ...DEFAULT_STRUCTURE_PREFS, typeOnly: true, impactMode: 'both' })
+    expect(useStructurePrefs('p1').prefs.value).toEqual({ ...DEFAULT_STRUCTURE_PREFS, typeOnly: true })
+    // 第七轮记下的 impactMode 读回时忽略
+    localStorage.setItem('h5p-arch-desk:structure-prefs:p3', JSON.stringify({ impactMode: 'both', valuesOnly: true }))
+    expect(useStructurePrefs('p3').prefs.value).toEqual({ ...DEFAULT_STRUCTURE_PREFS, valuesOnly: true })
   })
 })

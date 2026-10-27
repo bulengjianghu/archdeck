@@ -2,7 +2,8 @@
 /**
  * 结构视角的节点角标（ADR-0031）：
  * - L17：左缘色条 = 不稳定度三档（稳定 / 居中 / 易变），下边框左侧「入 Ca · 出 Ce」（共用件架上的块只标入）；
- * - K15：选中模块时影响面里的节点——上边框左侧标方向与距离（牵动 = 传入、依赖 = 传出、双向），外圈按距离由深到浅。
+ * - K15b：面板查询影响面时闭包里的节点——上边框左侧标方向与距离（牵动 = 传入、依赖 = 传出、双向），外圈按距离由深到浅；
+ *   K15d：可能波及的外圈与标记浅一档（不加字，悬停说明）。
  * - L20①：有入口的模块在同一行加「表面 W」（K19）；
  * - B2、L21③：跨界折叠的束——朝外一侧的小记号「界外 入 N · 出 M」，悬停列目标。
  * 环的编号与「共用 ×N」仍由 DiffMark 画（共享通道）。
@@ -33,7 +34,10 @@ const impactTitle = computed(() => {
   const x = imp.value
   if (!x) return ''
   const what = x.direction === 'in' ? '改选中的模块会牵动它（影响面）' : x.direction === 'out' ? '选中的模块要它才能工作（依赖面）' : '既在影响面又在依赖面'
-  return `${what}，距离 ${x.distance}${x.inCycle ? '，在模块环中' : ''}（K15）`
+  const maybe = x.possible
+    ? '；可能波及——只经可截断处（只用具名契约：端口、具名接口、声明的数据结构，或只是再导出）到达，改内部实现时变更可能在那里停下（K15d）'
+    : ''
+  return `${what}，距离 ${x.distance}${x.inCycle ? '，在模块环中' : ''}${maybe}（K15）`
 })
 </script>
 
@@ -48,8 +52,15 @@ const impactTitle = computed(() => {
   <span v-if="cross" class="cross-fold" :class="cross.side" data-testid="cross-fold" :data-in="cross.in" :data-out="cross.out" :title="cross.title">{{
     crossText
   }}</span>
-  <span v-if="imp" class="impact-ring" :class="[imp.direction, `d${Math.min(imp.distance, 3)}`]" />
-  <span v-if="imp" class="impact-mark" :class="imp.direction" data-testid="impact-mark" :data-distance="dist" :title="impactTitle"
+  <span v-if="imp" class="impact-ring" :class="[imp.direction, `d${Math.min(imp.distance, 3)}`, { possible: imp.possible }]" />
+  <span
+    v-if="imp"
+    class="impact-mark"
+    :class="[imp.direction, { possible: imp.possible }]"
+    data-testid="impact-mark"
+    :data-distance="dist"
+    :data-possible="imp.possible ? '' : undefined"
+    :title="impactTitle"
     >{{ DIRECTION[imp.direction] }} {{ dist }}<template v-if="imp.inCycle"> ↻</template></span
   >
 </template>
@@ -165,6 +176,18 @@ const impactTitle = computed(() => {
 .impact-ring.both,
 .impact-mark.both {
   --impact-color: var(--impact-both);
+}
+
+.impact-ring.possible {
+  opacity: 0.4;
+}
+
+/* K15d：可能波及浅一档——底色换成方向色的浅底、字用方向色，不加字 */
+.impact-mark.possible {
+  color: var(--impact-color);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--impact-color);
+  opacity: 0.75;
 }
 
 .impact-mark {

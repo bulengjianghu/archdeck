@@ -48,7 +48,7 @@ const { setViewport, zoomIn, zoomOut, dimensions, setNodes, setEdges, onMoveStar
 /** 运行视角的舞台叠加；结构 / 交互视角为 null */
 const stage = computed(() => (desk.perspective.value === 'run' ? desk.run.overlay.value : null))
 const interaction = computed(() => desk.perspective.value === 'interaction')
-/** ADR-0031、ADR-0032：结构视角的显示偏好（只引类型、只看交互使用、只看未解释、总是展开表面、影响面方向、只看值依赖），与「显示」面板共享 */
+/** ADR-0031、ADR-0032：结构视角的显示偏好（只引类型、只看交互使用、只看未解释、总是展开表面、只看值依赖），与「显示」面板共享 */
 const structurePrefs = useStructurePrefs(desk.project)
 
 /** 结构视角的画布输入；其余视角为 null */
@@ -56,9 +56,9 @@ const structure = computed<StructureInput | null>(() => {
   if (desk.perspective.value !== 'structure') return null
   const f = desk.facts
   const p = structurePrefs.prefs.value
-  const sel = desk.selection.value
   const loading = f.status.value === 'loading'
-  const hit = sel?.kind === 'module' && !loading ? f.impactOf(sel.id, p.valuesOnly) : null
+  // K15b（ADR-0037）：影响面只在面板显式查询时投影（视图状态 impactQuery，desk.facts.queried）
+  const hit = loading ? null : f.queried.value
   const display = loading ? null : f.structureDisplay({ typeOnly: p.typeOnly, invokesOnly: p.invokesOnly, uncoveredOnly: p.uncoveredOnly })
   return {
     view: loading ? null : f.structure.value,
@@ -68,7 +68,7 @@ const structure = computed<StructureInput | null>(() => {
     uncoveredOnly: p.uncoveredOnly,
     metrics: (p.valuesOnly ? f.valueMetrics.value : f.metrics.value) ?? null,
     impact: hit?.impact ?? null,
-    impactMode: p.impactMode,
+    impactMode: hit?.mode ?? 'in',
     cycles: f.level.value?.cycles ?? null,
     report: f.report.value,
     note: loading ? '正在读取代码事实…' : null,

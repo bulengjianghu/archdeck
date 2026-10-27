@@ -88,7 +88,10 @@ function edgeChange(marks: ModelDiff | null, e: ViewEdge): 'added' | 'changed' |
  */
 export const EDGE_Z = { idle: 1, active: 1001, current: 1002 } as const
 
-const touchesFocus = (ctx: SceneContext, e: ViewEdge) => !!ctx.focusId && (e.from === ctx.focusId || e.to === ctx.focusId)
+/** L26：边的一端是聚焦对象（选中或悬停的节点） */
+const touchesFocus = (ctx: SceneContext, e: { from: string; to: string }) => ctx.focusIds.some(f => e.from === f || e.to === f)
+/** L26：边的一端是悬停的节点（悬停叠加在影响面查询、边聚焦之上） */
+const touchesHover = (ctx: SceneContext, e: { from: string; to: string }) => !!ctx.hoverFocus && (e.from === ctx.hoverFocus || e.to === ctx.hoverFocus)
 
 /** 运行视角：按舞台显示（V5、V8）；分层总览：层间边在聚焦核心模块时变淡；普通层次：与聚焦对象无关的边变淡 */
 function edgeDim(ctx: SceneContext, e: ViewEdge, core: boolean, selected: boolean, played: boolean): boolean {
@@ -390,7 +393,7 @@ export function assemblyEdges(ctx: SceneContext): (CanvasEdge | null)[] {
 /**
  * L15、L16、L21、C6：结构视角的结构边——画出来的束、散开的元素级边与跨层依赖（structureScene 的显隐之后），编码数据交给 DepEdge（UML 类图惯例）。
  * 标签只有角标与异常标记：形态不止一种的束「×N 元素」（L21①）、越过入口（C3）、未解释（K17）、逆稳定（U17，浅色）；
- * 变淡：影响面生效时两端不都在闭包里的边；选中束时不在聚焦里的（B3）；否则与聚焦节点无关的边（共享通道）。
+ * 变淡：影响面查询生效时两端不都在闭包里的边；选中束时不在聚焦里的（B3）；否则与选中、悬停的节点都无关的边（共享通道，L26）；与悬停节点相连的边总不变淡。
  */
 export function depEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   const sc = ctx.structure
@@ -400,9 +403,12 @@ export function depEdges(ctx: SceneContext): (CanvasEdge | null)[] {
     const route0 = sc.routes.get(e.id)
     if (!route0) return null
     const selected = sc.selected.has(e.id)
-    const touches = !!ctx.focusId && (e.from === ctx.focusId || e.to === ctx.focusId)
     const unfocused = !!sc.focus && !sc.focus.has(e.bundle ?? e.id) && !e.chip
-    const dim = sc.impact ? !(inImpact(sc, nodeOf(e.from)) && inImpact(sc, nodeOf(e.to))) && !selected : unfocused || (!!ctx.near && !touches && !selected)
+    // L26：悬停的一跳叠加在影响面查询（K15b）与边聚焦（L21④）之上
+    const dim =
+      !selected &&
+      !touchesHover(ctx, e) &&
+      (sc.impact ? !(inImpact(sc, nodeOf(e.from)) && inImpact(sc, nodeOf(e.to))) : unfocused || (!!ctx.near && !touchesFocus(ctx, e)))
     const label = [
       e.look.rest ? `×${e.look.elements} 其余` : e.look.elements ? `×${e.look.elements} 元素` : '',
       e.look.bypass ? '越过入口' : '',
@@ -418,7 +424,7 @@ export function depEdges(ctx: SceneContext): (CanvasEdge | null)[] {
       target: e.to,
       type: 'dep' as const,
       // 同交互边（L11）：与聚焦对象相邻或选中的浮在节点之上，其余在节点之下
-      zIndex: selected || touches ? EDGE_Z.active : EDGE_Z.idle,
+      zIndex: selected || touchesFocus(ctx, e) ? EDGE_Z.active : EDGE_Z.idle,
       data: {
         route,
         edge: depViewEdge(e),
