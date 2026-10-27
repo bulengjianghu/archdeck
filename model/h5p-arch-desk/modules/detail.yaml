@@ -220,8 +220,8 @@ modules:
   - id: state.layout.runner
     name: 布局入口与缓存
     parent: state.layout
-    responsibility: Layout 的入口（layout.ts，对外只经它引用）：layoutView 按视图模式分派给分层总览或普通层次排布；并集布局（L15）：结构边（StructureLinks）经 unionView 并入视图边、共用件的边与核心跨层边，与交互边一起交给排布，两个视角共用同一份布局与走线；结果按视图内容、结构边 ID 与布局算法版本（LAYOUT_VERSION）缓存；几何类型（点、盒子、走线、带坐标的视图与它的父模块框 parentFrame、系统框 frame）、节点尺寸与内容外框 contentBounds（含两种框，geometry.ts）。
-    codeRefs: [src/layout/layout.ts, src/layout/geometry.ts]
+    responsibility: Layout 的入口（layout.ts，对外只经它引用）：layoutView 按视图模式分派给分层总览或普通层次排布；并集布局（L15）：结构边（StructureLinks）经 unionView 并入视图边、共用件的边与核心跨层边，与交互边一起交给排布，两个视角共用同一份布局与走线；表面展开不进排布（L20a②，ADR-0036）：先取收起态的布局，再由 expandSurface 在固定的节点上排端口点（surfaceDots）、把接到点的边沿束的走线经扇出线接到点上（fanRoute、fanLevels，dots.ts），换选中节点不动；结果按视图内容、结构边 ID 与布局算法版本（LAYOUT_VERSION）缓存；几何类型（点、盒子、走线、带坐标的视图与它的父模块框 parentFrame、系统框 frame）、节点尺寸与内容外框 contentBounds（含两种框，geometry.ts）。
+    codeRefs: [src/layout/layout.ts, src/layout/geometry.ts, src/layout/dots.ts]
   - id: state.layout.runner.layered
     name: 分层总览排布
     parent: state.layout.runner
