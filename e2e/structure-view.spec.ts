@@ -1,7 +1,7 @@
 /**
  * 结构视角（ADR-0031、ADR-0032）：顶部三段切换与 URL v=s（V11）、节点位置与交互视角一致（V12）、结构边即束（L15、L16、L21：一对节点一条），
  * 只引类型收起与计数（L15）、只看交互使用 / 只看未解释（B1、B4）、跨界折叠与悬停画出（B2）、选中束（K10 sel=d:）与聚焦（B3）、
- * 表面展开（C6、L20）、影响面（K15）、分层总览（O13③）、退出场景回到进入前的视角（V11）。
+ * 表面展开（C6、L20）、影响面查询（K15、K15b）、分层总览（O13③）、退出场景回到进入前的视角（V11）。
  */
 import { expect, test, type Page } from '@playwright/test'
 import { graphNode, openDesk, query } from './helpers'
@@ -159,9 +159,12 @@ test('C6、L20：节点角标「表面 W」；选中模块展开表面——元�
   await expect(page.locator('.vue-flow__edge-dep[data-id^="el:"]')).toHaveCount(0)
 })
 
-test('K15：结构视角选中模块时影响面按距离标在节点上，闭包外变淡', async ({ page }) => {
+test('K15、K15b：结构视角选中模块后在面板查询影响面，按距离标在节点上，闭包外变淡', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra.framework&v=s&sel=m:infra.framework.contracts')
   const marks = page.getByTestId('impact-mark')
+  await expect(page.locator('.module-structure .segmented button.on')).toHaveText('不看')
+  await expect(marks).toHaveCount(0)
+  await page.locator('.module-structure .segmented button[data-choice="in"]').click()
   await expect(marks.first()).toBeVisible()
   expect(await marks.count()).toBeGreaterThan(2)
   await expect(marks.first()).toHaveText(/牵动 (1|2|3\+)/)
