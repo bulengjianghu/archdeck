@@ -13,7 +13,7 @@ scenario:
     - media-sdk-kits/tests/kernel.test.mjs
     - media-wasm/tests/live-pipeline-session.test.mjs
   steps:
-    - async: {id: failed, from: providers.wasm-core.lifecycle, to: kit.kernel.envelope, label: 'sink.failed(cause, error)：只报一次，会话停止工作'}
+    - async: {id: failed, from: providers.wasm-module.lifecycle, to: kit.kernel.envelope, label: 'sink.failed(cause, error)：只报一次，会话停止工作'}
     - async: {from: kit.kernel.envelope, to: kit.kernel.queue, label: "enqueue({kind: 'failed', generation, cause, error})"}
     - alt:
         - when: 代号不是当前会话（迟到的回报）

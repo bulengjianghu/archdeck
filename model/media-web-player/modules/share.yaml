@@ -83,7 +83,7 @@ interfaces:
     signature: |
       class MediaFault extends Error { readonly code: ErrorCode; constructor(code: ErrorCode, message: string) }
     semantics: 带会话失败原因的 MediaPlayerFault 继承它（子类事实）。
-    implementedBy: [providers.wasm-core.module]
+    implementedBy: [providers.wasm-module.module]
   - id: if.share.core.describeError
     name: describeError
     owner: share.core.primitives.fault

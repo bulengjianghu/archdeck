@@ -1,6 +1,8 @@
 # 骨架（持久草图，X1、X2，ADR-0023）：5 个层 + 第二级模块，ID 按 plans/arch-desk-media-player/00-plan.md §2 固定。
 # 层按仓库自己的分层（docs/architecture/06-unified-web-media-architecture.md §3：App / Host → Kit → 领域窄端口 → Provider → 共享基础）；
 # 第二级封闭（closed）：区域文件只能用 parent 往第二级模块下挂子模块。人拥有：本次由 AI 起草（2026-10-26），待负责人审核后 npm run arch -- own 登记。
+# 2026-10-27 按 plans/arch-desk-media-player/10-module-review.md §5、§8（负责人裁决采纳）重划：pipeline 为 contract / latency / metering / timing / fetch，
+# providers.wasm-core 拆为 wasm-module 与 stream-input；改动清单见 11-redivision-report.md，待负责人重新 arch own。
 
 sketch:
   id: skeleton
@@ -84,8 +86,8 @@ sketch:
       kind: layer
       order: 3
       abstraction: 领域窄端口：内核与管线族之间的契约，加两族共用的纯决策律与拉流；只依赖共享基础，不认识具体族
-      responsibility: 内核与每个管线族共用的契约（源、打开选项、命令、回报、统计、族端口），两族共用的延迟决策律（纯函数）与其运行骨架、抖动 / 锚点 / 冻结计量、计时器，以及 HTTP-FLV、HLS、MP4 的拉流与有界重连。
-      includes: [管线契约, 延迟决策律, 计量与计时器, HTTP 请求与拉流, HLS 清单与窗口, MP4 分段拉取]
+      responsibility: 内核与每个管线族共用的契约（源、打开选项、命令、回报、统计、族端口），两族共用的延迟决策律（纯函数与运行骨架）、计量与锚点（抖动、冻结、墙钟锚点）、计时器与看不见即保持，以及 HTTP-FLV、HLS、MP4 的拉流与有界重连。
+      includes: [管线契约, 延迟决策律, 计量与锚点, 计时器与看不见即保持, 拉流与重连]
       excludes: [会话状态（内核）, 解封装与解码（Provider）, 呈现与音频（Provider）]
       mayDependOn: [share]
       docRefs: [docs/development/07-web-player-element-family.md, docs/design/02-web-live-player.md]
@@ -103,52 +105,63 @@ sketch:
           name: 延迟决策律
           kind: subsystem
           role: core
-          responsibility: 两族共用的延迟决策律（纯函数，状态 × 读数 × 配置 → 动作与报告，可重放）与一次会话的运行骨架；抖动、墙钟锚点与画面冻结的计量；计时器、页面隐藏时的「看不见即保持」与会话计时器。不碰浏览器 API、不设定时器（计时器由调用方注入）。
-          provides: [if.pipeline.latency.decideLatency, if.pipeline.latency.runLatencyLaw, if.pipeline.latency.validateLatencyConfig, if.pipeline.latency.HoldUnseen, if.pipeline.latency.sessionTimers]
-          dataStructures: [ds.LatencyConfig, ds.LatencyReading, ds.LatencyAction, ds.LatencyReport, ds.Timers]
-          codeRefs: ['media-web/packages/media-playback-pipeline/src/{latency-law,latency-run,latency,anchors,freeze,jitter,timers}.ts']
-          docRefs: [docs/design/02-web-live-player.md, docs/development/14-web-player-metrics.md]
-        - id: pipeline.network
+          responsibility: 两族共用的延迟决策律：纯函数（状态 × 读数 × 配置 → 动作与报告，可重放）与一次会话驱动它的运行骨架（携带状态、报告送 sink、动作交给本族执行器并计数）。读数怎么取、动作怎么做归各族；计量件与计时器不在这里。
+          provides: [if.pipeline.latency.decideLatency, if.pipeline.latency.runLatencyLaw, if.pipeline.latency.validateLatencyConfig]
+          dataStructures: [ds.LatencyConfig, ds.LatencyReading, ds.LatencyAction, ds.LatencyReport]
+          codeRefs: ['media-web/packages/media-playback-pipeline/src/{latency-law,latency-run,latency}.ts']
+          docRefs: [docs/design/02-web-live-player.md]
+        - id: pipeline.metering
+          name: 计量与锚点
+          kind: subsystem
+          responsibility: 两族共用、把时间戳变成读数或报告的三件观测件：到达抖动（律的死区）、画面冻结（观众看到的停顿与原因）、墙钟锚点（位置 ↔ 墙钟，三种来源取可信者）。各自独立、互不依赖，都不碰浏览器 API。
+          provides: [if.pipeline.metering.JitterMeter, if.pipeline.metering.FreezeMeter, if.pipeline.metering.anchors]
+          dataStructures: [ds.Anchor, ds.Freeze]
+          codeRefs: ['media-web/packages/media-playback-pipeline/src/{jitter,anchors,freeze}.ts']
+          docRefs: [docs/development/14-web-player-metrics.md, docs/development/11-web-player-live-timeshift.md]
+        - id: pipeline.timing
+          name: 计时器与看不见即保持
+          kind: subsystem
+          responsibility: 拉流与各族等待所用的可注入计时器；会话的「看不见即保持」（页面隐藏且声音没人听见时原地保持，HoldUnseen）及随它停走的会话计时器，只在页面可见时计时的计时器，与带超时的等待 within。是播放器领域的概念（依赖契约的 PageVisibility），不下沉到共享基础。
+          provides: [if.pipeline.timing.Timers, if.pipeline.timing.HoldUnseen, if.pipeline.timing.sessionTimers, if.pipeline.timing.visibleTimers, if.pipeline.timing.within]
+          dataStructures: [ds.Timers]
+          codeRefs: [media-web/packages/media-playback-pipeline/src/timers.ts]
+          docRefs: [docs/design/02-web-live-player.md]
+        - id: pipeline.fetch
           name: 拉流与重连
           kind: subsystem
-          responsibility: 一次流式 HTTP 请求（可取消、空闲超时）与 HTTP-FLV 拉流的有界重连：断流归因、重试计数与稳定清零、直播正常结束的判定。
-          provides: [if.pipeline.network.requestStream, if.pipeline.network.startPull, if.pipeline.network.boundedRetries]
-          dataStructures: [ds.PullHandlers, ds.PullLoss]
-          codeRefs: ['media-web/packages/media-playback-pipeline/src/{network,http-request}.ts']
-        - id: pipeline.hls
-          name: HLS 拉取
-          kind: subsystem
-          responsibility: HLS 拉流：解析 m3u8（含 AES-128 与 xor-v2 标记）、维护列表时间上的窗口、逐片加载并按 startPull 的规则重试；直播边缘、点播结束、按 PROGRAM-DATE-TIME 定位。
-          provides: [if.pipeline.hls.startHlsPull, if.pipeline.hls.parsePlaylist]
-          dataStructures: [ds.HlsHandlers, ds.MediaPlaylist]
-          codeRefs: [media-web/packages/media-playback-pipeline/src/hls/**]
+          responsibility: 一个概念的三种协议：每种拉流底下的流式 HTTP 请求（可取消、空闲超时），HTTP-FLV 拉流与有界重连（断流归因、退避、稳定清零、直播结束判定），HLS 拉流（m3u8 解析、列表时间窗口、逐片加载、墙钟定位），MP4 按字节范围分段拉取；三者共用请求与有界重试，消费者都是拉流内核。
+          provides: [if.pipeline.fetch.requestStream, if.pipeline.fetch.startPull, if.pipeline.fetch.startHlsPull, if.pipeline.fetch.startMp4Pull, if.pipeline.fetch.boundedRetries]
+          dataStructures: [ds.PullHandlers, ds.PullLoss, ds.HlsHandlers, ds.MediaPlaylist]
+          codeRefs: ['media-web/packages/media-playback-pipeline/src/{network,http-request}.ts', media-web/packages/media-playback-pipeline/src/hls/**, media-web/packages/media-playback-pipeline/src/mp4/**]
           docRefs: [docs/development/11-web-player-live-timeshift.md]
-        - id: pipeline.mp4
-          name: MP4 拉取
-          kind: subsystem
-          responsibility: 按模块要的字节范围逐段拉 MP4 文件：首个请求探测源站是否支持 Range，文件大小变化即失败，丢失的请求从未交出的下一个字节重试。不认识模块与 box。
-          provides: [if.pipeline.mp4.startMp4Pull]
-          codeRefs: [media-web/packages/media-playback-pipeline/src/mp4/**]
     - id: providers
       name: 管线族 Provider
       kind: layer
       order: 4
       abstraction: 管线族：实现管线契约，拥有一个会话的拉流、解封装、解码、延迟执行、呈现与音频；由宿主选取并注入门面
-      responsibility: 两个管线族与它们共用的 wasm 模块：自建时钟族（webcodecs / wasm 路线，可在 Worker 中运行）、元素族（mse / native 路线），wasm 模块装载与拉流内核（StreamInput，含时移），以及 C 写的 wasm 原生模块（解封装、解密、解码）。
-      includes: [自建时钟族, 元素族, wasm 模块与拉流内核, wasm 原生模块]
+      responsibility: 两个管线族与它们共用的两件内核：自建时钟族（webcodecs / wasm 路线，可在 Worker 中运行）、元素族（mse / native 路线），wasm 模块与会话（ABI、样本、生命周期）、拉流内核（StreamInput，含时移），以及 C 写的 wasm 原生模块（解封装、解密、解码）。
+      includes: [自建时钟族, 元素族, wasm 模块与会话, 拉流内核, wasm 原生模块]
       excludes: [会话状态与命令接受（Kit）, 延迟决策律本身（pipeline）]
       mayDependOn: [pipeline, share]
       docRefs: [docs/design/02-web-live-player.md, docs/development/07-web-player-element-family.md]
       children:
-        - id: providers.wasm-core
-          name: wasm 模块与拉流内核
+        - id: providers.wasm-module
+          name: wasm 模块与会话
           kind: subsystem
           role: core
-          responsibility: 两族共用：基线播放模块的编译与每会话实例（ABI 读写、归一化样本、H.264 参数集），一次管线会话的生命周期（逆序释放、回调守护、漏斗只报一次），以及喂模块的拉流内核 StreamInput（FLV / HLS / MP4 输入、压缩缓冲满时跳到最新 IDR、到达计量、直播切时移）。
-          provides: [if.providers.wasm-core.loadMediaPlayer, if.providers.wasm-core.MediaPlayerSession, if.providers.wasm-core.StreamInput, if.providers.wasm-core.StreamInputHooks, if.providers.wasm-core.SessionLifecycle]
+          responsibility: 两族共用的 ABI 一侧：基线播放模块的编译与每会话实例（ABI 读写、推字节、解码、取帧与样本、错误码映射）、归一化样本与 H.264 参数集，以及一次管线会话的生命周期（逆序释放、回调守护、漏斗只报一次）。变更原因是 ABI。
+          provides: [if.providers.wasm-module.loadMediaPlayer, if.providers.wasm-module.MediaPlayerSession, if.providers.wasm-module.SessionLifecycle]
           dataStructures: [ds.MediaPlayerProgram, ds.NormalizedSample]
-          codeRefs: [media-wasm/packages/media-wasm-core/src/**]
-          docRefs: [docs/development/11-web-player-live-timeshift.md, docs/development/07-web-player-element-family.md]
+          codeRefs: ['media-wasm/packages/media-wasm-core/src/{index,module,player-abi,wasm-memory,sample,h264,session-lifecycle}.ts']
+          docRefs: [docs/development/07-web-player-element-family.md]
+        - id: providers.stream-input
+          name: 拉流内核
+          kind: subsystem
+          role: core
+          responsibility: 两族共用的输入一侧：喂模块会话的 StreamInput（FLV / HLS / MP4 输入、按模块肯收的块推入、压缩缓冲满时跳到最新 IDR、到达计量给延迟律、seek 与回直播），与 FLV 直播切时移列表（截断 → 接入中 → 时移）的计算。位于拉流与两族之间，经族给的钩子回调会话。变更原因是输入协议。
+          provides: [if.providers.stream-input.StreamInput, if.providers.stream-input.StreamInputHooks]
+          codeRefs: [media-wasm/packages/media-wasm-core/src/stream-input.ts, media-wasm/packages/media-wasm-core/src/stream-input-timeshift.ts]
+          docRefs: [docs/development/11-web-player-live-timeshift.md]
         - id: providers.self-clocked
           name: 自建时钟族
           kind: subsystem

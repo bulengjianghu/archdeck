@@ -14,36 +14,36 @@ scenario:
     - media-wasm/tests/stream-input.test.mjs
     - media-wasm/tests/live-pipeline-session.test.mjs
   steps:
-    - async: {id: lost, from: pipeline.network.request, to: pipeline.network.pull, label: 'fail(network / idle / http-status)'}
-    - async: {from: pipeline.network.pull, to: providers.wasm-core.stream-input, label: 'disconnected(attempt, loss)'}
-    - async: {from: providers.wasm-core.stream-input, to: kit.kernel.envelope, label: 'network {connected: false, attempt}'}
+    - async: {id: lost, from: pipeline.fetch.request, to: pipeline.fetch.flv-pull, label: 'fail(network / idle / http-status)'}
+    - async: {from: pipeline.fetch.flv-pull, to: providers.stream-input.stream-input, label: 'disconnected(attempt, loss)'}
+    - async: {from: providers.stream-input.stream-input, to: kit.kernel.envelope, label: 'network {connected: false, attempt}'}
     - async: {from: kit.kernel.envelope, to: actor.host-app, label: network 事件（重连中）}
     - loop:
         while: 尝试次数未到 MAX_RECONNECT_ATTEMPTS（连接稳定 STEADY_MS 后清零）
         steps:
-          - call: {from: pipeline.network.pull, to: pipeline.latency.timers, label: '等 reconnectDelayMs(attempt)（看不见即保持时停走）'}
-          - async: {from: pipeline.network.pull, to: pipeline.network.request, label: requestStream(url)}
+          - call: {from: pipeline.fetch.flv-pull, to: pipeline.timing, label: '等 reconnectDelayMs(attempt)（看不见即保持时停走）'}
+          - async: {from: pipeline.fetch.flv-pull, to: pipeline.fetch.request, label: requestStream(url)}
     - alt:
         - when: 连上
           steps:
-            - async: {id: back, from: pipeline.network.pull, to: providers.wasm-core.stream-input, label: connected(reconnected = true)}
-            - call: {from: providers.wasm-core.stream-input, to: providers.wasm-core.module, relation: rel.providers.input-reposition, label: restartInput()：此后重发的内容标 REPEATED}
-            - async: {from: providers.wasm-core.stream-input, to: kit.kernel.envelope, label: 'network {connected: true} / log reconnected'}
+            - async: {id: back, from: pipeline.fetch.flv-pull, to: providers.stream-input.stream-input, label: connected(reconnected = true)}
+            - call: {from: providers.stream-input.stream-input, to: providers.wasm-module.module, relation: rel.providers.input-reposition, label: restartInput()：此后重发的内容标 REPEATED}
+            - async: {from: providers.stream-input.stream-input, to: kit.kernel.envelope, label: 'network {connected: true} / log reconnected'}
             - loop:
                 while: 重发的 GOP 缓存到达
                 steps:
-                  - async: {from: pipeline.network.pull, to: providers.wasm-core.stream-input, label: chunk(bytes)}
-                  - async: {from: providers.wasm-core.stream-input, to: providers.wasm-core.module, relation: rel.providers.input-push, label: push(bytes)}
-                  - call: {id: dedupe, from: providers.wasm-core.module, to: providers.native-module, label: 'push_input → join_timeline：重发的音频丢弃、视频标 REPEATED，duplicate_samples_dropped++'}
-            - call: {from: providers.wasm-core.stream-input, to: providers.self-clocked.session, label: 'received()：律从头开始，不连续计入统计'}
+                  - async: {from: pipeline.fetch.flv-pull, to: providers.stream-input.stream-input, label: chunk(bytes)}
+                  - async: {from: providers.stream-input.stream-input, to: providers.wasm-module.module, relation: rel.providers.input-push, label: push(bytes)}
+                  - call: {id: dedupe, from: providers.wasm-module.module, to: providers.native-module, label: 'push_input → join_timeline：重发的音频丢弃、视频标 REPEATED，duplicate_samples_dropped++'}
+            - call: {from: providers.stream-input.stream-input, to: providers.self-clocked.session, label: 'received()：律从头开始，不连续计入统计'}
         - when: 耗尽或源站拒绝（401 / 403 / 404）
           steps:
-            - async: {id: exhausted, from: pipeline.network.pull, to: providers.wasm-core.stream-input, label: 'exhausted(loss, retryable)'}
+            - async: {id: exhausted, from: pipeline.fetch.flv-pull, to: providers.stream-input.stream-input, label: 'exhausted(loss, retryable)'}
             - alt:
                 - when: 有时移列表且已暂停
                   steps:
-                    - call: {from: providers.wasm-core.stream-input, to: providers.wasm-core.module, relation: rel.providers.input-reposition, label: truncateToRandomAccess()：截断，由时移列表接着播}
+                    - call: {from: providers.stream-input.stream-input, to: providers.wasm-module.module, relation: rel.providers.input-reposition, label: truncateToRandomAccess()：截断，由时移列表接着播}
                 - when: 否则
                   steps:
-                    - async: {from: providers.wasm-core.lifecycle, to: kit.kernel.envelope, label: "sink.failed('network', error)"}
+                    - async: {from: providers.wasm-module.lifecycle, to: kit.kernel.envelope, label: "sink.failed('network', error)"}
                     - ref: sc.session-failure

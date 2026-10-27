@@ -274,7 +274,7 @@ relations:
     description: 内核与接受表用管线契约的形状判断（isDecryptionKey、isTimeshiftSource）检查源与时移列表、拷贝密钥。
   - id: rel.kit.acceptance-latency
     from: kit.session.acceptance
-    to: pipeline.latency
+    to: pipeline.latency.law
     type: queries
     interface: if.pipeline.latency.validateLatencyConfig
     description: 接受表校验 open 的延迟配置（validateLatencyConfig），不合法即 invalid-argument。
@@ -377,9 +377,9 @@ relations:
     description: 页面声音状态变化与每次 resumeAudio 的手势（environment.audio.subscribe / onResume）通知元素的声音，被自动播放策略拦住的元素在手势内再试放声。
   - id: rel.kit.page-audio-timers
     from: kit.page.audio
-    to: pipeline.latency
+    to: pipeline.timing
     type: commands
-    interface: if.pipeline.latency.visibleTimers
+    interface: if.pipeline.timing.visibleTimers
     description: 页面音频的恢复超时用只在页面可见时计时的计时器（visibleTimers）。
   - id: rel.kit.page-fault
     from: kit.page

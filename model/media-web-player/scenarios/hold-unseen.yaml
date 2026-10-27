@@ -21,9 +21,9 @@ scenario:
         - when: 声音没人听见（静音、音量 0、声音被拦或无声音输出）
           steps:
             - call: {id: hold, from: kit.kernel.state, to: providers.self-clocked.session, relation: rel.kit.state-self-clocked, label: "pipeline.command({type: 'hold-unseen', held: true})"}
-            - call: {from: providers.self-clocked.session, to: pipeline.latency.timers, label: 'hold.hold(true)：时钟停，会话计时器停走'}
-            - call: {from: providers.self-clocked.session, to: providers.wasm-core.stream-input, label: holdUnseen(true)}
-            - call: {from: providers.wasm-core.stream-input, to: pipeline.network.pull, label: holdUnseen(true)：重试随之停走}
+            - call: {from: providers.self-clocked.session, to: pipeline.timing, label: 'hold.hold(true)：时钟停，会话计时器停走'}
+            - call: {from: providers.self-clocked.session, to: providers.stream-input.stream-input, label: holdUnseen(true)}
+            - call: {from: providers.stream-input.stream-input, to: pipeline.fetch.flv-pull, label: holdUnseen(true)：重试随之停走}
         - when: 有声音在播
           steps: []
     - async: {from: kit.kernel.envelope, to: host.demo.app, label: visibility 事件}
