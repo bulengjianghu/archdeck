@@ -14,23 +14,25 @@ scenario:
     - media-sdk-kits/tests/player.test.mjs
   steps:
     - async: {id: method, from: actor.host-app, to: kit.facade.player-api, label: pause() / play() / seek(ms) / stop()}
-    - async: {from: kit.facade.player-api, to: kit.kernel.queue, relation: rel.kit.api-submit, label: 'submit({type})'}
-    - call: {from: kit.kernel.queue, to: kit.session.acceptance, label: 'commandRejection(command, {state, destroyed, timeline…})'}
+    - async: {from: kit.facade.player-api, to: kit.kernel.schedule, relation: rel.kit.api-submit, label: 'submit({type})'}
+    - call: {from: kit.kernel.schedule, to: kit.session.acceptance, label: 'commandRejection(command, {state, destroyed, timeline…})'}
     - alt:
         - when: 被拒（no-session / not-seekable / destroyed / invalid-argument）
           steps:
-            - return: {id: rejected, from: kit.kernel.queue, to: kit.facade.player-api, label: '{accepted: false, reason}'}
+            - return: {id: rejected, from: kit.kernel.schedule, to: kit.facade.player-api, label: '{accepted: false, reason}'}
         - when: stop
           steps:
-            - async: {id: stop, from: kit.kernel.queue, to: kit.kernel.lifecycle, label: closeSession(stop)}
+            - call: {from: kit.kernel.schedule, to: kit.kernel.decide, relation: rel.kit.schedule-decide, label: apply(stop)}
+            - async: {id: stop, from: kit.kernel.decide, to: kit.kernel.lifecycle, relation: rel.kit.decide-close-session, label: closeSession(stop)}
             - async: {from: kit.kernel.lifecycle, to: providers.self-clocked.session, relation: rel.kit.lifecycle-stop-self-clocked, label: pipeline.stop()}
             - call: {from: kit.kernel.lifecycle, to: kit.kernel.envelope, label: 'session-closed {type: stop}'}
         - when: play / pause / seek 被接受
           steps:
-            - call: {id: apply, from: kit.kernel.queue, to: kit.kernel.state, label: playSession / pauseSession / 记下 seek}
-            - call: {from: kit.kernel.state, to: providers.self-clocked.session, relation: rel.kit.state-self-clocked, label: "pipeline.command({type: 'pause' | 'play' | 'seek'})"}
+            - call: {id: apply, from: kit.kernel.schedule, to: kit.kernel.decide, relation: rel.kit.schedule-decide, label: apply：playSession / pauseSession / seek}
+            - call: {from: kit.kernel.decide, to: providers.self-clocked.session, relation: rel.kit.decide-self-clocked, label: "pipeline.command({type: 'pause' | 'play' | 'seek'})：下发成功才改意图与状态"}
             - call: {from: providers.self-clocked.session, to: providers.stream-input.input, label: 'pause(paused) / reposition(seek, positionMs)'}
-            - call: {from: kit.kernel.state, to: kit.kernel.envelope, label: 'state paused / playing'}
+            - call: {from: kit.kernel.decide, to: kit.kernel.envelope, relation: rel.kit.decide-envelope, label: 'state paused / playing'}
+            - call: {from: kit.kernel.decide, to: kit.kernel.follow, relation: rel.kit.decide-follow, label: 重判 audio-blocked、屏幕常亮与意图时长}
             - async: {from: providers.self-clocked.session, to: kit.kernel.envelope, label: 'seek {active} / buffering（seek 的结束带落点）'}
     - async: {from: kit.kernel.envelope, to: actor.host-app, label: 状态事件（先于命令结果）}
     - return: {id: result, from: kit.facade.player-api, to: actor.host-app, label: '{accepted: true, generation} 或 {accepted: false, reason}'}

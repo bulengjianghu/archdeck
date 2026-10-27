@@ -47,16 +47,16 @@ modules:
     codeRefs: [media-sdk-kits/packages/media-player/src/index.ts]
 
   # ───────────────────────── kit.kernel（概念子模块，同在 kernel.ts） ─────────────────────────
-  - id: kit.kernel.queue
+  - id: kit.kernel.schedule
     parent: kit.kernel
-    name: 命令队列与施用
+    name: 命令调度
     kind: component
     responsibility: >-
-      唯一的工作队列：宿主命令（submit 时先拷贝成内核自己的一份）与管线回报的结束、暂停、播放、系统媒体键、续播点、失败按序施用；
-      命令先过接受表，被拒的带原因回给调用方；一项的失败只回给它的调用方，不挡后面的工作。
+      回答「什么时候处理」：宿主命令（submit 时先拷贝成内核自己的一份）与管线回报里改变意图或会话生死的那些（结束、暂停、播放、续播点、失败）
+      以及系统媒体键，排进唯一的工作队列按序交给会话决定；命令先过接受表，被拒的带原因回给调用方；过时的回报（代号不是当前会话、会话在关闭）丢弃。
     principle: |
-      - `schedule(run)` 串行：上一项（含等待释放）落定后才施用下一项，所以一串快速命令与慢慢发的结果相同。
-      - `apply(work)` 按种类分派：open → 关旧会话、开新会话；play / pause / seek… → 转成管线命令；ended / failed 只认当前代号。
+      - `schedule(run)` 串行：上一项（含等待释放）落定后才处理下一项，所以一串快速命令与慢慢发的结果相同；一项的失败只回给它的调用方，不挡后面的工作。
+      - 进队列的判据：会改变意图或会话生死的输入才排队；只是观察的回报（模式、边缘、缓冲、声音被拦、时间线、统计）不排队，直接交给观察跟随。
       - screenshot 也排队（抓的是它之前那些命令之后的会话），但编码不占队列。
     provides: [if.kit.kernel.createPlayerKernel, if.kit.kernel.PlayerKernel]
 
@@ -72,17 +72,32 @@ modules:
     principle: |
       - 获取即登记：每拿到一项资源（管线、可见性订阅、媒体键订阅）就把它的释放放到 `releases` 栈顶；关闭只按栈依次执行，不认识具体资源——新增一种会话资源只改打开这一侧。
       - 关闭把接续交给下一次打开（`Continuation`）：续播点 `resumePoint` 直播在边缘时不带，有墙钟就按墙钟 seek，否则只有点播按位置 seek。
-      - 无路线、Worker 不可用、startPipeline 抛错都不在打开时抛：入队一个 failed，由队列按序关闭会话。
+      - 无路线、Worker 不可用、startPipeline 抛错都不在打开时抛：入队一个 failed，由调度交给会话决定按序关闭会话。
       - 路线怎么选不在这里：各容器的顺序、跳过排除项、延迟硬上限能否用于该路线都归路线策略。
 
-  - id: kit.kernel.state
+  - id: kit.kernel.decide
     parent: kit.kernel
-    name: 状态与意图跟随
+    name: 会话决定
     kind: component
     responsibility: >-
-      会话的唯一状态与宿主意图（wantPlaying）：play / pause 转成管线命令并改状态；跟随管线报的模式与边缘告诉宿主 playback-mode；
-      按页面可见性与声音是否被听见判定「看不见即保持」并下发 hold-unseen；声音被拦（sound-held）汇成 audio-blocked；
-      播放中持有屏幕常亮；累计卡顿、意图时长与冻结。快照由这里读出。
+      回答「处理后变成什么」：会话状态（state）与宿主意图（wantPlaying）唯一的写入处。按工作种类决定会话怎么变——open 关旧开新、
+      失败后的 play 重开、ended 先停再关、failed 关闭并按需交回主线程接续；play / pause / seek / seek-live / seek-wall-clock / set-timeshift 转成管线命令，
+      命令下发成功才改意图与状态；首帧把 loading 定为 playing 或 paused（按意图）；音量、静音与清最后一帧是播放器级的，也在这里施用。
+    principle: |
+      - 先下发后改：管线命令抛错即入队 failed，意图与状态保持原样。
+      - 状态每变一次就发 state 事件，并交给观察跟随重判（audio-blocked、屏幕常亮、累计时长）；生命周期打开、关闭时的初始与最终状态也由这里给。
+
+  - id: kit.kernel.follow
+    parent: kit.kernel
+    name: 观察跟随
+    kind: component
+    responsibility: >-
+      回答「变化之后对外报什么」：读当前状态与意图、管线报的观察（模式、边缘、缓冲、seek、声音被拦、时间线）和页面能力（可见性、音量），
+      派生出告诉宿主与管线的东西——playback-mode、visibility、audio-blocked、hold-unseen（看不见且声音没被听见即保持），播放中持有屏幕常亮，
+      累计卡顿、意图时长与冻结；快照由这里读出。
+    principle: |
+      - 只读不决：不写 state 与 wantPlaying，只把它们和观察合起来算出该报什么，同一输入总报同一结果。
+      - 观察直接到这里，不经队列：它们不改变意图或会话生死，不需要与宿主命令排序。
 
   - id: kit.kernel.envelope
     parent: kit.kernel
@@ -147,7 +162,7 @@ relations:
   # 门面 → 内核 / 页面 / 管线族
   - id: rel.kit.api-submit
     from: kit.facade.player-api
-    to: kit.kernel.queue
+    to: kit.kernel.schedule
     type: commands
     mode: async
     interface: if.kit.kernel.PlayerKernel
@@ -155,7 +170,7 @@ relations:
     description: 门面把宿主的每个方法转成一条命令交给内核排队（submit），以命令结果回给宿主；screenshot 同样排队。
   - id: rel.kit.assembly-kernel
     from: kit.facade.assembly
-    to: kit.kernel.queue
+    to: kit.kernel.schedule
     type: commands
     interface: if.kit.kernel.createPlayerKernel
     description: 装配时以时钟、族、可见性、媒体键、音量与屏幕常亮适配器创建会话内核（createPlayerKernel）。
@@ -194,58 +209,73 @@ relations:
     interface: if.share.core.MediaFault
     description: 门面在没有任何管线族时构造 invalid-argument 的 MediaFault。
   # 内核内部（概念拆分，同文件）
-  - id: rel.kit.queue-open-session
-    from: kit.kernel.queue
+  - id: rel.kit.decide-open-session
+    from: kit.kernel.decide
     to: kit.kernel.lifecycle
     type: commands
-    description: 施用 open（及失败后的 play、Worker 交回）时打开新会话。
-  - id: rel.kit.queue-close-session
-    from: kit.kernel.queue
+    description: 决定 open（及失败后的 play、Worker 交回）时打开新会话，交给它初始状态与接续。
+  - id: rel.kit.decide-close-session
+    from: kit.kernel.decide
     to: kit.kernel.lifecycle
     type: commands
     mode: async
-    description: 施用 stop / open / failed / ended / destroy 时关闭当前会话，等释放完成再施用下一项。
-  - id: rel.kit.queue-state
-    from: kit.kernel.queue
-    to: kit.kernel.state
+    description: 决定 stop / open / failed / ended / destroy 时关闭当前会话（带最终状态），等释放完成才回到调度。
+  - id: rel.kit.schedule-decide
+    from: kit.kernel.schedule
+    to: kit.kernel.decide
     type: commands
-    description: 施用 play / pause / seek / 媒体键等命令时改状态与意图并下发管线命令。
+    description: 队首的工作（已过接受表、代号是当前会话的）交给会话决定施用（apply），落定后才取下一项。
   - id: rel.kit.lifecycle-envelope
     from: kit.kernel.lifecycle
     to: kit.kernel.envelope
     type: commands
     description: 打开会话时为它建 PipelineSink（sinkFor）交给管线并发 session-opened；关闭时经信封发 error 与 session-closed，并记会话级遥测（卡顿、意图时长、冻结）。
-  - id: rel.kit.envelope-queue
+  - id: rel.kit.envelope-schedule
     from: kit.kernel.envelope
-    to: kit.kernel.queue
+    to: kit.kernel.schedule
     type: commands
     mode: async
-    description: 管线回报的结束、暂停、播放、续播点与失败由信封层入队，按序施用。
-  - id: rel.kit.envelope-state
+    description: 管线回报里改变意图或会话生死的——结束、暂停、播放、续播点与失败——由信封层入队，按序施用。
+  - id: rel.kit.envelope-follow
     from: kit.kernel.envelope
-    to: kit.kernel.state
+    to: kit.kernel.follow
     type: commands
-    description: 管线回报的模式、边缘、缓冲、声音被拦更新会话状态与意图跟随。
-  - id: rel.kit.state-envelope
-    from: kit.kernel.state
+    description: 管线回报的观察（模式、边缘、缓冲、seek、声音被拦、时间线、统计、漏斗阶段）直接交给观察跟随，不经队列。
+  - id: rel.kit.envelope-decide
+    from: kit.kernel.envelope
+    to: kit.kernel.decide
+    type: commands
+    description: 首帧到达时请会话决定把 loading 定为 playing 或 paused（按意图）。
+  - id: rel.kit.decide-envelope
+    from: kit.kernel.decide
     to: kit.kernel.envelope
     type: commands
-    description: 状态与意图的变化经信封发给宿主（state、playback-mode、visibility、audio-blocked、log）。
+    description: 状态每变一次经信封发 state 事件给宿主。
+  - id: rel.kit.decide-follow
+    from: kit.kernel.decide
+    to: kit.kernel.follow
+    type: commands
+    description: 状态、意图、音量或静音变化后请观察跟随重判 audio-blocked、hold-unseen、屏幕常亮与累计时长。
+  - id: rel.kit.follow-envelope
+    from: kit.kernel.follow
+    to: kit.kernel.envelope
+    type: commands
+    description: 跟随的结果经信封发给宿主（playback-mode、visibility、audio-blocked、屏幕常亮被拒的 log）。
   - id: rel.kit.visibility-callback
     from: kit.facade.browser-platform
-    to: kit.kernel.state
+    to: kit.kernel.follow
     type: notifies
     via: channel:callback@kit.kernel
     description: 页面可见性变化经内核订阅时给的回调通知会话：转给管线、发 visibility 事件、重判看不见即保持。
   - id: rel.kit.media-keys-callback
     from: kit.facade.browser-platform
-    to: kit.kernel.queue
+    to: kit.kernel.schedule
     type: notifies
     via: channel:callback@kit.kernel
     description: 系统媒体键的 play / pause 经内核订阅时给的回调作为当前会话的工作入队（media-control）。
   # 内核 → 会话规则
-  - id: rel.kit.queue-acceptance
-    from: kit.kernel.queue
+  - id: rel.kit.schedule-acceptance
+    from: kit.kernel.schedule
     to: kit.session.acceptance
     type: queries
     interface: if.kit.session.commandRejection
@@ -285,22 +315,38 @@ relations:
     via: port:if.pipeline.contract.Pipelines
     payload: ds.PipelineStart
     description: 内核把会话交给元素族启动管线（startPipeline）；无会话时清最后一帧（clearLastFrame）。
-  - id: rel.kit.state-self-clocked
-    from: kit.kernel.state
+  - id: rel.kit.decide-self-clocked
+    from: kit.kernel.decide
     to: providers.self-clocked
     type: commands
     interface: if.pipeline.contract.Pipeline
     via: port:if.pipeline.contract.Pipeline
     payload: ds.PipelineCommand
-    description: 内核向自建时钟族的会话管线下发命令（play / pause / seek / seek-live / seek-wall-clock / set-timeshift / visibility / hold-unseen），截图也经它取。
-  - id: rel.kit.state-element
-    from: kit.kernel.state
+    description: 会话决定向自建时钟族的会话管线下发宿主意图的命令（play / pause / seek / seek-live / seek-wall-clock / set-timeshift，续播点的 seek），截图也经它取。
+  - id: rel.kit.follow-self-clocked
+    from: kit.kernel.follow
+    to: providers.self-clocked
+    type: commands
+    interface: if.pipeline.contract.Pipeline
+    via: port:if.pipeline.contract.Pipeline
+    payload: ds.PipelineCommand
+    description: 观察跟随向自建时钟族的会话管线下发派生出的命令（visibility、hold-unseen）。
+  - id: rel.kit.decide-element
+    from: kit.kernel.decide
     to: providers.element
     type: commands
     interface: if.pipeline.contract.Pipeline
     via: port:if.pipeline.contract.Pipeline
     payload: ds.PipelineCommand
-    description: 内核向元素族的会话管线下发同一组命令。
+    description: 会话决定向元素族的会话管线下发同一组意图命令；清最后一帧经族的 clearLastFrame。
+  - id: rel.kit.follow-element
+    from: kit.kernel.follow
+    to: providers.element
+    type: commands
+    interface: if.pipeline.contract.Pipeline
+    via: port:if.pipeline.contract.Pipeline
+    payload: ds.PipelineCommand
+    description: 观察跟随向元素族的会话管线下发 visibility 与 hold-unseen。
   - id: rel.kit.lifecycle-stop-self-clocked
     from: kit.kernel.lifecycle
     to: providers.self-clocked
@@ -318,13 +364,20 @@ relations:
     via: port:if.pipeline.contract.Pipeline
     description: 关闭会话时让元素族的管线释放（stop），超时则终止。
   # 内核 → 注入的适配器
-  - id: rel.kit.state-adapters
-    from: kit.kernel.state
+  - id: rel.kit.follow-adapters
+    from: kit.kernel.follow
+    to: kit.facade.browser-platform
+    type: queries
+    interface: if.kit.kernel.PlayerAdapters
+    via: port:if.kit.kernel.PlayerAdapters
+    description: 经注入的适配器读页面可见性与能否出声，判定看不见即保持、填快照。
+  - id: rel.kit.decide-adapters
+    from: kit.kernel.decide
     to: kit.facade.browser-platform
     type: commands
     interface: if.kit.kernel.PlayerAdapters
     via: port:if.kit.kernel.PlayerAdapters
-    description: 经注入的适配器读可见性判定看不见即保持；音量命令经适配器交给门面设增益与族音量。
+    description: 音量与静音命令经注入的适配器交给门面设增益与族音量（setVolume）。
   - id: rel.kit.lifecycle-adapters
     from: kit.kernel.lifecycle
     to: kit.facade.browser-platform
@@ -332,13 +385,13 @@ relations:
     interface: if.kit.kernel.PlayerAdapters
     via: port:if.kit.kernel.PlayerAdapters
     description: 打开会话时经注入的适配器订阅页面可见性与系统媒体键（返回的退订登记进释放栈），关闭时退订。
-  - id: rel.kit.state-screen-wake
-    from: kit.kernel.state
+  - id: rel.kit.follow-screen-wake
+    from: kit.kernel.follow
     to: kit.page.screen-wake
     type: commands
     interface: if.kit.kernel.PlayerAdapters
     via: port:if.kit.kernel.PlayerAdapters
-    description: 会话播放时经注入的适配器持有屏幕常亮（screenWake.hold），停下时释放；拒绝报告回到会话的 warn 日志。
+    description: 会话播放时经注入的适配器持有屏幕常亮（screenWake.hold），停下时释放；拒绝报告经信封成为会话的 warn 日志。
   - id: rel.kit.kernel-clock
     from: kit.kernel.lifecycle
     to: kit.page.audio
@@ -428,12 +481,12 @@ interfaces:
     semantics: 在用户手势内调用：为页面上全部播放器放声，并在同一手势内补申请屏幕常亮；浏览器不回应时按超时失败。
   - id: if.kit.kernel.createPlayerKernel
     name: createPlayerKernel
-    owner: kit.kernel.queue
+    owner: kit.kernel.schedule
     signature: |
       createPlayerKernel(adapters: PlayerAdapters, options: PlayerKernelOptions): PlayerKernel
   - id: if.kit.kernel.PlayerKernel
     name: PlayerKernel
-    owner: kit.kernel.queue
+    owner: kit.kernel.schedule
     signature: |
       interface PlayerKernel {
         submit(command: PlayerCommand): Promise<CommandResult>;

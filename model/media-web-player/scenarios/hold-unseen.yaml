@@ -14,13 +14,13 @@ scenario:
     - media-wasm/tests/stream-input.test.mjs
   steps:
     - async: {id: hidden, from: actor.page-lifecycle, to: kit.facade.browser-platform, label: 'visibilitychange: hidden'}
-    - async: {from: kit.facade.browser-platform, to: kit.kernel.state, label: visible(false)}
-    - call: {from: kit.kernel.state, to: kit.kernel.envelope, label: 'visibility {visible: false}'}
-    - call: {from: kit.kernel.state, to: providers.self-clocked.session, relation: rel.kit.state-self-clocked, label: "pipeline.command({type: 'visibility', visible: false})：只读数不画"}
+    - async: {from: kit.facade.browser-platform, to: kit.kernel.follow, relation: rel.kit.visibility-callback, label: visible(false)}
+    - call: {from: kit.kernel.follow, to: kit.kernel.envelope, relation: rel.kit.follow-envelope, label: 'visibility {visible: false}'}
+    - call: {from: kit.kernel.follow, to: providers.self-clocked.session, relation: rel.kit.follow-self-clocked, label: "pipeline.command({type: 'visibility', visible: false})：只读数不画"}
     - alt:
         - when: 声音没人听见（静音、音量 0、声音被拦或无声音输出）
           steps:
-            - call: {id: hold, from: kit.kernel.state, to: providers.self-clocked.session, relation: rel.kit.state-self-clocked, label: "pipeline.command({type: 'hold-unseen', held: true})"}
+            - call: {id: hold, from: kit.kernel.follow, to: providers.self-clocked.session, relation: rel.kit.follow-self-clocked, label: "pipeline.command({type: 'hold-unseen', held: true})"}
             - call: {from: providers.self-clocked.session, to: pipeline.timing, label: 'hold.hold(true)：时钟停，会话计时器停走'}
             - call: {from: providers.self-clocked.session, to: providers.stream-input.input, label: holdUnseen(true)}
             - call: {from: providers.stream-input.input, to: pipeline.fetch.flv-pull, label: holdUnseen(true)：重试随之停走}
@@ -28,5 +28,5 @@ scenario:
           steps: []
     - async: {from: kit.kernel.envelope, to: host.demo.app, label: visibility 事件}
     - async: {id: visible, from: actor.page-lifecycle, to: kit.facade.browser-platform, label: 'visibilitychange: visible'}
-    - async: {from: kit.facade.browser-platform, to: kit.kernel.state, label: visible(true)}
-    - call: {id: release, from: kit.kernel.state, to: providers.self-clocked.session, relation: rel.kit.state-self-clocked, label: 'hold-unseen false + visibility true：从原处继续'}
+    - async: {from: kit.facade.browser-platform, to: kit.kernel.follow, relation: rel.kit.visibility-callback, label: visible(true)}
+    - call: {id: release, from: kit.kernel.follow, to: providers.self-clocked.session, relation: rel.kit.follow-self-clocked, label: 'hold-unseen false + visibility true：从原处继续'}

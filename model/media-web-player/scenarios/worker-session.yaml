@@ -33,6 +33,6 @@ scenario:
                   - call: {from: providers.self-clocked.worker-client, to: providers.self-clocked.worker-protocol, label: "parsePlayerWorkerMessage('from-worker')"}
                   - async: {from: providers.self-clocked.worker-client, to: kit.kernel.envelope, label: sink.event / sink.stats / sink.failed}
         - steps:
-            - call: {id: command, from: kit.kernel.state, to: providers.self-clocked.worker-client, relation: rel.kit.state-self-clocked, label: 'pipeline.command(pause / seek / hold-unseen …)'}
+            - call: {id: command, from: kit.kernel.decide, to: providers.self-clocked.worker-client, relation: rel.kit.decide-self-clocked, label: 'pipeline.command(pause / seek …)；hold-unseen 与 visibility 由观察跟随同样下发'}
             - async: {from: providers.self-clocked.worker-client, to: providers.self-clocked.worker-host, label: postMessage command}
             - call: {from: providers.self-clocked.worker-host, to: providers.self-clocked.session, label: pipeline.command(command)}

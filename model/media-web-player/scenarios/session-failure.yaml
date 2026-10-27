@@ -14,13 +14,14 @@ scenario:
     - media-wasm/tests/live-pipeline-session.test.mjs
   steps:
     - async: {id: failed, from: providers.wasm-module.lifecycle, to: kit.kernel.envelope, label: 'sink.failed(cause, error)：只报一次，会话停止工作'}
-    - async: {from: kit.kernel.envelope, to: kit.kernel.queue, label: "enqueue({kind: 'failed', generation, cause, error})"}
+    - async: {from: kit.kernel.envelope, to: kit.kernel.schedule, relation: rel.kit.envelope-schedule, label: "enqueue({kind: 'failed', generation, cause, error})"}
     - alt:
         - when: 代号不是当前会话（迟到的回报）
           steps: []
         - when: 当前会话
           steps:
-            - async: {id: close, from: kit.kernel.queue, to: kit.kernel.lifecycle, label: closeSession(failed)}
+            - call: {from: kit.kernel.schedule, to: kit.kernel.decide, relation: rel.kit.schedule-decide, label: apply(failed)}
+            - async: {id: close, from: kit.kernel.decide, to: kit.kernel.lifecycle, relation: rel.kit.decide-close-session, label: closeSession(failed)}
             - async: {from: kit.kernel.lifecycle, to: providers.self-clocked.session, relation: rel.kit.lifecycle-stop-self-clocked, label: pipeline.stop()}
             - alt:
                 - when: 3 s 内落定
@@ -33,7 +34,7 @@ scenario:
             - alt:
                 - when: cause 为 worker 且 threading 为 auto
                   steps:
-                    - call: {id: handover, from: kit.kernel.queue, to: kit.kernel.lifecycle, label: 接续会话：主线程、续播点、liveStart again}
+                    - call: {id: handover, from: kit.kernel.decide, to: kit.kernel.lifecycle, relation: rel.kit.decide-open-session, label: 接续会话：主线程、续播点、liveStart again}
                     - call: {from: kit.kernel.lifecycle, to: kit.kernel.envelope, label: session-opened + threading-switched}
                     - call: {from: kit.kernel.lifecycle, to: providers.self-clocked.family, relation: rel.kit.lifecycle-start-self-clocked, label: "startPipeline({threading: 'main'})"}
                 - when: 其他原因

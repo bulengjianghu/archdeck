@@ -14,10 +14,10 @@ scenario:
     - media-sdk-kits/tests/player.test.mjs
   steps:
     - async: {id: set, from: actor.host-app, to: kit.facade.player-api, label: 'setTimeshift({url, decryptionKey?})'}
-    - async: {from: kit.facade.player-api, to: kit.kernel.queue, relation: rel.kit.api-submit, label: "submit({type: 'set-timeshift'})"}
-    - call: {from: kit.kernel.queue, to: kit.session.acceptance, label: commandRejection：须是 flv 会话、地址非空}
-    - call: {from: kit.kernel.queue, to: kit.kernel.state, label: 记下会话的时移列表（快照显示正在用的）}
-    - call: {from: kit.kernel.state, to: providers.self-clocked.session, relation: rel.kit.state-self-clocked, label: "pipeline.command({type: 'set-timeshift'})"}
+    - async: {from: kit.facade.player-api, to: kit.kernel.schedule, relation: rel.kit.api-submit, label: "submit({type: 'set-timeshift'})"}
+    - call: {from: kit.kernel.schedule, to: kit.session.acceptance, label: commandRejection：须是 flv 会话、地址非空}
+    - call: {from: kit.kernel.schedule, to: kit.kernel.decide, relation: rel.kit.schedule-decide, label: apply：记下会话的时移列表（快照显示正在用的）}
+    - call: {from: kit.kernel.decide, to: providers.self-clocked.session, relation: rel.kit.decide-self-clocked, label: "pipeline.command({type: 'set-timeshift'})"}
     - call: {from: providers.self-clocked.session, to: providers.stream-input.input, label: setTimeshift(list)}
     - call: {id: watch, from: providers.stream-input.input, to: pipeline.fetch.hls-loader, label: "startHlsPull(list, 'watch')：只看清单"}
     - async: {from: pipeline.fetch.hls-loader, to: providers.stream-input.input, label: 'timeline(window, targetDurationMs)'}
@@ -28,9 +28,9 @@ scenario:
         - when: 宿主 seek 进时移窗口
           steps:
             - async: {id: seek, from: actor.host-app, to: kit.facade.player-api, label: seek(ms) / seekToWallClock(epochMs)}
-            - async: {from: kit.facade.player-api, to: kit.kernel.queue, relation: rel.kit.api-submit, label: submit(seek)}
-            - call: {from: kit.kernel.queue, to: kit.kernel.state, label: 记下 seek}
-            - call: {from: kit.kernel.state, to: providers.self-clocked.session, relation: rel.kit.state-self-clocked, label: "pipeline.command({type: 'seek'})"}
+            - async: {from: kit.facade.player-api, to: kit.kernel.schedule, relation: rel.kit.api-submit, label: submit(seek)}
+            - call: {from: kit.kernel.schedule, to: kit.kernel.decide, relation: rel.kit.schedule-decide, label: apply(seek)}
+            - call: {from: kit.kernel.decide, to: providers.self-clocked.session, relation: rel.kit.decide-self-clocked, label: "pipeline.command({type: 'seek'})"}
             - call: {from: providers.self-clocked.session, to: providers.stream-input.input, label: 'reposition(seek, positionMs)'}
             - call: {from: providers.stream-input.input, to: providers.stream-input.timeshift, label: 'seekOffsetMs / shiftedTimeline：会话时间 → 列表时间'}
             - call: {from: providers.stream-input.input, to: pipeline.fetch.hls-loader, label: 停直播输入，时移列表 seek(listMs) / seekWallClock}

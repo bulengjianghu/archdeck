@@ -17,16 +17,17 @@ scenario:
   steps:
     - call: {id: click, from: actor.viewer, to: host.demo.app, label: 点播放（表单 → 生效配置）}
     - async: {id: open, from: host.demo.app, to: kit.facade.player-api, relation: rel.host.player-commands, label: 'open(source, {latency, autoplay})'}
-    - async: {from: kit.facade.player-api, to: kit.kernel.queue, relation: rel.kit.api-submit, label: "submit({type: 'open'})：拷贝源、密钥与延迟配置后排队"}
-    - call: {from: kit.kernel.queue, to: kit.session.acceptance, interface: if.kit.session.commandRejection, label: 'commandRejection(open, context)'}
-    - return: {from: kit.session.acceptance, to: kit.kernel.queue, label: null（接受）}
+    - async: {from: kit.facade.player-api, to: kit.kernel.schedule, relation: rel.kit.api-submit, label: "submit({type: 'open'})：拷贝源、密钥与延迟配置后排队"}
+    - call: {from: kit.kernel.schedule, to: kit.session.acceptance, interface: if.kit.session.commandRejection, label: 'commandRejection(open, context)'}
+    - return: {from: kit.session.acceptance, to: kit.kernel.schedule, label: null（接受）}
+    - call: {from: kit.kernel.schedule, to: kit.kernel.decide, relation: rel.kit.schedule-decide, label: 'apply(open)'}
     - alt:
         - when: 有正在跑的会话
           steps:
-            - async: {id: replace, from: kit.kernel.queue, to: kit.kernel.lifecycle, label: closeSession(replaced)：等旧管线释放}
+            - async: {id: replace, from: kit.kernel.decide, to: kit.kernel.lifecycle, relation: rel.kit.decide-close-session, label: closeSession(replaced)：等旧管线释放}
         - when: 没有会话
           steps: []
-    - call: {id: session, from: kit.kernel.queue, to: kit.kernel.lifecycle, label: 'openSession(source, options)'}
+    - call: {id: session, from: kit.kernel.decide, to: kit.kernel.lifecycle, relation: rel.kit.decide-open-session, label: 'openSession(source, options)'}
     - call: {from: kit.kernel.lifecycle, to: kit.session.routes, interface: if.kit.session.resolveRoute, label: 'resolveRoute(flv, auto, families.routes)'}
     - return: {from: kit.session.routes, to: kit.kernel.lifecycle, label: '{family: 自建时钟族, route: webcodecs}'}
     - call: {from: kit.kernel.lifecycle, to: kit.kernel.envelope, label: sinkFor(s)，发 session-opened}

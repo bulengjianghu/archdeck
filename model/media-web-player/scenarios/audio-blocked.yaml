@@ -15,11 +15,11 @@ scenario:
     - async: {id: suspended, from: actor.page-lifecycle, to: kit.page.audio, label: AudioContext statechange（suspended / 中断）}
     - async: {from: kit.page.audio, to: providers.self-clocked.family, label: running(false)}
     - async: {from: providers.self-clocked.family, to: kit.kernel.envelope, label: "sound-held {held: true}"}
-    - call: {from: kit.kernel.envelope, to: kit.kernel.state, label: 记下声音被拦，重判看不见即保持}
+    - call: {from: kit.kernel.envelope, to: kit.kernel.follow, relation: rel.kit.envelope-follow, label: 记下声音被拦（不经队列），重判看不见即保持}
     - alt:
         - when: 会话在播放
           steps:
-            - call: {from: kit.kernel.state, to: kit.kernel.envelope, label: 'audio-blocked {active: true}'}
+            - call: {from: kit.kernel.follow, to: kit.kernel.envelope, relation: rel.kit.follow-envelope, label: 'audio-blocked {active: true}'}
             - async: {id: blocked, from: kit.kernel.envelope, to: host.demo.app, label: audio-blocked 事件}
         - when: 已暂停（播放时才报）
           steps: []
@@ -29,7 +29,7 @@ scenario:
     - call: {id: resume, from: kit.facade.player-api, to: kit.page.audio, label: 'resumePageAudio()：context.resume()，等时钟走动'}
     - async: {from: kit.page.audio, to: providers.self-clocked.family, label: onResume / running(true)}
     - async: {from: providers.self-clocked.family, to: kit.kernel.envelope, label: "sound-held {held: false}"}
-    - call: {from: kit.kernel.envelope, to: kit.kernel.state, label: 声音恢复}
-    - call: {from: kit.kernel.state, to: kit.kernel.envelope, label: 'audio-blocked {active: false}'}
+    - call: {from: kit.kernel.envelope, to: kit.kernel.follow, relation: rel.kit.envelope-follow, label: 声音恢复}
+    - call: {from: kit.kernel.follow, to: kit.kernel.envelope, relation: rel.kit.follow-envelope, label: 'audio-blocked {active: false}'}
     - async: {from: kit.kernel.envelope, to: host.demo.app, label: audio-blocked 结束}
     - return: {id: resumed, from: kit.facade.player-api, to: host.demo.app, relation: rel.host.resume-audio, label: resolved（或 timeout 被拒）}
