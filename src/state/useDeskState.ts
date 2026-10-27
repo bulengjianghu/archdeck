@@ -40,6 +40,7 @@ import {
   type CanvasMode,
   type Selection,
   type Toggles,
+  type ImpactQuery,
   type ViewAction,
   type ViewState,
 } from './transition'
@@ -59,7 +60,7 @@ import { createIntent } from './desk/intent'
 import { createEvidence } from './desk/evidence'
 import { createEdit } from './desk/edit'
 
-export type { CanvasMode, Selection, Toggles } from './transition'
+export type { CanvasMode, ImpactQuery, Selection, Toggles } from './transition'
 export { encodeSelection, decodeSelection } from './transition'
 export type { CompareSource, ModelPayload, FetchModel } from './sync/modelSource'
 export type { SourceFetcher, Resource } from './sync/source'
@@ -129,6 +130,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const levelId = computed(() => state.value.levelId)
   const selection = computed(() => state.value.selection)
   const hoverId = computed(() => state.value.hover)
+  /** K15b：影响面查询；null =「不看」 */
+  const impactQuery = computed(() => state.value.impactQuery ?? null)
   const playback = computed(() => state.value.playback)
   const levelPath = computed(() => (index.value && levelId.value ? (index.value.pathOf.get(levelId.value) ?? []) : []))
   /** 视角与选中（V1、V2、V7、V11），由视图状态推出 */
@@ -341,6 +344,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const revealRelation = (id: string) => void dispatch({ type: 'revealRelation', id })
   const revealModule = (id: string) => void dispatch({ type: 'revealModule', id })
   const setHover = (id: string | null) => void dispatch({ type: 'hover', id })
+  /** K15b：影响面查询（null =「不看」），一次性 */
+  const queryImpact = (query: ImpactQuery | null) => void dispatch({ type: 'queryImpact', query })
   const setToggles = (patch: Partial<Toggles>) => void dispatch({ type: 'toggle', patch })
   const openScenario = (id: string) => void dispatch({ type: 'openScenario', id })
   const closeScenario = () => void dispatch({ type: 'closeScenario' })
@@ -389,6 +394,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     selection,
     selected,
     hoverId,
+    impactQuery,
     perspective,
     mode,
     droppedSelection,
@@ -420,6 +426,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     revealRelation,
     revealModule,
     setHover,
+    queryImpact,
     setToggles,
     pressKey,
     openScenario,
