@@ -169,10 +169,10 @@ function surfaceOf(ctx: SceneContext, n: ViewNode, box: Box, hits: Map<string, S
       }
       last = sub
     }
-    // 组名宽度：到下一组首（自左向右时到节点右沿）
+    // 组名宽度：到下一组首；最后一组到节点右沿让开右上角的下钻记号（自左向右时到节点右沿）
     heads.forEach((m, i) => {
       if (m.group === undefined) return
-      m.groupRoom = top ? (heads[i + 1] ? along(heads[i + 1]) : box.w) - along(m) - 2 : box.w - 16
+      m.groupRoom = top ? (heads[i + 1] ? along(heads[i + 1]) - 2 : box.w - GROUP_RIGHT) - along(m) : box.w - 16
     })
   }
   // 交互视角没有被接到的元素时也给（空的）记号层：入边一侧照样让出
@@ -180,6 +180,9 @@ function surfaceOf(ctx: SceneContext, n: ViewNode, box: Box, hits: Map<string, S
   const surface: NodeSurface = { side: ctx.pv.direction === 'RIGHT' ? 'left' : 'top', items, ...(more ? { more } : {}), ...(grouped ? { grouped: true } : {}) }
   return { surface }
 }
+
+/** L20b：顶边最后一组组名到节点右沿留出的宽度（右上角的下钻记号「⌄ N」） */
+const GROUP_RIGHT = 34
 
 /** L20b：子模块短名——ID 去掉父模块前缀（`pipeline.latency.timers` → `timers`） */
 export const shortName = (parent: string, sub: string): string => (sub.startsWith(`${parent}.`) ? sub.slice(parent.length + 1) : sub.split('.').pop()!)

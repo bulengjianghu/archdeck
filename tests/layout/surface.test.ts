@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { InteractionBundle, LevelView, SurfaceElement } from '@/model'
-import { DOTS, expandSurface, fanRoute, surfaceDots } from '../../src/layout/dots'
+import { DOTS, expandSurface, fanLevels, fanRoute, surfaceDots } from '../../src/layout/dots'
 import {
   SURFACE_PORT_CAP,
   layoutExpansion,
@@ -250,5 +250,21 @@ describe('surfaceDots、fanRoute：定尺寸点阵（L20a②、L20b）', () => {
         3,
       )[3],
     ).toEqual({ x: 60, y: 195 })
+  })
+})
+
+describe('fanLevels：扇出线次序（L20a②）', () => {
+  it('取交叉最少的次序：不止按落点数——落点多但横跨另一条的那条放远更少交叉', () => {
+    // B 从左边进、横跨到右边落三个点；A 在中间、落两个点。B 近时 A 的两条落线穿过 B 的扇出横线（2），A 近时只有 A 的进点竖线穿过 B 的（1）
+    const a = { end: 50, drops: [52, 54] }
+    const b = { end: 10, drops: [88, 90, 92] }
+    expect(fanLevels([a, b])).toEqual([0, 1])
+    // 互不相交时按落点数从多到少，落点多的靠近节点
+    expect(
+      fanLevels([
+        { end: 0, drops: [5] },
+        { end: 50, drops: [55, 60] },
+      ]),
+    ).toEqual([1, 0])
   })
 })

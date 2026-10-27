@@ -95,6 +95,28 @@ function simplify(pts: Point[]): Point[] {
 }
 
 /**
+ * L20a②：一个节点上各干线的扇出线次序（0 离节点最近）。干线 t 在 u 之外（离节点更远）时，t 落向各点的竖线穿过 u 的扇出横线、
+ * u 的进点竖线穿过 t 的扇出横线；取这类交叉总数最少的次序——干线不多于 6 条时穷举，多了按落点数从多到少（落点多的靠近节点）。
+ */
+export function fanLevels(trunks: readonly { end: number; drops: readonly number[] }[]): number[] {
+  const span = trunks.map(t => [Math.min(t.end, ...t.drops), Math.max(t.end, ...t.drops)] as const)
+  const inside = (x: number, [a, b]: readonly [number, number]) => x > a + 0.5 && x < b - 0.5
+  // over[t][u]：t 在 u 之外时的交叉数
+  const over = trunks.map((t, i) => trunks.map((u, j) => (i === j ? 0 : t.drops.filter(x => inside(x, span[j])).length + (inside(u.end, span[i]) ? 1 : 0))))
+  const cost = (order: readonly number[]) => order.reduce((n, t, k) => n + order.slice(0, k).reduce((m, u) => m + over[t][u], 0), 0)
+  let best = trunks.map((_, i) => i).sort((a, b) => trunks[b].drops.length - trunks[a].drops.length || trunks[a].end - trunks[b].end)
+  if (trunks.length <= 6) {
+    const perms = (rest: number[]): number[][] =>
+      rest.length <= 1 ? [rest] : rest.flatMap((x, i) => perms([...rest.slice(0, i), ...rest.slice(i + 1)]).map(p => [x, ...p]))
+    for (const p of perms(best)) if (cost(p) < cost(best)) best = p
+  }
+  // best 从近到远；返回每条干线的层号
+  const out = new Array<number>(trunks.length)
+  best.forEach((t, k) => (out[t] = k))
+  return out
+}
+
+/**
  * C6、L20②（ADR-0036）：在收起态的布局 base 上展开表面——节点与其余走线原样，补端口点（elements、elementsMore）、被散开的束（spread）、
  * 接到点的元素级边与交互散开段的走线、束里其余的一条（`#rest`），以及框外边接到点时的端点（`<边 ID>#in`）。没有展开时原样返回。
  */
@@ -115,19 +137,24 @@ export function expandSurface(base: PositionedView, view: LevelView, links: Stru
   const trunkOf = new Map<string, string>()
   for (const e of links?.elements ?? []) if (exp.targets.has(e.id)) trunkOf.set(e.id, e.bundle)
   for (const x of links?.interactions ?? []) for (const el of x.elements) trunkOf.set(spreadEdgeId(x.edge, el), x.edge)
-  // 扇出线：同一节点上每条干线一条，按干线进点的位置排
+  // 扇出线：同一节点上每条干线一条，次序取交叉最少的一种（fanLevels）
   const along = (p: Point) => (direction === 'DOWN' ? p.x : p.y)
   const level = new Map<string, number>()
-  const trunks = new Map<string, Set<string>>()
+  const fans = new Map<string, Map<string, number[]>>()
   for (const [id, t] of exp.targets) {
     const trunk = trunkOf.get(id)
-    if (trunk && base.edges.has(trunk)) (trunks.get(t.node) ?? trunks.set(t.node, new Set()).get(t.node)!).add(trunk)
+    const dot = elements.get(t.node)?.find(p => p.name === t.element)
+    if (!trunk || !dot || !base.edges.has(trunk)) continue
+    const byTrunk = fans.get(t.node) ?? fans.set(t.node, new Map()).get(t.node)!
+    byTrunk.set(trunk, [...(byTrunk.get(trunk) ?? []), along(dot)])
   }
-  const endOf = (id: string) => {
-    const pts = base.edges.get(id)!.points
-    return along(pts[pts.length - 1])
+  for (const [node, byTrunk] of fans) {
+    const list = [...byTrunk].map(([id, drops]) => {
+      const pts = base.edges.get(id)!.points
+      return { id, end: along(pts[pts.length - 1]), drops }
+    })
+    fanLevels(list).forEach((k, i) => level.set(`${node}|${list[i].id}`, k))
   }
-  for (const [node, ids] of trunks) [...ids].sort((a, b) => endOf(a) - endOf(b)).forEach((id, i) => level.set(`${node}|${id}`, i))
   const edges = new Map<string, EdgeRoute>(base.edges)
   const ports = new Map(base.ports ?? [])
   for (const [id, t] of exp.targets) {

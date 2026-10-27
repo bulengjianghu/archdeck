@@ -32,6 +32,13 @@ describe('StructMarks', () => {
     expect(m.attributes('title')).toContain('入 UI')
     const only = mount(StructMarks, { props: { data: { ...base, crossFold: { in: 0, out: 3, side: 'left', title: '' } } } })
     expect(only.get('[data-testid="cross-fold"]').text()).toBe('界外 出 3')
+    // L20②（ADR-0036）：展开表面的节点入边一侧是端口点，朝同一侧的记号挪到相邻一侧（顶 → 右、左 → 下）
+    const top = mount(StructMarks, { props: { data: { ...base, surface: { side: 'top', items: [] }, crossFold: { in: 1, out: 0, side: 'top', title: '' } } } })
+    expect(top.get('[data-testid="cross-fold"]').classes()).toContain('right')
+    const left = mount(StructMarks, {
+      props: { data: { ...base, surface: { side: 'left', items: [] }, crossFold: { in: 1, out: 0, side: 'left', title: '' } } },
+    })
+    expect(left.get('[data-testid="cross-fold"]').classes()).toContain('bottom')
   })
 })
 

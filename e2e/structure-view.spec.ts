@@ -129,34 +129,69 @@ test('K10、B3：单击束选中这对节点的代码依赖（sel=d:），它高
   await expect(page.locator('.vue-flow__edge-dep[data-id^="el:"]')).toHaveCount(0)
 })
 
-test('C6、L20：节点角标「表面 W」；选中模块展开表面——元素记号排在入边一侧、束散开为元素级边，取消选中收起', async ({ page }) => {
+test('C6、L20（ADR-0036）：节点角标「表面 W」；选中模块展开表面——入边一侧一排端口点、束散开为元素级边，节点与视口不动，取消选中收起', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra&v=s')
   await expect(graphNode(page, 'infra.framework').getByTestId('node-surface-w')).toHaveText(/表面 \d+/)
-  const w0 = await graphNode(page, 'infra.framework').evaluate(n => n.getBoundingClientRect().width)
+  const boxes = () =>
+    page.locator('.vue-flow__node-module, .vue-flow__node-core').evaluateAll(els =>
+      els.map(n => [
+        n.getAttribute('data-id'),
+        n
+          .getAttribute('style')
+          ?.match(/translate\([^)]*\)|width: [\d.]+px|height: [\d.]+px/g)
+          ?.join(' '),
+      ]),
+    )
+  const before = await boxes()
+  const viewport = () => page.locator('.vue-flow__transformationpane').getAttribute('style')
+  const vp = await viewport()
   await graphNode(page, 'infra.framework').click()
-  const marks = graphNode(page, 'infra.framework').getByTestId('surface-marks').locator('.element')
+  const marks = graphNode(page, 'infra.framework').getByTestId('surface-marks').locator('.dot')
   await expect(marks.first()).toBeAttached()
   expect(await marks.count()).toBeLessThanOrEqual(16)
-  await expect(graphNode(page, 'infra.framework').getByTestId('surface-more')).toHaveText(/\+\d+ 个元素/)
+  // 点不写名字（只有子模块组名）；封顶外收进「+N」
+  expect((await marks.allInnerTexts()).every(t => t === '')).toBe(true)
+  await expect(graphNode(page, 'infra.framework').getByTestId('surface-more')).toHaveText(/^\+\d+$/)
   await expect(page.locator('.vue-flow__edge-dep[data-id^="el:"]').first()).toBeAttached()
   await expect(marks.first()).toHaveAttribute('title', /扇入 \d+/)
-  // 节点尺寸随元素数变化（本层重新布局）
-  await expect.poll(() => graphNode(page, 'infra.framework').evaluate(n => n.getBoundingClientRect().width)).not.toBe(w0)
-  // T2-9：展开后视口适应到展开节点及本层邻居——展开的节点整个落在画布内
-  await expect
-    .poll(async () => {
-      const pane = (await page.locator('.vue-flow').boundingBox())!
-      const b = (await graphNode(page, 'infra.framework').boundingBox())!
-      return b.x >= pane.x - 1 && b.y >= pane.y - 1 && b.x + b.width <= pane.x + pane.width + 1 && b.y + b.height <= pane.y + pane.height + 1
-    })
-    .toBe(true)
-  // T2-4、C9：单击元素记号直接定位到面板「表面」一节的该元素
+  // L20②：全部节点的位置与尺寸不变，视口不动
+  await expect.poll(boxes).toEqual(before)
+  expect(await viewport()).toBe(vp)
+  // 接到点的元素级边终点不画记号
+  expect(await page.locator('.vue-flow__edge-dep[data-id^="el:"]:not([data-id$="#rest"]) path.vue-flow__edge-path[marker-end]').count()).toBe(0)
+  // T2-4、C9：单击点直接定位到面板「表面」一节的该元素
   const name = (await marks.first().getAttribute('data-element'))!
-  await marks.first().locator('.label').click()
+  await marks.first().click()
   await expect(page.locator(`li.element[data-element="${name}"]`)).toHaveClass(/flash/)
+  // L20④：悬停点——落在它上的边高亮（衬边），面板「表面」一节同一行同亮
+  await page.mouse.move(0, 0)
+  await marks.first().hover()
+  await expect(page.locator(`li.element[data-element="${name}"]`)).toHaveClass(/hot/)
+  await expect(page.locator('.vue-flow__edge-dep[data-id^="el:"] path.edge-hover-casing').first()).toBeAttached()
   await page.locator('.vue-flow__pane').click({ position: { x: 5, y: 5 } })
   await expect(graphNode(page, 'infra.framework').getByTestId('surface-marks')).toHaveCount(0)
   await expect(page.locator('.vue-flow__edge-dep[data-id^="el:"]')).toHaveCount(0)
+  expect(await boxes()).toEqual(before)
+})
+
+test('L20②（ADR-0036）：选中 A 再换选中 B，节点 bbox 不变', async ({ page }) => {
+  await openDesk(page, '/p/h5p-arch-desk?level=state&v=s&sel=m:state.desk')
+  await expect(page.locator('[data-testid="surface-marks"]').first()).toBeAttached()
+  const boxes = () =>
+    page.locator('.vue-flow__node-module, .vue-flow__node-core').evaluateAll(els =>
+      els.map(n => [
+        n.getAttribute('data-id'),
+        n
+          .getAttribute('style')
+          ?.match(/translate\([^)]*\)|width: [\d.]+px|height: [\d.]+px/g)
+          ?.join(' '),
+      ]),
+    )
+  const a = await boxes()
+  const other = (await page.locator('.vue-flow__node-module').evaluateAll(els => els.map(n => n.getAttribute('data-id')!))).find(id => id !== 'state.desk')!
+  await graphNode(page, other).click()
+  expect(query(page).get('sel')).toBe(`m:${other}`)
+  await expect.poll(boxes).toEqual(a)
 })
 
 test('K15：结构视角选中模块时影响面按距离标在节点上，闭包外变淡', async ({ page }) => {
