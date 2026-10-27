@@ -286,7 +286,7 @@ scenario:
   | `rel.ad.desk-changed`、`rel.ad.list-changed`（页面订阅描述变化） | `channel:hmr` | 开发服务器经 HMR 推送 `arch-model:changed` |
   | `rel.ad.version-shell`（版本切换 → 应用外壳） | `channel:router` | 经 vue-router 导航，路由表在外壳里 |
   | `rel.p7.file-preview`（文件面板 → 项目视图） | `channel:inject` | 经共用件的注入键 provide / inject |
-  | `rel.ad.url-actions`（路由同步 → dispatch） | `channel:callback` | 协调者把 `query => dispatch(…)` 回调交给路由同步 |
+  | `rel.ad.url-actions`（路由同步 → dispatch） | `channel:callback@state.desk.url-sync` | 协调者把 `query => dispatch(…)` 回调交给路由同步 |
 
 #### import 与关系
 

@@ -1,6 +1,6 @@
 # ADR-0034：读线——回调记号、说明置顶、悬停看两端
 
-- 状态：已采纳，待实现（第十轮）
+- 状态：已采纳，已实现（第十轮 T1–T3）
 - 日期：2026-10-27
 - 决策人：项目负责人（2026-10-27：「C1 取方案甲：叠放回程钩记号，不改 L10。其余待裁决项按文件里的倾向定」；同日提出说明置顶与悬停看两端两项小需求）；起草：第十轮协调者
 - 关联：[ADR-0018](./0018-edge-encoding.md)（一个通道一个维度）、[ADR-0029](./0029-interaction-kinds-and-via.md)（`via` 四形态与插座 L12）、[ADR-0032](./0032-module-surface-and-carrier-chain.md)（`channel:<名>@<模块>` 与承载模板）、[ADR-0033](./0033-handles.md)（把手按 `interface` 计）；规则 L10、L12、M20、M21、M22、L23b（02）；新增 L24、L25、V13，修订 L10、M22
@@ -49,4 +49,8 @@ media-web-player 的分层总览上，延迟决策律与自建时钟族、元素
 
 ## 实施结果
 
-（实现后补。）
+- **回调记号（L24）**：`isCallbackVia`（模型层）判定；画布场景给视图边带 `callback` 与悬停说明（`callbackText`，聚合边逐条）；`CallbackMarker` 以 `marker-start` 叠放在走线起点，`RouteEdge`、图例 `LineSwatch`、草图 `StraightEdge` 共用同一几何。关系面板「经 callback」徽标前加 ↩、说明同句；`RelationRow` 标「↩ 经回调」。M22 跳过经回调的关系。
+- **本项目描述**：`rel.ad.url-actions` → `channel:callback@state.desk.url-sync`、`rel.ed.commands-dispatch` → `channel:callback@state.desk.edit.commands`（两条都是「回调只是传递方式、被调的是 dispatch」，`interface` 保留）；`rel.v4.panel-requests`、`rel.v4.version-sketch` 实为经 `present.sketch.contracts` 里的共享 ref（`sketchRequest`、`dragOverParent`）传递，不是回调，改为 `channel:shared-ref@present.sketch.contracts`，不画回程钩。
+- **说明置顶（V13）**：`RelationPanel` 头部之后第一节为「说明」或一行「未写说明」；`EdgePanel` 的 `RelationRow` 带 `summary` 显示首句。
+- **悬停看两端（L25）**：纯函数 `withEdgeHover`（Layout）给悬停边 `hovered`、`zIndex = EDGE_HOVER_Z`（高于回放当前）、不变淡，两端节点加类名 `edge-end`；`GraphCanvas` 以 Vue Flow 的 edge mouse enter / leave 维护局部状态，换层次与视角时清掉；`RouteEdge`、`DepEdge` 画悬停晕；草图画布同样处理（悬停线 zIndex 4）。
+- **与方案的出入**：两端描边环加在节点（Vue Flow 节点外层）上，展开表面时不单独环到元素端口——元素端口在节点边上，环住节点已能找到这一端。
