@@ -49,6 +49,12 @@ const scene = computed(() => e.scene.value)
 const sizeOf = computed(() => new Map((scene.value?.nodes ?? []).map(n => [n.id, { w: n.data.w, h: n.data.h }])))
 /** X22：悬停的节点（引用线实色显示） */
 const hovered = ref<string | null>(null)
+/** L25：悬停的线——线高亮、两端节点加描边环（画布局部状态） */
+const hoverEdge = ref<string | null>(null)
+const hoverEnds = computed(() => {
+  const e = hoverEdge.value ? scene.value?.edges.find(x => x.id === hoverEdge.value) : undefined
+  return e ? new Set([e.source, e.target]) : null
+})
 const nodes = computed<Node<SketchNodeData & { drop?: boolean }>[]>(() =>
   (scene.value?.nodes ?? []).map(n => {
     const kind = n.data.kind
@@ -70,6 +76,7 @@ const nodes = computed<Node<SketchNodeData & { drop?: boolean }>[]>(() =>
       // X22：引用节点的位置由规则算，不可拖
       draggable: !passive && kind !== 'reference',
       connectable: !passive,
+      ...(hoverEnds.value?.has(n.id) ? { class: 'edge-end' } : {}),
     }
   }),
 )
@@ -90,9 +97,12 @@ const edges = computed<Edge<SketchEdgeData & { sizes: { a: { w: number; h: numbe
       ...x.data,
       sizes: { a: sizeOf.value.get(x.source)!, b: sizeOf.value.get(x.target)! },
       ...(x.data.external ? { hot: hotIds.value.has(x.source) || hotIds.value.has(x.target) } : {}),
+      ...(hoverEdge.value === x.id ? { hovered: true } : {}),
     },
     // X22：引用线在模块之上、不接收指针；本层之间的线在模块之下
     ...(x.data.external ? { zIndex: 3, selectable: false, focusable: false, class: 'sk-ref-edge' } : {}),
+    // L25：悬停的线提到最上层
+    ...(hoverEdge.value === x.id ? { zIndex: 4 } : {}),
   })),
 )
 watch(nodes, n => setNodes(n), { immediate: true })
@@ -544,6 +554,8 @@ const splitName = computed(() => (parts.value?.kind === 'split' ? (e.nameOf(part
       @node-mouse-leave="hovered = null"
       @node-context-menu="onNodeMenu"
       @edge-click="({ edge }) => onEdgeClick(edge.id)"
+      @edge-mouse-enter="({ edge }) => (hoverEdge = edge.id)"
+      @edge-mouse-leave="({ edge }) => hoverEdge === edge.id && (hoverEdge = null)"
       @edge-context-menu="onEdgeMenu"
       @pane-click="clearSelection"
       @pane-context-menu="onPaneMenu"

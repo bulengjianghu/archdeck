@@ -22,7 +22,7 @@ import { VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import { useDesk } from '@/state/inject'
 import { contentBounds, type PositionedView } from '@/layout/layout'
-import { canvasScene, type NodeData, type RouteEdgeData, type StructureInput } from '@/layout/canvas'
+import { canvasScene, withEdgeHover, type NodeData, type RouteEdgeData, type StructureInput } from '@/layout/canvas'
 import { useStage } from './stage/useStageDisplay'
 import ModuleNode from './nodes/ModuleNode.vue'
 import BoundaryNode from './nodes/BoundaryNode.vue'
@@ -121,8 +121,11 @@ const scene = computed(() =>
     surfaceInfo: desk.facts.surfaceInfo.value,
   }),
 )
-const nodes = computed<Node<NodeData>[]>(() => scene.value.nodes)
-const edges = computed<Edge<RouteEdgeData>[]>(() => scene.value.edges)
+/** L25：悬停的边（画布局部状态，不进视图状态与 URL）——这条边高亮、提到最上层，两端节点加描边环 */
+const hoverEdge = ref<string | null>(null)
+const hovered = computed(() => withEdgeHover(scene.value.nodes, scene.value.edges, hoverEdge.value))
+const nodes = computed<Node<NodeData>[]>(() => hovered.value.nodes)
+const edges = computed<Edge<RouteEdgeData>[]>(() => hovered.value.edges)
 
 // 节点与边直接写入 Vue Flow 的 store，不走 :nodes / :edges 属性：
 // 属性同步在「上一层次有选中、切到分层总览」时会被跳过（store 停留在旧节点），这里绕开它
@@ -201,6 +204,15 @@ function onNodeEnter({ node }: { node: Node<NodeData> }) {
 function onNodeLeave() {
   desk.setHover(null)
 }
+
+function onEdgeEnter({ edge }: { edge: Edge<RouteEdgeData> }) {
+  hoverEdge.value = edge.id
+}
+function onEdgeLeave({ edge }: { edge: Edge<RouteEdgeData> }) {
+  if (hoverEdge.value === edge.id) hoverEdge.value = null
+}
+// 换层次、换视角后旧的悬停不留
+watch([desk.levelVersion, desk.perspective], () => (hoverEdge.value = null))
 
 // ── 视角：切换层次后自动适应画布 ──
 // 视野：内容边界直接取自布局结果（不依赖 Vue Flow 对节点尺寸的测量，首帧即可用）；
@@ -332,6 +344,8 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       @pane-click="desk.select(null)"
       @node-mouse-enter="onNodeEnter"
       @node-mouse-leave="onNodeLeave"
+      @edge-mouse-enter="onEdgeEnter"
+      @edge-mouse-leave="onEdgeLeave"
       @error="onFlowError"
     >
       <template #node-module="p"><ModuleNode :data="p.data" /></template>

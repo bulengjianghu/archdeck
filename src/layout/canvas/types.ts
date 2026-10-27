@@ -200,6 +200,8 @@ export interface RouteEdgeData {
   callback?: boolean
   /** 选中：强调色窄晕，不改线宽 */
   selected: boolean
+  /** L25：鼠标悬停——悬停晕、提到最上层（画布局部状态，GraphCanvas 叠加） */
+  hovered?: boolean
   dim: boolean
   /** 核心跨层边，只在悬停/选中时出现 */
   core?: boolean

@@ -321,3 +321,10 @@ a {
     box-shadow: 0 0 0 7px var(--accent-soft);
   }
 }
+
+/* L25：悬停一条边时两端节点的描边环（比选中节点的描边细一档、同强调色）；类名由画布场景的悬停叠加加在 Vue Flow 节点外层 */
+.vue-flow__node.edge-end {
+  outline: 1.5px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 10px;
+}

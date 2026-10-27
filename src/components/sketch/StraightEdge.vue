@@ -19,7 +19,7 @@ const props = defineProps<{
   sourceY: number
   targetX: number
   targetY: number
-  data: SketchEdgeData & { sizes: { a: { w: number; h: number }; b: { w: number; h: number } }; hot?: boolean }
+  data: SketchEdgeData & { sizes: { a: { w: number; h: number }; b: { w: number; h: number } }; hot?: boolean; hovered?: boolean }
 }>()
 const desk = useDesk()
 const { viewport } = useVueFlow('sketch')
@@ -129,9 +129,21 @@ function onUp() {
 <template>
   <g
     class="sk-edge"
-    :class="[data.type, { selected: data.selected, pending: data.pending, changed: !!data.change, many: many > 1, external: !!data.external, hot: data.hot }]"
+    :class="[
+      data.type,
+      {
+        selected: data.selected,
+        pending: data.pending,
+        changed: !!data.change,
+        many: many > 1,
+        external: !!data.external,
+        hot: data.hot,
+        hovered: data.hovered,
+      },
+    ]"
   >
     <path v-if="!data.external" :d="path" class="hit" />
+    <path v-if="data.hovered" :d="path" class="hover-glow" />
     <path :d="path" class="line" />
     <polygon :points="arrow" class="head" />
     <path v-if="socket" :d="socket" class="socket" />
@@ -158,6 +170,15 @@ function onUp() {
   fill: none;
   stroke: transparent;
   stroke-width: 14;
+}
+
+/* L25：悬停的线——强调色宽晕 */
+.hover-glow {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 10;
+  opacity: 0.2;
+  pointer-events: none;
 }
 
 .line {

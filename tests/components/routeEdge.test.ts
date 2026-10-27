@@ -101,6 +101,14 @@ describe('RouteEdge', () => {
     expect(all.w.find('.edge-socket:not(.edge-hook)').exists()).toBe(true)
   })
 
+  it('L25：悬停的边加悬停晕（与选中晕可叠加），不改线宽与线型', () => {
+    expect(render({}).w.find('.edge-hover-glow').exists()).toBe(false)
+    const h = render({ hovered: true, selected: true })
+    expect(h.w.find('.edge-hover-glow').exists()).toBe(true)
+    expect(h.w.find('.edge-selected-glow').exists()).toBe(true)
+    expect(render({ hovered: true }).style).toBe(render({}).style)
+  })
+
   it('线宽只按条数三档；选中与走过不改线宽，选中加窄晕', () => {
     const width = (d: Partial<RouteEdgeData>) => render(d).style.match(/stroke-width: ([\d.]+)/)![1]
     expect([1, 2, 3].map(weight => width({ weight: weight as 1 | 2 | 3 }))).toEqual(['1.5', '2.5', '3.5'])

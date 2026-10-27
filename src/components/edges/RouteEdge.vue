@@ -62,6 +62,7 @@ const hookId = computed(() => `hook-${markerId.value.slice('arrow-'.length)}`)
     :opacity="data.dim ? 0.06 : 0.28"
   />
   <path v-if="data.violated && !data.temp" :d="path" class="edge-violated" fill="none" stroke-linecap="round" :opacity="data.dim ? 0.06 : 0.3" />
+  <path v-if="data.hovered" :d="path" class="edge-hover-glow" fill="none" stroke-linecap="round" stroke-linejoin="round" />
   <path v-if="data.selected" :d="path" class="edge-selected-glow" fill="none" stroke-linecap="round" stroke-linejoin="round" />
   <path v-if="data.temp === 'carried'" :d="path" class="edge-carried-glow" fill="none" stroke-linecap="round" stroke-linejoin="round" />
   <path v-if="data.play === 'current' || data.play === 'hover'" :d="path" class="edge-glow" :class="data.play" fill="none" stroke-linecap="round" />
@@ -120,6 +121,14 @@ const hookId = computed(() => `hook-${markerId.value.slice('arrow-'.length)}`)
   stroke: var(--accent);
   stroke-width: 9;
   opacity: 0.28;
+}
+
+/* L25：悬停——比选中晕宽、浅一档，与选中晕可叠加 */
+.edge-hover-glow {
+  pointer-events: none;
+  stroke: var(--accent);
+  stroke-width: 10;
+  opacity: 0.2;
 }
 
 /* 选中：强调色窄晕，与回放当前步骤的宽晕区分；线宽不变 */

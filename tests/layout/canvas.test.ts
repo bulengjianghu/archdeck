@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { diffModels, loadModel, planScenario, projectLevel, projectScenario, stageEnds } from '../../src/model'
 import { layoutView } from '../../src/layout/layout'
 import { stageOverlay } from '../../src/layout/stage'
-import { EDGE_Z, canvasScene, routeMidpoint, type CanvasInput } from '../../src/layout/canvas'
+import { EDGE_HOVER_Z, EDGE_Z, canvasScene, routeMidpoint, withEdgeHover, type CanvasInput } from '../../src/layout/canvas'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
 const { index } = loadModel(scenarioFiles())
@@ -294,5 +294,33 @@ describe('canvasScene', () => {
     expect(old.data.callback).toBe(true)
     expect(old.data.title).toContain('契约未指明')
     expect(edge(s, 'infra.mus->infra.framework:commands')!.data.callback).toBeUndefined()
+  })
+})
+
+describe('L25 悬停边看两端', () => {
+  it('悬停的边加 hovered、提到最上层且不变淡，两端节点加 edge-end；其余节点与边原样（同一对象）；没有悬停或边已不在时不变', async () => {
+    const s = canvasScene({ ...(await structure('infra')) })
+    const target = s.edges[0]
+    const other = s.edges.find(e => e.source !== target.source && e.target !== target.target && e.source !== target.target && e.target !== target.source)
+    const h = withEdgeHover(
+      s.nodes,
+      s.edges.map(e => (e === target ? { ...e, data: { ...e.data, dim: true } } : e)),
+      target.id,
+    )
+    const hit = h.edges.find(e => e.id === target.id)!
+    expect(hit.data.hovered).toBe(true)
+    expect(hit.data.dim).toBe(false)
+    expect(hit.zIndex).toBe(EDGE_HOVER_Z)
+    expect(EDGE_HOVER_Z).toBeGreaterThan(EDGE_Z.current)
+    const ends = h.nodes
+      .filter(n => n.class?.split(' ').includes('edge-end'))
+      .map(n => n.id)
+      .sort()
+    expect(ends).toEqual([target.source, target.target].sort())
+    if (other) expect(h.edges.find(e => e.id === other.id)).toBe(other)
+    // 选中不变：只加悬停标记，selected 原样
+    expect(hit.data.selected).toBe(target.data.selected)
+    expect(withEdgeHover(s.nodes, s.edges, null).edges).toEqual(s.edges)
+    expect(withEdgeHover(s.nodes, s.edges, 'nope').nodes.every(n => !n.class?.includes('edge-end'))).toBe(true)
   })
 })

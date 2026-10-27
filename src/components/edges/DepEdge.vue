@@ -71,6 +71,7 @@ const safe = computed(() => props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)
       stroke-linejoin="round"
       :opacity="data.dim ? 0.06 : undefined"
     />
+    <path v-if="data.hovered" :d="path" class="edge-hover-glow" fill="none" stroke-linecap="round" stroke-linejoin="round" />
     <path v-if="data.selected" :d="path" class="edge-selected-glow" fill="none" stroke-linecap="round" stroke-linejoin="round" />
     <g :class="{ 'edge-label-warn': data.warn, 'dep-label-soft': !data.warn }">
       <BaseEdge
@@ -118,6 +119,14 @@ const safe = computed(() => props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)
   stroke: var(--text-3);
   stroke-width: 6;
   opacity: 0.25;
+}
+
+/* L25：悬停——比选中晕宽、浅一档，与选中晕可叠加 */
+.edge-hover-glow {
+  pointer-events: none;
+  stroke: var(--accent);
+  stroke-width: 10;
+  opacity: 0.2;
 }
 
 .edge-selected-glow {
