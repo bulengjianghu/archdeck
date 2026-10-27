@@ -76,6 +76,20 @@ const socket = computed(() => {
   const b = { x: c.x + uy * r, y: c.y - ux * r }
   return `M ${a.x} ${a.y} C ${a.x + ux * k} ${a.y + uy * k} ${b.x + ux * k} ${b.y + uy * k} ${b.x} ${b.y}`
 })
+/** L24：经回调的线在起点画回程钩（与画布同一记号的几何：从线上弯出半圆、折回指向起点的小箭头，在行进方向左侧） */
+const hook = computed(() => {
+  if (!props.data.callback) return ''
+  const p = ports.value
+  const from = p ? p.from : geo.value.from
+  const next = p ? { x: p.from.x + p.from.dir, y: p.from.y } : geo.value.to
+  const len = Math.hypot(next.x - from.x, next.y - from.y) || 1
+  const ux = (next.x - from.x) / len
+  const uy = (next.y - from.y) / len
+  const h = 4.5
+  // 局部坐标 (x 沿线, y 向左为负) → 画布坐标
+  const at = (x: number, y: number) => `${from.x + ux * x - uy * y} ${from.y + uy * x + ux * y}`
+  return `M ${at(2 * h, 0)} A ${h} ${h} 0 0 0 ${at(2 * h, -2 * h)} L ${at(0.5 * h, -2 * h)} M ${at(1.3 * h, -2.7 * h)} L ${at(0.5 * h, -2 * h)} L ${at(1.3 * h, -1.3 * h)}`
+})
 /** 拖动中的标签位置（松手才写回） */
 const dragging = ref<{ x: number; y: number } | null>(null)
 const label = computed(() => dragging.value ?? props.data.label ?? geo.value.mid)
@@ -121,6 +135,7 @@ function onUp() {
     <path :d="path" class="line" />
     <polygon :points="arrow" class="head" />
     <path v-if="socket" :d="socket" class="socket" />
+    <path v-if="hook" :d="hook" class="socket" />
   </g>
   <EdgeLabelRenderer v-if="text">
     <div

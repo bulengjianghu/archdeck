@@ -2,7 +2,7 @@
 /** 关系面板：头部为方向与类型；「关系」一节按五个维度各一行（控制流、知识、语义、同步性、平面，ADR-0022）；其后接口、数据、代码事实与承载（D5、L22） */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
-import { RUNTIME_RELATION_TYPES, moduleName, parseVia, relationMode, viaLabel } from '@/model'
+import { RUNTIME_RELATION_TYPES, callbackText, isCallbackVia, moduleName, parseVia, relationMode, viaLabel } from '@/model'
 import { RELATION_TYPE_HINTS, RELATION_TYPE_LABELS } from '../shared/labels'
 import Markdown from './Markdown.vue'
 import Section from './Section.vue'
@@ -52,6 +52,14 @@ const semantics = computed(
 const mode = computed(() => (relationMode(r.value) === 'async' ? '异步' : '同步'))
 /** L12：经端口（插座记号）；其余机制只在面板标出 */
 const viaText = computed(() => (r.value.via ? viaLabel(r.value.via, desk.index.value!) : ''))
+/** 徽标说明：经端口（L12）、经回调（L24）、其余经此传递 */
+const viaTitle = computed(() => {
+  const via = r.value.via
+  if (!via) return ''
+  if (via.startsWith('port:')) return '经端口：接收方是端口的实现者，可替换（L12）'
+  if (isCallbackVia(via)) return callbackText(desk.index.value!, r.value.id)
+  return '经此传递，静态导入证实不了（K5b）'
+})
 const plane = computed(() => (!runtime.value ? '—（编译期）' : r.value.type === 'streams' ? '数据面' : '控制面'))
 const visibleHere = computed(() => desk.view.value?.edges.some(e => e.relationIds.includes(props.id)) ?? false)
 /** K12、K13：两端之间的子类与组装事实，「知识」行旁标出 */
@@ -82,8 +90,8 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
         <span
           v-if="r.via"
           class="badge via"
-          :title="r.via.startsWith('port:') ? '经端口：接收方是端口的实现者，可替换（L12）' : '经此传递，静态导入证实不了（K5b）'"
-          >经 {{ viaText }}</span
+          :title="viaTitle"
+          >{{ isCallbackVia(r.via) ? '↩ ' : '' }}经 {{ viaText }}</span
         >
         <button v-if="couple" class="badge couple" title="两端是时间耦合：单击看共同的提交（J7）" @click="desk.select({ kind: 'couple', id: couple.id })">
           同提交 ×{{ couple.shared }}

@@ -6,6 +6,8 @@ import {
   CARRIER_ROLE_TEXT,
   CARRIER_TEMPLATE_LABELS,
   CARRIER_VERDICT_LABELS,
+  callbackText,
+  isCallbackVia,
   moduleName,
   nodeOf as nodeOfModule,
   parseVia,
@@ -43,6 +45,17 @@ export const arrowOf = (e: ViewEdge): EdgeArrow => (e.mode === 'async' ? 'open' 
 /** L12：视图边（含聚合边、经由上层的临时线）里有任一条关系经端口（via: port:<P>，含迁移期的「端口未指明」）即画插座 */
 export const viaPort = (idx: ModelIndex | null, e: ViewEdge): boolean =>
   !!idx && e.relationIds.some(id => parseVia(idx.relations.get(id)?.via)?.kind === 'port')
+
+/** L24：视图边里经回调（via: channel:callback）的关系 */
+export const callbackRelations = (idx: ModelIndex | null, e: ViewEdge): string[] =>
+  idx ? e.relationIds.filter(id => isCallbackVia(idx.relations.get(id)?.via)) : []
+
+/** L24：边的悬停里经回调的说明；聚合边逐条列出 */
+function callbackTitle(idx: ModelIndex | null, ids: readonly string[], aggregate: boolean): string | undefined {
+  if (!idx || !ids.length) return undefined
+  if (!aggregate) return callbackText(idx, ids[0])
+  return ids.map(id => `${id}：${callbackText(idx, id)}`).join('\n')
+}
 
 /** 临时线用的视图边外形；经由上层关系时取该关系的类型与同步 / 异步（P15；通知一律异步） */
 function tempEdge(idx: ModelIndex | null, id: string, from: string, to: string, relationId?: string): ViewEdge {
@@ -118,6 +131,10 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined,
   // D8：束内同步 / 异步、via 不一致时加「混合」记号
   const label = extra.label ?? [count, mark, extra.mixed ? '混合' : ''].filter(Boolean).join(' ')
   const route = label && !route0.label ? { ...route0, label: routeMidpoint(route0) } : route0
+  // L24：经回调的关系在发起方一端画回程钩，悬停说明接在其余说明之后
+  const callbacks = callbackRelations(ctx.input.index, e)
+  const cbTitle = callbackTitle(ctx.input.index, callbacks, e.relationIds.length > 1)
+  const title = [extra.title, cbTitle].filter(Boolean).join('\n\n') || undefined
   return {
     id: core ? `core:${e.id}` : e.id,
     source: e.from,
@@ -144,6 +161,8 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined,
       muted: play.play === 'walked' && !!ctx.emphEdges && !ctx.emphEdges.has(e.id),
       ...play,
       ...extra,
+      ...(callbacks.length ? { callback: true } : {}),
+      ...(title ? { title } : {}),
     },
   }
 }

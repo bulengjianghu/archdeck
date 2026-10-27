@@ -196,6 +196,8 @@ export interface RouteEdgeData {
   weight: 1 | 2 | 3
   /** L12：边上有一条经端口（via: port:）的关系——目标端画插座记号 */
   port?: boolean
+  /** L24：边上有一条经回调（via: channel:callback）的关系——发起方一端画回程钩 */
+  callback?: boolean
   /** 选中：强调色窄晕，不改线宽 */
   selected: boolean
   dim: boolean

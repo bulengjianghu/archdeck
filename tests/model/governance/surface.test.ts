@@ -12,6 +12,7 @@ import {
   formOf,
   governanceReport,
   interactionBundle,
+  isCallbackVia,
   levelDeps,
   loadModel,
   reworkList,
@@ -365,6 +366,21 @@ describe('M21 通道的契约模块、M22 束内没写接口', () => {
     expect(m22.map(i => i.severity)).toEqual(['info', 'info'])
     expect(m22[0].message).toContain('「r.loose1」、「r.loose2」')
     expect(m22[1].message).toContain('「r.ch」、「r.ext」')
+  })
+
+  it('M22：经回调的关系（interface 留空，ADR-0034）不计入同束无接口提示；isCallbackVia 认 channel:callback 与 @ 写法', () => {
+    expect(isCallbackVia('channel:callback')).toBe(true)
+    expect(isCallbackVia('channel:callback@ctr')).toBe(true)
+    expect(isCallbackVia('channel:callbacks')).toBe(false)
+    expect(isCallbackVia('port:if.x')).toBe(false)
+    expect(isCallbackVia(undefined)).toBe(false)
+    const { issues } = loadModel([
+      { path: 'system.yaml', text: 'system: { id: sys, name: Sys }' },
+      { path: 'modules.yaml', text: MODEL.replace("via: 'channel:http'", "via: 'channel:callback@ctr'") },
+    ])
+    const m22 = issues.filter(i => i.code === 'relation.bundle-no-interface')
+    expect(m22).toHaveLength(1)
+    expect(m22[0].message).toContain('「r.loose1」、「r.loose2」')
   })
 })
 

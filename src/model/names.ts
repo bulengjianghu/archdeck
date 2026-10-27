@@ -33,3 +33,11 @@ export function viaLabel(via: string, index?: ModelIndex): string {
 
 /** 规则种类的名称：门禁消息、命令行与页面共用 */
 export const RULE_LABELS: Record<RuleKind, string> = { layer: '层规则', deps: '依赖白名单', exposes: '访问面' }
+
+/** L24：经回调的一句说明——「<接收方> 把执行器交给 <发起方>，契约在 <契约模块>」（没写 @ 为「契约未指明」） */
+export function callbackText(idx: ModelIndex, relationId: string): string {
+  const r = idx.relations.get(relationId)
+  if (!r) return relationId
+  const contract = parseVia(r.via)?.contract
+  return `经回调：${moduleName(idx, r.to)} 把执行器交给 ${moduleName(idx, r.from)}，${contract ? `契约在 ${moduleName(idx, contract)}` : '契约未指明'}（代码依赖方向与箭头相反，L24）`
+}

@@ -23,6 +23,7 @@ import {
   ROOT_MOUNT,
   SKETCH_SOFT_LIMIT,
   isSharedRole,
+  isCallbackVia,
   parseVia,
   type ChangeKind,
   type GridArea,
@@ -117,6 +118,8 @@ export interface SketchEdgeData {
   pending?: boolean
   /** L12、X23：边上有一条经端口（via: port:）的关系——终点画插座 */
   port?: boolean
+  /** L24：经回调——起点画回程钩 */
+  callback?: boolean
   change?: ChangeKind
   selected?: boolean
   /** X22：引用线——引用在中心区的哪一侧（模块从这一侧的端口进出），引用是起点还是终点 */
@@ -598,6 +601,7 @@ export function sketchScene(input: SketchSceneInput): SketchScene {
         label: many ? null : (def.layout?.relations?.[r.id]?.label ?? null),
         ...(g.rels.some(x => pending.has(x.id)) ? { pending: true } : {}),
         ...(g.rels.some(x => parseVia(x.via)?.kind === 'port') ? { port: true } : {}),
+        ...(g.rels.some(x => isCallbackVia(x.via)) ? { callback: true } : {}),
         ...(change ? { change } : {}),
         ...(sel.has(id) || (!many && sel.has(r.id)) ? { selected: true } : {}),
         ...(sideOf.has(g.source) ? { external: sideOf.get(g.source), refEnd: 'source' as const } : {}),

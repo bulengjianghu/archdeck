@@ -271,4 +271,28 @@ describe('canvasScene', () => {
     expect(agg.data.edge.type).toBe('commands')
     expect(edge(s, 'infra.mus->infra.framework:commands')!.data.port).toBeUndefined()
   })
+
+  it('L24：经回调（via: channel:callback，含 @ 与旧别名）的视图边带回程钩，悬停写明谁把执行器交给谁、契约在哪；聚合边逐条列出；其余通道不画', async () => {
+    const { index: idx } = loadModel(
+      sampleFiles({
+        'z.yaml':
+          "relations:\n  - { id: rcb, from: infra.player, to: infra.framework, type: commands, via: 'channel:callback@infra.player' }\n  - { id: rq, from: infra.player, to: infra.framework, type: commands }\n  - { id: rold, from: infra.framework, to: infra.player, type: commands, via: callback }\n  - { id: rc, from: infra.mus, to: infra.framework, type: commands, via: 'channel:http' }\n",
+      }),
+    )
+    const view = projectLevel(idx, 'infra', { showBoundaries: true })
+    const s = canvasScene({ ...(await structure('infra')), index: idx, positioned: await layoutView(view) })
+    const agg = edge(s, 'infra.player->infra.framework:commands')!
+    expect(agg.data.callback).toBe(true)
+    // 回程钩不改色相、线型与箭头（一个通道一个维度）
+    expect(agg.data.edge.type).toBe('commands')
+    expect(agg.data.arrow).toBe('closed')
+    expect(agg.data.title).toContain('rcb：经回调：')
+    expect(agg.data.title).toContain('契约在')
+    expect(agg.data.title).not.toContain('rq：')
+    // M20 旧别名 callback 读作 channel:callback，契约未指明
+    const old = edge(s, 'infra.framework->infra.player:commands')!
+    expect(old.data.callback).toBe(true)
+    expect(old.data.title).toContain('契约未指明')
+    expect(edge(s, 'infra.mus->infra.framework:commands')!.data.callback).toBeUndefined()
+  })
 })

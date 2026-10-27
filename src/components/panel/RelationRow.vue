@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
-import { moduleName } from '@/model'
+import { callbackText, isCallbackVia, moduleName } from '@/model'
 import ChangeBadge from './ChangeBadge.vue'
 import { RELATION_TYPE_LABELS } from '../shared/labels'
 
@@ -11,6 +11,8 @@ const desk = useDesk()
 const r = computed(() => desk.index.value?.relations.get(props.id))
 const name = (id: string) => (desk.index.value ? moduleName(desk.index.value, id) : id)
 const ifName = computed(() => (r.value?.interface ? desk.index.value?.interfaces.get(r.value.interface)?.name : undefined))
+/** L24：经回调的一条标「经回调」 */
+const callback = computed(() => (r.value && desk.index.value && isCallbackVia(r.value.via) ? callbackText(desk.index.value, r.value.id) : null))
 /** K5：有代码事实时标出证实 */
 const fact = computed(() => desk.facts.report.value?.relations.get(props.id)?.status)
 </script>
@@ -26,6 +28,7 @@ const fact = computed(() => desk.facts.report.value?.relations.get(props.id)?.st
     <span class="rel-chip" :class="`rel-${r.type}`" :title="r.type">{{ RELATION_TYPE_LABELS[r.type] }}</span>
     <span v-if="r.mode === 'async'" class="muted">异步</span>
     <code v-if="ifName" class="if">{{ ifName }}</code>
+    <span v-if="callback" class="hook" :title="callback">↩ 经回调</span>
     <span v-if="fact === 'confirmed'" class="fact ok" title="已被代码证实">✓</span>
     <span v-else-if="fact === 'unconfirmed'" class="fact" title="未被代码证实">?</span>
   </li>
@@ -50,6 +53,11 @@ const fact = computed(() => desk.facts.report.value?.relations.get(props.id)?.st
 }
 
 .if {
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.hook {
   font-size: 11.5px;
   color: var(--text-2);
 }

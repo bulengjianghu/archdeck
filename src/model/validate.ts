@@ -20,7 +20,7 @@ import type {
   SourceLoc,
   Step,
 } from './types'
-import { LEGACY_VIAS, isCallLike, isUnclassified, parseVia, relationMode, type RelationVia } from './types'
+import { LEGACY_VIAS, isCallLike, isCallbackVia, isUnclassified, parseVia, relationMode, type RelationVia } from './types'
 
 /** 问题消息里的类型名 */
 const TYPE_NAMES: Record<string, string> = { queries: '查询', commands: '委托', calls: '未分类关系', notifies: '通知', streams: '流' }
@@ -278,7 +278,8 @@ function checkRelations(input: ArchModel, c: Checked): RelationEntity[] {
   }
   // M22：同一对端点、同一种类（画布上的一束）里有两条以上没写接口——按表面散开时接不到元素、分不出通路（info）
   const unnamed = new Map<string, RelationEntity[]>()
-  for (const r of relations) if (!r.interface) (unnamed.get(`${r.from}->${r.to}:${r.type}`) ?? unnamed.set(`${r.from}->${r.to}:${r.type}`, []).get(`${r.from}->${r.to}:${r.type}`)!).push(r)
+  // ADR-0034：经回调的关系 interface 留空（04 §3.4），不计
+  for (const r of relations) if (!r.interface && !isCallbackVia(r.via)) (unnamed.get(`${r.from}->${r.to}:${r.type}`) ?? unnamed.set(`${r.from}->${r.to}:${r.type}`, []).get(`${r.from}->${r.to}:${r.type}`)!).push(r)
   for (const list of unnamed.values())
     if (list.length >= 2)
       c.info(

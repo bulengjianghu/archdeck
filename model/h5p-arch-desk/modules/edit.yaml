@@ -272,7 +272,7 @@ relations:
   - { id: rel.v4.dispatch-sketch, from: present.panel.dispatch, to: present.panel.sketch, type: commands, description: 面板分派交给草图面板：进入草图时面板分派渲染草图面板 }
   - { id: rel.v4.nav-tree-sketch, from: present.nav-tree, to: present.sketch.tree, type: commands, description: 导航树交给草图导航树：进入草图时模块页签渲染本张草图的模块与引用树 }
   - {id: rel.v4.sketch-panel, from: present.sketch.canvas, to: present.panel.sketch, type: notifies, via: 'channel:inject', description: 选中变化时面板跟随（经注入的 DeskState 的选中，画布与面板互不引用）}
-  - {id: rel.v4.panel-requests, from: present.panel.sketch, to: present.sketch.canvas, type: commands, via: 'channel:callback', description: 草图面板交给画布与手势：requestSketch：合并 / 拆分 / 删除的对话框与级联确认由画布打开（经共享的 sketchRequest，画布接到后打开并清掉）}
+  - {id: rel.v4.panel-requests, from: present.panel.sketch, to: present.sketch.canvas, type: commands, via: 'channel:shared-ref@present.sketch.contracts', description: 草图面板交给画布与手势：requestSketch：合并 / 拆分 / 删除的对话框与级联确认由画布打开（经共享的 sketchRequest，画布接到后打开并清掉）}
   - { id: rel.v4.panel-badges, from: present.panel.sketch, to: present.sketch.contracts, type: commands, description: 草图面板交给画布的约定与显示名：调用 sixCounts 算设计概览的六类计数、requestSketch 请画布打开合并 / 拆分 / 删除对话框，渲染血缘角标 }
   - {id: rel.v4.panel-confirm, from: present.panel.sketch, to: present.version.actions, type: commands, description: 草图面板交给动作区：改 ID 前调用 ask 打开二次确认对话框，列出级联条数、子草图文件名与当前版本引用数（X7d）}
   - {id: rel.v4.sketch-layout-types, from: state.layout.sketch, to: model.types, type: queries, description: 草图布局向类型与 Schema 取：调用 isSharedRole 把共用件排上层带的共用件架、不计入七的软限（O9、X13）}
@@ -284,7 +284,7 @@ relations:
   - {id: rel.ed.bar-commands, from: present.version.actions, to: state.desk.edit.commands, type: commands, interface: if.desk.edit, description: 动作区交给编辑操作：canLeave / exit / save / saveAndHandToAi / discard / replayOnReload / undo / redo；读 dirty、designErrors / designWarnings、comparison}
   - { id: rel.v4.identity-zones, from: present.version.identity, to: present.version.actions, type: commands, description: 身份区交给动作区：右侧按版本渲染动作区（ActionZone） }
   - { id: rel.v4.identity-compare, from: present.version.identity, to: present.version.compare, type: commands, description: 身份区交给对比区：右侧按版本渲染对比区（CompareZone） }
-  - {id: rel.v4.version-sketch, from: present.version.identity, to: present.sketch.canvas, type: commands, via: 'channel:callback', description: 身份区交给画布与手势：面包屑父级是升级的落点（画布拖动经过时经共享的 dragOverParent 高亮），点一级返回切张}
+  - {id: rel.v4.version-sketch, from: present.version.identity, to: present.sketch.canvas, type: commands, via: 'channel:shared-ref@present.sketch.contracts', description: 身份区交给画布与手势：面包屑父级是升级的落点（画布拖动经过时经共享的 dragOverParent 高亮），点一级返回切张}
   - {id: rel.v4.version-crumbs, from: present.version.identity, to: state.desk.edit.commands, type: commands, interface: if.desk.edit, description: "身份区交给编辑操作：面包屑——读 breadcrumb、dirty，点一级 openMount（#15）"}
   - {id: rel.v4.compare-commands, from: present.version.compare, to: state.desk.edit.commands, type: commands, interface: if.desk.edit, description: 对比区交给编辑操作：setCompareMode；读 comparison、twoBases、baselineFallback}
   - { id: rel.v4.compare-counts, from: present.version.compare, to: present.sketch.contracts, type: queries, description: 对比区向画布的约定与显示名取：对比按钮与弹层调用 sixCounts 算六类计数 }
@@ -320,7 +320,7 @@ relations:
   # ── 视图状态层：编辑中的草图 ──
   - {id: rel.ed.commands-session, from: state.desk.edit.commands, to: state.desk.edit.session, type: commands, interface: if.desk.editSession, description: 编辑操作交给编辑会话：apply / open / undo / redo / replay / discard / reloaded}
   - {id: rel.ed.commands-mode, from: state.desk.edit.commands, to: state.transition.edit, type: queries, interface: if.state.editMode, description: 编辑操作向编辑规则取：leaveGuard：离开前是否要确认}
-  - {id: rel.ed.commands-dispatch, from: state.desk.edit.commands, to: state.desk.actions, type: commands, via: 'channel:callback', interface: if.desk.actions, description: 编辑操作交给 dispatch 与操作：dispatch(enterEdit / exitEdit / edited)}
+  - {id: rel.ed.commands-dispatch, from: state.desk.edit.commands, to: state.desk.actions, type: commands, via: 'channel:callback@state.desk.edit.commands', interface: if.desk.actions, description: 编辑操作交给 dispatch 与操作：dispatch(enterEdit / exitEdit / edited)}
   - {id: rel.ed.commands-save, from: state.desk.edit.commands, to: state.desk.edit.save, type: commands, description: 编辑操作交给草图写回同步：save / createDesign 交给写回同步}
   - {id: rel.ed.commands-derive, from: state.desk.edit.commands, to: state.desk.edit.derive, type: queries, description: 编辑操作向编辑会话的派生取：设计的索引与编辑的上下文（editContext）}
   - {id: rel.ed.save-session, from: state.desk.edit.save, to: state.desk.edit.session, type: commands, interface: if.desk.editSession, description: 草图写回同步交给编辑会话：写入结果 → saved / 已过时}

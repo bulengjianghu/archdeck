@@ -69,6 +69,12 @@ export function parseVia(via: string | undefined): ParsedVia | undefined {
   return at > 0 && at < m[2].length - 1 ? { kind: 'channel', target: m[2], name: m[2].slice(0, at), contract: m[2].slice(at + 1) } : { kind: 'channel', target: m[2] }
 }
 
+/** L24：经回调——via 为 channel:callback（含 @<契约模块>；旧别名 callback 读入时已改写为 channel:callback，M20） */
+export function isCallbackVia(via: string | undefined): boolean {
+  const v = parseVia(via)
+  return v?.kind === 'channel' && (v.name ?? v.target) === 'callback'
+}
+
 /** 运行时关系（§1.1）：ADR-0029 起关系全是交互，与 RELATION_TYPES 相同；步骤只对应它们（S12）。迁移期含未分类 */
 export const RUNTIME_RELATION_TYPES: readonly RelationType[] = ['queries', 'commands', 'notifies', 'streams', 'calls']
 

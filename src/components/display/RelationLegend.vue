@@ -3,7 +3,7 @@
  * 「显示」面板 · 关系（颜色通道，ADR-0018 / ADR-0017 第三轮），按「三问四修饰」组织（ADR-0029 §3）：
  * - 三问：三个判断题定类型，每个答案落到一类；类型行既是图例又是筛选（结构视角点击筛选，L8），示意按画布同一套样式（查询淡、委托实色）。
  * - 迁移期的未分类（calls，M17）单列一行，中性灰。
- * - 「四修饰」是读完类型再读的修饰：机制（直接 / 端口——插座记号 L12 / 总线 / 通道——面板标出）、异步（空心箭头）、拉取（面板标出），
+ * - 「四修饰」是读完类型再读的修饰：机制（直接 / 端口——插座记号 L12 / 经回调——回程钩 L24 / 总线 / 通道——面板标出）、异步（空心箭头）、拉取（面板标出），
  *   与粗细（聚合条数）一起放在浅底卡片里、中性色示意、不可点击。
  * 线型（事实状态）不在这里讲，只在「代码事实」组。
  */
@@ -84,6 +84,9 @@ const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] 
         <span class="dim">机制</span>
         <span class="pair" :title="VIA_KIND_HINTS.direct"><LineSwatch :color="NEUTRAL" :width="22" arrow="closed" />{{ VIA_KIND_LABELS.direct }}</span>
         <span class="pair" :title="VIA_KIND_HINTS.port"><LineSwatch :color="NEUTRAL" :width="26" arrow="closed" socket />{{ VIA_KIND_LABELS.port }}</span>
+        <span class="pair" title="经回调（L24）：发起方调用的是接收方交来的执行器，代码依赖方向与箭头相反"
+          ><LineSwatch :color="NEUTRAL" :width="26" arrow="closed" hook />经回调</span
+        >
         <span class="pair muted-text" :title="`${VIA_KIND_HINTS.bus}；${VIA_KIND_HINTS.channel}`"
           >{{ VIA_KIND_LABELS.bus }} · {{ VIA_KIND_LABELS.channel }}：见面板</span
         >

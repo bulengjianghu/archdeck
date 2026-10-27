@@ -87,6 +87,20 @@ describe('RouteEdge', () => {
     expect(p.style).toBe(render({}).style)
   })
 
+  it('L24：经回调的边在起点叠放回程钩（marker-start），与插座、箭头、线型互不替换', () => {
+    expect(render({}).w.find('.edge-hook').exists()).toBe(false)
+    const h = render({ callback: true })
+    expect(h.w.find('marker.callback-marker').exists()).toBe(true)
+    expect(h.w.find('.edge-hook').attributes('marker-start')).toContain('hook-')
+    expect(h.w.find('path.vue-flow__edge-path').attributes('marker-end')).toContain('arrow-')
+    expect(h.style).toBe(render({}).style)
+    // 未证实（虚线）又经端口又经回调：三个记号同时在
+    const all = render({ callback: true, port: true, factState: 'unconfirmed' })
+    expect(all.style).toContain('stroke-dasharray')
+    expect(all.w.find('.edge-hook').exists()).toBe(true)
+    expect(all.w.find('.edge-socket:not(.edge-hook)').exists()).toBe(true)
+  })
+
   it('线宽只按条数三档；选中与走过不改线宽，选中加窄晕', () => {
     const width = (d: Partial<RouteEdgeData>) => render(d).style.match(/stroke-width: ([\d.]+)/)![1]
     expect([1, 2, 3].map(weight => width({ weight: weight as 1 | 2 | 3 }))).toEqual(['1.5', '2.5', '3.5'])

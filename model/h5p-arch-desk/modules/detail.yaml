@@ -359,7 +359,7 @@ relations:
   - {id: rel.ad.loading-baselines, from: state.desk.loading, to: state.desk.versions, type: streams, pull: true, payload: [ds.ModelPayload], description: 设计版本的载荷附带设计信息与对比基线原文}
   - {id: rel.ad.versions-diff, from: state.desk.versions, to: model.diff, type: queries, interface: if.model.diffModels, payload: [ds.ModelDiff], description: 版本与对比基线（desk.versions）向版本对比取：切换对比基线或重新加载时重算}
   - {id: rel.ad.loading-keep, from: state.desk.loading, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 模型源同步交给 dispatch 与操作：加载完成 → dispatch(loaded / reloaded)，层次回退由转移规则决定}
-  - {id: rel.ad.url-actions, from: state.desk.url-sync, to: state.desk.actions, type: commands, via: 'channel:callback', interface: if.desk.actions, description: 路由同步交给 dispatch 与操作：外部路由变化 → decode → dispatch}
+  - {id: rel.ad.url-actions, from: state.desk.url-sync, to: state.desk.actions, type: commands, via: 'channel:callback@state.desk.url-sync', interface: if.desk.actions, description: 路由同步交给 dispatch 与操作：外部路由变化 → decode → dispatch}
   - {id: rel.ad.actions-url, from: state.desk.actions, to: state.desk.url-sync, type: streams, payload: [ds.ViewState], description: 状态改变后写地址（router.write），地址 = encode(状态)}
   - {id: rel.ad.actions-lca, from: state.transition.navigation, to: model.projector.hierarchy, type: queries, interface: if.model.lowestCommonAncestor, description: 导航规则向层次顺序与公共祖先取：定位关系用最近公共祖先}
   - id: rel.ad.projection-project
