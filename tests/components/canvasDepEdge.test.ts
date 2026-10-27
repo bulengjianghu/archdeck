@@ -186,3 +186,13 @@ describe('结构视角的显示偏好（useStructurePrefs）', () => {
     expect(useStructurePrefs('p1').prefs.value).toEqual({ ...DEFAULT_STRUCTURE_PREFS, typeOnly: true, impactMode: 'both' })
   })
 })
+
+describe('L20②（ADR-0036）：接到端口点的元素级边', () => {
+  it('终点不画记号、不回缩（点就是终点记号）；组装的起点菱形照画；不接元素的边照画终点记号', () => {
+    const dot = render({ kind: 'assembly', element: { name: 'get', kind: 'port' } })
+    expect(dot.main.attributes('marker-end')).toBeUndefined()
+    expect(dot.main.attributes('marker-start')).toContain('dep-start-')
+    expect(dot.main.attributes('d')).toContain('100')
+    expect(render({ kind: 'use' }).main.attributes('marker-end')).toContain('dep-end-')
+  })
+})

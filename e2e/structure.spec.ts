@@ -40,7 +40,7 @@ test('L23：选中模块时交互束按接口散开到它的元素（#to:<元素
   await openDesk(page, '/p/h5player?level=app&sel=m:app.factories')
   const parts = page.locator('.vue-flow__edge-route[data-id^="app.solution->app.factories:commands#to:"]')
   await expect(parts.first()).toBeAttached()
-  const marks = graphNode(page, 'app.factories').getByTestId('surface-marks').locator('.element')
+  const marks = graphNode(page, 'app.factories').getByTestId('surface-marks').locator('.dot')
   await expect(marks.first()).toBeAttached()
   // 只画被接到的元素：记号数不多于散开的段接到的元素数（另有其他发起方的段）
   const hit = new Set(

@@ -166,7 +166,7 @@ describe('C6、L20 表面展开', () => {
     expect(node(s, 'core.impl').data.metrics!.w).toBeUndefined()
   })
 
-  it('选中模块：元素作为 elk 端口排在入边一侧、节点加长，束散开为元素级边接到各自元素；越过入口接到节点本体并带记号', async () => {
+  it('选中模块：元素作为端口点排在入边一侧、节点位置与尺寸不变（ADR-0036），束散开为元素级边接到各自的点；越过入口接到节点本体并带记号', async () => {
     const bypass: FileDep = {
       from: 'src/core/log/l.ts',
       to: 'src/core/api/client.ts',
@@ -182,10 +182,11 @@ describe('C6、L20 表面展开', () => {
     desk.select({ kind: 'module', id: 'core.api' })
     await settle(desk)
     const { scene: s, positioned: pv, expansion } = await sceneOf(desk)
-    expect(expansion!.expand).toEqual([{ node: 'core.api', elements: ['get', 'Client'], from: null }])
+    expect(expansion!.expand).toMatchObject([{ node: 'core.api', elements: ['get', 'Client'], from: null }])
+    // L20②：选中前后全部节点的位置与尺寸相同
+    const boxes = (sc: typeof s) => sc.nodes.map(n => [n.id, n.position, n.width, n.height])
+    expect(boxes(s)).toEqual(boxes(before))
     const api = node(s, 'core.api')
-    const was = node(before, 'core.api')
-    expect(api.width * api.height).toBeGreaterThan(was.width * was.height)
     expect(api.data.surface!.items.map(i => [i.name, i.kind, i.fanIn, i.used])).toEqual([
       ['get', 'port', 3, true],
       ['Client', 'operation', 1, true],
@@ -233,6 +234,24 @@ describe('C6、L20 表面展开', () => {
     desk.setMode('structure')
     const st = (await sceneOf(desk)).scene
     expect(st.nodes.map(n => [n.id, n.position, n.width, n.height])).toEqual(s.nodes.map(n => [n.id, n.position, n.width, n.height]))
+    // L20②：节点也与没有选中时相同
+    expect(s.nodes.map(n => [n.id, n.position, n.width, n.height])).toEqual(quiet.nodes.map(n => [n.id, n.position, n.width, n.height]))
+  })
+
+  it('L20②（ADR-0036）：换选中、总是展开表面都不动节点；换选中直接命中收起态那一份布局（不重排）', async () => {
+    const desk = await openDesk('/?level=core&v=s')
+    const boxes = async (prefs = {}) => (await sceneOf(desk, prefs)).scene.nodes.map(n => [n.id, n.position, n.width, n.height])
+    const none = await boxes()
+    desk.select({ kind: 'module', id: 'core.api' })
+    await settle(desk)
+    const a = await boxes()
+    desk.select({ kind: 'module', id: 'core.util' })
+    await settle(desk)
+    expect(await boxes()).toEqual(none)
+    expect(a).toEqual(none)
+    desk.select(null)
+    await settle(desk)
+    expect(await boxes({ surfaceAlways: true })).toEqual(none)
   })
 })
 

@@ -23,7 +23,13 @@ const metricsTitle = computed(() => {
   const w = x.w !== undefined ? ` · 表面宽度 W ${x.w}（子树外引用的不同表面元素数，K19）` : ''
   return `扇入 Ca ${x.ca}（子树外依赖它的模块）· 扇出 Ce ${x.ce}（它依赖的子树外模块）· 不稳定度 I ${i}${x.band ? `（${STABILITY[x.band]}）` : ''}（K16、L17）${w}`
 })
-const cross = computed(() => props.data.crossFold)
+/** L20②（ADR-0036）：展开表面的节点入边一侧整排是端口点，朝向同一侧的跨界折叠记号挪到相邻一侧（顶 → 右、左 → 下），不压点 */
+const cross = computed(() => {
+  const x = props.data.crossFold
+  const s = props.data.surface?.side
+  if (!x || !s || x.side !== s) return x
+  return { ...x, side: s === 'top' ? ('right' as const) : ('bottom' as const) }
+})
 const crossText = computed(() => {
   const x = cross.value
   if (!x) return ''

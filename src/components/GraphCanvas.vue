@@ -10,8 +10,8 @@
  * 结构视角（ADR-0031）：节点不动，交互边换成结构边（L15、L16），单击结构边即选中这对节点的代码依赖（`sel=d:`）；节点标指标与不稳定度（L17）、
  * 选中模块时标影响面（K15）、本层的环常显（Y4）；画布角计收起的只引类型依赖边（L15），没有代码事实时说明只画允许依赖（U16）。
  * 第八轮（ADR-0032）：结构边即束，按显示偏好过滤（desk.facts.structureDisplay，L21），画布角计收起的只引类型 / 值使用 / 已解释；
- * 表面展开（C6、L20、L23）：展开集合与元素端口由 DeskState 的布局同步给出（desk.facts.expansion），本层带元素端口重新布局（等同下钻），重排完成前沿用上一份布局；
- * 新展开的节点在重排后把视口适应到它及本层邻居一次（T2-9）；
+ * 表面展开（C6、L20、L23；ADR-0036）：展开集合与端口点由 DeskState 的布局同步给出（desk.facts.expansion），节点不动、视口不动，只多端口点与重新走线；
+ * 悬停端口点或面板「表面」一节的元素行（useSurfaceHover）时落在点上的边与发起方高亮（L20④）；
  * 交互视角选中交互时叠加承载（L22），交互束按接收方表面散开、混合标记（L23）。
  * 开启「演化」时叠加热度角标与时间耦合的波浪线（J5）；单击耦合线即选中它（J7）。
  * 节点右键：「在此设计」（F-10：以该模块为挂载点新建设计，只在当前版本、不能是层）。
@@ -22,7 +22,8 @@ import { VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import { useDesk } from '@/state/inject'
 import { contentBounds, type PositionedView } from '@/layout/layout'
-import { canvasScene, withEdgeHover, type NodeData, type RouteEdgeData, type StructureInput } from '@/layout/canvas'
+import { canvasScene, withEdgeHover, withElementHover, type NodeData, type RouteEdgeData, type StructureInput } from '@/layout/canvas'
+import { useSurfaceHover } from './panel/surfaceFocus'
 import { useStage } from './stage/useStageDisplay'
 import ModuleNode from './nodes/ModuleNode.vue'
 import BoundaryNode from './nodes/BoundaryNode.vue'
@@ -43,7 +44,7 @@ import { canDesignAt, openNewDesign } from './edit/designHere'
 
 const desk = useDesk()
 const stageUi = useStage()
-const { setViewport, zoomIn, zoomOut, dimensions, setNodes, setEdges, onMoveStart } = useVueFlow('arch-desk')
+const { setViewport, zoomIn, zoomOut, dimensions, setNodes, setEdges } = useVueFlow('arch-desk')
 
 /** 运行视角的舞台叠加；结构 / 交互视角为 null */
 const stage = computed(() => (desk.perspective.value === 'run' ? desk.run.overlay.value : null))
@@ -123,7 +124,17 @@ const scene = computed(() =>
 )
 /** L25：悬停的边（画布局部状态，不进视图状态与 URL）——这条边高亮、提到最上层，两端节点加描边环 */
 const hoverEdge = ref<string | null>(null)
-const hovered = computed(() => withEdgeHover(scene.value.nodes, scene.value.edges, hoverEdge.value))
+/** L20④：悬停的端口点（画布或面板「表面」一节）——模块换成本层的视图节点 */
+const surfaceHover = useSurfaceHover()
+const dotHover = computed(() => {
+  const h = surfaceHover.value
+  const node = h && positioned.value?.view.nodes.find(n => n.moduleId === h.module && positioned.value?.elements?.has(n.id))
+  return node && h ? { node: node.id, element: h.element } : null
+})
+const hovered = computed(() => {
+  const e = withEdgeHover(scene.value.nodes, scene.value.edges, hoverEdge.value)
+  return hoverEdge.value ? e : withElementHover(e.nodes, e.edges, dotHover.value)
+})
 const nodes = computed<Node<NodeData>[]>(() => hovered.value.nodes)
 const edges = computed<Edge<RouteEdgeData>[]>(() => hovered.value.edges)
 
@@ -259,33 +270,6 @@ function fitNow(only?: ReadonlySet<string>): boolean {
   return true
 }
 
-// T2-9：新展开表面的节点——重排完成后把视口适应到它及本层邻居（整层适应优先）；入口导出到齐后的再次重排也跟着适应，
-// 直到用户自己平移缩放或展开集合变化为止
-const pendingSurface = ref<Set<string> | null>(null)
-watch(
-  () => desk.facts.expansion.value,
-  (now, was) => {
-    const before = new Set((was?.expand ?? []).map(x => x.node))
-    const fresh = (now?.expand ?? []).map(x => x.node).filter(n => !before.has(n))
-    if (fresh.length) pendingSurface.value = new Set(fresh)
-    else if (!now) pendingSurface.value = null
-  },
-)
-onMoveStart(e => {
-  if ((e.event as { sourceEvent?: unknown } | undefined)?.sourceEvent) pendingSurface.value = null
-})
-function trySurfaceFit() {
-  const want = pendingSurface.value
-  const pv = positioned.value
-  if (!want || !pv?.elements || ![...want].some(n => pv.elements!.has(n))) return
-  const near = new Set(want)
-  const shown = structure.value?.display?.shown ?? []
-  for (const e of [...pv.view.edges, ...shown]) {
-    if (want.has(e.from)) near.add(e.to)
-    if (want.has(e.to)) near.add(e.from)
-  }
-  fitNow(new Set([...near].filter(id => pv.nodes.has(id))))
-}
 function tryPendingFit(attempt = 0) {
   if (!pendingFit.value) return
   if (fitNow()) pendingFit.value = false
@@ -295,17 +279,9 @@ watch(
   () => positioned.value,
   async () => {
     await nextTick()
-    if (pendingFit.value) {
-      pendingSurface.value = null
-      tryPendingFit()
-    } else trySurfaceFit()
+    if (pendingFit.value) tryPendingFit()
   },
   { immediate: true },
-)
-// C6：「总是展开表面」切换后本层重排，重排后适应一次（选中引起的展开不重新适应，视野保持）
-watch(
-  () => structurePrefs.prefs.value.surfaceAlways,
-  () => (pendingFit.value = true),
 )
 
 // 画布容器尺寸变化（进入 / 退出运行视角、切换分屏方向、拖动分隔条或折叠两侧栏）后重新适应

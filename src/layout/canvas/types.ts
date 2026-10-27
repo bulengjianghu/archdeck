@@ -94,7 +94,7 @@ export interface NodeData {
   crossFold?: { in: number; out: number; side: 'top' | 'bottom' | 'left' | 'right'; title: string }
 }
 
-/** C6：节点上的一个表面元素记号 */
+/** C6、L20②：节点上的一个端口点（不写名字，形状按种类） */
 export interface SurfaceMark {
   name: string
   kind?: ElementKind
@@ -106,8 +106,12 @@ export interface SurfaceMark {
   used: boolean
   /** L20b：所属子模块的名称（悬停「属于 <子模块>」）；本体为「本体」；节点没有子模块分组时不给 */
   owner?: string
-  /** L20b：组首——该组的子模块短名（ID 末段；本体为「本体」），画小标签；组之间画细分隔 */
+  /** L20b：组首——该组的子模块短名（ID 去掉父模块前缀），画小标签；本体一组不给（ADR-0036） */
   group?: string
+  /** L20b：组名可用的宽度（px，到下一组首），放不下截短 */
+  groupRoom?: number
+  /** L20④：使用它的模块（名称），悬停提示「扇入 N（…）」 */
+  users?: string[]
 }
 
 export interface NodeSurface {
@@ -311,7 +315,7 @@ export interface CanvasInput {
   /** L22：交互视角选中一条交互时它的承载（不判定或没有代码事实时为 null） */
   carrier?: Carrier | null
   /** C6：展开表面的节点模块 → 元素名 → 种类与扇入（元素记号的悬停） */
-  surfaceInfo?: ReadonlyMap<string, ReadonlyMap<string, { kind: ElementKind; fanIn: number; sub?: string | null }>> | null
+  surfaceInfo?: ReadonlyMap<string, ReadonlyMap<string, { kind: ElementKind; fanIn: number; sub?: string | null; users?: readonly string[] }>> | null
 }
 
 /**

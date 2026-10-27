@@ -15,7 +15,7 @@ import { useDesk } from '@/state/inject'
 import Section from './Section.vue'
 import { DECL_STATE_LABEL, ELEMENT_KIND_LABEL, ELEMENT_KIND_MARK } from '../display/labels'
 import { useOpenPreview } from '../shared/preview'
-import { revealIn, useSurfaceFocus } from './surfaceFocus'
+import { hoverSurfaceElement, leaveSurfaceElement, revealIn, useSurfaceFocus, useSurfaceHover } from './surfaceFocus'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -25,6 +25,9 @@ const openPreview = useOpenPreview()
 
 const surface = computed(() => desk.facts.surfaceOf(props.id))
 const sm = computed(() => desk.facts.surfaceMetricsOf(props.id))
+/** L20④：画布上悬停的端口点（或本节悬停的行）——这一行同亮 */
+const hoverRef = useSurfaceHover()
+const hot = computed(() => (hoverRef.value?.module === props.id ? hoverRef.value.element : null))
 const facts = computed(() => !!surface.value?.facts)
 
 interface Row {
@@ -121,7 +124,17 @@ watch([focus, rows], () => nextTick(reveal))
 
       <p v-if="!rows.length" class="muted">没有表面元素（入口没有导出，也没有声明接口）</p>
       <ul v-else class="plain elements" aria-label="表面元素">
-        <li v-for="(r, i) in shown" :key="r.element.name" class="element" :data-element="r.element.name" :data-kind="r.element.kind" :data-sub="r.sub ?? ''">
+        <li
+          v-for="(r, i) in shown"
+          :key="r.element.name"
+          class="element"
+          :class="{ hot: hot === r.element.name }"
+          :data-element="r.element.name"
+          :data-kind="r.element.kind"
+          :data-sub="r.sub ?? ''"
+          @mouseenter="hoverSurfaceElement({ module: id, element: r.element.name })"
+          @mouseleave="leaveSurfaceElement(id, r.element.name)"
+        >
           <div v-if="groupHead(i)" class="group-head" data-testid="surface-group-head">
             {{ groupHead(i)!.name }}<span class="muted"> · {{ groupHead(i)!.count }} 个元素</span>
           </div>
@@ -213,6 +226,10 @@ watch([focus, rows], () => nextTick(reveal))
 
 .element {
   padding: 3px 0;
+}
+
+.element.hot {
+  background: var(--accent-soft);
 }
 
 .element.flash {

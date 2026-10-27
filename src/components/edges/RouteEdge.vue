@@ -40,8 +40,10 @@ const size = computed(() => arrowSize(props.data.weight))
 const path = computed(() => draw(props.data.route.points))
 /** L18、L16：依赖类的线用依赖的端点记号——组装叠加依赖方一端实心菱形、被依赖方开口箭头；代码依赖叠加线与承载缺段开口箭头 */
 const dep = computed(() => (isDependencyLine(props.data) ? depEnds(props.data.temp === 'assembly' ? 'assembly' : 'use') : null))
+/** L20②、L23a②（ADR-0036）：散开到端口点的一段（`#to:`）不画箭头，点就是终点记号 */
+const toDot = computed(() => props.id.includes('#to:'))
 const linePath = computed(() => {
-  if (couple.value) return path.value
+  if (couple.value || toDot.value) return path.value
   const { points, curve } = props.data.route
   if (!dep.value) return draw(retractEnd(points, curve, arrowDepth(size.value)))
   let pts = retractEnd(points, curve, umlDepth(dep.value.end, size.value))
@@ -98,7 +100,7 @@ const socketId = computed(() => `socket-${markerId.value.slice('arrow-'.length)}
     <BaseEdge
       :id="id"
       :path="linePath"
-      :marker-end="couple ? undefined : `url(#${markerId})`"
+      :marker-end="couple || toDot ? undefined : `url(#${markerId})`"
       :marker-start="dep?.start ? `url(#${depStartId})` : undefined"
       :style="style"
       :interaction-width="16"

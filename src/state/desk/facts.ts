@@ -92,6 +92,8 @@ export interface SurfaceInfo {
   kind: ElementKind
   fanIn: number
   sub: string | null
+  /** L20④：使用它的模块（端口点悬停提示「扇入 N（使用它的模块）」） */
+  users: string[]
 }
 
 /** 为什么没有代码事实，或正在取；源码清单读取失败也是 error（源码在本地是前提，G1） */
@@ -433,8 +435,16 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     for (const e of x.expand) {
       const m = v.nodes.find(n => n.id === e.node)?.moduleId
       if (!m || out.has(m)) continue
-      const fan = new Map((surfaceMetricsOf(m)?.uses ?? []).map(u => [u.element.name, u.modules.length]))
-      out.set(m, new Map((surfaceOfModule(m)?.elements ?? []).map(el => [el.name, { kind: el.kind, fanIn: fan.get(el.name) ?? 0, sub: surfaceSubOf(m, el) }])))
+      const uses = new Map((surfaceMetricsOf(m)?.uses ?? []).map(u => [u.element.name, u.modules]))
+      out.set(
+        m,
+        new Map(
+          (surfaceOfModule(m)?.elements ?? []).map(el => {
+            const users = [...(uses.get(el.name) ?? [])]
+            return [el.name, { kind: el.kind, fanIn: users.length, sub: surfaceSubOf(m, el), users }]
+          }),
+        ),
+      )
     }
     return out
   })

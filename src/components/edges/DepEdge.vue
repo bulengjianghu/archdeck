@@ -37,11 +37,13 @@ const bypassAt = computed(() => {
   return { x: b.x - (b.x - a.x) * t, y: b.y - (b.y - a.y) * t }
 })
 const ends = computed(() => depEnds(look.value.kind))
+/** L20②（ADR-0036）：接到端口点的元素级边终点不画记号、不回缩（点就是终点记号），起点记号照画 */
+const toDot = computed(() => !!look.value.element)
 const path = computed(() => draw(props.data.route.points))
 /** 线在两端的记号处回缩，记号从回缩处画到原端点（晕仍沿完整走线） */
 const linePath = computed(() => {
   const { points, curve } = props.data.route
-  let pts = retractEnd(points, curve, umlDepth(ends.value.end, size.value))
+  let pts = toDot.value ? points : retractEnd(points, curve, umlDepth(ends.value.end, size.value))
   if (ends.value.start) pts = retractEnd([...pts].reverse(), curve, umlDepth(ends.value.start, size.value)).reverse()
   return draw(pts)
 })
@@ -50,7 +52,7 @@ const safe = computed(() => props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)
 
 <template>
   <defs>
-    <UmlMarker :id="`dep-end-${safe}`" :end="ends.end" :color="style.stroke" :size="size" :line-width="style.strokeWidth" />
+    <UmlMarker v-if="!toDot" :id="`dep-end-${safe}`" :end="ends.end" :color="style.stroke" :size="size" :line-width="style.strokeWidth" />
     <UmlMarker v-if="ends.start" :id="`dep-start-${safe}`" :end="ends.start" :color="style.stroke" :size="size" :line-width="style.strokeWidth" start />
   </defs>
   <g
@@ -80,7 +82,7 @@ const safe = computed(() => props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)
       <BaseEdge
         :id="id"
         :path="linePath"
-        :marker-end="`url(#dep-end-${safe})`"
+        :marker-end="toDot ? undefined : `url(#dep-end-${safe})`"
         :marker-start="ends.start ? `url(#dep-start-${safe})` : undefined"
         :style="style"
         :interaction-width="16"

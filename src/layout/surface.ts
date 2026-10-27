@@ -7,11 +7,12 @@
  *   元素端口：本层（散开范围内）有元素级边接到的元素与交互接到的元素，按种类（端口、操作、类型、数据）再按名字排序；没有元素的节点不展开。
  *   一个节点最多 SURFACE_PORT_CAP 个元素端口：按本层接到它的节点数取前若干（交互接到的优先），其余计入「+N 个元素」（边接到节点本体，清单在面板「表面」一节）。
  *   L20b：封顶后的元素端口先按所属子模块（元素 owner 在接收方之下的那一级，groupOf）分组——子模块组按声明顺序，本体的元素一组排在最后；组内按种类、名字。
+ *   L20a②（ADR-0036）：另给组号（布局留组间距）与优先次序（入边一侧放不下时布局从末尾截掉，计入「+N」）。
  */
 import { ELEMENT_KINDS, type ElementKind, type InteractionBundle, type LevelView } from '@/model'
 import type { ElementLink, StructureLinks, SurfaceExpand } from './layout'
 
-/** C6、L20：一个展开节点最多画的元素端口数（宽表面如 W 上百的共用件不让节点无限加长；其余在面板「表面」一节，图例注明） */
+/** C6、L20：一个展开节点最多画的端口点数（定尺寸节点的入边一侧一排放得下；其余收进「+N」，清单在面板「表面」一节，图例注明） */
 export const SURFACE_PORT_CAP = 16
 
 export interface ExpansionInput {
@@ -89,11 +90,16 @@ export function surfaceExpansion({ view, selection: sel, always, links, spreads,
     const keep = new Set(top)
     const rank = (n: string) => ELEMENT_KINDS.indexOf(kinds.get(`${node}|${n}`) ?? 'operation')
     const group = (n: string) => groupOf?.(node, n)?.rank ?? Infinity
+    const elements = [...top].sort((x, y) => group(x) - group(y) || rank(x) - rank(y) || x.localeCompare(y))
+    // L20b、L20a②：组号交给布局留组间距（有属于子模块的元素时才给），优先次序交给布局在入边一侧放不下时截掉
+    const groups = elements.map(n => groupOf?.(node, n)?.rank ?? null)
     expand.push({
       node,
-      elements: top.sort((x, y) => group(x) - group(y) || rank(x) - rank(y) || x.localeCompare(y)),
+      elements,
       from,
       ...(names.size > keep.size ? { more: names.size - keep.size } : {}),
+      ...(groups.some(g => g !== null) ? { groups } : {}),
+      ranked: top,
     })
     for (const x of edgeEls) {
       const els = [...x.elements].filter(n => keep.has(n))
