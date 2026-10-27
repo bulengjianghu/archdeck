@@ -19,7 +19,9 @@ export function withEdgeHover<N extends Pick<CanvasNode, 'id' | 'class'>, E exte
   const ends = new Set([hit.source, hit.target])
   // L24：悬停回调边时，交来执行器的正向边减一档同时高亮
   const pairs = new Set(hit.data.callbackPairs ?? [])
-  const paired = (e: E) => e !== hit && pairs.size > 0 && e.data.edge.relationIds.some(id => pairs.has(id))
+  // 只认端点正好相反的边（本层同一对节点之间），层间聚合边等含配对关系但端点不同的不亮
+  const paired = (e: E) =>
+    e !== hit && pairs.size > 0 && e.source === hit.target && e.target === hit.source && e.data.edge.relationIds.some(id => pairs.has(id))
   return {
     nodes: nodes.map(n => (ends.has(n.id) ? { ...n, class: [n.class, 'edge-end'].filter(Boolean).join(' ') } : n)),
     edges: edges.map(e =>

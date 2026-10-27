@@ -349,6 +349,9 @@ describe('L24 配对高亮（第十一轮）', () => {
     expect(fw.data.hoverPair).toBe(true)
     expect(fw.data.hovered).toBeUndefined()
     expect(fw.zIndex).toBe(EDGE_HOVER_Z - 1)
+    // 端点不是正好相反的边（如层间聚合边）即使含配对关系也不亮
+    const fake = { ...s.edges.find(e => e.id === fw.id)!, id: 'band', source: 'x', target: 'y' }
+    expect(withEdgeHover(s.nodes, [...s.edges, fake], back.id).edges.find(e => e.id === 'band')!.data.hoverPair).toBeUndefined()
     // 悬停正向边不反过来高亮回调边
     expect(withEdgeHover(s.nodes, s.edges, fw.id).edges.some(e => e.data.hoverPair)).toBe(false)
   })
