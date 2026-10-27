@@ -76,6 +76,29 @@ describe('属性面板', () => {
     expect(desk.selection.value).toEqual({ kind: 'relation', id: 'r4' })
   })
 
+  it('V13：选中关系时头部之后第一节是「说明」，没写说明的显示「未写说明」；聚合边面板每条原始关系下显示说明首句', async () => {
+    const long = `管线把媒体单元推给 MUs。${'长'.repeat(80)}`
+    const files = sampleFiles({
+      'z.yaml': `relations:\n  - { id: rd, from: infra.framework.sm, to: infra.mus, type: streams, description: '${long}' }\n  - { id: rl, from: infra.framework.pipeline, to: infra.mus, type: streams, description: '${'短'.repeat(70)}' }\n`,
+    })
+    const withDesc = (await mountPanel('/?level=infra.framework&sel=r:rd', files)).wrapper
+    const first = withDesc.find('.relation-panel > :not(header)')
+    expect(first.classes()).toContain('summary')
+    expect(first.text()).toContain('管线把媒体单元推给 MUs。')
+    const without = (await mountPanel('/?level=infra.framework&sel=r:r6', files)).wrapper
+    expect(without.find('.relation-panel > :not(header)').text()).toBe('未写说明')
+    // 聚合边：说明首句到第一个句号；没写说明的一条不显示；超过 60 字截断加「…」
+    const agg = (await mountPanel('/?level=infra&sel=e:infra.framework->infra.mus:streams', files)).wrapper
+    const rows = agg.findAll('.rel-row')
+    const summaries = agg.findAll('.rel-row .summary')
+    const summary = (id: string) => summaries.find(x => x.attributes('title')!.startsWith(id === 'rd' ? '管线' : '短'))
+    expect(rows).toHaveLength(3)
+    expect(summaries).toHaveLength(2)
+    expect(summary('rd')!.text()).toBe('管线把媒体单元推给 MUs。')
+    expect(summary('rd')!.attributes('title')).toBe(long)
+    expect(summary('rl')!.text()).toBe(`${'短'.repeat(60)}…`)
+  })
+
   it('子模块列表点击：在当前层次时只选中', async () => {
     const { wrapper, desk } = await mountPanel('/?level=infra')
     const link = wrapper.findAll('.child .link').find(l => l.text() === 'Framework')!

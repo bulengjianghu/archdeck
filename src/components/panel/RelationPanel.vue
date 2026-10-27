@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 关系面板：头部为方向与类型；「关系」一节按五个维度各一行（控制流、知识、语义、同步性、平面，ADR-0022）；其后接口、数据、代码事实与承载（D5、L22） */
+/** 关系面板：头部为方向与类型；之后第一节是「说明」（V13，没写的显示「未写说明」）；「关系」一节按五个维度各一行（控制流、知识、语义、同步性、平面，ADR-0022）；其后接口、数据、代码事实与承载（D5、L22） */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { RUNTIME_RELATION_TYPES, callbackText, isCallbackVia, moduleName, parseVia, relationMode, viaLabel } from '@/model'
@@ -101,6 +101,9 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
         <ChangeBadge entity="relation" :id="r.id" detail />
       </div>
     </header>
+    <!-- V13：先读一句说明建立认知，再看维度与证据 -->
+    <Section v-if="r.description" title="说明" class="summary"><Markdown :text="r.description" /></Section>
+    <p v-else class="no-summary muted">未写说明</p>
     <DesignNote :text="r.designNote" />
 
     <Section title="关系">
@@ -117,7 +120,6 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
         <dd>{{ plane }}</dd>
       </dl>
     </Section>
-    <Section v-if="r.description" title="说明"><Markdown :text="r.description" /></Section>
     <Section title="经由接口">
       <InterfaceItem v-if="r.interface" :id="r.interface" open />
       <p v-else class="muted">未指定</p>
@@ -133,6 +135,11 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
 </template>
 
 <style scoped>
+.no-summary {
+  margin: 8px 0 4px;
+  font-size: 12.5px;
+}
+
 .endpoints {
   display: flex;
   flex-wrap: wrap;

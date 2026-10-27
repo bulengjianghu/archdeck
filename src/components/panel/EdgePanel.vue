@@ -51,7 +51,7 @@ const endSelection = (nodeId: string) =>
     </header>
     <Section title="原始关系" :count="edge.relationIds.length">
       <ul class="plain">
-        <RelationRow v-for="r in edge.relationIds" :key="r" :id="r" />
+        <RelationRow v-for="r in edge.relationIds" :key="r" :id="r" summary />
       </ul>
     </Section>
   </div>
