@@ -94,6 +94,100 @@ describe('layoutLayered · 分层总览', () => {
     expect(skip.points[1].x).toBeGreaterThan(pv.nodes.get('infra')!.w)
   })
 
+  it('O3a：带右边的端口统一分配——通道边与参与者的边上半进、下半出，同一条带上互不重叠', async () => {
+    const { index: idx } = loadModel(scenarioFiles())
+    const back: ViewEdge = { id: 'domain->infra:notifies', kind: 'direct', from: 'domain', to: 'infra', type: 'notifies', relationIds: ['x'], mode: 'async' }
+    const extra = (v: ReturnType<typeof projectLevel>) => ({
+      ...v,
+      edges: [...v.edges, back, { ...back, id: 'domain->infra:streams', type: 'streams' as const }],
+    })
+    for (const v of [extra(view), extra(projectLevel(idx, 'sys'))]) {
+      const p = layoutLayered(v)
+      const ids = new Set(v.bands!.map(b => b.layerId))
+      const ys = new Map<string, number[]>()
+      let ins = 0
+      let outs = 0
+      for (const e of v.edges) {
+        const r = p.edges.get(e.id)
+        if (!r) continue
+        const ends = [
+          [e.from, r.points[0], 'out'],
+          [e.to, r.points[r.points.length - 1], 'in'],
+        ] as const
+        for (const [id, pt, end] of ends) {
+          const b = p.nodes.get(id)!
+          if (!ids.has(id) || pt.x !== b.x + b.w) continue
+          if (end === 'in') {
+            ins++
+            expect(pt.y).toBeGreaterThan(b.y)
+            expect(pt.y).toBeLessThan(b.y + b.h / 2)
+          } else {
+            outs++
+            expect(pt.y).toBeGreaterThan(b.y + b.h / 2)
+            expect(pt.y).toBeLessThan(b.y + b.h)
+          }
+          ys.set(id, [...(ys.get(id) ?? []), pt.y])
+        }
+      }
+      expect(ins).toBeGreaterThan(0)
+      expect(outs).toBeGreaterThan(0)
+      for (const list of ys.values()) expect(new Set(list).size).toBe(list.length)
+    }
+    // 对端在下方的按车道由外到内自上而下：infra 的两条进边来自下方的 domain，外道那条在上
+    const p = layoutLayered(extra(view))
+    const lane = (id: string) => p.edges.get(id)!.points[1].x
+    const yIn = (id: string) => p.edges.get(id)!.points.at(-1)!.y
+    const [a, b] = ['domain->infra:notifies', 'domain->infra:streams'].sort((x, y) => lane(x) - lane(y))
+    expect(yIn(a)).toBeGreaterThan(yIn(b))
+  })
+
+  it('O3b：核心跨层边朝对端取顶边或底边，左半进、右半出，半边内按对端横向位置排；跨多层的走核心车道、不穿过中间的带', () => {
+    const { index: idx } = loadModel(scenarioFiles())
+    const base = projectLevel(idx, 'sys')
+    const mk = (id: string, type: ViewEdge['type']): ViewEdge => {
+      const [from, to] = id.split(':')[0].split('->')
+      return { id, kind: 'direct', from, to, type, relationIds: ['x'], mode: 'sync' }
+    }
+    const added = [
+      mk('domain.services->infra.player:notifies', 'notifies'),
+      mk('infra.framework->domain.services:calls', 'calls'),
+      mk('app.solution->infra.player:notifies', 'notifies'),
+    ]
+    const v = { ...base, coreEdges: [...(base.coreEdges ?? []), ...added] }
+    const p = layoutLayered(v)
+    const box = (id: string) => p.nodes.get(id)!
+    for (const e of v.coreEdges) {
+      const r = p.coreEdges.get(e.id)!
+      const [s, t] = [r.points[0], r.points.at(-1)!]
+      if (!isOutsideEdge(v, e)) {
+        const a = box(e.from)
+        expect(s.x).toBeGreaterThan(a.x + a.w / 2)
+        expect([a.y, a.y + a.h]).toContain(s.y)
+      }
+      const b = box(e.to)
+      expect(t.x).toBeLessThan(b.x + b.w / 2)
+      expect([b.y, b.y + b.h]).toContain(t.y)
+    }
+    // 半边内按对端横向位置：app.solution 顶边的两条进边，infra.player（左）在 infra.framework（右）之左
+    const endX = (id: string) => p.coreEdges.get(id)!.points.at(-1)!.x
+    expect(endX('infra.player->app.solution:queries')).toBeLessThan(endX('infra.framework->app.solution:calls'))
+    // 跨多层：正交折线，横段在带间空隙、竖段在带外；有共同端点的两条不同车道
+    const app = box('app')
+    const multi = ['domain.services->infra.player:notifies', 'infra.framework->domain.services:calls'].map(id => p.coreEdges.get(id)!)
+    for (const r of multi) {
+      expect(r.curve).toBeUndefined()
+      expect(r.points.slice(1).every((q, i) => q.x === r.points[i].x || q.y === r.points[i].y)).toBe(true)
+      r.points.slice(1).forEach((q, i) => {
+        const o = r.points[i]
+        const crossesApp = Math.max(o.y, q.y) > app.y && Math.min(o.y, q.y) < app.y + app.h && Math.min(o.x, q.x) < app.x + app.w
+        expect(crossesApp).toBe(false)
+      })
+    }
+    expect(multi[0].points[2].x).not.toBe(multi[1].points[2].x)
+    // 车道常留：框宽含核心车道，与是否悬停无关
+    expect(p.parentFrame!.x + p.parentFrame!.w).toBeGreaterThanOrEqual(Math.max(...multi.map(r => r.points[2].x)))
+  })
+
   it('同一空隙里的多条边横向错开', () => {
     const xs = ['infra->app:calls', 'infra->app:queries'].map(id => pv.edges.get(id)!.points[0].x)
     expect(xs[0]).not.toBe(xs[1])
