@@ -1,10 +1,12 @@
 /**
  * 交互的承载链（ADR-0032 D）：每条交互的承载是结构图上由元素级结构边组成的一条路径，按交互方式有模板（K20），判定齐全 / 缺段 / 无承载（K5d），
- * 元素匹配不上而模块依赖在时回退到 K5 的模块级；通道没写契约模块时为外部承载（M21）。另给交互束按接收方表面散开的数据（D7）与束内修饰不一致（D8）。
+ * 元素匹配不上而模块依赖在时回退到 K5 的模块级；通道没写契约模块时为外部承载（M21）。另给交互束按接收方表面散开的数据（D7）与束内修饰不一致（D8），
+ * 以及束的把手（ADR-0033，L23b）与表面元素所属的子模块（L20b）。
  * 只读代码事实、归属与描述；页面、lint 与 agent 共用。
  */
 import { moduleName } from '../names'
-import { parseVia, type ModelIndex, type RelationEntity } from '../types'
+import type { SourceOwnership } from '../source'
+import { parseVia, type ModelIndex, type RelationEntity, type RelationType } from '../types'
 import { contractNames, judgeable, portOwner, related } from './facts'
 import { elementSlots, gateModule, slotKey, surfaceContext, type SurfaceContext } from './surface'
 import {
@@ -19,6 +21,7 @@ import {
   type GovernanceReport,
   type InteractionBundle,
   type ModuleSurface,
+  type SurfaceElement,
   type SurfaceSource,
 } from './types'
 
@@ -170,4 +173,100 @@ export function interactionBundle(index: ModelIndex, receiver: ModuleSurface | n
   const vias = new Set(rs.map(r => r.via ?? ''))
   const mixed = { ...(modes.size > 1 ? { mode: true as const } : {}), ...(vias.size > 1 ? { via: true as const } : {}) }
   return { items, ...(mixed.mode || mixed.via ? { mixed } : {}), unnamed: rs.filter(r => !r.interface).length }
+}
+
+// ── 把手（ADR-0033）：一条交互束落在接收方表面的哪几处、各属接收方的哪个子模块 ──
+//   L23b：束内关系的 `interface` 去重后、属于接收方表面（K18：接口 owner 在接收方子树内或接收方 provides）的个数为把手数 M；没写接口的不计；
+//         各条按所属子模块（接口 owner 在接收方之下的那一级；owner 即接收方、或接口不在接收方表面上的为「本体」）分组，组按条数降序。
+//   L20b：展开节点的元素按所属子模块分组——元素的 owner 为匹配的接口 owner，否则为声明文件的归属模块（G3）。
+// 只读描述（与文件归属），不要代码事实：分层总览与普通层次同一口径。
+
+/** 接口的所属模块：写了 owner 取 owner，否则取 provides 它的第一个模块 */
+export function interfaceOwner(index: ModelIndex, interfaceId: string): string | null {
+  const x = index.interfaces.get(interfaceId)
+  if (!x) return null
+  if (x.owner && index.modules.has(x.owner)) return x.owner
+  for (const m of index.modules.values()) if (m.provides?.includes(interfaceId)) return m.id
+  return null
+}
+
+/** owner 在 receiver 之下的那一级子模块；owner 即 receiver、不在 receiver 子树内或未知时为 null（本体） */
+export function subUnder(index: ModelIndex, receiver: string, owner: string | null | undefined): string | null {
+  if (!owner || owner === receiver) return null
+  const path = index.pathOf.get(owner) ?? []
+  const i = path.indexOf(receiver)
+  return i >= 0 && i + 1 < path.length ? path[i + 1] : null
+}
+
+/** L20b：表面元素的所属模块——匹配的接口 owner，否则为声明文件的归属模块（冲突时取第一个）；都没有为 null */
+export function elementOwner(index: ModelIndex, own: Pick<SourceOwnership, 'owners'> | null | undefined, el: SurfaceElement): string | null {
+  if (el.interfaceId) {
+    const o = interfaceOwner(index, el.interfaceId)
+    if (o) return o
+  }
+  return (el.file && own?.owners.get(el.file)?.[0]) || null
+}
+
+/** L20b：表面元素在接收方之下所属的子模块；本体为 null */
+export const elementSub = (index: ModelIndex, own: Pick<SourceOwnership, 'owners'> | null | undefined, receiver: string, el: SurfaceElement): string | null =>
+  subUnder(index, receiver, elementOwner(index, own, el))
+
+/** L23b：束内一条交互落在哪个把手 */
+export interface HandleItem {
+  relation: string
+  /** 关系写的接口；没写为 null */
+  interface: string | null
+  /** 接口名（没写接口为 null） */
+  name: string | null
+  /** 接口 owner 在接收方之下的那一级子模块；本体为 null */
+  sub: string | null
+  /** 接口是接收方表面上的元素（计入把手数） */
+  handle: boolean
+  type: RelationType
+}
+
+export interface HandleGroup {
+  /** 子模块 ID；本体为 null */
+  sub: string | null
+  items: HandleItem[]
+}
+
+/** L23b：一条交互束的把手 */
+export interface BundleHandles {
+  /** 束内关系条数 N */
+  relations: number
+  /** 把手数 M：接收方表面上不同接口的个数（没写接口的不计） */
+  handles: number
+  /** 按所属子模块分组，组按条数降序（同数时本体在后、再按子模块在父模块下的声明顺序） */
+  groups: HandleGroup[]
+}
+
+/** L23b：receiver 为接收方节点对应的模块（分层总览提升到层的为层模块） */
+export function bundleHandles(index: ModelIndex, receiver: string, relationIds: readonly string[]): BundleHandles {
+  const provided = new Set(index.modules.get(receiver)?.provides ?? [])
+  const items: HandleItem[] = []
+  for (const id of relationIds) {
+    const r = index.relations.get(id)
+    if (!r) continue
+    const iface = r.interface && index.interfaces.has(r.interface) ? r.interface : null
+    const owner = iface ? interfaceOwner(index, iface) : null
+    const inSurface = !!iface && (provided.has(iface) || (!!owner && (index.pathOf.get(owner) ?? []).includes(receiver)))
+    items.push({
+      relation: id,
+      interface: r.interface ?? null,
+      name: iface ? index.interfaces.get(iface)!.name : (r.interface ?? null),
+      sub: inSurface ? subUnder(index, receiver, owner) : null,
+      handle: inSurface,
+      type: r.type,
+    })
+  }
+  const order = index.childrenOf.get(receiver) ?? []
+  const groups = new Map<string | null, HandleItem[]>()
+  for (const it of items) (groups.get(it.sub) ?? groups.set(it.sub, []).get(it.sub)!).push(it)
+  const rank = (s: string | null) => (s === null ? Infinity : order.indexOf(s) < 0 ? order.length : order.indexOf(s))
+  return {
+    relations: items.length,
+    handles: new Set(items.filter(x => x.handle).map(x => x.interface)).size,
+    groups: [...groups].map(([sub, list]) => ({ sub, items: list })).sort((a, b) => b.items.length - a.items.length || rank(a.sub) - rank(b.sub)),
+  }
 }

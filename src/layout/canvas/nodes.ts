@@ -8,7 +8,7 @@ import type { Visibility } from '../stage'
 import type { SceneContext } from './context'
 import { routeMidpoint, spreadHits } from './edges'
 import { inImpact, structureNodeMarks } from './structure'
-import type { CanvasNode, CanvasNodeType, NodeData, NodePorts, NodeSurface } from './types'
+import type { CanvasNode, CanvasNodeType, NodeData, NodePorts, NodeSurface, SurfaceMark } from './types'
 
 const visOf = (ctx: SceneContext, id: string): Visibility => ctx.display?.nodes.get(id) ?? 'show'
 /** 运行视角：按舞台显示（V5、V8、V9）；结构视角：与聚焦对象无关的变淡 */
@@ -136,17 +136,34 @@ function surfaceOf(ctx: SceneContext, n: ViewNode, box: Box, hits: Map<string, S
   if (!placed?.length || ctx.st) return {}
   const info = ctx.input.surfaceInfo?.get(n.moduleId)
   const used = ctx.structure ? ctx.structure.usedElements.get(n.id) : hits?.get(n.id)
-  const items = placed
+  const items: SurfaceMark[] = placed
     .filter(p => ctx.structure || used?.has(p.name))
     .map(p => {
       const x = info?.get(p.name)
       return { name: p.name, x: p.x - box.x, y: p.y - box.y, used: !!used?.has(p.name), ...(x ? { kind: x.kind, fanIn: x.fanIn } : {}) }
     })
+  // L20b：元素按所属子模块分组（次序已由 surfaceExpansion 排好）——有子模块的元素时，每组组首标子模块短名，悬停写「属于 <子模块>」
+  const subOf = (name: string) => info?.get(name)?.sub ?? null
+  const grouped = items.some(m => subOf(m.name) !== null)
+  if (grouped) {
+    const idx = ctx.input.index
+    const along = (m: SurfaceMark) => (ctx.pv.direction === 'RIGHT' ? m.y : m.x)
+    let last: string | null | undefined
+    for (const m of [...items].sort((a, b) => along(a) - along(b))) {
+      const sub = subOf(m.name)
+      m.owner = sub && idx ? `${moduleName(idx, sub)}（${shortName(n.moduleId, sub)}）` : '本体'
+      if (sub !== last) m.group = sub ? shortName(n.moduleId, sub) : '本体'
+      last = sub
+    }
+  }
   // 交互视角没有被接到的元素时也给（空的）记号层：节点按展开的尺寸布局（两个视角同一份布局，V12），入边一侧照样让出
   const more = ctx.structure ? ctx.pv.elementsMore?.get(n.id) : undefined
-  const surface: NodeSurface = { side: ctx.pv.direction === 'RIGHT' ? 'left' : 'top', items, ...(more ? { more } : {}) }
+  const surface: NodeSurface = { side: ctx.pv.direction === 'RIGHT' ? 'left' : 'top', items, ...(more ? { more } : {}), ...(grouped ? { grouped: true } : {}) }
   return { surface }
 }
+
+/** L20b：子模块短名——ID 去掉父模块前缀（`pipeline.latency.timers` → `timers`） */
+export const shortName = (parent: string, sub: string): string => (sub.startsWith(`${parent}.`) ? sub.slice(parent.length + 1) : sub.split('.').pop()!)
 
 /** L13：一个节点的端口超过这么多个时合成一个「端口 ×N」 */
 export const PORT_MERGE = 3

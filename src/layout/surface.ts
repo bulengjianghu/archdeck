@@ -6,6 +6,7 @@
  *   选中束（`sel=d:A->B`）不展开（T2-7 裁决：只聚焦与高亮，元素在面板看），免得单击一条线引起本层重排。只对普通层次的内部模块（不含共用件、边界节点、边界角色、参与者、「+N」）；分层总览不展开。
  *   元素端口：本层（散开范围内）有元素级边接到的元素与交互接到的元素，按种类（端口、操作、类型、数据）再按名字排序；没有元素的节点不展开。
  *   一个节点最多 SURFACE_PORT_CAP 个元素端口：按本层接到它的节点数取前若干（交互接到的优先），其余计入「+N 个元素」（边接到节点本体，清单在面板「表面」一节）。
+ *   L20b：封顶后的元素端口先按所属子模块（元素 owner 在接收方之下的那一级，groupOf）分组——子模块组按声明顺序，本体的元素一组排在最后；组内按种类、名字。
  */
 import { ELEMENT_KINDS, type ElementKind, type InteractionBundle, type LevelView } from '@/model'
 import type { ElementLink, StructureLinks, SurfaceExpand } from './layout'
@@ -22,6 +23,8 @@ export interface ExpansionInput {
   links: StructureLinks | null
   /** D7：本层交互视图边按接收方表面散开的数据（desk.facts.interactionSpread） */
   spreads: ReadonlyMap<string, InteractionBundle> | null
+  /** L20b：展开节点的元素所属的子模块（rank 为它在接收方下的声明顺序）；本体或未知为 null。不给时不分组 */
+  groupOf?: (node: string, element: string) => { sub: string; rank: number } | null
 }
 
 export interface Expansion {
@@ -33,7 +36,7 @@ export interface Expansion {
 const expandable = (n: LevelView['nodes'][number]) => (n.role === 'module' || n.role === 'core') && !n.rim
 
 /** C6：本层要展开的节点与元素；没有时为 null */
-export function surfaceExpansion({ view, selection: sel, always, links, spreads }: ExpansionInput): Expansion | null {
+export function surfaceExpansion({ view, selection: sel, always, links, spreads, groupOf }: ExpansionInput): Expansion | null {
   if (view.mode === 'layered') return null
   const nodes = view.nodes.filter(expandable)
   const want = new Map<string, string[] | null>()
@@ -85,9 +88,10 @@ export function surfaceExpansion({ view, selection: sel, always, links, spreads 
       .slice(0, SURFACE_PORT_CAP)
     const keep = new Set(top)
     const rank = (n: string) => ELEMENT_KINDS.indexOf(kinds.get(`${node}|${n}`) ?? 'operation')
+    const group = (n: string) => groupOf?.(node, n)?.rank ?? Infinity
     expand.push({
       node,
-      elements: top.sort((x, y) => rank(x) - rank(y) || x.localeCompare(y)),
+      elements: top.sort((x, y) => group(x) - group(y) || rank(x) - rank(y) || x.localeCompare(y)),
       from,
       ...(names.size > keep.size ? { more: names.size - keep.size } : {}),
     })

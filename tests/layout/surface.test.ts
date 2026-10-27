@@ -89,6 +89,28 @@ describe('surfaceExpansion', () => {
     expect(x.expand[0].elements).toContain('e19')
     expect(x.expand[0].more).toBe(4)
   })
+
+  it('L20b：元素端口先按所属子模块分组（子模块按声明顺序、本体在后），组内仍按种类再按名字；封顶照旧', () => {
+    const sub: Record<string, { sub: string; rank: number }> = {
+      run: { sub: 'b.run', rank: 0 },
+      Freeze: { sub: 'b.meters', rank: 1 },
+      Jitter: { sub: 'b.meters', rank: 1 },
+      hold: { sub: 'b.timers', rank: 2 },
+      Item: { sub: 'b.timers', rank: 2 },
+    }
+    const x = surfaceExpansion({
+      view,
+      selection: { kind: 'module', id: 'b' },
+      always: false,
+      links: links([el('a', 'hold'), el('a', 'Item', 'type'), el('a', 'Jitter'), el('c', 'Freeze'), el('c', 'body'), el('a', 'run')]),
+      spreads: null,
+      groupOf: (node, name) => (node === 'b' ? (sub[name] ?? null) : null),
+    })!
+    expect(x.expand[0].elements).toEqual(['run', 'Freeze', 'Jitter', 'hold', 'Item', 'body'])
+    // 不给 groupOf 时不分组（行为同前）
+    const y = surfaceExpansion({ view, selection: { kind: 'module', id: 'b' }, always: false, links: links([el('a', 'hold'), el('a', 'run')]), spreads: null })!
+    expect(y.expand[0].elements).toEqual(['hold', 'run'])
+  })
 })
 
 describe('unionView、layoutExpansion：散开的束', () => {
