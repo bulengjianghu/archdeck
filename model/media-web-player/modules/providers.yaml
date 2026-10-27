@@ -39,9 +39,9 @@ modules:
     provides: [if.providers.wasm-module.SessionLifecycle]
     codeRefs: [media-wasm/packages/media-wasm-core/src/session-lifecycle.ts]
   # ───────────────────────── providers.stream-input（同一包 media-wasm-core 的输入协议一侧） ─────────────────────────
-  - id: providers.stream-input.stream-input
+  - id: providers.stream-input.input
     parent: providers.stream-input
-    name: 拉流内核 StreamInput
+    name: 拉流输入
     kind: component
     responsibility: >-
       喂模块会话的拉流，两族相同：FLV 一路直播响应、HLS 一张清单（片推动模块的时间轴）、MP4 按模块要的字节范围；字节按模块肯收的块推入，
@@ -210,19 +210,19 @@ modules:
 relations:
   # ── wasm-core 内部 ──
   - id: rel.providers.input-push
-    from: providers.stream-input.stream-input
+    from: providers.stream-input.input
     to: providers.wasm-module.module
     type: streams
     interface: if.providers.wasm-module.MediaPlayerSession
     description: StreamInput 把网络读到的字节按模块肯收的块连续推进模块会话（push），满了先跳 IDR 再推。
   - id: rel.providers.input-reposition
-    from: providers.stream-input.stream-input
+    from: providers.stream-input.input
     to: providers.wasm-module.module
     type: commands
     interface: if.providers.wasm-module.MediaPlayerSession
     description: StreamInput 让模块定位与换输入：seek / 不连续 / 输入结束与重启、设密钥与 AES、截断到 IDR 与续接（时移接点），并读缓冲水位与计数。
   - id: rel.providers.input-timeshift
-    from: providers.stream-input.stream-input
+    from: providers.stream-input.input
     to: providers.stream-input.timeshift
     type: queries
     description: StreamInput 按截断、接点与列表锚点计算时移列表在会话时间轴上的偏移、时间轴与统计。
@@ -264,49 +264,49 @@ relations:
     interface: if.pipeline.fetch.boundedRetries
     description: 装载失败时取丢失的错误码、可否重试与说明（lossCode、lossRetryable、describeLoss、describeUrl）。
   - id: rel.providers.input-flv
-    from: providers.stream-input.stream-input
+    from: providers.stream-input.input
     to: pipeline.fetch.flv-pull
     type: commands
     interface: if.pipeline.fetch.startPull
     description: FLV 输入开 HTTP-FLV 拉流（startPull，open / again），延迟律的重连动作与看不见即保持交给它；丢失的错误码与说明也取自这里。
   - id: rel.providers.flv-bytes
     from: pipeline.fetch.flv-pull
-    to: providers.stream-input.stream-input
+    to: providers.stream-input.input
     type: streams
     interface: if.pipeline.fetch.PullHandlers
     description: HTTP-FLV 拉流把响应字节连续交给 StreamInput（chunk），并报连接、断线、耗尽与结束。
   - id: rel.providers.input-hls
-    from: providers.stream-input.stream-input
+    from: providers.stream-input.input
     to: pipeline.fetch.hls-loader
     type: commands
     interface: if.pipeline.fetch.startHlsPull
     description: HLS 输入开 HLS 拉流（startHlsPull，open / again / watch / follow），seek、按墙钟 seek、回直播、接入时移列表、暂停都交给它。
   - id: rel.providers.hls-bytes
     from: pipeline.fetch.hls-loader
-    to: providers.stream-input.stream-input
+    to: providers.stream-input.input
     type: streams
     interface: if.pipeline.fetch.HlsHandlers
     description: HLS 拉流把每片字节连续交给 StreamInput，并报时间轴、片起止、跳过的片与结束。
   - id: rel.providers.input-mp4
-    from: providers.stream-input.stream-input
+    from: providers.stream-input.input
     to: pipeline.fetch.mp4
     type: commands
     interface: if.pipeline.fetch.startMp4Pull
     description: MP4 输入按模块要的字节范围逐段取（startMp4Pull、fetch、cancel）。
   - id: rel.providers.mp4-bytes
     from: pipeline.fetch.mp4
-    to: providers.stream-input.stream-input
+    to: providers.stream-input.input
     type: streams
     interface: if.pipeline.fetch.Mp4PullHandlers
     description: MP4 拉取把每段字节连续交给 StreamInput，并报文件大小、完成与失败。
   - id: rel.providers.input-jitter
-    from: providers.stream-input.stream-input
+    from: providers.stream-input.input
     to: pipeline.metering.jitter
     type: commands
     interface: if.pipeline.metering.JitterMeter
     description: StreamInput 把每块的到达时刻与媒体时间记进抖动计（JitterMeter.add），取抖动与是否在消化积压给律的读数。
   - id: rel.providers.input-anchors
-    from: providers.stream-input.stream-input
+    from: providers.stream-input.input
     to: pipeline.metering.anchors
     type: commands
     interface: if.pipeline.metering.anchors
@@ -325,21 +325,21 @@ relations:
     description: 模块与样本读取构造 MediaFault（ABI 不符、越界、资源耗尽），把异常转成说明。
   # ── StreamInput → 族（经钩子端口） ──
   - id: rel.providers.input-self-clocked
-    from: providers.stream-input.stream-input
+    from: providers.stream-input.input
     to: providers.self-clocked.session
     type: commands
     interface: if.providers.stream-input.StreamInputHooks
-    via: channel:callback@providers.stream-input.stream-input
+    via: channel:callback@providers.stream-input.input
     description: StreamInput 经族给的钩子回调自建时钟会话：推送 / 接收后解码与呈现、缓冲满时跳 IDR、seek 落点、模式与边缘变化、输入结束。
   - id: rel.providers.input-mse
-    from: providers.stream-input.stream-input
+    from: providers.stream-input.input
     to: providers.element.mse
     type: commands
     interface: if.providers.stream-input.StreamInputHooks
-    via: channel:callback@providers.stream-input.stream-input
+    via: channel:callback@providers.stream-input.input
     description: StreamInput 经钩子回调 mse 会话：接收后 drain 封段、跳 IDR、seek 落点、模式与边缘变化、输入结束。
   - id: rel.providers.input-sink
-    from: providers.stream-input.stream-input
+    from: providers.stream-input.input
     to: kit.kernel.envelope
     type: notifies
     interface: if.pipeline.contract.PipelineSink
@@ -396,7 +396,7 @@ relations:
     description: 族在只在页面可见时计时的计时器上等模块装载（visibleTimers），会话的等待用缺省计时器为底。
   - id: rel.providers.session-input
     from: providers.self-clocked.session
-    to: providers.stream-input.stream-input
+    to: providers.stream-input.input
     type: commands
     interface: if.providers.stream-input.StreamInput
     description: 会话开 StreamInput 拉流（start），seek / 回直播 / 按墙钟 seek、时移列表、暂停与看不见即保持交给它，按它取读数信号与时间轴。
@@ -625,7 +625,7 @@ relations:
     description: 族在只在页面可见时计时的计时器上等模块装载（visibleTimers）。
   - id: rel.providers.mse-input
     from: providers.element.mse
-    to: providers.stream-input.stream-input
+    to: providers.stream-input.input
     type: commands
     interface: if.providers.stream-input.StreamInput
     description: mse 会话开 StreamInput 拉流（start），seek、回直播、时移列表、暂停与看不见即保持交给它。
@@ -683,7 +683,7 @@ relations:
     description: 封段器从模块逐个取归一化样本（sampleFront / samplePop），等随机访问时丢弃视频。
   - id: rel.providers.mse-driver-input
     from: providers.element.mse-driver
-    to: providers.stream-input.stream-input
+    to: providers.stream-input.input
     type: commands
     description: 封段器按输入的列表结束、片长与文件是否压住决定断段与补静音，视频等随机访问时继续等（videoAwaitingRandomAccess），全部放出后标记输入结束（markEnded）。
   - id: rel.providers.mse-driver-video
@@ -788,7 +788,7 @@ interfaces:
     implementedBy: [providers.element.video]
   - id: if.providers.stream-input.StreamInput
     name: StreamInput
-    owner: providers.stream-input.stream-input
+    owner: providers.stream-input.input
     signature: |
       class StreamInput {
         constructor(hooks: StreamInputHooks);
@@ -802,7 +802,7 @@ interfaces:
       }
   - id: if.providers.stream-input.StreamInputHooks
     name: StreamInputHooks
-    owner: providers.stream-input.stream-input
+    owner: providers.stream-input.input
     signature: |
       interface StreamInputHooks {
         session(): MediaPlayerSession; sessionMs(): number;

@@ -29,7 +29,7 @@ scenario:
           steps:
             - call: {id: apply, from: kit.kernel.queue, to: kit.kernel.state, label: playSession / pauseSession / 记下 seek}
             - call: {from: kit.kernel.state, to: providers.self-clocked.session, relation: rel.kit.state-self-clocked, label: "pipeline.command({type: 'pause' | 'play' | 'seek'})"}
-            - call: {from: providers.self-clocked.session, to: providers.stream-input.stream-input, label: 'pause(paused) / reposition(seek, positionMs)'}
+            - call: {from: providers.self-clocked.session, to: providers.stream-input.input, label: 'pause(paused) / reposition(seek, positionMs)'}
             - call: {from: kit.kernel.state, to: kit.kernel.envelope, label: 'state paused / playing'}
             - async: {from: providers.self-clocked.session, to: kit.kernel.envelope, label: 'seek {active} / buffering（seek 的结束带落点）'}
     - async: {from: kit.kernel.envelope, to: actor.host-app, label: 状态事件（先于命令结果）}

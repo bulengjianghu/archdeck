@@ -16,8 +16,8 @@ scenario:
     - loop:
         while: 会话在直播边缘播放，每 100 ms
         steps:
-          - call: {id: signals, from: providers.self-clocked.session, to: providers.stream-input.stream-input, label: 'takeSignals(atMs)：抖动、积压、连接、不连续'}
-          - return: {from: providers.stream-input.stream-input, to: providers.self-clocked.session, label: '{jitterMs, backlog, connected, discontinuity}'}
+          - call: {id: signals, from: providers.self-clocked.session, to: providers.stream-input.input, label: 'takeSignals(atMs)：抖动、积压、连接、不连续'}
+          - return: {from: providers.stream-input.input, to: providers.self-clocked.session, label: '{jitterMs, backlog, connected, discontinuity}'}
           - call: {id: read, from: providers.self-clocked.session, to: pipeline.latency.run, label: 'law.read(reading)'}
           - call: {id: decide, from: pipeline.latency.run, to: pipeline.latency.law, label: 'decideLatency(state, reading, config)'}
           - return: {from: pipeline.latency.law, to: pipeline.latency.run, label: '{state, action, reports}'}

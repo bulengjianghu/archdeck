@@ -18,11 +18,11 @@ scenario:
     - call: {from: kit.kernel.queue, to: kit.session.acceptance, label: commandRejection：须是 flv 会话、地址非空}
     - call: {from: kit.kernel.queue, to: kit.kernel.state, label: 记下会话的时移列表（快照显示正在用的）}
     - call: {from: kit.kernel.state, to: providers.self-clocked.session, relation: rel.kit.state-self-clocked, label: "pipeline.command({type: 'set-timeshift'})"}
-    - call: {from: providers.self-clocked.session, to: providers.stream-input.stream-input, label: setTimeshift(list)}
-    - call: {id: watch, from: providers.stream-input.stream-input, to: pipeline.fetch.hls-loader, label: "startHlsPull(list, 'watch')：只看清单"}
-    - async: {from: pipeline.fetch.hls-loader, to: providers.stream-input.stream-input, label: 'timeline(window, targetDurationMs)'}
-    - call: {from: providers.stream-input.stream-input, to: providers.stream-input.timeshift, label: 'listOffsetMs / liveTimeline：按直播锚点放置列表窗口'}
-    - async: {from: providers.stream-input.stream-input, to: kit.kernel.envelope, label: timeline（可 seek、带墙钟）}
+    - call: {from: providers.self-clocked.session, to: providers.stream-input.input, label: setTimeshift(list)}
+    - call: {id: watch, from: providers.stream-input.input, to: pipeline.fetch.hls-loader, label: "startHlsPull(list, 'watch')：只看清单"}
+    - async: {from: pipeline.fetch.hls-loader, to: providers.stream-input.input, label: 'timeline(window, targetDurationMs)'}
+    - call: {from: providers.stream-input.input, to: providers.stream-input.timeshift, label: 'listOffsetMs / liveTimeline：按直播锚点放置列表窗口'}
+    - async: {from: providers.stream-input.input, to: kit.kernel.envelope, label: timeline（可 seek、带墙钟）}
     - async: {from: kit.kernel.envelope, to: actor.host-app, label: timeline 事件}
     - alt:
         - when: 宿主 seek 进时移窗口
@@ -31,27 +31,27 @@ scenario:
             - async: {from: kit.facade.player-api, to: kit.kernel.queue, relation: rel.kit.api-submit, label: submit(seek)}
             - call: {from: kit.kernel.queue, to: kit.kernel.state, label: 记下 seek}
             - call: {from: kit.kernel.state, to: providers.self-clocked.session, relation: rel.kit.state-self-clocked, label: "pipeline.command({type: 'seek'})"}
-            - call: {from: providers.self-clocked.session, to: providers.stream-input.stream-input, label: 'reposition(seek, positionMs)'}
-            - call: {from: providers.stream-input.stream-input, to: providers.stream-input.timeshift, label: 'seekOffsetMs / shiftedTimeline：会话时间 → 列表时间'}
-            - call: {from: providers.stream-input.stream-input, to: pipeline.fetch.hls-loader, label: 停直播输入，时移列表 seek(listMs) / seekWallClock}
+            - call: {from: providers.self-clocked.session, to: providers.stream-input.input, label: 'reposition(seek, positionMs)'}
+            - call: {from: providers.stream-input.input, to: providers.stream-input.timeshift, label: 'seekOffsetMs / shiftedTimeline：会话时间 → 列表时间'}
+            - call: {from: providers.stream-input.input, to: pipeline.fetch.hls-loader, label: 停直播输入，时移列表 seek(listMs) / seekWallClock}
         - when: 暂停到压缩缓冲满（有带墙钟的窗口）
           steps:
-            - call: {id: cut, from: providers.stream-input.stream-input, to: providers.wasm-module.module, relation: rel.providers.input-reposition, label: truncateToRandomAccess()：在最后一个 IDR 截断直播}
-            - call: {from: providers.stream-input.stream-input, to: pipeline.metering.anchors, label: 'trustedAnchor(时间 SEI, 到达时刻)：接点的墙钟'}
-            - call: {from: providers.stream-input.stream-input, to: providers.stream-input.timeshift, label: 'junctionOf(cut, anchor)'}
-            - async: {from: providers.stream-input.stream-input, to: kit.kernel.envelope, label: log live-cut}
-            - call: {id: join, from: providers.stream-input.stream-input, to: pipeline.fetch.hls-loader, label: 'play 后 join(junction.epochMs)：找接点所在的片'}
+            - call: {id: cut, from: providers.stream-input.input, to: providers.wasm-module.module, relation: rel.providers.input-reposition, label: truncateToRandomAccess()：在最后一个 IDR 截断直播}
+            - call: {from: providers.stream-input.input, to: pipeline.metering.anchors, label: 'trustedAnchor(时间 SEI, 到达时刻)：接点的墙钟'}
+            - call: {from: providers.stream-input.input, to: providers.stream-input.timeshift, label: 'junctionOf(cut, anchor)'}
+            - async: {from: providers.stream-input.input, to: kit.kernel.envelope, label: log live-cut}
+            - call: {id: join, from: providers.stream-input.input, to: pipeline.fetch.hls-loader, label: 'play 后 join(junction.epochMs)：找接点所在的片'}
     - loop:
         while: 时移列表的片字节到达
         steps:
-          - async: {from: pipeline.fetch.hls-loader, to: providers.stream-input.stream-input, label: 'segmentStart / chunk(bytes) / segmentEnd'}
-          - async: {from: providers.stream-input.stream-input, to: providers.wasm-module.module, relation: rel.providers.input-push, label: push(bytes)}
+          - async: {from: pipeline.fetch.hls-loader, to: providers.stream-input.input, label: 'segmentStart / chunk(bytes) / segmentEnd'}
+          - async: {from: providers.stream-input.input, to: providers.wasm-module.module, relation: rel.providers.input-push, label: push(bytes)}
     - alt:
         - when: 接入中（截断后续接）
           steps:
-            - call: {id: continue, from: providers.stream-input.stream-input, to: providers.wasm-module.module, relation: rel.providers.input-reposition, label: "continue('mpegts', join)：在接点续接，不重复不跳帧"}
+            - call: {id: continue, from: providers.stream-input.input, to: providers.wasm-module.module, relation: rel.providers.input-reposition, label: "continue('mpegts', join)：在接点续接，不重复不跳帧"}
         - when: 直接定位
           steps: []
-    - call: {id: mode, from: providers.stream-input.stream-input, to: providers.self-clocked.session, label: "mode('timeshift') / edge(false)：律的动作撤销"}
+    - call: {id: mode, from: providers.stream-input.input, to: providers.self-clocked.session, label: "mode('timeshift') / edge(false)：律的动作撤销"}
     - async: {from: providers.self-clocked.session, to: kit.kernel.envelope, label: 'mode timeshift / stats.timeshift'}
     - async: {from: kit.kernel.envelope, to: actor.host-app, label: playback-mode timeshift}

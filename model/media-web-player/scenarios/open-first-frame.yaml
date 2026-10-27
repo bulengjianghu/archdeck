@@ -39,18 +39,18 @@ scenario:
           steps:
             - call: {id: create, from: providers.self-clocked.family, to: providers.self-clocked.session, label: 'createWasmPipeline(deps)(start)'}
             - call: {from: providers.self-clocked.session, to: providers.wasm-module.module, relation: rel.providers.session-module, label: "MediaPlayerSession.open(program, limits, 'audio', 'flv')"}
-            - call: {from: providers.self-clocked.session, to: providers.stream-input.stream-input, relation: rel.providers.session-input, label: 'start(source, liveStart)'}
-            - call: {from: providers.stream-input.stream-input, to: pipeline.fetch.flv-pull, label: 'startPull(url, handlers)'}
+            - call: {from: providers.self-clocked.session, to: providers.stream-input.input, relation: rel.providers.session-input, label: 'start(source, liveStart)'}
+            - call: {from: providers.stream-input.input, to: pipeline.fetch.flv-pull, label: 'startPull(url, handlers)'}
             - async: {from: pipeline.fetch.flv-pull, to: pipeline.fetch.request, label: requestStream(url)}
             - async: {from: providers.wasm-module.lifecycle, to: kit.kernel.envelope, label: funnel first-load}
             - loop:
                 while: 响应字节到达
                 steps:
                   - async: {from: pipeline.fetch.request, to: pipeline.fetch.flv-pull, label: chunk(bytes)}
-                  - async: {from: pipeline.fetch.flv-pull, to: providers.stream-input.stream-input, label: 'chunk(bytes)（首块前 connected）'}
-                  - async: {from: providers.stream-input.stream-input, to: providers.wasm-module.module, relation: rel.providers.input-push, label: push(bytes)}
-                  - call: {from: providers.stream-input.stream-input, to: providers.self-clocked.session, label: received()：钩子回调，解码与呈现}
-            - async: {from: providers.stream-input.stream-input, to: kit.kernel.envelope, label: funnel first-response / first-data（经会话的钩子）}
+                  - async: {from: pipeline.fetch.flv-pull, to: providers.stream-input.input, label: 'chunk(bytes)（首块前 connected）'}
+                  - async: {from: providers.stream-input.input, to: providers.wasm-module.module, relation: rel.providers.input-push, label: push(bytes)}
+                  - call: {from: providers.stream-input.input, to: providers.self-clocked.session, label: received()：钩子回调，解码与呈现}
+            - async: {from: providers.stream-input.input, to: kit.kernel.envelope, label: funnel first-response / first-data（经会话的钩子）}
             - call: {from: providers.self-clocked.session, to: providers.self-clocked.video, label: 解码视频（WebCodecs 或模块软解）}
             - call: {from: providers.self-clocked.session, to: providers.self-clocked.presentation, label: 按媒体时钟画第一帧}
             - async: {id: first-frame, from: providers.self-clocked.session, to: kit.kernel.envelope, label: 'funnel first-frame / mode live / timeline / stream-info'}

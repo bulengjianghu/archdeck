@@ -22,8 +22,8 @@ scenario:
           steps:
             - call: {id: hold, from: kit.kernel.state, to: providers.self-clocked.session, relation: rel.kit.state-self-clocked, label: "pipeline.command({type: 'hold-unseen', held: true})"}
             - call: {from: providers.self-clocked.session, to: pipeline.timing, label: 'hold.hold(true)：时钟停，会话计时器停走'}
-            - call: {from: providers.self-clocked.session, to: providers.stream-input.stream-input, label: holdUnseen(true)}
-            - call: {from: providers.stream-input.stream-input, to: pipeline.fetch.flv-pull, label: holdUnseen(true)：重试随之停走}
+            - call: {from: providers.self-clocked.session, to: providers.stream-input.input, label: holdUnseen(true)}
+            - call: {from: providers.stream-input.input, to: pipeline.fetch.flv-pull, label: holdUnseen(true)：重试随之停走}
         - when: 有声音在播
           steps: []
     - async: {from: kit.kernel.envelope, to: host.demo.app, label: visibility 事件}

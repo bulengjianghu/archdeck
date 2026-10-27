@@ -15,8 +15,8 @@ scenario:
     - media-wasm/tests/live-pipeline-session.test.mjs
   steps:
     - async: {id: lost, from: pipeline.fetch.request, to: pipeline.fetch.flv-pull, label: 'fail(network / idle / http-status)'}
-    - async: {from: pipeline.fetch.flv-pull, to: providers.stream-input.stream-input, label: 'disconnected(attempt, loss)'}
-    - async: {from: providers.stream-input.stream-input, to: kit.kernel.envelope, label: 'network {connected: false, attempt}'}
+    - async: {from: pipeline.fetch.flv-pull, to: providers.stream-input.input, label: 'disconnected(attempt, loss)'}
+    - async: {from: providers.stream-input.input, to: kit.kernel.envelope, label: 'network {connected: false, attempt}'}
     - async: {from: kit.kernel.envelope, to: actor.host-app, label: network 事件（重连中）}
     - loop:
         while: 尝试次数未到 MAX_RECONNECT_ATTEMPTS（连接稳定 STEADY_MS 后清零）
@@ -26,23 +26,23 @@ scenario:
     - alt:
         - when: 连上
           steps:
-            - async: {id: back, from: pipeline.fetch.flv-pull, to: providers.stream-input.stream-input, label: connected(reconnected = true)}
-            - call: {from: providers.stream-input.stream-input, to: providers.wasm-module.module, relation: rel.providers.input-reposition, label: restartInput()：此后重发的内容标 REPEATED}
-            - async: {from: providers.stream-input.stream-input, to: kit.kernel.envelope, label: 'network {connected: true} / log reconnected'}
+            - async: {id: back, from: pipeline.fetch.flv-pull, to: providers.stream-input.input, label: connected(reconnected = true)}
+            - call: {from: providers.stream-input.input, to: providers.wasm-module.module, relation: rel.providers.input-reposition, label: restartInput()：此后重发的内容标 REPEATED}
+            - async: {from: providers.stream-input.input, to: kit.kernel.envelope, label: 'network {connected: true} / log reconnected'}
             - loop:
                 while: 重发的 GOP 缓存到达
                 steps:
-                  - async: {from: pipeline.fetch.flv-pull, to: providers.stream-input.stream-input, label: chunk(bytes)}
-                  - async: {from: providers.stream-input.stream-input, to: providers.wasm-module.module, relation: rel.providers.input-push, label: push(bytes)}
+                  - async: {from: pipeline.fetch.flv-pull, to: providers.stream-input.input, label: chunk(bytes)}
+                  - async: {from: providers.stream-input.input, to: providers.wasm-module.module, relation: rel.providers.input-push, label: push(bytes)}
                   - call: {id: dedupe, from: providers.wasm-module.module, to: providers.native-module, label: 'push_input → join_timeline：重发的音频丢弃、视频标 REPEATED，duplicate_samples_dropped++'}
-            - call: {from: providers.stream-input.stream-input, to: providers.self-clocked.session, label: 'received()：律从头开始，不连续计入统计'}
+            - call: {from: providers.stream-input.input, to: providers.self-clocked.session, label: 'received()：律从头开始，不连续计入统计'}
         - when: 耗尽或源站拒绝（401 / 403 / 404）
           steps:
-            - async: {id: exhausted, from: pipeline.fetch.flv-pull, to: providers.stream-input.stream-input, label: 'exhausted(loss, retryable)'}
+            - async: {id: exhausted, from: pipeline.fetch.flv-pull, to: providers.stream-input.input, label: 'exhausted(loss, retryable)'}
             - alt:
                 - when: 有时移列表且已暂停
                   steps:
-                    - call: {from: providers.stream-input.stream-input, to: providers.wasm-module.module, relation: rel.providers.input-reposition, label: truncateToRandomAccess()：截断，由时移列表接着播}
+                    - call: {from: providers.stream-input.input, to: providers.wasm-module.module, relation: rel.providers.input-reposition, label: truncateToRandomAccess()：截断，由时移列表接着播}
                 - when: 否则
                   steps:
                     - async: {from: providers.wasm-module.lifecycle, to: kit.kernel.envelope, label: "sink.failed('network', error)"}
