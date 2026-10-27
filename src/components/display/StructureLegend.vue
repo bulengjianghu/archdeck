@@ -135,8 +135,11 @@ const crossCount = computed(() => hiddenWith({})?.cross ?? 0)
         >
       </div>
       <div class="item" data-testid="surface-cap">
-        <span class="sw kind"><span class="chip">+N 个元素</span></span>
-        <span>一个节点最多画 {{ SURFACE_PORT_CAP }} 个元素（本层用得最多的、交互接到的优先），其余在面板「表面」一节</span>
+        <span class="sw kind"><span class="chip">+N</span></span>
+        <span
+          >展开的表面是一排点：点就是终点，接到点的一端不画箭头；一个节点最多
+          {{ SURFACE_PORT_CAP }} 个点（本层用得最多的、交互接到的优先），其余收进「+N」、清单在面板「表面」一节；节点不随展开移动（L20②，ADR-0036）</span
+        >
       </div>
       <div class="item">
         <span class="sw kind"><span class="chip bypass">越过入口</span></span>
