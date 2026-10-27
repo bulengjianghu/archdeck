@@ -238,6 +238,13 @@ describe('surfaceDots、tapRoute：定尺寸点阵与分叉（L20a②、L20b）'
       { x: 200 - DOTS.fan, y: 90 },
       { x: 200 - DOTS.r, y: 90 },
     ])
+    // 点落在干线最后一段横线的途中（干线从这一侧来）：直接从横线落下，不走到头再折回
+    expect(tapRoute(trunk, { x: 40, y: 200 }, 'DOWN', 20)).toEqual([
+      { x: 10, y: 0 },
+      { x: 10, y: 100 },
+      { x: 40, y: 100 },
+      { x: 40, y: 200 - DOTS.r },
+    ])
     // 点正好在干线上：直下；最后一段太短：分叉点取它与点边缘的中点，不越过它的起点
     expect(tapRoute(trunk, { x: 60, y: 200 }, 'DOWN', 20).at(-1)).toEqual({ x: 60, y: 200 - DOTS.r })
     const short = [

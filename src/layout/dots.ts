@@ -80,11 +80,29 @@ export function tapRoute(trunk: readonly Point[], dot: Point, direction: 'DOWN' 
   const end = t[t.length - 1]
   const prev = t[t.length - 2]
   const tip = { x: d.x, y: d.y - DOTS.r }
+  // 点在干线最后一段横线的途中（干线从这一侧来）：直接从横线上垂直落到点，不走到头再折回
+  const on = onChannel(t, d.x)
+  if (on !== null) {
+    const pts = simplify([...t.slice(0, on + 1), { x: d.x, y: t[on].y }, tip])
+    return direction === 'DOWN' ? pts : pts.map(swap)
+  }
   const from = Math.abs(prev.x - end.x) < 0.5 ? prev.y : end.y - 2 * DOTS.fan
   let turn = Math.max(end.y - distance, from + 4)
   if (turn > tip.y - 2) turn = (from + tip.y) / 2
   const pts = simplify(Math.abs(end.x - d.x) < 0.5 ? [...t.slice(0, -1), tip] : [...t.slice(0, -1), { x: end.x, y: turn }, { x: d.x, y: turn }, tip])
   return direction === 'DOWN' ? pts : pts.map(swap)
+}
+
+/**
+ * 干线（自上而下的坐标）最后一段竖线之前是一段横线，且 x 落在这段横线的途中（不含末端）时，返回横线起点的下标；否则 null。
+ * 这样的点直接从横线上落下，不参与分叉高度的排序。
+ */
+function onChannel(t: readonly Point[], x: number): number | null {
+  if (t.length < 3) return null
+  const [a, b, c] = [t[t.length - 3], t[t.length - 2], t[t.length - 1]]
+  if (Math.abs(a.y - b.y) > 0.5 || Math.abs(b.x - c.x) > 0.5 || c.y - b.y < DOTS.fan + DOTS.r) return null
+  const [lo, hi] = a.x < b.x ? [a.x, b.x - 0.5] : [b.x + 0.5, a.x]
+  return x > lo && x < hi ? t.length - 3 : null
 }
 
 /** 去掉重合点与共线的中间点 */
@@ -160,8 +178,11 @@ export function expandSurface(base: PositionedView, view: LevelView, links: Stru
   for (const [trunk, x] of trunks) {
     const pts = x.route.points
     const body = along(pts[pts.length - 1])
-    const right = x.members.filter(m => m.at > body + 0.5).sort((p, q) => p.at - q.at)
-    const left = x.members.filter(m => m.at < body - 0.5).sort((p, q) => q.at - p.at)
+    // 落在最后一段横线途中的点直接从横线落下，不占分叉高度
+    const down = simplify([...pts]).map(p => (direction === 'DOWN' ? p : swap(p)))
+    const tapped = x.members.filter(m => onChannel(down, m.at) === null)
+    const right = tapped.filter(m => m.at > body + 0.5).sort((p, q) => p.at - q.at)
+    const left = tapped.filter(m => m.at < body - 0.5).sort((p, q) => q.at - p.at)
     right.forEach((m, k) => rank.set(m.id, k))
     left.forEach((m, k) => rank.set(m.id, k))
     for (const m of x.members) if (!rank.has(m.id)) rank.set(m.id, 0)
