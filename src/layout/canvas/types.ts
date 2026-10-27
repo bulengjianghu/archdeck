@@ -217,6 +217,8 @@ export interface RouteEdgeData {
   title?: string
   /** D8：交互束内同步 / 异步、via 不一致（标签加「混合」） */
   mixed?: boolean
+  /** L23b：收起的交互束的把手角标（`×N · M 把手`）；有它时 title 为按子模块分组的悬停列表 */
+  handles?: string
   /** K9：关系边的证实 */
   fact?: EdgeFact
   /** K9：边含违规 */

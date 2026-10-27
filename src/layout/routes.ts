@@ -1,7 +1,7 @@
 /**
  * 手工走线与边界：参与者排布与曲线（A7）、边的标签与线宽档、平行边错开（L10），边界边的判定（L4）。
  */
-import type { LevelView, ViewEdge } from '@/model'
+import { bundleHandles, moduleName, type BundleHandles, type LevelView, type ModelIndex, type RelationType, type ViewEdge } from '@/model'
 import { NODE_SIZE, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
 import { ARRIVE, allocateTracks, detour, placeLabels, type PortAt } from './routing'
 
@@ -66,6 +66,45 @@ export function actorRoute(a?: Box, b?: Box): EdgeRoute | undefined {
 export function edgeLabel(e: ViewEdge): string {
   const n = e.relationIds.length
   return n > 1 ? `×${n}` : ''
+}
+
+/** L23b：悬停列表里的关系种类（与图例、面板的关系类型名同一套） */
+const TYPE_NAMES: Record<RelationType, string> = { queries: '查询', commands: '委托', notifies: '通知', streams: '流', calls: '未分类' }
+
+/** L23b：交互束的把手角标与悬停分组（ADR-0033） */
+export interface HandleBadge {
+  /** 角标：`×N · M 把手`；M 为 0 时只写 `×N`；N 为 1 时为空 */
+  label: string
+  /** 悬停：束的两端与 N / M，各组「子模块（条数）」与各条「接口名 · 所属子模块 · 种类」 */
+  title: string
+  handles: BundleHandles
+}
+
+/** L23b：角标文本——N 为 1 不写（同 L10 的 ×N），M 为 0 不写把手段 */
+export function handleLabel(n: number, m: number): string {
+  if (n <= 1) return ''
+  return m > 0 ? `×${n} · ${m} 把手` : `×${n}`
+}
+
+/**
+ * L23b：一条交互视图边的把手角标与悬停分组——接收方为边的 to 节点对应的模块（分层总览提升到层时为层模块）；
+ * 接收方不是模块（参与者）时为 null。只读描述，与代码事实无关。
+ */
+export function handleBadge(index: ModelIndex, view: LevelView, e: ViewEdge): HandleBadge | null {
+  const to = view.nodes.find(n => n.id === e.to)
+  if (!to || !index.modules.has(to.moduleId)) return null
+  const h = bundleHandles(index, to.moduleId, e.relationIds)
+  const from = view.nodes.find(n => n.id === e.from)
+  const name = (id: string) => (index.modules.has(id) ? moduleName(index, id) : id)
+  const subName = (sub: string | null) => (sub ? name(sub) : '本体')
+  const head = `${from ? name(from.moduleId) : e.from} → ${name(to.moduleId)} · ${TYPE_NAMES[e.type]} ×${h.relations}${h.handles ? ` · ${h.handles} 把手` : ''}（L23b）`
+  const lines = h.groups.flatMap(g => [
+    `${subName(g.sub)}（${g.items.length} 条）`,
+    ...g.items.map(
+      it => `  ${it.name ?? '（没写接口）'} · ${subName(g.sub)} · ${TYPE_NAMES[it.type]}${it.name && !it.handle ? '（接口不在接收方表面上，接到本体）' : ''}`,
+    ),
+  ])
+  return { label: handleLabel(h.relations, h.handles), title: [head, ...lines].join('\n'), handles: h }
 }
 
 /** L10：线宽档位——聚合条数 1 / 2–4 / ≥5 */

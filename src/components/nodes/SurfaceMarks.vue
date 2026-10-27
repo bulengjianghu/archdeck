@@ -148,16 +148,18 @@ const groups = computed(() => {
   right: auto;
 }
 
-/* L20b：组间细分隔与组首标签（自上而下：竖线穿过两行名字，标签在端口行下方；自左向右：横线横过左列，标签骑在线上） */
+/* L20b：组间细分隔与组首标签（自上而下：竖线画在记号行与标签行、让开两行名字，标签在端口行下方；自左向右：横线横过左列，标签骑在线上） */
 .group-cut {
   position: absolute;
   background: var(--border-strong);
 }
 
 .top .group-cut {
-  top: 0;
+  top: -4px;
   width: 1px;
-  height: 42px;
+  height: 46px;
+  /* 只画在记号行与标签行，让开两行元素名 */
+  background: linear-gradient(to bottom, var(--border-strong) 0 12px, transparent 12px 33px, var(--border-strong) 33px);
 }
 
 .left .group-cut {

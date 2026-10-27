@@ -5,6 +5,9 @@ import type { LevelView, ViewEdge } from '@/model'
 import { SHELF, type Box, type EdgeRoute, type LayoutOptions, type PositionedView } from './geometry'
 import { compassOf, isOutsideEdge, parallelOffsets, placeOutside, portFor, shifted, slotOf, withSourceLane } from './routes'
 import { detour, type PortAt } from './routing'
+// L23b（第九轮）：总览核心边的把手角标——独立的一段，见文件末尾 coreHandleBadges
+import type { ModelIndex } from '@/model'
+import { handleBadge, type HandleBadge } from './routes'
 
 export const BAND = {
   left: 236,
@@ -261,4 +264,18 @@ function outsideRouter(view: LevelView, nodes: Map<string, Box>, bands: readonly
     const to = toPort && withSourceLane(toPort, slotOf(group, e.from, e.id))
     return from && to ? { points: detour(from, to, obstacles) } : undefined
   }
+}
+
+/**
+ * O4、L23b：分层总览核心跨层交互边的把手角标与悬停分组（ADR-0033）——只给数据，不动走线与端口；总览不展开表面，
+ * 「×N · M 把手」与按所属子模块分组的悬停列表回答「落在几个把手」，落在哪一处下钻到普通层次再看（L20b / L23）。
+ */
+export function coreHandleBadges(view: LevelView, index: ModelIndex): Map<string, HandleBadge> {
+  const out = new Map<string, HandleBadge>()
+  if (view.mode !== 'layered') return out
+  for (const e of view.coreEdges ?? []) {
+    const b = handleBadge(index, view, e)
+    if (b) out.set(e.id, b)
+  }
+  return out
 }
