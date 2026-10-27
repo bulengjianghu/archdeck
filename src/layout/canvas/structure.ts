@@ -9,7 +9,8 @@
  *   C6、L20：被依赖方表面展开时束散开为元素级边，接到元素端口（越过入口、整模块接到节点本体），同样随只引类型 / 只看交互使用过滤。
  *   O13：共用件与使用者之间的束缺省不画，聚焦任一端时画；反向依赖（U12）、违规（U15）、在环中（Y4）的照画；「共用 ×N」按依赖计。
  *   O13③：分层总览带间画层间的束，带内不画；核心模块（与架上共用件）的跨层依赖按对合成一条，只在聚焦它时画。
- *   K15：选中模块时影响面按方向（偏好 impactMode）投影到本层，节点标方向与距离，闭包外变淡（共享通道「聚焦变淡」）。
+ *   L27：选中给一跳底、悬停叠加一跳（聚焦变淡是共享通道）；跨界折叠、共用件、核心跨层依赖、边界节点的边对两者都画。
+ *   K15b：面板显式查询影响面时（视图状态 impactQuery）按方向投影到本层，节点标方向与距离、可能波及浅一档（K15d），闭包外变淡；悬停照常叠加。
  *   L17、L20①：节点标「入 Ca · 出 Ce · 表面 W」与不稳定度三档；Y4：本层环编号常显（不受「代码事实」开关影响）。
  *   U16：没有代码事实时只画允许边（mayDependOn 的投影），画布角说明。
  */
@@ -19,6 +20,7 @@ import {
   isTarget,
   levelImpact,
   moduleName,
+  type LevelImpactHit,
   nodeOf,
   shelfOf,
   type AllowedEdge,
@@ -100,14 +102,16 @@ export interface StructureScene {
   coveredHidden: number
   /** 画布角的说明（U16 / 正在读取） */
   note: string | null
-  /** K15：本层节点 → 方向与最短距离；没有选中模块时为 null */
-  impact: Map<string, { direction: 'in' | 'out' | 'both'; distance: number; inCycle: boolean }> | null
+  /** K15b：本层节点 → 方向与最短距离（K15d 的可能波及）；没有查询影响面时为 null */
+  impact: Map<string, LevelImpactHit> | null
   /** K15：选中的模块所在的节点 */
   impactSelf: string | null
   /** O13：使用者节点 → 它依赖的不同共用件数（含只引类型） */
   sharedCounts: Map<string, number>
-  /** 聚焦（悬停或选中节点）时与它相连的节点；没有聚焦或影响面生效时为 null */
+  /** L27：与聚焦节点相连的节点——选中的一跳 ∪ 悬停的一跳；影响面查询生效时只有悬停的一跳；没有聚焦时为 null */
   near: Set<string> | null
+  /** L27：悬停节点的一跳（叠加在影响面查询之上，inImpact 用）；没有悬停时为 null */
+  hoverNear: Set<string> | null
   /** 选中的依赖（`sel=d:`）对应的束（与它散开的元素级边） */
   selected: Set<string>
   /** B3：选中束时留在聚焦里的束（与两端相连的）；没有选中束时为 null */
@@ -320,7 +324,7 @@ function outwardSide(pv: PositionedView, node: string, others: readonly string[]
 }
 
 /** 结构视角的场景派生；结构视角之外不调用 */
-export function structureScene(input: CanvasInput, pv: PositionedView, focusId: string | null): StructureScene {
+export function structureScene(input: CanvasInput, pv: PositionedView, focusIds: readonly string[], hoverFocus: string | null = null): StructureScene {
   const s = input.structure!
   const idx = input.index
   const view = pv.view
@@ -330,7 +334,8 @@ export function structureScene(input: CanvasInput, pv: PositionedView, focusId: 
   const sel = input.selection
   const shelf = shelfOf(view)
   const isBoundary = (id: string) => id.startsWith('boundary:')
-  const touches = (e: DepItem) => !!focusId && (e.from === focusId || e.to === focusId)
+  const focused = (id: string) => focusIds.includes(id)
+  const touches = (e: { from: string; to: string }) => focused(e.from) || focused(e.to)
   const cyc = s.cycles
   const inCycle = (e: { from: string; to: string }) => !!cyc && cyc.get(e.from) !== undefined && cyc.get(e.from) === cyc.get(e.to)
 
@@ -358,8 +363,7 @@ export function structureScene(input: CanvasInput, pv: PositionedView, focusId: 
     const keep = (b: Bundle) => {
       if (b.id === picked?.id) return true
       // O13②：共用件——聚焦一端、违规、在环中、反向依赖（共用件依赖使用者，U12）照画
-      if (shelf.has(b.from) || shelf.has(b.to))
-        return (!!focusId && (b.from === focusId || b.to === focusId)) || disp.anomalies.has(b.id) || inCycle(b) || (shelf.has(b.from) && !shelf.has(b.to))
+      if (shelf.has(b.from) || shelf.has(b.to)) return touches(b) || disp.anomalies.has(b.id) || inCycle(b) || (shelf.has(b.from) && !shelf.has(b.to))
       return true
     }
     // C6：被依赖方表面展开、本布局散开了的束换成元素级边（随只引类型 / 只看交互使用过滤；照画的束不过滤）
@@ -412,7 +416,7 @@ export function structureScene(input: CanvasInput, pv: PositionedView, focusId: 
   if (layered && sv?.facts && idx && s.report) {
     const chipIds = new Set(view.nodes.filter(n => n.role === 'core' || n.role === 'shared').map(n => n.id))
     const wanted = new Set<string>()
-    if (focusId && chipIds.has(focusId)) wanted.add(focusId)
+    for (const id of focusIds) if (chipIds.has(id)) wanted.add(id)
     if (sel?.kind === 'dep') for (const id of sel.id.split('->')) if (chipIds.has(id)) wanted.add(id)
     const chips = chipItems(idx, chipDeps(idx, view, s.report, wanted))
     items.push(...chips)
@@ -433,7 +437,7 @@ export function structureScene(input: CanvasInput, pv: PositionedView, focusId: 
     if (r) routes.set(e.id, r)
   }
 
-  // K15：影响面按方向投影到本层
+  // K15b：查询的影响面按方向投影到本层
   let impact: StructureScene['impact'] = null
   let impactSelf: string | null = null
   if (s.impact && idx) {
@@ -449,16 +453,20 @@ export function structureScene(input: CanvasInput, pv: PositionedView, focusId: 
     if (!shelf.has(b.from) && shelf.has(b.to)) (sharedSets.get(b.from) ?? sharedSets.set(b.from, new Set()).get(b.from)!).add(b.to)
   const sharedCounts = new Map([...sharedSets].map(([k, v]) => [k, v.size]))
 
-  // 聚焦变淡：与聚焦节点之间有画出来的结构边的节点照常；分层总览只有核心模块、共用件参与聚焦（同交互视角）
-  let near: Set<string> | null = null
-  const focusable = (id: string) => !layered || view.nodes.some(n => n.id === id && (n.role === 'core' || n.role === 'shared'))
-  if (!impact && focusId && pv.nodes.has(focusId) && focusable(focusId)) {
-    near = new Set([focusId])
+  // L27 聚焦变淡：与聚焦节点之间有画出来的结构边的节点照常——选中给底、悬停叠加；分层总览只有核心模块、共用件参与聚焦（同交互视角）
+  const focusable = (id: string) => pv.nodes.has(id) && (!layered || view.nodes.some(n => n.id === id && (n.role === 'core' || n.role === 'shared')))
+  const hop = (f: string) => {
+    const set = new Set([f])
     for (const e of shown) {
-      if (e.from === focusId) near.add(e.to)
-      if (e.to === focusId) near.add(e.from)
+      if (e.from === f) set.add(e.to)
+      if (e.to === f) set.add(e.from)
     }
+    return set
   }
+  const hoverNear = hoverFocus && focusable(hoverFocus) ? hop(hoverFocus) : null
+  const hops = focusIds.filter(focusable).map(hop)
+  // 影响面查询生效时闭包代替选中的一跳，悬停照常叠加
+  const near = impact ? hoverNear : hops.length ? new Set(hops.flatMap(x => [...x])) : null
 
   const hidden = disp?.hidden ?? { type: 0, value: 0, covered: 0, cross: 0 }
   const note = s.note ?? (sv && !sv.facts ? sv.note : null)
@@ -475,6 +483,7 @@ export function structureScene(input: CanvasInput, pv: PositionedView, focusId: 
     impactSelf,
     sharedCounts,
     near,
+    hoverNear,
     selected,
     focus,
     carried,
@@ -532,10 +541,10 @@ export function structureNodeMarks(
   return out
 }
 
-/** K15：影响面生效时节点是否留在闭包里（自身、闭包内；分层总览的核心块与架上共用件跟随它所在的带） */
+/** K15b：影响面查询生效时节点是否不变淡（自身、闭包内、悬停的一跳 L27；分层总览的核心块与架上共用件跟随它所在的带） */
 export function inImpact(scene: StructureScene, n: { id: string; layerId?: string }): boolean {
   const imp = scene.impact
   if (!imp) return true
-  const hit = (id: string) => id === scene.impactSelf || imp.has(id)
+  const hit = (id: string) => id === scene.impactSelf || imp.has(id) || !!scene.hoverNear?.has(id)
   return hit(n.id) || (!!n.layerId && hit(n.layerId))
 }

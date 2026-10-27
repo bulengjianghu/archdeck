@@ -2,7 +2,9 @@
 /**
  * 模块面板 · 结构（结构视角，ADR-0031）：
  * - K16：扇入 Ca、扇出 Ce、不稳定度 I 与三档，本层节点数另列，贡献最多的依赖方 / 被依赖方；
- * - K15：影响面 / 依赖面清单（按距离分组，列模块与文件数，缺省只展开距离 1），方向写显示偏好 impactMode，「只看值依赖」写 valuesOnly（画布同读）；
+ * - K15b、K15c（ADR-0037）：影响面是一次性查询——分段按钮「不看 / 影响面 / 依赖面 / 两者」写视图状态 impactQuery（换选中、切视角、刷新即回到不看），
+ *   查询时列按距离分组的清单（列模块与文件数，缺省只展开距离 1），可能波及标「可能」（K15d），「含只引类型」只在查询时出现；
+ *   「只看值依赖」写显示偏好 valuesOnly，只作用于指标与逆稳定；
  * - U17：逆稳定方向的提示行（info）；
  * - K17：交互图互查——涉及本模块（含子树）、两端之间没有任何依赖的交互关系（K6），单击切到交互视角并选中它。
  * 没有代码事实（K8、U16）时只说明原因。
@@ -11,16 +13,23 @@ import { computed, ref } from 'vue'
 import { moduleName, type ImpactEntry } from '@/model'
 import { useDesk } from '@/state/inject'
 import Section from './Section.vue'
-import { IMPACT_MODE_HINT, IMPACT_MODE_LABEL, STABILITY_LABEL } from '../display/labels'
-import { useStructurePrefs, type ImpactMode } from '../display/useDisplayPrefs'
+import { IMPACT_MODE_HINT, IMPACT_MODE_LABEL, STABILITY_LABEL, type ImpactChoice } from '../display/labels'
+import { useStructurePrefs } from '../display/useDisplayPrefs'
 import { RELATION_TYPE_LABELS } from '../shared/labels'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
 const sp = useStructurePrefs(desk.project)
-const impactMode = computed({ get: () => sp.prefs.value.impactMode, set: sp.setImpactMode })
 const valuesOnly = computed({ get: () => sp.prefs.value.valuesOnly, set: sp.setValuesOnly })
-const MODES: readonly ImpactMode[] = ['in', 'out', 'both']
+/** K15b：查询只对选中的模块有效（面板显示的就是它）；desk.facts.queried 已按 impactQuery 与选中算好 */
+const query = computed(() => (desk.selection.value?.kind === 'module' && desk.selection.value.id === props.id ? desk.impactQuery.value : null))
+const choice = computed<ImpactChoice>(() => query.value?.mode ?? 'none')
+const CHOICES: readonly ImpactChoice[] = ['none', 'in', 'out', 'both']
+const choose = (c: ImpactChoice) => desk.queryImpact(c === 'none' ? null : { mode: c, ...(query.value?.types ? { types: true as const } : {}) })
+const withTypes = computed({
+  get: () => !!query.value?.types,
+  set: on => query.value && desk.queryImpact({ mode: query.value.mode, ...(on ? { types: true as const } : {}) }),
+})
 /** 每组先列前 LIMIT 个，其余单击展开 */
 const LIMIT = 15
 const expanded = ref(new Set<string>())
@@ -39,7 +48,9 @@ const noFacts = computed(() =>
 )
 
 const metrics = computed(() => desk.facts.metricsOf(props.id, valuesOnly.value))
-const impact = computed(() => desk.facts.impactOf(props.id, valuesOnly.value))
+const impact = computed(() => (query.value ? desk.facts.queried.value : null))
+/** U17 与环的徽标照常按指标的口径算（不随查询） */
+const own = computed(() => desk.facts.impactOf(props.id, valuesOnly.value))
 const fmtI = (i: number | null) => (i === null ? '—' : i.toFixed(2))
 
 /** 闭包内模块的文件数（归属可用时） */
@@ -51,12 +62,14 @@ interface Side {
   modules: number
   nodes: number
   files: number | null
+  /** K15d：可能波及的模块数（只在影响面） */
+  possible: number
   groups: { label: string; list: ImpactEntry[] }[]
 }
 const sides = computed<Side[]>(() => {
   const i = impact.value
   if (!i) return []
-  const dirs: ('in' | 'out')[] = impactMode.value === 'both' ? ['in', 'out'] : [impactMode.value]
+  const dirs: ('in' | 'out')[] = i.mode === 'both' ? ['in', 'out'] : [i.mode]
   return dirs.map(dir => {
     const list = dir === 'in' ? i.impact.incoming : i.impact.outgoing
     const nodes = i.level ? [...i.level.values()].filter(x => x.direction === dir || x.direction === 'both').length : 0
@@ -67,6 +80,7 @@ const sides = computed<Side[]>(() => {
       modules: list.length,
       nodes,
       files: i.impact.files ? i.impact.files[dir === 'in' ? 'incoming' : 'outgoing'] : null,
+      possible: list.filter(e => e.possible).length,
       groups: [
         { label: '距离 1', list: by(d => d === 1) },
         { label: '距离 2', list: by(d => d === 2) },
@@ -113,7 +127,7 @@ const relText = (id: string) => {
           <dd>入 {{ metrics.level.in }} · 出 {{ metrics.level.out }} <span class="muted">（投影到本层后的不同节点，与图上的线对得上）</span></dd>
         </template>
       </dl>
-      <label class="check values-only" title="去掉只引类型的依赖重算指标与影响面（环仍只按值依赖）">
+      <label class="check values-only" title="去掉只引类型的依赖重算指标与逆稳定（环仍只按值依赖；影响面查询缺省只看值依赖）">
         <input v-model="valuesOnly" type="checkbox" /> 只看值依赖
       </label>
 
@@ -143,25 +157,35 @@ const relText = (id: string) => {
 
       <div class="impact">
         <div class="impact-head">
-          <span class="segmented" role="group" aria-label="影响面方向">
+          <span class="segmented" role="group" aria-label="影响面查询">
             <button
-              v-for="m in MODES"
+              v-for="m in CHOICES"
               :key="m"
-              :class="{ on: impactMode === m }"
-              :aria-pressed="impactMode === m"
+              :class="{ on: choice === m }"
+              :aria-pressed="choice === m"
               :title="IMPACT_MODE_HINT[m]"
-              @click="impactMode = m"
+              :data-choice="m"
+              @click="choose(m)"
             >
               {{ IMPACT_MODE_LABEL[m] }}
             </button>
           </span>
-          <span v-if="impact?.impact.inCycle" class="badge bad" title="本模块在模块环中（只按值依赖）">在环中</span>
+          <span v-if="own?.impact.inCycle" class="badge bad" title="本模块在模块环中（只按值依赖）">在环中</span>
         </div>
+        <label v-if="query" class="check values-only" title="缺省只看值依赖；勾选后按全部种类（含只引类型）重算，随查询一起收回">
+          <input v-model="withTypes" type="checkbox" /> 含只引类型
+        </label>
         <div v-for="s in sides" :key="s.dir" class="side" :data-dir="s.dir">
           <div class="side-count">
             <b>{{ s.title }}</b>
             <span class="muted"
-              >本层 {{ s.nodes }} 个节点 · 全系统 {{ s.modules }} 个模块<template v-if="s.files !== null"> · {{ s.files }} 个文件</template></span
+              >本层 {{ s.nodes }} 个节点 · 全系统 {{ s.modules }} 个模块<template v-if="s.files !== null"> · {{ s.files }} 个文件</template
+              ><template v-if="s.possible">
+                ·
+                <span class="possible" title="只经可截断处（只用具名契约：端口、具名接口、声明的数据结构，或只是再导出）到达（K15d）"
+                  >其中可能波及 {{ s.possible }} 个</span
+                ></template
+              ></span
             >
           </div>
           <p v-if="!s.groups.length" class="muted empty">{{ s.dir === 'in' ? '没有模块依赖它' : '它不依赖别的模块' }}</p>
@@ -174,6 +198,13 @@ const relText = (id: string) => {
                 <button class="link" @click="desk.revealModule(e.module)">{{ name(e.module) }}</button>
                 <span v-if="filesOf(e.module) !== null" class="muted"> {{ filesOf(e.module) }} 个文件</span>
                 <span v-if="e.inCycle" class="cyc" title="在模块环中">↻</span>
+                <span
+                  v-if="e.possible"
+                  class="possible"
+                  data-testid="impact-possible"
+                  title="可能波及：只经可截断处（只用具名契约或只是再导出）到达，改内部实现时变更可能在那里停下（K15d）"
+                  >可能</span
+                >
               </li>
               <li v-if="shownOf(`${s.dir}:${g.label}`, g.list).length < g.list.length">
                 <button class="link more" @click="expand(`${s.dir}:${g.label}`)">另 {{ g.list.length - LIMIT }} 个，展开</button>
@@ -320,6 +351,11 @@ const relText = (id: string) => {
 .cyc {
   margin-left: 4px;
   color: var(--danger);
+}
+
+.possible {
+  margin-left: 4px;
+  color: var(--text-3);
 }
 
 .cross {

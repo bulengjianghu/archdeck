@@ -78,7 +78,7 @@ modules:
     name: 指标与影响面角标
     parent: present.canvas.nodes
     adrs: [31]
-    responsibility: 结构视角下节点上的角标（ADR-0031）：「入 Ca · 出 Ce」与左缘的不稳定度三档色条（L17）；选中模块时影响面的方向（牵动 / 依赖 / 双向）与距离，外圈按距离实 / 虚 / 点线（K15）；本层环编号（Y4，结构视角常显）。只读画布场景给出的数据（StructMarks），不自己算指标。
+    responsibility: 结构视角下节点上的角标（ADR-0031）：「入 Ca · 出 Ce」与左缘的不稳定度三档色条（L17）；面板查询影响面时闭包里节点的方向（牵动 / 依赖 / 双向）与距离，外圈按距离实 / 虚 / 点线，可能波及的浅一档（K15b、K15d）；本层环编号（Y4，结构视角常显）。只读画布场景给出的数据（StructMarks），不自己算指标。
     codeRefs: [src/components/nodes/StructMarks.vue]
   - id: present.canvas.edges
     name: 边组件
@@ -145,7 +145,7 @@ modules:
     name: 结构视图面板
     parent: present.panel
     adrs: [31]
-    responsibility: 属性面板里结构视角的两节（ADR-0031）：模块的「结构」一节（ModuleStructure）——扇入 Ca、扇出 Ce、不稳定度 I 与三档、本层节点数、贡献最多的依赖方 / 被依赖方（K16）；影响面 / 依赖面清单按距离分组、列模块与文件数（K15，方向与「只看值依赖」写显示偏好，画布同读）；逆稳定的提示行（U17，info）；交互图互查——涉及本模块、两端之间没有任何依赖的交互关系，单击切到交互视角并选中（K17）。依赖边面板的结构部分（DepStructure，选中依赖边 sel=d:<依赖方>-><被依赖方> 时）——这对节点的结构边：种类与档、文件依赖条数与清单、聚合的模块依赖条数（K14、L16）；交互覆盖与「未解释」（K17）；规则判定（违规或允许它的规则，U15）；两端的不稳定度与「逆稳定」（U17）。全部读 desk.facts 的派生（metricsOf、impactOf、againstOf、isolatedOf、edgeFiles、structure），没有代码事实时只说明原因（K8、U16）。
+    responsibility: 属性面板里结构视角的两节（ADR-0031）：模块的「结构」一节（ModuleStructure）——扇入 Ca、扇出 Ce、不稳定度 I 与三档、本层节点数、贡献最多的依赖方 / 被依赖方（K16）；影响面查询（分段按钮「不看 / 影响面 / 依赖面 / 两者」与「含只引类型」，经 queryImpact 写视图状态，一次性；查询时清单按距离分组、列模块与文件数、可能波及标「可能」，K15b–K15d；「只看值依赖」写显示偏好、只管指标）；逆稳定的提示行（U17，info）；交互图互查——涉及本模块、两端之间没有任何依赖的交互关系，单击切到交互视角并选中（K17）。依赖边面板的结构部分（DepStructure，选中依赖边 sel=d:<依赖方>-><被依赖方> 时）——这对节点的结构边：种类与档、文件依赖条数与清单、聚合的模块依赖条数（K14、L16）；交互覆盖与「未解释」（K17）；规则判定（违规或允许它的规则，U15）；两端的不稳定度与「逆稳定」（U17）。全部读 desk.facts 的派生（metricsOf、impactOf、againstOf、isolatedOf、edgeFiles、structure），没有代码事实时只说明原因（K8、U16）。
     codeRefs: [src/components/panel/ModuleStructure.vue, src/components/panel/DepStructure.vue]
 
   - id: present.nav.breadcrumb

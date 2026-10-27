@@ -1,8 +1,8 @@
 /**
  * 「显示」面板的本机记忆（ADR-0017）：面板展开、各组折叠，按视角分别记在 localStorage；运行视角默认只展开「回放」。
  * 结构视角的显示偏好（ADR-0031、ADR-0032）：只引类型的束是否画出（typeOnly，L15、B1，缺省收起）、只看交互使用（invokesOnly，B1）、
- * 只看交互未覆盖（uncoveredOnly，B4）、总是展开表面（surfaceAlways，C6）、影响面画哪个方向（impactMode，K15，缺省传入）、
- * 只看值依赖（valuesOnly，K15、K16，缺省否）——开关缺省都关；按项目记在本地、各组件共享同一份（画布读、面板写），不进视图状态与 URL。
+ * 只看交互未覆盖（uncoveredOnly，B4）、总是展开表面（surfaceAlways，C6）、
+ * 只看值依赖（valuesOnly，K16、U17，缺省否）——开关缺省都关；影响面方向第十一轮起是视图状态的一次性查询 impactQuery（K15b，ADR-0037），不在这里，本地记着的旧 impactMode 忽略；按项目记在本地、各组件共享同一份（画布读、面板写），不进视图状态与 URL。
  * 只属于这块界面，不进视图状态与 URL。
  */
 import { ref, shallowRef, watch, type Ref } from 'vue'
@@ -33,16 +33,10 @@ function write(key: string, value: unknown) {
   }
 }
 
-/** K15：影响面画哪个方向——传入（影响面，缺省）、传出（依赖面）、两者 */
-export type ImpactMode = 'in' | 'out' | 'both'
-const IMPACT_MODES: readonly ImpactMode[] = ['in', 'out', 'both']
-
 export interface StructurePrefsValue {
   /** L15：只引类型的依赖边画出（缺省 false：收起，画布角计数） */
   typeOnly: boolean
-  /** K15：影响面的方向 */
-  impactMode: ImpactMode
-  /** K15、K16：只看值依赖（去掉只引类型重算影响面与指标） */
+  /** K16、U17：只看值依赖（去掉只引类型重算指标与逆稳定；影响面查询另有「含只引类型」，K15b） */
   valuesOnly: boolean
   /** B1：只画交互使用档的束（值使用也收起；基线外违规、环上的、逆稳定的照画） */
   invokesOnly: boolean
@@ -54,7 +48,6 @@ export interface StructurePrefsValue {
 
 export const DEFAULT_STRUCTURE_PREFS: StructurePrefsValue = {
   typeOnly: false,
-  impactMode: 'in',
   valuesOnly: false,
   invokesOnly: false,
   uncoveredOnly: false,
@@ -64,7 +57,6 @@ export const DEFAULT_STRUCTURE_PREFS: StructurePrefsValue = {
 export interface StructurePrefs {
   prefs: Readonly<Ref<StructurePrefsValue>>
   setTypeOnly(v: boolean): void
-  setImpactMode(v: ImpactMode): void
   setValuesOnly(v: boolean): void
   setInvokesOnly(v: boolean): void
   setUncoveredOnly(v: boolean): void
@@ -84,7 +76,6 @@ export function useStructurePrefs(project = ''): StructurePrefs {
   const prefs = shallowRef<StructurePrefsValue>({
     ...DEFAULT_STRUCTURE_PREFS,
     ...Object.fromEntries(FLAGS.flatMap(k => (typeof raw[k] === 'boolean' ? [[k, raw[k]]] : []))),
-    impactMode: raw.impactMode && IMPACT_MODES.includes(raw.impactMode) ? raw.impactMode : DEFAULT_STRUCTURE_PREFS.impactMode,
   })
   const set = (patch: Partial<StructurePrefsValue>) => {
     prefs.value = { ...prefs.value, ...patch }
@@ -93,7 +84,6 @@ export function useStructurePrefs(project = ''): StructurePrefs {
   const store: StructurePrefs = {
     prefs,
     setTypeOnly: v => set({ typeOnly: v }),
-    setImpactMode: v => set({ impactMode: v }),
     setValuesOnly: v => set({ valuesOnly: v }),
     setInvokesOnly: v => set({ invokesOnly: v }),
     setUncoveredOnly: v => set({ uncoveredOnly: v }),

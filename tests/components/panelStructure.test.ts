@@ -88,10 +88,26 @@ describe('模块面板「结构」一节（K15、K16、K17）', () => {
     expect(wrapper.find('.module-structure').exists()).toBe(false)
   })
 
-  it('影响面按距离分组、列模块与文件数，缺省只展开距离 1；切到依赖面、两者；「只看值依赖」去掉只引类型重算', async () => {
-    const { wrapper } = await open('/?v=s&sel=m:app')
+  it('K15b、K15c：缺省「不看」不列闭包；点「影响面」查一次（缺省只看值依赖，「含只引类型」按全部种类），按距离分组、列模块与文件数，缺省只展开距离 1；切到依赖面、两者；换选中回到不看', async () => {
+    const { wrapper, desk } = await open('/?v=s&sel=m:app')
     const side = () => wrapper.findAll('.module-structure .side')
+    const click = async (label: string) => {
+      await wrapper
+        .findAll('.module-structure .segmented button')
+        .find(b => b.text() === label)!
+        .trigger('click')
+      await flushPromises()
+    }
+    expect(side()).toHaveLength(0)
+    expect(wrapper.find('.module-structure .segmented button.on').text()).toBe('不看')
+    // 只看值依赖：只引类型的去掉后只有 Extra、SmImpl
+    await click('影响面')
     expect(side()).toHaveLength(1)
+    expect(side()[0].text()).toContain('全系统 2 个模块')
+    // 含只引类型：ModCore 经 Extra（只引类型）距离 2；PipeImpl 经 ModCore 距离 3
+    await wrapper.find('.module-structure .impact .values-only input').setValue(true)
+    await flushPromises()
+    expect(desk.impactQuery.value).toEqual({ mode: 'in', types: true })
     expect(side()[0].attributes('data-dir')).toBe('in')
     // 传入：Extra、SmImpl 距离 1；ModCore 经 Extra（只引类型）距离 2；PipeImpl 经 ModCore 距离 3
     expect(side()[0].text()).toContain('全系统 4 个模块')
@@ -100,28 +116,25 @@ describe('模块面板「结构」一节（K15、K16、K17）', () => {
     expect(groups[0].attributes('open')).toBeDefined()
     expect(groups[1].attributes('open')).toBeUndefined()
     expect(groups[0].text()).toContain('1 个文件')
-    // 依赖面
-    await wrapper
-      .findAll('.module-structure .segmented button')
-      .find(b => b.text() === '依赖面')!
-      .trigger('click')
+    // 依赖面、两者（「含只引类型」随查询带着）
+    await click('依赖面')
     expect(side()[0].attributes('data-dir')).toBe('out')
-    await wrapper
-      .findAll('.module-structure .segmented button')
-      .find(b => b.text() === '两者')!
-      .trigger('click')
+    await click('两者')
     expect(side().map(s => s.attributes('data-dir'))).toEqual(['in', 'out'])
-    await wrapper
-      .findAll('.module-structure .segmented button')
-      .find(b => b.text() === '影响面')!
-      .trigger('click')
-    // 只看值依赖：只引类型的去掉后 ModCore、PipeImpl 不在影响面里，Ca 不变（Extra、SmImpl）
+    expect(desk.impactQuery.value).toEqual({ mode: 'both', types: true })
+    await click('不看')
+    expect(side()).toHaveLength(0)
+    expect(desk.impactQuery.value).toBeNull()
+    // 一次性：换选中即回到不看；「只看值依赖」偏好只管指标，不打开查询
+    await click('影响面')
+    desk.select({ kind: 'module', id: 'infra' })
+    await flushPromises()
+    expect(desk.impactQuery.value).toBeNull()
+    expect(side()).toHaveLength(0)
     await wrapper.find('.module-structure .values-only input').setValue(true)
     await flushPromises()
-    expect(side()[0].text()).toContain('全系统 2 个模块')
-    expect(side()[0].findAll('details.dist')).toHaveLength(1)
-    // 偏好记在本机，画布与面板共用同一份
-    expect(JSON.parse(localStorage.getItem('h5p-arch-desk:structure-prefs:')!)).toMatchObject({ impactMode: 'in', valuesOnly: true })
+    expect(side()).toHaveLength(0)
+    expect(JSON.parse(localStorage.getItem('h5p-arch-desk:structure-prefs:')!)).toMatchObject({ valuesOnly: true })
   })
 
   it('交互图互查：有交互、两端之间没有任何依赖的关系（K6）列出，单击切到交互视角并选中它', async () => {

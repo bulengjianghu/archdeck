@@ -4,7 +4,7 @@
  * 只读代码事实与规则，不读关系来定边（原则 SP2）；投影与 K9、Y4 共用 nodeOf（mapEndpoint）。
  */
 import { moduleName } from '../names'
-import { moduleFiles, type SourceOwnership } from '../source'
+import { moduleFiles, moduleInterfaces, type SourceOwnership } from '../source'
 import { RELATION_TYPES, type LevelView, type ModelIndex } from '../types'
 import { valueDeps } from './cycles'
 import { contractNames, coveringRelations, depKey, implementsInto, within } from './facts'
@@ -418,14 +418,18 @@ export function impactOf(
   const deps = depsOf(report, opts)
   const fwd = new Map<string, string[]>()
   const back = new Map<string, string[]>()
+  // K15d：传入方向另走一遍不经可截断依赖的图，走不到的为「可能波及」
+  const firm = new Map<string, string[]>()
+  const contracts = new Map<string, ReadonlySet<string>>()
   for (const d of deps) {
     ;(fwd.get(d.from) ?? fwd.set(d.from, []).get(d.from)!).push(d.to)
     ;(back.get(d.to) ?? back.set(d.to, []).get(d.to)!).push(d.from)
+    if (!cuttableDep(index, d, contracts)) (firm.get(d.to) ?? firm.set(d.to, []).get(d.to)!).push(d.from)
   }
   const cyclic = new Set(report.moduleCycles.flatMap(c => c.members))
   const inside = (m: string) => within(index, m, id)
   const seeds = [...new Set(deps.flatMap(d => [d.from, d.to]))].filter(inside)
-  const walk = (adj: Map<string, string[]>): ImpactEntry[] => {
+  const reach = (adj: Map<string, string[]>): Map<string, number> => {
     const dist = new Map<string, number>()
     let frontier = seeds
     for (let k = 1; frontier.length; k++) {
@@ -438,11 +442,13 @@ export function impactOf(
           }
       frontier = next
     }
-    return [...dist]
-      .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
-      .map(([module, distance]) => ({ module, distance, inCycle: cyclic.has(module) }))
+    return dist
   }
-  const incoming = walk(back)
+  const walk = (adj: Map<string, string[]>, certain?: ReadonlyMap<string, number>): ImpactEntry[] =>
+    [...reach(adj)]
+      .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
+      .map(([module, distance]) => ({ module, distance, inCycle: cyclic.has(module), ...(certain && !certain.has(module) ? { possible: true as const } : {}) }))
+  const incoming = walk(back, reach(firm))
   const outgoing = walk(fwd)
   const countFiles = (list: ImpactEntry[]) => new Set(list.flatMap(e => moduleFiles(index, opts.own!, e.module))).size
   return {
@@ -455,27 +461,60 @@ export function impactOf(
   }
 }
 
+const bareName = (name: string) => name.replace(/[(<].*$/s, '').trim()
+
+/** K15d：模块 M 的具名契约——M 子树声明的接口（G12 口径，含端口）与数据结构的名字 */
+export function contractOf(index: ModelIndex, id: string): Set<string> {
+  const out = new Set(moduleInterfaces(index, id).map(x => bareName(index.interfaces.get(x)?.name ?? '')))
+  for (const m of index.modules.values())
+    if (index.pathOf.get(m.id)?.includes(id)) for (const ds of m.dataStructures ?? []) out.add(bareName(index.dataStructures.get(ds)?.name ?? ''))
+  out.delete('')
+  return out
+}
+
+/**
+ * K15d（ADR-0037）：可截断的模块依赖——每条文件依赖都只经具名契约：`export … from` 再导出（透传，不使用），或按名字导入、名字全在被依赖方的具名契约里
+ * （contractOf）且不是子类；整模块导入、命名空间导入、契约外的名字都不算。改被依赖方的内部实现时变更可以停在这里（「可能波及」）。cache 按被依赖方缓存契约。
+ */
+export function cuttableDep(index: ModelIndex, d: Pick<ModuleDep, 'to' | 'files'>, cache = new Map<string, ReadonlySet<string>>()): boolean {
+  const contract = cache.get(d.to) ?? cache.set(d.to, contractOf(index, d.to)).get(d.to)!
+  return (
+    d.files.length > 0 &&
+    d.files.every(
+      f =>
+        (f.reexport && !f.uses && !f.invokes) ||
+        (!!f.names?.length &&
+          f.names.every(n => contract.has(n)) &&
+          !(f.inherits ?? []).some(h => h.clause === 'extends' && h.decl !== 'interface' && h.decl !== 'type')),
+    )
+  )
+}
+
+/** K15：影响面在本层的一个节点——方向、最短距离、在环中；K15d：节点下的传入命中全是「可能波及」时 possible（双向的不标） */
+export interface LevelImpactHit {
+  direction: 'in' | 'out' | 'both'
+  distance: number
+  inCycle: boolean
+  possible?: true
+}
+
 /** K15：影响面投影到本层——节点 ID → 方向与最短距离（两个方向都在时为 both，距离取小）；M 所在的节点不在其中 */
-export function levelImpact(
-  index: ModelIndex,
-  view: LevelView,
-  impact: Impact,
-): Map<string, { direction: 'in' | 'out' | 'both'; distance: number; inCycle: boolean }> {
+export function levelImpact(index: ModelIndex, view: LevelView, impact: Impact): Map<string, LevelImpactHit> {
   const present = new Set(view.nodes.map(n => n.id))
   const self = nodeOf(index, view, present, impact.module)
-  const out = new Map<string, { direction: 'in' | 'out' | 'both'; distance: number; inCycle: boolean }>()
+  const out = new Map<string, LevelImpactHit>()
   const put = (list: ImpactEntry[], dir: 'in' | 'out') => {
     for (const e of list) {
       const n = nodeOf(index, view, present, e.module)
       if (!n || n === self) continue
       const hit = out.get(n)
-      if (!hit) out.set(n, { direction: dir, distance: e.distance, inCycle: e.inCycle })
-      else
-        out.set(n, {
-          direction: hit.direction === dir ? dir : 'both',
-          distance: Math.min(hit.distance, e.distance),
-          inCycle: hit.inCycle || e.inCycle,
-        })
+      const possible = dir === 'in' && !!e.possible && (!hit || (hit.direction === 'in' && !!hit.possible))
+      out.set(n, {
+        direction: !hit || hit.direction === dir ? dir : 'both',
+        distance: Math.min(hit?.distance ?? e.distance, e.distance),
+        inCycle: !!hit?.inCycle || e.inCycle,
+        ...(possible ? { possible: true as const } : {}),
+      })
     }
   }
   put(impact.incoming, 'in')

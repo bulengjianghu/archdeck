@@ -438,14 +438,16 @@ export function createService(opts: ServiceOptions) {
       const l = load(p)
       if (!l.index.modules.has(target) || target === l.index.rootId) throw new ServiceError(`「${target}」不是模块`)
       const valuesOnly = !!opts.valuesOnly
-      const imp = impactOf(l.index, l.report, target, { valuesOnly, own: l.own })!
+      const imp = impactOf(l.index, l.report, target, { valuesOnly, own: l.own, surface: l.surface })!
       const m = moduleMetrics(l.index, l.report, target, { valuesOnly })!
       const side = (list: typeof imp.incoming, files: number) => ({
         modules: list.length,
         files,
         byDistance: [...new Set(list.map(e => e.distance))].map(distance => ({
           distance,
-          modules: list.filter(e => e.distance === distance).map(e => ({ id: e.module, name: name(l, e.module), ...(e.inCycle ? { inCycle: true } : {}) })),
+          modules: list
+            .filter(e => e.distance === distance)
+            .map(e => ({ id: e.module, name: name(l, e.module), ...(e.inCycle ? { inCycle: true } : {}), ...(e.possible ? { possible: true } : {}) })),
         })),
       })
       return {

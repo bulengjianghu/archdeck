@@ -10,7 +10,7 @@ import {
   type StabilityBand,
 } from '@/model'
 import type { StaticMode } from '@/layout/stage'
-import type { ImpactMode } from './useDisplayPrefs'
+import type { ImpactQuery } from '@/state/useDeskState'
 
 export const MODES: readonly StaticMode[] = ['hide', 'dim', 'show']
 export const MODE_LABEL: Record<StaticMode, string> = { hide: '隐藏', dim: '淡显', show: '全显' }
@@ -84,11 +84,14 @@ export const DECL_STATE_LABEL: Record<DeclState, string> = {
 }
 
 export const STABILITY_LABEL: Record<StabilityBand, string> = { stable: '稳定', balanced: '居中', unstable: '易变' }
-export const IMPACT_MODE_LABEL: Record<ImpactMode, string> = { in: '影响面', out: '依赖面', both: '两者' }
-export const IMPACT_MODE_HINT: Record<ImpactMode, string> = {
-  in: '改它会牵动谁：依赖它的模块（传入闭包）',
-  out: '它要谁才能工作：它依赖的模块（传出闭包）',
-  both: '两个方向都看',
+/** K15c：影响面查询的分段按钮——「不看」（none，缺省）与三个方向 */
+export type ImpactChoice = ImpactQuery['mode'] | 'none'
+export const IMPACT_MODE_LABEL: Record<ImpactChoice, string> = { none: '不看', in: '影响面', out: '依赖面', both: '两者' }
+export const IMPACT_MODE_HINT: Record<ImpactChoice, string> = {
+  none: '不查询：画布只聚焦一跳（L27）',
+  in: '查一次：改它会牵动谁——依赖它的模块（传入闭包）；换选中即收回',
+  out: '查一次：它要谁才能工作——它依赖的模块（传出闭包）；换选中即收回',
+  both: '查一次：两个方向都看；换选中即收回',
 }
 
 /**

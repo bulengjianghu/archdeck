@@ -461,6 +461,15 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     return { impact, level: view.value ? levelImpact(index.value, view.value, impact) : null }
   }
 
+  /** K15b、K15d（ADR-0037）：影响面查询的结果——视图状态的 impactQuery 与选中的模块；缺省只看值依赖，「含只引类型」时按全部种类；不看、没选中模块或没有代码事实时为 null */
+  const queried = computed(() => {
+    const q = state.value.impactQuery
+    const sel = state.value.selection
+    if (!q || sel?.kind !== 'module') return null
+    const hit = impactOfModule(sel.id, !q.types)
+    return hit ? { ...hit, mode: q.mode } : null
+  })
+
   /** U17：模块直接依赖的模块中违背稳定依赖方向的（面板「逆稳定」提示行，只看值依赖时按值依赖的指标） */
   const againstOf = (id: string, valuesOnly = false): { module: string; hit: { from: number; to: number } }[] => {
     const all = valuesOnly ? valueMetrics.value : metrics.value
@@ -597,6 +606,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     valueMetrics,
     metricsOf,
     impactOf: impactOfModule,
+    queried,
     structurePair,
     structureDisplay,
     expansion,

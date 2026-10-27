@@ -29,6 +29,8 @@ export interface FileDep {
   names?: string[]
   /** 依赖方文件的类声明 implements / extends 引用了落到这个目标的名字（K1，K5 的 implements 证据） */
   heritage?: true
+  /** `export … from` 再导出：只转出、不使用（K1；K15d 按透传算可截断） */
+  reexport?: true
   /** 引用了 to 文件的实现：函数、类或变量（不是类型、枚举），或不按名称穿透的值导入；`export … from` 再导出不算（K1，K5 的 implements 证据分档、U11、U12 的值使用） */
   uses?: true
   /** 交互使用：引用了实现且不只是纯值读取——被调用、new、extends、渲染，或把函数、类、组件作为值交出；只读常量、只读成员不算（K1） */
@@ -593,6 +595,8 @@ export interface ImpactEntry {
   distance: number
   /** 在模块环中（Y1，只按值依赖） */
   inCycle: boolean
+  /** K15d：只能经可截断的依赖（只用声明接口）到达 M——「可能波及」；只在传入闭包、给了表面来源时标 */
+  possible?: true
 }
 
 export interface Impact {

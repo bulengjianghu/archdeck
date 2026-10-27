@@ -84,8 +84,8 @@ export interface NodeData {
   ports?: NodePorts
   /** L17、L20①：结构视角的指标角标「入 Ca · 出 Ce · 表面 W」与不稳定度三档色条；共用件架上的块只标入（inOnly）；W 只在有入口时给；Ca + Ce = 0 时不给 */
   metrics?: { ca: number; ce: number; instability: number | null; band: StabilityBand | null; inOnly?: boolean; w?: number }
-  /** K15：结构视角选中模块时，本节点在影响面（传入）/ 依赖面（传出）里的方向与最短距离 */
-  impact?: { direction: 'in' | 'out' | 'both'; distance: number; inCycle: boolean }
+  /** K15b：结构视角查询影响面时，本节点在影响面（传入）/ 依赖面（传出）里的方向与最短距离；K15d：可能波及（possible）时标浅一档 */
+  impact?: { direction: 'in' | 'out' | 'both'; distance: number; inCycle: boolean; possible?: true }
   /** K15：影响面的中心（选中的模块所在的节点） */
   impactSelf?: boolean
   /** C6、L20、L23：展开表面的节点——元素记号在入边一侧（side），坐标相对节点左上角；交互视角只给被交互接到的元素 */
@@ -346,9 +346,9 @@ export interface StructureInput {
   uncoveredOnly?: boolean
   /** L17：各模块的 Ca / Ce / I（没有代码事实时为 null） */
   metrics: ReadonlyMap<string, ModuleMetrics> | null
-  /** K15：选中模块的影响面（全系统）；没有选中模块或没有代码事实时为 null */
+  /** K15b：面板显式查询的影响面（全系统，视图状态 impactQuery）；不看、没有选中模块或没有代码事实时为 null */
   impact: Impact | null
-  /** K15：画哪个方向——影响面（传入）、依赖面（传出）或两者（显示偏好 impactMode） */
+  /** K15b：查询的方向——影响面（传入）、依赖面（传出）或两者；impact 为 null 时不用 */
   impactMode: 'in' | 'out' | 'both'
   /** Y4：本层的环（节点 → 编号），结构视角常显 */
   cycles: ReadonlyMap<string, number> | null

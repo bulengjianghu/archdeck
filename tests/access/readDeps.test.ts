@@ -389,12 +389,14 @@ describe('K1 implements 证据（ADR-0022）', () => {
     expect(imp.inert).toEqual(['PluginBase'])
   })
 
-  it('再导出（export … from、export *）只转出名字，不算引用了实现（K1、K7 的值使用）', () => {
+  it('再导出（export … from、export *）只转出名字，不算引用了实现（K1、K7 的值使用），另记 reexport（K15d 的透传）', () => {
     const exportsOf = () => [{ name: 'make', kind: 'function', from: 'src/impl.ts' }]
     const [named, star] = parseImports('src/index.ts', "export { make } from './impl'\nexport * from './all'")
     expect(named.reexport).toBe(true)
-    expect(importTargetKinds(named, 'src/impl.ts', exportsOf)).toEqual([{ to: 'src/impl.ts', kind: 'value', names: ['make'] }])
-    expect(importTargetKinds(star, 'src/all.ts', exportsOf)).toEqual([{ to: 'src/all.ts', kind: 'value' }])
+    expect(importTargetKinds(named, 'src/impl.ts', exportsOf)).toEqual([{ to: 'src/impl.ts', kind: 'value', names: ['make'], reexport: true }])
+    expect(importTargetKinds(star, 'src/all.ts', exportsOf)).toEqual([{ to: 'src/all.ts', kind: 'value', reexport: true }])
+    const [use] = parseImports('src/u.ts', "import { make } from './impl'\nmake()")
+    expect(importTargetKinds(use, 'src/impl.ts', exportsOf)[0].reexport).toBeUndefined()
   })
 })
 

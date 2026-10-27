@@ -19,8 +19,13 @@ export interface SceneContext {
   evo: LevelEvolution | null
   /** 悬停时序图中的一条消息时，它在本层的落点（预览） */
   hoverLanding: VisibleLanding | null
-  /** 聚焦对象：悬停优先，其次是选中的模块（选中的外部模块在本视图里以边界节点出现） */
-  focusId: string | null
+  /**
+   * L27（ADR-0037）：聚焦对象——选中的模块或参与者（选中的外部模块在本视图里以边界节点出现）给一跳底，悬停的节点在其上叠加一跳；
+   * 两者都有时两个都在（去重），都没有时为空
+   */
+  focusIds: string[]
+  /** L27：悬停的节点（时序图消息的悬停不算）；没有为 null */
+  hoverFocus: string | null
   selectedEdgeIds: Set<string>
   /** 回放走过的、预览的、悬停预览的边（视图边 ID） */
   playEdges: Set<string>
@@ -33,7 +38,7 @@ export interface SceneContext {
   visibleCoreEdges: ViewEdge[]
   /** O10：显示的共用件的边——与聚焦对象相连的、被选中的，或回放落在其上的 */
   visibleShelfEdges: ViewEdge[]
-  /** 与聚焦对象相邻的节点 ID；无聚焦对象时为 null（不变淡） */
+  /** 与聚焦对象相邻的节点 ID（选中的一跳 ∪ 悬停的一跳，L27）；无聚焦对象时为 null（不变淡） */
   near: Set<string> | null
   /** L11：当前画出来的框外边按可见集分配轨道后的走线（普通层次；canvasScene 在算节点与边之前填入） */
   routes: Map<string, EdgeRoute>
@@ -45,11 +50,11 @@ export function sceneContext(input: CanvasInput, pv: PositionedView): SceneConte
   const { stage: st, scenarioView: sv } = input
   const layered = pv.view.mode === 'layered'
   // 结构视角：交互图的叠加（代码事实 K9、组装 O12）不画；演化（J5）是共享通道照画
-  const structure = !st && input.structure ? structureScene(input, pv, focusOf(input, pv)) : null
+  const { focusIds, hoverFocus } = focusOf(input, pv)
+  const structure = !st && input.structure ? structureScene(input, pv, focusIds, hoverFocus) : null
   const facts = st || structure ? null : (input.facts ?? null)
   const evo = st ? null : (input.evolution ?? null)
   const hoverLanding = hoverLandingOf(input.hover, sv)
-  const focusId = focusOf(input, pv)
   const selectedEdgeIds = selectedEdgesOf(input, pv, facts, evo)
   for (const id of structure?.selected ?? []) selectedEdgeIds.add(id)
   const playEdges = new Set<string>(st?.walked.keys() ?? [])
@@ -57,7 +62,7 @@ export function sceneContext(input: CanvasInput, pv: PositionedView): SceneConte
   if (hoverLanding?.kind === 'edge') playEdges.add(hoverLanding.edgeId)
   const em = input.emphasis
   const emphMessages = em?.selected == null ? null : new Set([em.selected, ...em.paired])
-  const shown = (e: ViewEdge) => (focusId && (e.from === focusId || e.to === focusId)) || selectedEdgeIds.has(e.id) || playEdges.has(e.id)
+  const shown = (e: ViewEdge) => focusIds.some(f => e.from === f || e.to === f) || selectedEdgeIds.has(e.id) || playEdges.has(e.id)
   // 结构视角不画交互图的核心跨层边与共用件的边（换成结构边，O13）
   const visibleCoreEdges = structure ? [] : (pv.view.coreEdges ?? []).filter(shown)
   // O10：运行视角不画共用件的临时线（P18）
@@ -71,7 +76,8 @@ export function sceneContext(input: CanvasInput, pv: PositionedView): SceneConte
     facts,
     evo,
     hoverLanding,
-    focusId,
+    focusIds,
+    hoverFocus,
     selectedEdgeIds,
     playEdges,
     display: displayOf(input, pv, playEdges),
@@ -84,7 +90,7 @@ export function sceneContext(input: CanvasInput, pv: PositionedView): SceneConte
       ? structure.near
       : !st && !input.hover && input.carrier
         ? carrierNodes({ input, pv })
-        : nearOf(pv, layered, focusId, [...visibleCoreEdges, ...visibleShelfEdges]),
+        : union(focusIds.map(f => nearOf(pv, layered, f, [...visibleCoreEdges, ...visibleShelfEdges]))),
     routes: new Map(),
     structure,
   }
@@ -96,12 +102,24 @@ function hoverLandingOf(hover: string | null, sv: ScenarioLevelView | null): Vis
   return m === undefined ? null : sv.messages[m].at
 }
 
-function focusOf({ hover, selection: sel }: CanvasInput, pv: PositionedView): string | null {
-  if (hover?.startsWith('step:')) return null
-  if (hover) return hover
-  if (sel?.kind === 'actor') return sel.id
-  if (sel?.kind !== 'module') return null
-  return !pv.nodes.has(sel.id) && pv.nodes.has(`boundary:${sel.id}`) ? `boundary:${sel.id}` : sel.id
+/** L27：选中给底（模块、参与者；选中的外部模块以边界节点出现），悬停叠加（时序图消息的悬停不算） */
+function focusOf({ hover, selection: sel }: CanvasInput, pv: PositionedView): { focusIds: string[]; hoverFocus: string | null } {
+  const hoverFocus = hover && !hover.startsWith('step:') ? hover : null
+  const picked =
+    sel?.kind === 'actor'
+      ? sel.id
+      : sel?.kind === 'module'
+        ? !pv.nodes.has(sel.id) && pv.nodes.has(`boundary:${sel.id}`)
+          ? `boundary:${sel.id}`
+          : sel.id
+        : null
+  return { focusIds: [...new Set([picked, hoverFocus].filter((x): x is string => !!x))], hoverFocus }
+}
+
+/** L27：几份一跳的并集；全为 null（没有聚焦或都不参与聚焦）时为 null */
+function union(sets: readonly (Set<string> | null)[]): Set<string> | null {
+  const hit = sets.filter((x): x is Set<string> => !!x)
+  return hit.length ? new Set(hit.flatMap(x => [...x])) : null
 }
 
 function selectedEdgesOf(

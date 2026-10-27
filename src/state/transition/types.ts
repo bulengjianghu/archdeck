@@ -63,6 +63,14 @@ export interface ViewState {
   mode?: CanvasMode
   /** 草图画布（X7a，ADR-0025）：打开的草图版本的编辑目标——进入草图即编辑；与运行视角互斥，不进 URL。缺省（undefined）同 null */
   editing?: SketchTarget | null
+  /** K15b（ADR-0037）：影响面查询——一次性，选中或视角一变即去掉（transition 统一判定）；不进 URL。缺省（undefined）同 null =「不看」 */
+  impactQuery?: ImpactQuery | null
+}
+
+/** K15b：影响面查询——方向（影响面 = 传入、依赖面 = 传出、两者）；types 为「含只引类型」（缺省只看值依赖） */
+export interface ImpactQuery {
+  mode: 'in' | 'out' | 'both'
+  types?: true
 }
 
 export type Query = Record<string, string | undefined>
@@ -79,6 +87,8 @@ export type ViewAction =
   | { type: 'revealRelation'; id: string }
   | { type: 'revealModule'; id: string }
   | { type: 'hover'; id: string | null }
+  /** K15b：设定或撤掉影响面查询（null =「不看」）；只在结构视角、选中模块时生效 */
+  | { type: 'queryImpact'; query: ImpactQuery | null }
   | { type: 'toggle'; patch: Partial<Toggles> }
   /** V11、V12：切到结构 / 交互视角（运行视角下即退出场景）；进历史 */
   | { type: 'setMode'; mode: CanvasMode }

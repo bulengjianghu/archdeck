@@ -415,6 +415,8 @@ export interface ImportTarget {
   invokes?: true
   /** 交互使用的种类（K1；K7 只看 call，K12 看 extends，K13 看 new / factory / register） */
   invokeKinds?: InvokeKind[]
+  /** `export … from` 再导出：只转出、不使用（K1；K15d 按透传算可截断） */
+  reexport?: true
   /** 继承子句引用的落到这个目标的名字、子句种类与目标声明的种类（K5c、K12） */
   inherits?: { name: string; clause: HeritageClause; decl?: string }[]
 }
@@ -486,6 +488,7 @@ export function importTargetKinds(
       {
         to: via,
         kind: imp.kind,
+        ...(imp.reexport ? { reexport: true as const } : {}),
         ...(imp.heritage?.includes('*') ? { heritage: true as const } : {}),
         ...(uses ? { uses: true as const } : {}),
         ...(invokes ? { invokes: true as const } : {}),
@@ -500,7 +503,7 @@ export function importTargetKinds(
     const sym = syms.find(s => s.name === n)
     const to = sym?.from ?? via
     const kind: DepKind = imp.kind === 'type' || imp.types.includes(n) || TYPE_DECL.has(sym?.kind ?? '') ? 'type' : 'value'
-    const hit = out.get(to) ?? { to, kind, names: [] }
+    const hit = out.get(to) ?? { to, kind, names: [], ...(imp.reexport ? { reexport: true as const } : {}) }
     if (hit.kind !== 'value') hit.kind = kind
     hit.names.push(n)
     if (imp.heritage?.includes(n)) hit.heritage = true
