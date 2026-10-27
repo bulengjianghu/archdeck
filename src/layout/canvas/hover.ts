@@ -1,5 +1,6 @@
 /**
- * L25 悬停边看两端（ADR-0034）：悬停的边加悬停晕、提到最上层（且不变淡），两端节点加描边环（类名 `edge-end`）。
+ * L25 悬停边看两端（ADR-0034，第十一轮修订）：悬停的边加衬边与投影、提到最上层（且不变淡），两端节点加描边环（类名 `edge-end`）；
+ * 悬停回调边时它配对的正向边减一档（`hoverPair`）同时高亮（L24）。
  * 画布局部状态，不改选中、不进 URL、不重新布局；其余边与节点原样返回（同一对象），便于 Vue Flow 只更新变的几个。
  */
 import { EDGE_Z } from './edges'
@@ -16,8 +17,17 @@ export function withEdgeHover<N extends Pick<CanvasNode, 'id' | 'class'>, E exte
   const hit = hoverId ? edges.find(e => e.id === hoverId) : undefined
   if (!hit) return { nodes: [...nodes], edges: [...edges] }
   const ends = new Set([hit.source, hit.target])
+  // L24：悬停回调边时，交来执行器的正向边减一档同时高亮
+  const pairs = new Set(hit.data.callbackPairs ?? [])
+  const paired = (e: E) => e !== hit && pairs.size > 0 && e.data.edge.relationIds.some(id => pairs.has(id))
   return {
     nodes: nodes.map(n => (ends.has(n.id) ? { ...n, class: [n.class, 'edge-end'].filter(Boolean).join(' ') } : n)),
-    edges: edges.map(e => (e === hit ? { ...e, zIndex: EDGE_HOVER_Z, data: { ...e.data, hovered: true, dim: false } } : e)),
+    edges: edges.map(e =>
+      e === hit
+        ? { ...e, zIndex: EDGE_HOVER_Z, data: { ...e.data, hovered: true, dim: false } }
+        : paired(e)
+          ? { ...e, zIndex: EDGE_HOVER_Z - 1, data: { ...e.data, hoverPair: true, dim: false } }
+          : e,
+    ),
   }
 }

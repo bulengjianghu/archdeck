@@ -87,26 +87,29 @@ describe('RouteEdge', () => {
     expect(p.style).toBe(render({}).style)
   })
 
-  it('L24：经回调的边在起点叠放回程钩（marker-start），与插座、箭头、线型互不替换', () => {
-    expect(render({}).w.find('.edge-hook').exists()).toBe(false)
-    const h = render({ callback: true })
-    expect(h.w.find('marker.callback-marker').exists()).toBe(true)
-    expect(h.w.find('.edge-hook').attributes('marker-start')).toContain('hook-')
-    expect(h.w.find('path.vue-flow__edge-path').attributes('marker-end')).toContain('arrow-')
+  it('L24（第十一轮）：经回调不画图形记号——不改线型、箭头，标签由画布场景写「回调」', () => {
+    const h = render({ callback: true, label: '回调' })
+    expect(h.w.find('marker.callback-marker').exists()).toBe(false)
+    expect(h.w.find('path.vue-flow__edge-path').attributes('marker-start')).toBeUndefined()
     expect(h.style).toBe(render({}).style)
-    // 未证实（虚线）又经端口又经回调：三个记号同时在
-    const all = render({ callback: true, port: true, factState: 'unconfirmed' })
-    expect(all.style).toContain('stroke-dasharray')
-    expect(all.w.find('.edge-hook').exists()).toBe(true)
-    expect(all.w.find('.edge-socket:not(.edge-hook)').exists()).toBe(true)
   })
 
-  it('L25：悬停的边加悬停晕（与选中晕可叠加），不改线宽与线型', () => {
-    expect(render({}).w.find('.edge-hover-glow').exists()).toBe(false)
-    const h = render({ hovered: true, selected: true })
-    expect(h.w.find('.edge-hover-glow').exists()).toBe(true)
+  it('L25（第十一轮）：悬停的边下垫背景色衬边（沿回缩后的走线、比线宽 4px）、线加粗一档且不透明；配对边只垫衬边、不加粗', () => {
+    expect(render({}).w.find('.edge-hover-casing').exists()).toBe(false)
+    const width = (d: Partial<RouteEdgeData>) => Number(render(d).style.match(/stroke-width: ([\d.]+)/)![1])
+    const h = render({ hovered: true, selected: true, type: 'queries' } as Partial<RouteEdgeData>)
+    const casing = h.w.find('.edge-hover-casing')
+    expect(casing.exists()).toBe(true)
+    expect(casing.classes()).not.toContain('pair')
     expect(h.w.find('.edge-selected-glow').exists()).toBe(true)
-    expect(render({ hovered: true }).style).toBe(render({}).style)
+    expect(width({ hovered: true })).toBe(width({}) + 1)
+    expect(Number(casing.attributes('stroke-width'))).toBe(width({ hovered: true }) + 4)
+    // 衬边走回缩后的线，不伸进节点（与主线同一条 path）
+    expect(casing.attributes('d')).toBe(h.w.find('path.vue-flow__edge-path').attributes('d'))
+    expect(h.style).toContain('opacity: 1')
+    const pair = render({ hoverPair: true })
+    expect(pair.w.find('.edge-hover-casing.pair').exists()).toBe(true)
+    expect(width({ hoverPair: true })).toBe(width({}))
   })
 
   it('线宽只按条数三档；选中与走过不改线宽，选中加窄晕', () => {

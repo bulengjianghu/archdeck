@@ -37,7 +37,7 @@ const fact = computed(() => desk.facts.report.value?.relations.get(props.id)?.st
     <span class="rel-chip" :class="`rel-${r.type}`" :title="r.type">{{ RELATION_TYPE_LABELS[r.type] }}</span>
     <span v-if="r.mode === 'async'" class="muted">异步</span>
     <code v-if="ifName" class="if">{{ ifName }}</code>
-    <span v-if="callback" class="hook" :title="callback">↩ 经回调</span>
+    <span v-if="callback" class="hook" :title="callback">回调</span>
     <span v-if="fact === 'confirmed'" class="fact ok" title="已被代码证实">✓</span>
     <span v-else-if="fact === 'unconfirmed'" class="fact" title="未被代码证实">?</span>
     <span v-if="firstSentence" class="summary" :title="r.description">{{ firstSentence }}</span>

@@ -2,7 +2,7 @@
 /**
  * 关系边与临时线（L10、ADR-0018、ADR-0029）：一个通道一个维度——
  * 颜色 = 关系类型（查询低饱和 + 半透明、委托实色、未分类中性灰）；线型 = 事实状态（实 / 虚 / 点）；箭头 = 同步实心、异步空心；
- * 插座 = 经端口（L12，目标端与箭头叠放）；回程钩 = 经回调（L24，起点端叠放）；线宽 = 聚合条数三档；标签 = ×N（pill）与异常；晕 = 违规（优先）/ 设计变更、选中（强调色窄晕）、回放当前（宽晕 + 流动）。
+ * 插座 = 经端口（L12，目标端与箭头叠放）；经回调 = 标签「回调」（L24）；线宽 = 聚合条数三档；标签 = ×N（pill）与异常；晕 = 违规（优先）/ 设计变更、选中（强调色窄晕）、回放当前（宽晕 + 流动）。
  * 时间耦合（J5）：灰色波浪线、无箭头、标 ×N；无依赖无关系的更深色。
  * 第八轮：束内修饰不一致标「混合」、悬停列出各条（D8）；结构视角选中束时它承载的交互临时画出、带强调色晕（L22 反向）；承载缺段为提示虚线（L22）。
  */
@@ -13,7 +13,6 @@ import type { Point } from '@/layout/layout'
 import { horizontalCurve, retractEnd, roundedPolyline, verticalCurve, wavyPath } from './routePath'
 import ArrowMarker from './ArrowMarker.vue'
 import SocketMarker from './SocketMarker.vue'
-import CallbackMarker from './CallbackMarker.vue'
 import { FLOW, arrowDepth, arrowSize, strokeColor, strokeStyle } from './edgeStyle'
 
 const props = defineProps<{ id: string; data: RouteEdgeData }>()
@@ -28,7 +27,10 @@ const draw = (pts: Point[]) => {
 
 const look = computed(() => ({ ...props.data, type: props.data.edge.type, isolated: props.data.couple?.isolated }))
 const color = computed(() => strokeColor(look.value))
-const style = computed(() => ({ ...strokeStyle(look.value), ...(props.data.temp ? {} : { transition: 'opacity 0.15s' }) }))
+const base = computed(() => ({ ...strokeStyle(look.value), ...(props.data.temp ? {} : { transition: 'opacity 0.15s' }) }))
+/** L25：悬停的边加粗一档、不透明度拉满（查询线悬停时也变实）；衬边比线宽 4px */
+const style = computed(() => (props.data.hovered ? { ...base.value, strokeWidth: Number(base.value.strokeWidth) + 1, opacity: 1 } : base.value))
+const casing = computed(() => (props.data.hovered || props.data.hoverPair ? Number(style.value.strokeWidth) + 4 : 0))
 /** 箭头大小随线宽档；线在箭头处回缩一个箭头深度（晕与红晕仍沿完整走线） */
 const size = computed(() => arrowSize(props.data.weight))
 const path = computed(() => draw(props.data.route.points))
@@ -39,16 +41,12 @@ const markerId = computed(() => `arrow-${props.id.replace(/[^\w-]/g, c => `_${c.
 /** L12：经端口的边在目标端加插座记号（沿完整走线的终点定向，与箭头叠放） */
 const socket = computed(() => !!props.data.port && !couple.value)
 const socketId = computed(() => `socket-${markerId.value.slice('arrow-'.length)}`)
-/** L24：经回调的边在起点（发起方一端）加回程钩 */
-const hook = computed(() => !!props.data.callback && !couple.value)
-const hookId = computed(() => `hook-${markerId.value.slice('arrow-'.length)}`)
 </script>
 
 <template>
   <defs>
     <ArrowMarker :id="markerId" :kind="data.arrow" :color="color" :size="size" :line-width="style.strokeWidth" />
     <SocketMarker v-if="socket" :id="socketId" :color="color" :size="size" />
-    <CallbackMarker v-if="hook" :id="hookId" :color="color" :size="size" />
   </defs>
   <path
     v-if="data.change && !data.violated"
@@ -62,7 +60,16 @@ const hookId = computed(() => `hook-${markerId.value.slice('arrow-'.length)}`)
     :opacity="data.dim ? 0.06 : 0.28"
   />
   <path v-if="data.violated && !data.temp" :d="path" class="edge-violated" fill="none" stroke-linecap="round" :opacity="data.dim ? 0.06 : 0.3" />
-  <path v-if="data.hovered" :d="path" class="edge-hover-glow" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+  <path
+    v-if="casing"
+    :d="linePath"
+    class="edge-hover-casing"
+    :class="{ pair: !data.hovered }"
+    fill="none"
+    :stroke-width="casing"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
   <path v-if="data.selected" :d="path" class="edge-selected-glow" fill="none" stroke-linecap="round" stroke-linejoin="round" />
   <path v-if="data.temp === 'carried'" :d="path" class="edge-carried-glow" fill="none" stroke-linecap="round" stroke-linejoin="round" />
   <path v-if="data.play === 'current' || data.play === 'hover'" :d="path" class="edge-glow" :class="data.play" fill="none" stroke-linecap="round" />
@@ -88,7 +95,6 @@ const hookId = computed(() => `hook-${markerId.value.slice('arrow-'.length)}`)
     />
   </g>
   <path v-if="socket" :d="path" class="edge-socket" fill="none" stroke="none" :opacity="style.opacity" :marker-end="`url(#${socketId})`" />
-  <path v-if="hook" :d="path" class="edge-socket edge-hook" fill="none" stroke="none" :opacity="style.opacity" :marker-start="`url(#${hookId})`" />
   <template v-if="data.play === 'current'">
     <path :d="linePath" class="edge-flow-base" fill="none" stroke-linecap="round" :stroke-width="FLOW.baseWidth" />
     <path
@@ -123,12 +129,15 @@ const hookId = computed(() => `hook-${markerId.value.slice('arrow-'.length)}`)
   opacity: 0.28;
 }
 
-/* L25：悬停——比选中晕宽、浅一档，与选中晕可叠加 */
-.edge-hover-glow {
+/* L25（第十一轮）：悬停——线下垫背景色衬边并加投影，线本身加粗一档、不透明；配对边（L24）只垫衬边、不加投影 */
+.edge-hover-casing {
   pointer-events: none;
-  stroke: var(--accent);
-  stroke-width: 10;
-  opacity: 0.2;
+  stroke: var(--surface);
+  filter: drop-shadow(0 1px 2.5px var(--hover-shadow));
+}
+
+.edge-hover-casing.pair {
+  filter: none;
 }
 
 /* 选中：强调色窄晕，与回放当前步骤的宽晕区分；线宽不变 */

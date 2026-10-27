@@ -76,29 +76,17 @@ const socket = computed(() => {
   const b = { x: c.x + uy * r, y: c.y - ux * r }
   return `M ${a.x} ${a.y} C ${a.x + ux * k} ${a.y + uy * k} ${b.x + ux * k} ${b.y + uy * k} ${b.x} ${b.y}`
 })
-/** L24：经回调的线在起点画回程钩（与画布同一记号的几何：从线上弯出半圆、折回指向起点的小箭头，在行进方向左侧） */
-const hook = computed(() => {
-  if (!props.data.callback) return ''
-  const p = ports.value
-  const from = p ? p.from : geo.value.from
-  const next = p ? { x: p.from.x + p.from.dir, y: p.from.y } : geo.value.to
-  const len = Math.hypot(next.x - from.x, next.y - from.y) || 1
-  const ux = (next.x - from.x) / len
-  const uy = (next.y - from.y) / len
-  const h = 4.5
-  // 局部坐标 (x 沿线, y 向左为负) → 画布坐标
-  const at = (x: number, y: number) => `${from.x + ux * x - uy * y} ${from.y + uy * x + ux * y}`
-  return `M ${at(2 * h, 0)} A ${h} ${h} 0 0 0 ${at(2 * h, -2 * h)} L ${at(0.5 * h, -2 * h)} M ${at(1.3 * h, -2.7 * h)} L ${at(0.5 * h, -2 * h)} L ${at(1.3 * h, -1.3 * h)}`
-})
 /** 拖动中的标签位置（松手才写回） */
 const dragging = ref<{ x: number; y: number } | null>(null)
 const label = computed(() => dragging.value ?? props.data.label ?? geo.value.mid)
 const many = computed(() => props.data.relationIds?.length ?? 0)
 const typeLabel = computed(() => (many.value ? `${many.value} 条关系（折叠显示）` : (RELATION_TYPE_LABELS[props.data.type as RelationType] ?? props.data.type)))
 /** 标签：聚合边标条数；写了说明的显示说明；没写的只在选中时显示类型（线多时不堆满画布） */
-const text = computed(() =>
-  props.data.external ? '' : many.value ? `${many.value} 条` : props.data.description || (props.data.selected ? typeLabel.value : ''),
-)
+/** L24（第十一轮）：经回调的线在标签前加「回调」 */
+const text = computed(() => {
+  const t = props.data.external ? '' : many.value ? `${many.value} 条` : props.data.description || (props.data.selected ? typeLabel.value : '')
+  return props.data.callback && !props.data.external ? [`回调`, t].filter(Boolean).join(' · ') : t
+})
 
 let start: { px: number; py: number; x: number; y: number } | null = null
 function onDown(e: PointerEvent) {
@@ -143,11 +131,10 @@ function onUp() {
     ]"
   >
     <path v-if="!data.external" :d="path" class="hit" />
-    <path v-if="data.hovered" :d="path" class="hover-glow" />
+    <path v-if="data.hovered" :d="path" class="hover-casing" />
     <path :d="path" class="line" />
     <polygon :points="arrow" class="head" />
     <path v-if="socket" :d="socket" class="socket" />
-    <path v-if="hook" :d="hook" class="socket" />
   </g>
   <EdgeLabelRenderer v-if="text">
     <div
@@ -172,13 +159,18 @@ function onUp() {
   stroke-width: 14;
 }
 
-/* L25：悬停的线——强调色宽晕 */
-.hover-glow {
+/* L25（第十一轮）：悬停的线——背景色衬边 + 投影，线加粗 */
+.hover-casing {
   fill: none;
-  stroke: var(--accent);
-  stroke-width: 10;
-  opacity: 0.2;
+  stroke: var(--surface);
+  stroke-width: 6;
+  stroke-linecap: round;
+  filter: drop-shadow(0 1px 2.5px var(--hover-shadow));
   pointer-events: none;
+}
+
+.sk-edge.hovered .line {
+  stroke-width: 2.5;
 }
 
 .line {

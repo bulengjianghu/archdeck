@@ -6,6 +6,7 @@ import {
   CARRIER_ROLE_TEXT,
   CARRIER_TEMPLATE_LABELS,
   CARRIER_VERDICT_LABELS,
+  callbackPairs,
   callbackText,
   isCallbackVia,
   moduleName,
@@ -126,14 +127,19 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined,
   const fact = ctx.facts?.edgeFacts.get(e.id)
   const state = factState(fact)
   // 运行视角下走过的边由步骤序号标注，不标条数；K9：异常标记跟在条数后；L23b：收起的交互束条数带把手数
-  const count = ctx.st && play.play ? '' : (extra.handles ?? edgeLabel(e))
+  const quiet = !!ctx.st && !!play.play
+  const count = quiet ? '' : (extra.handles ?? edgeLabel(e))
   const mark = state === 'unconfirmed' ? '?' : ''
-  // D8：束内同步 / 异步、via 不一致时加「混合」记号
-  const label = extra.label ?? [count, mark, extra.mixed ? '混合' : ''].filter(Boolean).join(' ')
-  const route = label && !route0.label ? { ...route0, label: routeMidpoint(route0) } : route0
-  // L24：经回调的关系在发起方一端画回程钩，悬停说明接在其余说明之后
+  // L24（第十一轮）：经回调写在标签位——单条「回调」，聚合边全部经回调「×N · 回调」、部分「×N · 回调 M」
   const callbacks = callbackRelations(ctx.input.index, e)
+  const cb = quiet || !callbacks.length ? '' : callbacks.length === e.relationIds.length || e.relationIds.length === 1 ? '回调' : `回调 ${callbacks.length}`
+  const head = [count, cb].filter(Boolean).join(' · ')
+  // D8：束内同步 / 异步、via 不一致时加「混合」记号
+  const label = extra.label ?? [head, mark, extra.mixed ? '混合' : ''].filter(Boolean).join(' ')
+  const route = label && !route0.label ? { ...route0, label: routeMidpoint(route0) } : route0
+  // L24：悬停说明接在其余说明之后；配对的正向关系供悬停时一起高亮（L25）
   const cbTitle = callbackTitle(ctx.input.index, callbacks, e.relationIds.length > 1)
+  const pairs = ctx.input.index ? [...new Set(callbacks.flatMap(id => callbackPairs(ctx.input.index!, id)))] : []
   const title = [extra.title, cbTitle].filter(Boolean).join('\n\n') || undefined
   return {
     id: core ? `core:${e.id}` : e.id,
@@ -145,7 +151,7 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined,
       route,
       edge: e,
       label,
-      ...(count ? { pill: true } : {}),
+      ...(head ? { pill: true } : {}),
       ...(mark ? { warn: true } : {}),
       factState: state,
       arrow: arrowOf(e),
@@ -162,6 +168,7 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined,
       ...play,
       ...extra,
       ...(callbacks.length ? { callback: true } : {}),
+      ...(pairs.length ? { callbackPairs: pairs } : {}),
       ...(title ? { title } : {}),
     },
   }

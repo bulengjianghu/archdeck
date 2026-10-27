@@ -1,6 +1,6 @@
 /** 画布场景 canvasScene（ADR-0013）：聚焦变淡（结构视角）、舞台显隐（V5、V8）、选中突出的灰化（R15、R16）、文件高亮（G14）、设计版本标记 */
 import { describe, expect, it } from 'vitest'
-import { diffModels, loadModel, planScenario, projectLevel, projectScenario, stageEnds } from '../../src/model'
+import { callbackPairs, callbackText, diffModels, loadModel, planScenario, projectLevel, projectScenario, stageEnds } from '../../src/model'
 import { layoutView } from '../../src/layout/layout'
 import { stageOverlay } from '../../src/layout/stage'
 import { EDGE_HOVER_Z, EDGE_Z, canvasScene, routeMidpoint, withEdgeHover, type CanvasInput } from '../../src/layout/canvas'
@@ -283,6 +283,8 @@ describe('canvasScene', () => {
     const s = canvasScene({ ...(await structure('infra')), index: idx, positioned: await layoutView(view) })
     const agg = edge(s, 'infra.player->infra.framework:commands')!
     expect(agg.data.callback).toBe(true)
+    // 第十一轮：标签位写字——聚合边部分经回调为「×N · 回调 M」
+    expect(agg.data.label).toBe('×2 · 回调 1')
     // 回程钩不改色相、线型与箭头（一个通道一个维度）
     expect(agg.data.edge.type).toBe('commands')
     expect(agg.data.arrow).toBe('closed')
@@ -293,6 +295,9 @@ describe('canvasScene', () => {
     const old = edge(s, 'infra.framework->infra.player:commands')!
     expect(old.data.callback).toBe(true)
     expect(old.data.title).toContain('契约未指明')
+    // 单条为「回调」；配对的正向关系 rcb（方向相反、写了接口的才算，这里 rcb 没写接口 → 无配对）
+    expect(old.data.label).toBe('回调')
+    expect(old.data.callbackPairs).toBeUndefined()
     expect(edge(s, 'infra.mus->infra.framework:commands')!.data.callback).toBeUndefined()
   })
 })
@@ -322,5 +327,29 @@ describe('L25 悬停边看两端', () => {
     expect(hit.data.selected).toBe(target.data.selected)
     expect(withEdgeHover(s.nodes, s.edges, null).edges).toEqual(s.edges)
     expect(withEdgeHover(s.nodes, s.edges, 'nope').nodes.every(n => !n.class?.includes('edge-end'))).toBe(true)
+  })
+})
+
+describe('L24 配对高亮（第十一轮）', () => {
+  it('回调关系的配对正向关系 = 方向相反、端点相同、写了接口；悬停回调边时配对边减一档（hoverPair）高亮，说明接「随 <接口> 交来」', async () => {
+    const { index: idx } = loadModel(
+      sampleFiles({
+        'z.yaml':
+          "relations:\n  - { id: rfw, from: infra.player, to: infra.framework, type: commands, interface: if.sm }\n  - { id: rback, from: infra.framework, to: infra.player, type: commands, via: 'channel:callback@infra.framework' }\n",
+      }),
+    )
+    expect(callbackPairs(idx, 'rback')).toEqual(['rfw'])
+    expect(callbackText(idx, 'rback')).toContain('随 sendCommand 交来')
+    const view = projectLevel(idx, 'infra', { showBoundaries: true })
+    const s = canvasScene({ ...(await structure('infra')), index: idx, positioned: await layoutView(view) })
+    const back = s.edges.find(e => e.id === 'infra.framework->infra.player:commands')!
+    expect(back.data.callbackPairs).toEqual(['rfw'])
+    const h = withEdgeHover(s.nodes, s.edges, back.id)
+    const fw = h.edges.find(e => e.data.edge.relationIds.includes('rfw'))!
+    expect(fw.data.hoverPair).toBe(true)
+    expect(fw.data.hovered).toBeUndefined()
+    expect(fw.zIndex).toBe(EDGE_HOVER_Z - 1)
+    // 悬停正向边不反过来高亮回调边
+    expect(withEdgeHover(s.nodes, s.edges, fw.id).edges.some(e => e.data.hoverPair)).toBe(false)
   })
 })

@@ -8,7 +8,6 @@ import { FLOW, arrowDepth, arrowSize, strokeColor, strokeStyle, type ArrowKind, 
 import { wavyPath } from '../edges/routePath'
 import ArrowMarker from '../edges/ArrowMarker.vue'
 import SocketMarker from '../edges/SocketMarker.vue'
-import CallbackMarker from '../edges/CallbackMarker.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -27,8 +26,6 @@ const props = withDefaults(
     mark?: string
     /** L12：经端口的插座记号（与箭头叠放） */
     socket?: boolean
-    /** L24：经回调的回程钩（起点端叠放） */
-    hook?: boolean
   }>(),
   { look: () => ({}), color: undefined, width: 28, arrow: undefined, mark: undefined },
 )
@@ -38,7 +35,6 @@ const stroke = computed(() => props.color ?? strokeColor(props.look))
 // <script setup> 每个实例都会重跑，模块级计数器在这里不唯一；用 useId 保证每条示意引用自己的箭头
 const markerId = `swatch-arrow-${useId()}`
 const socketId = `${markerId}-socket`
-const hookId = `${markerId}-hook`
 const size = computed(() => arrowSize(props.look.weight))
 /** 线的终点：给箭头、标签或标记留位置；有箭头时再回缩一个箭头深度，箭头尖落在 tip */
 const tip = computed(() => props.width - 1 - (props.pill ? 10 : 0) - (props.mark ? 7 : 0))
@@ -49,10 +45,9 @@ const wavy = computed(() => (props.look.temp === 'couple' ? wavyPath({ x: 1, y: 
 
 <template>
   <svg class="swatch" :width="width" height="10" :viewBox="`0 0 ${width} 10`">
-    <defs v-if="arrow || socket || hook">
+    <defs v-if="arrow || socket">
       <ArrowMarker v-if="arrow" :id="markerId" :kind="arrow" :color="stroke" :size="size" :line-width="style.strokeWidth" />
       <SocketMarker v-if="socket" :id="socketId" :color="stroke" :size="size" />
-      <CallbackMarker v-if="hook" :id="hookId" :color="stroke" :size="size" />
     </defs>
     <line v-if="halo" x1="1" y1="5" :x2="end" y2="5" stroke="var(--danger)" stroke-width="7" stroke-opacity="0.3" stroke-linecap="round" />
     <template v-if="flow">
@@ -84,7 +79,6 @@ const wavy = computed(() => (props.look.temp === 'couple' ? wavyPath({ x: 1, y: 
       :marker-end="arrow ? `url(#${markerId})` : undefined"
     />
     <line v-if="socket" x1="1" y1="5" :x2="tip" y2="5" stroke="none" :opacity="style.opacity" :marker-end="`url(#${socketId})`" />
-    <line v-if="hook" x1="1" y1="5" :x2="tip" y2="5" stroke="none" :opacity="style.opacity" :marker-start="`url(#${hookId})`" />
     <rect v-if="pill" :x="width - 10.5" y="1" width="10" height="8" rx="4" fill="var(--surface)" stroke="var(--border-strong)" />
     <text v-if="mark" :x="width - 6" y="9" class="mark">{{ mark }}</text>
   </svg>

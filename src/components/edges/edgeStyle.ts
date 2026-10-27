@@ -40,20 +40,6 @@ export function socketPath(size: number): string {
   return `M${cx},${-r} A${r},${r} 0 0 1 ${cx},${r}`
 }
 
-/**
- * L24 回程钩记号（ADR-0034）：叠放在走线起点（发起方一端）的「↩」——从线上弯出一个半圆、折回指向发起方的小箭头，
- * 说「这次调用经接收方交来的回调，代码依赖方向与箭头相反」。与插座同尺寸档；标记坐标的原点即走线起点，x 轴沿走线方向，钩在行进方向左侧。
- */
-export const callbackHookRadius = (size: number): number => socketRadius(size) * 0.5
-export function callbackPath(size: number): string {
-  const h = callbackHookRadius(size)
-  const f = (n: number) => +n.toFixed(2)
-  return [
-    `M${f(2 * h)},0 A${f(h)},${f(h)} 0 0 0 ${f(2 * h)},${f(-2 * h)} L${f(0.5 * h)},${f(-2 * h)}`,
-    `M${f(1.3 * h)},${f(-2.7 * h)} L${f(0.5 * h)},${f(-2 * h)} L${f(1.3 * h)},${f(-1.3 * h)}`,
-  ].join(' ')
-}
-
 /** 回放当前步骤：强调色底线上走一串浅色短点（P10） */
 export const FLOW = { baseWidth: 4, width: 1.6, dash: '3 9' } as const
 

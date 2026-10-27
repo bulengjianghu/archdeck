@@ -34,10 +34,22 @@ export function viaLabel(via: string, index?: ModelIndex): string {
 /** 规则种类的名称：门禁消息、命令行与页面共用 */
 export const RULE_LABELS: Record<RuleKind, string> = { layer: '层规则', deps: '依赖白名单', exposes: '访问面' }
 
-/** L24：经回调的一句说明——「<接收方> 把执行器交给 <发起方>，契约在 <契约模块>」（没写 @ 为「契约未指明」） */
+/**
+ * L24：经回调关系的配对正向关系——方向相反、端点相同、写了接口的关系（接收方调用发起方的那个操作时把执行器交过来）。
+ * 不是经回调的关系或找不到时为空
+ */
+export function callbackPairs(idx: ModelIndex, relationId: string): string[] {
+  const r = idx.relations.get(relationId)
+  if (!r) return []
+  return [...idx.relations.values()].filter(x => x.from === r.to && x.to === r.from && !!x.interface && x.id !== r.id).map(x => x.id)
+}
+
+/** L24：经回调的一句说明——「<接收方> 把执行器交给 <发起方>，契约在 <契约模块>」（没写 @ 为「契约未指明」），有配对正向关系时接「随 <接口名> 交来」 */
 export function callbackText(idx: ModelIndex, relationId: string): string {
   const r = idx.relations.get(relationId)
   if (!r) return relationId
   const contract = parseVia(r.via)?.contract
-  return `经回调：${moduleName(idx, r.to)} 把执行器交给 ${moduleName(idx, r.from)}，${contract ? `契约在 ${moduleName(idx, contract)}` : '契约未指明'}（代码依赖方向与箭头相反，L24）`
+  const via = callbackPairs(idx, relationId).map(id => idx.relations.get(id)!.interface!)
+  const names = [...new Set(via)].map(i => idx.interfaces.get(i)?.name ?? i)
+  return `经回调：${moduleName(idx, r.to)} 把执行器交给 ${moduleName(idx, r.from)}，${contract ? `契约在 ${moduleName(idx, contract)}` : '契约未指明'}${names.length ? `，随 ${names.join('、')} 交来` : ''}（代码依赖方向与箭头相反，L24）`
 }

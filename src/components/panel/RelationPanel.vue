@@ -87,7 +87,7 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
         <span class="rel-chip" :class="`rel-${r.type}`">{{ RELATION_TYPE_LABELS[r.type] }}</span>
         <span v-if="runtime" class="badge">{{ mode }}</span>
         <span v-if="r.type === 'streams' && r.pull" class="badge">拉取</span>
-        <span v-if="r.via" class="badge via" :title="viaTitle">{{ isCallbackVia(r.via) ? '↩ ' : '' }}经 {{ viaText }}</span>
+        <span v-if="r.via" class="badge via" :title="viaTitle">经 {{ viaText }}</span>
         <button v-if="couple" class="badge couple" title="两端是时间耦合：单击看共同的提交（J7）" @click="desk.select({ kind: 'couple', id: couple.id })">
           同提交 ×{{ couple.shared }}
         </button>

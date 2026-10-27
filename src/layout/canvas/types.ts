@@ -196,12 +196,16 @@ export interface RouteEdgeData {
   weight: 1 | 2 | 3
   /** L12：边上有一条经端口（via: port:）的关系——目标端画插座记号 */
   port?: boolean
-  /** L24：边上有一条经回调（via: channel:callback）的关系——发起方一端画回程钩 */
+  /** L24：边上有经回调（via: channel:callback）的关系——标签位写「回调」 */
   callback?: boolean
+  /** L24：经回调关系配对的正向关系 ID（悬停时这些关系所在的边减一档高亮，L25） */
+  callbackPairs?: string[]
   /** 选中：强调色窄晕，不改线宽 */
   selected: boolean
-  /** L25：鼠标悬停——悬停晕、提到最上层（画布局部状态，GraphCanvas 叠加） */
+  /** L25：鼠标悬停——衬边 + 投影、线加粗、提到最上层（画布局部状态，GraphCanvas 叠加） */
   hovered?: boolean
+  /** L24、L25：悬停回调边时它配对的正向边——减一档（只垫衬边） */
+  hoverPair?: boolean
   dim: boolean
   /** 核心跨层边，只在悬停/选中时出现 */
   core?: boolean

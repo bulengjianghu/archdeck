@@ -21,7 +21,10 @@ const draw = (pts: Point[]) => {
   if (c && pts.length === 2) return c === 'h' ? horizontalCurve(pts[0], pts[1]) : verticalCurve(pts[0], pts[1])
   return roundedPolyline(pts, 8, props.data.jumps)
 }
-const style = computed(() => ({ ...depStroke({ ...look.value, weight: props.data.weight, dim: props.data.dim }), transition: 'opacity 0.15s' }))
+const base = computed(() => ({ ...depStroke({ ...look.value, weight: props.data.weight, dim: props.data.dim }), transition: 'opacity 0.15s' }))
+/** L25：悬停的边加粗一档、不透明度拉满；衬边比线宽 4px */
+const style = computed(() => (props.data.hovered ? { ...base.value, strokeWidth: Number(base.value.strokeWidth) + 1, opacity: 1 } : base.value))
+const casing = computed(() => (props.data.hovered ? Number(style.value.strokeWidth) + 4 : 0))
 const size = computed(() => arrowSize(props.data.weight) + (look.value.kind === 'subclass' || look.value.kind === 'implements' ? 2 : 0))
 /** C3：越过入口的元素级边在终点画一个小叉（接到节点本体，没有经过入口） */
 const bypassAt = computed(() => {
@@ -71,7 +74,7 @@ const safe = computed(() => props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)
       stroke-linejoin="round"
       :opacity="data.dim ? 0.06 : undefined"
     />
-    <path v-if="data.hovered" :d="path" class="edge-hover-glow" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    <path v-if="casing" :d="linePath" class="edge-hover-casing" fill="none" :stroke-width="casing" stroke-linecap="round" stroke-linejoin="round" />
     <path v-if="data.selected" :d="path" class="edge-selected-glow" fill="none" stroke-linecap="round" stroke-linejoin="round" />
     <g :class="{ 'edge-label-warn': data.warn, 'dep-label-soft': !data.warn }">
       <BaseEdge
@@ -121,12 +124,11 @@ const safe = computed(() => props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)
   opacity: 0.25;
 }
 
-/* L25：悬停——比选中晕宽、浅一档，与选中晕可叠加 */
-.edge-hover-glow {
+/* L25（第十一轮）：悬停——线下垫背景色衬边并加投影，线本身加粗一档、不透明；配对边（L24）只垫衬边、不加投影 */
+.edge-hover-casing {
   pointer-events: none;
-  stroke: var(--accent);
-  stroke-width: 10;
-  opacity: 0.2;
+  stroke: var(--surface);
+  filter: drop-shadow(0 1px 2.5px var(--hover-shadow));
 }
 
 .edge-selected-glow {

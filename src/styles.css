@@ -10,6 +10,8 @@
   --text-3: #808a99;
   --accent: #2f6fe4;
   --accent-soft: #e6eefc;
+  /* L25：悬停边衬边的投影（暗色主题为浅色外发光） */
+  --hover-shadow: rgba(15, 23, 42, 0.38);
   --danger: #c93a3a;
   --danger-soft: #fbeaea;
   --warning: #a86a0a;
@@ -80,6 +82,7 @@
     --text-3: #7a8394;
     --accent: #6b9cf5;
     --accent-soft: #1f2d48;
+    --hover-shadow: rgba(255, 255, 255, 0.32);
     --danger: #ef7a7a;
     --danger-soft: #3a2224;
     --warning: #e2a646;
