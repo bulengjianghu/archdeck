@@ -15,6 +15,7 @@ interface ViewState {
   toggles: Toggles                   // showBoundaries · currentOnly · relationTypes · showDiff · compareTo · showFacts（代码事实叠加，K9）
   playback: PlaybackState | null     // null = 结构 / 交互视角（按 mode）
   mode?: 'structure'                 // 不开场景时的画布模式：'structure' 为结构视角，缺省（不写）为交互视角；URL `v=s`（V11）
+  impactQuery?: ImpactQuery | null   // 影响面查询（K15b，ADR-0037）：一次性，选中或视角一变即去掉；不进 URL
 }
 
 interface PlaybackState {
@@ -54,7 +55,8 @@ URL 与此一致，编码不需区分：选中步骤时只有 `step`；选中场
 
 源码（文件清单、归属）与代码事实（文件依赖、基线、拦截记录）不是视图状态：它们是关于被描述系统的数据，像模型索引一样由协调者持有、由源码同步取得。副栏的页签与预览文件只属于那块界面，留在呈现层（G15）。
 
-- **结构视角的显示偏好**（ADR-0031、ADR-0032）：`useDisplayPrefs` 按项目记在本地、不进视图状态与 URL，画布与面板共用一份——第七轮 `typeOnly`（只引类型显示）、`impactMode`（影响面方向）、`valuesOnly`（只看值依赖）（L19a）；第八轮另加 `invokesOnly`（只看交互使用，缺省关）、`uncoveredOnly`（只看未解释，缺省关）、`surfaceAlways`（总是展开表面，缺省关）（L21、L20）；`surfaceAlways` 经意图 `setSurfaceAlways` 交给 DeskState（表面展开并进布局同步），其余三个开关作为 `structureDisplay(filter)` 的参数。表面展开（选中模块或交互时，L20、L23；选中束不展开）由选中推出，不是独立的状态；展开引起的本层重排不属于视角切换（V12）。表面元素没有自己的选中种类，单击元素即选中其模块并请求面板定位到该元素（`focusSurfaceElement`，呈现层的一次浏览提示，不进视图状态与 URL，L20④）。
+- **影响面查询**（ADR-0037，K15b①）：`ViewState.impactQuery`（`{ mode: 'in' | 'out' | 'both'; types?: true }`，没有即「不看」）是会话里的一次性查询，不是偏好——动作 `queryImpact` 只在结构视角、选中模块时生效；`transition` 在每个动作之后统一检查，选中（种类或 ID）或视角变了就去掉它（S2-1），所以换选中、取消选中、切换视角、下钻都回到「不看」；不进 URL、不记在本地，刷新即无。画布与面板都只读它。
+- **结构视角的显示偏好**（ADR-0031、ADR-0032）：`useDisplayPrefs` 按项目记在本地、不进视图状态与 URL，画布与面板共用一份——第七轮 `typeOnly`（只引类型显示）、`valuesOnly`（只看值依赖；第十一轮起只作用于指标与逆稳定，影响面查询有自己的「含只引类型」）（L19a；第七轮的 `impactMode` 第十一轮改为上面的 `impactQuery`，本地记着的旧值忽略）；第八轮另加 `invokesOnly`（只看交互使用，缺省关）、`uncoveredOnly`（只看未解释，缺省关）、`surfaceAlways`（总是展开表面，缺省关）（L21、L20）；`surfaceAlways` 经意图 `setSurfaceAlways` 交给 DeskState（表面展开并进布局同步），其余三个开关作为 `structureDisplay(filter)` 的参数。表面展开（选中模块或交互时，L20、L23；选中束不展开）由选中推出，不是独立的状态；展开引起的本层重排不属于视角切换（V12）。表面元素没有自己的选中种类，单击元素即选中其模块并请求面板定位到该元素（`focusSurfaceElement`，呈现层的一次浏览提示，不进视图状态与 URL，L20④）。
 - **端口、组装与场景类别**（ADR-0029、ADR-0030）：选中多一种「端口」（`sel=p:<接口 ID>`，L13、V2）；「组装」叠加开关同热度开关，按项目记在本地、不进 URL（O12）；场景列表的「主流程 / 全部」切换记在本地（R17）。
 
 ## 2. 协调者：DeskState

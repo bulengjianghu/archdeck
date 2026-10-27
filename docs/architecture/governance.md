@@ -240,7 +240,7 @@ interface SketchCheck { sketch: string; design?: string; deviations: SketchDevia
 - MCP 服务器经 stdio 通信，stdout 只留给协议；日志写 stderr。
 - 接入：在 agent 的 MCP 配置里加入 `npm --prefix <本包路径> run -s arch:mcp`；本包根目录的 `.mcp.json` 是示例（在本仓库里自举）。
 
-**结构查询**（ADR-0031）：命令行 `impact <模块> [--direction in|out] [--values-only]` 与 MCP 工具 `impact` 返回影响面（K15）与该模块的 Ca / Ce / I（K16），`metrics` 返回本层或全系统的指标（Q14）；只读，不写拦截记录。
+**结构查询**（ADR-0031）：命令行 `impact <模块> [--direction in|out] [--values-only]` 与 MCP 工具 `impact` 返回影响面（K15；传入闭包的模块带 `possible` 即可能波及，K15d）与该模块的 Ca / Ce / I（K16），`metrics` 返回本层或全系统的指标（Q14）；只读，不写拦截记录。
 
 ## 6. 运行时序
 
@@ -263,7 +263,7 @@ sequenceDiagram
 
 ## 7. 页面
 
-**结构视角的派生**（ADR-0031）：DeskState 的 `facts` 分组在结构视角下另派生本层的结构视图 `structure`（有代码事实时为 `levelDeps`，否则为允许依赖图）、全系统指标 `metrics` / `valueMetrics` 与模块明细 `metricsOf`、模块的影响面 `impactOf`，以及面板用的 `edgeFiles`、`againstOf`、`isolatedOf`，与 `levelFacts` 同源；`levelFacts` 在交互视角「代码事实」开启时与结构视角下给出（结构视角只用其中的本层环，Y4、Y5）。
+**结构视角的派生**（ADR-0031）：DeskState 的 `facts` 分组在结构视角下另派生本层的结构视图 `structure`（有代码事实时为 `levelDeps`，否则为允许依赖图）、全系统指标 `metrics` / `valueMetrics` 与模块明细 `metricsOf`、模块的影响面 `impactOf`（传入闭包按 `cuttableDep` 标可能波及，K15d）以及面板用的 `edgeFiles`、`againstOf`、`isolatedOf`，与 `levelFacts` 同源；`levelFacts` 在交互视角「代码事实」开启时与结构视角下给出（结构视角只用其中的本层环，Y4、Y5）。
 
 - `source/<项目>/facts.json`：`{ deps, baseline, ledger }`（拦截记录取最近 2000 行）；源码清单读取失败时 404，事实状态为 `error` 并带原因（K8、G1）。
 - DeskState 的 `facts` 分组：源码清单就绪后取事实；`report = governanceReport(…)`；`level = levelFacts(…)`（只在交互视角、「代码事实」开启时用于画布，开关缺省开启；违规只取基线外的，K9）；`selectedCycle`：选中的模块（本层节点或边界节点）所在的本层环（Y5）；返工清单（`desk.rework`，与描述、归属一起汇总）进问题页签（U9、W-6）。「刷新源码」同时重新取事实。
