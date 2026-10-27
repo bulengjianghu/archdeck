@@ -5,11 +5,8 @@
 import { expect, test, type Page } from '@playwright/test'
 import { graphNode, openDesk, query } from './helpers'
 
-/** 结构边是否变淡：DepEdge 变淡时线的不透明度降到 0.12 */
-const faded = (page: Page, id: string) =>
-  page
-    .locator(`.vue-flow__edge-dep[data-id="${id}"] path`)
-    .evaluateAll(ps => ps.some(p => Number(getComputedStyle(p).opacity) < 0.5 && Number(getComputedStyle(p).opacity) > 0))
+/** 结构边是否变淡：DepEdge 变淡时线的不透明度降到 0.12（同 structure-view.spec） */
+const faded = async (page: Page, id: string) => (await page.locator(`.vue-flow__edge-dep[data-id="${id}"] path[style*="opacity: 0.12"]`).count()) > 0
 const nodeFaded = (page: Page, id: string) => graphNode(page, id).locator('.dim').count()
 const marks = (page: Page) => page.getByTestId('impact-mark')
 const choice = (page: Page, c: 'none' | 'in' | 'out' | 'both') => page.locator(`.module-structure .segmented button[data-choice="${c}"]`)
