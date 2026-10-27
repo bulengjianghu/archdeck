@@ -22,9 +22,9 @@ scenario:
             - return: {id: rejected, from: kit.kernel.queue, to: kit.facade.player-api, label: '{accepted: false, reason}'}
         - when: stop
           steps:
-            - async: {id: stop, from: kit.kernel.queue, to: kit.kernel.release, label: closeSession(stop)}
-            - async: {from: kit.kernel.release, to: providers.self-clocked.session, relation: rel.kit.release-self-clocked, label: pipeline.stop()}
-            - call: {from: kit.kernel.release, to: kit.kernel.envelope, label: 'session-closed {type: stop}'}
+            - async: {id: stop, from: kit.kernel.queue, to: kit.kernel.lifecycle, label: closeSession(stop)}
+            - async: {from: kit.kernel.lifecycle, to: providers.self-clocked.session, relation: rel.kit.lifecycle-stop-self-clocked, label: pipeline.stop()}
+            - call: {from: kit.kernel.lifecycle, to: kit.kernel.envelope, label: 'session-closed {type: stop}'}
         - when: play / pause / seek 被接受
           steps:
             - call: {id: apply, from: kit.kernel.queue, to: kit.kernel.state, label: playSession / pauseSession / 记下 seek}

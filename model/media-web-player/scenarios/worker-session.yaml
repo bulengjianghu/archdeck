@@ -14,7 +14,7 @@ scenario:
     - media-wasm/tests/worker-contract.test.mjs
     - media-sdk-kits/tests/kernel.test.mjs
   steps:
-    - call: {id: start, from: kit.kernel.open, to: providers.self-clocked.family, relation: rel.kit.open-self-clocked, label: "startPipeline({threading: 'worker', …})"}
+    - call: {id: start, from: kit.kernel.lifecycle, to: providers.self-clocked.family, relation: rel.kit.lifecycle-start-self-clocked, label: "startPipeline({threading: 'worker', …})"}
     - call: {from: providers.self-clocked.family, to: providers.self-clocked.worker-client, label: 'startWorkerPipeline(预热的 Worker, 新画布, start)'}
     - async: {from: providers.self-clocked.worker-client, to: providers.self-clocked.audio, label: createWorkletNode / connectOutputPort}
     - async: {id: post-start, from: providers.self-clocked.worker-client, to: providers.self-clocked.worker-host, label: 'postMessage start {module, canvas, audio.port}（转交）'}

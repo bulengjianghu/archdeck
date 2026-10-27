@@ -60,17 +60,20 @@ modules:
       - screenshot 也排队（抓的是它之前那些命令之后的会话），但编码不占队列。
     provides: [if.kit.kernel.createPlayerKernel, if.kit.kernel.PlayerKernel]
 
-  - id: kit.kernel.open
+  - id: kit.kernel.lifecycle
     parent: kit.kernel
-    name: 会话打开与路线
+    name: 会话生命周期
     kind: component
     responsibility: >-
-      打开一个会话：按容器、route 与已排除的路线解析出族与路线（WebCodecs 失败过即排除），检查延迟硬上限与元素路线的互斥，
-      分配代号与会话号、发 session-opened，再交给所选族的 startPipeline；订阅页面可见性与系统媒体键。接续一个关闭的会话时
-      （Worker 失败交回主线程、失败后 play）带上续播点与 liveStart。
+      一个会话从打开到关闭：打开时向路线策略要族与路线（排除集由内核给：WebCodecs 失败过即排除，带密钥即排除 native），
+      要不到或延迟硬上限与元素路线互斥即失败；分配代号与会话号、发 session-opened，交给所选族的 startPipeline，订阅页面可见性与系统媒体键。
+      关闭时先标记关闭（之后的回报丢弃），按获取的逆序释放，管线 stop 超过 PIPELINE_STOP_TIMEOUT_MS（按宿主时钟，页面隐藏也计）即 terminate；
+      释放的异常报在会话上而不挡队列；最后记会话级遥测、发 session-closed。接续一个关闭的会话（Worker 失败交回主线程、失败后 play）时带上续播点、liveStart 与系统暂停。
     principle: |
-      - 无路线、Worker 不可用、startPipeline 抛错都不在这里抛：入队一个 failed，由队列按序关闭会话。
-      - 续播点 `resumePoint`：直播在边缘时不带；有墙钟就按墙钟 seek，否则只有点播按位置 seek。
+      - 获取即登记：每拿到一项资源（管线、可见性订阅、媒体键订阅）就把它的释放放到 `releases` 栈顶；关闭只按栈依次执行，不认识具体资源——新增一种会话资源只改打开这一侧。
+      - 关闭把接续交给下一次打开（`Continuation`）：续播点 `resumePoint` 直播在边缘时不带，有墙钟就按墙钟 seek，否则只有点播按位置 seek。
+      - 无路线、Worker 不可用、startPipeline 抛错都不在打开时抛：入队一个 failed，由队列按序关闭会话。
+      - 路线怎么选不在这里：各容器的顺序、跳过排除项、延迟硬上限能否用于该路线都归路线策略。
 
   - id: kit.kernel.state
     parent: kit.kernel
@@ -91,14 +94,6 @@ modules:
     principle: |
       - 信封：`{…body, sessionId, sequence: s.sequence++, timestampMs: 单调取整, generation}`，事件顺序契约由会话规则机检。
       - 遥测只在有订阅时拆（`telemetry.size > 0`）。
-
-  - id: kit.kernel.release
-    parent: kit.kernel
-    name: 会话关闭与释放
-    kind: component
-    responsibility: >-
-      关闭会话：先标记关闭（之后的回报丢弃），按获取的逆序释放（管线、可见性与媒体键订阅、屏幕常亮），管线 stop 超过
-      PIPELINE_STOP_TIMEOUT_MS（按宿主时钟，页面隐藏也计）即 terminate；释放的异常报在会话上而不挡队列；最后记会话级遥测、发 session-closed。
 
   # ───────────────────────── kit.session（概念子模块，同在 session.ts） ─────────────────────────
   - id: kit.session.contract
@@ -199,27 +194,27 @@ relations:
     interface: if.share.core.MediaFault
     description: 门面在没有任何管线族时构造 invalid-argument 的 MediaFault。
   # 内核内部（概念拆分，同文件）
-  - id: rel.kit.queue-open
+  - id: rel.kit.queue-open-session
     from: kit.kernel.queue
-    to: kit.kernel.open
+    to: kit.kernel.lifecycle
     type: commands
     description: 施用 open（及失败后的 play、Worker 交回）时打开新会话。
+  - id: rel.kit.queue-close-session
+    from: kit.kernel.queue
+    to: kit.kernel.lifecycle
+    type: commands
+    mode: async
+    description: 施用 stop / open / failed / ended / destroy 时关闭当前会话，等释放完成再施用下一项。
   - id: rel.kit.queue-state
     from: kit.kernel.queue
     to: kit.kernel.state
     type: commands
     description: 施用 play / pause / seek / 媒体键等命令时改状态与意图并下发管线命令。
-  - id: rel.kit.queue-release
-    from: kit.kernel.queue
-    to: kit.kernel.release
-    type: commands
-    mode: async
-    description: 施用 stop / open / failed / ended / destroy 时关闭当前会话，等释放完成再施用下一项。
-  - id: rel.kit.open-envelope
-    from: kit.kernel.open
+  - id: rel.kit.lifecycle-envelope
+    from: kit.kernel.lifecycle
     to: kit.kernel.envelope
     type: commands
-    description: 打开会话时为它建 PipelineSink（sinkFor）交给管线，并发 session-opened。
+    description: 打开会话时为它建 PipelineSink（sinkFor）交给管线并发 session-opened；关闭时经信封发 error 与 session-closed，并记会话级遥测（卡顿、意图时长、冻结）。
   - id: rel.kit.envelope-queue
     from: kit.kernel.envelope
     to: kit.kernel.queue
@@ -236,11 +231,6 @@ relations:
     to: kit.kernel.envelope
     type: commands
     description: 状态与意图的变化经信封发给宿主（state、playback-mode、visibility、audio-blocked、log）。
-  - id: rel.kit.release-envelope
-    from: kit.kernel.release
-    to: kit.kernel.envelope
-    type: commands
-    description: 关闭会话时经信封发 error 与 session-closed，并记会话级遥测（卡顿、意图时长、冻结）。
   - id: rel.kit.visibility-callback
     from: kit.facade.browser-platform
     to: kit.kernel.state
@@ -260,8 +250,8 @@ relations:
     type: queries
     interface: if.kit.session.commandRejection
     description: 每条命令到队首时查接受表，得出拒绝原因或接受。
-  - id: rel.kit.open-routes
-    from: kit.kernel.open
+  - id: rel.kit.lifecycle-routes
+    from: kit.kernel.lifecycle
     to: kit.session.routes
     type: queries
     interface: if.kit.session.resolveRoute
@@ -279,16 +269,16 @@ relations:
     interface: if.pipeline.latency.validateLatencyConfig
     description: 接受表校验 open 的延迟配置（validateLatencyConfig），不合法即 invalid-argument。
   # 内核 → 管线族（经端口）
-  - id: rel.kit.open-self-clocked
-    from: kit.kernel.open
+  - id: rel.kit.lifecycle-start-self-clocked
+    from: kit.kernel.lifecycle
     to: providers.self-clocked
     type: commands
     interface: if.pipeline.contract.Pipelines
     via: port:if.pipeline.contract.Pipelines
     payload: ds.PipelineStart
     description: 内核把会话交给自建时钟族启动管线（startPipeline），带代号、路线、源、选项、liveStart 与 sink。
-  - id: rel.kit.open-element
-    from: kit.kernel.open
+  - id: rel.kit.lifecycle-start-element
+    from: kit.kernel.lifecycle
     to: providers.element
     type: commands
     interface: if.pipeline.contract.Pipelines
@@ -311,16 +301,16 @@ relations:
     via: port:if.pipeline.contract.Pipeline
     payload: ds.PipelineCommand
     description: 内核向元素族的会话管线下发同一组命令。
-  - id: rel.kit.release-self-clocked
-    from: kit.kernel.release
+  - id: rel.kit.lifecycle-stop-self-clocked
+    from: kit.kernel.lifecycle
     to: providers.self-clocked
     type: commands
     mode: async
     interface: if.pipeline.contract.Pipeline
     via: port:if.pipeline.contract.Pipeline
     description: 关闭会话时让自建时钟族的管线释放（stop），超时则终止（terminate，Worker 模式即终止 Worker）。
-  - id: rel.kit.release-element
-    from: kit.kernel.release
+  - id: rel.kit.lifecycle-stop-element
+    from: kit.kernel.lifecycle
     to: providers.element
     type: commands
     mode: async
@@ -334,7 +324,14 @@ relations:
     type: commands
     interface: if.kit.kernel.PlayerAdapters
     via: port:if.kit.kernel.PlayerAdapters
-    description: 会话打开时经注入的适配器订阅页面可见性与系统媒体键，读可见性判定看不见即保持；音量命令经适配器交给门面设增益与族音量。
+    description: 经注入的适配器读可见性判定看不见即保持；音量命令经适配器交给门面设增益与族音量。
+  - id: rel.kit.lifecycle-adapters
+    from: kit.kernel.lifecycle
+    to: kit.facade.browser-platform
+    type: commands
+    interface: if.kit.kernel.PlayerAdapters
+    via: port:if.kit.kernel.PlayerAdapters
+    description: 打开会话时经注入的适配器订阅页面可见性与系统媒体键（返回的退订登记进释放栈），关闭时退订。
   - id: rel.kit.state-screen-wake
     from: kit.kernel.state
     to: kit.page.screen-wake
@@ -343,7 +340,7 @@ relations:
     via: port:if.kit.kernel.PlayerAdapters
     description: 会话播放时经注入的适配器持有屏幕常亮（screenWake.hold），停下时释放；拒绝报告回到会话的 warn 日志。
   - id: rel.kit.kernel-clock
-    from: kit.kernel.release
+    from: kit.kernel.lifecycle
     to: kit.page.audio
     type: queries
     interface: if.kit.kernel.PlayerAdapters

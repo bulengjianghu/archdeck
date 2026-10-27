@@ -23,14 +23,14 @@ scenario:
     - alt:
         - when: 有正在跑的会话
           steps:
-            - async: {id: replace, from: kit.kernel.queue, to: kit.kernel.release, label: closeSession(replaced)：等旧管线释放}
+            - async: {id: replace, from: kit.kernel.queue, to: kit.kernel.lifecycle, label: closeSession(replaced)：等旧管线释放}
         - when: 没有会话
           steps: []
-    - call: {id: session, from: kit.kernel.queue, to: kit.kernel.open, label: 'openSession(source, options)'}
-    - call: {from: kit.kernel.open, to: kit.session.routes, interface: if.kit.session.resolveRoute, label: 'resolveRoute(flv, auto, families.routes)'}
-    - return: {from: kit.session.routes, to: kit.kernel.open, label: '{family: 自建时钟族, route: webcodecs}'}
-    - call: {from: kit.kernel.open, to: kit.kernel.envelope, label: sinkFor(s)，发 session-opened}
-    - call: {id: start, from: kit.kernel.open, to: providers.self-clocked.family, relation: rel.kit.open-self-clocked, label: 'startPipeline({generation, threading, route, source, options, sink})'}
+    - call: {id: session, from: kit.kernel.queue, to: kit.kernel.lifecycle, label: 'openSession(source, options)'}
+    - call: {from: kit.kernel.lifecycle, to: kit.session.routes, interface: if.kit.session.resolveRoute, label: 'resolveRoute(flv, auto, families.routes)'}
+    - return: {from: kit.session.routes, to: kit.kernel.lifecycle, label: '{family: 自建时钟族, route: webcodecs}'}
+    - call: {from: kit.kernel.lifecycle, to: kit.kernel.envelope, label: sinkFor(s)，发 session-opened}
+    - call: {id: start, from: kit.kernel.lifecycle, to: providers.self-clocked.family, relation: rel.kit.lifecycle-start-self-clocked, label: 'startPipeline({generation, threading, route, source, options, sink})'}
     - alt:
         - when: threading 解析为 worker
           steps:
