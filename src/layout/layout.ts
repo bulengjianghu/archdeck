@@ -5,13 +5,15 @@
  * - 手工走线与边界（routes.ts）、几何类型（geometry.ts）。
  * 并集布局（L15，第七轮 T6）：交互边与结构边（StructureLinks）一起交给布局，节点位置由两组边共同决定、每条边都由同一个走线器走线；
  * 两个视角共用这一份布局（V12 由构造保证），各自只画自己那组边。
+ * 表面展开（L20②、L20a②，ADR-0036）不进 elk：先取收起态的布局（去掉 expand / interactions，同一缓存），再在固定的节点上排端口点、给接到点的边走线（dots.ts）。
  * 结果按视图内容与结构边缓存，同样的输入得到同样的输出。
  */
 import type { ElementKind, LevelView, ViewEdge } from '@/model'
 import { DEFAULT_BAND_COLUMNS, layoutLayered } from './layered'
 import { layoutGraph } from './graph'
 import { compassOf } from './routes'
-import { restEdgeId, spreadEdgeId, type LayoutExpansion, type LayoutOptions, type PositionedView } from './geometry'
+import { spreadEdgeId, type LayoutExpansion, type LayoutOptions, type PositionedView } from './geometry'
+import { expandSurface } from './dots'
 
 export * from './geometry'
 export { BAND, DEFAULT_BAND_COLUMNS, bandColumnsFor, bandShelfTop, coreHandleBadges, layoutLayered, moreChipId } from './layered'
@@ -56,7 +58,7 @@ export interface ElementLink extends StructureLink {
 }
 
 /**
- * C6、L20、L23：一个展开表面的节点——元素作为 elk 端口排在入边一侧（按序），散开哪些依赖方 / 发起方节点的束（null 为全部）；
+ * C6、L20、L23：一个展开表面的节点——元素作为端口点排在入边一侧（按序），散开哪些依赖方 / 发起方节点的束（null 为全部）；
  * 交互束按接收方表面散开（D7）的去向在 interactions 里（视图边 → 它的关系接到的元素）。
  */
 export interface SurfaceExpand {
@@ -65,6 +67,10 @@ export interface SurfaceExpand {
   from: readonly string[] | null
   /** 端口封顶后没画成端口的元素数（「+N 个元素」，边接到节点本体） */
   more?: number
+  /** L20b：元素所属的子模块组（与 elements 对齐，组号为子模块的声明顺序，本体为 null）；不分组时不给 */
+  groups?: readonly (number | null)[]
+  /** L20a②：元素的优先次序（交互接到的 → 使用者数 → 名字）；入边一侧放不下时从末尾截掉 */
+  ranked?: readonly string[]
 }
 
 /**
@@ -97,46 +103,34 @@ export function spreadBundles(links: StructureLinks | null | undefined): Set<str
 /**
  * 并集视图：结构边并入视图边——普通层次与架上共用件相连的并入共用件的边（O10，不参与 elk），其余并入视图边（内部边由 elk 走线、
  * 框外边在内部节点上占端口）；分层总览的跨层依赖并入核心跨层边（O4）。同一对节点同方向的交互边与结构边各保留自己的边 ID。
- * C6：被散开的束换成它的元素级边；D7：散开的交互束另加接到元素的一段（原视图边保留，接没写接口的）。
+ * 只用收起态的束：表面展开不进 elk（L20a②），元素级边与散开段的走线由 dots.ts 在布局结果上补。
  */
 export function unionView(view: LevelView, links: StructureLinks | null | undefined): LevelView {
   if (!links || (!links.edges.length && !links.core?.length)) return view
   const shelf = new Set(view.shelf ?? [])
   const onShelf = (e: StructureLink) => shelf.has(e.from) || shelf.has(e.to)
-  const spread = view.mode === 'layered' ? new Set<string>() : spreadBundles(links)
-  // C6：散开的束——接到元素端口的元素级边各一条，其余（端口封顶外、越过入口、整模块）合成一条接到节点本体
-  const ports = new Map((links.expand ?? []).map(x => [x.node, new Set(x.elements)]))
-  const rest = new Map<string, StructureLink>()
-  const own: StructureLink[] = []
-  for (const e of links.elements ?? []) {
-    if (!spread.has(e.bundle)) continue
-    if (e.element && ports.get(e.to)?.has(e.element)) own.push(e)
-    else if (!rest.has(e.bundle)) rest.set(e.bundle, { id: restEdgeId(e.bundle), from: e.from, to: e.to })
-  }
-  const structural = [...links.edges.filter(e => !spread.has(e.id)), ...own, ...rest.values()]
-  const byId = new Map(view.edges.map(e => [e.id, e]))
-  const fanned = (view.mode === 'layered' ? [] : (links.interactions ?? [])).flatMap(x => {
-    const e = byId.get(x.edge)
-    return e ? x.elements.map(el => ({ id: spreadEdgeId(e.id, el), from: e.from, to: e.to })) : []
-  })
   return {
     ...view,
-    edges: [...view.edges, ...[...structural, ...fanned].filter(e => !onShelf(e)).map(linkEdge)],
-    ...(view.mode === 'layered' ? {} : { shelfEdges: [...(view.shelfEdges ?? []), ...structural.filter(onShelf).map(linkEdge)] }),
+    edges: [...view.edges, ...links.edges.filter(e => !onShelf(e)).map(linkEdge)],
+    ...(view.mode === 'layered' ? {} : { shelfEdges: [...(view.shelfEdges ?? []), ...links.edges.filter(onShelf).map(linkEdge)] }),
     ...(links.core?.length ? { coreEdges: [...(view.coreEdges ?? []), ...links.core.map(linkEdge)] } : {}),
   }
 }
 
-/** C6：给 elk 的表面展开——只对普通层次的内部节点（不含共用件、边界节点、参与者）；没有展开时为 null */
+/** C6：布局里的表面展开（排端口点、走线用）——只对普通层次的内部节点（不含共用件、边界节点、参与者）；没有展开时为 null */
 export function layoutExpansion(view: LevelView, links: StructureLinks | null | undefined): LayoutExpansion | null {
   if (view.mode === 'layered' || !links?.expand?.length) return null
   const inner = new Set(view.nodes.filter(n => compassOf(n) === 'inner' && n.role !== 'shared' && n.role !== 'more').map(n => n.id))
   const nodes = new Map<string, readonly string[]>()
   const more = new Map<string, number>()
+  const groups = new Map<string, readonly (number | null)[]>()
+  const ranked = new Map<string, readonly string[]>()
   for (const x of links.expand)
     if (inner.has(x.node) && x.elements.length) {
       nodes.set(x.node, x.elements)
       if (x.more) more.set(x.node, x.more)
+      if (x.groups) groups.set(x.node, x.groups)
+      if (x.ranked) ranked.set(x.node, x.ranked)
     }
   if (!nodes.size) return null
   const targets = new Map<string, { node: string; element: string }>()
@@ -149,7 +143,7 @@ export function layoutExpansion(view: LevelView, links: StructureLinks | null | 
       const node = to.get(x.edge)
       if (node && nodes.get(node)?.includes(el)) targets.set(spreadEdgeId(x.edge, el), { node, element: el })
     }
-  return { nodes, targets, more }
+  return { nodes, targets, more, ...(groups.size ? { groups } : {}), ...(ranked.size ? { ranked } : {}) }
 }
 
 const cache = new Map<string, PositionedView>()
@@ -170,11 +164,11 @@ export function cacheKey(view: LevelView, opts: LayoutOptions = {}, links?: Stru
     // L15、L21：结构边进键——按束 ID（代码事实变化、束增删即重算）；只按 ID，编码数据（形态、档、违规）不影响布局
     (links?.edges ?? []).map(e => e.id),
     (links?.core ?? []).map(e => e.id),
-    // C6：展开表面时元素级边、展开的节点与元素、交互束的散开进键（不展开时不进，元素级边的增删不触发重排）
+    // C6：展开表面时元素级边、展开的节点与元素、交互束的散开进键（不展开时不进；展开的结果建在收起态那一份之上，L20a②）
     ...(links?.expand?.length
       ? [
           (links.elements ?? []).map(e => [e.id, e.element]),
-          links.expand.map(x => [x.node, x.elements, x.from, x.more ?? 0]),
+          links.expand.map(x => [x.node, x.elements, x.from, x.more ?? 0, x.groups ?? null]),
           (links.interactions ?? []).map(x => [x.edge, x.elements]),
         ]
       : []),
@@ -189,15 +183,14 @@ export async function layoutView(view: LevelView, opts: LayoutOptions = {}, link
   const key = cacheKey(view, opts, links)
   const hit = cache.get(key)
   if (hit) return { ...hit, view }
-  const union = unionView(view, links)
   let result: PositionedView
-  if (view.mode === 'layered') result = layoutLayered(union, opts)
+  if (view.mode !== 'layered' && links?.expand?.length) {
+    // L20a②：节点位置只取收起态（同一缓存，换选中不重排），展开只排端口点、重新走线
+    const { expand: _x, interactions: _i, ...collapsed } = links
+    result = expandSurface(await layoutView(view, opts, collapsed), view, links)
+  } else if (view.mode === 'layered') result = layoutLayered(unionView(view, links), opts)
   else if (view.nodes.length === 0) result = { view, nodes: new Map(), edges: new Map(), coreEdges: new Map() }
-  else {
-    const exp = layoutExpansion(view, links)
-    result = await layoutGraph(union, exp)
-    if (exp) result = { ...result, spread: spreadBundles(links) }
-  }
+  else result = await layoutGraph(unionView(view, links))
   result = { ...result, view }
   if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value!)
   cache.set(key, result)

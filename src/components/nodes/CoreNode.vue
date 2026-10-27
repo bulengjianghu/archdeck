@@ -19,6 +19,7 @@ defineProps<{ data: NodeData }>()
       target: data.module?.status === 'target',
       [`diff-${data.change}`]: !!data.change,
       [`surface-${data.surface?.side}`]: !!data.surface,
+      'surface-grouped': !!data.surface?.grouped,
     }"
   >
     <Handles />
@@ -47,14 +48,9 @@ defineProps<{ data: NodeData }>()
   transition: opacity 0.15s;
 }
 
-/* C6：展开表面——元素名占入边一侧，名字让开 */
-.core.surface-top {
-  align-items: flex-end;
-  padding-bottom: 12px;
-}
-
-.core.surface-left {
-  padding-left: 132px;
+/* C6、L20b（ADR-0036）：展开表面——节点尺寸不变；有组名时名字让开组名那一列（左边）；顶边的组名在上部，名字居中不挡 */
+.core.surface-left.surface-grouped {
+  padding-left: 56px;
 }
 
 .core:hover {

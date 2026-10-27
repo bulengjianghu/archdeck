@@ -43,7 +43,7 @@ export type {
 export { DEP_KIND_LABELS, DEP_TIER_LABELS, depWeight, violationLook } from './canvas/structure'
 export { PORT_MERGE } from './canvas/nodes'
 export { EDGE_Z, routeMidpoint } from './canvas/edges'
-export { EDGE_HOVER_Z, withEdgeHover } from './canvas/hover'
+export { EDGE_HOVER_Z, landsOn, withEdgeHover, withElementHover } from './canvas/hover'
 export { JUMP_RADIUS } from './routing'
 
 export function canvasScene(input: CanvasInput): CanvasScene {

@@ -41,3 +41,26 @@ export function revealIn(root: Element | null | undefined, element: string): boo
   el.classList.add('flash')
   return true
 }
+
+/**
+ * L20④（ADR-0036）：悬停的表面元素——画布端口点与面板「表面」一节的元素行共用一个值，悬停任一处两处同亮，
+ * 画布据此高亮落在点上的边与发起方（withElementHover）。只是呈现层的浏览提示，不进 DeskState 与 URL。
+ */
+export interface SurfaceHover {
+  module: string
+  element: string
+}
+
+const hover = shallowRef<SurfaceHover | null>(null)
+
+export function hoverSurfaceElement(next: SurfaceHover | null) {
+  if (hover.value?.module === next?.module && hover.value?.element === next?.element) return
+  hover.value = next
+}
+
+/** 移开时只清自己设的那个（避免离开 A 晚于进入 B 时把 B 清掉） */
+export function leaveSurfaceElement(module: string, element: string) {
+  if (hover.value?.module === module && hover.value.element === element) hover.value = null
+}
+
+export const useSurfaceHover = (): ShallowRef<SurfaceHover | null> => hover

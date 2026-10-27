@@ -34,7 +34,11 @@ const casing = computed(() => (props.data.hovered || props.data.hoverPair ? Numb
 /** 箭头大小随线宽档；线在箭头处回缩一个箭头深度（晕与红晕仍沿完整走线） */
 const size = computed(() => arrowSize(props.data.weight))
 const path = computed(() => draw(props.data.route.points))
-const linePath = computed(() => (couple.value ? path.value : draw(retractEnd(props.data.route.points, props.data.route.curve, arrowDepth(size.value)))))
+/** L20②、L23a②（ADR-0036）：散开到端口点的一段（`#to:`）不画箭头，点就是终点记号 */
+const toDot = computed(() => props.id.includes('#to:'))
+const linePath = computed(() =>
+  couple.value || toDot.value ? path.value : draw(retractEnd(props.data.route.points, props.data.route.curve, arrowDepth(size.value))),
+)
 
 /** 每条边自带箭头 marker，颜色跟随线色 */
 const markerId = computed(() => `arrow-${props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)}`)}`)
@@ -82,7 +86,7 @@ const socketId = computed(() => `socket-${markerId.value.slice('arrow-'.length)}
     <BaseEdge
       :id="id"
       :path="linePath"
-      :marker-end="couple ? undefined : `url(#${markerId})`"
+      :marker-end="couple || toDot ? undefined : `url(#${markerId})`"
       :style="style"
       :interaction-width="16"
       :label="data.dim || !data.label ? undefined : data.label"
