@@ -56,7 +56,7 @@ beforeEach(() => {
 describe('L19：图例按视角整体替换', () => {
   it('交互视角：关系、节点、代码事实、组装、演化与共享；没有结构视图的组', async () => {
     const { wrapper } = await open('/')
-    expect(titles(wrapper)).toEqual(['关系 · 三问四修饰', '节点', '代码事实 · 线型', '组装', '演化 · 角标与波浪线', '共享 · 三个视角同义'])
+    expect(titles(wrapper)).toEqual(['关系 · 三问四修饰', '节点', '代码事实 · 标签', '组装', '演化 · 角标与波浪线', '共享 · 三个视角同义'])
   })
 
   it('结构视角：依赖 · 形态与档、节点、规则叠加、指标、演化与共享；隐藏代码事实叠加组与关系类型筛选', async () => {
@@ -66,9 +66,10 @@ describe('L19：图例按视角整体替换', () => {
     expect(wrapper.find('[aria-label="代码事实"]').exists()).toBe(false)
     const text = wrapper.text()
     for (const s of [
-      '子类 = 实线 + 空心三角',
-      '组装 = 实线 + 实心菱形',
-      '端口实现 = 虚线 + 空心三角',
+      // L16（ADR-0035）：全部虚线，形态只靠端点记号；端口实现为 ◇
+      '子类 = 虚线 + 空心三角',
+      '组装 = 虚线 + 实心菱形',
+      '端口实现 = 虚线 + 空心菱形 ◇',
       '使用 = 虚线 + 开口箭头',
       '交互使用',
       '值使用',
@@ -79,6 +80,7 @@ describe('L19：图例按视角整体替换', () => {
     // L21：四种形态按强弱次序（子类 ＞ 组装 ＞ 端口实现 ＞ 使用）
     expect(wrapper.findAll('[data-form]').map(x => x.attributes('data-form'))).toEqual(['subclass', 'assembly', 'implements', 'use'])
     expect(wrapper.findAll('svg[data-kind]').length).toBeGreaterThanOrEqual(7)
+    for (const svg of wrapper.findAll('svg[data-kind]')) expect(svg.findAll('line').some(l => l.attributes('stroke-dasharray') === '6 4')).toBe(true)
     // L20：表面一段——元素四类、越过入口、界外
     expect(wrapper.find('[aria-label="表面元素四类"]').text()).toMatch(/端口.*操作.*类型.*数据/)
     expect(text).toContain('越过入口')
@@ -106,6 +108,10 @@ describe('L19：图例按视角整体替换', () => {
     }
     expect(new Set(texts).size).toBe(1)
     for (const c of SHARED_CHANNELS) expect(texts[0]).toContain(c.text)
+    // ADR-0035：线型在共享组只剩实线 = 交互、虚线 = 依赖，波浪线是唯一例外
+    expect(texts[0]).toContain('实线 = 交互')
+    expect(texts[0]).toContain('虚线 = 依赖')
+    expect(texts[0]).toContain('线型的唯一例外')
   })
 })
 
@@ -146,9 +152,11 @@ describe('L21：三个开关与收起计数（B1、B4）、跨界折叠计数（
     for (const s of ['只看交互使用', '只看未解释', '总是展开表面']) expect(summary).toContain(s)
   })
 
-  it('交互视角「代码事实」组有承载叠加一句与缺段虚线示意', async () => {
+  it('交互视角「代码事实 · 标签」组列出标签词表（L26）与承载叠加一句（缺段为警示色虚线）', async () => {
     const { wrapper } = await open('/')
-    expect(wrapper.find('[data-testid="carrier-legend"]').text()).toContain('缺的段画成提示虚线')
+    expect(wrapper.find('[data-testid="carrier-legend"]').text()).toContain('缺的一段画成警示色虚线')
+    expect(wrapper.findAll('[data-tag]').map(x => x.attributes('data-tag'))).toEqual(['未证实', '违规', '未解释', '缺段'])
+    expect(wrapper.text()).not.toContain('虚线 + ?')
   })
 })
 

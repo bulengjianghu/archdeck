@@ -38,14 +38,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
           <path d="M72 11 L78 15 L72 19" class="dep-head" />
           <path d="M23 22 L55 42" class="dep" />
           <path d="M50 38 L56 43 L49 44" class="dep-head" />
-          <path d="M97 22 L70 42" class="dep solid" />
+          <path d="M97 22 L70 42" class="dep" />
           <path d="M70 42 L73 36 L77 40 Z" class="tri" />
         </svg>
         <div>
           <h3>结构</h3>
           <p>
-            顶部「结构」：模块之间的依赖事实，从源码算出、不用人写——虚线开口箭头是使用（越深越强：交互使用 / 值使用 / 只引类型，只引类型缺省收起），
-            空心三角是继承或端口实现，实心菱形是组装。选中模块看「改它牵动谁」，块边的色条是不稳定度；只标违规。
+            顶部「结构」：模块之间的依赖事实，从源码算出、不用人写——依赖一律虚线，看端点记号：开口箭头是使用（越深越强：交互使用 / 值使用 /
+            只引类型，只引类型缺省收起）， 空心三角是继承，空心菱形 ◇ 是端口实现，实心菱形是组装。选中模块看「改它牵动谁」，块边的色条是不稳定度；只标违规。
           </p>
           <p class="sub" data-testid="guide-bundle">
             <b>束与表面</b>：一对模块之间的线是一条束（线宽按束内元素级边条数，形态不止一种时标「×N 元素」），展开模块看它的表面——入口导出与声明的接口；
@@ -53,7 +53,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
           </p>
           <p class="sub" data-testid="guide-carrier">
             <b>承载</b>：每条交互都应由结构图上的一段元素级依赖撑着（直接 / 经端口 / 经总线 / 回调注册 /
-            经通道五种模板），逐段判定为齐全、模块级、缺段、无承载或外部； 交互视角选中一条交互时承载临时叠加在图上，缺的段画成提示虚线。
+            经通道五种模板），逐段判定为齐全、模块级、缺段、无承载或外部； 交互视角选中一条交互时承载临时叠加在图上，缺的段画成警示色虚线、标「缺段」。
           </p>
         </div>
       </div>
@@ -119,29 +119,30 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
           <rect x="80" y="8" width="34" height="14" rx="3" class="node" />
           <rect x="6" y="42" width="34" height="14" rx="3" class="node" />
           <rect x="80" y="42" width="34" height="14" rx="3" class="node" />
-          <path d="M40 15 L80 15" class="edge dashed" />
-          <text x="60" y="12" class="mark">?</text>
-          <path d="M40 49 L80 49" class="edge dotted" />
+          <path d="M40 15 L80 15" class="edge" />
+          <text x="60" y="12" class="mark">未证实</text>
+          <path d="M40 49 L80 49" class="edge dep-fact" />
+          <text x="60" y="46" class="mark">未解释</text>
           <path d="M23 22 L97 42" class="edge bad" />
         </svg>
         <div>
           <h3>对照与治理</h3>
           <p>
-            交互视角下代码事实缺省叠加：虚线加 ? 是代码里找不到的关系，点线是代码有而描述没写的依赖，红色是基线外新增的违规，↻
-            是本层的环；所有问题汇总在导航树「问题」页签，可复制给 agent 返工。
+            交互视角下代码事实缺省叠加，只标异常、写在线中点：「未证实」是代码里找不到的关系，「未解释」是代码有而描述没写的依赖（画成依赖的虚线），
+            「违规」是基线外新增的违规（红色），↻ 是本层的环；所有问题汇总在导航树「问题」页签，可复制给 agent 返工。
           </p>
         </div>
       </div>
 
       <div class="shared" aria-label="三个视角共享">
         <h3>三个视角共享</h3>
-        <p>线型、箭头、颜色在三个视角各有含义（看「显示」面板）；下面这些在三个视角意思一样：</p>
+        <p>箭头、颜色在三个视角各有含义（看「显示」面板）；下面这些在三个视角意思一样——实线是交互、虚线是依赖，异常写在线中点：</p>
         <ul>
           <li v-for="c in SHARED_CHANNELS" :key="c.key">{{ c.text }}</li>
         </ul>
       </div>
 
-      <p class="foot muted">线型、颜色与节点样式的完整图例在画布右下角的「显示」面板，随视角整组切换。</p>
+      <p class="foot muted">箭头、颜色与节点样式的完整图例在画布右下角的「显示」面板，随视角整组切换。</p>
     </section>
   </div>
 </template>
@@ -264,20 +265,14 @@ svg {
   stroke-dasharray: 4 3;
 }
 
-.edge.dashed {
-  stroke-dasharray: 5 3;
-}
-
-.edge.dotted {
+.edge.dep-fact {
   stroke: var(--text-3);
-  stroke-dasharray: 1 3;
-  stroke-linecap: round;
+  stroke-dasharray: 5 3;
 }
 
 .edge.bad {
   stroke: var(--danger);
-  stroke-dasharray: 1 3;
-  stroke-linecap: round;
+  stroke-dasharray: 5 3;
 }
 
 .head {
@@ -290,7 +285,8 @@ svg {
 }
 
 .mark {
-  font-size: 9px;
+  font-size: 7px;
+  text-anchor: middle;
   fill: var(--warning);
 }
 
@@ -321,10 +317,6 @@ svg {
   stroke: var(--text-2);
   stroke-width: 1.5;
   stroke-dasharray: 4 3;
-}
-
-.dep.solid {
-  stroke-dasharray: none;
 }
 
 .dep-head {

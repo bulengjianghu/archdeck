@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 「显示」面板 · 回放（运行视角）：当前步骤、步骤序号、当前端点，以及经由上层、未建模、分支预览三种临时线（P10、P11、P15、F6） */
+/** 「显示」面板 · 回放（运行视角）：当前步骤、步骤序号、当前端点，以及经由上层、未建模、分支预览三种临时线（P10、P11、P15、F6）——都是交互，实线（L18），经上层与未建模写在标签位（L26） */
 import DisplayGroup from './DisplayGroup.vue'
 import LineSwatch from './LineSwatch.vue'
 
@@ -26,15 +26,15 @@ const emit = defineEmits<{ toggle: [] }>()
     </div>
     <div class="item">
       <span class="sw"><LineSwatch :look="{ type: 'calls', temp: 'upper', weight: 2 }" /></span>
-      <span>经由上层关系（类型色虚线，本层没有它的边）</span>
+      <span>经由上层关系（类型色实线，标「经上层」；本层没有它的边）</span>
     </div>
     <div class="item">
       <span class="sw"><LineSwatch :look="{ temp: 'unmodeled' }" /></span>
-      <span>交互中未建模</span>
+      <span>交互中未建模（红色实线，标「未建模」）</span>
     </div>
     <div class="item">
       <span class="sw"><LineSwatch :look="{ play: 'preview', weight: 2 }" /></span>
-      <span>分支预览</span>
+      <span>分支预览（实线、半透明）</span>
     </div>
   </DisplayGroup>
 </template>

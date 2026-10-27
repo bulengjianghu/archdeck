@@ -83,7 +83,7 @@ modules:
   - id: present.canvas.edges
     name: 边组件
     parent: present.canvas
-    responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线；颜色、线宽、线型的映射在 edgeStyle，箭头 marker 在 ArrowMarker（大小随线宽档，线在箭头处回缩），都与「显示」面板的示意线共用；折线在跳点处插半圆小桥（L11）。一个视觉通道只表一个维度（L10、ADR-0018、ADR-0029）：颜色 = 关系类型（四类各一色相——查询低饱和且半透明，只「淡」不「细」；委托实色；迁移期的未分类中性灰）；线型 = 事实状态（实线已证实或无事实、虚线未证实、点线为代码依赖叠加线，K9）；箭头自画 marker——同步实心、异步空心「V」；插座 = 经端口（L12，目标端与箭头叠放）；线宽 = 聚合条数三档；×N 标签画成 pill，异常标记用警示色。晕：违规红晕优先于设计变更底色，选中为强调色窄晕（不改线宽），回放当前步骤为宽晕并沿方向流动（P10）；走过的边不加粗。结构视角的边见子模块「结构边」（UML 惯例，ADR-0031 裁决 D）。临时线：经由上层关系为关系类型色的虚线（P15），未建模为红色虚线（P11）；组装叠加线为组装专用色的点划线（O12）。
+    responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线；颜色、线宽、线型的映射在 edgeStyle，箭头 marker 在 ArrowMarker（大小随线宽档，线在箭头处回缩），都与「显示」面板的示意线共用；折线在跳点处插半圆小桥（L11）。一个视觉通道只表一个维度（L10、ADR-0018、ADR-0029）：颜色 = 关系类型（四类各一色相——查询低饱和且半透明，只「淡」不「细」；委托实色；迁移期的未分类中性灰）；线型 = 行为还是依赖（L18、ADR-0035：交互与回放临时线实线，代码依赖叠加线、组装叠加、承载缺段虚线并用依赖的端点记号 UmlMarker）；箭头自画 marker——同步实心、异步空心「V」；插座 = 经端口（L12，目标端与箭头叠放）；线宽 = 聚合条数三档；标签位（L26）画成 pill，含异常时用警示色。晕：违规红晕优先于设计变更底色，选中为强调色窄晕（不改线宽），回放当前步骤为宽晕并沿方向流动（P10）；走过的边不加粗。结构视角的边见子模块「结构边」（UML 惯例，ADR-0031 裁决 D）。临时线：经由上层关系为关系类型色的虚线（P15），未建模为红色虚线（P11）；组装叠加线为组装专用色的点划线（O12）。
     codeRefs: [src/components/edges/**]
   - id: present.canvas.edges.socket
     name: 插座记号
@@ -95,7 +95,7 @@ modules:
     name: 结构边
     parent: present.canvas.edges
     adrs: [31]
-    responsibility: 结构视角的边（L16，ADR-0031 裁决 D，结构视图私有的通道）：UML 类图惯例——线型：依赖虚线、子类实线、端口实现虚线、组装实线，允许边（U16）点线；端点：依赖开口箭头，子类与端口实现在被依赖方一端空心三角，组装在依赖方一端实心菱形（UmlMarker，线在记号处回缩）；色相中性，依赖的档用明度（交互使用深、值使用中、只引类型浅），不用透明度；线宽 = 聚合的模块依赖条数（共享通道，与交互边同一套档）；违规红晕、选中窄晕、聚焦变淡同交互边（L18）。颜色、线型与记号的映射在 depStyle，与「显示」面板的 StructureSwatch 共用；按 Layout 给的直连走线画（L15）。
+    responsibility: 结构视角的边（L16，ADR-0031 裁决 D、ADR-0035）：依赖一律虚线（L18 共享通道），允许边（U16）浅一档的虚线；形态只靠端点记号（结构视图私有的通道）：使用开口箭头，子类在被依赖方一端空心三角，端口实现在被依赖方一端空心菱形 ◇，组装在依赖方一端实心菱形（UmlMarker，线在记号处回缩）；色相中性，依赖的档用明度（交互使用深、值使用中、只引类型浅），不用透明度；线宽 = 聚合的模块依赖条数（共享通道，与交互边同一套档）；违规红晕、选中窄晕、聚焦变淡同交互边（L18）。颜色、线型与记号的映射在 depStyle，与「显示」面板的 StructureSwatch 共用；按 Layout 给的直连走线画（L15）。
     codeRefs: [src/components/edges/DepEdge.vue, src/components/edges/UmlMarker.vue, src/components/edges/depStyle.ts]
 
   - id: present.panel.dispatch
@@ -167,13 +167,13 @@ modules:
     name: 组装开关与图例
     parent: present.canvas.legend
     adrs: [30]
-    responsibility: 「显示」面板的「组装」一组（O12，ADR-0030，交互视角）：组标题右侧是「组装」开关（缺省关），开启后画布把组装事实（K13）投影到本层画点划叠加线（不参与布局，单击落到代码依赖），组装根所在的节点标「组装根」角标；图例说明线型与角标。开关在视图状态里（toggles.assembly，不进 URL），按项目记在本机（useAssemblyPrefs：模型加载后恢复，之后每次变化写回，同演化叠加的本机记忆）。
+    responsibility: 「显示」面板的「组装」一组（O12，ADR-0030，交互视角）：组标题右侧是「组装」开关（缺省关），开启后画布把组装事实（K13）投影到本层画叠加虚线（依赖方一端实心菱形，ADR-0035；不参与布局，单击落到代码依赖），组装根所在的节点标「组装根」角标；图例说明线型与角标。开关在视图状态里（toggles.assembly，不进 URL），按项目记在本机（useAssemblyPrefs：模型加载后恢复，之后每次变化写回，同演化叠加的本机记忆）。
     codeRefs: [src/components/display/AssemblyLegend.vue, src/components/display/useAssemblyPrefs.ts]
   - id: present.canvas.legend.structure
     name: 结构视图图例
     parent: present.canvas.legend
     adrs: [31]
-    responsibility: 结构视角下「显示」面板的图例组（L19、D-26，ADR-0031）：「结构边 · 种类与档」——依赖、组装、子类、端口实现四种的 UML 线型与端点，依赖的三档按明度（交互使用深、值使用中、只引类型浅），组标题右侧是「只引类型」开关（显示偏好 typeOnly，按项目记在本机、不进 URL），组内写「本层只引类型的边 N 条已收起」与口径（一对节点只按最强的一档计；含聚焦才画的）；「规则叠加」——违规红晕、允许边点线（U15、U16）；「指标 · 不稳定度与共用件」——入 Ca · 出 Ce 角标、不稳定度三档色条与阈值、共用件折叠（K16、L17、O13）。示意线由 StructureSwatch 按与边组件共用的 depStyle 画出、颜色取 styles.css 的同一套变量；没有代码事实时只说明允许依赖图（U16）。
+    responsibility: 结构视角下「显示」面板的图例组（L19、D-26，ADR-0031）：「结构边 · 种类与档」——依赖、组装、子类、端口实现四种的端点记号（全部虚线，ADR-0035），依赖的三档按明度（交互使用深、值使用中、只引类型浅），组标题右侧是「只引类型」开关（显示偏好 typeOnly，按项目记在本机、不进 URL），组内写「本层只引类型的边 N 条已收起」与口径（一对节点只按最强的一档计；含聚焦才画的）；「规则叠加」——违规红晕、允许边浅虚线（U15、U16）；「指标 · 不稳定度与共用件」——入 Ca · 出 Ce 角标、不稳定度三档色条与阈值、共用件折叠（K16、L17、O13）。示意线由 StructureSwatch 按与边组件共用的 depStyle 画出、颜色取 styles.css 的同一套变量；没有代码事实时只说明允许依赖图（U16）。
     codeRefs: [src/components/display/StructureLegend.vue, src/components/display/StructureSwatch.vue, src/components/display/RuleLegend.vue, src/components/display/MetricLegend.vue, src/components/display/SharedLegend.vue]
 
   # ── 视图状态层 ──────────────────────────────────────────

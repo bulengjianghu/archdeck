@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 /**
- * 结构边的编码表（L16，ADR-0031 裁决 D）：UML 类图惯例——使用虚线 + 开口箭头、子类实线 + 空心三角、端口实现虚线 + 空心三角、
- * 组装实线 + 组装者一端实心菱形 + 开口箭头；依赖三档用明度（不用透明度）；色相中性；线宽 = 聚合条数（共享通道 L18）；违规三档红晕（U15）；
- * 允许边（U16）点线、意图色。另含「只引类型」等结构视角显示偏好的本地记忆（useStructurePrefs）。
+ * 结构边的编码表（L16，ADR-0031 裁决 D、ADR-0035）：依赖一律虚线（L18），形态只靠端点记号——使用开口箭头、子类空心三角、端口实现空心菱形 ◇、
+ * 组装者一端实心菱形 + 开口箭头；依赖三档用明度（不用透明度）；色相中性；线宽 = 聚合条数（共享通道 L18）；违规三档红晕（U15）；
+ * 允许边（U16）浅一档的虚线、意图色。另含「只引类型」等结构视角显示偏好的本地记忆（useStructurePrefs）。
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import DepEdge from '../../src/components/edges/DepEdge.vue'
-import { ALLOWED_COLOR, FACT_COLOR, TIER_COLOR, depColor, depDash, depEnds, depStroke, umlDepth } from '../../src/components/edges/depStyle'
-import { DASHED, DOTTED, WIDTH, arrowSize } from '../../src/components/edges/edgeStyle'
+import { ALLOWED_COLOR, FACT_COLOR, TIER_COLOR, depColor, depDash, depEnds, depStroke, umlDepth, umlPath } from '../../src/components/edges/depStyle'
+import { DASHED, WIDTH, arrowSize } from '../../src/components/edges/edgeStyle'
 import { DEFAULT_STRUCTURE_PREFS, resetStructurePrefs, useStructurePrefs } from '../../src/components/display/useDisplayPrefs'
 import { depWeight, violationLook, type DepEdgeLook, type RouteEdgeData } from '../../src/layout/canvas'
 
@@ -38,19 +38,26 @@ function render(l: Partial<DepEdgeLook>, extra: Partial<RouteEdgeData> = {}) {
 }
 
 describe('L16 编码表', () => {
-  it('线型：依赖与端口实现虚线，子类与组装实线，允许边点线', () => {
-    expect(depDash('use')).toBe(DASHED)
-    expect(depDash('implements')).toBe(DASHED)
-    expect(depDash('subclass')).toBeUndefined()
-    expect(depDash('assembly')).toBeUndefined()
-    expect(depDash('allowed')).toBe(DOTTED)
+  it('线型（L18、ADR-0035）：依赖一律虚线——使用、子类、端口实现、组装与允许边同一种虚线', () => {
+    for (const k of ['use', 'subclass', 'implements', 'assembly', 'allowed'] as const) expect(depDash(k)).toBe(DASHED)
+    expect(depStroke({ kind: 'allowed' })).not.toHaveProperty('strokeLinecap')
   })
 
-  it('端点：依赖开口箭头；子类、端口实现空心三角；组装起点实心菱形、终点开口箭头', () => {
+  it('端点：使用开口箭头；子类空心三角；端口实现空心菱形 ◇；组装起点实心菱形、终点开口箭头', () => {
     expect(depEnds('use')).toEqual({ end: 'open' })
     expect(depEnds('subclass')).toEqual({ end: 'triangle' })
-    expect(depEnds('implements')).toEqual({ end: 'triangle' })
+    expect(depEnds('implements')).toEqual({ end: 'port' })
     expect(depEnds('assembly')).toEqual({ start: 'diamond', end: 'open' })
+  })
+
+  it('L16a ⑤：◇ 与实心菱形同尺寸、同形状，只差填充', () => {
+    expect(umlDepth('port', 16)).toBe(umlDepth('diamond', 16))
+    expect(umlPath('port', 16)).toBe(umlPath('diamond', 16))
+  })
+
+  it('U16：允许边意图色浅一档（不用透明度）', () => {
+    expect(ALLOWED_COLOR).toBe('var(--dep-allowed-soft)')
+    expect(depStroke({ kind: 'allowed' }).opacity).toBe(1)
   })
 
   it('依赖三档用明度（深 / 中 / 浅），不改透明度；其余种类中性色；允许边意图色', () => {
@@ -124,9 +131,9 @@ describe('DepEdge', () => {
     expect(w.findAll('marker')).toHaveLength(1)
   })
 
-  it('组装：实线、起点实心菱形（auto-start-reverse）、终点开口箭头，两端都回缩', () => {
+  it('组装：虚线、起点实心菱形（auto-start-reverse）、终点开口箭头，两端都回缩', () => {
     const { w, main } = render({ kind: 'assembly', tier: undefined })
-    expect(main.attributes('style')).not.toContain('dasharray')
+    expect(main.attributes('style')).toContain('stroke-dasharray: 6 4')
     const markers = w.findAll('marker')
     expect(markers).toHaveLength(2)
     expect(markers[1].attributes('orient')).toBe('auto-start-reverse')
@@ -134,13 +141,15 @@ describe('DepEdge', () => {
     expect(main.attributes('d')!.startsWith(`M0,${umlDepth('diamond', arrowSize(1))}`)).toBe(true)
   })
 
-  it('子类：实线、空心三角（填底色）；端口实现：虚线、空心三角', () => {
+  it('子类：虚线、空心三角（填底色）；端口实现：虚线、空心菱形 ◇（填底色）——两者只靠端点记号区分', () => {
     const sub = render({ kind: 'subclass', tier: undefined })
-    expect(sub.main.attributes('style')).not.toContain('dasharray')
+    expect(sub.main.attributes('style')).toContain('stroke-dasharray: 6 4')
     expect(sub.w.find('marker path').attributes('fill')).toBe('var(--surface)')
     const imp = render({ kind: 'implements', tier: undefined })
     expect(imp.main.attributes('style')).toContain('stroke-dasharray: 6 4')
     expect(imp.w.find('marker path').attributes('fill')).toBe('var(--surface)')
+    expect(imp.w.find('marker path').attributes('d')).toBe(umlPath('port', arrowSize(1) + 2))
+    expect(imp.w.find('marker path').attributes('d')).not.toBe(sub.w.find('marker path').attributes('d'))
   })
 
   it('违规红晕按状态、选中为强调色窄晕；悬停说明写在 title 里', () => {

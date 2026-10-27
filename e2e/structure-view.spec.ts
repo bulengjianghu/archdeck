@@ -195,3 +195,16 @@ test('V11：从结构视角打开场景，退出回到结构视角；运行视�
   expect(query(page).get('v')).toBeNull()
   await expect(seg(page, 'interaction')).toHaveClass(/on/)
 })
+
+test('§6.22、L16（ADR-0035）：结构视角的依赖全部虚线，形态只靠端点记号——端口实现在被依赖方一端为空心菱形 ◇，子类为空心三角', async ({ page }) => {
+  await openDesk(page, '/p/h5player?level=infra.framework&v=s&sel=m:infra.framework.contracts')
+  await expect(depEdges(page).first()).toBeAttached()
+  for (const p of await depEdges(page).locator('path.vue-flow__edge-path').all()) await expect(p).toHaveCSS('stroke-dasharray', '6px, 4px')
+  // 端口实现的终点记号是菱形（四个顶点、从原点画起），子类是三角（从尖端画起）；两者都填底色
+  const endPath = (kind: string) => page.locator(`g.dep-edge[data-kind="${kind}"]`).first().locator('xpath=..').locator('marker.uml-marker path').first()
+  const impl = page.locator('g.dep-edge[data-kind="implements"]')
+  await expect(impl.first()).toBeAttached()
+  await expect(endPath('implements')).toHaveAttribute('d', /^M0,0 L[\d.]+,-[\d.]+ L[\d.]+,0 L[\d.]+,[\d.]+ Z$/)
+  await expect(endPath('implements')).toHaveAttribute('fill', 'var(--surface)')
+  if (await page.locator('g.dep-edge[data-kind="subclass"]').count()) await expect(endPath('subclass')).toHaveAttribute('d', /^M[\d.]+,0 L0,/)
+})

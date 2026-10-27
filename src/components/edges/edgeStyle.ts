@@ -1,6 +1,7 @@
 /**
- * 关系线的视觉映射（L10、ADR-0018、ADR-0029）：颜色 = 关系类型（四类各一色相，查询低饱和 + 半透明，未分类中性灰），线型 = 事实状态，线宽 = 聚合条数三档；
- * 插座记号（L12）= 经端口。画布的 RouteEdge 与「显示」面板的示意线（LineSwatch）共用，图例与画布同一套样式。
+ * 关系线的视觉映射（L10、ADR-0018、ADR-0029）：颜色 = 关系类型（四类各一色相，查询低饱和 + 半透明，未分类中性灰），线宽 = 聚合条数三档；
+ * 线型 = 行为还是依赖（L18，ADR-0035）：交互与回放临时线实线，依赖类的线（代码依赖叠加线、组装叠加、承载缺段）虚线，时间耦合波浪线是唯一例外；
+ * 事实状态与异常写在标签位（L26），不进线型。插座记号（L12）= 经端口。画布的 RouteEdge 与「显示」面板的示意线（LineSwatch）共用，图例与画布同一套样式。
  */
 import type { RelationType } from '@/model'
 import type { RouteEdgeData } from '@/layout/canvas'
@@ -14,10 +15,13 @@ export type StrokeLook = Partial<Pick<RouteEdgeData, 'temp' | 'violated' | 'play
 export const WIDTH = [1.5, 2.5, 3.5] as const
 /** L10：查询的半透明——与低饱和的颜色一起把查询「淡」下去；乘在聚焦变淡等透明度上 */
 export const QUERY_OPACITY = 0.6
+/** L18：依赖的虚线——结构边、代码依赖叠加线、组装叠加、承载段与缺段同一种 */
 export const DASHED = '6 4'
-export const DOTTED = '0.5 4.5'
-/** O12：组装叠加线的点划线 */
-export const DASH_DOT = '8 3 1.5 3'
+/** F6：分支预览线的不透明度（实线，降低不透明度与走过的边区分） */
+export const PREVIEW_OPACITY = 0.6
+
+/** L18（ADR-0035）：这条线是依赖（虚线）——代码依赖叠加线（K9）、组装叠加（O12）、承载缺段（L22）；其余线都是交互（实线） */
+export const isDependencyLine = (d: Pick<StrokeLook, 'temp'>): boolean => d.temp === 'code' || d.temp === 'assembly' || d.temp === 'carrier-gap'
 /**
  * 箭头（L10：实心 = 同步，空心「V」= 异步）：大小随线宽档走，14 / 16 / 18 px；
  * 形状画在 10×10 的 viewBox 里，底边在 x = 1、尖端在 x = 9，标记的参考点在底边中点——线回缩一个箭头深度后接在底边上，尖端落在原终点。
@@ -63,16 +67,17 @@ const typeAlpha = (d: CoupleLook): number => (d.type === 'queries' && !d.muted ?
 export function strokeStyle(d: CoupleLook) {
   const stroke = strokeColor(d)
   if (d.temp === 'couple') return { stroke, strokeWidth: d.isolated ? 2 : 1.5, strokeLinecap: 'round' as const, opacity: d.dim ? 0.12 : 0.9 }
-  if (d.temp === 'code') return { stroke, strokeWidth: 2, strokeDasharray: DOTTED, strokeLinecap: 'round' as const, opacity: d.dim ? 0.12 : 0.95 }
-  if (d.temp === 'unmodeled') return { stroke, strokeWidth: 1.5, strokeDasharray: '5 5', opacity: d.play === 'preview' ? 0.7 : 0.9 }
-  if (d.temp === 'assembly') return { stroke, strokeWidth: 1.8, strokeDasharray: DASH_DOT, strokeLinecap: 'round' as const, opacity: d.dim ? 0.12 : 0.9 }
-  // L22：承载缺段的提示虚线
-  if (d.temp === 'carrier-gap') return { stroke, strokeWidth: 1.6, strokeDasharray: '5 4', strokeLinecap: 'round' as const, opacity: 0.95 }
+  // 依赖类的线：虚线（L18）
+  if (d.temp === 'code') return { stroke, strokeWidth: 2, strokeDasharray: DASHED, opacity: d.dim ? 0.12 : 0.95 }
+  if (d.temp === 'assembly') return { stroke, strokeWidth: 1.8, strokeDasharray: DASHED, opacity: d.dim ? 0.12 : 0.9 }
+  // L22：承载缺段——警示色虚线（缺的是一段依赖）
+  if (d.temp === 'carrier-gap') return { stroke, strokeWidth: 1.6, strokeDasharray: DASHED, opacity: 0.95 }
+  // P11：未建模是一次交互，只是没建模——红色实线
+  if (d.temp === 'unmodeled') return { stroke, strokeWidth: 1.5, opacity: d.play === 'preview' ? PREVIEW_OPACITY : 0.9 }
+  // 交互：实线（L10、L18）；经由上层（P15）、分支预览（F6）同样是交互，预览降低不透明度
   return {
     stroke,
     strokeWidth: WIDTH[(d.weight ?? 1) - 1],
-    // 线型只表事实状态；分支预览与经由上层（P15）的临时线为虚线
-    strokeDasharray: d.play === 'preview' || d.temp === 'upper' || d.factState === 'unconfirmed' ? DASHED : undefined,
-    opacity: (d.dim ? 0.12 : d.muted ? 0.45 : 1) * typeAlpha(d),
+    opacity: (d.dim ? 0.12 : d.muted ? 0.45 : 1) * typeAlpha(d) * (d.play === 'preview' ? PREVIEW_OPACITY : 1),
   }
 }

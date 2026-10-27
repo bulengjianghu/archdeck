@@ -27,6 +27,8 @@ export interface DepOverlay {
 export interface LevelFacts {
   /** 视图边 ID → 证实标记（含核心跨层边）；没有可判定的关系时不在其中 */
   edgeFacts: Map<string, EdgeFact>
+  /** L26：未证实的关系 ID → 两端之间是否没有任何模块依赖（K6）；标签位按它计条数、悬停逐条列出（没有时退回 edgeFacts） */
+  unconfirmed?: Map<string, { isolated: boolean }>
   /** 含违规的视图边 ID */
   violatedEdges: Set<string>
   overlays: DepOverlay[]
@@ -57,8 +59,13 @@ export function levelFacts(index: ModelIndex, view: LevelView, report: Governanc
 
   // 视图边的证实（K9）
   const edgeFacts = new Map<string, EdgeFact>()
+  const unconfirmed = new Map<string, { isolated: boolean }>()
   const allEdges = [...view.edges, ...(view.coreEdges ?? [])]
   for (const e of allEdges) {
+    for (const id of e.relationIds) {
+      const c = report.relations.get(id)
+      if (c?.status === 'unconfirmed') unconfirmed.set(id, { isolated: !!c.isolated })
+    }
     const st = e.relationIds.map(id => report.relations.get(id)?.status).filter(s => s && s !== 'skipped')
     if (!st.length) continue
     const ok = st.filter(s => s === 'confirmed').length
@@ -122,7 +129,7 @@ export function levelFacts(index: ModelIndex, view: LevelView, report: Governanc
       })
     return { id, nodes: [...members].sort(byOrder).map(m => ({ id: m, module: moduleOfNode(view, m) })), edges }
   })
-  return { edgeFacts, violatedEdges, overlays, cycles, levelCycles }
+  return { edgeFacts, unconfirmed, violatedEdges, overlays, cycles, levelCycles }
 }
 
 /** K10：投影到本层这对节点（以两端的模块 ID 指明）的模块依赖与违规 */

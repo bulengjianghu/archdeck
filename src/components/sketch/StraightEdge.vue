@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 草图画布的边（F-22、X15）：两端中心之间的直线，裁到两端节点的边框；同一对节点的多条线按草图布局给的平移量错开；
- * 不走线、不避让。标签在中点或 layout.relations 记下的位置；选中的边可拖动标签，松手为一步（relabel）。待重连的线为红色虚线。
+ * 不走线、不避让。标签在中点或 layout.relations 记下的位置；选中的边可拖动标签，松手为一步（relabel）。草图的线都是交互，一律实线（L18，ADR-0035）；待重连的线为红色实线、标签标红。
  * 聚合边（05 裁决 4：本层模块与同一个折叠引用之间的多条关系）标「N 条」，点它选中引用节点（面板展开精确关系），标签不能拖。
  * 引用线（X22）：从模块朝引用列的一侧端口（左侧列进左端口、右侧列进右端口）到引用节点朝中心区的一侧，水平切线的曲线；画在模块之上，
  * 细、半透明、不接收指针、不带标签（条数在引用节点上），相关节点选中或悬停时（hot）实色。
@@ -9,6 +9,7 @@
 import { computed, ref } from 'vue'
 import { EdgeLabelRenderer, useVueFlow } from '@vue-flow/core'
 import { straightEdge, type SketchEdgeData } from '@/layout/layout'
+import { composeLabel } from '@/layout/canvas'
 import type { RelationType } from '@/model'
 import { useDesk } from '@/state/inject'
 import { RELATION_TYPE_LABELS } from '../shared/labels'
@@ -82,10 +83,10 @@ const label = computed(() => dragging.value ?? props.data.label ?? geo.value.mid
 const many = computed(() => props.data.relationIds?.length ?? 0)
 const typeLabel = computed(() => (many.value ? `${many.value} 条关系（折叠显示）` : (RELATION_TYPE_LABELS[props.data.type as RelationType] ?? props.data.type)))
 /** 标签：聚合边标条数；写了说明的显示说明；没写的只在选中时显示类型（线多时不堆满画布） */
-/** L24（第十一轮）：经回调的线在标签前加「回调」 */
+/** L24、L26：经回调的线在标签后接「回调」（与画布标签位同一套组装：条数或说明在前，标签在后） */
 const text = computed(() => {
   const t = props.data.external ? '' : many.value ? `${many.value} 条` : props.data.description || (props.data.selected ? typeLabel.value : '')
-  return props.data.callback && !props.data.external ? [`回调`, t].filter(Boolean).join(' · ') : t
+  return composeLabel(t, [props.data.callback && !props.data.external && { tag: '回调' }])
 })
 
 let start: { px: number; py: number; x: number; y: number } | null = null
@@ -208,7 +209,6 @@ function onUp() {
 
 .sk-edge.pending .line {
   stroke: var(--danger);
-  stroke-dasharray: 4 3;
 }
 
 .sk-edge.external {

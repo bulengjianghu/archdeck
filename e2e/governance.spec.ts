@@ -1,20 +1,29 @@
 /**
- * 架构治理（§6.10 第 5、6 条）：开启「代码事实」，只标异常——未证实的关系边为虚线并标 ?、已证实的不标；单击代码依赖叠加线看证据；根层面板有架构治理。
- * 本项目的描述已无未解释的交互、根层也没有未证实的边（经 HTTP 等的写了 via，K5b），? 与叠加线用 h5player 验证（源码在本地是前提，G1，不设跳过）。
+ * 架构治理（§6.10 第 5、6 条，§6.22）：开启「代码事实」，只标异常——未证实的关系边仍是实线、标签位写「未证实」，已证实的不标；代码依赖叠加线是虚线；单击叠加线看证据；根层面板有架构治理。
+ * 本项目的描述已无未解释的交互、根层也没有未证实的边（经 HTTP 等的写了 via，K5b），未证实与叠加线用 h5player 验证（源码在本地是前提，G1，不设跳过）。
  * 两个项目的未解释的交互都已为 0（ADR-0026），h5player 的违规都在基线内（不画线）：叠加线用例拦截事实端点去掉基线，让违规成为「无基线的全部违规」画出来（K9）。
  */
 import { expect, test } from '@playwright/test'
 import { openDesk, query } from './helpers'
 
-test('开启代码事实：未证实的边标 ?，已证实的不标 ✓（K9、L10）', async ({ page }) => {
+test('开启代码事实：未证实的边标「未证实」、仍是实线，已证实的不标 ✓（K9、L10、L26）', async ({ page }) => {
   await openDesk(page, '/p/h5player')
   await expect(page.locator('.panel')).toContainText('架构治理')
   await expect(page.locator('.panel')).toContainText(/已证实 \d+/)
   const toggle = page.locator('label.facts input')
   await expect(toggle).toBeEnabled()
   await toggle.check()
-  await expect(page.locator('.edge-label-warn .vue-flow__edge-text', { hasText: '?' }).first()).toBeVisible()
+  const tagged = page.locator('.vue-flow__edge-route').filter({ has: page.locator('.edge-label-warn .vue-flow__edge-text', { hasText: '未证实' }) })
+  await expect(tagged.first()).toBeAttached()
+  await expect(tagged.first().locator('path.vue-flow__edge-path')).toHaveCSS('stroke-dasharray', 'none')
+  // 根层是分层总览：只写计数——未证实只出现在聚合边上（×N · 未证实 M）
+  for (const t of await page.locator('.vue-flow__edge-text', { hasText: '未证实' }).allTextContents()) expect(t).toMatch(/^×\d+ .*未证实 \d+/)
+  await expect(page.locator('.vue-flow__edge-text', { hasText: '?' })).toHaveCount(0)
   await expect(page.locator('.vue-flow__edge-text', { hasText: '✓' })).toHaveCount(0)
+  // 普通层次：单条未证实的边也写字；一条边只有一个 pill
+  await openDesk(page, '/p/h5player?level=infra.framework')
+  await expect(page.locator('.vue-flow__edge-text', { hasText: '未证实' }).first()).toBeAttached()
+  for (const e of await page.locator('.vue-flow__edge-route').all()) expect(await e.locator('.vue-flow__edge-text').count()).toBeLessThanOrEqual(1)
 })
 
 test('K5a：Projector 文件内概念子模块之间的关系，面板标「概念拆分，同文件」', async ({ page }) => {
@@ -38,8 +47,10 @@ test('h5player：没有基线时违规画成叠加线；单击叠加线选中它
 
   // 根层的违规都落在已有的层间边上（只加红晕）；Framework 层有没有关系边的违规（外部的 app → kernel），画成叠加线
   await openDesk(page, '/p/h5player?level=infra.framework')
-  const overlay = page.locator('.vue-flow__edge-text', { hasText: '违规' }).first()
+  const overlay = page.locator('.vue-flow__edge[data-id^="dep:"] .vue-flow__edge-text', { hasText: '违规' }).first()
   await expect(overlay).toBeVisible()
+  // L18：代码依赖叠加线是依赖——虚线
+  await expect(page.locator('.vue-flow__edge[data-id^="dep:"] path.vue-flow__edge-path').first()).toHaveCSS('stroke-dasharray', '6px, 4px')
   // 叠加线的标签浮在边上，Playwright 的「稳定」判定会一直等待；h5player 根层节点密集，按坐标单击会落到节点上，这里直接在标签上派发单击
   await overlay.dispatchEvent('click')
   await expect.poll(() => query(page).get('sel')).toMatch(/^d:.+->.+$/)

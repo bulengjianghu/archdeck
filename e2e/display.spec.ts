@@ -20,7 +20,9 @@ test('结构视角：关系类型筛选与边界节点开关在面板里，折�
   await expect(reading.getByRole('button')).toHaveCount(0)
   // L12：端口的示意带插座记号
   await expect(reading.locator('marker.socket-marker')).toHaveCount(1)
-  await expect(panel.getByText('实线 = 已证实', { exact: false })).toHaveCount(1)
+  // ADR-0035：代码事实写在标签位，不再有「实线 = 已证实」；线型只有实线 = 交互、虚线 = 依赖（共享组）
+  await expect(panel.getByText('实线 = 已证实', { exact: false })).toHaveCount(0)
+  await expect(panel.getByRole('button', { name: /代码事实 · 标签/ })).toBeVisible()
   const types = panel.getByRole('group', { name: '关系类型筛选' })
   await expect(types).toContainText('查询 = 要结果、无副作用')
   await expect(types).toContainText('委托 = 交出控制权')
@@ -60,7 +62,8 @@ test('结构视角（L19、L21、D-26）：图例整组换成「依赖 · 形态
   await expect(panel.getByRole('button', { name: /依赖 · 形态与档/ })).toBeVisible()
   await expect(panel.getByRole('button', { name: /规则叠加/ })).toBeVisible()
   await expect(panel.getByRole('button', { name: /指标 · 不稳定度/ })).toBeVisible()
-  for (const t of ['子类 = 实线 + 空心三角', '组装 = 实线 + 实心菱形', '端口实现 = 虚线 + 空心三角', '使用 = 虚线 + 开口箭头'])
+  // L16（ADR-0035）：全部虚线，形态只靠端点记号，端口实现为 ◇
+  for (const t of ['子类 = 虚线 + 空心三角', '组装 = 虚线 + 实心菱形', '端口实现 = 虚线 + 空心菱形 ◇', '使用 = 虚线 + 开口箭头'])
     await expect(panel).toContainText(t)
   await expect(panel.getByTestId('bundle-note')).toContainText('一对模块之间画一条束，线宽按束内元素级边条数；形态不止一种时标 ×N 元素')
   await expect(panel.getByLabel('表面元素四类')).toContainText('端口')
@@ -92,9 +95,12 @@ test('结构视角（L19、L21、D-26）：图例整组换成「依赖 · 形态
   await expect(count).toContainText(`本层只引类型的束 ${n} 条已收起`)
 })
 
-test('交互视角「代码事实」组：承载叠加一句与缺段虚线示意（L22）', async ({ page }) => {
+test('交互视角「代码事实 · 标签」组：标签词表与承载叠加一句（L22、L26）', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk')
-  await expect(page.getByRole('region', { name: '显示' }).getByTestId('carrier-legend')).toContainText('承载叠加')
+  const panel = page.getByRole('region', { name: '显示' })
+  await expect(panel.getByTestId('carrier-legend')).toContainText('承载叠加')
+  await expect(panel.getByTestId('carrier-legend')).toContainText('缺段')
+  for (const t of ['未证实', '违规', '未解释']) await expect(panel.locator(`[data-tag="${t}"]`)).toBeVisible()
 })
 
 test('时序图图例在副栏标题栏的「图例」里', async ({ page }) => {

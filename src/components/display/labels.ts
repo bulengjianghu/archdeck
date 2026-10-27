@@ -56,10 +56,11 @@ export const DEP_TIER_HINT: Record<DepTier, string> = {
 
 /** A2、L16：元素级边的形态，按 DEP_FORMS 的强弱次序（子类 ＞ 组装 ＞ 端口实现 ＞ 使用） */
 export const DEP_FORM_LABEL: Record<DepForm, string> = { subclass: '子类', assembly: '组装', implements: '端口实现', use: '使用' }
+/** L16（ADR-0035）：依赖一律虚线，形态只靠端点记号 */
 export const DEP_FORM_HINT: Record<DepForm, string> = {
-  subclass: '实线 + 空心三角，三角在基类一端',
-  assembly: '实线 + 实心菱形，菱形在组装者一端',
-  implements: '虚线 + 空心三角，三角在端口定义模块一端',
+  subclass: '虚线 + 空心三角，三角在基类一端',
+  assembly: '虚线 + 实心菱形，菱形在组装者一端',
+  implements: '虚线 + 空心菱形 ◇，◇ 在端口定义模块一端（与端口元素同一记号）',
   use: '虚线 + 开口箭头，指向被依赖方',
 }
 /** L21：束的一句说明（图例与帮助同文） */
@@ -94,12 +95,27 @@ export const IMPACT_MODE_HINT: Record<ImpactMode, string> = {
  * L18：共享通道——交互、结构、运行三个视角同义，三处图例同文（不得各自改写）。
  * 每项：示意种类与读法。
  */
-export const SHARED_CHANNELS: readonly { key: 'select' | 'dim' | 'violation' | 'cycle' | 'evolution' | 'width'; text: string }[] = [
+export const SHARED_CHANNELS: readonly {
+  key: 'select' | 'dim' | 'violation' | 'cycle' | 'evolution' | 'width' | 'solid' | 'dashed' | 'label'
+  text: string
+}[] = [
   { key: 'select', text: '选中：强调色窄晕' },
   { key: 'dim', text: '变淡：不在焦点内的节点与线降低不透明度' },
   { key: 'violation', text: '违规：红晕（已知的淡红晕）' },
   { key: 'cycle', text: '↻N：本层的环编号' },
-  { key: 'evolution', text: '演化：热度角标、同提交的波浪线' },
+  { key: 'evolution', text: '演化：热度角标、同提交的波浪线（线型的唯一例外）' },
   { key: 'width', text: '线宽 = 合了几条本图的边：1 条 / 2–4 / ≥5' },
+  // ADR-0035：线型只答「行为还是依赖」，异常与修饰写在标签位（L18、L26）
+  { key: 'solid', text: '实线 = 交互：谁调谁做什么' },
+  { key: 'dashed', text: '虚线 = 依赖：谁导入、继承、实现、组装谁' },
+  { key: 'label', text: '标签位：线中点只写 ×N 与异常、修饰（未证实、违规、回调……）' },
+]
+
+/** L26：代码事实一组的标签说明（交互视角，「代码事实」开时出现） */
+export const FACT_TAG_HINT: readonly { tag: '未证实' | '违规' | '未解释' | '缺段'; text: string }[] = [
+  { tag: '未证实', text: '交互关系没有代码证据；聚合边带条数（×5 · 未证实 2），总览只写计数' },
+  { tag: '违规', text: '基线外的违规依赖；关系边另加红晕，叠加虚线为红色' },
+  { tag: '未解释', text: '代码有依赖、描述没写交互：画成代码依赖叠加虚线' },
+  { tag: '缺段', text: '选中一条交互时承载叠加在图上，缺的一段画成警示色虚线' },
 ]
 export const SHARED_CHANNELS_TITLE = '共享 · 三个视角同义'

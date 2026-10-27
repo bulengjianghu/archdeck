@@ -107,7 +107,7 @@ describe('canvasScene', () => {
     expect(edge(paired, 'actor.biz->infra.player:calls')!.data.muted).toBe(false)
   })
 
-  it('P11、P15：经由上层关系的临时线取关系的类型、标「经由上层」，随关系选中；未建模的临时线标「未建模」', async () => {
+  it('P11、P15：经由上层关系的临时线取关系的类型、标「经上层」，随关系选中；未建模的临时线标「未建模」（L26 标签位、pill）', async () => {
     const { index: idx } = loadModel(
       scenarioFiles({
         'upper.yaml': 'relations: [{ id: r9, from: app.solution, to: infra.framework, type: streams }]',
@@ -123,15 +123,22 @@ describe('canvasScene', () => {
     const input: CanvasInput = { ...(await structure('infra')), index: idx, positioned, scenarioView: sv, stage }
     const s = canvasScene(input)
     const upper = edge(s, 'upper:boundary:app|infra.framework.pipeline')!
-    expect(upper.data).toMatchObject({ temp: 'upper', label: '经由上层', play: 'walked', selected: false })
+    expect(upper.data).toMatchObject({ temp: 'upper', label: '经上层', pill: true, play: 'walked', selected: false })
+    expect(upper.data.warn).toBeUndefined()
     expect(upper.data.edge).toMatchObject({ type: 'streams', relationIds: ['r9'] })
     expect(upper.data).toMatchObject({ arrow: 'closed', weight: 1, factState: 'confirmed' })
     expect(upper.data.port).toBeUndefined()
-    expect(edge(s, 'unmodeled:infra.framework.pipeline|boundary:app')!.data).toMatchObject({ temp: 'unmodeled', label: '未建模', play: 'current' })
+    expect(edge(s, 'unmodeled:infra.framework.pipeline|boundary:app')!.data).toMatchObject({
+      temp: 'unmodeled',
+      label: '未建模',
+      pill: true,
+      warn: true,
+      play: 'current',
+    })
     expect(edge(canvasScene({ ...input, selection: { kind: 'relation', id: 'r9' } }), upper.id)!.data.selected).toBe(true)
   })
 
-  it('L10、K9：线型只表事实状态、箭头表同步 / 异步、线宽档按条数；只标异常；选中不改线宽', async () => {
+  it('L10、K9：事实状态写在标签位（不进线型）、箭头表同步 / 异步、线宽档按条数；只标异常；选中不改线宽', async () => {
     const input = await structure('infra')
     const plain = canvasScene(input)
     const calls = edge(plain, 'infra.player->infra.framework:calls')!.data
@@ -144,7 +151,7 @@ describe('canvasScene', () => {
       'infra.player->infra.framework:calls',
     )!.data
     expect(selected).toMatchObject({ selected: true, weight: 1 })
-    // 代码事实：已证实不标；未证实为虚线 + ?；叠加线为点线
+    // 代码事实（L26）：已证实不标；未证实标「未证实」；叠加线标「未解释 N」
     const facts = {
       edgeFacts: new Map([
         ['infra.player->infra.framework:calls', 'confirmed' as const],
@@ -167,21 +174,39 @@ describe('canvasScene', () => {
     }
     const s = canvasScene({ ...input, facts })
     expect(edge(s, 'infra.player->infra.framework:calls')!.data).toMatchObject({ label: '', factState: 'confirmed' })
-    expect(edge(s, 'infra.framework->infra.player:notifies')!.data).toMatchObject({ label: '?', warn: true, factState: 'unconfirmed' })
-    expect(edge(s, 'dep:infra.mus->infra.player')!.data).toMatchObject({ temp: 'code', label: '未解释 2', factState: 'undescribed' })
+    expect(edge(s, 'infra.framework->infra.player:notifies')!.data).toMatchObject({ label: '未证实', pill: true, warn: true, factState: 'unconfirmed' })
+    expect(edge(s, 'dep:infra.mus->infra.player')!.data).toMatchObject({ temp: 'code', label: '未解释 2', pill: true, warn: true, factState: 'undescribed' })
+    // 违规在前（L26②）：叠加线「违规 N · 未解释 N」
+    const both = canvasScene({ ...input, facts: { ...facts, overlays: [{ ...facts.overlays[0], violations: 1 }] } })
+    expect(edge(both, 'dep:infra.mus->infra.player')!.data).toMatchObject({ label: '违规 1 · 未解释 2', violated: true })
+    // 开关关闭（没有代码事实）时不写这些标签
+    expect(edge(plain, 'infra.framework->infra.player:notifies')!.data.label).toBe('')
   })
 
-  it('L10：含多条关系的边标 ×N 并画成 pill，异常标记跟在后面；运行视角走过的边不标条数', async () => {
+  it('L10、L26：含多条关系的边标 ×N 并画成 pill，标签按 ` · ` 跟在后面；部分证实按逐条证实计条数', async () => {
     const { index: idx } = loadModel(scenarioFiles({ 'z.yaml': 'relations: [{ id: x1, from: infra.player, to: infra.framework.pipeline, type: calls }]' }))
     const view = projectLevel(idx, 'infra', { showBoundaries: true })
     const input = { ...(await structure('infra')), index: idx, positioned: await layoutView(view) }
     const id = 'infra.player->infra.framework:calls'
     expect(edge(canvasScene(input), id)!.data).toMatchObject({ label: '×2', pill: true, weight: 2 })
     const facts = { edgeFacts: new Map([[id, 'partial' as const]]), violatedEdges: new Set<string>(), overlays: [], cycles: new Map(), levelCycles: [] }
-    expect(edge(canvasScene({ ...input, facts }), id)!.data).toMatchObject({ label: '×2 ?', pill: true, warn: true })
+    // 没有逐条证实时退回视图边的证实标记：部分证实不知条数
+    expect(edge(canvasScene({ ...input, facts }), id)!.data).toMatchObject({ label: '×2 · 未证实', pill: true, warn: true })
+    // 逐条证实：两条中一条未证实写「未证实 1」，全部未证实省略条数
+    const rels = edge(canvasScene(input), id)!.data.edge.relationIds
+    const one = { ...facts, unconfirmed: new Map([[rels[0], { isolated: true }]]) }
+    const e1 = edge(canvasScene({ ...input, facts: one }), id)!.data
+    expect(e1.label).toBe('×2 · 未证实 1')
+    expect(e1.title).toContain('未证实（K9）')
+    expect(e1.title).toContain('两端之间没有任何代码依赖')
+    const all = { ...facts, unconfirmed: new Map(rels.map(r => [r, { isolated: false }])) }
+    expect(edge(canvasScene({ ...input, facts: all }), id)!.data.label).toBe('×2 · 未证实')
+    // 违规排在未证实前面，关系边另加红晕
+    const vio = { ...one, violatedEdges: new Set([id]) }
+    expect(edge(canvasScene({ ...input, facts: vio }), id)!.data).toMatchObject({ label: '×2 · 违规 · 未证实 1', violated: true, warn: true })
   })
 
-  it('标签没有坐标（elk 没给）而要标 ? 或 ×N 时，落在走线中点，不退到画布原点', async () => {
+  it('标签没有坐标（elk 没给）而要写标签或 ×N 时，落在走线中点，不退到画布原点', async () => {
     const input = await structure('infra')
     const pv = input.positioned!
     const [id, route] = [...pv.edges].find(([, r]) => r.points.length >= 2)!
@@ -189,7 +214,7 @@ describe('canvasScene', () => {
     edges.set(id, { points: route.points })
     const facts = { edgeFacts: new Map([[id, 'unconfirmed' as const]]), violatedEdges: new Set<string>(), overlays: [], cycles: new Map(), levelCycles: [] }
     const e = edge(canvasScene({ ...input, positioned: { ...pv, edges }, facts }), id)!
-    expect(e.data.label).toContain('?')
+    expect(e.data.label).toContain('未证实')
     expect(e.data.route.label).toEqual(routeMidpoint({ points: route.points }))
     expect(e.data.route.label).not.toEqual({ x: 0, y: 0 })
   })

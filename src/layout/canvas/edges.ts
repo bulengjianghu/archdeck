@@ -1,6 +1,7 @@
 /**
  * 画布场景的边（ADR-0013）：关系边（本层视图边与分层总览的核心跨层边）、回放叠加的临时线（P11、P15）与分支预览、
- * 代码事实叠加线（K9）、时间耦合的波浪线（J5）、组装叠加线（O12）。显隐、变淡、回放态、选中突出的灰化，以及视觉通道（L10：线型、箭头、线宽档、标签）都在这里定。
+ * 代码事实叠加线（K9）、时间耦合的波浪线（J5）、组装叠加线（O12）。显隐、变淡、回放态、选中突出的灰化，以及视觉通道（L10：箭头、线宽档；标签位按 L26 组装，labels.ts）都在这里定。
+ * 线型不在这里定：实线 = 交互、虚线 = 依赖（L18，ADR-0035），由画布按临时线种类取（edgeStyle）。
  */
 import {
   CARRIER_ROLE_TEXT,
@@ -35,10 +36,32 @@ import {
 import { isTemp, landingId } from '../stage'
 import type { SceneContext } from './context'
 import { DEP_KIND_LABELS, DEP_TIER_LABELS, ELEMENT_KIND_LABELS, depViewEdge, depWeight, elementAt, inImpact, routeToPoint } from './structure'
+import { composeLabel, hasWarnTag, type TagPart } from './labels'
 import type { CanvasEdge, EdgeArrow, FactState, RouteEdgeData } from './types'
 
-/** K9、L10：只标异常——未证实与部分证实画虚线并标 ?，已证实与没有事实的照常 */
+/** K9：证实状态（只进数据与面板，不改线型——L10、ADR-0035） */
 const factState = (fact: EdgeFact | undefined): FactState => (fact === 'unconfirmed' || fact === 'partial' ? 'unconfirmed' : 'confirmed')
+
+/** K9、L26：边上未证实的关系——有逐条证实时按关系计条数，否则退回视图边的证实标记（部分证实时条数未知） */
+function unconfirmedOf(ctx: SceneContext, e: ViewEdge): { ids: string[]; count?: number } | null {
+  const facts = ctx.facts
+  if (!facts) return null
+  if (facts.unconfirmed) {
+    const ids = e.relationIds.filter(id => facts.unconfirmed!.has(id))
+    return ids.length ? { ids, count: ids.length } : null
+  }
+  const f = facts.edgeFacts.get(e.id)
+  if (f === 'unconfirmed') return { ids: [...e.relationIds], count: e.relationIds.length }
+  return f === 'partial' ? { ids: [] } : null
+}
+
+/** L26⑤：未证实的悬停——逐条列出，缺的依赖写在后面 */
+function unconfirmedTitle(ctx: SceneContext, ids: readonly string[]): string | undefined {
+  if (!ids.length) return undefined
+  const line = (id: string) =>
+    `${relationText(ctx.input.index, id)}——${ctx.facts?.unconfirmed?.get(id)?.isolated ? '两端之间没有任何代码依赖（K6）' : '代码里没有与它相符的依赖（K5）'}`
+  return ['未证实（K9）：', ...ids.map(line)].join('\n')
+}
 
 /** L10：同步（含同步与异步混合）实心；异步空心（通知一律异步，relationMode） */
 export const arrowOf = (e: ViewEdge): EdgeArrow => (e.mode === 'async' ? 'open' : 'closed')
@@ -120,27 +143,45 @@ export function routeMidpoint(route: EdgeRoute): { x: number; y: number } {
   return pts[pts.length - 1]
 }
 
-function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined, core: boolean, extra: Partial<RouteEdgeData> = {}): CanvasEdge | null {
+/** makeEdge 的附加数据：tags 为这条线自带的 L26 标签（缺段、经上层、未建模、叠加线的计数），与关系边的标签一起按词表次序合并 */
+type EdgeExtra = Partial<RouteEdgeData> & { tags?: TagPart[] }
+
+function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined, core: boolean, extra0: EdgeExtra = {}): CanvasEdge | null {
   if (!route0) return null
+  const { tags, ...extra } = extra0
   const selected = ctx.selectedEdgeIds.has(e.id)
   const play = playOf(ctx, e.id)
   const fact = ctx.facts?.edgeFacts.get(e.id)
   const state = factState(fact)
-  // 运行视角下走过的边由步骤序号标注，不标条数；K9：异常标记跟在条数后；L23b：收起的交互束条数带把手数
+  // L26④：运行视角下走过的边由步骤序号标注，不标条数，标签照写；L23b：收起的交互束条数带把手数
   const quiet = !!ctx.st && !!play.play
-  const count = quiet ? '' : (extra.handles ?? edgeLabel(e))
-  const mark = state === 'unconfirmed' ? '?' : ''
-  // L24（第十一轮）：经回调写在标签位——单条「回调」，聚合边全部经回调「×N · 回调」、部分「×N · 回调 M」
+  const head = quiet ? '' : (extra.handles ?? edgeLabel(e))
+  const total = e.relationIds.length
+  // L26②：标签位按词表次序合并——违规（K9）、未证实（K9；③分层总览只写在聚合边上、总带条数）、回调（L24）、混合（D8）
+  const violated = !!ctx.facts?.violatedEdges.has(e.id)
+  const unc = unconfirmedOf(ctx, e)
+  const uncTag: TagPart | null = !unc
+    ? null
+    : ctx.layered
+      ? total > 1
+        ? { tag: '未证实', count: unc.count }
+        : null
+      : { tag: '未证实', count: unc.count, total }
   const callbacks = callbackRelations(ctx.input.index, e)
-  const cb = quiet || !callbacks.length ? '' : callbacks.length === e.relationIds.length || e.relationIds.length === 1 ? '回调' : `回调 ${callbacks.length}`
-  const head = [count, cb].filter(Boolean).join(' · ')
-  // D8：束内同步 / 异步、via 不一致时加「混合」记号
-  const label = extra.label ?? [head, mark, extra.mixed ? '混合' : ''].filter(Boolean).join(' ')
+  const parts: (TagPart | null)[] = [
+    violated && !extra.temp ? { tag: '违规' } : null,
+    uncTag,
+    callbacks.length ? { tag: '回调', count: callbacks.length, total } : null,
+    extra.mixed ? { tag: '混合' } : null,
+    ...(tags ?? []),
+  ]
+  const label = extra.label ?? composeLabel(head, parts)
   const route = label && !route0.label ? { ...route0, label: routeMidpoint(route0) } : route0
-  // L24：悬停说明接在其余说明之后；配对的正向关系供悬停时一起高亮（L25）
-  const cbTitle = callbackTitle(ctx.input.index, callbacks, e.relationIds.length > 1)
+  // L24：悬停说明接在其余说明之后；配对的正向关系供悬停时一起高亮（L25）；L26⑤：未证实逐条列出
+  const cbTitle = callbackTitle(ctx.input.index, callbacks, total > 1)
   const pairs = ctx.input.index ? [...new Set(callbacks.flatMap(id => callbackPairs(ctx.input.index!, id)))] : []
-  const title = [extra.title, cbTitle].filter(Boolean).join('\n\n') || undefined
+  const vioTitle = violated && !extra.temp ? '违规（K9）：这对节点之间有基线外的违规依赖（面板列出）' : ''
+  const title = [extra.title, vioTitle, uncTag ? unconfirmedTitle(ctx, unc!.ids) : '', cbTitle].filter(Boolean).join('\n\n') || undefined
   return {
     id: core ? `core:${e.id}` : e.id,
     source: e.from,
@@ -151,8 +192,8 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined,
       route,
       edge: e,
       label,
-      ...(head ? { pill: true } : {}),
-      ...(mark ? { warn: true } : {}),
+      ...(label ? { pill: true } : {}),
+      ...(hasWarnTag(parts) ? { warn: true } : {}),
       factState: state,
       arrow: arrowOf(e),
       weight: edgeWeight(e),
@@ -257,7 +298,7 @@ function spreadEdges(ctx: SceneContext, e: ViewEdge, route: EdgeRoute | undefine
     const id = spreadEdgeId(e.id, name)
     if ((sel?.kind === 'relation' && rels.includes(sel.id)) || (sel?.kind === 'edge' && sel.id === e.id)) ctx.selectedEdgeIds.add(id)
     const part: ViewEdge = { ...e, id, relationIds: rels }
-    out.push(makeEdge(ctx, part, ctx.pv.edges.get(id), false, rels.length > 1 ? {} : { label: '' }))
+    out.push(makeEdge(ctx, part, ctx.pv.edges.get(id), false))
   }
   const rest = e.relationIds.filter(id => ![...groups.values()].some(r => r.includes(id)))
   if (rest.length) out.push(makeEdge(ctx, { ...e, relationIds: rest }, route, false, mixed))
@@ -287,7 +328,7 @@ export function spreadHits(ctx: SceneContext): Map<string, Set<string>> {
   return out
 }
 
-/** 回放叠加的边：P11、P15 本层没有视图边的消息画临时线，不参与布局——经由上层关系为关系类型色的虚线，未建模为红色虚线；分支预览同样画临时线 */
+/** 回放叠加的边：P11、P15 本层没有视图边的消息画临时线，不参与布局——经由上层关系为关系类型色的实线、标「经上层」，未建模为红色实线、标「未建模」（L18、L26）；分支预览同样画临时线 */
 export function replayEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   const { st, emphEdges } = ctx
   if (!st) return []
@@ -295,9 +336,7 @@ export function replayEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   const list = st.temps.map(u =>
     makeEdge(ctx, tempEdge(idx, u.edgeId, u.from, u.to, u.relationId), u.route, false, {
       temp: u.kind,
-      label: u.kind === 'upper' ? '经由上层' : '未建模',
-      pill: false,
-      warn: false,
+      tags: [{ tag: u.kind === 'upper' ? '经上层' : '未建模' }],
       muted: !!emphEdges && !emphEdges.has(u.edgeId),
     }),
   )
@@ -351,17 +390,18 @@ export function evolutionEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   })
 }
 
-/** 代码事实叠加（K9）：代码依赖叠加线，不参与布局 */
+/** 代码事实叠加（K9）：代码依赖叠加线（虚线，L18），不参与布局；标「违规 N · 未解释 N」（L26） */
 export function factEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   return (ctx.facts?.overlays ?? []).map(o => {
-    const label = [o.undescribed ? `未解释 ${o.undescribed}` : '', o.violations ? `违规 ${o.violations}` : ''].filter(Boolean).join(' · ')
+    const tags: TagPart[] = [
+      ...(o.violations ? [{ tag: '违规' as const, count: o.violations }] : []),
+      ...(o.undescribed ? [{ tag: '未解释' as const, count: o.undescribed }] : []),
+    ]
     const ve: ViewEdge = { id: o.id, kind: 'direct', from: o.from, to: o.to, type: 'calls', relationIds: [], mode: 'sync' }
     const route = linkRoute(ctx.pv.nodes.get(o.from), ctx.pv.nodes.get(o.to))
     return makeEdge(ctx, ve, route, false, {
       temp: 'code',
-      label,
-      warn: true,
-      pill: false,
+      tags,
       factState: 'undescribed',
       overlay: o,
       ...(o.violations ? { violated: true } : {}),
@@ -369,7 +409,7 @@ export function factEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   })
 }
 
-/** O12：组装叠加线——组装事实投影到本层的点划线（组装专用色），不参与布局；同一对节点合并标 ×N；单击落到这对节点的代码依赖（K10） */
+/** O12：组装叠加线——组装事实投影到本层的虚线（组装专用色，依赖方一端实心菱形，L18、L16），不参与布局；同一对节点合并标 ×N；单击落到这对节点的代码依赖（K10） */
 export function assemblyEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   if (ctx.st || ctx.structure) return []
   return (ctx.input.assembly ?? []).map(o => {
@@ -378,8 +418,6 @@ export function assemblyEdges(ctx: SceneContext): (CanvasEdge | null)[] {
     return makeEdge(ctx, ve, route, false, {
       temp: 'assembly',
       label: o.count > 1 ? `×${o.count}` : '',
-      pill: o.count > 1,
-      warn: false,
       factState: 'confirmed',
       assembly: o,
       violated: false,
@@ -389,7 +427,7 @@ export function assemblyEdges(ctx: SceneContext): (CanvasEdge | null)[] {
 
 /**
  * L15、L16、L21、C6：结构视角的结构边——画出来的束、散开的元素级边与跨层依赖（structureScene 的显隐之后），编码数据交给 DepEdge（UML 类图惯例）。
- * 标签只有角标与异常标记：形态不止一种的束「×N 元素」（L21①）、越过入口（C3）、未解释（K17）、逆稳定（U17，浅色）；
+ * 标签只有角标与异常标记（L26）：形态不止一种的束「×N 元素」（L21①）、违规（U15 基线外）、未解释（K17）、越过入口（C3）、逆稳定（U17，浅色）；
  * 变淡：影响面生效时两端不都在闭包里的边；选中束时不在聚焦里的（B3）；否则与聚焦节点无关的边（共享通道）。
  */
 export function depEdges(ctx: SceneContext): (CanvasEdge | null)[] {
@@ -403,14 +441,10 @@ export function depEdges(ctx: SceneContext): (CanvasEdge | null)[] {
     const touches = !!ctx.focusId && (e.from === ctx.focusId || e.to === ctx.focusId)
     const unfocused = !!sc.focus && !sc.focus.has(e.bundle ?? e.id) && !e.chip
     const dim = sc.impact ? !(inImpact(sc, nodeOf(e.from)) && inImpact(sc, nodeOf(e.to))) && !selected : unfocused || (!!ctx.near && !touches && !selected)
-    const label = [
-      e.look.rest ? `×${e.look.elements} 其余` : e.look.elements ? `×${e.look.elements} 元素` : '',
-      e.look.bypass ? '越过入口' : '',
-      e.look.unexplained ? '未解释' : '',
-      e.look.against ? '逆稳定' : '',
-    ]
-      .filter(Boolean)
-      .join(' · ')
+    // L26：角标之后先写词表里的异常（违规 = 基线外新增，U15；未解释，K17），再写结构视角自己的记号（越过入口 C3、逆稳定 U17）
+    const head = e.look.rest ? `×${e.look.elements} 其余` : e.look.elements ? `×${e.look.elements} 元素` : ''
+    const tags: TagPart[] = [...(e.look.violation === 'new' ? [{ tag: '违规' as const }] : []), ...(e.look.unexplained ? [{ tag: '未解释' as const }] : [])]
+    const label = [composeLabel(head, tags), e.look.bypass ? '越过入口' : '', e.look.against ? '逆稳定' : ''].filter(Boolean).join(' · ')
     const route = label && !route0.label ? { ...route0, label: routeMidpoint(route0) } : route0
     return {
       id: e.id,
@@ -423,7 +457,7 @@ export function depEdges(ctx: SceneContext): (CanvasEdge | null)[] {
         route,
         edge: depViewEdge(e),
         label,
-        ...(e.look.unexplained || e.look.bypass ? { warn: true } : {}),
+        ...(hasWarnTag(tags) || e.look.bypass ? { warn: true } : {}),
         factState: 'confirmed' as const,
         arrow: 'open' as const,
         weight: depWeight(e.look.deps),
@@ -459,9 +493,6 @@ export function carriedEdges(ctx: SceneContext): (CanvasEdge | null)[] {
     out.push(
       makeEdge(ctx, ve, route, false, {
         temp: 'carried',
-        label: rel.length > 1 ? `承载 ×${rel.length}` : '承载',
-        pill: false,
-        warn: false,
         factState: 'confirmed',
         selected: false,
         dim: false,
@@ -474,7 +505,7 @@ export function carriedEdges(ctx: SceneContext): (CanvasEdge | null)[] {
 
 /**
  * L22、D4：交互视角选中一条交互时它的承载段临时画在同一画布上并高亮——元素级边按结构视图的形态记号（DepEdge），
- * 接到元素端口（被依赖方展开时）或节点本体；缺的段画成提示虚线；两端投到本层同一节点或不在本层的段不画（面板定位）。不参与布局与跳线。
+ * 接到元素端口（被依赖方展开时）或节点本体；缺的段画成警示色虚线、标「缺段」（L26）；两端投到本层同一节点或不在本层的段不画（面板定位）。不参与布局与跳线。
  */
 export function carrierEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   const c = ctx.input.carrier
@@ -495,9 +526,7 @@ export function carrierEdges(ctx: SceneContext): (CanvasEdge | null)[] {
       out.push(
         makeEdge(ctx, ve, route, false, {
           temp: 'carrier-gap',
-          label: `缺：${role}`,
-          pill: false,
-          warn: true,
+          tags: [{ tag: '缺段' }],
           factState: 'unconfirmed',
           selected: false,
           dim: false,

@@ -25,6 +25,20 @@ describe('K9、K10、Y4、Y5 本层投影', () => {
     expect([...f.cycles.keys()].sort()).toEqual(['boundary:core', 'ui.store', 'ui.view'])
   })
 
+  it('K9、L26：本层视图边上未证实的关系逐条记下（标签位按它计条数），带两端之间是否没有任何依赖（K6）', () => {
+    const { index } = loadModel([...files(), { path: 'modules/z.yaml', text: 'relations: [{ id: rel.u, from: ui.store, to: ui.view, type: commands }]' }])
+    const report = governanceReport(index, assignFiles(index, SRC, []), { files: SRC, packages: {} }, CODE, null)
+    const view = projectLevel(index, 'ui')
+    const f = levelFacts(index, view, report)
+    const onLevel = new Set([...view.edges, ...(view.coreEdges ?? [])].flatMap(e => e.relationIds))
+    const want = [...onLevel].filter(id => report.relations.get(id)?.status === 'unconfirmed').sort()
+    expect(want.length).toBeGreaterThan(0)
+    expect([...f.unconfirmed!.keys()].sort()).toEqual(want)
+    for (const [id, u] of f.unconfirmed!) expect(u.isolated).toBe(!!report.relations.get(id)!.isolated)
+    // 已证实与不判定的不在其中
+    for (const id of onLevel) if (report.relations.get(id)?.status !== 'unconfirmed') expect(f.unconfirmed!.has(id)).toBe(false)
+  })
+
   it('K9：画布只画基线外的违规——已知（基线内）与已豁免的不进叠加线与红晕，面板照常列出', () => {
     const { index, report: open } = setup()
     const all = open.violations.filter(v => v.status !== 'allowed').map(v => v.key)

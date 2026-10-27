@@ -1,6 +1,6 @@
 /**
  * O12 组装叠加（ADR-0030）：「组装」开关（缺省关、不进 URL、草图画布下无效）、组装事实按 mapEndpoint 投影到本层（levelAssembly）、
- * 组装根按最深模块聚合到本层节点、画布的点划叠加线与「组装根」角标（运行视角不画）。
+ * 组装根按最深模块聚合到本层节点、画布的叠加虚线（依赖方一端实心菱形，ADR-0035）与「组装根」角标（运行视角不画）。
  */
 import { describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
@@ -10,7 +10,7 @@ import { DEFAULT_TOGGLES } from '../../src/state/transition'
 import { blocked } from '../../src/state/transition/edit'
 import { layoutView } from '../../src/layout/layout'
 import { canvasScene, type CanvasInput } from '../../src/layout/canvas'
-import { strokeStyle, DASH_DOT } from '../../src/components/edges/edgeStyle'
+import { strokeStyle, DASHED } from '../../src/components/edges/edgeStyle'
 import { levelAssembly, loadModel, projectLevel, RELATION_TYPES, type AssemblyFact, type FactsPayload, type FileDep, type SourcePayload } from '../../src/model'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
@@ -97,7 +97,7 @@ describe('O12 「组装」开关与画布', () => {
     expect(desk.facts.assembly.value).toBeNull()
   })
 
-  it('画布：点划叠加线（组装专用色，标 ×N）与「组装根」角标；运行视角不画', async () => {
+  it('画布：叠加虚线（组装专用色，标 ×N）与「组装根」角标；运行视角不画', async () => {
     const { desk } = await setup('/')
     desk.setToggles({ assembly: true })
     await flush()
@@ -123,7 +123,8 @@ describe('O12 「组装」开关与画布', () => {
     const e = scene.edges.find(x => x.id === 'asm:domain->infra')!
     expect(e.data).toMatchObject({ temp: 'assembly', label: '', assembly: { fromModule: 'domain', toModule: 'infra' } })
     expect(scene.edges.find(x => x.id === 'asm:app->infra')!.data).toMatchObject({ label: '×3', pill: true })
-    expect(strokeStyle({ temp: 'assembly' })).toMatchObject({ stroke: 'var(--assembly)', strokeDasharray: DASH_DOT })
+    // O12、L18（ADR-0035）：组装是依赖——虚线（菱形端点见 RouteEdge）
+    expect(strokeStyle({ temp: 'assembly' })).toMatchObject({ stroke: 'var(--assembly)', strokeDasharray: DASHED })
     expect(scene.nodes.find(n => n.id === 'domain')!.data.assemblyRoot).toBe(1)
     expect(scene.nodes.find(n => n.id === 'app')!.data.assemblyRoot).toBeUndefined()
     // 选中代码依赖时，组装叠加线随之选中（K10）

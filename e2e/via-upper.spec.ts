@@ -4,12 +4,14 @@ import { openDesk, query } from './helpers'
 
 const BEGIN = '/p/h5player?level=infra.framework&sc=sc.switch-transaction&step=sc.switch-transaction%23begin'
 
-test('beginXxxModelSwitch()：结构图画「经由上层」类型色虚线、时序图标「经由上层关系」；面板定位到上层关系', async ({ page }) => {
+test('beginXxxModelSwitch()：交互图画类型色实线临时线、标签位写「经上层」（ADR-0035）、时序图标「经由上层关系」；面板定位到上层关系', async ({ page }) => {
   await openDesk(page, BEGIN)
   const line = page.locator('.vue-flow__edge[data-id^="upper:"]')
   await expect(line).toHaveCount(1)
-  await expect(line).toContainText('经由上层')
-  await expect(line.locator('path.vue-flow__edge-path')).toHaveCSS('stroke-dasharray', '6px, 4px')
+  await expect(line).toContainText('经上层')
+  // L18：是一次交互——实线（不是依赖的虚线）
+  await expect(line.locator('path.vue-flow__edge-path')).toHaveCSS('stroke-dasharray', 'none')
+  await expect(line.locator('.edge-label-pill')).toBeAttached()
   await expect(page.locator('.vue-flow__edge[data-id^="unmodeled:"]')).toHaveCount(0)
   await expect(page.locator('.msg.selected .upper-tag')).toContainText('经由上层关系')
   await expect(page.locator('.msg .tag')).toHaveCount(0)

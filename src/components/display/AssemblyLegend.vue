@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 「显示」面板 · 组装（O12，结构视角）：组标题右侧是「组装」开关（缺省关，按项目记在本地，不进 URL）；
- * 开启后把组装事实（K13）投影到本层画点划叠加线（不参与布局，单击落到代码依赖），组装根所在的节点标「组装根」角标。
+ * 开启后把组装事实（K13）投影到本层画叠加虚线（依赖，L18；依赖方一端实心菱形，同 L16 组装；不参与布局，单击落到代码依赖），组装根所在的节点标「组装根」角标。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -29,8 +29,8 @@ const count = computed(() => desk.facts.assembly.value?.overlays.length ?? 0)
     <div v-else-if="!desk.toggles.assembly" class="item muted">已关闭：打开后叠加组装事实（谁把谁装起来），标出组装根</div>
     <template v-else>
       <div class="item">
-        <span class="sw"><LineSwatch :look="{ temp: 'assembly' }" arrow="closed" /></span>
-        <span>点划线 = 组装（new / 工厂 / 注册，不参与布局）{{ count ? '' : '；本层没有' }}</span>
+        <span class="sw"><LineSwatch :look="{ temp: 'assembly' }" arrow="open" /></span>
+        <span>虚线 + 实心菱形 = 组装（new / 工厂 / 注册，菱形在组装者一端，不参与布局）{{ count ? '' : '；本层没有' }}</span>
       </div>
       <div class="item">
         <span class="sw"><span class="root">组装根</span></span

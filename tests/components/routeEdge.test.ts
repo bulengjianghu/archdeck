@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** 关系边的视觉通道（L10、L12、K9、P15）：四类各一色相（查询淡）、线型只表事实状态、箭头表同步 / 异步、插座表经端口、线宽只按条数三档、选中为窄晕不改线宽 */
+/** 关系边的视觉通道（L10、L12、K9、P11、P15、F6、L18）：四类各一色相（查询淡）、线型只答行为还是依赖（ADR-0035）、箭头表同步 / 异步、插座表经端口、线宽只按条数三档、选中为窄晕不改线宽 */
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import RouteEdge from '../../src/components/edges/RouteEdge.vue'
@@ -41,18 +41,51 @@ describe('RouteEdge', () => {
     expect(d.endsWith(`L0,${100 - arrowDepth(arrowSize(1))}`)).toBe(true)
   })
 
-  it('已证实为实线；未证实为虚线；叠加线为点线（叠加线专用色）', () => {
+  it('L10、L18：交互边一律实线——已证实、未证实都是实线（事实状态写在标签位）；代码依赖叠加线是依赖，虚线（叠加线专用色）', () => {
     expect(render({}).style).not.toContain('dasharray')
-    expect(render({ factState: 'unconfirmed' }).style).toContain('stroke-dasharray: 6 4')
+    expect(render({ factState: 'unconfirmed', label: '未证实', warn: true }).style).not.toContain('dasharray')
     const code = render({ temp: 'code', factState: 'undescribed' }).style
-    expect(code).toContain('stroke-dasharray: 0.5 4.5')
+    expect(code).toContain('stroke-dasharray: 6 4')
     expect(code).toContain('var(--edge-code)')
   })
 
-  it('P15：经由上层的临时线为关系类型色的虚线', () => {
+  it('L18：依赖类的线用依赖的端点记号——叠加线与缺段开口箭头，组装叠加依赖方一端实心菱形', () => {
+    const code = render({ temp: 'code' }).w
+    expect(code.findAll('marker.uml-marker')).toHaveLength(1)
+    expect(code.find('marker.uml-marker path').attributes('fill')).toBe('none')
+    const gap = render({ temp: 'carrier-gap' })
+    expect(gap.style).toContain('stroke-dasharray: 6 4')
+    expect(gap.style).toContain('var(--warning)')
+    const asm = render({ temp: 'assembly' })
+    expect(asm.style).toContain('stroke-dasharray: 6 4')
+    expect(asm.style).toContain('var(--assembly)')
+    expect(asm.w.findAll('marker.uml-marker')).toHaveLength(2)
+    expect(asm.w.find('path.vue-flow__edge-path').attributes('marker-start')).toMatch(/^url\(#arrow-e1-start\)$/)
+    // 交互边仍是同步 / 异步箭头
+    expect(render({}).w.find('marker.uml-marker').exists()).toBe(false)
+  })
+
+  it('P15、P11、F6：经由上层（类型色）、未建模（红）与分支预览（降低不透明度）的临时线都是交互，实线', () => {
     const s = render({ temp: 'upper', edge: { ...base.edge, type: 'streams' } }).style
     expect(s).toContain('var(--rel-streams)')
-    expect(s).toContain('stroke-dasharray: 6 4')
+    expect(s).not.toContain('dasharray')
+    const u = render({ temp: 'unmodeled' }).style
+    expect(u).toContain('var(--danger)')
+    expect(u).not.toContain('dasharray')
+    const p = render({ play: 'preview' }).style
+    expect(p).not.toContain('dasharray')
+    expect(p).toContain('opacity: 0.6')
+  })
+
+  it('J5：时间耦合是线型的唯一例外——波浪线，不是虚线', () => {
+    const c = render({ temp: 'couple', label: '×3', pill: true })
+    expect(c.style).not.toContain('dasharray')
+    expect(c.w.find('path.vue-flow__edge-path').attributes('d')!.split(' L').length).toBeGreaterThan(4)
+  })
+
+  it('L26：标签位画成 pill，含异常时为警示色', () => {
+    const w = render({ label: '×2 · 未证实', pill: true, warn: true }).w
+    expect(w.find('g.edge-label-pill.edge-label-warn').exists()).toBe(true)
   })
 
   it('箭头：同步实心、异步空心（没有空心三角）', () => {

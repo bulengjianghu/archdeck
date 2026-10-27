@@ -95,6 +95,9 @@ describe('L16、L21① 束的编码', () => {
     const { scene: s } = await sceneOf(desk)
     const v = dep(s, 'bundle:core.log->boundary:ui')
     expect(v.data.dep).toMatchObject({ tier: 'type', violation: 'new' })
+    // L26：基线外的违规在标签位写「违规」（警示色），排在未解释之前
+    expect(v.data.label.split(' · ')).toContain('违规')
+    expect(v.data.warn).toBe(true)
   })
 })
 
@@ -145,7 +148,9 @@ describe('B3 选中束：聚焦与反向高亮承载的交互（L22）', () => {
     const carried = s.edges.filter(e => e.data.temp === 'carried')
     expect(carried).toHaveLength(1)
     expect(carried[0].data.edge.relationIds.sort()).toEqual(['rel.q', 'rel.q2'])
-    expect(carried[0].data.label).toBe('承载 ×2')
+    // L26：标签位只写条数（「承载」由强调色晕表达，说明在悬停里）
+    expect(carried[0].data.label).toBe('×2')
+    expect(carried[0].data.title).toMatch(/^这条束承载的交互/)
     desk.select(null)
     const back = (await sceneOf(desk)).scene
     expect(deps(back).some(e => e.data.dim)).toBe(false)
@@ -232,7 +237,7 @@ describe('C6、L20 表面展开', () => {
 })
 
 describe('L22 承载叠加（交互视角）', () => {
-  it('选中一条交互时承载段以结构边的形态记号临时画出并高亮，接到元素；缺段画提示虚线；无关的边与节点变淡', async () => {
+  it('选中一条交互时承载段以结构边的形态记号临时画出并高亮，接到元素；缺段标「缺段」（L26，缺哪段在悬停）；无关的边与节点变淡', async () => {
     const desk = await openDesk('/?level=core')
     desk.select({ kind: 'relation', id: 'rel.q' })
     await settle(desk)
@@ -249,8 +254,8 @@ describe('L22 承载叠加（交互视角）', () => {
     desk.select({ kind: 'relation', id: 'rel.gap' })
     await settle(desk)
     const gap = (await sceneOf(desk)).scene.edges.find(e => e.data.temp === 'carrier-gap')!
-    expect(gap.data.label).toMatch(/^缺：/)
-    expect(gap.data.factState).toBe('unconfirmed')
+    expect(gap.data).toMatchObject({ label: '缺段', pill: true, warn: true, factState: 'unconfirmed' })
+    expect(gap.data.title).toMatch(/缺段：/)
   })
 })
 

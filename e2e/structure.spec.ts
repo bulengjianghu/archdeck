@@ -1,5 +1,5 @@
 /**
- * 交互视角的第八轮呈现（ADR-0032）：选中一条交互时承载叠加（L22：承载段按结构视图的形态记号临时画出并高亮，缺段提示虚线，其余变淡），
+ * 交互视角的第八轮呈现（ADR-0032）：选中一条交互时承载叠加（L22：承载段按结构视图的形态记号临时画出（虚线）并高亮，缺段为警示色虚线并标「缺段」，其余变淡），
  * 接收方表面展开时交互束按接口散开（L23，只画被交互接到的元素），束内修饰不一致标「混合」（D8）；结构视角选中束时反向高亮它承载的交互（L22）。
  */
 import { expect, test } from '@playwright/test'
@@ -11,6 +11,15 @@ test('L22：选中一条经端口的交互，承载段临时画出并高亮，�
   await expect(seg.first()).toBeAttached()
   await expect(seg.first().locator('.dep-edge.dep-carrier')).toBeAttached()
   await expect(seg.first().locator('title')).toHaveText(/承载（经端口/)
+  // §6.22：叠出的承载段全是虚线（依赖），选中的交互是实线
+  for (const p of await seg.locator('path.vue-flow__edge-path').all()) await expect(p).toHaveCSS('stroke-dasharray', '6px, 4px')
+  await expect(
+    page
+      .locator('.vue-flow__edge-route')
+      .filter({ has: page.locator('.edge-selected') })
+      .first()
+      .locator('path.vue-flow__edge-path'),
+  ).toHaveCSS('stroke-dasharray', 'none')
   await expect(page.locator('.vue-flow__node .dim').first()).toBeAttached()
   // 接收方展开：只画被交互 / 承载段接到的元素
   await expect(graphNode(page, 'app.factories').getByTestId('surface-marks')).toBeAttached()
@@ -53,6 +62,8 @@ test('L22 反向：结构视角选中束时它承载的交互临时画出；单�
   await edge.locator('path.vue-flow__edge-interaction').dispatchEvent('click')
   const carried = page.locator('.vue-flow__edge-route g[data-temp="carried"]')
   await expect(carried.first()).toBeAttached()
+  // L22、L18：反向画出的承载交互是交互——实线
+  await expect(carried.first().locator('path.vue-flow__edge-path')).toHaveCSS('stroke-dasharray', 'none')
   await carried.first().locator('path.vue-flow__edge-interaction').dispatchEvent('click')
   await expect(page.locator('.perspective .seg[data-mode="interaction"]')).toHaveClass(/on/)
   expect(query(page).get('sel')).toMatch(/^r:/)

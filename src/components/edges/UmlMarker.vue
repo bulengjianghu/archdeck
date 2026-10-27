@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * 结构边的端点记号（L16）：开口箭头、空心三角（子类、端口实现）、实心菱形（组装）。
+ * 依赖的端点记号（L16、L16a ⑤）：开口箭头、空心三角（子类）、空心菱形 ◇（端口实现，ADR-0035）、实心菱形（组装）；◇ 与实心菱形同尺寸、只差填充。
  * markerUnits 为 userSpaceOnUse、原点在线回缩后的端点：终点记号（marker-end）x 轴沿走线方向；起点记号（marker-start）用 auto-start-reverse，同样指向原端点。
- * 画布的 DepEdge 与「显示」面板的图例共用。
+ * 画布的 DepEdge、RouteEdge 上依赖类的线（代码依赖叠加线、组装叠加、承载缺段）与「显示」面板的图例共用。
  */
 import { computed } from 'vue'
 import { umlDepth, umlPath, type UmlEnd } from './depStyle'
@@ -34,7 +34,7 @@ const box = computed(() => ({ x: -3, y: -props.size / 2 - 3, w: d.value + 6, h: 
       stroke-linecap="round"
     />
     <path
-      v-else-if="end === 'triangle'"
+      v-else-if="end === 'triangle' || end === 'port'"
       :d="umlPath(end, size)"
       fill="var(--surface)"
       :stroke="color"

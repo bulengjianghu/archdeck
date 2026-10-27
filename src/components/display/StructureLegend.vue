@@ -151,7 +151,7 @@ const crossCount = computed(() => hiddenWith({})?.cross ?? 0)
       <div class="item muted">{{ hint || '没有代码事实' }}</div>
       <div class="item">
         <span class="sw kind"><StructureSwatch kind="allowed" /></span>
-        <span>点线 = 规则允许的依赖（mayDependOn）；没有代码事实，只画允许依赖</span>
+        <span>浅虚线 = 规则允许的依赖（mayDependOn）；没有代码事实，只画允许依赖</span>
       </div>
     </template>
   </DisplayGroup>

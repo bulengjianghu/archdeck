@@ -119,3 +119,20 @@
   white-space: nowrap;
   color: var(--text-2);
 }
+
+/* L26：标签位的示意——与画布 pill 同款（带边框、加粗）；warn 为异常的警示色 */
+.display .tag-pill {
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  color: var(--text-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  white-space: nowrap;
+}
+
+.display .tag-pill.warn {
+  color: var(--warning);
+  border-color: var(--warning);
+}

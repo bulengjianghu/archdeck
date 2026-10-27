@@ -56,6 +56,8 @@
   --dep-tier-type: var(--text-3);
   --dep-fact: var(--text-2);
   --dep-allowed: #2f8f6a;
+  /* U16（ADR-0035）：允许边画浅一档的虚线（与底色混合，不用透明度） */
+  --dep-allowed-soft: #7dbca3;
   --stability-stable: #4a8fd6;
   --stability-mid: #a3abb8;
   --stability-unstable: #e08a2e;
@@ -112,6 +114,7 @@
     --diff-changed-soft: #3a2f1c;
     --diff-removed: #ef7a7a;
     --dep-allowed: #4cc49a;
+    --dep-allowed-soft: #2f7d63;
     --stability-stable: #6ba6eb;
     --stability-mid: #6c7686;
     --stability-unstable: #eba052;
@@ -240,7 +243,7 @@ a {
   font-size: 11px;
 }
 
-/* 聚合边的 ×N（L10）：带边框的 pill，与直接边区分 */
+/* 标签位（L26）：×N、把手与异常和修饰写在一个带边框的 pill 里 */
 .edge-label-pill .vue-flow__edge-textbg {
   stroke: var(--border-strong);
   stroke-width: 1;
@@ -250,10 +253,14 @@ a {
   font-weight: 600;
 }
 
-/* 异常标记（? / 未解释 / 违规） */
+/* 标签含异常（违规 / 未证实 / 未解释 / 缺段 / 未建模，L26）：警示色字、警示色边框 */
 .edge-label-warn .vue-flow__edge-text {
   fill: var(--warning);
   font-weight: 600;
+}
+
+.edge-label-pill.edge-label-warn .vue-flow__edge-textbg {
+  stroke: var(--warning);
 }
 
 /* ── 设计版本的变更标记：节点描边 + 角标（各节点组件共用；需压过节点组件自身的边框与阴影） ── */

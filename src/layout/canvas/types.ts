@@ -175,7 +175,7 @@ export interface NodePorts {
   selected?: string
 }
 
-/** L10：线型表示的事实状态——已证实或没有代码事实（实线）/ 未证实或部分证实（虚线）/ 代码有描述无（点线） */
+/** K9：事实状态——已证实或没有代码事实 / 未证实或部分证实 / 代码有描述无；不进线型（L10、ADR-0035），未证实写在标签位（L26） */
 export type FactState = 'confirmed' | 'unconfirmed' | 'undescribed'
 
 /** L10：箭头——同步实心、异步空心 */
@@ -184,11 +184,11 @@ export type EdgeArrow = 'closed' | 'open'
 export interface RouteEdgeData {
   route: EdgeRoute
   edge: ViewEdge
-  /** L10：只有聚合条数（×N）与异常标记；运行视角走过的边为空 */
+  /** L26：标签位——×N、把手与词表里的异常和修饰（` · ` 连接）；运行视角走过的边不标条数 */
   label: string
-  /** 标签含 ×N：画成带边框的 pill */
+  /** 有标签：画成带边框的 pill（L26） */
   pill?: boolean
-  /** 标签含异常标记（? / 未解释 / 违规） */
+  /** 标签含异常（违规 / 未证实 / 未解释 / 缺段 / 未建模）：警示色 */
   warn?: boolean
   factState: FactState
   arrow: EdgeArrow
@@ -223,7 +223,7 @@ export interface RouteEdgeData {
   temp?: TempLine['kind'] | 'code' | 'couple' | 'assembly' | 'carried' | 'carrier-gap'
   /** 悬停说明（D8：交互束内修饰不一致时列出各条；L22：缺段的说明） */
   title?: string
-  /** D8：交互束内同步 / 异步、via 不一致（标签加「混合」） */
+  /** D8：交互束内同步 / 异步、via 不一致（标签位加「混合」，L26） */
   mixed?: boolean
   /** L23b：收起的交互束的把手角标（`×N · M 把手`）；有它时 title 为按子模块分组的悬停列表 */
   handles?: string

@@ -1,5 +1,5 @@
 /**
- * 边界与组装（ADR-0030）：L14 边界角色压在框上边 / 右边；O12「组装」开关开启后出现点划叠加线与「组装根」角标，单击叠加线落到代码依赖；
+ * 边界与组装（ADR-0030）：L14 边界角色压在框上边 / 右边；O12「组装」开关开启后出现组装叠加虚线（依赖方一端实心菱形，ADR-0035）与「组装根」角标，单击叠加线落到代码依赖；
  * R17 场景列表默认只列主流程，可切到全部类别。
  */
 import { expect, test } from '@playwright/test'
@@ -29,6 +29,9 @@ test('O12：「组装」开关缺省关；开启后出现组装叠加线与组�
   await expect(overlays.first()).toBeAttached()
   expect(await overlays.count()).toBeGreaterThan(0)
   await expect(page.locator('.assembly-root').first()).toBeVisible()
+  // L18：组装是依赖——虚线；依赖方一端实心菱形
+  await expect(overlays.first().locator('path.vue-flow__edge-path')).toHaveCSS('stroke-dasharray', '6px, 4px')
+  await expect(overlays.first().locator('path.vue-flow__edge-path')).toHaveAttribute('marker-start', /url\(#arrow-.+-start\)/)
   expect(page.url()).not.toContain('assembly')
   // 叠加线不参与布局、带标签的标 ×N：在标签上派发单击（同代码依赖叠加线）
   await page.locator('.vue-flow__edge[data-id^="asm:"] .vue-flow__edge-text').first().dispatchEvent('click')

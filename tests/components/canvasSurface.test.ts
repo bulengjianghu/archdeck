@@ -101,14 +101,12 @@ describe('RouteEdge 第八轮', () => {
     expect(w.find('title').text()).toContain('同步 / 异步')
   })
 
-  it('L22：结构视角反向高亮的承载交互带强调色晕；缺段为提示虚线', () => {
-    expect(
-      render(data({ temp: 'carried' }))
-        .find('path.edge-carried-glow')
-        .exists(),
-    ).toBe(true)
-    const gap = render(data({ temp: 'carrier-gap', label: '缺：a → b的操作' }))
-    expect(gap.find('path.vue-flow__edge-path').attributes('style')).toContain('stroke-dasharray: 5 4')
+  it('L22：结构视角反向高亮的承载交互带强调色晕、是交互（实线）；缺段是依赖——警示色虚线', () => {
+    const carried = render(data({ temp: 'carried' }))
+    expect(carried.find('path.edge-carried-glow').exists()).toBe(true)
+    expect(carried.find('path.vue-flow__edge-path').attributes('style')).not.toContain('dasharray')
+    const gap = render(data({ temp: 'carrier-gap', label: '缺段', pill: true, warn: true }))
+    expect(gap.find('path.vue-flow__edge-path').attributes('style')).toContain('stroke-dasharray: 6 4')
     expect(gap.find('path.vue-flow__edge-path').attributes('style')).toContain('var(--warning)')
   })
 })
