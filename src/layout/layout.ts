@@ -54,7 +54,7 @@ export {
   spreadEnds,
 } from './routes'
 export { RESERVED, fromElkGraph, placeShelf, portSide, toElkGraph } from './graph'
-export { elkLayers, tierGeometry, type LayoutTiers, type TierGeometry } from './tiers'
+export { elkLayers, placeTierLabels, tierBandLabel, tierGeometry, tierTextBoxes, type LayoutTiers, type TierGeometry } from './tiers'
 
 /** 一条交给布局的结构边：ID 与两端视图节点 */
 export interface StructureLink {

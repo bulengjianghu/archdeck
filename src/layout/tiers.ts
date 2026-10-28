@@ -19,8 +19,8 @@ export interface LayoutTiers {
 
 /** 布局结果上的分层几何（画布画层带、环组框） */
 export interface TierGeometry {
-  /** L29：层带（只在 banded 时给），自上而下 */
-  bands: { tier: number; box: Box }[]
+  /** L29：层带（只在 banded 时给），自上而下；labelX 为层号文字离带左沿的距离（L30：避开节点与内部边，placeTierLabels） */
+  bands: { tier: number; box: Box; labelX?: number }[]
   /** L29：环组框（成员之间没有夹着别的节点时才给，否则只靠环编号） */
   groups: { id: number; box: Box }[]
 }
@@ -128,4 +128,66 @@ export function tierGeometry(nodes: ReadonlyMap<string, Box>, tiers: LayoutTiers
     if (!clash) groups.push({ id: g.id, box })
   }
   return { bands, groups }
+}
+
+/** L30：层号文字的估宽（字号 11：中文 11 px、其余 6.5 px） */
+const textWidth = (text: string) => [...text].reduce((n, c) => n + (/[\u3000-\u9fff\uff00-\uffef]/.test(c) ? 11 : 6.5), 0)
+
+/** L30：层号文字离带左沿的缺省距离、文字区的上沿与高度（与 TierNode 一致） */
+export const TIER_LABEL = { x: 10, y: 4, h: 14 }
+
+/**
+ * L30：层号文字沿带的上沿从左往右挑第一处不压节点、不被线穿过的位置（步长 8）；都不行时取压到的最少的一处。
+ * 长边常沿父模块框的左侧走，左上角的层号会被线压住。
+ */
+export function placeTierLabels(t: TierGeometry, nodes: ReadonlyMap<string, Box>, lines: readonly (readonly { x: number; y: number }[])[]): TierGeometry {
+  const last = t.bands.length - 1
+  const hit = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+  const segs = lines.flatMap(pts =>
+    pts.slice(1).map((q, i) => {
+      const p = pts[i]
+      return { x: Math.min(p.x, q.x), y: Math.min(p.y, q.y), w: Math.abs(p.x - q.x) + 1, h: Math.abs(p.y - q.y) + 1 }
+    }),
+  )
+  const boxes = [...nodes.values()]
+  return {
+    ...t,
+    bands: t.bands.map((b, i) => {
+      const w = textWidth(tierBandLabel(b.tier, i, last)) + 4
+      let best = { dx: TIER_LABEL.x, cost: Infinity }
+      for (let dx = TIER_LABEL.x; dx + w <= b.box.w - TIER_LABEL.x; dx += 8) {
+        const box = { x: b.box.x + dx, y: b.box.y + TIER_LABEL.y, w, h: TIER_LABEL.h }
+        const cost = boxes.filter(n => hit(n, box)).length * 100 + segs.filter(s => hit(s, box)).length
+        if (!cost) return { ...b, labelX: dx }
+        if (cost < best.cost) best = { dx, cost }
+      }
+      return best.dx === TIER_LABEL.x ? b : { ...b, labelX: best.dx }
+    }),
+  }
+}
+
+/** L29：层带的层号文字（第 1 层为入口，最下为被依赖）；i 为带在自上而下中的序号 */
+export function tierBandLabel(tier: number, i: number, last: number): string {
+  return `第 ${tier + 1} 层${i === 0 ? ' · 入口' : i === last ? ' · 被依赖' : ''}`
+}
+
+/**
+ * L30、L33：层带与环组框上的文字区（线与标签都不压）——层带左上的层号、环组框上边右端的环编号；与 TierNode 的排版一致
+ * （字号 11：中文按 11 px、其余按 6.5 px 估宽）。
+ */
+export function tierTextBoxes(t: TierGeometry | undefined): Box[] {
+  if (!t) return []
+  const last = t.bands.length - 1
+  return [
+    ...t.bands.map((b, i) => ({
+      x: b.box.x + (b.labelX ?? TIER_LABEL.x),
+      y: b.box.y + TIER_LABEL.y,
+      w: textWidth(tierBandLabel(b.tier, i, last)),
+      h: TIER_LABEL.h,
+    })),
+    ...t.groups.map(g => {
+      const w = textWidth(`环 ${g.id}`) + 8
+      return { x: g.box.x + g.box.w - 12 - w, y: g.box.y - 9, w, h: 16 }
+    }),
+  ]
 }

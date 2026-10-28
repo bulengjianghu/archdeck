@@ -3,6 +3,7 @@
  */
 import { bundleHandles, moduleName, type BundleHandles, type LevelView, type ModelIndex, type RelationType, type ViewEdge } from '@/model'
 import { NODE_SIZE, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
+import { tierTextBoxes } from './tiers'
 import { ARRIVE, BusyLines, allocateTracks, clampStub, detour, frameLines, placeLabelBoxes, type PortAt } from './routing'
 
 // ── 外部参与者（A7）────────────────────────────────────────────
@@ -396,7 +397,8 @@ export function outsideRoutes(pv: PositionedView, visible: readonly ViewEdge[]):
   if (!group.length) return new Map()
   let memo = trackMemo.get(pv.nodes)
   if (!memo) trackMemo.set(pv.nodes, (memo = new Map()))
-  const key = group.map(e => e.id).join(',')
+  // 层带文字区在布局最后才有（tierGeometry）：同一份节点表上布局中途按没有层带算过的不复用
+  const key = `${pv.tiers ? 't' : '-'}|${group.map(e => e.id).join(',')}`
   const hit = memo.get(key)
   if (hit) return hit
   // L32：选通道时避开内部边与同组已走好的线
@@ -411,7 +413,12 @@ export function outsideRoutes(pv: PositionedView, visible: readonly ViewEdge[]):
     return r ? [{ id: e.id, points: r.points }] : []
   })
   // L32：elk 排好的内部边只占不动，分轨时避开它们、框线与节点
-  const tracks = allocateTracks(base, PARALLEL_GAP, { fixed: [...fixed, ...frameLines([pv.parentFrame, pv.frame])], obstacles: [...pv.nodes.values()] })
+  // L30：层带的层号、环组框的环编号也是障碍
+  const texts = tierTextBoxes(pv.tiers)
+  const tracks = allocateTracks(base, PARALLEL_GAP, {
+    fixed: [...fixed, ...frameLines([pv.parentFrame, pv.frame])],
+    obstacles: [...pv.nodes.values(), ...texts],
+  })
   // L33：标签按实际尺寸放在各自的轨道上，不压节点、内部边的标签与彼此
   const byId = new Map(group.map(e => [e.id, e]))
   const innerLabels = pv.view.edges.flatMap(e => {
@@ -421,7 +428,7 @@ export function outsideRoutes(pv: PositionedView, visible: readonly ViewEdge[]):
   })
   const labels = placeLabelBoxes(
     [...tracks].map(([id, points]) => ({ id, points, size: labelSize(byId.get(id)!) ?? { w: 24, h: 18 } })),
-    { obstacles: [...pv.nodes.values(), ...innerLabels] },
+    { obstacles: [...pv.nodes.values(), ...innerLabels, ...texts] },
   )
   const result = new Map([...tracks].map(([id, points]) => [id, { points, label: labels.get(id)! }]))
   memo.set(key, result)

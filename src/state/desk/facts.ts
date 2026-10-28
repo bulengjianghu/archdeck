@@ -24,7 +24,6 @@ import {
   type SurfaceMetrics,
   type SurfaceSource,
   againstStabilityOf,
-  chipDeps,
   hasStructureEdge,
   isolatedInteractions,
   impactOf,
@@ -74,7 +73,8 @@ import {
   sketchLifetime,
   type RawFile,
 } from '@/model'
-import { chipBundleId, surfaceExpansion, type Expansion, type LayoutTiers, type StructureLinks } from '@/layout/layout'
+import { surfaceExpansion, type Expansion, type LayoutTiers, type StructureLinks } from '@/layout/layout'
+import { baseLayoutLinks, toLayoutTiers } from './layoutLinks'
 import { perspectiveOf, type ViewState } from '../transition'
 import type { createSourceSync } from '../sync/source'
 import type { FileDerivations } from './files'
@@ -391,39 +391,14 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
   }
 
   /** L28：交给布局的分层（纯数据，进缓存键） */
-  const layoutTiers = computed<LayoutTiers | null>(() => {
-    const t = tiers.value
-    if (!t || !t.count) return t && t.isolated.length ? { tier: {}, count: 0, groups: [], isolated: t.isolated, banded: false } : null
-    return {
-      tier: Object.fromEntries(t.tier),
-      count: t.count,
-      groups: t.groups.map((g, i) => ({ id: t.groupIds[i], nodes: g })),
-      isolated: t.isolated,
-      banded: t.banded,
-    }
-  })
+  const layoutTiers = computed<LayoutTiers | null>(() => toLayoutTiers(tiers.value))
 
   /** L15、L21：并集布局的基础输入——本层全部束与元素级边（不含表面展开）；没有代码事实时为允许边（U16），读取中为 null */
   const baseLinks = computed<StructureLinks | null>(() => {
     const sv = levelStructure.value
     const v = view.value
     if (!sv || !v || !index.value) return null
-    const link = (e: { id: string; from: string; to: string }) => ({ id: e.id, from: e.from, to: e.to })
-    const chips = new Set(v.nodes.filter(n => n.role === 'core' || n.role === 'shared').map(n => n.id))
-    const pairs = new Map<string, { id: string; from: string; to: string }>()
-    if (v.mode === 'layered' && sv.facts && report.value)
-      for (const c of chipDeps(index.value, v, report.value, chips))
-        pairs.set(chipBundleId(c.from, c.to), { id: chipBundleId(c.from, c.to), from: c.from, to: c.to })
-    const core = [...pairs.values()]
-    if (!sv.facts) return { edges: sv.edges.map(link) }
-    const lt = layoutTiers.value
-    const elements = sv.elementEdges.map(e => ({
-      ...link(e),
-      bundle: e.bundle,
-      element: e.element?.name ?? null,
-      ...(e.element ? { kind: e.element.kind } : {}),
-    }))
-    return { edges: sv.bundles.map(link), ...(core.length ? { core } : {}), ...(elements.length ? { elements } : {}), ...(lt ? { tiers: lt } : {}) }
+    return baseLayoutLinks(index.value, v, sv, report.value, layoutTiers.value)
   })
 
   /** D7、D8：本层交互视图边按接收方表面散开的数据（结构 / 交互视角都给：布局取并集；运行视角与代码事实未就绪时为 null） */

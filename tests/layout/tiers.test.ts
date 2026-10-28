@@ -143,3 +143,19 @@ describe('L29 层带与环组框', () => {
     ).toBe(false)
   })
 })
+
+describe('L30：层号文字避开节点与线', () => {
+  const geom = { bands: [{ tier: 0, box: { x: 0, y: 0, w: 400, h: 100 } }], groups: [] }
+  it('左端被线穿过时沿上沿往右挪到第一处空位；没有障碍时留在左端', async () => {
+    const { placeTierLabels, tierTextBoxes } = await import('../../src/layout/layout')
+    expect(placeTierLabels(geom, new Map(), []).bands[0].labelX ?? 10).toBe(10)
+    const line = [
+      { x: 30, y: -50 },
+      { x: 30, y: 80 },
+    ]
+    const moved = placeTierLabels(geom, new Map(), [line])
+    expect(moved.bands[0].labelX).toBeGreaterThan(30)
+    const [box] = tierTextBoxes(moved)
+    expect(box.x).toBeGreaterThan(30)
+  })
+})

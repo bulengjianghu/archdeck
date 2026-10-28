@@ -4,9 +4,9 @@
 import type { ELK, ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk-api'
 import type { LevelView } from '@/model'
 import { NODE_SIZE, SHELF, contentBounds, sizeOf, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
-import { LABEL_SLOT, PARALLEL_GAP, compassOf, edgeLabel, labelSize, nearPoints, placeOutside, placeRims, spreadEnds } from './routes'
+import { LABEL_SLOT, PARALLEL_GAP, compassOf, edgeLabel, labelSize, nearPoints, outsideRoutes, placeOutside, placeRims, spreadEnds } from './routes'
 import { allocateTracks, placeLabelBoxes } from './routing'
-import { elkLayers, tierGeometry, type LayoutTiers } from './tiers'
+import { elkLayers, placeTierLabels, tierGeometry, type LayoutTiers } from './tiers'
 
 /**
  * L11：elk 只排父模块框内的子模块与它们之间的边；框外的元素（用户、外部系统与时间、边界节点）在布局后按方位摆放（routes.ts placeOutside，A7、L4），
@@ -54,7 +54,10 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
         sources: [port(e.from, `${e.id}#out`, 'out')],
         targets: [port(e.to, `${e.id}#in`, 'in')],
         // L28：按依赖分层时不交标签——elk 的中间标签是分层前插入的无坐标占位节点，会让 INTERACTIVE 分层压缩、打乱层号；标签由画布按走线中点放
-        ...(tiers ? {} : { labels: [{ id: `${e.id}#label`, text, width: Math.max(LABEL_SLOT.w, text.length * 7 + 18), height: LABEL_SLOT.h }] }),
+        // L33：槽按画布实际写的把手角标估宽（labelSize），elk 才给够长的直段
+        ...(tiers
+          ? {}
+          : { labels: [{ id: `${e.id}#label`, text, width: Math.max(LABEL_SLOT.w, labelSize(e)?.w ?? text.length * 7 + 18), height: LABEL_SLOT.h }] }),
       }
     })
   // 框外边（参与者的边、边界边）在内部节点上的那一端只占一个端口、不连线：与内部边的端口一起排左右顺序，
@@ -119,6 +122,8 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
       'elk.edgeRouting': 'ORTHOGONAL',
       'elk.layered.spacing.nodeNodeBetweenLayers': '72',
       'elk.spacing.nodeNode': '44',
+      // L32：互不相连的节点（分量）之间留出进边的直段（ARRIVE 38）与错开量，进边不伸进上方的节点
+      'elk.spacing.componentComponent': '72',
       'elk.spacing.edgeNode': '24',
       'elk.spacing.edgeEdge': '14',
       'elk.spacing.portPort': '12',
@@ -262,7 +267,12 @@ export async function layoutGraph(view: LevelView, tiers?: LayoutTiers | null): 
   const elk = await getElk()
   const down = fromElkGraph(view, await elk.layout(toElkGraph(view, 'DOWN', tiers)))
   // L28：按依赖分层时只自上而下（被依赖的在下），层带与环组框在布局结果上算
-  if (tiers) return { ...down, tiers: tierGeometry(down.nodes, tiers, down.parentFrame, FRAME_PAD) }
+  if (tiers) {
+    const geom = tierGeometry(down.nodes, tiers, down.parentFrame, FRAME_PAD)
+    // L30：层号文字避开内部边与全部框外边（运行视角「全显」时画出的最多一组）
+    const outside = [...outsideRoutes(down, view.edges).values()].map(r => r.points)
+    return { ...down, tiers: placeTierLabels(geom, down.nodes, [...[...down.edges.values()].map(r => r.points), ...outside]) }
+  }
   const score = (pv: PositionedView) => {
     const b = contentBounds(pv)
     return b ? Math.abs(Math.log(b.w / b.h / TARGET_ASPECT)) : 0

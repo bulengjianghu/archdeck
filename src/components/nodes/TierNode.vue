@@ -7,7 +7,7 @@ defineProps<{ data: NodeData }>()
 
 <template>
   <div class="tier-node" :class="data.tierBand?.kind" data-testid="tier-node">
-    <span class="label">{{ data.tierBand?.label }}</span>
+    <span class="label" :style="data.tierBand?.offset !== undefined ? { left: `${data.tierBand.offset}px` } : undefined">{{ data.tierBand?.label }}</span>
   </div>
 </template>
 

@@ -93,7 +93,8 @@ export interface NodeData {
   /** B2、L21③：跨界折叠的束——朝外一侧的小记号「界外 入 N · 出 M」，悬停列目标 */
   crossFold?: { in: number; out: number; side: 'top' | 'bottom' | 'left' | 'right'; title: string }
   /** L29：层带（层号与读法）或环组框（Y4 编号） */
-  tierBand?: { kind: 'band' | 'group'; label: string }
+  /** offset：层号文字离带左沿的距离（L30，避开节点与内部边） */
+  tierBand?: { kind: 'band' | 'group'; label: string; offset?: number }
 }
 
 /** C6、L20②：节点上的一个端口点（不写名字，形状按种类） */

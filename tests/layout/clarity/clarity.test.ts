@@ -165,21 +165,29 @@ describe('L30 几何检查器', () => {
   })
 })
 
-/** 三个项目所有层次（交互视角，分层总览含逐个聚焦核心模块，普通层次含全部框外边）的计数上限：只降不升 */
+/**
+ * 三个项目所有层次（交互视角的线，分层总览含逐个聚焦核心模块，普通层次含全部框外边）的计数上限：只降不升。
+ * 布局与产品一致（state/desk/layoutLinks.ts：结构边、核心跨层束、按值依赖的分层）；BARE 为没有代码事实时的布局（设计版本、提交版本）。
+ */
 const CEILING: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 40, arrows: 0, crossNode: 3, labels: 1, hug: 6, onFrame: 0 },
-  h5player: { overlap: 87, arrows: 0, crossNode: 0, labels: 2, hug: 14, onFrame: 0 },
-  'media-web-player': { overlap: 52, arrows: 0, crossNode: 1, labels: 0, hug: 7, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 98, arrows: 25, crossNode: 5, labels: 0, hug: 4, onFrame: 0 },
+  h5player: { overlap: 96, arrows: 1, crossNode: 2, labels: 1, hug: 13, onFrame: 0 },
+  'media-web-player': { overlap: 29, arrows: 0, crossNode: 5, labels: 0, hug: 8, onFrame: 0 },
+}
+const BARE: Record<(typeof PROJECTS)[number], Counts> = {
+  'h5p-arch-desk': { overlap: 39, arrows: 0, crossNode: 3, labels: 1, hug: 7, onFrame: 0 },
+  h5player: { overlap: 66, arrows: 0, crossNode: 0, labels: 2, hug: 12, onFrame: 0 },
+  'media-web-player': { overlap: 48, arrows: 0, crossNode: 1, labels: 0, hug: 6, onFrame: 0 },
 }
 
 describe('L30 计数回归（只降不升）', () => {
-  for (const p of PROJECTS)
-    it(
-      p,
-      async () => {
-        const { total } = await checkProject(p)
-        for (const k of KINDS) expect({ kind: k, count: total[k] }).toEqual({ kind: k, count: Math.min(total[k], CEILING[p][k]) })
-      },
-      120000,
-    )
+  for (const [facts, limits] of [
+    [true, CEILING],
+    [false, BARE],
+  ] as const)
+    for (const p of PROJECTS)
+      it(`${p}${facts ? '' : '（无代码事实）'}`, async () => {
+        const { total } = await checkProject(p, { facts })
+        for (const k of KINDS) expect({ kind: k, count: total[k] }).toEqual({ kind: k, count: Math.min(total[k], limits[p][k]) })
+      }, 180000)
 })

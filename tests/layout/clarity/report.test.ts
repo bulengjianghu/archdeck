@@ -9,6 +9,8 @@ it.skipIf(!process.env.CLARITY_REPORT)(
     for (const p of PROJECTS) {
       const { levels, total } = await checkProject(p)
       rows.push(`${p}\t${KINDS.map(k => `${k}=${total[k]}`).join('\t')}`)
+      const bare = await checkProject(p, { facts: false })
+      rows.push(`${p}（无代码事实）\t${KINDS.map(k => `${k}=${bare.total[k]}`).join('\t')}`)
       if (process.env.CLARITY_REPORT === 'levels')
         for (const l of levels) if (KINDS.some(k => l.counts[k])) rows.push(`  ${l.level}\t${KINDS.map(k => `${k}=${l.counts[k]}`).join('\t')}`)
     }
