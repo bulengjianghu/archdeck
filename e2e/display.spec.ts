@@ -119,7 +119,14 @@ test('交互视角「代码事实 · 标签」组：标签词表与承载叠加�
   await settings.getByRole('switch', { name: '代码事实' }).uncheck()
   await expect(panel.getByRole('button', { name: /代码事实 · 标签/ })).toBeVisible()
   await expect(settings.getByRole('switch', { name: '代码事实' })).not.toBeChecked()
-  await settings.getByRole('switch', { name: '代码事实' }).check()
+  // L45、审核轮 2 B3：留痕计数写明口径——「N 处标记」是未证实「?」标签、未解释与违规叠加线、违规晕的合计，悬停可读、单击恢复
+  const factsCorner = page.getByTestId('facts-off-corner')
+  await expect(factsCorner).toHaveText(/代码事实已关 · 隐藏 \d+ 处标记/)
+  await expect(factsCorner).toHaveAttribute('title', /未证实关系的「\?」标签/)
+  await expect(factsCorner).toHaveAttribute('title', /违规视图边的红晕/)
+  await factsCorner.click()
+  await expect(settings.getByRole('switch', { name: '代码事实' })).toBeChecked()
+  await expect(factsCorner).toHaveCount(0)
 })
 
 test('时序图图例在副栏标题栏的「图例」里', async ({ page }) => {

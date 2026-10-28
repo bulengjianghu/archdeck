@@ -472,7 +472,7 @@ const showFacts = () => desk.setToggles({ showFacts: true })
         v-if="factsOff"
         class="type-only"
         data-testid="facts-off-corner"
-        title="「代码事实」已关闭：未证实的标签、未解释与违规的叠加线不画（K9）；单击打开"
+        title="「代码事实」已关闭：三类异常标记都不画（K9）——未证实关系的「?」标签、未解释与违规的代码依赖叠加线（点线）、违规视图边的红晕；「N 处标记」是这三类的合计，单击打开恢复显示"
         @click="showFacts"
       >
         代码事实已关 · 隐藏 {{ factsOff }} 处标记

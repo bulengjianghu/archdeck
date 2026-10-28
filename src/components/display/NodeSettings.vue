@@ -51,7 +51,9 @@ const toggleType = (t: RelationType) => {
 const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] })
 const lookOf = (t: RelationType) => ({ type: t, weight: 2 as const })
 
-// ── 代码事实与组装（K9、O12：只适用于交互视角）──
+// ── 代码事实与组装（K9、O12：只适用于交互视角）。审核轮 2 A1 核实：组装叠加（线与组装根角标）仅交互视角有画布效果——
+//    GraphCanvas 只在 interaction 时传入组装投影，edges.ts 的 assemblyEdges 与 nodes.ts 的组装根角标在结构视角都直接不画；
+//    改动前（4a62a89）同样如此，结构视角曾显示的组装图例只是无画布效果的死配置（O12：结构视角的组装是常画的结构边，K14、L16）──
 const ready = computed(() => desk.facts.status.value === 'ready')
 
 // ── 演化（J5）──

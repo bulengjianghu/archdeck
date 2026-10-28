@@ -19,7 +19,7 @@ const rows = computed(() => orderNotices(props.notices))
       :key="n.key"
       class="notice"
       :class="{ hint: n.hint }"
-      :title="`跳到「${n.to}」`"
+      :title="n.note ? `${n.note}；单击跳到「${n.to}」` : `跳到「${n.to}」`"
       :data-notice="n.key"
       @click="jumpToSection(n.target)"
     >

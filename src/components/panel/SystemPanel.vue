@@ -33,7 +33,17 @@ const liveCycles = computed(() => (r.value?.moduleCycles ?? []).filter(c => !c.t
 const notices = computed<PanelNotice[]>(() => {
   const out: PanelNotice[] = []
   if (r.value) {
-    if (r.value.violations.length) out.push({ key: 'violations', label: '违规', count: r.value.violations.length, target: 'governance.detail', to: '治理' })
+    if (r.value.violations.length)
+      out.push({
+        key: 'violations',
+        label: '违规',
+        count: r.value.violations.length,
+        target: 'governance.detail',
+        to: '治理',
+        // 审核轮 2 B1：③ 的计数是治理信号（声明的规则对代码事实，含基线内的已知），不是门禁红（基线外新增才 error，U8），
+        // 也不含返工清单的 info 级提示（K24 层符合性不进 violations）
+        note: '声明的架构规则对代码事实的违规（U2–U6），含基线内的已知违规；门禁卡的是基线外的新增（U8，无基线时只提示），返工清单的 info 级提示（K24 层符合性）不在此计数',
+      })
     if (liveCycles.value) out.push({ key: 'cycles', label: '模块环', count: liveCycles.value, target: 'governance.detail', to: '治理' })
     if (r.value.undescribed.length)
       out.push({ key: 'undescribed', label: '未解释的交互', count: r.value.undescribed.length, target: 'governance.detail', to: '治理' })

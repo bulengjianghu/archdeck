@@ -53,7 +53,9 @@ const violationTitle = computed(() => {
   const x = r.value
   if (!x) return ''
   const allowed = x.violations.length - counted.value
-  return `计入门禁 ${counted.value} 条（新增 ${x.gate.newViolations} · 已知 ${x.gate.knownViolations}）${allowed ? `，已豁免 ${allowed}` : ''}${x.baseline ? `，基线 ${x.baseline.violations.length} 条` : ''}`
+  // 审核轮 2 B1：写明口径——这里是声明的规则对代码事实的违规（面板「治理信号」），计入门禁的是基线外新增（U8）；
+  // 返工清单的 info 级提示（K24 层符合性）不进 violations，不在此计数
+  return `声明的架构规则对代码事实的违规（U2–U6）：计入门禁 ${counted.value} 条（新增 ${x.gate.newViolations} · 已知 ${x.gate.knownViolations}）${allowed ? `，已豁免 ${allowed}` : ''}${x.baseline ? `，基线 ${x.baseline.violations.length} 条` : '；无基线：暂不卡门禁（U8）'}；返工清单的 info 级提示（K24 层符合性）不在此计数`
 })
 // Q13：共用件的两条提醒（反向依赖、体量）；修改占比要 git 历史，演化事实没加载时只给行数占比
 const shared = computed(() => desk.evolution.shared.value)

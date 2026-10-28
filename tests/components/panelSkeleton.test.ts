@@ -189,6 +189,12 @@ modules:
     // 严重度：违规、环在最前，确认过期在其后（V15b 排序）
     expect(keys.indexOf('violations')).toBeLessThan(keys.indexOf('stale'))
     expect(rows[0].attributes('data-notice')).toBe('violations')
+    // 审核轮 2 B1：「违规」行的计数口径在悬停写明——治理信号（含基线内已知），不是门禁红（U8），也不含返工清单的 info 级（K24）
+    expect(rows[0].attributes('title')).toContain('门禁卡的是基线外的新增')
+    expect(rows[0].attributes('title')).toContain('返工清单的 info 级提示（K24 层符合性）不在此计数')
+    // 其余行没有口径说明时悬停仍是跳转提示
+    const staleRow = rows.find(r => r.attributes('data-notice') === 'stale')!
+    expect(staleRow.attributes('title')).toBe('跳到「自上次确认以来的改动」')
     // 单击「确认过期」：⑤ 的「自上次确认以来的改动」折叠节自动展开
     const diffFold = wrapper.find('[data-sec="review.diff"] .fold')
     expect(diffFold.attributes('aria-expanded')).toBe('false')

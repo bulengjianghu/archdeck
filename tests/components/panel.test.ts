@@ -286,6 +286,9 @@ modules:
     expect(none.row('违规').text()).toContain('无基线')
     expect(none.row('违规').text()).not.toContain('存量')
     expect(based.row('违规').attributes('title')).toContain('计入门禁 1 条')
+    // 审核轮 2 B1：悬停写明口径——声明的规则对代码事实；返工清单的 info 级（K24）不在此计数
+    expect(based.row('违规').attributes('title')).toContain('声明的架构规则对代码事实的违规')
+    expect(based.row('违规').attributes('title')).toContain('返工清单的 info 级提示（K24 层符合性）不在此计数')
   })
 })
 

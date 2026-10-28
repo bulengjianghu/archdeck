@@ -18,6 +18,8 @@ export interface PanelNotice {
   target: string
   /** 引导文字（目标节名） */
   to: string
+  /** 计数口径的说明（进悬停提示，审核轮 2 B1：③ 的计数与门禁 / 返工清单口径不同，避免误读） */
+  note?: string
   /** 提示级（逆稳定、表面提示、拆分信号）：警示色而非危险色 */
   hint?: boolean
 }

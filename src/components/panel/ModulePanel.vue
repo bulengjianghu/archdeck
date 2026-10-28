@@ -77,7 +77,16 @@ const notices = computed<PanelNotice[]>(() => {
   if (detail.value) {
     const d = detail.value
     const violations = d.violations.out.length + d.violations.in.length
-    if (violations) out.push({ key: 'violations', label: '违规', count: violations, target: 'evidence.governance', to: '架构治理' })
+    if (violations)
+      out.push({
+        key: 'violations',
+        label: '违规',
+        count: violations,
+        target: 'evidence.governance',
+        to: '架构治理',
+        // 审核轮 2 B1：与系统面板同口径说明——治理信号（含基线内已知），不是门禁红（U8），不含返工清单的 info 级（K24）
+        note: '涉此模块的架构规则违规（U2–U6），含基线内的已知违规；门禁卡的是基线外的新增（U8，无基线时只提示），返工清单的 info 级提示（K24 层符合性）不在此计数',
+      })
     // 模块环（Y 系列，模块级强连通）与本层环（层带内，Y5）是两个独立信号：各自一行、各自计数（V15b）
     const moduleCycles = d.cycles.length
     if (moduleCycles) out.push({ key: 'cycles', label: '模块环', count: moduleCycles, target: 'evidence.governance', to: '架构治理' })
