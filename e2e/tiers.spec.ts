@@ -3,7 +3,7 @@
  * 以本项目与 h5player 验收（01 §6.25）。
  */
 import { expect, test } from '@playwright/test'
-import { graphNode, openDesk } from './helpers'
+import { graphNode, openDesk, waitSettled } from './helpers'
 
 const top = async (page: Parameters<typeof graphNode>[0], id: string) => (await graphNode(page, id).boundingBox())!.y
 
@@ -14,9 +14,12 @@ test('L28、L29：本项目「模型层」——类型与 Schema 在最下，层
   const types = await top(page, 'model.types')
   for (const id of ['model.pipeline', 'model.governance', 'model.projector']) expect(await top(page, id)).toBeLessThan(types)
   expect(await top(page, 'model.rework')).toBeLessThan(await top(page, 'model.governance'))
+  // 位置要跨两次加载逐字节相等：先等首帧后的整体平移（再适应）结束，两边都在稳定态上读
+  await waitSettled(page)
   const before = await graphNode(page, 'model.governance').boundingBox()
   await openDesk(page, '/p/h5p-arch-desk?level=model&v=s')
   await expect(page.locator('.vue-flow__node[data-id="tier:0"]')).toBeAttached()
+  await waitSettled(page)
   expect(await graphNode(page, 'model.governance').boundingBox()).toEqual(before)
 })
 

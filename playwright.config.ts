@@ -14,6 +14,8 @@ export default defineConfig({
   // 首次打开项目时布局在 Worker 中计算、开发服务器按需编译，留足余量
   timeout: 60_000,
   expect: { timeout: 10_000 },
+  // 全量实测 ~2 分钟（83 用例，fullyParallel）；10 分钟是跑偏的硬预算：超过就是环境问题，先查开发服务器与端口再谈红绿（G9，CLAUDE.md §4）
+  globalTimeout: 15 * 60_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

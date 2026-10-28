@@ -39,5 +39,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    // 单测里最重的源码读取（acceptance 的 h5player 全树解析）实测 ~4.5s，全量并发负载下还会拉伸；
+    // 预算给足 20s：红了就是断言红，不是环境负载把默认 5s 挤爆的假红（G9，CLAUDE.md §4）
+    testTimeout: 20_000,
   },
 })

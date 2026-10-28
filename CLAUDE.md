@@ -57,14 +57,28 @@ npm run arch:mcp     # 架构治理 MCP 服务器（stdio）
 - 每一轮都要能在架构台上独立打开和对比，所以每轮都是完整快照，不写增量。
 - 负责人看的是图：设计说明（`designNote`）写在实体上，比写在长文档里更容易被评审到。
 
-## 4. 在 worktree 里跑测试
+## 4. 标准跑法与门禁（G9）
 
-源码根目录按「工作区根目录 + `system.source.repo`」解析，工作区根目录缺省为本包往上三级（G1）。在 `git worktree`（如 `work4/wt/<名>/packages/h5p-arch-desk`）里往上三级是 `work4/wt/`，不是 `work4/`：两个项目的源码都找不到（`source.missing`，代码事实与演化相关的单测失败）；只设 `ARCH_WORKSPACE_ROOT` 时 h5player 找到了，本项目自身的代码事实却读到主检出 `work4/h5player-demo/` 而不是这个 worktree。所以在 worktree 里跑任何 npm 命令都要带两个环境变量：
+源码根目录按「工作区根目录 + `system.source.repo`」解析，工作区根目录缺省为本包往上三级（G1）；自项目（G22）缺省为所在包目录。在 `git worktree`（如 `work4/wt/<名>/packages/h5p-arch-desk`）里往上三级是 `work4/wt/`，不是 `work4/`：两个项目的源码都找不到（`source.missing`，代码事实与演化相关的单测失败）；只设 `ARCH_WORKSPACE_ROOT` 时 h5player 找到了，本项目自身的代码事实却读到主检出 `work4/h5player-demo/` 而不是这个 worktree。所以在 worktree 里跑任何 npm 命令都要带两个环境变量：
 
 ```bash
 export ARCH_WORKSPACE_ROOT=<work4 的绝对路径>                               # 让 h5player 等项目找到源码
 export ARCH_SOURCE_ROOT_H5P_ARCH_DESK=<这个 worktree 的 packages/h5p-arch-desk 绝对路径>  # 自身的代码事实读这个 worktree
 ```
 
-- E2E 用 `E2E_PORT=<端口> npm run test:e2e`，每个 worktree 各用各的端口（缺省 5393）：Playwright 会复用已在该端口运行的开发服务器，端口相同就会测到别的副本。手动看页面同理：`npx vite --port <端口> --strictPort`。
-- E2E 会临时改写真实的 `model/h5p-arch-desk/`（如确认记录、指纹、拦截记录）并在结束时恢复；跑完 `git status` 应当干净。
+门禁命令（进入包目录后，缺环境变量就是假红）：
+
+```bash
+npm run test          # 全量单测：实测 ~27s（1235 通过 / 3 跳过）；vitest 自带并行，不分组、不改并发
+E2E_PORT=5671 npx playwright test   # 全量 E2E：实测 ~1m47s（83 用例，fullyParallel）
+npm run type-check    # ~9s
+npm run lint          # ~8s
+npm run lint:model    # ~12s
+npm run build         # ~21s
+```
+
+- **E2E 端口**：每个 worktree 各用各的高位端口（如 5671，缺省 5393）——Playwright 会复用已在该端口运行的开发服务器，端口相同就会测到别的副本。手动看页面同理：`npx vite --port <端口> --strictPort`。
+- **不并发混跑**：E2E 会临时改写真实的 `model/h5p-arch-desk/`（如确认记录、指纹、拦截记录）并在结束时恢复，同一个 worktree 里不要同时跑单测 / E2E / lint:model；跑完 `git status` 应当干净。
+- **超时预算（实测定，2026-10-28，本机）**：单测单个用例 20s（`vite.config.ts` testTimeout；最重的是 acceptance 里 h5player 全树 TS 解析 ~4.5s，全量并发下会拉伸，默认 5s 曾被挤爆误报超时）；E2E 单个用例 60s、断言 10s、整轮 globalTimeout 15 分钟（超过即环境问题，先查开发服务器与端口占用，再谈红绿）。改了影响面（源码读取、布局）之后用实测重新校准这些数字。
+- **红了就是红**：按上面的标准跑法红了就是红，修到绿为止；不得以「单独重跑通过」「换个端口 / 换台机器就好了」放行。单独重跑只用于定位，不用于放行。
+- `lint:model` 的门禁口径：本包 `model/h5p-arch-desk` 0 个错误（`npm run lint:model -- model/h5p-arch-desk`）；全量输出里被描述项目（h5player 等）的错误来自它们自己的代码与基线，是那些项目的治理待办，不在本包门禁内，但要在报告里如实带出。
