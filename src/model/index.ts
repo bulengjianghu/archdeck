@@ -22,6 +22,7 @@ export {
   projectLevel,
   mapEndpoint,
   nearestVisibleLevel,
+  countHiddenByCurrentOnly,
   edgeId,
   hierarchyKey,
   compareKeys,

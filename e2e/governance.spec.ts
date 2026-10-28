@@ -10,7 +10,8 @@ test('开启代码事实：未证实的边标「未证实」、仍是实线，�
   await openDesk(page, '/p/h5player')
   await expect(page.locator('.panel')).toContainText('架构治理')
   await expect(page.locator('.panel')).toContainText(/已证实 \d+/)
-  const toggle = page.locator('label.facts input')
+  // L45（第十五轮 G13）：代码事实开关在设置块的「代码事实与组装」组
+  const toggle = page.getByRole('region', { name: '显示' }).getByRole('switch', { name: '代码事实' })
   await expect(toggle).toBeEnabled()
   await toggle.check()
   const tagged = page.locator('.vue-flow__edge-route').filter({ has: page.locator('.edge-label-warn .vue-flow__edge-text', { hasText: '未证实' }) })
@@ -40,7 +41,8 @@ test('h5player：没有基线时违规画成叠加线；单击叠加线选中它
   await expect(page.locator('.panel')).toContainText('架构治理')
   await expect(page.locator('.panel')).toContainText(/已证实 \d+/)
 
-  const toggle = page.locator('label.facts input')
+  // L45（第十五轮 G13）：代码事实开关在设置块的「代码事实与组装」组
+  const toggle = page.getByRole('region', { name: '显示' }).getByRole('switch', { name: '代码事实' })
   await expect(toggle).toBeEnabled()
   await toggle.check()
   await expect(page.locator('.vue-flow__edge-text', { hasText: '✓' })).toHaveCount(0)
@@ -64,5 +66,5 @@ test('运行视角下「显示」面板不出现「代码事实」开关（L9）
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
   await page.getByRole('button', { name: /^显示/ }).click()
   await expect(page.getByRole('region', { name: '显示' })).toContainText('场景中显示全部节点与关系类型')
-  await expect(page.locator('label.facts')).toHaveCount(0)
+  await expect(page.getByRole('region', { name: '显示' }).getByRole('switch', { name: '代码事实' })).toHaveCount(0)
 })

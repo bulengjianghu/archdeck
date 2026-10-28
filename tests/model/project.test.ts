@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareKeys, hierarchyKey, loadModel, mapEndpoint, nearestVisibleLevel, projectLevel, type LevelView, type ViewEdge } from '../../src/model'
+import { compareKeys, countHiddenByCurrentOnly, hierarchyKey, loadModel, mapEndpoint, nearestVisibleLevel, projectLevel, type LevelView, type ViewEdge } from '../../src/model'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
 const { index } = loadModel(sampleFiles())
@@ -222,6 +222,9 @@ describe('nearestVisibleLevel（N12）', () => {
     expect(nearestVisibleLevel(idx, 'app.next.a', { currentOnly: true })).toBe('app')
     expect(nearestVisibleLevel(idx, 'app.next.a', { currentOnly: false })).toBe('app.next.a')
     expect(nearestVisibleLevel(idx, 'nope', { currentOnly: true })).toBe('sys')
+  })
+  it('L45：countHiddenByCurrentOnly 数出隐藏的目标态模块及其后代（画布角留痕计数）', () => {
+    expect(countHiddenByCurrentOnly(idx)).toBe(2) // app.next（status: target）与其后代 app.next.a
   })
 })
 

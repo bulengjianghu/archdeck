@@ -410,3 +410,11 @@ function makeVisibility(index: ModelIndex, opts: ProjectOptions): (id: string) =
     return !!path && path.every(p => index.modules.get(p)?.status !== 'target')
   }
 }
+
+/** L45：「只看现状」隐藏的模块数——status: target 的模块及其后代（L7 可见性的补集，画布角留痕计数用） */
+export function countHiddenByCurrentOnly(index: ModelIndex): number {
+  const visible = makeVisibility(index, { showBoundaries: true, currentOnly: true })
+  let n = 0
+  for (const id of index.modules.keys()) if (!visible(id)) n++
+  return n
+}

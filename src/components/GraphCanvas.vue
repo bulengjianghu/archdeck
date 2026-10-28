@@ -14,6 +14,8 @@
  * 悬停端口点或面板「表面」一节的元素行（useSurfaceHover）时落在点上的边与发起方高亮（L20④）；
  * 交互视角选中交互时叠加承载（L22），交互束按接收方表面散开、混合标记（L23）。
  * 开启「演化」时叠加热度角标与时间耦合的波浪线（J5）；单击耦合线即选中它（J7）。
+ * 画布角另给「隐藏必留痕」（L45，第十五轮 G13）：关系类型筛选（隐藏 N 类关系）、「只看现状」（目标态 N 个模块已隐藏）、
+ * 「代码事实」已关（隐藏 N 处标记）三处计数，单击撤销对应开关；结构视角既有的只引类型 / 值使用 / 已解释三钮不变。
  * 节点右键：「在此设计」（F-10：以该模块为挂载点新建设计，只在当前版本、不能是层）。
  * 画什么由 Layout 的 canvasScene 算出（ADR-0013）；这里只把结果写入 Vue Flow、把交互转成操作、适应画布。
  */
@@ -21,6 +23,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import { useDesk } from '@/state/inject'
+import { RELATION_TYPES, countHiddenByCurrentOnly } from '@/model'
 import { contentBounds, layerStatusOf, type PositionedView } from '@/layout/layout'
 import { canvasScene, withEdgeHover, withElementHover, type NodeData, type RouteEdgeData, type StructureInput } from '@/layout/canvas'
 import { useSurfaceHover } from './panel/surfaceFocus'
@@ -323,6 +326,24 @@ const layerNote = computed(() => desk.facts.layerNote.value)
 /** L15、U16：结构视角的画布角——收起的只引类型依赖边条数、没有代码事实时的说明 */
 const structureCorner = computed(() => scene.value.structure ?? null)
 const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned.value.view.nodes.length === 0)
+
+// ── L45：隐藏画布内容的开关在画布角留痕计数、单击撤销（第十五轮 G13）；运行视角与草图编辑态不受这些开关影响（L9），不留痕 ──
+const traceable = computed(() => desk.perspective.value !== 'run' && !desk.edit.active.value)
+/** 关系类型筛选隐藏的类数（L8：只适用于交互视角） */
+const hiddenRelationTypes = computed(() => (interaction.value && traceable.value ? RELATION_TYPES.length - desk.toggles.relationTypes.length : 0))
+const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] })
+/** 「只看现状」隐藏的目标态模块及其后代数（L7，交互与结构视角） */
+const hiddenTargets = computed(() => {
+  const idx = desk.index.value
+  if (!idx || !desk.toggles.currentOnly || !traceable.value) return 0
+  return countHiddenByCurrentOnly(idx)
+})
+/** 「代码事实」关闭时本层被隐藏的异常标记数（K9，交互视角） */
+const factsOff = computed(() => {
+  if (!interaction.value || !traceable.value || desk.toggles.showFacts || desk.facts.status.value !== 'ready') return 0
+  return desk.facts.hiddenFacts.value ?? 0
+})
+const showFacts = () => desk.setToggles({ showFacts: true })
 </script>
 
 <template>
@@ -363,7 +384,10 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
     </VueFlow>
 
     <div v-if="isEmpty" class="empty">这个模块没有子模块</div>
-    <div v-if="foldHint || structureCorner || tierHints.length || layerNote || lineBudget || pending" class="corner">
+    <div
+      v-if="foldHint || structureCorner || tierHints.length || layerNote || lineBudget || pending || hiddenRelationTypes || hiddenTargets || factsOff"
+      class="corner"
+    >
       <span
         v-if="pending?.overlays"
         class="fold-hint"
@@ -425,6 +449,33 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
         @click="structurePrefs.setUncoveredOnly(false)"
       >
         已解释 {{ structureCorner.coveredHidden }} 条已收起
+      </button>
+      <button
+        v-if="hiddenRelationTypes"
+        class="type-only"
+        data-testid="filter-corner"
+        title="关系类型筛选隐藏了部分类别的交互（L8）；单击全部显示，「显示」面板设置块里可逐类勾选"
+        @click="showAllTypes"
+      >
+        隐藏 {{ hiddenRelationTypes }} 类关系
+      </button>
+      <button
+        v-if="hiddenTargets"
+        class="type-only"
+        data-testid="current-only-corner"
+        title="「只看现状」开启：status 为目标态的模块及其后代不显示（L7）；单击显示全部"
+        @click="desk.setToggles({ currentOnly: false })"
+      >
+        目标态 {{ hiddenTargets }} 个模块已隐藏
+      </button>
+      <button
+        v-if="factsOff"
+        class="type-only"
+        data-testid="facts-off-corner"
+        title="「代码事实」已关闭：未证实的标签、未解释与违规的叠加线不画（K9）；单击打开"
+        @click="showFacts"
+      >
+        代码事实已关 · 隐藏 {{ factsOff }} 处标记
       </button>
     </div>
     <SketchMenu

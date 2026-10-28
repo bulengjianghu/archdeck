@@ -32,12 +32,9 @@ test('L13、V2、K11：单击端口记号出端口面板，URL 带 sel=p:，单�
 test('L10、L12：图例示意与画布同一套样式——查询半透明、线宽与委托相同（只「淡」不「细」）；端口示意带插座', async ({ page }) => {
   // 迁移（T2）前描述里还没有查询 / 委托：在图例上验（示意与画布共用 edgeStyle）；画布上的同一映射见单测 routeEdge
   await openDesk(page, '/p/h5player?level=infra')
-  const types = page.getByRole('group', { name: '关系类型筛选' })
-  const swatch = (label: string) =>
-    types
-      .getByRole('button', { name: new RegExp(`^${label}`) })
-      .locator('svg.swatch line')
-      .first()
+  // L45（第十五轮 G13）：类型行是纯图例（.item，不再是可点击的 .type 按钮），示意仍与画布同一套样式
+  const types = page.getByRole('region', { name: '显示' }).locator('.type-list')
+  const swatch = (label: string) => types.locator('.item', { hasText: label }).first().locator('svg.swatch line').first()
   const q = swatch('查询')
   const c = swatch('委托')
   await expect(q).toHaveAttribute('stroke', 'var(--rel-queries)')

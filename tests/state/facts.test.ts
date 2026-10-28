@@ -113,6 +113,23 @@ describe('K9、Y4 本层投影只在结构视角、开关开启时', () => {
     // 开关关闭（facts 为 null）时没有叠加
     expect(canvasScene({ ...base, facts: null }).edges.some(e => e.data.temp === 'code')).toBe(false)
   })
+
+  it('L45：代码事实关闭时 hiddenFacts 给出本层被隐藏的异常标记数（画布角留痕）；开启、结构视角、运行视角为 null', async () => {
+    const { desk } = await setup()
+    const on = desk.facts.level.value!
+    const marks = on.overlays.length + on.violatedEdges.size + (on.unconfirmed?.size ?? 0)
+    expect(marks).toBeGreaterThan(0)
+    expect(desk.facts.hiddenFacts.value).toBeNull()
+    desk.setToggles({ showFacts: false })
+    expect(desk.facts.hiddenFacts.value).toBe(marks)
+    // 结构视角不受这个开关影响（K9：只适用于交互视角）
+    desk.setMode('structure')
+    expect(desk.facts.hiddenFacts.value).toBeNull()
+    desk.setMode('interaction')
+    // 运行视角下舞台不受显示开关影响（L9）
+    desk.openScenario('sc.play')
+    expect(desk.facts.hiddenFacts.value).toBeNull()
+  })
 })
 
 describe('Y5 选中节点所在的本层环', () => {

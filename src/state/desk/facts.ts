@@ -178,6 +178,15 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
       : null,
   )
 
+  /** L45：交互视角、「代码事实」关闭时本层被隐藏的异常标记数（叠加线、违规晕的边、未证实的关系），画布角留痕用；开着或结构视角（不受开关影响）为 null */
+  const hiddenFacts = computed<number | null>(() => {
+    const r = report.value
+    if (!r || !index.value || !view.value || state.value.playback) return null
+    if (state.value.mode === 'structure' || state.value.toggles.showFacts) return null
+    const lf = levelFacts(index.value, view.value, r)
+    return lf.overlays.length + lf.violatedEdges.size + (lf.unconfirmed?.size ?? 0)
+  })
+
   /** O12：交互视角、「组装」开关开启时组装事实与组装根在本层的投影（不参与布局） */
   const assembly = computed<LevelAssembly | null>(() =>
     report.value && index.value && view.value && !state.value.playback && state.value.toggles.assembly
@@ -755,6 +764,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     againstOf,
     isolatedOf,
     level,
+    hiddenFacts,
     assembly,
     gateIssues,
     ledger,
