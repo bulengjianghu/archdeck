@@ -3,6 +3,8 @@
 # 只在 infra.framework 之下挂子模块；跨区域关系只引用第二级模块 ID。
 
 modules:
+  # ─── 第二级模块的原则（ADR-0042，补充骨架条目）───
+  - { id: infra.framework, name: "Framework 机制内核", abstraction: 只放不含业务选择的通用机制，按可靠执行的对象切分：命令、图事务、模型槽位、插件各有唯一机制，业务经 Hook 与插件注入。 }
   # ───────────────────────── 内核门面与事件 / 错误路由 ─────────────────────────
   - id: infra.framework.kernel
     name: 内核门面与事件 / 错误路由
@@ -12,6 +14,7 @@ modules:
     responsibility: >-
       Framework 入口对象：按组合根注入的绑定函数惰性创建三个 Controller，组装事件总线、错误处理链与插件 API，
       并把 emit / handleError 回填到 Context；同时负责把领域事件映射为对外 EventKey。不含任何播放业务决策。
+    abstraction: 门面只做装配与路由：控制器按注入的绑定函数惰性创建，事件与错误各走一条链，领域事件经适配器单向映射为对外事件。
     codeRefs:
       - packages/framework/src/index.ts
       - packages/framework/src/types.ts
@@ -102,6 +105,7 @@ modules:
       控制面唯一的生命周期状态通道：串行调度命令，按当前模式的迁移规则表匹配状态、执行 pre / post Hook、
       把命令翻译为 Action 经 Dispatcher 下发给 MU，并三段式提交 PlaybackState 的状态迁移。
       不负责方案选择与业务编排（由 Hook 的注册方承担）。
+    abstraction: 调度、迁移与规则分离：命令串行进入，迁移按规则表数据驱动，业务编排只经 pre / post Hook 注册进来。
     principle: |
       一条命令的时序（`StateMachine.receive`）：
       1. 规则表查 `trigger = command.key` 的迁移；`match(current)` 不通过 → `CommandNoMatchTransitionError`。
@@ -173,6 +177,7 @@ modules:
     responsibility: >-
       持有 MU 图（节点、段账本、外部锚点、活动腿），以声明式 diff 原子更新图拓扑并完成节点 Init / Destroy 生命周期，
       失败整体回滚；按全局或按腿把 Action 分发给 MU。不决定建什么图（由三段工厂产出 diff）。
+    abstraction: 图事务与动作分发分离：拓扑变更只经声明式 diff 原子提交、失败整体回滚，逐帧推送不经控制器，多腿以句柄按腿隔离。
     principle: |
       `updatePipeline(diff)` 的原子提交：
       1. **准备**：把裸 MuKey 翻译为 NodeId（Load 段 `<MuKey>@<LegId>`），物化当前拓扑，交 Domain 的 `validateDiff` 按图规则 G1–G7 与当前 nextStatus 校验，得到目标拓扑；校验失败直接返回 `Err`，图不动。
@@ -261,6 +266,7 @@ modules:
       模型生命周期的唯一持有层与切换事实源：持有 state / statistic 全局单例与可换代的 stream / play 槽位，
       分发换代稳定的视图 Proxy 与属性订阅，提供可回滚的模型切换、代际收口，以及多腿的待命模型槽位。
       模型的定义、不变量与语义方法在 Domain，不在此处。
+    abstraction: 槽位代际切换是模型的唯一写路径，对外只发换代稳定的只读视图；待命槽位不进当前槽位、不触发订阅。
     principle: |
       - **稳定视图**：`getView(kind)` 返回的 Proxy 身份不随换代变化，读穿到当前实例；`watch` 订阅挂在 Registry 上，换代自动迁移到新实例。
       - **写拦截**：接管 / 创建的每个实例立即被 set-trap Proxy 包裹，语义方法内部写 `this.x` 也会触发通知；只有「当前」实例的写入才通知，按 prop 倒排索引使无人订阅的热路径写入零开销。
@@ -339,6 +345,7 @@ modules:
     responsibility: >-
       贯穿全局的运行时上下文：config + Registry 的只读投影（四个模型、播放三元组）+ 横切面（emit / log / track / recordFrame / handleError）
       + 少量显式写端口（settings、updateNeedsDecryption）；多腿时以 LegContext 门面按腿角色隔离。不提供业务写入口。
+    abstraction: 只读投影与显式写端口分开：读一律走 Registry 投影，写只经 settings 等少量窄端口，多腿以腿上下文按角色隔离。
     principle: |
       - 模型 getter 全部是 `modelRegistry.getView` 的投影；stream / play 在实例接管前返回 undefined（兼容窗口）。
       - `stop()` 只 reset 各代际，`reset()` 对 stream / play 走 destroy，均经 `resetGeneration` 收口。
@@ -457,6 +464,7 @@ modules:
     responsibility: >-
       依赖浏览器环境的通用工具集：环境 / 能力探测、性能采样与埋点载体、Worker 消息桥与 Wasm 加载、定时与节流、
       媒体与全屏辅助等。与 share.utils 的区别是这里允许有环境副作用；不含播放业务规则。
+    abstraction: 按环境副作用的类别切分（探测、观测、Worker / Wasm、定时与 DOM），各件不含播放业务规则，供机制与 MU 复用。
     codeRefs: [packages/framework/src/common/utils/**, packages/framework/src/common/solutionSelector.ts]
     children:
       - id: infra.framework.utils.env-probe

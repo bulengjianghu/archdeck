@@ -5,24 +5,35 @@ modules:
   # ── 骨架模块的代码落点（04 §3.10：骨架只写目录级，细到文件的由 AI 在这里补充，X1）──
   - id: present.desk-view
     name: 项目视图
+    abstraction: 一个项目一个版本一份 DeskState，由这里创建并注入；自身只布置区块，画布区的分屏与副栏另成一件。
     principle: |
       - 「怎么读这张图」（GuideDialog）按三问四修饰讲一条线（ADR-0029 §3）：三个判断题定类型，再读机制（插座 = 经端口）、异步、拉取；查询淡、委托实色，端口是方框进边一侧的小记号。
       - 「组装」叠加开关同演化叠加，按项目记在本机：模型加载后恢复，之后每次变化写回（useAssemblyPrefs，O12）。
     codeRefs: [src/components/DeskView.vue, src/components/GuideDialog.vue]
   - id: present.scenarios
     name: 场景列表
+    abstraction: 只列出与筛选 DeskState 派生好的场景，选定即交给它进入运行视角，自身不遍历场景、不改层次。
     principle: 场景按类别筛选（R17，ADR-0030）：默认只列主流程（kind 缺省 main），可切到「全部类别」，切换记在本机、所有项目共用、不进 URL；非主流程项在名字后标「异常」/「维护」；类别筛选与层次、发起者筛选叠加（filterScenariosByKind）。
     codeRefs: [src/components/ScenarioList.vue]
   - id: present.perspective
     name: 视角切换
+    abstraction: 视角由视图状态推出，这里只显示当前视角并发出切换意图，自身不存视角。
     principle: 画布顶部「结构 ｜ 交互 ｜ 运行：<场景名>」三段切换（V11，ADR-0031）：不开场景时单击「结构」「交互」切换画布模式（发 setMode，结构视角写 URL `v=s`，交互为缺省）；打开场景即运行视角，单击「结构」或「交互」即退出场景并进入那个视角，退出按钮回到进入前的视角；各段的 title 说明这种视角回答什么。
     codeRefs: [src/components/PerspectiveSwitch.vue]
   - id: present.player
     name: 回放控制条
+    abstraction: 回放只由用户驱动：控制条与路线总览只发单步、指向与选分支的意图，路径与路线都取派生数据。
     codeRefs: [src/components/PlayerBar.vue, src/components/BranchChooser.vue]
   - id: model.scenario
     name: 场景投影
+    abstraction: 按流水线单向切分：先算与层次无关的回放计划与路径，再按本层投影出可见消息与时序模型，查询都建在其上。
     codeRefs: [src/model/scenario/index.ts]
+  - id: present.sequence
+    name: 时序图
+    abstraction: 按画面区块切分，交互集中一处转成 DeskState 操作；坐标全取时序图排布，自身不排布。
+  - id: state.transition
+    name: 视图状态转移
+    abstraction: 会话规则按话题拆成纯函数，输入状态与动作、输出新状态，不碰外界；被描述系统的问题一律问模型层。
 
   # ── 呈现层 ──────────────────────────────────────────────
   - id: present.desk-view.split
@@ -144,6 +155,7 @@ modules:
     name: 画布场景
     parent: state.layout
     responsibility: 把带坐标的层次视图换成画布要画的节点与边（canvasScene，ADR-0013）：位置、类型、数据与类名、层级，以及运行视角下适应画布用的可见节点；框：根层只画系统框，下钻后外框为系统、内框为当前父模块，边界节点在两框之间（两框重合时外框外扩，A7、L4）；要写标签（×N 或 L26 标签）而走线没有标签位置时取走线中点（routeMidpoint）。边的层级：与聚焦对象相邻、选中、回放经过的边浮在节点之上（EDGE_Z）。框外边：先对当前画出来的这组调用 outsideRoutes 分配轨道，边与运行视角的步骤序号、分支预览都用分配后的走线。跳线：对画出来的折线关系边调用 routing 的 jumpsOf，交叉处的水平段标跳点（L11）。结构 / 交互视角：聚焦对象（悬停优先、其次选中）不相邻的节点与边变淡，分层总览中带不参与变淡；核心跨层边只在聚焦核心模块、被选中或回放落在其上时出现（O4、P7）；边界边只在聚焦其一端、被选中或回放经过时出现（L4）。运行视角：按舞台显示（stageDisplay）决定显隐与淡化（V5、V8、V9、V10）；回放叠加——当前消息的边带方向流动、端点节点为活动态、走过的边标步骤序号、临时线（经由上层关系取关系的类型色画虚线、标「经由上层」、随关系选中，P15；未建模画红色虚线，P11）、分支预览（P7、P10、P11、F6）；选中步骤时其余走过的边与步骤序号变灰（R15、R16）。边的视觉通道（L10、ADR-0029）：颜色取关系类型（查询再乘半透明，只「淡」不「细」）、标签位按 L26 组装（composePill，ADR-0041：异常段——×N、把手与违规、向上、未证实、未解释、缺段、未建模——警示色在前，修饰段——机制 L35（按关系现算，含散开段与经上层的临时线）、混合（只表同步 / 异步，L23）、经上层——中性在后，标签至多两个、其余「+k」并在悬停逐条列出，聚合边带条数；分层总览照写机制与向上、未证实只写在聚合边上；交互视角开启代码事实时才写未证实 / 未解释 / 违规，K9；「向上」取 desk.facts.upward（K22），结构视角不写机制与向上）、箭头取同步 / 异步（通知一律异步）、线宽档取条数，视图边（含聚合边、经由上层的临时线）里有一条经端口的关系即带插座（L12），标签只有 ×N 与异常；选中不改线宽。端口与边界（ADR-0029、ADR-0030）：节点带它定义的端口记号（L13：画在进边一侧的后半，超过 3 个合成「端口 ×N」，实现者数为描述与代码事实的并集，运行视角不画）与边界角色（L14）；交互视角开启「组装」时画组装叠加线（O12：组装事实投影到本层的虚线，同一对节点合并标 ×N，不参与布局，单击落到这对节点的代码依赖）与节点上的「组装根」角标。选中文件时投影节点加文件高亮（G14）；设计版本标出新增 / 修改与涉及变更数。结构视角（ADR-0031）的结构边与节点角标见子模块「结构视角的画布场景」，节点位置与交互视角相同（V12）。模型画布上没有编辑态（草图编辑在草图画布，ADR-0025）。分级（ADR-0027）：共用件的边（shelfEdges）默认不画、悬停或选中一端时画成曲线（O10）；本层框计数（levelCounts，O11）；运行视角下当前步骤经过的共用件高亮、不画共用件的临时线（P18）。
+    abstraction: 只把带坐标的视图换成画布场景、不改布局；结构视角的场景单独成件，与交互视角共用节点位置。
     principle: 纯函数，与 stageOverlay、stageDisplay 对称：呈现层只按结果写入 Vue Flow，不自己判断显隐、变淡与回放态；节点与边的数据类型（NodeData、RouteEdgeData）因此归 Layout。
     codeRefs: [src/layout/canvas.ts, src/layout/canvas/**]
   - id: state.layout.canvas.structure

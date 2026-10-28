@@ -10,7 +10,7 @@ import Panel from '../../src/components/panel/Panel.vue'
 import ModuleTree from '../../src/components/tree/ModuleTree.vue'
 import { createDeskState, type ModelWriter } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
-import { loadModel, reviewEntries, type ReviewedInput } from '../../src/model'
+import { loadModel, reviewEntries, reviewHash, type ReviewedInput } from '../../src/model'
 import { sampleFiles } from '../fixtures/sample'
 
 const idx = loadModel(sampleFiles()).index
@@ -90,6 +90,25 @@ describe('模块面板的确认（RV-3）', () => {
     const c = desk.review.counts.value
     expect(wrapper.text()).toContain(`核心模块已确认 ${c.reviewed} / ${c.scope} · 需复核 ${c.stale}`)
     expect(c).toMatchObject({ reviewed: 1, stale: 1 })
+  })
+})
+
+describe('系统与层的确认（RV-7、Z7，ADR-0042）', () => {
+  it('根层系统面板：「简介」是第一节，标题旁有系统的确认状态，简介下「确认」发出以系统 ID 记的一条', async () => {
+    const { wrapper, batches, desk } = await mountWith(Panel, '/')
+    const sid = desk.index.value!.rootId
+    expect(wrapper.find('.system-panel .section').text()).toContain('简介')
+    expect(wrapper.find('.system-panel .head .badge.review').text()).toBe('未确认')
+    expect(wrapper.text()).toContain('认可上面的定位与核心原则')
+    await wrapper.find('form.confirm').trigger('submit')
+    await flushPromises()
+    expect(batches[0].map(e => e.module)).toEqual([sid])
+    expect(batches[0][0].hash).toBe(reviewHash(desk.index.value!, sid))
+  })
+  it('层：面板提供「确认」（层原来不在 Z4 范围），不计入健康度', async () => {
+    const { wrapper, desk } = await mountWith(Panel, '/?sel=m:infra')
+    expect(wrapper.find('form.confirm').exists()).toBe(true)
+    expect(desk.review.scope.value.has('infra')).toBe(false)
   })
 })
 

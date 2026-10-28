@@ -398,11 +398,15 @@ export interface RulesDef {
 /** Z2、Z3：确认时的摘要——指纹覆盖的内容的一份副本，需复核时据此显示差异 */
 export interface ReviewSummaryDef {
   responsibility?: string
+  /** ADR-0042 */
+  abstraction?: string
   includes?: string[]
   excludes?: string[]
   mayDependOn?: string[]
   provides?: { id: string; signature?: string }[]
   children?: string[]
+  /** 系统简介（Z7） */
+  description?: string
 }
 
 /** Z1、Z6：一条确认记录；source 为 `manual` 或 `sketch:<设计 ID>` */
@@ -514,6 +518,8 @@ export interface ArchModel {
   rules?: RulesDef
   /** U1：rules 的出处 */
   rulesSrc?: SourceLoc
+  /** M23、Z7：system 的出处（提示与返工清单定位用），不参与版本对比 */
+  systemSrc?: SourceLoc
   /** Z1：各文件 reviewed 的合并（Validator 去掉坏引用、按模块去重），不参与版本对比 */
   reviewed: ReviewedEntry[]
   /** X1：本次加载的草图文件（整份定义，供核验），不参与版本对比 */

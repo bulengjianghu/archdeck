@@ -4,6 +4,8 @@
 # 按数据面三段划分：Load（loader / demuxer / buffer.demuxed）→ Process（corrector / process-plugin）→ Play（buffer.processed / remuxer / decoder / buffer.decoded / render）。
 
 modules:
+  # ─── 第二级模块的原则（ADR-0042，补充骨架条目）───
+  - { id: infra.mus, name: "MUs 媒体单元", abstraction: 按数据面三段与节点角色切分：上游 output 直推下游 input、不经控制面，节点只执行动作不做决策，协议算法下沉 Domain。 }
   # ───────────────────────── 装配入口 ─────────────────────────
   - id: infra.mus.factory
     name: MU 工厂
@@ -35,6 +37,7 @@ modules:
     parent: infra.mus
     kind: module
     responsibility: 数据面唯一入水口：按策略下发的 LoadData / LoadStreamInfo / CancelLoad 等动作拉取 FLV 流、HLS 分片或 MP4 字节区间，以 StreamData 包直推解封装器，并上报连接 / 到流事件与网络错误。不决定何时加载、加载多少（归加载策略）。
+    abstraction: 按源协议切分加载器、共用 HTTP 流读取器；何时拉、拉多少一律由策略动作下达，加载器只执行并上报事实。
     principle: |
       - Loader 的 `support()` 恒为 false：不接受上游输入，数据只由网络回调驱动 `output`。
       - 网络回调是异步任务，回调内同步执行完下游整条直推链；链上抛出的错误在回调里被包装为 `PullStreamTaskError` 等经 `handleError` 上报。
@@ -80,6 +83,7 @@ modules:
     parent: infra.mus
     kind: module
     responsibility: 把 StreamData 字节流解成音视频帧与轨道元数据（四类 FlvDemuxed* 包）直推 Load 段尾缓冲；负责字节拼接、解析器生命周期、流事实落写（metadata、SPS / PPS、样本信息）与帧序合法性校验。协议算法（位读取、AMF、SPS）调用 Domain，不在此重复实现。
+    abstraction: 按容器格式切分解封装器，H.264 切片解析单独成件被共用；位流语法等协议算法调 Domain，不在此重复实现。
     principle: |
       - 每种容器分两层：纯协议解析器（`FlvDemuxer` / `TsDemuxer` / mp4box）+ MU 包装层（`MuFlvDemuxer` / `MuTsDemuxer` / `MuMp4Demuxer`）。解析器不接收 Context，流模型落写全部在包装层。
       - 字节拼接：上一包未消费的尾巴与新包拼接后送解析，解析器返回已消费字节数，剩余留到下一包。
@@ -125,6 +129,7 @@ modules:
     parent: infra.mus
     kind: module
     responsibility: 在帧进入播放段之前就地修正视频帧事实：重建 PTS、过滤解码器不能消化的 NALU、细化帧类型。只处理 FlvDemuxedVideoData，其余包类型原样透传；不增删音频、不做解密。
+    abstraction: 按要修正的帧事实切分为独立的就地变换，只碰视频帧，其余包原样透传。
     principle: |
       - 三个校正 MU 由 processFactory 按需串成链（PtsCorrector → NaluTypeFilter → FrameInfoCorrector → 解密插件），链为空时 Load 段尾直连 Play 段首。
       - 都是「就地改字段 + `output` 原对象」，不复制帧、不插 Hook。
@@ -159,6 +164,7 @@ modules:
     parent: infra.mus
     kind: module
     responsibility: 段与段之间的帧队列：入队、存储、按策略动作出队、丢弃与 BufferChange 事实上报。只管「帧怎么进、怎么存、怎么出」，不管「该不该出、出多少、何时停」（归运行时驾驶策略）。
+    abstraction: 按流水线位置与方案切分缓冲、共用入队 / 存储 / 出队基类；只管帧怎么进出，出不出、出多少由策略动作决定。
     principle: |
       - 缓冲是数据面上唯一「拉 / 推解耦」的位置：上游 `input` 只入队；出队由策略经动作（SendAllBuffer / SendBuffer / Hold / Release …）触发，出队后仍是 `output` 直推下游。
       - 基类 `MuMediaBufferBase` 统一音 / 视频双队列、DropBuffer / DropAllBuffer 与 BufferChange 事件；帧账本按能力读取（Video 方案无账本时跳过）。
@@ -214,6 +220,7 @@ modules:
     parent: infra.mus
     kind: module
     responsibility: 把解封装帧重新封装为浏览器原生播放所需的容器：fMP4（init segment + moof/mdat，供 MSE / Vcs）或 TS 分片（供 Fhls 原生 HLS）。
+    abstraction: 按目标容器切分：fMP4 面向 MSE / Vcs，TS 分片面向 Fhls 原生 HLS，由下游呈现方式决定选哪一个。
     codeRefs: [packages/player/src/mus/remuxer/**]
     children:
       - id: infra.mus.remuxer.mp4
@@ -250,6 +257,7 @@ modules:
     parent: infra.mus
     kind: module
     responsibility: Wcs / Wasm / Vcs 方案的解码节点：把解封装帧解码为 DecodedVideoData（VideoFrame 或 YUV）/ DecodedAudioData（PCM），维护在途解码计数与解码耗时，处理参数集变化时的重配与出错重建。何时送解码、丢哪帧由送解码策略决定。
+    abstraction: 按解码技术切分，各自只把帧解出并维护在途计数与重建；送哪帧、丢哪帧由送解码策略决定。
     principle: |
       - 两条腿：WebCodecs（浏览器硬解，主线程异步回调）与 Wasm（软解：视频在 Worker 中跑 libvdec，音频在主线程跑 libadec 实例池）。
       - 首帧必须是关键帧，之前的非关键帧直接丢弃并扣减在途计数，避免送解码闸门卡死。
@@ -282,6 +290,7 @@ modules:
     parent: infra.mus
     kind: module
     responsibility: 数据面的出口：把 fMP4 分片、解码帧、PCM 或媒体地址交给浏览器呈现（video 元素 / MSE / canvas / MediaStream / WebAudio），并承担挂载、音量、倍速、截图、全屏、清屏等呈现动作与首帧 / 渲染进度等读数事件。只执行，不做水位、追帧、seek 等决策。
+    abstraction: 按呈现目标切分渲染实现、共用 video 元素基类；元素归池所有、渲染只借用，跨代保留不随 MU 销毁。
     principle: |
       各渲染路径差异：
       - **mse**：fMP4 append 进 MediaSource / SourceBuffer，由 video 元素自行解码播放；渲染执行策略下发的写入闸、区间回收、时长、追帧 seek。
@@ -338,6 +347,7 @@ modules:
         name: Vcs 渲染
         kind: component
         responsibility: '`MuVcs2Render`：Vcs 方案的渲染 MU，接收逐帧 fMP4 分片，交给内部的 Model / Controller / View 三件套完成分片调度与多 video 元素轮转播放；由 `VcsFactory` 在 Init 时装配。'
+        abstraction: 按 MVC 切分：模型只记分片与时间轴事实，控制器调度装载与切片，视图只管 video 元素播放，MU 外壳只接收与装配。
         principle: |
           - 3 个 FragmentModel 组成环状链表，各自绑定一个 video 元素：当前片播放的同时，下一片由加载控制器把累积的逐帧分片合成 mp4 Blob 预加载，到点由切换控制器无缝切换。
           - VcsModel 是注册在 ModelRegistry 里的播放模型（组合 RenderTimeline 与 FrameBufferLedger），供策略层读取缓冲时长等事实。

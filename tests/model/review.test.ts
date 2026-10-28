@@ -1,5 +1,5 @@
 /**
- * 人确认层（docs/02-domain.md §2.19 Z1–Z6）：确认记录的加载、指纹覆盖什么、状态三档与差异、确认范围、健康度计数、来源与批量记录。
+ * 人确认层（docs/02-domain.md §2.19 Z1–Z7，ADR-0042）：确认记录的加载、指纹覆盖什么、状态三档与差异、确认范围、健康度计数、来源与批量记录。
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -16,6 +16,7 @@ import {
   reviewSummary,
   reworkList,
   summaryHash,
+  summaryText,
   subtreeOf,
   isReviewSource,
   type RawFile,
@@ -67,9 +68,9 @@ describe('Z1 确认记录是人拥有的文件', () => {
     const { index, issues } = load(text)
     expect(index.model.reviewed).toHaveLength(1)
     expect(index.model.reviewed[0]).toMatchObject({ module: 'ui.view', hash: 'cccc', source: 'sketch:d1', note: '第二次', src: { file: 'reviewed.yaml', path: 'reviewed.2' } })
-    expect(issues.map(i => i.code).sort()).toEqual(['duplicate-reviewed', 'unknown-reviewed-module'])
+    expect(issues.filter(i => i.severity !== 'info').map(i => i.code).sort()).toEqual(['duplicate-reviewed', 'unknown-reviewed-module'])
     expect(issues.find(i => i.code === 'unknown-reviewed-module')?.message).toBe('确认记录失效：模块 nope 已改名或删除，请在新模块上重新确认')
-    expect(issues.every(i => i.severity === 'warning')).toBe(true)
+    expect(issues.every(i => i.severity !== 'error')).toBe(true)
   })
   it('格式：缺 module / at / hash、来源写法不对、不认识的字段都是格式错误（M1）', () => {
     for (const bad of [
@@ -93,6 +94,8 @@ describe('Z2 指纹覆盖什么', () => {
   it('摘要：职责按行、包含 / 不包含、可依赖的层、接口按 ID 排序带签名、直接子模块排序', () => {
     expect(reviewSummary(idx, 'ui.view')).toEqual({
       responsibility: '画视图\n不持有状态',
+      abstraction: '',
+      description: '',
       includes: [],
       excludes: [],
       mayDependOn: [],
@@ -163,7 +166,7 @@ describe('Z3 状态三档与差异', () => {
       { kind: 'removed', text: '不持有状态' },
       { kind: 'added', text: '不持有任何状态' },
     ])
-    for (const f of ['includes', 'excludes', 'mayDependOn', 'provides', 'children'] as const) expect(st.diff![f]).toEqual([])
+    for (const f of ['description', 'abstraction', 'includes', 'excludes', 'mayDependOn', 'provides', 'children'] as const) expect(st.diff![f]).toEqual([])
     expect(reviewDiffText(st.diff!)).toBe('职责：−「不持有状态」 +「不持有任何状态」')
   })
   it('接口按 ID 增 / 删 / 改（带前后签名），子模块与包含 / 不包含、可依赖的层按项增删', () => {
@@ -279,5 +282,67 @@ describe('Z6 来源与批量记录', () => {
       ],
     })
     expect(e.note).toBeUndefined()
+  })
+})
+
+describe('Z2 纳入原则 abstraction（ADR-0042）', () => {
+  const hashOf = (modules: string, id: string) => reviewHash(load('', modules).index, id)
+  it('层与模块都覆盖原则：改层的抽象原则、给模块写或改一句话原则，指纹都变；原则的首尾空白与空行不算', () => {
+    expect(hashOf(MODULES.replace('abstraction: 界面', 'abstraction: 界面与交互'), 'ui')).not.toBe(hashOf(MODULES, 'ui'))
+    const withP = MODULES.replace('name: Store\n', 'name: Store\n        abstraction: 读写分离\n')
+    expect(hashOf(withP, 'ui.store')).not.toBe(hashOf(MODULES, 'ui.store'))
+    expect(hashOf(withP.replace('读写分离', '读写分离、单一写者'), 'ui.store')).not.toBe(hashOf(withP, 'ui.store'))
+    expect(hashOf(withP.replace('abstraction: 读写分离', 'abstraction: "  读写分离  \\n\\n"'), 'ui.store')).toBe(hashOf(withP, 'ui.store'))
+    expect(reviewSummary(load('', withP).index, 'ui.store').abstraction).toBe('读写分离')
+  })
+  it('没写原则时不参与拼接：指纹与纳入前的六项拼接相同，旧的确认记录照旧有效', () => {
+    const s = reviewSummary(idx, 'ui.view')
+    expect(summaryText(s)).toBe(JSON.stringify([s.responsibility, s.includes, s.excludes, s.mayDependOn, s.provides.map(p => [p.id, p.signature]), s.children]))
+    const [old] = reviewEntries(idx, ['ui.view'], { source: 'manual', at: '2026-10-22' })
+    expect(old.summary.abstraction).toBeUndefined()
+    expect(reviewStates(load(`reviewed:\n  - ${JSON.stringify(old)}\n`).index).get('ui.view')!.status).toBe('reviewed')
+  })
+  it('写了原则的已确认模块一次性需复核，差异列在「原则」下', () => {
+    const [entry] = reviewEntries(idx, ['ui.store'], { source: 'manual', at: '2026-10-22' })
+    const withP = MODULES.replace('name: Store\n', 'name: Store\n        abstraction: 读写分离\n')
+    const st = reviewStates(load(`reviewed:\n  - ${JSON.stringify(entry)}\n`, withP).index).get('ui.store')!
+    expect(st.status).toBe('stale')
+    expect(st.diff!.abstraction).toEqual([{ kind: 'added', text: '读写分离' }])
+    expect(reviewDiffText(st.diff!)).toBe('原则：+「读写分离」')
+    // 记下的摘要带原则，重算一致
+    const [now] = reviewEntries(load('', withP).index, ['ui.store'], { source: 'manual' })
+    expect(now.summary.abstraction).toBe('读写分离')
+    expect(summaryHash(normalizeSummary(now.summary))).toBe(now.hash)
+  })
+})
+
+describe('Z7 系统也可确认（ADR-0042）', () => {
+  const SYS = MODULES.replace('system: { id: sys, name: S }', 'system: { id: sys, name: S, description: "给谁用的工具。\\n按两层分。" }')
+  const sidx = load('', SYS).index
+  it('系统的摘要只有简介（按行规整）；子模块、层的变化不影响系统的指纹', () => {
+    expect(reviewSummary(sidx, 'sys')).toMatchObject({ description: '给谁用的工具。\n按两层分。', responsibility: '', children: [] })
+    expect(reviewHash(sidx, 'sys')).toBe(reviewHash(load('', SYS.replace('abstraction: 界面', 'abstraction: 别的')).index, 'sys'))
+    expect(reviewHash(sidx, 'sys')).not.toBe(reviewHash(load('', SYS.replace('按两层分。', '按三层分。')).index, 'sys'))
+  })
+  it('以系统 ID 记一条确认：加载不提醒失效；状态三档同模块；需复核时差异列在「简介」下并进返工清单', () => {
+    expect(reviewStates(sidx).get('sys')).toEqual({ status: 'unreviewed' })
+    const [e] = reviewEntries(sidx, ['sys'], { source: 'manual', at: '2026-10-28' })
+    expect(e.summary).toEqual({ description: '给谁用的工具。\n按两层分。' })
+    const yaml = `reviewed:\n  - ${JSON.stringify(e)}\n`
+    const ok = load(yaml, SYS)
+    expect(ok.issues.map(i => i.code)).not.toContain('unknown-reviewed-module')
+    expect(reviewStates(ok.index).get('sys')!.status).toBe('reviewed')
+    const changed = load(yaml, SYS.replace('按两层分。', '按三层分。')).index
+    const st = reviewStates(changed).get('sys')!
+    expect(st.status).toBe('stale')
+    expect(reviewDiffText(st.diff!)).toBe('简介：−「按两层分。」 +「按三层分。」')
+    const item = reworkList({ index: changed, issues: [] }).items.find(i => i.code === 'review.stale')!
+    expect(item).toMatchObject({ id: 'review:sys', title: expect.stringContaining('需复核：S') })
+  })
+  it('系统不计入确认范围与健康度（Z4、Z5 只数模块）', () => {
+    const [e] = reviewEntries(sidx, ['sys'], { source: 'manual', at: '2026-10-28' })
+    const index = load(`reviewed:\n  - ${JSON.stringify(e)}\n`, SYS).index
+    expect(reviewScope(index)).not.toContain('sys')
+    expect(reviewCounts(index)).toEqual({ scope: 3, reviewed: 0, stale: 0 })
   })
 })

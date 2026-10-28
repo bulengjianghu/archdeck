@@ -87,6 +87,8 @@ const ISSUE_RULES: Record<string, string[]> = {
   'unknown-implementer': ['M18'],
   'relation.via-legacy': ['M20'],
   'relation.bundle-no-interface': ['M22'],
+  'system.description-sentences': ['M23'],
+  'module.missing-abstraction': ['M24'],
   'step.sync-mismatch': ['S19'],
   'missing-responsibility': ['M9'],
   'step-relation-mismatch': ['S5a'],
@@ -846,8 +848,8 @@ function reviewItems(index: ModelIndex, name: (id: string) => string): ReworkIte
   const items: ReworkItem[] = []
   for (const [id, st] of reviewStates(index)) {
     if (st.status !== 'stale' || !st.entry) continue
-    const m = index.modules.get(id)!
-    const at = descLoc(m.src)
+    // Z7：系统本身的确认，出处是 system 的声明
+    const at = descLoc(id === index.rootId ? index.model.systemSrc : index.modules.get(id)!.src)
     const changed = st.diff ? REVIEW_FIELDS.filter(f => st.diff![f].length).map(f => REVIEW_FIELD_LABELS[f]) : []
     items.push({
       id: `review:${id}`,

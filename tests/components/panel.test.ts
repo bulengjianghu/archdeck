@@ -29,11 +29,14 @@ describe('属性面板', () => {
     expect(text).toContain('机制与副作用')
   })
 
-  it('选中层：显示抽象原则与可依赖的层', async () => {
+  it('选中层：「说明」= 职责 + 原则一句（ADR-0042），另有可依赖的层', async () => {
     const { wrapper } = await mountPanel('/?sel=m:infra')
     const text = wrapper.text()
-    expect(text).toContain('抽象原则')
-    expect(text).toContain('机制与副作用')
+    const first = wrapper.findAll('.section')[0]
+    expect(first.text()).toContain('说明')
+    expect(first.text()).toContain('原则')
+    expect(first.text()).toContain('机制与副作用')
+    expect(text).not.toContain('抽象原则')
     expect(text).toContain('可依赖的层')
     expect(text).toContain('Application')
     expect(text).toContain('本层模块')

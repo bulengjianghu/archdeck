@@ -5,32 +5,41 @@ modules:
   # ── 骨架模块的代码落点（04 §3.10：骨架只写目录级，细到文件的由 AI 在这里补充，X1）──
   - id: present.issues
     name: 问题页签
+    abstraction: 只呈现模型层汇总好的返工清单，排序、筛选与复制都不新增判断；画布上只留计数角标。
     codeRefs: [src/components/tree/IssueList.vue]
   - id: access.deps
     name: 依赖提取
+    abstraction: 只提取事实不做判断：说明符解析到清单中的文件即止，归属与规则交给模型层；给分类器的事实单独成件、只在命令行用。
     principle: 继承与组装的提取（ADR-0029、ADR-0030）：类声明的 implements / extends 子句记为 inherits（导入名、子句种类，目标上带穿透后的声明种类；默认导入的基类按默认导出解析），供端口实现者（K5c）与子类事实（K12）；值位置的交互使用另记种类 invokeKinds——call、extends、new、factory（create* / make* / build* 或 *Factory，成员调用只认命名空间导入或 *Factory 对象）、register（交给 register* / provide / bind / use 的调用），K7 只看 call，K13 看后三种（Error 类的 new 不算组装）。
     codeRefs: [vite/readDeps.ts]
   - id: access.governance-store
     name: 治理存储
+    abstraction: 只存取项目下的 governance/：基线只由命令行生成，拦截记录只追加。
     codeRefs: [vite/governanceStore.ts]
   - id: access.history
     name: 源码历史读取
+    abstraction: 只读 git 历史并按 HEAD 与窗口缓存，不判断归属；git 不可用时给出原因而不报错。
     codeRefs: [vite/readHistory.ts]
   - id: access.agent
     name: agent 接口
+    abstraction: 查询核心只有一份，命令行与 MCP 两层外壳同输入同结果；只读描述、规则与基线，只写拦截记录。
     codeRefs: [scripts/agent/**, scripts/arch.ts, scripts/arch-mcp.ts, .mcp.json]
   - id: model.governance
     name: 架构治理
+    abstraction: 事实比对、规则判定与环各算一类，报告只组合它们；本层投影、结构视图与查询都只是读法，不新增事实。
     adrs: [15, 26]
     codeRefs: [src/model/governance/index.ts]
   - id: model.rework
     name: 返工清单
+    abstraction: 只汇总其他模型子模块已有的结果并按根因聚合，不新增事实、不重做判定。
     codeRefs: [src/model/rework/index.ts, src/model/rework/list.ts, src/model/rework/markdown.ts, src/model/rework/health.ts]
   - id: model.evolution
     name: 演化事实
+    abstraction: 与代码事实同一做法：历史按归属提升到模块再投影到本层，输入全由接入层给，不碰文件系统。
     codeRefs: [src/model/evolution/index.ts, src/model/evolution/history.ts, src/model/evolution/level.ts]
   - id: model.intent
     name: 意图
+    abstraction: 按草图生命周期切分：编辑只产出新草图、校验只判是否合法、核验只比对版本，三者都是纯函数、互不越位。
     adrs: [23, 24, 25]
     codeRefs: [src/model/intent/index.ts]
 
@@ -146,6 +155,7 @@ modules:
   # 骨架里的「确认」（model.review）只补它提供的接口（X1：补充草图没写的字段）
   - id: model.review
     name: 确认
+    abstraction: 确认的摘要、指纹与状态都是纯函数，页面、命令行与草图归档共用同一份。
     parent: model
     provides: [if.review.query]
     codeRefs: [src/model/review/index.ts, src/model/review/hash.ts, src/model/review/status.ts, src/model/review/text.ts]

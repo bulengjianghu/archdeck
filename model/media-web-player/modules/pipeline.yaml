@@ -4,6 +4,13 @@
 # pipeline.ts 是单文件契约，按「源 / 管线端口 / 回报 / 族端口」写成概念子模块（不写 codeRefs，§3.7）。
 
 modules:
+  # 第二级模块的原则（补充条目，ADR-0042；名称与骨架一致）
+  - { id: pipeline.contract, name: 管线契约, abstraction: 按一次会话的流向切契约：源进、命令下行、回报经 sink 上行、族端口管建立与释放；内核拥有状态，管线拥有其余。 }
+  - { id: pipeline.latency, name: 延迟决策律, abstraction: 决策与执行分界：律是不读时钟、可重放的纯函数，运行骨架只携带状态并把动作交给本族执行器，读数与动作归各族。 }
+  - { id: pipeline.metering, name: 计量与锚点, abstraction: 按观测对象分成互不依赖的观测件：只把时间戳变成读数或报告，不碰浏览器 API、不做决策。 }
+  - { id: pipeline.timing, name: 计时器与看不见即保持, abstraction: 时间一律经注入的计时器，按谁在等选停走规则：会话的等待随看不见即保持停走，非会话的等待只在页面可见时计时。 }
+  - { id: pipeline.fetch, name: 拉流与重连, abstraction: 按协议切拉流，共用一个流式请求与一套有界重试和丢失归因；拉流只交字节，不认识模块与解封装。 }
+
   # ───────────────────────── pipeline.contract（概念子模块，同在 pipeline.ts） ─────────────────────────
   - id: pipeline.contract.source
     parent: pipeline.contract

@@ -3,6 +3,16 @@
 # 骨架模块（share.contracts 等第二级）在 layers.yaml 中定义，本文件只用 parent 往下挂。
 
 modules:
+  # ─── 第二级模块的原则（ADR-0042，补充骨架条目）───
+  - { id: domain.types, name: "类型与事件", abstraction: 领域公共类型的唯一属地：按类型用途切分，Framework 只重导出同一对象，不另造副本。 }
+  - { id: domain.ports, name: "领域端口", abstraction: 签名引用领域类型的契约集中于此，由外层实现、领域只依赖端口，使依赖方向保持向内。 }
+  - { id: domain.models, name: "领域模型", abstraction: 聚合持有事实并守住不变量：写只经语义方法、读只出只读视图，按聚合与方案切分，只存值快照不持 DOM。 }
+  - { id: domain.services, name: "决策服务", abstraction: 按决策主题切分的纯函数：输入事实、输出结构化结论，零 I/O，控制律经 host 注入，写回由宿主插件完成。 }
+  - { id: domain.algorithms, name: "协议算法", abstraction: 按协议切分的无 I/O 纯算法，只依赖输入字节与参数，供 MU 调用而不反向依赖外层。 }
+  - { id: domain.rules, name: "规则表", abstraction: 可穷举的规则写成表与校验函数，按规则对象（图变更 / 状态映射）切分，由机制层调用判定。 }
+  - { id: share.contracts, name: "跨层契约", abstraction: 只收只依赖跨层公共类型的最小契约；签名一旦引用领域类型就归 Domain 端口。 }
+  - { id: share.errors, name: "错误原语", abstraction: 错误分类数据化：错误码到类型 / 级别查表映射，所有失败归一为 ErrorBase 进同一条错误链。 }
+  - { id: share.utils, name: "通用原语", abstraction: 只收无状态、无环境副作用的纯工具；带环境副作用的归 Framework 通用运行时工具。 }
   # ───────────────────────── share（层的包入口）─────────────────────────
   - id: share
     name: Share

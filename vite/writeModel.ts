@@ -24,6 +24,7 @@ import {
   parseDesignSketches,
   reviewEntries,
   reviewHash,
+  isReviewable,
   sketchModules,
   type ArchiveVerdict,
   type ModelIndex,
@@ -235,7 +236,8 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/
 /** 一条记录的校验与规整；坏的抛 WriteError */
 function cleanEntry(raw: unknown, index: ModelIndex): ReviewedInput {
   const e = (raw && typeof raw === 'object' ? raw : {}) as Partial<ReviewedInput>
-  if (typeof e.module !== 'string' || !index.modules.has(e.module)) throw new WriteError(`模块不存在：${String(e.module)}`)
+  // Z7：系统 ID 也可以记一条确认
+  if (typeof e.module !== 'string' || !isReviewable(index, e.module)) throw new WriteError(`模块不存在：${String(e.module)}`)
   if (typeof e.hash !== 'string' || !e.hash.trim()) throw new WriteError(`模块「${e.module}」的记录缺少 hash`)
   if (e.hash.trim() !== reviewHash(index, e.module))
     throw new WriteError(`模块「${e.module}」的记录 hash 与当前描述的指纹不符：描述已变，请刷新后重新确认（Z6）`)

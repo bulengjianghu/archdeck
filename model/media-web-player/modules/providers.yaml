@@ -3,6 +3,13 @@
 # 2026-10-27 按 plans/arch-desk-media-player/10-module-review.md §5 把原 providers.wasm-core 一分为二：ABI 变与输入协议变是两个变更原因。
 
 modules:
+  # 第二级模块的原则（补充条目，ADR-0042；名称与骨架一致）
+  - { id: providers.wasm-module, name: wasm 模块与会话, abstraction: 以模块 ABI 为唯一变更原因收拢两族共用的一侧，输入协议的变化不进来；会话资源一律逆序释放、失败只报一次。 }
+  - { id: providers.stream-input, name: 拉流内核, abstraction: 以输入协议为变更原因独立于 ABI 一侧：输入对两族相同、只经族给的钩子回调会话；时移切换的计算抽成纯函数。 }
+  - { id: providers.self-clocked, name: 自建时钟族, abstraction: 会话实现只有一份、主线程与 Worker 共用，Worker 只经消息协议映射；播放器级资源归族，每会话资源归会话逆序释放。 }
+  - { id: providers.element, name: 元素族, abstraction: 按路线切会话管线、共用元素会话与声音：浏览器解码定速，延迟律只经元素属性与模块跳 IDR 施力。 }
+  - { id: providers.native-module, name: wasm 原生模块（C）, abstraction: 按处理阶段切分：解封装、解密、解码各自只管一步，模块会话是 ABI 背后唯一的调度者，JS 只经 ABI 头进出。 }
+
   # ───────────────────────── providers.wasm-module（同一包 media-wasm-core 的 ABI 一侧） ─────────────────────────
   - id: providers.wasm-module.module
     parent: providers.wasm-module

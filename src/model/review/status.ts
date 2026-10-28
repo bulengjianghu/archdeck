@@ -39,7 +39,7 @@ function diffItems(a: readonly string[], b: readonly string[]): ReviewChange[] {
   return [...a.filter(x => !B.has(x)).map(text => ({ kind: 'removed' as const, text })), ...b.filter(x => !A.has(x)).map(text => ({ kind: 'added' as const, text }))]
 }
 
-/** Z3：上次确认时与现在的差异——职责按行、包含 / 不包含与可依赖的层按项、接口按 ID 增 / 删 / 改、子模块按 ID 增删 */
+/** Z3：上次确认时与现在的差异——简介、职责与原则按行、包含 / 不包含与可依赖的层按项、接口按 ID 增 / 删 / 改、子模块按 ID 增删 */
 export function reviewDiff(before: ReviewSummary, now: ReviewSummary): ReviewDiff {
   const was = new Map(before.provides.map(p => [p.id, p.signature]))
   const is = new Map(now.provides.map(p => [p.id, p.signature]))
@@ -49,8 +49,11 @@ export function reviewDiff(before: ReviewSummary, now: ReviewSummary): ReviewDif
     else if (is.get(id) !== sig) provides.push({ kind: 'changed', text: id, before: sig, after: is.get(id) })
   }
   for (const [id, sig] of is) if (!was.has(id)) provides.push({ kind: 'added', text: id, after: sig })
+  const lines = (f: 'description' | 'responsibility' | 'abstraction') => diffLines(before[f].split('\n').filter(Boolean), now[f].split('\n').filter(Boolean))
   const diff = {
-    responsibility: diffLines(before.responsibility.split('\n').filter(Boolean), now.responsibility.split('\n').filter(Boolean)),
+    description: lines('description'),
+    responsibility: lines('responsibility'),
+    abstraction: lines('abstraction'),
     includes: diffItems(before.includes, now.includes),
     excludes: diffItems(before.excludes, now.excludes),
     mayDependOn: diffItems(before.mayDependOn, now.mayDependOn),
@@ -69,11 +72,11 @@ export function reviewScope(index: ModelIndex): string[] {
     .map(m => m.id)
 }
 
-/** 每个模块的确认状态（Z1、Z3）；只有记录的模块才有 entry，需复核且记录带摘要时才有 diff */
+/** 每个模块与系统本身（Z7）的确认状态（Z1、Z3）；只有记录的才有 entry，需复核且记录带摘要时才有 diff */
 export function reviewStates(index: ModelIndex): Map<string, ReviewState> {
   const entries = new Map(index.model.reviewed.map(e => [e.module, e]))
   const out = new Map<string, ReviewState>()
-  for (const id of index.modules.keys()) {
+  for (const id of [index.rootId, ...index.modules.keys()]) {
     const entry = entries.get(id)
     if (!entry) {
       out.set(id, { status: 'unreviewed' })
@@ -104,7 +107,7 @@ export function subtreeOf(index: ModelIndex, moduleId: string): string[] {
   return out
 }
 
-/** Z4、Z6：为一组模块生成确认记录（现在的指纹与摘要）；页面「确认」与草图归档都用它构造写入 */
+/** Z4、Z6、Z7：为一组模块（或系统）生成确认记录（现在的指纹与摘要）；页面「确认」与草图归档都用它构造写入 */
 export function reviewEntries(index: ModelIndex, ids: readonly string[], opts: { source: string; note?: string; at?: string }): ReviewedInput[] {
   const at = opts.at ?? new Date().toISOString().slice(0, 10)
   const note = opts.note?.trim()
