@@ -1,6 +1,6 @@
 /**
- * L14 边界角色的位置（ADR-0030）：port 压在父模块框上边（用户一侧）、adapter 压在右边（外部系统一侧）；常显、不折叠进「+N」（O8 的例外）；
- * 普通层次不交给 elk、布局后摆在框线上，边按需正交走线；分层总览里是带内的块——port 压在带的上边、adapter 贴带的右边。
+ * L14 边界角色的位置（ADR-0030，ADR-0039 修订）：port 压在父模块框上边（用户一侧）、adapter 压在左边（外部系统一侧，A7）；常显、不折叠进「+N」（O8 的例外）；
+ * 普通层次不交给 elk、布局后摆在框线上，边按需正交走线；分层总览里是带内的块——port 压在带的上边、adapter 在带内最左一列（标题栏旁）。
  */
 import { describe, expect, it } from 'vitest'
 import { loadModel, projectLevel } from '../../src/model'
@@ -31,7 +31,7 @@ describe('L14 普通层次', () => {
     expect(view.fold!.members).toHaveLength(8)
     expect(view.fold!.members).not.toContain('infra.zone.api')
     expect(compassOf(view.nodes.find(n => n.id === 'infra.zone.api')!)).toBe('rim-top')
-    expect(compassOf(view.nodes.find(n => n.id === 'infra.zone.ext')!)).toBe('rim-right')
+    expect(compassOf(view.nodes.find(n => n.id === 'infra.zone.ext')!)).toBe('rim-left')
   })
 
   it('不交给 elk；它们的边是框外边（按需正交走线），内部节点上照常占端口', () => {
@@ -45,31 +45,31 @@ describe('L14 普通层次', () => {
     expect(isOutsideEdge(view, e)).toBe(true)
   })
 
-  it('布局后 port 的中心压在父模块框的上边、在所有内部节点之上；adapter 的中心压在右边、在所有内部节点之右；边能走线；布局版本已升级', async () => {
+  it('布局后 port 的中心压在父模块框的上边、在所有内部节点之上；adapter 的中心压在左边、在所有内部节点之左；边能走线；布局版本已升级', async () => {
     const pv = await layoutView(view)
     const f = pv.parentFrame!
     const api = pv.nodes.get('infra.zone.api')!
     const ext = pv.nodes.get('infra.zone.ext')!
     expect(api.y + api.h / 2).toBeCloseTo(f.y)
-    expect(ext.x + ext.w / 2).toBeCloseTo(f.x + f.w)
+    expect(ext.x + ext.w / 2).toBeCloseTo(f.x)
     const inner = ['infra.zone.c0', `more:infra.zone`].map(id => pv.nodes.get(id)!)
     for (const b of inner) {
       expect(api.y + api.h).toBeLessThan(b.y)
-      expect(ext.x).toBeGreaterThan(b.x + b.w)
+      expect(ext.x + ext.w).toBeLessThan(b.x)
     }
     const z1 = view.edges.find(x => x.relationIds.includes('z1'))!
     const z2 = view.edges.find(x => x.relationIds.includes('z2'))!
-    // port 的出边从它的底边出发（朝框内）；adapter 的进边从它的左边进入
+    // port 的出边从它的底边出发（朝框内）；adapter 的进边从它的右边（朝框内）进入
     const r1 = edgeRoute(pv, z1)!
     expect(r1.points[0].y).toBeCloseTo(api.y + api.h)
     const r2 = edgeRoute(pv, z2)!
-    expect(r2.points[r2.points.length - 1].x).toBeCloseTo(ext.x)
-    expect(LAYOUT_VERSION).toBe('L28-tiers-1')
+    expect(r2.points[r2.points.length - 1].x).toBeCloseTo(ext.x + ext.w)
+    expect(LAYOUT_VERSION).toBe('L33-r12-1')
   })
 })
 
 describe('L14 分层总览', () => {
-  it('port / adapter 同核心模块常显在带内（不计入 +N）；port 压在带的上边，adapter 在带内最右一列（紧贴「可依赖」栏），不占核心模块的行', () => {
+  it('port / adapter 同核心模块常显在带内（不计入 +N）；port 压在带的上边，adapter 在带内最左一列（紧贴标题栏），不占核心模块的行', () => {
     const view = projectLevel(index, 'sys')
     const zone = view.nodes.find(n => n.id === 'infra.zone')!
     expect(zone).toMatchObject({ role: 'core', rim: 'port' })
@@ -80,9 +80,9 @@ describe('L14 分层总览', () => {
     const z = pv.nodes.get('infra.zone')!
     const mus = pv.nodes.get('infra.mus')!
     expect(z.y + z.h / 2).toBeCloseTo(band.y)
-    // 紧贴带右侧的「可依赖」栏（BAND.right），在所有核心模块之右
-    expect(mus.x + mus.w).toBeCloseTo(band.x + band.w - BAND.right - BAND.chipGap / 2)
-    expect(mus.x).toBeGreaterThan(Math.max(...['infra.player', 'infra.framework'].map(id => pv.nodes.get(id)!.x + pv.nodes.get(id)!.w)))
+    // 紧贴带左侧的标题栏（BAND.left），在所有核心模块之左（外部系统一侧，A7）
+    expect(mus.x).toBeCloseTo(band.x + BAND.left + BAND.chipGap / 2)
+    expect(mus.x + mus.w).toBeLessThan(Math.min(...['infra.player', 'infra.framework'].map(id => pv.nodes.get(id)!.x)))
     expect(mus.w).toBe(BAND.chip.w)
     // 核心模块在 port 之下
     const core = pv.nodes.get('infra.player')!

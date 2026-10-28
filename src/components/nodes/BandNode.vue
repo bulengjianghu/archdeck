@@ -87,10 +87,11 @@ defineProps<{ data: NodeData }>()
   padding-left: 12px;
 }
 
+/* O11：计数标签在上边框左端（标题栏之上）——块的端口短桩与空隙里的轨道都不经过这里（L30） */
 .counts {
   position: absolute;
   top: -9px;
-  right: 170px;
+  left: 16px;
   padding: 0 6px;
   font-size: 11px;
   line-height: 16px;

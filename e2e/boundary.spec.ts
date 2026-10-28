@@ -1,11 +1,11 @@
 /**
- * 边界与组装（ADR-0030）：L14 边界角色压在框上边 / 右边；O12「组装」开关开启后出现组装叠加虚线（依赖方一端实心菱形，ADR-0035）与「组装根」角标，单击叠加线落到代码依赖；
+ * 边界与组装（ADR-0030、ADR-0039）：L14 边界角色压在框上边 / 左边；O12「组装」开关开启后出现组装叠加虚线（依赖方一端实心菱形，ADR-0035）与「组装根」角标，单击叠加线落到代码依赖；
  * R17 场景列表默认只列主流程，可切到全部类别。
  */
 import { expect, test } from '@playwright/test'
 import { graphNode, openDesk, query } from './helpers'
 
-test('L14：h5player 的对外 API 压在 PlayerIndex 框的上边，SW 通道（adapter）压在 Worker 基础设施框的右边', async ({ page }) => {
+test('L14：h5player 的对外 API 压在 PlayerIndex 框的上边，SW 通道（adapter）压在 Worker 基础设施框的左边（外部系统一侧）', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra.player-index')
   const api = (await graphNode(page, 'infra.player-index.player-api').boundingBox())!
   const stats = (await graphNode(page, 'infra.player-index.stats').boundingBox())!
@@ -14,7 +14,7 @@ test('L14：h5player 的对外 API 压在 PlayerIndex 框的上边，SW 通道�
   await openDesk(page, '/p/h5player?level=infra.workers')
   const sw = (await graphNode(page, 'infra.workers.sw-channel').boundingBox())!
   const task = (await graphNode(page, 'infra.workers.worker-task').boundingBox())!
-  expect(sw.x).toBeGreaterThan(task.x + task.width)
+  expect(sw.x + sw.width).toBeLessThan(task.x)
   await expect(graphNode(page, 'infra.workers.sw-channel').locator('.rim-tag')).toHaveText('适配器')
 })
 

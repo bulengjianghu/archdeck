@@ -40,7 +40,7 @@ modules:
     codeRefs: [src/model/load.ts, src/model/validate.ts, src/model/indexer.ts, src/model/index.ts]
   - id: model.projector
     name: Projector 层次投影
-    principle: 边界角色（L14，ADR-0030）：role 为 port / adapter 的模块同核心常显、不折叠进「+N」也不算普通模块，视图节点带 rim 标记，由 Layout 压在框的上边 / 右边；视图边仍按 (from, to, type) 分（L5），类型为四类交互。
+    principle: 边界角色（L14，ADR-0030）：role 为 port / adapter 的模块同核心常显、不折叠进「+N」也不算普通模块，视图节点带 rim 标记，由 Layout 压在框的上边 / 左边（adapter 随外部系统在左，ADR-0039）；视图边仍按 (from, to, type) 分（L5），类型为四类交互。
     codeRefs: [src/model/project.ts]
   - id: model.diff
     name: 版本对比
@@ -72,7 +72,7 @@ modules:
     name: 边界角色记号
     parent: present.canvas.nodes
     adrs: [30]
-    responsibility: '边界角色的记号（L14，ADR-0030）：role: port 的模块名后标「端口」（对外端口，压在框上边、用户一侧），role: adapter 的标「适配器」（接外部技术，贴框右边、外部系统一侧），悬停说明位置的含义；模型画布的模块与核心小块、草图画布的模块节点共用。'
+    responsibility: '边界角色的记号（L14，ADR-0030）：role: port 的模块名后标「端口」（对外端口，压在框上边、用户一侧），role: adapter 的标「适配器」（接外部技术，贴框左边、外部系统一侧），悬停说明位置的含义；模型画布的模块与核心小块、草图画布的模块节点共用。'
     codeRefs: [src/components/nodes/RimTag.vue]
   - id: present.canvas.nodes.metrics
     name: 指标与影响面角标
@@ -226,17 +226,17 @@ modules:
     name: 分层总览排布
     parent: state.layout.runner
     codeRefs: [src/layout/layered.ts]
-    responsibility: '按层序自上而下分带，带内核心模块横向排开（含 +N 占位）；相邻层间的边画在带间空隙并横向错开，跨多层的边走右侧通道；核心模块之间的跨层边画成曲线。父模块框（根层即系统框）包住全部带与右侧通道；框外元素（用户、外部系统与时间、边界节点）按方位摆放，它们的边（含到核心模块的跨层边）由 outsideRouter 正交走线：带按对端方位取顶边 / 右边 / 底边，核心模块上进下出、短桩先到带间空隙的中线，不贴着带的边框（A7、L4）。带内的共用件排在带底一行的共用件架（带随之加高，O9）。边界角色（L14）：role: port 的块一半压在带的上边（核心模块行随之下让），role: adapter 在带内最右一列、紧贴右侧「可依赖」栏（外部系统一侧）；关系边一律在该侧的前半错开，后半留给端口记号（L11、L13）。'
+    responsibility: '按层序自上而下分带，带内核心模块横向排开（含 +N 占位）；相邻层间的边走带间空隙里块与块之间的竖巷，跨多层的边走右侧通道；核心模块之间相邻层的跨层边画成曲线、跨多层的经空隙里自己的轨道到右侧核心车道（O3b）。带间空隙按穿过它的横段撑开（gapTracks：每条横段一条轨道，向上离开的、框外边的、向下离开的依次排，同车道号共用一条，O14、O15）；父模块框（根层即系统框）包住全部带与右侧通道；框外元素（用户在上、外部系统与时间在左、边界节点在下）按方位摆放，右侧只留层间关系线（O16），它们的边由 outsideRouter 正交走线：带按对端方位取顶边 / 左边 / 底边，核心模块上进下出、短桩到空隙里自己的轨道，再一起分轨（allocateTracks，L32）。标签按实际尺寸沿线挑不压块、文字区与同时画出的标签的位置（placeLabelBoxes，L33）。带内的共用件排在带底一行的共用件架（带随之加高，O9）。边界角色（L14）：role: port 的块一半压在带的上边（核心模块行随之下让），role: adapter 在带内最左一列、紧贴左侧标题栏（外部系统一侧）；关系边一律在该侧的前半错开，后半留给端口记号（L11、L13）。'
   - id: state.layout.runner.graph
     name: 普通层次排布
     parent: state.layout.runner
     codeRefs: [src/layout/graph.ts]
-    responsibility: 用 elkjs layered 算法只排父模块框内的子模块与它们之间的边：正交走线、标签内联；每条边两端各有固定朝向的端口——上进下出（自左向右时左进右出），同一侧左动右静（动态关系在前半、静态在后半，FIXED_ORDER，L11）；框外边在内部节点那一端给不连线的占位端口一起排序，端口位置随布局给出；父模块框包住内部节点与走线并留出内边距，框外的元素在布局后按方位摆放（placeOutside，A7、L4）；elk 在浏览器的 Worker 中运行（无 Worker 环境用同步打包版）；结果过于狭长时再试自左向右，取宽高比更接近画布者。共用件不参与 elk，布局后由 placeShelf 收进父模块框底部一行的共用件架（框随之撑开，O9）；核心模块与「+N」占位按各自尺寸参与布局。关系全是交互（ADR-0029），出入点都排在该侧的前半：每个内部节点在进边一侧的末尾占一个半边长的保留端口（不连边，FIXED_ORDER 固定），留给端口记号（L11、L13）。边界角色（L14）不交给 elk，布局后由 placeRims 压在父模块框线上——port 一行横跨上边、adapter 一列横跨右边，按所连节点的位置排序，框线先向外让出半个节点；它们的边同框外边按需走线。
+    responsibility: 用 elkjs layered 算法只排父模块框内的子模块与它们之间的边：正交走线、标签内联；每条边两端各有固定朝向的端口——上进下出（自左向右时左进右出），同一侧左动右静（动态关系在前半、静态在后半，FIXED_ORDER，L11）；框外边在内部节点那一端给不连线的占位端口一起排序，端口位置随布局给出；父模块框包住内部节点与走线并留出内边距，框外的元素在布局后按方位摆放（placeOutside，A7、L4）；elk 在浏览器的 Worker 中运行（无 Worker 环境用同步打包版）；结果过于狭长时再试自左向右，取宽高比更接近画布者。共用件不参与 elk，布局后由 placeShelf 收进父模块框底部一行的共用件架（框随之撑开，O9）；核心模块与「+N」占位按各自尺寸参与布局。关系全是交互（ADR-0029），出入点都排在该侧的前半：每个内部节点在进边一侧的末尾占一个半边长的保留端口（不连边，FIXED_ORDER 固定），留给端口记号（L11、L13）。边界角色（L14）不交给 elk，布局后由 placeRims 压在父模块框线上——port 一行横跨上边、adapter 一列横跨左边，按所连节点的位置排序，框线先向外让出半个节点；它们的边同框外边按需走线。布局后内部边的中间段再分一次轨（allocateTracks，L32），标签按画布实际写的把手角标估宽重新挑位置（placeLabelBoxes，L33）。
   - id: state.layout.runner.boundaries
     name: 框外元素与手工走线
     parent: state.layout.runner
     codeRefs: [src/layout/routes.ts]
-    responsibility: 方位表示角色（A7、L4）：用户在系统框上方、外部系统与时间在系统框右侧（placeActors），边界节点在父模块框下方一行、按视图给出的层次顺序（与时序图泳道一致），系统框包住父模块框与边界节点行（placeOutside）；方位固定在屏幕上，不随布局方向改变。普通层次中框外元素的边（参与者的边、边界边）不参与布局，要画时由 edgeRoute 按需正交绕行（routing 的 detour：用户底边、外部系统左边、边界节点顶边出入，不穿节点，从目标的入口侧进入，同一节点上的多条边错开、同一起点的边各走一条横线；内部节点那一端取 elk 的占位端口，框外元素自身的端口同样左动右静）。画布每次只对当前画出来的那组框外边一起走线并分配轨道（outsideRoutes + routing 的 allocateTracks：走廊里重合的中间段按边 ID 错开，placeLabels 让标签互不相碰），按布局与可见集记忆。手工走线与编码工具也在这里（routes.ts）：回放临时线与叠加线的曲线 linkRoute、edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、isBoundaryEdge（L10），供排布与画布场景使用。L14：placeRims 把普通层次的边界角色压在父模块框线上；框线上的 port 对端在上方（用户）时走顶边、否则走底边，adapter 对端在右侧（外部系统）时走右边、否则走左边；关系边的出入点在该侧前半错开，后半留给端口记号（L11、L13）。
+    responsibility: 方位表示角色（A7、L4）：用户在系统框上方、外部系统与时间在系统框左侧（placeActors，ADR-0039），边界节点在父模块框下方一行、按视图给出的层次顺序（与时序图泳道一致），系统框包住父模块框与边界节点行（placeOutside）；方位固定在屏幕上，不随布局方向改变。普通层次中框外元素的边（参与者的边、边界边）不参与布局，要画时由 edgeRoute 按需正交绕行（routing 的 detour：用户底边、外部系统右边、边界节点顶边出入，选通道时避开已占的竖段（BusyLines），短桩不伸进对面的节点（clampStub），不穿节点，从目标的入口侧进入，同一节点上的多条边错开、同一起点的边各走一条横线；内部节点那一端取 elk 的占位端口，框外元素自身的端口同样左动右静）。画布每次只对当前画出来的那组框外边一起走线并分配轨道（outsideRoutes + routing 的 allocateTracks：走廊里重合或挨得太近的中间段按边 ID 分轨，内部边与框线只占不动、分轨后不穿节点，L32；placeLabelBoxes 按实际尺寸放标签，L33），按布局与可见集记忆。手工走线与编码工具也在这里（routes.ts）：回放临时线与叠加线的曲线 linkRoute、edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、isBoundaryEdge（L10），供排布与画布场景使用。L14：placeRims 把普通层次的边界角色压在父模块框线上；框线上的 port 对端在上方（用户）时走顶边、否则走底边，adapter 对端在左侧（外部系统）时走左边、否则走右边；关系边的出入点在该侧前半错开，后半留给端口记号（L11、L13）。
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.pipeline.loader

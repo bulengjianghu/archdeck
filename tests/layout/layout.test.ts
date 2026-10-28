@@ -27,6 +27,9 @@ import {
   spreadEnds,
   unionView,
   type EdgeRoute,
+  gapHeight,
+  gapTracks,
+  portFor,
 } from '../../src/layout/layout'
 import type { ViewEdge } from '../../src/model'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
@@ -156,17 +159,23 @@ describe('layoutLayered · 分层总览', () => {
     const v = { ...base, coreEdges: [...(base.coreEdges ?? []), ...added] }
     const p = layoutLayered(v)
     const box = (id: string) => p.nodes.get(id)!
+    // 同一节点同一侧有进有出时左半进、右半出；只有一种时用整条边（L31）
+    const sideKey = (id: string, y: number) => `${id}|${y}`
+    const ins = new Set(v.coreEdges.flatMap(e => [sideKey(e.to, p.coreEdges.get(e.id)!.points.at(-1)!.y)]))
+    const outs = new Set(v.coreEdges.filter(e => !isOutsideEdge(v, e)).map(e => sideKey(e.from, p.coreEdges.get(e.id)!.points[0].y)))
     for (const e of v.coreEdges) {
       const r = p.coreEdges.get(e.id)!
       const [s, t] = [r.points[0], r.points.at(-1)!]
       if (!isOutsideEdge(v, e)) {
         const a = box(e.from)
-        expect(s.x).toBeGreaterThan(a.x + a.w / 2)
         expect([a.y, a.y + a.h]).toContain(s.y)
+        if (ins.has(sideKey(e.from, s.y))) expect(s.x).toBeGreaterThan(a.x + a.w / 2)
+        else expect(s.x > a.x && s.x < a.x + a.w).toBe(true)
       }
       const b = box(e.to)
-      expect(t.x).toBeLessThan(b.x + b.w / 2)
       expect([b.y, b.y + b.h]).toContain(t.y)
+      if (outs.has(sideKey(e.to, t.y))) expect(t.x).toBeLessThan(b.x + b.w / 2)
+      else expect(t.x > b.x && t.x < b.x + b.w).toBe(true)
     }
     // 半边内按对端横向位置：app.solution 顶边的两条进边，infra.player（左）在 infra.framework（右）之左
     const endX = (id: string) => p.coreEdges.get(id)!.points.at(-1)!.x
@@ -286,14 +295,14 @@ describe('方位表示角色、框表示边界（A7、L4）', () => {
   const inside = (b: Box, f: Box) => b.x >= f.x && b.y >= f.y && b.x + b.w <= f.x + f.w && b.y + b.h <= f.y + f.h
   const orthogonal = (pts: readonly { x: number; y: number }[]) => pts.slice(1).every((p, i) => p.x === pts[i].x || p.y === pts[i].y)
 
-  it('分层总览：用户在系统框上方、外部系统在右侧通道之外；参与者的边正交走线，进核心模块时先到带间空隙中线', async () => {
+  it('分层总览：用户在系统框上方、外部系统在系统框左侧（右侧只留层间关系线）；参与者的边正交走线，进核心模块时先到空隙里自己的轨道', async () => {
     const view = projectLevel(idx, 'sys')
     const pv = await layoutView(view)
     const f = pv.frame!
     const viewer = pv.nodes.get('actor.viewer')!
     const biz = pv.nodes.get('actor.biz')!
     expect(viewer.y + viewer.h).toBeLessThan(f.y)
-    expect(biz.x).toBeGreaterThan(f.x + f.w)
+    expect(biz.x + biz.w).toBeLessThan(f.x)
     for (const e of view.edges.filter(x => x.from.startsWith('actor'))) {
       const r = pv.edges.get(e.id)!
       expect(r.curve).toBeUndefined()
@@ -304,13 +313,13 @@ describe('方位表示角色、框表示边界（A7、L4）', () => {
       const target = pv.nodes.get(e.to)!
       const [p, q] = r.points.slice(-2)
       expect(q.y).toBe(target.y)
-      // 横段不贴着带的边框：在目标带上沿之上至少半个带间空隙
+      // 横段不贴着带的边框：在目标带上沿之上至少一个轨道留白（O14）
       const band = [...pv.nodes.entries()].find(([id, b]) => view.bands!.some(x => x.layerId === id) && inside(target, b))![1]
-      expect(p.y).toBeLessThanOrEqual(band.y - BAND.framePad / 2)
+      expect(p.y).toBeLessThanOrEqual(band.y - BAND.trackPad)
     }
   })
 
-  it('普通层次：内部节点在父模块框内；边界节点在父模块框下方、系统框之内，按层次顺序；用户在系统框上方，外部系统在系统框右侧', async () => {
+  it('普通层次：内部节点在父模块框内；边界节点在父模块框下方、系统框之内，按层次顺序；用户在系统框上方，外部系统在系统框左侧', async () => {
     const view = projectLevel(idx, 'infra', { showBoundaries: true })
     const pv = await layoutView(view)
     const pf = pv.parentFrame!
@@ -328,10 +337,10 @@ describe('方位表示角色、框表示边界（A7、L4）', () => {
     const viewer = pv.nodes.get('actor.viewer')!
     const biz = pv.nodes.get('actor.biz')!
     expect(viewer.y + viewer.h).toBeLessThan(f.y)
-    expect(biz.x).toBeGreaterThan(f.x + f.w)
+    expect(biz.x + biz.w).toBeLessThan(f.x)
   })
 
-  it('普通层次：框外元素的边不参与布局，按需正交走线——外部系统从左边进出、用户从底边出发、都从目标的入口侧进入', async () => {
+  it('普通层次：框外元素的边不参与布局，按需正交走线——外部系统从右边（朝系统框）进出、用户从底边出发、都从目标的入口侧进入', async () => {
     const view = projectLevel(idx, 'infra', { showBoundaries: true })
     const pv = await layoutView(view)
     for (const e of view.edges.filter(x => isOutsideEdge(view, x))) {
@@ -344,8 +353,8 @@ describe('方位表示角色、框表示边界（A7、L4）', () => {
       view.edges.find(e => e.from === 'actor.biz')!,
     )!
     const biz = pv.nodes.get('actor.biz')!
-    expect(fromBiz.points[0].x).toBe(biz.x)
-    expect(fromBiz.points[1].x).toBeLessThan(biz.x)
+    expect(fromBiz.points[0].x).toBe(biz.x + biz.w)
+    expect(fromBiz.points[1].x).toBeGreaterThan(biz.x + biz.w)
     const fromViewer = edgeRoute(
       pv,
       view.edges.find(e => e.from === 'actor.viewer')!,
@@ -558,10 +567,10 @@ describe('L11 端口方向', () => {
     expect(checked).toBeGreaterThan(0)
   })
 
-  it('方位：用户 top、外部系统 right、边界节点 bottom、其余 inner', () => {
+  it('方位：用户 top、外部系统 left（A7）、边界节点 bottom、其余 inner', () => {
     const of = (id: string) => compassOf(view.nodes.find(n => n.id === id)!)
     expect(of('actor.viewer')).toBe('top')
-    expect(of('actor.biz')).toBe('right')
+    expect(of('actor.biz')).toBe('left')
     expect(compassOf(view.nodes.find(n => n.role === 'boundary')!)).toBe('bottom')
     expect(compassOf(view.nodes.find(n => n.role === 'module')!)).toBe('inner')
   })
@@ -571,5 +580,77 @@ describe('L11 端口方向', () => {
     const innerOnly = { ...view, edges: view.edges.filter(e => !isOutsideEdge(view, e)) }
     expect(cacheKey(innerOnly)).not.toBe(cacheKey(view))
     expect(cacheKey({ ...view })).toBe(cacheKey(view))
+  })
+})
+
+describe('第十二轮 G1、G2、W（ADR-0039）', () => {
+  const { index: idx } = loadModel(scenarioFiles())
+  const mk = (id: string): ViewEdge => {
+    const [from, to] = id.split(':')[0].split('->')
+    return { id, kind: 'direct', from, to, type: 'calls', relationIds: ['x', 'y'], mode: 'sync' }
+  }
+
+  it('O14：空隙高度按轨道数撑开、不低于原值；轨道之间一个轨距，最外一条离带边留白', () => {
+    expect(gapHeight(0, BAND.gap)).toBe(BAND.gap)
+    expect(gapHeight(3, BAND.gap)).toBe(BAND.gap)
+    expect(gapHeight(8, BAND.gap)).toBe(7 * BAND.track + 2 * BAND.trackPad)
+    const base = projectLevel(idx, 'sys')
+    const many = Array.from({ length: 8 }, (_, i) => mk(`infra.framework->domain.services:calls${i}`)).map((e, i) => ({
+      ...e,
+      from: i % 2 ? 'infra.player' : 'infra.framework',
+    }))
+    const tall = layoutLayered({ ...base, coreEdges: [...(base.coreEdges ?? []), ...many] })
+    const flat = layoutLayered(base)
+    const gapOf = (p: ReturnType<typeof layoutLayered>) => p.nodes.get('app')!.y - (p.nodes.get('infra')!.y + p.nodes.get('infra')!.h)
+    expect(gapOf(flat)).toBeGreaterThanOrEqual(BAND.gap)
+    expect(gapOf(tall)).toBeGreaterThan(gapOf(flat))
+    // 同时画出的（有共同端点的）横段互相离开至少一个轨距
+    const ys = many.filter(e => e.from === 'infra.framework').map(e => tall.coreEdges.get(e.id)!.points[1].y)
+    const sorted = [...ys].sort((a, b) => a - b)
+    sorted.slice(1).forEach((y, i) => expect(y - sorted[i]).toBeGreaterThanOrEqual(BAND.track - 0.01))
+  })
+
+  it('O15：向下离开的核心车道横段内车道在下、向上离开的内车道在上；同车道号的共用一条轨道；框外边的横段在中间', () => {
+    const e = (id: string) => ({ ...mk(id), relationIds: ['x'] })
+    const items = [
+      [
+        { key: 'd0', edge: e('a->b:x'), group: 'down' as const, lane: 0, always: false },
+        { key: 'd1', edge: e('a->c:x'), group: 'down' as const, lane: 1, always: false },
+        { key: 'u0', edge: e('p->q:x'), group: 'up' as const, lane: 0, always: false },
+        { key: 'u1', edge: e('p->r:x'), group: 'up' as const, lane: 1, always: false },
+        { key: 'u1b', edge: e('s->t:x'), group: 'up' as const, lane: 1, always: false },
+        { key: 's', edge: e('z->a:x'), group: 'side' as const, lane: 0, always: true },
+      ],
+    ]
+    const { trackOf, counts } = gapTracks(items)
+    const t = (k: string) => trackOf.get(k)!.t
+    expect(counts[0]).toBe(5)
+    expect(t('u0')).toBeLessThan(t('u1'))
+    expect(t('u1')).toBe(t('u1b'))
+    expect(t('s')).toBeGreaterThan(t('u1'))
+    expect(t('d1')).toBeGreaterThan(t('s'))
+    expect(t('d0')).toBeGreaterThan(t('d1'))
+  })
+
+  it('O16：分层总览里外部系统在系统框左侧，带与它的边从带的左边进出；右侧只有侧边通道与核心车道', async () => {
+    const view = projectLevel(idx, 'sys')
+    const pv = await layoutView(view)
+    const bandIds = new Set(view.bands!.map(b => b.layerId))
+    for (const e of view.edges.filter(x => x.from === 'actor.biz' || x.to === 'actor.biz')) {
+      const r = pv.edges.get(e.id)!
+      const band = bandIds.has(e.to) ? pv.nodes.get(e.to)! : pv.nodes.get(e.from)!
+      const end = bandIds.has(e.to) ? r.points.at(-1)! : r.points[0]
+      expect(end.x).toBe(band.x)
+    }
+    const right = Math.max(...view.bands!.map(b => pv.nodes.get(b.layerId)!.x + pv.nodes.get(b.layerId)!.w))
+    for (const n of view.nodes.filter(x => x.role === 'actor')) expect(pv.nodes.get(n.id)!.x).toBeLessThan(right)
+  })
+
+  it('L31：同一侧放不下 PARALLEL_GAP 时等分压缩，不在边缘堆成一点；参与者、边界节点用整条边', () => {
+    const box = { x: 0, y: 0, w: 176, h: 48 }
+    const xs = Array.from({ length: 30 }, (_, i) => portFor(box, 'bottom', 'in', 'DOWN', { i, n: 30 }, undefined, false).x)
+    expect(new Set(xs.map(x => Math.round(x * 10))).size).toBe(30)
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(8)
+    expect(Math.max(...xs)).toBeLessThanOrEqual(168)
   })
 })

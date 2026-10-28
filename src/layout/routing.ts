@@ -72,6 +72,21 @@ export const STUB = 14
  * 只在靠近目标处竖直穿过父模块框一次。
  */
 export const ARRIVE = 38
+/** L32：已占用的竖段（detour 选通道时避开）；add 把一条线的竖段记进去 */
+export class BusyLines {
+  verticals: { x: number; lo: number; hi: number }[] = []
+  add(points: readonly Point[]) {
+    points.slice(1).forEach((b, i) => {
+      const a = points[i]
+      if (Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) >= 0.5) this.verticals.push({ x: a.x, lo: Math.min(a.y, b.y), hi: Math.max(a.y, b.y) })
+    })
+    return this
+  }
+}
+/** L32：竖直通道里离已占的竖段不到这么近就算挤（一个轨距加余量） */
+const BUSY_NEAR = 14
+/** L32：一条竖直通道上每多一条线加的代价（px，按走线长度计）：通道里放得下三四条线之后，绕到旁边的通道更划算 */
+const LOAD_COST = 60
 /** 绕到所有节点外侧时离节点外沿的距离：落在父模块框（留 28）与系统框（再留 44）之间，不压框线 */
 const OUTSIDE = 50
 
@@ -88,7 +103,7 @@ const crossesBox = (a: Point, b: Point, box: { x: number; y: number; w: number; 
  * 端口可在上下边（参与者在上方、边界节点在下方）或左右边（右侧的外部系统从左边进出）。
  * 通道 x 取起终点自身、障碍之间空隙的中线与外框两侧，选中间三段都不穿障碍（含两端节点自身）、总长最短的；都不行时走外框外侧。
  */
-export function detour(from: PortAt, to: PortAt, obstacles: readonly { x: number; y: number; w: number; h: number }[]): Point[] {
+export function detour(from: PortAt, to: PortAt, obstacles: readonly { x: number; y: number; w: number; h: number }[], busy?: BusyLines): Point[] {
   const p1 = stubEnd(from)
   const p2 = stubEnd(to)
   const xs = obstacles.flatMap(o => [o.x, o.x + o.w])
@@ -99,9 +114,36 @@ export function detour(from: PortAt, to: PortAt, obstacles: readonly { x: number
   const candidates = [p1.x, p2.x, ...gaps, left, right]
   const pathOf = (x: number): Point[] => [{ x: from.x, y: from.y }, p1, { x, y: p1.y }, { x, y: p2.y }, p2, { x: to.x, y: to.y }]
   const free = (pts: Point[]) => pts.slice(2, 5).every((b, i) => obstacles.every(o => !crossesBox(pts[i + 1], b, o)))
-  const cost = (x: number) => Math.abs(x - p1.x) + Math.abs(x - p2.x)
+  // L32：这条竖直通道上已有几条线（内部边、同组已走好的框外边）离它不到一个轨距、竖向区间重叠，每条加 LOAD_COST 的代价，线多时分散到别的通道
+  const lo = Math.min(p1.y, p2.y)
+  const hi = Math.max(p1.y, p2.y)
+  const crowd = (x: number) => (busy ? busy.verticals.filter(v => Math.abs(v.x - x) < BUSY_NEAR && v.lo < hi - 1 && lo < v.hi - 1).length : 0)
+  const cost = (x: number) => Math.abs(x - p1.x) + Math.abs(x - p2.x) + crowd(x) * LOAD_COST
   const best = candidates.sort((a, b) => cost(a) - cost(b)).find(x => free(pathOf(x))) ?? (cost(left) < cost(right) ? left : right)
-  return simplify(pathOf(best))
+  const path = simplify(pathOf(best))
+  busy?.add(path)
+  return path
+}
+
+/**
+ * L32：短桩不伸进对面的节点——沿端口方向到最近一个障碍（与端口同列 / 同行）的距离不够短桩加错开量时，短桩缩到离它 6 px（至少 6）。
+ * elk 把互不相连的节点按 20 px 的组件间距排开，进边的直段（ARRIVE 38）会伸进上方的节点。
+ */
+export function clampStub(p: PortAt, obstacles: readonly Rect[]): PortAt {
+  const want = (p.stub ?? STUB) + (p.lane ?? 0)
+  let room = Infinity
+  for (const o of obstacles) {
+    if (p.axis === 'h') {
+      if (p.y <= o.y || p.y >= o.y + o.h) continue
+      const d = p.dir > 0 ? o.x - p.x : p.x - (o.x + o.w)
+      if (d > 0.5) room = Math.min(room, d)
+    } else {
+      if (p.x <= o.x || p.x >= o.x + o.w) continue
+      const d = p.dir > 0 ? o.y - p.y : p.y - (o.y + o.h)
+      if (d > 0.5) room = Math.min(room, d)
+    }
+  }
+  return want <= room - 6 ? p : { ...p, stub: Math.max(6, room - 6), lane: 0 }
 }
 
 /** 端口沿其方向走出短桩后的点 */
@@ -142,56 +184,103 @@ interface Seg {
   away: number
 }
 
+type Rect = { x: number; y: number; w: number; h: number }
+
+/** 一条线在某个轴上的线段；movable 只取中间段（首段离开起点、末段进终点不动） */
+function segsOn(id: string, pts: readonly Point[], axis: 'h' | 'v', movable: boolean): Seg[] {
+  const out: Seg[] = []
+  const [from, to] = movable ? [1, pts.length - 2] : [0, pts.length - 1]
+  for (let i = from; i < to; i++) {
+    const a = pts[i]
+    const b = pts[i + 1]
+    const horizontal = Math.abs(a.y - b.y) < 0.5 && Math.abs(a.x - b.x) >= 0.5
+    const vertical = Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) >= 0.5
+    if ((axis === 'h' && !horizontal) || (axis === 'v' && !vertical)) continue
+    const first = pts[1].y - pts[0].y + (pts[1].x - pts[0].x)
+    const last = pts[pts.length - 1].y - pts[pts.length - 2].y + (pts[pts.length - 1].x - pts[pts.length - 2].x)
+    const away = movable && axis === 'h' ? (i === pts.length - 3 ? -Math.sign(last) : i === 1 ? Math.sign(first) : 0) : 0
+    out.push(
+      axis === 'h'
+        ? { id, i, at: a.y, lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x), away }
+        : { id, i, at: a.x, lo: Math.min(a.y, b.y), hi: Math.max(a.y, b.y), away },
+    )
+  }
+  return out
+}
+
 /**
- * 把同一走廊里重合的线段分到各自的轨道：横段按 y、竖段按 x 分组（同一坐标、区间重叠），组内按边 ID 依次错开 gap。
- * 只动中间的线段——首段（离开起点）与末段（进终点）不动，端口与进节点前的直段保持；
- * 紧接首段的横段倾向继续远离起点，紧接末段的横段倾向远离终点（不压缩箭头前的直段），组内偏好一致时单向错开，否则居中错开。
- * 结果确定：同样的输入（线与顺序）得到同样的轨道。
+ * L11、L32：把走廊里重合或挨得太近的线段分到各自的轨道——按边 ID 依次处理每条线的中间段（首段离开起点、末段进终点不动），
+ * 在 0、±gap、±2gap……里挑第一个与已占用的平行段（同轴、区间重叠）相距都不小于 gap、挪动后不穿过障碍（节点）的位置；
+ * 已占用的包括：已处理的线、fixed 的线（如 elk 排好的内部边，只占不动）与各线的首末段。紧接首段的横段倾向继续远离起点、紧接末段的横段倾向远离终点，
+ * 先试这个方向。都不行时取冲突最少的（先比穿障碍）。结果确定：同样的输入（线与顺序）得到同样的轨道。
  */
-export function allocateTracks(lines: readonly TrackLine[], gap: number): Map<string, Point[]> {
+export function allocateTracks(
+  lines: readonly TrackLine[],
+  gap: number,
+  opts: { fixed?: readonly TrackLine[]; obstacles?: readonly Rect[] } = {},
+): Map<string, Point[]> {
   const out = new Map(lines.map(l => [l.id, l.points.map(p => ({ ...p }))]))
+  const obstacles = opts.obstacles ?? []
+  const order = [...out.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+  // 挪动一段会拉长它两侧的段：这三段都不能穿过障碍——中间段不贴近节点（外扩 2），首末段本就接在节点边上，只查是否穿进节点内部（内收 2）
+  const inner = (o: Rect): Rect => ({ x: o.x + 2, y: o.y + 2, w: o.w - 4, h: o.h - 4 })
+  const blocked = (pts: readonly Point[], i: number) =>
+    [i - 1, i, i + 1]
+      .filter(k => k >= 0 && k <= pts.length - 2)
+      .some(k => obstacles.some(o => (k === 0 || k === pts.length - 2 ? crossesBox(pts[k], pts[k + 1], inner(inner(o))) : crossesBox(pts[k], pts[k + 1], o))))
   for (const axis of ['h', 'v'] as const) {
-    const segs: Seg[] = []
-    for (const [id, pts] of out) {
-      for (let i = 1; i < pts.length - 2; i++) {
-        const a = pts[i]
-        const b = pts[i + 1]
-        const horizontal = Math.abs(a.y - b.y) < 0.5 && Math.abs(a.x - b.x) >= 0.5
-        const vertical = Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) >= 0.5
-        if ((axis === 'h' && !horizontal) || (axis === 'v' && !vertical)) continue
-        const first = pts[1].y - pts[0].y + (pts[1].x - pts[0].x)
-        const last = pts[pts.length - 1].y - pts[pts.length - 2].y + (pts[pts.length - 1].x - pts[pts.length - 2].x)
-        const away = axis === 'h' ? (i === pts.length - 3 ? -Math.sign(last) : i === 1 ? Math.sign(first) : 0) : 0
-        segs.push(
-          axis === 'h'
-            ? { id, i, at: a.y, lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x), away }
-            : { id, i, at: a.x, lo: Math.min(a.y, b.y), hi: Math.max(a.y, b.y), away },
-        )
-      }
-    }
-    // 同一坐标、区间重叠的线段连成一组
-    const groups: Seg[][] = []
-    for (const s of [...segs].sort((p, q) => p.at - q.at || p.lo - q.lo)) {
-      const g = groups.find(x => x.some(t => Math.abs(t.at - s.at) < 0.5 && t.lo < s.hi - 1 && s.lo < t.hi - 1))
-      if (g) g.push(s)
-      else groups.push([s])
-    }
-    for (const g of groups) {
-      const members = [...g].sort((p, q) => (p.id < q.id ? -1 : p.id > q.id ? 1 : p.i - q.i))
-      if (new Set(members.map(m => m.id)).size < 2) continue
-      const pref = Math.sign(members.reduce((n, m) => n + m.away, 0))
-      members.forEach((m, k) => {
-        const d = pref ? pref * k * gap : (k - (members.length - 1) / 2) * gap
-        if (!d) return
-        const pts = out.get(m.id)!
-        for (const p of [pts[m.i], pts[m.i + 1]]) {
-          if (axis === 'h') p.y += d
-          else p.x += d
+    const taken: Seg[] = [
+      ...(opts.fixed ?? []).flatMap(l => segsOn(l.id, l.points, axis, false)),
+      ...[...out].flatMap(([id, pts]) => segsOn(id, pts, axis, false).filter(s => s.i === 0 || s.i === pts.length - 2)),
+    ]
+    for (const id of order) {
+      const pts = out.get(id)!
+      for (const s of segsOn(id, pts, axis, true)) {
+        const near = (at: number) => taken.filter(t => t.id !== id && t.lo < s.hi - 1 && s.lo < t.hi - 1 && Math.abs(t.at - at) < gap - 0.5).length
+        const moved = (d: number) => {
+          const copy = pts.map(p => ({ ...p }))
+          for (const p of [copy[s.i], copy[s.i + 1]]) {
+            if (axis === 'h') p.y += d
+            else p.x += d
+          }
+          return copy
         }
-      })
+        const dir = s.away || 1
+        const steps = [0, ...Array.from({ length: 12 }, (_, k) => [dir * (k + 1), -dir * (k + 1)]).flat()]
+        const score = (d: number) => (blocked(moved(d * gap), s.i) ? 1000 : 0) + near(s.at + d * gap)
+        const best = steps.find(d => score(d) === 0) ?? [...steps].sort((p, q) => score(p) - score(q) || Math.abs(p) - Math.abs(q))[0]
+        const d = best * gap
+        if (d) {
+          for (const p of [pts[s.i], pts[s.i + 1]]) {
+            if (axis === 'h') p.y += d
+            else p.x += d
+          }
+        }
+        taken.push({ ...s, at: s.at + d })
+      }
     }
   }
   return out
+}
+
+/** L32：框线（系统框、父模块框）作为只占不动的线交给 allocateTracks，分轨后的线段不贴着框线走 */
+export function frameLines(frames: readonly (Rect | undefined)[]): TrackLine[] {
+  return frames.flatMap((f, k) =>
+    f
+      ? [
+          {
+            id: `frame:${k}`,
+            points: [
+              { x: f.x, y: f.y },
+              { x: f.x + f.w, y: f.y },
+              { x: f.x + f.w, y: f.y + f.h },
+              { x: f.x, y: f.y + f.h },
+              { x: f.x, y: f.y },
+            ],
+          },
+        ]
+      : [],
+  )
 }
 
 /** 折线上按长度比例 t（0–1）取点 */
@@ -208,22 +297,68 @@ export function pointAlong(points: readonly Point[], t: number): Point {
   return points[points.length - 1] ?? { x: 0, y: 0 }
 }
 
-/** 标签的避让范围（px）：×N 标签约 24 × 18 */
-const LABEL_CLEAR = { x: 28, y: 20 }
+/** L33：一条要放标签的线与标签尺寸 */
+export interface LabelLine extends TrackLine {
+  size: { w: number; h: number }
+  /** 先试的位置（如 elk 给的标签槽） */
+  prefer?: Point
+}
+
+const hits = (p: { x: number; y: number; w: number; h: number }, q: { x: number; y: number; w: number; h: number }) =>
+  p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h
+
+/** L33：标签在线上的候选位置——先最长一段的 0.5、0.3、0.7、0.15、0.85，再整条线的 0.5、0.35、0.65、0.2、0.8 */
+function labelCandidates(points: readonly Point[]): Point[] {
+  const segs = points
+    .slice(1)
+    .map((b, i) => ({ a: points[i], b, len: Math.hypot(b.x - points[i].x, b.y - points[i].y) }))
+    .filter(s => s.len > 0)
+    .sort((p, q) => q.len - p.len)
+  const at = (s: (typeof segs)[number], t: number) => ({ x: s.a.x + (s.b.x - s.a.x) * t, y: s.a.y + (s.b.y - s.a.y) * t })
+  const longest = segs[0] ? [0.5, 0.3, 0.7, 0.15, 0.85].map(t => at(segs[0], t)) : []
+  const rest = segs.slice(1).flatMap(s => [0.5, 0.25, 0.75].map(t => at(s, t)))
+  return [...longest, ...rest, ...[0.5, 0.35, 0.65, 0.2, 0.8].map(t => pointAlong(points, t))]
+}
+
+/** 曲线（核心跨层边、参与者的边）按画布的 S 形曲线采样成折线：竖向（true）的控制点在起终点正下 / 正上，横向（'h'）的在正侧 */
+export function curvePoints(points: readonly Point[], curve: true | 'h', n = 16): Point[] {
+  const a = points[0]
+  const b = points[points.length - 1]
+  const c1 = curve === 'h' ? { x: (a.x + b.x) / 2, y: a.y } : { x: a.x, y: (a.y + b.y) / 2 }
+  const c2 = curve === 'h' ? { x: (a.x + b.x) / 2, y: b.y } : { x: b.x, y: (a.y + b.y) / 2 }
+  return Array.from({ length: n + 1 }, (_, i) => {
+    const t = i / n
+    const u = 1 - t
+    return {
+      x: u * u * u * a.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * b.x,
+      y: u * u * u * a.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * b.y,
+    }
+  })
+}
 
 /**
- * 标签放在各自的线上：按 ID 顺序，沿线在 0.5、0.35、0.65、0.2、0.8 处挑第一个不与已放标签相碰的位置；都碰时取中点。
+ * L33：标签按实际尺寸放在各自的线上——按 ID 顺序，挑第一个既不压障碍（节点、文字区）、也不与已放的、会同时画出的（together）标签相碰的候选位置；
+ * 都碰时取碰得最少的（先比与标签相碰的个数）。结果确定。
  */
-export function placeLabels(lines: readonly TrackLine[]): Map<string, Point> {
-  const placed: Point[] = []
+export function placeLabelBoxes(
+  lines: readonly LabelLine[],
+  opts: { obstacles?: readonly { x: number; y: number; w: number; h: number }[]; together?: (a: string, b: string) => boolean } = {},
+): Map<string, Point> {
+  const obstacles = opts.obstacles ?? []
+  const together = opts.together ?? (() => true)
+  const placed: { id: string; box: { x: number; y: number; w: number; h: number } }[] = []
   const out = new Map<string, Point>()
   for (const l of [...lines].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
-    const at =
-      [0.5, 0.35, 0.65, 0.2, 0.8]
-        .map(t => pointAlong(l.points, t))
-        .find(p => placed.every(q => Math.abs(p.x - q.x) >= LABEL_CLEAR.x || Math.abs(p.y - q.y) >= LABEL_CLEAR.y)) ?? pointAlong(l.points, 0.5)
-    placed.push(at)
-    out.set(l.id, at)
+    const boxAt = (p: Point) => ({ x: p.x - l.size.w / 2, y: p.y - l.size.h / 2, w: l.size.w, h: l.size.h })
+    const score = (p: Point) => {
+      const b = boxAt(p)
+      return placed.filter(q => together(q.id, l.id) && hits(q.box, b)).length * 100 + obstacles.filter(o => hits(o, b)).length
+    }
+    const cands = [...(l.prefer ? [l.prefer] : []), ...labelCandidates(l.points)]
+    if (!cands.length) continue
+    const best = cands.find(p => score(p) === 0) ?? [...cands].sort((p, q) => score(p) - score(q))[0]
+    placed.push({ id: l.id, box: boxAt(best) })
+    out.set(l.id, best)
   }
   return out
 }
