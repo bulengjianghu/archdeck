@@ -159,6 +159,15 @@ describe('Z1、Z6 确认记录（appendReviewed）', () => {
     ])
     expect(list[1].at).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
+  it('Z7：以系统 ID 记一条确认（指纹只覆盖简介）；简介变了再拿旧指纹写即拒绝', () => {
+    write('system.yaml', 'system: { id: p, name: P, description: "给谁用。按什么分。" }')
+    const r = appendReviewed(modelRoot, 'p', [entry('p', { summary: { description: '给谁用。按什么分。' } })], root)
+    expect(r).toMatchObject({ added: ['p'] })
+    expect(parse(read('reviewed.yaml')).reviewed[0]).toMatchObject({ module: 'p', hash: current('p') })
+    const stale = entry('p')
+    write('system.yaml', 'system: { id: p, name: P, description: "给谁用。按别的分。" }')
+    expect(() => appendReviewed(modelRoot, 'p', [stale], root)).toThrow('指纹不符')
+  })
   it('校验：模块必须存在、hash 必填、source 只能是 manual 或 sketch:<设计 ID>、at 为日期；一条不过整批不写；root 缺省为模型根目录的上一级', () => {
     expect(() => appendReviewed(modelRoot, 'p', [entry('zz')], root)).toThrow('模块不存在')
     expect(() => appendReviewed(modelRoot, 'p', [entry('a'), entry('b', { source: 'robot' })], root)).toThrow('source')

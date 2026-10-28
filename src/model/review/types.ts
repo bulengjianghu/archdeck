@@ -8,20 +8,24 @@ import type { ReviewedEntry, ReviewSummaryDef } from '../types'
 export type ReviewStatus = 'reviewed' | 'stale' | 'unreviewed'
 export const REVIEW_STATUSES: readonly ReviewStatus[] = ['reviewed', 'stale', 'unreviewed']
 
-/** Z2：指纹覆盖的内容，规整后的形状（字段都有值，接口按 ID 排序，子模块与可依赖的层排序） */
+/** Z2：指纹覆盖的内容，规整后的形状（字段都有值，接口按 ID 排序，子模块与可依赖的层排序）；系统（Z7）只有 description */
 export interface ReviewSummary {
   /** 按行去首尾空白、去空行 */
   responsibility: string
+  /** 原则（层与模块，ADR-0042），按行规整；没写为空串 */
+  abstraction: string
   includes: string[]
   excludes: string[]
   mayDependOn: string[]
   provides: { id: string; signature: string }[]
   children: string[]
+  /** 系统简介（Z7），按行规整；模块为空串 */
+  description: string
 }
 
 /** 摘要的字段名，按呈现顺序 */
 export type ReviewField = keyof ReviewSummary
-export const REVIEW_FIELDS: readonly ReviewField[] = ['responsibility', 'includes', 'excludes', 'mayDependOn', 'provides', 'children']
+export const REVIEW_FIELDS: readonly ReviewField[] = ['description', 'responsibility', 'abstraction', 'includes', 'excludes', 'mayDependOn', 'provides', 'children']
 
 /** Z3：一项差异；接口「改」时带前后签名 */
 export interface ReviewChange {
@@ -44,7 +48,7 @@ export interface ReviewState {
 
 /** Z5：确认范围内的计数 */
 export interface ReviewCounts {
-  /** 范围内的模块数（核心模块与第二级模块，Z4） */
+  /** 范围内的模块数（核心模块与第二级模块，Z4；不含系统，Z7） */
   scope: number
   reviewed: number
   stale: number
@@ -67,7 +71,9 @@ export interface ReviewedInput {
 /** 状态与字段的名称：命令行与页面共用 */
 export const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = { reviewed: '已确认', stale: '需复核', unreviewed: '未确认' }
 export const REVIEW_FIELD_LABELS: Record<ReviewField, string> = {
+  description: '简介',
   responsibility: '职责',
+  abstraction: '原则',
   includes: '应该包含',
   excludes: '不应该包含',
   mayDependOn: '可依赖的层',

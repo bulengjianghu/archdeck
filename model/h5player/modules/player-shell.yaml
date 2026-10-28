@@ -2,6 +2,11 @@
 # 第二级模块（infra.player-index / infra.bootstrap / infra.workers / infra.third-party）由 layers.yaml 定义，此处只往下挂子模块。
 
 modules:
+  # ─── 第二级模块的原则（ADR-0042，补充骨架条目）───
+  - { id: infra.player-index, name: "PlayerIndex", abstraction: 按对外方向切分：用户操作只经命令入口进状态机，状态与统计只以只读投影和版本化快照流出，对外面不反向驱动内部。 }
+  - { id: infra.bootstrap, name: "Bootstrap 组合根", abstraction: 契约到实现的唯一绑定点：按装配对象切分运行时、模型创建器与 Solution 装配，只有出边，业务模块不反向依赖它。 }
+  - { id: infra.workers, name: "Worker 基础设施", abstraction: 按跨出主线程的通道类型切分，通道只搬运与配对消息、不含播放决策，业务使用方与通道本体分开。 }
+  - { id: infra.third-party, name: "三方库与外部媒体插件", abstraction: 按接入方式切分：三方库作被直接调用的算法件，解密插件只经 MediaPlugin 契约由处理段工厂挂入流水线。 }
   # ───────────────────────── infra.player-index ─────────────────────────
   - id: infra.player-index.player-api
     parent: infra.player-index

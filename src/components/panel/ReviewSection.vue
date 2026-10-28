@@ -5,6 +5,8 @@
  * diff：需复核时「自上次确认以来的改动」（职责按行、包含 / 不包含与可依赖的层按项、接口按 ID 增删改、子模块增删）；
  * confirm：底部「确认 / 复核并确认」，可填一句 note，有子模块时可勾「也确认子模块」；默认只对核心模块与第二级模块提供，
  * 范围外的模块只显示状态。设计版本与提交版本只显示状态（desk.review.canReview 为 false）。
+ * 系统本身（id 为系统 ID，Z7）也用这三块：放在系统面板，指纹只覆盖简介，总提供确认；层也总提供确认（原则三级都能确认，ADR-0042），
+ * 两者都不计入健康度（Z5 只数范围内的模块）。
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -15,7 +17,9 @@ import Section from './Section.vue'
 const props = defineProps<{ id: string; part: 'badge' | 'diff' | 'confirm' }>()
 const desk = useDesk()
 const st = computed(() => desk.review.of(props.id))
-const inScope = computed(() => desk.review.scope.value.has(props.id))
+const isSystem = computed(() => props.id === desk.index.value?.rootId)
+const isLayer = computed(() => desk.index.value?.modules.get(props.id)?.kind === 'layer')
+const inScope = computed(() => isSystem.value || isLayer.value || desk.review.scope.value.has(props.id))
 const subtree = computed(() => desk.review.subtree(props.id))
 const fields = computed(() => (st.value.diff ? REVIEW_FIELDS.filter(f => st.value.diff![f].length) : []))
 const mark = (c: ReviewChange) => (c.kind === 'added' ? '+' : c.kind === 'removed' ? '−' : '≠')
@@ -24,7 +28,7 @@ const SOURCE = (s?: string) => (s === 'manual' ? '面板确认' : s?.startsWith(
 const FACTS_NOTE = '已确认的内容与代码是否一致由代码事实判断'
 const badgeTitle = computed(() => {
   const e = st.value.entry
-  if (!e) return '架构师还没有确认过这个模块'
+  if (!e) return isSystem.value ? '架构师还没有确认过系统的定位与核心原则' : '架构师还没有确认过这个模块'
   const base = `${e.at} ${SOURCE(e.source)}${e.note ? `：${e.note}` : ''}`
   return st.value.status === 'reviewed' ? `${base}\n${FACTS_NOTE}` : base
 })
@@ -82,7 +86,8 @@ async function confirm() {
     <p class="muted hint">
       <template v-if="st.status === 'reviewed'">{{ st.entry!.at }} 确认过（{{ SOURCE(st.entry!.source) }}），内容没有变；再次确认会更新那一条记录。</template>
       <template v-else-if="st.status === 'stale'">看过上面的改动后点「复核并确认」，记录会更新为现在的内容。</template>
-      <template v-else>确认表示你看过并认可它的职责、接口与子模块；AI 之后改了这些会标「需复核」。</template>
+      <template v-else-if="isSystem">确认表示你看过并认可上面的定位与核心原则；AI 之后改了简介会标「需复核」。</template>
+      <template v-else>确认表示你看过并认可它的职责、原则、接口与子模块；AI 之后改了这些会标「需复核」。</template>
     </p>
     <form class="confirm" @submit.prevent="confirm">
       <input v-model="note" placeholder="一句话（可选），如：确认只有转移函数能改状态" aria-label="确认说明" />

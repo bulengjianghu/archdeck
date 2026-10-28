@@ -3,6 +3,11 @@
 # 代码根：packages/player/src/{solution,plugins/solution}/**
 
 modules:
+  # ─── 第二级模块的原则（ADR-0042，补充骨架条目）───
+  - { id: app.solution, name: "Solution", abstraction: 只编排不决策、依赖倒置：外界能力全经端口契约注入，按事务类型切分编排者，播放段启动只有一个实现者。 }
+  - { id: app.registry, name: "方案注册表", abstraction: 数据与机制分离：方案差异写成描述符数据，规划是纯计算、挂载是唯一执行者，片段之间只经窄句柄契约协作。 }
+  - { id: app.factories, name: "三段工厂", abstraction: 声明式产出：基类统管候选计划、就地重配与段生命周期，子类按段只写目标 MU 图的 diff，提交权归 Solution 的切换事务。 }
+  - { id: app.strategies, name: "运行时驾驶策略", abstraction: 按段与方案 × 直播 / 点播切分主策略，共用契约与基座；策略只经段控制器与窄句柄驾驶，判定调 Domain。 }
   # ───────────────────────────── app.solution ─────────────────────────────
   - id: app.solution.ports
     parent: app.solution
@@ -325,6 +330,7 @@ modules:
     name: 加载段驱动
     kind: module
     responsibility: 加载段主策略：上报流事实并在下一阶段就绪后开闸放水，驱动点播拉片节奏、HLS 清单刷新与直播边缘追赶。
+    abstraction: 共用基座承担上报流事实与开闸放水，点播拉片与 HLS 加载按来源各自扩展拉流节奏。
     children:
       - id: app.strategies.load.base
         name: 加载基座与开闸
@@ -388,6 +394,7 @@ modules:
     name: 直播帧策略（Wcs / Wasm）
     kind: module
     responsibility: Wcs / Wasm 直播播放主策略：按 Domain 方案计划组装送解码、送渲染、丢视频、丢音频、充水五个部件，事件到达时按序扇出；处理暂停续播重锚、跨会话续播裁剪、降延迟跳变。
+    abstraction: 按帧去向切分为可组装部件：主策略按 Domain 方案计划装配部件，事件到达时按固定顺序扇出。
     principle: |
       - init 时 `resolveLiveFramePlan(solution)` 决定送解码（Wcs / Wasm）与丢视频（通用 / Wasm 能力抽帧）的具体实现，不再 instanceof 判具体类。
       - 事件扇出顺序即契约：丢帧 → 丢音频 → 充水；Wasm 专属的 `onVideoFrameDecoded` 由部件是否实现来承载差异。

@@ -246,6 +246,7 @@ export function load(files: readonly RawFile[]): LoadResult {
   return {
     model: {
       system, modules, relations, interfaces, dataStructures, actors, scenarios, sourceIgnore, reviewed, ...(sourceLimits ? { sourceLimits: sourceLimits.def } : {}),
+      ...(systems.length ? { systemSrc: systems[0].src } : {}),
       ...(rules ? { rules: rules.def, rulesSrc: rules.src } : {}),
       sketches,
     },
