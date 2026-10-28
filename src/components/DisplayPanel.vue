@@ -1,13 +1,15 @@
 <script setup lang="ts">
 /**
- * 「显示」面板（W-2、ADR-0017）：画布右下角，先「设置」后「图例」。
- * - 设置（NodeSettings）：只放没有对应图例的开关；运行视角为交互关系显示方式（V8）与 L9 的说明。
- * - 图例按画布上的对象分组（RelationLegend、节点、FactsLegend、EvolutionLegend、ReplayLegend），一行一项，左列为与画布同款的示意（LineSwatch，
- *   与 RouteEdge 共用 edgeStyle）、右列为文字；既是开关又是图例的放在图例里——关系类型行点击筛选（L8），代码事实开关在组标题右侧（K9），组装开关同（O12）。
- *   时序图的箭头约定不在这里，在副栏时序图标题栏的「图例」里。
- * - 图例按视角整体替换、不混列（L19、D-26）：交互视角为关系、代码事实、组装、演化各组；结构视角为「依赖 · 形态与档」（元素级边的形态、束、只引类型 / 只看交互使用 / 只看未解释 / 总是展开表面四个开关与计数，L21、L20）、
- *   规则叠加、指标与共用件、演化；运行视角为回放。共享通道（选中、变淡、违规、环、演化、线宽、线型、标签位）三处同文（SharedLegend，L18、ADR-0035）。
+ * 「显示」面板（W-2、ADR-0017；L45，第十五轮 G13）：画布右下角，分上「设置」下「图例」两块。
+ * - 设置（NodeSettings 容器）：开关与筛选一律在这里、按对象分组——边界与现状、关系筛选（L8）、代码事实与组装（K9、O12）、
+ *   结构筛选与表面（L21、L20）、演化（J5）、运行视角的交互关系显示方式（V8）；开关行标注它控制的画布记号。
+ * - 图例只读（L45：一行不兼两职）：按画布上的对象分组（RelationLegend、节点、FactsLegend、EvolutionLegend、ReplayLegend），
+ *   一行一项，左列为与画布同款的示意（LineSwatch，与 RouteEdge 共用 edgeStyle）、右列为文字；
+ *   组标题旁标注对应开关（互指）。时序图的箭头约定不在这里，在副栏时序图标题栏的「图例」里。
+ * - 图例按视角整体替换、不混列（L19、D-26）：交互视角为关系、代码事实、组装、演化各组；结构视角为「依赖 · 形态与档」、
+ *   规则叠加、指标与共用件；运行视角为回放。共享通道（选中、变淡、违规、环、演化、线宽、线型、标签位）三处同文（SharedLegend，L18、ADR-0035）。
  * - 折叠时标题后摘要列出非默认的设置；面板展开与各组折叠按视角记在本机（useDisplayPrefs，运行视角默认只展开「回放」）。
+ * - 隐藏画布内容的开关在画布角留痕计数、单击可撤销（GraphCanvas 的 corner，L45）。
  */
 import { computed, watch } from 'vue'
 import { RELATION_TYPES } from '@/model'
@@ -38,7 +40,7 @@ const { open, groups, toggleOpen, toggleGroup, prefs } = useDisplayPrefs(desk.pe
 const editing = computed(() => desk.edit.active.value)
 watch(editing, on => on && open.value && toggleOpen(), { immediate: true })
 
-/** 折叠时的摘要：只列非默认的设置 */
+/** 折叠时的摘要：只列非默认的设置（设置块收编全部开关后照旧，W-2） */
 const summary = computed(() => {
   const t = desk.toggles
   // 运行视角缺省折叠为一行：总是给出交互关系的显示方式（V8）
@@ -75,7 +77,8 @@ const summary = computed(() => {
     </button>
 
     <div v-if="open" class="body">
-      <NodeSettings :run="run" />
+      <NodeSettings :run="run" :structure="structure" :editing="editing" />
+      <div class="block-label">图例</div>
       <StructureLegend v-if="structure" :open="groups.struct" @toggle="toggleGroup('struct')" />
       <RelationLegend v-else :run="run" :open="groups.rel" @toggle="toggleGroup('rel')" />
       <DisplayGroup title="节点" :open="groups.node" @toggle="toggleGroup('node')">
@@ -155,5 +158,15 @@ const summary = computed(() => {
 .body {
   overflow-y: auto;
   padding: 0 10px 8px;
+}
+
+.block-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--text-3);
+  min-height: 22px;
+  display: flex;
+  align-items: center;
 }
 </style>

@@ -119,15 +119,20 @@ describe('L19：图例按视角整体替换', () => {
 })
 
 describe('L21：三个开关与收起计数（B1、B4）、跨界折叠计数（B2），L20：总是展开表面', () => {
-  it('只引类型缺省收起并给出本层束条数；打开写显示偏好 typeOnly（画布同读），折叠摘要列出', async () => {
+  it('只引类型缺省收起并给出本层束条数；打开写显示偏好 typeOnly（画布同读），折叠摘要列出；开关在设置块的「结构筛选与表面」组（L45）', async () => {
     const { wrapper, desk } = await open('/?v=s')
     const OFF = { typeOnly: false, invokesOnly: false, uncoveredOnly: false }
     expect(desk.facts.structureDisplay(OFF)!.hidden.type).toBe(2)
+    // L45：开关在设置块，行上互指它控制的记号（点线）；图例组标题旁互指
+    const settings = wrapper.find('[aria-label="设置"]')
+    expect(settings.text()).toContain('设置')
+    expect(wrapper.text()).toContain('图例')
+    expect(wrapper.find('[aria-label="依赖 · 形态与档"], .group-btn').exists()).toBe(true)
     const count = wrapper.find('[data-testid="type-only-count"]')
-    expect(count.text()).toContain('本层只引类型的束 2 条已收起')
-    expect(count.text()).toContain('一对节点一条束、按最强的一档计')
+    expect(count.text()).toContain('只引类型（点线） · 2 条已收起')
+    expect(wrapper.find('[data-testid="legend-salience-exception"]').exists()).toBe(true)
     await wrapper.find('input[aria-label="只引类型"]').setValue(true)
-    expect(wrapper.find('[data-testid="type-only-count"]').text()).toContain('本层只引类型的束 2 条已显示')
+    expect(wrapper.find('[data-testid="type-only-count"]').text()).toContain('只引类型（点线） · 2 条已显示')
     expect(useStructurePrefs('').prefs.value.typeOnly).toBe(true)
     expect(JSON.parse(localStorage.getItem('h5p-arch-desk:structure-prefs:')!)).toMatchObject({ typeOnly: true })
     await wrapper.find('.head-btn').trigger('click')
@@ -140,19 +145,44 @@ describe('L21：三个开关与收起计数（B1、B4）、跨界折叠计数（
     const value = desk.facts.structureDisplay({ ...OFF, invokesOnly: true })!.hidden.value
     const covered = desk.facts.structureDisplay({ ...OFF, uncoveredOnly: true })!.hidden.covered
     expect(wrapper.find('[data-testid="value-count"]').text()).toContain(`打开后收起值使用的束 ${value} 条`)
-    expect(wrapper.find('[data-testid="uncovered-count"]').text()).toContain(`打开后收起已解释的束 ${covered} 条`)
-    expect(wrapper.find('[data-testid="uncovered-count"]').text()).toContain('未解释 = 既无交互覆盖、形态也不是端口实现 / 子类 / 组装')
+    const unc = wrapper.find('[data-testid="uncovered-count"]')
+    expect(unc.text()).toContain(`打开后收起已解释的束 ${covered} 条`)
+    // 未解释的口径在开关行的悬停提示里（L45：设置行互指记号，长说明放悬停）
+    expect((unc.element.closest('label') as HTMLElement).getAttribute('title')).toContain('既没有交互覆盖、形态也不是端口实现 / 子类 / 组装')
     await wrapper.find('input[aria-label="只看交互使用"]').setValue(true)
     await wrapper.find('input[aria-label="只看未解释"]').setValue(true)
     await wrapper.find('input[aria-label="总是展开表面"]').setValue(true)
     expect(wrapper.find('[data-testid="value-count"]').text()).toMatch(/值使用的束 \d+ 条已收起/)
     expect(wrapper.find('[data-testid="uncovered-count"]').text()).toMatch(/已解释的束 \d+ 条已收起/)
     expect(useStructurePrefs('').prefs.value).toMatchObject({ invokesOnly: true, uncoveredOnly: true, surfaceAlways: true })
-    // 跨界折叠的条数
+    // 跨界折叠的条数（留在图例块）
     expect(wrapper.find('[data-testid="cross-count"]').text()).toMatch(/一端是边界节点的束 \d+ 条折叠/)
     await wrapper.find('.head-btn').trigger('click')
     const summary = wrapper.find('.summary').text()
     for (const s of ['只看交互使用', '只看未解释', '总是展开表面']) expect(summary).toContain(s)
+  })
+
+  it('L45：图例的类型行只读，筛选在设置块的「关系筛选」组；代码事实与组装的开关在设置块', async () => {
+    const { wrapper } = await open('/')
+    // 图例的类型行不再可点击（L45：一行不兼两职）
+    expect(wrapper.find('.type-list').findAll('button')).toHaveLength(0)
+    // 组标题旁互指
+    expect(wrapper.text()).toContain('筛选在设置 · 关系筛选')
+    expect(wrapper.text()).toContain('开关在设置 · 代码事实')
+    expect(wrapper.text()).toContain('开关在设置 · 组装')
+    expect(wrapper.text()).toContain('开关在设置 · 演化')
+    // 设置块里的关系筛选：勾掉「未分类」后「全部显示」出现
+    const settings = wrapper.find('[aria-label="设置"]')
+    const unclassified = settings.find('input[aria-label="关系类型：未分类"]')
+    expect(unclassified.exists()).toBe(true)
+    await unclassified.setValue(false)
+    expect(settings.text()).toContain('全部显示')
+    await settings.find('button.link').trigger('click')
+    expect((wrapper.find('[aria-label="设置"]').find('input[aria-label="关系类型：未分类"]').element as HTMLInputElement).checked).toBe(true)
+    // 代码事实与组装的开关在设置块（图例组标题右侧不再有开关）
+    expect(wrapper.find('[aria-label="代码事实"]').exists()).toBe(true)
+    expect(wrapper.find('[aria-label="组装"]').exists()).toBe(true)
+    expect(wrapper.find('.group-head .switch').exists()).toBe(false)
   })
 
   it('交互视角「代码事实 · 标签」组列出标签词表（L26）与承载叠加一句（缺段为警示色虚线）', async () => {

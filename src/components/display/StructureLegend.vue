@@ -1,15 +1,14 @@
 <script setup lang="ts">
 /**
  * 「显示」面板 · 依赖 · 形态与档（结构视角，L16、L19、L21，ADR-0031 修订）：元素级边的四种形态记号（子类、组装、端口实现、使用）、
- * 醒目度（L43：例外深色加宽、骨架安静）与依赖的档（只引类型点线，K14）、束的一句说明；三个开关——只引类型（typeOnly，B1）、只看交互使用（invokesOnly，B1）、只看未解释（uncoveredOnly，B4）——
- * 各自给出收起的束条数（desk.facts.structureDisplay 的 hidden；开关关着时给出打开后会收起的条数），另给跨界折叠的条数（B2）；
- * 「表面」一段：总是展开表面（surfaceAlways，C6）开关与元素四类记号、越过入口、界外记号的说明（L20）。
- * 开关读写显示偏好（useStructurePrefs，画布同读），不进 URL。没有代码事实时（U16）只说明允许边。
+ * 醒目度（L43：例外深色加宽、骨架安静）与依赖的档（只引类型点线，K14）、束的一句说明；收起与例外的计数——跨界折叠（B2）、
+ * 例外照画、环按组（L42）、「另直连」（L38）。只引类型 / 只看交互使用 / 只看未解释 / 总是展开表面四个开关（带收起计数）
+ * 在设置块的「结构筛选与表面」组（L45，第十五轮 G13 迁出），组标题旁互指；「表面」一段：表面元素四类记号、越过入口、界外记号的说明（L20）。
+ * 没有代码事实时（U16）只说明允许边。
  */
 import { computed } from 'vue'
 import { DEP_FORMS, DEP_TIERS, ELEMENT_KINDS } from '@/model'
 import { SURFACE_PORT_CAP } from '@/layout/layout'
-import type { StructureFilter } from '@/state/desk/facts'
 import { useDesk } from '@/state/inject'
 import DisplayGroup from './DisplayGroup.vue'
 import StructureSwatch from './StructureSwatch.vue'
@@ -30,33 +29,28 @@ defineProps<{ open: boolean }>()
 const emit = defineEmits<{ toggle: [] }>()
 const desk = useDesk()
 const sp = useStructurePrefs(desk.project)
-const typeOnly = computed({ get: () => sp.prefs.value.typeOnly, set: sp.setTypeOnly })
-const invokesOnly = computed({ get: () => sp.prefs.value.invokesOnly, set: sp.setInvokesOnly })
-const uncoveredOnly = computed({ get: () => sp.prefs.value.uncoveredOnly, set: sp.setUncoveredOnly })
-const surfaceAlways = computed({ get: () => sp.prefs.value.surfaceAlways, set: sp.setSurfaceAlways })
+/** 档的图例行随开关状态提示「已收起」（开关在设置 · 结构筛选与表面） */
+const typeOnly = computed(() => sp.prefs.value.typeOnly)
 
 const facts = computed(() => desk.facts.status.value === 'ready' && !!desk.facts.structure.value?.facts)
 const hint = computed(() => (desk.facts.status.value === 'ready' ? '' : FACTS_HINT[desk.facts.status.value]))
 
-const filter = computed<StructureFilter>(() => ({
-  typeOnly: typeOnly.value,
-  invokesOnly: invokesOnly.value,
-  uncoveredOnly: uncoveredOnly.value,
-}))
-/** 按某个开关的取值算收起的条数（其余开关按当前取值）；没有代码事实时为 0 */
-const hiddenWith = (patch: Partial<StructureFilter>) => desk.facts.structureDisplay({ ...filter.value, ...patch })?.hidden ?? null
-/** B1：只引类型的束（开关关着时收起）；一对节点一条束、按最强的一档计 */
-const typeCount = computed(() => hiddenWith({ typeOnly: false })?.type ?? 0)
-/** B1：只看交互使用时收起的值使用的束 */
-const valueCount = computed(() => hiddenWith({ invokesOnly: true })?.value ?? 0)
-/** B4：只看未解释时收起的束（有交互覆盖或已由事实解释的） */
-const coveredCount = computed(() => hiddenWith({ uncoveredOnly: true })?.covered ?? 0)
-/** B2：当前折叠的跨界束 */
-const crossCount = computed(() => hiddenWith({})?.cross ?? 0)
+/** B2：当前折叠的跨界束（按当前的结构筛选取值） */
+const crossCount = computed(
+  () =>
+    desk.facts.structureDisplay({
+      typeOnly: sp.prefs.value.typeOnly,
+      invokesOnly: sp.prefs.value.invokesOnly,
+      uncoveredOnly: sp.prefs.value.uncoveredOnly,
+    })?.hidden.cross ?? 0,
+)
 </script>
 
 <template>
   <DisplayGroup title="依赖 · 形态与档" :open="open" @toggle="emit('toggle')">
+    <template #actions>
+      <span class="aside-note">开关在设置 · 结构筛选与表面</span>
+    </template>
     <template v-if="facts">
       <div v-for="f in DEP_FORMS" :key="f" class="item" :data-form="f">
         <span class="sw kind"><StructureSwatch :kind="f" /></span>
@@ -78,7 +72,9 @@ const crossCount = computed(() => hiddenWith({})?.cross ?? 0)
         <span class="sw kind"><StructureSwatch :tier="t" /></span>
         <span
           >{{ DEP_TIER_LABEL[t]
-          }}<span class="hint"> = {{ DEP_TIER_HINT[t] }}{{ t === 'type' ? '；点线' : '；画布上与另一档同画，悬停与面板写明' }}</span></span
+          }}<span class="hint">
+            = {{ DEP_TIER_HINT[t] }}{{ t === 'type' ? '；点线，缺省收起（设置 · 结构筛选与表面）' : '；画布上与另一档同画，悬停与面板写明' }}</span
+          ></span
         >
       </div>
       <div class="item bundle" data-testid="bundle-note">
@@ -86,38 +82,7 @@ const crossCount = computed(() => hiddenWith({})?.cross ?? 0)
         <span>{{ BUNDLE_TEXT }}</span>
       </div>
 
-      <div class="section-label">收起与过滤 · 都带计数</div>
-      <label class="item toggle" title="只引类型的束缺省收起；打开后以浅色画出">
-        <span class="sw kind"
-          ><span class="switch"><input v-model="typeOnly" type="checkbox" role="switch" aria-label="只引类型" /></span
-        ></span>
-        <span data-testid="type-only-count"
-          ><b>只引类型</b> · <template v-if="!typeOnly">本层只引类型的束 {{ typeCount }} 条已收起</template
-          ><template v-else>本层只引类型的束 {{ typeCount }} 条已显示</template><span class="hint type-count-note">；一对节点一条束、按最强的一档计</span></span
-        >
-      </label>
-      <label class="item toggle" title="只画交互使用档的束，值使用也收起（聚焦时用）">
-        <span class="sw kind"
-          ><span class="switch"><input v-model="invokesOnly" type="checkbox" role="switch" aria-label="只看交互使用" /></span
-        ></span>
-        <span data-testid="value-count"
-          ><b>只看交互使用</b> · <template v-if="invokesOnly">值使用的束 {{ valueCount }} 条已收起</template
-          ><template v-else
-            ><span class="hint">打开后收起值使用的束 {{ valueCount }} 条</span></template
-          ></span
-        >
-      </label>
-      <label class="item toggle" title="只画未解释的束：既没有交互覆盖、形态也不是端口实现 / 子类 / 组装（查缺口用）">
-        <span class="sw kind"
-          ><span class="switch"><input v-model="uncoveredOnly" type="checkbox" role="switch" aria-label="只看未解释" /></span
-        ></span>
-        <span data-testid="uncovered-count"
-          ><b>只看未解释</b> · <template v-if="uncoveredOnly">已解释的束 {{ coveredCount }} 条已收起</template
-          ><template v-else
-            ><span class="hint">打开后收起已解释的束 {{ coveredCount }} 条</span></template
-          ><span class="hint">；未解释 = 既无交互覆盖、形态也不是端口实现 / 子类 / 组装</span></span
-        >
-      </label>
+      <div class="section-label">收起与例外 · 都带计数</div>
       <div class="item" data-testid="cross-count">
         <span class="sw kind"><span class="chip">界外</span></span>
         <span
@@ -140,15 +105,9 @@ const crossCount = computed(() => hiddenWith({})?.cross ?? 0)
       </div>
 
       <div class="section-label">表面 · 入口导出与声明接口</div>
-      <label class="item toggle" title="本层全部模块展开表面元素（缺省只在选中模块时展开）">
-        <span class="sw kind"
-          ><span class="switch"><input v-model="surfaceAlways" type="checkbox" role="switch" aria-label="总是展开表面" /></span
-        ></span>
-        <span><b>总是展开表面</b><span class="hint"> · 关着时选中模块展开它的表面；选中束只聚焦，元素在面板看</span></span>
-      </label>
       <div class="item">
         <span class="sw kind"><span class="chip">表面 W</span></span>
-        <span>节点角标：被外部引用的不同元素数（与「入 · 出」同一行）</span>
+        <span>节点角标：被外部引用的不同元素数（与「入 · 出」同一行）；开关「总是展开表面」在设置 · 结构筛选与表面</span>
       </div>
       <div class="item inline elements" aria-label="表面元素四类">
         <span v-for="k in ELEMENT_KINDS" :key="k" :title="ELEMENT_KIND_HINT[k]"
@@ -197,8 +156,10 @@ const crossCount = computed(() => hiddenWith({})?.cross ?? 0)
   color: var(--text-3);
 }
 
-.toggle {
-  cursor: pointer;
+.aside-note {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-3);
 }
 
 .bypass {

@@ -1,14 +1,15 @@
 <script setup lang="ts">
 /**
- * 「显示」面板 · 演化（结构视角，J5）：热度单选「关 / 修改 / 缺陷」与「时间耦合」开关在组内，缺省关闭、按项目记在本地；
- * 开启后说明三档角标与波浪线怎么读；没有演化事实时置灰并写明原因（J1）。热度只用角标、耦合只用波浪线（L10）。
+ * 「显示」面板 · 演化（结构 / 交互视角，J5）：说明热度三档角标与时间耦合波浪线怎么读（图例只读，L45）；
+ * 「热度」单选与「时间耦合」开关在设置块的「演化」组（第十五轮 G13 迁出，缺省关闭、按项目记在本地），组标题旁互指；
+ * 时间耦合的波浪线按需显示（F7、L44：不进布局，悬停或选中一端时画出），常显的只剩画布角计数与面板清单。
+ * 没有演化事实时置灰并写明原因（J1）。热度只用角标、耦合只用波浪线（L10）。
  */
 import { computed } from 'vue'
-import { HEAT_KINDS, type HeatKind } from '@/model'
 import { useDesk } from '@/state/inject'
 import DisplayGroup from './DisplayGroup.vue'
 import LineSwatch from './LineSwatch.vue'
-import { EVOLUTION_HINT, HEAT_HINT, HEAT_LABEL } from './labels'
+import { EVOLUTION_HINT, HEAT_LABEL } from './labels'
 
 defineProps<{ open: boolean }>()
 const emit = defineEmits<{ toggle: [] }>()
@@ -20,36 +21,17 @@ const hint = computed(() => {
   const st = desk.evolution.status.value
   return st === 'error' && desk.evolution.error.value ? `${EVOLUTION_HINT.error}：${desk.evolution.error.value}` : EVOLUTION_HINT[st]
 })
-const OPTIONS: readonly ('off' | HeatKind)[] = ['off', ...HEAT_KINDS]
-const stats = computed(() => desk.evolution.stats.value)
-const setHeat = (h: 'off' | HeatKind) => desk.setToggles({ heat: h })
 </script>
 
 <template>
   <DisplayGroup title="演化 · 角标与波浪线" :open="open" @toggle="emit('toggle')">
+    <template #actions>
+      <span class="aside-note">开关在设置 · 演化</span>
+    </template>
     <div v-if="!ready" class="item muted">{{ hint }}</div>
     <template v-else>
-      <div class="setting" role="group" aria-label="热度">
-        <span class="setting-label">热度</span>
-        <span class="segmented">
-          <button
-            v-for="h in OPTIONS"
-            :key="h"
-            :class="{ on: desk.toggles.heat === h }"
-            :aria-pressed="desk.toggles.heat === h"
-            :title="HEAT_HINT[h]"
-            @click="setHeat(h)"
-          >
-            {{ HEAT_LABEL[h] }}
-          </button>
-        </span>
-      </div>
-      <div class="setting">
-        <label class="check"><input v-model="desk.toggles.coupling" type="checkbox" aria-label="时间耦合" /> 时间耦合</label>
-        <span v-if="stats" class="muted window">近 {{ stats.days }} 天 · {{ stats.commits }} 次提交</span>
-      </div>
       <div v-if="desk.toggles.heat === 'off' && !desk.toggles.coupling" class="item muted">
-        已关闭：打开后节点右下角标热度角标、本层总是一起改的模块之间画波浪线
+        已关闭：在「设置 · 演化」打开后节点右下角标热度角标、本层总是一起改的模块之间画波浪线
       </div>
       <template v-else>
         <div v-if="desk.toggles.heat !== 'off'" class="item inline">
@@ -73,57 +55,6 @@ const setHeat = (h: 'off' | HeatKind) => desk.setToggles({ heat: h })
 </template>
 
 <style scoped>
-.setting {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 24px;
-}
-
-.setting-label {
-  color: var(--text-2);
-  white-space: nowrap;
-}
-
-.check {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-  color: var(--text-2);
-}
-
-.window {
-  font-size: 11px;
-}
-
-.segmented {
-  display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.segmented button {
-  border: none;
-  border-radius: 0;
-  background: none;
-  padding: 1px 10px;
-  font: inherit;
-  color: var(--text-2);
-  white-space: nowrap;
-}
-
-.segmented button + button {
-  border-left: 1px solid var(--border);
-}
-
-.segmented button.on {
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 600;
-}
-
 .heat {
   display: inline-block;
   width: 10px;
@@ -142,5 +73,11 @@ const setHeat = (h: 'off' | HeatKind) => desk.setToggles({ heat: h })
 
 .heat.tier-3 {
   background: var(--heat-3);
+}
+
+.aside-note {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-3);
 }
 </style>
