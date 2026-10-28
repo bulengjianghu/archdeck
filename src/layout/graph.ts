@@ -4,7 +4,8 @@
 import type { ELK, ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk-api'
 import type { LevelView } from '@/model'
 import { NODE_SIZE, SHELF, contentBounds, sizeOf, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
-import { LABEL_SLOT, compassOf, edgeLabel, nearPoints, placeOutside, placeRims, spreadEnds } from './routes'
+import { LABEL_SLOT, PARALLEL_GAP, compassOf, edgeLabel, labelSize, nearPoints, placeOutside, placeRims, spreadEnds } from './routes'
+import { allocateTracks, placeLabelBoxes } from './routing'
 
 /**
  * L11：elk 只排父模块框内的子模块与它们之间的边；框外的元素（用户、外部系统与时间、边界节点）在布局后按方位摆放（routes.ts placeOutside，A7、L4），
@@ -131,6 +132,21 @@ export function fromElkGraph(view: LevelView, graph: ElkNode): PositionedView {
   }
   // 汇到同一端点的几条边错开
   spreadEnds(view.edges, edges)
+  // L32：elk 的正交走线偶有重合或挨得太近的段（长边的虚拟节点、错开终点之后），中间段再分一次轨，不穿过节点
+  const tracked = allocateTracks(
+    [...edges].map(([id, r]) => ({ id, points: r.points })),
+    PARALLEL_GAP,
+    { obstacles: [...nodes.values()] },
+  )
+  for (const [id, points] of tracked) edges.set(id, { ...edges.get(id)!, points })
+  // L33：标签按画布实际写的把手角标估宽，沿线挑不压节点、不互压的位置（elk 只按「×N」留了槽，先试它给的位置）
+  const byEdge = new Map(view.edges.map(e => [e.id, e]))
+  const labelLines = [...edges].flatMap(([id, r]) => {
+    const e = byEdge.get(id)
+    const size = e && labelSize(e)
+    return size ? [{ id, points: r.points, size, ...(r.label ? { prefer: r.label } : {}) }] : []
+  })
+  for (const [id, at] of placeLabelBoxes(labelLines, { obstacles: [...nodes.values()] })) edges.set(id, { ...edges.get(id)!, label: at })
   const direction = graph.layoutOptions?.['elk.direction'] === 'RIGHT' ? 'RIGHT' : 'DOWN'
   // 父模块框：包住内部节点（留 FRAME_PAD）与内部走线（留 FRAME_EDGE_PAD），框线不压在走线上
   const inner = [...nodes.values()]

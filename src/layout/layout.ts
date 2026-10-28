@@ -16,7 +16,18 @@ import { spreadEdgeId, type LayoutExpansion, type LayoutOptions, type Positioned
 import { expandSurface } from './dots'
 
 export * from './geometry'
-export { BAND, DEFAULT_BAND_COLUMNS, bandColumnsFor, bandShelfTop, coreHandleBadges, layoutLayered, moreChipId } from './layered'
+export {
+  BAND,
+  DEFAULT_BAND_COLUMNS,
+  bandColumnsFor,
+  bandShelfTop,
+  bandTextBoxes,
+  coreHandleBadges,
+  gapHeight,
+  gapTracks,
+  layoutLayered,
+  moreChipId,
+} from './layered'
 export {
   ACTOR_GAP,
   LABEL_SLOT,
@@ -38,6 +49,7 @@ export {
   nearPoints,
   parallelOffsets,
   placeActors,
+  portFor,
   spreadEnds,
 } from './routes'
 export { RESERVED, fromElkGraph, placeShelf, portSide, toElkGraph } from './graph'
@@ -150,7 +162,7 @@ const cache = new Map<string, PositionedView>()
 const CACHE_LIMIT = 64
 
 /** 布局算法的版本：端口、层约束等选项改了就升，旧结果不再命中 */
-export const LAYOUT_VERSION = 'L21-bundle-3'
+export const LAYOUT_VERSION = 'L30-lines-1'
 
 export function cacheKey(view: LevelView, opts: LayoutOptions = {}, links?: StructureLinks | null): string {
   return JSON.stringify([

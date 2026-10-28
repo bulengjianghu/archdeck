@@ -63,9 +63,10 @@ test('L11：关系全是交互，进边的进点都在入口侧的前半（顶�
   const boxes = new Map(result.boxes)
   expect(result.ends.length).toBeGreaterThan(0)
   // 线在箭头处回缩、平行边错开半个间距：留 20px 余量
+  // 进点在盒子正上方为顶边进、看左右（左半）；在盒子两侧为侧边进（框线左侧的 adapter 从右边进，L14）、看上下（上半）
   const bad = result.ends.filter(e => {
     const b = boxes.get(e.to)!
-    const top = Math.abs(e.y - b.y) < 30
+    const top = e.x >= b.x && e.x <= b.x + b.w
     return top ? e.x > b.x + b.w / 2 + 20 : e.y > b.y + b.h / 2 + 20
   })
   expect(bad.map(e => ({ ...e, box: boxes.get(e.to) }))).toEqual([])

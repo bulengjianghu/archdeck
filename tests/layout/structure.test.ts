@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { loadModel, projectLevel, structureView, type FileDep } from '@/model'
-import { cacheKey, layoutView, type PositionedView } from '../../src/layout/layout'
+import { LAYOUT_VERSION, cacheKey, layoutView, type PositionedView } from '../../src/layout/layout'
 import { DOTS } from '../../src/layout/dots'
 import { EDGE_HOVER_Z, EDGE_Z, canvasScene, type CanvasInput } from '../../src/layout/canvas'
 import { DEPS, MODEL, openDesk, sceneOf, settle } from './bundleDesk'
@@ -52,7 +52,7 @@ describe('L15、L21 束：一对节点一条，换边不换节点', () => {
     expect(links.edges.map(e => e.id).every(id => id.startsWith('bundle:'))).toBe(true)
     expect(links.edges.map(e => e.id)).toContain('bundle:core.util->core.log')
     const key = cacheKey(desk.view.value!, {}, links)
-    expect(key).toContain('L21-bundle-3')
+    expect(key).toContain(LAYOUT_VERSION)
     expect(key).toContain('bundle:core.util->core.log')
     const closed = (await sceneOf(desk)).scene
     const open = (await sceneOf(desk, { typeOnly: true })).scene

@@ -1,6 +1,6 @@
 /** 跳线（L11）：水平段跳过竖直段；同一对节点的边、曲线、端点附近的交叉不跳；路径在跳点处插半圆小桥 */
 import { describe, expect, it } from 'vitest'
-import { JUMP_MARGIN, JUMP_RADIUS, allocateTracks, jumpsOf, placeLabels } from '../../src/layout/routing'
+import { BusyLines, JUMP_MARGIN, JUMP_RADIUS, allocateTracks, clampStub, detour, frameLines, jumpsOf, placeLabelBoxes } from '../../src/layout/routing'
 import { roundedPolyline } from '../../src/components/edges/routePath'
 
 const h = (id: string, y: number, x1: number, x2: number, pair = id) => ({
@@ -113,10 +113,94 @@ describe('allocateTracks 与 placeLabels（L11：可见的框外边各占一条�
     expect(allocateTracks([a, c], 10).get('c')).toEqual(c.points)
   })
 
-  it('标签沿各自的线放，互不相碰', () => {
+  it('L33：标签按实际尺寸沿各自的线放，互不相碰，也不压障碍', () => {
     const t = allocateTracks([a, b], 10)
-    const labels = placeLabels([...t].map(([id, points]) => ({ id, points })))
-    const [la, lb] = [labels.get('a')!, labels.get('b')!]
-    expect(Math.abs(la.x - lb.x) >= 28 || Math.abs(la.y - lb.y) >= 20).toBe(true)
+    const size = { w: 70, h: 18 }
+    const obstacle = { x: 60, y: 40, w: 80, h: 30 }
+    const labels = placeLabelBoxes(
+      [...t].map(([id, points]) => ({ id, points, size })),
+      { obstacles: [obstacle] },
+    )
+    const box = (p: { x: number; y: number }) => ({ x: p.x - 35, y: p.y - 9, w: 70, h: 18 })
+    const hit = (p: { x: number; y: number; w: number; h: number }, q: typeof p) => p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h
+    const [la, lb] = [box(labels.get('a')!), box(labels.get('b')!)]
+    expect(hit(la, lb)).toBe(false)
+    expect(hit(la, obstacle) || hit(lb, obstacle)).toBe(false)
+  })
+
+  it('L33：together 为假的两条（不会同时画出）可以放在同一处', () => {
+    const size = { w: 70, h: 18 }
+    const labels = placeLabelBoxes(
+      [
+        { id: 'a', points: a.points, size },
+        { id: 'b', points: a.points, size },
+      ],
+      { together: () => false },
+    )
+    expect(labels.get('a')).toEqual(labels.get('b'))
+  })
+})
+
+describe('L32 走廊分轨', () => {
+  const a = {
+    id: 'a',
+    points: [
+      { x: 0, y: 0 },
+      { x: 0, y: 50 },
+      { x: 200, y: 50 },
+      { x: 200, y: 120 },
+    ],
+  }
+  it('相距不到一个轨距（不止同一坐标）的平行段也分开', () => {
+    const b = { id: 'b', points: a.points.map((p, i) => (i === 1 || i === 2 ? { ...p, y: 54 } : { ...p, x: p.x + 20 })) }
+    const t = allocateTracks([a, b], 10)
+    expect(Math.abs(t.get('a')![1].y - t.get('b')![1].y)).toBeGreaterThanOrEqual(10)
+  })
+
+  it('fixed 的线只占不动：分轨的线让开它；框线（frameLines）也一样', () => {
+    const fixed = {
+      id: 'f',
+      points: [
+        { x: -50, y: 50 },
+        { x: 250, y: 50 },
+      ],
+    }
+    const t = allocateTracks([a], 10, { fixed: [fixed] })
+    expect(Math.abs(t.get('a')![1].y - 50)).toBeGreaterThanOrEqual(10)
+    const frame = frameLines([{ x: -100, y: 48, w: 400, h: 200 }])
+    expect(Math.abs(allocateTracks([a], 10, { fixed: frame }).get('a')![1].y - 48)).toBeGreaterThanOrEqual(10)
+  })
+
+  it('挪动后不穿过障碍：往下一格会碰到节点时往上让', () => {
+    const fixed = {
+      id: 'f',
+      points: [
+        { x: -50, y: 50 },
+        { x: 250, y: 50 },
+      ],
+    }
+    const node = { x: 50, y: 55, w: 60, h: 40 }
+    const t = allocateTracks([a], 10, { fixed: [fixed], obstacles: [node] })
+    expect(t.get('a')![1].y).toBeLessThan(50)
+  })
+
+  it('clampStub：短桩不伸进对面的节点', () => {
+    const p = clampStub({ x: 50, y: 100, dir: -1, stub: 38 }, [{ x: 0, y: 0, w: 100, h: 80 }])
+    expect(p.stub).toBe(14)
+    expect(clampStub({ x: 50, y: 100, dir: -1, stub: 10 }, [{ x: 0, y: 0, w: 100, h: 80 }]).stub).toBe(10)
+  })
+
+  it('detour：竖直通道已有线时改走旁边的通道', () => {
+    const from = { x: 0, y: 0, dir: 1 as const }
+    const to = { x: 200, y: 200, dir: -1 as const }
+    const channel = (pts: { x: number; y: number }[]) => pts.find((p, i) => i > 0 && p.x === pts[i - 1].x && Math.abs(p.y - pts[i - 1].y) > 100)!.x
+    const free = channel(detour(from, to, []))
+    const busy = new BusyLines()
+    for (let i = 0; i < 4; i++)
+      busy.add([
+        { x: free, y: -100 },
+        { x: free, y: 400 },
+      ])
+    expect(channel(detour(from, to, [], busy))).not.toBe(free)
   })
 })

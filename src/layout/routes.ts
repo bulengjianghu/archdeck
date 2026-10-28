@@ -3,7 +3,7 @@
  */
 import { bundleHandles, moduleName, type BundleHandles, type LevelView, type ModelIndex, type RelationType, type ViewEdge } from '@/model'
 import { NODE_SIZE, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
-import { ARRIVE, allocateTracks, detour, placeLabels, type PortAt } from './routing'
+import { ARRIVE, BusyLines, allocateTracks, clampStub, detour, frameLines, placeLabelBoxes, type PortAt } from './routing'
 
 // ── 外部参与者（A7）────────────────────────────────────────────
 
@@ -12,10 +12,10 @@ export const hasActors = (view: LevelView) => view.nodes.some(n => n.role === 'a
 export const ACTOR_GAP = 72
 
 /**
- * 参与者排布：用户类在边界框上方一行，外部系统与时间类在右侧一列（离边界框 rightGap）；
+ * 参与者排布（A7）：用户类在边界框上方一行，外部系统与时间类在左侧一列（离边界框 sideGap）；
  * 按所连内部节点的位置排序以减少交叉。
  */
-export function placeActors(view: LevelView, nodes: Map<string, Box>, frame: Box, rightGap = ACTOR_GAP) {
+export function placeActors(view: LevelView, nodes: Map<string, Box>, frame: Box, sideGap = ACTOR_GAP) {
   const actors = view.nodes.filter(n => n.role === 'actor')
   if (actors.length === 0) return
   const kindOf = (id: string) => view.nodes.find(n => n.id === id)?.actorKind ?? 'system'
@@ -38,7 +38,7 @@ export function placeActors(view: LevelView, nodes: Map<string, Box>, frame: Box
   }
   let y = frame.y + frame.h / 2 - (others.length * h + (others.length - 1) * gap) / 2
   for (const a of others) {
-    nodes.set(a.id, { x: frame.x + frame.w + rightGap, y, w, h })
+    nodes.set(a.id, { x: frame.x - sideGap - w, y, w, h })
     y += h + gap
   }
 }
@@ -48,7 +48,7 @@ export function linkRoute(a?: Box, b?: Box): EdgeRoute | undefined {
   return actorRoute(a, b)
 }
 
-/** 参与者与内部节点之间的曲线：上方的参与者从底边出发，右侧的从左边出发 */
+/** 参与者与内部节点之间的曲线：上方的参与者从底边出发，左侧的从右边出发 */
 export function actorRoute(a?: Box, b?: Box): EdgeRoute | undefined {
   if (!a || !b) return undefined
   const port = (box: Box, other: Box): Point => {
@@ -105,6 +105,19 @@ export function handleBadge(index: ModelIndex, view: LevelView, e: ViewEdge): Ha
     ),
   ])
   return { label: handleLabel(h.relations, h.handles), title: [head, ...lines].join('\n'), handles: h }
+}
+
+/** 标签 pill 的估宽：字号 11，中文按 11 px、其余按 6.5 px，左右内边距共 12 */
+export function labelWidth(text: string): number {
+  return [...text].reduce((n, c) => n + (/[\u3000-\u9fff\uff00-\uffef]/.test(c) ? 11 : 6.5), 0) + 12
+}
+
+/**
+ * L33：布局时给标签留的尺寸——画布写的是把手角标「×N · M 把手」（L23b）或 ×N，布局时不知道 M，按 M = N 估；只有一条关系的边不写字，不占位。
+ */
+export function labelSize(e: ViewEdge): { w: number; h: number } | null {
+  const n = e.relationIds.length
+  return n > 1 ? { w: labelWidth(handleLabel(n, n)), h: 18 } : null
 }
 
 /** L10：线宽档位——聚合条数 1 / 2–4 / ≥5 */
@@ -190,19 +203,19 @@ export const BOUNDARY_GAP = 72
 export const SYSTEM_PAD = 44
 
 /**
- * 方位：用户在系统框上方，外部系统与时间在系统框右侧，边界节点在父模块框下方、系统框之内，其余在父模块框内。
- * 方位固定在屏幕上，不随普通层次的布局方向（自上而下 / 自左向右）改变。
+ * 方位（A7）：用户在系统框上方，外部系统与时间在系统框左侧，边界节点在父模块框下方、系统框之内，其余在父模块框内。
+ * 方位固定在屏幕上，不随普通层次的布局方向（自上而下 / 自左向右）改变。右侧只留分层总览的层间关系线（侧边通道、核心车道）。
  */
-export type Compass = 'top' | 'right' | 'bottom' | 'inner' | 'rim-top' | 'rim-right'
+export type Compass = 'top' | 'left' | 'bottom' | 'inner' | 'rim-top' | 'rim-left'
 
 /**
- * L14：普通层次的边界角色——port 在父模块框上边（rim-top）、adapter 在右边（rim-right）：不交给 elk，布局后压在框线上（placeRims），
+ * L14：普通层次的边界角色——port 在父模块框上边（rim-top）、adapter 在左边（rim-left，随外部系统）：不交给 elk，布局后压在框线上（placeRims），
  * 边与框外元素的边一样按需正交走线、常显。分层总览里它们是带内的块（role 为 core），不走这里。
  */
 export function compassOf(n: { role?: string; actorKind?: string; rim?: string }): Compass {
   if (n.role === 'boundary') return 'bottom'
-  if (n.role === 'actor') return n.actorKind === 'user' ? 'top' : 'right'
-  if (n.role === 'module' && n.rim) return n.rim === 'port' ? 'rim-top' : 'rim-right'
+  if (n.role === 'actor') return n.actorKind === 'user' ? 'top' : 'left'
+  if (n.role === 'module' && n.rim) return n.rim === 'port' ? 'rim-top' : 'rim-left'
   return 'inner'
 }
 
@@ -210,11 +223,11 @@ export function compassOf(n: { role?: string; actorKind?: string; rim?: string }
 export const RIM_GAP = 32
 
 /**
- * L14：普通层次的边界角色压在父模块框线上——port 一行横跨上边（中心在框线上），adapter 一列横跨右边；按所连节点的位置排序以减少交叉。
+ * L14：普通层次的边界角色压在父模块框线上——port 一行横跨上边（中心在框线上），adapter 一列横跨左边；按所连节点的位置排序以减少交叉。
  * 框线先向外让出半个节点加 RIM_GAP，框内的节点与走线不被压住。返回让出后的框。
  */
 export function placeRims(view: LevelView, nodes: Map<string, Box>, frame: Box): Box {
-  const rims = view.nodes.filter(n => compassOf(n) === 'rim-top' || compassOf(n) === 'rim-right')
+  const rims = view.nodes.filter(n => compassOf(n) === 'rim-top' || compassOf(n) === 'rim-left')
   if (!rims.length) return frame
   const anchor = (id: string, axis: 'x' | 'y') => {
     const vs = view.edges
@@ -226,7 +239,7 @@ export function placeRims(view: LevelView, nodes: Map<string, Box>, frame: Box):
   }
   const { w, h } = NODE_SIZE.module
   const ports = rims.filter(n => compassOf(n) === 'rim-top').sort((a, b) => anchor(a.id, 'x') - anchor(b.id, 'x'))
-  const adapters = rims.filter(n => compassOf(n) === 'rim-right').sort((a, b) => anchor(a.id, 'y') - anchor(b.id, 'y'))
+  const adapters = rims.filter(n => compassOf(n) === 'rim-left').sort((a, b) => anchor(a.id, 'y') - anchor(b.id, 'y'))
   let f = frame
   if (ports.length) {
     const top = f.y - h / 2 - RIM_GAP
@@ -236,11 +249,11 @@ export function placeRims(view: LevelView, nodes: Map<string, Box>, frame: Box):
     f = { x: f.x, y: top, w: Math.max(f.w, x0 + rowW + RIM_GAP - f.x), h: f.y + f.h - top }
   }
   if (adapters.length) {
-    const right = f.x + f.w + w / 2 + RIM_GAP
+    const left = f.x - w / 2 - RIM_GAP
     const colH = adapters.length * h + (adapters.length - 1) * RIM_GAP
     const y0 = Math.max(f.y + h / 2 + RIM_GAP, f.y + f.h / 2 - colH / 2)
-    adapters.forEach((n, i) => nodes.set(n.id, { x: right - w / 2, y: y0 + i * (h + RIM_GAP), w, h }))
-    f = { x: f.x, y: f.y, w: right - f.x, h: Math.max(f.h, y0 + colH + RIM_GAP - f.y) }
+    adapters.forEach((n, i) => nodes.set(n.id, { x: left - w / 2, y: y0 + i * (h + RIM_GAP), w, h }))
+    f = { x: left, y: f.y, w: f.x + f.w - left, h: Math.max(f.h, y0 + colH + RIM_GAP - f.y) }
   }
   return f
 }
@@ -255,9 +268,9 @@ const expand = (b: Box, d: number): Box => ({ x: b.x - d, y: b.y - d, w: b.w + 2
 /**
  * 给定父模块框（已包住内部节点与走线），摆放框外的元素：边界节点在它下方一行（按视图顺序，即层次顺序），
  * 系统框包住父模块框与边界节点行（有边界节点时留 SYSTEM_PAD，没有时与父模块框重合）；参与者按方位放在系统框外（placeActors）。
- * 没有边界节点也没有参与者时不给系统框。rightGap 为外部系统离系统框的距离（分层总览要让出右侧通道）。
+ * 没有边界节点也没有参与者时不给系统框。sideGap 为外部系统离系统框的距离。
  */
-export function placeOutside(view: LevelView, nodes: Map<string, Box>, parentFrame: Box, rightGap = ACTOR_GAP): Box | undefined {
+export function placeOutside(view: LevelView, nodes: Map<string, Box>, parentFrame: Box, sideGap = ACTOR_GAP): Box | undefined {
   const bs = view.nodes.filter(n => n.role === 'boundary')
   if (!bs.length && !hasActors(view)) return undefined
   let frame = parentFrame
@@ -270,7 +283,7 @@ export function placeOutside(view: LevelView, nodes: Map<string, Box>, parentFra
     bs.forEach((n, i) => nodes.set(n.id, { x: x0 + i * (w + gap), y, w, h }))
     frame = expand(union(parentFrame, { x: x0, y, w: rowW, h }), SYSTEM_PAD)
   }
-  placeActors(view, nodes, frame, rightGap)
+  placeActors(view, nodes, frame, sideGap)
   return frame
 }
 
@@ -282,7 +295,7 @@ const LANE_GAP = 6
 const MAX_LANE = 22
 
 /** L14：普通层次压在框线上的边界角色节点 */
-const isRimNode = (view: LevelView, id: string) => view.nodes.some(n => n.id === id && (compassOf(n) === 'rim-top' || compassOf(n) === 'rim-right'))
+const isRimNode = (view: LevelView, id: string) => view.nodes.some(n => n.id === id && (compassOf(n) === 'rim-top' || compassOf(n) === 'rim-left'))
 
 /** 框外元素的边（参与者的边、边界边、L14 边界角色的边）：普通层次不参与布局，要画时才走线 */
 export const isOutsideEdge = (view: LevelView, e: ViewEdge) =>
@@ -309,7 +322,7 @@ export function edgeRoute(pv: PositionedView, e: ViewEdge): EdgeRoute | undefine
 }
 
 /**
- * 端口按方位：用户在底边朝下、外部系统在左边朝左、边界节点在顶边朝上；内部节点进边在入口侧（自上而下为顶边，自左向右为左边）、
+ * 端口按方位：用户在底边朝下、外部系统在右边朝右（A7：它在系统框左侧）、边界节点在顶边朝上；内部节点进边在入口侧（自上而下为顶边，自左向右为左边）、
  * 出边在出口侧（底边 / 右边，L11）；front 时落在该侧的前半（ADR-0029 起关系全是交互、都在前半，进边一侧的后半留给端口记号 L13）。
  * 同一节点同一侧的多条边沿该边错开 PARALLEL_GAP，短桩逐条加长。
  */
@@ -322,18 +335,20 @@ export function portFor(
   stub?: number,
   front?: boolean,
 ): PortAt {
-  // L11：front 时端口落在该侧的前半（顶边 / 底边的左半、左边 / 右边的上半），在半边内错开；否则在整条边上错开
+  // L11：front 时端口落在该侧的前半（顶边 / 底边的左半、左边 / 右边的上半），在半边内错开；否则在整条边上错开。
+  // L31：放不下 PARALLEL_GAP 时等分压缩，不在边缘堆成一点
   const along = (len: number) => {
     const span = front ? len / 4 : len / 2
     const center = front ? -len / 4 : 0
-    return center + Math.max(-span + 8, Math.min(span - 8, (slot.i - (slot.n - 1) / 2) * PARALLEL_GAP))
+    const step = Math.min(PARALLEL_GAP, (2 * span - 16) / Math.max(1, slot.n - 1))
+    return center + (slot.i - (slot.n - 1) / 2) * step
   }
   const lane = Math.min(slot.i * LANE_GAP, MAX_LANE)
   const side =
     compass === 'top' || compass === 'rim-top'
       ? 'bottom'
-      : compass === 'right' || compass === 'rim-right'
-        ? 'left'
+      : compass === 'left' || compass === 'rim-left'
+        ? 'right'
         : compass === 'bottom'
           ? 'top'
           : direction === 'DOWN'
@@ -384,20 +399,37 @@ export function outsideRoutes(pv: PositionedView, visible: readonly ViewEdge[]):
   const key = group.map(e => e.id).join(',')
   const hit = memo.get(key)
   if (hit) return hit
+  // L32：选通道时避开内部边与同组已走好的线
+  const fixed = pv.view.edges.flatMap(e => {
+    const r = pv.edges.get(e.id)
+    return r && !isOutsideEdge(pv.view, e) ? [{ id: e.id, points: r.points }] : []
+  })
+  const busy = new BusyLines()
+  for (const l of fixed) busy.add(l.points)
   const base = group.flatMap(e => {
-    const r = outsideRoute(pv, e, group)
+    const r = outsideRoute(pv, e, group, busy)
     return r ? [{ id: e.id, points: r.points }] : []
   })
-  const tracks = allocateTracks(base, PARALLEL_GAP)
-  // 标签放在各自的轨道上、互不相碰
-  const labels = placeLabels([...tracks].map(([id, points]) => ({ id, points })))
+  // L32：elk 排好的内部边只占不动，分轨时避开它们、框线与节点
+  const tracks = allocateTracks(base, PARALLEL_GAP, { fixed: [...fixed, ...frameLines([pv.parentFrame, pv.frame])], obstacles: [...pv.nodes.values()] })
+  // L33：标签按实际尺寸放在各自的轨道上，不压节点、内部边的标签与彼此
+  const byId = new Map(group.map(e => [e.id, e]))
+  const innerLabels = pv.view.edges.flatMap(e => {
+    const r = pv.edges.get(e.id)
+    const size = labelSize(e)
+    return r?.label && size && !isOutsideEdge(pv.view, e) ? [{ x: r.label.x - size.w / 2, y: r.label.y - size.h / 2, ...size }] : []
+  })
+  const labels = placeLabelBoxes(
+    [...tracks].map(([id, points]) => ({ id, points, size: labelSize(byId.get(id)!) ?? { w: 24, h: 18 } })),
+    { obstacles: [...pv.nodes.values(), ...innerLabels] },
+  )
   const result = new Map([...tracks].map(([id, points]) => [id, { points, label: labels.get(id)! }]))
   memo.set(key, result)
   return result
 }
 
 /**
- * L14：框线上的边界角色朝对端出入——port 对端在它上方（用户）时走顶边、否则走底边；adapter 对端在它右侧（外部系统）时走右边、否则走左边。
+ * L14：框线上的边界角色朝对端出入——port 对端在它上方（用户）时走顶边、否则走底边；adapter 对端在它左侧（外部系统）时走左边、否则走右边。
  * 其余节点按方位（portFor）。
  */
 function rimPort(
@@ -411,19 +443,19 @@ function rimPort(
   front?: boolean,
 ): PortAt {
   if (compass === 'rim-top' && other.y + other.h <= box.y) return portFor(box, 'bottom', end, dir, slot, stub, front)
-  if (compass === 'rim-right' && other.x >= box.x + box.w) return portFor(box, 'inner', 'out', 'RIGHT', slot, stub, front)
+  if (compass === 'rim-left' && other.x + other.w <= box.x) return portFor(box, 'inner', 'in', 'RIGHT', slot, stub, front)
   return portFor(box, compass, end, dir, slot, stub, front)
 }
 
-function outsideRoute(pv: PositionedView, e: ViewEdge, group?: readonly ViewEdge[]): EdgeRoute | undefined {
+function outsideRoute(pv: PositionedView, e: ViewEdge, group?: readonly ViewEdge[], busy?: BusyLines): EdgeRoute | undefined {
   const a = pv.nodes.get(e.from)
   const b = pv.nodes.get(e.to)
   const na = pv.view.nodes.find(n => n.id === e.from)
   const nb = pv.view.nodes.find(n => n.id === e.to)
   if (!a || !b || !na || !nb) return undefined
   const dir = pv.direction ?? 'DOWN'
-  // L11：关系边一律在前半错开（后半留给端口记号）
-  const dyn = true
+  // L11：模块（内部节点、框线上的边界角色）的关系边在前半错开，后半留给端口记号（L13）；L31：参与者、边界节点没有端口记号，用整条边
+  const front = (n: { role?: string }) => n.role !== 'actor' && n.role !== 'boundary'
   const outside = group ?? pv.view.edges.filter(x => isOutsideEdge(pv.view, x))
   const fs = slotOf(outside, e.from, e.id)
   // 内部节点那一端用 elk 排出的占位端口（与内部边的端口一起排在前半）；没有时按半边错开
@@ -431,9 +463,10 @@ function outsideRoute(pv: PositionedView, e: ViewEdge, group?: readonly ViewEdge
     const q = pv.ports?.get(id)
     return q ? { ...p, x: q.x, y: q.y } : p
   }
-  const from = at(rimPort(a, b, compassOf(na), 'out', dir, fs, undefined, dyn), `${e.id}#out`)
+  const from = at(rimPort(a, b, compassOf(na), 'out', dir, fs, undefined, front(na)), `${e.id}#out`)
   // 终点短桩加长到 ARRIVE：箭头前留出直段，拐弯不贴着箭头
-  const to = at(withSourceLane(rimPort(b, a, compassOf(nb), 'in', dir, slotOf(outside, e.to, e.id), ARRIVE, dyn), fs), `${e.id}#in`)
-  // 两端自身也是障碍：中间三段（横、竖通道、横）都在两端的短桩之外，不能穿过它们
-  return { points: detour(from, to, [...pv.nodes.values()]) }
+  const to = at(withSourceLane(rimPort(b, a, compassOf(nb), 'in', dir, slotOf(outside, e.to, e.id), ARRIVE, front(nb)), fs), `${e.id}#in`)
+  // 两端自身也是障碍：中间三段（横、竖通道、横）都在两端的短桩之外，不能穿过它们；L32：短桩不伸进对面的节点
+  const boxes = [...pv.nodes.values()]
+  return { points: detour(clampStub(from, boxes), clampStub(to, boxes), boxes, busy) }
 }
