@@ -4,7 +4,7 @@
  * 表面展开（C6、L20）、影响面查询（K15、K15b）、分层总览（O13③）、退出场景回到进入前的视角（V11）。
  */
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, openDesk, query, settleCanvas } from './helpers'
+import { graphNode, openDesk, query, collapseDisplay } from './helpers'
 
 /** 本层模块节点的位置（Vue Flow 节点的 transform）与尺寸 */
 async function boxes(page: Page) {
@@ -131,8 +131,8 @@ test('K10、B3：单击束选中这对节点的代码依赖（sel=d:），它高
 
 test('C6、L20（ADR-0036）：节点角标「表面 W」；选中模块展开表面——入边一侧一排端口点、束散开为元素级边，节点与视口不动，取消选中收起', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra&v=s')
-  // V14：「显示」面板展开时「适应」只用面板左侧，节点不再落在面板下面
-  await settleCanvas(page)
+  // 展开的「显示」面板叠在画布右下，分层后 infra.framework 落在它下面
+  await collapseDisplay(page)
   await expect(graphNode(page, 'infra.framework').getByTestId('node-surface-w')).toHaveText(/表面 \d+/)
   const boxes = () =>
     page.locator('.vue-flow__node-module, .vue-flow__node-core').evaluateAll(els =>

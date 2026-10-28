@@ -47,7 +47,6 @@ export { EDGE_Z, routeMidpoint } from './canvas/edges'
 export { EDGE_HOVER_Z, landsOn, withEdgeHover, withElementHover } from './canvas/hover'
 export { EDGE_TAGS, composeLabel, hasWarnTag, type EdgeTag, type TagPart } from './canvas/labels'
 export { JUMP_RADIUS } from './routing'
-export { FIT, fitArea, fitViewport, type FitArea } from './canvas/fit'
 
 export function canvasScene(input: CanvasInput): CanvasScene {
   if (!input.positioned) return { nodes: [], edges: [], visibleIds: null }
