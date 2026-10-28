@@ -30,6 +30,7 @@ export {
 export { portEntry, portPanel, portIssues } from './ports'
 export { judge, evaluateRules, rulesFor, exposesMatch, exposesText, violationKey, rulesOf } from './rules'
 export type { EntryOf, DepProbe, Judgement, ModuleRules } from './rules'
+export { gradeBundles, exceptionsOf, forcedExceptions, type BundleGrading, type ExceptionKind, type GradeInput, type LineGrade } from './grades'
 export { stronglyConnected, valueDeps, moduleCycles, fileCycles, cyclicityOf } from './cycles'
 export { governanceReport, gateIssues, makeBaseline, entryResolver } from './report'
 export { levelFacts, levelAssembly, depsBetween, nodeOf, levelValueDeps } from './level'

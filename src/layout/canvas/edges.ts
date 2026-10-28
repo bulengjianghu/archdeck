@@ -37,6 +37,7 @@ import { isTemp, landingId } from '../stage'
 import type { SceneContext } from './context'
 import { DEP_KIND_LABELS, DEP_TIER_LABELS, ELEMENT_KIND_LABELS, depViewEdge, depWeight, elementAt, inImpact, routeToPoint } from './structure'
 import { composeLabel, hasWarnTag, type TagPart } from './labels'
+import { depLabel } from './structure'
 import type { CanvasEdge, EdgeArrow, FactState, RouteEdgeData } from './types'
 
 /** K9：证实状态（只进数据与面板，不改线型——L10、ADR-0035） */
@@ -447,10 +448,7 @@ export function depEdges(ctx: SceneContext): (CanvasEdge | null)[] {
       !selected &&
       !touchesHover(ctx, e) &&
       (sc.impact ? !(inImpact(sc, nodeOf(e.from)) && inImpact(sc, nodeOf(e.to))) : unfocused || (!!ctx.near && !touchesFocus(ctx, e)))
-    // L26：角标之后先写词表里的异常（违规 = 基线外新增，U15；未解释，K17），再写结构视角自己的记号（越过入口 C3、逆稳定 U17）
-    const head = e.look.rest ? `×${e.look.elements} 其余` : e.look.elements ? `×${e.look.elements} 元素` : ''
-    const tags: TagPart[] = [...(e.look.violation === 'new' ? [{ tag: '违规' as const }] : []), ...(e.look.unexplained ? [{ tag: '未解释' as const }] : [])]
-    const label = [composeLabel(head, tags), e.look.bypass ? '越过入口' : '', e.look.against ? '逆稳定' : ''].filter(Boolean).join(' · ')
+    const { label, tags } = depLabel(e.look)
     const route = label && !route0.label ? { ...route0, label: routeMidpoint(route0) } : route0
     return {
       id: e.id,

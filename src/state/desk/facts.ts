@@ -30,6 +30,10 @@ import {
   levelImpact,
   levelTiers,
   layerUpward,
+  gradeBundles,
+  forcedExceptions,
+  shelfOf,
+  type BundleGrading,
   type UpwardEdge,
   splitSignals,
   tierNoteText,
@@ -126,13 +130,19 @@ export interface StructureDisplay {
   shown: Bundle[]
   /** 画出的元素级边：属于画出的束、被依赖方的表面展开且元素在展开集合里的（越过入口与整模块的边随展开一并给出） */
   elementEdges: ElementEdge[]
-  /** 收起的束的条数：只引类型（B1）、只看交互使用时收起的值使用（B1）、只看未解释时收起的已解释（B4）、跨界折叠（B2） */
-  hidden: { type: number; value: number; covered: number; cross: number }
+  /** 收起的束的条数：只引类型（B1）、只看交互使用时收起的值使用（B1）、只看未解释时收起的已解释（B4）、跨界折叠（B2）、可推出（L42，F9）、环内（L42，F10） */
+  hidden: { type: number; value: number; covered: number; cross: number; reducible: number; cycle: number }
+  /** L42（F9）：依赖方节点 → 静息态没画出来的可推出束（「另直连 N」） */
+  direct: Map<string, Bundle[]>
+  /** L42（F10）：环编号 → 环内静息态没画出来的束数（「环内 N 条」） */
+  cycleHidden: Map<number, number>
+  /** F10：依赖违背算出的层（「向上」）的束 */
+  upward: Set<string>
   /** B2：本层节点 → 折叠进角标的跨界束的入 / 出条数 */
   cross: Map<string, { in: number; out: number }>
   /** 每条束与边界节点的关系 */
   reach: Map<string, BundleReach>
-  /** 不论档位、过滤与折叠照画的束：基线外违规、环上、逆稳定（L15a①、B1、B2） */
+  /** 不论档位、过滤与折叠照画的束——逐条的例外（F10）：基线外违规、向上、逆稳定、未解释（L15a①、B1、B2；环上的按组，见 cycleHidden） */
   anomalies: Set<string>
   /** B3：选中束（K10 的 dep 选中）时与它两端相连的束；没有选中束时为 null */
   focus: { bundle: string; nodes: [string, string]; bundles: Set<string> } | null
@@ -543,14 +553,40 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     return new Set(v.nodes.filter(n => n.role === 'boundary' || n.rim || (idx.modules.has(n.moduleId) && isTarget(idx, n.moduleId))).map(n => n.id))
   })
 
-  /** L15a①：照画的束——基线外违规（新增 / 无基线）、环上（Y5 的本层环边）、逆稳定（U17） */
+  /**
+   * K23（第十四轮 F9、F10）：本层每条束的级别——逐条的例外、环内、可推出、骨架；结构视图不论视角都算（与聚焦、偏好无关）。
+   * 内部节点 = 不是边界节点、不是共用件；「向上」按算出的层（L28），「+N」不判（L39④）。
+   */
+  const grading = computed<BundleGrading | null>(() => {
+    const sv = levelStructure.value
+    const v = view.value
+    if (!sv?.facts || !v) return null
+    const bnd = boundaryNodes.value
+    const shelf = shelfOf(v)
+    const t = tiers.value
+    return gradeBundles({
+      bundles: sv.bundles,
+      inner: n => !bnd.has(n) && !shelf.has(n),
+      cycleEdges: new Set((level.value?.levelCycles ?? []).flatMap(c => c.edges.map(e => `${e.from}->${e.to}`))),
+      tier: t?.tier ?? null,
+      ...(t?.foldSpan ? { noTier: new Set([t.foldSpan.node]) } : {}),
+    })
+  })
+
+  /** L42（F10）：环编号 → 环内静息态收起的束数（结构视角缺省偏好；交互视角与没有代码事实时为空） */
+  const cycleHidden = computed<Map<number, number>>(
+    () => structureDisplay({ typeOnly: false, invokesOnly: false, uncoveredOnly: false })?.cycleHidden ?? new Map(),
+  )
+
+  /** L15a①、F10、L42：照画的束——逐条的例外（基线外违规、向上、逆稳定；未解释只在两端都是内部节点时）；环上的按组呈现 */
   const anomalies = computed<Set<string>>(() => {
-    const sv = structure.value
-    if (!sv?.facts) return new Set()
-    const cyc = new Set((level.value?.levelCycles ?? []).flatMap(c => c.edges.map(e => `${e.from}->${e.to}`)))
-    return new Set(
-      sv.bundles.filter(b => b.ruling.status === 'new' || b.ruling.status === 'open' || cyc.has(`${b.from}->${b.to}`) || b.againstStability).map(b => b.id),
-    )
+    const g = grading.value
+    const sv = levelStructure.value
+    const v = view.value
+    if (!g || !sv?.facts || !v) return new Set()
+    const bnd = boundaryNodes.value
+    const shelf = shelfOf(v)
+    return forcedExceptions(g, sv.bundles, n => !bnd.has(n) && !shelf.has(n))
   })
 
   /**
@@ -571,8 +607,14 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     const near = (b: Bundle) => [s.hover, s.selection?.kind === 'module' ? s.selection.id : null].some(id => touch(id, b.from) || touch(id, b.to))
     const reach = new Map<string, BundleReach>()
     const cross = new Map<string, { in: number; out: number }>()
-    const hidden = { type: 0, value: 0, covered: 0, cross: 0 }
+    const hidden = { type: 0, value: 0, covered: 0, cross: 0, reducible: 0, cycle: 0 }
     const shown: Bundle[] = []
+    const g = grading.value
+    const cycleNo = level.value?.cycles
+    // L42：选中环组（V2，sel=y:<环编号>）时环内的束画出
+    const pickedCycle = s.selection?.kind === 'cycle' ? Number(s.selection.id) : null
+    const direct = new Map<string, Bundle[]>()
+    const cycleHidden = new Map<number, number>()
     for (const b of sv.bundles) {
       const fb = bnd.has(b.from)
       const tb = bnd.has(b.to)
@@ -590,6 +632,19 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
       }
       if (!keep && b.tier === 'value' && filter.invokesOnly) {
         hidden.value++
+        continue
+      }
+      // L42（F9、F10）：可推出的与环内的束静息态不画、计数；聚焦一端（选中或悬停）时画出，环内的另随选中环组画出
+      const grade = g?.grade.get(b.id)
+      if (grade === 'reducible' && !near(b)) {
+        hidden.reducible++
+        direct.set(b.from, [...(direct.get(b.from) ?? []), b])
+        continue
+      }
+      if (grade === 'cycle' && !near(b) && (pickedCycle === null || cycleNo?.get(b.from) !== pickedCycle)) {
+        hidden.cycle++
+        const no = cycleNo?.get(b.from)
+        if (no !== undefined) cycleHidden.set(no, (cycleHidden.get(no) ?? 0) + 1)
         continue
       }
       if (r === 'cross' && !keep) {
@@ -626,7 +681,8 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
       const names = expanded.get(e.toModule)
       return names === null || !e.element || names!.has(e.element.name)
     })
-    return { shown, elementEdges, hidden, cross, reach, anomalies: odd, focus, expanded }
+    const upward = new Set([...(g?.exceptions ?? [])].filter(([, ks]) => ks.includes('upward')).map(([id]) => id))
+    return { shown, elementEdges, hidden, cross, reach, anomalies: odd, focus, expanded, direct, cycleHidden, upward }
   }
 
   /** D7、D8：交互视图边（本层一对节点、一种类型）按接收方表面散开的数据与束内混合；不是本层的视图边为 null */
@@ -662,6 +718,8 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     queried,
     structurePair,
     structureDisplay,
+    grading,
+    cycleHidden,
     expansion,
     spreads,
     surfaceInfo,

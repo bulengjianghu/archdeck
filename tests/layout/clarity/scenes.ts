@@ -6,12 +6,15 @@
  * 层带的层号、环组框的环编号是文字区（障碍），环组框是框线。
  * 标签文字取画布同一口径：把手角标（L23b）或 ×N（L10）。
  * 结构视角（有代码事实时）另成一组：缺省显示偏好下画出来的束——照画的异常束（基线外违规、环上、逆稳定，L15a①）、
- *   交互使用与值使用的兄弟束（只引类型收起 B1、一端是边界节点的折叠 B2、共用件按 O13② 收起），走线与标签同画布（canvas/structure.ts、edges.ts）。
+ *   交互使用与值使用的兄弟束（只引类型收起 B1、一端是边界节点的折叠 B2、共用件按 O13② 收起；第十四轮 F9、F10：例外照画、环内与可推出的静息态不画，K23、L42），
+ *   走线与标签同画布（canvas/structure.ts、edges.ts）。
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import {
   assignFiles,
+  gradeBundles,
+  forcedExceptions,
   governanceReport,
   isTarget,
   levelFacts,
@@ -32,6 +35,7 @@ import {
   edgeLabel,
   handleBadge,
   isOutsideEdge,
+  labelWidth,
   layoutView,
   outsideRoutes,
   tierTextBoxes,
@@ -40,8 +44,7 @@ import {
   type PositionedView,
 } from '../../../src/layout/layout'
 import { routeMidpoint } from '../../../src/layout/canvas'
-import { bundleItem, depViewEdge, routeToPoint } from '../../../src/layout/canvas/structure'
-import { composeLabel } from '../../../src/layout/canvas/labels'
+import { bundleItem, depLabel, depViewEdge, routeToPoint } from '../../../src/layout/canvas/structure'
 import { readModelDir } from '../../../vite/readModelDir'
 import { readSourceTree } from '../../../vite/readSource'
 import { readCodeDeps } from '../../../vite/readDeps'
@@ -127,32 +130,70 @@ function structureLines(
 ): CheckLine[] {
   const facts = levelFacts(index, view, report)
   const cycEdges = new Set(facts.levelCycles.flatMap(c => c.edges.map(e => `${e.from}->${e.to}`)))
-  const odd = (b: (typeof sv.bundles)[number]) =>
-    b.ruling.status === 'new' || b.ruling.status === 'open' || cycEdges.has(`${b.from}->${b.to}`) || b.againstStability
   const bnd = new Set(view.nodes.filter(n => n.role === 'boundary' || n.rim || (index.modules.has(n.moduleId) && isTarget(index, n.moduleId))).map(n => n.id))
   const shelf = shelfOf(view)
-  const inCycle = (b: { from: string; to: string }) => facts.cycles.get(b.from) !== undefined && facts.cycles.get(b.from) === facts.cycles.get(b.to)
+  // K23、L42（第十四轮 F9、F10）：同 desk.facts 的 grading——逐条的例外照画，环内与可推出的静息态不画
+  const t = levelTiers(index, view, report)
+  const g = gradeBundles({
+    bundles: sv.bundles,
+    inner: n => !bnd.has(n) && !shelf.has(n),
+    cycleEdges: cycEdges,
+    tier: t?.tier ?? null,
+    ...(t?.foldSpan ? { noTier: new Set([t.foldSpan.node]) } : {}),
+  })
+  const forced = forcedExceptions(g, sv.bundles, n => !bnd.has(n) && !shelf.has(n))
   const shown = sv.bundles.filter(b => {
-    if (odd(b)) return true
+    if (forced.has(b.id)) return true
     if (b.tier === 'type') return false
+    const grade = g.grade.get(b.id)
+    if (grade === 'reducible' || grade === 'cycle') return false
     if (bnd.has(b.from) || bnd.has(b.to)) return false
-    if (shelf.has(b.from) || shelf.has(b.to)) return inCycle(b) || (shelf.has(b.from) && !shelf.has(b.to))
+    if (shelf.has(b.from) || shelf.has(b.to)) return shelf.has(b.from) && !shelf.has(b.to)
     return true
   })
-  const items = shown.map(b => bundleItem(index, b, []))
-  const outside = view.mode === 'layered' ? new Map<string, EdgeRoute>() : outsideRoutes(pv, items.map(depViewEdge))
+  const items = shown.map(b => {
+    const it = bundleItem(index, b, [])
+    return g.exceptions.get(b.id)?.includes('upward') ? { ...it, look: { ...it.look, upward: true as const } } : it
+  })
+  const sizes = new Map(
+    items.flatMap(e => {
+      const t = depLabel(e.look).label
+      return t ? [[e.id, { w: labelWidth(t), h: 18 }] as const] : []
+    }),
+  )
+  const outside = view.mode === 'layered' ? new Map<string, EdgeRoute>() : outsideRoutes(pv, items.map(depViewEdge), sizes)
   return items.flatMap(e => {
     const r =
       outside.get(e.id) ??
       pv.edges.get(e.id) ??
       (shelf.has(e.from) || shelf.has(e.to) ? routeToPoint(pv.nodes.get(e.from), undefined, pv.nodes.get(e.to)) : undefined)
     if (!r) return []
-    const head = e.look.rest ? `×${e.look.elements} 其余` : e.look.elements ? `×${e.look.elements} 元素` : ''
-    const tags = [...(e.look.violation === 'new' ? [{ tag: '违规' as const }] : []), ...(e.look.unexplained ? [{ tag: '未解释' as const }] : [])]
-    const text = [composeLabel(head, tags), e.look.bypass ? '越过入口' : '', e.look.against ? '逆稳定' : ''].filter(Boolean).join(' · ')
+    const text = depLabel(e.look).label
     const at = r.label ?? routeMidpoint(r)
     return [{ id: e.id, points: r.points, ...(r.curve ? { curve: r.curve } : {}), ...(text ? { label: { at, text } } : {}), ends: [e.from, e.to] as const }]
   })
+}
+
+function reducedLinks(
+  index: ModelIndex,
+  view: LevelView,
+  sv: Extract<StructureView, { facts: true }>,
+  report: GovernanceReport,
+  links: ReturnType<typeof baseLayoutLinks>,
+): ReturnType<typeof baseLayoutLinks> {
+  const facts = levelFacts(index, view, report)
+  const bnd = new Set(view.nodes.filter(n => n.role === 'boundary' || n.rim || (index.modules.has(n.moduleId) && isTarget(index, n.moduleId))).map(n => n.id))
+  const shelf = shelfOf(view)
+  const t = levelTiers(index, view, report)
+  const g = gradeBundles({
+    bundles: sv.bundles,
+    inner: n => !bnd.has(n) && !shelf.has(n),
+    cycleEdges: new Set(facts.levelCycles.flatMap(c => c.edges.map(e => `${e.from}->${e.to}`))),
+    tier: t?.tier ?? null,
+    ...(t?.foldSpan ? { noTier: new Set([t.foldSpan.node]) } : {}),
+  })
+  const drop = (id: string) => g.grade.get(id) === 'reducible' || g.grade.get(id) === 'cycle'
+  return { ...links, edges: links.edges.filter(e => !drop(e.id)), ...(links.elements ? { elements: links.elements.filter(e => !drop(e.bundle)) } : {}) }
 }
 
 /** perspective：interaction 为交互视角的线（缺省）；structure 为结构视角的束（只在有代码事实时，否则为 null） */
@@ -180,7 +221,12 @@ async function levelScenes({ index, report }: Project, level: string, perspectiv
   // 与 DeskState 同一份布局输入（facts.ts 的 baseLinks）：结构边、核心跨层束、分层
   const sv = structureView(index, view, report)
   const tiers = report ? toLayoutTiers(levelTiers(index, view, report)) : null
-  const pv = { ...(await layoutView(view, {}, baseLayoutLinks(index, view, sv, report, tiers))), view }
+  const links = baseLayoutLinks(index, view, sv, report, tiers)
+  // 第十四轮 F9 对照实验（ADR-0046，不上线）：CLARITY_ELK=reduced 时交给 elk 的束去掉静息态不画的（环内、可推出），量节点位置变了之后的线
+  const pv = {
+    ...(await layoutView(view, {}, process.env.CLARITY_ELK === 'reduced' && sv.facts && report ? reducedLinks(index, view, sv, report, links) : links)),
+    view,
+  }
   const { obstacles, frames, anchors } = obstaclesOf(pv)
   const scenes: Scene[] = []
   if (perspective === 'structure') {

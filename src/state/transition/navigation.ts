@@ -15,8 +15,10 @@ export function selectionExists(index: ModelIndex, s: Selection | null): s is Se
       return index.relations.has(s.id)
     case 'actor':
       return index.actors.has(s.id)
+    // L42：环编号（cycle）按本层算，换层时由层次切换清空（N2）
     case 'edge':
     case 'file':
+    case 'cycle':
       return true
     case 'dep': {
       // K10：两端都是存在的模块或参与者

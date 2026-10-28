@@ -51,6 +51,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
           <p class="sub" data-testid="guide-bundle">
             <b>束与表面</b>：一对模块之间的线是一条束（线宽按束内元素级边条数，形态不止一种时标「×N 元素」），展开模块看它的表面——入口导出与声明的接口；
             依赖接到表面元素，不经入口的深层导入标「越过入口」。束与折叠都带计数，从不掩盖耦合。
+            平时只画骨架与例外：违规、向上、逆稳定、未解释照画；环内的依赖按组计数（单击「↻ N」选中环组画出），能由别的路径推出的线退到「另直连
+            N」，聚焦时画出。
           </p>
           <p class="sub" data-testid="guide-carrier">
             <b>承载</b>：每条交互都应由结构图上的一段元素级依赖撑着（直接 / 经端口 / 经总线 / 回调注册 /

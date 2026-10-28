@@ -64,6 +64,10 @@ export interface NodeData {
   preview?: { pointId: string; option: number; label: string }
   /** Y4：本层环的编号 */
   cycle?: number
+  /** L42：环内静息态收起的束数（悬停说明） */
+  cycleHidden?: number
+  /** L42：所在的环组被选中（sel=y:<环编号>） */
+  cycleSelected?: boolean
   /** ADR-0027：普通层次的核心模块（大块） */
   core?: boolean
   /** L14：边界角色记号（port 对外端口、adapter 适配器） */
@@ -163,6 +167,8 @@ export interface DepEdgeLook {
   unexplained?: boolean
   /** U17：逆稳定——两端的 I */
   against?: { from: number; to: number }
+  /** F10、L42：向上——依赖违背算出的层（依赖方在被依赖方之下） */
+  upward?: true
   /** 悬停说明：种类与档、条数、覆盖、规则判定 */
   title: string
 }
@@ -331,7 +337,13 @@ export interface CanvasInput {
 export interface StructureDisplayInput {
   shown: readonly Bundle[]
   elementEdges: readonly ElementEdge[]
-  hidden: { type: number; value: number; covered: number; cross: number }
+  hidden: { type: number; value: number; covered: number; cross: number; reducible?: number; cycle?: number }
+  /** L42（F9）：依赖方节点 → 静息态没画出来的可推出束 */
+  direct?: ReadonlyMap<string, readonly Bundle[]>
+  /** L42（F10）：环编号 → 环内静息态收起的束数 */
+  cycleHidden?: ReadonlyMap<number, number>
+  /** F10：依赖违背算出的层（「向上」）的束 */
+  upward?: ReadonlySet<string>
   cross: ReadonlyMap<string, { in: number; out: number }>
   reach: ReadonlyMap<string, 'sibling' | 'cross' | 'outer'>
   anomalies: ReadonlySet<string>
@@ -372,7 +384,7 @@ export interface CanvasScene {
    * 结构视角：画布角的计数与说明——收起的只引类型束（L15、B1）、只看交互使用时收起的值使用（B1）、只看未解释时收起的已解释（B4），
    * 没有代码事实时的说明（U16）；其余视角不给
    */
-  structure?: { typeOnlyHidden: number; valueHidden: number; coveredHidden: number; note: string | null }
+  structure?: { typeOnlyHidden: number; valueHidden: number; coveredHidden: number; reducibleHidden: number; cycleHidden: number; note: string | null }
   /** V5：运行视角隐藏了静态内容时只按这些节点适应画布；否则为 null（取全部内容） */
   visibleIds: Set<string> | null
 }

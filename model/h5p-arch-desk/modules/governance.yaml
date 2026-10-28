@@ -112,8 +112,8 @@ modules:
     name: 分层与拆分信号
     parent: model.governance
     adrs: [38]
-    responsibility: 普通层次按本层值依赖分层（ADR-0038）——tierNodes：强连通分量合组、到汇点的最长链定高度、没人依赖的提到顶层、孤立的另列（L28）；levelTiers：取本层值依赖（与 Y4 共用 levelValueDeps）给参与分层的节点定层，环组复用 Y4 编号，找向上的交互边并判断是否控制反转（isInversion，K22）、直接交互却两个方向都没有值依赖的兄弟与大环、本层无依赖的提示（L29、K21③）；splitSignals：子模块不占文件、兄弟共用文件（K21①②）；tierFindings / tierIssues：逐个普通层次（「+N」展开）出 split.* 与 tier.upward 的 info 提醒，并入治理报告、返工清单按它定位。布局只消费层号。
-    codeRefs: [src/model/governance/tiers.ts]
+    responsibility: 普通层次按本层值依赖分层（ADR-0038）——tierNodes：强连通分量合组、到汇点的最长链定高度、没人依赖的提到顶层、孤立的另列（L28）；levelTiers：取本层值依赖（与 Y4 共用 levelValueDeps）给参与分层的节点定层，环组复用 Y4 编号，找向上的交互边并判断是否控制反转（isInversion，K22）、直接交互却两个方向都没有值依赖的兄弟与大环、本层无依赖的提示（L29、K21③）；splitSignals：子模块不占文件、兄弟共用文件（K21①②）；tierFindings / tierIssues：逐个普通层次（「+N」展开）出 split.* 与 tier.upward 的 info 提醒（分层总览按声明的层判向上，layerUpward，第十四轮 F8），并入治理报告、返工清单按它定位。层号对全集算、「+N」放在成员最上的一层并给出层号跨度 foldSpan（L39）；平铺提示（L40）。线的级别（grades.ts，K23）：gradeBundles 按例外（违规 / 向上 / 逆稳定 / 未解释）、环内、传递约简（91 §2 口径）给结构视角的束定级，forcedExceptions 给出照画的例外。布局只消费层号。
+    codeRefs: [src/model/governance/tiers.ts, src/model/governance/grades.ts]
   - id: model.governance.query
     name: agent 查询
     parent: model.governance

@@ -18,7 +18,8 @@ describe('L27 选中只聚焦一跳', () => {
     const { scene: s } = await sceneOf(desk)
     expect(bundle(s, 'core.impl', 'core.util').data.dim).toBe(false)
     expect(bundle(s, 'core.util', 'core.api').data.dim).toBe(false)
-    expect(bundle(s, 'core.impl', 'core.api').data.dim).toBe(true)
+    // L42：impl → api 可由 impl → util → api 推出，静息态不画（聚焦 impl 或 api 时才画）
+    expect(bundle(s, 'core.impl', 'core.api')).toBeUndefined()
     expect(bundle(s, 'core.api', 'core.log').data.dim).toBe(true)
     expect(['core.util', 'core.impl', 'core.api'].map(id => node(s, id).data.dim)).toEqual([false, false, false])
     expect(node(s, 'core.log').data.dim).toBe(true)
@@ -36,8 +37,8 @@ describe('L27 选中只聚焦一跳', () => {
     expect(bundle(s, 'core.impl', 'core.log').data.dim).toBe(false)
     // 选中的一跳仍在
     expect(bundle(s, 'core.impl', 'core.util').data.dim).toBe(false)
-    // 两者都不碰的边照样变淡
-    expect(bundle(s, 'core.impl', 'core.api').data.dim).toBe(true)
+    // 两者都不碰的边照样不画（可推出，L42）
+    expect(bundle(s, 'core.impl', 'core.api')).toBeUndefined()
     desk.setHover(null)
     const { scene: back } = await sceneOf(desk)
     expect(node(back, 'core.log').data.dim).toBe(true)

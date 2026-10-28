@@ -71,7 +71,18 @@ export function canvasScene(input: CanvasInput): CanvasScene {
     nodes,
     edges: withJumps(edges),
     visibleIds: visibleIdsOf(ctx.display),
-    ...(sc ? { structure: { typeOnlyHidden: sc.typeOnlyHidden, valueHidden: sc.valueHidden, coveredHidden: sc.coveredHidden, note: sc.note } } : {}),
+    ...(sc
+      ? {
+          structure: {
+            typeOnlyHidden: sc.typeOnlyHidden,
+            valueHidden: sc.valueHidden,
+            coveredHidden: sc.coveredHidden,
+            reducibleHidden: sc.reducibleHidden,
+            cycleHidden: sc.cycleHidden,
+            note: sc.note,
+          },
+        }
+      : {}),
   }
 }
 

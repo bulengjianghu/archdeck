@@ -29,6 +29,8 @@ describe('选中编码', () => {
     ] as const) {
       expect(decodeSelection(encodeSelection(s))).toEqual(s)
     }
+    expect(decodeSelection(encodeSelection({ kind: 'cycle', id: '2' }))).toEqual({ kind: 'cycle', id: '2' })
+    expect(encodeSelection({ kind: 'cycle', id: '2' })).toBe('y:2')
     expect(decodeSelection('x:1')).toBeNull()
     expect(decodeSelection(undefined)).toBeNull()
   })

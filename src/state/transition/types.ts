@@ -18,6 +18,8 @@ export type Selection =
   | { kind: 'couple'; id: string }
   /** 端口（接口 ID，L13、V2）：结构视角单击端口记号选中，面板显示端口面板（K11） */
   | { kind: 'port'; id: string }
+  /** 本层的环组（Y4 环编号，L42，第十四轮 F10）：单击环编号选中，环内的束画出，面板列成员与环内的依赖 */
+  | { kind: 'cycle'; id: string }
 
 export interface Toggles {
   showBoundaries: boolean

@@ -215,6 +215,8 @@ function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box, s
     ...(ctx.structure ? structureNodeMarks(ctx.structure, ctx.input, n) : {}),
     ...surface,
   }
+  // L42：所在的环组被选中
+  if (base.cycle !== undefined && sel?.kind === 'cycle' && sel.id === String(base.cycle)) base.cycleSelected = true
   // K15：影响面生效时闭包外的节点变淡（带也参与）
   if (ctx.structure?.impact) base.dim = !inImpact(ctx.structure, n)
   // L37：写字的注记静息态最多 REST_MARKS 个；悬停或选中该节点时全部出现（带有自己的标题栏，不受此限）

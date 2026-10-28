@@ -391,14 +391,15 @@ const trackMemo = new WeakMap<Map<string, Box>, Map<string, Map<string, EdgeRout
  * 端口错开只在这一组里算，走廊里重合的横段、竖段按边 ID 依次错开 PARALLEL_GAP（allocateTracks），同一对节点的平行边与同走廊的不同边一样处理。
  * 不对本层全部框外边预分配（会把走廊撑开），不影响内部布局与缓存键。分层总览的框外边在排布时已走好，这里不给。
  */
-export function outsideRoutes(pv: PositionedView, visible: readonly ViewEdge[]): Map<string, EdgeRoute> {
+export function outsideRoutes(pv: PositionedView, visible: readonly ViewEdge[], sizes?: ReadonlyMap<string, { w: number; h: number }>): Map<string, EdgeRoute> {
   if (pv.view.mode === 'layered') return new Map()
   const group = visible.filter(e => isOutsideEdge(pv.view, e)).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   if (!group.length) return new Map()
   let memo = trackMemo.get(pv.nodes)
   if (!memo) trackMemo.set(pv.nodes, (memo = new Map()))
   // 层带文字区在布局最后才有（tierGeometry）：同一份节点表上布局中途按没有层带算过的不复用
-  const key = `${pv.tiers ? 't' : '-'}|${group.map(e => e.id).join(',')}`
+  // L33：结构视角的标签按实际文字估宽（sizes），尺寸不同的同一组线不复用
+  const key = `${pv.tiers ? 't' : '-'}|${group.map(e => `${e.id}${sizes?.has(e.id) ? `:${sizes.get(e.id)!.w}` : ''}`).join(',')}`
   const hit = memo.get(key)
   if (hit) return hit
   // L32：选通道时避开内部边与同组已走好的线
@@ -427,7 +428,7 @@ export function outsideRoutes(pv: PositionedView, visible: readonly ViewEdge[]):
     return r?.label && size && !isOutsideEdge(pv.view, e) ? [{ x: r.label.x - size.w / 2, y: r.label.y - size.h / 2, ...size }] : []
   })
   const labels = placeLabelBoxes(
-    [...tracks].map(([id, points]) => ({ id, points, size: labelSize(byId.get(id)!) ?? { w: 24, h: 18 } })),
+    [...tracks].map(([id, points]) => ({ id, points, size: sizes?.get(id) ?? labelSize(byId.get(id)!) ?? { w: 24, h: 18 } })),
     { obstacles: [...pv.nodes.values(), ...innerLabels, ...texts] },
   )
   const result = new Map([...tracks].map(([id, points]) => [id, { points, label: labels.get(id)! }]))

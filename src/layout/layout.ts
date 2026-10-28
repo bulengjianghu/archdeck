@@ -41,6 +41,7 @@ export {
   isBoundaryEdge,
   compassOf,
   edgeRoute,
+  labelWidth,
   outsideRoutes,
   isOutsideEdge,
   placeOutside,

@@ -112,9 +112,21 @@ const crossCount = computed(() => hiddenWith({})?.cross ?? 0)
         <span class="sw kind"><span class="chip">界外</span></span>
         <span
           >跨界折叠：一端是边界节点的束 {{ crossCount }} 条折叠进节点朝外一侧的「界外 入 · 出」记号，悬停或选中一端时画出<span class="hint"
-            >；违规、环上、逆稳定的束不论开关照画</span
+            >；违规、向上、逆稳定的束不论开关照画</span
           ></span
         >
+      </div>
+      <div class="item" data-testid="legend-exceptions">
+        <span class="sw kind"><span class="chip warn">向上</span></span>
+        <span>例外照画：违规、向上（依赖违背算出的层）、逆稳定、未解释；只是未解释、另一端在框外或共用件架上的仍折叠计数<span class="hint">（L42）</span></span>
+      </div>
+      <div class="item" data-testid="legend-cycle">
+        <span class="sw kind"><span class="chip warn">↻ N</span></span>
+        <span>环按组：环内的依赖静息态只计数（画布角「环内 N 条已收起」），单击节点上的环编号选中环组时画出</span>
+      </div>
+      <div class="item" data-testid="legend-direct">
+        <span class="sw kind"><span class="chip">另直连 N</span></span>
+        <span>可由别的路径推出的依赖（传递约简）静息态不画，依赖方节点下边右计数，悬停或选中节点时画出</span>
       </div>
 
       <div class="section-label">表面 · 入口导出与声明接口</div>
@@ -161,6 +173,11 @@ const crossCount = computed(() => hiddenWith({})?.cross ?? 0)
 </template>
 
 <style scoped>
+.chip.warn {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
 .sw.kind {
   width: 54px;
   justify-content: flex-start;

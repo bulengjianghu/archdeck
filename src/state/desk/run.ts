@@ -99,7 +99,17 @@ export function createRun({ state, index, levelId, plan, view, positioned, fileO
   /** 选中对象（步骤、场景、文件以外）在本场景中的参与（V6）；运行视角下才有 */
   const selectionParticipation = computed<Participation | null>(() => {
     const s = state.value.selection
-    if (!index.value || !path.value || !scenarioView.value || !s || s.kind === 'file' || s.kind === 'dep' || s.kind === 'couple' || s.kind === 'port')
+    if (
+      !index.value ||
+      !path.value ||
+      !scenarioView.value ||
+      !s ||
+      s.kind === 'file' ||
+      s.kind === 'dep' ||
+      s.kind === 'couple' ||
+      s.kind === 'port' ||
+      s.kind === 'cycle'
+    )
       return null
     return participation(index.value, path.value.frames, scenarioView.value, s, frameId())
   })

@@ -361,6 +361,20 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       <div v-if="foldHint" class="fold-hint" data-testid="fold-hint">{{ foldHint }} 个模块，考虑标出核心</div>
       <div v-for="h in tierHints" :key="h" class="fold-hint" data-testid="tier-hint">{{ h }}</div>
       <div v-if="structureCorner?.note" class="structure-note" data-testid="structure-note">{{ structureCorner.note }}</div>
+      <span
+        v-if="structureCorner?.reducibleHidden"
+        class="fold-hint"
+        data-testid="reducible-corner"
+        title="可由别的路径推出的依赖（传递约简，L42）静息态不画；依赖方节点下边右标「另直连 N」，悬停或选中节点时画出"
+        >另直连 {{ structureCorner.reducibleHidden }} 条已收起</span
+      >
+      <span
+        v-if="structureCorner?.cycleHidden"
+        class="fold-hint"
+        data-testid="cycle-corner"
+        title="环是组的属性（L42）：环内的依赖静息态只计数，单击节点上的「↻ N」选中环组或聚焦成员时画出"
+        >环内 {{ structureCorner.cycleHidden }} 条已收起</span
+      >
       <button
         v-if="structureCorner?.typeOnlyHidden"
         class="type-only"
