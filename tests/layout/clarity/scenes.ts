@@ -4,20 +4,26 @@
  *   普通层次：内部边 + 全部框外边一起走线（运行视角「全显」，框外边最多的情形）为一个场景。
  * 布局与产品一致：结构边（L15 并集布局）、分层总览的核心跨层束与按值依赖的分层（L28）由 state/desk/layoutLinks.ts 构造，代码事实按 vite/readHealth.ts 同样读出。
  * 层带的层号、环组框的环编号是文字区（障碍），环组框是框线。
- * 标签文字取画布同一口径：把手角标（L23b）或 ×N（L10）。只看交互视角的线；结构视角的束另有口径，不在这里。
+ * 标签文字取画布同一口径：把手角标（L23b）或 ×N（L10）。
+ * 结构视角（有代码事实时）另成一组：缺省显示偏好下画出来的束——照画的异常束（基线外违规、环上、逆稳定，L15a①）、
+ *   交互使用与值使用的兄弟束（只引类型收起 B1、一端是边界节点的折叠 B2、共用件按 O13② 收起），走线与标签同画布（canvas/structure.ts、edges.ts）。
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import {
   assignFiles,
   governanceReport,
+  isTarget,
+  levelFacts,
   levelTiers,
   loadModel,
+  shelfOf,
   projectLevel,
   structureView,
   type GovernanceReport,
   type LevelView,
   type ModelIndex,
+  type StructureView,
   type ViewEdge,
 } from '../../../src/model'
 import {
@@ -34,6 +40,8 @@ import {
   type PositionedView,
 } from '../../../src/layout/layout'
 import { routeMidpoint } from '../../../src/layout/canvas'
+import { bundleItem, depViewEdge, routeToPoint } from '../../../src/layout/canvas/structure'
+import { composeLabel } from '../../../src/layout/canvas/labels'
 import { readModelDir } from '../../../vite/readModelDir'
 import { readSourceTree } from '../../../vite/readSource'
 import { readCodeDeps } from '../../../vite/readDeps'
@@ -107,7 +115,52 @@ export interface LevelResult {
   counts: Counts
 }
 
-export async function checkLevel({ index, report }: Project, level: string): Promise<LevelResult | null> {
+/**
+ * 结构视角缺省（不聚焦、不展开表面、显示偏好全关）时画出来的束——与 facts.ts 的 anomalies / structureDisplay、canvas/structure.ts 的 keep 同口径。
+ */
+function structureLines(
+  index: ModelIndex,
+  view: LevelView,
+  sv: Extract<StructureView, { facts: true }>,
+  report: GovernanceReport,
+  pv: PositionedView,
+): CheckLine[] {
+  const facts = levelFacts(index, view, report)
+  const cycEdges = new Set(facts.levelCycles.flatMap(c => c.edges.map(e => `${e.from}->${e.to}`)))
+  const odd = (b: (typeof sv.bundles)[number]) =>
+    b.ruling.status === 'new' || b.ruling.status === 'open' || cycEdges.has(`${b.from}->${b.to}`) || b.againstStability
+  const bnd = new Set(view.nodes.filter(n => n.role === 'boundary' || n.rim || (index.modules.has(n.moduleId) && isTarget(index, n.moduleId))).map(n => n.id))
+  const shelf = shelfOf(view)
+  const inCycle = (b: { from: string; to: string }) => facts.cycles.get(b.from) !== undefined && facts.cycles.get(b.from) === facts.cycles.get(b.to)
+  const shown = sv.bundles.filter(b => {
+    if (odd(b)) return true
+    if (b.tier === 'type') return false
+    if (bnd.has(b.from) || bnd.has(b.to)) return false
+    if (shelf.has(b.from) || shelf.has(b.to)) return inCycle(b) || (shelf.has(b.from) && !shelf.has(b.to))
+    return true
+  })
+  const items = shown.map(b => bundleItem(index, b, []))
+  const outside = view.mode === 'layered' ? new Map<string, EdgeRoute>() : outsideRoutes(pv, items.map(depViewEdge))
+  return items.flatMap(e => {
+    const r =
+      outside.get(e.id) ??
+      pv.edges.get(e.id) ??
+      (shelf.has(e.from) || shelf.has(e.to) ? routeToPoint(pv.nodes.get(e.from), undefined, pv.nodes.get(e.to)) : undefined)
+    if (!r) return []
+    const head = e.look.rest ? `×${e.look.elements} 其余` : e.look.elements ? `×${e.look.elements} 元素` : ''
+    const tags = [...(e.look.violation === 'new' ? [{ tag: '违规' as const }] : []), ...(e.look.unexplained ? [{ tag: '未解释' as const }] : [])]
+    const text = [composeLabel(head, tags), e.look.bypass ? '越过入口' : '', e.look.against ? '逆稳定' : ''].filter(Boolean).join(' · ')
+    const at = r.label ?? routeMidpoint(r)
+    return [{ id: e.id, points: r.points, ...(r.curve ? { curve: r.curve } : {}), ...(text ? { label: { at, text } } : {}), ends: [e.from, e.to] as const }]
+  })
+}
+
+/** perspective：interaction 为交互视角的线（缺省）；structure 为结构视角的束（只在有代码事实时，否则为 null） */
+export async function checkLevel(
+  { index, report }: Project,
+  level: string,
+  perspective: 'interaction' | 'structure' = 'interaction',
+): Promise<LevelResult | null> {
   let view: LevelView
   try {
     view = projectLevel(index, level)
@@ -121,7 +174,10 @@ export async function checkLevel({ index, report }: Project, level: string): Pro
   const pv = { ...(await layoutView(view, {}, baseLayoutLinks(index, view, sv, report, tiers))), view }
   const { obstacles, frames, anchors } = obstaclesOf(pv)
   const scenes: Scene[] = []
-  if (view.mode === 'layered') {
+  if (perspective === 'structure') {
+    if (!sv.facts || !report) return null
+    scenes.push({ lines: structureLines(index, view, sv, report, pv), obstacles, frames, anchors })
+  } else if (view.mode === 'layered') {
     const base = view.edges.flatMap(e => {
       const r = pv.edges.get(e.id)
       return r ? [lineOf(index, view, e, r)] : []
@@ -152,12 +208,15 @@ export async function checkLevel({ index, report }: Project, level: string): Pro
 }
 
 /** facts 为 false 时按没有代码事实的布局量（设计版本、提交版本：只按交互边与允许边，不分层） */
-export async function checkProject(id: string, opts: { facts?: boolean } = {}): Promise<{ levels: LevelResult[]; total: Counts }> {
+export async function checkProject(
+  id: string,
+  opts: { facts?: boolean; perspective?: 'interaction' | 'structure' } = {},
+): Promise<{ levels: LevelResult[]; total: Counts }> {
   const loaded = loadProject(id)
   const project = opts.facts === false ? { ...loaded, report: null } : loaded
   const levels: LevelResult[] = []
   for (const level of levelIds(project.index)) {
-    const r = await checkLevel(project, level)
+    const r = await checkLevel(project, level, opts.perspective)
     if (r) levels.push(r)
   }
   const total = countFindings(levels.flatMap(l => l.findings.map(f => ({ ...f, ids: [l.level, ...f.ids] }))))

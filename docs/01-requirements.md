@@ -599,6 +599,10 @@ SK-6–SK-11 是叠在分层总览上的编辑态（ADR-0024），由 SK-12–SK
 5. `npx vitest run tests/layout/clarity` 通过；`CLARITY_REPORT=1` 打印的计数不高于测试里的上限（L30）。
 6. 本项目 `model.governance`、`present.panel`（运行视角「全显」）：没有端口记号的节点扇入的进边沿整条上边排开，箭头不叠（L11、L13；`tests/layout/layout.test.ts`「没有端口记号的节点不保留后半」）。
 
+### 6.27（空号）
+
+束干线的验收，随 ADR-0040 否决删除；结构视角的线由 L30 的结构视角一组守住（`tests/layout/clarity`）。
+
 ## 7. 后续方向
 
 1. **演化的时间轴**：两个提交之间的对比已实现（DV-8），后续沿时间轴连续回看、按提交看描述规模与问题数的趋势。

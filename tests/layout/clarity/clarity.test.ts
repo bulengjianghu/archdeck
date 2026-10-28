@@ -166,7 +166,7 @@ describe('L30 几何检查器', () => {
 })
 
 /**
- * 三个项目所有层次（交互视角的线，分层总览含逐个聚焦核心模块，普通层次含全部框外边）的计数上限：只降不升。
+ * 三个项目所有层次（交互视角的线，分层总览含逐个聚焦核心模块，普通层次含全部框外边）的计数上限：只降不升；结构视角另见 STRUCTURE。
  * 布局与产品一致（state/desk/layoutLinks.ts：结构边、核心跨层束、按值依赖的分层）；BARE 为没有代码事实时的布局（设计版本、提交版本）。
  */
 const CEILING: Record<(typeof PROJECTS)[number], Counts> = {
@@ -178,6 +178,15 @@ const BARE: Record<(typeof PROJECTS)[number], Counts> = {
   'h5p-arch-desk': { overlap: 38, arrows: 0, crossNode: 3, labels: 1, hug: 6, onFrame: 0 },
   h5player: { overlap: 96, arrows: 0, crossNode: 0, labels: 2, hug: 13, onFrame: 0 },
   'media-web-player': { overlap: 35, arrows: 0, crossNode: 1, labels: 0, hug: 6, onFrame: 0 },
+}
+/**
+ * 结构视角（有代码事实，缺省显示偏好）画出来的束：基线录于 75ec65f 的布局（第十三轮修复，ADR-0040 否决节）。
+ * 任何常显的线都由所在视角的检查器测量（第十三轮评审 M7）；改变结构视角画线规则的改动，在这一组上量前后。
+ */
+const STRUCTURE: Record<(typeof PROJECTS)[number], Counts> = {
+  'h5p-arch-desk': { overlap: 3, arrows: 0, crossNode: 1, labels: 1, hug: 0, onFrame: 0 },
+  h5player: { overlap: 32, arrows: 0, crossNode: 0, labels: 18, hug: 4, onFrame: 0 },
+  'media-web-player': { overlap: 1, arrows: 0, crossNode: 0, labels: 1, hug: 0, onFrame: 0 },
 }
 // ADR-0039 修订 1（没有端口记号的节点进边用整条边）后重定：h5p 箭头叠 25 → 1、重合 98 → 64；elk 端口约束变了、节点随之重排，
 // 少数几类小幅上升（h5p 贴框 4 → 9，h5player 贴框 13 → 18、无代码事实的重合 66 → 96，media 压节点 5 → 7），明细与取舍见第十二轮 C-08 报告
@@ -192,4 +201,9 @@ describe('L30 计数回归（只降不升）', () => {
         const { total } = await checkProject(p, { facts })
         for (const k of KINDS) expect({ kind: k, count: total[k] }).toEqual({ kind: k, count: Math.min(total[k], limits[p][k]) })
       }, 180000)
+  for (const p of PROJECTS)
+    it(`${p}（结构视角）`, async () => {
+      const { total } = await checkProject(p, { perspective: 'structure' })
+      for (const k of KINDS) expect({ kind: k, count: total[k] }).toEqual({ kind: k, count: Math.min(total[k], STRUCTURE[p][k]) })
+    }, 180000)
 })
