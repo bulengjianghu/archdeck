@@ -31,6 +31,8 @@ test('系统面板「演化」列出热度前 10；模块树可按热度排序',
   await openDesk(page, '/p/h5p-arch-desk')
   const panel = page.locator('.panel')
   await expect(panel).toContainText('演化（git 历史）')
+  // G11 V14c：系统面板的演化与模块层同规——默认折叠带计数，展开再断言
+  await panel.getByRole('button', { name: /^▸ 演化（git 历史）/ }).click()
   await expect(panel).toContainText(/修改热度前 10/)
   await expect(panel.locator('.top li')).toHaveCount(10)
   // 两种口径分开写（J4）：总数含上级并集，清单只列最具体的对
