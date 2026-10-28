@@ -5,8 +5,8 @@
  * - K18：元素清单——种类 · 声明状态 · 扇入 · 使用它的模块（单击定位模块），按扇入降序，长清单先列 15 条；
  *   L20b：模块有子模块的元素时按所属子模块分组（子模块按声明顺序、本体在后），组内按扇入降序，组首标子模块名；
  *   端口类元素与「端口」一节（K11）互相定位；画布单击元素（surfaceFocus）时滚到该元素；
- * - C3：越过入口清单（依赖方文件:行 → 符号）；
- * - C4：建议——提升到入口（越过入口用到的符号）/ 声明接口（导出未声明、扇入 ≥ HOT_SURFACE_MODULES，U19）/ 改经入口（越过入口的依赖方）。
+ * - C3：越过入口清单（依赖方文件:行 → 符号）——G12：二级折叠带计数（O11 面板版），常显只留 W / B 度量与元素清单；
+ * - C4：建议（提升到入口 / 声明接口 / 改经入口）——G12：折叠带计数。
  * 只读 desk.facts 的派生（surfaceOf、surfaceMetricsOf）。
  */
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
@@ -72,6 +72,8 @@ const promote = computed(() => [...new Set(bypasses.value.flatMap(f => f.names ?
 const viaFiles = computed(() => [...new Set(bypasses.value.map(f => f.via))])
 const fromFiles = computed(() => new Set(bypasses.value.map(f => f.from)).size)
 const declare = computed(() => rows.value.filter(r => r.element.state === 'exported-only' && r.fanIn >= HOT_SURFACE_MODULES))
+/** G12：建议折叠的计数——提升到入口 / 声明接口 / 改经入口各一条 */
+const adviceCount = computed(() => (bypasses.value.length ? 1 : 0) + (declare.value.length ? 1 : 0) + (bypasses.value.length ? 1 : 0))
 
 /** 端口类元素 ↔ 「端口」一节（K11） */
 const root = ref<HTMLElement | null>(null)
@@ -165,39 +167,47 @@ watch([focus, rows], () => nextTick(reveal))
         </li>
       </ul>
 
-      <div v-if="bypasses.length" class="bypasses" aria-label="越过入口">
-        <div class="sub-head">
-          越过入口<span class="muted"> · {{ bypasses.length }} 条</span>
-        </div>
-        <ul class="plain">
-          <li v-for="(f, i) in bypasses.slice(0, 10)" :key="`${f.from}:${f.line}:${f.to}:${i}`" class="bypass">
-            <button class="link mono" :title="`在副栏预览 ${f.from} 第 ${f.line} 行`" @click="openPreview(f.from, f.line)">{{ f.from }}:{{ f.line }}</button>
-            <span class="muted">→</span>
-            <code v-if="f.names?.length">{{ f.names.join(', ') }}</code>
-            <span v-else class="muted mono">{{ f.via }}</span>
-          </li>
-          <li v-if="bypasses.length > 10" class="muted">另 {{ bypasses.length - 10 }} 条</li>
-        </ul>
+      <div v-if="bypasses.length" class="fold-block" aria-label="越过入口">
+        <!-- G12：常显节内二级折叠、折叠必有计数（O11 面板版）——越过入口清单收起，只留 B 度量 -->
+        <details>
+          <summary>
+            越过入口<span class="muted"> · {{ bypasses.length }} 条</span>
+          </summary>
+          <ul class="plain">
+            <li v-for="(f, i) in bypasses.slice(0, 10)" :key="`${f.from}:${f.line}:${f.to}:${i}`" class="bypass">
+              <button class="link mono" :title="`在副栏预览 ${f.from} 第 ${f.line} 行`" @click="openPreview(f.from, f.line)">{{ f.from }}:{{ f.line }}</button>
+              <span class="muted">→</span>
+              <code v-if="f.names?.length">{{ f.names.join(', ') }}</code>
+              <span v-else class="muted mono">{{ f.via }}</span>
+            </li>
+            <li v-if="bypasses.length > 10" class="muted">另 {{ bypasses.length - 10 }} 条</li>
+          </ul>
+        </details>
       </div>
 
-      <div v-if="bypasses.length || declare.length" class="advice" aria-label="建议">
-        <div class="sub-head">建议</div>
-        <ul class="plain">
-          <li v-if="bypasses.length" data-advice="promote">
-            <b>提升到入口</b>：把<template v-if="promote.length">
-              <code>{{ promote.slice(0, 8).join(', ') }}</code
-              ><template v-if="promote.length > 8"> 等 {{ promote.length }} 个</template></template
-            ><template v-else> {{ viaFiles.slice(0, 3).join('、') }} 里用到的符号</template>加进入口<template v-if="sm?.entry">
-              <code>{{ sm.entry }}</code></template
-            >
-            的导出
-          </li>
-          <li v-if="declare.length" data-advice="declare">
-            <b>声明接口</b>：<code>{{ declare.map(r => r.element.name).join(', ') }}</code> 被 ≥
-            {{ HOT_SURFACE_MODULES }} 个模块使用而没有声明接口，在描述里声明（04 §3.3）
-          </li>
-          <li v-if="bypasses.length" data-advice="via-entry"><b>改经入口</b>：{{ fromFiles }} 个依赖方文件改为从入口导入，不直接导入模块内部的文件</li>
-        </ul>
+      <div v-if="bypasses.length || declare.length" class="fold-block" aria-label="建议">
+        <!-- G12：建议折叠带计数（提升到入口 / 声明接口 / 改经入口各一条） -->
+        <details>
+          <summary>
+            建议<span class="muted"> · {{ adviceCount }} 条</span>
+          </summary>
+          <ul class="plain">
+            <li v-if="bypasses.length" data-advice="promote">
+              <b>提升到入口</b>：把<template v-if="promote.length">
+                <code>{{ promote.slice(0, 8).join(', ') }}</code
+                ><template v-if="promote.length > 8"> 等 {{ promote.length }} 个</template></template
+              ><template v-else> {{ viaFiles.slice(0, 3).join('、') }} 里用到的符号</template>加进入口<template v-if="sm?.entry">
+                <code>{{ sm.entry }}</code></template
+              >
+              的导出
+            </li>
+            <li v-if="declare.length" data-advice="declare">
+              <b>声明接口</b>：<code>{{ declare.map(r => r.element.name).join(', ') }}</code> 被 ≥
+              {{ HOT_SURFACE_MODULES }} 个模块使用而没有声明接口，在描述里声明（04 §3.3）
+            </li>
+            <li v-if="bypasses.length" data-advice="via-entry"><b>改经入口</b>：{{ fromFiles }} 个依赖方文件改为从入口导入，不直接导入模块内部的文件</li>
+          </ul>
+        </details>
       </div>
     </Section>
   </div>
@@ -296,11 +306,27 @@ watch([focus, rows], () => nextTick(reveal))
   font-size: 12px;
 }
 
-.sub-head {
+/* G12：常显节内二级折叠（O11 面板版：折叠必有计数） */
+.fold-block summary {
   margin: 8px 0 2px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-2);
+  cursor: pointer;
+  list-style: none;
+}
+
+.fold-block summary::-webkit-details-marker {
+  display: none;
+}
+
+.fold-block summary::before {
+  content: '▸ ';
+  color: var(--text-3);
+}
+
+.fold-block details[open] summary::before {
+  content: '▾ ';
 }
 
 .bypass {

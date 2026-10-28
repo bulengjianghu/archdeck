@@ -290,6 +290,54 @@ modules:
     expect(based.row('违规').attributes('title')).toContain('声明的架构规则对代码事实的违规')
     expect(based.row('违规').attributes('title')).toContain('返工清单的 info 级提示（K24 层符合性）不在此计数')
   })
+
+  it('G12（V16）：健康度按对象分组——确认 / 依赖 / 关系常显、治理组折叠带计数；拦截记录与外部依赖折叠带计数', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+    await router.push('/')
+    const desk = createDeskState(async () => ({ dir: 'model/test', files: [...scenarioFiles(), { path: 'modules/zz-refs.yaml', text: REFS }] }), {
+      source: {
+        ...source,
+        facts: async () => ({
+          deps: {
+            deps: [{ from: 'src/app/s.ts', to: 'src/framework/extra.ts', via: 'src/framework/extra.ts', kind: 'value', line: 7 }],
+            external: { vue: 12, yaml: 3 },
+            parsed: 2,
+          },
+          baseline: null,
+          ledger: [
+            { at: 't1', tool: 'check_dependency', client: 'cli', from: 'a', to: 'b', verdict: 'denied', rules: ['layer'], cycle: false },
+            { at: 't2', tool: 'rescan', client: 'cli', violations: 1, newViolations: 0, cyclicity: { modules: 2, files: 0 } },
+          ],
+        }),
+      },
+    })
+    desk.attachRouter(router)
+    await desk.init()
+    await flushPromises()
+    const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+    await flushPromises()
+    // 常显组：确认 / 依赖 / 关系
+    expect(wrapper.findAll('.grp-head').map(x => x.text())).toEqual(['确认', '依赖', '关系'])
+    // 治理组折叠带计数（违规 + 模块环 + 未解释的交互），缺省收起
+    const gov = wrapper.find('details.fold-gov')
+    expect(gov.exists()).toBe(true)
+    expect(gov.attributes('open')).toBeUndefined()
+    expect(gov.find('summary').text()).toMatch(/治理\s*·\s*\d/)
+    await gov.find('summary').trigger('click')
+    const dts = gov.findAll('dt').map(x => x.text())
+    expect(dts).toContain('违规')
+    expect(dts).toContain('环度')
+    expect(dts).toContain('基线')
+    // 外部依赖（按导入次数）折叠带计数（包数）
+    const ext = wrapper.findAll('details.g-fold').find(x => x.text().includes('外部依赖'))!
+    expect(ext.find('summary').text()).toContain('外部依赖（按导入次数）')
+    expect(ext.find('summary').text()).toMatch(/2/)
+    expect(ext.attributes('open')).toBeUndefined()
+    // 拦截记录折叠带计数（写前判定次数）
+    const ledger = wrapper.findAll('details.g-fold').find(x => x.text().includes('拦截记录'))!
+    expect(ledger.find('summary').text()).toMatch(/拦截记录（agent 接口）\s*1/)
+    expect(ledger.attributes('open')).toBeUndefined()
+  })
 })
 
 describe('K6：关系面板的未证实分档', () => {

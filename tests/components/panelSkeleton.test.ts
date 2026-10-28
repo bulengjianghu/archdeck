@@ -231,6 +231,26 @@ modules:
     expect(wrapper.find('.notice-sec').exists()).toBe(false)
   })
 
+  it('G12（V16）：架构治理节内「生效的规则」折叠带计数；违规 / 环明细保持带计数（异常计数已在 ③，节内供跳转落点）', async () => {
+    const { wrapper } = await openWithFacts('/?v=s&sel=m:infra')
+    // ⑤ 的架构治理缺省折叠：先展开（③ 单击也会展开）
+    await wrapper.find('[data-sec="evidence.governance"] .fold').trigger('click')
+    const rules = wrapper.find('.rules-fold')
+    expect(rules.exists()).toBe(true)
+    // infra 是声明层（mayDependOn [app, domain]）：生效的规则 1 条
+    expect(rules.find('summary').text()).toMatch(/生效的规则\s*·\s*1/)
+    expect(rules.attributes('open')).toBeUndefined()
+    await rules.find('summary').trigger('click')
+    expect(rules.text()).toContain('所在层 infra')
+    // 异常明细不折叠：违规 / 所在的模块环仍是 h4 明细
+    expect(
+      wrapper
+        .findAll('[data-sec="evidence.governance"] h4')
+        .map(x => x.text())
+        .join('|'),
+    ).toContain('违规')
+  })
+
   it('模块环与本层环各自一行、各自计数（评审轮 1 A2）：样例事实两类环同时存在，③ 出两行', async () => {
     const { wrapper } = await openWithFacts('/?v=s&sel=m:infra')
     const rows = wrapper.findAll('.notice-sec .notice')

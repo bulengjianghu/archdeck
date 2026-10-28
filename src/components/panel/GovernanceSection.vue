@@ -2,6 +2,8 @@
 /**
  * 根层面板的「架构治理」一节（GV-7）：代码事实统计、违规按新增 / 已知 / 已豁免、环与环度对比基线、拦截记录摘要。
  * 没有代码事实时说明原因（K8）。
+ * G12：健康度指标按对象分组（确认 / 依赖 / 关系常显，治理组折叠带计数——异常计数已在 ③，O11 面板版）；
+ * 「拦截记录（agent 接口）」「外部依赖（按导入次数）」折叠带计数。
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -81,6 +83,8 @@ const portOfIssue = (i: Issue) => [...(desk.index.value?.interfaces.values() ?? 
 const liveCycles = computed(() => (r.value?.moduleCycles ?? []).filter(c => !c.tolerated))
 const maxCycle = computed(() => Math.max(0, ...liveCycles.value.map(c => c.members.length)))
 const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c.tolerated).length)
+/** G12：健康度「治理」组折叠的计数——违规、模块环、未解释的交互（与 ③ 同源的治理信号数） */
+const governanceCount = computed(() => (r.value ? r.value.violations.length + liveCycles.value.length + r.value.undescribed.length : 0))
 </script>
 
 <template>
@@ -91,86 +95,111 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
         核心模块已确认 {{ rc.reviewed }} / {{ rc.scope }} · <span :class="{ warn: rc.stale }">需复核 {{ rc.stale }}</span>
       </dd>
     </dl>
+    <!-- G12：健康度按对象分组——确认 / 依赖 / 关系常显，治理组折叠带计数（异常计数已在 ③） -->
+    <div class="grp">
+      <div class="grp-head">确认</div>
+      <dl class="kv review-line" :title="`确认范围：核心模块与第二级模块（Z4）；已确认 ${rc.reviewed} / ${rc.scope}，需复核 ${rc.stale}`">
+        <dt>确认</dt>
+        <dd>
+          核心模块已确认 {{ rc.reviewed }} / {{ rc.scope }} · <span :class="{ warn: rc.stale }">需复核 {{ rc.stale }}</span>
+        </dd>
+      </dl>
+    </div>
     <p v-if="!r" class="muted">{{ f.error.value ? `没有代码事实：${f.error.value}` : REASON[f.status.value] }}</p>
     <template v-else>
-      <dl class="kv">
-        <dt>文件依赖</dt>
-        <dd>
-          {{ r.fileDeps }}<span v-if="r.skipped" class="muted">（一端未归属或已忽略 {{ r.skipped }}）</span
-          ><span v-if="r.conflicted.length" class="muted">（因归属冲突未计入 {{ r.conflicted.length }}）</span>
-        </dd>
-        <dt>模块依赖</dt>
-        <dd>{{ r.moduleDeps.size }}</dd>
-        <dt>关系</dt>
-        <dd>
-          已证实 {{ confirm.confirmed }} · <span :class="{ warn: confirm.unconfirmed }">未证实 {{ confirm.unconfirmed }}</span>
-        </dd>
-        <dt>未解释的交互</dt>
-        <dd>{{ r.undescribed.length }}</dd>
-        <dt>交互分类</dt>
-        <dd data-testid="interaction-health" title="未分类：迁移期的 calls（M17），只确认核心之间的；查询副作用：查询的场景闭包里有委托或通知（U13）">
-          <span :class="{ warn: unclassified.core }">未分类 {{ unclassified.all }}（核心之间 {{ unclassified.core }}）</span> ·
-          <span :class="{ warn: sideEffects.length }">查询副作用 {{ sideEffects.length }}</span>
-        </dd>
-        <dt>端口</dt>
-        <dd data-testid="port-health" title="端口：被 via: port: 引用、或有实现者的接口（K11）；子类与组装是代码事实，不是关系（K12、K13）">
-          {{ portCount }} 个 ·
-          <span :class="{ warn: portProblems.some(i => i.code === 'port.no-implementer') }"
-            >无实现者 {{ portProblems.filter(i => i.code === 'port.no-implementer').length }}</span
-          >
-          · 无使用者 {{ portProblems.filter(i => i.code === 'port.no-user').length }} · 子类 {{ r.subclasses.length }} · 组装 {{ r.assembly.length }}（组装根
-          {{ r.assemblyRoots.length }}）
-        </dd>
-        <dt>违规</dt>
-        <dd :title="violationTitle">
-          <template v-if="r.baseline">
-            <span :class="{ bad: r.gate.newViolations }">{{ signed(r.gate.newViolations - r.gate.resolved) }}</span>
-            <span class="stock"> · 存量 {{ counted }}</span>
-            <span class="muted">（相对基线：新增 {{ r.gate.newViolations }} · 已消除 {{ r.gate.resolved }}）</span>
-          </template>
-          <template v-else>{{ counted }} <span class="muted">（无基线）</span></template>
-        </dd>
-        <dt>模块环</dt>
-        <dd :title="`不含容忍的环；文件环 ${liveFileCycles} 个`">
-          {{ liveCycles.length }} 个<template v-if="liveCycles.length"> · 最大 {{ maxCycle }}</template>
-        </dd>
-        <dt>环度</dt>
-        <dd
-          :title="`模块 ${r.cyclicity.modules} · 文件 ${r.cyclicity.files}${r.baseline ? `（基线 ${r.baseline.cyclicity.modules} · ${r.baseline.cyclicity.files}）` : ''}`"
-        >
-          <template v-if="r.baseline">
-            模块
-            <span :class="trendClass(r.cyclicity.modules, r.baseline.cyclicity.modules)">{{ trend(r.cyclicity.modules, r.baseline.cyclicity.modules) }}</span> ·
-            文件
-            <span :class="trendClass(r.cyclicity.files, r.baseline.cyclicity.files)">{{ trend(r.cyclicity.files, r.baseline.cyclicity.files) }}</span>
-          </template>
-          <template v-else>模块 {{ r.cyclicity.modules }} · 文件 {{ r.cyclicity.files }} <span class="muted">（无基线）</span></template>
-        </dd>
-        <template v-if="shared">
-          <dt>共用件</dt>
-          <dd
-            data-testid="shared-health"
-            :title="`共用件 ${shared.modules} 个；行数占比阈值 ${pct(shared.limits.lines)}、修改占比阈值 ${pct(shared.limits.changes)}（Q13）`"
-          >
-            <span :class="{ warn: shared.reverse }">反向依赖 {{ shared.reverse }}</span> · 体量
-            <span :class="{ warn: shared.over }">行数 {{ pct(shared.lineRatio) }} · 修改 {{ pct(shared.changeRatio) }}</span>
-            <span v-if="shared.over" class="warn">（超阈值）</span>
-            <template v-if="shared.topFanIn">
-              ·
-              <span data-testid="shared-top" title="扇入 Ca 最大的共用件：改它牵动的模块最多；只计数、不卡门禁（Q15）"
-                >入度最高 <button class="link" @click="desk.revealModule(shared.topFanIn.module)">{{ name(shared.topFanIn.module) }}</button> Ca
-                {{ shared.topFanIn.ca }}（占 {{ pct(shared.topFanIn.ratio) }}）</span
-              >
-            </template>
+      <div class="grp">
+        <div class="grp-head">依赖</div>
+        <dl class="kv">
+          <dt>文件依赖</dt>
+          <dd>
+            {{ r.fileDeps }}<span v-if="r.skipped" class="muted">（一端未归属或已忽略 {{ r.skipped }}）</span
+            ><span v-if="r.conflicted.length" class="muted">（因归属冲突未计入 {{ r.conflicted.length }}）</span>
           </dd>
-        </template>
-        <dt>基线</dt>
-        <dd v-if="r.baseline">
-          {{ r.baseline.createdAt.slice(0, 10) }}<code v-if="r.baseline.commit"> {{ r.baseline.commit.slice(0, 8) }}</code>
-          <span v-if="r.gate.resolved" class="ok">已消除 {{ r.gate.resolved }} 条，可收紧</span>
-        </dd>
-        <dd v-else class="muted">无（npm run arch -- baseline 生成）</dd>
-      </dl>
+          <dt>模块依赖</dt>
+          <dd>{{ r.moduleDeps.size }}</dd>
+        </dl>
+      </div>
+      <div class="grp">
+        <div class="grp-head">关系</div>
+        <dl class="kv">
+          <dt>关系</dt>
+          <dd>
+            已证实 {{ confirm.confirmed }} · <span :class="{ warn: confirm.unconfirmed }">未证实 {{ confirm.unconfirmed }}</span>
+          </dd>
+          <dt>未解释的交互</dt>
+          <dd>{{ r.undescribed.length }}</dd>
+          <dt>交互分类</dt>
+          <dd data-testid="interaction-health" title="未分类：迁移期的 calls（M17），只确认核心之间的；查询副作用：查询的场景闭包里有委托或通知（U13）">
+            <span :class="{ warn: unclassified.core }">未分类 {{ unclassified.all }}（核心之间 {{ unclassified.core }}）</span> ·
+            <span :class="{ warn: sideEffects.length }">查询副作用 {{ sideEffects.length }}</span>
+          </dd>
+          <dt>端口</dt>
+          <dd data-testid="port-health" title="端口：被 via: port: 引用、或有实现者的接口（K11）；子类与组装是代码事实，不是关系（K12、K13）">
+            {{ portCount }} 个 ·
+            <span :class="{ warn: portProblems.some(i => i.code === 'port.no-implementer') }"
+              >无实现者 {{ portProblems.filter(i => i.code === 'port.no-implementer').length }}</span
+            >
+            · 无使用者 {{ portProblems.filter(i => i.code === 'port.no-user').length }} · 子类 {{ r.subclasses.length }} · 组装 {{ r.assembly.length }}（组装根
+            {{ r.assemblyRoots.length }}）
+          </dd>
+        </dl>
+      </div>
+      <details class="grp fold-gov">
+        <summary>
+          治理<span class="muted"> · {{ governanceCount }}</span>
+        </summary>
+        <dl class="kv">
+          <dt>违规</dt>
+          <dd :title="violationTitle">
+            <template v-if="r.baseline">
+              <span :class="{ bad: r.gate.newViolations }">{{ signed(r.gate.newViolations - r.gate.resolved) }}</span>
+              <span class="stock"> · 存量 {{ counted }}</span>
+              <span class="muted">（相对基线：新增 {{ r.gate.newViolations }} · 已消除 {{ r.gate.resolved }}）</span>
+            </template>
+            <template v-else>{{ counted }} <span class="muted">（无基线）</span></template>
+          </dd>
+          <dt>模块环</dt>
+          <dd :title="`不含容忍的环；文件环 ${liveFileCycles} 个`">
+            {{ liveCycles.length }} 个<template v-if="liveCycles.length"> · 最大 {{ maxCycle }}</template>
+          </dd>
+          <dt>环度</dt>
+          <dd
+            :title="`模块 ${r.cyclicity.modules} · 文件 ${r.cyclicity.files}${r.baseline ? `（基线 ${r.baseline.cyclicity.modules} · ${r.baseline.cyclicity.files}）` : ''}`"
+          >
+            <template v-if="r.baseline">
+              模块
+              <span :class="trendClass(r.cyclicity.modules, r.baseline.cyclicity.modules)">{{ trend(r.cyclicity.modules, r.baseline.cyclicity.modules) }}</span>
+              · 文件
+              <span :class="trendClass(r.cyclicity.files, r.baseline.cyclicity.files)">{{ trend(r.cyclicity.files, r.baseline.cyclicity.files) }}</span>
+            </template>
+            <template v-else>模块 {{ r.cyclicity.modules }} · 文件 {{ r.cyclicity.files }} <span class="muted">（无基线）</span></template>
+          </dd>
+          <template v-if="shared">
+            <dt>共用件</dt>
+            <dd
+              data-testid="shared-health"
+              :title="`共用件 ${shared.modules} 个；行数占比阈值 ${pct(shared.limits.lines)}、修改占比阈值 ${pct(shared.limits.changes)}（Q13）`"
+            >
+              <span :class="{ warn: shared.reverse }">反向依赖 {{ shared.reverse }}</span> · 体量
+              <span :class="{ warn: shared.over }">行数 {{ pct(shared.lineRatio) }} · 修改 {{ pct(shared.changeRatio) }}</span>
+              <span v-if="shared.over" class="warn">（超阈值）</span>
+              <template v-if="shared.topFanIn">
+                ·
+                <span data-testid="shared-top" title="扇入 Ca 最大的共用件：改它牵动的模块最多；只计数、不卡门禁（Q15）"
+                  >入度最高 <button class="link" @click="desk.revealModule(shared.topFanIn.module)">{{ name(shared.topFanIn.module) }}</button> Ca
+                  {{ shared.topFanIn.ca }}（占 {{ pct(shared.topFanIn.ratio) }}）</span
+                >
+              </template>
+            </dd>
+          </template>
+          <dt>基线</dt>
+          <dd v-if="r.baseline">
+            {{ r.baseline.createdAt.slice(0, 10) }}<code v-if="r.baseline.commit"> {{ r.baseline.commit.slice(0, 8) }}</code>
+            <span v-if="r.gate.resolved" class="ok">已消除 {{ r.gate.resolved }} 条，可收紧</span>
+          </dd>
+          <dd v-else class="muted">无（npm run arch -- baseline 生成）</dd>
+        </dl>
+      </details>
       <p class="hint muted">图上缺省叠加代码事实（「显示」面板可关闭）：虚线加 ? 为未证实的关系，点线为未解释的交互，红色为基线外的违规，↻ 为本层的环。</p>
     </template>
   </Section>
@@ -257,13 +286,21 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
     </p>
   </Section>
 
-  <Section v-if="part !== 'summary' && r && externals.length" title="外部依赖（按导入次数）">
+  <!-- G12：外部依赖折叠带计数（按导入次数，列前 8） -->
+  <details v-if="part !== 'summary' && r && externals.length" class="g-fold">
+    <summary>
+      外部依赖（按导入次数）<span class="count">{{ externals.length }}</span>
+    </summary>
     <p class="muted ext">
       <span v-for="[pkg, n] in externals" :key="pkg">{{ pkg }} {{ n }}</span>
     </p>
-  </Section>
+  </details>
 
-  <Section v-if="part !== 'summary' && ledger && (ledger.checks || ledger.rescans)" title="拦截记录（agent 接口）">
+  <!-- G12：拦截记录折叠带计数（写前判定次数） -->
+  <details v-if="part !== 'summary' && ledger && (ledger.checks || ledger.rescans)" class="g-fold">
+    <summary>
+      拦截记录（agent 接口）<span class="count">{{ ledger.checks }}</span>
+    </summary>
     <dl class="kv">
       <dt>写前判定</dt>
       <dd>{{ ledger.checks }} 次：拒绝 {{ ledger.byVerdict.denied }} · 允许 {{ ledger.byVerdict.allowed }} · 无约束 {{ ledger.byVerdict.unconstrained }}</dd>
@@ -279,10 +316,86 @@ const liveFileCycles = computed(() => (r.value?.fileCycles ?? []).filter(c => !c
         </dd>
       </template>
     </dl>
-  </Section>
+  </details>
 </template>
 
 <style scoped>
+/* G12：健康度按对象分组的组头与治理组折叠 */
+.grp {
+  margin: 0 0 4px;
+}
+
+.grp + .grp,
+.grp + details,
+details + .grp {
+  margin-top: 6px;
+}
+
+.grp-head {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  letter-spacing: 0.02em;
+}
+
+.fold-gov summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+  list-style: none;
+}
+
+.fold-gov summary::-webkit-details-marker {
+  display: none;
+}
+
+.fold-gov summary::before {
+  content: '▸ ';
+  color: var(--text-3);
+}
+
+.fold-gov[open] summary::before {
+  content: '▾ ';
+}
+
+/* G12：外部依赖、拦截记录折叠（带计数） */
+.g-fold {
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.g-fold summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.g-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.g-fold summary::before {
+  content: '▸ ';
+}
+
+.g-fold[open] summary::before {
+  content: '▾ ';
+}
+
+.g-fold .count {
+  margin-left: 6px;
+  font-weight: 500;
+}
+
+.g-fold .kv,
+.g-fold .ext {
+  font-weight: 400;
+  margin-top: 6px;
+}
+
 .kv {
   display: grid;
   grid-template-columns: auto 1fr;

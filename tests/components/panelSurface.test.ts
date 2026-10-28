@@ -197,6 +197,27 @@ describe('C7：模块「表面」一节', () => {
     expect(advice.find('[data-advice="via-entry"]').text()).toContain('改经入口')
   })
 
+  it('G12（V16）：越过入口清单与建议二级折叠带计数，W / B 度量与元素清单常显', async () => {
+    const { wrapper } = await open('/?v=s&sel=m:lib')
+    const sec = wrapper.find('.module-surface')
+    // 越过入口清单：details 折叠、summary 带计数，缺省收起（O11 面板版）
+    const bp = sec.find('[aria-label="越过入口"] details')
+    expect(bp.exists()).toBe(true)
+    expect(bp.attributes('open')).toBeUndefined()
+    expect(bp.find('summary').text()).toContain('越过入口 · 1 条')
+    await bp.find('summary').trigger('click')
+    expect(bp.text()).toContain('src/c/c.ts:7')
+    // 建议：折叠带计数（提升到入口 / 声明接口 / 改经入口共 3 条）
+    const advice = sec.find('[aria-label="建议"] details')
+    expect(advice.exists()).toBe(true)
+    expect(advice.attributes('open')).toBeUndefined()
+    expect(advice.find('summary').text()).toContain('建议 · 3 条')
+    // 常显：W / B 度量与元素清单不折叠
+    expect(sec.find('dl.dims').exists()).toBe(true)
+    expect(sec.findAll('.element').length).toBeGreaterThan(0)
+    expect(sec.find('dl.dims .fold').exists()).toBe(false)
+  })
+
   it('没有入口时说明原因；交互视角没有这一节；没有代码事实时只有声明接口', async () => {
     const { wrapper, desk } = await open('/?v=s&sel=m:bare')
     expect(wrapper.find('.module-surface .no-entry').text()).toContain('没有入口')

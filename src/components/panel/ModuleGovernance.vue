@@ -1,5 +1,6 @@
 <script setup lang="ts">
-/** 模块面板的「架构治理」一节（GV-7、GV-9、Q1）：生效的规则、出入的违规与未解释的交互、所在的模块环与本层环（Y5） */
+/** 模块面板的「架构治理」一节（GV-7、GV-9、Q1）：生效的规则、出入的违规与未解释的交互、所在的模块环与本层环（Y5）。
+ * G12：⑤ 治理组内「生效的规则」明细折叠带计数（O11 面板版）；违规 / 环 / 未解释保持带计数——异常计数已在 ③，节内明细供跳转落点。 */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { RULE_LABELS, moduleName, type LevelCycleEdge } from '@/model'
@@ -16,6 +17,8 @@ const cycle = computed(() => (desk.selection.value?.kind === 'module' && desk.se
 /** 单击一条本层依赖：有同方向视图边时选中它，否则选中这对节点的代码依赖（K10） */
 const pick = (e: LevelCycleEdge) => desk.select(e.edgeId ? { kind: 'edge', id: e.edgeId } : { kind: 'dep', id: `${e.fromModule}->${e.toModule}` })
 const hasRules = computed(() => !!d.value && (d.value.rules.layers.length > 0 || d.value.rules.deps.length > 0 || d.value.rules.exposes.length > 0))
+/** G12：生效的规则折叠的计数——层的可依赖、模块例外、访问面各一条 */
+const rulesCount = computed(() => (d.value ? d.value.rules.layers.length + d.value.rules.deps.length + d.value.rules.exposes.length : 0))
 const empty = computed(
   () =>
     !!d.value &&
@@ -43,16 +46,23 @@ const anomalyCount = computed(() =>
 <template>
   <Section v-if="d && !empty" title="架构治理" :count="anomalyCount || undefined" :fold="props.fold">
     <div v-if="hasRules" class="block">
-      <h4>生效的规则</h4>
-      <ul class="plain">
-        <li v-for="l in d.rules.layers" :key="l.layer">所在层 {{ l.layer }} 只可依赖：{{ l.mayDependOn.join('、') || '无' }}</li>
-        <li v-for="r in d.rules.deps" :key="r.module">
-          {{ r.module }} 之外只许依赖：{{ r.mayDependOn.join('、') }}<span v-if="r.reason" class="muted">（{{ r.reason }}）</span>
-        </li>
-        <li v-for="e in d.rules.exposes" :key="e.module">
-          外部访问 {{ e.module }} 只许经由：{{ e.exposes.map(x => (x === 'entry' ? `入口 ${e.entry ?? '（无）'}` : x)).join('、') }}
-        </li>
-      </ul>
+      <!-- G12：生效的规则折叠带计数 -->
+      <details class="rules-fold">
+        <summary>
+          <h4>
+            生效的规则<span class="muted"> · {{ rulesCount }}</span>
+          </h4>
+        </summary>
+        <ul class="plain">
+          <li v-for="l in d.rules.layers" :key="l.layer">所在层 {{ l.layer }} 只可依赖：{{ l.mayDependOn.join('、') || '无' }}</li>
+          <li v-for="r in d.rules.deps" :key="r.module">
+            {{ r.module }} 之外只许依赖：{{ r.mayDependOn.join('、') }}<span v-if="r.reason" class="muted">（{{ r.reason }}）</span>
+          </li>
+          <li v-for="e in d.rules.exposes" :key="e.module">
+            外部访问 {{ e.module }} 只许经由：{{ e.exposes.map(x => (x === 'entry' ? `入口 ${e.entry ?? '（无）'}` : x)).join('、') }}
+          </li>
+        </ul>
+      </details>
     </div>
     <div v-if="d.violations.out.length || d.violations.in.length" class="block">
       <h4 class="bad">违规</h4>
@@ -128,6 +138,25 @@ h4 {
   margin: 0 0 2px;
   font-size: 12px;
   font-weight: 600;
+}
+
+/* G12：生效的规则折叠 */
+.rules-fold summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.rules-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.rules-fold summary::before {
+  content: '▸ ';
+  color: var(--text-3);
+}
+
+.rules-fold[open] summary::before {
+  content: '▾ ';
 }
 
 .bad {
