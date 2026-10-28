@@ -25,6 +25,7 @@ export type ReworkCategory =
   | 'owned'
   | 'unevidenced'
   | 'split'
+  | 'conformance'
 export const REWORK_CATEGORIES: readonly ReworkCategory[] = [
   'description',
   'violation',
@@ -44,6 +45,7 @@ export const REWORK_CATEGORIES: readonly ReworkCategory[] = [
   'owned',
   'unevidenced',
   'split',
+  'conformance',
 ]
 
 /** 严重度：error 卡门禁或剔除了实体；warning 描述与代码不一致；info 只提示（未解释的交互、已豁免） */
@@ -74,6 +76,7 @@ export type ReworkActionKind =
   | 'drop-role' // U12：取消共用件角色（改 intent/roles.yaml 或草图，架构师决定）
   | 'fix-surface' // U18、U19：改经入口导入或把符号提升到入口；热表面声明接口
   | 'split-file' // K21：先拆文件，再按文件划子模块
+  | 'check-layers' // K24：声明的层与实算不符——核对 order、模块归属，或改代码让依赖朝下
 
 export interface ReworkAction {
   kind: ReworkActionKind
@@ -144,6 +147,7 @@ export const REWORK_CATEGORY_LABELS: Record<ReworkCategory, string> = {
   port: '端口孤立',
   surface: '表面',
   split: '模块拆分与分层',
+  conformance: '层的符合性',
   'query-side-effect': '查询副作用',
   undescribed: '未解释的交互',
   unclassified: '未分类',

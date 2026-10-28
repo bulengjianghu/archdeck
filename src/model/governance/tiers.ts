@@ -261,6 +261,41 @@ export function layerUpward(index: ModelIndex, view: LevelView, opts: { core?: b
   return out
 }
 
+/** K24（第十四轮 F3）：声明的层与实算不符的一处——成环（声明为不同的层，实际互相依赖）或倒置（声明 above 在 below 之上，实算 above 在 below 之下） */
+export type LayerDrift = { kind: 'cycle'; parent: string; layers: string[] } | { kind: 'inverted'; parent: string; above: string; below: string; tiers: [number, number] }
+
+/**
+ * K24（第十四轮 F3）：结构符合性——分层总览（子模块全是声明的层）里，按层之间的值依赖（核心与共用件归到所在的带）用 L28 的算法实算层号，
+ * 与声明的 order 比对：成环的声明层、order 在上而实算在下的层对，都是漂移。mayDependOn 验「允许的依赖」，这里验「声称的结构」。
+ * 没有代码事实时不比对（无依赖可算）。只算、不判定确认状态：只对已确认的层报，由返工清单按确认状态过滤。
+ */
+export function layerDrift(index: ModelIndex, report: Pick<GovernanceReport, 'moduleDeps'>): LayerDrift[] {
+  const out: LayerDrift[] = []
+  for (const [parent, children] of index.childrenOf) {
+    if (children.length < 2 || !children.every(k => index.modules.get(k)?.kind === 'layer')) continue
+    const view = tierView(index, parent)
+    const bandOf = new Map<string, string>()
+    for (const b of view.bands ?? []) for (const id of [b.layerId, ...b.coreModuleIds, ...b.shelf]) bandOf.set(id, b.layerId)
+    const layers = (view.bands ?? []).map(b => b.layerId)
+    const order = new Map((view.bands ?? []).map(b => [b.layerId, b.order]))
+    const pairs = [...levelValueDeps(index, view, report).values()].flatMap(e => {
+      const a = bandOf.get(e.from)
+      const b = bandOf.get(e.to)
+      return a && b && a !== b ? [[a, b] as const] : []
+    })
+    const t = tierNodes(layers, pairs)
+    for (const g of t.groups) out.push({ kind: 'cycle', parent, layers: g })
+    for (const a of layers)
+      for (const b of layers) {
+        const ta = t.tier.get(a)
+        const tb = t.tier.get(b)
+        if (ta === undefined || tb === undefined || order.get(a)! >= order.get(b)! || ta <= tb) continue
+        out.push({ kind: 'inverted', parent, above: a, below: b, tiers: [ta, tb] })
+      }
+  }
+  return out
+}
+
 /** K21①②：一个父模块的子模块的拆分信号（只对有代码事实的当前版本） */
 export interface SplitSignals {
   /** ① 子树不占任何文件的子模块（父模块子树有文件时；目标态不算） */

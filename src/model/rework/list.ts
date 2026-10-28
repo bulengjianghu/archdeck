@@ -16,6 +16,7 @@ import {
   sharedHostOf,
   stepEvidence,
   tierFindings,
+  layerDrift,
   unconfirmedCode,
   unconfirmedReason,
   unconfirmedWarns,
@@ -157,6 +158,7 @@ export function reworkList(input: ReworkInput): ReworkList {
   if (source) items.push(...ownershipItems(index, source.own, source.tree, name, report?.conflicted), ...evidenceItems(index, source.tree))
   if (report) items.push(...factItems(index, report, name), ...surfaceItems(report), ...carrierItems(report))
   if (report && source) items.push(...splitItems(index, report, source.own))
+  if (report) items.push(...conformanceItems(index, report))
   items.push(...portItems(index, report ?? null), ...sideEffectItems(index, name), ...unclassifiedItems(index, name))
   items.push(...unmodeledItems(index, name))
   items.push(...reviewItems(index, name))
@@ -602,6 +604,37 @@ function splitItems(index: ModelIndex, report: GovernanceReport, own: SourceOwne
       ],
       target: relation ? { modules, relation } : { modules },
     }
+  })
+}
+
+// ── 层的符合性（K24，第十四轮 F3，info）：已确认的声明层与实算不符——成环一处一条、倒置一对一条；未确认的层不报（还只是主张，Z3） ──
+
+function conformanceItems(index: ModelIndex, report: GovernanceReport): ReworkItem[] {
+  const states = reviewStates(index)
+  const confirmed = (id: string) => states.get(id)?.status === 'reviewed'
+  const name = (id: string) => moduleName(index, id)
+  return layerDrift(index, report).flatMap(d => {
+    const layers = d.kind === 'cycle' ? d.layers : [d.above, d.below]
+    if (!layers.some(confirmed)) return []
+    const at = descLoc(index.modules.get(layers[0])?.src)
+    const title =
+      d.kind === 'cycle'
+        ? `声明的层 ${layers.map(l => `「${name(l)}」`).join('、')} 之间成环：实算是同一层（K24）`
+        : `声明「${name(d.above)}」在「${name(d.below)}」之上，实算在它之下（第 ${d.tiers[0] + 1} 层 / 第 ${d.tiers[1] + 1} 层，K24）`
+    return [
+      {
+        id: `conformance:${d.kind}:${layers.join(',')}`,
+        category: 'conformance' as const,
+        severity: 'info' as const,
+        rules: ['K24'],
+        code: 'tier.drift',
+        title,
+        ...(at ? { at } : {}),
+        affected: at ? [at] : [],
+        actions: [{ kind: 'check-layers' as const, text: '核对声明：层的次序或模块归属与依赖的实际方向不符——调整 order、把模块移到该在的层，或改代码让依赖朝下' }],
+        target: { modules: layers },
+      },
+    ]
   })
 }
 

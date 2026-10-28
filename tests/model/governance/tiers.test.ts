@@ -11,6 +11,8 @@ import {
   tierNodes,
   tierNoteText,
   layerUpward,
+  layerDrift,
+  reviewEntries,
   foldSpanText,
   DEFAULT_PROJECT_OPTIONS,
   isInversion,
@@ -279,5 +281,44 @@ relations:
     const issues = tierIssues(index, report, own).filter(i => i.code === 'tier.upward')
     expect(issues).toHaveLength(1)
     expect(issues[0].message).toContain('声明的层')
+  })
+})
+
+describe('K24 结构符合性（第十四轮 F3）', () => {
+  const LAYERED = `
+modules:
+  - { id: ui, name: UI, kind: layer, order: 1, abstraction: 呈现, responsibility: 界面, codeRefs: [src/ui/**] }
+  - { id: core, name: Core, kind: layer, order: 2, abstraction: 业务, responsibility: 业务, codeRefs: [src/core/**] }
+  - { id: base, name: Base, kind: layer, order: 3, abstraction: 底座, responsibility: 底座, codeRefs: [src/base/**] }
+`
+  const files = ['src/ui/a.ts', 'src/core/b.ts', 'src/base/c.ts']
+  function setupLayers(deps: FileDep[]) {
+    const { index } = loadModel([
+      { path: 'system.yaml', text: 'system: { id: sys, name: Sys }' },
+      { path: 'modules/a.yaml', text: LAYERED },
+    ])
+    const own = assignFiles(index, files, [])
+    const report = governanceReport(index, own, { files, packages: {} }, { deps, external: {}, parsed: files.length }, null)
+    return { index, own, report }
+  }
+
+  it('依赖与声明一致时没有漂移；声明在上、实算在下为倒置；声明的层互相依赖为成环', () => {
+    const ok = setupLayers([dep('src/ui/a.ts', 'src/core/b.ts'), dep('src/core/b.ts', 'src/base/c.ts')])
+    expect(layerDrift(ok.index, ok.report)).toEqual([])
+    const inv = setupLayers([dep('src/core/b.ts', 'src/ui/a.ts'), dep('src/ui/a.ts', 'src/base/c.ts')])
+    expect(layerDrift(inv.index, inv.report)).toContainEqual({ kind: 'inverted', parent: inv.index.rootId, above: 'ui', below: 'core', tiers: [1, 0] })
+    const cyc = setupLayers([dep('src/ui/a.ts', 'src/core/b.ts'), dep('src/core/b.ts', 'src/ui/a.ts')])
+    expect(layerDrift(cyc.index, cyc.report)).toContainEqual({ kind: 'cycle', parent: cyc.index.rootId, layers: ['ui', 'core'] })
+  })
+
+  it('返工清单只报已确认的层（info，类别「层的符合性」）；未确认的还是主张，不报', () => {
+    const inv = setupLayers([dep('src/core/b.ts', 'src/ui/a.ts')])
+    const before = reworkList({ index: inv.index, issues: [], report: inv.report, source: { own: inv.own, tree: { files, packages: {} } } })
+    expect(before.items.some(i => i.category === 'conformance')).toBe(false)
+    inv.index.model.reviewed.push(...reviewEntries(inv.index, ['ui'], { source: 'manual' }).map(e => ({ ...e, src: { file: 'reviewed.yaml', path: 'reviewed.0' } })))
+    const after = reworkList({ index: inv.index, issues: [], report: inv.report, source: { own: inv.own, tree: { files, packages: {} } } })
+    const item = after.items.find(i => i.category === 'conformance')!
+    expect(item).toMatchObject({ severity: 'info', code: 'tier.drift', rules: ['K24'] })
+    expect(item.title).toContain('实算在它之下')
   })
 })
