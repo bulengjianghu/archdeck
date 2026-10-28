@@ -387,6 +387,8 @@ export interface CanvasScene {
    * 没有代码事实时的说明（U16）；其余视角不给
    */
   structure?: { typeOnlyHidden: number; valueHidden: number; coveredHidden: number; reducibleHidden: number; cycleHidden: number; note: string | null }
+  /** L44、F7：只能临时出现、此刻收起的线——框外的代码依赖叠加线（其中带违规的）、时间耦合；都没有时不给 */
+  pending?: { overlays: number; overlayViolations: number; couples: number }
   /** V5：运行视角隐藏了静态内容时只按这些节点适应画布；否则为 null（取全部内容） */
   visibleIds: Set<string> | null
 }

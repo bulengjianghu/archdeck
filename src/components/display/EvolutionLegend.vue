@@ -60,7 +60,7 @@ const setHeat = (h: 'off' | HeatKind) => desk.setToggles({ heat: h })
         <template v-if="desk.toggles.coupling">
           <div class="item">
             <span class="sw"><LineSwatch :look="{ temp: 'couple' }" pill /></span>
-            <span>波浪线 ×N = 同一提交里一起改了 N 次</span>
+            <span>波浪线 ×N = 同一提交里一起改了 N 次；不进布局，悬停或选中一端时画出（F7），清单在面板</span>
           </div>
           <div class="item">
             <span class="sw"><LineSwatch :look="{ temp: 'couple', isolated: true }" /></span>

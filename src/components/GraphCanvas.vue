@@ -309,6 +309,8 @@ watch(
 const foldHint = computed(() => (desk.perspective.value !== 'run' ? (desk.positioned.value?.view.foldHint ?? 0) : 0))
 /** L29、K21③：按依赖分层的提示——本层没有依赖（拆分信号）、大环照样分层；运行视角不给 */
 const tierHints = computed(() => desk.facts.tierHints.value)
+/** L44、F7：只能临时出现的线收起时的计数 */
+const pending = computed(() => scene.value.pending ?? null)
 /** L43：线的预算（超出时提示） */
 const lineBudget = computed(() => desk.facts.lineBudget.value)
 /** L36：算出的层的状态记号（一组层同一状态，写一次） */
@@ -356,7 +358,21 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
     </VueFlow>
 
     <div v-if="isEmpty" class="empty">这个模块没有子模块</div>
-    <div v-if="foldHint || structureCorner || tierHints.length || layerNote || lineBudget" class="corner">
+    <div v-if="foldHint || structureCorner || tierHints.length || layerNote || lineBudget || pending" class="corner">
+      <span
+        v-if="pending?.overlays"
+        class="fold-hint"
+        data-testid="overlay-corner"
+        title="一端在框外的代码依赖叠加线不进静息态的布局（L44），同框外的交互边，悬停或选中一端时画出"
+        >框外代码依赖 {{ pending.overlays }} 条{{ pending.overlayViolations ? `（违规 ${pending.overlayViolations}）` : '' }}：悬停或选中一端时画出</span
+      >
+      <span
+        v-if="pending?.couples"
+        class="fold-hint"
+        data-testid="couple-corner"
+        title="时间耦合不是交互也不是依赖，不进布局（F7、L44）：悬停或选中一端时画出，清单在面板"
+        >时间耦合 {{ pending.couples }} 对：悬停或选中一端时画出</span
+      >
       <div v-if="lineBudget" class="fold-hint" data-testid="line-budget">{{ lineBudget }}</div>
       <div v-if="layerNote" class="fold-hint" data-testid="layer-note">
         层<LayerStatus :status="layerNote.status" />本层按值依赖分为 {{ layerNote.count }} 层（L28）：算出的层是证据，不是声明的原则

@@ -12,7 +12,11 @@ test('L22：选中一条经端口的交互，承载段临时画出并高亮，�
   await expect(seg.first().locator('.dep-edge.dep-carrier')).toBeAttached()
   await expect(seg.first().locator('title')).toHaveText(/承载（经端口/)
   // §6.22：叠出的承载段全是虚线（依赖），选中的交互是实线
-  for (const p of await seg.locator('path.vue-flow__edge-path').all()) await expect(p).toHaveCSS('stroke-dasharray', '6px, 4px')
+  // 只引类型档为点线（L43）
+  for (const e of await seg.all()) {
+    const dash = (await e.locator('.dep-edge').first().getAttribute('data-tier')) === 'type' ? '1.5px, 3.5px' : '6px, 4px'
+    for (const p of await e.locator('path.vue-flow__edge-path').all()) await expect(p).toHaveCSS('stroke-dasharray', dash)
+  }
   await expect(
     page
       .locator('.vue-flow__edge-route')

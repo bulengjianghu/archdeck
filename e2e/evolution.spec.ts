@@ -46,6 +46,10 @@ test('开启时间耦合：本层出现波浪线，单击选中它，地址带 s
   await openDesk(page, '/p/h5p-arch-desk?level=present')
   const panel = page.getByRole('region', { name: '显示' })
   await panel.getByLabel('时间耦合').check()
+  // F7（L44）：时间耦合按需显示——静息态只在画布角计数，选中一端时画出
+  await expect(page.getByTestId('couple-corner')).toContainText(/时间耦合 \d+ 对/)
+  await expect(page.locator('.edge-couple')).toHaveCount(0)
+  await openDesk(page, '/p/h5p-arch-desk?level=present&sel=m:present.panel')
   const line = page.locator('.edge-couple').first()
   await expect(line).toBeVisible()
   await expect(page.locator('.edge-couple .vue-flow__edge-text').first()).toContainText('×')

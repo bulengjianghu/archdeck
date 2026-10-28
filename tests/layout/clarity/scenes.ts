@@ -43,7 +43,8 @@ import {
   type EdgeRoute,
   type PositionedView,
 } from '../../../src/layout/layout'
-import { routeMidpoint } from '../../../src/layout/canvas'
+import { overlayTags, routeMidpoint } from '../../../src/layout/canvas'
+import { composeLabel } from '../../../src/layout/canvas/labels'
 import { bundleItem, depLabel, depViewEdge, routeToPoint } from '../../../src/layout/canvas/structure'
 import { readModelDir } from '../../../vite/readModelDir'
 import { readSourceTree } from '../../../vite/readSource'
@@ -251,12 +252,27 @@ async function levelScenes({ index, report }: Project, level: string, perspectiv
       const r = pv.edges.get(e.id)
       return r && !isOutsideEdge(view, e) ? [lineOf(index, view, e, r)] : []
     })
-    const outside = outsideRoutes(pv, view.edges)
+    // L44（第十四轮 F12）：常显的代码依赖叠加线（两端都在本层）取并集布局里束的走线，一起量；框外的只在聚焦时临时出现，不量
+    const overlays = report ? levelFacts(index, view, report).overlays.filter(o => !o.from.startsWith('boundary:') && !o.to.startsWith('boundary:')) : []
+    const innerOverlays = new Map(
+      overlays.flatMap(o => {
+        const r = pv.edges.get(`bundle:${o.from}->${o.to}`)
+        return r ? [[o.id, r] as const] : []
+      }),
+    )
+    const outside = outsideRoutes(pv, view.edges, undefined, innerOverlays.size ? innerOverlays : undefined)
     const outer = view.edges.flatMap(e => {
       const r = outside.get(e.id)
       return r ? [lineOf(index, view, e, r)] : []
     })
-    scenes.push({ lines: [...inner, ...outer], obstacles, frames, anchors })
+    const overlayLines = overlays.flatMap(o => {
+      const r = pv.edges.get(`bundle:${o.from}->${o.to}`)
+      if (!r) return []
+      const text = composeLabel('', overlayTags(o))
+      const at = r.label ?? routeMidpoint(r)
+      return [{ id: o.id, points: r.points, ...(text ? { label: { at, text } } : {}), ends: [o.from, o.to] as const }]
+    })
+    scenes.push({ lines: [...inner, ...outer, ...overlayLines], obstacles, frames, anchors })
   }
   return scenes
 }

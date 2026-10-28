@@ -377,56 +377,93 @@ export function coupleRoute(a?: Box, b?: Box): EdgeRoute | undefined {
   return { points: [p1, p2], label: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } }
 }
 
-/** 时间耦合（J5）：本层两端之间的灰色波浪线，标 ×N，无依赖无关系的更深色；不参与布局、不算跳线 */
+/** F7（L44）：时间耦合线不进布局，只能临时出现——聚焦（选中或悬停）一端、或选中这对耦合时画；常显的只剩面板清单与画布角计数 */
+export const coupleShown = (ctx: Pick<SceneContext, 'focusIds' | 'input'>, l: { from: string; to: string; pairs: readonly string[] }): boolean =>
+  ctx.focusIds.some(f => f === l.from || f === l.to) || (ctx.input.selection?.kind === 'couple' && l.pairs.includes(ctx.input.selection.id))
+
+/** 时间耦合（J5）：本层两端之间的灰色波浪线，标 ×N，无依赖无关系的更深色；不参与布局、不算跳线；按需显示（F7，L44） */
 export function evolutionEdges(ctx: SceneContext): (CanvasEdge | null)[] {
-  return (ctx.evo?.couplings ?? []).map(l => {
-    const ve: ViewEdge = { id: l.id, kind: 'direct', from: l.from, to: l.to, type: 'calls', relationIds: [], mode: 'sync' }
-    const route = coupleRoute(ctx.pv.nodes.get(l.from), ctx.pv.nodes.get(l.to))
-    return makeEdge(ctx, ve, route, false, {
-      temp: 'couple',
-      label: `×${l.shared}`,
-      pill: true,
-      warn: false,
-      factState: 'confirmed',
-      couple: l,
-      violated: false,
+  return (ctx.evo?.couplings ?? [])
+    .filter(l => coupleShown(ctx, l))
+    .map(l => {
+      const ve: ViewEdge = { id: l.id, kind: 'direct', from: l.from, to: l.to, type: 'calls', relationIds: [], mode: 'sync' }
+      const route = coupleRoute(ctx.pv.nodes.get(l.from), ctx.pv.nodes.get(l.to))
+      return makeEdge(ctx, ve, route, false, {
+        temp: 'couple',
+        label: `×${l.shared}`,
+        pill: true,
+        warn: false,
+        factState: 'confirmed',
+        couple: l,
+        violated: false,
+      })
     })
-  })
 }
 
-/** 代码事实叠加（K9）：代码依赖叠加线（虚线，L18），不参与布局；标「违规 N · 未解释 N」（L26） */
+/**
+ * L44（第十四轮 F12）：常显的线必须进布局、被 L30 测量，否则只能临时出现——代码依赖叠加线两端都在本层的常显，取并集布局里同一对节点的束的走线；
+ * 一端是边界节点的同框外的交互边（L4）只在聚焦一端或选中它时画，与此刻画出来的框外边一起分轨（overlayViewEdges 交给 outsideRoutes），画布角计数。
+ */
+export function overlayShown(
+  ctx: Pick<SceneContext, 'focusIds' | 'input'>,
+  o: { id: string; from: string; to: string; fromModule: string; toModule: string },
+): boolean {
+  const outside = o.from.startsWith('boundary:') || o.to.startsWith('boundary:')
+  if (!outside) return true
+  const sel = ctx.input.selection
+  return ctx.focusIds.some(f => f === o.from || f === o.to) || (sel?.kind === 'dep' && sel.id === `${o.fromModule}->${o.toModule}`)
+}
+
+/** L44：交给 outsideRoutes 一起分轨的叠加线（一端是边界节点、此刻画出来的） */
+export function overlayViewEdges(ctx: Pick<SceneContext, 'facts' | 'focusIds' | 'input'>): ViewEdge[] {
+  return (ctx.facts?.overlays ?? [])
+    .filter(o => (o.from.startsWith('boundary:') || o.to.startsWith('boundary:')) && overlayShown(ctx, o))
+    .map(o => ({ id: o.id, kind: 'direct', from: o.from, to: o.to, type: 'calls', relationIds: [], mode: 'sync' }))
+}
+
+/** L44：叠加线的标签文字（分轨时按实际尺寸避让） */
+export const overlayTags = (o: { violations: number; undescribed: number }): TagPart[] => [
+  ...(o.violations ? [{ tag: '违规' as const, count: o.violations }] : []),
+  ...(o.undescribed ? [{ tag: '未解释' as const, count: o.undescribed }] : []),
+]
+
+/** 代码事实叠加（K9）：代码依赖叠加线（虚线，L18）；标「违规 N · 未解释 N」（L26）；走线进布局（L44） */
 export function factEdges(ctx: SceneContext): (CanvasEdge | null)[] {
-  return (ctx.facts?.overlays ?? []).map(o => {
-    const tags: TagPart[] = [
-      ...(o.violations ? [{ tag: '违规' as const, count: o.violations }] : []),
-      ...(o.undescribed ? [{ tag: '未解释' as const, count: o.undescribed }] : []),
-    ]
-    const ve: ViewEdge = { id: o.id, kind: 'direct', from: o.from, to: o.to, type: 'calls', relationIds: [], mode: 'sync' }
-    const route = linkRoute(ctx.pv.nodes.get(o.from), ctx.pv.nodes.get(o.to))
-    return makeEdge(ctx, ve, route, false, {
-      temp: 'code',
-      tags,
-      factState: 'undescribed',
-      overlay: o,
-      ...(o.violations ? { violated: true } : {}),
+  return (ctx.facts?.overlays ?? [])
+    .filter(o => overlayShown(ctx, o))
+    .map(o => {
+      const tags = overlayTags(o)
+      const ve: ViewEdge = { id: o.id, kind: 'direct', from: o.from, to: o.to, type: 'calls', relationIds: [], mode: 'sync' }
+      // L44：框外的与框外边一起分轨；两端都在本层的取同一对节点的束在并集布局里的走线；都没有时（分层总览）退回曲线
+      const route = ctx.routes.get(o.id) ?? ctx.pv.edges.get(`bundle:${o.from}->${o.to}`) ?? linkRoute(ctx.pv.nodes.get(o.from), ctx.pv.nodes.get(o.to))
+      return makeEdge(ctx, ve, route, false, {
+        temp: 'code',
+        tags,
+        factState: 'undescribed',
+        overlay: o,
+        ...(o.violations ? { violated: true } : {}),
+      })
     })
-  })
 }
 
 /** O12：组装叠加线——组装事实投影到本层的虚线（组装专用色，依赖方一端实心菱形，L18、L16），不参与布局；同一对节点合并标 ×N；单击落到这对节点的代码依赖（K10） */
 export function assemblyEdges(ctx: SceneContext): (CanvasEdge | null)[] {
   if (ctx.st || ctx.structure) return []
-  return (ctx.input.assembly ?? []).map(o => {
-    const ve: ViewEdge = { id: o.id, kind: 'direct', from: o.from, to: o.to, type: 'calls', relationIds: [], mode: 'sync' }
-    const route = linkRoute(ctx.pv.nodes.get(o.from), ctx.pv.nodes.get(o.to))
-    return makeEdge(ctx, ve, route, false, {
-      temp: 'assembly',
-      label: o.count > 1 ? `×${o.count}` : '',
-      factState: 'confirmed',
-      assembly: o,
-      violated: false,
+  // L44：两端都在本层的取并集布局里同一对节点的束的走线；一端是边界节点的只在聚焦一端时画（同 L4）
+  const outside = (o: { from: string; to: string }) => o.from.startsWith('boundary:') || o.to.startsWith('boundary:')
+  return (ctx.input.assembly ?? [])
+    .filter(o => !outside(o) || ctx.focusIds.some(f => f === o.from || f === o.to))
+    .map(o => {
+      const ve: ViewEdge = { id: o.id, kind: 'direct', from: o.from, to: o.to, type: 'calls', relationIds: [], mode: 'sync' }
+      const route = ctx.pv.edges.get(`bundle:${o.from}->${o.to}`) ?? linkRoute(ctx.pv.nodes.get(o.from), ctx.pv.nodes.get(o.to))
+      return makeEdge(ctx, ve, route, false, {
+        temp: 'assembly',
+        label: o.count > 1 ? `×${o.count}` : '',
+        factState: 'confirmed',
+        assembly: o,
+        violated: false,
+      })
     })
-  })
 }
 
 /**
