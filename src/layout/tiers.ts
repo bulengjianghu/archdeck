@@ -15,6 +15,8 @@ export interface LayoutTiers {
   isolated: readonly string[]
   /** L29：画层带与层号 */
   banded: boolean
+  /** L39②：折叠时「+N」成员的层号跨度（层号 0 起） */
+  fold?: { node: string; from: number; to: number; members: number }
 }
 
 /** 布局结果上的分层几何（画布画层带、环组框） */
@@ -23,6 +25,8 @@ export interface TierGeometry {
   bands: { tier: number; box: Box; labelX?: number }[]
   /** L29：环组框（成员之间没有夹着别的节点时才给，否则只靠环编号） */
   groups: { id: number; box: Box }[]
+  /** L39②：折叠时「+N」成员的层号跨度（照抄 LayoutTiers.fold，画布写在占位块上） */
+  fold?: { node: string; from: number; to: number; members: number }
 }
 
 /**
@@ -127,7 +131,7 @@ export function tierGeometry(nodes: ReadonlyMap<string, Box>, tiers: LayoutTiers
     const clash = [...nodes].some(([id, b]) => !inner.has(id) && overlaps(box, b))
     if (!clash) groups.push({ id: g.id, box })
   }
-  return { bands, groups }
+  return { bands, groups, ...(tiers.fold ? { fold: tiers.fold } : {}) }
 }
 
 /** L30：层号文字的估宽（字号 11：中文 11 px、其余 6.5 px） */

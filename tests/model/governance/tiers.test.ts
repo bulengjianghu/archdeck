@@ -10,6 +10,8 @@ import {
   tierIssues,
   tierNodes,
   tierNoteText,
+  foldSpanText,
+  DEFAULT_PROJECT_OPTIONS,
   isInversion,
   reworkList,
   BAND_MIN_NODES,
@@ -183,5 +185,65 @@ describe('K21、K22 返工清单', () => {
     expect(up).toMatchObject({ severity: 'info', rules: ['K22'], target: { modules: ['app.base', 'app.mid'], relation: 'r.up' } })
     expect(split.find(i => i.code === 'split.no-files')!.actions[0].kind).toBe('split-file')
     expect(list.byCategory.split).toBe(3)
+  })
+})
+
+describe('L39 折叠与分层正交、L40 组织判断三态（第十四轮 F1、F5）', () => {
+  // 一个核心 + 8 个普通模块（O8 折叠为「+N」）：入口 → m1 → m2 → … → m8 的长链，m8 在最底
+  const chain = Array.from({ length: 8 }, (_, i) => `m${i + 1}`)
+  const FOLD = `
+modules:
+  - id: app
+    name: App
+    responsibility: 应用
+    children:
+      - { id: app.entry, name: Entry, responsibility: 入口, role: core, codeRefs: [src/entry/**] }
+${chain.map(m => `      - { id: app.${m}, name: ${m}, responsibility: ${m}, codeRefs: [src/${m}/**] }`).join('\n')}
+`
+  const files = ['src/entry/e.ts', ...chain.map(m => `src/${m}/x.ts`)]
+  const deps = files.slice(1).map((f, i) => dep(files[i], f))
+  function folded() {
+    const { index } = loadModel([
+      { path: 'system.yaml', text: 'system: { id: sys, name: Sys }' },
+      { path: 'modules/app.yaml', text: FOLD },
+    ])
+    const own = assignFiles(index, files, [])
+    const report = governanceReport(index, own, { files, packages: {} }, { deps, external: {}, parsed: files.length }, null)
+    return { index, report }
+  }
+
+  it('①② 层号对全集算：折叠后「+N」放在成员最上的一层，给出成员的层号跨度；门槛按全集判定', () => {
+    const { index, report } = folded()
+    const view = projectLevel(index, 'app')
+    expect(view.fold?.expanded).toBe(false)
+    const t = levelTiers(index, view, report)!
+    expect(t.tier.get('app.entry')).toBe(0)
+    expect(t.tier.get('more:app')).toBe(1)
+    expect(t.foldSpan).toEqual({ node: 'more:app', from: 1, to: 8, members: 8 })
+    expect(t.count).toBe(9)
+    expect(t.banded).toBe(true)
+    expect(t.nodes).toEqual(['app.entry', 'more:app'])
+  })
+
+  it('③ 展开即解压：成员落到全集算好的层号，层数不变', () => {
+    const { index, report } = folded()
+    const open = projectLevel(index, 'app', { ...DEFAULT_PROJECT_OPTIONS, expandedBands: ['app'] })
+    const t = levelTiers(index, open, report)!
+    expect(chain.map(m => t.tier.get(`app.${m}`))).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(t.count).toBe(9)
+    expect(t.foldSpan).toBeUndefined()
+  })
+
+  it('L40② 跨 ≥ 3 层提示「该标核心或该拆」；同一层只写一个层号', () => {
+    expect(foldSpanText({ from: 1, to: 8 })).toEqual({ tiers: '第 2–9 层', warn: '跨 8 层：该标核心或该拆' })
+    expect(foldSpanText({ from: 2, to: 3 })).toEqual({ tiers: '第 3–4 层', warn: null })
+    expect(foldSpanText({ from: 2, to: 2 }).tiers).toBe('第 3 层')
+  })
+
+  it('L40③ 平铺：子模块之间既没有依赖也没有交互时明说', () => {
+    const { index } = folded()
+    const t = levelTiers(index, projectLevel(index, 'app', { ...DEFAULT_PROJECT_OPTIONS, expandedBands: ['app'] }), { moduleDeps: new Map() })!
+    expect(t.notes).toContainEqual({ kind: 'flat', nodes: 9 })
+    expect(tierNoteText({ kind: 'flat', nodes: 9 })).toBe('平铺：本层 9 个子模块彼此独立（没有依赖也没有交互）')
   })
 })

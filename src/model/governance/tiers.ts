@@ -99,16 +99,41 @@ export type TierNote =
   | { kind: 'big-cycle'; group: number; size: number; of: number }
   /** K21③：本层子模块之间有交互、没有任何值依赖——不强行分层 */
   | { kind: 'no-deps'; interactions: number }
+  /** L40③：平铺——本层子模块之间既没有值依赖也没有交互 */
+  | { kind: 'flat'; nodes: number }
 
 /** L29、K21③：提示的说法（画布角、命令行共用） */
 export const tierNoteText = (n: TierNote): string =>
   n.kind === 'big-cycle'
     ? `环 ${n.group} 占本层 ${n.size} / ${n.of} 个子模块，照样分层：整组同层`
-    : `本层子模块之间有 ${n.interactions} 条交互、没有依赖，不分层——拆分可能不沿文件边界`
+    : n.kind === 'flat'
+      ? `平铺：本层 ${n.nodes} 个子模块彼此独立（没有依赖也没有交互）`
+      : `本层子模块之间有 ${n.interactions} 条交互、没有依赖，不分层——拆分可能不沿文件边界`
+
+/** L39②：「+N」的成员的层号跨度（层号 0 起） */
+export interface FoldSpan {
+  /** 占位块的视图节点 ID */
+  node: string
+  from: number
+  to: number
+  members: number
+}
+
+/** L40②：「+N」的成员跨这么多层及以上时提示「该标核心或该拆」 */
+export const FOLD_SPAN_WARN = 3
+
+/** L39②、L40②：占位块上的层号与跨度提示（按 1 起） */
+export function foldSpanText(f: Pick<FoldSpan, 'from' | 'to'>): { tiers: string; warn: string | null } {
+  const k = f.to - f.from + 1
+  return {
+    tiers: f.from === f.to ? `第 ${f.from + 1} 层` : `第 ${f.from + 1}–${f.to + 1} 层`,
+    warn: k >= FOLD_SPAN_WARN ? `跨 ${k} 层：该标核心或该拆` : null,
+  }
+}
 
 /** L28、L29、K21③、K22：一个普通层次的分层 */
 export interface LevelTiers extends Tiering {
-  /** 参与分层的节点（module / core 角色的子模块，含边界角色 port / adapter；不含共用件、总线、「+N」、边界节点、参与者），按视图顺序 */
+  /** 本视图里参与分层的节点（module / core 角色的子模块，含边界角色 port / adapter；折叠时含「+N」，L39；不含共用件、总线、边界节点、参与者），按视图顺序 */
   nodes: string[]
   /** 环组的 Y4 编号，与 groups 对齐 */
   groupIds: number[]
@@ -120,6 +145,8 @@ export interface LevelTiers extends Tiering {
   /** K21③：直接交互（不写 via 的）的两端之间、两个方向都没有本层值依赖的节点对 */
   undepended: { from: string; to: string; edges: string[] }[]
   notes: TierNote[]
+  /** L39②：折叠时「+N」成员的层号跨度（成员全孤立时不给） */
+  foldSpan?: FoldSpan
 }
 
 /** L29：层带出现的门槛 */
@@ -133,34 +160,58 @@ export const isInversion = (r: Pick<RelationEntity, 'type' | 'via'>): boolean =>
 export const tierable = (view: LevelView): string[] => view.nodes.filter(n => n.role === 'module' || n.role === 'core').map(n => n.id)
 
 /**
- * L28：普通层次的分层（分层总览按作者声明的层 O1，返回 null）。依赖只取本层值依赖（levelValueDeps，同 Y4）；
- * 环组复用 Y4 的编号；交互边不影响层号，只用来找向上的线（K22）与有交互却没依赖的兄弟（K21③）。
+ * L28、L39：普通层次的分层（分层总览按作者声明的层 O1，返回 null）。依赖只取本层值依赖（levelValueDeps，同 Y4）；
+ * 层号、环组与层带门槛对全集（「+N」展开后的视图）计算，与折叠无关（L39）；折叠时「+N」放在成员中最上的一层，另给成员的层号跨度（foldSpan）。
+ * 环组的编号复用本视图的 Y4；交互边不影响层号，只用来找向上的线（K22，按本视图的边）与有交互却没依赖的兄弟（K21③，按全集）。
  */
 export function levelTiers(index: ModelIndex, view: LevelView, report: Pick<GovernanceReport, 'moduleDeps'>): LevelTiers | null {
   if (view.mode === 'layered') return null
-  const nodes = tierable(view)
-  const all = levelValueDeps(index, view, report)
+  const folded = view.fold && !view.fold.expanded && view.fold.members.length ? view.fold : null
+  const full = folded ? tierView(index, view.parentId) : view
+  const fullNodes = tierable(full)
+  const all = levelValueDeps(index, full, report)
   const t = tierNodes(
-    nodes,
+    fullNodes,
     [...all.values()].map(e => [e.from, e.to] as const),
   )
+  // 本视图的 Y4 编号（与节点上的环编号一致）
   const y4 = new Map<string, number>()
-  levelCycleMembers(all).forEach((ms, i) => ms.forEach(m => y4.set(m, i + 1)))
-  const inTier = new Set(nodes)
-  const deps = [...all.values()].filter(e => inTier.has(e.from) && inTier.has(e.to)).length
+  levelCycleMembers(folded ? levelValueDeps(index, view, report) : all).forEach((ms, i) => ms.forEach(m => y4.set(m, i + 1)))
+  const inFull = new Set(fullNodes)
+  const deps = [...all.values()].filter(e => inFull.has(e.from) && inFull.has(e.to)).length
+  // L39②：投影到本视图——可见节点照抄层号；「+N」取成员中最小的层号，成员全孤立时进孤立列
+  const visible = tierable(view)
+  const tier = new Map<string, number>()
+  for (const n of visible) if (t.tier.has(n)) tier.set(n, t.tier.get(n)!)
+  let foldSpan: FoldSpan | undefined
+  if (folded) {
+    const ts = folded.members.map(m => t.tier.get(m)).filter((x): x is number => x !== undefined)
+    if (ts.length) {
+      foldSpan = { node: folded.id, from: Math.min(...ts), to: Math.max(...ts), members: folded.members.length }
+      tier.set(folded.id, foldSpan.from)
+    }
+  }
+  const shown = new Set([...visible, ...(folded ? [folded.id] : [])])
+  const groups = t.groups.map(g => g.filter(m => shown.has(m))).filter(g => g.length)
+  const isolated = [...t.isolated.filter(n => shown.has(n)), ...(folded && !foldSpan ? [folded.id] : [])]
+  // K22：向上的线按本视图的边（「+N」的边按占位块所在的层）
   const upward: UpwardEdge[] = []
+  for (const e of view.edges) {
+    if (!shown.has(e.from) || !shown.has(e.to) || e.from === e.to) continue
+    const a = tier.get(e.from)
+    const b = tier.get(e.to)
+    if (a === undefined || b === undefined || a <= b) continue
+    const rels = e.relationIds.map(id => index.relations.get(id)).filter((r): r is RelationEntity => !!r)
+    const direct = rels.filter(r => !isInversion(r)).map(r => r.id)
+    upward.push({ edge: e.id, from: e.from, to: e.to, inversion: !direct.length, relations: direct })
+  }
+  // K21③、L40③：有交互没依赖、平铺——按全集
   const pairs = new Map<string, { from: string; to: string; edges: string[] }>()
   let interactions = 0
-  for (const e of view.edges) {
-    if (!inTier.has(e.from) || !inTier.has(e.to) || e.from === e.to) continue
+  for (const e of full.edges) {
+    if (!inFull.has(e.from) || !inFull.has(e.to) || e.from === e.to) continue
     interactions++
     const rels = e.relationIds.map(id => index.relations.get(id)).filter((r): r is RelationEntity => !!r)
-    const a = t.tier.get(e.from)
-    const b = t.tier.get(e.to)
-    if (a !== undefined && b !== undefined && a > b) {
-      const direct = rels.filter(r => !isInversion(r)).map(r => r.id)
-      upward.push({ edge: e.id, from: e.from, to: e.to, inversion: !direct.length, relations: direct })
-    }
     if (rels.some(r => !r.via) && !all.has(depKey(e.from, e.to)) && !all.has(depKey(e.to, e.from))) {
       const [x, y] = [e.from, e.to].sort()
       const p = pairs.get(depKey(x, y)) ?? { from: e.from, to: e.to, edges: [] }
@@ -169,20 +220,24 @@ export function levelTiers(index: ModelIndex, view: LevelView, report: Pick<Gove
     }
   }
   const notes: TierNote[] = []
-  if (!deps && interactions && nodes.length >= 2) notes.push({ kind: 'no-deps', interactions })
-  const groupIds = t.groups.map(g => y4.get(g[0]) ?? 0)
-  t.groups.forEach((g, i) => {
-    if (g.length * 2 > nodes.length) notes.push({ kind: 'big-cycle', group: groupIds[i], size: g.length, of: nodes.length })
+  if (!deps && fullNodes.length >= 2) notes.push(interactions ? { kind: 'no-deps', interactions } : { kind: 'flat', nodes: fullNodes.length })
+  const groupIds = groups.map(g => y4.get(g[0]) ?? 0)
+  t.groups.forEach(g => {
+    if (g.length * 2 > fullNodes.length) notes.push({ kind: 'big-cycle', group: y4.get(g.find(m => shown.has(m)) ?? '') ?? 0, size: g.length, of: fullNodes.length })
   })
   return {
-    ...t,
-    nodes,
+    tier,
+    count: t.count,
+    groups,
+    isolated,
+    nodes: [...shown],
     groupIds,
     deps,
-    banded: nodes.length >= BAND_MIN_NODES && t.count >= BAND_MIN_TIERS,
+    banded: fullNodes.length >= BAND_MIN_NODES && t.count >= BAND_MIN_TIERS,
     upward,
     undepended: [...pairs.values()],
     notes,
+    ...(foldSpan ? { foldSpan } : {}),
   }
 }
 

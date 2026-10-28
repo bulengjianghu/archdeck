@@ -14,6 +14,7 @@ export function toLayoutTiers(t: LevelTiers | null): LayoutTiers | null {
     groups: t.groups.map((g, i) => ({ id: t.groupIds[i], nodes: g })),
     isolated: t.isolated,
     banded: t.banded,
+    ...(t.foldSpan ? { fold: t.foldSpan } : {}),
   }
 }
 

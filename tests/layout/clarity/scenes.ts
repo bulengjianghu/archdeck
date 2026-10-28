@@ -156,11 +156,20 @@ function structureLines(
 }
 
 /** perspective：interaction 为交互视角的线（缺省）；structure 为结构视角的束（只在有代码事实时，否则为 null） */
-export async function checkLevel(
-  { index, report }: Project,
-  level: string,
-  perspective: 'interaction' | 'structure' = 'interaction',
-): Promise<LevelResult | null> {
+export async function checkLevel(project: Project, level: string, perspective: 'interaction' | 'structure' = 'interaction'): Promise<LevelResult | null> {
+  const scenes = await levelScenes(project, level, perspective)
+  if (!scenes) return null
+  const findings = scenes.flatMap(check)
+  return { level, findings, counts: countFindings(findings) }
+}
+
+/** 第十四轮：静息态常显的线（场景的第一组）；不适用时为 null */
+export async function restLines(project: Project, level: string, perspective: 'interaction' | 'structure'): Promise<readonly CheckLine[] | null> {
+  const scenes = await levelScenes(project, level, perspective)
+  return scenes ? (scenes[0]?.lines ?? []) : null
+}
+
+async function levelScenes({ index, report }: Project, level: string, perspective: 'interaction' | 'structure'): Promise<Scene[] | null> {
   let view: LevelView
   try {
     view = projectLevel(index, level)
@@ -203,8 +212,7 @@ export async function checkLevel(
     })
     scenes.push({ lines: [...inner, ...outer], obstacles, frames, anchors })
   }
-  const findings = scenes.flatMap(check)
-  return { level, findings, counts: countFindings(findings) }
+  return scenes
 }
 
 /** facts 为 false 时按没有代码事实的布局量（设计版本、提交版本：只按交互边与允许边，不分层） */

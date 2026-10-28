@@ -2,7 +2,7 @@
  * 画布场景的节点（ADR-0013）：本层的模块、带与 +N 占位块、边界节点、参与者；回放叠加的步骤序号与分支预览序号。
  * 结构视角按聚焦变淡，运行视角按舞台显示（V5、V8、V9）；回放态与文件高亮（G14）写进类名。
  */
-import { moduleName, type ModelDiff, type ModelIndex, type ModuleEntity, type ViewNode, type VisibleLanding } from '@/model'
+import { foldSpanText, moduleName, type ModelDiff, type ModelIndex, type ModuleEntity, type ViewNode, type VisibleLanding } from '@/model'
 import { SHELF, bandShelfTop, moreChipId, type Box, type PositionedView } from '../layout'
 import type { Visibility } from '../stage'
 import type { SceneContext } from './context'
@@ -233,7 +233,16 @@ function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box, s
         n.id,
         box,
         'more',
-        { ...base, name: '', selected: false, dim: !!ctx.st || !!ctx.near, hiddenCount: n.hiddenCount ?? 0, expanded: n.expanded ?? 0, graphFold: true },
+        {
+          ...base,
+          name: '',
+          selected: false,
+          dim: !!ctx.st || !!ctx.near,
+          hiddenCount: n.hiddenCount ?? 0,
+          expanded: n.expanded ?? 0,
+          graphFold: true,
+          ...(ctx.pv.tiers?.fold?.node === n.id && !n.expanded ? { foldTiers: foldSpanText(ctx.pv.tiers.fold) } : {}),
+        },
         OVER_EDGES.more,
       ),
     ]

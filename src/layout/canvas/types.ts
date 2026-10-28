@@ -84,6 +84,8 @@ export interface NodeData {
   shelfAt?: number
   /** O8：普通层次的「+N」占位（双击无动作；分层总览的占位双击下钻到层） */
   graphFold?: boolean
+  /** L39②、L40②：按依赖分层时「+N」成员的层号跨度（「第 X–Y 层」）与跨 ≥ 3 层的提示 */
+  foldTiers?: { tiers: string; warn: string | null }
   /** J5：热度角标（右下角三档色块）：档位、种类、热度值与次数 */
   heat?: NodeHeat & { kind: HeatKind }
   /** L13：节点定义的端口记号——画在进边一侧（side）的后半；超过 PORT_MERGE 个时合成一个「端口 ×N」（merged 为端口数） */

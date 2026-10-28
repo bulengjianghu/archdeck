@@ -70,3 +70,15 @@ describe('L36 分层总览的带写状态记号', () => {
     ).toBe(false)
   })
 })
+
+describe('L39②、L40② 「+N」写成员的层号跨度', () => {
+  it('折叠 N · 第 X–Y 层；跨 ≥ 3 层时第二行提示；不分层时只写 +N', async () => {
+    const MoreNode = (await import('../../src/components/nodes/MoreNode.vue')).default
+    const w = mount(MoreNode, { props: { data: { ...base, hiddenCount: 8, foldTiers: { tiers: '第 2–9 层', warn: '跨 8 层：该标核心或该拆' } } } })
+    expect(w.find('[data-testid="fold-tiers"]').text()).toBe('折叠 8 · 第 2–9 层')
+    expect(w.find('[data-testid="fold-warn"]').text()).toBe('跨 8 层：该标核心或该拆')
+    const plain = mount(MoreNode, { props: { data: { ...base, hiddenCount: 8 } } })
+    expect(plain.find('[data-testid="fold-tiers"]').exists()).toBe(false)
+    expect(plain.text()).toBe('+8 个其他模块')
+  })
+})
