@@ -75,6 +75,41 @@ export function isCallbackVia(via: string | undefined): boolean {
   return v?.kind === 'channel' && (v.name ?? v.target) === 'callback'
 }
 
+/** L35①：机制词，按 L26② 修饰段的次序排列；直接、同步不写 */
+export const MECHANISMS = ['回调', '端口', '总线', '注入', '跨进程', '路由', '事件', '通道', '拉取'] as const
+export type Mechanism = (typeof MECHANISMS)[number]
+
+/** L35①：通道名的固定归类（小写比较）；归不进的落在「通道」 */
+const CHANNEL_MECHANISMS: Readonly<Record<string, Mechanism>> = {
+  callback: '回调',
+  inject: '注入',
+  router: '路由',
+  ...Object.fromEntries(['http', 'https', 'ws', 'websocket', 'sse', 'postmessage', 'worker', 'hmr', 'ipc'].map(n => [n, '跨进程'])),
+  ...Object.fromEntries(['event', 'dom', 'mediasession'].map(n => [n, '事件'])),
+}
+
+/** L35①：一条关系的机制——端口、总线按 via 形态，通道按通道名（不分大小写，@<契约模块> 不影响），没写 via 的拉取型流为「拉取」；直接、同步为 null */
+export function mechanismOf(r: { via?: string; pull?: boolean }): Mechanism | null {
+  const v = parseVia(r.via)
+  if (v?.kind === 'port') return '端口'
+  if (v?.kind === 'bus') return '总线'
+  if (v?.kind === 'channel') {
+    const name = (v.name ?? v.target ?? '').toLowerCase()
+    return CHANNEL_MECHANISMS[name] ?? (name.endsWith('change') ? '事件' : '通道')
+  }
+  return r.pull ? '拉取' : null
+}
+
+/** L35②：一组关系里每个机制的条数（没有机制的关系不计） */
+export function mechanismCounts(rels: Iterable<{ via?: string; pull?: boolean }>): Partial<Record<Mechanism, number>> {
+  const out: Partial<Record<Mechanism, number>> = {}
+  for (const r of rels) {
+    const m = mechanismOf(r)
+    if (m) out[m] = (out[m] ?? 0) + 1
+  }
+  return out
+}
+
 /** 运行时关系（§1.1）：ADR-0029 起关系全是交互，与 RELATION_TYPES 相同；步骤只对应它们（S12）。迁移期含未分类 */
 export const RUNTIME_RELATION_TYPES: readonly RelationType[] = ['queries', 'commands', 'notifies', 'streams', 'calls']
 
@@ -363,11 +398,15 @@ export interface RulesDef {
 /** Z2、Z3：确认时的摘要——指纹覆盖的内容的一份副本，需复核时据此显示差异 */
 export interface ReviewSummaryDef {
   responsibility?: string
+  /** ADR-0042 */
+  abstraction?: string
   includes?: string[]
   excludes?: string[]
   mayDependOn?: string[]
   provides?: { id: string; signature?: string }[]
   children?: string[]
+  /** 系统简介（Z7） */
+  description?: string
 }
 
 /** Z1、Z6：一条确认记录；source 为 `manual` 或 `sketch:<设计 ID>` */
@@ -479,6 +518,8 @@ export interface ArchModel {
   rules?: RulesDef
   /** U1：rules 的出处 */
   rulesSrc?: SourceLoc
+  /** M23、Z7：system 的出处（提示与返工清单定位用），不参与版本对比 */
+  systemSrc?: SourceLoc
   /** Z1：各文件 reviewed 的合并（Validator 去掉坏引用、按模块去重），不参与版本对比 */
   reviewed: ReviewedEntry[]
   /** X1：本次加载的草图文件（整份定义，供核验），不参与版本对比 */
@@ -577,6 +618,8 @@ export interface ViewEdge {
   relationIds: string[]
   /** 原始关系的同步/异步汇总：全同步、全异步，或混合 */
   mode: 'sync' | 'async' | 'mixed'
+  /** L35②：机制 → 带该机制的关系条数（mechanismCounts）；没有机制时不给 */
+  mechs?: Partial<Record<Mechanism, number>>
 }
 
 export interface Band {

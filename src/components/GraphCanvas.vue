@@ -103,6 +103,10 @@ const layerStatus = computed(() => {
   return new Map(v.nodes.filter(n => n.role === 'layer').map(n => [n.moduleId, layerStatusOf(desk.review.of(n.moduleId).status)] as const))
 })
 
+/** K22、L26（ADR-0041）：向上又不是控制反转的视图边 → 那些关系（标签位写「向上」）；结构视角不给 */
+const upwardRelations = computed(() =>
+  structure.value ? null : new Map(desk.facts.upward.value.filter(u => !u.inversion).map(u => [u.edge, u.relations] as const)),
+)
 /** 画布场景（Layout 的纯函数 canvasScene，ADR-0013）：节点与边的数据、显隐、变淡、回放态与选中突出 */
 const scene = computed(() =>
   canvasScene({
@@ -128,6 +132,7 @@ const scene = computed(() =>
     layerStatus: layerStatus.value,
     structure: structure.value,
     spreads: interaction.value ? desk.facts.spreads.value : null,
+    upward: upwardRelations.value,
     carrier: carrier.value,
     surfaceInfo: desk.facts.surfaceInfo.value,
   }),

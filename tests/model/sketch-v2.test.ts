@@ -118,6 +118,18 @@ describe('X9 挂载点：读取', () => {
     expect(codes(load(files({ 'sketches/nope.yaml': 'sketch: { id: d1, mount: nope, abstraction: x, modules: [] }' })).issues)).toContain('sketch-mount-missing')
   })
 
+  it('X10 修订（ADR-0042）：原则描述可写——骨架里的第二级模块由区域文件补一句话原则；草图写了相同的值不报，没写的不冲突', () => {
+    const sup = 'modules:\n  - { id: fe.ui, name: UI, abstraction: 只读派生、单向数据流 }\n  - { id: core.api, name: Api, abstraction: 薄门面 }\n'
+    const { index, issues } = loadModel(files({ 'modules/p.yaml': sup }))
+    expect(codes(issues)).not.toContain('sketch-redefined')
+    expect(index.modules.get('fe.ui')?.abstraction).toBe('只读派生、单向数据流')
+    // 挂在 core.api 上的草图写了同样的原则：不算重定义
+    const sk = 'sketch: { id: d1, mount: core.api, abstraction: 薄门面, modules: [] }'
+    const same = loadModel(files({ 'modules/p.yaml': sup, 'sketches/core.api.yaml': sk }))
+    expect(codes(same.issues)).not.toContain('sketch-redefined')
+    expect(same.index.modules.get('core.api')?.abstraction).toBe('薄门面')
+  })
+
   it('一期骨架（intent/ 下没有 mount、顶层全是层）按根挂载读取并提醒；其余没有 mount 的草图是格式错误、整份跳过', () => {
     const legacy = SKELETON.replace('  mount: root\n', '')
     const { model, issues } = load(files({ 'intent/skeleton.yaml': legacy }))

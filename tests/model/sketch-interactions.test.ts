@@ -139,7 +139,7 @@ describe('X24 草图里的端口与实现者', () => {
     expect(check(def).errors.map(e => [e.code, e.target.interface])).toEqual([['sketch.ref', 'if.ui.list.items']])
   })
 
-  it('草图画布：定义了接口的模块带端口记号（实现者数）；经端口的线带插座', () => {
+  it('草图画布：定义了接口的模块带端口记号（实现者数）；经端口的线带插座，同时带机制「端口」（L12、L35）', () => {
     const def = ok(ok(base(), { op: 'implement', interface: 'if.ui.list.items', module: 'fe.ui.view' }), {
       op: 'connect',
       from: 'fe.ui.view',
@@ -151,5 +151,6 @@ describe('X24 草图里的端口与实现者', () => {
     expect(s.nodes.find(n => n.id === 'fe.ui.list')!.data.ports).toEqual([{ id: 'if.ui.list.items', name: 'items', implementers: 1 }])
     expect(s.nodes.find(n => n.id === 'fe.ui.view')!.data.ports).toBeUndefined()
     expect(s.edges[0].data.port).toBe(true)
+    expect(s.edges[0].data.mechs).toEqual({ 端口: 1 })
   })
 })

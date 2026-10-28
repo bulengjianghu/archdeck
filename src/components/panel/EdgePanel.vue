@@ -27,7 +27,7 @@ const couple = computed(() => {
   const b = endId(e.to)
   return desk.index.value.modules.has(a) && desk.index.value.modules.has(b) ? desk.evolution.between(a, b) : undefined
 })
-/** K22：按依赖分层后向上的边——控制反转是应有之义，否则多半是没标的回调、通知或经通道 */
+/** K22：分层（按依赖算出的层或声明的层）后向上的边——控制反转是应有之义，否则多半是没标的回调、通知或经通道；画布标「向上」（L26） */
 const upward = computed(() => desk.facts.upward.value.find(u => u.edge === props.id) ?? null)
 const endSelection = (nodeId: string) =>
   desk.index.value?.actors.has(nodeId) ? ({ kind: 'actor', id: nodeId } as const) : ({ kind: 'module', id: endId(nodeId) } as const)

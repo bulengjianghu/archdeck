@@ -8,8 +8,8 @@
  */
 import { computed, ref } from 'vue'
 import { EdgeLabelRenderer, useVueFlow } from '@vue-flow/core'
-import { straightEdge, type SketchEdgeData } from '@/layout/layout'
-import { composeLabel } from '@/layout/canvas'
+import { mechTags, straightEdge, type SketchEdgeData } from '@/layout/layout'
+import { composePill } from '@/layout/canvas'
 import type { RelationType } from '@/model'
 import { useDesk } from '@/state/inject'
 import { RELATION_TYPE_LABELS } from '../shared/labels'
@@ -83,11 +83,15 @@ const label = computed(() => dragging.value ?? props.data.label ?? geo.value.mid
 const many = computed(() => props.data.relationIds?.length ?? 0)
 const typeLabel = computed(() => (many.value ? `${many.value} 条关系（折叠显示）` : (RELATION_TYPE_LABELS[props.data.type as RelationType] ?? props.data.type)))
 /** 标签：聚合边标条数；写了说明的显示说明；没写的只在选中时显示类型（线多时不堆满画布） */
-/** L24、L26：经回调的线在标签后接「回调」（与画布标签位同一套组装：条数或说明在前，标签在后） */
-const text = computed(() => {
+/** L35、L26：机制写在说明或条数之后（与画布标签位同一套组装与上限，草图没有异常，只有一段中性；其余「+k」悬停列出） */
+const pill = computed(() => {
   const t = props.data.external ? '' : many.value ? `${many.value} 条` : props.data.description || (props.data.selected ? typeLabel.value : '')
-  return composeLabel(t, [props.data.callback && !props.data.external && { tag: '回调' }])
+  return composePill(t, props.data.external ? [] : mechTags(props.data.mechs, Math.max(1, many.value)))
 })
+const text = computed(() => pill.value.text)
+const more = computed(() =>
+  pill.value.hidden.length ? `\n另：${pill.value.hidden.map(p => p.tag + (p.count && p.count < (p.total ?? 0) ? ` ${p.count}` : '')).join('、')}` : '',
+)
 
 let start: { px: number; py: number; x: number; y: number } | null = null
 function onDown(e: PointerEvent) {
@@ -143,7 +147,7 @@ function onUp() {
       :class="{ selected: data.selected, pending: data.pending, many: many > 1 }"
       :style="{ transform: `translate(-50%, -50%) translate(${label.x}px, ${label.y}px)` }"
       :data-relation="id"
-      :title="`${typeLabel}${data.selected ? '（拖动可移动标签）' : ''}`"
+      :title="`${typeLabel}${data.selected ? '（拖动可移动标签）' : ''}${more}`"
       @pointerdown="onDown"
       @pointermove="onMove"
       @pointerup="onUp"

@@ -252,13 +252,13 @@ a {
   font-weight: 600;
 }
 
-/* 标签含异常（违规 / 未证实 / 未解释 / 缺段 / 未建模，L26）：警示色字、警示色边框 */
+/* 标签含异常（违规 / 向上 / 未证实 / 未解释 / 缺段 / 未建模，L26）：警示色字、警示色边框；分两段时只有异常段警示色（EdgePill，ADR-0041） */
 .edge-label-warn .vue-flow__edge-text {
   fill: var(--warning);
   font-weight: 600;
 }
 
-.edge-label-pill.edge-label-warn .vue-flow__edge-textbg {
+.edge-label-pill.edge-label-warn .vue-flow__edge-textbg:not(.plain) {
   stroke: var(--warning);
 }
 

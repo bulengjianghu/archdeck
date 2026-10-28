@@ -242,20 +242,33 @@ export function levelTiers(index: ModelIndex, view: LevelView, report: Pick<Gove
 }
 
 /**
- * K22（第十四轮 F8：扩到声明的层）：分层总览里发起方所在的层在接收方之下（声明的 order 更大）的交互边也是向上的边，
- * 与算出的层同一判定（控制反转是应有之义，否则提示）。带与带之间的边、核心跨层边都判定（核心按所在的带）；参与者等不在带里的端点不判。
+ * K22（ADR-0041；第十四轮 F8 合入）：分层总览里向上的边——层间边、核心跨层边与共用件的边，方向违背声明的分层：
+ * 接收方所在层可依赖发起方所在层（mayDependOn）、反过来不可，即交互逆着依赖方向；两层都没写 mayDependOn 时按层序（O2，order 小的在上），
+ * 发起方的 order 大于接收方。写了 mayDependOn、两个方向都不许的不算向上（那是违规，归代码事实）；层序与可依赖方向不一致交给 K24。
+ * 控制反转的口径同 levelTiers；不在任何层里的端点（边界节点、参与者）与同一层内的边不算。
+ * opts.core 为 false 时只判层间边（返工清单按带间边各报一条，不与核心跨层边重复）。返工清单、desk.facts.upward、画布与边面板都用这一个函数。
  */
 export function layerUpward(index: ModelIndex, view: LevelView, opts: { core?: boolean } = {}): UpwardEdge[] {
-  if (view.mode !== 'layered') return []
-  const order = new Map<string, number>()
-  for (const b of view.bands ?? []) for (const id of [b.layerId, ...b.coreModuleIds, ...b.shelf]) order.set(id, b.order)
+  if (view.mode !== 'layered' || !view.bands) return []
+  const order = new Map(view.bands.map(b => [b.layerId, b.order]))
+  const layerOf = new Map(view.nodes.map(n => [n.id, order.has(n.id) ? n.id : n.layerId]))
+  const may = (l: string) => index.modules.get(l)?.mayDependOn
+  const against = (from: string, to: string, a: number, b: number): boolean => {
+    if (may(from)?.includes(to)) return false
+    if (may(to)?.includes(from)) return true
+    return !may(from) && !may(to) && a > b
+  }
   const out: UpwardEdge[] = []
-  for (const e of [...view.edges, ...(opts.core === false ? [] : (view.coreEdges ?? []))]) {
-    const a = order.get(e.from)
-    const b = order.get(e.to)
-    if (a === undefined || b === undefined || a <= b) continue
-    const rels = e.relationIds.map(id => index.relations.get(id)).filter((r): r is RelationEntity => !!r)
-    const direct = rels.filter(r => !isInversion(r)).map(r => r.id)
+  for (const e of [...view.edges, ...(opts.core === false ? [] : [...(view.coreEdges ?? []), ...(view.shelfEdges ?? [])])]) {
+    const a = order.get(layerOf.get(e.from) ?? '')
+    const b = order.get(layerOf.get(e.to) ?? '')
+    const la = layerOf.get(e.from)!
+    const lb = layerOf.get(e.to)!
+    if (a === undefined || b === undefined || la === lb || !against(la, lb, a, b)) continue
+    const direct = e.relationIds.filter(id => {
+      const r = index.relations.get(id)
+      return !!r && !isInversion(r)
+    })
     out.push({ edge: e.id, from: e.from, to: e.to, inversion: !direct.length, relations: direct })
   }
   return out
@@ -363,7 +376,7 @@ export function tierFindings(index: ModelIndex, report: Pick<GovernanceReport, '
           issue: {
             severity: 'info',
             code: 'tier.upward',
-            message: `「${name(u.from)}」→「${name(u.to)}」向上（声明的层：order ${ord(u.from)} → ${ord(u.to)}）却不是控制反转：${u.relations.join('、')}；多半是没标的回调、通知或经通道（K22）`,
+            message: `「${name(u.from)}」→「${name(u.to)}」向上（声明的层：交互逆着可依赖方向，order ${ord(u.from)} → ${ord(u.to)}）却不是控制反转：${u.relations.join('、')}；多半是没标的回调、通知或经通道（K22）`,
             ...(r?.src ?? index.modules.get(parentId)?.src ?? {}),
           },
           modules: [u.from, u.to],

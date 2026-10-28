@@ -8,6 +8,7 @@ import CommitSection from './CommitSection.vue'
 import GovernanceSection from './GovernanceSection.vue'
 import EvolutionSection from './EvolutionSection.vue'
 import IntentSection from './IntentSection.vue'
+import ReviewSection from './ReviewSection.vue'
 
 const desk = useDesk()
 const idx = computed(() => desk.index.value!)
@@ -25,8 +26,16 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
       <div class="badges">
         <code>{{ sys.id }}</code>
         <span class="badge">系统</span>
+        <ReviewSection :id="sys.id" part="badge" />
       </div>
     </header>
+    <!-- 先答做什么（ADR-0042）：简介置顶——定位一句 + 核心原则一句；系统也能确认（Z7） -->
+    <Section title="简介">
+      <Markdown v-if="sys.description" :text="sys.description" />
+      <p v-else class="muted">未填写（system.description：定位一句、核心原则一句）</p>
+    </Section>
+    <ReviewSection :id="sys.id" part="diff" />
+    <ReviewSection :id="sys.id" part="confirm" />
     <GovernanceSection part="summary" />
     <IntentSection />
     <Section :title="layered ? '分层' : '顶层模块'" :count="top.length">
@@ -37,7 +46,6 @@ const layered = computed(() => desk.view.value?.mode === 'layered')
         </li>
       </ul>
     </Section>
-    <Section v-if="sys.description" title="简介"><Markdown :text="sys.description" /></Section>
     <Section title="生成来源与规模">
       <dl v-if="sys.source" class="kv">
         <template v-if="sys.source.repo"

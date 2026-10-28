@@ -58,9 +58,12 @@ function openChild(childId: string) {
     </header>
     <DesignNote :text="m.designNote" />
 
-    <Section title="职责">
+    <!-- 先答做什么（ADR-0042）：「说明」= 职责 + 原则一句；层与模块同一写法，实现原理折叠在后 -->
+    <Section title="说明">
       <Markdown v-if="m.responsibility" :text="m.responsibility" />
-      <p v-else class="muted">未填写</p>
+      <p v-else class="muted">职责未填写</p>
+      <div v-if="m.abstraction" class="principle"><span class="label">原则</span><Markdown :text="m.abstraction" /></div>
+      <p v-else-if="isLayer" class="muted principle">原则未填写</p>
     </Section>
     <ReviewSection :id="m.id" part="diff" />
     <!-- 结构视角（ADR-0031）：指标、影响面与交互图互查紧跟职责 -->
@@ -70,10 +73,6 @@ function openChild(childId: string) {
     <ModuleDecisions :id="m.id" />
 
     <template v-if="isLayer">
-      <Section title="抽象原则">
-        <Markdown v-if="m.abstraction" :text="m.abstraction" />
-        <p v-else class="muted">未填写</p>
-      </Section>
       <Section v-if="m.includes?.length || m.excludes?.length" title="应该包含 / 不应该包含">
         <div class="inc">
           <ul class="yes">
@@ -148,6 +147,21 @@ function openChild(childId: string) {
 </template>
 
 <style scoped>
+.principle {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+
+.principle .label {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
 .inc {
   display: grid;
   grid-template-columns: 1fr 1fr;

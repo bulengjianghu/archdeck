@@ -5,32 +5,41 @@ modules:
   # ── 骨架模块的代码落点（04 §3.10：骨架只写目录级，细到文件的由 AI 在这里补充，X1）──
   - id: present.issues
     name: 问题页签
+    abstraction: 只呈现模型层汇总好的返工清单，排序、筛选与复制都不新增判断；画布上只留计数角标。
     codeRefs: [src/components/tree/IssueList.vue]
   - id: access.deps
     name: 依赖提取
+    abstraction: 只提取事实不做判断：说明符解析到清单中的文件即止，归属与规则交给模型层；给分类器的事实单独成件、只在命令行用。
     principle: 继承与组装的提取（ADR-0029、ADR-0030）：类声明的 implements / extends 子句记为 inherits（导入名、子句种类，目标上带穿透后的声明种类；默认导入的基类按默认导出解析），供端口实现者（K5c）与子类事实（K12）；值位置的交互使用另记种类 invokeKinds——call、extends、new、factory（create* / make* / build* 或 *Factory，成员调用只认命名空间导入或 *Factory 对象）、register（交给 register* / provide / bind / use 的调用），K7 只看 call，K13 看后三种（Error 类的 new 不算组装）。
     codeRefs: [vite/readDeps.ts]
   - id: access.governance-store
     name: 治理存储
+    abstraction: 只存取项目下的 governance/：基线只由命令行生成，拦截记录只追加。
     codeRefs: [vite/governanceStore.ts]
   - id: access.history
     name: 源码历史读取
+    abstraction: 只读 git 历史并按 HEAD 与窗口缓存，不判断归属；git 不可用时给出原因而不报错。
     codeRefs: [vite/readHistory.ts]
   - id: access.agent
     name: agent 接口
+    abstraction: 查询核心只有一份，命令行与 MCP 两层外壳同输入同结果；只读描述、规则与基线，只写拦截记录。
     codeRefs: [scripts/agent/**, scripts/arch.ts, scripts/arch-mcp.ts, .mcp.json]
   - id: model.governance
     name: 架构治理
+    abstraction: 事实比对、规则判定与环各算一类，报告只组合它们；本层投影、结构视图与查询都只是读法，不新增事实。
     adrs: [15, 26]
     codeRefs: [src/model/governance/index.ts]
   - id: model.rework
     name: 返工清单
+    abstraction: 只汇总其他模型子模块已有的结果并按根因聚合，不新增事实、不重做判定。
     codeRefs: [src/model/rework/index.ts, src/model/rework/list.ts, src/model/rework/markdown.ts, src/model/rework/health.ts]
   - id: model.evolution
     name: 演化事实
+    abstraction: 与代码事实同一做法：历史按归属提升到模块再投影到本层，输入全由接入层给，不碰文件系统。
     codeRefs: [src/model/evolution/index.ts, src/model/evolution/history.ts, src/model/evolution/level.ts]
   - id: model.intent
     name: 意图
+    abstraction: 按草图生命周期切分：编辑只产出新草图、校验只判是否合法、核验只比对版本，三者都是纯函数、互不越位。
     adrs: [23, 24, 25]
     codeRefs: [src/model/intent/index.ts]
 
@@ -62,7 +71,7 @@ modules:
   - id: state.desk.facts
     name: 架构治理派生（desk.facts）
     parent: state.desk
-    responsibility: 由源码同步取得的代码事实派生（computed，调用模型层架构治理）：事实状态（设计版本或历史提交、取数中、失败——源码清单读取失败也算，K8、G1）、治理报告、交互视角「代码事实」开关开启时（缺省开启）或结构视角下的本层投影（只取基线外的违规，K9、Y4）、门禁错误（U9）、拦截记录摘要（Q4）、选中的代码依赖叠加线（K10）、选中节点所在的本层环（Y5）、模块治理信息与关系证实（含知识方向与经端口的证实，K5b）。四类交互与端口（ADR-0029）：端口面板 portOf / portsOf（K11；有代码事实时实现者带证据档并含「仅代码事实」的，否则只按描述）、本层要画端口记号的节点 portMarks（L13，只在交互视角，分层总览只画核心模块）、端口孤立（U14，治理面板）、未分类条数与其中核心之间的（M17）；子类与组装事实 structureOf（模块的子类 / 基类、组装 / 被组装于、是否组装根）与 structureBetween（两端之间的，关系与代码依赖面板用，K12、K13）；「组装」开关开启时组装事实与组装根的本层投影 assembly（O12，不参与布局）。结构视图（ADR-0031）：结构视角下本层的结构视图 structure（有代码事实时为束与元素级边，否则为允许依赖图，活动草图的 mayDependOn 一并投影，U16）；交给布局同步的结构边 layoutLinks（不论视角，本层全部束与元素级边，分层总览另加全部核心块的跨层束 chipDeps，普通层次带按值依赖的分层；构造逻辑是纯函数 baseLayoutLinks / toLayoutTiers，线的几何检查器（测试）同用一份；读取中为空，L15 并集布局；有表面展开时带 expansion——选中模块 / 交互 / 视图边或「总是展开表面」（setSurfaceAlways 交来）时展开的节点与元素端口、交互束的散开，两个视角一份，L20a）；全系统指标 metrics / valueMetrics 与模块明细 metricsOf（K16）、模块的影响面 impactOf（K15）与按视图状态的影响面查询算好的 queried（K15b，缺省只看值依赖）、逆稳定 againstOf（U17）、交互图互查 isolatedOf（K17）；视角切换用的 structurePair（V12）；结构视角画布按显示偏好过滤、跨界折叠与聚焦的 structureDisplay（L21a）；表面 surfaceOf / surfaceMetricsOf / bypassesOf、展开元素的悬停数据 surfaceInfo（K18、K19）；承载 carriers / carrierOf / stepCarrierOf 与交互束散开 interactionSpread / spreads（K5d、S18b、D7）。
+    responsibility: 由源码同步取得的代码事实派生（computed，调用模型层架构治理）：事实状态（设计版本或历史提交、取数中、失败——源码清单读取失败也算，K8、G1）、治理报告、本层向上的交互边 upward（K22：普通层次取 levelTiers 的结果、分层总览取 layerUpward，画布据此写「向上」、边面板据此说明，ADR-0041）、交互视角「代码事实」开关开启时（缺省开启）或结构视角下的本层投影（只取基线外的违规，K9、Y4）、门禁错误（U9）、拦截记录摘要（Q4）、选中的代码依赖叠加线（K10）、选中节点所在的本层环（Y5）、模块治理信息与关系证实（含知识方向与经端口的证实，K5b）。四类交互与端口（ADR-0029）：端口面板 portOf / portsOf（K11；有代码事实时实现者带证据档并含「仅代码事实」的，否则只按描述）、本层要画端口记号的节点 portMarks（L13，只在交互视角，分层总览只画核心模块）、端口孤立（U14，治理面板）、未分类条数与其中核心之间的（M17）；子类与组装事实 structureOf（模块的子类 / 基类、组装 / 被组装于、是否组装根）与 structureBetween（两端之间的，关系与代码依赖面板用，K12、K13）；「组装」开关开启时组装事实与组装根的本层投影 assembly（O12，不参与布局）。结构视图（ADR-0031）：结构视角下本层的结构视图 structure（有代码事实时为束与元素级边，否则为允许依赖图，活动草图的 mayDependOn 一并投影，U16）；交给布局同步的结构边 layoutLinks（不论视角，本层全部束与元素级边，分层总览另加全部核心块的跨层束 chipDeps，普通层次带按值依赖的分层；构造逻辑是纯函数 baseLayoutLinks / toLayoutTiers，线的几何检查器（测试）同用一份；读取中为空，L15 并集布局；有表面展开时带 expansion——选中模块 / 交互 / 视图边或「总是展开表面」（setSurfaceAlways 交来）时展开的节点与元素端口、交互束的散开，两个视角一份，L20a）；全系统指标 metrics / valueMetrics 与模块明细 metricsOf（K16）、模块的影响面 impactOf（K15）与按视图状态的影响面查询算好的 queried（K15b，缺省只看值依赖）、逆稳定 againstOf（U17）、交互图互查 isolatedOf（K17）；视角切换用的 structurePair（V12）；结构视角画布按显示偏好过滤、跨界折叠与聚焦的 structureDisplay（L21a）；表面 surfaceOf / surfaceMetricsOf / bypassesOf、展开元素的悬停数据 surfaceInfo（K18、K19）；承载 carriers / carrierOf / stepCarrierOf 与交互束散开 interactionSpread / spreads（K5d、S18b、D7）。
     codeRefs: [src/state/desk/facts.ts, src/state/desk/evidence.ts, src/state/desk/layoutLinks.ts]
   - id: state.desk.evolution
     name: 演化事实派生（desk.evolution）
@@ -112,7 +121,7 @@ modules:
     name: 分层与拆分信号
     parent: model.governance
     adrs: [38]
-    responsibility: 普通层次按本层值依赖分层（ADR-0038）——tierNodes：强连通分量合组、到汇点的最长链定高度、没人依赖的提到顶层、孤立的另列（L28）；levelTiers：取本层值依赖（与 Y4 共用 levelValueDeps）给参与分层的节点定层，环组复用 Y4 编号，找向上的交互边并判断是否控制反转（isInversion，K22）、直接交互却两个方向都没有值依赖的兄弟与大环、本层无依赖的提示（L29、K21③）；splitSignals：子模块不占文件、兄弟共用文件（K21①②）；tierFindings / tierIssues：逐个普通层次（「+N」展开）出 split.* 与 tier.upward 的 info 提醒（分层总览按声明的层判向上，layerUpward，第十四轮 F8），并入治理报告、返工清单按它定位。层号对全集算、「+N」放在成员最上的一层并给出层号跨度 foldSpan（L39）；平铺提示（L40）。线的级别（grades.ts，K23）：gradeBundles 按例外（违规 / 向上 / 逆稳定 / 未解释）、环内、传递约简（91 §2 口径）给结构视角的束定级，forcedExceptions 给出照画的例外。布局只消费层号。
+    responsibility: 普通层次按本层值依赖分层（ADR-0038）——tierNodes：强连通分量合组、到汇点的最长链定高度、没人依赖的提到顶层、孤立的另列（L28）；levelTiers：取本层值依赖（与 Y4 共用 levelValueDeps）给参与分层的节点定层，环组复用 Y4 编号，找向上的交互边并判断是否控制反转（isInversion，K22）；layerUpward：分层总览按声明的分层找向上的边——接收方的层可依赖发起方的层、反过来不可（mayDependOn），两层都没写时按层序（ADR-0041）；直接交互却两个方向都没有值依赖的兄弟与大环、本层无依赖的提示（L29、K21③）；splitSignals：子模块不占文件、兄弟共用文件（K21①②）；tierFindings / tierIssues：逐个普通层次（「+N」展开）出 split.* 与 tier.upward 的 info 提醒（分层总览也报，第十四轮 F8）；layerDrift：声明的层序与实算比对（K24），并入治理报告、返工清单按它定位。层号对全集算、「+N」放在成员最上的一层并给出层号跨度 foldSpan（L39）；平铺提示（L40）。线的级别（grades.ts，K23）：gradeBundles 按例外（违规 / 向上 / 逆稳定 / 未解释）、环内、传递约简（91 §2 口径）给结构视角的束定级，forcedExceptions 给出照画的例外。布局只消费层号。
     codeRefs: [src/model/governance/tiers.ts, src/model/governance/grades.ts]
   - id: model.governance.query
     name: agent 查询
@@ -146,6 +155,7 @@ modules:
   # 骨架里的「确认」（model.review）只补它提供的接口（X1：补充草图没写的字段）
   - id: model.review
     name: 确认
+    abstraction: 确认的摘要、指纹与状态都是纯函数，页面、命令行与草图归档共用同一份。
     parent: model
     provides: [if.review.query]
     codeRefs: [src/model/review/index.ts, src/model/review/hash.ts, src/model/review/status.ts, src/model/review/text.ts]
@@ -379,3 +389,4 @@ relations:
   - { id: rel.gv.tiers-cycles, from: model.governance.tiers, to: model.governance.cycles, type: queries, description: 分层向环与环度取：校验提醒调用 valueDeps 只留值依赖，再按最近公共祖先归到层次（L28、Y1） }
   - { id: rel.r14.facts-projector, from: state.desk.facts, to: model.projector, type: queries, description: 架构治理派生（desk.facts）向 Projector 层次投影取：调用 shelfOf 取本层共用件，线的级别（K23）的约简宇宙与照画的例外据此排除共用件 }
   - { id: rel.r14.canvas-tiers, from: state.layout.canvas, to: model.governance.tiers, type: queries, description: 画布场景向分层与拆分信号取：调用 foldSpanText 在「+N」上写成员的层号跨度与跨 ≥ 3 层的提示（L39、L40） }
+  - { id: rel.r14.pill-labels, from: present.canvas.edges, to: state.layout.runner.boundaries, type: queries, description: 边组件向框外元素与手工走线取：标签位的 pill 调用 labelWidth、PILL_GAP 按两段的实际文字估宽并排开（L26、L33） }

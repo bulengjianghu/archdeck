@@ -3,6 +3,11 @@
 # 页面的 Worker 脚本（/bundle/player-worker.js）由演示服务从 media-test/probes/web-player/worker-bundle.mjs 打包，不在本描述范围内。
 
 modules:
+  # 第二级模块的原则（补充条目，ADR-0042；名称与骨架一致）
+  - { id: host.demo, name: 演示页与布局, abstraction: 控制器是页面唯一协调者，只把输入转成 SDK 命令、页面状态只取事件与快照；共用件与骨架不碰 SDK。 }
+  - { id: host.demo-config, name: 配置、测试流与接入代码, abstraction: 把纯值变换与页面分开：配置与接入示例都只吃传入的值、不碰页面元素，示例只从生效配置生成。 }
+  - { id: host.demo-diag, name: 诊断与故障注入, abstraction: 按只读观察与只改地址分开：诊断只读事件与快照，故障注入只经代理改写交给 SDK 的地址，当前会话由控制器注入。 }
+
   # ───────────────────────── host.demo ─────────────────────────
   - id: host.demo.app
     parent: host.demo

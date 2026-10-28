@@ -4,47 +4,69 @@ modules:
   # ── 骨架模块的代码落点（04 §3.10：骨架只写目录级，细到文件的由 AI 在这里补充，X1）──
   - id: present.shell
     name: 应用外壳与路由
+    abstraction: 外壳只按路由选页，切换项目或版本时整块重建视图，自身不持有任何浏览状态。
     codeRefs: [index.html, env.d.ts, src/main.ts, src/App.vue, src/styles.css]
   - id: present.project-list
     name: 项目列表主页
+    abstraction: 只读接入层附好健康度的项目摘要，健康度在前、规模在后，自身不加载任何项目的描述。
     codeRefs: [src/components/ProjectList.vue]
   - id: present.version
     name: 版本切换与设计信息条
+    abstraction: 信息条按「这是哪个版本、能做什么、和谁比」三问分区，新建设计另成入口；各区只调 DeskState 的操作。
     principle: 版本切换（VersionSwitcher）在这一级：选中后只显示名称，kind 用图标，草图选项为「✎ 名称」（F-63）；信息条按三区拆成子模块（身份、动作、对比，F-60–F-62），另有「在此设计」的新建设计对话框。
     codeRefs: [src/components/VersionSwitcher.vue]
   - id: present.canvas
     name: 画布
+    abstraction: 画什么全由画布场景给出，画布只渲染并上交手势；节点、边与图例按视觉元素切分，共用同一套样式映射。
     codeRefs: [src/components/GraphCanvas.vue, src/components/DisplayPanel.vue, src/components/nodes/**, src/components/edges/**, src/components/stage/**]
   - id: present.nav
     name: 导航
+    abstraction: 面包屑管「在哪一层」、工具栏管「跳到哪」，两者都只发导航意图，不持有状态。
     codeRefs: [src/components/Breadcrumb.vue, src/components/Toolbar.vue]
   - id: state.desk
     name: DeskState
+    abstraction: 一个协调者持有视图状态，dispatch 是唯一写入口；派生按领域分组且只读，与外界的往来全放在同步适配器里。
     codeRefs: [src/state/useDeskState.ts, src/state/inject.ts, src/state/desk/intent.ts]
   - id: access.model-source
     name: ModelSource 插件
+    abstraction: 只把读取、写入、源码与治理各模块挂成同源端点并按项目推送变更，自身不解析描述。
     codeRefs: [vite/archModelPlugin.ts, vite/readHealth.ts, vite.config.ts]
   - id: access.reader
     name: 描述读取
+    abstraction: 按目录约定发现项目与版本、只搬运文本，描述的含义一律交给模型层的 loadModel 解释。
     codeRefs: [vite/readModelDir.ts, vite/readGit.ts]
   - id: access.lint
     name: 命令行校验
+    abstraction: 与页面共用同一套模型层函数，命令行只负责遍历目录、输出位置与退出码，不另立规则。
     principle: 摘要给出未分类关系的条数与其中核心之间的条数（M17），以及有实现者的端口、子类、组装与组装根（K5c、K12、K13）；设计版本没有代码事实（K8），端口孤立只按描述判定（U14）。
     codeRefs: [scripts/lint-model.ts]
   - id: model.types
     name: 类型与 Schema
+    abstraction: 只放形状与只查表的小谓词、不含计算，是呈现层唯一可依赖的模型层契约。
     adrs: [22, 26]
     codeRefs: [src/model/types.ts, src/model/names.ts, src/model/project-summary.ts, src/model/design.ts, src/model/scenario/types.ts, src/model/source/types.ts, src/model/governance/types.ts, src/model/intent/types.ts, src/model/rework/types.ts, src/model/review/types.ts, src/model/evolution/types.ts, schema/arch-file.schema.json]
   - id: model.pipeline
     name: 加载流水线
+    abstraction: 按阶段单向串联：Loader 只管单文件、Validator 只管跨文件、Indexer 只建查询结构，问题由入口统一汇总。
     codeRefs: [src/model/load.ts, src/model/validate.ts, src/model/indexer.ts, src/model/index.ts]
   - id: model.projector
     name: Projector 层次投影
+    abstraction: 按投影步骤切分：先映射端点、再汇总成边，层次顺序作共用查询；只产出 LevelView，不知道坐标。
     principle: 边界角色（L14，ADR-0030）：role 为 port / adapter 的模块同核心常显、不折叠进「+N」也不算普通模块，视图节点带 rim 标记，由 Layout 压在框的上边 / 左边（adapter 随外部系统在左，ADR-0039）；视图边仍按 (from, to, type) 分（L5），类型为四类交互。
     codeRefs: [src/model/project.ts]
   - id: model.diff
     name: 版本对比
+    abstraction: 只按 ID 逐字段比对两份索引，输出差异与涉及数，不读文件、不解释变更原因。
     codeRefs: [src/model/diff.ts]
+  - id: present.panel
+    name: 属性面板
+    abstraction: 选中是唯一主语：按选中只挑一张对象面板；各面板只读派生数据、共用内容块，写入只经 DeskState 发起。
+  - id: present.shared
+    name: 呈现共用件
+    abstraction: 只放被多个呈现子系统共用的叶子，自身不依赖任何呈现子系统，避免取用方与提供方成环。
+  - id: state.layout
+    name: Layout
+    abstraction: 按画什么切分排布，入口唯一并按内容缓存；只算坐标与画面数据，不知道层次规则。
 
   # ── 呈现层 ──────────────────────────────────────────────
   - id: present.canvas.flow
@@ -61,6 +83,7 @@ modules:
     name: 节点组件
     parent: present.canvas
     responsibility: '七种节点：模块（职责摘要、可下钻标识、目标态虚线）、边界（系统内、本层外的模块与所在路径）、外部参与者（用户 / 外部系统 / 时间图标，系统外）、边界框（系统框与当前父模块框，FrameNode）、带（层名、抽象原则、可依赖层）、核心模块小块、「+N 个其他模块」占位；设计版本中新增 / 修改描边与「△N」变更角标。分级（ADR-0027）：普通层次的核心模块画成大块，共用件画成架上的紧凑块（SharedNode，O9），用到共用件的节点右上角「共用 ×N」角标（O10），父模块框与带右上角常驻「共用件 N · 折叠 M」并标出架的「共用件」字样（O11）；普通层次的「+N」占位双击无动作（O8）。边界与端口（ADR-0029、ADR-0030）：role: port / adapter 的模块名后带边界角色记号（L14），模块、核心小块与边界节点骑着端口记号（L13）；节点角标统一布局（DiffMark）——上边框左侧为新增 / 修改、「△N」与「组装根」角标（O12），上边框右半为端口记号，顶边有端口记号时环编号与「共用 ×N」移到下边框、热度色块让到左下角。'
+    abstraction: 一种节点一个组件，角标共用统一的布局；只画画布场景给的数据，指标与端口不自己算。
     codeRefs: [src/components/nodes/**]
   - id: present.canvas.nodes.ports
     name: 端口记号
@@ -84,6 +107,7 @@ modules:
     name: 边组件
     parent: present.canvas
     responsibility: 按 Layout 给出的走线画边：折线带圆角或竖向 S 形曲线；颜色、线宽、线型的映射在 edgeStyle，箭头 marker 在 ArrowMarker（大小随线宽档，线在箭头处回缩），都与「显示」面板的示意线共用；折线在跳点处插半圆小桥（L11）。一个视觉通道只表一个维度（L10、ADR-0018、ADR-0029）：颜色 = 关系类型（四类各一色相——查询低饱和且半透明，只「淡」不「细」；委托实色；迁移期的未分类中性灰）；线型 = 行为还是依赖（L18、ADR-0035：交互与回放临时线实线，代码依赖叠加线、组装叠加、承载缺段虚线并用依赖的端点记号 UmlMarker）；箭头自画 marker——同步实心、异步空心「V」；插座 = 经端口（L12，目标端与箭头叠放）；线宽 = 聚合条数三档；标签位（L26）画成 pill，含异常时用警示色。晕：违规红晕优先于设计变更底色，选中为强调色窄晕（不改线宽），回放当前步骤为宽晕并沿方向流动（P10）；走过的边不加粗。结构视角的边见子模块「结构边」（UML 惯例，ADR-0031 裁决 D）。临时线：经由上层关系为关系类型色的虚线（P15），未建模为红色虚线（P11）；组装叠加线为组装专用色的点划线（O12）。
+    abstraction: 一个视觉通道只表一个维度，样式映射集中一处、与图例示意线共用；结构边与插座记号各自成件。
     codeRefs: [src/components/edges/**]
   - id: present.canvas.edges.socket
     name: 插座记号
@@ -162,6 +186,7 @@ modules:
     name: 显示面板（显示设置与图例）
     parent: present.canvas
     responsibility: 画布右下角的「显示」面板，先「设置」后「图例」（ADR-0017）；图例按视角整组替换、不混列（L19、D-26，ADR-0031 裁决 D）。设置只放没有图例的开关（交互视角为边界节点、只看现状；运行视角为交互关系显示方式）；交互视角的图例一个视觉通道一组、每组可折叠——关系 · 颜色按「三问四修饰」组织（ADR-0029 §3）：三个判断题（被调方拥有后果吗 / 发起方知道接收方吗 / 传的是连续数据吗）各落到一类，类型行示意按画布同一套样式（查询淡、委托实色、带该类箭头）并附一句读法，每行兼作类型筛选（L8），迁移期的未分类单列一行中性灰；读完类型再读的修饰——机制（直接 / 端口的插座 / 总线 / 通道）、异步（空心箭头）、拉取——与粗细（聚合条数）、×N 放在浅底卡片里、中性色示意、不可点击（L10、L12）；节点；代码事实 · 线型（交互视角，开关在组标题；线型只在这一组讲）；组装（交互视角，开关在组标题，O12）。结构视角换成结构视图的几组（子模块「结构视图图例」）；运行视角为回放。共享通道（选中、违规、环、演化、条数）的说明三处同文（L18）。一行一项，示意线由 LineSwatch 按与边组件共用的 edgeStyle 画出，与画布同款。各组为子组件（NodeSettings、RelationLegend、FactsLegend、AssemblyLegend、ReplayLegend，外壳 DisplayGroup）。折叠时摘要列出非默认的设置（运行视角缺省折叠，摘要总是「交互关系：<方式>」）；面板展开与各组折叠按视角记在本机（useDisplayPrefs），运行视角默认只展开「回放」。
+    abstraction: 图例按视角整组替换、不混列，每组一个子组件；示意线与画布共用同一套样式映射。
     codeRefs: [src/components/DisplayPanel.vue, src/components/display/**]
   - id: present.canvas.legend.assembly
     name: 组装开关与图例
@@ -197,11 +222,13 @@ modules:
     name: 视图派生（核心与 desk.run）
     parent: state.desk
     responsibility: 由视图状态与模型派生要画的数据（全部是 computed，调用纯函数）。核心平铺在 DeskState 上：层次视图与坐标、选中（selectedOf）、视角。运行视角的派生归 desk.run（ADR-0013）：回放计划、调用与返回的配对、回放路径与路线、本层的帧投影与可见消息、选中突出（emphasisOf）、舞台叠加与参与节点、时序模型与时序图坐标，导航树用的步骤大纲与参与模块，以及场景列表（全部场景的触发者与消息数）与当前场景的触发者、ref 引用与被引用（呈现层不再自己遍历场景）。源码与版本的派生另见 desk.files、desk.versions。
+    abstraction: 全部是调用纯函数的 computed，只读不写；核心平铺在 DeskState 上，运行视角的派生收进 desk.run。
     codeRefs: [src/state/desk/run.ts]
   - id: state.desk.actions
     name: dispatch 与操作
     parent: state.desk
     responsibility: 视图状态唯一的写入口 dispatch(action)：调用视图状态转移得到新状态并写入，层次变化时通知画布适应；对外的一组操作（下钻、跳转、返回上级、选中、定位、悬停、打开 / 关闭场景、单步、指向某一步或回到开头、选分支）都只是构造动作并 dispatch。
+    abstraction: dispatch 是视图状态唯一的写入口，对外操作只构造动作，规则全在视图状态转移。
     principle: 本身不含领域规则：所有「给定状态与动作，下一个状态是什么」都在视图状态转移里；这里只把派生的上下文（索引、本层帧投影等）交给转移函数。
   - id: state.desk.url-sync
     name: 路由同步
@@ -221,6 +248,7 @@ modules:
     name: 布局入口与缓存
     parent: state.layout
     responsibility: Layout 的入口（layout.ts，对外只经它引用）：layoutView 按视图模式分派给分层总览或普通层次排布；并集布局（L15）：结构边（StructureLinks）经 unionView 并入视图边、共用件的边与核心跨层边，与交互边一起交给排布，两个视角共用同一份布局与走线；表面展开不进排布（L20a②，ADR-0036）：先取收起态的布局，再由 expandSurface 在固定的节点上排端口点（surfaceDots）、散开的束在节点前分叉、每个点一支并停在点的边缘（tapRoute、fanLevels，dots.ts），换选中节点不动；结果按视图内容、结构边 ID 与布局算法版本（LAYOUT_VERSION）缓存；几何类型（点、盒子、走线、带坐标的视图与它的父模块框 parentFrame、系统框 frame）、节点尺寸与内容外框 contentBounds（含两种框，geometry.ts）。
+    abstraction: 对外只经一个入口、按视图模式分派给两种排布，框外元素在排布后按方位另摆；两个视角共用同一份布局与缓存。
     codeRefs: [src/layout/layout.ts, src/layout/geometry.ts, src/layout/dots.ts]
   - id: state.layout.runner.layered
     name: 分层总览排布
@@ -235,8 +263,8 @@ modules:
   - id: state.layout.runner.boundaries
     name: 框外元素与手工走线
     parent: state.layout.runner
-    codeRefs: [src/layout/routes.ts]
-    responsibility: 方位表示角色（A7、L4）：用户在系统框上方、外部系统与时间在系统框左侧（placeActors，ADR-0039），边界节点在父模块框下方一行、按视图给出的层次顺序（与时序图泳道一致），系统框包住父模块框与边界节点行（placeOutside）；方位固定在屏幕上，不随布局方向改变。普通层次中框外元素的边（参与者的边、边界边）不参与布局，要画时由 edgeRoute 按需正交绕行（routing 的 detour：用户底边、外部系统右边、边界节点顶边出入，选通道时避开已占的竖段（BusyLines），短桩不伸进对面的节点（clampStub），不穿节点，从目标的入口侧进入，同一节点上的多条边错开、同一起点的边各走一条横线；内部节点那一端取 elk 的占位端口，框外元素自身的端口同样左动右静）。画布每次只对当前画出来的那组框外边一起走线并分配轨道（outsideRoutes + routing 的 allocateTracks：走廊里重合或挨得太近的中间段按边 ID 分轨，内部边与框线只占不动、分轨后不穿节点，L32；placeLabelBoxes 按实际尺寸放标签，L33），按布局与可见集记忆。手工走线与编码工具也在这里（routes.ts）：回放临时线与叠加线的曲线 linkRoute、edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、isBoundaryEdge（L10），供排布与画布场景使用。L14：placeRims 把普通层次的边界角色压在父模块框线上；框线上的 port 对端在上方（用户）时走顶边、否则走底边，adapter 对端在左侧（外部系统）时走左边、否则走右边；关系边的出入点在该侧前半错开，后半留给端口记号（L11、L13）。
+    codeRefs: [src/layout/routes.ts, src/layout/labels.ts]
+    responsibility: 方位表示角色（A7、L4）：用户在系统框上方、外部系统与时间在系统框左侧（placeActors，ADR-0039），边界节点在父模块框下方一行、按视图给出的层次顺序（与时序图泳道一致），系统框包住父模块框与边界节点行（placeOutside）；方位固定在屏幕上，不随布局方向改变。普通层次中框外元素的边（参与者的边、边界边）不参与布局，要画时由 edgeRoute 按需正交绕行（routing 的 detour：用户底边、外部系统右边、边界节点顶边出入，选通道时避开已占的竖段（BusyLines），短桩不伸进对面的节点（clampStub），不穿节点，从目标的入口侧进入，同一节点上的多条边错开、同一起点的边各走一条横线；内部节点那一端取 elk 的占位端口，框外元素自身的端口同样左动右静）。画布每次只对当前画出来的那组框外边一起走线并分配轨道（outsideRoutes + routing 的 allocateTracks：走廊里重合或挨得太近的中间段按边 ID 分轨，内部边与框线只占不动、分轨后不穿节点，L32；placeLabelBoxes 按实际尺寸放标签，L33），按布局与可见集记忆。手工走线与编码工具也在这里（routes.ts）：回放临时线与叠加线的曲线 linkRoute、edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、标签位的词表与组装（labels.ts：EDGE_TAGS 分异常与修饰两级，composePill 画成至多两段、标签至多两个其余「+k」，labelWidth / pillWidth 估宽，L26、ADR-0041）、视图边的机制标签 mechTags（L35）、标签尺寸 labelSize（按两段的实际文字）与 elk 标签槽 slotSize（只按把手角标，机制标签不改走线，L33）、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、isBoundaryEdge（L10），供排布与画布场景使用。L14：placeRims 把普通层次的边界角色压在父模块框线上；框线上的 port 对端在上方（用户）时走顶边、否则走底边，adapter 对端在左侧（外部系统）时走左边、否则走右边；关系边的出入点在该侧前半错开，后半留给端口记号（L11、L13）。
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.pipeline.loader
@@ -280,7 +308,7 @@ modules:
   - id: model.projector.collector
     name: 边汇总
     parent: model.projector
-    responsibility: 把映射后的关系按 (from, to, type) 收集成视图边（L5）：同一对节点之间不同类型（四类交互，迁移期的未分类单成一类）的关系各成一条，同类型内聚合并记条数（L2）；汇总同步 / 异步（通知一律异步）。
+    responsibility: 把映射后的关系按 (from, to, type) 收集成视图边（L5）：同一对节点之间不同类型（四类交互，迁移期的未分类单成一类）的关系各成一条，同类型内聚合并记条数（L2）；汇总同步 / 异步（通知一律异步）；按 mechanismOf 记每个机制的条数（mechs，L35，ADR-0041）。
   - id: model.projector.overview
     name: 分层总览
     parent: model.projector

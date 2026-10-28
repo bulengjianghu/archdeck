@@ -5,6 +5,7 @@
 import { computed, type ShallowRef } from 'vue'
 import {
   REVIEW_SOURCE_MANUAL,
+  isReviewable,
   reviewCounts,
   reviewEntries,
   reviewScope,
@@ -43,12 +44,12 @@ export function createReview({ index, version, writer }: ReviewInputs) {
   /** Z4：「也确认子模块」要记入的模块（含自身） */
   const subtree = (id: string): string[] => (index.value?.modules.has(id) ? subtreeOf(index.value, id) : [])
 
-  /** Z4、Z6：把这些模块记为确认（来源 manual、当天日期、现在的指纹与摘要）；分批写，任一批失败即停止 */
+  /** Z4、Z6、Z7：把这些模块（或系统）记为确认（来源 manual、当天日期、现在的指纹与摘要）；分批写，任一批失败即停止 */
   async function confirm(ids: readonly string[], note?: string): Promise<WriteOutcome> {
     if (!canReview) return { ok: false, error: '只对当前版本确认（Z1）' }
     const idx = index.value
     if (!idx) return { ok: false, error: '描述还没有加载' }
-    const missing = ids.find(id => !idx.modules.has(id))
+    const missing = ids.find(id => !isReviewable(idx, id))
     if (missing) return { ok: false, error: `模块不存在：${missing}` }
     if (!ids.length) return { ok: false, error: '没有要确认的模块' }
     let last: WriteOutcome = { ok: false, error: '没有要确认的模块' }

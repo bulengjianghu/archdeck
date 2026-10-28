@@ -183,9 +183,15 @@
           "summary": {
             "type": "object",
             "additionalProperties": false,
-            "description": "确认时的摘要（Z3）：需复核时据此显示差异",
+            "description": "确认时的摘要（Z3）：需复核时据此显示差异；系统的确认只有 description（Z7）",
             "properties": {
               "responsibility": {
+                "type": "string"
+              },
+              "abstraction": {
+                "type": "string"
+              },
+              "description": {
                 "type": "string"
               },
               "includes": {

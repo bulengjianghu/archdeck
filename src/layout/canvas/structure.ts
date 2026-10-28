@@ -35,7 +35,7 @@ import {
   type ViolationStatus,
 } from '@/model'
 import { chipBundleId, labelWidth, linkRoute, restEdgeId, outsideRoutes, type Box, type EdgeRoute, type Point, type PositionedView } from '../layout'
-import { composeLabel, type TagPart } from './labels'
+import { composeLabel, type TagPart } from '../labels'
 import type { CanvasInput, DepEdgeKind, DepEdgeLook, DepViolation, NodeData } from './types'
 
 /** L16：结构边形态的名称（悬停说明与图例） */
@@ -296,16 +296,20 @@ export function chipItems(idx: ModelIndex, list: readonly ChipDep[]): DepItem[] 
 }
 
 /**
- * L26、L42：结构边的标签——角标之后先写词表里的异常（违规 = 基线外新增，U15；未解释，K17），再写结构视角自己的记号
- * （向上 F10、越过入口 C3、逆稳定 U17）。画布与几何检查器同读这一份。
+ * L26、L42：结构边的标签——角标之后先写词表里的异常（违规 = 基线外新增，U15；向上，F10 的结构视角判定；未解释，K17），再写结构视角自己的记号
+ * （越过入口 C3、逆稳定 U17）。画布与几何检查器同读这一份。
  */
 export function depLabel(look: Pick<DepEdgeLook, 'rest' | 'elements' | 'violation' | 'unexplained' | 'bypass' | 'against' | 'upward'>): {
   label: string
   tags: TagPart[]
 } {
   const head = look.rest ? `×${look.elements} 其余` : look.elements ? `×${look.elements} 元素` : ''
-  const tags: TagPart[] = [...(look.violation === 'new' ? [{ tag: '违规' as const }] : []), ...(look.unexplained ? [{ tag: '未解释' as const }] : [])]
-  const label = [composeLabel(head, tags), look.upward ? '向上' : '', look.bypass ? '越过入口' : '', look.against ? '逆稳定' : ''].filter(Boolean).join(' · ')
+  const tags: TagPart[] = [
+    ...(look.violation === 'new' ? [{ tag: '违规' as const }] : []),
+    ...(look.upward ? [{ tag: '向上' as const }] : []),
+    ...(look.unexplained ? [{ tag: '未解释' as const }] : []),
+  ]
+  const label = [composeLabel(head, tags), look.bypass ? '越过入口' : '', look.against ? '逆稳定' : ''].filter(Boolean).join(' · ')
   return { label, tags }
 }
 

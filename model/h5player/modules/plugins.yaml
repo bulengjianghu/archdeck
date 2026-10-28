@@ -3,12 +3,16 @@
 # 规范：docs/04-model-generation.md；只用 parent 往第二级模块下挂子模块。
 
 modules:
+  # ─── 第二级模块的原则（ADR-0042，补充骨架条目）───
+  - { id: app.plugins, name: "横向用例插件", abstraction: 按与方案无关的横向用例切分：控制律在 Domain，插件只做事件采样、宿主适配与执行写回，作为片段按需挂载。 }
+  - { id: app.timeshift, name: "时移", abstraction: 编排与判定分离：判定调 Domain 纯函数，建腿 / 换腿事务交 Solution 腿端口，协调器是会话唯一编排者，记账部件零端口零事件。 }
   # ════════════════════════════ app.plugins ════════════════════════════
   - id: app.plugins.buffer-strategy
     parent: app.plugins
     name: 缓冲策略
     kind: group
     responsibility: 直播 / 点播播放段的缓冲水位驾驶与缓冲阈值自适应：何时起冲 / 停冲、追帧、回收已播数据，以及按网络与供数节奏动态调整四个缓冲阈值。控制律在 Domain 决策服务，本组只做事件采样、宿主适配、执行与写回；不负责拉流节奏（归 app.strategies）。
+    abstraction: 按播放形态切分水位策略与阈值自适应，水位换算单列为纯计算；控制律在 Domain，本组只采样、适配、执行与写回。
     docRefs:
       - docs/design/5-capabilities/buffer/buffer-adaptive.md
       - docs/design/5-capabilities/buffer/supply-aware-live-buffer.md
@@ -86,6 +90,7 @@ modules:
     name: 网络监测与重连
     kind: group
     responsibility: 识别网络在线 / 离线 / 不稳定并发布事实，直播下对拉流故障与断流做有限次重连；点播下拉片失败且缓冲耗尽时暂停。不负责错误码到恢复动作的通用映射（归错误处理）。
+    abstraction: 监测与恢复分离：监测只发布网络事实，重连据事实与拉流故障做有限次恢复，通用错误映射不在此。
     docRefs:
       - docs/design/5-capabilities/guard/live-reconnect.md
     children:
@@ -125,6 +130,7 @@ modules:
     name: 运行状态守护
     kind: group
     responsibility: 播放会话内的运行健康监测：画面长时间不更新 / 分片 video 异常时重启、检测视频帧损坏、采样主线程定时器负载并给出系统负载档位（供丢帧策略使用）。
+    abstraction: 按守护对象切分为独立监测器，各自采样、各自判定；系统负载只写档位供丢帧策略读取，不直接干预播放。
     docRefs:
       - docs/design/5-capabilities/guard/monitor-detection.md
     children:
@@ -150,6 +156,7 @@ modules:
     name: 错误处理
     kind: group
     responsibility: 全局错误链上的错误到恢复动作的映射，以及漏网错误的兜底捕获。
+    abstraction: 恢复与兜底分离：错误链上的错误按错误码映射为恢复动作，漏网异常只兜底记日志、不触发恢复。
     docRefs:
       - docs/design/5-capabilities/guard/error-recovery.md
     children:
@@ -175,6 +182,7 @@ modules:
     name: 统计与埋点
     kind: group
     responsibility: 播放统计采集（码率、帧率、延迟、卡顿、字节数、请求数等）写入统计模型、起播里程碑事件、端到端时间校准，以及基于 RMS SDK 的会话级埋点上报。不负责对外统计快照的投影（归 infra.player-index）。
+    abstraction: 按产出物切分：采集写统计模型，里程碑翻译成事件，埋点对外上报，采样器与时间校准作为共用基准单列。
     docRefs:
       - docs/design/5-capabilities/stats/statistic-plugins.md
       - docs/design/5-capabilities/stats/statistic-record-samplers.md
@@ -231,6 +239,7 @@ modules:
     name: 可见性与设备
     kind: group
     responsibility: 页面可见性事实的发布与压后台 / 回前台的播放处理，以及播放期间防止设备休眠。
+    abstraction: 按设备事实切分：可见性发布事实并在前后台做最小命令，防休眠随播放判定启停，两者互不驱动。
     docRefs:
       - docs/design/5-capabilities/guard/visibility.md
     children:
@@ -253,6 +262,7 @@ modules:
     name: 日志与调试
     kind: group
     responsibility: 日志输出、开发调试数据采集与上报、页面内播放器信息浮层；不参与播放控制。
+    abstraction: 按输出去向切分（控制台日志、调试上报、页面浮层），全部只读观测，不参与播放控制。
     children:
       - id: app.plugins.diagnostics.logger
         name: 日志输出

@@ -3,12 +3,17 @@
 # media-core 的 index.ts 同时含错误与事件原语，在「平台原语」下写成概念子模块（不写 codeRefs，§3.7）。
 
 modules:
+  # 第二级模块的原则（补充条目，ADR-0042；名称与骨架一致）
+  - { id: share.core, name: Web 基础媒体模型, abstraction: 只放运行时无关、不含播放规则的原语，按原语种类分文件、彼此少依赖；不依赖播放器的任何层。 }
+  - { id: share.contracts, name: 跨语言契约, abstraction: 以 JSON Schema 为唯一来源：类型、schema 常量与校验器都由它生成、不手改，消费者按需只引类型。 }
+
   # ───────────────────────── share.core ─────────────────────────
   - id: share.core.primitives
     parent: share.core
     name: 平台原语
     kind: component
     responsibility: 包入口里的运行时无关原语：错误、事件中心、一次性操作与媒体轨道类型；Kit 与 Provider 从包根导入它们。
+    abstraction: 只收各层从包根直接导入的原语，错误与事件互不依赖；监听者抛错不打断其他监听者。
     codeRefs: [media-web/packages/media-core/src/index.ts]
   - id: share.core.primitives.fault
     parent: share.core.primitives

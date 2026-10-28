@@ -15,7 +15,8 @@ export interface CheckLine {
   id: string
   points: readonly Point[]
   curve?: boolean | 'h'
-  label?: { at: Point; text: string }
+  /** w：整个标签位的宽（两段时含段间距，ADR-0041）；不给时按 text 一段估 */
+  label?: { at: Point; text: string; w?: number }
   /** 两端节点 ID：线可以从它们的边上出入 */
   ends: readonly [string, string]
 }
@@ -111,8 +112,8 @@ function segHitsBox(s: Seg, box: Box, inset: number): boolean {
 const boxesHit = (p: Box, q: Box) => p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h
 
 /** 标签盒子：pill（字号 11，左右各 6 内边距、高 18）；中文按 11 px、其余按 6.5 px 估宽 */
-export function labelBox(at: Point, text: string): Box {
-  const w = [...text].reduce((n, c) => n + (/[\u3000-\u9fff\uff00-\uffef]/.test(c) ? 11 : 6.5), 0) + 12
+export function labelBox(at: Point, text: string, width?: number): Box {
+  const w = width ?? [...text].reduce((n, c) => n + (/[\u3000-\u9fff\uff00-\uffef]/.test(c) ? 11 : 6.5), 0) + 12
   const h = 18
   return { x: at.x - w / 2, y: at.y - h / 2, w, h }
 }
@@ -170,7 +171,7 @@ export function check(scene: Scene): Finding[] {
 
   // labels：标签互压、标签压节点
   const labeled = lines.filter(l => l.label && l.label.text)
-  const lboxes = labeled.map(l => ({ id: l.id, box: labelBox(l.label!.at, l.label!.text) }))
+  const lboxes = labeled.map(l => ({ id: l.id, box: labelBox(l.label!.at, l.label!.text, l.label!.w) }))
   for (let i = 0; i < lboxes.length; i++) {
     for (let j = i + 1; j < lboxes.length; j++)
       if (boxesHit(lboxes[i].box, lboxes[j].box)) out.push({ kind: 'labels', ids: sorted(lboxes[i].id, lboxes[j].id), at: labeled[i].label!.at })

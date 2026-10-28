@@ -29,7 +29,7 @@ import {
   replayEdges,
   shownEdges,
 } from './canvas/edges'
-import { composeLabel } from './canvas/labels'
+import { composeLabel } from './labels'
 import { labelWidth, outsideRoutes } from './layout'
 import { moduleNodes, replayNodes } from './canvas/nodes'
 import { tierNodes } from './canvas/tiers'
@@ -61,7 +61,21 @@ export { PORT_MERGE } from './canvas/nodes'
 export { NODE_MARK_SLOTS, REST_MARKS, REST_PRIORITY, markShown, presentMarks, restMarks, type RestMark } from './canvas/marks'
 export { EDGE_Z, coupleShown, overlayShown, overlayTags, routeMidpoint } from './canvas/edges'
 export { EDGE_HOVER_Z, landsOn, withEdgeHover, withElementHover } from './canvas/hover'
-export { EDGE_TAGS, composeLabel, hasWarnTag, type EdgeTag, type TagPart } from './canvas/labels'
+export {
+  EDGE_TAGS,
+  MAX_TAGS,
+  PILL_GAP,
+  composeLabel,
+  composePill,
+  hasWarnTag,
+  isWarnTag,
+  labelWidth,
+  pillWidth,
+  type EdgeTag,
+  type Pill,
+  type PillSegment,
+  type TagPart,
+} from './labels'
 export { JUMP_RADIUS } from './routing'
 
 export function canvasScene(input: CanvasInput): CanvasScene {

@@ -19,6 +19,7 @@ import {
   isTarget,
   levelFacts,
   levelTiers,
+  layerUpward,
   loadModel,
   shelfOf,
   projectLevel,
@@ -44,8 +45,9 @@ import {
   type PositionedView,
 } from '../../../src/layout/layout'
 import { overlayTags, routeMidpoint } from '../../../src/layout/canvas'
-import { composeLabel } from '../../../src/layout/canvas/labels'
 import { bundleItem, depLabel, depViewEdge, routeToPoint } from '../../../src/layout/canvas/structure'
+import { composeLabel, composePill, pillWidth } from '../../../src/layout/labels'
+import { mechTags } from '../../../src/layout/routes'
 import { readModelDir } from '../../../vite/readModelDir'
 import { readSourceTree } from '../../../vite/readSource'
 import { readCodeDeps } from '../../../vite/readDeps'
@@ -82,12 +84,30 @@ export function levelIds(index: ModelIndex): string[] {
   return [...new Set(ids)].sort()
 }
 
-const labelText = (index: ModelIndex, view: LevelView, e: ViewEdge) => handleBadge(index, view, e)?.label || edgeLabel(e)
+/**
+ * 交互视角静息态的标签位（与画布 makeEdge 同口径，L26②、ADR-0041）：×N 与把手、向上（K22，分层是事实、不随开关）、机制（L35）、混合（L23），
+ * 按两段与上限组装；只随「代码事实」开关出现的异常（违规、未证实）不算
+ */
+function labelOf(index: ModelIndex, view: LevelView, e: ViewEdge, up: ReadonlyMap<string, readonly string[]>) {
+  const n = e.relationIds.length
+  const ups = up.get(e.id)?.filter(id => e.relationIds.includes(id)) ?? []
+  return composePill(handleBadge(index, view, e)?.label || edgeLabel(e), [
+    ups.length > 0 && { tag: '向上', count: ups.length, total: n },
+    ...mechTags(e.mechs, n),
+    e.mode === 'mixed' && { tag: '混合' },
+  ])
+}
 
-function lineOf(index: ModelIndex, view: LevelView, e: ViewEdge, r: EdgeRoute, id = e.id): CheckLine {
-  const text = labelText(index, view, e)
+function lineOf(index: ModelIndex, view: LevelView, e: ViewEdge, r: EdgeRoute, up: ReadonlyMap<string, readonly string[]>, id = e.id): CheckLine {
+  const pill = labelOf(index, view, e, up)
   const at = r.label ?? routeMidpoint(r)
-  return { id, points: r.points, ...(r.curve ? { curve: r.curve } : {}), ...(text ? { label: { at, text } } : {}), ends: [e.from, e.to] }
+  return {
+    id,
+    points: r.points,
+    ...(r.curve ? { curve: r.curve } : {}),
+    ...(pill.text ? { label: { at, text: pill.text, w: pillWidth(pill.segments) } } : {}),
+    ends: [e.from, e.to],
+  }
 }
 
 function obstaclesOf(pv: PositionedView): { obstacles: Obstacle[]; frames: Box[]; anchors: Box[] } {
@@ -229,6 +249,9 @@ async function levelScenes({ index, report }: Project, level: string, perspectiv
     view,
   }
   const { obstacles, frames, anchors } = obstaclesOf(pv)
+  // K22（ADR-0041）：向上又不是控制反转的边——普通层次按算出的层号（有代码事实时），分层总览按声明的层序
+  const ups = view.mode === 'layered' ? layerUpward(index, view) : report ? (levelTiers(index, view, report)?.upward ?? []) : []
+  const up = new Map(ups.filter(u => !u.inversion).map(u => [u.edge, u.relations] as const))
   const scenes: Scene[] = []
   if (perspective === 'structure') {
     if (!sv.facts || !report) return null
@@ -236,21 +259,28 @@ async function levelScenes({ index, report }: Project, level: string, perspectiv
   } else if (view.mode === 'layered') {
     const base = view.edges.flatMap(e => {
       const r = pv.edges.get(e.id)
-      return r ? [lineOf(index, view, e, r)] : []
+      return r ? [lineOf(index, view, e, r, up)] : []
     })
     scenes.push({ lines: base, obstacles, frames, anchors })
+    // 第十四轮合入（B-09 2(b)）：同时性口径——聚焦核心模块时层间边变淡、不写标签（RouteEdge），只算核心跨层边之间的标签互压；
+    // 只有选中一条核心跨层边、没有聚焦模块时，它才与带标签的层间边同时出现
+    const quiet = base.map(({ label: _label, ...l }) => l)
     const cores = new Set((view.coreEdges ?? []).flatMap(e => [e.from, e.to]))
     for (const n of cores) {
       const extra = (view.coreEdges ?? []).flatMap(e => {
         const r = pv.coreEdges.get(e.id)
-        return r && (e.from === n || e.to === n) ? [lineOf(index, view, e, r, `core:${e.id}`)] : []
+        return r && (e.from === n || e.to === n) ? [lineOf(index, view, e, r, up, `core:${e.id}`)] : []
       })
-      if (extra.length) scenes.push({ lines: [...base, ...extra], obstacles, frames, anchors })
+      if (extra.length) scenes.push({ lines: [...quiet, ...extra], obstacles, frames, anchors })
+    }
+    for (const e of view.coreEdges ?? []) {
+      const r = pv.coreEdges.get(e.id)
+      if (r) scenes.push({ lines: [...base, lineOf(index, view, e, r, up, `core:${e.id}`)], obstacles, frames, anchors })
     }
   } else {
     const inner = view.edges.flatMap(e => {
       const r = pv.edges.get(e.id)
-      return r && !isOutsideEdge(view, e) ? [lineOf(index, view, e, r)] : []
+      return r && !isOutsideEdge(view, e) ? [lineOf(index, view, e, r, up)] : []
     })
     // L44（第十四轮 F12）：常显的代码依赖叠加线（两端都在本层）取并集布局里束的走线，一起量；框外的只在聚焦时临时出现，不量
     const overlays = report ? levelFacts(index, view, report).overlays.filter(o => !o.from.startsWith('boundary:') && !o.to.startsWith('boundary:')) : []
@@ -263,7 +293,7 @@ async function levelScenes({ index, report }: Project, level: string, perspectiv
     const outside = outsideRoutes(pv, view.edges, undefined, innerOverlays.size ? innerOverlays : undefined)
     const outer = view.edges.flatMap(e => {
       const r = outside.get(e.id)
-      return r ? [lineOf(index, view, e, r)] : []
+      return r ? [lineOf(index, view, e, r, up)] : []
     })
     const overlayLines = overlays.flatMap(o => {
       const r = pv.edges.get(`bundle:${o.from}->${o.to}`)

@@ -61,6 +61,7 @@ export function validate(input: ArchModel): ValidateResult {
   const c: Checked = { rootId, err, warn, info, modules, actors, interfaces, dataStructures }
   checkModuleRefs(c)
   checkLayers(c)
+  checkPrinciples(input, c)
   checkImplementers(c)
   const relations = checkRelations(input, c)
   markPorts(c, relations)
@@ -74,7 +75,8 @@ export function validate(input: ArchModel): ValidateResult {
     actors: [...actors.values()],
     scenarios: [],
     sourceIgnore: input.sourceIgnore ?? [],
-    reviewed: cleanReviewed(input.reviewed ?? [], id => modules.has(id), warn),
+    ...(input.systemSrc ? { systemSrc: input.systemSrc } : {}),
+    reviewed: cleanReviewed(input.reviewed ?? [], id => modules.has(id) || id === rootId, warn),
     sketches: input.sketches ?? [],
     ...(input.sourceLimits ? { sourceLimits: input.sourceLimits } : {}),
     ...(input.rules ? { rules: cleanRules(input.rules, id => modules.has(id), input.rulesSrc, err, warn), rulesSrc: input.rulesSrc } : {}),
@@ -171,6 +173,35 @@ function checkModuleRefs({ modules, interfaces, dataStructures, warn }: Checked)
       warn('unknown-owner', `接口「${x.id}」的提供方「${x.owner}」不存在`, x.src)
       x.owner = undefined
     }
+  }
+}
+
+/** M23：系统简介的句数（在 。！？ 与后跟空白 / 行尾的 .!? 处断句，没有句末标点的尾巴也算一句）；版本号、文件名里的点不断句 */
+export const sentenceCount = (text: string | undefined): number =>
+  (text ?? '')
+    .split(/(?<=[。！？])|(?<=[.!?])(?=\s|$)/)
+    .filter(x => /[^\s。！？.!?]/.test(x)).length
+
+/**
+ * ADR-0042：原则三级同构。M23 系统简介写两句（定位、核心原则）；M24 确认范围内的非层模块（核心与第二级，同 Z4）写一句话原则。
+ * 两者都是 info：提醒 AI 生成时补上，不计入提醒数
+ */
+function checkPrinciples(input: ArchModel, { rootId, modules, info }: Checked) {
+  // 没声明 system 时已有 missing-system（M2），不再叠一条
+  const n = sentenceCount(input.system.description)
+  if (input.systemSrc && n !== 2)
+    info(
+      'system.description-sentences',
+      n === 0
+        ? '系统没有简介：description 写两句——定位一句（为谁解决什么）、核心原则一句（按什么取舍、怎么分）（M23）'
+        : `系统简介是 ${n} 句：写两句——定位一句（为谁解决什么）、核心原则一句（按什么取舍、怎么分）（M23）`,
+      input.systemSrc ? { ...input.systemSrc, path: 'system.description' } : undefined,
+    )
+  for (const m of modules.values()) {
+    if (m.kind === 'layer' || m.abstraction?.trim()) continue
+    const second = m.parentId !== rootId && modules.get(m.parentId)?.parentId === rootId
+    if (m.role === 'core' || second)
+      info('module.missing-abstraction', `「${m.id}」是${m.role === 'core' ? '核心模块' : '第二级模块'}，没有一句话原则 abstraction（为什么这样分子模块，M24）`, m.src)
   }
 }
 

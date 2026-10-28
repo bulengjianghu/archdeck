@@ -1,6 +1,6 @@
 /**
  * 交互视角的第八轮呈现（ADR-0032）：选中一条交互时承载叠加（L22：承载段按结构视图的形态记号临时画出（虚线）并高亮，缺段为警示色虚线并标「缺段」，其余变淡），
- * 接收方表面展开时交互束按接口散开（L23，只画被交互接到的元素），束内修饰不一致标「混合」（D8）；结构视角选中束时反向高亮它承载的交互（L22）。
+ * 接收方表面展开时交互束按接口散开（L23，只画被交互接到的元素），束内同步与异步不一致标「混合」（L23，ADR-0041）；结构视角选中束时反向高亮它承载的交互（L22）。
  */
 import { expect, test } from '@playwright/test'
 import { graphNode, openDesk, query } from './helpers'
@@ -32,11 +32,11 @@ test('L22：选中一条经端口的交互，承载段临时画出并高亮，�
   await expect(seg).toHaveCount(0)
 })
 
-test('D8：束内同步 / 异步或 via 不一致标「混合」，悬停列出各条', async ({ page }) => {
-  await openDesk(page, '/p/h5player?level=app')
+test('L23（ADR-0041）：束内同步与异步不一致标「混合」，悬停列出各条', async ({ page }) => {
+  await openDesk(page, '/p/media-web-player?level=kit')
   const mixed = page.locator('.vue-flow__edge-route g[data-mixed]').first()
   await expect(mixed).toBeAttached()
-  await expect(mixed.locator('title')).toHaveText(/不一致（D8）/)
+  await expect(mixed.locator('title')).toHaveText(/同步 \/ 异步不一致（L23）/)
   await expect(mixed.locator('.vue-flow__edge-text')).toHaveText(/混合/)
 })
 

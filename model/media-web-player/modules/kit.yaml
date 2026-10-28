@@ -3,6 +3,12 @@
 # kernel.ts 与 session.ts 各是单文件，内部子结构写成概念子模块（不写 codeRefs，§3.7）。
 
 modules:
+  # 第二级模块的原则（补充条目，ADR-0042；名称与骨架一致）
+  - { id: kit.facade, name: 门面与对外契约, abstraction: 门面只翻译与装配：一个方法一条内核命令、不判断状态，管线族只认族端口由宿主注入，浏览器能力经适配器交给内核。 }
+  - { id: kit.kernel, name: 会话内核, abstraction: 按「何时处理 / 变成什么 / 对外报什么」切分：调度是唯一队列串行施用，决定是状态与意图的唯一写者，跟随只读不决。 }
+  - { id: kit.session, name: 会话规则, abstraction: 把规则从内核抽成类型与纯函数：接受、选路线与顺序检查都无副作用、可单测，内核只调用不内嵌。 }
+  - { id: kit.page, name: 页面能力适配, abstraction: 每种页面级浏览器能力一个适配器，全页共用、比会话活得久；内核只经注入的接口用它们，不碰浏览器 API。 }
+
   # ───────────────────────── kit.facade ─────────────────────────
   - id: kit.facade.player-api
     parent: kit.facade

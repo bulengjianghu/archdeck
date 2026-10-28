@@ -5,13 +5,19 @@ modules:
   # ── 骨架模块的代码落点（04 §3.10：骨架只写目录级，细到文件的由 AI 在这里补充，X1）──
   - id: present.nav-tree
     name: 导航树
+    abstraction: 按页签对象各成一棵树，都是「状态 → 树、树 → 意图」的双向映射，复用画布与时序图的同一套操作。
     codeRefs: [src/components/tree/NavTree.vue, src/components/tree/types.ts]
   - id: access.source
     name: 源码读取
+    abstraction: 只读文件清单与内容、解析导出，不判断归属；读不到即配置错误，带原因与尝试的路径返回。
     codeRefs: [vite/readSource.ts]
   - id: model.source
     name: 源码归属
+    abstraction: glob 匹配与路径补全是底层纯函数，归属与入口建在其上，补全一套供依赖提取共用；不碰文件系统。
     codeRefs: [src/model/source/index.ts]
+  - id: present.source
+    name: 源代码预览
+    abstraction: 只读预览、不做编辑；高亮与签名共用一份，读不到、过大或二进制时只给提示不报错。
 
   # ── 呈现层 ──────────────────────────────────────────────
   - id: present.nav-tree.files

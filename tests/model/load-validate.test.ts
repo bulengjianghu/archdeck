@@ -146,6 +146,31 @@ describe('validate', () => {
     expect(model.relations.find(r => r.id === 'x1')).toMatchObject({ interface: undefined, payload: ['ds.cmd'] })
   })
 
+  it('M23：系统简介写两句（定位、核心原则），不是两句时提示 info（带出处）；版本号、文件名里的点不计句；没声明 system 时不叠提示', () => {
+    const infos = (desc: string | undefined) =>
+      validate(load([{ path: 'system.yaml', text: `system: { id: s, name: S${desc === undefined ? '' : `, description: "${desc}"`} }` }]).model).issues.filter(i => i.code === 'system.description-sentences')
+    expect(infos('给谁用的工具。按两层分（见 docs/a.md、v1.2）。')).toEqual([])
+    expect(infos('A tool for X. Split by layers.')).toEqual([])
+    const one = infos('给谁用的工具')
+    expect(one).toHaveLength(1)
+    expect(one[0]).toMatchObject({ severity: 'info', file: 'system.yaml', path: 'system.description' })
+    expect(one[0].message).toContain('1 句')
+    expect(infos('一。二。三。')[0].message).toContain('3 句')
+    expect(infos(undefined)[0].message).toContain('没有简介')
+    expect(validate(load([{ path: 'm.yaml', text: 'modules: [{ id: a, name: A, responsibility: x }]' }]).model).issues.map(i => i.code)).not.toContain('system.description-sentences')
+  })
+
+  it('M24：核心模块与第二级模块（非层）没写一句话原则 abstraction 时提示 info；写了、层、其余模块不提示', () => {
+    const text = [
+      'system: { id: s, name: S, description: "一。二。" }',
+      'modules:',
+      '  - { id: l, name: L, kind: layer, order: 1, abstraction: x, responsibility: x, children: [{ id: l.a, name: A, responsibility: x, children: [{ id: l.a.b, name: B, responsibility: x }, { id: l.a.c, name: C, role: core, responsibility: x }] }, { id: l.d, name: D, responsibility: x, abstraction: 有 }] }',
+    ].join('\n')
+    const issues = validate(load([{ path: 'm.yaml', text }]).model).issues.filter(i => i.code === 'module.missing-abstraction')
+    expect(issues.map(i => i.message)).toEqual([expect.stringContaining('「l.a」是第二级模块'), expect.stringContaining('「l.a.c」是核心模块')])
+    expect(issues.every(i => i.severity === 'info' && i.file === 'm.yaml')).toBe(true)
+  })
+
   it('层：缺 order / abstraction、mayDependOn 指向非同级层、同级混入非层模块', () => {
     const bad = validate(load([
       { path: 's.yaml', text: 'system: { id: s, name: S }' },
