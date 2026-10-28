@@ -75,8 +75,9 @@ describe('L21、B1–B4 结构视角画布的束', () => {
   it('缺省：只引类型收起计数；一端是边界节点（适配器）的束折叠进另一端的「入 · 出」角标', async () => {
     const desk = await open()
     const d = desk.facts.structureDisplay(OFF)!
+    // F10：edge → lib 未解释（逐条的例外），但一端是边界节点：仍按跨界折叠计数（L42①，议）
     expect(ids(d.shown)).toEqual(['bundle:a->b', 'bundle:a->lib'])
-    expect(d.hidden).toEqual({ type: 1, value: 0, covered: 0, cross: 1 })
+    expect(d.hidden).toEqual({ type: 1, value: 0, covered: 0, cross: 1, reducible: 0, cycle: 0 })
     expect(Object.fromEntries(d.cross)).toEqual({ lib: { in: 1, out: 0 } })
     expect(d.reach.get('bundle:edge->lib')).toBe('cross')
     expect(d.reach.get('bundle:a->lib')).toBe('sibling')

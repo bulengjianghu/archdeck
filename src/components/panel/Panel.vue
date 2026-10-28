@@ -20,6 +20,7 @@ import FilePanel from './FilePanel.vue'
 import DepPanel from './DepPanel.vue'
 import CouplePanel from './CouplePanel.vue'
 import PortPanel from './PortPanel.vue'
+import CyclePanel from './CyclePanel.vue'
 import SketchPanel from '../sketch/SketchPanel.vue'
 
 const desk = useDesk()
@@ -56,6 +57,7 @@ const target = computed(() => {
   if (s?.kind === 'dep') return { kind: 'dep' as const, id: s.id }
   if (s?.kind === 'couple') return { kind: 'couple' as const, id: s.id }
   if (s?.kind === 'port') return { kind: 'port' as const, id: s.id }
+  if (s?.kind === 'cycle') return { kind: 'cycle' as const, id: s.id }
   const level = desk.levelId.value
   return level && level !== idx.rootId ? { kind: 'module' as const, id: level } : { kind: 'system' as const, id: idx.rootId }
 })
@@ -72,10 +74,11 @@ const target = computed(() => {
         <FilePanel v-if="target.kind === 'file'" :key="`f:${target.id}`" :path="target.id" />
         <DepPanel v-else-if="target.kind === 'dep'" :key="`d:${target.id}`" />
         <CouplePanel v-else-if="target.kind === 'couple'" :key="`c:${target.id}`" />
-        <RunSection v-if="run && target.kind !== 'file' && target.kind !== 'dep' && target.kind !== 'couple'" />
+        <CyclePanel v-else-if="target.kind === 'cycle'" :id="target.id" :key="`y:${target.id}`" />
+        <RunSection v-if="run && target.kind !== 'file' && target.kind !== 'dep' && target.kind !== 'couple' && target.kind !== 'cycle'" />
         <component
           :is="run ? 'details' : 'div'"
-          v-if="target.kind !== 'file' && target.kind !== 'dep' && target.kind !== 'couple'"
+          v-if="target.kind !== 'file' && target.kind !== 'dep' && target.kind !== 'couple' && target.kind !== 'cycle'"
           class="structure"
           :open="run ? false : undefined"
         >

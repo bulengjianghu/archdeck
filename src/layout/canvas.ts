@@ -14,8 +14,23 @@
  * 本文件是入口，只组合各部分：共用派生 canvas/context.ts、节点 canvas/nodes.ts、边 canvas/edges.ts、对外类型 canvas/types.ts。
  */
 import { sceneContext, visibleIdsOf } from './canvas/context'
-import { assemblyEdges, carriedEdges, carrierEdges, depEdges, evolutionEdges, factEdges, interactionEdges, replayEdges, shownEdges } from './canvas/edges'
-import { outsideRoutes } from './layout'
+import {
+  assemblyEdges,
+  carriedEdges,
+  carrierEdges,
+  depEdges,
+  evolutionEdges,
+  factEdges,
+  interactionEdges,
+  coupleShown,
+  overlayShown,
+  overlayTags,
+  overlayViewEdges,
+  replayEdges,
+  shownEdges,
+} from './canvas/edges'
+import { composeLabel } from './labels'
+import { labelWidth, outsideRoutes } from './layout'
 import { moduleNodes, replayNodes } from './canvas/nodes'
 import { tierNodes } from './canvas/tiers'
 import { jumpsOf } from './routing'
@@ -43,7 +58,8 @@ export type {
 } from './canvas/types'
 export { DEP_KIND_LABELS, DEP_TIER_LABELS, depWeight, violationLook } from './canvas/structure'
 export { PORT_MERGE } from './canvas/nodes'
-export { EDGE_Z, routeMidpoint } from './canvas/edges'
+export { NODE_MARK_SLOTS, REST_MARKS, REST_PRIORITY, markShown, presentMarks, restMarks, type RestMark } from './canvas/marks'
+export { EDGE_Z, coupleShown, overlayShown, overlayTags, routeMidpoint } from './canvas/edges'
 export { EDGE_HOVER_Z, landsOn, withEdgeHover, withElementHover } from './canvas/hover'
 export {
   EDGE_TAGS,
@@ -66,7 +82,22 @@ export function canvasScene(input: CanvasInput): CanvasScene {
   if (!input.positioned) return { nodes: [], edges: [], visibleIds: null }
   const ctx = sceneContext(input, input.positioned)
   // L11：画出来的框外边一起走线、分配轨道；边与步骤序号都用分配后的走线
-  ctx.routes = ctx.structure ? ctx.structure.routes : outsideRoutes(input.positioned, shownEdges(ctx))
+  // L44：聚焦时画出的框外代码依赖叠加线与此刻的框外边一起分轨，标签按实际文字避让（静息态没有，框外边的走线不变）
+  const overlays = overlayViewEdges(ctx)
+  const sizes = new Map(
+    (ctx.facts?.overlays ?? [])
+      .filter(o => overlays.some(e => e.id === o.id))
+      .map(o => [o.id, { w: labelWidth(composeLabel('', overlayTags(o))), h: 18 }] as const),
+  )
+  // 常显的（两端都在本层的）叠加线走束的走线，框外边分轨时只占不动地避开它们
+  const pv = input.positioned
+  const inner = new Map(
+    (ctx.facts?.overlays ?? []).flatMap(o => {
+      const r = !o.from.startsWith('boundary:') && !o.to.startsWith('boundary:') ? pv.edges.get(`bundle:${o.from}->${o.to}`) : undefined
+      return r ? [[o.id, r] as const] : []
+    }),
+  )
+  ctx.routes = ctx.structure ? ctx.structure.routes : outsideRoutes(pv, [...shownEdges(ctx), ...overlays], sizes, inner.size ? inner : undefined)
   const nodes = input.index ? [...tierNodes(ctx), ...moduleNodes(ctx, input.index), ...replayNodes(ctx)] : []
   // 回放叠加只在运行视角；代码事实与组装叠加只在交互视角；结构边只在结构视角；演化叠加在交互与结构视角（共享通道）
   const edges = [
@@ -80,11 +111,27 @@ export function canvasScene(input: CanvasInput): CanvasScene {
     ...evolutionEdges(ctx),
   ].filter((e): e is CanvasEdge => e !== null)
   const sc = ctx.structure
+  // L44、F7：只能临时出现的线收起时的计数（画布角）——框外的代码依赖叠加线、时间耦合
+  const overlaysOff = (ctx.facts?.overlays ?? []).filter(o => !overlayShown(ctx, o))
+  const couplesOff = (ctx.evo?.couplings ?? []).filter(l => !coupleShown(ctx, l)).length
+  const pending = overlaysOff.length || couplesOff
   return {
     nodes,
     edges: withJumps(edges),
     visibleIds: visibleIdsOf(ctx.display),
-    ...(sc ? { structure: { typeOnlyHidden: sc.typeOnlyHidden, valueHidden: sc.valueHidden, coveredHidden: sc.coveredHidden, note: sc.note } } : {}),
+    ...(pending ? { pending: { overlays: overlaysOff.length, overlayViolations: overlaysOff.filter(o => o.violations).length, couples: couplesOff } } : {}),
+    ...(sc
+      ? {
+          structure: {
+            typeOnlyHidden: sc.typeOnlyHidden,
+            valueHidden: sc.valueHidden,
+            coveredHidden: sc.coveredHidden,
+            reducibleHidden: sc.reducibleHidden,
+            cycleHidden: sc.cycleHidden,
+            note: sc.note,
+          },
+        }
+      : {}),
   }
 }
 

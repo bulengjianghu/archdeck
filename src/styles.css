@@ -51,10 +51,9 @@
 
   /* 结构视角（ADR-0031，L16、L17、K15、U16）：画布结构边（depStyle）与「显示」面板图例（StructureSwatch、MetricLegend）、
      节点角标（StructMarks）、模块「结构」一节共用这一套；依赖的档用明度（引用正文三档灰），色相只给允许边、不稳定度与影响面 */
-  --dep-tier-invokes: var(--text);
-  --dep-tier-value: var(--text-2);
-  --dep-tier-type: var(--text-3);
-  --dep-fact: var(--text-2);
+  /* L43（第十四轮 F11）：骨架安静、例外醒目；档不再用明度 */
+  --dep-skeleton: var(--text-3);
+  --dep-exception: var(--text);
   --dep-allowed: #2f8f6a;
   /* U16（ADR-0035）：允许边画浅一档的虚线（与底色混合，不用透明度） */
   --dep-allowed-soft: #7dbca3;

@@ -80,7 +80,10 @@ describe('L19：图例按视角整体替换', () => {
     // L21：四种形态按强弱次序（子类 ＞ 组装 ＞ 端口实现 ＞ 使用）
     expect(wrapper.findAll('[data-form]').map(x => x.attributes('data-form'))).toEqual(['subclass', 'assembly', 'implements', 'use'])
     expect(wrapper.findAll('svg[data-kind]').length).toBeGreaterThanOrEqual(7)
-    for (const svg of wrapper.findAll('svg[data-kind]')) expect(svg.findAll('line').some(l => l.attributes('stroke-dasharray') === '6 4')).toBe(true)
+    // L18：依赖一律断开的线——虚线，只引类型点线（L43，档的新通道）
+    for (const svg of wrapper.findAll('svg[data-kind]'))
+      expect(svg.findAll('line').some(l => l.attributes('stroke-dasharray') === (svg.attributes('data-tier') === 'type' ? '1.5 3.5' : '6 4'))).toBe(true)
+    expect(wrapper.find('[data-testid="legend-salience-exception"]').text()).toContain('例外')
     // L20：表面一段——元素四类、越过入口、界外
     expect(wrapper.find('[aria-label="表面元素四类"]').text()).toMatch(/端口.*操作.*类型.*数据/)
     expect(text).toContain('越过入口')
@@ -163,7 +166,10 @@ describe('L21：三个开关与收起计数（B1、B4）、跨界折叠计数（
 describe('W-10：帮助按结构 / 交互 / 运行 / 对照与治理分组，另有共享一段', () => {
   it('四组标题与改名', () => {
     const w = mount(GuideDialog)
-    expect(w.findAll('.group h3').map(h => h.text())).toEqual(['结构', '交互', '读一条线：三问四修饰', '运行', '对照与治理'])
+    expect(w.findAll('.group h3').map(h => h.text())).toEqual(['结构', '交互', '读一条线：三问四修饰', '运行', '对照与治理', '层'])
+    // L36、L37（第十四轮 F4、F16）：层的状态记号与节点注记的位置表
+    expect(w.find('[data-testid="guide-layer-status"]').text()).toMatch(/已确认.*待确认.*算出/)
+    expect(w.find('[data-testid="guide-node-marks"]').text()).toContain('最多三个')
     expect(w.text()).toContain('交互图变成舞台')
     expect(w.text()).not.toContain('结构图变成舞台')
     expect(w.find('[aria-label="三个视角共享"]').text()).toContain(SHARED_CHANNELS[5].text)

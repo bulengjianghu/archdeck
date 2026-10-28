@@ -121,8 +121,8 @@ modules:
     name: 分层与拆分信号
     parent: model.governance
     adrs: [38]
-    responsibility: 普通层次按本层值依赖分层（ADR-0038）——tierNodes：强连通分量合组、到汇点的最长链定高度、没人依赖的提到顶层、孤立的另列（L28）；levelTiers：取本层值依赖（与 Y4 共用 levelValueDeps）给参与分层的节点定层，环组复用 Y4 编号，找向上的交互边并判断是否控制反转（isInversion，K22）；layerUpward：分层总览按声明的分层找向上的边——接收方的层可依赖发起方的层、反过来不可（mayDependOn），两层都没写时按层序（ADR-0041）、直接交互却两个方向都没有值依赖的兄弟与大环、本层无依赖的提示（L29、K21③）；splitSignals：子模块不占文件、兄弟共用文件（K21①②）；tierFindings / tierIssues：逐个普通层次（「+N」展开）出 split.* 与 tier.upward 的 info 提醒，并入治理报告、返工清单按它定位。布局只消费层号。
-    codeRefs: [src/model/governance/tiers.ts]
+    responsibility: 普通层次按本层值依赖分层（ADR-0038）——tierNodes：强连通分量合组、到汇点的最长链定高度、没人依赖的提到顶层、孤立的另列（L28）；levelTiers：取本层值依赖（与 Y4 共用 levelValueDeps）给参与分层的节点定层，环组复用 Y4 编号，找向上的交互边并判断是否控制反转（isInversion，K22）；layerUpward：分层总览按声明的分层找向上的边——接收方的层可依赖发起方的层、反过来不可（mayDependOn），两层都没写时按层序（ADR-0041）；直接交互却两个方向都没有值依赖的兄弟与大环、本层无依赖的提示（L29、K21③）；splitSignals：子模块不占文件、兄弟共用文件（K21①②）；tierFindings / tierIssues：逐个普通层次（「+N」展开）出 split.* 与 tier.upward 的 info 提醒（分层总览也报，第十四轮 F8）；layerDrift：声明的层序与实算比对（K24），并入治理报告、返工清单按它定位。层号对全集算、「+N」放在成员最上的一层并给出层号跨度 foldSpan（L39）；平铺提示（L40）。线的级别（grades.ts，K23）：gradeBundles 按例外（违规 / 向上 / 逆稳定 / 未解释）、环内、传递约简（91 §2 口径）给结构视角的束定级，forcedExceptions 给出照画的例外。布局只消费层号。
+    codeRefs: [src/model/governance/tiers.ts, src/model/governance/grades.ts]
   - id: model.governance.query
     name: agent 查询
     parent: model.governance
@@ -387,3 +387,6 @@ relations:
   - { id: rel.gv.agent-tiers, from: access.agent, to: model.governance.tiers, type: queries, description: agent 接口向分层取：tiers 命令调用 tierView、levelTiers、splitSignals 列出每层的子模块、环组、孤立的、向上的边与拆分信号（L28、Q 接口） }
   - { id: rel.gv.tiers-facts, from: model.governance.tiers, to: model.governance.facts, type: queries, description: 分层向事实比对取：调用 depKey 给本层依赖与有交互无依赖的节点对去重（L28、K21） }
   - { id: rel.gv.tiers-cycles, from: model.governance.tiers, to: model.governance.cycles, type: queries, description: 分层向环与环度取：校验提醒调用 valueDeps 只留值依赖，再按最近公共祖先归到层次（L28、Y1） }
+  - { id: rel.r14.facts-projector, from: state.desk.facts, to: model.projector, type: queries, description: 架构治理派生（desk.facts）向 Projector 层次投影取：调用 shelfOf 取本层共用件，线的级别（K23）的约简宇宙与照画的例外据此排除共用件 }
+  - { id: rel.r14.canvas-tiers, from: state.layout.canvas, to: model.governance.tiers, type: queries, description: 画布场景向分层与拆分信号取：调用 foldSpanText 在「+N」上写成员的层号跨度与跨 ≥ 3 层的提示（L39、L40） }
+  - { id: rel.r14.pill-labels, from: present.canvas.edges, to: state.layout.runner.boundaries, type: queries, description: 边组件向框外元素与手工走线取：标签位的 pill 调用 labelWidth、PILL_GAP 按两段的实际文字估宽并排开（L26、L33） }

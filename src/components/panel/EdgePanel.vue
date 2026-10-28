@@ -51,7 +51,7 @@ const endSelection = (nodeId: string) =>
       </div>
       <p class="hint muted">由更深层次的 {{ edge.relationIds.length }} 条关系汇总而成。点击任意一条，跳到它真实所在的层次。</p>
       <p v-if="upward?.inversion" class="hint muted" data-testid="upward-note">
-        向上的线：本层分层后依赖都朝下，这条是控制反转（通知、流或经端口 / 总线 / 通道），向上是应有之义（K22）。
+        向上的线：本层分了层（算出的或声明的），依赖都朝下，这条是控制反转（通知、流或经端口 / 总线 / 通道），向上是应有之义（K22）。
       </p>
       <p v-else-if="upward" class="hint warn-text" data-testid="upward-note">
         向上却不是控制反转：{{ upward.relations.join('、') }} 是直接的查询或委托，发起方却在被依赖的一侧——多半是没标的回调、通知或经通道（K22）。

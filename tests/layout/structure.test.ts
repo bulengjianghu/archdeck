@@ -30,14 +30,9 @@ describe('L15、L21 束：一对节点一条，换边不换节点', () => {
     expect(s.nodes.map(n => [n.id, n.position, n.width, n.height])).toEqual(i.nodes.map(n => [n.id, n.position, n.width, n.height]))
     expect(s.edges.every(e => e.type === 'dep')).toBe(true)
     expect(i.edges.every(e => e.type === 'route')).toBe(true)
-    // 只引类型（util → log）收起，跨界（ui → api）折叠
-    expect(ids(s)).toEqual([
-      'bundle:core.api->core.log',
-      'bundle:core.impl->core.api',
-      'bundle:core.impl->core.log',
-      'bundle:core.impl->core.util',
-      'bundle:core.util->core.api',
-    ])
+    // 只引类型（util → log）收起，跨界（ui → api）折叠；impl → api 可由 impl → util → api 推出，静息态不画、impl 标「另直连 1」（L42）
+    expect(node(s, 'core.impl').data.direct?.count).toBe(1)
+    expect(ids(s)).toEqual(['bundle:core.api->core.log', 'bundle:core.impl->core.log', 'bundle:core.impl->core.util', 'bundle:core.util->core.api'])
     const pairs = deps(s).map(e => `${e.source}|${e.target}`)
     expect(new Set(pairs).size).toBe(pairs.length)
     for (const e of deps(s)) {
@@ -65,6 +60,8 @@ describe('L15、L21 束：一对节点一条，换边不换节点', () => {
 describe('L16、L21① 束的编码', () => {
   it('线型与端点取最强形态、档取最强；线宽按束内元素级边条数三档；形态不止一种时「×N 元素」角标，悬停列各形态与元素', async () => {
     const desk = await openDesk()
+    // impl → api 可推出（L42）：悬停 impl 时画出
+    desk.setHover('core.impl')
     const { scene: s } = await sceneOf(desk, { typeOnly: true })
     const asm = dep(s, 'bundle:core.impl->core.api').data
     expect(asm.dep).toMatchObject({ kind: 'assembly', tier: 'invokes', forms: ['assembly', 'implements'], elements: 2, deps: 2 })
@@ -105,7 +102,14 @@ describe('L16、L21① 束的编码', () => {
 describe('B1–B4 过滤与画布角计数', () => {
   it('缺省只引类型收起；只看交互使用时值使用也收起；只看未解释只留未解释的束；各自计数', async () => {
     const desk = await openDesk()
-    expect((await sceneOf(desk)).scene.structure).toEqual({ typeOnlyHidden: 1, valueHidden: 0, coveredHidden: 0, note: null })
+    expect((await sceneOf(desk)).scene.structure).toEqual({
+      typeOnlyHidden: 1,
+      valueHidden: 0,
+      coveredHidden: 0,
+      reducibleHidden: 1,
+      cycleHidden: 0,
+      note: null,
+    })
     const inv = (await sceneOf(desk, { invokesOnly: true })).scene
     expect(ids(inv)).not.toContain('bundle:core.impl->core.log')
     expect(inv.structure!.valueHidden).toBe(1)
@@ -301,6 +305,7 @@ describe('L17 指标角标、O13 共用件折叠、K15 影响面', () => {
     const desk = await openDesk('/?level=core&v=s', DEPS, shared)
     const { scene: s, positioned } = await sceneOf(desk)
     expect(positioned!.view.shelf).toEqual(['core.log'])
+    // api → log 未解释（逐条的例外，F10），但另一端是共用件：仍按共用件折叠（L42①，议）
     expect(ids(s).some(id => id.endsWith('->core.log'))).toBe(false)
     expect(node(s, 'core.impl').data).toMatchObject({ sharedCount: 1, sharedByDeps: true })
     expect(node(s, 'core.util').data.sharedCount).toBe(1)
@@ -373,5 +378,49 @@ describe('O13③ 分层总览', () => {
     const chip = dep(hovered, 'chip:bundle:ui->core.api')
     expect(chip.data.route).toEqual(pv!.coreEdges.get(chip.id))
     expect(chip.data.route.curve).toBe(true)
+  })
+})
+
+describe('L42 环按组、可推出的退到计数（第十四轮 F9、F10）', () => {
+  // util ⇄ log 成环（两条值使用，不是逐条例外）
+  const use = (from: string, to: string): FileDep => ({ from, to, via: to, kind: 'value', line: 9, names: ['X'], uses: true })
+  const CYC = [...DEPS, use('src/core/log/l.ts', 'src/core/util/u.ts'), use('src/core/util/u.ts', 'src/core/log/l.ts')]
+
+  it('环内的束静息态不画、计数（环编号悬停与画布角）；单击环编号选中环组时画出，成员之外变淡', async () => {
+    // 环：util → api → log → util（api → log 未解释，是逐条的例外，照画），另有 util → log
+    const desk = await openDesk('/?level=core&v=s', CYC)
+    const { scene: s } = await sceneOf(desk)
+    expect(ids(s)).toContain('bundle:core.api->core.log')
+    expect(ids(s)).not.toContain('bundle:core.util->core.log')
+    expect(ids(s)).not.toContain('bundle:core.log->core.util')
+    expect(ids(s)).not.toContain('bundle:core.util->core.api')
+    expect(s.structure!.cycleHidden).toBe(3)
+    const no = node(s, 'core.util').data.cycle!
+    expect(node(s, 'core.util').data.cycleHidden).toBe(3)
+    desk.select({ kind: 'cycle', id: String(no) })
+    await settle(desk)
+    const { scene: picked } = await sceneOf(desk)
+    expect(ids(picked)).toEqual(expect.arrayContaining(['bundle:core.util->core.log', 'bundle:core.log->core.util']))
+    expect(node(picked, 'core.util').data.cycleSelected).toBe(true)
+    expect(node(picked, 'core.impl').data.dim).toBe(true)
+    expect(desk.facts.cycleHidden.value.get(no) ?? 0).toBe(0)
+  })
+
+  it('可推出的束：依赖方标「另直连 N」（下边右），悬停一端时画出', async () => {
+    const desk = await openDesk()
+    const { scene: s } = await sceneOf(desk)
+    expect(node(s, 'core.impl').data.direct).toMatchObject({ count: 1 })
+    expect(node(s, 'core.impl').data.direct!.title).toContain('→ Api')
+    desk.setHover('core.api')
+    expect(ids((await sceneOf(desk)).scene)).toContain('bundle:core.impl->core.api')
+  })
+})
+
+describe('L43 醒目度跟信息量走（第十四轮 F11）', () => {
+  it('照画的例外（api → log 未解释）标 exception、画得最醒目；骨架不标', async () => {
+    const desk = await openDesk()
+    const { scene: s } = await sceneOf(desk)
+    expect(dep(s, 'bundle:core.api->core.log').data.dep!.exception).toBe(true)
+    expect(dep(s, 'bundle:core.util->core.api').data.dep!.exception).toBeUndefined()
   })
 })

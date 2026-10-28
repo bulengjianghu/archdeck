@@ -15,8 +15,8 @@ import { withMode } from './mode'
 import { selectionExists, withLevel } from './navigation'
 import type { PlaybackState, Query, Selection, TransitionContext, TransitionResult, ViewState } from './types'
 
-const SELECTION_PREFIX = { module: 'm', relation: 'r', edge: 'e', actor: 'a', file: 'f', dep: 'd', couple: 'c', port: 'p' } as const
-const SELECTION_KIND = { m: 'module', r: 'relation', e: 'edge', a: 'actor', f: 'file', d: 'dep', c: 'couple', p: 'port' } as const
+const SELECTION_PREFIX = { module: 'm', relation: 'r', edge: 'e', actor: 'a', file: 'f', dep: 'd', couple: 'c', port: 'p', cycle: 'y' } as const
+const SELECTION_KIND = { m: 'module', r: 'relation', e: 'edge', a: 'actor', f: 'file', d: 'dep', c: 'couple', p: 'port', y: 'cycle' } as const
 
 export function encodeSelection(s: Selection | null): string | undefined {
   if (!s) return undefined
@@ -25,7 +25,7 @@ export function encodeSelection(s: Selection | null): string | undefined {
 
 export function decodeSelection(raw: unknown): Selection | null {
   if (typeof raw !== 'string') return null
-  const m = /^([mreafdcp]):(.+)$/.exec(raw)
+  const m = /^([mreafdcpy]):(.+)$/.exec(raw)
   if (!m) return null
   return { kind: SELECTION_KIND[m[1] as keyof typeof SELECTION_KIND], id: m[2] }
 }

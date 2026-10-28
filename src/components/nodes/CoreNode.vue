@@ -5,6 +5,7 @@ import StructMarks from './StructMarks.vue'
 import PortMarks from './PortMarks.vue'
 import SurfaceMarks from './SurfaceMarks.vue'
 import RimTag from './RimTag.vue'
+import CycleMark from './CycleMark.vue'
 import type { NodeData } from './types'
 
 defineProps<{ data: NodeData }>()
@@ -28,6 +29,7 @@ defineProps<{ data: NodeData }>()
     <SurfaceMarks v-if="data.surface" :surface="data.surface" :module-id="data.moduleId" />
     <span class="name">{{ data.name }}</span>
     <RimTag v-if="data.rim" :rim="data.rim" />
+    <CycleMark :data="data" />
     <span v-if="data.childCount > 0" class="drill">⌄ {{ data.childCount }}</span>
   </div>
 </template>

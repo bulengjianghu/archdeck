@@ -34,7 +34,8 @@ import {
   type ViewEdge,
   type ViolationStatus,
 } from '@/model'
-import { chipBundleId, linkRoute, restEdgeId, outsideRoutes, type Box, type EdgeRoute, type Point, type PositionedView } from '../layout'
+import { chipBundleId, labelWidth, linkRoute, restEdgeId, outsideRoutes, type Box, type EdgeRoute, type Point, type PositionedView } from '../layout'
+import { composeLabel, type TagPart } from '../labels'
 import type { CanvasInput, DepEdgeKind, DepEdgeLook, DepViolation, NodeData } from './types'
 
 /** L16：结构边形态的名称（悬停说明与图例） */
@@ -100,6 +101,10 @@ export interface StructureScene {
   valueHidden: number
   /** B4：只看未解释时收起的已解释束条数 */
   coveredHidden: number
+  /** L42（F9）：静息态收起的可推出束条数 */
+  reducibleHidden: number
+  /** L42（F10）：静息态收起的环内束条数 */
+  cycleHidden: number
   /** 画布角的说明（U16 / 正在读取） */
   note: string | null
   /** K15b：本层节点 → 方向与最短距离（K15d 的可能波及）；没有查询影响面时为 null */
@@ -290,6 +295,24 @@ export function chipItems(idx: ModelIndex, list: readonly ChipDep[]): DepItem[] 
   })
 }
 
+/**
+ * L26、L42：结构边的标签——角标之后先写词表里的异常（违规 = 基线外新增，U15；向上，F10 的结构视角判定；未解释，K17），再写结构视角自己的记号
+ * （越过入口 C3、逆稳定 U17）。画布与几何检查器同读这一份。
+ */
+export function depLabel(look: Pick<DepEdgeLook, 'rest' | 'elements' | 'violation' | 'unexplained' | 'bypass' | 'against' | 'upward'>): {
+  label: string
+  tags: TagPart[]
+} {
+  const head = look.rest ? `×${look.elements} 其余` : look.elements ? `×${look.elements} 元素` : ''
+  const tags: TagPart[] = [
+    ...(look.violation === 'new' ? [{ tag: '违规' as const }] : []),
+    ...(look.upward ? [{ tag: '向上' as const }] : []),
+    ...(look.unexplained ? [{ tag: '未解释' as const }] : []),
+  ]
+  const label = [composeLabel(head, tags), look.bypass ? '越过入口' : '', look.against ? '逆稳定' : ''].filter(Boolean).join(' · ')
+  return { label, tags }
+}
+
 /** 结构边在走线器里的外形（同并集布局里的结构边） */
 export const depViewEdge = (e: Pick<DepItem, 'id' | 'from' | 'to'>): ViewEdge => ({
   id: e.id,
@@ -388,6 +411,12 @@ export function structureScene(input: CanvasInput, pv: PositionedView, focusIds:
       }
       if (rest.length) items.push(restItem(idx, b, rest))
     }
+    // F10：向上的束（依赖违背算出的层）标「向上」；L43：照画的例外画得最醒目
+    for (const e of items) {
+      const b = e.bundle ?? e.id
+      if (disp.upward?.has(b)) e.look = { ...e.look, upward: true }
+      if (disp.anomalies.has(b)) e.look = { ...e.look, exception: true }
+    }
     shown = [...items]
     if (picked) for (const e of items) if (e.id === picked.id || e.bundle === picked.id) selected.add(e.id)
     // B2：跨界折叠——一端是边界节点、没画出来的（不含照画的）束，按本层那一端节点计入、记下另一端
@@ -427,7 +456,15 @@ export function structureScene(input: CanvasInput, pv: PositionedView, focusIds:
   // 走线（L15，并集布局）：与交互边同一个走线器——布局给出的按 ID 取；普通层次的框外边按画出来的这一组走线（同 L11），
   // 共用件的边为曲线（同 O10），接到元素时曲线的终点落在元素端口上
   const routes = new Map<string, EdgeRoute>()
-  const outside = layered ? new Map<string, EdgeRoute>() : outsideRoutes(pv, shown.filter(e => !e.chip).map(depViewEdge))
+  // L33：框外的结构边按实际标签文字估宽交给分轨与标签避让
+  const outer = shown.filter(e => !e.chip)
+  const sizes = new Map(
+    outer.flatMap(e => {
+      const t = depLabel(e.look).label
+      return t ? [[e.id, { w: labelWidth(t), h: 18 }] as const] : []
+    }),
+  )
+  const outside = layered ? new Map<string, EdgeRoute>() : outsideRoutes(pv, outer.map(depViewEdge), sizes)
   for (const e of shown) {
     const r = e.chip
       ? pv.coreEdges.get(e.id)
@@ -465,6 +502,9 @@ export function structureScene(input: CanvasInput, pv: PositionedView, focusIds:
   }
   const hoverNear = hoverFocus && focusable(hoverFocus) ? hop(hoverFocus) : null
   const hops = focusIds.filter(focusable).map(hop)
+  // L42：选中环组时环的成员照常、其余变淡（环内的束由 structureDisplay 画出）
+  const cycleSel = sel?.kind === 'cycle' && cyc ? new Set([...cyc].filter(([, no]) => String(no) === sel.id).map(([n]) => n)) : null
+  if (cycleSel?.size) hops.push(cycleSel)
   // 影响面查询生效时闭包代替选中的一跳，悬停照常叠加
   const near = impact ? hoverNear : hops.length ? new Set(hops.flatMap(x => [...x])) : null
 
@@ -478,6 +518,8 @@ export function structureScene(input: CanvasInput, pv: PositionedView, focusIds:
     typeOnlyHidden: hidden.type,
     valueHidden: hidden.value,
     coveredHidden: hidden.covered,
+    reducibleHidden: hidden.reducible ?? 0,
+    cycleHidden: hidden.cycle ?? 0,
     note,
     impact,
     impactSelf,
@@ -504,9 +546,9 @@ export function structureNodeMarks(
   scene: StructureScene,
   input: CanvasInput,
   n: { id: string; moduleId: string; role: string; layerId?: string },
-): Pick<NodeData, 'metrics' | 'impact' | 'impactSelf' | 'cycle' | 'sharedCount' | 'sharedByDeps' | 'crossFold'> {
+): Pick<NodeData, 'metrics' | 'impact' | 'impactSelf' | 'cycle' | 'cycleHidden' | 'sharedCount' | 'sharedByDeps' | 'crossFold' | 'direct'> {
   const s = input.structure!
-  const out: Pick<NodeData, 'metrics' | 'impact' | 'impactSelf' | 'cycle' | 'sharedCount' | 'sharedByDeps' | 'crossFold'> = {}
+  const out: Pick<NodeData, 'metrics' | 'impact' | 'impactSelf' | 'cycle' | 'cycleHidden' | 'sharedCount' | 'sharedByDeps' | 'crossFold' | 'direct'> = {}
   const m = n.role === 'actor' || n.role === 'more' ? undefined : s.metrics?.get(n.moduleId)
   if (m && m.ca + m.ce > 0)
     out.metrics = {
@@ -523,6 +565,24 @@ export function structureNodeMarks(
   if (scene.impactSelf === n.id) out.impactSelf = true
   const c = s.cycles?.get(n.id)
   if (c !== undefined) out.cycle = c
+  const ch = c === undefined ? 0 : (s.display?.cycleHidden?.get(c) ?? 0)
+  if (ch) out.cycleHidden = ch
+  // L42（F9）：依赖方节点的「另直连 N」（L37 ⑧ 下边右）——静息态没画出来的可推出束，悬停列另一端与替代路径
+  const direct = s.display?.direct?.get(n.id)
+  if (direct?.length) {
+    const nameOf = (id: string) => {
+      const m = input.positioned?.view.nodes.find(x => x.id === id)?.moduleId ?? id
+      return input.index ? moduleName(input.index, m) : m
+    }
+    out.direct = {
+      count: direct.length,
+      title: [
+        `另直连 ${direct.length} 条：可由别的路径推出的依赖（传递约简），静息态不画，悬停或选中本节点时画出（L42）`,
+        ...direct.slice(0, 12).map(b => `→ ${nameOf(b.to)}`),
+        ...(direct.length > 12 ? [`等 ${direct.length} 条`] : []),
+      ].join('\n'),
+    }
+  }
   const shared = scene.sharedCounts.get(n.id)
   out.sharedCount = shared || undefined
   if (shared) out.sharedByDeps = true

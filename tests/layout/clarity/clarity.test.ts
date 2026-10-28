@@ -171,9 +171,12 @@ describe('L30 几何检查器', () => {
  */
 // 第十四轮 F14（ADR-0041）：标签按两段的实际文字测量（机制、混合、向上，scenes.ts 的 labelOf）后重定，走线与其余各类计数不变：
 // 标签互压 h5player 1 → 0、h5p 无代码事实 1 → 0；上升两处待裁决（B-09）——media-web-player 0 → 2（kit.facade：adapter 一半压在框外、贴着左侧外部系统，
-// 两条一跳的「事件」线没有放标签的地方），h5player 无代码事实 2 → 3（根层分层总览的核心跨层边标签）
+// 两条一跳的「事件」线没有放标签的地方），h5player 无代码事实 2 → 3（根层分层总览的核心跨层边标签）。
+// 第十四轮合入裁决（负责人 2026-10-28）：media 的 +2 接受、登记为后续布局项；检查器改同时性口径（scenes.ts）——聚焦核心模块时层间边变淡、不写标签，
+// 只算核心跨层边之间的互压（h5player 无代码事实这一组 3 → 1）；选中一条核心跨层边、没有聚焦模块时它与带标签的层间边同时出现，另成场景（新纳入测量，
+// 多出 2 处：app → infra.framework 的委托 / 查询标签与层间边标签互压），合计 3：与 labels 分支的终点持平，比 2fbf33e 多 1（议，见 A-08「合并」）
 const CEILING: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 64, arrows: 1, crossNode: 4, labels: 0, hug: 9, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 59, arrows: 1, crossNode: 3, labels: 0, hug: 7, onFrame: 0 },
   h5player: { overlap: 93, arrows: 1, crossNode: 2, labels: 0, hug: 18, onFrame: 0 },
   'media-web-player': { overlap: 23, arrows: 0, crossNode: 7, labels: 2, hug: 5, onFrame: 0 },
 }
@@ -183,16 +186,19 @@ const BARE: Record<(typeof PROJECTS)[number], Counts> = {
   'media-web-player': { overlap: 35, arrows: 0, crossNode: 1, labels: 0, hug: 6, onFrame: 0 },
 }
 /**
- * 结构视角（有代码事实，缺省显示偏好）画出来的束：基线录于 75ec65f 的布局（第十三轮修复，ADR-0040 否决节）。
+ * 结构视角（有代码事实，缺省显示偏好）画出来的束：基线录于 75ec65f 的布局（第十三轮修复，ADR-0040 否决节）；
+ * 第十四轮 F9、F10（可推出与环内的静息态不画、例外照画，L42）与框外结构边按实际标签文字避让（L33）后重定：
+ * h5p 3 / 1 / 1 → 1 / 0 / 0（重合 / 压节点 / 标签），h5player 重合 32 → 6、标签 18 → 3、贴框 4 → 3，media 重合 1 → 0、标签 1 → 0。
  * 任何常显的线都由所在视角的检查器测量（第十三轮评审 M7）；改变结构视角画线规则的改动，在这一组上量前后。
  */
 const STRUCTURE: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 3, arrows: 0, crossNode: 1, labels: 1, hug: 0, onFrame: 0 },
-  h5player: { overlap: 32, arrows: 0, crossNode: 0, labels: 18, hug: 4, onFrame: 0 },
-  'media-web-player': { overlap: 1, arrows: 0, crossNode: 0, labels: 1, hug: 0, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 1, arrows: 0, crossNode: 0, labels: 0, hug: 0, onFrame: 0 },
+  h5player: { overlap: 6, arrows: 0, crossNode: 0, labels: 3, hug: 3, onFrame: 0 },
+  'media-web-player': { overlap: 0, arrows: 0, crossNode: 0, labels: 0, hug: 0, onFrame: 0 },
 }
 // ADR-0039 修订 1（没有端口记号的节点进边用整条边）后重定：h5p 箭头叠 25 → 1、重合 98 → 64；elk 端口约束变了、节点随之重排，
 // 少数几类小幅上升（h5p 贴框 4 → 9，h5player 贴框 13 → 18、无代码事实的重合 66 → 96，media 压节点 5 → 7），明细与取舍见第十二轮 C-08 报告
+// 第十四轮 F1（层号对全集算）后 h5p 重合 64 → 59、压节点 4 → 3、贴框 9 → 7
 
 describe('L30 计数回归（只降不升）', () => {
   for (const [facts, limits] of [

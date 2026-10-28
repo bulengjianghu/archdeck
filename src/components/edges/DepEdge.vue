@@ -61,6 +61,7 @@ const safe = computed(() => props.id.replace(/[^\w-]/g, c => `_${c.charCodeAt(0)
     :class="{ 'dep-carrier': look.carrier }"
     :data-kind="look.kind"
     :data-tier="look.tier"
+    :data-exception="look.exception ? '' : undefined"
     :data-violation="look.violation"
     :data-elements="look.elements"
     :data-element="look.element?.name"

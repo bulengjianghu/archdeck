@@ -2,11 +2,12 @@
  * 画布场景的节点（ADR-0013）：本层的模块、带与 +N 占位块、边界节点、参与者；回放叠加的步骤序号与分支预览序号。
  * 结构视角按聚焦变淡，运行视角按舞台显示（V5、V8、V9）；回放态与文件高亮（G14）写进类名。
  */
-import { moduleName, type ModelDiff, type ModelIndex, type ModuleEntity, type ViewNode, type VisibleLanding } from '@/model'
+import { foldSpanText, moduleName, type ModelDiff, type ModelIndex, type ModuleEntity, type ViewNode, type VisibleLanding } from '@/model'
 import { SHELF, bandShelfTop, moreChipId, type Box, type PositionedView } from '../layout'
 import type { Visibility } from '../stage'
 import type { SceneContext } from './context'
 import { routeMidpoint, spreadHits } from './edges'
+import { restMarks } from './marks'
 import { inImpact, structureNodeMarks } from './structure'
 import type { CanvasNode, CanvasNodeType, NodeData, NodePorts, NodeSurface, SurfaceMark } from './types'
 
@@ -214,8 +215,13 @@ function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box, s
     ...(ctx.structure ? structureNodeMarks(ctx.structure, ctx.input, n) : {}),
     ...surface,
   }
+  // L42：所在的环组被选中
+  if (base.cycle !== undefined && sel?.kind === 'cycle' && sel.id === String(base.cycle)) base.cycleSelected = true
   // K15：影响面生效时闭包外的节点变淡（带也参与）
   if (ctx.structure?.impact) base.dim = !inImpact(ctx.structure, n)
+  // L37：写字的注记静息态最多 REST_MARKS 个；悬停或选中该节点时全部出现（带有自己的标题栏，不受此限）
+  const open = base.selected || ctx.hoverFocus === n.id
+  if (n.role !== 'layer') Object.assign(base, restMarks(base, open))
   if (n.role === 'boundary') {
     const path = (idx.pathOf.get(n.moduleId) ?? []).slice(1, -1).map(id => idx.modules.get(id)?.name ?? id)
     return [placeNode(ctx, n.id, box, 'boundary', { ...base, path: path.length ? path.join(' / ') : idx.model.system.name }, 1)]
@@ -229,7 +235,16 @@ function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box, s
         n.id,
         box,
         'more',
-        { ...base, name: '', selected: false, dim: !!ctx.st || !!ctx.near, hiddenCount: n.hiddenCount ?? 0, expanded: n.expanded ?? 0, graphFold: true },
+        {
+          ...base,
+          name: '',
+          selected: false,
+          dim: !!ctx.st || !!ctx.near,
+          hiddenCount: n.hiddenCount ?? 0,
+          expanded: n.expanded ?? 0,
+          graphFold: true,
+          ...(ctx.pv.tiers?.fold?.node === n.id && !n.expanded ? { foldTiers: foldSpanText(ctx.pv.tiers.fold) } : {}),
+        },
         OVER_EDGES.more,
       ),
     ]
@@ -248,6 +263,7 @@ function bandNodes(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box, ba
       abstraction: m?.abstraction,
       mayDependOn: (m?.mayDependOn ?? []).map(id => idx.modules.get(id)?.name ?? id),
       hiddenCount: band?.hiddenCount ?? 0,
+      ...(ctx.input.layerStatus?.get(n.moduleId) ? { status: ctx.input.layerStatus.get(n.moduleId) } : {}),
     },
     // O11：带右上角常驻「共用件 N · 折叠 M」
     ...(band && (band.shelf?.length || band.hiddenCount) ? { counts: { shared: band.shelf?.length ?? 0, folded: band.hiddenCount } } : {}),

@@ -30,10 +30,11 @@ export {
 export { portEntry, portPanel, portIssues } from './ports'
 export { judge, evaluateRules, rulesFor, exposesMatch, exposesText, violationKey, rulesOf } from './rules'
 export type { EntryOf, DepProbe, Judgement, ModuleRules } from './rules'
+export { gradeBundles, exceptionsOf, forcedExceptions, type BundleGrading, type ExceptionKind, type GradeInput, type LineGrade } from './grades'
 export { stronglyConnected, valueDeps, moduleCycles, fileCycles, cyclicityOf } from './cycles'
 export { governanceReport, gateIssues, makeBaseline, entryResolver } from './report'
 export { levelFacts, levelAssembly, depsBetween, nodeOf, levelValueDeps } from './level'
-export { tierNodes, tierNoteText, levelTiers, layerUpward, splitSignals, tierIssues, tierFindings, tierView, tierable, isInversion, BAND_MIN_NODES, BAND_MIN_TIERS } from './tiers'
+export { tierNodes, tierNoteText, foldSpanText, FOLD_SPAN_WARN, type FoldSpan, levelTiers, layerUpward, layerDrift, type LayerDrift, splitSignals, tierIssues, tierFindings, tierView, tierable, isInversion, BAND_MIN_NODES, BAND_MIN_TIERS } from './tiers'
 export type { TierFinding, Tiering, LevelTiers, UpwardEdge, TierNote, SplitSignals } from './tiers'
 export type { AssemblyOverlay, DepOverlay, EdgeFact, LevelAssembly, LevelFacts } from './level'
 export {

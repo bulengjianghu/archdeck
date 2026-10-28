@@ -41,6 +41,7 @@ export {
   isBoundaryEdge,
   compassOf,
   edgeRoute,
+  labelWidth,
   outsideRoutes,
   isOutsideEdge,
   placeOutside,
@@ -70,7 +71,19 @@ export {
   type TagPart,
 } from './labels'
 export { RESERVED, fromElkGraph, placeShelf, portSide, toElkGraph } from './graph'
-export { elkLayers, placeTierLabels, tierBandLabel, tierGeometry, tierTextBoxes, type LayoutTiers, type TierGeometry } from './tiers'
+export { LINE_BUDGET, budgetHint } from './budget'
+export {
+  elkLayers,
+  placeTierLabels,
+  tierBandLabel,
+  tierGeometry,
+  tierTextBoxes,
+  LAYER_STATUS,
+  layerStatusOf,
+  type LayerStatus,
+  type LayoutTiers,
+  type TierGeometry,
+} from './tiers'
 
 /** 一条交给布局的结构边：ID 与两端视图节点 */
 export interface StructureLink {

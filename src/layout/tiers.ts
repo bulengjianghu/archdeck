@@ -15,6 +15,8 @@ export interface LayoutTiers {
   isolated: readonly string[]
   /** L29：画层带与层号 */
   banded: boolean
+  /** L39②：折叠时「+N」成员的层号跨度（层号 0 起） */
+  fold?: { node: string; from: number; to: number; members: number }
 }
 
 /** 布局结果上的分层几何（画布画层带、环组框） */
@@ -23,6 +25,8 @@ export interface TierGeometry {
   bands: { tier: number; box: Box; labelX?: number }[]
   /** L29：环组框（成员之间没有夹着别的节点时才给，否则只靠环编号） */
   groups: { id: number; box: Box }[]
+  /** L39②：折叠时「+N」成员的层号跨度（照抄 LayoutTiers.fold，画布写在占位块上） */
+  fold?: { node: string; from: number; to: number; members: number }
 }
 
 /**
@@ -127,7 +131,7 @@ export function tierGeometry(nodes: ReadonlyMap<string, Box>, tiers: LayoutTiers
     const clash = [...nodes].some(([id, b]) => !inner.has(id) && overlaps(box, b))
     if (!clash) groups.push({ id: g.id, box })
   }
-  return { bands, groups }
+  return { bands, groups, ...(tiers.fold ? { fold: tiers.fold } : {}) }
 }
 
 /** L30：层号文字的估宽（字号 11：中文 11 px、其余 6.5 px） */
@@ -165,6 +169,19 @@ export function placeTierLabels(t: TierGeometry, nodes: ReadonlyMap<string, Box>
     }),
   }
 }
+
+/** L36（第十四轮 F4、F8）：层的状态——算出（L28，无人声明）/ 待确认（声明的层，未确认或需复核，Z3）/ 已确认（指纹一致） */
+export type LayerStatus = 'computed' | 'pending' | 'confirmed'
+
+/** L36：状态记号的文字与悬停说明 */
+export const LAYER_STATUS: Record<LayerStatus, { text: string; title: string }> = {
+  computed: { text: '算出', title: '由本层值依赖算出（L28），不是原则：是原则的证据；可经提炼起草为声明的层' },
+  pending: { text: '待确认', title: '声明的层，尚未确认或指纹已变、需复核（Z3）：抽象原则还只是主张' },
+  confirmed: { text: '已确认', title: '声明的层，已确认且指纹一致（Z3）：抽象原则是原则，接受符合性校验' },
+}
+
+/** L36：确认状态（Z3）→ 声明的层的状态记号 */
+export const layerStatusOf = (review: 'reviewed' | 'stale' | 'unreviewed' | undefined): LayerStatus => (review === 'reviewed' ? 'confirmed' : 'pending')
 
 /** L29：层带的层号文字（第 1 层为入口，最下为被依赖）；i 为带在自上而下中的序号 */
 export function tierBandLabel(tier: number, i: number, last: number): string {

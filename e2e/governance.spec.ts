@@ -46,7 +46,10 @@ test('h5player：没有基线时违规画成叠加线；单击叠加线选中它
   await expect(page.locator('.vue-flow__edge-text', { hasText: '✓' })).toHaveCount(0)
 
   // 根层的违规都落在已有的层间边上（只加红晕）；Framework 层有没有关系边的违规（外部的 app → kernel），画成叠加线
+  // L44（第十四轮 F12）：一端在框外的叠加线同框外的交互边，静息态只在画布角计数，选中外部模块（聚焦边界节点）时画出
   await openDesk(page, '/p/h5player?level=infra.framework')
+  await expect(page.getByTestId('overlay-corner')).toContainText(/框外代码依赖 \d+ 条（违规 \d+）/)
+  await openDesk(page, '/p/h5player?level=infra.framework&sel=m:app')
   const overlay = page.locator('.vue-flow__edge[data-id^="dep:"] .vue-flow__edge-text', { hasText: '违规' }).first()
   await expect(overlay).toBeVisible()
   // L18：代码依赖叠加线是依赖——虚线

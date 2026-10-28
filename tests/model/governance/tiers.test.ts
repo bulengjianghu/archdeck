@@ -10,6 +10,11 @@ import {
   tierIssues,
   tierNodes,
   tierNoteText,
+  layerUpward,
+  layerDrift,
+  reviewEntries,
+  foldSpanText,
+  DEFAULT_PROJECT_OPTIONS,
   isInversion,
   reworkList,
   BAND_MIN_NODES,
@@ -183,5 +188,137 @@ describe('K21、K22 返工清单', () => {
     expect(up).toMatchObject({ severity: 'info', rules: ['K22'], target: { modules: ['app.base', 'app.mid'], relation: 'r.up' } })
     expect(split.find(i => i.code === 'split.no-files')!.actions[0].kind).toBe('split-file')
     expect(list.byCategory.split).toBe(3)
+  })
+})
+
+describe('L39 折叠与分层正交、L40 组织判断三态（第十四轮 F1、F5）', () => {
+  // 一个核心 + 8 个普通模块（O8 折叠为「+N」）：入口 → m1 → m2 → … → m8 的长链，m8 在最底
+  const chain = Array.from({ length: 8 }, (_, i) => `m${i + 1}`)
+  const FOLD = `
+modules:
+  - id: app
+    name: App
+    responsibility: 应用
+    children:
+      - { id: app.entry, name: Entry, responsibility: 入口, role: core, codeRefs: [src/entry/**] }
+${chain.map(m => `      - { id: app.${m}, name: ${m}, responsibility: ${m}, codeRefs: [src/${m}/**] }`).join('\n')}
+`
+  const files = ['src/entry/e.ts', ...chain.map(m => `src/${m}/x.ts`)]
+  const deps = files.slice(1).map((f, i) => dep(files[i], f))
+  function folded() {
+    const { index } = loadModel([
+      { path: 'system.yaml', text: 'system: { id: sys, name: Sys }' },
+      { path: 'modules/app.yaml', text: FOLD },
+    ])
+    const own = assignFiles(index, files, [])
+    const report = governanceReport(index, own, { files, packages: {} }, { deps, external: {}, parsed: files.length }, null)
+    return { index, report }
+  }
+
+  it('①② 层号对全集算：折叠后「+N」放在成员最上的一层，给出成员的层号跨度；门槛按全集判定', () => {
+    const { index, report } = folded()
+    const view = projectLevel(index, 'app')
+    expect(view.fold?.expanded).toBe(false)
+    const t = levelTiers(index, view, report)!
+    expect(t.tier.get('app.entry')).toBe(0)
+    expect(t.tier.get('more:app')).toBe(1)
+    expect(t.foldSpan).toEqual({ node: 'more:app', from: 1, to: 8, members: 8 })
+    expect(t.count).toBe(9)
+    expect(t.banded).toBe(true)
+    expect(t.nodes).toEqual(['app.entry', 'more:app'])
+  })
+
+  it('③ 展开即解压：成员落到全集算好的层号，层数不变', () => {
+    const { index, report } = folded()
+    const open = projectLevel(index, 'app', { ...DEFAULT_PROJECT_OPTIONS, expandedBands: ['app'] })
+    const t = levelTiers(index, open, report)!
+    expect(chain.map(m => t.tier.get(`app.${m}`))).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(t.count).toBe(9)
+    expect(t.foldSpan).toBeUndefined()
+  })
+
+  it('L40② 跨 ≥ 3 层提示「该标核心或该拆」；同一层只写一个层号', () => {
+    expect(foldSpanText({ from: 1, to: 8 })).toEqual({ tiers: '第 2–9 层', warn: '跨 8 层：该标核心或该拆' })
+    expect(foldSpanText({ from: 2, to: 3 })).toEqual({ tiers: '第 3–4 层', warn: null })
+    expect(foldSpanText({ from: 2, to: 2 }).tiers).toBe('第 3 层')
+  })
+
+  it('L40③ 平铺：子模块之间既没有依赖也没有交互时明说', () => {
+    const { index } = folded()
+    const t = levelTiers(index, projectLevel(index, 'app', { ...DEFAULT_PROJECT_OPTIONS, expandedBands: ['app'] }), { moduleDeps: new Map() })!
+    expect(t.notes).toContainEqual({ kind: 'flat', nodes: 9 })
+    expect(tierNoteText({ kind: 'flat', nodes: 9 })).toBe('平铺：本层 9 个子模块彼此独立（没有依赖也没有交互）')
+  })
+})
+
+describe('K22 扩到声明的层（第十四轮 F8）', () => {
+  const LAYERED = `
+modules:
+  - { id: ui, name: UI, kind: layer, order: 1, abstraction: 呈现, responsibility: 界面, children: [{ id: ui.view, name: View, responsibility: 视图, role: core }] }
+  - { id: core, name: Core, kind: layer, order: 2, abstraction: 业务, responsibility: 业务, children: [{ id: core.svc, name: Svc, responsibility: 服务, role: core }] }
+relations:
+  - { id: r.down, from: ui.view, to: core.svc, type: commands }
+  - { id: r.up, from: core.svc, to: ui.view, type: commands }
+  - { id: r.note, from: core.svc, to: ui.view, type: notifies }
+`
+  it('分层总览：下层发起、指向上层的交互为向上；通知是控制反转，直接委托给提示（带间边与核心跨层边同一判定）', () => {
+    const { index } = loadModel([
+      { path: 'system.yaml', text: 'system: { id: sys, name: Sys }' },
+      { path: 'modules/a.yaml', text: LAYERED },
+    ])
+    const view = projectLevel(index, index.rootId)
+    expect(view.mode).toBe('layered')
+    const up = layerUpward(index, view)
+    const band = up.find(u => u.from === 'core' && u.to === 'ui')
+    expect(band).toMatchObject({ inversion: false, relations: ['r.up'] })
+    expect(up.some(u => u.from === 'ui')).toBe(false)
+    expect(layerUpward(index, view, { core: false }).every(u => !u.edge.startsWith('core:'))).toBe(true)
+    // 普通层次不适用
+    expect(layerUpward(index, projectLevel(index, 'ui'))).toEqual([])
+    // 返工清单：tier.upward 指向声明的层
+    const own = assignFiles(index, [], [])
+    const report = governanceReport(index, own, { files: [], packages: {} }, { deps: [], external: {}, parsed: 0 }, null)
+    const issues = tierIssues(index, report, own).filter(i => i.code === 'tier.upward')
+    expect(issues).toHaveLength(1)
+    expect(issues[0].message).toContain('声明的层')
+  })
+})
+
+describe('K24 结构符合性（第十四轮 F3）', () => {
+  const LAYERED = `
+modules:
+  - { id: ui, name: UI, kind: layer, order: 1, abstraction: 呈现, responsibility: 界面, codeRefs: [src/ui/**] }
+  - { id: core, name: Core, kind: layer, order: 2, abstraction: 业务, responsibility: 业务, codeRefs: [src/core/**] }
+  - { id: base, name: Base, kind: layer, order: 3, abstraction: 底座, responsibility: 底座, codeRefs: [src/base/**] }
+`
+  const files = ['src/ui/a.ts', 'src/core/b.ts', 'src/base/c.ts']
+  function setupLayers(deps: FileDep[]) {
+    const { index } = loadModel([
+      { path: 'system.yaml', text: 'system: { id: sys, name: Sys }' },
+      { path: 'modules/a.yaml', text: LAYERED },
+    ])
+    const own = assignFiles(index, files, [])
+    const report = governanceReport(index, own, { files, packages: {} }, { deps, external: {}, parsed: files.length }, null)
+    return { index, own, report }
+  }
+
+  it('依赖与声明一致时没有漂移；声明在上、实算在下为倒置；声明的层互相依赖为成环', () => {
+    const ok = setupLayers([dep('src/ui/a.ts', 'src/core/b.ts'), dep('src/core/b.ts', 'src/base/c.ts')])
+    expect(layerDrift(ok.index, ok.report)).toEqual([])
+    const inv = setupLayers([dep('src/core/b.ts', 'src/ui/a.ts'), dep('src/ui/a.ts', 'src/base/c.ts')])
+    expect(layerDrift(inv.index, inv.report)).toContainEqual({ kind: 'inverted', parent: inv.index.rootId, above: 'ui', below: 'core', tiers: [1, 0] })
+    const cyc = setupLayers([dep('src/ui/a.ts', 'src/core/b.ts'), dep('src/core/b.ts', 'src/ui/a.ts')])
+    expect(layerDrift(cyc.index, cyc.report)).toContainEqual({ kind: 'cycle', parent: cyc.index.rootId, layers: ['ui', 'core'] })
+  })
+
+  it('返工清单只报已确认的层（info，类别「层的符合性」）；未确认的还是主张，不报', () => {
+    const inv = setupLayers([dep('src/core/b.ts', 'src/ui/a.ts')])
+    const before = reworkList({ index: inv.index, issues: [], report: inv.report, source: { own: inv.own, tree: { files, packages: {} } } })
+    expect(before.items.some(i => i.category === 'conformance')).toBe(false)
+    inv.index.model.reviewed.push(...reviewEntries(inv.index, ['ui'], { source: 'manual' }).map(e => ({ ...e, src: { file: 'reviewed.yaml', path: 'reviewed.0' } })))
+    const after = reworkList({ index: inv.index, issues: [], report: inv.report, source: { own: inv.own, tree: { files, packages: {} } } })
+    const item = after.items.find(i => i.category === 'conformance')!
+    expect(item).toMatchObject({ severity: 'info', code: 'tier.drift', rules: ['K24'] })
+    expect(item.title).toContain('实算在它之下')
   })
 })

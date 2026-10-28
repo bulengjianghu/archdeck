@@ -255,7 +255,7 @@ function startCreate(ev: MouseEvent) {
   const at = flowPoint(ev)
   if (!root.value) return void (creating.value = { screen: { x: ev.clientX, y: ev.clientY }, at })
   const layer = bandAt(scene.value?.bands ?? [], at.y)
-  if (!layer) return notify('双击层带内的空白处在该层新建模块；新建一层用工具条「＋ 层」')
+  if (!layer) return notify('双击层内的空白处在该层新建模块；新建一层用工具条「＋ 层」')
   creating.value = { screen: { x: ev.clientX, y: ev.clientY }, at, layer }
 }
 function onHostDblClick(ev: MouseEvent) {

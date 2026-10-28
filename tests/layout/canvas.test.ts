@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { callbackPairs, callbackText, diffModels, loadModel, planScenario, projectLevel, projectScenario, stageEnds } from '../../src/model'
 import { layoutView } from '../../src/layout/layout'
 import { stageOverlay } from '../../src/layout/stage'
-import { EDGE_HOVER_Z, EDGE_Z, canvasScene, routeMidpoint, withEdgeHover, type CanvasInput } from '../../src/layout/canvas'
+import { EDGE_HOVER_Z, EDGE_Z, canvasScene, overlayShown, routeMidpoint, withEdgeHover, type CanvasInput } from '../../src/layout/canvas'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
 const { index } = loadModel(scenarioFiles())
@@ -181,6 +181,12 @@ describe('canvasScene', () => {
     expect(edge(both, 'dep:infra.mus->infra.player')!.data).toMatchObject({ label: '违规 1 · 未解释 2', violated: true })
     // 开关关闭（没有代码事实）时不写这些标签
     expect(edge(plain, 'infra.framework->infra.player:notifies')!.data.label).toBe('')
+    // L44（第十四轮 F12）：一端在框外的叠加线不进静息态的布局，同框外的交互边——不画、画布角计数；聚焦一端时画出
+    const outer = { ...facts.overlays[0], id: 'dep:boundary:x->infra.player', from: 'boundary:x', fromModule: 'x', violations: 1 }
+    const rest = canvasScene({ ...input, facts: { ...facts, overlays: [outer] } })
+    expect(edge(rest, outer.id)).toBeUndefined()
+    expect(rest.pending).toEqual({ overlays: 1, overlayViolations: 1, couples: 0 })
+    expect(overlayShown({ focusIds: ['infra.player'], input: { ...input, facts: null } }, outer)).toBe(true)
   })
 
   it('L10、L26：含多条关系的边标 ×N 并画成 pill，标签按 ` · ` 跟在后面；部分证实按逐条证实计条数', async () => {

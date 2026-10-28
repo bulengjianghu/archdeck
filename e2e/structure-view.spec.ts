@@ -48,17 +48,21 @@ test('V11、V12：顶部「结构 ｜ 交互 ｜ 运行」单击切到结构视�
 
 test('L15：只引类型的依赖边缺省收起、画布角计数；单击计数画出（边界节点的照 L4 聚焦才画），边数随之增加', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=domain&v=s')
+  // 画布角多了「环内 N 条已收起」（L42），收起「显示」面板免得压住计数按钮
+  await collapseDisplay(page)
   const count = page.getByTestId('type-only-corner')
   await expect(count).toHaveText(/只引类型 \d+ 条已收起/)
   const hidden = Number((await count.textContent())!.match(/(\d+) 条/)![1])
   await expect(depEdges(page).first()).toBeAttached()
   const before = await depEdges(page).count()
-  expect(await page.locator('.dep-edge[data-tier="type"]').count()).toBe(0)
+  // 只引类型而向上（依赖违背算出的层）的是例外，照画（K23、L42）
+  const typeRest = '.dep-edge[data-tier="type"]:not([data-exception])'
+  expect(await page.locator(typeRest).count()).toBe(0)
   await count.click()
   await expect(count).toHaveCount(0)
   // 计数是本层全部只引类型的依赖边；其中边界节点、共用件的边照 L4、O13 只在聚焦一端时画
-  await expect(page.locator('.dep-edge[data-tier="type"]').first()).toBeAttached()
-  const shown = await page.locator('.dep-edge[data-tier="type"]').count()
+  await expect(page.locator(typeRest).first()).toBeAttached()
+  const shown = await page.locator(typeRest).count()
   expect(shown).toBeLessThanOrEqual(hidden)
   await expect(depEdges(page)).toHaveCount(before + shown)
 })
@@ -249,7 +253,11 @@ test('V11：从结构视角打开场景，退出回到结构视角；运行视�
 test('§6.22、L16（ADR-0035）：结构视角的依赖全部虚线，形态只靠端点记号——端口实现在被依赖方一端为空心菱形 ◇，子类为空心三角', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra.framework&v=s&sel=m:infra.framework.contracts')
   await expect(depEdges(page).first()).toBeAttached()
-  for (const p of await depEdges(page).locator('path.vue-flow__edge-path').all()) await expect(p).toHaveCSS('stroke-dasharray', '6px, 4px')
+  // 依赖一律断开的线：虚线；只引类型档为点线（L43，第十四轮 F11 档的新通道）
+  for (const e of await depEdges(page).all()) {
+    const dash = (await e.locator('.dep-edge').first().getAttribute('data-tier')) === 'type' ? '1.5px, 3.5px' : '6px, 4px'
+    for (const p of await e.locator('path.vue-flow__edge-path').all()) await expect(p).toHaveCSS('stroke-dasharray', dash)
+  }
   // 端口实现的终点记号是菱形（四个顶点、从原点画起），子类是三角（从尖端画起）；两者都填底色
   const endPath = (kind: string) => page.locator(`g.dep-edge[data-kind="${kind}"]`).first().locator('xpath=..').locator('marker.uml-marker path').first()
   const impl = page.locator('g.dep-edge[data-kind="implements"]')

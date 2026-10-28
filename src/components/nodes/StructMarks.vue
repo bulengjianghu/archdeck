@@ -6,7 +6,8 @@
  *   K15d：可能波及的外圈与标记浅一档（不加字，悬停说明）。
  * - L20①：有入口的模块在同一行加「表面 W」（K19）；
  * - B2、L21③：跨界折叠的束——朝外一侧的小记号「界外 入 N · 出 M」，悬停列目标。
- * 环的编号与「共用 ×N」仍由 DiffMark 画（共享通道）。
+ * 位置按 L37 的位置表（ADR-0043）：量在下边左、界外在外侧、影响面在上边左（状态）；静息态超出上限时按 restHidden 收起。
+ * 环编号在名称行（CycleMark），「共用 ×N」在下边右（DiffMark）。
  */
 import { computed } from 'vue'
 import type { NodeData } from './types'
@@ -15,7 +16,8 @@ const props = defineProps<{ data: NodeData; compact?: boolean }>()
 const STABILITY = { stable: '稳定', balanced: '居中', unstable: '易变' } as const
 const DIRECTION = { in: '牵动', out: '依赖', both: '双向' } as const
 const m = computed(() => props.data.metrics)
-const imp = computed(() => props.data.impact)
+const showMetrics = computed(() => !!m.value && !props.data.restHidden?.includes('metrics'))
+const imp = computed(() => (props.data.restHidden?.includes('state') ? undefined : props.data.impact))
 const dist = computed(() => (imp.value ? (imp.value.distance >= 3 ? '3+' : String(imp.value.distance)) : ''))
 const metricsTitle = computed(() => {
   const x = m.value
@@ -26,7 +28,7 @@ const metricsTitle = computed(() => {
 })
 /** L20②（ADR-0036）：展开表面的节点入边一侧整排是端口点，朝向同一侧的跨界折叠记号挪到相邻一侧（顶 → 右、左 → 下），不压点 */
 const cross = computed(() => {
-  const x = props.data.crossFold
+  const x = props.data.restHidden?.includes('cross') ? undefined : props.data.crossFold
   const s = props.data.surface?.side
   if (!x || !s || x.side !== s) return x
   return { ...x, side: s === 'top' ? ('right' as const) : ('bottom' as const) }
@@ -49,7 +51,7 @@ const impactTitle = computed(() => {
 
 <template>
   <span v-if="m?.band" class="stability" :class="m.band" :data-band="m.band" :title="metricsTitle" />
-  <span v-if="m" class="metrics" :class="{ compact }" data-testid="node-metrics" :title="metricsTitle"
+  <span v-if="showMetrics && m" class="metrics" :class="{ compact }" data-testid="node-metrics" :title="metricsTitle"
     >入 {{ m.ca }}<template v-if="!m.inOnly"> · 出 {{ m.ce }}</template
     ><template v-if="m.w !== undefined">
       · <span data-testid="node-surface-w">表面 {{ m.w }}</span></template
@@ -131,12 +133,14 @@ const impactTitle = computed(() => {
 
 .cross-fold.top {
   top: -8px;
-  right: 10px;
+  right: -6px;
+  transform: translateX(100%);
 }
 
 .cross-fold.bottom {
   bottom: -8px;
-  right: 10px;
+  right: -6px;
+  transform: translateX(100%);
 }
 
 .cross-fold.left {

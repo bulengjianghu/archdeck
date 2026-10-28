@@ -99,16 +99,41 @@ export type TierNote =
   | { kind: 'big-cycle'; group: number; size: number; of: number }
   /** K21③：本层子模块之间有交互、没有任何值依赖——不强行分层 */
   | { kind: 'no-deps'; interactions: number }
+  /** L40③：平铺——本层子模块之间既没有值依赖也没有交互 */
+  | { kind: 'flat'; nodes: number }
 
 /** L29、K21③：提示的说法（画布角、命令行共用） */
 export const tierNoteText = (n: TierNote): string =>
   n.kind === 'big-cycle'
     ? `环 ${n.group} 占本层 ${n.size} / ${n.of} 个子模块，照样分层：整组同层`
-    : `本层子模块之间有 ${n.interactions} 条交互、没有依赖，不分层——拆分可能不沿文件边界`
+    : n.kind === 'flat'
+      ? `平铺：本层 ${n.nodes} 个子模块彼此独立（没有依赖也没有交互）`
+      : `本层子模块之间有 ${n.interactions} 条交互、没有依赖，不分层——拆分可能不沿文件边界`
+
+/** L39②：「+N」的成员的层号跨度（层号 0 起） */
+export interface FoldSpan {
+  /** 占位块的视图节点 ID */
+  node: string
+  from: number
+  to: number
+  members: number
+}
+
+/** L40②：「+N」的成员跨这么多层及以上时提示「该标核心或该拆」 */
+export const FOLD_SPAN_WARN = 3
+
+/** L39②、L40②：占位块上的层号与跨度提示（按 1 起） */
+export function foldSpanText(f: Pick<FoldSpan, 'from' | 'to'>): { tiers: string; warn: string | null } {
+  const k = f.to - f.from + 1
+  return {
+    tiers: f.from === f.to ? `第 ${f.from + 1} 层` : `第 ${f.from + 1}–${f.to + 1} 层`,
+    warn: k >= FOLD_SPAN_WARN ? `跨 ${k} 层：该标核心或该拆` : null,
+  }
+}
 
 /** L28、L29、K21③、K22：一个普通层次的分层 */
 export interface LevelTiers extends Tiering {
-  /** 参与分层的节点（module / core 角色的子模块，含边界角色 port / adapter；不含共用件、总线、「+N」、边界节点、参与者），按视图顺序 */
+  /** 本视图里参与分层的节点（module / core 角色的子模块，含边界角色 port / adapter；折叠时含「+N」，L39；不含共用件、总线、边界节点、参与者），按视图顺序 */
   nodes: string[]
   /** 环组的 Y4 编号，与 groups 对齐 */
   groupIds: number[]
@@ -120,6 +145,8 @@ export interface LevelTiers extends Tiering {
   /** K21③：直接交互（不写 via 的）的两端之间、两个方向都没有本层值依赖的节点对 */
   undepended: { from: string; to: string; edges: string[] }[]
   notes: TierNote[]
+  /** L39②：折叠时「+N」成员的层号跨度（成员全孤立时不给） */
+  foldSpan?: FoldSpan
 }
 
 /** L29：层带出现的门槛 */
@@ -133,34 +160,58 @@ export const isInversion = (r: Pick<RelationEntity, 'type' | 'via'>): boolean =>
 export const tierable = (view: LevelView): string[] => view.nodes.filter(n => n.role === 'module' || n.role === 'core').map(n => n.id)
 
 /**
- * L28：普通层次的分层（分层总览按作者声明的层 O1，返回 null）。依赖只取本层值依赖（levelValueDeps，同 Y4）；
- * 环组复用 Y4 的编号；交互边不影响层号，只用来找向上的线（K22）与有交互却没依赖的兄弟（K21③）。
+ * L28、L39：普通层次的分层（分层总览按作者声明的层 O1，返回 null）。依赖只取本层值依赖（levelValueDeps，同 Y4）；
+ * 层号、环组与层带门槛对全集（「+N」展开后的视图）计算，与折叠无关（L39）；折叠时「+N」放在成员中最上的一层，另给成员的层号跨度（foldSpan）。
+ * 环组的编号复用本视图的 Y4；交互边不影响层号，只用来找向上的线（K22，按本视图的边）与有交互却没依赖的兄弟（K21③，按全集）。
  */
 export function levelTiers(index: ModelIndex, view: LevelView, report: Pick<GovernanceReport, 'moduleDeps'>): LevelTiers | null {
   if (view.mode === 'layered') return null
-  const nodes = tierable(view)
-  const all = levelValueDeps(index, view, report)
+  const folded = view.fold && !view.fold.expanded && view.fold.members.length ? view.fold : null
+  const full = folded ? tierView(index, view.parentId) : view
+  const fullNodes = tierable(full)
+  const all = levelValueDeps(index, full, report)
   const t = tierNodes(
-    nodes,
+    fullNodes,
     [...all.values()].map(e => [e.from, e.to] as const),
   )
+  // 本视图的 Y4 编号（与节点上的环编号一致）
   const y4 = new Map<string, number>()
-  levelCycleMembers(all).forEach((ms, i) => ms.forEach(m => y4.set(m, i + 1)))
-  const inTier = new Set(nodes)
-  const deps = [...all.values()].filter(e => inTier.has(e.from) && inTier.has(e.to)).length
+  levelCycleMembers(folded ? levelValueDeps(index, view, report) : all).forEach((ms, i) => ms.forEach(m => y4.set(m, i + 1)))
+  const inFull = new Set(fullNodes)
+  const deps = [...all.values()].filter(e => inFull.has(e.from) && inFull.has(e.to)).length
+  // L39②：投影到本视图——可见节点照抄层号；「+N」取成员中最小的层号，成员全孤立时进孤立列
+  const visible = tierable(view)
+  const tier = new Map<string, number>()
+  for (const n of visible) if (t.tier.has(n)) tier.set(n, t.tier.get(n)!)
+  let foldSpan: FoldSpan | undefined
+  if (folded) {
+    const ts = folded.members.map(m => t.tier.get(m)).filter((x): x is number => x !== undefined)
+    if (ts.length) {
+      foldSpan = { node: folded.id, from: Math.min(...ts), to: Math.max(...ts), members: folded.members.length }
+      tier.set(folded.id, foldSpan.from)
+    }
+  }
+  const shown = new Set([...visible, ...(folded ? [folded.id] : [])])
+  const groups = t.groups.map(g => g.filter(m => shown.has(m))).filter(g => g.length)
+  const isolated = [...t.isolated.filter(n => shown.has(n)), ...(folded && !foldSpan ? [folded.id] : [])]
+  // K22：向上的线按本视图的边（「+N」的边按占位块所在的层）
   const upward: UpwardEdge[] = []
+  for (const e of view.edges) {
+    if (!shown.has(e.from) || !shown.has(e.to) || e.from === e.to) continue
+    const a = tier.get(e.from)
+    const b = tier.get(e.to)
+    if (a === undefined || b === undefined || a <= b) continue
+    const rels = e.relationIds.map(id => index.relations.get(id)).filter((r): r is RelationEntity => !!r)
+    const direct = rels.filter(r => !isInversion(r)).map(r => r.id)
+    upward.push({ edge: e.id, from: e.from, to: e.to, inversion: !direct.length, relations: direct })
+  }
+  // K21③、L40③：有交互没依赖、平铺——按全集
   const pairs = new Map<string, { from: string; to: string; edges: string[] }>()
   let interactions = 0
-  for (const e of view.edges) {
-    if (!inTier.has(e.from) || !inTier.has(e.to) || e.from === e.to) continue
+  for (const e of full.edges) {
+    if (!inFull.has(e.from) || !inFull.has(e.to) || e.from === e.to) continue
     interactions++
     const rels = e.relationIds.map(id => index.relations.get(id)).filter((r): r is RelationEntity => !!r)
-    const a = t.tier.get(e.from)
-    const b = t.tier.get(e.to)
-    if (a !== undefined && b !== undefined && a > b) {
-      const direct = rels.filter(r => !isInversion(r)).map(r => r.id)
-      upward.push({ edge: e.id, from: e.from, to: e.to, inversion: !direct.length, relations: direct })
-    }
     if (rels.some(r => !r.via) && !all.has(depKey(e.from, e.to)) && !all.has(depKey(e.to, e.from))) {
       const [x, y] = [e.from, e.to].sort()
       const p = pairs.get(depKey(x, y)) ?? { from: e.from, to: e.to, edges: [] }
@@ -169,30 +220,35 @@ export function levelTiers(index: ModelIndex, view: LevelView, report: Pick<Gove
     }
   }
   const notes: TierNote[] = []
-  if (!deps && interactions && nodes.length >= 2) notes.push({ kind: 'no-deps', interactions })
-  const groupIds = t.groups.map(g => y4.get(g[0]) ?? 0)
-  t.groups.forEach((g, i) => {
-    if (g.length * 2 > nodes.length) notes.push({ kind: 'big-cycle', group: groupIds[i], size: g.length, of: nodes.length })
+  if (!deps && fullNodes.length >= 2) notes.push(interactions ? { kind: 'no-deps', interactions } : { kind: 'flat', nodes: fullNodes.length })
+  const groupIds = groups.map(g => y4.get(g[0]) ?? 0)
+  t.groups.forEach(g => {
+    if (g.length * 2 > fullNodes.length) notes.push({ kind: 'big-cycle', group: y4.get(g.find(m => shown.has(m)) ?? '') ?? 0, size: g.length, of: fullNodes.length })
   })
   return {
-    ...t,
-    nodes,
+    tier,
+    count: t.count,
+    groups,
+    isolated,
+    nodes: [...shown],
     groupIds,
     deps,
-    banded: nodes.length >= BAND_MIN_NODES && t.count >= BAND_MIN_TIERS,
+    banded: fullNodes.length >= BAND_MIN_NODES && t.count >= BAND_MIN_TIERS,
     upward,
     undepended: [...pairs.values()],
     notes,
+    ...(foldSpan ? { foldSpan } : {}),
   }
 }
 
 /**
- * K22（ADR-0041）：分层总览里向上的边——层间边、核心跨层边与共用件的边，方向违背声明的分层：
+ * K22（ADR-0041；第十四轮 F8 合入）：分层总览里向上的边——层间边、核心跨层边与共用件的边，方向违背声明的分层：
  * 接收方所在层可依赖发起方所在层（mayDependOn）、反过来不可，即交互逆着依赖方向；两层都没写 mayDependOn 时按层序（O2，order 小的在上），
- * 发起方的 order 大于接收方。写了 mayDependOn、两个方向都不许的不算向上（那是违规，归代码事实）。控制反转的口径同 levelTiers；
- * 不在任何层里的端点（边界节点、参与者）与同一层内的边不算
+ * 发起方的 order 大于接收方。写了 mayDependOn、两个方向都不许的不算向上（那是违规，归代码事实）；层序与可依赖方向不一致交给 K24。
+ * 控制反转的口径同 levelTiers；不在任何层里的端点（边界节点、参与者）与同一层内的边不算。
+ * opts.core 为 false 时只判层间边（返工清单按带间边各报一条，不与核心跨层边重复）。返工清单、desk.facts.upward、画布与边面板都用这一个函数。
  */
-export function layerUpward(index: ModelIndex, view: LevelView): UpwardEdge[] {
+export function layerUpward(index: ModelIndex, view: LevelView, opts: { core?: boolean } = {}): UpwardEdge[] {
   if (view.mode !== 'layered' || !view.bands) return []
   const order = new Map(view.bands.map(b => [b.layerId, b.order]))
   const layerOf = new Map(view.nodes.map(n => [n.id, order.has(n.id) ? n.id : n.layerId]))
@@ -203,7 +259,7 @@ export function layerUpward(index: ModelIndex, view: LevelView): UpwardEdge[] {
     return !may(from) && !may(to) && a > b
   }
   const out: UpwardEdge[] = []
-  for (const e of [...view.edges, ...(view.coreEdges ?? []), ...(view.shelfEdges ?? [])]) {
+  for (const e of [...view.edges, ...(opts.core === false ? [] : [...(view.coreEdges ?? []), ...(view.shelfEdges ?? [])])]) {
     const a = order.get(layerOf.get(e.from) ?? '')
     const b = order.get(layerOf.get(e.to) ?? '')
     const la = layerOf.get(e.from)!
@@ -214,6 +270,41 @@ export function layerUpward(index: ModelIndex, view: LevelView): UpwardEdge[] {
       return !!r && !isInversion(r)
     })
     out.push({ edge: e.id, from: e.from, to: e.to, inversion: !direct.length, relations: direct })
+  }
+  return out
+}
+
+/** K24（第十四轮 F3）：声明的层与实算不符的一处——成环（声明为不同的层，实际互相依赖）或倒置（声明 above 在 below 之上，实算 above 在 below 之下） */
+export type LayerDrift = { kind: 'cycle'; parent: string; layers: string[] } | { kind: 'inverted'; parent: string; above: string; below: string; tiers: [number, number] }
+
+/**
+ * K24（第十四轮 F3）：结构符合性——分层总览（子模块全是声明的层）里，按层之间的值依赖（核心与共用件归到所在的带）用 L28 的算法实算层号，
+ * 与声明的 order 比对：成环的声明层、order 在上而实算在下的层对，都是漂移。mayDependOn 验「允许的依赖」，这里验「声称的结构」。
+ * 没有代码事实时不比对（无依赖可算）。只算、不判定确认状态：只对已确认的层报，由返工清单按确认状态过滤。
+ */
+export function layerDrift(index: ModelIndex, report: Pick<GovernanceReport, 'moduleDeps'>): LayerDrift[] {
+  const out: LayerDrift[] = []
+  for (const [parent, children] of index.childrenOf) {
+    if (children.length < 2 || !children.every(k => index.modules.get(k)?.kind === 'layer')) continue
+    const view = tierView(index, parent)
+    const bandOf = new Map<string, string>()
+    for (const b of view.bands ?? []) for (const id of [b.layerId, ...b.coreModuleIds, ...b.shelf]) bandOf.set(id, b.layerId)
+    const layers = (view.bands ?? []).map(b => b.layerId)
+    const order = new Map((view.bands ?? []).map(b => [b.layerId, b.order]))
+    const pairs = [...levelValueDeps(index, view, report).values()].flatMap(e => {
+      const a = bandOf.get(e.from)
+      const b = bandOf.get(e.to)
+      return a && b && a !== b ? [[a, b] as const] : []
+    })
+    const t = tierNodes(layers, pairs)
+    for (const g of t.groups) out.push({ kind: 'cycle', parent, layers: g })
+    for (const a of layers)
+      for (const b of layers) {
+        const ta = t.tier.get(a)
+        const tb = t.tier.get(b)
+        if (ta === undefined || tb === undefined || order.get(a)! >= order.get(b)! || ta <= tb) continue
+        out.push({ kind: 'inverted', parent, above: a, below: b, tiers: [ta, tb] })
+      }
   }
   return out
 }
@@ -272,8 +363,28 @@ export function tierFindings(index: ModelIndex, report: Pick<GovernanceReport, '
   }
   const relsAt = new Set([...index.relations.values()].map(r => lowestCommonAncestor(index, r.from, r.to)))
   for (const [parentId, children] of index.childrenOf) {
-    // 子模块全是层的为分层总览（O1，按作者声明的层）
-    if (children.length < 2 || children.every(k => index.modules.get(k)?.kind === 'layer')) continue
+    if (children.length < 2) continue
+    // 子模块全是层的为分层总览（O1，按作者声明的层）：只查向上的线（K22，第十四轮 F8 扩到声明的层）
+    if (children.every(k => index.modules.get(k)?.kind === 'layer')) {
+      if (!relsAt.has(parentId)) continue
+      const lv = tierView(index, parentId)
+      for (const u of layerUpward(index, lv, { core: false })) {
+        if (u.inversion) continue
+        const r = index.relations.get(u.relations[0])
+        const ord = (id: string) => index.modules.get(id)?.order ?? 0
+        out.push({
+          issue: {
+            severity: 'info',
+            code: 'tier.upward',
+            message: `「${name(u.from)}」→「${name(u.to)}」向上（声明的层：交互逆着可依赖方向，order ${ord(u.from)} → ${ord(u.to)}）却不是控制反转：${u.relations.join('、')}；多半是没标的回调、通知或经通道（K22）`,
+            ...(r?.src ?? index.modules.get(parentId)?.src ?? {}),
+          },
+          modules: [u.from, u.to],
+          relation: u.relations[0],
+        })
+      }
+      continue
+    }
     const parent = index.modules.get(parentId)
     const src = parent?.src ?? {}
     const split = splitSignals(index, own, parentId, withFiles)

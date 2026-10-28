@@ -180,5 +180,11 @@ describe('J7 耦合线的选中', () => {
     expect(line.data.couple?.isolated).toBe(false)
     expect(line.data.jumps).toBeUndefined()
     expect(canvasScene({ ...base, evolution: null }).edges.some(e => e.data.temp === 'couple')).toBe(false)
+    // F7（L44）：按需显示——不选中、不聚焦时不画，画布角计数；悬停一端时画出
+    const rest = canvasScene({ ...base, selection: null, evolution: desk.evolution.level.value })
+    expect(rest.edges.some(e => e.data.temp === 'couple')).toBe(false)
+    expect(rest.pending?.couples).toBeGreaterThan(0)
+    const hovered = canvasScene({ ...base, selection: null, hover: 'infra.framework.extra', evolution: desk.evolution.level.value })
+    expect(hovered.edges.some(e => e.data.temp === 'couple')).toBe(true)
   })
 })

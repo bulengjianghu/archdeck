@@ -31,6 +31,8 @@ import type {
 } from '@/model'
 import type { EdgeRoute, Point, PositionedView } from '../layout'
 import type { StageOverlay, StaticMode, TempLine } from '../stage'
+import type { RestMark } from './marks'
+import type { LayerStatus } from '../tiers'
 import type { PillSegment } from '../layout'
 
 /** 画布节点的公共数据 */
@@ -45,7 +47,7 @@ export interface NodeData {
   /** 边界节点：外部模块所在路径 */
   path?: string
   /** 带（层）专用 */
-  band?: { abstraction?: string; mayDependOn: string[]; hiddenCount: number }
+  band?: { abstraction?: string; mayDependOn: string[]; hiddenCount: number; status?: LayerStatus }
   /** +N 占位块 */
   hiddenCount?: number
   /** O6：带内 +N 临时展开后，展开出来的模块数（占位块变为「收起」） */
@@ -63,6 +65,10 @@ export interface NodeData {
   preview?: { pointId: string; option: number; label: string }
   /** Y4：本层环的编号 */
   cycle?: number
+  /** L42：环内静息态收起的束数（悬停说明） */
+  cycleHidden?: number
+  /** L42：所在的环组被选中（sel=y:<环编号>） */
+  cycleSelected?: boolean
   /** ADR-0027：普通层次的核心模块（大块） */
   core?: boolean
   /** L14：边界角色记号（port 对外端口、adapter 适配器） */
@@ -73,12 +79,18 @@ export interface NodeData {
   sharedCount?: number
   /** O13②：结构视角下「共用 ×N」按依赖计（含只引类型），悬停文字随之 */
   sharedByDeps?: true
+  /** L38：结构视角静息态没画出来的可推出直连（传递约简，F9）——下边右「另直连 N」（L37 ⑧） */
+  direct?: { count: number; title: string }
+  /** L37：静息态超出上限、此刻收起的注记（悬停或选中该节点时为空） */
+  restHidden?: readonly RestMark[]
   /** O11：本层框（父模块框、分层总览的带）常驻计数「共用件 N · 折叠 M」 */
   counts?: { shared: number; folded: number }
   /** O9：共用件架在本框 / 带内的纵向位置（相对框顶，px），画「共用件」字样 */
   shelfAt?: number
   /** O8：普通层次的「+N」占位（双击无动作；分层总览的占位双击下钻到层） */
   graphFold?: boolean
+  /** L39②、L40②：按依赖分层时「+N」成员的层号跨度（「第 X–Y 层」）与跨 ≥ 3 层的提示 */
+  foldTiers?: { tiers: string; warn: string | null }
   /** J5：热度角标（右下角三档色块）：档位、种类、热度值与次数 */
   heat?: NodeHeat & { kind: HeatKind }
   /** L13：节点定义的端口记号——画在进边一侧（side）的后半；超过 PORT_MERGE 个时合成一个「端口 ×N」（merged 为端口数） */
@@ -156,6 +168,10 @@ export interface DepEdgeLook {
   unexplained?: boolean
   /** U17：逆稳定——两端的 I */
   against?: { from: number; to: number }
+  /** F10、L42：向上——依赖违背算出的层（依赖方在被依赖方之下） */
+  upward?: true
+  /** L43（F11）：逐条的例外（L0）——画得最醒目（深色、线宽加半档）；其余为骨架（安静） */
+  exception?: true
   /** 悬停说明：种类与档、条数、覆盖、规则判定 */
   title: string
 }
@@ -308,6 +324,8 @@ export interface CanvasInput {
   assembly?: readonly AssemblyOverlay[] | null
   /** O12：本层节点 ID → 落在它上面的组装根个数（「组装根」角标）；开关关闭时为空 */
   assemblyRoots?: ReadonlyMap<string, number> | null
+  /** L36：声明的层（分层总览的带）的状态记号，按层模块的确认状态（Z3）；不给时不画 */
+  layerStatus?: ReadonlyMap<string, LayerStatus> | null
   /** ADR-0031：结构视角的输入；交互视角与运行视角为 null（照交互图画） */
   structure?: StructureInput | null
   /** K22、L26（ADR-0041）：本层向上、又有不是控制反转的关系的视图边 → 这些关系（标签位写「向上」）；结构视角不给 */
@@ -326,7 +344,13 @@ export interface CanvasInput {
 export interface StructureDisplayInput {
   shown: readonly Bundle[]
   elementEdges: readonly ElementEdge[]
-  hidden: { type: number; value: number; covered: number; cross: number }
+  hidden: { type: number; value: number; covered: number; cross: number; reducible?: number; cycle?: number }
+  /** L42（F9）：依赖方节点 → 静息态没画出来的可推出束 */
+  direct?: ReadonlyMap<string, readonly Bundle[]>
+  /** L42（F10）：环编号 → 环内静息态收起的束数 */
+  cycleHidden?: ReadonlyMap<number, number>
+  /** F10：依赖违背算出的层（「向上」）的束 */
+  upward?: ReadonlySet<string>
   cross: ReadonlyMap<string, { in: number; out: number }>
   reach: ReadonlyMap<string, 'sibling' | 'cross' | 'outer'>
   anomalies: ReadonlySet<string>
@@ -367,7 +391,9 @@ export interface CanvasScene {
    * 结构视角：画布角的计数与说明——收起的只引类型束（L15、B1）、只看交互使用时收起的值使用（B1）、只看未解释时收起的已解释（B4），
    * 没有代码事实时的说明（U16）；其余视角不给
    */
-  structure?: { typeOnlyHidden: number; valueHidden: number; coveredHidden: number; note: string | null }
+  structure?: { typeOnlyHidden: number; valueHidden: number; coveredHidden: number; reducibleHidden: number; cycleHidden: number; note: string | null }
+  /** L44、F7：只能临时出现、此刻收起的线——框外的代码依赖叠加线（其中带违规的）、时间耦合；都没有时不给 */
+  pending?: { overlays: number; overlayViolations: number; couples: number }
   /** V5：运行视角隐藏了静态内容时只按这些节点适应画布；否则为 null（取全部内容） */
   visibleIds: Set<string> | null
 }
