@@ -166,6 +166,19 @@ export function placeTierLabels(t: TierGeometry, nodes: ReadonlyMap<string, Box>
   }
 }
 
+/** L36（第十四轮 F4、F8）：层的状态——算出（L28，无人声明）/ 待确认（声明的层，未确认或需复核，Z3）/ 已确认（指纹一致） */
+export type LayerStatus = 'computed' | 'pending' | 'confirmed'
+
+/** L36：状态记号的文字与悬停说明 */
+export const LAYER_STATUS: Record<LayerStatus, { text: string; title: string }> = {
+  computed: { text: '算出', title: '由本层值依赖算出（L28），不是原则：是原则的证据；可经提炼起草为声明的层' },
+  pending: { text: '待确认', title: '声明的层，尚未确认或指纹已变、需复核（Z3）：抽象原则还只是主张' },
+  confirmed: { text: '已确认', title: '声明的层，已确认且指纹一致（Z3）：抽象原则是原则，接受符合性校验' },
+}
+
+/** L36：确认状态（Z3）→ 声明的层的状态记号 */
+export const layerStatusOf = (review: 'reviewed' | 'stale' | 'unreviewed' | undefined): LayerStatus => (review === 'reviewed' ? 'confirmed' : 'pending')
+
 /** L29：层带的层号文字（第 1 层为入口，最下为被依赖）；i 为带在自上而下中的序号 */
 export function tierBandLabel(tier: number, i: number, last: number): string {
   return `第 ${tier + 1} 层${i === 0 ? ' · 入口' : i === last ? ' · 被依赖' : ''}`

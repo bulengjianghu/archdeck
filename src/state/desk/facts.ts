@@ -361,6 +361,11 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
   /** L29、K21③：画布角的分层提示（大环照样分层、本层没有依赖）；运行视角不给 */
   const tierHints = computed<string[]>(() => (perspectiveOf(state.value) === 'run' ? [] : (tiers.value?.notes ?? []).map(tierNoteText)))
 
+  /** L36：算出的层整组同一状态——画布角写一次「层 · 算出」与层数（只在画层带时；运行视角不给） */
+  const layerNote = computed<{ status: 'computed'; count: number } | null>(() =>
+    perspectiveOf(state.value) !== 'run' && tiers.value?.banded ? { status: 'computed', count: tiers.value.count } : null,
+  )
+
   /** K21①②：本层（当前父模块）的子模块的拆分信号；没有代码事实时为 null */
   const split = computed<SplitSignals | null>(() => {
     const v = view.value
@@ -637,6 +642,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     layoutLinks,
     tiers,
     tierHints,
+    layerNote,
     split,
     splitOf,
     metrics,

@@ -1,29 +1,35 @@
 // @vitest-environment jsdom
-/** 节点角上的记号（T3 裁决 7）：端口记号占上边框右半时，环与「共用 ×N」移到下边框、热度让到左下角；L14 角色记号；O12「组装根」角标 */
+/** 节点注记的位置表（L37）：环在名称行、共用与另直连在下边右、热度在右下角内；L14 角色记号；O12「组装根」角标 */
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import DiffMark from '../../src/components/nodes/DiffMark.vue'
 import RimTag from '../../src/components/nodes/RimTag.vue'
+import CycleMark from '../../src/components/nodes/CycleMark.vue'
 import type { NodeData } from '../../src/layout/canvas'
 
 const base: NodeData = { moduleId: 'm', name: 'M', childCount: 0, selected: false, dim: false }
 
 describe('节点角标的统一布局', () => {
-  it('没有顶边端口记号：环与共用骑在上边框右侧；有时移到下边框，热度色块让到左下角', () => {
-    const plain = mount(DiffMark, { props: { data: { ...base, cycle: 2, sharedCount: 3, heat: { tier: 2, value: 5, count: 3, kind: 'changes' } as never } } })
-    expect(plain.find('.cycle-mark').classes()).not.toContain('lowered')
-    expect(plain.find('.heat-badge').classes()).not.toContain('left')
-    const withPorts = mount(DiffMark, {
-      props: {
-        data: { ...base, cycle: 2, sharedCount: 3, heat: { tier: 2, value: 5, count: 3, kind: 'changes' } as never, ports: { side: 'top', items: [] } },
-      },
-    })
-    expect(withPorts.find('.cycle-mark').classes()).toContain('lowered')
-    expect(withPorts.find('.shared-mark').classes()).toContain('lowered')
-    expect(withPorts.find('.heat-badge').classes()).toContain('left')
-    // 端口记号在左边（自左向右布局）时不冲突，照常在上边框
-    const left = mount(DiffMark, { props: { data: { ...base, cycle: 2, ports: { side: 'left', items: [] } } } })
-    expect(left.find('.cycle-mark').classes()).not.toContain('lowered')
+  it('L37：环编号在名称行（不随端口记号挪动）；「共用 ×N」固定在下边右、热度色块固定在右下角内；收起的注记不画', () => {
+    const heat = { tier: 2, value: 5, count: 3, kind: 'changes' } as never
+    const w = mount(DiffMark, { props: { data: { ...base, cycle: 2, sharedCount: 3, heat, ports: { side: 'top', items: [] } } } })
+    expect(w.find('.cycle-mark').exists()).toBe(false)
+    expect(w.find('[data-testid="unseen-marks"]').text()).toBe('共用 ×3')
+    expect(w.find('.heat-badge').classes()).not.toContain('left')
+    expect(mount(CycleMark, { props: { data: { ...base, cycle: 2 } } }).text()).toBe('↻ 2')
+    expect(
+      mount(CycleMark, { props: { data: { ...base, cycle: 2, restHidden: ['cycle'] } } })
+        .find('.cycle-mark')
+        .exists(),
+    ).toBe(false)
+    const hidden = mount(DiffMark, { props: { data: { ...base, sharedCount: 3, change: 'added', restHidden: ['unseen', 'state'] } } })
+    expect(hidden.find('[data-testid="unseen-marks"]').exists()).toBe(false)
+    expect(hidden.find('.diff-mark').exists()).toBe(false)
+  })
+
+  it('L37、L38：「另直连 N」与「共用 ×N」同在下边右一槽', () => {
+    const w = mount(DiffMark, { props: { data: { ...base, sharedCount: 1, direct: { count: 2, title: 't' } } } })
+    expect(w.find('[data-testid="unseen-marks"]').text().replace(/\s+/g, ' ')).toBe('共用 ×1 · 另直连 2')
   })
 
   it('O13：结构视角下「共用 ×N」按依赖计，悬停文字为「依赖 ×N（含只引类型）」；交互视角照 O10', () => {
@@ -47,5 +53,20 @@ describe('节点角标的统一布局', () => {
   it('L14：边界角色记号「端口」/「适配器」（模块块、分层总览的块与草图节点共用，跟在名字后）', () => {
     expect(mount(RimTag, { props: { rim: 'port' } }).text()).toBe('端口')
     expect(mount(RimTag, { props: { rim: 'adapter' } }).attributes('data-rim')).toBe('adapter')
+  })
+})
+
+describe('L36 分层总览的带写状态记号', () => {
+  it('带标题旁写「已确认 / 待确认」；不给状态时不画', async () => {
+    const BandNode = (await import('../../src/components/nodes/BandNode.vue')).default
+    const band = { abstraction: 'a', mayDependOn: [], hiddenCount: 0 }
+    const stubs = { global: { stubs: { Handles: true } } }
+    const w = mount(BandNode, { props: { data: { ...base, band: { ...band, status: 'confirmed' as const } } }, ...stubs })
+    expect(w.find('[data-testid="layer-status"]').text()).toBe('已确认')
+    expect(
+      mount(BandNode, { props: { data: { ...base, band } }, ...stubs })
+        .find('[data-testid="layer-status"]')
+        .exists(),
+    ).toBe(false)
   })
 })

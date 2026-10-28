@@ -3,6 +3,7 @@ import Handles from './Handles.vue'
 import DiffMark from './DiffMark.vue'
 import StructMarks from './StructMarks.vue'
 import PortMarks from './PortMarks.vue'
+import CycleMark from './CycleMark.vue'
 import type { NodeData } from './types'
 
 defineProps<{ data: NodeData }>()
@@ -14,7 +15,7 @@ defineProps<{ data: NodeData }>()
     <DiffMark :data="data" />
     <StructMarks :data="data" />
     <PortMarks v-if="data.ports" :ports="data.ports" :module-id="data.moduleId" />
-    <div class="name">{{ data.name }}</div>
+    <div class="name">{{ data.name }} <CycleMark :data="data" /></div>
     <div class="path">外部 · {{ data.path }}</div>
   </div>
 </template>

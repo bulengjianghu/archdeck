@@ -163,7 +163,10 @@ describe('L21：三个开关与收起计数（B1、B4）、跨界折叠计数（
 describe('W-10：帮助按结构 / 交互 / 运行 / 对照与治理分组，另有共享一段', () => {
   it('四组标题与改名', () => {
     const w = mount(GuideDialog)
-    expect(w.findAll('.group h3').map(h => h.text())).toEqual(['结构', '交互', '读一条线：三问四修饰', '运行', '对照与治理'])
+    expect(w.findAll('.group h3').map(h => h.text())).toEqual(['结构', '交互', '读一条线：三问四修饰', '运行', '对照与治理', '层'])
+    // L36、L37（第十四轮 F4、F16）：层的状态记号与节点注记的位置表
+    expect(w.find('[data-testid="guide-layer-status"]').text()).toMatch(/已确认.*待确认.*算出/)
+    expect(w.find('[data-testid="guide-node-marks"]').text()).toContain('最多三个')
     expect(w.text()).toContain('交互图变成舞台')
     expect(w.text()).not.toContain('结构图变成舞台')
     expect(w.find('[aria-label="三个视角共享"]').text()).toContain(SHARED_CHANNELS[5].text)

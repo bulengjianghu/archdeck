@@ -21,10 +21,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import { useDesk } from '@/state/inject'
-import { contentBounds, type PositionedView } from '@/layout/layout'
+import { contentBounds, layerStatusOf, type PositionedView } from '@/layout/layout'
 import { canvasScene, withEdgeHover, withElementHover, type NodeData, type RouteEdgeData, type StructureInput } from '@/layout/canvas'
 import { useSurfaceHover } from './panel/surfaceFocus'
 import { useStage } from './stage/useStageDisplay'
+import LayerStatus from './nodes/LayerStatus.vue'
 import ModuleNode from './nodes/ModuleNode.vue'
 import BoundaryNode from './nodes/BoundaryNode.vue'
 import BandNode from './nodes/BandNode.vue'
@@ -95,6 +96,13 @@ const carrier = computed(() => {
   return interaction.value && sel?.kind === 'relation' ? desk.facts.carrierOf(sel.id) : null
 })
 
+/** L36：分层总览的带（声明的层）的状态记号——按层模块的确认状态（Z3） */
+const layerStatus = computed(() => {
+  const v = positioned.value?.view
+  if (v?.mode !== 'layered') return null
+  return new Map(v.nodes.filter(n => n.role === 'layer').map(n => [n.moduleId, layerStatusOf(desk.review.of(n.moduleId).status)] as const))
+})
+
 /** 画布场景（Layout 的纯函数 canvasScene，ADR-0013）：节点与边的数据、显隐、变淡、回放态与选中突出 */
 const scene = computed(() =>
   canvasScene({
@@ -117,6 +125,7 @@ const scene = computed(() =>
     ports: desk.facts.portMarks.value,
     assembly: interaction.value ? (desk.facts.assembly.value?.overlays ?? null) : null,
     assemblyRoots: interaction.value ? (desk.facts.assembly.value?.roots ?? null) : null,
+    layerStatus: layerStatus.value,
     structure: structure.value,
     spreads: interaction.value ? desk.facts.spreads.value : null,
     carrier: carrier.value,
@@ -300,6 +309,8 @@ watch(
 const foldHint = computed(() => (desk.perspective.value !== 'run' ? (desk.positioned.value?.view.foldHint ?? 0) : 0))
 /** L29、K21③：按依赖分层的提示——本层没有依赖（拆分信号）、大环照样分层；运行视角不给 */
 const tierHints = computed(() => desk.facts.tierHints.value)
+/** L36：算出的层的状态记号（一组层同一状态，写一次） */
+const layerNote = computed(() => desk.facts.layerNote.value)
 /** L15、U16：结构视角的画布角——收起的只引类型依赖边条数、没有代码事实时的说明 */
 const structureCorner = computed(() => scene.value.structure ?? null)
 const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned.value.view.nodes.length === 0)
@@ -343,7 +354,10 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
     </VueFlow>
 
     <div v-if="isEmpty" class="empty">这个模块没有子模块</div>
-    <div v-if="foldHint || structureCorner || tierHints.length" class="corner">
+    <div v-if="foldHint || structureCorner || tierHints.length || layerNote" class="corner">
+      <div v-if="layerNote" class="fold-hint" data-testid="layer-note">
+        层<LayerStatus :status="layerNote.status" />本层按值依赖分为 {{ layerNote.count }} 层（L28）：算出的层是证据，不是声明的原则
+      </div>
       <div v-if="foldHint" class="fold-hint" data-testid="fold-hint">{{ foldHint }} 个模块，考虑标出核心</div>
       <div v-for="h in tierHints" :key="h" class="fold-hint" data-testid="tier-hint">{{ h }}</div>
       <div v-if="structureCorner?.note" class="structure-note" data-testid="structure-note">{{ structureCorner.note }}</div>

@@ -31,6 +31,8 @@ import type {
 } from '@/model'
 import type { EdgeRoute, Point, PositionedView } from '../layout'
 import type { StageOverlay, StaticMode, TempLine } from '../stage'
+import type { RestMark } from './marks'
+import type { LayerStatus } from '../tiers'
 
 /** 画布节点的公共数据 */
 export interface NodeData {
@@ -44,7 +46,7 @@ export interface NodeData {
   /** 边界节点：外部模块所在路径 */
   path?: string
   /** 带（层）专用 */
-  band?: { abstraction?: string; mayDependOn: string[]; hiddenCount: number }
+  band?: { abstraction?: string; mayDependOn: string[]; hiddenCount: number; status?: LayerStatus }
   /** +N 占位块 */
   hiddenCount?: number
   /** O6：带内 +N 临时展开后，展开出来的模块数（占位块变为「收起」） */
@@ -72,6 +74,10 @@ export interface NodeData {
   sharedCount?: number
   /** O13②：结构视角下「共用 ×N」按依赖计（含只引类型），悬停文字随之 */
   sharedByDeps?: true
+  /** L38：结构视角静息态没画出来的可推出直连（传递约简，F9）——下边右「另直连 N」（L37 ⑧） */
+  direct?: { count: number; title: string }
+  /** L37：静息态超出上限、此刻收起的注记（悬停或选中该节点时为空） */
+  restHidden?: readonly RestMark[]
   /** O11：本层框（父模块框、分层总览的带）常驻计数「共用件 N · 折叠 M」 */
   counts?: { shared: number; folded: number }
   /** O9：共用件架在本框 / 带内的纵向位置（相对框顶，px），画「共用件」字样 */
@@ -305,6 +311,8 @@ export interface CanvasInput {
   assembly?: readonly AssemblyOverlay[] | null
   /** O12：本层节点 ID → 落在它上面的组装根个数（「组装根」角标）；开关关闭时为空 */
   assemblyRoots?: ReadonlyMap<string, number> | null
+  /** L36：声明的层（分层总览的带）的状态记号，按层模块的确认状态（Z3）；不给时不画 */
+  layerStatus?: ReadonlyMap<string, LayerStatus> | null
   /** ADR-0031：结构视角的输入；交互视角与运行视角为 null（照交互图画） */
   structure?: StructureInput | null
   /** D7、D8：本层交互视图边 → 按接收方表面散开的数据与束内混合（交互视角用；运行视角为 null） */

@@ -43,6 +43,7 @@ export type {
 } from './canvas/types'
 export { DEP_KIND_LABELS, DEP_TIER_LABELS, depWeight, violationLook } from './canvas/structure'
 export { PORT_MERGE } from './canvas/nodes'
+export { NODE_MARK_SLOTS, REST_MARKS, REST_PRIORITY, markShown, presentMarks, restMarks, type RestMark } from './canvas/marks'
 export { EDGE_Z, routeMidpoint } from './canvas/edges'
 export { EDGE_HOVER_Z, landsOn, withEdgeHover, withElementHover } from './canvas/hover'
 export { EDGE_TAGS, composeLabel, hasWarnTag, type EdgeTag, type TagPart } from './canvas/labels'

@@ -135,6 +135,26 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
         </div>
       </div>
 
+      <div class="group" aria-label="层与节点注记" data-testid="guide-layers">
+        <svg viewBox="0 0 120 64" aria-hidden="true">
+          <rect x="4" y="4" width="112" height="26" rx="4" class="band" />
+          <rect x="4" y="34" width="112" height="26" rx="4" class="band" />
+          <rect x="14" y="10" width="40" height="14" rx="3" class="node" />
+          <rect x="66" y="40" width="40" height="14" rx="3" class="node" />
+          <path d="M34 24 L86 40" class="dep" />
+        </svg>
+        <div>
+          <h3>层</h3>
+          <p data-testid="guide-layer-status">
+            上依赖下，位置就是方向。层有两种来源、一个名字：作者声明的层（分层总览的带）标「已确认」或「待确认」，按依赖算出的层标「算出」——算出的层是证据，不是原则。
+          </p>
+          <p class="sub" data-testid="guide-node-marks">
+            <b>节点注记</b>位置固定：名称行是身份（角色、环编号 ↻），上边左是状态（变更、影响面），上边右是端口，下边左是量（入 · 出 ·
+            表面），下边右是没画出来的线（共用、另直连），外侧是界外；平时每个节点最多三个，悬停或选中时全部出现。
+          </p>
+        </div>
+      </div>
+
       <div class="shared" aria-label="三个视角共享">
         <h3>三个视角共享</h3>
         <p>箭头、颜色在三个视角各有含义（看「显示」面板）；下面这些在三个视角意思一样——实线是交互、虚线是依赖，异常写在线中点：</p>
