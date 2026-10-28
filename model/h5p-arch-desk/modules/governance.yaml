@@ -377,3 +377,5 @@ relations:
   - { id: rel.gv.agent-tiers, from: access.agent, to: model.governance.tiers, type: queries, description: agent 接口向分层取：tiers 命令调用 tierView、levelTiers、splitSignals 列出每层的子模块、环组、孤立的、向上的边与拆分信号（L28、Q 接口） }
   - { id: rel.gv.tiers-facts, from: model.governance.tiers, to: model.governance.facts, type: queries, description: 分层向事实比对取：调用 depKey 给本层依赖与有交互无依赖的节点对去重（L28、K21） }
   - { id: rel.gv.tiers-cycles, from: model.governance.tiers, to: model.governance.cycles, type: queries, description: 分层向环与环度取：校验提醒调用 valueDeps 只留值依赖，再按最近公共祖先归到层次（L28、Y1） }
+  - { id: rel.r14.facts-projector, from: state.desk.facts, to: model.projector, type: queries, description: 架构治理派生（desk.facts）向 Projector 层次投影取：调用 shelfOf 取本层共用件，线的级别（K23）的约简宇宙与照画的例外据此排除共用件 }
+  - { id: rel.r14.canvas-tiers, from: state.layout.canvas, to: model.governance.tiers, type: queries, description: 画布场景向分层与拆分信号取：调用 foldSpanText 在「+N」上写成员的层号跨度与跨 ≥ 3 层的提示（L39、L40） }
