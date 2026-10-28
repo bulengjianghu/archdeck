@@ -10,6 +10,7 @@ import {
   tierIssues,
   tierNodes,
   tierNoteText,
+  layerUpward,
   foldSpanText,
   DEFAULT_PROJECT_OPTIONS,
   isInversion,
@@ -245,5 +246,38 @@ ${chain.map(m => `      - { id: app.${m}, name: ${m}, responsibility: ${m}, code
     const t = levelTiers(index, projectLevel(index, 'app', { ...DEFAULT_PROJECT_OPTIONS, expandedBands: ['app'] }), { moduleDeps: new Map() })!
     expect(t.notes).toContainEqual({ kind: 'flat', nodes: 9 })
     expect(tierNoteText({ kind: 'flat', nodes: 9 })).toBe('平铺：本层 9 个子模块彼此独立（没有依赖也没有交互）')
+  })
+})
+
+describe('K22 扩到声明的层（第十四轮 F8）', () => {
+  const LAYERED = `
+modules:
+  - { id: ui, name: UI, kind: layer, order: 1, abstraction: 呈现, responsibility: 界面, children: [{ id: ui.view, name: View, responsibility: 视图, role: core }] }
+  - { id: core, name: Core, kind: layer, order: 2, abstraction: 业务, responsibility: 业务, children: [{ id: core.svc, name: Svc, responsibility: 服务, role: core }] }
+relations:
+  - { id: r.down, from: ui.view, to: core.svc, type: commands }
+  - { id: r.up, from: core.svc, to: ui.view, type: commands }
+  - { id: r.note, from: core.svc, to: ui.view, type: notifies }
+`
+  it('分层总览：下层发起、指向上层的交互为向上；通知是控制反转，直接委托给提示（带间边与核心跨层边同一判定）', () => {
+    const { index } = loadModel([
+      { path: 'system.yaml', text: 'system: { id: sys, name: Sys }' },
+      { path: 'modules/a.yaml', text: LAYERED },
+    ])
+    const view = projectLevel(index, index.rootId)
+    expect(view.mode).toBe('layered')
+    const up = layerUpward(index, view)
+    const band = up.find(u => u.from === 'core' && u.to === 'ui')
+    expect(band).toMatchObject({ inversion: false, relations: ['r.up'] })
+    expect(up.some(u => u.from === 'ui')).toBe(false)
+    expect(layerUpward(index, view, { core: false }).every(u => !u.edge.startsWith('core:'))).toBe(true)
+    // 普通层次不适用
+    expect(layerUpward(index, projectLevel(index, 'ui'))).toEqual([])
+    // 返工清单：tier.upward 指向声明的层
+    const own = assignFiles(index, [], [])
+    const report = governanceReport(index, own, { files: [], packages: {} }, { deps: [], external: {}, parsed: 0 }, null)
+    const issues = tierIssues(index, report, own).filter(i => i.code === 'tier.upward')
+    expect(issues).toHaveLength(1)
+    expect(issues[0].message).toContain('声明的层')
   })
 })

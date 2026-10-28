@@ -241,6 +241,26 @@ export function levelTiers(index: ModelIndex, view: LevelView, report: Pick<Gove
   }
 }
 
+/**
+ * K22（第十四轮 F8：扩到声明的层）：分层总览里发起方所在的层在接收方之下（声明的 order 更大）的交互边也是向上的边，
+ * 与算出的层同一判定（控制反转是应有之义，否则提示）。带与带之间的边、核心跨层边都判定（核心按所在的带）；参与者等不在带里的端点不判。
+ */
+export function layerUpward(index: ModelIndex, view: LevelView, opts: { core?: boolean } = {}): UpwardEdge[] {
+  if (view.mode !== 'layered') return []
+  const order = new Map<string, number>()
+  for (const b of view.bands ?? []) for (const id of [b.layerId, ...b.coreModuleIds, ...b.shelf]) order.set(id, b.order)
+  const out: UpwardEdge[] = []
+  for (const e of [...view.edges, ...(opts.core === false ? [] : (view.coreEdges ?? []))]) {
+    const a = order.get(e.from)
+    const b = order.get(e.to)
+    if (a === undefined || b === undefined || a <= b) continue
+    const rels = e.relationIds.map(id => index.relations.get(id)).filter((r): r is RelationEntity => !!r)
+    const direct = rels.filter(r => !isInversion(r)).map(r => r.id)
+    out.push({ edge: e.id, from: e.from, to: e.to, inversion: !direct.length, relations: direct })
+  }
+  return out
+}
+
 /** K21①②：一个父模块的子模块的拆分信号（只对有代码事实的当前版本） */
 export interface SplitSignals {
   /** ① 子树不占任何文件的子模块（父模块子树有文件时；目标态不算） */
@@ -295,8 +315,28 @@ export function tierFindings(index: ModelIndex, report: Pick<GovernanceReport, '
   }
   const relsAt = new Set([...index.relations.values()].map(r => lowestCommonAncestor(index, r.from, r.to)))
   for (const [parentId, children] of index.childrenOf) {
-    // 子模块全是层的为分层总览（O1，按作者声明的层）
-    if (children.length < 2 || children.every(k => index.modules.get(k)?.kind === 'layer')) continue
+    if (children.length < 2) continue
+    // 子模块全是层的为分层总览（O1，按作者声明的层）：只查向上的线（K22，第十四轮 F8 扩到声明的层）
+    if (children.every(k => index.modules.get(k)?.kind === 'layer')) {
+      if (!relsAt.has(parentId)) continue
+      const lv = tierView(index, parentId)
+      for (const u of layerUpward(index, lv, { core: false })) {
+        if (u.inversion) continue
+        const r = index.relations.get(u.relations[0])
+        const ord = (id: string) => index.modules.get(id)?.order ?? 0
+        out.push({
+          issue: {
+            severity: 'info',
+            code: 'tier.upward',
+            message: `「${name(u.from)}」→「${name(u.to)}」向上（声明的层：order ${ord(u.from)} → ${ord(u.to)}）却不是控制反转：${u.relations.join('、')}；多半是没标的回调、通知或经通道（K22）`,
+            ...(r?.src ?? index.modules.get(parentId)?.src ?? {}),
+          },
+          modules: [u.from, u.to],
+          relation: u.relations[0],
+        })
+      }
+      continue
+    }
     const parent = index.modules.get(parentId)
     const src = parent?.src ?? {}
     const split = splitSignals(index, own, parentId, withFiles)

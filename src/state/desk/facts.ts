@@ -29,6 +29,8 @@ import {
   impactOf,
   levelImpact,
   levelTiers,
+  layerUpward,
+  type UpwardEdge,
   splitSignals,
   tierNoteText,
   tierView,
@@ -361,6 +363,13 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
   /** L29、K21③：画布角的分层提示（大环照样分层、本层没有依赖）；运行视角不给 */
   const tierHints = computed<string[]>(() => (perspectiveOf(state.value) === 'run' ? [] : (tiers.value?.notes ?? []).map(tierNoteText)))
 
+  /** K22：本层向上的交互边——普通层次按算出的层（L28），分层总览按声明的层（第十四轮 F8）；没有代码事实时普通层次不给 */
+  const upward = computed<UpwardEdge[]>(() => {
+    const v = view.value
+    if (!v || !index.value) return []
+    return v.mode === 'layered' ? layerUpward(index.value, v) : (tiers.value?.upward ?? [])
+  })
+
   /** L36：算出的层整组同一状态——画布角写一次「层 · 算出」与层数（只在画层带时；运行视角不给） */
   const layerNote = computed<{ status: 'computed'; count: number } | null>(() =>
     perspectiveOf(state.value) !== 'run' && tiers.value?.banded ? { status: 'computed', count: tiers.value.count } : null,
@@ -643,6 +652,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     tiers,
     tierHints,
     layerNote,
+    upward,
     split,
     splitOf,
     metrics,

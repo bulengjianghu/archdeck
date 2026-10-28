@@ -33,7 +33,7 @@ export type { EntryOf, DepProbe, Judgement, ModuleRules } from './rules'
 export { stronglyConnected, valueDeps, moduleCycles, fileCycles, cyclicityOf } from './cycles'
 export { governanceReport, gateIssues, makeBaseline, entryResolver } from './report'
 export { levelFacts, levelAssembly, depsBetween, nodeOf, levelValueDeps } from './level'
-export { tierNodes, tierNoteText, foldSpanText, FOLD_SPAN_WARN, type FoldSpan, levelTiers, splitSignals, tierIssues, tierFindings, tierView, tierable, isInversion, BAND_MIN_NODES, BAND_MIN_TIERS } from './tiers'
+export { tierNodes, tierNoteText, foldSpanText, FOLD_SPAN_WARN, type FoldSpan, levelTiers, layerUpward, splitSignals, tierIssues, tierFindings, tierView, tierable, isInversion, BAND_MIN_NODES, BAND_MIN_TIERS } from './tiers'
 export type { TierFinding, Tiering, LevelTiers, UpwardEdge, TierNote, SplitSignals } from './tiers'
 export type { AssemblyOverlay, DepOverlay, EdgeFact, LevelAssembly, LevelFacts } from './level'
 export {
