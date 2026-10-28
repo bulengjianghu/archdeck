@@ -103,6 +103,8 @@ export interface StructureLinks {
   interactions?: readonly { edge: string; elements: readonly string[] }[]
   /** L28：普通层次按本层值依赖的分层（模型层 levelTiers）；没有代码事实时不给，按边排 */
   tiers?: LayoutTiers
+  /** L11、L13（ADR-0039 修订 1）：普通层次中有端口记号的内部节点（视图节点 ID）——只有它们进边一侧的后半留给记号，其余用整条边；不给即都没有 */
+  marked?: readonly string[]
 }
 
 const linkEdge = (l: StructureLink): ViewEdge => ({ id: l.id, kind: 'direct', from: l.from, to: l.to, type: 'calls', relationIds: [], mode: 'sync' })
@@ -166,7 +168,7 @@ const cache = new Map<string, PositionedView>()
 const CACHE_LIMIT = 64
 
 /** 布局算法的版本：端口、层约束等选项改了就升，旧结果不再命中 */
-export const LAYOUT_VERSION = 'L33-r12-1'
+export const LAYOUT_VERSION = 'L11-marked-1'
 
 export function cacheKey(view: LevelView, opts: LayoutOptions = {}, links?: StructureLinks | null): string {
   return JSON.stringify([
@@ -182,6 +184,8 @@ export function cacheKey(view: LevelView, opts: LayoutOptions = {}, links?: Stru
     (links?.core ?? []).map(e => e.id),
     // L28：分层进键（层号、环组、孤立、层带）
     links?.tiers ?? null,
+    // L11、L13：有端口记号的节点进键（只有它们保留进边一侧的后半）
+    links?.marked ?? [],
     // C6：展开表面时元素级边、展开的节点与元素、交互束的散开进键（不展开时不进；展开的结果建在收起态那一份之上，L20a②）
     ...(links?.expand?.length
       ? [
@@ -208,7 +212,7 @@ export async function layoutView(view: LevelView, opts: LayoutOptions = {}, link
     result = expandSurface(await layoutView(view, opts, collapsed), view, links)
   } else if (view.mode === 'layered') result = layoutLayered(unionView(view, links), opts)
   else if (view.nodes.length === 0) result = { view, nodes: new Map(), edges: new Map(), coreEdges: new Map() }
-  else result = await layoutGraph(unionView(view, links), links?.tiers)
+  else result = await layoutGraph(unionView(view, links), links?.tiers, links?.marked)
   result = { ...result, view }
   if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value!)
   cache.set(key, result)

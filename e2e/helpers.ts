@@ -8,11 +8,15 @@ export async function openDesk(page: Page, hashPath: string) {
   await expect(page.locator('.vue-flow__node').first()).toBeVisible({ timeout: 20_000 })
 }
 
-/** 收起「显示」面板（展开时叠在画布右下，会挡住那里的节点，L30 布局变高后更常见） */
+/** 收起「显示」面板（收起后「适应」用整块画布，V14），等画布稳定 */
 export async function collapseDisplay(page: Page) {
   const btn = page.locator('.display .head-btn')
   if ((await btn.getAttribute('aria-expanded')) === 'true') await btn.click()
-  // 画布首帧后约半秒还会再适应一次（节点整体平移）：等节点位置连续三次（约 0.75 s）不变再继续，悬停 / 点击才落在节点上
+  await settleCanvas(page)
+}
+
+/** 画布首帧后约半秒还会再适应一次（节点整体平移）：等节点位置连续三次（约 0.75 s）不变再继续，悬停 / 点击才落在节点上 */
+export async function settleCanvas(page: Page) {
   const node = page.locator('.vue-flow__node').first()
   let last = ''
   let same = 0

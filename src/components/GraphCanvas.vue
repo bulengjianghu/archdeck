@@ -22,7 +22,7 @@ import { VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import { useDesk } from '@/state/inject'
 import { contentBounds, type PositionedView } from '@/layout/layout'
-import { canvasScene, withEdgeHover, withElementHover, type NodeData, type RouteEdgeData, type StructureInput } from '@/layout/canvas'
+import { canvasScene, fitArea, fitViewport, withEdgeHover, withElementHover, type NodeData, type RouteEdgeData, type StructureInput } from '@/layout/canvas'
 import { useSurfaceHover } from './panel/surfaceFocus'
 import { useStage } from './stage/useStageDisplay'
 import ModuleNode from './nodes/ModuleNode.vue'
@@ -265,10 +265,24 @@ function fitNow(only?: ReadonlySet<string>): boolean {
   if (!pv || width === 0 || height === 0) return false
   const b = contentBounds(pv, only ?? visibleIds.value ?? undefined)
   if (!b) return false
-  const pad = 0.08
-  const zoom = Math.min(1.2, (width * (1 - 2 * pad)) / b.w, (height * (1 - 2 * pad)) / b.h)
-  void setViewport({ x: (width - b.w * zoom) / 2 - b.x * zoom, y: (height - b.h * zoom) / 2 - b.y * zoom, zoom })
+  void setViewport(fitViewport(b, fitArea(width, height, panelLeft())))
   return true
+}
+
+/** V14：展开的「显示」面板左边离画布左边的距离；收起时为 null（整块画布可用） */
+function panelLeft(): number | null {
+  const panel = host.value?.querySelector<HTMLElement>('.display')
+  if (!panelOpen.value || !panel || !host.value) return null
+  return panel.getBoundingClientRect().left - host.value.getBoundingClientRect().left
+}
+/** V14：「显示」面板展开或收起即可用区域变了，重新适应（面板内各组的展开折叠不算） */
+const panelOpen = ref(false)
+async function onPanelOpen(open: boolean) {
+  const was = panelOpen.value
+  panelOpen.value = open
+  if (was === open) return
+  await nextTick()
+  fitNow()
 }
 
 function tryPendingFit(attempt = 0) {
@@ -394,7 +408,7 @@ const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned
       <button title="适应画布" @click="fitNow()">适应</button>
       <span class="gesture">空格 + 拖动 = 平移，Ctrl + 滚轮 = 缩放</span>
     </div>
-    <DisplayPanel />
+    <DisplayPanel @open="onPanelOpen" />
   </div>
 </template>
 

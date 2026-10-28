@@ -324,7 +324,7 @@ export function edgeRoute(pv: PositionedView, e: ViewEdge): EdgeRoute | undefine
 
 /**
  * 端口按方位：用户在底边朝下、外部系统在右边朝右（A7：它在系统框左侧）、边界节点在顶边朝上；内部节点进边在入口侧（自上而下为顶边，自左向右为左边）、
- * 出边在出口侧（底边 / 右边，L11）；front 时落在该侧的前半（ADR-0029 起关系全是交互、都在前半，进边一侧的后半留给端口记号 L13）。
+ * 出边在出口侧（底边 / 右边，L11）；front 时落在该侧的前半（有端口记号的节点，进边一侧的后半留给记号 L13）。
  * 同一节点同一侧的多条边沿该边错开 PARALLEL_GAP，短桩逐条加长。
  */
 export function portFor(
@@ -461,8 +461,8 @@ function outsideRoute(pv: PositionedView, e: ViewEdge, group?: readonly ViewEdge
   const nb = pv.view.nodes.find(n => n.id === e.to)
   if (!a || !b || !na || !nb) return undefined
   const dir = pv.direction ?? 'DOWN'
-  // L11：模块（内部节点、框线上的边界角色）的关系边在前半错开，后半留给端口记号（L13）；L31：参与者、边界节点没有端口记号，用整条边
-  const front = (n: { role?: string }) => n.role !== 'actor' && n.role !== 'boundary'
+  // L11：有端口记号的节点（L13）关系边在前半错开、后半留给记号；L31：没有端口记号的（参与者、边界节点、边界角色、没有端口的模块）用整条边
+  const front = (n: { id: string }) => !!pv.marked?.has(n.id)
   const outside = group ?? pv.view.edges.filter(x => isOutsideEdge(pv.view, x))
   const fs = slotOf(outside, e.from, e.id)
   // 内部节点那一端用 elk 排出的占位端口（与内部边的端口一起排在前半）；没有时按半边错开

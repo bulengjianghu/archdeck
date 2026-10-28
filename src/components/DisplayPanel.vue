@@ -34,6 +34,9 @@ const run = computed(() => desk.perspective.value === 'run')
 /** 结构视角（ADR-0031）：图例整组换成结构视图的 */
 const structure = computed(() => desk.perspective.value === 'structure')
 const { open, groups, toggleOpen, toggleGroup, prefs } = useDisplayPrefs(desk.perspective, desk.project)
+/** V14：面板展开或收起时告诉画布（「适应」只用面板左侧的区域，展开收起即重新适应） */
+const emit = defineEmits<{ open: [open: boolean] }>()
+watch(open, v => emit('open', v), { immediate: true })
 /** E-2：编辑态下草图不对应代码——隐藏代码事实与演化两组；进入编辑态时收起面板，不挡住编辑落点 */
 const editing = computed(() => desk.edit.active.value)
 watch(editing, on => on && open.value && toggleOpen(), { immediate: true })

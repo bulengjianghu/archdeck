@@ -31,7 +31,7 @@ import {
   gapTracks,
   portFor,
 } from '../../src/layout/layout'
-import type { ViewEdge } from '../../src/model'
+import type { LevelView, ViewEdge } from '../../src/model'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
 const { index } = loadModel(sampleFiles())
@@ -500,7 +500,9 @@ describe('L11 端口方向', () => {
   }
 
   it('elk 只排父模块框内的子模块与它们之间的边；进边在上、出边在下（RIGHT：左进右出）；端口固定边、各边各有端口', () => {
-    const g = toElkGraph(view, 'DOWN')
+    // 有端口记号的节点（L13）才保留进边一侧的后半：这里让全部内部节点都有
+    const all = view.nodes.filter(n => compassOf(n) === 'inner').map(n => n.id)
+    const g = toElkGraph(view, 'DOWN', null, all)
     expect(g.children!.map(c => c.id).sort()).toEqual(
       view.nodes
         .filter(n => compassOf(n) === 'inner')
@@ -518,11 +520,11 @@ describe('L11 端口方向', () => {
     ).toBe(true)
     const inner = view.edges.find(e => !isOutsideEdge(view, e))!
     expect([side(g, `${inner.id}#out`), side(g, `${inner.id}#in`)]).toEqual(['SOUTH', 'NORTH'])
-    const r = toElkGraph(view, 'RIGHT')
+    const r = toElkGraph(view, 'RIGHT', null, all)
     expect([side(r, `${inner.id}#out`), side(r, `${inner.id}#in`)]).toEqual(['EAST', 'WEST'])
     expect(portSide('in', 'DOWN')).toBe('NORTH')
     for (const c of g.children!) expect(c.layoutOptions!['elk.portConstraints']).toBe('FIXED_ORDER')
-    // 内部边两端各一个端口；框外边在内部节点那一端只占位（不连线，与内部边一起排序）；每个内部节点另有一个保留端口（L13）
+    // 内部边两端各一个端口；框外边在内部节点那一端只占位（不连线，与内部边一起排序）；每个有端口记号的内部节点另有一个保留端口（L13）
     const ports = g.children!.flatMap(c => c.ports!.map(p => p.id))
     const innerIds = new Set(g.children!.map(c => c.id))
     const placeholders = view.edges.filter(e => isOutsideEdge(view, e) && (innerIds.has(e.from) || innerIds.has(e.to)))
@@ -545,12 +547,12 @@ describe('L11 端口方向', () => {
     }
   })
 
-  it('L11：关系全是交互，进边的进点都在入口侧的前半（顶边左半 / 左边上半），后半留给端口记号；框外边同一规则', async () => {
+  it('L11：有端口记号的节点，进边的进点都在入口侧的前半（顶边左半 / 左边上半），后半留给端口记号；框外边同一规则', async () => {
     const idx2 = loadModel(scenarioFiles()).index
     let checked = 0
     for (const level of ['infra', 'infra.framework', 'app']) {
       const v = projectLevel(idx2, level, { showBoundaries: true })
-      const pv = await layoutView(v)
+      const pv = await layoutView(v, {}, { edges: [], marked: v.nodes.filter(x => compassOf(x) === 'inner').map(x => x.id) })
       const allocated = outsideRoutes(pv, v.edges)
       const route = (e: (typeof v.edges)[number]) => allocated.get(e.id) ?? pv.edges.get(e.id)
       for (const n of v.nodes.filter(x => compassOf(x) === 'inner')) {
@@ -565,6 +567,39 @@ describe('L11 端口方向', () => {
       }
     }
     expect(checked).toBeGreaterThan(0)
+  })
+
+  it('L11、L13（ADR-0039 修订 1）：没有端口记号的节点不保留后半，扇入的进边用整条边', async () => {
+    const g = toElkGraph(view, 'DOWN')
+    expect(g.children!.flatMap(c => c.ports!.map(p => p.id)).some(id => id.endsWith(RESERVED))).toBe(false)
+    const one = view.nodes.find(n => compassOf(n) === 'inner')!.id
+    const g1 = toElkGraph(view, 'DOWN', null, [one])
+    expect(g1.children!.flatMap(c => c.ports!.map(p => p.id)).filter(id => id.endsWith(RESERVED))).toEqual([`${one}${RESERVED}`])
+    // 五个节点扇入同一个节点：不保留时进点越过中线进入后半，保留时都在前半
+    const fan: LevelView = {
+      ...view,
+      nodes: ['a', 'b', 'c', 'd', 'e', 't'].map(id => ({ id, moduleId: id, role: 'module' as const, hasChildren: false })),
+      edges: ['a', 'b', 'c', 'd', 'e'].map(f => ({
+        id: `${f}->t:calls`,
+        kind: 'direct' as const,
+        from: f,
+        to: 't',
+        type: 'calls' as const,
+        relationIds: ['x'],
+        mode: 'sync' as const,
+      })),
+    }
+    const ends = async (marked?: string[]) => {
+      const pv = await layoutView(fan, {}, { edges: [], ...(marked ? { marked } : {}) })
+      const box = pv.nodes.get('t')!
+      return { box, xs: fan.edges.map(e => pv.edges.get(e.id)!.points.at(-1)!.x) }
+    }
+    const whole = await ends()
+    expect(Math.max(...whole.xs)).toBeGreaterThan(whole.box.x + whole.box.w / 2)
+    const half = await ends(['t'])
+    expect(Math.max(...half.xs)).toBeLessThanOrEqual(half.box.x + half.box.w / 2 + PARALLEL_GAP)
+    // 有端口记号的节点进缓存键
+    expect(cacheKey(fan, {}, { edges: [], marked: ['t'] })).not.toBe(cacheKey(fan, {}, { edges: [] }))
   })
 
   it('方位：用户 top、外部系统 left（A7）、边界节点 bottom、其余 inner', () => {

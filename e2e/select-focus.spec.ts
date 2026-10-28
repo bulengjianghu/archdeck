@@ -3,7 +3,7 @@
  * 以 media-web-player 的分层总览验收（01 §6.24）。
  */
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, openDesk, query, collapseDisplay } from './helpers'
+import { graphNode, openDesk, query, settleCanvas } from './helpers'
 
 /** 结构边是否变淡：DepEdge 变淡时线的不透明度降到 0.12（同 structure-view.spec） */
 const faded = async (page: Page, id: string) => (await page.locator(`.vue-flow__edge-dep[data-id="${id}"] path[style*="opacity: 0.12"]`).count()) > 0
@@ -25,7 +25,7 @@ test('L27：分层总览选中「元素族」——它往外的依赖边与到�
 
 test('L27：选中状态下悬停另一个模块，画面有响应——它的一跳边画出、邻居不变淡；移开收回', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?v=s&sel=m:providers.element')
-  await collapseDisplay(page)
+  await settleCanvas(page)
   const chip = page.locator('.vue-flow__edge-dep[data-id="chip:bundle:kit.session->pipeline.latency"]')
   await expect(chip).toHaveCount(0)
   expect(await nodeFaded(page, 'kit.session')).toBeGreaterThan(0)

@@ -1,6 +1,6 @@
 /** 入门页与分层总览（W-10、ADR-0029 三问四修饰、O6、O7、DV-6、DV-9）：「帮助」打开「怎么读这张图」；带内 +N 单击临时展开、不改层次；版本切换里已归档的设计单独一组；设计面板链到 ADR */
 import { expect, test } from '@playwright/test'
-import { openDesk, query, collapseDisplay } from './helpers'
+import { openDesk, query, settleCanvas } from './helpers'
 
 test('顶栏「帮助」打开「怎么读这张图」：结构 / 交互 / 读一条线（三问四修饰）/ 运行 / 对照与治理，另有三视角共享一段（W-10、ADR-0031），Esc 关闭', async ({
   page,
@@ -23,7 +23,7 @@ test('顶栏「帮助」打开「怎么读这张图」：结构 / 交互 / 读�
 
 test('O6：单击带内 +N 临时展开非核心模块，层次与地址不变；再单击收起', async ({ page }) => {
   await openDesk(page, '/p/h5player')
-  await collapseDisplay(page)
+  await settleCanvas(page)
   const cores = page.locator('.vue-flow__node-core')
   const before = await cores.count()
   const more = page.locator('.vue-flow__node-more').first()

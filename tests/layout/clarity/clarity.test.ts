@@ -170,15 +170,17 @@ describe('L30 几何检查器', () => {
  * 布局与产品一致（state/desk/layoutLinks.ts：结构边、核心跨层束、按值依赖的分层）；BARE 为没有代码事实时的布局（设计版本、提交版本）。
  */
 const CEILING: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 98, arrows: 25, crossNode: 5, labels: 0, hug: 4, onFrame: 0 },
-  h5player: { overlap: 96, arrows: 1, crossNode: 2, labels: 1, hug: 13, onFrame: 0 },
-  'media-web-player': { overlap: 29, arrows: 0, crossNode: 5, labels: 0, hug: 8, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 64, arrows: 1, crossNode: 4, labels: 0, hug: 9, onFrame: 0 },
+  h5player: { overlap: 93, arrows: 1, crossNode: 2, labels: 1, hug: 18, onFrame: 0 },
+  'media-web-player': { overlap: 23, arrows: 0, crossNode: 7, labels: 0, hug: 5, onFrame: 0 },
 }
 const BARE: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 39, arrows: 0, crossNode: 3, labels: 1, hug: 7, onFrame: 0 },
-  h5player: { overlap: 66, arrows: 0, crossNode: 0, labels: 2, hug: 12, onFrame: 0 },
-  'media-web-player': { overlap: 48, arrows: 0, crossNode: 1, labels: 0, hug: 6, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 38, arrows: 0, crossNode: 3, labels: 1, hug: 6, onFrame: 0 },
+  h5player: { overlap: 96, arrows: 0, crossNode: 0, labels: 2, hug: 13, onFrame: 0 },
+  'media-web-player': { overlap: 35, arrows: 0, crossNode: 1, labels: 0, hug: 6, onFrame: 0 },
 }
+// ADR-0039 修订 1（没有端口记号的节点进边用整条边）后重定：h5p 箭头叠 25 → 1、重合 98 → 64；elk 端口约束变了、节点随之重排，
+// 少数几类小幅上升（h5p 贴框 4 → 9，h5player 贴框 13 → 18、无代码事实的重合 66 → 96，media 压节点 5 → 7），明细与取舍见第十二轮 C-08 报告
 
 describe('L30 计数回归（只降不升）', () => {
   for (const [facts, limits] of [

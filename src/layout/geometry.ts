@@ -45,6 +45,8 @@ export interface PositionedView {
   spread?: ReadonlySet<string>
   /** L28、L29：普通层次按依赖分层时的层带与环组框；没有分层时不给 */
   tiers?: TierGeometry
+  /** L11、L13：普通层次中有端口记号的内部节点（进边一侧后半留给记号）；没有时不给 */
+  marked?: ReadonlySet<string>
 }
 
 export const NODE_SIZE = {

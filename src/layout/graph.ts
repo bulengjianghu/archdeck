@@ -13,8 +13,8 @@ import { elkLayers, placeTierLabels, tierGeometry, type LayoutTiers } from './ti
  * 边界角色（port / adapter，L14）在布局后压在父模块框的上边 / 左边（placeRims），
  * 它们的边不参与布局，要画时才按需正交走线（edgeRoute）。
  * 端口方向——每条边在两端各有自己的端口：进边在入口侧、出边在出口侧（自上而下为上进下出，自左向右为左进右出）；
- * 关系全是交互（ADR-0029），出入点都在该侧的前半（顶边 / 底边的左半，自左向右布局时左边 / 右边的上半）；进边一侧的后半留给端口记号（L13）：
- * 每个内部节点在进边一侧的末尾占一个半边宽的保留端口（RESERVED），用 FIXED_ORDER 固定，elk 只在前半里排开关系边的端口。
+ * 关系全是交互（ADR-0029）；有端口记号（L13）的内部节点进边一侧的后半留给记号：在进边一侧的末尾占一个半边宽的保留端口（RESERVED），
+ * 用 FIXED_ORDER 固定，elk 只在前半里排开关系边的端口；没有端口记号的节点用整条边（ADR-0039 修订 1）。
  */
 type Side = 'NORTH' | 'SOUTH' | 'WEST' | 'EAST'
 /** elk 端口序号按边分段：顺时针的 上、右、下、左 */
@@ -32,7 +32,7 @@ export function portSide(end: 'in' | 'out', direction: 'DOWN' | 'RIGHT'): Side {
  * L28（ADR-0038）：给了分层（tiers，模型层按本层值依赖算出）时层号由它定——每个节点按 elkLayers 的层给出初始坐标，elk 用 INTERACTIVE 的破环与分层
  * 照坐标定层（交互边、只引类型的束不影响层号，向上的边由 elk 反转后照常走线）；同层内的左右仍由 elk 减少交叉，再按描述顺序（环组成员排在一起）。
  */
-export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN', tiers?: LayoutTiers | null): ElkNode {
+export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN', tiers?: LayoutTiers | null, marked?: readonly string[]): ElkNode {
   // O9：共用件不参与 elk 布局，布局后收进父模块框底部的共用件架（placeShelf）
   const inner = view.nodes.filter(n => compassOf(n) === 'inner' && n.role !== 'shared')
   const ids = new Set(inner.map(n => n.id))
@@ -66,8 +66,10 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
     if (ids.has(e.from) && !ids.has(e.to)) port(e.from, `${e.id}#out`, 'out')
     if (ids.has(e.to) && !ids.has(e.from)) port(e.to, `${e.id}#in`, 'in')
   }
-  // L11、L13：进边一侧的后半留给端口记号——末尾一个半边长的保留端口，关系边的端口只能排在它前面
+  // L11、L13：有端口记号的节点进边一侧的后半留给记号——末尾一个半边长的保留端口，关系边的端口只能排在它前面
+  const reserve = new Set(marked ?? [])
   for (const n of inner) {
+    if (!reserve.has(n.id)) continue
     const side = portSide('in', direction)
     const { w, h } = sizeOf(n)
     const half = (side === 'NORTH' || side === 'SOUTH' ? w : h) / 2
@@ -263,9 +265,11 @@ const TARGET_ASPECT = 1.4
 /**
  * 普通层次先自上而下排；没有分层（没有代码事实）时，若结果又高又窄（依赖链长），再试自左向右，取宽高比更接近画布的一种。
  */
-export async function layoutGraph(view: LevelView, tiers?: LayoutTiers | null): Promise<PositionedView> {
+export async function layoutGraph(view: LevelView, tiers?: LayoutTiers | null, marked?: readonly string[]): Promise<PositionedView> {
   const elk = await getElk()
-  const down = fromElkGraph(view, await elk.layout(toElkGraph(view, 'DOWN', tiers)))
+  // L11、L13：框外边按需走线时也要知道哪些节点保留了后半
+  const mark = (pv: PositionedView): PositionedView => (marked?.length ? { ...pv, marked: new Set(marked) } : pv)
+  const down = mark(fromElkGraph(view, await elk.layout(toElkGraph(view, 'DOWN', tiers, marked))))
   // L28：按依赖分层时只自上而下（被依赖的在下），层带与环组框在布局结果上算
   if (tiers) {
     const geom = tierGeometry(down.nodes, tiers, down.parentFrame, FRAME_PAD)
@@ -279,6 +283,6 @@ export async function layoutGraph(view: LevelView, tiers?: LayoutTiers | null): 
   }
   const b = contentBounds(down)
   if (!b || b.w / b.h > TARGET_ASPECT / 2) return down
-  const right = fromElkGraph(view, await elk.layout(toElkGraph(view, 'RIGHT')))
+  const right = mark(fromElkGraph(view, await elk.layout(toElkGraph(view, 'RIGHT', null, marked))))
   return score(right) < score(down) ? right : down
 }
