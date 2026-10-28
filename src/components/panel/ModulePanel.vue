@@ -9,6 +9,7 @@ import RelationRow from './RelationRow.vue'
 import ChangeBadge from './ChangeBadge.vue'
 import DesignNote from './DesignNote.vue'
 import ModuleSource from './ModuleSource.vue'
+import ModuleSplit from './ModuleSplit.vue'
 import ModuleGovernance from './ModuleGovernance.vue'
 import ModuleEvolution from './ModuleEvolution.vue'
 import ModulePorts from './ModulePorts.vue'
@@ -121,6 +122,7 @@ function openChild(childId: string) {
     <ModulePorts :id="m.id" />
     <ModuleKnowledge :id="m.id" />
     <ModuleGovernance :id="m.id" />
+    <ModuleSplit :id="m.id" />
     <ModuleEvolution :id="m.id" />
     <ModuleSource :id="m.id" />
     <Section v-if="m.principle" title="实现原理" fold><Markdown :text="m.principle" /></Section>

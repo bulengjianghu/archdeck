@@ -196,6 +196,9 @@ test('L20②（ADR-0036）：选中 A 再换选中 B，节点 bbox 不变', asyn
     )
   const a = await boxes()
   const other = (await page.locator('.vue-flow__node-module').evaluateAll(els => els.map(n => n.getAttribute('data-id')!))).find(id => id !== 'state.desk')!
+  // 按依赖分层（L28）后节点可能落在右下角「显示」面板之下：先收起面板再点
+  const display = page.locator('.display .head-btn[aria-expanded="true"]')
+  if (await display.isVisible()) await display.click()
   await graphNode(page, other).click()
   expect(query(page).get('sel')).toBe(`m:${other}`)
   await expect.poll(boxes).toEqual(a)

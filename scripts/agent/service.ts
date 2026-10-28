@@ -25,6 +25,9 @@ import {
   evolutionStats,
   hotspots,
   impactOf,
+  levelTiers,
+  splitSignals,
+  tierView,
   listedCouplings,
   moduleMetrics,
   structureMetrics,
@@ -495,6 +498,36 @@ export function createService(opts: ServiceOptions) {
         scope: opts.level ? `${opts.level}（${name(l, opts.level)}）的子模块` : '全系统的叶子模块',
         total: ids.length,
         modules: rows.map(m => metricsRow(l, m)),
+      }
+    },
+
+    /**
+     * L28、K21、K22：普通层次按本层值依赖分层——每层的子模块（自上而下，第 1 层为入口）、环组、孤立的、向上的交互边（是否控制反转）、
+     * 有交互却没有值依赖的兄弟与拆分信号（不占文件、共用文件）。分层总览（作者声明的层）不适用。只读。
+     */
+    tiers(level: string, p?: string) {
+      const l = load(p)
+      if (!l.index.modules.has(level)) throw new ServiceError(`「${level}」不是模块`)
+      const view = tierView(l.index, level)
+      const t = levelTiers(l.index, view, l.report)
+      if (!t) throw new ServiceError(`「${level}」是分层总览：按作者声明的层排（O1），不按依赖分层`)
+      const moduleOf = (id: string) => view.nodes.find(n => n.id === id)?.moduleId ?? id
+      const ref = (id: string) => ({ id: moduleOf(id), name: name(l, moduleOf(id)) })
+      const split = splitSignals(l.index, l.own, level)
+      return {
+        project: l.project,
+        level,
+        name: name(l, level),
+        nodes: t.nodes.length,
+        deps: t.deps,
+        banded: t.banded,
+        tiers: Array.from({ length: t.count }, (_, i) => ({ tier: i + 1, modules: t.nodes.filter(n => t.tier.get(n) === i).map(ref) })),
+        groups: t.groups.map((g, i) => ({ id: t.groupIds[i], modules: g.map(ref) })),
+        isolated: t.isolated.map(ref),
+        upward: t.upward.map(u => ({ edge: u.edge, from: ref(u.from), to: ref(u.to), inversion: u.inversion, relations: u.relations })),
+        undepended: t.undepended.map(u => ({ from: ref(u.from), to: ref(u.to), edges: u.edges })),
+        notes: t.notes,
+        split: { noFiles: split.noFiles.map(id => ({ id, name: name(l, id) })), shared: split.shared },
       }
     },
 

@@ -191,6 +191,8 @@ function governanceSummary(r: GovernanceReport): string {
     `；有实现者的端口 ${r.implementers.size}（实现者 ${impl.length}，仅代码事实 ${impl.filter(i => !i.described).length}）、子类 ${r.subclasses.length}、组装 ${r.assembly.length}（组装根 ${r.assemblyRoots.length}）` +
     `；违规 ${b ? `新增 ${r.gate.newViolations} / 已知 ${r.gate.knownViolations}` : `${open}（无基线）`}${allowed ? ` / 已豁免 ${allowed}` : ''}` +
     `；环度 模块 ${r.cyclicity.modules} / 文件 ${r.cyclicity.files}${b ? `（基线 ${b.cyclicity.modules} / ${b.cyclicity.files}）` : ''}` +
+    // K21、K22：拆分信号与向上却不是控制反转的边只给计数（info，详见 arch issues --category split）
+    `；拆分信号 ${r.issues.filter(i => i.code.startsWith('split.')).length}、向上非控制反转 ${r.issues.filter(i => i.code === 'tier.upward').length}` +
     (r.gate.resolved ? `；基线中 ${r.gate.resolved} 条违规已消除，可运行 npm run arch -- baseline 收紧基线` : '')
   )
 }

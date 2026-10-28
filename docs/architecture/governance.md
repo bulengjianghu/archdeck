@@ -89,6 +89,8 @@ governanceReport(index, own, tree, deps, baseline)      模型层：纯函数
 
 **承载判定**（`governance/carrier.ts`，ADR-0032 D，第八轮已实现）：对每条交互关系按 `via` 取承载模板（直接 / 经端口 / 经总线 / 直接通知 / 经通道，K20），在元素级边上逐段核对，给齐全 / 缺段 / 无承载三档与缺的段；元素对不上而模块依赖存在时回退为 K5 的「已证实（模块级）」；`channel:<名>` 没写契约模块（M21）时为外部承载、不判定（K5d、K5b）。没写 `via` 的关系 `fact.unconfirmed` 的文本由此列出缺的段（K6）；写了 `via` 的承载为缺段 / 无承载 / 外部时报 info `carrier.gap`（进返工清单「未证实的关系」类）；步骤证据等级由承载判定导出（`alignedLevel`，在类型与 Schema，S18b）；关系面板「承载」一节、交互视角的承载叠加（L22）与步骤面板的元素级包含链（S18b）都取它的结果，经 `desk.facts` 派生，呈现层不直接调用模型层。
 
+**按依赖分层与拆分信号**（`governance/tiers.ts`，ADR-0038，第十二轮已实现）：分层是被描述系统的知识，布局只消费层号——`levelValueDeps`（本层值依赖，与 Y4 的 `levelFacts` 共用）→ `tierNodes(nodes, pairs)`（强连通分量合组、到汇点的最长链定高度、入度为 0 的提到顶层、孤立的另列，L28）→ `levelTiers(index, view, report)`（参与分层的节点、环组的 Y4 编号、向上的交互边与是否控制反转 `isInversion`、直接交互却无值依赖的节点对、大环与本层无依赖的提示，L29、K21③、K22）；`splitSignals(index, own, parentId)`（子模块不占文件、兄弟共用文件，K21①②）；`tierFindings` / `tierIssues`（逐个普通层次以「+N」展开的投影 `tierView` 算一遍，出 `split.*` 与 `tier.upward` 的 info，并入 `governanceReport.issues`，返工清单按 `tierFindings` 定位）。agent 接口 `tiers(level)`（命令行 `arch tiers`，MCP `tiers`）。
+
 ### 4.1 数据结构
 
 ```ts
@@ -131,11 +133,11 @@ interface LevelCycle { id: number; nodes: { id: string; module: string }[]; edge
 
 | 函数 | 做什么 | 规则 |
 |---|---|---|
-| `reworkList({ index, issues, source?, report?, evolution?, sketches?, deps?, carriers? })` | 汇总（第八轮另有「表面」类 `surface`：U18 / U19 的 info 透传；`carrier.gap` 归 `unconfirmed`，info；无证据的步骤按承载对齐，S18b。另有第六轮的三类：核心之间的未分类 `unclassified`，其余只计数，M17；查询副作用 `query-side-effect`，一对（查询，委托 / 通知）一个根因并带两处步骤，U13；端口孤立 `port`，一个端口一个根因，U14；端口实现者的未证实与证据像使用归 `unconfirmed`，结构性实现为 info，建议「从 `implementedBy` 去掉并按交互改写」，K5c、Q8）：校验问题（跳过归属、证据、门禁、事实与 S5a 未建模，它们由下列材料重新算；`owned.*` 归入类别 `owned`）、归属（冲突按匹配的 codeRefs 组合，`detail` 注明一端是这组文件、因冲突未计入的依赖条数（`report.conflicted`，K4）；未归属按目录；entry 不存在）、不在清单里的场景证据文件（`missingEvidence`，归描述问题，S15）、违规（按基线状态 · 种类 · 规则所在 · 被依赖方）、环度上升与可收紧基线、报警的未证实关系（`unconfirmedWarns`）、未解释的交互、未建模的步骤（`bindRelation` 绑定不到关系的消息步骤，按两端聚合）、无证据的步骤（给了文件依赖 `deps` 时，`scenarioEvidence` 为 `none` 的步骤按两端与方向聚合，S17）、草图偏差（`sketches`：每张活动草图的 `SketchCheck`，一条偏差一个根因，已认可的不进清单，X4）；排序后给出各严重度与类别的计数 | Q7、Q8 |
+| `reworkList({ index, issues, source?, report?, evolution?, sketches?, deps?, carriers? })` | 汇总（第八轮另有「表面」类 `surface`：U18 / U19 的 info 透传；第十二轮另有「模块拆分与分层」类 `split`：`tierFindings` 的 K21 / K22 info，按父模块或边定位；`carrier.gap` 归 `unconfirmed`，info；无证据的步骤按承载对齐，S18b。另有第六轮的三类：核心之间的未分类 `unclassified`，其余只计数，M17；查询副作用 `query-side-effect`，一对（查询，委托 / 通知）一个根因并带两处步骤，U13；端口孤立 `port`，一个端口一个根因，U14；端口实现者的未证实与证据像使用归 `unconfirmed`，结构性实现为 info，建议「从 `implementedBy` 去掉并按交互改写」，K5c、Q8）：校验问题（跳过归属、证据、门禁、事实与 S5a 未建模，它们由下列材料重新算；`owned.*` 归入类别 `owned`）、归属（冲突按匹配的 codeRefs 组合，`detail` 注明一端是这组文件、因冲突未计入的依赖条数（`report.conflicted`，K4）；未归属按目录；entry 不存在）、不在清单里的场景证据文件（`missingEvidence`，归描述问题，S15）、违规（按基线状态 · 种类 · 规则所在 · 被依赖方）、环度上升与可收紧基线、报警的未证实关系（`unconfirmedWarns`）、未解释的交互、未建模的步骤（`bindRelation` 绑定不到关系的消息步骤，按两端聚合）、无证据的步骤（给了文件依赖 `deps` 时，`scenarioEvidence` 为 `none` 的步骤按两端与方向聚合，S17）、草图偏差（`sketches`：每张活动草图的 `SketchCheck`，一条偏差一个根因，已认可的不进清单，X4）；排序后给出各严重度与类别的计数 | Q7、Q8 |
 | `reworkMarkdown(list, title, { modelDir, sourceRoot, limit })` · `reworkItemMarkdown(item, opts)` | 给 agent 的指令：摘要、每条的规则、位置、受影响（缺省最多 20 处）、建议与 YAML 片段；描述文件路径加模型目录前缀 | Q9 |
 
 ```ts
-type ReworkCategory = 'description' | 'violation' | 'shared' | 'cycle' | 'ownership' | 'unconfirmed' | 'port' | 'query-side-effect' | 'undescribed' | 'unclassified' | 'unmodeled' | 'review' | 'coupling' | 'sketch' | 'owned' | 'unevidenced'   // port：端口孤立（U14）；query-side-effect：查询有副作用（U13）；unclassified：核心之间的未分类（M17）；shared：共用件反向依赖（U12）；review：需复核（Z3）；coupling：时间耦合（J6）；sketch：草图偏差（X4）；owned：指纹不符（X6）；unevidenced：步骤无证据（S17）
+type ReworkCategory = 'description' | 'violation' | 'shared' | 'cycle' | 'ownership' | 'unconfirmed' | 'port' | 'surface' | 'query-side-effect' | 'undescribed' | 'unclassified' | 'unmodeled' | 'review' | 'coupling' | 'sketch' | 'owned' | 'unevidenced' | 'split'   // port：端口孤立（U14）；query-side-effect：查询有副作用（U13）；unclassified：核心之间的未分类（M17）；shared：共用件反向依赖（U12）；review：需复核（Z3）；coupling：时间耦合（J6）；sketch：草图偏差（X4）；owned：指纹不符（X6）；unevidenced：步骤无证据（S17）
 interface ReworkLoc { in: 'description' | 'source'; file: string; line?: number; note?: string }
 interface ReworkAction { kind: ReworkActionKind; text: string; file?: string; snippet?: string }
 interface ReworkItem {

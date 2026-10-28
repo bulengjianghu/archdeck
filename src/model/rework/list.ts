@@ -15,6 +15,7 @@ import {
   portIssues,
   sharedHostOf,
   stepEvidence,
+  tierFindings,
   unconfirmedCode,
   unconfirmedReason,
   unconfirmedWarns,
@@ -118,7 +119,7 @@ function descriptionFix(i: Issue): string {
  * 由下面的材料重新算、不从 issues 取的问题：未建模的步骤（S5a 的 warning）、源码归属、场景证据（S15）、门禁与事实、端口孤立（U14）；
  * 未分类（M17）只列核心之间的，也由下面重新算
  */
-const recomputed = (code: string) => code === 'step-unmodeled' || code === 'relation.unclassified' || /^(source|scenario|rule|cycle|fact|port|query|surface|carrier)\./.test(code)
+const recomputed = (code: string) => code === 'step-unmodeled' || code === 'relation.unclassified' || /^(source|scenario|rule|cycle|fact|port|query|surface|carrier|split|tier)\./.test(code)
 
 const RULE_OF_KIND: Record<Violation['kind'], string> = { layer: 'U2', deps: 'U3', exposes: 'U4' }
 
@@ -155,6 +156,7 @@ export function reworkList(input: ReworkInput): ReworkList {
 
   if (source) items.push(...ownershipItems(index, source.own, source.tree, name, report?.conflicted), ...evidenceItems(index, source.tree))
   if (report) items.push(...factItems(index, report, name), ...surfaceItems(report), ...carrierItems(report))
+  if (report && source) items.push(...splitItems(index, report, source.own))
   items.push(...portItems(index, report ?? null), ...sideEffectItems(index, name), ...unclassifiedItems(index, name))
   items.push(...unmodeledItems(index, name))
   items.push(...reviewItems(index, name))
@@ -576,6 +578,31 @@ function surfaceItems(report: GovernanceReport): ReworkItem[] {
         target: {},
       }
     })
+}
+
+// ── 模块拆分与分层（K21、K22，info）：一个父模块的拆分信号一条、一条向上却不是控制反转的边一条 ──
+
+function splitItems(index: ModelIndex, report: GovernanceReport, own: SourceOwnership): ReworkItem[] {
+  return tierFindings(index, report, own).map(({ issue: i, modules, relation }) => {
+    const at = descLoc(i)
+    const upward = i.code === 'tier.upward'
+    return {
+      id: `split:${i.code}:${modules.join(',')}`,
+      category: 'split' as const,
+      severity: i.severity,
+      rules: [upward ? 'K22' : 'K21'],
+      code: i.code,
+      title: i.message,
+      ...(at ? { at } : {}),
+      affected: at ? [at] : [],
+      actions: [
+        upward
+          ? { kind: 'fix-relation' as const, text: '核对代码：是回调、通知或经通道的，在描述里改类型或补 via；确是下层直接调上层的，改代码让依赖朝下' }
+          : { kind: 'split-file' as const, text: '模块拆分的最小单位是文件：先把文件按职责拆开，再让每个子模块占自己的文件；交互写在兄弟之间却没依赖的，核对交互是否该写在父模块上' },
+      ],
+      target: relation ? { modules, relation } : { modules },
+    }
+  })
 }
 
 // ── 承载缺口（K5d、D6，info）：写了 via 的关系承载为缺段 / 无承载 / 外部，一条关系一个根因 ──

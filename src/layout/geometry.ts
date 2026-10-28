@@ -2,6 +2,7 @@
  * Layout 的几何类型与共用量：坐标、盒子、走线、带坐标的视图，节点尺寸，内容外框。
  */
 import type { LevelView, ViewNode } from '@/model'
+import type { TierGeometry } from './tiers'
 
 export interface Point {
   x: number
@@ -42,6 +43,8 @@ export interface PositionedView {
   elementsMore?: Map<string, number>
   /** C6：本布局里被散开为元素级边的束（ID）；没有展开时不给 */
   spread?: ReadonlySet<string>
+  /** L28、L29：普通层次按依赖分层时的层带与环组框；没有分层时不给 */
+  tiers?: TierGeometry
 }
 
 export const NODE_SIZE = {

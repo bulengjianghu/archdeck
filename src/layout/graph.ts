@@ -5,6 +5,7 @@ import type { ELK, ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk-api'
 import type { LevelView } from '@/model'
 import { NODE_SIZE, SHELF, contentBounds, sizeOf, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
 import { LABEL_SLOT, compassOf, edgeLabel, nearPoints, placeOutside, placeRims, spreadEnds } from './routes'
+import { elkLayers, tierGeometry, type LayoutTiers } from './tiers'
 
 /**
  * L11：elk 只排父模块框内的子模块与它们之间的边；框外的元素（用户、外部系统与时间、边界节点）在布局后按方位摆放（routes.ts placeOutside，A7、L4），
@@ -27,8 +28,10 @@ export function portSide(end: 'in' | 'out', direction: 'DOWN' | 'RIGHT'): Side {
 
 /**
  * C6、L20a②（ADR-0036）：elk 只排收起态——展开表面不进 elk（节点位置与尺寸与展开无关），端口点与接到点的边的走线由 dots.ts 在布局结果上补。
+ * L28（ADR-0038）：给了分层（tiers，模型层按本层值依赖算出）时层号由它定——每个节点按 elkLayers 的层给出初始坐标，elk 用 INTERACTIVE 的破环与分层
+ * 照坐标定层（交互边、只引类型的束不影响层号，向上的边由 elk 反转后照常走线）；同层内的左右仍由 elk 减少交叉，再按描述顺序（环组成员排在一起）。
  */
-export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'): ElkNode {
+export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN', tiers?: LayoutTiers | null): ElkNode {
   // O9：共用件不参与 elk 布局，布局后收进父模块框底部的共用件架（placeShelf）
   const inner = view.nodes.filter(n => compassOf(n) === 'inner' && n.role !== 'shared')
   const ids = new Set(inner.map(n => n.id))
@@ -49,7 +52,8 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
         id: e.id,
         sources: [port(e.from, `${e.id}#out`, 'out')],
         targets: [port(e.to, `${e.id}#in`, 'in')],
-        labels: [{ id: `${e.id}#label`, text, width: Math.max(LABEL_SLOT.w, text.length * 7 + 18), height: LABEL_SLOT.h }],
+        // L28：按依赖分层时不交标签——elk 的中间标签是分层前插入的无坐标占位节点，会让 INTERACTIVE 分层压缩、打乱层号；标签由画布按走线中点放
+        ...(tiers ? {} : { labels: [{ id: `${e.id}#label`, text, width: Math.max(LABEL_SLOT.w, text.length * 7 + 18), height: LABEL_SLOT.h }] }),
       }
     })
   // 框外边（参与者的边、边界边）在内部节点上的那一端只占一个端口、不连线：与内部边的端口一起排左右顺序，
@@ -77,9 +81,38 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
       clockwise.forEach((p, i) => (p.layoutOptions['elk.port.index'] = String(SIDE_BASE[side] + i)))
     }
   }
+  // L28：层号 → elk 层与初始坐标；子模块按（层、环组、描述顺序）排，elk 的模型顺序随之
+  const layers = tiers
+    ? elkLayers(
+        inner.map(n => n.id),
+        view.edges.filter(e => ids.has(e.from) && ids.has(e.to)).map(e => [e.from, e.to] as const),
+        tiers,
+      )
+    : null
+  const groupOf = new Map((tiers?.groups ?? []).flatMap(g => g.nodes.map(n => [n, g.nodes[0]] as const)))
+  const rank = new Map(inner.map((n, i) => [n.id, i]))
+  const children = layers
+    ? [...inner].sort(
+        (a, b) =>
+          layers.get(a.id)! - layers.get(b.id)! ||
+          rank.get(groupOf.get(a.id) ?? a.id)! - rank.get(groupOf.get(b.id) ?? b.id)! ||
+          rank.get(a.id)! - rank.get(b.id)!,
+      )
+    : inner
+  const slot = new Map<number, number>()
+  const at = (id: string) => {
+    const l = layers!.get(id)!
+    const i = slot.get(l) ?? 0
+    slot.set(l, i + 1)
+    return { x: i * 320, y: l * 200 }
+  }
   return {
     id: 'root',
     layoutOptions: {
+      // 不拆连通分量：没有交互边的节点也按层号定层，不被单独排到顶上
+      ...(layers
+        ? { 'elk.layered.layering.strategy': 'INTERACTIVE', 'elk.layered.cycleBreaking.strategy': 'INTERACTIVE', 'elk.separateConnectedComponents': 'false' }
+        : {}),
       'elk.algorithm': 'layered',
       'elk.direction': direction,
       'elk.edgeRouting': 'ORTHOGONAL',
@@ -96,8 +129,9 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
       'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
       'elk.edgeLabels.inline': 'true',
     },
-    children: inner.map(n => ({
+    children: children.map(n => ({
       id: n.id,
+      ...(layers ? at(n.id) : {}),
       width: sizeOf(n).w,
       height: sizeOf(n).h,
       ports: ports.get(n.id)!.map(({ id, width, height, layoutOptions }) => ({ id, width, height, layoutOptions })),
@@ -206,11 +240,13 @@ function getElk(): Promise<ELK> {
 const TARGET_ASPECT = 1.4
 
 /**
- * 普通层次先自上而下排；若结果又高又窄（依赖链长），再试自左向右，取宽高比更接近画布的一种。
+ * 普通层次先自上而下排；没有分层（没有代码事实）时，若结果又高又窄（依赖链长），再试自左向右，取宽高比更接近画布的一种。
  */
-export async function layoutGraph(view: LevelView): Promise<PositionedView> {
+export async function layoutGraph(view: LevelView, tiers?: LayoutTiers | null): Promise<PositionedView> {
   const elk = await getElk()
-  const down = fromElkGraph(view, await elk.layout(toElkGraph(view, 'DOWN')))
+  const down = fromElkGraph(view, await elk.layout(toElkGraph(view, 'DOWN', tiers)))
+  // L28：按依赖分层时只自上而下（被依赖的在下），层带与环组框在布局结果上算
+  if (tiers) return { ...down, tiers: tierGeometry(down.nodes, tiers, down.parentFrame, FRAME_PAD) }
   const score = (pv: PositionedView) => {
     const b = contentBounds(pv)
     return b ? Math.abs(Math.log(b.w / b.h / TARGET_ASPECT)) : 0

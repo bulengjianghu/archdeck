@@ -17,6 +17,7 @@ import { sceneContext, visibleIdsOf } from './canvas/context'
 import { assemblyEdges, carriedEdges, carrierEdges, depEdges, evolutionEdges, factEdges, interactionEdges, replayEdges, shownEdges } from './canvas/edges'
 import { outsideRoutes } from './layout'
 import { moduleNodes, replayNodes } from './canvas/nodes'
+import { tierNodes } from './canvas/tiers'
 import { jumpsOf } from './routing'
 import type { CanvasEdge, CanvasInput, CanvasScene } from './canvas/types'
 
@@ -52,7 +53,7 @@ export function canvasScene(input: CanvasInput): CanvasScene {
   const ctx = sceneContext(input, input.positioned)
   // L11：画出来的框外边一起走线、分配轨道；边与步骤序号都用分配后的走线
   ctx.routes = ctx.structure ? ctx.structure.routes : outsideRoutes(input.positioned, shownEdges(ctx))
-  const nodes = input.index ? [...moduleNodes(ctx, input.index), ...replayNodes(ctx)] : []
+  const nodes = input.index ? [...tierNodes(ctx), ...moduleNodes(ctx, input.index), ...replayNodes(ctx)] : []
   // 回放叠加只在运行视角；代码事实与组装叠加只在交互视角；结构边只在结构视角；演化叠加在交互与结构视角（共享通道）
   const edges = [
     ...interactionEdges(ctx),

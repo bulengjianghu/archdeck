@@ -17,6 +17,7 @@
  *   metrics [<模块> | --level <父模块>] [--top N] [--values-only]
  *                                 扇入 Ca、扇出 Ce 与不稳定度 I（K16、Q14）：给模块为明细，--level 为该层的子模块，缺省全系统的叶子模块；--top 按 Ca 取前 N；
  *                                 有入口的模块另带表面宽度 W 与越过入口数 B（K19）
+ *   tiers <父模块>                按依赖分层（L28、K21、K22）：每层的子模块（第 1 层为入口）、环组、孤立的、向上的交互边与拆分信号
  *   surface <模块>                模块表面（Q16、K18、K19）：元素清单（种类 · 声明状态 · 扇入）、W / B、越过入口清单与建议
  *   report                        拦截报告（Q4）
  *   baseline                      生成基线 governance/baseline.json（U7，由人执行并提交）
@@ -35,7 +36,16 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { fileURLToPath } from 'node:url'
-import { CHANGE_KINDS, CHANGE_KIND_LABELS, REWORK_CATEGORIES, RULE_LABELS, type CheckResult, type ReworkCategory, type SketchCheck } from '../src/model'
+import {
+  CHANGE_KINDS,
+  CHANGE_KIND_LABELS,
+  REWORK_CATEGORIES,
+  RULE_LABELS,
+  tierNoteText,
+  type CheckResult,
+  type ReworkCategory,
+  type SketchCheck,
+} from '../src/model'
 import type { DesignComparison } from './agent/service'
 import { ServiceError, createService } from './agent/service'
 import { printClassify, runClassify } from './agent/classify'
@@ -158,6 +168,19 @@ function printMetrics(r: ReturnType<typeof svc.metrics>) {
   for (const m of r.modules) console.log(`  ${m.id}（${m.name}）  ${metricsText(m)}`)
 }
 
+function printTiers(r: ReturnType<typeof svc.tiers>) {
+  const n = (m: { id: string; name: string }) => `${m.name}（${m.id}）`
+  console.log(`${r.name}（${r.level}）：${r.nodes} 个子模块、${r.tiers.length} 层、本层依赖 ${r.deps}${r.banded ? '，画层带' : ''}`)
+  const group = new Map(r.groups.flatMap(g => g.modules.map(m => [m.id, g.id] as const)))
+  for (const t of r.tiers) console.log(`  第 ${t.tier} 层：${t.modules.map(m => n(m) + (group.has(m.id) ? ` [环 ${group.get(m.id)}]` : '')).join('、')}`)
+  if (r.isolated.length) console.log(`  孤立（不占层）：${r.isolated.map(n).join('、')}`)
+  for (const x of r.notes) console.log(`  提示：${tierNoteText(x)}`)
+  for (const u of r.upward) console.log(`  向上：${n(u.from)} → ${n(u.to)}  ${u.inversion ? '控制反转' : `不是控制反转：${u.relations.join('、')}`}`)
+  for (const u of r.undepended) console.log(`  有交互无依赖：${n(u.from)} — ${n(u.to)}`)
+  if (r.split.noFiles.length) console.log(`  不占文件的子模块：${r.split.noFiles.map(n).join('、')}`)
+  for (const s of r.split.shared) console.log(`  共用文件：${s.file}（${s.modules.join('、')}）`)
+}
+
 function run(): number {
   switch (cmd) {
     case 'projects':
@@ -209,6 +232,13 @@ function run(): number {
       const r = svc.metrics(project, { module: rest[0], level: str('level'), top, valuesOnly: flags.has('values-only') })
       if (asJson) console.log(JSON.stringify(r, null, 2))
       else printMetrics(r)
+      return 0
+    }
+    case 'tiers': {
+      need(1, '<父模块>')
+      const r = svc.tiers(rest[0], project)
+      if (asJson) console.log(JSON.stringify(r, null, 2))
+      else printTiers(r)
       return 0
     }
     case 'surface': {

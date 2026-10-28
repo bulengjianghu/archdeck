@@ -104,19 +104,11 @@ export function levelFacts(index: ModelIndex, view: LevelView, report: Governanc
   }
 
   // Y4：本层的环（值依赖，Y1）；Y5：按节点对记下投影来的模块依赖，环的构成由此给出
-  const levelDeps = new Map<string, { from: string; to: string; deps: ModuleDep[] }>()
-  for (const d of valueDeps(report.moduleDeps.values())) {
-    const p = project(d)
-    if (!p) continue
-    const k = depKey(p[0], p[1])
-    const e = levelDeps.get(k) ?? { from: p[0], to: p[1], deps: [] }
-    e.deps.push(d)
-    levelDeps.set(k, e)
-  }
+  const levelDeps = levelValueDeps(index, view, report)
   const cycles = new Map<string, number>()
   const order = new Map(view.nodes.map((n, i) => [n.id, i]))
   const byOrder = (a: string, b: string) => (order.get(a) ?? 0) - (order.get(b) ?? 0)
-  const levelCycles = stronglyConnected([...levelDeps.values()].map(e => [e.from, e.to] as [string, string])).map((members, i) => {
+  const levelCycles = levelCycleMembers(levelDeps).map((members, i) => {
     const id = i + 1
     members.forEach(m => cycles.set(m, id))
     const inCycle = new Set(members)
@@ -131,6 +123,30 @@ export function levelFacts(index: ModelIndex, view: LevelView, report: Governanc
   })
   return { edgeFacts, unconfirmed, violatedEdges, overlays, cycles, levelCycles }
 }
+
+/** Y4、L28：本层依赖——含值依赖的模块依赖（Y1）投影到本层两个不同节点，按节点对（depKey）合并 */
+export function levelValueDeps(
+  index: ModelIndex,
+  view: LevelView,
+  report: Pick<GovernanceReport, 'moduleDeps'>,
+): Map<string, { from: string; to: string; deps: ModuleDep[] }> {
+  const present = new Set(view.nodes.map(n => n.id))
+  const out = new Map<string, { from: string; to: string; deps: ModuleDep[] }>()
+  for (const d of valueDeps(report.moduleDeps.values())) {
+    const a = nodeOf(index, view, present, d.from)
+    const b = nodeOf(index, view, present, d.to)
+    if (!a || !b || a === b) continue
+    const k = depKey(a, b)
+    const e = out.get(k) ?? { from: a, to: b, deps: [] }
+    e.deps.push(d)
+    out.set(k, e)
+  }
+  return out
+}
+
+/** Y4：本层的环的成员，下标 + 1 即环编号（L28 的环组复用同一编号） */
+export const levelCycleMembers = (levelDeps: ReadonlyMap<string, { from: string; to: string }>): string[][] =>
+  stronglyConnected([...levelDeps.values()].map(e => [e.from, e.to] as [string, string]))
 
 /** K10：投影到本层这对节点（以两端的模块 ID 指明）的模块依赖与违规 */
 export function depsBetween(

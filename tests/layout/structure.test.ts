@@ -52,7 +52,7 @@ describe('L15、L21 束：一对节点一条，换边不换节点', () => {
     expect(links.edges.map(e => e.id).every(id => id.startsWith('bundle:'))).toBe(true)
     expect(links.edges.map(e => e.id)).toContain('bundle:core.util->core.log')
     const key = cacheKey(desk.view.value!, {}, links)
-    expect(key).toContain('L21-bundle-3')
+    expect(key).toContain('L28-tiers-1')
     expect(key).toContain('bundle:core.util->core.log')
     const closed = (await sceneOf(desk)).scene
     const open = (await sceneOf(desk, { typeOnly: true })).scene

@@ -189,6 +189,17 @@ server.registerTool(
 )
 
 server.registerTool(
+  'tiers',
+  {
+    title: '按依赖分层',
+    description:
+      '普通层次按本层值依赖分层（L28）：被依赖的在下、本层没人依赖的（入口）在第 1 层、成环的合为一组同层、孤立的不占层。依赖全部朝下，向上的交互边只可能是控制反转（通知、流、经端口 / 总线 / 通道含回调，K22）；不是控制反转却向上的多半是没标的回调。另给有交互却没有值依赖的兄弟、不占文件的子模块、共用文件——模块拆分不沿文件边界的信号（K21）。分层总览不适用。',
+    inputSchema: { level: z.string().describe('父模块 ID'), project },
+  },
+  ({ level, project }) => reply(() => svc.tiers(level, project)),
+)
+
+server.registerTool(
   'sketch_check',
   {
     title: '草图核验',

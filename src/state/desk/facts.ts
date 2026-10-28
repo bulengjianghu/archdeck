@@ -29,6 +29,12 @@ import {
   isolatedInteractions,
   impactOf,
   levelImpact,
+  levelTiers,
+  splitSignals,
+  tierNoteText,
+  tierView,
+  type LevelTiers,
+  type SplitSignals,
   moduleMetrics,
   structureMetrics,
   structureView,
@@ -68,7 +74,7 @@ import {
   sketchLifetime,
   type RawFile,
 } from '@/model'
-import { chipBundleId, surfaceExpansion, type Expansion, type StructureLinks } from '@/layout/layout'
+import { chipBundleId, surfaceExpansion, type Expansion, type LayoutTiers, type StructureLinks } from '@/layout/layout'
 import { perspectiveOf, type ViewState } from '../transition'
 import type { createSourceSync } from '../sync/source'
 import type { FileDerivations } from './files'
@@ -346,6 +352,57 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
   /** L15、U16：结构视角下本层的结构视图；其余视角为 null */
   const structure = computed<StructureView | null>(() => (state.value.playback || state.value.mode !== 'structure' ? null : levelStructure.value))
 
+  /** L28、K21③、K22：本层按值依赖的分层（普通层次、有代码事实时；不论视角，两个视角同一份布局 V12） */
+  const tiers = computed<LevelTiers | null>(() => {
+    const v = view.value
+    return v && index.value && report.value ? levelTiers(index.value, v, report.value) : null
+  })
+
+  /** L29、K21③：画布角的分层提示（大环照样分层、本层没有依赖）；运行视角不给 */
+  const tierHints = computed<string[]>(() => (perspectiveOf(state.value) === 'run' ? [] : (tiers.value?.notes ?? []).map(tierNoteText)))
+
+  /** K21①②：本层（当前父模块）的子模块的拆分信号；没有代码事实时为 null */
+  const split = computed<SplitSignals | null>(() => {
+    const v = view.value
+    const own = files.ownership.value
+    return v && index.value && own && report.value ? splitSignals(index.value, own, v.parentId) : null
+  })
+
+  /**
+   * K21：模块面板「拆分信号」——它自己不占文件、与兄弟共用文件（在父模块一层看），它的子模块不占文件、共用文件、有交互却没有值依赖（在它这一层看）；
+   * 没有代码事实时为 null
+   */
+  const splitOf = (id: string) => {
+    const idx = index.value
+    const own = files.ownership.value
+    const r = report.value
+    if (!idx || !own || !r || !idx.modules.has(id)) return null
+    const parent = idx.modules.get(id)!.parentId
+    const up = parent ? splitSignals(idx, own, parent) : null
+    const down = splitSignals(idx, own, id)
+    const lv = (idx.childrenOf.get(id) ?? []).length >= 2 ? levelTiers(idx, tierView(idx, id), r) : null
+    return {
+      noFiles: !!up?.noFiles.includes(id),
+      shared: up?.shared.filter(x => x.modules.includes(id)) ?? [],
+      children: { noFiles: down.noFiles, shared: down.shared },
+      noDeps: !!lv?.notes.some(n => n.kind === 'no-deps'),
+      undepended: lv?.undepended.map(p => ({ from: p.from, to: p.to })) ?? [],
+    }
+  }
+
+  /** L28：交给布局的分层（纯数据，进缓存键） */
+  const layoutTiers = computed<LayoutTiers | null>(() => {
+    const t = tiers.value
+    if (!t || !t.count) return t && t.isolated.length ? { tier: {}, count: 0, groups: [], isolated: t.isolated, banded: false } : null
+    return {
+      tier: Object.fromEntries(t.tier),
+      count: t.count,
+      groups: t.groups.map((g, i) => ({ id: t.groupIds[i], nodes: g })),
+      isolated: t.isolated,
+      banded: t.banded,
+    }
+  })
+
   /** L15、L21：并集布局的基础输入——本层全部束与元素级边（不含表面展开）；没有代码事实时为允许边（U16），读取中为 null */
   const baseLinks = computed<StructureLinks | null>(() => {
     const sv = levelStructure.value
@@ -359,13 +416,14 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
         pairs.set(chipBundleId(c.from, c.to), { id: chipBundleId(c.from, c.to), from: c.from, to: c.to })
     const core = [...pairs.values()]
     if (!sv.facts) return { edges: sv.edges.map(link) }
+    const lt = layoutTiers.value
     const elements = sv.elementEdges.map(e => ({
       ...link(e),
       bundle: e.bundle,
       element: e.element?.name ?? null,
       ...(e.element ? { kind: e.element.kind } : {}),
     }))
-    return { edges: sv.bundles.map(link), ...(core.length ? { core } : {}), ...(elements.length ? { elements } : {}) }
+    return { edges: sv.bundles.map(link), ...(core.length ? { core } : {}), ...(elements.length ? { elements } : {}), ...(lt ? { tiers: lt } : {}) }
   })
 
   /** D7、D8：本层交互视图边按接收方表面散开的数据（结构 / 交互视角都给：布局取并集；运行视角与代码事实未就绪时为 null） */
@@ -602,6 +660,10 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     report,
     structure,
     layoutLinks,
+    tiers,
+    tierHints,
+    split,
+    splitOf,
     metrics,
     valueMetrics,
     metricsOf,

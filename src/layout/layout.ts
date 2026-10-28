@@ -14,6 +14,7 @@ import { layoutGraph } from './graph'
 import { compassOf } from './routes'
 import { spreadEdgeId, type LayoutExpansion, type LayoutOptions, type PositionedView } from './geometry'
 import { expandSurface } from './dots'
+import type { LayoutTiers } from './tiers'
 
 export * from './geometry'
 export { BAND, DEFAULT_BAND_COLUMNS, bandColumnsFor, bandShelfTop, coreHandleBadges, layoutLayered, moreChipId } from './layered'
@@ -41,6 +42,7 @@ export {
   spreadEnds,
 } from './routes'
 export { RESERVED, fromElkGraph, placeShelf, portSide, toElkGraph } from './graph'
+export { elkLayers, tierGeometry, type LayoutTiers, type TierGeometry } from './tiers'
 
 /** 一条交给布局的结构边：ID 与两端视图节点 */
 export interface StructureLink {
@@ -87,6 +89,8 @@ export interface StructureLinks {
   expand?: readonly SurfaceExpand[]
   /** D7：交互视图边 → 它的关系接到的接收方元素（只给接收方展开的） */
   interactions?: readonly { edge: string; elements: readonly string[] }[]
+  /** L28：普通层次按本层值依赖的分层（模型层 levelTiers）；没有代码事实时不给，按边排 */
+  tiers?: LayoutTiers
 }
 
 const linkEdge = (l: StructureLink): ViewEdge => ({ id: l.id, kind: 'direct', from: l.from, to: l.to, type: 'calls', relationIds: [], mode: 'sync' })
@@ -150,7 +154,7 @@ const cache = new Map<string, PositionedView>()
 const CACHE_LIMIT = 64
 
 /** 布局算法的版本：端口、层约束等选项改了就升，旧结果不再命中 */
-export const LAYOUT_VERSION = 'L21-bundle-3'
+export const LAYOUT_VERSION = 'L28-tiers-1'
 
 export function cacheKey(view: LevelView, opts: LayoutOptions = {}, links?: StructureLinks | null): string {
   return JSON.stringify([
@@ -164,6 +168,8 @@ export function cacheKey(view: LevelView, opts: LayoutOptions = {}, links?: Stru
     // L15、L21：结构边进键——按束 ID（代码事实变化、束增删即重算）；只按 ID，编码数据（形态、档、违规）不影响布局
     (links?.edges ?? []).map(e => e.id),
     (links?.core ?? []).map(e => e.id),
+    // L28：分层进键（层号、环组、孤立、层带）
+    links?.tiers ?? null,
     // C6：展开表面时元素级边、展开的节点与元素、交互束的散开进键（不展开时不进；展开的结果建在收起态那一份之上，L20a②）
     ...(links?.expand?.length
       ? [
@@ -190,7 +196,7 @@ export async function layoutView(view: LevelView, opts: LayoutOptions = {}, link
     result = expandSurface(await layoutView(view, opts, collapsed), view, links)
   } else if (view.mode === 'layered') result = layoutLayered(unionView(view, links), opts)
   else if (view.nodes.length === 0) result = { view, nodes: new Map(), edges: new Map(), coreEdges: new Map() }
-  else result = await layoutGraph(unionView(view, links))
+  else result = await layoutGraph(unionView(view, links), links?.tiers)
   result = { ...result, view }
   if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value!)
   cache.set(key, result)

@@ -11,6 +11,7 @@ import { evaluateRules, type EntryOf } from './rules'
 import { sharedHostOf, sharedReverse, sharedSuggestions } from './roles'
 import { carrierGap, carrierNote, carrierOf, moduleElementEdges } from './carrier'
 import { surfaceIssues } from './surface'
+import { tierIssues } from './tiers'
 import type { Baseline, CodeDeps, ElementEdge, GovernanceReport, Violation } from './types'
 
 /** G10：入口文件（不存在的 entry 不算） */
@@ -138,6 +139,8 @@ export function governanceReport(
   issues.push(...portIssues(index, { relations, implementers }))
   // U18、U19：越过入口（已命中 U4 访问面违规的文件依赖不再报）、热表面未声明（共用件豁免）；info，不进门禁
   issues.push(...surfaceIssues(index, { moduleDeps, violations }, surface))
+  // K21、K22：拆分信号与向上却不是控制反转的交互边；info，不进门禁
+  issues.push(...tierIssues(index, { moduleDeps }, own))
 
   return {
     moduleDeps,

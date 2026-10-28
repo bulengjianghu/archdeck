@@ -92,6 +92,8 @@ export interface NodeData {
   surface?: NodeSurface
   /** B2、L21③：跨界折叠的束——朝外一侧的小记号「界外 入 N · 出 M」，悬停列目标 */
   crossFold?: { in: number; out: number; side: 'top' | 'bottom' | 'left' | 'right'; title: string }
+  /** L29：层带（层号与读法）或环组框（Y4 编号） */
+  tierBand?: { kind: 'band' | 'group'; label: string }
 }
 
 /** C6、L20②：节点上的一个端口点（不写名字，形状按种类） */
@@ -241,7 +243,7 @@ export interface RouteEdgeData {
   dep?: DepEdgeLook
 }
 
-export type CanvasNodeType = 'frame' | 'module' | 'boundary' | 'band' | 'core' | 'more' | 'shared' | 'actor' | 'step' | 'preview'
+export type CanvasNodeType = 'frame' | 'tier' | 'module' | 'boundary' | 'band' | 'core' | 'more' | 'shared' | 'actor' | 'step' | 'preview'
 
 /** 与 Vue Flow 的节点同形 */
 export interface CanvasNode {
@@ -252,7 +254,7 @@ export interface CanvasNode {
   zIndex: number
   width: number
   height: number
-  style: { width: string; height: string }
+  style: { width: string; height: string; pointerEvents?: 'none' }
   selectable: false
   /** 编辑态下模块与带可拖动（移动、排序）、可连线（X7） */
   draggable: boolean
