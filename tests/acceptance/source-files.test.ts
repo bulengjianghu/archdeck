@@ -44,7 +44,7 @@ const settle = async () => {
   await nextTick()
 }
 
-/** G11（V14c）：⑤ 证据与细节缺省折叠——按标题展开面板里的折叠节 */
+/** G11（V15c）：⑤ 证据与细节缺省折叠——按标题展开面板里的折叠节 */
 const expand = async (panel: ReturnType<typeof mount>, title: string) => {
   const btn = panel.findAll('button.fold').find(b => b.text().includes(title))
   if (btn) await btn.trigger('click')
@@ -154,7 +154,7 @@ describe('§6.4 源代码验收', () => {
     const { desk, panel } = await open('h5p-arch-desk', '/p/h5p-arch-desk?level=model&sel=m:model.pipeline')
     expect(desk.files.entryOf('model.pipeline')).toEqual({ file: 'src/model/index.ts', via: 'index' })
     await settle()
-    // G11（V14c）：入口文件并入「源代码文件」节（fold），入口导出折叠，展开再断言
+    // G11（V15c）：入口文件并入「源代码文件」节（fold），入口导出折叠，展开再断言
     await expand(panel, '源代码文件')
     await expand(panel, '入口导出')
     const text = panel.text()

@@ -155,7 +155,7 @@ modules:
   - id: present.panel.content
     name: 内容组件
     parent: present.panel
-    responsibility: 面板共用的内容块：Markdown（禁用原始 HTML）、TS 代码块（高亮用呈现共用件）、接口与数据结构折叠项（算端口的接口带「端口 · 实现者 N」，单击打开端口面板，K11、L13）、关系行、分节；面板骨架 ③「需要注意」的一节与机制（NoticeSection、panelNotices：异常行的排序与单击跳转，G11、V14b）。
+    responsibility: 面板共用的内容块：Markdown（禁用原始 HTML）、TS 代码块（高亮用呈现共用件）、接口与数据结构折叠项（算端口的接口带「端口 · 实现者 N」，单击打开端口面板，K11、L13）、关系行、分节；面板骨架 ③「需要注意」的一节与机制（NoticeSection、panelNotices：异常行的排序与单击跳转，G11、V15b）。
     codeRefs:
       - src/components/panel/Markdown.vue
       - src/components/panel/CodeBlock.vue

@@ -5,7 +5,7 @@ import { useDesk } from '@/state/inject'
 import { moduleName, type HeatKind } from '@/model'
 import Section from './Section.vue'
 
-/** G11 V14c：系统面板 ⑤ 的演化与模块层同规——默认折叠带计数（G11 波 0b 改 fold） */
+/** G11 V15c：系统面板 ⑤ 的演化与模块层同规——默认折叠带计数（G11 波 0b 改 fold） */
 defineProps<{ fold?: boolean }>()
 
 const desk = useDesk()

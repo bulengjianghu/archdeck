@@ -1,9 +1,9 @@
 /**
- * 面板骨架 ③「需要注意」的机制（G11、ADR-0050、V14b）：
+ * 面板骨架 ③「需要注意」的机制（G11、ADR-0050、V15b）：
  * - 异常行数据结构、严重度排序（违规、环 > 未解释、未证实 > 确认过期 > 拆分信号、逆稳定、表面提示）；
  * - 行单击跳转：记录目标节的 `data-sec`，由显示中的面板完成「折叠节自动展开并滚动到位」；
  * - 拆分信号的计数（与 ModuleSplit 的清单同一口径，K21）。
- * 异常清单与计数全部来自现有派生，不新算（V14b）。
+ * 异常清单与计数全部来自现有派生，不新算（V15b）。
  */
 import { nextTick, ref, watch, type Ref } from 'vue'
 import type { RelationType } from '@/model'
@@ -11,7 +11,7 @@ import { RELATION_TYPE_LABELS } from '../shared/labels'
 
 /** 一行异常：label + count + 跳转目标（data-sec）。hint 为提示级（不判问题），其余为问题级 */
 export interface PanelNotice {
-  key: 'violations' | 'cycles' | 'undescribed' | 'unconfirmed' | 'stale' | 'split' | 'against' | 'surface'
+  key: 'violations' | 'cycles' | 'levelCycles' | 'undescribed' | 'unconfirmed' | 'stale' | 'split' | 'against' | 'surface'
   label: string
   count: number
   /** 目标节的 data-sec */
@@ -22,16 +22,17 @@ export interface PanelNotice {
   hint?: boolean
 }
 
-/** V14b 的严重度排序：同组内按登记次序 */
+/** V15b 的严重度排序：同组内按登记次序（模块环与本层环是两个独立信号，各自一行，V15b） */
 export const NOTICE_RANK: Record<PanelNotice['key'], number> = {
   violations: 0,
   cycles: 1,
-  undescribed: 2,
-  unconfirmed: 3,
-  stale: 4,
-  split: 5,
-  against: 6,
-  surface: 7,
+  levelCycles: 2,
+  undescribed: 3,
+  unconfirmed: 4,
+  stale: 5,
+  split: 6,
+  against: 7,
+  surface: 8,
 }
 
 /** 过滤零计数并按严重度排序（③ 每类一行、全部无异常整段不出现） */
@@ -90,7 +91,7 @@ export function splitSignalCount(s: SplitShape | null, longFiles: number): numbe
   )
 }
 
-// ── ④ 出边 / 入边的类型汇总（V14c）：每方向一行按类型汇总，展开才逐条 ──
+// ── ④ 出边 / 入边的类型汇总（V15c）：每方向一行按类型汇总，展开才逐条 ──
 
 /** 关系类型的登记次序（查询 → 委托 → 通知 → 流 → 迁移期的未分类） */
 const REL_ORDER: readonly RelationType[] = ['queries', 'commands', 'notifies', 'streams', 'calls']

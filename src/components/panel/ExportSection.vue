@@ -9,7 +9,7 @@ import Section from './Section.vue'
 import ExportItem from './ExportItem.vue'
 import InterfaceItem from './InterfaceItem.vue'
 
-const props = defineProps<{ file: string; moduleId?: string; /** G11 V14c：⑤ 证据与细节缺省折叠 */ fold?: boolean }>()
+const props = defineProps<{ file: string; moduleId?: string; /** G11 V15c：⑤ 证据与细节缺省折叠 */ fold?: boolean }>()
 const desk = useDesk()
 const res = computed(() => desk.files.exports(props.file).value)
 const symbols = computed(() => (res.value.status === 'ok' ? res.value.value : []))

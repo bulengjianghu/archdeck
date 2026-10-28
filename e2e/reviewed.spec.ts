@@ -39,7 +39,7 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
     const tools = page.locator('.nav-tree .tools')
     const stale0 = (await tools.count()) ? Number(/需复核 (\d+)/.exec(await tools.innerText())?.[1] ?? 0) : 0
 
-    // 确认：文件多一条，标题旁「已确认 <日期>」（G11 V14c：「确认」表单折叠在 ⑤，展开再填）
+    // 确认：文件多一条，标题旁「已确认 <日期>」（G11 V15c：「确认」表单折叠在 ⑤，展开再填）
     await panel.getByRole('button', { name: /^▸ 确认/ }).click()
     await panel.getByLabel('确认说明').fill('E2E 确认')
     // 面板里可能还有名为「确认」的模块链接（模型层「确认」子模块），按钮在确认表单里
@@ -60,7 +60,7 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
     await expect(badge).toHaveText('需复核')
     await expect(treeRow.locator('.tag.stale')).toHaveText('需复核')
     await expect(tools).toContainText(`需复核 ${stale0 + 1}`)
-    // G11 V14c：diff 明细折叠在 ⑤，展开再断言
+    // G11 V15c：diff 明细折叠在 ⑤，展开再断言
     await panel.getByRole('button', { name: /^▸ 自上次确认以来的改动/ }).click()
     const diff = panel.locator('.diff')
     await expect(diff.locator('dt')).toHaveText(['职责'])

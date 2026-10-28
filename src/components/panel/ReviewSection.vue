@@ -14,7 +14,7 @@ import { REVIEW_FIELDS, REVIEW_FIELD_LABELS, REVIEW_STATUS_LABELS, type ReviewCh
 import type { WriteOutcome } from '@/state/useDeskState'
 import Section from './Section.vue'
 
-const props = defineProps<{ id: string; part: 'badge' | 'diff' | 'confirm'; /** G11 V14c：diff 与确认的明细缺省折叠（确认过期的计数在 ③） */ fold?: boolean }>()
+const props = defineProps<{ id: string; part: 'badge' | 'diff' | 'confirm'; /** G11 V15c：diff 与确认的明细缺省折叠（确认过期的计数在 ③） */ fold?: boolean }>()
 const desk = useDesk()
 const st = computed(() => desk.review.of(props.id))
 const isSystem = computed(() => props.id === desk.index.value?.rootId)

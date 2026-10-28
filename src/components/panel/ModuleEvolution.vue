@@ -18,7 +18,7 @@ const files = computed(() => new Set(desk.files.filesOf(props.id)))
 </script>
 
 <template>
-  <!-- G11 V14c：⑤ 证据与细节默认折叠带计数，count（修改次数）为 0 不显示节（「没有演化事实」的原因随节隐藏） -->
+  <!-- G11 V15c：⑤ 证据与细节默认折叠带计数，count（修改次数）为 0 不显示节（「没有演化事实」的原因随节隐藏） -->
   <Section v-if="m && stats && m.changes" title="演化" fold :count="m.changes">
     <dl class="kv">
       <dt>修改</dt>

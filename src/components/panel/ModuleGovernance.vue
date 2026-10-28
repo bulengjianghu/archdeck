@@ -6,7 +6,7 @@ import { RULE_LABELS, moduleName, type LevelCycleEdge } from '@/model'
 import Section from './Section.vue'
 import FileDepList from './FileDepList.vue'
 
-const props = defineProps<{ id: string; /** G11 V14c：⑤ 证据与细节缺省折叠（异常计数已在 ③） */ fold?: boolean }>()
+const props = defineProps<{ id: string; /** G11 V15c：⑤ 证据与细节缺省折叠（异常计数已在 ③） */ fold?: boolean }>()
 const desk = useDesk()
 const d = computed(() => desk.facts.moduleDetail(props.id))
 const name = (id: string) => (desk.index.value ? moduleName(desk.index.value, id) : id)
@@ -27,7 +27,7 @@ const empty = computed(
     !d.value.cycles.length &&
     !cycle.value,
 )
-/** 折叠计数：异常条数（违规、未解释、环；V14b 的 ③ 已给同数，这里折叠必有计数 O11） */
+/** 折叠计数：异常条数（违规、未解释、环；V15b 的 ③ 已给同数，这里折叠必有计数 O11） */
 const anomalyCount = computed(() =>
   d.value
     ? d.value.violations.out.length +

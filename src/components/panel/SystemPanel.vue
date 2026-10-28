@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 系统面板（G11 五段骨架，ADR-0050、V14；与模块面板同一段序——「同类节跨面板同位」）：
+ * 系统面板（G11 五段骨架，ADR-0050、V15；与模块面板同一段序——「同类节跨面板同位」）：
  * ① 头部（ID / 系统 / 确认徽标）② 简介 ③ 需要注意（系统级：确认过期、违规、环、未解释的交互；G22 的源码落后提醒是页面级信息条，不进面板）
  * ④ 顶层模块 / 分层 ⑤ 生成来源与规模、意图、治理（健康度摘要与明细）、演化（改 fold，与模块层同规）、确认。
  * 健康度指标的分组裁剪与拦截记录 / 外部依赖折叠属波 2（G12），本波不动 GovernanceSection 内部。
@@ -24,7 +24,7 @@ const sys = computed(() => idx.value.model.system)
 const top = computed(() => (idx.value.childrenOf.get(idx.value.rootId) ?? []).map(id => idx.value.modules.get(id)!))
 const layered = computed(() => desk.view.value?.mode === 'layered')
 
-// ── ③ 需要注意（V14b）：确认过期 + 治理类计数；全部无异常整段不出现 ──
+// ── ③ 需要注意（V15b）：确认过期 + 治理类计数；全部无异常整段不出现 ──
 const root = ref<HTMLElement | null>(null)
 usePanelJump(root)
 const review = computed(() => desk.review.of(sys.value.id))

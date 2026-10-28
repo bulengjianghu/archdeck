@@ -5,7 +5,7 @@
  * 结构视角下模式切换映射不过去而被清空的选中（V12，droppedSelection）：顶部说明原选中没有对应的依赖边。
  * 代码依赖叠加线（K10）→ 代码依赖面板；耦合线（J7）→ 耦合面板；端口（L13）→ 端口面板（K11）。草图画布下（X7，ADR-0025）：换成草图面板。
  */
-import { computed } from 'vue'
+import { computed, provide } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import ScenarioPanel from './ScenarioPanel.vue'
@@ -24,6 +24,11 @@ import SketchPanel from '../sketch/SketchPanel.vue'
 
 const desk = useDesk()
 const run = computed(() => desk.perspective.value === 'run')
+/** 运行视角：模块信息整体折叠在外层 details（V6），⑤ 段的折叠由外层代行——内层不再叠加，展开即全展开（ADR-0050 实现要点、评审轮 1 B1） */
+provide(
+  'panelUnfold',
+  computed(() => run.value),
+)
 /** V12：切到结构视角时原选中（关系、视图边、端口）没有对应的依赖边，被清空 */
 const dropped = computed(() => {
   const d = desk.droppedSelection.value
@@ -227,7 +232,7 @@ const target = computed(() => {
   word-break: break-all;
 }
 
-/* ③「需要注意」行单击跳转到位时闪一次（V14b） */
+/* ③「需要注意」行单击跳转到位时闪一次（V15b） */
 .panel .jump-flash {
   animation: jump-flash 1.2s ease-out;
 }

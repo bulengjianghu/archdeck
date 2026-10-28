@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * 人确认层的界面（RV-3、RV-4；Z3–Z5）：模块面板的状态标记、「自上次确认以来的改动」与「确认 / 复核并确认」；模块树的需复核标记与「只看需复核」；根层健康度一行。
- * G11（V14c）起 ⑤ 证据与细节缺省折叠，断言节内内容前先全部展开。
+ * G11（V15c）起 ⑤ 证据与细节缺省折叠，断言节内内容前先全部展开。
  */
 import { NO_WRITER } from '../../src/state/sync/writer'
 import { describe, expect, it } from 'vitest'
@@ -14,7 +14,7 @@ import { DESK_STATE } from '../../src/state/inject'
 import { loadModel, reviewEntries, reviewHash, type ReviewedInput } from '../../src/model'
 import { sampleFiles } from '../fixtures/sample'
 
-/** 展开面板里全部折叠的节（⑤ 段缺省折叠，V14c） */
+/** 展开面板里全部折叠的节（⑤ 段缺省折叠，V15c） */
 async function expandAll(wrapper: VueWrapper) {
   for (const b of wrapper.findAll('button.fold[aria-expanded="false"]')) await b.trigger('click')
   await flushPromises()

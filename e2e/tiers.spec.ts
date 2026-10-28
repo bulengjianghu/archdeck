@@ -28,7 +28,7 @@ test('K21、L29：DeskState 没有依赖——画布角提示不分层；选中�
   await expect(page.getByTestId('tier-hint')).toContainText('没有依赖')
   await expect(page.locator('.vue-flow__node[data-id^="tier:"]')).toHaveCount(0)
   await openDesk(page, '/p/h5p-arch-desk?level=state&sel=m:state.desk')
-  // G11 V14c：「拆分信号」折叠在 ⑤，展开再断言清单
+  // G11 V15c：「拆分信号」折叠在 ⑤，展开再断言清单
   const split = page.getByTestId('split-signals')
   await expect(split).toBeVisible()
   await split.getByRole('button', { name: /^▸ 拆分信号/ }).click()

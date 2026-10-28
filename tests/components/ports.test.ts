@@ -98,7 +98,7 @@ describe('模块面板：端口一节（K11）与「知识」行旁的子类 / �
 
   it('知识：基类所在模块列「子类 N」、组装方列「组装 N」并标组装根，单击展开两端与文件证据', async () => {
     const { wrapper } = await mountWith('/?level=infra.framework&sel=m:infra.framework.extra')
-    // G11（V14c）：「代码事实 · 知识」在 ⑤ 缺省折叠，展开再断言
+    // G11（V15c）：「代码事实 · 知识」在 ⑤ 缺省折叠，展开再断言
     await wrapper.find('[data-sec="evidence.knowledge"] .fold').trigger('click')
     await flushPromises()
     const section = wrapper.findAll('section').find(x => x.text().includes('代码事实 · 知识'))!

@@ -26,7 +26,7 @@ const conflict = (f: string) => desk.files.ownership.value?.conflicts.includes(f
 </script>
 
 <template>
-  <!-- G11 V14c：⑤ 默认折叠带计数；入口文件并入本节，不再独占一节 -->
+  <!-- G11 V15c：⑤ 默认折叠带计数；入口文件并入本节，不再独占一节 -->
   <Section v-if="local && (files.length || entry)" title="源代码文件" :count="files.length || undefined" fold>
     <p v-if="!desk.files.payload.value" class="muted">正在读取源码清单…</p>
     <p v-else-if="desk.files.payload.value.status === 'error'" class="muted">{{ desk.files.payload.value.reason }}</p>

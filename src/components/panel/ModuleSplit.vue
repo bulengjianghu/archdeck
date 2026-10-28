@@ -8,7 +8,7 @@ import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import Section from './Section.vue'
 
-const props = defineProps<{ id: string; /** G11 V14c：⑤ 证据与细节缺省折叠（计数已在 ③） */ fold?: boolean }>()
+const props = defineProps<{ id: string; /** G11 V15c：⑤ 证据与细节缺省折叠（计数已在 ③） */ fold?: boolean }>()
 const desk = useDesk()
 const s = computed(() => desk.facts.splitOf(props.id))
 const total = computed(() => desk.files.linesOf(props.id))

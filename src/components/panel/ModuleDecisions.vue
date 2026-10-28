@@ -8,7 +8,7 @@ import { useDesk } from '@/state/inject'
 import Section from './Section.vue'
 import { useOpenPreview } from '../shared/preview'
 
-const props = defineProps<{ id: string; /** G11 V14c：⑤ 证据与细节缺省折叠 */ fold?: boolean }>()
+const props = defineProps<{ id: string; /** G11 V15c：⑤ 证据与细节缺省折叠 */ fold?: boolean }>()
 const desk = useDesk()
 const openPreview = useOpenPreview()
 const local = computed(() => (desk.files.payload.value?.status === 'local' ? desk.files.payload.value : null))

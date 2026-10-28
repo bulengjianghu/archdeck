@@ -31,7 +31,7 @@ interface Measure {
   gapPx: number
 }
 
-/** 常显行数与 ①–④ 段底边（口径见文件头注释）；data-sec 由面板骨架标在各段上（V14） */
+/** 常显行数与 ①–④ 段底边（口径见文件头注释）；data-sec 由面板骨架标在各段上（V15） */
 const MEASURE = `(() => {
   const panel = document.querySelector('.panel-area .panel') || document.querySelector('.panel')
   if (!panel) return { rows: 0, boundaryBottom: 0, firstScreenReadable: false, gapPx: 0 }

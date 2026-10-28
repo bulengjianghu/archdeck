@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * 模块面板（G11 五段骨架，ADR-0050、V14）：① 头部（名称、进入 / 在此设计、徽标槽位表、设计说明）
+ * 模块面板（G11 五段骨架，ADR-0050、V15）：① 头部（名称、进入 / 在此设计、徽标槽位表、设计说明）
  * ② 作用（说明 = 职责 + 原则一句，ADR-0042；层的包含 / 不包含、可依赖的层跟在说明后——它们是「为什么这样分」）
- * ③ 需要注意（每类异常一行、带计数、单击跳转，无异常不出现，V14b）
+ * ③ 需要注意（每类异常一行、带计数、单击跳转，无异常不出现，V15b）
  * ④ 边界（视角敏感段：对外接口 → 子模块 → 出边 / 入边（先按类型汇总，展开才逐条）→ 端口；结构视角另加结构指标与影响面、表面；
  *   运行视角整体折叠在下（V6，由 Panel 包装））
  * ⑤ 证据与细节（默认折叠带计数，count 不为 0 才显示节；出处 footer 常显在最底）。
@@ -48,7 +48,7 @@ function openChild(childId: string) {
   else desk.goTo(props.id, { kind: 'module', id: childId })
 }
 
-// ── ① 头部徽标槽位表（V14a，来源议、出图后负责人定稿）：次序 ID → 类别 → 状态 → 核心 → 标签 → 变更 → 确认； ──
+// ── ① 头部徽标槽位表（V15a，来源议、出图后负责人定稿）：次序 ID → 类别 → 状态 → 核心 → 标签 → 变更 → 确认； ──
 // ── 每槽至多一项；标签槽静息态至多 2 个，其余收「+N」（悬停看全量、单击展开） ──
 const TAG_CAP = 2
 const tagsOpen = ref(false)
@@ -56,7 +56,7 @@ const tags = computed(() => m.value.tags ?? [])
 const tagsShown = computed(() => (tagsOpen.value ? tags.value : tags.value.slice(0, TAG_CAP)))
 const tagsHidden = computed(() => tags.value.length - tagsShown.value.length)
 
-// ── ③ 需要注意（V14b）：清单与计数全部来自现有派生，不新算 ──
+// ── ③ 需要注意（V15b）：清单与计数全部来自现有派生，不新算 ──
 const root = ref<HTMLElement | null>(null)
 usePanelJump(root)
 
@@ -78,8 +78,11 @@ const notices = computed<PanelNotice[]>(() => {
     const d = detail.value
     const violations = d.violations.out.length + d.violations.in.length
     if (violations) out.push({ key: 'violations', label: '违规', count: violations, target: 'evidence.governance', to: '架构治理' })
-    const cycles = d.cycles.length + (desk.facts.selectedCycle.value ? 1 : 0)
-    if (cycles) out.push({ key: 'cycles', label: '模块环 / 本层环', count: cycles, target: 'evidence.governance', to: '架构治理' })
+    // 模块环（Y 系列，模块级强连通）与本层环（层带内，Y5）是两个独立信号：各自一行、各自计数（V15b）
+    const moduleCycles = d.cycles.length
+    if (moduleCycles) out.push({ key: 'cycles', label: '模块环', count: moduleCycles, target: 'evidence.governance', to: '架构治理' })
+    const levelCycles = desk.facts.selectedCycle.value ? 1 : 0
+    if (levelCycles) out.push({ key: 'levelCycles', label: '本层环', count: levelCycles, target: 'evidence.governance', to: '架构治理' })
     const undescribed = d.undescribed.out.length + d.undescribed.in.length
     if (undescribed) out.push({ key: 'undescribed', label: '未解释的交互', count: undescribed, target: 'evidence.governance', to: '架构治理' })
   }
@@ -95,7 +98,7 @@ const notices = computed<PanelNotice[]>(() => {
   return out
 })
 
-// ── ④ 出边 / 入边先按类型汇总一行（V14c），展开才逐条 RelationRow ──
+// ── ④ 出边 / 入边先按类型汇总一行（V15c），展开才逐条 RelationRow ──
 const relOf = (id: string) => idx.value.relations.get(id)
 const outSummary = computed(() => typeSummary(relOf, outs.value))
 const inSummary = computed(() => typeSummary(relOf, ins.value))
@@ -160,7 +163,7 @@ const refsCount = computed(() => (m.value.codeRefs?.length ?? 0) + (m.value.docR
       </Section>
     </template>
 
-    <!-- ③ 需要注意：全部无异常时整段不出现（V14b） -->
+    <!-- ③ 需要注意：全部无异常时整段不出现（V15b） -->
     <NoticeSection :notices="notices" />
 
     <!-- ④ 边界（视角敏感段）：对外接口 → 子模块 → 出边 / 入边 → 端口；结构视角另加结构、表面（指标贴 ④ 段内的结构块首） -->
@@ -214,7 +217,7 @@ const refsCount = computed(() => (m.value.codeRefs?.length ?? 0) + (m.value.docR
       <ModuleSurface :id="m.id" data-sec="boundary.surface" />
     </template>
 
-    <!-- ⑤ 证据与细节：默认折叠带计数，count 不为 0 才显示节（V14c） -->
+    <!-- ⑤ 证据与细节：默认折叠带计数，count 不为 0 才显示节（V15c） -->
     <ModuleDecisions :id="m.id" fold data-sec="evidence.decisions" />
     <ModuleKnowledge :id="m.id" fold data-sec="evidence.knowledge" />
     <ModuleGovernance :id="m.id" fold data-sec="evidence.governance" />
