@@ -22,6 +22,7 @@ import {
   unclassifiedRelations,
   parseDesignSketches,
   sketchLifetime,
+  sourceDeltaNote,
   validateSketch,
   sourceIssues,
   type AcceptedDeviation,
@@ -133,6 +134,7 @@ for (const entry of dirs) {
           })
   }
   let sourceNote = ''
+  let deltaNote = ''
   let governanceNote = ''
   const project = currentOf.get(dir)
   // X6：当前版本比对人拥有文件的指纹
@@ -142,6 +144,8 @@ for (const entry of dirs) {
     const own = assignFiles(index, tree.files, index.model.sourceIgnore)
     issues.push(...sourceIssues(index, own, tree))
     sourceNote = `；源码 ${tree.files.length} 个文件（未归属 ${own.unowned.length}、冲突 ${own.conflicts.length}、忽略 ${own.ignored.size}）`
+    // G22：描述的 source.commit 与源码树 HEAD 不一致——只提醒不判错，测的可能不是描述那一份代码
+    if (tree.commitDelta) deltaNote = `；源码版本：${sourceDeltaNote(tree.commitDelta)}`
     const report = governanceReport(index, own, tree, readCodeDeps(tree.root, tree.files, tree.packages), readBaseline(governanceDir(modelRoot, project!)))
     issues.push(...report.issues)
     governanceNote = governanceSummary(report)
@@ -168,6 +172,7 @@ for (const entry of dirs) {
       (index.actors.size || index.scenarios.size ? `，${index.actors.size} 个参与者，${index.scenarios.size} 个场景` : '') +
       unclassifiedNote +
       sourceNote +
+      deltaNote +
       governanceNote +
       reviewNote +
       (checks.length ? `；草图 ${checks.map(c => `${c.sketch}${c.consistent ? ' 一致' : ` 偏差 ${c.counts.error + c.counts.warning}`}`).join('、')}` : '') +

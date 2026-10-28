@@ -19,6 +19,7 @@ import PerspectiveSwitch from './PerspectiveSwitch.vue'
 import PlayerBar from './PlayerBar.vue'
 import SplitView from './split/SplitView.vue'
 import AsidePane from './split/AsidePane.vue'
+import SourceDeltaBar from './source/SourceDeltaBar.vue'
 import { useAside } from './split/useAside'
 import { directionOf, readLayout, resize, saveLayout, setDirection, toggleSlot, type PaneLayout } from './split/paneLayout'
 import Panel from './panel/Panel.vue'
@@ -181,6 +182,11 @@ function onDividerUp() {
 const aside = useAside(desk)
 const { previewPath, previewLine, tab: asideTab, run } = aside
 provide(OPEN_PREVIEW, aside.open)
+// G22：当前版本下源码树的 HEAD 与描述的 source.commit 不一致（提交 / 设计版本没有代码事实，不提示）
+const sourceDelta = computed(() => {
+  const p = desk.files.payload.value
+  return p?.status === 'local' ? (p.commitDelta ?? null) : null
+})
 // W-10：「怎么读这张图」
 const guideOpen = ref(false)
 // W-6：导航树页签由项目视图持有，画布的问题角标切到「问题」页签
@@ -260,7 +266,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </button>
     </header>
 
-    <InfoBar v-if="version && desk.status.value === 'ready'" class="info-bar" />
+    <div class="sub-bars">
+      <InfoBar v-if="version && desk.status.value === 'ready'" />
+      <!-- G22：源码版本提示条，加载完成后当前版本常显，一致时不出现 -->
+      <SourceDeltaBar v-if="!version && desk.status.value === 'ready'" :delta="sourceDelta" />
+    </div>
 
     <aside v-show="!navCollapsed" class="nav-area">
       <NavTree v-if="desk.status.value === 'ready'" />
@@ -338,8 +348,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   height: 100%;
 }
 
-.info-bar {
+.sub-bars {
   grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
 }
 
 .top {

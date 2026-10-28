@@ -15,12 +15,15 @@ import {
   listSourceFiles,
   readExports,
   exportsResolver,
+  readHeadCommit,
   readSourceFile,
   readSourceTree,
   resolveSourceRoot,
+  sourceCommitDelta,
   sourceRootEnvKey,
   workspaceRoot,
 } from '../../vite/readSource'
+import { sourceDeltaNote } from '../../src/model'
 
 let ws: string
 let projectRoot: string
@@ -260,5 +263,72 @@ describe('G19 行数', () => {
     expect(countLines(dir, ['a.ts', 'b.vue', 'c.ts', 'd.md', 'missing.ts'])).toEqual({ 'a.ts': 3, 'b.vue': 2, 'c.ts': 0 })
     write(dir, 'a.ts', 'a\nb\nc\nd\ne\n')
     expect(countLines(dir, ['a.ts'])['a.ts']).toBe(5)
+  })
+})
+
+describe('G22 自项目源码根与描述版本', () => {
+  const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd }).toString('utf8').trim()
+  let gws: string
+  let gitRepo: string
+  let first: string
+  let second: string
+  beforeAll(() => {
+    // 同名的自项目：repo 的基名与所在包目录（demo/packages/desk）相同
+    gws = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-self-'))
+    gitRepo = path.join(gws, 'repo')
+    fs.mkdirSync(gitRepo)
+    git(gitRepo, 'init', '-q')
+    git(gitRepo, 'config', 'user.email', 't@example.com')
+    git(gitRepo, 'config', 'user.name', 't')
+    write(gitRepo, 'src/a.ts', 'export const a = 1\n')
+    git(gitRepo, 'add', '-A')
+    git(gitRepo, 'commit', '-qm', 'first')
+    first = git(gitRepo, 'rev-parse', 'HEAD')
+    write(gitRepo, 'src/b.ts', 'export const b = 2\n')
+    git(gitRepo, 'add', '-A')
+    git(gitRepo, 'commit', '-qm', 'second')
+    second = git(gitRepo, 'rev-parse', 'HEAD')
+    write(modelRoot, 'ver/system.yaml', `system: { id: ver, name: V, source: { repo: '${gitRepo}', commit: '${first}' } }`)
+    write(modelRoot, 'nocommit/system.yaml', `system: { id: nocommit, name: N, source: { repo: '${gitRepo}' } }`)
+    // 自项目：repo 基名与所在包同名，指向哪里都解析回本包
+    write(modelRoot, 'selfp/system.yaml', 'system: { id: selfp, name: S, source: { repo: elsewhere/desk } }')
+  })
+  afterAll(() => fs.rmSync(gws, { recursive: true, force: true }))
+
+  it('解析：自项目缺省为所在包目录，不外推到工作区；ARCH_SOURCE_ROOT_<项目> 仍然优先；不同名的项目照旧走工作区', () => {
+    expect(resolveSourceRoot('selfp', { id: 'selfp', name: 'S', source: { repo: 'elsewhere/desk' } }, gws, {}, projectRoot)).toEqual({
+      status: 'local',
+      root: projectRoot,
+    })
+    expect(
+      resolveSourceRoot('selfp', { id: 'selfp', name: 'S', source: { repo: 'elsewhere/desk' } }, gws, { ARCH_SOURCE_ROOT_SELFP: gitRepo }, projectRoot),
+    ).toEqual({ status: 'local', root: gitRepo })
+    expect(resolveSourceRoot('app', { id: 'app', name: 'A', source: { repo: 'app-repo' } }, ws, {}, projectRoot)).toEqual({ status: 'local', root: repo })
+    // readSourceTree 同一缺省：自项目的清单来自本包
+    const tree = readSourceTree(modelRoot, 'selfp', projectRoot, {})
+    expect(tree).toMatchObject({ status: 'local', root: projectRoot })
+  })
+
+  it('比对：落后、一致、不在历史中、未写 commit、无 git 五态', () => {
+    const tree = readSourceTree(modelRoot, 'ver', projectRoot, {})
+    expect(tree).toMatchObject({ status: 'local', root: gitRepo, commitDelta: { described: first, head: second, ahead: 1 } })
+    expect(sourceDeltaNote((tree as Extract<typeof tree, { status: 'local' }>).commitDelta!)).toBe(
+      `描述基于 ${first.slice(0, 8)}，源码树在 ${second.slice(0, 8)}（差 1 个提交）`,
+    )
+    // 一致（HEAD 以描述的提交开头，容忍短哈希）不提示
+    write(modelRoot, 'ver/system.yaml', `system: { id: ver, name: V, source: { repo: '${gitRepo}', commit: '${second.slice(0, 8)}' } }`)
+    expect(readSourceTree(modelRoot, 'ver', projectRoot, {})).not.toHaveProperty('commitDelta')
+    expect(sourceCommitDelta({ id: 'ver', name: 'V', source: { repo: 'x', commit: second } }, gitRepo)).toBeNull()
+    // 描述的提交不在源码树历史中：提示不一致，差数缺省
+    write(modelRoot, 'ver/system.yaml', `system: { id: ver, name: V, source: { repo: '${gitRepo}', commit: '${'f'.padEnd(40, '0')}' } }`)
+    expect(readSourceTree(modelRoot, 'ver', projectRoot, {})).toMatchObject({ commitDelta: { described: 'f'.padEnd(40, '0'), head: second, ahead: null } })
+    expect(sourceDeltaNote({ described: 'f'.padEnd(40, '0'), head: second, ahead: null })).toBe(
+      `描述基于 f0000000，源码树在 ${second.slice(0, 8)}（描述的提交不在源码树历史中）`,
+    )
+    // 未写 commit：静默跳过
+    expect(readSourceTree(modelRoot, 'nocommit', projectRoot, {})).not.toHaveProperty('commitDelta')
+    // 读不到 git（不在仓库内）：静默跳过
+    expect(readHeadCommit(ws)).toBeNull()
+    expect(sourceCommitDelta({ id: 'ver', name: 'V', source: { repo: 'x', commit: first } }, ws)).toBeNull()
   })
 })

@@ -3,14 +3,24 @@
  * 只列文件、读文件、做 TypeScript 语法摘要，不判断文件属于哪个模块（归属在模型层）。
  *
  * 源码根目录（G1）：ARCH_SOURCE_ROOT_<项目> 优先；否则为工作区根目录 + system.source.repo，
- * 工作区根目录缺省为本包往上三级（work4/），可用 ARCH_WORKSPACE_ROOT 覆盖。
+ * 工作区根目录缺省为本包往上三级（work4/），可用 ARCH_WORKSPACE_ROOT 覆盖；
+ * 自项目——repo 与本包同名（G22）——缺省为本包目录，不外推到工作区（worktree 里那是主检出的另一份代码）。
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import ts from 'typescript'
 import { loadModel } from '../src/model'
-import { LINE_COUNTED, resolveRelative, type ExportedSymbol, type PackageEntry, type SourceFile, type SourcePayload, type SystemDef } from '../src/model'
+import {
+  LINE_COUNTED,
+  resolveRelative,
+  type CommitDelta,
+  type ExportedSymbol,
+  type PackageEntry,
+  type SourceFile,
+  type SourcePayload,
+  type SystemDef,
+} from '../src/model'
 import { readProject } from './readModelDir'
 
 /** G17：超过这个大小不预览 */
@@ -29,19 +39,54 @@ export const sourceRootEnvKey = (project: string) => `ARCH_SOURCE_ROOT_${project
 
 export type SourceRoot = { status: 'local'; root: string } | { status: 'error'; tried?: string; reason: string }
 
-/** G1：解析源码根目录；源码在本地是前提，根目录不存在或未写 repo 是配置错误，返回原因与尝试的路径（调用方报错），不抛异常 */
-export function resolveSourceRoot(project: string, system: SystemDef, workspace: string, env: NodeJS.ProcessEnv = process.env): SourceRoot {
+/**
+ * G1：解析源码根目录；G22：自项目——repo 与所在包目录 selfRoot 同名（基名相同）——缺省为 selfRoot，
+ * 不按工作区根目录外推（worktree 里外推到的是主检出的另一份代码，会静默测错）。源码在本地是前提，
+ * 根目录不存在或未写 repo 是配置错误，返回原因与尝试的路径（调用方报错），不抛异常
+ */
+export function resolveSourceRoot(project: string, system: SystemDef, workspace: string, env: NodeJS.ProcessEnv = process.env, selfRoot?: string): SourceRoot {
   const repo = system.source?.repo
   const override = env[sourceRootEnvKey(project)]
   if (!override && !repo) return { status: 'error', reason: `描述未写 system.source.repo（或用环境变量 ${sourceRootEnvKey(project)} 指定源码根目录）` }
-  const root = path.resolve(workspace, override ?? repo!)
-  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory())
+  const self = !override && selfRoot !== undefined && !!repo && path.basename(repo) === path.basename(selfRoot)
+  const target = self ? path.resolve(selfRoot) : path.resolve(workspace, override ?? repo!)
+  if (!fs.existsSync(target) || !fs.statSync(target).isDirectory())
     return {
       status: 'error',
-      tried: root,
-      reason: `源码根目录不存在：${root}（检查 system.source.repo，或用 ${sourceRootEnvKey(project)} / ARCH_WORKSPACE_ROOT 指定）`,
+      tried: target,
+      reason: `源码根目录不存在：${target}（检查 system.source.repo，或用 ${sourceRootEnvKey(project)} / ARCH_WORKSPACE_ROOT 指定）`,
     }
-  return { status: 'local', root }
+  return { status: 'local', root: target }
+}
+
+const gitIn = (root: string, args: string[]) =>
+  execFileSync('git', args, { cwd: root, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] })
+    .toString('utf8')
+    .trim()
+
+/** G22：源码树的 git HEAD 提交；不在 git 仓库内、还没有提交或 git 不可用（发布产物等）为 null——静默跳过 */
+export function readHeadCommit(root: string): string | null {
+  try {
+    return gitIn(root, ['rev-parse', 'HEAD']) || null
+  } catch {
+    return null
+  }
+}
+
+/** G22：描述的 source.commit 与源码树 HEAD 的比对；一致（HEAD 以它开头，容忍短哈希）、未写 commit 或读不到 git 时为 null */
+export function sourceCommitDelta(system: SystemDef, root: string): CommitDelta | null {
+  const described = system.source?.commit?.trim()
+  if (!described) return null
+  const head = readHeadCommit(root)
+  if (!head || head.startsWith(described)) return null
+  let ahead: number | null = null
+  try {
+    const n = Number.parseInt(gitIn(root, ['rev-list', '--count', `${described}..HEAD`]), 10)
+    if (Number.isFinite(n)) ahead = n
+  } catch {
+    /* 描述的提交不在源码树历史中（深克隆截断、改写历史等）：只报不一致，不给差数 */
+  }
+  return { described, head, ahead }
 }
 
 /** G2：git 仓库内按 git 的忽略规则列出（已跟踪 + 未跟踪且未忽略），否则遍历并排除依赖与产物目录 */
@@ -101,9 +146,12 @@ export function readSourceTree(modelRoot: string, project: string, projectRoot: 
   const payload = readProject(modelRoot, project, projectRoot)
   if (!payload) return null
   const system = loadModel(payload.files).index.model.system
-  const at = resolveSourceRoot(project, system, workspaceRoot(projectRoot, env), env)
+  // G22：projectRoot 是本工具所在的包，repo 与它同名的项目是自项目，源码根缺省为它
+  const at = resolveSourceRoot(project, system, workspaceRoot(projectRoot, env), env, projectRoot)
   if (at.status === 'error') return at
   const files = listSourceFiles(at.root)
+  // G22：描述的提交与源码树 HEAD 不一致时随清单交给页面与命令行，各给一条提醒
+  const delta = sourceCommitDelta(system, at.root)
   return {
     status: 'local',
     root: at.root,
@@ -111,6 +159,7 @@ export function readSourceTree(modelRoot: string, project: string, projectRoot: 
     packages: readPackages(at.root, files),
     lines: countLines(at.root, files),
     adrTitles: readAdrTitles(at.root, files),
+    ...(delta ? { commitDelta: delta } : {}),
   }
 }
 

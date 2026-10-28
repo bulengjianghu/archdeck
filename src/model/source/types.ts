@@ -35,8 +35,21 @@ export type SourcePayload =
       lines?: Record<string, number>
       /** E9：ADR 文件 → 标题（文件第一行 `# ` 之后，去掉「ADR-0025：」前缀） */
       adrTitles?: Record<string, string>
+      /** G22：源码树的 HEAD 与描述的 `system.source.commit` 不一致时给出；一致、未写 commit 或读不到 git（发布产物等）时没有 */
+      commitDelta?: CommitDelta
     }
   | { status: 'error'; reason: string; tried?: string }
+
+/** G22：描述提交与源码树 HEAD 的比对。ahead = HEAD 比描述的提交多的提交数；描述的提交不在源码树历史中为 null */
+export interface CommitDelta {
+  described: string
+  head: string
+  ahead: number | null
+}
+
+/** G22：源码版本提示的一句话（页面文件树头部与 `lint:model` 摘要共用同一措辞） */
+export const sourceDeltaNote = (d: CommitDelta): string =>
+  `描述基于 ${d.described.slice(0, 8)}，源码树在 ${d.head.slice(0, 8)}（${d.ahead === null ? '描述的提交不在源码树历史中' : `差 ${d.ahead} 个提交`}）`
 
 export type LocalSource = Extract<SourcePayload, { status: 'local' }>
 

@@ -379,7 +379,7 @@ SK-6–SK-11 是叠在分层总览上的编辑态（ADR-0024），由 SK-12–SK
 6. 运行视角下选中文件：面板显示文件，副栏切到「源代码」页签；单步后选中下一步，副栏切回「时序图」，「源代码」页签仍可切回。
 7. 文件树中 TS / Vue 文件显示行数，超过 500 行的标红，目录显示行数合计与超长数；勾选「只看超长」只列超长文件；选中模块时面板列出各文件行数与合计；在 `source-ignore.yaml` 写 `sourceLimits: { maxLines: 300 }` 后阈值随之变化。
 8. 选中一个未归属文件，在文件面板「加入忽略」（可一键改为整个目录）：`source-ignore.yaml` 末尾多一项、注释与其他内容不变，页面自动刷新后文件标为已忽略；在违规详情里「加例外」不写理由时拒绝，写理由后 `rules.yaml` 的 `allow` 多一条；在设计版本面板「记录评审意见」追加到本轮 `feedback`；跨域的 POST 被拒绝（B1–B5；自动化验收：`tests/access/writeModel.test.ts`）。
-9. （G22，待实现）在 worktree 里不设 `ARCH_SOURCE_ROOT_H5P_ARCH_DESK` 打开本项目：文件页签读到的是本 worktree 的源码；把 `system.source.commit` 改成旧提交后刷新，页面出现一条「描述基于 X，源码树在 Y（差 N 个提交）」，`lint:model` 摘要给出同一条提醒且不判错；改回真实提交后提示消失。
+9. （G22）在 worktree 里不设 `ARCH_SOURCE_ROOT_H5P_ARCH_DESK` 打开本项目：文件页签读到的是本 worktree 的源码；把 `system.source.commit` 改成旧提交后刷新，项目视图顶部出现一条「描述基于 X，源码树在 Y（差 N 个提交）」，`lint:model` 摘要给出同一条提醒且不判错；改回真实提交后提示消失。
 
 ### 6.5 运行视角聚焦（已通过）
 
