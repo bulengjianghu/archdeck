@@ -235,8 +235,8 @@ modules:
   - id: state.layout.runner.boundaries
     name: 框外元素与手工走线
     parent: state.layout.runner
-    codeRefs: [src/layout/routes.ts]
-    responsibility: 方位表示角色（A7、L4）：用户在系统框上方、外部系统与时间在系统框左侧（placeActors，ADR-0039），边界节点在父模块框下方一行、按视图给出的层次顺序（与时序图泳道一致），系统框包住父模块框与边界节点行（placeOutside）；方位固定在屏幕上，不随布局方向改变。普通层次中框外元素的边（参与者的边、边界边）不参与布局，要画时由 edgeRoute 按需正交绕行（routing 的 detour：用户底边、外部系统右边、边界节点顶边出入，选通道时避开已占的竖段（BusyLines），短桩不伸进对面的节点（clampStub），不穿节点，从目标的入口侧进入，同一节点上的多条边错开、同一起点的边各走一条横线；内部节点那一端取 elk 的占位端口，框外元素自身的端口同样左动右静）。画布每次只对当前画出来的那组框外边一起走线并分配轨道（outsideRoutes + routing 的 allocateTracks：走廊里重合或挨得太近的中间段按边 ID 分轨，内部边与框线只占不动、分轨后不穿节点，L32；placeLabelBoxes 按实际尺寸放标签，L33），按布局与可见集记忆。手工走线与编码工具也在这里（routes.ts）：回放临时线与叠加线的曲线 linkRoute、edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、isBoundaryEdge（L10），供排布与画布场景使用。L14：placeRims 把普通层次的边界角色压在父模块框线上；框线上的 port 对端在上方（用户）时走顶边、否则走底边，adapter 对端在左侧（外部系统）时走左边、否则走右边；关系边的出入点在该侧前半错开，后半留给端口记号（L11、L13）。
+    codeRefs: [src/layout/routes.ts, src/layout/labels.ts]
+    responsibility: 方位表示角色（A7、L4）：用户在系统框上方、外部系统与时间在系统框左侧（placeActors，ADR-0039），边界节点在父模块框下方一行、按视图给出的层次顺序（与时序图泳道一致），系统框包住父模块框与边界节点行（placeOutside）；方位固定在屏幕上，不随布局方向改变。普通层次中框外元素的边（参与者的边、边界边）不参与布局，要画时由 edgeRoute 按需正交绕行（routing 的 detour：用户底边、外部系统右边、边界节点顶边出入，选通道时避开已占的竖段（BusyLines），短桩不伸进对面的节点（clampStub），不穿节点，从目标的入口侧进入，同一节点上的多条边错开、同一起点的边各走一条横线；内部节点那一端取 elk 的占位端口，框外元素自身的端口同样左动右静）。画布每次只对当前画出来的那组框外边一起走线并分配轨道（outsideRoutes + routing 的 allocateTracks：走廊里重合或挨得太近的中间段按边 ID 分轨，内部边与框线只占不动、分轨后不穿节点，L32；placeLabelBoxes 按实际尺寸放标签，L33），按布局与可见集记忆。手工走线与编码工具也在这里（routes.ts）：回放临时线与叠加线的曲线 linkRoute、edgeLabel 只给聚合条数 ×N、edgeWeight 线宽档、标签位的词表与组装（labels.ts：EDGE_TAGS 分异常与修饰两级，composePill 画成至多两段、标签至多两个其余「+k」，labelWidth / pillWidth 估宽，L26、ADR-0041）、视图边的机制标签 mechTags（L35）、标签尺寸 labelSize（按两段的实际文字）与 elk 标签槽 slotSize（只按把手角标，机制标签不改走线，L33）、parallelOffsets 平行曲线错开、spreadEnds 平行边终点错开、elk 标签槽与离走线太远的标签坐标作废、isBoundaryEdge（L10），供排布与画布场景使用。L14：placeRims 把普通层次的边界角色压在父模块框线上；框线上的 port 对端在上方（用户）时走顶边、否则走底边，adapter 对端在左侧（外部系统）时走左边、否则走右边；关系边的出入点在该侧前半错开，后半留给端口记号（L11、L13）。
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.pipeline.loader
@@ -280,7 +280,7 @@ modules:
   - id: model.projector.collector
     name: 边汇总
     parent: model.projector
-    responsibility: 把映射后的关系按 (from, to, type) 收集成视图边（L5）：同一对节点之间不同类型（四类交互，迁移期的未分类单成一类）的关系各成一条，同类型内聚合并记条数（L2）；汇总同步 / 异步（通知一律异步）。
+    responsibility: 把映射后的关系按 (from, to, type) 收集成视图边（L5）：同一对节点之间不同类型（四类交互，迁移期的未分类单成一类）的关系各成一条，同类型内聚合并记条数（L2）；汇总同步 / 异步（通知一律异步）；按 mechanismOf 记每个机制的条数（mechs，L35，ADR-0041）。
   - id: model.projector.overview
     name: 分层总览
     parent: model.projector

@@ -16,6 +16,7 @@ import {
   isTarget,
   levelFacts,
   levelTiers,
+  layerUpward,
   loadModel,
   shelfOf,
   projectLevel,
@@ -41,7 +42,8 @@ import {
 } from '../../../src/layout/layout'
 import { routeMidpoint } from '../../../src/layout/canvas'
 import { bundleItem, depViewEdge, routeToPoint } from '../../../src/layout/canvas/structure'
-import { composeLabel } from '../../../src/layout/canvas/labels'
+import { composeLabel, composePill, pillWidth } from '../../../src/layout/labels'
+import { mechTags } from '../../../src/layout/routes'
 import { readModelDir } from '../../../vite/readModelDir'
 import { readSourceTree } from '../../../vite/readSource'
 import { readCodeDeps } from '../../../vite/readDeps'
@@ -78,12 +80,30 @@ export function levelIds(index: ModelIndex): string[] {
   return [...new Set(ids)].sort()
 }
 
-const labelText = (index: ModelIndex, view: LevelView, e: ViewEdge) => handleBadge(index, view, e)?.label || edgeLabel(e)
+/**
+ * 交互视角静息态的标签位（与画布 makeEdge 同口径，L26②、ADR-0041）：×N 与把手、向上（K22，分层是事实、不随开关）、机制（L35）、混合（L23），
+ * 按两段与上限组装；只随「代码事实」开关出现的异常（违规、未证实）不算
+ */
+function labelOf(index: ModelIndex, view: LevelView, e: ViewEdge, up: ReadonlyMap<string, readonly string[]>) {
+  const n = e.relationIds.length
+  const ups = up.get(e.id)?.filter(id => e.relationIds.includes(id)) ?? []
+  return composePill(handleBadge(index, view, e)?.label || edgeLabel(e), [
+    ups.length > 0 && { tag: '向上', count: ups.length, total: n },
+    ...mechTags(e.mechs, n),
+    e.mode === 'mixed' && { tag: '混合' },
+  ])
+}
 
-function lineOf(index: ModelIndex, view: LevelView, e: ViewEdge, r: EdgeRoute, id = e.id): CheckLine {
-  const text = labelText(index, view, e)
+function lineOf(index: ModelIndex, view: LevelView, e: ViewEdge, r: EdgeRoute, up: ReadonlyMap<string, readonly string[]>, id = e.id): CheckLine {
+  const pill = labelOf(index, view, e, up)
   const at = r.label ?? routeMidpoint(r)
-  return { id, points: r.points, ...(r.curve ? { curve: r.curve } : {}), ...(text ? { label: { at, text } } : {}), ends: [e.from, e.to] }
+  return {
+    id,
+    points: r.points,
+    ...(r.curve ? { curve: r.curve } : {}),
+    ...(pill.text ? { label: { at, text: pill.text, w: pillWidth(pill.segments) } } : {}),
+    ends: [e.from, e.to],
+  }
 }
 
 function obstaclesOf(pv: PositionedView): { obstacles: Obstacle[]; frames: Box[]; anchors: Box[] } {
@@ -173,6 +193,9 @@ export async function checkLevel(
   const tiers = report ? toLayoutTiers(levelTiers(index, view, report)) : null
   const pv = { ...(await layoutView(view, {}, baseLayoutLinks(index, view, sv, report, tiers))), view }
   const { obstacles, frames, anchors } = obstaclesOf(pv)
+  // K22（ADR-0041）：向上又不是控制反转的边——普通层次按算出的层号（有代码事实时），分层总览按声明的层序
+  const ups = view.mode === 'layered' ? layerUpward(index, view) : report ? (levelTiers(index, view, report)?.upward ?? []) : []
+  const up = new Map(ups.filter(u => !u.inversion).map(u => [u.edge, u.relations] as const))
   const scenes: Scene[] = []
   if (perspective === 'structure') {
     if (!sv.facts || !report) return null
@@ -180,26 +203,26 @@ export async function checkLevel(
   } else if (view.mode === 'layered') {
     const base = view.edges.flatMap(e => {
       const r = pv.edges.get(e.id)
-      return r ? [lineOf(index, view, e, r)] : []
+      return r ? [lineOf(index, view, e, r, up)] : []
     })
     scenes.push({ lines: base, obstacles, frames, anchors })
     const cores = new Set((view.coreEdges ?? []).flatMap(e => [e.from, e.to]))
     for (const n of cores) {
       const extra = (view.coreEdges ?? []).flatMap(e => {
         const r = pv.coreEdges.get(e.id)
-        return r && (e.from === n || e.to === n) ? [lineOf(index, view, e, r, `core:${e.id}`)] : []
+        return r && (e.from === n || e.to === n) ? [lineOf(index, view, e, r, up, `core:${e.id}`)] : []
       })
       if (extra.length) scenes.push({ lines: [...base, ...extra], obstacles, frames, anchors })
     }
   } else {
     const inner = view.edges.flatMap(e => {
       const r = pv.edges.get(e.id)
-      return r && !isOutsideEdge(view, e) ? [lineOf(index, view, e, r)] : []
+      return r && !isOutsideEdge(view, e) ? [lineOf(index, view, e, r, up)] : []
     })
     const outside = outsideRoutes(pv, view.edges)
     const outer = view.edges.flatMap(e => {
       const r = outside.get(e.id)
-      return r ? [lineOf(index, view, e, r)] : []
+      return r ? [lineOf(index, view, e, r, up)] : []
     })
     scenes.push({ lines: [...inner, ...outer], obstacles, frames, anchors })
   }

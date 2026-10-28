@@ -31,6 +31,7 @@ import type {
 } from '@/model'
 import type { EdgeRoute, Point, PositionedView } from '../layout'
 import type { StageOverlay, StaticMode, TempLine } from '../stage'
+import type { PillSegment } from '../layout'
 
 /** 画布节点的公共数据 */
 export interface NodeData {
@@ -185,11 +186,13 @@ export type EdgeArrow = 'closed' | 'open'
 export interface RouteEdgeData {
   route: EdgeRoute
   edge: ViewEdge
-  /** L26：标签位——×N、把手与词表里的异常和修饰（` · ` 连接）；运行视角走过的边不标条数 */
+  /** L26：标签位——×N、把手与词表里的异常和修饰（` · ` 连接，含「+k」）；运行视角走过的边不标条数 */
   label: string
+  /** L26②（ADR-0041）：标签位的段——异常段（警示色）在前、修饰段（中性）在后；不给时整串 label 为一段，按 warn 着色 */
+  segments?: PillSegment[]
   /** 有标签：画成带边框的 pill（L26） */
   pill?: boolean
-  /** 标签含异常（违规 / 未证实 / 未解释 / 缺段 / 未建模）：警示色 */
+  /** 标签含异常（违规 / 向上 / 未证实 / 未解释 / 缺段 / 未建模）：有警示色的段 */
   warn?: boolean
   factState: FactState
   arrow: EdgeArrow
@@ -224,7 +227,7 @@ export interface RouteEdgeData {
   temp?: TempLine['kind'] | 'code' | 'couple' | 'assembly' | 'carried' | 'carrier-gap'
   /** 悬停说明（D8：交互束内修饰不一致时列出各条；L22：缺段的说明） */
   title?: string
-  /** D8：交互束内同步 / 异步、via 不一致（标签位加「混合」，L26） */
+  /** L23（ADR-0041）：交互束内同步与异步不一致（标签位加「混合」，L26）；via 不一致由机制标签表达（L35） */
   mixed?: boolean
   /** L23b：收起的交互束的把手角标（`×N · M 把手`）；有它时 title 为按子模块分组的悬停列表 */
   handles?: string
@@ -307,6 +310,8 @@ export interface CanvasInput {
   assemblyRoots?: ReadonlyMap<string, number> | null
   /** ADR-0031：结构视角的输入；交互视角与运行视角为 null（照交互图画） */
   structure?: StructureInput | null
+  /** K22、L26（ADR-0041）：本层向上、又有不是控制反转的关系的视图边 → 这些关系（标签位写「向上」）；结构视角不给 */
+  upward?: ReadonlyMap<string, readonly string[]> | null
   /** D7、D8：本层交互视图边 → 按接收方表面散开的数据与束内混合（交互视角用；运行视角为 null） */
   spreads?: ReadonlyMap<string, InteractionBundle> | null
   /** L22：交互视角选中一条交互时它的承载（不判定或没有代码事实时为 null） */

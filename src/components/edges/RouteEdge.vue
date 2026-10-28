@@ -2,7 +2,8 @@
 /**
  * 关系边与临时线（L10、ADR-0018、ADR-0029）：一个通道一个维度——
  * 颜色 = 关系类型（查询低饱和 + 半透明、委托实色、未分类中性灰）；线型 = 行为还是依赖（L18，ADR-0035：交互实线，依赖类的线虚线）；箭头 = 同步实心、异步空心；
- * 插座 = 经端口（L12，目标端与箭头叠放）；线宽 = 聚合条数三档；标签位 = ×N、把手与 L26 的异常和修饰（未证实、违规、回调、混合、经上层、未建模……），一律画成 pill；
+ * 插座 = 经端口（L12，目标端与箭头叠放；与标签「端口」并存）；线宽 = 聚合条数三档；标签位 = ×N、把手与 L26 的异常和修饰，一律画成 pill（EdgePill）：
+ * 至多两段——异常段（违规、向上、未证实……，警示色）在前、修饰段（机制 L35、混合、经上层，中性）在后，标签至多两个、其余「+k」（ADR-0041）；
  * 晕 = 违规（优先）/ 设计变更、选中（强调色窄晕）、回放当前（宽晕 + 流动）。
  * 依赖类的线（代码依赖叠加线 K9、组装叠加 O12、承载缺段 L22）用依赖的端点记号（UmlMarker：开口箭头，组装另在依赖方一端实心菱形）。
  * 时间耦合（J5）：灰色波浪线、无箭头、标 ×N；无依赖无关系的更深色——线型的唯一例外。
@@ -15,6 +16,7 @@ import type { Point } from '@/layout/layout'
 import { horizontalCurve, retractEnd, roundedPolyline, verticalCurve, wavyPath } from './routePath'
 import ArrowMarker from './ArrowMarker.vue'
 import SocketMarker from './SocketMarker.vue'
+import EdgePill from './EdgePill.vue'
 import UmlMarker from './UmlMarker.vue'
 import { DOT_ARROW, FLOW, arrowDepth, arrowSize, isDependencyLine, strokeColor, strokeStyle } from './edgeStyle'
 import { depEnds, umlDepth } from './depStyle'
@@ -57,6 +59,12 @@ const depStartId = computed(() => `${markerId.value}-start`)
 /** L12：经端口的边在目标端加插座记号（沿完整走线的终点定向，与箭头叠放） */
 const socket = computed(() => !!props.data.port && !couple.value)
 const socketId = computed(() => `socket-${markerId.value.slice('arrow-'.length)}`)
+/** L26：标签位——变淡时不写；没给段的整串为一段，按 warn 着色 */
+const pill = computed(() => {
+  const { label, dim, route, segments, warn } = props.data
+  if (dim || !label || !route.label) return null
+  return { x: route.label.x, y: route.label.y, segments: segments ?? [{ text: label, warn: !!warn }] }
+})
 </script>
 
 <template>
@@ -104,14 +112,9 @@ const socketId = computed(() => `socket-${markerId.value.slice('arrow-'.length)}
       :marker-start="dep?.start ? `url(#${depStartId})` : undefined"
       :style="style"
       :interaction-width="16"
-      :label="data.dim || !data.label ? undefined : data.label"
-      :label-x="data.route.label?.x"
-      :label-y="data.route.label?.y"
-      :label-show-bg="true"
-      :label-bg-padding="data.pill ? [6, 2] : [4, 2]"
-      :label-bg-border-radius="data.pill ? 8 : 4"
       :class="{ 'edge-selected': data.selected, 'edge-core': data.core }"
     />
+    <EdgePill v-if="pill" :x="pill.x" :y="pill.y" :segments="pill.segments" :pill="!!data.pill" />
   </g>
   <path v-if="socket" :d="path" class="edge-socket" fill="none" stroke="none" :opacity="style.opacity" :marker-end="`url(#${socketId})`" />
   <template v-if="data.play === 'current'">

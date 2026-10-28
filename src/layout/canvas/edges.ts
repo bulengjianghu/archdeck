@@ -10,6 +10,8 @@ import {
   callbackPairs,
   callbackText,
   isCallbackVia,
+  mechanismCounts,
+  mechanismOf,
   moduleName,
   nodeOf as nodeOfModule,
   parseVia,
@@ -27,6 +29,13 @@ import {
   handleBadge,
   isBoundaryEdge,
   linkRoute,
+  mechTags,
+  composeLabel,
+  composePill,
+  hasWarnTag,
+  isWarnTag,
+  tagText,
+  type TagPart,
   spreadEdgeId,
   type Box,
   type EdgeRoute,
@@ -36,7 +45,6 @@ import {
 import { isTemp, landingId } from '../stage'
 import type { SceneContext } from './context'
 import { DEP_KIND_LABELS, DEP_TIER_LABELS, ELEMENT_KIND_LABELS, depViewEdge, depWeight, elementAt, inImpact, routeToPoint } from './structure'
-import { composeLabel, hasWarnTag, type TagPart } from './labels'
 import type { CanvasEdge, EdgeArrow, FactState, RouteEdgeData } from './types'
 
 /** K9：证实状态（只进数据与面板，不改线型——L10、ADR-0035） */
@@ -73,6 +81,30 @@ export const viaPort = (idx: ModelIndex | null, e: ViewEdge): boolean =>
 /** L24：视图边里经回调（via: channel:callback）的关系 */
 export const callbackRelations = (idx: ModelIndex | null, e: ViewEdge): string[] =>
   idx ? e.relationIds.filter(id => isCallbackVia(idx.relations.get(id)?.via)) : []
+
+/** L35：视图边（含散开段、临时线）上各机制的条数——按关系现算，散开段与经上层的临时线也对得上；结构视角不标 */
+function mechPartsOf(ctx: SceneContext, e: ViewEdge, total: number): TagPart[] {
+  const idx = ctx.input.index
+  if (ctx.structure || !idx) return []
+  return mechTags(mechanismCounts(e.relationIds.flatMap(id => (idx.relations.has(id) ? [idx.relations.get(id)!] : []))), total)
+}
+
+/** K22、L26（ADR-0041）：边上向上又不是控制反转的关系（交互朝上、又没有任何机制）；结构视角不标 */
+const upwardOf = (ctx: SceneContext, e: ViewEdge): string[] => {
+  const ids = ctx.structure ? undefined : ctx.input.upward?.get(e.id)
+  return ids ? e.relationIds.filter(id => ids.includes(id)) : []
+}
+
+/** L26⑤：被「+k」收起的标签逐条列出——机制列带它的关系，其余写标签与条数 */
+function hiddenTitle(ctx: SceneContext, e: ViewEdge, hidden: readonly TagPart[]): string {
+  if (!hidden.length) return ''
+  const idx = ctx.input.index
+  const lines = hidden.flatMap(p => {
+    const rels = isWarnTag(p.tag) ? [] : e.relationIds.filter(id => idx?.relations.has(id) && mechanismOf(idx.relations.get(id)!) === p.tag)
+    return [`· ${tagText(p)}`, ...rels.map(id => `  ${relationText(idx, id)}`)]
+  })
+  return [`另 ${hidden.length} 个标签（L26②，「+${hidden.length}」）：`, ...lines].join('\n')
+}
 
 /** L24：边的悬停里经回调的说明；聚合边逐条列出 */
 function callbackTitle(idx: ModelIndex | null, ids: readonly string[], aggregate: boolean): string | undefined {
@@ -160,7 +192,7 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined,
   const quiet = !!ctx.st && !!play.play
   const head = quiet ? '' : (extra.handles ?? edgeLabel(e))
   const total = e.relationIds.length
-  // L26②：标签位按词表次序合并——违规（K9）、未证实（K9；③分层总览只写在聚合边上、总带条数）、回调（L24）、混合（D8）
+  // L26②：标签位按词表次序合并、分两段——违规（K9）、向上（K22）、未证实（K9；③分层总览只写在聚合边上、总带条数）；机制（L35，含回调 L24）、混合（L23）
   const violated = !!ctx.facts?.violatedEdges.has(e.id)
   const unc = unconfirmedOf(ctx, e)
   const uncTag: TagPart | null = !unc
@@ -170,21 +202,30 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined,
         ? { tag: '未证实', count: unc.count }
         : null
       : { tag: '未证实', count: unc.count, total }
-  const callbacks = callbackRelations(ctx.input.index, e)
+  const callbacks = ctx.structure ? [] : callbackRelations(ctx.input.index, e)
+  const up = upwardOf(ctx, e)
   const parts: (TagPart | null)[] = [
     violated && !extra.temp ? { tag: '违规' } : null,
+    up.length ? { tag: '向上', count: up.length, total } : null,
     uncTag,
-    callbacks.length ? { tag: '回调', count: callbacks.length, total } : null,
+    ...mechPartsOf(ctx, e, total),
     extra.mixed ? { tag: '混合' } : null,
     ...(tags ?? []),
   ]
-  const label = extra.label ?? composeLabel(head, parts)
+  const pill = extra.label === undefined ? composePill(head, parts) : null
+  const label = extra.label ?? pill!.text
   const route = label && !route0.label ? { ...route0, label: routeMidpoint(route0) } : route0
   // L24：悬停说明接在其余说明之后；配对的正向关系供悬停时一起高亮（L25）；L26⑤：未证实逐条列出
   const cbTitle = callbackTitle(ctx.input.index, callbacks, total > 1)
   const pairs = ctx.input.index ? [...new Set(callbacks.flatMap(id => callbackPairs(ctx.input.index!, id)))] : []
   const vioTitle = violated && !extra.temp ? '违规（K9）：这对节点之间有基线外的违规依赖（面板列出）' : ''
-  const title = [extra.title, vioTitle, uncTag ? unconfirmedTitle(ctx, unc!.ids) : '', cbTitle].filter(Boolean).join('\n\n') || undefined
+  const upTitle = up.length
+    ? ['向上（K22）：发起方在被依赖的一侧、又不是控制反转——多半是没标的回调、通知或经通道：', ...up.map(id => relationText(ctx.input.index, id))].join('\n')
+    : ''
+  const title =
+    [extra.title, vioTitle, upTitle, uncTag ? unconfirmedTitle(ctx, unc!.ids) : '', cbTitle, pill ? hiddenTitle(ctx, e, pill.hidden) : '']
+      .filter(Boolean)
+      .join('\n\n') || undefined
   return {
     id: core ? `core:${e.id}` : e.id,
     source: e.from,
@@ -195,8 +236,9 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined,
       route,
       edge: e,
       label,
+      ...(pill && pill.segments.length > 1 ? { segments: pill.segments } : {}),
       ...(label ? { pill: true } : {}),
-      ...(hasWarnTag(parts) ? { warn: true } : {}),
+      ...(pill?.segments.some(x => x.warn) ? { warn: true } : {}),
       factState: state,
       arrow: arrowOf(e),
       weight: edgeWeight(e),
@@ -271,12 +313,10 @@ function withHandles(extra: Partial<RouteEdgeData>, badge: HandleBadge | null | 
 const badgeOf = (ctx: SceneContext, e: ViewEdge): HandleBadge | null =>
   ctx.st || ctx.layered || !ctx.input.index ? null : handleBadge(ctx.input.index, ctx.pv.view, e)
 
-/** D8：束内修饰不一致——「混合」记号与悬停列出各条（运行视角不标） */
+/** L23（ADR-0041 裁决 4）：束内同步与异步不一致——「混合」与悬停列出各条（运行视角不标）；via 不一致由机制标签表达（L35） */
 function mixedOf(ctx: SceneContext, e: ViewEdge): Partial<RouteEdgeData> {
-  const sp = ctx.st ? null : ctx.input.spreads?.get(e.id)
-  if (!sp?.mixed) return {}
-  const what = [sp.mixed.mode ? '同步 / 异步' : '', sp.mixed.via ? 'via' : ''].filter(Boolean).join('、')
-  return { mixed: true, title: [`束内${what}不一致（D8）：`, ...e.relationIds.map(id => relationText(ctx.input.index, id))].join('\n') }
+  if (ctx.st || ctx.structure || e.mode !== 'mixed') return {}
+  return { mixed: true, title: ['束内同步 / 异步不一致（L23）：', ...e.relationIds.map(id => relationText(ctx.input.index, id))].join('\n') }
 }
 
 /**

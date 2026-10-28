@@ -1,9 +1,10 @@
 /**
  * 手工走线与边界：参与者排布与曲线（A7）、边的标签与线宽档、平行边错开（L10），边界边的判定（L4）。
  */
-import { bundleHandles, moduleName, type BundleHandles, type LevelView, type ModelIndex, type RelationType, type ViewEdge } from '@/model'
+import { MECHANISMS, bundleHandles, moduleName, type BundleHandles, type LevelView, type ModelIndex, type RelationType, type ViewEdge } from '@/model'
 import { NODE_SIZE, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
 import { tierTextBoxes } from './tiers'
+import { composePill, pillWidth, type TagPart } from './labels'
 import { ARRIVE, BusyLines, allocateTracks, clampStub, detour, frameLines, placeLabelBoxes, type PortAt } from './routing'
 
 // ── 外部参与者（A7）────────────────────────────────────────────
@@ -108,17 +109,30 @@ export function handleBadge(index: ModelIndex, view: LevelView, e: ViewEdge): Ha
   return { label: handleLabel(h.relations, h.handles), title: [head, ...lines].join('\n'), handles: h }
 }
 
-/** 标签 pill 的估宽：字号 11，中文按 11 px、其余按 6.5 px，左右内边距共 12 */
-export function labelWidth(text: string): number {
-  return [...text].reduce((n, c) => n + (/[\u3000-\u9fff\uff00-\uffef]/.test(c) ? 11 : 6.5), 0) + 12
+export { labelWidth } from './labels'
+import { labelWidth } from './labels'
+
+/** L35②：视图边的机制标签（按词表次序，聚合边带条数；全部都带时省略） */
+export const mechTags = (mechs: ViewEdge['mechs'], total: number): TagPart[] =>
+  MECHANISMS.filter(m => mechs?.[m]).map(tag => ({ tag, count: mechs![tag], total }))
+
+/**
+ * L33：交给 elk 的标签槽——只按把手角标「×N · M 把手」（M = N）估：槽决定 elk 的直段长度与走线，机制标签不改走线（ADR-0041：节点与线不动，只挪标签）；
+ * 只有一条关系的边不占槽
+ */
+export function slotSize(e: ViewEdge): { w: number; h: number } | null {
+  const n = e.relationIds.length
+  return n > 1 ? { w: labelWidth(handleLabel(n, n)), h: 18 } : null
 }
 
 /**
- * L33：布局时给标签留的尺寸——画布写的是把手角标「×N · M 把手」（L23b）或 ×N，布局时不知道 M，按 M = N 估；只有一条关系的边不写字，不占位。
+ * L33（ADR-0041）：布局时给标签留的尺寸——按画布实际写的文字：把手角标「×N · M 把手」（L23b；布局时不知道 M，按 M = N 估）或 ×N，
+ * 加机制与「混合」（L35、L23），照 L26② 的上限与分段估宽；只随代码事实或分层出现的异常不进估宽。什么都不写的边不占位。
  */
 export function labelSize(e: ViewEdge): { w: number; h: number } | null {
   const n = e.relationIds.length
-  return n > 1 ? { w: labelWidth(handleLabel(n, n)), h: 18 } : null
+  const pill = composePill(n > 1 ? handleLabel(n, n) : '', [...mechTags(e.mechs, n), e.mode === 'mixed' && { tag: '混合' }])
+  return pill.segments.length ? { w: pillWidth(pill.segments), h: 18 } : null
 }
 
 /** L10：线宽档位——聚合条数 1 / 2–4 / ≥5 */

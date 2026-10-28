@@ -307,7 +307,10 @@ export interface LabelLine extends TrackLine {
 const hits = (p: { x: number; y: number; w: number; h: number }, q: { x: number; y: number; w: number; h: number }) =>
   p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h
 
-/** L33：标签在线上的候选位置——先最长一段的 0.5、0.3、0.7、0.15、0.85，再整条线的 0.5、0.35、0.65、0.2、0.8 */
+/**
+ * L33：标签在线上的候选位置——先最长一段的 0.5、0.3、0.7、0.15、0.85，再其余各段，再整条线的 0.5、0.35、0.65、0.2、0.8；
+ * 最后沿整条线每 5% 一处（ADR-0041：机制标签让标签变宽，前面的都碰时再细找，前面能放下的位置不变）
+ */
 function labelCandidates(points: readonly Point[]): Point[] {
   const segs = points
     .slice(1)
@@ -317,7 +320,8 @@ function labelCandidates(points: readonly Point[]): Point[] {
   const at = (s: (typeof segs)[number], t: number) => ({ x: s.a.x + (s.b.x - s.a.x) * t, y: s.a.y + (s.b.y - s.a.y) * t })
   const longest = segs[0] ? [0.5, 0.3, 0.7, 0.15, 0.85].map(t => at(segs[0], t)) : []
   const rest = segs.slice(1).flatMap(s => [0.5, 0.25, 0.75].map(t => at(s, t)))
-  return [...longest, ...rest, ...[0.5, 0.35, 0.65, 0.2, 0.8].map(t => pointAlong(points, t))]
+  const fine = Array.from({ length: 19 }, (_, i) => pointAlong(points, (i + 1) / 20))
+  return [...longest, ...rest, ...[0.5, 0.35, 0.65, 0.2, 0.8].map(t => pointAlong(points, t)), ...fine]
 }
 
 /** 曲线（核心跨层边、参与者的边）按画布的 S 形曲线采样成折线：竖向（true）的控制点在起终点正下 / 正上，横向（'h'）的在正侧 */
@@ -346,19 +350,42 @@ export function placeLabelBoxes(
 ): Map<string, Point> {
   const obstacles = opts.obstacles ?? []
   const together = opts.together ?? (() => true)
-  const placed: { id: string; box: { x: number; y: number; w: number; h: number } }[] = []
-  const out = new Map<string, Point>()
-  for (const l of [...lines].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
-    const boxAt = (p: Point) => ({ x: p.x - l.size.w / 2, y: p.y - l.size.h / 2, w: l.size.w, h: l.size.h })
-    const score = (p: Point) => {
-      const b = boxAt(p)
-      return placed.filter(q => together(q.id, l.id) && hits(q.box, b)).length * 100 + obstacles.filter(o => hits(o, b)).length
-    }
-    const cands = [...(l.prefer ? [l.prefer] : []), ...labelCandidates(l.points)]
-    if (!cands.length) continue
-    const best = cands.find(p => score(p) === 0) ?? [...cands].sort((p, q) => score(p) - score(q))[0]
-    placed.push({ id: l.id, box: boxAt(best) })
-    out.set(l.id, best)
+  const items = [...lines]
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map(l => ({ l, cands: [...(l.prefer ? [l.prefer] : []), ...labelCandidates(l.points)] }))
+    .filter(x => x.cands.length)
+  const boxAt = (l: LabelLine, p: Point) => ({ x: p.x - l.size.w / 2, y: p.y - l.size.h / 2, w: l.size.w, h: l.size.h })
+  type Placed = { id: string; box: { x: number; y: number; w: number; h: number } }
+  const score = (placed: readonly Placed[], l: LabelLine, p: Point) => {
+    const b = boxAt(l, p)
+    return placed.filter(q => together(q.id, l.id) && hits(q.box, b)).length * 100 + obstacles.filter(o => hits(o, b)).length
   }
-  return out
+  /** 按给定的挑选次序放一遍，返回位置与总代价（与已放标签相碰 ×100 + 压障碍） */
+  const run = (constrained: boolean) => {
+    const rest = [...items]
+    const placed: Placed[] = []
+    const out = new Map<string, Point>()
+    let cost = 0
+    while (rest.length) {
+      let pick = 0
+      if (constrained) {
+        let fewest = Infinity
+        rest.forEach((x, i) => {
+          const free = x.cands.filter(p => score(placed, x.l, p) === 0).length
+          if (free < fewest) [pick, fewest] = [i, free]
+        })
+      }
+      const { l, cands } = rest.splice(pick, 1)[0]
+      const best = cands.find(p => score(placed, l, p) === 0) ?? [...cands].sort((p, q) => score(placed, l, p) - score(placed, l, q))[0]
+      cost += score(placed, l, best)
+      placed.push({ id: l.id, box: boxAt(l, best) })
+      out.set(l.id, best)
+    }
+    return { out, cost }
+  }
+  // 先按 ID 先到先得；有相碰时再试「空位最少的先放」，代价更小才换（ADR-0041：标签变宽后窄处的空位容易被先到的占掉）
+  const byId = run(false)
+  if (!byId.cost) return byId.out
+  const tight = run(true)
+  return tight.cost < byId.cost ? tight.out : byId.out
 }

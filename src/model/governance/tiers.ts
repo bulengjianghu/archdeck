@@ -186,6 +186,38 @@ export function levelTiers(index: ModelIndex, view: LevelView, report: Pick<Gove
   }
 }
 
+/**
+ * K22（ADR-0041）：分层总览里向上的边——层间边、核心跨层边与共用件的边，方向违背声明的分层：
+ * 接收方所在层可依赖发起方所在层（mayDependOn）、反过来不可，即交互逆着依赖方向；两层都没写 mayDependOn 时按层序（O2，order 小的在上），
+ * 发起方的 order 大于接收方。写了 mayDependOn、两个方向都不许的不算向上（那是违规，归代码事实）。控制反转的口径同 levelTiers；
+ * 不在任何层里的端点（边界节点、参与者）与同一层内的边不算
+ */
+export function layerUpward(index: ModelIndex, view: LevelView): UpwardEdge[] {
+  if (view.mode !== 'layered' || !view.bands) return []
+  const order = new Map(view.bands.map(b => [b.layerId, b.order]))
+  const layerOf = new Map(view.nodes.map(n => [n.id, order.has(n.id) ? n.id : n.layerId]))
+  const may = (l: string) => index.modules.get(l)?.mayDependOn
+  const against = (from: string, to: string, a: number, b: number): boolean => {
+    if (may(from)?.includes(to)) return false
+    if (may(to)?.includes(from)) return true
+    return !may(from) && !may(to) && a > b
+  }
+  const out: UpwardEdge[] = []
+  for (const e of [...view.edges, ...(view.coreEdges ?? []), ...(view.shelfEdges ?? [])]) {
+    const a = order.get(layerOf.get(e.from) ?? '')
+    const b = order.get(layerOf.get(e.to) ?? '')
+    const la = layerOf.get(e.from)!
+    const lb = layerOf.get(e.to)!
+    if (a === undefined || b === undefined || la === lb || !against(la, lb, a, b)) continue
+    const direct = e.relationIds.filter(id => {
+      const r = index.relations.get(id)
+      return !!r && !isInversion(r)
+    })
+    out.push({ edge: e.id, from: e.from, to: e.to, inversion: !direct.length, relations: direct })
+  }
+  return out
+}
+
 /** K21①②：一个父模块的子模块的拆分信号（只对有代码事实的当前版本） */
 export interface SplitSignals {
   /** ① 子树不占任何文件的子模块（父模块子树有文件时；目标态不算） */

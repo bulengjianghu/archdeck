@@ -4,7 +4,7 @@
 import type { ELK, ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk-api'
 import type { LevelView } from '@/model'
 import { NODE_SIZE, SHELF, contentBounds, sizeOf, type Box, type EdgeRoute, type Point, type PositionedView } from './geometry'
-import { LABEL_SLOT, PARALLEL_GAP, compassOf, edgeLabel, labelSize, nearPoints, outsideRoutes, placeOutside, placeRims, spreadEnds } from './routes'
+import { LABEL_SLOT, PARALLEL_GAP, compassOf, edgeLabel, labelSize, nearPoints, slotSize, outsideRoutes, placeOutside, placeRims, spreadEnds } from './routes'
 import { allocateTracks, placeLabelBoxes } from './routing'
 import { elkLayers, placeTierLabels, tierGeometry, type LayoutTiers } from './tiers'
 
@@ -54,10 +54,10 @@ export function toElkGraph(view: LevelView, direction: 'DOWN' | 'RIGHT' = 'DOWN'
         sources: [port(e.from, `${e.id}#out`, 'out')],
         targets: [port(e.to, `${e.id}#in`, 'in')],
         // L28：按依赖分层时不交标签——elk 的中间标签是分层前插入的无坐标占位节点，会让 INTERACTIVE 分层压缩、打乱层号；标签由画布按走线中点放
-        // L33：槽按画布实际写的把手角标估宽（labelSize），elk 才给够长的直段
+        // L33：槽按把手角标估宽（slotSize），elk 才给够长的直段；机制标签不改槽（ADR-0041：只挪标签、不动线），实际尺寸在放标签时用（labelSize）
         ...(tiers
           ? {}
-          : { labels: [{ id: `${e.id}#label`, text, width: Math.max(LABEL_SLOT.w, labelSize(e)?.w ?? text.length * 7 + 18), height: LABEL_SLOT.h }] }),
+          : { labels: [{ id: `${e.id}#label`, text, width: Math.max(LABEL_SLOT.w, slotSize(e)?.w ?? text.length * 7 + 18), height: LABEL_SLOT.h }] }),
       }
     })
   // 框外边（参与者的边、边界边）在内部节点上的那一端只占一个端口、不连线：与内部边的端口一起排左右顺序，

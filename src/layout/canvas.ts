@@ -45,7 +45,21 @@ export { DEP_KIND_LABELS, DEP_TIER_LABELS, depWeight, violationLook } from './ca
 export { PORT_MERGE } from './canvas/nodes'
 export { EDGE_Z, routeMidpoint } from './canvas/edges'
 export { EDGE_HOVER_Z, landsOn, withEdgeHover, withElementHover } from './canvas/hover'
-export { EDGE_TAGS, composeLabel, hasWarnTag, type EdgeTag, type TagPart } from './canvas/labels'
+export {
+  EDGE_TAGS,
+  MAX_TAGS,
+  PILL_GAP,
+  composeLabel,
+  composePill,
+  hasWarnTag,
+  isWarnTag,
+  labelWidth,
+  pillWidth,
+  type EdgeTag,
+  type Pill,
+  type PillSegment,
+  type TagPart,
+} from './labels'
 export { JUMP_RADIUS } from './routing'
 
 export function canvasScene(input: CanvasInput): CanvasScene {

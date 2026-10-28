@@ -3,8 +3,8 @@
  * 「显示」面板 · 关系（颜色通道，ADR-0018 / ADR-0017 第三轮），按「三问四修饰」组织（ADR-0029 §3）：
  * - 三问：三个判断题定类型，每个答案落到一类；类型行既是图例又是筛选（结构视角点击筛选，L8），示意按画布同一套样式（查询淡、委托实色）。
  * - 迁移期的未分类（calls，M17）单列一行，中性灰。
- * - 「四修饰」是读完类型再读的修饰：机制（直接 / 端口——插座记号 L12 / 经回调——标签「回调」L24 / 总线 / 通道——面板标出）、异步（空心箭头）、拉取（面板标出），
- *   与粗细（聚合条数）一起放在浅底卡片里、中性色示意、不可点击。
+ * - 「四修饰」是读完类型再读的修饰：机制写在标签位（L35，ADR-0041：回调、端口、总线、注入、跨进程、路由、事件、通道、拉取，中性色；端口另在目标端画插座 L12；直接不写）、
+ *   异步（空心箭头），与粗细（聚合条数）、标签位的两段（异常警示色在前、修饰中性在后，至多两个标签、其余「+k」）一起放在浅底卡片里、中性色示意、不可点击。
  * 线型（实线 = 交互、虚线 = 依赖，ADR-0035）在「共享」组讲；代码事实写在标签位，在「代码事实 · 标签」组讲。
  */
 import { computed } from 'vue'
@@ -14,6 +14,7 @@ import DisplayGroup from './DisplayGroup.vue'
 import LineSwatch from './LineSwatch.vue'
 import { TYPE_HINT, TYPE_LABEL, TYPE_ORDER } from './labels'
 import { THREE_QUESTIONS, VIA_KIND_HINTS, VIA_KIND_LABELS } from '../shared/labels'
+import { MECHANISM_HINTS } from './labels'
 
 defineProps<{ run: boolean; open: boolean }>()
 const emit = defineEmits<{ toggle: [] }>()
@@ -83,19 +84,27 @@ const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] 
       <div class="reading-row">
         <span class="dim">机制</span>
         <span class="pair" :title="VIA_KIND_HINTS.direct"><LineSwatch :color="NEUTRAL" :width="22" arrow="closed" />{{ VIA_KIND_LABELS.direct }}</span>
-        <span class="pair" :title="VIA_KIND_HINTS.port"><LineSwatch :color="NEUTRAL" :width="26" arrow="closed" socket />{{ VIA_KIND_LABELS.port }}</span>
-        <span class="pair" title="经回调（L24）：发起方调用的是接收方交来的执行器，代码依赖方向与箭头相反"
-          ><LineSwatch :color="NEUTRAL" :width="22" arrow="closed" /><span class="tag">回调</span>经回调</span
+        <span class="pair" :title="`${VIA_KIND_HINTS.port}；标签与入口的插座并存（L12）`"
+          ><LineSwatch :color="NEUTRAL" :width="26" arrow="closed" socket /><span class="tag">端口</span></span
         >
-        <span class="pair muted-text" :title="`${VIA_KIND_HINTS.bus}；${VIA_KIND_HINTS.channel}`"
-          >{{ VIA_KIND_LABELS.bus }} · {{ VIA_KIND_LABELS.channel }}：见面板</span
+      </div>
+      <div class="reading-row mech-tags" data-testid="legend-mechanisms">
+        <span class="dim">标签</span>
+        <span v-for="m in MECHANISM_HINTS" :key="m.tag" class="tag" :title="m.text">{{ m.tag }}</span>
+      </div>
+      <div class="reading-row" data-testid="legend-pill">
+        <span class="dim">两段</span>
+        <span
+          class="pair"
+          title="异常段（×N、把手与违规、向上、未证实……）警示色在前，修饰段（机制、混合、经上层）中性在后；标签至多两个，其余「+k」、悬停列出（L26②）"
+          ><span class="tag warn">×5 · 未证实 2</span><span class="tag">端口 1 · +1</span></span
         >
       </div>
       <div class="reading-row">
         <span class="dim">同步</span>
         <span class="pair"><LineSwatch :color="NEUTRAL" :width="18" arrow="closed" />同步</span>
         <span class="pair"><LineSwatch :color="NEUTRAL" :width="18" arrow="open" />异步</span>
-        <span class="pair muted-text" title="拉取型流（pull），箭头仍指数据去向">拉取：见面板</span>
+        <span class="pair" title="束内同步与异步不一致（L23）；via 不一致由机制标签的条数表达"><span class="tag">混合</span></span>
       </div>
       <div class="reading-row">
         <span class="dim">粗细</span>
@@ -110,6 +119,8 @@ const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] 
 <style scoped>
 /* L24：标签位文字的示意（与画布 ×N 标签同样式） */
 .tag {
+  display: inline-block;
+  margin-right: 3px;
   padding: 0 5px;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
@@ -117,6 +128,17 @@ const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] 
   line-height: 15px;
   color: var(--text-2);
   background: var(--surface);
+}
+
+/* L26②：异常段警示色 */
+.tag.warn {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.mech-tags {
+  flex-wrap: wrap;
+  row-gap: 3px;
 }
 
 /* 带箭头的类型示意比通用示意列宽一些，线不被箭头吃掉 */

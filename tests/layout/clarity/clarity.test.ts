@@ -169,14 +169,17 @@ describe('L30 几何检查器', () => {
  * 三个项目所有层次（交互视角的线，分层总览含逐个聚焦核心模块，普通层次含全部框外边）的计数上限：只降不升；结构视角另见 STRUCTURE。
  * 布局与产品一致（state/desk/layoutLinks.ts：结构边、核心跨层束、按值依赖的分层）；BARE 为没有代码事实时的布局（设计版本、提交版本）。
  */
+// 第十四轮 F14（ADR-0041）：标签按两段的实际文字测量（机制、混合、向上，scenes.ts 的 labelOf）后重定，走线与其余各类计数不变：
+// 标签互压 h5player 1 → 0、h5p 无代码事实 1 → 0；上升两处待裁决（B-09）——media-web-player 0 → 2（kit.facade：adapter 一半压在框外、贴着左侧外部系统，
+// 两条一跳的「事件」线没有放标签的地方），h5player 无代码事实 2 → 3（根层分层总览的核心跨层边标签）
 const CEILING: Record<(typeof PROJECTS)[number], Counts> = {
   'h5p-arch-desk': { overlap: 64, arrows: 1, crossNode: 4, labels: 0, hug: 9, onFrame: 0 },
-  h5player: { overlap: 93, arrows: 1, crossNode: 2, labels: 1, hug: 18, onFrame: 0 },
-  'media-web-player': { overlap: 23, arrows: 0, crossNode: 7, labels: 0, hug: 5, onFrame: 0 },
+  h5player: { overlap: 93, arrows: 1, crossNode: 2, labels: 0, hug: 18, onFrame: 0 },
+  'media-web-player': { overlap: 23, arrows: 0, crossNode: 7, labels: 2, hug: 5, onFrame: 0 },
 }
 const BARE: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 38, arrows: 0, crossNode: 3, labels: 1, hug: 6, onFrame: 0 },
-  h5player: { overlap: 96, arrows: 0, crossNode: 0, labels: 2, hug: 13, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 38, arrows: 0, crossNode: 3, labels: 0, hug: 6, onFrame: 0 },
+  h5player: { overlap: 96, arrows: 0, crossNode: 0, labels: 3, hug: 13, onFrame: 0 },
   'media-web-player': { overlap: 35, arrows: 0, crossNode: 1, labels: 0, hug: 6, onFrame: 0 },
 }
 /**

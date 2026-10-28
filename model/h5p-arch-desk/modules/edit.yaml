@@ -259,7 +259,7 @@ relations:
   - {id: rel.v4.sketch-commands, from: present.sketch.canvas, to: state.desk.edit.commands, type: commands, interface: if.desk.edit, description: 画布与手势交给编辑操作：每个手势一个操作（moveNode / addModule / connect / merge / split / demote / promote / moveIn / remove / openChild / undo / redo / save）}
   - { id: rel.v4.sketch-scene, from: present.sketch.canvas, to: state.layout.sketch, type: queries, description: 画布与手势向草图布局取：草图画布调用 bandAt 求落点所在的层带、outsideCenter 摆放引用节点，渲染 SketchNodeData / SketchEdgeData }
   - { id: rel.v4.elements-scene, from: present.sketch.elements, to: state.layout.sketch, type: queries, description: 节点与边向草图布局取：草图的边调用 straightEdge 把直线裁到节点边框、同对多条平移错开 }
-  - { id: rel.v4.elements-labels, from: present.sketch.elements, to: state.layout.canvas, type: queries, description: 节点与边向画布场景取：草图的边调用 composeLabel 按标签位规则（L26）组装标签，条数或说明在前、「回调」在后 }
+  - { id: rel.v4.elements-labels, from: present.sketch.elements, to: state.layout.runner.boundaries, type: queries, description: 节点与边向框外元素与编码工具取：草图的边调用 mechTags、composePill 按标签位规则（L26、L35）组装标签，条数或说明在前、机制在后，超过两个写「+k」 }
   - { id: rel.v4.canvas-elements, from: present.sketch.canvas, to: present.sketch.elements, type: commands, description: 画布与手势交给节点与边：草图画布渲染模块节点与直线边（SketchNode、StraightEdge） }
   - { id: rel.v4.canvas-dialogs, from: present.sketch.canvas, to: present.sketch.dialogs, type: commands, description: 画布与手势交给菜单与对话框：草图画布打开右键菜单、名称 + ID 对话框、连线选类型与引用外部模块 }
   - {id: rel.v4.elements-actions, from: present.sketch.elements, to: present.sketch.canvas, type: commands, via: 'channel:inject', description: 节点与边交给画布与手势：层带头的「＋ 模块」「删层」经注入的 SKETCH_ACTIONS 交给画布（就地新建、级联确认）}

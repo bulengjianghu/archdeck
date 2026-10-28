@@ -27,8 +27,8 @@ const couple = computed(() => {
   const b = endId(e.to)
   return desk.index.value.modules.has(a) && desk.index.value.modules.has(b) ? desk.evolution.between(a, b) : undefined
 })
-/** K22：按依赖分层后向上的边——控制反转是应有之义，否则多半是没标的回调、通知或经通道 */
-const upward = computed(() => desk.facts.tiers.value?.upward.find(u => u.edge === props.id) ?? null)
+/** K22：分层（按依赖算出的层或声明的层）后向上的边——控制反转是应有之义，否则多半是没标的回调、通知或经通道；画布标「向上」（L26） */
+const upward = computed(() => desk.facts.upward.value.find(u => u.edge === props.id) ?? null)
 const endSelection = (nodeId: string) =>
   desk.index.value?.actors.has(nodeId) ? ({ kind: 'actor', id: nodeId } as const) : ({ kind: 'module', id: endId(nodeId) } as const)
 </script>
@@ -51,7 +51,7 @@ const endSelection = (nodeId: string) =>
       </div>
       <p class="hint muted">由更深层次的 {{ edge.relationIds.length }} 条关系汇总而成。点击任意一条，跳到它真实所在的层次。</p>
       <p v-if="upward?.inversion" class="hint muted" data-testid="upward-note">
-        向上的线：本层按依赖分层，依赖都朝下，这条是控制反转（通知、流或经端口 / 总线 / 通道），向上是应有之义（K22）。
+        向上的线：本层分层后依赖都朝下，这条是控制反转（通知、流或经端口 / 总线 / 通道），向上是应有之义（K22）。
       </p>
       <p v-else-if="upward" class="hint warn-text" data-testid="upward-note">
         向上却不是控制反转：{{ upward.relations.join('、') }} 是直接的查询或委托，发起方却在被依赖的一侧——多半是没标的回调、通知或经通道（K22）。

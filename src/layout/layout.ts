@@ -47,12 +47,28 @@ export {
   placeRims,
   type Compass,
   linkRoute,
+  mechTags,
   nearPoints,
   parallelOffsets,
   placeActors,
   portFor,
   spreadEnds,
 } from './routes'
+export {
+  EDGE_TAGS,
+  MAX_TAGS,
+  PILL_GAP,
+  composeLabel,
+  composePill,
+  hasWarnTag,
+  isWarnTag,
+  pillWidth,
+  tagText,
+  type EdgeTag,
+  type Pill,
+  type PillSegment,
+  type TagPart,
+} from './labels'
 export { RESERVED, fromElkGraph, placeShelf, portSide, toElkGraph } from './graph'
 export { elkLayers, placeTierLabels, tierBandLabel, tierGeometry, tierTextBoxes, type LayoutTiers, type TierGeometry } from './tiers'
 

@@ -7,6 +7,7 @@ import {
   type DepTier,
   type ElementKind,
   type HeatKind,
+  type Mechanism,
   type StabilityBand,
 } from '@/model'
 import type { StaticMode } from '@/layout/stage'
@@ -111,7 +112,24 @@ export const SHARED_CHANNELS: readonly {
   // ADR-0035：线型只答「行为还是依赖」，异常与修饰写在标签位（L18、L26）
   { key: 'solid', text: '实线 = 交互：谁调谁做什么' },
   { key: 'dashed', text: '虚线 = 依赖：谁导入、继承、实现、组装谁' },
-  { key: 'label', text: '标签位：线中点只写 ×N 与异常、修饰（未证实、违规、回调……）' },
+  // ADR-0041：标签位至多两段——异常（警示色）在前、修饰（中性）在后；标签至多两个、其余「+k」
+  {
+    key: 'label',
+    text: '标签位：线中点只写 ×N、异常（警示色：违规、向上、未证实……）与修饰（中性：端口、回调、总线……、混合）；至多两个标签，其余「+k」、悬停列出',
+  },
+]
+
+/** L35（ADR-0041）：机制标签的说明（图例「标签」一行的悬停），次序同词表 */
+export const MECHANISM_HINTS: readonly { tag: Mechanism; text: string }[] = [
+  { tag: '回调', text: '经回调：发起方调用的是接收方交来的执行器，代码依赖方向与箭头相反（L24）' },
+  { tag: '端口', text: '经端口：发起方只知道端口，接收方是实现者（目标端另有插座）' },
+  { tag: '总线', text: '经事件总线：两端只认识总线' },
+  { tag: '注入', text: '经框架注入（provide / inject、依赖注入）' },
+  { tag: '跨进程', text: '跨进程：HTTP、WebSocket、postMessage、Worker、HMR……' },
+  { tag: '路由', text: '经路由导航' },
+  { tag: '事件', text: '经平台事件：DOM、mediaSession、…change' },
+  { tag: '通道', text: '经其他通道（通道名不在固定归类表里，04 §3.4）' },
+  { tag: '拉取', text: '拉取型流：接收方按需取下一项，箭头仍指数据去向' },
 ]
 
 /** L26：代码事实一组的标签说明（交互视角，「代码事实」开时出现） */

@@ -29,10 +29,12 @@ import {
   impactOf,
   levelImpact,
   levelTiers,
+  layerUpward,
   splitSignals,
   tierNoteText,
   tierView,
   type LevelTiers,
+  type UpwardEdge,
   type SplitSignals,
   moduleMetrics,
   structureMetrics,
@@ -358,6 +360,16 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     return v && index.value && report.value ? levelTiers(index.value, v, report.value) : null
   })
 
+  /**
+   * K22、L26（ADR-0041）：本层向上的交互边——普通层次按算出的层号（levelTiers，有代码事实时），分层总览按声明的层序（layerUpward）；
+   * 不论视角（画布只在交互图与运行视角写「向上」，面板照说）
+   */
+  const upward = computed<UpwardEdge[]>(() => {
+    const v = view.value
+    if (!v || !index.value) return []
+    return v.mode === 'layered' ? layerUpward(index.value, v) : (tiers.value?.upward ?? [])
+  })
+
   /** L29、K21③：画布角的分层提示（大环照样分层、本层没有依赖）；运行视角不给 */
   const tierHints = computed<string[]>(() => (perspectiveOf(state.value) === 'run' ? [] : (tiers.value?.notes ?? []).map(tierNoteText)))
 
@@ -636,6 +648,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     structure,
     layoutLinks,
     tiers,
+    upward,
     tierHints,
     split,
     splitOf,

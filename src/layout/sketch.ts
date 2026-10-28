@@ -24,6 +24,8 @@ import {
   SKETCH_SOFT_LIMIT,
   isSharedRole,
   isCallbackVia,
+  mechanismCounts as mechs,
+  type Mechanism,
   parseVia,
   type ChangeKind,
   type GridArea,
@@ -118,8 +120,10 @@ export interface SketchEdgeData {
   pending?: boolean
   /** L12、X23：边上有一条经端口（via: port:）的关系——终点画插座 */
   port?: boolean
-  /** L24：经回调——起点画回程钩 */
+  /** L24：经回调（标签位写「回调」，L35 机制族） */
   callback?: boolean
+  /** L35：机制 → 带该机制的关系条数（标签位按 L26② 组装）；没有机制时不给 */
+  mechs?: Partial<Record<Mechanism, number>>
   change?: ChangeKind
   selected?: boolean
   /** X22：引用线——引用在中心区的哪一侧（模块从这一侧的端口进出），引用是起点还是终点 */
@@ -602,6 +606,7 @@ export function sketchScene(input: SketchSceneInput): SketchScene {
         ...(g.rels.some(x => pending.has(x.id)) ? { pending: true } : {}),
         ...(g.rels.some(x => parseVia(x.via)?.kind === 'port') ? { port: true } : {}),
         ...(g.rels.some(x => isCallbackVia(x.via)) ? { callback: true } : {}),
+        ...(Object.keys(mechs(g.rels)).length ? { mechs: mechs(g.rels) } : {}),
         ...(change ? { change } : {}),
         ...(sel.has(id) || (!many && sel.has(r.id)) ? { selected: true } : {}),
         ...(sideOf.has(g.source) ? { external: sideOf.get(g.source), refEnd: 'source' as const } : {}),
