@@ -8,7 +8,7 @@ import { useDesk } from '@/state/inject'
 import Section from './Section.vue'
 import StructureFacts, { type StructureGroup } from './StructureFacts.vue'
 
-const props = defineProps<{ id: string }>()
+const props = defineProps<{ id: string; /** G11 V14c：⑤ 证据与细节缺省折叠 */ fold?: boolean }>()
 const desk = useDesk()
 const s = computed(() => desk.facts.structureOf(props.id))
 const groups = computed<StructureGroup[]>(() =>
@@ -22,10 +22,12 @@ const groups = computed<StructureGroup[]>(() =>
     : [],
 )
 const any = computed(() => groups.value.some(g => g.list.length) || !!s.value?.root)
+/** 折叠计数：子类 / 基类 / 组装 / 被组装于的事实条数（组装根不计） */
+const factsCount = computed(() => groups.value.reduce((n, g) => n + g.list.length, 0))
 </script>
 
 <template>
-  <Section v-if="any" title="代码事实 · 知识">
+  <Section v-if="any" title="代码事实 · 知识" :count="factsCount || undefined" :fold="props.fold">
     <dl class="dims">
       <dt>知识</dt>
       <dd>

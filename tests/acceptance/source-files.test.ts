@@ -44,6 +44,13 @@ const settle = async () => {
   await nextTick()
 }
 
+/** G11（V14c）：⑤ 证据与细节缺省折叠——按标题展开面板里的折叠节 */
+const expand = async (panel: ReturnType<typeof mount>, title: string) => {
+  const btn = panel.findAll('button.fold').find(b => b.text().includes(title))
+  if (btn) await btn.trigger('click')
+  await settle()
+}
+
 async function open(project: string, url = `/p/${project}`, extra: RawFile[] = []) {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/p/:project', component: { render: () => null } }] })
   await router.push(url)
@@ -83,6 +90,7 @@ describe('§6.4 源代码验收', () => {
     const files = desk.files.filesOf('present.nav-tree')
     expect(files).toEqual(expect.arrayContaining(['src/components/tree/NavTree.vue', 'src/components/tree/FileTree.vue', 'src/components/tree/ModuleTree.vue']))
     expect(panel.text()).toContain('源代码文件')
+    await expand(panel, '源代码文件')
     expect(panel.text()).toContain('src/components/tree/FileTree.vue')
     expect(fileRow('src/components/tree/NavTree.vue')!.classes()).toContain('hit')
     expect(nav.findAll('.row.file.hit')).toHaveLength(files.length)
@@ -146,6 +154,9 @@ describe('§6.4 源代码验收', () => {
     const { desk, panel } = await open('h5p-arch-desk', '/p/h5p-arch-desk?level=model&sel=m:model.pipeline')
     expect(desk.files.entryOf('model.pipeline')).toEqual({ file: 'src/model/index.ts', via: 'index' })
     await settle()
+    // G11（V14c）：入口文件并入「源代码文件」节（fold），入口导出折叠，展开再断言
+    await expand(panel, '源代码文件')
+    await expand(panel, '入口导出')
     const text = panel.text()
     expect(text).toContain('入口文件')
     expect(text).toContain('src/model/index.ts')

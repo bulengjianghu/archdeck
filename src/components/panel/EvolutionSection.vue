@@ -5,6 +5,9 @@ import { useDesk } from '@/state/inject'
 import { moduleName, type HeatKind } from '@/model'
 import Section from './Section.vue'
 
+/** G11 V14c：系统面板 ⑤ 的演化与模块层同规——默认折叠带计数（G11 波 0b 改 fold） */
+defineProps<{ fold?: boolean }>()
+
 const desk = useDesk()
 const e = desk.evolution
 const stats = computed(() => e.stats.value)
@@ -18,7 +21,7 @@ const REASON: Record<string, string> = {
 </script>
 
 <template>
-  <Section title="演化（git 历史）">
+  <Section title="演化（git 历史）" :count="stats ? top.length || undefined : undefined" :fold="fold" class="evo-sec">
     <p v-if="!stats" class="muted">{{ e.error.value ? `没有演化事实：${e.error.value}` : REASON[e.status.value] }}</p>
     <p v-else-if="e.history.value?.note" class="muted">{{ e.history.value.note }}。</p>
     <template v-else>

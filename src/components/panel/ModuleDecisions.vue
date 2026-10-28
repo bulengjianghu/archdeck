@@ -8,7 +8,7 @@ import { useDesk } from '@/state/inject'
 import Section from './Section.vue'
 import { useOpenPreview } from '../shared/preview'
 
-const props = defineProps<{ id: string }>()
+const props = defineProps<{ id: string; /** G11 V14c：⑤ 证据与细节缺省折叠 */ fold?: boolean }>()
 const desk = useDesk()
 const openPreview = useOpenPreview()
 const local = computed(() => (desk.files.payload.value?.status === 'local' ? desk.files.payload.value : null))
@@ -18,7 +18,7 @@ const upperOpen = ref(false)
 </script>
 
 <template>
-  <Section v-if="own.length || upper.length" title="相关决策" :count="own.length">
+  <Section v-if="own.length || upper.length" title="相关决策" :count="own.length || undefined" :fold="props.fold">
     <ul v-if="own.length" class="plain adrs" data-testid="module-adrs">
       <li v-for="a in own" :key="a.n" :data-adr="a.n">
         <button v-if="a.file" class="link" :title="`在副栏预览 ${a.file}`" @click="openPreview(a.file)">{{ a.label }}</button>

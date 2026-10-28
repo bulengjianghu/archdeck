@@ -226,4 +226,15 @@ const target = computed(() => {
   border-top: 1px solid var(--border);
   word-break: break-all;
 }
+
+/* ③「需要注意」行单击跳转到位时闪一次（V14b） */
+.panel .jump-flash {
+  animation: jump-flash 1.2s ease-out;
+}
+
+@keyframes jump-flash {
+  from {
+    background: var(--accent-soft);
+  }
+}
 </style>

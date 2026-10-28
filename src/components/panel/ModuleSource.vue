@@ -26,7 +26,8 @@ const conflict = (f: string) => desk.files.ownership.value?.conflicts.includes(f
 </script>
 
 <template>
-  <Section title="源代码文件" :count="local ? files.length : undefined">
+  <!-- G11 V14c：⑤ 默认折叠带计数；入口文件并入本节，不再独占一节 -->
+  <Section v-if="local && (files.length || entry)" title="源代码文件" :count="files.length || undefined" fold>
     <p v-if="!desk.files.payload.value" class="muted">正在读取源码清单…</p>
     <p v-else-if="desk.files.payload.value.status === 'error'" class="muted">{{ desk.files.payload.value.reason }}</p>
     <template v-else>
@@ -45,23 +46,35 @@ const conflict = (f: string) => desk.files.ownership.value?.conflicts.includes(f
         </li>
       </ul>
       <button v-if="files.length > LIMIT && !showAll" class="small" @click="showAll = true">显示全部 {{ files.length }} 个</button>
+      <p class="entry-line">
+        <span class="muted">入口文件</span>
+        <template v-if="entry">
+          <button class="link" @click="desk.selectFile(entry.file)">{{ entry.file }}</button>
+          <span class="muted"> · {{ VIA[entry.via] }}</span>
+          <span v-if="entry.missing" class="badge warn">文件不存在</span>
+        </template>
+        <span v-else class="muted">没有对外入口（无 entry、模块目录下无 index.ts 或包入口）</span>
+      </p>
     </template>
   </Section>
-  <Section v-if="local" title="入口文件">
-    <p v-if="!entry" class="muted">没有对外入口（无 entry、模块目录下无 index.ts 或包入口）</p>
-    <div v-else>
-      <button class="link" @click="desk.selectFile(entry.file)">{{ entry.file }}</button>
-      <span class="muted"> · {{ VIA[entry.via] }}</span>
-      <span v-if="entry.missing" class="badge warn">文件不存在</span>
-    </div>
-  </Section>
-  <ExportSection v-if="local && entry && !entry.missing" :key="entry.file" :file="entry.file" :module-id="id" />
+  <ExportSection v-if="local && entry && !entry.missing" :key="entry.file" :file="entry.file" :module-id="id" fold />
 </template>
 
 <style scoped>
 .total {
   margin: 0 0 4px;
   font-size: 12px;
+}
+
+.entry-line {
+  margin: 8px 0 0;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+  font-size: 12.5px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  align-items: baseline;
 }
 
 .lines {

@@ -98,6 +98,9 @@ describe('模块面板：端口一节（K11）与「知识」行旁的子类 / �
 
   it('知识：基类所在模块列「子类 N」、组装方列「组装 N」并标组装根，单击展开两端与文件证据', async () => {
     const { wrapper } = await mountWith('/?level=infra.framework&sel=m:infra.framework.extra')
+    // G11（V14c）：「代码事实 · 知识」在 ⑤ 缺省折叠，展开再断言
+    await wrapper.find('[data-sec="evidence.knowledge"] .fold').trigger('click')
+    await flushPromises()
     const section = wrapper.findAll('section').find(x => x.text().includes('代码事实 · 知识'))!
     expect(section.text()).toContain('子类 1')
     expect(section.text()).toContain('被组装于 1')
@@ -105,6 +108,8 @@ describe('模块面板：端口一节（K11）与「知识」行旁的子类 / �
     expect(section.find('.fact-list').text()).toContain('Core')
     expect(section.find('.fact-list').text()).toContain('src/app/s.ts')
     const root = await mountWith('/?level=domain.models&sel=m:domain.models.core')
+    await root.wrapper.find('[data-sec="evidence.knowledge"] .fold').trigger('click')
+    await flushPromises()
     const s2 = root.wrapper.findAll('section').find(x => x.text().includes('代码事实 · 知识'))!
     expect(s2.text()).toContain('组装根')
     expect(s2.text()).toContain('组装 1')

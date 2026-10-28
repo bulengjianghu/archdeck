@@ -14,7 +14,7 @@ import { REVIEW_FIELDS, REVIEW_FIELD_LABELS, REVIEW_STATUS_LABELS, type ReviewCh
 import type { WriteOutcome } from '@/state/useDeskState'
 import Section from './Section.vue'
 
-const props = defineProps<{ id: string; part: 'badge' | 'diff' | 'confirm' }>()
+const props = defineProps<{ id: string; part: 'badge' | 'diff' | 'confirm'; /** G11 V14c：diff 与确认的明细缺省折叠（确认过期的计数在 ③） */ fold?: boolean }>()
 const desk = useDesk()
 const st = computed(() => desk.review.of(props.id))
 const isSystem = computed(() => props.id === desk.index.value?.rootId)
@@ -55,7 +55,7 @@ async function confirm() {
     >{{ st.status === 'reviewed' ? `已确认 ${st.entry!.at}` : REVIEW_STATUS_LABELS[st.status] }}</span
   >
 
-  <Section v-else-if="part === 'diff' && st.status === 'stale'" title="自上次确认以来的改动" :count="st.diff?.count">
+  <Section v-else-if="part === 'diff' && st.status === 'stale'" title="自上次确认以来的改动" :count="st.diff?.count" :fold="props.fold">
     <p class="muted when">
       {{ st.entry!.at }} 确认（{{ SOURCE(st.entry!.source) }}）<template v-if="st.entry!.note">：{{ st.entry!.note }}</template>
     </p>
@@ -82,7 +82,7 @@ async function confirm() {
     </dl>
   </Section>
 
-  <Section v-else-if="part === 'confirm' && desk.review.canReview && (inScope || st.status !== 'unreviewed')" title="确认">
+  <Section v-else-if="part === 'confirm' && desk.review.canReview && (inScope || st.status !== 'unreviewed')" title="确认" :fold="props.fold">
     <p class="muted hint">
       <template v-if="st.status === 'reviewed'">{{ st.entry!.at }} 确认过（{{ SOURCE(st.entry!.source) }}），内容没有变；再次确认会更新那一条记录。</template>
       <template v-else-if="st.status === 'stale'">看过上面的改动后点「复核并确认」，记录会更新为现在的内容。</template>

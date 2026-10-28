@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 /**
  * 人确认层的界面（RV-3、RV-4；Z3–Z5）：模块面板的状态标记、「自上次确认以来的改动」与「确认 / 复核并确认」；模块树的需复核标记与「只看需复核」；根层健康度一行。
+ * G11（V14c）起 ⑤ 证据与细节缺省折叠，断言节内内容前先全部展开。
  */
 import { NO_WRITER } from '../../src/state/sync/writer'
 import { describe, expect, it } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import Panel from '../../src/components/panel/Panel.vue'
 import ModuleTree from '../../src/components/tree/ModuleTree.vue'
@@ -12,6 +13,12 @@ import { createDeskState, type ModelWriter } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
 import { loadModel, reviewEntries, reviewHash, type ReviewedInput } from '../../src/model'
 import { sampleFiles } from '../fixtures/sample'
+
+/** 展开面板里全部折叠的节（⑤ 段缺省折叠，V14c） */
+async function expandAll(wrapper: VueWrapper) {
+  for (const b of wrapper.findAll('button.fold[aria-expanded="false"]')) await b.trigger('click')
+  await flushPromises()
+}
 
 const idx = loadModel(sampleFiles()).index
 const [ok] = reviewEntries(idx, ['infra.framework'], { source: 'manual', at: '2026-10-22', note: '看过' })
@@ -48,6 +55,7 @@ describe('模块面板的确认（RV-3）', () => {
     expect(badge.text()).toBe('已确认 2026-10-22')
     expect(badge.attributes('title')).toContain('看过')
     expect(wrapper.text()).not.toContain('自上次确认以来的改动')
+    await expandAll(wrapper)
     expect(wrapper.text()).toContain('再次确认会更新那一条记录')
     expect(wrapper.find('button[type=submit]').text()).toBe('确认')
   })
@@ -56,13 +64,16 @@ describe('模块面板的确认（RV-3）', () => {
     expect(wrapper.find('.badge.review').text()).toBe('需复核')
     const text = wrapper.text()
     expect(text).toContain('自上次确认以来的改动')
-    expect(text).toContain('2026-10-20 确认（草图归档 next）')
-    expect(text).toContain('旧职责')
-    expect(text).toContain('if.gone')
+    await expandAll(wrapper)
+    const expanded = wrapper.text()
+    expect(expanded).toContain('2026-10-20 确认（草图归档 next）')
+    expect(expanded).toContain('旧职责')
+    expect(expanded).toContain('if.gone')
     expect(wrapper.find('button[type=submit]').text()).toBe('复核并确认')
   })
   it('确认：发出记录（来源 manual、带 note）；勾「也确认子模块」时子树各一条', async () => {
     const { wrapper, batches, desk } = await mountWith(Panel, '/?sel=m:infra.framework')
+    await expandAll(wrapper)
     await wrapper.find('input[aria-label=确认说明]').setValue('第二级看过')
     await wrapper.find('form.confirm').trigger('submit')
     await flushPromises()
@@ -99,6 +110,7 @@ describe('系统与层的确认（RV-7、Z7，ADR-0042）', () => {
     const sid = desk.index.value!.rootId
     expect(wrapper.find('.system-panel .section').text()).toContain('简介')
     expect(wrapper.find('.system-panel .head .badge.review').text()).toBe('未确认')
+    await expandAll(wrapper)
     expect(wrapper.text()).toContain('认可上面的定位与核心原则')
     await wrapper.find('form.confirm').trigger('submit')
     await flushPromises()
@@ -107,6 +119,7 @@ describe('系统与层的确认（RV-7、Z7，ADR-0042）', () => {
   })
   it('层：面板提供「确认」（层原来不在 Z4 范围），不计入健康度', async () => {
     const { wrapper, desk } = await mountWith(Panel, '/?sel=m:infra')
+    await expandAll(wrapper)
     expect(wrapper.find('form.confirm').exists()).toBe(true)
     expect(desk.review.scope.value.has('infra')).toBe(false)
   })

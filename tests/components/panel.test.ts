@@ -241,6 +241,8 @@ modules:
     desk.setToggles({ showFacts: true })
     const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
     await flushPromises()
+    // G11（V14c）：「架构治理」在 ⑤ 缺省折叠，展开再断言
+    await wrapper.find('[data-sec="evidence.governance"] .fold').trigger('click')
     const block = wrapper.find('.level-cycle')
     expect(block.text()).toMatch(/所在的本层环 ↻\d/)
     expect(block.text()).toContain('Application')

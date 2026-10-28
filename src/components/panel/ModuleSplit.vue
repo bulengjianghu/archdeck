@@ -8,7 +8,7 @@ import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import Section from './Section.vue'
 
-const props = defineProps<{ id: string }>()
+const props = defineProps<{ id: string; /** G11 V14c：⑤ 证据与细节缺省折叠（计数已在 ③） */ fold?: boolean }>()
 const desk = useDesk()
 const s = computed(() => desk.facts.splitOf(props.id))
 const total = computed(() => desk.files.linesOf(props.id))
@@ -29,7 +29,7 @@ const count = computed(() => {
 </script>
 
 <template>
-  <Section v-if="s && count" title="拆分信号" :count="count" data-testid="split-signals">
+  <Section v-if="s && count" title="拆分信号" :count="count" :fold="props.fold" data-testid="split-signals">
     <p class="muted">模块拆分的最小单位是文件：下面每一条都指向「先拆文件」（K21）。</p>
     <ul class="plain">
       <li v-if="s.noFiles">它不占任何文件：代码在别的模块的文件里，划分小于文件</li>

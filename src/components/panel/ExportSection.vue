@@ -9,7 +9,7 @@ import Section from './Section.vue'
 import ExportItem from './ExportItem.vue'
 import InterfaceItem from './InterfaceItem.vue'
 
-const props = defineProps<{ file: string; moduleId?: string }>()
+const props = defineProps<{ file: string; moduleId?: string; /** G11 V14c：⑤ 证据与细节缺省折叠 */ fold?: boolean }>()
 const desk = useDesk()
 const res = computed(() => desk.files.exports(props.file).value)
 const symbols = computed(() => (res.value.status === 'ok' ? res.value.value : []))
@@ -18,7 +18,7 @@ const few = computed(() => symbols.value.length <= 3)
 </script>
 
 <template>
-  <Section title="入口导出" :count="res.status === 'ok' ? symbols.length : undefined">
+  <Section title="入口导出" :count="res.status === 'ok' ? symbols.length || undefined : undefined" :fold="props.fold">
     <p v-if="res.status === 'loading'" class="muted">正在解析导出…</p>
     <p v-else-if="res.status !== 'ok'" class="muted">无法解析导出{{ res.status === 'error' ? `：${res.message}` : '' }}</p>
     <p v-else-if="!symbols.length" class="muted">没有导出</p>
