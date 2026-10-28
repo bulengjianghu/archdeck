@@ -40,16 +40,22 @@ it.skipIf(!process.env.CLARITY_MEASURE)(
       for (const perspective of ['interaction', 'structure'] as const) {
         let lines = 0
         let x = 0
+        // 第十四轮 F13：残余大扇入——静息态进同一个节点的线数（≥ 5、≥ 8 的节点数与最大值）
+        const fanins: number[] = []
         const detail: string[] = []
         for (const level of levelIds(project.index)) {
           const ls = await restLines(project, level, perspective)
           if (!ls) continue
           const c = crossings(ls)
+          const into = new Map<string, number>()
+          for (const l of ls) if (l.ends) into.set(l.ends[1], (into.get(l.ends[1]) ?? 0) + 1)
+          fanins.push(...into.values())
           lines += ls.length
           x += c
           if (process.env.CLARITY_MEASURE === 'levels' && ls.length) detail.push(`  ${level}\tlines=${ls.length}\tcross=${c}`)
         }
-        rows.push(`${p}\t${perspective}\tlines=${lines}\tcross=${x}`, ...detail)
+        const big = (k: number) => fanins.filter(n => n >= k).length
+        rows.push(`${p}\t${perspective}\tlines=${lines}\tcross=${x}\tfanin>=5:${big(5)}\tfanin>=8:${big(8)}\tmax:${Math.max(0, ...fanins)}`, ...detail)
       }
     }
     console.log(rows.join('\n'))
