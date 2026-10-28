@@ -11,7 +11,7 @@ import { RELATION_TYPE_LABELS } from '../shared/labels'
 
 /** 一行异常：label + count + 跳转目标（data-sec）。hint 为提示级（不判问题），其余为问题级 */
 export interface PanelNotice {
-  key: 'violations' | 'cycles' | 'levelCycles' | 'undescribed' | 'unconfirmed' | 'stale' | 'split' | 'against' | 'surface'
+  key: 'violations' | 'cycles' | 'levelCycles' | 'undescribed' | 'unconfirmed' | 'carrierGap' | 'upward' | 'stale' | 'split' | 'against' | 'surface'
   label: string
   count: number
   /** 目标节的 data-sec */
@@ -24,13 +24,19 @@ export interface PanelNotice {
   hint?: boolean
 }
 
-/** V15b 的严重度排序：同组内按登记次序（模块环与本层环是两个独立信号，各自一行，V15b） */
+/**
+ * V15b 的严重度排序：同组内按登记次序（模块环与本层环是两个独立信号，各自一行，V15b）。
+ * 波 2 铺开（G11）新增的关系级与边级信号与既有组同档：缺段（承载判定，K20）与未证实同档、
+ * 向上却不是控制反转（K22）属违背分层的例外、与违规同档。
+ */
 export const NOTICE_RANK: Record<PanelNotice['key'], number> = {
   violations: 0,
+  upward: 0,
   cycles: 1,
   levelCycles: 2,
   undescribed: 3,
   unconfirmed: 4,
+  carrierGap: 4,
   stale: 5,
   split: 6,
   against: 7,

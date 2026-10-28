@@ -1,5 +1,9 @@
 <script setup lang="ts">
-/** 耦合线的面板（J7）：两端、同提交次数与占比、有无依赖 / 关系、共同的提交；历史刷新或层次变化后本层已没有这对耦合时说明原因 */
+/**
+ * 耦合线的面板（J7；G11 五段骨架，ADR-0050、V15）：① 头部（两端、时间耦合与同提交徽标）
+ * ② 作用：说明（历史刷新或层次变化后本层已没有这对耦合时的空态解释）④ 边界：耦合（同提交、占比、有无依赖 / 关系）
+ * ⑤ 证据与细节：共同的提交（折叠带计数）。
+ */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
@@ -15,7 +19,7 @@ const c = computed(() => sel.value?.coupling ?? null)
 
 <template>
   <div class="couple-panel">
-    <header class="head">
+    <header class="head" data-sec="head">
       <h2 v-if="sel">
         <button class="link" @click="desk.revealModule(sel.a)">{{ name(sel.a) }}</button> ~
         <button class="link" @click="desk.revealModule(sel.b)">{{ name(sel.b) }}</button>
@@ -26,11 +30,11 @@ const c = computed(() => sel.value?.coupling ?? null)
         <span v-if="c && !c.dependency && !c.relation" class="badge warn" title="两端之间没有模块依赖也没有描述关系：代码事实看不见的耦合">无依赖无关系</span>
       </div>
     </header>
-    <Section v-if="!sel || !c" title="说明">
+    <Section v-if="!sel || !c" title="说明" data-sec="purpose">
       <p class="muted">这对模块现在不是时间耦合（历史已刷新，或阈值已变化）。</p>
     </Section>
     <template v-else>
-      <Section title="耦合">
+      <Section title="耦合" data-sec="boundary.coupling">
         <dl class="kv">
           <dt>同提交</dt>
           <dd>{{ c.shared }} 次（近 {{ desk.evolution.stats.value?.days }} 天）</dd>
@@ -47,7 +51,7 @@ const c = computed(() => sel.value?.coupling ?? null)
           两端总是一起改，代码里却没有依赖、描述里也没有关系：检查是否存在未描述的运行时关系（事件、注入、约定），或是否应合并 / 拆分。
         </p>
       </Section>
-      <Section title="共同的提交" :count="c.commits.length">
+      <Section title="共同的提交" :count="c.commits.length" fold data-sec="evidence.commits">
         <CommitList :hashes="c.commits" :limit="10" />
       </Section>
     </template>

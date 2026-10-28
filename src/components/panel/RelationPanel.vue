@@ -1,6 +1,11 @@
 <script setup lang="ts">
-/** 关系面板：头部为方向与类型；之后第一节是「说明」（V13，没写的显示「未写说明」）；「关系」一节按五个维度各一行（控制流、知识、语义、同步性、平面，ADR-0022）；其后接口、数据、代码事实与承载（D5、L22） */
-import { computed } from 'vue'
+/**
+ * 关系面板（G11 五段骨架，ADR-0050、V15）：① 头部（端点、类型与修饰徽标）
+ * ② 作用：「说明」（V13，没写的显示「未写说明」）③ 需要注意（未证实 K6、承载缺段，一行带计数单击跳转，无异常不出现，V15b）
+ * ④ 边界：关系维度（控制流、知识、语义、同步性、平面，ADR-0022）→ 经由接口 → 交换的数据结构 → 承载（判定徽标与缺段提示常显，
+ * 逐段文件级证据折叠带计数）⑤ 证据与细节：代码事实（K5 / K6，折叠带计数）；出处 footer 常显在最底。
+ */
+import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
 import { RUNTIME_RELATION_TYPES, callbackText, isCallbackVia, moduleName, parseVia, relationMode, viaLabel } from '@/model'
 import { RELATION_TYPE_HINTS, RELATION_TYPE_LABELS } from '../shared/labels'
@@ -13,6 +18,8 @@ import DesignNote from './DesignNote.vue'
 import RelationFact from './RelationFact.vue'
 import RelationCarrier from './RelationCarrier.vue'
 import StructureFacts, { type StructureGroup } from './StructureFacts.vue'
+import NoticeSection from './NoticeSection.vue'
+import { usePanelJump, type PanelNotice } from './panelNotices'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -21,6 +28,28 @@ const name = (id: string) => moduleName(desk.index.value!, id)
 const point = (id: string) => (desk.index.value!.actors.has(id) ? desk.select({ kind: 'actor', id }) : desk.revealModule(id))
 const runtime = computed(() => RUNTIME_RELATION_TYPES.includes(r.value.type))
 const fact = computed(() => desk.facts.relationFact(props.id))
+const carrier = computed(() => desk.facts.carrierOf(props.id))
+
+// ── ③ 需要注意（V15b）：未证实（K6）、承载缺段；清单来自现有派生，不新算 ──
+const root = ref<HTMLElement | null>(null)
+usePanelJump(root)
+const notices = computed<PanelNotice[]>(() => {
+  const out: PanelNotice[] = []
+  const f = fact.value
+  // K6：写了 via 或同文件概念拆分的不判定不算异常；两端没有任何依赖的未证实（多半是描述写错）才提示
+  if (f && !f.via && !f.host && f.status === 'unconfirmed')
+    out.push({
+      key: 'unconfirmed',
+      label: '未证实',
+      count: 1,
+      target: 'evidence.fact',
+      to: '代码事实',
+      note: f.isolated ? '两端之间在代码里没有任何依赖（类型依赖、端口注入都没有），多半是描述写错（K6）' : '两端之间只有反向的依赖，可能经端口或注入（K6）',
+    })
+  const missing = carrier.value?.segments.filter(s => s.missing).length ?? 0
+  if (missing) out.push({ key: 'carrierGap', label: '承载缺段', count: missing, target: 'boundary.carrier', to: '承载' })
+  return out
+})
 
 /** 知识（谁知道谁）：由代码事实给出——依据的依赖与箭头同向 / 反向，经端口，或不判定 */
 const knowledge = computed(() => {
@@ -75,7 +104,7 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
 </script>
 
 <template>
-  <div v-if="r" class="relation-panel">
+  <div v-if="r" ref="root" class="relation-panel">
     <header class="head">
       <h2 class="endpoints">
         <button class="link" @click="point(r.from)">{{ name(r.from) }}</button>
@@ -96,12 +125,15 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
         <ChangeBadge entity="relation" :id="r.id" detail />
       </div>
     </header>
-    <!-- V13：先读一句说明建立认知，再看维度与证据 -->
-    <Section v-if="r.description" title="说明" class="summary"><Markdown :text="r.description" /></Section>
-    <p v-else class="no-summary muted">未写说明</p>
+    <!-- V13、V15：先读一句说明建立认知（② 作用），再看维度与证据（④ 边界） -->
+    <Section v-if="r.description" title="说明" class="summary" data-sec="purpose"><Markdown :text="r.description" /></Section>
+    <p v-else class="no-summary muted" data-sec="purpose">未写说明</p>
     <DesignNote :text="r.designNote" />
 
-    <Section title="关系">
+    <!-- ③ 需要注意：未证实（K6）、承载缺段；无异常整段不出现（V15b） -->
+    <NoticeSection :notices="notices" />
+
+    <Section title="关系" data-sec="boundary.dimensions">
       <dl class="dims">
         <dt>控制流</dt>
         <dd>{{ runtime ? `${name(r.from)} → ${name(r.to)}` : '—（编译期关系，不发生运行时交互）' }}</dd>
@@ -115,15 +147,17 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
         <dd>{{ plane }}</dd>
       </dl>
     </Section>
-    <Section title="经由接口">
+    <Section title="经由接口" data-sec="boundary.interface">
       <InterfaceItem v-if="r.interface" :id="r.interface" open />
       <p v-else class="muted">未指定</p>
     </Section>
-    <Section v-if="r.payload.length" title="交换的数据结构" :count="r.payload.length">
+    <Section v-if="r.payload.length" title="交换的数据结构" :count="r.payload.length" data-sec="boundary.payload">
       <DataStructureItem v-for="id in r.payload" :key="id" :id="id" open />
     </Section>
-    <RelationFact :id="r.id" />
     <RelationCarrier :id="r.id" />
+
+    <!-- ⑤ 证据与细节：代码事实（K5 / K6）折叠带计数（V15c） -->
+    <RelationFact :id="r.id" fold />
 
     <footer class="src muted">出处：{{ desk.modelDir.value }}/{{ r.src.file }}{{ r.src.line ? `:${r.src.line}` : '' }}</footer>
   </div>

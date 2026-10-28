@@ -77,7 +77,7 @@ const segText = (s: CarrierSegment) => CARRIER_ROLE_TEXT[s.role](name(s.from), n
 </script>
 
 <template>
-  <Section v-if="carrier" title="承载" class="relation-carrier">
+  <Section v-if="carrier" title="承载" class="relation-carrier" data-sec="boundary.carrier">
     <p class="verdict">
       <span class="badge">{{ CARRIER_TEMPLATE_LABELS[carrier.template] }}</span>
       <span class="badge v" :data-verdict="carrier.verdict">{{ CARRIER_VERDICT_LABELS[carrier.verdict] }}</span>
@@ -99,16 +99,20 @@ const segText = (s: CarrierSegment) => CARRIER_ROLE_TEXT[s.role](name(s.from), n
           <span v-if="s.edge.element" class="muted">{{ ELEMENT_KIND_LABEL[s.edge.element.kind] }}</span>
           <span v-else class="muted">{{ name(s.edge.toModule) }}（模块本体）</span>
           <span v-if="s.moduleLevel" class="badge" title="边接到模块本体或别的元素，按模块依赖回退（K5）">模块级</span>
-          <button
-            v-for="(f, k) in s.edge.files.slice(0, 3)"
-            :key="k"
-            class="link mono file"
-            :title="`在副栏预览 ${f.from} 第 ${f.line} 行`"
-            @click="openPreview(f.from, f.line)"
-          >
-            {{ f.from }}:{{ f.line }}
-          </button>
-          <span v-if="s.edge.files.length > 3" class="muted">另 {{ s.edge.files.length - 3 }} 处</span>
+          <!-- G11 V15c（波 2 铺开）：判定与缺段提示常显，逐段文件级证据折叠带计数 -->
+          <details v-if="s.edge.files.length" class="seg-files">
+            <summary>文件证据 {{ s.edge.files.length }}</summary>
+            <button
+              v-for="(f, k) in s.edge.files.slice(0, 3)"
+              :key="k"
+              class="link mono file"
+              :title="`在副栏预览 ${f.from} 第 ${f.line} 行`"
+              @click="openPreview(f.from, f.line)"
+            >
+              {{ f.from }}:{{ f.line }}
+            </button>
+            <span v-if="s.edge.files.length > 3" class="muted">另 {{ s.edge.files.length - 3 }} 处</span>
+          </details>
         </div>
         <div v-else class="s-body muted">同一组代码，这一段不需要边</div>
       </li>
@@ -176,6 +180,34 @@ const segText = (s: CarrierSegment) => CARRIER_ROLE_TEXT[s.role](name(s.from), n
 .s-body {
   padding-left: 16px;
   font-size: 12px;
+}
+
+/* G11 V15c（波 2 铺开）：逐段文件级证据折叠带计数 */
+.seg-files {
+  flex-basis: 100%;
+}
+
+.seg-files summary {
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--text-3);
+  list-style: none;
+}
+
+.seg-files summary::-webkit-details-marker {
+  display: none;
+}
+
+.seg-files summary::before {
+  content: '▸ ';
+}
+
+.seg-files[open] summary::before {
+  content: '▾ ';
+}
+
+.seg-files .file {
+  display: block;
 }
 
 .mark {

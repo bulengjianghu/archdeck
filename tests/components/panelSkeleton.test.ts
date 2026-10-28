@@ -30,6 +30,23 @@ async function mountPanel(url: string, files = sampleFiles()) {
 /** 模块面板的直接子节，按出现次序给出标题文字（折叠节含 ▸ 与计数） */
 const titlesOf = (wrapper: VueWrapper) => wrapper.findAll('.module-panel > .section').map(s => s.find('h3')!.text())
 
+/** 带代码事实源的面板挂载（G11 波 2 铺开的 ③/⑤ 断言需要 facts） */
+async function mountWithSource(
+  url: string,
+  source: Record<string, unknown>,
+  files = sampleFiles(),
+): Promise<{ wrapper: VueWrapper; desk: ReturnType<typeof createDeskState> }> {
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+  await router.push(url)
+  const desk = createDeskState(async () => ({ dir: 'model/test', files }), { source: source as never })
+  desk.attachRouter(router)
+  await desk.init()
+  const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+  mounted.push(wrapper)
+  await flushPromises()
+  return { wrapper, desk }
+}
+
 afterEach(() => {
   while (mounted.length) mounted.pop()!.unmount()
 })
@@ -274,14 +291,167 @@ describe('V15c：④ 汇总与 ⑤ 折叠', () => {
   })
 })
 
+describe('V15 波 2 铺开：其余面板的段序（G11）', () => {
+  /** K6 用：两端各一个子模块、一对文件依赖；deps 参数决定证实状态 */
+  const REFS = `
+modules:
+  - { id: infra.framework.sm.impl, parent: infra.framework.sm, name: SmImpl, responsibility: x, codeRefs: [src/sm/**] }
+  - { id: infra.framework.pipeline.impl, parent: infra.framework.pipeline, name: PipeImpl, responsibility: x, codeRefs: [src/pipe/**] }
+`
+  const dep = (from: string, to: string): FileDep => ({ from, to, via: to, kind: 'value', line: 7 })
+  const sourceWith = (deps: FileDep[], files = ['src/sm/a.ts', 'src/pipe/b.ts']) =>
+    ({
+      tree: async () => ({ status: 'local', root: '/repo', files, packages: {} }),
+      file: async () => null,
+      exports: async () => [],
+      facts: async () => ({ deps: { deps, external: {}, parsed: files.length }, baseline: null, ledger: [] }),
+    }) as never
+
+  it('关系面板：② 说明置顶 → ③ 需要注意 → ④ 关系维度 / 经由接口 / 数据结构 → ⑤ 代码事实；未证实行（K6）单击跳到代码事实', async () => {
+    // r6 两端之间没有依赖 → isolated，未证实（K6）
+    const { wrapper } = await mountWithSource('/?level=infra.framework&sel=r:r6', sourceWith([]), [
+      ...sampleFiles(),
+      { path: 'modules/zz-refs.yaml', text: REFS },
+    ])
+    const cls = (x: Element) => x.getAttribute('class') ?? ''
+    const order = [...(wrapper.find('.relation-panel').element as HTMLElement).children].map(cls)
+    expect(order.some(c => c.includes('no-summary'))).toBe(true) // 未写说明（② 的空态在同一位置）
+    // 段序：③ 需要注意在 ④「关系」维度节之前；出处 footer 最底
+    const secs = wrapper.findAll('.relation-panel > .section')
+    const titles = secs.map(s => s.find('h3')!.text())
+    expect(titles[0]).toContain('需要注意')
+    expect(titles[1]).toContain('关系')
+    expect(wrapper.find('.relation-panel > .src').exists()).toBe(true)
+    // 未证实行 → 单击跳到 ⑤ 代码事实（isolated 没有文件证据：折叠必有计数，没有可计的物就不折，一行判定常显）
+    expect(wrapper.find('[data-sec="evidence.fact"] .fold').exists()).toBe(false)
+    expect(wrapper.find('[data-sec="evidence.fact"]').text()).toContain('两端之间在代码里没有任何依赖')
+    await wrapper.find('[data-notice="unconfirmed"]').trigger('click')
+    await flushPromises()
+    await flushPromises()
+    expect(wrapper.find('[data-sec="evidence.fact"]').classes()).toContain('jump-flash')
+  })
+
+  it('关系面板：已证实且有文件证据时代码事实缺省折叠带计数（V15c），展开见「已证实」', async () => {
+    const { wrapper } = await mountWithSource('/?level=infra.framework&sel=r:r6', sourceWith([dep('src/sm/a.ts', 'src/pipe/b.ts')]), [
+      ...sampleFiles(),
+      { path: 'modules/zz-refs.yaml', text: REFS },
+    ])
+    const fold = wrapper.find('[data-sec="evidence.fact"] .fold')
+    expect(fold.exists()).toBe(true)
+    expect(fold.text()).toContain('代码事实')
+    expect(fold.text()).toMatch(/代码事实\s*1/)
+    expect(fold.attributes('aria-expanded')).toBe('false')
+    await fold.trigger('click')
+    expect(wrapper.find('[data-sec="evidence.fact"]').text()).toContain('已证实')
+  })
+
+  it('聚合边面板：③「向上却不是控制反转」一行带计数、单击跳到 ④ 原始关系（K22）', async () => {
+    const files = sampleFiles({ 'zz-up.yaml': 'relations:\n  - { id: r8, from: app.solution, to: infra.player, type: queries }' })
+    const { wrapper } = await mountPanel('/?sel=e:app.solution->infra.player:queries', files)
+    const notice = wrapper.find('[data-notice="upward"]')
+    expect(notice.exists()).toBe(true)
+    expect(notice.text()).toContain('向上却不是控制反转')
+    await notice.trigger('click')
+    await flushPromises()
+    await flushPromises()
+    const target = wrapper.find('[data-sec="boundary.relations"]')
+    expect(target.exists()).toBe(true)
+    expect(target.classes()).toContain('jump-flash')
+  })
+
+  it('聚合边面板：向上的控制反转（有机制）是应有之义，只在头部注记、③ 不出现（V15b）', async () => {
+    const files = sampleFiles({
+      'zz-up.yaml': 'relations:\n  - { id: r8b, from: app.solution, to: infra.player, type: notifies, via: "channel:cb@app.solution" }',
+    })
+    const { wrapper } = await mountPanel('/?sel=e:app.solution->infra.player:notifies', files)
+    expect(wrapper.find('[data-testid="upward-note"]').text()).toContain('控制反转')
+    expect(wrapper.find('[data-notice="upward"]').exists()).toBe(false)
+  })
+
+  it('端口面板：「说明」在端口结构详情之前（「先答做什么」的铺开修正），出处最底', async () => {
+    const files = sampleFiles({
+      'zz-if.yaml':
+        'interfaces:\n  - { id: if.io, name: IO, owner: app.solution, description: 对外入口, signature: "io(): void", implementedBy: [infra.player] }',
+    })
+    const { wrapper } = await mountPanel('/?sel=p:if.io', files)
+    // ② 说明（purpose）在 ④ 端口结构（boundary.port）之前，footer 最底
+    const order = [...wrapper.find('.port-panel').element.children]
+    const purpose = order.findIndex(x => x.getAttribute?.('data-sec') === 'purpose')
+    const port = order.findIndex(x => x.getAttribute?.('data-sec') === 'boundary.port')
+    expect(purpose).toBeGreaterThan(-1)
+    expect(port).toBeGreaterThan(purpose)
+    expect(order[order.length - 1].classList.contains('src')).toBe(true)
+  })
+
+  it('代码依赖 / 依赖边面板：③ 违规行跳 ⑤ 违规明细（折叠带计数），④ DepStructure（结构视角）在前', async () => {
+    const source = sourceWith(
+      [dep('src/app/s.ts', 'src/framework/extra.ts'), dep('src/framework/extra.ts', 'src/app/s.ts')],
+      ['src/app/s.ts', 'src/framework/extra.ts'],
+    )
+    const { wrapper } = await mountWithSource('/?v=s&sel=d:app->infra', source, [
+      ...sampleFiles(),
+      {
+        path: 'modules/zz-refs.yaml',
+        text: `
+modules:
+  - { id: app.solution.core, parent: app.solution, name: Core, responsibility: x, codeRefs: [src/app/**] }
+  - { id: infra.framework.extra, parent: infra.framework, name: Extra, responsibility: x, codeRefs: [src/framework/**] }
+`,
+      },
+    ])
+    // ④ 边界在前：结构视角是 DepStructure（文件依赖等）
+    expect(wrapper.find('[data-sec="boundary.deps"]').exists()).toBe(true)
+    const notice = wrapper.find('.dep-panel [data-notice="violations"]')
+    const fold = wrapper.find('[data-sec="evidence.violations"] .fold')
+    if (fold.exists()) {
+      // 有违规：③ 一行带计数、明细缺省折叠；单击 ③ 折叠自动展开
+      expect(notice.exists()).toBe(true)
+      expect(fold.attributes('aria-expanded')).toBe('false')
+      await notice.trigger('click')
+      await flushPromises()
+      await flushPromises()
+      expect(wrapper.find('[data-sec="evidence.violations"] .fold').attributes('aria-expanded')).toBe('true')
+    } else {
+      // 样例规则对这对节点没有违规：③ 不出现（无异常不强造）
+      expect(notice.exists()).toBe(false)
+    }
+  })
+
+  it('参与者 / 场景面板：② 说明（触发）在前、④ 入口关系 / 场景与证据、⑤ 引用折叠带计数', async () => {
+    const a = await mountPanel('/?sel=a:actor.biz', scenarioFiles())
+    const aOrder = [...a.wrapper.find('.actor-panel').element.children]
+    expect(aOrder.findIndex(x => x.getAttribute?.('data-sec') === 'purpose')).toBeGreaterThan(-1)
+    expect(aOrder.findIndex(x => x.getAttribute?.('data-sec') === 'boundary.relations')).toBeGreaterThan(
+      aOrder.findIndex(x => x.getAttribute?.('data-sec') === 'purpose'),
+    )
+    expect(aOrder[aOrder.length - 1].classList.contains('src')).toBe(true)
+
+    const s = await mountPanel('/?sc=sc.play', scenarioFiles())
+    const refsSec = s.wrapper.find('[data-sec="evidence.refs"]')
+    expect(refsSec.exists()).toBe(true)
+    // 运行视角 ⑤ 的折叠由外层「模块信息」details 代行（评审轮 1 B1）：标题带计数、内容直接可见
+    expect(refsSec.find('h3').text()).toMatch(/引用\s*\d/)
+    expect(refsSec.text()).toContain('引用了')
+    // ④ 证据保持常显带计数
+    expect(s.wrapper.find('[data-sec="boundary.evidence"] .fold').exists()).toBe(false)
+  })
+})
+
 describe('V15b、V15c 的纯函数', () => {
-  it('orderNotices 过滤零计数并按严重度排序', () => {
+  it('orderNotices 过滤零计数并按严重度排序；关系级与边级信号（缺段、向上）归入对应档（波 2 铺开）', () => {
     const n = (key: PanelNotice['key'], count: number): PanelNotice => ({ key, label: key, count, target: 'x', to: 'y' })
     expect(
       orderNotices([n('stale', 2), n('surface', 0), n('violations', 1), n('against', 3), n('undescribed', 1), n('levelCycles', 1), n('cycles', 1)]).map(
         x => x.key,
       ),
     ).toEqual(['violations', 'cycles', 'levelCycles', 'undescribed', 'stale', 'against'])
+    // 向上却不是控制反转（K22）与违规同档（违背分层）；缺段（K20）与未证实同档，同档按 label 次序
+    expect(orderNotices([n('unconfirmed', 1), n('carrierGap', 2), n('upward', 1), n('stale', 1)]).map(x => x.key)).toEqual([
+      'upward',
+      'carrierGap',
+      'unconfirmed',
+      'stale',
+    ])
   })
 
   it('splitSignalCount 与「拆分信号」清单同一口径', () => {

@@ -1,9 +1,17 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+/**
+ * 聚合边面板（G11 五段骨架，ADR-0050、V15）：① 头部（端点、类型与条数徽标）
+ * ③ 需要注意：向上却不是控制反转（K22，desk.facts.tiers.upward）一行带计数、单击跳到「原始关系」；
+ * 向上是控制反转（通知、流、经端口 / 总线 / 通道）是应有之义，只在头部注记、不算异常（V15b）
+ * ④ 边界：「原始关系」——每条可跳到它真实所在的层次并选中（N3）。
+ */
+import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import Section from './Section.vue'
 import RelationRow from './RelationRow.vue'
+import NoticeSection from './NoticeSection.vue'
+import { usePanelJump, type PanelNotice } from './panelNotices'
 import { RELATION_TYPE_LABELS } from '../shared/labels'
 
 const props = defineProps<{ id: string }>()
@@ -31,11 +39,29 @@ const couple = computed(() => {
 const upward = computed(() => desk.facts.upward.value.find(u => u.edge === props.id) ?? null)
 const endSelection = (nodeId: string) =>
   desk.index.value?.actors.has(nodeId) ? ({ kind: 'actor', id: nodeId } as const) : ({ kind: 'module', id: endId(nodeId) } as const)
+
+// ── ③ 需要注意（V15b）：向上却不是控制反转（K22）一行、单击跳到「原始关系」 ──
+const root = ref<HTMLElement | null>(null)
+usePanelJump(root)
+const notices = computed<PanelNotice[]>(() =>
+  upward.value && !upward.value.inversion
+    ? [
+        {
+          key: 'upward',
+          label: '向上却不是控制反转',
+          count: 1,
+          target: 'boundary.relations',
+          to: '原始关系',
+          note: `本层分了层（算出的或声明的），依赖都朝下；${upward.value.relations.join('、')} 是直接的查询或委托，发起方却在被依赖的一侧——多半是没标的回调、通知或经通道（K22）`,
+        },
+      ]
+    : [],
+)
 </script>
 
 <template>
-  <div v-if="edge" class="edge-panel">
-    <header class="head">
+  <div v-if="edge" ref="root" class="edge-panel">
+    <header class="head" data-sec="head">
       <h2 class="endpoints">
         <button class="link" @click="desk.select(endSelection(edge.from))">{{ endName(edge.from) }}</button>
         <span class="muted">→</span>
@@ -53,11 +79,10 @@ const endSelection = (nodeId: string) =>
       <p v-if="upward?.inversion" class="hint muted" data-testid="upward-note">
         向上的线：本层分了层（算出的或声明的），依赖都朝下，这条是控制反转（通知、流或经端口 / 总线 / 通道），向上是应有之义（K22）。
       </p>
-      <p v-else-if="upward" class="hint warn-text" data-testid="upward-note">
-        向上却不是控制反转：{{ upward.relations.join('、') }} 是直接的查询或委托，发起方却在被依赖的一侧——多半是没标的回调、通知或经通道（K22）。
-      </p>
     </header>
-    <Section title="原始关系" :count="edge.relationIds.length">
+    <!-- ③ 需要注意：向上却不是控制反转（V15b；数据源 desk.facts.tiers.upward） -->
+    <NoticeSection :notices="notices" />
+    <Section title="原始关系" :count="edge.relationIds.length" data-sec="boundary.relations">
       <ul class="plain">
         <RelationRow v-for="r in edge.relationIds" :key="r" :id="r" summary />
       </ul>
@@ -82,9 +107,5 @@ const endSelection = (nodeId: string) =>
 .hint {
   margin: 6px 0 0;
   font-size: 12px;
-}
-
-.warn-text {
-  color: var(--warning, #b7791f);
 }
 </style>

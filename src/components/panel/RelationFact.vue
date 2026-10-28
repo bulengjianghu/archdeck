@@ -1,12 +1,15 @@
 <script setup lang="ts">
-/** 关系面板的「代码事实」一节（K5、K5b、K6）：证实状态与依据的文件依赖；未证实分可解释、两端无依赖两档；经端口的按端口证实，写了其余 via 的、概念拆分同文件的说明不判定 */
+/**
+ * 关系面板的「代码事实」一节（K5、K5b、K6）：证实状态与依据的文件依赖；未证实分可解释、两端无依赖两档；经端口的按端口证实，写了其余 via 的、概念拆分同文件的说明不判定。
+ * G11 V15c（波 2 铺开）：⑤ 证据与细节——有文件证据时缺省折叠带计数（fold）；没有文件证据时只有一行判定，折叠没有可计的物，不折。
+ */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName, viaLabel } from '@/model'
 import Section from './Section.vue'
 import FileDepList from './FileDepList.vue'
 
-const props = defineProps<{ id: string }>()
+const props = defineProps<{ id: string; /** G11 V15c：有文件证据时缺省折叠 */ fold?: boolean }>()
 const desk = useDesk()
 const fact = computed(() => desk.facts.relationFact(props.id))
 const files = computed(() => fact.value?.deps.flatMap(d => d.files) ?? [])
@@ -14,7 +17,13 @@ const name = (id: string) => (desk.index.value ? moduleName(desk.index.value, id
 </script>
 
 <template>
-  <Section v-if="fact && (fact.status !== 'skipped' || fact.host || fact.via)" title="代码事实">
+  <Section
+    v-if="fact && (fact.status !== 'skipped' || fact.host || fact.via)"
+    title="代码事实"
+    :count="files.length || undefined"
+    :fold="props.fold && files.length > 0"
+    data-sec="evidence.fact"
+  >
     <p v-if="fact.via && fact.port && fact.status === 'confirmed'" class="ok">
       ✓ 已证实（经{{ viaLabel(fact.via, desk.index.value ?? undefined) }}）：{{
         fact.deps.map(d => `${name(d.from)} → ${name(d.to)}`).join('；')

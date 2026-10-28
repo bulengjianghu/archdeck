@@ -1,16 +1,19 @@
 <script setup lang="ts">
 /**
- * 代码依赖叠加线的面板（K10）：投影到这对节点的模块依赖、其中的违规与文件证据。
- * 结构视角（ADR-0031 修订）下即依赖边面板（选中束）：「文件依赖」按元素分组、交互覆盖、规则判定与两端的不稳定度（DepStructure），再列违规；
- * 模块依赖清单已并入「文件依赖」（A6），只在交互视角的代码依赖面板列出。
+ * 代码依赖叠加线的面板（K10）与依赖边面板（选中束，ADR-0031 修订）——G11 五段骨架（ADR-0050、V15）：
+ * ① 头部（两端、类型徽标、知识）③ 需要注意：违规一行带计数、单击跳到「违规」明细（V15b，口径与模块面板同——治理信号，非门禁红 U8）
+ * ④ 边界：结构视角「文件依赖」（DepStructure，按元素分组、交互覆盖、判定与不稳定度）前置；交互视角「模块依赖」（A6 并入）
+ * ⑤ 证据与细节：违规明细（折叠带计数）。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
 import { RULE_LABELS, moduleName } from '@/model'
 import Section from './Section.vue'
 import FileDepList from './FileDepList.vue'
 import StructureFacts, { type StructureGroup } from './StructureFacts.vue'
 import DepStructure from './DepStructure.vue'
+import NoticeSection from './NoticeSection.vue'
+import { usePanelJump, type PanelNotice } from './panelNotices'
 
 const desk = useDesk()
 const structureView = computed(() => desk.perspective.value === 'structure')
@@ -26,25 +29,62 @@ const structure = computed<StructureGroup[]>(() => {
     { key: 'asm', label: '组装', title: '组装（K13）：new / 工厂 / 注册，不是关系', list: b.assembly },
   ]
 })
+
+// ── ③ 需要注意（V15b）：违规一行带计数、单击跳到 ⑤ 的「违规」明细 ──
+const root = ref<HTMLElement | null>(null)
+usePanelJump(root)
+const violations = computed(() => sel.value?.detail?.violations ?? [])
+const notices = computed<PanelNotice[]>(() =>
+  violations.value.length
+    ? [
+        {
+          key: 'violations',
+          label: '违规',
+          count: violations.value.length,
+          target: 'evidence.violations',
+          to: '违规',
+          // 与模块面板同口径（审核轮 2 B1）：治理信号，不是门禁红（U8），不含返工清单 info 级（K24）
+          note: '这对节点之间声明的架构规则违规（U2–U6），含基线内的已知违规；门禁卡的是基线外的新增（U8），返工清单的 info 级提示（K24 层符合性）不在此计数',
+        },
+      ]
+    : [],
+)
 </script>
 
 <template>
-  <div class="dep-panel">
-    <header class="head">
+  <div ref="root" class="dep-panel">
+    <header class="head" data-sec="head">
       <h2 v-if="sel">{{ name(sel.from) }} → {{ name(sel.to) }}</h2>
       <div class="badges">
         <span class="badge">{{ structureView ? '依赖边' : '代码依赖' }}</span>
         <template v-if="structure.some(g => g.list.length)"><span class="muted">知识</span><StructureFacts :groups="structure" /></template>
       </div>
     </header>
-    <Section v-if="!sel || !sel.detail" title="说明">
+    <Section v-if="!sel || !sel.detail" title="说明" data-sec="purpose">
       <p class="muted">本层没有这对节点之间的代码依赖（层次已变化，或代码事实已刷新）。</p>
     </Section>
     <template v-else>
-      <DepStructure v-if="structureView" :from="sel.from" :to="sel.to" />
-      <Section v-if="sel.detail.violations.length" title="违规" :count="sel.detail.violations.length">
+      <!-- ③ 需要注意：违规（V15b） -->
+      <NoticeSection :notices="notices" />
+      <!-- ④ 边界：结构视角「文件依赖」前置；交互视角「模块依赖」 -->
+      <DepStructure v-if="structureView" data-sec="boundary.deps" :from="sel.from" :to="sel.to" />
+      <Section v-if="!structureView" title="模块依赖" :count="sel.detail.deps.length" data-sec="boundary.deps">
         <ul class="plain">
-          <li v-for="v in sel.detail.violations" :key="v.key" class="item">
+          <li v-for="d in sel.detail.deps" :key="d.key" class="item">
+            <div>
+              <button class="link" @click="desk.revealModule(d.from)">{{ name(d.from) }}</button> →
+              <button class="link" @click="desk.revealModule(d.to)">{{ name(d.to) }}</button>
+              <span :class="d.described ? 'muted' : 'warn'">{{ d.described ? '有交互' : '未解释' }}</span>
+              <span class="muted">{{ d.files.length }} 处</span>
+            </div>
+            <FileDepList :deps="d.files" :limit="4" />
+          </li>
+        </ul>
+      </Section>
+      <!-- ⑤ 证据与细节：违规明细折叠带计数（V15c） -->
+      <Section v-if="violations.length" title="违规" :count="violations.length" fold data-sec="evidence.violations">
+        <ul class="plain">
+          <li v-for="v in violations" :key="v.key" class="item">
             <div>
               <button class="link" @click="desk.revealModule(v.from)">{{ name(v.from) }}</button> →
               <button class="link" @click="desk.revealModule(v.to)">{{ name(v.to) }}</button>
@@ -55,19 +95,6 @@ const structure = computed<StructureGroup[]>(() => {
               {{ v.reason }}<template v-if="v.allowReason">；例外理由：{{ v.allowReason }}</template>
             </p>
             <FileDepList :deps="v.files" :limit="4" />
-          </li>
-        </ul>
-      </Section>
-      <Section v-if="!structureView" title="模块依赖" :count="sel.detail.deps.length">
-        <ul class="plain">
-          <li v-for="d in sel.detail.deps" :key="d.key" class="item">
-            <div>
-              <button class="link" @click="desk.revealModule(d.from)">{{ name(d.from) }}</button> →
-              <button class="link" @click="desk.revealModule(d.to)">{{ name(d.to) }}</button>
-              <span :class="d.described ? 'muted' : 'warn'">{{ d.described ? '有交互' : '未解释' }}</span>
-              <span class="muted">{{ d.files.length }} 处</span>
-            </div>
-            <FileDepList :deps="d.files" :limit="4" />
           </li>
         </ul>
       </Section>
