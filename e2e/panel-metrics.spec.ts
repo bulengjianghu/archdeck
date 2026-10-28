@@ -1,7 +1,7 @@
 /**
- * G15：面板测量装置（不变式 8「肉眼守不住的几何纪律交给机器守」的面板版，00-candidates §4）。
+ * G15（L46）：面板测量装置（不变式 8「肉眼守不住的几何纪律交给机器守」的面板版，00-candidates §4）。
  * 对每个项目 × 每类对象（模块选一个内容丰富的：h5p present.canvas、h5player app.solution、media kit.kernel；系统 = 根层面板）
- * 测两个数，本波（G11 波 0b 原型）只**输出基线**、不断言上限——上限等波 2 铺开后由负责人定（基线数字同时记在本文件底部）：
+ * 测两个数并**断言常显行数上限**（上限为波 2 铺开 + 折叠后的基线加合理余量，数值议、负责人定稿）：
  *
  * - 常显行数：面板静息态（不滚动、不展开）占用的行数。口径：① 头部算 2 行（标题行 + 徽标行），设计说明算 1 行（出现时）；
  *   每一节（含折叠节）的标题算 1 行；非折叠节的节体内每个一级行块（.section 的直接子元素，h3 之外）各算 1 行（块内不再展开，如子模块清单整块 1 行）；
@@ -9,8 +9,12 @@
  * - 首屏可读：1700×1100 视口、缺省面板宽，不滚动、不展开时 ①–④ 段是否全部在视口内（③ 无异常时不存在，按出现的段计）；
  *   输出布尔与缺口像素（④ 段最后一节的底边超出视口下沿多少 px，不缺为 0）。
  *
- * 模块面板在结构视角测量（v=s，④ 段最全：含结构指标与影响面、表面）；系统面板与视角无关。布局与代码事实就绪后再量
- * （waitSettled + 读数连续三次相同），测量稳定（G9）。测量在浏览器里执行（字符串表达式，本侧无 DOM 类型）。
+ * 上限（2026-10-28 波 2 实测后定，议——负责人定稿；模块面板在结构视角、系统面板在代码事实就绪后的静息态测量）：
+ * - 模块面板 ≤ 36 行（h5p 基线 32 + 4、media 34 + 2；依据：① 2 + 设计说明 1 + ② 1–2 + ③ 0–3 + ④ 各节常显（出边入边已汇总、表面折叠带计数）+ ⑤ 折叠标题 ~9 + footer 1）
+ * - h5player 模块面板（最重）暂挂 ≤ 44（基线 41 + 3）：② 长文与 ④ 子模块清单仍溢出，缺口见文件尾注，波 3 处理
+ * - 系统面板按项目 ≤ 33（h5p、media 基线 31 + 2）/ ≤ 39（h5player 基线 37 + 2；治理明细的违规组多一组）：
+ *   依据：① 2 + ② 简介 1 + ③ 治理类 3 行 + ④ 分层 1 + ⑤ 生成来源 3、意图 2、健康度 6（G12 分组后）、治理明细各节（③ 的跳转落点）、折叠标题与 footer
+ * 系统面板 ①–④ 全部在首屏内（三项目实测 boundaryBottom ≤ 841 < 1100），一并断言。行数只许从常显挪进折叠、不许净增（L46）。
  */
 import { expect, test, type Page } from '@playwright/test'
 import { openDesk, waitSettled } from './helpers'
@@ -18,9 +22,9 @@ import { openDesk, waitSettled } from './helpers'
 test.use({ viewport: { width: 1700, height: 1100 } })
 
 const CASES = [
-  { project: 'h5p-arch-desk', module: 'present.canvas', level: 'present' },
-  { project: 'h5player', module: 'app.solution', level: 'app' },
-  { project: 'media-web-player', module: 'kit.kernel', level: 'kit' },
+  { project: 'h5p-arch-desk', module: 'present.canvas', level: 'present', moduleCap: 36, systemCap: 33 },
+  { project: 'h5player', module: 'app.solution', level: 'app', moduleCap: 44, systemCap: 39 },
+  { project: 'media-web-player', module: 'kit.kernel', level: 'kit', moduleCap: 36, systemCap: 33 },
 ]
 
 interface Measure {
@@ -78,35 +82,52 @@ async function measureStable(page: Page): Promise<Measure> {
 }
 
 for (const c of CASES) {
-  test(`G15 基线 · ${c.project} 模块面板（${c.module}，结构视角）：常显行数与首屏可读`, async ({ page }) => {
+  test(`G15 上限（L46）· ${c.project} 模块面板（${c.module}，结构视角）：常显行数 ≤ ${c.moduleCap}`, async ({ page }) => {
     await openDesk(page, `/p/${c.project}?level=${c.level}&sel=m:${c.module}&v=s`)
     await waitSettled(page)
     // 代码事实就绪：④ 段的结构节出现（没有代码事实时该节也渲染、只给原因，不阻塞）
     await page.waitForSelector('[data-sec="boundary.structure"]', { timeout: 20_000 })
     const m = await measureStable(page)
-    console.log(`PANEL_BASELINE ${c.project} module rows=${m.rows} readable=${m.firstScreenReadable} gapPx=${m.gapPx} boundaryBottom=${m.boundaryBottom}`)
-    expect(m.rows).toBeGreaterThan(0)
+    console.log(
+      `PANEL_BASELINE ${c.project} module rows=${m.rows} cap=${c.moduleCap} readable=${m.firstScreenReadable} gapPx=${m.gapPx} boundaryBottom=${m.boundaryBottom}`,
+    )
+    // 行数只许从常显挪进折叠、不许净增（L46）；h5player 的 44 是最重对象的暂挂豁免（② 长文与 ④ 子模块清单，波 3 收敛）
+    expect(m.rows).toBeLessThanOrEqual(c.moduleCap)
   })
 
-  test(`G15 基线 · ${c.project} 系统面板：常显行数与首屏可读`, async ({ page }) => {
+  test(`G15 上限（L46）· ${c.project} 系统面板：常显行数 ≤ ${c.systemCap}`, async ({ page }) => {
     await openDesk(page, `/p/${c.project}`)
     await waitSettled(page)
     await page.waitForSelector('[data-sec="boundary.top"]', { timeout: 20_000 })
+    // 代码事实就绪再量：健康度的治理组（fold-gov）随治理报告出现；缺了它量到的是加载中途的假低值（G9）
+    await page.waitForSelector('.fold-gov', { timeout: 20_000 })
     const m = await measureStable(page)
-    console.log(`PANEL_BASELINE ${c.project} system rows=${m.rows} readable=${m.firstScreenReadable} gapPx=${m.gapPx} boundaryBottom=${m.boundaryBottom}`)
-    expect(m.rows).toBeGreaterThan(0)
+    console.log(
+      `PANEL_BASELINE ${c.project} system rows=${m.rows} cap=${c.systemCap} readable=${m.firstScreenReadable} gapPx=${m.gapPx} boundaryBottom=${m.boundaryBottom}`,
+    )
+    expect(m.rows).toBeLessThanOrEqual(c.systemCap)
+    // 系统面板 ①–④ 全部在首屏内（三项目实测 boundaryBottom ≤ 841 < 1100）
+    expect(m.firstScreenReadable).toBe(true)
   })
 }
 
 /*
- * G15 基线（2026-10-28，G11 波 0b 原型落地后实测，1700×1100、缺省面板宽；只记录、不断言上限）：
+ * G15 基线（2026-10-28，波 2 · G11 铺开 + G12 二级折叠落地后实测，1700×1100、缺省面板宽；上限为基线 + 余量，议——负责人定稿）：
+ * 系统面板在代码事实就绪后量（等 .fold-gov）——波 0b 基线里系统面板 19 / 19 / 27 是治理报告加载中途的假低值，作废。
  *
- * | 项目 | 对象 | 常显行数 | 首屏可读 | 缺口 px |
- * |---|---|---|---|---|
- * | h5p-arch-desk | 模块 present.canvas | 29 | 否 | 388 |
- * | h5p-arch-desk | 系统 | 27 | 是 | 0 |
- * | h5player | 模块 app.solution | 41 | 否 | 1926 |
- * | h5player | 系统 | 19 | 是 | 0 |
- * | media-web-player | 模块 kit.kernel | 34 | 否 | 924 |
- * | media-web-player | 系统 | 19 | 是 | 0 |
+ * | 项目 | 对象 | 常显行数（基线） | 上限 | 首屏可读（①–④） | ④ 底边 px |
+ * |---|---|---|---|---|---|
+ * | h5p-arch-desk | 模块 present.canvas | 32 | 36 | 否 | 1540 |
+ * | h5p-arch-desk | 系统 | 31 | 33 | 是 | 771 |
+ * | h5player | 模块 app.solution | 41 | 44（暂挂，波 3） | 否 | 2762 |
+ * | h5player | 系统 | 37 | 39 | 是 | 704 |
+ * | media-web-player | 模块 kit.kernel | 34 | 36 | 否 | 2024 |
+ * | media-web-player | 系统 | 31 | 33 | 是 | 841 |
+ *
+ * 模块面板相对波 0b 的行数变化（29→32 / 41→41 / 34→34）来自描述与代码事实推进（源码树前进 17+ 提交，表面元素与 ③ 信号变多），
+ * 不是骨架回退；系统面板 27→31（h5p）同样主要是治理明细就绪后的真值。
+ *
+ * h5player 模块面板剩余缺口（波 3 建议，不强做）：首屏缺口 1663 px。量化：② 说明长文（app.solution 的职责多行）与
+ * ④ 子模块清单（app.solution 子模块最多，每行块 1 行但块数多）占大头；可做的收敛——② 长文超 N 行折叠带计数、
+ * ④ 子模块清单只列前 M 个其余收「+N」（折叠必有计数）、结构指标与影响面（ModuleStructure）的闭包明细再折叠一层。
  */
