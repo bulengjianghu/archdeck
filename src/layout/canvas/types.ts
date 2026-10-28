@@ -169,6 +169,8 @@ export interface DepEdgeLook {
   against?: { from: number; to: number }
   /** F10、L42：向上——依赖违背算出的层（依赖方在被依赖方之下） */
   upward?: true
+  /** L43（F11）：逐条的例外（L0）——画得最醒目（深色、线宽加半档）；其余为骨架（安静） */
+  exception?: true
   /** 悬停说明：种类与档、条数、覆盖、规则判定 */
   title: string
 }

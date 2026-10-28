@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 「显示」面板 · 依赖 · 形态与档（结构视角，L16、L19、L21，ADR-0031 修订）：元素级边的四种形态记号（子类、组装、端口实现、使用）、
- * 依赖的三档浓淡（K14）与束的一句说明；三个开关——只引类型（typeOnly，B1）、只看交互使用（invokesOnly，B1）、只看未解释（uncoveredOnly，B4）——
+ * 醒目度（L43：例外深色加宽、骨架安静）与依赖的档（只引类型点线，K14）、束的一句说明；三个开关——只引类型（typeOnly，B1）、只看交互使用（invokesOnly，B1）、只看未解释（uncoveredOnly，B4）——
  * 各自给出收起的束条数（desk.facts.structureDisplay 的 hidden；开关关着时给出打开后会收起的条数），另给跨界折叠的条数（B2）；
  * 「表面」一段：总是展开表面（surfaceAlways，C6）开关与元素四类记号、越过入口、界外记号的说明（L20）。
  * 开关读写显示偏好（useStructurePrefs，画布同读），不进 URL。没有代码事实时（U16）只说明允许边。
@@ -64,11 +64,21 @@ const crossCount = computed(() => hiddenWith({})?.cross ?? 0)
           >{{ DEP_FORM_LABEL[f] }}<span class="hint"> = {{ DEP_FORM_HINT[f] }}</span></span
         >
       </div>
-      <div class="section-label">依赖的档 · 浓淡</div>
-      <div v-for="t in DEP_TIERS" :key="t" class="item" :class="{ muted: t === 'type' && !typeOnly }">
+      <div class="section-label">醒目度 · 跟信息量走</div>
+      <div class="item" data-testid="legend-salience-exception">
+        <span class="sw kind"><StructureSwatch exception /></span>
+        <span>例外（违规、向上、逆稳定、未解释）：深色、加宽，最先看到</span>
+      </div>
+      <div class="item" data-testid="legend-salience-skeleton">
+        <span class="sw kind"><StructureSwatch /></span>
+        <span>骨架（其余画出来的依赖）：安静的中灰，线宽 = 条数；聚焦时其余变淡</span>
+      </div>
+      <div class="section-label">依赖的档</div>
+      <div v-for="t in DEP_TIERS" :key="t" class="item" :class="{ muted: t === 'type' && !typeOnly }" :data-tier="t">
         <span class="sw kind"><StructureSwatch :tier="t" /></span>
         <span
-          >{{ DEP_TIER_LABEL[t] }}<span class="hint"> = {{ DEP_TIER_HINT[t] }}</span></span
+          >{{ DEP_TIER_LABEL[t]
+          }}<span class="hint"> = {{ DEP_TIER_HINT[t] }}{{ t === 'type' ? '；点线' : '；画布上与另一档同画，悬停与面板写明' }}</span></span
         >
       </div>
       <div class="item bundle" data-testid="bundle-note">

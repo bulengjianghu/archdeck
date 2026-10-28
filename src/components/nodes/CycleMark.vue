@@ -18,7 +18,7 @@ const pick = () => {
   <button
     v-if="data.cycle !== undefined && !data.restHidden?.includes('cycle')"
     class="cycle-mark nodrag"
-    :class="{ band, selected: data.cycleSelected }"
+    :class="{ 'on-band': band, selected: data.cycleSelected }"
     data-testid="cycle-mark"
     :title="`本层的环 ${data.cycle}：与同编号的节点互相依赖${data.cycleHidden ? `；环内 ${data.cycleHidden} 条依赖静息态收起` : ''}（单击选中环组，画出环内的依赖）`"
     @click.stop="pick"
@@ -49,7 +49,7 @@ const pick = () => {
   background: var(--danger);
 }
 
-.cycle-mark.band {
+.cycle-mark.on-band {
   position: absolute;
   top: -9px;
   right: 10px;

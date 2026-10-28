@@ -55,6 +55,7 @@ export {
   spreadEnds,
 } from './routes'
 export { RESERVED, fromElkGraph, placeShelf, portSide, toElkGraph } from './graph'
+export { LINE_BUDGET, budgetHint } from './budget'
 export {
   elkLayers,
   placeTierLabels,

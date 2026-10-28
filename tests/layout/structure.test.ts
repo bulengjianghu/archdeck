@@ -415,3 +415,12 @@ describe('L42 环按组、可推出的退到计数（第十四轮 F9、F10）', 
     expect(ids((await sceneOf(desk)).scene)).toContain('bundle:core.impl->core.api')
   })
 })
+
+describe('L43 醒目度跟信息量走（第十四轮 F11）', () => {
+  it('照画的例外（api → log 未解释）标 exception、画得最醒目；骨架不标', async () => {
+    const desk = await openDesk()
+    const { scene: s } = await sceneOf(desk)
+    expect(dep(s, 'bundle:core.api->core.log').data.dep!.exception).toBe(true)
+    expect(dep(s, 'bundle:core.util->core.api').data.dep!.exception).toBeUndefined()
+  })
+})

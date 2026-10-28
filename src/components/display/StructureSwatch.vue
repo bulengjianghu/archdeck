@@ -9,14 +9,17 @@ import type { DepForm, DepTier } from '@/model'
 import { WIDTH } from '../edges/edgeStyle'
 import { depColor, depDash } from '../edges/depStyle'
 
-const props = withDefaults(defineProps<{ kind?: DepForm | 'allowed'; tier?: DepTier; width?: number; halo?: boolean; muted?: boolean }>(), {
-  kind: 'use',
-  tier: undefined,
-  width: 36,
-})
+const props = withDefaults(
+  defineProps<{ kind?: DepForm | 'allowed'; tier?: DepTier; width?: number; halo?: boolean; muted?: boolean; exception?: boolean }>(),
+  {
+    kind: 'use',
+    tier: undefined,
+    width: 36,
+  },
+)
 
-const color = computed(() => depColor({ kind: props.kind, ...(props.tier ? { tier: props.tier } : {}) }))
-const dash = computed(() => depDash(props.kind))
+const color = computed(() => depColor({ kind: props.kind, ...(props.tier ? { tier: props.tier } : {}), ...(props.exception ? { exception: true } : {}) }))
+const dash = computed(() => depDash(props.kind, props.tier))
 const triangle = computed(() => props.kind === 'subclass')
 /** 端口实现：被依赖方一端空心菱形 ◇ */
 const port = computed(() => props.kind === 'implements')

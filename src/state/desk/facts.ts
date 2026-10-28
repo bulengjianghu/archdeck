@@ -79,7 +79,7 @@ import {
   sketchLifetime,
   type RawFile,
 } from '@/model'
-import { surfaceExpansion, type Expansion, type LayoutTiers, type StructureLinks } from '@/layout/layout'
+import { budgetHint, isOutsideEdge, surfaceExpansion, type Expansion, type LayoutTiers, type StructureLinks } from '@/layout/layout'
 import { baseLayoutLinks, toLayoutTiers } from './layoutLinks'
 import { perspectiveOf, type ViewState } from '../transition'
 import type { createSourceSync } from '../sync/source'
@@ -578,6 +578,21 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     () => structureDisplay({ typeOnly: false, invokesOnly: false, uncoveredOnly: false })?.cycleHidden ?? new Map(),
   )
 
+  /**
+   * L43（第十四轮 F11）：线的预算——本层静息态常显的线数超过 LINE_BUDGET 时画布角提示；结构视角数缺省偏好下画出的束，
+   * 交互视角数本层内部的交互边（分层总览为带间边）；运行视角与没有代码事实的结构视角不给
+   */
+  const lineBudget = computed<string | null>(() => {
+    const v = view.value
+    const p = perspectiveOf(state.value)
+    if (!v || p === 'run') return null
+    if (p === 'structure') {
+      const d = structureDisplay({ typeOnly: false, invokesOnly: false, uncoveredOnly: false }, { rest: true })
+      return d ? budgetHint('structure', d.shown.length) : null
+    }
+    return budgetHint('interaction', v.edges.filter(e => v.mode === 'layered' || !isOutsideEdge(v, e)).length)
+  })
+
   /** L15a①、F10、L42：照画的束——逐条的例外（基线外违规、向上、逆稳定；未解释只在两端都是内部节点时）；环上的按组呈现 */
   const anomalies = computed<Set<string>>(() => {
     const g = grading.value
@@ -596,7 +611,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
    * C6：表面展开取 expansion（选中模块 → 它的全部元素；surfaceAlways → 本层全部模块；选中束不展开，T2-7）。
    * 没有代码事实（允许依赖图）或不在结构视角时为 null。
    */
-  const structureDisplay = (filter: StructureFilter): StructureDisplay | null => {
+  const structureDisplay = (filter: StructureFilter, opts: { rest?: boolean } = {}): StructureDisplay | null => {
     const sv = structure.value
     const v = view.value
     if (!sv?.facts || !v) return null
@@ -604,7 +619,8 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     const bnd = boundaryNodes.value
     const odd = anomalies.value
     const touch = (id: string | null | undefined, node: string) => !!id && (node === id || node === `boundary:${id}`)
-    const near = (b: Bundle) => [s.hover, s.selection?.kind === 'module' ? s.selection.id : null].some(id => touch(id, b.from) || touch(id, b.to))
+    // L43：rest 时按静息态算（不看悬停与选中），线的预算用
+    const near = (b: Bundle) => !opts.rest && [s.hover, s.selection?.kind === 'module' ? s.selection.id : null].some(id => touch(id, b.from) || touch(id, b.to))
     const reach = new Map<string, BundleReach>()
     const cross = new Map<string, { in: number; out: number }>()
     const hidden = { type: 0, value: 0, covered: 0, cross: 0, reducible: 0, cycle: 0 }
@@ -612,7 +628,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     const g = grading.value
     const cycleNo = level.value?.cycles
     // L42：选中环组（V2，sel=y:<环编号>）时环内的束画出
-    const pickedCycle = s.selection?.kind === 'cycle' ? Number(s.selection.id) : null
+    const pickedCycle = !opts.rest && s.selection?.kind === 'cycle' ? Number(s.selection.id) : null
     const direct = new Map<string, Bundle[]>()
     const cycleHidden = new Map<number, number>()
     for (const b of sv.bundles) {
@@ -720,6 +736,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     structureDisplay,
     grading,
     cycleHidden,
+    lineBudget,
     expansion,
     spreads,
     surfaceInfo,

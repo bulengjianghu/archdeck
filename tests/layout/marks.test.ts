@@ -40,3 +40,13 @@ describe('L36 层的状态记号', () => {
     expect([LAYER_STATUS.computed.text, LAYER_STATUS.pending.text, LAYER_STATUS.confirmed.text]).toEqual(['算出', '待确认', '已确认'])
   })
 })
+
+describe('L43 线的预算', () => {
+  it('超过 15 条才提示；结构视角说依赖多，交互视角说描述可能过细', async () => {
+    const { LINE_BUDGET, budgetHint } = await import('../../src/layout/layout')
+    expect(LINE_BUDGET).toBe(15)
+    expect(budgetHint('structure', 15)).toBeNull()
+    expect(budgetHint('structure', 16)).toContain('考虑标出核心或拆分')
+    expect(budgetHint('interaction', 30)).toContain('描述是否写得过细')
+  })
+})

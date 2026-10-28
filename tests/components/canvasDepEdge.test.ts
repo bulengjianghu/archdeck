@@ -7,7 +7,19 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import DepEdge from '../../src/components/edges/DepEdge.vue'
-import { ALLOWED_COLOR, FACT_COLOR, TIER_COLOR, depColor, depDash, depEnds, depStroke, umlDepth, umlPath } from '../../src/components/edges/depStyle'
+import {
+  ALLOWED_COLOR,
+  DOTTED,
+  EXCEPTION_COLOR,
+  EXCEPTION_EXTRA,
+  SKELETON_COLOR,
+  depColor,
+  depDash,
+  depEnds,
+  depStroke,
+  umlDepth,
+  umlPath,
+} from '../../src/components/edges/depStyle'
 import { DASHED, DOT_ARROW, WIDTH, arrowSize } from '../../src/components/edges/edgeStyle'
 import { DEFAULT_STRUCTURE_PREFS, resetStructurePrefs, useStructurePrefs } from '../../src/components/display/useDisplayPrefs'
 import { depWeight, violationLook, type DepEdgeLook, type RouteEdgeData } from '../../src/layout/canvas'
@@ -60,12 +72,13 @@ describe('L16 编码表', () => {
     expect(depStroke({ kind: 'allowed' }).opacity).toBe(1)
   })
 
-  it('依赖三档用明度（深 / 中 / 浅），不改透明度；其余种类中性色；允许边意图色', () => {
-    expect(depColor({ kind: 'use', tier: 'invokes' })).toBe(TIER_COLOR.invokes)
-    expect(depColor({ kind: 'use', tier: 'value' })).toBe(TIER_COLOR.value)
-    expect(depColor({ kind: 'use', tier: 'type' })).toBe(TIER_COLOR.type)
-    expect(new Set(Object.values(TIER_COLOR)).size).toBe(3)
-    expect(depColor({ kind: 'subclass' })).toBe(FACT_COLOR)
+  it('L43（第十四轮 F11）：骨架一律安静中灰、例外深色加宽半档；档不用明度——只引类型点线；对比度只留给聚焦变淡', () => {
+    for (const tier of ['invokes', 'value', 'type'] as const) expect(depColor({ kind: 'use', tier })).toBe(SKELETON_COLOR)
+    expect(depColor({ kind: 'subclass' })).toBe(SKELETON_COLOR)
+    expect(depColor({ kind: 'use', tier: 'value', exception: true })).toBe(EXCEPTION_COLOR)
+    expect(depStroke({ kind: 'use', weight: 1, exception: true }).strokeWidth).toBe(WIDTH[0] + EXCEPTION_EXTRA)
+    expect(depDash('use', 'type')).toBe(DOTTED)
+    expect(depDash('use', 'value')).toBe(DASHED)
     expect(depColor({ kind: 'allowed' })).toBe(ALLOWED_COLOR)
     for (const tier of ['invokes', 'value', 'type'] as const) expect(depStroke({ kind: 'use', tier }).opacity).toBe(1)
     expect(depStroke({ kind: 'use', tier: 'type', dim: true }).opacity).toBeLessThan(1)
@@ -88,14 +101,10 @@ describe('L16 编码表', () => {
 })
 
 describe('L16、L21 第八轮：按形态与档', () => {
-  it('形态：使用（第七轮的 dependency 同义）虚线 + 开口箭头；四种形态都按档定浓淡；不带档的事实形态为中性色', () => {
+  it('形态：使用（第七轮的 dependency 同义）虚线 + 开口箭头；形态只靠端点记号，颜色不随形态与档（L43）', () => {
     expect(depDash('use')).toBe(DASHED)
     expect(depEnds('use')).toEqual({ end: 'open' })
-    expect(depColor({ kind: 'use', tier: 'value' })).toBe(TIER_COLOR.value)
-    expect(depColor({ kind: 'assembly', tier: 'type' })).toBe(TIER_COLOR.type)
-    expect(depColor({ kind: 'subclass', tier: 'invokes' })).toBe(TIER_COLOR.invokes)
-    expect(depColor({ kind: 'implements' })).toBe(FACT_COLOR)
-    expect(depColor({ kind: 'use' })).toBe(TIER_COLOR.invokes)
+    expect(new Set((['use', 'assembly', 'subclass', 'implements'] as const).map(kind => depColor({ kind, tier: 'invokes' }))).size).toBe(1)
   })
 
   it('线宽档按束内元素级边条数：1 / 2–4 / ≥5', () => {

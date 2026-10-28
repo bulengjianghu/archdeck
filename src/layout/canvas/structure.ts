@@ -407,8 +407,12 @@ export function structureScene(input: CanvasInput, pv: PositionedView, focusIds:
       }
       if (rest.length) items.push(restItem(idx, b, rest))
     }
-    // F10：向上的束（依赖违背算出的层）标「向上」
-    for (const e of items) if (disp.upward?.has(e.bundle ?? e.id)) e.look = { ...e.look, upward: true }
+    // F10：向上的束（依赖违背算出的层）标「向上」；L43：照画的例外画得最醒目
+    for (const e of items) {
+      const b = e.bundle ?? e.id
+      if (disp.upward?.has(b)) e.look = { ...e.look, upward: true }
+      if (disp.anomalies.has(b)) e.look = { ...e.look, exception: true }
+    }
     shown = [...items]
     if (picked) for (const e of items) if (e.id === picked.id || e.bundle === picked.id) selected.add(e.id)
     // B2：跨界折叠——一端是边界节点、没画出来的（不含照画的）束，按本层那一端节点计入、记下另一端
