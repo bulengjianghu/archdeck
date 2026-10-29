@@ -1,7 +1,7 @@
 /** 项目列表页展示的项目摘要（由接入层在 Node 侧算好，页面只展示） */
 import type { SourceDef } from './types'
 import type { DesignInfo } from './design'
-import type { ReviewCounts } from './review'
+import type { ReviewCounts } from './review/types'
 
 export interface ProjectSummary {
   /** 项目 ID，即模型根目录下的子目录名 */

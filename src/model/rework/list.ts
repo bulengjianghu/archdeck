@@ -3,7 +3,7 @@
  * 每条带文件行号、规则编号与建议动作。关于被描述系统的知识，页面、命令行与 MCP 共用同一份结果。
  */
 import { RULE_LABELS, moduleName } from '../names'
-import { bindRelation, forEachStep, planScenario, querySideEffects, RUNTIME_RELATION_TYPES } from '../scenario'
+import { bindRelation, forEachStep, planScenario, querySideEffects, RUNTIME_RELATION_TYPES } from '../scenario/semantics'
 import { matchRef, missingEvidence, moduleEntry, type LocalSource, type SourceOwnership } from '../source'
 import {
   alignedLevel,

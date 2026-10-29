@@ -3,7 +3,7 @@
  * 路径一律相对源码根目录、以 `/` 分隔。
  */
 import type { Issue, ModuleRole, RelationType, RelationVia, RuleKind } from '../types'
-import type { ExportKind, SourceOwnership, ExportedSymbol } from '../source'
+import type { ExportKind, SourceOwnership, ExportedSymbol } from '../source/types'
 
 export type DepKind = 'value' | 'type'
 
