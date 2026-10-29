@@ -39,8 +39,11 @@ describe('§6.10 架构治理验收', () => {
     expect(r.kind).toBe('file')
     if (r.kind !== 'file') return
     expect(r.owners).toEqual(['model.pipeline.loader'])
-    expect(r.module!.path.map(p => p.id)).toEqual(['model', 'model.pipeline', 'model.pipeline.loader'])
-    expect(r.module!.rules.layers).toEqual([{ layer: 'model（模型层）', mayDependOn: [] }])
+    expect(r.module!.path.map(p => p.id)).toEqual(['model', 'model.description', 'model.pipeline', 'model.pipeline.loader'])
+    expect(r.module!.rules.layers).toEqual([
+      { layer: 'model（模型层）', mayDependOn: [] },
+      { layer: 'model.description（描述）', mayDependOn: ['model.contract（契约）'] },
+    ])
   })
 
   it('2. check：模型层不可依赖视图状态层；视图状态层依赖 @/model 允许并附目标语义；外部包无约束', () => {

@@ -176,14 +176,14 @@ describe('L30 几何检查器', () => {
 // 只算核心跨层边之间的互压（h5player 无代码事实这一组 3 → 1）；选中一条核心跨层边、没有聚焦模块时它与带标签的层间边同时出现，另成场景（新纳入测量，
 // 多出 2 处：app → infra.framework 的委托 / 查询标签与层间边标签互压），合计 3：与 labels 分支的终点持平，比 2fbf33e 多 1（议，见 A-08「合并」）
 const CEILING: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 62, arrows: 1, crossNode: 12, labels: 0, hug: 6, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 53, arrows: 0, crossNode: 3, labels: 0, hug: 10, onFrame: 0 },
   h5player: { overlap: 93, arrows: 1, crossNode: 2, labels: 0, hug: 18, onFrame: 0 },
   'media-web-player': { overlap: 23, arrows: 0, crossNode: 7, labels: 2, hug: 5, onFrame: 0 },
 }
-// 第十五轮：模型层新增两个第二级模块（模型层入口、场景语义，ADR-0051，两者标核心以默认可见）——模型层多出入口的导出面与语义半区的边：
-// 有代码事实重合 59 → 62、压节点 3 → 12、贴框 7 → 6；无代码事实重合 39 → 48、压节点 3 → 12
+// 第十五轮：模型层新增两个第二级模块（模型层入口、场景语义）后，把四层声明为层（ADR-0051 修订）——模型层由普通层次改为分层总览：
+// 有代码事实重合 62 → 53、压节点 12 → 3、贴框 6 → 10；无代码事实重合 48 → 45、压节点 12 → 3、贴框 6 → 7
 const BARE: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 48, arrows: 0, crossNode: 12, labels: 0, hug: 6, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 45, arrows: 0, crossNode: 3, labels: 0, hug: 7, onFrame: 0 },
   h5player: { overlap: 96, arrows: 0, crossNode: 0, labels: 3, hug: 13, onFrame: 0 },
   'media-web-player': { overlap: 35, arrows: 0, crossNode: 1, labels: 0, hug: 6, onFrame: 0 },
 }

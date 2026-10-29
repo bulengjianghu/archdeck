@@ -156,7 +156,6 @@ modules:
   - id: model.review
     name: 确认
     abstraction: 确认的摘要、指纹与状态都是纯函数，页面、命令行与草图归档共用同一份。
-    parent: model
     provides: [if.review.query]
     codeRefs: [src/model/review/index.ts, src/model/review/hash.ts, src/model/review/status.ts, src/model/review/text.ts]
 

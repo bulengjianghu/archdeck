@@ -7,18 +7,26 @@ import { graphNode, openDesk, waitSettled } from './helpers'
 
 const top = async (page: Parameters<typeof graphNode>[0], id: string) => (await graphNode(page, id).boundingBox())!.y
 
-test('L28、L29：本项目「模型层」——类型与 Schema 在最下，层带写层号，切到结构视角节点不动', async ({ page }) => {
+test('ADR-0051：本项目「模型层」声明为四层——打开即 4 条带，契约在最下，切到结构视角节点不动', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=model')
-  await expect(page.locator('.vue-flow__node[data-id="tier:0"]')).toContainText('第 1 层 · 入口')
-  await expect(page.locator('.vue-flow__node[data-id="tier:6"]')).toContainText('被依赖')
+  const bandTop = async (id: string) => (await graphNode(page, id).boundingBox())!.y
+  for (const [id, name] of [
+    ['model.deliver', '交付'],
+    ['model.explain', '解释'],
+    ['model.description', '描述'],
+    ['model.contract', '契约'],
+  ] as const)
+    await expect(page.locator(`.vue-flow__node[data-id="${id}"]`)).toContainText(name)
+  expect(await bandTop('model.deliver')).toBeLessThan(await bandTop('model.explain'))
+  expect(await bandTop('model.explain')).toBeLessThan(await bandTop('model.description'))
+  expect(await bandTop('model.description')).toBeLessThan(await bandTop('model.contract'))
   const types = await top(page, 'model.types')
   for (const id of ['model.pipeline', 'model.governance', 'model.projector']) expect(await top(page, id)).toBeLessThan(types)
-  expect(await top(page, 'model.rework')).toBeLessThan(await top(page, 'model.governance'))
   // 位置要跨两次加载逐字节相等：先等首帧后的整体平移（再适应）结束，两边都在稳定态上读
   await waitSettled(page)
   const before = await graphNode(page, 'model.governance').boundingBox()
   await openDesk(page, '/p/h5p-arch-desk?level=model&v=s')
-  await expect(page.locator('.vue-flow__node[data-id="tier:0"]')).toBeAttached()
+  await expect(page.locator('.vue-flow__node[data-id="model.contract"]')).toBeAttached()
   await waitSettled(page)
   expect(await graphNode(page, 'model.governance').boundingBox()).toEqual(before)
 })
