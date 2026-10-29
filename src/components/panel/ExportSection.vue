@@ -21,7 +21,7 @@ const few = computed(() => symbols.value.length <= 3)
   <Section title="入口导出" :count="res.status === 'ok' ? symbols.length || undefined : undefined" :fold="props.fold">
     <p v-if="res.status === 'loading'" class="muted">正在解析导出…</p>
     <p v-else-if="res.status !== 'ok'" class="muted">无法解析导出{{ res.status === 'error' ? `：${res.message}` : '' }}</p>
-    <p v-else-if="!symbols.length" class="muted">没有导出</p>
+    <p v-else-if="!symbols.length" class="muted">本模块没有导出</p>
     <template v-else-if="match">
       <div v-if="match.matched.length" class="group">
         <div class="sub ok">已对应描述的接口 {{ match.matched.length }}</div>

@@ -124,7 +124,7 @@ watch([focus, rows], () => nextTick(reveal))
         没有入口（entry）：入口导出与越过入口都不判，表面只有声明的接口，W / B 不给；在描述里给模块写 <code>entry</code>
       </p>
 
-      <p v-if="!rows.length" class="muted">没有表面元素（入口没有导出，也没有声明接口）</p>
+      <p v-if="!rows.length" class="muted">本模块没有表面元素（入口没有导出，也没有声明接口）</p>
       <ul v-else class="plain elements" aria-label="表面元素">
         <li
           v-for="(r, i) in shown"

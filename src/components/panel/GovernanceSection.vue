@@ -88,7 +88,8 @@ const governanceCount = computed(() => (r.value ? r.value.violations.length + li
 </script>
 
 <template>
-  <Section v-if="part !== 'detail'" title="健康度（架构治理）">
+  <!-- G16（波 3）：节名与模块面板「架构治理」统一（原「健康度（架构治理）」）；健康度按对象分组的 V16 分组保留 -->
+  <Section v-if="part !== 'detail'" title="架构治理">
     <dl class="kv review-line" :title="`确认范围：核心模块与第二级模块（Z4）；已确认 ${rc.reviewed} / ${rc.scope}，需复核 ${rc.stale}`">
       <dt>确认</dt>
       <dd>

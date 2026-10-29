@@ -40,7 +40,7 @@ const scenarios = computed(() => (idx.value.triggeredBy.get(props.id) ?? []).map
       <ul v-if="relations.length" class="plain">
         <RelationRow v-for="r in relations" :key="r" :id="r" :perspective="a.id" />
       </ul>
-      <p v-else class="muted">没有与系统的关系</p>
+      <p v-else class="muted">本参与者没有与系统的关系</p>
     </Section>
     <Section title="由它触发的场景" :count="scenarios.length" data-sec="boundary.scenarios">
       <ul v-if="scenarios.length" class="plain">
@@ -49,7 +49,7 @@ const scenarios = computed(() => (idx.value.triggeredBy.get(props.id) ?? []).map
           <span v-if="s.cause" class="muted">{{ s.cause }}</span>
         </li>
       </ul>
-      <p v-else class="muted">没有以它为第一条消息发送方的场景</p>
+      <p v-else class="muted">本参与者没有作为第一条消息发送方的场景</p>
     </Section>
     <footer class="src muted">
       {{ a.src.file }}<template v-if="a.src.line">:{{ a.src.line }}</template>

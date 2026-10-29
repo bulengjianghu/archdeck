@@ -244,7 +244,7 @@ const relText = (id: string) => {
         </ul>
       </div>
     </template>
-    <p v-else class="muted">这个模块没有指标（系统根不计）</p>
+    <p v-else class="muted">本模块没有指标（系统根不计）</p>
   </Section>
 </template>
 

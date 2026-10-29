@@ -53,7 +53,7 @@ const conflict = (f: string) => desk.files.ownership.value?.conflicts.includes(f
           <span class="muted"> · {{ VIA[entry.via] }}</span>
           <span v-if="entry.missing" class="badge warn">文件不存在</span>
         </template>
-        <span v-else class="muted">没有对外入口（无 entry、模块目录下无 index.ts 或包入口）</span>
+        <span v-else class="muted">本模块没有对外入口（无 entry、模块目录下无 index.ts 或包入口）</span>
       </p>
     </template>
   </Section>
