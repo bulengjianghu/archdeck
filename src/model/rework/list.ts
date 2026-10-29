@@ -85,6 +85,7 @@ const ISSUE_RULES: Record<string, string[]> = {
   'stratum.member-missing': ['ST-6'],
   'stratum.shadowed': ['ST-6'],
   'stratum.redeclared': ['ST-6'],
+  'stratum.not-inherited': ['ST-6'],
   'stratum.principle-missing': ['ST-1'],
   'nested-parent-ignored': ['M10'],
   'relation.via-target': ['M11'],

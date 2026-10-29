@@ -257,7 +257,9 @@ export function load(files: readonly RawFile[]): LoadResult {
   // 只有草图的版本（草图作为版本，DV-10：没有 modules/）本来就只画了一部分模块：roles 指向本版本没有的模块不提醒
   const sketchOnly = !files.some(f => f.path.startsWith('modules/'))
   applyRoles(roles, modules, sketched, issues, sketchOnly)
-  const mergedStrata = mergeStrata(strata, system.id, issues)
+  // DV-10：草图作为版本（设计的草图 + 当前版本的 intent/**，没有 modules/）里的 intent/strata.yaml 是从当前版本带来的
+  const sketchVersion = sketchOnly && files.some(f => /(^|\/)sketches\/[^/]+\.ya?ml$/.test(f.path))
+  const mergedStrata = mergeStrata(strata, system.id, issues).map(s => (sketchVersion && !s.fromSketch ? { ...s, inherited: true as const } : s))
 
   return {
     model: {

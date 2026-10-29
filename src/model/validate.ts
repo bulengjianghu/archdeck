@@ -222,7 +222,8 @@ function checkStrata(input: ArchModel, { modules, rootId, err, info, warn }: Che
   const byParent = new Map<string, StratumEntity[]>()
   for (const s of input.strata ?? []) {
     if (s.parent !== rootId && !modules.has(s.parent)) {
-      warn('stratum.parent-missing', `层「${s.id}」的父模块「${s.parent}」不在描述里，这条分层声明没有落处`, s.src)
+      // 只有草图的版本本来就只画了一部分模块：带来的声明没有落处不提醒（同 M16 的 roles）
+      if (!s.inherited) warn('stratum.parent-missing', `层「${s.id}」的父模块「${s.parent}」不在描述里，这条分层声明没有落处`, s.src)
       continue
     }
     const list = byParent.get(s.parent) ?? []
@@ -246,6 +247,19 @@ function checkStrata(input: ArchModel, { modules, rootId, err, info, warn }: Che
     const claims = new Map<string, Set<string>>()
     const claim = (child: string, layer: string) => claims.set(child, (claims.get(child) ?? new Set()).add(layer))
     const declared = new Map((input.strata ?? []).filter(s => s.parent === parent).map(s => [s.id, s.members]))
+    // ST-6：只有草图的版本从当前版本带来的声明（intent/strata.yaml）只在本版本里全有时生效——成员缺了的去掉，
+    // 有子模块不在任何一层（设计改了这一层）或引用对不上，整份不用（info），不报错误与提醒
+    if (list.some(l => l.inherited)) {
+      const kept = (id: string) => kidIds.has(id)
+      const all = new Set([...declared.values()].flatMap(m => m.filter(kept)))
+      const fits = kids.every(k => all.has(k.id) || (k.stratum !== undefined && ids.has(k.stratum))) && list.every(l => (l.mayDependOn ?? []).every(d => ids.has(d)))
+      if (!fits) {
+        info('stratum.not-inherited', `「${parent}」在这个版本里的子模块与当前版本的分层声明对不上（设计改了这一层），本版本不按分层呈现`, list[0].src)
+        for (const k of kids) delete k.stratum
+        continue
+      }
+      for (const [id, m] of declared) declared.set(id, m.filter(kept))
+    }
     for (const l of list) {
       for (const id of declared.get(l.id) ?? []) {
         if (kidIds.has(id)) claim(id, l.id)

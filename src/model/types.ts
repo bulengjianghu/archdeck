@@ -574,6 +574,8 @@ export interface StratumEntity extends Omit<StratumDef, 'members'> {
   migrated?: true
   /** 声明出自草图（X1：同一父模块草图与 intent/strata.yaml 都写了时以草图为准） */
   fromSketch?: true
+  /** 只有草图的版本（DV-10）从当前版本带来的 intent/strata.yaml 声明：只在本版本里成员齐全时生效（ST-6） */
+  inherited?: true
   src: SourceLoc
 }
 

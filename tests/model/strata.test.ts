@@ -72,6 +72,40 @@ describe('ST-6 声明的读入与校验', () => {
   })
 })
 
+describe('ST-6 只有草图的版本（DV-10）带来的 intent/strata.yaml', () => {
+  // 草图作为版本：当前版本的 system.yaml + intent/** + 设计的草图，没有 modules/
+  const STRATA = `strata:\n  app:\n    - { id: top, name: 入口, asks: 问, admits: 判, members: [app.ui, app.cli] }\n    - { id: base, name: 基础, asks: 问, admits: 判, members: [app.core] }\n  gone:\n    - { id: x, name: X, asks: 问, admits: 判, members: [gone.a] }\n`
+  const version = (kids: string) =>
+    loadModel([
+      { path: 'system.yaml', text: SYSTEM },
+      { path: 'intent/strata.yaml', text: STRATA },
+      { path: 'sketches/root.yaml', text: `sketch:\n  id: d\n  mount: root\n  modules:\n    - { id: app, name: App, responsibility: 应用, children: [${kids}] }\n` },
+    ])
+  const real = (issues: { code: string; severity: string }[]) => issues.filter(i => i.severity !== 'info').map(i => i.code)
+
+  it('父模块与缺的成员不在本版本里不提醒；剩下的成员仍覆盖全部子模块时照用', () => {
+    const { index, issues } = version('{ id: app.ui, name: UI, responsibility: u }, { id: app.core, name: Core, responsibility: c }')
+    expect(real(issues)).toEqual([])
+    expect(index.strata.get('app')!.map(s => [s.id, s.members])).toEqual([
+      ['top', ['app.ui']],
+      ['base', ['app.core']],
+    ])
+    expect(index.strata.has('gone')).toBe(false)
+  })
+
+  it('设计在这一层加了不在任何一层的子模块：本版本不用这份声明（info），不报全有或全无', () => {
+    const { index, issues } = version('{ id: app.ui, name: UI, responsibility: u }, { id: app.core, name: Core, responsibility: c }, { id: app.edit, name: Edit, responsibility: e }')
+    expect(real(issues)).toEqual([])
+    expect(issues.find(i => i.code === 'stratum.not-inherited')!.severity).toBe('info')
+    expect(index.strata.has('app')).toBe(false)
+  })
+
+  it('当前版本（有 modules/）照常提醒父模块不存在', () => {
+    const { issues } = loadModel(files(APP, { 'modules/x.yaml': 'modules: []', 'intent/strata.yaml': STRATA.slice(STRATA.indexOf('  gone:')).replace(/^/, 'strata:\n') }))
+    expect(real(issues)).toContain('stratum.parent-missing')
+  })
+})
+
 describe('M26 旧写法迁移', () => {
   it('非根层级的 kind: layer 溶解：成员上提一级、层变成父模块的层（局部 ID 去前缀），提醒 layer.nested', () => {
     const text = `modules:\n  - id: m\n    name: M\n    children:\n      - { id: m.hi, name: 上, kind: layer, order: 1, mayDependOn: [m.lo], children: [{ id: m.a, name: A }] }\n      - { id: m.lo, name: 下, kind: layer, order: 2, children: [{ id: m.b, name: B }, { id: m.c, name: C }] }\n`
