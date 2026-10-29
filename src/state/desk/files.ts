@@ -28,13 +28,13 @@ import {
   type SourceOwnership,
 } from '@/model'
 import type { ViewState } from '../transition'
-import type { createSourceSync } from '../sync/source'
+import type { SourceSyncPort } from './ports'
 
 export interface FilesInputs {
   state: ShallowRef<ViewState>
   index: ShallowRef<ModelIndex | null>
   view: ComputedRef<LevelView | null>
-  sync: ReturnType<typeof createSourceSync>
+  sync: SourceSyncPort
   /** 设计版本时为 true：归属警告只对当前版本报（G9） */
   design: boolean
 }

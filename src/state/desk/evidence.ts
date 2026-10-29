@@ -18,7 +18,7 @@ import {
   type StepEvidence,
 } from '@/model'
 import type { ViewState } from '../transition'
-import type { createSourceSync } from '../sync/source'
+import type { SourceSyncPort } from './ports'
 import type { FileDerivations } from './files'
 
 export interface EvidenceInputs {
@@ -28,7 +28,7 @@ export interface EvidenceInputs {
   /** 任一场景的回放计划（场景列表的「? N」用；由协调者给出，这里不直接调用场景投影） */
   planOf: (index: ModelIndex, scenarioId: string) => ScenarioPlan
   files: FileDerivations
-  sync: ReturnType<typeof createSourceSync>
+  sync: SourceSyncPort
   /** 设计版本没有代码事实（K8） */
   design: boolean
   /** K5d：交互的承载（desk.facts.carrierOf）；不给时按步骤证据（S16） */

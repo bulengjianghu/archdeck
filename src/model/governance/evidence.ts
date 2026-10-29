@@ -6,7 +6,7 @@ import type { ModelIndex } from '../types'
 import type { Frame, ScenarioPlan } from '../scenario/types'
 import { moduleFiles, type SourceOwnership } from '../source'
 import { hostOf } from './facts'
-import type { EntryOf } from './rules'
+import type { EntryOf } from './types'
 import { EVIDENCE_LEVELS, type EvidenceLevel, type FileDep, type ScenarioEvidence, type StepEvidence } from './types'
 
 /** 按模块依赖时最多列几条 */

@@ -329,8 +329,16 @@ const tierHints = computed(() => desk.facts.tierHints.value)
 const pending = computed(() => scene.value.pending ?? null)
 /** L43：线的预算（超出时提示） */
 const lineBudget = computed(() => desk.facts.lineBudget.value)
-/** L36：算出的层的状态记号（一组层同一状态，写一次） */
+/** L36：算出的依赖深度的状态记号（一组同一状态，写一次） */
 const layerNote = computed(() => desk.facts.layerNote.value)
+/** L28、ST-1（ADR-0052）：子模块多于七个又没声明分层时画布角一行；运行视角与草图编辑态不给 */
+const undeclared = computed(() => {
+  const v = desk.positioned.value?.view
+  const idx = desk.index.value
+  if (!v || !idx || v.mode !== 'graph' || desk.perspective.value === 'run' || desk.edit.active.value) return 0
+  const n = (idx.childrenOf.get(v.parentId) ?? []).length
+  return n > 7 && !idx.strata.has(v.parentId) ? n : 0
+})
 /** L15、U16：结构视角的画布角——收起的只引类型依赖边条数、没有代码事实时的说明 */
 const structureCorner = computed(() => scene.value.structure ?? null)
 const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned.value.view.nodes.length === 0)
@@ -411,7 +419,15 @@ const showFacts = () => desk.setToggles({ showFacts: true })
       >
       <div v-if="lineBudget" class="fold-hint" data-testid="line-budget">{{ lineBudget }}</div>
       <div v-if="layerNote" class="fold-hint" data-testid="layer-note">
-        层<LayerStatus :status="layerNote.status" />本层按值依赖分为 {{ layerNote.count }} 层（L28）：算出的层是证据，不是声明的原则
+        依赖深度<LayerStatus :status="layerNote.status" />本层按值依赖算出 {{ layerNote.count }} 个深度（L28）：是证据，不是分层（ADR-0052）
+      </div>
+      <div
+        v-if="undeclared"
+        class="fold-hint"
+        data-testid="undeclared-strata"
+        title="子模块多于七个：能归纳出 2–5 个有原则的层就声明分层，归纳不出就记一条拆分信号（ST-1）"
+      >
+        本层未声明分层 · {{ undeclared }} 个模块
       </div>
       <div v-if="foldHint" class="fold-hint" data-testid="fold-hint">{{ foldHint }} 个模块，考虑标出核心</div>
       <div v-for="h in tierHints" :key="h" class="fold-hint" data-testid="tier-hint">{{ h }}</div>

@@ -17,7 +17,7 @@ import {
   type ReviewedInput,
   type VersionRef,
 } from '@/model'
-import type { ModelWriter, WriteOutcome } from '../sync/writer'
+import type { ModelWriter, WriteOutcome } from './ports'
 
 export interface ReviewInputs {
   index: ShallowRef<ModelIndex | null>

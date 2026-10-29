@@ -132,7 +132,7 @@ describe('L29 层带与环组框', () => {
       branchPointId: null,
     }
     const tiers = canvasScene(input).nodes.filter(n => n.type === 'tier')
-    expect(tiers.filter(n => n.data.tierBand?.kind === 'band').map(n => n.data.tierBand?.label)).toEqual(['第 1 层 · 入口', '第 2 层', '第 3 层 · 被依赖'])
+    expect(tiers.filter(n => n.data.tierBand?.kind === 'band').map(n => n.data.tierBand?.label)).toEqual(['深度 1 · 入口', '深度 2', '深度 3 · 被依赖'])
     expect(tiers.every(n => n.zIndex < 0 && !n.selectable && n.style.pointerEvents === 'none')).toBe(true)
     // 运行视角（有舞台）不画
     expect(

@@ -35,8 +35,8 @@ export function sharedSuggestions(index: ModelIndex, moduleDeps: Iterable<Module
   const out: SharedSuggestion[] = []
   const modules = [...index.modules.values()].sort((a, b) => a.seq - b.seq)
   for (const m of modules) {
-    // 单成员层的成员就是层（ADR-0052），不建议
-    if (m.id === index.rootId || index.stratumOf.get(m.id)?.members.length === 1 || m.role || sharedHostOf(index, m.id)) continue
+    // 根的子模块是根的层的成员（原 kind: layer 的层，ADR-0052），不建议
+    if (m.id === index.rootId || (m.parentId === index.rootId && index.stratumOf.has(m.id)) || m.role || sharedHostOf(index, m.id)) continue
     const text = `${m.id} ${m.name}`.toLowerCase()
     const nameHit = m.kind === 'library' ? 'kind: library' : SHARED_NAME_HINTS.find(w => text.includes(w))
     if (!nameHit) continue

@@ -175,7 +175,7 @@ export type LayerStatus = 'computed' | 'pending' | 'confirmed'
 
 /** L36：状态记号的文字与悬停说明 */
 export const LAYER_STATUS: Record<LayerStatus, { text: string; title: string }> = {
-  computed: { text: '算出', title: '由本层值依赖算出（L28），不是原则：是原则的证据；可经提炼起草为声明的层' },
+  computed: { text: '算出', title: '依赖深度：由本层值依赖算出（L28），不是分层，是声明分层的证据（ADR-0052）' },
   pending: { text: '待确认', title: '声明的层，尚未确认或指纹已变、需复核（Z3）：抽象原则还只是主张' },
   confirmed: { text: '已确认', title: '声明的层，已确认且指纹一致（Z3）：抽象原则是原则，接受符合性校验' },
 }
@@ -183,9 +183,9 @@ export const LAYER_STATUS: Record<LayerStatus, { text: string; title: string }> 
 /** L36：确认状态（Z3）→ 声明的层的状态记号 */
 export const layerStatusOf = (review: 'reviewed' | 'stale' | 'unreviewed' | undefined): LayerStatus => (review === 'reviewed' ? 'confirmed' : 'pending')
 
-/** L29：层带的层号文字（第 1 层为入口，最下为被依赖）；i 为带在自上而下中的序号 */
+/** L29：依赖深度带的文字（深度 1 为入口，最下为被依赖；ADR-0052：算出的是依赖深度，不称「层」）；i 为带在自上而下中的序号 */
 export function tierBandLabel(tier: number, i: number, last: number): string {
-  return `第 ${tier + 1} 层${i === 0 ? ' · 入口' : i === last ? ' · 被依赖' : ''}`
+  return `深度 ${tier + 1}${i === 0 ? ' · 入口' : i === last ? ' · 被依赖' : ''}`
 }
 
 /**

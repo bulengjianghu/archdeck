@@ -238,9 +238,9 @@ ${chain.map(m => `      - { id: app.${m}, name: ${m}, responsibility: ${m}, code
   })
 
   it('L40② 跨 ≥ 3 层提示「该标核心或该拆」；同一层只写一个层号', () => {
-    expect(foldSpanText({ from: 1, to: 8 })).toEqual({ tiers: '第 2–9 层', warn: '跨 8 层：该标核心或该拆' })
-    expect(foldSpanText({ from: 2, to: 3 })).toEqual({ tiers: '第 3–4 层', warn: null })
-    expect(foldSpanText({ from: 2, to: 2 }).tiers).toBe('第 3 层')
+    expect(foldSpanText({ from: 1, to: 8 })).toEqual({ tiers: '深度 2–9', warn: '跨 8 个深度：该标核心或该拆' })
+    expect(foldSpanText({ from: 2, to: 3 })).toEqual({ tiers: '深度 3–4', warn: null })
+    expect(foldSpanText({ from: 2, to: 2 }).tiers).toBe('深度 3')
   })
 
   it('L40③ 平铺：子模块之间既没有依赖也没有交互时明说', () => {

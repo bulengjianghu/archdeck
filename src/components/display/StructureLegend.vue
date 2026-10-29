@@ -104,7 +104,9 @@ const crossCount = computed(
         <div v-if="presence.has('struct:fold:exceptions')" class="item" data-testid="legend-exceptions">
           <span class="sw kind"><span class="chip warn">向上</span></span>
           <span
-            >例外照画：违规、向上（依赖违背算出的层）、逆稳定、未解释；只是未解释、另一端在框外或共用件架上的仍折叠计数<span class="hint">（L42）</span></span
+            >例外照画：违规、向上（依赖违背依赖深度或声明的层）、逆稳定、未解释；只是未解释、另一端在框外或共用件架上的仍折叠计数<span class="hint"
+              >（L42）</span
+            ></span
           >
         </div>
         <div v-if="presence.has('struct:fold:cycle')" class="item" data-testid="legend-cycle">

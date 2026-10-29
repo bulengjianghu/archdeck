@@ -7,6 +7,10 @@ import type { ExportKind, SourceOwnership, ExportedSymbol } from '../source/type
 
 export type DepKind = 'value' | 'type'
 
+
+/** 模块入口文件（G10）；由调用方按源码清单给出 */
+export type EntryOf = (moduleId: string) => string | null
+
 /**
  * K1：交互使用的种类——call 调用、渲染或把函数、类、组件作为值交出；extends 类的 extends（子类事实，K12）；
  * new、factory、register 为组装使用（组装事实，K13）。K7 只把 call 算作要由关系解释的交互。

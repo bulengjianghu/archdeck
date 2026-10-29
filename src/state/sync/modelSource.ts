@@ -2,7 +2,8 @@
  * 模型源同步：取描述文件并交给模型层加载；本项目的描述变化（开发态 `arch-model:changed`）时重新取。
  * 只负责外界，加载结果由协调者 dispatch。
  */
-import { loadModel, type DesignInfo, type LoadedModel, type ModelCommit, type ModelIndex, type RawFile, type VersionRef } from '@/model'
+import type { Baseline, Baselines } from '../desk/ports'
+import { loadModel, type DesignInfo, type LoadedModel, type ModelCommit, type RawFile, type VersionRef } from '@/model'
 
 export interface CompareSource {
   label: string
@@ -34,12 +35,6 @@ export interface ModelPayload {
 
 export type FetchModel = () => Promise<ModelPayload>
 
-/** 对比基线加载后的结果 */
-export interface Baseline {
-  label: string
-  index: ModelIndex
-}
-
 export interface LoadedSource {
   payload: ModelPayload
   model: LoadedModel
@@ -50,12 +45,8 @@ export interface LoadedSource {
   baselines: Baselines
 }
 
-export interface Baselines {
-  current?: Baseline
-  previous?: Baseline
-  base?: Baseline
-  own?: Baseline
-}
+// ADR-0052：对比基线的形状是 DeskState 的接线端口（state.desk），派生按它读
+export type { Baseline, Baselines } from '../desk/ports'
 
 /** 取一次描述并加载（设计版本同时加载对比基线） */
 export async function fetchAndLoad(fetchModel: FetchModel): Promise<LoadedSource> {

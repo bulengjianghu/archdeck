@@ -5,6 +5,7 @@
  */
 import { shallowRef, type ShallowRef } from 'vue'
 import type { ExportedSymbol, FactsPayload, SourceFile, SourceHistory, SourcePayload } from '@/model'
+import type { Resource, SourceSyncPort } from '../desk/ports'
 
 export interface SourceFetcher {
   tree(): Promise<SourcePayload>
@@ -20,7 +21,7 @@ export interface SourceFetcher {
 
 export type CommitMessage = { hash: string; message: string }
 
-export type Resource<T> = { status: 'loading' } | { status: 'ok'; value: T } | { status: 'missing' } | { status: 'error'; message: string }
+export type { Resource } from '../desk/ports'
 
 /** 没有注入源码来源时（只看描述的测试）：清单为 error */
 export const NO_SOURCE: SourceFetcher = {
@@ -29,7 +30,7 @@ export const NO_SOURCE: SourceFetcher = {
   exports: async () => null,
 }
 
-export function createSourceSync(fetcher: SourceFetcher) {
+export function createSourceSync(fetcher: SourceFetcher): SourceSyncPort {
   /** null = 正在取清单 */
   const tree = shallowRef<SourcePayload | null>(null)
   /** K8：清单取到后随后取代码事实；null = 没有（清单读取失败、未注入） */

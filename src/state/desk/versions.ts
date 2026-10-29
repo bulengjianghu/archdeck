@@ -18,7 +18,7 @@ import {
   type VersionRef,
 } from '@/model'
 import type { ViewState } from '../transition'
-import type { Baseline, Baselines } from '../sync/modelSource'
+import type { Baseline, Baselines } from './ports'
 
 export interface VersionsInputs {
   state: ShallowRef<ViewState>

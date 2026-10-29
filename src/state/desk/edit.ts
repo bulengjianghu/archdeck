@@ -22,7 +22,7 @@ import {
   type VersionRef,
 } from '@/model'
 import type { Selection, ViewAction } from '../transition'
-import type { ModelWriter } from '../sync/writer'
+import type { ModelWriter } from './ports'
 import type { EditSession } from './edit/session'
 import { createDerive } from './edit/derive'
 import { createSaveSync } from './edit/save'

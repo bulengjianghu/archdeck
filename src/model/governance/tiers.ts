@@ -124,12 +124,12 @@ export interface FoldSpan {
 /** L40②：「+N」的成员跨这么多层及以上时提示「该标核心或该拆」 */
 export const FOLD_SPAN_WARN = 3
 
-/** L39②、L40②：占位块上的层号与跨度提示（按 1 起） */
+/** L39②、L40②：占位块上的依赖深度与跨度提示（按 1 起；ADR-0052：称依赖深度，不称层） */
 export function foldSpanText(f: Pick<FoldSpan, 'from' | 'to'>): { tiers: string; warn: string | null } {
   const k = f.to - f.from + 1
   return {
-    tiers: f.from === f.to ? `第 ${f.from + 1} 层` : `第 ${f.from + 1}–${f.to + 1} 层`,
-    warn: k >= FOLD_SPAN_WARN ? `跨 ${k} 层：该标核心或该拆` : null,
+    tiers: f.from === f.to ? `深度 ${f.from + 1}` : `深度 ${f.from + 1}–${f.to + 1}`,
+    warn: k >= FOLD_SPAN_WARN ? `跨 ${k} 个深度：该标核心或该拆` : null,
   }
 }
 

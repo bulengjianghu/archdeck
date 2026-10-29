@@ -6,7 +6,7 @@
  */
 import { shallowRef, type ShallowRef } from 'vue'
 import { layoutForSave, type DesignEditContext, type SketchDef, type SketchValidationIssue } from '@/model'
-import type { DesignSketchWrite, ModelWriter, WriteOutcome } from '../../sync/writer'
+import type { DesignSketchWrite, ModelWriter, WriteOutcome } from '../ports'
 import { removedMounts, saved, sketchDirty, type EditSession } from './session'
 
 export type SaveOutcome =

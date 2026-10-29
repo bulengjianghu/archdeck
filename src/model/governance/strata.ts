@@ -1,6 +1,6 @@
 /**
  * 声明的分层的校验与查询（ADR-0052，ST-3–ST-5、ST-2）：层由人声明（原则），代码事实校验声明（证据）。
- * - ST-3 稳定性单调：各层的不稳定度 I 自上而下应递减，逆序超过 0.15 给 info；
+ * - ST-3 稳定性单调：各层的不稳定度 I（只数同一父模块下兄弟之间的依赖）沿可依赖方向应递减，逆序超过 0.15 给 info（互不可依赖的并列层不比）；
  * - ST-4 单成员层没写 singular：info；
  * - ST-5 底层（mayDependOn: []）的成员只引类型的向上 import：info（U2 的口径不计只引类型的依赖时，底层的「不依赖任何层」会失真）。
  * 迁移来的旧层（M26）不提示 ST-4（它们由 kind: layer 读来，等作者改写为 strata）。关于被描述系统的知识，lint:model、页面与 agent 接口共用。
@@ -28,7 +28,7 @@ export interface StratumMetrics {
   mayDependOn: string[] | null
   singular?: string
   members: string[]
-  /** 本层成员子树之外依赖进来的模块数 / 依赖出去的模块数（K16 的口径，把整层看作一个子树） */
+  /** 同一父模块下、本层之外的兄弟子树依赖进来的模块数 / 依赖出去的模块数（把整层看作一个子树；只数兄弟之间的依赖） */
   ca: number
   ce: number
   instability: number | null
@@ -41,12 +41,16 @@ const memberOf = (index: ModelIndex, members: readonly string[], id: string) => 
 /** ST：一个父模块的各层指标（按层序）；没有代码事实时 Ca / Ce 为 0、I 为 null */
 export function strataMetrics(index: ModelIndex, parent: string, report?: Pick<GovernanceReport, 'moduleDeps'>): StratumMetrics[] {
   const list = index.strata.get(parent) ?? []
+  const kids = index.childrenOf.get(parent) ?? []
   const deps: ModuleDep[] = report ? [...report.moduleDeps.values()] : []
   return list.map(s => {
+    // 口径：只数这个父模块的子模块之间（同一组兄弟）的依赖——分层说的是兄弟之间谁依赖谁；外面的依赖（对其他层次、对父模块的入口）各层都有，不参与比较
     const inside = (id: string) => !!memberOf(index, s.members, id)
+    const sibling = (id: string) => !!memberOf(index, kids, id)
     const ins = new Set<string>()
     const outs = new Set<string>()
     for (const d of deps) {
+      if (!sibling(d.from) || !sibling(d.to)) continue
       if (inside(d.to) && !inside(d.from)) ins.add(d.from)
       if (inside(d.from) && !inside(d.to)) outs.add(d.to)
     }
@@ -106,11 +110,13 @@ export function strataFindings(index: ModelIndex, report?: Pick<GovernanceReport
         })
     if (!report) continue
     const metrics = strataMetrics(index, parent, report)
-    // ST-3：自上而下 I 应递减；下层比上层易变超过容差即逆序
+    // ST-3：上层可（经 mayDependOn 传递）依赖的下层应更稳定；下层比上层易变超过容差即逆序。互不可依赖的并列层不比（它们的上下只是摆放）
+    const reach = reachable(list)
     for (let i = 0; i < metrics.length; i++)
       for (let j = i + 1; j < metrics.length; j++) {
         const up = metrics[i]
         const low = metrics[j]
+        if (!reach.get(up.id)?.has(low.id)) continue
         if (up.instability === null || low.instability === null || low.instability - up.instability <= STRATA_ORDER_TOLERANCE) continue
         const top = topContributor(index, report, low)
         out.push({
@@ -142,6 +148,25 @@ export function strataFindings(index: ModelIndex, report?: Pick<GovernanceReport
 }
 
 export const strataIssues = (index: ModelIndex, report?: Pick<GovernanceReport, 'moduleDeps'>): Issue[] => strataFindings(index, report).map(f => f.issue)
+
+/** 每层经 mayDependOn 传递可依赖的层（迁移来的旧层没写时按层序：可依赖下面的全部层） */
+function reachable(list: readonly StratumEntity[]): Map<string, Set<string>> {
+  const direct = new Map(list.map((s, i) => [s.id, mayDependOnOf(s) ?? list.slice(i + 1).map(x => x.id)] as const))
+  const out = new Map<string, Set<string>>()
+  for (const s of list) {
+    const seen = new Set<string>()
+    const walk = (id: string) => {
+      for (const d of direct.get(id) ?? [])
+        if (!seen.has(d)) {
+          seen.add(d)
+          walk(d)
+        }
+    }
+    walk(s.id)
+    out.set(s.id, seen)
+  }
+  return out
+}
 
 const stratumSrc = (list: readonly StratumEntity[], id: string) => list.find(s => s.id === id)?.src ?? {}
 

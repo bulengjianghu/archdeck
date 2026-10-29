@@ -16,11 +16,15 @@ function viewNode(index: ModelIndex, view: LevelView, ids: ReadonlySet<string>, 
   return ids.has(node) ? { node, local: ep.kind === 'local' } : null
 }
 
-/** 分层总览：端点落在核心模块（或带底共用件架上的共用件，O9）的子树内时用它 */
+/** 分层总览：端点落在带内露出的模块（或带底共用件架上的共用件，O9）的子树内时用它——单成员层的带内是成员的子模块，多成员层的带内是成员本身（ADR-0052） */
 function coreNode(index: ModelIndex, view: LevelView, id: string): string | null {
   const parentDepth = (index.pathOf.get(view.parentId) ?? []).length - 1
-  const second = index.pathOf.get(id)?.[parentDepth + 2]
-  return second !== undefined && view.nodes.some(n => (n.role === 'core' || n.role === 'shared') && n.id === second) ? second : null
+  const path = index.pathOf.get(id) ?? []
+  const shown = (x: string | undefined) => x !== undefined && view.nodes.some(n => (n.role === 'core' || n.role === 'shared') && n.id === x)
+  const first = path[parentDepth + 1]
+  if (shown(first)) return first!
+  const second = path[parentDepth + 2]
+  return shown(second) ? second! : null
 }
 
 /**

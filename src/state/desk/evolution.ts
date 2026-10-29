@@ -26,7 +26,7 @@ import {
   type SharedHealth,
 } from '@/model'
 import type { ViewState } from '../transition'
-import type { createSourceSync } from '../sync/source'
+import type { SourceSyncPort } from './ports'
 import type { FactsDerivations } from './facts'
 import type { FileDerivations } from './files'
 
@@ -36,7 +36,7 @@ export interface EvolutionInputs {
   view: ComputedRef<LevelView | null>
   files: FileDerivations
   facts: FactsDerivations
-  sync: ReturnType<typeof createSourceSync>
+  sync: SourceSyncPort
   /** 设计版本与提交版本没有演化事实（J1） */
   design: boolean
 }

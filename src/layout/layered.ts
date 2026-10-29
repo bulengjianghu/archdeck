@@ -115,9 +115,11 @@ export function layoutLayered(view: LevelView, opts: LayoutOptions = {}): Positi
   const rimOf = new Map(view.nodes.flatMap(n => (n.rim && n.role === 'core' ? [[n.id, n.rim] as const] : [])))
   const regular = (b: { coreModuleIds: string[] }) => b.coreModuleIds.filter(id => !rimOf.has(id))
   const maxCore = Math.max(1, ...bands.map(b => regular(b).length + (hasChip(b) ? 1 : 0)))
-  const perRow = Math.max(3, Math.min(maxCore, columns))
+  // O2a（ADR-0052）：多成员层的带内成员不超过七个就全显、不换行（换行后上下两行的边互相穿过成员）——有多成员层时一行至少放得下七个成员与「+N」
+  const multi = bands.some(b => b.layerId.startsWith('s:'))
+  const perRow = Math.max(3, Math.min(maxCore, multi ? Math.max(columns, 8) : columns))
   // O7：带宽按画布铺开（列数给出），内容少时也不缩窄
-  const middle = Math.max(BAND.minMiddle, columns * (BAND.chip.w + BAND.chipGap) - BAND.chipGap + 2 * BAND.chipGap)
+  const middle = Math.max(BAND.minMiddle, Math.max(columns, perRow) * (BAND.chip.w + BAND.chipGap) - BAND.chipGap + 2 * BAND.chipGap)
   // L14：有 adapter 时带内最左多一列，紧贴左侧标题栏（外部系统一侧，A7）
   const adapterCol = view.nodes.some(n => n.rim === 'adapter' && n.role === 'core') ? BAND.chip.w + BAND.chipGap : 0
   const chipLeft = BAND.left + adapterCol
@@ -179,10 +181,22 @@ export function layoutLayered(view: LevelView, opts: LayoutOptions = {}): Positi
   const { trackOf, counts } = gapTracks(items)
   const gapH = counts.map((t, g) => gapHeight(t, g === 0 || g === bands.length ? BAND.framePad : BAND.gap))
 
+  // ADR-0052：多成员层的带内放的是成员本身，换行时第二行的成员会被从上方来的边穿过第一行——与上方的带有边的成员排在前面（同分照声明顺序）
+  const fromAbove = (id: string, i: number) =>
+    core.filter(e => (e.to === id && (bandOf.get(e.from) ?? i) < i) || (e.from === id && (bandOf.get(e.to) ?? i) < i)).length
+  const ordered = (band: (typeof bands)[number], i: number) => {
+    const list = regular(band)
+    if (!band.layerId.startsWith('s:')) return list
+    return list
+      .map((id, k) => ({ id, k, up: fromAbove(id, i) }))
+      .sort((a, b) => b.up - a.up || a.k - b.k)
+      .map(x => x.id)
+  }
+
   // ── 带与块的位置 ──
   let y = 0
   bands.forEach((band, i) => {
-    const cores = regular(band)
+    const cores = ordered(band, i)
     const ports = band.coreModuleIds.filter(id => rimOf.get(id) === 'port')
     const adapters = band.coreModuleIds.filter(id => rimOf.get(id) === 'adapter')
     const slots = cores.length + (hasChip(band) ? 1 : 0)

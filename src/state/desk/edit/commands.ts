@@ -23,7 +23,7 @@ import {
   type SketchTarget,
 } from '@/model'
 import { bandRelative, sketchPositions } from '@/layout/layout'
-import type { WriteOutcome } from '../../sync/writer'
+import type { WriteOutcome } from '../ports'
 import { leaveGuard, type ViewAction } from '../../transition'
 import type { createSaveSync, SaveOutcome } from './save'
 import type { EditDerivations } from './derive'

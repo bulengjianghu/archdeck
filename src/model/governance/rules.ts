@@ -6,10 +6,10 @@ import { matchRef, normalizeRef, type SourceOwnership } from '../source'
 import type { ModelIndex, ModuleRuleDef, RuleKind, RulesDef, StratumEntity } from '../types'
 import { within } from './facts'
 import { mayDependOnOf, stratumKey, stratumNames } from '../names'
-import type { FileDep, ModuleDep, RuleHit, Violation } from './types'
+import type { EntryOf, FileDep, ModuleDep, RuleHit, Violation } from './types'
 
-/** 模块入口文件（G10）；由调用方按源码清单给出 */
-export type EntryOf = (moduleId: string) => string | null
+// 模块入口文件的查询（G10）是契约（governance/types.ts）：事实比对与规则判定都用它
+export type { EntryOf }
 
 /** 待判定的一条依赖：依赖方模块、被依赖方模块，以及经由文件与它的归属（U4） */
 export interface DepProbe {

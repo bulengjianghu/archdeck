@@ -84,7 +84,7 @@ import {
 import { budgetHint, isOutsideEdge, surfaceExpansion, type Expansion, type LayoutTiers, type StructureLinks } from '@/layout/layout'
 import { baseLayoutLinks, toLayoutTiers } from './layoutLinks'
 import { perspectiveOf, type ViewState } from '../transition'
-import type { createSourceSync } from '../sync/source'
+import type { SourceSyncPort } from './ports'
 import type { FileDerivations } from './files'
 
 export interface FactsInputs {
@@ -92,7 +92,7 @@ export interface FactsInputs {
   index: ShallowRef<ModelIndex | null>
   view: ComputedRef<LevelView | null>
   files: FileDerivations
-  sync: ReturnType<typeof createSourceSync>
+  sync: SourceSyncPort
   /** 设计版本没有代码事实（K8） */
   design: boolean
   /** X4：载荷附带的设计草图（U16：活动草图里层的 mayDependOn 一并画进允许依赖图） */
