@@ -12,7 +12,7 @@ test('③ 需要注意：逐行单击跳到对应节，目标节展开并进入�
   expect(n, 'h5player app.solution 应有异常行').toBeGreaterThan(0)
   for (let i = 0; i < n; i++) {
     // 上一次跳转的闪烁类留在原节上，先清掉，只认这一次的目标
-    await page.evaluate(() => document.querySelectorAll('.jump-flash').forEach(el => el.classList.remove('jump-flash')))
+    await page.evaluate(`document.querySelectorAll('.jump-flash').forEach(el => el.classList.remove('jump-flash'))`)
     const key = await rows.nth(i).getAttribute('data-notice')
     await rows.nth(i).click()
     const target = page.locator('.panel .jump-flash')
