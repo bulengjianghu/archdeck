@@ -25,7 +25,11 @@ const MODEL = path.join(ROOT, 'model')
 
 /** 临时模型根目录：复制本项目的描述，拦截记录与基线写在这里，不碰仓库 */
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-gov-'))
-fs.cpSync(path.join(MODEL, 'h5p-arch-desk'), path.join(tmp, 'h5p-arch-desk'), { recursive: true, filter: src => !src.includes(`${path.sep}designs`) })
+// 验收从「没有基线」起步（第 4 条自己生成基线）：本项目登记的真实基线不带进副本
+fs.cpSync(path.join(MODEL, 'h5p-arch-desk'), path.join(tmp, 'h5p-arch-desk'), {
+  recursive: true,
+  filter: src => !src.includes(`${path.sep}designs`) && !src.endsWith(`${path.sep}governance${path.sep}baseline.json`),
+})
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }))
 const svc = () => createService({ root: ROOT, client: 'mcp', env: { ...process.env, ARCH_MODEL_ROOT: tmp, ARCH_PROJECT: 'h5p-arch-desk' } })
 
