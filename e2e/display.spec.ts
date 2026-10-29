@@ -111,9 +111,9 @@ test('交互视角「代码事实 · 标签」组：标签词表与承载叠加�
   const panel = page.getByRole('region', { name: '显示' })
   await expect(panel.getByTestId('carrier-legend')).toContainText('承载叠加')
   await expect(panel.getByTestId('carrier-legend')).toContainText('缺段')
-  // L47（G14）：只列本层静息态画面出现的标签词——h5p 根层有违规与未解释，没有未证实的交互（该行不列，h5player infra 层有）
-  for (const t of ['违规', '未解释']) await expect(panel.locator(`[data-tag="${t}"]`)).toBeVisible()
-  await expect(panel.locator('[data-tag="未证实"]')).toHaveCount(0)
+  // L47（G14）：只列本层静息态画面出现的标签词——波 3 收敛掉根层唯一的违规后，h5p 根层只有未解释（违规与未证实两行不列）
+  await expect(panel.locator('[data-tag="未解释"]')).toBeVisible()
+  for (const t of ['违规', '未证实']) await expect(panel.locator(`[data-tag="${t}"]`)).toHaveCount(0)
   // L45：代码事实与组装的开关在设置块的「代码事实与组装」组
   const settings = panel.getByLabel('设置', { exact: true })
   await expect(settings.getByRole('switch', { name: '代码事实' })).toBeChecked()

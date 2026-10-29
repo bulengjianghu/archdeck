@@ -78,6 +78,7 @@ import {
   parseDesignSketches,
   sketchLifetime,
   type RawFile,
+  countHiddenByCurrentOnly,
 } from '@/model'
 import { budgetHint, isOutsideEdge, surfaceExpansion, type Expansion, type LayoutTiers, type StructureLinks } from '@/layout/layout'
 import { baseLayoutLinks, toLayoutTiers } from './layoutLinks'
@@ -185,6 +186,12 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     if (state.value.mode === 'structure' || state.value.toggles.showFacts) return null
     const lf = levelFacts(index.value, view.value, r)
     return lf.overlays.length + lf.violatedEdges.size + (lf.unconfirmed?.size ?? 0)
+  })
+
+  /** L7 / L45：「只看现状」隐藏的目标态模块及其后代数（画布角留痕计数用）——呈现层不直接调模型层的计算，经这里取（U10，波 3 收敛 rule.violation） */
+  const hiddenByCurrentOnly = computed<number | null>(() => {
+    const idx = index.value
+    return idx ? countHiddenByCurrentOnly(idx) : null
   })
 
   /** O12：交互视角、「组装」开关开启时组装事实与组装根在本层的投影（不参与布局） */
@@ -765,6 +772,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     isolatedOf,
     level,
     hiddenFacts,
+    hiddenByCurrentOnly,
     assembly,
     gateIssues,
     ledger,

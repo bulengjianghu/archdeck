@@ -23,7 +23,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import { useDesk } from '@/state/inject'
-import { RELATION_TYPES, countHiddenByCurrentOnly } from '@/model'
+import { RELATION_TYPES } from '@/model'
 import { contentBounds, layerStatusOf, type PositionedView } from '@/layout/layout'
 import { canvasScene, withEdgeHover, withElementHover, type NodeData, type RouteEdgeData, type StructureInput } from '@/layout/canvas'
 import { useSurfaceHover } from './panel/surfaceFocus'
@@ -332,11 +332,10 @@ const traceable = computed(() => desk.perspective.value !== 'run' && !desk.edit.
 /** 关系类型筛选隐藏的类数（L8：只适用于交互视角） */
 const hiddenRelationTypes = computed(() => (interaction.value && traceable.value ? RELATION_TYPES.length - desk.toggles.relationTypes.length : 0))
 const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] })
-/** 「只看现状」隐藏的目标态模块及其后代数（L7，交互与结构视角） */
+/** 「只看现状」隐藏的目标态模块及其后代数（L7，交互与结构视角）——计算经视图状态层取（desk.facts，U10；呈现层不直接调模型层的计算） */
 const hiddenTargets = computed(() => {
-  const idx = desk.index.value
-  if (!idx || !desk.toggles.currentOnly || !traceable.value) return 0
-  return countHiddenByCurrentOnly(idx)
+  if (!desk.index.value || !desk.toggles.currentOnly || !traceable.value) return 0
+  return desk.facts.hiddenByCurrentOnly.value ?? 0
 })
 /** 「代码事实」关闭时本层被隐藏的异常标记数（K9，交互视角） */
 const factsOff = computed(() => {
