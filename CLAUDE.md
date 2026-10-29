@@ -69,13 +69,15 @@ export ARCH_SOURCE_ROOT_H5P_ARCH_DESK=<这个 worktree 的 packages/h5p-arch-des
 门禁命令（进入包目录后，缺环境变量就是假红）：
 
 ```bash
-npm run test          # 全量单测：实测 ~27s（1235 通过 / 3 跳过）；vitest 自带并行，不分组、不改并发
-E2E_PORT=5671 npx playwright test   # 全量 E2E：实测 ~1m47s（83 用例，fullyParallel）
+npm run test          # 全量单测：实测 ~27s（1287 通过 / 4 跳过）；vitest 自带并行，不分组、不改并发
+E2E_PORT=5671 npx playwright test --workers=4   # 全量 E2E：实测 ~1m50s（99 用例，fullyParallel）；worker 数固定 4，原因见下
 npm run type-check    # ~9s
 npm run lint          # ~8s
 npm run lint:model    # ~12s
 npm run build         # ~21s
 ```
+
+- **E2E worker 数固定 `--workers=4`**（波 2 实测立项、波 3 复实测确认，不修用例）：多会话并行负载下缺省并发（本机 12 核 ≈ 6 workers）出现过 60s 用例超时；波 3 复现实验——同一 worktree 双会话同时全量跑，缺省并发 2 次超时之一再现（1× 60s，整轮 4.2–4.4m），`--workers=4` 全天单会话 5+ 轮稳定（~1m50s）。注意同 worktree 双会话的主要失败源其实是「不并发混跑」禁止的 model/ 写入互相踩（两种并发下都有断言红），那不是 worker 数能解决的；固定 4 是取「降低浏览器进程的资源争用 + 与波 2 校准的稳定配置一致」，标准门禁（单会话）两种并发都绿，按更保守的 4 执行。
 
 - **E2E 端口**：每个 worktree 各用各的高位端口（如 5671，缺省 5393）——Playwright 会复用已在该端口运行的开发服务器，端口相同就会测到别的副本。手动看页面同理：`npx vite --port <端口> --strictPort`。
 - **不并发混跑**：E2E 会临时改写真实的 `model/h5p-arch-desk/`（如确认记录、指纹、拦截记录）并在结束时恢复，同一个 worktree 里不要同时跑单测 / E2E / lint:model；跑完 `git status` 应当干净。
