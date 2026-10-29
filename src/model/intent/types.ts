@@ -253,6 +253,7 @@ export type SketchValidationCode =
   | 'sketch.ref'
   | 'sketch.ancestor'
   | 'sketch.layer-cycle'
+  | 'sketch.stratum'
   | 'sketch.contradiction'
   | 'sketch.pending'
   | 'sketch.over-seven'

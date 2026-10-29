@@ -30,10 +30,14 @@ import type {
   RelationType,
   ReviewedEntry,
   ScenarioEntity,
+  SketchDef,
   SketchEntity,
   SourceLoc,
   Step,
   StepDef,
+  StrataDef,
+  StratumDef,
+  StratumEntity,
   SystemDef,
 } from './types'
 
@@ -69,6 +73,8 @@ export function load(files: readonly RawFile[]): LoadResult {
   const otherAbstraction = new Map<string, SourceLoc>()
   /** M16：intent/roles.yaml 的角色（模块 ID → role 与出处），加载完再落到模块上 */
   const roles: { id: string; role: ModuleRole; src: SourceLoc }[] = []
+  /** ST（ADR-0052）：各文件的分层声明（父模块 → 层），加载完按「草图为准」合并（mergeStrata） */
+  const strata: StrataDecl[] = []
   let seq = 0
 
   // X1：草图文件先入；其余按路径排序
@@ -76,8 +82,15 @@ export function load(files: readonly RawFile[]): LoadResult {
   for (const file of sorted) {
     const parsed = parseFile(file, issues)
     if (!parsed) continue
-    const { data, locate } = parsed
+    const { data, locate, migrated } = parsed
     const sketch = data.sketch
+    const pushStrata = (def: StrataDef | undefined, base: (string | number)[], fromSketch: boolean) => {
+      for (const [parent, defs] of Object.entries(def ?? {})) {
+        const from = migrated.get(`${base.join('.')}|${parent}`)
+        const src = locate([...base, parent])
+        strata.push({ parent, defs: defs.map((x, i) => ({ def: x, src: from?.get(x.id) ?? { ...src, path: `${src.path}.${i}` } })), src, fromSketch, migrated: !!from })
+      }
+    }
     if (sketch && !isSketchFile(file.path))
       issues.push({
         severity: 'warning',
@@ -179,6 +192,7 @@ export function load(files: readonly RawFile[]): LoadResult {
       // X9：根挂载的模块是层（子模块嵌套）；其余草图的模块挂在 mount 下
       const mount = sketch.mount === ROOT_MOUNT ? undefined : sketch.mount
       sketch.modules?.forEach((m, i) => pushModule(m, mount, ['sketch', 'modules', i], mount !== undefined))
+      pushStrata(sketch.strata, ['sketch', 'strata'], true)
       if (mount && sketch.abstraction !== undefined) mountAbstractions.push({ mount, value: sketch.abstraction, src: locate(['sketch', 'abstraction']) })
       sketch.relations?.forEach((r, i) => pushRelation(r, ['sketch', 'relations', i]))
       sketch.interfaces?.forEach((x, i) => pushInterface(x, ['sketch', 'interfaces', i]))
@@ -200,6 +214,7 @@ export function load(files: readonly RawFile[]): LoadResult {
     data.scenarios?.forEach((x, i) => pushScenario(x, ['scenarios', i]))
     if (data.sourceIgnore) sourceIgnore.push(...data.sourceIgnore)
     for (const [id, role] of Object.entries(data.roles ?? {})) roles.push({ id, role, src: locate(['roles', id]) })
+    pushStrata(data.strata, ['strata'], false)
     // Z1：各文件的确认记录合并（约定只在 reviewed.yaml）
     data.reviewed?.forEach((x, i) => reviewed.push({ ...x, src: locate(['reviewed', i]) }))
     // G20：sourceLimits 只能声明一次，重复时用第一处
@@ -242,6 +257,7 @@ export function load(files: readonly RawFile[]): LoadResult {
   // 只有草图的版本（草图作为版本，DV-10：没有 modules/）本来就只画了一部分模块：roles 指向本版本没有的模块不提醒
   const sketchOnly = !files.some(f => f.path.startsWith('modules/'))
   applyRoles(roles, modules, sketched, issues, sketchOnly)
+  const mergedStrata = mergeStrata(strata, system.id, issues)
 
   return {
     model: {
@@ -249,6 +265,7 @@ export function load(files: readonly RawFile[]): LoadResult {
       ...(systems.length ? { systemSrc: systems[0].src } : {}),
       ...(rules ? { rules: rules.def, rulesSrc: rules.src } : {}),
       sketches,
+      ...(mergedStrata.length ? { strata: mergedStrata } : {}),
     },
     issues,
   }
@@ -286,6 +303,50 @@ function applyRoles(
     m.role = role
     m.roleFrom = 'roles'
   }
+}
+
+/**
+ * ST（ADR-0052）：各文件的分层声明按父模块合并——根写 root 或系统 ID；同一父模块草图写了的以草图为准（intent/strata.yaml 的同父声明不生效，info），
+ * 同为草图或同为非草图文件的后者覆盖前者（提醒）。成员（members 与子模块的 stratum）的归一与校验在 Validator（checkStrata）。
+ */
+interface StrataDecl {
+  parent: string
+  defs: { def: StratumDef; src: SourceLoc }[]
+  src: SourceLoc
+  fromSketch: boolean
+  migrated: boolean
+}
+
+function mergeStrata(
+  decls: readonly StrataDecl[],
+  rootId: string,
+  issues: Issue[],
+): StratumEntity[] {
+  const byParent = new Map<string, (typeof decls)[number]>()
+  for (const d of decls) {
+    const parent = d.parent === ROOT_MOUNT ? rootId : d.parent
+    const prev = byParent.get(parent)
+    if (prev && prev.fromSketch && !d.fromSketch) {
+      issues.push({ severity: 'info', code: 'stratum.shadowed', message: `「${parent}」的分层已由草图（${prev.src.file}）声明，这里的不生效（草图为准）`, ...d.src })
+      continue
+    }
+    // M26：迁移来的旧层可能分在几份文件里（一份一层、或设计草图只写了几层），同 ID 后者覆盖前者、其余合并
+    if (prev && prev.fromSketch === d.fromSketch && (prev.migrated || d.migrated)) {
+      const ids = new Set(d.defs.map(x => x.def.id))
+      byParent.set(parent, { ...d, defs: [...prev.defs.filter(x => !ids.has(x.def.id)), ...d.defs] })
+      continue
+    }
+    // X1：草图之间后者整份覆盖前者（设计的草图在持久草图之后，矛盾由核验报出）；非草图文件重复声明提醒
+    if (prev && !prev.fromSketch && !d.fromSketch)
+      issues.push({ severity: 'warning', code: 'stratum.redeclared', message: `「${parent}」的分层已在 ${prev.src.file} 声明，这里的覆盖它`, ...d.src })
+    byParent.set(parent, d)
+  }
+  return [...byParent].flatMap(([parent, d]) =>
+    d.defs.map(({ def, src }) => {
+      const { members, ...rest } = def
+      return { ...rest, parent, members: [...(members ?? [])], ...(d.migrated ? { migrated: true as const } : {}), ...(d.fromSketch ? { fromSketch: true as const } : {}), src }
+    }),
+  )
 }
 
 /** M12：旧名映射为新类型（event 同时翻转两端），每条提醒迁移 */
@@ -332,6 +393,8 @@ function normalizeSteps(defs: StepDef[], yamlPath: (string | number)[], prefix: 
 interface ParsedFile {
   data: ArchFileDef
   locate: (path: (string | number)[]) => SourceLoc
+  /** M26：由 kind: layer 迁移出的分层声明（`<strata 的路径>|<父模块>`）→ 层 ID → 原层模块的出处 */
+  migrated: Map<string, Map<string, SourceLoc>>
 }
 
 function parseFile(file: RawFile, issues: Issue[]): ParsedFile | null {
@@ -383,6 +446,22 @@ function parseFile(file: RawFile, issues: Issue[]): ParsedFile | null {
       message: `implements 已不是关系类型（ADR-0029），这条关系已丢弃：实现端口的写进接口的 implementedBy；有交互的按三问写 queries / commands（M17）`,
       ...loc,
     })
+  const migrated = new Map<string, Map<string, SourceLoc>>()
+  const moved = migrateLayers(data)
+  for (const { at, nested, key, id } of moved) {
+    migrated.set(key, (migrated.get(key) ?? new Map()).set(id, locate(at.slice(0, -1))))
+    if (nested)
+      issues.push({
+        severity: 'warning',
+        code: 'layer.nested',
+        message: '非根层级的 kind: layer 已按「层是分类」读取：成员上提一级、层改为父模块的 strata（M26、ADR-0052）；请改写为 strata',
+        ...locate(at),
+      })
+  }
+  // M26：根下的旧层一份文件一条 info（不计入提醒数）
+  const roots = moved.filter(x => !x.nested)
+  if (roots.length)
+    issues.push({ severity: 'info', code: 'layer.migrated', message: `根下的 kind: layer（${roots.map(x => x.id).join('、')}）已读作根的单成员层（M26、ADR-0052）`, ...locate(roots[0].at) })
   if (!validateFile(data)) {
     for (const err of dedupeErrors(validateFile.errors ?? [])) {
       const path = err.instancePath.split('/').slice(1).map(seg => (/^\d+$/.test(seg) ? Number(seg) : seg))
@@ -390,7 +469,78 @@ function parseFile(file: RawFile, issues: Issue[]): ParsedFile | null {
     }
     return null
   }
-  return { data, locate }
+  return { data, locate, migrated }
+}
+
+/**
+ * M26（ADR-0052）：旧写法 kind: layer 改写为分层声明（先取位置、后改写；不改文件）。
+ * - 根下的层（根挂载草图的顶层模块、文件顶层没写 parent 的模块）：读作根的单成员层——层 ID = 模块 ID，name / order / abstraction / mayDependOn 搬到层上
+ *   （abstraction 同时留在模块上，作它对内的原则），模块的 kind 记为 subsystem；没写 mayDependOn 的不约束（迁移前即如此）。
+ * - 非根层级的层（模块的 children、非根草图的顶层模块）：按「无代码的分组层」溶解——成员上提一级并标 stratum，层变成父模块的层（局部 ID 去掉父模块前缀）。
+ * 同一份文件同一父模块的迁移层并入同一份声明（`strata` 已有该父模块的声明时追加）。
+ */
+function migrateLayers(data: unknown): { at: (string | number)[]; nested: boolean; key: string; id: string }[] {
+  const out: { at: (string | number)[]; nested: boolean; key: string; id: string }[] = []
+  if (!data || typeof data !== 'object') return out
+  type Mod = Record<string, unknown> & { id?: string; kind?: unknown; children?: unknown }
+  const isLayer = (m: unknown): m is Mod => !!m && typeof m === 'object' && (m as Mod).kind === 'layer' && typeof (m as Mod).id === 'string'
+  const localId = (parent: string, id: string) => (id.startsWith(`${parent}.`) ? id.slice(parent.length + 1) : id)
+  const declare = (holder: { strata?: StrataDef }, base: string, parent: string, layer: Mod, members: string[]) => {
+    const { id, name, order, abstraction, mayDependOn, designNote } = layer as Mod & StratumDef
+    const def: StratumDef = {
+      id: parent === ROOT_MOUNT ? id! : localId(parent, id!),
+      name: (name as string) ?? id!,
+      ...(order !== undefined ? { order } : {}),
+      ...(abstraction !== undefined ? { abstraction } : {}),
+      ...(mayDependOn !== undefined ? { mayDependOn: (mayDependOn as string[]).map(d => (parent === ROOT_MOUNT ? d : localId(parent, d))) } : {}),
+      ...(designNote !== undefined && parent !== ROOT_MOUNT ? { designNote } : {}),
+      members,
+    }
+    holder.strata = holder.strata ?? {}
+    ;(holder.strata[parent] = holder.strata[parent] ?? []).push(def)
+    return { key: `${base}|${parent}`, id: def.id }
+  }
+  /** 一组兄弟（父模块 parent）里的嵌套层：溶解为成员，返回新的兄弟列表 */
+  const dissolve = (list: unknown[], parent: string, holder: { strata?: StrataDef }, base: string, at: (string | number)[]): unknown[] => {
+    const next: unknown[] = []
+    list.forEach((m, i) => {
+      if (!isLayer(m)) {
+        next.push(m)
+        return
+      }
+      const kids = (Array.isArray(m.children) ? m.children : []) as Mod[]
+      for (const k of kids) next.push({ ...k, stratum: localId(parent, m.id!) })
+      out.push({ at: [...at, i, 'kind'], nested: true, ...declare(holder, base, parent, m, []) })
+    })
+    return next
+  }
+  const visit = (m: unknown, holder: { strata?: StrataDef }, base: string, at: (string | number)[]) => {
+    if (!m || typeof m !== 'object') return
+    const mod = m as Mod
+    if (Array.isArray(mod.children)) {
+      if (typeof mod.id === 'string' && mod.children.some(isLayer)) mod.children = dissolve(mod.children, mod.id, holder, base, [...at, 'children'])
+      ;(mod.children as unknown[]).forEach((c, i) => visit(c, holder, base, [...at, 'children', i]))
+    }
+  }
+  const root = (m: Mod, holder: { strata?: StrataDef }, base: string, at: (string | number)[]) => {
+    out.push({ at: [...at, 'kind'], nested: false, ...declare(holder, base, ROOT_MOUNT, m, [m.id!]) })
+    m.kind = 'subsystem'
+    delete m.order
+    delete m.mayDependOn
+  }
+  const d = data as { module?: unknown; modules?: unknown; sketch?: { mount?: unknown; modules?: unknown; strata?: StrataDef }; strata?: StrataDef }
+  const sk = d.sketch && typeof d.sketch === 'object' ? d.sketch : undefined
+  if (sk && Array.isArray(sk.modules)) {
+    if (sk.mount === ROOT_MOUNT) sk.modules.forEach((m, i) => isLayer(m) && root(m, sk, 'sketch.strata', ['sketch', 'modules', i]))
+    else if (typeof sk.mount === 'string' && sk.modules.some(isLayer)) sk.modules = dissolve(sk.modules, sk.mount, sk, 'sketch.strata', ['sketch', 'modules'])
+    ;(sk.modules as unknown[]).forEach((m, i) => visit(m, sk, 'sketch.strata', ['sketch', 'modules', i]))
+  }
+  const top = [...(d.module ? [[d.module, ['module']] as const] : []), ...(Array.isArray(d.modules) ? d.modules.map((m, i) => [m, ['modules', i]] as const) : [])]
+  for (const [m, at] of top) {
+    if (isLayer(m) && (m as Mod).parent === undefined) root(m as Mod, d, 'strata', [...at])
+    visit(m, d, 'strata', [...at])
+  }
+  return out
 }
 
 /**
@@ -451,6 +601,19 @@ function upgradeLegacySkeleton(data: unknown, path: string): boolean {
   if (!Array.isArray(modules) || !modules.length || !modules.every(m => m && typeof m === 'object' && (m as { kind?: unknown }).kind === 'layer')) return false
   sketch.mount = ROOT_MOUNT
   return true
+}
+
+/**
+ * M26：草图定义里的旧写法 kind: layer 改写为 strata（不改入参，返回新对象；没有旧写法时原样返回）。
+ * 草图编辑与校验的入口都先经它，编辑器只认新写法（ADR-0052）。
+ */
+export function migrateSketch<T extends SketchDef>(def: T): T {
+  const has = (list: unknown): boolean =>
+    Array.isArray(list) && list.some(m => !!m && typeof m === 'object' && ((m as { kind?: unknown }).kind === 'layer' || has((m as { children?: unknown }).children)))
+  if (!has(def.modules)) return def
+  const data = { sketch: structuredClone(def) }
+  migrateLayers(data)
+  return data.sketch
 }
 
 /** X7f：草图定义的形状（按同一份 JSON Schema 检查 { sketch: def }）；返回每处问题的位置与说明 */

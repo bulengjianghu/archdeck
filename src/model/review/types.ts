@@ -19,13 +19,15 @@ export interface ReviewSummary {
   mayDependOn: string[]
   provides: { id: string; signature: string }[]
   children: string[]
+  /** Z2（ADR-0052）：对子模块的分层声明，一层一行（层序、ID、名称、问题、判定问、原则、可依赖的层、成员）；没声明为空 */
+  strata: string[]
   /** 系统简介（Z7），按行规整；模块为空串 */
   description: string
 }
 
 /** 摘要的字段名，按呈现顺序 */
 export type ReviewField = keyof ReviewSummary
-export const REVIEW_FIELDS: readonly ReviewField[] = ['description', 'responsibility', 'abstraction', 'includes', 'excludes', 'mayDependOn', 'provides', 'children']
+export const REVIEW_FIELDS: readonly ReviewField[] = ['description', 'responsibility', 'abstraction', 'includes', 'excludes', 'mayDependOn', 'provides', 'children', 'strata']
 
 /** Z3：一项差异；接口「改」时带前后签名 */
 export interface ReviewChange {
@@ -79,4 +81,5 @@ export const REVIEW_FIELD_LABELS: Record<ReviewField, string> = {
   mayDependOn: '可依赖的层',
   provides: '对外接口',
   children: '子模块',
+  strata: '分层',
 }

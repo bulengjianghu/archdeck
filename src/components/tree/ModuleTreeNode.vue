@@ -1,17 +1,38 @@
 <script setup lang="ts">
 /** 模块树的一行及其子树（递归）；只画，不改状态，意图交给 ModuleTree */
 import { computed } from 'vue'
-import { moduleName } from '@/model'
+import { moduleName, stratumKey } from '@/model'
 import type { ModuleTreeContext } from './types'
 
 defineOptions({ name: 'ModuleTreeNode' })
 const props = defineProps<{ id: string; depth: number; ctx: ModuleTreeContext }>()
-const emit = defineEmits<{ pick: [id: string]; drill: [id: string]; toggle: [id: string]; hover: [id: string | null]; menu: [id: string, ev: MouseEvent] }>()
+const emit = defineEmits<{
+  pick: [id: string]
+  drill: [id: string]
+  toggle: [id: string]
+  hover: [id: string | null]
+  menu: [id: string, ev: MouseEvent]
+  stratum: [key: string]
+}>()
 
 const kids = computed(() => props.ctx.childrenOf(props.id))
 const open = computed(() => props.ctx.expanded.has(props.id))
 const mod = computed(() => props.ctx.index.modules.get(props.id))
+/** ADR-0052：单成员层的成员就是层，标「层」；多成员层在父模块下作分组标题（ModuleTree） */
+const stratum = computed(() => props.ctx.index.stratumOf.get(props.id))
 const isRoot = computed(() => props.id === props.ctx.index.rootId)
+/** ADR-0052：多成员层在它第一个可见成员之前起一行分组标题（不可下钻，单击选中层）；单成员层不另起标题 */
+const heads = computed(() => {
+  const out = new Map<string, { key: string; name: string; asks?: string }>()
+  const seen = new Set<string>()
+  for (const k of kids.value) {
+    const s = props.ctx.index.stratumOf.get(k)
+    if (!s || s.members.length < 2 || seen.has(s.id)) continue
+    seen.add(s.id)
+    out.set(k, { key: stratumKey(props.ctx.index, s), name: s.name, ...(s.asks ? { asks: s.asks } : {}) })
+  }
+  return out
+})
 const name = computed(() => (isRoot.value ? props.ctx.index.model.system.name : moduleName(props.ctx.index, props.id)))
 </script>
 
@@ -41,30 +62,44 @@ const name = computed(() => (isRoot.value ? props.ctx.index.model.system.name : 
       </button>
       <span v-else class="caret" />
       <span class="name">{{ name }}</span>
-      <span v-if="mod?.kind === 'layer'" class="tag">层</span>
+      <span v-if="stratum && stratum.members.length === 1" class="tag">层</span>
       <span v-if="ctx.levelId === id" class="tag here">当前层次</span>
       <span v-if="ctx.stale.has(id)" class="tag stale" title="确认过的内容变了（Z3）">需复核</span>
       <span v-else-if="ctx.reviewed.has(id)" class="tag reviewed" title="架构师已确认">✓</span>
       <span v-if="ctx.heatCount && !isRoot" class="heat muted">{{ ctx.heatCount(id) }}</span>
     </div>
     <ul v-if="kids.length && open" role="group">
-      <ModuleTreeNode
-        v-for="k in kids"
-        :id="k"
-        :key="k"
-        :depth="depth + 1"
-        :ctx="ctx"
-        @pick="i => emit('pick', i)"
-        @drill="i => emit('drill', i)"
-        @toggle="i => emit('toggle', i)"
-        @hover="i => emit('hover', i)"
-        @menu="(i, ev) => emit('menu', i, ev)"
-      />
+      <template v-for="k in kids" :key="k">
+        <li v-if="heads.get(k)" class="stratum-head" role="presentation" :title="heads.get(k)!.asks" @click="emit('stratum', heads.get(k)!.key)">
+          <span class="name" :style="{ paddingLeft: `${(depth + 1) * 14 + 8}px` }">{{ heads.get(k)!.name }}</span>
+        </li>
+        <ModuleTreeNode
+          :id="k"
+          :depth="depth + 1"
+          :ctx="ctx"
+          @pick="i => emit('pick', i)"
+          @drill="i => emit('drill', i)"
+          @toggle="i => emit('toggle', i)"
+          @hover="i => emit('hover', i)"
+          @menu="(i, ev) => emit('menu', i, ev)"
+          @stratum="x => emit('stratum', x)"
+        />
+      </template>
     </ul>
   </li>
 </template>
 
 <style scoped>
+.stratum-head {
+  font-size: 11px;
+  color: var(--text-3);
+  padding: 4px 8px 0 0;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+}
+.stratum-head:hover {
+  color: var(--text-2);
+}
 ul {
   list-style: none;
   margin: 0;

@@ -9,7 +9,8 @@ import { RELATION_TYPES, type LevelView, type ModelIndex } from '../types'
 import { valueDeps } from './cycles'
 import { contractNames, coveringRelations, depKey, implementsInto, within } from './facts'
 import { nodeOf } from './level'
-import { rulesOf } from './rules'
+import { layerJudgement, rulesOf } from './rules'
+import { mayDependOnOf, stratumKey, stratumNames } from '../names'
 import { sharedHostOf } from './roles'
 import { elementSlots, slotKey, strongerForm, strongerTier, surfaceContext, surfaceWidths, tierOf } from './surface'
 import {
@@ -49,15 +50,10 @@ const STATUS_ORDER: readonly ViolationStatus[] = ['new', 'open', 'known', 'allow
 export function ruleBasis(index: ModelIndex, from: string, to: string): RuleBasis[] {
   const rules = rulesOf(index)
   const out: RuleBasis[] = []
-  const pa = index.pathOf.get(from) ?? []
-  const pb = index.pathOf.get(to) ?? []
-  let i = 0
-  while (i < pa.length && i < pb.length && pa[i] === pb[i]) i++
-  if (rules.layers !== false && i < pa.length && i < pb.length) {
-    const x = index.modules.get(pa[i])
-    const y = index.modules.get(pb[i])
-    if (x?.kind === 'layer' && y?.kind === 'layer' && x.mayDependOn)
-      out.push({ kind: 'layer', at: x.id, text: `层规则：「${x.name}」可依赖 ${x.mayDependOn.map(id => `「${moduleName(index, id)}」`).join('、') || '无'}` })
+  const layer = rules.layers === false ? null : layerJudgement(index, from, to)
+  if (layer) {
+    const x = layer.from
+    out.push({ kind: 'layer', at: stratumKey(index, x), text: `层规则：「${x.name}」可依赖 ${stratumNames(index, x.parent, mayDependOnOf(x) ?? []).map(n => `「${n}」`).join('、') || '无'}` })
   }
   for (const m of rules.modules ?? []) {
     const inside = within(index, from, m.module)
@@ -538,16 +534,24 @@ export const NO_FACTS_REASON = '没有代码事实（设计版本、提交版本
 export function allowedDeps(index: ModelIndex, view: LevelView, sketch: readonly { layer: string; mayDependOn: readonly string[] }[] = []): AllowedDeps {
   const present = new Set(view.nodes.map(n => n.id))
   const rules = rulesOf(index)
-  const items: AllowedEdge['rules'] = []
+  // 规则条目与它两端的模块（层规则为两层成员的每一对，ADR-0052）
+  const items: { rule: AllowedEdge['rules'][number]; a: string; b: string }[] = []
   if (rules.layers !== false)
-    for (const m of index.modules.values()) if (m.kind === 'layer') for (const to of m.mayDependOn ?? []) items.push({ kind: 'layer', at: m.id, to })
-  for (const r of rules.modules ?? []) for (const to of r.mayDependOn ?? []) items.push({ kind: 'deps', at: r.module, to })
-  for (const s of sketch) for (const to of s.mayDependOn) items.push({ kind: 'sketch', at: s.layer, to })
+    for (const list of index.strata.values())
+      for (const x of list)
+        for (const to of mayDependOnOf(x) ?? []) {
+          const y = list.find(l => l.id === to)
+          if (!y) continue
+          const rule = { kind: 'layer' as const, at: stratumKey(index, x), to: stratumKey(index, y) }
+          for (const a of x.members) for (const b of y.members) items.push({ rule, a, b })
+        }
+  for (const r of rules.modules ?? []) for (const to of r.mayDependOn ?? []) items.push({ rule: { kind: 'deps', at: r.module, to }, a: r.module, b: to })
+  for (const s of sketch) for (const to of s.mayDependOn) items.push({ rule: { kind: 'sketch', at: s.layer, to }, a: s.layer, b: to })
   const pairs = new Map<string, AllowedEdge>()
-  for (const it of items) {
-    if (!index.modules.has(it.at) || !index.modules.has(it.to)) continue
-    const a = nodeOf(index, view, present, it.at)
-    const b = nodeOf(index, view, present, it.to)
+  for (const { rule: it, a: from, b: to } of items) {
+    if (!index.modules.has(from) || !index.modules.has(to)) continue
+    const a = nodeOf(index, view, present, from)
+    const b = nodeOf(index, view, present, to)
     if (!a || !b || a === b) continue
     const k = depKey(a, b)
     const e =

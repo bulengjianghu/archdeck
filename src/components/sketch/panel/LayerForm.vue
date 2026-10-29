@@ -4,7 +4,7 @@
  * 可依赖的层（mayDependOn），失焦提交一步；「删层」经画布的级联确认。层是带不是层次：没有「进入下一层」。
  */
 import { computed, ref, watch } from 'vue'
-import type { ModuleDef } from '@/model'
+import { ROOT_MOUNT, type ModuleDef } from '@/model'
 import { useDesk } from '@/state/inject'
 import { requestSketch } from '../actions'
 
@@ -54,8 +54,16 @@ function commitList(key: 'includes' | 'excludes', text: string) {
   if (now.join('\n') !== (l.value[key] ?? []).join('\n')) report(e.updateModule(l.value.id, { [key]: now.length ? now : undefined }))
 }
 const others = computed(() => (e.sketch.value?.modules ?? []).filter(m => m.id !== l.value.id))
+/** ADR-0052：可依赖的层写在根草图 strata 的层上（层 ID）；这里按带（成员模块 ID）列出与勾选 */
+const deps = computed(() => {
+  const def = e.sketch.value
+  if (!def) return [] as string[]
+  const list = def.strata?.[ROOT_MOUNT] ?? []
+  const own = list.find(x => x.members?.includes(l.value.id) || x.id === l.value.stratum)
+  return (own?.mayDependOn ?? []).flatMap(d => list.find(x => x.id === d)?.members ?? [])
+})
 function toggleDep(dep: string, on: boolean) {
-  const cur = new Set(l.value.mayDependOn ?? [])
+  const cur = new Set(deps.value)
   if (on) cur.add(dep)
   else cur.delete(dep)
   report(e.edit({ op: 'setMayDependOn', id: l.value.id, layers: [...cur] }))
@@ -84,7 +92,7 @@ const blur = (ev: KeyboardEvent) => (ev.target as HTMLElement).blur()
     <div class="f">
       <span class="lab">可依赖的层</span>
       <label v-for="o in others" :key="o.id" class="inline">
-        <input type="checkbox" :checked="(l.mayDependOn ?? []).includes(o.id)" @change="toggleDep(o.id, ($event.target as HTMLInputElement).checked)" />
+        <input type="checkbox" :checked="deps.includes(o.id)" @change="toggleDep(o.id, ($event.target as HTMLInputElement).checked)" />
         {{ o.name }}
       </label>
     </div>

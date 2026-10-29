@@ -7,6 +7,8 @@
 import { computed, ref, type ComputedRef, type Ref, type ShallowRef } from 'vue'
 import {
   carriersOf,
+  strataMetrics,
+  type StratumMetrics,
   elementSub,
   interactionBundle,
   isTarget,
@@ -74,7 +76,6 @@ import {
   type Impact,
   type StructureView,
   type FileDep,
-  flattenSketch,
   parseDesignSketches,
   sketchLifetime,
   type RawFile,
@@ -337,6 +338,8 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
   )
   /** K5d：一条交互的承载；不判定或没有代码事实时为 null */
   const carrierOf = (relationId: string): Carrier | null => carriers.value?.get(relationId) ?? null
+  /** ADR-0052（层面板 V2）：父模块各层的 Ca / Ce / I 与向上依赖；没有代码事实时指标为空 */
+  const strataOf = (parent: string): StratumMetrics[] => (index.value ? strataMetrics(index.value, parent, report.value ?? undefined) : [])
   /** S18b：步骤 → 绑定的交互 → 承载段（帧没有绑定交互时 relation 为 null） */
   const stepCarrierOf = (frame: Pick<Frame, 'relation'>): { relation: string | null; carrier: Carrier | null } => ({
     relation: frame.relation ?? null,
@@ -361,8 +364,14 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     if (!index.value) return []
     const own = index.value.model.sketches.filter(s => sketchLifetime(s) === 'persistent' || design)
     const all = [...own, ...parseDesignSketches(sketches?.value ?? [])]
+    // ADR-0052：层写在草图的 strata 上——成员两两投成允许边（根草图的层即成员）
     return all.flatMap(s =>
-      flattenSketch(s).flatMap(m => (m.def.kind === 'layer' && m.def.mayDependOn?.length ? [{ layer: m.id, mayDependOn: m.def.mayDependOn }] : [])),
+      Object.values(s.def.strata ?? {}).flatMap(list =>
+        list.flatMap(x => {
+          const to = (x.mayDependOn ?? []).flatMap(d => list.find(y => y.id === d)?.members ?? [])
+          return to.length ? (x.members ?? []).map(a => ({ layer: a, mayDependOn: to })) : []
+        }),
+      ),
     )
   })
 
@@ -766,6 +775,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     bypassesOf,
     carriers,
     carrierOf,
+    strataOf,
     stepCarrierOf,
     interactionSpread,
     againstOf,

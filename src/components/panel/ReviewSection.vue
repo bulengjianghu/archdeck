@@ -18,7 +18,8 @@ const props = defineProps<{ id: string; part: 'badge' | 'diff' | 'confirm'; /** 
 const desk = useDesk()
 const st = computed(() => desk.review.of(props.id))
 const isSystem = computed(() => props.id === desk.index.value?.rootId)
-const isLayer = computed(() => desk.index.value?.modules.get(props.id)?.kind === 'layer')
+// ADR-0052：单成员层的成员（根的层）同旧的层，面板提供「确认」
+const isLayer = computed(() => desk.index.value?.stratumOf.get(props.id)?.members.length === 1)
 const inScope = computed(() => isSystem.value || isLayer.value || desk.review.scope.value.has(props.id))
 const subtree = computed(() => desk.review.subtree(props.id))
 const fields = computed(() => (st.value.diff ? REVIEW_FIELDS.filter(f => st.value.diff![f].length) : []))

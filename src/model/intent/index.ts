@@ -48,6 +48,7 @@ export {
   isRootSketch,
   ID_PATTERN,
 } from './edit'
+export { strataKey, isRootLayer, strataIn, stratumOfMember, rootOrderOf } from './edit'
 export type { LocatedModule, SeedOptions, GridArea } from './edit'
 export { validateSketch, SKETCH_SOFT_LIMIT } from './validate'
 export type { ValidateContext } from './validate'

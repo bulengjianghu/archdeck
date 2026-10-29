@@ -8,6 +8,7 @@
  * 同一 (from, to, type) 的关系合并成一条边（L5：同一对节点之间不同类型的关系各成一条）。
  */
 import { isBoundaryRole, isSharedRole, mechanismOf, relationMode } from './types'
+import { stratumKey } from './names'
 import type {
   Band,
   ModelIndex,
@@ -16,6 +17,7 @@ import type {
   ViewEdge,
   ViewNode,
   LevelView,
+  StratumEntity,
 } from './types'
 
 /**
@@ -54,6 +56,14 @@ export const FOLD_LIMIT = 7
 
 /** O6、O8：「+N 个其他模块」占位的视图节点 ID（分层总览为层 ID，普通层次为父模块 ID） */
 export const moreNodeId = (id: string): string => `more:${id}`
+
+/** ST（ADR-0052）：多成员层的带节点 ID（单成员层的带即成员，用成员 ID） */
+export const stratumNodeId = (key: string): string => `s:${key}`
+
+/** ST：分层总览里一个层的带节点 ID */
+export function bandNodeId(index: Pick<ModelIndex, 'rootId'>, s: Pick<StratumEntity, 'parent' | 'id' | 'members'>): string {
+  return s.members.length === 1 ? s.members[0] : stratumNodeId(stratumKey(index, s))
+}
 
 /** O8：本层子模块端点（mapEndpoint 的 local / external 结果）在视图里对应的节点：折叠进「+N」的换成占位 */
 export const viewNodeOf = (view: Pick<LevelView, 'alias'>, node: string): string => view.alias?.[node] ?? node
@@ -96,7 +106,9 @@ export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectO
   const visible = makeVisibility(index, opts)
   if (!index.pathOf.has(parentId) || !visible(parentId)) throw new Error(`未知或已隐藏的层次：${parentId}`)
   const children = (index.childrenOf.get(parentId) ?? []).filter(visible)
-  const layered = children.length > 0 && children.every(id => index.modules.get(id)!.kind === 'layer')
+  // ST（ADR-0052）：父模块声明了分层即分层总览（O1）；层是分类，带不是模块
+  const strata = (index.strata.get(parentId) ?? []).map(s => ({ s, members: s.members.filter(visible) })).filter(x => x.members.length > 0)
+  const layered = strata.length > 0
 
   // ADR-0027：普通层次按 role 分三类——核心、普通、共用件（分层总览在带内分，layeredOverview）
   const shelf = layered ? [] : children.filter(id => isSharedRole(roleOf(index, id)))
@@ -110,7 +122,10 @@ export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectO
   const expanded = folding && (opts.expandedBands ?? []).includes(parentId)
   const alias: Record<string, string> = {}
   if (folding && !expanded) for (const id of normal) alias[id] = moreNodeId(parentId)
-  const scope: LevelScope = { index, parentId, opts, visible, children, rep: n => alias[n] ?? n, shelf: new Set(shelf) }
+  // ST：多成员层的成员在本层映射到它的带（同单成员层：端点落在带里即落到带上）
+  const bandOf = new Map<string, string>()
+  for (const { s, members } of strata) for (const id of members) bandOf.set(id, bandNodeId(index, s))
+  const scope: LevelScope = { index, parentId, opts, visible, children, rep: n => alias[n] ?? bandOf.get(n) ?? n, shelf: new Set(shelf) }
 
   const relations = index.model.relations.filter(r => {
     if (opts.relationTypes && opts.relationTypes.length > 0 && !opts.relationTypes.includes(r.type)) return false
@@ -142,7 +157,7 @@ export function projectLevel(index: ModelIndex, parentId: string, opts: ProjectO
       ...(Object.keys(alias).length ? { alias } : {}),
     })
   }
-  return layeredOverview(scope, relations, proj, tail)
+  return layeredOverview(scope, strata, relations, proj, tail)
 }
 
 /** O10：每个非共用件节点连到的共用件个数（「共用 ×N」） */
@@ -233,44 +248,68 @@ function actorNodes(index: ModelIndex, actorIds: ReadonlySet<string>): ViewNode[
   return index.model.actors.filter(a => actorIds.has(a.id)).map(a => ({ id: a.id, moduleId: a.id, role: 'actor', hasChildren: false, actorKind: a.kind }))
 }
 
-/** 分层总览中一个端点在带内的代表：核心模块、共用件，否则为层本身 */
+/** 分层总览中一个端点在带内的代表：带内露出的模块、共用件，否则为带本身 */
 type Rep = { node: string; core: boolean; shelf: boolean; exact: boolean }
 
-/** 分层总览（O）：层画成带，带内只画核心模块、共用件进带底的共用件架（O9），另算核心模块之间的核心跨层边与共用件的边 */
-function layeredOverview(scope: LevelScope, relations: readonly RelationEntity[], proj: Projected, tail: ViewNode[]): LevelView {
-  const { index, parentId, children } = scope
-  const coreOf = new Map<string, Set<string>>()
-  const shelfOfLayer = new Map<string, Set<string>>()
-  // O6：临时展开的层，全部非共用件子模块都按核心模块露出
+/** 一条带（O2）：带节点、它的层、带内的内容（单成员层为成员的子模块，多成员层为成员） */
+interface BandScope {
+  id: string
+  s: StratumEntity
+  /** 单成员层：带即这个成员 */
+  member?: string
+  contents: string[]
+  shown: Set<string>
+  shelf: Set<string>
+}
+
+/**
+ * 分层总览（O1、O2、O2a，ADR-0052）：一层一条带。单成员层的带即成员，带内画成员的子模块，同今天的根层：核心与 port / adapter 常显、其余折成「+N」；
+ * 多成员层的带内画成员，放得下（非共用件不超过七个，X13）就全显，超过才把普通成员折成「+N」。共用件进带底的共用件架（O9）。
+ */
+function layeredOverview(scope: LevelScope, strata: { s: StratumEntity; members: string[] }[], relations: readonly RelationEntity[], proj: Projected, tail: ViewNode[]): LevelView {
+  const { index, parentId } = scope
+  // O6：临时展开的带，全部非共用件内容都露出
   const expanded = new Set(scope.opts.expandedBands ?? [])
-  for (const l of children) {
-    const kids = visibleChildren(scope, l)
-    shelfOfLayer.set(l, new Set(kids.filter(c => isSharedRole(roleOf(index, c)))))
-    // L14：port / adapter 同核心模块常显在带内
-    coreOf.set(l, new Set(kids.filter(c => !shelfOfLayer.get(l)!.has(c) && (expanded.has(l) || roleOf(index, c) === 'core' || isBoundaryRole(roleOf(index, c))))))
-  }
-  const nodes = children.map(id => childNode(scope, id, 'layer'))
-  const bands: Band[] = children.map(l => {
-    const m = index.modules.get(l)!
-    const kids = visibleChildren(scope, l)
-    const core = kids.filter(c => coreOf.get(l)!.has(c))
-    const shelf = kids.filter(c => shelfOfLayer.get(l)!.has(c))
-    for (const c of core) nodes.push({ id: c, moduleId: c, role: 'core', hasChildren: visibleChildren(scope, c).length > 0, layerId: l, ...rimOf(index, c) })
-    for (const c of shelf) nodes.push({ id: c, moduleId: c, role: 'shared', hasChildren: visibleChildren(scope, c).length > 0, layerId: l })
-    const declared = kids.filter(c => roleOf(index, c) === 'core' || isBoundaryRole(roleOf(index, c))).length
+  const scopes: BandScope[] = strata.map(({ s, members }) => {
+    const id = bandNodeId(index, s)
+    const member = s.members.length === 1 ? s.members[0] : undefined
+    const contents = member ? visibleChildren(scope, member) : members
+    const shelf = new Set(contents.filter(c => isSharedRole(roleOf(index, c))))
+    const rest = contents.filter(c => !shelf.has(c))
+    // O2：单成员层的带即成员，同今天的根层——核心常显、其余折成「+N」；O2a：多成员层的带内成员放得下（不超过七个，X13）就全显
+    const fold = (member !== undefined || rest.length > FOLD_LIMIT) && !expanded.has(id)
+    const shown = new Set(rest.filter(c => !fold || roleOf(index, c) === 'core' || isBoundaryRole(roleOf(index, c))))
+    return { id, s, ...(member ? { member } : {}), contents, shown, shelf }
+  })
+  const nodes: ViewNode[] = scopes.map(b =>
+    b.member
+      ? { ...childNode(scope, b.member, 'layer'), stratum: stratumKey(index, b.s) }
+      : { id: b.id, moduleId: b.id, role: 'layer', hasChildren: false, stratum: stratumKey(index, b.s) },
+  )
+  const bands: Band[] = scopes.map(b => {
+    const core = b.contents.filter(c => b.shown.has(c))
+    const shelf = b.contents.filter(c => b.shelf.has(c))
+    for (const c of core) nodes.push({ id: c, moduleId: c, role: 'core', hasChildren: visibleChildren(scope, c).length > 0, layerId: b.id, ...rimOf(index, c) })
+    for (const c of shelf) nodes.push({ id: c, moduleId: c, role: 'shared', hasChildren: visibleChildren(scope, c).length > 0, layerId: b.id })
+    const always = b.contents.filter(c => !b.shelf.has(c) && (roleOf(index, c) === 'core' || isBoundaryRole(roleOf(index, c)))).length
     return {
-      layerId: l,
-      order: m.order ?? Infinity,
+      layerId: b.id,
+      stratum: stratumKey(index, b.s),
+      order: b.s.order ?? Infinity,
       coreModuleIds: core,
-      hiddenCount: kids.length - core.length - shelf.length,
-      ...(expanded.has(l) && core.length > declared ? { expanded: core.length - declared } : {}),
+      hiddenCount: b.contents.length - core.length - shelf.length,
+      ...(expanded.has(b.id) && core.length > always ? { expanded: core.length - always } : {}),
       shelf,
     }
   })
+  const byChild = new Map<string, BandScope>()
+  for (const b of scopes) for (const id of b.member ? [b.member] : b.contents) byChild.set(id, b)
   const coreEdges = new EdgeCollector()
   const shelfEdges = new EdgeCollector()
-  for (const r of relations) projectCoreRelation(scope, coreOf, shelfOfLayer, coreEdges, shelfEdges, r)
+  for (const r of relations) projectCoreRelation(scope, byChild, coreEdges, shelfEdges, r)
   const shelfList = shelfEdges.result()
+  const alias: Record<string, string> = {}
+  for (const b of scopes) if (!b.member) for (const c of b.contents) alias[c] = b.id
   return withSharedCounts({
     mode: 'layered',
     parentId,
@@ -279,17 +318,17 @@ function layeredOverview(scope: LevelScope, relations: readonly RelationEntity[]
     bands,
     coreEdges: coreEdges.result(),
     ...(shelfList.length ? { shelfEdges: shelfList } : {}),
+    ...(Object.keys(alias).length ? { alias } : {}),
   })
 }
 
 /**
- * 核心跨层边：关系端点在层内落到核心模块时用核心模块；两端都没落到核心模块时与层间边重复，不记录。
- * O10：一端落到共用件的进共用件的边（同一层内核心与共用件之间的也算；共用件与自己所在的带之间不算）。
+ * 核心跨层边：关系端点在带内落到露出的模块时用它；两端都没落到露出的模块时与带间边重复，不记录。
+ * O10：一端落到共用件的进共用件的边（同一带内露出的模块与共用件之间的也算；共用件与自己所在的带之间不算）。
  */
 function projectCoreRelation(
   { index, parentId }: LevelScope,
-  coreOf: Map<string, Set<string>>,
-  shelfOfLayer: Map<string, Set<string>>,
+  byChild: ReadonlyMap<string, BandScope>,
   coreEdges: EdgeCollector,
   shelfEdges: EdgeCollector,
   r: RelationEntity,
@@ -301,7 +340,7 @@ function projectCoreRelation(
   if (a.kind === 'actor' || b.kind === 'actor') {
     const local = a.kind === 'local' ? a : b.kind === 'local' ? b : null
     if (!local) return
-    const c = coreRep(index.pathOf.get(local === a ? r.from : r.to)!, depth, coreOf, shelfOfLayer)
+    const c = coreRep(index.pathOf.get(local === a ? r.from : r.to)!, depth, byChild)
     const from = a.kind === 'actor' ? a.node : c.node
     const to = b.kind === 'actor' ? b.node : c.node
     if (c.shelf) shelfEdges.add(from, to, r, c.exact)
@@ -309,26 +348,31 @@ function projectCoreRelation(
     return
   }
   if (a.kind !== 'local' || b.kind !== 'local') return
-  const ca = coreRep(index.pathOf.get(r.from)!, depth, coreOf, shelfOfLayer)
-  const cb = coreRep(index.pathOf.get(r.to)!, depth, coreOf, shelfOfLayer)
+  const ca = coreRep(index.pathOf.get(r.from)!, depth, byChild)
+  const cb = coreRep(index.pathOf.get(r.to)!, depth, byChild)
   if (ca.node === cb.node) return
+  const sameBand = byChild.get(a.node) === byChild.get(b.node)
   if (ca.shelf || cb.shelf) {
-    // 共用件与它所在的带之间（同层的普通模块用它）不画：带就是它的框
-    if (a.node === b.node && (!ca.core && !ca.shelf ? true : !cb.core && !cb.shelf)) return
+    // 共用件与它所在的带之间（同带的其他内容用它）不画：带就是它的框
+    if (sameBand && (!ca.core && !ca.shelf ? true : !cb.core && !cb.shelf)) return
     shelfEdges.add(ca.node, cb.node, r, ca.exact && cb.exact)
     return
   }
-  if (a.node === b.node) return
+  if (sameBand) return
   if (ca.core || cb.core) coreEdges.add(ca.node, cb.node, r, ca.exact && cb.exact)
 }
 
-/** 端点在层内落到核心模块或共用件时用它，否则用层本身 */
-function coreRep(path: string[], depth: number, coreOf: Map<string, Set<string>>, shelfOfLayer: Map<string, Set<string>>): Rep {
-  const layer = path[depth + 1]
-  const second = path[depth + 2]
-  if (second !== undefined && coreOf.get(layer)?.has(second)) return { node: second, core: true, shelf: false, exact: path.length === depth + 3 }
-  if (second !== undefined && shelfOfLayer.get(layer)?.has(second)) return { node: second, core: false, shelf: true, exact: path.length === depth + 3 }
-  return { node: layer, core: false, shelf: false, exact: path.length === depth + 2 }
+/** 端点在带内落到露出的模块或共用件时用它，否则用带本身 */
+function coreRep(path: string[], depth: number, byChild: ReadonlyMap<string, BandScope>): Rep {
+  const child = path[depth + 1]
+  const band = byChild.get(child)
+  if (!band) return { node: child, core: false, shelf: false, exact: path.length === depth + 2 }
+  const at = band.member ? depth + 2 : depth + 1
+  const inner = path[at]
+  const exact = path.length === at + 1
+  if (inner !== undefined && band.shown.has(inner)) return { node: inner, core: true, shelf: false, exact }
+  if (inner !== undefined && band.shelf.has(inner)) return { node: inner, core: false, shelf: true, exact }
+  return { node: band.id, core: false, shelf: false, exact: !!band.member && path.length === depth + 2 }
 }
 
 /** L5：按 (from, to, type) 收集视图边，同类型内聚合并汇总同步 / 异步 */
@@ -369,18 +413,15 @@ export function lowestCommonAncestor(index: ModelIndex, a: string, b: string): s
 
 /**
  * 层次顺序（P9、L4）：模块在层次中的排序键。从根下到该模块的路径上每一级两项：
- * 层为 [0, order]，其他模块为 [1, 在父模块子模块中的描述顺序]。逐项比较即得层次顺序（compareKeys）：
+ * 声明了分层的父模块下为 [0, 按层序排好的位置]，其他为 [1, 在父模块子模块中的描述顺序]。逐项比较即得层次顺序（compareKeys）：
  * 同一父模块的模块相邻，上层在前，祖先在后代之前。参与者与未知 ID 的键为空。
  */
 export function hierarchyKey(index: ModelIndex, id: string): number[] {
   const path = index.pathOf.get(id)
   if (!path || index.actors.has(id)) return []
   const key: number[] = []
-  for (let i = 1; i < path.length; i++) {
-    const m = index.modules.get(path[i])!
-    if (m.kind === 'layer') key.push(0, m.order ?? Infinity)
-    else key.push(1, (index.childrenOf.get(path[i - 1]) ?? []).indexOf(path[i]))
-  }
+  // ST：声明了分层的父模块下，子模块按层序排在前（childrenOf 已按层序排好）
+  for (let i = 1; i < path.length; i++) key.push(index.strata.has(path[i - 1]) ? 0 : 1, (index.childrenOf.get(path[i - 1]) ?? []).indexOf(path[i]))
   return key
 }
 

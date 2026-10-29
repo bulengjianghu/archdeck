@@ -14,3 +14,4 @@ export { applyDesignEdit, sketchesUnder } from './design'
 export { locateAll, locate, knownModules, moduleId, relationId, interfaceId, kebab, shortName, ID_PATTERN, mountOf, isRootSketch } from './locate'
 export type { LocatedModule } from './locate'
 export { removeLayer }
+export { strataKey, isRootLayer, strataIn, stratumOfMember, rootOrderOf } from './strata'

@@ -2,7 +2,7 @@
  * 返工清单（Q7–Q9）：把描述问题、源码归属、代码事实、架构规则与场景中能交给人或 AI 修正的问题汇总，按根因聚合，
  * 每条带文件行号、规则编号与建议动作。关于被描述系统的知识，页面、命令行与 MCP 共用同一份结果。
  */
-import { RULE_LABELS, moduleName } from '../names'
+import { RULE_LABELS, moduleName, stratumByKey } from '../names'
 import { bindRelation, forEachStep, planScenario, querySideEffects, RUNTIME_RELATION_TYPES } from '../scenario/semantics'
 import { matchRef, missingEvidence, moduleEntry, type LocalSource, type SourceOwnership } from '../source'
 import {
@@ -16,6 +16,7 @@ import {
   sharedHostOf,
   stepEvidence,
   tierFindings,
+  strataFindings,
   layerDrift,
   unconfirmedCode,
   unconfirmedReason,
@@ -74,6 +75,17 @@ const ISSUE_RULES: Record<string, string[]> = {
   'layer-missing-order': ['M8'],
   'layer-missing-abstraction': ['M8'],
   'mixed-layer-siblings': ['M8'],
+  'layer.nested': ['M26'],
+  'layer.migrated': ['M26'],
+  'stratum.missing': ['ST-6'],
+  'stratum.multiple': ['ST-6'],
+  'stratum.unknown': ['ST-6'],
+  'stratum.duplicate': ['ST-6'],
+  'stratum.parent-missing': ['ST-6'],
+  'stratum.member-missing': ['ST-6'],
+  'stratum.shadowed': ['ST-6'],
+  'stratum.redeclared': ['ST-6'],
+  'stratum.principle-missing': ['ST-1'],
   'nested-parent-ignored': ['M10'],
   'relation.via-target': ['M11'],
   'relation-type-renamed': ['M12'],
@@ -122,7 +134,9 @@ function descriptionFix(i: Issue): string {
  * 由下面的材料重新算、不从 issues 取的问题：未建模的步骤（S5a 的 warning）、源码归属、场景证据（S15）、门禁与事实、端口孤立（U14）；
  * 未分类（M17）只列核心之间的，也由下面重新算
  */
-const recomputed = (code: string) => code === 'step-unmodeled' || code === 'relation.unclassified' || /^(source|scenario|rule|cycle|fact|port|query|surface|carrier|split|tier)\./.test(code)
+const STRATA_RECOMPUTED = new Set(['stratum.singular', 'stratum.instability-order', 'stratum.type-upward'])
+const recomputed = (code: string) =>
+  code === 'step-unmodeled' || code === 'relation.unclassified' || STRATA_RECOMPUTED.has(code) || /^(source|scenario|rule|cycle|fact|port|query|surface|carrier|split|tier)\./.test(code)
 
 const RULE_OF_KIND: Record<Violation['kind'], string> = { layer: 'U2', deps: 'U3', exposes: 'U4' }
 
@@ -161,6 +175,7 @@ export function reworkList(input: ReworkInput): ReworkList {
   if (report) items.push(...factItems(index, report, name), ...surfaceItems(report), ...carrierItems(report))
   if (report && source) items.push(...splitItems(index, report, source.own))
   if (report) items.push(...conformanceItems(index, report))
+  items.push(...strataItems(index, report ?? undefined))
   items.push(...portItems(index, report ?? null), ...sideEffectItems(index, name), ...unclassifiedItems(index, name))
   items.push(...unmodeledItems(index, name))
   items.push(...reviewItems(index, name))
@@ -345,7 +360,7 @@ function factItems(index: ModelIndex, report: GovernanceReport, name: (id: strin
     const v = vs[0]
     const sevOf: Record<Violation['status'], ReworkSeverity> = { new: 'error', known: 'warning', open: 'warning', allowed: 'info' }
     const code = v.status === 'new' ? 'rule.new' : v.status === 'known' ? 'rule.known' : v.status === 'allowed' ? 'rule.allowed' : 'rule.violation'
-    const src = v.kind === 'layer' ? index.modules.get(v.at)?.src : index.model.rulesSrc
+    const src = v.kind === 'layer' ? stratumByKey(index, v.at)?.src : index.model.rulesSrc
     const label = { new: '新增违规', known: '已知违规', open: '违规', allowed: '已豁免' }[v.status]
     const froms = vs.map(x => x.from)
     // 一条时例外只放这一对；多条时放在规则所在（层或写规则的模块）上，一条覆盖全部
@@ -609,6 +624,30 @@ function splitItems(index: ModelIndex, report: GovernanceReport, own: SourceOwne
   })
 }
 
+// ── 分层（ST-3–ST-5，ADR-0052，info）：稳定性逆序、单成员层没写理由、底层只引类型的向上 import，一处一条 ──
+
+function strataItems(index: ModelIndex, report?: GovernanceReport): ReworkItem[] {
+  return strataFindings(index, report).map(({ issue: i, modules }) => {
+    const at = descLoc(i)
+    return {
+      id: `strata:${i.code}:${modules.join(',')}:${i.path ?? ''}`,
+      category: 'strata' as const,
+      severity: 'info' as const,
+      rules: [i.code === 'stratum.singular' ? 'ST-4' : i.code === 'stratum.type-upward' ? 'ST-5' : 'ST-3'],
+      code: i.code,
+      title: i.message,
+      ...(at ? { at } : {}),
+      affected: at ? [at] : [],
+      actions: [
+        i.code === 'stratum.type-upward'
+          ? { kind: 'fix-code' as const, text: '把用到的类型移到底层，或改为从底层的契约取' }
+          : { kind: 'check-layers' as const, text: i.code === 'stratum.singular' ? '写 singular 说明为什么单独成层，或与相邻层合并' : '按各层的 admits 核对成员归属；归属无误时是依赖本身朝上，改代码或登记理由' },
+      ],
+      target: { modules },
+    }
+  })
+}
+
 // ── 层的符合性（K24，第十四轮 F3，info）：已确认的声明层与实算不符——成环一处一条、倒置一对一条；未确认的层不报（还只是主张，Z3） ──
 
 function conformanceItems(index: ModelIndex, report: GovernanceReport): ReworkItem[] {
@@ -618,7 +657,7 @@ function conformanceItems(index: ModelIndex, report: GovernanceReport): ReworkIt
   return layerDrift(index, report).flatMap(d => {
     const layers = d.kind === 'cycle' ? d.layers : [d.above, d.below]
     if (!layers.some(confirmed)) return []
-    const at = descLoc(index.modules.get(layers[0])?.src)
+    const at = descLoc(index.modules.get(layers[0])?.src ?? stratumByKey(index, layers[0].replace(/^s:/, ''))?.src)
     const title =
       d.kind === 'cycle'
         ? `声明的层 ${layers.map(l => `「${name(l)}」`).join('、')} 之间成环：实算是同一层（K24）`

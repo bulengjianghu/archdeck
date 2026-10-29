@@ -4,7 +4,7 @@
  * | 参数    | 含义                                              |
  * |---------|---------------------------------------------------|
  * | `level` | 当前层次（根层省略）                              |
- * | `sel`   | 选中，`m:` / `r:` / `e:` / `a:` / `f:` / `d:` / `c:` / `p:` 前缀 |
+ * | `sel`   | 选中，`m:` / `r:` / `e:` / `a:` / `f:` / `d:` / `c:` / `p:` / `y:` / `s:`（层，ADR-0052）前缀 |
  * | `sc`    | 打开的场景（有即运行视角）                        |
  * | `step`  | 播放头帧 ID                                       |
  * | `alt`   | 已选分支：路径上依次经过的分支点的选项，以 `.` 连接 |
@@ -15,8 +15,8 @@ import { withMode } from './mode'
 import { selectionExists, withLevel } from './navigation'
 import type { PlaybackState, Query, Selection, TransitionContext, TransitionResult, ViewState } from './types'
 
-const SELECTION_PREFIX = { module: 'm', relation: 'r', edge: 'e', actor: 'a', file: 'f', dep: 'd', couple: 'c', port: 'p', cycle: 'y' } as const
-const SELECTION_KIND = { m: 'module', r: 'relation', e: 'edge', a: 'actor', f: 'file', d: 'dep', c: 'couple', p: 'port', y: 'cycle' } as const
+const SELECTION_PREFIX = { module: 'm', relation: 'r', edge: 'e', actor: 'a', file: 'f', dep: 'd', couple: 'c', port: 'p', cycle: 'y', stratum: 's' } as const
+const SELECTION_KIND = { m: 'module', r: 'relation', e: 'edge', a: 'actor', f: 'file', d: 'dep', c: 'couple', p: 'port', y: 'cycle', s: 'stratum' } as const
 
 export function encodeSelection(s: Selection | null): string | undefined {
   if (!s) return undefined
@@ -25,7 +25,7 @@ export function encodeSelection(s: Selection | null): string | undefined {
 
 export function decodeSelection(raw: unknown): Selection | null {
   if (typeof raw !== 'string') return null
-  const m = /^([mreafdcpy]):(.+)$/.exec(raw)
+  const m = /^([mreafdcpys]):(.+)$/.exec(raw)
   if (!m) return null
   return { kind: SELECTION_KIND[m[1] as keyof typeof SELECTION_KIND], id: m[2] }
 }

@@ -104,8 +104,11 @@ describe('Z2 指纹覆盖什么', () => {
         { id: 'if.render', signature: 'render(vnode): void' },
       ],
       children: [],
+      strata: [],
     })
-    expect(reviewSummary(idx, 'ui')).toMatchObject({ includes: ['组件', '页面'], excludes: ['业务规则'], mayDependOn: ['core'], children: ['ui.store', 'ui.view'] })
+    // ADR-0052：可依赖的层是根的分层的一部分，随系统确认（Z7）；模块上不再有
+    expect(reviewSummary(idx, 'ui')).toMatchObject({ includes: ['组件', '页面'], excludes: ['业务规则'], mayDependOn: [], children: ['ui.store', 'ui.view'] })
+    expect(reviewSummary(idx, 'sys').strata).toEqual(['1 | ui | UI |  |  | 界面 | core | ui', '2 | core | Core |  |  | 内核 |  | core'])
     expect(reviewHash(idx, 'ui.view')).toMatch(/^[0-9a-f]{16}$/)
   })
   it('覆盖：改职责一行、改接口签名、增减子模块、改包含 / 不包含与可依赖的层，指纹都变', () => {
@@ -114,7 +117,7 @@ describe('Z2 指纹覆盖什么', () => {
     expect(hashOf(MODULES.replace("provides: [if.render, if.mount]", "provides: [if.render]"))).not.toBe(base)
     const parent = hashOf(MODULES, 'ui')
     expect(hashOf(MODULES.replace('includes: [组件, 页面]', 'includes: [组件]'), 'ui')).not.toBe(parent)
-    expect(hashOf(MODULES.replace('mayDependOn: [core]', 'mayDependOn: []'), 'ui')).not.toBe(parent)
+    expect(hashOf(MODULES.replace('mayDependOn: [core]', 'mayDependOn: []'), 'sys')).not.toBe(hashOf(MODULES, 'sys'))
     expect(hashOf(MODULES.replace('      - id: ui.store\n', '      - { id: ui.extra, name: Extra, responsibility: 多一个 }\n      - id: ui.store\n'), 'ui')).not.toBe(parent)
   })
   it('排序口径一致：含大小写的接口 ID，确认时的指纹与从记录摘要重算的指纹相同，状态为已确认；非 ASCII 的 ID（只可能出现在手写的摘要里）同一口径', () => {
@@ -319,15 +322,16 @@ describe('Z2 纳入原则 abstraction（ADR-0042）', () => {
 describe('Z7 系统也可确认（ADR-0042）', () => {
   const SYS = MODULES.replace('system: { id: sys, name: S }', 'system: { id: sys, name: S, description: "给谁用的工具。\\n按两层分。" }')
   const sidx = load('', SYS).index
-  it('系统的摘要只有简介（按行规整）；子模块、层的变化不影响系统的指纹', () => {
+  it('系统的摘要是简介与根的分层（按行规整，ADR-0052：根的层随系统确认）；子模块的变化不影响系统的指纹，层的原则变了要复核', () => {
     expect(reviewSummary(sidx, 'sys')).toMatchObject({ description: '给谁用的工具。\n按两层分。', responsibility: '', children: [] })
-    expect(reviewHash(sidx, 'sys')).toBe(reviewHash(load('', SYS.replace('abstraction: 界面', 'abstraction: 别的')).index, 'sys'))
+    expect(reviewHash(sidx, 'sys')).toBe(reviewHash(load('', SYS.replace('responsibility: 状态', 'responsibility: 别的状态')).index, 'sys'))
+    expect(reviewHash(sidx, 'sys')).not.toBe(reviewHash(load('', SYS.replace('abstraction: 界面', 'abstraction: 别的')).index, 'sys'))
     expect(reviewHash(sidx, 'sys')).not.toBe(reviewHash(load('', SYS.replace('按两层分。', '按三层分。')).index, 'sys'))
   })
   it('以系统 ID 记一条确认：加载不提醒失效；状态三档同模块；需复核时差异列在「简介」下并进返工清单', () => {
     expect(reviewStates(sidx).get('sys')).toEqual({ status: 'unreviewed' })
     const [e] = reviewEntries(sidx, ['sys'], { source: 'manual', at: '2026-10-28' })
-    expect(e.summary).toEqual({ description: '给谁用的工具。\n按两层分。' })
+    expect(e.summary).toEqual({ description: '给谁用的工具。\n按两层分。', strata: ['1 | ui | UI |  |  | 界面 | core | ui', '2 | core | Core |  |  | 内核 |  | core'] })
     const yaml = `reviewed:\n  - ${JSON.stringify(e)}\n`
     const ok = load(yaml, SYS)
     expect(ok.issues.map(i => i.code)).not.toContain('unknown-reviewed-module')

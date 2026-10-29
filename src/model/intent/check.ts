@@ -365,6 +365,31 @@ export function sketchCheck(sketch: SketchEntity, index: ModelIndex, opts: Sketc
     })
   }
 
+  // ── 分层（ADR-0052）：草图写了的层按结构比（存在、层序、可依赖的层、成员属于它），写了才比；文字不在这里比 ──
+  for (const [parent, list] of Object.entries(def.strata ?? {})) {
+    const pid = parent === ROOT_MOUNT ? rootId : parent
+    const actual = index.strata.get(pid) ?? []
+    const diffs: string[] = []
+    for (const l of list) {
+      const a = actual.find(x => x.id === l.id)
+      if (!a) {
+        diffs.push(`层「${l.name || l.id}」版本里没有`)
+        continue
+      }
+      if (l.order !== undefined && l.order !== a.order) diffs.push(`「${l.name || l.id}」层序（草图 ${l.order}，版本 ${a.order ?? '无'}）`)
+      if (l.mayDependOn !== undefined && !sameSet(l.mayDependOn, a.mayDependOn)) diffs.push(`「${l.name || l.id}」可依赖的层（草图 [${l.mayDependOn.join(', ')}]，版本 [${(a.mayDependOn ?? []).join(', ')}]）`)
+      const members = [...(l.members ?? []), ...own.filter(m => m.node.stratum === l.id && (m.parentId ?? (def.mount === ROOT_MOUNT ? ROOT_MOUNT : def.mount)) === parent).map(m => m.id)]
+      const off = members.filter(m => !a.members.includes(m))
+      if (off.length) diffs.push(`「${l.name || l.id}」的成员 ${off.join('、')} 在版本里不属于这层`)
+    }
+    if (diffs.length)
+      push('sketch.field', 'error', pid, `「${name(pid)}」的分层与草图不一致：${diffs.join('；')}`, {
+        target: { modules: [pid] },
+        at: at(`sketch.strata.${parent}`),
+        detail: '层是父模块对子模块的分类（ADR-0052）：写了才比——层、层序、可依赖的层与成员归属以草图为准',
+      })
+  }
+
   // ── 血缘的来源仍在原处、基线里有而草图删掉的仍在（X11、X17）──
   const scope = mountScope(index, def.mount)
   const map = prefixMap(lineage)

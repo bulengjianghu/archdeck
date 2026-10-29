@@ -1,6 +1,7 @@
 /**
  * 治理报告（K4–K7、U2–U9、Y1–Y3）：把代码事实、架构规则与基线组合成一份报告，页面、lint:model 与 agent 接口共用。
  */
+import { stratumByKey } from '../names'
 import { RULE_LABELS, moduleName } from '../names'
 import { moduleEntry, type LocalSource, type SourceOwnership } from '../source'
 import type { Issue, ModelIndex } from '../types'
@@ -12,6 +13,7 @@ import { sharedHostOf, sharedReverse, sharedSuggestions } from './roles'
 import { carrierGap, carrierNote, carrierOf, moduleElementEdges } from './carrier'
 import { surfaceIssues } from './surface'
 import { tierIssues } from './tiers'
+import { strataIssues } from './strata'
 import type { Baseline, CodeDeps, ElementEdge, GovernanceReport, Violation } from './types'
 
 /** G10：入口文件（不存在的 entry 不算） */
@@ -68,7 +70,7 @@ export function governanceReport(
   for (const v of counted) {
     const code = v.status === 'new' ? 'rule.new' : v.status === 'known' ? 'rule.known' : 'rule.violation'
     const first = v.files[0]
-    const src = v.kind === 'layer' ? index.modules.get(v.at)?.src : rulesSrc
+    const src = v.kind === 'layer' ? stratumByKey(index, v.at)?.src : rulesSrc
     issues.push({
       severity: v.status === 'new' ? 'error' : 'warning',
       code,
@@ -141,6 +143,8 @@ export function governanceReport(
   issues.push(...surfaceIssues(index, { moduleDeps, violations }, surface))
   // K21、K22：拆分信号与向上却不是控制反转的交互边；info，不进门禁
   issues.push(...tierIssues(index, { moduleDeps }, own))
+  // ST-3–ST-5（ADR-0052）：声明的分层与稳定性、单成员层、底层只引类型的向上 import；info，不进门禁
+  issues.push(...strataIssues(index, { moduleDeps }))
 
   return {
     moduleDeps,

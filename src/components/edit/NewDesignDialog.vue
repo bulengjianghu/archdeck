@@ -21,19 +21,19 @@ const name = ref('')
 const goal = ref('')
 const idx = computed(() => desk.index.value)
 const usable = (x: string | undefined) =>
-  !!x && (x === ROOT_MOUNT ? props.mount === ROOT_MOUNT : !!idx.value?.modules.get(x) && idx.value.modules.get(x)!.kind !== 'layer')
-/** 缺省挂载点：入口带入的，否则选中的（不是层的）模块，否则空（必须选） */
+  !!x && (x === ROOT_MOUNT ? props.mount === ROOT_MOUNT : !!idx.value?.modules.get(x) && idx.value.modules.get(x)!.parentId !== idx.value.rootId)
+/** 缺省挂载点：入口带入的，否则选中的（不是根的子模块的）模块，否则空（必须选） */
 const selectedModule = desk.selection.value?.kind === 'module' ? desk.selection.value.id : undefined
 const mount = ref([props.mount, selectedModule].find(usable) ?? '')
 const search = ref('')
 const error = ref('')
 const busy = ref(false)
-/** 可选的挂载点：非层的模块（层的直接子模块由根草图画，X9）；路径名便于认出 */
+/** 可选的挂载点：根的子模块之外的模块（根的子模块的直接子模块由根草图画，X9）；路径名便于认出 */
 const mounts = computed(() => {
   const i = idx.value
   if (!i) return []
   return [...i.modules.values()]
-    .filter(m => m.kind !== 'layer' && m.id !== i.rootId)
+    .filter(m => m.parentId !== i.rootId && m.id !== i.rootId)
     .map(m => ({
       id: m.id,
       label: (i.pathOf.get(m.id) ?? [])

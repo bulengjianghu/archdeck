@@ -112,8 +112,8 @@ function spotFor(def: SketchDef, layers: ReadonlySet<string>, id: string, p: Ske
   return { x: p.x, y: Math.max(0, p.y ?? ROOT_BAND_PAD) }
 }
 
-const layerIds = (def: SketchDef): Set<string> =>
-  new Set(def.mount === ROOT_MOUNT ? (def.modules ?? []).filter((m: ModuleDef) => m.kind === 'layer' || m.children).map(m => m.id) : [])
+/** X21：根草图的顶层模块即层的带（ADR-0052：根的单成员层），布局不记 */
+const layerIds = (def: SketchDef): Set<string> => new Set(def.mount === ROOT_MOUNT ? (def.modules ?? []).filter((m: ModuleDef) => m.parent === undefined).map(m => m.id) : [])
 
 const layoutOf = (def: SketchDef): SketchLayout => (def.layout ??= {})
 

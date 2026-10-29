@@ -94,8 +94,8 @@ modules:
   - id: model.governance.rules
     name: 规则判定
     parent: model.governance
-    responsibility: 一条依赖对层规则、依赖白名单、访问面的判定与例外（U2–U5）；按种类、规则所在与两端合并为违规（U6）；一个模块上生效的规则（Q1）。
-    codeRefs: [src/model/governance/rules.ts]
+    responsibility: 一条依赖对层规则、依赖白名单、访问面的判定与例外（U2–U5；层规则按最近公共祖先声明的分层判，任意层级，ADR-0052）；按种类、规则所在与两端合并为违规（U6）；一个模块上生效的规则（Q1）。声明的分层的校验（strata.ts）：各层的 Ca / Ce / I 与向上依赖（strataMetrics），稳定性逆序、单成员层没写理由、底层只引类型的向上 import 三类 info（ST-3–ST-5），新模块的归属建议（placeSuggestion，ST-2）。
+    codeRefs: [src/model/governance/rules.ts, src/model/governance/strata.ts]
   - id: model.governance.cycles
     name: 环与环度
     parent: model.governance

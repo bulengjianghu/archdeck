@@ -122,6 +122,8 @@ export const isBoundaryRole = (role: ModuleRole | undefined): boolean => role ==
 export const isSharedRole = (role: ModuleRole | undefined): boolean => role === 'shared' || role === 'bus'
 /** M16、U11：模块角色的约定文件（人拥有） */
 export const ROLES_FILE = 'intent/roles.yaml'
+/** ST（ADR-0052）：分层声明的约定文件（人拥有）；草图里写了的以草图为准 */
+export const STRATA_FILE = 'intent/strata.yaml'
 
 export interface SourceDef {
   repo?: string
@@ -172,9 +174,11 @@ export interface ModuleDef {
   adrs?: number[]
   owner?: string
   tags?: string[]
-  // 以下仅 kind: layer（abstraction 例外：非层模块的对内原则由挂在它身上的草图写入，X10）
+  /** ST（ADR-0052）：所属的层——父模块 strata 里的局部 ID（与层的 members 二选一写，归一到同一份索引） */
+  stratum?: string
+  /** 迁移期（M26）：旧写法 kind: layer 的层序与可依赖的层，Loader 改写为父模块的 strata；新写法写在 strata 上 */
   order?: number
-  /** 层的抽象；非层模块为对内的原则（来自挂在它身上的草图的 abstraction，X10） */
+  /** 对内的原则（来自挂在它身上的草图的 abstraction，X10） */
   abstraction?: string
   includes?: string[]
   excludes?: string[]
@@ -305,7 +309,35 @@ export interface ArchFileDef {
   sketch?: SketchDef
   /** M16、U11：模块角色（约定文件 intent/roles.yaml，人拥有）：模块 ID → role；草图里写了的以草图为准 */
   roles?: Record<string, ModuleRole>
+  /** ST（ADR-0052）：父模块对子模块的分层声明（约定文件 intent/strata.yaml，人拥有）：父模块 ID（根写 root）→ 层；草图里写了的以草图为准 */
+  strata?: StrataDef
 }
+
+/** ST（ADR-0052）：一个层——父模块对子模块的分类，不是节点、不占级 */
+export interface StratumDef {
+  /** 局部 ID：在父模块内唯一 */
+  id: string
+  name: string
+  /** 自上而下 */
+  order?: number
+  /** 回答的问题（检验 1） */
+  asks?: string
+  /** 归属判定问（检验 2）：新模块只看职责就能回答是 / 否 */
+  admits?: string
+  /** 原则正文 */
+  abstraction?: string
+  /** 本父模块内可依赖的层 ID；不写等于 []（迁移来的旧层不写时不约束，M26） */
+  mayDependOn?: string[]
+  /** M5b：单成员层的理由 */
+  singular?: string
+  /** 成员：父模块的直接子模块 ID（也可在子模块上写 stratum） */
+  members?: string[]
+  /** 设计版本专用 */
+  designNote?: string
+}
+
+/** 父模块 ID（根写 root 或系统 ID）→ 层 */
+export type StrataDef = Record<string, StratumDef[]>
 
 /** X3：草图的生命周期 */
 export type SketchLifetime = 'persistent' | 'until-implemented'
@@ -350,6 +382,8 @@ export interface SketchDef {
   /** X10：挂载点模块对内的原则（加载为挂载点模块的 abstraction）；根挂载不用，改用各层的 abstraction 等字段 */
   abstraction?: string
   modules?: ModuleDef[]
+  /** ST（ADR-0052）：本草图里的分层声明——挂载点或草图里的模块（根挂载写 root）→ 层 */
+  strata?: StrataDef
   relations?: RelationDef[]
   interfaces?: InterfaceDef[]
   dataStructures?: DataStructureDef[]
@@ -405,6 +439,8 @@ export interface ReviewSummaryDef {
   mayDependOn?: string[]
   provides?: { id: string; signature?: string }[]
   children?: string[]
+  /** Z2（ADR-0052）：分层声明，一层一行 */
+  strata?: string[]
   /** 系统简介（Z7） */
   description?: string
 }
@@ -524,6 +560,21 @@ export interface ArchModel {
   reviewed: ReviewedEntry[]
   /** X1：本次加载的草图文件（整份定义，供核验），不参与版本对比 */
   sketches: SketchEntity[]
+  /** ST（ADR-0052）：分层声明（Validator 归一后成员齐全、引用有效）；按父模块、order 排序 */
+  strata?: StratumEntity[]
+}
+
+/** ST：已加载的层 */
+export interface StratumEntity extends Omit<StratumDef, 'members'> {
+  /** 父模块 ID（根为系统 ID） */
+  parent: string
+  /** 成员（父模块的直接子模块，按父模块的子模块顺序） */
+  members: string[]
+  /** M26：由旧写法 kind: layer 迁移而来 */
+  migrated?: true
+  /** 声明出自草图（X1：同一父模块草图与 intent/strata.yaml 都写了时以草图为准） */
+  fromSketch?: true
+  src: SourceLoc
 }
 
 /** 一份已加载的草图（X1）：定义、所在文件与出处；设计的草图另记所属设计 */
@@ -573,6 +624,10 @@ export interface ModelIndex {
   scenariosOf: Map<string, string[]>
   /** 参与者 ID → 由它触发（第一条消息由它发出）的场景（A6） */
   triggeredBy: Map<string, string[]>
+  /** ST（ADR-0052）：父模块 ID → 层（按 order）；没有声明分层的父模块不在表里 */
+  strata: Map<string, StratumEntity[]>
+  /** ST：子模块 ID → 它在父模块下所属的层 */
+  stratumOf: Map<string, StratumEntity>
 }
 
 // ── 层次投影 ─────────────────────────────────────────────────
@@ -589,8 +644,10 @@ export interface ViewNode {
   moduleId: string
   role: ViewNodeRole
   hasChildren: boolean
-  /** core 节点（与分层总览中 shared 节点）所在的层 ID */
+  /** core 节点（与分层总览中 shared 节点）所在的带（带节点的视图 ID） */
   layerId?: string
+  /** ST（ADR-0052）：layer 节点（带）对应的层的全局键（stratumKey）；单成员层的带即成员，moduleId 为成员 */
+  stratum?: string
   /** actor 节点的类别，决定排布位置（A7） */
   actorKind?: ActorKind
   /** 普通层次的核心模块（role: core）：大块常显（ADR-0027） */
@@ -623,7 +680,10 @@ export interface ViewEdge {
 }
 
 export interface Band {
+  /** 带节点的视图 ID：单成员层为成员模块 ID，多成员层为 `s:<层的全局键>`（O2） */
   layerId: string
+  /** 层的全局键（stratumKey） */
+  stratum: string
   order: number
   coreModuleIds: string[]
   hiddenCount: number

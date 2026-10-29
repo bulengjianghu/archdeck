@@ -370,8 +370,8 @@ export function createCommands(i: CommandInputs) {
   function createDesign(input: { id: string; name: string; goal?: string; mount: string }): Promise<WriteOutcome> {
     const idx = loaded.value
     if (!idx) return Promise.resolve({ ok: false, error: '描述还没加载' })
-    if (input.mount !== ROOT_MOUNT && idx.modules.get(input.mount)?.kind === 'layer')
-      return Promise.resolve({ ok: false, error: '挂载点不能是层：层的直接子模块画在根草图里（X9）' })
+    if (input.mount !== ROOT_MOUNT && idx.modules.get(input.mount)?.parentId === idx.rootId)
+      return Promise.resolve({ ok: false, error: '挂载点不能是根的子模块：它的直接子模块画在根草图里（X9）' })
     return i.sync.createDesign({ id: input.id, name: input.name, ...(input.goal ? { goal: input.goal } : {}), mount: input.mount })
   }
 

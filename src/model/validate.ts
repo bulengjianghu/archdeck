@@ -19,6 +19,7 @@ import type {
   ScenarioEntity,
   SourceLoc,
   Step,
+  StratumEntity,
 } from './types'
 import { LEGACY_VIAS, isCallLike, isCallbackVia, isUnclassified, parseVia, relationMode, type RelationVia } from './types'
 
@@ -60,7 +61,7 @@ export function validate(input: ArchModel): ValidateResult {
   const dataStructures = dedupe(input.dataStructures, 'data-structure', err)
   const c: Checked = { rootId, err, warn, info, modules, actors, interfaces, dataStructures }
   checkModuleRefs(c)
-  checkLayers(c)
+  const strata = checkStrata(input, c)
   checkPrinciples(input, c)
   checkImplementers(c)
   const relations = checkRelations(input, c)
@@ -78,6 +79,7 @@ export function validate(input: ArchModel): ValidateResult {
     ...(input.systemSrc ? { systemSrc: input.systemSrc } : {}),
     reviewed: cleanReviewed(input.reviewed ?? [], id => modules.has(id) || id === rootId, warn),
     sketches: input.sketches ?? [],
+    ...(strata.length ? { strata } : {}),
     ...(input.sourceLimits ? { sourceLimits: input.sourceLimits } : {}),
     ...(input.rules ? { rules: cleanRules(input.rules, id => modules.has(id), input.rulesSrc, err, warn), rulesSrc: input.rulesSrc } : {}),
   }
@@ -198,41 +200,92 @@ function checkPrinciples(input: ArchModel, { rootId, modules, info }: Checked) {
       input.systemSrc ? { ...input.systemSrc, path: 'system.description' } : undefined,
     )
   for (const m of modules.values()) {
-    if (m.kind === 'layer' || m.abstraction?.trim()) continue
+    if (m.abstraction?.trim()) continue
     const second = m.parentId !== rootId && modules.get(m.parentId)?.parentId === rootId
     if (m.role === 'core' || second)
       info('module.missing-abstraction', `「${m.id}」是${m.role === 'core' ? '核心模块' : '第二级模块'}，没有一句话原则 abstraction（为什么这样分子模块，M24）`, m.src)
   }
 }
 
-/** 层：同级要么都是层、要么都不是；order、abstraction 已填；mayDependOn 只引用同级的层 */
-function checkLayers({ modules, warn }: Checked) {
+/**
+ * ST（ADR-0052）：分层声明的归一与校验——父模块存在；层 ID 在父模块内唯一；成员（层的 members 与子模块的 stratum）是父模块的直接子模块；
+ * 全有或全无：声明了分层的父模块，每个直接子模块恰好属于一层（stratum.missing / stratum.multiple，错误）；mayDependOn 只引用同一父模块的层（stratum.unknown，错误）；
+ * 缺 asks / admits 给 info（stratum.principle-missing，迁移来的旧层不提示）。坏引用去掉；成员按父模块的子模块声明顺序。
+ */
+function checkStrata(input: ArchModel, { modules, rootId, err, info, warn }: Checked): StratumEntity[] {
   const childrenOf = new Map<string, ModuleEntity[]>()
-  for (const m of modules.values()) {
+  for (const m of [...modules.values()].sort((a, b) => a.seq - b.seq)) {
     const list = childrenOf.get(m.parentId) ?? []
     list.push(m)
     childrenOf.set(m.parentId, list)
   }
-  for (const [parentId, kids] of childrenOf) {
-    const layers = kids.filter(k => k.kind === 'layer')
-    if (layers.length === 0) continue
-    if (layers.length !== kids.length) {
-      warn('mixed-layer-siblings', `「${parentId}」的子模块中只有一部分是层（kind: layer），不会按分层总览呈现`, layers[0].src)
+  const byParent = new Map<string, StratumEntity[]>()
+  for (const s of input.strata ?? []) {
+    if (s.parent !== rootId && !modules.has(s.parent)) {
+      warn('stratum.parent-missing', `层「${s.id}」的父模块「${s.parent}」不在描述里，这条分层声明没有落处`, s.src)
       continue
     }
-    const layerIds = new Set(layers.map(l => l.id))
-    for (const l of layers) {
-      if (l.order === undefined) warn('layer-missing-order', `层「${l.id}」没有 order，按声明顺序排列`, l.src)
-      if (!l.abstraction?.trim()) warn('layer-missing-abstraction', `层「${l.id}」没有填写抽象原则 abstraction`, l.src)
-      if (l.mayDependOn) {
+    const list = byParent.get(s.parent) ?? []
+    if (list.some(x => x.id === s.id)) {
+      err('stratum.duplicate', `「${s.parent}」下的层 ID「${s.id}」重复`, s.src)
+      continue
+    }
+    list.push({ ...s, members: [] })
+    byParent.set(s.parent, list)
+  }
+  for (const m of modules.values())
+    if (m.stratum !== undefined && !byParent.has(m.parentId)) {
+      err('stratum.unknown', `「${m.id}」写了 stratum: ${m.stratum}，但父模块「${m.parentId}」没有声明分层`, m.src)
+      delete m.stratum
+    }
+  const out: StratumEntity[] = []
+  for (const [parent, list] of byParent) {
+    const kids = childrenOf.get(parent) ?? []
+    const kidIds = new Set(kids.map(k => k.id))
+    const ids = new Set(list.map(l => l.id))
+    const claims = new Map<string, Set<string>>()
+    const claim = (child: string, layer: string) => claims.set(child, (claims.get(child) ?? new Set()).add(layer))
+    const declared = new Map((input.strata ?? []).filter(s => s.parent === parent).map(s => [s.id, s.members]))
+    for (const l of list) {
+      for (const id of declared.get(l.id) ?? []) {
+        if (kidIds.has(id)) claim(id, l.id)
+        else if (!modules.has(id)) warn('stratum.member-missing', `层「${l.name}」的成员「${id}」不在描述里`, l.src)
+        else err('stratum.unknown', `层「${l.name}」的成员「${id}」不是「${parent}」的直接子模块`, l.src)
+      }
+      if (l.mayDependOn)
         l.mayDependOn = l.mayDependOn.filter(id => {
-          if (layerIds.has(id)) return true
-          warn('unknown-layer', `层「${l.id}」的 mayDependOn 引用了「${id}」，它不是同级的层`, l.src)
+          if (ids.has(id) && id !== l.id) return true
+          // M26：迁移来的旧层同迁移前，只提醒
+          ;(l.migrated ? warn : err)('stratum.unknown', `层「${l.name}」的 mayDependOn 引用了「${id}」，它不是「${parent}」下的另一层`, l.src)
           return false
         })
+      if (!l.migrated && (!l.asks?.trim() || !l.admits?.trim()))
+        info('stratum.principle-missing', `层「${l.name}」没有写${[!l.asks?.trim() && '回答的问题 asks', !l.admits?.trim() && '归属判定问 admits'].filter(Boolean).join('、')}（ST-1）`, l.src)
+    }
+    for (const k of kids) {
+      if (k.stratum === undefined) continue
+      if (ids.has(k.stratum)) claim(k.id, k.stratum)
+      else err('stratum.unknown', `「${k.id}」的 stratum「${k.stratum}」不是「${parent}」下的层`, k.src)
+    }
+    // M26：迁移来的旧层与非层兄弟混在一起时同迁移前：不按分层呈现（提醒），不报全有或全无
+    if (list.some(l => l.migrated) && kids.some(k => !claims.has(k.id))) {
+      warn('mixed-layer-siblings', `「${parent}」的子模块中只有一部分是层（kind: layer），不会按分层总览呈现`, list[0].src)
+      for (const k of kids) delete k.stratum
+      continue
+    }
+    for (const k of kids) {
+      const got = [...(claims.get(k.id) ?? [])]
+      if (got.length === 0) err('stratum.missing', `「${parent}」声明了分层，「${k.id}」不属于任何一层（全有或全无，ADR-0052）`, k.src)
+      else if (got.length > 1) err('stratum.multiple', `「${k.id}」同时属于 ${got.map(g => `「${g}」`).join('、')} 几层，只能属于一层`, k.src)
+      const own = got[0]
+      if (own !== undefined) {
+        list.find(l => l.id === own)!.members.push(k.id)
+        k.stratum = own
       }
     }
+    out.push(...list.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || 0))
   }
+  return out
 }
 
 const isEndpoint = (c: Checked, id: string) => c.modules.has(id) || c.actors.has(id)

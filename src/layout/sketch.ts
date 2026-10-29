@@ -13,6 +13,9 @@ import {
   foldReference,
   gridLayout,
   locateAll,
+  migrateSketch,
+  rootOrderOf,
+  stratumOfMember,
   referenceNodes,
   referenceRelations,
   ROOT_BAND_COLS,
@@ -206,10 +209,10 @@ export interface SketchScene {
 /** 聚合边的 ID（05 裁决 4） */
 export const aggregateEdgeId = (source: string, target: string): string => `agg:${source}>${target}`
 
-/** X21：根草图的层，按 order（没写的按出现顺序排在后面） */
+/** X21：根草图的层带（根的子模块，ADR-0052 根的单成员层），按 strata.root 的层序（没写的按出现顺序排在后面） */
 export function rootLayers(def: SketchDef): ModuleDef[] {
-  const layers = (def.modules ?? []).map((m, i) => ({ m, i }))
-  return layers.sort((a, b) => (a.m.order ?? 1e6 + a.i) - (b.m.order ?? 1e6 + b.i)).map(x => x.m)
+  const layers = (def.modules ?? []).filter(m => m.parent === undefined).map((m, i) => ({ m, i, o: rootOrderOf(def, m.id) }))
+  return layers.sort((a, b) => (a.o ?? 1e6 + a.i) - (b.o ?? 1e6 + b.i)).map(x => x.m)
 }
 
 /**
@@ -467,7 +470,9 @@ function boundaryLayout(
 }
 
 export function sketchScene(input: SketchSceneInput): SketchScene {
-  const { def } = input
+  // M26：旧写法 kind: layer 先读作 strata（ADR-0052）
+  const def = migrateSketch(input.def)
+  input = { ...input, def }
   const root = def.mount === ROOT_MOUNT
   const own = locateAll(def)
   const ownIds = new Set(own.map(m => m.id))
@@ -497,7 +502,10 @@ export function sketchScene(input: SketchSceneInput): SketchScene {
         id: b.id,
         kind: 'layer' as const,
         name: layer.name || b.id,
-        ...(layer.abstraction ? { abstraction: layer.abstraction } : {}),
+        // ADR-0052：层的原则写在 strata 的层上；没有时取成员模块自己的
+        ...((stratumOfMember(def, ROOT_MOUNT, b.id)?.abstraction ?? layer.abstraction)
+          ? { abstraction: stratumOfMember(def, ROOT_MOUNT, b.id)?.abstraction ?? layer.abstraction }
+          : {}),
         count,
         ...(count > SKETCH_SOFT_LIMIT ? { over: true } : {}),
         ...(input.changes?.get(b.id) ? { change: input.changes.get(b.id) } : {}),
@@ -509,8 +517,6 @@ export function sketchScene(input: SketchSceneInput): SketchScene {
   })
   const modules: SketchNode[] = own
     .filter(m => !(root && m.parentId === undefined))
-    // X21：根草图只画层与第二级模块；第二级以下的（模型层改成四层后的层内模块）交给当前版本的面板与下钻，不在这里画
-    .filter(m => !root || pos[m.id] !== undefined)
     .map(m => ({
       id: m.id,
       position: pos[m.id],

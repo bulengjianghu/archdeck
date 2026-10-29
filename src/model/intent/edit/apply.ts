@@ -3,6 +3,7 @@
  */
 import { stringify } from 'yaml'
 import type { SketchDef } from '../../types'
+import { migrateSketch } from '../../load'
 import type { EditContext, EditOp, EditResult } from '../types'
 import { addLayer, reorderLayer, setMayDependOn } from './layers'
 import { addModule, removeModule, setClosed, updateModule } from './modules'
@@ -64,7 +65,8 @@ function run(def: SketchDef, ctx: EditContext, op: EditOp): OpOutcome {
 }
 
 export function applyEdit(sketch: SketchDef, op: EditOp, ctx: EditContext): EditResult {
-  const draft = structuredClone(sketch)
+  // M26：旧写法 kind: layer 先读作 strata（ADR-0052）；编辑器只产出新写法
+  const draft = structuredClone(migrateSketch(sketch))
   const out = run(draft, ctx, op)
   if ('reject' in out) return { ok: false, ...out.reject }
   return { ok: true, sketch: draft, effects: out.effects }

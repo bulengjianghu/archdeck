@@ -28,7 +28,7 @@ function view() {
   }).href
   window.open(href, '_blank')
 }
-const designable = computed(() => !!cur.value && cur.value.kind !== 'layer')
+const designable = computed(() => !!cur.value && cur.value.parentId !== e.currentIndex.value?.rootId)
 function designHere() {
   const r = e.openMount(props.id)
   emit('note', r.ok ? '' : r.reason)

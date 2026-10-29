@@ -566,8 +566,9 @@ export function summarizeProject(payload: ModelPayload, health?: ProjectHealth, 
     description: sys.description,
     source: sys.source,
     dir: payload.dir,
-    layered: top.length > 0 && top.every(m => m.kind === 'layer'),
-    top: top.map(m => ({ id: m.id, name: m.name, abstraction: m.abstraction })),
+    // ADR-0052：根声明了分层
+    layered: !!index.strata.get(index.rootId)?.length,
+    top: top.map(m => ({ id: m.id, name: m.name, abstraction: index.stratumOf.get(m.id)?.abstraction ?? m.abstraction })),
     counts: {
       modules: index.modules.size,
       relations: index.relations.size,

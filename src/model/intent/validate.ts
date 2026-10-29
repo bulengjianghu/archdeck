@@ -6,7 +6,7 @@
  * 只提示（hint，不进两级）：超七（X13）、没写职责。
  * 与核验（sketchCheck，版本对草图）分工：两边都有的只有矛盾检查（同一函数与稳定键）。画布每次操作后、保存前与写入端点调用同一函数。
  */
-import { sketchShapeIssues } from '../load'
+import { migrateSketch, sketchShapeIssues } from '../load'
 import { INTERACTION_TYPES, LEGACY_VIAS, ROOT_MOUNT, UNCLASSIFIED, isSharedRole, parseVia, type InteractionType, type ModelIndex, type SketchDef, type SketchEntity } from '../types'
 import { sketchContradictions } from './check'
 import { ID_PATTERN, knownModules, locateAll } from './edit/locate'
@@ -28,7 +28,9 @@ export interface ValidateContext {
 /** X13：一张草图的模块数软限 */
 export const SKETCH_SOFT_LIMIT = 7
 
-export function validateSketch(sketch: SketchDef, ctx: ValidateContext): SketchValidation {
+export function validateSketch(input: SketchDef, ctx: ValidateContext): SketchValidation {
+  // M26：旧写法 kind: layer 先读作 strata（ADR-0052）
+  const sketch = migrateSketch(input)
   const issues: SketchValidationIssue[] = []
   const push = (severity: SketchValidationIssue['severity'], code: SketchValidationIssue['code'], message: string, target: SketchValidationIssue['target'] = {}, path?: string) =>
     issues.push({ severity, code, message, target, ...(path ? { path } : {}) })
@@ -62,18 +64,21 @@ export function validateSketch(sketch: SketchDef, ctx: ValidateContext): SketchV
     const was = prefixes.size ? unmapId(prefixes, id) : id
     return was !== id && plain(was)
   }
-  const isLayer = (id: string) =>
-    (fromPersistent.get(id)?.node.kind ?? own.find(m => m.id === id)?.node.kind ?? ctx.index?.modules.get(id)?.kind) === 'layer'
-  const layers = new Set([...fromPersistent].filter(([, m]) => m.node.kind === 'layer').map(([id]) => id))
-  if (root) for (const m of own) if (m.parentId === undefined && m.node.kind === 'layer') layers.add(m.id)
+  // ADR-0052：层不是节点；根的子模块（根层的成员）的子模块由根草图画，它们不能作挂载点
+  const isRootChild = (id: string) =>
+    (fromPersistent.has(id) && fromPersistent.get(id)!.parentId === undefined) ||
+    (root && own.some(m => m.id === id && m.parentId === undefined)) ||
+    (!!ctx.index && ctx.index.modules.get(id)?.parentId === ctx.index.rootId)
+  const layers = new Set([...fromPersistent].filter(([, m]) => m.parentId === undefined).map(([id]) => id))
+  if (root) for (const m of own) if (m.parentId === undefined) layers.add(m.id)
 
   // ── 挂载点与文件（X9）──
   const fileMount = mountOfSketchFile(ctx.file)
   if (fileMount !== undefined && fileMount !== sketch.mount) err('sketch.file', `文件名「${fileMount}」与 mount「${sketch.mount}」不一致：设计的草图文件名必须是挂载点 ID（X9）`, {}, 'sketch.mount')
   if (!root) {
-    if (isLayer(sketch.mount)) err('sketch.mount', `挂载点「${sketch.mount}」是层：层的直接子模块由根草图画（X9）`, {}, 'sketch.mount')
+    if (isRootChild(sketch.mount)) err('sketch.mount', `挂载点「${sketch.mount}」是根的子模块：它的直接子模块由根草图画（X9）`, {}, 'sketch.mount')
     else if ((ctx.index || persistent.length || others.length) && !known(sketch.mount)) err('sketch.ref', `挂载点「${sketch.mount}」不存在`, {}, 'sketch.mount')
-  } else if (sketch.abstraction !== undefined) err('sketch.mount', '根挂载没有父模块原则：各层的原则写在层的 abstraction 等字段（X10）', {}, 'sketch.abstraction')
+  } else if (sketch.abstraction !== undefined) err('sketch.mount', '根挂载没有父模块原则：各层的原则写在 strata 的层上（X10、ADR-0052）', {}, 'sketch.abstraction')
 
   // ── ID：格式、本草图内唯一 ──
   const seen = new Set<string>()
@@ -95,10 +100,9 @@ export function validateSketch(sketch: SketchDef, ctx: ValidateContext): SketchV
     if (!m.node.name?.trim()) err('sketch.name', `「${m.id}」缺名称`, t, m.path)
     if (root) {
       if (m.parentId === undefined) {
-        if (m.node.kind !== 'layer') err('sketch.scope', `根草图的顶层只放层，「${m.id}」不是层（X9）`, t, m.path)
-        if (m.node.parent !== undefined) err('sketch.parent', `「${m.id}」不写 parent：根草图的层挂在系统根下`, t, m.path)
+        if (m.node.parent !== undefined) err('sketch.parent', `「${m.id}」不写 parent：根草图的顶层模块挂在系统根下`, t, m.path)
       } else if (!m.nested || own.find(x => x.id === m.parentId)?.parentId !== undefined)
-        err('sketch.nested', `根草图只到层的直接子模块，「${m.id}」更深（X9）：往下一层请在它的父模块上再挂一张草图`, t, m.path)
+        err('sketch.nested', `根草图只到根的子模块的直接子模块，「${m.id}」更深（X9）：往下一层请在它的父模块上再挂一张草图`, t, m.path)
       else if (!m.id.startsWith(`${m.parentId}.`) || m.id.slice(m.parentId.length + 1).includes('.'))
         err('sketch.id-prefix', `「${m.id}」的 ID 必须是「${m.parentId}.<短名>」（X5、X9）`, t, m.path)
     } else {
@@ -182,26 +186,59 @@ export function validateSketch(sketch: SketchDef, ctx: ValidateContext): SketchV
     if (c !== sketch.mount && !local.has(c)) err('sketch.ref', `封闭的「${c}」不是挂载点或本草图的模块（X2）`, { module: c }, `sketch.closed.${i}`)
   })
   for (const m of own)
-    m.node.mayDependOn?.forEach((d, i) => {
-      if (!known(d)) err('sketch.ref', `「${m.id}」可依赖的层「${d}」不存在`, { module: m.id }, `${m.path}.mayDependOn.${i}`)
-      else if (!isLayer(d)) err('sketch.ref', `「${m.id}」可依赖的「${d}」不是层`, { module: m.id }, `${m.path}.mayDependOn.${i}`)
-    })
+    if (m.node.mayDependOn !== undefined) err('sketch.ref', `「${m.id}」写了 mayDependOn：可依赖的层写在 strata 的层上（ADR-0052）`, { module: m.id }, `${m.path}.mayDependOn`)
 
-  // ── 语义：根草图的层依赖成环（mayDependOn 图，X14）；非根草图本层的环由代码事实给出（Y4，ADR-0026）──
-  if (root) {
-    const deps = new Map<string, string[]>()
-    for (const [id, m] of fromPersistent) if (m.node.kind === 'layer' && m.parentId === undefined) deps.set(id, m.node.mayDependOn ?? [])
-    for (const m of own) if (m.parentId === undefined && m.node.kind === 'layer') deps.set(m.id, m.node.mayDependOn ?? [])
-    const cycle = findCycle(deps)
-    if (cycle) push('warning', 'sketch.layer-cycle', `层依赖成环：${[...cycle, cycle[0]].join(' → ')}（X14）`, { module: cycle.find(id => local.has(id)) ?? cycle[0] })
+  // ── 分层（ADR-0052）：父模块是挂载点或本草图的模块（根草图另可写 root）；层 ID 唯一；成员与 stratum 是该父模块在本草图里的直接子模块；
+  //    mayDependOn 只引同一父模块的层（格式错误）；本草图画全了子模块的父模块，每个子模块恰好属于一层（语义提示）；层依赖成环（X14）──
+  const kidsOf = (parent: string) => own.filter(m => (parent === ROOT_MOUNT ? m.parentId === undefined : m.parentId === parent || (m.parentId === undefined && parent === sketch.mount)))
+  for (const [parent, list] of Object.entries(sketch.strata ?? {})) {
+    const base = `sketch.strata.${parent}`
+    if (parent === ROOT_MOUNT ? !root : parent !== sketch.mount && !local.has(parent)) {
+      err('sketch.ref', `分层的父模块「${parent}」不是挂载点或本草图的模块`, {}, base)
+      continue
+    }
+    const kids = kidsOf(parent)
+    const kidIds = new Set(kids.map(k => k.id))
+    const ids = new Set<string>()
+    const claims = new Map<string, string[]>()
+    list.forEach((l, i) => {
+      if (ids.has(l.id)) err('sketch.id-dup', `「${parent}」下的层 ID「${l.id}」重复`, {}, `${base}.${i}`)
+      ids.add(l.id)
+      if (!l.name?.trim()) err('sketch.name', `层「${l.id}」缺名称`, {}, `${base}.${i}`)
+      for (const x of l.members ?? []) {
+        if (!kidIds.has(x)) err('sketch.ref', `层「${l.name || l.id}」的成员「${x}」不是「${parent}」在本草图里的直接子模块`, { module: x }, `${base}.${i}.members`)
+        else claims.set(x, [...(claims.get(x) ?? []), l.id])
+      }
+    })
+    list.forEach((l, i) =>
+      l.mayDependOn?.forEach((d, j) => {
+        if (!ids.has(d) || d === l.id) err('sketch.ref', `层「${l.name || l.id}」可依赖的「${d}」不是「${parent}」下的另一层`, {}, `${base}.${i}.mayDependOn.${j}`)
+      }),
+    )
+    for (const k of kids) {
+      if (k.node.stratum !== undefined) {
+        if (!ids.has(k.node.stratum)) err('sketch.ref', `「${k.id}」的 stratum「${k.node.stratum}」不是「${parent}」下的层`, { module: k.id }, `${k.path}.stratum`)
+        else claims.set(k.id, [...new Set([...(claims.get(k.id) ?? []), k.node.stratum])])
+      }
+      const got = claims.get(k.id) ?? []
+      if (got.length !== 1)
+        push('warning', 'sketch.stratum', got.length ? `「${k.node.name || k.id}」同时属于几层（${got.join('、')}），只能属于一层` : `「${parent}」声明了分层，「${k.node.name || k.id}」不属于任何一层（全有或全无）`, { module: k.id }, k.path)
+    }
+    const cycle = findCycle(new Map(list.map(l => [l.id, l.mayDependOn ?? []])))
+    if (cycle) push('warning', 'sketch.layer-cycle', `「${parent}」的层依赖成环：${[...cycle, cycle[0]].join(' → ')}（X14）`, {})
   }
+  for (const m of own)
+    if (m.node.stratum !== undefined) {
+      const parent = m.parentId ?? (root ? ROOT_MOUNT : sketch.mount)
+      if (!sketch.strata?.[parent]) err('sketch.ref', `「${m.id}」写了 stratum，但本草图没有为「${parent}」声明分层`, { module: m.id }, `${m.path}.stratum`)
+    }
 
   // ── 语义：同挂载点与持久草图矛盾（X4，与核验同一函数）──
   for (const d of sketchContradictions({ def: sketch, file: ctx.file, src: { file: ctx.file, path: 'sketch' }, mount: sketch.mount }, persistent))
     push('warning', 'sketch.contradiction', d.message, { module: d.target.modules?.[0] }, d.at?.path)
 
   // ── 只提示：超七（X13）、没写职责 ──
-  // X13、X21：根草图按每条层带算（骨架整体天然超七），其余草图按本层；七的软限只数非共用件（ADR-0027）
+  // X13、X21：根草图按根的每个子模块（单成员层的带）算（骨架整体天然超七），其余草图按本层；七的软限只数非共用件（ADR-0027）
   if (root)
     for (const layer of own.filter(m => m.parentId === undefined)) {
       const n = (layer.node.children ?? []).filter(k => !isSharedRole(k.role)).length
@@ -209,8 +246,7 @@ export function validateSketch(sketch: SketchDef, ctx: ValidateContext): SketchV
     }
   else if (own.filter(m => !isSharedRole(m.node.role)).length > SKETCH_SOFT_LIMIT)
     push('hint', 'sketch.over-seven', `${own.filter(m => !isSharedRole(m.node.role)).length} 个模块，考虑归并（X13）`)
-  for (const m of own)
-    if (m.node.kind !== 'layer' && !m.node.responsibility?.trim()) push('hint', 'sketch.empty', `「${m.node.name || m.id}」还没写职责`, { module: m.id }, m.path)
+  for (const m of own) if (!m.node.responsibility?.trim()) push('hint', 'sketch.empty', `「${m.node.name || m.id}」还没写职责`, { module: m.id }, m.path)
 
   return finish(pending)
 }

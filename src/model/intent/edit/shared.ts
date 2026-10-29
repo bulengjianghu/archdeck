@@ -4,6 +4,7 @@
 import type { ModuleDef, SketchDef } from '../../types'
 import type { EditContext, EditEffects, EditRejectCode } from '../types'
 import { ID_PATTERN, knownModules, locate, mountOf, subtreeIds, takenIds } from './locate'
+import { renameInStrata } from './strata'
 
 export type OpOutcome = { effects: EditEffects } | { reject: { code: EditRejectCode; reason: string } }
 
@@ -42,7 +43,7 @@ export function isAncestor(def: SketchDef, ctx: EditContext, a: string, b: strin
   return subtreeIds(all, a).includes(b)
 }
 
-/** 把一组 ID 的引用按 map 改写（关系两端、接口 owner、closed、mayDependOn、parent）；返回改写的引用条数 */
+/** 把一组 ID 的引用按 map 改写（关系两端、接口 owner、closed、mayDependOn、parent、分层的父模块与成员）；返回改写的引用条数 */
 export function rewriteRefs(def: SketchDef, map: ReadonlyMap<string, string>): number {
   let n = 0
   const sub = (id: string) => {
@@ -67,5 +68,5 @@ export function rewriteRefs(def: SketchDef, map: ReadonlyMap<string, string>): n
       if (m.children) walk(m.children)
     })
   walk(def.modules ?? [])
-  return n
+  return n + renameInStrata(def, map)
 }

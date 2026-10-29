@@ -5,6 +5,7 @@
  * ID 变了一律前缀级联：设计里挂在它或它后代上的草图改挂载点与其中模块 ID，被改写的模块记 from（指向基线）；
  * 关系两端、接口 owner、closed、layout 的键随之改写。from 一律指向基线 ID：沿血缘求闭包写入（X11）。纯函数，输入不动。
  */
+import { isRootLayer } from './strata'
 import { ROOT_MOUNT, type ModuleDef, type SketchDef } from '../../types'
 import { lineageSources, sketchLineage } from '../lineage'
 import type { DesignEditContext, DesignEditEffects, DesignEditOp, DesignEditResult, EditContext, EditOp, EditRejectCode, SketchSet } from '../types'
@@ -177,7 +178,7 @@ const nodeCopy = (node: ModuleDef, id: string, from: readonly string[]): ModuleD
 function own(def: SketchDef, id: string, notLayer = true): LocatedModule | Reject {
   const hit = locate(def, id)
   if (!hit) return no('not-found', `草图里没有模块「${id}」`)
-  if (notLayer && hit.node.kind === 'layer') return no('invalid', `「${id}」是层：层只在根草图里增删改排序`)
+  if (notLayer && isRootLayer(def, id)) return no('invalid', `「${id}」是层：层只在根草图里增删改排序`)
   return hit
 }
 const isReject = (x: unknown): x is Reject => !!x && typeof x === 'object' && 'code' in x && 'reason' in x
@@ -367,7 +368,7 @@ function moveIn(s: Session, op: Extract<DesignEditOp, { op: 'moveIn' }>): Reject
   const a = own(root, op.id)
   if (isReject(a)) return a
   const layer = locate(root, op.layer)
-  if (!layer || layer.node.kind !== 'layer' || layer.parentId !== undefined) return no('not-found', `根草图里没有层「${op.layer}」`)
+  if (!layer || !isRootLayer(root, op.layer)) return no('not-found', `根草图里没有层「${op.layer}」`)
   if (a.parentId === op.layer) return null
   if (!a.parentId || a.nested === false) return no('root-only', '移入只用于根草图里层的直接子模块（X7d）')
   const newId = `${op.layer}.${shortName(op.id)}`

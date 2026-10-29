@@ -1,6 +1,7 @@
 /**
- * 模块操作（C-4、C-6、C-7、P-2，X7b、X7e）：新建、改字段、标封闭、删除（级联子树、两端落在子树内的关系、owner 在子树内的接口、closed 与 mayDependOn 中的引用）。
+ * 模块操作（C-4、C-6、C-7、P-2，X7b、X7e）：新建、改字段、标封闭、删除（级联子树、两端落在子树内的关系、owner 在子树内的接口、closed 中的引用、分层的成员与只以它们为成员的层）。
  */
+import { dropFromStrata } from './strata'
 import type { ModuleDef, SketchDef } from '../../types'
 import type { EditContext, ModulePatch } from '../types'
 import { locate, locateAll, moduleId, mountOf, subtreeIds, takenIds } from './locate'
@@ -75,7 +76,8 @@ export function removeModule(def: SketchDef, ctx: EditContext, id: string): OpOu
   for (const r of def.relations ?? []) if (r.interface && lost.has(r.interface)) delete r.interface
   if (def.closed) def.closed = def.closed.filter(x => !gone.has(x))
   if (def.closed?.length === 0) delete def.closed
-  for (const m of locateAll(def)) if (m.node.mayDependOn) m.node.mayDependOn = m.node.mayDependOn.filter(x => !gone.has(x))
+  // ADR-0052：从各层的成员里去掉，只以它们为成员的层一并删掉
+  dropFromStrata(def, gone)
   // X7e：它的布局一并删
   if (def.layout?.modules) for (const x of gone) delete def.layout.modules[x]
   if (def.layout?.relations) for (const r of relations) delete def.layout.relations[r.id]

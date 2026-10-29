@@ -191,12 +191,33 @@ server.registerTool(
 server.registerTool(
   'tiers',
   {
-    title: '按依赖分层',
+    title: '依赖深度',
     description:
-      '普通层次按本层值依赖分层（L28）：被依赖的在下、本层没人依赖的（入口）在第 1 层、成环的合为一组同层、孤立的不占层。依赖全部朝下，向上的交互边只可能是控制反转（通知、流、经端口 / 总线 / 通道含回调，K22）；不是控制反转却向上的多半是没标的回调。另给有交互却没有值依赖的兄弟、不占文件的子模块、共用文件——模块拆分不沿文件边界的信号（K21）。分层总览不适用。',
+      '依赖深度是证据、不是分层（ADR-0052）；声明了分层的父模块用 strata。普通层次按本层值依赖算深度（L28）：被依赖的在下、本层没人依赖的（入口）在第 1 层、成环的合为一组同层、孤立的不占层。依赖全部朝下，向上的交互边只可能是控制反转（通知、流、经端口 / 总线 / 通道含回调，K22）；不是控制反转却向上的多半是没标的回调。另给有交互却没有值依赖的兄弟、不占文件的子模块、共用文件——模块拆分不沿文件边界的信号（K21）。分层总览不适用。',
     inputSchema: { level: z.string().describe('父模块 ID'), project },
   },
   ({ level, project }) => reply(() => svc.tiers(level, project)),
+)
+
+server.registerTool(
+  'strata',
+  {
+    title: '声明的分层',
+    description:
+      '父模块声明的分层（ADR-0052）：层是父模块对子模块的分类、不占级。返回各层的回答的问题（asks）、归属判定问（admits）、原则、可依赖的层、成员、Ca / Ce / I、本层的向上依赖，与 ST-3 稳定性逆序、ST-4 单成员层、ST-5 底层只引类型的向上 import 提示。没声明分层的给出提示（子模块多于七个时按 ST-1 归纳）。',
+    inputSchema: { parent: z.string().describe('父模块 ID，根写 root'), project },
+  },
+  ({ parent, project }) => reply(() => svc.strata(parent, project)),
+)
+
+server.registerTool(
+  'place',
+  {
+    title: '新模块归属建议',
+    description: '在已分层的父模块下新增模块前调用（ST-2）：给出各层的回答的问题与归属判定问，按职责文字的重合度排序；按 admits 选层，designNote 写一句理由。',
+    inputSchema: { parent: z.string().describe('父模块 ID，根写 root'), responsibility: z.string().describe('新模块的职责'), project },
+  },
+  ({ parent, responsibility, project }) => reply(() => svc.place(parent, responsibility, project)),
 )
 
 server.registerTool(
@@ -204,7 +225,7 @@ server.registerTool(
   {
     title: '草图核验',
     description:
-      '架构师的草图是 AI 不能违背的约束（X4）：缺省核验活动草图（持久草图与已定稿设计的草图）对当前版本；给 design 时核验该设计的草图对当前版本，再给 revision 时对那一轮。返回每张草图的偏差（错误：缺模块、封闭子树多出子模块、父模块 / kind / core / mayDependOn 不一致；提醒：关系或接口没有对应）与是否一致。起草设计版本后先跑它，零错误才交评审；提醒确有理由时写进 design.yaml 的 questions 由架构师认可，不要自己改草图。',
+      '架构师的草图是 AI 不能违背的约束（X4）：缺省核验活动草图（持久草图与已定稿设计的草图）对当前版本；给 design 时核验该设计的草图对当前版本，再给 revision 时对那一轮。返回每张草图的偏差（错误：缺模块、封闭子树多出子模块、父模块 / kind / core 不一致、分层（strata）与草图不一致；提醒：关系或接口没有对应）与是否一致。起草设计版本后先跑它，零错误才交评审；提醒确有理由时写进 design.yaml 的 questions 由架构师认可，不要自己改草图。',
     inputSchema: { design: z.string().optional().describe('设计 ID'), revision: z.string().optional().describe('轮次 ID，如 r1'), project },
   },
   ({ design, revision, project }) => reply(() => svc.sketchCheck(project, design, revision)),

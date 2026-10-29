@@ -211,7 +211,8 @@ export function createDerive(i: DeriveInputs) {
   const boundary = computed(() => {
     const idx = index.value ?? i.current()
     if (!idx) return {}
-    const layers = (idx.childrenOf.get(idx.rootId) ?? []).map(id => idx.modules.get(id)!).filter(m => m?.kind === 'layer')
+    // ADR-0052：根声明了分层时，根的子模块按层序成列（childrenOf 已按层序排好）
+    const layers = idx.strata.has(idx.rootId) ? (idx.childrenOf.get(idx.rootId) ?? []).map(id => idx.modules.get(id)!).filter(Boolean) : []
     const ids = new Set(layers.map(l => l.id))
     const layerOf = (id: string) => {
       const top = idx.pathOf.get(id)?.[1] ?? id.split('.')[0]

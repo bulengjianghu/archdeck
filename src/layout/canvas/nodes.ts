@@ -2,7 +2,18 @@
  * 画布场景的节点（ADR-0013）：本层的模块、带与 +N 占位块、边界节点、参与者；回放叠加的步骤序号与分支预览序号。
  * 结构视角按聚焦变淡，运行视角按舞台显示（V5、V8、V9）；回放态与文件高亮（G14）写进类名。
  */
-import { foldSpanText, moduleName, type ModelDiff, type ModelIndex, type ModuleEntity, type ViewNode, type VisibleLanding } from '@/model'
+import {
+  foldSpanText,
+  mayDependOnOf,
+  moduleName,
+  stratumByKey,
+  stratumNames,
+  type ModelDiff,
+  type ModelIndex,
+  type ModuleEntity,
+  type ViewNode,
+  type VisibleLanding,
+} from '@/model'
 import { SHELF, bandShelfTop, moreChipId, type Box, type PositionedView } from '../layout'
 import type { Visibility } from '../stage'
 import type { SceneContext } from './context'
@@ -197,7 +208,7 @@ function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box, s
   const m = idx.modules.get(n.moduleId)
   const base: NodeData = {
     moduleId: n.moduleId,
-    name: m?.name ?? n.moduleId,
+    name: m?.name ?? moduleName(idx, n.moduleId),
     module: m,
     childCount: idx.childrenOf.get(n.moduleId)?.length ?? 0,
     selected: sel?.kind === 'module' && sel.id === n.moduleId,
@@ -257,11 +268,16 @@ function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box, s
 /** 分层总览的带（层）与它的 +N 占位块 */
 function bandNodes(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box, base: NodeData, m: ModuleEntity | undefined): CanvasNode[] {
   const band = ctx.pv.view.bands?.find(b => b.layerId === n.id)
+  // ADR-0052：带是层——层名、回答的问题、原则与可依赖的层取自层；单成员层的带即成员，原则缺省取成员的
+  const s = stratumByKey(idx, n.stratum ?? band?.stratum ?? '')
   const data: NodeData = {
     ...base,
+    ...(s && !m ? { name: s.name } : {}),
     band: {
-      abstraction: m?.abstraction,
-      mayDependOn: (m?.mayDependOn ?? []).map(id => idx.modules.get(id)?.name ?? id),
+      abstraction: s?.abstraction ?? m?.abstraction,
+      ...(s?.asks ? { asks: s.asks } : {}),
+      ...(s?.admits ? { admits: s.admits } : {}),
+      mayDependOn: s ? stratumNames(idx, s.parent, mayDependOnOf(s) ?? []) : [],
       hiddenCount: band?.hiddenCount ?? 0,
       ...(ctx.input.layerStatus?.get(n.moduleId) ? { status: ctx.input.layerStatus.get(n.moduleId) } : {}),
     },

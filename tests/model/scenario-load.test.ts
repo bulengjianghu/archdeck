@@ -11,7 +11,7 @@ const scenario = (extra: string) => scenarioFiles({ 'scenarios/x.yaml': extra })
 describe('加载', () => {
   it('S2、S8：YAML 与 JSON 场景解析成同一份数据；步骤带路径与出处', () => {
     const { model, issues } = load(scenarioFiles())
-    expect(issues).toEqual([])
+    expect(real(issues)).toEqual([])
     expect(model.scenarios.map(s => s.id)).toEqual(['sc.decide', 'sc.play'])
     const play = model.scenarios.find(s => s.id === 'sc.play')!
     expect(play.steps.map(s => s.kind)).toEqual(['call', 'call', 'call', 'alt', 'ref', 'async'])
@@ -173,7 +173,7 @@ describe('索引', () => {
 
 describe('格式错误的报告', () => {
   it('步骤树中深处的错误只报最深处，不报外层各候选分支', () => {
-    const { issues } = load(scenario('scenario: { id: sc.x, name: X, steps: [{ alt: [{ when: a, steps: [{ call: { from: a, to: b, lable: x } }] }] }] }'))
+    const issues = real(load(scenario('scenario: { id: sc.x, name: X, steps: [{ alt: [{ when: a, steps: [{ call: { from: a, to: b, lable: x } }] }] }] }')).issues)
     expect(issues).toHaveLength(1)
     expect(issues[0].message).toContain('lable')
     expect(issues[0].path).toBe('scenario.steps.0.alt.0.steps.0.call')

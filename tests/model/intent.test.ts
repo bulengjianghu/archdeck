@@ -39,7 +39,8 @@ const codes = (issues: { code: string; severity: string }[]) => issues.filter(i 
 describe('X1 草图先入、其他文件只能补充', () => {
   it('草图文件先于其他文件进入 Loader（不论路径排序），内容既是普通实体又整份记入 sketches', () => {
     const { model, issues } = load(files({ 'a-first.yaml': 'modules: [{ id: core.api, name: Api, parent: core, responsibility: x }]' }))
-    expect(issues).toEqual([])
+    // 骨架按旧写法 kind: layer 写：只有一条迁移 info（M26）
+    expect(issues.map(i => i.code)).toEqual(['layer.migrated'])
     expect(model.modules.map(m => m.id)).toEqual(['ui', 'ui.view', 'core', 'core.api'])
     expect(model.sketches).toHaveLength(1)
     expect(model.sketches[0]).toMatchObject({ file: 'intent/skeleton.yaml', def: { id: 'skeleton', lifetime: 'persistent', closed: ['ui'] } })
@@ -56,7 +57,8 @@ describe('X1 草图先入、其他文件只能补充', () => {
       }),
     )
     expect(codes(issues)).toEqual([])
-    expect(index.modules.get('ui')).toMatchObject({ kind: 'layer', docRefs: ['docs/ui.md'] })
+    expect(index.modules.get('ui')).toMatchObject({ kind: 'subsystem', docRefs: ['docs/ui.md'] })
+    expect(index.stratumOf.get('ui')).toMatchObject({ id: 'ui', order: 1, mayDependOn: ['core'], members: ['ui'] })
     expect(index.childrenOf.get('ui')).toEqual(['ui.view', 'ui.panel'])
     expect(index.interfaces.get('if.core.run')).toMatchObject({ owner: 'core', signature: 'run(): void' })
   })
@@ -72,9 +74,10 @@ describe('X1 草图先入、其他文件只能补充', () => {
     expect(redefined.map(i => i.file)).toEqual(['modules/rel.yaml', 'modules/ui.yaml'])
     const ui = redefined[1]
     expect(ui).toMatchObject({ severity: 'error', line: 1 })
-    expect(ui.message).toContain('kind、mayDependOn')
-    expect(ui.message).not.toContain('order')
-    expect(index.modules.get('ui')).toMatchObject({ kind: 'layer', mayDependOn: ['core'] })
+    // M26：草图里的层序与可依赖的层已搬到根的分层上，模块上只剩 kind 可比
+    expect(ui.message).toContain('重定义了它的 kind（')
+    expect(index.modules.get('ui')).toMatchObject({ kind: 'subsystem' })
+    expect(index.stratumOf.get('ui')).toMatchObject({ order: 1, mayDependOn: ['core'] })
     expect(index.relations.get('rel.sk.view-core')?.type).toBe('calls')
     expect(codes(issues)).not.toContain('duplicate-module')
   })
@@ -97,7 +100,9 @@ describe('X1 草图先入、其他文件只能补充', () => {
   it('草图之间不算重定义：设计的草图在持久草图之后，对同一实体的不同值以后者为准（矛盾由核验报出）', () => {
     const { index, issues } = loadModel(files({ 'sketches/root.yaml': 'sketch: { id: d1, mount: root, modules: [{ id: ui, name: UI, kind: layer, order: 1, abstraction: 界面, mayDependOn: [] }] }' }))
     expect(codes(issues)).not.toContain('sketch-redefined')
-    expect(index.modules.get('ui')?.mayDependOn).toEqual([])
+    // M26：两张草图的旧层迁移后按层 ID 合并，同 ID 后者为准
+    expect(index.stratumOf.get('ui')?.mayDependOn).toEqual([])
+    expect(index.strata.get(index.rootId)!.map(s => s.id)).toEqual(['ui', 'core'])
     expect(index.model.sketches.map(s => s.def.id)).toEqual(['skeleton', 'd1'])
   })
 

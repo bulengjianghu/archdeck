@@ -223,6 +223,10 @@
               },
               "children": {
                 "$ref": "#/definitions/idList"
+              },
+              "strata": {
+                "$ref": "#/definitions/textList",
+                "description": "分层声明，一层一行（Z2、ADR-0052）"
               }
             }
           }
@@ -319,6 +323,9 @@
               }
             }
           }
+        },
+        "strata": {
+          "$ref": "#/definitions/strata"
         }
       }
     },
@@ -337,6 +344,9 @@
           "adapter"
         ]
       }
+    },
+    "strata": {
+      "$ref": "#/definitions/strata"
     }
   },
   "definitions": {
@@ -503,7 +513,8 @@
           "$ref": "#/definitions/textList"
         },
         "order": {
-          "type": "number"
+          "type": "number",
+          "description": "迁移期：旧写法 kind: layer 的层序（M26），新写法写在 strata 上"
         },
         "abstraction": {
           "type": "string"
@@ -526,6 +537,10 @@
         "designNote": {
           "type": "string",
           "description": "设计版本专用：为什么这样设计 / 调整（Markdown）"
+        },
+        "stratum": {
+          "$ref": "#/definitions/id",
+          "description": "所属的层：父模块 strata 里的局部 ID（ST、ADR-0052）"
         }
       }
     },
@@ -604,7 +619,8 @@
           "$ref": "#/definitions/textList"
         },
         "order": {
-          "type": "number"
+          "type": "number",
+          "description": "迁移期：旧写法 kind: layer 的层序（M26），新写法写在 strata 上"
         },
         "abstraction": {
           "type": "string"
@@ -631,6 +647,10 @@
         "from": {
           "$ref": "#/definitions/idList",
           "description": "血缘（X11）：这个模块由哪些基线模块而来，一律指向基线 ID；全新模块不写"
+        },
+        "stratum": {
+          "$ref": "#/definitions/id",
+          "description": "所属的层：父模块 strata 里的局部 ID（ST、ADR-0052）"
         }
       },
       "description": "草图里的模块（X9、X11）：字段同普通模块，可带血缘 from"
@@ -1094,6 +1114,68 @@
         },
         "y": {
           "type": "number"
+        }
+      }
+    },
+    "stratum": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "description": "层（ST、ADR-0052）：父模块对子模块的分类，不是节点、不占级；成员用 members 列出或在子模块上写 stratum",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id",
+          "description": "局部 ID：在父模块内唯一"
+        },
+        "name": {
+          "type": "string"
+        },
+        "order": {
+          "type": "number",
+          "description": "自上而下"
+        },
+        "asks": {
+          "type": "string",
+          "description": "回答的问题"
+        },
+        "admits": {
+          "type": "string",
+          "description": "归属判定问：新模块只看职责就能回答是 / 否"
+        },
+        "abstraction": {
+          "type": "string",
+          "description": "原则正文"
+        },
+        "mayDependOn": {
+          "$ref": "#/definitions/idList",
+          "description": "本父模块内可依赖的层 ID；不写等于 []"
+        },
+        "singular": {
+          "type": "string",
+          "description": "单成员层的理由（M5b）"
+        },
+        "members": {
+          "$ref": "#/definitions/idList",
+          "description": "成员：父模块的直接子模块 ID"
+        },
+        "designNote": {
+          "type": "string"
+        }
+      }
+    },
+    "strata": {
+      "type": "object",
+      "description": "分层声明（ST、ADR-0052）：父模块 ID（根写 root）→ 层；约定文件 intent/strata.yaml（人拥有），草图里写了的以草图为准",
+      "propertyNames": {
+        "$ref": "#/definitions/id"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/stratum"
         }
       }
     }

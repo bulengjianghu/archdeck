@@ -26,6 +26,7 @@ export type ReworkCategory =
   | 'unevidenced'
   | 'split'
   | 'conformance'
+  | 'strata'
 export const REWORK_CATEGORIES: readonly ReworkCategory[] = [
   'description',
   'violation',
@@ -46,6 +47,7 @@ export const REWORK_CATEGORIES: readonly ReworkCategory[] = [
   'unevidenced',
   'split',
   'conformance',
+  'strata',
 ]
 
 /** 严重度：error 卡门禁或剔除了实体；warning 描述与代码不一致；info 只提示（未解释的交互、已豁免） */
@@ -148,6 +150,7 @@ export const REWORK_CATEGORY_LABELS: Record<ReworkCategory, string> = {
   surface: '表面',
   split: '模块拆分与分层',
   conformance: '层的符合性',
+  strata: '分层',
   'query-side-effect': '查询副作用',
   undescribed: '未解释的交互',
   unclassified: '未分类',

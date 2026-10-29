@@ -2,12 +2,50 @@
  * 名称查询与小谓词：只按 ID 或枚举查表，不做投影与计算。属于模型层的契约（与类型、枚举一起），
  * 呈现层、命令行与模型层内部共用同一套显示名。
  */
-import { parseVia, type ModelIndex, type RuleKind } from './types'
+import { parseVia, type ModelIndex, type RuleKind, type StratumEntity } from './types'
 
-/** 模块、参与者或系统根的显示名 */
+/** 模块、参与者或系统根的显示名；层的全局键（`<父模块>/<层>`）与多成员层的带节点（`s:<键>`）取层名（ADR-0052） */
 export function moduleName(index: ModelIndex, id: string): string {
-  return id === index.rootId ? index.model.system.name : (index.modules.get(id)?.name ?? index.actors.get(id)?.name ?? id)
+  return id === index.rootId ? index.model.system.name : (index.modules.get(id)?.name ?? index.actors.get(id)?.name ?? stratumName(index, id) ?? id)
 }
+
+/** ST：按全局键或带节点 ID 查层名（只查表） */
+function stratumName(index: ModelIndex, id: string): string | undefined {
+  return index.strata ? stratumByKey(index, id.startsWith('s:') ? id.slice(2) : id)?.name : undefined
+}
+
+// ── 层（ADR-0052）：只按 ID 查表的小谓词，模型层、呈现层与命令行共用 ──
+
+/**
+ * ST：层的全局键——根的层用局部 ID（迁移来的根层 ID 即模块 ID，违规键与基线照旧），其余为 `<父模块>/<局部 ID>`。
+ * 视图里多成员层的带节点 ID 为 `s:<键>`（stratumNodeId）。
+ */
+export function stratumKey(index: Pick<ModelIndex, 'rootId'>, s: Pick<StratumEntity, 'parent' | 'id'>): string {
+  return s.parent === index.rootId ? s.id : `${s.parent}/${s.id}`
+}
+
+/** ST：按全局键找层 */
+export function stratumByKey(index: ModelIndex, key: string): StratumEntity | undefined {
+  const slash = key.lastIndexOf('/')
+  const parent = slash < 0 ? index.rootId : key.slice(0, slash)
+  const id = slash < 0 ? key : key.slice(slash + 1)
+  return index.strata.get(parent)?.find(s => s.id === id)
+}
+
+/** ST：单成员层（它的带就是成员，O2） */
+export const isSingular = (s: Pick<StratumEntity, 'members'>): boolean => s.members.length === 1
+
+/** ST：层生效的可依赖的层（局部 ID）；迁移来的旧层没写时不约束（undefined，M26），新写法没写等于 [] */
+export function mayDependOnOf(s: Pick<StratumEntity, 'mayDependOn' | 'migrated'>): readonly string[] | undefined {
+  return s.mayDependOn ?? (s.migrated ? undefined : [])
+}
+
+/** ST：层的显示名（同一父模块下的局部 ID → 名称） */
+export function stratumNames(index: ModelIndex, parent: string, ids: readonly string[]): string[] {
+  const list = index.strata.get(parent) ?? []
+  return ids.map(id => list.find(s => s.id === id)?.name ?? id)
+}
+
 
 /** G20：超过阈值即超长；没有行数（不统计的文件）不算 */
 export const isLong = (lines: number | undefined, maxLines: number): boolean => lines !== undefined && lines > maxLines

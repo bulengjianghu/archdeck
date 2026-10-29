@@ -47,7 +47,7 @@ export interface NodeData {
   /** 边界节点：外部模块所在路径 */
   path?: string
   /** 带（层）专用 */
-  band?: { abstraction?: string; mayDependOn: string[]; hiddenCount: number; status?: LayerStatus }
+  band?: { abstraction?: string; asks?: string; admits?: string; mayDependOn: string[]; hiddenCount: number; status?: LayerStatus }
   /** +N 占位块 */
   hiddenCount?: number
   /** O6：带内 +N 临时展开后，展开出来的模块数（占位块变为「收起」） */

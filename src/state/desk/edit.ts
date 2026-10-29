@@ -146,7 +146,7 @@ export function createEdit(i: EditInputs) {
     if (!def || !cur) return []
     const here = new Set([...locateAll(def).map(m => m.id), ...referenceNodes(def), def.mount])
     return [...cur.modules.values()]
-      .filter(m => m.kind !== 'layer' && !here.has(m.id))
+      .filter(m => m.parentId !== cur.rootId && !here.has(m.id))
       .map(m => ({ id: m.id, name: m.name, path: (cur.pathOf.get(m.id) ?? []).slice(1, -1).map(x => cur.modules.get(x)?.name ?? x) }))
   })
   /**

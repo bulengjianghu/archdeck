@@ -7,12 +7,13 @@ import type { ModelIndex, ModuleDef, SketchDef, Step } from '../../types'
 import type { EditContext, IdImpact } from '../types'
 import { knownModules, locate, locateAll, shortName, subtreeIds } from './locate'
 import { placeModule } from './modules'
+import { isRootLayer } from './strata'
 import { checkNewId, done, isAncestor, ownModule, reject, rewriteRefs, type OpOutcome } from './shared'
 
 export function moveModule(def: SketchDef, ctx: EditContext, id: string, parent: string, newId?: string): OpOutcome {
   const own = ownModule(def, ctx, id)
   if (!own.ok) return own.out
-  if (own.node.kind === 'layer') return reject('invalid', '层不能移动到其他模块下；层的先后用排序')
+  if (isRootLayer(def, id)) return reject('invalid', '层不能移动到其他模块下；层的先后用排序')
   if (!knownModules(def, ctx.persistent).has(parent)) return reject('not-found', `父模块「${parent}」不在草图里`)
   if (isAncestor(def, ctx, id, parent)) return reject('ancestor', `不能把「${id}」移到它自己或它的后代之下`)
   const target = newId?.trim() || `${parent}.${shortName(id)}`

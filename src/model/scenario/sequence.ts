@@ -3,6 +3,7 @@
  * 列出计划全貌：回放路径上的消息正常显示，未选分支与尚未到达的部分也列出（由界面淡化），
  * 单击它们即指向该步（R13）。与回放共用同一套落点与合并规则，路径上的消息与 ScenarioLevelView 一一对应。
  */
+import { stratumByKey, stratumKey } from '../names'
 import type { LevelView, ModelIndex } from '../types'
 import { moduleName } from '../names'
 import { hierarchyKey } from '../project'
@@ -26,19 +27,24 @@ export function buildSequence(index: ModelIndex, view: LevelView, plan: Scenario
       participants.push({ nodeId, id, name, kind: 'actor', path: [], key: [], byX: false })
       return
     }
+    // ST（ADR-0052）：多成员层的带不是模块——泳道排在它第一个成员的位置，归到父模块
+    const band = id.startsWith('s:') ? stratumByKey(index, id.slice(2)) : undefined
     const m = index.modules.get(id)
-    const path = (index.pathOf.get(id) ?? []).slice(1)
-    const layer = [...path].reverse().find(p => index.modules.get(p)?.kind === 'layer')
+    const anchor = band ? band.members[0] : id
+    const path = band ? (index.pathOf.get(band.parent) ?? []).slice(1) : (index.pathOf.get(id) ?? []).slice(1)
+    const at = [...(index.pathOf.get(anchor) ?? [])].reverse().find(p => index.stratumOf.has(p))
+    const layer = at === undefined ? undefined : stratumKey(index, index.stratumOf.get(at)!)
     participants.push({
       nodeId,
       id,
       name,
       kind: boundary ? 'boundary' : 'module',
-      parentId: other ? id : m?.parentId,
+      parentId: other ? id : (band?.parent ?? m?.parentId),
       path,
       ...(layer ? { layer } : {}),
-      key: other ? [...hierarchyKey(index, id), Infinity, 0] : hierarchyKey(index, id),
-      byX: !boundary && m?.parentId === view.parentId && m.kind !== 'layer',
+      key: other || band ? [...hierarchyKey(index, anchor), Infinity, 0] : hierarchyKey(index, id),
+      // 单成员层的带（即成员）与多成员层的带都不按 x 排
+      byX: !boundary && !band && m?.parentId === view.parentId && view.mode !== 'layered',
     })
   }
 

@@ -8,6 +8,8 @@ import { DEFAULT_PROJECT_OPTIONS, lowestCommonAncestor, projectLevel } from '../
 import { moduleFiles, type SourceOwnership } from '../source'
 import { parseVia, type Issue, type LevelView, type ModelIndex, type RelationEntity } from '../types'
 import { depKey } from './facts'
+import { isLayered } from '../indexer'
+import { mayDependOnOf, stratumByKey } from '../names'
 import { levelCycleMembers, levelValueDeps } from './level'
 import { valueDeps } from './cycles'
 import type { GovernanceReport, ModuleDep } from './types'
@@ -252,10 +254,16 @@ export function layerUpward(index: ModelIndex, view: LevelView, opts: { core?: b
   if (view.mode !== 'layered' || !view.bands) return []
   const order = new Map(view.bands.map(b => [b.layerId, b.order]))
   const layerOf = new Map(view.nodes.map(n => [n.id, order.has(n.id) ? n.id : n.layerId]))
-  const may = (l: string) => index.modules.get(l)?.mayDependOn
+  // ST：带 → 它的层；可依赖的层按局部 ID 比
+  const stratum = new Map(view.bands.map(b => [b.layerId, stratumByKey(index, b.stratum)]))
+  const may = (l: string) => {
+    const s = stratum.get(l)
+    return s && mayDependOnOf(s)
+  }
+  const sid = (l: string) => stratum.get(l)?.id ?? l
   const against = (from: string, to: string, a: number, b: number): boolean => {
-    if (may(from)?.includes(to)) return false
-    if (may(to)?.includes(from)) return true
+    if (may(from)?.includes(sid(to))) return false
+    if (may(to)?.includes(sid(from))) return true
     return !may(from) && !may(to) && a > b
   }
   const out: UpwardEdge[] = []
@@ -278,14 +286,14 @@ export function layerUpward(index: ModelIndex, view: LevelView, opts: { core?: b
 export type LayerDrift = { kind: 'cycle'; parent: string; layers: string[] } | { kind: 'inverted'; parent: string; above: string; below: string; tiers: [number, number] }
 
 /**
- * K24（第十四轮 F3）：结构符合性——分层总览（子模块全是声明的层）里，按层之间的值依赖（核心与共用件归到所在的带）用 L28 的算法实算层号，
+ * K24（第十四轮 F3）：结构符合性——分层总览（父模块声明了两层以上，ADR-0052）里，按层之间的值依赖（核心与共用件归到所在的带）用 L28 的算法实算层号，
  * 与声明的 order 比对：成环的声明层、order 在上而实算在下的层对，都是漂移。mayDependOn 验「允许的依赖」，这里验「声称的结构」。
  * 没有代码事实时不比对（无依赖可算）。只算、不判定确认状态：只对已确认的层报，由返工清单按确认状态过滤。
  */
 export function layerDrift(index: ModelIndex, report: Pick<GovernanceReport, 'moduleDeps'>): LayerDrift[] {
   const out: LayerDrift[] = []
   for (const [parent, children] of index.childrenOf) {
-    if (children.length < 2 || !children.every(k => index.modules.get(k)?.kind === 'layer')) continue
+    if (children.length < 2 || (index.strata.get(parent)?.length ?? 0) < 2) continue
     const view = tierView(index, parent)
     const bandOf = new Map<string, string>()
     for (const b of view.bands ?? []) for (const id of [b.layerId, ...b.coreModuleIds, ...b.shelf]) bandOf.set(id, b.layerId)
@@ -364,14 +372,14 @@ export function tierFindings(index: ModelIndex, report: Pick<GovernanceReport, '
   const relsAt = new Set([...index.relations.values()].map(r => lowestCommonAncestor(index, r.from, r.to)))
   for (const [parentId, children] of index.childrenOf) {
     if (children.length < 2) continue
-    // 子模块全是层的为分层总览（O1，按作者声明的层）：只查向上的线（K22，第十四轮 F8 扩到声明的层）
-    if (children.every(k => index.modules.get(k)?.kind === 'layer')) {
+    // 声明了分层的为分层总览（O1，按作者声明的层，ADR-0052）：只查向上的线（K22，第十四轮 F8 扩到声明的层）
+    if (isLayered(index, parentId)) {
       if (!relsAt.has(parentId)) continue
       const lv = tierView(index, parentId)
       for (const u of layerUpward(index, lv, { core: false })) {
         if (u.inversion) continue
         const r = index.relations.get(u.relations[0])
-        const ord = (id: string) => index.modules.get(id)?.order ?? 0
+        const ord = (id: string) => lv.bands?.find(b => b.layerId === id)?.order ?? 0
         out.push({
           issue: {
             severity: 'info',

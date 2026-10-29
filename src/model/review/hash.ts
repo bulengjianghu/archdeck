@@ -2,7 +2,7 @@
  * 确认摘要与指纹（Z2）：只覆盖架构师应当理解的部分——职责、原则（abstraction，ADR-0042）、包含 / 不包含、可依赖的层、对外接口签名、直接子模块；
  * 不覆盖名称、类别、实现原理、数据结构正文、codeRefs、docRefs、关系。系统（Z7）只覆盖简介。纯函数，页面、命令行与草图归档同一份。
  */
-import type { ModelIndex, ReviewSummaryDef } from '../types'
+import type { ModelIndex, ReviewSummaryDef, StratumEntity } from '../types'
 import type { ReviewSummary } from './types'
 
 /** 职责按行去首尾空白、去空行（Z2） */
@@ -21,11 +21,26 @@ const sorted = (xs: readonly string[] | undefined) => [...(xs ?? [])].sort(compa
 /** Z1、Z7：能记确认的对象——模块或系统本身 */
 export const isReviewable = (index: ModelIndex, id: string): boolean => id === index.rootId || index.modules.has(id)
 
-const EMPTY: ReviewSummary = { responsibility: '', abstraction: '', includes: [], excludes: [], mayDependOn: [], provides: [], children: [], description: '' }
+const EMPTY: ReviewSummary = { responsibility: '', abstraction: '', includes: [], excludes: [], mayDependOn: [], provides: [], children: [], strata: [], description: '' }
 
-/** 现在的摘要：从索引里读；系统只给简介（Z7） */
+/** Z2（ADR-0052）：层的一行——层序、ID、名称、问题、判定问、原则、可依赖的层、成员（都规整、排序） */
+export const stratumLine = (s: StratumEntity): string =>
+  [
+    s.order ?? '',
+    s.id,
+    s.name,
+    normalizeLines(s.asks),
+    normalizeLines(s.admits),
+    normalizeLines(s.abstraction),
+    sorted(s.mayDependOn).join(','),
+    sorted(s.members).join(','),
+  ].join(' | ')
+
+const strataLines = (index: ModelIndex, parent: string) => (index.strata?.get(parent) ?? []).map(stratumLine)
+
+/** 现在的摘要：从索引里读；系统只给简介与根的分层（Z7、ADR-0052：根的层随系统确认） */
 export function reviewSummary(index: ModelIndex, moduleId: string): ReviewSummary {
-  if (moduleId === index.rootId) return { ...EMPTY, description: normalizeLines(index.model.system.description) }
+  if (moduleId === index.rootId) return { ...EMPTY, description: normalizeLines(index.model.system.description), strata: strataLines(index, moduleId) }
   const m = index.modules.get(moduleId)
   if (!m) throw new Error(`模块不存在：${moduleId}`)
   return {
@@ -36,6 +51,7 @@ export function reviewSummary(index: ModelIndex, moduleId: string): ReviewSummar
     mayDependOn: sorted(m.mayDependOn),
     provides: sorted(m.provides).map(id => ({ id, signature: index.interfaces.get(id)?.signature?.trim() ?? '' })),
     children: sorted(index.childrenOf.get(moduleId)),
+    strata: strataLines(index, moduleId),
     description: '',
   }
 }
@@ -50,6 +66,7 @@ export function normalizeSummary(def: ReviewSummaryDef | undefined): ReviewSumma
     mayDependOn: sorted(def?.mayDependOn),
     provides: [...(def?.provides ?? [])].sort((a, b) => compareIds(a.id, b.id)).map(p => ({ id: p.id, signature: p.signature?.trim() ?? '' })),
     children: sorted(def?.children),
+    strata: [...(def?.strata ?? [])],
     description: normalizeLines(def?.description),
   }
 }
@@ -65,6 +82,7 @@ export function summaryDef(s: ReviewSummary): ReviewSummaryDef {
     ...(s.mayDependOn.length ? { mayDependOn: s.mayDependOn } : {}),
     ...(s.provides.length ? { provides: s.provides.map(p => (p.signature ? p : { id: p.id })) } : {}),
     ...(s.children.length ? { children: s.children } : {}),
+    ...(s.strata.length ? { strata: s.strata } : {}),
   }
 }
 
@@ -82,6 +100,7 @@ export const summaryText = (s: ReviewSummary): string =>
     s.children,
     ...(s.abstraction ? [['abstraction', s.abstraction]] : []),
     ...(s.description ? [['description', s.description]] : []),
+    ...(s.strata.length ? [['strata', s.strata]] : []),
   ])
 
 /** 64 位指纹（两段 32 位 cyrb 混合），16 位十六进制 */

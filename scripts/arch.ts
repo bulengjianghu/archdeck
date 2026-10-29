@@ -17,7 +17,10 @@
  *   metrics [<模块> | --level <父模块>] [--top N] [--values-only]
  *                                 扇入 Ca、扇出 Ce 与不稳定度 I（K16、Q14）：给模块为明细，--level 为该层的子模块，缺省全系统的叶子模块；--top 按 Ca 取前 N；
  *                                 有入口的模块另带表面宽度 W 与越过入口数 B（K19）
- *   tiers <父模块>                按依赖分层（L28、K21、K22）：每层的子模块（第 1 层为入口）、环组、孤立的、向上的交互边与拆分信号
+ *   tiers <父模块>                依赖深度（L28、K21、K22；ADR-0052：证据，不是分层）：每一深度的子模块（深度 1 为入口）、环组、孤立的、向上的交互边与拆分信号；
+ *                                 声明了分层的父模块改用 strata
+ *   strata <父模块|root>          声明的分层（ADR-0052）：各层的问题、判定问、可依赖的层、成员、Ca / Ce / I、向上依赖与 ST-3–ST-5 提示
+ *   place <父模块|root> "<职责>"  新模块归属的建议（ST-2）：各层的判定问，按职责文字的重合度排序
  *   surface <模块>                模块表面（Q16、K18、K19）：元素清单（种类 · 声明状态 · 扇入）、W / B、越过入口清单与建议
  *   report                        拦截报告（Q4）
  *   baseline                      生成基线 governance/baseline.json（U7，由人执行并提交）
@@ -170,15 +173,32 @@ function printMetrics(r: ReturnType<typeof svc.metrics>) {
 
 function printTiers(r: ReturnType<typeof svc.tiers>) {
   const n = (m: { id: string; name: string }) => `${m.name}（${m.id}）`
-  console.log(`${r.name}（${r.level}）：${r.nodes} 个子模块、${r.tiers.length} 层、本层依赖 ${r.deps}${r.banded ? '，画层带' : ''}`)
+  console.log(`${r.name}（${r.level}）：${r.nodes} 个子模块、依赖深度 ${r.tiers.length}、本层依赖 ${r.deps}（依赖深度是证据，不是分层；ADR-0052）`)
   const group = new Map(r.groups.flatMap(g => g.modules.map(m => [m.id, g.id] as const)))
-  for (const t of r.tiers) console.log(`  第 ${t.tier} 层：${t.modules.map(m => n(m) + (group.has(m.id) ? ` [环 ${group.get(m.id)}]` : '')).join('、')}`)
-  if (r.isolated.length) console.log(`  孤立（不占层）：${r.isolated.map(n).join('、')}`)
+  for (const t of r.tiers) console.log(`  深度 ${t.tier}：${t.modules.map(m => n(m) + (group.has(m.id) ? ` [环 ${group.get(m.id)}]` : '')).join('、')}`)
+  if (r.isolated.length) console.log(`  孤立（不计深度）：${r.isolated.map(n).join('、')}`)
+  if (r.nodes > 7) console.log(`  本层未声明分层 · ${r.nodes} 个模块（ST-1：归纳 2–5 个有原则的层，或记拆分信号）`)
   for (const x of r.notes) console.log(`  提示：${tierNoteText(x)}`)
   for (const u of r.upward) console.log(`  向上：${n(u.from)} → ${n(u.to)}  ${u.inversion ? '控制反转' : `不是控制反转：${u.relations.join('、')}`}`)
   for (const u of r.undepended) console.log(`  有交互无依赖：${n(u.from)} — ${n(u.to)}`)
   if (r.split.noFiles.length) console.log(`  不占文件的子模块：${r.split.noFiles.map(n).join('、')}`)
   for (const s of r.split.shared) console.log(`  共用文件：${s.file}（${s.modules.join('、')}）`)
+}
+
+function printStrata(r: ReturnType<typeof svc.strata>) {
+  console.log(`${r.name}（${r.parent}）：${r.children} 个子模块，${r.declared ? `${r.layers.length} 层` : '未声明分层'}`)
+  if (r.hint) console.log(`  ${r.hint}`)
+  for (const s of r.layers) {
+    const i = s.instability === null ? '—' : s.instability.toFixed(2)
+    console.log(
+      `  ${s.order ?? '-'}. ${s.name}（${s.id}）  I ${i}（Ca ${s.ca} / Ce ${s.ce}）  可依赖：${s.mayDependOn === null ? '不约束' : s.mayDependOn.join('、') || '无'}`,
+    )
+    if (s.asks) console.log(`     问：${s.asks}`)
+    if (s.admits) console.log(`     判定：${s.admits}`)
+    console.log(`     成员：${s.members.map(m => m.name).join('、')}`)
+    for (const u of s.upward) console.log(`     向上：${u.from.name} → ${u.to.name}（层 ${u.layer}${u.typeOnly ? '，只引类型' : ''}，${u.files} 处）`)
+  }
+  for (const x of r.notes) console.log(`  提示：${x.message}`)
 }
 
 function run(): number {
@@ -241,6 +261,16 @@ function run(): number {
       else printTiers(r)
       return 0
     }
+    case 'strata': {
+      need(1, '<父模块|root>')
+      const r = svc.strata(rest[0], project)
+      if (asJson) console.log(JSON.stringify(r, null, 2))
+      else printStrata(r)
+      return 0
+    }
+    case 'place':
+      need(2, '<父模块|root> "<职责>"')
+      return out(svc.place(rest[0], rest.slice(1).join(' '), project))
     case 'surface': {
       need(1, '<模块>')
       const r = svc.surface(rest[0], project)
@@ -304,7 +334,7 @@ function run(): number {
     }
     default:
       console.error(
-        '用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|hotspots|coupling|impact|metrics|surface|report|baseline|own|sketch-check|sketch|classify> [参数] [--project <项目>] [--json]',
+        '用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|hotspots|coupling|impact|metrics|tiers|strata|place|surface|report|baseline|own|sketch-check|sketch|classify> [参数] [--project <项目>] [--json]',
       )
       return 2
   }

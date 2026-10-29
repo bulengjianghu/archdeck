@@ -20,6 +20,8 @@ export type Selection =
   | { kind: 'port'; id: string }
   /** 本层的环组（Y4 环编号，L42，第十四轮 F10）：单击环编号选中，环内的束画出，面板列成员与环内的依赖 */
   | { kind: 'cycle'; id: string }
+  /** 层（ADR-0052，V2）：id 为层的全局键 `<父模块>/<层 ID>`（根的层为层 ID）；单击多成员层的带选中，面板为层面板 */
+  | { kind: 'stratum'; id: string }
 
 export interface Toggles {
   showBoundaries: boolean

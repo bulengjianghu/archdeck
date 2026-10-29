@@ -3,7 +3,9 @@
  * 关于被描述系统的知识，页面、lint:model 与 agent 接口共用；只用已有的代码事实（模块依赖 K4 的值使用）与描述。
  */
 import { RUNTIME_RELATION_TYPES, isSharedRole, type ModelIndex } from '../types'
+import { moduleName } from '../names'
 import { within } from './facts'
+import { stratumKey } from '../names'
 import type { ModuleDep, SharedSuggestion } from './types'
 
 /** U11 ④：名称 / ID 里像工具模块的词（不分大小写；T0 裁决 7：kind: library 无人用，照写但主要按名字） */
@@ -12,9 +14,10 @@ export const SHARED_NAME_HINTS: readonly string[] = ['shared', 'util', 'labels',
 /** U11、U12：只算值使用（K1 的 uses）的模块依赖 */
 const valueUse = (d: ModuleDep) => d.files.some(f => f.uses)
 
-/** 模块所在的层（路径上最近的 kind: layer 祖先，含自身）；没有时为 undefined */
+/** 模块所在的层（路径上最近的、父模块声明了分层的祖先所属的层，含自身；全局键，ADR-0052）；没有时为 undefined */
 function layerOf(index: ModelIndex, id: string): string | undefined {
-  return [...(index.pathOf.get(id) ?? [])].reverse().find(p => index.modules.get(p)?.kind === 'layer')
+  const at = [...(index.pathOf.get(id) ?? [])].reverse().find(p => index.stratumOf.has(p))
+  return at === undefined ? undefined : stratumKey(index, index.stratumOf.get(at)!)
 }
 
 /** 模块或其祖先是共用件（role: shared / bus）时为那个共用件 */
@@ -32,7 +35,8 @@ export function sharedSuggestions(index: ModelIndex, moduleDeps: Iterable<Module
   const out: SharedSuggestion[] = []
   const modules = [...index.modules.values()].sort((a, b) => a.seq - b.seq)
   for (const m of modules) {
-    if (m.id === index.rootId || m.kind === 'layer' || m.role || sharedHostOf(index, m.id)) continue
+    // 单成员层的成员就是层（ADR-0052），不建议
+    if (m.id === index.rootId || index.stratumOf.get(m.id)?.members.length === 1 || m.role || sharedHostOf(index, m.id)) continue
     const text = `${m.id} ${m.name}`.toLowerCase()
     const nameHit = m.kind === 'library' ? 'kind: library' : SHARED_NAME_HINTS.find(w => text.includes(w))
     if (!nameHit) continue
@@ -43,7 +47,7 @@ export function sharedSuggestions(index: ModelIndex, moduleDeps: Iterable<Module
     const layers = [...new Set(dependents.map(d => layerOf(index, d)).filter((l): l is string => !!l))]
     const siblings = (index.childrenOf.get(m.parentId) ?? []).filter(s => s !== m.id && dependents.some(d => within(index, d, s)))
     if (layers.length < 2 && siblings.length < 3) continue
-    const name = (id: string) => index.modules.get(id)?.name ?? id
+    const name = (id: string) => moduleName(index, id)
     out.push({
       module: m.id,
       fanIn: { layers, siblings, dependents },

@@ -18,7 +18,7 @@ export function openNewDesign(mount?: string): void {
 export function canDesignAt(desk: DeskState, id: string): boolean {
   const idx = desk.index.value
   const m = idx?.modules.get(id)
-  return !desk.version && !desk.edit.active.value && !!m && id !== idx!.rootId && m.kind !== 'layer'
+  return !desk.version && !desk.edit.active.value && !!m && id !== idx!.rootId && m.parentId !== idx!.rootId
 }
 
 export function closeNewDesign(): void {

@@ -103,7 +103,12 @@ const carrier = computed(() => {
 const layerStatus = computed(() => {
   const v = positioned.value?.view
   if (v?.mode !== 'layered') return null
-  return new Map(v.nodes.filter(n => n.role === 'layer').map(n => [n.moduleId, layerStatusOf(desk.review.of(n.moduleId).status)] as const))
+  // ADR-0052：单成员层按成员模块，多成员层的原则随父模块确认（Z2）
+  return new Map(
+    v.nodes
+      .filter(n => n.role === 'layer')
+      .map(n => [n.moduleId, layerStatusOf(desk.review.of(n.moduleId.startsWith('s:') ? v.parentId : n.moduleId).status)] as const),
+  )
 })
 
 /** K22、L26（ADR-0041）：向上又不是控制反转的视图边 → 那些关系（标签位写「向上」）；结构视角不给 */
@@ -173,11 +178,14 @@ function onNodeClick({ node }: { node: Node<NodeData> }) {
   else if (node.type === 'actor') desk.select({ kind: 'actor', id: node.data!.moduleId })
   // O6、O8：单击 +N 临时展开（再单击「收起」），不改层次、不改选中；普通层次的占位 ID 是 more:<父模块>
   else if (node.type === 'more') desk.toggleBand(node.id.slice('more:'.length))
+  // ADR-0052：多成员层的带是层，不是模块——选中层（V2）
+  else if (node.data!.moduleId.startsWith('s:')) desk.select({ kind: 'stratum', id: node.data!.moduleId.slice(2) })
   else desk.select({ kind: 'module', id: node.data!.moduleId })
 }
 
 function onNodeDoubleClick({ node }: { node: Node<NodeData> }) {
   if (node.type === 'actor' || node.type === 'frame' || node.type === 'tier' || node.type === 'step' || node.type === 'preview') return
+  if (node.data?.moduleId.startsWith('s:')) return
   if (node.type === 'boundary') desk.revealModule(node.data!.moduleId)
   // O5：带内的 +N 双击下钻到这一层；O8：普通层次的 +N 双击无动作
   else if (node.type === 'more') {

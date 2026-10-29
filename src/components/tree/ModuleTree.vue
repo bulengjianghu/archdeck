@@ -98,6 +98,11 @@ const ctx = computed(() => ({
   heatCount: byHeat.value ? countOf : null,
 }))
 
+/** ADR-0052：分组标题单击选中层（V2） */
+function pickStratum(key: string) {
+  desk.select({ kind: 'stratum', id: key })
+}
+
 function pick(id: string) {
   if (id === idx.value.rootId) desk.goTo(id, null)
   else desk.revealModule(id)
@@ -143,7 +148,17 @@ function onChoose(key: string) {
       <span class="warn">需复核 {{ desk.review.stale.value.size }}</span>
     </div>
     <ul ref="root" class="tree" role="tree" @mouseleave="hover(null)">
-      <ModuleTreeNode :id="idx.rootId" :depth="0" :ctx="ctx" @pick="pick" @drill="drill" @toggle="toggle" @hover="hover" @menu="onMenu" />
+      <ModuleTreeNode
+        :id="idx.rootId"
+        :depth="0"
+        :ctx="ctx"
+        @pick="pick"
+        @drill="drill"
+        @toggle="toggle"
+        @hover="hover"
+        @menu="onMenu"
+        @stratum="pickStratum"
+      />
     </ul>
     <SketchMenu
       v-if="menu"

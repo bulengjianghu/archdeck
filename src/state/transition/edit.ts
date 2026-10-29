@@ -38,7 +38,7 @@ export function blocked(state: ViewState, action: ViewAction): boolean {
 }
 
 const badSelection = (s: Selection | null): boolean =>
-  s?.kind === 'file' || s?.kind === 'dep' || s?.kind === 'couple' || s?.kind === 'edge' || s?.kind === 'port' || s?.kind === 'cycle'
+  s?.kind === 'file' || s?.kind === 'dep' || s?.kind === 'couple' || s?.kind === 'edge' || s?.kind === 'port' || s?.kind === 'cycle' || s?.kind === 'stratum'
 
 /** X7a：只在草图版本上进入；进入时关闭场景、清掉文件选中，层次换成当前张的挂载点，保留仍在的模块与关系选中 */
 export function enterEdit(state: ViewState, ctx: TransitionContext, target: SketchTarget, level: string): TransitionResult {

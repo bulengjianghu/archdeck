@@ -85,7 +85,9 @@ describe('X7b 编辑操作是纯函数，只拒绝不成立的操作', () => {
 
   it('结构问题照常应用、交给校验：层依赖成环可以先连上', () => {
     const r = ok(SKELETON, { op: 'setMayDependOn', id: 'core', layers: ['ui'] }, own)
-    expect(r.sketch.modules![1].mayDependOn).toEqual(['ui'])
+    // ADR-0052：可依赖的层写在根草图 strata 的层上（旧写法读入时迁移，M26）
+    expect(r.sketch.strata!.root.find(s => s.id === 'core')!.mayDependOn).toEqual(['ui'])
+    expect(r.sketch.modules![1].mayDependOn).toBeUndefined()
     expect(validateSketch(r.sketch, { persistent: [], file: 'intent/skeleton.yaml' }).warnings.map(i => i.code)).toContain('sketch.layer-cycle')
   })
 
@@ -96,15 +98,14 @@ describe('X7b 编辑操作是纯函数，只拒绝不成立的操作', () => {
     expect(flat.modules!.at(-1)).toEqual({ id: 'ui.panel', name: 'Panel', parent: 'ui' })
   })
 
-  it('加层按插入位置给 order、其后顺延；层排序重排为 1…N', () => {
+  it('加层 = 新建根的子模块与它的单成员层，按插入位置给 order、其后顺延；层排序重排为 1…N（ADR-0052）', () => {
+    const orders = (d: SketchDef) => Object.fromEntries(d.strata!.root.map(s => [s.members![0], s.order]))
     const added = ok(SKELETON, { op: 'addLayer', name: 'Share', at: 1 }, own).sketch
-    expect(added.modules!.map(m => [m.id, m.order])).toEqual([
-      ['ui', 1],
-      ['core', 3],
-      ['share', 2],
-    ])
+    expect(added.modules!.map(m => m.id)).toEqual(['ui', 'core', 'share'])
+    expect(added.modules![2]).toEqual({ id: 'share', name: 'Share' })
+    expect(orders(added)).toEqual({ ui: 1, share: 2, core: 3 })
     const moved = ok(added, { op: 'reorderLayer', id: 'ui', to: 2 }, own).sketch
-    expect(Object.fromEntries(moved.modules!.map(m => [m.id, m.order]))).toEqual({ share: 1, core: 2, ui: 3 })
+    expect(orders(moved)).toEqual({ share: 1, core: 2, ui: 3 })
   })
 
   it('改字段：空值删掉字段；setClosed 增删 closed；setMeta 改 lifetime / supersedes', () => {
@@ -193,10 +194,10 @@ describe('X7e 删除级联', () => {
     expect(r.effects.removed.sort()).toEqual(['core.a', 'core.a.x', 'core.a.y', 'if.a.run', 'rel.x-b'].sort())
   })
 
-  it('删层同删除模块；删层后 mayDependOn 里的引用一并去掉', () => {
+  it('删层同删除模块；它的层一并删掉，其他层 mayDependOn 里的引用一并去掉', () => {
     const r = ok(SKELETON, { op: 'removeModule', id: 'core' }, own)
     expect(r.sketch.modules!.map(m => m.id)).toEqual(['ui'])
-    expect(r.sketch.modules![0].mayDependOn).toEqual([])
+    expect(r.sketch.strata!.root.map(s => [s.id, s.mayDependOn])).toEqual([['ui', []]])
   })
 
   it('删关系、删接口（同时去掉关系上的经由接口）', () => {
@@ -212,13 +213,20 @@ describe('sketchText', () => {
 })
 
 describe('X7b 设计草图里的层序', () => {
-  it('有持久草图的层（只读）时，新加或移动的层取前后两层 order 的中点，不动别的层', () => {
+  it('设计草图还没写根的分层时先整份带上持久草图的（同一父模块的分层草图之间后者整份覆盖前者，ADR-0052），再按插入位置重排；持久草图不动', () => {
+    const orders = (d: SketchDef) => d.strata!.root.map(s => [s.id, s.order])
     const a = ok({ id: 'd', mount: 'root' }, { op: 'addLayer', name: 'Mid', at: 1 })
-    expect(a.sketch.modules).toEqual([{ id: 'mid', name: 'Mid', kind: 'layer', order: 1.5 }])
+    expect(a.sketch.modules).toEqual([{ id: 'mid', name: 'Mid' }])
+    expect(orders(a.sketch)).toEqual([
+      ['ui', 1],
+      ['mid', 2],
+      ['core', 3],
+    ])
     const b = ok(a.sketch, { op: 'addLayer', name: 'Last', at: 3 })
-    expect(b.sketch.modules![1].order).toBe(3)
+    expect(orders(b.sketch).at(-1)).toEqual(['last', 4])
     const c = ok(b.sketch, { op: 'reorderLayer', id: 'last', to: 0 })
-    expect(c.sketch.modules![1].order).toBe(0)
+    expect(orders(c.sketch)[0]).toEqual(['last', 1])
+    expect(SKELETON.strata).toBeUndefined()
   })
 })
 

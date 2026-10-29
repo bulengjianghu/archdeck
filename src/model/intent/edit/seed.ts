@@ -1,10 +1,10 @@
 /**
  * 草图底稿与元信息（X18，ADR-0025；S-4、B6）。底稿一律从设计的基线复制挂载点的一层：直接子模块的 ID、名称、kind、role、
- * closed，与显式写在本层的关系及类型；不复制职责文字、接口、原则（根挂载时层的 abstraction / includes / excludes 也不复制，
- * 可依赖的层 mayDependOn 与 order 是结构，照复制）。同挂载点在基线里已有持久草图时声明 supersedes（根挂载即 supersedes skeleton）。
+ * closed，与显式写在本层的关系及类型；不复制职责文字、接口、原则。本层父模块的分层（strata，ADR-0052）的层 ID、名称、层序、
+ * 可依赖的层与成员是结构，照复制；层的问题、判定问与原则是文字，不复制。同挂载点在基线里已有持久草图时声明 supersedes（根挂载即 supersedes skeleton）。
  * 复制后「相对基线」为 0。下一层草图不存在时由「基线里的子树 + 血缘指向的模块」推出（deriveChildSketch）。
  */
-import { ROOT_MOUNT, type ModelIndex, type ModuleDef, type RelationDef, type SketchDef, type SketchEntity, type SketchLifetime } from '../../types'
+import { ROOT_MOUNT, type ModelIndex, type ModuleDef, type RelationDef, type SketchDef, type SketchEntity, type SketchLifetime, type StrataDef } from '../../types'
 import { isMergeResult, prefixMap, sketchLineage, unmapId } from '../lineage'
 import { mountScope } from '../scope'
 import type { EditContext, SketchSet } from '../types'
@@ -25,9 +25,24 @@ function structural(index: ModelIndex, id: string, as = id): ModuleDef {
     name: m.name,
     ...(m.kind ? { kind: m.kind } : {}),
     ...(m.role ? { role: m.role } : {}),
-    ...(m.kind === 'layer' && m.order !== undefined ? { order: m.order } : {}),
-    ...(m.kind === 'layer' && m.mayDependOn?.length ? { mayDependOn: [...m.mayDependOn] } : {}),
   }
+}
+
+/** ADR-0052：基线里一组父模块的分层（结构字段）；根写 root */
+function strataOf(index: ModelIndex, parents: readonly string[], rename: (x: string) => string = x => x): StrataDef | undefined {
+  const out: StrataDef = {}
+  for (const p of parents) {
+    const list = index.strata.get(p)
+    if (!list?.length) continue
+    out[p === index.rootId ? ROOT_MOUNT : rename(p)] = list.map(s => ({
+      id: s.id,
+      name: s.name,
+      ...(s.order !== undefined ? { order: s.order } : {}),
+      ...(s.mayDependOn !== undefined ? { mayDependOn: [...s.mayDependOn] } : {}),
+      members: s.members.map(rename),
+    }))
+  }
+  return Object.keys(out).length ? out : undefined
 }
 
 const relationOf = (index: ModelIndex, id: string, rename: (x: string) => string = x => x): RelationDef => {
@@ -62,6 +77,7 @@ export function seedFromBaseline(mount: string, baseline: ModelIndex, opts: Seed
   const closed = closedAt(baseline, mount, local)
   const relations = scope.relations.map(id => relationOf(baseline, id))
   const persistent = persistentAt(baseline, mount)
+  const strata = strataOf(baseline, mount === ROOT_MOUNT ? [baseline.rootId, ...modules.map(m => m.id)] : [mount])
   return {
     id: opts.id,
     mount,
@@ -69,6 +85,7 @@ export function seedFromBaseline(mount: string, baseline: ModelIndex, opts: Seed
     ...(persistent && persistent.def.id !== opts.id ? { supersedes: persistent.def.id } : {}),
     ...(closed.length ? { closed } : {}),
     modules,
+    ...(strata ? { strata } : {}),
     ...(relations.length ? { relations } : {}),
   }
 }
@@ -99,6 +116,9 @@ export function deriveChildSketch(mount: string, baseline: ModelIndex, design: S
     mount,
     ...(seeded.closed ? { closed: seeded.closed.map(rename) } : {}),
     modules: (seeded.modules ?? []).map(m => ({ ...m, id: rename(m.id), from: [m.id] })),
+    ...(seeded.strata
+      ? { strata: Object.fromEntries(Object.entries(seeded.strata).map(([k, list]) => [rename(k), list.map(s => ({ ...s, members: (s.members ?? []).map(rename) }))])) }
+      : {}),
     ...(seeded.relations ? { relations: seeded.relations.map(r => ({ ...r, from: rename(r.from), to: rename(r.to) })) } : {}),
   }
 }

@@ -11,7 +11,7 @@
  */
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'
-import { HOT_SURFACE_MODULES } from '@/model'
+import { HOT_SURFACE_MODULES, mayDependOnOf, stratumKey } from '@/model'
 import Markdown from './Markdown.vue'
 import Section from './Section.vue'
 import InterfaceItem from './InterfaceItem.vue'
@@ -40,9 +40,20 @@ const m = computed(() => idx.value.modules.get(props.id)!)
 const children = computed(() => (idx.value.childrenOf.get(props.id) ?? []).map(id => idx.value.modules.get(id)!))
 const outs = computed(() => idx.value.outRelations.get(props.id) ?? [])
 const ins = computed(() => idx.value.inRelations.get(props.id) ?? [])
-const isLayer = computed(() => m.value.kind === 'layer')
+// ADR-0052：单成员层的成员就是层（根的四层）；它的问题、判定问与可依赖的层取自层
+const stratum = computed(() => idx.value.stratumOf.get(props.id) ?? null)
+const isLayer = computed(() => stratum.value?.members.length === 1)
+const layerDeps = computed(() => {
+  const s = stratum.value
+  if (!s) return []
+  const list = idx.value.strata.get(s.parent) ?? []
+  return (mayDependOnOf(s) ?? []).map(d => list.find(x => x.id === d)).filter((x): x is NonNullable<typeof x> => !!x)
+})
+/** ADR-0052：本模块对子模块声明的分层 */
+const ownStrata = computed(() => idx.value.strata.get(props.id) ?? [])
+const pickStratum = (x: { parent: string; id: string; members: string[] }) =>
+  x.members.length === 1 ? desk.select({ kind: 'module', id: x.members[0] }) : desk.select({ kind: 'stratum', id: stratumKey(idx.value, x) })
 const isCurrentLevel = computed(() => desk.levelId.value === props.id)
-const name = (id: string) => idx.value.modules.get(id)?.name ?? id
 const STATUS: Record<string, string> = { current: '现状', target: '目标态', deprecated: '已废弃' }
 
 function openChild(childId: string) {
@@ -191,7 +202,9 @@ const refsCount = computed(() => (m.value.codeRefs?.length ?? 0) + (m.value.docR
       </div>
       <div class="badges">
         <code>{{ m.id }}</code>
-        <span v-if="m.kind" class="badge">{{ isLayer ? '层' : m.kind }}</span>
+        <span v-if="isLayer" class="badge">层</span>
+        <span v-else-if="m.kind" class="badge">{{ m.kind }}</span>
+        <button v-if="stratum && !isLayer" class="badge link" data-testid="module-stratum" @click="pickStratum(stratum)">层 · {{ stratum.name }}</button>
         <span v-if="m.status && m.status !== 'current'" class="badge warn">{{ STATUS[m.status] }}</span>
         <span v-if="m.role === 'core'" class="badge accent">核心</span>
         <span v-for="t in tagsShown" :key="t" class="badge">{{ t }}</span>
@@ -217,7 +230,11 @@ const refsCount = computed(() => (m.value.codeRefs?.length ?? 0) + (m.value.docR
         <div ref="purposeEl" class="purpose-text" :class="{ clamped: !purposeOpen }" :style="{ maxHeight: purposeOpen ? '' : `${purposeClamp}px` }">
           <Markdown v-if="m.responsibility" :text="m.responsibility" />
           <p v-else class="muted">职责未填写</p>
+          <div v-if="isLayer && stratum?.asks" class="principle" :title="stratum.admits ? `归属判定：${stratum.admits}` : undefined">
+            <span class="label">层</span>{{ stratum.asks }}
+          </div>
           <div v-if="m.abstraction" class="principle"><span class="label">原则</span><Markdown :text="m.abstraction" /></div>
+          <div v-else-if="isLayer && stratum?.abstraction" class="principle"><span class="label">原则</span><Markdown :text="stratum.abstraction" /></div>
           <p v-else-if="isLayer" class="muted principle">原则未填写</p>
         </div>
         <button v-if="purposeOverflow" class="link purpose-toggle" :aria-expanded="purposeOpen" @click="purposeOpen = !purposeOpen">
@@ -237,12 +254,22 @@ const refsCount = computed(() => (m.value.codeRefs?.length ?? 0) + (m.value.docR
         </div>
       </Section>
       <Section title="可依赖的层" data-sec="purpose">
-        <span v-if="!m.mayDependOn?.length" class="muted">无</span>
-        <span v-for="(d, i) in m.mayDependOn ?? []" :key="d">
-          <span v-if="i > 0"> · </span><button class="link" @click="desk.select({ kind: 'module', id: d })">{{ name(d) }}</button>
+        <span v-if="!layerDeps.length" class="muted">无</span>
+        <span v-for="(d, i) in layerDeps" :key="d.id">
+          <span v-if="i > 0"> · </span><button class="link" @click="pickStratum(d)">{{ d.name }}</button>
         </span>
       </Section>
     </template>
+    <!-- ADR-0052：本模块对子模块的分层（层是分类、不占级） -->
+    <Section v-if="ownStrata.length" title="分层" :count="ownStrata.length" data-sec="purpose" data-testid="module-strata">
+      <ol class="strata">
+        <li v-for="x in ownStrata" :key="x.id">
+          <button class="link" :title="x.admits ? `归属判定：${x.admits}` : undefined" @click="pickStratum(x)">{{ x.name }}</button>
+          <span v-if="x.asks" class="muted"> · {{ x.asks }}</span>
+          <span class="muted"> · {{ x.members.length }} 个模块</span>
+        </li>
+      </ol>
+    </Section>
 
     <!-- ③ 需要注意：全部无异常时整段不出现（V15b） -->
     <NoticeSection :notices="notices" />
@@ -366,6 +393,10 @@ const refsCount = computed(() => (m.value.codeRefs?.length ?? 0) + (m.value.docR
   margin-top: 2px;
 }
 
+.strata {
+  margin: 0;
+  padding-left: 18px;
+}
 .principle {
   display: flex;
   gap: 8px;

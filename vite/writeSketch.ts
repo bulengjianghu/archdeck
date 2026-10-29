@@ -246,8 +246,8 @@ export function createDesign(
   if (!given.length && req.mount) {
     const index = loadModel(base?.files ?? current).index
     const m = index.modules.get(req.mount)
-    if (req.mount !== ROOT_MOUNT && (!m || m.kind === 'layer'))
-      throw new WriteError(m ? `挂载点不能是层：「${req.mount}」的直接子模块画在根草图里（X9）` : `基线里没有模块「${req.mount}」`)
+    if (req.mount !== ROOT_MOUNT && (!m || m.parentId === index.rootId))
+      throw new WriteError(m ? `挂载点不能是根的子模块：「${req.mount}」的直接子模块画在根草图里（X9）` : `基线里没有模块「${req.mount}」`)
     const seed = seedFromBaseline(req.mount, index, { id })
     // X22：不写初始布局——画布按中心区的可用宽度排一次（需初始布局），第一次拖动时落下
     given = [seed]

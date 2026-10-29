@@ -59,6 +59,7 @@ export function reviewDiff(before: ReviewSummary, now: ReviewSummary): ReviewDif
     mayDependOn: diffItems(before.mayDependOn, now.mayDependOn),
     provides,
     children: diffItems(before.children, now.children),
+    strata: diffItems(before.strata, now.strata),
   }
   return { ...diff, count: REVIEW_FIELDS.reduce((n, f) => n + diff[f].length, 0) }
 }

@@ -9,7 +9,9 @@ const codes = (issues: { code: string; severity: string }[]) => real(issues).map
 describe('load', () => {
   it('合并多个文件：系统、模块树、关系、接口、数据结构', () => {
     const { model, issues } = load(sampleFiles())
-    expect(issues).toEqual([])
+    // 样例按旧写法 kind: layer 写（M26 迁移的回归样例）：只有一条 layer.migrated（info）
+    expect(real(issues)).toEqual([])
+    expect(issues.map(i => i.code)).toEqual(['layer.migrated', 'layer.migrated'])
     expect(model.system).toMatchObject({ id: 'sys', source: { commit: 'abc123' } })
     expect(model.modules.map(m => m.id)).toContain('infra.framework.sm')
     expect(model.modules.find(m => m.id === 'infra')!.parentId).toBe('sys')
@@ -67,9 +69,9 @@ describe('load', () => {
   })
 
   it('M20：via 只收四形态（port: / bus: / channel:）与旧的平铺取值，其余为格式错误；Loader 原样读入，由 Validator 映射', () => {
-    expect(load(sampleFiles({ 'p.yaml': 'relations:\n  - { id: rp2, from: infra.framework.pipeline, to: infra.mus, type: streams, via: port }\n' })).issues).toEqual([])
+    expect(load(sampleFiles({ 'p.yaml': 'relations:\n  - { id: rp2, from: infra.framework.pipeline, to: infra.mus, type: streams, via: port }\n' })).issues.filter(i => i.severity !== 'info')).toEqual([])
     const ok = load(sampleFiles({ 'v.yaml': 'relations:\n  - { id: rv, from: infra.framework.sm, to: infra.framework.pipeline, type: calls, via: http }\n' }))
-    expect(ok.issues).toEqual([])
+    expect(real(ok.issues)).toEqual([])
     expect(ok.model.relations.find(r => r.id === 'rv')!.via).toBe('http')
     const bad = load(sampleFiles({ 'v.yaml': 'relations:\n  - { id: rv, from: infra.framework.sm, to: infra.framework.pipeline, type: calls, via: socket }\n' }))
     expect(bad.issues.find(i => i.code === 'schema')).toMatchObject({ file: 'v.yaml' })
@@ -91,7 +93,7 @@ describe('load', () => {
   })
 
   it('空文件不报错', () => {
-    expect(load(sampleFiles({ 'empty.yaml': '# 只有注释\n' })).issues).toEqual([])
+    expect(real(load(sampleFiles({ 'empty.yaml': '# 只有注释\n' })).issues)).toEqual([])
   })
 })
 
@@ -171,13 +173,19 @@ describe('validate', () => {
     expect(issues.every(i => i.severity === 'info' && i.file === 'm.yaml')).toBe(true)
   })
 
-  it('层：缺 order / abstraction、mayDependOn 指向非同级层、同级混入非层模块', () => {
-    const bad = validate(load([
+  it('M26：旧写法的层读作根的单成员层——mayDependOn 指向非同级层提醒并去掉（迁移来的不报错、不提示缺原则）；同级混入非层模块不按分层呈现', () => {
+    const loaded = load([
       { path: 's.yaml', text: 'system: { id: s, name: S }' },
       { path: 'l.yaml', text: 'modules:\n  - { id: l1, name: L1, kind: layer, responsibility: x, mayDependOn: [l2, zz] }\n  - { id: l2, name: L2, kind: layer, order: 2, abstraction: y, responsibility: x }' },
-    ]).model)
-    expect(codes(bad.issues).sort()).toEqual(['layer-missing-abstraction', 'layer-missing-order', 'unknown-layer'])
-    expect(bad.model.modules.find(m => m.id === 'l1')!.mayDependOn).toEqual(['l2'])
+    ])
+    expect(loaded.issues.map(i => [i.code, i.severity])).toEqual([['layer.migrated', 'info']])
+    const bad = validate(loaded.model)
+    expect(codes(bad.issues)).toEqual(['stratum.unknown'])
+    expect(bad.model.modules.find(m => m.id === 'l1')).toMatchObject({ kind: 'subsystem' })
+    expect(bad.model.strata!.map(s => [s.id, s.order, s.mayDependOn, s.members, s.migrated])).toEqual([
+      ['l2', 2, undefined, ['l2'], true],
+      ['l1', undefined, ['l2'], ['l1'], true],
+    ])
 
     const mixed = run({ 'z.yaml': 'modules: [{ id: misc, name: Misc, responsibility: x }]' })
     expect(codes(mixed.issues)).toEqual(['mixed-layer-siblings'])
@@ -363,7 +371,7 @@ describe('第六轮：四类交互、via、端口实体、角色与场景类别�
     )
     expect(['p1', 'p2', 'b1', 'b2', 'h1'].map(id => r.index.relations.get(id)!.via)).toEqual(['port:if.model', undefined, 'bus:domain.bus', undefined, 'channel:postMessage'])
     expect(issuesOf(r, 'relation.via-target').map(i => i.line)).toEqual([5, 7])
-    expect(load(sampleFiles({ 'z.yaml': "relations:\n  - { id: x, from: app.fragments, to: domain.models, type: commands, via: 'socket:x' }\n" })).issues[0].code).toBe('schema')
+    expect(load(sampleFiles({ 'z.yaml': "relations:\n  - { id: x, from: app.fragments, to: domain.models, type: commands, via: 'socket:x' }\n" })).issues.filter(i => i.severity !== 'info')[0].code).toBe('schema')
   })
 
   it('裁决 4：被 via: port: 引用、或描述写了实现者的接口才算端口（port），其余接口只是对外能力；port 不参与版本对比', () => {
@@ -396,7 +404,7 @@ describe('第六轮：四类交互、via、端口实体、角色与场景类别�
     expect(scenarioKind(lm(sc('exception')).index.scenarios.get('sc.k')!)).toBe('exception')
     expect(scenarioKind(lm(sc('maintenance')).index.scenarios.get('sc.k')!)).toBe('maintenance')
     const bad = load(sampleFiles({ 's.yaml': sc('weird') }))
-    expect(bad.issues.map(i => i.code)).toEqual(['schema'])
+    expect(codes(bad.issues)).toEqual(['schema'])
   })
 
   it('M17、裁决 12：核心之间——两端各在某核心子树内、且不在同一个核心子树内；摘要「未分类 N（核心之间 M）」', () => {

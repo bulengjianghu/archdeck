@@ -39,10 +39,11 @@ describe('§6.10 架构治理验收', () => {
     expect(r.kind).toBe('file')
     if (r.kind !== 'file') return
     expect(r.owners).toEqual(['model.pipeline.loader'])
-    expect(r.module!.path.map(p => p.id)).toEqual(['model', 'model.description', 'model.pipeline', 'model.pipeline.loader'])
+    // ADR-0052：层不占级——路径只有模块；所在各级的层按全局键（根的层即模块 ID）
+    expect(r.module!.path.map(p => p.id)).toEqual(['model', 'model.pipeline', 'model.pipeline.loader'])
     expect(r.module!.rules.layers).toEqual([
       { layer: 'model（模型层）', mayDependOn: [] },
-      { layer: 'model.description（描述）', mayDependOn: ['model.contract（契约）'] },
+      { layer: 'model/description（描述）', mayDependOn: ['model/contract（契约）'] },
     ])
   })
 

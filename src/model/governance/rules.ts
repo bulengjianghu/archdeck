@@ -3,8 +3,9 @@
  */
 import { moduleName } from '../names'
 import { matchRef, normalizeRef, type SourceOwnership } from '../source'
-import type { ModelIndex, ModuleRuleDef, RuleKind, RulesDef } from '../types'
+import type { ModelIndex, ModuleRuleDef, RuleKind, RulesDef, StratumEntity } from '../types'
 import { within } from './facts'
+import { mayDependOnOf, stratumKey, stratumNames } from '../names'
 import type { FileDep, ModuleDep, RuleHit, Violation } from './types'
 
 /** 模块入口文件（G10）；由调用方按源码清单给出 */
@@ -28,16 +29,26 @@ const EMPTY_RULES: RulesDef = {}
 
 export const rulesOf = (index: ModelIndex): RulesDef => index.model.rules ?? EMPTY_RULES
 
-/** U2：两端在最近公共祖先下分叉处的两个模块（同一父模块的两个子模块）；有一端是另一端的祖先时为 null */
-function divergence(index: ModelIndex, a: string, b: string): [string, string] | null {
+const names = (index: ModelIndex, ids: readonly string[]) => namesOrNone(ids.map(id => moduleName(index, id)))
+const namesOrNone = (list: readonly string[]) => (list.length ? list.join('、') : '无')
+
+/**
+ * U2（ADR-0052）：依赖 a → b 的层判定——取最近公共祖先 P 下两端所在的子模块；P 声明了分层时取它们的层 sa、sb。
+ * 两端有一方是另一方的祖先、P 没有分层、或 sa 不约束时为 null；allowed 为 sa = sb 或 sb ∈ sa.mayDependOn。任意层级生效。
+ */
+export function layerJudgement(index: ModelIndex, a: string, b: string): { from: StratumEntity; to: StratumEntity; allowed: boolean } | null {
   const pa = index.pathOf.get(a) ?? []
   const pb = index.pathOf.get(b) ?? []
   let i = 0
   while (i < pa.length && i < pb.length && pa[i] === pb[i]) i++
-  return i < pa.length && i < pb.length ? [pa[i], pb[i]] : null
+  if (i >= pa.length || i >= pb.length) return null
+  const sa = index.stratumOf.get(pa[i])
+  const sb = index.stratumOf.get(pb[i])
+  if (!sa || !sb) return null
+  const may = mayDependOnOf(sa)
+  if (!may) return null
+  return { from: sa, to: sb, allowed: sa === sb || may.includes(sb.id) }
 }
-
-const names = (index: ModelIndex, ids: readonly string[]) => (ids.length ? ids.map(id => moduleName(index, id)).join('、') : '无')
 
 /** U4：经由文件是否在访问面内；`entry` 为模块入口 */
 export function exposesMatch(patterns: readonly string[], file: string, entry: string | null): boolean {
@@ -59,14 +70,12 @@ export function judge(index: ModelIndex, entryOf: EntryOf, dep: DepProbe): Judge
     hits.push({ kind, at, to, reason, ...(allowed ? { allowed } : {}) })
   }
 
-  // U2：层规则
-  const pair = rules.layers === false ? null : divergence(index, dep.from, dep.to)
-  if (pair) {
-    const [x, y] = pair.map(id => index.modules.get(id))
-    if (x?.kind === 'layer' && y?.kind === 'layer' && x.mayDependOn) {
-      constrained = true
-      if (!x.mayDependOn.includes(y.id)) hit('layer', x.id, dep.to, `「${x.name}」不可依赖「${y.name}」（可依赖：${names(index, x.mayDependOn)}）`)
-    }
+  // U2：层规则（ADR-0052：最近公共祖先声明了分层即生效，任意层级）
+  const layer = rules.layers === false ? null : layerJudgement(index, dep.from, dep.to)
+  if (layer) {
+    constrained = true
+    const { from: x, to: y } = layer
+    if (!layer.allowed) hit('layer', stratumKey(index, x), dep.to, `「${x.name}」不可依赖「${y.name}」（可依赖：${namesOrNone(stratumNames(index, x.parent, mayDependOnOf(x) ?? []))}）`)
   }
 
   for (const m of rules.modules ?? []) {
@@ -129,7 +138,7 @@ export function evaluateRules(index: ModelIndex, own: SourceOwnership, moduleDep
 
 /** Q1：对一个模块生效的规则 */
 export interface ModuleRules {
-  /** 所在各级层的可依赖层（U2） */
+  /** 所在各级层的可依赖层（U2；层与可依赖的层都是全局键，stratumKey） */
   layers: { layer: string; mayDependOn: string[] }[]
   /** 祖先链（含自身）上的白名单（U3） */
   deps: { module: string; mayDependOn: string[]; reason?: string }[]
@@ -140,13 +149,15 @@ export interface ModuleRules {
 export function rulesFor(index: ModelIndex, moduleId: string, entryOf: EntryOf): ModuleRules {
   const rules = rulesOf(index)
   const path = index.pathOf.get(moduleId) ?? []
+  // ST：路径上每一级所在的层（父模块声明了分层且约束的），可依赖的层写成全局键
   const layers =
     rules.layers === false
       ? []
-      : path
-          .map(id => index.modules.get(id))
-          .filter(m => m?.kind === 'layer' && m.mayDependOn)
-          .map(m => ({ layer: m!.id, mayDependOn: m!.mayDependOn! }))
+      : path.flatMap(id => {
+          const s = index.stratumOf.get(id)
+          const may = s && mayDependOnOf(s)
+          return s && may ? [{ layer: stratumKey(index, s), mayDependOn: may.map(x => stratumKey(index, { parent: s.parent, id: x })) }] : []
+        })
   const mine = (rules.modules ?? []).filter(r => path.includes(r.module))
   return {
     layers,

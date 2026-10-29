@@ -1,7 +1,7 @@
 /**
  * Indexer：把校验后的模型整理成按 ID 查询的结构。输入必须来自 validate()。
  */
-import type { ArchModel, ModelIndex, ModuleEntity } from './types'
+import type { ArchModel, ModelIndex, ModuleEntity, StratumEntity } from './types'
 import { messagesOf } from './scenario/semantics'
 
 export function buildIndex(model: ArchModel): ModelIndex {
@@ -14,7 +14,15 @@ export function buildIndex(model: ArchModel): ModelIndex {
     list.push(m.id)
     childrenOf.set(m.parentId, list)
   }
-  for (const [id, kids] of childrenOf) childrenOf.set(id, sortChildren(kids.map(k => modules.get(k)!)))
+  // ST（ADR-0052）：层是父模块对子模块的分类，不是节点
+  const strata = new Map<string, StratumEntity[]>()
+  const stratumOf = new Map<string, StratumEntity>()
+  for (const s of model.strata ?? []) {
+    push(strata, s.parent, s)
+    for (const id of s.members) stratumOf.set(id, s)
+  }
+  for (const list of strata.values()) list.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || 0)
+  for (const [id, kids] of childrenOf) childrenOf.set(id, sortChildren(kids.map(k => modules.get(k)!), strata.get(id)))
 
   const pathOf = new Map<string, string[]>([[rootId, [rootId]]])
   const resolvePath = (id: string): string[] => {
@@ -63,6 +71,8 @@ export function buildIndex(model: ArchModel): ModelIndex {
     scenarios,
     scenariosOf,
     triggeredBy,
+    strata,
+    stratumOf,
   }
 }
 
@@ -71,20 +81,14 @@ export function triggerOf(index: ModelIndex, scenarioId: string): string | undef
   return messagesOf(index.scenarios, scenarioId)[0]?.msg.from
 }
 
-/** 全部是层时按 order（缺省排最后）再按声明顺序；否则按声明顺序 */
-function sortChildren(kids: ModuleEntity[]): string[] {
-  const allLayers = kids.length > 0 && kids.every(k => k.kind === 'layer')
-  const sorted = [...kids].sort((a, b) => {
-    if (allLayers) {
-      const d = (a.order ?? Infinity) - (b.order ?? Infinity)
-      if (d !== 0 && !Number.isNaN(d)) return d
-    }
-    return a.seq - b.seq
-  })
+/** 声明了分层时按层序（ST、O2）再按声明顺序；否则按声明顺序 */
+function sortChildren(kids: ModuleEntity[], strata?: readonly StratumEntity[]): string[] {
+  const rank = new Map<string, number>((strata ?? []).flatMap((s, i) => s.members.map(id => [id, i] as const)))
+  const sorted = [...kids].sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity) || a.seq - b.seq)
   return sorted.map(k => k.id)
 }
 
-function push(map: Map<string, string[]>, key: string, value: string) {
+function push<T>(map: Map<string, T[]>, key: string, value: T) {
   const list = map.get(key)
   if (list) list.push(value)
   else map.set(key, [value])
@@ -95,8 +99,17 @@ export function nearestExisting(index: ModelIndex, path: readonly string[]): str
   return [...path].reverse().find(id => index.pathOf.has(id)) ?? index.rootId
 }
 
+/** ST（ADR-0052）：父模块声明了分层 */
 export function isLayered(index: ModelIndex, parentId: string): boolean {
-  const kids = index.childrenOf.get(parentId) ?? []
-  return kids.length > 0 && kids.every(k => index.modules.get(k)?.kind === 'layer')
+  return !!index.strata.get(parentId)?.length
 }
 
+/** ST：父模块的层（按 order）；没有声明时为空 */
+export function strataOf(index: ModelIndex, parentId: string): readonly StratumEntity[] {
+  return index.strata.get(parentId) ?? []
+}
+
+/** ST：子模块在父模块下所属的层 */
+export function stratumOf(index: ModelIndex, childId: string): StratumEntity | undefined {
+  return index.stratumOf.get(childId)
+}

@@ -213,7 +213,8 @@ describe('X14 两级校验', () => {
 
   it('语义提示：根草图层依赖成环、同挂载点矛盾、待重连——不拦保存（ok），拦交给 AI（ready 为假）；本层关系成环不提示（本层的环由代码事实给出，ADR-0026）', () => {
     const root = seedFromBaseline('root', baseline, { id: 'd1' })
-    root.modules![1].mayDependOn = ['fe']
+    // ADR-0052：层依赖写在根草图 strata 的层上
+    root.strata!.root.find(s => s.id === root.modules![1].id)!.mayDependOn = ['fe']
     const rr = v(root)
     expect(rr).toMatchObject({ ok: true, ready: false })
     expect(codes(rr.warnings)).toEqual(['sketch.layer-cycle'])

@@ -38,8 +38,8 @@ modules:
   - id: model.intent.edit.locate
     name: 草图寻址与 ID 生成
     parent: model.intent.edit
-    responsibility: 在草图里按 ID 找到模块与它的位置（根草图嵌在层的 children 里，非根草图平铺在挂载点下）；挂载点与是否根草图（mountOf、isRootSketch）；新 ID 的生成与检查——模块 ID 为挂载点（或层）加 ID 短名（名称能转写时为 kebab-case，中文名必须手填，不用拼音，X7c），关系 ID 为 rel.<from 短名>-<to 短名>（同一对已有别的类型时加类型后缀，仍冲突时加序号），接口 ID 为 if.<owner 短路径>.<名称>（04 §3.3）；已占用的 ID（本草图与持久草图）。
-    codeRefs: [src/model/intent/edit/locate.ts]
+    responsibility: 在草图里按 ID 找到模块与它的位置（根草图嵌在层的 children 里，非根草图平铺在挂载点下）；挂载点与是否根草图（mountOf、isRootSketch）；新 ID 的生成与检查——模块 ID 为挂载点（或层）加 ID 短名（名称能转写时为 kebab-case，中文名必须手填，不用拼音，X7c），关系 ID 为 rel.<from 短名>-<to 短名>（同一对已有别的类型时加类型后缀，仍冲突时加序号），接口 ID 为 if.<owner 短路径>.<名称>（04 §3.3）；已占用的 ID（本草图与持久草图）。草图里的分层寻址与级联（strata.ts，ADR-0052）：父模块的层、子模块所属的层、根草图的层带即根的子模块，删除与改 ID 时成员与层一并级联。
+    codeRefs: [src/model/intent/edit/locate.ts, src/model/intent/edit/strata.ts]
   - id: model.intent.edit.layers
     name: 层操作
     parent: model.intent.edit

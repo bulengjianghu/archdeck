@@ -108,7 +108,8 @@ export function createRun({ state, index, levelId, plan, view, positioned, fileO
       s.kind === 'dep' ||
       s.kind === 'couple' ||
       s.kind === 'port' ||
-      s.kind === 'cycle'
+      s.kind === 'cycle' ||
+      s.kind === 'stratum'
     )
       return null
     return participation(index.value, path.value.frames, scenarioView.value, s, frameId())

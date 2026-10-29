@@ -26,6 +26,9 @@ import {
   hotspots,
   impactOf,
   levelTiers,
+  placeSuggestion,
+  strataMetrics,
+  strataFindings,
   splitSignals,
   tierView,
   listedCouplings,
@@ -510,7 +513,7 @@ export function createService(opts: ServiceOptions) {
       if (!l.index.modules.has(level)) throw new ServiceError(`「${level}」不是模块`)
       const view = tierView(l.index, level)
       const t = levelTiers(l.index, view, l.report)
-      if (!t) throw new ServiceError(`「${level}」是分层总览：按作者声明的层排（O1），不按依赖分层`)
+      if (!t) throw new ServiceError(`「${level}」声明了分层（ADR-0052）：按作者声明的层排，不算依赖深度；改用 strata ${level}`)
       const moduleOf = (id: string) => view.nodes.find(n => n.id === id)?.moduleId ?? id
       const ref = (id: string) => ({ id: moduleOf(id), name: name(l, moduleOf(id)) })
       const split = splitSignals(l.index, l.own, level)
@@ -529,6 +532,45 @@ export function createService(opts: ServiceOptions) {
         notes: t.notes,
         split: { noFiles: split.noFiles.map(id => ({ id, name: name(l, id) })), shared: split.shared },
       }
+    },
+
+    /**
+     * ST（ADR-0052）：父模块声明的分层——各层的问题、判定问、原则、可依赖的层、成员、Ca / Ce / I、本层的向上依赖，与 ST-3–ST-5 的提示。只读。
+     */
+    strata(parent: string, p?: string) {
+      const l = load(p)
+      const id = parent === 'root' ? l.index.rootId : parent
+      if (id !== l.index.rootId && !l.index.modules.has(id)) throw new ServiceError(`「${parent}」不是模块`)
+      const layers = strataMetrics(l.index, id, l.report)
+      const under = (x: string) => layers.some(s => s.members.some(m => (l.index.pathOf.get(x) ?? []).includes(m)))
+      const findings = strataFindings(l.index, l.report).filter(f => f.modules[0] === id || f.modules.some(under))
+      return {
+        project: l.project,
+        parent: id,
+        name: name(l, id),
+        declared: layers.length > 0,
+        children: (l.index.childrenOf.get(id) ?? []).length,
+        layers: layers.map(s => ({
+          ...s,
+          members: s.members.map(m => ({ id: m, name: name(l, m) })),
+          upward: s.upward.map(u => ({ ...u, from: { id: u.from, name: name(l, u.from) }, to: { id: u.to, name: name(l, u.to) } })),
+        })),
+        notes: findings.map(f => ({ code: f.issue.code, message: f.issue.message })),
+        ...(layers.length
+          ? {}
+          : {
+              hint: `「${name(l, id)}」没有声明分层：子模块 ${(l.index.childrenOf.get(id) ?? []).length} 个${(l.index.childrenOf.get(id) ?? []).length > 7 ? '，超过七个，按 ST-1 归纳 2–5 个有原则的层或记拆分信号' : ''}；依赖深度见 tiers`,
+            }),
+      }
+    },
+
+    /** ST-2（ADR-0052）：在已分层的父模块下新增模块时的归属建议——各层的问题与判定问，按职责文字的重合度排序。只读。 */
+    place(parent: string, responsibility: string, p?: string) {
+      const l = load(p)
+      const id = parent === 'root' ? l.index.rootId : parent
+      const r = placeSuggestion(l.index, id, responsibility)
+      if (!r) throw new ServiceError(`「${parent}」没有声明分层：不需要选层`)
+      return { project: l.project, ...r, name: name(l, id) }
     },
 
     /**
