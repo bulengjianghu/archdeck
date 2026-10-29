@@ -551,9 +551,29 @@ test('草图画布手势：按住空格拖动空白处 = 平移（视口变、�
   const t0 = await transform()
   const n0 = await page.evaluate(() => JSON.stringify((globalThis as unknown as { __desk: { edit: { sketch: { value: unknown } } } }).__desk.edit.sketch.value))
   const flow = (await page.locator('.sk-flow').boundingBox())!
-  // 起点取画布左上角的空白处（适应画布后四周留白）
-  const sx = flow.x + 16
-  const sy = flow.y + 16
+  // 起点取画布的空白处：适应画布后四周留白，但模型层改成四层后左上角可能压到带名，按网格找一块空白
+  const { sx, sy } = await page.evaluate(() => {
+    type Rect = { left: number; top: number; width: number; height: number }
+    const doc = (
+      globalThis as unknown as {
+        document: {
+          querySelector(sel: string): { getBoundingClientRect(): Rect } | null
+          elementFromPoint(x: number, y: number): { classList: { contains(c: string): boolean } } | null
+        }
+      }
+    ).document
+    const flow = doc.querySelector('.sk-flow')!.getBoundingClientRect()
+    // 在画布内按网格找一块空白（向右、向下各留出 200 / 120 px 供拖动）
+    for (let dy = 16; dy < flow.height - 120; dy += 40) {
+      for (let dx = 16; dx < flow.width - 200; dx += 40) {
+        const x = flow.left + dx
+        const y = flow.top + dy
+        const el = doc.elementFromPoint(x, y)
+        if (el && el.classList.contains('vue-flow__pane')) return { sx: x, sy: y }
+      }
+    }
+    throw new Error('草图画布没有空白处可起拖')
+  })
 
   await page.keyboard.down('Space')
   await expect(page.locator('.sketch-canvas')).toHaveClass(/panning/)

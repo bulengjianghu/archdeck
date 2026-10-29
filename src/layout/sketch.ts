@@ -509,6 +509,8 @@ export function sketchScene(input: SketchSceneInput): SketchScene {
   })
   const modules: SketchNode[] = own
     .filter(m => !(root && m.parentId === undefined))
+    // X21：根草图只画层与第二级模块；第二级以下的（模型层改成四层后的层内模块）交给当前版本的面板与下钻，不在这里画
+    .filter(m => !root || pos[m.id] !== undefined)
     .map(m => ({
       id: m.id,
       position: pos[m.id],
