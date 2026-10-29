@@ -309,7 +309,7 @@ describe('G22 自项目源码根与描述版本', () => {
     expect(tree).toMatchObject({ status: 'local', root: projectRoot })
   })
 
-  it('比对：落后、一致、不在历史中、未写 commit、无 git 五态', () => {
+  it('比对：落后、一致、不在历史中、只改描述不算落后、未写 commit、无 git 六态', () => {
     const tree = readSourceTree(modelRoot, 'ver', projectRoot, {})
     expect(tree).toMatchObject({ status: 'local', root: gitRepo, commitDelta: { described: first, head: second, ahead: 1 } })
     expect(sourceDeltaNote((tree as Extract<typeof tree, { status: 'local' }>).commitDelta!)).toBe(
@@ -325,6 +325,17 @@ describe('G22 自项目源码根与描述版本', () => {
     expect(sourceDeltaNote({ described: 'f'.padEnd(40, '0'), head: second, ahead: null })).toBe(
       `描述基于 f0000000，源码树在 ${second.slice(0, 8)}（描述的提交不在源码树历史中）`,
     )
+    // 描述目录在源码树内（自项目）：只改了描述目录的提交不算落后；之后再改代码才算
+    write(gitRepo, 'model/ver/system.yaml', 'system: { id: ver }\n')
+    git(gitRepo, 'add', '-A')
+    git(gitRepo, 'commit', '-qm', 'describe')
+    const inModel = path.join(gitRepo, 'model')
+    expect(sourceCommitDelta({ id: 'ver', name: 'V', source: { repo: 'x', commit: second } }, gitRepo, inModel)).toBeNull()
+    expect(sourceCommitDelta({ id: 'ver', name: 'V', source: { repo: 'x', commit: second } }, gitRepo)).toMatchObject({ ahead: 1 })
+    write(gitRepo, 'src/c.ts', 'export const c = 3\n')
+    git(gitRepo, 'add', '-A')
+    git(gitRepo, 'commit', '-qm', 'code')
+    expect(sourceCommitDelta({ id: 'ver', name: 'V', source: { repo: 'x', commit: second } }, gitRepo, inModel)).toMatchObject({ ahead: 1 })
     // 未写 commit：静默跳过
     expect(readSourceTree(modelRoot, 'nocommit', projectRoot, {})).not.toHaveProperty('commitDelta')
     // 读不到 git（不在仓库内）：静默跳过

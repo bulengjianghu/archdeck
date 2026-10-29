@@ -73,15 +73,21 @@ export function readHeadCommit(root: string): string | null {
   }
 }
 
-/** G22：描述的 source.commit 与源码树 HEAD 的比对；一致（HEAD 以它开头，容忍短哈希）、未写 commit 或读不到 git 时为 null */
-export function sourceCommitDelta(system: SystemDef, root: string): CommitDelta | null {
+/**
+ * G22：描述的 source.commit 与源码树 HEAD 的比对；一致（HEAD 以它开头，容忍短哈希）、未写 commit 或读不到 git 时为 null。
+ * 描述目录 modelDir 在源码树内（自项目）时只数改了描述目录之外的提交——更新 source.commit 的那次提交本身不算落后，否则自项目永远不一致
+ */
+export function sourceCommitDelta(system: SystemDef, root: string, modelDir?: string): CommitDelta | null {
   const described = system.source?.commit?.trim()
   if (!described) return null
   const head = readHeadCommit(root)
   if (!head || head.startsWith(described)) return null
+  const rel = modelDir ? path.relative(root, modelDir) : ''
+  const outside = rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? ['--', '.', `:(exclude)${rel.split(path.sep).join('/')}`] : []
   let ahead: number | null = null
   try {
-    const n = Number.parseInt(gitIn(root, ['rev-list', '--count', `${described}..HEAD`]), 10)
+    const n = Number.parseInt(gitIn(root, ['rev-list', '--count', `${described}..HEAD`, ...outside]), 10)
+    if (outside.length && n === 0) return null
     if (Number.isFinite(n)) ahead = n
   } catch {
     /* 描述的提交不在源码树历史中（深克隆截断、改写历史等）：只报不一致，不给差数 */
@@ -151,7 +157,7 @@ export function readSourceTree(modelRoot: string, project: string, projectRoot: 
   if (at.status === 'error') return at
   const files = listSourceFiles(at.root)
   // G22：描述的提交与源码树 HEAD 不一致时随清单交给页面与命令行，各给一条提醒
-  const delta = sourceCommitDelta(system, at.root)
+  const delta = sourceCommitDelta(system, at.root, modelRoot)
   return {
     status: 'local',
     root: at.root,
