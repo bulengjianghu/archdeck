@@ -104,6 +104,64 @@ describe('V15：五段段序', () => {
   })
 })
 
+describe('L46 波 3 收敛：② 说明长文折叠与 ④ 清单「+N」', () => {
+  const FOLDS =
+    'modules:\n' +
+    '  - id: app.big\n' +
+    '    parent: app\n' +
+    '    name: Big\n' +
+    '    responsibility: 职责\n' +
+    '    abstraction: 原则\n' +
+    '    provides: [if.f1, if.f2, if.f3, if.f4, if.f5, if.f6]\n' +
+    '    children:\n' +
+    '      - { id: app.big.c1, name: 一号, responsibility: r }\n' +
+    '      - { id: app.big.c2, name: 二号, responsibility: r }\n' +
+    '      - { id: app.big.c3, name: 三号, responsibility: r }\n' +
+    '      - { id: app.big.c4, name: 四号, responsibility: r }\n' +
+    '      - { id: app.big.c5, name: 五号, responsibility: r }\n' +
+    '      - { id: app.big.c6, name: 六号, responsibility: r }\n' +
+    'interfaces:\n' +
+    "  - { id: if.f1, name: F1, owner: app.big, signature: 'f1()' }\n" +
+    "  - { id: if.f2, name: F2, owner: app.big, signature: 'f2()' }\n" +
+    "  - { id: if.f3, name: F3, owner: app.big, signature: 'f3()' }\n" +
+    "  - { id: if.f4, name: F4, owner: app.big, signature: 'f4()' }\n" +
+    "  - { id: if.f5, name: F5, owner: app.big, signature: 'f5()' }\n" +
+    "  - { id: if.f6, name: F6, owner: app.big, signature: 'f6()' }\n"
+
+  it('④ 对外接口与子模块清单超 4 个收「+N」（悬停看全量、单击展开，与头部标签同款）', async () => {
+    const { wrapper } = await mountPanel('/?sel=m:app.big', sampleFiles({ 'modules/zz-folds.yaml': FOLDS }))
+    // 子模块：先列 4 个，+2 的 title 列出其余，单击展开成 6 个再收起
+    const kids = wrapper.findAll('[data-sec="boundary.children"] .child')
+    expect(kids).toHaveLength(4)
+    const more = wrapper.find('[data-sec="boundary.children"] .badge-more')
+    expect(more.text()).toBe('+2')
+    expect(more.attributes('title')).toContain('五号、六号')
+    await more.trigger('click')
+    expect(wrapper.findAll('[data-sec="boundary.children"] .child')).toHaveLength(6)
+    await wrapper.find('[data-sec="boundary.children"] .badge-more').trigger('click')
+    expect(wrapper.findAll('[data-sec="boundary.children"] .child')).toHaveLength(4)
+    // 对外接口：同样先列 4 个、+2
+    const ifaces = wrapper.findAll('[data-sec="boundary.interfaces"] .iface')
+    expect(ifaces).toHaveLength(4)
+    expect(wrapper.find('[data-sec="boundary.interfaces"] .badge-more').text()).toBe('+2')
+    // ② 说明：内容包进折叠容器（jsdom 没有布局、量不出溢出，展开按钮的显隐逻辑由 E2E 的 panel-metrics 与浏览器验证）
+    expect(wrapper.find('.purpose-text').exists()).toBe(true)
+    expect(wrapper.find('.purpose-text .principle').exists()).toBe(true)
+  })
+
+  it('展开态不跨选中保持：展开「+N」后换选中再回来，回到缺省（收起）', async () => {
+    const { wrapper, desk } = await mountPanel('/?sel=m:app.big', sampleFiles({ 'modules/zz-folds.yaml': FOLDS }))
+    await wrapper.find('[data-sec="boundary.children"] .badge-more').trigger('click')
+    expect(wrapper.findAll('[data-sec="boundary.children"] .child')).toHaveLength(6)
+    await desk.select({ kind: 'module', id: 'app.solution' })
+    await flushPromises()
+    expect(wrapper.find('[data-sec="boundary.children"]')).toBeDefined()
+    await desk.select({ kind: 'module', id: 'app.big' })
+    await flushPromises()
+    expect(wrapper.findAll('[data-sec="boundary.children"] .child')).toHaveLength(4)
+  })
+})
+
 describe('V15a：① 头部徽标槽位表', () => {
   it('槽位次序 ID → 类别 → 状态 → 核心 → 标签 → 变更 → 确认；标签超过 2 个收「+N」，悬停看全量、单击展开', async () => {
     const files = sampleFiles({

@@ -130,7 +130,7 @@ modules:
   - id: present.panel.module
     name: 模块面板
     parent: present.panel
-    responsibility: 模块的职责、实现原理、对外接口、核心数据结构、子模块、出入边、「端口」一节（声明的每个端口一份端口面板，K11，渲染端口面板的 ModulePorts）、代码事实里的子类 / 基类与组装 / 被组装于（K12、K13）、代码与文档引用；结构视角下另有「结构」一节（指标、影响面、交互图互查，present.panel.structure）；层额外显示抽象原则、包含 / 不包含、可依赖的层。
+    responsibility: 模块的职责、实现原理、对外接口、核心数据结构、子模块、出入边、「端口」一节（声明的每个端口一份端口面板，K11，渲染端口面板的 ModulePorts）、代码事实里的子类 / 基类与组装 / 被组装于（K12、K13）、代码与文档引用；结构视角下另有「结构」一节（指标、影响面、交互图互查，present.panel.structure）；层额外显示抽象原则、包含 / 不包含、可依赖的层。说明长文超 4 行收起带「展开 N 字」，对外接口与子模块清单超 4 个收「+N」（悬停看全量、单击展开，与头部标签同款），交互图互查先列 8 条（L46 波 3 收敛）——展开态不跨选中保持，换选中即回缺省。
     codeRefs: [src/components/panel/ModulePanel.vue]
   - id: present.panel.relation
     name: 关系面板

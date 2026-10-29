@@ -1,13 +1,15 @@
 <script setup lang="ts">
 /**
  * 模块面板（G11 五段骨架，ADR-0050、V15）：① 头部（名称、进入 / 在此设计、徽标槽位表、设计说明）
- * ② 作用（说明 = 职责 + 原则一句，ADR-0042；层的包含 / 不包含、可依赖的层跟在说明后——它们是「为什么这样分」）
+ * ② 作用（说明 = 职责 + 原则一句，ADR-0042；层的包含 / 不包含、可依赖的层跟在说明后——它们是「为什么这样分」；
+ *   长文超 4 行收起带「展开 N 字」，波 3 r3 要求 1）
  * ③ 需要注意（每类异常一行、带计数、单击跳转，无异常不出现，V15b）
- * ④ 边界（视角敏感段：对外接口 → 子模块 → 出边 / 入边（先按类型汇总，展开才逐条）→ 端口；结构视角另加结构指标与影响面、表面；
- *   运行视角整体折叠在下（V6，由 Panel 包装））
+ * ④ 边界（视角敏感段：对外接口 → 子模块 → 出边 / 入边（先按类型汇总，展开才逐条）→ 端口；对外接口与子模块清单超 4 个
+ *   收「+N」（悬停看全量、单击展开，与头部标签同款）；结构视角另加结构指标与影响面、表面；运行视角整体折叠在下（V6，由 Panel 包装））
  * ⑤ 证据与细节（默认折叠带计数，count 不为 0 才显示节；出处 footer 常显在最底）。
+ * ② 的展开与 ④ 的「+N」展开都不跨选中保持：换选中即回缺省（与 V15「折叠状态换选中即回默认」同口径）。
  */
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'
 import { HOT_SURFACE_MODULES } from '@/model'
 import Markdown from './Markdown.vue'
@@ -55,6 +57,68 @@ const tagsOpen = ref(false)
 const tags = computed(() => m.value.tags ?? [])
 const tagsShown = computed(() => (tagsOpen.value ? tags.value : tags.value.slice(0, TAG_CAP)))
 const tagsHidden = computed(() => tags.value.length - tagsShown.value.length)
+
+// ── ② 说明长文折叠（第十五轮波 3，r3 要求 1）：超过 PURPOSE_LINES 行收起、带「展开 N 字」（行数实测定：说明一节
+// ── 常态 4 行读完职责大意，h5player app.solution 等长文 7+ 行）——展开态不跨选中保持，换选中即回缺省（收起） ──
+const PURPOSE_LINES = 4
+const purposeEl = ref<HTMLElement | null>(null)
+const purposeOpen = ref(false)
+const purposeOverflow = ref(false)
+const purposeChars = ref(0)
+const purposeClamp = ref(84)
+const measurePurpose = () => {
+  const el = purposeEl.value
+  if (!el) return
+  const lh = parseFloat(getComputedStyle(el).lineHeight) || parseFloat(getComputedStyle(el).fontSize) * 1.45 || 18
+  purposeClamp.value = Math.round(lh * PURPOSE_LINES)
+  purposeChars.value = (el.textContent ?? '').replace(/\s+/g, '').length
+  // 夹住量全高：scrollHeight 是完整内容高，与夹住的可见高比
+  const prev = el.style.maxHeight
+  el.style.maxHeight = `${purposeClamp.value}px`
+  purposeOverflow.value = el.scrollHeight > purposeClamp.value + 2
+  el.style.maxHeight = prev
+}
+onMounted(() => {
+  nextTick(measurePurpose)
+  // 字体就绪后行高会变，再量一次
+  document.fonts?.ready.then(() => nextTick(measurePurpose))
+})
+
+// ── ④ 清单的「+N」（第十五轮波 3，与头部标签同款交互：悬停看全量、单击展开）：对外接口、子模块各留前几个，其余收起带计数； ──
+// ── ModuleStructure 的交互图互查清单同款（在 ModuleStructure.vue）。展开态同样不跨选中保持 ──
+const IFACE_CAP = 4
+const ifaceOpen = ref(false)
+const provides = computed(() => m.value.provides ?? [])
+const ifaceShown = computed(() => (ifaceOpen.value ? provides.value : provides.value.slice(0, IFACE_CAP)))
+const ifaceHidden = computed(() => provides.value.length - ifaceShown.value.length)
+
+const CHILDREN_CAP = 4
+const childrenOpen = ref(false)
+const childrenShown = computed(() => (childrenOpen.value ? children.value : children.value.slice(0, CHILDREN_CAP)))
+const childrenHidden = computed(() => children.value.length - childrenShown.value.length)
+const childrenRest = computed(() =>
+  childrenShown.value === children.value
+    ? ''
+    : children.value
+        .slice(CHILDREN_CAP)
+        .map(c => c.name)
+        .join('、'),
+)
+
+// 换选中（props.id 变）即回缺省：说明收起、清单收起
+watch(
+  () => props.id,
+  () => {
+    purposeOpen.value = false
+    ifaceOpen.value = false
+    childrenOpen.value = false
+    nextTick(measurePurpose)
+  },
+)
+watch(
+  () => [m.value?.responsibility, m.value?.abstraction],
+  () => nextTick(measurePurpose),
+)
 
 // ── ③ 需要注意（V15b）：清单与计数全部来自现有派生，不新算 ──
 const root = ref<HTMLElement | null>(null)
@@ -146,12 +210,20 @@ const refsCount = computed(() => (m.value.codeRefs?.length ?? 0) + (m.value.docR
     </header>
     <DesignNote :text="m.designNote" />
 
-    <!-- ② 作用：说明 = 职责 + 原则一句（ADR-0042）；层的包含 / 不包含、可依赖的层跟在说明后（「为什么这样分」） -->
+    <!-- ② 作用：说明 = 职责 + 原则一句（ADR-0042）；层的包含 / 不包含、可依赖的层跟在说明后（「为什么这样分」）。
+         长文超过 4 行收起带「展开 N 字」（波 3 r3 要求 1，行数实测定），展开态不跨选中保持 -->
     <Section title="说明" data-sec="purpose">
-      <Markdown v-if="m.responsibility" :text="m.responsibility" />
-      <p v-else class="muted">职责未填写</p>
-      <div v-if="m.abstraction" class="principle"><span class="label">原则</span><Markdown :text="m.abstraction" /></div>
-      <p v-else-if="isLayer" class="muted principle">原则未填写</p>
+      <div class="purpose">
+        <div ref="purposeEl" class="purpose-text" :class="{ clamped: !purposeOpen }" :style="{ maxHeight: purposeOpen ? '' : `${purposeClamp}px` }">
+          <Markdown v-if="m.responsibility" :text="m.responsibility" />
+          <p v-else class="muted">职责未填写</p>
+          <div v-if="m.abstraction" class="principle"><span class="label">原则</span><Markdown :text="m.abstraction" /></div>
+          <p v-else-if="isLayer" class="muted principle">原则未填写</p>
+        </div>
+        <button v-if="purposeOverflow" class="link purpose-toggle" :aria-expanded="purposeOpen" @click="purposeOpen = !purposeOpen">
+          {{ purposeOpen ? '收起说明' : `展开 · 说明 ${purposeChars} 字` }}
+        </button>
+      </div>
     </Section>
     <template v-if="isLayer">
       <Section v-if="m.includes?.length || m.excludes?.length" title="应该包含 / 不应该包含" data-sec="purpose">
@@ -175,19 +247,44 @@ const refsCount = computed(() => (m.value.codeRefs?.length ?? 0) + (m.value.docR
     <!-- ③ 需要注意：全部无异常时整段不出现（V15b） -->
     <NoticeSection :notices="notices" />
 
-    <!-- ④ 边界（视角敏感段）：对外接口 → 子模块 → 出边 / 入边 → 端口；结构视角另加结构、表面（指标贴 ④ 段内的结构块首） -->
-    <Section v-if="m.provides?.length" title="对外接口" :count="m.provides.length" data-sec="boundary.interfaces">
-      <InterfaceItem v-for="id in m.provides" :key="id" :id="id" :open="m.provides.length <= 2" />
+    <!-- ④ 边界（视角敏感段）：对外接口 → 子模块 → 出边 / 入边 → 端口；结构视角另加结构、表面（指标贴 ④ 段内的结构块首）。
+         两类清单超 4 个收「+N」（波 3 r3 要求 1，与头部标签同款：悬停看全量、单击展开） -->
+    <Section v-if="provides.length" title="对外接口" :count="provides.length" data-sec="boundary.interfaces">
+      <ul class="plain">
+        <li v-for="id in ifaceShown" :key="id" class="iface">
+          <InterfaceItem :id="id" :open="provides.length <= 2" />
+        </li>
+        <li v-if="ifaceHidden > 0 || ifaceOpen">
+          <button
+            class="badge-more link"
+            :title="ifaceOpen ? undefined : `其余接口：${provides.slice(IFACE_CAP).join('、')}`"
+            :aria-expanded="ifaceOpen"
+            @click="ifaceOpen = !ifaceOpen"
+          >
+            {{ ifaceOpen ? '收起' : `+${ifaceHidden}` }}
+          </button>
+        </li>
+      </ul>
     </Section>
 
     <Section v-if="children.length" :title="isLayer ? '本层模块' : '子模块'" :count="children.length" data-sec="boundary.children">
       <ul class="plain">
-        <li v-for="c in children" :key="c.id" class="child">
+        <li v-for="c in childrenShown" :key="c.id" class="child">
           <button class="link" @click="openChild(c.id)">{{ c.name }}</button>
           <ChangeBadge entity="module" :id="c.id" />
           <span v-if="c.role === 'core'" class="badge accent">核心</span>
           <span v-if="(idx.childrenOf.get(c.id) ?? []).length" class="muted">⌄ {{ idx.childrenOf.get(c.id)!.length }}</span>
           <span class="resp">{{ c.responsibility }}</span>
+        </li>
+        <li v-if="childrenHidden > 0 || childrenOpen">
+          <button
+            class="badge-more link"
+            :title="childrenOpen ? undefined : `其余子模块：${childrenRest}`"
+            :aria-expanded="childrenOpen"
+            @click="childrenOpen = !childrenOpen"
+          >
+            {{ childrenOpen ? '收起' : `+${childrenHidden}` }}
+          </button>
         </li>
       </ul>
     </Section>
@@ -259,6 +356,16 @@ const refsCount = computed(() => (m.value.codeRefs?.length ?? 0) + (m.value.docR
 </template>
 
 <style scoped>
+/* ② 说明长文折叠：max-height 由脚本按实际行高写入（purposeClamp），展开时清空 */
+.purpose-text.clamped {
+  overflow: hidden;
+}
+
+.purpose-toggle {
+  font-size: 12px;
+  margin-top: 2px;
+}
+
 .principle {
   display: flex;
   gap: 8px;
@@ -272,6 +379,10 @@ const refsCount = computed(() => (m.value.codeRefs?.length ?? 0) + (m.value.docR
   flex: none;
   font-size: 12px;
   color: var(--text-3);
+}
+
+.plain .iface {
+  padding: 2px 0;
 }
 
 .badge-more {

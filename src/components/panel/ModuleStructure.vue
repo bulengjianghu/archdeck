@@ -9,7 +9,7 @@
  * - K17：交互图互查——涉及本模块（含子树）、两端之间没有任何依赖的交互关系（K6），单击切到交互视角并选中它。
  * 没有代码事实（K8、U16）时只说明原因。
  */
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { moduleName, type ImpactEntry } from '@/model'
 import { useDesk } from '@/state/inject'
 import Section from './Section.vue'
@@ -35,6 +35,17 @@ const LIMIT = 15
 const expanded = ref(new Set<string>())
 const shownOf = (key: string, list: ImpactEntry[]) => (expanded.value.has(key) ? list : list.slice(0, LIMIT))
 const expand = (key: string) => (expanded.value = new Set([...expanded.value, key]))
+
+/** K17 交互图互查的清单同样先列前 CROSS_LIMIT 条，其余单击展开（波 3 r3 要求 1 的「+N」同款）；换选中回缺省 */
+const CROSS_LIMIT = 8
+const crossOpen = ref(false)
+watch(
+  () => props.id,
+  () => {
+    crossOpen.value = false
+    expanded.value = new Set()
+  },
+)
 
 const idx = computed(() => desk.index.value!)
 const name = (id: string) => moduleName(idx.value, id)
@@ -220,9 +231,15 @@ const relText = (id: string) => {
         </div>
         <p v-if="!isolated.length" class="muted empty">没有：涉及它的交互都有依赖撑着或不判定</p>
         <ul v-else class="plain">
-          <li v-for="r in isolated" :key="r">
+          <li v-for="r in crossOpen ? isolated : isolated.slice(0, CROSS_LIMIT)" :key="r">
             <button class="link cross-item" title="切到交互视角并选中这条关系" @click="showInteraction(r)">{{ relText(r) }}</button>
             <span class="muted"> {{ RELATION_TYPE_LABELS[idx.relations.get(r)!.type] }} · 未证实</span>
+          </li>
+          <li v-if="!crossOpen && isolated.length > CROSS_LIMIT">
+            <button class="link more" :aria-expanded="crossOpen" @click="crossOpen = true">另 {{ isolated.length - CROSS_LIMIT }} 条，展开</button>
+          </li>
+          <li v-if="crossOpen && isolated.length > CROSS_LIMIT">
+            <button class="link more" @click="crossOpen = false">收起</button>
           </li>
         </ul>
       </div>

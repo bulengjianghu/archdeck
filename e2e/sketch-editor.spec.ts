@@ -99,7 +99,7 @@ async function designHere(page: Page, layer: string, id: string) {
   await page.getByRole('menuitem', { name: '在此设计' }).click()
 }
 
-test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 → 底稿 13 个模块与折叠引用、引用按层成列、隐藏外部引用（X22）→ 合并两个 → 拖位置 → 连关系 → 父模块原则 → 保存 → 文件含 mount / abstraction / layout / from → 刷新原样 → 面板两个核验数与清单 → 拆分前二次确认（X7k）→ 拖出挂载点框 = 升级（X22）', async ({
+test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 → 底稿 14 个模块与折叠引用、引用按层成列、隐藏外部引用（X22）→ 合并两个 → 拖位置 → 连关系 → 父模块原则 → 保存 → 文件含 mount / abstraction / layout / from → 刷新原样 → 面板两个核验数与清单 → 拆分前二次确认（X7k）→ 拖出挂载点框 = 升级（X22）', async ({
   page,
 }) => {
   const box = sandbox('zz-e2e-sketch')
@@ -117,12 +117,12 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     await expect(page.locator('.info-bar .name')).toHaveText('E2E 草图')
     await expect(saveButton(page)).toBeVisible()
 
-    // 基线 = 仓库 HEAD；底稿：挂载点 DeskState 的一层从基线复制（13 个），不带职责文字；不写初始布局（X22：画布按中心区宽度排一次）
+    // 基线 = 仓库 HEAD；底稿：挂载点 DeskState 的一层从基线复制（14 个，波 3 G14 起含 state.desk.legend），不带职责文字；不写初始布局（X22：画布按中心区宽度排一次）
     expect(parse(fs.readFileSync(path.join(box.dir, 'design.yaml'), 'utf8')).design.base.commit).toBe(HEAD())
     const seed = sketchFile(box.dir, 'state.desk')
     expect(seed).toMatchObject({ id: 'zz-e2e-sketch', mount: 'state.desk' })
     const ids: string[] = seed.modules.map((m: { id: string }) => m.id)
-    expect(ids).toHaveLength(13)
+    expect(ids).toHaveLength(14)
     expect(seed.modules.every((m: { responsibility?: string }) => !m.responsibility)).toBe(true)
     expect(seed.layout).toBeUndefined()
     for (const id of ids) await expect(graphNode(page, id)).toBeVisible()
