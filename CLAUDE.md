@@ -83,4 +83,6 @@ npm run build         # ~21s
 - **不并发混跑**：E2E 会临时改写真实的 `model/h5p-arch-desk/`（如确认记录、指纹、拦截记录）并在结束时恢复，同一个 worktree 里不要同时跑单测 / E2E / lint:model；跑完 `git status` 应当干净。
 - **超时预算（实测定，2026-10-28，本机）**：单测单个用例 20s（`vite.config.ts` testTimeout；最重的是 acceptance 里 h5player 全树 TS 解析 ~4.5s，全量并发下会拉伸，默认 5s 曾被挤爆误报超时）；E2E 单个用例 60s、断言 10s、整轮 globalTimeout 15 分钟（超过即环境问题，先查开发服务器与端口占用，再谈红绿）。改了影响面（源码读取、布局）之后用实测重新校准这些数字。
 - **红了就是红**：按上面的标准跑法红了就是红，修到绿为止；不得以「单独重跑通过」「换个端口 / 换台机器就好了」放行。单独重跑只用于定位，不用于放行。
+- **只由人执行的两条命令**：`arch own`（登记人拥有文件的指纹，04 §3）与 `arch baseline`（生成治理基线，U7）。AI 与子智能体遇到 `owned.changed` 或需要（重新）生成基线时，在报告里列出涉及的文件与原因，交给人执行，不自行运行——第十五轮 6c7d84d 由子智能体运行 `arch own`，负责人 2026-10-29 追认结果、重申此条。
+- 本项目已登记治理基线（`model/h5p-arch-desk/governance/baseline.json`）：基线外的新增违规（`rule.new`）、环度上升（`cycle.grew`）是 `lint:model` 错误，门禁直接拦下；面板 ③ 出现违规或环是必修项，不以「口径说明」放行。
 - `lint:model` 的门禁口径：本包 `model/h5p-arch-desk` 0 个错误（`npm run lint:model -- model/h5p-arch-desk`）；全量输出里被描述项目（h5player 等）的错误来自它们自己的代码与基线，是那些项目的治理待办，不在本包门禁内，但要在报告里如实带出。
