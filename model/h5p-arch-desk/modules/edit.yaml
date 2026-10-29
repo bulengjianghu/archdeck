@@ -339,7 +339,7 @@ relations:
   - {id: rel.ed.commands-load, from: state.desk.edit.commands, to: model.pipeline.loader, type: queries, description: 编辑操作向 Loader 取：从载荷原文读出草图定义}
   - {id: rel.ed.derive-validate, from: state.desk.edit.derive, to: model.intent.validate, type: queries, interface: if.intent.validateSketch, description: 编辑会话的派生向草图校验取：每次操作后逐张两级校验（与写入端点同一函数）}
   - {id: rel.ed.derive-check, from: state.desk.edit.derive, to: model.intent.check, type: queries, interface: if.intent.compareDesign, description: 编辑会话的派生向草图核验与生命周期取：compareDesign：两个对比（相对基线 / 相对当前版本）的全设计计数与本张清单（X17）}
-  - {id: rel.ed.derive-load, from: state.desk.edit.derive, to: model.pipeline.entry, type: queries, interface: if.model.loadModel, description: 编辑会话的派生向 loadModel 入口取：各张草图序列化为 sketches/<mount>.yaml，与 system.yaml、持久草图、引用的外部模块一起加载成设计的索引}
+  - {id: rel.ed.derive-load, from: state.desk.edit.derive, to: model.api, type: queries, interface: if.model.loadModel, description: 编辑会话的派生向 loadModel 入口取：各张草图序列化为 sketches/<mount>.yaml，与 system.yaml、持久草图、引用的外部模块一起加载成设计的索引}
   - {id: rel.ed.derive-edit, from: state.desk.edit.derive, to: model.intent.edit, type: queries, description: 编辑会话的派生向草图编辑取：sketchText：草图交给加载流水线}
   # ── 接入层：草图写回 ──
   - { id: rel.ed.sketch-types, from: access.writer.sketch, to: model.types, type: queries, description: 草图写回向类型与 Schema 取：写回草图时调用 designSketchPath / isSketchFile 定位与识别草图文件 }
@@ -376,7 +376,7 @@ relations:
   - {id: rel.v4.sketch-layout-model, from: state.layout.sketch, to: model.intent.edit.layout, type: queries, description: 草图布局向位置与引用节点取：gridLayout、referenceNodes、foldReference：按中心区可用区域的初始网格、引用节点与引用列的重心}
   - {id: rel.v4.sketch-layout-locate, from: state.layout.sketch, to: model.intent.edit.locate, type: queries, description: 草图布局向草图寻址与 ID 生成取：locateAll：本层模块}
   - {id: rel.v4.versions-lineage, from: state.desk.versions, to: model.intent.check, type: queries, description: 版本与对比基线（desk.versions）向草图核验与生命周期取：parseDesignSketches、sketchLineage：设计版本的差异按血缘表述（X11）}
-  - {id: rel.v2.writer-entry, from: access.writer.sketch, to: model.pipeline.entry, type: queries, description: 草图写回向 loadModel 入口取：按设计写回时以当前版本为校验的引用范围（loadModel）}
+  - {id: rel.v2.writer-entry, from: access.writer.sketch, to: model.api, type: queries, description: 草图写回向 loadModel 入口取：按设计写回时以当前版本为校验的引用范围（loadModel）}
 
 interfaces:
   - id: if.intent.applyEdit

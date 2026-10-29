@@ -150,9 +150,9 @@ describe('§6.4 源代码验收', () => {
     expect(again.desk.levelId.value).toBe('present')
   })
 
-  it('4. 选中「加载流水线」：面板显示入口与导出，loadModel 与描述的接口对上，对不上的分组列出', async () => {
-    const { desk, panel } = await open('h5p-arch-desk', '/p/h5p-arch-desk?level=model&sel=m:model.pipeline')
-    expect(desk.files.entryOf('model.pipeline')).toEqual({ file: 'src/model/index.ts', via: 'index' })
+  it('4. 选中「模型层入口」：面板显示入口与导出，loadModel 与描述的接口对上，对不上的分组列出', async () => {
+    const { desk, panel } = await open('h5p-arch-desk', '/p/h5p-arch-desk?level=model&sel=m:model.api')
+    expect(desk.files.entryOf('model.api')).toEqual({ file: 'src/model/index.ts', via: 'entry' })
     await settle()
     // G11（V15c）：入口文件并入「源代码文件」节（fold），入口导出折叠，展开再断言
     await expand(panel, '源代码文件')

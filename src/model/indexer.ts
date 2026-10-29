@@ -2,7 +2,7 @@
  * Indexer：把校验后的模型整理成按 ID 查询的结构。输入必须来自 validate()。
  */
 import type { ArchModel, ModelIndex, ModuleEntity } from './types'
-import { messagesOf } from './scenario/steps'
+import { messagesOf } from './scenario/semantics'
 
 export function buildIndex(model: ArchModel): ModelIndex {
   const rootId = model.system.id

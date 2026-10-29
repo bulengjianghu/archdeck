@@ -166,7 +166,7 @@ describe('§6.2 运行视角验收', () => {
   name: 不一致的步骤
   steps:
     - call: {from: model.diff, to: access.lint, relation: rel.ad.list-fetch}
-    - call: {from: model.diff, to: model.evolution}
+    - call: {from: model.pipeline, to: model.projector}
     - call: {from: access.lint, to: access.deps, relation: rel.bad.impl}
 `,
     }

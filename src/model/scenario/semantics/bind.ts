@@ -5,9 +5,9 @@
  * 两者可能写在不同深度，所以「对得上」指关系两端分别是消息两端自身或其祖先（参与者只能是它自己）。
  * 方向：运行时关系的箭头是控制流方向（ADR-0022），call / async 与关系同向；return 与关系相反。
  */
-import { RUNTIME_RELATION_TYPES, relationMode } from '../types'
-import type { ModelIndex, RelationEntity } from '../types'
-import type { MessageEnds, Binding } from './types'
+import { RUNTIME_RELATION_TYPES, relationMode } from '../../types'
+import type { ModelIndex, RelationEntity } from '../../types'
+import type { MessageEnds, Binding } from '../types'
 
 export { RUNTIME_RELATION_TYPES }
 

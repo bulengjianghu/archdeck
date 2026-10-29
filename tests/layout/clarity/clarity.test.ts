@@ -180,8 +180,9 @@ const CEILING: Record<(typeof PROJECTS)[number], Counts> = {
   h5player: { overlap: 93, arrows: 1, crossNode: 2, labels: 0, hug: 18, onFrame: 0 },
   'media-web-player': { overlap: 23, arrows: 0, crossNode: 7, labels: 2, hug: 5, onFrame: 0 },
 }
+// 第十五轮：模型层新增两个第二级模块（模型层入口、场景语义，ADR-0051），无代码事实的布局重合 38 → 39
 const BARE: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 38, arrows: 0, crossNode: 3, labels: 0, hug: 6, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 39, arrows: 0, crossNode: 3, labels: 0, hug: 6, onFrame: 0 },
   h5player: { overlap: 96, arrows: 0, crossNode: 0, labels: 3, hug: 13, onFrame: 0 },
   'media-web-player': { overlap: 35, arrows: 0, crossNode: 1, labels: 0, hug: 6, onFrame: 0 },
 }

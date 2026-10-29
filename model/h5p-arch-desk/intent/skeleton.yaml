@@ -197,7 +197,7 @@ sketch:
       order: 4
       abstraction: 关于**被描述系统**的知识，脱离工作台仍成立：输入描述、输出数据，不依赖 Vue / DOM / 布局库，可在 Node 中纯输入输出测试
       responsibility: 把多个描述文件变成校验过的模型与索引（含参与者与场景），按层次投影出要画的节点与边，把场景展开、按层次投影成回放帧与时序模型，并回答关于被描述系统的架构查询（最近存在 / 可见的祖先、本层的下一步、到达某帧需要的分支选择、谁参与了哪一步）。
-      includes: [ 文件格式与类型, 解析与合并, 引用校验, 索引, 层次投影, 场景展开与投影, 架构查询, 版本对比, 源码归属, 架构治理, 返工清单 ]
+      includes: [ 文件格式与类型, 解析与合并, 引用校验, 索引, 场景语义, 层次投影, 场景展开与投影, 架构查询, 版本对比, 源码归属, 架构治理, 返工清单, 模型层入口 ]
       excludes: [ Vue, DOM, elkjs, 文件系统 ]
       mayDependOn: []
       entry: src/model/index.ts
@@ -212,18 +212,29 @@ sketch:
           name: 加载流水线
           kind: subsystem
           role: core
-          responsibility: 文本 → 模型 → 索引：Loader 解析与单文件格式检查，Validator 跨文件引用检查，Indexer 建查询结构；入口 loadModel 串起三步并汇总问题。模块、关系与场景走同一条流水线。
+          responsibility: 文本 → 模型 → 索引：Loader 解析与单文件格式检查，Validator 跨文件引用检查，Indexer 建查询结构；模块、关系与场景走同一条流水线。各步自报问题，汇总在模型层入口。
+        - id: model.api
+          name: 模型层入口
+          kind: subsystem
+          role: core
+          responsibility: 模型层对外的唯一入口：loadModel 串起 load → validate → buildIndex 并汇总问题，其余能力按层再导出（投影、场景、归属、治理、返工、确认、演化、意图、对比）。只有导出面与串接，不含知识，是四层里的 L4 交付层（ADR-0051）。
+          entry: src/model/index.ts
         - id: model.projector
           name: Projector 层次投影
           kind: subsystem
           role: core
           responsibility: 给定当前父模块，算出这一层的节点、直接边、聚合边、边界节点、外部参与者；子模块都是层时算出分层总览（带、核心模块、核心跨层边；临时展开的层全部子模块按核心模块露出，O6）。
           docRefs: [ docs/01-requirements.md ]
+        - id: model.scenario-semantics
+          name: 场景语义（步骤与回放计划）
+          kind: subsystem
+          role: core
+          responsibility: 把场景文本变成可信、可回放的语义模型：遍历步骤树、把消息绑定到关系、展开成回放计划（帧树，alt 处分叉）；回答「这个场景按书写顺序会发生什么」。加载流水线的校验与建索引只依赖这一半，不依赖场景投影；四层划分里属于 L2 描述层（ADR-0051）。
         - id: model.scenario
           name: 场景投影
           kind: subsystem
           role: core
-          responsibility: 运行视角的核心规则：把场景的步骤树展开成回放计划（帧树，alt 处分叉），按已选分支求出回放路径，再按当前层次投影——每帧落到本层哪条边（本层没有视图边时为「经由上层关系」或「结构中未建模」）、哪个节点（内部活动）或不可见，合并出本层的可见消息；产出本层的时序模型与场景所在层次；回答场景相关的架构查询：本层的下一步 / 上一步、到达某帧需要的分支选择、某个模块 / 关系 / 边在本场景中参与了哪些步骤。
+          responsibility: 运行视角的投影规则：读场景语义（回放计划与绑定），按已选分支求出回放路径，再按当前层次投影——每帧落到本层哪条边（本层没有视图边时为「经由上层关系」或「结构中未建模」）、哪个节点（内部活动）或不可见，合并出本层的可见消息；产出本层的时序模型与场景所在层次；回答场景相关的架构查询：本层的下一步 / 上一步、到达某帧需要的分支选择、某个模块 / 关系 / 边在本场景中参与了哪些步骤。
           principle: |
             - **术语**：**步骤**是描述里的树（消息步骤为叶子，组合步骤为容器，时序图上画成组合框）；**帧**是一条消息步骤展开后的回放单位；
               **回放计划**是展开后的帧树；**回放路径**是按已选分支走出的线性帧序列；**可见消息**是本层投影后合并出的单步单位，一条覆盖一段连续的帧。
@@ -317,13 +328,13 @@ sketch:
     - { id: rel.gv.model-source, from: model.governance, to: model.source, type: queries }
     - { id: rel.gv.model-types, from: model.governance, to: model.types, type: queries }
     - { id: rel.gv.pipeline-rules, from: model.pipeline, to: model.types, type: queries }
-    - { id: rel.gv.agent-pipeline, from: access.agent, to: model.pipeline, type: queries }
+    - { id: rel.gv.agent-pipeline, from: access.agent, to: model.api, type: queries }
     - { id: rel.gv.agent-types, from: access.agent, to: model.types, type: queries }
     - { id: rel.gv.source-health, from: access.model-source, to: model.rework, type: queries }
     - { id: rel.gv.desk-rework, from: state.desk, to: model.rework, type: queries }
     - { id: rel.gv.agent-rework, from: access.agent, to: model.rework, type: queries }
     - { id: rel.gv.rework-source, from: model.rework, to: model.source, type: queries }
-    - { id: rel.gv.rework-scenario, from: model.rework, to: model.scenario, type: queries }
+    - { id: rel.gv.rework-scenario, from: model.rework, to: model.scenario-semantics, type: queries }
     - { id: rel.gv.rework-types, from: model.rework, to: model.types, type: queries }
     - { id: rel.gv.store-reader, from: access.governance-store, to: access.reader, type: queries }
     - { id: rel.gv.evolution-types, from: model.evolution, to: model.types, type: queries }

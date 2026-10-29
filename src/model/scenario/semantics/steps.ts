@@ -1,5 +1,5 @@
 /** 步骤树的遍历：按书写顺序访问消息步骤，ref 进入被引用的场景（遇到循环引用即停）。 */
-import type { MessageStep, ScenarioEntity, Step } from '../types'
+import type { MessageStep, ScenarioEntity, Step } from '../../types'
 
 export function forEachStep(steps: readonly Step[], visit: (s: Step) => void): void {
   for (const s of steps) {

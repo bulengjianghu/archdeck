@@ -27,8 +27,8 @@ rules:
       exposes: [entry]
       reason: 源码归属只经 src/model/source/index.ts 访问，glob、ownership、resolve 是它的内部拆分（types.ts 属于契约「类型与 Schema」，U10）
     - module: model.scenario
-      exposes: [entry, src/model/scenario/steps.ts]
-      reason: 场景投影只经入口访问；Indexer 直达 steps.ts 取 messagesOf——场景入口再导出的 level.ts / sequence.ts 依赖 indexer，经入口会成 indexer ↔ scenario 的环，而 steps.ts 只依赖类型
+      exposes: [entry, src/model/scenario/semantics/index.ts]
+      reason: 场景投影只经入口访问；加载流水线（Indexer、Validator）直达语义半区 semantics/index.ts（步骤、绑定、回放计划）——投影入口再导出的 level.ts / sequence.ts 依赖 indexer，经入口会成 indexer ↔ scenario 的环，而语义半区只依赖类型。四层划分里语义半区是 L2 描述层，投影是 L3
     - module: model.governance
       exposes: [entry]
       reason: 架构治理只经 src/model/governance/index.ts 访问

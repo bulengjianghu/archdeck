@@ -25,7 +25,7 @@ import { LEGACY_VIAS, isCallLike, isCallbackVia, isUnclassified, parseVia, relat
 /** 问题消息里的类型名 */
 const TYPE_NAMES: Record<string, string> = { queries: '查询', commands: '委托', calls: '未分类关系', notifies: '通知', streams: '流' }
 import { buildIndex } from './indexer'
-import { bindRelation, forEachStep, mapChildren, planScenario, querySideEffects, syncMismatch } from './scenario'
+import { bindRelation, forEachStep, mapChildren, planScenario, querySideEffects, syncMismatch } from './scenario/semantics'
 
 export interface ValidateResult {
   model: ArchModel

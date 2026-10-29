@@ -21,7 +21,7 @@ scenario:
     - call: {from: state.desk.actions, to: state.transition.playback, label: transition(openScenario)：运行视角、停在开头、选中场景}
     - return: {from: state.transition.playback, to: state.desk.actions, label: 新的视图状态}
     - async: {from: state.desk.actions, to: state.desk.url-sync, label: 地址 = encode(新状态)，进浏览器历史, payload: ds.ViewState}
-    - call: {from: state.desk.projection, to: model.scenario.flatten, relation: rel.p2.projection-plan, label: planScenario：步骤树展开为回放计划}
+    - call: {from: state.desk.projection, to: model.scenario-semantics, relation: rel.p2.projection-plan, label: planScenario：步骤树展开为回放计划}
     - call: {from: state.desk.projection, to: model.projector.endpoints, label: projectLevel（舞台：补齐场景端点）}
     - call: {from: state.desk.projection, to: model.scenario.path, label: resolvePath}
     - call: {from: state.desk.projection, to: model.scenario.level, label: projectScenario：本层可见消息}

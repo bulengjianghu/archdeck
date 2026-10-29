@@ -26,8 +26,8 @@ modules:
     codeRefs: [src/components/PlayerBar.vue, src/components/BranchChooser.vue]
   - id: model.scenario
     name: 场景投影
-    abstraction: 按流水线单向切分：先算与层次无关的回放计划与路径，再按本层投影出可见消息与时序模型，查询都建在其上。
-    codeRefs: [src/model/scenario/index.ts]
+    abstraction: 只做投影：读场景语义（回放计划与绑定）算路径、按本层投影出可见消息与时序模型，查询都建在其上；投影不反向依赖加载流水线（ADR-0051）。
+    codeRefs: [src/model/scenario/index.ts, src/model/scenario/path.ts, src/model/scenario/level.ts, src/model/scenario/participation.ts, src/model/scenario/outline.ts, src/model/scenario/sequence.ts]
   - id: present.sequence
     name: 时序图
     abstraction: 按画面区块切分，交互集中一处转成 DeskState 操作；坐标全取时序图排布，自身不排布。
@@ -174,15 +174,14 @@ modules:
     codeRefs: [src/layout/sketch.ts]
 
   # ── 模型层 ──────────────────────────────────────────────
-  - id: model.scenario.flatten
-    name: 回放计划
-    parent: model.scenario
-    responsibility: 把步骤树展开成回放计划（帧树）：ref 内联子场景并记为 ref 组合框（F3）；loop 展开一遍并标注循环条件（F4）；par 各分支按书写顺序串行并标注并行（F5）；alt 处分叉为分支点，每个选项一棵子树（F6）。每帧带 ID、所在组合框路径，以及对应的交互关系（显式引用或按 S13 推断，标明是否推断）；步骤没写的接口与数据取自对应关系（返回只取接口），并标明继承（S14）。调用与显式返回配对（pairReturns，F7）：按书写顺序以栈匹配（call 与 async 入栈，写了显式返回的 async 同样配对），alt 各分支从进入分支点时的栈开始。
+  - id: model.scenario-semantics
+    name: 场景语义（步骤与回放计划）
+    abstraction: 把场景文本变成可信、可回放的语义模型：遍历步骤树、把消息绑定到关系、展开成回放计划（帧树）。加载流水线的 Validator / Indexer 只依赖这一半，不依赖场景投影；四层划分里属于 L2 描述层（ADR-0051）。把步骤树展开成回放计划（帧树）：ref 内联子场景并记为 ref 组合框（F3）；loop 展开一遍并标注循环条件（F4）；par 各分支按书写顺序串行并标注并行（F5）；alt 处分叉为分支点，每个选项一棵子树（F6）。每帧带 ID、所在组合框路径，以及对应的交互关系（显式引用或按 S13 推断，标明是否推断）；步骤没写的接口与数据取自对应关系（返回只取接口），并标明继承（S14）。调用与显式返回配对（pairReturns，F7）：按书写顺序以栈匹配（call 与 async 入栈，写了显式返回的 async 同样配对），alt 各分支从进入分支点时的栈开始。
     principle: |
       帧 ID = 场景 ID + 步骤 id；步骤没写 id 时用它在树中的路径（如 `sc.open#4.alt0.1`）（F2）。ref 内联时 ID 加上引用处前缀，同一子场景被引用两次也不冲突。
       绑定关系 bindRelation（S12、S13，ADR-0029）：显式引用优先；否则两端之间恰好一条与消息同向的交互关系（queries / commands / notifies / streams，迁移期的未分类同查询 / 委托；关系箭头是控制流方向，只有 return 反向比对，ADR-0022）即认定并标为推断，恰好连在两端上的优先于连在祖先上的；候选多条时消息形态与关系类型一致（查询与委托按 mode，通知一律 async，流不比）的恰好一条也认定（S19）；Validator 用同一个函数，校验与界面结果一致。
       查询有副作用 querySideEffects（U13，T0 裁决 14）：沿 alt 各选项展开全部线性帧序列（loop 一遍、par 串行、ref 内联，路径数有上限），从绑定到查询的一帧 A → B 起，闭包为其后发送方落在接收集合（从 B 的子树开始，闭包内每帧的接收方加入）的连续帧，到配对的 return 为止、没有显式返回时到第一条发送方不在集合中的帧为止；闭包里绑定到委托或通知的帧即副作用，一对（查询，副作用）一条。按场景判定，不按结构闭包。
-    codeRefs: [src/model/scenario/plan.ts, src/model/scenario/bind.ts, src/model/scenario/steps.ts]
+    codeRefs: [src/model/scenario/semantics/index.ts, src/model/scenario/semantics/steps.ts, src/model/scenario/semantics/bind.ts, src/model/scenario/semantics/plan.ts]
   - id: model.scenario.path
     name: 回放路径
     parent: model.scenario
@@ -271,13 +270,13 @@ relations:
   - {id: rel.p2.layoutsync-read, from: state.desk.projection, to: state.desk.layout-sync, type: streams, payload: [ds.LevelView], description: 层次视图（Ref）交给布局同步，变化触发布局，结果回填}
   - id: rel.p2.projection-plan
     from: state.desk.projection
-    to: model.scenario.flatten
+    to: model.scenario-semantics
     type: queries
     interface: if.model.planScenario
     payload: [ds.ScenarioPlan]
     description: 视图派生（核心与 desk.run）向回放计划取：打开场景时展开一次，与层次无关
   - {id: rel.p2.projection-path, from: state.desk.projection, to: model.scenario.path, type: queries, interface: if.model.resolvePath, payload: [ds.ScenarioPlan, ds.Frame, ds.RouteItem], description: 视图派生（核心与 desk.run）向回放路径取：已选分支变化时重算路径与路线（routeOf，F6f）}
-  - {id: rel.p8.projection-pairs, from: state.desk.projection, to: model.scenario.flatten, type: queries, interface: if.model.pairReturns, payload: [ds.ReturnPairs], description: 视图派生（核心与 desk.run）向回放计划取：打开场景时算一次调用与返回的配对（F7）}
+  - {id: rel.p8.projection-pairs, from: state.desk.projection, to: model.scenario-semantics, type: queries, interface: if.model.pairReturns, payload: [ds.ReturnPairs], description: 视图派生（核心与 desk.run）向回放计划取：打开场景时算一次调用与返回的配对（F7）}
   - {id: rel.p8.projection-emphasis, from: state.desk.projection, to: state.transition.selection, type: queries, interface: if.state.transition, payload: [ds.ViewState, ds.ScenarioLevelView, ds.SequenceModel, ds.ReturnPairs, ds.Emphasis], description: 视图派生（核心与 desk.run）向视角与选中规则取：selectedOf、emphasisOf：选中的对象与选中突出（V2、R15、R16）}
   - {id: rel.p12.selection-lanes, from: state.transition.selection, to: model.scenario.sequence, type: queries, interface: if.model.lanesOf, payload: [ds.SequenceModel], description: 视角与选中规则向时序模型取：选中模块、文件归属模块、关系两端、参与者在本层时序图中的泳道（R15、R16）}
   - id: rel.p2.projection-level
@@ -312,7 +311,7 @@ relations:
   - { id: rel.p2.level-edgeid, from: model.scenario.level, to: model.projector.collector, type: queries, description: 帧的层次投影向边汇总取：本层回放调用 mapEndpoint / viewNodeOf 与 lowestCommonAncestor 算帧对应的视图边，shelfOf 判共用件 }
   - {id: rel.p2.level-sequence, from: model.scenario.level, to: model.scenario.sequence, type: streams, payload: [ds.ScenarioLevelView], description: 本层的可见消息交给时序模型}
   - {id: rel.p8.sequence-hierarchy, from: model.scenario.sequence, to: model.projector.hierarchy, type: queries, interface: if.model.hierarchyKey, description: 时序模型向层次顺序与公共祖先取：参与者的层次排序键（P9）}
-  - {id: rel.p3.validator-bind, from: model.pipeline.validator, to: model.scenario.flatten, type: queries, description: Validator 向回放计划取：S5a / S13 与回放共用 bindRelation}
+  - {id: rel.p3.validator-bind, from: model.pipeline.validator, to: model.scenario-semantics, type: queries, description: Validator 向回放计划取：S5a / S13 与回放共用 bindRelation}
   - {id: rel.p2.level-lca, from: model.scenario.level, to: model.projector.hierarchy, type: queries, interface: if.model.lowestCommonAncestor, description: 帧的层次投影向层次顺序与公共祖先取：场景所在层次 = 帧端点的最近公共祖先}
   # 场景投影、时序图与视图状态转移补齐（K7）
   - {id: rel.p2.seqmodel-path, from: model.scenario.sequence, to: model.scenario.path, type: queries, description: 时序模型向回放路径取：resolvePath：按选择展开路径}
@@ -325,7 +324,7 @@ relations:
   - {id: rel.p8.canvas-route, from: state.layout.canvas, to: state.layout.runner, type: queries, description: 画布场景向布局入口与缓存取：outsideRoutes、edgeRoute、edgeLabel、edgeWeight、linkRoute、isBoundaryEdge：边的走线（框外元素的边按可见集分配轨道）、标签与线宽档}
   - { id: rel.p2.seqlayout-keys, from: state.layout.sequence, to: model.projector, type: queries, description: 时序图排布向 Projector 层次投影取：时序图布局调用 compareKeys 让泳道按层次键排序（L4） }
   - {id: rel.p8.stage-level, from: state.layout.stage, to: model.scenario.level, type: queries, description: 舞台叠加向帧的层次投影取：currentMessage、walkedCount：舞台叠加的当前一步与走过的步数}
-  - {id: rel.p2.url-plan, from: state.transition.url, to: model.scenario.flatten, type: queries, description: URL 编解码向回放计划取：planScenario、choiceList：地址里的分支选择编解码}
+  - {id: rel.p2.url-plan, from: state.transition.url, to: model.scenario-semantics, type: queries, description: URL 编解码向回放计划取：planScenario、choiceList：地址里的分支选择编解码}
   - {id: rel.p2.url-path, from: state.transition.url, to: model.scenario.path, type: queries, description: URL 编解码向回放路径取：resolvePath：恢复时校验选中的步骤}
   - {id: rel.p2.url-navigation, from: state.transition.url, to: state.transition.navigation, type: queries, description: URL 编解码向导航规则取：selectionExists、withLevel：恢复时校正层次与选中}
 
@@ -349,7 +348,7 @@ interfaces:
       // 解码即 transition(state, { type: 'restore', query }, ctx)：丢弃无效值，恢复到最接近的合法状态
   - id: if.model.planScenario
     name: planScenario
-    owner: model.scenario.flatten
+    owner: model.scenario-semantics
     signature: |
       planScenario(index: ModelIndex, scenarioId: string): ScenarioPlan
       bindRelation(index: ModelIndex, msg: { kind; from; to; relation? }):
@@ -357,7 +356,7 @@ interfaces:
     semantics: 纯函数；校验已保证 ref 无环，展开必然终止。
   - id: if.model.pairReturns
     name: pairReturns
-    owner: model.scenario.flatten
+    owner: model.scenario-semantics
     signature: |
       pairReturns(plan: ScenarioPlan): ReturnPairs   // F7：帧 ID ↔ 配对帧 ID
     semantics: 纯函数，与层次、已选分支无关；一条调用被多个分支中的返回回应时取书写顺序的第一个。

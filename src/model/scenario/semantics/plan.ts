@@ -5,9 +5,9 @@
  * - loop 展开一遍（F4）；par 各分支按书写顺序串行（F5）；alt 每个选项一棵子树（F6）；
  * - 每帧绑定对应的结构关系（bindRelation，S12、S13）；步骤没写的接口与数据取自对应关系（S14）。
  */
-import type { ModelIndex, Step } from '../types'
+import type { ModelIndex, Step } from '../../types'
 import { bindRelation } from './bind'
-import type { FragmentTag, Frame, BranchPoint, PlanNode, ScenarioPlan, ReturnPairs, QuerySideEffect } from './types'
+import type { FragmentTag, Frame, BranchPoint, PlanNode, ScenarioPlan, ReturnPairs, QuerySideEffect } from '../types'
 
 export function planScenario(index: ModelIndex, scenarioId: string): ScenarioPlan {
   const frames = new Map<string, Frame>()
