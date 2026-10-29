@@ -6,20 +6,19 @@ test('交互视角：类型行是纯图例（不再点击筛选），筛选在�
   await openDesk(page, '/p/h5p-arch-desk')
   const panel = page.getByRole('region', { name: '显示' })
   // ADR-0029 §3：三问四修饰——三个判断题定类型；类型行只读（L45：一行不兼两职）；修饰（机制、异步、拉取）与粗细在「四修饰」卡片（不可点击）
+  // L47（G14）：三问只列答案类型出现在画面上的——h5p 根层静息态没有流关系，第三问（流）不列
   const questions = panel.getByRole('list', { name: '三问定类型' })
-  await expect(questions.getByRole('listitem')).toHaveCount(3)
+  await expect(questions.getByRole('listitem')).toHaveCount(2)
   await expect(questions).toContainText('被调方拥有后果吗？否 → 查询')
   await expect(questions).toContainText('是：发起方知道接收方吗？知道 → 委托；不知道、一对多 → 通知')
-  await expect(questions).toContainText('传的是连续数据吗？是 → 流')
   const reading = panel.getByLabel('四修饰')
   await expect(reading).toContainText('直接')
-  await expect(reading).toContainText('端口')
   await expect(reading).toContainText('异步')
-  await expect(reading).toContainText('拉取')
   await expect(reading).toContainText('≥5')
   await expect(reading.getByRole('button')).toHaveCount(0)
-  // L12：端口的示意带插座记号
-  await expect(reading.locator('marker.socket-marker')).toHaveCount(1)
+  // L47（G14）：机制标签行只列本层画面出现的——h5p 根层静息态只有跨进程；没有经端口机制的关系 → 端口示意（带插座）不列（h5player app 层有，ports.spec 验）
+  await expect(panel.getByTestId('legend-mechanisms')).toContainText('跨进程')
+  await expect(reading.locator('marker.socket-marker')).toHaveCount(0)
   // ADR-0035：代码事实写在标签位，不再有「实线 = 已证实」；线型只有实线 = 交互、虚线 = 依赖（共享组）
   await expect(panel.getByText('实线 = 已证实', { exact: false })).toHaveCount(0)
   await expect(panel.getByRole('button', { name: /代码事实 · 标签/ })).toBeVisible()
@@ -75,7 +74,9 @@ test('结构视角（L19、L21、L45）：图例整组换成「依赖 · 形态�
     await expect(panel).toContainText(t)
   await expect(panel.getByTestId('bundle-note')).toContainText('一对模块之间画一条束，线宽按束内元素级边条数；形态不止一种时标 ×N 元素')
   await expect(panel.getByLabel('表面元素四类')).toContainText('端口')
-  await expect(panel).toContainText('越过入口')
+  // L47（G14）：表面一段按本层角标出现——h5p 根层有带 W 的节点（表面 W 行列），没有越过入口的束（该行不列）
+  await expect(panel).toContainText('表面 W')
+  await expect(panel).not.toContainText('越过入口')
   await expect(panel.getByText('关系筛选')).toHaveCount(0)
   await expect(panel.getByText('代码事实与组装')).toHaveCount(0)
   // L45：开关迁到设置块「结构筛选与表面」组；图例组标题旁互指
@@ -97,7 +98,7 @@ test('结构视角（L19、L21、L45）：图例整组换成「依赖 · 形态�
   await panel.getByRole('switch', { name: '只看未解释' }).check()
   await expect(unc).toContainText(/已解释的束 \d+ 条已收起/)
   await panel.getByRole('switch', { name: '总是展开表面' }).check()
-  await expect(panel.getByTestId('cross-count')).toContainText(/一端是边界节点的束 \d+ 条折叠/)
+  // L47（G14）：跨界折叠的行只在本层有折叠的跨界束时列出——h5p 根层没有，不断言计数（行的显隐逻辑见单测夹具与 legend.spec）
   await panel.getByRole('button', { name: /^显示/ }).click()
   await expect(panel.getByRole('button', { name: /^显示/ })).toContainText('只引类型已显示 · 只看交互使用 · 只看未解释 · 总是展开表面')
   await panel.getByRole('button', { name: /^显示/ }).click()
@@ -110,7 +111,9 @@ test('交互视角「代码事实 · 标签」组：标签词表与承载叠加�
   const panel = page.getByRole('region', { name: '显示' })
   await expect(panel.getByTestId('carrier-legend')).toContainText('承载叠加')
   await expect(panel.getByTestId('carrier-legend')).toContainText('缺段')
-  for (const t of ['未证实', '违规', '未解释']) await expect(panel.locator(`[data-tag="${t}"]`)).toBeVisible()
+  // L47（G14）：只列本层静息态画面出现的标签词——h5p 根层有违规与未解释，没有未证实的交互（该行不列，h5player infra 层有）
+  for (const t of ['违规', '未解释']) await expect(panel.locator(`[data-tag="${t}"]`)).toBeVisible()
+  await expect(panel.locator('[data-tag="未证实"]')).toHaveCount(0)
   // L45：代码事实与组装的开关在设置块的「代码事实与组装」组
   const settings = panel.getByLabel('设置', { exact: true })
   await expect(settings.getByRole('switch', { name: '代码事实' })).toBeChecked()

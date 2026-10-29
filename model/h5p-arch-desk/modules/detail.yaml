@@ -187,8 +187,8 @@ modules:
   - id: present.canvas.legend
     name: 显示面板（显示设置与图例）
     parent: present.canvas
-    responsibility: 画布右下角的「显示」面板，分上「设置」下「图例」两块；图例行只读、一行不兼两职，开关与筛选全在设置块、两侧互指（L45，第十五轮 G13）；图例按视角整组替换、不混列（L19、D-26，ADR-0031 裁决 D）。设置块按对象分组（NodeSettings 为容器）：边界与现状（边界节点、只看现状）；关系筛选（交互视角，L8，邐藏的类在画布角留痕）；代码事实与组装（交互视角，K9、O12）；结构筛选与表面（结构视角：只引类型 / 只看交互使用 / 只看未解释 / 总是展开表面，带收起计数）；演化（热度、时间耦合，J5）；运行视角只有交互关系显示方式（V8）与一行 L9 说明。图例块：关系 · 三问四修饰（类型行纯图例，迁移期未分类单列）、节点、代码事实 · 标签、组装、演化 · 角标与波浪线（各组标题旁标对应开关）；结构视角换成结构视图的几组（子模块「结构视图图例」）；运行视角为回放。共享通道的说明三处同文（L18，SharedLegend）。一行一项，示意线由 LineSwatch 按与边组件共用的 edgeStyle 画出，与画布同款。折叠时摘要列出非默认的设置（运行视角缺省折叠，摘要总是「交互关系：<方式>」）；面板展开与各组折叠按视角记在本机（useDisplayPrefs），运行视角默认只展开「回放」。
-    abstraction: 图例按视角整组替换、不混列，每组一个子组件；示意线与画布共用同一套样式映射。
+    responsibility: 画布右下角的「显示」面板，分上「设置」下「图例」两块；图例行只读、一行不兼两职，开关与筛选全在设置块、两侧互指（L45，第十五轮 G13）；图例按视角整组替换、不混列（L19、D-26，ADR-0031 裁决 D）。设置块按对象分组（NodeSettings 为容器）：边界与现状（边界节点、只看现状）；关系筛选（交互视角，L8，邐藏的类在画布角留痕）；代码事实与组装（交互视角，K9、O12）；结构筛选与表面（结构视角：只引类型 / 只看交互使用 / 只看未解释 / 总是展开表面，带收起计数）；演化（热度、时间耦合，J5）；运行视角只有交互关系显示方式（V8）与一行 L9 说明。图例块：关系 · 三问四修饰（类型行纯图例，迁移期未分类单列）、节点、代码事实 · 标签、组装、演化 · 角标与波浪线（各组标题旁标对应开关）；结构视角换成结构视图的几组（子模块「结构视图图例」）；运行视角为回放。共享通道的说明三处同文（L18，SharedLegend）。图例按上下文显示（L47，第十五轮 G14）：这里调用 state.desk.legend 算一次出现集合传给各组，没出现的记号行不列，临时（聚焦 / 悬停 / 回放才出现）记号归各组尾部「临时可见」小节常列。一行一项，示意线由 LineSwatch 按与边组件共用的 edgeStyle 画出，与画布同款。折叠时摘要列出非默认的设置（运行视角缺省折叠，摘要总是「交互关系：<方式>」）；面板展开与各组折叠按视角记在本机（useDisplayPrefs），运行视角默认只展开「回放」。
+    abstraction: 图例按视角整组替换、不混列，每组一个子组件；示意线与画布共用同一套样式映射；出现集合在状态层一处派生（L47）。
     codeRefs: [src/components/DisplayPanel.vue, src/components/display/**]
   - id: present.canvas.legend.assembly
     name: 组装开关与图例
@@ -226,6 +226,12 @@ modules:
     responsibility: 由视图状态与模型派生要画的数据（全部是 computed，调用纯函数）。核心平铺在 DeskState 上：层次视图与坐标、选中（selectedOf）、视角。运行视角的派生归 desk.run（ADR-0013）：回放计划、调用与返回的配对、回放路径与路线、本层的帧投影与可见消息、选中突出（emphasisOf）、舞台叠加与参与节点、时序模型与时序图坐标，导航树用的步骤大纲与参与模块，以及场景列表（全部场景的触发者与消息数）与当前场景的触发者、ref 引用与被引用（呈现层不再自己遍历场景）。源码与版本的派生另见 desk.files、desk.versions。
     abstraction: 全部是调用纯函数的 computed，只读不写；核心平铺在 DeskState 上，运行视角的派生收进 desk.run。
     codeRefs: [src/state/desk/run.ts]
+  - id: state.desk.legend
+    name: 图例的出现集合派生（desk.legend，L47）
+    parent: state.desk
+    responsibility: 「显示」面板图例的出现集合（L47，第十五轮 G14）：按当前视角与层次的静息态画面算画布上出现的记号——交互视角与运行视角扫层次视图的边与节点（边界边聚焦才画、不计入，只出现在边界边上的类型单列临时键）、代码事实读 K9 的本层投影、组装读 O12 的投影、热度读 J5 的本层投影；结构视角读与画布同一份 structureDisplay 过滤后的束（形态、档、醒目度、收起计数、越过入口）。没有代码事实等加载态按空集合处理。呈现层（DisplayPanel）实例化一次、把集合传给各图例组；组结构与行序按固定词表，行只显隐、不重排；聚焦 / 悬停 / 回放才出现的临时记号归各组尾部固定的「临时可见」小节常列，不进出现集合（reviews/r3.md 的 G14 补充口径）。
+    abstraction: 一处派生（唯一 computed），图例组件不再各自判断记号是否出现。
+    codeRefs: [src/state/desk/legend.ts]
   - id: state.desk.actions
     name: dispatch 与操作
     parent: state.desk
@@ -327,6 +333,7 @@ relations:
   - {id: rel.ad.flow-nodes, from: present.canvas.flow, to: present.canvas.nodes, type: commands, description: 视图转换与交互交给节点组件：渲染 ModuleNode、BoundaryNode、BandNode、CoreNode}
   - {id: rel.ad.flow-edges, from: present.canvas.flow, to: present.canvas.edges, type: commands, description: 视图转换与交互交给边组件：渲染 RouteEdge}
   - { id: rel.ad.flow-legend, from: present.canvas.flow, to: present.canvas.legend, type: commands, description: 视图转换与交互交给显示面板（显示设置与图例）：画布渲染右下角的图例与显示面板（DisplayPanel） }
+  - { id: rel.ad.legend-presence, from: present.canvas.legend, to: state.desk.legend, type: queries, payload: [ds.ViewState, ds.LevelView], description: 显示面板向图例的出现集合派生取：按当前视角与层次的静息态画面算出现的记号集合（L47），传给各图例组过滤行 }
   - { id: rel.ad.legend-edge-style, from: present.canvas.legend, to: present.canvas.edges, type: queries, description: 显示面板（显示设置与图例）向边组件取：图例的示意线调用画布边的 edgeStyle 与箭头、插座组件，按同一套颜色、线宽、线型与查询的半透明绘制（L10、L12） }
   - {id: rel.ad.panel-module, from: present.panel.dispatch, to: present.panel.module, type: commands, description: 面板分派交给模块面板：渲染 ModulePanel}
   - {id: rel.ad.panel-relation, from: present.panel.dispatch, to: present.panel.relation, type: commands, description: 面板分派交给关系面板：渲染 RelationPanel}

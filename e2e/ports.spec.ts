@@ -30,8 +30,9 @@ test('L13、V2、K11：单击端口记号出端口面板，URL 带 sel=p:，单�
 })
 
 test('L10、L12：图例示意与画布同一套样式——查询半透明、线宽与委托相同（只「淡」不「细」）；端口示意带插座', async ({ page }) => {
-  // 迁移（T2）前描述里还没有查询 / 委托：在图例上验（示意与画布共用 edgeStyle）；画布上的同一映射见单测 routeEdge
-  await openDesk(page, '/p/h5player?level=infra')
+  // T2 迁移后 app 层有真实的查询 / 委托：在图例上验（示意与画布共用 edgeStyle）；画布上的同一映射见单测 routeEdge
+  // L47（G14）：换到 app 层量——infra 层静息态没有经端口机制的边，端口示意（带插座）不列
+  await openDesk(page, '/p/h5player?level=app')
   // L45（第十五轮 G13）：类型行是纯图例（.item，不再是可点击的 .type 按钮），示意仍与画布同一套样式
   const types = page.getByRole('region', { name: '显示' }).locator('.type-list')
   const swatch = (label: string) => types.locator('.item', { hasText: label }).first().locator('svg.swatch line').first()
@@ -42,7 +43,9 @@ test('L10、L12：图例示意与画布同一套样式——查询半透明、�
   await expect(q).toHaveCSS('opacity', '0.6')
   await expect(c).toHaveCSS('opacity', '1')
   expect(await q.getAttribute('stroke-width')).toBe(await c.getAttribute('stroke-width'))
-  await expect(swatch('未分类')).toHaveAttribute('stroke', 'var(--rel-calls)')
+  // L47（G14）：只列本层画面出现的类型——app 层没有未分类与流（行按词表保留、只显隐）
+  await expect(types.locator('.item', { hasText: '未分类' })).not.toBeVisible()
+  await expect(types.locator('.item', { hasText: '流 =' })).not.toBeVisible()
   await expect(page.getByLabel('四修饰').locator('marker.socket-marker')).toHaveCount(1)
 })
 

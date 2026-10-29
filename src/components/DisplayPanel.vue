@@ -8,12 +8,16 @@
  *   组标题旁标注对应开关（互指）。时序图的箭头约定不在这里，在副栏时序图标题栏的「图例」里。
  * - 图例按视角整体替换、不混列（L19、D-26）：交互视角为关系、代码事实、组装、演化各组；结构视角为「依赖 · 形态与档」、
  *   规则叠加、指标与共用件；运行视角为回放。共享通道（选中、变淡、违规、环、演化、线宽、线型、标签位）三处同文（SharedLegend，L18、ADR-0035）。
+ * - 图例按上下文显示（L47，第十五轮 G14）：每一组只列当前视角 + 当前层次静息态画面出现的记号（出现集合由 state/desk/legend
+ *   一处派生，这里算一次往下传），没出现的记号行不列；组结构与行序按固定词表、行只显隐不重排；临时（聚焦 / 悬停 / 回放才出现）
+ *   记号归各组尾部固定的「临时可见」小节常列。
  * - 折叠时标题后摘要列出非默认的设置；面板展开与各组折叠按视角记在本机（useDisplayPrefs，运行视角默认只展开「回放」）。
  * - 隐藏画布内容的开关在画布角留痕计数、单击可撤销（GraphCanvas 的 corner，L45）。
  */
 import { computed, watch } from 'vue'
 import { RELATION_TYPES } from '@/model'
 import { useDesk } from '@/state/inject'
+import { createLegendPresence } from '@/state/desk/legend'
 import { useStage } from './stage/useStageDisplay'
 import { useDisplayPrefs } from './display/useDisplayPrefs'
 import { HEAT_LABEL, MODE_LABEL } from './display/labels'
@@ -36,6 +40,15 @@ const run = computed(() => desk.perspective.value === 'run')
 /** 结构视角（ADR-0031）：图例整组换成结构视图的 */
 const structure = computed(() => desk.perspective.value === 'structure')
 const { open, groups, toggleOpen, toggleGroup, prefs } = useDisplayPrefs(desk.perspective, desk.project)
+/** L47：图例的出现集合——按当前视角 + 层次的静息态画面算一次，各图例组只显隐行 */
+const presence = createLegendPresence({
+  state: desk.state,
+  index: desk.index,
+  view: desk.view,
+  facts: desk.facts,
+  evolution: desk.evolution,
+  filter: prefs,
+})
 /** E-2：编辑态下草图不对应代码——隐藏代码事实与演化两组；进入编辑态时收起面板，不挡住编辑落点 */
 const editing = computed(() => desk.edit.active.value)
 watch(editing, on => on && open.value && toggleOpen(), { immediate: true })
@@ -79,26 +92,26 @@ const summary = computed(() => {
     <div v-if="open" class="body">
       <NodeSettings :run="run" :structure="structure" :editing="editing" />
       <div class="block-label">图例</div>
-      <StructureLegend v-if="structure" :open="groups.struct" @toggle="toggleGroup('struct')" />
-      <RelationLegend v-else :run="run" :open="groups.rel" @toggle="toggleGroup('rel')" />
-      <DisplayGroup title="节点" :open="groups.node" @toggle="toggleGroup('node')">
+      <StructureLegend v-if="structure" :open="groups.struct" :presence="presence" @toggle="toggleGroup('struct')" />
+      <RelationLegend v-else :run="run" :open="groups.rel" :presence="presence" @toggle="toggleGroup('rel')" />
+      <DisplayGroup v-if="presence.has('node:module')" title="节点" :open="groups.node" @toggle="toggleGroup('node')">
         <div class="item inline">
           <span><span class="box" />模块</span>
-          <span><span class="box stack" />可下钻</span>
-          <span><span class="box dashed" />目标态 / 外部</span>
+          <span v-if="presence.has('node:drill')"><span class="box stack" />可下钻</span>
+          <span v-if="presence.has('node:outer')"><span class="box dashed" />目标态 / 外部</span>
         </div>
       </DisplayGroup>
       <template v-if="structure">
-        <RuleLegend :open="groups.rule" @toggle="toggleGroup('rule')" />
-        <MetricLegend :open="groups.metric" @toggle="toggleGroup('metric')" />
+        <RuleLegend :open="groups.rule" :presence="presence" @toggle="toggleGroup('rule')" />
+        <MetricLegend :open="groups.metric" :presence="presence" @toggle="toggleGroup('metric')" />
       </template>
       <template v-else-if="!run && !editing">
-        <FactsLegend :open="groups.facts" @toggle="toggleGroup('facts')" />
-        <AssemblyLegend :open="groups.asm" @toggle="toggleGroup('asm')" />
+        <FactsLegend :open="groups.facts" :presence="presence" @toggle="toggleGroup('facts')" />
+        <AssemblyLegend :open="groups.asm" :presence="presence" @toggle="toggleGroup('asm')" />
       </template>
-      <EvolutionLegend v-if="!run && !editing" :open="groups.evo" @toggle="toggleGroup('evo')" />
+      <EvolutionLegend v-if="!run && !editing" :open="groups.evo" :presence="presence" @toggle="toggleGroup('evo')" />
       <ReplayLegend v-else :open="groups.play" @toggle="toggleGroup('play')" />
-      <SharedLegend :open="groups.shared" @toggle="toggleGroup('shared')" />
+      <SharedLegend :open="groups.shared" :presence="presence" :structure="structure" @toggle="toggleGroup('shared')" />
     </div>
   </div>
 </template>

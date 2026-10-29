@@ -4,6 +4,8 @@
  * 「热度」单选与「时间耦合」开关在设置块的「演化」组（第十五轮 G13 迁出，缺省关闭、按项目记在本地），组标题旁互指；
  * 时间耦合的波浪线按需显示（F7、L44：不进布局，悬停或选中一端时画出），常显的只剩画布角计数与面板清单。
  * 没有演化事实时置灰并写明原因（J1）。热度只用角标、耦合只用波浪线（L10）。
+ * - 图例按上下文显示（L47，G14）：本层有热度角标才列热度行（出现集合由 state/desk/legend 一处派生）；
+ *   波浪线是聚焦 / 悬停才画出的临时记号（F7）——归尾部「临时可见」小节常列，不随出现显隐。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -11,7 +13,7 @@ import DisplayGroup from './DisplayGroup.vue'
 import LineSwatch from './LineSwatch.vue'
 import { EVOLUTION_HINT, HEAT_LABEL } from './labels'
 
-defineProps<{ open: boolean }>()
+defineProps<{ open: boolean; presence: Set<string> }>()
 const emit = defineEmits<{ toggle: [] }>()
 const desk = useDesk()
 
@@ -35,11 +37,16 @@ const hint = computed(() => {
       </div>
       <template v-else>
         <div v-if="desk.toggles.heat !== 'off'" class="item inline">
-          <span><span class="heat tier-1" />低</span>
-          <span><span class="heat tier-2" />中</span>
-          <span><span class="heat tier-3" />高（{{ HEAT_LABEL[desk.toggles.heat] }}热度，本层分档）</span>
+          <template v-if="presence.has('evo:heat')">
+            <span><span class="heat tier-1" />低</span>
+            <span><span class="heat tier-2" />中</span>
+            <span><span class="heat tier-3" />高（{{ HEAT_LABEL[desk.toggles.heat] }}热度，本层分档）</span>
+          </template>
+          <span v-else class="muted">本层没有热度角标（{{ HEAT_LABEL[desk.toggles.heat] }}热度，本层分档）</span>
         </div>
+        <!-- L47：临时可见——波浪线是聚焦 / 悬停才画出的临时记号（F7、L44），常列、不随出现显隐 -->
         <template v-if="desk.toggles.coupling">
+          <div class="section-label">临时可见 · 悬停或选中一端时画出</div>
           <div class="item">
             <span class="sw"><LineSwatch :look="{ temp: 'couple' }" pill /></span>
             <span>波浪线 ×N = 同一提交里一起改了 N 次；不进布局，悬停或选中一端时画出（F7），清单在面板</span>

@@ -62,6 +62,9 @@ test('§6.28-4：「混合」只出现在同步 / 异步不一致的束上', asy
 
 test('L26（ADR-0041）：显示面板图例有机制标签一行与两段示意', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?level=kit')
-  await expect(page.getByTestId('legend-mechanisms')).toContainText('跨进程')
+  // L47（G14）：机制标签行只列本层画面出现的——kit 层有回调 / 端口 / 总线 / 事件，跨进程的边静息态不画（不列）
+  await expect(page.getByTestId('legend-mechanisms')).toContainText('总线')
+  await expect(page.getByTestId('legend-mechanisms')).toContainText('端口')
+  await expect(page.getByTestId('legend-mechanisms')).not.toContainText('跨进程')
   await expect(page.getByTestId('legend-pill').locator('.tag.warn')).toBeAttached()
 })
