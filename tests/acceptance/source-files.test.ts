@@ -127,13 +127,14 @@ describe('§6.4 源代码验收', () => {
         .find(r => r.attributes('data-id') === 'present.nav-tree.files')!
         .classes(),
     ).toContain('owner')
-    // 下钻到呈现层：导航树是普通模块，折叠在「+N」里（O8）——高亮占位；临时展开后高亮导航树
+    // 下钻到呈现层：呈现层声明了分层（ADR-0052），导航树在「区块」层，区块层超七、普通成员折叠——高亮所在的带；临时展开后高亮导航树
     desk.goTo('present', { kind: 'file', id: file })
     await settle()
-    expect([...desk.files.hits.value!.nodes]).toEqual(['more:present'])
-    desk.toggleBand('present')
+    expect([...desk.files.hits.value!.nodes]).toEqual(['s:present/block'])
+    desk.toggleBand('s:present/block')
     await settle()
-    expect([...desk.files.hits.value!.nodes]).toEqual(['present.nav-tree'])
+    // G14：分层总览高亮所在的带与路径上露出的模块
+    expect([...desk.files.hits.value!.nodes]).toEqual(['s:present/block', 'present.nav-tree'])
     // 副栏：选中文件即预览
     const aside = useAside(desk)
     expect(aside.previewPath.value).toBe(file)
@@ -150,9 +151,9 @@ describe('§6.4 源代码验收', () => {
     expect(again.desk.levelId.value).toBe('present')
   })
 
-  it('4. 选中「模型层入口」：面板显示入口与导出，loadModel 与描述的接口对上，对不上的分组列出', async () => {
-    const { desk, panel } = await open('h5p-arch-desk', '/p/h5p-arch-desk?level=model&sel=m:model.api')
-    expect(desk.files.entryOf('model.api')).toEqual({ file: 'src/model/index.ts', via: 'entry' })
+  it('4. 选中「模型层」：面板显示入口与导出，loadModel 与描述的接口对上，对不上的分组列出（ADR-0052：入口归模型层自身）', async () => {
+    const { desk, panel } = await open('h5p-arch-desk', '/p/h5p-arch-desk?sel=m:model')
+    expect(desk.files.entryOf('model')).toEqual({ file: 'src/model/index.ts', via: 'entry' })
     await settle()
     // G11（V15c）：入口文件并入「源代码文件」节（fold），入口导出折叠，展开再断言
     await expand(panel, '源代码文件')

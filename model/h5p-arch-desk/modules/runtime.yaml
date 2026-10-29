@@ -213,6 +213,8 @@ modules:
     codeRefs: [src/model/scenario/sequence.ts]
 
 relations:
+  - {id: rel.st.sketch-layout-migrate, from: state.layout.sketch, to: model.pipeline.loader, type: queries, description: 草图布局向 Loader 取：sketchScene 先用 migrateSketch 把旧写法的根草图读作 strata，层带按 strata.root 的层序排（M26、X21）}
+  - {id: rel.st.navigation-strata, from: state.transition.navigation, to: model.types, type: queries, description: 导航规则向类型与 Schema 取：stratumByKey 判层的选中（sel=s:）是否存在（V2、ADR-0052）}
   # 呈现层内部
   - { id: rel.p2.split-canvas, from: present.desk-view.split, to: present.canvas.flow, type: commands, description: 分屏容器与副栏交给视图转换与交互：分栏在画布槽位（左 / 上）渲染画布，调用 useStageDisplay 取显示设置 }
   - { id: rel.p2.split-sequence, from: present.desk-view.split, to: present.sequence.interact, type: commands, description: 分屏容器与副栏交给时序图交互：运行视角下分栏在副栏「时序图」页签（右 / 下）渲染时序图 }

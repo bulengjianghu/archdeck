@@ -25,8 +25,8 @@ modules:
     codeRefs: [src/components/Breadcrumb.vue, src/components/Toolbar.vue]
   - id: state.desk
     name: DeskState
-    abstraction: 一个协调者持有视图状态，dispatch 是唯一写入口；派生按领域分组且只读，与外界的往来全放在同步适配器里。
-    codeRefs: [src/state/useDeskState.ts, src/state/inject.ts, src/state/desk/intent.ts]
+    abstraction: 一个协调者持有视图状态，dispatch 是唯一写入口；派生按领域分组且只读，与外界的往来全放在同步适配器里。写入口与派生按接线端口（desk/ports.ts：写入、对比基线、源码同步的形状）读写外界，端口归协调者、由同步适配器实现（ADR-0052 的分层：同步适配器 → 写入口 → 派生）。
+    codeRefs: [src/state/useDeskState.ts, src/state/inject.ts, src/state/desk/intent.ts, src/state/desk/ports.ts]
   - id: access.model-source
     name: ModelSource 插件
     abstraction: 只把读取、写入、源码与治理各模块挂成同源端点并按项目推送变更，自身不解析描述。
@@ -49,10 +49,6 @@ modules:
     name: 加载流水线
     abstraction: 按阶段单向串联：Loader 只管单文件、Validator 只管跨文件、Indexer 只建查询结构；各步自报问题，汇总在模型层入口。场景的步骤与绑定取场景语义，与校验共用同一份语义。
     codeRefs: [src/model/load.ts, src/model/validate.ts, src/model/indexer.ts]
-  - id: model.api
-    name: 模型层入口
-    abstraction: 只有导出面与串接：loadModel 依次调 Loader → Validator → Indexer 并汇总问题，其余能力按层再导出；本身不含知识，是四层里的 L4 交付层（ADR-0051）。
-    codeRefs: [src/model/index.ts]
   - id: model.projector
     name: Projector 层次投影
     abstraction: 按投影步骤切分：先映射端点、再汇总成边，层次顺序作共用查询；只产出 LevelView，不知道坐标。
@@ -390,7 +386,7 @@ relations:
   - {id: rel.ad.crumb-name, from: present.nav.breadcrumb, to: model.types, type: queries, description: 面包屑向类型与 Schema 取：moduleName 取显示名}
 
   # 视图状态内部与 → 模型
-  - {id: rel.ad.loading-entry, from: state.desk.loading, to: model.api, type: queries, interface: if.model.loadModel, payload: [ds.ModelIndex, ds.Issue], description: 模型源同步向 loadModel 入口取：loadModel}
+  - {id: rel.ad.loading-entry, from: state.desk.loading, to: model, type: queries, interface: if.model.loadModel, payload: [ds.ModelIndex, ds.Issue], description: 模型源同步向 loadModel 入口取：loadModel}
   - {id: rel.ad.loading-baselines, from: state.desk.loading, to: state.desk.versions, type: streams, pull: true, payload: [ds.ModelPayload], description: 设计版本的载荷附带设计信息与对比基线原文}
   - {id: rel.ad.versions-diff, from: state.desk.versions, to: model.diff, type: queries, interface: if.model.diffModels, payload: [ds.ModelDiff], description: 版本与对比基线（desk.versions）向版本对比取：切换对比基线或重新加载时重算}
   - {id: rel.ad.loading-keep, from: state.desk.loading, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 模型源同步交给 dispatch 与操作：加载完成 → dispatch(loaded / reloaded)，层次回退由转移规则决定}
@@ -418,13 +414,10 @@ relations:
   # 接入层
   - {id: rel.ad.source-reader, from: access.model-source, to: access.reader, type: queries, interface: if.reader.projects, payload: [ds.ProjectSummary, ds.ModelPayload], description: ModelSource 插件向描述读取取：resolveModelRoot、isModelFile、listProjects、readProject}
   - {id: rel.ad.lint-reader, from: access.lint, to: access.reader, type: queries, interface: if.reader.projects, description: 命令行校验向描述读取取：resolveModelRoot、listProjectIds、listDesigns、designSketches}
-  - {id: rel.ad.lint-entry, from: access.lint, to: model.api, type: queries, interface: if.model.loadModel, payload: [ds.Issue], description: 命令行校验向 loadModel 入口取：loadModel}
-  - {id: rel.ad.reader-entry, from: access.reader, to: model.api, type: queries, interface: if.model.loadModel, description: 描述读取向 loadModel 入口取：生成项目摘要时跑一遍模型层}
+  - {id: rel.ad.lint-entry, from: access.lint, to: model, type: queries, interface: if.model.loadModel, payload: [ds.Issue], description: 命令行校验向 loadModel 入口取：loadModel}
+  - {id: rel.ad.reader-entry, from: access.reader, to: model, type: queries, interface: if.model.loadModel, description: 描述读取向 loadModel 入口取：生成项目摘要时跑一遍模型层}
 
   # 模型层内部
-  - {id: rel.ad.entry-loader, from: model.api, to: model.pipeline.loader, type: queries, interface: if.model.load, description: loadModel 入口向 Loader 取：load}
-  - {id: rel.ad.entry-validator, from: model.api, to: model.pipeline.validator, type: queries, interface: if.model.validate, description: loadModel 入口向 Validator 取：validate}
-  - {id: rel.ad.entry-indexer, from: model.api, to: model.pipeline.indexer, type: queries, interface: if.model.buildIndex, description: loadModel 入口向 Indexer 取：buildIndex}
   - {id: rel.ad.flow-validate-index, from: model.pipeline.validator, to: model.pipeline.indexer, type: streams, payload: [ds.ArchModel], description: 剔除坏实体后的模型交给建索引}
   - {id: rel.ad.loader-schema, from: model.pipeline.loader, to: model.types, type: queries, payload: [ds.ArchFileDef, ds.RawFile], description: Loader 向类型与 Schema 取：isSketchFile}
   - {id: rel.ad.overview-endpoints, from: model.projector.overview, to: model.projector.endpoints, type: queries, description: 分层总览向端点映射取结果}
@@ -447,7 +440,7 @@ relations:
 interfaces:
   - id: if.model.loadModel
     name: loadModel
-    owner: model.api
+    owner: model
     signature: |
       loadModel(files: readonly RawFile[]): { index: ModelIndex; issues: Issue[] }
     semantics: 纯函数，不抛异常；有问题的实体被剔除或修剪，问题按 error / warning 汇总。

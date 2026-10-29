@@ -45,13 +45,14 @@ test('系统面板「演化」列出热度前 10；模块树可按热度排序',
 })
 
 test('开启时间耦合：本层出现波浪线，单击选中它，地址带 sel=c:，面板列出共同的提交；关系面板标「同提交 ×N」', async ({ page }) => {
-  await openDesk(page, '/p/h5p-arch-desk?level=present')
+  // ADR-0052：呈现层声明了分层，带内同层成员之间的耦合不画；在普通层次「画布」里看
+  await openDesk(page, '/p/h5p-arch-desk?level=present.canvas')
   const panel = page.getByRole('region', { name: '显示' })
   await panel.getByLabel('时间耦合').check()
   // F7（L44）：时间耦合按需显示——静息态只在画布角计数，选中一端时画出
   await expect(page.getByTestId('couple-corner')).toContainText(/时间耦合 \d+ 对/)
   await expect(page.locator('.edge-couple')).toHaveCount(0)
-  await openDesk(page, '/p/h5p-arch-desk?level=present&sel=m:present.panel')
+  await openDesk(page, '/p/h5p-arch-desk?level=present.canvas&sel=m:present.canvas.flow')
   const line = page.locator('.edge-couple').first()
   await expect(line).toBeVisible()
   await expect(page.locator('.edge-couple .vue-flow__edge-text').first()).toContainText('×')
@@ -63,7 +64,7 @@ test('开启时间耦合：本层出现波浪线，单击选中它，地址带 s
   // 模块面板的「演化」一节默认折叠，展开后列出提交（先收起右下角的「显示」面板，免得它盖住节点）
   const head = panel.locator('.head-btn')
   if ((await head.getAttribute('aria-expanded')) === 'true') await head.click()
-  await page.locator('.vue-flow__node[data-id="present.panel"]').click()
+  await page.locator('.vue-flow__node[data-id="present.canvas.flow"]').click()
   await expect(page.locator('.panel')).toContainText('演化')
   await page
     .locator('.panel')

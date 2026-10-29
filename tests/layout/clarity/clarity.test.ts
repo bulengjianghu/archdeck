@@ -175,15 +175,19 @@ describe('L30 几何检查器', () => {
 // 第十四轮合入裁决（负责人 2026-10-28）：media 的 +2 接受、登记为后续布局项；检查器改同时性口径（scenes.ts）——聚焦核心模块时层间边变淡、不写标签，
 // 只算核心跨层边之间的互压（h5player 无代码事实这一组 3 → 1）；选中一条核心跨层边、没有聚焦模块时它与带标签的层间边同时出现，另成场景（新纳入测量，
 // 多出 2 处：app → infra.framework 的委托 / 查询标签与层间边标签互压），合计 3：与 labels 分支的终点持平，比 2fbf33e 多 1（议，见 A-08「合并」）
+// 第十六轮 H4（ADR-0052，层是分类、不占级）：模型层的四层改为 model 的 strata、撤掉 model.api，ST-1 为呈现层、属性面板、接入层、DeskState、
+// 架构治理、草图编辑声明分层（这六个层次由普通层次变为分层总览，多成员层的带内成员不超七全显、不换行）后重定：
+// 有代码事实 重合 53 → 27、压节点 3 → 3（根层原有的 3 处）、箭头叠 0 → 3、贴框 10 → 17；无代码事实 重合 45 → 17、压节点 3 → 3、贴框 7 → 20。
+// 箭头叠 3 处都是「核心边与带间边落在同一个没有内容的单成员层带上」（access → model、规则判定 → 事实比对、改 ID → 寻址），上升待裁（29 待裁 Q9）
 const CEILING: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 53, arrows: 0, crossNode: 3, labels: 0, hug: 10, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 27, arrows: 3, crossNode: 3, labels: 0, hug: 17, onFrame: 0 },
   h5player: { overlap: 93, arrows: 1, crossNode: 2, labels: 0, hug: 18, onFrame: 0 },
   'media-web-player': { overlap: 23, arrows: 0, crossNode: 7, labels: 2, hug: 5, onFrame: 0 },
 }
 // 第十五轮：模型层新增两个第二级模块（模型层入口、场景语义）后，把四层声明为层（ADR-0051 修订）——模型层由普通层次改为分层总览：
 // 有代码事实重合 62 → 53、压节点 12 → 3、贴框 6 → 10；无代码事实重合 48 → 45、压节点 12 → 3、贴框 6 → 7
 const BARE: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 45, arrows: 0, crossNode: 3, labels: 0, hug: 7, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 17, arrows: 0, crossNode: 3, labels: 0, hug: 20, onFrame: 0 },
   h5player: { overlap: 96, arrows: 0, crossNode: 0, labels: 3, hug: 13, onFrame: 0 },
   'media-web-player': { overlap: 35, arrows: 0, crossNode: 1, labels: 0, hug: 6, onFrame: 0 },
 }

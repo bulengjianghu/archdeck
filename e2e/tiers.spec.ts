@@ -7,34 +7,39 @@ import { graphNode, openDesk, waitSettled } from './helpers'
 
 const top = async (page: Parameters<typeof graphNode>[0], id: string) => (await graphNode(page, id).boundingBox())!.y
 
-test('ADR-0051：本项目「模型层」声明为四层——打开即 4 条带，契约在最下，切到结构视角节点不动', async ({ page }) => {
+test('ADR-0052：本项目「模型层」声明四层（层是分类、不占级）——打开即 4 条带，单成员层的带即成员，契约在最下，切到结构视角节点不动', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=model')
   const bandTop = async (id: string) => (await graphNode(page, id).boundingBox())!.y
+  // 交付、契约是单成员层：带即成员（返工清单、类型与 Schema）；解释、描述是多成员层：带节点为 s:<父模块>/<层>
   for (const [id, name] of [
-    ['model.deliver', '交付'],
-    ['model.explain', '解释'],
-    ['model.description', '描述'],
-    ['model.contract', '契约'],
+    ['model.rework', '返工清单'],
+    ['s:model/explain', '解释'],
+    ['s:model/description', '描述'],
+    ['model.types', '类型与 Schema'],
   ] as const)
     await expect(page.locator(`.vue-flow__node[data-id="${id}"]`)).toContainText(name)
-  expect(await bandTop('model.deliver')).toBeLessThan(await bandTop('model.explain'))
-  expect(await bandTop('model.explain')).toBeLessThan(await bandTop('model.description'))
-  expect(await bandTop('model.description')).toBeLessThan(await bandTop('model.contract'))
+  expect(await bandTop('model.rework')).toBeLessThan(await bandTop('s:model/explain'))
+  expect(await bandTop('s:model/explain')).toBeLessThan(await bandTop('s:model/description'))
+  expect(await bandTop('s:model/description')).toBeLessThan(await bandTop('model.types'))
   const types = await top(page, 'model.types')
   for (const id of ['model.pipeline', 'model.governance', 'model.projector']) expect(await top(page, id)).toBeLessThan(types)
   // 位置要跨两次加载逐字节相等：先等首帧后的整体平移（再适应）结束，两边都在稳定态上读
   await waitSettled(page)
   const before = await graphNode(page, 'model.governance').boundingBox()
   await openDesk(page, '/p/h5p-arch-desk?level=model&v=s')
-  await expect(page.locator('.vue-flow__node[data-id="model.contract"]')).toBeAttached()
+  await expect(page.locator('.vue-flow__node[data-id="model.types"]')).toBeAttached()
   await waitSettled(page)
   expect(await graphNode(page, 'model.governance').boundingBox()).toEqual(before)
 })
 
-test('K21、L29：DeskState 没有依赖——画布角提示不分层；选中后面板「拆分信号」列出不占文件的子模块', async ({ page }) => {
+test('ST-1、K21：DeskState 声明了三层（同步适配器 → 写入口 → 派生）——分层总览、不算依赖深度；选中后面板「拆分信号」列出不占文件的子模块', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=state.desk')
-  await expect(page.getByTestId('tier-hint')).toContainText('没有依赖')
+  for (const id of ['s:state.desk/sync', 's:state.desk/write', 's:state.desk/derive']) await expect(graphNode(page, id)).toBeVisible()
+  await expect(page.getByTestId('tier-hint')).toHaveCount(0)
   await expect(page.locator('.vue-flow__node[data-id^="tier:"]')).toHaveCount(0)
+  // 单击多成员层的带选中层（V2，sel=s:），面板为层面板
+  await graphNode(page, 's:state.desk/derive').click({ position: { x: 40, y: 12 } })
+  await expect(page.getByTestId('stratum-panel')).toContainText('只读状态与模型')
   await openDesk(page, '/p/h5p-arch-desk?level=state&sel=m:state.desk')
   // G11 V15c：「拆分信号」折叠在 ⑤，展开再断言清单
   const split = page.getByTestId('split-signals')

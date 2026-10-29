@@ -166,7 +166,7 @@ describe('§6.2 运行视角验收', () => {
   name: 不一致的步骤
   steps:
     - call: {from: model.diff, to: access.lint, relation: rel.ad.list-fetch}
-    - call: {from: model.pipeline, to: model.projector}
+    - call: {from: model.pipeline.loader, to: model.pipeline.validator}
     - call: {from: access.lint, to: access.deps, relation: rel.bad.impl}
 `,
     }
@@ -178,11 +178,13 @@ describe('§6.2 运行视角验收', () => {
       ['error', 'step-relation-mismatch'],
       ['warning', 'step-unmodeled'],
     ])
-    const { desk, step } = await open('h5p-arch-desk', '/p/h5p-arch-desk?level=model', [bad])
+    // 第十六轮：模型层改为分层总览（ADR-0052）后带间都有边，未建模的一步放在加载流水线的普通层次里看
+    const { desk, step } = await open('h5p-arch-desk', '/p/h5p-arch-desk?level=model.pipeline', [bad])
     expect(desk.issues.value.filter(i => i.file === 'scenarios/bad.yaml')).toHaveLength(3)
     desk.openScenario('sc.bad')
     step(2)
-    expect(desk.run.scenarioView.value!.messages[1].at.kind).toBe('unmodeled')
+    // 本层只看得到第 2 步（加载流水线内部）
+    expect(desk.run.scenarioView.value!.messages.map(m => m.at.kind)).toEqual(['unmodeled'])
   })
 
   it('7. 复制运行视角下的地址到新标签打开：回到同一场景、同一步骤、同一分支选择', async () => {

@@ -254,6 +254,8 @@ dataStructures:
       interface CheckResult { verdict: 'allowed' | 'denied' | 'unconstrained'; notes: string[]; checks: PairCheck[]; targets: ModuleBrief[] }
 
 relations:
+  - {id: rel.st.tiers-indexer, from: model.governance.tiers, to: model.pipeline.indexer, type: queries, description: 分层与拆分信号向 Indexer 取：isLayered 判父模块是否声明了分层（声明了的只查向上的线，ADR-0052）}
+  - {id: rel.st.rework-strata, from: model.rework, to: model.governance.rules, type: queries, description: 返工清单向规则判定取：strataFindings 的稳定性逆序、单成员层与底层只引类型的提示，汇成「分层」类（ST-3–ST-5）}
   # 外部参与者
   - {id: rel.gv.ai-agent, from: actor.ai, to: access.agent, type: commands, interface: if.agent.mcp, payload: [ds.CheckResult], description: AI 交给 agent 接口：coding agent 写代码前判定依赖、写完重新扫描（MCP 或命令行）}
   # 呈现层
@@ -296,16 +298,16 @@ relations:
   - {id: rel.gv.report-cycles, from: model.governance.report, to: model.governance.cycles, type: queries, description: 治理报告与门禁向环与环度取：moduleCycles、fileCycles、cyclicityOf（Y1–Y3）}
   - {id: rel.gv.report-rules, from: model.governance.report, to: model.governance.rules, type: queries, description: 治理报告与门禁向规则判定取：evaluateRules（U2–U4）}
   - {id: rel.gv.rules-facts, from: model.governance.rules, to: model.governance.facts, type: queries, description: 规则判定向事实比对取：within：规则按模块子树匹配}
-  - {id: rel.gv.agent-pipeline, from: access.agent, to: model.api, type: queries, interface: if.model.loadModel, description: agent 接口向模型层入口取：loadModel 加载描述}
+  - {id: rel.gv.agent-pipeline, from: access.agent, to: model, type: queries, interface: if.model.loadModel, description: agent 接口向模型层入口取：loadModel 加载描述}
   - {id: rel.gv.agent-ownership, from: access.agent, to: model.source.ownership, type: queries, interface: if.model.assignFiles, description: agent 接口向归属与入口取：按 codeRefs 归属源码（G3–G8）}
   - {id: rel.gv.source-health, from: access.model-source, to: model.rework, type: queries, description: ModelSource 插件向返工清单取：projectHealth：项目卡片的健康度（Q10）}
-  - {id: rel.gv.source-health-model, from: access.model-source, to: model.api, type: queries, interface: if.model.loadModel, description: ModelSource 插件向 loadModel 入口取：健康度：加载描述（Q10）}
+  - {id: rel.gv.source-health-model, from: access.model-source, to: model, type: queries, interface: if.model.loadModel, description: ModelSource 插件向 loadModel 入口取：健康度：加载描述（Q10）}
   - {id: rel.gv.source-health-own, from: access.model-source, to: model.source.ownership, type: queries, interface: if.model.assignFiles, description: ModelSource 插件向归属与入口取：健康度：归属（Q10）}
   - {id: rel.gv.source-health-report, from: access.model-source, to: model.governance.report, type: queries, interface: if.governance.report, description: ModelSource 插件向治理报告与门禁取：健康度：治理报告（Q10）}
   - {id: rel.gv.desk-rework, from: state.desk, to: model.rework, type: queries, interface: if.rework.list, payload: [ds.ReworkItem], description: DeskState 向返工清单取：问题页签的返工清单与「复制给 agent」的 Markdown（W-6）}
   - {id: rel.gv.source-writer, from: access.model-source, to: access.writer.append, type: commands, description: ModelSource 插件交给追加写入：POST /write/<项目>/feedback | allow | ignore（B1–B5）}
   - { id: rel.gv.writer-reader, from: access.writer.append, to: access.reader, type: queries, description: 追加写入向描述读取取：写回端点调用 isProjectId 校验项目、readModelDir / readDesignInfo / designSketches 读描述与设计 }
-  - {id: rel.gv.writer-model, from: access.writer.append, to: model.api, type: queries, interface: if.model.loadModel, description: 追加写入向 loadModel 入口取：加例外前校验两端模块存在、找 rules 所在文件（B3）}
+  - {id: rel.gv.writer-model, from: access.writer.append, to: model, type: queries, interface: if.model.loadModel, description: 追加写入向 loadModel 入口取：加例外前校验两端模块存在、找 rules 所在文件（B3）}
   - { id: rel.gv.writer-types, from: access.writer.append, to: model.types, type: queries, description: 追加写入向类型与 Schema 取：写确认记录前调用 isReviewSource 校验来源（Z6） }
   - {id: rel.gv.agent-rework, from: access.agent, to: model.rework, type: queries, interface: if.rework.list, payload: [ds.ReworkItem], description: agent 接口向返工清单取：命令行与 MCP 的 issues（Q9）}
   - {id: rel.gv.rework-source, from: model.rework, to: model.source, type: queries, description: 返工清单向源码归属取：matchRef、moduleEntry：冲突的 codeRefs 组合与 entry 是否存在}

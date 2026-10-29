@@ -16,24 +16,22 @@ const LEDGER = path.join(MODEL, 'governance/ledger.jsonl')
 /** 本层的主体：模块块与「+N」占位（不含边界节点、参与者、框与共用件架） */
 const bodies = (page: import('@playwright/test').Page) => page.locator('.vue-flow__node-module, .vue-flow__node-more')
 
-test('下钻 DeskState：核心大块常显、普通模块折叠为「+N」，默认主体不超过 7；单击展开、再单击收起（O8、O6）', async ({ page }) => {
-  await openDesk(page, '/p/h5p-arch-desk?level=state.desk')
-  await expect(graphNode(page, 'more:state.desk')).toBeVisible()
-  const n = await bodies(page).count()
-  expect(n).toBeGreaterThan(1)
-  expect(n).toBeLessThanOrEqual(7)
-  await expect(page.getByTestId('level-counts')).toHaveText(/^共用件 \d+ · 折叠 \d+$/)
-  const folded = Number(/折叠 (\d+)/.exec(await page.getByTestId('level-counts').innerText())![1])
+test('下钻呈现层：「区块」层超七，核心常显、普通成员折叠为「+N」；不超七的多成员层全显；单击展开、再单击收起（O2a、O6，ADR-0052）', async ({ page }) => {
+  await openDesk(page, '/p/h5p-arch-desk?level=present')
+  const chip = graphNode(page, 'more:s:present/block')
+  await expect(chip).toBeVisible()
+  const cores = page.locator('.vue-flow__node-core')
+  const n = await cores.count()
+  // 「页面」层两个成员都露出（不超七全显）
+  for (const id of ['present.project-list', 'present.desk-view']) await expect(graphNode(page, id)).toBeVisible()
+  const folded = Number(/\+(\d+) 个其他模块/.exec(await chip.innerText())![1])
   expect(folded).toBeGreaterThan(0)
-
-  await graphNode(page, 'more:state.desk').click()
-  await expect(graphNode(page, 'more:state.desk')).toContainText(`收起 ${folded} 个`)
-  await expect.poll(() => bodies(page).count()).toBe(n + folded)
-  // O11：本层没有共用件、展开后折叠为 0，两者都为 0 时不显示计数
-  await expect(page.getByTestId('level-counts')).toHaveCount(0)
-  await graphNode(page, 'more:state.desk').click()
-  await expect(graphNode(page, 'more:state.desk')).toContainText(`+${folded} 个其他模块`)
-  await expect.poll(() => bodies(page).count()).toBe(n)
+  await chip.click()
+  await expect(chip).toContainText(`收起 ${folded} 个`)
+  await expect.poll(() => cores.count()).toBe(n + folded)
+  await chip.click()
+  await expect(chip).toContainText(`+${folded} 个其他模块`)
+  await expect.poll(() => cores.count()).toBe(n)
 })
 
 test('疑似共用件一键认可写进 intent/roles.yaml；认可后收进共用件架，使用者带「共用 ×N」，悬停才画线（U11、O9–O11）', async ({ page }) => {
@@ -52,11 +50,12 @@ test('疑似共用件一键认可写进 intent/roles.yaml；认可后收进共�
     // 文件变化推送后重新加载：建议消失
     await expect(list.locator('[data-module="present.shared"]')).toHaveCount(0)
 
-    await openDesk(page, '/p/h5p-arch-desk?level=present')
+    // ADR-0052：呈现层声明了分层，呈现共用件自成「共用件」层（单成员层的带即成员）；在根层看它在呈现层带底的共用件架上
+    await openDesk(page, '/p/h5p-arch-desk')
     const shelf = page.locator('.vue-flow__node-shared[data-id="present.shared"]')
     await expect(shelf).toBeVisible()
-    await expect(page.getByTestId('level-counts')).toContainText('共用件 1')
-    const user = page.locator('.vue-flow__node-module', { has: page.locator('.shared-mark') }).first()
+    await expect(graphNode(page, 'present').getByTestId('band-counts')).toContainText('共用件 1')
+    const user = page.locator('.vue-flow__node-core', { has: page.locator('.shared-mark') }).first()
     await expect(user.locator('.shared-mark')).toHaveText(/^共用 ×\d+$/)
     // 共用件的边默认不画，悬停共用件时画出它与使用者之间的线
     const shelfEdges = page.locator('.vue-flow__edge[data-id*="present.shared"]')

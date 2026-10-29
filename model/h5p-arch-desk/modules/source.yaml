@@ -105,7 +105,7 @@ relations:
 
   # 接入层
   - {id: rel.p7.plugin-source, from: access.model-source, to: access.source, type: queries, interface: if.source.readSourceTree, payload: [ds.SourcePayload, ds.ExportedSymbol], description: ModelSource 插件向源码读取取：源码端点委托源码读取}
-  - {id: rel.p7.source-entry, from: access.source, to: model.api, type: queries, interface: if.model.loadModel, description: 源码读取向 loadModel 入口取：取 system.source.repo 解析源码根目录}
+  - {id: rel.p7.source-entry, from: access.source, to: model, type: queries, interface: if.model.loadModel, description: 源码读取向 loadModel 入口取：取 system.source.repo 解析源码根目录}
   - {id: rel.p7.lint-source, from: access.lint, to: access.source, type: queries, interface: if.source.readSourceTree, description: 命令行校验向源码读取取：当前版本的源码清单}
   - {id: rel.p7.lint-ownership, from: access.lint, to: model.source.ownership, type: queries, interface: if.model.assignFiles, description: 命令行校验向归属与入口取：归属警告（G9）}
   - {id: rel.p7.source-resolve, from: access.source, to: model.source.resolve, type: queries, interface: if.model.specResolver, description: 源码读取向路径补全与包入口取：再导出的相对路径补全（G11）}
