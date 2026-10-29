@@ -206,8 +206,10 @@ export function validateSketch(input: SketchDef, ctx: ValidateContext): SketchVa
       ids.add(l.id)
       if (!l.name?.trim()) err('sketch.name', `层「${l.id}」缺名称`, {}, `${base}.${i}`)
       for (const x of l.members ?? []) {
-        if (!kidIds.has(x)) err('sketch.ref', `层「${l.name || l.id}」的成员「${x}」不是「${parent}」在本草图里的直接子模块`, { module: x }, `${base}.${i}.members`)
-        else claims.set(x, [...(claims.get(x) ?? []), l.id])
+        // 成员只在持久草图里（设计草图写全了根的分层、模块仍在骨架里）也算
+        const elsewhere = !own.some(m => m.id === x) && fromPersistent.get(x)?.parentId === (parent === ROOT_MOUNT ? undefined : parent)
+        if (kidIds.has(x)) claims.set(x, [...(claims.get(x) ?? []), l.id])
+        else if (!elsewhere) err('sketch.ref', `层「${l.name || l.id}」的成员「${x}」不是「${parent}」在本草图里的直接子模块`, { module: x }, `${base}.${i}.members`)
       }
     })
     list.forEach((l, i) =>

@@ -132,7 +132,9 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     const refs = page.locator('.sk-ref')
     await expect(refs.first()).toBeVisible()
     expect(await refs.count()).toBeLessThan(ends.size)
-    for (const r of await refs.evaluateAll(els => els.map(e => e.closest('.vue-flow__node')!.getAttribute('data-id')!))) expect(r.split('.')).toHaveLength(2)
+    // ADR-0052：接到模型层入口的关系端点是 model 自身（撤掉门面模块），折叠后的引用至多到第二级
+    for (const r of await refs.evaluateAll(els => els.map(e => e.closest('.vue-flow__node')!.getAttribute('data-id')!)))
+      expect(r.split('.').length).toBeLessThanOrEqual(2)
     await expect(page.locator('.sk-ref .ref-count').first()).toBeVisible()
     // X22：引用按所属层成列——呈现层在中心区（挂载点框）左侧，同层的一列标「同层」在右侧，模型层在更右；框线带层名与挂载点名
     const frame = (kind: string, name?: string) =>

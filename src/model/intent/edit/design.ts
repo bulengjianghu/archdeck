@@ -5,13 +5,13 @@
  * ID 变了一律前缀级联：设计里挂在它或它后代上的草图改挂载点与其中模块 ID，被改写的模块记 from（指向基线）；
  * 关系两端、接口 owner、closed、layout 的键随之改写。from 一律指向基线 ID：沿血缘求闭包写入（X11）。纯函数，输入不动。
  */
-import { isRootLayer } from './strata'
+import { isRootLayer, pruneStrata, strataKey, stratumOfMember } from './strata'
 import { ROOT_MOUNT, type ModuleDef, type SketchDef } from '../../types'
 import { lineageSources, sketchLineage } from '../lineage'
 import type { DesignEditContext, DesignEditEffects, DesignEditOp, DesignEditResult, EditContext, EditOp, EditRejectCode, SketchSet } from '../types'
 import { applyEdit } from './apply'
 import { gridLayout } from './layout'
-import { ID_PATTERN, locate, locateAll, shortName, type LocatedModule } from './locate'
+import { ID_PATTERN, knownModules, locate, locateAll, shortName, type LocatedModule } from './locate'
 import { deriveChildSketch, seedFromBaseline } from './seed'
 
 type Draft = Record<string, SketchDef>
@@ -170,7 +170,8 @@ class Session {
 
 const fullId = (parent: string, id: string) => (id.startsWith(`${parent}.`) ? id : `${parent}.${id.trim()}`)
 const nodeCopy = (node: ModuleDef, id: string, from: readonly string[]): ModuleDef => {
-  const { children: _c, parent: _p, from: _f, ...rest } = node
+  // ADR-0052：层是原父模块的分类，换到别的父模块下不带过去
+  const { children: _c, parent: _p, from: _f, stratum: _s, ...rest } = node
   return { ...rest, id, ...(from.length && !(from.length === 1 && from[0] === id) ? { from: [...from] } : {}) }
 }
 
@@ -226,7 +227,16 @@ function merge(s: Session, op: Extract<DesignEditOp, { op: 'merge' }>): Reject |
   const closure = [...new Set(hits.flatMap(h => s.closureOf(h.node)))]
   const kinds = new Set(hits.map(h => h.node.kind))
   const kind = op.kind ?? (kinds.size === 1 ? [...kinds][0] : undefined)
-  const node: ModuleDef = { id: newId, name: op.name.trim(), ...(kind ? { kind } : {}), ...(closure.length >= 2 ? { from: closure } : {}) }
+  // ADR-0052：来源同属一层时，合并结果留在这层
+  const layers = new Set(hits.map(h => stratumOfMember(def, strataKey(def, h.parentId), h.id, h.node)?.id))
+  const stratum = layers.size === 1 ? [...layers][0] : undefined
+  const node: ModuleDef = {
+    id: newId,
+    name: op.name.trim(),
+    ...(kind ? { kind } : {}),
+    ...(stratum !== undefined ? { stratum } : {}),
+    ...(closure.length >= 2 ? { from: closure } : {}),
+  }
   const first = hits[0]
   first.list.splice(first.index, 0, node)
   const shifted = hits.map(h => (h.list === first.list && h.index >= first.index ? { ...h, index: h.index + 1 } : h))
@@ -285,10 +295,13 @@ function split(s: Session, op: Extract<DesignEditOp, { op: 'split' }>): Reject |
     if (bad) return bad
   }
   const closure = s.closureOf(hit.node)
+  // ADR-0052：拆出的模块留在原模块的层
+  const layer = stratumOfMember(def, strataKey(def, hit.parentId), op.id, hit.node)?.id
   const nodes = op.parts.map((p, i) => ({
     id: ids[i],
     name: p.name.trim(),
     ...(hit.node.kind ? { kind: hit.node.kind } : {}),
+    ...(layer !== undefined ? { stratum: layer } : {}),
     ...(closure.length && !(closure.length === 1 && closure[0] === ids[i]) ? { from: [...closure] } : {}),
   }))
   hit.list.splice(hit.index, 1, ...nodes)
@@ -349,6 +362,10 @@ function promote(s: Session, op: Extract<DesignEditOp, { op: 'promote' }>): Reje
   const bad = s.checkId(newId, up.parent)
   if (bad) return bad
   const node = nodeCopy(x.node, newId, s.closureOf(x.node))
+  // ADR-0052：升级上来的模块落在它原来所在模块的层（父层声明了分层时）
+  const from = stratumOfMember(target, up.parent, op.sketch)?.id
+  if (from !== undefined) node.stratum = from
+  else delete node.stratum
   if (up.mount === ROOT_MOUNT) {
     const layer = locate(target, up.parent)
     if (!layer) return no('not-found', `根草图里没有层「${up.parent}」`)
@@ -466,5 +483,8 @@ export function applyDesignEdit(design: SketchSet, op: DesignEditOp, ctx: Design
                   ? rename(s, op)
                   : remove(s, op)
   if (out) return { ok: false, ...out }
+  // ADR-0052：挪走的模块不再列在原层的成员里（成员只在持久草图里的照留）
+  const inDesign = new Set(Object.values(s.draft).flatMap(d => locateAll(d).map(m => m.id)))
+  for (const def of Object.values(s.draft)) pruneStrata(def, id => inDesign.has(id) || knownModules(def, ctx.persistent).has(id))
   return { ok: true, design: s.draft, effects: s.fx }
 }

@@ -46,7 +46,8 @@ test('ST-1、K21：DeskState 声明了三层（同步适配器 → 写入口 →
   await expect(split).toBeVisible()
   await split.getByRole('button', { name: /^▸ 拆分信号/ }).click()
   await expect(split).toContainText('不占文件')
-  await expect(split).toContainText('有交互、没有值依赖')
+  // 声明了分层的层次只查向上的线（K22），不再报「有交互、没有值依赖」（K21③ 只对普通层次）
+  await expect(split).not.toContainText('有交互、没有值依赖')
 })
 
 test('K22：h5player「MUs 媒体单元」缓冲 → 校正器向上，面板写明是控制反转', async ({ page }) => {

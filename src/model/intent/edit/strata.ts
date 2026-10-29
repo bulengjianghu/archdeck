@@ -69,6 +69,22 @@ export function renameInStrata(def: SketchDef, map: ReadonlyMap<string, string>)
   return n
 }
 
+/**
+ * 级联（ADR-0052）：合并、降级、升级、移入、拆分把模块挪走后，原层里不再列它——成员在本草图里却已不是该父模块的直接子模块，
+ * 或哪里都没有了（known 为假：本设计的草图、持久草图与当前版本里都找不到），就从成员里去掉；成员只在持久草图里的照留。
+ * 层本身不删（空层留给人决定删或补成员）。
+ */
+export function pruneStrata(def: SketchDef, known: (id: string) => boolean): void {
+  if (!def.strata) return
+  const all = locateAll(def)
+  const at = new Map(all.map(m => [m.id, m.parentId]))
+  for (const [key, list] of Object.entries(def.strata)) {
+    const here = (m: string) => (key === ROOT_MOUNT ? def.mount === ROOT_MOUNT && at.get(m) === undefined : at.get(m) === key)
+    const keep = (m: string) => (at.has(m) ? here(m) : known(m))
+    def.strata[key] = list.map(s => (s.members && !s.members.every(keep) ? { ...s, members: s.members.filter(keep) } : s))
+  }
+}
+
 /** 根草图的层按序重排为 1…N（顺序即给出的成员顺序） */
 export function renumberRoot(def: SketchDef, members: readonly string[]): void {
   const list = strataIn(def, ROOT_MOUNT)

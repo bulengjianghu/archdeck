@@ -4,6 +4,8 @@
 import { stringify } from 'yaml'
 import type { SketchDef } from '../../types'
 import { migrateSketch } from '../../load'
+import { pruneStrata } from './strata'
+import { knownModules } from './locate'
 import type { EditContext, EditOp, EditResult } from '../types'
 import { addLayer, reorderLayer, setMayDependOn } from './layers'
 import { addModule, removeModule, setClosed, updateModule } from './modules'
@@ -69,6 +71,7 @@ export function applyEdit(sketch: SketchDef, op: EditOp, ctx: EditContext): Edit
   const draft = structuredClone(migrateSketch(sketch))
   const out = run(draft, ctx, op)
   if ('reject' in out) return { ok: false, ...out.reject }
+  pruneStrata(draft, id => knownModules(draft, ctx.persistent).has(id) || !!ctx.known?.(id))
   return { ok: true, sketch: draft, effects: out.effects }
 }
 

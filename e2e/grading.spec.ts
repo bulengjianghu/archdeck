@@ -6,18 +6,17 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
-import { graphNode, openDesk, restoreOwned } from './helpers'
+import { graphNode, openDesk, restoreOwned, collapseDisplay } from './helpers'
 
 const MODEL = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 const ROLES = path.join(MODEL, 'intent/roles.yaml')
 const OWNED = path.join(MODEL, 'governance/owned.json')
 const LEDGER = path.join(MODEL, 'governance/ledger.jsonl')
 
-/** 本层的主体：模块块与「+N」占位（不含边界节点、参与者、框与共用件架） */
-const bodies = (page: import('@playwright/test').Page) => page.locator('.vue-flow__node-module, .vue-flow__node-more')
-
 test('下钻呈现层：「区块」层超七，核心常显、普通成员折叠为「+N」；不超七的多成员层全显；单击展开、再单击收起（O2a、O6，ADR-0052）', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=present')
+  // 先收起右下角的「显示」面板，免得它盖住带底的「+N」
+  await collapseDisplay(page)
   const chip = graphNode(page, 'more:s:present/block')
   await expect(chip).toBeVisible()
   const cores = page.locator('.vue-flow__node-core')
