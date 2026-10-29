@@ -84,25 +84,27 @@ dataStructures:
 ```
 
 ```yaml
-# intent/skeleton.yaml —— 骨架：层（根层的分层总览靠这些字段）与第二级模块，人拥有的持久草图（§3.10）
+# intent/skeleton.yaml —— 骨架：根的子模块与第二级模块，根的分层（strata），人拥有的持久草图（§3.10）
 sketch:
   id: skeleton
+  mount: root
   lifetime: persistent
-  closed: [domain, share]        # 这些层的直接子模块集合必须与这里相等（X2）
+  closed: [domain, share]        # 这些模块的直接子模块集合必须与这里相等（X2）
   modules:
     - id: domain
       name: Domain
-      kind: layer
-      order: 3
+      kind: subsystem
       abstraction: 规则与事实；纯决策，无 DOM / 网络
       includes: [纯决策, 领域类型与模型, 协议算法, 规则表, 领域端口]
       excludes: [DOM, 网络, Framework / Player 实现, 装配时序]
-      mayDependOn: [share]
       responsibility: …
       children:
         - { id: domain.services, name: Services, role: core, responsibility: … }
         - { id: domain.events, name: Events, responsibility: … }     # 普通，总览中折叠为 +N
         - { id: domain.rules, name: Rules, role: shared, responsibility: … }  # 共用件，收进带底的共用件架（O9）
+  strata:                        # 层是父模块对子模块的分类，不是节点（ADR-0052）；根写 root
+    root:
+      - { id: domain, name: Domain, order: 3, asks: 规则是什么？, admits: 它是纯决策、不碰 DOM 与网络吗？, mayDependOn: [share], singular: 边界模块, members: [domain] }
 ```
 
 ```yaml
@@ -177,6 +179,17 @@ system:
 | `share` Share | `share.contracts` 跨层契约 | `packages/share/src/contracts/**` |
 | | `share.errors` 错误原语 | `packages/share/src/errors/**` |
 | | `share.utils` 通用原语 | `packages/share/src/utils/**` |
+
+#### 分层（strata，ADR-0052）
+
+层是父模块对子模块的**分类**，不是模块、不占级：写在草图的 `strata`（挂载点或草图里的模块，根写 `root`）或约定文件 `intent/strata.yaml`（人拥有；同一父模块草图写了的以草图为准），成员用层的 `members` 或子模块上的 `stratum: <层 ID>`。
+
+- **什么时候分**（ST-1）：子模块 ≤ 5 不分层；6–7 有原则性的分类才分；**多于 7 个应当处理**——能归纳出 2–5 个有原则的层就声明，归纳不出（同类对等件）就保持平铺、记一条拆分信号。先读父模块的原则（`abstraction`）：原则里常常已经写了分类。
+- **有原则**：每层写 `asks`（回答的问题）与 `admits`（归属判定问：新模块只看职责就能答是 / 否）、`order`（自上而下）、`mayDependOn`（同一父模块的层 ID，不写等于 `[]`）；单成员层写 `singular` 说明为什么单独成层（ST-4）。
+- **全有或全无**（ST-6）：声明了分层的父模块，每个直接子模块恰好属于一层，共用件、总线也要归层。
+- **新模块的归属**（ST-2）：在已分层的父模块下新增模块，按各层的 `admits` 逐个回答选层，`designNote` 写一句理由；可先跑 `npm run arch -- place <父模块> "<职责>"`。
+- **出现层规则违规时**：先按 `admits` 判成员是否归错；归属无误就是依赖本身错了，改代码，不为消违规挪层、不改 `rules.yaml`。
+- 算出的依赖深度（`arch tiers`）只是证据，不写成层。
 
 ### 3.2 模块
 
@@ -393,7 +406,7 @@ sourceLimits:
 ```yaml
 # rules.yaml
 rules:
-  layers: true                  # 层按骨架里的 mayDependOn 默认拒绝（U2），缺省 true
+  layers: true                  # 层按分层声明里的 mayDependOn 默认拒绝（U2，任意层级），缺省 true
   modules:
     - module: infra.framework
       mayDependOn: [share, domain]                  # 子树之外只许依赖这些模块的子树（U3）
@@ -405,7 +418,7 @@ rules:
     tolerated: [domain.types]  # 环的全部成员都在这些子树内时容忍（Y3）
 ```
 
-- 层规则写在骨架的 `mayDependOn` 上（§3.1），这里只能整体开关。
+- 层规则写在分层声明（`strata`）各层的 `mayDependOn` 上（§3.1），这里只能整体开关。
 - 先写约束少而硬的规则（层、核心模块的白名单与访问面），再逐步收紧；存量违规用基线承接（§4），不用 `allow` 掩盖——`allow` 只给有理由、长期接受的例外。
 - 设计版本可以修改 `rules`，随设计一起评审。
 
@@ -501,11 +514,13 @@ sketch:
   closed: [present, state, access, model]
   modules:
     - id: present
-      kind: layer
-      order: 1
-      abstraction: …             # 根挂载时，各层的 abstraction / includes / excludes / mayDependOn 就是「原则」，草图顶层不写 abstraction
-      children:                  # 根挂载是唯一允许嵌套的情形：层下嵌套第二级模块
+      kind: subsystem
+      abstraction: …             # 根挂载时，根的子模块的 abstraction 是它对内的原则；层的原则写在 strata 上，草图顶层不写 abstraction
+      children:                  # 根挂载是唯一允许嵌套的情形：根的子模块下嵌套第二级模块
         - { id: present.version, name: 版本切换与设计信息条, kind: subsystem }
+  strata:                        # 根的层（单成员层：带即成员）；也可以为草图里的模块写它对子模块的层
+    root:
+      - { id: present, name: 呈现层, order: 1, asks: …, admits: …, mayDependOn: [state, model], singular: …, members: [present] }
   relations:                     # 自 v2 起骨架包含第二级之间的关系（显式写在本层，X18）
     - { id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: commands }
 ```
@@ -571,7 +586,7 @@ sketch:
 #### 加载、核验与写回
 
 - **加载**：草图先于其他文件进入 Loader；其他文件对草图实体只能补充（往下挂子模块、补草图没写的字段），不能重定义（X1）。`mount` 推出模块的 `parent`；草图的 `abstraction` 即挂载点模块的 `abstraction` 字段（对内的一面，其他文件写了不同的值即 `sketch-redefined`；挂载点不在描述里时提醒 `sketch-mount-missing`）；`from`、`layout` 不进模型索引（它们是设计信息，不是被描述系统的事实）。
-- **校验**（X14）：格式错误拦保存——schema、ID 格式与重复、模块不是挂载点的直接子节点、引用不存在、缺名称；语义提示拦「交给 AI」与定稿——根草图的层依赖（`mayDependOn`）成环、同挂载点与持久草图矛盾、待重连（X16）。超七（X13）与没写职责只提示（hint），不进两级。
+- **校验**（X14）：格式错误拦保存——schema、ID 格式与重复、模块不是挂载点的直接子节点、引用不存在、缺名称；语义提示拦「交给 AI」与定稿——任意父模块的层依赖（`strata` 的 `mayDependOn`）成环、声明了分层却有子模块没归层（`sketch.stratum`）、同挂载点与持久草图矛盾、待重连（X16）。超七（X13）与没写职责只提示（hint），不进两级。
 - **核验**（X4、X17）：同一个函数做两个对比——相对基线（我改了什么）与相对当前版本（实现还差什么）；按挂载点取对象版本的同一范围比对，按血缘识别合并 / 拆分 / 改 ID / 移动；相对当前版本只比结构（模块、父子、`kind`、`role`、`closed`、关系两端与类型、接口与 `owner`），职责等文字只参与相对基线。`npm run arch -- sketch-check [--design <设计>]` 对设计逐张报告，与页面问题页签「草图偏差」同一份结果。持久草图（`intent/`）的偏差同样相对完整的当前版本（草图自身也已加载进去），页面「本张核验」与对比按钮与命令行一致，骨架与实现一致时为 0；它交给 AI 的指令另带「交给 AI 时的改动摘要」，对象是去掉这张草图后的当前版本（其余描述说的样子），不是偏差、不进计数（X17）。
 - **写回**（B6、X20）：在草图画布上编辑，保存整个设计——改过的草图整份写回（含 `layout`；引用节点的键去掉，X22），会话里推出并改过的草图作为新文件写出；写回用 YAML 文档模型合并，**注释只在未改动的节点上保留**；保存时任一文件已被外部改动则整次拒绝（X7i）；没有关系的引用节点保存时丢弃（X19）。级联改名（X12）写到新文件名并删旧文件，删带下一层草图的模块（人确认后）删子草图文件——只限 `designs/<设计>/sketches/*`，永不动 `intent/*`，每个文件照记拦截记录（B7）。手写与画布编辑可以交替。
 
@@ -579,6 +594,7 @@ sketch:
 
 - 一期格式（ADR-0023 / ADR-0024：没有 `mount`，`designs/<设计>/sketch.yaml`，可跨层次嵌套）**不再读取**：仓库里的一期草图已按挂载点机械拆成 v2（`designs/phase2-dynamic/`、`designs/sketch-editor/` 的 `sketches/`；`sketch-v2` 改为根挂载的 `root.yaml` 与 `present.panel.yaml`），骨架加了 `mount: root`。
 - 唯一的读取例外：`intent/` 下没有 `mount`、顶层全是层的草图按根挂载读取，并提醒 `sketch-legacy-mount`——历史提交、设计基线（`base.commit`）与各轮快照里的骨架都是这个形状，改不了。其余没有 `mount` 的草图是格式错误，整份跳过。
+- 旧写法 `kind: layer`（ADR-0052 之前的层）由 Loader 迁移（M26）：根下的层读作根的单成员层，非根层级的层溶解为父模块的 `strata`（提醒 `layer.nested`）。新写的描述一律用 `strata`。
 - 草图版本（页面上把一个设计的草图当版本打开）载荷为 `system.yaml` + 持久草图 + 该设计的各张草图（`sketches/<mount>.yaml`）+ `references.yaml`（草图引用、草图里没有的外部模块，取自当前版本，只读，X19），自成一份可加载的描述。
 
 ## 4. 校验与提交
@@ -654,7 +670,7 @@ revision:
 
 给 AI 的规范（「保存并交给 AI」的指令由各张草图全文、相对基线的变更摘要与这一节组成）：
 
-1. 草图是约束，不是建议：草图里的每个实体都必须出现在你的版本里，ID、父子关系、`kind`、`role`、`mayDependOn` 与草图一致；草图写的关系（两端与类型）与接口（ID 与 `owner`）必须有对应——草图写的关系类型是架构师确认的分类，不得改写（X23）；草图声明的端口实现者要在接口的 `implementedBy` 里出现（X24）。
+1. 草图是约束，不是建议：草图里的每个实体都必须出现在你的版本里，ID、父子关系、`kind`、`role`、分层（`strata` 的层、层序、可依赖的层与成员归属）与草图一致；草图写的关系（两端与类型）与接口（ID 与 `owner`）必须有对应——草图写的关系类型是架构师确认的分类，不得改写（X23）；草图声明的端口实现者要在接口的 `implementedBy` 里出现（X24）。
 2. 声明 `closed` 的子树下，直接子模块的集合必须与草图相等——不多不少；没声明的子树可以加子模块。
 3. 没写的字段由你展开：职责、实现原理、接口签名、数据结构、更深层的子模块与关系，都按 §3 的生成规范写全。
 4. ID 纪律（X5）：草图里的 ID 由架构师起，你只能沿用；你新增的实体只能挂在草图实体之下，ID 以其为前缀（如草图有 `model.scenario`，你可以加 `model.scenario.plan`，不能加 `model.playback`）；不得重命名、移动草图里出现过的实体，要改就把问题写进 `design.yaml` 的 `questions` 交给架构师改草图。
