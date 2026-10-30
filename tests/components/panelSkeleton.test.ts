@@ -190,7 +190,8 @@ describe('PC-3：模块的理解卡按五问', () => {
   it('① 一句话职责粗体（写了 summary 不标待提炼），职责全文折叠在下；没写 summary 的标「待提炼」', async () => {
     const { wrapper } = await mountPanel('/?sel=m:app.big', files())
     const one = wrapper.find('[data-testid="summary"]')
-    expect(one.text()).toBe('编排方案的执行')
+    expect(one.text()).toMatch(/^编排方案的执行\s*全文 ▸$/)
+    expect(one.text()).not.toContain('待提炼')
     expect(wrapper.find('.full-text').exists()).toBe(false)
     await wrapper.find('.understand .full').trigger('click')
     expect(wrapper.find('.full-text').text()).toContain('编排一切')
