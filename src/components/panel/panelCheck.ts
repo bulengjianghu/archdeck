@@ -2,7 +2,12 @@
  * 属性栏的核对卡（PC-2、PC-6、PC-7，V15b）：「描述可信吗、健康吗」——分项一行一个状态加一句结论，异常行下平铺出问题的条目。
  * 输入全部来自现有派生（各面板从 desk.facts / review / evolution 取），这里只定状态、结论句与卡头结论，不新算。
  */
+import type { RelationType } from '@/model'
+import { RELATION_TYPE_LABELS } from '../shared/labels'
 import { orderNotices, type PanelNotice } from './panelNotices'
+
+/** 关系类型的显示名（核对条目与协作行共用，取自呈现共用件的文案） */
+export const relationTypeLabel = (t: RelationType): string => RELATION_TYPE_LABELS[t]
 
 /** ⚠ 要看（bad 问题级、hint 提示级）/ ✓ 正常 / — 不适用（没有代码事实、未确认等） */
 export type CheckState = 'bad' | 'hint' | 'ok' | 'none'

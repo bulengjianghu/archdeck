@@ -46,6 +46,7 @@ import {
   structureMetrics,
   structureView,
   depsBetween,
+  collaborationsOf,
   describeModule,
   entryResolver,
   gateIssues as gateOf,
@@ -238,6 +239,9 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     report.value && index.value && files.ownership.value && entryOf.value
       ? describeModule(index.value, files.ownership.value, report.value, entryOf.value, id)
       : null
+
+  /** PC-4：模块的协作——跨子树边界的关系按方向与对端合并（只看描述，不要代码事实） */
+  const collaborations = (id: string) => (index.value ? collaborationsOf(index.value, id) : [])
 
   /** K5：关系的证实与依据的模块依赖 */
   const relationFact = (id: string): (Omit<Confirmation, 'deps'> & { deps: ModuleDep[] }) | null => {
@@ -790,6 +794,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     selectedDep,
     selectedCycle,
     moduleDetail,
+    collaborations,
     relationFact,
     portOf,
     portsOf,

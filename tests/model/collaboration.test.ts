@@ -1,7 +1,7 @@
-/** PC-4：模块的协作——跨子树边界的关系按（方向，对端）合并，对端为画布上相邻的那一级 */
+/** PC-4：模块的协作——跨子树边界的关系按（方向，对端）合并，对端为画布上相邻的那一级；PC-10：经过关系的场景 */
 import { describe, expect, it } from 'vitest'
-import { collaborationsOf, loadModel } from '../../src/model'
-import { sampleFiles } from '../fixtures/sample'
+import { collaborationsOf, loadModel, relationScenarios } from '../../src/model'
+import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
 const { index } = loadModel(sampleFiles())
 
@@ -26,5 +26,14 @@ describe('PC-4 协作的合并', () => {
 
   it('不存在的模块没有协作', () => {
     expect(collaborationsOf(index, 'nope')).toEqual([])
+  })
+})
+
+describe('PC-10 经过关系的场景', () => {
+  it('有消息步骤绑定到这条关系（显式写 relation 或按两端推出）的场景；没有的为空', () => {
+    const { index: sc } = loadModel(scenarioFiles())
+    expect(relationScenarios(sc, 'r6')).toContain('sc.play')
+    expect(relationScenarios(sc, 'r7')).toEqual([])
+    expect(relationScenarios(sc, 'nope')).toEqual([])
   })
 })

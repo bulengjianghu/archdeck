@@ -147,7 +147,7 @@ describe('属性面板 · 运行视角', () => {
     expect(text).not.toContain('已钉住')
     expect(text).toContain('在「播放」中')
     expect(text).toContain('离进度最近')
-    const u = wrapper.find('[data-card="understand"] .understand')
+    const u = wrapper.find('[data-card="understand"] .card-body')
     expect(u.element.firstElementChild!.textContent).toContain('在「播放」中')
     expect(u.find('[data-testid="summary"]').exists()).toBe(true)
   })

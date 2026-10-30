@@ -6,8 +6,7 @@
  */
 import { computed, ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'
-import { HOT_SURFACE_MODULES, collaborationsOf, moduleName } from '@/model'
-import { RELATION_TYPE_LABELS } from '../shared/labels'
+import { HOT_SURFACE_MODULES, moduleName } from '@/model'
 import Markdown from './Markdown.vue'
 import Section from './Section.vue'
 import CheckCard from './CheckCard.vue'
@@ -23,7 +22,7 @@ import ModuleStructure from './ModuleStructure.vue'
 import ModuleSurface from './ModuleSurface.vue'
 import ModuleDecisions from './ModuleDecisions.vue'
 import ReviewSection from './ReviewSection.vue'
-import { moduleCheckRows, type CheckItem } from './panelCheck'
+import { moduleCheckRows, relationTypeLabel, type CheckItem } from './panelCheck'
 import { useSurfaceFocus } from './surfaceFocus'
 
 const props = defineProps<{ id: string }>()
@@ -35,13 +34,13 @@ const inside = (id: string) => !!idx.value.pathOf.get(id)?.includes(props.id)
 
 const ready = computed(() => desk.facts.status.value === 'ready')
 const detail = computed(() => (ready.value ? desk.facts.moduleDetail(props.id) : null))
-const crossing = computed(() => collaborationsOf(idx.value, props.id).flatMap(c => c.relations))
+const crossing = computed(() => desk.facts.collaborations(props.id).flatMap(c => c.relations))
 
 /** 一条关系相对本模块的写法：「→ 对端（类型）」/「← 对端（类型）」 */
 const relText = (rid: string) => {
   const r = idx.value.relations.get(rid)!
   const out = inside(r.from)
-  return `${out ? '→' : '←'} ${name(out ? r.to : r.from)}（${RELATION_TYPE_LABELS[r.type]}）`
+  return `${out ? '→' : '←'} ${name(out ? r.to : r.from)}（${relationTypeLabel(r.type)}）`
 }
 
 /** 确认行：徽标（已确认 / 需复核 / 未确认）只在范围内或已有记录时出现（ReviewSection 同口径） */

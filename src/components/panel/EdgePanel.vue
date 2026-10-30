@@ -12,7 +12,6 @@ import Section from './Section.vue'
 import RelationRow from './RelationRow.vue'
 import PanelCard from './PanelCard.vue'
 import CheckCard from './CheckCard.vue'
-import RunSection from './RunSection.vue'
 import { usePanelJump, type PanelNotice } from './panelNotices'
 import { rowsFromNotices } from './panelCheck'
 import { RELATION_TYPE_LABELS } from '../shared/labels'
@@ -76,7 +75,6 @@ const rows = computed(() =>
     ],
   ),
 )
-const run = computed(() => desk.perspective.value === 'run')
 </script>
 
 <template>
@@ -101,7 +99,6 @@ const run = computed(() => desk.perspective.value === 'run')
       </p>
     </header>
     <PanelCard kind="understand" title="理解" closed-summary :summary="`${edge.relationIds.length} 条原始关系`">
-      <RunSection v-if="run" />
       <Section title="原始关系" :count="edge.relationIds.length" data-sec="boundary.relations">
         <ul class="plain">
           <RelationRow v-for="r in edge.relationIds" :key="r" :id="r" summary />

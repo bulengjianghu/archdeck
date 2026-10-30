@@ -6,7 +6,7 @@
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
-import { RUNTIME_RELATION_TYPES, callbackText, isCallbackVia, moduleName, parseVia, purposeOf, relationMode, relationScenarios, viaLabel } from '@/model'
+import { RUNTIME_RELATION_TYPES, callbackText, isCallbackVia, moduleName, parseVia, purposeOf, relationMode, viaLabel } from '@/model'
 import { RELATION_TYPE_HINTS, RELATION_TYPE_LABELS } from '../shared/labels'
 import Markdown from './Markdown.vue'
 import Section from './Section.vue'
@@ -20,7 +20,6 @@ import StructureFacts, { type StructureGroup } from './StructureFacts.vue'
 import PanelCard from './PanelCard.vue'
 import CheckCard from './CheckCard.vue'
 import RelatedCard from './RelatedCard.vue'
-import RunSection from './RunSection.vue'
 import { usePanelJump } from './panelNotices'
 import type { CheckRow } from './panelCheck'
 
@@ -70,8 +69,7 @@ const rows = computed<CheckRow[]>(() => {
   return out
 })
 const purpose = computed(() => purposeOf(r.value))
-const scenarios = computed(() => relationScenarios(desk.index.value!, props.id))
-const run = computed(() => desk.perspective.value === 'run')
+const scenarios = computed(() => desk.run.scenariosOfRelation(props.id))
 
 /** 知识（谁知道谁）：由代码事实给出——依据的依赖与箭头同向 / 反向，经端口，或不判定 */
 const knowledge = computed(() => {
@@ -149,7 +147,6 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
     </header>
     <DesignNote :text="r.designNote" />
     <PanelCard kind="understand" title="理解" closed-summary :summary="purpose?.text">
-      <RunSection v-if="run" />
       <p v-if="purpose" class="purpose" data-testid="purpose">
         {{ purpose.text }}<span v-if="purpose.pending" class="pending" title="描述没有写 purpose：取自说明首句截断（M30）">待提炼</span>
       </p>

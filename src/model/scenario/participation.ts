@@ -4,8 +4,6 @@
  */
 import type { ModelIndex } from '../types'
 import type { Frame, ScenarioPlan, ScenarioLevelView, ParticipationTarget, Participation } from './types'
-import { bindRelation } from './semantics/bind'
-import { forEachStep } from './semantics/steps'
 
 export function participation(
   index: ModelIndex,
@@ -62,15 +60,3 @@ export function scenarioModules(index: ModelIndex, plan: ScenarioPlan): Set<stri
   return out
 }
 
-/** PC-10：经过这条关系的场景——有消息步骤绑定到它（显式写 relation 或按两端推出，S 系列的绑定口径），按场景声明次序 */
-export function relationScenarios(index: ModelIndex, relationId: string): string[] {
-  const out: string[] = []
-  for (const sc of index.scenarios.values()) {
-    let hit = false
-    forEachStep(sc.steps, s => {
-      if (!hit && 'msg' in s && bindRelation(index, { kind: s.kind, ...s.msg }).relation === relationId) hit = true
-    })
-    if (hit) out.push(sc.id)
-  }
-  return out
-}

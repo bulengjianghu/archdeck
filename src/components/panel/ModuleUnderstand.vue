@@ -3,21 +3,19 @@
  * 模块的理解卡（PC-3，R3.2、R3.3）：按五问，没有内容的问不出现——
  * ① 一句话职责（summaryOf，粗体，回退值标「待提炼」；职责全文折叠在下）② 怎么分（原则一句 + 各层或子模块，每个一句话；
  * 单成员层另有「包含 / 不包含」折叠块与「可依赖」链接行）③ 对外表面（接口名 + 一句用途，单击展开详情）④ 协作（ModuleCollab）
- * ⑤ 守住什么（不变式，带 ADR 链接）。不写画布已经表达的位置信息（C2）。运行视角下首节是运行信息（V6）。
+ * ⑤ 守住什么（不变式，带 ADR 链接）。不写画布已经表达的位置信息（C2）。运行视角下的运行信息由分派注入卡首（V6，PanelCard）。
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
-import { collaborationsOf, firstSentence, invariantsOf, mayDependOnOf, stratumKey, summaryOf, truncateWidth, PURPOSE_LIMIT } from '@/model'
+import { firstSentence, invariantsOf, mayDependOnOf, stratumKey, summaryOf, truncateWidth, PURPOSE_LIMIT } from '@/model'
 import Markdown from './Markdown.vue'
 import InterfaceItem from './InterfaceItem.vue'
 import ChangeBadge from './ChangeBadge.vue'
 import ModuleCollab from './ModuleCollab.vue'
-import RunSection from './RunSection.vue'
-import { useOpenPreview } from '../shared/preview'
+import AdrLink from './AdrLink.vue'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
-const openPreview = useOpenPreview()
 const idx = computed(() => desk.index.value!)
 const m = computed(() => idx.value.modules.get(props.id)!)
 const summary = computed(() => summaryOf(m.value))
@@ -60,16 +58,14 @@ const use = (id: string) => {
 }
 const isPort = (id: string) => !!desk.facts.portOf(id)?.isPort
 
-const hasCollab = computed(() => collaborationsOf(idx.value, props.id).length > 0)
+const hasCollab = computed(() => desk.facts.collaborations(props.id).length > 0)
 
 // ── ⑤ 守住什么 ──
-const invariants = computed(() => invariantsOf(m.value).map(x => ({ ...x, link: x.adr !== undefined ? desk.files.adrLink(x.adr) : null })))
-const run = computed(() => desk.perspective.value === 'run')
+const invariants = computed(() => invariantsOf(m.value))
 </script>
 
 <template>
   <div class="understand" data-sec="understand">
-    <RunSection v-if="run" class="run-first" />
     <!-- ① 一句话职责 -->
     <div class="one" data-sec="purpose">
       <p v-if="summary" class="summary" data-testid="summary">
@@ -177,15 +173,7 @@ const run = computed(() => desk.perspective.value === 'run')
       <ul class="inv" data-testid="invariants">
         <li v-for="(x, i) in invariants" :key="i">
           {{ x.text }}
-          <button
-            v-if="x.link?.file"
-            class="link adr"
-            :title="x.link.title ? `${x.link.title}（在资料区预览）` : '在资料区预览'"
-            @click="openPreview(x.link.file)"
-          >
-            {{ x.link.label }}
-          </button>
-          <span v-else-if="x.link" class="adr muted">{{ x.link.label }}</span>
+          <AdrLink v-if="x.adr !== undefined" :n="x.adr" />
         </li>
       </ul>
     </div>
@@ -193,10 +181,6 @@ const run = computed(() => desk.perspective.value === 'run')
 </template>
 
 <style scoped>
-.run-first {
-  margin: 0 -12px 6px;
-}
-
 .summary {
   margin: 0;
   font-size: 14px;
@@ -357,10 +341,5 @@ const run = computed(() => desk.perspective.value === 'run')
   font-size: 12.5px;
   line-height: 1.45;
   color: var(--text-2);
-}
-
-.adr {
-  font-size: 11px;
-  padding: 0;
 }
 </style>

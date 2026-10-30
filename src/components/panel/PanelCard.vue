@@ -5,6 +5,7 @@
  * 换选中时面板整体重建，展开态不跨选中保持（V15）。注入 panelUnfold 为真时（单测）全部展开。
  */
 import { computed, inject, ref, watch, type Ref } from 'vue'
+import { RUN_FIRST } from './related'
 
 const props = withDefaults(
   defineProps<{
@@ -23,6 +24,9 @@ const props = withDefaults(
 )
 const unfold = inject<Ref<boolean> | null>('panelUnfold', null)
 const user = ref<boolean | null>(null)
+/** V6：运行视角下理解卡的首节是运行信息（由分派注入） */
+const runFirst = inject(RUN_FIRST, null)
+const run = computed(() => (props.kind === 'understand' ? (runFirst?.value ?? null) : null))
 const isOpen = computed(() => !!unfold?.value || (user.value ?? props.open))
 watch(
   () => props.force,
@@ -40,6 +44,7 @@ watch(
       </button>
     </h3>
     <div v-if="isOpen" class="card-body">
+      <component :is="run" v-if="run" class="run-first" />
       <slot />
     </div>
   </section>
@@ -100,5 +105,9 @@ watch(
 
 .card-body {
   padding: 0 12px 10px;
+}
+
+.run-first {
+  margin: 0 -12px 6px;
 }
 </style>

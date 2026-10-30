@@ -12,7 +12,6 @@ import RelationRow from './RelationRow.vue'
 import DesignNote from './DesignNote.vue'
 import PanelCard from './PanelCard.vue'
 import RelatedCard from './RelatedCard.vue'
-import RunSection from './RunSection.vue'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -20,7 +19,6 @@ const idx = computed(() => desk.index.value!)
 const a = computed(() => idx.value.actors.get(props.id))
 const relations = computed(() => [...(idx.value.outRelations.get(props.id) ?? []), ...(idx.value.inRelations.get(props.id) ?? [])])
 const scenarios = computed(() => idx.value.triggeredBy.get(props.id) ?? [])
-const run = computed(() => desk.perspective.value === 'run')
 </script>
 
 <template>
@@ -37,7 +35,6 @@ const run = computed(() => desk.perspective.value === 'run')
     </header>
     <DesignNote :text="a.designNote" />
     <PanelCard kind="understand" title="理解" closed-summary>
-      <RunSection v-if="run" />
       <Section title="说明" data-sec="purpose">
         <Markdown v-if="a.description" :text="a.description" />
         <p v-else class="muted">未填写</p>

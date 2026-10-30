@@ -13,7 +13,6 @@ import ChangeBadge from './ChangeBadge.vue'
 import PortEntry from './PortEntry.vue'
 import PanelCard from './PanelCard.vue'
 import CheckCard from './CheckCard.vue'
-import RunSection from './RunSection.vue'
 import { firstSentence, moduleName } from '@/model'
 import type { CheckRow } from './panelCheck'
 
@@ -37,7 +36,6 @@ const rows = computed<CheckRow[]>(() => {
     },
   ]
 })
-const run = computed(() => desk.perspective.value === 'run')
 </script>
 
 <template>
@@ -53,7 +51,6 @@ const run = computed(() => desk.perspective.value === 'run')
     </header>
     <DesignNote :text="x.designNote" />
     <PanelCard kind="understand" title="理解" closed-summary :summary="use">
-      <RunSection v-if="run" />
       <p v-if="use" class="use">{{ use }}</p>
       <!-- 先答做什么：说明在端口结构详情之前 -->
       <Section v-if="x.description || x.semantics" title="说明" data-sec="purpose">

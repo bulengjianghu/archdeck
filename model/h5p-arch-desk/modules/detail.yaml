@@ -125,10 +125,12 @@ modules:
   - id: present.panel
     name: 属性面板
     summary: 显示选中对象的详情并发起人拥有文件的写入
-    abstraction: 选中是唯一主语：按选中只挑一张对象面板；各面板只读派生数据、共用内容块，写入只经 DeskState 发起。
+    abstraction: 选中是唯一主语：按选中只挑一张对象面板，每张都是头部加理解、核对、相关资料三卡；三卡骨架归面板自身，各面板只读派生数据、共用内容块，写入只经 DeskState 发起。
     invariants:
       - { text: 对象面板只由 Panel.vue 按 desk.selected 挑一张，别处不挂对象面板, adr: 12 }
       - { text: 写入人拥有的文件只经 desk.write 发起，面板不直接发请求, adr: 19 }
+      - { text: 核对卡的分项与计数只取现有派生，不新算, adr: 53 }
+    principle: 三卡骨架（ADR-0053）由面板自身持有、各对象面板共用——卡片 PanelCard（卡头结论、缺省展开态、定位请求时展开；理解卡首节渲染分派经 RUN_FIRST 注入的运行信息，V6）、核对卡 CheckCard（分项一行一个状态加结论，⚠ 行下平铺条目至多 5 条、单击跳到清单或选中关系，清单插槽）、相关资料卡 RelatedCard（图解与场景，单击预览、双击固定、已打开标记；图解有无由 HAS_EXPLAINER 注入，W5 接入）、ADR 编号链接 AdrLink；分项的纯函数在 panelCheck（checkSummary、moduleCheckRows、rowsFromNotices、relationTypeLabel，PC-2、PC-6、PC-10），注入键在 related。层面板与环面板也直接归面板自身。
   - id: present.shared
     name: 呈现共用件
     summary: 为各呈现子系统提供共用文案、代码高亮与资料区预览入口
@@ -208,31 +210,32 @@ modules:
     name: 面板分派
     summary: 按当前选中挑出唯一一张对象面板
     parent: present.panel
-    responsibility: 按选中选择面板（V2）：结构 / 交互视角下为选中的对象，无选中时为当前父模块（根层为系统）；运行视角下选中步骤时为步骤面板、选中场景时为场景面板，选中模块 / 关系 / 聚合边 / 参与者 / 文件时为该对象的面板；没有「已钉住」之类的提示（ADR-0012）。选中端口（L13）时为端口面板（K11）；结构视角下选中依赖边（sel=d:）时为代码依赖面板，其下是这对节点的结构边（present.panel.structure，ADR-0031）。运行视角下模块、关系、聚合边面板顶部加「运行信息」，模块信息折叠在下方（V6）。草图画布下整个面板换成草图面板（present.panel.sketch）。
+    responsibility: 按选中选择面板（V2）：结构 / 交互视角下为选中的对象，无选中时为当前父模块（根层为系统）；运行视角下选中步骤时为步骤面板、选中场景时为场景面板，选中模块 / 关系 / 聚合边 / 参与者 / 文件时为该对象的面板；没有「已钉住」之类的提示（ADR-0012）。选中端口（L13）时为端口面板（K11）；结构视角下选中依赖边（sel=d:）时为代码依赖面板，其下是这对节点的结构边（present.panel.structure，ADR-0031）。运行视角下选中模块、关系、聚合边、参与者、端口或系统时，把运行信息注入各对象理解卡的首节（RUN_FIRST，V6），对象面板不引用运行信息。属性栏的卡片样式（卡里的节去掉面板级分隔、头部粘顶）在这里统一。草图画布下整个面板换成草图面板（present.panel.sketch）。
     codeRefs: [src/components/panel/Panel.vue]
   - id: present.panel.module
     name: 模块面板
-    summary: 展示模块的职责、接口、子模块、出入边与源码
+    summary: 用五问讲清一个模块，并核对它的描述与健康
     parent: present.panel
-    responsibility: 模块的职责、实现原理、对外接口、核心数据结构、子模块、出入边、「端口」一节（声明的每个端口一份端口面板，K11，渲染端口面板的 ModulePorts）、代码事实里的子类 / 基类与组装 / 被组装于（K12、K13）、代码与文档引用；结构视角下另有「结构」一节（指标、影响面、交互图互查，present.panel.structure）；层额外显示抽象原则、包含 / 不包含、可依赖的层。说明长文超 4 行收起带「展开 N 字」，对外接口与子模块清单超 4 个收「+N」（悬停看全量、单击展开，与头部标签同款），交互图互查先列 8 条（L46 波 3 收敛）——展开态不跨选中保持，换选中即回缺省。
-    codeRefs: [src/components/panel/ModulePanel.vue]
+    abstraction: 头部、理解、核对、相关资料各一个组件：理解卡只读契约字段与协作查询，核对卡只组合现有派生，证据节原样做核对卡的清单。
+    responsibility: 模块面板（ADR-0053）：头部（名称、进入 / 在此设计、徽标槽位表 V15a、设计说明）；理解卡（ModuleUnderstand）按五问——一句话职责（summaryOf，回退标「待提炼」，职责全文行内展开）、怎么分（原则一句 + 各层或子模块各一句话，超 6 收「+N」；层模块另有包含 / 不包含与可依赖链接）、对外表面（接口名 + 一句用途，单击展开 InterfaceItem，超 5 收「+N」）、协作（ModuleCollab：desk.facts.collaborations 按方向与对端合并，单击目的逐条展开，悬停写 hoverRelations 让画布高亮承载的边，PC-4、PC-5）、守住什么（invariantsOf，ADR 链接在资料区预览）；运行视角下理解卡首节为分派注入的运行信息（V6）；核对卡（ModuleCheck）六行——证实、治理、表面、拆分、演化、确认（moduleCheckRows，条目文字按名称写好、单击跳到清单或选中关系），清单为交互证据、源代码文件、提交历史、结构指标与表面元素（结构视角）、端口、架构治理、拆分信号、代码事实 · 知识、相关决策、实现原理、核心数据结构、代码与文档引用、确认改动与确认表单（PC-6–PC-8）；画布单击本模块的表面元素时展开核对卡与「表面元素」清单（C9）；相关资料卡列图解与参与的场景（PC-9）。卡片与折叠块的展开态不跨选中保持。
+    codeRefs: [src/components/panel/ModulePanel.vue, src/components/panel/ModuleUnderstand.vue, src/components/panel/ModuleCollab.vue, src/components/panel/ModuleCheck.vue]
   - id: present.panel.relation
     name: 关系面板
     summary: 按维度说明一条关系的两端、语义与机制
     parent: present.panel
-    responsibility: 关系的两端与类型；「关系」一节按维度各一行——控制流、知识（由代码事实给出：同向 / 反向 / 经端口——发起方只知道端口、接收方是它的实现者 / 不判定，K5b；旁标两端之间的子类与组装事实，K12、K13）、语义（查询 / 委托 / 通知 / 流，ADR-0029）、同步性（通知一律异步，查询与委托按 mode）、机制（直接 / 端口 / 总线 / 通道，标题处另标「经 …」与拉取）、平面（ADR-0022）；经由接口、交换的数据结构；不在当前视图时提供「定位到所在层次」。
+    responsibility: 关系的两端与类型；「关系」一节按维度各一行——控制流、知识（由代码事实给出：同向 / 反向 / 经端口——发起方只知道端口、接收方是它的实现者 / 不判定，K5b；旁标两端之间的子类与组装事实，K12、K13）、语义（查询 / 委托 / 通知 / 流，ADR-0029）、同步性（通知一律异步，查询与委托按 mode）、机制（直接 / 端口 / 总线 / 通道，标题处另标「经 …」与拉取）、平面（ADR-0022）；经由接口、交换的数据结构；不在当前视图时提供「定位到所在层次」。三卡（PC-10）：理解卡先给目的（purposeOf，回退标待提炼），再是说明与上述维度、接口与数据；核对卡为证实与承载两行，清单为代码事实与承载；相关资料卡列经过它的场景（desk.run.scenariosOfRelation）。
     codeRefs: [src/components/panel/RelationPanel.vue]
   - id: present.panel.edge
     name: 聚合边面板
     summary: 列出聚合边背后的原始关系并可跳转
     parent: present.panel
-    responsibility: 列出聚合边背后的原始关系与各类型条数，点击任一条跳到它所在的层次并选中。
+    responsibility: 列出聚合边背后的原始关系与各类型条数，点击任一条跳到它所在的层次并选中。三卡（PC-10）：理解卡为原始关系（每条先给目的）；核对卡为方向（K22 向上却不是控制反转）与证实两行（rowsFromNotices）。
     codeRefs: [src/components/panel/EdgePanel.vue]
   - id: present.panel.system
     name: 系统面板
     summary: 展示系统简介、生成来源、规模与顶层模块
     parent: present.panel
-    responsibility: 系统简介、生成来源（仓库 / 提交 / 时间）、规模统计与顶层模块列表。
+    responsibility: 系统简介、生成来源（仓库 / 提交 / 时间）、规模统计与顶层模块列表。三卡（PC-10）：理解卡为简介与分层 / 顶层模块（各一句话职责）；核对卡为证实、治理、确认三行，清单为生成来源与规模、意图、架构治理、演化与确认。
     codeRefs: [src/components/panel/SystemPanel.vue]
   - id: present.panel.design
     name: 设计面板
@@ -244,7 +247,7 @@ modules:
     name: 内容组件
     summary: 提供面板共用的 Markdown、代码与接口等内容块
     parent: present.panel
-    responsibility: 面板共用的内容块：Markdown（禁用原始 HTML）、TS 代码块（高亮用呈现共用件）、接口与数据结构折叠项（算端口的接口带「端口 · 实现者 N」，单击打开端口面板，K11、L13）、关系行、分节；面板骨架 ③「需要注意」的一节与机制（NoticeSection、panelNotices：异常行的排序与单击跳转，G11、V15b）。
+    responsibility: 面板共用的内容块：Markdown（禁用原始 HTML）、TS 代码块（高亮用呈现共用件）、接口与数据结构折叠项（算端口的接口带「端口 · 实现者 N」，单击打开端口面板，K11、L13）、关系行（聚合边面板里先给目的）、分节（可由定位请求展开）；信号的严重度排序与单击跳转 panelNotices（V15b、PC-7）。三卡的骨架不在这里，归属性面板自身（见 present.panel）。
     codeRefs:
       - src/components/panel/Markdown.vue
       - src/components/panel/CodeBlock.vue
@@ -254,14 +257,13 @@ modules:
       - src/components/panel/Section.vue
       - src/components/panel/ChangeBadge.vue
       - src/components/panel/DesignNote.vue
-      - src/components/panel/NoticeSection.vue
       - src/components/panel/panelNotices.ts
   - id: present.panel.structure
     name: 结构视图面板
     summary: 展示模块的耦合指标并查询影响面
     parent: present.panel
     adrs: [31]
-    responsibility: 属性面板里结构视角的两节（ADR-0031）：模块的「结构」一节（ModuleStructure）——扇入 Ca、扇出 Ce、不稳定度 I 与三档、本层节点数、贡献最多的依赖方 / 被依赖方（K16）；影响面查询（分段按钮「不看 / 影响面 / 依赖面 / 两者」与「含只引类型」，经 queryImpact 写视图状态，一次性；查询时清单按距离分组、列模块与文件数、可能波及标「可能」，K15b–K15d；「只看值依赖」写显示偏好、只管指标）；逆稳定的提示行（U17，info）；交互图互查——涉及本模块、两端之间没有任何依赖的交互关系，单击切到交互视角并选中（K17）。依赖边面板的结构部分（DepStructure，选中依赖边 sel=d:<依赖方>-><被依赖方> 时）——这对节点的结构边：种类与档、文件依赖条数与清单、聚合的模块依赖条数（K14、L16）；交互覆盖与「未解释」（K17）；规则判定（违规或允许它的规则，U15）；两端的不稳定度与「逆稳定」（U17）。全部读 desk.facts 的派生（metricsOf、impactOf、againstOf、isolatedOf、edgeFiles、structure），没有代码事实时只说明原因（K8、U16）。
+    responsibility: 属性面板里结构视角的两节（ADR-0031）：模块的「结构」一节（ModuleStructure）——扇入 Ca、扇出 Ce、不稳定度 I 与三档、本层节点数、贡献最多的依赖方 / 被依赖方（K16）；影响面查询（分段按钮「不看 / 影响面 / 依赖面 / 两者」与「含只引类型」，经 queryImpact 写视图状态，一次性；查询时清单按距离分组、列模块与文件数、可能波及标「可能」，K15b–K15d；「只看值依赖」写显示偏好、只管指标）；逆稳定的提示行（U17，info）；交互图互查——涉及本模块、两端之间没有任何依赖的交互关系，单击切到交互视角并选中（K17）。依赖边面板的结构部分（DepStructure，选中依赖边 sel=d:<依赖方>-><被依赖方> 时）——这对节点的结构边：种类与档、文件依赖条数与清单、聚合的模块依赖条数（K14、L16）；交互覆盖与「未解释」（K17）；规则判定（违规或允许它的规则，U15）；两端的不稳定度与「逆稳定」（U17）。全部读 desk.facts 的派生（metricsOf、impactOf、againstOf、isolatedOf、edgeFiles、structure），没有代码事实时只说明原因（K8、U16）。在模块核对卡里是「结构指标」清单（结构视角，PC-8），影响面查询随清单展开（ADR-0053 Q11）；逆稳定计入「治理」行、交互图互查计入「证实」行。
     codeRefs: [src/components/panel/ModuleStructure.vue, src/components/panel/DepStructure.vue]
 
   - id: present.nav.breadcrumb

@@ -5,8 +5,8 @@
  */
 import { computed, onBeforeUnmount, reactive } from 'vue'
 import { useDesk } from '@/state/inject'
-import { collaborationsOf, moduleName, purposeOf, type RelationType } from '@/model'
-import { RELATION_TYPE_LABELS } from '../shared/labels'
+import { moduleName, purposeOf, type RelationType } from '@/model'
+import { relationTypeLabel } from './panelCheck'
 import RelationRow from './RelationRow.vue'
 import { hoverRelations } from './surfaceFocus'
 
@@ -14,7 +14,7 @@ const props = defineProps<{ id: string }>()
 const desk = useDesk()
 const idx = computed(() => desk.index.value!)
 const rows = computed(() =>
-  collaborationsOf(idx.value, props.id).map(c => {
+  desk.facts.collaborations(props.id).map(c => {
     const rels = c.relations.map(id => idx.value.relations.get(id)!)
     const types = [...new Set(rels.map(r => r.type))] as RelationType[]
     return { ...c, key: `${c.dir}:${c.peer}`, types, purpose: purposeOf(rels[0]) }
@@ -34,7 +34,7 @@ onBeforeUnmount(() => hoverRelations(null))
         <span class="dir">{{ c.dir === 'in' ? '←' : '→' }}</span>
         <button class="link peer" :title="`选中 ${name(c.peer)}`" @click="pick(c.peer)">{{ name(c.peer) }}</button>
         <span class="chips"
-          ><span v-for="t in c.types" :key="t" class="rel-chip" :class="`rel-${t}`">{{ RELATION_TYPE_LABELS[t] }}</span></span
+          ><span v-for="t in c.types" :key="t" class="rel-chip" :class="`rel-${t}`">{{ relationTypeLabel(t) }}</span></span
         >
         <button
           class="why"
