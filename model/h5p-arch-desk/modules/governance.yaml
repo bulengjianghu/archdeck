@@ -101,18 +101,10 @@ modules:
 
   - id: state.desk.review
     name: 人确认层派生（desk.review）
-    summary: 给出每个模块的确认状态并写入确认记录
+    summary: 给出确认状态与图解的依据状态，写入确认记录
     parent: state.desk
-    responsibility: 每个模块的确认状态与差异、确认范围与计数（调用模型层「确认」，Z3–Z5）；「确认」的写入意图——按当天、来源 manual 生成记录，经注入的 ModelWriter 分批写入，结果由文件变化推送回来（N5）；只对当前版本（Z1）。
-    codeRefs: [src/state/desk/review.ts]
-
-  - id: state.desk.explainers
-    name: 图解派生（desk.explainers）
-    summary: 给出哪些模块有图解、原文、导航与是否过期
-    parent: state.desk
-    stratum: derive
-    responsibility: 调用模型层「图解」的派生（computed，随索引重算，ADR-0055）：有图解的模块与路径（EX-1）、各图解的依据状态与改动（EX-7，只算有图解的模块）、图解原文与要填入的引用原文（EX-2）、↑ ↓ 导航（EX-4）。呈现层（资料区的图解标签、相关资料卡、核对卡、画布标记）只读这里，不直接调模型层（U10）。
-    codeRefs: [src/state/desk/explainers.ts]
+    responsibility: 每个模块的确认状态与差异、确认范围与计数（调用模型层「确认」，Z3–Z5）；「确认」的写入意图——按当天、来源 manual 生成记录，经注入的 ModelWriter 分批写入，结果由文件变化推送回来（N5）；只对当前版本（Z1）。图解派生（desk.explainers，ADR-0055）与确认过期同一套机制、放在这里：有图解的模块与路径（EX-1）、各图解的依据状态与改动（EX-7）、原文与要填入的引用原文（EX-2）、↑ ↓ 导航（EX-4），以及呈现层用的形状；呈现层只读这里，不直接调模型层（U10）。
+    codeRefs: [src/state/desk/review.ts, src/state/desk/explainers.ts]
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.governance.facts
@@ -399,7 +391,6 @@ relations:
   - {id: rel.gv.desk-evolution-model, from: state.desk.evolution, to: model.evolution, type: queries, description: 演化事实派生（desk.evolution）向演化事实取：evolutionStats、levelEvolution：热度与耦合的派生（J5）, purpose: 派生热度与耦合 }
   - {id: rel.gv.source-history-options, from: access.model-source, to: model.evolution, type: queries, description: ModelSource 插件向演化事实取：读源码历史与健康度前调用 historyOptions，按 system.source.history 取统计窗口与耦合阈值（J1）, purpose: 取统计窗口与耦合阈值 }
   - {id: rel.gv.desk-review-model, from: state.desk.review, to: model.review, type: queries, interface: if.review.query, description: 人确认层派生（desk.review）向确认取：reviewStates、reviewCounts、reviewEntries（Z3–Z5）, purpose: 算确认状态、计数与条目 }
-  - { id: rel.w5.desk-explainers-model, from: state.desk.explainers, to: model.review.explainer, type: queries, description: 图解派生（desk.explainers）向「图解」取有图解的模块、各图解的依据状态、原文与引用原文、↑ ↓ 导航（EX-1–EX-7）, purpose: 取图解与它的依据状态 }
   - { id: rel.w5.loader-explainer, from: model.pipeline.loader, to: model.review.explainer, type: queries, description: Loader 用 isExplainerFile 认出 explainers/*.html，原样带进模型、不按 YAML 解析（EX-1）, purpose: 认出图解文件 }
   - { id: rel.gv.navigation-evolution, from: state.transition.navigation, to: model.evolution, type: queries, description: 导航规则向演化事实取：选中耦合线时调用 coupleEnds 取两端（J7）, purpose: 选中耦合线时取两端 }
   - { id: rel.gv.selection-evolution, from: state.transition.selection, to: model.evolution, type: queries, description: 视角与选中规则向演化事实取：选中耦合线时调用 coupleEnds 取要突出的两端（J7）, purpose: 选中耦合线时取要突出的两端 }

@@ -82,8 +82,7 @@ modules:
     invariants:
       - 只读：读描述与读 git 快照都不写任何文件
       - git 经 execFileSync 调用、提交号只收十六进制，不经 shell
-      - 读当前版本时跳过 designs/ 与 governance/
-      - 随描述带上的只有 YAML / JSON 与图解 explainers/*.html（EX-1）
+      - 读当前版本时跳过 designs/ 与 governance/，随描述带上的只有 YAML / JSON 与图解 explainers/*.html（EX-1）
     codeRefs: [vite/readModelDir.ts, vite/readGit.ts]
   - id: access.lint
     name: 命令行校验
