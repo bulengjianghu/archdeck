@@ -420,7 +420,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   align-items: center;
   flex: 0 1 auto;
-  min-width: 110px;
+  min-width: min(110px, max-content);
   overflow: hidden;
   white-space: nowrap;
 }
@@ -440,10 +440,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .top :deep(.perspective .run) {
   flex: 0 1 auto;
-  min-width: 110px;
+  min-width: 4.5em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 运行视角下场景名至少留出几个字 */
+.top :deep(.perspective:has(.exit) .run) {
+  min-width: 110px;
 }
 
 .top > :deep(.crumbs) {
