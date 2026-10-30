@@ -16,6 +16,7 @@ export { encodeSelection, decodeSelection, encodeView, sameQuery } from './url'
 export { perspectiveOf, selectedOf, emphasisOf } from './selected'
 export { leaveGuard, isEditing } from './edit'
 export { mapSelection, withMode } from './mode'
+export * from './workspace'
 export type { Perspective, Selected, Emphasis, EmphasisContext } from './selected'
 
 export function transition(state: ViewState, action: ViewAction, ctx: TransitionContext): TransitionResult {

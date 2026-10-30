@@ -46,6 +46,7 @@ import { useStructurePrefs } from './display/useDisplayPrefs'
 import DisplayPanel from './DisplayPanel.vue'
 import SketchMenu from './sketch/SketchMenu.vue'
 import { canDesignAt, openNewDesign } from './edit/designHere'
+import { useCanvasInset } from './shared/canvasInset'
 
 const desk = useDesk()
 const stageUi = useStage()
@@ -284,10 +285,14 @@ watch(
     tryPendingFit()
   },
 )
+// WS-3：属性栏悬浮时盖住画布右侧，适应只用没被盖住的部分；悬浮与并排切换后重新适应
+const inset = useCanvasInset()
+watch(inset, () => fitNow())
 function fitNow(only?: ReadonlySet<string>): boolean {
   const pv = positioned.value
-  const { width, height } = dimensions.value
-  if (!pv || width === 0 || height === 0) return false
+  const { height } = dimensions.value
+  const width = dimensions.value.width - Math.min(inset.value, dimensions.value.width / 2)
+  if (!pv || width <= 0 || height === 0) return false
   const b = contentBounds(pv, only ?? visibleIds.value ?? undefined)
   if (!b) return false
   const pad = 0.08
@@ -555,7 +560,7 @@ const showFacts = () => desk.setToggles({ showFacts: true })
 .corner {
   position: absolute;
   top: 10px;
-  right: 12px;
+  right: calc(12px + var(--canvas-inset, 0px));
   z-index: 5;
   display: flex;
   flex-direction: column;

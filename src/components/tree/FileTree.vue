@@ -97,7 +97,14 @@ const longFiles = computed(() => Object.keys(desk.files.lines.value).filter(f =>
         <div v-if="selectedModule" class="hint">{{ moduleName(desk.index.value!, selectedModule) }}：{{ hits.size }} 个文件</div>
       </header>
       <ul class="tree" role="tree">
-        <FileTreeNode :dir="tree" :depth="0" :ctx="ctx" @pick="desk.selectFile" @toggle="toggle" />
+        <FileTreeNode
+          :dir="tree"
+          :depth="0"
+          :ctx="ctx"
+          @pick="desk.selectFile"
+          @pin="p => desk.workspace.open({ kind: 'source', path: p }, true)"
+          @toggle="toggle"
+        />
       </ul>
     </template>
   </div>

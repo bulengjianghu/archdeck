@@ -43,6 +43,12 @@ import {
   type ImpactQuery,
   type ViewAction,
   type ViewState,
+  EMPTY_WORKSPACE,
+  dockShown,
+  workspaceTransition,
+  type DocRef,
+  type WorkspaceAction,
+  type WorkspaceState,
 } from './transition'
 import { createRouterSync, type RouterSync, type RouterSyncOptions } from './sync/router'
 import { fetchAndLoad, watchModelChanges, type Baselines, type ChangeEvents, type FetchModel } from './sync/modelSource'
@@ -60,7 +66,8 @@ import { createIntent } from './desk/intent'
 import { createEvidence } from './desk/evidence'
 import { createEdit } from './desk/edit'
 
-export type { CanvasMode, ImpactQuery, Selection, Toggles } from './transition'
+export type { CanvasMode, ImpactQuery, Selection, Toggles, DocRef, DocTab, DocGroup, WorkspaceState } from './transition'
+export { PROPS_WIDTH, propsPlacement, dockAppeared } from './transition'
 export { encodeSelection, decodeSelection } from './transition'
 export type { CompareSource, ModelPayload, FetchModel } from './sync/modelSource'
 export type { SourceFetcher, Resource } from './sync/source'
@@ -362,6 +369,32 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   }
   const selectFile = (path: string) => select({ kind: 'file', id: path })
 
+  // ── 工作区（WS，ADR-0054）：资料区与属性栏开关是另一个值，只经 workspaceTransition 改变；不进 URL ──
+  const workspaceState = shallowRef<WorkspaceState>(EMPTY_WORKSPACE)
+  const workspaceDispatch = (a: WorkspaceAction) => void (workspaceState.value = workspaceTransition(workspaceState.value, a))
+  // WS-8：资料区不跟随选中；只把「打开场景 / 退出场景 / 选中另一个文件」翻译成打开资料（G15）。描述重新加载后场景与文件不变，不再打开
+  watch(
+    () => playback.value?.scenarioId ?? null,
+    (id, was) => {
+      if (id && id !== was) workspaceDispatch({ type: 'open', doc: { kind: 'sequence' }, pin: true })
+      else if (!id && was) workspaceDispatch({ type: 'closeDoc', id: 'seq' })
+    },
+    { immediate: true },
+  )
+  watch(
+    () => files.selected.value,
+    (path, was) => path && path !== was && workspaceDispatch({ type: 'open', doc: { kind: 'source', path } }),
+    { immediate: true },
+  )
+  const workspace = {
+    state: workspaceState,
+    dockShown: computed(() => dockShown(workspaceState.value)),
+    dispatch: workspaceDispatch,
+    /** 打开一份资料：不固定为预览标签（WS-5） */
+    open: (doc: DocRef, pin = false) => workspaceDispatch({ type: 'open', doc, pin }),
+    setProps: (open: boolean) => workspaceDispatch({ type: 'setProps', open }),
+  }
+
   /** 键盘（N7、N9）：返回 'leave' 表示应回到项目列表，由呈现层导航 */
   function pressKey(key: string): 'leave' | boolean {
     const idx = index.value
@@ -413,6 +446,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     intent,
     evidence,
     edit,
+    workspace,
     // 操作
     dispatch,
     init,
