@@ -2,6 +2,7 @@
 import { load } from './load'
 import { validate } from './validate'
 import { buildIndex } from './indexer'
+import { explainerIssues } from './explainer'
 import type { Issue, ModelIndex, RawFile } from './types'
 
 export * from './types'
@@ -19,6 +20,7 @@ export * from './rework'
 export * from './review'
 export * from './evolution'
 export * from './intent'
+export * from './explainer'
 export {
   projectLevel,
   mapEndpoint,
@@ -45,5 +47,6 @@ export interface LoadedModel {
 export function loadModel(files: readonly RawFile[]): LoadedModel {
   const loaded = load(files)
   const checked = validate(loaded.model)
-  return { index: buildIndex(checked.model), issues: [...loaded.issues, ...checked.issues] }
+  const index = buildIndex(checked.model)
+  return { index, issues: [...loaded.issues, ...checked.issues, ...explainerIssues(index)] }
 }

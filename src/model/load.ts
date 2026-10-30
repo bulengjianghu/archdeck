@@ -11,6 +11,7 @@ import { LineCounter, parseDocument, type Document } from 'yaml'
 import schema from '../../schema/arch-file.schema.json'
 import { LEGACY_RELATION_TYPES, MIGRATED_RELATION_TYPE, REMOVED_RELATION_TYPE, ROOT_MOUNT } from './types'
 import { isSketchFile } from './intent/types'
+import { isExplainerFile } from './explainer/types'
 import type {
   ActorEntity,
   ArchFileDef,
@@ -77,8 +78,11 @@ export function load(files: readonly RawFile[]): LoadResult {
   const strata: StrataDecl[] = []
   let seq = 0
 
+  // EX-1：图解文件不是 YAML，原样带上
+  const explainers: Record<string, string> = {}
+  for (const f of files) if (isExplainerFile(f.path)) explainers[f.path] = f.text
   // X1：草图文件先入；其余按路径排序
-  const sorted = [...files].sort((a, b) => Number(isSketchFile(b.path)) - Number(isSketchFile(a.path)) || a.path.localeCompare(b.path))
+  const sorted = [...files].filter(f => !isExplainerFile(f.path)).sort((a, b) => Number(isSketchFile(b.path)) - Number(isSketchFile(a.path)) || a.path.localeCompare(b.path))
   for (const file of sorted) {
     const parsed = parseFile(file, issues)
     if (!parsed) continue
@@ -268,6 +272,7 @@ export function load(files: readonly RawFile[]): LoadResult {
       ...(rules ? { rules: rules.def, rulesSrc: rules.src } : {}),
       sketches,
       ...(mergedStrata.length ? { strata: mergedStrata } : {}),
+      ...(Object.keys(explainers).length ? { explainers } : {}),
     },
     issues,
   }

@@ -110,7 +110,8 @@ export function summaryHash(s: ReviewSummary): string {
 
 export const reviewHash = (index: ModelIndex, moduleId: string): string => summaryHash(reviewSummary(index, moduleId))
 
-function hash64(str: string): string {
+/** Z2 的 64 位指纹算法；图解的依据（EX-6）共用 */
+export function hash64(str: string): string {
   let h1 = 0xdeadbeef ^ 0x9e3779b9
   let h2 = 0x41c6ce57 ^ 0x9e3779b9
   for (let i = 0; i < str.length; i++) {

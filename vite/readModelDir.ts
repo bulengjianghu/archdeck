@@ -23,6 +23,7 @@ import {
   compareDesign,
   diffModels,
   isArchived,
+  isExplainerFile,
   isSketchFile,
   load,
   loadModel,
@@ -103,6 +104,9 @@ export function isModelFile(file: string): boolean {
   return /\.(ya?ml|json)$/i.test(file)
 }
 
+/** 描述目录里随描述载入的文件：YAML / JSON，以及图解 explainers/*.html（EX-1）；rel 为相对项目描述目录的路径 */
+export const isDescriptionFile = (rel: string): boolean => isModelFile(rel) || isExplainerFile(rel)
+
 export function readModelDir(dir: string, projectRoot: string): Pick<ModelPayload, 'dir' | 'files'> {
   const files: RawFile[] = []
   const walk = (cur: string) => {
@@ -113,7 +117,10 @@ export function readModelDir(dir: string, projectRoot: string): Pick<ModelPayloa
       if (ent.isDirectory() && cur === dir && (ent.name === DESIGNS_DIR || ent.name === GOVERNANCE_DIR)) continue
       if (!ent.isDirectory() && cur === dir && ent.name === REVISION_FILE) continue
       if (ent.isDirectory()) walk(full)
-      else if (isModelFile(ent.name)) files.push({ path: path.relative(dir, full).split(path.sep).join('/'), text: fs.readFileSync(full, 'utf8') })
+      else {
+        const rel = path.relative(dir, full).split(path.sep).join('/')
+        if (isDescriptionFile(rel)) files.push({ path: rel, text: fs.readFileSync(full, 'utf8') })
+      }
     }
   }
   walk(dir)

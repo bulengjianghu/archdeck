@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { WORKTREE, type ModelCommit, type RawFile } from '../src/model'
-import { DESIGNS_DIR, GOVERNANCE_DIR, isModelFile, readProject, type ModelPayload } from './readModelDir'
+import { DESIGNS_DIR, GOVERNANCE_DIR, isDescriptionFile, readProject, type ModelPayload } from './readModelDir'
 
 /** E5：版本切换列出的提交数上限 */
 export const COMMIT_LIMIT = 50
@@ -66,7 +66,7 @@ export function readModelAt(projectDir: string, rev: string): RawFile[] | null {
       .split('\n')
       .filter(Boolean)
       .map(n => n.slice(prefix.length))
-      .filter(n => isModelFile(n) && !n.startsWith(`${DESIGNS_DIR}/`) && !n.startsWith(`${GOVERNANCE_DIR}/`))
+      .filter(n => isDescriptionFile(n) && !n.startsWith(`${DESIGNS_DIR}/`) && !n.startsWith(`${GOVERNANCE_DIR}/`))
     if (!names.includes('system.yaml')) return null
     return names.map(n => ({ path: n, text: git(at.top, ['show', `${rev}:${prefix}${n}`]) })).sort((a, b) => a.path.localeCompare(b.path))
   } catch {

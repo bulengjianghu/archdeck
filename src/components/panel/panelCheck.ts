@@ -73,6 +73,8 @@ export interface ModuleCheckInput {
   evolution: { changes: number; fixes: number; heat: number | null; days?: number } | null
   /** 确认（Z3）：已确认带日期；需复核带改动处数；未确认 */
   review: { status: 'reviewed' | 'stale' | 'unreviewed'; date?: string; changes?: number; inScope: boolean }
+  /** EX-7：本模块图解的依据过期（「基于旧描述 · N 处改动」或「未记录依据」）；没有图解或依据一致时省略 */
+  explainerStale?: string
 }
 
 /** PC-6：模块核对卡的六行，次序固定 */
@@ -126,7 +128,7 @@ export function moduleCheckRows(x: ModuleCheckInput): CheckRow[] {
     items: [],
   })
   const r = x.review
-  rows.push(
+  const review: CheckRow =
     r.status === 'stale'
       ? {
           key: 'review',
@@ -137,8 +139,15 @@ export function moduleCheckRows(x: ModuleCheckInput): CheckRow[] {
         }
       : r.status === 'reviewed'
         ? { key: 'review', label: '确认', state: 'ok', text: `${r.date ?? ''} 已确认`.trim(), items: [] }
-        : { key: 'review', label: '确认', state: 'none', text: r.inScope ? '从未确认' : '未确认（不在确认范围）', items: [] },
-  )
+        : { key: 'review', label: '确认', state: 'none', text: r.inScope ? '从未确认' : '未确认（不在确认范围）', items: [] }
+  // EX-7：图解基于旧描述与「确认过期」是同一套机制，提示级细节落在这一行
+  if (x.explainerStale)
+    rows.push({
+      ...review,
+      state: review.state === 'bad' ? 'bad' : 'hint',
+      items: [...review.items, { text: `图解${x.explainerStale}`, target: 'review.explainer', hint: true }],
+    })
+  else rows.push(review)
   return rows
 }
 

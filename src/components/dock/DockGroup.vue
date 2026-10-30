@@ -9,6 +9,8 @@ import { useDesk } from '@/state/inject'
 import type { DocGroup, DocTab } from '@/state/useDeskState'
 import SourceView from '../source/SourceView.vue'
 import SequenceDoc from './SequenceDoc.vue'
+import ExplainerDoc from './ExplainerDoc.vue'
+import { staleText } from '../shared/explainerText'
 
 const props = defineProps<{ group: DocGroup; gi: number; count: number; focused: boolean }>()
 const desk = useDesk()
@@ -19,9 +21,19 @@ function label(t: DocTab): string {
   const d = t.doc
   if (d.kind === 'sequence') return `时序图${desk.run.scenario.value ? ` · ${desk.run.scenario.value.name}` : ''}`
   if (d.kind === 'source') return `源代码 · ${d.path.split('/').pop()}`
-  return `图解 · ${desk.index.value?.modules.get(d.module)?.name ?? d.module}`
+  return explainerName(d.module)
 }
-const tip = (t: DocTab) => (t.doc.kind === 'source' ? t.doc.path : label(t)) + (t.preview ? '（预览：双击固定）' : '')
+/** EX-3：图解标签名取模块名（系统根取系统名），前面的 ▣ 表明种类 */
+const explainerName = (id: string) => (id === desk.index.value?.rootId ? desk.index.value.model.system.name : (desk.index.value?.modules.get(id)?.name ?? id))
+/** EX-7：图解依据过期时标在标题后 */
+const stale = (t: DocTab) => {
+  const st = t.doc.kind === 'explainer' ? desk.explainers.status(t.doc.module) : null
+  return st?.stale ? staleText(st) : null
+}
+const tip = (t: DocTab) =>
+  (t.doc.kind === 'source' ? t.doc.path : t.doc.kind === 'explainer' ? `图解 · ${label(t)}` : label(t)) +
+  (stale(t) ? `（${stale(t)}）` : '') +
+  (t.preview ? '（预览：双击固定）' : '')
 </script>
 
 <template>
@@ -36,8 +48,9 @@ const tip = (t: DocTab) => (t.doc.kind === 'source' ? t.doc.path : label(t)) + (
         @dblclick="ws.dispatch({ type: 'pin', group: gi, id: t.id })"
       >
         <button role="tab" class="lbl" :aria-selected="t.id === group.active" :title="tip(t)" @click="ws.dispatch({ type: 'activate', group: gi, id: t.id })">
-          {{ label(t) }}
+          <span v-if="t.doc.kind === 'explainer'" class="kind-ic" aria-hidden="true">▣</span>{{ label(t) }}
         </button>
+        <span v-if="stale(t)" class="stale-chip" data-testid="tab-stale">{{ stale(t) }}</span>
         <button class="x" :title="`关闭${label(t)}`" :aria-label="`关闭${label(t)}`" @click.stop="ws.dispatch({ type: 'close', group: gi, id: t.id })">
           ×
         </button>
@@ -58,7 +71,7 @@ const tip = (t: DocTab) => (t.doc.kind === 'source' ? t.doc.path : label(t)) + (
           <SequenceDoc v-if="desk.perspective.value === 'run'" />
           <p v-else class="empty">没有打开的场景</p>
         </template>
-        <p v-else class="empty">图解（第十七轮 W5）</p>
+        <ExplainerDoc v-else :key="active.id" :module="active.doc.module" />
       </template>
       <p v-else class="empty">从场景、文件或面板里的「预览」打开一份资料，放进这一组</p>
     </div>
@@ -129,6 +142,28 @@ const tip = (t: DocTab) => (t.doc.kind === 'source' ? t.doc.path : label(t)) + (
 
 .tab.preview .lbl {
   font-style: italic;
+}
+
+.tab:has(.stale-chip) {
+  max-width: 340px;
+}
+
+.kind-ic {
+  margin-right: 4px;
+  font-style: normal;
+  color: var(--accent);
+}
+
+.stale-chip {
+  flex: none;
+  margin-left: 2px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--warning);
+  background: var(--warning-soft);
+  white-space: nowrap;
 }
 
 .tab .x {

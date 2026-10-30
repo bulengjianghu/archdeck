@@ -107,6 +107,14 @@ const ISSUE_RULES: Record<string, string[]> = {
   'module.missing-summary': ['M27'],
   'module.invariants-many': ['M28'],
   'relation.purpose-long': ['M29'],
+  'module.explainer-missing': ['M32'],
+  'explainer.orphan': ['EX-1'],
+  'explainer.unknown-module': ['EX-8'],
+  'explainer.unknown-field': ['EX-2', 'EX-8'],
+  'explainer.copied-text': ['EX-8'],
+  'explainer.too-deep': ['EX-8'],
+  'explainer.stale': ['EX-7', 'EX-8'],
+  'explainer.no-basis': ['EX-6', 'EX-8'],
   'step.sync-mismatch': ['S19'],
   'missing-responsibility': ['M9'],
   'step-relation-mismatch': ['S5a'],
@@ -132,6 +140,9 @@ function descriptionFix(i: Issue): string {
   if (i.code === 'sketch-redefined') return '草图里的实体由架构师定：去掉这里对已写字段的重定义，只补草图没写的字段或往下挂子模块；要改草图本身请交给架构师（X1、X5）'
   if (i.code === 'relation-type-renamed') return '改为新名：event → notifies 并对调 from / to，dataflow → streams；再核对说明里的方向字样'
   if (i.code === 'relation.via-legacy') return "把 via 改写为四形态：port:<接口 ID> / bus:<总线模块 ID> / channel:<通道名>（如 via: 'channel:http'，M20）"
+  if (i.code === 'explainer.stale' || i.code === 'explainer.no-basis')
+    return '按改动核对图解的讲法（引用的原文由架构台填入，不用改）；讲法仍成立或已改好后运行 npm run arch -- explainer <模块> --write 写入现在的依据（EX-9）'
+  if (i.code.startsWith('explainer.')) return '改图解：模块一律用 data-arch 链接、描述一律用 data-field 引用，父模块只讲子模块之间的配合（04 §3.11）'
   return i.severity === 'error' ? '改正描述：这一处的实体已被剔除，图上看不到它' : '改正描述：坏引用已被去掉'
 }
 

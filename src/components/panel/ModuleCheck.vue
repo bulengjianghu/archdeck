@@ -24,6 +24,7 @@ import ModuleDecisions from './ModuleDecisions.vue'
 import ReviewSection from './ReviewSection.vue'
 import { moduleCheckRows, relationTypeLabel, type CheckItem } from './panelCheck'
 import { useSurfaceFocus } from './surfaceFocus'
+import { BASIS_CHANGE_TEXT, staleText } from '../shared/explainerText'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -43,6 +44,8 @@ const relText = (rid: string) => {
   return `${out ? '→' : '←'} ${name(out ? r.to : r.from)}（${relationTypeLabel(r.type)}）`
 }
 
+/** EX-7：本模块图解的依据状态（没有图解为 null） */
+const explainer = computed(() => desk.explainers.status(props.id))
 /** 确认行：徽标（已确认 / 需复核 / 未确认）只在范围内或已有记录时出现（ReviewSection 同口径） */
 const reviewInScope = computed(() => idx.value.stratumOf.get(props.id)?.members.length === 1 || desk.review.scope.value.has(props.id))
 const rows = computed(() => {
@@ -118,6 +121,7 @@ const rows = computed(() => {
     split,
     evolution: ev && stats && ev.changes ? { changes: ev.changes, fixes: ev.fixes, heat: Math.round(ev.heat), days: stats.days } : null,
     review: { status: st.status, date: st.entry?.at, changes: st.diff?.count, inScope: reviewInScope.value },
+    ...(explainer.value?.stale ? { explainerStale: staleText(explainer.value) } : {}),
   })
 })
 
@@ -176,11 +180,29 @@ const refsCount = computed(() => (m.value.codeRefs?.length ?? 0) + (m.value.docR
     <div data-sec="review.diff">
       <ReviewSection :id="id" part="diff" fold />
     </div>
+    <Section v-if="explainer?.changes.length" title="图解依据的改动" fold :count="explainer.changes.length" data-sec="review.explainer">
+      <ul class="plain">
+        <li v-for="c in explainer.changes" :key="c.key" class="basis">
+          <span class="kind">{{ BASIS_CHANGE_TEXT[c.kind] }}</span> {{ c.label }}
+        </li>
+      </ul>
+    </Section>
     <ReviewSection :id="id" part="confirm" fold />
   </CheckCard>
 </template>
 
 <style scoped>
+.basis {
+  padding: 2px 0;
+  font-size: 12.5px;
+}
+
+.basis .kind {
+  display: inline-block;
+  min-width: 1.4em;
+  color: var(--warning);
+}
+
 .refs li {
   padding: 2px 0;
   font-size: 12.5px;

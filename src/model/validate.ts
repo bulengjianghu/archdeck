@@ -82,6 +82,7 @@ export function validate(input: ArchModel): ValidateResult {
     reviewed: cleanReviewed(input.reviewed ?? [], id => modules.has(id) || id === rootId, warn),
     sketches: input.sketches ?? [],
     ...(strata.length ? { strata } : {}),
+    ...(input.explainers ? { explainers: input.explainers } : {}),
     ...(input.sourceLimits ? { sourceLimits: input.sourceLimits } : {}),
     ...(input.rules ? { rules: cleanRules(input.rules, id => modules.has(id), input.rulesSrc, err, warn), rulesSrc: input.rulesSrc } : {}),
   }

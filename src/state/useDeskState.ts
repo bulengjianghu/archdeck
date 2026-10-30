@@ -2,7 +2,7 @@
  * DeskState：协调者（docs/architecture/view-state.md §2）。
  * - 持有视图状态（一个值）、加载后的模型与对比基线；
  * - 唯一写入口 dispatch(action) → transition() → 写入新状态；对外的操作都是构造动作并 dispatch 的包装；
- * - 派生要画的数据：核心（层次、选中、视角、层次视图）平铺，领域派生分组——run 运行视角、files 源码、versions 版本、facts 架构治理、evidence 步骤证据、evolution 演化事实（ADR-0013、ADR-0015、ADR-0023，见 ./desk/）；
+ * - 派生要画的数据：核心（层次、选中、视角、层次视图）平铺，领域派生分组——run 运行视角、files 源码、versions 版本、facts 架构治理、evidence 步骤证据、explainers 图解、evolution 演化事实（ADR-0013、ADR-0015、ADR-0023，见 ./desk/）；
  * - 与外界的交互交给同步适配器：路由（sync/router）、模型源（sync/modelSource）、布局（sync/layout）、源码（sync/source）。
  * 呈现层只读这里的状态、只调这里的操作，不直接调用模型层的计算。
  */
@@ -66,9 +66,11 @@ import { createEvolution } from './desk/evolution'
 import { createIntent } from './desk/intent'
 import { createEvidence } from './desk/evidence'
 import { createEdit } from './desk/edit'
+import { createExplainers } from './desk/explainers'
 
 export type { CanvasMode, ImpactQuery, Selection, Toggles, DocRef, DocTab, DocGroup, WorkspaceState } from './transition'
 export { PROPS_WIDTH, propsPlacement, dockAppeared } from './transition'
+export type { ExplainerRef, ExplainerStatus, ExplainerNav, BasisChange } from '@/model'
 export { encodeSelection, decodeSelection } from './transition'
 export type { CompareSource, ModelPayload, FetchModel } from './sync/modelSource'
 export type { SourceFetcher, Resource } from './sync/source'
@@ -270,6 +272,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   }
   // ── 人确认层（Z1–Z6，ADR-0023）：确认状态的派生与确认的写入意图；只对当前版本 ──
   const review = createReview({ index, version: options.version, writer })
+  const explainers = createExplainers({ index })
 
   /** W-6、Q9：给 agent 的指令（Markdown）；不给返工项时为整份清单 */
   function reworkPrompt(item?: ReworkItem): string {
@@ -445,6 +448,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     versions,
     facts,
     review,
+    explainers,
     evolution,
     intent,
     evidence,

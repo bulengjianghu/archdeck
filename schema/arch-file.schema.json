@@ -482,6 +482,11 @@
           "type": "string",
           "description": "一句话职责（M27、ADR-0053）：≤ 30 字，动词开头，写对外承诺、不写内部构成"
         },
+        "explainer": {
+          "type": "string",
+          "pattern": "^explainers/[^/]+\\.html$",
+          "description": "图解（M32、ADR-0055）：相对项目描述目录的 explainers/<文件>.html；不写时按约定路径 explainers/<模块 ID>.html 查找"
+        },
         "principle": {
           "type": "string"
         },
@@ -620,6 +625,11 @@
         "summary": {
           "type": "string",
           "description": "一句话职责（M27、ADR-0053）：≤ 30 字，动词开头，写对外承诺、不写内部构成"
+        },
+        "explainer": {
+          "type": "string",
+          "pattern": "^explainers/[^/]+\\.html$",
+          "description": "图解（M32、ADR-0055）：相对项目描述目录的 explainers/<文件>.html；不写时按约定路径 explainers/<模块 ID>.html 查找"
         },
         "principle": {
           "type": "string"

@@ -164,6 +164,8 @@ export interface ModuleDef {
   responsibility?: string
   /** M27（ADR-0053）：一句话职责，≤ 30 字，动词开头，写对外承诺；取值走 summaryOf（M30） */
   summary?: string
+  /** M32（ADR-0055）：图解文件，相对项目描述目录的 `explainers/<文件>.html`；不写按约定路径查找（EX-1） */
+  explainer?: string
   principle?: string
   dataStructures?: string[]
   provides?: string[]
@@ -575,6 +577,8 @@ export interface ArchModel {
   sketches: SketchEntity[]
   /** ST（ADR-0052）：分层声明（Validator 归一后成员齐全、引用有效）；按父模块、order 排序 */
   strata?: StratumEntity[]
+  /** EX-1（ADR-0055）：图解文件（相对项目描述目录的路径 → HTML 原文），不按 YAML 解析、不参与版本对比 */
+  explainers?: Record<string, string>
 }
 
 /** ST：已加载的层 */

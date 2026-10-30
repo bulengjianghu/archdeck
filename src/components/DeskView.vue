@@ -25,6 +25,7 @@ import SourceDeltaBar from './source/SourceDeltaBar.vue'
 import Panel from './panel/Panel.vue'
 import NavTree from './tree/NavTree.vue'
 import { OPEN_PREVIEW } from './shared/preview'
+import { HAS_EXPLAINER } from './panel/related'
 import { NAV_TAB, type NavTab } from './shared/navTab'
 import { CANVAS_INSET } from './shared/canvasInset'
 import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
@@ -210,6 +211,8 @@ provide(CANVAS_INSET, canvasInset)
 
 // 资料区（G15、WS-8）：面板等组件经注入请求「预览某个文件」，在资料区打开为预览标签
 provide(OPEN_PREVIEW, (path: string, line?: number) => ws.open({ kind: 'source', path, line }))
+// PC-9、EX-1：相关资料卡的图解入口——模块有没有图解由模型层判定（desk.explainers）
+provide(HAS_EXPLAINER, (id: string) => desk.explainers.has(id))
 // WS-7：「▣ 资料」——有标签时隐藏 / 显示；没有标签时运行视角打开时序图，其他视角不可用
 const hasDocs = computed(() => ws.state.value.groups.some(g => g.tabs.length))
 function toggleDock() {

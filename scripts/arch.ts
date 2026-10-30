@@ -23,6 +23,8 @@
  *   place <父模块|root> "<职责>"  新模块归属的建议（ST-2）：各层的判定问，按职责文字的重合度排序
  *   surface <模块>                模块表面（Q16、K18、K19）：元素清单（种类 · 声明状态 · 扇入）、W / B、越过入口清单与建议
  *   report                        拦截报告（Q4）
+ *   explainer [<模块>] [--write]  图解的依据状态（EX-9）：一致 / 基于旧描述 · N 处改动 / 未记录，附改动明细；
+ *                                 --write 把现在的依据写进图解的 arch-basis（生成图解或按改动核对完之后执行）
  *   baseline                      生成基线 governance/baseline.json（U7，由人执行并提交）
  *   own                           登记人拥有文件的指纹 governance/owned.json（X6，人改完草图 / 规则 / 忽略清单后执行）
  *   sketch-check [--design <设计>] [--revision <轮次>]   草图核验（X4、X17）：缺省为活动草图对当前版本；给了设计时逐张报告，
@@ -42,6 +44,7 @@ import { fileURLToPath } from 'node:url'
 import {
   CHANGE_KINDS,
   CHANGE_KIND_LABELS,
+  BASIS_CHANGE_LABELS,
   REWORK_CATEGORIES,
   RULE_LABELS,
   tierNoteText,
@@ -324,6 +327,19 @@ function run(): number {
       console.log('此后 lint:model 对这些文件的改动报错 owned.changed；人改完再运行一次本命令。')
       return 0
     }
+    case 'explainer': {
+      const r = svc.explainers(project, rest[0], flags.has('write'))
+      if (asJson) console.log(JSON.stringify(r, null, 2))
+      else {
+        if (!r.explainers.length) console.log(`${r.project}：没有图解`)
+        for (const x of r.explainers) {
+          const state = !x.recorded ? '未记录依据' : x.stale ? `基于旧描述 · ${x.changes.length} 处改动` : '依据一致'
+          console.log(`${x.name}（${x.module}）  ${x.file}  ${state}${x.written ? ' → 已写入现在的依据' : ''}`)
+          for (const c of x.changes) console.log(`  ${BASIS_CHANGE_LABELS[c.kind]}  ${c.label}`)
+        }
+      }
+      return 0
+    }
     case 'baseline': {
       const b = svc.baseline(project)
       console.log(
@@ -334,7 +350,7 @@ function run(): number {
     }
     default:
       console.error(
-        '用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|hotspots|coupling|impact|metrics|tiers|strata|place|surface|report|baseline|own|sketch-check|sketch|classify> [参数] [--project <项目>] [--json]',
+        '用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|hotspots|coupling|impact|metrics|tiers|strata|place|surface|report|baseline|own|explainer|sketch-check|sketch|classify> [参数] [--project <项目>] [--json]',
       )
       return 2
   }

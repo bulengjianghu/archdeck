@@ -56,6 +56,10 @@ import {
   type ModuleMetrics,
   type SourceOwnership,
   type SurfaceSource,
+  explainerModules,
+  explainerStatus,
+  formatBasis,
+  writeBasisMeta,
 } from '../../src/model'
 import {
   designSketchFiles,
@@ -707,6 +711,39 @@ export function createService(opts: ServiceOptions) {
       const r = registerOwned(modelRoot, project)
       cache.delete(project)
       return { file: path.relative(opts.root, r.file), files: r.files }
+    },
+
+    /**
+     * EX-9：各图解的依据状态与改动；write 时把现在的依据写进图解的 arch-basis（只改那一个 meta）。
+     * 给了模块时只看它的图解
+     */
+    explainers(p?: string, module?: string, write = false) {
+      const l = load(p, true)
+      const owners = explainerModules(l.index)
+      if (module && !owners.has(module)) throw new ServiceError(`「${module}」没有图解（EX-1）`)
+      const dir = path.join(modelRoot, l.project)
+      const rows = [...owners.keys()]
+        .filter(id => !module || id === module)
+        .map(id => {
+          const st = explainerStatus(l.index, id)!
+          const row = {
+            module: id,
+            name: moduleName(l.index, id),
+            file: st.path,
+            recorded: !!st.recorded,
+            stale: st.stale,
+            changes: st.changes,
+            written: false,
+          }
+          if (write && st.stale) {
+            const file = path.join(dir, st.path)
+            fs.writeFileSync(file, writeBasisMeta(fs.readFileSync(file, 'utf8'), formatBasis(st.current)))
+            row.written = true
+          }
+          return row
+        })
+      if (write) cache.delete(l.project)
+      return { project: l.project, explainers: rows }
     },
 
     /** U7：只给命令行，由人执行 */

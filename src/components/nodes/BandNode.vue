@@ -3,6 +3,7 @@ import Handles from './Handles.vue'
 import DiffMark from './DiffMark.vue'
 import StructMarks from './StructMarks.vue'
 import CycleMark from './CycleMark.vue'
+import ExplainerMark from './ExplainerMark.vue'
 import LayerStatus from './LayerStatus.vue'
 import type { NodeData } from './types'
 
@@ -16,7 +17,9 @@ defineProps<{ data: NodeData }>()
     <StructMarks :data="data" />
     <CycleMark :data="data" band />
     <div class="left">
-      <div class="name">{{ data.name }}<LayerStatus v-if="data.band?.status" :status="data.band.status" /></div>
+      <div class="name">
+        {{ data.name }}<LayerStatus v-if="data.band?.status" :status="data.band.status" /><ExplainerMark :module-id="data.moduleId" band />
+      </div>
       <div class="abstraction">{{ data.band?.abstraction || '（未填写抽象原则）' }}</div>
     </div>
     <span v-if="data.counts" class="counts" data-testid="band-counts">共用件 {{ data.counts.shared }} · 折叠 {{ data.counts.folded }}</span>

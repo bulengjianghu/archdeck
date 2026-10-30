@@ -48,7 +48,7 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
   /** 变化的文件属于哪个项目；不在模型根目录下返回 null */
   const projectOf = (file: string): string | null => {
     const rel = path.relative(modelRoot, file)
-    if (rel.startsWith('..') || path.isAbsolute(rel) || !isModelFile(file)) return null
+    if (rel.startsWith('..') || path.isAbsolute(rel) || !(isModelFile(file) || /[\\/]explainers[\\/][^\\/]+\.html$/i.test(file))) return null
     return rel.split(path.sep)[0] || null
   }
   const json = (res: import('node:http').ServerResponse, body: unknown, status = 200) => {
