@@ -119,7 +119,7 @@ const relText = (id: string) => {
 </script>
 
 <template>
-  <Section title="结构指标" class="module-structure" :fold="fold">
+  <Section title="结构指标" class="module-structure" :fold="fold" :count="ready && metrics ? metrics.ca + metrics.ce : undefined">
     <p v-if="!ready" class="muted no-facts">{{ noFacts }}</p>
     <template v-else-if="metrics">
       <dl class="dims">
