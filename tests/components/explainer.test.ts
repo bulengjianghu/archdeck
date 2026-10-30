@@ -125,6 +125,9 @@ describe('EX-3、EX-4、EX-7 图解标签', () => {
     const w = mount(ExplainerDoc, { props: { module: 'infra.framework' }, global: provide(d) })
     mounted.push(w)
     expect(w.find('.nav.up').text()).toBe('↑ Infrastructure')
+    // 「在画布上选中」选中这份图解的模块，资料区不动
+    await w.find('.nav.sel').trigger('click')
+    expect(d.selection.value).toEqual({ kind: 'module', id: 'infra.framework' })
     expect(w.find('[data-testid="explainer-stale"]').text()).toContain('未记录依据')
   })
 

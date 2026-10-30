@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 资料区的图解标签内容（EX-3、EX-4、EX-7，ADR-0055）：顶部一行 ↑ ↓ 图解导航与过期提示（可展开改动），下面是沙箱 iframe。
+ * 资料区的图解标签内容（EX-3、EX-4、EX-7，ADR-0055）：顶部一行 ↑ ↓ 图解导航、「在画布上选中」与过期提示（可展开改动），下面是沙箱 iframe。
  * iframe 只给 allow-scripts；父页只接受来源是这个 iframe 窗口的消息：arch:select 在画布上选中模块（资料区不动，WS-8），
  * arch:open 以预览标签打开另一份图解。
  */
@@ -35,7 +35,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onMessage))
 
 <template>
   <div class="explainer" :data-explainer="module">
-    <div v-if="nav.up || nav.down.length || status?.stale" class="bar">
+    <div class="bar">
       <button v-if="nav.up" class="nav up" :title="`上一级图解：${name(nav.up)}（单击预览 · 双击固定）`" @click="open(nav.up)" @dblclick="open(nav.up, true)">
         ↑ {{ name(nav.up) }}
       </button>
@@ -52,6 +52,9 @@ onBeforeUnmount(() => window.removeEventListener('message', onMessage))
         </button>
       </span>
       <span class="sp" />
+      <button v-if="module !== desk.index.value?.rootId" class="nav sel" title="在画布上选中这个模块（资料区不动）" @click="desk.revealModule(module)">
+        在画布上选中
+      </button>
       <button v-if="status?.stale" class="stale" :aria-expanded="showChanges" data-testid="explainer-stale" @click="showChanges = !showChanges">
         {{ staleText(status) }} {{ status.changes.length ? (showChanges ? '▴' : '▾') : '' }}
       </button>

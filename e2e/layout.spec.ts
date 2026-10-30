@@ -3,7 +3,7 @@
  * 选中文件在资料区打开源代码（G15、§6.4）
  */
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, openDesk, query } from './helpers'
+import { collapseDisplay, graphNode, openDesk, query } from './helpers'
 
 const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
 const props = (page: Page) => page.getByRole('complementary', { name: '属性' })
@@ -151,6 +151,8 @@ test('WS-8：资料区不跟随选中——选中画布节点、单步只改属�
   const head = props(page).locator('h2').first()
   const was = await head.innerText()
   await page.getByRole('button', { name: /下一步/ }).click()
+  // 图例展开时叠在画布右上，会盖住那里的节点（L48）
+  await collapseDisplay(page)
   await graphNode(page, 'state.desk').click()
   await expect(head).not.toHaveText(was)
   expect(await tabs(page).allInnerTexts()).toEqual(before)
