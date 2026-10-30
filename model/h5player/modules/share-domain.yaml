@@ -3,30 +3,36 @@
 # 骨架模块（share.contracts 等第二级）在 layers.yaml 中定义，本文件只用 parent 往下挂。
 
 modules:
+  - id: domain
+    name: Domain
+    summary: 以纯函数给出领域事实、模型与播放决策
   # ─── 第二级模块的原则（ADR-0042，补充骨架条目）───
-  - { id: domain.types, name: "类型与事件", abstraction: 领域公共类型的唯一属地：按类型用途切分，Framework 只重导出同一对象，不另造副本。 }
-  - { id: domain.ports, name: "领域端口", abstraction: 签名引用领域类型的契约集中于此，由外层实现、领域只依赖端口，使依赖方向保持向内。 }
-  - { id: domain.models, name: "领域模型", abstraction: 聚合持有事实并守住不变量：写只经语义方法、读只出只读视图，按聚合与方案切分，只存值快照不持 DOM。 }
-  - { id: domain.services, name: "决策服务", abstraction: 按决策主题切分的纯函数：输入事实、输出结构化结论，零 I/O，控制律经 host 注入，写回由宿主插件完成。 }
-  - { id: domain.algorithms, name: "协议算法", abstraction: 按协议切分的无 I/O 纯算法，只依赖输入字节与参数，供 MU 调用而不反向依赖外层。 }
-  - { id: domain.rules, name: "规则表", abstraction: 可穷举的规则写成表与校验函数，按规则对象（图变更 / 状态映射）切分，由机制层调用判定。 }
-  - { id: share.contracts, name: "跨层契约", abstraction: 只收只依赖跨层公共类型的最小契约；签名一旦引用领域类型就归 Domain 端口。 }
-  - { id: share.errors, name: "错误原语", abstraction: 错误分类数据化：错误码到类型 / 级别查表映射，所有失败归一为 ErrorBase 进同一条错误链。 }
-  - { id: share.utils, name: "通用原语", abstraction: 只收无状态、无环境副作用的纯工具；带环境副作用的归 Framework 通用运行时工具。 }
+  - { id: domain.types, name: "类型与事件", abstraction: 领域公共类型的唯一属地：按类型用途切分，Framework 只重导出同一对象，不另造副本。, summary: 提供领域公共类型与事件的唯一定义 }
+  - { id: domain.ports, name: "领域端口", abstraction: 签名引用领域类型的契约集中于此，由外层实现、领域只依赖端口，使依赖方向保持向内。, summary: 定义领域对外依赖的端口签名，使依赖向内, invariants: [只有类型声明与无副作用的纯函数，不含实现类, 签名只引用 domain 内部类型，不依赖 framework 或 player] }
+  - { id: domain.models, name: "领域模型", abstraction: 聚合持有事实并守住不变量：写只经语义方法、读只出只读视图，按聚合与方案切分，只存值快照不持 DOM。, summary: 持有播放事实并守住不变量，对外给只读视图, invariants: [所在包 lib 只有 ES2020、依赖只有 share，模型无法持有 DOM 句柄, 领域事件只经构造时注入的 DomainEventPublisher 发布, PlaybackState 同时至多一个待提交迁移，违例抛 InvariantError] }
+  - { id: domain.services, name: "决策服务", abstraction: 按决策主题切分的纯函数：输入事实、输出结构化结论，零 I/O，控制律经 host 注入，写回由宿主插件完成。, summary: 由事实算出方案选型、缓冲阈值等结构化结论, invariants: [所在包 lib 只有 ES2020、依赖只有 share，编译期碰不到 DOM 与网络, 不读时钟、不取随机数，时间作为输入传入, 无模块级可变状态，同输入同输出] }
+  - { id: domain.algorithms, name: "协议算法", abstraction: 按协议切分的无 I/O 纯算法，只依赖输入字节与参数，供 MU 调用而不反向依赖外层。, summary: 无 I/O 地解析 H.264、AMF0 并选出降延迟丢帧段 }
+  - { id: domain.rules, name: "规则表", abstraction: 可穷举的规则写成表与校验函数，按规则对象（图变更 / 状态映射）切分，由机制层调用判定。, summary: 穷举校验图变更合法性，并把播放状态映射为 MU 状态 }
+  - { id: share.contracts, name: "跨层契约", abstraction: 只收只依赖跨层公共类型的最小契约；签名一旦引用领域类型就归 Domain 端口。, summary: 定义插件契约与 Result 成败返回值, invariants: [只有类型与 ok / err 两个纯构造函数, share 包零依赖，契约不引用领域类型] }
+  - { id: share.errors, name: "错误原语", abstraction: 错误分类数据化：错误码到类型 / 级别查表映射，所有失败归一为 ErrorBase 进同一条错误链。, summary: 按错误码统一构造带类型与级别的错误, invariants: [错误的类型与级别只由错误码查表得出，表对每个错误码穷举, errorWrapper 遇到已是 ErrorBase 的不重包，只追加 detail, share 包零依赖] }
+  - { id: share.utils, name: "通用原语", abstraction: 只收无状态、无环境副作用的纯工具；带环境副作用的归 Framework 通用运行时工具。, summary: 提供无状态、无副作用的通用工具函数 }
   # ───────────────────────── share（层的包入口）─────────────────────────
   - id: share
     name: Share
+    summary: 提供各层共用的最小契约、错误与工具原语
     codeRefs: [packages/share/src/index.ts]
 
   # ───────────────────────── domain.types ─────────────────────────
   - id: domain.types.ambient
     parent: domain.types
     name: 宿主类型补丁
+    summary: 补齐 ES2020 下分片地址归一化所需的 URL 类型
     responsibility: domain 的 lib 收窄为 ES2020 后按 lib.dom.d.ts 契约补的最小全局类型面（WHATWG URL），供分片地址归一化使用；只有类型，不构造任何 I/O 对象。
     codeRefs: [packages/domain/src/globals.d.ts]
   - id: domain.types.modes
     parent: domain.types
     name: 方案三元组与模式枚举
+    summary: 定义加载、播放模式与方案三元组枚举
     responsibility: 定义 LoadMode（Mp4/Flv/Hls）、PlayMode（Live/Vod）、SolutionType（Wcs/Wasm/Mse/Fhls/Vcs/Video）三元组枚举，以及 Fhls 呈现形态 FhlsPresentation 与建段判定 decidePresentation。不含任何选型规则。
     dataStructures: [ds.LoadMode, ds.PlayMode, ds.SolutionType, ds.FhlsPresentation]
     codeRefs: [packages/domain/src/types/modes.ts, packages/domain/src/types/fhlsPresentation.ts]
@@ -35,6 +41,7 @@ modules:
   - id: domain.types.model-types
     parent: domain.types
     name: 模型与观测类型
+    summary: 统一定义状态、MU 枚举与模型能力面类型
     responsibility: 领域公共类型的唯一属地：MuKey / MuType / PlayerStatus / MuStatus / State / Overlay 等状态与 MU 枚举，PlaybackState 与 Statistic 的三档能力面（只读 ⊂ 采集 ⊂ 持有/状态机），ModelViewMap / PlaybackProfile 等 Registry 视图契约，以及弱网观测事实（缓冲、追帧、丢帧、策略决策、拉流）。framework 侧只重导出同一枚举对象，不另起一套值。
     principle: |
       - 能力面收窄矩阵用结构类型继承链表达：`PlaybackStateReadView ⊂ CollectorView ⊂ MachineView`、`StatisticReadView ⊂ CollectorView ⊂ OwnerView`，Registry 按调用方身份窄化分发。
@@ -70,6 +77,7 @@ modules:
   - id: domain.types.pipeline-topology
     parent: domain.types
     name: Pipeline 拓扑契约
+    summary: 定义 Pipeline 段、腿、节点与变更的形状
     responsibility: Pipeline 图的拓扑契约类型唯一属地：段类别 SegmentKind、语义锚点 SemanticPosition、腿 LegId / 节点 NodeId、边、拓扑快照与变更描述 PipelineDiffSpec。framework 的 PipelineDiff 等公开 API 由 framework 承载，这里只放规则判定所需的形状。
     dataStructures: [ds.SegmentKind, ds.SemanticPosition, ds.LegId, ds.NodeId, ds.PipelineEdge, ds.PipelineTopology, ds.PipelineDiffSpec, ds.TopologyError]
     codeRefs: [packages/domain/src/types/pipelineTopology.ts]
@@ -78,6 +86,7 @@ modules:
   - id: domain.types.events
     parent: domain.types
     name: 领域事件
+    summary: 定义领域事件的形状
     responsibility: 定义领域事件判别联合 DomainEvent（加载/播放模式变化、方案变化、叠加态进出、统计切片开始）。只定义事件形状，发布通道由 domain.ports 的 DomainEventPublisher 提供。
     dataStructures: [ds.DomainEvent]
     codeRefs: [packages/domain/src/events.ts]
@@ -87,6 +96,7 @@ modules:
   - id: domain.models.base
     parent: domain.models
     name: 聚合基类
+    summary: 给领域聚合统一事件注入、重置与幂等释放
     responsibility: 领域聚合的公共基类 ModelBase（只注入 DomainEventPublisher、抽象 reset、幂等 dispose）与不变量违例错误 InvariantError。不持 Context，不做观察 Proxy（观察归 Registry）。
     dataStructures: [ds.ModelBase, ds.InvariantError]
     codeRefs: [packages/domain/src/models/modelBase.ts]
@@ -95,6 +105,7 @@ modules:
   - id: domain.models.playback-state
     parent: domain.models
     name: PlaybackState 播放状态聚合
+    summary: 持有播放器基态与叠加态，守住转移不变量
     responsibility: 持有播放器基态（current / next 两相）、叠加态（Seeking / Buffering）、命令代次与 MU 编制（含多腿别名表），守住转移与叠加的不变量，提供 memento 快照与回滚。不决定迁移规则（由 framework 状态机驱动）。
     principle: |
       - 两相提交：`beginTransition` 写入 next 并递增 commandGeneration → `commitTransition` 落到 current → `endTransition` 释放 next；重复 begin / 无 next 时 commit 一律抛 InvariantError。
@@ -109,6 +120,9 @@ modules:
   - id: domain.models.statistic
     parent: domain.models
     name: Statistic 统计聚合
+    summary: 持有全部播放统计事实，分清未记录与记录为零
+    invariants:
+      - 不取时钟：时刻一律由调用方传入
     responsibility: 播放统计事实的唯一持有者：首帧里程碑、帧率/码率/帧延迟、卡顿与丢帧计数、播放结局累计、弱网观测（观察时长、追帧、拉流、缓冲策略决策）等；区分「未记录」与「记录为 0」，管理计数窗口与统计切片。不取时钟（时刻由调用方传入），不做对外快照映射。
     principle: |
       - 写入面按能力面分档：采集方只拿 StatisticCollectorView（mark* / report* / count*），持有方额外有 startNewSlice / reset。
@@ -123,6 +137,7 @@ modules:
   - id: domain.models.stream
     parent: domain.models
     name: 流模型
+    summary: 持有各协议加载腿解析出的流事实
     responsibility: 加载腿的流事实聚合：FlvStreamModel / HlsModel / Mp4StreamModel 三种流模型共享解析得到的流事实（时间基准、帧信息、SPS/PPS、到达高水位、加密版本），并各自承载协议专属事实——HLS 清单滚动窗口、起播分片、墙钟找片；MP4 字节区间与分片加载进度；直播 pts↔墙钟映射轨 WallClockTrack。不发网络请求，不持 DOM。
     principle: |
       - 公共流事实委托给组件 StreamFactsCore，三种流模型只是薄外观 + 协议专属状态；Registry 合成 `loadMode` / `playMode` 判别字段，形成 StreamModelUnion。
@@ -149,6 +164,7 @@ modules:
   - id: domain.models.play
     parent: domain.models
     name: 播放模型
+    summary: 按方案持有播放段事实，并按能力判别
     responsibility: 播放段的领域事实聚合，按方案一一对应：FrameModel（Wcs/Wasm 帧级渲染）、MseModel（MSE SourceBuffer 事实）、FhlsModel（Fhls 分片生成、呈现时钟、原生取片需求）、VideoPlayModel（原生 Video）。提供能力面断言（assert* / has*）供调用方按能力而非按类判别。VCS 播放模型由 Player 持有，此处只定义其视图契约。不持 DOM / SourceBuffer 句柄。
     principle: |
       - 播放模型只存可序列化的值快照（VideoPlaybackSnapshot、帧台账、渲染时间轴），DOM 读数由渲染适配层采样后 `record*` 写入。
@@ -173,6 +189,7 @@ modules:
   - id: domain.models.components
     parent: domain.models
     name: 模型组件
+    summary: 提供流事实、帧台账与渲染时间轴等可复用值组件
     responsibility: 被流模型 / 播放模型组合复用的值组件：StreamFactsCore（解析链路共享流事实）、FrameBufferLedger（解复用/解码帧台账与 GOP 账）、RenderTimeline（渲染时间轴、倍速、补缓冲冻结）、VideoPlaybackSnapshot（video 元素状态值快照）。
     principle: |
       - StreamFactsCore 的 `arrivedMaxDts` 是会话内单调高水位，必须在任何丢帧 / 时间戳修正之前上报，否则积压判据会闭环自我抹除；fps 在首秒样本内锁定，dts 倒退时重新起算。
@@ -197,6 +214,7 @@ modules:
   - id: domain.services.solution-select
     parent: domain.services
     name: 方案选型与流事实裁决
+    summary: 推出目标方案三元组，并裁决流事实是否需重选
     responsibility: 由 URL / 配置 / 请求 / 当前三元组 / 环境能力推出目标 (loadMode, playMode, solution) 及变化标记；流信息到达后裁决是否需要解密与重选方案；推导 Process 段需求（PTS 校正、解密）与直播帧策略的方案分派。只给结论，不执行装配。
     principle: |
       - 推断优先级：URL 推断 > 本次请求 > 当前值 > 配置 > 默认（Live / Flv 或 Mp4）；与显式配置冲突时返回 `err(ErrorBase(ConfigError))`。
@@ -228,6 +246,7 @@ modules:
   - id: domain.services.buffer-baseline
     parent: domain.services
     name: 基线缓冲阈值
+    summary: 给出各播放场景的四阈值缓冲基线
     responsibility: 按播放模式 / 加载模式 / 活动腿给出四阈值基线（起补 / 停补 / 起丢 / 停丢），配置覆盖优先；录制腿固定取点播档。是各自适应控制律与时移阈值的共同起点。
     provides: [if.services.buffer-baseline.resolvePlaybackBuffer]
     dataStructures: [ds.PlaybackBufferThresholds]
@@ -237,6 +256,7 @@ modules:
   - id: domain.services.live-buffer-control
     parent: domain.services
     name: 直播自适应缓冲控制律
+    summary: 算出直播缓冲阈值、降延迟放行与跳跃量
     responsibility: 直播缓冲阈值的控制律（框架无关、host 注入）：SAB 自适应控制器、供需感知控制器 SupplyAware、两者按送货节奏切换的融合控制器 CadenceSwitch、降延迟放行的积压检测器 BacklogDetector，以及 VCS 送帧线的 EWMA 包络控制器。只计算阈值 / 放行位 / 跳跃量，写回与埋点由宿主插件做。
     principle: |
       - SAB：扩张只看实测缓冲谷底，固定死区 + 封顶 band + 起播冷静期；平静确认后按固定步长回收；空档预留 setGapFloor 作为独立下限；欠载时上报交棒。
@@ -266,6 +286,9 @@ modules:
   - id: domain.services.vod-buffer
     parent: domain.services
     name: 点播缓冲与加载水位
+    summary: 推导点播缓冲阈值，并判定是否继续拉下一段
+    invariants:
+      - 零 import：不依赖任何 Model 类型与 LoadMode，来源换算由调用方传入
     responsibility: 点播的自适应缓冲（带宽 / 码率 EWMA、下一段体积与拉流耗时预测、起补 / 停补阈值推导与节流）与加载水位滞回（是否继续拉下一段）。不认识任何 Model 类型与 LoadMode，来源换算由插件整理成入参。
     principle: |
       - 阈值推导 = 预测 T_load × 安全系数，经 clamp、变化率夹断与最小间隔节流；拖慢检测命中时跳过节流立即重算。
@@ -278,6 +301,7 @@ modules:
   - id: domain.services.hls-live
     parent: domain.services
     name: HLS 直播与清单节律
+    summary: 判定 HLS 直播缓冲策略、追帧与清单刷新节律
     responsibility: HLS 专属的纯决策：按分片时长与目标延迟推直播缓冲策略、追帧 / 落后判定与暂停恢复（重定位 / 追赶 / 不动）、清单刷新节律（快档 / 慢档 / 停止，点播策略与录制腿驱动共用）。副作用与运行态守卫留在策略层。
     provides: [if.services.hls-live.getHlsLiveBufferPolicy, if.services.hls-live.decideLiveEdgeLag, if.services.hls-live.hlsPlaylistRefresh]
     dataStructures: [ds.HlsLiveBufferPolicy, ds.HlsLiveEdgeLagDecision, ds.HlsLiveResumeDecision, ds.HlsPlaylistRefreshDecision]
@@ -290,6 +314,9 @@ modules:
   - id: domain.services.fhls-presentation
     parent: domain.services
     name: Fhls 呈现规则
+    summary: 换算 Fhls 呈现时钟，判定看门狗、供数与收敛
+    invariants:
+      - 纯函数、零 import：不读墙钟、不开定时器
     responsibility: Fhls 方案的纯规则：呈现时钟（源 pts ↔ 呈现时间 ↔ 媒体原点，按渲染轴分代）、连续呈现三条看门狗判据（未渲染 / 进度停滞 / 消费间隔）、连续呈现点播组的供数预算与 seek 收敛判据、原生取片饥饿缓解。不读墙钟、无定时器，错误码留在接线层。
     principle: |
       - 渲染 dts = 源 dts + 代偏移 + Σ已生效丢帧偏移；内容跳变（换边 / seek）用 `spliceEpoch` 开新一代，新一代首帧接在两轨最后渲染 dts 之后，渲染轴恒单调。
@@ -305,6 +332,9 @@ modules:
   - id: domain.services.timeshift
     parent: domain.services
     name: 时移换腿决策
+    summary: 判定时移何时换腿、回退与是否追不上
+    invariants:
+      - 纯判定：只依赖本包模式枚举与基线阈值，无 IO、定时器与模块级状态
     responsibility: 直播时移的纯判定：直播腿接点跟踪、换腿判定（覆盖 + 关键帧对齐 + 交接余量）、灰度区回退、接管前有界预取、追不上（饥饿）判定、拖进度换腿、Fhls 切后台续播，以及录制腿与直播腿的对齐方式与时间基准常量 C 换算。无 IO / 定时器 / 全局状态；执行换腿事务的是 app.timeshift。
     principle: |
       - `decideLeg` 规则顺序即契约、命中即出：覆盖且对齐（余量够 → switch，不够 → wait）→ 对不齐定局 → 接点滚出 → 录制结束 → 拉取失败 → 未覆盖片数到上限 → 录制头未知 → 等下一片；连续无进展可把 wait 改判 give-up。
@@ -328,6 +358,7 @@ modules:
   - id: domain.algorithms.codec-syntax
     parent: domain.algorithms
     name: H.264 位流语法
+    summary: 读 H.264 位流并解析 SPS
     responsibility: H.264 码流的比特级读取（ExpGolomb 缓存式整块读取、FastExpGolomb 逐字节轻量读取，ue(v)/se(v) 解码）与 SPS 解析（profile/level、尺寸含 cropping、SAR、VUI 帧率、POC 字段）。越界抛 share 的 ErrorBase。
     provides: [if.algorithms.codec-syntax.ExpGolomb, if.algorithms.codec-syntax.parseSps]
     codeRefs: [packages/domain/src/algorithms/bitReader/**, packages/domain/src/algorithms/h264/**]
@@ -336,6 +367,7 @@ modules:
   - id: domain.algorithms.container
     parent: domain.algorithms
     name: 容器元数据解析
+    summary: 解码 AMF0 元数据，非法时报格式错误
     responsibility: AMF0 解码（FLV script data / onMetaData：时长、宽高、码率、编码 id、点播关键帧索引表），按类型标记递归下降；数据非法时上抛 DemuxFormatError，不静默返回空对象。
     provides: [if.algorithms.container.parseScriptData]
     dataStructures: [ds.ParseValueDataType]
@@ -345,6 +377,7 @@ modules:
   - id: domain.algorithms.latency-drop
     parent: domain.algorithms
     name: Fhls 降延迟丢帧选段
+    summary: 在合流队列上选出可丢的降延迟区间
     responsibility: 状态转移形纯函数：在合流队列上按关键帧对齐、断裂点约束选出降延迟丢帧区间，缓冲不足时取消；只给 drop/pass/hold/cancel 动作，执行丢帧与偏移记账留给调用方。
     provides: [if.algorithms.latency-drop.pickLatencyDropRange]
     dataStructures: [ds.LatencyDropState, ds.LatencyDropEvent, ds.LatencyDropResult]
@@ -355,6 +388,7 @@ modules:
   - id: domain.rules.pipeline-rules
     parent: domain.rules
     name: Pipeline 图规则
+    summary: 校验 Pipeline 图变更并推导目标边
     responsibility: Pipeline 图变更的唯一规则属地：校验 PipelineDiffSpec（节点增删、段归属、边合法性、外部锚点、多腿 G1–G7 活动腿分区、语义锚点唯一性），推导目标边并应用外部锚点；提供 NodeId / 腿段账本键的唯一拼接口。不持图实例，「当前已有边」由调用方传入。
     principle: |
       - `validateDiff(topology, diff, playerPhase, currentEdges)` 在拷贝上依次做 remove → add → 边校验 → 外部锚点校验 → buildTargetEdges → 活动腿分区 → 语义锚点校验，任何错误收集为 TopologyError[] 一次返回；全部通过才 applyExternalAnchors 产出最终边。
@@ -366,6 +400,7 @@ modules:
   - id: domain.rules.status-mapping
     parent: domain.rules
     name: 状态映射规则
+    summary: 把播放器基态穷举映射为 MU 状态
     responsibility: 播放器基态 PlayerStatus → MU 状态 MuStatus 的穷举映射表（Loaded/Playing/Paused/Buffering → Running 等），framework 状态机同名再导出。
     provides: [if.rules.status-mapping.mappingPlayerStatus]
     codeRefs: [packages/domain/src/rules/mappingPlayerStatus.ts]
@@ -377,27 +412,27 @@ relations:
   # ── Domain.ports ──
 
   # ── Domain.models ──
-  - { id: rel.sd.ps-publish, from: domain.models.playback-state, to: domain.ports, type: notifies, interface: if.ports.DomainEventPublisher, payload: ds.DomainEvent, description: 叠加进出（OverlayEntered / OverlayExited）同步发布领域事件 }
-  - { id: rel.sd.stat-publish, from: domain.models.statistic, to: domain.ports, type: notifies, interface: if.ports.DomainEventPublisher, payload: ds.DomainEvent, description: startNewSlice 发布 StatisticSliceStarted }
-  - { id: rel.sd.ps-status-map, from: domain.models.playback-state, to: domain.rules.status-mapping, type: queries, interface: if.rules.status-mapping.mappingPlayerStatus, description: PlaybackState 播放状态聚合向状态映射规则取：addMu 时按基态推 MU 状态 }
-  - { id: rel.sd.stream-comp, from: domain.models.stream, to: domain.models.components, type: commands, payload: ds.StreamFactsCore, description: 流模型交给模型组件：把公共流事实委托给 StreamFactsCore }
-  - { id: rel.sd.stream-hls-policy, from: domain.models.stream, to: domain.services.hls-live, type: queries, interface: if.services.hls-live.getHlsLiveBufferPolicy, description: 流模型向 HLS 直播与清单节律取：HlsModel 按清单分片时长与目标延迟推直播缓冲策略 }
-  - { id: rel.sd.stream-utils, from: domain.models.stream, to: share.utils, type: queries, interface: if.utils.lastOf, description: 流模型向通用原语取：取清单 / 样本末项 }
-  - { id: rel.sd.play-comp, from: domain.models.play, to: domain.models.components, type: commands, description: 播放模型交给模型组件：new 出 FrameBufferLedger / RenderTimeline / VideoPlaybackSnapshot 并委托给它们 }
-  - { id: rel.sd.play-fhls-clock, from: domain.models.play, to: domain.services.fhls-presentation, type: queries, interface: if.services.fhls-presentation.presentationClock, payload: ds.PresentationClockFacts, description: 播放模型向 Fhls 呈现规则取：FhlsModel 的呈现时钟分代与媒体原点换算 }
-  - { id: rel.sd.comp-utils, from: domain.models.components, to: share.utils, type: queries, interface: if.utils.lastOf, description: 模型组件向通用原语取：StreamFactsCore 取末帧 }
+  - { id: rel.sd.ps-publish, from: domain.models.playback-state, to: domain.ports, type: notifies, interface: if.ports.DomainEventPublisher, payload: ds.DomainEvent, description: 叠加进出（OverlayEntered / OverlayExited）同步发布领域事件, purpose: 宣告叠加态进出 }
+  - { id: rel.sd.stat-publish, from: domain.models.statistic, to: domain.ports, type: notifies, interface: if.ports.DomainEventPublisher, payload: ds.DomainEvent, description: startNewSlice 发布 StatisticSliceStarted, purpose: 宣告新统计切片开始 }
+  - { id: rel.sd.ps-status-map, from: domain.models.playback-state, to: domain.rules.status-mapping, type: queries, interface: if.rules.status-mapping.mappingPlayerStatus, description: PlaybackState 播放状态聚合向状态映射规则取：addMu 时按基态推 MU 状态, purpose: 按基态推出 MU 状态 }
+  - { id: rel.sd.stream-comp, from: domain.models.stream, to: domain.models.components, type: commands, payload: ds.StreamFactsCore, description: 流模型交给模型组件：把公共流事实委托给 StreamFactsCore, purpose: 共用解析链路的流事实 }
+  - { id: rel.sd.stream-hls-policy, from: domain.models.stream, to: domain.services.hls-live, type: queries, interface: if.services.hls-live.getHlsLiveBufferPolicy, description: 流模型向 HLS 直播与清单节律取：HlsModel 按清单分片时长与目标延迟推直播缓冲策略, purpose: 推出 HLS 直播缓冲策略 }
+  - { id: rel.sd.stream-utils, from: domain.models.stream, to: share.utils, type: queries, interface: if.utils.lastOf, description: 流模型向通用原语取：取清单 / 样本末项, purpose: 取清单与样本末项 }
+  - { id: rel.sd.play-comp, from: domain.models.play, to: domain.models.components, type: commands, description: 播放模型交给模型组件：new 出 FrameBufferLedger / RenderTimeline / VideoPlaybackSnapshot 并委托给它们, purpose: 复用帧台账与渲染时间轴 }
+  - { id: rel.sd.play-fhls-clock, from: domain.models.play, to: domain.services.fhls-presentation, type: queries, interface: if.services.fhls-presentation.presentationClock, payload: ds.PresentationClockFacts, description: 播放模型向 Fhls 呈现规则取：FhlsModel 的呈现时钟分代与媒体原点换算, purpose: 换算 Fhls 呈现时钟 }
+  - { id: rel.sd.comp-utils, from: domain.models.components, to: share.utils, type: queries, interface: if.utils.lastOf, description: 模型组件向通用原语取：StreamFactsCore 取末帧, purpose: 取末帧 }
 
   # ── Domain.services ──
-  - { id: rel.sd.sel-errors, from: domain.services.solution-select, to: share.errors, type: queries, description: 方案选型与流事实裁决向错误原语取：冲突 / 不支持时构造 ErrorBase(ConfigError / UnsupportedError) }
-  - { id: rel.sd.sel-result, from: domain.services.solution-select, to: share.contracts, type: queries, interface: if.contracts.Result, payload: ds.Result, description: 方案选型与流事实裁决向跨层契约取：选型与裁决调用 ok / err 构造 Result 返回 }
-  - { id: rel.sd.ts-baseline, from: domain.services.timeshift, to: domain.services.buffer-baseline, type: queries, interface: if.services.buffer-baseline.resolvePlaybackBuffer, description: 时移换腿决策向基线缓冲阈值取：交接余量与录制停更阈值取点播档基线 }
+  - { id: rel.sd.sel-errors, from: domain.services.solution-select, to: share.errors, type: queries, description: 方案选型与流事实裁决向错误原语取：冲突 / 不支持时构造 ErrorBase(ConfigError / UnsupportedError), purpose: 报配置冲突或不支持 }
+  - { id: rel.sd.sel-result, from: domain.services.solution-select, to: share.contracts, type: queries, interface: if.contracts.Result, payload: ds.Result, description: 方案选型与流事实裁决向跨层契约取：选型与裁决调用 ok / err 构造 Result 返回, purpose: 以结果值返回选型结论 }
+  - { id: rel.sd.ts-baseline, from: domain.services.timeshift, to: domain.services.buffer-baseline, type: queries, interface: if.services.buffer-baseline.resolvePlaybackBuffer, description: 时移换腿决策向基线缓冲阈值取：交接余量与录制停更阈值取点播档基线, purpose: 取点播档基线定交接余量 }
 
   # ── Domain.algorithms ──
-  - { id: rel.sd.codec-errors, from: domain.algorithms.codec-syntax, to: share.errors, type: queries, description: H.264 位流语法向错误原语取：位读取越界抛 ErrorBase }
-  - { id: rel.sd.container-errors, from: domain.algorithms.container, to: share.errors, type: queries, description: 容器元数据解析向错误原语取：AMF 数据非法抛 ErrorBase(DemuxFormatError) }
+  - { id: rel.sd.codec-errors, from: domain.algorithms.codec-syntax, to: share.errors, type: queries, description: H.264 位流语法向错误原语取：位读取越界抛 ErrorBase, purpose: 报位读取越界 }
+  - { id: rel.sd.container-errors, from: domain.algorithms.container, to: share.errors, type: queries, description: 容器元数据解析向错误原语取：AMF 数据非法抛 ErrorBase(DemuxFormatError), purpose: 报元数据格式非法 }
 
   # ── Domain.rules ──
-  - { id: rel.sd.pr-result, from: domain.rules.pipeline-rules, to: share.contracts, type: queries, interface: if.contracts.Result, payload: ds.Result, description: Pipeline 图规则向跨层契约取：validateDiff 调用 ok / err 返回目标拓扑或 TopologyError 列表 }
+  - { id: rel.sd.pr-result, from: domain.rules.pipeline-rules, to: share.contracts, type: queries, interface: if.contracts.Result, payload: ds.Result, description: Pipeline 图规则向跨层契约取：validateDiff 调用 ok / err 返回目标拓扑或 TopologyError 列表, purpose: 以结果值返回目标拓扑或错误 }
 
 interfaces:
   # ── 能力面契约（implements 的目标，M11、K5；字段见同名数据结构） ──

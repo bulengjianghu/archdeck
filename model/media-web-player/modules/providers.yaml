@@ -3,17 +3,21 @@
 # 2026-10-27 按 plans/arch-desk-media-player/10-module-review.md §5 把原 providers.wasm-core 一分为二：ABI 变与输入协议变是两个变更原因。
 
 modules:
+  - id: providers
+    name: 管线族 Provider
+    summary: 把一个会话的流拉下来、解码并呈现出声
   # 第二级模块的原则（补充条目，ADR-0042；名称与骨架一致）
-  - { id: providers.wasm-module, name: wasm 模块与会话, abstraction: 以模块 ABI 为唯一变更原因收拢两族共用的一侧，输入协议的变化不进来；会话资源一律逆序释放、失败只报一次。 }
-  - { id: providers.stream-input, name: 拉流内核, abstraction: 以输入协议为变更原因独立于 ABI 一侧：输入对两族相同、只经族给的钩子回调会话；时移切换的计算抽成纯函数。 }
-  - { id: providers.self-clocked, name: 自建时钟族, abstraction: 会话实现只有一份、主线程与 Worker 共用，Worker 只经消息协议映射；播放器级资源归族，每会话资源归会话逆序释放。 }
-  - { id: providers.element, name: 元素族, abstraction: 按路线切会话管线、共用元素会话与声音：浏览器解码定速，延迟律只经元素属性与模块跳 IDR 施力。 }
-  - { id: providers.native-module, name: wasm 原生模块（C）, abstraction: 按处理阶段切分：解封装、解密、解码各自只管一步，模块会话是 ABI 背后唯一的调度者，JS 只经 ABI 头进出。 }
+  - { id: providers.wasm-module, name: wasm 模块与会话, abstraction: 以模块 ABI 为唯一变更原因收拢两族共用的一侧，输入协议的变化不进来。, summary: 让两族按 ABI 驱动 wasm 模块并安全收尾会话, invariants: [模块只编译一次，每个会话一个新实例，关闭即释放内存, 管线会话的资源按获取逆序释放，失败只报一次，每个漏斗阶段只报一次, 回调只在会话运行中执行，一次抛错即让会话失败] }
+  - { id: providers.stream-input, name: 拉流内核, abstraction: 以输入协议为变更原因独立于 ABI 一侧：输入对两族相同、只经族给的钩子回调会话；时移切换的计算抽成纯函数。, summary: 把各协议的拉流按模块肯收的节奏喂给会话, invariants: [只依赖管线契约与模块会话，不导入任何族，经族给的钩子回调会话, 时移切换的计算抽成无状态的纯函数，拉流与模块不进计算] }
+  - { id: providers.self-clocked, name: 自建时钟族, abstraction: 会话实现只有一份、主线程与 Worker 共用，Worker 只经消息协议映射；播放器级资源归族，每会话资源归会话逆序释放。, summary: 用 WebCodecs 或 wasm 软解自己定时播放，可在 Worker 跑, invariants: [主线程与 Worker 都用同一个 createWasmPipeline 建会话管线, 不依赖元素族，两族只经 wasm 核心与管线契约共用代码] }
+  - { id: providers.element, name: 元素族, abstraction: 按路线切会话管线、共用元素会话与声音：浏览器解码定速，延迟律只经元素属性与模块跳 IDR 施力。, summary: 借浏览器媒体元素播放，延迟仍受决策律约束, invariants: [mse 路线的模块实例只解封装（解码模式 none），解码交给浏览器, 不依赖自建时钟族，两族只经 wasm 核心与管线契约共用代码] }
+  - { id: providers.native-module, name: wasm 原生模块（C）, abstraction: 按处理阶段切分：解封装、解密、解码各自只管一步，模块会话是 ABI 背后唯一的调度者，JS 只经 ABI 头进出。, summary: 在 wasm 里解封装、解密并解码 FLV、TS、MP4 流 }
 
   # ───────────────────────── providers.wasm-module（同一包 media-wasm-core 的 ABI 一侧） ─────────────────────────
   - id: providers.wasm-module.module
     parent: providers.wasm-module
     name: 模块装载与 ABI 会话
+    summary: 装载 wasm 模块，给每个会话一个可驱动的 ABI 句柄
     kind: component
     responsibility: >-
       基线播放模块的装载与每会话句柄：wasm 只取一次、从 ArrayBuffer 编译一次（iOS 14 及以下唯一的装载路径），每个会话一个新实例、关闭即释放内存；
@@ -33,6 +37,7 @@ modules:
   - id: providers.wasm-module.sample
     parent: providers.wasm-module
     name: 归一化样本与 H.264
+    summary: 读出归一化样本，提取 H.264 参数集与 codec
     kind: component
     responsibility: 读模块内存里的归一化样本（dts / pts 90 kHz、随机访问、不连续、重发、配置哈希、负载视图、时间 SEI 的墙钟）；从 Annex-B 访问单元取 codec 字符串、参数集、首片是否参考帧并转 AVCC（给 WebCodecs 与 fMP4 用）。
     provides: [if.providers.wasm-module.h264]
@@ -41,6 +46,7 @@ modules:
   - id: providers.wasm-module.lifecycle
     parent: providers.wasm-module
     name: 管线会话生命周期
+    summary: 保证管线会话逆序释放、失败与漏斗只报一次
     kind: component
     responsibility: 两族共用的一次管线会话：获取的资源逆序释放（一个抛错也释放其余）、回调只在运行中执行且一次抛错即让会话失败一次、每个漏斗阶段只报一次；把族的命令函数与截图包成 Pipeline（stop / terminate）。
     provides: [if.providers.wasm-module.SessionLifecycle]
@@ -49,6 +55,7 @@ modules:
   - id: providers.stream-input.input
     parent: providers.stream-input
     name: 拉流输入
+    summary: 把拉到的字节喂进模块会话，并计量到达
     kind: component
     responsibility: >-
       喂模块会话的拉流，两族相同：FLV 一路直播响应、HLS 一张清单（片推动模块的时间轴）、MP4 按模块要的字节范围；字节按模块肯收的块推入，
@@ -63,6 +70,7 @@ modules:
   - id: providers.stream-input.timeshift
     parent: providers.stream-input
     name: 直播切时移计算
+    summary: 算出直播切时移时的接点、偏移与时间轴
     kind: component
     responsibility: 带时移列表的 FLV 直播里纯计算的那部分：截断处的接点与锚点、时移列表时间落在会话时间轴的哪里（偏移、平移后的时间轴）、直播 / 时移的时间轴、接入是否结束、时移统计。只计算，拉流与模块归 StreamInput。
     codeRefs: [media-wasm/packages/media-wasm-core/src/stream-input-timeshift.ts]
@@ -72,6 +80,7 @@ modules:
   - id: providers.self-clocked.family
     parent: providers.self-clocked
     name: 族装配与路线
+    summary: 给宿主自建时钟族，按环境列出路线并启动会话
     kind: component
     responsibility: >-
       wasmPipelines(options) 是给宿主的族：建立时按页面可见计时取并编译模块，createWasmPipelines 持有播放器级的容器、主线程画布与渲染器、
@@ -83,6 +92,7 @@ modules:
   - id: providers.self-clocked.session
     parent: providers.self-clocked
     name: 会话管线
+    summary: 在一个会话里拉流、解码、按时钟呈现并控延迟
     kind: component
     responsibility: >-
       一个会话的自建时钟管线，主线程与 Worker 内同一份：开模块实例与 StreamInput 拉流，按预算分片解码，按媒体时钟呈现，喂音频，
@@ -97,18 +107,21 @@ modules:
   - id: providers.self-clocked.video
     parent: providers.self-clocked
     name: 视频解码源
+    summary: 按路线提供视频解码，换解码器不动拉流
     kind: component
     responsibility: 管线眼里的视频解码器，只换它、拉流与缓冲不变：模块软解（wasm 路线），或从模块取压缩样本交给浏览器 VideoDecoder（webcodecs 路线：有界输出队列、按请求丢非参考片、配置检查超时）。
     codeRefs: [media-wasm/packages/media-provider-wasm-playback/src/live/video-source.ts, media-wasm/packages/media-provider-wasm-playback/src/live/webcodecs-video.ts]
   - id: providers.self-clocked.presentation
     parent: providers.self-clocked
     name: 呈现与渲染
+    summary: 按时把帧画上画布，并能截图
     kind: component
     responsibility: 何时呈现（下一帧到期前用定时器、到期用动画帧，页面隐藏时只读数不画）与画到哪里（WebGL 渲染器：I420 平面直接从 wasm 内存上传，WebCodecs 的 VideoFrame 一张纹理；上下文丢失与恢复、截图）。主线程模式渲染器属播放器，最后一帧跨会话留在屏上。
     codeRefs: [media-wasm/packages/media-provider-wasm-playback/src/live/presenter.ts, media-wasm/packages/media-provider-wasm-playback/src/live/renderer.ts]
   - id: providers.self-clocked.audio
     parent: providers.self-clocked
     name: 音频与媒体时钟
+    summary: 按播放速度出声，并给出会话的媒体时钟
     kind: component
     responsibility: 会话的声音与时钟：解码块按播放速度重采样到输出采样率、写在把输出帧数映射回媒体时间的时间线上（AudioFeed、线性重采样）；拉模型的音频输出（AudioWorklet，低版本 ScriptProcessor；Worker 模式经 MessagePort 直写音频线程）；媒体时钟与音频时间线。
     codeRefs:
@@ -119,12 +132,14 @@ modules:
   - id: providers.self-clocked.worker-client
     parent: providers.self-clocked
     name: Worker 模式主线程端
+    summary: 让 Worker 里的会话在主线程看来就是一个管线
     kind: component
     responsibility: 主线程这一侧：一个会话的 Pipeline 映射成发给 Worker 的消息（start 带模块、OffscreenCanvas 与音频端口，command / stop / screenshot / audio），把 Worker 回的 event / stats / failed 交给 sink；会话拥有 Worker、转交的画布与 AudioWorkletNode，stop 等 Worker 释放后终止它，应答超时即失败。
     codeRefs: [media-wasm/packages/media-provider-wasm-playback/src/live/worker-pipeline.ts]
   - id: providers.self-clocked.worker-host
     parent: providers.self-clocked
     name: Worker 端宿主
+    summary: 在 Worker 里运行会话管线，并把回报发回
     kind: component
     responsibility: Worker 这一侧（包的 ./worker 子路径入口）：一个 Worker 服务一个会话，start 带来已编译模块、转交的画布与音频端口，跑与主线程相同的会话管线，画进 OffscreenCanvas、PCM 写到端口；把管线的回报发回主线程。
     provides: [if.providers.self-clocked.serveMediaPlayerWorker]
@@ -132,6 +147,7 @@ modules:
   - id: providers.self-clocked.worker-protocol
     parent: providers.self-clocked
     name: Worker 消息协议
+    summary: 约定并校验主线程、Worker 与音频线程的消息
     kind: component
     responsibility: 主线程、管线 Worker 与音频输出之间的消息契约：四个通道（to-worker / from-worker / to-audio / from-audio）的消息类型、带版本与代号的信封、逐字段的形状校验（parsePlayerWorkerMessage）与可转移对象。
     provides: [if.providers.self-clocked.parsePlayerWorkerMessage]
@@ -142,6 +158,7 @@ modules:
   - id: providers.element.family
     parent: providers.element
     name: 族装配与路线
+    summary: 给宿主元素族，按能力列出 mse / native 路线
     kind: component
     responsibility: elementPipelines(options) 是给宿主的族：播放器级的一个 video 与留最后一帧的画布（iOS 按元素解锁播放），模块按需装载（只给 mse）；列出 mse / native 路线（MSE / ManagedMediaSource 与原生 HLS 能力探测），Worker 不可用；按路线启动会话管线，音量锁定（iPhone）时只管静音。
     provides: [if.providers.element.elementPipelines]
@@ -151,6 +168,7 @@ modules:
   - id: providers.element.mse
     parent: providers.element
     name: mse 路线管线
+    summary: 把模块解封装的样本经 MSE 交给元素播放
     kind: component
     responsibility: >-
       route mse：同一 wasm 模块只解封装（不解码），StreamInput 拉 HTTP-FLV 或 HLS，每次 drain 把模块里的样本封成每轨一个 fMP4 媒体段经 MediaSource 驱动追加；
@@ -161,6 +179,7 @@ modules:
   - id: providers.element.mse-driver
     parent: providers.element
     name: MSE 驱动与封段
+    summary: 把样本封成 fMP4 段，稳妥地追加进 MediaSource
     kind: component
     responsibility: MediaSource 驱动（每轨一个 SourceBuffer、一次一个操作的队列、满了腾空间重试一次、打开超时）与封段器（每轨压住最新样本、遇新配置 / 音频缺口 / 上限 / HLS 片长断段，音频远落后于视频时补静音），fMP4 的 init / media 段写法（90 kHz 时间轴不换算）与静音 AAC 帧。
     codeRefs:
@@ -171,12 +190,14 @@ modules:
   - id: providers.element.native
     parent: providers.element
     name: native 路线管线
+    summary: 把地址直接交给 video 播放，并转报元素事件
     kind: component
     responsibility: route native：源地址直给 video（mp4 点播、浏览器原生 HLS）；元素自己缓冲、定速、解码，会话只映射元素事件、出统计，不跑延迟律（session-opened 报 latencyControl false）。
     codeRefs: [media-wasm/packages/media-provider-element-playback/src/native-pipeline.ts]
   - id: providers.element.video
     parent: providers.element
     name: 元素会话与声音
+    summary: 管好元素的监听、首帧、最后一帧与自动播放声音
     kind: component
     responsibility: 两条元素路线共用的那部分：ElementSession（在 SessionLifecycle 上加元素监听、缓冲、首帧上屏、保最后一帧并复位元素），错误映射、渲染帧计数与冻结、前方缓冲量，元素在自动播放策略下的声音（静音起播、手势内放声、音量锁定探测）。
     codeRefs: [media-wasm/packages/media-provider-element-playback/src/video-element.ts]
@@ -185,6 +206,7 @@ modules:
   - id: providers.native-module.abi
     parent: providers.native-module
     name: 对外 ABI 头
+    summary: 定义 JS 与 C 模块之间的函数与结构布局
     kind: component
     responsibility: JS 与模块之间的 C ABI：会话配置、推字节、按轨取归一化样本与视频帧 / 音频块、流信息、缓冲水位、计数、接点与续接、密钥设置等导出函数与结构布局（ABI 版本 15、样本 ABI 3）。
     provides: [if.providers.native-module.media-player-abi]
@@ -192,24 +214,28 @@ modules:
   - id: providers.native-module.player
     parent: providers.native-module
     name: 模块会话
+    summary: 在 ABI 背后调度缓冲、解封装与解码
     kind: component
     responsibility: ABI 背后的会话：输入缓冲与压缩缓冲、按容器分派解封装、跳 IDR 与截断、接点续接、按轨队列与解码调度、计数；内部共用的类型与声明。
     codeRefs: [media-wasm/native/media-player/src/player.c, media-wasm/native/media-player/src/internal.h]
   - id: providers.native-module.demux
     parent: providers.native-module
     name: 解封装
+    summary: 把 FLV、TS、MP4、ADTS 解封装成归一化样本
     kind: component
     responsibility: FLV、MPEG-TS、MP4（含按需取字节范围的协议）与 ADTS 的解封装，产出归一化样本。
     codeRefs: ['media-wasm/native/media-player/src/{flv,ts,mp4}.{c,h}', media-wasm/native/media-player/src/adts.c]
   - id: providers.native-module.codec
     parent: providers.native-module
     name: H.264 解析与解码
+    summary: 解析 H.264 与时间 SEI，并用 FFmpeg 解码音视频
     kind: component
     responsibility: H.264 的 NAL / SPS / 参考帧判定（avc.c）、时间 SEI 的识别与墙钟提取（sei.c），以及基于 FFmpeg libavcodec 的视频 / 音频解码（decode.c）。
     codeRefs: [media-wasm/native/media-player/src/avc.c, media-wasm/native/media-player/src/sei.c, media-wasm/native/media-player/src/decode.c]
   - id: providers.native-module.decrypt
     parent: providers.native-module
     name: 解密
+    summary: 就地解密 AES-128 与 xor-v2 加密的 HLS 片
     kind: component
     responsibility: 就地解密：HLS 片的 AES-128（CBC）与 xor-v2。
     codeRefs: [media-wasm/native/media-player/src/aes.c, media-wasm/native/media-player/src/xor_v2.c]
@@ -221,33 +247,39 @@ relations:
     to: providers.wasm-module.module
     type: streams
     interface: if.providers.wasm-module.MediaPlayerSession
+    purpose: 把字节送进模块解封装
     description: StreamInput 把网络读到的字节按模块肯收的块连续推进模块会话（push），满了先跳 IDR 再推。
   - id: rel.providers.input-reposition
     from: providers.stream-input.input
     to: providers.wasm-module.module
     type: commands
     interface: if.providers.wasm-module.MediaPlayerSession
+    purpose: 让模块跟上定位与换输入
     description: StreamInput 让模块定位与换输入：seek / 不连续 / 输入结束与重启、设密钥与 AES、截断到 IDR 与续接（时移接点），并读缓冲水位与计数。
   - id: rel.providers.input-timeshift
     from: providers.stream-input.input
     to: providers.stream-input.timeshift
     type: queries
+    purpose: 算出时移在时间轴上的位置
     description: StreamInput 按截断、接点与列表锚点计算时移列表在会话时间轴上的偏移、时间轴与统计。
   - id: rel.providers.module-sample
     from: providers.wasm-module.module
     to: providers.wasm-module.sample
     type: queries
+    purpose: 读出解封装后的样本
     description: 模块会话从 wasm 内存读出归一化样本（readNormalizedSample）。
   - id: rel.providers.sample-memory
     from: providers.wasm-module.sample
     to: providers.wasm-module.module
     type: queries
+    purpose: 读出 64 位时间戳
     description: 读样本结构时按模块内存的小端 int64 读时间戳（readInt64）。
   - id: rel.providers.lifecycle-module
     from: providers.wasm-module.lifecycle
     to: providers.wasm-module.module
     type: queries
     interface: if.providers.wasm-module.mediaErrorOf
+    purpose: 把失败归成会话失败原因
     description: 会话失败时把异常归一成会话失败原因与 MediaError（failureOf、mediaErrorOf）。
   - id: rel.providers.module-native
     from: providers.wasm-module.module
@@ -255,6 +287,7 @@ relations:
     type: commands
     interface: if.providers.native-module.media-player-abi
     via: channel:wasm-abi@providers.wasm-module.module
+    purpose: 驱动 C 模块解封装与解码
     description: 模块会话经 Emscripten 导出调用 C 模块（_media_player_input_buffer / push_input / seek / decode / sample_front …），结构按 ABI 布局读写 wasm 内存。
   # ── wasm-core → pipeline ──
   - id: rel.providers.module-fetch
@@ -263,72 +296,84 @@ relations:
     type: commands
     mode: async
     interface: if.pipeline.fetch.requestStream
+    purpose: 取回 .wasm 以便编译
     description: loadMediaPlayer 用流式请求取 .wasm（requestStream），在注入的计时器上计超时。
   - id: rel.providers.module-loss
     from: providers.wasm-module.module
     to: pipeline.fetch.flv-pull
     type: queries
     interface: if.pipeline.fetch.boundedRetries
+    purpose: 说明装载失败及能否重试
     description: 装载失败时取丢失的错误码、可否重试与说明（lossCode、lossRetryable、describeLoss、describeUrl）。
   - id: rel.providers.input-flv
     from: providers.stream-input.input
     to: pipeline.fetch.flv-pull
     type: commands
     interface: if.pipeline.fetch.startPull
+    purpose: 拉 FLV 直播并执行重连
     description: FLV 输入开 HTTP-FLV 拉流（startPull，open / again），延迟律的重连动作与看不见即保持交给它；丢失的错误码与说明也取自这里。
   - id: rel.providers.flv-bytes
     from: pipeline.fetch.flv-pull
     to: providers.stream-input.input
     type: streams
     interface: if.pipeline.fetch.PullHandlers
+    purpose: 把直播字节喂给模块
     description: HTTP-FLV 拉流把响应字节连续交给 StreamInput（chunk），并报连接、断线、耗尽与结束。
   - id: rel.providers.input-hls
     from: providers.stream-input.input
     to: pipeline.fetch.hls-loader
     type: commands
     interface: if.pipeline.fetch.startHlsPull
+    purpose: 拉 HLS 并执行定位与时移
     description: HLS 输入开 HLS 拉流（startHlsPull，open / again / watch / follow），seek、按墙钟 seek、回直播、接入时移列表、暂停都交给它。
   - id: rel.providers.hls-bytes
     from: pipeline.fetch.hls-loader
     to: providers.stream-input.input
     type: streams
     interface: if.pipeline.fetch.HlsHandlers
+    purpose: 把片字节与时间轴交给输入
     description: HLS 拉流把每片字节连续交给 StreamInput，并报时间轴、片起止、跳过的片与结束。
   - id: rel.providers.input-mp4
     from: providers.stream-input.input
     to: pipeline.fetch.mp4
     type: commands
     interface: if.pipeline.fetch.startMp4Pull
+    purpose: 按模块所需取 MP4 字节
     description: MP4 输入按模块要的字节范围逐段取（startMp4Pull、fetch、cancel）。
   - id: rel.providers.mp4-bytes
     from: pipeline.fetch.mp4
     to: providers.stream-input.input
     type: streams
     interface: if.pipeline.fetch.Mp4PullHandlers
+    purpose: 把文件字节交给输入
     description: MP4 拉取把每段字节连续交给 StreamInput，并报文件大小、完成与失败。
   - id: rel.providers.input-jitter
     from: providers.stream-input.input
     to: pipeline.metering.jitter
     type: commands
     interface: if.pipeline.metering.JitterMeter
+    purpose: 给延迟律提供抖动读数
     description: StreamInput 把每块的到达时刻与媒体时间记进抖动计（JitterMeter.add），取抖动与是否在消化积压给律的读数。
   - id: rel.providers.input-anchors
     from: providers.stream-input.input
     to: pipeline.metering.anchors
     type: commands
     interface: if.pipeline.metering.anchors
+    purpose: 在墙钟与位置间换算
     description: StreamInput 按时间轴记录到达（ArrivalLog.record），按可信锚点换算墙钟与位置（trustedAnchor、epochAt、positionAt）。
   - id: rel.providers.timeshift-anchors
     from: providers.stream-input.timeshift
     to: pipeline.metering.anchors
     type: queries
     interface: if.pipeline.metering.anchors
+    purpose: 按锚点换算时移位置
     description: 时移计算按锚点换算墙钟与位置、取锚点误差（epochAt、positionAt、anchorErrorMs）。
   - id: rel.providers.wasm-module-fault
     from: providers.wasm-module
     to: share.core
     type: queries
     interface: if.share.core.MediaFault
+    purpose: 以统一错误报 ABI 与资源问题
     description: 模块与样本读取构造 MediaFault（ABI 不符、越界、资源耗尽），把异常转成说明。
   # ── StreamInput → 族（经钩子端口） ──
   - id: rel.providers.input-self-clocked
@@ -337,6 +382,7 @@ relations:
     type: commands
     interface: if.providers.stream-input.StreamInputHooks
     via: channel:callback@providers.stream-input.input
+    purpose: 通知会话解码、跳转与结束
     description: StreamInput 经族给的钩子回调自建时钟会话：推送 / 接收后解码与呈现、缓冲满时跳 IDR、seek 落点、模式与边缘变化、输入结束。
   - id: rel.providers.input-mse
     from: providers.stream-input.input
@@ -344,6 +390,7 @@ relations:
     type: commands
     interface: if.providers.stream-input.StreamInputHooks
     via: channel:callback@providers.stream-input.input
+    purpose: 通知会话封段、跳转与结束
     description: StreamInput 经钩子回调 mse 会话：接收后 drain 封段、跳 IDR、seek 落点、模式与边缘变化、输入结束。
   - id: rel.providers.input-sink
     from: providers.stream-input.input
@@ -351,6 +398,7 @@ relations:
     type: notifies
     interface: if.pipeline.contract.PipelineSink
     via: port:if.pipeline.contract.PipelineSink
+    purpose: 让内核知道网络与时间轴变化
     description: StreamInput 经族交给它的 sink 报网络连接 / 断线、时间轴、seek 与日志事件；漏斗的 first-response / first-data 经族的钩子报出。
   - id: rel.providers.lifecycle-sink
     from: providers.wasm-module.lifecycle
@@ -358,6 +406,7 @@ relations:
     type: notifies
     interface: if.pipeline.contract.PipelineSink
     via: port:if.pipeline.contract.PipelineSink
+    purpose: 报告起播进度与不可继续的失败
     description: 会话生命周期经 sink 报漏斗阶段（每个只报一次）与不可继续的失败（failed）。
   # ── 自建时钟族 ──
   - id: rel.providers.family-load
@@ -366,6 +415,7 @@ relations:
     type: commands
     mode: async
     interface: if.providers.wasm-module.loadMediaPlayer
+    purpose: 备好已编译的模块
     description: 族建立时取并编译模块（loadMediaPlayer），只在页面可见时计超时。
   - id: rel.providers.family-sound-held
     from: providers.self-clocked.family
@@ -373,94 +423,111 @@ relations:
     type: notifies
     interface: if.pipeline.contract.PipelineSink
     via: port:if.pipeline.contract.PipelineSink
+    purpose: 宣告声音因页面而被挂住
     description: 族包住每个会话的管线，页面声音不在跑时经 sink 报 sound-held（reportingHeldSound），恢复时撤销。
   - id: rel.providers.family-session
     from: providers.self-clocked.family
     to: providers.self-clocked.session
     type: commands
+    purpose: 在主线程开会话管线
     description: 主线程模式下 startPipeline 以播放器级的模块、渲染器与音频建会话管线（createWasmPipeline）并启动。
   - id: rel.providers.family-worker
     from: providers.self-clocked.family
     to: providers.self-clocked.worker-client
     type: commands
+    purpose: 把会话放进 Worker 运行
     description: Worker 模式下 startPipeline 取预热的 Worker、新画布与 AudioWorkletNode，交给主线程端起会话（startWorkerPipeline）。
   - id: rel.providers.family-presentation
     from: providers.self-clocked.family
     to: providers.self-clocked.presentation
     type: commands
+    purpose: 建跨会话共用的画布渲染
     description: 族建播放器级的主线程画布渲染器（createVideoRenderer），无会话时清最后一帧。
   - id: rel.providers.family-audio
     from: providers.self-clocked.family
     to: providers.self-clocked.audio
     type: commands
     mode: async
+    purpose: 给会话开音频输出
     description: 族为每个会话开音频输出（mainThreadAudio：AudioWorklet 或 ScriptProcessor），Worker 模式建 AudioWorkletNode。
   - id: rel.providers.family-timers
     from: providers.self-clocked.family
     to: pipeline.timing
     type: commands
     interface: if.pipeline.timing.visibleTimers
+    purpose: 可见时才计模块装载超时
     description: 族在只在页面可见时计时的计时器上等模块装载（visibleTimers），会话的等待用缺省计时器为底。
   - id: rel.providers.session-input
     from: providers.self-clocked.session
     to: providers.stream-input.input
     type: commands
     interface: if.providers.stream-input.StreamInput
+    purpose: 拉流并让输入跟随命令
     description: 会话开 StreamInput 拉流（start），seek / 回直播 / 按墙钟 seek、时移列表、暂停与看不见即保持交给它，按它取读数信号与时间轴。
   - id: rel.providers.session-module
     from: providers.self-clocked.session
     to: providers.wasm-module.module
     type: commands
     interface: if.providers.wasm-module.MediaPlayerSession
+    purpose: 解封装、解码并取帧与音频
     description: 会话开模块实例（MediaPlayerSession.open），按预算分片解码、取视频帧与音频块、跳 IDR、读流信息与水位。
   - id: rel.providers.session-lifecycle
     from: providers.self-clocked.session
     to: providers.wasm-module.lifecycle
     type: commands
     interface: if.providers.wasm-module.SessionLifecycle
+    purpose: 保证资源释放与失败只报一次
     description: 会话把获取的资源登记进生命周期、回调经它守护、漏斗经它只报一次，最后由它包成 Pipeline（stop / terminate）。
   - id: rel.providers.session-law
     from: providers.self-clocked.session
     to: pipeline.latency.run
     type: commands
     interface: if.pipeline.latency.runLatencyLaw
+    purpose: 把延迟控制在目标附近
     description: 会话每 100 ms 以读数驱动延迟决策律（runLatencyLaw），动作由本族执行器执行：变速、丢非参考帧、跳 IDR。
   - id: rel.providers.session-meters
     from: providers.self-clocked.session
     to: pipeline.metering.freeze
     type: commands
     interface: if.pipeline.metering.FreezeMeter
+    purpose: 统计观众看到的冻结
     description: 会话把每帧上屏时刻交给冻结计（FreezeMeter），seek、律的动作、缓冲与迟到作为冻结原因。
   - id: rel.providers.session-timers
     from: providers.self-clocked.session
     to: pipeline.timing
     type: commands
     interface: if.pipeline.timing.HoldUnseen
+    purpose: 让等待随看不见即保持停走
     description: 会话持有看不见即保持（HoldUnseen），它的等待用随之停走的会话计时器（sessionTimers）。
   - id: rel.providers.session-progress
     from: providers.self-clocked.session
     to: pipeline.contract.report
     type: queries
+    purpose: 发现解码器挂住
     description: 会话用契约的无进展看门（progressWatch）判断解码器挂住。
   - id: rel.providers.session-video
     from: providers.self-clocked.session
     to: providers.self-clocked.video
     type: commands
+    purpose: 按路线解出视频帧
     description: 会话按路线建视频解码源（wasmVideoSource 或 webcodecsVideoSource），解码、取帧、丢非参考片，失败时换新或切回软解。
   - id: rel.providers.session-presentation
     from: providers.self-clocked.session
     to: providers.self-clocked.presentation
     type: commands
+    purpose: 按媒体时钟把帧画出来
     description: 会话按媒体时钟排下一帧（Presenter）并让渲染器上传与绘制、截图。
   - id: rel.providers.session-audio
     from: providers.self-clocked.session
     to: providers.self-clocked.audio
     type: commands
+    purpose: 出声并推进媒体时钟
     description: 会话驱动媒体时钟（MediaClock），把解码的音频块交给 AudioFeed 重采样写出，变速、暂停、清空时同步它。
   - id: rel.providers.session-pcm
     from: providers.self-clocked.session
     to: providers.self-clocked.audio
     type: streams
+    purpose: 把解出的声音送去播放
     description: 解码出的 PCM 块连续送入音频输出（经 AudioFeed 重采样）。
   - id: rel.providers.self-clocked-sink
     from: providers.self-clocked.session
@@ -468,36 +535,42 @@ relations:
     type: notifies
     interface: if.pipeline.contract.PipelineSink
     via: port:if.pipeline.contract.PipelineSink
+    purpose: 让内核知道播放的状况
     description: 主线程模式的会话经 sink 报模式、边缘、缓冲、seek、声音被拦、流信息、冻结、路线切换、结束与每秒统计。
   - id: rel.providers.video-sample
     from: providers.self-clocked.video
     to: providers.wasm-module.sample
     type: queries
     interface: if.providers.wasm-module.h264
+    purpose: 配置 WebCodecs 并判断能否丢帧
     description: WebCodecs 源从样本取 codec 字符串、参数集与首片参考性（avcCodecString、parameterSets、firstSliceReference）配置与丢帧。
   - id: rel.providers.video-module
     from: providers.self-clocked.video
     to: providers.wasm-module.module
     type: commands
     interface: if.providers.wasm-module.MediaPlayerSession
+    purpose: 取压缩样本或软解出的帧
     description: 视频源从模块取压缩样本（sampleFront / samplePop）或让模块软解出帧（decode / videoFront / videoPop），开关丢非参考片。
   - id: rel.providers.video-timers
     from: providers.self-clocked
     to: pipeline.timing
     type: commands
     interface: if.pipeline.timing.within
+    purpose: 给初始化与应答设上限
     description: 解码器配置检查、音频处理器装载、Worker 应答都以带超时的等待（within）计时。
   - id: rel.providers.self-clocked-fault
     from: providers.self-clocked
     to: share.core
     type: queries
     interface: if.share.core.MediaFault
+    purpose: 以统一错误报浏览器异常
     description: 自建时钟族构造 MediaFault、把浏览器异常转成说明（describeError）。
   - id: rel.providers.self-clocked-module-fault
     from: providers.self-clocked
     to: providers.wasm-module.module
     type: queries
     interface: if.providers.wasm-module.mediaErrorOf
+    purpose: 把异常归成会话失败原因
     description: 自建时钟族构造 MediaPlayerFault、把异常归一成会话失败原因与 MediaError（failureOf、mediaErrorOf）。
   # Worker 模式
   - id: rel.providers.worker-start
@@ -507,6 +580,7 @@ relations:
     mode: async
     payload: ds.ToWorkerMessage
     via: channel:postMessage@providers.self-clocked.worker-protocol
+    purpose: 在 Worker 里开会话并控制它
     description: 主线程端经 postMessage 给 Worker 发 start（模块、OffscreenCanvas、音频端口转交）、command、stop、screenshot、audio，等应答。
   - id: rel.providers.worker-report
     from: providers.self-clocked.worker-host
@@ -514,32 +588,38 @@ relations:
     type: notifies
     payload: ds.FromWorkerMessage
     via: channel:postMessage@providers.self-clocked.worker-protocol
+    purpose: 把会话回报送回主线程
     description: Worker 经 postMessage 回 ready、应答、截图，以及会话管线的 event / stats / failed。
   - id: rel.providers.worker-host-session
     from: providers.self-clocked.worker-host
     to: providers.self-clocked.session
     type: commands
+    purpose: 在 Worker 里跑同一份会话
     description: Worker 收到 start 后以收到的模块、OffscreenCanvas 渲染器与端口音频输出建同一份会话管线（createWasmPipeline）并运行，命令转给它。
   - id: rel.providers.worker-host-audio
     from: providers.self-clocked.worker-host
     to: providers.self-clocked.audio
     type: commands
+    purpose: 把声音直写音频线程
     description: Worker 以转交的 MessagePort 建端口音频输出（createPortOutput），PCM 直写音频线程。
   - id: rel.providers.worker-host-presentation
     from: providers.self-clocked.worker-host
     to: providers.self-clocked.presentation
     type: commands
+    purpose: 在转交的画布上绘制
     description: Worker 以转交的 OffscreenCanvas 建渲染器（createVideoRenderer）。
   - id: rel.providers.worker-host-video
     from: providers.self-clocked.worker-host
     to: providers.self-clocked.video
     type: queries
+    purpose: 判断 Worker 里能否硬解
     description: Worker 探测本线程的 WebCodecs（webcodecsApi）。
   - id: rel.providers.worker-client-audio
     from: providers.self-clocked.worker-client
     to: providers.self-clocked.audio
     type: commands
     mode: async
+    purpose: 让 Worker 的声音直达音频线程
     description: 主线程端建 AudioWorkletNode 并把它的输出端口转交 Worker（createWorkletNode、connectOutputPort），会话结束时结束处理器。
   - id: rel.providers.worker-sink
     from: providers.self-clocked.worker-client
@@ -547,58 +627,68 @@ relations:
     type: notifies
     interface: if.pipeline.contract.PipelineSink
     via: port:if.pipeline.contract.PipelineSink
+    purpose: 让内核收到 Worker 的回报
     description: Worker 模式下主线程端把 Worker 回的 event / stats / failed 转给内核的 sink。
   - id: rel.providers.worker-client-parse
     from: providers.self-clocked.worker-client
     to: providers.self-clocked.worker-protocol
     type: queries
     interface: if.providers.self-clocked.parsePlayerWorkerMessage
+    purpose: 只接受形状合法的消息
     description: 主线程端收到 Worker 的消息先校验形状（parsePlayerWorkerMessage），发出时取可转移对象（playerWorkerTransfer）。
   - id: rel.providers.worker-host-parse
     from: providers.self-clocked.worker-host
     to: providers.self-clocked.worker-protocol
     type: queries
     interface: if.providers.self-clocked.parsePlayerWorkerMessage
+    purpose: 只接受形状合法的消息
     description: Worker 端收到主线程的消息先校验形状，发出时取可转移对象。
   - id: rel.providers.protocol-contract
     from: providers.self-clocked.worker-protocol
     to: pipeline.contract.source
     type: queries
+    purpose: 核对 start 带来的源与密钥
     description: 校验 start 消息时按契约检查源、时移列表与密钥的形状（isDecryptionKey、isTimeshiftSource）。
   - id: rel.providers.protocol-latency
     from: providers.self-clocked.worker-protocol
     to: pipeline.latency.law
     type: queries
     interface: if.pipeline.latency.validateLatencyConfig
+    purpose: 核对 start 带来的延迟配置
     description: 校验 start 消息带的延迟配置（validateLatencyConfig）。
   - id: rel.providers.audio-parse
     from: providers.self-clocked.audio
     to: providers.self-clocked.worker-protocol
     type: queries
     interface: if.providers.self-clocked.parsePlayerWorkerMessage
+    purpose: 只接受合法的音频线程报告
     description: 音频输出收到音频线程的已播帧数与欠载报告先校验形状。
   - id: rel.providers.family-webcodecs
     from: providers.self-clocked.family
     to: providers.self-clocked.video
     type: queries
+    purpose: 判断能否提供 webcodecs 路线
     description: 族按本线程的 WebCodecs（webcodecsApi）列出 webcodecs 路线并交给主线程会话。
   - id: rel.providers.family-url
     from: providers.self-clocked.family
     to: pipeline.fetch.flv-pull
     type: queries
     interface: if.pipeline.fetch.boundedRetries
+    purpose: 写失败说明时不泄露凭据
     description: 地址解析不了时以去掉凭据与查询串的地址（describeUrl）写失败说明。
   - id: rel.providers.family-parse
     from: providers.self-clocked.family
     to: providers.self-clocked.worker-protocol
     type: queries
     interface: if.providers.self-clocked.parsePlayerWorkerMessage
+    purpose: 确认预热的 Worker 已就绪
     description: 族预热 Worker 时校验它发来的 ready 消息。
   - id: rel.providers.audio-pcm
     from: providers.self-clocked.worker-host
     to: providers.self-clocked.audio
     type: streams
     via: channel:postMessage@providers.self-clocked.worker-protocol
+    purpose: 把声音送到音频线程播放
     description: Worker 模式下 PCM 经 MessagePort 连续写给 AudioWorklet，音频线程回已播帧数驱动音频主时钟。
   # ── 元素族 ──
   - id: rel.providers.element-load
@@ -607,67 +697,79 @@ relations:
     type: commands
     mode: async
     interface: if.providers.wasm-module.loadMediaPlayer
+    purpose: 为 mse 会话备好模块
     description: 第一个 mse 会话时取并编译模块（loadMediaPlayer），网络失败可下次重来。
   - id: rel.providers.element-mse
     from: providers.element.family
     to: providers.element.mse
     type: commands
+    purpose: 在共用 video 上开 mse 会话
     description: route mse 的会话由 startMsePipeline 在播放器级的 video 上启动。
   - id: rel.providers.element-native
     from: providers.element.family
     to: providers.element.native
     type: commands
+    purpose: 在共用 video 上开 native 会话
     description: route native 的会话由 startNativePipeline 在同一个 video 上启动。
   - id: rel.providers.element-video
     from: providers.element.family
     to: providers.element.video
     type: commands
     mode: async
+    purpose: 管好元素的声音与复位
     description: 族探测音量是否被锁（volumeLocked）、建元素声音（elementSound），无会话时复位元素。
   - id: rel.providers.element-timers
     from: providers.element.family
     to: pipeline.timing
     type: commands
     interface: if.pipeline.timing.visibleTimers
+    purpose: 可见时才计模块装载超时
     description: 族在只在页面可见时计时的计时器上等模块装载（visibleTimers）。
   - id: rel.providers.mse-input
     from: providers.element.mse
     to: providers.stream-input.input
     type: commands
     interface: if.providers.stream-input.StreamInput
+    purpose: 拉流并让输入跟随命令
     description: mse 会话开 StreamInput 拉流（start），seek、回直播、时移列表、暂停与看不见即保持交给它。
   - id: rel.providers.mse-module
     from: providers.element.mse
     to: providers.wasm-module.module
     type: commands
     interface: if.providers.wasm-module.MediaPlayerSession
+    purpose: 只解封装出样本
     description: mse 会话开只解封装的模块实例（MediaPlayerSession.open(…, 'none')），跳 IDR、读水位与流信息。
   - id: rel.providers.mse-driver
     from: providers.element.mse
     to: providers.element.mse-driver
     type: commands
+    purpose: 把样本封段追加给元素
     description: mse 会话建 MediaSource 驱动（createAppender）与封段器（MseSegmenter），每次 drain 让封段器把模块样本封段追加，按需清理与重建。
   - id: rel.providers.mse-element
     from: providers.element.mse
     to: providers.element.video
     type: commands
+    purpose: 在元素上播放并施加延迟手段
     description: mse 会话在 ElementSession 上运行（元素监听、缓冲、首帧、复位），读前方缓冲与渲染帧计数，延迟律的执行器改元素的 playbackRate / currentTime。
   - id: rel.providers.mse-law
     from: providers.element.mse
     to: pipeline.latency.run
     type: commands
     interface: if.pipeline.latency.runLatencyLaw
+    purpose: 把延迟控制在目标附近
     description: mse 会话每 100 ms 以元素读数驱动延迟决策律（runLatencyLaw），动作作用在元素与模块上。
   - id: rel.providers.mse-timers
     from: providers.element.mse
     to: pipeline.timing
     type: commands
     interface: if.pipeline.timing.sessionTimers
+    purpose: 让等待随看不见即保持停走
     description: mse 会话的等待用随看不见即保持停走的会话计时器（sessionTimers）。
   - id: rel.providers.mse-progress
     from: providers.element.mse
     to: pipeline.contract.report
     type: queries
+    purpose: 发现元素有数据却不走
     description: mse 会话用契约的无进展看门（progressWatch）判断元素前方有数据却不走。
   - id: rel.providers.mse-sink
     from: providers.element.mse
@@ -675,33 +777,39 @@ relations:
     type: notifies
     interface: if.pipeline.contract.PipelineSink
     via: port:if.pipeline.contract.PipelineSink
+    purpose: 让内核知道播放的状况
     description: mse 会话经 sink 报模式、边缘、缓冲、seek、流信息、日志、结束与每秒统计。
   - id: rel.providers.mse-driver-sample
     from: providers.element.mse-driver
     to: providers.wasm-module.sample
     type: queries
     interface: if.providers.wasm-module.h264
+    purpose: 写 init 段所需的参数集
     description: 封段器从 IDR 样本取参数集、转 AVCC、取 codec 字符串（parameterSets、annexbToAvcc、avcCodecString）。
   - id: rel.providers.mse-driver-module
     from: providers.element.mse-driver
     to: providers.wasm-module.module
     type: commands
     interface: if.providers.wasm-module.MediaPlayerSession
+    purpose: 逐个取出要封段的样本
     description: 封段器从模块逐个取归一化样本（sampleFront / samplePop），等随机访问时丢弃视频。
   - id: rel.providers.mse-driver-input
     from: providers.element.mse-driver
     to: providers.stream-input.input
     type: commands
+    purpose: 按输入进度决定断段与结束
     description: 封段器按输入的列表结束、片长与文件是否压住决定断段与补静音，视频等随机访问时继续等（videoAwaitingRandomAccess），全部放出后标记输入结束（markEnded）。
   - id: rel.providers.mse-driver-video
     from: providers.element.mse-driver
     to: providers.element.video
     type: commands
+    purpose: 重建 MediaSource 前复位元素
     description: MediaSource 重建前复位元素（resetVideo）。
   - id: rel.providers.native-element
     from: providers.element.native
     to: providers.element.video
     type: commands
+    purpose: 在元素上播放并读进度
     description: native 会话在 ElementSession 上运行，读前方缓冲、渲染帧与播放计数，元素错误经映射成会话失败。
   - id: rel.providers.native-sink
     from: providers.element.native
@@ -709,30 +817,35 @@ relations:
     type: notifies
     interface: if.pipeline.contract.PipelineSink
     via: port:if.pipeline.contract.PipelineSink
+    purpose: 让内核知道元素播放的状况
     description: native 会话经 sink 报元素事件映射成的缓冲、seek、时间轴、结束、暂停 / 播放（画中画）与每秒统计。
   - id: rel.providers.video-meters
     from: providers.element.video
     to: pipeline.metering.freeze
     type: commands
     interface: if.pipeline.metering.FreezeMeter
+    purpose: 统计观众看到的冻结
     description: 元素会话把每个上屏帧（requestVideoFrameCallback）交给冻结计。
   - id: rel.providers.video-hold
     from: providers.element.video
     to: pipeline.timing
     type: commands
     interface: if.pipeline.timing.HoldUnseen
+    purpose: 看不见且无人听时暂停元素
     description: 元素会话持有看不见即保持（HoldUnseen），保持时暂停元素。
   - id: rel.providers.element-fault
     from: providers.element
     to: providers.wasm-module.module
     type: queries
     interface: if.providers.wasm-module.MediaPlayerFault
+    purpose: 把元素错误归成会话失败
     description: 元素族把元素与 MediaSource 的错误构造成 MediaPlayerFault（带会话失败原因）。
   - id: rel.providers.element-core-fault
     from: providers.element
     to: share.core
     type: queries
     interface: if.share.core.MediaFault
+    purpose: 以统一错误报浏览器异常
     description: 元素族构造 MediaFault、把浏览器异常转成说明（describeError）。
 
 interfaces:

@@ -3,15 +3,21 @@
 # 代码根：packages/player/src/{solution,plugins/solution}/**
 
 modules:
+  - id: app
+    name: Application
+    summary: 执行方案选择结果，装配、切换流水线并驾驶运行
   # ─── 第二级模块的原则（ADR-0042，补充骨架条目）───
-  - { id: app.solution, name: "Solution", abstraction: 只编排不决策、依赖倒置：外界能力全经端口契约注入，按事务类型切分编排者，播放段启动只有一个实现者。 }
-  - { id: app.registry, name: "方案注册表", abstraction: 数据与机制分离：方案差异写成描述符数据，规划是纯计算、挂载是唯一执行者，片段之间只经窄句柄契约协作。 }
-  - { id: app.factories, name: "三段工厂", abstraction: 声明式产出：基类统管候选计划、就地重配与段生命周期，子类按段只写目标 MU 图的 diff，提交权归 Solution 的切换事务。 }
-  - { id: app.strategies, name: "运行时驾驶策略", abstraction: 按段与方案 × 直播 / 点播切分主策略，共用契约与基座；策略只经段控制器与窄句柄驾驶，判定调 Domain。 }
+  - { id: app.solution, name: "Solution", abstraction: 只编排不决策、依赖倒置：外界能力全经端口契约注入，按事务类型切分编排者，播放段启动只有一个实现者。, summary: 执行方案初始化、段换代与换腿事务, invariants: [只依赖 domain 与自身端口契约，不 import Framework、插件或 MU, 播放段启动只有 Solution 一处实现，策略经上报流事实取回入口, 换腿事务只在 SwitchLeg 命令的前置 Hook 内执行] }
+  - { id: app.registry, name: "方案注册表", abstraction: 数据与机制分离：方案差异写成描述符数据，规划是纯计算、挂载是唯一执行者，片段之间只经窄句柄契约协作。, summary: 登记方案描述符，规划并挂载方案片段 }
+  - { id: app.factories, name: "三段工厂", abstraction: 声明式产出：基类统管候选计划、就地重配与段生命周期，子类按段只写目标 MU 图的 diff，提交权归 Solution 的切换事务。, summary: 按方案产出三段 MU 图的候选计划与段控制器, invariants: [createPipeline 只交出候选计划，不触 live 图、不做生命周期动作, 改 live 图（就地重配、销毁）一律经 PipelineController 的 diff 事务, MU 实例一律经 MU 工厂创建，工厂子类不直接 new MU] }
+  - { id: app.strategies, name: "运行时驾驶策略", abstraction: 按段与方案 × 直播 / 点播切分主策略，共用契约与基座；策略只经段控制器与窄句柄驾驶，判定调 Domain。, summary: 在运行期驾驶各方案的拉流、追帧、seek 与回退, invariants: [主策略都是 PluginBase 子类，经插件 API 挂载与收尾, 策略不调 Pipeline 事务改图拓扑，只经段控制器动作与状态机命令驾驶, 加载策略不自己启动播放段，只调上报流事实后取回的入口] }
   # ───────────────────────────── app.solution ─────────────────────────────
   - id: app.solution.ports
     parent: app.solution
     name: Solution 端口契约
+    summary: 声明 Solution 需要外界注入的全部能力
+    invariants:
+      - solution 目录只 import @h5player/domain 与自身文件，不碰 Framework 与插件实现
     kind: module
     responsibility: 声明 Solution 需要外界注入的全部能力（SolutionDeps：状态机、Pipeline、模型、注册表、片段挂载器、段工厂、腿上下文、选型器等）与跨模块交换的窄结构（段工厂、段建图计划、腿句柄、描述符窄面）；本目录不 import 任何 Framework / plugins 实现，只消费 Domain 类型与这些端口。
     principle: |
@@ -37,6 +43,7 @@ modules:
   - id: app.solution.lifecycle
     parent: app.solution
     name: 命令编排与初始化
+    summary: 按命令编排初始化、选型、换代与收尾
     kind: module
     responsibility: Solution 主类：挂 / 摘状态机前后置命令 Hook，按命令（Init / Load / Play / Switch / Stop / Reset / Destroy / Error）编排初始化、选型、换代、收尾；调用选型 / reconcile 等决策服务但自身不做决策；处理显式点播判据与地址归属。
     principle: |
@@ -58,6 +65,7 @@ modules:
   - id: app.solution.play-stage-start
     parent: app.solution
     name: 播放段启动协调者
+    summary: 按状态机目标启动播放段
     kind: module
     responsibility: MU 级启动（Load / Play / 追平用的 Pause）的唯一实现：按状态机目标态算出启动目标，经 play-stage 句柄启动播放段；命令线与流信息线两个触发入口都只判断「该不该由我启动」再调这里。不认识具体方案。
     principle: |
@@ -74,6 +82,7 @@ modules:
   - id: app.solution.stage-swap
     parent: app.solution
     name: 段换代事务
+    summary: 整体重建三段并原子提交，失败回滚
     kind: module
     responsibility: 换方案 / 换地址时 Load、Process、Play 三段的重建与连段：建新段候选、记入待提交账本、按段边界接线并以一次 Pipeline 事务提交，失败整体回滚旧段与模型。
     principle: |
@@ -94,6 +103,7 @@ modules:
   - id: app.solution.stream-facts
     parent: app.solution
     name: 流事实协调
+    summary: 按流事实重选方案或重挂段，再交回起播方式
     kind: module
     responsibility: 加载段上报的流事实（加密版本、清单推断的 playMode 等）经 reconcile 判定后的三条协调分支：解密翻转重选、inferredPlayMode 重选、最终段重挂；收口为「播放段如何启动」交回加载段策略。
     principle: |
@@ -109,6 +119,7 @@ modules:
   - id: app.solution.legs
     parent: app.solution
     name: 腿端口 LegPort
+    summary: 让外界建撤待命腿、截流放流并发起换腿
     kind: module
     responsibility: 直播时移多腿的对外端口 `solution.legs`：待命腿的建 / 撤、段尾阀门 hold/release、处理后队列截流、待命流模型时间基准、活动腿查询，以及换腿 / 换回 / 拖进度换腿的命令入口；维护每条腿的记账（上下文、句柄、Load 工厂、控制器）。
     principle: |
@@ -132,6 +143,7 @@ modules:
   - id: app.solution.leg-switch
     parent: app.solution
     name: 换腿事务
+    summary: 执行换腿与换回事务，收尾时还原主腿
     kind: module
     responsibility: switch / revert / revert-live / seek-switch 共用的十步换腿事务本体，以及 Stop / Reset / Switch / Destroy / Error 前置的撤腿与主腿还原。
     principle: |
@@ -154,6 +166,7 @@ modules:
   - id: app.registry.core
     parent: app.registry
     name: 注册表核心
+    summary: 按方案或加载模式登记和查询描述符
     kind: module
     responsibility: 按 SolutionType / LoadMode 登记与查询方案描述符和加载描述符；重复登记、缺失描述符一律抛 ConfigError。不含具体方案内容。
     principle: |
@@ -172,6 +185,7 @@ modules:
   - id: app.registry.default-descriptors
     parent: app.registry
     name: 默认方案描述符表
+    summary: 提供内置的加载与方案描述符
     kind: module
     responsibility: 内置的 3 条加载描述符（Flv / Mp4 / Hls）与 6 套方案描述符（Wcs / Wasm / Mse / Fhls / Vcs / Video）：把段工厂构造器、片段清单（主策略 + 缓冲 / 网络 / 运行监测等横向插件）与方案属性绑在一起，由组合根显式注册。
     principle: |
@@ -189,6 +203,7 @@ modules:
   - id: app.registry.fragment-planner
     parent: app.registry
     name: 片段规划
+    summary: 过滤、校验片段并算出挂载顺序
     kind: module
     responsibility: 纯计算：按挂载输入对 FragmentSpec 做条件过滤、key / 句柄唯一性与依赖存在性校验，并按 needs 拓扑排序得出挂载顺序。
     principle: |
@@ -206,6 +221,7 @@ modules:
   - id: app.registry.fragment-mounter
     parent: app.registry
     name: 片段挂载器
+    summary: 把片段按段挂成插件并发布窄句柄
     kind: module
     responsibility: 按段（load / play）把规划好的片段实例化为插件并挂到插件控制器，发布 / 吊销片段窄句柄，支持 Stop 后只重建 solution 作用域片段；是 Solution 端口 `fragments` 的实现。
     principle: |
@@ -224,6 +240,7 @@ modules:
   - id: app.registry.fragment-contracts
     parent: app.registry
     name: 片段窄句柄契约
+    summary: 约定片段之间交换的窄句柄形状
     kind: module
     responsibility: 片段之间、Solution 与片段之间交换的窄句柄契约：`vod-load` 句柄（点播加载策略对外的起拉 / 续拉 / 承接 / 起播定位）及其键常量、起播定位锚点。
     principle: |
@@ -238,6 +255,7 @@ modules:
   - id: app.factories.base
     parent: app.factories
     name: 段工厂基类
+    summary: 让段工厂只声明目标图即可建、改、停、销毁
     kind: module
     responsibility: 声明式段工厂的公共骨架：子类只写 `diff()`（目标节点序列 + 段内边），基类负责候选计划、就地重配事务、段边界声明、静默 / 恢复 / 销毁与节点所有权追踪；结构性满足 Solution 端口 `SolutionStageFactory`。
     principle: |
@@ -258,6 +276,7 @@ modules:
   - id: app.factories.load
     parent: app.factories
     name: 加载段工厂
+    summary: 按加载模式建加载段并控制拉流
     kind: module
     responsibility: 按 LoadMode 产出加载段 MU 图（Loader → Demuxer → DemuxedBuffer）并提供加载段控制器（拉清单 / 拉数据 / 取消）。
     principle: |
@@ -273,6 +292,7 @@ modules:
   - id: app.factories.process
     parent: app.factories
     name: 处理段工厂
+    summary: 按加工需求建处理段并就地差量重配
     kind: module
     responsibility: 按加工需求（是否解密、是否校正 PTS）与方案产出处理段线性 MU 链；支持换腿 / 流事实变化时的就地差量重配。
     principle: |
@@ -283,6 +303,7 @@ modules:
   - id: app.factories.play
     parent: app.factories
     name: 播放段工厂
+    summary: 按方案建播放段并提供方案控制器
     kind: module
     responsibility: 按 SolutionType 产出播放段 MU 图（ProcessedBuffer → 解码 / 重封装 → 渲染）并提供方案控制器（play / load / seek / 丢缓冲 / 重置解码器等定向 Action）；帧方案负责按 playMode 配置解码缓冲上限。
     principle: |
@@ -306,6 +327,7 @@ modules:
   - id: app.strategies.contracts
     parent: app.strategies
     name: 策略契约与决策观测
+    summary: 约定策略与控制器的接口，并把结论记为决策观测
     kind: module
     responsibility: 策略与段控制器之间的契约（各方案 Controller 窄面、送解码 / 直播部件接口）以及把各腿已算出的追帧 / 缓冲结论翻译为统计 `lastDecision` 的观测函数（不含新判定逻辑）。
     principle: |
@@ -328,12 +350,14 @@ modules:
   - id: app.strategies.load
     parent: app.strategies
     name: 加载段驱动
+    summary: 上报流事实后开闸放数据，并驱动拉流节奏
     kind: module
     responsibility: 加载段主策略：上报流事实并在下一阶段就绪后开闸放水，驱动点播拉片节奏、HLS 清单刷新与直播边缘追赶。
     abstraction: 共用基座承担上报流事实与开闸放水，点播拉片与 HLS 加载按来源各自扩展拉流节奏。
     children:
       - id: app.strategies.load.base
         name: 加载基座与开闸
+        summary: 上报流事实，等下一段就绪后开闸放数据
         kind: module
         responsibility: 所有加载策略的基类与 Flv 直播加载：流信息到达后向 Solution 上报流事实、等待下一阶段装配完成、交播放段启动协调者启动，再让 DemuxedBuffer 开闸放水；Load / Play 后置 Hook 等待装配（5s 超时、拉流故障提前放行）。
         principle: |
@@ -345,6 +369,7 @@ modules:
           - packages/player/src/plugins/solution/strategy/pluginFlvLoadStrategy.ts
       - id: app.strategies.load.vod
         name: 点播拉片
+        summary: 按水位驱动点播拉片、重拉与换腿承接
         kind: module
         responsibility: 点播加载策略基类与 Mp4 加载：按水位决定起拉 / 停拉 / 续拉分片，硬 seek 重拉，起播定位与换腿承接，拉片失败退避；对外暴露 vod-load 句柄。
         principle: |
@@ -360,6 +385,7 @@ modules:
           - packages/player/src/plugins/solution/strategy/vodLoadFailureBackoff.ts
       - id: app.strategies.load.hls
         name: HLS 加载
+        summary: 驱动 HLS 清单刷新与逐片拉取，直播追边缘
         kind: module
         responsibility: HLS 点播 / 直播加载策略：清单刷新定时器状态机、逐片三项（不连续处理 / 片落地后处理 / 推进游标拉片），直播起播跳直播边缘、暂停期清理陈旧缓冲、恢复后追赶。
         principle: |
@@ -379,6 +405,7 @@ modules:
   - id: app.strategies.play-base
     parent: app.strategies
     name: 播放策略基座与 Video
+    summary: 经控制器启动播放段，驱动原生 Video 播放
     kind: module
     responsibility: 播放策略基类（经控制器 load / play，承载 play-stage 句柄的统一实现）与 Video 原生方案播放策略、video 元素 seek 处理；Vcs 点播也直接用基类。
     provides:
@@ -392,6 +419,7 @@ modules:
   - id: app.strategies.live-frame
     parent: app.strategies
     name: 直播帧策略（Wcs / Wasm）
+    summary: 驱动 Wcs / Wasm 直播送解码、送渲染与丢帧
     kind: module
     responsibility: Wcs / Wasm 直播播放主策略：按 Domain 方案计划组装送解码、送渲染、丢视频、丢音频、充水五个部件，事件到达时按序扇出；处理暂停续播重锚、跨会话续播裁剪、降延迟跳变。
     abstraction: 按帧去向切分为可组装部件：主策略按 Domain 方案计划装配部件，事件到达时按固定顺序扇出。
@@ -407,6 +435,7 @@ modules:
     children:
       - id: app.strategies.live-frame.send-decode
         name: 直播送解码
+        summary: 控制直播帧送解码的节奏与降延迟跳变
         kind: module
         responsibility: 直播送解码策略：音频送解码、关键帧起播丢帧、暂停即停送；视频送解码闸门（Wasm 同步计数闸门 / Wcs 起播测量状态机 + 在途双闸门），以及「到点再跳」的降延迟跳变规划。
         principle: |
@@ -418,6 +447,7 @@ modules:
           - packages/player/src/plugins/solution/strategy/common/latencyDropExecutor.ts
       - id: app.strategies.live-frame.drop
         name: 直播丢帧
+        summary: 按负载与能力丢视频帧，音频跟随丢弃
         kind: module
         responsibility: 负载 / 能力抽帧与音频跟随丢弃：通用丢视频策略、Wasm 能力抽帧（按实测单帧端到端耗时推可持续帧率，按比例丢非参考帧），丢音频策略，以及统一的丢解析后视频帧 Action 构造。
         codeRefs:
@@ -427,6 +457,7 @@ modules:
           - packages/player/src/plugins/solution/strategy/common/dropBufferDispatch.ts
       - id: app.strategies.live-frame.render-fill
         name: 直播送渲染与充水
+        summary: 按渲染时钟送显并维持缓冲循环
         kind: module
         responsibility: 按渲染时钟把解码后帧送显（取最小 pts 到点即送），送一帧补一帧维持缓冲循环，并在 Stop→Play 间以 Context 为键暂存续播位置以裁掉 CDN 重推的已播内容。
         codeRefs:
@@ -437,6 +468,7 @@ modules:
   - id: app.strategies.live-vcs
     parent: app.strategies
     name: Vcs 直播策略
+    summary: 驱动 Vcs 直播送帧，稳供给并压延迟
     kind: module
     responsibility: Vcs 直播播放主策略：由自适应缓冲控制器决定送帧线落点（稳供给、压延迟），向重封装送解析后视频；暂停冻结音频时钟、续播从暂停点恢复，并按渲染 dts 轴清理解码后音频。
     provides:
@@ -448,6 +480,7 @@ modules:
   - id: app.strategies.vod-frame
     parent: app.strategies
     name: 点播帧策略（Wcs / Wasm）
+    summary: 驱动 Wcs / Wasm 点播送解码送渲染与 seek
     kind: module
     responsibility: Wcs / Wasm 点播播放主策略：按渲染时钟排期送解码与送渲染，处理软 / 硬 seek 收敛、暂停冻结渲染时间线与暂停态 seek 定格、换腿承接解码进行中的画面组；经 vod-load 句柄驱动重拉。
     principle: |
@@ -468,6 +501,7 @@ modules:
   - id: app.strategies.vod-mse
     parent: app.strategies
     name: 点播 MSE 策略
+    summary: 驱动 MSE 点播送帧、seek 与过期回收
     kind: module
     responsibility: Mse 点播播放主策略：按水位送帧进 SourceBuffer、seek 目标钳位与搁浅看门狗、过期缓冲回收与卡顿巡检、HLS 空洞跳过、mp4 送帧兜底巡检，以及时移录制腿的媒体原点 / 清单轴换算。
     principle: |
@@ -481,6 +515,7 @@ modules:
   - id: app.strategies.vod-fhls
     parent: app.strategies
     name: Fhls 点播策略
+    summary: 驱动 Fhls 点播分片呈现与连续呈现
     kind: module
     responsibility: Fhls 点播两种呈现形态的主策略：分片呈现（按 vod-load 句柄拉片、seek）与连续呈现（时移接管后的录制腿：按预算把处理后队列的录制帧送进解析后缓存，原生按墙钟取片）。
     principle: |
@@ -496,40 +531,47 @@ relations:
     to: app.solution.stage-swap
     type: commands
     interface: if.solution.onSwitch
+    purpose: 首次建图或换方案时换代
     description: 命令编排与初始化交给段换代事务：Init 首次建图、Load/Play/Switch 命中三元组变化时换代
   - id: rel.solution.lifecycle-stream-facts
     from: app.solution.lifecycle
     to: app.solution.stream-facts
     type: commands
     interface: if.solution.handleStreamInfoFacts
+    purpose: 按流事实结论重选或重挂
     description: 命令编排与初始化交给流事实协调：reconcile 判定后交给流事实协调分支
   - id: rel.solution.lifecycle-play-stage-start
     from: app.solution.lifecycle
     to: app.solution.play-stage-start
     type: commands
     interface: if.solution.playStageStart
+    purpose: 在命令线上启动播放段
     description: 命令编排与初始化交给播放段启动协调者：命令线触发入口（Load/Play 前置）
   - id: rel.solution.lifecycle-leg-switch
     from: app.solution.lifecycle
     to: app.solution.leg-switch
     type: commands
     interface: if.solution.performLegSwitch
+    purpose: 让收尾命令先撤腿还原
     description: 命令编排与初始化交给换腿事务：SwitchLeg/Stop/Reset/Switch/Destroy/Error 前置 Hook 转发（runLegAwareCommandHook）
   - id: rel.solution.lifecycle-legs
     from: app.solution.lifecycle
     to: app.solution.legs
     type: commands
+    purpose: 让 Load 段归属活动腿
     description: 命令编排与初始化交给腿端口 LegPort：建 Load 段工厂时取当前活动腿 scope 并回写腿记账
   - id: rel.solution.stream-facts-stage-swap
     from: app.solution.stream-facts
     to: app.solution.stage-swap
     type: commands
     interface: if.solution.connectStage
+    purpose: 重选方案后重挂段
     description: 流事实协调交给段换代事务：解密翻转 / inferredPlayMode 重选后重挂段
   - id: rel.solution.stream-facts-play-stage-start
     from: app.solution.stream-facts
     to: app.solution.play-stage-start
     type: commands
+    purpose: 把起播方式交回加载策略
     description: '流事实协调交给播放段启动协调者：流信息线判定成功后把 Solution 的 playStageStart 回交给加载段策略去开闸，失败按 isSolutionError 分类（solutionStreamFacts.ts:51、200）'
   - id: rel.solution.legs-leg-switch
     from: app.solution.legs
@@ -537,12 +579,14 @@ relations:
     type: commands
     mode: async
     interface: if.solution.performLegSwitch
+    purpose: 串行执行换腿事务
     description: 腿端口 LegPort 交给换腿事务：经状态机发 SwitchLeg 命令，事务在前置 Hook 中执行，结果经 pendingOutcome 回传
   - id: rel.solution.leg-switch-legs
     from: app.solution.leg-switch
     to: app.solution.legs
     type: commands
     interface: if.solution.LegPort
+    purpose: 读写腿记账、控阀与撤腿
     payload: ds.LegRecord
     description: 换腿事务交给腿端口 LegPort：读写腿记账，hold/release 段尾阀门、撤腿
   - id: rel.solution.leg-switch-legs-outcome
@@ -550,17 +594,20 @@ relations:
     to: app.solution.legs
     type: commands
     mode: async
+    purpose: 把换腿结果交回发起方
     payload: ds.LegSwitchOutcome
     description: 换腿事务交给腿端口 LegPort：前置 Hook 里 await performLegSwitch 之后把事务结果写入 legs.pendingOutcome 邮箱，由发命令的一方在命令完成后取回（异步回传）
   - id: rel.solution.legs-stage-swap
     from: app.solution.legs
     to: app.solution.stage-swap
     type: queries
+    purpose: 建腿时归一化段计划
     description: 腿端口 LegPort 向段换代事务取：建腿时调用 normalizeStagePlan 归一化段计划
   - id: rel.solution.leg-switch-stage-swap
     from: app.solution.leg-switch
     to: app.solution.stage-swap
     type: queries
+    purpose: 换腿时归一化段计划
     description: 换腿事务向段换代事务取：换腿时调用 normalizeStagePlan 归一化段计划，主腿还原时按常规路径重建 Load 段
 
   # ── app.solution → 本区域其他第二级模块 ──
@@ -570,6 +617,7 @@ relations:
     type: commands
     via: 'channel:inject'
     interface: if.registry.SolutionRegistry
+    purpose: 取方案与加载描述符
     payload: [ds.LoadDescriptor, ds.SolutionDescriptor]
     description: 命令编排与初始化交给注册表核心：经 SolutionDeps.registry 取描述符（运行时注入，无编译期 import）
   - id: rel.solution.lifecycle-fragment-mounter
@@ -578,18 +626,21 @@ relations:
     type: commands
     via: 'channel:inject'
     interface: if.registry.FragmentMounter
+    purpose: 挂卸片段并取句柄
     description: 命令编排与初始化交给片段挂载器：经 SolutionDeps.fragments 挂 / 卸 / 重挂 load、play 片段，取 play-stage / vod-load 句柄
   - id: rel.solution.play-stage-start-play-base
     from: app.solution.play-stage-start
     to: app.strategies.play-base
     type: commands
     interface: if.strategies.playStage
+    purpose: 让播放段开始加载或播放
     description: 播放段启动协调者交给播放策略基座与 Video：经 play-stage 句柄启动播放段（load / play）
   - id: rel.solution.lifecycle-vod-load
     from: app.solution.lifecycle
     to: app.strategies.load.vod
     type: commands
     interface: if.strategies.vodLoad
+    purpose: 让点播从指定位置起拉
     payload: ds.StartPositionAnchor
     description: 命令编排与初始化交给点播拉片：Switch 后置把 seekTo 交给 vod-load 句柄 setStartPosition
   - id: rel.solution.stage-swap-factory-base
@@ -598,40 +649,47 @@ relations:
     type: commands
     via: 'port:if.solution.ports.SolutionStageFactory'
     interface: if.factories.StageFactory
+    purpose: 建、停、恢复与销毁段
     payload: ds.StagePipelinePlan
     description: 段换代事务交给段工厂基类：经 SolutionStageFactory 端口 createPipeline / head / tail / quiesce / resume / destroy
   - id: rel.solution.stage-swap-factory-process
     from: app.solution.stage-swap
     to: app.factories.process
     type: commands
+    purpose: 产出或重配处理段
     description: 段换代事务交给处理段工厂：按加工需求产出 / 差量重配处理段
   - id: rel.solution.legs-factory-load
     from: app.solution.legs
     to: app.factories.load
     type: commands
+    purpose: 为待命腿建加载段
     description: 腿端口 LegPort 交给加载段工厂：createLeg 以腿上下文 + 腿句柄为 scope 建待命腿 Load 段工厂
   - id: rel.solution.leg-switch-factory-play
     from: app.solution.leg-switch
     to: app.factories.play
     type: commands
     interface: if.factories.configureBufferLimits
+    purpose: 按新播放模式重设解码缓冲
     description: 换腿事务交给播放段工厂：换腿第 ⑥ 步按目标 playMode 重配解码缓冲上限
   - id: rel.solution.leg-switch-factory-process
     from: app.solution.leg-switch
     to: app.factories.process
     type: commands
+    purpose: 换腿时差量重配处理段
     description: 换腿事务交给处理段工厂：换腿第 ⑥ 步处理段差量（及回滚时反向差量）
   - id: rel.solution.leg-switch-vod-load
     from: app.solution.leg-switch
     to: app.strategies.load.vod
     type: commands
     interface: if.strategies.vodLoad
+    purpose: 让点播承接接手腿分片
     description: 换腿事务交给点播拉片：换腿第 ⑧ 步点播承接 resumeFromSegment
   - id: rel.solution.leg-switch-play-base
     from: app.solution.leg-switch
     to: app.strategies.play-base
     type: commands
     interface: if.strategies.playStage
+    purpose: 承接解码中的画面组
     description: 换腿事务交给播放策略基座与 Video：换腿第 ⑧ 步 continueDecodeInProgress 承接解码进行中的画面组
 
   # ── app.solution → 其他区域 ──
@@ -639,29 +697,34 @@ relations:
     from: app.solution.lifecycle
     to: domain.services
     type: queries
+    purpose: 取选型与流事实裁决
     payload: [ds.SolutionSelectInput, ds.SolutionDecision]
     description: 命令编排与初始化向决策服务取：选型 selectSolution（经 SolutionDeps.selector）、reconcileStreamFacts、computeProcessRequirements
   - id: rel.solution.stage-swap-domain-services
     from: app.solution.stage-swap
     to: domain.services
     type: queries
+    purpose: 定处理段是否解密校正
     description: 段换代事务向决策服务取：computeProcessRequirements 决定处理段是否解密 / 校正 PTS
   - id: rel.solution.leg-switch-domain-services
     from: app.solution.leg-switch
     to: domain.services
     type: queries
+    purpose: 判接手腿解密与处理段
     description: 换腿事务向决策服务取：reconcileStreamFacts、recordingNeedsDecryption、computeProcessRequirements（接手腿解密判定与处理段差量）
   - id: rel.solution.lifecycle-framework
     from: app.solution.lifecycle
     to: infra.framework
     type: commands
     via: 'channel:inject'
+    purpose: 挂命令钩子并驱动状态机
     description: 命令编排与初始化交给 Framework 机制内核：经 SolutionDeps 端口：挂状态机前后置命令 Hook、sendCommand(Init/SetVolume)、updateStateMachineMode、Destroy 时 updatePipeline 移除四段节点
   - id: rel.solution.stage-swap-framework
     from: app.solution.stage-swap
     to: infra.framework
     type: commands
     via: 'channel:inject'
+    purpose: 一次事务提交段换代
     payload: [ds.SolutionPipelineUpdate, ds.PlaybackModelSwitch]
     description: 段换代事务交给 Framework 机制内核：经 SolutionDeps 端口：Pipeline 事务 updatePipeline 一次提交三段增删与跨段边；ModelRegistry beginStream/PlaybackModelSwitch → commit / rollback
   - id: rel.solution.legs-framework
@@ -669,6 +732,7 @@ relations:
     to: infra.framework
     type: commands
     via: 'channel:inject'
+    purpose: 开腿并控制段尾阀门
     payload: [ds.SolutionLegHandle, ds.SolutionLegContext]
     description: 腿端口 LegPort 交给 Framework 机制内核：经 SolutionDeps 端口：openLeg / getLeg 腿句柄、createLegContext、createStandby 待命模型槽、向段尾 / 处理后队列定向派发 Hold / Release；sendCommand(SwitchLeg)
   - id: rel.solution.leg-switch-framework
@@ -676,11 +740,13 @@ relations:
     to: infra.framework
     type: commands
     via: 'channel:inject'
+    purpose: 切活动腿并提交模型
     description: 换腿事务交给 Framework 机制内核：经 SolutionDeps 端口：updatePipeline{activeLeg}、beginPromote / commit、updateStateMachineMode、派发 PlayModeChanged / DropBuffer / ContentDiscontinuity
   - id: rel.solution.leg-switch-domain-models
     from: app.solution.leg-switch
     to: domain.models
     type: commands
+    purpose: 更新流模型的换腿事实
     description: 换腿事务交给领域模型：读写流模型 nextStageReady、HlsModel 强制点播开关等语义方法
 
   # ── app.registry ──
@@ -689,21 +755,25 @@ relations:
     to: app.registry.core
     type: commands
     interface: if.registry.SolutionRegistry
+    purpose: 把内置描述符登记进去
     description: 默认方案描述符表交给注册表核心：registerDefaultDescriptors 把默认表灌入注册表
   - id: rel.registry.default-factory-load
     from: app.registry.default-descriptors
     to: app.factories.load
     type: commands
+    purpose: 登记各协议加载段工厂
     description: 默认方案描述符表交给加载段工厂：默认加载描述符登记 Flv / Hls / Mp4 加载段工厂，组段时由注册表 new 出工厂（registry/index.ts）
   - id: rel.registry.default-strategy-load
     from: app.registry.default-descriptors
     to: app.strategies.load
     type: commands
+    purpose: 登记各协议加载策略
     description: '默认方案描述符表交给加载段驱动：默认加载片段登记 Flv / Mp4 / Hls 点播 / Hls 直播加载策略的构造，挂载时 new 出策略（registry/index.ts:419 起）'
   - id: rel.registry.default-strategy-vod-fhls
     from: app.registry.default-descriptors
     to: app.strategies.vod-fhls
     type: commands
+    purpose: 登记 Fhls 点播两种策略
     description: 默认方案描述符表交给 Fhls 点播策略：Fhls 点播主片段登记分片 / 连续两种 Fhls 点播策略类，挂载时 new 出策略
   - id: rel.registry.mounter-planner
     from: app.registry.fragment-mounter
@@ -711,11 +781,13 @@ relations:
     type: queries
     description: 片段挂载器向片段规划取结果
     interface: if.registry.planFragments
+    purpose: 得出片段挂载顺序
     payload: ds.FragmentPlanInput
   - id: rel.registry.mounter-framework
     from: app.registry.fragment-mounter
     to: infra.framework
     type: commands
+    purpose: 把片段挂成插件
     description: 片段挂载器交给 Framework 机制内核：PluginController.usePlugin / useSolutionPlugin / removePlugin 挂卸片段插件；读 Context.data.activeLeg
 
   # ── app.factories ──
@@ -723,31 +795,37 @@ relations:
     from: app.factories.base
     to: infra.framework
     type: commands
+    purpose: 提交段图并停销 MU
     description: 段工厂基类交给 Framework 机制内核：PipelineController.updatePipeline / getSegmentNodes / getNode / catchUpRestart；向 MU 发 Stop / Destroy
   - id: rel.factories.play-player-index
     from: app.factories.play
     to: infra.player-index
     type: queries
+    purpose: 取具体播放模型配置
     description: 播放段工厂向 PlayerIndex 取：经 modelAccess.requireFrameModel / requireFhlsModel 取具体播放模型
   - id: rel.factories.play-domain-models
     from: app.factories.play
     to: domain.models
     type: commands
+    purpose: 设解码缓冲上限与呈现形态
     description: 播放段工厂交给领域模型：帧缓冲模型 configureBufferLimits、Fhls 播放模型 assignPresentation
   - id: rel.factories.play-domain-types
     from: app.factories.play
     to: domain.types
     type: queries
+    purpose: 决定 Fhls 呈现形态
     description: 播放段工厂向类型与事件取：Fhls 播放段工厂调用 decidePresentation 决定呈现方式
   - id: rel.factories.load-framework
     from: app.factories.load
     to: infra.framework
     type: commands
+    purpose: 让 Loader 拉流或取消
     description: 加载段工厂交给 Framework 机制内核：加载段控制器经 PipelineController.dispatch 向 Loader 定向发 LoadStreamInfo / LoadData / CancelLoad
   - id: rel.factories.play-framework
     from: app.factories.play
     to: infra.framework
     type: commands
+    purpose: 让播放段 MU 执行动作
     description: 播放段工厂交给 Framework 机制内核：播放段控制器经 PipelineController.dispatch 向解码 / 缓冲 / 渲染 MU 定向派发 Play / Load / Seek / DropBuffer 等
 
   # ── app.strategies ──
@@ -758,6 +836,7 @@ relations:
     via: 'channel:inject'
     mode: async
     interface: if.solution.createStreamFactReporter
+    purpose: 上报流事实供方案裁决
     payload: ds.StreamInfoFacts
     description: 加载基座与开闸交给命令编排与初始化：流信息到达后 reportStreamInfo 上报流事实（由片段挂载输入注入 reporter）
   - id: rel.strategies.load-base-play-stage-start
@@ -766,102 +845,121 @@ relations:
     type: commands
     mode: async
     interface: if.solution.playStageStart
+    purpose: 流就绪后启动播放段
     description: 加载基座与开闸交给播放段启动协调者：下一阶段就绪后以 'facts' 原因调启动协调者（流信息线触发入口）
   - id: rel.strategies.load-factory-load
     from: app.strategies.load
     to: app.factories.load
     type: commands
+    purpose: 拉清单、拉数据或取消
     description: 加载段驱动交给加载段工厂：经加载段控制器拉清单 / 拉数据 / 取消
   - id: rel.strategies.load-framework
     from: infra.framework
     to: app.strategies.load
     type: notifies
+    purpose: 拿流信息与水位驱动拉流
     description: 通知 StreamInfoLoaded / BufferChange / Error / PlayerStatusChange（策略订阅）；策略另挂 Load / Play 后置命令 Hook、向 DemuxedBuffer 发 SendAllBuffer
   - id: rel.strategies.load-domain-services
     from: app.strategies.load
     to: domain.services
     type: queries
+    purpose: 定拉片水位与清单刷新档
     description: 加载段驱动向决策服务取：vodLoadWatermark 拉片水位、hlsPlaylistRefresh 清单刷新档位
   - id: rel.strategies.load-domain-models
     from: app.strategies.load
     to: domain.models
     type: commands
+    purpose: 更新流事实与清单游标
     description: 加载段驱动交给领域模型：读写流模型（nextStageReady、加密版本）与 HlsModel（游标、偏移、清单）
   - id: rel.strategies.load-plugins
     from: app.strategies.load
     to: app.plugins
     type: queries
+    purpose: 判重连故障并求追帧位置
     description: 加载段驱动向横向用例插件取：加载策略调用 isReconnectFault 判重连、resolveMseChasingSeekMs 求追帧位置
   - id: rel.strategies.load-mus
     from: app.strategies.load
     to: infra.mus
     type: queries
+    purpose: 算缓冲时长
     description: 加载段驱动向 MUs 媒体单元取：HLS 直播加载调用 computeBufferDuration 算缓冲时长
   - id: rel.strategies.play-base-factory-play
     from: app.strategies.play-base
     to: app.factories.play
     type: commands
+    purpose: 让播放段加载、播放或定位
     payload: ds.PlayController
     description: 播放策略基座与 Video 交给播放段工厂：经方案控制器向播放段 MU 发 Load / Play / Seek
   - id: rel.strategies.live-frame-factory-play
     from: app.strategies.live-frame
     to: app.factories.play
     type: commands
+    purpose: 重置解码器或丢缓冲
     payload: ds.FrameController
     description: 直播帧策略（Wcs / Wasm）交给播放段工厂：经帧控制器重置解码器 / 丢缓冲
   - id: rel.strategies.live-frame-domain-services
     from: app.strategies.live-frame
     to: domain.services
     type: queries
+    purpose: 决定装配哪些部件
     payload: ds.LiveFramePlan
     description: 直播帧策略（Wcs / Wasm）向决策服务取：resolveLiveFramePlan 决定送解码 / 丢视频部件
   - id: rel.strategies.live-frame-domain-models
     from: app.strategies.live-frame
     to: domain.models
     type: queries
+    purpose: 读帧与帧缓冲状态
     description: 直播帧策略（Wcs / Wasm）向领域模型取：读帧模型 / 帧缓冲模型
   - id: rel.strategies.live-frame-framework
     from: infra.framework
     to: app.strategies.live-frame
     type: notifies
+    purpose: 拿缓冲与解码事件驱动送帧
     description: 通知 BufferChange / PlayerStatusChange / VideoFrameDecoded（策略订阅）；策略以共享定时器驱动送渲染，向 MU 派发 SendBuffer / DropBuffer
   - id: rel.strategies.live-frame-player-index
     from: app.strategies.live-frame
     to: infra.player-index
     type: queries
+    purpose: 取帧与时间线模型能力
     description: 直播帧策略（Wcs / Wasm）向 PlayerIndex 取：直播帧策略调用 requireFrameModel / requireFrameBufferModel / requireRenderTimelineReadModel 取模型能力
   - id: rel.strategies.live-vcs-domain-services
     from: app.strategies.live-vcs
     to: domain.services
     type: queries
+    purpose: 定送帧线落点
     description: Vcs 直播策略向决策服务取：直播自适应缓冲控制器决策（送帧线落点）
   - id: rel.strategies.live-vcs-framework
     from: infra.framework
     to: app.strategies.live-vcs
     type: notifies
+    purpose: 拿缓冲与渲染事件驱动送帧
     description: 通知缓冲 / 状态 / 渲染事件（策略订阅）；策略派发送帧与丢音频动作
   - id: rel.strategies.vod-frame-vod-load
     from: app.strategies.vod-frame
     to: app.strategies.load.vod
     type: commands
     interface: if.strategies.vodLoad
+    purpose: 起拉、续拉或 seek 重拉
     payload: ds.VodLoadHandle
     description: 点播帧策略（Wcs / Wasm）交给点播拉片：经 vod-load 句柄起拉 / 续拉 / 硬 seek 重拉
   - id: rel.strategies.vod-frame-factory-play
     from: app.strategies.vod-frame
     to: app.factories.play
     type: commands
+    purpose: 让播放段送解码与渲染
     description: 点播帧策略（Wcs / Wasm）让播放段工厂接手处理
     payload: ds.FrameController
   - id: rel.strategies.vod-frame-framework
     from: infra.framework
     to: app.strategies.vod-frame
     type: notifies
+    purpose: 拿缓冲与出画事件排期
     description: 通知 BufferChange / PlayerStatusChange / VideoRendered（策略订阅）；策略以定时器驱动送解码与送渲染
   - id: rel.strategies.vod-frame-player-index
     from: app.strategies.vod-frame
     to: infra.player-index
     type: queries
+    purpose: 取帧模型排期送帧
     description: 点播帧策略（Wcs / Wasm）向 PlayerIndex 取：点播帧策略调用 requireFrameModel 取帧模型
   - id: rel.strategies.vod-mse-vod-load
     from: app.strategies.vod-mse
@@ -869,32 +967,38 @@ relations:
     type: commands
     description: 点播 MSE 策略让点播拉片接手处理
     interface: if.strategies.vodLoad
+    purpose: 按水位驱动拉片
     payload: ds.VodLoadHandle
   - id: rel.strategies.vod-mse-factory-play
     from: app.strategies.vod-mse
     to: app.factories.play
     type: commands
+    purpose: 让 MSE 渲染送帧与 seek
     description: 点播 MSE 策略让播放段工厂接手处理
     payload: ds.MseController
   - id: rel.strategies.vod-mse-mus
     from: app.strategies.vod-mse
     to: infra.mus
     type: queries
+    purpose: 判过期缓冲回收范围
     description: 点播 MSE 策略向 MUs 媒体单元取：调用 decideExpiredBufferRemovals / findValidExpiredRangeEnd 判过期回收范围
   - id: rel.strategies.vod-mse-plugins
     from: app.strategies.vod-mse
     to: app.plugins
     type: queries
+    purpose: 算送帧水位
     description: 点播 MSE 策略向横向用例插件取：调用 decideBufferCount / decideMediaBuffer 算水位
   - id: rel.strategies.vod-mse-framework
     from: infra.framework
     to: app.strategies.vod-mse
     type: notifies
+    purpose: 拿缓冲更新驱动送帧回收
     description: 通知 SourceBufferUpdated / VideoRendered / BufferChange（策略订阅）；策略向 MseRender 派发 RemoveRange / Seek
   - id: rel.strategies.vod-mse-player-index
     from: app.strategies.vod-mse
     to: infra.player-index
     type: queries
+    purpose: 取 MSE 播放模型
     description: 点播 MSE 策略向 PlayerIndex 取：调用 requireMseModel / requireFrameBufferModel 取 MSE 播放模型
   - id: rel.strategies.vod-fhls-vod-load
     from: app.strategies.vod-fhls
@@ -902,53 +1006,59 @@ relations:
     type: commands
     description: Fhls 点播策略让点播拉片接手处理
     interface: if.strategies.vodLoad
+    purpose: 按需拉片与 seek
     payload: ds.VodLoadHandle
   - id: rel.strategies.vod-fhls-factory-play
     from: app.strategies.vod-fhls
     to: app.factories.play
     type: commands
+    purpose: 让 Fhls 渲染送数据与定位
     description: Fhls 点播策略让播放段工厂接手处理
     payload: ds.FhlsController
   - id: rel.strategies.vod-fhls-plugins
     from: app.strategies.vod-fhls
     to: app.plugins
     type: queries
+    purpose: 算水位并看住连续呈现
     description: Fhls 点播策略向横向用例插件取：调用 decideBufferCount 算水位，new 出 Fhls 连续呈现看门狗
   - id: rel.strategies.vod-fhls-framework
     from: infra.framework
     to: app.strategies.vod-fhls
     type: notifies
+    purpose: 拿队列与渲染事件保活供数
     description: 通知处理后队列 / 解析后缓存 / 渲染事件（策略订阅）；策略以 200ms 巡检驱动保活涓流
   - id: rel.strategies.vod-fhls-player-index
     from: app.strategies.vod-fhls
     to: infra.player-index
     type: queries
+    purpose: 取 Fhls 播放模型
     description: Fhls 点播策略向 PlayerIndex 取：调用 requireFhlsModel 取 Fhls 播放模型
   - id: rel.strategies.contracts-domain-services
     from: app.strategies.contracts
     to: domain.services
     type: queries
+    purpose: 求生效死区做决策观测
     description: 策略契约与决策观测向决策服务取：策略契约调用 effectiveDeadbands 求生效死区
 
   # ── 补充的交互（ADR-0026：有值使用的模块依赖按交互补全，K7）──
-  - { id: rel.factories.base-model-access, from: app.factories.base, to: infra.player-index.model-access, type: queries, description: 段工厂基类向模型能力访问取：调用 requireFrameModel 取帧模型能力 }
-  - { id: rel.strategies.send-decode-drop, from: app.strategies.live-frame.send-decode, to: app.strategies.live-frame.drop, type: commands, description: 直播送解码交给直播丢帧：送解码前调用 dispatchDropVideoPackets 丢帧 }
-  - { id: rel.strategies.load-ports, from: app.strategies.load.base, to: domain.ports, type: queries, description: 加载基座与开闸向领域端口取：调用 toPlayStageStartTarget 求播放阶段起点 }
-  - { id: rel.strategies.hls-contracts, from: app.strategies.load.hls, to: app.strategies.contracts, type: queries, description: HLS 加载向策略契约与决策观测取：调用 hlsCatchupDecision 做直播追帧决策 }
-  - { id: rel.strategies.hls-model-access, from: app.strategies.load.hls, to: infra.player-index.model-access, type: queries, description: HLS 加载向模型能力访问取：调用 requireFrameModel / requireMseModel 取模型能力 }
-  - { id: rel.strategies.vcs-contracts, from: app.strategies.live-vcs, to: app.strategies.contracts, type: queries, description: Vcs 直播策略向策略契约与决策观测取：调用 vcsBufferDecision 做缓冲决策 }
-  - { id: rel.strategies.vcs-render-fill, from: app.strategies.live-vcs, to: app.strategies.live-frame.render-fill, type: commands, description: Vcs 直播策略交给直播送渲染与充水：创建 LiveSendRenderStrategy 并委托它送渲染与充水 }
-  - { id: rel.strategies.vcs-play-model, from: app.strategies.live-vcs, to: domain.models.play, type: queries, description: Vcs 直播策略向播放模型取：调用 assertVcsPlaybackModel 收窄播放模型 }
-  - { id: rel.strategies.vcs-invariant, from: app.strategies.live-vcs, to: domain.models.base, type: queries, description: Vcs 直播策略向聚合基类取：模型不符时抛 InvariantError }
-  - { id: rel.strategies.vcs-model-access, from: app.strategies.live-vcs, to: infra.player-index.model-access, type: queries, description: Vcs 直播策略向模型能力访问取：调用 requireFrameBufferModel / requireRenderTimelineModel 取模型能力 }
-  - { id: rel.strategies.vod-model-access, from: app.strategies.load.vod, to: infra.player-index.model-access, type: queries, description: 点播拉片向模型能力访问取：调用 requireFrameModel / requirePlaybackPositionModel 取模型能力 }
-  - { id: rel.strategies.play-model-access, from: app.strategies.play-base, to: infra.player-index.model-access, type: queries, description: 播放策略基座与 Video 向模型能力访问取：调用 requireVideoPlayModel 取 Video 播放模型 }
-  - { id: rel.strategies.fhls-presentation, from: app.strategies.vod-fhls, to: domain.services.fhls-presentation, type: queries, description: Fhls 点播策略向 Fhls 呈现规则取：调用连续供给与呈现规则（decideContinuousSupply、continuousSupplyBudget、epochIndexAt、toSourcePts 等） }
-  - { id: rel.strategies.fhls-stream-model, from: app.strategies.vod-fhls, to: domain.models.stream, type: queries, description: Fhls 点播策略向流模型取：调用 assertHlsStreamModel 收窄流模型 }
-  - { id: rel.solution.legs-lifecycle, from: app.solution.legs, to: app.solution.lifecycle, type: queries, description: 腿端口 LegPort 向命令编排与初始化取：调用 toSolutionSelectConfig 构造腿的方案选型配置 }
-  - { id: rel.solution.leg-switch-lifecycle, from: app.solution.leg-switch, to: app.solution.lifecycle, type: queries, description: 换腿事务向命令编排与初始化取：调用 toSolutionSelectConfig 构造接手腿的方案选型配置 }
-  - { id: rel.registry.core-errors, from: app.registry.core, to: share.errors, type: queries, description: 注册表核心向错误原语取：在配置不合法时以 registryError 构造 ErrorBase（ConfigError）抛出 }
-  - { id: rel.strategies.errors, from: app.strategies, to: share.errors, type: queries, description: 运行时驾驶策略向错误原语取：直播帧、Vcs 与点播帧策略把送解码与拖动寻址的异常经 errorWrapper 包装为 ErrorBase }
+  - { id: rel.factories.base-model-access, from: app.factories.base, to: infra.player-index.model-access, type: queries, description: 段工厂基类向模型能力访问取：调用 requireFrameModel 取帧模型能力, purpose: 取帧模型能力 }
+  - { id: rel.strategies.send-decode-drop, from: app.strategies.live-frame.send-decode, to: app.strategies.live-frame.drop, type: commands, description: 直播送解码交给直播丢帧：送解码前调用 dispatchDropVideoPackets 丢帧, purpose: 送解码前先丢该丢的帧 }
+  - { id: rel.strategies.load-ports, from: app.strategies.load.base, to: domain.ports, type: queries, description: 加载基座与开闸向领域端口取：调用 toPlayStageStartTarget 求播放阶段起点, purpose: 求播放段启动目标 }
+  - { id: rel.strategies.hls-contracts, from: app.strategies.load.hls, to: app.strategies.contracts, type: queries, description: HLS 加载向策略契约与决策观测取：调用 hlsCatchupDecision 做直播追帧决策, purpose: 做直播追边缘决策 }
+  - { id: rel.strategies.hls-model-access, from: app.strategies.load.hls, to: infra.player-index.model-access, type: queries, description: HLS 加载向模型能力访问取：调用 requireFrameModel / requireMseModel 取模型能力, purpose: 取帧与 MSE 模型能力 }
+  - { id: rel.strategies.vcs-contracts, from: app.strategies.live-vcs, to: app.strategies.contracts, type: queries, description: Vcs 直播策略向策略契约与决策观测取：调用 vcsBufferDecision 做缓冲决策, purpose: 做缓冲决策 }
+  - { id: rel.strategies.vcs-render-fill, from: app.strategies.live-vcs, to: app.strategies.live-frame.render-fill, type: commands, description: Vcs 直播策略交给直播送渲染与充水：创建 LiveSendRenderStrategy 并委托它送渲染与充水, purpose: 委托送渲染与充水 }
+  - { id: rel.strategies.vcs-play-model, from: app.strategies.live-vcs, to: domain.models.play, type: queries, description: Vcs 直播策略向播放模型取：调用 assertVcsPlaybackModel 收窄播放模型, purpose: 确认拿到 Vcs 播放模型 }
+  - { id: rel.strategies.vcs-invariant, from: app.strategies.live-vcs, to: domain.models.base, type: queries, description: Vcs 直播策略向聚合基类取：模型不符时抛 InvariantError, purpose: 模型不符时报不变量违例 }
+  - { id: rel.strategies.vcs-model-access, from: app.strategies.live-vcs, to: infra.player-index.model-access, type: queries, description: Vcs 直播策略向模型能力访问取：调用 requireFrameBufferModel / requireRenderTimelineModel 取模型能力, purpose: 取帧缓冲与时间线能力 }
+  - { id: rel.strategies.vod-model-access, from: app.strategies.load.vod, to: infra.player-index.model-access, type: queries, description: 点播拉片向模型能力访问取：调用 requireFrameModel / requirePlaybackPositionModel 取模型能力, purpose: 取帧与播放位置能力 }
+  - { id: rel.strategies.play-model-access, from: app.strategies.play-base, to: infra.player-index.model-access, type: queries, description: 播放策略基座与 Video 向模型能力访问取：调用 requireVideoPlayModel 取 Video 播放模型, purpose: 取 Video 播放模型 }
+  - { id: rel.strategies.fhls-presentation, from: app.strategies.vod-fhls, to: domain.services.fhls-presentation, type: queries, description: Fhls 点播策略向 Fhls 呈现规则取：调用连续供给与呈现规则（decideContinuousSupply、continuousSupplyBudget、epochIndexAt、toSourcePts 等）, purpose: 按呈现规则供数与换算 }
+  - { id: rel.strategies.fhls-stream-model, from: app.strategies.vod-fhls, to: domain.models.stream, type: queries, description: Fhls 点播策略向流模型取：调用 assertHlsStreamModel 收窄流模型, purpose: 确认拿到 HLS 流模型 }
+  - { id: rel.solution.legs-lifecycle, from: app.solution.legs, to: app.solution.lifecycle, type: queries, description: 腿端口 LegPort 向命令编排与初始化取：调用 toSolutionSelectConfig 构造腿的方案选型配置, purpose: 构造腿的选型配置 }
+  - { id: rel.solution.leg-switch-lifecycle, from: app.solution.leg-switch, to: app.solution.lifecycle, type: queries, description: 换腿事务向命令编排与初始化取：调用 toSolutionSelectConfig 构造接手腿的方案选型配置, purpose: 构造接手腿的选型配置 }
+  - { id: rel.registry.core-errors, from: app.registry.core, to: share.errors, type: queries, description: 注册表核心向错误原语取：在配置不合法时以 registryError 构造 ErrorBase（ConfigError）抛出, purpose: 报配置不合法 }
+  - { id: rel.strategies.errors, from: app.strategies, to: share.errors, type: queries, description: 运行时驾驶策略向错误原语取：直播帧、Vcs 与点播帧策略把送解码与拖动寻址的异常经 errorWrapper 包装为 ErrorBase, purpose: 包装送解码与寻址异常 }
 
 interfaces:
   # ── 契约接口（implements 的目标，M11、K5：方案控制器、段工厂、片段句柄；字段见同名数据结构） ──

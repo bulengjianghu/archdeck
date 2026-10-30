@@ -10,4 +10,5 @@ relations:
     from: actor.biz
     to: infra.player-index.player-api
     type: commands
+    purpose: 让播放器加载、播放并受控
     description: 业务方交给 Player 对外 API：调用 Player 对外 API（init / load / play / pause / stop / reset / switch / seek / destroy …）

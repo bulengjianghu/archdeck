@@ -3,16 +3,20 @@
 # kernel.ts 与 session.ts 各是单文件，内部子结构写成概念子模块（不写 codeRefs，§3.7）。
 
 modules:
+  - id: kit
+    name: 播放器 Kit
+    summary: 给宿主一次 open 到 close 的可靠播放会话
   # 第二级模块的原则（补充条目，ADR-0042；名称与骨架一致）
-  - { id: kit.facade, name: 门面与对外契约, abstraction: 门面只翻译与装配：一个方法一条内核命令、不判断状态，管线族只认族端口由宿主注入，浏览器能力经适配器交给内核。 }
-  - { id: kit.kernel, name: 会话内核, abstraction: 按「何时处理 / 变成什么 / 对外报什么」切分：调度是唯一队列串行施用，决定是状态与意图的唯一写者，跟随只读不决。 }
-  - { id: kit.session, name: 会话规则, abstraction: 把规则从内核抽成类型与纯函数：接受、选路线与顺序检查都无副作用、可单测，内核只调用不内嵌。 }
-  - { id: kit.page, name: 页面能力适配, abstraction: 每种页面级浏览器能力一个适配器，全页共用、比会话活得久；内核只经注入的接口用它们，不碰浏览器 API。 }
+  - { id: kit.facade, name: 门面与对外契约, abstraction: 门面只翻译与装配：一个方法一条内核命令、不判断状态，管线族只认族端口由宿主注入，浏览器能力经适配器交给内核。, summary: 让宿主用一套 API 创建并控制播放器, invariants: [门面不导入任何 Provider，管线族只按 PipelineFamily 端口由宿主注入, 每个命令方法只提交一条内核命令，返回的就是这条命令的结果, 族全部建立落定后才判失败，已建的族与增益一并释放] }
+  - { id: kit.kernel, name: 会话内核, abstraction: 按「何时处理 / 变成什么 / 对外报什么」切分：调度是唯一队列串行施用，决定是状态与意图的唯一写者，跟随只读不决。, summary: 按序施用命令，维护唯一的会话状态并干净释放, invariants: [宿主命令与改变意图或生死的管线回报都经唯一队列串行施用，一项失败只回给它的调用方, 会话资源获取即登记进释放栈、关闭时逆序释放，管线 stop 超时即 terminate, 回报带会话代号，不是当前会话或会话在关闭时即丢弃] }
+  - { id: kit.session, name: 会话规则, abstraction: 把规则从内核抽成类型与纯函数：接受、选路线与顺序检查都无副作用、可单测，内核只调用不内嵌。, summary: 判定命令能否受理、选出路线、核对事件顺序, invariants: [接受表、路线解析与顺序机检都是纯函数，不读时钟、不碰浏览器, 只依赖管线契约与共享基础，不依赖内核] }
+  - { id: kit.page, name: 页面能力适配, abstraction: 每种页面级浏览器能力一个适配器，全页共用、比会话活得久；内核只经注入的接口用它们，不碰浏览器 API。, summary: 给内核全页共用的声音与屏幕常亮能力 }
 
   # ───────────────────────── kit.facade ─────────────────────────
   - id: kit.facade.player-api
     parent: kit.facade
     name: Player 对外 API
+    summary: 给宿主唯一的播放器入口，每个方法回受理结果
     kind: component
     responsibility: >-
       宿主唯一的入口：createPlayer(options) 返回 Player，open / play / pause / seek / seekToLive / seekToWallClock /
@@ -29,6 +33,7 @@ modules:
   - id: kit.facade.assembly
     parent: kit.facade
     name: 播放器装配
+    summary: 把注入的族、页面音频与适配器装成一个播放器
     kind: component
     responsibility: >-
       createPlayerOn(platform, options)：取页面 AudioContext 建本播放器的增益节点，以「容器 + 音频 + 可见性」的环境逐个调用宿主注入的管线族，
@@ -40,6 +45,7 @@ modules:
   - id: kit.facade.browser-platform
     parent: kit.facade
     name: 浏览器平台适配
+    summary: 把页面可见性与系统媒体键交给内核
     kind: component
     responsibility: >-
       门面交给内核的浏览器适配器：document.visibilityState 的可见性订阅，navigator.mediaSession 的系统播放 / 暂停键
@@ -48,6 +54,7 @@ modules:
   - id: kit.facade.exports
     parent: kit.facade
     name: 包入口
+    summary: 对外导出门面、内核与会话规则的全部接口
     kind: component
     responsibility: 包的对外转出面：再导出门面（createPlayer、resumeAudio 与选项类型）、内核与会话规则的全部导出。
     codeRefs: [media-sdk-kits/packages/media-player/src/index.ts]
@@ -56,6 +63,7 @@ modules:
   - id: kit.kernel.schedule
     parent: kit.kernel
     name: 命令调度
+    summary: 决定何时处理：按提交顺序串行施用命令与回报
     kind: component
     responsibility: >-
       回答「什么时候处理」：宿主命令（submit 时先拷贝成内核自己的一份）与管线回报里改变意图或会话生死的那些（结束、暂停、播放、续播点、失败）
@@ -69,6 +77,7 @@ modules:
   - id: kit.kernel.lifecycle
     parent: kit.kernel
     name: 会话生命周期
+    summary: 打开会话交给所选族，关闭时逆序释放全部资源
     kind: component
     responsibility: >-
       一个会话从打开到关闭：打开时向路线策略要族与路线（排除集由内核给：WebCodecs 失败过即排除，带密钥即排除 native），
@@ -84,6 +93,7 @@ modules:
   - id: kit.kernel.decide
     parent: kit.kernel
     name: 会话决定
+    summary: 决定会话变成什么：唯一写入状态与播放意图
     kind: component
     responsibility: >-
       回答「处理后变成什么」：会话状态（state）与宿主意图（wantPlaying）唯一的写入处。按工作种类决定会话怎么变——open 关旧开新、
@@ -96,6 +106,7 @@ modules:
   - id: kit.kernel.follow
     parent: kit.kernel
     name: 观察跟随
+    summary: 由状态与观察推出该告诉宿主和管线的事
     kind: component
     responsibility: >-
       回答「变化之后对外报什么」：读当前状态与意图、管线报的观察（模式、边缘、缓冲、seek、声音被拦、时间线）和页面能力（可见性、音量），
@@ -108,6 +119,7 @@ modules:
   - id: kit.kernel.envelope
     parent: kit.kernel
     name: 回报与事件信封
+    summary: 收当前会话的回报，给每个事件套上有序信封
     kind: component
     responsibility: >-
       每个会话一个 PipelineSink：只收当前代号、未在关闭的会话的回报；漏斗阶段按序记一次并换算成相对 open 的毫秒，统计按路径与单位拆成遥测记录，
@@ -120,6 +132,7 @@ modules:
   - id: kit.session.contract
     parent: kit.session
     name: 命令与事件契约
+    summary: 定义宿主可见的状态、命令、事件与快照类型
     kind: component
     responsibility: 内核的对外类型：七种状态、命令单通道的命令与拒绝原因、命令结果、会话事件（内核自己的与管线回报的）及其信封、会话与播放器快照、关闭原因。
     dataStructures: [ds.PlayerState, ds.PlayerCommand, ds.CommandResult, ds.PlayerEvent, ds.PlayerSnapshot, ds.ClosedReason]
@@ -127,6 +140,7 @@ modules:
   - id: kit.session.acceptance
     parent: kit.session
     name: 命令接受表
+    summary: 判定一条命令在当前状态下受理还是拒绝
     kind: component
     responsibility: 纯表 commandRejection(command, context)：按命令种类、当前状态、是否 destroyed、时间轴能否 seek、源与参数形状给出拒绝原因或接受；open 的延迟配置在这里先校验，主线程会话也不会拿着跑不了的配置运行。
     provides: [if.kit.session.commandRejection]
@@ -134,6 +148,7 @@ modules:
   - id: kit.session.routes
     parent: kit.session
     name: 路线策略
+    summary: 为每种容器选出可用的族与路线
     kind: component
     responsibility: 各容器 auto 的路线顺序（ROUTE_ORDER：flv 先自建时钟族，mp4 先 native，hls 把 native 放最后）与纯函数 resolveRoute（跳过排除的、族没列的路线）；延迟硬上限只许自建时钟族（elementRefusesLatency）。
     provides: [if.kit.session.resolveRoute]
@@ -141,6 +156,7 @@ modules:
   - id: kit.session.order-check
     parent: kit.session
     name: 事件顺序机检
+    summary: 检查事件流是否违反顺序契约
     kind: component
     responsibility: eventOrderViolations(events)：按顺序契约检查一串事件（会话内序号连续、session-opened 在前、session-closed 在后、代号单调等），返回违例说明；测试与冒烟用。
     provides: [if.kit.session.eventOrderViolations]
@@ -149,6 +165,7 @@ modules:
   - id: kit.page.audio
     parent: kit.page
     name: 页面音频
+    summary: 提供全页共用的 AudioContext，判定声音是否真在跑
     kind: component
     responsibility: >-
       全页一个、永不关闭的 AudioContext（iOS 限个数），每个播放器在它上面一个增益；「声音在跑」= 上下文说 running 且时钟在走；
@@ -159,6 +176,7 @@ modules:
   - id: kit.page.screen-wake
     parent: kit.page
     name: 屏幕常亮
+    summary: 播放时保持屏幕常亮，拿不到时报告一次
     kind: component
     responsibility: 会话播放时持有 Screen Wake Lock，页面回到前台重新申请；没有 API 或被拒时报一次 warn（wake-lock-unavailable / refused）；askPageScreenWake 在用户手势内补申请。
     provides: [if.kit.page.ScreenWake]
@@ -172,6 +190,7 @@ relations:
     type: commands
     mode: async
     interface: if.kit.kernel.PlayerKernel
+    purpose: 把宿主的调用按序交内核执行
     payload: ds.PlayerCommand
     description: 门面把宿主的每个方法转成一条命令交给内核排队（submit），以命令结果回给宿主；screenshot 同样排队。
   - id: rel.kit.assembly-kernel
@@ -179,18 +198,21 @@ relations:
     to: kit.kernel.schedule
     type: commands
     interface: if.kit.kernel.createPlayerKernel
+    purpose: 建出承载会话的内核
     description: 装配时以时钟、族、可见性、媒体键、音量与屏幕常亮适配器创建会话内核（createPlayerKernel）。
   - id: rel.kit.assembly-page-audio
     from: kit.facade
     to: kit.page.audio
     type: commands
     interface: if.kit.page.PageAudio
+    purpose: 让播放器接上页面声音
     description: 装配时取页面 AudioContext（browserPageAudio）建增益；resumeAudio 交给页面音频在手势内放声（resumePageAudio）。
   - id: rel.kit.assembly-screen-wake
     from: kit.facade
     to: kit.page.screen-wake
     type: commands
     interface: if.kit.page.ScreenWake
+    purpose: 在手势内争取屏幕常亮
     description: 装配时建屏幕常亮适配器（browserScreenWake）；open / play / resumeAudio 在手势内补申请（ask / askPageScreenWake）。
   - id: rel.kit.assembly-self-clocked
     from: kit.facade.assembly
@@ -199,6 +221,7 @@ relations:
     mode: async
     interface: if.pipeline.contract.PipelineFamily
     via: port:if.pipeline.contract.PipelineFamily
+    purpose: 建立自建时钟族供会话选用
     description: 门面以环境（容器、音频、可见性）调用宿主注入的自建时钟族，得到它的族实例（路线清单、启动管线、音量、释放）；destroy 后逐族释放。
   - id: rel.kit.assembly-element
     from: kit.facade.assembly
@@ -207,77 +230,91 @@ relations:
     mode: async
     interface: if.pipeline.contract.PipelineFamily
     via: port:if.pipeline.contract.PipelineFamily
+    purpose: 建立元素族供会话选用
     description: 门面以同一环境调用宿主注入的元素族；音量变化经 family.setVolume 交给元素自己出声的族，destroy 后释放。
   - id: rel.kit.assembly-fault
     from: kit.facade
     to: share.core
     type: queries
     interface: if.share.core.MediaFault
+    purpose: 拒绝没有任何管线族的创建
     description: 门面在没有任何管线族时构造 invalid-argument 的 MediaFault。
   # 内核内部（概念拆分，同文件）
   - id: rel.kit.decide-open-session
     from: kit.kernel.decide
     to: kit.kernel.lifecycle
     type: commands
+    purpose: 按决定开出新会话
     description: 决定 open（及失败后的 play、Worker 交回）时打开新会话，交给它初始状态与接续。
   - id: rel.kit.decide-close-session
     from: kit.kernel.decide
     to: kit.kernel.lifecycle
     type: commands
     mode: async
+    purpose: 按决定收掉当前会话
     description: 决定 stop / open / failed / ended / destroy 时关闭当前会话（带最终状态），等释放完成才回到调度。
   - id: rel.kit.schedule-decide
     from: kit.kernel.schedule
     to: kit.kernel.decide
     type: commands
+    purpose: 让队首的工作落成状态变化
     description: 队首的工作（已过接受表、代号是当前会话的）交给会话决定施用（apply），落定后才取下一项。
   - id: rel.kit.lifecycle-envelope
     from: kit.kernel.lifecycle
     to: kit.kernel.envelope
     type: commands
+    purpose: 宣告会话开合并记会话遥测
     description: 打开会话时为它建 PipelineSink（sinkFor）交给管线并发 session-opened；关闭时经信封发 error 与 session-closed，并记会话级遥测（卡顿、意图时长、冻结）。
   - id: rel.kit.envelope-schedule
     from: kit.kernel.envelope
     to: kit.kernel.schedule
     type: commands
     mode: async
+    purpose: 让结束与失败按序施用
     description: 管线回报里改变意图或会话生死的——结束、暂停、播放、续播点与失败——由信封层入队，按序施用。
   - id: rel.kit.envelope-follow
     from: kit.kernel.envelope
     to: kit.kernel.follow
     type: commands
+    purpose: 让观察立刻反映给宿主
     description: 管线回报的观察（模式、边缘、缓冲、seek、声音被拦、时间线、统计、漏斗阶段）直接交给观察跟随，不经队列。
   - id: rel.kit.envelope-decide
     from: kit.kernel.envelope
     to: kit.kernel.decide
     type: commands
+    purpose: 首帧时定下播放或暂停
     description: 首帧到达时请会话决定把 loading 定为 playing 或 paused（按意图）。
   - id: rel.kit.decide-envelope
     from: kit.kernel.decide
     to: kit.kernel.envelope
     type: commands
+    purpose: 告诉宿主状态变了
     description: 状态每变一次经信封发 state 事件给宿主。
   - id: rel.kit.decide-follow
     from: kit.kernel.decide
     to: kit.kernel.follow
     type: commands
+    purpose: 状态变后重判派生结果
     description: 状态、意图、音量或静音变化后请观察跟随重判 audio-blocked、hold-unseen、屏幕常亮与累计时长。
   - id: rel.kit.follow-envelope
     from: kit.kernel.follow
     to: kit.kernel.envelope
     type: commands
+    purpose: 把派生结果告诉宿主
     description: 跟随的结果经信封发给宿主（playback-mode、visibility、audio-blocked、屏幕常亮被拒的 log）。
   - id: rel.kit.visibility-callback
     from: kit.facade.browser-platform
     to: kit.kernel.follow
     type: notifies
     via: channel:callback@kit.kernel
+    purpose: 让会话随页面可见性调整
     description: 页面可见性变化经内核订阅时给的回调通知会话：转给管线、发 visibility 事件、重判看不见即保持。
   - id: rel.kit.media-keys-callback
     from: kit.facade.browser-platform
     to: kit.kernel.schedule
     type: notifies
     via: channel:callback@kit.kernel
+    purpose: 把系统键的操作排进队列
     description: 系统媒体键的 play / pause 经内核订阅时给的回调作为当前会话的工作入队（media-control）。
   # 内核 → 会话规则
   - id: rel.kit.schedule-acceptance
@@ -285,24 +322,28 @@ relations:
     to: kit.session.acceptance
     type: queries
     interface: if.kit.session.commandRejection
+    purpose: 判定命令能否受理
     description: 每条命令到队首时查接受表，得出拒绝原因或接受。
   - id: rel.kit.lifecycle-routes
     from: kit.kernel.lifecycle
     to: kit.session.routes
     type: queries
     interface: if.kit.session.resolveRoute
+    purpose: 为会话选出族与路线
     description: 打开会话时按容器、route 与排除集解析族与路线，并查延迟硬上限能否用于该路线。
   - id: rel.kit.session-source-check
     from: kit
     to: pipeline.contract.source
     type: queries
     interface: if.pipeline.contract.isDecryptionKey
+    purpose: 核对源、时移列表与密钥形状
     description: 内核与接受表用管线契约的形状判断（isDecryptionKey、isTimeshiftSource）检查源与时移列表、拷贝密钥。
   - id: rel.kit.acceptance-latency
     from: kit.session.acceptance
     to: pipeline.latency.law
     type: queries
     interface: if.pipeline.latency.validateLatencyConfig
+    purpose: 拒绝不合法的延迟配置
     description: 接受表校验 open 的延迟配置（validateLatencyConfig），不合法即 invalid-argument。
   # 内核 → 管线族（经端口）
   - id: rel.kit.lifecycle-start-self-clocked
@@ -311,6 +352,7 @@ relations:
     type: commands
     interface: if.pipeline.contract.Pipelines
     via: port:if.pipeline.contract.Pipelines
+    purpose: 让自建时钟族开始播这个会话
     payload: ds.PipelineStart
     description: 内核把会话交给自建时钟族启动管线（startPipeline），带代号、路线、源、选项、liveStart 与 sink。
   - id: rel.kit.lifecycle-start-element
@@ -319,6 +361,7 @@ relations:
     type: commands
     interface: if.pipeline.contract.Pipelines
     via: port:if.pipeline.contract.Pipelines
+    purpose: 让元素族开始播这个会话
     payload: ds.PipelineStart
     description: 内核把会话交给元素族启动管线（startPipeline）；无会话时清最后一帧（clearLastFrame）。
   - id: rel.kit.decide-self-clocked
@@ -327,6 +370,7 @@ relations:
     type: commands
     interface: if.pipeline.contract.Pipeline
     via: port:if.pipeline.contract.Pipeline
+    purpose: 让会话照宿主意图播放与跳转
     payload: ds.PipelineCommand
     description: 会话决定向自建时钟族的会话管线下发宿主意图的命令（play / pause / seek / seek-live / seek-wall-clock / set-timeshift，续播点的 seek），截图也经它取。
   - id: rel.kit.follow-self-clocked
@@ -335,6 +379,7 @@ relations:
     type: commands
     interface: if.pipeline.contract.Pipeline
     via: port:if.pipeline.contract.Pipeline
+    purpose: 让会话按可见性保持或继续
     payload: ds.PipelineCommand
     description: 观察跟随向自建时钟族的会话管线下发派生出的命令（visibility、hold-unseen）。
   - id: rel.kit.decide-element
@@ -343,6 +388,7 @@ relations:
     type: commands
     interface: if.pipeline.contract.Pipeline
     via: port:if.pipeline.contract.Pipeline
+    purpose: 让会话照宿主意图播放与跳转
     payload: ds.PipelineCommand
     description: 会话决定向元素族的会话管线下发同一组意图命令；清最后一帧经族的 clearLastFrame。
   - id: rel.kit.follow-element
@@ -351,6 +397,7 @@ relations:
     type: commands
     interface: if.pipeline.contract.Pipeline
     via: port:if.pipeline.contract.Pipeline
+    purpose: 让会话按可见性保持或继续
     payload: ds.PipelineCommand
     description: 观察跟随向元素族的会话管线下发 visibility 与 hold-unseen。
   - id: rel.kit.lifecycle-stop-self-clocked
@@ -360,6 +407,7 @@ relations:
     mode: async
     interface: if.pipeline.contract.Pipeline
     via: port:if.pipeline.contract.Pipeline
+    purpose: 关会话时释放管线
     description: 关闭会话时让自建时钟族的管线释放（stop），超时则终止（terminate，Worker 模式即终止 Worker）。
   - id: rel.kit.lifecycle-stop-element
     from: kit.kernel.lifecycle
@@ -368,6 +416,7 @@ relations:
     mode: async
     interface: if.pipeline.contract.Pipeline
     via: port:if.pipeline.contract.Pipeline
+    purpose: 关会话时释放管线
     description: 关闭会话时让元素族的管线释放（stop），超时则终止。
   # 内核 → 注入的适配器
   - id: rel.kit.follow-adapters
@@ -376,6 +425,7 @@ relations:
     type: queries
     interface: if.kit.kernel.PlayerAdapters
     via: port:if.kit.kernel.PlayerAdapters
+    purpose: 判断看不见即保持、填快照
     description: 经注入的适配器读页面可见性与能否出声，判定看不见即保持、填快照。
   - id: rel.kit.decide-adapters
     from: kit.kernel.decide
@@ -383,6 +433,7 @@ relations:
     type: commands
     interface: if.kit.kernel.PlayerAdapters
     via: port:if.kit.kernel.PlayerAdapters
+    purpose: 让音量与静音真正生效
     description: 音量与静音命令经注入的适配器交给门面设增益与族音量（setVolume）。
   - id: rel.kit.lifecycle-adapters
     from: kit.kernel.lifecycle
@@ -390,6 +441,7 @@ relations:
     type: commands
     interface: if.kit.kernel.PlayerAdapters
     via: port:if.kit.kernel.PlayerAdapters
+    purpose: 让会话收到可见性与系统键
     description: 打开会话时经注入的适配器订阅页面可见性与系统媒体键（返回的退订登记进释放栈），关闭时退订。
   - id: rel.kit.follow-screen-wake
     from: kit.kernel.follow
@@ -397,6 +449,7 @@ relations:
     type: commands
     interface: if.kit.kernel.PlayerAdapters
     via: port:if.kit.kernel.PlayerAdapters
+    purpose: 播放时保持屏幕常亮
     description: 会话播放时经注入的适配器持有屏幕常亮（screenWake.hold），停下时释放；拒绝报告经信封成为会话的 warn 日志。
   - id: rel.kit.kernel-clock
     from: kit.kernel.lifecycle
@@ -404,6 +457,7 @@ relations:
     type: queries
     interface: if.kit.kernel.PlayerAdapters
     via: port:if.kit.kernel.PlayerAdapters
+    purpose: 取单调时间、限定释放时长
     description: 内核经注入的时钟（browserClock）取单调时间、为释放超时设定时器。
   # 内核 → 共享基础
   - id: rel.kit.kernel-fault
@@ -411,12 +465,14 @@ relations:
     to: share.core
     type: queries
     interface: if.share.core.describeError
+    purpose: 把异常归一成统一错误报给宿主
     description: 内核把管线与释放抛出的异常归一成 MediaError（MediaFault 的 code、describeError 的说明）。
   - id: rel.kit.session-fault
     from: kit.session
     to: share.core
     type: queries
     interface: if.share.core.MediaFault
+    purpose: 以统一错误说明校验失败
     description: 会话规则校验失败时构造 MediaFault。
   # 页面能力
   - id: rel.kit.audio-self-clocked
@@ -424,24 +480,28 @@ relations:
     to: providers.self-clocked.family
     type: notifies
     via: channel:callback@pipeline.contract.family-port
+    purpose: 宣告页面声音开始或停止
     description: 页面声音开始或停止在跑时，经播放器给族的环境（environment.audio.subscribe）通知自建时钟族；Worker 会话再转 audio 消息。
   - id: rel.kit.audio-element
     from: kit.page.audio
     to: providers.element.video
     type: notifies
     via: channel:callback@pipeline.contract.family-port
+    purpose: 宣告声音变化与放声手势
     description: 页面声音状态变化与每次 resumeAudio 的手势（environment.audio.subscribe / onResume）通知元素的声音，被自动播放策略拦住的元素在手势内再试放声。
   - id: rel.kit.page-audio-timers
     from: kit.page.audio
     to: pipeline.timing
     type: commands
     interface: if.pipeline.timing.visibleTimers
+    purpose: 只在页面可见时计恢复超时
     description: 页面音频的恢复超时用只在页面可见时计时的计时器（visibleTimers）。
   - id: rel.kit.page-fault
     from: kit.page
     to: share.core
     type: queries
     interface: if.share.core.describeError
+    purpose: 以统一错误报超时与被拒
     description: 页面能力适配构造超时的 MediaFault、把屏幕常亮被拒的异常转成说明。
 
 interfaces:

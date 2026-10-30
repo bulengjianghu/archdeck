@@ -4,17 +4,21 @@
 # pipeline.ts 是单文件契约，按「源 / 管线端口 / 回报 / 族端口」写成概念子模块（不写 codeRefs，§3.7）。
 
 modules:
+  - id: pipeline
+    name: 管线契约与共用律
+    summary: 定下内核与管线族的契约，提供两族共用的律与拉流
   # 第二级模块的原则（补充条目，ADR-0042；名称与骨架一致）
-  - { id: pipeline.contract, name: 管线契约, abstraction: 按一次会话的流向切契约：源进、命令下行、回报经 sink 上行、族端口管建立与释放；内核拥有状态，管线拥有其余。 }
-  - { id: pipeline.latency, name: 延迟决策律, abstraction: 决策与执行分界：律是不读时钟、可重放的纯函数，运行骨架只携带状态并把动作交给本族执行器，读数与动作归各族。 }
-  - { id: pipeline.metering, name: 计量与锚点, abstraction: 按观测对象分成互不依赖的观测件：只把时间戳变成读数或报告，不碰浏览器 API、不做决策。 }
-  - { id: pipeline.timing, name: 计时器与看不见即保持, abstraction: 时间一律经注入的计时器，按谁在等选停走规则：会话的等待随看不见即保持停走，非会话的等待只在页面可见时计时。 }
-  - { id: pipeline.fetch, name: 拉流与重连, abstraction: 按协议切拉流，共用一个流式请求与一套有界重试和丢失归因；拉流只交字节，不认识模块与解封装。 }
+  - { id: pipeline.contract, name: 管线契约, abstraction: 按一次会话的流向切契约：源进、命令下行、回报经 sink 上行、族端口管建立与释放；内核拥有状态，管线拥有其余。, summary: 约定内核与管线族之间怎么开会话、下命令、报事实, invariants: [契约包不导入内核与任何管线族，只依赖共享基础与跨语言契约, 管线只经 sink 向内核回报，内核只经端口向管线下命令] }
+  - { id: pipeline.latency, name: 延迟决策律, abstraction: 决策与执行分界：律是不读时钟、可重放的纯函数，运行骨架只携带状态并把动作交给本族执行器，读数与动作归各族。, summary: 按缓冲读数决定延迟手段，两族得到同样的决策, invariants: [决策律是纯函数，状态 × 读数 × 配置 → 动作与报告，不读时钟，可录制重放, 运行骨架不取读数、不执行动作，动作只交给本族执行器] }
+  - { id: pipeline.metering, name: 计量与锚点, abstraction: 按观测对象分成互不依赖的观测件：只把时间戳变成读数或报告，不碰浏览器 API、不做决策。, summary: 把时间戳变成抖动、冻结与墙钟换算的读数 }
+  - { id: pipeline.timing, name: 计时器与看不见即保持, abstraction: 时间一律经注入的计时器，按谁在等选停走规则：会话的等待随看不见即保持停走，非会话的等待只在页面可见时计时。, summary: 给拉流与会话可注入、看不见时会停走的计时 }
+  - { id: pipeline.fetch, name: 拉流与重连, abstraction: 按协议切拉流，共用一个流式请求与一套有界重试和丢失归因；拉流只交字节，不认识模块与解封装。, summary: 按协议拉回字节，断线时有界重连并归因 }
 
   # ───────────────────────── pipeline.contract（概念子模块，同在 pipeline.ts） ─────────────────────────
   - id: pipeline.contract.source
     parent: pipeline.contract
     name: 源与打开选项
+    summary: 描述会话播什么、怎么播与失败怎么归类
     kind: component
     responsibility: >-
       会话播放什么、怎么播：容器（flv / hls / mp4）与两族的路线（webcodecs / wasm、mse / native），源地址与 32 字节密钥、FLV 直播配套的时移列表，
@@ -24,6 +28,7 @@ modules:
   - id: pipeline.contract.session-port
     parent: pipeline.contract
     name: 管线端口
+    summary: 让内核启动、控制并停下一个会话的管线
     kind: component
     responsibility: 一个会话的管线：启动参数（代号、线程、路线、源、选项、liveStart、sink），内核下发的命令（播放控制、seek 三种、时移列表、可见性、看不见即保持），以及 stop / terminate / screenshot。Worker 模式把它映射成消息，主线程模式就地运行。
     provides: [if.pipeline.contract.Pipeline]
@@ -31,6 +36,7 @@ modules:
   - id: pipeline.contract.report
     parent: pipeline.contract
     name: 管线回报
+    summary: 约定管线向内核报告的事实、统计与失败
     kind: component
     responsibility: 管线经 sink 报给内核的事实：漏斗阶段、路线切换、时间轴、seek / 缓冲 / 网络、延迟报告、可恢复错误与日志、声音被拦、流信息、冻结、结束 / 暂停 / 播放 / 模式 / 边缘，每秒的累计统计，与不可继续的失败；另含无进展看门（progressWatch）。
     provides: [if.pipeline.contract.PipelineSink]
@@ -38,6 +44,7 @@ modules:
   - id: pipeline.contract.family-port
     parent: pipeline.contract
     name: 族端口
+    summary: 约定族为播放器提供哪些路线与能力
     kind: component
     responsibility: 一个管线族为一个播放器建立的样子：Worker 是否可用、能跑的容器 × 路线与跑不了的原因、startPipeline、音量能否控制、能否计冻结、setVolume / clearLastFrame / destroy；以及播放器交给族的环境（容器元素、页面音频图、页面可见性）。
     provides: [if.pipeline.contract.Pipelines, if.pipeline.contract.PipelineFamily, if.pipeline.contract.PageVisibility]
@@ -47,6 +54,7 @@ modules:
   - id: pipeline.latency.law
     parent: pipeline.latency
     name: 决策律
+    summary: 按缓冲深度选出延迟手段，可录制重放
     kind: component
     responsibility: >-
       延迟决策律本身：纯函数 decideLatency(state, reading, config) → { state, action, reports }，按缓冲深度相对目标分区，偏差越大手段越重
@@ -61,6 +69,7 @@ modules:
   - id: pipeline.latency.run
     parent: pipeline.latency
     name: 决策律运行骨架
+    summary: 在会话里驱动决策律，把动作交给本族执行
     kind: component
     responsibility: 一个会话里两族相同的那一段：携带律的状态、每个读数做一次决策，报告送 sink、动作交给本族的执行器并按类型计数（统计的 latencyActions）；回到直播边缘时从头开始。读数怎么取、动作怎么做归各族。
     provides: [if.pipeline.latency.runLatencyLaw]
@@ -70,6 +79,7 @@ modules:
   - id: pipeline.metering.jitter
     parent: pipeline.metering
     name: 到达抖动
+    summary: 测出到达抖动，给律一个不该响应的死区
     kind: component
     responsibility: 媒体到达的抖动——律不该响应的死区：每个样本取「到达时间 − 媒体时间」，只采样媒体推进不快于到达的块（GOP 缓存回放、卡顿后的积压被排除），给出窗口内的离散度与是否在消化积压。
     provides: [if.pipeline.metering.JitterMeter]
@@ -77,6 +87,7 @@ modules:
   - id: pipeline.metering.freeze
     parent: pipeline.metering
     name: 画面冻结
+    summary: 判出观众看到的画面冻结并归因
     kind: component
     responsibility: 观众看到的画面冻结：两帧上屏间隔超过 max(3 × 平均帧间隔, 平均 + 150 ms)（WebRTC freezeCount 的阈值）即一次冻结，按间隙里出现的信号归因（seek、律的动作、缓冲、起播、迟到、未知），边界处截断。
     provides: [if.pipeline.metering.FreezeMeter]
@@ -86,6 +97,7 @@ modules:
   - id: pipeline.metering.anchors
     parent: pipeline.metering
     name: 墙钟锚点
+    summary: 在位置与墙钟之间换算，取最可信的锚点
     kind: component
     responsibility: 时间轴的墙钟锚点：位置 ↔ 墙钟的换算，三种来源（流内时间 SEI 精确到帧、PROGRAM-DATE-TIME 精确到片、到达时刻估计）与各自误差，取可信者；按时间轴记录到达，新时间轴作废旧锚点。切换逻辑只读锚点、不读来源。
     provides: [if.pipeline.metering.anchors]
@@ -97,6 +109,7 @@ modules:
   - id: pipeline.fetch.request
     parent: pipeline.fetch
     name: 流式 HTTP 请求
+    summary: 发一次可取消、有空闲超时的流式 HTTP 请求
     kind: component
     responsibility: 每种拉流底下的那一次请求：fetch 的响应体按块交给处理器，可带字节范围并校验 Content-Range；AbortController 可取消，空闲超过 IDLE_TIMEOUT_MS（含等响应头）即判丢失；失败分类（网络、HTTP 状态、范围、超时）。
     provides: [if.pipeline.fetch.requestStream]
@@ -104,6 +117,7 @@ modules:
   - id: pipeline.fetch.flv-pull
     parent: pipeline.fetch
     name: HTTP-FLV 拉流与有界重连
+    summary: 拉 HTTP-FLV 直播，断线有界重连并判定结束
     kind: component
     responsibility: >-
       HTTP-FLV 直播拉流：断线后按退避重连，达到上限或源站拒绝即耗尽（带可否重试）；连接稳定 STEADY_MS 后计数清零；干净结束算一次断线，
@@ -115,6 +129,7 @@ modules:
   - id: pipeline.fetch.hls-loader
     parent: pipeline.fetch
     name: HLS 拉流
+    summary: 按清单逐片拉 HLS，保证 seek 总有终点
     kind: component
     responsibility: >-
       读清单、维护窗口、逐片加载：直播按目标时长刷新清单，片按 HTTP-FLV 拉流的规则重试，清单停滞或窗口越过播放位置走同一条断线 / 耗尽路径；
@@ -126,6 +141,7 @@ modules:
   - id: pipeline.fetch.hls-playlist
     parent: pipeline.fetch
     name: m3u8 解析
+    summary: 把 m3u8 文本解析成清单或报出不支持的标记
     kind: component
     responsibility: 纯函数 parsePlaylist(text, baseUrl)：媒体清单（目标时长、序号、ENDLIST、EVENT、片与 PROGRAM-DATE-TIME、GAP、DISCONTINUITY、AES-128 与 xor-v2 标记）或主清单（取第一个变体），不支持的标记给出错误。
     provides: [if.pipeline.fetch.parsePlaylist]
@@ -134,12 +150,14 @@ modules:
   - id: pipeline.fetch.hls-window
     parent: pipeline.fetch
     name: 列表时间窗口
+    summary: 把清单的片排成连续的列表时间与可 seek 窗口
     kind: component
     responsibility: 把清单给出的片按列表时间首尾相接（第一张清单的第一片为 0），滑动窗口只移动可 seek 范围的起点；直播从边缘往回若干目标时长起播。对给它的清单是纯的，加载什么、何时加载归 HLS 拉流。
     codeRefs: [media-web/packages/media-playback-pipeline/src/hls/window.ts]
   - id: pipeline.fetch.mp4
     parent: pipeline.fetch
     name: MP4 分段拉取
+    summary: 按字节范围分段拉 MP4，丢失时从断点续拉
     kind: component
     responsibility: 按模块要的字节范围逐段拉 MP4 文件：首个请求探测源站是否支持 Range，文件大小变化即失败，丢失的请求从未交出的下一个字节重试。不认识模块与 box。
     provides: [if.pipeline.fetch.startMp4Pull, if.pipeline.fetch.Mp4PullHandlers]
@@ -152,18 +170,21 @@ relations:
     to: pipeline.latency.law
     type: queries
     interface: if.pipeline.latency.decideLatency
+    purpose: 每个读数求出该做的动作
     description: 运行骨架每个读数调用一次决策律（decideLatency），以初始状态开始、回边缘时重置。
   - id: rel.pipeline.run-execute-self-clocked
     from: pipeline.latency.run
     to: providers.self-clocked.session
     type: commands
     via: channel:callback@pipeline.latency.run
+    purpose: 让本族执行律选出的动作
     description: 运行骨架把律选出的动作交给自建时钟会话给它的执行器（变速、丢非参考帧、跳 IDR），执行后计数。
   - id: rel.pipeline.run-execute-mse
     from: pipeline.latency.run
     to: providers.element.mse
     type: commands
     via: channel:callback@pipeline.latency.run
+    purpose: 让本族执行律选出的动作
     description: 运行骨架把律选出的动作交给 mse 会话给它的执行器（元素变速、跳到最新 IDR）。
   - id: rel.pipeline.run-sink
     from: pipeline.latency.run
@@ -171,12 +192,14 @@ relations:
     type: notifies
     interface: if.pipeline.contract.PipelineSink
     via: port:if.pipeline.contract.PipelineSink
+    purpose: 让宿主知道延迟控制的状况
     description: 律的报告（超限、目标不可达、手段锁定…）经会话的 sink 作为 latency 事件报给内核。
   - id: rel.pipeline.law-fault
     from: pipeline.latency.law
     to: share.core
     type: queries
     interface: if.share.core.MediaFault
+    purpose: 以统一错误拒绝不合法配置
     description: 配置校验不合法时构造 invalid-argument 的 MediaFault。
   # 拉流
   - id: rel.pipeline.pull-request
@@ -185,33 +208,39 @@ relations:
     type: commands
     mode: async
     interface: if.pipeline.fetch.requestStream
+    purpose: 每次连接拉取直播字节
     description: 每次连接发一次流式请求（requestStream），停止与重连时取消它。
   - id: rel.pipeline.fetch-timers
     from: pipeline.fetch
     to: pipeline.timing
     type: commands
     interface: if.pipeline.timing.Timers
+    purpose: 计超时、退避与清单刷新
     description: 拉流（HTTP-FLV、HLS、MP4）与请求的空闲超时、退避重连、清单刷新在注入的计时器上设定时器（缺省 defaultTimers）。
   - id: rel.pipeline.request-body-pull
     from: pipeline.fetch.request
     to: pipeline.fetch.flv-pull
     type: streams
+    purpose: 把直播字节交给拉流
     description: 请求把响应体按块连续交给 HTTP-FLV 拉流（ok / chunk / done / fail 回调）。
   - id: rel.pipeline.request-body-hls
     from: pipeline.fetch.request
     to: pipeline.fetch.hls-loader
     type: streams
+    purpose: 把清单与片的字节交给拉流
     description: 请求把清单、密钥与片的响应体按块连续交给 HLS 拉流。
   - id: rel.pipeline.request-body-mp4
     from: pipeline.fetch.request
     to: pipeline.fetch.mp4
     type: streams
+    purpose: 把每段字节交给分段拉取
     description: 请求把每段字节范围的响应体按块连续交给 MP4 拉取，带校验过的 Content-Range。
   - id: rel.pipeline.request-fault
     from: pipeline.fetch.request
     to: share.core
     type: queries
     interface: if.share.core.describeError
+    purpose: 写出请求失败的说明
     description: 把 fetch 的异常转成失败说明（describeError）。
   - id: rel.pipeline.hls-request
     from: pipeline.fetch.hls-loader
@@ -219,23 +248,27 @@ relations:
     type: commands
     mode: async
     interface: if.pipeline.fetch.requestStream
+    purpose: 取清单、密钥与片
     description: 清单、密钥与每个片各发一次流式请求。
   - id: rel.pipeline.hls-retries
     from: pipeline.fetch.hls-loader
     to: pipeline.fetch.flv-pull
     type: queries
     interface: if.pipeline.fetch.boundedRetries
+    purpose: 按同一规则重试并归因
     description: 按 HTTP-FLV 拉流的规则重试（boundedRetries）并取丢失的可否重试与说明（lossRetryable、fileLossRetryable、describeUrl）。
   - id: rel.pipeline.hls-parse
     from: pipeline.fetch.hls-loader
     to: pipeline.fetch.hls-playlist
     type: queries
     interface: if.pipeline.fetch.parsePlaylist
+    purpose: 读懂清单内容
     description: 每次读到清单文本后解析（parsePlaylist）。
   - id: rel.pipeline.hls-window
     from: pipeline.fetch.hls-loader
     to: pipeline.fetch.hls-window
     type: commands
+    purpose: 决定下一片与 seek 落点
     description: 拉流持有窗口（new HlsWindow），以每张新清单更新它，按它取下一片、算时间轴与 seek 落点。
   - id: rel.pipeline.mp4-request
     from: pipeline.fetch.mp4
@@ -243,12 +276,14 @@ relations:
     type: commands
     mode: async
     interface: if.pipeline.fetch.requestStream
+    purpose: 取回模块要的字节范围
     description: 每段字节范围发一次带 Range 的流式请求，校验 Content-Range 与文件大小。
   - id: rel.pipeline.mp4-retries
     from: pipeline.fetch.mp4
     to: pipeline.fetch.flv-pull
     type: queries
     interface: if.pipeline.fetch.boundedRetries
+    purpose: 按有界规则重试丢失
     description: 丢失的请求按有界重试规则重来（boundedRetries、fileLossRetryable）。
 
 interfaces:

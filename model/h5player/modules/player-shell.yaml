@@ -3,14 +3,15 @@
 
 modules:
   # ─── 第二级模块的原则（ADR-0042，补充骨架条目）───
-  - { id: infra.player-index, name: "PlayerIndex", abstraction: 按对外方向切分：用户操作只经命令入口进状态机，状态与统计只以只读投影和版本化快照流出，对外面不反向驱动内部。 }
-  - { id: infra.bootstrap, name: "Bootstrap 组合根", abstraction: 契约到实现的唯一绑定点：按装配对象切分运行时、模型创建器与 Solution 装配，只有出边，业务模块不反向依赖它。 }
-  - { id: infra.workers, name: "Worker 基础设施", abstraction: 按跨出主线程的通道类型切分，通道只搬运与配对消息、不含播放决策，业务使用方与通道本体分开。 }
-  - { id: infra.third-party, name: "三方库与外部媒体插件", abstraction: 按接入方式切分：三方库作被直接调用的算法件，解密插件只经 MediaPlugin 契约由处理段工厂挂入流水线。 }
+  - { id: infra.player-index, name: "PlayerIndex", abstraction: 按对外方向切分：用户操作只经命令入口进状态机，状态与统计只以只读投影和版本化快照流出，对外面不反向驱动内部。, summary: 以 Player 对外提供播放控制、事件与只读统计, invariants: [业务方只订阅入口自建的对外 EventEmitter，框架事件逐个转发，内部总线不外露, getStats 纯读：逐字段拷贝、不含内部引用，任何生命周期阶段都不抛错, 对外状态投影是无 I/O 的纯状态机，只决定转发、扣下或补发] }
+  - { id: infra.bootstrap, name: "Bootstrap 组合根", abstraction: 契约到实现的唯一绑定点：按装配对象切分运行时、模型创建器与 Solution 装配，只有出边，业务模块不反向依赖它。, summary: 把契约绑定到实现，装配出可运行的播放器 }
+  - { id: infra.workers, name: "Worker 基础设施", abstraction: 按跨出主线程的通道类型切分，通道只搬运与配对消息、不含播放决策，业务使用方与通道本体分开。, summary: 在主线程与 Worker、Service Worker 间搬运配对消息 }
+  - { id: infra.third-party, name: "三方库与外部媒体插件", abstraction: 按接入方式切分：三方库作被直接调用的算法件，解密插件只经 MediaPlugin 契约由处理段工厂挂入流水线。, summary: 提供容器解析、变速算法与内置解密插件 }
   # ───────────────────────── infra.player-index ─────────────────────────
   - id: infra.player-index.player-api
     parent: infra.player-index
     name: Player 对外 API
+    summary: 把业务方操作转成命令，并转发对外事件
     kind: component
     responsibility: >-
       SDK 唯一入口类 Player：暴露生命周期（init / destroy）、播放控制（load / play / pause / resume / stop / reset / switch / seek）、
@@ -53,6 +54,7 @@ modules:
   - id: infra.player-index.status-projection
     parent: infra.player-index
     name: 对外状态投影
+    summary: 对外只报真变化，扣下重连期间的伪恢复状态
     kind: component
     responsibility: >-
       把框架内部的 PlayerStatusChange 序列投影成对外只报「真变化」的状态序列：直播重连期间 Recovery 来源进入 Playing / Buffering
@@ -68,6 +70,7 @@ modules:
   - id: infra.player-index.stats
     parent: infra.player-index
     name: 统计快照
+    summary: 随时返回版本化只读统计快照，恒不抛错
     kind: component
     responsibility: >-
       定义 getStats 的版本化只读快照结构（对外契约，键名进混淆保留表），并把统计聚合与模型槽位里已有的数字定格为 plain object。
@@ -93,6 +96,7 @@ modules:
   - id: infra.player-index.model-access
     parent: infra.player-index
     name: 模型能力访问
+    summary: 把注册表取出的模型按能力收窄为具体类型
     kind: component
     responsibility: >-
       给 MU 与业务插件用的模型窄化助手：把 ModelRegistry 取出的 unknown 模型按能力断言收窄为具体播放 / 流模型或能力面
@@ -106,6 +110,7 @@ modules:
   - id: infra.player-index.public-surface
     parent: infra.player-index
     name: 对外转出面与构建入口
+    summary: 对外导出 SDK 类型、插件基类与 RMS 打包入口
     kind: component
     responsibility: >-
       SDK 包对外再导出的类型与基类（SolutionType / EventKey / LogLevel / ErrorCode / PlayerConfig、PluginBase），三方库类型声明补丁，
@@ -121,6 +126,7 @@ modules:
   - id: infra.bootstrap.player-runtime
     parent: infra.bootstrap
     name: 运行时装配
+    summary: 按固定顺序创建事件总线、注册表、Context 与内核
     kind: component
     responsibility: >-
       createPlayerRuntime：按固定顺序创建 ProfileEventBus、ModelRegistry（含 state / statistic 单例）、Context、video 元素池、
@@ -141,6 +147,7 @@ modules:
   - id: infra.bootstrap.model-creators
     parent: infra.bootstrap
     name: 模型创建器表
+    summary: 按配置构造流模型与播放模型并接好领域事件
     kind: component
     responsibility: >-
       提供 ModelRegistry 用的流模型创建器（Flv / Mp4 / Hls）与播放模型创建器（Wcs / Wasm / Mse / Fhls / Vcs / Video），
@@ -153,6 +160,7 @@ modules:
   - id: infra.bootstrap.solution-bootstrap
     parent: infra.bootstrap
     name: Solution 装配
+    summary: 把内核与注册表适配为 Solution 端口并启动它
     kind: component
     responsibility: >-
       注册默认方案 Descriptor，把 Framework 的状态机 / Pipeline / 插件控制器、ModelRegistry、方案注册表、Fragment 挂载器、
@@ -171,6 +179,7 @@ modules:
   - id: infra.workers.worker-task
     parent: infra.workers
     name: Dedicated Worker 任务通道
+    summary: 在 Worker 线程注册可供主线程调用的解码任务
     kind: component
     responsibility: >-
       Worker 线程侧的任务骨架：worker 入口脚本在子线程里建 WorkerMessageBridge、连上 self、注入 Wasm 视频解码任务；
@@ -187,6 +196,7 @@ modules:
   - id: infra.workers.sw-channel
     parent: infra.workers
     name: Service Worker 注册与消息协议
+    summary: 注册并引用计数 Service Worker，提供双向消息协议
     kind: component
     responsibility: >-
       页面侧的 Service Worker 基建：注册 / 激活等待 / 版本不符时重注册 / 机型兼容重连、按脚本 URL 引用计数的注销所有权，
@@ -206,6 +216,7 @@ modules:
   - id: infra.workers.sw-script
     parent: infra.workers
     name: SW 脚本 segmentProcessor
+    summary: 在 SW 内拦截匹配请求并向页面取应答
     kind: component
     responsibility: >-
       运行在 Service Worker 进程里的独立脚本（带版本号，随包以 URL 资源发布）：按页面下发的正则规则拦截 fetch，
@@ -219,6 +230,7 @@ modules:
   - id: infra.workers.fhls-services
     parent: infra.workers
     name: Fhls 服务
+    summary: 为原生 HLS 构造播表，把分片请求映射到内部缓冲
     kind: component
     responsibility: >-
       Service Worker 通道的业务使用方：直播 FhlsService 为浏览器原生 HLS 现场构造滑动播表、把分片请求映射到播放器内部缓冲的「下一片」、
@@ -238,6 +250,7 @@ modules:
   - id: infra.third-party.mp4box
     parent: infra.third-party
     name: mp4box
+    summary: 解析 ISO BMFF 容器的 box 与样本表
     kind: library
     responsibility: >-
       内置并裁剪的 mp4box.js（TS 化，约 1MB，百余种 box 定义）：ISO BMFF box 解析、多段缓冲流、ISOFile 与样本表；
@@ -248,6 +261,7 @@ modules:
   - id: infra.third-party.hls-utils
     parent: infra.third-party
     name: HLS 解析辅助
+    summary: 解析 ADTS 帧头并拼接字节
     kind: library
     responsibility: 源自 hls.js 的 ADTS（AAC 帧头）解析与字节拼接工具，供 TS 解封装器解析音频帧。
     provides: [if.third-party.hls-utils.adts]
@@ -257,6 +271,7 @@ modules:
   - id: infra.third-party.sonic
     parent: infra.third-party
     name: Sonic 变速
+    summary: 对 PCM 做不变调变速
     kind: library
     responsibility: >-
       libsonic 的 Wasm 构建（gzip 资源）与 AudioTimeShift 封装：对 PCM 平面数据做不变调变速，供音频渲染在倍速播放时使用。
@@ -268,6 +283,7 @@ modules:
   - id: infra.third-party.decrypt-plugins
     parent: infra.third-party
     name: 解密媒体插件
+    summary: 就地解密音视频样本，作为插件节点挂入流水线
     kind: component
     responsibility: >-
       两个实现 MediaPlugin 契约的内置解密插件（直播 FLV 解密、点播解密），内联 base64 Wasm，按 NALU 类型就地解密解封装后的音视频样本；
@@ -285,12 +301,14 @@ relations:
     to: infra.player-index.status-projection
     type: queries
     interface: if.player-index.status-projection.ExternalStatusProjector
+    purpose: 转发前过滤或补发对外状态
     description: Player 对外 API 向对外状态投影取：转发 PlayerStatusChange / FirstFrame 前经投影过滤或补发被扣下的状态。
   - id: rel.player-shell.api-stats
     from: infra.player-index.player-api
     to: infra.player-index.stats
     type: queries
     interface: if.player-index.stats.buildStatsSnapshot
+    purpose: 构造 getStats 的只读快照
     payload: ds.PlayerStatsSnapshot
     description: Player 对外 API 向统计快照取：getStats 委托构造只读快照。
   # ── PlayerIndex 出边 ──
@@ -298,53 +316,63 @@ relations:
     from: infra.player-index.player-api
     to: infra.bootstrap
     type: commands
+    purpose: init 时装配运行时与方案
     description: Player 对外 API 交给 Bootstrap 组合根：init 时调用组合根 createPlayerRuntime 与 bootstrapSolution 完成装配（入口触发装配）。
   - id: rel.player-shell.api-framework-command
     from: infra.player-index.player-api
     to: infra.framework
     type: commands
     mode: async
+    purpose: 把用户操作投递为状态机命令
     description: Player 对外 API 交给 Framework 机制内核：用户操作经 StateMachineController.sendCommand 投递命令；注册 Destroy / Attach 等后置 Hook；useMediaPlugin 经 PipelineController.updatePipeline 插入 external 段节点；设置类经 context.settings 写 playerData。
   - id: rel.player-shell.api-framework-event
     from: infra.framework
     to: infra.player-index.player-api
     type: notifies
+    purpose: 宣告首帧、状态变化与错误
     description: 框架事件总线通知 FirstFrame、PlayerStatusChange、Error、TimeShift* 等，player-api 订阅后转发到对外 EventEmitter。
   - id: rel.player-shell.api-framework-event-publish
     from: infra.player-index.player-api
     to: infra.framework
     type: notifies
+    purpose: 宣告用户操作与信息浮层开关
     description: 发布 UserAction / TogglePlayerInfo。
   - id: rel.player-shell.api-plugins
     from: infra.player-index.player-api
     to: app.plugins
     type: commands
+    purpose: 安装常驻横向插件
     description: Player 对外 API 交给横向用例插件：实例化并安装常驻横向插件（Logger、全局错误捕获、NoSleep、错误处理、可见性、PlayerInfo、Pipeline、网络重连、Tracker、授时）；resume 时向重连插件取续播重试。
   - id: rel.player-shell.api-timeshift
     from: infra.player-index.player-api
     to: app.timeshift
     type: commands
+    purpose: 安装时移并委托拖进度换腿
     description: Player 对外 API 交给时移：安装时移协调器；pause / resume / seek / backToLive 在拖进度换腿时委托协调器；VideoRendered 转发前向它换算清单轴 positionMs。
   - id: rel.player-shell.api-solution
     from: infra.player-index.player-api
     to: app.solution
     type: commands
+    purpose: 销毁时释放 Solution
     description: Player 对外 API 交给 Solution：Destroy 后置 Hook 中 dispose Solution。
   - id: rel.player-shell.stats-domain
     from: infra.player-index.stats
     to: domain.models
     type: queries
+    purpose: 读统计聚合的里程碑与计数
     payload: ds.Statistic
     description: 统计快照向领域模型取：只读 Statistic 读面属性（里程碑、计数族、recordedFlags 等），不调用其方法。
   - id: rel.player-shell.stats-framework
     from: infra.player-index.stats
     to: infra.framework
     type: queries
+    purpose: 读统计模型与生效的方案三元组
     description: 统计快照向 Framework 机制内核取：读 Context.statisticModel / data 与 ModelRegistry.getPlaybackSelection() 的生效三元组；使用 PlayMode / SolutionType / Time。
   - id: rel.player-shell.model-access-domain
     from: infra.player-index.model-access
     to: domain.models
     type: queries
+    purpose: 断言能力以收窄模型类型
     description: 模型能力访问向领域模型取：调用领域模型的 assert* / has*Capability 能力断言，收窄为 FrameModel / MseModel / FhlsModel / VideoPlayModel 等。
 
   # ── Bootstrap 内部 ──
@@ -353,47 +381,56 @@ relations:
     from: infra.bootstrap.player-runtime
     to: infra.framework
     type: commands
+    purpose: 创建内核及其总线、注册表与 Context
     description: 运行时装配交给 Framework 机制内核：创建 ProfileEventBus、ModelRegistry（state / statistic 单例创建器）、Context 具体类与 Framework（绑定三 Controller）。
   - id: rel.player-shell.runtime-framework-projection
     from: infra.framework
     to: infra.bootstrap.player-runtime
     type: notifies
+    purpose: 宣告网络、重连与播放范围变化
     description: 通知 NetworkStatusChange / PlaybackScopeStarted / ReconnectStateChange（runtime 最先订阅），投影到 context.data。
   - id: rel.player-shell.runtime-framework-projection-publish
     from: infra.bootstrap.player-runtime
     to: infra.framework
     type: notifies
+    purpose: 宣告投影后的播放数据变化
     description: 投影后补发 PlayerDataChange。
   - id: rel.player-shell.runtime-domain
     from: infra.bootstrap.player-runtime
     to: domain.models
     type: commands
+    purpose: 构造播放状态与统计单例
     description: 运行时装配交给领域模型：经单例创建器构造 PlaybackState 与 Statistic 单例（注入 DomainEventPublisher）。
   - id: rel.player-shell.model-creators-framework
     from: infra.bootstrap.model-creators
     to: infra.framework
     type: commands
+    purpose: 把模型的领域事件汇入 Context
     description: 模型创建器表交给 Framework 机制内核：模型发布的领域事件经 context.handlePlaybackProfileEvents 汇入 Context；读取 config 透传参数。
   - id: rel.player-shell.solution-bootstrap-solution
     from: infra.bootstrap.solution-bootstrap
     to: app.solution
     type: commands
+    purpose: 以窄端口构造 Solution 并挂 Hook
     payload: ds.SolutionDeps
     description: Solution 装配交给 Solution：以适配好的 SolutionDeps 构造 Solution 并 attachHooks。
   - id: rel.player-shell.solution-bootstrap-registry
     from: infra.bootstrap.solution-bootstrap
     to: app.registry
     type: commands
+    purpose: 注册默认方案并接上片段挂载
     description: Solution 装配交给方案注册表：注册默认 Descriptor；适配 getLoadDescriptor / getSolutionDescriptor；创建 FragmentMounter 并代理 mount / unmount。
   - id: rel.player-shell.solution-bootstrap-framework
     from: infra.bootstrap.solution-bootstrap
     to: infra.framework
     type: commands
+    purpose: 把内核能力适配成 Solution 端口
     description: Solution 装配交给 Framework 机制内核：把状态机 / Pipeline / 插件控制器、ModelRegistry 换代与待命槽位、LegContext 适配进 SolutionDeps；发出 Init 与 SetVolume(0) 内部命令。
   - id: rel.player-shell.solution-bootstrap-domain
     from: infra.bootstrap.solution-bootstrap
     to: domain.services
     type: commands
+    purpose: 给 Solution 注入方案选型
     description: Solution 装配交给决策服务：装配时把 selectSolution 作为 SolutionDeps.selector 注入，Solution 运行时经它调用方案选型
 
   # ── Workers 内部 ──
@@ -402,12 +439,14 @@ relations:
     to: infra.workers.sw-channel
     type: commands
     interface: if.workers.sw-channel.ServiceWorkerMessenger
+    purpose: 建立 SW 连接并下发拦截规则
     description: Fhls 服务交给 Service Worker 注册与消息协议：建立 SW 连接、版本 / 连接校验、下发拦截规则，并作为 callHandler 应答 SW 的回调。
   - id: rel.player-shell.sw-channel-script
     from: infra.workers.sw-channel
     to: infra.workers.sw-script
     type: commands
     mode: async
+    purpose: 向 SW 下发规则并校验版本
     payload: ds.ServiceWorkerMessage
     description: Service Worker 注册与消息协议交给 SW 脚本 segmentProcessor：页面经 postMessage 发 call（setCatchRule、checkVersion、unregister 等）并按 hash 等待 callback。
   - id: rel.player-shell.sw-script-channel
@@ -415,6 +454,7 @@ relations:
     to: infra.workers.sw-channel
     type: commands
     mode: async
+    purpose: 向页面取被拦请求的应答
     payload: ds.ServiceWorkerMessage
     description: SW 脚本 segmentProcessor 交给 Service Worker 注册与消息协议：拦下匹配的 fetch 后经 postMessage call 页面取 m3u8 / ts / 密钥应答。
   # ── Workers 出边 ──
@@ -422,18 +462,21 @@ relations:
     from: infra.workers.sw-channel
     to: infra.framework
     type: queries
+    purpose: 生成消息配对 hash
     description: Service Worker 注册与消息协议向 Framework 机制内核取：Service Worker 通道调用 Generator 生成配对 hash
   - id: rel.player-shell.fhls-mus
     from: infra.workers.fhls-services
     to: infra.mus
     type: commands
     mode: async
+    purpose: 向缓冲取下一片与清单
     payload: ds.NativeDemandFacts
     description: Fhls 服务交给 MUs 媒体单元：经构造时注入的回调（ServiceConfig / HlsDataProvider）向 Fhls 缓冲 MU 取下一片 / 清单，并回报原生取片需求事实。
   - id: rel.player-shell.fhls-framework
     from: infra.workers.fhls-services
     to: infra.framework
     type: queries
+    purpose: 取单调钟与工具处理密钥分片
     description: Fhls 服务向 Framework 机制内核取：Fhls 解密调用 Time 单调钟计时、Tool 工具函数处理密钥与分片
 
   # ── Third-party 出边 ──
@@ -441,16 +484,19 @@ relations:
     from: infra.third-party.sonic
     to: infra.framework
     type: queries
+    purpose: 取 wasm 文件以加载 libsonic
     description: Sonic 变速向 Framework 机制内核取：经框架的 wasm 加载工具（getWasmLoaderUrl / getWasmFile / sonicInitConfig）获取并实例化 libsonic。
   - id: rel.player-shell.bootstrap-errors
     from: infra.bootstrap.solution-bootstrap
     to: share.errors
     type: queries
+    purpose: 把方案层错误还原为 ErrorBase
     description: Solution 装配向错误原语取：把方案层返回的错误还原为具体的 ErrorBase（new ErrorBase）再交给错误链
   - id: rel.player-shell.api-errors
     from: infra.player-index.player-api
     to: share.errors
     type: commands
+    purpose: 登记构建版本并构造插入错误
     description: Player 对外 API 交给错误原语：启动时写入 ErrorBase.buildVersion，媒体插件插入失败时构造 ErrorBase 交给 handleError
 
 interfaces:
