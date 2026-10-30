@@ -92,8 +92,8 @@ export {
   carrierNote,
   interactionBundle,
 } from './carrier'
-export { moduleBrief, describeModule, locateFile, checkDependency } from './query'
-export type { ModuleBrief, ModuleDetail, FileStatus, CheckTarget, CheckResult, PairCheck, CycleImpact } from './query'
+export { moduleBrief, describeModule, locateFile, checkDependency, collaborationsOf } from './query'
+export type { ModuleBrief, ModuleDetail, FileStatus, CheckTarget, CheckResult, PairCheck, CycleImpact, Collaboration } from './query'
 export { sharedSuggestions, sharedReverse, sharedHostOf, SHARED_NAME_HINTS } from './roles'
 export { summarizeLedger } from './ledger'
 export type { LedgerSummary } from './ledger'

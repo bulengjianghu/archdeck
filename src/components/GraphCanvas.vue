@@ -26,7 +26,7 @@ import { useDesk } from '@/state/inject'
 import { RELATION_TYPES } from '@/model'
 import { contentBounds, layerStatusOf, type PositionedView } from '@/layout/layout'
 import { canvasScene, withEdgeHover, withElementHover, type NodeData, type RouteEdgeData, type StructureInput } from '@/layout/canvas'
-import { useSurfaceHover } from './panel/surfaceFocus'
+import { edgeOfRelations, useRelationHover, useSurfaceHover } from './panel/surfaceFocus'
 import { useStage } from './stage/useStageDisplay'
 import LayerStatus from './nodes/LayerStatus.vue'
 import ModuleNode from './nodes/ModuleNode.vue'
@@ -155,9 +155,13 @@ const dotHover = computed(() => {
   const node = h && positioned.value?.view.nodes.find(n => n.moduleId === h.module && positioned.value?.elements?.has(n.id))
   return node && h ? { node: node.id, element: h.element } : null
 })
+/** PC-5：属性栏悬停的协作行——承载这些关系的边按悬停边的样式高亮（同 L25） */
+const relationHover = useRelationHover()
+const relationEdge = computed(() => edgeOfRelations(scene.value.edges, relationHover.value))
 const hovered = computed(() => {
-  const e = withEdgeHover(scene.value.nodes, scene.value.edges, hoverEdge.value)
-  return hoverEdge.value ? e : withElementHover(e.nodes, e.edges, dotHover.value)
+  const id = hoverEdge.value ?? relationEdge.value
+  const e = withEdgeHover(scene.value.nodes, scene.value.edges, id)
+  return id ? e : withElementHover(e.nodes, e.edges, dotHover.value)
 })
 const nodes = computed<Node<NodeData>[]>(() => hovered.value.nodes)
 const edges = computed<Edge<RouteEdgeData>[]>(() => hovered.value.edges)

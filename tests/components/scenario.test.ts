@@ -26,7 +26,10 @@ async function setup(url: string, withSource = true) {
   await desk.init()
   await flushPromises()
   const opened: string[] = []
-  const global = { provide: { [DESK_STATE as symbol]: desk, [OPEN_PREVIEW as symbol]: (p: string) => opened.push(p) }, plugins: [router] }
+  const global = {
+    provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true }, [OPEN_PREVIEW as symbol]: (p: string) => opened.push(p) },
+    plugins: [router],
+  }
   return { desk, global, opened }
 }
 
@@ -84,7 +87,7 @@ describe('R17 场景列表按类别筛选', () => {
     desk.attachRouter(router)
     await desk.init()
     await flushPromises()
-    const global = { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] }
+    const global = { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] }
     const wrapper = mount(ScenarioList, { global })
     // 范围切到「全部」，只看类别筛选
     await wrapper.findAll('.seg')[0].findAll('button')[1].trigger('click')

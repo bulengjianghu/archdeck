@@ -20,6 +20,6 @@ export {
   frameHome,
   stageEnds,
 } from './level'
-export { participation, scenarioModules } from './participation'
+export { participation, relationScenarios, scenarioModules } from './participation'
 export { outlineScenario } from './outline'
 export { buildSequence, lanesOf } from './sequence'

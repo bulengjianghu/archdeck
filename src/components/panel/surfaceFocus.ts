@@ -64,3 +64,26 @@ export function leaveSurfaceElement(module: string, element: string) {
 }
 
 export const useSurfaceHover = (): ShallowRef<SurfaceHover | null> => hover
+
+/**
+ * PC-5：属性栏协作行的悬停——属性栏写入悬停的关系，画布把承载它们的边按悬停边的样式高亮（L25 的 withEdgeHover）。
+ * 与表面元素的悬停同属呈现层的浏览提示，不进 DeskState 与 URL。
+ */
+const relations = shallowRef<readonly string[] | null>(null)
+
+/** PC-5：悬停协作行（或展开后的一条关系）；移开传 null */
+export function hoverRelations(ids: readonly string[] | null) {
+  relations.value = ids && ids.length ? ids : null
+}
+
+export const useRelationHover = (): ShallowRef<readonly string[] | null> => relations
+
+/** PC-5：本层承载这些关系的第一条画布边（没有为 null） */
+export function edgeOfRelations<E extends { id: string; data?: { edge?: { relationIds: readonly string[] } } }>(
+  edges: readonly E[],
+  ids: readonly string[] | null,
+): string | null {
+  if (!ids?.length) return null
+  const want = new Set(ids)
+  return edges.find(e => e.data?.edge?.relationIds.some(r => want.has(r)))?.id ?? null
+}

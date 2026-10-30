@@ -14,7 +14,7 @@ async function mountPanel(url = '/', files = sampleFiles()) {
   const desk = createDeskState(async () => ({ dir: 'model/test', files }))
   desk.attachRouter(router)
   await desk.init()
-  const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+  const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
   await flushPromises()
   return { wrapper, desk }
 }
@@ -26,20 +26,20 @@ describe('属性面板', () => {
     expect(text).toContain('Demo')
     expect(text).toContain('abc123')
     expect(text).toContain('Infrastructure')
-    expect(text).toContain('机制与副作用')
+    // PC-10：系统的理解卡列分层（每层一句话职责）
+    expect(wrapper.find('[data-card="understand"]').text()).toContain('Infrastructure')
   })
 
-  it('选中层：「说明」= 职责 + 原则一句（ADR-0042），另有可依赖的层', async () => {
+  it('选中层：理解卡 ① 一句话职责、② 原则一句（ADR-0042）+ 子模块 + 「可依赖」链接行（PC-3）', async () => {
     const { wrapper } = await mountPanel('/?sel=m:infra')
-    const text = wrapper.text()
-    const first = wrapper.findAll('.section')[0]
-    expect(first.text()).toContain('说明')
-    expect(first.text()).toContain('原则')
-    expect(first.text()).toContain('机制与副作用')
-    expect(text).not.toContain('抽象原则')
-    expect(text).toContain('可依赖的层')
-    expect(text).toContain('Application')
-    expect(text).toContain('本层模块')
+    const u = wrapper.find('[data-card="understand"]')
+    expect(u.find('[data-testid="summary"]').exists()).toBe(true)
+    const split = u.find('[data-sec="split"]')
+    expect(split.text()).toContain('原则')
+    expect(split.text()).toContain('机制与副作用')
+    expect(wrapper.text()).not.toContain('抽象原则')
+    expect(u.find('[data-testid="layer-deps"]').text()).toContain('Application')
+    expect(u.find('[data-testid="module-children"]').text()).toContain('Framework')
   })
 
   it('选中模块：职责、对外接口签名、出入边', async () => {
@@ -48,9 +48,11 @@ describe('属性面板', () => {
     expect(text).toContain('StateMachine')
     expect(text).toContain('状态机')
     expect(text).toContain('sendCommand')
-    expect(text).toContain('sendCommand(cmd: Command): Result')
-    expect(text).toContain('出边')
-    expect(text).toContain('→ Solution')
+    // PC-3：对外表面一行一个，单击展开签名与说明
+    await wrapper.find('[data-sec="surface"] .k').trigger('click')
+    expect(wrapper.text()).toContain('sendCommand(cmd: Command): Result')
+    // PC-4：协作按对端合并
+    expect(wrapper.find('[data-testid="collab"] [data-peer="app"]').text()).toContain('→')
     expect(text).toContain('modules/infra.yaml')
   })
 
@@ -85,11 +87,14 @@ describe('属性面板', () => {
       'z.yaml': `relations:\n  - { id: rd, from: infra.framework.sm, to: infra.mus, type: streams, description: '${long}' }\n  - { id: rl, from: infra.framework.pipeline, to: infra.mus, type: streams, description: '${'短'.repeat(70)}' }\n`,
     })
     const withDesc = (await mountPanel('/?level=infra.framework&sel=r:rd', files)).wrapper
-    const first = withDesc.find('.relation-panel > :not(header)')
+    // PC-10：理解卡先给目的（没写 purpose 时为说明首句截断、标待提炼），其后第一节是「说明」
+    const card = withDesc.find('[data-card="understand"] .card-body')
+    expect(card.find('[data-testid="purpose"]').text()).toContain('待提炼')
+    const first = card.find('.section')
     expect(first.classes()).toContain('summary')
     expect(first.text()).toContain('管线把媒体单元推给 MUs。')
     const without = (await mountPanel('/?level=infra.framework&sel=r:r6', files)).wrapper
-    expect(without.find('.relation-panel > :not(header)').text()).toBe('未写说明')
+    expect(without.find('.no-summary').text()).toBe('未写说明')
     // 聚合边：说明首句到第一个句号；没写说明的一条不显示；超过 60 字截断加「…」
     const agg = (await mountPanel('/?level=infra&sel=e:infra.framework->infra.mus:streams', files)).wrapper
     const rows = agg.findAll('.rel-row')
@@ -104,7 +109,7 @@ describe('属性面板', () => {
 
   it('子模块列表点击：在当前层次时只选中', async () => {
     const { wrapper, desk } = await mountPanel('/?level=infra')
-    const link = wrapper.findAll('.child .link').find(l => l.text() === 'Framework')!
+    const link = wrapper.findAll('[data-testid="module-children"] .k').find(l => l.text() === 'Framework')!
     await link.trigger('click')
     expect(desk.levelId.value).toBe('infra')
     expect(desk.selection.value).toEqual({ kind: 'module', id: 'infra.framework' })
@@ -116,7 +121,7 @@ describe('属性面板 · 运行视角', () => {
     const { wrapper, desk } = await mountPanel('/?sel=a:actor.biz', scenarioFiles())
     expect(wrapper.text()).toContain('入口关系')
     expect(wrapper.text()).toContain('→ Player')
-    await wrapper.findAll('.scenario-row .link')[0].trigger('click')
+    await wrapper.findAll('[data-testid="related"] [data-doc="scenario"]')[0].trigger('click')
     expect(desk.playback.value?.scenarioId).toBe('sc.play')
   })
 
@@ -136,13 +141,15 @@ describe('属性面板 · 运行视角', () => {
     expect(s).toContain('引用了')
   })
 
-  it('选中模块：运行信息在上，模块信息折叠在下；没有「已钉住」提示（ADR-0012）', async () => {
+  it('选中模块：理解卡首节是运行信息（V6），其后是五问；没有「已钉住」提示（ADR-0012）', async () => {
     const { wrapper } = await mountPanel('/?sc=sc.play&step=sc.play%23done&alt=0&sel=m:infra.framework.sm&level=infra.framework', scenarioFiles())
     const text = wrapper.text()
     expect(text).not.toContain('已钉住')
     expect(text).toContain('在「播放」中')
     expect(text).toContain('离进度最近')
-    expect(wrapper.find('details.structure').exists()).toBe(true)
+    const u = wrapper.find('[data-card="understand"] .understand')
+    expect(u.element.firstElementChild!.textContent).toContain('在「播放」中')
+    expect(u.find('[data-testid="summary"]').exists()).toBe(true)
   })
 })
 
@@ -239,10 +246,9 @@ modules:
     await desk.init()
     await flushPromises()
     desk.setToggles({ showFacts: true })
-    const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+    const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
     await flushPromises()
-    // G11（V15c）：「架构治理」在 ⑤ 缺省折叠，展开再断言
-    await wrapper.find('[data-sec="evidence.governance"] .fold').trigger('click')
+    // PC-8：「架构治理」是核对卡的清单（panelUnfold 展开全部）
     const block = wrapper.find('.level-cycle')
     expect(block.text()).toMatch(/所在的本层环 ↻\d/)
     expect(block.text()).toContain('Application')
@@ -267,7 +273,7 @@ modules:
       desk.attachRouter(router)
       await desk.init()
       await flushPromises()
-      const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+      const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
       await flushPromises()
       const row = (label: string) => {
         const dts = wrapper.findAll('dt')
@@ -314,7 +320,7 @@ modules:
     desk.attachRouter(router)
     await desk.init()
     await flushPromises()
-    const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+    const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
     await flushPromises()
     // 常显组：确认 / 依赖 / 关系
     expect(wrapper.findAll('.grp-head').map(x => x.text())).toEqual(['确认', '依赖', '关系'])
@@ -361,7 +367,7 @@ modules:
     desk.attachRouter(router)
     await desk.init()
     await flushPromises()
-    const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+    const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
     await flushPromises()
     return wrapper.text()
   }

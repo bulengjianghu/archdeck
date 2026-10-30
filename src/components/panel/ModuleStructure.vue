@@ -17,7 +17,7 @@ import { IMPACT_MODE_HINT, IMPACT_MODE_LABEL, STABILITY_LABEL, type ImpactChoice
 import { useStructurePrefs } from '../display/useDisplayPrefs'
 import { RELATION_TYPE_LABELS } from '../shared/labels'
 
-const props = defineProps<{ id: string }>()
+const props = defineProps<{ id: string; /** PC-8：核对卡的清单缺省折叠 */ fold?: boolean }>()
 const desk = useDesk()
 const sp = useStructurePrefs(desk.project)
 const valuesOnly = computed({ get: () => sp.prefs.value.valuesOnly, set: sp.setValuesOnly })
@@ -119,7 +119,7 @@ const relText = (id: string) => {
 </script>
 
 <template>
-  <Section title="结构" class="module-structure">
+  <Section title="结构指标" class="module-structure" :fold="fold">
     <p v-if="!ready" class="muted no-facts">{{ noFacts }}</p>
     <template v-else-if="metrics">
       <dl class="dims">

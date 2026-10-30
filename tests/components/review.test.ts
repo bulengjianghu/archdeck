@@ -43,7 +43,7 @@ async function mountWith(Comp: typeof Panel | typeof ModuleTree, url: string, re
   })
   desk.attachRouter(router)
   await desk.init()
-  const wrapper = mount(Comp, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+  const wrapper = mount(Comp, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
   await flushPromises()
   return { wrapper, desk, batches }
 }
@@ -109,7 +109,8 @@ describe('系统与层的确认（RV-7、Z7，ADR-0042）', () => {
     const { wrapper, batches, desk } = await mountWith(Panel, '/')
     const sid = desk.index.value!.rootId
     expect(wrapper.find('.system-panel .section').text()).toContain('简介')
-    expect(wrapper.find('.system-panel .head .badge.review').text()).toBe('未确认')
+    // V15a：确认徽标在核对卡的「确认」行
+    expect(wrapper.find('.system-panel [data-card="check"] .badge.review').text()).toBe('未确认')
     await expandAll(wrapper)
     expect(wrapper.text()).toContain('认可上面的定位与核心原则')
     await wrapper.find('form.confirm').trigger('submit')

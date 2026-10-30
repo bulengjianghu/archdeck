@@ -1,17 +1,20 @@
 <script setup lang="ts">
 /**
- * 聚合边面板（G11 五段骨架，ADR-0050、V15）：① 头部（端点、类型与条数徽标）
- * ③ 需要注意：向上却不是控制反转（K22，desk.facts.tiers.upward）一行带计数、单击跳到「原始关系」；
- * 向上是控制反转（通知、流、经端口 / 总线 / 通道）是应有之义，只在头部注记、不算异常（V15b）
- * ④ 边界：「原始关系」——每条可跳到它真实所在的层次并选中（N3）。
+ * 聚合边面板（V15、PC-10，ADR-0053）：头部（端点、类型与条数徽标、控制反转的注记）之下三卡——
+ * 理解：原始关系（每条目的 + 说明首句，V13；可跳到它真实所在的层次并选中，N3）；
+ * 核对：方向（K22 向上却不是控制反转，desk.facts.upward；控制反转是应有之义，只在头部注记）、证实（被聚合关系中未证实的条数）两行。
+ * 运行视角下理解卡首节为运行信息（V6）。
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import Section from './Section.vue'
 import RelationRow from './RelationRow.vue'
-import NoticeSection from './NoticeSection.vue'
+import PanelCard from './PanelCard.vue'
+import CheckCard from './CheckCard.vue'
+import RunSection from './RunSection.vue'
 import { usePanelJump, type PanelNotice } from './panelNotices'
+import { rowsFromNotices } from './panelCheck'
 import { RELATION_TYPE_LABELS } from '../shared/labels'
 
 const props = defineProps<{ id: string }>()
@@ -40,7 +43,7 @@ const upward = computed(() => desk.facts.upward.value.find(u => u.edge === props
 const endSelection = (nodeId: string) =>
   desk.index.value?.actors.has(nodeId) ? ({ kind: 'actor', id: nodeId } as const) : ({ kind: 'module', id: endId(nodeId) } as const)
 
-// ── ③ 需要注意（V15b）：向上却不是控制反转（K22）一行、单击跳到「原始关系」 ──
+// ── 核对卡（PC-10）：向上却不是控制反转（K22）、未证实（K6）；单击跳到「原始关系」 ──
 const root = ref<HTMLElement | null>(null)
 usePanelJump(root)
 const notices = computed<PanelNotice[]>(() =>
@@ -57,6 +60,23 @@ const notices = computed<PanelNotice[]>(() =>
       ]
     : [],
 )
+const unconfirmed = computed(() => {
+  const rep = desk.facts.report.value
+  return rep && edge.value ? edge.value.relationIds.filter(id => rep.relations.get(id)?.status === 'unconfirmed').length : null
+})
+const rows = computed(() =>
+  rowsFromNotices(
+    [
+      ...notices.value,
+      ...(unconfirmed.value ? [{ key: 'unconfirmed' as const, label: '未证实', count: unconfirmed.value, target: 'boundary.relations', to: '原始关系' }] : []),
+    ],
+    [
+      { key: 'direction', label: '方向', notices: ['upward'], ok: upward.value?.inversion ? '向上，是控制反转' : '没有违背分层' },
+      { key: 'verify', label: '证实', notices: ['unconfirmed'], ...(unconfirmed.value === null ? { none: '没有代码事实' } : { ok: '全部被代码证实' }) },
+    ],
+  ),
+)
+const run = computed(() => desk.perspective.value === 'run')
 </script>
 
 <template>
@@ -80,13 +100,15 @@ const notices = computed<PanelNotice[]>(() =>
         向上的线：本层分了层（算出的或声明的），依赖都朝下，这条是控制反转（通知、流或经端口 / 总线 / 通道），向上是应有之义（K22）。
       </p>
     </header>
-    <!-- ③ 需要注意：向上却不是控制反转（V15b；数据源 desk.facts.tiers.upward） -->
-    <NoticeSection :notices="notices" />
-    <Section title="原始关系" :count="edge.relationIds.length" data-sec="boundary.relations">
-      <ul class="plain">
-        <RelationRow v-for="r in edge.relationIds" :key="r" :id="r" summary />
-      </ul>
-    </Section>
+    <PanelCard kind="understand" title="理解" :summary="`${edge.relationIds.length} 条原始关系`">
+      <RunSection v-if="run" />
+      <Section title="原始关系" :count="edge.relationIds.length" data-sec="boundary.relations">
+        <ul class="plain">
+          <RelationRow v-for="r in edge.relationIds" :key="r" :id="r" summary />
+        </ul>
+      </Section>
+    </PanelCard>
+    <CheckCard :rows="rows" />
   </div>
   <div v-else class="head muted">这条边在当前视图中已不存在（可能被筛选隐藏，或描述已更新）。</div>
 </template>

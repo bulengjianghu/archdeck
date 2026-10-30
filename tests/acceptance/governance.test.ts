@@ -118,7 +118,7 @@ describe('§6.10 架构治理验收', () => {
     desk.attachRouter(router)
     await desk.init()
     for (let i = 0; i < 3; i++) await flushPromises()
-    const panel = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+    const panel = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
     await nextTick()
     expect(panel.text()).toContain('架构治理')
     expect(panel.text()).toMatch(/已证实 \d+/)
