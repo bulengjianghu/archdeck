@@ -100,7 +100,7 @@ const run = computed(() => desk.perspective.value === 'run')
         向上的线：本层分了层（算出的或声明的），依赖都朝下，这条是控制反转（通知、流或经端口 / 总线 / 通道），向上是应有之义（K22）。
       </p>
     </header>
-    <PanelCard kind="understand" title="理解" :summary="`${edge.relationIds.length} 条原始关系`">
+    <PanelCard kind="understand" title="理解" closed-summary :summary="`${edge.relationIds.length} 条原始关系`">
       <RunSection v-if="run" />
       <Section title="原始关系" :count="edge.relationIds.length" data-sec="boundary.relations">
         <ul class="plain">

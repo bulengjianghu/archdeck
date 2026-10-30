@@ -35,7 +35,7 @@ const c = computed(() => sel.value?.coupling ?? null)
       <p class="muted">这对模块现在不是时间耦合（历史已刷新，或阈值已变化）。</p>
     </Section>
     <template v-else>
-      <PanelCard kind="understand" title="理解" :summary="`同提交 ×${c.shared}`">
+      <PanelCard kind="understand" title="理解" closed-summary :summary="`同提交 ×${c.shared}`">
         <Section title="耦合" data-sec="boundary.coupling">
           <dl class="kv">
             <dt>同提交</dt>

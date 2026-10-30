@@ -103,7 +103,7 @@ const target = computed(() => {
   position: sticky;
   top: 0;
   z-index: 5;
-  padding: 10px 34px 8px 14px;
+  padding: 8px 34px 6px 14px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }

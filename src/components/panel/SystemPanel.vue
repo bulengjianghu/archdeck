@@ -82,7 +82,7 @@ const brief = (m: { summary?: string; responsibility?: string; abstraction?: str
         <span class="badge">系统</span>
       </div>
     </header>
-    <PanelCard kind="understand" title="理解">
+    <PanelCard kind="understand" title="理解" closed-summary>
       <Section title="简介" data-sec="purpose">
         <Markdown v-if="sys.description" :text="sys.description" />
         <p v-else class="muted">未填写（system.description：定位一句、核心原则一句）</p>

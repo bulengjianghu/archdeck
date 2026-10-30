@@ -1,6 +1,6 @@
 /** 步骤的代码证据（S16–S18、D-21）：步骤面板列出候选调用点、单击在资料区滚到该行；无证据的步骤在时序图带「?」并进问题页签 */
 import { expect, test } from '@playwright/test'
-import { openDesk } from './helpers'
+import { openCheckList, openDesk } from './helpers'
 
 test('单步到 transition(openScenario)：面板按名字匹配到 useDeskState.ts 的一行，单击在资料区预览并滚到该行', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
@@ -9,6 +9,8 @@ test('单步到 transition(openScenario)：面板按名字匹配到 useDeskState
   for (let i = 0; i < 10 && !((await title.count()) && (await title.textContent())?.startsWith('transition(openScenario)')); i++)
     await page.getByRole('button', { name: /下一步/ }).click()
   await expect(title).toHaveText(/^transition\(openScenario\)/)
+  // PC-10：代码证据在步骤的核对卡里
+  await openCheckList(page)
 
   const section = page.locator('.step-panel .section').filter({ has: page.locator('h3', { hasText: '代码证据' }) })
   // D-25、S18b：证据等级之上只有一条链「这一步 → 交互（承载判定词）→ 承载段（文件:行）」，等级与判定同一个词（裁决 T0-10）

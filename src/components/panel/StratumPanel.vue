@@ -65,7 +65,7 @@ const rows = computed<CheckRow[]>(() => {
       <p class="muted">描述里已没有这个层。</p>
     </Section>
     <template v-else>
-      <PanelCard kind="understand" title="理解" :summary="s.asks">
+      <PanelCard kind="understand" title="理解" closed-summary :summary="s.asks">
         <Section title="说明" data-sec="purpose">
           <p v-if="s.asks" class="asks" :title="s.admits ? `归属判定：${s.admits}` : undefined">{{ s.asks }}</p>
           <p v-else class="muted">没有写回答的问题（asks）</p>

@@ -66,7 +66,7 @@ const rows = computed(() => rowsFromNotices(notices.value, [{ key: 'governance',
       <p class="muted">本层没有这对节点之间的代码依赖（层次已变化，或代码事实已刷新）。</p>
     </Section>
     <template v-else>
-      <PanelCard kind="understand" title="理解" :summary="`${sel.detail.deps.length} 组模块依赖`">
+      <PanelCard kind="understand" title="理解" closed-summary :summary="`${sel.detail.deps.length} 组模块依赖`">
         <DepStructure v-if="structureView" data-sec="boundary.deps" :from="sel.from" :to="sel.to" />
         <Section v-if="!structureView" title="模块依赖" :count="sel.detail.deps.length" data-sec="boundary.deps">
           <ul class="plain">

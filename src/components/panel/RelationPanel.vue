@@ -148,7 +148,7 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
       </div>
     </header>
     <DesignNote :text="r.designNote" />
-    <PanelCard kind="understand" title="理解" :summary="purpose?.text">
+    <PanelCard kind="understand" title="理解" closed-summary :summary="purpose?.text">
       <RunSection v-if="run" />
       <p v-if="purpose" class="purpose" data-testid="purpose">
         {{ purpose.text }}<span v-if="purpose.pending" class="pending" title="描述没有写 purpose：取自说明首句截断（M30）">待提炼</span>

@@ -31,7 +31,7 @@ const hidden = computed(() => desk.facts.cycleHidden.value.get(Number(props.id))
       <p class="muted">本层现在没有这个环（代码事实已刷新，或换了层次）。</p>
     </Section>
     <template v-else>
-      <PanelCard kind="understand" title="理解" :summary="`${cycle.nodes.length} 个模块互相依赖`">
+      <PanelCard kind="understand" title="理解" closed-summary :summary="`${cycle.nodes.length} 个模块互相依赖`">
         <p class="hint muted">
           环是一组模块的属性：组内互相依赖、整组同层。静息态只画组与计数，环内的依赖在选中环组或聚焦成员时画出（L42）{{
             hidden ? `；现在另有 ${hidden} 条收起` : ''

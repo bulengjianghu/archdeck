@@ -33,21 +33,17 @@ onBeforeUnmount(() => hoverRelations(null))
       <div class="line">
         <span class="dir">{{ c.dir === 'in' ? '←' : '→' }}</span>
         <button class="link peer" :title="`选中 ${name(c.peer)}`" @click="pick(c.peer)">{{ name(c.peer) }}</button>
-        <span v-for="t in c.types" :key="t" class="rel-chip" :class="`rel-${t}`">{{ RELATION_TYPE_LABELS[t] }}</span>
+        <span class="chips"
+          ><span v-for="t in c.types" :key="t" class="rel-chip" :class="`rel-${t}`">{{ RELATION_TYPE_LABELS[t] }}</span></span
+        >
         <button
-          v-if="c.relations.length > 1"
-          class="n link"
+          class="why"
+          :class="{ pending: c.purpose?.pending }"
           :aria-expanded="!!open[c.key]"
-          :title="open[c.key] ? '收起' : '逐条展开'"
+          :title="`${c.purpose?.text ?? ''}${c.purpose?.pending ? '（目的待提炼：取自说明首句）' : ''}\n${open[c.key] ? '收起' : '单击逐条展开'}`"
           @click="open[c.key] = !open[c.key]"
         >
-          ×{{ c.relations.length }}
-        </button>
-        <span v-if="c.purpose" class="why" :class="{ pending: c.purpose.pending }" :title="c.purpose.pending ? '目的待提炼：取自说明首句' : undefined">{{
-          c.purpose.text
-        }}</span>
-        <button v-if="c.relations.length === 1" class="one link" :aria-expanded="!!open[c.key]" title="展开这条关系" @click="open[c.key] = !open[c.key]">
-          {{ open[c.key] ? '▾' : '▸' }}
+          <span v-if="c.relations.length > 1" class="n">×{{ c.relations.length }}</span> {{ c.purpose?.text ?? '' }}
         </button>
       </div>
       <ul v-if="open[c.key]" class="plain each">
@@ -68,14 +64,15 @@ onBeforeUnmount(() => hoverRelations(null))
 }
 
 .co {
-  padding: 1px 0;
+  line-height: 20px;
 }
 
 .line {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 12px auto auto minmax(0, 1fr);
   align-items: baseline;
-  gap: 2px 6px;
+  gap: 0 6px;
+  white-space: nowrap;
 }
 
 .dir {
@@ -85,20 +82,44 @@ onBeforeUnmount(() => hoverRelations(null))
 }
 
 .peer {
+  max-width: 8.5em;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 500;
+  text-align: left;
 }
 
-.n,
-.one {
+.chips {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.chips .rel-chip {
   font-size: 11px;
-  padding: 0;
+  line-height: 16px;
+}
+
+.n {
+  font-size: 11px;
+  color: var(--accent);
 }
 
 .why {
-  flex: 1 1 8em;
   min-width: 0;
-  color: var(--text-2);
+  padding: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: inherit;
   font-size: 12.5px;
+  text-align: left;
+  color: var(--text-2);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.why:hover {
+  color: var(--accent);
 }
 
 .why.pending {

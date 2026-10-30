@@ -55,3 +55,14 @@ export function restoreOwned(file: string, snapshot: string, paths: readonly str
   const sorted = Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b)))
   fs.writeFileSync(file, `${JSON.stringify({ ...now, updatedAt: was.updatedAt, files: sorted }, null, 2)}\n`)
 }
+
+/** 属性栏核对卡（PC-2）收起时展开它；给了 data-sec 时再展开那个折叠的清单（PC-8） */
+export async function openCheckList(page: Page, sec?: string) {
+  const toggle = page.locator('.panel [data-card="check"] .card-toggle').first()
+  await expect(toggle).toBeVisible()
+  if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click()
+  if (!sec) return
+  const fold = page.locator(`.panel [data-sec="${sec}"] .fold`).first()
+  await expect(fold).toBeVisible()
+  if ((await fold.getAttribute('aria-expanded')) === 'false') await fold.click()
+}

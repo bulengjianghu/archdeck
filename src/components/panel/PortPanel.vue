@@ -52,7 +52,7 @@ const run = computed(() => desk.perspective.value === 'run')
       </div>
     </header>
     <DesignNote :text="x.designNote" />
-    <PanelCard kind="understand" title="理解" :summary="use">
+    <PanelCard kind="understand" title="理解" closed-summary :summary="use">
       <RunSection v-if="run" />
       <p v-if="use" class="use">{{ use }}</p>
       <!-- 先答做什么：说明在端口结构详情之前 -->

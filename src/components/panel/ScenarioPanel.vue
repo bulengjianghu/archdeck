@@ -87,7 +87,7 @@ function pointAt(id: string) {
         跳到场景所在层次：{{ moduleName(idx, desk.run.home.value) }}
       </button>
     </div>
-    <PanelCard kind="understand" title="理解" :summary="sc.cause">
+    <PanelCard kind="understand" title="理解" closed-summary :summary="sc.cause">
       <Section v-if="sc.description" title="说明" data-sec="purpose"><Markdown :text="sc.description" /></Section>
       <Section title="触发" data-sec="purpose">
         <div>

@@ -14,6 +14,8 @@ const props = withDefaults(
     warn?: boolean
     /** 缺省展开态 */
     open?: boolean
+    /** 结论只在收起时显示（理解卡：展开时卡内第一行就是它，C1） */
+    closedSummary?: boolean
     /** 变化即展开（定位请求） */
     force?: number
   }>(),
@@ -34,7 +36,7 @@ watch(
       <button class="card-toggle" :aria-expanded="isOpen" @click="user = !isOpen">
         <span class="caret">{{ isOpen ? '▾' : '▸' }}</span>
         <span class="card-title">{{ title }}</span>
-        <span v-if="summary" class="card-sum" :class="{ warn }">{{ summary }}</span>
+        <span v-if="summary && !(closedSummary && isOpen)" class="card-sum" :class="{ warn }">{{ summary }}</span>
       </button>
     </h3>
     <div v-if="isOpen" class="card-body">
@@ -45,7 +47,7 @@ watch(
 
 <style scoped>
 .card {
-  margin: 8px 8px 0;
+  margin: 6px 6px 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -60,7 +62,7 @@ watch(
   align-items: baseline;
   gap: 6px;
   width: 100%;
-  padding: 7px 12px;
+  padding: 5px 12px;
   font: inherit;
   font-size: 12px;
   font-weight: 600;

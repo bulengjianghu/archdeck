@@ -1,6 +1,6 @@
 /** 经由上层关系（§6.9、ADR-0014）：已绑定关系而本层没有视图边的消息画成关系类型色的临时线，与「未建模」区分；面板可定位到那条关系 */
 import { expect, test } from '@playwright/test'
-import { openDesk, query } from './helpers'
+import { openCheckList, openDesk, query } from './helpers'
 
 const BEGIN = '/p/h5player?level=infra.framework&sc=sc.switch-transaction&step=sc.switch-transaction%23begin'
 
@@ -16,6 +16,8 @@ test('beginXxxModelSwitch()：交互图画类型色实线临时线、标签位�
   await expect(page.locator('.msg.selected .upper-tag')).toContainText('经由上层关系')
   await expect(page.locator('.msg .tag')).toHaveCount(0)
 
+  // PC-10：端点与本层投影是步骤核对卡的清单
+  await openCheckList(page, 'evidence.ends')
   await expect(page.locator('.panel')).toContainText('对应关系建在上层')
   await page.locator('.panel button', { hasText: '定位到这条关系' }).click()
   await expect.poll(() => query(page).get('sel')).toBe('r:rel.solution.stage-swap-framework')

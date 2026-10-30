@@ -86,7 +86,7 @@ const rows = computed<CheckRow[]>(() => {
       </div>
     </header>
 
-    <PanelCard kind="understand" title="理解" :summary="owners.length ? moduleName(idx, owners[0]) : undefined">
+    <PanelCard kind="understand" title="理解" closed-summary :summary="owners.length ? moduleName(idx, owners[0]) : undefined">
       <template v-if="local && exists">
         <Section title="归属模块" :count="owners.length" data-sec="boundary.owner">
           <ul v-if="owners.length" class="plain">

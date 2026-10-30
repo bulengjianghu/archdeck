@@ -10,7 +10,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { parse } from 'yaml'
-import { graphNode, openDesk, restoreOwned } from './helpers'
+import { graphNode, openCheckList, openDesk, restoreOwned } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 const GOV = path.join(PROJECT, 'governance')
@@ -816,11 +816,8 @@ test('E9、DV-13（第五轮 T3）：模块面板「相关决策」列编号与�
   page,
 }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=present&sel=m:present.sketch')
-  // G11 V15c：「相关决策」折叠在 ⑤，展开再断言
-  await page
-    .locator('.panel')
-    .getByRole('button', { name: /^▸ 相关决策/ })
-    .click()
+  // PC-8：「相关决策」是核对卡的清单，展开再断言
+  await openCheckList(page, 'evidence.decisions')
   const adrs = page.locator('[data-testid="module-adrs"]')
   await expect(adrs.locator('li')).toHaveCount(2)
   await expect(adrs.locator('[data-adr="25"]')).toContainText('ADR-0025')
@@ -830,8 +827,8 @@ test('E9、DV-13（第五轮 T3）：模块面板「相关决策」列编号与�
   // 不继承：子模块不列祖先的决策，只给折叠行
   await openDesk(page, '/p/h5p-arch-desk?level=present.sketch&sel=m:present.sketch.canvas')
   const panel = page.locator('.module-panel')
-  // G11 V15c：本模块没有写决策（展开的节里没有清单），上级决策折叠行在「相关决策」节里
-  await panel.getByRole('button', { name: /^▸ 相关决策/ }).click()
+  // 本模块没有写决策（展开的节里没有清单），上级决策折叠行在「相关决策」清单里
+  await openCheckList(page, 'evidence.decisions')
   await expect(panel.locator('[data-testid="module-adrs"]')).toHaveCount(0)
   await panel.getByRole('button', { name: /上级模块的决策 2 条/ }).click()
   await expect(panel).toContainText('ADR-0024')

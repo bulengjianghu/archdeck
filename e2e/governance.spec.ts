@@ -4,10 +4,11 @@
  * 两个项目的未解释的交互都已为 0（ADR-0026），h5player 的违规都在基线内（不画线）：叠加线用例拦截事实端点去掉基线，让违规成为「无基线的全部违规」画出来（K9）。
  */
 import { expect, test } from '@playwright/test'
-import { openDesk, query } from './helpers'
+import { openCheckList, openDesk, query } from './helpers'
 
 test('开启代码事实：未证实的边标「未证实」、仍是实线，已证实的不标 ✓（K9、L10、L26）', async ({ page }) => {
   await openDesk(page, '/p/h5player')
+  await openCheckList(page) // PC-10：架构治理是系统核对卡的清单
   await expect(page.locator('.panel')).toContainText('架构治理')
   await expect(page.locator('.panel')).toContainText(/已证实 \d+/)
   // L45（第十五轮 G13）：代码事实开关在设置块的「代码事实与组装」组
@@ -38,6 +39,7 @@ test('h5player：没有基线时违规画成叠加线；单击叠加线选中它
     await route.fulfill({ response: res, json: { ...(await res.json()), baseline: null } })
   })
   await openDesk(page, '/p/h5player')
+  await openCheckList(page) // PC-10：架构治理是系统核对卡的清单
   await expect(page.locator('.panel')).toContainText('架构治理')
   await expect(page.locator('.panel')).toContainText(/已证实 \d+/)
 

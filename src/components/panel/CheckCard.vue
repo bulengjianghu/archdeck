@@ -31,7 +31,15 @@ const MARK = { bad: '⚠', hint: '⚠', ok: '✓', none: '—' } as const
           >
         </div>
         <template v-if="isWarn(r.state)">
-          <button v-for="(i, n) in shown(r)" :key="`${r.key}:${n}`" class="det" :class="{ hint: i.hint }" :data-check-item="r.key" @click="go(i)">
+          <button
+            v-for="(i, n) in shown(r)"
+            :key="`${r.key}:${n}`"
+            class="det"
+            :class="{ hint: i.hint }"
+            :data-check-item="r.key"
+            :data-target="i.target"
+            @click="go(i)"
+          >
             {{ i.text }}
           </button>
           <button v-if="r.items.length > CHECK_ITEMS_CAP" class="det more link" @click="more[r.key] = !more[r.key]">

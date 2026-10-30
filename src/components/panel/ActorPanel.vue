@@ -36,7 +36,7 @@ const run = computed(() => desk.perspective.value === 'run')
       </div>
     </header>
     <DesignNote :text="a.designNote" />
-    <PanelCard kind="understand" title="理解">
+    <PanelCard kind="understand" title="理解" closed-summary>
       <RunSection v-if="run" />
       <Section title="说明" data-sec="purpose">
         <Markdown v-if="a.description" :text="a.description" />

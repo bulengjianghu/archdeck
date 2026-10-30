@@ -71,7 +71,7 @@ usePanelJump(root)
     </header>
     <DesignNote :text="m.designNote" />
 
-    <PanelCard kind="understand" title="理解" :summary="summary">
+    <PanelCard kind="understand" title="理解" closed-summary :summary="summary">
       <ModuleUnderstand :id="m.id" />
     </PanelCard>
     <ModuleCheck :id="m.id" />

@@ -3,7 +3,7 @@
  * 开「时间耦合」后本层出现波浪线，单击选中它看面板。以 h5p-arch-desk 自身验收（源码在本地、是 git 仓库）。
  */
 import { expect, test } from '@playwright/test'
-import { openDesk, query } from './helpers'
+import { openCheckList, openDesk, query } from './helpers'
 
 test('缺省关闭：没有角标与耦合线；开启「缺陷」热度后出现角标，刷新后仍开启；运行视角不叠加', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=present')
@@ -61,14 +61,10 @@ test('开启时间耦合：本层出现波浪线，单击选中它，地址带 s
   await expect.poll(() => query(page).get('sel')).toMatch(/^c:.+~.+$/)
   await expect(page.locator('.couple-panel')).toContainText('同提交')
   await expect(page.locator('.couple-panel')).toContainText('共同的提交')
-  // 模块面板的「演化」一节默认折叠，展开后列出提交（先收起右下角的「显示」面板，免得它盖住节点）
+  // 模块的提交历史是核对卡的清单（PC-8），展开后列出提交（先收起右下角的「显示」面板，免得它盖住节点）
   const head = panel.locator('.head-btn')
   if ((await head.getAttribute('aria-expanded')) === 'true') await head.click()
   await page.locator('.vue-flow__node[data-id="present.canvas.flow"]').click()
-  await expect(page.locator('.panel')).toContainText('演化')
-  await page
-    .locator('.panel')
-    .getByRole('button', { name: /^▸ 演化/ })
-    .click()
+  await openCheckList(page, 'evidence.evolution')
   await expect(page.locator('.panel')).toContainText('最近 10 次提交')
 })

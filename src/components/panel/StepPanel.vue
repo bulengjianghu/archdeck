@@ -101,7 +101,7 @@ function pointAt(id: string) {
       </div>
     </header>
 
-    <PanelCard kind="understand" title="理解" :summary="f.label || undefined">
+    <PanelCard kind="understand" title="理解" closed-summary :summary="f.label || undefined">
       <Section title="作用">
         <p class="lead">
           <button class="link" @click="pointAt(f.from)">{{ moduleName(idx, f.from) }}</button>

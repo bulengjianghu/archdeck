@@ -74,27 +74,28 @@ const run = computed(() => desk.perspective.value === 'run')
     <div class="one" data-sec="purpose">
       <p v-if="summary" class="summary" data-testid="summary">
         {{ summary.text }}<span v-if="summary.pending" class="pending" title="描述没有写 summary：取自职责首句截断（M30）">待提炼</span>
+        <button
+          v-if="m.responsibility && !(summary && !summary.pending && summary.text === m.responsibility.trim())"
+          class="link full"
+          :aria-expanded="fullOpen"
+          title="职责全文"
+          @click="fullOpen = !fullOpen"
+        >
+          {{ fullOpen ? '收起全文' : '全文 ▸' }}
+        </button>
       </p>
       <p v-else class="muted">职责未填写</p>
-      <button
-        v-if="m.responsibility && !(summary && !summary.pending && summary.text === m.responsibility.trim())"
-        class="link full"
-        :aria-expanded="fullOpen"
-        @click="fullOpen = !fullOpen"
-      >
-        {{ fullOpen ? '▾ 职责全文' : '▸ 职责全文' }}
-      </button>
       <Markdown v-if="fullOpen" class="full-text" :text="m.responsibility" />
     </div>
 
     <!-- ② 怎么分 -->
     <div v-if="hasSplit" class="q-block" data-sec="split">
       <h4 class="q">怎么分</h4>
-      <p v-if="principle" class="principle"><span class="label">原则</span>{{ principle }}</p>
+      <p v-if="principle" class="principle" :title="principle"><span class="label">原则</span>{{ principle }}</p>
       <ul v-if="ownStrata.length" class="parts" data-testid="module-strata">
         <li v-for="x in ownStrata" :key="x.id" class="part">
           <button class="link k" :title="x.admits ? `归属判定：${x.admits}` : undefined" @click="pickStratum(x)">{{ x.name }}</button>
-          <span class="v">{{ x.asks ?? '' }}</span>
+          <span class="v" :title="x.asks">{{ x.asks ?? '' }}</span>
           <span class="members">
             <template v-for="(id, i) in x.members" :key="id"
               ><span v-if="i" class="muted">、</span><button class="link" @click="openChild(id)">{{ idx.modules.get(id)?.name ?? id }}</button></template
@@ -105,7 +106,7 @@ const run = computed(() => desk.perspective.value === 'run')
       <ul v-else-if="children.length" class="parts" data-testid="module-children">
         <li v-for="c in childrenShown" :key="c.id" class="part">
           <button class="link k" @click="openChild(c.id)">{{ c.name }}</button>
-          <span class="v">
+          <span class="v" :title="childSummary(c.id)?.text">
             <span v-if="c.role === 'core'" class="badge accent">核心</span>
             <span v-if="(idx.childrenOf.get(c.id) ?? []).length" class="muted">⌄ {{ idx.childrenOf.get(c.id)!.length }} </span>
             <ChangeBadge entity="module" :id="c.id" />
@@ -215,8 +216,11 @@ const run = computed(() => desk.perspective.value === 'run')
 }
 
 .full {
-  font-size: 11.5px;
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 400;
   padding: 0;
+  vertical-align: 1px;
 }
 
 .full-text {
@@ -225,7 +229,7 @@ const run = computed(() => desk.perspective.value === 'run')
 }
 
 .q-block {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .q {
@@ -251,6 +255,14 @@ const run = computed(() => desk.perspective.value === 'run')
   font-size: 12.5px;
 }
 
+/* C3：原则一句，长了收两行（悬停看全文） */
+.principle {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .label {
   margin-right: 6px;
   font-size: 11px;
@@ -265,6 +277,7 @@ const run = computed(() => desk.perspective.value === 'run')
 }
 
 .part {
+  line-height: 20px;
   display: grid;
   grid-template-columns: minmax(4.5em, auto) 1fr;
   gap: 0 10px;
@@ -280,8 +293,11 @@ const run = computed(() => desk.perspective.value === 'run')
 }
 
 .part .v {
-  color: var(--text-2);
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
 }
 
 .part .v .pending {
@@ -339,6 +355,7 @@ const run = computed(() => desk.perspective.value === 'run')
   margin: 0;
   padding-left: 16px;
   font-size: 12.5px;
+  line-height: 1.45;
   color: var(--text-2);
 }
 
