@@ -68,9 +68,9 @@
 
     <h2>三个问题，三个子模块</h2>
     <div class="three">
-      <div><b data-arch="kit.kernel.schedule">何时处理</b><span data-arch="kit.kernel.schedule" data-field="summary"></span></div>
-      <div><b data-arch="kit.kernel.decide">变成什么</b><span data-arch="kit.kernel.decide" data-field="summary"></span></div>
-      <div><b data-arch="kit.kernel.follow">对外报什么</b><span data-arch="kit.kernel.follow" data-field="summary"></span></div>
+      <div><b data-arch="kit.kernel.schedule">命令调度</b><span data-arch="kit.kernel.schedule" data-field="summary"></span></div>
+      <div><b data-arch="kit.kernel.decide">会话决定</b><span data-arch="kit.kernel.decide" data-field="summary"></span></div>
+      <div><b data-arch="kit.kernel.follow">观察跟随</b><span data-arch="kit.kernel.follow" data-field="summary"></span></div>
     </div>
     <p>
       另两块是它们的边：<span data-arch="kit.kernel.lifecycle">会话生命周期</span>负责会话的生与死（打开、释放），<span data-arch="kit.kernel.envelope">回报与事件信封</span>是管线回报进来的门、也是事件出去的门。
@@ -110,7 +110,7 @@
         <text x="540" y="184" text-anchor="middle" font-weight="600">跟随</text>
         <text x="540" y="204" text-anchor="middle" font-size="12" class="muted">只读不决：算出该报什么</text>
         <line x1="540" y1="86" x2="540" y2="158" stroke="var(--text-2)" stroke-dasharray="3 3" marker-end="url(#a)" />
-        <text x="548" y="126" font-size="11" class="muted">状态每变一次就重判</text>
+        <text x="532" y="126" font-size="11" text-anchor="end" class="muted">状态每变一次就重判</text>
         <line x1="170" y1="198" x2="458" y2="190" stroke="var(--text-2)" marker-end="url(#a)" />
         <text x="310" y="184" text-anchor="middle" font-size="11" class="muted">观察不排队：不改意图、不改生死</text>
         <!-- 背景：会话规则 -->
