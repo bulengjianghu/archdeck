@@ -1,4 +1,4 @@
-# 源代码文件树与代码预览（ADR-0007）：源码读取、源码归属、源码同步、文件树、副栏的源代码预览、文件面板。
+# 源代码文件树与代码预览（ADR-0007）：源码读取、源码归属、源码同步、文件树、资料区的源代码预览、文件面板。
 # 规则编号（G）见 docs/02-domain.md §2.13；机制见 docs/architecture/source.md。
 
 modules:
@@ -34,7 +34,7 @@ modules:
     name: 文件面板
     summary: 展示选中文件的归属、行数、本层投影与导出
     parent: present.panel
-    responsibility: 选中文件时的面板（SR-7）：路径、行数与是否超长（G21）、归属模块（可定位，冲突时全部列出）或未归属 / 已忽略及处理提示（未归属文件可「加入忽略」，B4）、当前层次中的投影说明（G14）、以它为入口的模块、导出（与模块接口的对应）；「预览源码」重新打开副栏预览。
+    responsibility: 选中文件时的面板（SR-7）：路径、行数与是否超长（G21）、归属模块（可定位，冲突时全部列出）或未归属 / 已忽略及处理提示（未归属文件可「加入忽略」，B4）、当前层次中的投影说明（G14）、以它为入口的模块、导出（与模块接口的对应）；「预览源码」在资料区重新打开源代码预览标签。
     codeRefs: [src/components/panel/FilePanel.vue]
   - id: present.panel.module-source
     name: 模块的源代码
@@ -86,7 +86,7 @@ relations:
   # 呈现层
   - {id: rel.p7.files-read, from: present.nav-tree.files, to: state.desk.files, type: queries, payload: [ds.SourceOwnership, ds.Selection], description: 文件树向源码派生（desk.files）取：目录树、归属标记、选中模块的文件、选中文件, purpose: 取目录树、归属标记与选中状态 }
   - {id: rel.p7.files-act, from: present.nav-tree.files, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 文件树交给 dispatch 与操作：单击文件 → selectFile；刷新 → refreshSource, purpose: 单击文件选中它，刷新源码清单 }
-  - { id: rel.p7.split-source, from: present.desk-view.split, to: present.source, type: commands, description: 分屏容器与副栏交给源代码预览：分栏在副栏「源代码」页签渲染源码视图，并以 httpSourceFetcher / httpModelWriter 读源码与写描述, purpose: 在副栏源代码页签预览文件 }
+  - { id: rel.p7.split-source, from: present.desk-view.split, to: present.source, type: commands, description: 资料区交给源代码预览：在源代码标签的内容区渲染源码视图（带目标行时滚到该行）, purpose: 在源代码标签里预览文件 }
   - {id: rel.p7.source-read, from: present.source, to: state.desk.files, type: queries, payload: [ds.SourceOwnership], description: 源代码预览向源码派生（desk.files）取：预览文件的归属模块与状态, purpose: 标出预览文件的归属与状态 }
   - {id: rel.p7.source-file, from: present.source, to: state.desk.source-sync, type: queries, mode: async, interface: if.desk.actions, payload: [ds.SourcePayload], description: 源代码预览向源码同步取：sourceFile(path) 按需取文件内容, purpose: 按需取文件内容来显示 }
   - { id: rel.p7.panel-file, from: present.panel.dispatch, to: present.panel.file, type: commands, description: 面板分派交给文件面板：选中文件时面板分派渲染文件面板, purpose: 选中文件时显示文件面板 }
@@ -94,7 +94,7 @@ relations:
   - { id: rel.p7.file-exports, from: present.panel.file, to: present.panel.module-source, type: commands, description: 文件面板交给模块的源代码：渲染导出分组列表（ExportSection）, purpose: 列出文件的导出分组 }
   - {id: rel.p7.file-read, from: present.panel.file, to: state.desk.files, type: queries, payload: [ds.SourceOwnership, ds.FileNodes], description: 文件面板向源码派生（desk.files）取结果, purpose: 取文件的归属、投影与导出 }
   - {id: rel.p7.file-act, from: present.panel.file, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 文件面板交给 dispatch 与操作：归属模块 → revealModule, purpose: 跳到文件的归属模块 }
-  - {id: rel.p7.file-preview, from: present.panel.file, to: present.desk-view, type: commands, via: 'channel:inject', description: 文件面板交给项目视图：「预览源码」调用项目视图注入的 openPreview（副栏的 aside.open），打开副栏预览, purpose: 在副栏重新打开源码预览 }
+  - {id: rel.p7.file-preview, from: present.panel.file, to: present.desk-view, type: commands, via: 'channel:inject', description: 文件面板交给项目视图：「预览源码」调用项目视图注入的 openPreview，在资料区打开源代码预览标签（G15）, purpose: 在资料区重新打开源码预览 }
   - {id: rel.p7.modsrc-read, from: present.panel.module-source, to: state.desk.files, type: queries, payload: [ds.ModuleEntry, ds.ExportedSymbol], description: 模块的源代码向源码派生（desk.files）取：模块的文件、入口、导出对应, purpose: 取模块的文件、入口与导出对应 }
   - {id: rel.p7.modsrc-act, from: present.panel.module-source, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 模块的源代码交给 dispatch 与操作：单击文件 → selectFile, purpose: 单击文件选中它 }
   - { id: rel.p7.modsrc-content, from: present.panel.module-source, to: present.panel.content, type: commands, description: 模块的源代码交给内容组件：模块源码节渲染签名代码块与接口折叠项（CodeBlock、InterfaceItem）, purpose: 用共用代码块排出签名与接口 }
@@ -134,7 +134,7 @@ relations:
   - { id: rel.p7.file-ownership, from: present.panel.file, to: model.types, type: queries, description: 文件面板向类型与 Schema 取：调用 isLong 标超长文件、moduleName 显示归属、isArchived 判已归档, purpose: 标超长、显示归属与归档状态 }
   - { id: rel.p7.modsrc-ownership, from: present.panel.module-source, to: model.types, type: queries, description: 模块的源代码向类型与 Schema 取：模块源码节调用 isLong 标超长文件、moduleName 显示归属、isArchived 判已归档, purpose: 标超长文件、显示归属模块名 }
   - { id: rel.p7.file-content, from: present.panel.file, to: present.panel.content, type: commands, description: 文件面板交给内容组件：渲染分节组件 Section, purpose: 用共用分节排出文件信息 }
-  - { id: rel.p7.file-preview-key, from: present.panel.file, to: present.shared, type: queries, description: 文件面板向呈现共用件取：调用 useOpenPreview 取项目视图注入的「在副栏预览」, purpose: 取副栏预览的入口 }
+  - { id: rel.p7.file-preview-key, from: present.panel.file, to: present.shared, type: queries, description: 文件面板向呈现共用件取：调用 useOpenPreview 取项目视图注入的「在资料区预览」, purpose: 取资料区预览的入口 }
 
 interfaces:
   - id: if.source.readSourceTree

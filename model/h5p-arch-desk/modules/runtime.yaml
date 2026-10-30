@@ -6,11 +6,14 @@ modules:
   - id: present.desk-view
     name: 项目视图
     summary: 为一个项目版本搭好工作台并接通会话状态
-    abstraction: 一个项目一个版本一份 DeskState，由这里创建并注入；自身只布置区块，画布区的分屏与副栏另成一件。
+    abstraction: 一个项目一个版本一份 DeskState，由这里创建并注入；自身只布置三列（导航树 | 工作列 | 资料区，ADR-0054），资料区另成一件。
     invariants:
       - 每个视图实例只调一次 createDeskState，并经 provide 注入子组件
       - 描述、源码与写入的 HTTP 实现由这里注入 DeskState，子组件不直接请求
+      - { text: 属性栏并排还是悬浮只由工作列宽度推出（propsPlacement），不存状态, adr: 54 }
     principle: |
+      - 工作列（WS-1）：工具栏只属于工作列、与资料区标签栏同高，保持一行——按钮不缩，版本选择、场景名、面包屑、搜索依次收窄；属性栏 330px 跟随选中，开关是工作区状态并按本机记住（WS-2）；宽度 − 330 ≥ 620 并排，否则悬浮在画布右侧，悬浮时经 CANVAS_INSET 把盖住的宽度交给画布（WS-3）。
+      - 资料区从不显示变为显示时收起导航树（dockAppeared），导航树在「文件」页签或因打开场景而出现时除外；「专注」收起导航树与属性栏，再按恢复（WS-9）。面板的「预览」经 OPEN_PREVIEW 打开源代码预览标签（G15）。
       - 「怎么读这张图」（GuideDialog）按三问四修饰讲一条线（ADR-0029 §3）：三个判断题定类型，再读机制（插座 = 经端口）、异步、拉取；查询淡、委托实色，端口是方框进边一侧的小记号。
       - 「组装」叠加开关同演化叠加，按项目记在本机：模型加载后恢复，之后每次变化写回（useAssemblyPrefs，O12）。
     codeRefs: [src/components/DeskView.vue, src/components/GuideDialog.vue]
@@ -50,21 +53,23 @@ modules:
   - id: state.transition
     name: 视图状态转移
     summary: 按会话规则由状态与动作算出下一个视图状态
-    abstraction: 会话规则按话题拆成纯函数，输入状态与动作、输出新状态，不碰外界；被描述系统的问题一律问模型层。
+    abstraction: 会话规则按话题拆成纯函数，输入状态与动作、输出新状态，不碰外界；被描述系统的问题一律问模型层；工作区规则（workspace.ts）是另一个值的转移，与视图状态互不约束。
     invariants:
       - 只引用模型层与自身文件，不依赖 Vue、路由与计时器
-      - 转移函数输入状态、动作与上下文，只返回新状态、是否进历史与被清空的选中
+      - 视图状态的转移输入状态、动作与上下文，只返回新状态、是否进历史与被清空的选中
+      - { text: 工作区状态是另一个值，只经 workspaceTransition 改变，不进 URL 与历史, adr: 54 }
 
   # ── 呈现层 ──────────────────────────────────────────────
   - id: present.desk-view.split
-    name: 分屏容器与副栏
-    summary: 把画布与副栏分屏排布，并切换时序图与源码页签
+    name: 资料区
+    summary: 以多标签打开时序图与源代码，可预览、分屏、关闭
     parent: present.desk-view
-    responsibility: 按布局树排布画布区的视图：画布与副栏两块，方向可切换（默认左右，W-4），比例可拖，副栏可收起（左右排列时缩成一条竖栏）；方向、比例与收起状态按项目记在本地。副栏只有一栏标题栏（ADR-0010）：收起、页签、时序图页签下的本层不可见提示、「定位」与「图例」（时序图图例浮层）、方向切换；页签在「时序图」（运行视角）与「源代码」（有预览文件时）之间切换：选中文件切到源代码并预览它，打开场景或移动进度切到时序图，预览文件保留到关闭（G15）。
-    principle: |
-      - 布局树是可序列化的值（ds.PaneLayout），视图组件只按「槽位」（structure / aside）挂载，不知道自己在哪；以后的自由拖拽分屏只需扩展布局树的编辑操作。
-      - 页签与预览文件只属于这块界面（useAside），不进视图状态与 URL；副栏在运行视角或有预览文件时出现。
-    codeRefs: [src/components/split/**]
+    responsibility: 工作区右侧从顶到底的一列（原「副栏」，ADR-0054）：时序图、源代码（以及 R5 的图解）都以标签打开，每组的标签栏在第一行、与工具栏同高；预览标签斜体、被下一次不固定的打开替换，双击标签固定（WS-5）；「⊟ 分屏」最多上下两组、单击组内即聚焦、「取消分屏」并回，✕ 关闭全部（WS-6、WS-7）；时序图标签内容区顶部是本层不可见提示、「定位」「图例」（WS-10）。不跟随选中：只读工作区状态、只发工作区意图（WS-8）。
+    abstraction: 一列（DockPane）按组排、一组（DockGroup）是标签栏加活动标签的内容，标签内容按资料种类交给时序图或源代码预览。
+    invariants:
+      - { text: 只读 desk.workspace 的状态、只经它的 dispatch 发意图，自身不存标签与分组, adr: 54 }
+      - 选中、悬停、移动进度都不改资料区
+    codeRefs: [src/components/dock/**]
 
   - id: present.sequence.lanes
     name: 泳道与消息
@@ -82,7 +87,7 @@ modules:
     name: 时序图交互
     summary: 把时序图上的单击与悬停转成回放操作，并按进度滚动
     parent: present.sequence
-    responsibility: 单击消息 = 指向这一步（R13）：选中它，进度前进或后退到它；在未选分支上的消息同样可单击，先改选该分支再跳转；单击 alt 的分支条件 = chooseBranch（F6e）；只在用户移动进度后把进度所在的步骤滚到纵向中间，副栏标题栏的「定位」调用这里暴露的方法，悬停、选中、切换层次都不滚动（D-7）；悬停消息时在交互图上预览对应的边；把选中突出（emphasis，R15）交给泳道头与消息区。
+    responsibility: 单击消息 = 指向这一步（R13）：选中它，进度前进或后退到它；在未选分支上的消息同样可单击，先改选该分支再跳转；单击 alt 的分支条件 = chooseBranch（F6e）；只在用户移动进度后把进度所在的步骤滚到纵向中间，时序图标签顶部的「定位」调用这里暴露的方法，悬停、选中、切换层次都不滚动（D-7）；悬停消息时在交互图上预览对应的边；把选中突出（emphasis，R15）交给泳道头与消息区。
     codeRefs: [src/components/sequence/SequenceView.vue]
   - id: present.sequence.heads
     name: 泳道头
@@ -264,8 +269,8 @@ relations:
   - {id: rel.st.sketch-layout-migrate, from: state.layout.sketch, to: model.pipeline.loader, type: queries, description: 草图布局向 Loader 取：sketchScene 先用 migrateSketch 把旧写法的根草图读作 strata，层带按 strata.root 的层序排（M26、X21）, purpose: 把旧写法的根草图读成分层 }
   - {id: rel.st.navigation-strata, from: state.transition.navigation, to: model.types, type: queries, description: 导航规则向类型与 Schema 取：stratumByKey 判层的选中（sel=s:）是否存在（V2、ADR-0052）, purpose: 判断选中的层是否还存在 }
   # 呈现层内部
-  - { id: rel.p2.split-canvas, from: present.desk-view.split, to: present.canvas.flow, type: commands, description: 分屏容器与副栏交给视图转换与交互：分栏在画布槽位（左 / 上）渲染画布，调用 useStageDisplay 取显示设置, purpose: 在画布槽位渲染结构图 }
-  - { id: rel.p2.split-sequence, from: present.desk-view.split, to: present.sequence.interact, type: commands, description: 分屏容器与副栏交给时序图交互：运行视角下分栏在副栏「时序图」页签（右 / 下）渲染时序图, purpose: 运行视角下在副栏渲染时序图 }
+  - { id: rel.p2.split-sequence, from: present.desk-view.split, to: present.sequence.interact, type: commands, description: 资料区交给时序图交互：运行视角下在时序图标签的内容区渲染时序图，「定位」调用它暴露的 centerCurrent, purpose: 在时序图标签里画时序图 }
+  - { id: rel.ws.dock-workspace, from: present.desk-view.split, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 资料区交给 dispatch 与操作：标签的激活、固定、关闭，分屏、取消分屏、聚焦组、关闭全部都经 desk.workspace.dispatch（WS-5–WS-7）, purpose: 切换、固定、关闭资料标签 }
   - {id: rel.p6.nav-perspective, from: present.nav-tree, to: state.desk.projection, type: queries, payload: [ds.ViewState], description: 导航树向视图派生（核心与 desk.run）取：视角变化时切换页签（T1）, purpose: 视角变化时切换页签 }
   - {id: rel.p3.perspective-act, from: present.perspective, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 视角切换交给 dispatch 与操作：退出场景 → closeScenario, purpose: 退出场景回到结构视角 }
   - {id: rel.p3.perspective-read, from: present.perspective, to: state.desk.projection, type: queries, payload: [ds.ViewState], description: 视角切换向视图派生（核心与 desk.run）取：当前视角与场景名, purpose: 显示当前视角与场景名 }
@@ -309,8 +314,8 @@ relations:
     type: queries
     interface: if.state.transition
     purpose: 由会话规则算出新状态
-    payload: [ds.ViewState, ds.ViewAction]
-    description: dispatch 与操作向视图状态转移取：唯一写入口：dispatch → transition → 写入新状态
+    payload: [ds.ViewState, ds.ViewAction, ds.WorkspaceState]
+    description: dispatch 与操作向视图状态转移取：唯一写入口：dispatch → transition → 写入新状态；工作区同一做法，desk.workspace.dispatch → workspaceTransition → 写入新的工作区状态（ADR-0054）
   - {id: rel.p2.router-codec, from: state.desk.url-sync, to: state.transition.url, type: queries, interface: if.state.urlCodec, description: 路由同步向 URL 编解码取：状态 ↔ 查询参数, purpose: 在状态与地址参数间转换 }
   - {id: rel.p2.layoutsync-runner, from: state.desk.layout-sync, to: state.layout.runner, type: queries, mode: async, interface: if.layout.layoutView, payload: [ds.LevelView, ds.PositionedView], description: 布局同步向布局入口与缓存取：bandColumnsFor, purpose: 按画布宽度算带内列数 }
   # 呈现层读派生数据：每次读 computed 都是一次运行时调用（S12：步骤只对应运行时关系）
@@ -727,13 +732,17 @@ dataStructures:
         nearest?: string                // 离进度最近的参与帧
       }
     description: 某个对象在本场景中做了什么，运行视角面板的「运行信息」。
-  - id: ds.PaneLayout
-    name: PaneLayout
+  - id: ds.WorkspaceState
+    name: WorkspaceState
     definition: |
-      type PaneLayout =
-        | { kind: 'pane'; slot: 'structure' | 'aside'; collapsed?: boolean }
-        | { kind: 'split'; dir: 'row' | 'column'; sizes: number[]; children: PaneLayout[] }
-    description: 分屏布局树；两块，根分割方向可切换（row 左右 / column 上下，默认 row），后续自由拖拽只扩展其编辑操作。
+      type DocRef = { kind: 'sequence' } | { kind: 'source'; path: string; line?: number | null } | { kind: 'explainer'; module: string }
+      interface WorkspaceState {
+        groups: { tabs: { id: string; doc: DocRef; preview: boolean }[]; active: string | null }[]  // 一到两组，上下排列
+        focus: number          // 新资料进入的组
+        dockHidden: boolean    // 「▣ 资料」隐藏（标签保留）
+        propsOpen: boolean     // 属性栏开关
+      }
+    description: 工作区状态（ADR-0054，transition/workspace.ts）：资料区的标签、预览、分组与属性栏开关，一个值，只经 workspaceTransition 改变，不进 URL。规则：每份资料一个标签（时序图唯一、源代码按路径、图解按模块），再打开即激活；不固定地打开替换焦点组的预览标签；最多上下两组，新资料进焦点组，下组空了即消失；关闭后激活右邻，最后一个关闭后资料区消失，隐藏保留标签（WS-4–WS-7）。属性栏并排还是悬浮（propsPlacement，WS-3）与资料区出现（dockAppeared，WS-9）由输入推出，不进这个值。
   - id: ds.OutlineNode
     name: OutlineNode
     definition: |

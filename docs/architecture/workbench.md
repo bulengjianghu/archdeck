@@ -32,7 +32,7 @@
 - **工具栏**只属于工作列（WS-1），高 42px，与资料区每组的标签栏同高：导航开关 ☰、版本切换、视角切换、「显示 ▾」的位置（R4，W4 落地）、面包屑、搜索、帮助「?」、专注、属性栏状态（「并排 / 悬浮」）、「▤ 属性」「▣ 资料」。保持一行：按钮不缩，版本选择、场景名、面包屑、搜索依次收窄并省略；工作列不足 1000px 时「编辑骨架」「新建设计」让位（容器查询）。
 - **属性栏**（WS-2、WS-3）：宽 330px，内容是选中对象的面板（§8，第十七轮 W3 改为三张卡片）。开关是工作区状态，「▤ 属性」与卡片右上角 × 切换，按本机记住（沿用 `panel-collapsed`）。并排还是悬浮由工作列宽度推出（`propsPlacement`：宽度 − 330 ≥ 620 并排），窗口大小、资料区开关变化时自动切换；悬浮时是盖在画布右侧的阴影卡片，项目视图经 `CANVAS_INSET`（`shared/canvasInset.ts`）把盖住的宽度交给画布——画布的「适应」只用没被盖住的部分，右侧浮层（「显示」面板、画布角计数）按 `--canvas-inset` 让位。
 - **专注**（WS-9）：导航树或属性栏任一展开时都收起；都已收起时都恢复。
-- **资料区**（W-4、WS-4–WS-10，`split/DockPane.vue` 一列、`split/DockGroup.vue` 一组、`split/SequenceDoc.vue` 时序图标签内容；规则在视图状态层的工作区状态，见[视图状态与协调 §1](./view-state.md#1-视图状态)）：
+- **资料区**（W-4、WS-4–WS-10，`dock/DockPane.vue` 一列、`dock/DockGroup.vue` 一组、`dock/SequenceDoc.vue` 时序图标签内容；规则在视图状态层的工作区状态，见[视图状态与协调 §1](./view-state.md#1-视图状态)）：
   - 右侧从顶到底的一列，与工作列之间的比例可拖动，按项目记在本地（`dock-ratio:<项目>`，缺省 44%）；有标签且没被「▣ 资料」隐藏时出现。
   - 时序图、源代码（§5、§6）、图解（R5，W5）都是标签；每份资料一个标签（时序图唯一一份，标题「时序图 · 场景名」）。单击打开为预览标签（斜体，被下一次单击替换），双击打开、双击标签或文件树双击文件即固定；每个标签可单独关闭，✕ 关闭整个资料区，「▣ 资料」隐藏 / 显示（标签保留；没有标签时运行视角下打开时序图）。
   - 「⊟ 分屏」上下两组，新资料进入获得焦点的组（单击组内即聚焦，焦点组的标签栏顶边为强调色）；「取消分屏」把下组并回。
@@ -161,7 +161,7 @@
 |---|---|
 | 应用外壳与路由 | `main.ts`、`App.vue`、`styles.css` |
 | 项目列表 | `ProjectList.vue` |
-| 项目视图 · 资料区 | `DeskView.vue`（三列、工具栏、属性栏并排 / 悬浮）；资料区 `split/**`（DockPane · DockGroup · SequenceDoc；目录名沿用，改名随描述重新生成）；舞台显示 `stage/useStageDisplay.ts` |
+| 项目视图 · 资料区 | `DeskView.vue`（三列、工具栏、属性栏并排 / 悬浮）；资料区 `dock/**`（DockPane · DockGroup · SequenceDoc）；舞台显示 `stage/useStageDisplay.ts` |
 | 版本切换与设计信息条 | `VersionSwitcher.vue`；信息条 `infobar/InfoBar.vue`（身份区，提交版本、设计轮次、草图共用，F-60）、`infobar/CompareZone.vue`（对比按钮与弹层，F-62） |
 | 视角切换 · 场景列表 · 回放控制条 | `PerspectiveSwitch.vue`、`ScenarioList.vue`、`PlayerBar.vue`、`RouteBar.vue`、`BranchChooser.vue` |
 | 导航树 · 问题页签 | `tree/**`（NavTree · ModuleTree · FileTree · StepTree · IssueList） |

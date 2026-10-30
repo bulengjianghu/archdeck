@@ -3,7 +3,7 @@
  * 时序图（D-2、D-7、R3、R5、R11）：只画定位好坐标的时序模型。
  * 单击消息（含未选分支上的）→ 指向该步，即选中它（R13）；单击 alt 的分支条件 → 选该分支（F6e）；悬停消息时在结构图上预览对应的边；选中突出（R15、R16）。
  * 泳道头固定在顶部、底部另有一份，消息区夹在中间纵向滚动，三块从左起排、不拉伸（D-2）；只在用户移动播放头后把当前步骤滚到中间（D-7）。
- * 不可见提示与「定位」在副栏标题栏（split/DockPane.vue，ADR-0010），「定位」调用这里暴露的 centerCurrent。
+ * 不可见提示、「定位」「图例」在时序图标签的内容区顶部（dock/SequenceDoc.vue，WS-10），「定位」调用这里暴露的 centerCurrent。
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'

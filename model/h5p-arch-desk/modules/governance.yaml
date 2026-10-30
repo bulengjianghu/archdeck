@@ -381,8 +381,8 @@ relations:
   - {id: rel.gv.desk-review-model, from: state.desk.review, to: model.review, type: queries, interface: if.review.query, description: 人确认层派生（desk.review）向确认取：reviewStates、reviewCounts、reviewEntries（Z3–Z5）, purpose: 算确认状态、计数与条目 }
   - { id: rel.gv.navigation-evolution, from: state.transition.navigation, to: model.evolution, type: queries, description: 导航规则向演化事实取：选中耦合线时调用 coupleEnds 取两端（J7）, purpose: 选中耦合线时取两端 }
   - { id: rel.gv.selection-evolution, from: state.transition.selection, to: model.evolution, type: queries, description: 视角与选中规则向演化事实取：选中耦合线时调用 coupleEnds 取要突出的两端（J7）, purpose: 选中耦合线时取要突出的两端 }
-  - { id: rel.gv.scenario-panel-shared, from: present.panel.scenario, to: present.shared, type: commands, description: 场景面板交给呈现共用件：经 useOpenPreview 在副栏预览证据文件（S15）, purpose: 在副栏预览证据文件 }
-  - { id: rel.gv.step-panel-shared, from: present.panel.step, to: present.shared, type: commands, description: 步骤面板交给呈现共用件：经 useOpenPreview 在副栏预览代码证据（S16）, purpose: 在副栏预览代码证据 }
+  - { id: rel.gv.scenario-panel-shared, from: present.panel.scenario, to: present.shared, type: commands, description: 场景面板交给呈现共用件：经 useOpenPreview 在资料区预览证据文件（S15）, purpose: 在资料区预览证据文件 }
+  - { id: rel.gv.step-panel-shared, from: present.panel.step, to: present.shared, type: commands, description: 步骤面板交给呈现共用件：经 useOpenPreview 在资料区预览代码证据（S16）, purpose: 在资料区预览代码证据 }
   # 结构视图（ADR-0031）
   - { id: rel.gv.canvas-structure-level, from: state.layout.canvas.structure, to: model.governance.structure, type: queries, description: 结构视角的画布场景向结构视图取：调用 chipDeps 取分层总览核心模块的跨层依赖、levelImpact 把选中模块的影响面投到本层节点（O13③、K15）, purpose: 取跨层依赖与选中的影响面 }
   - { id: rel.gv.canvas-structure-node, from: state.layout.canvas.structure, to: model.governance.level, type: queries, description: 结构视角的画布场景向本层投影取：调用 nodeOf 定位选中模块在本层所在的节点（K15）, purpose: 找选中模块在本层的节点 }

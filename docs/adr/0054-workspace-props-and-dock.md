@@ -72,7 +72,7 @@
 ## 后果
 
 - 规则 G15 改写；新增 WS-1–WS-10；需求 W-1、W-2（顶部）、W-4 改写。
-- `split/` 目录保留（组件改名 DockPane / DockGroup / 时序图与源代码标签）：改目录名要同时改 `model/h5p-arch-desk` 的 codeRefs，而描述文件本轮归 W1，交给集成时随描述重新生成一起做。
+- 组件目录 `split/` 改名 `dock/`（DockPane / DockGroup / SequenceDoc），描述的 codeRefs 随之更新；模块 ID `present.desk-view.split` 不变（人拥有的 `reviewed.yaml` 引用它），名称改为「资料区」。
 - 属性栏内容暂时沿用 `Panel.vue`，第十七轮 W3 改为三张卡片；工具栏为「显示 ▾」预留位置，W4 落地。
 - E2E 中依赖旧副栏结构（`.aside`、方向切换）的用例改为资料区的结构；新增布局 E2E。
 

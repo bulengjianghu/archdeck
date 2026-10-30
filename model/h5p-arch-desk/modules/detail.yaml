@@ -131,7 +131,7 @@ modules:
       - { text: 写入人拥有的文件只经 desk.write 发起，面板不直接发请求, adr: 19 }
   - id: present.shared
     name: 呈现共用件
-    summary: 为各呈现子系统提供共用文案、代码高亮与副栏预览入口
+    summary: 为各呈现子系统提供共用文案、代码高亮与资料区预览入口
     abstraction: 只放被多个呈现子系统共用的叶子，自身不依赖任何呈现子系统，避免取用方与提供方成环。
   - id: state.layout
     name: Layout
@@ -339,7 +339,7 @@ modules:
     name: dispatch 与操作
     summary: 提供视图状态唯一的写入口与对外操作
     parent: state.desk
-    responsibility: 视图状态唯一的写入口 dispatch(action)：调用视图状态转移得到新状态并写入，层次变化时通知画布适应；对外的一组操作（下钻、跳转、返回上级、选中、定位、悬停、打开 / 关闭场景、单步、指向某一步或回到开头、选分支）都只是构造动作并 dispatch。
+    responsibility: 视图状态唯一的写入口 dispatch(action)：调用视图状态转移得到新状态并写入，层次变化时通知画布适应；对外的一组操作（下钻、跳转、返回上级、选中、定位、悬停、打开 / 关闭场景、单步、指向某一步或回到开头、选分支）都只是构造动作并 dispatch。工作区（desk.workspace，ADR-0054）同一做法：持有工作区状态，dispatch 经工作区规则算出新值；把打开场景（变为另一个）、退出场景、选中另一个文件翻译成打开时序图、关闭时序图、打开源代码预览（WS-8、G15）。
     abstraction: 一种用户意图一个操作，操作只负责构造动作，规则统一留给视图状态转移。
     invariants:
       - 对外操作都只构造一个动作交给 dispatch，不直接写状态
@@ -587,11 +587,11 @@ relations:
   - {id: rel.ad.overview-collector, from: model.projector.overview, to: model.projector.collector, type: queries, description: 分层总览向边汇总取：核心跨层边单独汇总, purpose: 单独汇总核心跨层边 }
   # 模型层入口的再导出与名称、标签（K7 按代码补齐）
   - {id: rel.ad.indexer-steps, from: model.pipeline.indexer, to: model.scenario-semantics, type: queries, description: Indexer 向回放计划取：messagesOf：建索引时收集场景消息, purpose: 建索引时收集场景消息 }
-  - { id: rel.ad.content-labels, from: present.panel.content, to: present.shared, type: commands, description: 内容组件交给呈现共用件：渲染变更角标与代码块时调用 useOpenPreview 在副栏预览文件、useNavTab 切页签、highlightTs 高亮签名, purpose: 预览文件、切页签与高亮签名 }
+  - { id: rel.ad.content-labels, from: present.panel.content, to: present.shared, type: commands, description: 内容组件交给呈现共用件：渲染变更角标与代码块时调用 useOpenPreview 在资料区预览文件、useNavTab 切页签、highlightTs 高亮签名, purpose: 预览文件、切页签与高亮签名 }
   - { id: rel.ad.relation-type-labels, from: present.panel.relation, to: present.shared, type: commands, description: 关系面板交给呈现共用件：经 useOpenPreview / useNavTab 打开证据文件与切换页签, purpose: 打开证据文件并切换页签 }
   - { id: rel.ad.edge-type-labels, from: present.panel.edge, to: present.shared, type: commands, description: 聚合边面板交给呈现共用件：经 useOpenPreview / useNavTab 打开证据文件与切换页签, purpose: 打开证据文件并切换页签 }
   - { id: rel.gv.ports-type-labels, from: present.panel.governance, to: present.shared, type: commands, description: 架构治理面板交给呈现共用件：治理面板经 useOpenPreview / useNavTab 打开证据文件与切换页签, purpose: 打开证据文件并切换页签 }
-  - { id: rel.ad.design-labels, from: present.panel.design, to: present.shared, type: commands, description: 设计面板交给呈现共用件：调用 intentName 显示持久草图名，经 useOpenPreview 在副栏预览 ADR 与草图文件, purpose: 显示草图名并预览 ADR 与草图 }
+  - { id: rel.ad.design-labels, from: present.panel.design, to: present.shared, type: commands, description: 设计面板交给呈现共用件：调用 intentName 显示持久草图名，经 useOpenPreview 在资料区预览 ADR 与草图文件, purpose: 显示草图名并预览 ADR 与草图 }
   - { id: rel.ad.actor-labels, from: present.panel.actor, to: present.shared, type: commands, description: 参与者面板交给呈现共用件：经 useOpenPreview / useNavTab 打开证据文件与切换页签, purpose: 打开证据文件并切换页签 }
   - {id: rel.ad.nodes-act, from: present.canvas.nodes, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 节点组件交给 dispatch 与操作：分支预览选这一支（chooseBranch）、步骤序号指向这一步（seek）, purpose: 从分支预览选分支、从序号指向步骤 }
   - { id: rel.ad.port-marks-act, from: present.canvas.nodes.ports, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 端口记号交给 dispatch 与操作：单击端口 select 端口（L13），单击合成的「端口 ×N」select 定义模块, purpose: 单击记号选中端口或定义模块 }
