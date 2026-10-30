@@ -3,7 +3,7 @@
  * 以 media-web-player 的分层总览验收（01 §6.24）。
  */
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, openDesk, query, collapseDisplay } from './helpers'
+import { graphNode, openDesk, openCheckList, query, collapseDisplay } from './helpers'
 
 /** 结构边是否变淡：DepEdge 变淡时线的不透明度降到 0.12（同 structure-view.spec） */
 const faded = async (page: Page, id: string) => (await page.locator(`.vue-flow__edge-dep[data-id="${id}"] path[style*="opacity: 0.12"]`).count()) > 0
@@ -44,6 +44,8 @@ test('L27：选中状态下悬停另一个模块，画面有响应——它的�
 
 test('K15b：面板点「影响面」出现距离标记；换选中后标记消失、按钮回到「不看」；刷新后不保留', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?v=s&sel=m:pipeline.latency')
+  // PC-8：影响面查询在核对卡的「结构指标」清单里
+  await openCheckList(page, 'boundary.structure')
   await expect(choice(page, 'none')).toHaveClass(/on/)
   await expect(marks(page)).toHaveCount(0)
   await choice(page, 'in').click()
@@ -53,6 +55,7 @@ test('K15b：面板点「影响面」出现距离标记；换选中后标记消�
   expect(query(page).toString()).not.toContain('impact')
   await page.reload()
   await expect(page.locator('.vue-flow__node').first()).toBeVisible({ timeout: 20_000 })
+  await openCheckList(page, 'boundary.structure')
   await expect(choice(page, 'none')).toHaveClass(/on/)
   await expect(marks(page)).toHaveCount(0)
   // 换选中
@@ -61,11 +64,13 @@ test('K15b：面板点「影响面」出现距离标记；换选中后标记消�
   await graphNode(page, 'kit.session').click({ force: true })
   await expect.poll(() => query(page).get('sel')).toBe('m:kit.session')
   await expect(marks(page)).toHaveCount(0)
+  await openCheckList(page, 'boundary.structure')
   await expect(choice(page, 'none')).toHaveClass(/on/)
 })
 
 test('K15d：「延迟决策律」的影响面查询——经具名接口（validateLatencyConfig）或只经再导出使用它的标为可能波及', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?v=s&sel=m:pipeline.latency')
+  await openCheckList(page, 'boundary.structure')
   await choice(page, 'in').click()
   // 分层总览按带投影（K15b③）：宿主与演示只经可截断处到达，整带可能波及；播放器 Kit 有会话内核必然波及
   const mark = (id: string) => graphNode(page, id).getByTestId('impact-mark').first()

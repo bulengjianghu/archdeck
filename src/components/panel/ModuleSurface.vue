@@ -17,7 +17,7 @@ import { DECL_STATE_LABEL, ELEMENT_KIND_LABEL, ELEMENT_KIND_MARK } from '../disp
 import { useOpenPreview } from '../shared/preview'
 import { hoverSurfaceElement, leaveSurfaceElement, revealIn, useSurfaceFocus, useSurfaceHover } from './surfaceFocus'
 
-const props = defineProps<{ id: string }>()
+const props = defineProps<{ id: string; /** PC-8：核对卡的清单缺省折叠 */ fold?: boolean }>()
 const desk = useDesk()
 const idx = computed(() => desk.index.value!)
 const name = (id: string) => moduleName(idx.value, id)
@@ -87,9 +87,15 @@ function toPort(port: string) {
 
 /** C9：画布单击元素（或「端口」一节的定位）时滚到该元素 */
 const focus = useSurfaceFocus()
+/** 定位请求到达时展开折叠的清单（PC-8） */
+const force = ref(0)
 async function reveal() {
   const f = focus.value
   if (!f || f.module !== props.id || !rows.value.some(r => r.element.name === f.element)) return
+  if (props.fold && !root.value?.querySelector('[data-element]')) {
+    force.value++
+    await nextTick()
+  }
   if (!all.value && !shown.value.some(r => r.element.name === f.element)) {
     all.value = true
     await nextTick()
@@ -102,7 +108,7 @@ watch([focus, rows], () => nextTick(reveal))
 
 <template>
   <div ref="root" class="module-surface-wrap">
-    <Section v-if="surface" title="表面" :count="surface.elements.length" class="module-surface">
+    <Section v-if="surface" title="表面元素" :count="surface.elements.length" class="module-surface" :fold="fold" :force="force">
       <dl v-if="sm && sm.w !== null" class="dims">
         <dt>表面宽度 W</dt>
         <dd>{{ sm.w }} <span class="muted">个元素被外部模块引用</span></dd>

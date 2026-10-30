@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
-import { callbackText, isCallbackVia, moduleName } from '@/model'
+import { callbackText, isCallbackVia, moduleName, purposeOf } from '@/model'
 import ChangeBadge from './ChangeBadge.vue'
 import { RELATION_TYPE_LABELS } from '../shared/labels'
 
@@ -20,6 +20,8 @@ const firstSentence = computed(() => {
   const s = cut >= 0 ? d.slice(0, cut + (d[cut] === '。' ? 1 : 0)) : d
   return s.length > SUMMARY_MAX ? `${s.slice(0, SUMMARY_MAX)}…` : s
 })
+/** PC-10：聚合边面板的原始关系先给目的 */
+const purpose = computed(() => (props.summary && r.value ? purposeOf(r.value) : null))
 /** L24：经回调的一条标「经回调」 */
 const callback = computed(() => (r.value && desk.index.value && isCallbackVia(r.value.via) ? callbackText(desk.index.value, r.value.id) : null))
 /** K5：有代码事实时标出证实 */
@@ -40,6 +42,7 @@ const fact = computed(() => desk.facts.report.value?.relations.get(props.id)?.st
     <span v-if="callback" class="hook" :title="callback">回调</span>
     <span v-if="fact === 'confirmed'" class="fact ok" title="已被代码证实">✓</span>
     <span v-else-if="fact === 'unconfirmed'" class="fact" title="未被代码证实">?</span>
+    <span v-if="purpose && !purpose.pending" class="purpose">{{ purpose.text }}</span>
     <span v-if="firstSentence" class="summary" :title="r.description">{{ firstSentence }}</span>
   </li>
 </template>
@@ -65,6 +68,12 @@ const fact = computed(() => desk.facts.report.value?.relations.get(props.id)?.st
 .if {
   font-size: 11.5px;
   color: var(--text-2);
+}
+
+.purpose {
+  flex-basis: 100%;
+  font-size: 12.5px;
+  font-weight: 600;
 }
 
 .summary {

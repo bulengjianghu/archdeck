@@ -239,3 +239,43 @@ export function checkDependency(
   const targetIds = [...new Set(checks.map(c => c.to))]
   return { verdict, notes, checks, targets: targetIds.map(id => moduleBrief(index, entryOf, id)).filter((b): b is ModuleBrief => !!b) }
 }
+
+/** PC-4：协作的一行——同一方向、同一对端的关系合成一行 */
+export interface Collaboration {
+  dir: 'in' | 'out'
+  /** 对端：另一端在「本模块与另一端的最近共同祖先」之下的那个子模块；参与者就是它自己 */
+  peer: string
+  /** 合并的关系 ID，按声明次序 */
+  relations: string[]
+}
+
+/**
+ * PC-4：模块的协作——一端在子树内、另一端在子树外的关系（与 describeModule 同口径），按（方向，对端）合并；
+ * 对端取画布上与本模块相邻的那个节点（另一端在最近共同祖先之下的那一级），入在前、出在后，各按首条关系的声明次序。
+ */
+export function collaborationsOf(index: ModelIndex, id: string): Collaboration[] {
+  const own = index.pathOf.get(id)
+  if (!own) return []
+  const inside = (x: string) => !!index.pathOf.get(x)?.includes(id)
+  const peerOf = (other: string) => {
+    const path = index.pathOf.get(other)
+    if (!path) return other
+    let k = 0
+    while (k < path.length && k < own.length && path[k] === own[k]) k++
+    return path[k] ?? other
+  }
+  const rows = new Map<string, Collaboration>()
+  for (const r of index.relations.values()) {
+    const f = inside(r.from)
+    const t = inside(r.to)
+    if (f === t) continue
+    const dir = f ? 'out' : 'in'
+    const peer = peerOf(f ? r.to : r.from)
+    const key = `${dir}:${peer}`
+    const row = rows.get(key)
+    if (row) row.relations.push(r.id)
+    else rows.set(key, { dir, peer, relations: [r.id] })
+  }
+  const list = [...rows.values()]
+  return [...list.filter(c => c.dir === 'in'), ...list.filter(c => c.dir === 'out')]
+}

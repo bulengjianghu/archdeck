@@ -21,7 +21,7 @@ import { useOpenPreview } from '../shared/preview'
 import { ELEMENT_KIND_LABEL } from '../display/labels'
 import Section from './Section.vue'
 
-const props = defineProps<{ id: string }>()
+const props = defineProps<{ id: string; /** PC-10：核对卡的清单缺省折叠 */ fold?: boolean }>()
 const desk = useDesk()
 const idx = computed(() => desk.index.value!)
 const r = computed(() => idx.value.relations.get(props.id)!)
@@ -77,7 +77,7 @@ const segText = (s: CarrierSegment) => CARRIER_ROLE_TEXT[s.role](name(s.from), n
 </script>
 
 <template>
-  <Section v-if="carrier" title="承载" class="relation-carrier" data-sec="boundary.carrier">
+  <Section v-if="carrier" title="承载" class="relation-carrier" data-sec="boundary.carrier" :fold="fold" :count="carrier.segments.length">
     <p class="verdict">
       <span class="badge">{{ CARRIER_TEMPLATE_LABELS[carrier.template] }}</span>
       <span class="badge v" :data-verdict="carrier.verdict">{{ CARRIER_VERDICT_LABELS[carrier.verdict] }}</span>

@@ -1,16 +1,17 @@
 <script setup lang="ts">
 /**
- * 属性面板：按选中分派（V2，ADR-0012）。结构视角：选中的对象，无选中时为当前父模块（根层显示系统）；
- * 运行视角：选中步骤 → 步骤面板，选中场景 → 场景面板，其他对象 → 运行信息在上、模块信息折叠在下（V6）。
- * 结构视角下模式切换映射不过去而被清空的选中（V12，droppedSelection）：顶部说明原选中没有对应的依赖边。
+ * 属性栏的内容：按选中分派（V2，ADR-0012），每种对象的面板都是「头部 + 理解 · 核对 · 相关资料三卡」（V15、PC-1，ADR-0053）。
+ * 结构视角：选中的对象，无选中时为当前父模块（根层显示系统）；运行视角：选中步骤 → 步骤面板，选中场景 → 场景面板，
+ * 其他对象的理解卡首节为运行信息（V6）。结构视角下模式切换映射不过去而被清空的选中（V12，droppedSelection）：顶部说明原选中没有对应的依赖边。
  * 代码依赖叠加线（K10）→ 代码依赖面板；耦合线（J7）→ 耦合面板；端口（L13）→ 端口面板（K11）。草图画布下（X7，ADR-0025）：换成草图面板。
  */
 import { computed, provide } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import ScenarioPanel from './ScenarioPanel.vue'
-import StepPanel from './StepPanel.vue'
 import RunSection from './RunSection.vue'
+import { RUN_FIRST } from './related'
+import StepPanel from './StepPanel.vue'
 import ModulePanel from './ModulePanel.vue'
 import RelationPanel from './RelationPanel.vue'
 import EdgePanel from './EdgePanel.vue'
@@ -25,12 +26,6 @@ import StratumPanel from './StratumPanel.vue'
 import SketchPanel from '../sketch/SketchPanel.vue'
 
 const desk = useDesk()
-const run = computed(() => desk.perspective.value === 'run')
-/** 运行视角：模块信息整体折叠在外层 details（V6），⑤ 段的折叠由外层代行——内层不再叠加，展开即全展开（ADR-0050 实现要点、评审轮 1 B1） */
-provide(
-  'panelUnfold',
-  computed(() => run.value),
-)
 /** V12：切到结构视角时原选中（关系、视图边、端口）没有对应的依赖边，被清空 */
 const dropped = computed(() => {
   const d = desk.droppedSelection.value
@@ -44,6 +39,12 @@ const dropped = computed(() => {
   if (d.kind === 'port') return `端口 ${idx.interfaces.get(d.id)?.name ?? d.id}`
   return '选中的对象'
 })
+/** V6：运行视角下模块、关系、聚合边、参与者、端口、系统的理解卡首节是运行信息（由这里注入，对象面板不引用它） */
+const RUN_KINDS = new Set(['module', 'relation', 'edge', 'actor', 'port', 'system'])
+provide(
+  RUN_FIRST,
+  computed(() => (desk.perspective.value === 'run' && target.value && RUN_KINDS.has(target.value.kind) ? RunSection : null)),
+)
 const target = computed(() => {
   const idx = desk.index.value
   const s = desk.selected.value
@@ -78,23 +79,12 @@ const target = computed(() => {
         <CouplePanel v-else-if="target.kind === 'couple'" :key="`c:${target.id}`" />
         <CyclePanel v-else-if="target.kind === 'cycle'" :id="target.id" :key="`y:${target.id}`" />
         <StratumPanel v-else-if="target.kind === 'stratum'" :id="target.id" :key="`s:${target.id}`" />
-        <RunSection
-          v-if="run && target.kind !== 'file' && target.kind !== 'dep' && target.kind !== 'couple' && target.kind !== 'cycle' && target.kind !== 'stratum'"
-        />
-        <component
-          :is="run ? 'details' : 'div'"
-          v-if="target.kind !== 'file' && target.kind !== 'dep' && target.kind !== 'couple' && target.kind !== 'cycle' && target.kind !== 'stratum'"
-          class="structure"
-          :open="run ? false : undefined"
-        >
-          <summary v-if="run" class="structure-head">模块信息</summary>
-          <ModulePanel v-if="target.kind === 'module'" :id="target.id" :key="`m:${target.id}`" />
-          <RelationPanel v-else-if="target.kind === 'relation'" :id="target.id" :key="`r:${target.id}`" />
-          <EdgePanel v-else-if="target.kind === 'edge'" :id="target.id" :key="`e:${target.id}`" />
-          <ActorPanel v-else-if="target.kind === 'actor'" :id="target.id" :key="`a:${target.id}`" />
-          <PortPanel v-else-if="target.kind === 'port'" :id="target.id" :key="`p:${target.id}`" />
-          <SystemPanel v-else />
-        </component>
+        <ModulePanel v-else-if="target.kind === 'module'" :id="target.id" :key="`m:${target.id}`" />
+        <RelationPanel v-else-if="target.kind === 'relation'" :id="target.id" :key="`r:${target.id}`" />
+        <EdgePanel v-else-if="target.kind === 'edge'" :id="target.id" :key="`e:${target.id}`" />
+        <ActorPanel v-else-if="target.kind === 'actor'" :id="target.id" :key="`a:${target.id}`" />
+        <PortPanel v-else-if="target.kind === 'port'" :id="target.id" :key="`p:${target.id}`" />
+        <SystemPanel v-else />
       </template>
     </template>
   </div>
@@ -110,18 +100,36 @@ const target = computed(() => {
 }
 
 .panel {
+  min-height: 100%;
   font-size: 13.5px;
-  padding-bottom: 24px;
+  padding-bottom: 16px;
+  background: var(--surface-2);
 }
 
+/* V15a：头部与属性栏头合并，粘在属性栏顶部；右上角留给属性栏的 ×（DeskView） */
 .panel .head {
-  padding: 16px 18px 12px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 8px 34px 6px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 
 .panel h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.35;
+}
+
+/* PC-1：卡片里的节去掉面板级的分隔与边距（清单是一行一个折叠标题） */
+.panel .card .section {
+  padding: 3px 0;
+  border-top: 0;
+}
+
+.panel .card .section h3 {
+  margin-bottom: 2px;
 }
 
 .panel .title {
@@ -224,19 +232,9 @@ const target = computed(() => {
   color: var(--text-3);
 }
 
-.panel .structure-head {
-  padding: 10px 18px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-3);
-  cursor: pointer;
-  border-top: 1px solid var(--border);
-}
-
 .panel .src {
-  padding: 12px 18px 0;
-  font-size: 11.5px;
-  border-top: 1px solid var(--border);
+  padding: 10px 14px 0;
+  font-size: 11px;
   word-break: break-all;
 }
 

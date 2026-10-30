@@ -201,7 +201,9 @@ const governanceCount = computed(() => (r.value ? r.value.violations.length + li
           <dd v-else class="muted">无（npm run arch -- baseline 生成）</dd>
         </dl>
       </details>
-      <p class="hint muted">图上缺省叠加代码事实（「显示」面板可关闭）：虚线加 ? 为未证实的关系，点线为未解释的交互，红色为基线外的违规，↻ 为本层的环。</p>
+      <p class="hint muted">
+        图上缺省叠加代码事实（图例「代码事实」一行可关闭）：虚线加 ? 为未证实的关系，点线为未解释的交互，红色为基线外的违规，↻ 为本层的环。
+      </p>
     </template>
   </Section>
 

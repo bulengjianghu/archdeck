@@ -59,3 +59,4 @@ export function scenarioModules(index: ModelIndex, plan: ScenarioPlan): Set<stri
     for (const id of [f.from, f.to]) for (const m of index.pathOf.get(id) ?? []) if (m !== index.rootId) out.add(m)
   return out
 }
+

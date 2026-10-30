@@ -53,7 +53,7 @@ async function mountWith(url: string, comp: unknown = Panel, withFacts = true) {
   desk.attachRouter(router)
   await desk.init()
   await flushPromises()
-  const wrapper = mount(comp as never, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+  const wrapper = mount(comp as never, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
   await flushPromises()
   return { wrapper, desk }
 }
@@ -98,8 +98,7 @@ describe('模块面板：端口一节（K11）与「知识」行旁的子类 / �
 
   it('知识：基类所在模块列「子类 N」、组装方列「组装 N」并标组装根，单击展开两端与文件证据', async () => {
     const { wrapper } = await mountWith('/?level=infra.framework&sel=m:infra.framework.extra')
-    // G11（V15c）：「代码事实 · 知识」在 ⑤ 缺省折叠，展开再断言
-    await wrapper.find('[data-sec="evidence.knowledge"] .fold').trigger('click')
+    // PC-8：「代码事实 · 知识」是核对卡的清单（panelUnfold 展开全部）
     await flushPromises()
     const section = wrapper.findAll('section').find(x => x.text().includes('代码事实 · 知识'))!
     expect(section.text()).toContain('子类 1')
@@ -108,8 +107,6 @@ describe('模块面板：端口一节（K11）与「知识」行旁的子类 / �
     expect(section.find('.fact-list').text()).toContain('Core')
     expect(section.find('.fact-list').text()).toContain('src/app/s.ts')
     const root = await mountWith('/?level=domain.models&sel=m:domain.models.core')
-    await root.wrapper.find('[data-sec="evidence.knowledge"] .fold').trigger('click')
-    await flushPromises()
     const s2 = root.wrapper.findAll('section').find(x => x.text().includes('代码事实 · 知识'))!
     expect(s2.text()).toContain('组装根')
     expect(s2.text()).toContain('组装 1')
@@ -132,14 +129,14 @@ describe('V2 画布端口记号的单击', () => {
     const { desk } = await mountWith('/?level=app', Panel, false)
     const marks = mount(PortMarks, {
       props: { moduleId: 'app.solution', ports: { side: 'top', items: [{ id: 'if.plan', name: 'Plan', implementers: 1 }] } },
-      global: { provide: { [DESK_STATE as symbol]: desk } },
+      global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } } },
     })
     expect(marks.find('.port-mark').attributes('aria-label')).toBe('端口 Plan，实现者 1')
     await marks.find('.port-mark').trigger('click')
     expect(desk.selection.value).toEqual({ kind: 'port', id: 'if.plan' })
     const merged = mount(PortMarks, {
       props: { moduleId: 'app.solution', ports: { side: 'left', items: [], merged: 5 } },
-      global: { provide: { [DESK_STATE as symbol]: desk } },
+      global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } } },
     })
     expect(merged.text()).toContain('端口 ×5')
     await merged.find('.port-mark').trigger('click')

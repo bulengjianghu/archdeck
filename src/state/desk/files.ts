@@ -93,9 +93,18 @@ export function createFiles({ state, index, view, sync, design }: FilesInputs) {
     })
   }
 
+  /** PC-3：不变式的 ADR 链接——编号对到源码清单里的 ADR 文件（不在清单里为 null） */
+  const adrLink = (n: number) => {
+    const ix = index.value
+    if (!ix) return { label: adrLabel(n), file: null }
+    const file = adrFile(local.value?.files ?? [], adrDir(ix.model.system), n)
+    return { label: adrLabel(n), file, title: file ? local.value?.adrTitles?.[file] : undefined }
+  }
+
   return {
     payload,
     adrsOf,
+    adrLink,
     ancestorAdrsOf,
     ownership,
     tree,

@@ -69,7 +69,7 @@
 ## 后果
 
 - 删除 `DisplayPanel.vue`、`display/NodeSettings.vue`；新增 `display/Legend.vue`（外壳）、`display/LegendToggle.vue`（开关行）、`display/DisplayMenu.vue`（「显示 ▾」）、`display/gloss.ts`（悬停释义）、`shared/guide.ts`（打开帮助的注入键）；`useEvolutionPrefs` 增加热度口径 `useHeatKind` / `heatControls`；图例行文字收进 `labels.ts`。
-- 规则 L45 改写、L47 修订、新增 L48–L51；L8、L9、L18a、L19、L19a、O12、V8、K9、J5 的「所在」与措辞随之改；需求 W-2、W-10、GV-6、HS-4 改写；验收 6.36 由 6.39 取代。
+- 规则 L45 改写、L47 修订、新增 L48–L51；L8、L9、L18a、L19、L19a、O12、V8、K9、J5 的「所在」与措辞随之改；需求 W-2、W-10、GV-6、HS-4 改写；验收 6.36 由 6.40 取代。
 - 描述：`present.canvas.legend` 及其子模块按代码重写。
 - E2E：display、legend、evolution、governance、ports、run-default 按新结构更新。
 

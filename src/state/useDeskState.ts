@@ -44,6 +44,7 @@ import {
   type ViewAction,
   type ViewState,
   EMPTY_WORKSPACE,
+  docKey,
   dockShown,
   workspaceTransition,
   type DocRef,
@@ -392,6 +393,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     dispatch: workspaceDispatch,
     /** 打开一份资料：不固定为预览标签（WS-5） */
     open: (doc: DocRef, pin = false) => workspaceDispatch({ type: 'open', doc, pin }),
+    /** 这份资料是否已在资料区开着（任一组；PC-9 的「已打开」） */
+    isOpen: (doc: DocRef) => workspaceState.value.groups.some(g => g.tabs.some(t => t.id === docKey(doc))),
     setProps: (open: boolean) => workspaceDispatch({ type: 'setProps', open }),
   }
 

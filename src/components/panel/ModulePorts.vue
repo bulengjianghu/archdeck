@@ -9,7 +9,7 @@ import Section from './Section.vue'
 import PortEntry from './PortEntry.vue'
 import { focusSurfaceElement } from './surfaceFocus'
 
-const props = defineProps<{ id: string }>()
+const props = defineProps<{ id: string; /** PC-8：核对卡的清单缺省折叠 */ fold?: boolean }>()
 const desk = useDesk()
 const ports = computed(() => desk.facts.portsOf(props.id))
 /** 端口 → 表面上对应的端口元素（只在结构视角） */
@@ -22,7 +22,7 @@ const elementOf = computed(() => {
 </script>
 
 <template>
-  <Section v-if="ports.length" title="端口（定义 · 实现者 · 使用者）" :count="ports.length">
+  <Section v-if="ports.length" title="端口（定义 · 实现者 · 使用者）" :count="ports.length" :fold="fold">
     <div v-for="p in ports" :key="p.port" class="entry">
       <button
         v-if="elementOf.get(p.port)"

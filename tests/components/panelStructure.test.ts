@@ -56,7 +56,7 @@ async function open(url: string, opts: { facts?: boolean } = {}) {
   desk.attachRouter(router)
   await desk.init()
   await flushPromises()
-  const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+  const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
   await flushPromises()
   return { desk, wrapper }
 }
@@ -299,7 +299,7 @@ describe('Q15：根层「架构治理」共用件一行的入度最高的共用�
     desk.attachRouter(router)
     await desk.init()
     await flushPromises()
-    const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+    const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
     await flushPromises()
     const top = desk.evolution.shared.value!.topFanIn!
     expect(top.module).toBe('domain.models')

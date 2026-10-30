@@ -107,7 +107,7 @@ async function open(url: string, opts: { facts?: boolean } = {}) {
   desk.facts.surfaceOf('lib')
   desk.facts.surfaceOf('bus')
   await flush()
-  const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+  const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
   await flush()
   return { desk, wrapper }
 }
@@ -163,7 +163,8 @@ describe('A6：依赖边面板「文件依赖」按元素分组', () => {
 describe('C7：模块「表面」一节', () => {
   it('结构视角在「结构」之后：W / B、元素清单（种类 · 声明状态 · 扇入 · 使用它的模块）按扇入排序', async () => {
     const { wrapper, desk } = await open('/?v=s&sel=m:lib')
-    const sections = wrapper.findAll('.module-panel > section, .module-panel > div > section').map(x => x.classes())
+    // PC-8：结构指标与表面元素是核对卡相邻的两个清单
+    const sections = wrapper.findAll('[data-card="check"] .lists > section, [data-card="check"] .lists > div > section').map(x => x.classes())
     const iStructure = sections.findIndex(c => c.includes('module-structure'))
     const iSurface = sections.findIndex(c => c.includes('module-surface'))
     expect(iStructure).toBeGreaterThanOrEqual(0)
@@ -241,7 +242,8 @@ describe('D5、L22：关系面板「承载」一节', () => {
   it('齐全：模板、判定、各段的元素与文件:行', async () => {
     const { wrapper } = await open('/?sel=r:r1')
     const sec = wrapper.find('.relation-carrier')
-    expect(sec.find('h3').text()).toBe('承载')
+    // PC-10：承载是核对卡的清单，标题带段数
+    expect(sec.find('h3').text()).toMatch(/^承载\d+$/)
     expect(sec.find('.verdict').text()).toContain('直接')
     expect(sec.find('.verdict').text()).toContain('齐全')
     const seg = sec.find('.segment')

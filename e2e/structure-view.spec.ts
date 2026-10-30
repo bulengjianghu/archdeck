@@ -4,7 +4,7 @@
  * 表面展开（C6、L20）、影响面查询（K15、K15b）、分层总览（O13③）、退出场景回到进入前的视角（V11）。
  */
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, openDesk, query, collapseDisplay } from './helpers'
+import { graphNode, openDesk, openCheckList, query, collapseDisplay } from './helpers'
 
 /** 本层模块节点的位置（Vue Flow 节点的 transform）与尺寸 */
 async function boxes(page: Page) {
@@ -213,6 +213,8 @@ test('L20②（ADR-0036）：选中 A 再换选中 B，节点 bbox 不变', asyn
 test('K15、K15b：结构视角选中模块后在面板查询影响面，按距离标在节点上，闭包外变淡', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra.framework&v=s&sel=m:infra.framework.contracts')
   const marks = page.getByTestId('impact-mark')
+  // PC-8：影响面查询在核对卡的「结构指标」清单里
+  await openCheckList(page, 'boundary.structure')
   await expect(page.locator('.module-structure .segmented button.on')).toHaveText('不看')
   await expect(marks).toHaveCount(0)
   await page.locator('.module-structure .segmented button[data-choice="in"]').click()

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /**
- * 面板信息骨架（G11，ADR-0050）：V15 五段段序与视角敏感段、V15a 头部徽标槽位表、V15b ③ 需要注意、V15c ④ 出入边汇总与 ⑤ 折叠带计数。
+ * 属性栏三卡（ADR-0053）：V15 头部 + 理解 · 核对 · 相关资料、V15a 头部徽标槽位表、V15b 核对卡的分项、V15c 核对卡的清单；
+ * PC-1–PC-10（三卡骨架、展开、五问、协作、悬停、六行、异常平铺、清单、相关资料、其他对象）。
  */
 import { afterEach, describe, expect, it } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
@@ -8,27 +9,37 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import Panel from '../../src/components/panel/Panel.vue'
 import { createDeskState } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
-import { orderNotices, splitSignalCount, typeSummary, type PanelNotice } from '../../src/components/panel/panelNotices'
+import { orderNotices, splitSignalCount, type PanelNotice } from '../../src/components/panel/panelNotices'
+import { HAS_EXPLAINER } from '../../src/components/panel/related'
+import { checkSummary, moduleCheckRows, rowsFromNotices, type CheckRow } from '../../src/components/panel/panelCheck'
+import { useRelationHover } from '../../src/components/panel/surfaceFocus'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 import type { FileDep } from '../../src/model'
 
 /** 跳转目标是模块级的单值：测试里每个用例结束卸载面板，免得早先面板的监听先消费掉目标 */
 const mounted: VueWrapper[] = []
 
-async function mountPanel(url: string, files = sampleFiles()) {
+async function mountPanel(url: string, files = sampleFiles(), provide: Record<string | symbol, unknown> = {}) {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
   await router.push(url)
   const desk = createDeskState(async () => ({ dir: 'model/test', files }))
   desk.attachRouter(router)
   await desk.init()
-  const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+  const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk, ...provide }, plugins: [router] } })
   mounted.push(wrapper)
   await flushPromises()
   return { wrapper, desk }
 }
 
-/** 模块面板的直接子节，按出现次序给出标题文字（折叠节含 ▸ 与计数） */
-const titlesOf = (wrapper: VueWrapper) => wrapper.findAll('.module-panel > .section').map(s => s.find('h3')!.text())
+/** 卡片次序（data-card） */
+const cardsOf = (wrapper: VueWrapper) => wrapper.findAll('.card').map(c => c.attributes('data-card'))
+/** 展开核对卡（已展开时不动） */
+async function openCheck(wrapper: VueWrapper) {
+  const t = wrapper.find('[data-card="check"] .card-toggle')
+  if (t.attributes('aria-expanded') === 'false') await t.trigger('click')
+}
+/** 核对卡清单的标题（折叠节含 ▸ 与计数） */
+const listsOf = (wrapper: VueWrapper) => wrapper.findAll('[data-card="check"] .lists .section h3').map(h => h.text())
 
 /** 带代码事实源的面板挂载（G11 波 2 铺开的 ③/⑤ 断言需要 facts） */
 async function mountWithSource(
@@ -51,146 +62,87 @@ afterEach(() => {
   while (mounted.length) mounted.pop()!.unmount()
 })
 
-describe('V15：五段段序', () => {
-  it('② 说明在最前，层的「可依赖的层」跟在其后；③ 无异常不出现；⑤ 折叠节在 ④ 之后，footer 最底', async () => {
+describe('V15、PC-1：头部 + 三卡', () => {
+  it('模块：头部在最前，其后理解、核对；没有图解也不在任何场景里时没有相关资料卡；出处 footer 最底', async () => {
     const { wrapper } = await mountPanel('/?sel=m:infra')
-    const titles = titlesOf(wrapper)
-    expect(titles[0]).toContain('说明')
-    expect(titles[1]).toContain('可依赖的层')
-    expect(titles.join('|')).not.toContain('需要注意')
-    // ④：本层模块在 ② 之后
-    const boundary = titles.findIndex(t => t.includes('本层模块'))
-    expect(boundary).toBeGreaterThan(1)
-    // ⑤：折叠节（确认）在 ④ 之后；出处 footer 是最后一个元素
-    const secs = wrapper.findAll('.module-panel > .section')
-    const confirmSec = secs.find(x => x.find('button.fold').exists() && x.find('button.fold').text().includes('确认'))
-    expect(confirmSec).toBeTruthy()
-    expect(secs.indexOf(confirmSec!)).toBeGreaterThan(boundary)
-    const kids = wrapper.find('.module-panel').element.children
+    const kids = [...wrapper.find('.module-panel').element.children]
+    expect(kids[0].tagName).toBe('HEADER')
+    expect(cardsOf(wrapper)).toEqual(['understand', 'check'])
     expect(kids[kids.length - 1].classList.contains('src')).toBe(true)
   })
 
-  it('交互视角 ④ 没有「结构 / 表面」；结构视角 ④ 在端口之后是结构、表面', async () => {
-    const files = sampleFiles({
-      'modules/zz-facts.yaml':
-        'modules:\n  - { id: infra.framework.extra, parent: infra.framework, name: Extra, responsibility: x, codeRefs: [src/framework/**] }\n  - { id: app.solution.core, parent: app.solution, name: Core, responsibility: x, codeRefs: [src/app/**] }',
-    })
-    const dep = (from: string, to: string): FileDep => ({ from, to, via: to, kind: 'value', line: 1, uses: true, invokes: true })
-    const source = {
-      tree: async () => ({ status: 'local', root: '/repo', files: ['src/app/s.ts', 'src/framework/e.ts'], packages: {} }),
-      file: async () => null,
-      exports: async () => [],
-      facts: async () => ({ deps: { deps: [dep('src/framework/e.ts', 'src/app/s.ts')], external: {}, parsed: 2 }, baseline: null, ledger: [] }),
-    } as never
-    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
-    await router.push('/?v=s&sel=m:app.solution')
-    const desk = createDeskState(async () => ({ dir: 'model/test', files }), { source })
-    desk.attachRouter(router)
-    await desk.init()
+  it('PC-9：参与场景的模块有相关资料卡，列场景；单击打开场景（时序图标签按 WS-8 打开），已打开的标「已打开」', async () => {
+    const { wrapper, desk } = await mountPanel('/?level=infra.framework&sel=m:infra.framework.sm', scenarioFiles())
+    expect(cardsOf(wrapper)).toEqual(['understand', 'check', 'related'])
+    const items = wrapper.findAll('[data-testid="related"] [data-doc="scenario"]')
+    expect(items.length).toBeGreaterThan(0)
+    await items[0].trigger('click')
     await flushPromises()
-    const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
-    mounted.push(wrapper)
-    await flushPromises()
-    const titles = titlesOf(wrapper)
-    // ④ 段内：结构指标与影响面、表面贴在结构块首（端口之后）；样例模块没有入口，表面节不出现
-    const ports = titles.findIndex(t => t.includes('端口'))
-    const structure = titles.findIndex(t => t.startsWith('结构'))
-    expect(structure).toBeGreaterThan(ports)
-    // 切到交互视角：结构消失（④ 视角敏感）
-    desk.setMode('interaction')
-    await flushPromises()
-    const after = titlesOf(wrapper).join('|')
-    expect(after).not.toContain('结构')
+    expect(desk.playback.value?.scenarioId).toBeTruthy()
+    expect(desk.workspace.isOpen({ kind: 'sequence' })).toBe(true)
+    expect(wrapper.find('[data-testid="related"] .opened').text()).toContain('已打开')
+  })
+
+  it('PC-9：有图解的模块列图解；单击为预览标签、双击固定（WS-5）；没有图解判定时不列', async () => {
+    const yes = { [HAS_EXPLAINER as symbol]: (id: string) => id === 'infra' }
+    const { wrapper, desk } = await mountPanel('/?sel=m:infra', sampleFiles(), yes)
+    const item = wrapper.find('[data-testid="related"] [data-doc="explainer"]')
+    expect(item.text()).toContain('图解')
+    await item.trigger('click')
+    const tab = () => desk.workspace.state.value.groups[0].tabs.find(t => t.id === 'exp:infra')
+    expect(tab()?.preview).toBe(true)
+    expect(wrapper.find('[data-doc="explainer"]').text()).toContain('已打开')
+    await wrapper.find('[data-doc="explainer"]').trigger('dblclick')
+    expect(tab()?.preview).toBe(false)
+    const none = await mountPanel('/?sel=m:app')
+    expect(none.wrapper.find('[data-doc="explainer"]').exists()).toBe(false)
   })
 })
 
-describe('L46 波 3 收敛：② 说明长文折叠与 ④ 清单「+N」', () => {
-  const FOLDS =
-    'modules:\n' +
-    '  - id: app.big\n' +
-    '    parent: app\n' +
-    '    name: Big\n' +
-    '    responsibility: 职责\n' +
-    '    abstraction: 原则\n' +
-    '    provides: [if.f1, if.f2, if.f3, if.f4, if.f5, if.f6]\n' +
-    '    children:\n' +
-    '      - { id: app.big.c1, name: 一号, responsibility: r }\n' +
-    '      - { id: app.big.c2, name: 二号, responsibility: r }\n' +
-    '      - { id: app.big.c3, name: 三号, responsibility: r }\n' +
-    '      - { id: app.big.c4, name: 四号, responsibility: r }\n' +
-    '      - { id: app.big.c5, name: 五号, responsibility: r }\n' +
-    '      - { id: app.big.c6, name: 六号, responsibility: r }\n' +
-    'interfaces:\n' +
-    "  - { id: if.f1, name: F1, owner: app.big, signature: 'f1()' }\n" +
-    "  - { id: if.f2, name: F2, owner: app.big, signature: 'f2()' }\n" +
-    "  - { id: if.f3, name: F3, owner: app.big, signature: 'f3()' }\n" +
-    "  - { id: if.f4, name: F4, owner: app.big, signature: 'f4()' }\n" +
-    "  - { id: if.f5, name: F5, owner: app.big, signature: 'f5()' }\n" +
-    "  - { id: if.f6, name: F6, owner: app.big, signature: 'f6()' }\n"
-
-  it('④ 对外接口与子模块清单超 4 个收「+N」（悬停看全量、单击展开，与头部标签同款）', async () => {
-    const { wrapper } = await mountPanel('/?sel=m:app.big', sampleFiles({ 'modules/zz-folds.yaml': FOLDS }))
-    // 子模块：先列 4 个，+2 的 title 列出其余，单击展开成 6 个再收起
-    const kids = wrapper.findAll('[data-sec="boundary.children"] .child')
-    expect(kids).toHaveLength(4)
-    const more = wrapper.find('[data-sec="boundary.children"] .badge-more')
-    expect(more.text()).toBe('+2')
-    expect(more.attributes('title')).toContain('五号、六号')
-    await more.trigger('click')
-    expect(wrapper.findAll('[data-sec="boundary.children"] .child')).toHaveLength(6)
-    await wrapper.find('[data-sec="boundary.children"] .badge-more').trigger('click')
-    expect(wrapper.findAll('[data-sec="boundary.children"] .child')).toHaveLength(4)
-    // 对外接口：同样先列 4 个、+2
-    const ifaces = wrapper.findAll('[data-sec="boundary.interfaces"] .iface')
-    expect(ifaces).toHaveLength(4)
-    expect(wrapper.find('[data-sec="boundary.interfaces"] .badge-more').text()).toBe('+2')
-    // ② 说明：内容包进折叠容器（jsdom 没有布局、量不出溢出，展开按钮的显隐逻辑由 E2E 的 panel-metrics 与浏览器验证）
-    expect(wrapper.find('.purpose-text').exists()).toBe(true)
-    expect(wrapper.find('.purpose-text .principle').exists()).toBe(true)
+describe('PC-2：卡片的展开', () => {
+  it('理解卡缺省展开、可收起，收起后卡头给一句话职责；核对卡没有 ⚠ 时收起、卡头给结论', async () => {
+    const { wrapper } = await mountPanel('/?sel=m:infra')
+    const u = wrapper.find('[data-card="understand"] .card-toggle')
+    expect(u.attributes('aria-expanded')).toBe('true')
+    await u.trigger('click')
+    expect(wrapper.find('[data-card="understand"] .card-body').exists()).toBe(false)
+    expect(wrapper.find('[data-card="understand"] .card-sum').text()).not.toBe('')
+    const c = wrapper.find('[data-card="check"] .card-toggle')
+    expect(c.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('[data-card="check"] .card-sum').text()).toBe('暂无核对结果')
   })
 
-  it('展开态不跨选中保持：展开「+N」后换选中再回来，回到缺省（收起）', async () => {
-    const { wrapper, desk } = await mountPanel('/?sel=m:app.big', sampleFiles({ 'modules/zz-folds.yaml': FOLDS }))
-    await wrapper.find('[data-sec="boundary.children"] .badge-more').trigger('click')
-    expect(wrapper.findAll('[data-sec="boundary.children"] .child')).toHaveLength(6)
-    await desk.select({ kind: 'module', id: 'app.solution' })
+  it('换选中即回缺省：收起理解卡后换选中再回来，理解卡重新展开', async () => {
+    const { wrapper, desk } = await mountPanel('/?sel=m:infra')
+    await wrapper.find('[data-card="understand"] .card-toggle').trigger('click')
+    desk.select({ kind: 'module', id: 'app' })
     await flushPromises()
-    expect(wrapper.find('[data-sec="boundary.children"]')).toBeDefined()
-    await desk.select({ kind: 'module', id: 'app.big' })
+    desk.select({ kind: 'module', id: 'infra' })
     await flushPromises()
-    expect(wrapper.findAll('[data-sec="boundary.children"] .child')).toHaveLength(4)
+    expect(wrapper.find('[data-card="understand"] .card-toggle').attributes('aria-expanded')).toBe('true')
   })
 })
 
-describe('V15a：① 头部徽标槽位表', () => {
-  it('槽位次序 ID → 类别 → 状态 → 核心 → 标签 → 变更 → 确认；标签超过 2 个收「+N」，悬停看全量、单击展开', async () => {
+describe('V15a：头部徽标槽位表', () => {
+  it('槽位次序 ID → 类别 → 状态 → 核心 → 标签 → 变更；标签超过 2 个收「+N」；确认徽标不在头部（在核对卡的「确认」行）', async () => {
     const files = sampleFiles({
       'modules/zz-tags.yaml':
         'modules:\n  - { id: app.tagged, parent: app, kind: subsystem, name: Tagged, role: core, status: target, responsibility: x, tags: [核心链路, 高频, 易变] }',
     })
     const { wrapper } = await mountPanel('/?sel=m:app.tagged', files)
     const badges = wrapper.findAll('.module-panel .head .badges > *')
-    const texts = badges.map(b => b.text())
-    expect(texts[0]).toBe('app.tagged')
-    expect(texts[1]).toBe('subsystem')
-    expect(texts[2]).toBe('目标态')
-    expect(texts[3]).toBe('核心')
-    expect(texts[4]).toBe('核心链路')
-    expect(texts[5]).toBe('高频')
-    expect(texts[6]).toBe('+1')
-    expect(texts).toContain('未确认')
-    expect(texts.indexOf('未确认')).toBeGreaterThan(texts.indexOf('+1'))
-    // 悬停看全量、单击展开
+    expect(badges.map(b => b.text())).toEqual(['app.tagged', 'subsystem', '目标态', '核心', '核心链路', '高频', '+1'])
     expect(badges[6].attributes('title')).toBe('易变')
     await badges[6].trigger('click')
     expect(wrapper.findAll('.module-panel .head .badges > *').map(b => b.text())).toEqual(expect.arrayContaining(['易变', '收起']))
+    await wrapper.find('[data-card="check"] .card-toggle').trigger('click')
+    expect(wrapper.find('[data-check="review"]').text()).toContain('未确认')
   })
 
-  it('变更槽在标签槽之后、确认徽标之前（评审轮 1 B3）：设计版本相对基线改了职责时「修改」徽标落在 +N 与确认徽标之间', async () => {
+  it('变更槽在标签槽之后（评审轮 1 B3）：设计版本相对基线改了职责时「修改」徽标在 +N 之后', async () => {
     const TAGS =
       'modules:\n  - { id: app.tagged, parent: app, kind: subsystem, name: Tagged, role: core, status: target, responsibility: x, tags: [核心链路, 高频, 易变] }'
     const base = sampleFiles({ 'modules/zz-tags.yaml': TAGS })
-    // 设计版本的描述相对基线改了 app.tagged 的职责一行 → 头部「变更」槽亮起
     const design = sampleFiles({ 'modules/zz-tags.yaml': TAGS.replace('responsibility: x', 'responsibility: y') })
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
     await router.push('/?sel=m:app.tagged')
@@ -210,13 +162,122 @@ describe('V15a：① 头部徽标槽位表', () => {
     mounted.push(wrapper)
     await flushPromises()
     const texts = wrapper.findAll('.module-panel .head .badges > *').map(b => b.text())
-    expect(texts).toContain('修改')
     expect(texts.indexOf('修改')).toBeGreaterThan(texts.indexOf('+1'))
-    expect(texts.indexOf('未确认')).toBeGreaterThan(texts.indexOf('修改'))
+    expect(texts).not.toContain('未确认')
   })
 })
 
-describe('V15b：③ 需要注意', () => {
+const STRATA =
+  'strata:\n  app:\n    - { id: top, name: 入口层, order: 1, asks: 从哪进来？, members: [app.solution], mayDependOn: [base] }\n    - { id: base, name: 基础层, order: 2, asks: 靠什么？, members: [app.fragments] }\n'
+
+describe('PC-3：模块的理解卡按五问', () => {
+  const BIG =
+    'modules:\n' +
+    '  - id: app.big\n' +
+    '    parent: app\n' +
+    '    name: Big\n' +
+    '    responsibility: 编排一切。其余是细节\n' +
+    '    summary: 编排方案的执行\n' +
+    '    abstraction: 按阶段切分\n' +
+    '    invariants: [{ text: 只经队列改状态, adr: 12 }, 不碰浏览器]\n' +
+    '    provides: [if.f1, if.f2, if.f3, if.f4, if.f5, if.f6]\n' +
+    '    children:\n' +
+    ['一', '二', '三', '四', '五', '六', '七', '八'].map((n, i) => `      - { id: app.big.c${i + 1}, name: ${n}号, responsibility: 第${n}件事 }\n`).join('') +
+    'interfaces:\n' +
+    [1, 2, 3, 4, 5, 6].map(i => `  - { id: if.f${i}, name: F${i}, owner: app.big, signature: 'f${i}()', description: 第 ${i} 个能力。细节 }\n`).join('')
+  const files = () => sampleFiles({ 'modules/zz-big.yaml': BIG })
+
+  it('① 一句话职责粗体（写了 summary 不标待提炼），职责全文折叠在下；没写 summary 的标「待提炼」', async () => {
+    const { wrapper } = await mountPanel('/?sel=m:app.big', files())
+    const one = wrapper.find('[data-testid="summary"]')
+    expect(one.text()).toMatch(/^编排方案的执行\s*全文 ▸$/)
+    expect(one.text()).not.toContain('待提炼')
+    expect(wrapper.find('.full-text').exists()).toBe(false)
+    await wrapper.find('.understand .full').trigger('click')
+    expect(wrapper.find('.full-text').text()).toContain('编排一切')
+    const other = await mountPanel('/?sel=m:app.solution')
+    expect(other.wrapper.find('[data-testid="summary"]').text()).toContain('待提炼')
+  })
+
+  it('② 怎么分：原则一句 + 子模块各一句话，超过 6 个收「+N」；③ 对外表面一行一个（名称 · 说明首句），超过 5 个收「+N」，单击展开详情', async () => {
+    const { wrapper } = await mountPanel('/?sel=m:app.big', files())
+    const split = wrapper.find('[data-sec="split"]')
+    expect(split.find('.principle').text()).toContain('按阶段切分')
+    expect(split.findAll('[data-testid="module-children"] .part')).toHaveLength(6)
+    const more = split.find('.more')
+    expect(more.text()).toBe('+2')
+    await more.trigger('click')
+    expect(wrapper.findAll('[data-testid="module-children"] .part')).toHaveLength(8)
+    expect(wrapper.find('[data-testid="module-children"]').text()).toContain('第一件事')
+    const surface = wrapper.find('[data-sec="surface"]')
+    expect(surface.findAll('.part')).toHaveLength(5)
+    expect(surface.find('.part .v').text()).toContain('第 1 个能力')
+    expect(surface.find('.more').text()).toBe('+1')
+    expect(surface.text()).not.toContain('f1()')
+    await surface.find('.part .k').trigger('click')
+    expect(wrapper.find('[data-sec="surface"]').text()).toContain('f1()')
+  })
+
+  it('⑤ 守住什么：不变式逐条，带 adr 的附 ADR 编号（文件不在源码清单里时不可点）', async () => {
+    const { wrapper } = await mountPanel('/?sel=m:app.big', files())
+    const inv = wrapper.find('[data-testid="invariants"]')
+    expect(inv.findAll('li')).toHaveLength(2)
+    expect(inv.text()).toContain('只经队列改状态')
+    expect(inv.find('.adr').text()).toBe('ADR-0012')
+    const plain = await mountPanel('/?sel=m:app.solution')
+    expect(plain.wrapper.find('[data-sec="invariants"]').exists()).toBe(false)
+  })
+
+  it('② 声明了分层的模块按层列（层名 · 层的问题），成员作链接；单成员层的模块有「包含 / 不包含」折叠块与「可依赖」链接', async () => {
+    const { wrapper, desk } = await mountPanel('/?sel=m:app', sampleFiles({ 'intent/strata.yaml': STRATA }))
+    const rows = wrapper.findAll('[data-testid="module-strata"] .part')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].text()).toContain('入口层')
+    expect(rows[0].text()).toContain('从哪进来？')
+    await rows[0].find('.members .link').trigger('click')
+    expect(desk.selection.value).toEqual({ kind: 'module', id: 'app.solution' })
+    const EXT = 'modules:\n  - { id: ext, name: Ext, kind: layer, order: 4, responsibility: x, includes: [适配器], excludes: [规则, 状态] }\n'
+    const layer = await mountPanel('/?sel=m:ext', sampleFiles({ 'modules/zz-ext.yaml': EXT }))
+    expect(layer.wrapper.find('.inc summary').text()).toBe('包含 / 不包含 1 / 2')
+    expect(layer.wrapper.find('[data-testid="layer-deps"]').text()).toContain('可依赖')
+  })
+})
+
+describe('PC-4、PC-5：协作', () => {
+  const files = () =>
+    sampleFiles({
+      'zz-rel.yaml':
+        'relations:\n  - { id: rq, from: infra.framework.sm, to: infra.mus, type: queries, purpose: 取媒体单元 }\n  - { id: rq2, from: infra.framework.pipeline, to: infra.mus, type: streams }',
+    })
+
+  it('按（方向，对端）合成一行：对端为画布上相邻的节点，多条标「×N」、单击展开逐条；单击对端名选中对端', async () => {
+    const { wrapper, desk } = await mountPanel('/?level=infra&sel=m:infra.framework', files())
+    const rows = wrapper.findAll('[data-testid="collab"] .co')
+    expect(rows.map(r => r.attributes('data-peer'))).toEqual(['app', 'infra.mus'])
+    const mus = rows[1]
+    expect(mus.find('.dir').text()).toBe('→')
+    expect(mus.find('.n').text()).toBe('×3')
+    expect(mus.findAll('.rel-chip').map(c => c.text())).toEqual(['流', '查询'])
+    expect(mus.find('.each').exists()).toBe(false)
+    await mus.find('.n').trigger('click')
+    expect(wrapper.findAll('[data-peer="infra.mus"] .rel-row')).toHaveLength(3)
+    // 展开后逐条带目的（写了 purpose 的）
+    expect(wrapper.find('[data-peer="infra.mus"] .each').text()).toContain('取媒体单元')
+    await wrapper.find('[data-peer="app"] .peer').trigger('click')
+    expect(desk.selection.value).toEqual({ kind: 'module', id: 'app' })
+  })
+
+  it('悬停一行：写入悬停的关系（画布据此高亮承载它们的边，L25）；移开清空', async () => {
+    const { wrapper } = await mountPanel('/?level=infra&sel=m:infra.framework', files())
+    const hover = useRelationHover()
+    await wrapper.find('[data-peer="infra.mus"]').trigger('mouseenter')
+    expect(hover.value).toEqual(['r4', 'rq', 'rq2'])
+    await wrapper.find('[data-peer="infra.mus"]').trigger('mouseleave')
+    expect(hover.value).toBeNull()
+  })
+})
+
+describe('V15b、PC-6、PC-7：核对卡的六行', () => {
   const REFS = `
 modules:
   - { id: app.solution.core, parent: app.solution, name: Core, responsibility: x, codeRefs: [src/app/**] }
@@ -253,124 +314,85 @@ modules:
     return { wrapper, desk }
   }
 
-  it('每类异常一行、带计数，按严重度排序；单击跳到对应节——折叠节自动展开（架构治理、确认改动）', async () => {
+  it('固定六行、次序不变；有 ⚠ 行时核对卡自动展开，卡头「⚠ N 项要看 · ✓ M 项正常」', async () => {
     const REVIEWED = `reviewed:\n  - { module: infra, at: '2026-10-20', hash: stale, source: manual }\n`
     const { wrapper } = await openWithFacts('/?v=s&sel=m:infra', { 'reviewed.yaml': REVIEWED })
-    const rows = wrapper.findAll('.notice-sec .notice')
-    const keys = rows.map(r => r.attributes('data-notice'))
-    expect(keys).toContain('violations')
-    expect(keys).toContain('cycles')
-    expect(keys).toContain('stale')
-    // 严重度：违规、环在最前，确认过期在其后（V15b 排序）
-    expect(keys.indexOf('violations')).toBeLessThan(keys.indexOf('stale'))
-    expect(rows[0].attributes('data-notice')).toBe('violations')
-    // 审核轮 2 B1：「违规」行的计数口径在悬停写明——治理信号（含基线内已知），不是门禁红（U8），也不含返工清单的 info 级（K24）
-    expect(rows[0].attributes('title')).toContain('门禁卡的是基线外的新增')
-    expect(rows[0].attributes('title')).toContain('返工清单的 info 级提示（K24 层符合性）不在此计数')
-    // 其余行没有口径说明时悬停仍是跳转提示
-    const staleRow = rows.find(r => r.attributes('data-notice') === 'stale')!
-    expect(staleRow.attributes('title')).toBe('跳到「自上次确认以来的改动」')
-    // 单击「确认过期」：⑤ 的「自上次确认以来的改动」折叠节自动展开
-    const diffFold = wrapper.find('[data-sec="review.diff"] .fold')
-    expect(diffFold.attributes('aria-expanded')).toBe('false')
-    await wrapper.find('.notice-sec [data-notice="stale"]').trigger('click')
-    await flushPromises()
-    await flushPromises()
-    expect(wrapper.find('[data-sec="review.diff"] .fold').attributes('aria-expanded')).toBe('true')
-    // 单击「违规」：架构治理折叠节自动展开（展开后重渲染换了节点，重新取行）
-    await wrapper.find('.notice-sec [data-notice="violations"]').trigger('click')
+    expect(wrapper.findAll('[data-check]').map(r => r.attributes('data-check'))).toEqual(['verify', 'governance', 'surface', 'split', 'evolution', 'review'])
+    expect(wrapper.find('[data-card="check"] .card-toggle').attributes('aria-expanded')).toBe('true')
+    const sum = wrapper.find('[data-card="check"] .card-sum')
+    expect(sum.classes()).toContain('warn')
+    expect(sum.text()).toMatch(/^⚠ \d 项要看 · ✓ \d 项正常$/)
+    expect(wrapper.find('[data-check="governance"]').classes()).toContain('bad')
+    expect(wrapper.find('[data-check="review"]').classes()).toContain('bad')
+  })
+
+  it('异常行下平铺条目：模块环与本层环各一条（评审轮 1 A2）；单击条目跳到对应清单——折叠的清单自动展开（架构治理、确认改动）', async () => {
+    const REVIEWED = `reviewed:\n  - { module: infra, at: '2026-10-20', hash: stale, source: manual }\n`
+    const { wrapper } = await openWithFacts('/?v=s&sel=m:infra', { 'reviewed.yaml': REVIEWED })
+    const gov = wrapper.findAll('[data-check-item="governance"]').map(x => x.text())
+    expect(gov.some(t => t.startsWith('模块环'))).toBe(true)
+    expect(gov.some(t => t.startsWith('本层环'))).toBe(true)
+    expect(wrapper.find('[data-sec="evidence.governance"] .fold').attributes('aria-expanded')).toBe('false')
+    await wrapper.find('[data-check-item="governance"]').trigger('click')
     await flushPromises()
     await flushPromises()
     expect(wrapper.find('[data-sec="evidence.governance"] .fold').attributes('aria-expanded')).toBe('true')
+    await wrapper.find('[data-check-item="review"]').trigger('click')
+    await flushPromises()
+    await flushPromises()
+    expect(wrapper.find('[data-sec="review.diff"] .fold').attributes('aria-expanded')).toBe('true')
   })
 
-  it('无异常时整段不出现（没有代码事实的样例面板没有 ③）', async () => {
+  it('没有代码事实时前四行为 — 并写原因；演化没有数据为 —', async () => {
     const { wrapper } = await mountPanel('/?sel=m:infra')
-    expect(wrapper.find('.notice-sec').exists()).toBe(false)
+    await wrapper.find('[data-card="check"] .card-toggle').trigger('click')
+    for (const k of ['verify', 'governance', 'surface', 'split', 'evolution']) expect(wrapper.find(`[data-check="${k}"]`).classes()).toContain('none')
+    expect(wrapper.find('[data-check="verify"]').text()).toContain('没有代码事实')
   })
 
-  it('G12（V16）：架构治理节内「生效的规则」折叠带计数；违规 / 环明细保持带计数（异常计数已在 ③，节内供跳转落点）', async () => {
+  it('G12（V16）：清单「架构治理」内「生效的规则」仍折叠带计数', async () => {
     const { wrapper } = await openWithFacts('/?v=s&sel=m:infra')
-    // ⑤ 的架构治理缺省折叠：先展开（③ 单击也会展开）
     await wrapper.find('[data-sec="evidence.governance"] .fold').trigger('click')
     const rules = wrapper.find('.rules-fold')
-    expect(rules.exists()).toBe(true)
-    // infra 是声明层（mayDependOn [app, domain]）：生效的规则 1 条
     expect(rules.find('summary').text()).toMatch(/生效的规则\s*·\s*1/)
     expect(rules.attributes('open')).toBeUndefined()
-    await rules.find('summary').trigger('click')
-    expect(rules.text()).toContain('所在层 infra')
-    // 异常明细不折叠：违规 / 所在的模块环仍是 h4 明细
-    expect(
-      wrapper
-        .findAll('[data-sec="evidence.governance"] h4')
-        .map(x => x.text())
-        .join('|'),
-    ).toContain('违规')
-  })
-
-  it('模块环与本层环各自一行、各自计数（评审轮 1 A2）：样例事实两类环同时存在，③ 出两行', async () => {
-    const { wrapper } = await openWithFacts('/?v=s&sel=m:infra')
-    const rows = wrapper.findAll('.notice-sec .notice')
-    const cyclesRow = rows.find(r => r.attributes('data-notice') === 'cycles')
-    const levelRow = rows.find(r => r.attributes('data-notice') === 'levelCycles')
-    expect(cyclesRow).toBeTruthy()
-    expect(levelRow).toBeTruthy()
-    // 计数各来自自己的派生：模块环 = moduleDetail().cycles 的环数（1 个），本层环 = selectedCycle 有即 1
-    expect(cyclesRow!.text()).toContain('模块环 1')
-    expect(levelRow!.text()).toContain('本层环 1')
-    // 两行都跳「架构治理」
-    expect(cyclesRow!.text()).toContain('架构治理')
-    expect(levelRow!.text()).toContain('架构治理')
   })
 })
 
-describe('V15c：④ 汇总与 ⑤ 折叠', () => {
-  it('出边先按类型汇总一行（只列非零类型），展开才逐条；RelationRow 的跨层定位保留', async () => {
-    const files = sampleFiles({
-      'zz-rel.yaml':
-        'relations:\n  - { id: rq, from: infra.framework.sm, to: infra.mus, type: queries }\n  - { id: rn, from: infra.framework.sm, to: domain.services, type: notifies }',
-    })
-    const { wrapper, desk } = await mountPanel('/?level=infra.framework&sel=m:infra.framework.sm', files)
-    const group = wrapper.find('[data-sec="boundary.edges-out"] details.rel-group')
-    expect(group.find('summary').text()).toContain('未分类 2')
-    expect(group.find('summary').text()).toContain('查询 1')
-    expect(group.find('summary').text()).toContain('通知 1')
-    // 缺省收起：展开才逐条（ RelationRow 在 details 里，单击后可跨层定位）
-    expect(group.attributes('open')).toBeUndefined()
-    await group.find('summary').trigger('click')
-    const rows = group.findAll('.rel-row')
-    expect(rows.length).toBe(4)
-    await rows[0].find('.link').trigger('click')
-    expect(desk.selection.value).toEqual({ kind: 'relation', id: 'r1' })
-  })
-
-  it('⑤ 折叠带计数、count 为 0 的节不出现', async () => {
+describe('V15c、PC-8：核对卡的清单', () => {
+  it('清单折叠带计数、计数为 0 的不出现；次序为交互证据 → 源代码 → … → 确认', async () => {
     const { wrapper } = await mountPanel('/?sel=m:infra')
-    const folds = wrapper.findAll('.module-panel > .section button.fold').map(f => f.text())
-    expect(folds.some(t => t.includes('确认'))).toBe(true)
-    expect(folds.join('|')).not.toContain('核心数据结构')
+    await wrapper.find('[data-card="check"] .card-toggle').trigger('click')
+    const lists = listsOf(wrapper)
+    expect(lists[0]).toMatch(/交互证据\s*\d+/)
+    expect(lists[lists.length - 1]).toContain('确认')
+    expect(lists.join('|')).not.toContain('核心数据结构')
     expect(wrapper.find('[data-testid="split-signals"]').exists()).toBe(false)
-    expect(wrapper.find('.module-panel > .section button.fold[aria-expanded="true"]').exists()).toBe(false)
+    expect(wrapper.find('[data-card="check"] .lists button.fold[aria-expanded="true"]').exists()).toBe(false)
   })
 
-  it('运行视角下 ⑤ 的折叠由外层「模块信息」details 代行（评审轮 1 B1）：外层展开即内层全展开，结构视角仍折叠', async () => {
-    // 运行视角：打开场景 + 选中模块 → 运行信息在上、模块信息 details 折叠在下（V6）
-    const run = await mountPanel('/?sc=sc.play&sel=m:infra', scenarioFiles())
-    const outer = run.wrapper.find('details.structure')
-    expect(outer.exists()).toBe(true)
-    expect(outer.attributes('open')).toBeUndefined()
-    // 内层不再叠加折叠：⑤ 各节没有折叠按钮（外层展开即全展开）
-    expect(outer.findAll('h3 .fold').length).toBe(0)
-    // 对照：结构视角没有外层 details，⑤ 仍缺省折叠
-    const structure = await mountPanel('/?v=s&sel=m:infra')
-    expect(structure.wrapper.find('details.structure').exists()).toBe(false)
-    expect(structure.wrapper.findAll('.module-panel > .section h3 .fold').length).toBeGreaterThan(0)
+  it('结构视角才有「结构指标」「表面元素」两个清单（④ 视角敏感，ADR-0031）', async () => {
+    const files = sampleFiles({
+      'modules/zz-facts.yaml':
+        'modules:\n  - { id: infra.framework.extra, parent: infra.framework, name: Extra, responsibility: x, codeRefs: [src/framework/**] }\n  - { id: app.solution.core, parent: app.solution, name: Core, responsibility: x, codeRefs: [src/app/**] }',
+    })
+    const dep = (from: string, to: string): FileDep => ({ from, to, via: to, kind: 'value', line: 1, uses: true, invokes: true })
+    const source = {
+      tree: async () => ({ status: 'local', root: '/repo', files: ['src/app/s.ts', 'src/framework/e.ts'], packages: {} }),
+      file: async () => null,
+      exports: async () => [],
+      facts: async () => ({ deps: { deps: [dep('src/framework/e.ts', 'src/app/s.ts')], external: {}, parsed: 2 }, baseline: null, ledger: [] }),
+    }
+    const { wrapper, desk } = await mountWithSource('/?v=s&sel=m:app.solution', source, files)
+    await openCheck(wrapper)
+    expect(listsOf(wrapper).some(t => t.includes('结构指标'))).toBe(true)
+    desk.setMode('interaction')
+    await flushPromises()
+    expect(listsOf(wrapper).some(t => t.includes('结构指标'))).toBe(false)
   })
 })
 
-describe('V15 波 2 铺开：其余面板的段序（G11）', () => {
-  /** K6 用：两端各一个子模块、一对文件依赖；deps 参数决定证实状态 */
+describe('PC-10：其他对象的三卡', () => {
   const REFS = `
 modules:
   - { id: infra.framework.sm.impl, parent: infra.framework.sm, name: SmImpl, responsibility: x, codeRefs: [src/sm/**] }
@@ -385,83 +407,88 @@ modules:
       facts: async () => ({ deps: { deps, external: {}, parsed: files.length }, baseline: null, ledger: [] }),
     }) as never
 
-  it('关系面板：② 说明置顶 → ③ 需要注意 → ④ 关系维度 / 经由接口 / 数据结构 → ⑤ 代码事实；未证实行（K6）单击跳到代码事实', async () => {
-    // r6 两端之间没有依赖 → isolated，未证实（K6）
+  it('关系：理解卡先目的、再说明与维度；核对卡「证实」未证实为 ⚠，条目单击跳到代码事实；出处 footer 最底', async () => {
     const { wrapper } = await mountWithSource('/?level=infra.framework&sel=r:r6', sourceWith([]), [
       ...sampleFiles(),
       { path: 'modules/zz-refs.yaml', text: REFS },
     ])
-    const cls = (x: Element) => x.getAttribute('class') ?? ''
-    const order = [...(wrapper.find('.relation-panel').element as HTMLElement).children].map(cls)
-    expect(order.some(c => c.includes('no-summary'))).toBe(true) // 未写说明（② 的空态在同一位置）
-    // 段序：③ 需要注意在 ④「关系」维度节之前；出处 footer 最底
-    const secs = wrapper.findAll('.relation-panel > .section')
-    const titles = secs.map(s => s.find('h3')!.text())
-    expect(titles[0]).toContain('需要注意')
-    expect(titles[1]).toContain('关系')
-    expect(wrapper.find('.relation-panel > .src').exists()).toBe(true)
-    // 未证实行 → 单击跳到 ⑤ 代码事实（isolated 没有文件证据：折叠必有计数，没有可计的物就不折，一行判定常显）
-    expect(wrapper.find('[data-sec="evidence.fact"] .fold').exists()).toBe(false)
+    expect(cardsOf(wrapper)).toEqual(['understand', 'check'])
+    expect(wrapper.find('[data-card="understand"] .no-summary').text()).toBe('未写说明')
+    expect(wrapper.find('[data-card="understand"] .dims').exists()).toBe(true)
+    expect(wrapper.find('[data-check="verify"]').classes()).toContain('bad')
     expect(wrapper.find('[data-sec="evidence.fact"]').text()).toContain('两端之间在代码里没有任何依赖')
-    await wrapper.find('[data-notice="unconfirmed"]').trigger('click')
+    await wrapper.find('[data-check-item="verify"]').trigger('click')
     await flushPromises()
     await flushPromises()
     expect(wrapper.find('[data-sec="evidence.fact"]').classes()).toContain('jump-flash')
+    expect(wrapper.find('.relation-panel > .src').exists()).toBe(true)
   })
 
-  it('关系面板：已证实且有文件证据时代码事实缺省折叠带计数（V15c），展开见「已证实」', async () => {
+  it('关系：已证实且有文件证据时「证实」为 ✓、核对卡收起，代码事实清单折叠带计数', async () => {
     const { wrapper } = await mountWithSource('/?level=infra.framework&sel=r:r6', sourceWith([dep('src/sm/a.ts', 'src/pipe/b.ts')]), [
       ...sampleFiles(),
       { path: 'modules/zz-refs.yaml', text: REFS },
     ])
+    expect(wrapper.find('[data-card="check"] .card-toggle').attributes('aria-expanded')).toBe('false')
+    await wrapper.find('[data-card="check"] .card-toggle').trigger('click')
+    expect(wrapper.find('[data-check="verify"]').classes()).toContain('ok')
     const fold = wrapper.find('[data-sec="evidence.fact"] .fold')
-    expect(fold.exists()).toBe(true)
-    expect(fold.text()).toContain('代码事实')
     expect(fold.text()).toMatch(/代码事实\s*1/)
-    expect(fold.attributes('aria-expanded')).toBe('false')
     await fold.trigger('click')
     expect(wrapper.find('[data-sec="evidence.fact"]').text()).toContain('已证实')
   })
 
-  it('聚合边面板：③「向上却不是控制反转」一行带计数、单击跳到 ④ 原始关系（K22）', async () => {
-    const files = sampleFiles({ 'zz-up.yaml': 'relations:\n  - { id: r8, from: app.solution, to: infra.player, type: queries }' })
-    const { wrapper } = await mountPanel('/?sel=e:app.solution->infra.player:queries', files)
-    const notice = wrapper.find('[data-notice="upward"]')
-    expect(notice.exists()).toBe(true)
-    expect(notice.text()).toContain('向上却不是控制反转')
-    await notice.trigger('click')
+  it('聚合边：「方向」行——向上却不是控制反转为 ⚠，条目跳到原始关系（K22）；控制反转只在头部注记', async () => {
+    const up = sampleFiles({ 'zz-up.yaml': 'relations:\n  - { id: r8, from: app.solution, to: infra.player, type: queries }' })
+    const { wrapper } = await mountPanel('/?sel=e:app.solution->infra.player:queries', up)
+    expect(wrapper.find('[data-check="direction"]').classes()).toContain('bad')
+    await wrapper.find('[data-check-item="direction"]').trigger('click')
     await flushPromises()
     await flushPromises()
-    const target = wrapper.find('[data-sec="boundary.relations"]')
-    expect(target.exists()).toBe(true)
-    expect(target.classes()).toContain('jump-flash')
-  })
-
-  it('聚合边面板：向上的控制反转（有机制）是应有之义，只在头部注记、③ 不出现（V15b）', async () => {
-    const files = sampleFiles({
+    expect(wrapper.find('[data-sec="boundary.relations"]').classes()).toContain('jump-flash')
+    const inv = sampleFiles({
       'zz-up.yaml': 'relations:\n  - { id: r8b, from: app.solution, to: infra.player, type: notifies, via: "channel:cb@app.solution" }',
     })
-    const { wrapper } = await mountPanel('/?sel=e:app.solution->infra.player:notifies', files)
-    expect(wrapper.find('[data-testid="upward-note"]').text()).toContain('控制反转')
-    expect(wrapper.find('[data-notice="upward"]').exists()).toBe(false)
+    const ok = await mountPanel('/?sel=e:app.solution->infra.player:notifies', inv)
+    expect(ok.wrapper.find('[data-testid="upward-note"]').text()).toContain('控制反转')
+    expect(ok.wrapper.find('[data-check="direction"]').exists()).toBe(false)
   })
 
-  it('端口面板：「说明」在端口结构详情之前（「先答做什么」的铺开修正），出处最底', async () => {
+  it('端口：理解卡先一句用途、说明在端口结构详情之前；出处最底', async () => {
     const files = sampleFiles({
       'zz-if.yaml':
-        'interfaces:\n  - { id: if.io, name: IO, owner: app.solution, description: 对外入口, signature: "io(): void", implementedBy: [infra.player] }',
+        'interfaces:\n  - { id: if.io, name: IO, owner: app.solution, description: 对外入口。细节, signature: "io(): void", implementedBy: [infra.player] }',
     })
     const { wrapper } = await mountPanel('/?sel=p:if.io', files)
-    // ② 说明（purpose）在 ④ 端口结构（boundary.port）之前，footer 最底
-    const order = [...wrapper.find('.port-panel').element.children]
-    const purpose = order.findIndex(x => x.getAttribute?.('data-sec') === 'purpose')
-    const port = order.findIndex(x => x.getAttribute?.('data-sec') === 'boundary.port')
-    expect(purpose).toBeGreaterThan(-1)
-    expect(port).toBeGreaterThan(purpose)
-    expect(order[order.length - 1].classList.contains('src')).toBe(true)
+    const body = [...wrapper.find('[data-card="understand"] .card-body').element.children]
+    expect(body[0].textContent).toBe('对外入口')
+    const purpose = body.findIndex(x => x.getAttribute?.('data-sec') === 'purpose')
+    expect(body.findIndex(x => x.getAttribute?.('data-sec') === 'boundary.port')).toBeGreaterThan(purpose)
+    const kids = [...wrapper.find('.port-panel').element.children]
+    expect(kids[kids.length - 1].classList.contains('src')).toBe(true)
   })
 
-  it('代码依赖 / 依赖边面板：③ 违规行跳 ⑤ 违规明细（折叠带计数），④ DepStructure（结构视角）在前', async () => {
+  it('层：理解卡按五问（问题 → 说明 → 成员 · 一句话 → 可依赖的层）；核对卡为「结构」一行', async () => {
+    const { wrapper } = await mountPanel('/?sel=s:app/top', sampleFiles({ 'intent/strata.yaml': STRATA }))
+    expect(cardsOf(wrapper)).toEqual(['understand', 'check'])
+    expect(wrapper.find('[data-testid="stratum-members"]').text()).toContain('Solution')
+    await wrapper.find('[data-card="check"] .card-toggle').trigger('click')
+    expect(wrapper.find('[data-check="structure"]').exists()).toBe(true)
+  })
+
+  it('参与者：理解卡为说明与入口关系，相关资料卡列由它触发的场景；场景：核对卡「证据」一行与「引用」清单，相关资料卡为时序图', async () => {
+    const a = await mountPanel('/?sel=a:actor.biz', scenarioFiles())
+    expect(cardsOf(a.wrapper)).toEqual(['understand', 'related'])
+    expect(a.wrapper.find('[data-card="understand"] [data-sec="boundary.relations"]').exists()).toBe(true)
+    const s = await mountPanel('/?sc=sc.play', scenarioFiles())
+    expect(cardsOf(s.wrapper)).toEqual(['understand', 'check', 'related'])
+    await openCheck(s.wrapper)
+    expect(s.wrapper.find('[data-check="evidence"]').exists()).toBe(true)
+    expect(s.wrapper.find('[data-sec="evidence.refs"] h3').text()).toMatch(/引用\s*\d/)
+    expect(s.wrapper.find('[data-doc="sequence"]').exists()).toBe(true)
+  })
+
+  it('依赖边：理解卡为文件依赖（结构视角）；核对卡「治理」一行', async () => {
     const source = sourceWith(
       [dep('src/app/s.ts', 'src/framework/extra.ts'), dep('src/framework/extra.ts', 'src/app/s.ts')],
       ['src/app/s.ts', 'src/framework/extra.ts'],
@@ -477,45 +504,13 @@ modules:
 `,
       },
     ])
-    // ④ 边界在前：结构视角是 DepStructure（文件依赖等）
-    expect(wrapper.find('[data-sec="boundary.deps"]').exists()).toBe(true)
-    const notice = wrapper.find('.dep-panel [data-notice="violations"]')
-    const fold = wrapper.find('[data-sec="evidence.violations"] .fold')
-    if (fold.exists()) {
-      // 有违规：③ 一行带计数、明细缺省折叠；单击 ③ 折叠自动展开
-      expect(notice.exists()).toBe(true)
-      expect(fold.attributes('aria-expanded')).toBe('false')
-      await notice.trigger('click')
-      await flushPromises()
-      await flushPromises()
-      expect(wrapper.find('[data-sec="evidence.violations"] .fold').attributes('aria-expanded')).toBe('true')
-    } else {
-      // 样例规则对这对节点没有违规：③ 不出现（无异常不强造）
-      expect(notice.exists()).toBe(false)
-    }
-  })
-
-  it('参与者 / 场景面板：② 说明（触发）在前、④ 入口关系 / 场景与证据、⑤ 引用折叠带计数', async () => {
-    const a = await mountPanel('/?sel=a:actor.biz', scenarioFiles())
-    const aOrder = [...a.wrapper.find('.actor-panel').element.children]
-    expect(aOrder.findIndex(x => x.getAttribute?.('data-sec') === 'purpose')).toBeGreaterThan(-1)
-    expect(aOrder.findIndex(x => x.getAttribute?.('data-sec') === 'boundary.relations')).toBeGreaterThan(
-      aOrder.findIndex(x => x.getAttribute?.('data-sec') === 'purpose'),
-    )
-    expect(aOrder[aOrder.length - 1].classList.contains('src')).toBe(true)
-
-    const s = await mountPanel('/?sc=sc.play', scenarioFiles())
-    const refsSec = s.wrapper.find('[data-sec="evidence.refs"]')
-    expect(refsSec.exists()).toBe(true)
-    // 运行视角 ⑤ 的折叠由外层「模块信息」details 代行（评审轮 1 B1）：标题带计数、内容直接可见
-    expect(refsSec.find('h3').text()).toMatch(/引用\s*\d/)
-    expect(refsSec.text()).toContain('引用了')
-    // ④ 证据保持常显带计数
-    expect(s.wrapper.find('[data-sec="boundary.evidence"] .fold').exists()).toBe(false)
+    expect(wrapper.find('[data-card="understand"] [data-sec="boundary.deps"]').exists()).toBe(true)
+    await openCheck(wrapper)
+    expect(wrapper.find('[data-check="governance"]').exists()).toBe(true)
   })
 })
 
-describe('V15b、V15c 的纯函数', () => {
+describe('V15b 的纯函数', () => {
   it('orderNotices 过滤零计数并按严重度排序；关系级与边级信号（缺段、向上）归入对应档（波 2 铺开）', () => {
     const n = (key: PanelNotice['key'], count: number): PanelNotice => ({ key, label: key, count, target: 'x', to: 'y' })
     expect(
@@ -547,13 +542,80 @@ describe('V15b、V15c 的纯函数', () => {
     expect(splitSignalCount(s, 0)).toBe(6)
     expect(splitSignalCount(null, 3)).toBe(0)
   })
+})
 
-  it('typeSummary 只列非零类型、按登记次序', () => {
-    const of = (id: string) =>
-      id === 'a' ? { type: 'queries' as const } : id === 'b' ? { type: 'notifies' as const } : id === 'c' ? { type: 'queries' as const } : undefined
-    expect(typeSummary(of, ['a', 'b', 'c', 'missing'])).toEqual([
-      { type: 'queries', label: '查询', n: 2 },
-      { type: 'notifies', label: '通知', n: 1 },
-    ])
+describe('PC-2、PC-6、PC-10 的纯函数', () => {
+  const none = {
+    facts: false,
+    relations: 0,
+    unconfirmed: [],
+    undescribed: [],
+    violations: [],
+    cycles: [],
+    against: [],
+    surfaceWidth: null,
+    surface: [],
+    split: [],
+  }
+  const review = { status: 'unreviewed' as const, inScope: true }
+
+  it('checkSummary：⚠ 与 ✓ 计数，为 0 的一半不写，— 行不计', () => {
+    const r = (state: CheckRow['state']): CheckRow => ({ key: state, label: state, state, text: '', items: [] })
+    expect(checkSummary([r('bad'), r('hint'), r('ok'), r('none')]).text).toBe('⚠ 2 项要看 · ✓ 1 项正常')
+    expect(checkSummary([r('ok'), r('ok')]).text).toBe('✓ 2 项正常')
+    expect(checkSummary([r('bad')]).text).toBe('⚠ 1 项要看')
+    expect(checkSummary([r('none')]).text).toBe('暂无核对结果')
+  })
+
+  it('moduleCheckRows：固定六行；没有代码事实前四行为 —；演化只陈述不判 ⚠；未确认为 —、需复核为 ⚠', () => {
+    const rows = moduleCheckRows({ ...none, noFactsReason: '代码事实读取中', evolution: { changes: 5, fixes: 1, heat: 3, days: 180 }, review })
+    expect(rows.map(r => r.key)).toEqual(['verify', 'governance', 'surface', 'split', 'evolution', 'review'])
+    expect(rows.slice(0, 4).map(r => [r.state, r.text])).toEqual(Array(4).fill(['none', '代码事实读取中']))
+    expect(rows[4]).toMatchObject({ state: 'ok', text: '近 180 天修改 5 次 · 缺陷 1 · 热度 3' })
+    expect(rows[5]).toMatchObject({ state: 'none', text: '从未确认' })
+    const stale = moduleCheckRows({ ...none, evolution: null, review: { status: 'stale', changes: 2, inScope: true } })
+    expect(stale[4].state).toBe('none')
+    expect(stale[5]).toMatchObject({ state: 'bad', text: '确认已过期 · 2 处改动' })
+    expect(stale[5].items[0].target).toBe('review.diff')
+  })
+
+  it('moduleCheckRows：有代码事实时按信号归行——证实（未证实 + 未解释）、治理（违规、环为问题级，逆稳定为提示级）、表面与拆分为提示级', () => {
+    const item = (text: string) => ({ text })
+    const rows = moduleCheckRows({
+      ...none,
+      facts: true,
+      relations: 4,
+      unconfirmed: [item('a'), item('b')],
+      against: [item('c')],
+      surfaceWidth: 3,
+      surface: [item('d')],
+      evolution: null,
+      review: { status: 'reviewed', date: '2026-10-20', inScope: true },
+    })
+    expect(rows[0]).toMatchObject({ state: 'bad', text: '4 条交互中 2 条未证实' })
+    expect(rows[1]).toMatchObject({ state: 'hint', text: '违规 0 · 环 0 · 逆稳定 1' })
+    expect(rows[2]).toMatchObject({ state: 'hint', text: 'W 3 · 1 处提示' })
+    expect(rows[3]).toMatchObject({ state: 'ok', text: '无' })
+    expect(rows[5]).toMatchObject({ state: 'ok', text: '2026-10-20 已确认' })
+    const clean = moduleCheckRows({ ...none, facts: true, relations: 3, evolution: null, review })
+    expect(clean[0].text).toBe('3 条交互全部被代码证实')
+    expect(clean[1]).toMatchObject({ state: 'ok', text: '违规 0 · 环 0' })
+  })
+
+  it('rowsFromNotices：信号按行归位，行内按严重度排序；没有信号为 ✓ 或 —', () => {
+    const n = (key: PanelNotice['key'], count: number, hint = false): PanelNotice => ({ key, label: key, count, target: `t.${key}`, to: 'x', hint })
+    const rows = rowsFromNotices(
+      [n('cycles', 1), n('violations', 2), n('stale', 0)],
+      [
+        { key: 'governance', label: '治理', notices: ['violations', 'cycles'], ok: '没有违规' },
+        { key: 'review', label: '确认', notices: ['stale'], none: '未确认' },
+        { key: 'split', label: '拆分', notices: ['split'], ok: '无' },
+      ],
+    )
+    expect(rows[0]).toMatchObject({ state: 'bad', text: 'violations 2 · cycles 1' })
+    expect(rows[0].items.map(i => i.target)).toEqual(['t.violations', 't.cycles'])
+    expect(rows[1]).toMatchObject({ state: 'none', text: '未确认' })
+    expect(rows[2]).toMatchObject({ state: 'ok', text: '无' })
+    expect(rowsFromNotices([n('split', 1, true)], [{ key: 'split', label: '拆分', notices: ['split'], ok: '无' }])[0].state).toBe('hint')
   })
 })

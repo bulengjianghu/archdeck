@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
- * 系统面板（G11 五段骨架，ADR-0050、V15；与模块面板同一段序——「同类节跨面板同位」）：
- * ① 头部（ID / 系统 / 确认徽标）② 简介 ③ 需要注意（系统级：确认过期、违规、环、未解释的交互；G22 的源码落后提醒是页面级信息条，不进面板）
- * ④ 顶层模块 / 分层 ⑤ 生成来源与规模、意图、治理（健康度按对象分组：确认 / 依赖 / 关系常显、治理组折叠带计数，V16；明细）、演化（fold）、确认。
+ * 系统面板（V15、PC-10，ADR-0053；与模块面板同一卡序——「同类节跨面板同位」）：头部（ID / 系统）之下——
+ * 理解：简介（定位一句 + 核心原则一句）、分层或顶层模块（每个一句话）；
+ * 核对：证实（未解释的交互）、治理（违规、模块环）、确认三行（G22 的源码落后提醒是页面级信息条，不进面板），清单为生成来源与规模、
+ * 意图、架构治理（健康度按对象分组：确认 / 依赖 / 关系常显、治理组折叠带计数，V16；明细）、演化（fold）、确认。
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -14,8 +15,11 @@ import GovernanceSection from './GovernanceSection.vue'
 import EvolutionSection from './EvolutionSection.vue'
 import IntentSection from './IntentSection.vue'
 import ReviewSection from './ReviewSection.vue'
-import NoticeSection from './NoticeSection.vue'
+import PanelCard from './PanelCard.vue'
+import CheckCard from './CheckCard.vue'
+import { summaryOf } from '@/model'
 import { usePanelJump, type PanelNotice } from './panelNotices'
+import { rowsFromNotices } from './panelCheck'
 
 const desk = useDesk()
 const idx = computed(() => desk.index.value!)
@@ -23,7 +27,7 @@ const sys = computed(() => idx.value.model.system)
 const top = computed(() => (idx.value.childrenOf.get(idx.value.rootId) ?? []).map(id => idx.value.modules.get(id)!))
 const layered = computed(() => desk.view.value?.mode === 'layered')
 
-// ── ③ 需要注意（V15b）：确认过期 + 治理类计数；全部无异常整段不出现 ──
+// ── 核对卡（PC-10）：确认过期 + 治理类计数，按行归位 ──
 const root = ref<HTMLElement | null>(null)
 usePanelJump(root)
 const review = computed(() => desk.review.of(sys.value.id))
@@ -51,6 +55,19 @@ const notices = computed<PanelNotice[]>(() => {
     out.push({ key: 'stale', label: '确认过期', count: review.value.diff?.count || 1, target: 'review.diff', to: '自上次确认以来的改动' })
   return out
 })
+const rows = computed(() =>
+  rowsFromNotices(notices.value, [
+    { key: 'verify', label: '证实', notices: ['undescribed'], ...(r.value ? { ok: '代码里的交互都有描述' } : { none: '没有代码事实' }) },
+    { key: 'governance', label: '治理', notices: ['violations', 'cycles'], ...(r.value ? { ok: '违规 0 · 环 0' } : { none: '没有代码事实' }) },
+    {
+      key: 'review',
+      label: '确认',
+      notices: ['stale'],
+      ...(review.value.status === 'reviewed' ? { ok: `${review.value.entry?.at ?? ''} 已确认`.trim() } : { none: '未确认' }),
+    },
+  ]),
+)
+const brief = (m: { summary?: string; responsibility?: string; abstraction?: string }) => summaryOf(m)?.text ?? m.abstraction ?? ''
 </script>
 
 <template>
@@ -63,68 +80,70 @@ const notices = computed<PanelNotice[]>(() => {
       <div class="badges">
         <code>{{ sys.id }}</code>
         <span class="badge">系统</span>
-        <ReviewSection :id="sys.id" part="badge" />
       </div>
     </header>
-    <!-- ② 作用：简介置顶——定位一句 + 核心原则一句；系统也能确认（Z7） -->
-    <Section title="简介" data-sec="purpose">
-      <Markdown v-if="sys.description" :text="sys.description" />
-      <p v-else class="muted">未填写（system.description：定位一句、核心原则一句）</p>
-    </Section>
-    <!-- ③ 需要注意 -->
-    <NoticeSection :notices="notices" />
-    <!-- ④ 边界：顶层模块 / 分层 -->
-    <Section :title="layered ? '分层' : '顶层模块'" :count="top.length" data-sec="boundary.top">
-      <ul class="plain">
-        <li v-for="m in top" :key="m.id" class="top">
-          <button class="link" @click="desk.select({ kind: 'module', id: m.id })">{{ m.name }}</button>
-          <span class="muted">{{ m.abstraction ?? m.responsibility }}</span>
-        </li>
-      </ul>
-    </Section>
-    <!-- ⑤ 证据与细节：生成来源与规模、意图、治理（摘要 + 明细）、演化（fold）、确认 -->
-    <Section title="生成来源与规模">
-      <dl v-if="sys.source" class="kv">
-        <template v-if="sys.source.repo"
-          ><dt>仓库</dt>
-          <dd>{{ sys.source.repo }}</dd></template
-        >
-        <template v-if="sys.source.commit"
-          ><dt>提交</dt>
-          <dd>
-            <code>{{ sys.source.commit }}</code>
-          </dd></template
-        >
-        <template v-if="sys.source.generatedAt"
-          ><dt>生成时间</dt>
-          <dd>{{ sys.source.generatedAt }}</dd></template
-        >
-      </dl>
-      <p v-else class="muted">未记录（system.source）</p>
-      <div class="sub">规模</div>
-      <dl class="kv">
-        <dt>{{ layered ? '层' : '顶层模块' }}</dt>
-        <dd>{{ top.length }}</dd>
-        <dt>模块</dt>
-        <dd>{{ idx.modules.size }}</dd>
-        <dt>关系</dt>
-        <dd>{{ idx.relations.size }}</dd>
-        <dt>接口</dt>
-        <dd>{{ idx.interfaces.size }}</dd>
-        <dt>数据结构</dt>
-        <dd>{{ idx.dataStructures.size }}</dd>
-      </dl>
-    </Section>
-    <IntentSection />
-    <GovernanceSection part="summary" />
-    <div data-sec="governance.detail">
-      <GovernanceSection part="detail" />
-    </div>
-    <EvolutionSection fold />
-    <div data-sec="review.diff">
-      <ReviewSection :id="sys.id" part="diff" fold />
-    </div>
-    <ReviewSection :id="sys.id" part="confirm" fold />
+    <PanelCard kind="understand" title="理解" closed-summary>
+      <Section title="简介" data-sec="purpose">
+        <Markdown v-if="sys.description" :text="sys.description" />
+        <p v-else class="muted">未填写（system.description：定位一句、核心原则一句）</p>
+      </Section>
+      <Section :title="layered ? '分层' : '顶层模块'" :count="top.length" data-sec="boundary.top">
+        <ul class="plain">
+          <li v-for="m in top" :key="m.id" class="top">
+            <button class="link" @click="desk.select({ kind: 'module', id: m.id })">{{ m.name }}</button>
+            <span class="muted">{{ brief(m) }}</span>
+          </li>
+        </ul>
+      </Section>
+    </PanelCard>
+    <CheckCard :rows="rows">
+      <template #row-review="{ row }">
+        <ReviewSection :id="sys.id" part="badge" />
+        <span v-if="row.state === 'bad'"> {{ row.text }}</span>
+      </template>
+      <Section title="生成来源与规模" fold>
+        <dl v-if="sys.source" class="kv">
+          <template v-if="sys.source.repo"
+            ><dt>仓库</dt>
+            <dd>{{ sys.source.repo }}</dd></template
+          >
+          <template v-if="sys.source.commit"
+            ><dt>提交</dt>
+            <dd>
+              <code>{{ sys.source.commit }}</code>
+            </dd></template
+          >
+          <template v-if="sys.source.generatedAt"
+            ><dt>生成时间</dt>
+            <dd>{{ sys.source.generatedAt }}</dd></template
+          >
+        </dl>
+        <p v-else class="muted">未记录（system.source）</p>
+        <div class="sub">规模</div>
+        <dl class="kv">
+          <dt>{{ layered ? '层' : '顶层模块' }}</dt>
+          <dd>{{ top.length }}</dd>
+          <dt>模块</dt>
+          <dd>{{ idx.modules.size }}</dd>
+          <dt>关系</dt>
+          <dd>{{ idx.relations.size }}</dd>
+          <dt>接口</dt>
+          <dd>{{ idx.interfaces.size }}</dd>
+          <dt>数据结构</dt>
+          <dd>{{ idx.dataStructures.size }}</dd>
+        </dl>
+      </Section>
+      <IntentSection />
+      <GovernanceSection part="summary" />
+      <div data-sec="governance.detail">
+        <GovernanceSection part="detail" />
+      </div>
+      <EvolutionSection fold />
+      <div data-sec="review.diff">
+        <ReviewSection :id="sys.id" part="diff" fold />
+      </div>
+      <ReviewSection :id="sys.id" part="confirm" fold />
+    </CheckCard>
     <footer class="src muted">描述目录：{{ desk.modelDir.value }}</footer>
   </div>
 </template>

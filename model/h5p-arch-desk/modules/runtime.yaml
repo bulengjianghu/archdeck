@@ -101,25 +101,25 @@ modules:
     name: 场景面板
     summary: 展示场景的说明、触发者、所在层次与参与模块
     parent: present.panel
-    responsibility: 选中场景时（进度在开头且没有选中其他对象，V2、R12）显示：场景名称、说明、触发者（第一条消息的发送方）与触发原因、场景所在层次（可跳转）、参与模块；ref 引用了哪些场景、被哪些场景引用。步骤目录在导航树的步骤树里。
+    responsibility: 选中场景时（进度在开头且没有选中其他对象，V2、R12）显示：场景名称、说明、触发者（第一条消息的发送方）与触发原因、场景所在层次（可跳转）、参与模块；ref 引用了哪些场景、被哪些场景引用。步骤目录在导航树的步骤树里。三卡（PC-10）：理解卡为说明、触发、参与者；核对卡为证据一行，清单为证据与引用；相关资料卡为时序图。
     codeRefs: [src/components/panel/ScenarioPanel.vue]
   - id: present.panel.step
     name: 步骤面板
     summary: 回答选中的这一步做什么、输入输出与本层投影
     parent: present.panel
-    responsibility: 先回答「这一步做什么」（D-5）：作用（标签与说明）；输入（携带的数据）与输出（配对返回的数据，本步是返回时为回应的调用，异步为「不等待返回」，没写显式返回时指向接口签名，F7）；数据结构；经由接口。其后是真实端点与本层投影（经由上层关系时注明对应关系建在上层，可「定位到这条关系」，P15）、本层一条可见消息覆盖的多帧；交互关系（对应关系与「推断」标记）默认折叠，可「在画布上显示」这条消息两端的交互关系（V9）；最后是出处。「代码证据」一节在证据等级之上补一行包含链（步骤 → 交互 → 依赖，缺哪一级标哪一级，D-25、S18a）：由步骤绑定的关系、关系的证实与依据的模块依赖组合而成（chain.ts）。
+    responsibility: 先回答「这一步做什么」（D-5）：作用（标签与说明）；输入（携带的数据）与输出（配对返回的数据，本步是返回时为回应的调用，异步为「不等待返回」，没写显式返回时指向接口签名，F7）；数据结构；经由接口。其后是真实端点与本层投影（经由上层关系时注明对应关系建在上层，可「定位到这条关系」，P15）、本层一条可见消息覆盖的多帧；交互关系（对应关系与「推断」标记）默认折叠，可「在画布上显示」这条消息两端的交互关系（V9）；最后是出处。「代码证据」一节在证据等级之上补一行包含链（步骤 → 交互 → 依赖，缺哪一级标哪一级，D-25、S18a）：由步骤绑定的关系、关系的证实与依据的模块依赖组合而成（chain.ts）。三卡（PC-10）：理解卡为作用、输入输出、数据结构、经由接口与交互关系；核对卡为代码证据一行，清单为代码证据、端点与本层投影、覆盖的帧。
     codeRefs: [src/components/panel/StepPanel.vue, src/components/panel/chain.ts]
   - id: present.panel.run
     name: 运行信息
     summary: 回答选中对象在这次流程中做了什么
     parent: present.panel
-    responsibility: 运行视角下选中模块、关系、聚合边、参与者时面板顶部的一节，回答「在这次流程中做了什么」（V6）：本场景中参与的步骤（按顺序，可单击选中，标出离进度最近的一步）、在本层投影下收发的消息、本场景中用到的接口与数据；模块与参与者可「在画布上显示」它在本层节点的交互关系（V9）；面板原有的模块信息折叠在其下方。
+    responsibility: 运行视角下选中模块、关系、聚合边、参与者时面板顶部的一节，回答「在这次流程中做了什么」（V6）：本场景中参与的步骤（按顺序，可单击选中，标出离进度最近的一步）、在本层投影下收发的消息、本场景中用到的接口与数据；模块与参与者可「在画布上显示」它在本层节点的交互关系（V9）；面板原有的模块信息折叠在其下方。第十七轮起它是各对象理解卡的首节，由面板分派经 RUN_FIRST 注入（V6），对象面板不直接引用它。
     codeRefs: [src/components/panel/RunSection.vue]
   - id: present.panel.actor
     name: 参与者面板
     summary: 展示外部参与者及由它触发的场景
     parent: present.panel
-    responsibility: 外部参与者的名称、类别（用户 / 外部系统 / 时间）、说明；与系统的入口关系；由它触发的场景（可打开）。
+    responsibility: 外部参与者的名称、类别（用户 / 外部系统 / 时间）、说明；与系统的入口关系；由它触发的场景（可打开）。三卡（PC-10）：理解卡为说明与入口关系；相关资料卡列由它触发的场景。
     codeRefs: [src/components/panel/ActorPanel.vue]
 
   - id: present.player.route
@@ -275,7 +275,7 @@ relations:
   - {id: rel.p6.nav-perspective, from: present.nav-tree, to: state.desk.projection, type: queries, payload: [ds.ViewState], description: 导航树向视图派生（核心与 desk.run）取：视角变化时切换页签（T1）, purpose: 视角变化时切换页签 }
   - {id: rel.p3.perspective-act, from: present.perspective, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 视角切换交给 dispatch 与操作：退出场景 → closeScenario, purpose: 退出场景回到结构视角 }
   - {id: rel.p3.perspective-read, from: present.perspective, to: state.desk.projection, type: queries, payload: [ds.ViewState], description: 视角切换向视图派生（核心与 desk.run）取：当前视角与场景名, purpose: 显示当前视角与场景名 }
-  - { id: rel.p3.dispatch-run, from: present.panel.dispatch, to: present.panel.run, type: commands, description: 面板分派交给运行信息：运行视角下选中模块、关系、聚合边、参与者时，面板在模块信息之上渲染运行信息（RunSection，V6）, purpose: 先答对象在流程中做了什么 }
+  - { id: rel.p3.dispatch-run, from: present.panel.dispatch, to: present.panel.run, type: commands, description: 面板分派交给运行信息：运行视角下选中模块、关系、聚合边、参与者、端口或系统时，把运行信息（RunSection）注入各对象理解卡的首节（RUN_FIRST，V6）, purpose: 先答对象在流程中做了什么 }
   - {id: rel.p3.run-read, from: present.panel.run, to: state.desk.projection, type: queries, payload: [ds.Participation], description: 运行信息向视图派生（核心与 desk.run）取结果, purpose: 取对象在本场景参与的步骤 }
   - {id: rel.p3.run-act, from: present.panel.run, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 运行信息交给 dispatch 与操作：单击参与的步骤 → seek（R13）, purpose: 单击参与的步骤跳到那一步 }
   - {id: rel.p2.seq-lanes, from: present.sequence.interact, to: present.sequence.lanes, type: commands, description: 时序图交互交给泳道与消息：渲染 SequenceLanes, purpose: 画出消息区 }
@@ -334,7 +334,7 @@ relations:
     payload: [ds.ScenarioPlan]
     description: 视图派生（核心与 desk.run）向回放计划取：打开场景时展开一次，与层次无关
   - {id: rel.p2.projection-path, from: state.desk.projection, to: model.scenario.path, type: queries, interface: if.model.resolvePath, payload: [ds.ScenarioPlan, ds.Frame, ds.RouteItem], description: 视图派生（核心与 desk.run）向回放路径取：已选分支变化时重算路径与路线（routeOf，F6f）, purpose: 按已选分支算路径与路线 }
-  - {id: rel.p8.projection-pairs, from: state.desk.projection, to: model.scenario-semantics, type: queries, interface: if.model.pairReturns, payload: [ds.ReturnPairs], description: 视图派生（核心与 desk.run）向回放计划取：打开场景时算一次调用与返回的配对（F7）, purpose: 配对调用与返回 }
+  - {id: rel.p8.projection-pairs, from: state.desk.projection, to: model.scenario-semantics, type: queries, interface: if.model.pairReturns, payload: [ds.ReturnPairs], description: 视图派生（核心与 desk.run）向回放计划取：打开场景时算一次调用与返回的配对（F7）；关系面板的相关资料卡要经过某条关系的场景时调用 relationScenarios（按消息绑定，PC-10）, purpose: 配对调用与返回、找经过关系的场景 }
   - {id: rel.p8.projection-emphasis, from: state.desk.projection, to: state.transition.selection, type: queries, interface: if.state.transition, payload: [ds.ViewState, ds.ScenarioLevelView, ds.SequenceModel, ds.ReturnPairs, ds.Emphasis], description: 视图派生（核心与 desk.run）向视角与选中规则取：selectedOf、emphasisOf：选中的对象与选中突出（V2、R15、R16）, purpose: 推出选中对象与选中突出 }
   - {id: rel.p12.selection-lanes, from: state.transition.selection, to: model.scenario.sequence, type: queries, interface: if.model.lanesOf, payload: [ds.SequenceModel], description: 视角与选中规则向时序模型取：选中模块、文件归属模块、关系两端、参与者在本层时序图中的泳道（R15、R16）, purpose: 找出选中对象在时序图的泳道 }
   - id: rel.p2.projection-level

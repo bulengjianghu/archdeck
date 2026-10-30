@@ -34,13 +34,13 @@ modules:
     name: 文件面板
     summary: 展示选中文件的归属、行数、本层投影与导出
     parent: present.panel
-    responsibility: 选中文件时的面板（SR-7）：路径、行数与是否超长（G21）、归属模块（可定位，冲突时全部列出）或未归属 / 已忽略及处理提示（未归属文件可「加入忽略」，B4）、当前层次中的投影说明（G14）、以它为入口的模块、导出（与模块接口的对应）；「预览源码」在资料区重新打开源代码预览标签。
+    responsibility: 选中文件时的面板（SR-7）：路径、行数与是否超长（G21）、归属模块（可定位，冲突时全部列出）或未归属 / 已忽略及处理提示（未归属文件可「加入忽略」，B4）、当前层次中的投影说明（G14）、以它为入口的模块、导出（与模块接口的对应）；「预览源码」在资料区重新打开源代码预览标签。三卡（PC-10）：理解卡为归属、当前层次、作为入口与源码异常态；核对卡为归属与源码两行，清单为入口导出。
     codeRefs: [src/components/panel/FilePanel.vue]
   - id: present.panel.module-source
     name: 模块的源代码
     summary: 列出模块的文件、行数、入口与导出对应
     parent: present.panel
-    responsibility: 模块面板的「源代码」一节（SR-5）：模块的文件（子树并集，可选中，注明直接归属的子模块，带行数、超长标红）与模块行数合计、超长数（G21）、入口文件及来源（描述 entry / 约定 index.ts / package.json）、入口导出按「已对应 / 导出未描述 / 描述未导出」分组列出（G12）。
+    responsibility: 模块面板的「源代码」一节（SR-5）：模块的文件（子树并集，可选中，注明直接归属的子模块，带行数、超长标红）与模块行数合计、超长数（G21）、入口文件及来源（描述 entry / 约定 index.ts / package.json）、入口导出按「已对应 / 导出未描述 / 描述未导出」分组列出（G12）。在模块核对卡里是「源代码文件」清单（PC-8）。
     codeRefs: [src/components/panel/ModuleSource.vue, src/components/panel/ExportSection.vue, src/components/panel/ExportItem.vue]
 
   # ── 视图状态层 ──────────────────────────────────────────

@@ -5,7 +5,7 @@
  * 投影部分不反向依赖加载流水线。
  */
 export type { MessageEnds, Binding, FragmentKind, FragmentTag, Frame, BranchPoint, PlanNode, ScenarioPlan, ReturnPairs, Choices, ResolvedPath, RouteItem, Lanes, Landing, VisibleLanding, VisibleMessage, ScenarioLevelView, FrameStatus, ParticipationTarget, Participation, OutlineOption, OutlineNode, SequenceParticipant, SequenceMessage, SequenceFragment, SequenceModel, QuerySideEffect } from './types'
-export { bindRelation, RUNTIME_RELATION_TYPES, syncMismatch, forEachStep, messagesOf, mapChildren, planScenario, firstFrame, pairReturns, querySideEffects } from './semantics'
+export { bindRelation, relationScenarios, RUNTIME_RELATION_TYPES, syncMismatch, forEachStep, messagesOf, mapChildren, planScenario, firstFrame, pairReturns, querySideEffects } from './semantics'
 export { resolvePath, chooseBranch, choicesFor, choicesForBranch, pointPrefix, routeOf, choiceList, choicesFromList } from './path'
 export {
   landFrame,

@@ -356,10 +356,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         </main>
         <!-- WS-2、WS-3：属性栏 330px，跟随选中；并排或悬浮由宽度推出 -->
         <aside v-if="propsOpen" class="props" :class="{ floating }" aria-label="属性">
-          <header class="props-head">
-            <span>▤ 属性</span>
-            <button class="props-close" title="关闭属性栏（工具栏「▤ 属性」再打开）" aria-label="关闭属性栏" @click="toggleProps">×</button>
-          </header>
+          <!-- V15a：属性栏头与面板头合并——× 浮在面板头部的右上角 -->
+          <button class="props-close" title="关闭属性栏（工具栏「▤ 属性」再打开）" aria-label="关闭属性栏" @click="toggleProps">×</button>
           <div class="panel-area">
             <Panel v-if="desk.status.value === 'ready'" />
           </div>
@@ -558,6 +556,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 .props {
+  position: relative;
   flex: none;
   display: flex;
   flex-direction: column;
@@ -579,18 +578,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   overflow: hidden;
 }
 
-.props-head {
-  display: flex;
-  align-items: center;
-  padding: 3px 6px 3px 14px;
-  font-size: 11.5px;
-  color: var(--text-3);
-  border-bottom: 1px solid var(--border);
-  flex: none;
-}
-
 .props-close {
-  margin-left: auto;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 6;
   border: none;
   background: none;
   font-size: 15px;

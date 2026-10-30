@@ -1,14 +1,15 @@
 <script setup lang="ts">
 /**
- * 耦合线的面板（J7；G11 五段骨架，ADR-0050、V15）：① 头部（两端、时间耦合与同提交徽标）
- * ② 作用：说明（历史刷新或层次变化后本层已没有这对耦合时的空态解释）④ 边界：耦合（同提交、占比、有无依赖 / 关系）
- * ⑤ 证据与细节：共同的提交（折叠带计数）。
+ * 耦合线的面板（J7；V15、PC-10，ADR-0053）：头部（两端、时间耦合与同提交徽标）之下——
+ * 理解：耦合（同提交、占比、有无依赖 / 关系；历史刷新或层次变化后本层已没有这对耦合时为空态说明）；核对：共同的提交（折叠带计数）。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import Section from './Section.vue'
 import CommitList from './CommitList.vue'
+import PanelCard from './PanelCard.vue'
+import CheckCard from './CheckCard.vue'
 
 const desk = useDesk()
 const sel = computed(() => desk.evolution.selectedCouple.value)
@@ -34,26 +35,30 @@ const c = computed(() => sel.value?.coupling ?? null)
       <p class="muted">这对模块现在不是时间耦合（历史已刷新，或阈值已变化）。</p>
     </Section>
     <template v-else>
-      <Section title="耦合" data-sec="boundary.coupling">
-        <dl class="kv">
-          <dt>同提交</dt>
-          <dd>{{ c.shared }} 次（近 {{ desk.evolution.stats.value?.days }} 天）</dd>
-          <dt>占比</dt>
-          <dd>{{ name(c.a) }} 的 {{ pct(c.ratioA) }} · {{ name(c.b) }} 的 {{ pct(c.ratioB) }}</dd>
-          <dt>模块依赖</dt>
-          <dd :class="c.dependency ? '' : 'muted'">{{ c.dependency ? '有（任一方向）' : '无' }}</dd>
-          <dt>描述关系</dt>
-          <dd :class="c.relation ? '' : 'muted'">{{ c.relation ? '有（任一方向）' : '无' }}</dd>
-          <dt v-if="!sel.line">本层</dt>
-          <dd v-if="!sel.line" class="muted">这对模块在当前层次没有耦合线（两端投到同一节点，或时间耦合未开启）</dd>
-        </dl>
-        <p v-if="!c.dependency && !c.relation" class="hint muted">
-          两端总是一起改，代码里却没有依赖、描述里也没有关系：检查是否存在未描述的运行时关系（事件、注入、约定），或是否应合并 / 拆分。
-        </p>
-      </Section>
-      <Section title="共同的提交" :count="c.commits.length" fold data-sec="evidence.commits">
-        <CommitList :hashes="c.commits" :limit="10" />
-      </Section>
+      <PanelCard kind="understand" title="理解" closed-summary :summary="`同提交 ×${c.shared}`">
+        <Section title="耦合" data-sec="boundary.coupling">
+          <dl class="kv">
+            <dt>同提交</dt>
+            <dd>{{ c.shared }} 次（近 {{ desk.evolution.stats.value?.days }} 天）</dd>
+            <dt>占比</dt>
+            <dd>{{ name(c.a) }} 的 {{ pct(c.ratioA) }} · {{ name(c.b) }} 的 {{ pct(c.ratioB) }}</dd>
+            <dt>模块依赖</dt>
+            <dd :class="c.dependency ? '' : 'muted'">{{ c.dependency ? '有（任一方向）' : '无' }}</dd>
+            <dt>描述关系</dt>
+            <dd :class="c.relation ? '' : 'muted'">{{ c.relation ? '有（任一方向）' : '无' }}</dd>
+            <dt v-if="!sel.line">本层</dt>
+            <dd v-if="!sel.line" class="muted">这对模块在当前层次没有耦合线（两端投到同一节点，或时间耦合未开启）</dd>
+          </dl>
+          <p v-if="!c.dependency && !c.relation" class="hint muted">
+            两端总是一起改，代码里却没有依赖、描述里也没有关系：检查是否存在未描述的运行时关系（事件、注入、约定），或是否应合并 / 拆分。
+          </p>
+        </Section>
+      </PanelCard>
+      <CheckCard :rows="[]" :empty="`共同的提交 ${c.commits.length}`">
+        <Section title="共同的提交" :count="c.commits.length" fold data-sec="evidence.commits">
+          <CommitList :hashes="c.commits" :limit="10" />
+        </Section>
+      </CheckCard>
     </template>
   </div>
 </template>

@@ -17,6 +17,7 @@ import {
   resolvePath,
   routeOf,
   scenarioHome,
+  relationScenarios,
   scenarioModules,
   stepAfter,
   triggerOf,
@@ -193,6 +194,8 @@ export function createRun({ state, index, levelId, plan, view, positioned, fileO
     sequence,
     positionedSequence,
     participation: selectionParticipation,
+    /** PC-10：经过这条关系的场景（关系面板的相关资料卡） */
+    scenariosOfRelation: (id: string) => (index.value ? relationScenarios(index.value, id) : []),
     pairs,
     route,
     emphasis,

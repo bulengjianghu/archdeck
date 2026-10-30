@@ -58,7 +58,7 @@ async function open(project: string, url = `/p/${project}`, extra: RawFile[] = [
   desk.attachRouter(router)
   await desk.init()
   await settle()
-  const global = { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] }
+  const global = { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] }
   const nav = mount(NavTree, { global })
   const panel = mount(Panel, { global })
   await settle()

@@ -1,9 +1,8 @@
 <script setup lang="ts">
 /**
- * 代码依赖叠加线的面板（K10）与依赖边面板（选中束，ADR-0031 修订）——G11 五段骨架（ADR-0050、V15）：
- * ① 头部（两端、类型徽标、知识）③ 需要注意：违规一行带计数、单击跳到「违规」明细（V15b，口径与模块面板同——治理信号，非门禁红 U8）
- * ④ 边界：结构视角「文件依赖」（DepStructure，按元素分组、交互覆盖、判定与不稳定度）前置；交互视角「模块依赖」（A6 并入）
- * ⑤ 证据与细节：违规明细（折叠带计数）。
+ * 代码依赖叠加线的面板（K10）与依赖边面板（选中束，ADR-0031 修订）——V15、PC-10（ADR-0053）：头部（两端、类型徽标、知识）之下——
+ * 理解：结构视角「文件依赖」（DepStructure，按元素分组、交互覆盖、判定与不稳定度）；交互视角「模块依赖」（A6 并入）；
+ * 核对：治理一行（违规，口径与模块面板同——治理信号，非门禁红 U8），清单为违规明细（折叠带计数）。
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -12,8 +11,10 @@ import Section from './Section.vue'
 import FileDepList from './FileDepList.vue'
 import StructureFacts, { type StructureGroup } from './StructureFacts.vue'
 import DepStructure from './DepStructure.vue'
-import NoticeSection from './NoticeSection.vue'
+import PanelCard from './PanelCard.vue'
+import CheckCard from './CheckCard.vue'
 import { usePanelJump, type PanelNotice } from './panelNotices'
+import { rowsFromNotices } from './panelCheck'
 
 const desk = useDesk()
 const structureView = computed(() => desk.perspective.value === 'structure')
@@ -30,7 +31,7 @@ const structure = computed<StructureGroup[]>(() => {
   ]
 })
 
-// ── ③ 需要注意（V15b）：违规一行带计数、单击跳到 ⑤ 的「违规」明细 ──
+// ── 核对卡（PC-10）：治理一行（违规），单击跳到「违规」明细 ──
 const root = ref<HTMLElement | null>(null)
 usePanelJump(root)
 const violations = computed(() => sel.value?.detail?.violations ?? [])
@@ -49,6 +50,7 @@ const notices = computed<PanelNotice[]>(() =>
       ]
     : [],
 )
+const rows = computed(() => rowsFromNotices(notices.value, [{ key: 'governance', label: '治理', notices: ['violations'], ok: '没有违规' }]))
 </script>
 
 <template>
@@ -64,40 +66,40 @@ const notices = computed<PanelNotice[]>(() =>
       <p class="muted">本层没有这对节点之间的代码依赖（层次已变化，或代码事实已刷新）。</p>
     </Section>
     <template v-else>
-      <!-- ③ 需要注意：违规（V15b） -->
-      <NoticeSection :notices="notices" />
-      <!-- ④ 边界：结构视角「文件依赖」前置；交互视角「模块依赖」 -->
-      <DepStructure v-if="structureView" data-sec="boundary.deps" :from="sel.from" :to="sel.to" />
-      <Section v-if="!structureView" title="模块依赖" :count="sel.detail.deps.length" data-sec="boundary.deps">
-        <ul class="plain">
-          <li v-for="d in sel.detail.deps" :key="d.key" class="item">
-            <div>
-              <button class="link" @click="desk.revealModule(d.from)">{{ name(d.from) }}</button> →
-              <button class="link" @click="desk.revealModule(d.to)">{{ name(d.to) }}</button>
-              <span :class="d.described ? 'muted' : 'warn'">{{ d.described ? '有交互' : '未解释' }}</span>
-              <span class="muted">{{ d.files.length }} 处</span>
-            </div>
-            <FileDepList :deps="d.files" :limit="4" />
-          </li>
-        </ul>
-      </Section>
-      <!-- ⑤ 证据与细节：违规明细折叠带计数（V15c） -->
-      <Section v-if="violations.length" title="违规" :count="violations.length" fold data-sec="evidence.violations">
-        <ul class="plain">
-          <li v-for="v in violations" :key="v.key" class="item">
-            <div>
-              <button class="link" @click="desk.revealModule(v.from)">{{ name(v.from) }}</button> →
-              <button class="link" @click="desk.revealModule(v.to)">{{ name(v.to) }}</button>
-              <span class="chip">{{ RULE_LABELS[v.kind] }}</span
-              ><span :class="v.status === 'new' ? 'bad' : 'muted'">{{ STATUS[v.status] }}</span>
-            </div>
-            <p class="muted reason">
-              {{ v.reason }}<template v-if="v.allowReason">；例外理由：{{ v.allowReason }}</template>
-            </p>
-            <FileDepList :deps="v.files" :limit="4" />
-          </li>
-        </ul>
-      </Section>
+      <PanelCard kind="understand" title="理解" closed-summary :summary="`${sel.detail.deps.length} 组模块依赖`">
+        <DepStructure v-if="structureView" data-sec="boundary.deps" :from="sel.from" :to="sel.to" />
+        <Section v-if="!structureView" title="模块依赖" :count="sel.detail.deps.length" data-sec="boundary.deps">
+          <ul class="plain">
+            <li v-for="d in sel.detail.deps" :key="d.key" class="item">
+              <div>
+                <button class="link" @click="desk.revealModule(d.from)">{{ name(d.from) }}</button> →
+                <button class="link" @click="desk.revealModule(d.to)">{{ name(d.to) }}</button>
+                <span :class="d.described ? 'muted' : 'warn'">{{ d.described ? '有交互' : '未解释' }}</span>
+                <span class="muted">{{ d.files.length }} 处</span>
+              </div>
+              <FileDepList :deps="d.files" :limit="4" />
+            </li>
+          </ul>
+        </Section>
+      </PanelCard>
+      <CheckCard :rows="rows">
+        <Section v-if="violations.length" title="违规" :count="violations.length" fold data-sec="evidence.violations">
+          <ul class="plain">
+            <li v-for="v in violations" :key="v.key" class="item">
+              <div>
+                <button class="link" @click="desk.revealModule(v.from)">{{ name(v.from) }}</button> →
+                <button class="link" @click="desk.revealModule(v.to)">{{ name(v.to) }}</button>
+                <span class="chip">{{ RULE_LABELS[v.kind] }}</span
+                ><span :class="v.status === 'new' ? 'bad' : 'muted'">{{ STATUS[v.status] }}</span>
+              </div>
+              <p class="muted reason">
+                {{ v.reason }}<template v-if="v.allowReason">；例外理由：{{ v.allowReason }}</template>
+              </p>
+              <FileDepList :deps="v.files" :limit="4" />
+            </li>
+          </ul>
+        </Section>
+      </CheckCard>
     </template>
   </div>
 </template>
