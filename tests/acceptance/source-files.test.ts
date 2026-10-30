@@ -12,7 +12,7 @@ import { readProject } from '../../vite/readModelDir'
 import { readExports, readSourceFile, readSourceTree } from '../../vite/readSource'
 import { createDeskState, type SourceFetcher } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
-import { useAside } from '../../src/components/split/useAside'
+import { useDock } from '../../src/components/split/useDock'
 import NavTree from '../../src/components/tree/NavTree.vue'
 import Panel from '../../src/components/panel/Panel.vue'
 import SourceView from '../../src/components/source/SourceView.vue'
@@ -136,7 +136,7 @@ describe('§6.4 源代码验收', () => {
     // G14：分层总览高亮所在的带与路径上露出的模块
     expect([...desk.files.hits.value!.nodes]).toEqual(['s:present/block', 'present.nav-tree'])
     // 副栏：选中文件即预览
-    const aside = useAside(desk)
+    const aside = useDock(desk)
     expect(aside.previewPath.value).toBe(file)
     expect(aside.tab.value).toBe('source')
     expect(aside.hidden.value).toBe(false)
@@ -192,7 +192,7 @@ describe('§6.4 源代码验收', () => {
   it('6. 运行视角下选中文件：副栏切到源代码；单步后选中下一步，副栏切回时序图，源代码页签仍在', async () => {
     const { desk } = await open('h5p-arch-desk')
     desk.openScenario('sc.open-and-play')
-    const aside = useAside(desk)
+    const aside = useDock(desk)
     await settle()
     expect(aside.tab.value).toBe('sequence')
     desk.selectFile('src/state/useDeskState.ts')

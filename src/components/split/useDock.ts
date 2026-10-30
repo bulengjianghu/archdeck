@@ -8,7 +8,7 @@ import type { DeskState } from '@/state/useDeskState'
 
 export type AsideTab = 'sequence' | 'source'
 
-export function useAside(desk: Pick<DeskState, 'files' | 'perspective' | 'playback'>) {
+export function useDock(desk: Pick<DeskState, 'files' | 'perspective' | 'playback'>) {
   const previewPath = ref<string | null>(null)
   /** S18：预览要滚到的行；没有时从头显示 */
   const previewLine = ref<number | null>(null)

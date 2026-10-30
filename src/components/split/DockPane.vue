@@ -8,7 +8,7 @@ import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
 import SequenceView from '../sequence/SequenceView.vue'
 import SourceView from '../source/SourceView.vue'
-import type { AsideTab } from './useAside'
+import type { AsideTab } from './useDock'
 
 const props = defineProps<{ collapsed: boolean; dir: 'row' | 'column'; tab: AsideTab; run: boolean; previewPath: string | null; previewLine?: number | null }>()
 const emit = defineEmits<{ toggle: []; direction: [dir: 'row' | 'column']; tab: [tab: AsideTab]; close: [] }>()

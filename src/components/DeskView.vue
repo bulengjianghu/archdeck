@@ -18,9 +18,9 @@ import GuideDialog from './GuideDialog.vue'
 import PerspectiveSwitch from './PerspectiveSwitch.vue'
 import PlayerBar from './PlayerBar.vue'
 import SplitView from './split/SplitView.vue'
-import AsidePane from './split/AsidePane.vue'
+import DockPane from './split/DockPane.vue'
 import SourceDeltaBar from './source/SourceDeltaBar.vue'
-import { useAside } from './split/useAside'
+import { useDock } from './split/useDock'
 import { directionOf, readLayout, resize, saveLayout, setDirection, toggleSlot, type PaneLayout } from './split/paneLayout'
 import Panel from './panel/Panel.vue'
 import NavTree from './tree/NavTree.vue'
@@ -179,7 +179,7 @@ function onDividerUp() {
 }
 
 // 副栏（G15）：页签与预览文件只属于这块界面
-const aside = useAside(desk)
+const aside = useDock(desk)
 const { previewPath, previewLine, tab: asideTab, run } = aside
 provide(OPEN_PREVIEW, aside.open)
 // G22：当前版本下源码树的 HEAD 与描述的 source.commit 不一致（提交 / 设计版本没有代码事实，不提示）
@@ -304,7 +304,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             </button>
           </template>
           <template #aside="{ collapsed, toggle }">
-            <AsidePane
+            <DockPane
               v-if="!aside.hidden.value"
               :collapsed="collapsed"
               :dir="paneDir"
