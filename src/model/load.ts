@@ -11,7 +11,7 @@ import { LineCounter, parseDocument, type Document } from 'yaml'
 import schema from '../../schema/arch-file.schema.json'
 import { LEGACY_RELATION_TYPES, MIGRATED_RELATION_TYPE, REMOVED_RELATION_TYPE, ROOT_MOUNT } from './types'
 import { isSketchFile } from './intent/types'
-import { isExplainerFile } from './explainer/types'
+import { isExplainerFile } from './explainer'
 import type {
   ActorEntity,
   ArchFileDef,

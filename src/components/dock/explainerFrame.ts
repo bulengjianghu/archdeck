@@ -3,7 +3,7 @@
  * 在 body 末尾注入桥接脚本——按架构台给的原文填 data-field、给有图解的引用附「图解 ›」（每个模块只在第一处附一次）、把单击变成 postMessage。
  * iframe 只给 allow-scripts（不给 same-origin），父页按消息来源校验（ExplainerDoc）。
  */
-import type { ExplainerRef } from '@/state/useDeskState'
+import type { ExplainerRefView } from '@/state/useDeskState'
 
 /** 桥接脚本发给父页的消息 */
 export type ExplainerMessage = { type: 'arch:select'; module: string } | { type: 'arch:open'; module: string }
@@ -81,7 +81,7 @@ const BRIDGE = `(function () {
 const scriptJson = (v: unknown) => JSON.stringify(v).replace(/</g, '\\u003c')
 
 /** EX-2、EX-3：组装 iframe 的 srcdoc */
-export function explainerSrcdoc(html: string, refs: Record<string, ExplainerRef>, origin: string): string {
+export function explainerSrcdoc(html: string, refs: Record<string, ExplainerRefView>, origin: string): string {
   const head = /<head\b[^>]*>/i.exec(html)
   const top = `${CSP}${STYLE}`
   let out = head ? `${html.slice(0, head.index + head[0].length)}${top}${html.slice(head.index + head[0].length)}` : `${top}${html}`

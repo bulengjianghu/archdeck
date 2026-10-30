@@ -83,6 +83,7 @@ modules:
       - 只读：读描述与读 git 快照都不写任何文件
       - git 经 execFileSync 调用、提交号只收十六进制，不经 shell
       - 读当前版本时跳过 designs/ 与 governance/
+      - 随描述带上的只有 YAML / JSON 与图解 explainers/*.html（EX-1）
     codeRefs: [vite/readModelDir.ts, vite/readGit.ts]
   - id: access.lint
     name: 命令行校验
@@ -160,7 +161,7 @@ modules:
     name: 节点组件
     summary: 按种类画出模块、边界、参与者、带等节点与角标
     parent: present.canvas
-    responsibility: '七种节点：模块（职责摘要、可下钻标识、目标态虚线）、边界（系统内、本层外的模块与所在路径）、外部参与者（用户 / 外部系统 / 时间图标，系统外）、边界框（系统框与当前父模块框，FrameNode）、带（层名、抽象原则、可依赖层）、核心模块小块、「+N 个其他模块」占位；设计版本中新增 / 修改描边与「△N」变更角标。分级（ADR-0027）：普通层次的核心模块画成大块，共用件画成架上的紧凑块（SharedNode，O9），用到共用件的节点右上角「共用 ×N」角标（O10），父模块框与带右上角常驻「共用件 N · 折叠 M」并标出架的「共用件」字样（O11）；普通层次的「+N」占位双击无动作（O8）。边界与端口（ADR-0029、ADR-0030）：role: port / adapter 的模块名后带边界角色记号（L14），模块、核心小块与边界节点骑着端口记号（L13）；节点角标统一布局（DiffMark）——上边框左侧为新增 / 修改、「△N」与「组装根」角标（O12），上边框右半为端口记号，顶边有端口记号时环编号与「共用 ×N」移到下边框、热度色块让到左下角。'
+    responsibility: '七种节点：模块（职责摘要、可下钻标识、目标态虚线）、边界（系统内、本层外的模块与所在路径）、外部参与者（用户 / 外部系统 / 时间图标，系统外）、边界框（系统框与当前父模块框，FrameNode）、带（层名、抽象原则、可依赖层）、核心模块小块、「+N 个其他模块」占位；设计版本中新增 / 修改描边与「△N」变更角标。分级（ADR-0027）：普通层次的核心模块画成大块，共用件画成架上的紧凑块（SharedNode，O9），用到共用件的节点右上角「共用 ×N」角标（O10），父模块框与带右上角常驻「共用件 N · 折叠 M」并标出架的「共用件」字样（O11）；普通层次的「+N」占位双击无动作（O8）。边界与端口（ADR-0029、ADR-0030）：role: port / adapter 的模块名后带边界角色记号（L14），模块、核心小块与边界节点骑着端口记号（L13）；节点角标统一布局（DiffMark）——上边框左侧为新增 / 修改、「△N」与「组装根」角标（O12），上边框右半为端口记号，顶边有端口记号时环编号与「共用 ×N」移到下边框、热度色块让到左下角。；有图解的模块（模块、核心、带）名称行加一枚 ▣，单击以预览打开图解、双击固定、不改选中，运行视角与草图编辑态不显示（EX-5）'
     abstraction: 一种节点一个组件，角标共用统一的布局；只画画布场景给的数据，指标与端口不自己算。
     codeRefs: [src/components/nodes/**]
   - id: present.canvas.nodes.ports
@@ -399,7 +400,7 @@ modules:
     name: Loader
     summary: 解析描述文件、检查单文件格式并合并成模型
     parent: model.pipeline
-    responsibility: 解析 YAML / JSON、按 JSON Schema 检查单文件格式（未知字段即报错）、把多个文件合并成一个模型并记录每个实体的出处（文件 / 路径 / 行号）；解析外部参与者、场景与嵌套步骤树（每个步骤记录路径与出处）；sourceLimits 只取第一处声明，重复时提醒（G20）；关系类型的旧名 event / dataflow 映射为 notifies（翻转两端）/ streams 并逐条提醒迁移（M12）；类型为 depends（M15，ADR-0026）与 implements（M17，ADR-0029：实现者已改写在接口的 implementedBy）的关系在格式检查前丢弃并逐条提醒——供读历史提交，文件不整份跳过；via 原样带入，旧的平铺取值由 Validator 读成四形态（M20）；场景的 kind 由 schema 校验（M19）。
+    responsibility: 解析 YAML / JSON、按 JSON Schema 检查单文件格式（未知字段即报错）、把多个文件合并成一个模型并记录每个实体的出处（文件 / 路径 / 行号）；解析外部参与者、场景与嵌套步骤树（每个步骤记录路径与出处）；sourceLimits 只取第一处声明，重复时提醒（G20）；关系类型的旧名 event / dataflow 映射为 notifies（翻转两端）/ streams 并逐条提醒迁移（M12）；类型为 depends（M15，ADR-0026）与 implements（M17，ADR-0029：实现者已改写在接口的 implementedBy）的关系在格式检查前丢弃并逐条提醒——供读历史提交，文件不整份跳过；via 原样带入，旧的平铺取值由 Validator 读成四形态（M20）；场景的 kind 由 schema 校验（M19）。图解文件 explainers/*.html 不按 YAML 解析，原样记进模型（EX-1）。
     codeRefs: [src/model/load.ts]
   - id: model.pipeline.validator
     name: Validator
@@ -493,6 +494,8 @@ relations:
   - {id: rel.ad.flow-edges, from: present.canvas.flow, to: present.canvas.edges, type: commands, description: 视图转换与交互交给边组件：渲染 RouteEdge, purpose: 按走线渲染边 }
   - { id: rel.ad.flow-legend, from: present.canvas.flow, to: present.canvas.legend, type: commands, description: 视图转换与交互交给图例：画布在右上角那一列渲染图例（Legend），留痕排在它下面；并调用 gloss 把图例释义并进边的悬停说明（L50）, purpose: 在画布右上角放图例并附悬停释义 }
   - { id: rel.w4.desk-display-menu, from: present.desk-view, to: present.canvas.legend, type: commands, description: 项目视图在工具栏视角切换之后渲染「显示 ▾」（DisplayMenu，L49），并经 OPEN_GUIDE 提供打开帮助的入口给图例关系组的「?」（L51）, purpose: 在工具栏放没有记号的显示设置 }
+  - { id: rel.w5.dock-explainer-text, from: present.desk-view.split, to: present.shared, type: queries, description: 资料区的图解标签向呈现共用件取过期的一句话与改动的增删改文字（staleText、BASIS_CHANGE_TEXT，EX-7）, purpose: 写出图解的过期提示 }
+  - { id: rel.w5.module-explainer-text, from: present.panel.module, to: present.shared, type: queries, description: 模块面板的相关资料卡与核对卡向呈现共用件取图解过期的一句话与改动文字（EX-7）, purpose: 写出图解的过期提示 }
   - { id: rel.ad.legend-presence, from: present.canvas.legend, to: state.desk.legend, type: queries, payload: [ds.ViewState, ds.LevelView], description: 图例向出现集合派生取：按当前视角与层次的静息态画面算出现的记号集合（L47），传给各图例组过滤行, purpose: 只列画面上实际出现的图例行 }
   - { id: rel.ad.legend-edge-style, from: present.canvas.legend, to: present.canvas.edges, type: queries, description: 图例向边组件取：图例的示意线调用画布边的 edgeStyle 与箭头、插座组件，按同一套颜色、线宽、线型与查询的半透明绘制（L10、L12）, purpose: 让示意线与画布边同一画法 }
   - {id: rel.ad.panel-module, from: present.panel.dispatch, to: present.panel.module, type: commands, description: 面板分派交给模块面板：渲染 ModulePanel, purpose: 选中模块时显示模块面板 }

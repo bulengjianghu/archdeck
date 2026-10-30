@@ -17,6 +17,7 @@ model/<项目>/
     <区域>.yaml            各区域的子树：第二级模块之下的模块、本区域的关系、接口、数据结构（AI 按代码生成）
   actors.yaml              外部参与者及其入口关系
   scenarios/<场景>.yaml    一个场景一个文件，也可用 .json
+  explainers/<模块 ID>.html 图解：讲「这个机制为什么这样设计」的一份自包含 HTML（可选的第二趟，§3.11）
   source-ignore.yaml       忽略清单 sourceIgnore：不属于任何模块的源码文件（§3.7）
   rules.yaml               架构规则 rules：架构师的意图，AI 重新生成时不改动（§3.8）
   reviewed.yaml            确认记录 reviewed：架构师确认过哪些模块、确认时的指纹与摘要，AI 重新生成时不改动（§3.9）
@@ -28,7 +29,7 @@ model/<项目>/
 
 | 拥有者 | 文件 | 页面 | 指纹 |
 |---|---|---|---|
-| AI（按代码生成） | `system.yaml`、`modules/`（骨架之下）、`actors.yaml`、`scenarios/`；设计版本各轮快照 `designs/<设计>/r<N>/`，含该轮说明 `revision.yaml`（E8） | 只读 | — |
+| AI（按代码生成） | `system.yaml`、`modules/`（骨架之下）、`actors.yaml`、`scenarios/`、`explainers/`（图解，§3.11）；设计版本各轮快照 `designs/<设计>/r<N>/`，含该轮说明 `revision.yaml`（E8） | 只读 | — |
 | 人（架构师、负责人） | 草图：`intent/*.yaml`（骨架等持久草图）、`designs/<设计>/sketches/*.yaml`；`rules.yaml`（AI 重新生成时不改动，§3.8）；`source-ignore.yaml`（忽略项）；`designs/<设计>/design.yaml`（目标、状态、基线、ADR、认可偏差 `accepted`、评审意见 `revisions[].feedback`——不含每轮说明，E8）；`reviewed.yaml`（确认记录，§3.9） | 只追加：例外、忽略项、评审意见（该轮没有条目时新建，B2）、认可偏差；确认记录追加或按模块更新（Z1）；归档 / 晋升改设计状态、晋升时整份替换持久草图；草图在画布编辑后按设计整份覆盖、新建设计，级联改名与删除只限 `designs/<设计>/sketches/*`（B6、B7、X7）；其余由人编辑 | 记在 `governance/owned.json`：人改完后 `npm run arch -- own` 登记，页面写入自动更新，`lint:model` 不符即报错 `owned.changed` |
 | 命令行与 agent 接口 | `governance/` | 只读 | — |
 
@@ -217,6 +218,7 @@ system:
       - { text: 会话是资源的唯一属主，close 时全部释放, adr: 12 }
   ```
 - **实现原理**：只给关键模块写，说清核心机制（长文，面板折叠在后）。
+- **图解 `explainer`**（M32，ADR-0055）：通常不写——图解放在约定路径 `explainers/<模块 ID>.html` 就会被找到；只有文件名不能用模块 ID 时才写 `explainer: explainers/<文件>.html`。模块在骨架等人拥有的草图里时，写在 `modules/` 区域文件的补充条目里（同 `summary`）。图解本身怎么写见 §3.11。
 - **接口 / 数据结构**：只列对外有意义的（被其他模块调用或交换的）。
 - **角色 `role`**（ADR-0027；旧写法 `core: true` 加载时映射为 `role: core` 并提醒，M16）：任意层次都可写，属模块对外的一面，写在父草图（X10）——第二级写在骨架里，更深的写在挂在父模块上的草图里，或写在人拥有的 `intent/roles.yaml`（`roles:` 模块 ID → role；草图写了的以草图为准；治理面板「认可为共用件」追加到这里，U11）；AI 生成的 `modules/` 不写 `role`（分级是架构师的判断，AI 只能经治理面板建议，U11）。
 
@@ -618,6 +620,51 @@ sketch:
 - 旧写法 `kind: layer`（ADR-0052 之前的层）由 Loader 迁移（M26）：根下的层读作根的单成员层，非根层级的层溶解为父模块的 `strata`（提醒 `layer.nested`）。新写的描述一律用 `strata`。
 - 草图版本（页面上把一个设计的草图当版本打开）载荷为 `system.yaml` + 持久草图 + 该设计的各张草图（`sketches/<mount>.yaml`）+ `references.yaml`（草图引用、草图里没有的外部模块，取自当前版本，只读，X19），自成一份可加载的描述。
 
+### 3.11 图解（可选的第二趟）
+
+图解是附在模块上的一份自包含 HTML（EX-1–EX-10，ADR-0055），回答「**这个机制为什么这样设计**」。它不是第二份描述：结构与行为归架构台，图解只讲原理与理由。先按 §3.1–§3.10 生成 YAML，再针对入选模块做这一趟。
+
+**给谁做**：只给机制不显然的模块做——有内部分层（声明了 `strata`）、有不变式，或出现在 ≥ 2 个场景里的核心模块。根模块（系统）的图解 `explainers/<系统 ID>.html` 即项目总览。每个项目先做 5–9 份；跨多个模块的机制挂在它们的最近共同父模块上。
+
+**写什么、不写什么**（C1）：
+
+| 写 | 不写（归架构台，写进图解就会过期） |
+|---|---|
+| 机制示意（内联 SVG）、关键流程的简化图、为什么这样切分、守住的约束为什么必要、常见误解 | 接口清单、关系清单、文件清单、调用链逐步、代码片段的大段摘抄 |
+
+**父子分工**（R5.3）：父模块的图解只讲子模块之间怎么配合、为什么这样切分，把子模块当黑盒；子模块的图解只讲自己内部，父模块和兄弟模块只作为灰色背景出现。父模块的图解用 `data-arch` 指向孙模块即越级（`explainer.too-deep`）。
+
+**自上而下生成**：先生成父模块的图解，定下切分与配合；再在父模块给的语境里生成子模块的图解。
+
+**引用而不抄写**（EX-2）：
+
+```html
+<!-- 提到一个模块：单击即在画布上选中它；它有图解时架构台在第一处附「图解 ›」 -->
+<span data-arch="kit.kernel">会话内核</span>
+<!-- 引用描述原文：内容由架构台显示时填入，写成空元素 -->
+<span data-arch="kit.kernel" data-field="summary"></span>
+<ul data-arch="kit.kernel" data-field="invariants"></ul>   <!-- ul / ol 填成列表项，其他元素用「；」连接 -->
+```
+
+- 一切 `summary` 与不变式都用 `data-field` 引用；正文里出现某个模块 `summary` 或一条不变式的原文（≥ 8 字）即 `explainer.copied-text`。用自己的话转述可以，原样抄不行。
+- `data-field` 只有 `summary`、`invariants` 两种；职责全文、关系、接口不引用（它们属于架构台，读者在属性栏看）。
+- 术语与架构台一致：查询 / 委托 / 通知 / 流，层、端口、核心、共用件；模块名与描述里的 `name` 一致。
+
+**形态**：
+
+- 一个文件、自包含：样式与 SVG 内联，不引用外部脚本、样式、字体、图片（架构台以 CSP 禁止一切网络请求，EX-3）；可以有少量自己的脚本，但不依赖它。
+- 深浅色都可读：颜色写成 CSS 变量，在 `@media (prefers-color-scheme: dark)` 里重定义，`color-scheme: light dark`。
+- 结论先行：标题一句点题，第一段引用本模块的 `summary` 交代它对外承诺什么，然后才是机制。一份图解在资料区一列（约 600px 宽）里读完，不要超过三屏。
+- 中文行文，短句；一张示意图胜过三段文字。
+
+**写入依据**（EX-6、EX-9）：生成或改完一份图解后执行
+
+```bash
+npm run arch -- explainer <模块 ID> --project <项目> --write
+```
+
+它在图解的 head 里写入 `<meta name="arch-basis" content="v1 …">`：本模块的描述、子模块的 summary / invariants 与子模块之间的关系，按项各一个指纹。之后这些依据变了，架构台标「基于旧描述 · N 处改动」，`lint:model` 报 `explainer.stale`；按改动核对图解的讲法（引用的原文已自动是新的），讲法仍成立或改好后再执行一次上面的命令。不要手改 `arch-basis`。
+
 ## 4. 校验与提交
 
 ```bash
@@ -628,6 +675,7 @@ npm run arch -- own            # 人改完 intent/、designs/*/sketches/、rules
 - 必须 0 个错误；提醒逐条处理：缺职责要补；引用其他区域尚未定义的接口 / 数据结构时可暂留；源码归属警告按 §3.7 处理；场景证据文件不存在（`scenario.evidence`）按 §3.6 改正路径。
 - 人拥有的文件由指纹门禁守住：`lint:model` 报 `owned.changed` 时说明有人拥有的文件在登记后被改动（多半是 AI 重新生成时碰了它）——由人核对后恢复，或确认改动后再 `arch own`；`owned.unregistered` 提醒有人拥有的文件还没登记。AI 不得运行 `arch own`。
 - 描述契约（M27–M31，ADR-0053）：摘要行的「契约」一段要做到——有职责的模块全有 `summary`（核心缺 0）、关系全有 `purpose`、超长 0；核心模块与有内部分层的模块有 `invariants`。这些提示是 info、不作为门禁，明细在返工清单（`npm run arch -- issues`）里。
+- 图解（§3.11）：`lint:model` 的 `explainer.*` 提醒逐条处理——指向不存在的模块是错误；`explainer.stale` 先核对讲法，再按 §3.11 写入依据。
 - 按代码重新生成当前版本后，更新 `system.yaml` 的 `source.commit` 与 `source.generatedAt`；对活动草图跑 `sketch-check`，偏差按草图修正描述（X5）。
 - `lint:model` 一并检查代码事实与架构规则（K、U、Y）：基线之外的新增违规（`rule.new`）、环度上升（`cycle.grew`）是错误，要么修代码，要么由架构师裁决后改规则；`fact.unconfirmed` 提醒说明描述里的端口实现者（`implementedBy`；现状为 `implements` 关系）在代码里找不到，或交互关系的两端之间在代码里没有任何依赖（K6），按代码修正描述（确实经端口、总线或通道传递的写 `via`，K5b）——运行时交互经由第三个模块转交时，关系写在实际调用的两端之间（如 `entry → validator`，而不是 `loader → validator`）；未解释的交互（K7，info）只计交互使用（调用、`new`、`extends`、渲染，或把函数、类、组件作为值交出）而没有交互关系覆盖的，只读常量、枚举、只读值的纯值读取不计；按「事实求全、描述求准、呈现求少」（Q12）**补交互，不补依赖**：这次使用是哪种交互就按三问补哪种（§3.4：要结果、无副作用的补 `queries`，交出一件事的补 `commands`，一对多的补 `notifies`，连续数据的补 `streams`；描述写「谁调谁做什么」），只引类型的、只读常量与标签的、借用名称查询这类没有架构含义的不补；实现端口的写进接口的 `implementedBy`，继承与组装是事实（K12、K13），都不补关系（ADR-0029、ADR-0030）。`relation.unclassified`（未分类，info）只提示：AI 按三问给出分类，核心之间的由架构师在草图里确认（M17、X23）；`query.side-effect`（U13）与 `port.no-implementer` / `port.no-user`（U14）按建议改描述或交给架构师。
 - 基线由人生成并提交：

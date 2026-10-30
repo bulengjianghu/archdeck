@@ -27,7 +27,7 @@ modules:
   - id: access.agent
     name: agent 接口
     summary: 为 AI agent 与人提供命令行和 MCP 的架构查询
-    abstraction: 查询核心只有一份，命令行与 MCP 两层外壳同输入同结果；只读描述、规则与基线，只写拦截记录。
+    abstraction: 查询核心只有一份，命令行与 MCP 两层外壳同输入同结果；只读描述、规则与基线，只写拦截记录——显式 --write 的命令例外（classify 写回关系类型，explainer 写入图解的依据 arch-basis，EX-9）。
     invariants:
       - 命令行与 MCP 两层外壳都只经 createService 这一份查询核心
       - 复用缓存前比对输入指纹：描述文本、源码文件的修改时间与大小、基线与登记文件
@@ -105,6 +105,14 @@ modules:
     parent: state.desk
     responsibility: 每个模块的确认状态与差异、确认范围与计数（调用模型层「确认」，Z3–Z5）；「确认」的写入意图——按当天、来源 manual 生成记录，经注入的 ModelWriter 分批写入，结果由文件变化推送回来（N5）；只对当前版本（Z1）。
     codeRefs: [src/state/desk/review.ts]
+
+  - id: state.desk.explainers
+    name: 图解派生（desk.explainers）
+    summary: 给出哪些模块有图解、原文、导航与是否过期
+    parent: state.desk
+    stratum: derive
+    responsibility: 调用模型层「图解」的派生（computed，随索引重算，ADR-0055）：有图解的模块与路径（EX-1）、各图解的依据状态与改动（EX-7，只算有图解的模块）、图解原文与要填入的引用原文（EX-2）、↑ ↓ 导航（EX-4）。呈现层（资料区的图解标签、相关资料卡、核对卡、画布标记）只读这里，不直接调模型层（U10）。
+    codeRefs: [src/state/desk/explainers.ts]
 
   # ── 模型层 ──────────────────────────────────────────────
   - id: model.governance.facts
@@ -192,6 +200,18 @@ modules:
     abstraction: 确认的摘要、指纹与状态都是纯函数，页面、命令行与草图归档共用同一份。
     provides: [if.review.query]
     codeRefs: [src/model/review/index.ts, src/model/review/hash.ts, src/model/review/status.ts, src/model/review/text.ts]
+
+  - id: model.review.explainer
+    name: 图解
+    summary: 查找模块的图解，判定它的依据是否过期
+    parent: model.review
+    kind: component
+    responsibility: 图解的架构查询（ADR-0055）：按 explainer 字段或约定路径 explainers/<模块 ID>.html 查找（M32、EX-1），↑ 最近有图解的祖先、↓ 子树里最近有图解的后代（EX-4）；依据 = 本模块的确认摘要与 summary / invariants + 直接子模块的 summary / invariants + 子模块之间的关系，按项记 8 位指纹（复用确认的指纹算法），读写 arch-basis、比出增删改（EX-6、EX-7）；图解里 data-arch 引用到的模块要填入的原文（EX-2）；lint：未知模块、未知字段、抄写原文、越级、过期、未记录依据、孤儿文件（EX-8）。只做有限的 HTML 文本解析，不依赖 DOM；页面与命令行 arch explainer（EX-9）共用。
+    abstraction: 查找、依据与检查分文件：依据只读索引算指纹，HTML 只按标签做文本解析，检查组合两者产出问题。
+    invariants:
+      - { text: 依据只含本模块描述、子模块的对外承诺与子模块之间的关系，子模块内部改动不使父模块的图解过期, adr: 55 }
+      - 不依赖 DOM：HTML 只按标签做有限的文本解析，只改写 arch-basis 一个 meta
+    codeRefs: [src/model/explainer/**]
 
 interfaces:
   - id: if.governance.report
@@ -379,6 +399,8 @@ relations:
   - {id: rel.gv.desk-evolution-model, from: state.desk.evolution, to: model.evolution, type: queries, description: 演化事实派生（desk.evolution）向演化事实取：evolutionStats、levelEvolution：热度与耦合的派生（J5）, purpose: 派生热度与耦合 }
   - {id: rel.gv.source-history-options, from: access.model-source, to: model.evolution, type: queries, description: ModelSource 插件向演化事实取：读源码历史与健康度前调用 historyOptions，按 system.source.history 取统计窗口与耦合阈值（J1）, purpose: 取统计窗口与耦合阈值 }
   - {id: rel.gv.desk-review-model, from: state.desk.review, to: model.review, type: queries, interface: if.review.query, description: 人确认层派生（desk.review）向确认取：reviewStates、reviewCounts、reviewEntries（Z3–Z5）, purpose: 算确认状态、计数与条目 }
+  - { id: rel.w5.desk-explainers-model, from: state.desk.explainers, to: model.review.explainer, type: queries, description: 图解派生（desk.explainers）向「图解」取有图解的模块、各图解的依据状态、原文与引用原文、↑ ↓ 导航（EX-1–EX-7）, purpose: 取图解与它的依据状态 }
+  - { id: rel.w5.loader-explainer, from: model.pipeline.loader, to: model.review.explainer, type: queries, description: Loader 用 isExplainerFile 认出 explainers/*.html，原样带进模型、不按 YAML 解析（EX-1）, purpose: 认出图解文件 }
   - { id: rel.gv.navigation-evolution, from: state.transition.navigation, to: model.evolution, type: queries, description: 导航规则向演化事实取：选中耦合线时调用 coupleEnds 取两端（J7）, purpose: 选中耦合线时取两端 }
   - { id: rel.gv.selection-evolution, from: state.transition.selection, to: model.evolution, type: queries, description: 视角与选中规则向演化事实取：选中耦合线时调用 coupleEnds 取要突出的两端（J7）, purpose: 选中耦合线时取要突出的两端 }
   - { id: rel.gv.scenario-panel-shared, from: present.panel.scenario, to: present.shared, type: commands, description: 场景面板交给呈现共用件：经 useOpenPreview 在资料区预览证据文件（S15）, purpose: 在资料区预览证据文件 }

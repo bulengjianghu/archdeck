@@ -70,7 +70,7 @@ import { createExplainers } from './desk/explainers'
 
 export type { CanvasMode, ImpactQuery, Selection, Toggles, DocRef, DocTab, DocGroup, WorkspaceState } from './transition'
 export { PROPS_WIDTH, propsPlacement, dockAppeared } from './transition'
-export type { ExplainerRef, ExplainerStatus, ExplainerNav, BasisChange } from '@/model'
+export type { ExplainerRefView, BasisChangeKind } from './desk/explainers'
 export { encodeSelection, decodeSelection } from './transition'
 export type { CompareSource, ModelPayload, FetchModel } from './sync/modelSource'
 export type { SourceFetcher, Resource } from './sync/source'

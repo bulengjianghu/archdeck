@@ -40,3 +40,7 @@ export function createExplainers({ index }: ExplainersInputs) {
 }
 
 export type DeskExplainers = ReturnType<typeof createExplainers>
+
+/** 呈现层用的形状（由派生推出，呈现层不直接引用模型层的类型，U10） */
+export type ExplainerRefView = ReturnType<DeskExplainers['refs']>[string]
+export type BasisChangeKind = NonNullable<ReturnType<DeskExplainers['status']>>['changes'][number]['kind']
