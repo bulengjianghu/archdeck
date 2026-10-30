@@ -132,7 +132,7 @@ test('交互视角「代码事实 · 标签」组：标签词表与承载叠加�
   await expect(factsCorner).toHaveCount(0)
 })
 
-test('时序图图例在副栏标题栏的「图例」里', async ({ page }) => {
+test('时序图图例在时序图标签内容区顶部的「图例」里（WS-10）', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
   await page.getByRole('button', { name: '时序图图例' }).click()
   await expect(page.getByRole('note', { name: '时序图图例' })).toContainText('同步调用')

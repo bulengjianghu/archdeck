@@ -239,7 +239,7 @@ layoutSequence(model: SequenceModel, structure?: PositionedView): PositionedSequ
 |---|---|
 | DeskState 证据派生 `evidence`（`src/state/desk/evidence.ts`，随代码事实与计划变化） | 打开场景时按计划算一次 `scenarioEvidence`；选中步骤的证据、场景汇总；场景列表用的各场景无证据帧数（全部场景，随事实刷新） |
 | Layout `layoutSequence(model, structure, evidence?)` | 每条消息的证据等级：合并的各帧有一个 `none` 即 `none`，否则有 `module` 即 `module`，否则有 `name` 即 `name`，全部不判定为 `skipped`；时序图对 `none` 在标签后加「?」 |
-| 步骤面板「代码证据」 | 在「经由接口」之后：等级与说明（按名字匹配时给出接口名；不判定时给原因）、候选列表（依赖方文件:行 → 目标，经由不同于目标时注明），单击在副栏预览并滚到该行 |
+| 步骤面板「代码证据」 | 在「经由接口」之后：等级与说明（按名字匹配时给出接口名；不判定时给原因）、候选列表（依赖方文件:行 → 目标，经由不同于目标时注明），单击在资料区预览并滚到该行 |
 | 场景面板「证据」 | 先 S15 的证据文件，后「按名字 a · 按依赖 b · 无证据 c · 不判定 d」 |
 | 场景列表 | 有无证据帧的场景标「? N」 |
 | 返工清单 | 「步骤无证据」（`unevidenced`，warning，`step.no-evidence`）：同一对端点（含方向）合并，受影响为各步骤的描述位置（S17） |

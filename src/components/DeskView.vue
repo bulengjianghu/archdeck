@@ -153,10 +153,7 @@ watch(
   () => desk.perspective.value,
   p => (navCollapsed.value = navCollapsedOf(p === 'run')),
 )
-// WS-9：资料区从不显示变为显示时收起导航树，把宽度让给画布（不写进本机记忆）
-watch(ws.state, (now, was) => {
-  if (dockAppeared(was, now)) navCollapsed.value = true
-})
+
 function toggleNav() {
   navCollapsed.value = !navCollapsed.value
   store(navKey(desk.perspective.value === 'run'), navCollapsed.value ? '1' : '0')
@@ -227,6 +224,12 @@ const guideOpen = ref(false)
 // W-6：导航树页签由项目视图持有，画布的问题角标切到「问题」页签
 const navTab = ref<NavTab>(desk.perspective.value === 'run' ? 'steps' : 'modules')
 provide(NAV_TAB, navTab)
+// WS-9：资料区从不显示变为显示时收起导航树，把宽度让给画布（不写进本机记忆）。例外：正在文件页签里挑文件（导航树就是打开资料的地方）；
+// 因打开场景而出现时由运行视角的本机记忆决定（缺省收起，W-1：在运行视角里展开过的，下次进入仍展开）
+const hasSequence = (s: typeof ws.state.value) => s.groups.some(g => g.tabs.some(t => t.doc.kind === 'sequence'))
+watch(ws.state, (now, was) => {
+  if (dockAppeared(was, now) && navTab.value !== 'files' && !(hasSequence(now) && !hasSequence(was))) navCollapsed.value = true
+})
 const issueCount = computed(() => {
   const c = desk.rework.value?.counts
   return { errors: c?.error ?? 0, warnings: c?.warning ?? 0, total: (c?.error ?? 0) + (c?.warning ?? 0) }
