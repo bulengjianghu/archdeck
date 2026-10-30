@@ -119,7 +119,7 @@ const summary = computed(() => {
 <style scoped>
 .display {
   position: absolute;
-  right: 12px;
+  right: calc(12px + var(--canvas-inset, 0px));
   bottom: 12px;
   z-index: 5;
   display: flex;

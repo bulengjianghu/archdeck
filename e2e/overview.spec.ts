@@ -35,7 +35,7 @@ test('O6：单击带内 +N 临时展开非核心模块，层次与地址不变�
   await expect.poll(() => cores.count()).toBe(before)
 })
 
-test('DV-6、DV-9：已归档的设计在版本切换里单独一组；设计面板的 ADR 链接在副栏预览', async ({ page }) => {
+test('DV-6、DV-9：已归档的设计在版本切换里单独一组；设计面板的 ADR 链接在资料区预览', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk')
   await expect(page.locator('select[aria-label="切换版本"] optgroup[label^="已归档"] option').first()).toContainText('二期 · 动态视角')
   await openDesk(page, '/p/h5p-arch-desk/d/phase2-dynamic/r4')

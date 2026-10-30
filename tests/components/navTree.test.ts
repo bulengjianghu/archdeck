@@ -6,7 +6,6 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import NavTree from '../../src/components/tree/NavTree.vue'
 import { createDeskState } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
-import { DEFAULT_LAYOUT, directionOf, readLayout, setDirection, toggleSlot } from '../../src/components/split/paneLayout'
 import { REWORK_CATEGORIES, REWORK_CATEGORY_LABELS } from '../../src/model'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
@@ -164,31 +163,6 @@ describe('运行视角', () => {
     expect(desk.playback.value!.choices.get('sc.play#3')).toBe(1)
     await wrapper.find('.start').trigger('click')
     expect(desk.playback.value!.frameId).toBeNull()
-  })
-})
-
-describe('分屏方向（W-4）', () => {
-  it('默认左右；切换方向保留比例与收起状态', () => {
-    expect(directionOf(DEFAULT_LAYOUT)).toBe('row')
-    const folded = toggleSlot(DEFAULT_LAYOUT, 'aside')
-    const col = setDirection(folded, 'column')
-    expect(directionOf(col)).toBe('column')
-    expect(col.kind === 'split' && col.sizes).toEqual(DEFAULT_LAYOUT.kind === 'split' && DEFAULT_LAYOUT.sizes)
-    expect(col.kind === 'split' && col.children[1]).toMatchObject({ collapsed: true })
-  })
-
-  it('副栏泛化前存下的布局（槽位 sequence）读出时改为 aside，方向与收起保留', () => {
-    const old = {
-      kind: 'split',
-      dir: 'column',
-      sizes: [0.6, 0.4],
-      children: [
-        { kind: 'pane', slot: 'structure' },
-        { kind: 'pane', slot: 'sequence', collapsed: true },
-      ],
-    }
-    localStorage.setItem('h5p-arch-desk:split:v2:legacy', JSON.stringify(old))
-    expect(readLayout('legacy')).toEqual({ ...old, children: [old.children[0], { kind: 'pane', slot: 'aside', collapsed: true }] })
   })
 })
 

@@ -10,7 +10,6 @@ import { readProject, type ModelPayload } from '../../vite/readModelDir'
 import { createDeskState } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
 import NavTree from '../../src/components/tree/NavTree.vue'
-import { DEFAULT_LAYOUT, directionOf, readLayout, saveLayout, setDirection, toggleSlot } from '../../src/components/split/paneLayout'
 import type { RawFile } from '../../src/model'
 
 const ROOT = path.resolve(import.meta.dirname, '../..')
@@ -126,15 +125,5 @@ describe('§6.3 导航树与分屏验收', () => {
     await row('state.desk')!.trigger('click')
     expect(desk.selected.value).toEqual({ kind: 'module', id: 'state.desk' })
     expect(desk.run.participation.value!.frames.length).toBeGreaterThan(0)
-  })
-
-  it('5. 分屏默认左右；切换为上下后按项目记在本地，刷新仍保持；收起状态随之保留', () => {
-    expect(directionOf(DEFAULT_LAYOUT)).toBe('row')
-    expect(directionOf(readLayout('acceptance'))).toBe('row')
-    saveLayout('acceptance', toggleSlot(setDirection(DEFAULT_LAYOUT, 'column'), 'aside'))
-    const again = readLayout('acceptance')
-    expect(directionOf(again)).toBe('column')
-    expect(again.kind === 'split' && again.children[1]).toMatchObject({ collapsed: true })
-    expect(directionOf(readLayout('other'))).toBe('row')
   })
 })

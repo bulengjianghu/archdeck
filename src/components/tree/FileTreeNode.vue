@@ -6,7 +6,7 @@ import type { FileTreeContext } from './types'
 
 defineOptions({ name: 'FileTreeNode' })
 const props = defineProps<{ dir: DirNode; depth: number; ctx: FileTreeContext }>()
-const emit = defineEmits<{ pick: [path: string]; toggle: [path: string] }>()
+const emit = defineEmits<{ pick: [path: string]; pin: [path: string]; toggle: [path: string] }>()
 
 const isRoot = computed(() => props.dir.path === '')
 const open = computed(() => isRoot.value || props.ctx.expanded.has(props.dir.path))
@@ -38,7 +38,16 @@ const pad = (d: number) => ({ paddingLeft: `${8 + d * 14}px` })
       <span v-if="dir.long" class="lines long" :title="`${dir.long} 个文件超过 ${ctx.maxLines} 行`">长{{ dir.long }}</span>
     </div>
     <ul v-if="open" role="group">
-      <FileTreeNode v-for="d in dirs" :key="d.path" :dir="d" :depth="childDepth" :ctx="ctx" @pick="p => emit('pick', p)" @toggle="p => emit('toggle', p)" />
+      <FileTreeNode
+        v-for="d in dirs"
+        :key="d.path"
+        :dir="d"
+        :depth="childDepth"
+        :ctx="ctx"
+        @pick="p => emit('pick', p)"
+        @pin="p => emit('pin', p)"
+        @toggle="p => emit('toggle', p)"
+      />
       <li v-for="f in files" :key="f" role="treeitem" :aria-selected="ctx.selected === f">
         <div
           class="row file"
@@ -53,6 +62,7 @@ const pad = (d: number) => ({ paddingLeft: `${8 + d * 14}px` })
           }"
           :title="ctx.unowned.has(f) ? `${f}：未归属任何模块` : ctx.conflicts.has(f) ? `${f}：归属冲突` : ctx.ignored.has(f) ? `${f}：已忽略` : f"
           @click="emit('pick', f)"
+          @dblclick="emit('pin', f)"
         >
           <span class="caret" />
           <span class="name">{{ base(f) }}</span>
@@ -64,7 +74,16 @@ const pad = (d: number) => ({ paddingLeft: `${8 + d * 14}px` })
     </ul>
   </li>
   <template v-else>
-    <FileTreeNode v-for="d in dirs" :key="d.path" :dir="d" :depth="0" :ctx="ctx" @pick="p => emit('pick', p)" @toggle="p => emit('toggle', p)" />
+    <FileTreeNode
+      v-for="d in dirs"
+      :key="d.path"
+      :dir="d"
+      :depth="0"
+      :ctx="ctx"
+      @pick="p => emit('pick', p)"
+      @pin="p => emit('pin', p)"
+      @toggle="p => emit('toggle', p)"
+    />
     <li v-for="f in files" :key="f" role="treeitem" :aria-selected="ctx.selected === f">
       <div
         class="row file"
@@ -78,6 +97,7 @@ const pad = (d: number) => ({ paddingLeft: `${8 + d * 14}px` })
           ignored: ctx.ignored.has(f),
         }"
         @click="emit('pick', f)"
+        @dblclick="emit('pin', f)"
       >
         <span class="caret" />
         <span class="name">{{ f }}</span>

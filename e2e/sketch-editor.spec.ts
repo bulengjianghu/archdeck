@@ -812,7 +812,7 @@ test('X7d（第五轮 T3）：草图面板改 ID 时提交前预览影响（后�
   }
 })
 
-test('E9、DV-13（第五轮 T3）：模块面板「相关决策」列编号与标题、单击在副栏预览，子模块只给上级决策的折叠行；草图模块表单可编辑 adrs 并写进草图文件', async ({
+test('E9、DV-13（第五轮 T3）：模块面板「相关决策」列编号与标题、单击在资料区预览，子模块只给上级决策的折叠行；草图模块表单可编辑 adrs 并写进草图文件', async ({
   page,
 }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=present&sel=m:present.sketch')
@@ -835,7 +835,7 @@ test('E9、DV-13（第五轮 T3）：模块面板「相关决策」列编号与�
   await expect(panel.locator('[data-testid="module-adrs"]')).toHaveCount(0)
   await panel.getByRole('button', { name: /上级模块的决策 2 条/ }).click()
   await expect(panel).toContainText('ADR-0024')
-  // 上级决策同样列标题、单击在副栏预览（第五轮 T4）
+  // 上级决策同样列标题、单击在资料区预览（第五轮 T4）
   await expect(panel.locator('[data-adr="24"]')).toContainText('草图的画布编辑')
   await panel.locator('[data-adr="24"] button').click()
   await expect(page.locator('.source-view')).toContainText('ADR-0024')

@@ -12,7 +12,6 @@ import { readProject } from '../../vite/readModelDir'
 import { readExports, readSourceFile, readSourceTree } from '../../vite/readSource'
 import { createDeskState, type SourceFetcher } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
-import { useAside } from '../../src/components/split/useAside'
 import NavTree from '../../src/components/tree/NavTree.vue'
 import Panel from '../../src/components/panel/Panel.vue'
 import SourceView from '../../src/components/source/SourceView.vue'
@@ -135,11 +134,9 @@ describe('§6.4 源代码验收', () => {
     await settle()
     // G14：分层总览高亮所在的带与路径上露出的模块
     expect([...desk.files.hits.value!.nodes]).toEqual(['s:present/block', 'present.nav-tree'])
-    // 副栏：选中文件即预览
-    const aside = useAside(desk)
-    expect(aside.previewPath.value).toBe(file)
-    expect(aside.tab.value).toBe('source')
-    expect(aside.hidden.value).toBe(false)
+    // G15、WS-8：选中文件即在资料区打开它的源代码预览标签
+    expect(desk.workspace.state.value.groups[0].tabs).toEqual([{ id: `src:${file}`, doc: { kind: 'source', path: file }, preview: true }])
+    expect(desk.workspace.dockShown.value).toBe(true)
     const view = mount(SourceView, { props: { path: file }, global })
     await settle()
     expect(view.text()).toContain('只读')
@@ -189,27 +186,40 @@ describe('§6.4 源代码验收', () => {
     expect(bare.desk.files.ownership.value!.ignored.has('docs/README.md')).toBe(true)
   })
 
-  it('6. 运行视角下选中文件：副栏切到源代码；单步后选中下一步，副栏切回时序图，源代码页签仍在', async () => {
+  it('6. 资料区不跟随选中（WS-8、G15）：打开场景开时序图；选中文件开源代码预览；单步、选中模块不改资料区；退出场景关时序图', async () => {
     const { desk } = await open('h5p-arch-desk')
+    const ws = desk.workspace
+    const ids = () => ws.state.value.groups.flatMap(g => g.tabs.map(t => `${t.id}${t.preview ? '~' : ''}`))
+    expect(ws.dockShown.value).toBe(false)
     desk.openScenario('sc.open-and-play')
-    const aside = useAside(desk)
     await settle()
-    expect(aside.tab.value).toBe('sequence')
+    expect(ids()).toEqual(['seq'])
     desk.selectFile('src/state/useDeskState.ts')
     await settle()
     expect(desk.selected.value).toEqual({ kind: 'file', id: 'src/state/useDeskState.ts' })
-    expect(aside.tab.value).toBe('source')
+    expect(ids()).toEqual(['seq', 'src:src/state/useDeskState.ts~'])
+    expect(ws.state.value.groups[0].active).toBe('src:src/state/useDeskState.ts')
+    const before = ws.state.value
     desk.next()
     await settle()
     expect(desk.selected.value!.kind).toBe('step')
-    expect(aside.tab.value).toBe('sequence')
-    expect(aside.previewPath.value).toBe('src/state/useDeskState.ts')
-    // 退出场景：结构视角下副栏仍显示预览，关闭后消失
+    desk.select({ kind: 'module', id: 'state' })
+    await settle()
+    expect(ws.state.value).toBe(before)
+    // 另一个文件：替换预览标签
+    desk.selectFile('src/state/inject.ts')
+    await settle()
+    expect(ids()).toEqual(['seq', 'src:src/state/inject.ts~'])
+    // 关掉标签后再选同一个文件：选中没变，不重新打开（只有选中变为另一个文件才打开）
+    ws.dispatch({ type: 'close', group: 0, id: 'src:src/state/inject.ts' })
+    desk.selectFile('src/state/inject.ts')
+    await settle()
+    expect(ids()).toEqual(['seq'])
+    // 退出场景：时序图标签关闭，资料区随之消失
     desk.closeScenario()
     await settle()
-    expect(aside.tab.value).toBe('source')
-    aside.close()
-    expect(aside.hidden.value).toBe(true)
+    expect(ids()).toEqual([])
+    expect(ws.dockShown.value).toBe(false)
   })
 
   it('h5player：Framework 的入口导出与描述的接口对应，描述的真实归属问题报为警告', async () => {
