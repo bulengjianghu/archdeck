@@ -1,5 +1,5 @@
 /**
- * 演化事实（§6.12，HS-4、J5–J7）：「显示」面板「演化」组缺省关闭；开「缺陷」后节点出现热度角标并记在本地；系统面板列出热度前 10；
+ * 演化事实（§6.12，HS-4、J5–J7）：图例「演化」组的开关行缺省关闭（L45）；「显示 ▾」选口径「缺陷」、图例打开热度后节点出现热度角标并记在本地（L49）；系统面板列出热度前 10；
  * 开「时间耦合」后本层出现波浪线，单击选中它看面板。以 h5p-arch-desk 自身验收（源码在本地、是 git 仓库）。
  */
 import { expect, test } from '@playwright/test'
@@ -7,16 +7,23 @@ import { openDesk, query } from './helpers'
 
 test('缺省关闭：没有角标与耦合线；开启「缺陷」热度后出现角标，刷新后仍开启；运行视角不叠加', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=present')
-  const panel = page.getByRole('region', { name: '显示' })
-  await expect(panel.getByRole('group', { name: '热度' })).toBeVisible()
+  const panel = page.getByRole('region', { name: '图例' })
+  const heat = panel.getByRole('switch', { name: '演化热度' })
+  await expect(heat).toHaveAttribute('aria-checked', 'false')
   await expect(page.locator('.heat-badge')).toHaveCount(0)
   await expect(page.locator('.edge-couple')).toHaveCount(0)
-  await panel.getByRole('group', { name: '热度' }).getByRole('button', { name: '缺陷' }).click()
+  // L49：口径在「显示 ▾」——热度关着时只记下、不打开
+  await page.getByRole('button', { name: /^显示 ▾/ }).click()
+  await page.getByRole('group', { name: '热度口径' }).getByRole('button', { name: '缺陷' }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.heat-badge')).toHaveCount(0)
+  // L45：图例的热度行即开关，打开为记住的口径
+  await heat.click()
+  await expect(heat).toHaveAttribute('aria-checked', 'true')
+  await expect(heat).toContainText('缺陷')
   await expect(page.locator('.heat-badge').first()).toBeVisible()
-  await expect(panel).toContainText('高（缺陷热度，本层分档）')
-  // 折叠后摘要列出
-  await panel.getByRole('button', { name: /^显示/ }).click()
-  await expect(panel.getByRole('button', { name: /^显示/ })).toContainText('热度：缺陷')
+  await expect(panel).toContainText('高（本层分档）')
+  await expect(page.getByTestId('display-summary')).toContainText('热度：缺陷')
   // 记在本地：刷新后仍开启
   await page.reload()
   await expect(page.locator('.vue-flow__node').first()).toBeVisible({ timeout: 20_000 })
@@ -24,7 +31,7 @@ test('缺省关闭：没有角标与耦合线；开启「缺陷」热度后出�
   // 运行视角不叠加
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
   await expect(page.locator('.heat-badge')).toHaveCount(0)
-  await expect(page.getByRole('region', { name: '显示' }).getByRole('group', { name: '热度' })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: '图例' }).getByRole('switch', { name: '演化热度' })).toHaveCount(0)
 })
 
 test('系统面板「演化」列出热度前 10；模块树可按热度排序', async ({ page }) => {
@@ -47,8 +54,8 @@ test('系统面板「演化」列出热度前 10；模块树可按热度排序',
 test('开启时间耦合：本层出现波浪线，单击选中它，地址带 sel=c:，面板列出共同的提交；关系面板标「同提交 ×N」', async ({ page }) => {
   // ADR-0052：呈现层声明了分层，带内同层成员之间的耦合不画；在普通层次「画布」里看
   await openDesk(page, '/p/h5p-arch-desk?level=present.canvas')
-  const panel = page.getByRole('region', { name: '显示' })
-  await panel.getByLabel('时间耦合').check()
+  const panel = page.getByRole('region', { name: '图例' })
+  await panel.getByRole('switch', { name: '时间耦合' }).click()
   // F7（L44）：时间耦合按需显示——静息态只在画布角计数，选中一端时画出
   await expect(page.getByTestId('couple-corner')).toContainText(/时间耦合 \d+ 对/)
   await expect(page.locator('.edge-couple')).toHaveCount(0)
@@ -61,7 +68,7 @@ test('开启时间耦合：本层出现波浪线，单击选中它，地址带 s
   await expect.poll(() => query(page).get('sel')).toMatch(/^c:.+~.+$/)
   await expect(page.locator('.couple-panel')).toContainText('同提交')
   await expect(page.locator('.couple-panel')).toContainText('共同的提交')
-  // 模块面板的「演化」一节默认折叠，展开后列出提交（先收起右下角的「显示」面板，免得它盖住节点）
+  // 模块面板的「演化」一节默认折叠，展开后列出提交（先收起右上角的图例，免得它盖住节点）
   const head = panel.locator('.head-btn')
   if ((await head.getAttribute('aria-expanded')) === 'true') await head.click()
   await page.locator('.vue-flow__node[data-id="present.canvas.flow"]').click()

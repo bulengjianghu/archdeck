@@ -1,6 +1,6 @@
 /** E2E 公共步骤：打开项目视图并等画布布局完成（布局在 Worker 中异步完成） */
 import fs from 'node:fs'
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 
 /** 打开 `#/p/...`（hash 路由），等结构图出现节点 */
 export async function openDesk(page: Page, hashPath: string) {
@@ -26,7 +26,13 @@ export async function waitSettled(page: Page) {
     .toBe(true)
 }
 
-/** 收起「显示」面板（展开时叠在画布右下，会挡住那里的节点，L30 布局变高后更常见），随后等布局稳定，悬停 / 点击才落在节点上 */
+/** L45：把图例的开关行设成开或关（开关行是 role=switch 的按钮，aria-checked 表状态） */
+export async function setSwitch(toggle: Locator, on: boolean) {
+  if ((await toggle.getAttribute('aria-checked')) !== String(on)) await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-checked', String(on))
+}
+
+/** 收起图例（展开时叠在画布右上，会挡住那里的节点，L48），随后等布局稳定，悬停 / 点击才落在节点上 */
 export async function collapseDisplay(page: Page) {
   const btn = page.locator('.display .head-btn')
   if ((await btn.getAttribute('aria-expanded')) === 'true') await btn.click()

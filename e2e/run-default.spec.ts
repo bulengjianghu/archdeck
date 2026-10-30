@@ -1,4 +1,4 @@
-/** 运行视角默认态（W-1、W-2）：打开场景时导航树收起、退出恢复，按视角记在本地；「显示」面板默认折叠为一行摘要 */
+/** 运行视角默认态（W-1、W-2）：打开场景时导航树收起、退出恢复，按视角记在本地；「显示 ▾」旁的摘要给出交互关系的显示方式（L49） */
 import { expect, test } from '@playwright/test'
 import { openDesk } from './helpers'
 
@@ -9,8 +9,8 @@ test('打开场景导航树自动收起，退出恢复；运行视角里展开�
   await page.goto('./#/p/h5p-arch-desk?sc=sc.open-and-play')
   await expect(page.locator('.vue-flow__node').first()).toBeVisible({ timeout: 20_000 })
   await expect(nav).toBeHidden()
-  // 运行视角「显示」面板折叠为一行摘要
-  await expect(page.getByRole('region', { name: '显示' }).getByRole('button', { name: /^显示/ })).toContainText('交互关系：隐藏')
+  // 运行视角「显示 ▾」旁的摘要（L49）
+  await expect(page.getByTestId('display-summary')).toHaveText('交互关系：隐藏')
   await page.getByRole('button', { name: '展开导航树' }).click()
   await expect(nav).toBeVisible()
   await page.goto('./#/p/h5p-arch-desk')

@@ -48,7 +48,7 @@ test('V11、V12：顶部「结构 ｜ 交互 ｜ 运行」单击切到结构视�
 
 test('L15：只引类型的依赖边缺省收起、画布角计数；单击计数画出（边界节点的照 L4 聚焦才画），边数随之增加', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=domain&v=s')
-  // 画布角多了「环内 N 条已收起」（L42），收起「显示」面板免得压住计数按钮
+  // 画布角多了「环内 N 条已收起」（L42），收起图例（与计数按钮同一列，L48）
   await collapseDisplay(page)
   const count = page.getByTestId('type-only-corner')
   await expect(count).toHaveText(/只引类型 \d+ 条已收起/)
@@ -135,7 +135,7 @@ test('K10、B3：单击束选中这对节点的代码依赖（sel=d:），它高
 
 test('C6、L20（ADR-0036）：节点角标「表面 W」；选中模块展开表面——入边一侧一排端口点、束散开为元素级边，节点与视口不动，取消选中收起', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra&v=s')
-  // 展开的「显示」面板叠在画布右下，分层后 infra.framework 落在它下面
+  // 展开的图例叠在画布右上，分层后 infra.framework 落在它下面
   await collapseDisplay(page)
   await expect(graphNode(page, 'infra.framework').getByTestId('node-surface-w')).toHaveText(/表面 \d+/)
   const boxes = () =>
@@ -202,7 +202,7 @@ test('L20②（ADR-0036）：选中 A 再换选中 B，节点 bbox 不变', asyn
     )
   const a = await boxes()
   const other = (await page.locator('.vue-flow__node-module').evaluateAll(els => els.map(n => n.getAttribute('data-id')!))).find(id => id !== 'state.desk')!
-  // 按依赖分层（L28）后节点可能落在右下角「显示」面板之下：先收起面板再点
+  // 按依赖分层（L28）后节点可能落在右上角的图例之下：先收起面板再点
   const display = page.locator('.display .head-btn[aria-expanded="true"]')
   if (await display.isVisible()) await display.click()
   await graphNode(page, other).click()

@@ -16,6 +16,8 @@ import Toolbar from './Toolbar.vue'
 import VersionSwitcher from './VersionSwitcher.vue'
 import InfoBar from './infobar/InfoBar.vue'
 import GuideDialog from './GuideDialog.vue'
+import DisplayMenu from './display/DisplayMenu.vue'
+import { OPEN_GUIDE, type GuideSection } from './shared/guide'
 import PerspectiveSwitch from './PerspectiveSwitch.vue'
 import PlayerBar from './PlayerBar.vue'
 import DockPane from './dock/DockPane.vue'
@@ -221,6 +223,13 @@ const sourceDelta = computed(() => {
 })
 // W-10：「怎么读这张图」
 const guideOpen = ref(false)
+/** L51：图例关系组的「?」打开帮助并定位到「读一条线」 */
+const guideSection = ref<GuideSection>()
+function openGuide(section?: GuideSection) {
+  guideSection.value = section
+  guideOpen.value = true
+}
+provide(OPEN_GUIDE, openGuide)
 // W-6：导航树页签由项目视图持有，画布的问题角标切到「问题」页签
 const navTab = ref<NavTab>(desk.perspective.value === 'run' ? 'steps' : 'modules')
 provide(NAV_TAB, navTab)
@@ -289,10 +298,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <VersionSwitcher />
         <!-- 草图画布下没有运行视角（场景不在草图里画） -->
         <PerspectiveSwitch v-if="desk.status.value === 'ready' && !desk.edit.active.value" />
-        <!-- 「显示 ▾」的位置（R4.2，第十七轮 W4 落地） -->
+        <!-- L49：「显示 ▾」——没有画布记号的显示设置（有记号的开关在图例行上，L45） -->
+        <DisplayMenu v-if="desk.status.value === 'ready' && !desk.edit.active.value" />
         <Breadcrumb />
         <Toolbar />
-        <button class="tool guide-btn" title="帮助：怎么读这张图" aria-label="怎么读这张图" @click="guideOpen = true">?</button>
+        <button class="tool guide-btn" title="帮助：怎么读这张图" aria-label="怎么读这张图" @click="openGuide()">?</button>
         <button class="tool" :class="{ on: focused }" :title="focused ? '恢复导航树与属性栏' : '收起导航树与属性栏'" @click="toggleFocus">
           {{ focused ? '退出专注' : '专注' }}
         </button>
@@ -364,7 +374,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <DockPane />
       </div>
     </template>
-    <GuideDialog v-if="guideOpen" @close="guideOpen = false" />
+    <GuideDialog v-if="guideOpen" :section="guideSection" @close="guideOpen = false" />
     <EditDialog />
     <!-- F-10：「在此设计」（导航树、模型画布节点右键、属性面板）打开的新建设计对话框 -->
     <NewDesignDialog v-if="newDesignRequest" :mount="newDesignRequest.mount" @close="closeNewDesign" />
@@ -451,6 +461,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   min-width: 110px;
 }
 
+.top > :deep(.display-menu) {
+  flex: 0 2 auto;
+  min-width: 62px;
+}
+
 .top > :deep(.crumbs) {
   flex: 1 4 auto;
   min-width: 56px;
@@ -475,6 +490,25 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 @container (max-width: 1000px) {
   .top :deep(.versions .new) {
     display: none;
+  }
+
+  /* L49：摘要让位，只留「显示 ▾」（摘要在按钮的悬停提示里） */
+  .top :deep(.display-menu .summary) {
+    display: none;
+  }
+
+  /* L49：工具栏多了「显示 ▾」，窄时场景名至少留的宽度从 110 收到 64、版本选择从 110 收到 80（都省略显示，悬停看全名） */
+  .top :deep(.perspective:has(.exit) .run) {
+    min-width: 64px;
+  }
+
+  .top > :deep(.versions) {
+    min-width: min(80px, max-content);
+  }
+
+  /* 视角块不再被压到比「结构 | 交互 | 场景名 64px | ×」还窄（否则退出按钮被后面的元素盖住）：其余元素先收 */
+  .top > :deep(.perspective:has(.exit)) {
+    min-width: 184px;
   }
 }
 

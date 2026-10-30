@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 「显示」面板里的一组：可折叠的组标题（右侧可放组级操作，如筛选复位、代码事实开关），展开时显示内容 */
+/** 图例里的一组（L48）：可折叠的组标题（标题旁可放组级操作，如关系组的「?」，L51），展开时显示内容 */
 defineProps<{ title: string; open: boolean }>()
 const emit = defineEmits<{ toggle: [] }>()
 </script>
@@ -25,7 +25,7 @@ const emit = defineEmits<{ toggle: [] }>()
 .group-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 6px;
   min-height: 22px;
 }
 

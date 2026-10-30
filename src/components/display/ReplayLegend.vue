@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
- * 「显示」面板 · 回放（运行视角）：当前步骤、步骤序号、当前端点，以及经由上层、未建模、分支预览三种临时线（P10、P11、P15、F6）——都是交互，实线（L18），经上层与未建模写在标签位（L26）。
+ * 图例 · 回放（运行视角）：当前步骤、步骤序号、当前端点，以及经由上层、未建模、分支预览三种临时线（P10、P11、P15、F6）——都是交互，实线（L18），经上层与未建模写在标签位（L26）。
  * 回放的记号全部是回放中才出现的临时记号（L47，G14）：整组归「临时可见」小节常列、不随出现显隐。
  */
 import DisplayGroup from './DisplayGroup.vue'
 import LineSwatch from './LineSwatch.vue'
+import { UNMODELED_TEXT, UPPER_TEXT } from './labels'
 
 defineProps<{ open: boolean }>()
 const emit = defineEmits<{ toggle: [] }>()
@@ -30,11 +31,11 @@ const emit = defineEmits<{ toggle: [] }>()
     </div>
     <div class="item">
       <span class="sw"><LineSwatch :look="{ type: 'calls', temp: 'upper', weight: 2 }" /></span>
-      <span>经由上层关系（类型色实线，标「经上层」；本层没有它的边）</span>
+      <span>{{ UPPER_TEXT }}</span>
     </div>
     <div class="item">
       <span class="sw"><LineSwatch :look="{ temp: 'unmodeled' }" /></span>
-      <span>交互中未建模（红色实线，标「未建模」）</span>
+      <span>{{ UNMODELED_TEXT }}</span>
     </div>
     <div class="item">
       <span class="sw"><LineSwatch :look="{ play: 'preview', weight: 2 }" /></span>

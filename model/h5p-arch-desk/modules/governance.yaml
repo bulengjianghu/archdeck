@@ -302,7 +302,7 @@ relations:
   - {id: rel.gv.dep-read, from: present.panel.dep, to: state.desk.facts, type: queries, description: 代码依赖面板向架构治理派生（desk.facts）取：选中的代码依赖叠加线, purpose: 取选中的代码依赖线 }
   - {id: rel.gv.canvas-read, from: present.canvas.flow, to: state.desk.facts, type: queries, description: 视图转换与交互向架构治理派生（desk.facts）取：本层投影（K9、Y4）与留痕计数（hiddenFacts、hiddenByCurrentOnly，L45 / L7，波 3 起「只看现状」的计数也经这里取）, purpose: 取本层投影与留痕计数画叠加线 }
   - {id: rel.gv.toolbar-read, from: present.nav.toolbar, to: state.desk.facts, type: queries, description: 工具栏向架构治理派生（desk.facts）取：事实状态决定「代码事实」开关是否可用, purpose: 决定「代码事实」开关是否可用 }
-  - {id: rel.gv.legend-read, from: present.canvas.legend, to: state.desk.facts, type: queries, description: 显示面板（显示设置与图例）向架构治理派生（desk.facts）取结果, purpose: 取事实状态画图例与开关 }
+  - {id: rel.gv.legend-read, from: present.canvas.legend, to: state.desk.facts, type: queries, description: 图例与「显示 ▾」向架构治理派生（desk.facts）取结果：代码事实是否就绪、本层投影与 structureDisplay 的收起条数, purpose: 取事实状态画图例与开关 }
   - {id: rel.gv.canvas-select, from: present.canvas.flow, to: state.desk.actions, type: commands, interface: if.desk.actions, description: "视图转换与交互交给 dispatch 与操作：单击代码依赖叠加线 → select(kind: dep)", purpose: 单击依赖叠加线时选中它 }
   # 视图状态层
   - {id: rel.gv.facts-model, from: state.desk.facts, to: model.governance, type: queries, interface: if.governance.report, payload: [ds.GovernanceReport], description: 架构治理派生（desk.facts）向架构治理取：entryResolver、governanceReport、gateIssues、scenarioEvidence，levelAssembly 取组装叠加（O12），unclassifiedRelations 数未分类（M17）, purpose: 算治理报告、门禁与本层投影 }
@@ -410,7 +410,7 @@ relations:
   - { id: rel.gv.dep-structure, from: present.panel.dep, to: present.panel.structure, type: commands, description: 代码依赖面板交给结构视图面板：结构视角选中依赖边时渲染这对节点的结构边、交互覆盖、规则与稳定性 DepStructure（K14、K17、U15、U17）, purpose: 结构视角下显示这对节点的结构 }
   - { id: rel.gv.structure-content, from: present.panel.structure, to: present.panel.content, type: commands, description: 结构视图面板交给内容组件：渲染分节组件 Section, purpose: 复用分节的渲染 }
   - { id: rel.gv.structure-gov, from: present.panel.structure, to: present.panel.governance, type: commands, description: 结构视图面板交给架构治理面板：渲染结构边的文件依赖清单 FileDepList, purpose: 列出结构边的文件依赖 }
-  - { id: rel.gv.structure-prefs, from: present.panel.structure, to: present.canvas.legend, type: commands, description: 结构视图面板交给显示面板：经 useStructurePrefs 读写影响面方向与「只看值依赖」的显示偏好（画布同读，K15）, purpose: 读写影响面方向与值依赖偏好 }
+  - { id: rel.gv.structure-prefs, from: present.panel.structure, to: present.canvas.legend, type: commands, description: 结构视图面板交给图例：经 useStructurePrefs 读写影响面方向与「只看值依赖」的显示偏好（画布同读，K15）, purpose: 读写影响面方向与值依赖偏好 }
   - { id: rel.gv.url-mode, from: state.transition.url, to: state.transition.mode, type: queries, description: URL 编解码向视角模式与选中映射取：解码 v=s 时调用 withMode 得到带模式的视图状态（V11）, purpose: 解码 URL 时得到带模式的视图 }
   - { id: rel.gv.desk-facts-intent, from: state.desk.facts, to: model.intent.check, type: queries, description: 架构治理派生（desk.facts）向草图核验与生命周期取：没有代码事实时调用 sketchLifetime、flattenSketch 把活动草图里层的 mayDependOn 接进允许依赖图（U16）, purpose: 没有代码事实时取草图的层规则 }
   - { id: rel.gv.tiers-level, from: model.governance.tiers, to: model.governance.level, type: queries, description: 分层向本层投影取：调用 levelValueDeps 取本层值依赖、levelCycleMembers 取 Y4 的环编号（L28）, purpose: 取本层值依赖与环编号 }

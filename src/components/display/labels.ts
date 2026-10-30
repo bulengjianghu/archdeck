@@ -140,3 +140,26 @@ export const FACT_TAG_HINT: readonly { tag: '未证实' | '违规' | '未解释'
   { tag: '缺段', text: '选中一条交互时承载叠加在图上，缺的一段画成警示色虚线' },
 ]
 export const SHARED_CHANNELS_TITLE = '共享 · 三个视角同义'
+
+// ── 第十七轮 R4（ADR-0056）：图例行的文字一处定义——图例行（Legend 各组）与悬停释义（gloss.ts，L50）同读，不另写（C1） ──
+
+/** O12：组装叠加的两行 */
+export const ASSEMBLY_LINE_TEXT = '虚线 + 实心菱形 = 组装（new / 工厂 / 注册，菱形在组装者一端，不参与布局）'
+export const ASSEMBLY_ROOT_TEXT = '组装了别的模块、自身不被组装'
+/** J5、F7：时间耦合的两行 */
+export const COUPLE_TEXT = '波浪线 ×N = 同一提交里一起改了 N 次；不进布局，悬停或选中一端时画出（F7），清单在面板'
+export const COUPLE_ISOLATED_TEXT = '深色 = 两端没有任何依赖与关系（代码事实看不见）'
+/** P15、P11：回放的两种临时线 */
+export const UPPER_TEXT = '经由上层关系（类型色实线，标「经上层」；本层没有它的边）'
+export const UNMODELED_TEXT = '交互中未建模（红色实线，标「未建模」）'
+/** L45：开关行的名称（图例行即开关） */
+export const TOGGLE_LABEL = { facts: '代码事实', assembly: '组装', heat: '演化热度', coupling: '时间耦合' } as const
+/** L45：开关行悬停的说明（开 / 关的效果） */
+export const TOGGLE_HINT = {
+  facts: '在图上叠加代码事实：关系是否被代码证实、未解释的交互、违规与环；关闭时画布角留痕计数',
+  assembly: '叠加组装事实：谁 new / 工厂创建 / 注册了谁（K13），并标出组装根',
+  heat: '节点右下角的热度角标（本层分三档）；口径在工具栏「显示 ▾」里选',
+  coupling: '本层总是一起改的模块之间画波浪线（不进布局，悬停或选中一端时画出）',
+} as const
+/** U16：没有代码事实时结构视角只画的允许边 */
+export const ALLOWED_TEXT = '浅虚线 = 规则允许的依赖（mayDependOn）'

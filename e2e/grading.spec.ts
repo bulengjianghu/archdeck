@@ -15,7 +15,7 @@ const LEDGER = path.join(MODEL, 'governance/ledger.jsonl')
 
 test('下钻呈现层：「区块」层超七，核心常显、普通成员折叠为「+N」；不超七的多成员层全显；单击展开、再单击收起（O2a、O6，ADR-0052）', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=present')
-  // 先收起右下角的「显示」面板，免得它盖住带底的「+N」
+  // 先收起右上角的图例，免得它盖住带底的「+N」
   await collapseDisplay(page)
   const chip = graphNode(page, 'more:s:present/block')
   await expect(chip).toBeVisible()

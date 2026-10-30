@@ -13,11 +13,11 @@ test.use({ viewport: { width: 1700, height: 1100 } })
 /** 各视角的行数上限（固定词表全列基线 + 2 行小节标签余量，见文件头） */
 const CAPS = { 交互: 33, 结构: 42, 运行: 33 } as const
 
-/** 行 = 图例内容行：.item、三问 li、四修饰行、小节标签（不含组标题） */
+/** 行 = 图例内容行：.item（含开关行，L45）、修饰行、小节标签（不含组标题）；三问已移到帮助（L51） */
 const COUNT = `(() => {
   const body = document.querySelector('.display .body')
   if (!body) return -1
-  return body.querySelectorAll('.item').length + body.querySelectorAll('.questions li').length + body.querySelectorAll('.reading-row').length + body.querySelectorAll('.section-label').length
+  return body.querySelectorAll('.item').length + body.querySelectorAll('.reading-row').length + body.querySelectorAll('.section-label').length
 })()`
 
 /** 展开面板与全部组，等代码事实就绪（结构视角等束说明、交互视角等标签词），返回全展开的行数 */

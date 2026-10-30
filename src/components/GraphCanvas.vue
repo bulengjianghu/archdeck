@@ -3,7 +3,7 @@
  * GraphCanvas：把 PositionedView 画成节点和边；处理平移（拖空白处或按住空格拖动）、缩放（Ctrl + 滚轮）、单击、双击、悬停。
  * 运行视角下作为舞台（V5）：本层参与的节点与走过的边突出、其余变淡，当前消息沿步骤方向流动（P10），
  * 本层没有视图边的消息画临时线（经由上层关系 P15 / 未建模 P11），步骤序号可单击指向（R13），停在分支点时预览各选项（F6）。
- * 舞台按交互关系显示方式（在「显示」面板切换）隐藏或淡化不参与的节点与静态边（V5、V8），「在画布上显示」的对象照常（V9）；
+ * 舞台按交互关系显示方式（在工具栏「显示 ▾」切换，L49）隐藏或淡化不参与的节点与静态边（V5、V8），「在画布上显示」的对象照常（V9）；
  * 选中步骤时其余走过的边与步骤序号淡为灰色；选中其他对象时不变灰，舞台始终按进度（R15、R16）。
  * 选中文件时，其归属模块在本层的投影节点加文件高亮（G14）。
  * 交互视角开启「代码事实」时叠加证实标记、违规与代码依赖叠加线、本层的环（K9、Y4）；单击叠加线即选中它（K10）。
@@ -43,7 +43,8 @@ import BranchPreview from './nodes/BranchPreview.vue'
 import RouteEdge from './edges/RouteEdge.vue'
 import DepEdge from './edges/DepEdge.vue'
 import { useStructurePrefs } from './display/useDisplayPrefs'
-import DisplayPanel from './DisplayPanel.vue'
+import Legend from './display/Legend.vue'
+import { depGloss, routeGloss, withGloss } from './display/gloss'
 import SketchMenu from './sketch/SketchMenu.vue'
 import { canDesignAt, openNewDesign } from './edit/designHere'
 import { useCanvasInset } from './shared/canvasInset'
@@ -55,7 +56,7 @@ const { setViewport, zoomIn, zoomOut, dimensions, setNodes, setEdges } = useVueF
 /** 运行视角的舞台叠加；结构 / 交互视角为 null */
 const stage = computed(() => (desk.perspective.value === 'run' ? desk.run.overlay.value : null))
 const interaction = computed(() => desk.perspective.value === 'interaction')
-/** ADR-0031、ADR-0032：结构视角的显示偏好（只引类型、只看交互使用、只看未解释、总是展开表面、只看值依赖），与「显示」面板共享 */
+/** ADR-0031、ADR-0032：结构视角的显示偏好（只引类型、只看交互使用、只看未解释、总是展开表面、只看值依赖），与图例、「显示 ▾」共享 */
 const structurePrefs = useStructurePrefs(desk.project)
 
 /** 结构视角的画布输入；其余视角为 null */
@@ -160,7 +161,22 @@ const hovered = computed(() => {
   return hoverEdge.value ? e : withElementHover(e.nodes, e.edges, dotHover.value)
 })
 const nodes = computed<Node<NodeData>[]>(() => hovered.value.nodes)
-const edges = computed<Edge<RouteEdgeData>[]>(() => hovered.value.edges)
+/**
+ * L50：悬停说明末尾附上这个记号的图例释义（文字与图例行同一份词表，display/gloss）；在这里附、不在边组件里附——
+ * 边组件被图例的示意线引用，反过来引用图例会成环。按边对象缓存，悬停时只重算变了的那几条。
+ */
+const glossed = new WeakMap<Edge<RouteEdgeData>, Edge<RouteEdgeData>>()
+function withLegendGloss(e: Edge<RouteEdgeData>): Edge<RouteEdgeData> {
+  const hit = glossed.get(e)
+  if (hit) return hit
+  const d = e.data
+  const out = !d
+    ? e
+    : { ...e, data: d.dep ? { ...d, dep: { ...d.dep, title: withGloss(d.dep.title, depGloss(d.dep)) } } : { ...d, title: withGloss(d.title, routeGloss(d)) } }
+  glossed.set(e, out)
+  return out
+}
+const edges = computed<Edge<RouteEdgeData>[]>(() => hovered.value.edges.map(withLegendGloss))
 
 // 节点与边直接写入 Vue Flow 的 store，不走 :nodes / :edges 属性：
 // 属性同步在「上一层次有选中、切到分层总览」时会被跳过（store 停留在旧节点），这里绕开它
@@ -404,107 +420,111 @@ const showFacts = () => desk.setToggles({ showFacts: true })
     </VueFlow>
 
     <div v-if="isEmpty" class="empty">这个模块没有子模块</div>
-    <div
-      v-if="foldHint || structureCorner || tierHints.length || layerNote || lineBudget || pending || hiddenRelationTypes || hiddenTargets || factsOff"
-      class="corner"
-    >
-      <span
-        v-if="pending?.overlays"
-        class="fold-hint"
-        data-testid="overlay-corner"
-        title="一端在框外的代码依赖叠加线不进静息态的布局（L44），同框外的交互边，悬停或选中一端时画出"
-        >框外代码依赖 {{ pending.overlays }} 条{{ pending.overlayViolations ? `（违规 ${pending.overlayViolations}）` : '' }}：悬停或选中一端时画出</span
-      >
-      <span
-        v-if="pending?.couples"
-        class="fold-hint"
-        data-testid="couple-corner"
-        title="时间耦合不是交互也不是依赖，不进布局（F7、L44）：悬停或选中一端时画出，清单在面板"
-        >时间耦合 {{ pending.couples }} 对：悬停或选中一端时画出</span
-      >
-      <div v-if="lineBudget" class="fold-hint" data-testid="line-budget">{{ lineBudget }}</div>
-      <div v-if="layerNote" class="fold-hint" data-testid="layer-note">
-        依赖深度<LayerStatus :status="layerNote.status" />本层按值依赖算出 {{ layerNote.count }} 个深度（L28）：是证据，不是分层（ADR-0052）
-      </div>
+    <!-- L48：画布右上角一列——图例在顶端，留痕与提示排在它下面，图例再长也不盖住它们；属性栏悬浮时整列让出卡片宽度（WS-3） -->
+    <div class="top-right">
+      <Legend />
       <div
-        v-if="undeclared"
-        class="fold-hint"
-        data-testid="undeclared-strata"
-        title="子模块多于七个：能归纳出 2–5 个有原则的层就声明分层，归纳不出就记一条拆分信号（ST-1）"
+        v-if="foldHint || structureCorner || tierHints.length || layerNote || lineBudget || pending || hiddenRelationTypes || hiddenTargets || factsOff"
+        class="corner"
       >
-        本层未声明分层 · {{ undeclared }} 个模块
+        <span
+          v-if="pending?.overlays"
+          class="fold-hint"
+          data-testid="overlay-corner"
+          title="一端在框外的代码依赖叠加线不进静息态的布局（L44），同框外的交互边，悬停或选中一端时画出"
+          >框外代码依赖 {{ pending.overlays }} 条{{ pending.overlayViolations ? `（违规 ${pending.overlayViolations}）` : '' }}：悬停或选中一端时画出</span
+        >
+        <span
+          v-if="pending?.couples"
+          class="fold-hint"
+          data-testid="couple-corner"
+          title="时间耦合不是交互也不是依赖，不进布局（F7、L44）：悬停或选中一端时画出，清单在面板"
+          >时间耦合 {{ pending.couples }} 对：悬停或选中一端时画出</span
+        >
+        <div v-if="lineBudget" class="fold-hint" data-testid="line-budget">{{ lineBudget }}</div>
+        <div v-if="layerNote" class="fold-hint" data-testid="layer-note">
+          依赖深度<LayerStatus :status="layerNote.status" />本层按值依赖算出 {{ layerNote.count }} 个深度（L28）：是证据，不是分层（ADR-0052）
+        </div>
+        <div
+          v-if="undeclared"
+          class="fold-hint"
+          data-testid="undeclared-strata"
+          title="子模块多于七个：能归纳出 2–5 个有原则的层就声明分层，归纳不出就记一条拆分信号（ST-1）"
+        >
+          本层未声明分层 · {{ undeclared }} 个模块
+        </div>
+        <div v-if="foldHint" class="fold-hint" data-testid="fold-hint">{{ foldHint }} 个模块，考虑标出核心</div>
+        <div v-for="h in tierHints" :key="h" class="fold-hint" data-testid="tier-hint">{{ h }}</div>
+        <div v-if="structureCorner?.note" class="structure-note" data-testid="structure-note">{{ structureCorner.note }}</div>
+        <span
+          v-if="structureCorner?.reducibleHidden"
+          class="fold-hint"
+          data-testid="reducible-corner"
+          title="可由别的路径推出的依赖（传递约简，L42）静息态不画；依赖方节点下边右标「另直连 N」，悬停或选中节点时画出"
+          >另直连 {{ structureCorner.reducibleHidden }} 条已收起</span
+        >
+        <span
+          v-if="structureCorner?.cycleHidden"
+          class="fold-hint"
+          data-testid="cycle-corner"
+          title="环是组的属性（L42）：环内的依赖静息态只计数，单击节点上的「↻ N」选中环组或聚焦成员时画出"
+          >环内 {{ structureCorner.cycleHidden }} 条已收起</span
+        >
+        <button
+          v-if="structureCorner?.typeOnlyHidden"
+          class="type-only"
+          data-testid="type-only-corner"
+          title="只引类型的束缺省收起（L15、L21②）；单击画出，图例「只引类型」一行可再收起"
+          @click="structurePrefs.setTypeOnly(true)"
+        >
+          只引类型 {{ structureCorner.typeOnlyHidden }} 条已收起
+        </button>
+        <button
+          v-if="structureCorner?.valueHidden"
+          class="type-only"
+          data-testid="value-hidden-corner"
+          title="「只看交互使用」开启时值使用档的束收起（B1）；单击关闭这个开关"
+          @click="structurePrefs.setInvokesOnly(false)"
+        >
+          值使用 {{ structureCorner.valueHidden }} 条已收起
+        </button>
+        <button
+          v-if="structureCorner?.coveredHidden"
+          class="type-only"
+          data-testid="covered-hidden-corner"
+          title="「只看未解释」开启时已解释的束（有交互覆盖，或形态是端口实现 / 子类 / 组装）收起（B4）；单击关闭这个开关"
+          @click="structurePrefs.setUncoveredOnly(false)"
+        >
+          已解释 {{ structureCorner.coveredHidden }} 条已收起
+        </button>
+        <button
+          v-if="hiddenRelationTypes"
+          class="type-only"
+          data-testid="filter-corner"
+          title="关系类型筛选隐藏了部分类别的交互（L8）；单击全部显示，图例的关系类型行可逐类切换"
+          @click="showAllTypes"
+        >
+          隐藏 {{ hiddenRelationTypes }} 类关系
+        </button>
+        <button
+          v-if="hiddenTargets"
+          class="type-only"
+          data-testid="current-only-corner"
+          title="「只看现状」开启：status 为目标态的模块及其后代不显示（L7）；单击显示全部"
+          @click="desk.setToggles({ currentOnly: false })"
+        >
+          目标态 {{ hiddenTargets }} 个模块已隐藏
+        </button>
+        <button
+          v-if="factsOff"
+          class="type-only"
+          data-testid="facts-off-corner"
+          title="「代码事实」已关闭：三类异常标记都不画（K9）——未证实关系的「?」标签、未解释与违规的代码依赖叠加线（点线）、违规视图边的红晕；「N 处标记」是这三类的合计，单击打开恢复显示"
+          @click="showFacts"
+        >
+          代码事实已关 · 隐藏 {{ factsOff }} 处标记
+        </button>
       </div>
-      <div v-if="foldHint" class="fold-hint" data-testid="fold-hint">{{ foldHint }} 个模块，考虑标出核心</div>
-      <div v-for="h in tierHints" :key="h" class="fold-hint" data-testid="tier-hint">{{ h }}</div>
-      <div v-if="structureCorner?.note" class="structure-note" data-testid="structure-note">{{ structureCorner.note }}</div>
-      <span
-        v-if="structureCorner?.reducibleHidden"
-        class="fold-hint"
-        data-testid="reducible-corner"
-        title="可由别的路径推出的依赖（传递约简，L42）静息态不画；依赖方节点下边右标「另直连 N」，悬停或选中节点时画出"
-        >另直连 {{ structureCorner.reducibleHidden }} 条已收起</span
-      >
-      <span
-        v-if="structureCorner?.cycleHidden"
-        class="fold-hint"
-        data-testid="cycle-corner"
-        title="环是组的属性（L42）：环内的依赖静息态只计数，单击节点上的「↻ N」选中环组或聚焦成员时画出"
-        >环内 {{ structureCorner.cycleHidden }} 条已收起</span
-      >
-      <button
-        v-if="structureCorner?.typeOnlyHidden"
-        class="type-only"
-        data-testid="type-only-corner"
-        title="只引类型的束缺省收起（L15、L21②）；单击画出，「显示」面板里可再收起"
-        @click="structurePrefs.setTypeOnly(true)"
-      >
-        只引类型 {{ structureCorner.typeOnlyHidden }} 条已收起
-      </button>
-      <button
-        v-if="structureCorner?.valueHidden"
-        class="type-only"
-        data-testid="value-hidden-corner"
-        title="「只看交互使用」开启时值使用档的束收起（B1）；单击关闭这个开关"
-        @click="structurePrefs.setInvokesOnly(false)"
-      >
-        值使用 {{ structureCorner.valueHidden }} 条已收起
-      </button>
-      <button
-        v-if="structureCorner?.coveredHidden"
-        class="type-only"
-        data-testid="covered-hidden-corner"
-        title="「只看未解释」开启时已解释的束（有交互覆盖，或形态是端口实现 / 子类 / 组装）收起（B4）；单击关闭这个开关"
-        @click="structurePrefs.setUncoveredOnly(false)"
-      >
-        已解释 {{ structureCorner.coveredHidden }} 条已收起
-      </button>
-      <button
-        v-if="hiddenRelationTypes"
-        class="type-only"
-        data-testid="filter-corner"
-        title="关系类型筛选隐藏了部分类别的交互（L8）；单击全部显示，「显示」面板设置块里可逐类勾选"
-        @click="showAllTypes"
-      >
-        隐藏 {{ hiddenRelationTypes }} 类关系
-      </button>
-      <button
-        v-if="hiddenTargets"
-        class="type-only"
-        data-testid="current-only-corner"
-        title="「只看现状」开启：status 为目标态的模块及其后代不显示（L7）；单击显示全部"
-        @click="desk.setToggles({ currentOnly: false })"
-      >
-        目标态 {{ hiddenTargets }} 个模块已隐藏
-      </button>
-      <button
-        v-if="factsOff"
-        class="type-only"
-        data-testid="facts-off-corner"
-        title="「代码事实」已关闭：三类异常标记都不画（K9）——未证实关系的「?」标签、未解释与违规的代码依赖叠加线（点线）、违规视图边的红晕；「N 处标记」是这三类的合计，单击打开恢复显示"
-        @click="showFacts"
-      >
-        代码事实已关 · 隐藏 {{ factsOff }} 处标记
-      </button>
     </div>
     <SketchMenu
       v-if="menu"
@@ -525,7 +545,6 @@ const showFacts = () => desk.setToggles({ showFacts: true })
       <button title="适应画布" @click="fitNow()">适应</button>
       <span class="gesture">空格 + 拖动 = 平移，Ctrl + 滚轮 = 缩放</span>
     </div>
-    <DisplayPanel />
   </div>
 </template>
 
@@ -557,11 +576,21 @@ const showFacts = () => desk.setToggles({ showFacts: true })
   border-radius: 14px;
 }
 
-.corner {
+.top-right {
   position: absolute;
   top: 10px;
+  bottom: 52px;
   right: calc(12px + var(--canvas-inset, 0px));
   z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.corner {
+  flex: none;
   display: flex;
   flex-direction: column;
   align-items: flex-end;

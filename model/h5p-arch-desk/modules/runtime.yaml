@@ -16,6 +16,7 @@ modules:
       - 资料区从不显示变为显示时收起导航树（dockAppeared），导航树在「文件」页签或因打开场景而出现时除外；「专注」收起导航树与属性栏，再按恢复（WS-9）。面板的「预览」经 OPEN_PREVIEW 打开源代码预览标签（G15）。
       - 「怎么读这张图」（GuideDialog）按三问四修饰讲一条线（ADR-0029 §3）：三个判断题定类型，再读机制（插座 = 经端口）、异步、拉取；查询淡、委托实色，端口是方框进边一侧的小记号。
       - 「组装」叠加开关同演化叠加，按项目记在本机：模型加载后恢复，之后每次变化写回（useAssemblyPrefs，O12）。
+      - 「显示 ▾」在工具栏视角切换之后（L49，ADR-0056）；窄工作列时它的摘要先让位，场景名与版本选择的最小宽度随之收窄，视角块不被压到盖住退出按钮。帮助经 OPEN_GUIDE 也可由图例关系组的「?」打开，并定位到「读一条线」（L51）。
     codeRefs: [src/components/DeskView.vue, src/components/GuideDialog.vue]
   - id: present.scenarios
     name: 场景列表

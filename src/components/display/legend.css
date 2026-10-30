@@ -1,4 +1,4 @@
-/* 「显示」面板图例的共用样式（各组子组件共用，限定在 .display 内）：一行一项，左列示意固定宽，右列文字 */
+/* 图例的共用样式（各组子组件共用，限定在 .display 内，L48）：一行一项，左列示意固定宽，右列文字 */
 .display .item {
   display: flex;
   align-items: center;

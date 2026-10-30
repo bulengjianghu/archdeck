@@ -4,16 +4,16 @@
  * 两个项目的未解释的交互都已为 0（ADR-0026），h5player 的违规都在基线内（不画线）：叠加线用例拦截事实端点去掉基线，让违规成为「无基线的全部违规」画出来（K9）。
  */
 import { expect, test } from '@playwright/test'
-import { openDesk, query } from './helpers'
+import { openDesk, query, setSwitch } from './helpers'
 
 test('开启代码事实：未证实的边标「未证实」、仍是实线，已证实的不标 ✓（K9、L10、L26）', async ({ page }) => {
   await openDesk(page, '/p/h5player')
   await expect(page.locator('.panel')).toContainText('架构治理')
   await expect(page.locator('.panel')).toContainText(/已证实 \d+/)
-  // L45（第十五轮 G13）：代码事实开关在设置块的「代码事实与组装」组
-  const toggle = page.getByRole('region', { name: '显示' }).getByRole('switch', { name: '代码事实' })
+  // L45（第十七轮 R4）：代码事实的开关是图例「代码事实」组的第一行
+  const toggle = page.getByRole('region', { name: '图例' }).getByRole('switch', { name: '代码事实' })
   await expect(toggle).toBeEnabled()
-  await toggle.check()
+  await setSwitch(toggle, true)
   const tagged = page.locator('.vue-flow__edge-route').filter({ has: page.locator('.edge-label-warn .vue-flow__edge-text', { hasText: '未证实' }) })
   await expect(tagged.first()).toBeAttached()
   await expect(tagged.first().locator('path.vue-flow__edge-path')).toHaveCSS('stroke-dasharray', 'none')
@@ -41,10 +41,10 @@ test('h5player：没有基线时违规画成叠加线；单击叠加线选中它
   await expect(page.locator('.panel')).toContainText('架构治理')
   await expect(page.locator('.panel')).toContainText(/已证实 \d+/)
 
-  // L45（第十五轮 G13）：代码事实开关在设置块的「代码事实与组装」组
-  const toggle = page.getByRole('region', { name: '显示' }).getByRole('switch', { name: '代码事实' })
+  // L45（第十七轮 R4）：代码事实的开关是图例「代码事实」组的第一行
+  const toggle = page.getByRole('region', { name: '图例' }).getByRole('switch', { name: '代码事实' })
   await expect(toggle).toBeEnabled()
-  await toggle.check()
+  await setSwitch(toggle, true)
   await expect(page.locator('.vue-flow__edge-text', { hasText: '✓' })).toHaveCount(0)
 
   // 根层的违规都落在已有的层间边上（只加红晕）；Framework 层有没有关系边的违规（外部的 app → kernel），画成叠加线
@@ -62,9 +62,9 @@ test('h5player：没有基线时违规画成叠加线；单击叠加线选中它
   await expect(page.locator('.dep-panel')).toContainText('模块依赖')
 })
 
-test('运行视角下「显示」面板不出现「代码事实」开关（L9）', async ({ page }) => {
+test('运行视角下图例与「显示 ▾」都不出现「代码事实」开关（L9）', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
-  await page.getByRole('button', { name: /^显示/ }).click()
-  await expect(page.getByRole('region', { name: '显示' })).toContainText('场景中显示全部节点与关系类型')
-  await expect(page.getByRole('region', { name: '显示' }).getByRole('switch', { name: '代码事实' })).toHaveCount(0)
+  await page.getByRole('button', { name: /^显示 ▾/ }).click()
+  await expect(page.getByRole('menu', { name: '显示' })).toContainText('场景中显示全部节点与关系类型')
+  await expect(page.getByRole('switch', { name: '代码事实' })).toHaveCount(0)
 })

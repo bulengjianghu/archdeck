@@ -60,7 +60,7 @@ test('§6.28-4：「混合」只出现在同步 / 异步不一致的束上', asy
   for (const t of await page.locator('.vue-flow__edge-route g[data-mixed] > title').allTextContents()) expect(t).toContain('同步 / 异步不一致')
 })
 
-test('L26（ADR-0041）：显示面板图例有机制标签一行与两段示意', async ({ page }) => {
+test('L26（ADR-0041）：图例有机制标签一行与两段示意', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?level=kit')
   // L47（G14）：机制标签行只列本层画面出现的——kit 层有回调 / 端口 / 总线 / 事件，跨进程的边静息态不画（不列）
   await expect(page.getByTestId('legend-mechanisms')).toContainText('总线')

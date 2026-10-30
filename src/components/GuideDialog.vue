@@ -1,11 +1,15 @@
 <script setup lang="ts">
 /**
  * 「怎么读这张图」（W-10）：顶栏「帮助」打开的一页，按结构 / 交互 / 运行 / 对照与治理四组各一句话加示意（ADR-0031：结构图是依赖事实，交互图是四类交互），
- * 结构组另有「束与表面」「承载」两段（第八轮，C-27–C-29）；「读一条线」一段讲机制标签与两段标签位（ADR-0041）；另一段讲三视角共享的通道（L18，文字与「显示」面板同源）；只讲概念，线型、颜色等具体图例在画布右下角的「显示」面板。Esc 或单击遮罩关闭。
+ * 结构组另有「束与表面」「承载」两段（第八轮，C-27–C-29）；「读一条线」一段讲机制标签与两段标签位（ADR-0041）；另一段讲三视角共享的通道（L18，文字与图例同源）；只讲概念，线型、颜色等具体图例在画布右上角的图例。
+ * 「三问」「四修饰」的读法讲解只在这里（L51，ADR-0056）：图例关系组的「?」打开本页并定位到「读一条线」（section）。Esc 或单击遮罩关闭。
  */
-import { onBeforeUnmount, onMounted } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RELATION_TYPE_LABELS, THREE_QUESTIONS } from './shared/labels'
 import { SHARED_CHANNELS } from './display/labels'
+import type { GuideSection } from './shared/guide'
+
+const props = defineProps<{ section?: GuideSection }>()
 
 const emit = defineEmits<{ close: [] }>()
 const onKey = (e: KeyboardEvent) => {
@@ -14,13 +18,18 @@ const onKey = (e: KeyboardEvent) => {
     emit('close')
   }
 }
-onMounted(() => window.addEventListener('keydown', onKey, true))
+const dialog = ref<HTMLElement>()
+onMounted(() => {
+  window.addEventListener('keydown', onKey, true)
+  // L51：从图例的「?」打开时定位到对应一节
+  if (props.section) void nextTick(() => dialog.value?.querySelector(`[data-section="${props.section}"]`)?.scrollIntoView?.({ block: 'start' }))
+})
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 </script>
 
 <template>
   <div class="mask" @click.self="emit('close')">
-    <section class="guide" role="dialog" aria-modal="true" aria-label="怎么读这张图">
+    <section ref="dialog" class="guide" role="dialog" aria-modal="true" aria-label="怎么读这张图">
       <header>
         <h2>怎么读这张图</h2>
         <button class="close" aria-label="关闭" @click="emit('close')">×</button>
@@ -83,7 +92,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
         </div>
       </div>
 
-      <div class="group" aria-label="读一条线：三问四修饰">
+      <div class="group" aria-label="读一条线：三问四修饰" data-section="read-line">
         <svg viewBox="0 0 120 64" aria-hidden="true">
           <path d="M10 18 L98 18" class="edge query" marker-end="url(#g-arrow)" />
           <path d="M10 40 L98 40" class="edge" marker-end="url(#g-arrow)" />
@@ -162,13 +171,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 
       <div class="shared" aria-label="三个视角共享">
         <h3>三个视角共享</h3>
-        <p>箭头、颜色在三个视角各有含义（看「显示」面板）；下面这些在三个视角意思一样——实线是交互、虚线是依赖，异常写在线中点：</p>
+        <p>箭头、颜色在三个视角各有含义（看画布右上角的图例）；下面这些在三个视角意思一样——实线是交互、虚线是依赖，异常写在线中点：</p>
         <ul>
           <li v-for="c in SHARED_CHANNELS" :key="c.key">{{ c.text }}</li>
         </ul>
       </div>
 
-      <p class="foot muted">箭头、颜色与节点样式的完整图例在画布右下角的「显示」面板，随视角整组切换。</p>
+      <p class="foot muted">箭头、颜色与节点样式的完整图例在画布右上角的「图例」，随视角整组切换；有开关的行单击即切换显示，其余设置在工具栏「显示 ▾」。</p>
     </section>
   </div>
 </template>

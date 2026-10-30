@@ -33,8 +33,8 @@ test('L10、L12：图例示意与画布同一套样式——查询半透明、�
   // T2 迁移后 app 层有真实的查询 / 委托：在图例上验（示意与画布共用 edgeStyle）；画布上的同一映射见单测 routeEdge
   // L47（G14）：换到 app 层量——infra 层静息态没有经端口机制的边，端口示意（带插座）不列
   await openDesk(page, '/p/h5player?level=app')
-  // L45（第十五轮 G13）：类型行是纯图例（.item，不再是可点击的 .type 按钮），示意仍与画布同一套样式
-  const types = page.getByRole('region', { name: '显示' }).locator('.type-list')
+  // L45（第十七轮 R4）：类型行即开关（.item 按钮），示意仍与画布同一套样式
+  const types = page.getByRole('region', { name: '图例' }).locator('.type-list')
   const swatch = (label: string) => types.locator('.item', { hasText: label }).first().locator('svg.swatch line').first()
   const q = swatch('查询')
   const c = swatch('委托')
@@ -46,7 +46,7 @@ test('L10、L12：图例示意与画布同一套样式——查询半透明、�
   // L47（G14）：只列本层画面出现的类型——app 层没有未分类与流（行按词表保留、只显隐）
   await expect(types.locator('.item', { hasText: '未分类' })).not.toBeVisible()
   await expect(types.locator('.item', { hasText: '流 =' })).not.toBeVisible()
-  await expect(page.getByLabel('四修饰').locator('marker.socket-marker')).toHaveCount(1)
+  await expect(page.getByRole('region', { name: '图例' }).locator('.reading-row marker.socket-marker')).toHaveCount(1)
 })
 
 test('L12、L10：画布上经端口的边在目标端有插座；查询边半透明、委托实色（T2 迁移后的真实数据）', async ({ page }) => {

@@ -24,7 +24,7 @@ test('单击节点选中并在面板显示属性，单击空白取消选中', as
   await openDesk(page, '/p/h5player?level=infra')
   const node = page.locator('.vue-flow__node-module').first()
   const id = await node.getAttribute('data-id')
-  // 节点可能落在右下角「显示」面板底下（取决于布局）：直接在节点上派发单击
+  // 节点可能落在右上角的图例底下（取决于布局）：直接在节点上派发单击
   await node.dispatchEvent('click')
   expect(query(page).get('sel')).toBe(`m:${id}`)
   await expect(page.locator('.panel h2').first()).toBeVisible()
