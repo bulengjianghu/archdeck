@@ -114,7 +114,7 @@ export interface CompareOptions {
   names?: ReadonlyMap<string, string>
 }
 
-const TEXT_FIELDS = ['name', 'responsibility', 'abstraction', 'includes', 'excludes', 'principle', 'codeRefs', 'docRefs', 'adrs', 'entry', 'owner', 'tags', 'status'] as const
+const TEXT_FIELDS = ['name', 'responsibility', 'summary', 'abstraction', 'invariants', 'includes', 'excludes', 'principle', 'codeRefs', 'docRefs', 'adrs', 'entry', 'owner', 'tags', 'status'] as const
 
 /** 写了的字段与对象版本的差别：结构（kind、role、mayDependOn）两种口径都比；文字只在相对基线时比（X17） */
 function moduleFields(k: ModuleDef, t: ModuleEntity, mode: CompareMode): string[] {
@@ -238,7 +238,7 @@ export function compareSketch(sketch: SketchEntity, target: ModelIndex, opts: Co
     if (!lineageOnly(prev.to, r.to)) fields.push('to')
     if (prev.type !== r.type) fields.push('type')
     // X17、X23：机制（via）、同步性与拉取写了才比
-    for (const f of ['description', 'interface', 'via', 'mode', 'pull'] as const) if (r[f] !== undefined && !same(r[f], prev[f])) fields.push(f)
+    for (const f of ['description', 'purpose', 'interface', 'via', 'mode', 'pull'] as const) if (r[f] !== undefined && !same(r[f], prev[f])) fields.push(f)
     if (fields.length)
       changes.push({ kind: 'changed', entity: 'relation', id: r.id, name: `${name(r.from)} → ${name(r.to)}`, fields, message: `修改关系 ${name(r.from)} → ${name(r.to)}：${fields.join('、')}`, at: at(`sketch.relations.${i}`) })
   })

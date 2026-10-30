@@ -15,6 +15,8 @@ import {
   assignFiles,
   checkSketches,
   compareOwned,
+  contractCoverage,
+  contractNote,
   governanceReport,
   loadModel,
   portIssues,
@@ -171,6 +173,7 @@ for (const entry of dirs) {
       `${index.relations.size} 条关系，${index.interfaces.size} 个接口，${index.dataStructures.size} 个数据结构` +
       (index.actors.size || index.scenarios.size ? `，${index.actors.size} 个参与者，${index.scenarios.size} 个场景` : '') +
       unclassifiedNote +
+      `；${contractNote(contractCoverage(index))}` +
       sourceNote +
       deltaNote +
       governanceNote +

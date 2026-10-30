@@ -478,6 +478,10 @@
         "responsibility": {
           "type": "string"
         },
+        "summary": {
+          "type": "string",
+          "description": "一句话职责（M27、ADR-0053）：≤ 30 字，动词开头，写对外承诺、不写内部构成"
+        },
         "principle": {
           "type": "string"
         },
@@ -517,7 +521,36 @@
           "description": "迁移期：旧写法 kind: layer 的层序（M26），新写法写在 strata 上"
         },
         "abstraction": {
-          "type": "string"
+          "type": "string",
+          "description": "内部切分的原则一句（M24、ADR-0053）：为什么这样分子模块；不兼任职责（职责写 summary / responsibility）"
+        },
+        "invariants": {
+          "type": "array",
+          "description": "守住什么（M28、ADR-0053）：≤ 3 条不变式，每条一句；可写成字符串，或 { text, adr }（adr 为 ADR 编号整数）",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "text"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "adr": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "相关架构决策的编号（整数，同 adrs）"
+                  }
+                }
+              }
+            ]
+          }
         },
         "includes": {
           "$ref": "#/definitions/textList"
@@ -584,6 +617,10 @@
         "responsibility": {
           "type": "string"
         },
+        "summary": {
+          "type": "string",
+          "description": "一句话职责（M27、ADR-0053）：≤ 30 字，动词开头，写对外承诺、不写内部构成"
+        },
         "principle": {
           "type": "string"
         },
@@ -623,7 +660,36 @@
           "description": "迁移期：旧写法 kind: layer 的层序（M26），新写法写在 strata 上"
         },
         "abstraction": {
-          "type": "string"
+          "type": "string",
+          "description": "内部切分的原则一句（M24、ADR-0053）：为什么这样分子模块；不兼任职责（职责写 summary / responsibility）"
+        },
+        "invariants": {
+          "type": "array",
+          "description": "守住什么（M28、ADR-0053）：≤ 3 条不变式，每条一句；可写成字符串，或 { text, adr }（adr 为 ADR 编号整数）",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "text"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "adr": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "相关架构决策的编号（整数，同 adrs）"
+                  }
+                }
+              }
+            ]
+          }
         },
         "includes": {
           "$ref": "#/definitions/textList"
@@ -750,7 +816,12 @@
           ]
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "机制：怎么连、经什么（M29：目的写 purpose）"
+        },
+        "purpose": {
+          "type": "string",
+          "description": "目的（M29、ADR-0053）：≤ 20 字，从调用方的视角写「为了什么」"
         },
         "designNote": {
           "type": "string",

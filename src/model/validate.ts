@@ -26,6 +26,7 @@ import { LEGACY_VIAS, isCallLike, isCallbackVia, isUnclassified, parseVia, relat
 /** 问题消息里的类型名 */
 const TYPE_NAMES: Record<string, string> = { queries: '查询', commands: '委托', calls: '未分类关系', notifies: '通知', streams: '流' }
 import { buildIndex } from './indexer'
+import { INVARIANTS_LIMIT, PURPOSE_LIMIT, SUMMARY_LIMIT, invariantsOf, textWidth } from './contract'
 import { bindRelation, forEachStep, mapChildren, planScenario, querySideEffects, syncMismatch } from './scenario/semantics'
 
 export interface ValidateResult {
@@ -66,6 +67,7 @@ export function validate(input: ArchModel): ValidateResult {
   checkImplementers(c)
   const relations = checkRelations(input, c)
   markPorts(c, relations)
+  checkContract(c, relations)
 
   const structural: ArchModel = {
     system: input.system,
@@ -204,6 +206,24 @@ function checkPrinciples(input: ArchModel, { rootId, modules, info }: Checked) {
     const second = m.parentId !== rootId && modules.get(m.parentId)?.parentId === rootId
     if (m.role === 'core' || second)
       info('module.missing-abstraction', `「${m.id}」是${m.role === 'core' ? '核心模块' : '第二级模块'}，没有一句话原则 abstraction（为什么这样分子模块，M24）`, m.src)
+  }
+}
+
+/** M27–M29（ADR-0053）：描述契约的提示——一句话职责超长、核心模块缺一句话职责、不变式超条数、关系目的超长；都是 info，不计入提醒数 */
+function checkContract({ modules, info }: Checked, relations: readonly RelationEntity[]) {
+  const at = (src: SourceLoc, field: string): SourceLoc => ({ ...src, path: src.path ? `${src.path}.${field}` : field })
+  for (const m of modules.values()) {
+    const summary = m.summary?.trim()
+    if (summary && textWidth(summary) > SUMMARY_LIMIT)
+      info('module.summary-long', `「${m.id}」的一句话职责 summary 有 ${textWidth(summary)} 字，超过 ${SUMMARY_LIMIT} 字：只写对外承诺，内部构成留给 responsibility（M27）`, at(m.src, 'summary'))
+    if (!summary && m.role === 'core') info('module.missing-summary', `「${m.id}」是核心模块，没有一句话职责 summary（≤ ${SUMMARY_LIMIT} 字、动词开头、写对外承诺，M27）`, m.src)
+    const n = invariantsOf(m).length
+    if (n > INVARIANTS_LIMIT) info('module.invariants-many', `「${m.id}」写了 ${n} 条不变式，至多 ${INVARIANTS_LIMIT} 条：只留最要紧的（M28）`, at(m.src, 'invariants'))
+  }
+  for (const r of relations) {
+    const purpose = r.purpose?.trim()
+    if (purpose && textWidth(purpose) > PURPOSE_LIMIT)
+      info('relation.purpose-long', `关系「${r.id}」的目的 purpose 有 ${textWidth(purpose)} 字，超过 ${PURPOSE_LIMIT} 字：只写调用方为了什么，机制留给 description（M29）`, at(r.src, 'purpose'))
   }
 }
 

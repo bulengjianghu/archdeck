@@ -162,6 +162,8 @@ export interface ModuleDef {
   /** 角色（§1.1、ADR-0027、ADR-0030）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）/ port 对外端口模块 / adapter 适配器；不写为普通。旧写法 `core: true` 由 Loader 映射（M16） */
   role?: ModuleRole
   responsibility?: string
+  /** M27（ADR-0053）：一句话职责，≤ 30 字，动词开头，写对外承诺；取值走 summaryOf（M30） */
+  summary?: string
   principle?: string
   dataStructures?: string[]
   provides?: string[]
@@ -178,8 +180,10 @@ export interface ModuleDef {
   stratum?: string
   /** 迁移期（M26）：旧写法 kind: layer 的层序与可依赖的层，Loader 改写为父模块的 strata；新写法写在 strata 上 */
   order?: number
-  /** 对内的原则（来自挂在它身上的草图的 abstraction，X10） */
+  /** 对内的原则：内部切分的原则一句（来自挂在它身上的草图的 abstraction，X10；ADR-0053 收窄，不兼任职责） */
   abstraction?: string
+  /** M28（ADR-0053）：≤ 3 条不变式；取值走 invariantsOf 归一 */
+  invariants?: (string | InvariantDef)[]
   includes?: string[]
   excludes?: string[]
   mayDependOn?: string[]
@@ -204,8 +208,17 @@ export interface RelationDef {
   via?: string
   interface?: string
   payload?: string | string[]
+  /** 机制：怎么连、经什么 */
   description?: string
+  /** M29（ADR-0053）：目的，≤ 20 字，调用方视角的「为了什么」；取值走 purposeOf（M30） */
+  purpose?: string
   designNote?: string
+}
+
+/** M28：一条不变式；adr 为 ADR 编号（整数） */
+export interface InvariantDef {
+  text: string
+  adr?: number
 }
 
 export interface InterfaceDef {

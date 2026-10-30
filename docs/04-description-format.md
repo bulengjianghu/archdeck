@@ -54,6 +54,7 @@ module:
     - id: infra.framework.pipeline
       name: Pipeline
       kind: component
+      summary: 以事务方式提交三段 MU 图的变更
       responsibility: 维护 Load / Process / Play 三段 MU 图，以事务方式提交图变更。
       provides: [if.framework.pipeline.updatePipeline]
       dataStructures: [ds.PipelineTransaction]
@@ -64,6 +65,7 @@ relations:
     to: app.solution
     type: commands
     interface: if.solution.hooks
+    purpose: 让方案在命令前后插入处理
     description: 命令执行前后回调 Solution 的 pre / post hook。
 
 interfaces:
@@ -196,7 +198,24 @@ system:
 - **粒度**：模块是一组内聚的职责，通常对应 1~10 个文件。第二级之下一般再分 1~2 级，只有内部确实还有清晰子结构时才继续分；一个父模块的子模块以 3~9 个为宜。
 - **ID**：`<父 ID>.<短名>`，短名用 kebab-case。
 - **职责**：一两句话说清负责什么，有明显的「不负责什么」就写上；不要复述文件名。
-- **原则 `abstraction`**（对内的一面，ADR-0042）：一句话说清「为什么这样分子模块」——按什么取舍、子模块之间守什么约束，不复述职责、不列子模块。**核心模块与第二级模块必须写**（没写时 `lint:model` 提示 `module.missing-abstraction`，M24），其余有子模块的模块建议写，叶子模块不写。第二级模块在骨架（人拥有）里，原则写在对应的 `modules/` 区域文件里，作为补充条目（只含 `id`、`name`、`abstraction`）；挂在它身上的草图写了原则时不写（X10：草图写了以草图为准，写了不同的值即 `sketch-redefined`）。原则进确认指纹（Z2），改写已确认模块的原则会让它需复核：只在原则确实变了时改。面板首段「说明」= 职责 + 原则。
+- **一句话职责 `summary`**（M27，ADR-0053）：≤ 30 字（全角计 1、半角计 ½，M30），**动词开头**，写对外承诺——别人能指望它做成什么，不写内部构成、不列子模块、不写规则编号。**有 `responsibility` 的模块都写**；核心模块没写时 `lint:model` 提示 `module.missing-summary`，超长提示 `module.summary-long`。`responsibility` 照旧写全（负责什么、不负责什么），`summary` 是它的提炼，不是它的首句。模块在人拥有的草图里（骨架、挂载草图）时，`summary` 写在对应的 `modules/` 区域文件的补充条目里（只含 `id`、`name` 与要补的字段），同 `abstraction`。
+
+  | | 写法 |
+  |---|---|
+  | ✅ | 「把描述文件变成校验过的索引」「串行施用宿主命令，发出事件与快照」 |
+  | ❌ | 「门面、内核、规则与适配四部分」（内部构成）、「负责……的模块」（不是动词开头）、「按 M17 读入未分类」（规则编号） |
+- **原则 `abstraction`**（对内的一面，ADR-0042；ADR-0053 收窄）：一句话说清「**内部怎么切分**」——按什么取舍、子模块之间守什么约束，不复述职责、不列子模块，**不兼任职责**（对外承诺写 `summary`）。**核心模块与第二级模块必须写**（没写时 `lint:model` 提示 `module.missing-abstraction`，M24），其余有子模块的模块建议写，叶子模块不写。第二级模块在骨架（人拥有）里，原则写在对应的 `modules/` 区域文件里，作为补充条目（只含 `id`、`name`、`abstraction`）；挂在它身上的草图写了原则时不写（X10：草图写了以草图为准，写了不同的值即 `sketch-redefined`）。原则进确认指纹（Z2），改写已确认模块的原则会让它需复核：只在原则确实变了时改。面板首段「说明」= 职责 + 原则。
+- **不变式 `invariants`**（M28，ADR-0053）：回答「它靠什么一直是这个样子」，≤ 3 条，每条一句；有相关决策时写成 `{ text, adr }`（`adr` 为整数编号），否则写字符串。**核心模块与有内部分层（声明了 `strata`）的模块写**，其余有明确约束的可写。只写**代码里真成立**的约束（单通道、唯一属主、单向依赖、纯函数、不碰某类 API……），拿不准就读源码核对，核对不了的不写；不写愿望、不写「应当」。从 `abstraction`、`principle` 与相关 ADR 里提炼，提炼出来后 `abstraction` 不再重复它。超过 3 条提示 `module.invariants-many`。
+
+  ```yaml
+  - id: kit.kernel
+    name: 会话内核
+    summary: 串行施用宿主命令，维护唯一的会话状态
+    abstraction: 按「施用 / 规则 / 调度」切分：规则是纯表，施用者只有一个
+    invariants:
+      - 命令单通道串行：同一时刻只施用一条命令
+      - { text: 会话是资源的唯一属主，close 时全部释放, adr: 12 }
+  ```
 - **实现原理**：只给关键模块写，说清核心机制（长文，面板折叠在后）。
 - **接口 / 数据结构**：只列对外有意义的（被其他模块调用或交换的）。
 - **角色 `role`**（ADR-0027；旧写法 `core: true` 加载时映射为 `role: core` 并提醒，M16）：任意层次都可写，属模块对外的一面，写在父草图（X10）——第二级写在骨架里，更深的写在挂在父模块上的草图里，或写在人拥有的 `intent/roles.yaml`（`roles:` 模块 ID → role；草图写了的以草图为准；治理面板「认可为共用件」追加到这里，U11）；AI 生成的 `modules/` 不写 `role`（分级是架构师的判断，AI 只能经治理面板建议，U11）。
@@ -265,6 +284,8 @@ system:
 | `streams` | **流**：同一通道上连续的数据项，关注吞吐与背压（帧、分片、样本流）；两端通常只知道端口、由第三方接线。拉取型（接收方按需取下一项）加 `pull: true`，箭头仍指数据去向 | 推送方 → 接收方 |
 
 只有这四类。导入了对方却没有交互（只引类型、只是知道）的**不写关系**——那是代码事实。
+
+**目的与机制分开写**（M29，ADR-0053）：每条关系都写 `purpose`——≤ 20 字，**从调用方（`from`）的视角**写「为了什么」，如「取会话状态画控制条」「让选中的族拉流解码」；`description` 照旧写机制（怎么连、经什么、何时触发）。`purpose` 不复述类型与对端名（类型与对端已画在线上），不写函数名；通知写发布者为什么要让人知道（「宣告会话结束」），流写数据去哪做什么。超长提示 `relation.purpose-long`。关系在人拥有的草图里（骨架的第二级关系）时，`purpose` 写在对应 `modules/` 区域文件里的补充条目（同 `id`、`from`、`to`、`type`，只多 `purpose`，X1）。
 
 **判别顺序（三问四修饰）**：先问「有没有交互」——没有 → 不写。有：
 
@@ -606,6 +627,7 @@ npm run arch -- own            # 人改完 intent/、designs/*/sketches/、rules
 
 - 必须 0 个错误；提醒逐条处理：缺职责要补；引用其他区域尚未定义的接口 / 数据结构时可暂留；源码归属警告按 §3.7 处理；场景证据文件不存在（`scenario.evidence`）按 §3.6 改正路径。
 - 人拥有的文件由指纹门禁守住：`lint:model` 报 `owned.changed` 时说明有人拥有的文件在登记后被改动（多半是 AI 重新生成时碰了它）——由人核对后恢复，或确认改动后再 `arch own`；`owned.unregistered` 提醒有人拥有的文件还没登记。AI 不得运行 `arch own`。
+- 描述契约（M27–M31，ADR-0053）：摘要行的「契约」一段要做到——有职责的模块全有 `summary`（核心缺 0）、关系全有 `purpose`、超长 0；核心模块与有内部分层的模块有 `invariants`。这些提示是 info、不作为门禁，明细在返工清单（`npm run arch -- issues`）里。
 - 按代码重新生成当前版本后，更新 `system.yaml` 的 `source.commit` 与 `source.generatedAt`；对活动草图跑 `sketch-check`，偏差按草图修正描述（X5）。
 - `lint:model` 一并检查代码事实与架构规则（K、U、Y）：基线之外的新增违规（`rule.new`）、环度上升（`cycle.grew`）是错误，要么修代码，要么由架构师裁决后改规则；`fact.unconfirmed` 提醒说明描述里的端口实现者（`implementedBy`；现状为 `implements` 关系）在代码里找不到，或交互关系的两端之间在代码里没有任何依赖（K6），按代码修正描述（确实经端口、总线或通道传递的写 `via`，K5b）——运行时交互经由第三个模块转交时，关系写在实际调用的两端之间（如 `entry → validator`，而不是 `loader → validator`）；未解释的交互（K7，info）只计交互使用（调用、`new`、`extends`、渲染，或把函数、类、组件作为值交出）而没有交互关系覆盖的，只读常量、枚举、只读值的纯值读取不计；按「事实求全、描述求准、呈现求少」（Q12）**补交互，不补依赖**：这次使用是哪种交互就按三问补哪种（§3.4：要结果、无副作用的补 `queries`，交出一件事的补 `commands`，一对多的补 `notifies`，连续数据的补 `streams`；描述写「谁调谁做什么」），只引类型的、只读常量与标签的、借用名称查询这类没有架构含义的不补；实现端口的写进接口的 `implementedBy`，继承与组装是事实（K12、K13），都不补关系（ADR-0029、ADR-0030）。`relation.unclassified`（未分类，info）只提示：AI 按三问给出分类，核心之间的由架构师在草图里确认（M17、X23）；`query.side-effect`（U13）与 `port.no-implementer` / `port.no-user`（U14）按建议改描述或交给架构师。
 - 基线由人生成并提交：
