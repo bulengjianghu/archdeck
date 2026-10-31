@@ -29,6 +29,7 @@ modules:
     name: 应用外壳与路由
     summary: 按地址打开项目列表或某个项目的某个版本
     abstraction: 外壳只按路由选页，切换项目或版本时整块重建视图，自身不持有任何浏览状态。
+    principle: 全局样式里有一组卡片设计变量（--card-*）与 .desk-card / .desk-pill（CD-1，ADR-0057）：属性卡片、图例、画布角与缩放、回放胶囊都用它。
     codeRefs: [index.html, env.d.ts, src/main.ts, src/App.vue, src/styles.css]
   - id: present.project-list
     name: 项目列表主页
@@ -130,7 +131,7 @@ modules:
       - { text: 对象面板只由 Panel.vue 按 desk.selected 挑一张，别处不挂对象面板, adr: 12 }
       - { text: 写入人拥有的文件只经 desk.write 发起，面板不直接发请求, adr: 19 }
       - { text: 核对卡的分项与计数只取现有派生，不新算, adr: 53 }
-    principle: 三卡骨架（ADR-0053）由面板自身持有、各对象面板共用——卡片 PanelCard（卡头结论、缺省展开态、定位请求时展开；理解卡首节渲染分派经 RUN_FIRST 注入的运行信息，V6）、核对卡 CheckCard（分项一行一个状态加结论，⚠ 行下平铺条目至多 5 条、单击跳到清单或选中关系，清单插槽）、相关资料卡 RelatedCard（图解与场景，单击预览、双击固定、已打开标记；图解有无由 HAS_EXPLAINER 注入，W5 接入）、ADR 编号链接 AdrLink；分项的纯函数在 panelCheck（checkSummary、moduleCheckRows、rowsFromNotices、relationTypeLabel，PC-2、PC-6、PC-10），注入键在 related。层面板与环面板也直接归面板自身。
+    principle: 卡片直接立在画布上（CD-1–CD-6，ADR-0057）：每个对象面板的头部是身份卡（.id-card，名称 / ID 与徽标 / 动作三行，不粘顶），卡片外观取共用样式的 --card-* 变量，设计说明、出处等散块也成卡；身份卡滚出属性列上沿后分派在顶部显示名称胶囊（CD-4）。三卡骨架（ADR-0053）由面板自身持有、各对象面板共用——卡片 PanelCard（卡头结论、缺省展开态、定位请求时展开；理解卡首节渲染分派经 RUN_FIRST 注入的运行信息，V6）、核对卡 CheckCard（分项一行一个状态加结论，⚠ 行下平铺条目至多 5 条、单击跳到清单或选中关系，清单插槽）、相关资料卡 RelatedCard（图解与场景，单击预览、双击固定、已打开标记；图解有无由 HAS_EXPLAINER 注入，W5 接入）、ADR 编号链接 AdrLink；分项的纯函数在 panelCheck（checkSummary、moduleCheckRows、rowsFromNotices、relationTypeLabel，PC-2、PC-6、PC-10），注入键在 related。层面板与环面板也直接归面板自身。
   - id: present.shared
     name: 呈现共用件
     summary: 为各呈现子系统提供共用文案、代码高亮与注入入口
@@ -454,7 +455,7 @@ relations:
   - { id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: queries, purpose: 按契约类型产出投影结果 }
   - { id: rel.p8.desk-stage, from: present.desk-view, to: present.canvas, type: commands, purpose: 放结构图并注入舞台显示设置 }
   - { id: rel.p3.desk-perspective, from: present.desk-view, to: present.perspective, type: commands, purpose: 在顶部显示视角切换 }
-  - { id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: commands, purpose: 运行视角下在底部放回放控制条 }
+  - { id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: commands, purpose: 运行视角下在画布底部浮回放胶囊 }
   - { id: rel.p6.desk-nav-tree, from: present.desk-view, to: present.nav-tree, type: commands, purpose: 在工作台左侧放导航树 }
   - { id: rel.gv.reader-diff, from: access.reader, to: model.diff, type: queries, purpose: 摘要草图相对上次提交的改动 }
   - { id: rel.gv.source-review, from: access.model-source, to: model.review, type: queries, purpose: 算健康度里的确认计数 }

@@ -12,7 +12,7 @@ actors:
 relations:
   - {id: rel.ctx.perspective, from: actor.architect, to: present.perspective, type: commands, description: 架构师交给视角切换：点「运行」打开场景列表；退出场景, purpose: 进入运行视角或退出场景 }
   - {id: rel.ctx.scenarios, from: actor.architect, to: present.scenarios, type: commands, description: 架构师交给场景列表：选定场景, purpose: 挑一个场景来回放 }
-  - {id: rel.ctx.player, from: actor.architect, to: present.player, type: commands, description: 架构师交给回放控制条：上一步 / 下一步、拖动进度、选分支, purpose: 逐步推进回放并选择分支 }
+  - {id: rel.ctx.player, from: actor.architect, to: present.player, type: commands, description: 架构师交给回放胶囊：上一步 / 下一步、拖动进度、选路线与分支, purpose: 逐步推进回放并选择分支 }
   - {id: rel.ctx.nav-tree, from: actor.architect, to: present.nav-tree, type: commands, description: 架构师交给导航树：在模块树中定位、下钻；在步骤树中指向某一步、选分支, purpose: 定位模块、下钻或指向某一步 }
   - {id: rel.ctx.sequence, from: actor.architect, to: present.sequence.interact, type: commands, description: 架构师交给时序图交互：单击时序图中的消息、悬停预览, purpose: 指向时序图上的某一步 }
   - {id: rel.ctx.canvas, from: actor.architect, to: present.canvas.flow, type: commands, description: 架构师交给视图转换与交互：单击 / 双击 / 悬停节点与边，单击步骤序号, purpose: 在图上选中、下钻与预览关系 }
