@@ -81,7 +81,7 @@ const presence = createLegendPresence({
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  max-width: 300px;
+  max-width: min(300px, 100%);
   font-size: 12px;
   color: var(--text);
   pointer-events: auto;
@@ -111,7 +111,7 @@ const presence = createLegendPresence({
 
 /* L48：卡的高度上限为画布高度的一半（外层列 .top-right 高度确定，本组件 max-height: 50%），超出在卡内滚动 */
 .body {
-  width: 270px;
+  width: min(270px, 100%);
   min-height: 0;
   overflow-y: auto;
   padding: 6px 10px 8px;

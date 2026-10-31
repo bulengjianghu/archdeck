@@ -630,10 +630,12 @@ const showFacts = () => desk.setToggles({ showFacts: true })
   border-radius: 14px;
 }
 
+/* 左沿也定下来（12px）：这一列的宽度就是画布可见宽度，图例卡不会伸出画布、盖到导航上（CD-1，与 X1 集成） */
 .top-right {
   position: absolute;
   top: 10px;
   bottom: 52px;
+  left: 12px;
   right: calc(12px + var(--canvas-inset, 0px));
   z-index: 5;
   display: flex;

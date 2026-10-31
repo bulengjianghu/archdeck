@@ -47,7 +47,7 @@ export interface CommitDelta {
   ahead: number | null
 }
 
-/** G22：源码版本提示的一句话（页面文件树头部与 `lint:model` 摘要共用同一措辞） */
+/** G22：源码版本提示的一句话（画布标题行源码胶囊展开的原文与 `lint:model` 摘要共用同一措辞，TB-8） */
 export const sourceDeltaNote = (d: CommitDelta): string =>
   `描述基于 ${d.described.slice(0, 8)}，源码树在 ${d.head.slice(0, 8)}（${d.ahead === null ? '描述的提交不在源码树历史中' : `差 ${d.ahead} 个提交`}）`
 

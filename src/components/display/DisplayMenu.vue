@@ -4,7 +4,8 @@
  * 只放**没有画布记号的显示设置**——有记号的开关在图例行上（L45），一个开关只出现在一处。按视角只出现能用的项：
  * 交互视角为边界节点、只看现状、热度口径；结构视角另有只看交互使用、只看未解释（带收起计数，L21）、总是展开表面（L20）；
  * 运行视角只有交互关系的显示方式（V8）与一行说明（L9：舞台不受显示开关影响）。
- * 按钮旁的摘要列出非默认设置（沿用第十五轮「显示」面板折叠摘要的口径）。单击菜单外或 Esc 收起。
+ * 按钮不带摘要（TB-3，第十八轮修订 L49）：有非默认设置时按钮右上角一个点，悬停提示列出非默认设置（口径沿用第十五轮折叠摘要；
+ * 运行视角只有交互关系的显示方式不是缺省的「隐藏」才算）。隐藏了什么由画布角的留痕说明（L45）。单击菜单外或 Esc 收起。
  * 开关读写视图状态（desk.toggles）与显示偏好（useStructurePrefs，画布同读），不进 URL。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -57,10 +58,10 @@ const coveredCount = computed(() => hiddenWith({ uncoveredOnly: true })?.covered
 // ── 热度口径（J5、L49）：开关在图例的热度行 ──
 const evoReady = computed(() => desk.evolution.status.value === 'ready')
 
-/** L49：摘要——只列非默认的设置（第十五轮「显示」面板折叠摘要的口径） */
+/** TB-3：非默认的设置（第十五轮「显示」面板折叠摘要的口径），有就在按钮上加一个点 */
 const summary = computed(() => {
   const t = desk.toggles
-  if (run.value) return [`交互关系：${MODE_LABEL[stage.mode.value]}`]
+  if (run.value) return stage.mode.value === 'hide' ? [] : [`交互关系：${MODE_LABEL[stage.mode.value]}`]
   if (structure.value)
     return [
       t.showBoundaries ? '' : '无边界节点',
@@ -95,7 +96,7 @@ const summary = computed(() => {
       :title="`显示设置（没有画布记号的开关；有记号的开关在图例上）${summary.length ? `\n非默认：${summary.join(' · ')}` : ''}`"
       @click="open = !open"
     >
-      显示 ▾<span v-if="summary.length" class="summary" data-testid="display-summary">{{ summary.join(' · ') }}</span>
+      显示 ▾<span v-if="summary.length" class="dot" data-testid="display-summary" :data-summary="summary.join(' · ')" aria-hidden="true" />
     </button>
     <section v-if="open" class="menu" role="menu" aria-label="显示">
       <template v-if="run">
@@ -176,12 +177,11 @@ const summary = computed(() => {
 }
 
 .menu-btn {
+  position: relative;
   font-size: 12px;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  max-width: 100%;
-  overflow: hidden;
+  padding: 3px 12px;
+  border-radius: 8px;
+  background: none;
   white-space: nowrap;
 }
 
@@ -191,19 +191,20 @@ const summary = computed(() => {
   border-color: var(--accent);
 }
 
-.summary {
-  min-width: 0;
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 11.5px;
-  color: var(--warning);
+.dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
 }
 
 .menu {
   position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
+  top: calc(100% + 6px);
+  right: 0;
   z-index: 30;
   min-width: 240px;
   padding: 6px 12px 10px;

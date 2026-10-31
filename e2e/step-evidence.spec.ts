@@ -43,11 +43,11 @@ test('无证据（无承载）的步骤：时序图消息带「?」，场景面�
   await expect(page.locator('svg .no-evidence').first()).toBeVisible({ timeout: 20_000 })
   const section = page.locator('.scenario-panel .section').filter({ has: page.locator('h3', { hasText: '证据' }) })
   await expect(section).toContainText(/无证据 [1-9]/)
-  await page.getByRole('button', { name: /^运行：/ }).click()
+  await page.getByRole('button', { name: /^运行 · / }).click()
   await expect(page.locator('.scenario-list .item .unevidenced').first()).toHaveText(/\? \d+/)
   await page.keyboard.press('Escape')
   // 运行视角下导航树缺省收起（W-1）
-  await page.getByRole('button', { name: '展开导航树' }).click()
+  await page.getByRole('button', { name: '导航树', exact: true }).click()
   await page.getByRole('tab', { name: /问题/ }).click()
   await page.getByRole('combobox', { name: '按类别筛选' }).selectOption('unevidenced')
   await expect(page.locator('.nav-tree .item .title').first()).toContainText('步骤无证据')

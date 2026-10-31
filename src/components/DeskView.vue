@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * 单个项目的架构视图，三列（W-1、WS-1，ADR-0054）：导航树 | 工作列（只属于它的工具栏、画布、属性栏、回放胶囊）| 资料区。
+ * 单个项目的架构视图，三列（W-1、WS-1，ADR-0054）：导航树（顶部是项目标题区，TB-6）| 工作列（只属于它的工具栏、画布、属性栏、回放胶囊）| 资料区。
+ * 工具栏只放改变显示的控件（C6、TB-1，ADR-0057）；「我在哪」在画布左上角的标题行（TB-7）。
  * 属性栏按工作列宽度并排或悬浮（WS-3），卡片直接立在画布上（CD-2）；回放胶囊浮在画布底部居中、避让悬浮卡片（CD-7、CD-8）；「专注」一键收起导航树与属性栏（WS-9）。每次进入项目创建一份独立的 DeskState，
  * 其 watch 都在本组件作用域内，离开项目时随组件销毁。
  */
@@ -11,9 +12,11 @@ import { isCommitVersion, isIntentVersion, type VersionRef } from '@/model'
 import { httpModelWriter, httpSourceFetcher } from './source/httpSource'
 import { DESK_STATE } from '@/state/inject'
 import GraphCanvas from './GraphCanvas.vue'
-import Breadcrumb from './Breadcrumb.vue'
-import Toolbar from './Toolbar.vue'
-import VersionSwitcher from './VersionSwitcher.vue'
+import CanvasTitle from './CanvasTitle.vue'
+import SearchPalette from './SearchPalette.vue'
+import ProjectMenu from './ProjectMenu.vue'
+import MoreMenu from './MoreMenu.vue'
+import ToolIcon from './shared/ToolIcon.vue'
 import InfoBar from './infobar/InfoBar.vue'
 import GuideDialog from './GuideDialog.vue'
 import DisplayMenu from './display/DisplayMenu.vue'
@@ -21,7 +24,6 @@ import { OPEN_GUIDE, type GuideSection } from './shared/guide'
 import PerspectiveSwitch from './PerspectiveSwitch.vue'
 import PlayerBar from './PlayerBar.vue'
 import DockPane from './dock/DockPane.vue'
-import SourceDeltaBar from './source/SourceDeltaBar.vue'
 import Panel from './panel/Panel.vue'
 import NavTree from './tree/NavTree.vue'
 import { OPEN_PREVIEW } from './shared/preview'
@@ -261,11 +263,6 @@ function toggleDock() {
   if (hasDocs.value) ws.dispatch({ type: 'toggleDock' })
   else if (desk.perspective.value === 'run') ws.open({ kind: 'sequence' }, true)
 }
-// G22：当前版本下源码树的 HEAD 与描述的 source.commit 不一致（提交 / 设计版本没有代码事实，不提示）
-const sourceDelta = computed(() => {
-  const p = desk.files.payload.value
-  return p?.status === 'local' ? (p.commitDelta ?? null) : null
-})
 // W-10：「怎么读这张图」
 const guideOpen = ref(false)
 /** L51：图例关系组的「?」打开帮助并定位到「读一条线」 */
@@ -284,14 +281,69 @@ const hasSequence = (s: typeof ws.state.value) => s.groups.some(g => g.tabs.some
 watch(ws.state, (now, was) => {
   if (dockAppeared(was, now) && navTab.value !== 'files' && !(hasSequence(now) && !hasSequence(was))) navCollapsed.value = true
 })
-const issueCount = computed(() => {
-  const c = desk.rework.value?.counts
-  return { errors: c?.error ?? 0, warnings: c?.warning ?? 0, total: (c?.error ?? 0) + (c?.warning ?? 0) }
-})
 function showIssues() {
   navTab.value = 'issues'
   if (navCollapsed.value) toggleNav()
 }
+
+// TB-4：搜索面板——⌕ 或 ⌘K（Ctrl+K）打开，再按关闭；焦点在输入框里也生效
+const searchOpen = ref(false)
+function onSearchKey(e: KeyboardEvent) {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'k') return
+  e.preventDefault()
+  searchOpen.value = !searchOpen.value
+}
+onMounted(() => window.addEventListener('keydown', onSearchKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onSearchKey))
+// TB-1：工具栏的元素都不收缩——量出它们的总宽作为工作列的最小宽度，资料区先让位（窄到 280px 为止），视角段与右侧按钮不被挤压或盖住
+const toolbar = ref<HTMLElement>()
+const toolbarMin = ref(0)
+function measureToolbar() {
+  const el = toolbar.value
+  if (!el) return
+  const cs = getComputedStyle(el)
+  const items = [...el.children].filter(c => !c.classList.contains('spacer') && (c as HTMLElement).offsetParent !== null) as HTMLElement[]
+  const gap = parseFloat(cs.columnGap) || 0
+  const sum = items.reduce(
+    (w, c) => w + c.offsetWidth + (parseFloat(getComputedStyle(c).marginLeft) || 0) + (parseFloat(getComputedStyle(c).marginRight) || 0),
+    0,
+  )
+  toolbarMin.value = Math.ceil(sum + gap * items.length + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight))
+}
+let toolbarSizes: ResizeObserver | null = null
+let toolbarItems: MutationObserver | null = null
+onMounted(() => {
+  if (!toolbar.value || typeof ResizeObserver === 'undefined') return
+  const observeAll = () => {
+    toolbarSizes?.disconnect()
+    for (const c of toolbar.value!.children) toolbarSizes!.observe(c)
+    measureToolbar()
+  }
+  toolbarSizes = new ResizeObserver(measureToolbar)
+  toolbarItems = new MutationObserver(observeAll)
+  toolbarItems.observe(toolbar.value, { childList: true })
+  observeAll()
+})
+onBeforeUnmount(() => {
+  toolbarSizes?.disconnect()
+  toolbarItems?.disconnect()
+})
+
+// TB-2：「▤ 属性」的悬停提示写当前并排还是悬浮（WS-3）
+const propsTip = computed(() =>
+  propsOpen.value
+    ? `属性（跟随选中）· 当前${floating.value ? '悬浮：画布不够宽，卡片浮在画布右侧' : '并排：画布够宽，与画布并排'}；单击关闭`
+    : '属性（跟随选中）：单击打开',
+)
+const dockTip = computed(() =>
+  hasDocs.value
+    ? ws.dockShown.value
+      ? '资料：隐藏资料区（标签保留）'
+      : '资料：显示资料区'
+    : desk.perspective.value === 'run'
+      ? '资料：打开时序图'
+      : '资料：还没有打开的资料（打开场景或文件）',
+)
 
 // 舞台显示（V8、V9）：只属于画布这块界面
 provide(STAGE_DISPLAY, useStageDisplay(props.project, desk))
@@ -325,52 +377,72 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 <template>
   <div ref="desktop" class="desk">
     <aside v-show="!navCollapsed" class="nav-area" :style="{ width: `${navWidth}px` }">
+      <!-- TB-6：项目标题区，与工具栏、资料区标签栏底线成一条横线（TB-11） -->
+      <ProjectMenu />
       <NavTree v-if="desk.status.value === 'ready'" />
     </aside>
     <div v-show="!navCollapsed" class="divider" @pointerdown="onDividerDown('nav', $event)" @pointermove="onDividerMove" @pointerup="onDividerUp" />
 
-    <div class="work">
-      <header class="top" aria-label="工具栏">
+    <div class="work" :style="{ minWidth: `${toolbarMin}px` }">
+      <!-- TB-1：左侧「看什么」，右侧「怎么摆」，中间留空 -->
+      <header ref="toolbar" class="top" aria-label="工具栏">
         <button
-          class="tool nav-toggle"
+          class="ib nav-toggle"
           :class="{ on: !navCollapsed }"
           :title="navCollapsed ? '展开导航树' : '收起导航树'"
-          :aria-label="navCollapsed ? '展开导航树' : '收起导航树'"
+          aria-label="导航树"
+          :aria-pressed="!navCollapsed"
           @click="toggleNav"
         >
-          ☰
+          <ToolIcon name="nav" />
         </button>
-        <VersionSwitcher />
         <!-- 草图画布下没有运行视角（场景不在草图里画） -->
         <PerspectiveSwitch v-if="desk.status.value === 'ready' && !desk.edit.active.value" />
-        <!-- L49：「显示 ▾」——没有画布记号的显示设置（有记号的开关在图例行上，L45） -->
+        <span class="spacer" />
+        <!-- L49、TB-3：「显示 ▾」——没有画布记号的显示设置；有非默认设置时带一个点 -->
         <DisplayMenu v-if="desk.status.value === 'ready' && !desk.edit.active.value" />
-        <Breadcrumb />
-        <Toolbar />
-        <button class="tool guide-btn" title="帮助：怎么读这张图" aria-label="怎么读这张图" @click="openGuide()">?</button>
-        <button class="tool" :class="{ on: focused }" :title="focused ? '恢复导航树与属性栏' : '收起导航树与属性栏'" @click="toggleFocus">
-          {{ focused ? '退出专注' : '专注' }}
-        </button>
-        <span v-if="propsOpen" class="mode" :title="floating ? '画布不够宽，属性栏悬浮在画布右侧' : '画布够宽，属性栏与画布并排'">
-          {{ floating ? '悬浮' : '并排' }}
-        </span>
-        <button class="tool props-toggle" :class="{ on: propsOpen }" :aria-pressed="propsOpen" title="属性（跟随选中）" @click="toggleProps">▤ 属性</button>
+        <span class="vsep" aria-hidden="true" />
         <button
-          class="tool dock-toggle"
+          class="ib"
+          data-search-toggle
+          :class="{ on: searchOpen }"
+          title="搜索模块（⌘K）"
+          aria-label="搜索模块"
+          :aria-expanded="searchOpen"
+          @click="searchOpen = !searchOpen"
+        >
+          <ToolIcon name="search" />
+        </button>
+        <button
+          class="ib"
+          :class="{ on: focused }"
+          :title="focused ? '退出专注：恢复导航树与属性栏' : '专注：收起导航树与属性栏'"
+          :aria-label="focused ? '退出专注' : '专注'"
+          :aria-pressed="focused"
+          @click="toggleFocus"
+        >
+          <ToolIcon name="focus" />
+        </button>
+        <button class="ib props-toggle" :class="{ on: propsOpen }" :aria-pressed="propsOpen" :title="propsTip" aria-label="属性" @click="toggleProps">
+          <ToolIcon name="props" />
+        </button>
+        <button
+          class="ib dock-toggle"
           :class="{ on: ws.dockShown.value }"
           :aria-pressed="ws.dockShown.value"
           :disabled="!hasDocs && desk.perspective.value !== 'run'"
-          :title="hasDocs ? (ws.dockShown.value ? '隐藏资料区（标签保留）' : '显示资料区') : '还没有打开的资料：打开场景或文件'"
+          :title="dockTip"
+          aria-label="资料"
           @click="toggleDock"
         >
-          ▣ 资料
+          <ToolIcon name="dock" />
         </button>
+        <MoreMenu />
+        <SearchPalette v-if="desk.status.value === 'ready'" v-model:open="searchOpen" />
       </header>
 
       <div class="sub-bars">
         <InfoBar v-if="version && desk.status.value === 'ready'" />
-        <!-- G22：源码版本提示条，加载完成后当前版本常显，一致时不出现 -->
-        <SourceDeltaBar v-if="!version && desk.status.value === 'ready'" :delta="sourceDelta" />
       </div>
 
       <div ref="stage" class="stage">
@@ -388,15 +460,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <SketchCanvas v-else-if="desk.edit.active.value" />
           <template v-else>
             <GraphCanvas />
-            <button
-              v-if="issueCount.total"
-              class="issue-badge"
-              :class="{ bad: issueCount.errors }"
-              :title="`返工清单：${issueCount.errors} 个错误、${issueCount.warnings} 个提醒，单击在导航树「问题」页签查看`"
-              @click="showIssues"
-            >
-              ⚠ {{ issueCount.total }}
-            </button>
+            <!-- TB-7：画布标题行——面包屑、⚠、源码胶囊、版本胶囊 -->
+            <CanvasTitle @issues="showIssues" />
           </template>
           <!-- CD-7、CD-8：回放胶囊浮在画布底部居中，与左下角的缩放胶囊同一行 -->
           <PlayerBar v-if="playerShown" ref="player" class="player-bar" :class="{ wide: !playerFits }" :style="playerStyle" />
@@ -427,18 +492,28 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 <style scoped>
 .desk {
-  --toolbar-h: 42px;
+  --toolbar-h: 44px;
   display: flex;
   height: 100%;
   min-height: 0;
 }
 
+/* 项目菜单要能伸出导航栏（TB-6），所以导航栏不裁切；导航树自己滚动 */
 .nav-area {
+  position: relative;
   flex: none;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
   background: var(--surface);
+}
+
+.nav-area > :deep(.nav-tree) {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .work {
@@ -450,132 +525,41 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 .top {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   height: var(--toolbar-h);
-  padding: 0 12px;
+  padding: 0 10px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   min-width: 0;
   flex: none;
 }
 
-.top > :deep(*) {
+.top > .nav-toggle {
+  margin-right: 4px;
+}
+
+.spacer {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* TB-1：视角段与右侧按钮都不收缩，工作列再窄挤掉的只是中间的空白 */
+.top > * {
   flex-shrink: 0;
 }
 
-/* WS-1：工具栏只有工作列这么宽，保持一行、与资料区标签栏同高：按钮不缩；版本、场景名、面包屑、搜索按需收窄（场景名、面包屑省略） */
-.top {
-  container-type: inline-size;
+.top > .spacer {
+  flex-shrink: 1;
 }
 
-.top > :deep(.versions) {
-  display: flex;
-  align-items: center;
-  flex: 0 1 auto;
-  min-width: min(110px, max-content);
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.top :deep(.versions select) {
-  max-width: 170px;
-}
-
-.top > :deep(.perspective) {
-  flex: 0 1 auto;
-  min-width: 0;
-}
-
-.top :deep(.perspective .seg) {
-  flex: none;
-}
-
-.top :deep(.perspective .run) {
-  flex: 0 1 auto;
-  min-width: 4.5em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 运行视角下场景名至少留出几个字 */
-.top :deep(.perspective:has(.exit) .run) {
-  min-width: 110px;
-}
-
-.top > :deep(.display-menu) {
-  flex: 0 2 auto;
-  min-width: 62px;
-}
-
-.top > :deep(.crumbs) {
-  flex: 1 4 auto;
-  min-width: 56px;
-}
-
-.top > :deep(.toolbar) {
-  flex: 0 1 auto;
-  min-width: 84px;
-}
-
-.top :deep(.search) {
-  min-width: 0;
-}
-
-.top :deep(.search input) {
-  width: 150px;
-  max-width: 100%;
-  min-width: 76px;
-}
-
-/* 工作列窄（运行视角开了资料区）时，「编辑骨架」「新建设计」让位，资料区收起或拖宽后回来 */
-@container (max-width: 1000px) {
-  .top :deep(.versions .new) {
-    display: none;
-  }
-
-  /* L49：摘要让位，只留「显示 ▾」（摘要在按钮的悬停提示里） */
-  .top :deep(.display-menu .summary) {
-    display: none;
-  }
-
-  /* L49：工具栏多了「显示 ▾」，窄时场景名至少留的宽度从 110 收到 64、版本选择从 110 收到 80（都省略显示，悬停看全名） */
-  .top :deep(.perspective:has(.exit) .run) {
-    min-width: 64px;
-  }
-
-  .top > :deep(.versions) {
-    min-width: min(80px, max-content);
-  }
-
-  /* 视角块不再被压到比「结构 | 交互 | 场景名 64px | ×」还窄（否则退出按钮被后面的元素盖住）：其余元素先收 */
-  .top > :deep(.perspective:has(.exit)) {
-    min-width: 184px;
-  }
-}
-
-.tool {
-  flex: none;
-  font-size: 12px;
-}
-
-.guide-btn {
-  margin-left: auto;
-}
-
-.tool.on {
-  background: var(--accent-soft);
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.mode {
-  flex: none;
-  font-size: 11.5px;
-  color: var(--text-3);
-  margin-right: -6px;
+.vsep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--border);
 }
 
 .sub-bars {
@@ -671,9 +655,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   z-index: 21;
 }
 
+/* TB-1：工作列放不下工具栏时资料区先让位 */
 .dock-area {
-  flex: none;
-  min-width: 0;
+  flex: 0 1 auto;
+  min-width: 280px;
   min-height: 0;
 }
 
@@ -708,25 +693,5 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .divider:hover {
   background: var(--accent);
-}
-
-.issue-badge {
-  position: absolute;
-  top: 10px;
-  left: 12px;
-  z-index: 6;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 9px;
-  border-radius: 10px;
-  border: 1px solid var(--warning);
-  background: var(--warning-soft);
-  color: var(--warning);
-}
-
-.issue-badge.bad {
-  border-color: var(--danger);
-  background: var(--danger-soft);
-  color: var(--danger);
 }
 </style>

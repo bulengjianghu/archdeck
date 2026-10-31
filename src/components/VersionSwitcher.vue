@@ -1,14 +1,14 @@
 <script setup lang="ts">
 /**
  * 版本切换：当前版本（由代码生成）、持久草图（骨架等，可编辑，ADR-0024）、某个设计的草图（DV-10，排在 r1 之前）或某一轮（ADR-0002），
- * 或描述在某个 git 提交时的快照（E5）。选中后下拉只显示名称，草图以 ✎ 前缀区分（#14，kind 在信息条的身份区）。切换时保留层次与选中；有未保存的草图改动时离开由项目视图确认（X7a）。旁边是「新建设计」（SK-10）。
+ * 或描述在某个 git 提交时的快照（E5）。选中后下拉只显示名称，草图以 ✎ 前缀区分（#14，kind 在信息条的身份区）。切换时保留层次与选中；有未保存的草图改动时离开由项目视图确认（X7a）。
+ * 在项目菜单的「版本」一节里（TB-6）；「编辑骨架」「新建设计」是菜单的另两项。
  */
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDesk } from '@/state/inject'
 import { SKETCH_REVISION, isArchived, isCommitVersion, isDesignVersion, isIntentVersion } from '@/model'
 import { DESIGN_STATUS_LABELS, intentName } from './shared/labels'
-import NewDesignDialog from './edit/NewDesignDialog.vue'
 
 const desk = useDesk()
 const route = useRoute()
@@ -27,8 +27,7 @@ const value = computed(() =>
 )
 /** 持久草图（骨架等）：读到的描述里带着 intent/ */
 const intents = desk.edit.lookup.intentIds
-const creating = ref(false)
-const editSkeleton = () => void router.push({ name: 'intent', params: { project: desk.project!, intent: 'skeleton' } })
+const emit = defineEmits<{ switched: [] }>()
 const commits = computed(() => desk.versions.commits.value)
 /** DV-6：推进中的设计各自一组，已归档的（已实现、已放弃）合为一组放在后面 */
 const active = computed(() => desk.versions.designs.value.filter(d => !isArchived(d.status)))
@@ -55,6 +54,7 @@ function onChange(e: Event) {
   // X7a：离开被取消（未保存改动三选里选了取消，或保存失败）时下拉回到当前版本
   void go.then(failure => {
     if (failure) select.value = value.value
+    else emit('switched')
   })
 }
 </script>
@@ -95,17 +95,16 @@ function onChange(e: Event) {
         </optgroup>
       </select>
     </label>
-    <template v-if="!desk.version">
-      <button v-if="intents.includes('skeleton')" class="new" title="打开骨架（持久草图）并进入编辑态（E-1）" @click="editSkeleton">编辑骨架</button>
-      <button class="new" title="新建设计：画草图，AI 按它展开各轮（SK-10）" @click="creating = true">新建设计</button>
-    </template>
-    <NewDesignDialog v-if="creating" @close="creating = false" />
   </span>
 </template>
 
 <style scoped>
+.version {
+  display: block;
+}
+
 .version select {
-  max-width: 260px;
+  width: 100%;
   font-size: 12.5px;
   padding: 3px 6px;
   border-radius: 6px;
@@ -118,12 +117,6 @@ function onChange(e: Event) {
   border-color: var(--diff-changed);
   background: var(--diff-changed-soft);
   font-weight: 600;
-}
-
-.new {
-  margin-left: 6px;
-  font-size: 12px;
-  padding: 2px 8px;
 }
 
 .sr {

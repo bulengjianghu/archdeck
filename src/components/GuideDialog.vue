@@ -2,7 +2,7 @@
 /**
  * 「怎么读这张图」（W-10）：顶栏「帮助」打开的一页，按结构 / 交互 / 运行 / 对照与治理四组各一句话加示意（ADR-0031：结构图是依赖事实，交互图是四类交互），
  * 结构组另有「束与表面」「承载」两段（第八轮，C-27–C-29）；「读一条线」一段讲机制标签与两段标签位（ADR-0041）；另一段讲三视角共享的通道（L18，文字与图例同源）；只讲概念，线型、颜色等具体图例在画布右上角的图例。
- * 「三问」「四修饰」的读法讲解只在这里（L51，ADR-0056）：图例关系组的「?」打开本页并定位到「读一条线」（section）。Esc 或单击遮罩关闭。
+ * 「三问」「四修饰」的读法讲解只在这里（L51，ADR-0056）：图例关系组的「?」打开本页并定位到「读一条线」（section）；「⋯ → 快捷键」定位到「快捷键」一节（TB-5）。Esc 或单击遮罩关闭。
  */
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RELATION_TYPE_LABELS, THREE_QUESTIONS } from './shared/labels'
@@ -181,6 +181,26 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
         </ul>
       </div>
 
+      <div class="keys" aria-label="快捷键" data-section="keys">
+        <h3>快捷键</h3>
+        <dl>
+          <dt>⌘K / Ctrl+K</dt>
+          <dd>搜索模块，选中结果跳到它所在的层次（TB-4）</dd>
+          <dt>Esc</dt>
+          <dd>取消选中；关闭菜单与搜索（N9）</dd>
+          <dt>Backspace</dt>
+          <dd>返回上级并选中刚离开的模块，根层回项目列表（N7、N8）</dd>
+          <dt>双击</dt>
+          <dd>下钻到模块里面</dd>
+          <dt>← →</dt>
+          <dd>运行视角：上一步 / 下一步；时序图上单击一步即跳到那一步</dd>
+          <dt>1–9</dt>
+          <dd>运行视角走到分支时选第几条路线</dd>
+          <dt>Delete · ⌘Z · ⇧⌘Z · ⌘S</dt>
+          <dd>草图画布：删除、撤销、重做、保存</dd>
+        </dl>
+      </div>
+
       <p class="foot muted">箭头、颜色与节点样式的完整图例在画布右上角的「图例」，随视角整组切换；有开关的行单击即切换显示，其余设置在工具栏「显示 ▾」。</p>
     </section>
   </div>
@@ -223,6 +243,29 @@ h2 {
   border: none;
   background: none;
   font-size: 18px;
+}
+
+.keys h3 {
+  margin: 14px 0 6px;
+  font-size: 13.5px;
+}
+
+.keys dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.keys dt {
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+.keys dd {
+  margin: 0;
+  color: var(--text-2);
 }
 
 .group p.sub {

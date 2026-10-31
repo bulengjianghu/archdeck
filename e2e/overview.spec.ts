@@ -2,13 +2,15 @@
 import { expect, test } from '@playwright/test'
 import { openDesk, query, collapseDisplay } from './helpers'
 
-test('顶栏「帮助」打开「怎么读这张图」：结构 / 交互 / 读一条线（三问四修饰）/ 运行 / 对照与治理，另有三视角共享一段（W-10、ADR-0031），Esc 关闭', async ({
+test('「⋯ 更多 → 怎么读这张图」打开「怎么读这张图」：结构 / 交互 / 读一条线（三问四修饰）/ 运行 / 对照与治理，另有三视角共享一段（W-10、ADR-0031），Esc 关闭', async ({
   page,
 }) => {
   await openDesk(page, '/p/h5player')
-  await page.getByRole('button', { name: '怎么读这张图' }).click()
+  // TB-5：帮助在「⋯ 更多」菜单里
+  await page.getByRole('button', { name: '更多' }).click()
+  await page.getByRole('menuitem', { name: /怎么读这张图/ }).click()
   const dialog = page.getByRole('dialog', { name: '怎么读这张图' })
-  await expect(dialog.locator('h3')).toHaveText(['结构', '交互', '读一条线：三问四修饰', '运行', '对照与治理', '层', '三个视角共享'])
+  await expect(dialog.locator('h3')).toHaveText(['结构', '交互', '读一条线：三问四修饰', '运行', '对照与治理', '层', '三个视角共享', '快捷键'])
   await expect(dialog).toContainText('交互图变成舞台')
   // ADR-0029 §3：三个判断题，第四步读修饰
   const questions = dialog.locator('ol.questions li')

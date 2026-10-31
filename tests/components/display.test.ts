@@ -239,7 +239,7 @@ describe('L45：图例行即开关；L47：关着的开关行常列', () => {
     expect(row().text()).toContain('2 条已显示')
     expect(useStructurePrefs('').prefs.value.typeOnly).toBe(true)
     expect(JSON.parse(localStorage.getItem('h5p-arch-desk:structure-prefs:')!)).toMatchObject({ typeOnly: true })
-    expect(menu.find('[data-testid="display-summary"]').text()).toContain('只引类型已显示')
+    expect(menu.find('[data-testid="display-summary"]').attributes('data-summary')!).toContain('只引类型已显示')
   })
 
   it('一个开关只出现在一处：图例里的开关行不在「显示 ▾」里，反之亦然', async () => {
@@ -278,7 +278,7 @@ describe('L49：「显示 ▾」菜单', () => {
     expect(m.find('[aria-label="交互关系"]').exists()).toBe(false)
   })
 
-  it('结构视角：只看交互使用、只看未解释带收起计数，写显示偏好；摘要列出非默认设置', async () => {
+  it('结构视角：只看交互使用、只看未解释带收起计数，写显示偏好；按钮上的点与悬停提示列出非默认设置（TB-3）', async () => {
     const { desk, menu } = await open('/?v=s')
     const OFF = { typeOnly: false, invokesOnly: false, uncoveredOnly: false }
     const value = desk.facts.structureDisplay({ ...OFF, invokesOnly: true })!.hidden.value
@@ -294,24 +294,24 @@ describe('L49：「显示 ▾」菜单', () => {
     await m.find('input[aria-label="总是展开表面"]').setValue(true)
     expect(m.find('[data-testid="value-count"]').text()).toMatch(/值使用的束 \d+ 条已收起/)
     expect(useStructurePrefs('').prefs.value).toMatchObject({ invokesOnly: true, uncoveredOnly: true, surfaceAlways: true })
-    const summary = menu.find('[data-testid="display-summary"]').text()
+    const summary = menu.find('[data-testid="display-summary"]').attributes('data-summary')!
     for (const s of ['只看交互使用', '只看未解释', '总是展开表面']) expect(summary).toContain(s)
   })
 
-  it('运行视角：只有交互关系的显示方式与一行说明，摘要总是给出显示方式', async () => {
+  it('运行视角：只有交互关系的显示方式与一行说明；显示方式是缺省的「隐藏」时没有点（TB-3）', async () => {
     const { menu } = await open('/?sc=sc.play')
-    expect(menu.find('[data-testid="display-summary"]').text()).toMatch(/^交互关系：/)
+    expect(menu.find('[data-testid="display-summary"]').exists()).toBe(false)
     const m = await openMenu(menu)
     expect(m.find('[aria-label="交互关系"]').exists()).toBe(true)
     expect(m.find('input[aria-label="边界节点"]').exists()).toBe(false)
     expect(m.text()).toContain('场景中显示全部节点与关系类型')
   })
 
-  it('交互视角的摘要：隐藏的关系类别、代码事实已关（来自图例行的开关）', async () => {
+  it('交互视角的非默认设置（TB-3）：隐藏的关系类别、代码事实已关（来自图例行的开关）', async () => {
     const { wrapper, menu } = await open('/')
     await toggleOf(wrapper, '[data-type="calls"]').trigger('click')
     await wrapper.find('[data-testid="toggle-facts"]').trigger('click')
-    const summary = menu.find('[data-testid="display-summary"]').text()
+    const summary = menu.find('[data-testid="display-summary"]').attributes('data-summary')!
     expect(summary).toContain('隐藏 1 类关系')
     expect(summary).toContain('代码事实已关')
   })

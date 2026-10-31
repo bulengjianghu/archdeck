@@ -5,7 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
-import { openDesk, restoreOwned } from './helpers'
+import { openDesk, restoreOwned, switchVersion } from './helpers'
 
 const DESIGN = path.resolve(import.meta.dirname, '../model/h5p-arch-desk/designs/phase2-dynamic')
 const EXTRA = path.join(DESIGN, 'r4/modules/zz-e2e-deviation.yaml')
@@ -19,7 +19,7 @@ test('DV-10：版本切换里草图排在 r1 之前；打开草图即草图画�
   const options = await page.locator('select[aria-label="切换版本"] option').allTextContents()
   const r1 = options.findIndex(o => o.includes('· r1'))
   expect(options[r1 + 1]).toContain('✎')
-  await page.locator('select[aria-label="切换版本"]').selectOption('phase2-dynamic/sketch')
+  await switchVersion(page, 'phase2-dynamic/sketch')
   const bar = page.locator('.info-bar')
   await expect(bar.locator('.kind')).toHaveText('草图')
   await expect(page.locator('.sketch-canvas')).toBeVisible()

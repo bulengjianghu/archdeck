@@ -313,7 +313,6 @@ relations:
   - {id: rel.gv.panel-read, from: present.panel.governance, to: state.desk.facts, type: queries, payload: [ds.GovernanceReport], description: 架构治理面板向架构治理派生（desk.facts）取：治理报告、模块治理信息、关系证实、拦截摘要, purpose: 取治理报告、证实与拦截摘要 }
   - {id: rel.gv.dep-read, from: present.panel.dep, to: state.desk.facts, type: queries, description: 代码依赖面板向架构治理派生（desk.facts）取：选中的代码依赖叠加线, purpose: 取选中的代码依赖线 }
   - {id: rel.gv.canvas-read, from: present.canvas.flow, to: state.desk.facts, type: queries, description: 视图转换与交互向架构治理派生（desk.facts）取：本层投影（K9、Y4）与留痕计数（hiddenFacts、hiddenByCurrentOnly，L45 / L7，波 3 起「只看现状」的计数也经这里取）, purpose: 取本层投影与留痕计数画叠加线 }
-  - {id: rel.gv.toolbar-read, from: present.nav.toolbar, to: state.desk.facts, type: queries, description: 工具栏向架构治理派生（desk.facts）取：事实状态决定「代码事实」开关是否可用, purpose: 决定「代码事实」开关是否可用 }
   - {id: rel.gv.legend-read, from: present.canvas.legend, to: state.desk.facts, type: queries, description: 图例与「显示 ▾」向架构治理派生（desk.facts）取结果：代码事实是否就绪、本层投影与 structureDisplay 的收起条数, purpose: 取事实状态画图例与开关 }
   - {id: rel.gv.canvas-select, from: present.canvas.flow, to: state.desk.actions, type: commands, interface: if.desk.actions, description: "视图转换与交互交给 dispatch 与操作：单击代码依赖叠加线 → select(kind: dep)", purpose: 单击依赖叠加线时选中它 }
   # 视图状态层

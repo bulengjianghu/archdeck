@@ -349,6 +349,51 @@ a {
   border-radius: 10px;
 }
 
+/* TB-2：工具栏与资料区标签栏的图标按钮——30px，开着的浅色底 */
+.ib {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-2);
+}
+
+.ib:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--bg);
+}
+
+.ib.on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.ib:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* TB-7：画布标题行的胶囊（⚠、源码、版本）；外观取卡片变量（CD-1） */
+.canvas-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--pill-radius);
+  background: var(--card-bg);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+  box-shadow: var(--card-shadow);
+}
+
 /* CD-1：卡片与胶囊的共用外观（圆角 12 / 全圆，浅边，轻投影） */
 .desk-card,
 .desk-pill {
