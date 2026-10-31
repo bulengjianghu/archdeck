@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 资料区的一组（WS-4–WS-7）：第一行是标签栏（与工具栏同高），下面是活动标签的内容。
- * 预览标签标题斜体，双击固定；单击组内即聚焦该组（新资料进焦点组）。上组的标签栏右端有「⊟ 分屏 / 取消分屏」与 ✕。
+ * 预览标签标题斜体，双击固定；单击组内即聚焦该组（新资料进焦点组）。上组的标签栏右端有 ⊟ 分屏（分屏后按下态，再按取消）与 × 关闭全部（TB-10）。
  * 只读工作区状态、只发意图（desk.workspace.dispatch）。
  */
 import { computed } from 'vue'
@@ -11,6 +11,7 @@ import SourceView from '../source/SourceView.vue'
 import SequenceDoc from './SequenceDoc.vue'
 import ExplainerDoc from './ExplainerDoc.vue'
 import { staleText } from '../shared/explainerText'
+import ToolIcon from '../shared/ToolIcon.vue'
 
 const props = defineProps<{ group: DocGroup; gi: number; count: number; focused: boolean }>()
 const desk = useDesk()
@@ -56,12 +57,24 @@ const tip = (t: DocTab) =>
         </button>
       </span>
       <span class="sp" />
+      <!-- TB-10：这一组资料自己的操作——⊟ 分屏（分屏后为按下态，再按取消）、× 关闭全部 -->
       <template v-if="gi === 0">
-        <button v-if="count === 1" class="icon" title="上下分屏：之后打开的资料放进下组" :disabled="!group.tabs.length" @click="ws.dispatch({ type: 'split' })">
-          ⊟ 分屏
+        <button
+          v-if="count === 1"
+          class="ib"
+          title="上下分屏：之后打开的资料放进下组"
+          aria-label="上下分屏"
+          :disabled="!group.tabs.length"
+          @click="ws.dispatch({ type: 'split' })"
+        >
+          <ToolIcon name="split" />
         </button>
-        <button v-else class="icon" title="取消分屏：下组的标签并回上组" @click="ws.dispatch({ type: 'unsplit' })">取消分屏</button>
-        <button class="icon close-all" title="关闭资料区（关闭全部标签）" aria-label="关闭资料区" @click="ws.dispatch({ type: 'closeDock' })">✕</button>
+        <button v-else class="ib on" title="取消分屏：下组的标签并回上组" aria-label="取消分屏" @click="ws.dispatch({ type: 'unsplit' })">
+          <ToolIcon name="split" />
+        </button>
+        <button class="ib close-all" title="关闭全部资料（资料区随之消失）" aria-label="关闭资料区" @click="ws.dispatch({ type: 'closeDock' })">
+          <ToolIcon name="close" />
+        </button>
       </template>
     </header>
     <div class="body">
@@ -177,18 +190,10 @@ const tip = (t: DocTab) =>
   flex: 1;
 }
 
-.icon {
-  flex: none;
+.ib {
   align-self: center;
-  border: none;
-  background: none;
-  font-size: 12px;
-  color: var(--text-2);
-  padding: 2px 6px;
-}
-
-.icon:disabled {
-  opacity: 0.4;
+  width: 28px;
+  height: 28px;
 }
 
 .body {

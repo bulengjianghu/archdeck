@@ -23,7 +23,7 @@ test('缺省关闭：没有角标与耦合线；开启「缺陷」热度后出�
   await expect(heat).toContainText('缺陷')
   await expect(page.locator('.heat-badge').first()).toBeVisible()
   await expect(panel).toContainText('高（本层分档）')
-  await expect(page.getByTestId('display-summary')).toContainText('热度：缺陷')
+  await expect(page.getByTestId('display-summary')).toHaveAttribute('data-summary', new RegExp('热度：缺陷'))
   // 记在本地：刷新后仍开启
   await page.reload()
   await expect(page.locator('.vue-flow__node').first()).toBeVisible({ timeout: 20_000 })

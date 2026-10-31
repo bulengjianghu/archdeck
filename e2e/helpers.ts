@@ -8,6 +8,22 @@ export async function openDesk(page: Page, hashPath: string) {
   await expect(page.locator('.vue-flow__node').first()).toBeVisible({ timeout: 20_000 })
 }
 
+/** TB-6：打开导航顶部的项目菜单（版本、编辑骨架、新建设计、所有项目）；已打开时不动 */
+export async function openProjectMenu(page: Page) {
+  const btn = page.getByRole('button', { name: '项目菜单' })
+  // 项目标题区在导航顶部，导航收起时（运行视角、资料区出现时）先展开
+  const nav = page.getByRole('button', { name: '导航树', exact: true })
+  if ((await nav.getAttribute('aria-pressed')) !== 'true') await nav.click()
+  if ((await btn.getAttribute('aria-expanded')) !== 'true') await btn.click()
+  await expect(page.getByRole('menu', { name: '项目' })).toBeVisible()
+}
+
+/** TB-6：在项目菜单的版本下拉里切换版本（值同 VersionSwitcher：`<设计>/<轮次>`、`i:<草图>`、`c:<提交>`，空为当前版本） */
+export async function switchVersion(page: Page, value: string) {
+  await openProjectMenu(page)
+  await page.locator('select[aria-label="切换版本"]').selectOption(value)
+}
+
 /** 等画布布局稳定：节点位置连续三次（约 0.75 s）不变才算稳定（首次适应只一次，WS-3；之后的展开、聚焦等仍可能挪动节点） */
 export async function waitSettled(page: Page) {
   const node = page.locator('.vue-flow__node').first()

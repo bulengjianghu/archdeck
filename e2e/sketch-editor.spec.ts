@@ -10,7 +10,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { parse } from 'yaml'
-import { graphNode, openCheckList, openDesk, restoreOwned } from './helpers'
+import { graphNode, openCheckList, openDesk, restoreOwned, openProjectMenu, switchVersion } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 const GOV = path.join(PROJECT, 'governance')
@@ -379,11 +379,12 @@ test('X21 根草图：设计面板「改骨架」→ 层画成带 → 拖到另�
   }
 })
 
-test('E-1、#20b：从当前版本点「编辑骨架」打开持久草图即进入草图画布（层画成带）；信息条「退出」回到进入前的版本；版本切换选「✎ 骨架」后索引只有骨架的实体', async ({
+test('E-1、#20b：从当前版本的项目菜单点「编辑骨架」打开持久草图即进入草图画布（层画成带）；信息条「退出」回到进入前的版本；版本切换选「✎ 骨架」后索引只有骨架的实体', async ({
   page,
 }) => {
   await openDesk(page, '/p/h5p-arch-desk')
-  await page.getByRole('button', { name: '编辑骨架' }).click()
+  await openProjectMenu(page)
+  await page.getByRole('menuitem', { name: '编辑骨架' }).click()
   await expect(page).toHaveURL(/\/p\/h5p-arch-desk\/i\/skeleton/)
   await expect(page.locator('.sketch-canvas')).toBeVisible()
   await expect(page.locator('.info-bar .name')).toHaveText('骨架')
@@ -417,7 +418,7 @@ test('E-1、#20b：从当前版本点「编辑骨架」打开持久草图即进�
       id,
     )
   await expect.poll(() => has('state.desk.edit')).toBe(true)
-  await page.locator('select[aria-label="切换版本"]').selectOption('i:skeleton')
+  await switchVersion(page, 'i:skeleton')
   await expect(page.locator('.info-bar .kind')).toHaveText('草图')
   await expect(page.locator('.info-bar .chip')).toContainText('持久')
   await expect.poll(() => has('state.desk.edit')).toBe(false)
@@ -445,7 +446,7 @@ test('F-60–F-62、#15、#20b：草图的信息条只出现一次名称、唯�
     fs.writeFileSync(path.join(box.dir, 'design.yaml'), 'design:\n  name: E2E 信息条\n  status: draft\n')
     fs.writeFileSync(path.join(box.dir, 'sketches/state.desk.yaml'), BAR_SKETCH)
     await openDesk(page, '/p/h5p-arch-desk')
-    await page.locator('select[aria-label="切换版本"]').selectOption('zz-e2e-bar/sketch')
+    await switchVersion(page, 'zz-e2e-bar/sketch')
     const bar = page.locator('.info-bar')
     await expect(page.locator('.sketch-canvas')).toBeVisible()
     await expect(saveButton(page)).toBeVisible()
@@ -542,7 +543,8 @@ test('T2b 裁决 6：当前版本上「在此设计」的对话框有「加到�
 
 test('草图画布手势：按住空格拖动空白处 = 平移（视口变、不框选、不移动节点、不变脏），松开空格恢复框选；光标为抓手', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk')
-  await page.getByRole('button', { name: '编辑骨架' }).click()
+  await openProjectMenu(page)
+  await page.getByRole('menuitem', { name: '编辑骨架' }).click()
   await expect(page.locator('.sk-band')).toHaveCount(4)
   await expect(page.locator('.sk-zoom')).toContainText('空格 + 拖动 = 平移，Ctrl + 滚轮 = 缩放')
   const viewport = page.locator('.sk-flow .vue-flow__transformationpane')
@@ -656,7 +658,7 @@ test('X22（第五轮 T3）：草图画布的系统框随可用区域自适应�
     fs.writeFileSync(path.join(box.dir, 'design.yaml'), 'design:\n  name: E2E 画布尺寸\n  status: draft\n')
     fs.writeFileSync(path.join(box.dir, 'sketches/state.desk.yaml'), SIZE_SKETCH)
     await openDesk(page, '/p/h5p-arch-desk')
-    await page.locator('select[aria-label="切换版本"]').selectOption('zz-e2e-size/sketch')
+    await switchVersion(page, 'zz-e2e-size/sketch')
     await expect(page.locator('.sketch-canvas')).toBeVisible()
     const sys = graphNode(page, 'frame:system')
     const center = graphNode(page, 'frame:center')
@@ -727,6 +729,7 @@ test('X7a（第五轮 T3）：有未保存改动时切换版本、浏览器后�
     const file = path.join(box.dir, 'sketches/state.desk.yaml')
     await openDesk(page, '/p/h5p-arch-desk')
     const switcher = page.locator('select[aria-label="切换版本"]')
+    await openProjectMenu(page)
     await switcher.selectOption('zz-e2e-leave/sketch')
     await expect(page.locator('.sketch-canvas')).toBeVisible()
     const rename = async (text: string) => {
@@ -740,6 +743,7 @@ test('X7a（第五轮 T3）：有未保存改动时切换版本、浏览器后�
 
     // 切换版本 → 三选；取消：留在草图、仍脏、下拉回到这张草图
     await rename('Beta 存')
+    await openProjectMenu(page)
     await switcher.selectOption('')
     await expect(ask.getByRole('button')).toHaveText(['取消', '放弃', '保存'])
     await ask.getByRole('button', { name: '取消' }).click()
@@ -748,6 +752,7 @@ test('X7a（第五轮 T3）：有未保存改动时切换版本、浏览器后�
     await expect(switcher).toHaveValue('zz-e2e-leave/sketch')
 
     // 再切换 → 保存：写进文件后离开
+    await openProjectMenu(page)
     await switcher.selectOption('')
     await ask.getByRole('button', { name: '保存' }).click()
     await expect(page).not.toHaveURL(/zz-e2e-leave/)
@@ -777,7 +782,7 @@ test('X7d（第五轮 T3）：草图面板改 ID 时提交前预览影响（后�
     fs.writeFileSync(path.join(box.dir, 'design.yaml'), 'design:\n  name: E2E 改 ID\n  status: draft\n')
     fs.writeFileSync(path.join(box.dir, 'sketches/state.desk.yaml'), BAR_SKETCH.replace('id: zz-e2e-bar', 'id: zz-e2e-rename'))
     await openDesk(page, '/p/h5p-arch-desk')
-    await page.locator('select[aria-label="切换版本"]').selectOption('zz-e2e-rename/sketch')
+    await switchVersion(page, 'zz-e2e-rename/sketch')
     await expect(page.locator('.sketch-canvas')).toBeVisible()
     await graphNode(page, 'state.desk.alpha').locator('.name').click()
     const form = page.locator('[data-testid="sketch-module-form"]')
@@ -843,7 +848,7 @@ test('E9、DV-13（第五轮 T3）：模块面板「相关决策」列编号与�
     fs.writeFileSync(path.join(box.dir, 'design.yaml'), 'design:\n  name: E2E 决策\n  status: draft\n')
     fs.writeFileSync(path.join(box.dir, 'sketches/state.desk.yaml'), BAR_SKETCH.replace('id: zz-e2e-bar', 'id: zz-e2e-adrs'))
     await openDesk(page, '/p/h5p-arch-desk')
-    await page.locator('select[aria-label="切换版本"]').selectOption('zz-e2e-adrs/sketch')
+    await switchVersion(page, 'zz-e2e-adrs/sketch')
     await expect(page.locator('.sketch-canvas')).toBeVisible()
     await graphNode(page, 'state.desk.alpha').locator('.name').click()
     const field = page.locator('[data-testid="sketch-module-form"] [name="module-adrs"]')

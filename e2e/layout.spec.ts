@@ -8,6 +8,8 @@ import { collapseDisplay, graphNode, openDesk, query } from './helpers'
 const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
 const props = (page: Page) => page.getByRole('complementary', { name: '属性' })
 const tabs = (page: Page) => dock(page).locator('.tabs > .tab')
+/** TB-2、WS-3：「▤ 属性」——并排还是悬浮写在它的悬停提示里 */
+const propsBtn = (page: Page) => page.getByRole('button', { name: '属性', exact: true })
 
 /** 文件页签里单击 / 双击一个文件（目录未展开时先展开） */
 async function pickFile(page: Page, path: string, dbl = false) {
@@ -26,13 +28,13 @@ async function pickFile(page: Page, path: string, dbl = false) {
 test('WS-1、WS-3：工具栏只在工作列顶部、与资料区标签栏同高；开场景后属性栏由并排变悬浮，画布仍 ≥ 620px，导航树收起', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?level=kit')
   const bar = page.getByRole('banner', { name: '工具栏' })
-  await expect(page.locator('.mode')).toHaveText('并排')
+  await expect(propsBtn(page)).toHaveAttribute('title', /当前并排/)
   await expect(props(page)).not.toHaveClass(/floating/)
   await expect(page.locator('.nav-area')).toBeVisible()
 
   await openDesk(page, '/p/media-web-player?level=kit&sc=sc.command')
   await expect(dock(page)).toBeVisible()
-  await expect(page.locator('.mode')).toHaveText('悬浮')
+  await expect(propsBtn(page)).toHaveAttribute('title', /当前悬浮/)
   await expect(props(page)).toHaveClass(/floating/)
   await expect(page.locator('.nav-area')).toBeHidden()
   const barBox = (await bar.boundingBox())!
@@ -53,32 +55,32 @@ test('WS-1、WS-3：工具栏只在工作列顶部、与资料区标签栏同高
   await expect(dock(page).getByRole('button', { name: '时序图图例' })).toBeVisible()
 
   // 「▣ 资料」隐藏资料区：属性栏回到并排；再按恢复，标签还在
-  await page.getByRole('button', { name: '▣ 资料' }).click()
+  await page.getByRole('button', { name: '资料', exact: true }).click()
   await expect(dock(page)).toHaveCount(0)
-  await expect(page.locator('.mode')).toHaveText('并排')
-  await page.getByRole('button', { name: '▣ 资料' }).click()
+  await expect(propsBtn(page)).toHaveAttribute('title', /当前并排/)
+  await page.getByRole('button', { name: '资料', exact: true }).click()
   await expect(tabs(page)).toHaveCount(1)
-  await expect(page.locator('.mode')).toHaveText('悬浮')
+  await expect(propsBtn(page)).toHaveAttribute('title', /当前悬浮/)
 })
 
 test('WS-2、WS-3、WS-9：窗口变窄自动悬浮；× 与「▤ 属性」关闭 / 打开；「专注」收起导航与属性栏再恢复', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?level=kit')
-  await expect(page.locator('.mode')).toHaveText('并排')
+  await expect(propsBtn(page)).toHaveAttribute('title', /当前并排/)
   await page.setViewportSize({ width: 1100, height: 900 })
-  await expect(page.locator('.mode')).toHaveText('悬浮')
+  await expect(propsBtn(page)).toHaveAttribute('title', /当前悬浮/)
   await page.setViewportSize({ width: 1440, height: 900 })
-  await expect(page.locator('.mode')).toHaveText('并排')
+  await expect(propsBtn(page)).toHaveAttribute('title', /当前并排/)
 
   await props(page).getByRole('button', { name: '关闭属性栏' }).click()
   await expect(props(page)).toHaveCount(0)
-  await expect(page.locator('.mode')).toHaveCount(0)
+  await expect(propsBtn(page)).not.toHaveAttribute('title', /当前/)
   // 换选中不重新打开
   await page.locator('.vue-flow__node-module').first().click()
   await expect(props(page)).toHaveCount(0)
-  await page.getByRole('button', { name: '▤ 属性' }).click()
+  await page.getByRole('button', { name: '属性', exact: true }).click()
   await expect(props(page)).toBeVisible()
 
-  await page.getByRole('button', { name: '专注' }).click()
+  await page.getByRole('button', { name: '专注', exact: true }).click()
   await expect(props(page)).toHaveCount(0)
   await expect(page.locator('.nav-area')).toBeHidden()
   await page.getByRole('button', { name: '退出专注' }).click()
@@ -119,10 +121,10 @@ test('G15、WS-5：文件页签中选中文件——地址带 sel=f:，资料区
 test('WS-6：分屏后新资料进下组，上下对照；单击上组后进上组；取消分屏并回', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
   await expect(tabs(page)).toHaveCount(1)
-  await dock(page).getByRole('button', { name: '⊟ 分屏' }).click()
+  await dock(page).getByRole('button', { name: '上下分屏' }).click()
   const groups = dock(page).locator('.group')
   await expect(groups).toHaveCount(2)
-  await page.getByRole('button', { name: '展开导航树' }).click()
+  await page.getByRole('button', { name: '导航树', exact: true }).click()
   await pickFile(page, 'src/main.ts')
   await expect(groups.nth(1).locator('.tabs > .tab')).toContainText('main.ts')
   await expect(groups.nth(0).locator('.tabs > .tab')).toContainText('时序图')
@@ -143,7 +145,7 @@ test('WS-6：分屏后新资料进下组，上下对照；单击上组后进上�
 
 test('WS-8：资料区不跟随选中——选中画布节点、单步只改属性栏；退出场景关闭时序图标签', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
-  await page.getByRole('button', { name: '展开导航树' }).click()
+  await page.getByRole('button', { name: '导航树', exact: true }).click()
   await pickFile(page, 'src/main.ts')
   await expect(tabs(page)).toHaveCount(2)
   const before = await tabs(page).allInnerTexts()

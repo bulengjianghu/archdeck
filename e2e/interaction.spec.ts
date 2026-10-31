@@ -14,7 +14,7 @@ test('首页列出项目，进入 h5player 看到分层总览；双击层下钻�
   expect(query(page).get('level')).toBe('infra')
   await expect(page.locator('.vue-flow__node-band')).toHaveCount(0)
 
-  await page.locator('.crumb', { hasText: 'H5Player' }).click()
+  await page.locator('.crumb', { hasText: '根层' }).click()
   await expect(page.locator('.vue-flow__node-band')).toHaveCount(4)
   // N8：返回上级时选中刚离开的模块
   expect(query(page).get('sel')).toBe('m:infra')

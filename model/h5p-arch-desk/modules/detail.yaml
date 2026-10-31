@@ -41,9 +41,9 @@ modules:
   - id: present.version
     name: 版本切换与设计信息条
     summary: 标明当前版本，提供切换、对比与新建设计的入口
-    abstraction: 信息条按「这是哪个版本、能做什么、和谁比」三问分区，新建设计另成入口；各区只调 DeskState 的操作。
-    principle: 版本切换（VersionSwitcher）在这一级：选中后只显示名称，kind 用图标，草图选项为「✎ 名称」（F-63）；信息条按三区拆成子模块（身份、动作、对比，F-60–F-62），另有「在此设计」的新建设计对话框。
-    codeRefs: [src/components/VersionSwitcher.vue]
+    abstraction: 项目菜单收「对项目做什么」（版本、编辑骨架、新建设计、所有项目），信息条按「这是哪个版本、能做什么、和谁比」三问分区；各区只调 DeskState 的操作。
+    principle: 项目菜单（ProjectMenu）在导航顶部（TB-6，ADR-0057）：项目名 ▾，菜单里版本切换（VersionSwitcher）的下拉原样沿用——选中后只显示名称，kind 用图标，草图选项为「✎ 名称」（F-63）——另有编辑骨架、新建设计（经 openNewDesign 打开同一个对话框）、所有项目；信息条按三区拆成子模块（身份、动作、对比，F-60–F-62），另有「在此设计」的新建设计对话框。
+    codeRefs: [src/components/VersionSwitcher.vue, src/components/ProjectMenu.vue]
   - id: present.canvas
     name: 画布
     summary: 把当前层次画成可平移缩放点选的结构图并叠加回放
@@ -54,9 +54,10 @@ modules:
     codeRefs: [src/components/GraphCanvas.vue, src/components/nodes/**, src/components/edges/**, src/components/stage/**]
   - id: present.nav
     name: 导航
-    summary: 显示所在层次路径并按名称搜索跳转模块
-    abstraction: 面包屑管「在哪一层」、工具栏管「跳到哪」，两者都只发导航意图，不持有状态。
-    codeRefs: [src/components/Breadcrumb.vue, src/components/Toolbar.vue]
+    summary: 在画布左上角标出所在层次与状态，并按名称搜索跳转模块
+    abstraction: 画布标题行管「我在哪」（面包屑与问题、源码、版本胶囊），搜索面板管「跳到哪」，都只发导航意图，不持有状态。
+    principle: 「我在哪」贴着画布放（C6，ADR-0057）：标题行在模型画布左上角，面包屑以「根层」开头；搜索由工具栏的 ⌕ 或 ⌘K 打开，在工具栏中央下拉（TB-4、TB-7）。
+    codeRefs: [src/components/Breadcrumb.vue, src/components/SearchPalette.vue, src/components/CanvasTitle.vue]
   - id: state.desk
     name: DeskState
     summary: 持有一个项目版本的视图状态并提供唯一一组操作
@@ -270,20 +271,26 @@ modules:
     name: 面包屑
     summary: 显示当前层次路径，点击任一级返回
     parent: present.nav
-    responsibility: 显示「项目 / 系统 / … / 当前层次」，点击任一级返回。
+    responsibility: 画布标题行的第一项：「根层 / … / 当前层次」，以「根层」开头（悬停写系统名），点击任一级返回并选中刚离开的那一级（N7、TB-7）；草图画布下不出现。
     codeRefs: [src/components/Breadcrumb.vue]
   - id: present.nav.toolbar
-    name: 工具栏
+    name: 搜索面板
     summary: 按名称或 ID 搜索模块并跳转
     parent: present.nav
-    responsibility: 按名称或 ID 搜索模块并跳转（运行视角下搜索跳转同样选中目标，V3）。画布显示设置在画布右上角的图例行与工具栏「显示 ▾」（ADR-0056）；场景入口在视角切换。
-    codeRefs: [src/components/Toolbar.vue]
+    responsibility: 工具栏 ⌕ 或 ⌘K（Ctrl+K）打开、在工具栏中央下拉的搜索面板（TB-4）：按名称或 ID 搜索模块，结果写名称与所在路径，↑ ↓ 选择、Enter 跳转（N4；运行视角下搜索跳转同样选中目标，V3）；选中、Esc、单击面板外都关闭。
+    codeRefs: [src/components/SearchPalette.vue]
+  - id: present.nav.canvas-title
+    name: 画布标题行
+    summary: 在画布左上角列出所在层次、问题数、源码与版本状态
+    parent: present.nav
+    responsibility: 模型画布左上角的一排（TB-7–TB-9，ADR-0057）：面包屑、⚠ 问题胶囊（单击切到导航树「问题」页签，W-6）、源码胶囊（描述落后 N 个提交，单击展开原文，G22、TB-8）、非当前版本时的版本胶囊（× 回到当前版本，N11）。
+    codeRefs: [src/components/CanvasTitle.vue]
   - id: present.canvas.legend
     name: 图例与「显示 ▾」
     summary: 用可交互图例与「显示 ▾」菜单控制并解释画布记号
     parent: present.canvas
     adrs: [56]
-    responsibility: 画布显示的控件按「有没有画布记号」分两处，一个开关只出现在一处（L45，ADR-0056）。图例（Legend）在画布右上角那一列的顶端，收起为「图例 ▾」、展开为一张卡，第一次进入项目时展开、之后按本机记住，卡高上限为画布高度的一半，画布角的留痕排在它下面（L48）；有开关也有记号的项图例行就是开关（LegendToggle：勾选态 + 示意 + 名称，单击切换，关着的行淡色常列）——交互视角的关系类型、代码事实、组装、演化热度、时间耦合，结构视角的只引类型；运行视角的类型行只读（L9）。图例按视角整组替换、不混列（L19、D-26）：交互视角为关系、节点、代码事实、组装、演化、共享；结构视角换成结构视图的几组（子模块「结构视图图例」）；运行视角为关系、节点、回放、共享。图例按上下文显示（L47）：这里调用 state.desk.legend 算一次出现集合传给各组，没出现的记号行不列，临时记号归各组尾部「临时可见」小节常列。三问四修饰的讲解不在图例，关系组标题旁「?」经 OPEN_GUIDE 打开帮助的「读一条线」（L51）。「显示 ▾」（DisplayMenu）在工具栏，放没有记号的设置：边界节点、只看现状、热度口径；结构视角另有只看交互使用、只看未解释（带收起计数）、总是展开表面；运行视角为交互关系的显示方式（V8）；按钮旁摘要列出非默认设置（L49）。悬停释义（gloss）按记号给出图例里的那一句，由画布并进边的悬停说明（L50）。
+    responsibility: 画布显示的控件按「有没有画布记号」分两处，一个开关只出现在一处（L45，ADR-0056）。图例（Legend）在画布右上角那一列的顶端，收起为「图例 ▾」、展开为一张卡，第一次进入项目时展开、之后按本机记住，卡高上限为画布高度的一半，画布角的留痕排在它下面（L48）；有开关也有记号的项图例行就是开关（LegendToggle：勾选态 + 示意 + 名称，单击切换，关着的行淡色常列）——交互视角的关系类型、代码事实、组装、演化热度、时间耦合，结构视角的只引类型；运行视角的类型行只读（L9）。图例按视角整组替换、不混列（L19、D-26）：交互视角为关系、节点、代码事实、组装、演化、共享；结构视角换成结构视图的几组（子模块「结构视图图例」）；运行视角为关系、节点、回放、共享。图例按上下文显示（L47）：这里调用 state.desk.legend 算一次出现集合传给各组，没出现的记号行不列，临时记号归各组尾部「临时可见」小节常列。三问四修饰的讲解不在图例，关系组标题旁「?」经 OPEN_GUIDE 打开帮助的「读一条线」（L51）。「显示 ▾」（DisplayMenu）在工具栏，放没有记号的设置：边界节点、只看现状、热度口径；结构视角另有只看交互使用、只看未解释（带收起计数）、总是展开表面；运行视角为交互关系的显示方式（V8）；有非默认设置时按钮上一个点、悬停提示列出它们（L49、TB-3）。悬停释义（gloss）按记号给出图例里的那一句，由画布并进边的悬停说明（L50）。
     abstraction: 图例按视角整组替换、每组一个子组件；开关行与记号行分开写，开关行即开关；没有记号的设置另成一个菜单；图例行、悬停释义的文字只在 labels 一处。
     invariants:
       - { text: 一个开关只出现在一处：有画布记号的在图例行上，没有的在「显示 ▾」, adr: 56 }
@@ -483,7 +490,7 @@ relations:
   - { id: rel.ad.list-types, from: present.project-list, to: model.types, type: queries, purpose: 判断设计是否已归档 }
   - { id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: commands, purpose: 在工作台放版本信息条 }
   - { id: rel.ad.desk-issues, from: present.nav-tree, to: present.issues, type: commands, purpose: 在问题页签列出返工清单 }
-  - { id: rel.ad.desk-nav, from: present.desk-view, to: present.nav, type: commands, purpose: 在顶部放面包屑与搜索 }
+  - { id: rel.ad.desk-nav, from: present.desk-view, to: present.nav, type: commands, purpose: 在画布左上角放标题行、在工具栏放搜索 }
   - { id: rel.ad.shell-desk, from: present.shell, to: present.desk-view, type: commands, purpose: 按路由打开项目的某个版本 }
   - { id: rel.ad.shell-list, from: present.shell, to: present.project-list, type: commands, purpose: 在根路由显示项目列表 }
   # 呈现层内部
@@ -545,6 +552,13 @@ relations:
   - {id: rel.ad.content-act, from: present.panel.content, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 内容组件交给 dispatch 与操作：关系行点击 → revealRelation, purpose: 单击关系行时定位到关系 }
   - {id: rel.ad.crumb-act, from: present.nav.breadcrumb, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 面包屑让 dispatch 与操作接手处理, purpose: 点击路径返回某一级 }
   - {id: rel.ad.toolbar-act, from: present.nav.toolbar, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 工具栏交给 dispatch 与操作：搜索结果 → revealModule；显示开关写入 toggles, purpose: 把搜索结果跳转到模块 }
+  - {id: rel.x1.title-crumb, from: present.nav.canvas-title, to: present.nav.breadcrumb, type: commands, description: 画布标题行交给面包屑：标题行第一项渲染面包屑（TB-7）, purpose: 在画布左上角先写所在层次 }
+  - {id: rel.x1.title-source, from: present.nav.canvas-title, to: present.source, type: commands, description: 画布标题行交给源代码预览：渲染源码胶囊（SourceDeltaChip），交给它描述与源码树的提交差或读取失败的原因（G22、TB-8）, purpose: 在标题行标出描述落后多少 }
+  - {id: rel.x1.title-labels, from: present.nav.canvas-title, to: present.shared, type: queries, description: 画布标题行向呈现共用件取：持久草图的显示名（intentName）, purpose: 给版本胶囊取草图的显示名 }
+  - {id: rel.x1.title-versions, from: present.nav.canvas-title, to: state.desk.versions, type: queries, payload: [ds.DesignInfo], description: 画布标题行向版本与对比基线（desk.versions）取：设计名与提交，写版本胶囊（TB-9）, purpose: 写出非当前版本的名称 }
+  - {id: rel.x1.title-rework, from: present.nav.canvas-title, to: state.desk.loading, type: queries, payload: [ds.Issue], description: 画布标题行向模型源同步取：返工清单的错误与提醒计数（W-6）, purpose: 写出 ⚠ 问题数 }
+  - {id: rel.x1.title-files, from: present.nav.canvas-title, to: state.desk.files, type: queries, description: 画布标题行向源码派生（desk.files）取：源码清单里的提交差 commitDelta 或读取失败的原因, purpose: 判断源码胶囊写什么 }
+  - {id: rel.x1.title-shell, from: present.nav.canvas-title, to: present.shell, type: commands, via: 'channel:router', description: 画布标题行交给应用外壳与路由：版本胶囊的 × 导航到当前版本的路由，带上当前 level / sel, purpose: 一键回到当前版本 }
   - {id: rel.ad.issues-read, from: present.issues, to: state.desk.loading, type: commands, payload: [ds.Issue], description: 问题页签让模型源同步接手处理, purpose: 取加载后汇总的返工清单 }
   - {id: rel.ad.version-read, from: present.version, to: state.desk.versions, type: commands, payload: [ds.DesignInfo, ds.ModelDiff], description: 版本切换与设计信息条交给版本与对比基线（desk.versions）：设计、轮次、对比基线、变更计数；对比基线与标出变更写入 toggles, purpose: 切换对比基线与标出变更 }
   - {id: rel.ad.flow-diff, from: present.canvas.flow, to: state.desk.versions, type: queries, payload: [ds.ModelDiff], description: 视图转换与交互向版本与对比基线（desk.versions）取：节点与边的变更标记, purpose: 给节点与边标出新增与修改 }
