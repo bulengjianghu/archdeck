@@ -66,7 +66,10 @@ export function restoreOwned(file: string, snapshot: string, paths: readonly str
 export async function openCheckList(page: Page, sec?: string) {
   const toggle = page.locator('.panel [data-card="check"] .card-toggle').first()
   await expect(toggle).toBeVisible()
+  // 代码事实晚到时核对卡会自己展开（PC-2）：先等结论定下来（不再「读取中」），再按需单击并确认已展开，免得单击撞上自动展开又把它收起
+  await expect(page.locator('.panel [data-card="check"] .card-sum').first()).not.toHaveText(/读取中/, { timeout: 20_000 })
   if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
   if (!sec) return
   const fold = page.locator(`.panel [data-sec="${sec}"] .fold`).first()
   await expect(fold).toBeVisible()
