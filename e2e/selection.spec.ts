@@ -1,6 +1,6 @@
 /** 运行视角的统一选中（§6.8、ADR-0012）：选中样式唯一、配对标记、泳道突出、进度小标记、Esc 回到进度所在的步骤、再按无动作 */
 import { expect, test } from '@playwright/test'
-import { graphNode, openDesk, query } from './helpers'
+import { collapseDisplay, graphNode, openDesk, query } from './helpers'
 
 const HOOK = '/p/h5player?level=infra.framework&sc=sc.command&alt=1&step=sc.command%23hook'
 
@@ -19,6 +19,8 @@ test('选中步骤：只有它用选中样式，配对的返回只加「配对�
 
 test('选中模块：突出它所在的泳道、不突出消息，进度只剩小标记，结构图不变灰；sel 与 step 并存', async ({ page }) => {
   await openDesk(page, HOOK)
+  // 展开的图例叠在画布右上，合入 X1 后画布变高、适应放大，这个节点落在图例下面（L48）：先收起图例再点
+  await collapseDisplay(page)
   await graphNode(page, 'infra.framework.state-machine').click()
   expect(query(page).get('sel')).toBe('m:infra.framework.state-machine')
   expect(query(page).get('step')).toBe('sc.command#hook')
@@ -34,6 +36,8 @@ test('选中模块：突出它所在的泳道、不突出消息，进度只剩�
 
 test('Esc 回到选中进度所在的步骤，再按无动作（N9）；「下一步」从进度处继续并选中下一步', async ({ page }) => {
   await openDesk(page, HOOK)
+  // 展开的图例叠在画布右上，合入 X1 后画布变高、适应放大，这个节点落在图例下面（L48）：先收起图例再点
+  await collapseDisplay(page)
   await graphNode(page, 'infra.framework.state-machine').click()
   await page.keyboard.press('Escape')
   expect(query(page).get('sel')).toBeNull()
