@@ -54,7 +54,7 @@ const rows = computed<CheckRow[]>(() => {
 
 <template>
   <div class="stratum-panel" data-testid="stratum-panel">
-    <header class="head">
+    <header class="head id-card">
       <h2>{{ s?.name ?? id }}</h2>
       <div class="badges">
         <span class="badge">层</span>

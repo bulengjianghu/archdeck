@@ -55,7 +55,7 @@ const rows = computed(() => rowsFromNotices(notices.value, [{ key: 'governance',
 
 <template>
   <div ref="root" class="dep-panel">
-    <header class="head" data-sec="head">
+    <header class="head id-card" data-sec="head">
       <h2 v-if="sel">{{ name(sel.from) }} → {{ name(sel.to) }}</h2>
       <div class="badges">
         <span class="badge">{{ structureView ? '依赖边' : '代码依赖' }}</span>

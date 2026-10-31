@@ -75,7 +75,7 @@ const brief = (m: { summary?: string; responsibility?: string; abstraction?: str
     <DesignSection v-if="desk.versions.design.value && (desk.versions.revision.value || desk.versions.sketch)" />
     <CommitSection v-else-if="desk.versions.commit.value" />
     <!-- ① 头部 -->
-    <header class="head" :class="{ 'after-design': !!desk.versions.design.value || !!desk.versions.commit.value }" data-sec="head">
+    <header class="head id-card" :class="{ 'after-design': !!desk.versions.design.value || !!desk.versions.commit.value }" data-sec="head">
       <h2>{{ sys.name }}</h2>
       <div class="badges">
         <code>{{ sys.id }}</code>

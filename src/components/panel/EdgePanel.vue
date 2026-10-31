@@ -79,7 +79,7 @@ const rows = computed(() =>
 
 <template>
   <div v-if="edge" ref="root" class="edge-panel">
-    <header class="head" data-sec="head">
+    <header class="head id-card" data-sec="head">
       <h2 class="endpoints">
         <button class="link" @click="desk.select(endSelection(edge.from))">{{ endName(edge.from) }}</button>
         <span class="muted">→</span>
@@ -107,7 +107,7 @@ const rows = computed(() =>
     </PanelCard>
     <CheckCard :rows="rows" />
   </div>
-  <div v-else class="head muted">这条边在当前视图中已不存在（可能被筛选隐藏，或描述已更新）。</div>
+  <div v-else class="head id-card muted">这条边在当前视图中已不存在（可能被筛选隐藏，或描述已更新）。</div>
 </template>
 
 <style scoped>

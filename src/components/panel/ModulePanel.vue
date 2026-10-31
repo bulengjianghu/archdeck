@@ -43,12 +43,8 @@ usePanelJump(root)
 
 <template>
   <div v-if="m" ref="root" class="module-panel">
-    <header class="head" data-sec="head">
-      <div class="title">
-        <h2>{{ m.name }}</h2>
-        <button v-if="children.length && !isCurrentLevel" class="drill" @click="desk.drillInto(m.id)">进入 ⌄</button>
-        <button v-if="canDesignAt(desk, m.id)" class="drill" title="以这个模块为挂载点新建设计（F-10）" @click="openNewDesign(m.id)">在此设计</button>
-      </div>
+    <header class="head id-card" data-sec="head">
+      <h2>{{ m.name }}</h2>
       <div class="badges">
         <code>{{ m.id }}</code>
         <span v-if="isLayer" class="badge">层</span>
@@ -67,6 +63,11 @@ usePanelJump(root)
           {{ tagsOpen ? '收起' : `+${tagsHidden}` }}
         </button>
         <ChangeBadge entity="module" :id="m.id" detail />
+      </div>
+      <!-- CD-3：动作是小号描边按钮，在徽标之下另起一行 -->
+      <div v-if="(children.length && !isCurrentLevel) || canDesignAt(desk, m.id)" class="acts">
+        <button v-if="children.length && !isCurrentLevel" class="drill" @click="desk.drillInto(m.id)">进入 ⌄</button>
+        <button v-if="canDesignAt(desk, m.id)" class="drill" title="以这个模块为挂载点新建设计（F-10）" @click="openNewDesign(m.id)">在此设计</button>
       </div>
     </header>
     <DesignNote :text="m.designNote" />

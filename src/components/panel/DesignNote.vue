@@ -13,17 +13,24 @@ defineProps<{ text?: string }>()
 </template>
 
 <style scoped>
+/* CD-6：属性列里的设计说明自成一张卡（左边一道变更色）；嵌在条目里的（inline）仍是一段带色块 */
 .design-note {
-  margin: 10px 18px 2px;
-  padding: 8px 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--card-border);
   border-left: 3px solid var(--diff-changed);
   background: var(--diff-changed-soft);
-  border-radius: 0 6px 6px 0;
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
   font-size: 13px;
 }
 
 .design-note.inline {
   margin: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-left: 3px solid var(--diff-changed);
+  border-radius: 0 6px 6px 0;
+  box-shadow: none;
 }
 
 .label {

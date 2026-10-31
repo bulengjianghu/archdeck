@@ -65,6 +65,15 @@
   --impact-both: #8a5cc7;
 
   --radius: 8px;
+
+  /* CD-1（第十八轮 Y2.1，ADR-0057）：卡片——工作区里除了画布都是这一种东西（属性卡片、图例、画布角的胶囊、缩放胶囊、回放胶囊）；
+     画布的底色就是 --bg（属性列并排时与之同色，CD-2） */
+  --card-bg: var(--surface);
+  --card-border: #e4e7ec;
+  --card-radius: 12px;
+  --pill-radius: 999px;
+  --card-shadow: 0 1px 2px rgb(15 23 42 / 5%), 0 4px 14px rgb(15 23 42 / 7%);
+  --card-gap: 12px;
   --font: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', 'Microsoft YaHei', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   color-scheme: light;
@@ -120,6 +129,8 @@
     --impact-in: #ef8a5e;
     --impact-out: #45c0c0;
     --impact-both: #b08ae6;
+    --card-border: #2c323e;
+    --card-shadow: 0 1px 2px rgb(0 0 0 / 35%), 0 4px 14px rgb(0 0 0 / 30%);
     color-scheme: dark;
   }
 }
@@ -336,4 +347,20 @@ a {
   outline: 1.5px solid var(--accent);
   outline-offset: 3px;
   border-radius: 10px;
+}
+
+/* CD-1：卡片与胶囊的共用外观（圆角 12 / 全圆，浅边，轻投影） */
+.desk-card,
+.desk-pill {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+}
+
+.desk-card {
+  border-radius: var(--card-radius);
+}
+
+.desk-pill {
+  border-radius: var(--pill-radius);
 }

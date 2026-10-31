@@ -125,7 +125,7 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
 
 <template>
   <div v-if="r" ref="root" class="relation-panel">
-    <header class="head">
+    <header class="head id-card">
       <h2 class="endpoints">
         <button class="link" @click="point(r.from)">{{ name(r.from) }}</button>
         <span class="arrow">→</span>

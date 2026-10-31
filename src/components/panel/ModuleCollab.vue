@@ -64,7 +64,7 @@ onBeforeUnmount(() => hoverRelations(null))
 }
 
 .co {
-  line-height: 20px;
+  line-height: 19px;
 }
 
 .line {

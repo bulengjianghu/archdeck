@@ -20,7 +20,7 @@ const c = computed(() => sel.value?.coupling ?? null)
 
 <template>
   <div class="couple-panel">
-    <header class="head" data-sec="head">
+    <header class="head id-card" data-sec="head">
       <h2 v-if="sel">
         <button class="link" @click="desk.revealModule(sel.a)">{{ name(sel.a) }}</button> ~
         <button class="link" @click="desk.revealModule(sel.b)">{{ name(sel.b) }}</button>

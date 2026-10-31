@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 单个项目的架构视图，三列（W-1、WS-1，ADR-0054）：导航树 | 工作列（只属于它的工具栏、画布、属性栏、回放控制条）| 资料区。
- * 属性栏按工作列宽度并排或悬浮（WS-3）；「专注」一键收起导航树与属性栏（WS-9）。每次进入项目创建一份独立的 DeskState，
+ * 单个项目的架构视图，三列（W-1、WS-1，ADR-0054）：导航树 | 工作列（只属于它的工具栏、画布、属性栏、回放胶囊）| 资料区。
+ * 属性栏按工作列宽度并排或悬浮（WS-3），卡片直接立在画布上（CD-2）；回放胶囊浮在画布底部居中、避让悬浮卡片（CD-7、CD-8）；「专注」一键收起导航树与属性栏（WS-9）。每次进入项目创建一份独立的 DeskState，
  * 其 watch 都在本组件作用域内，离开项目时随组件销毁。
  */
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
@@ -28,6 +28,7 @@ import { OPEN_PREVIEW } from './shared/preview'
 import { HAS_EXPLAINER } from './panel/related'
 import { NAV_TAB, type NavTab } from './shared/navTab'
 import { CANVAS_INSET } from './shared/canvasInset'
+import { playerPlacement } from './shared/playerPlacement'
 import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
 import { useEvolutionPrefs } from './display/useEvolutionPrefs'
 import { useAssemblyPrefs } from './display/useAssemblyPrefs'
@@ -209,6 +210,47 @@ const floating = computed(() => propsOpen.value && placement.value === 'floating
 const canvasInset = computed(() => (floating.value ? PROPS_WIDTH + 16 : 0))
 provide(CANVAS_INSET, canvasInset)
 
+// CD-8：回放胶囊的位置（playerPlacement）；放不下时悬浮卡片列底部让出胶囊
+const PLAYER_MARGIN = 12
+const player = ref<{ $el: HTMLElement }>()
+const playerSize = ref({ w: 0, h: 0 })
+/** 缩放胶囊的右沿（相对画布左沿） */
+const zoomRight = ref(0)
+let playerObserver: ResizeObserver | null = null
+watch(
+  () => player.value?.$el,
+  el => {
+    playerObserver?.disconnect()
+    playerObserver = null
+    if (!el || typeof ResizeObserver === 'undefined') return
+    playerObserver = new ResizeObserver(() => {
+      playerSize.value = { w: el.offsetWidth, h: el.offsetHeight }
+      const area = el.parentElement?.getBoundingClientRect()
+      const zoom = el.parentElement?.querySelector('.zoom-pill')?.getBoundingClientRect()
+      zoomRight.value = area && zoom ? zoom.right - area.left : 0
+    })
+    playerObserver.observe(el)
+  },
+  { flush: 'post' },
+)
+onBeforeUnmount(() => playerObserver?.disconnect())
+const playerShown = computed(() => desk.perspective.value === 'run' && !desk.edit.active.value && desk.status.value === 'ready')
+const canvasWidth = computed(() => (propsOpen.value && !floating.value ? stageWidth.value - PROPS_WIDTH : stageWidth.value))
+const playerAt = computed(() =>
+  playerPlacement({
+    canvasWidth: canvasWidth.value,
+    inset: canvasInset.value,
+    playerWidth: playerSize.value.w,
+    zoomRight: zoomRight.value,
+    margin: PLAYER_MARGIN,
+  }),
+)
+const playerFits = computed(() => playerAt.value.fits)
+const playerStyle = computed(() => ({ left: `${playerAt.value.left}px` }))
+const propsStyle = computed(() =>
+  floating.value && playerShown.value && !playerFits.value ? { bottom: `${playerSize.value.h + 2 * PLAYER_MARGIN}px` } : undefined,
+)
+
 // 资料区（G15、WS-8）：面板等组件经注入请求「预览某个文件」，在资料区打开为预览标签
 provide(OPEN_PREVIEW, (path: string, line?: number) => ws.open({ kind: 'source', path, line }))
 // PC-9、EX-1：相关资料卡的图解入口——模块有没有图解由模型层判定（desk.explainers）
@@ -356,17 +398,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               ⚠ {{ issueCount.total }}
             </button>
           </template>
+          <!-- CD-7、CD-8：回放胶囊浮在画布底部居中，与左下角的缩放胶囊同一行 -->
+          <PlayerBar v-if="playerShown" ref="player" class="player-bar" :class="{ wide: !playerFits }" :style="playerStyle" />
         </main>
-        <!-- WS-2、WS-3：属性栏 330px，跟随选中；并排或悬浮由宽度推出 -->
-        <aside v-if="propsOpen" class="props" :class="{ floating }" aria-label="属性">
-          <!-- V15a：属性栏头与面板头合并——× 浮在面板头部的右上角 -->
-          <button class="props-close" title="关闭属性栏（工具栏「▤ 属性」再打开）" aria-label="关闭属性栏" @click="toggleProps">×</button>
+        <!-- WS-2、WS-3：属性栏 330px，跟随选中；并排或悬浮由宽度推出。CD-2：没有底板，卡片直接立在画布上 -->
+        <aside v-if="propsOpen" class="props" :class="{ floating }" :style="propsStyle" aria-label="属性">
           <div class="panel-area">
+            <!-- CD-3：× 在身份卡右上角、随身份卡滚走，悬停身份卡时显出 -->
+            <button class="props-close" title="关闭属性栏（工具栏「▤ 属性」再打开）" aria-label="关闭属性栏" @click="toggleProps">×</button>
             <Panel v-if="desk.status.value === 'ready'" />
           </div>
         </aside>
       </div>
-      <PlayerBar v-if="desk.perspective.value === 'run' && !desk.edit.active.value" class="player-bar" />
     </div>
 
     <template v-if="ws.dockShown.value">
@@ -565,43 +608,67 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   flex-direction: column;
   width: 330px;
   min-height: 0;
-  background: var(--surface);
-  border-left: 1px solid var(--border);
 }
 
+/* CD-2：悬浮时也没有整列的浮板——列与滚动区不接指针，卡片之间的空隙落到画布上；卡片本身照常接指针（滚轮在卡片上时滚动属性列） */
 .props.floating {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  bottom: 8px;
+  top: 0;
+  right: 0;
+  bottom: 0;
   z-index: 20;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgb(20 30 50 / 16%);
-  overflow: hidden;
 }
 
+.props.floating,
+.props.floating .panel-area,
+.props.floating :deep(.panel),
+.props.floating :deep(.panel > div:not(.mini-row, .sk-panel, .id-card)) {
+  pointer-events: none;
+}
+
+.props.floating :deep(.panel > div:not(.mini-row, .sk-panel, .id-card) > *),
+.props.floating :deep(.panel > :not(div)),
+.props.floating :deep(.panel > :is(.sk-panel, .id-card)),
+.props.floating :deep(.mini),
+.props.floating .props-close {
+  pointer-events: auto;
+}
+
+/* CD-3：× 在身份卡（属性列的第一张卡，上沿 12、右沿 12）的右上角，悬停身份卡或键盘聚焦时显出 */
 .props-close {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 16px;
+  right: 16px;
   z-index: 6;
   border: none;
   background: none;
   font-size: 15px;
   line-height: 1;
-  padding: 0 6px;
+  padding: 2px 6px;
   color: var(--text-3);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.panel-area:has(.id-card:hover) .props-close,
+.props-close:hover,
+.props-close:focus-visible {
+  opacity: 1;
 }
 
 .panel-area {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  scrollbar-width: thin;
 }
 
+/* CD-7：回放胶囊在画布底部居中（left 由 CD-8 推出：居中于未被悬浮卡片盖住的部分） */
 .player-bar {
-  flex: none;
+  position: absolute;
+  bottom: 12px;
+  z-index: 21;
 }
 
 .dock-area {

@@ -87,24 +87,21 @@ const presence = createLegendPresence({
   pointer-events: auto;
 }
 
+/* CD-1：收起时是一枚胶囊，展开的内容是它下面的一张卡（同一套卡片样式） */
 .head-btn {
   flex: none;
-  padding: 3px 10px;
+  padding: 3px 12px;
   font: inherit;
   font-weight: 600;
   color: var(--text-2);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--pill-radius);
+  box-shadow: var(--card-shadow);
 }
 
 .legend.open .head-btn {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-  border-bottom-color: transparent;
-  margin-bottom: -1px;
-  position: relative;
-  z-index: 1;
+  margin-bottom: 6px;
 }
 
 .caret {
@@ -118,9 +115,9 @@ const presence = createLegendPresence({
   min-height: 0;
   overflow-y: auto;
   padding: 6px 10px 8px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius) 0 var(--radius) var(--radius);
-  box-shadow: 0 4px 14px rgb(0 0 0 / 6%);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
 }
 </style>

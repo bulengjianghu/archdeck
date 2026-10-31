@@ -88,7 +88,7 @@ function pointAt(id: string) {
 
 <template>
   <div v-if="f" class="step-panel">
-    <header class="head">
+    <header class="head id-card">
       <div class="badges top">
         <span class="badge accent">选中的步骤</span>
         <span v-if="msg" class="muted">第 {{ msg.index + 1 }} / {{ total }} 步（本层）</span>

@@ -23,7 +23,7 @@ const scenarios = computed(() => idx.value.triggeredBy.get(props.id) ?? [])
 
 <template>
   <div v-if="a" class="actor-panel">
-    <header class="head" data-sec="head">
+    <header class="head id-card" data-sec="head">
       <div class="title">
         <h2>{{ a.name }}</h2>
       </div>
@@ -51,7 +51,7 @@ const scenarios = computed(() => idx.value.triggeredBy.get(props.id) ?? [])
       {{ a.src.file }}<template v-if="a.src.line">:{{ a.src.line }}</template>
     </footer>
   </div>
-  <div v-else class="head muted">参与者「{{ id }}」在当前描述中不存在。</div>
+  <div v-else class="head id-card muted">参与者「{{ id }}」在当前描述中不存在。</div>
 </template>
 
 <style scoped>

@@ -123,6 +123,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
         <div>
           <h3>运行</h3>
           <p>顶部「运行」选一个场景，交互图变成舞台、旁边出现时序图；逐步前进，每一步都是一次真实的调用或推送，下钻后步骤变细。</p>
+          <!-- CD-10：回放控制只在画布底部的胶囊里（不进时序图，D5） -->
+          <p class="sub" data-testid="guide-replay">
+            回放控制在画布底部的胶囊里：◀ ▶ 或键盘 ← → 单步，拖进度条跳转；在时序图上单击某一步即跳到那一步。走到分支时胶囊上出现「选路线」。
+          </p>
         </div>
       </div>
 

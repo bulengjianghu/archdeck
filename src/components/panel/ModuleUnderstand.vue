@@ -261,7 +261,7 @@ const invariants = computed(() => invariantsOf(m.value))
 }
 
 .part {
-  line-height: 20px;
+  line-height: 19px;
   display: grid;
   grid-template-columns: minmax(4.5em, auto) 1fr;
   gap: 0 10px;

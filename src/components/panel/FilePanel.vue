@@ -69,11 +69,8 @@ const rows = computed<CheckRow[]>(() => {
 
 <template>
   <div class="file-panel">
-    <header class="head" data-sec="head">
-      <div class="title">
-        <h2>{{ name }}</h2>
-        <button v-if="exists" class="small" @click="openPreview(path)">预览源码</button>
-      </div>
+    <header class="head id-card" data-sec="head">
+      <h2>{{ name }}</h2>
       <div class="badges">
         <code>{{ path }}</code>
         <span class="badge">文件</span>
@@ -83,6 +80,10 @@ const rows = computed<CheckRow[]>(() => {
         <span v-if="lineCount !== undefined" class="badge" :class="{ bad: long }"
           >{{ lineCount }} 行{{ long ? `（超过 ${desk.files.maxLines.value}）` : '' }}</span
         >
+      </div>
+      <!-- CD-3：动作是小号描边按钮，在徽标之下另起一行 -->
+      <div v-if="exists" class="acts">
+        <button class="small" @click="openPreview(path)">预览源码</button>
       </div>
     </header>
 

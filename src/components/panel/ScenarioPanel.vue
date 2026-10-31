@@ -71,7 +71,7 @@ function pointAt(id: string) {
 
 <template>
   <div v-if="sc" class="scenario-panel">
-    <header class="head" data-sec="head">
+    <header class="head id-card" data-sec="head">
       <div class="title">
         <h2>{{ sc.name }}</h2>
       </div>

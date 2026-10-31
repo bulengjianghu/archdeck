@@ -40,7 +40,7 @@ const rows = computed<CheckRow[]>(() => {
 
 <template>
   <div v-if="x && panel" class="port-panel">
-    <header class="head" data-sec="head">
+    <header class="head id-card" data-sec="head">
       <h2>端口 {{ x.name }}</h2>
       <div class="badges">
         <code>{{ x.id }}</code>

@@ -585,11 +585,14 @@ const showFacts = () => desk.setToggles({ showFacts: true })
       <button class="link" @click="desk.goTo(desk.run.frameLevel.value!)">到能看到它的层次</button>
     </div>
 
+    <!-- CD-1：缩放胶囊（与回放胶囊同一行、同一样式，CD-7）；手势说明在胶囊旁，运行视角让位给回放胶囊（悬停胶囊仍可看到） -->
     <div class="zoom">
-      <button title="放大" @click="zoomIn()">＋</button>
-      <button title="缩小" @click="zoomOut()">－</button>
-      <button title="适应画布" @click="fitNow()">适应</button>
-      <span class="gesture">空格 + 拖动 = 平移，Ctrl + 滚轮 = 缩放</span>
+      <div class="zoom-pill desk-pill" title="空格 + 拖动 = 平移，Ctrl + 滚轮 = 缩放">
+        <button title="放大" @click="zoomIn()">＋</button>
+        <button title="缩小" @click="zoomOut()">－</button>
+        <button title="适应画布" @click="fitNow()">适应</button>
+      </div>
+      <span v-if="desk.perspective.value !== 'run'" class="gesture">空格 + 拖动 = 平移，Ctrl + 滚轮 = 缩放</span>
     </div>
   </div>
 </template>
@@ -654,9 +657,10 @@ const showFacts = () => desk.setToggles({ showFacts: true })
   padding: 3px 10px;
   font-size: 12px;
   color: var(--text-2);
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--pill-radius);
+  box-shadow: var(--card-shadow);
 }
 
 .type-only {
@@ -670,7 +674,7 @@ const showFacts = () => desk.setToggles({ showFacts: true })
   color: var(--text-2);
   background: var(--surface);
   border: 1px dashed var(--border-strong);
-  border-radius: 12px;
+  border-radius: var(--pill-radius);
   pointer-events: none;
 }
 
@@ -678,15 +682,34 @@ const showFacts = () => desk.setToggles({ showFacts: true })
   position: absolute;
   left: 12px;
   bottom: 12px;
+  height: 40px;
   display: flex;
+  align-items: center;
   gap: 4px;
   z-index: 5;
 }
 
-.zoom button {
+.zoom-pill {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+  padding: 0 6px;
+}
+
+.zoom-pill button {
   min-width: 30px;
+  height: 28px;
   font-size: 12px;
-  padding: 3px 8px;
+  padding: 0 8px;
+  color: var(--text-2);
+  background: none;
+  border: 0;
+  border-radius: var(--pill-radius);
+}
+
+.zoom-pill button:hover {
+  background: var(--surface-2);
 }
 
 /* 空白处直接拖动即平移（Vue Flow 缺省 panOnDrag），按住空格拖动同样平移（缺省 panActivationKeyCode） */

@@ -20,7 +20,7 @@ const hidden = computed(() => desk.facts.cycleHidden.value.get(Number(props.id))
 
 <template>
   <div class="cycle-panel" data-testid="cycle-panel">
-    <header class="head">
+    <header class="head id-card">
       <h2>环 {{ id }}</h2>
       <div class="badges">
         <span class="badge warn">环组</span>
