@@ -57,17 +57,19 @@ describe('布局同步', () => {
   it('只采用最后一次请求的结果', async () => {
     const view = shallowRef<LevelView | null>(null)
     const resolvers: ((pv: PositionedView) => void)[] = []
-    const positioned = createLayoutSync(view, () => new Promise(r => resolvers.push(r)))
+    const { positioned, pending } = createLayoutSync(view, () => new Promise(r => resolvers.push(r)))
     const v1 = { mode: 'graph', parentId: 'a', nodes: [], edges: [] } as LevelView
     const v2 = { ...v1, parentId: 'b' }
     view.value = v1
     await nextTick()
     view.value = v2
     await nextTick()
+    expect(pending.value).toBe(true)
     resolvers[1]({ view: v2 } as PositionedView)
     resolvers[0]({ view: v1 } as PositionedView)
     await tick()
     expect(positioned.value?.view.parentId).toBe('b')
+    expect(pending.value).toBe(false)
     view.value = null
     await nextTick()
     expect(positioned.value).toBeNull()

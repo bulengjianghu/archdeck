@@ -195,7 +195,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     if (surfaceAlways.value !== on) surfaceAlways.value = on
   }
   const facts = createFacts({ state, index, view, files, sync: sourceSync, design: !!options.version, sketches, surfaceAlways })
-  const positioned = createLayoutSync(view, layoutView, layoutOpts, facts.layoutLinks)
+  const { positioned, pending: layoutPending } = createLayoutSync(view, layoutView, layoutOpts, facts.layoutLinks)
   // 步骤的代码证据（S16、S17）：时序图的「?」由 run 交给 Layout，所以先于 run 创建
   const evidence = createEvidence({ state, index, plan, planOf: planScenario, files, sync: sourceSync, design: !!options.version, carrierOf: facts.carrierOf })
   const run = createRun({ state, index, levelId, plan, view, positioned, fileOwners: files.owners, evidence: evidence.levels })
@@ -440,6 +440,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     toggles,
     view,
     positioned,
+    layoutPending,
     levelVersion,
     playback,
     // 领域派生

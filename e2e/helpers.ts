@@ -8,7 +8,7 @@ export async function openDesk(page: Page, hashPath: string) {
   await expect(page.locator('.vue-flow__node').first()).toBeVisible({ timeout: 20_000 })
 }
 
-/** 等画布布局稳定：首帧后约半秒还会再适应一次（节点整体平移），节点位置连续三次（约 0.75 s）不变才算稳定 */
+/** 等画布布局稳定：节点位置连续三次（约 0.75 s）不变才算稳定（首次适应只一次，WS-3；之后的展开、聚焦等仍可能挪动节点） */
 export async function waitSettled(page: Page) {
   const node = page.locator('.vue-flow__node').first()
   let last = ''

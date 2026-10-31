@@ -277,6 +277,48 @@ watch([desk.levelVersion, desk.perspective], () => (hoverEdge.value = null))
 // 只需等画布容器有尺寸，切换层次后自动适应
 const pendingFit = ref(true)
 
+// WS-3 首次适应：打开项目后，布局（含代码事实到达后的并集重排，L15）、画布容器尺寸（资料区出现、导航收起、属性栏并排或悬浮）
+// 与 inset 都定下来之前画布不可见；连续两帧不变才适应一次再显示，之后的变化照常重新适应。
+// 兜底：迟迟定不下来（代码事实读得很慢）时到点照常显示，之后按原来的触发重新适应。
+const revealed = ref(false)
+const REVEAL_DEADLINE = 4000
+let revealProbe = 0
+let revealDeadline: ReturnType<typeof setTimeout> | undefined
+let layoutSeen: PositionedView | null = null
+let lastKey = ''
+let stableFrames = 0
+function reveal() {
+  if (revealed.value) return
+  revealed.value = true
+  cancelAnimationFrame(revealProbe)
+  clearTimeout(revealDeadline)
+  if (fitNow()) pendingFit.value = false
+  else tryPendingFit()
+}
+function probeReveal() {
+  const flow = host.value?.querySelector<HTMLElement>('.vue-flow')
+  const pv = positioned.value
+  const ready = !!flow && !!pv && !desk.layoutPending.value && desk.facts.status.value !== 'loading'
+  const w = flow?.offsetWidth ?? 0
+  const h = flow?.offsetHeight ?? 0
+  // Vue Flow 的 dimensions 由它自己的 ResizeObserver 更新，晚一拍；与实测尺寸一致才算定下来
+  const synced = Math.abs(dimensions.value.width - w) < 1 && Math.abs(dimensions.value.height - h) < 1
+  const key = ready && synced && w > 0 && h > 0 ? `${w}x${h}:${inset.value}` : ''
+  stableFrames = key && key === lastKey && pv === layoutSeen ? stableFrames + 1 : 0
+  lastKey = key
+  layoutSeen = pv
+  if (stableFrames >= 2) reveal()
+  else revealProbe = requestAnimationFrame(probeReveal)
+}
+onMounted(() => {
+  revealDeadline = setTimeout(reveal, REVEAL_DEADLINE)
+  revealProbe = requestAnimationFrame(probeReveal)
+})
+onBeforeUnmount(() => {
+  cancelAnimationFrame(revealProbe)
+  clearTimeout(revealDeadline)
+})
+
 // O7：分层总览的带按画布宽度铺开——容器宽度交给协调者，换算成带内列数（只在列数变化时重新布局）
 const host = ref<HTMLElement | null>(null)
 let resize: ResizeObserver | null = null
@@ -307,7 +349,7 @@ watch(
 )
 // WS-3：属性栏悬浮时盖住画布右侧，适应只用没被盖住的部分；悬浮与并排切换后重新适应
 const inset = useCanvasInset()
-watch(inset, () => fitNow())
+watch(inset, () => revealed.value && fitNow())
 function fitNow(only?: ReadonlySet<string>): boolean {
   const pv = positioned.value
   const { height } = dimensions.value
@@ -322,7 +364,7 @@ function fitNow(only?: ReadonlySet<string>): boolean {
 }
 
 function tryPendingFit(attempt = 0) {
-  if (!pendingFit.value) return
+  if (!pendingFit.value || !revealed.value) return
   if (fitNow()) pendingFit.value = false
   else if (attempt < 40) setTimeout(() => tryPendingFit(attempt + 1), 50)
 }
@@ -340,7 +382,7 @@ let resizeTimer: ReturnType<typeof setTimeout> | undefined
 watch(
   () => [dimensions.value.width, dimensions.value.height] as const,
   ([w, h], [pw, ph]) => {
-    if (!pw || !ph || (Math.abs(w - pw) < 24 && Math.abs(h - ph) < 24)) return
+    if (!revealed.value || !pw || !ph || (Math.abs(w - pw) < 24 && Math.abs(h - ph) < 24)) return
     clearTimeout(resizeTimer)
     resizeTimer = setTimeout(fitNow, 120)
   },
@@ -387,7 +429,7 @@ const showFacts = () => desk.setToggles({ showFacts: true })
 </script>
 
 <template>
-  <div ref="host" class="canvas">
+  <div ref="host" class="canvas" :class="{ unrevealed: !revealed }">
     <VueFlow
       id="arch-desk"
       :min-zoom="0.1"
@@ -556,6 +598,11 @@ const showFacts = () => desk.setToggles({ showFacts: true })
 .canvas {
   position: absolute;
   inset: 0;
+}
+/* WS-3：首次适应之前不显示，不让一个错误的缩放先露面（Vue Flow 给量过尺寸的节点内联 visibility: visible，所以用透明度） */
+.canvas.unrevealed {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .empty {
