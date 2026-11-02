@@ -26,7 +26,7 @@ const MARK = { bad: '⚠', hint: '⚠', ok: '✓', none: '—' } as const
         <div class="row" :class="r.state" :data-check="r.key">
           <span class="st">{{ MARK[r.state] }}</span>
           <span class="dim">{{ r.label }}</span>
-          <span class="txt"
+          <span class="txt" :title="r.title"
             ><slot :name="`row-${r.key}`" :row="r">{{ r.text }}</slot></span
           >
         </div>
@@ -35,9 +35,10 @@ const MARK = { bad: '⚠', hint: '⚠', ok: '✓', none: '—' } as const
             v-for="(i, n) in shown(r)"
             :key="`${r.key}:${n}`"
             class="det"
-            :class="{ hint: i.hint }"
+            :class="{ hint: i.hint, plain: !i.target && !i.relation }"
             :data-check-item="r.key"
             :data-target="i.target"
+            :title="i.title"
             @click="go(i)"
           >
             {{ i.text }}
@@ -117,6 +118,15 @@ const MARK = { bad: '⚠', hint: '⚠', ok: '✓', none: '—' } as const
 
 .det:hover {
   text-decoration: underline;
+}
+
+/* 没有清单可跳的条目只陈述（如「核心之间未分类 N」）：不像链接 */
+.det.plain {
+  cursor: default;
+}
+
+.det.plain:hover {
+  text-decoration: none;
 }
 
 .det.more {

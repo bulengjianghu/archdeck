@@ -21,6 +21,8 @@ export interface CheckItem {
   relation?: string
   /** 提示级条目（警示色） */
   hint?: boolean
+  /** 口径说明（悬停；PC-7：条目只写信号与数字，口径不占行） */
+  title?: string
 }
 
 export interface CheckRow {
@@ -29,6 +31,8 @@ export interface CheckRow {
   state: CheckState
   text: string
   items: CheckItem[]
+  /** 结论句的口径说明（悬停；如治理行的基线日期、环度趋势） */
+  title?: string
 }
 
 /** PC-7：异常行下至多平铺的条数，其余收「+N」 */
@@ -161,19 +165,24 @@ export interface NoticeRowDef {
   ok?: string
   /** 不适用时的结论 */
   none?: string
+  /** 有信号时的结论句（缺省为「信号 计数」并列）；系统面板的治理行用它写「违规 新增 N · 存量 M · 模块环 K」 */
+  text?: string
+  /** 结论句的口径说明（悬停） */
+  title?: string
 }
 
-/** PC-10：按行定义把信号归行——有信号为 ⚠（全是提示级为 hint），条目为「信号 计数」并带跳转目标；没有信号为 ✓ 或 — */
+/** PC-10：按行定义把信号归行——有信号为 ⚠（全是提示级为 hint），条目为「信号 计数」（口径进悬停）并带跳转目标；没有信号为 ✓ 或 — */
 export function rowsFromNotices(notices: readonly PanelNotice[], defs: readonly NoticeRowDef[]): CheckRow[] {
   const ordered = orderNotices([...notices])
   return defs.map(d => {
     const hits = ordered.filter(n => d.notices.includes(n.key))
+    const title = d.title ? { title: d.title } : {}
     if (hits.length) {
-      const items = hits.map(n => ({ text: `${n.label} ${n.count}${n.note ? `：${n.note}` : ''}`, target: n.target, hint: !!n.hint }))
-      return { key: d.key, label: d.label, state: stateOf(items), text: hits.map(n => `${n.label} ${n.count}`).join(' · '), items }
+      const items = hits.map(n => ({ text: n.text ?? `${n.label} ${n.count}`, target: n.target, hint: !!n.hint, ...(n.note ? { title: n.note } : {}) }))
+      return { key: d.key, label: d.label, state: stateOf(items), text: d.text ?? hits.map(n => `${n.label} ${n.count}`).join(' · '), items, ...title }
     }
     return d.ok !== undefined
-      ? { key: d.key, label: d.label, state: 'ok', text: d.ok, items: [] }
-      : { key: d.key, label: d.label, state: 'none', text: d.none ?? '不适用', items: [] }
+      ? { key: d.key, label: d.label, state: 'ok', text: d.ok, items: [], ...title }
+      : { key: d.key, label: d.label, state: 'none', text: d.none ?? '不适用', items: [], ...title }
   })
 }

@@ -263,7 +263,7 @@ modules:
     expect(desk.selection.value).toEqual(e.edgeId ? { kind: 'edge', id: e.edgeId } : { kind: 'dep', id: 'infra->app' })
   })
 
-  it('GV-7、Q10：根层「架构治理」有基线时违规显示「±N · 存量 M」、环度只显示 ↑↓，其余绝对值在悬停中；没有基线时为绝对数并标「无基线」', async () => {
+  it('ADR-0059：根层核对卡的治理行——有基线时「违规 新增 N · 存量 M · 模块环 K」，口径、基线与环度在悬停；没有基线时「违规 N（无基线）」；条目只写信号与数字', async () => {
     const open = async (baseline: { createdAt: string; violations: string[]; cyclicity: { modules: number; files: number } } | null) => {
       const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
       await router.push('/')
@@ -275,29 +275,34 @@ modules:
       await flushPromises()
       const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
       await flushPromises()
-      const row = (label: string) => {
-        const dts = wrapper.findAll('dt')
-        const i = dts.findIndex(d => d.text() === label)
-        return wrapper.findAll('dd')[i]
-      }
-      return { row }
+      const row = wrapper.find('[data-check="governance"] .txt')
+      const items = wrapper.findAll('[data-check-item="governance"]').map(x => x.text())
+      return { wrapper, row, items }
     }
     const none = await open(null)
-    expect(none.row('环度').text()).toContain('无基线')
-    expect(none.row('模块环').text()).toMatch(/1 个 · 最大 2/)
+    expect(none.row.text()).toMatch(/^违规 1（无基线） · 模块环 1$/)
+    expect(none.row.attributes('title')).toContain('无基线')
+    expect(none.items.slice(0, 2)).toEqual(['违规 1', '模块环 1'])
     const based = await open({ createdAt: 't', violations: [], cyclicity: { modules: 9, files: 0 } })
-    expect(based.row('环度').text()).toContain('↓ −5')
-    expect(based.row('环度').attributes('title')).toContain('模块 4')
-    expect(based.row('违规').text()).toContain('+1 · 存量 1（相对基线：新增 1')
-    expect(none.row('违规').text()).toContain('无基线')
-    expect(none.row('违规').text()).not.toContain('存量')
-    expect(based.row('违规').attributes('title')).toContain('计入门禁 1 条')
-    // 审核轮 2 B1：悬停写明口径——声明的规则对代码事实；返工清单的 info 级（K24）不在此计数
-    expect(based.row('违规').attributes('title')).toContain('声明的架构规则对代码事实的违规')
-    expect(based.row('违规').attributes('title')).toContain('返工清单的 info 级提示（K24 层符合性）不在此计数')
+    expect(based.row.text()).toBe('违规 新增 1 · 存量 1 · 模块环 1')
+    expect(based.items.slice(0, 2)).toEqual(['新增违规 1', '模块环 1'])
+    // 严重度排序：端口孤立（提示级）排在违规与环之后
+    expect(based.items[2]).toMatch(/^端口无使用者 \d+$/)
+    // Q10：绝对值与趋势进悬停；审核轮 2 B1：口径写明——声明的规则对代码事实；返工清单的 info 级（K24）不在此计数
+    const title = based.row.attributes('title')!
+    expect(title).toContain('计入门禁 1 条')
+    expect(title).toContain('声明的架构规则对代码事实的违规')
+    expect(title).toContain('返工清单的 info 级提示（K24 层符合性）不在此计数')
+    expect(title).toMatch(/环度：模块 4 · 文件 \d+（基线 9 · 0）/)
+    // PC-7：条目的口径在悬停、不占行
+    const item = based.wrapper.find('[data-check-item="governance"]')
+    expect(item.attributes('title')).toContain('声明的架构规则对代码事实的违规')
+    // 清单折叠带计数：违规、模块环各一节（panelUnfold 下全展开，标题仍带计数）
+    expect(based.wrapper.find('[data-sec="governance.violations"] h3').text()).toMatch(/^违规\s*1$/)
+    expect(based.wrapper.find('[data-sec="governance.cycles"] h3').text()).toMatch(/^模块环\s*1$/)
   })
 
-  it('G12（V16）：健康度按对象分组——确认 / 依赖 / 关系常显、治理组折叠带计数；拦截记录与外部依赖折叠带计数', async () => {
+  it('ADR-0059：系统核对卡没有「架构治理」摘要节与讲解段；库存数（文件依赖、模块依赖、端口、子类、组装、外部依赖）在「规模与来源」；拦截记录折叠带计数；确认只有一行', async () => {
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
     await router.push('/')
     const desk = createDeskState(async () => ({ dir: 'model/test', files: [...scenarioFiles(), { path: 'modules/zz-refs.yaml', text: REFS }] }), {
@@ -322,27 +327,21 @@ modules:
     await flushPromises()
     const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
     await flushPromises()
-    // 常显组：确认 / 依赖 / 关系
-    expect(wrapper.findAll('.grp-head').map(x => x.text())).toEqual(['确认', '依赖', '关系'])
-    // 治理组折叠带计数（违规 + 模块环 + 未解释的交互），缺省收起
-    const gov = wrapper.find('details.fold-gov')
-    expect(gov.exists()).toBe(true)
-    expect(gov.attributes('open')).toBeUndefined()
-    expect(gov.find('summary').text()).toMatch(/治理\s*·\s*\d/)
-    await gov.find('summary').trigger('click')
-    const dts = gov.findAll('dt').map(x => x.text())
-    expect(dts).toContain('违规')
-    expect(dts).toContain('环度')
-    expect(dts).toContain('基线')
-    // 外部依赖（按导入次数）折叠带计数（包数）
-    const ext = wrapper.findAll('details.g-fold').find(x => x.text().includes('外部依赖'))!
-    expect(ext.find('summary').text()).toContain('外部依赖（按导入次数）')
-    expect(ext.find('summary').text()).toMatch(/2/)
-    expect(ext.attributes('open')).toBeUndefined()
+    const text = wrapper.text()
+    for (const s of ['架构治理', '图上缺省叠加代码事实', '草图是架构师的意图', '见 npm run arch']) expect(text).not.toContain(s)
+    expect(wrapper.find('.grp-head').exists()).toBe(false)
+    // 库存数在「规模与来源」
+    const scale = wrapper.find('[data-testid="facts-scale"]')
+    const kv = Object.fromEntries(scale.findAll('dt').map((dt, i) => [dt.text(), scale.findAll('dd')[i]!.text()]))
+    expect(kv['文件依赖']).toBe('1')
+    expect(kv['模块依赖']).toBe('1')
+    expect(kv['外部依赖']).toBe('vue 12yaml 3')
+    expect(Object.keys(kv)).toEqual(['文件依赖', '模块依赖', '端口', '子类', '组装', '外部依赖'])
     // 拦截记录折叠带计数（写前判定次数）
-    const ledger = wrapper.findAll('details.g-fold').find(x => x.text().includes('拦截记录'))!
-    expect(ledger.find('summary').text()).toMatch(/拦截记录（agent 接口）\s*1/)
-    expect(ledger.attributes('open')).toBeUndefined()
+    expect(wrapper.find('[data-sec="ledger"] h3').text()).toMatch(/拦截记录（agent 接口）\s*1/)
+    // 确认只有一行：核对卡的确认行并掉了原「架构治理」里的两处
+    expect(text.match(/核心模块已确认/g)).toHaveLength(1)
+    expect(wrapper.find('[data-check="review"]').text()).toContain('核心模块已确认')
   })
 })
 

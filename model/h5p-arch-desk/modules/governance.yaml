@@ -63,7 +63,8 @@ modules:
     name: 架构治理面板
     summary: 展示违规、环、规则与证实，可加例外
     parent: present.panel
-    responsibility: 面板中的「架构治理」：根层先给健康度摘要（事实统计；违规相对基线 ±N、环度 ↑↓、模块环个数与最大规模，绝对值在悬停中，GV-7），明细里违规按新增 / 已知 / 已豁免分组（可展开文件证据，未豁免的可「加例外（写理由）」，B3）、模块环与外部依赖、拦截记录摘要（GV-7）；模块的生效规则、出入违规与未解释的交互、所在环（Q1）；选中带环编号的节点时所在的本层环：环内节点、构成环的每条本层依赖（展开见模块依赖与文件证据，单击选中对应的视图边或代码依赖，GV-9、Y5）；关系的证实与文件证据（K5、K6；经端口的按端口证实——发起方依赖端口的定义模块、接收方是它已证实的实现者，K5b；写了其余 via 的标「不判定」）；关系行上的证实标记。文件证据可单击选中文件。四类交互与端口（ADR-0029、ADR-0030）：健康度加「交互分类」一行（未分类与其中核心之间的条数，M17；查询副作用，U13）与「端口」一行（端口数、无实现者 / 无使用者、子类、组装与组装根，U14、K12、K13），明细列端口孤立与查询副作用（单击端口打开端口面板）；子类与组装是代码事实、不是关系（StructureFacts）：关系面板与代码依赖面板「知识」行旁标「子类 N」「组装 N」，模块面板的「代码事实」列子类 / 基类、组装 / 被组装于并标出组装根（ModuleKnowledge），单击展开两端、方式（new / 工厂 / 注册）与文件证据。分级（ADR-0027）：健康度一行「共用件：反向依赖 N · 体量 行数 / 修改占比」（Q13），有被依赖的共用件时另列入度最高的共用件、它的扇入 Ca 与占比（单击跳到它，Q15）；明细列「疑似共用件 N 个」（每个带四条依据），「认可为共用件」经 desk.write.role 写进 intent/roles.yaml（U11），另列共用件反向依赖（U12）。在模块核对卡里是「架构治理」清单（异常已平铺在「治理」「证实」行下，PC-6）；在系统核对卡里是清单。
+    responsibility: 面板中的「架构治理」证据清单（GV-7 修订，PC-12，ADR-0059）：系统核对卡里只放折叠带计数、为 0 不出现、按严重度排的清单——违规按新增 / 违规（无基线）/ 已知（基线内）/ 已豁免分组，组内同一「规则 → 对端」的多个来源合成一行（N 个来源 · M 处，按处数降序，单击展开逐条，再展开理由与文件证据，未豁免的可「加例外（写理由）」，B3；每组前 12 行、其余「+N」）；模块环（含容忍的）与文件环的个数；端口与查询副作用一行一条（端口 · 问题词，说明进悬停，单击端口打开端口面板，U13、U14）；共用件（反向依赖、体量与阈值、入度最高的共用件及其扇入占比 Q15、反向依赖清单、疑似共用件带四条依据与「认可为共用件」经 desk.write.role 写进 intent/roles.yaml，U11、U12，ADR-0027）；未证实的关系（证实行的证据，单击选中那条关系，K5、K6）；未解释的交互（K7）。结论与条目在系统核对卡的三行上（SystemPanel），库存数在「规模与来源」，这里不写结论、不讲解。模块的生效规则、出入违规与未解释的交互、所在环（Q1）；选中带环编号的节点时所在的本层环：环内节点、构成环的每条本层依赖（展开见模块依赖与文件证据，单击选中对应的视图边或代码依赖，GV-9、Y5）；关系的证实与文件证据（K5、K6；经端口的按端口证实——发起方依赖端口的定义模块、接收方是它已证实的实现者，K5b；写了其余 via 的标「不判定」）；关系行上的证实标记。文件证据可单击选中文件。子类与组装是代码事实、不是关系（StructureFacts）：关系面板与代码依赖面板「知识」行旁标「子类 N」「组装 N」，模块面板的「代码事实」列子类 / 基类、组装 / 被组装于并标出组装根（ModuleKnowledge），单击展开两端、方式（new / 工厂 / 注册）与文件证据。在模块核对卡里是「架构治理」清单（异常已平铺在「治理」「证实」行下，PC-6）。
+
     codeRefs:
       - src/components/panel/GovernanceSection.vue
       - src/components/panel/ModuleGovernance.vue
@@ -306,7 +307,7 @@ relations:
   - {id: rel.gv.ai-agent, from: actor.ai, to: access.agent, type: commands, interface: if.agent.mcp, payload: [ds.CheckResult], description: AI 交给 agent 接口：coding agent 写代码前判定依赖、写完重新扫描（MCP 或命令行）, purpose: 写代码前判依赖、写完重新扫描 }
   # 呈现层
   - { id: rel.gv.dispatch-dep, from: present.panel.dispatch, to: present.panel.dep, type: commands, description: 面板分派交给代码依赖面板：选中代码依赖叠加线时面板分派渲染代码依赖面板, purpose: 选中代码依赖线时显示依赖面板 }
-  - {id: rel.gv.system-gov, from: present.panel.system, to: present.panel.governance, type: commands, description: 系统面板交给架构治理面板：渲染 GovernanceSection, purpose: 在系统面板显示治理总览 }
+  - {id: rel.gv.system-gov, from: present.panel.system, to: present.panel.governance, type: commands, description: 系统面板交给架构治理面板：在核对卡的清单区渲染 GovernanceSection 的折叠证据清单（违规、模块环、端口与查询副作用、共用件、未证实的关系、未解释的交互），结论与条目由系统面板自己的三行给出（ADR-0059）, purpose: 在系统核对卡放治理证据清单 }
   - {id: rel.gv.module-gov, from: present.panel.module, to: present.panel.governance, type: commands, description: 模块面板交给架构治理面板：渲染 ModuleGovernance 与代码事实里的子类、组装（ModuleKnowledge）, purpose: 在模块面板显示治理与代码知识 }
   - {id: rel.gv.relation-gov, from: present.panel.relation, to: present.panel.governance, type: commands, description: 关系面板交给架构治理面板：渲染代码事实一节 RelationFact，「知识」行旁渲染两端之间的子类与组装（StructureFacts）, purpose: 在关系面板显示代码事实 }
   - { id: rel.gv.dep-gov, from: present.panel.dep, to: present.panel.governance, type: commands, description: 代码依赖面板交给架构治理面板：渲染文件证据列表（FileDepList）与这对节点之间的子类、组装（StructureFacts）, purpose: 显示文件证据与两端的子类组装 }

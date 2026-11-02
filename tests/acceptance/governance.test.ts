@@ -120,8 +120,9 @@ describe('§6.10 架构治理验收', () => {
     for (let i = 0; i < 3; i++) await flushPromises()
     const panel = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
     await nextTick()
-    expect(panel.text()).toContain('架构治理')
-    expect(panel.text()).toMatch(/已证实 \d+/)
+    // ADR-0059：根层核对卡的证实行给结论（全部被代码证实 / N 条未证实）、治理行给违规与环，违规清单折叠带计数
+    expect(panel.find('[data-check="verify"]').text()).toMatch(/条关系全部被代码证实|条关系中 \d+ 条未证实/)
+    expect(panel.find('[data-check="governance"]').text()).toMatch(/违规 .*模块环 \d+/)
 
     desk.setToggles({ showFacts: true })
     const level = desk.facts.level.value!

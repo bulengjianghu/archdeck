@@ -6,7 +6,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
-import { graphNode, openDesk, restoreOwned, collapseDisplay } from './helpers'
+import { collapseDisplay, graphNode, openCheckList, openDesk, restoreOwned } from './helpers'
 
 const MODEL = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 const ROLES = path.join(MODEL, 'intent/roles.yaml')
@@ -39,6 +39,8 @@ test('疑似共用件一键认可写进 intent/roles.yaml；认可后收进共�
   const ledger0 = fs.existsSync(LEDGER) ? fs.readFileSync(LEDGER, 'utf8') : null
   try {
     await openDesk(page, '/p/h5p-arch-desk')
+    // ADR-0059：疑似共用件在系统核对卡折叠的「共用件」清单里
+    await openCheckList(page, 'governance.shared')
     const list = page.getByTestId('shared-suggestions')
     const item = list.locator('[data-module="present.shared"]')
     await expect(item).toContainText('入度广')

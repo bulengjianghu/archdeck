@@ -145,12 +145,22 @@ describe('V2 画布端口记号的单击', () => {
 })
 
 describe('治理面板与返工清单（U13、U14、M17、Q7）', () => {
-  it('根层健康度列交互分类与端口；明细列当前版本的端口孤立，单击选中端口', async () => {
+  it('根层核对卡：端口孤立作治理行的条目（无使用者为提示级）、核心之间未分类作证实行的提示；端口数、子类、组装是库存数在「规模与来源」；清单列端口孤立，单击选中端口（ADR-0059）', async () => {
     const { wrapper, desk } = await mountWith('/')
-    expect(wrapper.find('[data-testid="interaction-health"]').text()).toMatch(/未分类 \d+（核心之间 \d+） · 查询副作用 0/)
-    expect(wrapper.find('[data-testid="port-health"]').text()).toMatch(/2 个 · 无实现者 0 · 无使用者 1 · 子类 1 · 组装 1（组装根 1）/)
+    expect(wrapper.findAll('[data-check-item="governance"]').map(x => x.text())).toContain('端口无使用者 1')
+    const core = desk.facts.unclassified.value.core
+    const verify = wrapper.findAll('[data-check-item="verify"]').map(x => x.text())
+    if (core) expect(verify).toContain(`核心之间未分类 ${core}`)
+    else expect(verify.some(t => t.includes('未分类'))).toBe(false)
+    expect(wrapper.text()).not.toContain('查询副作用 0')
+    const scale = wrapper.find('[data-testid="facts-scale"]')
+    const kv = Object.fromEntries(scale.findAll('dt').map((dt, i) => [dt.text(), scale.findAll('dd')[i]!.text()]))
+    expect(kv['端口']).toBe('2')
+    expect(kv['子类']).toBe('1')
+    expect(kv['组装']).toBe('1（组装根 1）')
     const list = wrapper.find('[data-testid="port-problems"]')
-    expect(list.text()).toContain('port.no-user')
+    expect(list.text()).toContain('无使用者')
+    expect(list.text()).not.toContain('port.no-user')
     await list.find('.link').trigger('click')
     expect(desk.selection.value).toEqual({ kind: 'port', id: 'if.model' })
   })

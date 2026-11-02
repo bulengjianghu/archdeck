@@ -1,5 +1,5 @@
 /**
- * 架构治理（§6.10 第 5、6 条，§6.22）：开启「代码事实」，只标异常——未证实的关系边仍是实线、标签位写「未证实」，已证实的不标；代码依赖叠加线是虚线；单击叠加线看证据；根层面板有架构治理。
+ * 架构治理（§6.10 第 5、6 条，§6.22）：开启「代码事实」，只标异常——未证实的关系边仍是实线、标签位写「未证实」，已证实的不标；代码依赖叠加线是虚线；单击叠加线看证据；根层面板的核对卡给证实与治理的结论、违规清单折叠带计数（ADR-0059）。
  * 本项目的描述已无未解释的交互、根层也没有未证实的边（经 HTTP 等的写了 via，K5b），未证实与叠加线用 h5player 验证（源码在本地是前提，G1，不设跳过）。
  * 两个项目的未解释的交互都已为 0（ADR-0026），h5player 的违规都在基线内（不画线）：叠加线用例拦截事实端点去掉基线，让违规成为「无基线的全部违规」画出来（K9）。
  */
@@ -8,9 +8,9 @@ import { openCheckList, openDesk, query, setSwitch } from './helpers'
 
 test('开启代码事实：未证实的边标「未证实」、仍是实线，已证实的不标 ✓（K9、L10、L26）', async ({ page }) => {
   await openDesk(page, '/p/h5player')
-  await openCheckList(page) // PC-10：架构治理是系统核对卡的清单
-  await expect(page.locator('.panel')).toContainText('架构治理')
-  await expect(page.locator('.panel')).toContainText(/已证实 \d+/)
+  await openCheckList(page) // PC-10：系统核对卡的三行结论与折叠清单（ADR-0059）
+  await expect(page.locator('.panel [data-check="verify"]')).toContainText(/条关系全部被代码证实|条关系中 \d+ 条未证实/)
+  await expect(page.locator('.panel [data-check="governance"]')).toContainText(/违规/)
   // L45（第十七轮 R4）：代码事实的开关是图例「代码事实」组的第一行
   const toggle = page.getByRole('region', { name: '图例' }).getByRole('switch', { name: '代码事实' })
   await expect(toggle).toBeEnabled()
@@ -39,9 +39,9 @@ test('h5player：没有基线时违规画成叠加线；单击叠加线选中它
     await route.fulfill({ response: res, json: { ...(await res.json()), baseline: null } })
   })
   await openDesk(page, '/p/h5player')
-  await openCheckList(page) // PC-10：架构治理是系统核对卡的清单
-  await expect(page.locator('.panel')).toContainText('架构治理')
-  await expect(page.locator('.panel')).toContainText(/已证实 \d+/)
+  await openCheckList(page) // PC-10：系统核对卡的三行结论与折叠清单（ADR-0059）
+  await expect(page.locator('.panel [data-check="verify"]')).toContainText(/条关系全部被代码证实|条关系中 \d+ 条未证实/)
+  await expect(page.locator('.panel [data-check="governance"]')).toContainText(/违规/)
 
   // L45（第十七轮 R4）：代码事实的开关是图例「代码事实」组的第一行
   const toggle = page.getByRole('region', { name: '图例' }).getByRole('switch', { name: '代码事实' })

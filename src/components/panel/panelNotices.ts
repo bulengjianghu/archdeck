@@ -9,15 +9,34 @@ import { nextTick, ref, watch, type Ref } from 'vue'
 
 /** 一个信号：label + count + 跳转目标（data-sec）。hint 为提示级（不判问题），其余为问题级 */
 export interface PanelNotice {
-  key: 'violations' | 'cycles' | 'levelCycles' | 'undescribed' | 'unconfirmed' | 'carrierGap' | 'upward' | 'stale' | 'split' | 'against' | 'surface'
+  key:
+    | 'violations'
+    | 'cycles'
+    | 'levelCycles'
+    | 'undescribed'
+    | 'unconfirmed'
+    | 'carrierGap'
+    | 'upward'
+    | 'stale'
+    | 'split'
+    | 'against'
+    | 'surface'
+    | 'ports'
+    | 'sharedReverse'
+    | 'unclassified'
+    | 'sideEffects'
+    | 'sharedOver'
+    | 'baselineSlack'
   label: string
   count: number
-  /** 目标节的 data-sec */
+  /** 目标节的 data-sec；空串表示没有清单可跳（条目只陈述） */
   target: string
   /** 引导文字（目标节名） */
   to: string
-  /** 计数口径的说明（进悬停提示，审核轮 2 B1：③ 的计数与门禁 / 返工清单口径不同，避免误读） */
+  /** 计数口径的说明（进条目的悬停提示，PC-7：条目只写信号与数字，审核轮 2 B1：③ 的计数与门禁 / 返工清单口径不同，避免误读） */
   note?: string
+  /** 条目的文字；缺省为「label count」 */
+  text?: string
   /** 提示级（逆稳定、表面提示、拆分信号）：警示色而非危险色 */
   hint?: boolean
 }
@@ -26,19 +45,27 @@ export interface PanelNotice {
  * V15b 的严重度排序：同组内按登记次序（模块环与本层环是两个独立信号，各自一行，V15b）。
  * 波 2 铺开（G11）新增的关系级与边级信号与既有组同档：缺段（承载判定，K20）与未证实同档、
  * 向上却不是控制反转（K22）属违背分层的例外、与违规同档。
+ * 第十八轮走查（ADR-0059）系统面板的信号：共用件反向依赖与环同档；端口孤立（U14）与未证实同档；
+ * 未分类、查询副作用、共用件体量、可收紧基线是提示级，排最后。
  */
 export const NOTICE_RANK: Record<PanelNotice['key'], number> = {
   violations: 0,
   upward: 0,
   cycles: 1,
+  sharedReverse: 1,
   levelCycles: 2,
   undescribed: 3,
   unconfirmed: 4,
   carrierGap: 4,
+  ports: 4,
   stale: 5,
   split: 6,
+  unclassified: 6,
+  sideEffects: 6,
   against: 7,
+  sharedOver: 7,
   surface: 8,
+  baselineSlack: 9,
 }
 
 /** 过滤零计数并按严重度排序 */
