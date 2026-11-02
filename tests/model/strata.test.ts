@@ -174,10 +174,33 @@ describe('ST-3–ST-5、ST-2', () => {
     expect(strataFindings(index, r).map(f => f.issue.code).sort()).toEqual(['stratum.instability-order', 'stratum.singular', 'stratum.type-upward', 'stratum.type-upward'])
   })
 
-  it('ST-2 归属建议：各层按职责文字与原则、成员的字面重合度排序；没声明分层时为 null', () => {
+  it('ST-2 归属建议：各层按职责文字与原则、成员的字面重合度排序（mode strata）；没有子模块时为 null', () => {
     const { index } = loadModel(files(APP))
-    expect(placeSuggestion(index, 'app', '从哪进来的入口')!.candidates[0].layer).toBe('top')
+    const r = placeSuggestion(index, 'app', '从哪进来的入口')!
+    expect(r.mode).toBe('strata')
+    expect(r.candidates[0].layer).toBe('top')
     expect(placeSuggestion(index, 'app.ui', 'x')).toBeNull()
+  })
+
+  it('M33（ADR-0060）：未声明分层的父模块按子模块的一句话职责排序（mode children）；父模块否定边界带去向且与职责文字重合的直接给出去向', () => {
+    const text = [
+      'modules:',
+      '  - id: p',
+      '    name: P',
+      '    responsibility: 父',
+      '    excludes: [画面渲染 → p.b, 拉流]',
+      '    children:',
+      '      - { id: p.a, name: A, responsibility: 解码, summary: 软解视频帧 }',
+      '      - { id: p.b, name: B, responsibility: 渲染, summary: 把画面渲染到画布 }',
+    ].join('\n')
+    const { index } = loadModel([{ path: 'm.yaml', text }])
+    const r = placeSuggestion(index, 'p', '画面渲染与截图')!
+    expect(r.mode).toBe('children')
+    expect(r.candidates.map(c => c.layer)).toEqual(['p.b', 'p.a'])
+    expect(r.candidates[0].summary).toBe('把画面渲染到画布')
+    expect(r.excluded).toEqual([{ text: '画面渲染', to: 'p.b', score: expect.any(Number) }])
+    expect(r.excluded[0].score).toBeGreaterThan(0)
+    expect(placeSuggestion(index, 'p', '解码')!.excluded).toEqual([])
   })
 })
 

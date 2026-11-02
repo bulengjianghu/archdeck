@@ -35,7 +35,7 @@ export { stronglyConnected, valueDeps, moduleCycles, fileCycles, cyclicityOf } f
 export { governanceReport, gateIssues, makeBaseline, entryResolver } from './report'
 export { levelFacts, levelAssembly, depsBetween, nodeOf, levelValueDeps } from './level'
 export { strataMetrics, strataFindings, strataIssues, placeSuggestion, STRATA_ORDER_TOLERANCE, type StratumMetrics, type StrataFinding, type PlaceSuggestion } from './strata'
-export { tierNodes, tierNoteText, foldSpanText, FOLD_SPAN_WARN, type FoldSpan, levelTiers, layerUpward, layerDrift, type LayerDrift, splitSignals, tierIssues, tierFindings, tierView, tierable, isInversion, BAND_MIN_NODES, BAND_MIN_TIERS } from './tiers'
+export { tierNodes, tierBandLabel, tierNoteText, foldSpanText, FOLD_SPAN_WARN, type FoldSpan, levelTiers, layerUpward, layerDrift, type LayerDrift, splitSignals, tierIssues, tierFindings, tierView, tierable, isInversion, BAND_MIN_NODES, BAND_MIN_TIERS } from './tiers'
 export type { TierFinding, Tiering, LevelTiers, UpwardEdge, TierNote, SplitSignals } from './tiers'
 export type { AssemblyOverlay, DepOverlay, EdgeFact, LevelAssembly, LevelFacts } from './level'
 export {

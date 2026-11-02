@@ -568,12 +568,15 @@ export function createService(opts: ServiceOptions) {
       }
     },
 
-    /** ST-2（ADR-0052）：在已分层的父模块下新增模块时的归属建议——各层的问题与判定问，按职责文字的重合度排序。只读。 */
+    /**
+     * ST-2、M33（ADR-0052、ADR-0060）：在父模块下新增模块时的归属建议——已分层的列各层的问题与判定问，未分层的列各子模块的一句话职责，
+     * 都按职责文字的重合度排序；父模块否定边界（excludes）命中的直接给出去向。只读。
+     */
     place(parent: string, responsibility: string, p?: string) {
       const l = load(p)
       const id = parent === 'root' ? l.index.rootId : parent
       const r = placeSuggestion(l.index, id, responsibility)
-      if (!r) throw new ServiceError(`「${parent}」没有声明分层：不需要选层`)
+      if (!r) throw new ServiceError(`「${parent}」没有子模块：无处可放`)
       return { project: l.project, ...r, name: name(l, id) }
     },
 

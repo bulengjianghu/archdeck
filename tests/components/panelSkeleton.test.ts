@@ -199,22 +199,24 @@ describe('PC-3：模块的理解卡按五问', () => {
     expect(other.wrapper.find('[data-testid="summary"]').text()).toContain('待提炼')
   })
 
-  it('② 怎么分：原则一句 + 子模块各一句话，超过 6 个收「+N」；③ 对外表面一行一个（名称 · 说明首句），超过 5 个收「+N」，单击展开详情', async () => {
+  it('② 怎么分（ADR-0060）：原则全文不截；未声明分层的写明并只列子模块名（一句话在悬停、不在卡上）；⑤ 对外表面名字全文一行、用途在悬停，超过 5 个收「+N」，单击展开详情', async () => {
     const { wrapper } = await mountPanel('/?sel=m:app.big', files())
     const split = wrapper.find('[data-sec="split"]')
     expect(split.find('.principle').text()).toContain('按阶段切分')
-    expect(split.findAll('[data-testid="module-children"] .part')).toHaveLength(6)
-    const more = split.find('.more')
-    expect(more.text()).toBe('+2')
-    await more.trigger('click')
-    expect(wrapper.findAll('[data-testid="module-children"] .part')).toHaveLength(8)
-    expect(wrapper.find('[data-testid="module-children"]').text()).toContain('第一件事')
+    expect(split.find('.principle').attributes('style') ?? '').not.toContain('line-clamp')
+    expect(split.find('[data-testid="module-nostrata"]').text()).toContain('未声明分层 · 8 个子模块')
+    const names = split.findAll('[data-testid="module-children"] .link').filter(l => !l.classes().includes('more'))
+    expect(names).toHaveLength(8)
+    expect(split.text()).not.toContain('第一件事')
+    expect(names[0].attributes('title')).toContain('第一件事')
     const surface = wrapper.find('[data-sec="surface"]')
-    expect(surface.findAll('.part')).toHaveLength(5)
-    expect(surface.find('.part .v').text()).toContain('第 1 个能力')
+    const ifaces = surface.findAll('.ifaces .k')
+    expect(ifaces).toHaveLength(5)
+    expect(ifaces[0].attributes('title')).toContain('第 1 个能力')
+    expect(surface.text()).not.toContain('第 1 个能力')
     expect(surface.find('.more').text()).toBe('+1')
     expect(surface.text()).not.toContain('f1()')
-    await surface.find('.part .k').trigger('click')
+    await ifaces[0].trigger('click')
     expect(wrapper.find('[data-sec="surface"]').text()).toContain('f1()')
   })
 
@@ -228,18 +230,24 @@ describe('PC-3：模块的理解卡按五问', () => {
     expect(plain.wrapper.find('[data-sec="invariants"]').exists()).toBe(false)
   })
 
-  it('② 声明了分层的模块按层列（层名 · 层的问题），成员作链接；单成员层的模块有「包含 / 不包含」折叠块与「可依赖」链接', async () => {
+  it('② 声明了分层的模块按层列（层名 · 层的问题 · 归属），成员作链接；单成员层的模块：excludes 作「不负责」一行（M32），另有「层的问题与包含」折叠块与「可依赖」链接', async () => {
     const { wrapper, desk } = await mountPanel('/?sel=m:app', sampleFiles({ 'intent/strata.yaml': STRATA }))
-    const rows = wrapper.findAll('[data-testid="module-strata"] .part')
+    const rows = wrapper.findAll('[data-testid="module-strata"] .stratum')
     expect(rows).toHaveLength(2)
     expect(rows[0].text()).toContain('入口层')
     expect(rows[0].text()).toContain('从哪进来？')
     await rows[0].find('.members .link').trigger('click')
     expect(desk.selection.value).toEqual({ kind: 'module', id: 'app.solution' })
-    const EXT = 'modules:\n  - { id: ext, name: Ext, kind: layer, order: 4, responsibility: x, includes: [适配器], excludes: [规则, 状态] }\n'
+    const EXT = 'modules:\n  - { id: ext, name: Ext, kind: layer, order: 4, responsibility: x, includes: [适配器], excludes: [规则, 状态 → app] }\n'
     const layer = await mountPanel('/?sel=m:ext', sampleFiles({ 'modules/zz-ext.yaml': EXT }))
-    expect(layer.wrapper.find('.inc summary').text()).toBe('包含 / 不包含 1 / 2')
+    // ADR-0060：否定边界一行，带去向的是链接
+    const neg = layer.wrapper.find('[data-testid="excludes"]')
+    expect(neg.text()).toMatch(/^规则 · 状态\s*→ Application$/)
+    expect(layer.wrapper.find('.inc summary').text()).toBe('层的问题与包含 1')
     expect(layer.wrapper.find('[data-testid="layer-deps"]').text()).toContain('可依赖')
+    // 去向是链接：单击选中去向模块（面板随之换成它的）
+    await neg.find('.to').trigger('click')
+    expect(layer.desk.selection.value).toEqual({ kind: 'module', id: 'app' })
   })
 })
 
@@ -250,16 +258,21 @@ describe('PC-4、PC-5：协作', () => {
         'relations:\n  - { id: rq, from: infra.framework.sm, to: infra.mus, type: queries, purpose: 取媒体单元 }\n  - { id: rq2, from: infra.framework.pipeline, to: infra.mus, type: streams }',
     })
 
-  it('按（方向，对端）合成一行：对端为画布上相邻的节点，多条标「×N」、单击展开逐条；单击对端名选中对端', async () => {
+  it('缺省折叠为一行「← N · → M」（ADR-0060）；展开后按（方向，对端）合成一行：对端为画布上相邻的节点，多条标「×N」、类型在悬停，单击目的展开逐条；单击对端名选中对端', async () => {
     const { wrapper, desk } = await mountPanel('/?level=infra&sel=m:infra.framework', files())
+    const fold = wrapper.find('[data-testid="collab-fold"]')
+    expect(fold.text()).toMatch(/协作\s*2\s*← 0 · → 2/)
+    expect(wrapper.find('[data-testid="collab"]').exists()).toBe(false)
+    await fold.trigger('click')
     const rows = wrapper.findAll('[data-testid="collab"] .co')
     expect(rows.map(r => r.attributes('data-peer'))).toEqual(['app', 'infra.mus'])
     const mus = rows[1]
     expect(mus.find('.dir').text()).toBe('→')
     expect(mus.find('.n').text()).toBe('×3')
-    expect(mus.findAll('.rel-chip').map(c => c.text())).toEqual(['流', '查询'])
+    expect(mus.attributes('data-types')).toBe('streams queries')
+    expect(mus.find('.line').attributes('title')).toContain('流、查询 ×3')
     expect(mus.find('.each').exists()).toBe(false)
-    await mus.find('.n').trigger('click')
+    await mus.find('.why').trigger('click')
     expect(wrapper.findAll('[data-peer="infra.mus"] .rel-row')).toHaveLength(3)
     // 展开后逐条带目的（写了 purpose 的）
     expect(wrapper.find('[data-peer="infra.mus"] .each').text()).toContain('取媒体单元')
@@ -269,6 +282,7 @@ describe('PC-4、PC-5：协作', () => {
 
   it('悬停一行：写入悬停的关系（画布据此高亮承载它们的边，L25）；移开清空', async () => {
     const { wrapper } = await mountPanel('/?level=infra&sel=m:infra.framework', files())
+    await wrapper.find('[data-testid="collab-fold"]').trigger('click')
     const hover = useRelationHover()
     await wrapper.find('[data-peer="infra.mus"]').trigger('mouseenter')
     expect(hover.value).toEqual(['r4', 'rq', 'rq2'])
@@ -337,6 +351,9 @@ modules:
     await flushPromises()
     await flushPromises()
     expect(wrapper.find('[data-sec="evidence.governance"] .fold').attributes('aria-expanded')).toBe('true')
+    // PC-7（ADR-0060）：全卡缺省至多 8 条，后面行的条目收在「+N 全部条目」里，单击展开
+    const all = wrapper.find('[data-testid="check-expand-all"]')
+    if (all.exists()) await all.trigger('click')
     await wrapper.find('[data-check-item="review"]').trigger('click')
     await flushPromises()
     await flushPromises()

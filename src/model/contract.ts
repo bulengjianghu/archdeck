@@ -60,3 +60,26 @@ export const invariantsOf = (m: Pick<ModuleDef, 'invariants'>): InvariantDef[] =
   (m.invariants ?? [])
     .map(x => (typeof x === 'string' ? { text: x.trim() } : { text: x.text.trim(), ...(x.adr !== undefined ? { adr: x.adr } : {}) }))
     .filter(x => x.text)
+
+/** M33（ADR-0060，round19 V3）：否定边界的条数上限 */
+export const EXCLUDES_LIMIT = 3
+
+/** M33：否定边界的一条——「不负责什么」，可带去向（哪个模块负责） */
+export interface ExcludeDef {
+  text: string
+  /** 去向模块的 ID（写法「短语 → 模块 ID」） */
+  to?: string
+}
+
+/**
+ * M33：模块的否定边界——excludes 每条「短语」或「短语 → 模块 ID」（箭头可写 → 或 ->），去掉空条；
+ * 层（单成员层的模块）的 excludes 同一字段、同一读法（ADR-0052 的「不包含」）。
+ */
+export const excludesOf = (m: Pick<ModuleDef, 'excludes'>): ExcludeDef[] =>
+  (m.excludes ?? [])
+    .map(x => (typeof x === 'string' ? x.trim() : ''))
+    .filter(Boolean)
+    .map(x => {
+      const hit = /^(.*?)\s*(?:→|->)\s*([A-Za-z0-9_.-]+)\s*$/.exec(x)
+      return hit && hit[1].trim() ? { text: hit[1].trim(), to: hit[2] } : { text: x }
+    })

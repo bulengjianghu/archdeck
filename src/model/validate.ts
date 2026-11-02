@@ -26,7 +26,7 @@ import { LEGACY_VIAS, isCallLike, isCallbackVia, isUnclassified, parseVia, relat
 /** 问题消息里的类型名 */
 const TYPE_NAMES: Record<string, string> = { queries: '查询', commands: '委托', calls: '未分类关系', notifies: '通知', streams: '流' }
 import { buildIndex } from './indexer'
-import { INVARIANTS_LIMIT, PURPOSE_LIMIT, SUMMARY_LIMIT, invariantsOf, textWidth } from './contract'
+import { INVARIANTS_LIMIT, PURPOSE_LIMIT, SUMMARY_LIMIT, invariantsOf, textWidth, excludesOf, EXCLUDES_LIMIT } from './contract'
 import { bindRelation, forEachStep, mapChildren, planScenario, querySideEffects, syncMismatch } from './scenario/semantics'
 
 export interface ValidateResult {
@@ -220,6 +220,13 @@ function checkContract({ modules, info }: Checked, relations: readonly RelationE
     if (!summary && m.role === 'core') info('module.missing-summary', `「${m.id}」是核心模块，没有一句话职责 summary（≤ ${SUMMARY_LIMIT} 字、动词开头、写对外承诺，M27）`, m.src)
     const n = invariantsOf(m).length
     if (n > INVARIANTS_LIMIT) info('module.invariants-many', `「${m.id}」写了 ${n} 条不变式，至多 ${INVARIANTS_LIMIT} 条：只留最要紧的（M28）`, at(m.src, 'invariants'))
+    // M33（ADR-0060）：否定边界——核心模块缺失给 info；超过条数、去向不是模块也给 info
+    const ex = excludesOf(m)
+    if (!ex.length && m.role === 'core')
+      info('module.excludes-missing', `「${m.id}」是核心模块，没有写否定边界 excludes（≤ ${EXCLUDES_LIMIT} 条「不负责什么 → 去向模块」，写别人容易以为是它的，M33）`, m.src)
+    if (ex.length > EXCLUDES_LIMIT) info('module.excludes-many', `「${m.id}」写了 ${ex.length} 条否定边界，至多 ${EXCLUDES_LIMIT} 条（M33）`, at(m.src, 'excludes'))
+    for (const e of ex)
+      if (e.to && !modules.has(e.to)) info('module.excludes-target', `「${m.id}」的否定边界「${e.text}」的去向「${e.to}」不是模块（M33）`, at(m.src, 'excludes'))
   }
   for (const r of relations) {
     const purpose = r.purpose?.trim()

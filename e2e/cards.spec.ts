@@ -72,13 +72,14 @@ test('CD-2 悬浮：没有整列的浮板，单击卡片之间的空隙落到画
 })
 
 test('CD-4 名称胶囊：身份卡滚走后出现，回到顶部消失；单击胶囊滚回顶部', async ({ page }) => {
-  await openDesk(page, '/p/media-web-player?level=kit&sel=m:kit.kernel')
+  await openDesk(page, '/p/h5p-arch-desk?sel=m:state.desk')
   await waitSettled(page)
   const mini = page.getByTestId('props-mini')
   await expect(mini).toHaveCount(0)
-  await page.locator('.panel-area').evaluate(el => el.scrollTo({ top: 400 }))
+  // ADR-0060 后面板更短：挑内容长、一屏放不下的（DeskState）；滚到底，身份卡滚出上沿即出现胶囊
+  await page.locator('.panel-area').evaluate(el => el.scrollTo({ top: el.scrollHeight }))
   await expect(mini).toBeVisible()
-  await expect(mini).toHaveText('会话内核')
+  await expect(mini).toHaveText('DeskState')
   await mini.click()
   await expect.poll(() => page.locator('.panel-area').evaluate(el => el.scrollTop)).toBe(0)
   await expect(mini).toHaveCount(0)

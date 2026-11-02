@@ -151,6 +151,11 @@ export interface LevelTiers extends Tiering {
   foldSpan?: FoldSpan
 }
 
+/** L29：依赖深度带的文字（深度 1 为入口，最下为被依赖；ADR-0052：算出的是依赖深度，不称「层」）；i 为带在自上而下中的序号。画布层带与理解卡同一句（C1） */
+export function tierBandLabel(tier: number, i: number, last: number): string {
+  return `深度 ${tier + 1}${i === 0 ? ' · 入口' : i === last ? ' · 被依赖' : ''}`
+}
+
 /** L29：层带出现的门槛 */
 export const BAND_MIN_NODES = 7
 export const BAND_MIN_TIERS = 3

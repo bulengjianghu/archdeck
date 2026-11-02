@@ -61,7 +61,7 @@ watch(
   align-items: baseline;
   gap: 5px;
   width: 100%;
-  padding: 6px 13px 1px;
+  padding: 5px 13px 1px;
   font: inherit;
   font-size: 12.5px;
   color: var(--text-2);
@@ -104,8 +104,8 @@ watch(
 
 /* 卡内正文行高 1.5（原型 1.55）：卡片版式多了身份卡一行与卡间距，首屏守（L46）靠行高收回 */
 .card-body {
-  padding: 0 13px 10px;
-  line-height: 1.5;
+  padding: 0 13px 8px;
+  line-height: 1.45;
 }
 
 .run-first {

@@ -3,7 +3,7 @@
  * 以本项目与 h5player 验收（01 §6.25）。
  */
 import { expect, test } from '@playwright/test'
-import { graphNode, openDesk, waitSettled } from './helpers'
+import { graphNode, openDesk, openPanelLists, waitSettled } from './helpers'
 
 const top = async (page: Parameters<typeof graphNode>[0], id: string) => (await graphNode(page, id).boundingBox())!.y
 
@@ -41,7 +41,8 @@ test('ST-1、K21：DeskState 声明了三层（同步适配器 → 写入口 →
   await graphNode(page, 's:state.desk/derive').click({ position: { x: 40, y: 12 } })
   await expect(page.getByTestId('stratum-panel')).toContainText('只读状态与模型')
   await openDesk(page, '/p/h5p-arch-desk?level=state&sel=m:state.desk')
-  // G11 V15c：「拆分信号」折叠在 ⑤，展开再断言清单
+  // G11 V15c：「拆分信号」折叠在 ⑤；ADR-0060：证据与清单整块缺省折叠，先打开
+  await openPanelLists(page)
   const split = page.getByTestId('split-signals')
   await expect(split).toBeVisible()
   await split.getByRole('button', { name: /^▸ 拆分信号/ }).click()

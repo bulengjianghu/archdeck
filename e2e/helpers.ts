@@ -89,8 +89,27 @@ export async function openCheckList(page: Page, sec?: string) {
     if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click()
     await expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: 1_000 })
   }).toPass({ timeout: 15_000 })
+  // ADR-0060：证据与清单整块缺省折叠（details），里面的清单与表单要点开才在
+  await openPanelLists(page)
   if (!sec) return
   const fold = page.locator(`.panel [data-sec="${sec}"] .fold`).first()
   await expect(fold).toBeVisible()
   if ((await fold.getAttribute('aria-expanded')) === 'false') await fold.click()
+}
+
+/** ADR-0060：打开核对卡底部的「证据与清单」折叠块（缺省关闭）；没有这块（没有清单）时不动 */
+export async function openPanelLists(page: Page) {
+  const summary = page.locator('.panel [data-testid="check-lists-fold"]').first()
+  if (!(await summary.count())) return
+  const details = summary.locator('xpath=..')
+  if ((await details.evaluate(el => (el as unknown as { open: boolean }).open)) !== true) await summary.click()
+  await expect(details).toHaveJSProperty('open', true)
+}
+
+/** ADR-0060：相关资料卡条目多于 3 份时缺省收起；需要点里面的条目时先展开 */
+export async function openRelated(page: Page) {
+  const toggle = page.locator('.panel [data-card="related"] .card-toggle').first()
+  await expect(toggle).toBeVisible()
+  if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
 }

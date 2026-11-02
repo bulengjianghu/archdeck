@@ -102,6 +102,10 @@ const rows = computed(() => {
     else for (const x of s.undepended) split.push({ text: `${name(x.from)} 与 ${name(x.to)} 交互却没有值依赖`, target: to })
     if (long) split.push({ text: `${long} 个文件超过 ${desk.files.maxLines.value} 行`, target: 'evidence.source' })
   }
+  // ST-1（ADR-0060）：子模块超过七个却没有声明分层——与代码事实无关的描述信号，单击跳到理解卡的「怎么分」
+  const childCount = (desk.index.value?.childrenOf.get(props.id) ?? []).length
+  if (childCount > 7 && !(desk.index.value?.strata.get(props.id) ?? []).length)
+    split.push({ text: `${childCount} 个子模块未声明分层：归纳 2–5 个有原则的层，或记一条拆分信号（ST-1）`, target: 'split', hint: true })
   const ev = desk.evolution.moduleOf(props.id)
   const stats = desk.evolution.stats.value
   const st = desk.review.of(props.id)

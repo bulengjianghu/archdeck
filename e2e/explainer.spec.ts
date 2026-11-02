@@ -4,17 +4,21 @@
  * 子模块的 summary 改了，父模块的图解标出「基于旧描述」（EX-6、EX-7，用路由夹具改描述，不改文件）。
  */
 import { expect, test, type Page } from '@playwright/test'
-import { collapseDisplay, graphNode, openDesk, query } from './helpers'
+import { collapseDisplay, graphNode, openDesk, openRelated, query } from './helpers'
 
 const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
 const tabs = (page: Page) => dock(page).locator('.tabs > .tab')
-const related = (page: Page) => page.locator('[data-testid="related"] [data-doc="explainer"]')
+/** ADR-0060：相关资料卡条目多于 3 份时缺省收起，先展开再取图解行 */
+const related = async (page: Page) => {
+  await openRelated(page)
+  return page.locator('[data-testid="related"] [data-doc="explainer"]')
+}
 
 test('验收 6.41 第 1 条：依次单击两份图解只替换一个预览标签；双击固定；分屏后上下对照', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?level=kit&sel=m:kit')
   // 图例展开时叠在画布右上，会盖住节点上的 ▣（L48）
   await collapseDisplay(page)
-  await related(page).click()
+  await (await related(page)).click()
   await expect(tabs(page)).toHaveCount(1)
   await expect(tabs(page).first()).toHaveClass(/preview/)
   await expect(tabs(page).first()).toContainText('播放器 Kit')
@@ -30,7 +34,7 @@ test('验收 6.41 第 1 条：依次单击两份图解只替换一个预览标�
   await tabs(page).first().dblclick()
   await expect(tabs(page).first()).not.toHaveClass(/preview/)
   await dock(page).getByRole('button', { name: /分屏/ }).click()
-  await related(page).click()
+  await (await related(page)).click()
   const groups = dock(page).locator('.group')
   await expect(groups).toHaveCount(2)
   await expect(groups.nth(0).locator('.tab.on')).toContainText('会话内核')
@@ -44,7 +48,7 @@ test('验收 6.41 第 1 条：依次单击两份图解只替换一个预览标�
 test('验收 6.41 第 2 条：图解里点模块链接，画布选中该模块、属性栏随之变化，资料区不动；有图解的引用附「图解 ›」', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?level=kit&sel=m:kit')
   // 第一次打开资料区时属性栏由并排变悬浮、位置会动，所以单击打开后在标签上双击固定
-  await related(page).click()
+  await (await related(page)).click()
   await tabs(page).first().dblclick()
   await expect(tabs(page).first()).not.toHaveClass(/preview/)
   const frame = dock(page).frameLocator('iframe')
@@ -76,8 +80,9 @@ test('验收 6.41 第 3 条：临时改 kit.kernel 的 summary，kit 的图解�
     await route.fulfill({ response: res, json: { ...body, files } })
   })
   await openDesk(page, '/p/media-web-player?level=kit&sel=m:kit')
+  await openRelated(page) // ADR-0060：相关资料卡条目多于 3 份时缺省收起
   await expect(page.locator('[data-testid="related-stale"]')).toHaveText('基于旧描述 · 1 处改动')
-  await related(page).click()
+  await (await related(page)).click()
   await expect(dock(page).locator('[data-testid="tab-stale"]')).toHaveText('基于旧描述 · 1 处改动')
   const stale = dock(page).locator('[data-testid="explainer-stale"]')
   await stale.click()

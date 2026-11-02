@@ -36,6 +36,7 @@ modules:
     name: 架构治理
     summary: 比对代码事实与描述，判定违规、环与门禁问题
     abstraction: 事实比对、规则判定与环各算一类，报告只组合它们；本层投影、结构视图与查询都只是读法，不新增事实。
+    excludes: [读源码与描述文件 → access.model-source, 返工清单的汇总 → model.rework]
     invariants:
       - 事实比对只依赖类型；判定、读法与组合依次建在其上，不反向引用
       - 不碰文件系统：依赖、基线与历史都由调用方传入

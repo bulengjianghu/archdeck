@@ -2,6 +2,7 @@
  * 按依赖分层的布局（L28、L29，ADR-0038）：模型层给出层号（levelTiers），这里换成 elk 的层（INTERACTIVE 分层按坐标定层，见 toElkGraph），
  * 并在布局结果上算层带、环组框与孤立列的外框。层号不由交互边决定：交互边与只引类型的束只参与走线。
  */
+import { tierBandLabel } from '@/model'
 import type { Box } from './geometry'
 
 /** 布局消费的分层（由模型层的 LevelTiers 化成可缓存的纯数据） */
@@ -183,10 +184,8 @@ export const LAYER_STATUS: Record<LayerStatus, { text: string; title: string }> 
 /** L36：确认状态（Z3）→ 声明的层的状态记号 */
 export const layerStatusOf = (review: 'reviewed' | 'stale' | 'unreviewed' | undefined): LayerStatus => (review === 'reviewed' ? 'confirmed' : 'pending')
 
-/** L29：依赖深度带的文字（深度 1 为入口，最下为被依赖；ADR-0052：算出的是依赖深度，不称「层」）；i 为带在自上而下中的序号 */
-export function tierBandLabel(tier: number, i: number, last: number): string {
-  return `深度 ${tier + 1}${i === 0 ? ' · 入口' : i === last ? ' · 被依赖' : ''}`
-}
+/** L29：层带的文字在模型层（tierBandLabel，理解卡同读），这里转出给画布 */
+export { tierBandLabel }
 
 /**
  * L30、L33：层带与环组框上的文字区（线与标签都不压）——层带左上的层号、环组框上边右端的环编号；与 TierNode 的排版一致

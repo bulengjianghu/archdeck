@@ -35,11 +35,12 @@ watch(
   border-top: 1px solid var(--border);
 }
 
+/* 节标题与正文同色、半粗（ADR-0060：标题的视觉权重不低于正文） */
 h3 {
   margin: 0 0 6px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-3);
+  color: var(--text-2);
   letter-spacing: 0.02em;
 }
 

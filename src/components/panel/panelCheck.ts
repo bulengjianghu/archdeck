@@ -85,8 +85,12 @@ export interface ModuleCheckInput {
 export function moduleCheckRows(x: ModuleCheckInput): CheckRow[] {
   const none = (key: string, label: string): CheckRow => ({ key, label, state: 'none', text: x.noFactsReason ?? '没有代码事实', items: [] })
   const rows: CheckRow[] = []
-  if (!x.facts) rows.push(none('verify', '证实'), none('governance', '治理'), none('surface', '表面'), none('split', '拆分'))
-  else {
+  if (!x.facts) {
+    rows.push(none('verify', '证实'), none('governance', '治理'), none('surface', '表面'))
+    // 拆分信号里与代码事实无关的（ST-1 未声明分层）没有代码事实时也列
+    const split = x.split.map(i => ({ ...i, hint: true }))
+    rows.push(split.length ? { key: 'split', label: '拆分', state: 'hint', text: `${split.length} 个拆分信号`, items: split } : none('split', '拆分'))
+  } else {
     const verify = [...x.unconfirmed, ...x.undescribed]
     rows.push({
       key: 'verify',

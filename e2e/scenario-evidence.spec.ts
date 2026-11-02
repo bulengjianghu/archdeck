@@ -1,9 +1,11 @@
 /** 场景证据（S15、D-20）：场景面板的「证据」一节列出文件并可在资料区预览；场景列表给有证据的场景标「测试 N」（N 为证据文件数） */
 import { expect, test } from '@playwright/test'
-import { openDesk } from './helpers'
+import { openDesk, openPanelLists } from './helpers'
 
 test('打开自身的场景：面板有「证据」一节，单击文件在资料区预览源码；场景列表标「测试 N」', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
+  // ADR-0060：证据是核对卡的清单，在「证据与清单」折叠块里
+  await openPanelLists(page)
   const section = page.locator('.scenario-panel .section').filter({ has: page.locator('h3', { hasText: '证据' }) })
   await expect(section).toBeVisible()
   await expect(section.getByRole('button', { name: 'tests/acceptance/run-perspective.test.ts' })).toBeVisible()

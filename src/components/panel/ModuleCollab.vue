@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * 理解卡 ④ 协作（PC-4、PC-5）：跨子树边界的关系按（方向，对端）合成一行「← / → 对端 · 类型 · 目的」，多条标「×N」，单击展开逐条；
- * 悬停一行（或一条）时画布上承载它的边高亮（L25 的机制）。对端为画布上与本模块相邻的那个节点（collaborationsOf，模型层）。
+ * 理解卡 ⑥ 协作（PC-4、PC-5；ADR-0060 修订）：跨子树边界的关系按（方向，对端）合成一行「← / → 对端 ×N 目的」，目的全文换行、不截字；
+ * 关系类型与条数在悬停（画布的线上已有颜色与 ×N），单击目的展开逐条；悬停一行（或一条）时画布上承载它的边高亮（L25 的机制）。
+ * 对端为画布上与本模块相邻的那个节点（collaborationsOf，模型层）。整节在理解卡里缺省折叠（ModuleUnderstand）。
  */
 import { computed, onBeforeUnmount, reactive } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -24,26 +25,30 @@ const open = reactive<Record<string, boolean>>({})
 const name = (id: string) => moduleName(idx.value, id)
 const pick = (peer: string) => (idx.value.actors.has(peer) ? desk.select({ kind: 'actor', id: peer }) : desk.revealModule(peer))
 const purposeText = (id: string) => purposeOf(idx.value.relations.get(id)!)
+const rowTitle = (c: (typeof rows.value)[number]) =>
+  `${c.dir === 'in' ? '←' : '→'} ${name(c.peer)}：${c.types.map(relationTypeLabel).join('、')} ×${c.relations.length}${c.purpose?.pending ? '（目的待提炼：取自说明首句）' : ''}\n${open[c.key] ? '收起' : '单击目的逐条展开'}`
 onBeforeUnmount(() => hoverRelations(null))
 </script>
 
 <template>
   <ul v-if="rows.length" class="collab" data-testid="collab">
-    <li v-for="c in rows" :key="c.key" class="co" :data-peer="c.peer" @mouseenter="hoverRelations(c.relations)" @mouseleave="hoverRelations(null)">
-      <div class="line">
+    <li
+      v-for="c in rows"
+      :key="c.key"
+      class="co"
+      :data-peer="c.peer"
+      :data-types="c.types.join(' ')"
+      @mouseenter="hoverRelations(c.relations)"
+      @mouseleave="hoverRelations(null)"
+    >
+      <div class="line" :title="rowTitle(c)">
         <span class="dir">{{ c.dir === 'in' ? '←' : '→' }}</span>
-        <button class="link peer" :title="`选中 ${name(c.peer)}`" @click="pick(c.peer)">{{ name(c.peer) }}</button>
-        <span class="chips"
-          ><span v-for="t in c.types" :key="t" class="rel-chip" :class="`rel-${t}`">{{ relationTypeLabel(t) }}</span></span
+        <span class="head"
+          ><button class="link peer" @click="pick(c.peer)">{{ name(c.peer) }}</button
+          ><span v-if="c.relations.length > 1" class="n">×{{ c.relations.length }}</span></span
         >
-        <button
-          class="why"
-          :class="{ pending: c.purpose?.pending }"
-          :aria-expanded="!!open[c.key]"
-          :title="`${c.purpose?.text ?? ''}${c.purpose?.pending ? '（目的待提炼：取自说明首句）' : ''}\n${open[c.key] ? '收起' : '单击逐条展开'}`"
-          @click="open[c.key] = !open[c.key]"
-        >
-          <span v-if="c.relations.length > 1" class="n">×{{ c.relations.length }}</span> {{ c.purpose?.text ?? '' }}
+        <button class="why" :class="{ pending: c.purpose?.pending }" :aria-expanded="!!open[c.key]" @click="open[c.key] = !open[c.key]">
+          {{ c.purpose?.text ?? '' }}
         </button>
       </div>
       <ul v-if="open[c.key]" class="plain each">
@@ -69,34 +74,26 @@ onBeforeUnmount(() => hoverRelations(null))
 
 .line {
   display: grid;
-  grid-template-columns: 12px auto auto minmax(0, 1fr);
+  grid-template-columns: 12px auto minmax(0, 1fr);
   align-items: baseline;
   gap: 0 6px;
-  white-space: nowrap;
 }
 
 .dir {
-  flex: none;
   width: 12px;
   color: var(--text-3);
 }
 
+.head {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  white-space: nowrap;
+}
+
 .peer {
-  max-width: 8.5em;
-  overflow: hidden;
-  text-overflow: ellipsis;
   font-weight: 500;
   text-align: left;
-}
-
-.chips {
-  display: inline-flex;
-  gap: 3px;
-}
-
-.chips .rel-chip {
-  font-size: 11px;
-  line-height: 16px;
 }
 
 .n {
@@ -104,13 +101,13 @@ onBeforeUnmount(() => hoverRelations(null))
   color: var(--accent);
 }
 
+/* 目的全文换行、不截字（PC-13）；单击逐条展开 */
 .why {
   min-width: 0;
   padding: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   font: inherit;
   font-size: 12.5px;
+  line-height: 19px;
   text-align: left;
   color: var(--text-2);
   background: none;

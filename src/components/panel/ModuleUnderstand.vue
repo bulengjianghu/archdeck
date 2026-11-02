@@ -1,13 +1,17 @@
 <script setup lang="ts">
 /**
- * 模块的理解卡（PC-3，R3.2、R3.3）：按五问，没有内容的问不出现——
- * ① 一句话职责（summaryOf，粗体，回退值标「待提炼」；职责全文折叠在下）② 怎么分（原则一句 + 各层或子模块，每个一句话；
- * 单成员层另有「包含 / 不包含」折叠块与「可依赖」链接行）③ 对外表面（接口名 + 一句用途，单击展开详情）④ 协作（ModuleCollab）
- * ⑤ 守住什么（不变式，带 ADR 链接）。不写画布已经表达的位置信息（C2）。运行视角下的运行信息由分派注入卡首（V6，PanelCard）。
+ * 模块的理解卡（PC-3 改写，ADR-0060；第十八轮走查）：按意图在先、边在后的次序，全文不截字（PC-13）——
+ * ① 是什么：一句话职责（summaryOf，粗体，回退标「待提炼」；「全文 ▸」行内展开）
+ * ② 不是什么：否定边界 excludes（M33，round19 V3），去向是链接
+ * ③ 怎么分：原则全文（不收行、不截断）；声明了分层时每层「层名 · 层的问题」加归属判定一句与成员名；未声明时写明，
+ *    并按画布同一套依赖深度（childTiers，≥7 个子模块且 ≥3 档才分组，与层带同一门槛）分组成员——都是名字，子模块的一句话在画布节点与它自己的卡上（C2）
+ * ④ 守住什么：不变式（≤ 3 条，带 ADR 链接）
+ * ⑤ 对外表面：接口名全文（用途在悬停，单击展开签名与说明）；⑥ 协作缺省折叠为一行「← N · → M」（画布的线就是协作），展开见目的全文（ModuleCollab）。
+ * 运行视角下的运行信息由分派注入卡首（V6，PanelCard）。不写画布已经表达的位置信息（C2）。
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
-import { firstSentence, invariantsOf, mayDependOnOf, stratumKey, summaryOf, truncateWidth, PURPOSE_LIMIT } from '@/model'
+import { excludesOf, invariantsOf, mayDependOnOf, stratumKey, summaryOf, type ExcludeDef } from '@/model'
 import Markdown from './Markdown.vue'
 import InterfaceItem from './InterfaceItem.vue'
 import ChangeBadge from './ChangeBadge.vue'
@@ -21,52 +25,62 @@ const m = computed(() => idx.value.modules.get(props.id)!)
 const summary = computed(() => summaryOf(m.value))
 const fullOpen = ref(false)
 
-// ── ② 怎么分 ──
+// ── ② 不是什么（M33） ──
+const neg = computed<ExcludeDef[]>(() => excludesOf(m.value))
+const hasNegTarget = (e: ExcludeDef) => !!e.to && idx.value.modules.has(e.to)
+const goNeg = (e: ExcludeDef) => e.to && desk.revealModule(e.to)
+
+// ── ③ 怎么分 ──
 const stratum = computed(() => idx.value.stratumOf.get(props.id) ?? null)
 const isLayer = computed(() => stratum.value?.members.length === 1)
 const principle = computed(() => m.value.abstraction ?? (isLayer.value ? stratum.value?.abstraction : undefined))
 const ownStrata = computed(() => idx.value.strata.get(props.id) ?? [])
 const children = computed(() => (idx.value.childrenOf.get(props.id) ?? []).map(id => idx.value.modules.get(id)!))
-const CHILDREN_CAP = 6
-const childrenOpen = ref(false)
-const childrenShown = computed(() => (childrenOpen.value ? children.value : children.value.slice(0, CHILDREN_CAP)))
+const pickStratum = (x: { parent: string; id: string; members: string[] }) =>
+  x.members.length === 1 ? desk.select({ kind: 'module', id: x.members[0] }) : desk.select({ kind: 'stratum', id: stratumKey(idx.value, x) })
+const isCurrentLevel = computed(() => desk.levelId.value === props.id)
+const openChild = (childId: string) =>
+  isCurrentLevel.value ? desk.select({ kind: 'module', id: childId }) : desk.goTo(props.id, { kind: 'module', id: childId })
+const childSummary = (id: string) => summaryOf(idx.value.modules.get(id)!)?.text ?? ''
+const inc = computed(() => ({ yes: m.value.includes ?? [] }))
+const hasSplit = computed(() => !!principle.value || ownStrata.value.length > 0 || children.value.length > 0 || isLayer.value)
+/** 未声明分层：成员按画布同一套依赖深度分组（≥7 个子模块且 ≥3 档才分组，与层带同一门槛 BAND_MIN）；不足时平铺名字 */
+const depth = computed(() => desk.facts.childTiers(props.id))
+const MEMBER_CAP = 12
+const membersOpen = ref(false)
+const flatShown = computed(() => (membersOpen.value ? children.value : children.value.slice(0, MEMBER_CAP)))
+
 const layerDeps = computed(() => {
   const s = stratum.value
   if (!s || !isLayer.value) return []
   const list = idx.value.strata.get(s.parent) ?? []
   return (mayDependOnOf(s) ?? []).map(d => list.find(x => x.id === d)).filter((x): x is NonNullable<typeof x> => !!x)
 })
-const pickStratum = (x: { parent: string; id: string; members: string[] }) =>
-  x.members.length === 1 ? desk.select({ kind: 'module', id: x.members[0] }) : desk.select({ kind: 'stratum', id: stratumKey(idx.value, x) })
-const isCurrentLevel = computed(() => desk.levelId.value === props.id)
-const openChild = (childId: string) =>
-  isCurrentLevel.value ? desk.select({ kind: 'module', id: childId }) : desk.goTo(props.id, { kind: 'module', id: childId })
-const childSummary = (id: string) => summaryOf(idx.value.modules.get(id)!)
-const inc = computed(() => ({ yes: m.value.includes ?? [], no: m.value.excludes ?? [] }))
-const hasSplit = computed(() => !!principle.value || ownStrata.value.length > 0 || children.value.length > 0 || isLayer.value)
 
-// ── ③ 对外表面 ──
+// ── ⑤ 对外表面 ──
 const provides = computed(() => m.value.provides ?? [])
 const IFACE_CAP = 5
 const ifaceOpen = ref(false)
 const ifaceShown = computed(() => (ifaceOpen.value ? provides.value : provides.value.slice(0, IFACE_CAP)))
 const detail = ref<string | null>(null)
 const iface = (id: string) => idx.value.interfaces.get(id)
-const use = (id: string) => {
-  const d = iface(id)?.description
-  return d ? truncateWidth(firstSentence(d), PURPOSE_LIMIT) : ''
-}
+const use = (id: string) => iface(id)?.description?.trim() ?? ''
 const isPort = (id: string) => !!desk.facts.portOf(id)?.isPort
 
-const hasCollab = computed(() => desk.facts.collaborations(props.id).length > 0)
+// ── ⑥ 协作（缺省折叠） ──
+const collabRows = computed(() => desk.facts.collaborations(props.id))
+const hasCollab = computed(() => collabRows.value.length > 0)
+const collabOpen = ref(false)
+const collabIn = computed(() => collabRows.value.filter(c => c.dir === 'in').length)
+const collabOut = computed(() => collabRows.value.filter(c => c.dir === 'out').length)
 
-// ── ⑤ 守住什么 ──
+// ── ④ 守住什么 ──
 const invariants = computed(() => invariantsOf(m.value))
 </script>
 
 <template>
   <div class="understand" data-sec="understand">
-    <!-- ① 一句话职责 -->
+    <!-- ① 是什么 -->
     <div class="one" data-sec="purpose">
       <p v-if="summary" class="summary" data-testid="summary">
         {{ summary.text }}<span v-if="summary.pending" class="pending" title="描述没有写 summary：取自职责首句截断（M30）">待提炼</span>
@@ -84,46 +98,74 @@ const invariants = computed(() => invariantsOf(m.value))
       <Markdown v-if="fullOpen" class="full-text" :text="m.responsibility" />
     </div>
 
-    <!-- ② 怎么分 -->
+    <!-- ② 不是什么 -->
+    <div v-if="neg.length" class="q-block" data-sec="excludes">
+      <h4 class="q">不负责</h4>
+      <p class="neg" data-testid="excludes">
+        <template v-for="(e, i) in neg" :key="i"
+          ><span v-if="i" class="muted"> · </span>{{ e.text
+          }}<template v-if="hasNegTarget(e)">
+            <button class="link to" @click="goNeg(e)">→ {{ idx.modules.get(e.to!)?.name ?? e.to }}</button></template
+          ></template
+        >
+      </p>
+    </div>
+
+    <!-- ③ 怎么分 -->
     <div v-if="hasSplit" class="q-block" data-sec="split">
       <h4 class="q">怎么分</h4>
-      <p v-if="principle" class="principle" :title="principle"><span class="label">原则</span>{{ principle }}</p>
-      <ul v-if="ownStrata.length" class="parts" data-testid="module-strata">
-        <li v-for="x in ownStrata" :key="x.id" class="part">
-          <button class="link k" :title="x.admits ? `归属判定：${x.admits}` : undefined" @click="pickStratum(x)">{{ x.name }}</button>
-          <span class="v" :title="x.asks">{{ x.asks ?? '' }}</span>
-          <span class="members">
+      <p v-if="principle" class="principle" :title="principle">{{ principle }}</p>
+      <!-- 声明了分层：层名 · 层的问题 · 归属判定 · 成员名 -->
+      <ul v-if="ownStrata.length" class="strata" data-testid="module-strata">
+        <li v-for="x in ownStrata" :key="x.id" class="stratum" :data-stratum="x.id">
+          <div class="s-head">
+            <button class="link k" :title="x.admits ? `归属判定：${x.admits}` : undefined" @click="pickStratum(x)">{{ x.name }}</button>
+            <span v-if="x.asks" class="v">{{ x.asks }}</span>
+          </div>
+          <p v-if="x.admits" class="admits">归属：{{ x.admits }}</p>
+          <p class="members">
             <template v-for="(id, i) in x.members" :key="id"
-              ><span v-if="i" class="muted">、</span><button class="link" @click="openChild(id)">{{ idx.modules.get(id)?.name ?? id }}</button></template
-            >
-          </span>
+              ><span v-if="i" class="muted">、</span><button class="link" @click="openChild(id)">{{ idx.modules.get(id)?.name ?? id }}</button
+              ><ChangeBadge entity="module" :id="id"
+            /></template>
+          </p>
         </li>
       </ul>
-      <ul v-else-if="children.length" class="parts" data-testid="module-children">
-        <li v-for="c in childrenShown" :key="c.id" class="part">
-          <button class="link k" @click="openChild(c.id)">{{ c.name }}</button>
-          <span class="v" :title="childSummary(c.id)?.text">
-            <span v-if="c.role === 'core'" class="badge accent">核心</span>
-            <span v-if="(idx.childrenOf.get(c.id) ?? []).length" class="muted">⌄ {{ idx.childrenOf.get(c.id)!.length }} </span>
-            <ChangeBadge entity="module" :id="c.id" />
-            <span :class="{ pending: childSummary(c.id)?.pending }">{{ childSummary(c.id)?.text ?? '' }}</span>
-          </span>
-        </li>
-        <li v-if="children.length > CHILDREN_CAP">
-          <button class="link more" :aria-expanded="childrenOpen" @click="childrenOpen = !childrenOpen">
-            {{ childrenOpen ? '收起' : `+${children.length - CHILDREN_CAP}` }}
+      <!-- 未声明分层：写明，成员按依赖深度分组（画布同一套）或平铺名字 -->
+      <template v-else-if="children.length">
+        <p class="nostrata" data-testid="module-nostrata">
+          未声明分层<span class="muted"> · {{ children.length }} 个子模块</span
+          ><template v-if="depth"
+            ><span class="muted"> · 画布按依赖深度算出 {{ depth.count }} 层</span></template
+          >
+        </p>
+        <div v-if="depth" class="tiers" data-testid="module-tiers">
+          <div v-for="b in depth.bands" :key="b.label" class="tier">
+            <span class="t-label">{{ b.label }}</span>
+            <span class="members" :title="b.ids.map(childSummary).filter(Boolean).join('\n')">
+              <template v-for="(id, i) in b.ids" :key="id"
+                ><span v-if="i" class="muted">、</span><button class="link" @click="openChild(id)">{{ idx.modules.get(id)?.name ?? id }}</button
+                ><ChangeBadge entity="module" :id="id"
+              /></template>
+            </span>
+          </div>
+        </div>
+        <p v-else class="members flat" data-testid="module-children">
+          <template v-for="(c, i) in flatShown" :key="c.id"
+            ><span v-if="i" class="muted">、</span><button class="link" :title="childSummary(c.id)" @click="openChild(c.id)">{{ c.name }}</button
+            ><ChangeBadge entity="module" :id="c.id"
+          /></template>
+          <button v-if="children.length > MEMBER_CAP" class="link more" :aria-expanded="membersOpen" @click="membersOpen = !membersOpen">
+            {{ membersOpen ? '收起' : `+${children.length - MEMBER_CAP}` }}
           </button>
-        </li>
-      </ul>
-      <details v-if="isLayer && (inc.yes.length || inc.no.length || stratum?.asks || stratum?.admits)" class="inc">
-        <summary>包含 / 不包含 {{ inc.yes.length }} / {{ inc.no.length }}</summary>
+        </p>
+      </template>
+      <details v-if="isLayer && (inc.yes.length || stratum?.asks || stratum?.admits)" class="inc">
+        <summary>层的问题与包含 {{ inc.yes.length }}</summary>
         <p v-if="stratum?.asks" class="muted">层的问题：{{ stratum.asks }}</p>
         <p v-if="stratum?.admits" class="muted">归属判定：{{ stratum.admits }}</p>
         <ul class="yes">
           <li v-for="x in inc.yes" :key="x">{{ x }}</li>
-        </ul>
-        <ul class="no">
-          <li v-for="x in inc.no" :key="x">{{ x }}</li>
         </ul>
       </details>
       <p v-if="isLayer" class="deps" data-testid="layer-deps">
@@ -135,39 +177,7 @@ const invariants = computed(() => invariantsOf(m.value))
       </p>
     </div>
 
-    <!-- ③ 对外表面 -->
-    <div v-if="provides.length" class="q-block" data-sec="surface">
-      <h4 class="q">
-        对外表面<span class="count">{{ provides.length }}</span>
-      </h4>
-      <ul class="parts">
-        <li v-for="id in ifaceShown" :key="id" class="part iface">
-          <button
-            class="link k"
-            :aria-expanded="detail === id"
-            :title="detail === id ? '收起详情' : '展开签名与说明'"
-            @click="detail = detail === id ? null : id"
-          >
-            {{ iface(id)?.name ?? id }}
-          </button>
-          <span class="v"><span v-if="isPort(id)" class="badge">端口</span> {{ use(id) }}</span>
-          <InterfaceItem v-if="detail === id" class="iface-detail" :id="id" open />
-        </li>
-        <li v-if="provides.length > IFACE_CAP">
-          <button class="link more" :aria-expanded="ifaceOpen" @click="ifaceOpen = !ifaceOpen">
-            {{ ifaceOpen ? '收起' : `+${provides.length - IFACE_CAP}` }}
-          </button>
-        </li>
-      </ul>
-    </div>
-
-    <!-- ④ 协作 -->
-    <div v-if="hasCollab" class="q-block" data-sec="collab">
-      <h4 class="q">协作 <span class="muted hint">悬停高亮画布上的线</span></h4>
-      <ModuleCollab :id="id" />
-    </div>
-
-    <!-- ⑤ 守住什么 -->
+    <!-- ④ 守住什么 -->
     <div v-if="invariants.length" class="q-block" data-sec="invariants">
       <h4 class="q">守住什么</h4>
       <ul class="inv" data-testid="invariants">
@@ -177,15 +187,55 @@ const invariants = computed(() => invariantsOf(m.value))
         </li>
       </ul>
     </div>
+
+    <!-- ⑤ 对外表面：名字全文，用途在悬停，单击展开签名与说明 -->
+    <div v-if="provides.length" class="q-block" data-sec="surface">
+      <h4 class="q">
+        对外表面<span class="count">{{ provides.length }}</span>
+      </h4>
+      <p class="ifaces">
+        <template v-for="(id, i) in ifaceShown" :key="id"
+          ><span v-if="i" class="muted">、</span
+          ><button
+            class="link k"
+            :aria-expanded="detail === id"
+            :title="`${use(id) || '没有说明'}\n${detail === id ? '收起详情' : '单击展开签名与说明'}`"
+            @click="detail = detail === id ? null : id"
+          >
+            {{ iface(id)?.name ?? id }}</button
+          ><span v-if="isPort(id)" class="badge">端口</span></template
+        >
+        <button v-if="provides.length > IFACE_CAP" class="link more" :aria-expanded="ifaceOpen" @click="ifaceOpen = !ifaceOpen">
+          {{ ifaceOpen ? '收起' : `+${provides.length - IFACE_CAP}` }}
+        </button>
+      </p>
+      <InterfaceItem v-if="detail" class="iface-detail" :id="detail" open />
+    </div>
+
+    <!-- ⑥ 协作：缺省折叠为一行，展开见目的全文（ModuleCollab） -->
+    <div v-if="hasCollab" class="q-block" data-sec="collab">
+      <button
+        class="q fold"
+        :aria-expanded="collabOpen"
+        data-testid="collab-fold"
+        title="协作：跨子树边界的关系，按对端合并；悬停画布上承载它们的线会高亮（L25）"
+        @click="collabOpen = !collabOpen"
+      >
+        <span class="caret">{{ collabOpen ? '▾' : '▸' }}</span> 协作<span class="count">{{ collabRows.length }}</span>
+        <span class="sum muted">← {{ collabIn }} · → {{ collabOut }}</span>
+      </button>
+      <ModuleCollab v-if="collabOpen" :id="id" />
+    </div>
   </div>
 </template>
 
 <style scoped>
+/* 层级：问题标题与正文同色、半粗；职责 14px 粗；正文 12.5px。标题的视觉权重 ≥ 正文（PC-13） */
 .summary {
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 .pending {
@@ -217,97 +267,186 @@ const invariants = computed(() => invariantsOf(m.value))
 }
 
 .q {
-  margin: 0 0 2px;
-  font-size: 11px;
+  margin: 0 0 3px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--text-3);
+  color: var(--text-2);
+}
+
+.q.fold {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .q .count {
-  margin-left: 4px;
   font-weight: 500;
-}
-
-.q .hint {
-  font-weight: 400;
-}
-
-.principle,
-.deps {
-  margin: 0 0 2px;
-  color: var(--text-2);
-  font-size: 12.5px;
-}
-
-/* C3：原则一句，长了收两行（悬停看全文） */
-.principle {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.label {
-  margin-right: 6px;
-  font-size: 11px;
   color: var(--text-3);
 }
 
-.parts {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.q .sum {
+  font-weight: 400;
+}
+
+.caret {
+  flex: none;
+  width: 1em;
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+/* 原则与协作目的全文，不收行不省略（L46 的口径：超出的是描述写长了，按 04 改描述） */
+.principle {
+  margin: 2px 0 4px;
+  color: var(--text);
   font-size: 12.5px;
 }
 
-.part {
-  line-height: 19px;
-  display: grid;
-  grid-template-columns: minmax(4.5em, auto) 1fr;
-  gap: 0 10px;
-  padding: 1px 0;
-}
-
-.part .k {
-  text-align: left;
-  white-space: nowrap;
-  max-width: 9em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.part .v {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-2);
-}
-
-.part .v .pending {
-  font-style: italic;
+.neg,
+.members {
   margin: 0;
   padding: 0;
-  font-size: inherit;
-  background: none;
+  list-style: none;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.neg {
+  line-height: 1.5;
+}
+
+.neg .to {
+  padding: 0;
+  text-align: left;
+}
+
+.nostrata {
+  margin: 2px 0 3px;
+  font-size: 12.5px;
   color: var(--text-2);
+}
+
+.strata {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.stratum {
+  padding: 2px 0;
+}
+
+.s-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.s-head .k {
+  flex: none;
+  font-weight: 600;
+}
+
+.s-head .v {
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.admits {
+  margin: 1px 0 0;
+  font-size: 11.5px;
+  color: var(--text-3);
 }
 
 .members {
-  grid-column: 2;
-  font-size: 11.5px;
+  display: block;
+  line-height: 1.5;
 }
 
-.iface-detail {
-  grid-column: 1 / 3;
+.members .link {
+  text-align: left;
+}
+
+.tiers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tier {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 10px;
+  align-items: baseline;
+}
+
+.t-label {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.tier .members {
+  min-width: 0;
+  font-size: 12.5px;
+}
+
+.members.flat {
+  line-height: 1.5;
 }
 
 .more {
   font-size: 11.5px;
 }
 
+.ifaces {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.ifaces .k {
+  padding: 0;
+  text-align: left;
+}
+
+.ifaces .badge {
+  margin: 0 2px 0 3px;
+  padding: 0 4px;
+  font-size: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text-2);
+  vertical-align: 1px;
+}
+
+.iface-detail {
+  margin-top: 4px;
+}
+
+.deps {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.deps .label {
+  margin-right: 6px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
 .inc {
-  margin: 2px 0;
+  margin: 4px 0;
   font-size: 12px;
 }
 
@@ -340,6 +479,6 @@ const invariants = computed(() => invariantsOf(m.value))
   padding-left: 16px;
   font-size: 12.5px;
   line-height: 1.45;
-  color: var(--text-2);
+  color: var(--text);
 }
 </style>

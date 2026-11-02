@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { contractCoverage, contractNote, firstSentence, invariantsOf, load, loadModel, purposeOf, reworkList, summaryOf, textWidth, truncateWidth, validate } from '../../src/model'
+import { contractCoverage, contractNote, excludesOf, firstSentence, invariantsOf, load, loadModel, purposeOf, reworkList, summaryOf, textWidth, truncateWidth, validate } from '../../src/model'
 
 const run = (text: string) => validate(load([{ path: 'm.yaml', text }]).model)
 const infos = (text: string, code: string) => run(text).issues.filter(i => i.code === code)
@@ -130,5 +130,29 @@ describe('描述契约（ADR-0053）', () => {
     const c = contractCoverage(index)
     expect(c).toEqual({ modules: 2, summary: 1, coreMissing: 1, relations: 2, purpose: 1, invariants: 1, long: 1, many: 1 })
     expect(contractNote(c)).toBe('契约：summary 1 / 有职责的 2（核心缺 1）· purpose 1 / 2 · invariants 1 个模块 · 超长 1、不变式超 3 条 1')
+  })
+})
+
+describe('M33：否定边界 excludes（ADR-0060，round19 V3）', () => {
+  it('excludesOf：每条「短语」或「短语 → 模块 ID」（→ 或 ->），去掉空条；没有箭头没有去向', () => {
+    expect(excludesOf({ excludes: ['解码 → kernel.decoder', ' 呈现 -> ui.view ', '延迟执行', '  '] })).toEqual([
+      { text: '解码', to: 'kernel.decoder' },
+      { text: '呈现', to: 'ui.view' },
+      { text: '延迟执行' },
+    ])
+    expect(excludesOf({})).toEqual([])
+  })
+
+  it('核心模块没写 excludes 提示 info module.excludes-missing；超过 3 条提示 excludes-many；去向不是模块提示 excludes-target；都不计入提醒数', () => {
+    const text = [
+      'modules:',
+      '  - { id: a, name: A, role: core, responsibility: x }',
+      '  - { id: b, name: B, role: core, responsibility: x, excludes: [解码 → c, 呈现] }',
+      '  - { id: c, name: C, responsibility: x, excludes: [一, 二, 三, 四 → nope] }',
+    ].join('\n')
+    expect(infos(text, 'module.excludes-missing').map(i => i.message)).toEqual([expect.stringContaining('「a」是核心模块')])
+    expect(infos(text, 'module.excludes-many').map(i => i.message)).toEqual([expect.stringContaining('「c」写了 4 条')])
+    expect(infos(text, 'module.excludes-target').map(i => i.message)).toEqual([expect.stringContaining('「nope」不是模块')])
+    for (const code of ['module.excludes-missing', 'module.excludes-many', 'module.excludes-target']) expect(infos(text, code)[0].severity).toBe('info')
   })
 })

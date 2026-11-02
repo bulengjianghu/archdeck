@@ -88,8 +88,15 @@ export function usePanelJump(root: Ref<HTMLElement | null>) {
     if (!sec) return
     jumpTarget.value = null
     await nextTick()
-    const el = root.value?.querySelector<HTMLElement>(`[data-sec="${sec}"]`)
+    let el = root.value?.querySelector<HTMLElement>(`[data-sec="${sec}"]`)
     if (!el) return
+    // 目标在折叠块里（如核对卡的「证据与清单」details）时先打开祖先
+    for (let d = el.parentElement; d; d = d.parentElement)
+      if (d instanceof HTMLDetailsElement && !d.open) {
+        d.open = true
+        await nextTick()
+        el = root.value?.querySelector<HTMLElement>(`[data-sec="${sec}"]`) ?? el
+      }
     el.querySelector<HTMLElement>('.fold[aria-expanded="false"]')?.click()
     await nextTick()
     el.scrollIntoView?.({ block: 'start' })

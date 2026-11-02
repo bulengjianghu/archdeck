@@ -35,8 +35,9 @@ describe('属性面板', () => {
     const u = wrapper.find('[data-card="understand"]')
     expect(u.find('[data-testid="summary"]').exists()).toBe(true)
     const split = u.find('[data-sec="split"]')
-    expect(split.text()).toContain('原则')
-    expect(split.text()).toContain('机制与副作用')
+    // ADR-0060：原则全文直接写在「怎么分」下，不带「原则」标签、不收行
+    expect(split.find('.principle').text()).toContain('机制与副作用')
+    expect(split.text()).not.toContain('原则机制')
     expect(wrapper.text()).not.toContain('抽象原则')
     expect(u.find('[data-testid="layer-deps"]').text()).toContain('Application')
     expect(u.find('[data-testid="module-children"]').text()).toContain('Framework')
@@ -51,7 +52,10 @@ describe('属性面板', () => {
     // PC-3：对外表面一行一个，单击展开签名与说明
     await wrapper.find('[data-sec="surface"] .k').trigger('click')
     expect(wrapper.text()).toContain('sendCommand(cmd: Command): Result')
-    // PC-4：协作按对端合并
+    // PC-4：协作按对端合并；ADR-0060：缺省折叠为一行「← N · → M」，展开才列
+    expect(wrapper.find('[data-testid="collab"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="collab-fold"]').text()).toMatch(/协作.*← \d+ · → \d+/)
+    await wrapper.find('[data-testid="collab-fold"]').trigger('click')
     expect(wrapper.find('[data-testid="collab"] [data-peer="app"]').text()).toContain('→')
     expect(text).toContain('modules/infra.yaml')
   })
@@ -109,7 +113,7 @@ describe('属性面板', () => {
 
   it('子模块列表点击：在当前层次时只选中', async () => {
     const { wrapper, desk } = await mountPanel('/?level=infra')
-    const link = wrapper.findAll('[data-testid="module-children"] .k').find(l => l.text() === 'Framework')!
+    const link = wrapper.findAll('[data-testid="module-children"] .link').find(l => l.text() === 'Framework')!
     await link.trigger('click')
     expect(desk.levelId.value).toBe('infra')
     expect(desk.selection.value).toEqual({ kind: 'module', id: 'infra.framework' })

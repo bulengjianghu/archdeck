@@ -2,7 +2,7 @@
 /**
  * 相关资料卡（PC-9，R3.5）：本模块的图解（有图解才列，判定由 HAS_EXPLAINER 注入，EX-1）与参与的场景；图解依据过期时标「基于旧描述 · N 处改动」（EX-7）。
  * 图解单击 = 预览标签、双击 = 固定（WS-5）；场景单击 = 打开场景（时序图标签按 WS-8 固定打开，单双击同效）；已在资料区打开的标「已打开」。
- * 没有条目时整卡不出现（PC-1）。
+ * 没有条目时整卡不出现（PC-1）；条目多于 3 份时缺省收起、卡头给「N 份」（ADR-0060：三卡尽量一屏），少于等于 3 份展开。
  */
 import { computed, inject } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -28,7 +28,7 @@ const openExplainer = (pin: boolean) => explainer.value && desk.workspace.open({
 </script>
 
 <template>
-  <PanelCard v-if="count" kind="related" title="相关资料" :summary="`${count} 份`">
+  <PanelCard v-if="count" kind="related" title="相关资料" :summary="`${count} 份`" :open="count <= 3">
     <ul class="res-list" data-testid="related">
       <li v-if="explainer" class="res" :class="{ opened: explainerOpen }" data-doc="explainer" @click="openExplainer(false)" @dblclick="openExplainer(true)">
         <span class="ic">▣</span

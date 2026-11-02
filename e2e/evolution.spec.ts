@@ -3,7 +3,7 @@
  * 开「时间耦合」后本层出现波浪线，单击选中它看面板。以 h5p-arch-desk 自身验收（源码在本地、是 git 仓库）。
  */
 import { expect, test } from '@playwright/test'
-import { openCheckList, openDesk, query } from './helpers'
+import { openCheckList, openDesk, openPanelLists, query } from './helpers'
 
 test('缺省关闭：没有角标与耦合线；开启「缺陷」热度后出现角标，刷新后仍开启；运行视角不叠加', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=present')
@@ -37,8 +37,9 @@ test('缺省关闭：没有角标与耦合线；开启「缺陷」热度后出�
 test('系统面板「演化」列出热度前 10；模块树可按热度排序', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk')
   const panel = page.locator('.panel')
+  // ADR-0060：证据与清单整块缺省折叠；G11 V15c：演化清单默认折叠带计数，展开再断言
+  await openPanelLists(page)
   await expect(panel).toContainText('演化（git 历史）')
-  // G11 V15c：系统面板的演化与模块层同规——默认折叠带计数，展开再断言
   await panel.getByRole('button', { name: /^▸ 演化（git 历史）/ }).click()
   await expect(panel).toContainText(/修改热度前 10/)
   await expect(panel.locator('.top li')).toHaveCount(10)

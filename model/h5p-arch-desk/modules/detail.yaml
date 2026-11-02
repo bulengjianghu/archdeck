@@ -49,6 +49,7 @@ modules:
     name: 画布
     summary: 把当前层次画成可平移缩放点选的结构图并叠加回放
     abstraction: 画什么全由画布场景给出，画布只渲染并上交手势；节点、边与图例按视觉元素切分，共用同一套样式映射。
+    excludes: [算节点与边的位置 → state.layout, 持有选中与视图状态 → state.desk]
     invariants:
       - { text: 节点与边全由 Layout 的 canvasScene 纯函数产出，组件不自己算位置与显隐, adr: 13 }
       - 单击、双击、悬停只转成 DeskState 的操作，不直接改视图状态
@@ -63,6 +64,7 @@ modules:
     name: DeskState
     summary: 持有一个项目版本的视图状态并提供唯一一组操作
     abstraction: 一个协调者持有视图状态，dispatch 是唯一写入口；派生按领域分组且只读，与外界的往来全放在同步适配器里。写入口与派生按接线端口（desk/ports.ts：写入、对比基线、源码同步的形状）读写外界，端口归协调者、由同步适配器实现（ADR-0052 的分层：同步适配器 → 写入口 → 派生）。
+    excludes: [读写文件与网络 → access.model-source, 布局与几何 → state.layout, 改状态的规则 → state.transition]
     invariants:
       - 视图状态只在 dispatch 一处赋值，新值由视图状态转移算出
       - { text: 派生与写入口不引用同步适配器，只经 desk/ports 的端口与外界往来, adr: 52 }
@@ -219,7 +221,7 @@ modules:
     summary: 用五问讲清一个模块，并核对它的描述与健康
     parent: present.panel
     abstraction: 头部、理解、核对、相关资料各一个组件：理解卡只读契约字段与协作查询，核对卡只组合现有派生，证据节原样做核对卡的清单。
-    responsibility: 模块面板（ADR-0053）：头部（名称、进入 / 在此设计、徽标槽位表 V15a、设计说明）；理解卡（ModuleUnderstand）按五问——一句话职责（summaryOf，回退标「待提炼」，职责全文行内展开）、怎么分（原则一句 + 各层或子模块各一句话，超 6 收「+N」；层模块另有包含 / 不包含与可依赖链接）、对外表面（接口名 + 一句用途，单击展开 InterfaceItem，超 5 收「+N」）、协作（ModuleCollab：desk.facts.collaborations 按方向与对端合并，单击目的逐条展开，悬停写 hoverRelations 让画布高亮承载的边，PC-4、PC-5）、守住什么（invariantsOf，ADR 链接在资料区预览）；运行视角下理解卡首节为分派注入的运行信息（V6）；核对卡（ModuleCheck）六行——证实、治理、表面、拆分、演化、确认（moduleCheckRows，条目文字按名称写好、单击跳到清单或选中关系），清单为交互证据、源代码文件、提交历史、结构指标与表面元素（结构视角）、端口、架构治理、拆分信号、代码事实 · 知识、相关决策、实现原理、核心数据结构、代码与文档引用、确认改动与确认表单（PC-6–PC-8）；画布单击本模块的表面元素时展开核对卡与「表面元素」清单（C9）；相关资料卡列图解与参与的场景（PC-9）。卡片与折叠块的展开态不跨选中保持。
+    responsibility: 模块面板（ADR-0053；第十八轮走查修订 ADR-0060）：头部（名称、进入 / 在此设计、徽标槽位表 V15a、设计说明）；理解卡（ModuleUnderstand）按六问、意图在先——是什么（summaryOf，回退标「待提炼」，职责全文行内展开）、不是什么（excludesOf 一行，去向是链接，M33）、怎么分（原则全文；声明了分层时每层「层名 · 层的问题」加归属判定一句与成员名；未声明时写明并按 desk.facts.childTiers 的依赖深度分组列成员名，只列名字、一句话在悬停；层模块另有「层的问题与包含」折叠与可依赖链接）、守住什么（invariantsOf，ADR 链接在资料区预览）、对外表面（接口名全文一行，用途在悬停，单击展开 InterfaceItem，超 5 收「+N」）、协作（缺省折叠为一行「← N · → M」；ModuleCollab：desk.facts.collaborations 按方向与对端合并，目的全文、类型在悬停，单击目的逐条展开，悬停写 hoverRelations 让画布高亮承载的边，PC-4、PC-5）；标题的视觉权重不低于正文、界面不截字（PC-13）；运行视角下理解卡首节为分派注入的运行信息（V6）；核对卡（ModuleCheck）六行——证实、治理、表面、拆分（含子模块超七个未声明分层的 ST-1 提示）、演化、确认（moduleCheckRows，条目文字按名称写好、单击跳到清单或选中关系；条目全卡缺省至多 8 条，其余一键全部），清单整块收进「证据与清单 · N」缺省折叠（CheckCard），里面为交互证据、源代码文件、提交历史、结构指标与表面元素（结构视角）、端口、架构治理、拆分信号、代码事实 · 知识、相关决策、实现原理、核心数据结构、代码与文档引用、确认改动与确认表单（PC-6–PC-8）；画布单击本模块的表面元素时展开核对卡与「表面元素」清单（C9，跳转自动打开祖先折叠）；相关资料卡列图解与参与的场景，多于 3 份时缺省收起（PC-9）。卡片与折叠块的展开态不跨选中保持。
     codeRefs: [src/components/panel/ModulePanel.vue, src/components/panel/ModuleUnderstand.vue, src/components/panel/ModuleCollab.vue, src/components/panel/ModuleCheck.vue]
   - id: present.panel.relation
     name: 关系面板

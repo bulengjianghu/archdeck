@@ -5,6 +5,7 @@
  * - ST-5 底层（mayDependOn: []）的成员只引类型的向上 import：info（U2 的口径不计只引类型的依赖时，底层的「不依赖任何层」会失真）。
  * 迁移来的旧层（M26）不提示 ST-4（它们由 kind: layer 读来，等作者改写为 strata）。关于被描述系统的知识，lint:model、页面与 agent 接口共用。
  */
+import { excludesOf, summaryOf, type ExcludeDef } from '../contract'
 import { mayDependOnOf, moduleName, stratumKey } from '../names'
 import type { Issue, ModelIndex, StratumEntity } from '../types'
 import { within } from './facts'
@@ -180,43 +181,84 @@ function topContributor(index: ModelIndex, report: Pick<GovernanceReport, 'modul
   return best?.id
 }
 
-/** ST-2：新模块归属的建议——列出各层的问题与判定问，按职责文本与层的原则文字的字面重合度排序（只是起点，归属由人或 AI 按 admits 判定） */
+/**
+ * ST-2、M33（ADR-0052、ADR-0060）：新模块归属的建议——已分层的父模块列各层（问题、判定问、成员），按职责文本与层的原则文字的字面重合度排序；
+ * 未分层的父模块（round19 V3）列各子模块（一句话职责），同样按重合度排序，父模块 excludes 里写了去向且与职责文字重合的，直接给出去向（excluded）。
+ * 分数只是起点，归属由人或 AI 按 admits / excludes 判定。没有子模块的模块为 null。
+ */
 export interface PlaceSuggestion {
   parent: string
-  candidates: { layer: string; key: string; name: string; asks?: string; admits?: string; score: number; members: string[] }[]
+  /** strata：按层；children：未分层，按子模块 */
+  mode: 'strata' | 'children'
+  candidates: { layer: string; key: string; name: string; asks?: string; admits?: string; summary?: string; score: number; members: string[] }[]
+  /** 父模块声明「不负责 X → 去向」且 X 与职责文字重合：直接排除本模块、指向去向 */
+  excluded: { text: string; to: string; score: number }[]
   note: string
 }
 
+const grams = (t: string) => {
+  const s = t.replace(/\s+/g, '')
+  const g = new Set<string>()
+  for (let i = 0; i + 1 < s.length; i++) g.add(s.slice(i, i + 2))
+  return g
+}
+const overlap = (want: Set<string>, text: string) => {
+  const have = grams(text)
+  let n = 0
+  for (const g of want) if (have.has(g)) n++
+  return want.size ? Math.round((n / want.size) * 100) / 100 : 0
+}
+
 export function placeSuggestion(index: ModelIndex, parent: string, responsibility: string): PlaceSuggestion | null {
-  const list = index.strata.get(parent)
-  if (!list?.length) return null
-  const grams = (t: string) => {
-    const s = t.replace(/\s+/g, '')
-    const g = new Set<string>()
-    for (let i = 0; i + 1 < s.length; i++) g.add(s.slice(i, i + 2))
-    return g
-  }
   const want = grams(responsibility)
-  const score = (s: StratumEntity) => {
-    const text = [s.name, s.asks, s.admits, s.abstraction, ...s.members.map(m => `${index.modules.get(m)?.name ?? ''}${index.modules.get(m)?.responsibility ?? ''}`)].join('')
-    const have = grams(text)
-    let n = 0
-    for (const g of want) if (have.has(g)) n++
-    return want.size ? n / want.size : 0
+  const pm = index.modules.get(parent)
+  const excluded = (pm ? excludesOf(pm) : [])
+    .filter((e): e is ExcludeDef & { to: string } => !!e.to)
+    .map(e => ({ text: e.text, to: e.to, score: overlap(want, e.text) }))
+    .filter(e => e.score > 0)
+    .sort((a, b) => b.score - a.score)
+  const list = index.strata.get(parent)
+  if (list?.length) {
+    const score = (s: StratumEntity) =>
+      overlap(want, [s.name, s.asks, s.admits, s.abstraction, ...s.members.map(m => `${index.modules.get(m)?.name ?? ''}${index.modules.get(m)?.responsibility ?? ''}`)].join(''))
+    return {
+      parent,
+      mode: 'strata',
+      candidates: list
+        .map(s => ({
+          layer: s.id,
+          key: stratumKey(index, s),
+          name: s.name,
+          ...(s.asks ? { asks: s.asks } : {}),
+          ...(s.admits ? { admits: s.admits } : {}),
+          score: score(s),
+          members: [...s.members],
+        }))
+        .sort((a, b) => b.score - a.score),
+      excluded,
+      note: '按各层的判定问 admits 逐个回答是 / 否来选层，designNote 写一句理由（ST-2）；分数只是职责文字与层的原则、现有成员的字面重合度',
+    }
   }
+  const children = index.childrenOf.get(parent) ?? []
+  if (!children.length) return null
   return {
     parent,
-    candidates: list
-      .map(s => ({
-        layer: s.id,
-        key: stratumKey(index, s),
-        name: s.name,
-        ...(s.asks ? { asks: s.asks } : {}),
-        ...(s.admits ? { admits: s.admits } : {}),
-        score: Math.round(score(s) * 100) / 100,
-        members: [...s.members],
-      }))
+    mode: 'children',
+    candidates: children
+      .map(id => {
+        const c = index.modules.get(id)!
+        const summary = summaryOf(c)?.text
+        return {
+          layer: id,
+          key: id,
+          name: c.name,
+          ...(summary ? { summary } : {}),
+          score: overlap(want, `${c.name}${summary ?? ''}${c.responsibility ?? ''}`),
+          members: [],
+        }
+      })
       .sort((a, b) => b.score - a.score),
-    note: '按各层的判定问 admits 逐个回答是 / 否来选层，designNote 写一句理由（ST-2）；分数只是职责文字与层的原则、现有成员的字面重合度',
+    excluded,
+    note: `「${pm?.name ?? parent}」没有声明分层：按各子模块的一句话职责比对（M33，ADR-0060）；父模块否定边界命中的直接去它指向的模块；子模块超过七个时按 ST-1 考虑声明分层`,
   }
 }

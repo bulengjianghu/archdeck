@@ -31,6 +31,7 @@ import {
   impactOf,
   levelImpact,
   levelTiers,
+  tierBandLabel,
   layerUpward,
   gradeBundles,
   forcedExceptions,
@@ -446,6 +447,25 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     }
   }
 
+  /** PC-3（ADR-0060）：理解卡按深度分组的成员（与画布层带同一函数与同一文字）；只在 ≥7 个子模块且 ≥3 档（层带门槛）时给 */
+  type ChildTiers = { count: number; bands: { label: string; ids: string[] }[] }
+  /**
+   * L28、PC-3（ADR-0060）：任一模块的子模块按值依赖算出的深度（与画布层带同一函数 levelTiers）——理解卡「怎么分」在未声明分层时按它分组成员；
+   * 没有代码事实或子模块不足两个为 null。
+   */
+  const childTiers = (id: string): ChildTiers | null => {
+    const idx = index.value
+    const r = report.value
+    if (!idx || !r || (idx.childrenOf.get(id) ?? []).length < 2) return null
+    const t = levelTiers(idx, tierView(idx, id), r)
+    if (!t?.banded) return null
+    const last = t.count - 1
+    const bands = Array.from({ length: t.count }, (_, i) => ({ label: tierBandLabel(i, i, last), ids: [] as string[] }))
+    for (const n of t.nodes) bands[t.tier.get(n) ?? 0]?.ids.push(n)
+    if (t.isolated.length) bands.push({ label: '无依赖', ids: [...t.isolated] })
+    return { count: t.count, bands: bands.filter(b => b.ids.length) }
+  }
+
   /** L28：交给布局的分层（纯数据，进缓存键） */
   const layoutTiers = computed<LayoutTiers | null>(() => toLayoutTiers(tiers.value))
 
@@ -759,6 +779,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     layerNote,
     split,
     splitOf,
+    childTiers,
     metrics,
     valueMetrics,
     metricsOf,
