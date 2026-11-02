@@ -290,28 +290,22 @@ modules:
     name: 图例与「显示 ▾」
     summary: 用可交互图例与「显示 ▾」菜单控制并解释画布记号
     parent: present.canvas
-    adrs: [56]
-    responsibility: 画布显示的控件按「有没有画布记号」分两处，一个开关只出现在一处（L45，ADR-0056）。图例（Legend）在画布右上角那一列的顶端，收起为「图例 ▾」、展开为一张卡，第一次进入项目时展开、之后按本机记住，卡高上限为画布高度的一半，画布角的留痕排在它下面（L48）；有开关也有记号的项图例行就是开关（LegendToggle：勾选态 + 示意 + 名称，单击切换，关着的行淡色常列）——交互视角的关系类型、代码事实、组装、演化热度、时间耦合，结构视角的只引类型；运行视角的类型行只读（L9）。图例按视角整组替换、不混列（L19、D-26）：交互视角为关系、节点、代码事实、组装、演化、共享；结构视角换成结构视图的几组（子模块「结构视图图例」）；运行视角为关系、节点、回放、共享。图例按上下文显示（L47）：这里调用 state.desk.legend 算一次出现集合传给各组，没出现的记号行不列，临时记号归各组尾部「临时可见」小节常列。三问四修饰的讲解不在图例，关系组标题旁「?」经 OPEN_GUIDE 打开帮助的「读一条线」（L51）。「显示 ▾」（DisplayMenu）在工具栏，放没有记号的设置：边界节点、只看现状、热度口径；结构视角另有只看交互使用、只看未解释（带收起计数）、总是展开表面；运行视角为交互关系的显示方式（V8）；有非默认设置时按钮上一个点、悬停提示列出它们（L49、TB-3）。悬停释义（gloss）按记号给出图例里的那一句，由画布并进边的悬停说明（L50）。
-    abstraction: 图例按视角整组替换、每组一个子组件；开关行与记号行分开写，开关行即开关；没有记号的设置另成一个菜单；图例行、悬停释义的文字只在 labels 一处。
+    adrs: [56, 58]
+    responsibility: 画布显示的控件按「有没有画布记号」分两处，一个开关只出现在一处（L45，ADR-0056）。图例（Legend）在画布右上角那一列的顶端，收起为「图例 ▾」、展开为一张卡，第一次进入项目时展开、之后按本机记住，卡高上限为画布高度的一半，画布角的留痕排在它下面（L48）。正文按读者看到的视觉通道分节、不按数据来源分组（ADR-0058，L19）：线（RelationLegend——颜色 = 关系类型的开关行、粗细 WidthRow、箭头、线型；结构视角换成 StructureLegend，子模块「结构视图图例」）、节点、规则与指标（结构视角）、叠加（OverlayLegend：代码事实、组装、演化热度、时间耦合四个开关行，开着时只在下面列非文字记号）、脚注「临时可见」（TempLegend：悬停 / 选中 / 回放才出现的记号，缺省折叠、按视角列条目）。节只是一行标题、不折叠。有开关也有记号的项图例行就是开关（LegendToggle：勾选态 + 示意 + 名称，单击切换，关着的行淡色常列；运行视角的类型行只读 L9）。进正文的行过准入三问（L47）：画布上写了字的记号不列、此刻不在画面上的不列、只解码不讲解——类型定义、机制词表、标签位格式在帮助与悬停（L51），线一节标题旁「?」经 OPEN_GUIDE 打开帮助的「读一条线」。图例按上下文显示（L47）：这里调用 state.desk.legend 算一次出现集合传给各节，没出现的记号行不列。共享通道（L18）的行三个视角同一位置、同一句话，文字只在 labels 一处（C1）。「显示 ▾」（DisplayMenu）在工具栏，放没有记号的设置：边界节点、只看现状、热度口径；结构视角另有只看交互使用、只看未解释（带收起计数）、总是展开表面；运行视角为交互关系的显示方式（V8）；有非默认设置时按钮上一个点、悬停提示列出它们（L49、TB-3）。悬停释义（gloss）按记号给出图例里的那一句，由画布并进边的悬停说明（L50）。开关在视图状态里、不进 URL，组装与演化的开关按项目记在本机（useAssemblyPrefs、useEvolutionPrefs）。
+    abstraction: 图例按视觉通道分节、每节一个子组件；开关行与解码行分开写，开关行即开关；没有记号的设置另成一个菜单；临时记号单独一个脚注组件；图例行、悬停释义的文字只在 labels 一处。
     invariants:
       - { text: 一个开关只出现在一处：有画布记号的在图例行上，没有的在「显示 ▾」, adr: 56 }
       - { text: 图例行与悬停释义的文字只取自 labels 一份词表，不各写一遍, adr: 56 }
-      - 出现集合只在状态层派生一次，各组只按它显隐行、不重排（L47）
+      - { text: 进图例正文的行过准入三问——画布上写了字的不列、此刻不在画面上的不列、只解码不讲解；一行一个记号一个短语, adr: 58 }
+      - 出现集合只在状态层派生一次，各节只按它显隐行、不重排（L47）
     codeRefs: [src/components/display/**]
-  - id: present.canvas.legend.assembly
-    name: 组装开关与图例
-    summary: 开关组装事实的叠加，并说明其线型与角标
-    parent: present.canvas.legend
-    adrs: [30]
-    responsibility: 图例的「组装」一组（O12，ADR-0030，交互视角）：第一行就是「组装」开关（L45，ADR-0056：图例行即开关；缺省关），开启后画布把组装事实（K13）投影到本层画叠加虚线（依赖方一端实心菱形，ADR-0035；不参与布局，单击落到代码依赖），组装根所在的节点标「组装根」角标；开启时组内说明线型与角标。开关在视图状态里（toggles.assembly，不进 URL），按项目记在本机（useAssemblyPrefs：模型加载后恢复，之后每次变化写回，同演化叠加的本机记忆）。
-    codeRefs: [src/components/display/AssemblyLegend.vue, src/components/display/useAssemblyPrefs.ts]
   - id: present.canvas.legend.structure
     name: 结构视图图例
-    summary: 说明结构视角下依赖边的形态、档与收起计数
+    summary: 说明结构视角下依赖边的形态、醒目度、规则与指标记号
     parent: present.canvas.legend
-    adrs: [31]
-    responsibility: 结构视角下图例的几组（L19、D-26，ADR-0031）：「依赖 · 形态与档」——元素级边四种形态的端点记号（全部虚线，ADR-0035）与醒目度（例外深色加宽、骨架安静中灰，L43），依赖的三档在画布上不区分明度——只引类型用点线（L43），交互使用与值使用悬停与面板写明；「依赖的档」里的「只引类型」一行就是开关（L45，ADR-0056），带本层收起条数；只看交互使用 / 只看未解释 / 总是展开表面没有自己的记号，在「显示 ▾」；收起与例外的计数——跨界折叠（B2）、例外照画、环按组、「另直连 N」（L42）；表面一段——表面 W 角标、元素四类、+N 封顶、越过入口、界外（L20）；「规则叠加」——违规红晕、允许边浅虚线（U15、U16）；「指标 · 不稳定度与共用件」——入 Ca · 出 Ce 角标、不稳定度三档色条与阈值、共用件折叠（K16、L17、O13）。示意线由 StructureSwatch 按与边组件共用的 depStyle 画出、颜色取 styles.css 的同一套变量；没有代码事实时只说明允许依赖图（U16）。
-    codeRefs: [src/components/display/StructureLegend.vue, src/components/display/StructureSwatch.vue, src/components/display/RuleLegend.vue, src/components/display/MetricLegend.vue, src/components/display/SharedLegend.vue]
+    adrs: [31, 58]
+    responsibility: 结构视角下图例的几节（L19、D-26，ADR-0031，ADR-0058）：「线」（StructureLegend）——元素级边四种形态的端点记号（全部虚线，ADR-0035）、醒目度（例外深色加宽、骨架安静中灰，L43）、「只引类型」开关行（浅色点线，带本层收起条数，L45；交互使用与值使用在画布上同画、没有记号可解码，不列）、粗细（WidthRow）；「规则」（RuleLegend）——违规红晕、本层环编号 ↻N，有才列；「指标」（MetricLegend）——入 Ca · 出 Ce 角标、不稳定度三档色条，口径在悬停（K16、L17）。束的概念在帮助；收起与例外的计数、表面 W、越过入口、逆稳定、共用件折叠、表面元素四类与 +N 是写字的角标或悬停 / 选中才画出的线，归脚注（TempLegend）。只看交互使用 / 只看未解释 / 总是展开表面没有自己的记号，在「显示 ▾」。示意线由 StructureSwatch 按与边组件共用的 depStyle 画出、颜色取 styles.css 的同一套变量；没有代码事实时只说明允许依赖图（U16）。
+    codeRefs: [src/components/display/StructureLegend.vue, src/components/display/StructureSwatch.vue, src/components/display/RuleLegend.vue, src/components/display/MetricLegend.vue]
 
   # ── 视图状态层 ──────────────────────────────────────────
   - id: state.desk.loading
@@ -347,7 +341,7 @@ modules:
     name: 图例的出现集合派生（desk.legend，L47）
     summary: 算出当前画面上实际出现的图例记号集合
     parent: state.desk
-    responsibility: 图例的出现集合（L47，第十五轮 G14）：按当前视角与层次的静息态画面算画布上出现的记号——交互视角与运行视角扫层次视图的边与节点（边界边聚焦才画、不计入，只出现在边界边上的类型单列临时键）、代码事实读 K9 的本层投影、组装读 O12 的投影、热度读 J5 的本层投影；结构视角读与画布同一份 structureDisplay 过滤后的束（形态、档、醒目度、收起计数、越过入口）。没有代码事实等加载态按空集合处理。呈现层（display/Legend）实例化一次、把集合传给各图例组；组结构与行序按固定词表，行只显隐、不重排；聚焦 / 悬停 / 回放才出现的临时记号归各组尾部固定的「临时可见」小节常列，不进出现集合（reviews/r3.md 的 G14 补充口径）。
+    responsibility: 图例的出现集合（L47，第十五轮 G14）：按当前视角与层次的静息态画面算画布上出现的记号——交互视角与运行视角扫层次视图的边与节点（边界边聚焦才画、不计入，只出现在边界边上的类型单列临时键）、代码事实读 K9 的本层投影、组装读 O12 的投影、热度读 J5 的本层投影；结构视角读与画布同一份 structureDisplay 过滤后的束（形态、档、醒目度、收起计数、越过入口）。没有代码事实等加载态按空集合处理。呈现层（display/Legend）实例化一次、把集合传给各节；节结构与行序按固定词表，行只显隐、不重排；聚焦 / 悬停 / 回放才出现的临时记号归整张图例一个缺省折叠的脚注（TempLegend，ADR-0058），不进出现集合（只出现在边界边 / 核心跨层边上的类型单列 rel:temp:type 前缀的键供脚注用）。
     abstraction: 按记号来源分别扫描（交互边与节点、代码事实、组装、热度、结构束），再并成一个集合。
     codeRefs: [src/state/desk/legend.ts]
   - id: state.desk.actions
@@ -500,7 +494,7 @@ relations:
   - {id: rel.ad.flow-nodes, from: present.canvas.flow, to: present.canvas.nodes, type: commands, description: 视图转换与交互交给节点组件：渲染 ModuleNode、BoundaryNode、BandNode、CoreNode, purpose: 按节点种类渲染节点 }
   - {id: rel.ad.flow-edges, from: present.canvas.flow, to: present.canvas.edges, type: commands, description: 视图转换与交互交给边组件：渲染 RouteEdge, purpose: 按走线渲染边 }
   - { id: rel.ad.flow-legend, from: present.canvas.flow, to: present.canvas.legend, type: commands, description: 视图转换与交互交给图例：画布在右上角那一列渲染图例（Legend），留痕排在它下面；并调用 gloss 把图例释义并进边的悬停说明（L50）, purpose: 在画布右上角放图例并附悬停释义 }
-  - { id: rel.w4.desk-display-menu, from: present.desk-view, to: present.canvas.legend, type: commands, description: 项目视图在工具栏视角切换之后渲染「显示 ▾」（DisplayMenu，L49），并经 OPEN_GUIDE 提供打开帮助的入口给图例关系组的「?」（L51）, purpose: 在工具栏放没有记号的显示设置 }
+  - { id: rel.w4.desk-display-menu, from: present.desk-view, to: present.canvas.legend, type: commands, description: 项目视图在工具栏视角切换之后渲染「显示 ▾」（DisplayMenu，L49），并经 OPEN_GUIDE 提供打开帮助的入口给图例「线」一节标题旁的「?」（L51）, purpose: 在工具栏放没有记号的显示设置 }
   - { id: rel.w5.dock-explainer-text, from: present.desk-view.split, to: present.shared, type: queries, description: 资料区的图解标签向呈现共用件取过期的一句话与改动的增删改文字（staleText、BASIS_CHANGE_TEXT，EX-7）, purpose: 写出图解的过期提示 }
   - { id: rel.w5.module-explainer-text, from: present.panel.module, to: present.shared, type: queries, description: 模块面板的相关资料卡与核对卡向呈现共用件取图解过期的一句话与改动文字（EX-7）, purpose: 写出图解的过期提示 }
   - { id: rel.ad.legend-presence, from: present.canvas.legend, to: state.desk.legend, type: queries, payload: [ds.ViewState, ds.LevelView], description: 图例向出现集合派生取：按当前视角与层次的静息态画面算出现的记号集合（L47），传给各图例组过滤行, purpose: 只列画面上实际出现的图例行 }

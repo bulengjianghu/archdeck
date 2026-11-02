@@ -60,11 +60,13 @@ test('§6.28-4：「混合」只出现在同步 / 异步不一致的束上', asy
   for (const t of await page.locator('.vue-flow__edge-route g[data-mixed] > title').allTextContents()) expect(t).toContain('同步 / 异步不一致')
 })
 
-test('L26（ADR-0041）：图例有机制标签一行与两段示意', async ({ page }) => {
+test('L26（ADR-0041）、ADR-0058：机制词写在线上、不进图例；悬停线上的标签附机制释义（L50）', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?level=kit')
-  // L47（G14）：机制标签行只列本层画面出现的——kit 层有回调 / 端口 / 总线 / 事件，跨进程的边静息态不画（不列）
-  await expect(page.getByTestId('legend-mechanisms')).toContainText('总线')
-  await expect(page.getByTestId('legend-mechanisms')).toContainText('端口')
-  await expect(page.getByTestId('legend-mechanisms')).not.toContainText('跨进程')
-  await expect(page.getByTestId('legend-pill').locator('.tag.warn')).toBeAttached()
+  // ADR-0058 准入第一问：机制词与两段标签位是画布 pill 自己会说的字，图例不再列「标签」「两段」两行
+  const legend = page.getByRole('region', { name: '图例' })
+  await expect(legend.getByTestId('legend-mechanisms')).toHaveCount(0)
+  await expect(legend.getByTestId('legend-pill')).toHaveCount(0)
+  // kit 层有总线 / 端口机制的边：词在标签位，悬停提示末尾附「图例 · 总线：…」或「图例 · 端口：…」
+  const tips = await page.locator('.vue-flow__edges g > title').allTextContents()
+  expect(tips.some(t => /图例 · (总线|端口)：/.test(t))).toBe(true)
 })

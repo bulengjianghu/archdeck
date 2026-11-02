@@ -1,36 +1,33 @@
 <script setup lang="ts">
 /**
- * 图例（第十七轮 R4，ADR-0056；取代第十五轮的「显示」面板，ADR-0017 部分取代）：画布右上角，收起时一枚「图例 ▾」、展开为一张卡（L48）。
- * - 图例行即开关（L45）：同时有开关和画布记号的项（关系类型、代码事实、组装、演化热度、时间耦合、结构视角的只引类型）只留一行，
- *   单击切换，关着的行淡色常列；没有记号的设置在工具栏「显示 ▾」（L49）。隐藏画布内容的开关在画布角留痕计数（GraphCanvas 的 corner，L45）。
- * - 图例按视角整体替换、不混列（L19、D-26）：交互视角为关系、节点、代码事实、组装、演化；结构视角为「依赖 · 形态与档」、节点、规则叠加、指标与演化；
- *   运行视角为关系（只读）、节点与回放。共享通道（选中、变淡、违规、环、演化、线宽、线型、标签位）三处同文（SharedLegend，L18）。
- * - 图例按上下文显示（L47）：每一组只列当前视角 + 当前层次静息态画面出现的记号（出现集合由 state/desk/legend 一处派生，这里算一次往下传）；
- *   临时记号归各组尾部「临时可见」小节常列。教学内容（三问、四修饰）在帮助，关系组标题旁「?」过去（L51）。
- * - 收放按项目记在本机，第一次进入项目时展开；各组折叠按视角记（useDisplayPrefs，L48）。
+ * 图例（第十七轮 R4，ADR-0056；第十八轮走查修订，ADR-0058）：画布右上角，收起时一枚「图例 ▾」、展开为一张卡（L48）。
+ * - 正文按读者眼睛看到的视觉通道分节、不按工具内部的模块分组（ADR-0058）：线（颜色 = 类型 / 形态、粗细、箭头、线型）、节点、
+ *   规则与指标（结构视角）、叠加（开关行，L45）、脚注「临时可见」（缺省折叠）。节只是一行标题、不再各自折叠；整卡的收放按项目记在本机（L48）。
+ * - 每一行过准入三问才进正文（ADR-0058）：画布上写了字的记号不列（pill、角标里的词自己会说话，悬停有释义 L50）；此刻不在画面上的
+ *   （悬停 / 选中 / 回放才出现）归脚注；讲解（定义、格式、行为、去哪看）进帮助（L51）与悬停。一行 = 一个记号 + 一个短语。
+ * - 图例按视角整体替换、不混列（L19、D-26）：交互视角为线、节点、叠加、脚注；结构视角为线（形态与醒目度）、节点、规则、指标、叠加（演化）、脚注；
+ *   运行视角为线（只读）、节点、脚注（回放的记号）。共享通道（L18）的行三处同位同文，不再单列一组。
+ * - 图例按上下文显示（L47）：每节只列当前视角 + 当前层次静息态画面出现的记号（出现集合由 state/desk/legend 一处派生，这里算一次往下传）。
+ * - 「怎么读一条线」的讲解在帮助，线一节标题旁的「?」过去（L51）。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { createLegendPresence } from '@/state/desk/legend'
 import { useDisplayPrefs } from './useDisplayPrefs'
-import DisplayGroup from './DisplayGroup.vue'
 import RelationLegend from './RelationLegend.vue'
-import FactsLegend from './FactsLegend.vue'
-import AssemblyLegend from './AssemblyLegend.vue'
-import EvolutionLegend from './EvolutionLegend.vue'
-import ReplayLegend from './ReplayLegend.vue'
 import StructureLegend from './StructureLegend.vue'
 import RuleLegend from './RuleLegend.vue'
 import MetricLegend from './MetricLegend.vue'
-import SharedLegend from './SharedLegend.vue'
+import OverlayLegend from './OverlayLegend.vue'
+import TempLegend from './TempLegend.vue'
 import './legend.css'
 
 const desk = useDesk()
 const run = computed(() => desk.perspective.value === 'run')
-/** 结构视角（ADR-0031）：图例整组换成结构视图的 */
+/** 结构视角（ADR-0031）：「线」一节换成结构视图的 */
 const structure = computed(() => desk.perspective.value === 'structure')
-const { open, groups, toggleOpen, toggleGroup, prefs } = useDisplayPrefs(desk.perspective, desk.project)
-/** L47：图例的出现集合——按当前视角 + 层次的静息态画面算一次，各图例组只显隐行 */
+const { open, toggleOpen, prefs } = useDisplayPrefs(desk.project)
+/** L47：图例的出现集合——按当前视角 + 层次的静息态画面算一次，各节只显隐行 */
 const presence = createLegendPresence({
   state: desk.state,
   index: desk.index,
@@ -48,26 +45,20 @@ const presence = createLegendPresence({
     </button>
 
     <div v-if="open" class="body">
-      <StructureLegend v-if="structure" :open="groups.struct" :presence="presence" @toggle="toggleGroup('struct')" />
-      <RelationLegend v-else :run="run" :open="groups.rel" :presence="presence" @toggle="toggleGroup('rel')" />
-      <DisplayGroup v-if="presence.has('node:module')" title="节点" :open="groups.node" @toggle="toggleGroup('node')">
-        <div class="item inline">
-          <span><span class="box" />模块</span>
-          <span v-if="presence.has('node:drill')"><span class="box stack" />可下钻</span>
-          <span v-if="presence.has('node:outer')"><span class="box dashed" />目标态 / 外部</span>
-        </div>
-      </DisplayGroup>
+      <StructureLegend v-if="structure" :presence="presence" />
+      <RelationLegend v-else :run="run" :presence="presence" />
+      <div v-if="presence.has('node:module')" class="reading-row nodes" aria-label="节点" data-testid="legend-nodes">
+        <span class="dim">节点</span>
+        <span class="pair"><span class="box" />模块</span>
+        <span v-if="presence.has('node:drill')" class="pair"><span class="box stack" />可下钻</span>
+        <span v-if="presence.has('node:outer')" class="pair"><span class="box dashed" />目标态 / 外部</span>
+      </div>
       <template v-if="structure">
-        <RuleLegend :open="groups.rule" :presence="presence" @toggle="toggleGroup('rule')" />
-        <MetricLegend :open="groups.metric" :presence="presence" @toggle="toggleGroup('metric')" />
+        <RuleLegend :presence="presence" />
+        <MetricLegend :presence="presence" />
       </template>
-      <template v-else-if="!run">
-        <FactsLegend :open="groups.facts" :presence="presence" @toggle="toggleGroup('facts')" />
-        <AssemblyLegend :open="groups.asm" :presence="presence" @toggle="toggleGroup('asm')" />
-      </template>
-      <EvolutionLegend v-if="!run" :open="groups.evo" :presence="presence" @toggle="toggleGroup('evo')" />
-      <ReplayLegend v-else :open="groups.play" @toggle="toggleGroup('play')" />
-      <SharedLegend :open="groups.shared" :presence="presence" :structure="structure" @toggle="toggleGroup('shared')" />
+      <OverlayLegend v-if="!run" :structure="structure" :presence="presence" />
+      <TempLegend :run="run" :structure="structure" :presence="presence" />
     </div>
   </div>
 </template>
@@ -119,5 +110,9 @@ const presence = createLegendPresence({
   border: 1px solid var(--card-border);
   border-radius: var(--card-radius);
   box-shadow: var(--card-shadow);
+}
+
+.nodes {
+  color: var(--text);
 }
 </style>

@@ -57,12 +57,12 @@ export const DEP_TIER_HINT: Record<DepTier, string> = {
 
 /** A2、L16：元素级边的形态，按 DEP_FORMS 的强弱次序（子类 ＞ 组装 ＞ 端口实现 ＞ 使用） */
 export const DEP_FORM_LABEL: Record<DepForm, string> = { subclass: '子类', assembly: '组装', implements: '端口实现', use: '使用' }
-/** L16（ADR-0035）：依赖一律虚线，形态只靠端点记号 */
+/** L16（ADR-0035）：依赖一律虚线（示意线本身就是虚的，不再写「虚线 +」），形态只靠端点记号 */
 export const DEP_FORM_HINT: Record<DepForm, string> = {
-  subclass: '虚线 + 空心三角，三角在基类一端',
-  assembly: '虚线 + 实心菱形，菱形在组装者一端',
-  implements: '虚线 + 空心菱形 ◇，◇ 在端口定义模块一端（与端口元素同一记号）',
-  use: '虚线 + 开口箭头，指向被依赖方',
+  subclass: '空心三角，在基类一端',
+  assembly: '实心菱形，在组装者一端',
+  implements: '空心菱形 ◇，在端口定义一端（与端口元素同一记号）',
+  use: '开口箭头，指向被依赖方',
 }
 /** L21：束的一句说明（图例与帮助同文） */
 export const BUNDLE_TEXT = '一对模块之间画一条束，线宽按束内元素级边条数；形态不止一种时标 ×N 元素'
@@ -97,12 +97,11 @@ export const IMPACT_MODE_HINT: Record<ImpactChoice, string> = {
 
 /**
  * L18：共享通道——交互、结构、运行三个视角同义，三处图例同文（不得各自改写）。
- * 每项：示意种类与读法。
+ * 每项：示意种类与读法。第十八轮走查起（ADR-0058）图例不再有「共享」一组：这些行按视觉通道落到各自的节里（线宽、线型在「线」，
+ * 红晕、环在「规则」或「代码事实」下，选中、变淡、演化波浪线在脚注），文字仍只在这里一份；帮助的「三个视角共享」一段也读这份。
  */
-export const SHARED_CHANNELS: readonly {
-  key: 'select' | 'dim' | 'violation' | 'cycle' | 'evolution' | 'width' | 'solid' | 'dashed' | 'label'
-  text: string
-}[] = [
+export type SharedChannelKey = 'select' | 'dim' | 'violation' | 'cycle' | 'evolution' | 'width' | 'solid' | 'dashed' | 'label'
+export const SHARED_CHANNELS: readonly { key: SharedChannelKey; text: string }[] = [
   { key: 'select', text: '选中：强调色窄晕' },
   { key: 'dim', text: '变淡：不在焦点内的节点与线降低不透明度' },
   { key: 'violation', text: '违规：红晕（已知的淡红晕）' },
@@ -139,7 +138,8 @@ export const FACT_TAG_HINT: readonly { tag: '未证实' | '违规' | '未解释'
   { tag: '未解释', text: '代码有依赖、描述没写交互：画成代码依赖叠加虚线' },
   { tag: '缺段', text: '选中一条交互时承载叠加在图上，缺的一段画成警示色虚线' },
 ]
-export const SHARED_CHANNELS_TITLE = '共享 · 三个视角同义'
+/** 按键取共享通道的那一句（图例各节与脚注用） */
+export const SHARED_TEXT = Object.fromEntries(SHARED_CHANNELS.map(c => [c.key, c.text])) as Record<SharedChannelKey, string>
 
 // ── 第十七轮 R4（ADR-0056）：图例行的文字一处定义——图例行（Legend 各组）与悬停释义（gloss.ts，L50）同读，不另写（C1） ──
 

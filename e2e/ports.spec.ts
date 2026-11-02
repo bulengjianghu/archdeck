@@ -44,8 +44,8 @@ test('L10、L12：图例示意与画布同一套样式——查询半透明、�
   await expect(c).toHaveCSS('opacity', '1')
   expect(await q.getAttribute('stroke-width')).toBe(await c.getAttribute('stroke-width'))
   // L47（G14）：只列本层画面出现的类型——app 层没有未分类与流（行按词表保留、只显隐）
-  await expect(types.locator('.item', { hasText: '未分类' })).not.toBeVisible()
-  await expect(types.locator('.item', { hasText: '流 =' })).not.toBeVisible()
+  await expect(types.locator('[data-type="calls"]')).not.toBeVisible()
+  await expect(types.locator('[data-type="streams"]')).not.toBeVisible()
   await expect(page.getByRole('region', { name: '图例' }).locator('.reading-row marker.socket-marker')).toHaveCount(1)
 })
 

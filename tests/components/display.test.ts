@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
  * 图例按视角整体替换（L19、D-26）、共享通道三处同文（L18）、图例行即开关与留痕（L45）、关着的开关行常列（L47）、位置与收放（L48）、
- * 「显示 ▾」菜单（L49）、悬停释义（L50）、教学内容只在帮助（L51）、帮助的四组（W-10）
+ * 「显示 ▾」菜单（L49）、悬停释义（L50）、教学内容只在帮助（L51）、帮助的四组（W-10）；
+ * 第十八轮走查修订（ADR-0058）：正文按视觉通道分节、画布上写了字的记号不列、临时记号归一个缺省折叠的脚注、各节不再折叠
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
@@ -14,13 +15,13 @@ import { heatControls, resetHeatKind } from '../../src/components/display/useEvo
 import { effectScope, nextTick, shallowRef } from 'vue'
 import {
   ASSEMBLY_LINE_TEXT,
-  BUNDLE_TEXT,
   COUPLE_TEXT,
   DEP_FORM_HINT,
   DEP_TIER_HINT,
   FACT_TAG_HINT,
   MECHANISM_HINTS,
   SHARED_CHANNELS,
+  SHARED_TEXT,
   TYPE_HINT,
   UPPER_TEXT,
 } from '../../src/components/display/labels'
@@ -77,7 +78,14 @@ async function openMenu(menu: Awaited<ReturnType<typeof open>>['menu']) {
 }
 const toggleOf = (w: Awaited<ReturnType<typeof open>>['wrapper'], sel: string) => w.find(`button[role="switch"]${sel}`)
 
-const titles = (w: Awaited<ReturnType<typeof open>>['wrapper']) => w.findAll('.group-btn').map(b => b.text().replace(/^[▾▸]/, ''))
+/** ADR-0058：正文的节（线 / 节点 / 规则 / 指标 / 叠加 / 临时可见），按出现次序 */
+const sections = (w: Awaited<ReturnType<typeof open>>['wrapper']) => w.findAll('.body > [aria-label]').map(x => x.attributes('aria-label'))
+/** 展开脚注「临时可见」（缺省折叠） */
+async function openFoot(w: Awaited<ReturnType<typeof open>>['wrapper']) {
+  const btn = w.find('[data-testid="legend-temp"]')
+  if (btn.attributes('aria-expanded') !== 'true') await btn.trigger('click')
+  return w.find('[aria-label="临时可见的记号"]')
+}
 
 beforeEach(() => {
   localStorage.clear()
@@ -85,86 +93,89 @@ beforeEach(() => {
   resetHeatKind()
 })
 
-describe('L19：图例按视角整体替换', () => {
-  it('交互视角：关系、节点、代码事实、组装、演化与共享；没有结构视图的组', async () => {
+describe('L19：图例按视角整体替换；ADR-0058：按视觉通道分节、各节不折叠', () => {
+  it('交互视角：线、节点、叠加、临时可见；没有结构视图的节，也没有可折叠的组', async () => {
     const { wrapper } = await open('/')
-    expect(titles(wrapper)).toEqual(['关系', '节点', '代码事实', '组装', '演化', '共享 · 三个视角同义'])
+    expect(sections(wrapper)).toEqual(['线', '节点', '叠加', '临时可见'])
+    expect(wrapper.find('.group-btn').exists()).toBe(false)
+    // 类型行只留色 + 名：定义在悬停（L51 修订）
+    const row = toggleOf(wrapper, '[data-type="queries"]')
+    expect(row.find('.text').text()).toBe('查询')
+    expect(row.attributes('title')).toContain(`查询 = ${TYPE_HINT.queries}`)
+    // 画布上写了字的记号不列：机制词、两段示意、「直接」、标签词行（ADR-0058 准入第一问）
+    const text = wrapper.text()
+    for (const s of ['直接', '两段', '×5 · 未证实 2', '未证实', '未解释', '组装根', '混合', '三个视角同义']) expect(text).not.toContain(s)
+    expect(wrapper.find('[data-testid="legend-mechanisms"]').exists()).toBe(false)
   })
 
-  it('结构视角：依赖 · 形态与档、节点、规则叠加、指标、演化与共享；没有关系类型与代码事实的开关行', async () => {
+  it('结构视角：线（形态与醒目度）、节点、指标、叠加、临时可见；没有关系类型与代码事实的开关行', async () => {
     const { wrapper } = await open('/?v=s')
-    expect(titles(wrapper)).toEqual(['依赖 · 形态与档', '节点', '规则叠加 · 只标违规', '指标 · 不稳定度与共用件', '演化', '共享 · 三个视角同义'])
+    const secs = sections(wrapper)
+    expect(secs[0]).toBe('线')
+    expect(secs).toContain('节点')
+    expect(secs).toContain('叠加')
+    expect(secs[secs.length - 1]).toBe('临时可见')
     expect(wrapper.find('[data-type]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="toggle-facts"]').exists()).toBe(false)
     const text = wrapper.text()
     for (const s of [
       // L16（ADR-0035）：全部虚线，形态只靠端点记号；端口实现为 ◇
-      '子类 = 虚线 + 空心三角',
-      '组装 = 虚线 + 实心菱形',
-      '端口实现 = 虚线 + 空心菱形 ◇',
-      '使用 = 虚线 + 开口箭头',
-      '交互使用',
-      '值使用',
+      `子类 = ${DEP_FORM_HINT.subclass}`,
+      `组装 = ${DEP_FORM_HINT.assembly}`,
+      `端口实现 = ${DEP_FORM_HINT.implements}`,
+      `使用 = ${DEP_FORM_HINT.use}`,
       '只引类型',
-      BUNDLE_TEXT,
+      '深色加宽 = 例外',
     ])
       expect(text).toContain(s)
+    // 交互使用与值使用在画布上同画、没有记号可解码，不列（ADR-0058 准入第一问）；束的概念在帮助
+    for (const s of ['交互使用', '值使用', '一对模块之间画一条束']) expect(text).not.toContain(s)
     // L47（G14）：形态行只列画出来的，按强弱次序（子类 ＞ 组装 ＞ 端口实现 ＞ 使用）排列
     expect(wrapper.findAll('[data-form]').map(x => x.attributes('data-form'))).toEqual(['subclass', 'assembly', 'implements', 'use'])
-    expect(wrapper.findAll('svg[data-kind]').length).toBeGreaterThanOrEqual(7)
+    expect(wrapper.findAll('svg[data-kind]').length).toBeGreaterThanOrEqual(6)
     // L18：依赖一律断开的线——虚线，只引类型点线（L43，档的新通道）
     for (const svg of wrapper.findAll('svg[data-kind]'))
       expect(svg.findAll('line').some(l => l.attributes('stroke-dasharray') === (svg.attributes('data-tier') === 'type' ? '1.5 3.5' : '6 4'))).toBe(true)
-    expect(wrapper.find('[data-testid="legend-salience-exception"]').text()).toContain('例外')
-    // L47（G14）：本层没有的记号行不列——夹具没有越过入口与跨界折叠，两行不出现
-    expect(text).not.toContain('越过入口')
-    expect(wrapper.find('[data-testid="cross-count"]').exists()).toBe(false)
-    // L47（G14）：临时可见小节常列——表面元素四类与「+N」是展开表面才出现的记号，照列
-    expect(wrapper.find('[aria-label="表面元素四类"]').text()).toMatch(/端口.*操作.*类型.*数据/)
-    expect(wrapper.find('[data-testid="surface-cap"]').text()).toContain('+N')
-    expect(text).toContain('临时可见 · 展开表面的节点上出现')
+    // L47（G14）：本层没有的记号行不列——夹具没有越过入口与跨界折叠，脚注里也没有这两行
+    const foot = await openFoot(wrapper)
+    expect(foot.text()).not.toContain('越过入口')
+    expect(foot.find('[data-testid="cross-count"]').exists()).toBe(false)
+    // ADR-0058：表面元素四类与「+N」是展开表面才出现的记号，归脚注
+    expect(foot.find('[aria-label="表面元素四类"]').text()).toMatch(/端口.*操作.*类型.*数据/)
+    expect(foot.find('[data-testid="surface-cap"]').text()).toContain('+N')
+    expect(foot.text()).toContain(SHARED_TEXT.solid)
   })
 
-  it('运行视角：关系（只读）、节点、回放与共享；没有结构视图与代码事实的组', async () => {
+  it('运行视角：线（只读）、节点、临时可见（回放的记号）；没有结构视图、代码事实与叠加', async () => {
     const { wrapper } = await open('/?sc=sc.play')
-    expect(titles(wrapper)).toEqual(['关系', '节点', '回放', '共享 · 三个视角同义'])
-    expect(wrapper.text()).toContain('交互中未建模')
-    expect(wrapper.text()).toContain(UPPER_TEXT)
-    expect(wrapper.text()).not.toContain('结构中未建模')
-    // L45：运行视角的类型行只读（回放不受筛选影响，L9）；运行视角缺省只展开「回放」（L48）
-    await wrapper
-      .findAll('.group-btn')
-      .find(b => b.text().includes('关系'))!
-      .trigger('click')
+    expect(sections(wrapper)).toEqual(['线', '节点', '临时可见'])
+    expect(wrapper.find('[data-testid="toggle-facts"]').exists()).toBe(false)
+    // L45：运行视角的类型行只读（回放不受筛选影响，L9）
     expect(wrapper.find('[data-type]').exists()).toBe(true)
     expect(wrapper.find('button[role="switch"][data-type]').exists()).toBe(false)
+    // 回放的记号都是回放中才出现的临时记号，整组在脚注
+    expect(wrapper.find('[data-testid="legend-temp"]').text()).toMatch(/回放 \/ 选中时另有 \d+ 种记号/)
+    const foot = await openFoot(wrapper)
+    expect(foot.text()).toContain('交互中未建模')
+    expect(foot.text()).toContain(UPPER_TEXT)
+    expect(foot.text()).not.toContain('结构中未建模')
   })
 
-  it('L18：共享通道的行文字三处取自同一份词表；选中与变淡是临时记号，三处「临时可见」常列（L47）', async () => {
-    const rows: string[][] = []
+  it('L18：共享通道的行三处同文、按通道归位——线宽在「线」一节，选中与变淡在脚注；运行视角没有「虚线 = 依赖」', async () => {
     for (const url of ['/', '/?v=s', '/?sc=sc.play']) {
       const { wrapper } = await open(url)
-      const btn = wrapper.findAll('.group-btn').find(b => b.text().includes('共享'))!
-      if (btn.attributes('aria-expanded') !== 'true') await btn.trigger('click')
-      rows.push(
-        wrapper
-          .find('[aria-label="共享通道"]')
-          .findAll('.item')
-          .map(x => x.text()),
-      )
+      const width = wrapper.find('[data-testid="legend-width"]')
+      if (width.exists()) expect(width.attributes('title')).toBe(SHARED_TEXT.width)
+      const foot = await openFoot(wrapper)
+      const rows = foot.findAll('.item').map(x => x.text())
+      expect(rows[rows.length - 2]).toBe(SHARED_TEXT.select)
+      expect(rows[rows.length - 1]).toBe(SHARED_TEXT.dim)
+      // 线型一行：实线交互 / 虚线依赖的释义取自同一份词表（悬停）
+      const style = wrapper.find('[data-testid="legend-linestyle"]')
+      if (style.exists()) expect(style.findAll('.pair').map(p => p.attributes('title'))).toEqual([SHARED_TEXT.solid, SHARED_TEXT.dashed])
+      // 运行视角没有 K9 叠加 → 没有虚线行；结构视角的实线是选中才画的承载交互，在脚注
+      if (url !== '/') expect(style.exists()).toBe(false)
     }
-    const vocab = SHARED_CHANNELS.map(c => c.text)
-    for (const list of rows) for (const t of list) expect(vocab.some(v => t.includes(v))).toBe(true)
-    for (const list of rows) {
-      expect(list.some(t => t.includes(SHARED_CHANNELS[0].text))).toBe(true)
-      expect(list.some(t => t.includes(SHARED_CHANNELS[1].text))).toBe(true)
-    }
-    expect(rows[0].some(t => t.includes('实线 = 交互'))).toBe(true)
-    expect(rows[1].some(t => t.includes('实线 = 交互'))).toBe(true)
-    expect(rows[2].some(t => t.includes('实线 = 交互'))).toBe(true)
-    expect(rows[0].some(t => t.includes('虚线 = 依赖'))).toBe(true)
-    expect(rows[1].some(t => t.includes('虚线 = 依赖'))).toBe(true)
-    expect(rows[2].some(t => t.includes('虚线 = 依赖'))).toBe(false)
   })
 })
 
@@ -197,22 +208,27 @@ describe('L45：图例行即开关；L47：关着的开关行常列', () => {
     expect(listed()).toContain(absent)
   })
 
-  it('代码事实、组装、时间耦合的开关行在各组第一行；单击切换视图状态，关着淡色', async () => {
+  it('代码事实、组装、时间耦合的开关行在「叠加」一节；单击切换视图状态，关着淡色；开关行后面不写说明（说明在悬停）', async () => {
     const { wrapper, desk } = await open('/')
     const facts = () => wrapper.find('[data-testid="toggle-facts"]')
     expect(facts().attributes('aria-checked')).toBe('true')
+    expect(facts().find('.text').text()).toBe('代码事实')
+    expect(facts().attributes('title')).toContain('叠加代码事实')
     await facts().trigger('click')
     expect(desk.toggles.showFacts).toBe(false)
     expect(facts().classes()).toContain('off')
-    // 关着时组内只剩开关行：标签词行不列
-    expect(wrapper.find('[data-tag="未证实"]').exists()).toBe(false)
+    // 关着时「叠加」一节里只剩开关行：没有解码行
+    expect(wrapper.find('[aria-label="叠加"] .item.sub').exists()).toBe(false)
     await facts().trigger('click')
     expect(desk.toggles.showFacts).toBe(true)
 
     const asm = wrapper.find('[data-testid="toggle-assembly"]')
     expect(asm.attributes('aria-checked')).toBe('false')
+    expect(asm.find('.text').text()).toBe('组装')
     await asm.trigger('click')
     expect(desk.toggles.assembly).toBe(true)
+    const couple = wrapper.find('[data-testid="toggle-coupling"]')
+    expect(couple.find('.text').text()).toBe('时间耦合')
   })
 
   it('演化热度行打开为记住的口径（缺省修改），再单击关；没有演化事实时置灰', async () => {
@@ -363,52 +379,57 @@ describe('L49：「显示 ▾」菜单', () => {
   })
 })
 
-describe('L47：环与代码事实的出现集合', () => {
-  it('环编号在交互与结构视角都常显（T0 裁决 3）——本层有环时共享组列「↻N」行，没有环时不列', async () => {
-    const openShared = async (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) => {
-      const btn = wrapper.findAll('.group-btn').find(b => b.text().includes('共享'))!
-      if (btn.attributes('aria-expanded') !== 'true') await btn.trigger('click')
-    }
+describe('L47：环与代码事实的出现集合（ADR-0058：按通道归位）', () => {
+  it('环编号在交互与结构视角都常显（T0 裁决 3）——本层有环时列「↻N」行（交互在代码事实下、结构在「规则」一节），没有环时不列', async () => {
     for (const url of ['/', '/?v=s']) {
       const { wrapper } = await open(url)
-      await openShared(wrapper)
-      expect(wrapper.find('[aria-label="共享通道"]').text()).not.toContain('↻N')
+      expect(wrapper.find('[data-tag="环"]').exists()).toBe(false)
     }
     const CYCLE: FileDep[] = [
       ...DEPS,
       { from: 'src/app/s.ts', to: 'src/domain/m.ts', via: 'src/domain/m.ts', kind: 'value', line: 3, uses: true, invokes: true },
       { from: 'src/domain/m.ts', to: 'src/app/s.ts', via: 'src/app/s.ts', kind: 'value', line: 2, uses: true, invokes: true },
     ]
-    for (const url of ['/', '/?v=s']) {
+    for (const [url, sec] of [
+      ['/', '叠加'],
+      ['/?v=s', '规则'],
+    ] as const) {
       const { wrapper } = await open(url, CYCLE)
-      await openShared(wrapper)
-      expect(wrapper.find('[aria-label="共享通道"]').text()).toContain('↻N：本层的环编号')
+      const row = wrapper.find(`[aria-label="${sec}"] [data-tag="环"]`)
+      expect(row.exists()).toBe(true)
+      expect(row.text()).toContain(SHARED_TEXT.cycle)
     }
   })
 
-  it('交互视角「代码事实」组：只列本层出现的标签词（L26），缺段是选中交互才画出的临时记号、归「临时可见」常列', async () => {
+  it('交互视角「代码事实」开着时只列非文字记号；未证实 / 未解释是写在线上的字、不列；缺段是选中交互才画出的临时记号、在脚注', async () => {
     const { wrapper } = await open('/')
-    expect(wrapper.find('[data-testid="carrier-legend"]').text()).toContain('缺的一段画成警示色虚线')
-    expect(wrapper.findAll('[data-tag]').map(x => x.attributes('data-tag'))).toEqual(['未证实', '未解释', '缺段'])
-    expect(wrapper.text()).toContain('临时可见 · 选中交互时画出')
+    expect(wrapper.findAll('[aria-label="叠加"] [data-tag]').map(x => x.attributes('data-tag'))).not.toContain('未证实')
+    expect(wrapper.text()).not.toContain('未解释')
+    expect(wrapper.find('[data-testid="carrier-legend"]').exists()).toBe(false)
+    const foot = await openFoot(wrapper)
+    expect(foot.find('[data-testid="carrier-legend"]').text()).toContain('缺的一段画成警示色虚线')
+    expect(foot.find('[data-tag="缺段"]').exists()).toBe(true)
   })
 })
 
 describe('L51：教学内容只在帮助', () => {
-  it('图例里没有三问与「四修饰 · 读完类型再读」；关系组标题旁的「?」打开帮助并定位到「读一条线」', async () => {
+  it('图例里没有三问、「四修饰 · 读完类型再读」与类型定义；「线」一节标题旁的「?」打开帮助并定位到「读一条线」', async () => {
     const { wrapper, guide } = await open('/')
     for (const x of THREE_QUESTIONS) expect(wrapper.text()).not.toContain(x.q)
     expect(wrapper.text()).not.toContain('读完类型再读')
+    expect(wrapper.text()).not.toContain(TYPE_HINT.queries)
     await wrapper.find('button[aria-label="怎么读一条线"]').trigger('click')
     expect(guide).toEqual(['read-line'])
   })
 
-  it('帮助的「读一条线」一节有三问，可按 section 定位', () => {
+  it('帮助的「读一条线」一节有三问与四类关系的一句定义，可按 section 定位', () => {
     const w = mount(GuideDialog, { props: { section: 'read-line' } })
     const sec = w.find('[data-section="read-line"]')
     expect(sec.exists()).toBe(true)
     for (const x of THREE_QUESTIONS) expect(sec.text()).toContain(x.q)
     expect(sec.text()).toContain('三问四修饰')
+    const defs = sec.find('[data-testid="guide-types"]').text()
+    for (const t of ['queries', 'commands', 'notifies', 'streams'] as const) expect(defs).toContain(TYPE_HINT[t])
   })
 })
 

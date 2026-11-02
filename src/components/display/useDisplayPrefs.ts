@@ -1,21 +1,11 @@
 /**
- * 图例的本机记忆（L48，ADR-0056）：图例的收放按项目记在 localStorage，没记过（第一次进入这个项目）为展开；
- * 各组折叠按视角分别记，运行视角默认只展开「回放」。
+ * 图例的本机记忆（L48，ADR-0056；ADR-0058 起各节不再折叠，只记整卡的收放）：图例的收放按项目记在 localStorage，没记过（第一次进入这个项目）为展开。
  * 结构视角的显示偏好（ADR-0031、ADR-0032）：只引类型的束是否画出（typeOnly，L15、B1，缺省收起）、只看交互使用（invokesOnly，B1）、
  * 只看交互未覆盖（uncoveredOnly，B4）、总是展开表面（surfaceAlways，C6）、
  * 只看值依赖（valuesOnly，K16、U17，缺省否）——开关缺省都关；影响面方向第十一轮起是视图状态的一次性查询 impactQuery（K15b，ADR-0037），不在这里，本地记着的旧 impactMode 忽略；按项目记在本地、各组件共享同一份（画布读、面板写），不进视图状态与 URL。
  * 只属于这块界面，不进视图状态与 URL。
  */
-import { ref, shallowRef, watch, type Ref } from 'vue'
-import type { Perspective } from '@/state/transition'
-
-export type DisplayGroup = 'rel' | 'node' | 'facts' | 'asm' | 'evo' | 'play' | 'struct' | 'rule' | 'metric' | 'shared'
-
-const DEFAULT_GROUPS: Record<Perspective, Record<DisplayGroup, boolean>> = {
-  interaction: { rel: true, node: true, facts: true, asm: true, evo: true, play: true, struct: true, rule: true, metric: true, shared: false },
-  structure: { rel: true, node: true, facts: true, asm: true, evo: true, play: true, struct: true, rule: true, metric: true, shared: false },
-  run: { rel: false, node: false, facts: true, asm: true, evo: true, play: true, struct: true, rule: true, metric: true, shared: false },
-}
+import { ref, shallowRef, type Ref } from 'vue'
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -102,24 +92,15 @@ export function resetStructurePrefs() {
 /** L48：图例收放的键——按项目，不分视角 */
 export const legendOpenKey = (project = '') => `h5p-arch-desk:legend-open:${project}`
 
-export function useDisplayPrefs(perspective: Readonly<Ref<Perspective>>, project?: string) {
-  const GROUPS_KEY = () => `h5p-arch-desk:display-groups:${perspective.value}`
-  const readGroups = () => ({ ...DEFAULT_GROUPS[perspective.value], ...read<Partial<Record<DisplayGroup, boolean>>>(GROUPS_KEY(), {}) })
-
+export function useDisplayPrefs(project?: string) {
   // L48：第一次进入项目（没有记过）展开，之后按记住的
   const open = ref(read(legendOpenKey(project), true))
-  const groups = ref(readGroups())
-  watch(perspective, () => (groups.value = readGroups()))
 
   function toggleOpen() {
     open.value = !open.value
     write(legendOpenKey(project), open.value)
   }
-  function toggleGroup(g: DisplayGroup) {
-    groups.value = { ...groups.value, [g]: !groups.value[g] }
-    write(GROUPS_KEY(), groups.value)
-  }
   // ADR-0031：结构视角的显示偏好（与画布共享同一份）
   const structure = useStructurePrefs(project)
-  return { open, groups, toggleOpen, toggleGroup, ...structure }
+  return { open, toggleOpen, ...structure }
 }

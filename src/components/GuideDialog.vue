@@ -1,13 +1,17 @@
 <script setup lang="ts">
 /**
  * 「怎么读这张图」（W-10）：顶栏「帮助」打开的一页，按结构 / 交互 / 运行 / 对照与治理四组各一句话加示意（ADR-0031：结构图是依赖事实，交互图是四类交互），
- * 结构组另有「束与表面」「承载」两段（第八轮，C-27–C-29）；「读一条线」一段讲机制标签与两段标签位（ADR-0041）；另一段讲三视角共享的通道（L18，文字与图例同源）；只讲概念，线型、颜色等具体图例在画布右上角的图例。
- * 「三问」「四修饰」的读法讲解只在这里（L51，ADR-0056）：图例关系组的「?」打开本页并定位到「读一条线」（section）；「⋯ → 快捷键」定位到「快捷键」一节（TB-5）。Esc 或单击遮罩关闭。
+ * 结构组另有「束与表面」「承载」两段（第八轮，C-27–C-29）；「读一条线」一段讲四类关系的一句定义、机制标签与两段标签位（ADR-0041、ADR-0058）；另一段讲三视角共享的通道（L18，文字与图例同源）；只讲概念，线型、颜色等具体图例在画布右上角的图例。
+ * 「三问」「四修饰」与类型定义的讲解只在这里（L51，ADR-0056、ADR-0058）：图例「线」一节标题旁的「?」打开本页并定位到「读一条线」（section）；「⋯ → 快捷键」定位到「快捷键」一节（TB-5）。Esc 或单击遮罩关闭。
  */
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { RELATION_TYPE_LABELS, THREE_QUESTIONS } from './shared/labels'
+import { RELATION_TYPE_HINTS, RELATION_TYPE_LABELS, THREE_QUESTIONS } from './shared/labels'
 import { SHARED_CHANNELS } from './display/labels'
 import type { GuideSection } from './shared/guide'
+import { RELATION_TYPES, isUnclassified } from '@/model'
+
+/** L51（ADR-0058）：四类关系的一句定义只在这里与行悬停，图例的类型行只留色 + 名 */
+const TYPE_DEFS = RELATION_TYPES.filter(t => !isUnclassified(t))
 
 const props = defineProps<{ section?: GuideSection }>()
 
@@ -103,6 +107,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
           <ol class="questions">
             <li v-for="(x, i) in THREE_QUESTIONS" :key="i">{{ x.q }}{{ x.answers.map(a => `${a.a} → ${RELATION_TYPE_LABELS[a.type]}`).join('；') }}</li>
           </ol>
+          <p class="sub" data-testid="guide-types">
+            <template v-for="(t, i) in TYPE_DEFS" :key="t">{{ i ? '；' : '' }}{{ RELATION_TYPE_LABELS[t] }} = {{ RELATION_TYPE_HINTS[t] }}</template>
+            。线色就是类型，图例「线」一节只列色与名，悬停一行或一条线看这句定义。
+          </p>
           <p data-testid="guide-mechanism">
             再读修饰：经什么连写在线中点的标签（回调、端口、总线、注入、跨进程、路由、事件、通道、拉取，中性色；直接不写，经端口的线另在目标端画插座记号）、异步（空心箭头）。
             异常（违规、向上、未证实……）用警示色写在前一段；一条线至多两个标签，其余写「+k」、悬停列出。向上的线有机制就自带理由，没有机制的才标「向上」。

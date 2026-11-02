@@ -1,63 +1,44 @@
 <script setup lang="ts">
 /**
- * 图例 · 依赖 · 形态与档（结构视角，L16、L19、L21，ADR-0031 修订）：元素级边的四种形态记号（子类、组装、端口实现、使用）、
- * 醒目度（L43：例外深色加宽、骨架安静）与依赖的档（只引类型点线，K14）、束的一句说明；收起与例外的计数——跨界折叠（B2）、
- * 例外照画、环按组（L42）、「另直连」（L38）。「只引类型」那一档的行是开关行（L45，ADR-0056：图例行即开关，关着淡色常列、
- * 画布角留痕计数）；只看交互使用 / 只看未解释 / 总是展开表面没有自己的记号，在工具栏「显示 ▾」（L49）。「表面」一段：表面元素四类记号、越过入口、界外记号的说明（L20）。
- * 没有代码事实时（U16）只说明允许边。
- * - 图例按上下文显示（L47，G14）：只列本层静息态画出来的形态、档与收起计数（出现集合由 state/desk/legend 一处派生，
- *   与画布同一份 structureDisplay 过滤）；行序按固定词表、行只显隐不重排。表面元素四类与「+N」是表面展开（选中 / 悬停）才出现的
- *   临时记号（L20、ADR-0036）——归尾部「临时可见」小节常列，不随出现显隐。
+ * 图例 · 线（结构视角，L16、L19、L21，ADR-0031 修订，ADR-0058 按视觉通道组织）：只解码画布上有、且不是写字的记号——
+ * - 形态 = 端点记号（子类、组装、端口实现、使用；全部虚线，ADR-0035）；
+ * - 醒目度 = 明度与线宽（L43：例外深色加宽、骨架安静中灰）；
+ * - 档：只有「只引类型」在画布上另有记号（浅色点线，L43），那一行就是开关（L45，ADR-0056：关着淡色常列、带收起条数，画布角留痕计数）；
+ *   交互使用与值使用在画布上同画、靠悬停与面板区分，没有记号可解码，不列（ADR-0058 准入第一问）；
+ * - 粗细（共享通道 L18，WidthRow）。
+ * 束的概念（L21）、收起与例外的计数（B2、L42、L38）、表面 W 与越过入口（L20、C3）、表面元素四类与「+N」（ADR-0036）：
+ * 前者是讲解进帮助（L51），其余是写字的角标或悬停 / 选中才画出的线，归脚注（TempLegend）。
+ * 只看交互使用 / 只看未解释 / 总是展开表面没有自己的记号，在工具栏「显示 ▾」（L49）。没有代码事实时（U16）只说明允许边。
+ * 图例按上下文显示（L47，G14）：只列本层静息态画出来的形态与醒目度（出现集合由 state/desk/legend 一处派生，与画布同一份 structureDisplay 过滤）。
  */
 import { computed } from 'vue'
-import { DEP_FORMS, DEP_TIERS, ELEMENT_KINDS } from '@/model'
-import { SURFACE_PORT_CAP } from '@/layout/layout'
+import { DEP_FORMS } from '@/model'
 import { useDesk } from '@/state/inject'
-import DisplayGroup from './DisplayGroup.vue'
 import LegendToggle from './LegendToggle.vue'
 import StructureSwatch from './StructureSwatch.vue'
+import WidthRow from './WidthRow.vue'
 import { useStructurePrefs } from './useDisplayPrefs'
-import {
-  ALLOWED_TEXT,
-  BUNDLE_TEXT,
-  DEP_FORM_HINT,
-  DEP_FORM_LABEL,
-  DEP_TIER_HINT,
-  DEP_TIER_LABEL,
-  ELEMENT_KIND_HINT,
-  ELEMENT_KIND_LABEL,
-  ELEMENT_KIND_MARK,
-  FACTS_HINT,
-} from './labels'
+import { ALLOWED_TEXT, DEP_FORM_HINT, DEP_FORM_LABEL, DEP_TIER_HINT, DEP_TIER_LABEL, FACTS_HINT } from './labels'
 
-defineProps<{ open: boolean; presence: Set<string> }>()
-const emit = defineEmits<{ toggle: [] }>()
+defineProps<{ presence: Set<string> }>()
 const desk = useDesk()
 const sp = useStructurePrefs(desk.project)
 
 const facts = computed(() => desk.facts.status.value === 'ready' && !!desk.facts.structure.value?.facts)
 const hint = computed(() => (desk.facts.status.value === 'ready' ? '' : FACTS_HINT[desk.facts.status.value]))
 
-/** B2：当前折叠的跨界束（按当前的结构筛选取值） */
 /** L45：只引类型的档行即开关；关着（缺省）时常列淡色，带收起的条数 */
 const typeOnly = computed(() => sp.prefs.value.typeOnly)
 const typeCount = computed(
   () =>
     desk.facts.structureDisplay({ typeOnly: false, invokesOnly: sp.prefs.value.invokesOnly, uncoveredOnly: sp.prefs.value.uncoveredOnly })?.hidden.type ?? 0,
 )
-const showTier = (t: (typeof DEP_TIERS)[number], has: boolean) => has || (t === 'type' && !typeOnly.value)
-const crossCount = computed(
-  () =>
-    desk.facts.structureDisplay({
-      typeOnly: sp.prefs.value.typeOnly,
-      invokesOnly: sp.prefs.value.invokesOnly,
-      uncoveredOnly: sp.prefs.value.uncoveredOnly,
-    })?.hidden.cross ?? 0,
-)
+const typeTitle = `${DEP_TIER_LABEL.type} = ${DEP_TIER_HINT.type}；单击画出（浅色点线），再单击收起，收起时画布角留痕计数`
 </script>
 
 <template>
-  <DisplayGroup title="依赖 · 形态与档" :open="open" @toggle="emit('toggle')">
+  <section class="sec" aria-label="线">
+    <div class="sec-title">线</div>
     <template v-if="facts">
       <div v-for="f in DEP_FORMS" v-show="presence.has(`struct:form:${f}`)" :key="f" class="item" :data-form="f">
         <span class="sw kind"><StructureSwatch :kind="f" /></span>
@@ -65,108 +46,37 @@ const crossCount = computed(
           >{{ DEP_FORM_LABEL[f] }}<span class="hint"> = {{ DEP_FORM_HINT[f] }}</span></span
         >
       </div>
-      <template v-if="presence.has('struct:salience:exception') || presence.has('struct:salience:skeleton')">
-        <div class="section-label">醒目度 · 跟信息量走</div>
-        <div v-if="presence.has('struct:salience:exception')" class="item" data-testid="legend-salience-exception">
-          <span class="sw kind"><StructureSwatch exception /></span>
-          <span>例外（违规、向上、逆稳定、未解释）：深色、加宽，最先看到</span>
-        </div>
-        <div v-if="presence.has('struct:salience:skeleton')" class="item" data-testid="legend-salience-skeleton">
-          <span class="sw kind"><StructureSwatch /></span>
-          <span>骨架（其余画出来的依赖）：安静的中灰，线宽 = 条数；聚焦时其余变淡</span>
-        </div>
-      </template>
-      <template v-if="DEP_TIERS.some(t => showTier(t, presence.has(`struct:tier:${t}`)))">
-        <div class="section-label">依赖的档</div>
-        <template v-for="t in DEP_TIERS" :key="t">
-          <LegendToggle
-            v-if="t === 'type'"
-            v-show="showTier(t, presence.has(`struct:tier:${t}`))"
-            :on="typeOnly"
-            :label="DEP_TIER_LABEL[t]"
-            title="只引类型的束缺省收起；单击画出（浅色点线），再单击收起，收起时画布角留痕计数"
-            :data-tier="t"
-            data-testid="type-only-count"
-            @toggle="sp.setTypeOnly(!typeOnly)"
-          >
-            <template #swatch><StructureSwatch :tier="t" /></template>
-            = {{ DEP_TIER_HINT[t] }}；点线 · {{ typeCount }} 条{{ typeOnly ? '已显示' : '已收起' }}
-          </LegendToggle>
-          <div v-else v-show="presence.has(`struct:tier:${t}`)" class="item" :data-tier="t">
-            <span class="sw kind"><StructureSwatch :tier="t" /></span>
-            <span
-              >{{ DEP_TIER_LABEL[t] }}<span class="hint"> = {{ DEP_TIER_HINT[t] }}；画布上与另一档同画，悬停与面板写明</span></span
-            >
-          </div>
-        </template>
-      </template>
-      <div v-if="presence.has('struct:bundle')" class="item bundle" data-testid="bundle-note">
-        <span class="sw kind"><span class="chip">×N 元素</span></span>
-        <span>{{ BUNDLE_TEXT }}</span>
-      </div>
-
-      <template
-        v-if="
-          presence.has('struct:fold:cross') || presence.has('struct:fold:exceptions') || presence.has('struct:fold:cycle') || presence.has('struct:fold:direct')
-        "
+      <div
+        v-if="presence.has('struct:salience:exception')"
+        class="item"
+        data-testid="legend-salience-exception"
+        title="例外 = 违规、向上、逆稳定、未解释的依赖：深色、加宽，最先看到（L43）"
       >
-        <div class="section-label">收起与例外 · 都带计数</div>
-        <div v-if="presence.has('struct:fold:cross')" class="item" data-testid="cross-count">
-          <span class="sw kind"><span class="chip">界外</span></span>
-          <span
-            >跨界折叠：一端是边界节点的束 {{ crossCount }} 条折叠进节点朝外一侧的「界外 入 · 出」记号，悬停或选中一端时画出<span class="hint"
-              >；违规、向上、逆稳定的束不论开关照画</span
-            ></span
-          >
-        </div>
-        <div v-if="presence.has('struct:fold:exceptions')" class="item" data-testid="legend-exceptions">
-          <span class="sw kind"><span class="chip warn">向上</span></span>
-          <span
-            >例外照画：违规、向上（依赖违背依赖深度或声明的层）、逆稳定、未解释；只是未解释、另一端在框外或共用件架上的仍折叠计数<span class="hint"
-              >（L42）</span
-            ></span
-          >
-        </div>
-        <div v-if="presence.has('struct:fold:cycle')" class="item" data-testid="legend-cycle">
-          <span class="sw kind"><span class="chip warn">↻ N</span></span>
-          <span>环按组：环内的依赖静息态只计数（画布角「环内 N 条已收起」），单击节点上的环编号选中环组时画出</span>
-        </div>
-        <div v-if="presence.has('struct:fold:direct')" class="item" data-testid="legend-direct">
-          <span class="sw kind"><span class="chip">另直连 N</span></span>
-          <span>可由别的路径推出的依赖（传递约简）静息态不画，依赖方节点下边右计数，悬停或选中节点时画出</span>
-        </div>
-      </template>
-
-      <template v-if="presence.has('struct:surface:w') || presence.has('struct:surface:bypass')">
-        <div class="section-label">表面 · 入口导出与声明接口</div>
-        <div v-if="presence.has('struct:surface:w')" class="item">
-          <span class="sw kind"><span class="chip">表面 W</span></span>
-          <span>节点角标：被外部引用的不同元素数（与「入 · 出」同一行）；「总是展开表面」在工具栏「显示 ▾」</span>
-        </div>
-        <div v-if="presence.has('struct:surface:bypass')" class="item">
-          <span class="sw kind"><span class="chip bypass">越过入口</span></span>
-          <span>深层导入（不经入口）的边接到模块本体并带越过记号；建议经入口访问或把符号提升到入口</span>
-        </div>
-        <div v-if="presence.has('struct:fold:cross')" class="item">
-          <span class="sw kind"><span class="chip">界外 入 2 · 出 1</span></span>
-          <span>折叠的跨界束计数，悬停列出目标</span>
-        </div>
-      </template>
-      <!-- L47：临时可见——表面展开（选中 / 悬停，L20、ADR-0036）才出现的元素记号，常列、不随出现显隐 -->
-      <div class="section-label">临时可见 · 展开表面的节点上出现</div>
-      <div class="item inline elements" aria-label="表面元素四类">
-        <span v-for="k in ELEMENT_KINDS" :key="k" :title="ELEMENT_KIND_HINT[k]"
-          ><span class="el-mark" :data-kind="k">{{ ELEMENT_KIND_MARK[k] }}</span
-          >{{ ELEMENT_KIND_LABEL[k] }}</span
-        >
+        <span class="sw kind"><StructureSwatch exception /></span>
+        <span>深色加宽 = 例外</span>
       </div>
-      <div class="item" data-testid="surface-cap">
-        <span class="sw kind"><span class="chip">+N</span></span>
-        <span
-          >展开的表面是一排点：线在节点前分叉、各带小箭头指到自己的点，悬停点看名字与使用者；一个节点最多
-          {{ SURFACE_PORT_CAP }} 个点（本层用得最多的、交互接到的优先），其余收进「+N」、清单在面板「表面」一节；节点不随展开移动（L20②，ADR-0036）</span
-        >
+      <div
+        v-if="presence.has('struct:salience:skeleton')"
+        class="item"
+        data-testid="legend-salience-skeleton"
+        title="骨架 = 其余画出来的依赖：安静的中灰，线宽 = 条数；聚焦时其余变淡（L43）"
+      >
+        <span class="sw kind"><StructureSwatch /></span>
+        <span>中灰 = 骨架</span>
       </div>
+      <LegendToggle
+        v-show="!typeOnly || presence.has('struct:tier:type')"
+        :on="typeOnly"
+        :label="DEP_TIER_LABEL.type"
+        :title="typeTitle"
+        data-tier="type"
+        data-testid="type-only-count"
+        @toggle="sp.setTypeOnly(!typeOnly)"
+      >
+        <template #swatch><StructureSwatch tier="type" /></template>
+        · {{ typeCount }} 条{{ typeOnly ? '已显示' : '已收起' }}
+      </LegendToggle>
+      <WidthRow v-if="presence.has('shared:width')" />
     </template>
     <template v-else>
       <div class="item muted">{{ hint || '没有代码事实' }}</div>
@@ -175,15 +85,10 @@ const crossCount = computed(
         <span>{{ ALLOWED_TEXT }}；没有代码事实，只画允许依赖</span>
       </div>
     </template>
-  </DisplayGroup>
+  </section>
 </template>
 
 <style scoped>
-.chip.warn {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-
 .sw.kind,
 :deep(.toggle .sw) {
   width: 54px;
@@ -192,32 +97,5 @@ const crossCount = computed(
 
 .hint {
   color: var(--text-3);
-}
-
-.bypass {
-  border-style: dashed;
-  color: var(--warning);
-}
-
-.elements {
-  flex-wrap: wrap;
-  gap: 4px 12px;
-}
-
-.el-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  font-size: 10px;
-  line-height: 1;
-  color: var(--text-2);
-  border: 1px solid var(--border-strong);
-  border-radius: 3px;
-}
-
-.el-mark[data-kind='port'] {
-  border-radius: 50%;
 }
 </style>

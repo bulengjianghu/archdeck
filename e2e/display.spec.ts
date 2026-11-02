@@ -18,11 +18,12 @@ test('交互视角：类型行即开关——单击隐藏一类、行变淡仍�
   const canvas = (await page.locator('.canvas-area').boundingBox())!
   expect(box.y - canvas.y).toBeLessThan(40)
   expect(canvas.x + canvas.width - (box.x + box.width)).toBeLessThan(400)
-  // L51：三问不在图例里；修饰各行（机制、标签词、同步异步、粗细）照列，只解码
+  // L51：三问不在图例里；ADR-0058：机制词是写在线上的字、不列，粗细行照列只解码；各节不折叠
   await expect(legend.getByRole('list', { name: '三问定类型' })).toHaveCount(0)
   await expect(legend).not.toContainText('读完类型再读')
-  await expect(legend.getByTestId('legend-mechanisms')).toContainText('跨进程')
-  await expect(legend).toContainText('≥5')
+  await expect(legend.getByTestId('legend-mechanisms')).toHaveCount(0)
+  await expect(legend.getByTestId('legend-width')).toContainText('≥5')
+  await expect(legend.locator('.group-btn')).toHaveCount(0)
   // L45：类型行就是开关
   // L47：只列本层画面出现的类型——h5p 根层有委托
   const calls = legend.getByRole('switch', { name: '委托' })
@@ -59,27 +60,32 @@ test('运行视角：交互关系显示方式在「显示 ▾」里，结构类�
   await menu.getByRole('button', { name: '淡显' }).click()
   await expect(menu.getByRole('button', { name: '淡显' })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByTestId('display-summary')).toHaveAttribute('data-summary', '交互关系：淡显')
-  // 运行视角的图例：缺省只展开「回放」；类型行不是开关
+  // 运行视角的图例：类型行不是开关；回放的记号都是临时记号，在缺省折叠的脚注里（ADR-0058）
   const legend = legendOf(page)
-  await expect(legend.getByRole('button', { name: /^.关系$/ })).toHaveAttribute('aria-expanded', 'false')
-  await expect(legend).toContainText('当前步骤（沿消息方向流动）')
-  await legend.getByRole('button', { name: /^.关系$/ }).click()
   await expect(legend.locator('[data-type]').first()).toBeVisible()
   await expect(legend.getByRole('switch')).toHaveCount(0)
+  await expect(legend).not.toContainText('当前步骤（沿消息方向流动）')
+  await expect(legend.getByTestId('legend-temp')).toContainText(/回放 \/ 选中时另有 \d+ 种记号/)
+  await legend.getByTestId('legend-temp').click()
+  await expect(legend).toContainText('当前步骤（沿消息方向流动）')
 })
 
 test('结构视角（L19、L21、L45、L49）：「只引类型」档行即开关、带收起条数；只看交互使用 / 只看未解释 / 总是展开表面在「显示 ▾」', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?v=s')
   const legend = legendOf(page)
-  await expect(legend.getByRole('button', { name: /依赖 · 形态与档/ })).toBeVisible()
-  await expect(legend.getByRole('button', { name: /规则叠加/ })).toBeVisible()
-  await expect(legend.getByRole('button', { name: /指标 · 不稳定度/ })).toBeVisible()
-  for (const t of ['子类 = 虚线 + 空心三角', '组装 = 虚线 + 实心菱形', '端口实现 = 虚线 + 空心菱形 ◇', '使用 = 虚线 + 开口箭头'])
-    await expect(legend).toContainText(t)
-  await expect(legend.getByTestId('bundle-note')).toContainText('一对模块之间画一条束，线宽按束内元素级边条数；形态不止一种时标 ×N 元素')
+  // ADR-0058：按视觉通道分节（线 / 节点 / 指标 / 叠加 / 临时可见），不再有可折叠的组
+  await expect(legend.locator('.body > [aria-label="线"]')).toBeVisible()
+  await expect(legend.locator('.body > [aria-label="指标"]')).toBeVisible()
+  await expect(legend.locator('.group-btn')).toHaveCount(0)
+  for (const t of ['= 空心三角，在基类一端', '= 实心菱形，在组装者一端', '= 空心菱形 ◇', '= 开口箭头，指向被依赖方']) await expect(legend).toContainText(t)
+  // 束的概念在帮助；表面元素四类、+N、表面 W 是展开表面才出现的记号——在脚注
+  await expect(legend).not.toContainText('一对模块之间画一条束')
+  await expect(legend.getByLabel('表面元素四类')).toHaveCount(0)
+  await legend.getByTestId('legend-temp').click()
   await expect(legend.getByLabel('表面元素四类')).toContainText('端口')
   await expect(legend).toContainText('表面 W')
   await expect(legend).not.toContainText('越过入口')
+  await legend.getByTestId('legend-temp').click()
   await expect(legend.getByRole('switch', { name: '代码事实' })).toHaveCount(0)
   // 只引类型：缺省关、淡色常列（L47），带本层收起条数
   await expect(legend.getByRole('switch', { name: '只引类型' })).toHaveAttribute('aria-checked', 'false')
@@ -105,24 +111,27 @@ test('结构视角（L19、L21、L45、L49）：「只引类型」档行即开�
   await openDesk(page, '/p/h5player?level=domain&v=s')
   const typeRow = legendOf(page).getByRole('switch', { name: '只引类型' })
   await expect(typeRow).toHaveAttribute('aria-checked', 'false')
-  await expect(typeRow).toContainText(/点线 · \d+ 条已收起/)
+  await expect(typeRow).toContainText(/· \d+ 条已收起/)
   const n = (await typeRow.textContent())!.match(/(\d+) 条已收起/)![1]
   expect(Number(n)).toBeGreaterThan(0)
   await expect(page.getByTestId('type-only-corner')).toBeVisible()
   await typeRow.click()
-  await expect(typeRow).toContainText(`点线 · ${n} 条已显示`)
+  await expect(typeRow).toContainText(`· ${n} 条已显示`)
   await expect(page.getByTestId('type-only-corner')).toHaveCount(0)
   await expect(page.getByTestId('display-summary')).toHaveAttribute('data-summary', '只引类型已显示')
   await typeRow.click()
-  await expect(typeRow).toContainText(`点线 · ${n} 条已收起`)
+  await expect(typeRow).toContainText(`· ${n} 条已收起`)
 })
 
-test('交互视角「代码事实」组：第一行是开关，关闭后组内只剩开关行、画布角留痕写明口径、单击恢复（L22、L26、L45）', async ({ page }) => {
+test('交互视角「叠加」一节的代码事实：开关行后只列非文字记号，关闭后只剩开关行、画布角留痕写明口径、单击恢复（L22、L26、L45，ADR-0058）', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk')
   const legend = legendOf(page)
+  // 未解释 / 未证实 / 违规是写在线上的字，图例不列；缺段是选中交互才画出的临时记号，在脚注
+  for (const t of ['未解释', '违规', '未证实']) await expect(legend.locator(`[data-tag="${t}"]`)).toHaveCount(0)
+  await expect(legend.getByTestId('carrier-legend')).toHaveCount(0)
+  await legend.getByTestId('legend-temp').click()
   await expect(legend.getByTestId('carrier-legend')).toContainText('承载叠加')
-  await expect(legend.locator('[data-tag="未解释"]')).toBeVisible()
-  for (const t of ['违规', '未证实']) await expect(legend.locator(`[data-tag="${t}"]`)).toHaveCount(0)
+  await legend.getByTestId('legend-temp').click()
   const facts = legend.getByRole('switch', { name: '代码事实' })
   await expect(facts).toHaveAttribute('aria-checked', 'true')
   await expect(legend.getByRole('switch', { name: '组装' })).toHaveAttribute('aria-checked', 'false')
@@ -138,7 +147,7 @@ test('交互视角「代码事实」组：第一行是开关，关闭后组内�
   await expect(factsCorner).toHaveCount(0)
 })
 
-test('L48：图例收起后记在本机，重新进入仍收起；L51：关系组「?」打开帮助的「读一条线」', async ({ page }) => {
+test('L48：图例收起后记在本机，重新进入仍收起；L51：「线」一节标题旁的「?」打开帮助的「读一条线」', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk')
   const legend = legendOf(page)
   await legend.getByRole('button', { name: '怎么读一条线' }).click()
