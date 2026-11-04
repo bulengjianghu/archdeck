@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 1f2c3d0565905b7e providers.wasm-module#abstraction=f4ca283c providers.wasm-module#children=ab9e9931 providers.wasm-module#invariants=3b463369 providers.wasm-module#provides=0031a415 providers.wasm-module#responsibility=4d51d139 providers.wasm-module#summary=468f1c32 providers.wasm-module.lifecycle#summary=13218c66 providers.wasm-module.module#summary=de1a43e9 providers.wasm-module.sample#summary=a230955e rel:rel.providers.lifecycle-module=dcfffd3c rel:rel.providers.module-sample=a59614a7 rel:rel.providers.sample-memory=5057f889">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>wasm 模块与会话 · 进口发动机：C 的芯，JS 的接口面板</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>进口发动机：C 的芯，JS 的接口面板</h1>
+    <p class="lede">这一层是 <span data-arch="providers.wasm-module">wasm 模块与会话</span>：<span data-arch="providers.wasm-module" data-field="summary"></span>。两种机芯共用同一台解码发动机——C 语言写的芯，配一块规格化的接口面板。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 190" role="img" aria-label="C 发动机经 ABI 接口面板与 JS 会话相连">
+        <defs><marker id="f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="16" y="30" width="190" height="110" rx="10" fill="var(--warn-soft)" stroke="var(--warn)"/>
+        <text x="111" y="54" font-size="11.5" text-anchor="middle" class="">C 语言发动机</text>
+        <text x="111" y="74" font-size="9.5" text-anchor="middle" class="muted">拆包 · 解密 · 解码</text>
+        <text x="111" y="92" font-size="9.5" text-anchor="middle" class="muted">FFmpeg 出品，编译成 wasm</text>
+        <text x="111" y="116" font-size="9" text-anchor="middle" class="muted">一份代码，两族机芯共用</text>
+        <rect x="238" y="44" width="96" height="84" rx="10" fill="var(--bg)" stroke="var(--warn)"/>
+        <text x="286" y="74" font-size="11" text-anchor="middle" class="">ABI</text>
+        <text x="286" y="92" font-size="9" text-anchor="middle" class="muted">接口面板</text>
+        <text x="286" y="108" font-size="8.5" text-anchor="middle" class="muted">规格化</text>
+        <path d="M208,86 L234,86 M336,86 L356,86" stroke="var(--text-2)" stroke-width="2.5" marker-end="url(#f)"/>
+        <rect x="360" y="24" width="264" height="124" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="492" y="46" font-size="11.5" text-anchor="middle" class="">JS 会话</text>
+        <rect x="376" y="58" width="112" height="34" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="432" y="72" font-size="9.5" text-anchor="middle" class="">推字节 · 取样本</text><text x="432" y="86" font-size="8.5" text-anchor="middle" class="muted">按引擎肯收的块</text>
+        <rect x="496" y="58" width="112" height="34" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="552" y="72" font-size="9.5" text-anchor="middle" class="">水位 · 接点</text><text x="552" y="86" font-size="8.5" text-anchor="middle" class="muted">读数出口</text>
+        <rect x="376" y="100" width="232" height="34" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="492" y="116" font-size="9.5" text-anchor="middle" class="">关停：按借用的反序归还，超时即断</text>
+        <text x="320" y="174" font-size="9.5" text-anchor="middle" class="muted">回调有守护：引擎调皮也不掀桌；错误漏斗只报一次，不刷屏</text>
+      </svg>
+      <figcaption>发动机与接口面板：两边只认规格，不认实现。</figcaption>
+    </figure>
+
+    <h2>三个岗位</h2>
+    <div class="cols c3">
+      <div><b><span data-arch="providers.wasm-module.module">模块与会话</span></b>编译一份基线播放模块；每个播放会话领一个实例，经接口面板推字节、取帧。</div>
+      <div><b><span data-arch="providers.wasm-module.sample">归一化样本</span></b>引擎吐出的帧与声音统一成一种规格，两族机芯拿到手就能用。</div>
+      <div><b><span data-arch="providers.wasm-module.lifecycle">会话生命周期</span></b>开与关都讲顺序：资源按借用的反序归还，还到超时直接终止，绝不悬挂。</div>
+    </div>
+
+    <p class="note">它的上游是 <span data-arch="providers.stream-input">进料口</span>；两族机芯（<span data-arch="providers.self-clocked">自建时钟</span> / <span data-arch="providers.element">元素</span>）都只带这块面板的插头——发动机换版本，机芯无感。</p>
+
+  </body>
+</html>

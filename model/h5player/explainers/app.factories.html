@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 e636576aad79756a app.factories#abstraction=b0cefce2 app.factories#children=4d233fbb app.factories#invariants=f49ff1b1 app.factories#provides=95e8aefd app.factories#responsibility=72706a2b app.factories#summary=9caa6aa4 app.factories.base#summary=d602ad86 app.factories.load#summary=a8b82980 app.factories.play#summary=1adb8700 app.factories.process#summary=c98e6049">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>三段工厂 · 图纸间：方案定了，零件怎么造</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>图纸间：方案定了，零件怎么造</h1>
+    <p class="lede">这一层是 <span data-arch="app.factories">三段工厂</span>：<span data-arch="app.factories" data-field="summary"></span>。方案一选定，图纸间把三段传送带的候选图纸开出来，交给队长统一施工。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 156" role="img" aria-label="方案进入图纸间，产出三段图纸与段控制器，可就地改造">
+        <defs><marker id="f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="10" y="44" width="118" height="56" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="69" y="68" font-size="11" text-anchor="middle" class="">方案选定</text><text x="69" y="84" font-size="9" text-anchor="middle" class="muted">六选一</text>
+        <path d="M130,72 L148,72" stroke="var(--text-2)" stroke-width="2" marker-end="url(#f)"/>
+        <rect x="152" y="36" width="128" height="72" rx="10" fill="var(--bg)" stroke="var(--warn)"/><text x="216" y="60" font-size="12" text-anchor="middle" class="">图纸间</text><text x="216" y="78" font-size="9.5" text-anchor="middle" class="muted">方案 → 零件清单</text><text x="216" y="92" font-size="9.5" text-anchor="middle" class="muted">+ 段控制器</text>
+        <path d="M282,58 L300,58 M282,86 L300,86" stroke="var(--text-2)" stroke-width="2" marker-end="url(#f)"/>
+        <rect x="304" y="38" width="150" height="36" rx="8" fill="var(--bg)" stroke="var(--ok)"/><text x="379" y="60" font-size="10.5" text-anchor="middle" class="">三段传送带图纸</text>
+        <rect x="304" y="82" width="150" height="36" rx="8" fill="var(--bg)" stroke="var(--ok)"/><text x="379" y="104" font-size="10.5" text-anchor="middle" class="">可就地差量改造</text>
+        <path d="M456,58 L474,58" stroke="var(--text-2)" stroke-width="2" marker-end="url(#f)"/>
+        <rect x="478" y="40" width="152" height="52" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="554" y="62" font-size="10.5" text-anchor="middle" class="">交给队长</text><text x="554" y="78" font-size="9.5" text-anchor="middle" class="muted">事务统一提交施工</text>
+      </svg>
+      <figcaption>只出图纸不动手：施工由 Solution 的切换事务统一提交。</figcaption>
+    </figure>
+
+    <h2>三张图纸桌</h2>
+    <div class="cols c3">
+      <div><b><span data-arch="app.factories.base">公共底座</span></b>三段共用的图纸语法与段控制器骨架：暂停、恢复、就地改造都从这里来。</div>
+      <div><b><span data-arch="app.factories.load">加载段</span> · <span data-arch="app.factories.process">加工段</span></b>原料与质检两段的候选零件清单，按方案各有一套。</div>
+      <div><b><span data-arch="app.factories.play">成品段</span></b>解码与上屏的图纸，含缓冲上限的配置入口。</div>
+    </div>
+
+    <p class="note">换配置不推倒重来：图纸支持就地差量改造——正在跑的传送带按差异改造，观众无感。</p>
+
+  </body>
+</html>

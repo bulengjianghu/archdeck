@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 48baa60c28fa3e3e access#abstraction=b6367c8d access#children=08dcf71b access#excludes=12f77b73 access#includes=e2596ace access#invariants=33b1191a access#responsibility=086afb52 access#strata=4d8674e3 access#summary=b4c2ffbf access.agent#invariants=0190633f access.agent#summary=67c62664 access.deps#summary=d5ad6446 access.governance-store#summary=41b28d11 access.history#summary=cb3f24fb access.lint#summary=cd7a209c access.model-source#invariants=16797a02 access.model-source#summary=9c7ec10e access.reader#invariants=22665bca access.reader#summary=f96fa202 access.source#summary=7221b381 access.writer#summary=9ccb7805 rel:rel.ad.lint-reader=ce87a0ec rel:rel.ad.source-reader=e1fc2bc2 rel:rel.ed.sketch-reader=ed1dfa8a rel:rel.ed.sketch-store=2a9f4423 rel:rel.ed.source-sketch=6c9a2186 rel:rel.gv.agent-append=6074a5a5 rel:rel.gv.agent-deps=5268b156 rel:rel.gv.agent-history=aa9f997f rel:rel.gv.agent-reader=7c4d4a9d rel:rel.gv.agent-source=3db220d5 rel:rel.gv.agent-store=52e750f7 rel:rel.gv.append-store=8f9b5989 rel:rel.gv.classify-cmd-facts=64357085 rel:rel.gv.deps-exports=a137579f rel:rel.gv.history-reader=c689f366 rel:rel.gv.lint-deps=60b18dd5 rel:rel.gv.lint-store=44fef0b9 rel:rel.gv.source-deps=d19b574a rel:rel.gv.source-history=295182b5 rel:rel.gv.source-store=525aba7b rel:rel.gv.source-writer=cbb293b4 rel:rel.gv.store-reader=5c9a4ea5 rel:rel.gv.writer-reader=0c77cbae rel:rel.p7.lint-source=c6db8717 rel:rel.p7.plugin-source=14c8ad6d rel:rel.p7.source-reader=405f5c71">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>接入层 · 搬运工与两扇窗口</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>搬运工与两扇窗口</h1>
+    <p class="lede">这一层是 <span data-arch="access">接入层</span>：<span data-arch="access" data-field="summary"></span>。读进来的每样东西都有窗口，写出去只有一扇门，而且只许追加。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 226" role="img" aria-label="磁盘经搬运工供页面、命令行与 AI；写入口只追加人拥有的文件">
+        <defs><marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="20" y="60" width="130" height="76" rx="10" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="85" y="88" font-size="11.5" text-anchor="middle" class="">磁盘</text>
+        <text x="85" y="108" font-size="9" text-anchor="middle" class="muted">描述 YAML + 被描述项目源码</text>
+        <path d="M152,98 L178,98" stroke="var(--ok)" stroke-width="2.5" marker-end="url(#m)"/>
+        <rect x="182" y="52" width="216" height="92" rx="10" fill="var(--ok-soft)" stroke="var(--ok)"/>
+        <text x="290" y="76" font-size="12" text-anchor="middle" class="">搬运工</text>
+        <rect x="198" y="88" width="184" height="22" rx="5" fill="var(--bg)" stroke="var(--line)"/><text x="290" y="103" font-size="9.5" text-anchor="middle" class="">认项目的约定：含系统卡即是</text>
+        <rect x="198" y="116" width="184" height="22" rx="5" fill="var(--bg)" stroke="var(--line)"/><text x="290" y="131" font-size="9.5" text-anchor="middle" class="">读清单 · 读文件 · 读历史</text>
+        <path d="M400,80 L426,80" stroke="var(--text-2)" stroke-width="2" marker-end="url(#m)"/>
+        <path d="M400,116 L426,116" stroke="var(--text-2)" stroke-width="2" marker-end="url(#m)"/>
+        <rect x="430" y="52" width="196" height="42" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="528" y="70" font-size="10.5" text-anchor="middle" class="">数据窗口（页面用）</text><text x="528" y="86" font-size="8.5" text-anchor="middle" class="muted">变了就推送，存盘即刷新</text>
+        <rect x="430" y="102" width="196" height="42" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="528" y="120" font-size="10.5" text-anchor="middle" class="">查询窗口（命令行 / AI）</text><text x="528" y="136" font-size="8.5" text-anchor="middle" class="muted">同一输入同一答案</text>
+        <path d="M528,146 L528,168 L390,168" stroke="var(--warn)" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#m)"/>
+        <rect x="238" y="156" width="152" height="42" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/>
+        <text x="314" y="174" font-size="10.5" text-anchor="middle" class="">写入只追加</text>
+        <text x="314" y="190" font-size="8.5" text-anchor="middle" class="muted">只收人拥有的文件</text>
+        <text x="320" y="220" font-size="9.5" text-anchor="middle" class="muted">搬运工只搬运，不解释含义——解释是百科全书的事</text>
+      </svg>
+      <figcaption>两扇窗口进，一扇门出，且只许追加。</figcaption>
+    </figure>
+
+    <h2>窗口与门</h2>
+    <div class="cols c2">
+      <div><b><span data-arch="access.model-source">数据站</span></b>开发服务器里的邮政窗口：项目清单带健康度，描述、源码、历史各有窗口，文件一存盘就推送更新。</div>
+      <div><b><span data-arch="access.reader">描述读取</span></b>凭一个约定认项目：目录里含系统卡的即是项目；当前版本、设计某一轮、对比基线都按同一约定取。</div>
+      <div><b><span data-arch="access.writer">描述写入</span></b>只收「人拥有」的文件：评审意见、例外、确认记录——只追加、写前比对指纹，AI 生成的部分一个字都不碰。</div>
+      <div><b><span data-arch="access.agent">agent 窗口</span></b>命令行与 MCP 两个外壳、一个查询核心：架构师助手写代码前先来这里问路。</div>
+    </div>
+
+    <p class="note ok">为什么死守「只追加」：人拥有的文件是架构师的笔迹，指纹门禁守着——谁动过、什么时候动的一清二楚。</p>
+
+  </body>
+</html>

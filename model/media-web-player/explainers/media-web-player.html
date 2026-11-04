@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 4eb571c7803a2af6 host#summary=bb77b930 kit#summary=e6ce7e1c media-web-player#description=1aefa0f3 media-web-player#strata=ca96f64a pipeline#summary=00a4db68 providers#summary=0750c9dc rel:rel.host.create-player=c2de7c34 rel:rel.host.diag-snapshot=96eb2388 rel:rel.host.element-family=39e5ca10 rel:rel.host.player-commands=61134681 rel:rel.host.player-events=3f2d9a24 rel:rel.host.resume-audio=28e8507d rel:rel.host.self-clocked-family=c7a295e7 rel:rel.kit.acceptance-latency=ddaf1df5 rel:rel.kit.assembly-element=455b61d1 rel:rel.kit.assembly-fault=033d2318 rel:rel.kit.assembly-self-clocked=256b158e rel:rel.kit.audio-element=865624ae rel:rel.kit.audio-self-clocked=4d6a1437 rel:rel.kit.decide-element=76c0e37e rel:rel.kit.decide-self-clocked=c169d43c rel:rel.kit.follow-element=1f25285d rel:rel.kit.follow-self-clocked=40bdbec7 rel:rel.kit.kernel-fault=c4c577cd rel:rel.kit.lifecycle-start-element=f8bba0b9 rel:rel.kit.lifecycle-start-self-clocked=e9b014d9 rel:rel.kit.lifecycle-stop-element=8a1b4e25 rel:rel.kit.lifecycle-stop-self-clocked=553cdd84 rel:rel.kit.page-audio-timers=715b96b5 rel:rel.kit.page-fault=cd704a64 rel:rel.kit.session-fault=c4ec7e92 rel:rel.kit.session-source-check=c3a476cf rel:rel.pipeline.law-fault=af458186 rel:rel.pipeline.request-fault=b7795c70 rel:rel.pipeline.run-execute-mse=edf97d14 rel:rel.pipeline.run-execute-self-clocked=1b403dda rel:rel.pipeline.run-sink=df7d4a16 rel:rel.providers.element-core-fault=e98f5bb7 rel:rel.providers.element-timers=8c5a7df2 rel:rel.providers.family-sound-held=c48a8313 rel:rel.providers.family-timers=3a622cb6 rel:rel.providers.family-url=914e8821 rel:rel.providers.flv-bytes=b67a092a rel:rel.providers.hls-bytes=4d38bffa rel:rel.providers.input-anchors=ac0a45a2 rel:rel.providers.input-flv=c2d6eb8f rel:rel.providers.input-hls=43b1a7c0 rel:rel.providers.input-jitter=ed021b32 rel:rel.providers.input-mp4=6ab9c5fe rel:rel.providers.input-sink=42b632b9 rel:rel.providers.lifecycle-sink=39bda39a rel:rel.providers.module-fetch=7e4c2625 rel:rel.providers.module-loss=33cb3522 rel:rel.providers.mp4-bytes=dce01e14 rel:rel.providers.mse-law=a7525746 rel:rel.providers.mse-progress=156d1e9b rel:rel.providers.mse-sink=d7a50979 rel:rel.providers.mse-timers=f313ce94 rel:rel.providers.native-sink=ca8e31aa rel:rel.providers.protocol-contract=435279c2 rel:rel.providers.protocol-latency=39b5f384 rel:rel.providers.self-clocked-fault=05bc7e18 rel:rel.providers.self-clocked-sink=0be0e19a rel:rel.providers.session-law=2c080a60 rel:rel.providers.session-meters=2f9dba8b rel:rel.providers.session-progress=d6a0aaa8 rel:rel.providers.session-timers=2122680b rel:rel.providers.timeshift-anchors=d22734de rel:rel.providers.video-hold=9bf228e0 rel:rel.providers.video-meters=565e063b rel:rel.providers.video-timers=40d44cf9 rel:rel.providers.wasm-module-fault=b0892c7a rel:rel.providers.worker-sink=1318bc8d share#summary=3a0319eb">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Media Web Player · 同一机身，双机芯</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>同一机身，双机芯</h1>
+    <p class="lede">这台播放机分五层楼：客厅里的用户（演示页）、可换装的机身（会话内核）、机身与机芯共用的说明书与物理定律、两种机芯，以及公共件。<b>机身与机芯互相不认识，只认中间那本说明书。</b></p>
+
+    <figure>
+      <svg viewBox="0 0 640 336" role="img" aria-label="五层楼：客厅、机身、说明书与定律、机芯、公共件">
+        <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="8" y="6" width="624" height="56" rx="10" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="20" y="26" font-size="13" class="">Host · 客厅（唯一用户：演示页）</text>
+        <rect x="430" y="18" width="100" height="32" rx="8" fill="var(--bg)" stroke="var(--warn)"/><text x="480" y="38" font-size="10.5" text-anchor="middle" class="">演示页 ★</text>
+
+        <rect x="8" y="70" width="306" height="96" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="20" y="90" font-size="12.5" class="">Kit · 机身（会话内核）</text>
+        <text x="20" y="105" font-size="9.5" class="muted">一次打开到关闭 = 一个会话</text>
+        <rect x="20" y="114" width="88" height="40" rx="8" fill="var(--bg)" stroke="var(--warn)"/><text x="64" y="130" font-size="10" text-anchor="middle" class="">门面 ★</text><text x="64" y="144" font-size="8.5" text-anchor="middle" class="muted">方法→命令</text>
+        <rect x="114" y="114" width="94" height="40" rx="8" fill="var(--bg)" stroke="var(--warn)"/><text x="161" y="130" font-size="10" text-anchor="middle" class="">会话内核 ★</text><text x="161" y="144" font-size="8.5" text-anchor="middle" class="muted">排队·状态·释放</text>
+        <rect x="214" y="114" width="88" height="40" rx="8" fill="var(--bg)" stroke="var(--warn)"/><text x="258" y="130" font-size="10" text-anchor="middle" class="">会话规则 ★</text><text x="258" y="144" font-size="8.5" text-anchor="middle" class="muted">接受表·路线</text>
+
+        <rect x="326" y="70" width="306" height="96" rx="10" fill="var(--ok-soft)" stroke="var(--ok)"/>
+        <text x="338" y="90" font-size="12.5" class="">Pipeline · 说明书 + 物理定律</text>
+        <text x="338" y="105" font-size="9.5" class="muted">共用的契约与定律，不认识任何一族</text>
+        <rect x="338" y="114" width="138" height="40" rx="8" fill="var(--bg)" stroke="var(--warn)"/><text x="407" y="130" font-size="10" text-anchor="middle" class="">管线契约 ★</text><text x="407" y="144" font-size="8.5" text-anchor="middle" class="muted">插座标准</text>
+        <rect x="482" y="114" width="138" height="40" rx="8" fill="var(--bg)" stroke="var(--warn)"/><text x="551" y="130" font-size="10" text-anchor="middle" class="">延迟决策律 ★</text><text x="551" y="144" font-size="8.5" text-anchor="middle" class="muted">恒温器 · 纯函数</text>
+
+        <rect x="8" y="174" width="624" height="92" rx="10" fill="var(--warn-soft)" stroke="var(--warn)"/>
+        <text x="20" y="194" font-size="12.5" class="">Providers · 机芯 × 2（客厅主人选好注入机身）</text>
+        <rect x="20" y="204" width="148" height="50" rx="8" fill="var(--bg)" stroke="var(--warn)"/><text x="94" y="224" font-size="10" text-anchor="middle" class="">自建时钟机芯 ★</text><text x="94" y="240" font-size="8.5" text-anchor="middle" class="muted">画布自绘 · 可进后台</text>
+        <rect x="176" y="204" width="148" height="50" rx="8" fill="var(--bg)" stroke="var(--warn)"/><text x="250" y="224" font-size="10" text-anchor="middle" class="">元素机芯 ★</text><text x="250" y="240" font-size="8.5" text-anchor="middle" class="muted">借浏览器现成元件</text>
+        <rect x="332" y="204" width="148" height="50" rx="8" fill="var(--bg)" stroke="var(--warn)"/><text x="406" y="224" font-size="10" text-anchor="middle" class="">wasm 模块会话 ★</text><text x="406" y="240" font-size="8.5" text-anchor="middle" class="muted">共用的进口发动机</text>
+        <rect x="488" y="204" width="132" height="50" rx="8" fill="var(--bg)" stroke="var(--warn)"/><text x="554" y="224" font-size="10" text-anchor="middle" class="">拉流内核 ★</text><text x="554" y="240" font-size="8.5" text-anchor="middle" class="muted">进料口 · 溢流阀</text>
+
+        <rect x="8" y="274" width="624" height="54" rx="10" fill="var(--hot-soft)" stroke="var(--hot)"/>
+        <text x="20" y="294" font-size="12.5" class="">Share · 公共件</text>
+        <text x="20" y="310" font-size="9.5" class="muted">机身机芯共用的原语：错误 · 事件 · 一次性操作 · 轨道</text>
+        <rect x="470" y="286" width="150" height="30" rx="8" fill="var(--bg)" stroke="var(--hot)"/><text x="545" y="305" font-size="10" text-anchor="middle" class="">基础媒体模型 ★</text>
+        <text x="300" y="68" font-size="9.5" text-anchor="middle" class="muted">★ 核心 11 个（两份机芯内部机制另有图解）</text>
+      </svg>
+      <figcaption>五层楼：机身与机芯互不 import，装配时才见面。</figcaption>
+    </figure>
+
+    <h2>机身与机芯怎么相见</h2>
+    <figure>
+      <svg viewBox="0 0 640 138" role="img" aria-label="机身与机芯之间隔着一块插座面板">
+        <defs><marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="24" y="30" width="190" height="84" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="119" y="62" font-size="11.5" text-anchor="middle" class="">机身 · 内核</text><text x="119" y="82" font-size="9.5" text-anchor="middle" class="muted">会话 · 命令队列 · 状态</text><text x="119" y="98" font-size="9.5" text-anchor="middle" class="muted">零浏览器细节</text>
+        <rect x="226" y="22" width="188" height="100" rx="10" fill="var(--bg)" stroke="var(--warn)"/>
+        <text x="320" y="44" font-size="11" class="">插座面板（契约）</text>
+        <rect x="242" y="52" width="156" height="16" rx="4" fill="var(--soft)" stroke="var(--line)"/><text x="320" y="64" font-size="9" text-anchor="middle" class="muted">源 · 打开选项</text>
+        <rect x="242" y="72" width="156" height="16" rx="4" fill="var(--soft)" stroke="var(--line)"/><text x="320" y="84" font-size="9" text-anchor="middle" class="muted">命令 → 回报</text>
+        <rect x="242" y="92" width="156" height="16" rx="4" fill="var(--soft)" stroke="var(--line)"/><text x="320" y="104" font-size="9" text-anchor="middle" class="muted">统计 · 族端口</text>
+        <rect x="430" y="30" width="190" height="84" rx="10" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="525" y="62" font-size="11.5" text-anchor="middle" class="">机芯 · 管线族</text><text x="525" y="82" font-size="9.5" text-anchor="middle" class="muted">拉流 · 解码 · 呈现 · 音频</text><text x="525" y="98" font-size="9.5" text-anchor="middle" class="muted">自带定律执行器</text>
+        <path d="M216,72 L222,72 M416,72 L426,72" stroke="var(--text-2)" stroke-width="2.5" marker-end="url(#c)"/>
+        <text x="320" y="134" font-size="9.5" text-anchor="middle" class="muted">谁想接入，谁照插座做——换机芯不动机身</text>
+      </svg>
+      <figcaption>客厅主人把机芯注入机身：双方只认插座。</figcaption>
+    </figure>
+
+    <p class="note ok">机芯两族（自建时钟族：画布自绘每一帧，自由度大；元素族：借浏览器现成元件，稳而省力）都归 <span data-arch="providers">机芯层</span> 管；机身与说明书分属 <span data-arch="kit">机身层</span> 与 <span data-arch="pipeline">说明书层</span>。两族共用同一台 wasm 解码发动机与同一条延迟定律——调好一次，两台都好。</p>
+
+  </body>
+</html>

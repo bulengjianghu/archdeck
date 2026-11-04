@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 add377ca49ed3b87 domain.services#abstraction=442a69b0 domain.services#children=dac8e72c domain.services#invariants=67481dbf domain.services#responsibility=397c9975 domain.services#summary=6c1e19fa domain.services.buffer-baseline#summary=6850e6de domain.services.fhls-presentation#invariants=29f82de2 domain.services.fhls-presentation#summary=f179aa00 domain.services.hls-live#summary=ca7cb2a8 domain.services.live-buffer-control#summary=ed7a9eea domain.services.solution-select#summary=3ec2eb6f domain.services.timeshift#invariants=7bea5437 domain.services.timeshift#summary=0688d13f domain.services.vod-buffer#invariants=764d409b domain.services.vod-buffer#summary=75c9c669 rel:rel.sd.ts-baseline=6cae696d">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>决策服务 · 参谋部：只动脑，不动手</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>参谋部：只动脑，不动手</h1>
+    <p class="lede">这一层是 <span data-arch="domain.services">决策服务</span>：<span data-arch="domain.services" data-field="summary"></span>。全部是纯函数：同样输入必出同样决议，不碰网络不碰画面，拔掉浏览器也能在命令行里测。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 158" role="img" aria-label="情况输入参谋部，纯函数算出决议">
+        <defs><marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="12" y="42" width="118" height="62" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="71" y="68" font-size="11" text-anchor="middle" class="">情况输入</text><text x="71" y="84" font-size="9.5" text-anchor="middle" class="muted">水位 · 事实 · 配置</text>
+        <path d="M132,73 L152,73" stroke="var(--text-2)" stroke-width="2" marker-end="url(#h)"/>
+        <rect x="156" y="26" width="328" height="100" rx="10" fill="var(--ok-soft)" stroke="var(--ok)"/>
+        <text x="320" y="48" font-size="12" text-anchor="middle" class="">参谋部（纯函数）</text>
+        <rect x="172" y="60" width="92" height="50" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="218" y="80" font-size="9.5" text-anchor="middle" class="">选型</text><text x="218" y="95" font-size="9" text-anchor="middle" class="muted">六选一</text>
+        <rect x="274" y="60" width="92" height="50" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="320" y="80" font-size="9.5" text-anchor="middle" class="">缓冲控制律</text><text x="320" y="95" font-size="9" text-anchor="middle" class="muted">水位节奏</text>
+        <rect x="376" y="60" width="92" height="50" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="422" y="80" font-size="9.5" text-anchor="middle" class="">时移判定</text><text x="422" y="95" font-size="9" text-anchor="middle" class="muted">何时换腿</text>
+        <path d="M486,73 L506,73" stroke="var(--ok)" stroke-width="2" marker-end="url(#h)"/>
+        <rect x="510" y="42" width="118" height="62" rx="8" fill="var(--bg)" stroke="var(--ok)"/><text x="569" y="68" font-size="11" text-anchor="middle" class="">决议</text><text x="569" y="84" font-size="9.5" text-anchor="middle" class="muted">同样输入同样决议</text>
+        <text x="320" y="148" font-size="9.5" text-anchor="middle" class="muted">决议怎么落实：宿主与司机的事——参谋只动脑，不动手</text>
+      </svg>
+      <figcaption>纯决策：可重放、可离线测试。</figcaption>
+    </figure>
+
+    <h2>三张办公桌</h2>
+    <div class="cols c3">
+      <div><b><span data-arch="domain.services.solution-select">选型参谋</span></b>看流的样子（协议、编码、能力）从六种方案里挑一个，并给出理由。</div>
+      <div><b>水位参谋</b>基线与自适应：<span data-arch="domain.services.buffer-baseline">基线水位</span>、<span data-arch="domain.services.live-buffer-control">直播充放水</span>、<span data-arch="domain.services.vod-buffer">点播缓冲</span> 各管一段。</div>
+      <div><b><span data-arch="domain.services.timeshift">时移判定</span></b>什么时候从直播腿换到回看腿、换不成怎么降级；另有 HLS 两张专桌：<span data-arch="domain.services.hls-live">HLS 直播</span>、<span data-arch="domain.services.fhls-presentation">Fhls 呈现</span>。</div>
+    </div>
+
+    <p class="note ok">这一层零输入输出：不碰 DOM、不碰网络、不碰时钟。控制律经宿主注入，写回由司机完成——想验证一个决策，喂同样的输入就够了。</p>
+
+  </body>
+</html>
