@@ -351,9 +351,17 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const drillInto = (id: string) => dispatch({ type: 'drill', id })
   const goTo = (id: string, select?: Selection | null) => void dispatch({ type: 'goTo', id, select })
   const goUp = () => void dispatch({ type: 'goUp' })
-  const select = (s: Selection | null) => void dispatch({ type: 'select', selection: s })
+  /** 最近一次选中的来源：'explainer' = 图解 iframe 的 arch:select（EX-3：画布选中、资料区不动，自动打开图解要豁免） */
+  const selectSource = ref<'explainer' | null>(null)
+  const select = (s: Selection | null, source: 'explainer' | null = null) => {
+    selectSource.value = source
+    void dispatch({ type: 'select', selection: s })
+  }
   const revealRelation = (id: string) => void dispatch({ type: 'revealRelation', id })
-  const revealModule = (id: string) => void dispatch({ type: 'revealModule', id })
+  const revealModule = (id: string, source: 'explainer' | null = null) => {
+    selectSource.value = source
+    void dispatch({ type: 'revealModule', id })
+  }
   const setHover = (id: string | null) => void dispatch({ type: 'hover', id })
   /** K15b：影响面查询（null =「不看」），一次性 */
   const queryImpact = (query: ImpactQuery | null) => void dispatch({ type: 'queryImpact', query })
@@ -390,6 +398,18 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     (path, was) => path && path !== was && workspaceDispatch({ type: 'open', doc: { kind: 'source', path } }),
     { immediate: true },
   )
+  // WS-8 的例外（第十八轮走查 4，ADR-0061）：结构 / 交互视角下选中变为带图解的模块 → 该图解的预览标签，
+  // 让「有原理图解的模块被选中时资料区直接可读」。监听选中本身——退出场景、换视角等选中没变的路径不触发；
+  // 已在资料区开着（含固定）不再动；运行视角的资料区归时序图、草图编辑不打开；
+  // 图解 iframe 里点链接来的选中带 source: 'explainer'（EX-3：正在读父图解，资料区不动），来源标记消费后即复位
+  watch(selected, s => {
+    const source = selectSource.value
+    selectSource.value = null
+    if (!s || s.kind !== 'module' || source === 'explainer' || !explainers.has(s.id)) return
+    if (perspective.value === 'run' || edit.active.value) return
+    if (workspaceState.value.groups.some(g => g.tabs.some(t => t.id === docKey({ kind: 'explainer', module: s.id })))) return
+    workspaceDispatch({ type: 'open', doc: { kind: 'explainer', module: s.id } })
+  })
   const workspace = {
     state: workspaceState,
     dockShown: computed(() => dockShown(workspaceState.value)),

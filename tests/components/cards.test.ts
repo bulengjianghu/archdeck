@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /**
- * 卡片（第十八轮 Y2、Y3，ADR-0057）：CD-1 设计变量、CD-3 身份卡、CD-4 名称胶囊、CD-5 卡头、CD-6 散块成卡、
- * CD-7 回放胶囊、CD-8 胶囊的位置（playerPlacement）、CD-9 路线的编号与「选路线」、CD-10 帮助。
- * CD-2（属性列即画布、悬浮时空隙落到画布）与 CD-7、CD-8 的实际版面由 E2E `e2e/cards.spec.ts` 守。
+ * 卡片（第十八轮 Y2、Y3，ADR-0057；走查 4 修订，ADR-0061）：CD-1 设计变量、CD-3 身份卡（粘顶，名称后附「图解 ›」）、
+ * CD-5 卡头、CD-6 散块成卡、CD-7 回放胶囊、CD-8 胶囊的位置（playerPlacement）、CD-9 路线的编号与「选路线」、CD-10 帮助。
+ * CD-4 名称胶囊已作废（ADR-0061：身份卡改回粘顶，不再需要）。CD-2（属性列即画布、悬浮时空隙落到画布）与
+ * CD-7、CD-8 的实际版面由 E2E `e2e/cards.spec.ts` 守。
  */
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -72,18 +73,18 @@ describe('CD-3：身份卡', () => {
     ['层', '/?sel=s:app/top'],
   ]
   for (const [what, url] of OBJECTS)
-    it(`${what}：面板的第一张卡是身份卡（名称 h2 与徽标行），不粘顶`, async () => {
+    it(`${what}：面板的第一张卡是身份卡（名称 h2 与徽标行），粘在属性列上沿（ADR-0061）`, async () => {
       const files = url.includes('a:')
         ? scenarioFiles()
         : url.includes('e:')
           ? sampleFiles({ 'zz-up.yaml': 'relations:\n  - { id: r8, from: app.solution, to: infra.player, type: queries }' })
           : sampleFiles()
       const { wrapper } = await mountPanel(url, files)
-      const first = wrapper.find('.panel > div:not(.mini-row) > :first-child, .panel > .id-card')
+      const first = wrapper.find('.panel > div:not(.sk-panel) > :first-child, .panel > .id-card')
       expect(first.classes()).toContain('id-card')
       expect(first.find('h2').exists()).toBe(true)
       expect(first.find('.badges').exists()).toBe(true)
-      expect(src('components/panel/Panel.vue')).not.toMatch(/\.id-card \{[^}]*position: sticky/)
+      expect(src('components/panel/Panel.vue')).toMatch(/\.panel \.id-card \{[^}]*position: sticky/)
     })
 
   it('模块的「进入 ⌄」「在此设计」在徽标之下另起一行（.acts），不在名称一行', async () => {
@@ -93,7 +94,7 @@ describe('CD-3：身份卡', () => {
     expect(acts.exists()).toBe(true)
     expect(acts.text()).toContain('进入 ⌄')
     const children = card.element.children
-    expect(children[0].tagName).toBe('H2')
+    expect(children[0].querySelector('h2')?.textContent).toBeTruthy()
     expect(children[children.length - 1].classList.contains('acts')).toBe(true)
   })
 
@@ -105,37 +106,12 @@ describe('CD-3：身份卡', () => {
   })
 })
 
-describe('CD-4：名称胶囊', () => {
-  it('身份卡滚出属性列上沿后显示名称胶囊，回到可视区即消失', async () => {
-    const { wrapper } = await mountPanel('/?sel=m:infra')
-    const host = wrapper.element.parentElement as HTMLElement
-    const card = wrapper.find('.id-card').element as HTMLElement
-    host.getBoundingClientRect = () => ({ top: 100 }) as DOMRect
-    let bottom = 90
-    card.getBoundingClientRect = () => ({ bottom }) as DOMRect
-    host.dispatchEvent(new Event('scroll'))
-    await flushPromises()
-    const mini = wrapper.find('[data-testid="props-mini"]')
-    expect(mini.exists()).toBe(true)
-    expect(mini.text()).toBe(card.querySelector('h2')!.textContent!.trim())
-    bottom = 160
-    host.dispatchEvent(new Event('scroll'))
-    await flushPromises()
-    expect(wrapper.find('[data-testid="props-mini"]').exists()).toBe(false)
-  })
-
-  it('单击名称胶囊滚回顶部', async () => {
-    const { wrapper } = await mountPanel('/?sel=m:infra')
-    const host = wrapper.element.parentElement as HTMLElement
-    const card = wrapper.find('.id-card').element as HTMLElement
-    host.getBoundingClientRect = () => ({ top: 100 }) as DOMRect
-    card.getBoundingClientRect = () => ({ bottom: 50 }) as DOMRect
-    const calls: unknown[] = []
-    host.scrollTo = ((o: unknown) => calls.push(o)) as typeof host.scrollTo
-    host.dispatchEvent(new Event('scroll'))
-    await flushPromises()
-    await wrapper.find('[data-testid="props-mini"]').trigger('click')
-    expect(calls).toEqual([{ top: 0, behavior: 'smooth' }])
+describe('CD-4：名称胶囊（已作废，ADR-0061）', () => {
+  it('Panel 不再有名称胶囊机制——身份卡粘顶，胶囊与回顶部一并移除', () => {
+    const panel = src('components/panel/Panel.vue')
+    expect(panel).not.toContain('props-mini')
+    expect(panel).not.toContain('mini-row')
+    expect(panel).toMatch(/\.panel \.id-card \{[^}]*position: sticky;\s*top: 0/)
   })
 })
 

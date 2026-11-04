@@ -4,9 +4,9 @@
  * 结构视角：选中的对象，无选中时为当前父模块（根层显示系统）；运行视角：选中步骤 → 步骤面板，选中场景 → 场景面板，
  * 其他对象的理解卡首节为运行信息（V6）。结构视角下模式切换映射不过去而被清空的选中（V12，droppedSelection）：顶部说明原选中没有对应的依赖边。
  * 代码依赖叠加线（K10）→ 代码依赖面板；耦合线（J7）→ 耦合面板；端口（L13）→ 端口面板（K11）。草图画布下（X7，ADR-0025）：换成草图面板。
- * 卡片直接立在画布上（CD-2）：第一张是身份卡（各面板的 `.id-card`，CD-3），滚出属性列上沿后顶部显示名称胶囊（CD-4）。
+ * 卡片直接立在画布上（CD-2）：第一张是身份卡（各面板的 `.id-card`，CD-3），粘在属性列滚动区上沿、不随内容滚走（第十八轮走查 4 改回粘顶，ADR-0061；原名称胶囊 CD-4 作废）。
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { computed, provide } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import ScenarioPanel from './ScenarioPanel.vue'
@@ -65,31 +65,10 @@ const target = computed(() => {
   const level = desk.levelId.value
   return level && level !== idx.rootId ? { kind: 'module' as const, id: level } : { kind: 'system' as const, id: idx.rootId }
 })
-
-// CD-4：名称胶囊——身份卡整张滚出属性列（本组件的滚动容器）上沿后出现，回到可视区即消失；单击滚回顶部
-const root = ref<HTMLElement | null>(null)
-const mini = ref('')
-const scroller = () => root.value?.parentElement ?? null
-function updateMini() {
-  const box = scroller()
-  const card = root.value?.querySelector<HTMLElement>('.id-card')
-  if (!box || !card) return void (mini.value = '')
-  const gone = card.getBoundingClientRect().bottom <= box.getBoundingClientRect().top + 1
-  mini.value = gone ? (card.querySelector('h2')?.textContent ?? '').replace(/\s+/g, ' ').trim() : ''
-}
-function backToTop() {
-  scroller()?.scrollTo({ top: 0, behavior: 'smooth' })
-}
-onMounted(() => scroller()?.addEventListener('scroll', updateMini, { passive: true }))
-onBeforeUnmount(() => scroller()?.removeEventListener('scroll', updateMini))
-watch(target, () => nextTick(updateMini), { flush: 'post' })
 </script>
 
 <template>
-  <div ref="root" class="panel">
-    <div v-if="mini" class="mini-row">
-      <button class="mini desk-pill" data-testid="props-mini" :title="`${mini}（单击回到顶部）`" @click="backToTop">{{ mini }}</button>
-    </div>
+  <div class="panel">
     <SketchPanel v-if="desk.edit.active.value" />
     <p v-if="dropped && !desk.edit.active.value" class="dropped" role="note">切换视角后原选中（{{ dropped }}）没有对应的依赖边，已取消选中</p>
     <template v-else-if="target">
@@ -120,11 +99,10 @@ watch(target, () => nextTick(updateMini), { flush: 'post' })
   padding: 10px 10px var(--card-gap) 2px;
 }
 
-.panel > :not(.mini-row) + *,
-.panel > div:not(.mini-row, .sk-panel, .id-card) > * + * {
+.panel > :not(.sk-panel) + *,
+.panel > div:not(.sk-panel, .id-card) > * + * {
   margin-top: var(--card-gap);
 }
-
 /* CD-1、CD-6：身份卡、三卡与其余块都是同一种卡片 */
 .panel .id-card,
 .panel .card,
@@ -150,9 +128,11 @@ watch(target, () => nextTick(updateMini), { flush: 'post' })
   padding: 12px 14px 6px;
 }
 
-/* CD-3：身份卡——名称 16px 半粗；ID 等宽灰字与徽标；动作另起一行；不粘顶，随内容滚走；右上角留给 ×（DeskView） */
+/* CD-3：身份卡——名称 16px 半粗；ID 等宽灰字与徽标；动作另起一行；粘在属性列滚动区上沿、不随内容滚走（第十八轮走查 4，ADR-0061），其后的卡片从它底下滚过；右上角留给 ×（DeskView） */
 .panel .id-card {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 6;
   padding: 9px 34px 9px 14px;
 }
 
@@ -187,28 +167,7 @@ watch(target, () => nextTick(updateMini), { flush: 'post' })
   border-color: var(--accent);
 }
 
-/* CD-4：名称胶囊——粘在属性列顶部、不占位 */
-.panel .mini-row {
-  position: sticky;
-  top: 8px;
-  z-index: 6;
-  height: 0;
-  display: flex;
-  justify-content: center;
-}
-
-.panel .mini {
-  max-width: 240px;
-  height: 24px;
-  padding: 0 12px;
-  overflow: hidden;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-2);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  opacity: 0.94;
-}
+/* CD-4：名称胶囊已作废（ADR-0061）——身份卡粘顶后不再需要 */
 
 .panel h2 {
   margin: 0;

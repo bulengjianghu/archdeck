@@ -5,7 +5,7 @@
  * 其余对象（h5p-arch-desk present.canvas、h5player app.solution、三个项目的系统面板）只记录基线、不断言：
  * 超出的是描述写长了（summary / 原则 / 不变式），按 M27 与 04 改描述，不在界面截字。
  * 第十五轮的「常显行数」口径与上限 36 / 33 / 39 作废：三卡之后证据都在核对卡的折叠清单里，行数不再反映首屏。
- * 第十八轮卡片版式（Y2.7，CD-2–CD-5）：理解卡是立在画布上的第二张卡，身份卡（不粘顶）在它上面、卡间距 12；量法不变。
+ * 第十八轮卡片版式（Y2.7，CD-2–CD-5）：理解卡是立在画布上的第二张卡，身份卡在它上面、卡间距 12；量法不变（走查 4 身份卡改回粘顶，ADR-0061，静息态量法不受影响）。
  */
 import { expect, test, type Page } from '@playwright/test'
 import { openDesk, waitSettled } from './helpers'
@@ -49,8 +49,13 @@ async function measureStable(page: Page): Promise<Measure> {
   return JSON.parse(last) as Measure
 }
 
-async function open(page: Page, path: string) {
+async function open(page: Page, path: string, quietDock = false) {
   await openDesk(page, path)
+  // 受守模块都有图解，选中会自动打开资料区（WS-8 例外，ADR-0061）：关掉恢复静息前提（1440 宽、没有资料区），再等布局稳定
+  if (quietDock && (await page.locator('.dock-area').count())) {
+    await page.locator('.dock-toggle').click()
+    await expect(page.locator('.dock-area')).toHaveCount(0)
+  }
   await waitSettled(page)
   // 代码事实就绪：核对卡的结论不再是「读取中」（没有代码事实时也会定下来）
   await expect(page.locator('.panel [data-card="check"] .card-sum').first()).not.toHaveText(/读取中/, { timeout: 20_000 })
@@ -64,7 +69,7 @@ const GUARDED = [
 
 for (const c of GUARDED) {
   test(`L46 首屏守（R3.8）· ${c.project} ${c.module}：理解卡一屏读完`, async ({ page }) => {
-    const m = await open(page, `/p/${c.project}?${c.level ? `level=${c.level}&` : ''}sel=m:${c.module}&v=s`)
+    const m = await open(page, `/p/${c.project}?${c.level ? `level=${c.level}&` : ''}sel=m:${c.module}&v=s`, true)
     console.log(`PANEL_BASELINE ${c.project} ${c.module} understand top=${m.top} bottom=${m.bottom} limit=${m.limit} height=${m.height}`)
     expect(m.docked, '1440 宽、没有资料区时属性栏并排').toBe(true)
     expect(m.bottom).toBeLessThanOrEqual(m.limit)

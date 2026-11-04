@@ -4,7 +4,7 @@
  * 子模块的 summary 改了，父模块的图解标出「基于旧描述」（EX-6、EX-7，用路由夹具改描述，不改文件）。
  */
 import { expect, test, type Page } from '@playwright/test'
-import { collapseDisplay, graphNode, openDesk, openRelated, query } from './helpers'
+import { collapseDisplay, graphNode, openDesk, openRelated, query, waitSettled } from './helpers'
 
 const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
 const tabs = (page: Page) => dock(page).locator('.tabs > .tab')
@@ -91,4 +91,31 @@ test('验收 6.41 第 3 条：临时改 kit.kernel 的 summary，kit 的图解�
   await expect(dock(page).frameLocator('iframe').locator('[data-arch="kit.kernel"][data-field="summary"]')).toHaveText('串行施用命令并持有唯一状态')
   // kit.kernel 自己的图解同样过期（summary 也是它「本模块」的一项），画布标记变为警示色
   await expect(graphNode(page, 'kit.kernel').locator('[data-testid="explainer-mark"]')).toHaveClass(/stale/)
+})
+
+test('走查 4（ADR-0061）：选中带图解的模块资料区自动预览打开、再选另一份替换预览；运行视角不自动，标题后的「图解 ›」手动打开', async ({ page }) => {
+  await openDesk(page, '/p/h5p-arch-desk?level=state')
+  await waitSettled(page)
+  await expect(tabs(page)).toHaveCount(0)
+  // 结构视角：选中带图解的模块（state.desk）→ 自动以预览打开；再选另一份带图解的（state.transition）→ 替换预览、不累积
+  await graphNode(page, 'state.desk').click()
+  await expect(tabs(page)).toHaveCount(1)
+  await expect(tabs(page).first()).toHaveClass(/preview/)
+  await expect(tabs(page).first()).toContainText('DeskState')
+  await graphNode(page, 'state.transition').click()
+  await expect(tabs(page)).toHaveCount(1)
+  await expect(tabs(page).first()).toContainText('视图状态转移')
+  // 运行视角：时序图占用资料区，选中带图解的模块不自动开图解；标题后的「图解 ›」手动打开为预览
+  // （hash 内跳转不换文档、工作区留着上一段的图解标签，先到位再整页刷新拿到干净的资料区）
+  await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
+  await page.reload()
+  await waitSettled(page)
+  await expect(tabs(page)).toHaveCount(1)
+  await expect(tabs(page).first()).toContainText('时序图')
+  // 场景刚打开选中的是场景本身；先选一个带图解的模块
+  await graphNode(page, 'state.desk').click()
+  await expect(tabs(page)).toHaveCount(1)
+  await page.locator('.panel .id-card [data-testid="open-explainer"]').click()
+  await expect(tabs(page)).toHaveCount(2)
+  await expect(tabs(page).last()).toHaveClass(/preview/)
 })

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * 资料区的图解标签内容（EX-3、EX-4、EX-7，ADR-0055）：顶部一行 ↑ ↓ 图解导航、「在画布上选中」与过期提示（可展开改动），下面是沙箱 iframe。
- * iframe 只给 allow-scripts；父页只接受来源是这个 iframe 窗口的消息：arch:select 在画布上选中模块（资料区不动，WS-8），
+ * iframe 只给 allow-scripts；父页只接受来源是这个 iframe 窗口的消息：arch:select 在画布上选中模块（资料区不动，WS-8；
+ * 来源记为 'explainer'，选中的自动打开图解豁免，ADR-0061），
  * arch:open 以预览标签打开另一份图解。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -27,7 +28,7 @@ function onMessage(e: MessageEvent) {
   const id = e.data.module
   if (e.data.type === 'arch:open') {
     if (ex.has(id)) open(id)
-  } else if (desk.index.value?.modules.has(id)) desk.revealModule(id)
+  } else if (desk.index.value?.modules.has(id)) desk.revealModule(id, 'explainer')
 }
 onMounted(() => window.addEventListener('message', onMessage))
 onBeforeUnmount(() => window.removeEventListener('message', onMessage))

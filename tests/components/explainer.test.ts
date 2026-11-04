@@ -200,3 +200,41 @@ describe('EX-7 属性栏', () => {
     expect(w.find('[data-sec="review.explainer"]').text()).toContain('图解依据的改动')
   })
 })
+
+describe('CD-3 名称后的「图解 ›」与选中自动打开（第十八轮走查 4，ADR-0061）', () => {
+  it('有图解的模块名称后附「图解 ›」，单击在资料区以预览打开；无图解的没有', async () => {
+    const { d, router } = await desk('/?sel=m:app')
+    const w = mount(Panel, { global: { ...provide(d, { [HAS_EXPLAINER as symbol]: (id: string) => d.explainers.has(id) }), plugins: [router] } })
+    mounted.push(w)
+    await flushPromises()
+    expect(w.find('[data-testid="open-explainer"]').exists()).toBe(false)
+    d.select({ kind: 'module', id: 'infra' })
+    await flushPromises()
+    const tab = () => d.workspace.state.value.groups[0].tabs.find(t => t.id === 'exp:infra')
+    // WS-8 例外：结构 / 交互视角下选中带图解的模块即自动预览打开
+    expect(tab()?.preview).toBe(true)
+    await w.find('[data-testid="open-explainer"]').trigger('click')
+    expect(tab()?.preview).toBe(true) // 已开着，仍是一份预览标签
+  })
+
+  it('自动打开只在选中变为另一个带图解的模块时替换预览；无图解、已固定的不动', async () => {
+    const { d } = await desk('/?sel=m:app')
+    const tabs = () => d.workspace.state.value.groups[0].tabs
+    d.select({ kind: 'module', id: 'infra' })
+    await flushPromises()
+    expect(tabs().map(t => t.id)).toEqual(['exp:infra'])
+    d.select({ kind: 'module', id: 'app' })
+    await flushPromises()
+    expect(tabs().map(t => t.id)).toEqual(['exp:infra']) // 无图解：资料区不动
+    d.workspace.open({ kind: 'explainer', module: 'infra.framework' }, true)
+    d.select({ kind: 'module', id: 'infra' })
+    await flushPromises()
+    expect(
+      tabs()
+        .filter(t => t.id.startsWith('exp:'))
+        .map(t => t.id),
+    ).toEqual(['exp:infra', 'exp:infra.framework'])
+    expect(tabs().find(t => t.id === 'exp:infra.framework')!.preview).toBe(false) // 固定的不被自动打开降级
+    expect(tabs().find(t => t.id === 'exp:infra')!.preview).toBe(true)
+  })
+})

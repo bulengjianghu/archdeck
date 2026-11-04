@@ -15,6 +15,7 @@ import ModuleCheck from './ModuleCheck.vue'
 import RelatedCard from './RelatedCard.vue'
 import { usePanelJump } from './panelNotices'
 import { canDesignAt, openNewDesign } from '../edit/designHere'
+import { staleText } from '../shared/explainerText'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -39,12 +40,29 @@ const tagsHidden = computed(() => tags.value.length - tagsShown.value.length)
 // 核对卡的异常条目单击跳到清单（展开并滚动到位，V15b）
 const root = ref<HTMLElement | null>(null)
 usePanelJump(root)
+
+// CD-3（第十八轮走查 4，ADR-0061）：有图解的模块，名称后附「图解 ›」，单击在资料区以预览打开（WS-5）；依据过期时提示进悬停（EX-7）。
+// 结构视角下选中即自动打开（WS-8 的例外，由 DeskState 翻译），这里只管手动入口
+const hasExplainer = computed(() => desk.explainers.has(m.value.id))
+const explainerStale = computed(() => (hasExplainer.value ? desk.explainers.status(m.value.id) : null))
+const explainerTip = computed(() => `打开原理图解（资料区预览）${explainerStale.value?.stale ? ` · ${staleText(explainerStale.value)}` : ''}`)
 </script>
 
 <template>
   <div v-if="m" ref="root" class="module-panel">
     <header class="head id-card" data-sec="head">
-      <h2>{{ m.name }}</h2>
+      <div class="titlerow">
+        <h2>{{ m.name }}</h2>
+        <button
+          v-if="hasExplainer"
+          class="badge link"
+          data-testid="open-explainer"
+          :title="explainerTip"
+          @click="desk.workspace.open({ kind: 'explainer', module: m.id })"
+        >
+          图解 ›
+        </button>
+      </div>
       <div class="badges">
         <code>{{ m.id }}</code>
         <span v-if="isLayer" class="badge">层</span>
@@ -83,6 +101,19 @@ usePanelJump(root)
 </template>
 
 <style scoped>
+.titlerow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.titlerow .badge.link {
+  flex: none;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
 .badge-more {
   font: inherit;
   font-size: 11px;

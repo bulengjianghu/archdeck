@@ -1,6 +1,6 @@
 /**
- * 卡片与回放胶囊（第十八轮 Y2、Y3，ADR-0057；验收 6.43）：
- * CD-2 并排时属性列与画布同底色、没有分隔线；悬浮时卡片之间的空隙落到画布；CD-4 名称胶囊；
+ * 卡片与回放胶囊（第十八轮 Y2、Y3，ADR-0057；走查 4 修订，ADR-0061；验收 6.43）：
+ * CD-2 并排时属性列与画布同底色、没有分隔线；悬浮时卡片之间的空隙落到画布；CD-3 身份卡粘顶（CD-4 名称胶囊已作废）；
  * CD-7、CD-8 回放胶囊居中、避让缩放胶囊与悬浮卡片；CD-9 走到 alt 分支时「选路线」。
  */
 import { expect, test, type Page } from '@playwright/test'
@@ -26,6 +26,9 @@ async function rect(page: Page, sel: string) {
 test('CD-2 并排：属性列与画布同底色，没有竖分隔线与底板；卡片各自是卡', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?sel=m:kit')
   await waitSettled(page)
+  // 选中 kit 会自动打开资料区（WS-8 例外，ADR-0061）：关掉它再量静息的并排版面
+  await page.locator('.dock-toggle').click()
+  await expect(page.locator('.dock-area')).toHaveCount(0)
   const props = page.locator('aside.props')
   await expect(props).not.toHaveClass(/floating/)
   const [propsBg, canvasBg] = await Promise.all([page.evaluate(`(${EFFECTIVE_BG})('aside.props')`), page.evaluate(`(${EFFECTIVE_BG})('main.canvas-area')`)])
@@ -71,18 +74,24 @@ test('CD-2 悬浮：没有整列的浮板，单击卡片之间的空隙落到画
   await expect.poll(() => query(page).get('sel')).toBe(hit.node ? `m:${hit.node}` : null)
 })
 
-test('CD-4 名称胶囊：身份卡滚走后出现，回到顶部消失；单击胶囊滚回顶部', async ({ page }) => {
+test('CD-3 身份卡粘顶（ADR-0061）：滚到底身份卡仍钉在属性列上沿，名称后的「图解 ›」可打开资料区', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sel=m:state.desk')
   await waitSettled(page)
-  const mini = page.getByTestId('props-mini')
-  await expect(mini).toHaveCount(0)
-  // ADR-0060 后面板更短：挑内容长、一屏放不下的（DeskState）；滚到底，身份卡滚出上沿即出现胶囊
-  await page.locator('.panel-area').evaluate(el => el.scrollTo({ top: el.scrollHeight }))
-  await expect(mini).toBeVisible()
-  await expect(mini).toHaveText('DeskState')
-  await mini.click()
-  await expect.poll(() => page.locator('.panel-area').evaluate(el => el.scrollTop)).toBe(0)
-  await expect(mini).toHaveCount(0)
+  const area = page.locator('.panel-area')
+  const card = page.locator('.panel .id-card').first()
+  // 有图解的模块：名称后就是「图解 ›」，选中（含 URL 直达）即自动在资料区以预览打开（WS-8 例外）
+  const link = card.locator('[data-testid="open-explainer"]')
+  await expect(link).toHaveText('图解 ›')
+  await expect(page.locator('.dock-area .tab[data-doc="exp:state.desk"]')).toHaveClass(/preview/)
+  // 滚到底：身份卡钉在滚动区上沿，没有名称胶囊
+  await area.evaluate(el => el.scrollTo({ top: el.scrollHeight }))
+  const [cardBox, areaBox] = await Promise.all([card.boundingBox(), area.boundingBox()])
+  expect(cardBox!.y).toBeGreaterThanOrEqual(areaBox!.y - 0.5)
+  expect(cardBox!.y - areaBox!.y).toBeLessThan(2)
+  await expect(page.getByTestId('props-mini')).toHaveCount(0)
+  // 单击「图解 ›」：资料区已开着该图解，仍是同一份标签
+  await link.click()
+  await expect(page.locator('.dock-area .tab[data-doc="exp:state.desk"]')).toHaveCount(1)
 })
 
 /** 回放胶囊、缩放胶囊、画布（相对视口） */

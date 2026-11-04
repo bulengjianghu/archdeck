@@ -469,7 +469,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <!-- WS-2、WS-3：属性栏 330px，跟随选中；并排或悬浮由宽度推出。CD-2：没有底板，卡片直接立在画布上 -->
         <aside v-if="propsOpen" class="props" :class="{ floating }" :style="propsStyle" aria-label="属性">
           <div class="panel-area">
-            <!-- CD-3：× 在身份卡右上角、随身份卡滚走，悬停身份卡时显出 -->
+            <!-- CD-3：× 在属性列滚动区右上角（身份卡粘顶、恒在可视区，ADR-0061），悬停身份卡时显出 -->
             <button class="props-close" title="关闭属性栏（工具栏「▤ 属性」再打开）" aria-label="关闭属性栏" @click="toggleProps">×</button>
             <Panel v-if="desk.status.value === 'ready'" />
           </div>
@@ -618,12 +618,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   pointer-events: auto;
 }
 
-/* CD-3：× 在身份卡（属性列的第一张卡，上沿 12、右沿 12）的右上角，悬停身份卡或键盘聚焦时显出 */
+/* CD-3：× 在属性列滚动区右上角、身份卡（第一张卡）的右上角（上沿 12、右沿 12）；身份卡粘顶（ADR-0061），× 恒在可视区，悬停身份卡或键盘聚焦时显出 */
 .props-close {
   position: absolute;
   top: 16px;
   right: 16px;
-  z-index: 6;
+  z-index: 7; /* 高于粘顶的身份卡（CD-3，ADR-0061）：× 悬在身份卡右上角、可单击 */
   border: none;
   background: none;
   font-size: 15px;

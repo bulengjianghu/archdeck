@@ -4,7 +4,7 @@
  * 表面展开（C6、L20）、影响面查询（K15、K15b）、分层总览（O13③）、退出场景回到进入前的视角（V11）。
  */
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, openDesk, openCheckList, query, collapseDisplay } from './helpers'
+import { graphNode, openDesk, openCheckList, query, collapseDisplay, waitSettled } from './helpers'
 
 /** 本层模块节点的位置（Vue Flow 节点的 transform）与尺寸 */
 async function boxes(page: Page) {
@@ -137,6 +137,11 @@ test('C6、L20（ADR-0036）：节点角标「表面 W」；选中模块展开�
   await openDesk(page, '/p/h5player?level=infra&v=s')
   // 展开的图例叠在画布右上，分层后 infra.framework 落在它下面
   await collapseDisplay(page)
+  // infra.framework 有图解：选中会自动打开资料区并收起导航树（WS-8 例外 + WS-9，ADR-0061）。
+  // 先预热——选中让它出现、隐藏资料区（标签保留，再次选中不重开）、等布局稳定，之后「选中不动视口」量的才是同一几何
+  await graphNode(page, 'infra.framework').click()
+  if (await page.locator('.dock-area').count()) await page.locator('.dock-toggle').click()
+  await waitSettled(page)
   await expect(graphNode(page, 'infra.framework').getByTestId('node-surface-w')).toHaveText(/表面 \d+/)
   const boxes = () =>
     page.locator('.vue-flow__node-module, .vue-flow__node-core').evaluateAll(els =>
