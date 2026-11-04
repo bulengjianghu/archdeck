@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 0d88f9406928748c rel:rel.p5.stage-runner=39c81588 rel:rel.p8.canvas-route=ad41e977 rel:rel.p8.flow-stage-display=353da88b state.layout#abstraction=8c450f77 state.layout#children=a4a3e352 state.layout#invariants=4ca262b8 state.layout#responsibility=6136fa26 state.layout#summary=e8e7f59b state.layout.canvas#summary=673eecfd state.layout.runner#summary=a750b73a state.layout.sequence#summary=71a7dde1 state.layout.sketch#summary=7ab3b042 state.layout.stage#summary=df3ac630">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Layout · 把「谁连谁」变成「画在哪」</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>把「谁连谁」变成「画在哪」</h1>
+    <p class="lede">这一层是 <span data-arch="state.layout">Layout</span>：<span data-arch="state.layout" data-field="summary"></span>。它只出坐标与走线——画布拿到的是成品。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 200" role="img" aria-label="节点与边进入排版引擎，产出坐标走线与泳道，按内容缓存">
+        <defs><marker id="i" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="14" y="40" width="138" height="74" rx="10" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="83" y="62" font-size="10.5" text-anchor="middle" class="">输入：关系数据</text>
+        <text x="30" y="84" font-size="9" class="muted">节点 · 边 · 参与者</text>
+        <text x="30" y="100" font-size="9" class="muted">（不知道像素）</text>
+        <path d="M154,77 L182,77" stroke="var(--text-2)" stroke-width="2" marker-end="url(#i)"/>
+        <rect x="186" y="34" width="148" height="88" rx="10" fill="var(--bg)" stroke="var(--warn)"/>
+        <text x="260" y="58" font-size="11.5" text-anchor="middle" class="">排版引擎</text>
+        <text x="202" y="78" font-size="9" class="muted">分层图：引擎自动布</text>
+        <text x="202" y="92" font-size="9" class="muted">总览：按层带排（带内</text>
+        <text x="202" y="106" font-size="9" class="muted">列数按画布宽换算）</text>
+        <path d="M336,77 L364,77" stroke="var(--text-2)" stroke-width="2" marker-end="url(#i)"/>
+        <rect x="368" y="34" width="130" height="88" rx="10" fill="var(--ok-soft)" stroke="var(--ok)"/>
+        <text x="433" y="56" font-size="10.5" text-anchor="middle" class="">产出</text>
+        <text x="382" y="78" font-size="9" class="muted">坐标与走线 · 跳线</text>
+        <text x="382" y="94" font-size="9" class="muted">泳道与步长 · 舞台叠加</text>
+        <path d="M500,77 L528,77" stroke="var(--text-2)" stroke-width="2" marker-end="url(#i)"/>
+        <rect x="532" y="34" width="96" height="88" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="580" y="62" font-size="10.5" text-anchor="middle" class="">画布</text>
+        <text x="580" y="80" font-size="9" text-anchor="middle" class="muted">照单画</text>
+        <path d="M260,126 L260,156 L433,156 L433,126" stroke="var(--line)" stroke-width="1.5" fill="none" stroke-dasharray="5 4"/>
+        <text x="347" y="172" font-size="9.5" text-anchor="middle" class="">结果按「视图内容」缓存：内容没变就不重算</text>
+        <text x="320" y="192" font-size="9.5" text-anchor="middle" class="">框外角色按方位摆 · 交叉画跳线 · 泳道时序图同在此算</text>
+      </svg>
+      <figcaption>排版：从关系到坐标的一次翻译。</figcaption>
+    </figure>
+
+    <h2>四个车间</h2>
+    <div class="cols c2">
+      <div><b><span data-arch="state.layout.runner">层次引擎</span></b>普通层次交给排版引擎自动布；「位置不动」的硬规矩由它守住——下钻再深，看过的节点还在原地。</div>
+      <div><b><span data-arch="state.layout.sequence">泳道</span> 与 <span data-arch="state.layout.stage">舞台</span></b>时序图算泳道与步长；舞台叠加与舞台显示也在这一站。</div>
+      <div><b><span data-arch="state.layout.canvas">画布场景</span></b>节点与边的数据、显隐、变淡、回放态组装成画布要的成品清单。</div>
+      <div><b><span data-arch="state.layout.sketch">草图排版</span></b>草图画布的坐标另算——自由布局与模型布局互不干扰。</div>
+    </div>
+
+  </body>
+</html>

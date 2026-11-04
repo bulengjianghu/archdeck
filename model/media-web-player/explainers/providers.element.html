@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 e4dc20c68e99ff93 providers.element#abstraction=bebfc933 providers.element#children=f4f3d0ce providers.element#invariants=d60e06ea providers.element#provides=4f84b19d providers.element#responsibility=cbfe6d03 providers.element#summary=bb6631e4 providers.element.family#summary=198ca554 providers.element.mse#summary=6a773fad providers.element.mse-driver#summary=97028b8b providers.element.native#summary=55d4a1c3 providers.element.video#summary=b0a24100 rel:rel.providers.element-mse=9d5b334e rel:rel.providers.element-native=9130baeb rel:rel.providers.element-video=fe0bc85b rel:rel.providers.mse-driver=85393eb5 rel:rel.providers.mse-driver-video=fd016c8f rel:rel.providers.mse-element=0b407e8b rel:rel.providers.native-element=8a0d155e">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>元素机芯 · 借现成的机芯</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>借现成的机芯</h1>
+    <p class="lede">这一层是 <span data-arch="providers.element">元素机芯</span>：<span data-arch="providers.element" data-field="summary"></span>。浏览器现成的播放元件就是机芯——自己只做指挥。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 234" role="img" aria-label="一个 video 与留最后一帧的画布，mse 与 native 两条路线，延迟律作用在快慢旋钮上">
+        <defs><marker id="k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="16" y="30" width="160" height="60" rx="10" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="96" y="54" font-size="11" text-anchor="middle" class="">会话开路</text>
+        <text x="32" y="74" font-size="8.5" text-anchor="middle" class="muted">选路线（mse / native）</text>
+        <path d="M178,60 L206,60" stroke="var(--text-2)" stroke-width="2" marker-end="url(#k)"/>
+        <rect x="210" y="24" width="190" height="72" rx="10" fill="var(--warn-soft)" stroke="var(--warn)"/>
+        <text x="305" y="48" font-size="10.5" text-anchor="middle" class="">mse 路线</text>
+        <text x="226" y="68" font-size="8.5" class="muted">同一台 wasm 发动机只解封装，</text>
+        <text x="226" y="82" font-size="8.5" class="muted">封成 fMP4 喂给 MediaSource</text>
+        <rect x="210" y="108" width="190" height="72" rx="10" fill="var(--bg)" stroke="var(--line)"/>
+        <text x="305" y="132" font-size="10.5" text-anchor="middle" class="">native 路线</text>
+        <text x="226" y="152" font-size="8.5" class="muted">地址直接交给播放元件，</text>
+        <text x="226" y="166" font-size="8.5" class="muted">一枪到位</text>
+        <path d="M402,60 L430,60 M402,144 L430,144" stroke="var(--text-2)" stroke-width="2" marker-end="url(#k)"/>
+        <rect x="434" y="88" width="120" height="64" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="494" y="112" font-size="10.5" text-anchor="middle" class="">video 元素</text>
+        <text x="450" y="130" font-size="8.5" class="muted">+ 留最后一帧的画布</text>
+        <path d="M494,154 L494,178" stroke="var(--text-2)" stroke-width="1.6" marker-end="url(#k)"/>
+        <rect x="400" y="182" width="228" height="40" rx="10" fill="var(--ok-soft)" stroke="var(--ok)"/>
+        <text x="514" y="198" font-size="9.5" text-anchor="middle" class="">延迟律的旋钮：</text>
+        <text x="416" y="214" font-size="8.5" class="muted">playbackRate（快慢）· currentTime（跳）· 跳 IDR</text>
+        <text x="320" y="226" font-size="0" text-anchor="middle" class=""></text>
+      </svg>
+      <figcaption>两条路线一个出口：画面永远出自那一个元件。</figcaption>
+    </figure>
+
+    <h2>机芯里的岗位</h2>
+    <div class="cols c2">
+      <div><b><span data-arch="providers.element.family">族装配</span> 与 <span data-arch="providers.element.video">元件</span></b>开机立一个 video、备一块留最后一帧的画布——切会话不闪黑屏。</div>
+      <div><b><span data-arch="providers.element.mse">mse 管线</span> 与 <span data-arch="providers.element.mse-driver">驱动</span></b>解封装复用同一台 wasm 发动机（只拆不Decode），封好喂给 MediaSource。</div>
+      <div><b><span data-arch="providers.element.native">native</span></b>地址直给元件——最省力的一条路，兼容性兜底。</div>
+      <div><b>与延迟律的握手</b>元件的快慢旋钮与跳转就是执行器：律说快就快、说跳就跳，元件自己不思考。</div>
+    </div>
+
+    <p class="note">与 <span data-arch="providers.self-clocked">自建时钟族</span> 的取舍：自由度换稳定。两族共用同一块 <span data-arch="pipeline.contract">插座面板</span> 与同一条延迟律——机身毫无感知。</p>
+
+  </body>
+</html>

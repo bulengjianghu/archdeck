@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 02ad8e1b8acf2083 pipeline.contract#abstraction=771b3321 pipeline.contract#children=8d1ad4fb pipeline.contract#invariants=d92c3810 pipeline.contract#provides=70569169 pipeline.contract#responsibility=20dc47ff pipeline.contract#summary=a7115428 pipeline.contract.family-port#summary=27233a9e pipeline.contract.report#summary=4f4888bf pipeline.contract.session-port#summary=2ffda7dd pipeline.contract.source#summary=d107173b">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>管线契约 · 插座面板</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>插座面板</h1>
+    <p class="lede">这一层是 <span data-arch="pipeline.contract">管线契约</span>：<span data-arch="pipeline.contract" data-field="summary"></span>。机身与机芯互相不认识，全靠这块面板上的插孔对齐。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 216" role="img" aria-label="机身侧的源与命令，机芯侧的族端口与环境，回报与统计居中传递">
+        <defs><marker id="i" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="14" y="36" width="190" height="120" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="109" y="60" font-size="11" text-anchor="middle" class="">机身侧（内核）</text>
+        <rect x="30" y="72" width="158" height="22" rx="4" fill="var(--bg)" stroke="var(--line)"/><text x="109" y="87" font-size="9" text-anchor="middle" class="">源与打开选项</text>
+        <rect x="30" y="98" width="158" height="22" rx="4" fill="var(--bg)" stroke="var(--line)"/><text x="109" y="113" font-size="9" text-anchor="middle" class="">命令下发</text>
+        <rect x="30" y="124" width="158" height="22" rx="4" fill="var(--bg)" stroke="var(--line)"/><text x="109" y="139" font-size="9" text-anchor="middle" class="">只拥有状态</text>
+        <rect x="436" y="36" width="190" height="120" rx="10" fill="var(--warn-soft)" stroke="var(--warn)"/>
+        <text x="531" y="60" font-size="11" text-anchor="middle" class="">机芯侧（管线族）</text>
+        <rect x="452" y="72" width="158" height="22" rx="4" fill="var(--bg)" stroke="var(--line)"/><text x="531" y="87" font-size="9" text-anchor="middle" class="">族端口：路线 / 启动 / 音量</text>
+        <rect x="452" y="98" width="158" height="22" rx="4" fill="var(--bg)" stroke="var(--line)"/><text x="531" y="113" font-size="9" text-anchor="middle" class="">族环境（页面可见性等）</text>
+        <rect x="452" y="124" width="158" height="22" rx="4" fill="var(--bg)" stroke="var(--line)"/><text x="531" y="139" font-size="9" text-anchor="middle" class="">拥有拉流到呈现全套</text>
+        <path d="M206,90 L232,90 M408,90 L432,90" stroke="var(--text-2)" stroke-width="2" marker-end="url(#i)"/>
+        <rect x="236" y="66" width="168" height="108" rx="10" fill="var(--bg)" stroke="var(--ok)"/>
+        <text x="320" y="90" font-size="11.5" text-anchor="middle" class="">插座面板</text>
+        <rect x="252" y="102" width="136" height="18" rx="4" fill="var(--soft)" stroke="var(--line)"/><text x="320" y="115" font-size="8.5" text-anchor="middle" class="">命令 → 回报（事件）</text>
+        <rect x="252" y="124" width="136" height="18" rx="4" fill="var(--soft)" stroke="var(--line)"/><text x="320" y="137" font-size="8.5" text-anchor="middle" class="">统计 · 时间线</text>
+        <rect x="252" y="146" width="136" height="18" rx="4" fill="var(--soft)" stroke="var(--line)"/><text x="320" y="159" font-size="8.5" text-anchor="middle" class="">会话代号（防幽灵回报）</text>
+        <text x="320" y="198" font-size="10" text-anchor="middle" class="">一条管线拥有一个会话的拉流、解码、呈现与音频；状态永远归内核</text>
+      </svg>
+      <figcaption>面板上的每个插孔都有名字：谁拥有什么，写得清清楚楚。</figcaption>
+    </figure>
+
+    <h2>四个插孔</h2>
+    <div class="cols c2">
+      <div><b><span data-arch="pipeline.contract.source">源</span> 与 <span data-arch="pipeline.contract.session-port">会话端口</span></b>播什么、怎么开；会话的开关与资源归属。</div>
+      <div><b><span data-arch="pipeline.contract.report">回报</span> 与 <span data-arch="pipeline.contract.family-port">族端口</span></b>事件、统计、失败怎么回话（带会话代号）；一族机芯的路线清单、启动、音量与释放。</div>
+    </div>
+
+    <p class="note">两族机芯照同一块面板做插头——所以「换机芯不动机身」不是口号，是插座几何决定的。</p>
+
+  </body>
+</html>

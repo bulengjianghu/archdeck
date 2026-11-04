@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 42028ca216f9629e present.canvas#abstraction=b2cc5348 present.canvas#children=59513d62 present.canvas#excludes=08c6774f present.canvas#invariants=0543bc2e present.canvas#responsibility=21a096bf present.canvas#summary=e01dd4b4 present.canvas.edges#summary=0481e0aa present.canvas.flow#summary=461b6237 present.canvas.legend#invariants=2a8b14f1 present.canvas.legend#summary=948a2134 present.canvas.nodes#summary=e66ce409 rel:rel.ad.flow-edges=545bcec1 rel:rel.ad.flow-legend=563efa0a rel:rel.ad.flow-nodes=32b40729 rel:rel.ad.legend-edge-style=3b17fdea">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>画布 · 只画不算的照单办事员</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>只画不算的照单办事员</h1>
+    <p class="lede">这一层是 <span data-arch="present.canvas">画布</span>：<span data-arch="present.canvas" data-field="summary"></span>。拿到什么画什么——想骗它画错一个数都难。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 208" role="img" aria-label="清单进来照单画，手势变意图上交，节点带图解标">
+        <defs><marker id="e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="14" y="30" width="170" height="118" rx="10" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="99" y="52" font-size="11" text-anchor="middle" class="">别人算好的清单</text>
+        <text x="30" y="76" font-size="9.5" class="muted">节点与边（坐标来自排版）</text>
+        <text x="30" y="94" font-size="9.5" class="muted">显隐与变淡（来自状态）</text>
+        <text x="30" y="112" font-size="9.5" class="muted">回放态（来自场景进度）</text>
+        <text x="30" y="130" font-size="9.5" class="muted">▣ 图解标（desk.explainers）</text>
+        <path d="M186,86 L214,86" stroke="var(--text-2)" stroke-width="2" marker-end="url(#e)"/>
+        <rect x="218" y="52" width="150" height="74" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="293" y="82" font-size="12" text-anchor="middle" class="">画布</text>
+        <text x="293" y="102" font-size="9.5" text-anchor="middle" class="muted">照单绘制</text>
+        <path d="M293,128 L293,158 L470,158" stroke="var(--text-2)" stroke-width="1.6" fill="none"/>
+        <path d="M370,86 L398,86" stroke="var(--warn)" stroke-width="2" marker-end="url(#e)"/>
+        <rect x="402" y="52" width="224" height="74" rx="10" fill="var(--warn-soft)" stroke="var(--warn)"/>
+        <text x="514" y="76" font-size="11" text-anchor="middle" class="">手势 → 意图</text>
+        <text x="418" y="96" font-size="9.5" class="muted">点节点 = 选中 · 单击 ▣ = 预览图解</text>
+        <text x="418" y="112" font-size="9.5" class="muted">拖拽 / 悬停同样只上交，不自行处置</text>
+        <text x="320" y="196" font-size="10" text-anchor="middle" class="">画布自己不做投影与布局计算——想让它「自作主张」都没有入口</text>
+      </svg>
+      <figcaption>照单办事：左进清单，右出手势。</figcaption>
+    </figure>
+
+    <h2>画布上的四样东西</h2>
+    <div class="cols c2">
+      <div><b><span data-arch="present.canvas.flow">图流</span> 与 <span data-arch="present.canvas.nodes">节点</span></b>节点渲染模块名、核心徽标与 ▣ 图解标——▣ 单击即在该模块的资料里打开图解。</div>
+      <div><b><span data-arch="present.canvas.edges">边</span></b>线型、颜色、箭头全按清单来；悬停提示也是别人算好的释义。</div>
+      <div><b><span data-arch="present.canvas.legend">图例</span></b>按视觉通道解码记号，只解码不讲解（ADR-0058）。</div>
+      <div><b>协作对手</b>坐标来自 <span data-arch="state.layout">排版</span>，显隐与回放态来自 <span data-arch="state.desk">唯一状态</span>——画布缺一不可，但一个都不算。</div>
+    </div>
+
+  </body>
+</html>

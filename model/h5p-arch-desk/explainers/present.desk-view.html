@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 7c320fbf77b2e477 present.desk-view#abstraction=ef4e2c02 present.desk-view#children=5ae8396b present.desk-view#invariants=f192ecba present.desk-view#responsibility=45d2240e present.desk-view#summary=8087d249 present.desk-view.split#invariants=baeab31a present.desk-view.split#summary=6d54a88a">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>项目视图 · 布置工位的人</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>布置工位的人</h1>
+    <p class="lede">这一层是 <span data-arch="present.desk-view">项目视图</span>：<span data-arch="present.desk-view" data-field="summary"></span>。进入一个项目时，是它把整张工作台摆好。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 226" role="img" aria-label="三栏布局：导航树、画布区、属性面板，加上信息条与分屏">
+        <defs><marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="10" y="8" width="620" height="26" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="320" y="25" font-size="9.5" text-anchor="middle" class="muted">设计信息条（身份 / 动作 / 对比 · 草图挂载点面包屑）</text>
+        <rect x="10" y="40" width="140" height="140" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="80" y="108" font-size="11" text-anchor="middle" class="">导航树</text>
+        <rect x="158" y="40" width="300" height="140" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="308" y="100" font-size="11" text-anchor="middle" class="">画布区</text><text x="308" y="118" font-size="9" text-anchor="middle" class="muted">选中场景后切成</text><text x="308" y="132" font-size="9" text-anchor="middle" class="muted">结构图 + 时序图 分屏</text>
+        <rect x="466" y="40" width="164" height="140" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="548" y="108" font-size="11" text-anchor="middle" class="">属性面板</text>
+        <rect x="158" y="186" width="300" height="26" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="308" y="203" font-size="9.5" text-anchor="middle" class="muted">回放控制条（用户驱动，没有自动播放）</text>
+        <path d="M80,180 L80,196 L150,196" stroke="var(--line)" stroke-width="1.5" fill="none"/>
+        <text x="320" y="222" font-size="9.5" text-anchor="middle" class="">两侧宽度可拖、可折叠、可「专注」——都记在本地</text>
+      </svg>
+      <figcaption>工位布置：三栏 + 信息条 + 分屏与回放条。</figcaption>
+    </figure>
+
+    <h2>它做四件事</h2>
+    <div class="cols c2">
+      <div><b>注入状态</b>按项目 + 版本创建一份 <span data-arch="state.desk">DeskState</span> 交给全屋使用——同项目开几份视图就各有各的账本。</div>
+      <div><b>摆好三栏</b>导航树、画布区、属性面板的宽度与折叠记在本地；「专注」一键收起两侧（W-1）。</div>
+      <div><b>接管键盘</b>按键不直接改界面，统一翻译成意图交给 <span data-arch="state.transition">规则机器</span>。</div>
+      <div><b>场景分屏</b>打开场景后，画布区交给 <span data-arch="present.desk-view.split">分屏容器</span> 放结构图与时序图，底部出现回放条。</div>
+    </div>
+
+    <p class="note">它只布置、不经营：画什么、选了谁、走到哪一步，都听 <span data-arch="state">会话大脑</span> 的。</p>
+
+  </body>
+</html>

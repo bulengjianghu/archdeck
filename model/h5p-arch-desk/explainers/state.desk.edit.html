@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 45e0af7bdf715cfb rel:rel.ed.commands-derive=03902767 rel:rel.ed.commands-save=a736a68c rel:rel.ed.commands-session=280bd60d rel:rel.ed.derive-session=2a28c2cd rel:rel.ed.save-session=1ee87bf4 state.desk.edit#abstraction=df89cd64 state.desk.edit#children=438237fc state.desk.edit#invariants=7da2dfab state.desk.edit#responsibility=cc2c4ea5 state.desk.edit#summary=f5f06854 state.desk.edit.commands#summary=c8943280 state.desk.edit.derive#summary=371a7807 state.desk.edit.save#summary=e7730bf5 state.desk.edit.session#summary=8da1c730">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>编辑中的草图 · 草图编辑会话</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>草图编辑会话</h1>
+    <p class="lede">这一层是 <span data-arch="state.desk.edit">编辑中的草图</span>：<span data-arch="state.desk.edit" data-field="summary"></span>。打开草图版本即进入会话：改的是会话里的值，保存才落盘。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 226" role="img" aria-label="编辑会话是一个值：全部草图、当前张、撤销栈、指纹；手势经纯函数应用，保存整设计落盘">
+        <defs><marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="16" y="28" width="190" height="118" rx="10" fill="var(--ok-soft)" stroke="var(--ok)"/>
+        <text x="111" y="50" font-size="11" text-anchor="middle" class="">会话 = 一个值</text>
+        <text x="32" y="72" font-size="8.5" class="muted">设计的全部草图</text>
+        <text x="32" y="87" font-size="8.5" class="muted">当前画在哪张</text>
+        <text x="32" y="102" font-size="8.5" class="muted">撤销 / 重做栈</text>
+        <text x="32" y="117" font-size="8.5" class="muted">各张读取时的指纹</text>
+        <text x="32" y="134" font-size="8.5" class="muted">多选 · 对比口径 · 临时显隐</text>
+        <path d="M208,86 L236,86" stroke="var(--text-2)" stroke-width="2" marker-end="url(#c)"/>
+        <rect x="240" y="56" width="180" height="62" rx="10" fill="var(--bg)" stroke="var(--warn)"/>
+        <text x="330" y="80" font-size="10.5" text-anchor="middle" class="">手势 → 纯函数应用</text>
+        <text x="256" y="100" font-size="8.5" text-anchor="middle" class="muted">合并 / 拆分 / 连线 / 下钻 …</text>
+        <path d="M422,86 L450,86" stroke="var(--text-2)" stroke-width="2" marker-end="url(#c)"/>
+        <rect x="454" y="56" width="172" height="62" rx="10" fill="var(--ok-soft)" stroke="var(--ok)"/>
+        <text x="540" y="80" font-size="10.5" text-anchor="middle" class="">会话新值</text>
+        <text x="470" y="100" font-size="8.5" text-anchor="middle" class="muted">撤销栈随之生长</text>
+        <path d="M540,120 L540,150" stroke="var(--text-2)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#c)"/>
+        <rect x="400" y="154" width="226" height="56" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="513" y="174" font-size="10.5" text-anchor="middle" class="">保存（整个设计一次落盘）</text>
+        <text x="416" y="192" font-size="8.5" class="muted">保存并交给 AI · 退出 · 新建设计</text>
+        <rect x="16" y="156" width="368" height="54" rx="10" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="200" y="176" font-size="10" text-anchor="middle" class="">打开即建索引：各张草图连同系统卡与引用的外部模块</text>
+        <text x="200" y="192" font-size="9" text-anchor="middle" class="muted">派生：当前张画布数据 · 两级校验 · 脏与面包屑 · 面板查询</text>
+        <text x="320" y="218" font-size="9.5" text-anchor="middle" class="">写回由同步适配器收口——改的是会话，落盘的是文件</text>
+      </svg>
+      <figcaption>会话是值：手势改值，保存落盘。</figcaption>
+    </figure>
+
+    <h2>四件切分</h2>
+    <div class="cols c2">
+      <div><b>改会话</b>每个手势一个操作，经纯函数应用到会话值上——撤销 / 重做就是回到栈上的上一个值。</div>
+      <div><b>读会话</b>当前张的画布数据、校验、对比计数全是只读派生；「隐藏外部引用」这类临时显示只在会话里、不进 URL、不写文件。</div>
+      <div><b>落盘</b>保存以设计为单位整份写回；写前的指纹比对与校验由 <span data-arch="access.writer">描述写入</span> 把关。</div>
+      <div><b>进会话</b>打开草图版本即加载成设计的索引，作为 DeskState 的 index——从这一刻起，桌面整体切换到「设计时态」。</div>
+    </div>
+
+    <p class="note">草图编辑是「设计先于代码」主张的落地处：架构师改的是会话里的图，评审定稿才变成描述文件——改的每一步都留在值的历史里，可撤销、可追溯。</p>
+
+  </body>
+</html>

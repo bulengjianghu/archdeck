@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 175d917e3aa13057 rel:rel.ed.edit-navigation=fb2ca7dd rel:rel.gv.url-mode=aeebf769 rel:rel.p2.url-navigation=788e0f07 state.transition#abstraction=618f172a state.transition#children=bca91cfb state.transition#invariants=b1bf36b5 state.transition#responsibility=14855441 state.transition#summary=349bf794 state.transition.edit#summary=9911dcf0 state.transition.mode#summary=16d0566a state.transition.navigation#summary=a37973ba state.transition.playback#summary=69730b70 state.transition.selection#summary=c9cc5c4f state.transition.url#summary=980dd767">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>视图状态转移 · 规则机器</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>规则机器</h1>
+    <p class="lede">这一层是 <span data-arch="state.transition">视图状态转移</span>：<span data-arch="state.transition" data-field="summary"></span>。它是纯函数：不碰 Vue、路由、计时器，同样的输入永远同样的输出。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 210" role="img" aria-label="状态加动作加上下文，算出新状态、是否进历史与被清空的选中">
+        <defs><marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="14" y="30" width="128" height="38" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="78" y="48" font-size="10" text-anchor="middle" class="">当前视图状态</text><text x="78" y="61" font-size="8.5" text-anchor="middle" class="muted">层次 选中 开关 进度</text>
+        <rect x="14" y="80" width="128" height="38" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="78" y="98" font-size="10" text-anchor="middle" class="">动作</text><text x="78" y="111" font-size="8.5" text-anchor="middle" class="muted">点了一下 · 按了键</text>
+        <rect x="14" y="130" width="128" height="38" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="78" y="148" font-size="10" text-anchor="middle" class="">上下文</text><text x="78" y="161" font-size="8.5" text-anchor="middle" class="muted">能力与事实</text>
+        <path d="M144,49 L170,72 M144,99 L170,95 M144,149 L170,112" stroke="var(--text-2)" stroke-width="2" marker-end="url(#h)"/>
+        <rect x="174" y="76" width="128" height="52" rx="10" fill="var(--bg)" stroke="var(--warn)"/>
+        <text x="238" y="98" font-size="11.5" text-anchor="middle" class="">纯函数 f</text>
+        <text x="238" y="116" font-size="8.5" text-anchor="middle" class="muted">不碰网络不碰时钟</text>
+        <path d="M304,102 L330,102" stroke="var(--text-2)" stroke-width="2" marker-end="url(#h)"/>
+        <rect x="334" y="58" width="140" height="40" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="404" y="74" font-size="10" text-anchor="middle" class="">新状态</text><text x="404" y="89" font-size="8.5" text-anchor="middle" class="muted">唯一的产出之一</text>
+        <rect x="334" y="106" width="140" height="40" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="404" y="122" font-size="10" text-anchor="middle" class="">是否进浏览器历史</text><text x="404" y="137" font-size="8.5" text-anchor="middle" class="muted">URL 编解码同规则</text>
+        <rect x="334" y="154" width="140" height="40" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="404" y="170" font-size="10" text-anchor="middle" class="">被清空的选中</text><text x="404" y="185" font-size="8.5" text-anchor="middle" class="muted">目标消失时自动让位</text>
+        <rect x="496" y="76" width="130" height="76" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="561" y="100" font-size="10" text-anchor="middle" class="">关于被描述系统</text>
+        <text x="561" y="116" font-size="10" text-anchor="middle" class="">的问题 →</text>
+        <text x="561" y="134" font-size="9" text-anchor="middle" class="muted">问模型层架构查询</text>
+        <path d="M476,110 L492,112" stroke="var(--accent)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#h)"/>
+        <text x="320" y="200" font-size="10" text-anchor="middle" class="">一个事实一个值：互相约束的东西是同一个状态，不拆成几面旗子互相打架</text>
+      </svg>
+      <figcaption>规则机器：三进三出，全是纯数据。</figcaption>
+    </figure>
+
+    <h2>机器上的五个工位</h2>
+    <div class="cols c3">
+      <div><b><span data-arch="state.transition.selection">选中</span></b>与 <span data-arch="state.transition.navigation">导航</span>：选中是唯一排他的主语；下钻、回退都在规则里排队。</div>
+      <div><b><span data-arch="state.transition.playback">进度</span> 与 <span data-arch="state.transition.mode">模式</span></b>选中的步骤就是进度所在；回放只由用户驱动——状态里没有「播放中」。</div>
+      <div><b><span data-arch="state.transition.url">URL</span> 与 <span data-arch="state.transition.edit">编辑态</span></b>地址怎么编解码、草图的脏与存，同一处规则说了算。</div>
+    </div>
+
+    <ul data-arch="state.transition" data-field="invariants"></ul>
+
+    <p class="note">它不认识界面也不认识磁盘——所以单测穷举规则清单即可全覆盖，不用启动浏览器。</p>
+
+  </body>
+</html>
