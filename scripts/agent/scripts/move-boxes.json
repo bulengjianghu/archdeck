@@ -1,0 +1,12 @@
+{
+  "steps": [
+    {
+      "block": {
+        "kind": "edit",
+        "summary": "顺手把框挪一挪（不许：已有的框只有人能动）",
+        "ops": [{ "op": "edit", "sketch": "{{sketch.mount}}", "edit": { "op": "moveNode", "positions": { "{{sketch.mount}}.edit": { "x": 0, "y": 0 } } } }]
+      }
+    },
+    { "done": true }
+  ]
+}

@@ -27,6 +27,7 @@ const kindCtx: DocKindContext = {
   // EX-3：图解 / 理解页的标签名取模块名（系统根取系统名）
   moduleName: id => (id === desk.index.value?.rootId ? desk.index.value.model.system.name : (desk.index.value?.modules.get(id)?.name ?? id)),
   scenarioName: () => desk.run.scenario.value?.name ?? null,
+  noteTitle: file => desk.notes.list.value.find(n => n.file === file)?.title ?? file,
 }
 const label = (t: DocTab) => docLabel(t.doc, kindCtx)
 const icon = (t: DocTab) => docKindView(t.doc)?.icon

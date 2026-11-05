@@ -89,10 +89,13 @@ const vsBaseline = computed(() => e.vsBaseline.value?.sheet ?? null)
         <summary>
           相对基线：改了 <b>{{ vsBaseline?.changes.length ?? 0 }}</b> 处 <span class="tag">本张</span>
         </summary>
-        <ul>
-          <li v-for="(c, i) in vsBaseline?.changes ?? []" :key="i">{{ c.message }}</li>
-          <li v-if="!vsBaseline?.changes.length" class="muted">未改动</li>
-        </ul>
+        <!-- CI-4：变更清单搬到导航树的「改动」页签，面板只留计数 -->
+        <p class="muted moved">
+          全设计 {{ e.changes.items.value.length }} 项改动，清单在导航树的「改动」页签
+          <button v-if="e.changes.items.value.length" class="link" data-testid="open-changes-tab" @click="e.changes.revealItem(e.changes.items.value[0].n)">
+            打开 ›
+          </button>
+        </p>
       </details>
     </div>
   </section>

@@ -73,6 +73,10 @@ const ready = computed(() => (mode === 'commit' ? !!c.value : !!d.value || isInt
         </nav>
         <span v-if="crumbNote" class="crumb-note" role="alert">{{ crumbNote }}</span>
         <span v-if="desk.edit.dirty.value" class="dirty" title="有未保存的改动">编辑中 ●</span>
+        <!-- DA-6、ADR-0063 决策 10：AI 回合中画布只读 -->
+        <span v-if="desk.edit.locked.value" class="ai-busy" data-testid="ai-editing" title="AI 这一轮说完时一次性应用为一步；画布可看、可选、可下钻，不可改"
+          ><span class="spin" aria-hidden="true" />AI 正在修改…</span
+        >
       </template>
     </div>
     <ActionZone class="zone act" :mode="mode" />
@@ -81,6 +85,31 @@ const ready = computed(() => (mode === 'commit' ? !!c.value : !!d.value || isInt
 </template>
 
 <style scoped>
+.ai-busy {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 10px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+}
+.ai-busy .spin {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--accent);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: ai-spin 0.8s linear infinite;
+}
+@keyframes ai-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .info-bar {
   display: flex;
   align-items: stretch;

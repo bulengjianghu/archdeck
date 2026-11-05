@@ -98,6 +98,10 @@ export function httpModelWriter(project: string, base = ''): ModelWriter {
   return {
     saveSketch,
     saveDesignSketches,
+    saveNote: async ({ design, ...body }) => {
+      const r = await post(`designs/${encodeURIComponent(design)}/notes`, body)
+      return r.ok ? { ok: true, file: r.file } : r
+    },
     createDesign: b => post('designs', b),
     feedback: b => post('feedback', b),
     allow: b => post('allow', b),

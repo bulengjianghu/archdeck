@@ -10,7 +10,7 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
-import { AGENT_QUERY_TOOLS, parseBlock, parseEventLine, type AgentBlock } from '../src/model'
+import { AGENT_QUERY_TOOLS, parseBlock, parseEventLine, validateEditBlock, type AgentBlock } from '../src/model'
 
 /** 推给页面的事件（页面侧 state/desk/dialogue.ts 的 AgentPush） */
 export type DialogueEvent =
@@ -196,6 +196,11 @@ export function createAgentRunner(config: AgentConfig, emit: (project: string, e
       else if (ev.value.type === 'block') {
         const b = parseBlock(ev.value.block)
         if (!b.ok) return reject(b.error)
+        // DL-21：改动块里每条操作再过编辑操作族的形状校验（AI 不许出位置类与恢复类），不合法整轮拒绝
+        if (b.value.kind === 'edit') {
+          const ops = validateEditBlock(b.value)
+          if (!ops.ok) return reject(ops.error)
+        }
         blocks.push(b.value)
       } else finish()
     }

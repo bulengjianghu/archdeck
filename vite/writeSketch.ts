@@ -30,6 +30,7 @@ import {
 import { DESIGNS_DIR, SKETCHES_DIR, isProjectId, readModelDir, sketchHash } from './readModelDir'
 import { appendLedger, governanceDir, touchOwned } from './governanceStore'
 import { WriteError, openDoc, projectDir, save, today } from './writeModel'
+import { writeChangeTable } from './designNotes'
 
 /** 文件已在外部改动（409） */
 export class WriteConflict extends WriteError {}
@@ -66,6 +67,8 @@ export interface SaveDesignRequest {
   sketches: DesignSketchWrite[]
   /** B7：删掉的草图（删带下一层草图的模块时由人确认后一并删）与读取时的指纹 */
   removed?: { mount: string; baseHash: string }[]
+  /** DL-3：改动项编号表（页面维护，一并写进 designs/<设计>/changes.json，不登记指纹） */
+  changes?: unknown
 }
 
 export interface SaveDesignResult {
@@ -213,6 +216,7 @@ ${sketchText(clean.sketch)}`,
     touchOwned(modelRoot, project, f)
     appendLedger(ledger, { at, tool: 'sketch', origin: 'page', file: f, design, removed: true })
   }
+  if (req.changes && typeof req.changes === 'object') writeChangeTable(modelRoot, project, design, req.changes)
   return { files, removed: gone.map(f => path.relative(root, abs(f)).split(path.sep).join('/')), dropped }
 }
 

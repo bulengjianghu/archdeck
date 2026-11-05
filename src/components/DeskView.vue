@@ -30,12 +30,14 @@ import NavTree from './tree/NavTree.vue'
 import { OPEN_PREVIEW } from './shared/preview'
 import { HAS_EXPLAINER } from './panel/related'
 import { NAV_TAB, type NavTab } from './shared/navTab'
+import { OPEN_PROPS } from './shared/openProps'
 import { CANVAS_INSET } from './shared/canvasInset'
 import { playerPlacement } from './shared/playerPlacement'
 import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
 import { useEvolutionPrefs } from './display/useEvolutionPrefs'
 import { useAssemblyPrefs } from './display/useAssemblyPrefs'
 import EditDialog from './edit/EditDialog.vue'
+import { ask } from './edit/useEditDialog'
 import { confirmLeave } from './edit/leave'
 import SketchCanvas from './sketch/SketchCanvas.vue'
 import NewDesignDialog from './edit/NewDesignDialog.vue'
@@ -150,7 +152,8 @@ ws.setProps(readNumber(PROPS_KEY, 0, 1, 0) !== 1)
 const propsOpen = computed(() => ws.state.value.propsOpen)
 function toggleProps() {
   ws.setProps(!propsOpen.value)
-  store(PROPS_KEY, propsOpen.value ? '0' : '1')
+  // DL-20：草图编辑态的展开收起只在这一回（缺省收起），不改本机记住的偏好
+  if (!desk.edit.active.value) store(PROPS_KEY, propsOpen.value ? '0' : '1')
 }
 
 // 导航树是画布左缘的浮层抽屉（第二十轮读先方案 §2）：不挤压画布，宽度固定 300
@@ -162,12 +165,26 @@ const navCollapsed = ref(navCollapsedOf(desk.perspective.value === 'run'))
 // V6 新家（第二十轮 §6）：运行视角的「这一步 / 这个对象做了什么」住右栏的步骤节，选中抽屉随之收起（用户可再打开）
 let propsBeforeRun = readNumber(PROPS_KEY, 0, 1, 0) !== 1
 // 草图编辑：画布是主面，导航浮层自动收起（退出不自动恢复）
+// DL-20（裁决 11 §2）：草图编辑态选中面板缺省收起（与运行视角同口径）——对话在场后表单用得少；退出时恢复进入前的样子
+let propsBeforeEdit: boolean | null = null
 watch(
   () => desk.edit.active.value,
   on => {
     if (on && !navCollapsed.value) toggleNav()
+    if (on) {
+      propsBeforeEdit = propsOpen.value
+      if (propsOpen.value) ws.setProps(false)
+    } else if (propsBeforeEdit !== null) {
+      if (propsBeforeEdit !== propsOpen.value) ws.setProps(propsBeforeEdit)
+      propsBeforeEdit = null
+    }
   },
+  { immediate: true },
 )
+/** DL-20：手势编辑需要表单时按需展开（右键「编辑字段…」、改动页签定位到的项） */
+provide(OPEN_PROPS, () => {
+  if (!propsOpen.value) ws.setProps(true)
+})
 watch(
   () => desk.perspective.value,
   (p, was) => {
@@ -228,7 +245,8 @@ onMounted(() => {
 })
 onBeforeUnmount(() => stageObserver?.disconnect())
 const placement = computed(() => propsPlacement(stageWidth.value))
-const floating = computed(() => propsOpen.value && placement.value === 'floating')
+// DL-20：草图编辑态展开的选中面板浮在画布右侧，不挤压画布（画布宽度不变，草图的可用区域不随之重排）
+const floating = computed(() => propsOpen.value && (placement.value === 'floating' || desk.edit.active.value))
 const canvasInset = computed(() => (floating.value ? PROPS_WIDTH + 16 : 0))
 provide(CANVAS_INSET, canvasInset)
 
@@ -299,6 +317,25 @@ function showIssues() {
   navTab.value = 'issues'
   if (navCollapsed.value) toggleNav()
 }
+// CI-4：单击画布上的改动徽标——展开导航树、切到「改动」页签
+watch(
+  () => desk.edit.changes.reveal.value,
+  r => {
+    if (!r) return
+    navTab.value = 'changes'
+    if (navCollapsed.value) toggleNav()
+  },
+)
+// CI-5、DL-2：撤回有级联 / 之后又被改过时先列出确认（与编辑的二次确认同一对话框）
+watch(
+  () => desk.edit.changes.pending.value,
+  async p => {
+    if (!p) return
+    const ok = await ask({ title: p.title, lines: p.lines, ok: '撤回', danger: true })
+    if (ok) p.confirm()
+    else desk.edit.changes.cancelPending()
+  },
+)
 
 // TB-4：搜索面板——⌕ 或 ⌘K（Ctrl+K）打开，再按关闭；焦点在输入框里也生效
 const searchOpen = ref(false)

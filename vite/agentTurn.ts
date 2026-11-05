@@ -7,7 +7,16 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { buildContextPack, loadModel, packPrompt, type AgentBlock, type Anchor, type CodeFactsSummary, type DialogueMode } from '../src/model'
+import {
+  buildContextPack,
+  loadModel,
+  packPrompt,
+  type AgentBlock,
+  type Anchor,
+  type CodeFactsSummary,
+  type DialogueMode,
+  type SketchContext,
+} from '../src/model'
 import type { AgentRunner, DialogueEvent } from './agentProcess'
 import { readProject } from './readModelDir'
 import { readSourceTree } from './readSource'
@@ -24,6 +33,8 @@ export interface TurnBody {
   text: string
   images?: { name: string; type: string; dataUrl: string }[]
   design?: string
+  /** 改（DA-6）：草图里的上下文，页面从编辑会话构造（DL-14） */
+  sketch?: SketchContext
 }
 
 export class TurnInvalid extends Error {}
@@ -35,13 +46,16 @@ const IMAGE_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'j
 function validBody(b: Partial<TurnBody>): TurnBody {
   if (!b || typeof b.turn !== 'string' || !/^[\w-]{1,60}$/.test(b.turn)) throw new TurnInvalid('缺轮次编号')
   if (typeof b.session !== 'string' || !/^[\w-]{1,40}$/.test(b.session)) throw new TurnInvalid('缺对话会话编号')
-  if (b.mode !== 'ask' && b.mode !== 'renarrate') throw new TurnInvalid('mode 只能是 ask / renarrate')
+  if (b.mode !== 'ask' && b.mode !== 'renarrate' && b.mode !== 'edit') throw new TurnInvalid('mode 只能是 ask / renarrate / edit')
   if (typeof b.text !== 'string') throw new TurnInvalid('缺 text')
   const a = b.anchor as Anchor | undefined
   if (!a || !['module', 'step', 'none'].includes(a.kind)) throw new TurnInvalid('缺锚点')
   if (b.mode === 'renarrate' && a.kind !== 'module') throw new TurnInvalid('重讲要锚在一个模块上')
   if ((b.images?.length ?? 0) > IMAGE_LIMIT.count) throw new TurnInvalid(`一轮至多 ${IMAGE_LIMIT.count} 张图`)
   if (b.design !== undefined && !/^[\w.-]+$/.test(b.design)) throw new TurnInvalid('设计名不合法')
+  // DA-2、DA-6：改只在设计的草图里，且总带着草图上下文
+  if (b.mode === 'edit' && (!b.design || !b.sketch || typeof b.sketch !== 'object' || typeof b.sketch.mount !== 'string'))
+    throw new TurnInvalid('改要在设计的草图里发，并带草图上下文')
   return b as TurnBody
 }
 
@@ -87,7 +101,9 @@ export async function startTurn(
   if (designDir && !fs.existsSync(designDir)) return { ok: false, error: `设计不存在：${body.design}`, status: 404 }
   const { index } = loadModel(payload.files)
   const a = body.anchor
-  if (a.kind === 'module' && a.module !== index.rootId && !index.modules.has(a.module)) return { ok: false, error: `模块不存在：${a.module}`, status: 400 }
+  // 草图里的锚点可以是草图里才有的模块（DA-2），不按当前版本查
+  if (!body.sketch && a.kind === 'module' && a.module !== index.rootId && !index.modules.has(a.module))
+    return { ok: false, error: `模块不存在：${a.module}`, status: 400 }
 
   const imgDir = designDir
     ? path.join(designDir, 'dialogue', 'photos', body.turn)
@@ -107,6 +123,7 @@ export async function startTurn(
     images,
     facts,
     ...(body.mode === 'renarrate' && a.kind === 'module' ? { notes: readNotes(ctx.modelRoot, project, a.module) } : {}),
+    ...(body.mode === 'edit' && body.sketch ? { sketch: body.sketch } : {}),
   })
   const tree = readSourceTree(ctx.modelRoot, project, ctx.root)
   const cwd = tree?.status === 'local' ? tree.root : ctx.root

@@ -4,10 +4,13 @@
  * 锚点条粘顶（下一句话带着哪个模块 / 哪一步）；转录里每条带当时的锚点、单击定位；问答卡的引用由架构台按 {模块, 字段} 填原文、单击定位，
  * 推断段标「推断」；梳理卡与照片并排、四组、不确定标记；重讲的结果卡（落了 / 被拒的原因）；AI 回合中的状态提示与停止；
  * 输入框钉在底部：「只问」/「重讲」、贴图（粘贴或选文件）。只读对话会话、只发意图（desk.dialogue）。
+ * 草图里（波 2，DA-6–DA-10）：「改 / 问」切换（「可改」/「只问」徽标）；AI 改完一轮出提议卡（动了哪几个号、牵动谁「按当前代码估」、撤回本轮）；
+ * 梳理卡旁「按这张图起草」；问答卡「存为设计说明」。
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'
 import type { CiteView, DialogueEntry, ImageAttachment } from '@/state/desk/dialogue'
+import ProposalCard from './ProposalCard.vue'
 
 // 呈现层只依赖视图状态层与类型契约（rules.yaml）：对话的块、锚点、引用的类型从会话条目推出，不直引模型层
 type Anchor = DialogueEntry['anchor']
@@ -19,7 +22,39 @@ const dlg = desk.dialogue
 const s = computed(() => dlg.state.value)
 const running = computed(() => s.value.run.status === 'running')
 const isModule = computed(() => s.value.anchor.kind === 'module')
-const mode = computed(() => (isModule.value ? s.value.mode : 'ask'))
+/** 草图画布里：「改 / 问」；当前版本上：「问 / 重讲」（DL-19） */
+const inSketch = computed(() => s.value.perspective === 'sketch')
+const mode = computed(() => (inSketch.value ? s.value.mode : isModule.value ? s.value.mode : 'ask'))
+const BADGE = { ask: '只问', renarrate: '只动讲法', edit: '可改' } as const
+type Outcome = NonNullable<Extract<DialogueEntry, { role: 'agent' }>['outcome']>
+const proposal = (o: Outcome | undefined) => (o && 'kind' in o && o.kind === 'proposal' ? o : null)
+const renarrated = (o: Outcome | undefined) => (o && !('kind' in o) ? o : null)
+const notesCount = (o: Outcome | undefined) => {
+  const r = renarrated(o)
+  return r?.applied ? r.notes.length : 0
+}
+const reasonsOf = (o: Outcome | undefined) => {
+  const r = renarrated(o)
+  return r && !r.applied ? r.reasons : []
+}
+/** DA-10：存为设计说明——问答卡的段落连同引用原文存成一份 Markdown */
+const saved = ref<Record<string, string>>({})
+async function saveNote(e: Extract<DialogueEntry, { role: 'agent' }>, k: number) {
+  const b = e.blocks[k]
+  if (b.kind !== 'answer') return
+  const ask = [...s.value.transcript.slice(0, s.value.transcript.indexOf(e))].reverse().find(x => x.role === 'user')
+  const title = (ask?.role === 'user' ? ask.input.text : '').trim().split('\n')[0].slice(0, 40) || '设计说明'
+  const text = b.parts
+    .map(
+      p =>
+        `${p.inferred ? '（推断）' : ''}${p.text}${citeViews(p.cites)
+          .map(c => (c.ok ? `\n> ${c.name}：${c.text}` : ''))
+          .join('')}`,
+    )
+    .join('\n\n')
+  const r = await desk.notes.save({ title, text, ...(e.anchor.kind === 'module' ? { module: e.anchor.module } : {}) })
+  saved.value = { ...saved.value, [`${e.id}:${k}`]: r.ok ? '已存为设计说明' : `没存成：${r.error}` }
+}
 
 const anchorLabel = (a: Anchor) => dlg.anchorText(a)
 const anchorKind = (a: Anchor) => (a.kind === 'module' ? '模块' : a.kind === 'step' ? '步骤' : '系统')
@@ -114,6 +149,7 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
         <div v-if="e.role === 'user'" class="msg user" data-testid="msg-user">
           <button class="link at" :title="`当时的锚点：${anchorLabel(e.anchor)}，单击定位`" @click="locate(e.anchor)">@{{ anchorLabel(e.anchor) }}</button>
           <span v-if="e.input.mode === 'renarrate'" class="tag">重讲</span>
+          <span v-else-if="e.input.mode === 'edit'" class="tag">改</span>
           <p class="text">{{ e.input.text }}</p>
           <div v-if="e.input.images.length && !hasDigest(s.transcript[i + 1] ?? e)" class="thumbs">
             <img v-for="(img, k) in e.input.images" :key="k" :src="img.dataUrl" :alt="img.name" />
@@ -131,6 +167,12 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
                   </button>
                   <span v-else class="cite bad" data-testid="cite-bad" :title="cv.reason">引用无效</span>
                 </template>
+              </p>
+              <p v-if="inSketch && desk.notes.design" class="card-actions">
+                <span v-if="saved[`${e.id}:${k}`]" class="muted" data-testid="note-saved">{{ saved[`${e.id}:${k}`] }}</span>
+                <button v-else class="link" data-testid="save-note" title="存为设计说明：挂在设计下，标「目标态 · 未实现」" @click="saveNote(e, k)">
+                  存为设计说明 ›
+                </button>
               </p>
             </div>
             <!-- DA-7：梳理卡与照片并排 -->
@@ -161,13 +203,26 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
                     </li>
                   </ul>
                 </section>
+                <p v-if="inSketch" class="card-actions">
+                  <button
+                    class="link"
+                    data-testid="draft-from-digest"
+                    :disabled="running"
+                    title="按这张图起草：一键变成一轮提议，可撤回"
+                    @click="dlg.draftFromDigest(e.id)"
+                  >
+                    按这张图起草 ›
+                  </button>
+                </p>
               </div>
             </div>
           </template>
+          <!-- DA-8：提议卡 -->
+          <ProposalCard v-if="proposal(e.outcome)" :outcome="proposal(e.outcome)!" :busy="running" />
           <!-- DA-4：重讲的结果 -->
-          <div v-if="e.outcome" class="card outcome" :class="{ rejected: !e.outcome.applied }" data-testid="renarrate-outcome">
-            <template v-if="e.outcome.applied">
-              题解已按要求重讲，依据已盖 · 讲法要求 {{ e.outcome.notes.length }} 条
+          <div v-else-if="renarrated(e.outcome)" class="card outcome" :class="{ rejected: !renarrated(e.outcome)!.applied }" data-testid="renarrate-outcome">
+            <template v-if="renarrated(e.outcome)!.applied">
+              题解已按要求重讲，依据已盖 · 讲法要求 {{ notesCount(e.outcome) }} 条
               <button v-if="e.anchor.kind === 'module'" class="link" @click="desk.workspace.open({ kind: 'explainer', module: e.anchor.module })">
                 看题解 ›
               </button>
@@ -175,7 +230,7 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
             <template v-else>
               重讲被拒，什么都没写：
               <ul>
-                <li v-for="(r, n) in e.outcome.reasons" :key="n">{{ r }}</li>
+                <li v-for="(r, n) in reasonsOf(e.outcome)" :key="n">{{ r }}</li>
               </ul>
             </template>
           </div>
@@ -185,7 +240,7 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
         <div v-else class="msg stopped" data-testid="msg-stopped">{{ STOP_TEXT[e.reason] }}</div>
       </template>
       <div v-if="s.run.status === 'running'" class="msg live" data-testid="msg-live">
-        <span class="spin" aria-hidden="true" />AI 正在{{ s.run.mode === 'renarrate' ? '重讲' : '回答' }}…
+        <span class="spin" aria-hidden="true" />AI 正在{{ s.run.mode === 'renarrate' ? '重讲' : s.run.mode === 'edit' ? '修改' : '回答' }}…
         <span v-if="s.queue.length" class="muted">（排队 {{ s.queue.length }} 条）</span>
         <p v-if="s.run.live" class="text plain">{{ s.run.live }}</p>
       </div>
@@ -194,17 +249,30 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
     <!-- DA-1：输入框钉在辅助栏底部 -->
     <footer class="input" @paste="onPaste">
       <div class="modes">
-        <button class="seg" :class="{ on: mode === 'ask' }" @click="dlg.dispatch({ type: 'setMode', mode: 'ask' })">问</button>
-        <button
-          class="seg"
-          :class="{ on: mode === 'renarrate' }"
-          :disabled="!isModule"
-          :title="isModule ? '重讲：按你的意见重新生成这个模块的题解（只动讲法不动事实）' : '重讲要先选中一个模块'"
-          @click="dlg.dispatch({ type: 'setMode', mode: 'renarrate' })"
-        >
-          重讲
-        </button>
-        <span class="badge" data-testid="mode-badge">{{ mode === 'ask' ? '只问' : '只动讲法' }}</span>
+        <template v-if="inSketch">
+          <button
+            class="seg"
+            :class="{ on: mode === 'edit' }"
+            title="改：说想法，AI 改草图（一轮一步，可撤回）"
+            @click="dlg.dispatch({ type: 'setMode', mode: 'edit' })"
+          >
+            改
+          </button>
+          <button class="seg" :class="{ on: mode === 'ask' }" title="问：只回答，不改草图" @click="dlg.dispatch({ type: 'setMode', mode: 'ask' })">问</button>
+        </template>
+        <template v-else>
+          <button class="seg" :class="{ on: mode === 'ask' }" @click="dlg.dispatch({ type: 'setMode', mode: 'ask' })">问</button>
+          <button
+            class="seg"
+            :class="{ on: mode === 'renarrate' }"
+            :disabled="!isModule"
+            :title="isModule ? '重讲：按你的意见重新生成这个模块的题解（只动讲法不动事实）' : '重讲要先选中一个模块'"
+            @click="dlg.dispatch({ type: 'setMode', mode: 'renarrate' })"
+          >
+            重讲
+          </button>
+        </template>
+        <span class="badge" data-testid="mode-badge">{{ BADGE[mode] }}</span>
         <span class="sp" />
         <button v-if="running" class="stop" data-testid="dialogue-stop" title="停止：终止这一轮，什么都不落" @click="dlg.stop()">■ 停止</button>
       </div>
@@ -217,7 +285,13 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
         <textarea
           v-model="draft"
           rows="2"
-          :placeholder="mode === 'ask' ? '问这个系统…（Enter 发送，Shift+Enter 换行，可粘贴图片）' : '说说这张图 / 这段讲法要怎么改…'"
+          :placeholder="
+            mode === 'edit'
+              ? '说想法，AI 改草图…（「撤回 #3」也行；Enter 发送，可粘贴白板照片）'
+              : mode === 'ask'
+                ? '问这个系统…（Enter 发送，Shift+Enter 换行，可粘贴图片）'
+                : '说说这张图 / 这段讲法要怎么改…'
+          "
           aria-label="对话输入"
           @keydown="onKey"
         />
@@ -240,6 +314,14 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
 </template>
 
 <style scoped>
+.card-actions {
+  margin: 6px 0 0;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+}
+
 .dialogue {
   flex: 1 1 auto;
   min-height: 0;

@@ -129,12 +129,24 @@ export async function openRelated(page: Page) {
 }
 
 /**
- * DL-4（第二十一轮）：进入草图画布时辅助栏按主语表打开并固定「对话」，资料区占去画布的宽度；
- * 量草图画布几何、点画布节点的用例先关掉资料区（只在对话已打开时动）
+ * DL-4、DL-20（第二十一轮波 2）：进入草图画布时辅助栏按主语表打开并固定「对话」，选中面板缺省收起——画布不再被挤压，资料区不用关
  */
-export async function closeDialogueDock(page: Page) {
+export async function expectSketchLayout(page: Page) {
   const dock = page.getByRole('complementary', { name: '资料区' })
   await expect(dock.locator('.tab.on:not(.preview)')).toContainText('对话')
-  await dock.getByRole('button', { name: '关闭资料区' }).click()
-  await expect(dock).toHaveCount(0)
+  await expect(page.getByRole('complementary', { name: '属性' })).toHaveCount(0)
+}
+
+/** DL-20：草图编辑态要用表单时按需展开选中面板（浮在画布右侧） */
+export async function openSketchPanel(page: Page) {
+  const props = page.getByRole('complementary', { name: '属性' })
+  if (!(await props.count())) await page.locator('.props-toggle').click()
+  await expect(props).toBeVisible()
+}
+
+/** DL-20：用完表单收起（浮在画布右侧的面板会挡住右边的节点） */
+export async function closeSketchPanel(page: Page) {
+  const props = page.getByRole('complementary', { name: '属性' })
+  if (await props.count()) await page.locator('.props-toggle').click()
+  await expect(props).toHaveCount(0)
 }

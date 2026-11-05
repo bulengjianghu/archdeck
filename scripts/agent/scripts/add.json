@@ -1,0 +1,19 @@
+{
+  "steps": [
+    {
+      "block": {
+        "kind": "edit",
+        "summary": "新增「运行派生」，由编辑会话以外的模块查询",
+        "ops": [
+          { "op": "edit", "sketch": "{{sketch.mount}}", "edit": { "op": "addModule", "parent": "{{sketch.mount}}", "name": "运行派生", "id": "derived" } },
+          {
+            "op": "edit",
+            "sketch": "{{sketch.mount}}",
+            "edit": { "op": "connect", "from": "{{sketch.mount}}.derived", "to": "{{sketch.mount}}.loading", "type": "queries", "description": "读描述" }
+          }
+        ]
+      }
+    },
+    { "done": true }
+  ]
+}

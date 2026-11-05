@@ -10,7 +10,17 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { parse } from 'yaml'
-import { closeDialogueDock, graphNode, openCheckList, openDesk, restoreOwned, openProjectMenu, switchVersion } from './helpers'
+import {
+  closeSketchPanel,
+  expectSketchLayout,
+  openSketchPanel,
+  graphNode,
+  openCheckList,
+  openDesk,
+  restoreOwned,
+  openProjectMenu,
+  switchVersion,
+} from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 const GOV = path.join(PROJECT, 'governance')
@@ -115,7 +125,7 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     await dialog.getByRole('button', { name: '创建并打开草图' }).click()
     await expect(page).toHaveURL(/\/d\/zz-e2e-sketch\/sketch/)
     await expect(page.locator('.sketch-canvas')).toBeVisible()
-    await closeDialogueDock(page)
+    await expectSketchLayout(page)
     await expect(page.locator('.info-bar .name')).toHaveText('E2E 草图')
     await expect(saveButton(page)).toBeVisible()
 
@@ -178,7 +188,10 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     await expect(graphNode(page, 'state.desk.session')).toBeVisible()
     await expect(graphNode(page, a)).toHaveCount(0)
     await expect(graphNode(page, 'state.desk.session').locator('.badge')).toHaveText('合')
+    // DL-20：选中面板在草图里缺省收起，看表单时按需展开
+    await openSketchPanel(page)
     await expect(page.locator('[data-testid="module-lineage"]')).toContainText('合并')
+    await closeSketchPanel(page)
 
     // 拖位置：一步，可撤销
     const before = (await graphNode(page, 'state.desk.session').boundingBox())!
@@ -195,6 +208,7 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
 
     // 面板写父模块原则：无选中时为父模块，名称与职责只读，原则失焦提交一步
     await page.locator('.vue-flow__pane').click({ position: { x: 5, y: 5 } })
+    await openSketchPanel(page)
     const parent = page.locator('[data-testid="sketch-parent"]')
     await expect(parent).toContainText('DeskState')
     await parent.locator('textarea[name="mount-principle"]').fill('协调者只持有一个值')
@@ -223,7 +237,7 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     // 刷新原样：位置、合并结果、关系与原则都在
     await page.reload()
     await expect(graphNode(page, 'state.desk.session')).toBeVisible()
-    await closeDialogueDock(page)
+    await expectSketchLayout(page)
     await expect(graphNode(page, a)).toHaveCount(0)
     await expect(page.locator('.sk-edge-label', { hasText: 'E2E 连线' })).toBeVisible()
     const x = await page.evaluate(
@@ -232,14 +246,19 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
           .layout.modules['state.desk.session'].x,
     )
     expect(x).toBe(pos.x)
+    await openSketchPanel(page)
     await expect(page.locator('textarea[name="mount-principle"]')).toHaveValue('协调者只持有一个值')
 
-    // 面板的两个核验数（本张）：相对基线改了 N 处，清单含「合并」；相对当前版本 N 处偏差
+    // 面板的两个核验数（本张）：相对基线改了 N 处、相对当前版本 N 处偏差；清单搬到导航树「改动」页签（CI-4），含「合并」
     const vb = page.locator('[data-testid="verify-baseline"]')
     await expect(vb.locator('summary')).toContainText(/相对基线：改了 [1-9]\d* 处/)
-    await vb.locator('summary').click()
-    await expect(vb).toContainText('合并')
     await expect(page.locator('[data-testid="verify-current"] summary')).toContainText(/相对当前版本：\d+ 处偏差/)
+    await vb.locator('summary').click()
+    await vb.locator('[data-testid="open-changes-tab"]').click()
+    await expect(page.locator('[data-testid="changes-tab"]')).toContainText('合并')
+    await closeSketchPanel(page)
+    await page.getByRole('button', { name: '导航树', exact: true }).click()
+    await expect(page.locator('.nav-area')).toBeHidden()
 
     // 下钻：合并结果的下一层由血缘推出，来源成为它的子模块；面包屑返回
     await graphNode(page, 'state.desk.session').dblclick()
@@ -345,8 +364,9 @@ test('X21 根草图：设计面板「改骨架」→ 层画成带 → 拖到另�
     await dialog.locator('input[name="design-id"]').fill('zz-e2e-root')
     await dialog.getByRole('button', { name: '创建并打开草图' }).click()
     await expect(page.locator('.sketch-canvas')).toBeVisible()
-    await closeDialogueDock(page)
+    await expectSketchLayout(page)
     await page.locator('.vue-flow__pane').click({ position: { x: 5, y: 5 } })
+    await openSketchPanel(page)
     await page.locator('[data-testid="design-sketches"]').getByRole('button', { name: '改骨架' }).click()
 
     // 层带：四条，按 order；第二级模块在所属带内
@@ -391,11 +411,12 @@ test('E-1、#20b：从当前版本的项目菜单点「编辑骨架」打开持�
   await page.getByRole('menuitem', { name: '编辑骨架' }).click()
   await expect(page).toHaveURL(/\/p\/h5p-arch-desk\/i\/skeleton/)
   await expect(page.locator('.sketch-canvas')).toBeVisible()
-  await closeDialogueDock(page)
+  await expectSketchLayout(page)
   await expect(page.locator('.info-bar .name')).toHaveText('骨架')
   await expect(saveButton(page)).toBeVisible()
   await expect(page.locator('.sk-band')).toHaveCount(4)
   // 持久草图只有「相对当前版本」（偏差，与命令行 sketch-check 同一口径，X17）：骨架与当前版本一致时 0 偏差、按钮 +0 ~0；草图下没有视角切换、导航树不另列路径
+  await openSketchPanel(page)
   await expect(page.locator('[data-testid="verify-current"] summary')).toContainText('相对当前版本：0 处偏差')
   const cmp = page.locator('.info-bar .cmp-btn')
   await expect(cmp).toContainText('对比 相对当前版本')
@@ -454,7 +475,7 @@ test('F-60–F-62、#15、#20b：草图的信息条只出现一次名称、唯�
     await switchVersion(page, 'zz-e2e-bar/sketch')
     const bar = page.locator('.info-bar')
     await expect(page.locator('.sketch-canvas')).toBeVisible()
-    await closeDialogueDock(page)
+    await expectSketchLayout(page)
     await expect(saveButton(page)).toBeVisible()
 
     // 身份区：kind + 名称（只这一次）+ 状态 + 唯一一条面包屑；不再有「编辑草图：」「尺子」「校验」「放弃」「编辑」
@@ -469,6 +490,7 @@ test('F-60–F-62、#15、#20b：草图的信息条只出现一次名称、唯�
 
     // 改一处：编辑中 ●，「交给 AI」变成「保存并交给 AI」
     await graphNode(page, 'state.desk.beta').locator('.name').click()
+    await openSketchPanel(page)
     const name = page.locator('[data-testid="sketch-module-form"] [name="module-name"]')
     await name.fill('Beta 改')
     await name.press('Enter')
@@ -536,7 +558,7 @@ test('T2b 裁决 6：当前版本上「在此设计」的对话框有「加到�
 
     await expect(page).toHaveURL(/\/d\/zz-e2e-add\/sketch/)
     await expect(page.locator('.sketch-canvas')).toBeVisible()
-    await closeDialogueDock(page)
+    await expectSketchLayout(page)
     const crumbs = page.locator('.info-bar .mount')
     await expect(crumbs.locator('.here')).toHaveAttribute('data-crumb', 'state.transition')
     await expect(page.locator('.info-bar .name')).toHaveText('E2E 加一张')
@@ -553,7 +575,7 @@ test('草图画布手势：按住空格拖动空白处 = 平移（视口变、�
   await openProjectMenu(page)
   await page.getByRole('menuitem', { name: '编辑骨架' }).click()
   await expect(page.locator('.sk-band')).toHaveCount(4)
-  await closeDialogueDock(page)
+  await expectSketchLayout(page)
   await expect(page.locator('.sk-zoom')).toContainText('空格 + 拖动 = 平移，Ctrl + 滚轮 = 缩放')
   const viewport = page.locator('.sk-flow .vue-flow__transformationpane')
   const transform = () => viewport.getAttribute('style')
@@ -619,6 +641,7 @@ test('草图画布手势：按住空格拖动空白处 = 平移（视口变、�
   // 焦点在面板输入框时空格照常输入，不进入平移
   await page.keyboard.press('Escape')
   await graphNode(page, 'state.transition').locator('.name').click()
+  await openSketchPanel(page)
   const input = page.locator('[data-testid="sketch-panel"] textarea[name="module-responsibility"]')
   await input.click()
   await page.keyboard.type('a')
@@ -668,7 +691,7 @@ test('X22（第五轮 T3）：草图画布的系统框随可用区域自适应�
     await openDesk(page, '/p/h5p-arch-desk')
     await switchVersion(page, 'zz-e2e-size/sketch')
     await expect(page.locator('.sketch-canvas')).toBeVisible()
-    await closeDialogueDock(page)
+    await expectSketchLayout(page)
     const sys = graphNode(page, 'frame:system')
     const center = graphNode(page, 'frame:center')
     const desk = () =>
@@ -741,9 +764,10 @@ test('X7a（第五轮 T3）：有未保存改动时切换版本、浏览器后�
     await openProjectMenu(page)
     await switcher.selectOption('zz-e2e-leave/sketch')
     await expect(page.locator('.sketch-canvas')).toBeVisible()
-    await closeDialogueDock(page)
+    await expectSketchLayout(page)
     const rename = async (text: string) => {
       await graphNode(page, 'state.desk.beta').locator('.name').click()
+      await openSketchPanel(page)
       const name = page.locator('[data-testid="sketch-module-form"] [name="module-name"]')
       await name.fill(text)
       await name.press('Enter')
@@ -772,7 +796,7 @@ test('X7a（第五轮 T3）：有未保存改动时切换版本、浏览器后�
     await page.goBack()
     await expect(page).toHaveURL(/zz-e2e-leave\/sketch/)
     await expect(page.locator('.sketch-canvas')).toBeVisible()
-    await closeDialogueDock(page)
+    await expectSketchLayout(page)
     await rename('Beta 弃')
     await page.goBack()
     await expect(ask).toBeVisible()
@@ -795,8 +819,9 @@ test('X7d（第五轮 T3）：草图面板改 ID 时提交前预览影响（后�
     await openDesk(page, '/p/h5p-arch-desk')
     await switchVersion(page, 'zz-e2e-rename/sketch')
     await expect(page.locator('.sketch-canvas')).toBeVisible()
-    await closeDialogueDock(page)
+    await expectSketchLayout(page)
     await graphNode(page, 'state.desk.alpha').locator('.name').click()
+    await openSketchPanel(page)
     const form = page.locator('[data-testid="sketch-module-form"]')
     const id = form.locator('[name="module-id"]')
     await id.fill('alpha2')
@@ -862,8 +887,9 @@ test('E9、DV-13（第五轮 T3）：模块面板「相关决策」列编号与�
     await openDesk(page, '/p/h5p-arch-desk')
     await switchVersion(page, 'zz-e2e-adrs/sketch')
     await expect(page.locator('.sketch-canvas')).toBeVisible()
-    await closeDialogueDock(page)
+    await expectSketchLayout(page)
     await graphNode(page, 'state.desk.alpha').locator('.name').click()
+    await openSketchPanel(page)
     const field = page.locator('[data-testid="sketch-module-form"] [name="module-adrs"]')
     await field.fill('ADR-0025, 27, 25')
     await field.press('Enter')
@@ -890,13 +916,14 @@ test('X23、X24（第六轮 T3）：草图里声明端口与实现者（拖线�
     await dialog.locator('input[name="design-id"]').fill('zz-e2e-ports')
     await dialog.getByRole('button', { name: '创建并打开草图' }).click()
     await expect(page.locator('.sketch-canvas')).toBeVisible()
-    await closeDialogueDock(page)
+    await expectSketchLayout(page)
     const ids: string[] = sketchFile(box.dir, 'state.desk').modules.map((m: { id: string }) => m.id)
     const [owner, impl, user] = ids
     for (const id of [owner, impl, user]) await expect(graphNode(page, id)).toBeVisible()
 
     // 在定义模块上写接口：模块边上出现端口记号（实现者 0）
     await graphNode(page, owner).locator('.name').click()
+    await openSketchPanel(page)
     const form = page.locator('[data-testid="sketch-module-form"]')
     await form.locator('input[name="interface-name"]').fill('save')
     await form.locator('input[name="interface-name"]').press('Enter')
@@ -942,6 +969,7 @@ test('X23、X24（第六轮 T3）：草图里声明端口与实现者（拖线�
     await expect(page.locator('.sk-edge .socket')).toHaveCount(1)
     // 标签可能被重排后的节点盖住：直接派发按下（选中这条关系）
     await page.locator('.sk-edge-label', { hasText: '经端口保存' }).dispatchEvent('pointerdown')
+    await openSketchPanel(page)
     const rf = page.locator('[data-testid="sketch-relation-form"]')
     await expect(rf.locator('select[name="rel-via-kind"]')).toHaveValue('port')
     await expect(rf.locator('select[name="rel-via-port"]')).toHaveValue(portId)

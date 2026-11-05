@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 导航树（W-7、T1）：左侧固定栏，「模块」「文件」「步骤」「问题」四个页签。步骤页签只在运行视角出现；
+ * 导航树（W-7、T1）：左侧固定栏，「模块」「文件」「步骤」「问题」「改动」五个页签。步骤页签只在运行视角出现，改动页签只在设计的草图画布下出现（CI-4）；
  * 进入运行视角切到步骤页签，退出切回模块页签，选中文件切到文件页签；画布的问题角标切到问题页签（W-6）。
  * 页签只属于这块界面，不进视图状态与 URL。
  */
@@ -11,6 +11,7 @@ import ModuleTree from './ModuleTree.vue'
 import StepTree from './StepTree.vue'
 import FileTree from './FileTree.vue'
 import IssueList from './IssueList.vue'
+import ChangesTab from './ChangesTab.vue'
 import SketchTree from '../sketch/SketchTree.vue'
 
 const desk = useDesk()
@@ -25,6 +26,14 @@ watch(
   () => desk.files.selected.value,
   f => f && (tab.value = 'files'),
 )
+/** CI-4：改动页签只在设计的草图画布下 */
+const hasChanges = computed(() => desk.edit.active.value && desk.edit.target?.kind === 'design')
+watch(hasChanges, on => !on && tab.value === 'changes' && (tab.value = 'modules'))
+// CI-4：单击画布上的徽标——切到改动页签（清单滚到那一行）
+watch(
+  () => desk.edit.changes.reveal.value,
+  r => r && hasChanges.value && (tab.value = 'changes'),
+)
 </script>
 
 <template>
@@ -38,9 +47,20 @@ watch(
       <button role="tab" class="issues-tab" :class="{ on: tab === 'issues' }" :aria-selected="tab === 'issues'" @click="tab = 'issues'">
         问题<span v-if="issueCount" class="count" :class="{ bad: desk.rework.value?.counts.error }">{{ issueCount }}</span>
       </button>
+      <button
+        v-if="hasChanges"
+        role="tab"
+        class="changes-tab-btn"
+        :class="{ on: tab === 'changes' }"
+        :aria-selected="tab === 'changes'"
+        @click="tab = 'changes'"
+      >
+        改动<span v-if="desk.edit.changes.items.value.length" class="count chg">{{ desk.edit.changes.items.value.length }}</span>
+      </button>
     </header>
     <div class="body">
       <IssueList v-if="tab === 'issues'" />
+      <ChangesTab v-else-if="tab === 'changes' && hasChanges" />
       <StepTree v-else-if="tab === 'steps' && desk.perspective.value === 'run'" />
       <FileTree v-else-if="tab === 'files'" />
       <SketchTree v-else-if="desk.edit.active.value" />
@@ -89,6 +109,11 @@ watch(
   font-size: 11px;
   background: var(--warning-soft);
   color: var(--warning);
+}
+
+.count.chg {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .count.bad {

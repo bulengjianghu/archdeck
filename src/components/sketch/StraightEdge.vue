@@ -1,14 +1,15 @@
 <script setup lang="ts">
 /**
- * 草图画布的边（F-22、X15）：两端中心之间的直线，裁到两端节点的边框；同一对节点的多条线按草图布局给的平移量错开；
- * 不走线、不避让。标签在中点或 layout.relations 记下的位置；选中的边可拖动标签，松手为一步（relabel）。草图的线都是交互，一律实线（L18，ADR-0035）；待重连的线为红色实线、标签标红。
+ * 草图画布的边（F-22、X15）：本层之间的线与模型画布同一套正交走线（T2.5，草图布局给出折线，节点位置取草图的，避让节点、同对错开）；
+ * 拖动中节点离开草图里的位置时退回两端中心之间的直线（松手后重新走线）。标签在中点或 layout.relations 记下的位置；选中的边可拖动标签，松手为一步（relabel）。草图的线都是交互，一律实线（L18，ADR-0035）；待重连的线为红色实线、标签标红。
  * 聚合边（05 裁决 4：本层模块与同一个折叠引用之间的多条关系）标「N 条」，点它选中引用节点（面板展开精确关系），标签不能拖。
  * 引用线（X22）：从模块朝引用列的一侧端口（左侧列进左端口、右侧列进右端口）到引用节点朝中心区的一侧，水平切线的曲线；画在模块之上，
  * 细、半透明、不接收指针、不带标签（条数在引用节点上），相关节点选中或悬停时（hot）实色。
  */
 import { computed, ref } from 'vue'
 import { EdgeLabelRenderer, useVueFlow } from '@vue-flow/core'
-import { mechTags, straightEdge, type SketchEdgeData } from '@/layout/layout'
+import { mechTags, pointAlong, straightEdge, type SketchEdgeData } from '@/layout/layout'
+import { roundedPolyline } from '../edges/routePath'
 import { composePill } from '@/layout/canvas'
 import type { RelationType } from '@/model'
 import { useDesk } from '@/state/inject'
@@ -20,7 +21,15 @@ const props = defineProps<{
   sourceY: number
   targetX: number
   targetY: number
-  data: SketchEdgeData & { sizes: { a: { w: number; h: number }; b: { w: number; h: number } }; hot?: boolean; hovered?: boolean }
+  data: SketchEdgeData & {
+    sizes: { a: { w: number; h: number }; b: { w: number; h: number } }
+    centers?: { a: { x: number; y: number }; b: { x: number; y: number } }
+    hot?: boolean
+    hovered?: boolean
+    /** CI-3：改动项的号、刚应用的一轮、改动页签里正悬停 */
+    number?: number
+    recent?: boolean
+  }
 }>()
 const desk = useDesk()
 const { viewport } = useVueFlow('sketch')
@@ -43,8 +52,18 @@ const ports = computed(() => {
     to: end(props.targetX, props.targetY, props.data.sizes.b.w, !refIsSource),
   }
 })
+/** T2.5：走好的折线——两端还在草图里的位置时用它（拖动中退回直线） */
+const route = computed(() => {
+  const r = props.data.route
+  const c = props.data.centers
+  if (!r || r.length < 2 || !c) return null
+  // 句柄是节点中心的 1px 隐藏点，Vue Flow 报的坐标与中心差一两个像素：差 6px 以内算还在原位
+  const near = (a: { x: number; y: number }, x: number, y: number) => Math.abs(a.x - x) < 6 && Math.abs(a.y - y) < 6
+  return near(c.a, props.sourceX, props.sourceY) && near(c.b, props.targetX, props.targetY) ? r : null
+})
 const path = computed(() => {
   const p = ports.value
+  if (!p && route.value) return roundedPolyline(route.value)
   if (!p) return `M ${geo.value.from.x} ${geo.value.from.y} L ${geo.value.to.x} ${geo.value.to.y}`
   const k = Math.max(40, Math.abs(p.to.x - p.from.x) / 2)
   return `M ${p.from.x} ${p.from.y} C ${p.from.x + p.from.dir * k} ${p.from.y} ${p.to.x + p.to.dir * k} ${p.to.y} ${p.to.x} ${p.to.y}`
@@ -52,8 +71,9 @@ const path = computed(() => {
 /** 终点的箭头（引用线的终点切线水平、指向端口里面） */
 const arrow = computed(() => {
   const p = ports.value
-  const to = p ? p.to : geo.value.to
-  const from = p ? { x: p.to.x + p.to.dir, y: p.to.y } : geo.value.from
+  const r = !p ? route.value : null
+  const to = p ? p.to : r ? r[r.length - 1] : geo.value.to
+  const from = p ? { x: p.to.x + p.to.dir, y: p.to.y } : r ? r[r.length - 2] : geo.value.from
   const len = Math.hypot(to.x - from.x, to.y - from.y) || 1
   const ux = (to.x - from.x) / len
   const uy = (to.y - from.y) / len
@@ -79,7 +99,7 @@ const socket = computed(() => {
 })
 /** 拖动中的标签位置（松手才写回） */
 const dragging = ref<{ x: number; y: number } | null>(null)
-const label = computed(() => dragging.value ?? props.data.label ?? geo.value.mid)
+const label = computed(() => dragging.value ?? props.data.label ?? (route.value ? pointAlong(route.value, 0.5) : geo.value.mid))
 const many = computed(() => props.data.relationIds?.length ?? 0)
 const typeLabel = computed(() => (many.value ? `${many.value} 条关系（折叠显示）` : (RELATION_TYPE_LABELS[props.data.type as RelationType] ?? props.data.type)))
 /** 标签：聚合边标条数；写了说明的显示说明；没写的只在选中时显示类型（线多时不堆满画布） */
@@ -155,9 +175,47 @@ function onUp() {
       {{ text }}
     </div>
   </EdgeLabelRenderer>
+  <!-- CI-3：关系上的改动号（在线的中点偏上），单击在「改动」页签里滚到 -->
+  <EdgeLabelRenderer v-if="data.number">
+    <button
+      class="sk-edge-num nodrag nopan"
+      :class="{ recent: data.recent, hot: data.hot }"
+      data-testid="change-badge"
+      :data-n="data.number"
+      :style="{ transform: `translate(-50%, -100%) translate(${label.x}px, ${label.y - 10}px)` }"
+      :title="`改动 #${data.number}：单击在「改动」页签里看`"
+      @click.stop="desk.edit.changes.revealItem(data.number)"
+      @mouseenter="desk.edit.changes.setHover(data.number)"
+      @mouseleave="desk.edit.changes.setHover(null)"
+    >
+      #{{ data.number }}
+    </button>
+  </EdgeLabelRenderer>
 </template>
 
 <style scoped>
+.sk-edge-num {
+  position: absolute;
+  pointer-events: all;
+  padding: 0 5px;
+  height: 16px;
+  line-height: 14px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sk-edge-num.recent {
+  background: var(--accent);
+  color: var(--surface);
+}
+.sk-edge-num.hot {
+  outline: 2px solid var(--accent);
+}
+
 .hit {
   fill: none;
   stroke: transparent;

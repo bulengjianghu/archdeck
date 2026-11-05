@@ -5,7 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
-import { openDesk, restoreOwned, switchVersion, closeNav } from './helpers'
+import { openDesk, openSketchPanel, restoreOwned, switchVersion, closeNav } from './helpers'
 
 const DESIGN = path.resolve(import.meta.dirname, '../model/h5p-arch-desk/designs/phase2-dynamic')
 const EXTRA = path.join(DESIGN, 'r4/modules/zz-e2e-deviation.yaml')
@@ -28,6 +28,9 @@ test('DV-10：版本切换里草图排在 r1 之前；打开草图即草图画�
   await expect(bar.locator('.mount')).toContainText('挂在：')
   await expect(bar.locator('.cmp-btn')).toContainText('对比 相对基线')
   await expect(bar.getByRole('button', { name: '交给 AI', exact: true })).toBeVisible()
+  // DL-20：选中面板在草图里缺省收起，按需展开
+  await expect(page.locator('[data-testid="sketch-panel"]')).toHaveCount(0)
+  await openSketchPanel(page)
   await expect(page.locator('[data-testid="sketch-panel"]')).toBeVisible()
 })
 

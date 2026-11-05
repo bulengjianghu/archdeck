@@ -6,6 +6,7 @@
  * 标带内模块数与超七，「＋ 模块」「删层」；带身不接收指针，框选与双击新建落到画布上）。
  * 句柄：中心的两个隐藏句柄给直线边定位；模块与引用节点右侧的蓝色小圆点拖出连线（F-21）。
  * 拖到别的节点上时目标高亮「放下 = 降级为其子模块」（层带为「放下 = 移入这一层」，F-26）；图上标出变更时右上角角标（新 / 改 / 合 / 拆 / 移）。
+ * 改动项的号（CI-3）：左上角徽标「#n」沿用变更标色，刚应用的一轮带强调；单击在「改动」页签里滚到那一行，悬停两边一起高亮。删除项的虚框是 ghost 框线。
  */
 import { computed, inject, ref, watch } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
@@ -89,7 +90,13 @@ const scaled = computed(() => {
     </div>
     <span v-if="data.drop" class="drop-hint band-drop">放下 = 移入这一层</span>
   </div>
-  <div v-else-if="data.kind === 'frame'" class="sk-frame" :class="[data.frame, { drop: data.drop }]" :data-frame="data.frame">
+  <div
+    v-else-if="data.kind === 'frame'"
+    class="sk-frame"
+    :class="[data.frame, { drop: data.drop }]"
+    :data-frame="data.frame"
+    :data-testid="data.frame === 'ghost' ? 'ghost' : undefined"
+  >
     <span class="frame-label"
       >{{ data.name }}<span v-if="data.tag" class="frame-tag">{{ data.tag }}</span></span
     >
@@ -133,6 +140,19 @@ const scaled = computed(() => {
     <code class="id">{{ data.id }}</code>
     <span v-if="data.deeper" class="deeper" title="有下一层：双击进入">›</span>
     <span v-if="badge" class="badge" :class="data.change" :title="badge.title">{{ badge.text }}</span>
+    <button
+      v-if="data.number"
+      class="num-badge nodrag"
+      :class="[data.change, { recent: data.recent, hot: data.hot }]"
+      data-testid="change-badge"
+      :data-n="data.number"
+      :title="`改动 #${data.number}：单击在「改动」页签里看`"
+      @click.stop="desk.edit.changes.revealItem(data.number)"
+      @mouseenter="desk.edit.changes.setHover(data.number)"
+      @mouseleave="desk.edit.changes.setHover(null)"
+    >
+      #{{ data.number }}
+    </button>
     <span v-if="data.drop" class="drop-hint">放下 = 降级为其子模块</span>
     <Handle id="out" type="source" :position="Position.Right" class="sk-out nodrag" :connectable="true" title="拖到另一个节点上建关系" />
     <div v-if="data.ports?.length" class="sk-ports">
@@ -152,6 +172,45 @@ const scaled = computed(() => {
 </template>
 
 <style scoped>
+.num-badge {
+  position: absolute;
+  top: -9px;
+  left: -8px;
+  z-index: 2;
+  padding: 0 5px;
+  min-width: 22px;
+  height: 17px;
+  line-height: 15px;
+  border-radius: 9px;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.num-badge.added {
+  border-color: var(--diff-added, #2a8a3e);
+  color: var(--diff-added, #2a8a3e);
+}
+.num-badge.recent {
+  background: var(--accent);
+  color: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.num-badge.hot {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.sk-frame.ghost {
+  border: 2px dashed var(--danger, #c44);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger, #c44) 8%, transparent);
+}
+.sk-frame.ghost .frame-label {
+  color: var(--danger, #c44);
+}
+
 /* X24：端口记号骑在模块顶边的后半（同 L13），整块是连线的落点 */
 .sk-ports {
   position: absolute;

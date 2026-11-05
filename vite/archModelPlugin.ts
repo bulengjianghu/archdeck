@@ -24,6 +24,7 @@ import { readExports, readSourceFile, readSourceTree } from './readSource'
 import { readCodeDeps } from './readDeps'
 import { readHealth } from './readHealth'
 import { WriteError, appendAccepted, appendAllow, appendFeedback, appendIgnore, appendReviewed, appendRole, archiveDesign } from './writeModel'
+import { saveNote } from './designNotes'
 import { SketchInvalid, WriteConflict, createDesign, saveDesignSketches, saveSketch, type SaveDesignRequest, type SaveSketchRequest } from './writeSketch'
 import { headModel, listModelCommits, readCommitVersion, readFileAtHead, readModelAt } from './readGit'
 import { historyOptions, readCommitMessage, readSourceHistory } from './readHistory'
@@ -131,11 +132,11 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
       // B1–B6：人拥有的文件的追加写入与草图整份写回，只收同源的 JSON POST
       server.middlewares.use((req, res, next) => {
         const [url] = (req.url ?? '').split('?')
-        const many = /^\/write\/([^/]+)\/designs\/([^/]+)\/sketches$/.exec(url)
+        const many = /^\/write\/([^/]+)\/designs\/([^/]+)\/(sketches|notes)$/.exec(url)
         const w =
           /^\/write\/([^/]+)\/(feedback|allow|ignore|reviewed|accept|archive|sketch|designs|role)$/.exec(url) ??
           (/^\/write\/([^/]+)\/designs\/[^/]+\/sketch$/.test(url) ? [url, /^\/write\/([^/]+)\//.exec(url)![1], 'sketch'] : null) ??
-          (many ? [url, many[1], 'sketches'] : null)
+          (many ? [url, many[1], many[3]] : null)
         if (!w) return next()
         if (req.method !== 'POST') return json(res, { error: '只接受 POST' }, 405)
         const origin = req.headers.origin
@@ -145,7 +146,7 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
         req.on('data', (c: Buffer) => {
           raw += c.toString('utf8')
           // B5：正文上限 64 KB；草图整份写回放宽到 256 KB（骨架级草图约 20 KB）
-          if (raw.length > (w[2] === 'sketch' || w[2] === 'sketches' || w[2] === 'designs' ? 256 : 64) * 1024) req.destroy()
+          if (raw.length > (w[2] === 'sketch' || w[2] === 'sketches' || w[2] === 'designs' || w[2] === 'notes' ? 256 : 64) * 1024) req.destroy()
         })
         req.on('end', () => {
           try {
@@ -172,11 +173,13 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
                           ? appendRole(modelRoot, project, { module: body.module, role: body.role as ModuleRole }, root)
                           : w[2] === 'sketch'
                             ? saveSketch(modelRoot, project, parsed as SaveSketchRequest, root)
-                            : w[2] === 'sketches'
-                              ? saveDesignSketches(modelRoot, project, decodeURIComponent(many![2]), parsed as SaveDesignRequest, root)
-                              : w[2] === 'designs'
-                                ? createDesign(modelRoot, project, parsed as Parameters<typeof createDesign>[2], root, { base: headModel })
-                                : archiveDesign(modelRoot, project, body.design, root)
+                            : w[2] === 'notes'
+                              ? saveNote(modelRoot, project, decodeURIComponent(many![2]), parsed as Record<string, unknown>)
+                              : w[2] === 'sketches'
+                                ? saveDesignSketches(modelRoot, project, decodeURIComponent(many![2]), parsed as SaveDesignRequest, root)
+                                : w[2] === 'designs'
+                                  ? createDesign(modelRoot, project, parsed as Parameters<typeof createDesign>[2], root, { base: headModel })
+                                  : archiveDesign(modelRoot, project, body.design, root)
             json(res, out)
           } catch (e) {
             const status = e instanceof WriteConflict ? 409 : e instanceof SketchInvalid ? 422 : e instanceof WriteError ? 400 : 500

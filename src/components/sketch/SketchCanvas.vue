@@ -27,10 +27,42 @@ import ConnectPopover from './ConnectPopover.vue'
 import ReferencePicker from './ReferencePicker.vue'
 import { CHANGE_BADGES } from './labels'
 import { dragOverParent, SKETCH_ACTIONS, sketchRequest } from './actions'
+import { useOpenProps } from '../shared/openProps'
 
 const desk = useDesk()
 const e = desk.edit
-const { setNodes, setEdges, project, fitView, getSelectedNodes, getNodes, dimensions, zoomIn, zoomOut } = useVueFlow('sketch')
+const changes = e.changes
+const openProps = useOpenProps()
+const { setNodes, setEdges, project, fitView, getSelectedNodes, getNodes, dimensions, zoomIn, zoomOut, setCenter, viewport } = useVueFlow('sketch')
+/** DA-6：AI 回合中画布只读——可看、可选、可下钻，不可拖、不可连 */
+const locked = computed(() => e.locked.value)
+/** CI-3：刚应用的一轮（最近一轮还在的）动过的号带强调 */
+const recent = computed(() => {
+  const n = changes.latest.value
+  return new Set(n === null ? [] : changes.items.value.filter(x => x.by === 'ai' && x.round === n).map(x => x.n))
+})
+/** CI-3：删除项不常驻虚影——改动页签里悬停时在原位置显示一下（当前张里的） */
+const ghosts = computed<Node<SketchNodeData>[]>(() => {
+  const n = changes.hover.value
+  if (n === null) return []
+  const origin = root.value ? { x: 0, y: 0 } : (scene.value?.origin ?? { x: 0, y: 0 })
+  return changes
+    .ghostOf(n)
+    .filter(g => g.mount === e.mount.value)
+    .map(g => ({
+      id: `ghost:${g.id}`,
+      type: 'sketch',
+      position: { x: g.at.x + origin.x, y: g.at.y + origin.y },
+      data: { id: `ghost:${g.id}`, kind: 'frame' as const, frame: 'ghost' as const, name: `#${n} 删除：${e.nameOf(g.id) ?? g.id}`, w: 168, h: 56 },
+      width: 168,
+      height: 56,
+      style: { width: '168px', height: '56px', pointerEvents: 'none' as const },
+      zIndex: 2,
+      selectable: false,
+      draggable: false,
+      connectable: false,
+    }))
+})
 
 // ── 提示 ──
 const notice = ref('')
@@ -47,6 +79,10 @@ const dropParent = dragOverParent
 const picked = computed(() => new Set(e.picked.value))
 const scene = computed(() => e.scene.value)
 const sizeOf = computed(() => new Map((scene.value?.nodes ?? []).map(n => [n.id, { w: n.data.w, h: n.data.h }])))
+const centerOf = (id: string) => {
+  const n = scene.value?.nodes.find(x => x.id === id)
+  return n ? { x: n.position.x + n.data.w / 2, y: n.position.y + n.data.h / 2 } : { x: 0, y: 0 }
+}
 /** X22：悬停的节点（引用线实色显示） */
 const hovered = ref<string | null>(null)
 /** L25：悬停的线——线高亮、两端节点加描边环（画布局部状态） */
@@ -65,7 +101,19 @@ const nodes = computed<Node<SketchNodeData & { drop?: boolean }>[]>(() =>
       id: n.id,
       type: 'sketch',
       position: { ...n.position },
-      data: { ...n.data, selected: n.data.selected || picked.value.has(n.id), drop },
+      data: {
+        ...n.data,
+        selected: n.data.selected || picked.value.has(n.id),
+        drop,
+        // CI-3：徽标「#n」沿用变更标色，刚应用的一轮带强调；悬停的号两边一起高亮
+        ...(changes.badges.value.modules.has(n.id)
+          ? {
+              number: changes.badges.value.modules.get(n.id),
+              recent: recent.value.has(changes.badges.value.modules.get(n.id)!),
+              hot: changes.hover.value === changes.badges.value.modules.get(n.id),
+            }
+          : {}),
+      },
       width: n.data.w,
       height: n.data.h,
       // 层带与框线在模块之下、不接收指针（带头除外），框选与双击新建落到画布上（X21、X22）
@@ -73,9 +121,9 @@ const nodes = computed<Node<SketchNodeData & { drop?: boolean }>[]>(() =>
       zIndex: kind === 'frame' ? -1 : kind === 'layer' ? 0 : 1,
       selected: !!n.data.selected || picked.value.has(n.id),
       selectable: !passive,
-      // X22：引用节点的位置由规则算，不可拖
-      draggable: !passive && kind !== 'reference',
-      connectable: !passive,
+      // X22：引用节点的位置由规则算，不可拖；DA-6：AI 回合中都不可拖、不可连
+      draggable: !passive && kind !== 'reference' && !locked.value,
+      connectable: !passive && !locked.value,
       ...(hoverEnds.value?.has(n.id) ? { class: 'edge-end' } : {}),
     }
   }),
@@ -96,6 +144,15 @@ const edges = computed<Edge<SketchEdgeData & { sizes: { a: { w: number; h: numbe
     data: {
       ...x.data,
       sizes: { a: sizeOf.value.get(x.source)!, b: sizeOf.value.get(x.target)! },
+      // T2.5：走线按草图里的位置算好；拖动中节点离开了这个位置时退回直线
+      centers: { a: centerOf(x.source), b: centerOf(x.target) },
+      ...(changes.badges.value.relations.has(x.id)
+        ? {
+            number: changes.badges.value.relations.get(x.id),
+            recent: recent.value.has(changes.badges.value.relations.get(x.id)!),
+            hot: changes.hover.value === changes.badges.value.relations.get(x.id),
+          }
+        : {}),
       ...(x.data.external ? { hot: hotIds.value.has(x.source) || hotIds.value.has(x.target) } : {}),
       ...(hoverEdge.value === x.id ? { hovered: true } : {}),
     },
@@ -105,7 +162,7 @@ const edges = computed<Edge<SketchEdgeData & { sizes: { a: { w: number; h: numbe
     ...(hoverEdge.value === x.id ? { zIndex: 4 } : {}),
   })),
 )
-watch(nodes, n => setNodes(n), { immediate: true })
+watch([nodes, ghosts], ([n, g]) => setNodes([...n, ...g]), { immediate: true })
 watch(edges, x => setEdges(x), { immediate: true })
 
 // ── 视野（X22）：系统框按画布容器的实际尺寸排（ResizeObserver 量可用区域），缩放 1 时正好占满画布；
@@ -129,6 +186,8 @@ function refit() {
   void nextTick(() => setTimeout(() => tryFit(), 60))
 }
 watch(() => [e.mount.value, e.hideReferences.value], refit)
+// T2.5：模型画布的起点算好（异步）后，没有 layout 的草图换到起点，再适应一次
+watch(() => e.mount.value && e.seeds.value[e.mount.value], refit)
 watch(
   () => e.area.value,
   () => {
@@ -156,6 +215,36 @@ onMounted(() => {
   tryFit()
 })
 onBeforeUnmount(() => observer?.disconnect())
+
+// ── CI-4：单击改动页签的一行——切到那张草图、选中、画布居中 ──
+watch(
+  () => changes.focus.value,
+  f => {
+    const it = f ? changes.byNumber(f.n) : null
+    if (!it) return
+    if (it.mount !== e.mount.value) {
+      const r = e.openMount(it.mount)
+      if (!r.ok) return notify(r.reason)
+    }
+    const id = it.modules[0] ?? it.relations[0]
+    if (it.modules[0]) desk.select({ kind: 'module', id: it.modules[0] })
+    else if (it.relations[0]) desk.select({ kind: 'relation', id: it.relations[0] })
+    const center = (attempt = 0) => {
+      const n = scene.value?.nodes.find(x => x.id === id)
+      const edge = !n && id ? scene.value?.edges.find(x => x.id === id) : undefined
+      const at = n
+        ? { x: n.position.x + n.data.w / 2, y: n.position.y + n.data.h / 2 }
+        : edge
+          ? { x: (centerOf(edge.source).x + centerOf(edge.target).x) / 2, y: (centerOf(edge.source).y + centerOf(edge.target).y) / 2 }
+          : null
+      if (at) void setCenter(at.x, at.y, { zoom: Math.max(viewport.value.zoom, 0.8), duration: 200 })
+      else if (attempt < 20) setTimeout(() => center(attempt + 1), 50)
+      fitted = false
+    }
+    pendingFit = false
+    void nextTick(() => center())
+  },
+)
 
 // ── 选中：单选为视图状态的选中；多选（框选 / ⇧ 点选）记在编辑分组 ──
 function onNodeClick({ event, node }: NodeMouseEvent) {
@@ -312,6 +401,8 @@ function onNodeMenu({ event, node }: NodeMouseEvent) {
     items.push({ key: 'split', label: '拆分…', disabled: group.length > 1 })
     items.push({ key: 'open', label: '进入下一层', disabled: group.length > 1 })
   }
+  // DL-20：选中面板在草图里缺省收起，要改字段时从这里按需展开
+  if (group.length === 1) items.push({ key: 'form', label: '编辑字段…' })
   items.push({ key: 'remove', label: kind === 'reference' ? '删除（连同它的关系）' : '删除', danger: true })
   menu.value = { x: ev.clientX, y: ev.clientY, items, node: node.id }
 }
@@ -327,7 +418,12 @@ function onEdgeMenu({ event, edge }: { event: MouseEvent | TouchEvent; edge: { i
   onEdgeClick(edge.id)
   const ev = event as MouseEvent
   const n = relationsOf(edge.id).length
-  menu.value = { x: ev.clientX, y: ev.clientY, items: [{ key: 'remove-edge', label: n > 1 ? `删除这 ${n} 条关系` : '删除关系', danger: true }], edge: edge.id }
+  menu.value = {
+    x: ev.clientX,
+    y: ev.clientY,
+    items: [...(n > 1 ? [] : [{ key: 'form', label: '编辑字段…' }]), { key: 'remove-edge', label: n > 1 ? `删除这 ${n} 条关系` : '删除关系', danger: true }],
+    edge: edge.id,
+  }
 }
 function onPaneMenu(ev: MouseEvent) {
   ev.preventDefault()
@@ -341,6 +437,7 @@ async function onMenu(key: string) {
   if (key === 'create' && m.pane) return startCreate(m.pane)
   if (key === 'create-layer') return createAtCenter()
   if (key === 'remove-edge' && m.edge) return void removeIds(relationsOf(m.edge))
+  if (key === 'form') return openProps()
   const id = m.node!
   const group = picked.value.has(id) ? [...picked.value] : [id]
   if (key === 'merge') parts.value = { kind: 'merge', ids: group }

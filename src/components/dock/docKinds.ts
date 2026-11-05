@@ -9,6 +9,8 @@ import type { DocRef } from '@/state/useDeskState'
 export interface DocKindContext {
   moduleName: (id: string) => string
   scenarioName: () => string | null
+  /** DL-10：设计说明的标题 */
+  noteTitle?: (file: string) => string
 }
 
 export interface DocKindView {
@@ -31,7 +33,18 @@ export const DOC_KIND_VIEWS: Record<string, DocKindView> = {
   },
   explainer: { label: (d, c) => c.moduleName(mod(d)), tip: (d, c) => `图解 · ${c.moduleName(mod(d))}`, icon: '▣' },
   facts: { label: (d, c) => c.moduleName(mod(d)), tip: (d, c) => `理解页 · ${c.moduleName(mod(d))}`, icon: '▣' },
-  dialogue: { label: () => '对话', tip: () => '对话：问（当前版本）· 重讲题解', icon: '◇', component: defineAsyncComponent(() => import('./DialogueDoc.vue')) },
+  dialogue: {
+    label: () => '对话',
+    tip: () => '对话：问 · 重讲题解（当前版本）· 改（草图里）',
+    icon: '◇',
+    component: defineAsyncComponent(() => import('./DialogueDoc.vue')),
+  },
+  note: {
+    label: (d, c) => c.noteTitle?.((d as { file: string }).file) ?? '设计说明',
+    tip: (d, c) => `设计说明（目标态 · 未实现）· ${c.noteTitle?.((d as { file: string }).file) ?? (d as { file: string }).file}`,
+    icon: '✎',
+    component: defineAsyncComponent(() => import('./NoteDoc.vue')),
+  },
 }
 
 export const docKindView = (doc: DocRef, views: Record<string, DocKindView> = DOC_KIND_VIEWS): DocKindView | undefined => views[doc.kind]

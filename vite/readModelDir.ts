@@ -85,6 +85,10 @@ export interface ModelPayload {
   sketch?: SketchFileRef
   /** X9、X20：设计的全部草图（按挂载点）与各自读取时的指纹——设计级会话与按设计写回用 */
   sketchFiles?: SketchFileRef[]
+  /** DL-3：草图版本里设计的改动项编号表（changes.json） */
+  changes?: unknown
+  /** DL-10：设计说明（notes/） */
+  notes?: { file: string; title: string; module?: string; at?: string; text: string }[]
 }
 
 /** 一张草图文件：挂载点、相对项目描述目录的路径、在载荷里的路径、读取时的指纹 */
@@ -403,7 +407,33 @@ export function readSketchVersion(
     ),
     sketch: primary,
     sketchFiles: refs,
+    ...designExtras(modelRoot, project, design),
   }
+}
+
+/** DL-3、DL-10：设计目录下页面与 AI 拥有的两样——编号表与设计说明（不登记指纹） */
+function designExtras(modelRoot: string, project: string, design: string): Pick<ModelPayload, 'changes' | 'notes'> {
+  const dir = path.join(modelRoot, project, DESIGNS_DIR, design)
+  let changes: unknown
+  try {
+    changes = fs.existsSync(path.join(dir, 'changes.json')) ? JSON.parse(fs.readFileSync(path.join(dir, 'changes.json'), 'utf8')) : undefined
+  } catch {
+    changes = undefined
+  }
+  const notesDir = path.join(dir, 'notes')
+  const notes = fs.existsSync(notesDir)
+    ? fs
+        .readdirSync(notesDir)
+        .filter(f => f.endsWith('.md'))
+        .sort()
+        .map(f => {
+          const text = fs.readFileSync(path.join(notesDir, f), 'utf8')
+          const meta = /^>\s*(.+)$/m.exec(text)?.[1] ?? ''
+          const module = /模块\s+([\w.:-]+)/.exec(meta)?.[1]
+          return { file: `notes/${f}`, title: /^#\s+(.+)$/m.exec(text)?.[1]?.trim() ?? f.replace(/\.md$/, ''), ...(module ? { module } : {}), text }
+        })
+    : []
+  return { ...(changes !== undefined ? { changes } : {}), ...(notes.length ? { notes } : {}) }
 }
 
 /** X19：草图版本里的引用文件——草图引用、但草图与持久草图都没有定义的模块（与它们缺的祖先）与参与者，取当前版本的名称与位置，让草图版本自成一份可加载的描述 */

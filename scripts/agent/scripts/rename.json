@@ -1,0 +1,12 @@
+{
+  "steps": [
+    {
+      "block": {
+        "kind": "edit",
+        "summary": "把 writer 改名为 persist",
+        "ops": [{ "op": "rename", "sketch": "{{sketch.mount}}", "id": "{{sketch.mount}}.writer", "newId": "persist" }]
+      }
+    },
+    { "done": true }
+  ]
+}

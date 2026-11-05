@@ -35,10 +35,28 @@ function go(mount: string) {
     <button v-if="e.target?.kind === 'design' && !hasRoot" class="small" title="根挂载：层与第二级（supersedes 骨架），底稿从基线复制" @click="go(ROOT_MOUNT)">
       改骨架
     </button>
+    <!-- DA-10、DL-31：设计说明（AI 拥有，目标态 · 未实现）——单击在辅助栏打开预览标签 -->
+    <template v-if="desk.notes.list.value.length">
+      <p class="cap">设计说明 {{ desk.notes.list.value.length }} 份 <span class="tgt">目标态 · 未实现</span></p>
+      <ul data-testid="design-notes">
+        <li v-for="n in desk.notes.list.value" :key="n.file">
+          <button class="row" :data-note="n.file" @click="desk.notes.open(n.file)">
+            <span class="nm">{{ n.title }}</span>
+            <code v-if="n.module" class="mt">{{ n.module }}</code>
+          </button>
+        </li>
+      </ul>
+    </template>
   </div>
 </template>
 
 <style scoped>
+.tgt {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--warning);
+}
+
 .cap {
   margin: 0 0 4px;
   font-size: 12px;
