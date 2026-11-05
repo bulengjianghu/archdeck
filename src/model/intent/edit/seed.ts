@@ -18,7 +18,7 @@ export interface SeedOptions {
 }
 
 /** 基线里的一个模块的结构字段 */
-function structural(index: ModelIndex, id: string, as = id): ModuleDef {
+export function structural(index: ModelIndex, id: string, as = id): ModuleDef {
   const m = index.modules.get(id)!
   return {
     id: as,
@@ -45,7 +45,7 @@ function strataOf(index: ModelIndex, parents: readonly string[], rename: (x: str
   return Object.keys(out).length ? out : undefined
 }
 
-const relationOf = (index: ModelIndex, id: string, rename: (x: string) => string = x => x): RelationDef => {
+export const relationOf = (index: ModelIndex, id: string, rename: (x: string) => string = x => x): RelationDef => {
   const r = index.relations.get(id)!
   return { id: r.id, from: rename(r.from), to: rename(r.to), type: r.type }
 }

@@ -5,17 +5,32 @@
  */
 import { invariantsOf, summaryOf } from '../contract'
 import { explainerOf } from '../explainer/lookup'
-import type { ModelIndex } from '../types'
+import type { ModelIndex, SketchDef } from '../types'
 import { CITE_FIELDS } from './protocol'
 
 /** 锚点（DA-2）：下一句话带着哪个模块 / 哪一步；没有选中时为 none */
 export type Anchor =
-  | { kind: 'module'; module: string }
+  /** sheet：草图里的锚点所在的那张草图（挂载点）；没有选中框时锚在这张草图的挂载点上（DA-2：草图里总有锚点） */
+  | { kind: 'module'; module: string; sheet?: string }
   | { kind: 'step'; scenario: string; frame: string; from: string; to: string; label?: string }
   | { kind: 'none' }
 
-/** 当前版本上的两种请求（DA-3、DA-4）；草图里的「改」随波 2 */
-export type DialogueMode = 'ask' | 'renarrate'
+/** 当前版本上的两种请求（DA-3、DA-4）与草图里的「改」（DA-6） */
+export type DialogueMode = 'ask' | 'renarrate' | 'edit'
+
+/**
+ * DL-14（波 2 补齐 07 §7.1）：草图里的上下文——设计、当前张（全文）、同设计的其他草图（挂载点与模块）、基线里同一层、带号的改动清单、
+ * 父模块（挂载点）的原则。页面从编辑会话构造（AI 的改动停在未保存的会话里，07 §7.2），开发服务器原样放进包里。
+ */
+export interface SketchContext {
+  design: string
+  mount: string
+  current: SketchDef
+  others: { mount: string; modules: { id: string; name: string }[] }[]
+  baseline: { modules: { id: string; name: string; kind?: string }[]; relations: { id: string; from: string; to: string; type: string }[] }
+  changes: { n: number; kind: string; summary: string; round: number; by: string }[]
+  principle: string | null
+}
 
 export interface PackImage {
   name: string
@@ -47,6 +62,8 @@ export interface ContextPackInput {
   facts?: CodeFactsSummary | null
   /** 重讲：已有的讲法要求（DL-8，累积） */
   notes?: string[]
+  /** 改：草图里的上下文 */
+  sketch?: SketchContext | null
 }
 
 interface ModuleSketch {
@@ -73,6 +90,8 @@ export interface ContextPack {
   explainer: { module: string; path: string; html: string } | null
   facts: CodeFactsSummary | null
   notes: string[]
+  sketch: SketchContext | null
+  writing: string[]
   images: PackImage[]
   queries: string[]
   output: string[]
@@ -118,10 +137,26 @@ const OUTPUT = {
     '只动讲法不动事实：职责、一句话、不变式、关系、接口都不改；summary 与不变式用 data-field 引用，不抄写（04 §3.11）。',
     '题解形态：一个自包含 HTML、内联 SVG、深浅色 CSS 变量、结论先行、不超过三屏；不要手写 arch-basis，架构台会盖。',
   ],
+  edit: [
+    '一行一个 JSON：{"type":"text","text":…} 文本片段、{"type":"block","block":…} 结构化块、{"type":"done"} 结束；结构化块必须包在 block 里，一个块一行。',
+    '示例（一行）：{"type":"block","block":{"kind":"edit","summary":"合并 A 与 B 为编辑会话","ops":[{"op":"merge","sketch":"<sketch.mount>","ids":["<模块 ID>","<模块 ID>"],"name":"编辑会话","id":"session"}]}}',
+    '改动块：{"kind":"edit","summary":"这一轮改了什么（一句话）","ops":[…],"withdraw":[号]?}；ops 是设计级编辑操作（与架构台编辑器同一族），一轮的全部操作在你说完时一次性应用为一步，任一条做不成整轮不落。',
+    '可用操作：merge {sketch, ids, name, id}、split {sketch, id, parts:[{name,id}]}、demote {sketch, id, target}、promote {sketch, id}、rename {sketch, id, newId}、remove {sketch, id}、edit {sketch, edit}；edit 里：addModule {parent, name, id?, kind?}、updateModule {id, patch}、connect {from, to, type, description?}、updateRelation {id, patch}、removeRelation {id}、addInterface {owner, name, signature?}、setAbstraction {text}。sketch 是挂载点（sketch.mount）。',
+    '不许出位置类操作（moveNode、relabel、autoArrange）：已有的框只有人能动，新框由架构台按规则安放。撤回某一项写在 withdraw 里（号见 sketch.changes），不要自己拼逆向操作。',
+    '只回答不改图时照常回问答卡（answer）；收到图片时先回梳理卡（digest）。',
+  ],
 } as const
 
+/** 04 §5「按草图扩展」的写法要点（改的时候带上） */
+const SKETCH_WRITING = [
+  '一张草图只画一个模块的一层（挂载点的直接子模块与它们之间的关系），七个左右；往下再设计一层就在那个模块上再挂一张。',
+  'ID = 父 ID + 短名（kebab-case）；合并、拆分、改 ID、移动时架构台自动记血缘（from 指向基线），不要自己写 from。',
+  '关系四类：queries / commands / notifies / streams；关系只写本层，一端可以是本层之外的模块。',
+  '职责写「它负责什么、不负责什么」；不写实现细节。',
+]
+
 const BOUNDARIES = [
-  '只读：不写任何文件，不改规则、确认记录、当前版本、草图（ADR-0063 §7.1）。',
+  '只读：不写任何文件，不改规则、确认记录、当前版本、草图文件（ADR-0063 §7.1）；草图里的改动只能以改动块交给架构台。',
   '答案引用描述原文时只写 {模块, 字段}；说不准的标推断。',
 ]
 
@@ -194,6 +229,8 @@ export function buildContextPack(index: ModelIndex, input: ContextPackInput): Co
     explainer: path && html !== undefined && explainerModule ? { module: explainerModule, path, html } : null,
     facts: input.facts ?? null,
     notes: input.mode === 'renarrate' ? [...(input.notes ?? [])] : [],
+    sketch: input.mode === 'edit' ? (input.sketch ?? null) : null,
+    writing: input.mode === 'edit' ? [...SKETCH_WRITING] : [],
     images: [...(input.images ?? [])],
     queries: [...AGENT_QUERIES],
     output: [...OUTPUT[input.mode]],
@@ -210,3 +247,4 @@ export function packPrompt(pack: ContextPack): string {
     JSON.stringify(pack, null, 2),
   ].join('\n')
 }
+

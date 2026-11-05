@@ -44,10 +44,22 @@ function applyModifiers(r: RelationDef, m: RelationModifiers) {
   if (r.mode && relationMode({ type: t, mode: r.mode }) === 'sync') delete r.mode
 }
 
-export function connect(def: SketchDef, ctx: EditContext, from: string, to: string, type: RelationType, description?: string, iface?: string, mods: RelationModifiers = {}): OpOutcome {
+export function connect(
+  def: SketchDef,
+  ctx: EditContext,
+  from: string,
+  to: string,
+  type: RelationType,
+  description?: string,
+  iface?: string,
+  mods: RelationModifiers = {},
+  given?: string,
+): OpOutcome {
   const bad = checkPair(def, ctx, from, to, type)
   if (bad) return bad
-  const id = relationId(from, to, type, takenIds(def, ctx.persistent))
+  const taken = takenIds(def, ctx.persistent)
+  // DL-2：恢复基线的关系时沿用基线的 ID（被占用时按 X7c 生成）
+  const id = given && !taken.has(given) ? given : relationId(from, to, type, taken)
   const r: RelationDef = { id, from, to, type, ...(description?.trim() ? { description: description.trim() } : {}), ...(iface ? { interface: iface } : {}) }
   applyModifiers(r, mods)
   ;(def.relations ??= []).push(r)

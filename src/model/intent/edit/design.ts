@@ -7,12 +7,14 @@
  */
 import { isRootLayer, pruneStrata, strataKey, stratumOfMember } from './strata'
 import { ROOT_MOUNT, type ModuleDef, type SketchDef } from '../../types'
-import { lineageSources, sketchLineage } from '../lineage'
+import { lineageSources, mapId, prefixMap, sketchLineage } from '../lineage'
+import { mountScope } from '../scope'
 import type { DesignEditContext, DesignEditEffects, DesignEditOp, DesignEditResult, EditContext, EditOp, EditRejectCode, SketchSet } from '../types'
 import { applyEdit } from './apply'
-import { gridLayout } from './layout'
+import { GRID_GAP_X, gridLayout } from './layout'
 import { ID_PATTERN, knownModules, locate, locateAll, shortName, type LocatedModule } from './locate'
-import { deriveChildSketch, seedFromBaseline } from './seed'
+import { deriveChildSketch, seedFromBaseline, structural } from './seed'
+import { placeModule } from './modules'
 
 type Draft = Record<string, SketchDef>
 type Reject = { code: EditRejectCode; reason: string }
@@ -146,10 +148,14 @@ class Session {
     }
   }
 
-  /** 去掉一张草图里同一对模块同类型的重复关系（保留先出现的）与连自己的关系 */
-  dedupe(def: SketchDef) {
+  /**
+   * 去掉一张草图里同一对模块同类型的重复关系（保留先出现的）与连自己的关系——只看一端是 touching 的（重指向到它的关系）；
+   * 草图里原有的、与这一步无关的同对同类型关系不动（第二十一轮波 2 修：合并曾把底稿里本就并存的两条同对关系删掉一条）。
+   */
+  dedupe(def: SketchDef, touching: string) {
     const seen = new Set<string>()
     def.relations = (def.relations ?? []).filter(r => {
+      if (r.from !== touching && r.to !== touching) return true
       const k = `${r.from}\0${r.to}\0${r.type}`
       if (r.from === r.to || seen.has(k)) {
         this.fx.removed.push(r.id)
@@ -272,7 +278,7 @@ function merge(s: Session, op: Extract<DesignEditOp, { op: 'merge' }>): Reject |
     if (ids.includes(r.from)) r.from = newId
     if (ids.includes(r.to)) r.to = newId
   }
-  s.dedupe(def)
+  s.dedupe(def, newId)
   s.fx.created.push(newId)
   s.touch(op.sketch, newId)
   // 前缀级联：来源的子树与挂在它们上的草图换成「新模块.来源短名」
@@ -344,7 +350,7 @@ function demote(s: Session, op: Extract<DesignEditOp, { op: 'demote' }>): Reject
     if (r.from === op.id) r.from = op.target
     if (r.to === op.id) r.to = op.target
   }
-  s.dedupe(def)
+  s.dedupe(def, op.target)
   s.touch(op.sketch, op.target)
   s.cascade(op.id, newId)
   return null
@@ -447,6 +453,156 @@ function remove(s: Session, op: Extract<DesignEditOp, { op: 'remove' }>): Reject
   return null
 }
 
+/** 基线模块所在的那一层草图：父是根下的层（或根）时为根挂载，否则为父模块 */
+function baselineMount(b: NonNullable<DesignEditContext['baseline']>, parent: string): string {
+  if (parent === b.rootId) return ROOT_MOUNT
+  return b.modules.get(parent)?.parentId === b.rootId ? ROOT_MOUNT : parent
+}
+
+/**
+ * DL-2：恢复到基线——删掉设计里的这些模块（级联同 remove），把基线模块按底稿（X18 的结构字段）放回它在基线里的那一层；
+ * 那一层的父在设计里改了 ID 时按前缀映射放到新父下（记 from）。底稿里一端是它、另一端在编辑中可见的关系一并放回（沿用基线 ID）。
+ */
+function restore(s: Session, op: Extract<DesignEditOp, { op: 'restore' }>): Reject | null {
+  const b = s.ctx.baseline
+  if (!b) return no('invalid', '没有基线：不能恢复到基线（X18）')
+  for (const id of op.restore) if (!b.modules.has(id)) return no('not-found', `基线里没有模块「${id}」`)
+  const pts = op.remove.map(r => s.draft[r.sketch]?.layout?.modules?.[r.id]).filter(p => !!p)
+  for (const r of op.remove) {
+    const out = remove(s, { op: 'remove', sketch: r.sketch, id: r.id })
+    if (out) return out
+  }
+  const map = prefixMap(sketchLineage(Object.values(s.draft)))
+  const cx = pts.length ? Math.round(pts.reduce((a, p) => a + p.x, 0) / pts.length) : undefined
+  const ys = pts.map(p => p.y).filter((y): y is number => y !== undefined)
+  const cy = ys.length ? Math.round(ys.reduce((a, y) => a + y, 0) / ys.length) : undefined
+  op.restore.forEach((id, i) => {
+    const parent = b.modules.get(id)!.parentId
+    const at = parent === b.rootId ? parent : mapId(map, parent)
+    const as = at === parent ? id : `${at}.${shortName(id)}`
+    const mount = at === parent ? baselineMount(b, parent) : at.includes('.') ? at : ROOT_MOUNT
+    const def = s.ensure(mount)
+    s.touch(mount)
+    if (locate(def, as)) return
+    const node: ModuleDef = { ...structural(b, id, as), ...(as !== id ? { from: [id] } : {}) }
+    placeModule(def, node, parent === b.rootId ? undefined : at)
+    s.fx.created.push(as)
+    if (def.layout?.modules) {
+      if (cx !== undefined) def.layout.modules[as] = { x: cx + (i - (op.restore.length - 1) / 2) * GRID_GAP_X, ...(cy !== undefined && mount !== ROOT_MOUNT ? { y: cy } : {}) }
+      else place(def, as)
+    }
+    // 底稿里与它相连的关系（两端在编辑中可见、同一对同类型没有的）沿用基线 ID 放回
+    const ctx = s.editContext()
+    const known = (x: string) => !!locate(def, x) || !!ctx.known?.(x) || x === def.mount
+    const scope = mountScope(b, mount === ROOT_MOUNT ? ROOT_MOUNT : parent)
+    for (const rid of scope.relations) {
+      const r = b.relations.get(rid)!
+      if (r.from !== id && r.to !== id) continue
+      const [from, to] = [r.from === id ? as : mapId(map, r.from), r.to === id ? as : mapId(map, r.to)]
+      if (!known(from) || !known(to) || from === to) continue
+      const rels = (def.relations ??= [])
+      if (rels.some(x => x.id === rid || (x.from === from && x.to === to && x.type === r.type))) continue
+      rels.push({ id: rid, from, to, type: r.type })
+      s.fx.created.push(rid)
+    }
+  })
+  return null
+}
+
+/** 设计里一个模块所在的草图与位置 */
+function findModule(draft: Draft, id: string): { mount: string; hit: LocatedModule } | null {
+  for (const [mount, def] of Object.entries(draft)) {
+    const hit = locate(def, id)
+    if (hit) return { mount, hit }
+  }
+  return null
+}
+
+/**
+ * DL-1：按轮快照恢复——模块与关系恢复成快照里的样子：同一草图同一父下的原地换字段（子模块不动），否则摘下再按快照放回；
+ * 快照里没有的删掉。位置一并恢复。之后：因此消失的模块所挂的草图删掉，快照里挂在恢复回来的模块上、会话里没有的草图放回，
+ * 一端是因此消失的模块的关系删掉。
+ */
+function restoreEntities(s: Session, op: Extract<DesignEditOp, { op: 'restoreEntities' }>): Reject | null {
+  const snap = op.snapshot
+  const present = (id: string) => !!findModule(s.draft, id)
+  const before = new Set(op.modules.filter(present))
+  const ensureSnapSketch = (mount: string): SketchDef | null => {
+    if (s.draft[mount]) return s.draft[mount]
+    if (!snap[mount]) return null
+    s.draft[mount] = structuredClone(snap[mount]) as SketchDef
+    s.fx.createdSketches.push(mount)
+    return s.draft[mount]
+  }
+  for (const id of op.modules) {
+    const cur = findModule(s.draft, id)
+    const was = findModule(snap as Draft, id)
+    const pos = was ? snap[was.mount].layout?.modules?.[id] : undefined
+    if (cur && was && cur.mount === was.mount && cur.hit.parentId === was.hit.parentId) {
+      const node = cur.hit.node as unknown as Record<string, unknown>
+      const { children: _c, ...fields } = structuredClone(was.hit.node)
+      for (const k of Object.keys(node)) if (k !== 'children') delete node[k]
+      Object.assign(node, fields)
+      const lay = s.draft[cur.mount].layout
+      if (lay?.modules && pos) lay.modules[id] = { ...pos }
+      s.touch(cur.mount)
+      continue
+    }
+    if (cur) {
+      cur.hit.list.splice(cur.hit.index, 1)
+      if (s.draft[cur.mount].layout?.modules) delete s.draft[cur.mount].layout!.modules![id]
+      s.touch(cur.mount)
+      if (!was) s.fx.removed.push(id)
+    }
+    if (was) {
+      const def = ensureSnapSketch(was.mount)
+      if (!def || locate(def, id)) continue
+      const { children, ...fields } = structuredClone(was.hit.node)
+      const keep = (children ?? []).filter(c => !present(c.id))
+      const node: ModuleDef = { ...fields, ...(keep.length ? { children: keep } : {}) }
+      placeModule(def, node, was.hit.parentId)
+      if (pos) (def.layout ??= {}).modules = { ...(def.layout.modules ?? {}), [id]: { ...pos } }
+      if (!cur) s.fx.created.push(id)
+      s.touch(was.mount)
+    }
+  }
+  for (const rid of op.relations) {
+    for (const [mount, def] of Object.entries(s.draft))
+      if (def.relations?.some(r => r.id === rid)) {
+        def.relations = def.relations.filter(r => r.id !== rid)
+        if (!def.relations.length) delete def.relations
+        if (def.layout?.relations) delete def.layout.relations[rid]
+        s.touch(mount)
+      }
+    for (const [mount, def] of Object.entries(snap)) {
+      const r = def.relations?.find(x => x.id === rid)
+      if (!r) continue
+      const dst = ensureSnapSketch(mount)
+      if (!dst) continue
+      ;(dst.relations ??= []).push(structuredClone(r))
+      const label = def.layout?.relations?.[rid]
+      if (label) ((dst.layout ??= {}).relations ??= {})[rid] = structuredClone(label)
+      s.touch(mount)
+    }
+  }
+  const gone = new Set([...before].filter(id => !present(id)))
+  for (const m of Object.keys(s.draft))
+    if (m !== ROOT_MOUNT && [...gone].some(g => under(m, g))) {
+      delete s.draft[m]
+      s.fx.removedSketches.push(m)
+    }
+  for (const id of op.modules) if (present(id) && snap[id] && !s.draft[id]) ensureSnapSketch(id)
+  for (const [mount, def] of Object.entries(s.draft)) {
+    const dead = (def.relations ?? []).filter(r => [r.from, r.to].some(e => [...gone].some(g => under(e, g))))
+    if (!dead.length) continue
+    def.relations = def.relations!.filter(r => !dead.includes(r))
+    if (!def.relations.length) delete def.relations
+    s.fx.removed.push(...dead.map(r => r.id))
+    s.touch(mount)
+  }
+  return null
+}
+
 function single(s: Session, mount: string, edit: EditOp): Reject | null {
   if (edit.op === 'renameModule') return rename(s, { op: 'rename', sketch: mount, id: edit.id, newId: edit.newId })
   if (edit.op === 'removeModule') return remove(s, { op: 'remove', sketch: mount, id: edit.id })
@@ -481,7 +637,11 @@ export function applyDesignEdit(design: SketchSet, op: DesignEditOp, ctx: Design
                 ? moveIn(s, op)
                 : op.op === 'rename'
                   ? rename(s, op)
-                  : remove(s, op)
+                  : op.op === 'restore'
+                    ? restore(s, op)
+                    : op.op === 'restoreEntities'
+                      ? restoreEntities(s, op)
+                      : remove(s, op)
   if (out) return { ok: false, ...out }
   // ADR-0052：挪走的模块不再列在原层的成员里（成员只在持久草图里的照留）
   const inDesign = new Set(Object.values(s.draft).flatMap(d => locateAll(d).map(m => m.id)))

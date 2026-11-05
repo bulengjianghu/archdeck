@@ -36,7 +36,7 @@ function run(def: SketchDef, ctx: EditContext, op: EditOp): OpOutcome {
     case 'removeModule':
       return removeModule(def, ctx, op.id)
     case 'connect':
-      return connect(def, ctx, op.from, op.to, op.type, op.description, op.interface, { via: op.via, mode: op.mode, pull: op.pull })
+      return connect(def, ctx, op.from, op.to, op.type, op.description, op.interface, { via: op.via, mode: op.mode, pull: op.pull }, op.id)
     case 'updateRelation':
       return updateRelation(def, ctx, op.id, op.patch)
     case 'removeRelation':

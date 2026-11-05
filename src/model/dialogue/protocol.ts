@@ -1,10 +1,11 @@
 /**
  * agent 的薄协议（DL-11，ADR-0063 §7.1）：子进程的输出只认三种事件，一行一个 JSON——
  * `{ type: 'text', text }` 文本片段（流式显示，不落）、`{ type: 'block', block }` 结构化块（一轮说完时一次性落）、`{ type: 'done' }` 结束。
- * 结构化块有三种：问答卡 answer（DA-3）、梳理卡 digest（DA-7）、重讲 renarrate（DA-4、DL-8）。
+ * 结构化块有四种：问答卡 answer（DA-3）、梳理卡 digest（DA-7）、重讲 renarrate（DA-4、DL-8）、草图里的改动 edit（DA-6、DA-9）。
  * 不合法的行或块 = 整轮拒绝（DA-11）。真实 claude 的流式 JSON 由接入层的适配器翻译成本协议，假 agent 直接说本协议。
  * 换一个前端（命令行、导出脚本）这层协议照样成立，所以在模型层。
  */
+
 
 /** 问答卡引用的字段（DL-13）：职责、一句话、不变式、原则、接口、关系；`explainer` 指向题解（单击打开题解） */
 export const CITE_FIELDS = ['summary', 'responsibility', 'invariants', 'principle', 'interfaces', 'relations', 'explainer'] as const
@@ -46,6 +47,19 @@ export interface DigestBlock {
   groups: Record<DigestGroup, DigestItem[]>
 }
 
+/**
+ * 草图里「改」的产出（DA-6、DA-9、DL-21）：一串设计级编辑操作（与编辑器同一族，T2.1）、要撤回的号（「撤回 #3」由架构台做，DL-2）、一句话说明。
+ * 协议这里只看块的形状（ops 是带 op 的对象）；每条操作的形状与「AI 不许出的操作」由改动项的模型（changes/ops.ts validateEditBlock）判，
+ * 接入层收块时一起调——对话的模型挂在确认层下、只许依赖类型契约，不直接依赖编辑操作族（rules.yaml）。
+ */
+export interface EditBlock {
+  kind: 'edit'
+  /** 设计级编辑操作（DesignEditOp）；validateEditBlock 通过后才可按 DesignEditOp 用 */
+  ops: { op: string; [k: string]: unknown }[]
+  withdraw?: number[]
+  summary?: string
+}
+
 /** 重讲的产出（DL-8）：讲法要求（一条一行）与按要求重新生成的题解 HTML；其他任何键都不许出现 */
 export interface RenarrateBlock {
   kind: 'renarrate'
@@ -54,7 +68,7 @@ export interface RenarrateBlock {
   html: string
 }
 
-export type AgentBlock = AnswerBlock | DigestBlock | RenarrateBlock
+export type AgentBlock = AnswerBlock | DigestBlock | RenarrateBlock | EditBlock
 
 export type AgentEvent = { type: 'text'; text: string } | { type: 'block'; block: AgentBlock } | { type: 'done' }
 
@@ -125,6 +139,19 @@ export function parseBlock(raw: unknown): Parsed<AgentBlock> {
     const extra = Object.keys(raw.groups).filter(k => !(DIGEST_GROUPS as readonly string[]).includes(k))
     if (extra.length) return { ok: false, error: `梳理卡只有四组，多出 ${extra.join('、')}` }
     return { ok: true, value: { kind: 'digest', groups } }
+  }
+  if (raw.kind === 'edit') {
+    const list = raw.ops ?? []
+    if (!Array.isArray(list) || !list.every(o => isObj(o) && isStr(o.op))) return { ok: false, error: '改动块：ops 要是带 op 的对象数组' }
+    const ops = { value: list as EditBlock['ops'] }
+    if (raw.withdraw !== undefined && !(Array.isArray(raw.withdraw) && raw.withdraw.every(n => Number.isInteger(n) && n > 0)))
+      return { ok: false, error: '改动块的 withdraw 要是号的数组' }
+    if (raw.summary !== undefined && !isStr(raw.summary)) return { ok: false, error: '改动块的 summary 要是文字' }
+    const extra = Object.keys(raw).filter(k => !['kind', 'ops', 'withdraw', 'summary'].includes(k))
+    if (extra.length) return { ok: false, error: `改动块多出 ${extra.join('、')}` }
+    const withdraw = (raw.withdraw as number[] | undefined) ?? []
+    if (!ops.value.length && !withdraw.length) return { ok: false, error: '改动块既没有操作也没有要撤回的号' }
+    return { ok: true, value: { kind: 'edit', ops: ops.value, ...(withdraw.length ? { withdraw } : {}), ...(isStr(raw.summary) ? { summary: raw.summary } : {}) } }
   }
   if (raw.kind === 'renarrate') {
     // 形状校验只认三个字段；多出的键（可能是事实字段）留给 DL-8 的判别说清原因，这里不吞

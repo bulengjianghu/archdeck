@@ -146,7 +146,7 @@ export type EditOp =
   | { op: 'renameModule'; id: string; newId: string }
   | { op: 'removeModule'; id: string }
   /** X23：连线时选类型（四类）与机制（via 四形态）、异步（查询 / 委托）与拉取（流） */
-  | { op: 'connect'; from: string; to: string; type: RelationType; description?: string; interface?: string } & RelationModifiers
+  | ({ op: 'connect'; from: string; to: string; type: RelationType; description?: string; interface?: string; /** DL-2：恢复基线的关系时沿用基线的 ID（缺省按 X7c 生成） */ id?: string } & RelationModifiers)
   | { op: 'updateRelation'; id: string; patch: { type?: RelationType; description?: string; interface?: string } & RelationModifiers }
   | { op: 'removeRelation'; id: string }
   | { op: 'addInterface'; owner: string; name: string; signature?: string }
@@ -182,6 +182,16 @@ export type DesignEditOp =
   | { op: 'moveIn'; id: string; layer: string }
   | { op: 'rename'; sketch: string; id: string; newId: string }
   | { op: 'remove'; sketch: string; id: string }
+  /**
+   * DL-2：恢复到基线——删掉设计里的这些模块（级联同 remove），把这些基线模块按底稿（X18）放回它们在基线里的那一层（草图不在会话里时按 X18 推出），
+   * 连同底稿里两端都在的关系；位置取被删模块的重心。撤回一项的逆向操作用它表示合并、拆分、移动、删除的恢复。
+   */
+  | { op: 'restore'; remove: { sketch: string; id: string }[]; restore: string[] }
+  /**
+   * DL-1：按轮快照恢复——把这些模块与关系恢复成快照里的样子（快照里没有的删掉），位置一并恢复；之后没有挂载点的草图删掉、快照里挂在恢复回来的模块上的草图放回。
+   * 撤回更早一轮用它；快照只带被恢复的那几张草图。
+   */
+  | { op: 'restoreEntities'; snapshot: SketchSet; modules: string[]; relations: string[] }
 
 /** 设计级编辑的影响：涉及哪几张草图（设计级撤销的一步记它们，X7g）、改了挂载点的草图（写回层据此改文件名，X12）、删掉的草图 */
 export interface DesignEditEffects extends EditEffects {

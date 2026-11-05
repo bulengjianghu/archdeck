@@ -51,3 +51,4 @@ export function loadModel(files: readonly RawFile[]): LoadedModel {
   return { index, issues: [...loaded.issues, ...checked.issues, ...explainerIssues(index)] }
 }
 export * from './dialogue'
+export * from './changes'
