@@ -292,7 +292,7 @@ describe('DL-3 编号表', () => {
   })
 })
 
-describe('DL-7 影响面按当前代码估', () => {
+describe('DL-7 影响面按当前描述估', () => {
   const incoming = incomingByRelations(baseline)
   it('映射回基线后取传入闭包：改 list 牵动 view（view 依赖它）', () => {
     const set = run(seed(), ...SIX.changed)

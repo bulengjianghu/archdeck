@@ -2,7 +2,7 @@
  * 影响面估算（CI-6，DL-7）：草图改的是目标态，代码里还没有这些框——先按血缘把改动项映射回基线模块（baselineOrigins），
  * 再在依赖图上取传入闭包（IncomingOf 由调用方给：有代码事实的前端传 K15 impactOf 的传入闭包；设计里没有代码事实，用当前版本描述的关系图 incomingByRelations，DL-27）与涉及的场景（R4 的 scenariosOf）。
  * 意图属于描述层，不依赖解释层的架构治理（skeleton 的层规则），所以 K15 的闭包只作参数传进来。
- * 全新的框标「新」、不给数；凡按此口径出的估算都标「按当前代码估」（呈现层）。纯函数。
+ * 全新的框标「新」、不给数；凡按此口径出的估算都标「按当前描述估」（呈现层）。纯函数。
  */
 import type { SketchSet } from '../intent/types'
 import type { ModelIndex } from '../types'

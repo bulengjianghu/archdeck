@@ -43,7 +43,7 @@ import { applyRound, latestLive, roundState, withdrawItem, withdrawRound, type R
 /** 带号的改动项（页签的一行、图上的一个徽标） */
 export type NumberedItem = ChangeItem & { n: number; round: number; by: ChangeAuthor }
 
-/** 提议卡（DA-8）：这一轮动了哪几个号、牵动谁（按当前代码估）；没落时为原因 */
+/** 提议卡（DA-8）：这一轮动了哪几个号、牵动谁（按当前描述估）；没落时为原因 */
 export type ProposalOutcome =
   | { kind: 'proposal'; applied: true; round: number; numbers: number[]; impact: { modules: number; scenarios: number; fresh: boolean } }
   | { kind: 'proposal'; applied: false; reasons: string[] }
@@ -131,7 +131,7 @@ export function createChanges(i: ChangesInputs) {
   })
   const latest = computed(() => (session.value ? (latestLive(session.value)?.n ?? null) : null))
 
-  /** DL-7：一组号的影响面（按当前代码估；当前版本描述的关系图——设计里没有代码事实，K8） */
+  /** DL-7：一组号的影响面（按当前描述估；当前版本描述的关系图——设计里没有代码事实，K8） */
   function impactOf(numbers: readonly number[]): ImpactEstimate | null {
     const s = session.value
     const b = i.baseline()

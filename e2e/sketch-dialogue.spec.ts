@@ -99,7 +99,7 @@ test('用例 1、DL-20：进入草图画布——对话自动打开并固定、�
   }
 })
 
-test('用例 2、5：合并一轮——标色打号、提议卡「按当前代码估」、撤回本轮复原、重做恢复；三处改动后页签三行，单击行居中、单击徽标滚到、撤回一项 ⌘Z 可反悔；删除项悬停显示虚框', async ({
+test('用例 2、5：合并一轮——标色打号、提议卡「按当前描述估」、撤回本轮复原、重做恢复；三处改动后页签三行，单击行居中、单击徽标滚到、撤回一项 ⌘Z 可反悔；删除项悬停显示虚框', async ({
   page,
 }) => {
   // 四轮对话加一串页签操作：比单个用例的缺省 60s 长
@@ -110,7 +110,7 @@ test('用例 2、5：合并一轮——标色打号、提议卡「按当前代�
     await expect(graphNode(page, 'state.desk.session')).toBeVisible()
     await expect(graphNode(page, 'state.desk.edit')).toHaveCount(0)
     await expect(card.getByTestId('proposal-number')).toHaveText(['#1'])
-    await expect(card.getByTestId('proposal-impact')).toContainText('按当前代码估')
+    await expect(card.getByTestId('proposal-impact')).toContainText('按当前描述估')
     await expect(card.getByTestId('proposal-impact')).toContainText(/牵动 \d+ 个模块/)
     await expect(graphNode(page, 'state.desk.session').getByTestId('change-badge')).toHaveText('#1')
     await expect(graphNode(page, 'state.desk.session').locator('.badge')).toHaveText('合')

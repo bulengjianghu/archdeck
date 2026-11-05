@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 提议卡（DA-8）：AI 改完一轮出一张——第几轮、动了哪几个号（可点：画布居中、改动页签滚到）、牵动谁（按当前代码估；全是新框标「新」）、
+ * 提议卡（DA-8）：AI 改完一轮出一张——第几轮、动了哪几个号（可点：画布居中、改动页签滚到）、牵动谁（按当前描述估；全是新框标「新」）、
  * 「撤回本轮」（最近一轮 = 撤销；更早的按快照恢复，后面也碰过的先确认，CI-5）。没落时列原因。
  */
 import { computed, ref } from 'vue'
@@ -46,7 +46,7 @@ function withdraw() {
       <p class="impact" data-testid="proposal-impact">
         <template v-if="applied.impact.fresh">全是新框（新）</template>
         <template v-else>牵动 {{ applied.impact.modules }} 个模块 · 涉及 {{ applied.impact.scenarios }} 个场景</template>
-        <span class="est">按当前代码估</span>
+        <span class="est">按当前描述估</span>
       </p>
       <p class="acts">
         <button class="link" data-testid="withdraw-round" :disabled="!live || busy" @click="withdraw">{{ live ? '撤回本轮' : '本轮已撤回' }}</button>
