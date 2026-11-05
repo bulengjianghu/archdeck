@@ -470,6 +470,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       context: () => edit.changes.context(),
       apply: (blocks, turn) => edit.changes.applyAgentRound(blocks, turn),
       nameOf: id => (id === ROOT_MOUNT ? (baselines.value.current?.index.model.system.name ?? id) : edit.nameOf(id)),
+      sheetHas: id => edit.sheetHas(id),
     },
   })
   // DA-6、ADR-0063 决策 10：AI 修改草图的一轮在跑时，编辑分组只读

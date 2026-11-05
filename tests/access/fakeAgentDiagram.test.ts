@@ -22,7 +22,10 @@ function blocks(text: string, pack: Record<string, unknown>): AgentBlock[] {
 const diagram = (bs: AgentBlock[]) => bs.find(b => b.kind === 'diagram') as Extract<AgentBlock, { kind: 'diagram' }>
 
 describe('机制图剧本', () => {
-  const sketchPack = { anchor: { kind: 'module', module: 'state.desk' }, sketch: { mount: 'state.desk', current: { modules: [{ id: 'state.desk.edit' }, { id: 'state.desk.writer' }] } } }
+  const sketchPack = {
+    anchor: { kind: 'module', module: 'state.desk' },
+    sketch: { mount: 'state.desk', current: { modules: [{ id: 'state.desk.edit' }, { id: 'state.desk.writer' }] } },
+  }
 
   it('#diagram：问答卡 + 一张合格的图，引用当前张的两个框', () => {
     const bs = blocks('#diagram 画一张图讲拆分后怎么运作', sketchPack)

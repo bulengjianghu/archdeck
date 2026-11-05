@@ -44,7 +44,8 @@ export function saveNote(
   const title = typeof input.title === 'string' ? input.title.trim() : ''
   const text = typeof input.text === 'string' ? input.text.trim() : ''
   if (!title || !text) throw new WriteError('设计说明要有标题与正文')
-  if (text.length > 64 * 1024) throw new WriteError('设计说明太长（上限 64 KB）')
+  // 正文可带机制图（DL-43，每张 ≤ 64 KB）
+  if (text.length > 256 * 1024) throw new WriteError('设计说明太长（上限 256 KB）')
   const module = typeof input.module === 'string' && /^[\w.:-]+$/.test(input.module) ? input.module : undefined
   const dir = path.join(designDir(modelRoot, project, design), NOTES_DIR)
   fs.mkdirSync(dir, { recursive: true })

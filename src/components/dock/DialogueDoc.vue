@@ -6,10 +6,12 @@
  * 输入框钉在底部：「只问」/「重讲」、贴图（粘贴或选文件）。只读对话会话、只发意图（desk.dialogue）。
  * 草图里（波 2，DA-6–DA-10）：「改 / 问」切换（「可改」/「只问」徽标）；AI 改完一轮出提议卡（动了哪几个号、牵动谁「按当前代码估」、撤回本轮）；
  * 梳理卡旁「按这张图起草」；问答卡「存为设计说明」。
+ * 机制图（波 4 T4.0，DL-40–DL-43）：回答里的图块由 DiagramBlock 内联显示（被拒的只出原因），存为设计说明时随文字一起存。
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'
 import type { CiteView, DialogueEntry, ImageAttachment } from '@/state/desk/dialogue'
+import DiagramBlock from './DiagramBlock.vue'
 import ProposalCard from './ProposalCard.vue'
 
 // 呈现层只依赖视图状态层与类型契约（rules.yaml）：对话的块、锚点、引用的类型从会话条目推出，不直引模型层
@@ -52,7 +54,9 @@ async function saveNote(e: Extract<DialogueEntry, { role: 'agent' }>, k: number)
           .join('')}`,
     )
     .join('\n\n')
-  const r = await desk.notes.save({ title, text, ...(e.anchor.kind === 'module' ? { module: e.anchor.module } : {}) })
+  // DL-43：这条回答里通过检查的图块按次序接在正文后
+  const withDiagrams = [text, ...dlg.diagramFences(e)].join('\n\n')
+  const r = await desk.notes.save({ title, text: withDiagrams, ...(e.anchor.kind === 'module' ? { module: e.anchor.module } : {}) })
   saved.value = { ...saved.value, [`${e.id}:${k}`]: r.ok ? '已存为设计说明' : `没存成：${r.error}` }
 }
 
@@ -175,6 +179,8 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
                 </button>
               </p>
             </div>
+            <!-- DL-42：机制图（被拒的只出原因，文字照常） -->
+            <DiagramBlock v-else-if="b.kind === 'diagram' && dlg.diagram(e, k)" :view="dlg.diagram(e, k)!" />
             <!-- DA-7：梳理卡与照片并排 -->
             <div v-else-if="b.kind === 'digest' && digest(b)" class="digest-row" data-testid="digest">
               <div v-if="photosBefore(i).length" class="photos">

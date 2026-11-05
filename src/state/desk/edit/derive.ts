@@ -202,6 +202,11 @@ export function createDerive(i: DeriveInputs) {
     }
     return i.current()?.modules.get(id)?.name ?? i.baseline()?.modules.get(id)?.name ?? i.current()?.actors.get(id)?.name
   }
+  /** DL-41：当前张上有没有这个模块——挂载点与这张草图画着的框（对话里机制图的 data-arch 按它查） */
+  const sheetHas = (id: string): boolean => {
+    const def = sketch.value
+    return !!def && (id === def.mount || locateAll(def).some(m => m.id === id))
+  }
   /** 模块有下一层：设计里有挂在它身上的草图，或基线 / 当前版本里有子模块 */
   const deeper = (id: string): boolean => {
     const s = session.value
@@ -290,6 +295,7 @@ export function createDerive(i: DeriveInputs) {
     needsLayout,
     breadcrumb,
     nameOf,
+    sheetHas,
     deeper,
     shownPositions,
   }

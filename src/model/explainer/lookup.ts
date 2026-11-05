@@ -66,8 +66,13 @@ export function explainerStatus(index: ModelIndex, id: string): ExplainerStatus 
 /** EX-2、EX-3：图解里引用到的模块要填入的原文（不存在的模块不列，显示时标删除线） */
 export function explainerRefs(index: ModelIndex, id: string): Record<string, ExplainerRef> {
   const html = explainerHtml(index, id)
+  return html ? htmlRefs(index, html, id) : {}
+}
+
+/** EX-2、DL-42：一段 HTML / SVG 里 data-arch 引用的模块要填入的原文（图解与对话里的机制图共用；self 是图解自己的模块，不给它附「图解 ›」） */
+export function htmlRefs(index: ModelIndex, html: string, self: string | null = null): Record<string, ExplainerRef> {
   const out: Record<string, ExplainerRef> = {}
-  if (!html) return out
+  const id = self
   for (const r of archRefs(html)) {
     if (r.module in out) continue
     const m = index.modules.get(r.module)

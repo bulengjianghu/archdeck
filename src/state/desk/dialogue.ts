@@ -5,8 +5,18 @@
  */
 import { shallowRef, watch, type Ref, type ShallowRef } from 'vue'
 import {
+  checkDiagram,
+  diagramAspect,
+  diagramFence,
+  diagramModules,
+  diagramSvgReasons,
   digestView,
+  htmlRefs,
+  knownModule,
   resolveCitation,
+  splitNoteDiagrams,
+  type DiagramCheck,
+  type ExplainerRef,
   type AgentBlock,
   type Anchor,
   type Citation,
@@ -41,7 +51,17 @@ export type { ProposalOutcome }
 
 export type DialogueEntry =
   | { id: string; role: 'user'; anchor: Anchor; input: DialogueInput }
-  | { id: string; role: 'agent'; anchor: Anchor; turn: string; text: string; blocks: AgentBlock[]; outcome?: TurnOutcome }
+  | {
+      id: string
+      role: 'agent'
+      anchor: Anchor
+      turn: string
+      text: string
+      blocks: AgentBlock[]
+      outcome?: TurnOutcome
+      /** DL-41：机制图块到达那一刻的检查结果（按块的下标）；之后草图再改不重判 */
+      diagrams?: Record<number, DiagramCheck>
+    }
   | { id: string; role: 'error'; anchor: Anchor; turn: string; message: string }
   | { id: string; role: 'stopped'; anchor: Anchor; turn: string; reason: 'stopped' | 'timeout' }
 
@@ -66,7 +86,7 @@ export interface DialogueState {
 /** 推送来的 agent 事件（接入层 agentProcess 的 DialogueEvent） */
 export type AgentPush =
   | { turn: string; type: 'text'; text: string }
-  | { turn: string; type: 'done'; blocks: AgentBlock[]; outcome?: TurnOutcome }
+  | { turn: string; type: 'done'; blocks: AgentBlock[]; outcome?: TurnOutcome; diagrams?: Record<number, DiagramCheck> }
   | { turn: string; type: 'error'; message: string }
   | { turn: string; type: 'stopped'; reason: 'stopped' | 'timeout' }
 
@@ -175,6 +195,7 @@ export function dialogueTransition(s: DialogueState, a: DialogueAction): Dialogu
               text: run.live,
               blocks: e.blocks,
               ...(e.outcome ? { outcome: e.outcome } : {}),
+              ...(e.diagrams && Object.keys(e.diagrams).length ? { diagrams: e.diagrams } : {}),
             }
           : { id: `e${seq}`, role: 'error', anchor: lastAnchor(s), turn: e.turn, message: e.message }
       return next({ ...s, seq, transcript: [...s.transcript, entry] })
@@ -261,6 +282,8 @@ export interface DialogueSketchPort {
   context: () => SketchContext | null
   apply: (blocks: readonly AgentBlock[], turn: string) => ProposalOutcome | undefined
   nameOf: (id: string) => string | undefined
+  /** DL-41：当前张上有没有这个模块（挂载点与它画着的框）——草图里机制图的 data-arch 按它查 */
+  sheetHas?: (id: string) => boolean
 }
 
 export const NO_AGENT: AgentTransport = {
@@ -277,6 +300,25 @@ export function citeViews(index: ModelIndex | null, list: readonly Citation[] | 
     return r.ok ? { ok: true, cite: c, module: r.module, name: r.name, text: r.text } : { ok: false, cite: c, reason: r.reason }
   })
 }
+
+/**
+ * DL-41：一轮说完时检查其中的机制图块（只拒那一块，文字照常）；known 当前版本上是描述（含系统根），草图里是当前张。
+ * 没有图块时为空对象。
+ */
+export function checkDiagrams(blocks: readonly AgentBlock[], known: (id: string) => boolean): Record<number, DiagramCheck> {
+  const out: Record<number, DiagramCheck> = {}
+  blocks.forEach((b, k) => {
+    if (b.kind === 'diagram') out[k] = checkDiagram(b, known)
+  })
+  return out
+}
+
+/** DL-42：一张图的显示数据（aspect = 高 / 宽）——通过检查的给 SVG、说明与要填入的引用；被拒的给原因 */
+export type DiagramView =
+  { ok: true; svg: string; caption: string; refs: Record<string, ExplainerRef>; aspect: number } | { ok: false; caption: string; reasons: string[] }
+
+/** DL-43：设计说明正文的一段——文字，或一张图（只过形状、安全与尺寸检查） */
+export type NoteSegmentView = { kind: 'text'; text: string } | ({ kind: 'diagram' } & DiagramView)
 
 /** DL-15：梳理卡的渲染数据 */
 export const digestOf = (index: ModelIndex | null, block: AgentBlock) => (block.kind === 'digest' && index ? digestView(index, block as DigestBlock) : null)
@@ -298,6 +340,24 @@ export interface DialogueInputs {
 
 export function createDialogue({ project, index, selection, step, perspective, transport, design, openTab, sketch }: DialogueInputs) {
   const session = Math.random().toString(36).slice(2, 10)
+  /**
+   * DL-42：图里引用的模块要填入的原文——描述里有的按图解同一口径（EX-2）；草图里才有的框只给名称；
+   * 不附「图解 ›」（SVG 里插不进链接）；哪里都没有的不列（显示时删除线）
+   */
+  const diagramRefs = (svg: string): Record<string, ExplainerRef> => {
+    const idx = index.value
+    const out: Record<string, ExplainerRef> = {}
+    const fromIndex = idx ? htmlRefs(idx, svg) : {}
+    const inSketch = !!sketch?.active()
+    for (const id of diagramModules(svg)) {
+      const known = inSketch ? !!sketch?.sheetHas?.(id) : id in fromIndex
+      if (!known) continue
+      const hit = fromIndex[id]
+      if (hit) out[id] = { ...hit, explainer: false }
+      else out[id] = { name: sketch?.nameOf(id) ?? id, summary: null, invariants: [], explainer: false }
+    }
+    return out
+  }
   const sheet = () => (sketch?.active() ? (sketch.mount() ?? null) : null)
   const anchorNow = () => anchorOf(selection.value, step.value, sheet())
   const state: ShallowRef<DialogueState> = shallowRef({
@@ -311,6 +371,13 @@ export function createDialogue({ project, index, selection, step, perspective, t
     const before = state.value
     // DA-6、DL-1：草图里「改」的一轮说完时，先把改动块应用到编辑会话（一轮一步），结果写进提议卡
     let a = a0
+    // DL-41：回答到达那一刻检查机制图块（当前版本上查描述，草图里查当前张），结果随条目留下
+    if (a.type === 'event' && a.event.type === 'done' && before.run.status === 'running' && before.run.turn === a.event.turn) {
+      const idx = index.value
+      const known = sketch?.active() ? (sketch.sheetHas ?? (() => false)) : idx ? knownModule(idx) : () => false
+      const diagrams = checkDiagrams(a.event.blocks, known)
+      if (Object.keys(diagrams).length) a = { ...a, event: { ...a.event, diagrams } }
+    }
     if (
       a.type === 'event' &&
       a.event.type === 'done' &&
@@ -361,6 +428,28 @@ export function createDialogue({ project, index, selection, step, perspective, t
     /** 派生给呈现层：引用原文、梳理卡、锚点文字（呈现层不直接调模型层的计算） */
     citeViews: (list: readonly Citation[] | undefined) => citeViews(index.value, list),
     digest: (block: AgentBlock) => digestOf(index.value, block),
+    /** DL-42：回答里第 k 块机制图的显示数据（检查结果取到达那一刻的） */
+    diagram(entry: DialogueEntry, k: number): DiagramView | null {
+      if (entry.role !== 'agent') return null
+      const b = entry.blocks[k]
+      if (b?.kind !== 'diagram') return null
+      const c = entry.diagrams?.[k] ?? { ok: false, reasons: ['没有检查结果'] }
+      return c.ok
+        ? { ok: true, svg: b.svg, caption: b.caption, refs: diagramRefs(b.svg), aspect: diagramAspect(b.svg) ?? 0.5 }
+        : { ok: false, caption: b.caption, reasons: c.reasons }
+    },
+    /** DL-43：存为设计说明时接在正文后的图——这条回答里通过检查的图块，按次序写成围栏块 */
+    diagramFences: (entry: DialogueEntry): string[] =>
+      entry.role === 'agent' ? entry.blocks.flatMap((b, k) => (b.kind === 'diagram' && entry.diagrams?.[k]?.ok ? [diagramFence(b)] : [])) : [],
+    /** DL-43：设计说明正文切成文字段与图段；图段过形状、安全与尺寸检查（不查模块是否存在） */
+    noteSegments: (text: string): NoteSegmentView[] =>
+      splitNoteDiagrams(text).map(seg => {
+        if (seg.kind === 'text') return seg
+        const reasons = diagramSvgReasons(seg.svg)
+        return reasons.length
+          ? { kind: 'diagram', ok: false, caption: seg.caption, reasons }
+          : { kind: 'diagram', ok: true, svg: seg.svg, caption: seg.caption, refs: diagramRefs(seg.svg), aspect: diagramAspect(seg.svg) ?? 0.5 }
+      }),
     anchorText: (a: Anchor) => anchorText(index.value, a, sketch?.active() ? sketch.nameOf : undefined),
     /** DA-6：AI 正在修改草图（画布只读） */
     editing: () => state.value.run.status === 'running' && state.value.run.mode === 'edit',

@@ -73,6 +73,18 @@ export function checkDiagram(block: Pick<DiagramBlock, 'svg'>, known: (id: strin
   return reasons.length ? { ok: false, reasons } : { ok: true, modules: diagramModules(block.svg) }
 }
 
+/** DL-42：高宽比（viewBox 高 / 宽），显示时按它定高；读不出为 null */
+export function diagramAspect(svg: string): number | null {
+  const root = /^\s*<svg\b[^>]*>/i.exec(svg)?.[0]
+  const vb = root
+    ? attrOf(root, 'viewBox')
+        ?.trim()
+        .split(/[\s,]+/)
+        .map(Number)
+    : undefined
+  return vb && vb.length === 4 && vb[2] > 0 && vb[3] > 0 ? vb[3] / vb[2] : null
+}
+
 /** DL-42：图里 data-arch 引用的模块（去重、按出现顺序） */
 export const diagramModules = (svg: string): string[] => [...new Set(archRefs(svg).map(r => r.module))]
 

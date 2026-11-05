@@ -2,10 +2,12 @@
 /**
  * 设计说明（DA-10、DL-10）：辅助栏的预览标签——对话里「存为设计说明」的回答，挂在设计下（designs/<设计>/notes/，AI 拥有）。
  * 标「目标态 · 未实现」：它讲的是草图要它变成的样子，实现后作为该模块题解的底稿。只读。
+ * 正文里的机制图（DL-43 的围栏块）切出来按 DL-42 显示，与对话里同一个 DiagramBlock。
  */
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import Markdown from '../panel/Markdown.vue'
+import DiagramBlock from './DiagramBlock.vue'
 
 const props = defineProps<{ doc: { kind: 'note'; file: string } }>()
 const desk = useDesk()
@@ -17,6 +19,8 @@ const body = computed(() =>
     .replace(/^\s*>\s*.*\n/, '')
     .trim(),
 )
+/** DL-43：文字段与图段 */
+const segments = computed(() => desk.dialogue.noteSegments(body.value))
 </script>
 
 <template>
@@ -26,7 +30,12 @@ const body = computed(() =>
       <h3>{{ note?.title ?? doc.file }}</h3>
       <button v-if="note?.module" class="link" @click="desk.revealModule(note.module)">{{ note.module }}</button>
     </header>
-    <Markdown v-if="note" :text="body" />
+    <template v-if="note">
+      <template v-for="(seg, k) in segments" :key="k">
+        <Markdown v-if="seg.kind === 'text'" :text="seg.text" />
+        <DiagramBlock v-else :view="seg" />
+      </template>
+    </template>
     <p v-else class="muted">这份设计说明已不在设计目录里。</p>
   </article>
 </template>

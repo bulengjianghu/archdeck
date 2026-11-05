@@ -2,5 +2,5 @@
 export * from './types'
 export { basisEntries, explainerBasis, formatBasis, parseBasis, diffBasis, basisLabel } from './basis'
 export { readBasisMeta, writeBasisMeta, archRefs, plainText, lineAt, type ArchRef } from './html'
-export { explainerOf, explainerModules, explainerHtml, explainerNav, explainerStatus, explainerRefs } from './lookup'
+export { explainerOf, explainerModules, explainerHtml, explainerNav, explainerStatus, explainerRefs, htmlRefs } from './lookup'
 export { explainerIssues, COPY_MIN_WIDTH, knownModule, unknownArchRefs } from './lint'
