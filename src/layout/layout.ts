@@ -251,10 +251,15 @@ export async function layoutView(view: LevelView, opts: LayoutOptions = {}, link
 // 表面展开的输入（C6、L20、L23）：哪些节点展开、元素端口与散开范围，两个视角同一套规则
 export { SURFACE_PORT_CAP, surfaceExpansion, type Expansion, type ExpansionInput } from './surface'
 
+// 第二十一轮波 2：AI 新框的安放（DL-6）与折线取点（草图走线的标签位，DL-29），经本入口访问
+export { placeNewBoxes, type Placement, type PlacementTier } from './placement'
+export { pointAlong } from './routing'
+
 // 草图布局（state.layout.sketch，ADR-0025）：草图画布的节点、直线边、引用列与框线（X22）与显示位置，经本入口访问
 export {
   sketchScene,
   sketchPositions,
+  projectSeed,
   bandRelative,
   straightEdge,
   bandAt,

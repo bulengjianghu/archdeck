@@ -182,15 +182,17 @@ describe('L30 几何检查器', () => {
 // 第二十一轮波 1：自描述新增对话的六个模块与十条关系（modules/dialogue.yaml），布局代码未动——h5p-arch-desk 重合 26 → 30、无代码事实 17 → 18
 // （不加这份描述时为 26 / 17）：描述写入层多了「重讲落盘」，它到描述读取、模型层的两条出界线与追加写入、草图写回的同向线平行相贴（+2）；
 // DeskState 层 +1；编辑中的草图层多了对话会话 +1。上升待裁（波 1 报告）
+// 第二十一轮波 2：自描述新增 modules/changes.yaml（改动项与恢复操作、AI 回合与撤回、改动页签三个模块与十三条关系），模型画布的布局代码未动——
+// h5p-arch-desk 重合 30 → 34、贴框 17 → 14；无代码事实 重合 18 → 21、贴框 20 → 18（拿掉这份描述时重合回到 30 / 18 以内）。上升待裁（波 2 报告）
 const CEILING: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 30, arrows: 3, crossNode: 3, labels: 0, hug: 17, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 34, arrows: 3, crossNode: 3, labels: 0, hug: 14, onFrame: 0 },
   h5player: { overlap: 93, arrows: 1, crossNode: 2, labels: 0, hug: 18, onFrame: 0 },
   'media-web-player': { overlap: 23, arrows: 0, crossNode: 7, labels: 2, hug: 5, onFrame: 0 },
 }
 // 第十五轮：模型层新增两个第二级模块（模型层入口、场景语义）后，把四层声明为层（ADR-0051 修订）——模型层由普通层次改为分层总览：
 // 有代码事实重合 62 → 53、压节点 12 → 3、贴框 6 → 10；无代码事实重合 48 → 45、压节点 12 → 3、贴框 6 → 7
 const BARE: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 18, arrows: 0, crossNode: 3, labels: 0, hug: 20, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 21, arrows: 0, crossNode: 3, labels: 0, hug: 18, onFrame: 0 },
   h5player: { overlap: 96, arrows: 0, crossNode: 0, labels: 3, hug: 13, onFrame: 0 },
   'media-web-player': { overlap: 35, arrows: 0, crossNode: 1, labels: 0, hug: 6, onFrame: 0 },
 }
@@ -199,9 +201,10 @@ const BARE: Record<(typeof PROJECTS)[number], Counts> = {
  * 第十四轮 F9、F10（可推出与环内的静息态不画、例外照画，L42）与框外结构边按实际标签文字避让（L33）后重定：
  * h5p 3 / 1 / 1 → 1 / 0 / 0（重合 / 压节点 / 标签），h5player 重合 32 → 6、标签 18 → 3、贴框 4 → 3，media 重合 1 → 0、标签 1 → 0。
  * 任何常显的线都由所在视角的检查器测量（第十三轮评审 M7）；改变结构视角画线规则的改动，在这一组上量前后。
+ * 第二十一轮波 2：新增的改动项与 AI 回合两个模块带来的依赖（代码事实）使 h5p 重合 1 → 0、贴框 0 → 1，画线规则未动。上升待裁（波 2 报告）
  */
 const STRUCTURE: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 1, arrows: 0, crossNode: 0, labels: 0, hug: 0, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 0, arrows: 0, crossNode: 0, labels: 0, hug: 1, onFrame: 0 },
   h5player: { overlap: 6, arrows: 0, crossNode: 0, labels: 3, hug: 3, onFrame: 0 },
   'media-web-player': { overlap: 0, arrows: 0, crossNode: 0, labels: 0, hug: 0, onFrame: 0 },
 }

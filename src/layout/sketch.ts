@@ -37,6 +37,8 @@ import {
   type SketchDef,
   type SketchPoint,
 } from '@/model'
+import type { Point } from './geometry'
+import { sketchRoutes } from './sketchRoutes'
 
 export const SKETCH_NODE = { w: 168, h: 56 } as const
 /** SK-22（ADR-0027）：核心模块画成大块；共用件（shared / bus）画成本层框底部一行「共用件」架上的紧凑块 */
@@ -64,7 +66,7 @@ const ORIGIN = 40
 export type SketchNodeKind = 'module' | 'reference' | 'layer' | 'frame'
 
 /** X22：框线——最外的系统框、中心区（挂载点框）、引用列 */
-export type SketchFrameKind = 'system' | 'center' | 'column' | 'shelf'
+export type SketchFrameKind = 'system' | 'center' | 'column' | 'shelf' | 'ghost'
 
 export interface SketchNodeData {
   id: string
@@ -96,6 +98,10 @@ export interface SketchNodeData {
   side?: 'left' | 'right'
   /** X24：本草图里这个模块定义的接口（端口记号，同 L13）——拖线到记号即声明实现者；implementers 为 implementedBy 的条数 */
   ports?: { id: string; name: string; implementers: number }[]
+  /** CI-3：改动项的号（徽标「#n」）、刚应用的一轮（强调）、改动页签里正悬停的号（高亮）——画布从编辑分组叠上来 */
+  number?: number
+  recent?: boolean
+  hot?: boolean
   w: number
   h: number
 }
@@ -132,6 +138,8 @@ export interface SketchEdgeData {
   /** X22：引用线——引用在中心区的哪一侧（模块从这一侧的端口进出），引用是起点还是终点 */
   external?: 'left' | 'right'
   refEnd?: 'source' | 'target'
+  /** T2.5：与模型画布同一套的正交走线（画布坐标，节点位置取草图的）；引用线没有 */
+  route?: Point[]
 }
 
 export interface SketchEdge {
@@ -162,6 +170,8 @@ export interface SketchSceneInput {
   hideReferences?: boolean
   /** X22：草图画布的可用区域（画布容器的实际宽高，缩放 1 时流坐标 = 像素）；没给时取 SKETCH_CANVAS_FALLBACK */
   area?: { w: number; h: number }
+  /** T2.5：模型画布在这一层算好的节点位置（没有 layout 的草图以它为起点） */
+  seed?: Readonly<Record<string, SketchPoint>> | null
 }
 
 /** X22：一列引用（按层；与挂载点同层的标「同层」；不在任何层的为「外部」） */
@@ -278,9 +288,15 @@ export function bandRelative(def: SketchDef, positions: Readonly<Record<string, 
  * 显示用的位置（非根草图为本层模块，相对中心区的内容原点）：layout 里有的照用；缺的放到初始布局（按中心区可用区域 area 排的网格）的位置，
  * 与已有节点重叠时往下找空位。引用节点不在这里（X22：位置由规则算）
  */
-export function sketchPositions(def: SketchDef, ids: readonly string[], area?: GridArea): Record<string, SketchPoint> {
+export function sketchPositions(
+  def: SketchDef,
+  ids: readonly string[],
+  area?: GridArea,
+  seed?: Readonly<Record<string, SketchPoint>> | null,
+): Record<string, SketchPoint> {
   if (def.mount === ROOT_MOUNT) return bandLayout(def).pos
-  const grid = gridLayout(def, area).modules ?? {}
+  // T2.5：没有 layout 时起点借模型画布在这一层算好的位置（投影到中心区：整块居中），模型画布没有的退回网格
+  const grid = { ...(gridLayout(def, area).modules ?? {}), ...(!def.layout?.modules && seed ? projectSeed(seed, ids, area) : {}) }
   const given = def.layout?.modules ?? {}
   const out: Record<string, SketchPoint> = {}
   const taken: SketchPoint[] = []
@@ -301,6 +317,22 @@ export function sketchPositions(def: SketchDef, ids: readonly string[], area?: G
     taken.push(p)
   }
   return out
+}
+
+/**
+ * T2.5：模型画布同一层的节点位置（左上角）投影到中心区坐标——只取本层模块，平移到原点后整块在可用区域里居中；
+ * 模型画布的节点比草图节点大，相对位置不缩放（间距只会更宽，不会重叠）。
+ */
+export function projectSeed(seed: Readonly<Record<string, SketchPoint>>, ids: readonly string[], area?: GridArea): Record<string, SketchPoint> {
+  const pts = ids.filter(id => seed[id]).map(id => [id, seed[id]] as const)
+  if (!pts.length) return {}
+  const minX = Math.min(...pts.map(([, p]) => p.x))
+  const minY = Math.min(...pts.map(([, p]) => p.y ?? 0))
+  const w = Math.max(...pts.map(([, p]) => p.x)) - minX + SKETCH_NODE.w
+  const h = Math.max(...pts.map(([, p]) => p.y ?? 0)) - minY + SKETCH_NODE.h
+  const x0 = area ? Math.max(0, Math.round((area.w - w) / 2)) : 0
+  const y0 = area?.h ? Math.max(0, Math.round((area.h - h) / 2)) : 0
+  return Object.fromEntries(pts.map(([id, p]) => [id, { x: Math.round(p.x - minX + x0), y: Math.round((p.y ?? 0) - minY + y0) }]))
 }
 
 /**
@@ -373,7 +405,7 @@ function boundaryLayout(
   const measure = (canvas: { w: number; h: number }) => {
     const availW = canvas.w - fixedW
     const gridArea = { w: availW - 2 * SKETCH_CENTER_PAD, h: canvas.h - 2 * SKETCH_FRAME_PAD - 2 * SKETCH_CENTER_PAD }
-    const rel = sketchPositions(def, own, gridArea)
+    const rel = sketchPositions(def, own, gridArea, input.seed)
     const ps = Object.values(rel)
     const box = {
       minX: Math.min(0, ...ps.map(p => p.x)),
@@ -623,9 +655,11 @@ export function sketchScene(input: SketchSceneInput): SketchScene {
     }
   })
   const count = (root ? own.filter(m => m.parentId !== undefined) : own).filter(m => !shelf.has(m.id)).length
+  // T2.5：本层之间的线与模型画布同一套正交走线（节点位置取草图的）
+  const routes = sketchRoutes({ nodes, edges })
   return {
     nodes,
-    edges,
+    edges: edges.map(x => (routes.has(x.id) ? { ...x, data: { ...x.data, route: routes.get(x.id)! } } : x)),
     bands: band?.bands ?? [],
     needsLayout: !own.some(m => def.layout?.modules?.[m.id]),
     count,
