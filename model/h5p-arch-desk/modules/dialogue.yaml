@@ -1,6 +1,6 @@
 # 对话（第二十一轮波 1，ADR-0063）：当前版本上的「问」与「重讲」——薄协议、上下文包、引用与梳理卡、重讲判别（模型层）；
 # 对话会话与 agent 通道（视图状态层）；对话标签（呈现层）；agent 子进程与重讲落盘（接入层）。
-# 规则编号（DA-1–DA-11、DL-4、DL-5、DL-8、DL-11–DL-18）见 docs/01-requirements.md §4.13、docs/02-domain.md。
+# 规则编号（DA-1–DA-11、DL-4、DL-5、DL-8、DL-11–DL-18、DL-40–DL-43）见 docs/01-requirements.md §4.13、docs/02-domain.md。
 
 modules:
   # ── 模型层：放在人确认层之下——重讲判别与引用都要用题解的查找与检查（model.review.explainer），确认层的规则只许依赖类型契约 ──
@@ -16,10 +16,12 @@ modules:
       引用解析（DL-13）——问答卡只写 {模块, 字段}，原文由架构台从描述填，模块不存在或字段为空即解析失败；
       梳理卡（DL-15）——四组（对上 / 对不上 / 多 / 少）的标题、模块名与不确定计数；
       重讲（DL-8）——三问判别表（进不进确认层指纹、核验、事实检查），产出里有任何一问为是的键整轮拒绝，新题解再过题解的同一套检查（未知模块、抄写、越级）；讲法要求一条一行、累积合并。
+      机制图块（DL-40–DL-43）——结构化块多一种 diagram（内联 SVG + 一句说明），上下文包的「问」「改」写明何时画与一行示例；checkDiagram 过与题解同一套检查（只许内联 SVG、无脚本、无外部资源、尺寸适合资料区一列、data-arch 指向的模块存在，复用图解的 archRefs 与 unknownArchRefs），不合格只拒这一块；存为设计说明的 arch-diagram 围栏块写法与切回（diagramFence / splitNoteDiagrams）。
     abstraction: 协议、上下文包、引用、梳理卡与重讲判别分文件；全部纯函数，输入索引与产出、输出数据，换一个前端（命令行、导出脚本）照样成立。
     invariants:
       - 引用原文只由架构台从描述填，AI 写的原文进不了卡片
       - 重讲产出里任何一问为是的键都整轮拒绝，表外的键按事实对待
+      - 机制图块不是描述：不盖依据指纹、不落 explainers/、不进 lint:model
     codeRefs: [src/model/dialogue/**]
 
   # ── 视图状态层：对话会话与 agent 通道 ──
@@ -34,6 +36,7 @@ modules:
       对话会话（DA-1、DA-2、DA-11，DL-12）：DialogueState 一个值——转录（每条带当时的锚点：用户、回答、错误、已停止）、锚点、视角、运行状态（空闲 / 运行中的轮次与流式片段）、排队的输入、草稿、模式（问 / 重讲）、会话编号；
       只经纯转移函数 dialogueTransition 改变：发送（空闲开一轮，运行中进队列）、停止（这一轮不落，排队的退回草稿）、换锚点与换视角（转录不变）、agent 事件（片段累加、说完落一条并接着发队首、出错记错误卡、超时视同停止，别的轮次与停止后的迟到事件不认）；重讲只对模块，锚点不是模块时按「问」发；
       协调（createDialogue）：选中 / 视角 → 换锚点；进入新的运行轮次 → 经注入的 AgentTransport 发一轮，停止 → 通知子进程；推送的事件 → 转移；给呈现层派生引用原文、梳理卡与锚点文字。当前版本上的会话只在内存。
+      机制图（DL-41–DL-43）：一轮说完时检查回答里的图块（当前版本上查描述，草图里查当前张），结果随条目留下、之后不重判；给呈现层派生图的显示数据与引用原文、存为设计说明的围栏块、设计说明正文的文字段与图段。
     abstraction: 会话是值、规则是纯函数、协调只翻译——与编辑会话同一套分法；轮次 = 会话编号 + 序号，多个页面的推送不串。
     codeRefs: [src/state/desk/dialogue.ts]
   - id: state.desk.edit.dialogue.transport
@@ -54,8 +57,9 @@ modules:
       辅助栏的「对话」标签（DA-1–DA-5、DA-7）：锚点条粘顶（模块 / 步骤 / 系统，单击定位）；转录里每条带当时的锚点；问答卡的引用按 {模块, 字段} 显示架构台填的原文、单击在画布上定位（题解字段打开题解），推断段标「推断」，解析不了的标「引用无效」；
       梳理卡与发问时贴的照片并排、四组、不确定标记；重讲的结果卡（落了 / 被拒的原因）；AI 回合中的状态提示、排队数与停止按钮；
       输入框钉在底部：问 / 重讲（重讲只在锚点是模块时可选）与「只问」「只动讲法」徽标、贴图（粘贴或选文件，至多 4 张）、Enter 发送。
-      草图里（波 2，DA-6–DA-10）：改 / 问切换与「可改」徽标；AI 改完一轮出提议卡（ProposalCard：第几轮、动了哪几个号、牵动谁按当前代码估、撤回本轮）；梳理卡旁「按这张图起草」；问答卡「存为设计说明」。只读对话会话、只发意图。
-    codeRefs: [src/components/dock/DialogueDoc.vue, src/components/dock/ProposalCard.vue]
+      草图里（波 2，DA-6–DA-10）：改 / 问切换与「可改」徽标；AI 改完一轮出提议卡（ProposalCard：第几轮、动了哪几个号、牵动谁按当前代码估、撤回本轮）；梳理卡旁「按这张图起草」；问答卡「存为设计说明」（图随文字一起存）。只读对话会话、只发意图。
+      机制图（DiagramBlock，DL-42）：回答里的图放进与图解同一机制的沙箱 iframe（复用 explainerFrame），说明在图下，单击 data-arch 在画布上选中（草图里选中当前张的框），被拒的只出原因；设计说明预览里的图段同用它。
+    codeRefs: [src/components/dock/DialogueDoc.vue, src/components/dock/ProposalCard.vue, src/components/dock/DiagramBlock.vue]
 
   # ── 接入层：agent 子进程与重讲落盘 ──
   - id: access.agent.process
@@ -93,6 +97,12 @@ relations:
     type: queries
     description: '对话会话向对话的模型取：resolveCitation 按 {模块, 字段} 填引用原文、digestView 算梳理卡的渲染数据，派生给对话标签'
     purpose: '填引用原文与梳理卡给对话标签'
+  - id: rel.dl.session-explainer
+    from: state.desk.edit.dialogue
+    to: model.review.explainer
+    type: queries
+    description: '对话会话向图解取：knownModule 判机制图的 data-arch 是否在描述里（当前版本上），htmlRefs 按图解同一口径给图里引用的模块填原文（DL-41、DL-42）'
+    purpose: '检查机制图的引用并填引用原文'
   - id: rel.dl.source-process
     from: access.model-source
     to: access.agent.process
