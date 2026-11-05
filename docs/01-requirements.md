@@ -260,7 +260,7 @@
 | 编号 | 需求 | 规则 | 优先级 | 状态 |
 |---|---|---|---|---|
 | AG-1 | 命令行 `npm run arch -- <命令>`：`locate`（文件或模块）、`check`（写前判定）、`violations`、`cycles`、`rescan`、`report`（拦截报告）、`baseline`（生成基线，仅命令行）、`own`（登记人拥有文件的指纹，仅命令行，X6）、`sketch-check`（草图核验，X4）、`sketch archive`（归档 / 晋升，X3） | Q1–Q3、U7、X3、X4、X6 | P0 | 已实现 |
-| AG-2 | MCP 服务器 `npm run arch:mcp`（stdio）：与命令行相同的查询，不含生成基线与登记指纹；另有 `sketch_check` 与 `sketch_archive`（X8）；任何支持 MCP 的 coding agent 可接入 | Q5、Q6、X8 | P0 | 已实现 |
+| AG-2 | MCP 服务器 `npm run arch:mcp`（stdio）：与命令行相同的查询，不含生成基线与登记指纹；另有 `sketch_check` 与 `sketch_archive`（X8）、任务单 `tasks`（TK-4）；任何支持 MCP 的 coding agent 可接入 | Q5、Q6、X8 | P0 | 已实现 |
 | AG-3 | 拦截记录：写前判定与重新扫描写入 `governance/ledger.jsonl`，报告可量化「拦了多少、环度降了多少」 | Q4 | P0 | 已实现 |
 | AG-4 | 返工清单出口：命令行 `npm run arch -- issues`（缺省 Markdown，`--json`）与 MCP 工具 `issues` 输出同一份按根因聚合的返工清单，每条带文件行号、规则编号与建议动作（含可粘贴的 YAML 片段），可按类别筛选；AI 据此修正描述，改完用 `lint:model` 或 `rescan` 自检 | Q7–Q9 | P0 | 已实现 |
 | AG-5 | `sketch-check --design <设计>` 可不带 `--project`：在全部项目里找该设计，恰好一个即用它，否则报错并列出候选 | Q11 | P2 | 已实现 |

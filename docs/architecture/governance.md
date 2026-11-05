@@ -233,6 +233,7 @@ interface SketchCheck { sketch: string; design?: string; deviations: SketchDevia
 | `baseline` | —（Q5） | 生成基线，由人执行 | — |
 | `own` | —（X6） | 登记人拥有文件的指纹 `governance/owned.json`，由人执行 | — |
 | `sketch-check [--design <设计>] [--revision <轮次>]` | `sketch_check` | X4：活动草图对当前版本（缺省）或设计某一轮的核验，命令行缺省给人看的文本、`--json` 为结构化结果 | — |
+| `tasks --design <设计> [--json]` | `tasks`（`design`、`format`） | TK-2–TK-4、DL-36、DL-37：任务单——改动项原号、怎样算做到、状态由核验推出（✓ / 待做 / 不核验）、对不上号单列；命令行缺省 Markdown、`--json` 为 JSON，两端走同一个出口函数 `tasksOutput` | — |
 | `sketch archive <设计>` | `sketch_archive` | X3、X8：归档 / 晋升，与页面同一函数 `archiveDesign`；不一致即拒绝 | — |
 | `classify [--design <设计> [--revision <轮次>] \| --all-designs] [--core-only] [--override <文件>] [--write]` | — | 未分类关系的查询 / 委托建议（`classifyRelation`）：关系、两端、建议类型、置信度与依据；设计各轮没有代码事实，同 ID 的关系沿用当前版本的分类；`--override` 为人工核对后的覆盖（关系 ID → 类型）；`--write` 只改描述文件里 `type` 与 `description` 两个值（没有说明的补一个），草图（人拥有）只改 `type`，草图写了说明的关系各处都不改说明 | — |
 

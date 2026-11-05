@@ -29,6 +29,8 @@
  *   own                           登记人拥有文件的指纹 governance/owned.json（X6，人改完草图 / 规则 / 忽略清单后执行）
  *   sketch-check [--design <设计>] [--revision <轮次>]   草图核验（X4、X17）：缺省为活动草图对当前版本；给了设计时逐张报告，
  *                                 并附两个对比（相对基线、相对当前版本 / 该轮），按血缘表述
+ *   tasks --design <设计>         任务单（TK-2–TK-4、DL-36、DL-37）：认可后的改动项原号不变，每项「怎样算做到」与状态（✓ / 待做 / 不核验，由核验推出），
+ *                                 对不上号的偏差单列；缺省 Markdown（复制给写代码的 agent），--json 导出给外部系统；与 MCP 工具 tasks 同一份结果
  *   sketch list <设计>            设计的各张草图（挂载点、文件、是否需要初始布局）
  *   sketch archive <设计>         归档 / 晋升（X3）：对当前版本逐张核验一致才执行；晋升连 layout 一并替换持久草图
  *   classify [--design <设计> [--revision <轮次|sketch>] | --all-designs] [--core-only] [--override <文件>] [--write]
@@ -53,7 +55,7 @@ import {
   type SketchCheck,
 } from '../src/model'
 import type { DesignComparison } from './agent/service'
-import { ServiceError, createService } from './agent/service'
+import { ServiceError, createService, tasksOutput } from './agent/service'
 import { printClassify, runClassify } from './agent/classify'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -289,6 +291,12 @@ function run(): number {
       else printChecks(r)
       return r.checks.some(c => c.counts.error) ? 1 : 0
     }
+    case 'tasks': {
+      const design = str('design') ?? rest[0]
+      if (!design) throw new ServiceError('用法：npm run arch -- tasks --design <设计> [--json]')
+      console.log(tasksOutput(svc.tasks(project, design), asJson ? 'json' : 'markdown'))
+      return 0
+    }
     case 'sketch': {
       if (rest[0] === 'list' && rest[1]) return out(svc.designSketches(project, rest[1]))
       if (rest[0] !== 'archive' || !rest[1]) throw new ServiceError('用法：npm run arch -- sketch archive <设计> | sketch list <设计>')
@@ -350,7 +358,7 @@ function run(): number {
     }
     default:
       console.error(
-        '用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|hotspots|coupling|impact|metrics|tiers|strata|place|surface|report|baseline|own|explainer|sketch-check|sketch|classify> [参数] [--project <项目>] [--json]',
+        '用法：npm run arch -- <projects|overview|locate|check|violations|cycles|rescan|issues|hotspots|coupling|impact|metrics|tiers|strata|place|surface|report|baseline|own|explainer|sketch-check|sketch|tasks|classify> [参数] [--project <项目>] [--json]',
       )
       return 2
   }

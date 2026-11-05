@@ -11,6 +11,12 @@ import {
   assignFiles,
   checkDependency,
   checkSketches,
+  designEntities,
+  parseChangeTable,
+  taskList,
+  taskMarkdown,
+  type SketchSet,
+  type TaskList,
   compareOwned,
   parseDesignSketches,
   compareDesign,
@@ -689,6 +695,45 @@ export function createService(opts: ServiceOptions) {
       }
     },
 
+    /**
+     * TK-2–TK-4、DL-36、DL-37：设计的任务单——改动项（相对基线，号取 changes.json）的状态由各张草图对当前版本的核验推出；
+     * 命令行 arch tasks 与 MCP 工具 tasks 走这一个函数、同一份结果（页面用同一个模型层函数）。
+     */
+    tasks(p: string | undefined, design: string): { project: string; list: TaskList; markdown: string } {
+      const project = projectOfDesign(p, design)
+      const dir = path.join(modelRoot, project)
+      const files = designSketches(dir, design)
+      if (!files.length) throw new ServiceError(`设计「${design}」没有草图（designs/${design}/sketches/*.yaml），没有任务单`)
+      const info = readProject(modelRoot, project, opts.root)!.designs?.find(d => d.id === design)
+      if (!info) throw new ServiceError(`设计不存在：${design}`)
+      const entities = parseDesignSketches(files)
+      const sketches: SketchSet = Object.fromEntries(entities.map(e => [e.def.mount, e.def]))
+      const current = load(project).index
+      const commit = info.base?.commit
+      const baseFiles = commit ? readModelAt(dir, commit) : null
+      const baseline = baseFiles ? loadModel(baseFiles).index : current
+      let table: unknown = null
+      try {
+        table = JSON.parse(fs.readFileSync(path.join(dir, 'designs', design, 'changes.json'), 'utf8'))
+      } catch {
+        table = null
+      }
+      const checks = checkSketches(current, designEntities(sketches, design), new Map([[design, info.accepted ?? []]]), new Map([[design, baseline]])).filter(
+        c => c.design === design,
+      )
+      const list = taskList({
+        design,
+        name: info.name,
+        status: info.status,
+        approval: info.approval,
+        sketches,
+        baseline,
+        table: parseChangeTable(table),
+        checks,
+      })
+      return { project, list, markdown: taskMarkdown(list) }
+    },
+
     /** X9：设计的草图清单（设计面板用）：挂载点、文件、指纹、是否需要初始布局 */
     designSketches(p: string | undefined, design: string): { project: string; design: string; sketches: SketchFileRef[] } {
       const project = projectOfDesign(p, design)
@@ -761,6 +806,10 @@ export function createService(opts: ServiceOptions) {
 }
 
 export type ArchService = ReturnType<typeof createService>
+
+/** DL-37：任务单的出口——命令行（缺省 Markdown、--json）与 MCP 工具 tasks（format）同一个函数，同一份结果 */
+export const tasksOutput = (r: { list: TaskList; markdown: string }, format: 'markdown' | 'json' = 'markdown'): string =>
+  format === 'json' ? JSON.stringify(r.list, null, 2) : r.markdown
 
 /** X17：一个设计对同一对象的两个对比之一（全设计 = 各张的并集） */
 export type DesignComparison = ReturnType<typeof compareDesign>

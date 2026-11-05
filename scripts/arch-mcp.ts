@@ -9,7 +9,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { REWORK_CATEGORIES, type ReworkCategory } from '../src/model'
-import { ServiceError, createService } from './agent/service'
+import { ServiceError, createService, tasksOutput } from './agent/service'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const svc = createService({ root, client: 'mcp' })
@@ -229,6 +229,27 @@ server.registerTool(
     inputSchema: { design: z.string().optional().describe('设计 ID'), revision: z.string().optional().describe('轮次 ID，如 r1'), project },
   },
   ({ design, revision, project }) => reply(() => svc.sketchCheck(project, design, revision)),
+)
+
+server.registerTool(
+  'tasks',
+  {
+    title: '任务单',
+    description:
+      '认可后的设计的任务单（TK-2–TK-4）：每一项是「代码现在是这样、草图要它变成那样」的一条差别，带改动项原号、怎样算做到（对应的核验条目）与状态（✓ / 待做 / 不核验）。语义是「把代码改到位」，不是返工清单（issues）那种「描述有问题」：照「待做」的项改代码、重新生成当前描述后再查，✓ 由核验推出，不要手工勾，也不要改草图、规则与确认记录。任务单头写明是否有效（已认可 / 认可已撤回 / 预览 / 作废）。',
+    inputSchema: {
+      design: z.string().describe('设计 ID'),
+      format: z.enum(['markdown', 'json']).optional().describe('缺省 markdown（与命令行 npm run arch -- tasks --design <设计> 相同）；json 与 --json 相同'),
+      project,
+    },
+  },
+  ({ design, format, project }) => {
+    try {
+      return { content: [{ type: 'text' as const, text: tasksOutput(svc.tasks(project, design), format) }] }
+    } catch (e) {
+      return { isError: true, content: [{ type: 'text' as const, text: e instanceof ServiceError ? e.message : String(e) }] }
+    }
+  },
 )
 
 server.registerTool(
