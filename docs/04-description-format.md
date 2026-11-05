@@ -21,7 +21,7 @@ model/<项目>/
   source-ignore.yaml       忽略清单 sourceIgnore：不属于任何模块的源码文件（§3.7）
   rules.yaml               架构规则 rules：架构师的意图，AI 重新生成时不改动（§3.8）
   reviewed.yaml            确认记录 reviewed：架构师确认过哪些模块、确认时的指纹与摘要，AI 重新生成时不改动（§3.9）
-  designs/<设计>/          设计版本（§5）：sketches/<挂载点>.yaml（架构师的草图，每个挂载点一张）+ design.yaml + r<N>/（AI 展开的各轮，每轮的说明在 r<N>/revision.yaml），读取当前版本时跳过
+  designs/<设计>/          设计版本（§5）：sketches/<挂载点>.yaml（架构师的草图，每个挂载点一张）+ changes.json（改动项编号表，页面维护、不登记指纹，目标态）+ notes/（设计说明，AI 拥有，目标态）+ design.yaml + r<N>/（可选的展开快照，每轮的说明在 r<N>/revision.yaml），读取当前版本时跳过
   governance/              基线 baseline.json、拦截记录 ledger.jsonl、人拥有文件的指纹 owned.json，由命令行与 agent 接口写，不属于描述，读取时跳过（§4）
 ```
 
@@ -29,8 +29,8 @@ model/<项目>/
 
 | 拥有者 | 文件 | 页面 | 指纹 |
 |---|---|---|---|
-| AI（按代码生成） | `system.yaml`、`modules/`（骨架之下）、`actors.yaml`、`scenarios/`、`explainers/`（图解，§3.11）；设计版本各轮快照 `designs/<设计>/r<N>/`，含该轮说明 `revision.yaml`（E8） | 只读 | — |
-| 人（架构师、负责人） | 草图：`intent/*.yaml`（骨架等持久草图）、`designs/<设计>/sketches/*.yaml`；`rules.yaml`（AI 重新生成时不改动，§3.8）；`source-ignore.yaml`（忽略项）；`designs/<设计>/design.yaml`（目标、状态、基线、ADR、认可偏差 `accepted`、评审意见 `revisions[].feedback`——不含每轮说明，E8）；`reviewed.yaml`（确认记录，§3.9） | 只追加：例外、忽略项、评审意见（该轮没有条目时新建，B2）、认可偏差；确认记录追加或按模块更新（Z1）；归档 / 晋升改设计状态、晋升时整份替换持久草图；草图在画布编辑后按设计整份覆盖、新建设计，级联改名与删除只限 `designs/<设计>/sketches/*`（B6、B7、X7）；其余由人编辑 | 记在 `governance/owned.json`：人改完后 `npm run arch -- own` 登记，页面写入自动更新，`lint:model` 不符即报错 `owned.changed` |
+| AI（按代码生成） | `system.yaml`、`modules/`（骨架之下）、`actors.yaml`、`scenarios/`、`explainers/`（图解，§3.11）；设计版本各轮快照 `designs/<设计>/r<N>/`，含该轮说明 `revision.yaml`（E8）；设计说明 `designs/<设计>/notes/` 与讲法要求 `explainers/<模块 ID>.notes.md`（目标态 · 第二十一轮，ADR-0063） | 只读（notes / 讲法要求由架构台在对话里写入） | — |
+| 人（架构师、负责人） | 草图：`intent/*.yaml`（骨架等持久草图）、`designs/<设计>/sketches/*.yaml`；`rules.yaml`（AI 重新生成时不改动，§3.8）；`source-ignore.yaml`（忽略项）；`designs/<设计>/design.yaml`（目标、状态、基线、ADR、认可偏差 `accepted`、评审意见 `revisions[].feedback`——不含每轮说明，E8）；`reviewed.yaml`（确认记录，§3.9） | 只追加：例外、忽略项、评审意见（该轮没有条目时新建，B2）、认可偏差；确认记录追加或按模块更新（Z1）；归档 / 晋升改设计状态、晋升时整份替换持久草图；草图在画布编辑后按设计整份覆盖、新建设计，级联改名与删除只限 `designs/<设计>/sketches/*`（B6、B7、X7）；其余由人编辑。`designs/<设计>/changes.json` 由页面随编辑会话维护（手改也可以，DL-3），**不登记指纹** | 记在 `governance/owned.json`：人改完后 `npm run arch -- own` 登记，页面写入自动更新，`lint:model` 不符即报错 `owned.changed`；`changes.json`、`notes/`、`*.notes.md` 不在指纹清单里 |
 | 命令行与 agent 接口 | `governance/` | 只读 | — |
 
 - 骨架只描述层、第二级模块与第二级之间的关系（自草图 v2 起，根草图带第二级关系，晋升后由骨架拥有；`modules/` 里同 ID 的关系只能补 `interface`、`payload`、`via` 等骨架没写的字段）；AI 只能用 `parent: <第二级 ID>` 往骨架之下挂子模块，对骨架里的模块只能补草图没写的字段，不得重定义已写的字段（X1，`lint:model` 报 `sketch-redefined`）。没有 `intent/skeleton.yaml` 的旧描述仍可把层写在 `modules/layers.yaml`（兼容期）。
@@ -496,6 +496,26 @@ reviewed:
 
 全部人拥有，纳入指纹门禁（§4）。
 
+#### 改动项编号表（`changes.json`，DL-3，目标态 · 第二十一轮）
+
+对话起草（ADR-0063）里**一处改动一个号，图上和清单里是同一个号**：相对设计基线的变更按血缘聚合为改动项（X11、X17），编号记在 `designs/<设计>/changes.json`——设计目录下**页面维护**的小文件：
+
+- **不登记指纹**：它由页面随编辑会话维护，不属于人拥有指纹门禁（X6 的清单不含它），`lint:model` 不校验它的内容；手改也可以，页面下次写入时按当前内容续编。
+- **字段建议**：`nextNumber`（下一个可用的号）与 `items`——每项 `n`（号）、`kind`（六类：add / modify / merge / split / move / remove）、`summary`（一句话）、`round`（第几轮）、`by`（`ai` / `human`）、`withdrawnAt?`（撤回时间；撤回的项留在表里，不清掉）。
+- **编号按产生顺序给、撤回留空不复用**：撤回只是标 `withdrawnAt`，它的 `n` 永不再分配——图上的「#n」徽标、「改动」页签的行与 AI 上下文里的号是同一个号，复用会让历史对话里的「#3」指错东西。
+- AI 的上下文包里带着这张表，所以对话里可以直接说「撤回 #3」。
+
+```json
+{
+  "nextNumber": 4,
+  "items": [
+    { "n": 1, "kind": "merge", "summary": "edit 与 versions 合并为编辑会话", "round": 1, "by": "ai" },
+    { "n": 2, "kind": "add", "summary": "新增 运行派生", "round": 1, "by": "ai" },
+    { "n": 3, "kind": "move", "summary": "视图派生（原 files）", "round": 1, "by": "human", "withdrawnAt": "2026-11-05T10:00:00.000Z" }
+  ]
+}
+```
+
 #### 示例
 
 ```yaml
@@ -673,6 +693,8 @@ npm run arch -- explainer <模块 ID> --project <项目> --write
 
 它在图解的 head 里写入 `<meta name="arch-basis" content="v1 …">`：本模块的描述、子模块的 summary / invariants 与子模块之间的关系，按项各一个指纹。之后这些依据变了，架构台标「基于旧描述 · N 处改动」，`lint:model` 报 `explainer.stale`；按改动核对图解的讲法（引用的原文已自动是新的），讲法仍成立或改好后再执行一次上面的命令。不要手改 `arch-basis`。
 
+**讲法要求（DL-8，目标态 · 第二十一轮）**：当前版本上「重讲」（ADR-0063，DA-4）的讲法要求存 `explainers/<模块 ID>.notes.md`——AI 拥有、**不登记指纹**（不在 X6 的人拥有清单里）；纯文本，一条意见一行，逐条可读；重讲走同一条题解流水线（同一模板、同一套检查、同一个依据指纹），讲法要求作为意见喂给它，并随上下文带上、**累积**——第二次重讲带第一次的要求，事实变了重写题解时意见仍生效。讲法要求不进 `arch-basis` 依据（它讲的是「怎么讲」，不是「讲什么」），改它不算改动图解依据。
+
 ## 4. 校验与提交
 
 ```bash
@@ -692,27 +714,30 @@ npm run arch -- own            # 人改完 intent/、designs/*/sketches/、rules
 npm run arch -- baseline --project <项目>   # 写 model/<项目>/governance/baseline.json
 ```
 
-## 5. 设计版本：草图 + 轮次
+## 5. 设计版本：对话起草，认可后出任务单（ADR-0063）
 
-迭代前先出设计、评审定稿后再开发（ADR-0002）。设计 = 架构师的草图（尺子）+ AI 按草图展开的各轮完整快照（被量的东西）+ 评审意见 + ADR（ADR-0023）。
+迭代前先出设计、认可后再开发（ADR-0002；ADR-0063 修订：**设计 = 草图 + 可选的展开轮**，对话起草为主路径）。架构师的草图是尺子（§3.10），AI 在对话里一轮一轮改图、每轮应用为编辑会话的一步（可按号撤回）；「交给 AI 展开一轮」的完整快照降为可选预览；认可后同一份改动清单原号变成任务单，代码真的变成草图那样才能归档。旧设计的「评审中」多轮评审循环停用——评审在草图画布上完成（旧设计里已有的各轮照旧读）。
 
 ```text
 model/<项目>/designs/<设计 ID>/
   sketches/<挂载点>.yaml         架构师的草图（§3.10，人拥有），每个挂载点一张；版本切换中排在 r1 之前
-  design.yaml                    人拥有：目标、状态、基线、ADR、认可偏差、各轮的评审意见
-  r1/   system.yaml、intent/、modules/…、revision.yaml   第 1 轮：AI 从当前版本完整复制后按草图扩展；revision.yaml 为本轮说明（AI 拥有）
+  changes.json                   改动项编号表（§3.10「改动项编号表」，页面维护、不登记指纹，目标态）
+  notes/                         设计说明（AI 拥有，目标态）
+  design.yaml                    人拥有：目标、状态、认可（含各张草图指纹）、基线、ADR、认可偏差、各轮的评审意见
+  r1/   system.yaml、intent/、modules/…、revision.yaml   第 1 轮（可选的展开快照）：AI 从当前版本完整复制后按草图扩展；revision.yaml 为本轮说明（AI 拥有）
   r2/   …                        第 2 轮：从上一轮完整复制后按评审意见修改
 ```
 
 ```yaml
 design:
-  name: 二期 · 动态视角
-  status: reviewing             # draft / reviewing / accepted / implemented / abandoned
+  name: DeskState 的编辑会话
+  status: draft                 # draft / accepted / implemented / abandoned（ADR-0063：reviewing 停用，旧设计照旧读）
   goal: |                       # 设计目标与范围
   adr: docs/adr/0003-phase2-dynamic-view.md   # 定稿后记录结论的 ADR（一个或列表，相对源码根目录，E7）
   base: { commit: <新建设计时仓库的 HEAD（草图 v2，05 裁决 3）；旧设计为起草时当前版本的 source.commit>, generatedAt: … }
   accepted:                     # 认可的偏差（X4）：由面板「认可偏差（写理由）」追加；只能认可提醒级偏差
     - { deviation: 'missing-relation:rel.sk.desk-plan', reason: 调用经 DeskState 的派生，不单独建关系, at: '2026-10-22' }
+  # 认可（DL-9，目标态）：「认可」把 status 改为 accepted 时，架构台在同一文件记下各张草图的指纹；「回到起草」作废指纹；归档三关之一是指纹比对
   revisions:                    # 只承载评审意见，按 id 对上轮次；条目由「记录评审意见」按需建立（B2、E8）
     - id: r1
       feedback: |               # 架构师对本轮的评审意见，原样记录
@@ -728,12 +753,13 @@ revision:
 
 轮次从目录发现：含 `system.yaml` 的 `r<N>/` 即一轮，按 N 的数字排序（E8）。早先的设计把 `date`、`summary`、`questions` 写在 `design.yaml` 的 `revisions[]` 里，照常读取；新的轮次一律写 `revision.yaml`。
 
-流程：
+流程（07 §3）：
 
-1. **画草图**：架构师在要设计的模块上「在此设计」（或手写 `sketches/<挂载点>.yaml`，§3.10），底稿从基线复制该模块的一层；往下一层就在那个模块上再挂一张（SK-12–SK-15）；`lint:model` 校验格式与 ID；同挂载点已有持久草图时声明 `supersedes`，要改骨架就画根挂载的草图并 `supersedes: skeleton`。
-2. **交给 AI**：设计信息条「保存并交给 AI」生成指令——各张草图全文 + 相对基线的变更摘要（按血缘：合并 / 拆分 / 改 ID / 移动，含前缀级联推出的子树改名）+ 父模块原则 + 下面的「按草图扩展」一节（X20）；AI 据此在当前版本上起草 r1。
-3. **评审循环**：每一轮都跑核验（`sketch-check`），偏差进返工清单；AI 起草后自己先跑一遍，零 error 才交评审。架构师在架构台上对比、下钻、记评审意见；提醒级偏差确属合理时「认可偏差（写理由）」。
-4. **定稿与实现**：`status: accepted`，结论记 ADR，同步 01–04；实现、重新生成当前版本后，核验对象变为当前版本；一致即「归档」（`until-implemented`：状态 `implemented`，草图覆盖的模块写入确认记录）或「晋升」（`supersedes`：草图替换对应的持久草图）。归档由人显式发起（面板或 `arch sketch archive`）。
+1. **开始设计**：在一个模块上「在此设计」进入草图画布——底稿从基线复制该模块的一层（§3.10），辅助栏自动打开「对话」（DL-4）；也可以手写 `sketches/<挂载点>.yaml`；往下一层就在那个模块上再挂一张（SK-14）；`lint:model` 校验格式与 ID；同挂载点已有持久草图时声明 `supersedes`，要改骨架就画根挂载的草图并 `supersedes: skeleton`。
+2. **说想法，看图，再说**：对话里说想法、贴照片，AI 一轮一轮改图——每轮改动立刻画上、标色打号，一次性应用为设计级撤销的一步（DL-1）；改动项按血缘聚合、稳定编号不复用（§3.10「改动项编号表」），哪一项不要撤回哪一项，整轮不要点「撤回本轮」（DL-2）；也可以直接在画布上拖、在表单里改，与 AI 的改动进同一条记录。**「交给 AI 展开一轮」是可选预览**（信息条「认可 ▾」的下拉）：仍按下面的「写法约定」整份复制出一轮完整快照，供对比与留痕；AI 起草后自己先跑一遍 `lint:model` 与核验，零 error 才交。
+3. **认可**：点信息条「认可」，架构台弹出这张设计从头到尾的改动清单和影响面（影响面按当前代码估，DL-7），最后看一眼后果；确认后 `status: accepted`、草图锁定（对话只能问、手势禁用、撤回变灰）、记下各张草图的指纹（DL-9）；「回到起草」回「起草中」、指纹作废、任务单标「认可已撤回」。
+4. **任务单**：「改动」页签原号不变地变成任务单——每一项就是「代码现在是这样、草图要它变成那样」的一条差别，附一句怎样算做到（对应核验条目）；复制给写代码的 AI（Markdown）或导出给外部系统；状态由核验推出，不让人勾（TK-3）。
+5. **执行后归档**：代码改完、重新生成当前描述，架构台自动重算任务单——做到的项打 ✓ 留在清单，没做到的标「待做」；核验一致（X4）、规则没有新违反（棘轮 U8）、草图自认可未改动（指纹比对）**三关全绿才能归档**；归档写确认记录（指纹取归档当时的当前版本，X3）、状态改 `implemented`，晋升时草图替换对应的持久草图；归档预览列「认可时估牵动 N · 实际改了 N′」并列差；草图、对话、改动清单原样保留，是这次设计的证据。归档由人显式发起（面板或 `arch sketch archive`）。
 
 写法约定：
 
