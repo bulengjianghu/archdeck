@@ -6,6 +6,7 @@
 import { invariantsOf, summaryOf } from '../contract'
 import { explainerOf } from '../explainer/lookup'
 import type { ModelIndex, SketchDef } from '../types'
+import { DIAGRAM_LIMITS } from './diagram'
 import { CITE_FIELDS } from './protocol'
 
 /** 锚点（DA-2）：下一句话带着哪个模块 / 哪一步；没有选中时为 none */
@@ -125,11 +126,19 @@ export const AGENT_QUERIES = [
   '源码与描述用 Read / Grep / Glob 读（工作目录限定在被描述项目与架构台目录）',
 ]
 
+/** DL-40：机制图块的约定（「问」与「改」都带；「重讲」不带——题解本身就是图） */
+const DIAGRAM_OUTPUT = [
+  `机制图块：用户要图，或讲拆分 / 合并之后怎么运作时，在问答卡之外再给一块 {"kind":"diagram","svg":"<svg …>…</svg>","caption":"一句说明"}——一张自包含的内联 SVG：必须写 viewBox，宽不超过 ${DIAGRAM_LIMITS.width}（资料区一列），宽高比在 1:${DIAGRAM_LIMITS.ratio} 到 ${DIAGRAM_LIMITS.ratio}:1，不超过 ${DIAGRAM_LIMITS.bytes / 1024} KB；不许 <script>、on… 事件属性、javascript:、外部链接与 <foreignObject>；颜色用 currentColor 或写死的中性色。`,
+  '图里的模块用 data-arch="<模块 ID>" 标出（单击在画布上选中），ID 必须在描述里（草图里：在当前张 sketch.current 里或就是挂载点）；不合格的图整块被拒，文字照常显示。',
+  '示例（一行）：{"type":"block","block":{"kind":"diagram","caption":"拆分后命令先进会话、再由施用者落盘","svg":"<svg xmlns=\\"http://www.w3.org/2000/svg\\" viewBox=\\"0 0 400 120\\"><g data-arch=\\"<模块 ID>\\"><rect x=\\"10\\" y=\\"30\\" width=\\"140\\" height=\\"60\\" rx=\\"8\\" fill=\\"none\\" stroke=\\"currentColor\\"/><text x=\\"80\\" y=\\"65\\" text-anchor=\\"middle\\" fill=\\"currentColor\\">会话</text></g></svg>"}}',
+]
+
 const OUTPUT = {
   ask: [
     '一行一个 JSON：{"type":"text","text":…} 文本片段、{"type":"block","block":…} 结构化块、{"type":"done"} 结束。',
     `问答卡：{"kind":"answer","parts":[{"text":…,"cites":[{"module":…,"field":…}],"inferred":true?}]}；field 取 ${CITE_FIELDS.join(' / ')}，原文由架构台填，不要抄写；推断出来的段写 inferred: true。`,
     '收到图片时回梳理卡：{"kind":"digest","groups":{"matched":[],"mismatched":[],"extra":[],"missing":[]}}，条目 {"label":…,"modules":[…]?,"note":…?,"uncertain":true?}——对上的 / 一个框对应代码里多个模块的 / 画了但代码里没有依赖的 / 系统有而没画的。',
+    ...DIAGRAM_OUTPUT,
   ],
   renarrate: [
     '一行一个 JSON：{"type":"text"…}、{"type":"block"…}、{"type":"done"}。',
@@ -144,6 +153,7 @@ const OUTPUT = {
     '可用操作：merge {sketch, ids, name, id}、split {sketch, id, parts:[{name,id}]}、demote {sketch, id, target}、promote {sketch, id}、rename {sketch, id, newId}、remove {sketch, id}、edit {sketch, edit}；edit 里：addModule {parent, name, id?, kind?}、updateModule {id, patch}、connect {from, to, type, description?}、updateRelation {id, patch}、removeRelation {id}、addInterface {owner, name, signature?}、setAbstraction {text}。sketch 是挂载点（sketch.mount）。',
     '不许出位置类操作（moveNode、relabel、autoArrange）：已有的框只有人能动，新框由架构台按规则安放。撤回某一项写在 withdraw 里（号见 sketch.changes），不要自己拼逆向操作。',
     '只回答不改图时照常回问答卡（answer）；收到图片时先回梳理卡（digest）。',
+    ...DIAGRAM_OUTPUT,
   ],
 } as const
 

@@ -1,7 +1,7 @@
 /**
  * agent 的薄协议（DL-11，ADR-0063 §7.1）：子进程的输出只认三种事件，一行一个 JSON——
  * `{ type: 'text', text }` 文本片段（流式显示，不落）、`{ type: 'block', block }` 结构化块（一轮说完时一次性落）、`{ type: 'done' }` 结束。
- * 结构化块有四种：问答卡 answer（DA-3）、梳理卡 digest（DA-7）、重讲 renarrate（DA-4、DL-8）、草图里的改动 edit（DA-6、DA-9）。
+ * 结构化块有五种：问答卡 answer（DA-3）、梳理卡 digest（DA-7）、重讲 renarrate（DA-4、DL-8）、草图里的改动 edit（DA-6、DA-9）、机制图 diagram（DA-6、DL-40）。
  * 不合法的行或块 = 整轮拒绝（DA-11）。真实 claude 的流式 JSON 由接入层的适配器翻译成本协议，假 agent 直接说本协议。
  * 换一个前端（命令行、导出脚本）这层协议照样成立，所以在模型层。
  */
@@ -68,7 +68,17 @@ export interface RenarrateBlock {
   html: string
 }
 
-export type AgentBlock = AnswerBlock | DigestBlock | RenarrateBlock | EditBlock
+/**
+ * 机制图（DA-6、DL-40）：一张自包含的内联 SVG 加一句说明，与问答卡同在一条回答里。
+ * 协议只看形状；内容（脚本、外部资源、尺寸、data-arch 指向的模块）由 checkDiagram 判（DL-41），不合格只拒这一块、文字照常。
+ */
+export interface DiagramBlock {
+  kind: 'diagram'
+  svg: string
+  caption: string
+}
+
+export type AgentBlock = AnswerBlock | DigestBlock | RenarrateBlock | EditBlock | DiagramBlock
 
 export type AgentEvent = { type: 'text'; text: string } | { type: 'block'; block: AgentBlock } | { type: 'done' }
 
@@ -152,6 +162,13 @@ export function parseBlock(raw: unknown): Parsed<AgentBlock> {
     const withdraw = (raw.withdraw as number[] | undefined) ?? []
     if (!ops.value.length && !withdraw.length) return { ok: false, error: '改动块既没有操作也没有要撤回的号' }
     return { ok: true, value: { kind: 'edit', ops: ops.value, ...(withdraw.length ? { withdraw } : {}), ...(isStr(raw.summary) ? { summary: raw.summary } : {}) } }
+  }
+  if (raw.kind === 'diagram') {
+    // DL-40：形状不合按 DL-11 整轮拒绝；内容的检查（DL-41）只拒这一块，留给页面在回答到达时做
+    if (!isStr(raw.svg) || !raw.svg.trim() || !isStr(raw.caption) || !raw.caption.trim()) return { ok: false, error: '机制图块要有 svg（内联 SVG 文字）与 caption（一句说明）' }
+    const extra = Object.keys(raw).filter(k => !['kind', 'svg', 'caption'].includes(k))
+    if (extra.length) return { ok: false, error: `机制图块多出 ${extra.join('、')}` }
+    return { ok: true, value: { kind: 'diagram', svg: raw.svg, caption: raw.caption.trim() } }
   }
   if (raw.kind === 'renarrate') {
     // 形状校验只认三个字段；多出的键（可能是事实字段）留给 DL-8 的判别说清原因，这里不吞

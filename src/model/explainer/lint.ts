@@ -4,7 +4,7 @@
  */
 import { invariantsOf, textWidth } from '../contract'
 import type { Issue, ModelIndex } from '../types'
-import { archRefs, lineAt, plainText } from './html'
+import { archRefs, lineAt, plainText, type ArchRef } from './html'
 import { explainerModules, explainerStatus } from './lookup'
 import { BASIS_CHANGE_LABELS, isExplainerFile } from './types'
 
@@ -12,6 +12,15 @@ import { BASIS_CHANGE_LABELS, isExplainerFile } from './types'
 export const COPY_MIN_WIDTH = 8
 const FIELDS = new Set(['summary', 'invariants'])
 const squash = (s: string) => s.replace(/\s+/g, '')
+
+/** EX-8：data-arch 能指向的模块——描述里的模块与系统根（图解与对话里的机制图块共用，DL-41） */
+export const knownModule =
+  (index: ModelIndex) =>
+  (id: string): boolean =>
+    index.pathOf.has(id) && (index.modules.has(id) || id === index.rootId)
+
+/** EX-8、DL-41：HTML / SVG 里指向不存在模块的 data-arch 引用 */
+export const unknownArchRefs = (html: string, known: (id: string) => boolean): ArchRef[] => archRefs(html).filter(r => !known(r.module))
 
 export function explainerIssues(index: ModelIndex): Issue[] {
   const issues: Issue[] = []
@@ -34,6 +43,7 @@ export function explainerIssues(index: ModelIndex): Issue[] {
     if (isExplainerFile(p) && !claimed.has(p))
       issues.push({ severity: 'warning', code: 'explainer.orphan', message: `图解 ${p} 不属于任何模块（EX-1）：文件名用模块 ID，或在模块上写 explainer`, file: p })
   if (!owners.size) return issues
+  const known = knownModule(index)
 
   // EX-8：抄写的候选——每个模块的 summary 与每条不变式（够长的）
   const copies: { text: string; what: string }[] = []
@@ -47,12 +57,11 @@ export function explainerIssues(index: ModelIndex): Issue[] {
     const html = have[path]
     const at = (offset?: number) => ({ file: path, ...(offset !== undefined ? { line: lineAt(html, offset) } : {}) })
     const depth = (index.pathOf.get(id) ?? []).length
+    for (const r of unknownArchRefs(html, known))
+      issues.push({ severity: 'error', code: 'explainer.unknown-module', message: `图解里 data-arch="${r.module}" 指向的模块不存在（EX-8）`, ...at(r.offset) })
     for (const r of archRefs(html)) {
-      const target = index.pathOf.get(r.module)
-      if (!target || (!index.modules.has(r.module) && r.module !== index.rootId)) {
-        issues.push({ severity: 'error', code: 'explainer.unknown-module', message: `图解里 data-arch="${r.module}" 指向的模块不存在（EX-8）`, ...at(r.offset) })
-        continue
-      }
+      if (!known(r.module)) continue
+      const target = index.pathOf.get(r.module)!
       if (r.field !== null && !FIELDS.has(r.field))
         issues.push({ severity: 'warning', code: 'explainer.unknown-field', message: `data-field="${r.field}" 不认识：只能引用 summary 或 invariants（EX-2）`, ...at(r.offset) })
       if (target.length - depth >= 2 && target[depth - 1] === id)
