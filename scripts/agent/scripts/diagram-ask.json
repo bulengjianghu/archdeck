@@ -1,0 +1,20 @@
+{
+  "steps": [
+    { "text": "画一张图讲它怎么运作……" },
+    { "wait": 30 },
+    {
+      "block": {
+        "kind": "answer",
+        "parts": [{ "text": "它对外承诺的是这一句：", "cites": [{ "module": "{{anchor.module}}", "field": "summary" }] }]
+      }
+    },
+    {
+      "block": {
+        "kind": "diagram",
+        "caption": "它与它的第一个子模块",
+        "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 420 160\" font-size=\"13\"><g data-arch=\"{{anchor.module}}\"><rect x=\"10\" y=\"10\" width=\"400\" height=\"140\" rx=\"10\" fill=\"none\" stroke=\"currentColor\"/><text x=\"24\" y=\"32\" fill=\"currentColor\">{{anchor.name}}</text></g><g data-arch=\"{{skeleton.0.children.0.id}}\"><rect x=\"40\" y=\"60\" width=\"160\" height=\"60\" rx=\"8\" fill=\"none\" stroke=\"currentColor\"/><text x=\"120\" y=\"95\" text-anchor=\"middle\" fill=\"currentColor\">{{skeleton.0.children.0.name}}</text></g></svg>"
+      }
+    },
+    { "done": true }
+  ]
+}
