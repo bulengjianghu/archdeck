@@ -1,5 +1,6 @@
 /** E2E 公共步骤：打开项目视图并等画布布局完成（布局在 Worker 中异步完成） */
 import fs from 'node:fs'
+import path from 'node:path'
 import { expect, type Locator, type Page } from '@playwright/test'
 
 /** 打开 `#/p/...`（hash 路由），等结构图出现节点 */
@@ -149,4 +150,42 @@ export async function closeSketchPanel(page: Page) {
   const props = page.getByRole('complementary', { name: '属性' })
   if (await props.count()) await page.locator('.props-toggle').click()
   await expect(props).toHaveCount(0)
+}
+
+const SELF_PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
+
+/**
+ * 在架构台自身（h5p-arch-desk）上新建一个临时设计并打开它的草图；返回清理函数与读 design.yaml。
+ * 清理：还在跑的一轮先停下，删目录（停止前子进程可能已说完、随后追加转录会把目录又建出来——等一下再删一次），
+ * 删 `extra` 里的文件，撤销指纹与拦截记录里这个设计的痕迹。
+ */
+export async function sketchOn(page: Page, design: string, opts: { mount?: string; extra?: readonly string[]; goal?: string } = {}) {
+  const { mount = 'state.desk', extra = [], goal = 'E2E' } = opts
+  const dir = path.join(SELF_PROJECT, 'designs', design)
+  const OWNED = path.join(SELF_PROJECT, 'governance/owned.json')
+  const LEDGER = path.join(SELF_PROJECT, 'governance/ledger.jsonl')
+  const owned0 = fs.readFileSync(OWNED, 'utf8')
+  const restore = async () => {
+    const stop = page.getByTestId('dialogue-stop')
+    if (await stop.isVisible().catch(() => false)) await stop.click().catch(() => {})
+    await new Promise(r => setTimeout(r, 300))
+    fs.rmSync(dir, { recursive: true, force: true })
+    await new Promise(r => setTimeout(r, 1500))
+    fs.rmSync(dir, { recursive: true, force: true })
+    for (const f of extra) fs.rmSync(f, { force: true })
+    restoreOwned(OWNED, owned0, [`designs/${design}/`])
+    if (fs.existsSync(LEDGER)) {
+      const lines = fs.readFileSync(LEDGER, 'utf8').split('\n')
+      const rest = lines.filter(l => !l.includes(`"design":"${design}"`) && !l.includes(`"file":"designs/${design}/`))
+      if (rest.length !== lines.length) fs.writeFileSync(LEDGER, rest.join('\n'))
+    }
+  }
+  // 上一次没清干净（中途被杀）的同名设计先删掉
+  fs.rmSync(dir, { recursive: true, force: true })
+  for (const f of extra) fs.rmSync(f, { force: true })
+  const r = await page.request.post(`./write/h5p-arch-desk/designs`, { data: { id: design, name: `E2E ${design}`, goal, mount } })
+  expect(r.ok()).toBe(true)
+  await openDesk(page, `/p/h5p-arch-desk/d/${design}/sketch`)
+  await expect(page.locator('.sketch-canvas')).toBeVisible()
+  return { restore, dir, yaml: () => fs.readFileSync(path.join(dir, 'design.yaml'), 'utf8') }
 }

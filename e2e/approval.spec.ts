@@ -7,39 +7,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, openDesk, openSketchPanel, restoreOwned } from './helpers'
+import { graphNode, openDesk, openSketchPanel, sketchOn } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
-const OWNED = path.join(PROJECT, 'governance/owned.json')
-const LEDGER = path.join(PROJECT, 'governance/ledger.jsonl')
-
-async function sketchOn(page: Page, design: string, extra: string[] = [], mount = 'state.desk.edit') {
-  const dir = path.join(PROJECT, 'designs', design)
-  const owned0 = fs.readFileSync(OWNED, 'utf8')
-  const restore = async () => {
-    const stop = page.getByTestId('dialogue-stop')
-    if (await stop.isVisible().catch(() => false)) await stop.click().catch(() => {})
-    await new Promise(r => setTimeout(r, 300))
-    fs.rmSync(dir, { recursive: true, force: true })
-    // 停止前子进程可能已说完：服务端随后才追加转录，会把设计目录又建出来——等一下再删一次
-    await new Promise(r => setTimeout(r, 1500))
-    fs.rmSync(dir, { recursive: true, force: true })
-    for (const f of extra) fs.rmSync(f, { force: true })
-    restoreOwned(OWNED, owned0, [`designs/${design}/`])
-    if (fs.existsSync(LEDGER)) {
-      const lines = fs.readFileSync(LEDGER, 'utf8').split('\n')
-      const rest = lines.filter(l => !l.includes(`"design":"${design}"`) && !l.includes(`"file":"designs/${design}/`))
-      if (rest.length !== lines.length) fs.writeFileSync(LEDGER, rest.join('\n'))
-    }
-  }
-  fs.rmSync(dir, { recursive: true, force: true })
-  for (const f of extra) fs.rmSync(f, { force: true })
-  const r = await page.request.post(`./write/h5p-arch-desk/designs`, { data: { id: design, name: `E2E ${design}`, goal: '波 3', mount } })
-  expect(r.ok()).toBe(true)
-  await openDesk(page, `/p/h5p-arch-desk/d/${design}/sketch`)
-  await expect(page.locator('.sketch-canvas')).toBeVisible()
-  return { restore, yaml: () => fs.readFileSync(path.join(dir, 'design.yaml'), 'utf8') }
-}
 
 const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
 const dialogue = (page: Page) => dock(page).getByTestId('dialogue')
@@ -86,7 +56,7 @@ test('用例 9：认可——总览列出全设计改动与影响面，确认后
   test.setTimeout(120_000)
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   const regenerated = path.join(PROJECT, 'modules/zz-e2e-w3-derived.yaml')
-  const { restore, yaml } = await sketchOn(page, 'zz-e2e-w3-accept', [regenerated])
+  const { restore, yaml } = await sketchOn(page, 'zz-e2e-w3-accept', { mount: 'state.desk.edit', extra: [regenerated] })
   try {
     await round(page, '#approval-add 加一个认可')
     // 未保存时「认可」被拒并说明
@@ -161,7 +131,7 @@ test('用例 9：认可——总览列出全设计改动与影响面，确认后
 
 test('用例 10：回到起草——回「起草中」、任务单标「认可已撤回」；改一处再认可，指纹更新、任务单重算', async ({ page }) => {
   test.setTimeout(120_000)
-  const { restore, yaml } = await sketchOn(page, 'zz-e2e-w3-withdraw')
+  const { restore, yaml } = await sketchOn(page, 'zz-e2e-w3-withdraw', { mount: 'state.desk.edit' })
   try {
     await round(page, '#approval-add 加一个认可')
     await save(page)
@@ -197,7 +167,7 @@ test('用例 10：回到起草——回「起草中」、任务单标「认可�
 })
 
 test('放弃：设计面板「放弃设计」二次确认后为「已放弃」、只看；项目卡片不再列出，草图与对话仍可开', async ({ page }) => {
-  const { restore, yaml } = await sketchOn(page, 'zz-e2e-w3-abandon')
+  const { restore, yaml } = await sketchOn(page, 'zz-e2e-w3-abandon', { mount: 'state.desk.edit' })
   try {
     await openSketchPanel(page)
     await page.getByTestId('abandon-design').click()

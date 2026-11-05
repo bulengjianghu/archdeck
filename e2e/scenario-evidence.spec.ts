@@ -19,8 +19,15 @@ test('打开自身的场景：面板有「证据」一节，单击文件在资�
   const side = page.getByTestId('dock-step-side')
   const section = side.locator('.scenario-panel .section').filter({ has: page.locator('h3', { hasText: '证据' }) })
   // 步骤节限高 45%、内部滚动：证据清单在下方，先滚到它
-  await section.evaluate(el => el.scrollIntoView({ block: 'start' }))
-  await expect(section).toBeVisible()
+  // 第二十一轮波 4 再收紧（第二十轮已知偶发）：折叠块可能在上面 count() 之后才渲染、证据一节仍折叠——重试「展开 → 滚到 → 可见」直到成立
+  await expect(async () => {
+    if (await foldSummary.count()) {
+      const details = foldSummary.locator('xpath=..')
+      if ((await details.evaluate(el => (el as unknown as { open: boolean }).open)) !== true) await foldSummary.click()
+    }
+    await section.evaluate(el => el.scrollIntoView({ block: 'start' }))
+    await expect(section).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 20_000 })
   await expect(section.getByRole('button', { name: 'tests/acceptance/run-perspective.test.ts' })).toBeVisible()
   await expect(section.locator('.missing')).toHaveCount(0)
   await section.getByRole('button', { name: 'e2e/run-default.spec.ts' }).click()

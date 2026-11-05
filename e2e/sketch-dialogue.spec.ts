@@ -7,40 +7,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, openDesk, openSketchPanel, query, restoreOwned } from './helpers'
+import { graphNode, openDesk, openSketchPanel, query, sketchOn } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
-const OWNED = path.join(PROJECT, 'governance/owned.json')
-const LEDGER = path.join(PROJECT, 'governance/ledger.jsonl')
-
-/** 在 DeskState 上新建一个临时设计并打开它的草图；返回清理函数 */
-async function sketchOn(page: Page, design: string) {
-  const dir = path.join(PROJECT, 'designs', design)
-  const owned0 = fs.readFileSync(OWNED, 'utf8')
-  const restore = async () => {
-    // 还在跑的一轮先停下（它说完时会往设计目录追加转录），再删目录
-    const stop = page.getByTestId('dialogue-stop')
-    if (await stop.isVisible().catch(() => false)) await stop.click().catch(() => {})
-    await new Promise(r => setTimeout(r, 300))
-    fs.rmSync(dir, { recursive: true, force: true })
-    // 停止前子进程可能已说完：服务端随后才追加转录，会把设计目录又建出来——等一下再删一次
-    await new Promise(r => setTimeout(r, 1500))
-    fs.rmSync(dir, { recursive: true, force: true })
-    restoreOwned(OWNED, owned0, [`designs/${design}/`])
-    if (fs.existsSync(LEDGER)) {
-      const lines = fs.readFileSync(LEDGER, 'utf8').split('\n')
-      const rest = lines.filter(l => !l.includes(`"design":"${design}"`) && !l.includes(`"file":"designs/${design}/`))
-      if (rest.length !== lines.length) fs.writeFileSync(LEDGER, rest.join('\n'))
-    }
-  }
-  // 上一次没清干净（中途被杀）的同名设计先删掉
-  fs.rmSync(dir, { recursive: true, force: true })
-  const r = await page.request.post(`./write/h5p-arch-desk/designs`, { data: { id: design, name: `E2E ${design}`, goal: '波 2', mount: 'state.desk' } })
-  expect(r.ok()).toBe(true)
-  await openDesk(page, `/p/h5p-arch-desk/d/${design}/sketch`)
-  await expect(page.locator('.sketch-canvas')).toBeVisible()
-  return restore
-}
 
 const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
 const dialogue = (page: Page) => dock(page).getByTestId('dialogue')
@@ -81,7 +50,7 @@ const shown = (page: Page) =>
 test('用例 1、DL-20：进入草图画布——对话自动打开并固定、锚点「当前张 DeskState」、缺省「改」；选中面板缺省收起，展开时浮在右侧、画布宽度不变', async ({
   page,
 }) => {
-  const restore = await sketchOn(page, 'zz-e2e-w2-layout')
+  const { restore } = await sketchOn(page, 'zz-e2e-w2-layout')
   try {
     await expect(dock(page).locator('.tab.on:not(.preview)')).toContainText('对话')
     await expect(dialogue(page).getByTestId('anchor-bar')).toContainText('当前张 DeskState')
@@ -108,7 +77,7 @@ test('用例 2、5：合并一轮——标色打号、提议卡「按当前描�
 }) => {
   // 四轮对话加一串页签操作：比单个用例的缺省 60s 长
   test.setTimeout(120_000)
-  const restore = await sketchOn(page, 'zz-e2e-w2-merge')
+  const { restore } = await sketchOn(page, 'zz-e2e-w2-merge')
   try {
     const card = await round(page, '#merge 把 edit 与 versions 合并为编辑会话')
     await expect(graphNode(page, 'state.desk.session')).toBeVisible()
@@ -174,7 +143,7 @@ test('用例 2、5：合并一轮——标色打号、提议卡「按当前描�
 })
 
 test('用例 3、DL-28：AI 回合中画布只读——信息条「AI 正在修改…」，拖框无效；说完后恢复', async ({ page }) => {
-  const restore = await sketchOn(page, 'zz-e2e-w2-busy')
+  const { restore } = await sketchOn(page, 'zz-e2e-w2-busy')
   try {
     await expect(graphNode(page, 'state.desk.writer')).toBeVisible()
     const before = (await shown(page))['state.desk.writer']
@@ -198,7 +167,7 @@ test('用例 3、DL-28：AI 回合中画布只读——信息条「AI 正在修�
 })
 
 test('用例 6、DL-26：第 3 轮之后撤回第 1 轮——第 1 轮碰过的框回到开始前，第 2 轮的不动；第 3 轮也碰过同一个框时先列出并确认', async ({ page }) => {
-  const restore = await sketchOn(page, 'zz-e2e-w2-earlier')
+  const { restore } = await sketchOn(page, 'zz-e2e-w2-earlier')
   try {
     const first = await round(page, '#merge 合并')
     await round(page, '#add 加运行派生')
@@ -224,7 +193,7 @@ test('用例 6、DL-26：第 3 轮之后撤回第 1 轮——第 1 轮碰过的�
 })
 
 test('用例 7：草图里贴白板照片——梳理卡旁「按这张图起草」一键变成一轮提议，可撤回', async ({ page }) => {
-  const restore = await sketchOn(page, 'zz-e2e-w2-photo')
+  const { restore } = await sketchOn(page, 'zz-e2e-w2-photo')
   try {
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64')
     await dialogue(page).getByTestId('dialogue-file').setInputFiles({ name: 'whiteboard.png', mimeType: 'image/png', buffer: png })
@@ -249,7 +218,7 @@ test('用例 8、DL-30、DL-6：起点与模型画布同一层的摆法一致；
   await openDesk(page, '/p/h5p-arch-desk?level=state.desk')
   const model = async (id: string) => (await graphNode(page, id).boundingBox())!
   const [m1, m2] = [await model('state.desk.loading'), await model('state.desk.projection')]
-  const restore = await sketchOn(page, 'zz-e2e-w2-start')
+  const { restore } = await sketchOn(page, 'zz-e2e-w2-start')
   try {
     await expect.poll(async () => Object.keys(await shown(page)).length).toBeGreaterThan(10)
     // 起点算好（异步）后与模型画布同向：左右、上下的先后一致
@@ -275,7 +244,7 @@ test('用例 8、DL-30、DL-6：起点与模型画布同一层的摆法一致；
 })
 
 test('改 / 问切换、DL-21：「问」只回答不改图；AI 想挪已有的框整轮拒绝；存为设计说明——预览标签标「目标态 · 未实现」、设计面板有条目', async ({ page }) => {
-  const restore = await sketchOn(page, 'zz-e2e-w2-ask')
+  const { restore } = await sketchOn(page, 'zz-e2e-w2-ask')
   try {
     await dialogue(page).getByRole('button', { name: '问', exact: true }).click()
     await expect(dialogue(page).getByTestId('mode-badge')).toHaveText('只问')

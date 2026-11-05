@@ -17,6 +17,9 @@ exports[`DL-14 上下文包（三种锚点） > 无选中：系统根与第二�
     "一行一个 JSON：{"type":"text","text":…} 文本片段、{"type":"block","block":…} 结构化块、{"type":"done"} 结束。",
     "问答卡：{"kind":"answer","parts":[{"text":…,"cites":[{"module":…,"field":…}],"inferred":true?}]}；field 取 summary / responsibility / invariants / principle / interfaces / relations / explainer，原文由架构台填，不要抄写；推断出来的段写 inferred: true。",
     "收到图片时回梳理卡：{"kind":"digest","groups":{"matched":[],"mismatched":[],"extra":[],"missing":[]}}，条目 {"label":…,"modules":[…]?,"note":…?,"uncertain":true?}——对上的 / 一个框对应代码里多个模块的 / 画了但代码里没有依赖的 / 系统有而没画的。",
+    "机制图块：用户要图，或讲拆分 / 合并之后怎么运作时，在问答卡之外再给一块 {"kind":"diagram","svg":"<svg …>…</svg>","caption":"一句说明"}——一张自包含的内联 SVG：必须写 viewBox，宽不超过 640（资料区一列），宽高比在 1:4 到 4:1，不超过 64 KB；不许 <script>、on… 事件属性、javascript:、外部链接与 <foreignObject>；颜色用 currentColor 或写死的中性色。",
+    "图里的模块用 data-arch="<模块 ID>" 标出（单击在画布上选中），ID 必须在描述里（草图里：在当前张 sketch.current 里或就是挂载点）；不合格的图整块被拒，文字照常显示。",
+    "示例（一行）：{"type":"block","block":{"kind":"diagram","caption":"拆分后命令先进会话、再由施用者落盘","svg":"<svg xmlns=\\"http://www.w3.org/2000/svg\\" viewBox=\\"0 0 400 120\\"><g data-arch=\\"<模块 ID>\\"><rect x=\\"10\\" y=\\"30\\" width=\\"140\\" height=\\"60\\" rx=\\"8\\" fill=\\"none\\" stroke=\\"currentColor\\"/><text x=\\"80\\" y=\\"65\\" text-anchor=\\"middle\\" fill=\\"currentColor\\">会话</text></g></svg>"}}",
   ],
   "project": {
     "id": "s",
@@ -85,6 +88,9 @@ exports[`DL-14 上下文包（三种锚点） > 模块锚点：骨架字段（�
     "一行一个 JSON：{"type":"text","text":…} 文本片段、{"type":"block","block":…} 结构化块、{"type":"done"} 结束。",
     "问答卡：{"kind":"answer","parts":[{"text":…,"cites":[{"module":…,"field":…}],"inferred":true?}]}；field 取 summary / responsibility / invariants / principle / interfaces / relations / explainer，原文由架构台填，不要抄写；推断出来的段写 inferred: true。",
     "收到图片时回梳理卡：{"kind":"digest","groups":{"matched":[],"mismatched":[],"extra":[],"missing":[]}}，条目 {"label":…,"modules":[…]?,"note":…?,"uncertain":true?}——对上的 / 一个框对应代码里多个模块的 / 画了但代码里没有依赖的 / 系统有而没画的。",
+    "机制图块：用户要图，或讲拆分 / 合并之后怎么运作时，在问答卡之外再给一块 {"kind":"diagram","svg":"<svg …>…</svg>","caption":"一句说明"}——一张自包含的内联 SVG：必须写 viewBox，宽不超过 640（资料区一列），宽高比在 1:4 到 4:1，不超过 64 KB；不许 <script>、on… 事件属性、javascript:、外部链接与 <foreignObject>；颜色用 currentColor 或写死的中性色。",
+    "图里的模块用 data-arch="<模块 ID>" 标出（单击在画布上选中），ID 必须在描述里（草图里：在当前张 sketch.current 里或就是挂载点）；不合格的图整块被拒，文字照常显示。",
+    "示例（一行）：{"type":"block","block":{"kind":"diagram","caption":"拆分后命令先进会话、再由施用者落盘","svg":"<svg xmlns=\\"http://www.w3.org/2000/svg\\" viewBox=\\"0 0 400 120\\"><g data-arch=\\"<模块 ID>\\"><rect x=\\"10\\" y=\\"30\\" width=\\"140\\" height=\\"60\\" rx=\\"8\\" fill=\\"none\\" stroke=\\"currentColor\\"/><text x=\\"80\\" y=\\"65\\" text-anchor=\\"middle\\" fill=\\"currentColor\\">会话</text></g></svg>"}}",
   ],
   "project": {
     "id": "s",
@@ -155,6 +161,9 @@ exports[`DL-14 上下文包（三种锚点） > 步骤锚点：两端模块的�
     "一行一个 JSON：{"type":"text","text":…} 文本片段、{"type":"block","block":…} 结构化块、{"type":"done"} 结束。",
     "问答卡：{"kind":"answer","parts":[{"text":…,"cites":[{"module":…,"field":…}],"inferred":true?}]}；field 取 summary / responsibility / invariants / principle / interfaces / relations / explainer，原文由架构台填，不要抄写；推断出来的段写 inferred: true。",
     "收到图片时回梳理卡：{"kind":"digest","groups":{"matched":[],"mismatched":[],"extra":[],"missing":[]}}，条目 {"label":…,"modules":[…]?,"note":…?,"uncertain":true?}——对上的 / 一个框对应代码里多个模块的 / 画了但代码里没有依赖的 / 系统有而没画的。",
+    "机制图块：用户要图，或讲拆分 / 合并之后怎么运作时，在问答卡之外再给一块 {"kind":"diagram","svg":"<svg …>…</svg>","caption":"一句说明"}——一张自包含的内联 SVG：必须写 viewBox，宽不超过 640（资料区一列），宽高比在 1:4 到 4:1，不超过 64 KB；不许 <script>、on… 事件属性、javascript:、外部链接与 <foreignObject>；颜色用 currentColor 或写死的中性色。",
+    "图里的模块用 data-arch="<模块 ID>" 标出（单击在画布上选中），ID 必须在描述里（草图里：在当前张 sketch.current 里或就是挂载点）；不合格的图整块被拒，文字照常显示。",
+    "示例（一行）：{"type":"block","block":{"kind":"diagram","caption":"拆分后命令先进会话、再由施用者落盘","svg":"<svg xmlns=\\"http://www.w3.org/2000/svg\\" viewBox=\\"0 0 400 120\\"><g data-arch=\\"<模块 ID>\\"><rect x=\\"10\\" y=\\"30\\" width=\\"140\\" height=\\"60\\" rx=\\"8\\" fill=\\"none\\" stroke=\\"currentColor\\"/><text x=\\"80\\" y=\\"65\\" text-anchor=\\"middle\\" fill=\\"currentColor\\">会话</text></g></svg>"}}",
   ],
   "project": {
     "id": "s",

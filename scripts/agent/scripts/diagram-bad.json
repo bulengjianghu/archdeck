@@ -1,0 +1,20 @@
+{
+  "steps": [
+    { "text": "画一张图……" },
+    { "wait": 30 },
+    {
+      "block": {
+        "kind": "answer",
+        "parts": [{ "text": "这张图不合格：图被拒，文字照常显示。" }]
+      }
+    },
+    {
+      "block": {
+        "kind": "diagram",
+        "caption": "不合格的图",
+        "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 400 160\"><script>parent.postMessage('x','*')</script><image href=\"https://example.com/x.png\" width=\"40\" height=\"40\"/><g data-arch=\"no.such.module\"><rect x=\"10\" y=\"10\" width=\"100\" height=\"40\"/></g></svg>"
+      }
+    },
+    { "done": true }
+  ]
+}
