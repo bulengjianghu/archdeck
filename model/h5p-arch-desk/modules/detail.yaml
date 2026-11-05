@@ -246,7 +246,7 @@ modules:
     name: 设计面板
     summary: 展示设计目标、本轮变更与评审意见，并可记录意见
     parent: present.panel
-    responsibility: 设计版本与提交版本的根层：设计目标与范围、定稿结论的 ADR 链接（E7）、本轮做了什么、待评审确认的问题、按实体分组的变更清单（点击跳转，删除项只列出；与提交版本共用 ChangeList）、各轮评审意见与轮次切换、「记录评审意见」（B2）；提交版本为提交说明与变更清单（E5、E6）；设计的各张草图（挂载点、模块数、推出 / 脏标记，点击切张）与「改骨架」（DesignSketches，草图面板里也用，F-2）。
+    responsibility: 设计版本与提交版本的根层：设计目标与范围、定稿结论的 ADR 链接（E7）、本轮做了什么、待评审确认的问题、按实体分组的变更清单（点击跳转，删除项只列出；与提交版本共用 ChangeList）、各轮评审意见与轮次切换、「记录评审意见」（B2）；提交版本为提交说明与变更清单（E5、E6）；设计的各张草图（挂载点、模块数、推出 / 脏标记，点击切张）与「改骨架」（DesignSketches，草图面板里也用，F-2）。设计面板的「放弃设计」（DL-38）：起草中与已认可时可放弃，二次确认后改「已放弃」——任务单作废、项目卡片不再列出，草图、对话、设计说明保留。
     codeRefs: [src/components/panel/DesignSection.vue, src/components/panel/DesignSketches.vue, src/components/panel/CommitSection.vue, src/components/panel/ChangeList.vue]
   - id: present.panel.content
     name: 内容组件
@@ -620,6 +620,12 @@ relations:
   - {id: rel.ad.system-read, from: present.panel.system, to: state.desk.projection, type: queries, description: 系统面板向视图派生（核心与 desk.run）取：读索引、层次视图与版本, purpose: 取索引、层次视图与版本信息 }
   - {id: rel.ad.system-act, from: present.panel.system, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 系统面板交给 dispatch 与操作：选中模块或问题, purpose: 跳到选中的模块或问题 }
   - { id: rel.ad.projection-names, from: state.desk.projection, to: model.pipeline.indexer, type: queries, description: 视图派生（核心与 desk.run）向 Indexer 取：派生场景列表时调用 triggerOf 取每个场景的触发者, purpose: 取每个场景的触发者 }
+  - id: rel.pd.abandon-ask
+    from: present.panel.design
+    to: present.version.actions
+    type: commands
+    description: '设计面板的「放弃设计」借动作区的二次确认对话框（ask）问人，确认后才放弃'
+    purpose: '放弃前二次确认'
 
 interfaces:
   - id: if.model.loadModel

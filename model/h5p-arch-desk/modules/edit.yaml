@@ -17,6 +17,7 @@ modules:
       相对当前版本的偏差 sketchCheck / checkSketches（缺模块、结构字段、封闭子树多出、血缘未落实、给了基线时范围内删掉的仍在、关系与接口的对应，应用认可偏差，X2、X4）；
       四类交互与端口（ADR-0029）：关系按两端与类型对应——相同，或迁移期的未分类对查询 / 委托视为对应（X23）；草图声明的端口实现者在版本的 implementedBy 与代码事实的实现者（K5c，给了时）里都没有即偏差 sketch.missing-implementer（X24）；相对基线另比关系的机制（via）、同步性、拉取与接口的实现者（写了才比，X17），相对当前版本不比类型与机制；
       归档判定 archiveVerdict 与草图覆盖的模块 sketchModules（X3，交给确认层写确认记录）；人拥有文件的指纹比对 compareOwned（X6）。输入是草图定义与模型索引，不碰文件系统。
+      设计的认可与状态迁移（approval.ts，DL-32–DL-35）：07 §3.1 迁移表（designTransition：每行去向或拒绝原因，「评审中」按起草中迁移、不再产生）、锁定判定（editLock）、认可指纹比对（approvalDrift：改了 / 新加 / 删了的草图，没有认可记录即不一致，归档第三关的前置）。
     principle: |
       - **一个函数换对象**：相对基线（我改了什么）与相对当前版本（实现还差什么）共用 compareSketch，只差对象版本与要不要比文字；页面、命令行与交给 AI 的摘要同一套结果。
       - **血缘一律指向基线 ID**：读血缘不必沿链求闭包；前缀级联推出的子树改名、合并带走的来源被「合并 / 移动」吸收，不另列。
@@ -198,6 +199,7 @@ modules:
       saveSketch——持久草图 intent/<ID>.yaml 单张写回（同一套指纹、校验与合并）；设计的一张转给 saveDesignSketches。
       createDesign——设计 ID 合法且目录不存在；写 design.yaml（名称、目标、status: draft、base.commit = 仓库 HEAD，读不到时省略）与草图：给挂载点时在这里从基线（HEAD 那一版描述，没有时为当前版本）复制底稿（不写 layout：画布按中心区宽度排一次，X22），与「相对基线」读的是同一份（X18）；全部登记指纹。
       端点由 ModelSource 插件挂载：POST /write/<项目>/sketch（持久草图）、/write/<项目>/designs/<设计>/sketch（设计的一张）、/write/<项目>/designs/<设计>/sketches（按设计）、/write/<项目>/designs（新建），只收同源 JSON（B5）。
+      设计状态（designStatus.ts，DL-33、DL-34）：POST /write/<项目>/designs/<设计>/status——认可时比对页面读到的各张草图指纹并在磁盘草图上重跑校验，写 status: accepted 与 approval（日期、各张草图指纹）；回到起草去掉指纹、记 withdrawnAt；放弃只改状态；去向与拒绝原因问意图的迁移表。已认可 / 已实现 / 已放弃的设计不再接受草图写回（409）。
     principle: |
       - **注释的限度**（负责人裁决接受）：注释挂在节点上，节点没变注释就在；改过的标量保留其行尾注释，删掉的条目注释随之消失，新条目没有注释。写进 04 §3.10。
       - **服务端再校验一遍**：页面的即时校验只是提示，写入端点是最后一道；两边调用同一个 validateSketch，结果一致。
@@ -284,6 +286,7 @@ modules:
     responsibility: |
       信息条的动作区（F-61）：提交版本与设计轮次为「说明」；草图（打开即编辑）为保存（⌘S）、撤销 / 重做图标、保存并交给 AI（没有未保存改动时为「交给 AI」；全设计有格式错误或语义提示时禁用并悬停说明原因，F-52）、说明（全设计变更清单按血缘分组的弹层，F-53）、退出（有未保存改动时三选保存 / 放弃 / 取消，回到进入草图之前的版本，#20b）；保存结果与失败原因的提示；
       文件已在外部改动时整个动作区换成横幅「重新加载并重放 / 放弃本次改动」，重放有失败时列出失败的操作；窄屏只剩图标。另含全设计变更清单的分组组件（ChangeGroups，对比弹层共用）与草图下共用的确认 / 三选对话框（useEditDialog）。
+      设计的草图上（波 3，DL-38）：保存 · 放弃（本次未保存的改动）· 撤销 / 重做 · 校验（全设计的格式错误与语义提示）· 认可 ▾——先开认可前总览（AcceptDialog：带号的改动、影响面按当前描述估、涉及的场景），确认才写；下拉保留「交给 AI 展开一轮」作可选预览；已认可时只剩「回到起草」（二次确认）；已实现 / 已放弃只看。持久草图仍是「保存并交给 AI」。
     codeRefs: [src/components/infobar/ActionZone.vue, src/components/infobar/AcceptDialog.vue, src/components/infobar/ChangeGroups.vue, src/components/edit/EditDialog.vue, src/components/edit/useEditDialog.ts, src/components/edit/leave.ts]
   - id: present.version.compare
     name: 对比区
