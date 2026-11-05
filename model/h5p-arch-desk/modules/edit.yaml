@@ -202,7 +202,7 @@ modules:
       - **注释的限度**（负责人裁决接受）：注释挂在节点上，节点没变注释就在；改过的标量保留其行尾注释，删掉的条目注释随之消失，新条目没有注释。写进 04 §3.10。
       - **服务端再校验一遍**：页面的即时校验只是提示，写入端点是最后一道；两边调用同一个 validateSketch，结果一致。
       - **只写草图**：路径只由项目、草图 ID、设计 ID 与挂载点拼出（isProjectId），不接受任意路径；改名与删除只在本设计的 sketches/ 下；AI 生成的文件一律不写。
-    codeRefs: [vite/writeSketch.ts]
+    codeRefs: [vite/writeSketch.ts, vite/designNotes.ts]
 
   # ── 呈现层：草图画布、草图面板与信息条三区（ADR-0025）──
   # present.sketch 是第二级模块（名称、kind、职责属骨架，设计 sketch-v2 晋升后写在 intent/skeleton.yaml）；这里只补实现原理与子模块（X1）
