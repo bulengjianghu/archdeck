@@ -21,7 +21,7 @@ model/<项目>/
   source-ignore.yaml       忽略清单 sourceIgnore：不属于任何模块的源码文件（§3.7）
   rules.yaml               架构规则 rules：架构师的意图，AI 重新生成时不改动（§3.8）
   reviewed.yaml            确认记录 reviewed：架构师确认过哪些模块、确认时的指纹与摘要，AI 重新生成时不改动（§3.9）
-  designs/<设计>/          设计版本（§5）：sketches/<挂载点>.yaml（架构师的草图，每个挂载点一张）+ changes.json（改动项编号表，页面维护、不登记指纹，目标态）+ notes/（设计说明，AI 拥有，目标态）+ design.yaml + r<N>/（可选的展开快照，每轮的说明在 r<N>/revision.yaml），读取当前版本时跳过
+  designs/<设计>/          设计版本（§5）：sketches/<挂载点>.yaml（架构师的草图，每个挂载点一张）+ changes.json（改动项编号表，页面维护、不登记指纹）+ notes/（设计说明，AI 拥有）+ design.yaml + r<N>/（可选的展开快照，每轮的说明在 r<N>/revision.yaml），读取当前版本时跳过
   governance/              基线 baseline.json、拦截记录 ledger.jsonl、人拥有文件的指纹 owned.json，由命令行与 agent 接口写，不属于描述，读取时跳过（§4）
 ```
 
@@ -29,7 +29,7 @@ model/<项目>/
 
 | 拥有者 | 文件 | 页面 | 指纹 |
 |---|---|---|---|
-| AI（按代码生成） | `system.yaml`、`modules/`（骨架之下）、`actors.yaml`、`scenarios/`、`explainers/`（图解，§3.11）；设计版本各轮快照 `designs/<设计>/r<N>/`，含该轮说明 `revision.yaml`（E8）；设计说明 `designs/<设计>/notes/` 与讲法要求 `explainers/<模块 ID>.notes.md`（目标态 · 第二十一轮，ADR-0063） | 只读（notes / 讲法要求由架构台在对话里写入） | — |
+| AI（按代码生成） | `system.yaml`、`modules/`（骨架之下）、`actors.yaml`、`scenarios/`、`explainers/`（图解，§3.11）；设计版本各轮快照 `designs/<设计>/r<N>/`，含该轮说明 `revision.yaml`（E8）；设计说明 `designs/<设计>/notes/`（第二十一轮波 2）与讲法要求 `explainers/<模块 ID>.notes.md`（第二十一轮波 1，ADR-0063） | 只读（notes / 讲法要求由架构台在对话里写入） | — |
 | 人（架构师、负责人） | 草图：`intent/*.yaml`（骨架等持久草图）、`designs/<设计>/sketches/*.yaml`；`rules.yaml`（AI 重新生成时不改动，§3.8）；`source-ignore.yaml`（忽略项）；`designs/<设计>/design.yaml`（目标、状态、基线、ADR、认可偏差 `accepted`、评审意见 `revisions[].feedback`——不含每轮说明，E8）；`reviewed.yaml`（确认记录，§3.9） | 只追加：例外、忽略项、评审意见（该轮没有条目时新建，B2）、认可偏差；确认记录追加或按模块更新（Z1）；归档 / 晋升改设计状态、晋升时整份替换持久草图；草图在画布编辑后按设计整份覆盖、新建设计，级联改名与删除只限 `designs/<设计>/sketches/*`（B6、B7、X7）；其余由人编辑。`designs/<设计>/changes.json` 由页面随编辑会话维护（手改也可以，DL-3），**不登记指纹** | 记在 `governance/owned.json`：人改完后 `npm run arch -- own` 登记，页面写入自动更新，`lint:model` 不符即报错 `owned.changed`；`changes.json`、`notes/`、`*.notes.md` 不在指纹清单里 |
 | 命令行与 agent 接口 | `governance/` | 只读 | — |
 
@@ -496,25 +496,30 @@ reviewed:
 
 全部人拥有，纳入指纹门禁（§4）。
 
-#### 改动项编号表（`changes.json`，DL-3，目标态 · 第二十一轮）
+#### 改动项编号表（`changes.json`，DL-3、DL-24）
 
-对话起草（ADR-0063）里**一处改动一个号，图上和清单里是同一个号**：相对设计基线的变更按血缘聚合为改动项（X11、X17），编号记在 `designs/<设计>/changes.json`——设计目录下**页面维护**的小文件：
+对话起草（ADR-0063）里**一处改动一个号，图上和清单里是同一个号**：相对设计基线的变更按血缘聚合为改动项（X11、X17、DL-23），编号记在 `designs/<设计>/changes.json`——设计目录下**页面维护**的小文件：
 
-- **不登记指纹**：它由页面随编辑会话维护，不属于人拥有指纹门禁（X6 的清单不含它），`lint:model` 不校验它的内容；手改也可以，页面下次写入时按当前内容续编。
-- **字段建议**：`nextNumber`（下一个可用的号）与 `items`——每项 `n`（号）、`kind`（六类：add / modify / merge / split / move / remove）、`summary`（一句话）、`round`（第几轮）、`by`（`ai` / `human`）、`withdrawnAt?`（撤回时间；撤回的项留在表里，不清掉）。
-- **编号按产生顺序给、撤回留空不复用**：撤回只是标 `withdrawnAt`，它的 `n` 永不再分配——图上的「#n」徽标、「改动」页签的行与 AI 上下文里的号是同一个号，复用会让历史对话里的「#3」指错东西。
-- AI 的上下文包里带着这张表，所以对话里可以直接说「撤回 #3」。
+- **不登记指纹**：它由页面随编辑会话维护，不属于人拥有指纹门禁（X6 的清单不含它），`lint:model` 不校验它的内容；手改也可以，页面读入时丢掉形状不对的条目、`nextNumber` 不小于已用的最大号 + 1。
+- **何时写**：保存草图时一并写（与草图同一次写入）；没保存就放弃改动的号不落盘（DL-24）。
+- **字段**：`nextNumber`（下一个可用的号）与 `items`——每项 `n`（号）、`key`（改动项的稳定键 `<种类>:<实体>:<ID>`，页面按它认号，DL-23）、`kind`（`added` / `changed` / `merged` / `split` / `renamed` / `moved` / `removed`，与版本对比同一枚举；六类计数里改 ID 并入修改）、`summary`（一句话）、`round`（第几轮：AI 的轮序号，人的改动记当时已有几轮，0 = 第一轮之前）、`by`（`ai` / `human`）、`withdrawnAt?`（撤回时间；撤回的项留在表里，不清掉）。
+- **编号按产生顺序给、撤回留空不复用**：一项改动不在了（撤回、撤销、放弃、手改掉）就标 `withdrawnAt`，它的 `n` 永不再分配；同一处改动撤回后再做出来得新号——图上的「#n」徽标、「改动」页签的行与 AI 上下文里的号是同一个号，复用会让历史对话里的「#3」指错东西。
+- AI 的上下文包里带着带号的清单（DL-14），所以对话里可以直接说「撤回 #3」（改动块的 `withdraw`，DL-21）。
 
 ```json
 {
   "nextNumber": 4,
   "items": [
-    { "n": 1, "kind": "merge", "summary": "edit 与 versions 合并为编辑会话", "round": 1, "by": "ai" },
-    { "n": 2, "kind": "add", "summary": "新增 运行派生", "round": 1, "by": "ai" },
-    { "n": 3, "kind": "move", "summary": "视图派生（原 files）", "round": 1, "by": "human", "withdrawnAt": "2026-11-05T10:00:00.000Z" }
+    { "n": 1, "key": "merged:module:state.desk.session", "kind": "merged", "summary": "合并 编辑中的草图、版本 为 编辑会话", "round": 1, "by": "ai" },
+    { "n": 2, "key": "added:module:state.desk.derived", "kind": "added", "summary": "新增 运行派生", "round": 2, "by": "ai" },
+    { "n": 3, "key": "renamed:module:state.desk.persist", "kind": "renamed", "summary": "改 ID 写入 为 persist", "round": 2, "by": "human", "withdrawnAt": "2026-11-05T10:00:00.000Z" }
   ]
 }
 ```
+
+#### 设计说明（`notes/`，DL-10、DL-31）
+
+对话里好的回答可「存为设计说明」：`designs/<设计>/notes/<标题>.md`（AI 拥有、不登记指纹），第一行 `# 标题`，第二行引用行写状态与出处 `> 目标态 · 未实现 · 模块 <ID> · <时间>`，之后是正文（问答卡的段落，引用的原文以引用行附在段后，推断的段前标「（推断）」）。辅助栏以预览标签打开、标「目标态 · 未实现」；实现后作为该模块题解的底稿；随设计归档原样保留。
 
 #### 示例
 
@@ -721,8 +726,8 @@ npm run arch -- baseline --project <项目>   # 写 model/<项目>/governance/ba
 ```text
 model/<项目>/designs/<设计 ID>/
   sketches/<挂载点>.yaml         架构师的草图（§3.10，人拥有），每个挂载点一张；版本切换中排在 r1 之前
-  changes.json                   改动项编号表（§3.10「改动项编号表」，页面维护、不登记指纹，目标态）
-  notes/                         设计说明（AI 拥有，目标态）
+  changes.json                   改动项编号表（§3.10「改动项编号表」，页面维护、不登记指纹）
+  notes/                         设计说明（§3.10「设计说明」，AI 拥有）
   design.yaml                    人拥有：目标、状态、认可（含各张草图指纹）、基线、ADR、认可偏差、各轮的评审意见
   r1/   system.yaml、intent/、modules/…、revision.yaml   第 1 轮（可选的展开快照）：AI 从当前版本完整复制后按草图扩展；revision.yaml 为本轮说明（AI 拥有）
   r2/   …                        第 2 轮：从上一轮完整复制后按评审意见修改
