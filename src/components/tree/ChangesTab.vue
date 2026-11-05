@@ -217,6 +217,13 @@ watch(
 .danger-link {
   color: var(--danger);
 }
+/* DL-34：锁定时撤回变灰 */
+.danger-link:disabled,
+.withdraw:disabled {
+  color: var(--text-3);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 .items {
   list-style: none;
   margin: 0;

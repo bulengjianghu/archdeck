@@ -142,6 +142,7 @@ const OUTPUT = {
     '示例（一行）：{"type":"block","block":{"kind":"edit","summary":"合并 A 与 B 为编辑会话","ops":[{"op":"merge","sketch":"<sketch.mount>","ids":["<模块 ID>","<模块 ID>"],"name":"编辑会话","id":"session"}]}}',
     '改动块：{"kind":"edit","summary":"这一轮改了什么（一句话）","ops":[…],"withdraw":[号]?}；ops 是设计级编辑操作（与架构台编辑器同一族），一轮的全部操作在你说完时一次性应用为一步，任一条做不成整轮不落。',
     '可用操作：merge {sketch, ids, name, id}、split {sketch, id, parts:[{name,id}]}、demote {sketch, id, target}、promote {sketch, id}、rename {sketch, id, newId}、remove {sketch, id}、edit {sketch, edit}；edit 里：addModule {parent, name, id?, kind?}、updateModule {id, patch}、connect {from, to, type, description?}、updateRelation {id, patch}、removeRelation {id}、addInterface {owner, name, signature?}、setAbstraction {text}。sketch 是挂载点（sketch.mount）。',
+    '单张操作也要写 op，包在 edit 里：例 {"op":"edit","sketch":"<挂载点>","edit":{"op":"addModule","parent":"<挂载点>","name":"认可","id":"approval"}}；连线 {"op":"edit","sketch":"<挂载点>","edit":{"op":"connect","from":"<挂载点>.approval","to":"<挂载点>.session","type":"queries"}}（新框的完整 ID = 父 ID + . + id）。',
     '不许出位置类操作（moveNode、relabel、autoArrange）：已有的框只有人能动，新框由架构台按规则安放。撤回某一项写在 withdraw 里（号见 sketch.changes），不要自己拼逆向操作。',
     '只回答不改图时照常回问答卡（answer）；收到图片时先回梳理卡（digest）。',
   ],

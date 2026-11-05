@@ -65,6 +65,11 @@ function withdraw() {
 </template>
 
 <style scoped>
+.link:disabled {
+  color: var(--text-3);
+  cursor: not-allowed;
+}
+
 .card {
   padding: 8px 10px;
   border: 1px solid var(--border);
