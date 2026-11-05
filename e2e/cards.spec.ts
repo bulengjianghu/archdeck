@@ -6,17 +6,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { openDesk, query, waitSettled } from './helpers'
 
-/** 元素的实际底色：自己透明时取最近的不透明祖先 */
-const EFFECTIVE_BG = `(sel) => {
-  let el = document.querySelector(sel)
-  while (el) {
-    const bg = getComputedStyle(el).backgroundColor
-    if (bg && bg !== 'transparent' && !/rgba\\(.*,\\s*0\\)$/.test(bg)) return bg
-    el = el.parentElement
-  }
-  return getComputedStyle(document.body).backgroundColor
-}`
-
 async function rect(page: Page, sel: string) {
   const b = await page.locator(sel).first().boundingBox()
   expect(b, sel).not.toBeNull()

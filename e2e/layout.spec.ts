@@ -57,7 +57,9 @@ test('WS-1、WS-3（第二十轮 §4 改写）：顶栏拉通在双栏之上；�
   await page.getByRole('button', { name: '资料', exact: true }).click()
   await expect(tabs(page)).toHaveCount(1)
 })
-test('WS-2、WS-3、WS-9（第二十轮 §4 改写）：资料区在时抽屉浮着、隐藏资料区后挤压；× 与「▤ 属性」关闭 / 打开；「专注」收起导航与抽屉再恢复', async ({ page }) => {
+test('WS-2、WS-3、WS-9（第二十轮 §4 改写）：资料区在时抽屉浮着、隐藏资料区后挤压；× 与「▤ 属性」关闭 / 打开；「专注」收起导航与抽屉再恢复', async ({
+  page,
+}) => {
   await openDesk(page, '/p/media-web-player?level=kit&sc=sc.command')
   await expect(dock(page)).toBeVisible()
   // 运行视角抽屉被自动收起；先手动打开
@@ -159,7 +161,9 @@ test('WS-8（第二十轮 §4 改写）：资料区不跟随选中——选中�
   const before = await tabs(page).allInnerTexts()
   // 运行视角：抽屉被自动收起，步骤节在辅助栏（点文件后激活的是源代码标签，点回时序图）
   await expect(props(page)).toHaveCount(0)
-  await dock(page).getByRole('tab', { name: /时序图/ }).click()
+  await dock(page)
+    .getByRole('tab', { name: /时序图/ })
+    .click()
   await expect(dock(page).getByTestId('dock-step-side')).toBeVisible()
   await page.getByRole('button', { name: /下一步/ }).click()
   // 图例展开时叠在画布右上，会盖住那里的节点（L48）

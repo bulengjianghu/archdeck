@@ -9,6 +9,8 @@ test('打开自身的场景：面板有「证据」一节，单击文件在资�
   // ADR-0060：证据是核对卡的清单，在「证据与清单」折叠块里（面板在辅助栏步骤节，抽屉里那份不是它）
   const side2 = page.getByTestId('dock-step-side')
   const foldSummary = side2.locator('[data-testid="check-lists-fold"]').first()
+  // 第二十一轮波 1 绕开（第二十轮缺陷 02-review §2.5）：步骤节晚于抽屉渲染时，不等就 count() 会跳过展开、证据一节保持折叠——先等场景面板出现
+  await expect(side2.locator('.scenario-panel')).toBeVisible()
   if (await foldSummary.count()) {
     const details = foldSummary.locator('xpath=..')
     if ((await details.evaluate(el => (el as unknown as { open: boolean }).open)) !== true) await foldSummary.click()

@@ -42,7 +42,10 @@ test('无证据（无承载）的步骤：时序图消息带「?」，场景面�
   await openDesk(page, '/p/h5player?sc=sc.timeshift-leg-switch')
   await openPropsDrawer(page)
   await expect(page.locator('svg .no-evidence').first()).toBeVisible({ timeout: 20_000 })
-  const section = page.getByTestId('dock-step-side').locator('.scenario-panel .section').filter({ has: page.locator('h3', { hasText: '证据' }) })
+  const section = page
+    .getByTestId('dock-step-side')
+    .locator('.scenario-panel .section')
+    .filter({ has: page.locator('h3', { hasText: '证据' }) })
   await expect(section).toContainText(/无证据 [1-9]/)
   await page.getByRole('button', { name: /^运行 · / }).click()
   await expect(page.locator('.scenario-list .item .unevidenced').first()).toHaveText(/\? \d+/)
