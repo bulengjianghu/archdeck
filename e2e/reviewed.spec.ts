@@ -72,6 +72,7 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
     await expect(panel).toContainText('自上次确认以来的改动')
 
     // 返工清单多一条「需复核」
+    if (!(await page.locator('.nav-area').isVisible())) await page.getByRole('button', { name: '导航树', exact: true }).click()
     await page.getByRole('tab', { name: /问题/ }).click()
     await expect(page.locator('.nav-tree')).toContainText('需复核：描述写入')
     await page.getByRole('tab', { name: '模块' }).click()

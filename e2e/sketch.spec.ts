@@ -5,7 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
-import { openDesk, restoreOwned, switchVersion } from './helpers'
+import { openDesk, restoreOwned, switchVersion, closeNav } from './helpers'
 
 const DESIGN = path.resolve(import.meta.dirname, '../model/h5p-arch-desk/designs/phase2-dynamic')
 const EXTRA = path.join(DESIGN, 'r4/modules/zz-e2e-deviation.yaml')
@@ -45,6 +45,7 @@ test('X4：r4 与草图一致；故意制造偏差（封闭子树多出子模块
     await expect(item.first()).toHaveClass(/error/)
     fs.rmSync(EXTRA)
     await expect(page.locator('.issue-list .item', { hasText: '草图偏差' })).toHaveCount(0)
+    await closeNav(page) // 导航浮层盖着 ⚠ 胶囊，下一个动作在画布上
 
     // 提醒级偏差：r1 缺草图的接口 if.state.transition；在 r1 上认可它
     await openDesk(page, '/p/h5p-arch-desk/d/phase2-dynamic/r1')

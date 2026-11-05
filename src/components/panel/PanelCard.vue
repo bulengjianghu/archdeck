@@ -3,10 +3,10 @@
  * 属性栏的一张卡片（PC-1、PC-2，ADR-0053）：卡头单击收起 / 展开，收起时也给结论（summary）；
  * open 是缺省展开态（核对卡由「有没有 ⚠ 行」推出，代码事实晚到时随之更新），用户单击卡头后以用户的为准；
  * 换选中时面板整体重建，展开态不跨选中保持（V15）。注入 panelUnfold 为真时（单测）全部展开。
+ * 第二十轮读先方案：理解卡搬去辅助栏（ModuleDoc），运行信息改在运行视角右栏的步骤节（V6 新家）。
  * 卡头「小号粗标题 ▾」、结论靠右，没有底色与分隔线（CD-5）；卡片外观与间距由属性列统一给（CD-1、CD-2，Panel）。
  */
 import { computed, inject, ref, watch, type Ref } from 'vue'
-import { RUN_FIRST } from './related'
 
 const props = withDefaults(
   defineProps<{
@@ -25,9 +25,6 @@ const props = withDefaults(
 )
 const unfold = inject<Ref<boolean> | null>('panelUnfold', null)
 const user = ref<boolean | null>(null)
-/** V6：运行视角下理解卡的首节是运行信息（由分派注入） */
-const runFirst = inject(RUN_FIRST, null)
-const run = computed(() => (props.kind === 'understand' ? (runFirst?.value ?? null) : null))
 const isOpen = computed(() => !!unfold?.value || (user.value ?? props.open))
 watch(
   () => props.force,
@@ -45,7 +42,6 @@ watch(
       </button>
     </h3>
     <div v-if="isOpen" class="card-body">
-      <component :is="run" v-if="run" class="run-first" />
       <slot />
     </div>
   </section>

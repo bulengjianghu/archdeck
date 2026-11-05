@@ -15,7 +15,6 @@ import Markdown from './Markdown.vue'
 import DesignNote from './DesignNote.vue'
 import PanelCard from './PanelCard.vue'
 import CheckCard from './CheckCard.vue'
-import RelatedCard from './RelatedCard.vue'
 import type { CheckRow } from './panelCheck'
 
 const desk = useDesk()
@@ -140,7 +139,6 @@ function pointAt(id: string) {
         </div>
       </Section>
     </CheckCard>
-    <RelatedCard sequence />
     <footer class="src muted">出处：{{ desk.modelDir.value }}/{{ sc.src.file }}{{ sc.src.line ? `:${sc.src.line}` : '' }}</footer>
   </div>
 </template>

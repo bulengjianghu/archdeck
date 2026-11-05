@@ -90,8 +90,9 @@ const sketchFile = (dir: string, mount: string) => parse(fs.readFileSync(path.jo
 
 const HEAD = () => execFileSync('git', ['rev-parse', 'HEAD'], { cwd: PROJECT }).toString().trim()
 
-/** 导航树里右键一个模块「在此设计」（先展开它的层） */
+/** 导航树里右键一个模块「在此设计」（第二十轮：树是浮层抽屉缺省收起，先展开；再展开它的层） */
 async function designHere(page: Page, layer: string, id: string) {
+  if (!(await page.locator('.nav-area').isVisible())) await page.getByRole('button', { name: '导航树', exact: true }).click()
   const tree = page.locator('.module-tree')
   const row = (x: string) => tree.locator(`.row[data-id="${x}"]`)
   if (!(await row(id).isVisible())) await row(layer).locator('.caret').click()

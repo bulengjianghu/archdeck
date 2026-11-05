@@ -10,57 +10,47 @@ const bar = (page: Page) => page.getByRole('banner', { name: '工具栏' })
 const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
 const title = (page: Page) => page.locator('.canvas-title')
 
-test('验收 6.42 第 1 条：工具栏只有 8 组元素，右侧是同一套 16px 线框图标；运行视角加资料区时视角段不被挤压（TB-1、TB-2）', async ({ page }) => {
+test('验收 6.42 第 1 条（第二十轮 §4 改写）：顶栏拉通——项目菜单在栏首，其右是视角段与工具按钮；导航树是画布浮层抽屉，不再挤压任何栏（TB-1、TB-2）', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?level=kit')
   const names = await bar(page)
     .getByRole('button')
     .evaluateAll(els => els.map(e => e.getAttribute('aria-label') ?? e.textContent!.trim()))
-  expect(names).toEqual(['导航树', '结构', '交互', '运行 ▾', '显示 ▾', '搜索模块', '专注', '属性', '资料', '更多'])
-  // 不再有版本、面包屑、搜索框、帮助、「并排 / 悬浮」
-  await expect(bar(page).locator('select, input, .crumbs')).toHaveCount(0)
-  await expect(bar(page)).not.toContainText('并排')
+  expect(names).toEqual(['项目菜单', '导航树', '结构', '交互', '运行 ▾', '显示 ▾', '搜索模块', '专注', '属性', '资料', '更多'])
+  // 不再有面包屑与搜索框（版本下拉随项目菜单住进栏首）
+  await expect(bar(page).locator('.crumbs')).toHaveCount(0)
   for (const name of ['导航树', '搜索模块', '专注', '属性', '资料', '更多']) {
     const svg = bar(page).getByRole('button', { name, exact: true }).locator('svg')
     await expect(svg).toHaveAttribute('width', '16')
     await expect(svg).toHaveAttribute('fill', 'none')
   }
-  // 开着的浅色底：导航展开、属性打开
+  // 顶栏拉通：横跨包括资料区在内的整个窗口宽
+  const barBox = (await bar(page).boundingBox())!
+  const win = page.viewportSize()!
+  expect(Math.abs(barBox.width - win.width)).toBeLessThanOrEqual(1)
+  // 开着的浅色底：属性抽屉打开（无资料区时挤压画布）；导航抽屉缺省收起
   await expect(bar(page).getByRole('button', { name: '属性', exact: true })).toHaveClass(/\bon\b/)
-  await expect(bar(page).getByRole('button', { name: '属性', exact: true })).toHaveAttribute('title', /当前并排/)
-  // 左「看什么」、右「怎么摆」，中间留空
-  const persp = (await page.locator('.perspective').boundingBox())!
-  const display = (await page.locator('.display-menu').boundingBox())!
-  expect(display.x - (persp.x + persp.width)).toBeGreaterThan(200)
+  await expect(bar(page).getByRole('button', { name: '属性', exact: true })).toHaveAttribute('title', /当前挤压/)
+  await expect(bar(page).getByRole('button', { name: '导航树', exact: true })).not.toHaveClass(/\bon\b/)
 
   await openDesk(page, '/p/media-web-player?level=kit&sc=sc.command')
   await expect(dock(page)).toBeVisible()
   const run = page.locator('.perspective .seg.run')
   const full = (await run.getAttribute('title'))!
   expect(full).toContain('命令（play / pause / stop / seek')
-  const shown = (await run.innerText()).replace(/^运行 · /, '').replace(/ ▾$/, '')
-  expect(shown.length).toBeLessThanOrEqual(13)
-  expect(shown.endsWith('…')).toBe(true)
-  // 视角段完整可见：段内不裁切，退出按钮在「显示 ▾」左边
+  // 视角段完整可见：段内不裁切；顶栏拉通后右侧按钮不再被资料区挤压
   expect(await run.evaluate(e => e.scrollWidth <= e.clientWidth + 1)).toBe(true)
-  const exit = (await page.locator('.perspective .exit').boundingBox())!
-  const display2 = (await page.locator('.display-menu').boundingBox())!
-  expect(exit.x + exit.width).toBeLessThan(display2.x)
   const more = (await bar(page).getByRole('button', { name: '更多' }).boundingBox())!
-  const barBox = (await bar(page).boundingBox())!
   expect(more.x + more.width).toBeLessThanOrEqual(barBox.x + barBox.width)
-  // 再展开导航：工作列放不下工具栏时资料区让位，右侧按钮不压到资料区上
+  // 展开导航树：浮层抽屉盖在画布左缘；顶栏拉通后右侧按钮贴窗口右沿、不被任何栏挤压
   await page.getByRole('button', { name: '导航树', exact: true }).click()
   await expect(page.locator('.nav-area')).toBeVisible()
   const more2 = (await bar(page).getByRole('button', { name: '更多' }).boundingBox())!
-  const dockBox = (await dock(page).boundingBox())!
-  expect(more2.x + more2.width).toBeLessThanOrEqual(dockBox.x)
-  expect(await run.evaluate(e => e.scrollWidth <= e.clientWidth + 1)).toBe(true)
+  expect(more2.x + more2.width).toBeLessThanOrEqual(barBox.x + barBox.width)
 })
 
-test('验收 6.42 第 2 条：项目标题区、工具栏、资料区标签栏的底线成一条横线；资料区通顶，与工作列之间有通高的分割线（TB-6、TB-10、TB-11）', async ({ page }) => {
+test('验收 6.42 第 2 条（第二十轮 §4 改写）：项目菜单住顶栏栏首，与资料区标签栏底线同高；资料区在顶栏之下通到底（TB-6、TB-10、TB-11）', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?level=kit&sc=sc.command')
   await expect(dock(page)).toBeVisible()
-  await page.getByRole('button', { name: '导航树', exact: true }).click()
   const head = page.locator('.project-head')
   await expect(head).toBeVisible()
   await expect(head.getByRole('button', { name: '项目菜单' })).toContainText('media-platform Web 播放器')
@@ -68,14 +58,15 @@ test('验收 6.42 第 2 条：项目标题区、工具栏、资料区标签栏�
     const b = (await page.locator(sel).first().boundingBox())!
     return b.y + b.height
   }
-  const lines = [await bottom('.project-head'), await bottom('header.top'), await bottom('.dock .tabs')]
-  expect(lines[0]).toBe(44)
+  // 顶栏（含项目菜单）底线一致；资料区从顶栏之下开始，标签栏紧贴其下
+  const lines = [await bottom('.project-head'), await bottom('header.top')]
   expect(Math.max(...lines) - Math.min(...lines)).toBeLessThanOrEqual(0.5)
   const dockBox = (await dock(page).boundingBox())!
-  expect(dockBox.y).toBe(0)
+  expect(dockBox.y).toBe(44)
+  expect(await bottom('.dock .tabs')).toBe(88)
   const divider = (await page.locator('.dock-divider').boundingBox())!
-  expect(divider.y).toBe(0)
-  expect(divider.height).toBe(900)
+  expect(divider.y).toBe(44)
+  expect(divider.height).toBe(900 - 44)
   // 标签栏右端：⊟ 分屏、× 全部关闭
   await expect(dock(page).getByRole('button', { name: '上下分屏' }).locator('svg')).toHaveCount(1)
   await expect(dock(page).getByRole('button', { name: '关闭资料区' }).locator('svg')).toHaveCount(1)
@@ -105,6 +96,8 @@ test('验收 6.42 第 2 条：项目菜单切版本（版本胶囊 × 回当前�
   await openProjectMenu(page)
   await expect(menu.getByRole('menuitem')).toHaveText(['所有项目'])
   await page.keyboard.press('Escape')
+  // 导航树是画布左缘的浮层抽屉（openProjectMenu 会展开它）：盖住画布左上的版本胶囊，先收起
+  if (await page.locator('.nav-area').isVisible()) await page.getByRole('button', { name: '导航树', exact: true }).click()
   await chip.getByRole('button', { name: '回到当前版本' }).click()
   await expect(page).toHaveURL(/#\/p\/h5p-arch-desk(\?|$)/)
   await expect(chip).toHaveCount(0)

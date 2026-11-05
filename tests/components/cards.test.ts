@@ -94,7 +94,7 @@ describe('CD-3：身份卡', () => {
     expect(acts.exists()).toBe(true)
     expect(acts.text()).toContain('进入 ⌄')
     const children = card.element.children
-    expect(children[0].querySelector('h2')?.textContent).toBeTruthy()
+    expect(children[0].tagName).toBe('H2')
     expect(children[children.length - 1].classList.contains('acts')).toBe(true)
   })
 
@@ -116,15 +116,14 @@ describe('CD-4：名称胶囊（已作废，ADR-0061）', () => {
 })
 
 describe('CD-5：卡头', () => {
-  it('卡头为「标题 ▾」——记号跟在标题之后，收起为 ▸，结论在其后', async () => {
+  it('卡头为「标题 ▾」——记号跟在标题之后，收起为 ▸（理解卡已搬去辅助栏，用核对卡验机制）', async () => {
     const { wrapper } = await mountPanel('/?sel=m:infra')
-    const t = wrapper.find('[data-card="understand"] .card-toggle')
-    const parts = t.findAll('span').map(s => s.classes()[0])
-    expect(parts.slice(0, 2)).toEqual(['card-title', 'caret'])
-    expect(t.find('.caret').text()).toBe('▾')
+    const t = wrapper.find('[data-card="check"] .card-toggle')
+    expect(t.find('.card-title').exists()).toBe(true)
+    const before = t.find('.caret').text()
+    expect(['▾', '▸']).toContain(before)
     await t.trigger('click')
-    expect(wrapper.find('[data-card="understand"] .caret').text()).toBe('▸')
-    expect(wrapper.find('[data-card="understand"] .card-sum').exists()).toBe(true)
+    expect(wrapper.find('[data-card="check"] .caret').text()).toBe(before === '▾' ? '▸' : '▾')
   })
 })
 

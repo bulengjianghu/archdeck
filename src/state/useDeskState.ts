@@ -353,13 +353,17 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const goUp = () => void dispatch({ type: 'goUp' })
   /** 最近一次选中的来源：'explainer' = 图解 iframe 的 arch:select（EX-3：画布选中、资料区不动，自动打开图解要豁免） */
   const selectSource = ref<'explainer' | null>(null)
+  /** 最近一次选中是否来自用户操作包装器（画布 / 树 / 搜索）：是则自动打开走稳定窗，否则（URL 同步）立即打开 */
+  let viaWrapper = false
   const select = (s: Selection | null, source: 'explainer' | null = null) => {
     selectSource.value = source
+    viaWrapper = true
     void dispatch({ type: 'select', selection: s })
   }
   const revealRelation = (id: string) => void dispatch({ type: 'revealRelation', id })
   const revealModule = (id: string, source: 'explainer' | null = null) => {
     selectSource.value = source
+    viaWrapper = true
     void dispatch({ type: 'revealModule', id })
   }
   const setHover = (id: string | null) => void dispatch({ type: 'hover', id })
@@ -398,17 +402,29 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     (path, was) => path && path !== was && workspaceDispatch({ type: 'open', doc: { kind: 'source', path } }),
     { immediate: true },
   )
-  // WS-8 的例外（第十八轮走查 4，ADR-0061）：结构 / 交互视角下选中变为带图解的模块 → 该图解的预览标签，
-  // 让「有原理图解的模块被选中时资料区直接可读」。监听选中本身——退出场景、换视角等选中没变的路径不触发；
-  // 已在资料区开着（含固定）不再动；运行视角的资料区归时序图、草图编辑不打开；
-  // 图解 iframe 里点链接来的选中带 source: 'explainer'（EX-3：正在读父图解，资料区不动），来源标记消费后即复位
+  // WS-8 的例外（第十八轮走查 4，ADR-0061；第二十轮读先方案扩展）：结构 / 交互视角下选中变为任何模块 → 辅助栏打开它的理解页
+  // （事实卡 + 有图解时的故事），让「选中即理解」零点击。已在资料区开着（含固定）不再动；运行视角的资料区归时序图与步骤节、
+  // 草图编辑不打开；图解 iframe 里点链接来的选中带 source: 'explainer'（EX-3：正在读父图解，资料区不动），来源标记消费后即复位
+  let openTimer: ReturnType<typeof setTimeout> | undefined
   watch(selected, s => {
     const source = selectSource.value
+    const user = viaWrapper
     selectSource.value = null
-    if (!s || s.kind !== 'module' || source === 'explainer' || !explainers.has(s.id)) return
+    viaWrapper = false
+    clearTimeout(openTimer)
+    if (!s || s.kind !== 'module' || source === 'explainer') return
     if (perspective.value === 'run' || edit.active.value) return
-    if (workspaceState.value.groups.some(g => g.tabs.some(t => t.id === docKey({ kind: 'explainer', module: s.id })))) return
-    workspaceDispatch({ type: 'open', doc: { kind: 'explainer', module: s.id } })
+    const doc: DocRef = explainers.has(s.id) ? { kind: 'explainer', module: s.id } : { kind: 'facts', module: s.id }
+    if (workspaceState.value.groups.some(g => g.tabs.some(t => t.id === docKey(doc)))) return
+    const openNow = () => {
+      if (selected.value !== s || perspective.value === 'run' || edit.active.value) return
+      if (workspaceState.value.groups.some(g => g.tabs.some(t => t.id === docKey(doc)))) return
+      workspaceDispatch({ type: 'open', doc })
+    }
+    // URL 直达 / 状态同步来的选中立即打开（资料区在首次适应之前就位，缩放只取一个值）；
+    // 用户点选走 250ms 稳定窗：双击下钻、连续点选期间资料区不重排（画布几何稳定是交互的前提）
+    if (user) openTimer = setTimeout(openNow, 250)
+    else openNow()
   })
   const workspace = {
     state: workspaceState,

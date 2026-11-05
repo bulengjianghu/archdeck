@@ -59,7 +59,8 @@ test('K15b：面板点「影响面」出现距离标记；换选中后标记消�
   expect(query(page).toString()).not.toContain('impact')
   await page.reload()
   await expect(page.locator('.vue-flow__node').first()).toBeVisible({ timeout: 20_000 })
-  // 刷新后 URL 直达同样自动打开资料区：再关掉，几何与刷新前一致
+  // 刷新后 URL 直达同样自动打开资料区（立即开）：再关掉，几何与刷新前一致
+  await page.waitForTimeout(400)
   if (await page.locator('.dock-area').count()) await page.locator('.dock-toggle').click()
   await waitSettled(page)
   await openCheckList(page, 'boundary.structure')

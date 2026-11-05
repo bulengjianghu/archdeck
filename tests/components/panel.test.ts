@@ -3,10 +3,24 @@ import { describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import Panel from '../../src/components/panel/Panel.vue'
+import ModuleDoc from '../../src/components/dock/ModuleDoc.vue'
+import RunSection from '../../src/components/panel/RunSection.vue'
 import { createDeskState, type SourceFetcher } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
 import type { FileDep } from '../../src/model'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
+
+/** 第二十轮读先方案：理解卡搬去辅助栏的理解页（ModuleDoc），内容断言挂在这里 */
+async function mountDoc(moduleId: string, url = '/', files = sampleFiles()) {
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+  await router.push(url)
+  const desk = createDeskState(async () => ({ dir: 'model/test', files }))
+  desk.attachRouter(router)
+  await desk.init()
+  const wrapper = mount(ModuleDoc, { props: { module: moduleId }, global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+  await flushPromises()
+  return { wrapper, desk }
+}
 
 async function mountPanel(url = '/', files = sampleFiles()) {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
@@ -30,9 +44,9 @@ describe('属性面板', () => {
     expect(wrapper.find('[data-card="understand"]').text()).toContain('Infrastructure')
   })
 
-  it('选中层：理解卡 ① 一句话职责、② 原则一句（ADR-0042）+ 子模块 + 「可依赖」链接行（PC-3）', async () => {
-    const { wrapper } = await mountPanel('/?sel=m:infra')
-    const u = wrapper.find('[data-card="understand"]')
+  it('理解页 · 选中层：① 一句话职责、② 原则一句（ADR-0042）+ 子模块 + 「可依赖」链接行（PC-3）', async () => {
+    const { wrapper } = await mountDoc('infra', '/?sel=m:infra')
+    const u = wrapper.find('[data-sec="understand"]')
     expect(u.find('[data-testid="summary"]').exists()).toBe(true)
     const split = u.find('[data-sec="split"]')
     // ADR-0060：原则全文直接写在「怎么分」下，不带「原则」标签、不收行
@@ -43,8 +57,8 @@ describe('属性面板', () => {
     expect(u.find('[data-testid="module-children"]').text()).toContain('Framework')
   })
 
-  it('选中模块：职责、对外接口签名、出入边', async () => {
-    const { wrapper } = await mountPanel('/?level=infra.framework&sel=m:infra.framework.sm')
+  it('理解页 · 选中模块：职责、对外接口签名、出入边', async () => {
+    const { wrapper } = await mountDoc('infra.framework.sm', '/?level=infra.framework&sel=m:infra.framework.sm')
     const text = wrapper.text()
     expect(text).toContain('StateMachine')
     expect(text).toContain('状态机')
@@ -57,7 +71,7 @@ describe('属性面板', () => {
     expect(wrapper.find('[data-testid="collab-fold"]').text()).toMatch(/协作.*← \d+ · → \d+/)
     await wrapper.find('[data-testid="collab-fold"]').trigger('click')
     expect(wrapper.find('[data-testid="collab"] [data-peer="app"]').text()).toContain('→')
-    expect(text).toContain('modules/infra.yaml')
+    // 出处行在抽屉的 footer（ModulePanel），不在理解页
   })
 
   it('选中关系：端点、类型、五个维度、经由接口、交换的数据结构', async () => {
@@ -111,8 +125,8 @@ describe('属性面板', () => {
     expect(summary('rl')!.text()).toBe(`${'短'.repeat(60)}…`)
   })
 
-  it('子模块列表点击：在当前层次时只选中', async () => {
-    const { wrapper, desk } = await mountPanel('/?level=infra')
+  it('理解页 · 子模块列表点击：在当前层次时只选中', async () => {
+    const { wrapper, desk } = await mountDoc('infra', '/?level=infra')
     const link = wrapper.findAll('[data-testid="module-children"] .link').find(l => l.text() === 'Framework')!
     await link.trigger('click')
     expect(desk.levelId.value).toBe('infra')
@@ -145,15 +159,18 @@ describe('属性面板 · 运行视角', () => {
     expect(s).toContain('引用了')
   })
 
-  it('选中模块：理解卡首节是运行信息（V6），其后是五问；没有「已钉住」提示（ADR-0012）', async () => {
-    const { wrapper } = await mountPanel('/?sc=sc.play&step=sc.play%23done&alt=0&sel=m:infra.framework.sm&level=infra.framework', scenarioFiles())
+  it('运行视角选中模块：运行信息（V6）由 RunSection 呈现（新家 = 右栏步骤节，round20/01 §6）', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+    await router.push('/?sc=sc.play&step=sc.play%23done&alt=0&sel=m:infra.framework.sm&level=infra.framework')
+    const desk = createDeskState(async () => ({ dir: 'model/test', files: scenarioFiles() }))
+    desk.attachRouter(router)
+    await desk.init()
+    await flushPromises()
+    const wrapper = mount(RunSection, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+    await flushPromises()
     const text = wrapper.text()
-    expect(text).not.toContain('已钉住')
     expect(text).toContain('在「播放」中')
     expect(text).toContain('离进度最近')
-    const u = wrapper.find('[data-card="understand"] .card-body')
-    expect(u.element.firstElementChild!.textContent).toContain('在「播放」中')
-    expect(u.find('[data-testid="summary"]').exists()).toBe(true)
   })
 })
 

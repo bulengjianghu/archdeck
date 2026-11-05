@@ -6,12 +6,10 @@
  * 代码依赖叠加线（K10）→ 代码依赖面板；耦合线（J7）→ 耦合面板；端口（L13）→ 端口面板（K11）。草图画布下（X7，ADR-0025）：换成草图面板。
  * 卡片直接立在画布上（CD-2）：第一张是身份卡（各面板的 `.id-card`，CD-3），粘在属性列滚动区上沿、不随内容滚走（第十八轮走查 4 改回粘顶，ADR-0061；原名称胶囊 CD-4 作废）。
  */
-import { computed, provide } from 'vue'
+import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import ScenarioPanel from './ScenarioPanel.vue'
-import RunSection from './RunSection.vue'
-import { RUN_FIRST } from './related'
 import StepPanel from './StepPanel.vue'
 import ModulePanel from './ModulePanel.vue'
 import RelationPanel from './RelationPanel.vue'
@@ -40,12 +38,6 @@ const dropped = computed(() => {
   if (d.kind === 'port') return `端口 ${idx.interfaces.get(d.id)?.name ?? d.id}`
   return '选中的对象'
 })
-/** V6：运行视角下模块、关系、聚合边、参与者、端口、系统的理解卡首节是运行信息（由这里注入，对象面板不引用它） */
-const RUN_KINDS = new Set(['module', 'relation', 'edge', 'actor', 'port', 'system'])
-provide(
-  RUN_FIRST,
-  computed(() => (desk.perspective.value === 'run' && target.value && RUN_KINDS.has(target.value.kind) ? RunSection : null)),
-)
 const target = computed(() => {
   const idx = desk.index.value
   const s = desk.selected.value

@@ -19,7 +19,6 @@ import RelationCarrier from './RelationCarrier.vue'
 import StructureFacts, { type StructureGroup } from './StructureFacts.vue'
 import PanelCard from './PanelCard.vue'
 import CheckCard from './CheckCard.vue'
-import RelatedCard from './RelatedCard.vue'
 import { usePanelJump } from './panelNotices'
 import type { CheckRow } from './panelCheck'
 
@@ -69,7 +68,6 @@ const rows = computed<CheckRow[]>(() => {
   return out
 })
 const purpose = computed(() => purposeOf(r.value))
-const scenarios = computed(() => desk.run.scenariosOfRelation(props.id))
 
 /** 知识（谁知道谁）：由代码事实给出——依据的依赖与箭头同向 / 反向，经端口，或不判定 */
 const knowledge = computed(() => {
@@ -180,7 +178,6 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
       <RelationFact :id="r.id" fold />
       <RelationCarrier :id="r.id" fold />
     </CheckCard>
-    <RelatedCard :scenarios="scenarios" />
 
     <footer class="src muted">出处：{{ desk.modelDir.value }}/{{ r.src.file }}{{ r.src.line ? `:${r.src.line}` : '' }}</footer>
   </div>

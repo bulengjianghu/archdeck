@@ -23,74 +23,65 @@ async function rect(page: Page, sel: string) {
   return b!
 }
 
-test('CD-2 并排：属性列与画布同底色，没有竖分隔线与底板；卡片各自是卡', async ({ page }) => {
+test('CD-2（第二十轮 §4 改写）：选中面板是实底抽屉——不透画布、与画布有分界；抽屉里的卡各自是卡', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?sel=m:kit')
   await waitSettled(page)
-  // 选中 kit 会自动打开资料区（WS-8 例外，ADR-0061）：关掉它再量静息的并排版面
   await page.locator('.dock-toggle').click()
   await expect(page.locator('.dock-area')).toHaveCount(0)
   const props = page.locator('aside.props')
   await expect(props).not.toHaveClass(/floating/)
-  const [propsBg, canvasBg] = await Promise.all([page.evaluate(`(${EFFECTIVE_BG})('aside.props')`), page.evaluate(`(${EFFECTIVE_BG})('main.canvas-area')`)])
-  expect(propsBg).toBe(canvasBg)
   const own = (await page.evaluate(`(() => {
     const el = document.querySelector('aside.props')
     const s = getComputedStyle(el)
-    return { border: s.borderLeftWidth, bg: s.backgroundColor, panelBg: getComputedStyle(el.querySelector('.panel')).backgroundColor }
-  })()`)) as { border: string; bg: string; panelBg: string }
-  expect(own.border).toBe('0px')
-  expect(own.bg).toBe('rgba(0, 0, 0, 0)')
-  expect(own.panelBg).toBe('rgba(0, 0, 0, 0)')
-  // 身份卡与三卡都有卡片的圆角与投影，彼此间距 12
+    return { border: s.borderLeftWidth, bg: s.backgroundColor, shadow: s.boxShadow !== 'none' }
+  })()`)) as { border: string; bg: string; shadow: boolean }
+  // 实底抽屉：不透画布、有分界线
+  expect(own.bg).not.toBe('rgba(0, 0, 0, 0)')
+  expect(own.border).toBe('1px')
+  // 核对卡仍是卡：圆角与投影
   const look = (await page.evaluate(`[...document.querySelectorAll('.panel .id-card, .panel [data-card]')].map(el => {
     const s = getComputedStyle(el)
-    const r = el.getBoundingClientRect()
-    return { radius: s.borderTopLeftRadius, shadow: s.boxShadow !== 'none', top: r.top, bottom: r.bottom }
-  })`)) as { radius: string; shadow: boolean; top: number; bottom: number }[]
-  expect(look.length).toBeGreaterThanOrEqual(3)
+    return { radius: s.borderTopLeftRadius, shadow: s.boxShadow !== 'none' }
+  })`)) as { radius: string; shadow: boolean }[]
+  expect(look.length).toBeGreaterThanOrEqual(2)
   for (const l of look) expect(l).toMatchObject({ radius: '12px', shadow: true })
-  expect(Math.round(look[1].top - look[0].bottom)).toBe(12)
 })
 
-test('CD-2 悬浮：没有整列的浮板，单击卡片之间的空隙落到画布上', async ({ page }) => {
+test('CD-2 悬浮（第二十轮 §4 改写）：放不下时浮在画布右侧——实底、不透传点击；画布其余部分照常接指针', async ({ page }) => {
   await page.setViewportSize({ width: 1100, height: 900 })
   await openDesk(page, '/p/media-web-player?sel=m:kit')
   await waitSettled(page)
   await expect(page.locator('aside.props')).toHaveClass(/floating/)
-  const id = await rect(page, '.panel .id-card')
-  const und = await rect(page, '.panel [data-card="understand"]')
-  const x = id.x + id.width / 2
-  const y = (id.y + id.height + und.y) / 2
-  expect(und.y - (id.y + id.height)).toBeGreaterThan(8)
+  const pr = await rect(page, 'aside.props')
+  // 抽屉上任意一点都归抽屉（实底、不透传）
+  const inside = await page.evaluate(`!!document.elementFromPoint(${pr.x + pr.width / 2}, ${pr.y + pr.height / 2})?.closest('aside.props')`)
+  expect(inside).toBe(true)
+  // 画布左半边照常接指针：单击空白取消选中
+  const canvas = await rect(page, 'main.canvas-area')
+  const cx = canvas.x + 60
+  const cy = canvas.y + canvas.height / 2
   const hit = (await page.evaluate(`(() => {
-    const el = document.elementFromPoint(${x}, ${y})
-    return { canvas: !!el?.closest('.vue-flow'), props: !!el?.closest('aside.props'), node: el?.closest('.vue-flow__node')?.getAttribute('data-id') ?? null }
-  })()`)) as { canvas: boolean; props: boolean; node: string | null }
-  expect(hit).toMatchObject({ canvas: true, props: false })
-  // 卡片上照常接指针
-  const onCard = await page.evaluate(`!!document.elementFromPoint(${x}, ${und.y + 20})?.closest('aside.props')`)
-  expect(onCard).toBe(true)
-  await page.mouse.click(x, y)
+    const el = document.elementFromPoint(${cx}, ${cy})
+    return { vueflow: !!el?.closest('.vue-flow'), node: el?.closest('.vue-flow__node')?.getAttribute('data-id') ?? null }
+  })()`)) as { vueflow: boolean; node: string | null }
+  expect(hit.vueflow).toBe(true)
+  await page.mouse.click(cx, cy)
   await expect.poll(() => query(page).get('sel')).toBe(hit.node ? `m:${hit.node}` : null)
 })
 
-test('CD-3 身份卡粘顶（ADR-0061）：滚到底身份卡仍钉在属性列上沿，名称后的「图解 ›」可打开资料区', async ({ page }) => {
+test('CD-3 身份卡粘顶（ADR-0061）：滚到底身份卡仍钉在抽屉上沿；选中即自动打开辅助栏的理解页', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sel=m:state.desk')
   await waitSettled(page)
   const area = page.locator('.panel-area')
   const card = page.locator('.panel .id-card').first()
-  // 有图解的模块：名称后就是「图解 ›」，选中（含 URL 直达）即自动在资料区以预览打开（WS-8 例外）
-  const link = card.locator('[data-testid="open-explainer"]')
-  await expect(link).toHaveText('图解 ›')
+  // 选中（含 URL 直达）即自动在辅助栏打开理解页（事实卡 + 故事，第二十轮读先方案）
   await expect(page.locator('.dock-area .tab[data-doc="exp:state.desk"]')).toHaveClass(/preview/)
   // 滚到底：身份卡钉在滚动区上沿，没有名称胶囊
   await area.evaluate(el => el.scrollTo({ top: el.scrollHeight }))
   const [cardBox, areaBox] = await Promise.all([card.boundingBox(), area.boundingBox()])
   expect(cardBox!.y).toBeGreaterThanOrEqual(areaBox!.y - 0.5)
-  expect(cardBox!.y - areaBox!.y).toBeLessThan(2)
+  expect(cardBox!.y - areaBox!.y).toBeLessThan(12) // 面板内边距之内钉住
   await expect(page.getByTestId('props-mini')).toHaveCount(0)
-  // 单击「图解 ›」：资料区已开着该图解，仍是同一份标签
-  await link.click()
   await expect(page.locator('.dock-area .tab[data-doc="exp:state.desk"]')).toHaveCount(1)
 })
 
@@ -103,33 +94,25 @@ async function capsules(page: Page) {
   return { player, zoom, canvas, inset }
 }
 
-test('CD-7、CD-8 回放胶囊：浮在画布底部、与缩放胶囊同一行不相碰；放不下时居中于整个画布、悬浮卡片让出底部', async ({ page }) => {
+test('CD-7、CD-8 回放胶囊（第二十轮 §4 改写）：浮在画布底部、与缩放胶囊同一行不相碰；运行视角抽屉自动收起，胶囊居中于整个画布', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?sc=sc.command')
   await waitSettled(page)
   await expect(page.locator('.player-bar')).toBeVisible()
-  await expect(page.locator('aside.props')).toHaveClass(/floating/)
-  const { player, zoom, canvas, inset } = await capsules(page)
-  // 同一行：底边都离画布底 12
+  // 运行视角：选中抽屉自动收起（步骤节在辅助栏），不再有悬浮卡片让位
+  await expect(page.locator('aside.props')).toHaveCount(0)
+  const { player, zoom, canvas } = await capsules(page)
   expect(Math.round(canvas.y + canvas.height - (player.y + player.height))).toBe(12)
   expect(Math.round(canvas.y + canvas.height - (zoom.y + zoom.height))).toBe(12)
   expect(player.x).toBeGreaterThanOrEqual(zoom.x + zoom.width + 12 - 0.5)
-  const free = canvas.width - inset
-  const fits = player.x - canvas.x + player.width <= free - 12
-  if (fits) expect(player.x + player.width).toBeLessThanOrEqual(canvas.x + free)
-  else {
-    // 放不下：悬浮卡片列的底部让出胶囊
-    const props = await rect(page, 'aside.props')
-    expect(props.y + props.height).toBeLessThanOrEqual(player.y - 12 + 0.5)
-    expect(await page.locator('.player-bar').getAttribute('class')).toContain('wide')
-  }
+  // 放得下：胶囊右沿不出画布
+  expect(player.x + player.width).toBeLessThanOrEqual(canvas.x + canvas.width)
 })
 
-test('CD-8 回放胶囊：资料区隐藏、属性并排时居中于画布', async ({ page }) => {
+test('CD-8 回放胶囊：资料区隐藏后居中于更宽的画布', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?sc=sc.command')
   await waitSettled(page)
   await page.locator('.dock-toggle').click()
   await expect(page.locator('.dock-area')).toHaveCount(0)
-  await expect(page.locator('aside.props')).not.toHaveClass(/floating/)
   await expect
     .poll(async () => {
       const { player, canvas } = await capsules(page)

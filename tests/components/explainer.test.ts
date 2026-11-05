@@ -191,50 +191,61 @@ describe('EX-7 属性栏', () => {
     expect(bad.items).toHaveLength(2)
   })
 
-  it('PC-9：相关资料卡的图解行标「基于旧描述 · N 处改动」；核对卡列出改动', async () => {
+  it('PC-9 已删（第二十轮读先方案）：模块抽屉没有相关资料卡；图解过期提示在辅助栏标签（上面的 EX-7 用例守）', async () => {
     const { d, router } = await desk('/?sel=m:infra', files('提供状态机与流水线'))
     const w = mount(Panel, { global: { ...provide(d, { [HAS_EXPLAINER as symbol]: (id: string) => d.explainers.has(id) }), plugins: [router] } })
     mounted.push(w)
     await flushPromises()
-    expect(w.find('[data-testid="related-stale"]').text()).toBe('基于旧描述 · 1 处改动')
-    expect(w.find('[data-sec="review.explainer"]').text()).toContain('图解依据的改动')
+    expect(w.find('[data-testid="related-stale"]').exists()).toBe(false)
+    expect(w.find('[data-card="related"]').exists()).toBe(false)
+    expect(w.find('[data-card="check"]').exists()).toBe(true)
   })
 })
 
-describe('CD-3 名称后的「图解 ›」与选中自动打开（第十八轮走查 4，ADR-0061）', () => {
-  it('有图解的模块名称后附「图解 ›」，单击在资料区以预览打开；无图解的没有', async () => {
+describe('理解页随选中自动打开（第二十轮读先方案；ADR-0061 的 WS-8 例外扩展）', () => {
+  it('有图解的模块打开「事实卡 + 故事」页，无图解的打开纯事实卡页；抽屉不再有「图解 ›」按钮', async () => {
     const { d, router } = await desk('/?sel=m:app')
     const w = mount(Panel, { global: { ...provide(d, { [HAS_EXPLAINER as symbol]: (id: string) => d.explainers.has(id) }), plugins: [router] } })
     mounted.push(w)
     await flushPromises()
+    // 抽屉不再有图解入口按钮（入口在辅助栏理解页与画布 ▣）
     expect(w.find('[data-testid="open-explainer"]').exists()).toBe(false)
+    // 选中带图解的模块 → exp 页（事实卡 + 故事）；250ms 稳定窗后打开
     d.select({ kind: 'module', id: 'infra' })
     await flushPromises()
-    const tab = () => d.workspace.state.value.groups[0].tabs.find(t => t.id === 'exp:infra')
-    // WS-8 例外：结构 / 交互视角下选中带图解的模块即自动预览打开
-    expect(tab()?.preview).toBe(true)
-    await w.find('[data-testid="open-explainer"]').trigger('click')
-    expect(tab()?.preview).toBe(true) // 已开着，仍是一份预览标签
+    await new Promise(r => setTimeout(r, 300))
+    const tab = (id: string) => d.workspace.state.value.groups[0].tabs.find(t => t.id === id)
+    expect(tab('exp:infra')?.preview).toBe(true)
+    // 选中无图解的模块 → fact 页（只有事实卡）
+    d.select({ kind: 'module', id: 'app' })
+    await flushPromises()
+    await new Promise(r => setTimeout(r, 300))
+    expect(tab('fact:app')?.preview).toBe(true)
   })
 
-  it('自动打开只在选中变为另一个带图解的模块时替换预览；无图解、已固定的不动', async () => {
+  it('理解页按 WS-5 替换预览、不累积；已固定的不被自动打开降级', async () => {
     const { d } = await desk('/?sel=m:app')
     const tabs = () => d.workspace.state.value.groups[0].tabs
     d.select({ kind: 'module', id: 'infra' })
     await flushPromises()
+    await new Promise(r => setTimeout(r, 300))
     expect(tabs().map(t => t.id)).toEqual(['exp:infra'])
+    // 选另一个模块：新的理解页替换预览标签（WS-5），不累积
     d.select({ kind: 'module', id: 'app' })
     await flushPromises()
-    expect(tabs().map(t => t.id)).toEqual(['exp:infra']) // 无图解：资料区不动
+    await new Promise(r => setTimeout(r, 300))
+    expect(tabs().map(t => t.id)).toEqual(['fact:app'])
+    // 固定的页不被替换；回到已开着的 infra 不再新开
     d.workspace.open({ kind: 'explainer', module: 'infra.framework' }, true)
     d.select({ kind: 'module', id: 'infra' })
     await flushPromises()
+    await new Promise(r => setTimeout(r, 300))
     expect(
       tabs()
-        .filter(t => t.id.startsWith('exp:'))
+        .filter(t => t.id.startsWith('exp:') || t.id.startsWith('fact:'))
         .map(t => t.id),
     ).toEqual(['exp:infra', 'exp:infra.framework'])
-    expect(tabs().find(t => t.id === 'exp:infra.framework')!.preview).toBe(false) // 固定的不被自动打开降级
+    expect(tabs().find(t => t.id === 'exp:infra.framework')!.preview).toBe(false)
     expect(tabs().find(t => t.id === 'exp:infra')!.preview).toBe(true)
   })
 })

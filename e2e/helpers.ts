@@ -79,7 +79,21 @@ export function restoreOwned(file: string, snapshot: string, paths: readonly str
 }
 
 /** 属性栏核对卡（PC-2）收起时展开它；给了 data-sec 时再展开那个折叠的清单（PC-8） */
+/** 第二十轮 §4：导航树是画布左缘的浮层抽屉——盖住画布左上的胶囊，看完树里的东西要操作画布前先收起 */
+export async function closeNav(page: Page) {
+  if (await page.locator('.nav-area').isVisible()) await page.getByRole('button', { name: '导航树', exact: true }).click()
+}
+
+/** 第二十轮 §4：选中面板缺省收起（运行视角自动收起，步骤节在辅助栏）——要动核对卡先把抽屉拉开 */
+export async function openPropsDrawer(page: Page) {
+  if (await page.locator('aside.props .panel').count()) return
+  await page.locator('.props-toggle').click()
+  await expect(page.locator('aside.props .panel')).toBeVisible()
+}
+
+/** 属性栏核对卡（PC-2）收起时展开它；给了 data-sec 时再展开那个折叠的清单（PC-8） */
 export async function openCheckList(page: Page, sec?: string) {
+  await openPropsDrawer(page)
   const toggle = page.locator('.panel [data-card="check"] .card-toggle').first()
   await expect(toggle).toBeVisible()
   // 代码事实晚到时核对卡会自己展开（PC-2）：先等结论定下来（不再「读取中」），再按需单击并确认已展开；

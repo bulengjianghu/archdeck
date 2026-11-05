@@ -7,10 +7,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import Panel from '../../src/components/panel/Panel.vue'
+import ModuleDoc from '../../src/components/dock/ModuleDoc.vue'
 import { createDeskState } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
 import { orderNotices, splitSignalCount, type PanelNotice } from '../../src/components/panel/panelNotices'
-import { HAS_EXPLAINER } from '../../src/components/panel/related'
 import { checkSummary, moduleCheckRows, rowsFromNotices, type CheckRow } from '../../src/components/panel/panelCheck'
 import { useRelationHover } from '../../src/components/panel/surfaceFocus'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
@@ -18,6 +18,19 @@ import type { FileDep } from '../../src/model'
 
 /** 跳转目标是模块级的单值：测试里每个用例结束卸载面板，免得早先面板的监听先消费掉目标 */
 const mounted: VueWrapper[] = []
+
+/** 第二十轮读先方案：理解卡搬去辅助栏的理解页（ModuleDoc = 事实卡 + 故事）；理解叙述的断言挂这里 */
+async function mountDoc(moduleId: string, url: string, files = sampleFiles(), provide: Record<string | symbol, unknown> = {}) {
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+  await router.push(url)
+  const desk = createDeskState(async () => ({ dir: 'model/test', files }))
+  desk.attachRouter(router)
+  await desk.init()
+  const wrapper = mount(ModuleDoc, { props: { module: moduleId }, global: { provide: { [DESK_STATE as symbol]: desk, ...provide }, plugins: [router] } })
+  mounted.push(wrapper)
+  await flushPromises()
+  return { wrapper, desk }
+}
 
 async function mountPanel(url: string, files = sampleFiles(), provide: Record<string | symbol, unknown> = {}) {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
@@ -63,63 +76,34 @@ afterEach(() => {
 })
 
 describe('V15、PC-1：头部 + 三卡', () => {
-  it('模块：头部在最前，其后理解、核对；没有图解也不在任何场景里时没有相关资料卡；出处 footer 最底', async () => {
+  it('模块：头部在最前，其后核对卡（理解卡已搬去辅助栏的理解页，相关资料卡删除）；出处 footer 最底', async () => {
     const { wrapper } = await mountPanel('/?sel=m:infra')
     const kids = [...wrapper.find('.module-panel').element.children]
     expect(kids[0].tagName).toBe('HEADER')
-    expect(cardsOf(wrapper)).toEqual(['understand', 'check'])
+    expect(cardsOf(wrapper)).toEqual(['check'])
     expect(kids[kids.length - 1].classList.contains('src')).toBe(true)
   })
 
-  it('PC-9：参与场景的模块有相关资料卡，列场景；单击打开场景（时序图标签按 WS-8 打开），已打开的标「已打开」', async () => {
-    const { wrapper, desk } = await mountPanel('/?level=infra.framework&sel=m:infra.framework.sm', scenarioFiles())
-    expect(cardsOf(wrapper)).toEqual(['understand', 'check', 'related'])
-    const items = wrapper.findAll('[data-testid="related"] [data-doc="scenario"]')
-    expect(items.length).toBeGreaterThan(0)
-    await items[0].trigger('click')
-    await flushPromises()
-    expect(desk.playback.value?.scenarioId).toBeTruthy()
-    expect(desk.workspace.isOpen({ kind: 'sequence' })).toBe(true)
-    expect(wrapper.find('[data-testid="related"] .opened').text()).toContain('已打开')
-  })
-
-  it('PC-9：有图解的模块列图解；单击为预览标签、双击固定（WS-5）；没有图解判定时不列', async () => {
-    const yes = { [HAS_EXPLAINER as symbol]: (id: string) => id === 'infra' }
-    const { wrapper, desk } = await mountPanel('/?sel=m:infra', sampleFiles(), yes)
-    const item = wrapper.find('[data-testid="related"] [data-doc="explainer"]')
-    expect(item.text()).toContain('图解')
-    await item.trigger('click')
-    const tab = () => desk.workspace.state.value.groups[0].tabs.find(t => t.id === 'exp:infra')
-    expect(tab()?.preview).toBe(true)
-    expect(wrapper.find('[data-doc="explainer"]').text()).toContain('已打开')
-    await wrapper.find('[data-doc="explainer"]').trigger('dblclick')
-    expect(tab()?.preview).toBe(false)
-    const none = await mountPanel('/?sel=m:app')
-    expect(none.wrapper.find('[data-doc="explainer"]').exists()).toBe(false)
+  it('PC-9 已删（第二十轮读先方案）：抽屉没有相关资料卡——场景归运行视角，图解入口在理解页与画布 ▣', async () => {
+    const { wrapper } = await mountPanel('/?level=infra.framework&sel=m:infra.framework.sm', scenarioFiles())
+    expect(wrapper.find('[data-card="related"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="related"]').exists()).toBe(false)
   })
 })
 
 describe('PC-2：卡片的展开', () => {
-  it('理解卡缺省展开、可收起，收起后卡头给一句话职责；核对卡没有 ⚠ 时收起、卡头给结论', async () => {
-    const { wrapper } = await mountPanel('/?sel=m:infra')
-    const u = wrapper.find('[data-card="understand"] .card-toggle')
-    expect(u.attributes('aria-expanded')).toBe('true')
-    await u.trigger('click')
-    expect(wrapper.find('[data-card="understand"] .card-body').exists()).toBe(false)
-    expect(wrapper.find('[data-card="understand"] .card-sum').text()).not.toBe('')
+  it('核对卡没有 ⚠ 时收起、可展开、卡头给结论；换选中即回缺省', async () => {
+    const { wrapper, desk } = await mountPanel('/?sel=m:infra')
     const c = wrapper.find('[data-card="check"] .card-toggle')
     expect(c.attributes('aria-expanded')).toBe('false')
     expect(wrapper.find('[data-card="check"] .card-sum').text()).toBe('暂无核对结果')
-  })
-
-  it('换选中即回缺省：收起理解卡后换选中再回来，理解卡重新展开', async () => {
-    const { wrapper, desk } = await mountPanel('/?sel=m:infra')
-    await wrapper.find('[data-card="understand"] .card-toggle').trigger('click')
+    await c.trigger('click')
+    expect(wrapper.find('[data-card="check"] .card-body').exists()).toBe(true)
     desk.select({ kind: 'module', id: 'app' })
     await flushPromises()
     desk.select({ kind: 'module', id: 'infra' })
     await flushPromises()
-    expect(wrapper.find('[data-card="understand"] .card-toggle').attributes('aria-expanded')).toBe('true')
+    expect(wrapper.find('[data-card="check"] .card-toggle').attributes('aria-expanded')).toBe('false')
   })
 })
 
@@ -188,19 +172,19 @@ describe('PC-3：模块的理解卡按五问', () => {
   const files = () => sampleFiles({ 'modules/zz-big.yaml': BIG })
 
   it('① 一句话职责粗体（写了 summary 不标待提炼），职责全文折叠在下；没写 summary 的标「待提炼」', async () => {
-    const { wrapper } = await mountPanel('/?sel=m:app.big', files())
+    const { wrapper } = await mountDoc('app.big', '/?sel=m:app.big', files())
     const one = wrapper.find('[data-testid="summary"]')
     expect(one.text()).toMatch(/^编排方案的执行\s*全文 ▸$/)
     expect(one.text()).not.toContain('待提炼')
     expect(wrapper.find('.full-text').exists()).toBe(false)
     await wrapper.find('.understand .full').trigger('click')
     expect(wrapper.find('.full-text').text()).toContain('编排一切')
-    const other = await mountPanel('/?sel=m:app.solution')
+    const other = await mountDoc('app.solution', '/?sel=m:app.solution')
     expect(other.wrapper.find('[data-testid="summary"]').text()).toContain('待提炼')
   })
 
   it('② 怎么分（ADR-0060）：原则全文不截；未声明分层的写明并只列子模块名（一句话在悬停、不在卡上）；⑤ 对外表面名字全文一行、用途在悬停，超过 5 个收「+N」，单击展开详情', async () => {
-    const { wrapper } = await mountPanel('/?sel=m:app.big', files())
+    const { wrapper } = await mountDoc('app.big', '/?sel=m:app.big', files())
     const split = wrapper.find('[data-sec="split"]')
     expect(split.find('.principle').text()).toContain('按阶段切分')
     expect(split.find('.principle').attributes('style') ?? '').not.toContain('line-clamp')
@@ -221,17 +205,17 @@ describe('PC-3：模块的理解卡按五问', () => {
   })
 
   it('⑤ 守住什么：不变式逐条，带 adr 的附 ADR 编号（文件不在源码清单里时不可点）', async () => {
-    const { wrapper } = await mountPanel('/?sel=m:app.big', files())
+    const { wrapper } = await mountDoc('app.big', '/?sel=m:app.big', files())
     const inv = wrapper.find('[data-testid="invariants"]')
     expect(inv.findAll('li')).toHaveLength(2)
     expect(inv.text()).toContain('只经队列改状态')
     expect(inv.find('.adr').text()).toBe('ADR-0012')
-    const plain = await mountPanel('/?sel=m:app.solution')
+    const plain = await mountDoc('app.solution', '/?sel=m:app.solution')
     expect(plain.wrapper.find('[data-sec="invariants"]').exists()).toBe(false)
   })
 
   it('② 声明了分层的模块按层列（层名 · 层的问题 · 归属），成员作链接；单成员层的模块：excludes 作「不负责」一行（M32），另有「层的问题与包含」折叠块与「可依赖」链接', async () => {
-    const { wrapper, desk } = await mountPanel('/?sel=m:app', sampleFiles({ 'intent/strata.yaml': STRATA }))
+    const { wrapper, desk } = await mountDoc('app', '/?sel=m:app', sampleFiles({ 'intent/strata.yaml': STRATA }))
     const rows = wrapper.findAll('[data-testid="module-strata"] .stratum')
     expect(rows).toHaveLength(2)
     expect(rows[0].text()).toContain('入口层')
@@ -239,7 +223,7 @@ describe('PC-3：模块的理解卡按五问', () => {
     await rows[0].find('.members .link').trigger('click')
     expect(desk.selection.value).toEqual({ kind: 'module', id: 'app.solution' })
     const EXT = 'modules:\n  - { id: ext, name: Ext, kind: layer, order: 4, responsibility: x, includes: [适配器], excludes: [规则, 状态 → app] }\n'
-    const layer = await mountPanel('/?sel=m:ext', sampleFiles({ 'modules/zz-ext.yaml': EXT }))
+    const layer = await mountDoc('ext', '/?sel=m:ext', sampleFiles({ 'modules/zz-ext.yaml': EXT }))
     // ADR-0060：否定边界一行，带去向的是链接
     const neg = layer.wrapper.find('[data-testid="excludes"]')
     expect(neg.text()).toMatch(/^规则 · 状态\s*→ Application$/)
@@ -259,7 +243,7 @@ describe('PC-4、PC-5：协作', () => {
     })
 
   it('缺省折叠为一行「← N · → M」（ADR-0060）；展开后按（方向，对端）合成一行：对端为画布上相邻的节点，多条标「×N」、类型在悬停，单击目的展开逐条；单击对端名选中对端', async () => {
-    const { wrapper, desk } = await mountPanel('/?level=infra&sel=m:infra.framework', files())
+    const { wrapper, desk } = await mountDoc('infra.framework', '/?level=infra&sel=m:infra.framework', files())
     const fold = wrapper.find('[data-testid="collab-fold"]')
     expect(fold.text()).toMatch(/协作\s*2\s*← 0 · → 2/)
     expect(wrapper.find('[data-testid="collab"]').exists()).toBe(false)
@@ -281,7 +265,7 @@ describe('PC-4、PC-5：协作', () => {
   })
 
   it('悬停一行：写入悬停的关系（画布据此高亮承载它们的边，L25）；移开清空', async () => {
-    const { wrapper } = await mountPanel('/?level=infra&sel=m:infra.framework', files())
+    const { wrapper } = await mountDoc('infra.framework', '/?level=infra&sel=m:infra.framework', files())
     await wrapper.find('[data-testid="collab-fold"]').trigger('click')
     const hover = useRelationHover()
     await wrapper.find('[data-peer="infra.mus"]').trigger('mouseenter')
@@ -498,11 +482,11 @@ modules:
     expect(cardsOf(a.wrapper)).toEqual(['understand', 'related'])
     expect(a.wrapper.find('[data-card="understand"] [data-sec="boundary.relations"]').exists()).toBe(true)
     const s = await mountPanel('/?sc=sc.play', scenarioFiles())
-    expect(cardsOf(s.wrapper)).toEqual(['understand', 'check', 'related'])
+    // 第二十轮读先方案：场景面板的相关资料卡删除（时序图在辅助栏按场景自动打开）
+    expect(cardsOf(s.wrapper)).toEqual(['understand', 'check'])
     await openCheck(s.wrapper)
     expect(s.wrapper.find('[data-check="evidence"]').exists()).toBe(true)
     expect(s.wrapper.find('[data-sec="evidence.refs"] h3').text()).toMatch(/引用\s*\d/)
-    expect(s.wrapper.find('[data-doc="sequence"]').exists()).toBe(true)
   })
 
   it('依赖边：理解卡为文件依赖（结构视角）；核对卡「治理」一行', async () => {

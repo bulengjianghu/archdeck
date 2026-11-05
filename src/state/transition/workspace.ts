@@ -4,8 +4,9 @@
  * 属性栏并排还是悬浮由宽度推出（propsPlacement，WS-3），不存状态。
  */
 
-/** 一份资料（WS-4）：时序图跟当前场景，只有一份；源代码按路径；图解按模块（第十七轮 W5） */
-export type DocRef = { kind: 'sequence' } | { kind: 'source'; path: string; line?: number | null } | { kind: 'explainer'; module: string }
+/** 一份资料（WS-4）：时序图跟当前场景，只有一份；源代码按路径；图解按模块（第十七轮 W5）；事实页按模块（第二十轮读先方案：理解卡搬到辅助栏页顶，无故事的模块也有一页） */
+export type DocRef =
+  { kind: 'sequence' } | { kind: 'source'; path: string; line?: number | null } | { kind: 'explainer'; module: string } | { kind: 'facts'; module: string }
 
 export interface DocTab {
   /** 资料的键（docKey），同一份资料只开一个标签 */
@@ -52,7 +53,7 @@ export const PROPS_WIDTH = 330
 export const MIN_CANVAS = 620
 
 export function docKey(doc: DocRef): string {
-  return doc.kind === 'sequence' ? 'seq' : doc.kind === 'source' ? `src:${doc.path}` : `exp:${doc.module}`
+  return doc.kind === 'sequence' ? 'seq' : doc.kind === 'source' ? `src:${doc.path}` : doc.kind === 'facts' ? `fact:${doc.module}` : `exp:${doc.module}`
 }
 
 export const hasTabs = (s: WorkspaceState) => s.groups.some(g => g.tabs.length > 0)
