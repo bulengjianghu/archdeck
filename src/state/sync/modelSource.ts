@@ -31,6 +31,18 @@ export interface ModelPayload {
   sketch?: { file: string; hash: string; path?: string }
   /** X9、X20：设计的全部草图（第三波的设计级会话用） */
   sketchFiles?: { mount?: string; file: string; path?: string; hash: string; needsLayout?: boolean }[]
+  /** DL-3：草图版本里设计的改动项编号表（changes.json 原文） */
+  changes?: unknown
+  /** DL-10：设计说明 */
+  notes?: DesignNote[]
+}
+
+/** DL-10：一份设计说明（designs/<设计>/notes/<名>.md，AI 拥有） */
+export interface DesignNote {
+  file: string
+  title: string
+  module?: string
+  text: string
 }
 
 export type FetchModel = () => Promise<ModelPayload>

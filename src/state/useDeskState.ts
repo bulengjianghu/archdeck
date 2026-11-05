@@ -27,6 +27,7 @@ import {
   type ReworkList,
   isDesignVersion,
   isSketchRevision,
+  ROOT_MOUNT,
   type ModuleRole,
   type RuleKind,
 } from '@/model'
@@ -54,7 +55,7 @@ import {
   type WorkspaceState,
 } from './transition'
 import { createRouterSync, type RouterSync, type RouterSyncOptions } from './sync/router'
-import { fetchAndLoad, watchModelChanges, type Baselines, type ChangeEvents, type FetchModel } from './sync/modelSource'
+import { fetchAndLoad, watchModelChanges, type Baselines, type ChangeEvents, type DesignNote, type FetchModel } from './sync/modelSource'
 import { createLayoutSync } from './sync/layout'
 import { bandColumnsFor, layoutView, type LayoutOptions } from '@/layout/layout'
 import { NO_SOURCE, createSourceSync, type SourceFetcher } from './sync/source'
@@ -107,6 +108,11 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const payloadFiles = shallowRef<RawFile[]>([])
   const payloadSketch = shallowRef<{ file: string; hash: string; path?: string } | undefined>(undefined)
   const payloadSketchFiles = shallowRef<{ mount?: string; file: string; path?: string; hash: string }[] | undefined>(undefined)
+  /** DL-3、DL-10：草图版本里设计的编号表与设计说明 */
+  const payloadChanges = shallowRef<unknown>(undefined)
+  const notes = shallowRef<DesignNote[]>([])
+  /** DA-6：AI 正在修改草图（对话「改」的一轮在跑）——编辑分组据此只读；对话在编辑分组之后创建，这里先占位 */
+  const aiEditing = shallowRef(false)
   const state = shallowRef<ViewState>({ levelId: '', selection: null, hover: null, toggles: DEFAULT_TOGGLES(RELATION_TYPES), playback: null })
   /** V12：最近一次模式切换映射不过去而清空的选中（面板说明原因）；下一次改变状态的动作即收回 */
   const droppedSelection = shallowRef<Selection | null>(null)
@@ -228,6 +234,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     show: idx => (index.value = idx),
     reload: () => reload(),
     writer: options.writer ?? NO_WRITER,
+    changesFile: () => payloadChanges.value,
+    locked: () => aiEditing.value,
   })
   const allIssues = computed(() => [...issues.value, ...files.warnings.value, ...facts.gateIssues.value])
   /** W-6、Q7：返工清单——问题页签与画布角标；源码归属与代码事实只对当前版本（G9、K8），草图偏差对设计各轮也有（X4） */
@@ -316,6 +324,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       payloadFiles.value = loaded.payload.files
       payloadSketch.value = loaded.payload.sketch
       payloadSketchFiles.value = loaded.payload.sketchFiles
+      payloadChanges.value = loaded.payload.changes
+      notes.value = loaded.payload.notes ?? []
       loadedIndex.value = loaded.model.index
       index.value = edit.onReloaded()
       status.value = 'ready'
@@ -452,12 +462,43 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     perspective: canvas,
     transport: options.agent ?? NO_AGENT,
     openTab: () => workspaceDispatch({ type: 'open', doc: { kind: 'dialogue' }, pin: true }),
+    // DA-6：草图里的「改」——锚点带当前张，请求带草图上下文，一轮说完应用到编辑会话（提议卡）
+    sketch: {
+      active: () => edit.active.value && edit.target?.kind === 'design',
+      design: () => (edit.target?.kind === 'design' ? edit.target.design : undefined),
+      mount: () => edit.session.value?.mount ?? null,
+      context: () => edit.changes.context(),
+      apply: (blocks, turn) => edit.changes.applyAgentRound(blocks, turn),
+      nameOf: id => (id === ROOT_MOUNT ? (baselines.value.current?.index.model.system.name ?? id) : edit.nameOf(id)),
+    },
   })
+  // DA-6、ADR-0063 决策 10：AI 修改草图的一轮在跑时，编辑分组只读
+  watch(
+    () => dialogue.editing(),
+    on => (aiEditing.value = on),
+    { immediate: true },
+  )
   watch(canvas, (c, was) => {
     if (c === was) return
     const doc = defaultDocFor(c, { hasExplainer: explainers.has })
     if (doc?.kind === 'dialogue') workspaceDispatch({ type: 'open', doc: dialogueDoc(), pin: true })
   })
+
+  /** DA-10、DL-10：设计说明——草图版本里设计的 notes/；存为设计说明（写端点）后重新加载并打开预览标签 */
+  const noteDesign = isSketchRevision(options.version) ? options.version.design : null
+  const notesGroup = {
+    list: notes,
+    design: noteDesign,
+    open: (file: string) => workspaceDispatch({ type: 'open', doc: { kind: 'note', file } }),
+    async save(input: { title: string; text: string; module?: string }): Promise<{ ok: true; file: string } | { ok: false; error: string }> {
+      if (!noteDesign) return { ok: false, error: '设计说明只在设计的草图里存' }
+      const r = await writer.saveNote({ design: noteDesign, ...input })
+      if (!r.ok) return r
+      await reload()
+      workspaceDispatch({ type: 'open', doc: { kind: 'note', file: r.file } })
+      return r
+    },
+  }
 
   const workspace = {
     state: workspaceState,
@@ -525,6 +566,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     edit,
     workspace,
     dialogue,
+    notes: notesGroup,
     // 操作
     dispatch,
     init,

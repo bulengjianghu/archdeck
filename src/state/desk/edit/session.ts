@@ -17,6 +17,7 @@ import {
   type SketchDef,
   type SketchSet,
   type SketchTarget,
+  type Touched,
 } from '@/model'
 
 /** X7g：撤销栈深度上限 */
@@ -48,6 +49,20 @@ export interface Step {
   /** 做这一步时所在的草图与做完后所在的草图 */
   mountBefore: string
   mountAfter: string
+  /** DL-1：AI 的一轮（这一步是第几轮的产出） */
+  round?: number
+}
+
+/** DL-1：AI 的一轮——开始前的快照、结束后的样子、碰过的模块与关系；撤回更早一轮按它恢复 */
+export interface Round {
+  n: number
+  /** 对话的轮次编号 */
+  turn: string
+  before: SketchSet
+  after: SketchSet
+  touched: Touched
+  /** 已按快照撤回（撤回更早一轮，或撤回最近一轮时它已不在撤销栈顶） */
+  withdrawn?: boolean
 }
 
 export interface EditSession {
@@ -63,6 +78,8 @@ export interface EditSession {
   future: Step[]
   /** X7i：文件已在外部改动（重新加载时指纹不同，或保存被拒绝） */
   stale: boolean
+  /** DL-1：本次会话里 AI 的各轮（保存不清空：撤回更早一轮是一步新的编辑，不靠撤销栈） */
+  rounds: Round[]
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
@@ -88,7 +105,17 @@ export const primaryMount = (read: Readonly<Record<string, ReadSketch>>): string
 export function begin(target: SketchTarget, id: string, read: Record<string, ReadSketch>, mount = primaryMount(read)): EditSession {
   const sketches = Object.fromEntries(Object.entries(read).map(([m, r]) => [m, r.def]))
   const origin = Object.fromEntries(Object.keys(read).map(m => [m, m]))
-  return { target, id, read, doc: { sketches, origin, born: {} }, mount: sketches[mount] ? mount : primaryMount(read), past: [], future: [], stale: false }
+  return {
+    target,
+    id,
+    read,
+    doc: { sketches, origin, born: {} },
+    mount: sketches[mount] ? mount : primaryMount(read),
+    past: [],
+    future: [],
+    stale: false,
+    rounds: [],
+  }
 }
 
 /** 当前张的草图 */
@@ -183,7 +210,7 @@ function persistentGuard(s: EditSession, fx: DesignEditEffects): string | null {
 /**
  * 应用一步（一个或几个操作，原子）：成功压撤销栈、清空重做栈；任一操作被拒绝时会话不变。
  */
-export function apply(s: EditSession, ops: DesignEditOp | DesignEditOp[], ctx: DesignEditContext): ApplyOutcome {
+export function apply(s: EditSession, ops: DesignEditOp | DesignEditOp[], ctx: DesignEditContext, meta: { round?: number } = {}): ApplyOutcome {
   const list = Array.isArray(ops) ? ops : [ops]
   let sketches: SketchSet = s.doc.sketches
   let fx: DesignEditEffects = NO_DESIGN_EFFECTS
@@ -197,7 +224,15 @@ export function apply(s: EditSession, ops: DesignEditOp | DesignEditOp[], ctx: D
   if (guard) return { ok: false, code: 'invalid', reason: guard }
   const doc = nextDoc(s.doc, sketches, fx)
   const mount = followMount(s.mount, sketches, fx)
-  const step: Step = { ops: list, before: s.doc, after: doc, effects: fx, mountBefore: s.mount, mountAfter: mount }
+  const step: Step = {
+    ops: list,
+    before: s.doc,
+    after: doc,
+    effects: fx,
+    mountBefore: s.mount,
+    mountAfter: mount,
+    ...(meta.round !== undefined ? { round: meta.round } : {}),
+  }
   return { ok: true, session: { ...s, doc, mount, past: [...s.past, step].slice(-UNDO_LIMIT), future: [] }, effects: fx }
 }
 
@@ -370,7 +405,7 @@ export function reloaded(s: EditSession, read: Record<string, ReadSketch>): Edit
 
 /** X7i：把本次的每一步按序重放到新读到的草图上；失败的步骤列出，有失败时仍为已过时（可放弃本次改动） */
 export function replay(s: EditSession, read: Record<string, ReadSketch>, ctx: DesignEditContext): { session: EditSession; failed: DesignEditOp[] } {
-  let next = begin(s.target, s.id, read, s.mount)
+  let next = { ...begin(s.target, s.id, read, s.mount), rounds: s.rounds }
   const failed: DesignEditOp[] = []
   for (const step of s.past) {
     if (!next.doc.sketches[step.mountBefore]) {

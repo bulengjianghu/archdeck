@@ -22,7 +22,7 @@ import {
   type SketchPoint,
   type SketchTarget,
 } from '@/model'
-import { bandRelative, sketchPositions } from '@/layout/layout'
+import { bandRelative } from '@/layout/layout'
 import type { WriteOutcome } from '../ports'
 import { leaveGuard, type ViewAction } from '../../transition'
 import type { createSaveSync, SaveOutcome } from './save'
@@ -78,7 +78,12 @@ export interface CommandInputs {
   prompt: () => string
   sync: ReturnType<typeof createSaveSync>
   derive: EditDerivations
+  /** DA-6、ADR-0063 决策 10：AI 回合中画布只读——可看、可选、可下钻，不可改（拖、连、表单、撤销、保存都拒绝） */
+  locked?: () => boolean
 }
+
+/** AI 回合中拒绝改动的说明（信息条同一句） */
+export const AI_BUSY = 'AI 正在修改…：等这一轮说完，或先停止'
 
 export type EditOutcome = { ok: true; effects: DesignEditEffects } | { ok: false; reason: string }
 const fail = (reason: string): EditOutcome => ({ ok: false, reason })
@@ -125,10 +130,20 @@ export function createCommands(i: CommandInputs) {
     return 'done'
   }
 
+  /** 一步已经算好（AI 的一轮、撤回）：换上新会话并跟随 */
+  function commit(next: EditSession, effects: DesignEditEffects) {
+    const previousPath = i.levelPath()
+    session.value = next
+    i.picked.value = i.picked.value.filter(id => !effects.removed.includes(id) && !effects.renamed.some(([a]) => a === id))
+    showSession()
+    follow(effects, previousPath)
+  }
+
   /** 应用一步（一个或几个操作） */
   function run(ops: DesignEditOp | DesignEditOp[]): EditOutcome {
     const s = session.value
     if (!s || !loaded.value) return fail('不在草图里')
+    if (i.locked?.()) return fail(AI_BUSY)
     const previousPath = i.levelPath()
     const r = apply(s, ops, ctx())
     if (!r.ok) return fail(r.reason)
@@ -151,7 +166,7 @@ export function createCommands(i: CommandInputs) {
    */
   function positionsWith(def: SketchDef, given: Record<string, SketchPoint>): Record<string, SketchPoint> {
     const ids = locateAll(def).map(m => m.id)
-    const shown = sketchPositions(def, ids, i.derive.scene.value?.gridArea)
+    const shown = i.derive.shownPositions(def, ids)
     const have = def.layout?.modules ?? {}
     const missing = Object.fromEntries(ids.filter(id => !have[id] && !given[id] && shown[id]).map(id => [id, shown[id]]))
     return bandRelative(def, { ...missing, ...given })
@@ -294,6 +309,7 @@ export function createCommands(i: CommandInputs) {
   }
 
   const step = (fn: typeof undoSession) => () => {
+    if (i.locked?.()) return false
     const s = session.value
     const r = s && fn(s)
     if (!r) return false
@@ -309,6 +325,7 @@ export function createCommands(i: CommandInputs) {
   let reloadWhileSaving = false
 
   async function save(): Promise<SaveOutcome> {
+    if (i.locked?.()) return { ok: false, error: AI_BUSY }
     try {
       return await i.sync.save()
     } finally {
@@ -396,6 +413,7 @@ export function createCommands(i: CommandInputs) {
     enter,
     exit,
     run,
+    commit,
     edit,
     addModule,
     connect,

@@ -20,5 +20,6 @@ export const NO_WRITER: ModelWriter = {
   archive: none,
   saveSketch: none,
   saveDesignSketches: none,
+  saveNote: none,
   createDesign: none,
 }

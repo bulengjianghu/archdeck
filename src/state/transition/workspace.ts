@@ -16,6 +16,8 @@ export type DocRef =
   | { kind: 'explainer'; module: string }
   | { kind: 'facts'; module: string }
   | { kind: 'dialogue' }
+  /** DA-10、DL-10：设计说明（designs/<设计>/notes/<名>.md）的预览标签 */
+  | { kind: 'note'; file: string }
 
 export interface DocTab {
   /** 资料的键（docKey），同一份资料只开一个标签 */

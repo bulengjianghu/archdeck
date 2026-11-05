@@ -5,7 +5,7 @@
  * 持久草图只有一张，走单张写回。
  */
 import { shallowRef, type ShallowRef } from 'vue'
-import { layoutForSave, type DesignEditContext, type SketchDef, type SketchValidationIssue } from '@/model'
+import { layoutForSave, type ChangeTable, type DesignEditContext, type SketchDef, type SketchValidationIssue } from '@/model'
 import type { DesignSketchWrite, ModelWriter, WriteOutcome } from '../ports'
 import { removedMounts, saved, sketchDirty, type EditSession } from './session'
 
@@ -39,7 +39,12 @@ export function saveRequest(s: EditSession, baseline?: DesignEditContext['baseli
   return { sketches, removed, dropped }
 }
 
-export function createSaveSync(writer: ModelWriter, session: ShallowRef<EditSession | null>, baseline: () => DesignEditContext['baseline']) {
+export function createSaveSync(
+  writer: ModelWriter,
+  session: ShallowRef<EditSession | null>,
+  baseline: () => DesignEditContext['baseline'],
+  changes: () => unknown = () => null,
+) {
   const saving = shallowRef(false)
   /** 最近一次保存的结果说明（成功为文件，失败为原因），信息条显示 */
   const last = shallowRef<SaveOutcome | null>(null)
@@ -62,7 +67,13 @@ export function createSaveSync(writer: ModelWriter, session: ShallowRef<EditSess
         out = r.ok ? { ok: true, files: [r.file], dropped: req.dropped } : r
         if (r.ok) next = saved(s, sent, { [w.mount]: { file: s.read[w.mount]?.file ?? `intent/${s.target.id}.yaml`, hash: r.hash } })
       } else {
-        const r = await writer.saveDesignSketches({ design: s.target.design, sketches: req.sketches, ...(req.removed.length ? { removed: req.removed } : {}) })
+        const table = changes()
+        const r = await writer.saveDesignSketches({
+          design: s.target.design,
+          sketches: req.sketches,
+          ...(req.removed.length ? { removed: req.removed } : {}),
+          ...(table ? { changes: table as ChangeTable } : {}),
+        })
         out = r.ok ? { ok: true, files: r.files.map(f => f.file), dropped: req.dropped } : r
         if (r.ok) next = saved(s, sent, Object.fromEntries(r.files.map(f => [f.mount, { file: `sketches/${f.mount}.yaml`, hash: f.hash }])))
       }

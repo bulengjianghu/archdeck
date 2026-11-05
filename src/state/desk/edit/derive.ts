@@ -22,10 +22,11 @@ import {
   type SketchComparison,
   type SketchDef,
   type SketchEntity,
+  type SketchPoint,
   type SketchSet,
   type SketchValidation,
 } from '@/model'
-import { sketchScene, type SketchScene } from '@/layout/layout'
+import { sketchPositions, sketchScene, type SketchScene } from '@/layout/layout'
 import type { Selection } from '../../transition'
 import { isDirty, sketchDirty, type EditSession } from './session'
 
@@ -133,6 +134,8 @@ export interface DeriveInputs {
   hideReferences: () => boolean
   /** X22：草图画布的可用区域（画布容器的实际尺寸；没量到为 null） */
   area?: () => { w: number; h: number } | null
+  /** T2.5：模型画布在某一层算好的节点位置（没有 layout 的草图的起点；还没算好为 null） */
+  seed?: (mount: string) => Readonly<Record<string, SketchPoint>> | null
 }
 
 export function createDerive(i: DeriveInputs) {
@@ -237,8 +240,11 @@ export function createDerive(i: DeriveInputs) {
       mountName: def.mount === ROOT_MOUNT ? undefined : (nameOf(def.mount) ?? def.mount),
       hideReferences: i.hideReferences(),
       ...(i.area?.() ? { area: i.area()! } : {}),
+      seed: i.seed?.(def.mount) ?? null,
     })
   })
+  /** 本张模块此刻显示的位置（相对中心区的内容原点）：layout 里有的照用，没有的取起点（模型画布的位置或网格）——第一次落位、AI 新框安放前用 */
+  const shownPositions = (def: SketchDef, ids: readonly string[]) => sketchPositions(def, ids, scene.value?.gridArea, i.seed?.(def.mount) ?? null)
   /** X15：当前张没有 layout（显示的是一次网格布局，不写回） */
   const needsLayout = computed(() => !!scene.value?.needsLayout)
 
@@ -285,6 +291,7 @@ export function createDerive(i: DeriveInputs) {
     breadcrumb,
     nameOf,
     deeper,
+    shownPositions,
   }
 }
 

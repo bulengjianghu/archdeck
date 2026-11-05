@@ -4,7 +4,18 @@
  * 把推送来的 agent 事件翻译成转移。当前版本上的会话不保存（只在内存）；设计里的随设计保存（接入层按请求带的设计落盘，波 2 起有设计里的对话）。
  */
 import { shallowRef, watch, type Ref, type ShallowRef } from 'vue'
-import { digestView, resolveCitation, type AgentBlock, type Anchor, type Citation, type DialogueMode, type DigestBlock, type ModelIndex } from '@/model'
+import {
+  digestView,
+  resolveCitation,
+  type AgentBlock,
+  type Anchor,
+  type Citation,
+  type DialogueMode,
+  type DigestBlock,
+  type ModelIndex,
+  type SketchContext,
+} from '@/model'
+import type { ProposalOutcome } from './edit/changes'
 
 import type { Selected } from '../transition'
 
@@ -24,9 +35,13 @@ export interface DialogueInput {
 /** 重讲的结果（DL-8）：落了（题解与讲法要求已写、依据已盖）或被拒（原因） */
 export type RenarrateOutcome = { applied: true; path: string; notes: string[] } | { applied: false; reasons: string[] }
 
+/** 一轮的结果：重讲（DL-8）或草图里的提议（DA-8） */
+export type TurnOutcome = RenarrateOutcome | ProposalOutcome
+export type { ProposalOutcome }
+
 export type DialogueEntry =
   | { id: string; role: 'user'; anchor: Anchor; input: DialogueInput }
-  | { id: string; role: 'agent'; anchor: Anchor; turn: string; text: string; blocks: AgentBlock[]; outcome?: RenarrateOutcome }
+  | { id: string; role: 'agent'; anchor: Anchor; turn: string; text: string; blocks: AgentBlock[]; outcome?: TurnOutcome }
   | { id: string; role: 'error'; anchor: Anchor; turn: string; message: string }
   | { id: string; role: 'stopped'; anchor: Anchor; turn: string; reason: 'stopped' | 'timeout' }
 
@@ -51,7 +66,7 @@ export interface DialogueState {
 /** 推送来的 agent 事件（接入层 agentProcess 的 DialogueEvent） */
 export type AgentPush =
   | { turn: string; type: 'text'; text: string }
-  | { turn: string; type: 'done'; blocks: AgentBlock[]; outcome?: RenarrateOutcome }
+  | { turn: string; type: 'done'; blocks: AgentBlock[]; outcome?: TurnOutcome }
   | { turn: string; type: 'error'; message: string }
   | { turn: string; type: 'stopped'; reason: 'stopped' | 'timeout' }
 
@@ -128,13 +143,20 @@ export function dialogueTransition(s: DialogueState, a: DialogueAction): Dialogu
     case 'setAnchor':
       // DA-2：换锚点不动转录（历史消息各自记着当时的锚点）
       return sameAnchor(s.anchor, a.anchor) ? s : { ...s, anchor: a.anchor }
-    case 'setPerspective':
+    case 'setPerspective': {
       // DL-12：换视角只换锚点（运行视角下锚点随选中的步骤），转录、运行中的一轮与队列都不动
-      return s.perspective === a.perspective && sameAnchor(s.anchor, a.anchor) ? s : { ...s, perspective: a.perspective, anchor: a.anchor }
+      if (s.perspective === a.perspective && sameAnchor(s.anchor, a.anchor)) return s
+      // DL-19：进入草图画布缺省「改」，离开时「改」回到「问」（改只在草图里，重讲只在当前版本上）
+      const mode = a.perspective === 'sketch' ? (s.perspective !== 'sketch' ? 'edit' : s.mode) : s.mode === 'edit' ? 'ask' : s.mode
+      return { ...s, perspective: a.perspective, anchor: a.anchor, mode }
+    }
     case 'setDraft':
       return s.draft === a.text ? s : { ...s, draft: a.text }
-    case 'setMode':
-      return s.mode === a.mode ? s : { ...s, mode: a.mode }
+    case 'setMode': {
+      // DL-19：草图里只有「改 / 问」，当前版本上只有「问 / 重讲」
+      const allowed = s.perspective === 'sketch' ? a.mode !== 'renarrate' : a.mode !== 'edit'
+      return s.mode === a.mode || !allowed ? s : { ...s, mode: a.mode }
+    }
     case 'event': {
       const e = a.event
       // 停止之后迟到的事件、别的轮次的事件一律不认
@@ -165,13 +187,21 @@ const lastAnchor = (s: DialogueState): Anchor => [...s.transcript].reverse().fin
 
 export function sameAnchor(a: Anchor, b: Anchor): boolean {
   if (a.kind !== b.kind) return false
-  if (a.kind === 'module') return a.module === (b as typeof a).module
+  if (a.kind === 'module') return a.module === (b as typeof a).module && a.sheet === (b as typeof a).sheet
   if (a.kind === 'step') return a.frame === (b as typeof a).frame && a.scenario === (b as typeof a).scenario
   return true
 }
 
-/** DA-2：选中 → 锚点。模块 → 模块；步骤 → 步骤（带两端，供锚点条与上下文包）；其余（无选中、关系、文件…）→ 无 */
-export function anchorOf(sel: Selected | null, step: { scenario: string; frame: { id: string; from: string; to: string; label?: string } } | null): Anchor {
+/**
+ * DA-2：选中 → 锚点。模块 → 模块；步骤 → 步骤（带两端，供锚点条与上下文包）；其余（无选中、关系、文件…）→ 无。
+ * 草图里（sheet 给出当前张）总有锚点：选中的框，没有选中时是当前张的挂载点（DL-19：「没有选中对象不能发起修改」在草图里由当前张兜底）。
+ */
+export function anchorOf(
+  sel: Selected | null,
+  step: { scenario: string; frame: { id: string; from: string; to: string; label?: string } } | null,
+  sheet?: string | null,
+): Anchor {
+  if (sheet) return { kind: 'module', module: sel?.kind === 'module' ? sel.id : sheet, sheet }
   if (sel?.kind === 'module') return { kind: 'module', module: sel.id }
   if (sel?.kind === 'step' && step && step.frame.id === sel.id)
     return {
@@ -185,9 +215,14 @@ export function anchorOf(sel: Selected | null, step: { scenario: string; frame: 
   return { kind: 'none' }
 }
 
-/** 锚点条的文字 */
-export function anchorText(index: ModelIndex | null, a: Anchor): string {
-  const name = (id: string) => index?.modules.get(id)?.name ?? index?.actors.get(id)?.name ?? (id === index?.rootId ? index.model.system.name : id)
+/** 锚点条的文字（草图里：「当前张 <挂载点名>」，选中了框再加「 · <框名>」） */
+export function anchorText(index: ModelIndex | null, a: Anchor, nameOf?: (id: string) => string | undefined): string {
+  const name = (id: string) =>
+    nameOf?.(id) ??
+    index?.modules.get(id)?.name ??
+    index?.actors.get(id)?.name ??
+    (id === index?.rootId || id === 'root' ? (index?.model.system.name ?? id) : id)
+  if (a.kind === 'module' && a.sheet) return `当前张 ${name(a.sheet)}${a.module !== a.sheet ? ` · ${name(a.module)}` : ''}`
   if (a.kind === 'module') return name(a.module)
   if (a.kind === 'step') return `${name(a.from)} → ${name(a.to)}${a.label ? ` · ${a.label}` : ''}`
   return '没有选中（问整个系统）'
@@ -212,6 +247,20 @@ export interface AgentTurnRequest {
   images: ImageAttachment[]
   /** 设计里的对话随设计落盘；当前版本上不带（不落盘，DA-1） */
   design?: string
+  /** 草图里：草图上下文（DL-14，波 2） */
+  sketch?: SketchContext
+}
+
+/**
+ * DA-6：对话在草图里的一面（编辑分组给）——在不在草图里、设计、当前张、草图上下文、把一轮的改动块应用到编辑会话（提议卡的结果）、名称。
+ */
+export interface DialogueSketchPort {
+  active: () => boolean
+  design: () => string | undefined
+  mount: () => string | null
+  context: () => SketchContext | null
+  apply: (blocks: readonly AgentBlock[], turn: string) => ProposalOutcome | undefined
+  nameOf: (id: string) => string | undefined
 }
 
 export const NO_AGENT: AgentTransport = {
@@ -243,18 +292,36 @@ export interface DialogueInputs {
   design?: string
   /** 打开（固定）对话标签（DL-4、DL-5） */
   openTab: () => void
+  /** 草图里的一面（没有时只在当前版本上对话） */
+  sketch?: DialogueSketchPort
 }
 
-export function createDialogue({ project, index, selection, step, perspective, transport, design, openTab }: DialogueInputs) {
+export function createDialogue({ project, index, selection, step, perspective, transport, design, openTab, sketch }: DialogueInputs) {
   const session = Math.random().toString(36).slice(2, 10)
+  const sheet = () => (sketch?.active() ? (sketch.mount() ?? null) : null)
+  const anchorNow = () => anchorOf(selection.value, step.value, sheet())
   const state: ShallowRef<DialogueState> = shallowRef({
     ...EMPTY_DIALOGUE,
     session,
     perspective: perspective.value,
-    anchor: anchorOf(selection.value, step.value),
+    mode: perspective.value === 'sketch' ? ('edit' as const) : ('ask' as const),
+    anchor: anchorNow(),
   })
-  const dispatch = (a: DialogueAction) => {
+  const dispatch = (a0: DialogueAction) => {
     const before = state.value
+    // DA-6、DL-1：草图里「改」的一轮说完时，先把改动块应用到编辑会话（一轮一步），结果写进提议卡
+    let a = a0
+    if (
+      a.type === 'event' &&
+      a.event.type === 'done' &&
+      before.run.status === 'running' &&
+      before.run.turn === a.event.turn &&
+      before.run.mode === 'edit' &&
+      sketch
+    ) {
+      const outcome = sketch.apply(a.event.blocks, a.event.turn)
+      if (outcome) a = { ...a, event: { ...a.event, outcome } }
+    }
     const after = dialogueTransition(before, a)
     state.value = after
     // 状态变化 → 请求：进入一个新的运行轮次就发；停止就通知子进程
@@ -270,7 +337,8 @@ export function createDialogue({ project, index, selection, step, perspective, t
             anchor: user.anchor,
             text: user.input.text,
             images: user.input.images,
-            ...(design ? { design } : {}),
+            ...((sketch?.active() ? sketch.design() : design) ? { design: sketch?.active() ? sketch.design() : design } : {}),
+            ...(sketch?.active() && sketch.context() ? { sketch: sketch.context()! } : {}),
           })
           .then(r => {
             if (!r.ok) dispatch({ type: 'event', event: { turn, type: 'error', message: r.error } })
@@ -278,8 +346,8 @@ export function createDialogue({ project, index, selection, step, perspective, t
     }
     if (a.type === 'stop' && before.run.status === 'running' && project) void transport.stop(project, before.run.turn)
   }
-  watch([selection, step], () => dispatch({ type: 'setAnchor', anchor: anchorOf(selection.value, step.value) }))
-  watch(perspective, p => dispatch({ type: 'setPerspective', perspective: p, anchor: anchorOf(selection.value, step.value) }))
+  watch([selection, step, () => sheet()], () => dispatch({ type: 'setAnchor', anchor: anchorNow() }))
+  watch(perspective, p => dispatch({ type: 'setPerspective', perspective: p, anchor: anchorNow() }))
   const unsubscribe = project ? transport.subscribe(project, event => dispatch({ type: 'event', event })) : () => {}
   return {
     state,
@@ -293,7 +361,29 @@ export function createDialogue({ project, index, selection, step, perspective, t
     /** 派生给呈现层：引用原文、梳理卡、锚点文字（呈现层不直接调模型层的计算） */
     citeViews: (list: readonly Citation[] | undefined) => citeViews(index.value, list),
     digest: (block: AgentBlock) => digestOf(index.value, block),
-    anchorText: (a: Anchor) => anchorText(index.value, a),
+    anchorText: (a: Anchor) => anchorText(index.value, a, sketch?.active() ? sketch.nameOf : undefined),
+    /** DA-6：AI 正在修改草图（画布只读） */
+    editing: () => state.value.run.status === 'running' && state.value.run.mode === 'edit',
+    /**
+     * DA-7：「按这张图起草」——把梳理卡（与它那一问贴的照片）作为「改」的一轮发出去；只在草图里。
+     */
+    draftFromDigest(entryId: string) {
+      const s = state.value
+      const at = s.transcript.findIndex(e => e.id === entryId)
+      const ask = [...s.transcript.slice(0, at)].reverse().find(e => e.role === 'user')
+      const entry = s.transcript[at]
+      if (!sketch?.active() || entry?.role !== 'agent') return
+      const digest = entry.blocks.find(b => b.kind === 'digest')
+      if (!digest) return
+      dispatch({
+        type: 'send',
+        input: {
+          text: `按这张图起草：把梳理卡里对上的框与关系画进当前张（梳理卡：${JSON.stringify(digest)}）`,
+          mode: 'edit',
+          images: ask?.role === 'user' ? ask.input.images : [],
+        },
+      })
+    },
     stop: () => dispatch({ type: 'stop' }),
     dispose: unsubscribe,
   }

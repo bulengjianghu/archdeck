@@ -2,7 +2,8 @@
  * DeskState 的编辑分组（desk.edit，X7、X20，ADR-0024、ADR-0025）：按设计的编辑会话（一个值）、派生、操作与草图写回同步。
  * 只在草图版本（设计的草图、持久草图）上有会话：打开草图即进入草图画布；此时 DeskState 的 index 为设计的索引（各张草图连同 system.yaml 与持久草图）。
  */
-import { computed, shallowRef, type ShallowRef } from 'vue'
+import { computed, shallowRef, watch, type ShallowRef } from 'vue'
+import { layoutView } from '@/layout/layout'
 import {
   isIntentVersion,
   isSketchRevision,
@@ -10,6 +11,7 @@ import {
   kebab,
   locate,
   locateAll,
+  projectLevel,
   referenceNodes,
   referenceRelations,
   ROOT_MOUNT,
@@ -18,6 +20,7 @@ import {
   type CompareMode,
   type ModelIndex,
   type RawFile,
+  type SketchPoint,
   type SketchTarget,
   type VersionRef,
 } from '@/model'
@@ -27,6 +30,7 @@ import type { EditSession } from './edit/session'
 import { createDerive } from './edit/derive'
 import { createSaveSync } from './edit/save'
 import { createCommands, type PayloadSketch } from './edit/commands'
+import { createChanges } from './edit/changes'
 
 export type { EditSession } from './edit/session'
 export type { SaveOutcome } from './edit/save'
@@ -55,6 +59,10 @@ export interface EditInputs {
   show: (index: ModelIndex | null) => void
   reload: () => Promise<void>
   writer: ModelWriter
+  /** DL-3：载荷里的编号表（designs/<设计>/changes.json 原文） */
+  changesFile?: () => unknown
+  /** DA-6：AI 回合中画布只读 */
+  locked?: () => boolean
 }
 
 export function createEdit(i: EditInputs) {
@@ -77,7 +85,14 @@ export function createEdit(i: EditInputs) {
   const twoBases = target?.kind !== 'persistent'
   /** 对比口径（对比弹层设定，设计的草图缺省相对基线，持久草图固定相对当前版本） */
   const compareMode = shallowRef<CompareMode>(twoBases ? 'baseline' : 'current')
+  /**
+   * T2.5：新建草图的起点——模型画布在那一层算好的节点位置（同一套布局 layoutView，按基线投影本层）；按挂载点算一次、只在会话里。
+   * 根草图按层带排（X21），不借。
+   */
+  const seeds = shallowRef<Record<string, Record<string, SketchPoint>>>({})
+  const seedFor = (mount: string) => seeds.value[mount] ?? null
   const derive = createDerive({
+    seed: seedFor,
     session,
     loaded: i.loaded,
     files: i.files,
@@ -92,7 +107,26 @@ export function createEdit(i: EditInputs) {
     hideReferences: () => hideReferences.value,
     area: () => area.value,
   })
-  const sync = createSaveSync(i.writer, session, i.baseline)
+  /** DL-3：保存时一并写编号表（下面 createChanges 之后接上） */
+  let tableForSave: () => unknown = () => null
+  watch(
+    () => session.value?.mount,
+    async mount => {
+      const s = session.value
+      const idx = i.baseline()
+      if (!s || !mount || mount === ROOT_MOUNT || seeds.value[mount] || s.doc.sketches[mount]?.layout?.modules || !idx?.modules.has(mount)) return
+      try {
+        const pv = await layoutView(projectLevel(idx, mount))
+        const out: Record<string, SketchPoint> = {}
+        for (const [id, b] of pv.nodes) if (idx.modules.get(id)?.parentId === mount) out[id] = { x: Math.round(b.x), y: Math.round(b.y) }
+        if (Object.keys(out).length) seeds.value = { ...seeds.value, [mount]: out }
+      } catch {
+        // 模型画布排不出（层次被隐藏等）：退回网格
+      }
+    },
+    { immediate: true },
+  )
+  const sync = createSaveSync(i.writer, session, i.baseline, () => tableForSave())
   const sketchFiles = () => (target?.kind === 'design' ? (i.sketchFiles.value ?? []) : i.sketch.value ? [i.sketch.value] : [])
   const commands = createCommands({
     session,
@@ -110,7 +144,18 @@ export function createEdit(i: EditInputs) {
     prompt: i.prompt,
     sync,
     derive,
+    locked: i.locked,
   })
+  const changes = createChanges({
+    session,
+    derive,
+    baseline: i.baseline,
+    current: i.current,
+    design: target?.kind === 'design' ? target.design : null,
+    table: () => i.changesFile?.(),
+    commit: commands.commit,
+  })
+  tableForSave = changes.tableForSave
   /** 当前张里的条目（面板显示草图写了的字段；不在本张里的为 undefined——引用节点或属于别的草图） */
   const lookup = {
     module: (id: string) => (derive.sketch.value ? locate(derive.sketch.value, id)?.node : undefined),
@@ -247,6 +292,16 @@ export function createEdit(i: EditInputs) {
     lastSave: sync.last,
     serverIssues: sync.serverIssues,
     ...commands,
+    /** 放弃本次改动：编号表也回到文件里的样子 */
+    async discard() {
+      await commands.discard()
+      changes.reset()
+    },
+    changes,
+    /** T2.5：各层借来的起点（画布据此在起点算好时再适应一次） */
+    seeds,
+    /** DA-6：AI 回合中（画布只读） */
+    locked: computed(() => !!i.locked?.()),
   }
 }
 
