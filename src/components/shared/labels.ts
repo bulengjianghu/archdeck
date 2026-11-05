@@ -55,7 +55,7 @@ export const ACTOR_KIND_LABELS: Record<ActorKind, string> = { user: '用户', sy
 export const DESIGN_STATUS_LABELS: Record<DesignStatus, string> = {
   draft: '起草中',
   reviewing: '评审中',
-  accepted: '已定稿',
+  accepted: '已认可',
   implemented: '已实现',
   abandoned: '已放弃',
 }

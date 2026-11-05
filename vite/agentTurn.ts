@@ -9,6 +9,7 @@ import os from 'node:os'
 import path from 'node:path'
 import {
   buildContextPack,
+  editLock,
   loadModel,
   packPrompt,
   type AgentBlock,
@@ -99,6 +100,9 @@ export async function startTurn(
   if (!payload) return { ok: false, error: `项目不存在：${project}`, status: 404 }
   const designDir = body.design ? path.join(ctx.modelRoot, project, 'designs', body.design) : null
   if (designDir && !fs.existsSync(designDir)) return { ok: false, error: `设计不存在：${body.design}`, status: 404 }
+  // DL-34：已认可 / 已实现 / 已放弃的设计里不能「改」（服务端兜底，页面同口径）
+  const lock = body.mode === 'edit' ? editLock(payload.designs?.find(d => d.id === body.design)?.status) : null
+  if (lock) return { ok: false, error: lock, status: 409 }
   const { index } = loadModel(payload.files)
   const a = body.anchor
   // 草图里的锚点可以是草图里才有的模块（DA-2），不按当前版本查

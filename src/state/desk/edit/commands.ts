@@ -78,8 +78,11 @@ export interface CommandInputs {
   prompt: () => string
   sync: ReturnType<typeof createSaveSync>
   derive: EditDerivations
-  /** DA-6、ADR-0063 决策 10：AI 回合中画布只读——可看、可选、可下钻，不可改（拖、连、表单、撤销、保存都拒绝） */
-  locked?: () => boolean
+  /**
+   * 编辑锁的原因（没有锁为 null）：DL-34 设计已认可 / 已实现 / 已放弃；DA-6、ADR-0063 决策 10 AI 回合中——
+   * 可看、可选、可下钻，不可改（拖、连、表单、撤销、保存、撤回都拒绝）
+   */
+  locked?: () => string | null
 }
 
 /** AI 回合中拒绝改动的说明（信息条同一句） */
@@ -143,7 +146,8 @@ export function createCommands(i: CommandInputs) {
   function run(ops: DesignEditOp | DesignEditOp[]): EditOutcome {
     const s = session.value
     if (!s || !loaded.value) return fail('不在草图里')
-    if (i.locked?.()) return fail(AI_BUSY)
+    const why = i.locked?.()
+    if (why) return fail(why)
     const previousPath = i.levelPath()
     const r = apply(s, ops, ctx())
     if (!r.ok) return fail(r.reason)
@@ -325,7 +329,8 @@ export function createCommands(i: CommandInputs) {
   let reloadWhileSaving = false
 
   async function save(): Promise<SaveOutcome> {
-    if (i.locked?.()) return { ok: false, error: AI_BUSY }
+    const why = i.locked?.()
+    if (why) return { ok: false, error: why }
     try {
       return await i.sync.save()
     } finally {

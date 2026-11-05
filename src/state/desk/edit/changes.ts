@@ -66,6 +66,8 @@ export interface ChangesInputs {
   table: () => unknown
   /** 应用一步之后的跟随（选中、层次）——编辑操作的同一出口 */
   commit: (next: EditSession, effects: DesignEditEffects) => void
+  /** 编辑锁的原因（DL-34 设计已认可等、DL-28 AI 回合中）：撤回同样拒绝 */
+  locked?: () => string | null
 }
 
 export function createChanges(i: ChangesInputs) {
@@ -259,6 +261,8 @@ export function createChanges(i: ChangesInputs) {
 
   /** CI-5：撤回一轮（最近一轮 = 撤销；更早的按快照恢复，之后又被改过的先确认） */
   function withdrawRoundNow(n: number, confirmed = false): { ok: boolean; reason?: string } {
+    const why = i.locked?.()
+    if (why) return { ok: false, reason: why }
     const s = session.value
     const ctx = derive.ctx.value
     if (!s || !ctx) return { ok: false, reason: '不在草图里' }
@@ -283,6 +287,8 @@ export function createChanges(i: ChangesInputs) {
 
   /** CI-5：撤回一项（恢复到基线；别的项依赖它时先确认） */
   function withdrawItemNow(n: number, confirmed = false): { ok: boolean; reason?: string } {
+    const why = i.locked?.()
+    if (why) return { ok: false, reason: why }
     const s = session.value
     const ctx = derive.ctx.value
     const it = byNumber(n)

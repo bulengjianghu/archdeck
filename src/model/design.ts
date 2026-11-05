@@ -4,7 +4,7 @@
  * 由接入层在 Node 侧读取，页面只展示。
  */
 
-/** 设计整体状态：起草 → 评审中 → 已定稿 → 已实现；或放弃 */
+/** 设计整体状态：起草中 → 已认可 → 已实现；或放弃（DL-32）。「评审中」不再产生，旧设计照常读、按起草中迁移（ADR-0063 决策 5） */
 export type DesignStatus = 'draft' | 'reviewing' | 'accepted' | 'implemented' | 'abandoned'
 
 export const DESIGN_STATUSES: readonly DesignStatus[] = ['draft', 'reviewing', 'accepted', 'implemented', 'abandoned']
@@ -33,6 +33,13 @@ export interface RevisionInfo {
   feedback?: string
 }
 
+/** DL-33：认可记录——认可时的日期与各张草图的内容指纹（键为相对设计目录的路径 sketches/<挂载点>.yaml）；回到起草时去掉指纹、记 withdrawnAt */
+export interface DesignApproval {
+  at?: string
+  sketches?: Record<string, string>
+  withdrawnAt?: string
+}
+
 export interface DesignInfo {
   /** 设计 ID，即目录名 */
   id: string
@@ -52,6 +59,8 @@ export interface DesignInfo {
   sketches?: { mount: string; file: string; needsLayout?: boolean }[]
   /** X4：认可的偏差（design.yaml 的 accepted） */
   accepted?: { deviation: string; reason: string; at?: string }[]
+  /** DL-33：设计的认可记录（design.yaml 的 approval） */
+  approval?: DesignApproval
   /** X4：项目摘要里的偏差计数（未认可的 error 与 warning；草图对最新一轮核验，已定稿的对当前版本） */
   deviations?: { errors: number; warnings: number }
   /** design.yaml 的格式问题、缺失的快照目录等 */

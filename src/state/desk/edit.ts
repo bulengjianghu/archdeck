@@ -5,6 +5,7 @@
 import { computed, shallowRef, watch, type ShallowRef } from 'vue'
 import { layoutView } from '@/layout/layout'
 import {
+  editLock,
   isIntentVersion,
   isSketchRevision,
   isSketchVersion,
@@ -18,6 +19,7 @@ import {
   sketchLifetime,
   type ChangeKind,
   type CompareMode,
+  type DesignStatus,
   type ModelIndex,
   type RawFile,
   type SketchPoint,
@@ -29,7 +31,7 @@ import type { ModelWriter } from './ports'
 import type { EditSession } from './edit/session'
 import { createDerive } from './edit/derive'
 import { createSaveSync } from './edit/save'
-import { createCommands, type PayloadSketch } from './edit/commands'
+import { AI_BUSY, createCommands, type PayloadSketch } from './edit/commands'
 import { createChanges } from './edit/changes'
 
 export type { EditSession } from './edit/session'
@@ -62,7 +64,9 @@ export interface EditInputs {
   /** DL-3：载荷里的编号表（designs/<设计>/changes.json 原文） */
   changesFile?: () => unknown
   /** DA-6：AI 回合中画布只读 */
-  locked?: () => boolean
+  aiBusy?: () => boolean
+  /** DL-34：设计的状态（已认可 / 已实现 / 已放弃时锁定）；持久草图没有 */
+  status?: () => DesignStatus | undefined
 }
 
 export function createEdit(i: EditInputs) {
@@ -126,6 +130,9 @@ export function createEdit(i: EditInputs) {
     },
     { immediate: true },
   )
+  /** DL-34：编辑锁的原因——设计状态锁先于 AI 回合只读（DL-28） */
+  const statusLock = computed(() => (target?.kind === 'design' ? editLock(i.status?.()) : null))
+  const lockReason = (): string | null => statusLock.value ?? (i.aiBusy?.() ? AI_BUSY : null)
   const sync = createSaveSync(i.writer, session, i.baseline, () => tableForSave())
   const sketchFiles = () => (target?.kind === 'design' ? (i.sketchFiles.value ?? []) : i.sketch.value ? [i.sketch.value] : [])
   const commands = createCommands({
@@ -144,7 +151,7 @@ export function createEdit(i: EditInputs) {
     prompt: i.prompt,
     sync,
     derive,
-    locked: i.locked,
+    locked: lockReason,
   })
   const changes = createChanges({
     session,
@@ -154,6 +161,7 @@ export function createEdit(i: EditInputs) {
     design: target?.kind === 'design' ? target.design : null,
     table: () => i.changesFile?.(),
     commit: commands.commit,
+    locked: lockReason,
   })
   tableForSave = changes.tableForSave
   /** 当前张里的条目（面板显示草图写了的字段；不在本张里的为 undefined——引用节点或属于别的草图） */
@@ -300,8 +308,14 @@ export function createEdit(i: EditInputs) {
     changes,
     /** T2.5：各层借来的起点（画布据此在起点算好时再适应一次） */
     seeds,
-    /** DA-6：AI 回合中（画布只读） */
-    locked: computed(() => !!i.locked?.()),
+    /** 画布只读：设计已锁定（DL-34）或 AI 回合中（DA-6） */
+    locked: computed(() => !!lockReason()),
+    /** 只读的原因（信息条、画布提示同一句） */
+    lockReason: computed(lockReason),
+    /** DA-6：AI 回合中 */
+    aiBusy: computed(() => !!i.aiBusy?.()),
+    /** DL-34：设计的状态锁（已认可时为「回到起草」的提示） */
+    statusLock,
   }
 }
 

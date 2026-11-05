@@ -74,7 +74,15 @@ const ready = computed(() => (mode === 'commit' ? !!c.value : !!d.value || isInt
         <span v-if="crumbNote" class="crumb-note" role="alert">{{ crumbNote }}</span>
         <span v-if="desk.edit.dirty.value" class="dirty" title="有未保存的改动">编辑中 ●</span>
         <!-- DA-6、ADR-0063 决策 10：AI 回合中画布只读 -->
-        <span v-if="desk.edit.locked.value" class="ai-busy" data-testid="ai-editing" title="AI 这一轮说完时一次性应用为一步；画布可看、可选、可下钻，不可改"
+        <!-- DL-34：设计已认可 / 已实现 / 已放弃时草图锁定（先于 AI 回合只读） -->
+        <span v-if="desk.edit.statusLock.value" class="locked-chip" data-testid="design-locked" :title="desk.edit.statusLock.value">{{
+          d?.status === 'accepted' ? '草图已锁定：要改先「回到起草」' : '只看'
+        }}</span>
+        <span
+          v-else-if="desk.edit.aiBusy.value"
+          class="ai-busy"
+          data-testid="ai-editing"
+          title="AI 这一轮说完时一次性应用为一步；画布可看、可选、可下钻，不可改"
           ><span class="spin" aria-hidden="true" />AI 正在修改…</span
         >
       </template>
@@ -85,6 +93,16 @@ const ready = computed(() => (mode === 'commit' ? !!c.value : !!d.value || isInt
 </template>
 
 <style scoped>
+.locked-chip {
+  flex: none;
+  padding: 1px 10px;
+  border-radius: 10px;
+  background: var(--warn-soft, var(--accent-soft));
+  color: var(--text-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .ai-busy {
   flex: none;
   display: inline-flex;

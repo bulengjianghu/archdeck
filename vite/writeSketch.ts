@@ -11,6 +11,7 @@ import path from 'node:path'
 import { isMap, isScalar, isSeq, stringify, type Document, type Node } from 'yaml'
 import {
   designSketchPath,
+  editLock,
   layoutForSave,
   ROOT_MOUNT,
   seedFromBaseline,
@@ -27,13 +28,16 @@ import {
   type SketchValidation,
   type ValidateContext,
 } from '../src/model'
-import { DESIGNS_DIR, SKETCHES_DIR, isProjectId, readModelDir, sketchHash } from './readModelDir'
+import { DESIGNS_DIR, SKETCHES_DIR, isProjectId, readDesignInfo, readModelDir, sketchHash } from './readModelDir'
 import { appendLedger, governanceDir, touchOwned } from './governanceStore'
 import { WriteError, openDoc, projectDir, save, today } from './writeModel'
 import { writeChangeTable } from './designNotes'
 
 /** 文件已在外部改动（409） */
 export class WriteConflict extends WriteError {}
+
+/** 设计已锁定（409，DL-34） */
+export class DesignLocked extends WriteError {}
 
 /** 草图校验不过（422），附问题列表 */
 export class SketchInvalid extends WriteError {
@@ -100,6 +104,12 @@ function check(sketch: SketchDef, ctx: ValidateContext): void {
   if (!v.ok) throw new SketchInvalid(`草图「${sketch.mount}」校验不过（${v.errors.length} 个错误）：${v.errors[0]?.message ?? ''}`, v)
 }
 
+/** DL-34：已认可 / 已实现 / 已放弃的设计不再写草图（服务端兜底，页面同口径） */
+function assertEditable(dir: string, design: string): void {
+  const lock = editLock(readDesignInfo(path.join(dir, DESIGNS_DIR, design), design).status)
+  if (lock) throw new DesignLocked(lock)
+}
+
 /** B6：整份写回持久草图或设计的一张草图（按它的挂载点）；返回写进的文件与新指纹 */
 export function saveSketch(modelRoot: string, project: string, req: SaveSketchRequest, root: string): { file: string; hash: string } {
   if (!req?.sketch || typeof req.sketch !== 'object') throw new WriteError('缺少草图')
@@ -133,6 +143,7 @@ export function saveSketch(modelRoot: string, project: string, req: SaveSketchRe
 export function saveDesignSketches(modelRoot: string, project: string, design: string, req: SaveDesignRequest, root: string): SaveDesignResult {
   const dir = projectDir(modelRoot, project)
   if (!isProjectId(design) || !fs.existsSync(path.join(dir, DESIGNS_DIR, design, 'design.yaml'))) throw new WriteError(`设计不存在：${design}`)
+  assertEditable(dir, design)
   const writes = Array.isArray(req?.sketches) ? req.sketches : []
   const removed = Array.isArray(req?.removed) ? req.removed : []
   if (!writes.length && !removed.length) throw new WriteError('没有要写的草图')

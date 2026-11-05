@@ -35,6 +35,7 @@ import {
 import type {
   AcceptedDeviation,
   DesignInfo,
+  DesignApproval,
   DesignStatus,
   ModelCommit,
   ModelIndex,
@@ -258,6 +259,22 @@ export function readDesignInfo(designDir: string, id: string): DesignInfo {
     if (deviation && reason) accepted.push({ deviation, reason, at: str(a.at) ?? (a.at instanceof Date ? a.at.toISOString().slice(0, 10) : undefined) })
     else problems.push('accepted 中有条目缺少 deviation 或 reason')
   }
+  // DL-33：认可记录 approval（at、sketches 指纹、withdrawnAt）
+  let approval: DesignApproval | undefined
+  if (raw.approval !== undefined) {
+    const a = raw.approval && typeof raw.approval === 'object' && !Array.isArray(raw.approval) ? (raw.approval as Record<string, unknown>) : null
+    if (!a) problems.push('approval 必须是映射（at、sketches、withdrawnAt）')
+    else {
+      const sk = a.sketches && typeof a.sketches === 'object' && !Array.isArray(a.sketches) ? (a.sketches as Record<string, unknown>) : undefined
+      if (a.sketches !== undefined && (!sk || Object.values(sk).some(v => typeof v !== 'string')))
+        problems.push('approval.sketches 必须是「草图路径: 指纹」的映射')
+      approval = {
+        ...(date(a.at) ? { at: date(a.at) } : {}),
+        ...(sk ? { sketches: Object.fromEntries(Object.entries(sk).filter((e): e is [string, string] => typeof e[1] === 'string')) } : {}),
+        ...(date(a.withdrawnAt) ? { withdrawnAt: date(a.withdrawnAt) } : {}),
+      }
+    }
+  }
   const files = designSketchFiles(path.dirname(path.dirname(designDir)), id)
   const sketch = files.length > 0
   return {
@@ -270,6 +287,7 @@ export function readDesignInfo(designDir: string, id: string): DesignInfo {
     revisions,
     ...(sketch ? { sketch, sketches: files.map(f => ({ mount: f.mount ?? '', file: f.file, ...(f.needsLayout ? { needsLayout: true } : {}) })) } : {}),
     ...(accepted.length ? { accepted } : {}),
+    ...(approval ? { approval } : {}),
     problems,
   }
 }

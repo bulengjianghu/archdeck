@@ -235,7 +235,11 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     reload: () => reload(),
     writer: options.writer ?? NO_WRITER,
     changesFile: () => payloadChanges.value,
-    locked: () => aiEditing.value,
+    aiBusy: () => aiEditing.value,
+    status: () => {
+      const v = options.version
+      return isSketchRevision(v) ? designs.value.find(d => d.id === v.design)?.status : undefined
+    },
   })
   const allIssues = computed(() => [...issues.value, ...files.warnings.value, ...facts.gateIssues.value])
   /** W-6、Q7：返工清单——问题页签与画布角标；源码归属与代码事实只对当前版本（G9、K8），草图偏差对设计各轮也有（X4） */
@@ -470,6 +474,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       context: () => edit.changes.context(),
       apply: (blocks, turn) => edit.changes.applyAgentRound(blocks, turn),
       nameOf: id => (id === ROOT_MOUNT ? (baselines.value.current?.index.model.system.name ?? id) : edit.nameOf(id)),
+      lock: () => edit.statusLock.value,
     },
   })
   // DA-6、ADR-0063 决策 10：AI 修改草图的一轮在跑时，编辑分组只读
