@@ -6,8 +6,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { approvalDrift, load } from '../../src/model'
-import { listDesigns } from '../../vite/readModelDir'
+import { approvalDrift, load, loadModel, reviewHashes } from '../../src/model'
+import { listDesigns, readDesignInfo, readModelDir } from '../../vite/readModelDir'
 import { readOwned, registerOwned, ownedFingerprint } from '../../vite/governanceStore'
 import { WriteError } from '../../vite/writeModel'
 import { DesignLocked, WriteConflict, saveDesignSketches } from '../../vite/writeSketch'
@@ -75,6 +75,16 @@ describe('DL-33 认可', () => {
     expect(readOwned(path.join(P, 'governance'))!.files['designs/d/design.yaml']).toBe(ownedFingerprint(read('designs/d/design.yaml')))
     expect(listDesigns(P)[0].approval?.sketches).toEqual(seen())
   })
+  it('DL-49 认可时记下估算：estimate.json 带页面读到的影响面与当前版本各模块的描述指纹；设计信息读回', () => {
+    setDesignStatus(modelRoot, 'p', 'd', { action: 'accept', sketches: seen(), estimate: { modules: ['core', 'core', 7], fresh: false } }, root)
+    const est = JSON.parse(fs.readFileSync(path.join(P, 'designs/d/estimate.json'), 'utf8'))
+    const { index } = loadModel(readModelDir(P, root).files)
+    expect(est).toEqual({ at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), modules: ['core'], fresh: false, current: reviewHashes(index) })
+    expect(readDesignInfo(path.join(P, 'designs/d'), 'd').estimate).toMatchObject({ modules: ['core'], fresh: false })
+    // 估算记录不是人拥有的文件：不登记指纹
+    expect(JSON.parse(fs.readFileSync(path.join(P, 'governance/owned.json'), 'utf8')).files['designs/d/estimate.json']).toBeUndefined()
+  })
+
   it('页面读到的指纹与磁盘不符（未保存或外部改动）拒绝', () => {
     expect(() => setDesignStatus(modelRoot, 'p', 'd', { action: 'accept', sketches: { 'sketches/core.a.yaml': 'old' } }, root)).toThrow(WriteConflict)
     expect(() => setDesignStatus(modelRoot, 'p', 'd', { action: 'accept', sketches: {} }, root)).toThrow(WriteConflict)

@@ -14,13 +14,14 @@ import {
   isSketchFile,
   load,
   loadModel,
+  reviewHashes,
   sketchLifetime,
   validateSketch,
   type DesignAction,
   type DesignStatus,
   type SketchDef,
 } from '../src/model'
-import { DESIGNS_DIR, designSketches, isProjectId, readDesignInfo, readModelDir, sketchHash } from './readModelDir'
+import { DESIGNS_DIR, ESTIMATE_FILE, designSketches, isProjectId, readDesignInfo, readModelDir, sketchHash } from './readModelDir'
 import { WriteError, openDoc, projectDir, save, today, type WriteResult } from './writeModel'
 import { WriteConflict } from './writeSketch'
 
@@ -28,6 +29,8 @@ export interface DesignStatusRequest {
   action: DesignAction
   /** 认可：页面读取时各张草图的指纹（键为相对设计目录的路径 sketches/<挂载点>.yaml） */
   sketches?: Record<string, string>
+  /** DL-49：认可：认可前总览读到的影响面（牵动的模块、是否全是新框） */
+  estimate?: { modules?: unknown; fresh?: unknown }
 }
 
 export interface DesignStatusResult extends WriteResult {
@@ -60,6 +63,17 @@ function validateOnDisk(dir: string, root: string, design: string): { errors: st
   return { errors, hints }
 }
 
+/**
+ * DL-49：认可时记下估算——页面读到的影响面与此刻当前版本各模块的描述指纹，写 designs/<设计>/estimate.json（页面维护、不登记指纹）。
+ * 归档预览拿它与归档时的描述指纹比，得出「实际改了」。
+ */
+function writeEstimate(dir: string, designDir: string, raw: DesignStatusRequest['estimate'], root: string): void {
+  const modules = Array.isArray(raw?.modules) ? [...new Set(raw.modules.filter((x): x is string => typeof x === 'string'))].sort() : []
+  const { index } = loadModel(readModelDir(dir, root).files)
+  const body = { at: today(), modules, fresh: raw?.fresh === true, current: reviewHashes(index) }
+  fs.writeFileSync(path.join(designDir, ESTIMATE_FILE), `${JSON.stringify(body, null, 2)}\n`)
+}
+
 /** DL-32、DL-33：改设计状态（认可 / 回到起草 / 放弃）；归档另走 archiveDesign */
 export function setDesignStatus(modelRoot: string, project: string, design: string, req: DesignStatusRequest, root: string): DesignStatusResult {
   const dir = projectDir(modelRoot, project)
@@ -89,6 +103,7 @@ export function setDesignStatus(modelRoot: string, project: string, design: stri
   if (action === 'accept') {
     const node = doc.createNode({ at: today(), sketches: now })
     doc.setIn(['design', 'approval'], node)
+    writeEstimate(dir, designDir, req.estimate, root)
   } else if (action === 'withdraw') {
     doc.setIn(['design', 'approval'], doc.createNode({ ...(info.approval?.at ? { at: info.approval.at } : {}), withdrawnAt: today() }))
   }

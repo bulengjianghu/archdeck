@@ -22,7 +22,7 @@ import type { Plugin } from 'vite'
 import { isModelFile, listProjects, readDesignRevision, readIntentVersion, readProject, type ModelPayload } from './readModelDir'
 import { readExports, readSourceFile, readSourceTree } from './readSource'
 import { readCodeDeps } from './readDeps'
-import { readHealth } from './readHealth'
+import { readGateErrors, readHealth } from './readHealth'
 import { WriteError, appendAccepted, appendAllow, appendFeedback, appendIgnore, appendReviewed, appendRole, archiveDesign } from './writeModel'
 import { saveNote } from './designNotes'
 import { setDesignStatus, type DesignStatusRequest } from './designStatus'
@@ -191,7 +191,9 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
                                   ? saveDesignSketches(modelRoot, project, decodeURIComponent(many![2]), parsed as SaveDesignRequest, root)
                                   : w[2] === 'designs'
                                     ? createDesign(modelRoot, project, parsed as Parameters<typeof createDesign>[2], root, { base: headModel })
-                                    : archiveDesign(modelRoot, project, body.design, root)
+                                    : archiveDesign(modelRoot, project, body.design, root, {
+                                        ratchet: index => readGateErrors(modelRoot, project, index, root),
+                                      })
             json(res, out)
           } catch (e) {
             const status =

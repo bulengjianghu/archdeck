@@ -21,7 +21,7 @@ modules:
     principle: |
       - **一个函数换对象**：相对基线（我改了什么）与相对当前版本（实现还差什么）共用 compareSketch，只差对象版本与要不要比文字；页面、命令行与交给 AI 的摘要同一套结果。
       - **血缘一律指向基线 ID**：读血缘不必沿链求闭包；前缀级联推出的子树改名、合并带走的来源被「合并 / 移动」吸收，不另列。
-    codeRefs: [src/model/intent/check.ts, src/model/intent/lifecycle.ts, src/model/intent/approval.ts, src/model/intent/owned.ts, src/model/intent/lineage.ts, src/model/intent/scope.ts]
+    codeRefs: [src/model/intent/check.ts, src/model/intent/lifecycle.ts, src/model/intent/approval.ts, src/model/intent/archive.ts, src/model/intent/owned.ts, src/model/intent/lineage.ts, src/model/intent/scope.ts]
   - id: model.intent.edit
     name: 草图编辑
     summary: 把一个编辑操作应用到草图，产出新草图与影响

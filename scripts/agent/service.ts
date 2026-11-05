@@ -21,6 +21,7 @@ import {
   parseDesignSketches,
   compareDesign,
   describeModule,
+  gateIssues,
   governanceReport,
   loadModel,
   locateFile,
@@ -744,7 +745,15 @@ export function createService(opts: ServiceOptions) {
     sketchArchive(p: string | undefined, design: string) {
       const project = projectOfDesign(p, design)
       try {
-        const r = archiveDesign(modelRoot, project, design, opts.root)
+        // DL-47 第二关：当前版本的门禁错误取同一份治理报告（U8）；源码不可得时这一关不过
+        const ratchet = () => {
+          try {
+            return { errors: gateIssues(load(project, true).report).map(i => ({ message: i.message })) }
+          } catch (e) {
+            return { errors: null, note: `代码事实不可得：${e instanceof Error ? e.message : String(e)}` }
+          }
+        }
+        const r = archiveDesign(modelRoot, project, design, opts.root, { ratchet })
         cache.delete(project)
         return { project, ...r }
       } catch (e) {

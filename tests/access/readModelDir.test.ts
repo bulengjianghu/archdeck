@@ -145,8 +145,8 @@ describe('接入层 · 多项目读取', () => {
     const sk = designs.find(d => d.id === 'sk')!
     expect(sk.sketch).toBe(true)
     expect(sk.sketches).toEqual([
-      { mount: 'root', file: 'designs/sk/sketches/root.yaml', needsLayout: true },
-      { mount: 'core.api', file: 'designs/sk/sketches/core.api.yaml', needsLayout: true },
+      { mount: 'root', file: 'designs/sk/sketches/root.yaml', hash: expect.stringMatching(/^[0-9a-f]{40}$/), needsLayout: true },
+      { mount: 'core.api', file: 'designs/sk/sketches/core.api.yaml', hash: expect.stringMatching(/^[0-9a-f]{40}$/), needsLayout: true },
     ])
     expect(sk.accepted).toEqual([{ deviation: 'missing-relation:rel.sk.x', reason: '经注入', at: '2026-10-22' }])
     expect(sk.problems).toEqual(['accepted 中有条目缺少 deviation 或 reason'])

@@ -7,7 +7,7 @@ import path from 'node:path'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { loadModel, reviewHash, reviewStates } from '../../src/model'
-import { readModelDir } from '../../vite/readModelDir'
+import { readModelDir, sketchHash } from '../../vite/readModelDir'
 import { WriteError, appendAccepted, appendAllow, appendFeedback, appendIgnore, appendReviewed, appendRole, archiveDesign } from '../../vite/writeModel'
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-write-'))
@@ -203,6 +203,18 @@ describe('Z1、Z6 确认记录（appendReviewed）', () => {
   })
 })
 
+/** DL-47：归档测试里第二关缺省放行（门禁错误为零）；第三关要认可记录与磁盘上的草图一致 */
+const GREEN = { ratchet: () => ({ errors: [] }) }
+/** 把设计记成「已认可」：status 与各张草图此刻的指纹（DL-33 的写法），追加在 design 下 */
+function acceptNow() {
+  const dir = path.join(P, 'designs/d/sketches')
+  const lines = fs
+    .readdirSync(dir)
+    .sort()
+    .map(f => `      sketches/${f}: ${sketchHash(fs.readFileSync(path.join(dir, f), 'utf8'))}`)
+  fs.appendFileSync(path.join(P, 'designs/d/design.yaml'), `  status: accepted\n  approval:\n    at: '2026-11-06'\n    sketches:\n${lines.join('\n')}\n`)
+}
+
 describe('X4 认可偏差 · X3 归档 / 晋升', () => {
   const SKETCH = 'sketch:\n  id: d\n  mount: a\n  modules:\n    - { id: a.x, name: X }\n  relations:\n    - { id: rel.d.x-b, from: a.x, to: b, type: calls }\n'
   it('认可偏差追加到 design.accepted（键、理由、日期）；理由必填；重复的拒绝', () => {
@@ -216,19 +228,20 @@ describe('X4 认可偏差 · X3 归档 / 晋升', () => {
   })
 
   it('归档：没有草图、已归档、核验不一致都拒绝；一致后状态改为 implemented，为草图覆盖的模块写确认记录（来源 sketch:<设计>，Z6），指纹随之更新', () => {
-    expect(() => archiveDesign(modelRoot, 'p', 'd', root)).toThrow('没有草图')
+    expect(() => archiveDesign(modelRoot, 'p', 'd', root, GREEN)).toThrow('没有草图')
     write('designs/d/sketches/a.yaml', SKETCH)
+    acceptNow()
     // a.x 不存在：error，拒绝
-    expect(() => archiveDesign(modelRoot, 'p', 'd', root)).toThrow('不能归档：草图「a」核验不一致（1 个错误')
+    expect(() => archiveDesign(modelRoot, 'p', 'd', root, GREEN)).toThrow('不能归档：草图「a」核验不一致（1 个错误')
     write(
       'modules/m.yaml',
       'modules:\n  - { id: a, name: A, responsibility: x }\n  - { id: b, name: B, responsibility: y }\n  - { id: a.x, name: X, parent: a, responsibility: z }\n',
     )
     // 关系没有对应：warning，认可后一致
-    expect(() => archiveDesign(modelRoot, 'p', 'd', root)).toThrow('1 个未认可的提醒')
+    expect(() => archiveDesign(modelRoot, 'p', 'd', root, GREEN)).toThrow('1 个未认可的提醒')
     appendAccepted(modelRoot, 'p', 'd', 'missing-relation:rel.d.x-b', '经注入', root)
     write('reviewed.yaml', '# 架构师的确认\nreviewed:\n  - { module: b, at: "2026-10-01", hash: keep, source: manual }\n')
-    const r = archiveDesign(modelRoot, 'p', 'd', root)
+    const r = archiveDesign(modelRoot, 'p', 'd', root, GREEN)
     expect(r).toMatchObject({ file: 'model/p/designs/d/design.yaml', outcome: 'archive', reviewed: { count: 1, file: 'model/p/reviewed.yaml' } })
     expect(parse(read('designs/d/design.yaml')).design.status).toBe('implemented')
     // 联调：确认层按它的口径算指纹与摘要；草图没画的 b 原样保留
@@ -252,8 +265,39 @@ describe('X4 认可偏差 · X3 归档 / 晋升', () => {
       .filter(Boolean)
       .map(l => JSON.parse(l))
     expect(lines).toEqual([{ at: expect.any(String), tool: 'reviewed', origin: 'archive', modules: 1, design: 'd' }])
-    expect(() => archiveDesign(modelRoot, 'p', 'd', root)).toThrow('已归档')
+    expect(() => archiveDesign(modelRoot, 'p', 'd', root, GREEN)).toThrow('已归档')
     expect(fs.existsSync(path.join(modelRoot, 'p', 'governance', 'owned.json'))).toBe(true)
+  })
+
+  it('DL-47、DL-48 归档三关：没认可拒绝；第二关有新违反或代码事实不可得拒绝；第三关认可后手改草图拒绝（「草图自认可后已改动」）；全绿后归档留下认可记录并给出估与实际', () => {
+    write(
+      'modules/m.yaml',
+      'modules:\n  - { id: a, name: A, responsibility: x }\n  - { id: b, name: B, responsibility: y }\n  - { id: a.x, name: X, parent: a, responsibility: z }\n',
+    )
+    write('designs/d/sketches/a.yaml', 'sketch:\n  id: d\n  mount: a\n  modules:\n    - { id: a.x, name: X }\n')
+    expect(() => archiveDesign(modelRoot, 'p', 'd', root, GREEN)).toThrow('设计还没认可')
+    acceptNow()
+    // 认可时记下的估算：估 a、b；认可后 a.x 的描述变了、新加 a.y
+    const { index } = loadModel(readModelDir(P, root).files)
+    const current = Object.fromEntries([...index.modules.keys()].map(id => [id, reviewHash(index, id)]))
+    write('designs/d/estimate.json', JSON.stringify({ at: '2026-11-06', modules: ['a', 'b'], fresh: false, current }))
+    expect(() => archiveDesign(modelRoot, 'p', 'd', root, { ratchet: () => ({ errors: [{ message: '新增违规 a → b' }] }) })).toThrow(
+      '不能归档：规则有 1 条新违反：新增违规 a → b',
+    )
+    expect(() => archiveDesign(modelRoot, 'p', 'd', root, { ratchet: () => ({ errors: null, note: '代码事实不可得：没有源码' }) })).toThrow('代码事实不可得')
+    const sketch = read('designs/d/sketches/a.yaml')
+    write('designs/d/sketches/a.yaml', `${sketch}  closed: [a]\n`)
+    expect(() => archiveDesign(modelRoot, 'p', 'd', root, GREEN)).toThrow('草图自认可后已改动')
+    write('designs/d/sketches/a.yaml', sketch)
+    write(
+      'modules/m.yaml',
+      'modules:\n  - { id: a, name: A, responsibility: x }\n  - { id: b, name: B, responsibility: y }\n  - { id: a.x, name: X, parent: a, responsibility: 改过 }\n  - { id: a.y, name: Y, parent: a, responsibility: 新 }\n',
+    )
+    const r = archiveDesign(modelRoot, 'p', 'd', root, GREEN)
+    expect(r.gap).toMatchObject({ recorded: true, estimated: 2, touched: ['a', 'a.x'], added: ['a.y'], spared: ['b'], missed: ['a.x'] })
+    const d = parse(read('designs/d/design.yaml')).design
+    expect(d.status).toBe('implemented')
+    expect(d.approval.sketches['sketches/a.yaml']).toBe(sketchHash(sketch))
   })
 
   it('晋升：声明 supersedes 的草图整份替换 intent/<ID>.yaml（id、lifetime 改写，去掉 supersedes），设计同样归档', () => {
@@ -266,7 +310,8 @@ describe('X4 认可偏差 · X3 归档 / 晋升', () => {
       '# 新骨架\nsketch:\n  id: d\n  mount: root\n  supersedes: skeleton\n  closed: [a]\n  modules:\n    - { id: a, name: A, kind: layer, order: 1, abstraction: x, responsibility: x, children: [{ id: a.x, name: X }] }\n    - { id: b, name: B, kind: layer, order: 2, abstraction: y, responsibility: y }\n  layout:\n    modules: { a: { x: 1, y: 2 } }\n',
     )
     write('modules/m.yaml', 'modules:\n  - { id: a.x, name: X, parent: a, responsibility: z }\n')
-    const r = archiveDesign(modelRoot, 'p', 'd', root)
+    acceptNow()
+    const r = archiveDesign(modelRoot, 'p', 'd', root, GREEN)
     expect(r).toMatchObject({ outcome: 'promote', promoted: 'model/p/intent/skeleton.yaml', promotedAll: ['model/p/intent/skeleton.yaml'] })
     const text = read('intent/skeleton.yaml')
     expect(text).toContain('# 新骨架')

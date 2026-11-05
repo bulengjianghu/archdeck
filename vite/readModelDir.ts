@@ -36,6 +36,7 @@ import type {
   AcceptedDeviation,
   DesignInfo,
   DesignApproval,
+  DesignEstimate,
   DesignStatus,
   ModelCommit,
   ModelIndex,
@@ -275,6 +276,7 @@ export function readDesignInfo(designDir: string, id: string): DesignInfo {
       }
     }
   }
+  const estimate = readEstimate(designDir, problems)
   const files = designSketchFiles(path.dirname(path.dirname(designDir)), id)
   const sketch = files.length > 0
   return {
@@ -285,10 +287,30 @@ export function readDesignInfo(designDir: string, id: string): DesignInfo {
     base,
     ...(adr.length ? { adr } : {}),
     revisions,
-    ...(sketch ? { sketch, sketches: files.map(f => ({ mount: f.mount ?? '', file: f.file, ...(f.needsLayout ? { needsLayout: true } : {}) })) } : {}),
+    ...(sketch
+      ? { sketch, sketches: files.map(f => ({ mount: f.mount ?? '', file: f.file, hash: f.hash, ...(f.needsLayout ? { needsLayout: true } : {}) })) }
+      : {}),
     ...(accepted.length ? { accepted } : {}),
     ...(approval ? { approval } : {}),
+    ...(estimate ? { estimate } : {}),
     problems,
+  }
+}
+
+/** DL-49：认可时的估算记录 designs/<设计>/estimate.json（页面维护、不登记指纹）；坏的记入 problems 并忽略 */
+export const ESTIMATE_FILE = 'estimate.json'
+function readEstimate(designDir: string, problems: string[]): DesignEstimate | undefined {
+  const file = path.join(designDir, ESTIMATE_FILE)
+  if (!fs.existsSync(file)) return undefined
+  try {
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>
+    const modules = Array.isArray(raw.modules) ? raw.modules.filter((x): x is string => typeof x === 'string') : []
+    const cur = raw.current && typeof raw.current === 'object' && !Array.isArray(raw.current) ? (raw.current as Record<string, unknown>) : {}
+    const current = Object.fromEntries(Object.entries(cur).filter((e): e is [string, string] => typeof e[1] === 'string'))
+    return { ...(typeof raw.at === 'string' ? { at: raw.at } : {}), modules, fresh: raw.fresh === true, current }
+  } catch (e) {
+    problems.push(`${ESTIMATE_FILE} 解析失败：${e instanceof Error ? e.message.split('\n')[0] : String(e)}`)
+    return undefined
   }
 }
 

@@ -11,7 +11,7 @@ import { parse } from 'yaml'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { nextTick } from 'vue'
-import { readProject } from '../../vite/readModelDir'
+import { readProject, sketchHash } from '../../vite/readModelDir'
 import { readSourceTree } from '../../vite/readSource'
 import { readCodeDeps } from '../../vite/readDeps'
 import { createService } from '../../scripts/agent/service'
@@ -222,7 +222,14 @@ describe('§6.13 意图验收（X4、X8）：命令行 / MCP 的 sketch-check �
     expect(() => s.sketchArchive(undefined, 'gate')).toThrow('不能归档')
     expect(() => s.sketchCheck(undefined, 'nope')).toThrow('没有草图')
     fs.rmSync(path.join(design, 'sketches/root.yaml'))
-    write('sketches/model.intent.yaml', 'sketch:\n  id: gate\n  mount: model.intent\n  modules:\n    - { id: model.intent.check, name: 核验 }\n')
+    const fixed = 'sketch:\n  id: gate\n  mount: model.intent\n  modules:\n    - { id: model.intent.check, name: 核验 }\n'
+    write('sketches/model.intent.yaml', fixed)
+    // DL-47 第三关：没有认可记录（旧流程只写了 status: accepted）不能归档；记下认可时的指纹后才行
+    expect(() => s.sketchArchive(undefined, 'gate')).toThrow('没有认可记录')
+    write(
+      'design.yaml',
+      `design:\n  name: 门禁\n  status: accepted\n  approval:\n    at: '2026-11-06'\n    sketches:\n      sketches/model.intent.yaml: ${sketchHash(fixed)}\n  revisions: []\n`,
+    )
     const r = s.sketchArchive(undefined, 'gate')
     expect(r).toMatchObject({
       project: 'h5p-arch-desk',

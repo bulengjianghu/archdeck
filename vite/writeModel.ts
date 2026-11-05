@@ -17,23 +17,30 @@ import {
   MODULE_ROLES,
   ROLES_FILE,
   RULE_KINDS,
+  approvalDrift,
+  archiveGates,
   archiveVerdict,
   checkSketches,
+  designTransition,
+  estimateGap,
+  gateContext,
   isReviewSource,
   loadModel,
   parseDesignSketches,
   reviewEntries,
   reviewHash,
+  reviewHashes,
   isReviewable,
   sketchModules,
   type ArchiveVerdict,
+  type EstimateGap,
   type ModelIndex,
   type ModuleRole,
   type ReviewedInput,
   type ReviewedOrigin,
   type RuleKind,
 } from '../src/model'
-import { DESIGNS_DIR, designSketches, isProjectId, listRevisionDirs, readDesignInfo, readModelDir } from './readModelDir'
+import { DESIGNS_DIR, designSketches, isProjectId, listRevisionDirs, readDesignInfo, readModelDir, sketchHash } from './readModelDir'
 import { appendLedger, governanceDir, touchOwned } from './governanceStore'
 
 export class WriteError extends Error {}
@@ -166,6 +173,8 @@ export interface ArchiveResult extends WriteResult {
   promoted?: string
   /** 晋升：全部被替换的持久草图文件 */
   promotedAll?: string[]
+  /** DL-49：认可时的估算与实际改了的模块 */
+  gap: EstimateGap
 }
 
 /**
@@ -175,7 +184,12 @@ export interface ArchiveResult extends WriteResult {
  * supersedes → 草图整份（含 layout，X15）替换 intent/<ID>.yaml（id 改为被替换者、lifetime persistent、去掉 supersedes），状态同样改为 implemented。
  * 设计有多张草图（X9）时逐张核验（血缘与封闭按全设计），全部一致才归档；声明 supersedes 的那些晋升，其余为覆盖的模块写确认记录。
  */
-export function archiveDesign(modelRoot: string, project: string, design: string, root: string): ArchiveResult {
+export interface ArchiveOptions {
+  /** 第二关：当前版本的门禁错误（U8 的 rule.new、cycle.grew），errors 为 null 表示代码事实不可得、note 给原因 */
+  ratchet?: (index: ModelIndex) => { errors: readonly { message: string }[] | null; note?: string }
+}
+
+export function archiveDesign(modelRoot: string, project: string, design: string, root: string, opts: ArchiveOptions = {}): ArchiveResult {
   const dir = projectDir(modelRoot, project)
   if (!isProjectId(design)) throw new WriteError('设计 ID 不合法')
   const designDir = path.join(dir, DESIGNS_DIR, design)
@@ -191,8 +205,15 @@ export function archiveDesign(modelRoot: string, project: string, design: string
   // X3：逐张核验（血缘与封闭按全设计），全部一致才归档；有 supersedes 的那些晋升
   const checks = checkSketches(index, entities, new Map([[design, info.accepted ?? []]])).filter(c => c.design === design)
   const verdicts = checks.map(archiveVerdict)
-  const bad = verdicts.find(v => !v.ok)
-  if (bad) throw new WriteError(`不能归档：草图「${bad.check.mount ?? bad.check.sketch}」${bad.reason}`)
+  // DL-47、DL-48：三关——核验一致、棘轮无新增、草图指纹与认可记录一致；去向与拒绝原因取迁移表（DL-32）
+  const prefix = `${DESIGNS_DIR}/${design}/`
+  const drift = approvalDrift(info.approval, Object.fromEntries(files.map(({ file }) => [file.path.slice(prefix.length), sketchHash(file.text)])))
+  // 第二关的门禁错误由调用方算（代码事实属外壳一侧：页面插件与 agent 接口各有现成的）；没给时按不可得
+  const ratchet = opts.ratchet ? opts.ratchet(index) : { errors: null, note: '没有给出棘轮判定（代码事实不可得）' }
+  const gates = archiveGates({ checks, gateErrors: ratchet.errors, ...(ratchet.note ? { ratchetUnknown: ratchet.note } : {}), drift })
+  const move = designTransition(info.status, 'archive', gateContext(gates, drift))
+  if (!move.ok) throw new WriteError(`不能归档：${info.status === 'accepted' && gates.first ? gates.first.detail : move.reason}`)
+  const gap = estimateGap(info.estimate, reviewHashes(index))
   const at = today()
   const doc = openDoc(file, '')
   if (!isMap(doc.get('design'))) throw new WriteError('design.yaml 缺少顶层键 design')
@@ -221,7 +242,7 @@ export function archiveDesign(modelRoot: string, project: string, design: string
   const promoted = promotedAll[0]
   doc.setIn(['design', 'status'], 'implemented')
   const out = save(file, doc, root, modelRoot, project)
-  return { ...out, outcome, ...(reviewed ? { reviewed } : {}), ...(promoted ? { promoted, promotedAll } : {}) }
+  return { ...out, outcome, gap, ...(reviewed ? { reviewed } : {}), ...(promoted ? { promoted, promotedAll } : {}) }
 }
 
 export interface ReviewedWriteResult extends WriteResult {
