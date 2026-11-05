@@ -18,6 +18,7 @@ export const NO_WRITER: ModelWriter = {
   accept: none,
   role: none,
   archive: none,
+  designStatus: none,
   saveSketch: none,
   saveDesignSketches: none,
   saveNote: none,

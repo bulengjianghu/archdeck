@@ -2,7 +2,9 @@
 /**
  * 信息条的动作区（F-61，E-1–E-3、SK-6、SK-9、DV-10，ADR-0024、ADR-0025）：
  * - 提交版本 / 设计轮次：说明（根层的设计说明与变更清单）；
- * - 草图（打开即编辑，X7a）：保存（⌘S）、撤销 / 重做、保存并交给 AI（没有未保存改动时为「交给 AI」；全设计有格式错误或语义提示时禁用，F-52）、
+ * - 设计的草图（DL-38，TK-1）：保存（⌘S）· 放弃（本次未保存的改动）· 撤销 / 重做 · 校验（全设计的格式错误与语义提示）· 认可 ▾（先开认可前总览；
+ *   下拉保留「交给 AI 展开一轮」＝原「保存并交给 AI」，可选预览）；已认可时只剩「回到起草」（二次确认，指纹作废、任务单标「认可已撤回」）；已实现 / 已放弃只看；
+ * - 持久草图：保存（⌘S）、撤销 / 重做、保存并交给 AI（没有未保存改动时为「交给 AI」；全设计有格式错误或语义提示时禁用，F-52）、
  *   说明（全设计变更清单按血缘分组的弹层，F-53；持久草图另有一节「交给 AI 时的改动摘要」——与去掉这张草图贡献后的当前版本比，不进计数，X17）、退出（脏时三选保存 / 放弃 / 取消，退出回到进入草图之前的版本，#20b、leave.ts）；
  * - 文件已在外部改动：整个区换成横幅「重新加载并重放 / 放弃本次改动」，重放有失败时列出失败的操作。
  * ⌘S 与撤销 / 重做的快捷键由草图画布处理；输入框里的 ⌘S 在这里接：先失焦提交，再保存。
@@ -14,6 +16,7 @@ import { useDesk } from '@/state/inject'
 import { ask } from '../edit/useEditDialog'
 import { confirmLeave, leaveSketch } from '../edit/leave'
 import ChangeGroups from './ChangeGroups.vue'
+import AcceptDialog from './AcceptDialog.vue'
 
 const props = defineProps<{ mode: 'commit' | 'round' | 'sketch' }>()
 const desk = useDesk()
@@ -26,6 +29,37 @@ const handing = ref(false)
 const notesOpen = ref(false)
 const notesRoot = ref<HTMLElement>()
 const editing = computed(() => props.mode === 'sketch' && e.active.value)
+/** DL-38：设计的草图走「认可」主路径；持久草图仍是「保存并交给 AI」 */
+const isDesign = computed(() => e.target?.kind === 'design')
+const status = computed(() => e.approval.status.value)
+const locked = computed(() => !!e.statusLock.value)
+const accepting = ref(false)
+const menuOpen = ref(false)
+const checkOpen = ref(false)
+const menuRoot = ref<HTMLElement>()
+const checkRoot = ref<HTMLElement>()
+/** 校验（全设计）：格式错误与语义提示，都没有时说可以认可 */
+const checkLines = computed(() => [
+  ...e.designErrors.value.map(x => `错误 · 「${x.mount}」${x.message}`),
+  ...e.designWarnings.value.map(x => `提示 · 「${x.mount}」${x.message}`),
+])
+function openAccept() {
+  const why = e.approval.acceptBlocked.value
+  if (why) return flash(why)
+  accepting.value = true
+}
+async function withdraw() {
+  if (
+    !(await ask({
+      title: '回到起草？',
+      lines: ['设计回到「起草中」，草图解锁', '认可时记下的草图指纹作废', '任务单标「认可已撤回」：改完重新认可后再复制给 agent'],
+      ok: '回到起草',
+    }))
+  )
+    return
+  const r = await e.approval.withdraw()
+  flash(r.ok ? '已回到起草' : r.reason)
+}
 const errors = computed(() => e.designErrors.value.length)
 const warnings = computed(() => e.designWarnings.value.length)
 const noteTitle = computed(() =>
@@ -120,11 +154,13 @@ async function onKey(ev: KeyboardEvent) {
 }
 function onDocDown(ev: MouseEvent) {
   if (notesOpen.value && notesRoot.value && !notesRoot.value.contains(ev.target as Node)) notesOpen.value = false
+  if (menuOpen.value && menuRoot.value && !menuRoot.value.contains(ev.target as Node)) menuOpen.value = false
+  if (checkOpen.value && checkRoot.value && !checkRoot.value.contains(ev.target as Node)) checkOpen.value = false
 }
 function onEsc(ev: KeyboardEvent) {
-  if (!notesOpen.value || ev.key !== 'Escape') return
+  if (!(notesOpen.value || menuOpen.value || checkOpen.value) || ev.key !== 'Escape') return
   ev.stopImmediatePropagation()
-  notesOpen.value = false
+  notesOpen.value = menuOpen.value = checkOpen.value = false
 }
 onMounted(() => {
   window.addEventListener('keydown', onKey)
@@ -146,7 +182,12 @@ onBeforeUnmount(() => {
       <button @click="discard">放弃本次改动</button>
     </div>
     <template v-else>
-      <template v-if="editing">
+      <template v-if="editing && isDesign && locked">
+        <button v-if="status === 'accepted'" class="primary withdraw" aria-label="回到起草" title="回到「起草中」：草图解锁，认可的指纹作废" @click="withdraw">
+          <span class="ico">↺</span><span class="txt">回到起草</span>
+        </button>
+      </template>
+      <template v-else-if="editing">
         <button
           class="save"
           :class="{ primary: e.dirty.value }"
@@ -163,7 +204,39 @@ onBeforeUnmount(() => {
         <button class="icon" aria-label="重做" title="重做（⇧⌘Z）" :disabled="!e.canRedo.value" @click="e.redo()">
           <svg class="mirror" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M6 3 2.5 6.5 6 10M3 6.5h6.5a3.5 3.5 0 0 1 0 7H7" /></svg>
         </button>
-        <span class="hand-wrap" :title="handTitle">
+        <template v-if="isDesign">
+          <button aria-label="放弃改动" title="放弃本次未保存的改动，回到上次保存时的草图" :disabled="!e.dirty.value || e.saving.value" @click="discard">
+            <span class="ico">⟲</span><span class="txt">放弃</span>
+          </button>
+          <span ref="checkRoot" class="notes-wrap">
+            <button aria-label="校验" title="全设计的格式错误与语义提示（成环、矛盾、待重连）" :aria-expanded="checkOpen" @click="checkOpen = !checkOpen">
+              <span class="ico">✓</span><span class="txt">校验{{ checkLines.length ? ` ${checkLines.length}` : '' }}</span>
+            </button>
+            <div v-if="checkOpen" class="pop" role="dialog" aria-label="校验结果" data-testid="check-pop">
+              <p v-if="!checkLines.length">没有格式错误与未解决的提示{{ e.dirty.value ? '；保存后可以认可' : '，可以认可' }}</p>
+              <ul v-else>
+                <li v-for="(l, i) in checkLines" :key="i">{{ l }}</li>
+              </ul>
+            </div>
+          </span>
+          <span ref="menuRoot" class="split">
+            <button
+              class="accept"
+              aria-label="认可"
+              :title="e.approval.acceptBlocked.value ?? '认可这张设计：先看全设计的改动清单与影响面，确认后草图锁定、出任务单'"
+              @click="openAccept"
+            >
+              <span class="ico">✔</span><span class="txt">认可</span>
+            </button>
+            <button class="caret" aria-label="更多认可动作" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen">▾</button>
+            <div v-if="menuOpen" class="menu" role="menu">
+              <button role="menuitem" :disabled="!!handBlocked || handing || e.saving.value" :title="handTitle" @click="((menuOpen = false), handToAi())">
+                {{ copied ? '已复制指令' : '交给 AI 展开一轮' }}<span class="muted">可选预览</span>
+              </button>
+            </div>
+          </span>
+        </template>
+        <span v-else class="hand-wrap" :title="handTitle">
           <button
             class="hand"
             :aria-label="e.dirty.value ? '保存并交给 AI' : '交给 AI'"
@@ -195,6 +268,7 @@ onBeforeUnmount(() => {
         <span class="ico">✕</span><span class="txt">退出</span>
       </button>
     </template>
+    <AcceptDialog v-if="accepting" @close="accepting = false" />
     <span v-if="failed.length" class="failed" :title="failed.join('\n')">重放失败 {{ failed.length }} 个操作</span>
     <span v-if="note" class="note" role="status">{{ note }}</span>
   </div>
@@ -252,6 +326,59 @@ kbd {
 .hand {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.split {
+  position: relative;
+  display: inline-flex;
+}
+
+.split .accept {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.split .caret {
+  padding: 2px 6px;
+  border-color: var(--accent);
+  color: var(--accent);
+  border-left: none;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 14%);
+}
+
+.menu button {
+  justify-content: space-between;
+  border: none;
+}
+
+.muted {
+  color: var(--text-2);
+  font-size: 11px;
+}
+
+.withdraw {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
 }
 
 .hand-wrap,

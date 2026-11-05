@@ -253,7 +253,9 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
           <button
             class="seg"
             :class="{ on: mode === 'edit' }"
-            title="改：说想法，AI 改草图（一轮一步，可撤回）"
+            :disabled="!!s.lock"
+            data-testid="mode-edit"
+            :title="s.lock ?? '改：说想法，AI 改草图（一轮一步，可撤回）'"
             @click="dlg.dispatch({ type: 'setMode', mode: 'edit' })"
           >
             改
@@ -273,6 +275,8 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
           </button>
         </template>
         <span class="badge" data-testid="mode-badge">{{ BADGE[mode] }}</span>
+        <!-- DL-34：设计已认可 / 已实现 / 已放弃时只能问 -->
+        <span v-if="inSketch && s.lock" class="lock-note" data-testid="dialogue-lock">{{ s.lock }}</span>
         <span class="sp" />
         <button v-if="running" class="stop" data-testid="dialogue-stop" title="停止：终止这一轮，什么都不落" @click="dlg.stop()">■ 停止</button>
       </div>
@@ -314,6 +318,11 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
 </template>
 
 <style scoped>
+.lock-note {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
 .card-actions {
   margin: 6px 0 0;
   display: flex;

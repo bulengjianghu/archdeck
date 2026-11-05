@@ -110,5 +110,6 @@ export function httpModelWriter(project: string, base = ''): ModelWriter {
     accept: b => post('accept', b),
     role: b => post('role', b),
     archive: b => post('archive', b),
+    designStatus: ({ design, ...body }) => post(`designs/${encodeURIComponent(design)}/status`, body),
   }
 }

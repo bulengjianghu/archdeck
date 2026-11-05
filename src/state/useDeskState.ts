@@ -236,9 +236,9 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     writer: options.writer ?? NO_WRITER,
     changesFile: () => payloadChanges.value,
     aiBusy: () => aiEditing.value,
-    status: () => {
+    designInfo: () => {
       const v = options.version
-      return isSketchRevision(v) ? designs.value.find(d => d.id === v.design)?.status : undefined
+      return isSketchRevision(v) ? designs.value.find(d => d.id === v.design) : undefined
     },
   })
   const allIssues = computed(() => [...issues.value, ...files.warnings.value, ...facts.gateIssues.value])

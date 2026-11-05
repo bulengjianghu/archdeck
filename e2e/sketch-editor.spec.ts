@@ -328,19 +328,18 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     await crumbs.locator('.crumb', { hasText: 'DeskState' }).click()
     await expect(graphNode(page, 'state.desk.session')).toBeVisible()
 
-    // 保存并交给 AI（#20a）：有未保存改动时一步保存再复制指令；指令含草图全文与相对基线的变更
+    // 「认可 ▾」下拉里的「交给 AI 展开一轮」（#20a，DL-38 起为可选预览）：有未保存改动时一步保存再复制指令；指令含草图全文与相对基线的变更
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
-    const hand = page.locator('.info-bar').getByRole('button', { name: /交给 AI$/ })
-    await expect(hand.locator('.txt')).toHaveText('保存并交给 AI')
-    await hand.click()
-    // 保存、重新读入（服务端读 git 算基线与改动摘要）再复制：全量并行跑时服务端偏慢，多给等待（第五轮 T4）；失败时带出按钮文字与信息条说明
+    await page.evaluate<void>("navigator.clipboard.writeText('')")
+    await page.locator('.info-bar').getByRole('button', { name: '更多认可动作' }).click()
+    await page.getByRole('menuitem', { name: /交给 AI 展开一轮/ }).click()
+    // 保存、重新读入（服务端读 git 算基线与改动摘要）再复制：全量并行跑时服务端偏慢，多给等待（第五轮 T4）；失败时带出信息条说明
     await expect
       .poll(
         async () => {
-          const txt = await page.locator('.info-bar .hand .txt').textContent()
-          if (txt === '已复制指令') return 'ok'
+          if ((await page.evaluate<string>('navigator.clipboard.readText()')).includes('# 按草图扩展')) return 'ok'
           const note = page.locator('.info-bar .note')
-          return `pending: ${txt}${(await note.count()) ? ` / note: ${await note.textContent()}` : ''}`
+          return `pending${(await note.count()) ? ` / note: ${await note.textContent()}` : ''}`
         },
         { timeout: 30_000 },
       )
@@ -478,24 +477,26 @@ test('F-60–F-62、#15、#20b：草图的信息条只出现一次名称、唯�
     await expectSketchLayout(page)
     await expect(saveButton(page)).toBeVisible()
 
-    // 身份区：kind + 名称（只这一次）+ 状态 + 唯一一条面包屑；不再有「编辑草图：」「尺子」「校验」「放弃」「编辑」
+    // 身份区：kind + 名称（只这一次）+ 状态 + 唯一一条面包屑；不再有「编辑草图：」「尺子」「删除项」「编辑」（「放弃」「校验」回到动作区，DL-38）
     await expect(bar.locator('.kind')).toHaveText('草图')
     expect((await bar.innerText()).split('E2E 信息条').length - 1).toBe(1)
     await expect(bar).toContainText('起草中')
     await expect(bar.locator('.mount')).toContainText(/挂在：.*视图状态层 › DeskState/)
     await expect(bar.locator('.mount [data-parent="1"]')).toHaveCount(1)
     await expect(page.locator('.sk-crumbs')).toHaveCount(0)
-    for (const gone of ['编辑草图：', '尺子', '删除项', '校验', '放弃']) await expect(bar).not.toContainText(gone)
+    for (const gone of ['编辑草图：', '尺子', '删除项']) await expect(bar).not.toContainText(gone)
+    for (const b of ['保存', '放弃改动', '校验', '认可']) await expect(bar.getByRole('button', { name: b, exact: true })).toHaveCount(1)
     await expect(bar.getByRole('button', { name: '编辑', exact: true })).toHaveCount(0)
 
-    // 改一处：编辑中 ●，「交给 AI」变成「保存并交给 AI」
+    // 改一处：编辑中 ●，「保存」「放弃」亮起（DL-38）
     await graphNode(page, 'state.desk.beta').locator('.name').click()
     await openSketchPanel(page)
     const name = page.locator('[data-testid="sketch-module-form"] [name="module-name"]')
     await name.fill('Beta 改')
     await name.press('Enter')
     await expect(bar.locator('.dirty')).toHaveText('编辑中 ●')
-    await expect(bar.getByRole('button', { name: '保存并交给 AI' })).toBeVisible()
+    await expect(bar.getByRole('button', { name: '保存', exact: true })).toBeEnabled()
+    await expect(bar.getByRole('button', { name: '放弃改动', exact: true })).toBeEnabled()
 
     // 对比：一个按钮——新增 / 修改始终显示，合并 / 拆分 / 移动 / 删除只在非 0 时显示；弹层里六类计数、切口径，没有基线提交时提示退化；全设计清单按血缘分组
     const cmp = bar.locator('.cmp-btn')

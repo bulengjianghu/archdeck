@@ -1,0 +1,12 @@
+{
+  "steps": [
+    {
+      "block": {
+        "kind": "edit",
+        "summary": "把 save 改名为 persist",
+        "ops": [{ "op": "rename", "sketch": "{{sketch.mount}}", "id": "{{sketch.mount}}.save", "newId": "persist" }]
+      }
+    },
+    { "done": true }
+  ]
+}

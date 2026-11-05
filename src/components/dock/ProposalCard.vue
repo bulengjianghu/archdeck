@@ -49,7 +49,9 @@ function withdraw() {
         <span class="est">按当前描述估</span>
       </p>
       <p class="acts">
-        <button class="link" data-testid="withdraw-round" :disabled="!live || busy" @click="withdraw">{{ live ? '撤回本轮' : '本轮已撤回' }}</button>
+        <button class="link" data-testid="withdraw-round" :disabled="!live || busy || !!desk.edit.statusLock.value" @click="withdraw">
+          {{ live ? '撤回本轮' : '本轮已撤回' }}
+        </button>
         <span v-if="note" class="muted">{{ note }}</span>
       </p>
     </template>

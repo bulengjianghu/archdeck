@@ -14,7 +14,7 @@ const designYaml = path.join(DESIGN, 'design.yaml')
 
 test.describe.configure({ mode: 'serial' })
 
-test('DV-10：版本切换里草图排在 r1 之前；打开草图即草图画布（ADR-0025），信息条有「交给 AI」', async ({ page }) => {
+test('DV-10：版本切换里草图排在 r1 之前；打开草图即草图画布（ADR-0025）；已实现的设计只看（DL-34：信息条标「只看」，没有保存与认可）', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk/d/phase2-dynamic/r4')
   const options = await page.locator('select[aria-label="切换版本"] option').allTextContents()
   const r1 = options.findIndex(o => o.includes('· r1'))
@@ -27,7 +27,9 @@ test('DV-10：版本切换里草图排在 r1 之前；打开草图即草图画�
   // 身份区：唯一一条面包屑（根草图只有一级）；对比区：六类计数，口径缺省相对基线
   await expect(bar.locator('.mount')).toContainText('挂在：')
   await expect(bar.locator('.cmp-btn')).toContainText('对比 相对基线')
-  await expect(bar.getByRole('button', { name: '交给 AI', exact: true })).toBeVisible()
+  await expect(page.getByTestId('design-locked')).toHaveText('只看')
+  await expect(bar.getByRole('button', { name: '认可', exact: true })).toHaveCount(0)
+  await expect(bar.getByRole('button', { name: '保存', exact: true })).toHaveCount(0)
   // DL-20：选中面板在草图里缺省收起，按需展开
   await expect(page.locator('[data-testid="sketch-panel"]')).toHaveCount(0)
   await openSketchPanel(page)

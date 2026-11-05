@@ -23,6 +23,9 @@ async function sketchOn(page: Page, design: string) {
     if (await stop.isVisible().catch(() => false)) await stop.click().catch(() => {})
     await new Promise(r => setTimeout(r, 300))
     fs.rmSync(dir, { recursive: true, force: true })
+    // 停止前子进程可能已说完：服务端随后才追加转录，会把设计目录又建出来——等一下再删一次
+    await new Promise(r => setTimeout(r, 1500))
+    fs.rmSync(dir, { recursive: true, force: true })
     restoreOwned(OWNED, owned0, [`designs/${design}/`])
     if (fs.existsSync(LEDGER)) {
       const lines = fs.readFileSync(LEDGER, 'utf8').split('\n')
@@ -51,7 +54,8 @@ const cards = (page: Page) => dialogue(page).getByTestId('proposal-card')
 async function round(page: Page, text: string) {
   const n = await cards(page).count()
   await say(page, text)
-  await expect(cards(page)).toHaveCount(n + 1)
+  // 一轮的等待按 agent 的超时预算（playwright.config 的 ARCH_AGENT_TIMEOUT_MS = 20s）留余量：机器负载高时服务端读描述就要好几秒
+  await expect(cards(page)).toHaveCount(n + 1, { timeout: 25_000 })
   await expect(page.getByTestId('ai-editing')).toHaveCount(0)
   return cards(page).nth(n)
 }
@@ -226,10 +230,10 @@ test('用例 7：草图里贴白板照片——梳理卡旁「按这张图起草
     await dialogue(page).getByTestId('dialogue-file').setInputFiles({ name: 'whiteboard.png', mimeType: 'image/png', buffer: png })
     await say(page, '#digest 这是白板')
     const digest = dialogue(page).getByTestId('digest')
-    await expect(digest).toBeVisible()
+    await expect(digest).toBeVisible({ timeout: 25_000 })
     await expect(digest.getByTestId('digest-photo')).toHaveCount(1)
     await digest.getByTestId('draft-from-digest').click()
-    await expect(cards(page)).toHaveCount(1)
+    await expect(cards(page)).toHaveCount(1, { timeout: 25_000 })
     await expect(graphNode(page, 'state.desk.whiteboard')).toBeVisible()
     // 照片随设计落盘
     expect(fs.readdirSync(path.join(PROJECT, 'designs/zz-e2e-w2-photo/dialogue/photos')).length).toBeGreaterThan(0)

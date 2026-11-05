@@ -2,16 +2,32 @@
 /**
  * 设计面板的草图列表（present.panel.design，F-2、F-10，X9、X20）：设计的各张草图——挂载点、模块数、脏标记（● 改过未保存）、
  * 推出未写文件的标「推出」；点一张切过去（当前张高亮）。设计还没有根草图时给「改骨架」：在会话里按基线推出根草图（改了才写出，F-3）。
+ * 「放弃设计」（DL-38，07 §3.1）：起草中与已认可时可放弃，二次确认；放弃后任务单作废、项目卡片不再列出，草图与对话保留、版本切换里仍可开。
  */
 import { computed } from 'vue'
 import { ROOT_MOUNT } from '@/model'
 import { useDesk } from '@/state/inject'
+import { ask } from '../edit/useEditDialog'
 
 const emit = defineEmits<{ note: [text: string] }>()
 const desk = useDesk()
 const e = desk.edit
 const sheets = computed(() => e.sheets.value)
 const hasRoot = computed(() => sheets.value.some(s => s.mount === ROOT_MOUNT))
+const canAbandon = computed(() => e.target?.kind === 'design' && ['draft', 'reviewing', 'accepted'].includes(e.approval.status.value ?? ''))
+async function abandon() {
+  if (
+    !(await ask({
+      title: `放弃设计「${desk.versions.design.value?.name ?? ''}」？`,
+      lines: ['设计改为「已放弃」：只看，不能再改、认可或归档', '任务单作废；项目卡片不再列出这个设计', '草图、对话、设计说明原样保留，版本切换里仍可打开'],
+      ok: '放弃设计',
+      danger: true,
+    }))
+  )
+    return
+  const r = await e.approval.abandon()
+  emit('note', r.ok ? '设计已放弃' : r.reason)
+}
 function go(mount: string) {
   const r = e.openMount(mount)
   emit('note', r.ok ? '' : r.reason)
@@ -35,6 +51,9 @@ function go(mount: string) {
     <button v-if="e.target?.kind === 'design' && !hasRoot" class="small" title="根挂载：层与第二级（supersedes 骨架），底稿从基线复制" @click="go(ROOT_MOUNT)">
       改骨架
     </button>
+    <button v-if="canAbandon" class="small abandon" data-testid="abandon-design" title="放弃这个设计（二次确认）：任务单作废，草图与对话保留" @click="abandon">
+      放弃设计
+    </button>
     <!-- DA-10、DL-31：设计说明（AI 拥有，目标态 · 未实现）——单击在辅助栏打开预览标签 -->
     <template v-if="desk.notes.list.value.length">
       <p class="cap">设计说明 {{ desk.notes.list.value.length }} 份 <span class="tgt">目标态 · 未实现</span></p>
@@ -51,6 +70,11 @@ function go(mount: string) {
 </template>
 
 <style scoped>
+.abandon {
+  margin-left: 6px;
+  color: var(--danger);
+}
+
 .tgt {
   margin-left: 4px;
   font-size: 11px;

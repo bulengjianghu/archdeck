@@ -39,7 +39,7 @@ modules:
     principle: |
       - **一轮一步**：AI 的产出整轮成一步，撤回最近一轮就是撤销，不另造撤回的机制；更早的一轮和单项撤回是一步新的编辑，可反悔。
       - **只读期由会话说了算**：AI 的一轮在跑时编辑操作一律拒绝（locked），画布与页签只照着禁用。
-    codeRefs: [src/state/desk/edit/changes.ts, src/state/desk/edit/rounds.ts]
+    codeRefs: [src/state/desk/edit/changes.ts, src/state/desk/edit/rounds.ts, src/state/desk/edit/approval.ts]
 
   # ── 呈现层：导航树的「改动」页签 ──
   - id: present.nav-tree.changes

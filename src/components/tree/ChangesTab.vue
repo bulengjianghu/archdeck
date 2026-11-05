@@ -4,6 +4,9 @@
  * 顶部六类计数、筛选（全部 / 本轮 / 某张草图）、撤回本轮；每行 #n · 类别 · 一句话 · 第几轮 · 谁 · 撤回。
  * 单击行：画布切到那张草图并居中；单击画布上的徽标：清单滚到那一行；悬停：两边一起高亮，删除项在原位置显示虚框（CI-3）。
  * 撤回一项 = 恢复到基线（有级联时先确认）；撤回本轮 = 最近一轮（撤销）。只读编辑分组的改动项、只发意图（desk.edit.changes）。
+ * 任务模式（DL-38，TK-2–TK-4）：设计已认可时号不变，每行多一列状态（✓ / 待做 / 不核验，由核验推出、不能勾），撤回变灰，
+ * 顶部多「复制给 agent」（Markdown）与「导出 JSON」，对不上号的偏差列在最后；当前版本重新生成后随描述重新加载自动重算。
+ * 认可已撤回时顶部标「认可已撤回」。
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -11,6 +14,30 @@ import { CHANGE_BADGES, sixCounts } from '../sketch/labels'
 
 const desk = useDesk()
 const changes = desk.edit.changes
+const approval = desk.edit.approval
+const taskMode = computed(() => approval.taskMode.value)
+const tasks = computed(() => approval.tasks.value)
+const rowOf = computed(() => new Map((tasks.value?.rows ?? []).filter(r => r.n !== null).map(r => [r.n!, r])))
+const withdrawn = computed(() => tasks.value?.state === 'withdrawn')
+const STATE = { done: '✓', todo: '待做', unchecked: '不核验' } as const
+const copied = ref(false)
+async function copyTasks() {
+  try {
+    await navigator.clipboard.writeText(approval.markdown())
+    copied.value = true
+    setTimeout(() => (copied.value = false), 1500)
+  } catch {
+    note.value = '复制到剪贴板失败'
+  }
+}
+function exportJson() {
+  const url = URL.createObjectURL(new Blob([approval.json()], { type: 'application/json' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `tasks-${tasks.value?.design ?? 'design'}.json`
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
 const items = computed(() => changes.items.value)
 const filter = ref<'all' | 'round' | string>('all')
 const sheets = computed(() => [...new Set(items.value.map(i => i.mount))].sort())
@@ -46,8 +73,22 @@ watch(
 </script>
 
 <template>
-  <div class="changes-tab" data-testid="changes-tab">
+  <div class="changes-tab" :class="{ tasks: taskMode }" data-testid="changes-tab">
     <header class="head">
+      <div v-if="taskMode && tasks" class="task-head" data-testid="task-head">
+        <span class="task-note">任务单 · {{ tasks.note }}</span>
+        <span class="task-counts" data-testid="task-counts"
+          >✓ {{ tasks.counts.done }} · 待做 {{ tasks.counts.todo
+          }}<template v-if="tasks.counts.unchecked"> · 不核验 {{ tasks.counts.unchecked }}</template></span
+        >
+        <div class="task-out">
+          <button data-testid="copy-tasks" title="把任务单（Markdown）复制给写代码的 agent；与 npm run arch -- tasks 同一份" @click="copyTasks">
+            {{ copied ? '已复制' : '复制给 agent' }}
+          </button>
+          <button data-testid="export-tasks" title="导出 JSON 给外部系统；与 npm run arch -- tasks --json 同一份" @click="exportJson">导出 JSON</button>
+        </div>
+      </div>
+      <p v-else-if="withdrawn" class="withdrawn" data-testid="task-withdrawn">{{ tasks?.note }}</p>
       <div class="six" data-testid="changes-six">
         <span v-for="c in six" :key="c.key" class="six-n" :class="[c.key, { zero: !c.n }]" :title="c.label">{{ c.mark }} {{ c.n }}</span>
       </div>
@@ -97,6 +138,19 @@ watch(
             }}<template v-if="sheets.length > 1"> · {{ sheetName(i.mount) }}</template></span
           >
         </button>
+        <span
+          v-if="taskMode"
+          class="state"
+          :class="rowOf.get(i.n)?.state"
+          data-testid="task-state"
+          :title="
+            rowOf
+              .get(i.n)
+              ?.criteria.map(c => `怎样算做到：${c.text}`)
+              .join('\n')
+          "
+          >{{ STATE[rowOf.get(i.n)?.state ?? 'todo'] }}</span
+        >
         <button
           class="withdraw"
           :disabled="desk.edit.locked.value"
@@ -108,6 +162,10 @@ watch(
         </button>
       </li>
     </ul>
+    <section v-if="taskMode && tasks?.unmatched.length" class="unmatched" data-testid="task-unmatched">
+      <p class="cap">对不上号 {{ tasks.unmatched.length }}</p>
+      <p v-for="d in tasks.unmatched" :key="d.key" class="muted pad" :title="d.reason">{{ d.message }}</p>
+    </section>
   </div>
 </template>
 
@@ -202,6 +260,60 @@ watch(
   grid-column: 1 / -1;
   color: var(--text-3);
   font-size: 11.5px;
+}
+.task-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 12px;
+}
+.task-note {
+  color: var(--diff-added);
+}
+.task-counts {
+  color: var(--text-2);
+}
+.task-out {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.task-out button {
+  padding: 1px 8px;
+  font-size: 12px;
+}
+.withdrawn {
+  margin: 0;
+  font-size: 12px;
+  color: var(--danger);
+}
+.state {
+  flex: none;
+  margin-top: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.state.done {
+  color: var(--diff-added);
+  background: var(--diff-added-soft);
+}
+.state.todo {
+  color: var(--diff-changed);
+  background: var(--diff-changed-soft);
+}
+.state.unchecked {
+  color: var(--text-3);
+}
+.unmatched {
+  padding: 6px 4px;
+}
+.cap {
+  margin: 0 8px;
+  font-size: 12px;
+  color: var(--text-2);
 }
 .withdraw {
   flex: none;

@@ -19,7 +19,7 @@ import {
   sketchLifetime,
   type ChangeKind,
   type CompareMode,
-  type DesignStatus,
+  type DesignInfo,
   type ModelIndex,
   type RawFile,
   type SketchPoint,
@@ -32,6 +32,7 @@ import type { EditSession } from './edit/session'
 import { createDerive } from './edit/derive'
 import { createSaveSync } from './edit/save'
 import { AI_BUSY, createCommands, type PayloadSketch } from './edit/commands'
+import { createApproval } from './edit/approval'
 import { createChanges } from './edit/changes'
 
 export type { EditSession } from './edit/session'
@@ -65,8 +66,8 @@ export interface EditInputs {
   changesFile?: () => unknown
   /** DA-6：AI 回合中画布只读 */
   aiBusy?: () => boolean
-  /** DL-34：设计的状态（已认可 / 已实现 / 已放弃时锁定）；持久草图没有 */
-  status?: () => DesignStatus | undefined
+  /** DL-34、DL-33：设计的元信息（状态、认可记录、认可的偏差）；持久草图没有 */
+  designInfo?: () => DesignInfo | undefined
 }
 
 export function createEdit(i: EditInputs) {
@@ -131,7 +132,7 @@ export function createEdit(i: EditInputs) {
     { immediate: true },
   )
   /** DL-34：编辑锁的原因——设计状态锁先于 AI 回合只读（DL-28） */
-  const statusLock = computed(() => (target?.kind === 'design' ? editLock(i.status?.()) : null))
+  const statusLock = computed(() => (target?.kind === 'design' ? editLock(i.designInfo?.()?.status) : null))
   const lockReason = (): string | null => statusLock.value ?? (i.aiBusy?.() ? AI_BUSY : null)
   const sync = createSaveSync(i.writer, session, i.baseline, () => tableForSave())
   const sketchFiles = () => (target?.kind === 'design' ? (i.sketchFiles.value ?? []) : i.sketch.value ? [i.sketch.value] : [])
@@ -164,6 +165,21 @@ export function createEdit(i: EditInputs) {
     locked: lockReason,
   })
   tableForSave = changes.tableForSave
+  const approval = createApproval({
+    session,
+    derive,
+    changes,
+    design: target?.kind === 'design' ? target.design : null,
+    status: () => i.designInfo?.()?.status,
+    approval: () => i.designInfo?.()?.approval,
+    accepted: () => i.designInfo?.()?.accepted ?? [],
+    name: () => i.designInfo?.()?.name,
+    baseline: i.baseline,
+    current: i.current,
+    sketchFiles,
+    writer: i.writer,
+    reload: i.reload,
+  })
   /** 当前张里的条目（面板显示草图写了的字段；不在本张里的为 undefined——引用节点或属于别的草图） */
   const lookup = {
     module: (id: string) => (derive.sketch.value ? locate(derive.sketch.value, id)?.node : undefined),
@@ -306,6 +322,8 @@ export function createEdit(i: EditInputs) {
       changes.reset()
     },
     changes,
+    /** TK-1–TK-4：认可、回到起草、放弃与任务单 */
+    approval,
     /** T2.5：各层借来的起点（画布据此在起点算好时再适应一次） */
     seeds,
     /** 画布只读：设计已锁定（DL-34）或 AI 回合中（DA-6） */
