@@ -15,7 +15,7 @@ export {
   typesCorrespond,
 } from './check'
 export type { FlatSketchModule, SketchCheckOptions, CompareMode, CompareOptions, SketchChange, SketchComparison } from './check'
-export { archiveVerdict, sketchModules } from './lifecycle'
+export { archiveVerdict, gateSeverity, PENDING_TASK_NOTE, sketchModules } from './lifecycle'
 export * from './approval'
 export {
   applyEdit,

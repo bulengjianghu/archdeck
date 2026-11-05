@@ -41,8 +41,8 @@ export function diagramSvgReasons(svg: string): string[] {
   for (const tag of FORBIDDEN_TAGS) if (new RegExp(`<${tag}\\b`, 'i').test(t)) reasons.push(`含 <${tag}>：机制图只许纯 SVG，不许脚本与嵌入内容`)
   if (/<[^>]*\son[a-z]+\s*=/i.test(t)) reasons.push('含 on… 事件属性：不许脚本')
   if (/javascript:/i.test(t)) reasons.push('含 javascript: 链接：不许脚本')
-  for (const m of t.matchAll(/\s(?:xlink:)?(?:href|src)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
-    const v = m[1] ?? m[2] ?? ''
+  for (const m of t.matchAll(/\s(?:xlink:)?(?:href|src)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi)) {
+    const v = m[1] ?? m[2] ?? m[3] ?? ''
     if (!localRef(v)) reasons.push(`引用外部资源 ${v.slice(0, 60)}：只许 #片段 或 data:image/`)
   }
   if (/@import/i.test(t)) reasons.push('样式里有 @import：不许外部资源')

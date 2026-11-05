@@ -18,6 +18,8 @@ import {
   type ModuleDep,
   type SketchDef,
 } from '../../src/model'
+import { parse } from 'yaml'
+import { sketchText, stratumOfMember } from '../../src/model/intent'
 import { layerJudgement } from '../../src/model/governance/rules'
 
 const SYSTEM = 'system: { id: sys, name: S }'
@@ -243,5 +245,79 @@ describe('草图里的分层（ST-6、X14）与编辑的级联', () => {
     expect(app.strata!.app[0].members).toEqual([])
     expect(app.modules!.find(m => m.id === 'app.entry')).toMatchObject({ stratum: 'top' })
     expect(v(app).ok).toBe(true)
+  })
+
+  // ── DL-44：草图里指定层（ADR-0063 修订节）──
+  const ctx = { persistent: [], designSketch: true }
+  const added = () => {
+    const r = applyEdit(sketch, { op: 'addModule', parent: 'app', name: 'Agent', id: 'app.agent' }, ctx)
+    if (!r.ok) throw new Error(r.reason)
+    return r.sketch
+  }
+
+  it('DL-44 setStratum：新框不属于任何一层 → 指定后写进该层 members、提示消失；换层从原层去掉；同层重设不变', () => {
+    const fresh = added()
+    expect(v(fresh).warnings.map(w => w.message).join()).toContain('在选中面板的「层」里指定')
+    const set = applyEdit(fresh, { op: 'setStratum', id: 'app.agent', stratum: 'base' }, ctx)
+    if (!set.ok) throw new Error(set.reason)
+    expect(set.sketch.strata!.app.find(s => s.id === 'base')!.members).toEqual(['app.core', 'app.agent'])
+    expect(v(set.sketch).ok && v(set.sketch).warnings).toEqual([])
+    // 换层：从 base 去掉、进 top
+    const moved = applyEdit(set.sketch, { op: 'setStratum', id: 'app.agent', stratum: 'top' }, ctx)
+    if (!moved.ok) throw new Error(moved.reason)
+    expect(moved.sketch.strata!.app.map(s => [s.id, s.members])).toEqual([
+      ['top', ['app.ui', 'app.cli', 'app.agent']],
+      ['base', ['app.core']],
+    ])
+    // 同层重设：内容不变
+    const same = applyEdit(moved.sketch, { op: 'setStratum', id: 'app.agent', stratum: 'top' }, ctx)
+    expect(same.ok && same.sketch).toEqual(moved.sketch)
+    // 框自己写的 stratum 被成员写法取代
+    const own: SketchDef = { ...sketch, modules: [...sketch.modules!, { id: 'app.x', name: 'X', stratum: 'top' }] }
+    const conv = applyEdit(own, { op: 'setStratum', id: 'app.x', stratum: 'base' }, ctx)
+    if (!conv.ok) throw new Error(conv.reason)
+    expect(conv.sketch.modules!.find(m => m.id === 'app.x')!.stratum).toBeUndefined()
+    expect(conv.sketch.strata!.app.find(s => s.id === 'base')!.members).toContain('app.x')
+  })
+
+  it('DL-44 setStratum 的拒绝：层不存在、框不在本草图、本草图没有分层、根草图的顶层', () => {
+    const fresh = added()
+    const no = (def: SketchDef, op: { id: string; stratum: string }) => {
+      const r = applyEdit(def, { op: 'setStratum', ...op }, ctx)
+      return r.ok ? '' : r.reason
+    }
+    expect(no(fresh, { id: 'app.agent', stratum: 'zz' })).toContain('没有层「zz」')
+    expect(no(fresh, { id: 'app.nope', stratum: 'top' })).toContain('草图里没有模块')
+    expect(no({ ...fresh, strata: undefined }, { id: 'app.agent', stratum: 'top' })).toContain('没有声明分层')
+    const root: SketchDef = { id: 'skeleton', mount: 'root', modules: [{ id: 'ui', name: 'UI' }], strata: { root: [{ id: 'ui', name: 'UI', members: ['ui'] }] } }
+    expect(no(root, { id: 'ui', stratum: 'ui' })).toContain('moveIn')
+  })
+
+  it('DL-44 写回草图文件：setStratum 后的 YAML 带 members，读回再校验不再提示', () => {
+    const set = applyEdit(added(), { op: 'setStratum', id: 'app.agent', stratum: 'base' }, ctx)
+    if (!set.ok) throw new Error(set.reason)
+    const text = sketchText(set.sketch)
+    expect(text).toMatch(/members:\n\s+- app\.core\n\s+- app\.agent/)
+    const back = (parse(text) as { sketch: SketchDef }).sketch
+    expect(v(back).warnings).toEqual([])
+  })
+
+  it('DL-44 继承：改 ID 跟着改成员；拆分各部分继承原层；合并跨层无法继承 → 提示要求指定', () => {
+    const renamed = applyDesignEdit({ app: sketch }, { op: 'rename', sketch: 'app', id: 'app.core', newId: 'kernel' }, { design: 'd', persistent: [] })
+    if (!renamed.ok) throw new Error(renamed.reason)
+    expect(stratumOfMember(renamed.design.app, 'app', 'app.kernel')?.id).toBe('base')
+    expect(v(renamed.design.app).warnings).toEqual([])
+    const split = applyDesignEdit(
+      { app: sketch },
+      { op: 'split', sketch: 'app', id: 'app.core', parts: [{ name: '甲', id: 'k1' }, { name: '乙', id: 'k2' }] },
+      { design: 'd', persistent: [] },
+    )
+    if (!split.ok) throw new Error(split.reason)
+    expect(['app.k1', 'app.k2'].map(id => stratumOfMember(split.design.app, 'app', id)?.id)).toEqual(['base', 'base'])
+    expect(v(split.design.app).warnings).toEqual([])
+    const mixed = applyDesignEdit({ app: sketch }, { op: 'merge', sketch: 'app', ids: ['app.ui', 'app.core'], name: '混', id: 'mix' }, { design: 'd', persistent: [] })
+    if (!mixed.ok) throw new Error(mixed.reason)
+    expect(stratumOfMember(mixed.design.app, 'app', 'app.mix')).toBeUndefined()
+    expect(v(mixed.design.app).warnings.map(w => w.message).join()).toContain('「层」里指定')
   })
 })

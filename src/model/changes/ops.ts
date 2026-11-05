@@ -41,6 +41,7 @@ const EDIT: Record<EditOp['op'], Check> = {
     return extra.length ? `updateModule 的 patch 只能改 ${PATCH_KEYS.join(' / ')}，多出 ${extra.join('、')}` : null
   },
   setClosed: need({ id: isStr, closed: v => typeof v === 'boolean' }),
+  setStratum: need({ id: isStr, stratum: isStr }),
   moveModule: need({ id: isStr, parent: isStr }, { newId: isStr }),
   renameModule: need({ id: isStr, newId: isStr }),
   removeModule: need({ id: isStr }),

@@ -108,6 +108,7 @@ describe('T2.1 编辑操作的外部表示（DA-9）', () => {
     { op: 'edit', sketch: 'fe.ui', edit: { op: 'implement', interface: 'if.x', module: 'fe.ui.view' } },
     { op: 'edit', sketch: 'fe.ui', edit: { op: 'setAbstraction', text: '只读派生' } },
     { op: 'edit', sketch: 'fe.ui', edit: { op: 'setClosed', id: 'fe.ui', closed: true } },
+    { op: 'edit', sketch: 'fe.ui', edit: { op: 'setStratum', id: 'fe.ui.list', stratum: 'top' } },
     { op: 'edit', sketch: 'fe.ui', edit: { op: 'moveModule', id: 'fe.ui.list', parent: 'fe.ui.view' } },
     { op: 'edit', sketch: 'fe.ui', edit: { op: 'renameModule', id: 'fe.ui.list', newId: 'fe.ui.lst' } },
     { op: 'edit', sketch: 'fe.ui', edit: { op: 'removeModule', id: 'fe.ui.list' } },
@@ -151,6 +152,9 @@ describe('T2.1 编辑操作的外部表示（DA-9）', () => {
       expect(parseDesignOps([sample]).ok).toBe(true)
     }
     expect(parseDesignOps([samples.find(x => x.op === 'restore')!], { agent: true }).ok).toBe(false)
+    // DL-44：指定层是结构类操作，AI 可出；缺 stratum 拒绝
+    expect(parseDesignOps([samples.find(x => x.op === 'edit' && x.edit.op === 'setStratum')!], { agent: true }).ok).toBe(true)
+    expect(parseDesignOps([{ op: 'edit', sketch: 'fe.ui', edit: { op: 'setStratum', id: 'fe.ui.list' } }], { agent: true }).ok).toBe(false)
   })
   it('薄协议的改动块：合法的交出操作与要撤回的号；非法操作、空块、多出的键整块拒绝', () => {
     const ok = parseBlock({ kind: 'edit', summary: '合并', ops: SIX.merged, withdraw: [2] })

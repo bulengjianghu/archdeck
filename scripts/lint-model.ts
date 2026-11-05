@@ -17,6 +17,7 @@ import {
   compareOwned,
   contractCoverage,
   contractNote,
+  gateSeverity,
   governanceReport,
   loadModel,
   portIssues,
@@ -66,6 +67,8 @@ interface Entry {
   validate?: { design: string; project: string }
   /** 项目描述目录（草图偏差的位置相对它） */
   project?: string
+  /** DL-45：对当前版本核验已认可设计的草图——偏差按门禁口径降为提醒、标「任务单待做」 */
+  gate?: boolean
 }
 const dirs: Entry[] = []
 let totalErrors = 0
@@ -75,7 +78,13 @@ for (const dir of projectDirs) {
   const designs = listDesigns(dir)
   const accepted = new Map(designs.map(d => [d.id, d.accepted ?? []]))
   // X3、X4：已定稿、未归档的设计的草图约束当前版本
-  dirs.push({ dir, sketches: designs.filter(d => d.sketch && d.status === 'accepted').flatMap(d => designSketches(dir, d.id)), accepted, project: dir })
+  dirs.push({
+    dir,
+    sketches: designs.filter(d => d.sketch && d.status === 'accepted').flatMap(d => designSketches(dir, d.id)),
+    accepted,
+    project: dir,
+    gate: true,
+  })
   for (const d of designs) {
     for (const p of d.problems) {
       console.log(`  error   ${path.relative(root, path.join(dir, DESIGNS_DIR, d.id, 'design.yaml'))}  ${p}  [design]`)
@@ -110,7 +119,9 @@ for (const entry of dirs) {
   // X4：活动草图的核验，偏差按严重度报出（已认可的为 info，不报）
   const checks: SketchCheck[] = entry.skipSketches ? [] : checkSketches(index, parseDesignSketches(entry.sketches ?? []), entry.accepted)
   for (const c of checks)
-    for (const d of c.deviations)
+    for (const raw of c.deviations) {
+      // DL-45：已认可、未归档设计对当前版本的偏差是任务单，门禁里降为提醒（归档关仍按原严重度）
+      const d = entry.gate ? { ...raw, ...gateSeverity(c, raw) } : raw
       if (d.severity !== 'info')
         issues.push({
           severity: d.severity,
@@ -118,6 +129,7 @@ for (const entry of dirs) {
           message: `${c.design ? `设计「${c.design}」的草图` : `持久草图「${c.sketch}」`}：${d.message}`,
           ...(d.at ? { file: d.at.file, path: d.at.path } : {}),
         })
+    }
   // X14：设计的各张草图的两级校验（上下文：当前版本的持久草图与模块、同设计的其他草图）
   if (entry.validate) {
     const cur = loadModel(readModelDir(entry.validate.project, root).files).index

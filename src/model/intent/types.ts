@@ -141,6 +141,8 @@ export type EditOp =
   | { op: 'addModule'; parent: string; name: string; id?: string; kind?: string }
   | { op: 'updateModule'; id: string; patch: ModulePatch }
   | { op: 'setClosed'; id: string; closed: boolean }
+  /** DL-44：给框指定所在层（父模块在本草图声明了 strata；写进层的 members） */
+  | { op: 'setStratum'; id: string; stratum: string }
   | { op: 'moveModule'; id: string; parent: string; newId?: string }
   /** 父不变的移动：只改短名（X7d） */
   | { op: 'renameModule'; id: string; newId: string }

@@ -4,7 +4,7 @@
 import { stringify } from 'yaml'
 import type { SketchDef } from '../../types'
 import { migrateSketch } from '../../load'
-import { pruneStrata } from './strata'
+import { pruneStrata, setStratum } from './strata'
 import { knownModules } from './locate'
 import type { EditContext, EditOp, EditResult } from '../types'
 import { addLayer, reorderLayer, setMayDependOn } from './layers'
@@ -13,7 +13,7 @@ import { moveModule, renameModule } from './move'
 import { addInterface, connect, implement, removeInterface, removeRelation, updateInterface, updateRelation } from './relations'
 import { setMeta } from './seed'
 import { addReference, autoArrange, moveNode, relabel, removeReference, setAbstraction } from './layout'
-import type { OpOutcome } from './shared'
+import { done, reject, type OpOutcome } from './shared'
 
 function run(def: SketchDef, ctx: EditContext, op: EditOp): OpOutcome {
   switch (op.op) {
@@ -27,6 +27,10 @@ function run(def: SketchDef, ctx: EditContext, op: EditOp): OpOutcome {
       return addModule(def, ctx, op.parent, op.name, op.id, op.kind)
     case 'updateModule':
       return updateModule(def, ctx, op.id, op.patch)
+    case 'setStratum': {
+      const r = setStratum(def, op.id, op.stratum)
+      return r.ok ? done() : reject(r.reason.startsWith('草图里没有') ? 'not-found' : 'invalid', r.reason)
+    }
     case 'setClosed':
       return setClosed(def, ctx, op.id, op.closed)
     case 'moveModule':

@@ -1,0 +1,15 @@
+{
+  "steps": [
+    {
+      "block": {
+        "kind": "edit",
+        "summary": "新增「运行派生」，放进派生层",
+        "ops": [
+          { "op": "edit", "sketch": "{{sketch.mount}}", "edit": { "op": "addModule", "parent": "{{sketch.mount}}", "name": "运行派生", "id": "run-derive" } },
+          { "op": "edit", "sketch": "{{sketch.mount}}", "edit": { "op": "setStratum", "id": "{{sketch.mount}}.run-derive", "stratum": "derive" } }
+        ]
+      }
+    },
+    { "done": true }
+  ]
+}

@@ -3,7 +3,7 @@
  */
 import type { ModelIndex, SketchEntity } from '../types'
 import { flattenSketch } from './check'
-import type { ArchiveVerdict, SketchCheck } from './types'
+import type { ArchiveVerdict, SketchCheck, SketchDeviation } from './types'
 
 /** X3：核验一致才能归档；声明 supersedes 的为晋升；持久草图不归档 */
 export function archiveVerdict(check: SketchCheck): ArchiveVerdict {
@@ -29,4 +29,18 @@ export function sketchModules(sketch: SketchEntity, index: ModelIndex): string[]
   return flattenSketch(sketch)
     .map(m => m.id)
     .filter(id => index.modules.has(id))
+}
+
+/** DL-45 的标注：已认可、未归档设计的草图偏差在门禁里的尾注 */
+export const PENDING_TASK_NOTE = '（任务单待做）'
+
+/**
+ * DL-45（X3 的 ADR-0063 修订）：门禁（`lint:model`）报当前版本上的草图偏差时的严重度——属于已认可、未归档设计的草图（until-implemented）
+ * 的偏差，error 降为 warning、消息尾标「任务单待做」：从认可到实现之间的偏差就是任务单，不是违规；与持久草图矛盾（sketch.contradiction）不降。
+ * 持久草图不降。核验本身不变：归档三关（archiveVerdict）、任务单与页面仍看原严重度。info（已认可的偏差）原样。
+ */
+export function gateSeverity(check: Pick<SketchCheck, 'design' | 'lifetime'>, d: Pick<SketchDeviation, 'severity' | 'code' | 'message'>): { severity: SketchDeviation['severity']; message: string; pending: boolean } {
+  const pending = !!check.design && check.lifetime === 'until-implemented' && d.severity !== 'info' && d.code !== 'sketch.contradiction'
+  if (!pending) return { severity: d.severity, message: d.message, pending }
+  return { severity: d.severity === 'error' ? 'warning' : d.severity, message: `${d.message}${PENDING_TASK_NOTE}`, pending }
 }

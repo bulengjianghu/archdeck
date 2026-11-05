@@ -6,6 +6,7 @@ import { computed, shallowRef, watch, type ShallowRef } from 'vue'
 import { layoutView } from '@/layout/layout'
 import {
   editLock,
+  isRootLayer,
   isIntentVersion,
   isSketchRevision,
   isSketchVersion,
@@ -17,6 +18,9 @@ import {
   referenceRelations,
   ROOT_MOUNT,
   sketchLifetime,
+  strataIn,
+  strataKey,
+  stratumOfMember,
   type ChangeKind,
   type CompareMode,
   type DesignInfo,
@@ -247,6 +251,17 @@ export function createEdit(i: EditInputs) {
     const cur = i.current()?.modules.get(id)?.abstraction?.trim()
     return cur ? { text: cur, from: 'current' } : null
   }
+  /** DL-44：当前张上一个框可选的层——父模块在本张声明了分层、且不是根草图的顶层时给出层与它现在所在的层；否则 null */
+  function layersOf(id: string): { parent: string; layers: { id: string; name: string }[]; current: string | null } | null {
+    const s = session.value
+    const def = s?.doc.sketches[s.mount]
+    const hit = def ? locateAll(def).find(m => m.id === id) : undefined
+    if (!def || !hit || isRootLayer(def, id)) return null
+    const key = strataKey(def, hit.parentId)
+    const list = strataIn(def, key)
+    if (!list.length) return null
+    return { parent: key, layers: list.map(x => ({ id: x.id, name: x.name || x.id })), current: stratumOfMember(def, key, id, hit.node)?.id ?? null }
+  }
   /** F-41：模块的血缘读法（相对基线的本张变更）：合并 / 拆分 / 改 ID / 移动；没有血缘为 null */
   function lineageOf(id: string): ChangeKind | null {
     for (const c of derive.vsBaseline.value?.sheet?.changes ?? []) {
@@ -282,6 +297,7 @@ export function createEdit(i: EditInputs) {
     lookup,
     parent,
     principleOf,
+    layersOf,
     lineageOf,
     placeOf,
     sheets,

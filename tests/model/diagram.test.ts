@@ -66,6 +66,14 @@ describe('DL-41 图块的检查', () => {
     expect(reasons).toContain('javascript:')
   })
 
+  it('不合格二之一：不带引号的属性值也查（协调者 17 收紧）', () => {
+    const r = checkDiagram({ svg: svg('<image href=https://evil.example/u.png width="10" height="10"/><use xlink:href=#ok/>') }, known)
+    expect(r.ok).toBe(false)
+    const reasons = (r as { reasons: string[] }).reasons
+    expect(reasons.some(x => x.includes('https://evil.example/u.png'))).toBe(true)
+    expect(reasons.some(x => x.includes('#ok'))).toBe(false)
+  })
+
   it('不合格二：外部资源（外链 href、样式 url()、@import、foreignObject）', () => {
     const r = checkDiagram(
       {

@@ -191,7 +191,7 @@ interface ReworkList { items: ReworkItem[]; counts: Record<Severity, number>; by
 
 | 函数 | 做什么 | 规则 |
 |---|---|---|
-| `applyEdit(sketch, op, ctx)`（`edit/apply.ts`） | 单张草图的纯函数编辑：输入草图定义、一个编辑操作 `EditOp`（层；模块；移动与改 ID；关系与接口；元信息；ADR-0025 起加挂载点原则 `setAbstraction`、位置 `moveNode` / `relabel` / `autoArrange`、引用 `addReference`）与上下文（持久草图、范围外可引用的模块 `known`），输出新草图与影响 `{ created, renamed, removed }`，或拒绝原因；按操作族分 `locate` · `layers` · `modules` · `move` · `relations` · `layout` · `seed` | X7b–X7e、X15、X19 |
+| `applyEdit(sketch, op, ctx)`（`edit/apply.ts`） | 单张草图的纯函数编辑：输入草图定义、一个编辑操作 `EditOp`（层；模块；移动与改 ID；关系与接口；元信息；ADR-0025 起加挂载点原则 `setAbstraction`、位置 `moveNode` / `relabel` / `autoArrange`、引用 `addReference`；DL-44 指定层 `setStratum`）与上下文（持久草图、范围外可引用的模块 `known`），输出新草图与影响 `{ created, renamed, removed }`，或拒绝原因；按操作族分 `locate` · `layers` · `modules` · `move` · `relations` · `layout` · `seed` | X7b–X7e、X15、X19、DL-44 |
 | `applyDesignEdit(sketches, op, ctx)`（`edit/design.ts`） | 设计级编辑：输入输出为一个设计的全部草图（按挂载点）；`DesignEditOp` 为单张操作（`edit`）或跨草图的**合并 / 拆分 / 降级 / 升级 / 移入 / 改 ID / 删除**；ID 变了一律前缀级联（子草图改挂载点与模块 ID，被改写的记 `from`，关系两端、接口 `owner`、`closed`、`layout` 的键随之改写），`from` 沿血缘求闭包；影响另列涉及的草图、改挂载点的草图、删掉与新出现的草图 | X7b、X7d、X7e、X7j、X7k、X11、X12 |
 | `seedFromBaseline(mount, baseline, { id })` · `deriveChildSketch(mount, baseline, sketches, { id })`（`edit/seed.ts`） | 底稿从基线复制挂载点的一层（结构字段与显式写在本层的关系，不带文字；根挂载 `supersedes` 骨架）；下一层草图不存在时由「基线子树 + 血缘」推出 | X18 |
 | `gridLayout` · `referenceNodes` · `layoutForSave`（`edit/layout.ts`） | 网格布局（重新排列，按中心区可用区域）；引用节点由关系派生；保存前去掉引用节点的位置、丢掉没有关系的引用 | X15、X19、X22 |

@@ -128,7 +128,7 @@ describe('X1 草图先入、其他文件只能补充', () => {
 })
 
 // ── X2–X5：核验与生命周期 ──
-import { archiveVerdict, checkSketches, parseDesignSketches, sketchCheck, sketchLifetime, sketchModules, type SketchEntity } from '../../src/model'
+import { archiveVerdict, checkSketches, gateSeverity, PENDING_TASK_NOTE, parseDesignSketches, sketchCheck, sketchLifetime, sketchModules, type SketchEntity } from '../../src/model'
 
 const DESIGN_SKETCH = `
 sketch:
@@ -245,6 +245,26 @@ describe('X3 归档判定与确认记录', () => {
     expect(archiveVerdict(consistent)).toMatchObject({ ok: true, outcome: 'archive' })
     expect(archiveVerdict({ ...consistent, supersedes: 'skeleton' })).toMatchObject({ ok: true, outcome: 'promote' })
     expect(archiveVerdict({ ...consistent, lifetime: 'persistent' })).toMatchObject({ ok: false, outcome: 'archive' })
+  })
+
+  it('DL-45（X3 的 ADR-0063 修订）：已认可设计对当前版本的偏差在门禁里降为提醒、标任务单待做；矛盾与持久草图不降；归档关仍按错误', () => {
+    const { index } = loadModel(files({ 'modules/r1.yaml': R1 }))
+    const c = sketchCheck(design(), index)
+    const errs = c.deviations.filter(d => d.severity === 'error')
+    expect(errs.length).toBeGreaterThan(0)
+    for (const d of errs) {
+      const g = gateSeverity(c, d)
+      expect(g).toMatchObject({ severity: 'warning', pending: true })
+      expect(g.message.endsWith(PENDING_TASK_NOTE)).toBe(true)
+    }
+    // 与持久草图矛盾：说好了却做反了，不降
+    expect(gateSeverity(c, { severity: 'error', code: 'sketch.contradiction', message: 'x' })).toMatchObject({ severity: 'error', pending: false })
+    // 持久草图（没有设计）不降；已认可的偏差（info）原样
+    expect(gateSeverity({ lifetime: 'persistent' }, errs[0])).toMatchObject({ severity: 'error', pending: false })
+    expect(gateSeverity(c, { ...errs[0], severity: 'info' })).toMatchObject({ severity: 'info', pending: false })
+    // 归档关：同一份核验仍是错误、拒绝归档
+    expect(archiveVerdict(c)).toMatchObject({ ok: false })
+    expect(archiveVerdict(c).reason).toContain('个错误')
   })
 
   it('确认记录的对象：草图覆盖的、版本里存在的模块（按草图顺序）；指纹与摘要由确认层算', () => {

@@ -111,6 +111,9 @@ const ROLE_OPTIONS: { value: '' | ModuleRole; label: string }[] = [
 ]
 const setRole = (v: string) => report(e.updateModule(m.value.id, { role: (v || undefined) as ModuleRole | undefined }))
 const setClosed = (v: boolean) => report(e.edit({ op: 'setClosed', id: m.value.id, closed: v }))
+/** DL-44：所在层（父模块在本张声明了分层时）——写进该层的成员 */
+const layers = computed(() => e.layersOf(m.value.id))
+const setStratum = (v: string) => v && report(e.edit({ op: 'setStratum', id: m.value.id, stratum: v }))
 
 // ── 血缘与原则 ──
 const lineage = computed(() => e.lineageOf(m.value.id))
@@ -173,6 +176,15 @@ const blur = (ev: KeyboardEvent) => (ev.target as HTMLElement).blur()
         <span class="muted">（直接子模块必须与下一层草图相等）</span></label
       >
     </div>
+    <label v-if="layers" class="f">
+      <span class="lab"
+        >层 <span class="muted">（「{{ e.nameOf(layers.parent) ?? layers.parent }}」的分层）</span></span
+      >
+      <select name="module-stratum" :value="layers.current ?? ''" @change="setStratum(($event.target as HTMLSelectElement).value)">
+        <option v-if="!layers.current" value="">（未指定——认可前要指定）</option>
+        <option v-for="l in layers.layers" :key="l.id" :value="l.id">{{ l.name }}</option>
+      </select>
+    </label>
     <label class="f">
       <span class="lab">代码落点 <span class="muted">（目录级，逗号分隔）</span></span>
       <input v-model="code" name="module-code" placeholder="src/state/desk/**" @blur="commitCode" @keydown.enter="blur" />

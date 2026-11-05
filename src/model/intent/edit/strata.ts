@@ -94,3 +94,28 @@ export function renumberRoot(def: SketchDef, members: readonly string[]): void {
   })
   def.strata![ROOT_MOUNT] = [...list].sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity))
 }
+
+/**
+ * DL-44（ADR-0063 修订节）：草图里给框指定所在层——写进该层的 members、从同一父模块下其他层的 members 去掉、去掉框自己的 stratum。
+ * 拒绝：框不在本草图、父模块在本草图没有分层、层不存在、根草图的顶层（换层用 moveIn）。同层重设是空操作。
+ */
+export function setStratum(def: SketchDef, id: string, stratum: string): { ok: true; changed: boolean } | { ok: false; reason: string } {
+  const hit = locateAll(def).find(m => m.id === id)
+  if (!hit) return { ok: false, reason: `草图里没有模块「${id}」` }
+  if (isRootLayer(def, id)) return { ok: false, reason: `「${id}」是根草图的顶层：换层用「移入」（moveIn）` }
+  const key = strataKey(def, hit.parentId)
+  const list = strataIn(def, key)
+  if (!list.length) return { ok: false, reason: `「${key}」在本草图里没有声明分层，不能指定层` }
+  if (!list.some(s => s.id === stratum)) return { ok: false, reason: `「${key}」下没有层「${stratum}」（有：${list.map(s => s.id).join('、')}）` }
+  const before = stratumOfMember(def, key, id, hit.node)?.id
+  const inOthers = list.some(s => s.id !== stratum && s.members?.includes(id))
+  const listed = list.find(s => s.id === stratum)?.members?.includes(id)
+  if (before === stratum && !inOthers && listed && hit.node.stratum === undefined) return { ok: true, changed: false }
+  def.strata![key] = list.map(s => {
+    const rest = (s.members ?? []).filter(m => m !== id)
+    if (s.id === stratum) return { ...s, members: [...rest, id] }
+    return s.members ? { ...s, members: rest } : s
+  })
+  delete hit.node.stratum
+  return { ok: true, changed: true }
+}

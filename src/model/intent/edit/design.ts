@@ -133,6 +133,17 @@ class Session {
         def.closed = def.closed.map(c => swap(c, from, to))
         changed = true
       }
+      // DL-44：层的成员与分层的父模块键随之改写——改 ID 后的框留在原层（此前漏了，成员被随后的 pruneStrata 去掉）
+      if (def.strata && Object.entries(def.strata).some(([k, list]) => under(k, from) || list.some(s => s.members?.some(m => under(m, from))))) {
+        // 只在仍是同一父模块的直接子模块时改写：改 ID（父不变）的框本身、挂在被改名模块下的分层；合并 / 降级把框挪到别的父模块下的不改（由 pruneStrata 去掉）
+        const parentOf = (id: string) => id.slice(0, Math.max(0, id.lastIndexOf('.')))
+        const stays = parentOf(from) === parentOf(to)
+        const member = (k: string, m: string) => (m === from ? (stays ? to : m) : under(m, from) && under(k, from) ? swap(m, from, to) : m)
+        def.strata = Object.fromEntries(
+          Object.entries(def.strata).map(([k, list]) => [swap(k, from, to), list.map(s => (s.members ? { ...s, members: s.members.map(m => member(k, m)) } : s))]),
+        )
+        changed = true
+      }
       if (def.layout?.modules && Object.keys(def.layout.modules).some(id => under(id, from))) {
         def.layout.modules = Object.fromEntries(Object.entries(def.layout.modules).map(([id, p]) => [swap(id, from, to), p]))
         changed = true

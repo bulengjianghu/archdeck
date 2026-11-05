@@ -224,7 +224,7 @@ export function validateSketch(input: SketchDef, ctx: ValidateContext): SketchVa
       }
       const got = claims.get(k.id) ?? []
       if (got.length !== 1)
-        push('warning', 'sketch.stratum', got.length ? `「${k.node.name || k.id}」同时属于几层（${got.join('、')}），只能属于一层` : `「${parent}」声明了分层，「${k.node.name || k.id}」不属于任何一层（全有或全无）`, { module: k.id }, k.path)
+        push('warning', 'sketch.stratum', got.length ? `「${k.node.name || k.id}」同时属于几层（${got.join('、')}），只能属于一层` : `「${parent}」声明了分层，「${k.node.name || k.id}」不属于任何一层（全有或全无）：在选中面板的「层」里指定（AI 用 setStratum，DL-44）`, { module: k.id }, k.path)
     }
     const cycle = findCycle(new Map(list.map(l => [l.id, l.mayDependOn ?? []])))
     if (cycle) push('warning', 'sketch.layer-cycle', `「${parent}」的层依赖成环：${[...cycle, cycle[0]].join(' → ')}（X14）`, {})
