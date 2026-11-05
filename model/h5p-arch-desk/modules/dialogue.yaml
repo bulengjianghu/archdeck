@@ -89,20 +89,14 @@ relations:
     from: model.review.dialogue
     to: model.review.explainer
     type: queries
-    description: '对话的模型向图解取：上下文包与引用用 explainerOf 找锚点模块的题解，重讲判别用 explainerIssues 让新题解过同一套检查（EX-8）'
+    description: '对话的模型向图解取：上下文包与引用用 explainerOf 找锚点模块的题解，重讲判别用 explainerIssues、机制图用 unknownArchRefs / htmlRefs 过同一套检查与引用填充（EX-8、DL-41）'
     purpose: '找题解并让重讲的新题解过检查'
   - id: rel.dl.session-model
     from: state.desk.edit.dialogue
     to: model.review.dialogue
     type: queries
-    description: '对话会话向对话的模型取：resolveCitation 按 {模块, 字段} 填引用原文、digestView 算梳理卡的渲染数据，派生给对话标签'
+    description: '对话会话向对话的模型取：resolveCitation 按 {模块, 字段} 填引用原文、digestView 算梳理卡的渲染数据、checkDiagram 与 diagramDescribedRefs 检查机制图并填图里的引用原文、diagramFence / splitNoteDiagrams 写读设计说明的图段，派生给对话标签'
     purpose: '填引用原文与梳理卡给对话标签'
-  - id: rel.dl.session-explainer
-    from: state.desk.edit.dialogue
-    to: model.review.explainer
-    type: queries
-    description: '对话会话向图解取：knownModule 判机制图的 data-arch 是否在描述里（当前版本上），htmlRefs 按图解同一口径给图里引用的模块填原文（DL-41、DL-42）'
-    purpose: '检查机制图的引用并填引用原文'
   - id: rel.dl.source-process
     from: access.model-source
     to: access.agent.process

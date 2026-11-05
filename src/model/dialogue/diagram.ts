@@ -4,7 +4,10 @@
  * 图块不是描述：不盖依据指纹、不落 explainers/、不进 lint:model。存为设计说明时写成围栏块（DL-43），读回时切成文字段与图段。
  */
 import { archRefs } from '../explainer/html'
-import { unknownArchRefs } from '../explainer/lint'
+import { knownModule, unknownArchRefs } from '../explainer/lint'
+import { htmlRefs } from '../explainer/lookup'
+import type { ExplainerRef } from '../explainer/types'
+import type { ModelIndex } from '../types'
 import type { DiagramBlock } from './protocol'
 
 /** DL-41 的三个阈值（议）：宽 ≤ 640（资料区一列约 600px）、viewBox 宽高比在 1:4 到 4:1、整块 ≤ 64 KB */
@@ -84,6 +87,13 @@ export function diagramAspect(svg: string): number | null {
     : undefined
   return vb && vb.length === 4 && vb[2] > 0 && vb[3] > 0 ? vb[3] / vb[2] : null
 }
+
+/** DL-41：当前版本上 data-arch 能指向的模块——描述里的模块与系统根（与图解 EX-8 同口径） */
+export const describedModule = (index: ModelIndex): ((id: string) => boolean) => knownModule(index)
+
+/** DL-42：图里引用的、描述里有的模块要填入的原文（与图解 EX-2 同口径；SVG 里插不进链接，不附「图解 ›」） */
+export const diagramDescribedRefs = (index: ModelIndex, svg: string): Record<string, ExplainerRef> =>
+  Object.fromEntries(Object.entries(htmlRefs(index, svg)).map(([id, r]) => [id, { ...r, explainer: false }]))
 
 /** DL-42：图里 data-arch 引用的模块（去重、按出现顺序） */
 export const diagramModules = (svg: string): string[] => [...new Set(archRefs(svg).map(r => r.module))]

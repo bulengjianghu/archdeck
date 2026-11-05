@@ -6,13 +6,13 @@
 import { shallowRef, watch, type Ref, type ShallowRef } from 'vue'
 import {
   checkDiagram,
+  describedModule,
+  diagramDescribedRefs,
   diagramAspect,
   diagramFence,
   diagramModules,
   diagramSvgReasons,
   digestView,
-  htmlRefs,
-  knownModule,
   resolveCitation,
   splitNoteDiagrams,
   type DiagramCheck,
@@ -347,13 +347,13 @@ export function createDialogue({ project, index, selection, step, perspective, t
   const diagramRefs = (svg: string): Record<string, ExplainerRef> => {
     const idx = index.value
     const out: Record<string, ExplainerRef> = {}
-    const fromIndex = idx ? htmlRefs(idx, svg) : {}
+    const fromIndex = idx ? diagramDescribedRefs(idx, svg) : {}
     const inSketch = !!sketch?.active()
     for (const id of diagramModules(svg)) {
       const known = inSketch ? !!sketch?.sheetHas?.(id) : id in fromIndex
       if (!known) continue
       const hit = fromIndex[id]
-      if (hit) out[id] = { ...hit, explainer: false }
+      if (hit) out[id] = hit
       else out[id] = { name: sketch?.nameOf(id) ?? id, summary: null, invariants: [], explainer: false }
     }
     return out
@@ -374,7 +374,7 @@ export function createDialogue({ project, index, selection, step, perspective, t
     // DL-41：回答到达那一刻检查机制图块（当前版本上查描述，草图里查当前张），结果随条目留下
     if (a.type === 'event' && a.event.type === 'done' && before.run.status === 'running' && before.run.turn === a.event.turn) {
       const idx = index.value
-      const known = sketch?.active() ? (sketch.sheetHas ?? (() => false)) : idx ? knownModule(idx) : () => false
+      const known = sketch?.active() ? (sketch.sheetHas ?? (() => false)) : idx ? describedModule(idx) : () => false
       const diagrams = checkDiagrams(a.event.blocks, known)
       if (Object.keys(diagrams).length) a = { ...a, event: { ...a.event, diagrams } }
     }
