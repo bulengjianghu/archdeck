@@ -134,7 +134,7 @@ modules:
       - { text: 对象面板只由 Panel.vue 按 desk.selected 挑一张，别处不挂对象面板, adr: 12 }
       - { text: 写入人拥有的文件只经 desk.write 发起，面板不直接发请求, adr: 19 }
       - { text: 核对卡的分项与计数只取现有派生，不新算, adr: 53 }
-    principle: 卡片直接立在画布上（CD-1–CD-6，ADR-0057）：每个对象面板的头部是身份卡（.id-card，名称 / ID 与徽标 / 动作三行，粘在属性列滚动区上沿、不随内容滚走，第十八轮走查 4 改回粘顶，ADR-0061；有图解的模块名称后附「图解 ›」，单击在资料区预览打开，选中带图解的模块由 DeskState 自动打开，WS-8 的例外），卡片外观取共用样式的 --card-* 变量，设计说明、出处等散块也成卡；原「滚走后显示名称胶囊」（CD-4）已随粘顶作废移除。三卡骨架（ADR-0053）由面板自身持有、各对象面板共用——卡片 PanelCard（卡头结论、缺省展开态、定位请求时展开；理解卡首节渲染分派经 RUN_FIRST 注入的运行信息，V6）、核对卡 CheckCard（分项一行一个状态加结论，⚠ 行下平铺条目至多 5 条、单击跳到清单或选中关系，清单插槽）、相关资料卡 RelatedCard（图解与场景，单击预览、双击固定、已打开标记；图解有无由 HAS_EXPLAINER 注入，W5 接入）、ADR 编号链接 AdrLink；分项的纯函数在 panelCheck（checkSummary、moduleCheckRows、rowsFromNotices、relationTypeLabel，PC-2、PC-6、PC-10），注入键在 related。层面板与环面板也直接归面板自身。
+    principle: 卡片直接立在画布上（CD-1–CD-6，ADR-0057）：每个对象面板的头部是身份卡（.id-card，名称 / ID 与徽标 / 动作三行，粘在选中抽屉滚动区上沿，ADR-0061 / ADR-0062），面板是实底抽屉：缺省收起、宽度够时挤压画布、不够时浮在画布右侧（第二十轮读先版式取代 CD-2「卡片立在画布上」）；理解叙述在辅助栏的理解页（ModuleDoc：事实卡 + 故事），原抽屉理解卡与名称胶囊 / CD-4 已移除。卡片外观取共用样式的 --card-* 变量，设计说明、出处等散块也成卡。三卡骨架（ADR-0053）由面板自身持有、各对象面板共用——卡片 PanelCard（卡头结论、缺省展开态、定位请求时展开；理解卡首节渲染分派经 RUN_FIRST 注入的运行信息，V6）、核对卡 CheckCard（分项一行一个状态加结论，⚠ 行下平铺条目至多 5 条、单击跳到清单或选中关系，清单插槽）、相关资料卡 RelatedCard（图解与场景，单击预览、双击固定、已打开标记；图解有无由 HAS_EXPLAINER 注入，W5 接入）、ADR 编号链接 AdrLink；分项的纯函数在 panelCheck（checkSummary、moduleCheckRows、rowsFromNotices、relationTypeLabel，PC-2、PC-6、PC-10），注入键在 related。层面板与环面板也直接归面板自身。
   - id: present.shared
     name: 呈现共用件
     summary: 为各呈现子系统提供共用文案、代码高亮与注入入口

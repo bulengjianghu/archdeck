@@ -53,10 +53,16 @@ async function measureStable(page: Page): Promise<Measure> {
 
 async function open(page: Page, path: string, _quietDock = false) {
   await openDesk(page, path)
-  // 选中即自动打开辅助栏的理解页（事实卡 + 故事）——它就是首屏守的量测对象，不再关掉
+  // 选中即自动打开辅助栏的理解页（事实卡 + 故事）——它就是首屏守的量测对象，不再关掉；
+  // 没有理解页的对象（系统面板的理解卡还在抽屉里）拉开抽屉
+  const inDock = (await page.locator('.dock-area').count()) > 0
+  if (!inDock && (await page.locator('aside.props .panel').count()) === 0)
+    await page.getByRole('button', { name: '属性', exact: true }).click()
   await waitSettled(page)
-  // 代码事实就绪：核对卡的结论不再是「读取中」（没有代码事实时也会定下来）
-  await expect(page.locator('.panel [data-card="check"] .card-sum').first()).not.toHaveText(/读取中/, { timeout: 20_000 })
+  // 代码事实就绪：核对卡的结论不再是「读取中」（理解页的事实卡随描述即时渲染，等它出现即可）
+  const waitSel = inDock ? '.dock [data-sec="understand"]' : '.panel [data-card="check"] .card-sum'
+  if (inDock) await expect(page.locator(waitSel)).toBeVisible({ timeout: 20_000 })
+  else await expect(page.locator(waitSel)).not.toHaveText(/读取中/, { timeout: 20_000 })
   return measureStable(page)
 }
 

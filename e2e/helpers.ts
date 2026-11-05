@@ -85,8 +85,12 @@ export async function closeNav(page: Page) {
 }
 
 /** 第二十轮 §4：选中面板缺省收起（运行视角自动收起，步骤节在辅助栏）——要动核对卡先把抽屉拉开 */
+export const openPanel = openPropsDrawer
+
 export async function openPropsDrawer(page: Page) {
   if (await page.locator('aside.props .panel').count()) return
+  // 描述加载完成前点击会与就绪渲染竞态（.panel 迟迟不出 → 重试点击反复开合）：先等加载态结束
+  await expect(page.locator('.canvas-area .state')).toHaveCount(0, { timeout: 30_000 })
   await page.locator('.props-toggle').click()
   await expect(page.locator('aside.props .panel')).toBeVisible()
 }

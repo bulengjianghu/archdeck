@@ -4,7 +4,7 @@
  * 表面展开（C6、L20）、影响面查询（K15、K15b）、分层总览（O13③）、退出场景回到进入前的视角（V11）。
  */
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, openDesk, openCheckList, query, collapseDisplay, waitSettled } from './helpers'
+import { graphNode, openDesk, openCheckList, query, collapseDisplay, waitSettled, openPanel } from './helpers'
 
 /** 本层模块节点的位置（Vue Flow 节点的 transform）与尺寸 */
 async function boxes(page: Page) {
@@ -25,6 +25,7 @@ const seg = (page: Page, mode: 'structure' | 'interaction') => page.locator(`.pe
 
 test('V11、V12：顶部「结构 ｜ 交互 ｜ 运行」单击切到结构视角，URL 写 v=s；节点一个不动，交互边换成结构边', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(seg(page, 'interaction')).toHaveClass(/on/)
   await expect(seg(page, 'structure')).toHaveAttribute('title', '结构视角：谁依赖谁、改哪牵动哪里')
   await expect(seg(page, 'interaction')).toHaveAttribute('title', '交互视角：谁调谁、谁负责后果')
@@ -48,6 +49,7 @@ test('V11、V12：顶部「结构 ｜ 交互 ｜ 运行」单击切到结构视�
 
 test('L15：只引类型的依赖边缺省收起、画布角计数；单击计数画出（边界节点的照 L4 聚焦才画），边数随之增加', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=domain&v=s')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   // 画布角多了「环内 N 条已收起」（L42），收起图例（与计数按钮同一列，L48）
   await collapseDisplay(page)
   const count = page.getByTestId('type-only-corner')
@@ -69,6 +71,7 @@ test('L15：只引类型的依赖边缺省收起、画布角计数；单击计�
 
 test('L21：一对节点一条束（同方向不重复），形态混合的束标「×N 元素」', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra&v=s')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(depEdges(page).first()).toBeAttached()
   const ids = await depEdges(page).evaluateAll(els => els.map(e => e.getAttribute('data-id')!))
   expect(ids.every(id => id.startsWith('bundle:'))).toBe(true)
@@ -87,6 +90,7 @@ test('B1、B4：只看交互使用、只看未解释两个开关按项目记本�
   await page.goto('./')
   await page.evaluate(() => localStorage.setItem('h5p-arch-desk:structure-prefs:h5player', JSON.stringify({ invokesOnly: true })))
   await openDesk(page, '/p/h5player?level=domain&v=s')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   const value = page.getByTestId('value-hidden-corner')
   await expect(value).toHaveText(/值使用 \d+ 条已收起/)
   // 违规、环上、逆稳定的值使用照画，其余收起
@@ -109,6 +113,7 @@ test('B1、B4：只看交互使用、只看未解释两个开关按项目记本�
 
 test('B2：一端是边界节点的束跨界折叠——节点标「界外 入 N · 出 M」，悬停另一端（边界节点）时画出', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra&v=s')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   const mark = page.getByTestId('cross-fold').first()
   await expect(mark).toHaveText(/界外 (入 \d+|出 \d+)/)
   await expect(mark).toHaveAttribute('title', /跨界折叠/)
@@ -120,6 +125,7 @@ test('B2：一端是边界节点的束跨界折叠——节点标「界外 入 N
 
 test('K10、B3：单击束选中这对节点的代码依赖（sel=d:），它高亮、不相连的束变淡；被依赖方不展开（T2-7，元素在面板看）', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra&v=s')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   const edge = page.locator('.vue-flow__edge-dep[data-id="bundle:infra.mus->infra.framework"]')
   const id = (await edge.getAttribute('data-id'))!
   await edge.locator('path.vue-flow__edge-interaction').dispatchEvent('click')
@@ -135,6 +141,7 @@ test('K10、B3：单击束选中这对节点的代码依赖（sel=d:），它高
 
 test('C6、L20（ADR-0036）：节点角标「表面 W」；选中模块展开表面——入边一侧一排端口点、束散开为元素级边，节点与视口不动，取消选中收起', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra&v=s')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   // 展开的图例叠在画布右上，分层后 infra.framework 落在它下面
   await collapseDisplay(page)
   // infra.framework 有图解：选中会自动打开资料区并收起导航树（WS-8 例外 + WS-9，ADR-0061）。
@@ -194,6 +201,7 @@ test('C6、L20（ADR-0036）：节点角标「表面 W」；选中模块展开�
 
 test('L20②（ADR-0036）：选中 A 再换选中 B，节点 bbox 不变', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=state&v=s&sel=m:state.desk')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(page.locator('[data-testid="surface-marks"]').first()).toBeAttached()
   const boxes = () =>
     page.locator('.vue-flow__node-module, .vue-flow__node-core').evaluateAll(els =>
@@ -217,6 +225,7 @@ test('L20②（ADR-0036）：选中 A 再换选中 B，节点 bbox 不变', asyn
 
 test('K15、K15b：结构视角选中模块后在面板查询影响面，按距离标在节点上，闭包外变淡', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra.framework&v=s&sel=m:infra.framework.contracts')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   const marks = page.getByTestId('impact-mark')
   // PC-8：影响面查询在核对卡的「结构指标」清单里
   await openCheckList(page, 'boundary.structure')
@@ -231,6 +240,7 @@ test('K15、K15b：结构视角选中模块后在面板查询影响面，按距�
 
 test('O13③：分层总览下的结构视角——带间画层间依赖，聚焦核心模块时画它的跨层依赖', async ({ page }) => {
   await openDesk(page, '/p/h5player?v=s')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(page.locator('.vue-flow__node-band')).toHaveCount(4)
   await expect(depEdges(page).first()).toBeAttached()
   expect(await page.locator('.vue-flow__edge-dep[data-id^="chip:"]').count()).toBe(0)
@@ -242,6 +252,7 @@ test('O13③：分层总览下的结构视角——带间画层间依赖，聚�
 
 test('V11：从结构视角打开场景，退出回到结构视角；运行视角下单击「交互」即退出场景并进入交互视角', async ({ page }) => {
   await openDesk(page, '/p/h5player?v=s&sc=sc.command')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(page.locator('.perspective .seg.run')).toHaveClass(/on/)
   await expect(depEdges(page)).toHaveCount(0)
   await page.locator('.perspective .exit').click()
@@ -259,6 +270,7 @@ test('V11：从结构视角打开场景，退出回到结构视角；运行视�
 
 test('§6.22、L16（ADR-0035）：结构视角的依赖全部虚线，形态只靠端点记号——端口实现在被依赖方一端为空心菱形 ◇，子类为空心三角', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra.framework&v=s&sel=m:infra.framework.contracts')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(depEdges(page).first()).toBeAttached()
   // 依赖一律断开的线：虚线；只引类型档为点线（L43，第十四轮 F11 档的新通道）
   for (const e of await depEdges(page).all()) {
@@ -276,6 +288,7 @@ test('§6.22、L16（ADR-0035）：结构视角的依赖全部虚线，形态只
 
 test('L20②（ADR-0036 返工）：同一束散开到几个点，分叉后的线两两没有重合线段、都带箭头', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=state&v=s&sel=m:state.transition')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   const lines = page.locator('.vue-flow__edge-dep[data-id^="el:state.desk->state.transition:"]')
   await expect(lines.first()).toBeAttached()
   const all = await lines.evaluateAll(gs =>
