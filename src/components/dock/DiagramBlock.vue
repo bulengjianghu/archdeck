@@ -70,7 +70,9 @@ onBeforeUnmount(() => window.removeEventListener('message', onMessage))
   max-width: 640px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--bg);
+  background: var(--surface);
+  /* 与图解同：iframe 里的文档随宿主明暗（EX-3） */
+  color-scheme: light dark;
 }
 
 figcaption {
