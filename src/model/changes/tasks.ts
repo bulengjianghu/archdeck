@@ -26,6 +26,9 @@ export interface TaskCriterion {
   codes: string[]
 }
 
+/** DL-46：任务单行的次序——待做 → 不核验 → ✓ */
+export const TASK_ORDER: Record<TaskState, number> = { todo: 0, unchecked: 1, done: 2 }
+
 export interface TaskRow {
   /** 改动项号；编号表里没有的为 null（「未编号」） */
   n: number | null
@@ -173,7 +176,8 @@ export function taskList(i: TaskInput): TaskList {
       remaining: mine.map(d => ({ key: d.key, code: d.code, message: d.message })),
     }
   })
-  rows.sort((a, b) => (a.n ?? Infinity) - (b.n ?? Infinity) || a.key.localeCompare(b.key))
+  // DL-46：待做在前、不核验其次、✓ 留在最后；同一态内按号
+  rows.sort((a, b) => TASK_ORDER[a.state] - TASK_ORDER[b.state] || (a.n ?? Infinity) - (b.n ?? Infinity) || a.key.localeCompare(b.key))
   const unmatched = open
     .filter(d => !owner.has(d))
     .map(d => ({

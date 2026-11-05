@@ -40,6 +40,14 @@ export interface DesignApproval {
   withdrawnAt?: string
 }
 
+/** DL-49：认可时记下的估算（designs/<设计>/estimate.json，页面维护、不登记指纹）——认可前总览读到的牵动模块、是否全是新框，与认可时当前版本各模块的描述指纹 */
+export interface DesignEstimate {
+  at?: string
+  modules: string[]
+  fresh: boolean
+  current: Record<string, string>
+}
+
 export interface DesignInfo {
   /** 设计 ID，即目录名 */
   id: string
@@ -56,11 +64,13 @@ export interface DesignInfo {
   /** DV-5、DV-10：有草图（designs/<设计>/sketches/*.yaml） */
   sketch?: boolean
   /** X9：设计的各张草图（挂载点、相对项目描述目录的路径；needsLayout：没有 layout），设计面板列出 */
-  sketches?: { mount: string; file: string; needsLayout?: boolean }[]
+  sketches?: { mount: string; file: string; needsLayout?: boolean; /** DL-47：此刻的内容指纹（与认可记录同一口径，归档第三关） */ hash?: string }[]
   /** X4：认可的偏差（design.yaml 的 accepted） */
   accepted?: { deviation: string; reason: string; at?: string }[]
   /** DL-33：设计的认可记录（design.yaml 的 approval） */
   approval?: DesignApproval
+  /** DL-49：认可时的估算记录 */
+  estimate?: DesignEstimate
   /** X4：项目摘要里的偏差计数（未认可的 error 与 warning；草图对最新一轮核验，已定稿的对当前版本） */
   deviations?: { errors: number; warnings: number }
   /** design.yaml 的格式问题、缺失的快照目录等 */

@@ -9,6 +9,7 @@
  * 认可已撤回时顶部标「认可已撤回」。
  */
 import { computed, nextTick, ref, watch } from 'vue'
+import { TASK_ORDER } from '@/model'
 import { useDesk } from '@/state/inject'
 import { CHANGE_BADGES, sixCounts } from '../sketch/labels'
 
@@ -42,11 +43,15 @@ const items = computed(() => changes.items.value)
 const filter = ref<'all' | 'round' | string>('all')
 const sheets = computed(() => [...new Set(items.value.map(i => i.mount))].sort())
 const latest = computed(() => changes.latest.value)
-const shown = computed(() =>
-  items.value.filter(i =>
+const shown = computed(() => {
+  const list = items.value.filter(i =>
     filter.value === 'all' ? true : filter.value === 'round' ? latest.value !== null && i.round === latest.value && i.by === 'ai' : i.mount === filter.value,
-  ),
-)
+  )
+  // DL-46：任务模式下待做在前、不核验其次、✓ 留在最后（同态按号）
+  if (!taskMode.value) return list
+  const rank = (n: number) => TASK_ORDER[rowOf.value.get(n)?.state ?? 'todo']
+  return [...list].sort((a, b) => rank(a.n) - rank(b.n) || a.n - b.n)
+})
 const six = computed(() => sixCounts(changes.counts.value as Parameters<typeof sixCounts>[0]))
 const sheetName = (m: string) => (m === 'root' ? '根' : (desk.edit.nameOf(m) ?? m))
 const note = ref('')

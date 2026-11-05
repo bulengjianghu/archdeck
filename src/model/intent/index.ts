@@ -17,6 +17,7 @@ export {
 export type { FlatSketchModule, SketchCheckOptions, CompareMode, CompareOptions, SketchChange, SketchComparison } from './check'
 export { archiveVerdict, gateSeverity, PENDING_TASK_NOTE, sketchModules } from './lifecycle'
 export * from './approval'
+export * from './archive'
 export {
   applyEdit,
   applyDesignEdit,
