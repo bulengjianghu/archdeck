@@ -1,0 +1,17 @@
+{
+  "steps": [
+    { "text": "把照片对到真实系统上……" },
+    {
+      "block": {
+        "kind": "digest",
+        "groups": {
+          "matched": [{ "label": "工作台", "modules": ["present"] }],
+          "mismatched": [{ "label": "状态", "modules": ["state", "state.desk"], "note": "一个框对应代码里两个模块" }],
+          "extra": [{ "label": "工作台 → 接入", "note": "代码里没有这条依赖", "uncertain": true }],
+          "missing": [{ "label": "模型", "modules": ["model"], "note": "系统有而你没画" }]
+        }
+      }
+    },
+    { "done": true }
+  ]
+}

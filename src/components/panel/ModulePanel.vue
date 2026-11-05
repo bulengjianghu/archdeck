@@ -10,6 +10,7 @@ import { stratumKey } from '@/model'
 import ChangeBadge from './ChangeBadge.vue'
 import DesignNote from './DesignNote.vue'
 import ModuleCheck from './ModuleCheck.vue'
+import NameActions from './NameActions.vue'
 import { usePanelJump } from './panelNotices'
 import { canDesignAt, openNewDesign } from '../edit/designHere'
 
@@ -40,7 +41,7 @@ usePanelJump(root)
 <template>
   <div v-if="m" ref="root" class="module-panel">
     <header class="head id-card" data-sec="head">
-      <h2>{{ m.name }}</h2>
+      <h2>{{ m.name }}<NameActions :module="m.id" place="id-card" /></h2>
       <div class="badges">
         <code>{{ m.id }}</code>
         <span v-if="isLayer" class="badge">层</span>

@@ -4,9 +4,18 @@
  * 属性栏并排还是悬浮由宽度推出（propsPlacement，WS-3），不存状态。
  */
 
-/** 一份资料（WS-4）：时序图跟当前场景，只有一份；源代码按路径；图解按模块（第十七轮 W5）；事实页按模块（第二十轮读先方案：理解卡搬到辅助栏页顶，无故事的模块也有一页） */
+/**
+ * 一份资料（WS-4）：时序图跟当前场景，只有一份；源代码按路径；图解按模块（第十七轮 W5）；事实页按模块（第二十轮读先方案：理解卡搬到辅助栏页顶，
+ * 无故事的模块也有一页）；对话一个项目一份（DA-1，第二十一轮）。
+ * 种类可扩展（DL-5）：加一种 kind 只动这个联合、DOC_KEYS 里的一行（可省，缺省按 kind 与其余字段推出键）与呈现层的种类表（dock/docKinds.ts）；
+ * 标签栏、分组、打开 / 关闭转移都只认 docKey，零改动。
+ */
 export type DocRef =
-  { kind: 'sequence' } | { kind: 'source'; path: string; line?: number | null } | { kind: 'explainer'; module: string } | { kind: 'facts'; module: string }
+  | { kind: 'sequence' }
+  | { kind: 'source'; path: string; line?: number | null }
+  | { kind: 'explainer'; module: string }
+  | { kind: 'facts'; module: string }
+  | { kind: 'dialogue' }
 
 export interface DocTab {
   /** 资料的键（docKey），同一份资料只开一个标签 */
@@ -52,8 +61,27 @@ export const EMPTY_WORKSPACE: WorkspaceState = { groups: [{ tabs: [], active: nu
 export const PROPS_WIDTH = 330
 export const MIN_CANVAS = 620
 
+/** 已有种类的键（沿用旧键：E2E 与 closeDoc 认它们）；不在表里的种类按 genericDocKey 推出 */
+const DOC_KEYS: Record<string, (doc: never) => string> = {
+  sequence: () => 'seq',
+  source: (d: { path: string }) => `src:${d.path}`,
+  explainer: (d: { module: string }) => `exp:${d.module}`,
+  facts: (d: { module: string }) => `fact:${d.module}`,
+  dialogue: () => 'dlg',
+}
+
+/** DL-5：缺省键 = 种类 + 除定位行号外的其余字段（按字段名排序），同一份资料同一个键 */
+export function genericDocKey(doc: { kind: string } & Record<string, unknown>): string {
+  const rest = Object.keys(doc)
+    .filter(k => k !== 'kind' && k !== 'line')
+    .sort()
+    .map(k => String(doc[k]))
+  return [doc.kind, ...rest].join(':')
+}
+
 export function docKey(doc: DocRef): string {
-  return doc.kind === 'sequence' ? 'seq' : doc.kind === 'source' ? `src:${doc.path}` : doc.kind === 'facts' ? `fact:${doc.module}` : `exp:${doc.module}`
+  const f = DOC_KEYS[doc.kind] as ((d: DocRef) => string) | undefined
+  return f ? f(doc) : genericDocKey(doc as unknown as { kind: string } & Record<string, unknown>)
 }
 
 export const hasTabs = (s: WorkspaceState) => s.groups.some(g => g.tabs.length > 0)

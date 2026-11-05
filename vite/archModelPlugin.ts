@@ -13,6 +13,8 @@
  *   草图整份写回 POST /write/<项目>/sketch（持久草图）、/write/<项目>/designs/<设计>/sketch（设计的一张草图），
  *   按设计写回 POST /write/<项目>/designs/<设计>/sketches（多张、改名、删除，B6、B7、X20），新建设计 POST /write/<项目>/designs（B6，ADR-0024、ADR-0025）；
  *   持久草图版本 GET /models/<项目>/intent/<草图 ID>.json；写后照常推送变化。
+ * 对话（DA-11，ADR-0063）：POST /agent/<项目>/turn 起一轮（子进程见 agentProcess.ts、一轮的接入见 agentTurn.ts）、POST /agent/<项目>/stop 停止；
+ *   输出推送 `arch-agent:event`，载荷 { project, turn, type, … }。
  * 项目内容只搬运原始文本，解析与校验都在页面侧的模型层完成，与命令行同一套报错。
  */
 import path from 'node:path'
@@ -27,7 +29,9 @@ import { headModel, listModelCommits, readCommitVersion, readFileAtHead, readMod
 import { historyOptions, readCommitMessage, readSourceHistory } from './readHistory'
 import { loadModel } from '../src/model'
 import { LEDGER_PAGE_LIMIT, governanceDir, readBaseline, readLedger } from './governanceStore'
-import type { FactsPayload, ModuleRole, RuleKind, SourcePayload } from '../src/model'
+import type { CodeFactsSummary, FactsPayload, ModuleRole, RuleKind, SourcePayload } from '../src/model'
+import { agentConfigFromEnv, createAgentRunner } from './agentProcess'
+import { AGENT_EVENT, startTurn } from './agentTurn'
 
 export const MODEL_CHANGED_EVENT = 'arch-model:changed'
 export const PROJECTS_FILE = 'projects.json'
@@ -81,6 +85,49 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
         trees.set(project, { at: Date.now(), tree })
         return tree
       }
+      // DA-11：对话的子进程（命令、超时由环境变量配，缺省 claude 命令行）；输出经推送通道流到页面
+      const runner = createAgentRunner(agentConfigFromEnv(process.env, root), (project, e) =>
+        server.ws.send({ type: 'custom', event: AGENT_EVENT, data: { project, ...e } }),
+      )
+      server.httpServer?.on('close', () => runner.stopAll())
+      // 代码事实摘要（上下文包，DL-14）：架构治理的查询核心按需加载、按项目缓存
+      let service: Promise<import('../scripts/agent/service').ArchService> | null = null
+      const facts = async (project: string, module: string): Promise<CodeFactsSummary | null> => {
+        service ??= import('../scripts/agent/service').then(m => m.createService({ root, client: 'mcp' }))
+        const svc = await service
+        const imp = svc.impact(module, project)
+        const row = imp.metrics as { ca?: number; ce?: number; instability?: number }
+        return { ca: row.ca, ce: row.ce, instability: row.instability, impactIn: imp.incoming?.modules, cycles: imp.inCycle ? 1 : 0 }
+      }
+      server.middlewares.use((req, res, next) => {
+        const [url] = (req.url ?? '').split('?')
+        const a = /^\/agent\/([^/]+)\/(turn|stop)$/.exec(url)
+        if (!a) return next()
+        if (req.method !== 'POST') return json(res, { error: '只接受 POST' }, 405)
+        const origin = req.headers.origin
+        if (origin && new URL(origin).host !== req.headers.host) return json(res, { error: '只接受同源请求' }, 403)
+        if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return json(res, { error: '只接受 JSON' }, 415)
+        let raw = ''
+        req.on('data', (c: Buffer) => {
+          raw += c.toString('utf8')
+          // 贴图走 data URL：4 张 × 5 MB 的 base64 再留余量
+          if (raw.length > 28 * 1024 * 1024) req.destroy()
+        })
+        req.on('end', () => {
+          const project = decodeURIComponent(a[1])
+          let body: unknown
+          try {
+            body = JSON.parse(raw || '{}')
+          } catch {
+            return json(res, { error: '正文不是 JSON' }, 400)
+          }
+          if (a[2] === 'stop') return json(res, { stopped: runner.stop(project, (body as { turn?: string }).turn) })
+          startTurn({ modelRoot, root, runner, facts }, project, body).then(
+            r => (r.ok ? json(res, r) : json(res, { error: r.error }, r.status)),
+            e => json(res, { error: e instanceof Error ? e.message : String(e) }, 500),
+          )
+        })
+      })
       // B1–B6：人拥有的文件的追加写入与草图整份写回，只收同源的 JSON POST
       server.middlewares.use((req, res, next) => {
         const [url] = (req.url ?? '').split('?')

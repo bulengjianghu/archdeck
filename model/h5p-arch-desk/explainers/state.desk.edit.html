@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
   <head>
-    <meta name="arch-basis" content="v1 45e0af7bdf715cfb rel:rel.ed.commands-derive=03902767 rel:rel.ed.commands-save=a736a68c rel:rel.ed.commands-session=280bd60d rel:rel.ed.derive-session=2a28c2cd rel:rel.ed.save-session=1ee87bf4 state.desk.edit#abstraction=df89cd64 state.desk.edit#children=438237fc state.desk.edit#invariants=7da2dfab state.desk.edit#responsibility=cc2c4ea5 state.desk.edit#summary=f5f06854 state.desk.edit.commands#summary=c8943280 state.desk.edit.derive#summary=371a7807 state.desk.edit.save#summary=e7730bf5 state.desk.edit.session#summary=8da1c730">
+    <meta name="arch-basis" content="v1 ae0521287f008905 rel:rel.ed.commands-derive=03902767 rel:rel.ed.commands-save=a736a68c rel:rel.ed.commands-session=280bd60d rel:rel.ed.derive-session=2a28c2cd rel:rel.ed.save-session=1ee87bf4 state.desk.edit#abstraction=df89cd64 state.desk.edit#children=2c3b0a3b state.desk.edit#invariants=7da2dfab state.desk.edit#responsibility=cc2c4ea5 state.desk.edit#summary=f5f06854 state.desk.edit.commands#summary=c8943280 state.desk.edit.derive#summary=371a7807 state.desk.edit.dialogue#summary=e44b9826 state.desk.edit.save#summary=e7730bf5 state.desk.edit.session#summary=8da1c730">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>编辑中的草图 · 草图编辑会话</title>
@@ -69,6 +69,7 @@ code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border
       <div><b>进会话</b>打开草图版本即加载成设计的索引，作为 DeskState 的 index——从这一刻起，桌面整体切换到「设计时态」。</div>
     </div>
 
+    <p>旁边挂着 <span data-arch="state.desk.edit.dialogue">对话会话</span>：它是另一个值，发送、停止、换锚点各过自己的纯函数；现在只用来「问」与「重讲」，下一步 AI 在草图里的一轮提议会作为一步落进这里的撤销栈。</p>
     <p class="note">草图编辑是「设计先于代码」主张的落地处：架构师改的是会话里的图，评审定稿才变成描述文件——改的每一步都留在值的历史里，可撤销、可追溯。</p>
 
   </body>

@@ -95,3 +95,4 @@ function step(state: ViewState, action: ViewAction, ctx: TransitionContext): Tra
       return nav.toggle(state, index, action.patch)
   }
 }
+export * from './defaultDoc'

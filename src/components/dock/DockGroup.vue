@@ -15,21 +15,23 @@ import RunSection from '../panel/RunSection.vue'
 import ScenarioPanel from '../panel/ScenarioPanel.vue'
 import { staleText } from '../shared/explainerText'
 import ToolIcon from '../shared/ToolIcon.vue'
+import { docKindView, docLabel, docTip, type DocKindContext } from './docKinds'
 
 const props = defineProps<{ group: DocGroup; gi: number; count: number; focused: boolean }>()
 const desk = useDesk()
 const ws = desk.workspace
 const active = computed(() => props.group.tabs.find(t => t.id === props.group.active) ?? null)
 
-function label(t: DocTab): string {
-  const d = t.doc
-  if (d.kind === 'sequence') return `时序图${desk.run.scenario.value ? ` · ${desk.run.scenario.value.name}` : ''}`
-  if (d.kind === 'source') return `源代码 · ${d.path.split('/').pop()}`
-  if (d.kind === 'facts') return explainerName(d.module)
-  return explainerName(d.module)
+/** DL-5：标签名、说明与记号查资料种类表，不写种类分支 */
+const kindCtx: DocKindContext = {
+  // EX-3：图解 / 理解页的标签名取模块名（系统根取系统名）
+  moduleName: id => (id === desk.index.value?.rootId ? desk.index.value.model.system.name : (desk.index.value?.modules.get(id)?.name ?? id)),
+  scenarioName: () => desk.run.scenario.value?.name ?? null,
 }
-/** EX-3：图解标签名取模块名（系统根取系统名），前面的 ▣ 表明种类 */
-const explainerName = (id: string) => (id === desk.index.value?.rootId ? desk.index.value.model.system.name : (desk.index.value?.modules.get(id)?.name ?? id))
+const label = (t: DocTab) => docLabel(t.doc, kindCtx)
+const icon = (t: DocTab) => docKindView(t.doc)?.icon
+/** 新种类的正文组件（既有四种走下面的既有分支） */
+const bodyOf = computed(() => (active.value ? docKindView(active.value.doc)?.component : undefined))
 /** EX-7：图解依据过期时标在标题后 */
 const stale = (t: DocTab) => {
   const st = t.doc.kind === 'explainer' ? desk.explainers.status(t.doc.module) : null
@@ -42,10 +44,7 @@ const runSel = computed(() => {
   const k = desk.selected.value?.kind
   return k === 'module' || k === 'relation' || k === 'edge' || k === 'actor' || k === 'port'
 })
-const tip = (t: DocTab) =>
-  (t.doc.kind === 'source' ? t.doc.path : t.doc.kind === 'explainer' ? `图解 · ${label(t)}` : t.doc.kind === 'facts' ? `理解页 · ${label(t)}` : label(t)) +
-  (stale(t) ? `（${stale(t)}）` : '') +
-  (t.preview ? '（预览：双击固定）' : '')
+const tip = (t: DocTab) => docTip(t.doc, kindCtx) + (stale(t) ? `（${stale(t)}）` : '') + (t.preview ? '（预览：双击固定）' : '')
 </script>
 
 <template>
@@ -60,7 +59,8 @@ const tip = (t: DocTab) =>
         @dblclick="ws.dispatch({ type: 'pin', group: gi, id: t.id })"
       >
         <button role="tab" class="lbl" :aria-selected="t.id === group.active" :title="tip(t)" @click="ws.dispatch({ type: 'activate', group: gi, id: t.id })">
-          <span v-if="t.doc.kind === 'explainer' || t.doc.kind === 'facts'" class="kind-ic" aria-hidden="true">▣</span>{{ label(t) }}
+          <span v-if="icon(t)" class="kind-ic" aria-hidden="true">{{ icon(t) }}</span
+          >{{ label(t) }}
         </button>
         <span v-if="stale(t)" class="stale-chip" data-testid="tab-stale">{{ stale(t) }}</span>
         <button class="x" :title="`关闭${label(t)}`" :aria-label="`关闭${label(t)}`" @click.stop="ws.dispatch({ type: 'close', group: gi, id: t.id })">
@@ -104,7 +104,14 @@ const tip = (t: DocTab) =>
           <p v-else class="empty">没有打开的场景</p>
         </template>
         <!-- 第二十轮读先方案：辅助栏的一页 = 事实卡（架构台渲染）+ 故事（有图解才有）。exp 与 fact 两种标签同一渲染，事实卡在页顶 -->
-        <ModuleDoc v-else :key="active.id" :module="active.doc.module" :with-story="active.doc.kind === 'explainer'" />
+        <ModuleDoc
+          v-else-if="active.doc.kind === 'explainer' || active.doc.kind === 'facts'"
+          :key="active.id"
+          :module="active.doc.module"
+          :with-story="active.doc.kind === 'explainer'"
+        />
+        <!-- DL-5：其余种类的正文由资料种类表给出 -->
+        <component :is="bodyOf" v-else-if="bodyOf" :key="active.id" :doc="active.doc" />
       </template>
       <p v-else class="empty">从场景、文件或面板里的「预览」打开一份资料，放进这一组</p>
     </div>

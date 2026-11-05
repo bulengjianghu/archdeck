@@ -9,6 +9,7 @@ import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import ModuleUnderstand from '../panel/ModuleUnderstand.vue'
 import ExplainerDoc from './ExplainerDoc.vue'
+import NameActions from '../panel/NameActions.vue'
 
 const props = defineProps<{ module: string; withStory?: boolean }>()
 const desk = useDesk()
@@ -32,6 +33,7 @@ const REVIEW_TEXT: Record<string, string> = { reviewed: '已确认', stale: '需
     <div class="fact-head">
       <h2>{{ m.name }}</h2>
       <code>{{ m.id }}</code>
+      <NameActions :module="module" place="fact-card" />
       <span v-if="m.kind" class="badge">{{ m.kind }}</span>
       <span v-if="m.role === 'core'" class="badge accent">核心</span>
     </div>

@@ -1,0 +1,142 @@
+# 对话（第二十一轮波 1，ADR-0063）：当前版本上的「问」与「重讲」——薄协议、上下文包、引用与梳理卡、重讲判别（模型层）；
+# 对话会话与 agent 通道（视图状态层）；对话标签（呈现层）；agent 子进程与重讲落盘（接入层）。
+# 规则编号（DA-1–DA-11、DL-4、DL-5、DL-8、DL-11–DL-18）见 docs/01-requirements.md §4.13、docs/02-domain.md。
+
+modules:
+  # ── 模型层：放在人确认层之下——重讲判别与引用都要用题解的查找与检查（model.review.explainer），确认层的规则只许依赖类型契约 ──
+  - id: model.review.dialogue
+    name: 对话的模型
+    summary: 构造一轮的上下文包，校验产出并判别重讲
+    parent: model.review
+    kind: component
+    responsibility: |
+      对话的模型层（DA-3、DA-4、DA-5、DA-7、DA-11）：
+      薄协议（DL-11）——子进程的输出只认三种事件（文本片段 / 结构化块 / 结束），一行一个 JSON；结构化块三种：问答卡 answer、梳理卡 digest、重讲 renarrate，形状不合法即整轮拒绝；
+      上下文包（DL-14）——锚点（模块 / 步骤 / 无选中）、骨架字段（职责、一句话、原则、不变式、子模块、关系、接口）、锚点模块的题解、代码事实摘要（接入层算好传入）、可用查询说明（架构台 MCP 里不写记录的只读工具）、贴图清单、重讲的讲法要求与输出约定；packPrompt 给真实 claude 包一段说明；
+      引用解析（DL-13）——问答卡只写 {模块, 字段}，原文由架构台从描述填，模块不存在或字段为空即解析失败；
+      梳理卡（DL-15）——四组（对上 / 对不上 / 多 / 少）的标题、模块名与不确定计数；
+      重讲（DL-8）——三问判别表（进不进确认层指纹、核验、事实检查），产出里有任何一问为是的键整轮拒绝，新题解再过题解的同一套检查（未知模块、抄写、越级）；讲法要求一条一行、累积合并。
+    abstraction: 协议、上下文包、引用、梳理卡与重讲判别分文件；全部纯函数，输入索引与产出、输出数据，换一个前端（命令行、导出脚本）照样成立。
+    invariants:
+      - 引用原文只由架构台从描述填，AI 写的原文进不了卡片
+      - 重讲产出里任何一问为是的键都整轮拒绝，表外的键按事实对待
+    codeRefs: [src/model/dialogue/**]
+
+  # ── 视图状态层：对话会话与 agent 通道 ──
+  # DeskState 声明了分层（intent/strata.yaml，人拥有），新的直接子模块要先由人登记进层；在那之前挂在写入口层的「编辑中的草图」之下
+  # （波 2 的「改」本就落进编辑会话；挂在「dispatch 与操作」下会抹掉它「不占文件」的拆分信号）
+  - id: state.desk.edit.dialogue
+    name: 对话会话
+    summary: 以一个值记下对话的转录、锚点与运行状态
+    parent: state.desk.edit
+    kind: component
+    responsibility: |
+      对话会话（DA-1、DA-2、DA-11，DL-12）：DialogueState 一个值——转录（每条带当时的锚点：用户、回答、错误、已停止）、锚点、视角、运行状态（空闲 / 运行中的轮次与流式片段）、排队的输入、草稿、模式（问 / 重讲）、会话编号；
+      只经纯转移函数 dialogueTransition 改变：发送（空闲开一轮，运行中进队列）、停止（这一轮不落，排队的退回草稿）、换锚点与换视角（转录不变）、agent 事件（片段累加、说完落一条并接着发队首、出错记错误卡、超时视同停止，别的轮次与停止后的迟到事件不认）；重讲只对模块，锚点不是模块时按「问」发；
+      协调（createDialogue）：选中 / 视角 → 换锚点；进入新的运行轮次 → 经注入的 AgentTransport 发一轮，停止 → 通知子进程；推送的事件 → 转移；给呈现层派生引用原文、梳理卡与锚点文字。当前版本上的会话只在内存。
+    abstraction: 会话是值、规则是纯函数、协调只翻译——与编辑会话同一套分法；轮次 = 会话编号 + 序号，多个页面的推送不串。
+    codeRefs: [src/state/desk/dialogue.ts]
+  - id: state.desk.edit.dialogue.transport
+    name: agent 通道同步
+    summary: 把一轮的请求发给开发服务器，把推送交回会话
+    parent: state.desk.edit.dialogue
+    kind: component
+    responsibility: 同步适配器（DA-11）：AgentTransport 的 HTTP 实现——POST /agent/<项目>/turn 起一轮、/agent/<项目>/stop 停止；订阅开发服务器的推送 `arch-agent:event`，只把本项目的事件交回对话会话。只搬运，不改会话。
+    codeRefs: [src/state/sync/agent.ts]
+
+  # ── 呈现层：对话标签 ──
+  - id: present.desk-view.split.dialogue
+    name: 对话标签
+    summary: 在辅助栏里问系统、重讲题解，引用单击定位
+    parent: present.desk-view.split
+    kind: component
+    responsibility: |
+      辅助栏的「对话」标签（DA-1–DA-5、DA-7）：锚点条粘顶（模块 / 步骤 / 系统，单击定位）；转录里每条带当时的锚点；问答卡的引用按 {模块, 字段} 显示架构台填的原文、单击在画布上定位（题解字段打开题解），推断段标「推断」，解析不了的标「引用无效」；
+      梳理卡与发问时贴的照片并排、四组、不确定标记；重讲的结果卡（落了 / 被拒的原因）；AI 回合中的状态提示、排队数与停止按钮；
+      输入框钉在底部：问 / 重讲（重讲只在锚点是模块时可选）与「只问」「只动讲法」徽标、贴图（粘贴或选文件，至多 4 张）、Enter 发送。只读对话会话、只发意图。
+    codeRefs: [src/components/dock/DialogueDoc.vue]
+
+  # ── 接入层：agent 子进程与重讲落盘 ──
+  - id: access.agent.process
+    name: agent 子进程
+    summary: 起停 agent 子进程，把输出按薄协议流到页面
+    parent: access.agent
+    kind: component
+    responsibility: |
+      agent 子进程管理（DA-11，DL-18；ADR-0063 决策 11）：命令可配——缺省 claude 命令行（-p、stream-json、只读工具集 Read / Grep / Glob 加架构台 MCP 的只读查询、--add-dir 架构台目录），ARCH_AGENT_COMMAND 换成别的命令（测试用假 agent）；工作目录 = 被描述项目的源码根；环境变量里像密钥的一律不传；
+      一个对话会话同时只有一轮；超时（ARCH_AGENT_TIMEOUT_MS）视同停止；停止 = 终止整个进程组、这一轮不落；非零退出出错误事件；不合法的产出整轮拒绝；结构化块攒到结束才一次交出，文本片段随到随推；claude 的 stream-json 由适配器翻译成薄协议。
+      一轮的接入（agentTurn）：校验请求、读描述构造上下文包（代码事实摘要取架构治理的 impact）、贴图落到临时目录（设计里的落到设计目录）、起子进程；重讲的收尾交给重讲落盘；设计里的对话随设计落盘（designs/<设计>/dialogue/），当前版本上的不落。
+      端点由 ModelSource 插件挂载：POST /agent/<项目>/turn、/agent/<项目>/stop，只收同源 JSON；推送 `arch-agent:event`。
+    principle: |
+      - **三种产出都不直接写文件**：问只读；重讲的题解与讲法要求由架构台判别后写；改（波 2）的编辑操作由架构台应用到编辑会话。
+      - **自动化不调真实 claude**：单测与 E2E 一律用假 agent（scripts/agent/fake-agent.mjs），真实 claude 只由人手动走查。
+    codeRefs: [vite/agentProcess.ts, vite/agentTurn.ts]
+  - id: access.writer.explainer
+    name: 重讲落盘
+    summary: 判别放行后写题解并盖依据，累积讲法要求
+    parent: access.writer
+    kind: component
+    responsibility: 重讲落盘（DA-4、DA-5，DL-8）：读描述、要求产出指向锚点模块，经模型层判别（三问 + 新题解过同一套检查）放行后写题解（盖现在的依据指纹，与 arch explainer --write 同一个写法）与讲法要求 explainers/<模块 ID>.notes.md（AI 拥有、不登记指纹，已有的在前、新的追加）；被拒则什么都不写。只碰这两个文件。
+    codeRefs: [vite/writeExplainer.ts]
+
+relations:
+  - id: rel.dl.model-explainer
+    from: model.review.dialogue
+    to: model.review.explainer
+    type: queries
+    description: '对话的模型向图解取：上下文包与引用用 explainerOf 找锚点模块的题解，重讲判别用 explainerIssues 让新题解过同一套检查（EX-8）'
+    purpose: '找题解并让重讲的新题解过检查'
+  - id: rel.dl.session-model
+    from: state.desk.edit.dialogue
+    to: model.review.dialogue
+    type: queries
+    description: '对话会话向对话的模型取：resolveCitation 按 {模块, 字段} 填引用原文、digestView 算梳理卡的渲染数据，派生给对话标签'
+    purpose: '填引用原文与梳理卡给对话标签'
+  - id: rel.dl.source-process
+    from: access.model-source
+    to: access.agent.process
+    type: commands
+    description: 'ModelSource 插件交给 agent 子进程：挂 POST /agent/<项目>/turn、/stop 两个端点，createAgentRunner 起子进程、startTurn 起一轮；子进程的事件经插件推送 arch-agent:event'
+    purpose: '起停对话的子进程并推送输出'
+  - id: rel.dl.source-service
+    from: access.model-source
+    to: access.agent
+    type: queries
+    description: 'ModelSource 插件向 agent 接口取：按需加载查询核心 createService，取锚点模块的 impact（扇入、扇出、不稳定度、传入闭包）作上下文包的代码事实摘要'
+    purpose: '给上下文包取代码事实摘要'
+  - id: rel.dl.process-writer
+    from: access.agent.process
+    to: access.writer.explainer
+    type: commands
+    description: 'agent 子进程交给重讲落盘：重讲一轮说完时 applyRenarrate 判别并写题解与讲法要求，读已有的讲法要求进上下文包（readNotes）'
+    purpose: '让重讲的产出经判别后落盘'
+  - id: rel.dl.writer-model
+    from: access.writer.explainer
+    to: model.review.dialogue
+    type: queries
+    description: '重讲落盘向对话的模型取：judgeRenarrate 三问判别与新题解检查、mergeNotes / formatNotes / parseNotes 累积讲法要求'
+    purpose: '判别重讲产出并累积讲法要求'
+  - id: rel.dl.writer-explainer
+    from: access.writer.explainer
+    to: model.review.explainer
+    type: queries
+    description: '重讲落盘向图解取：explainerStatus 算新题解现在的依据，formatBasis / writeBasisMeta 盖进 arch-basis（与 arch explainer --write 同一写法）'
+    purpose: '给新题解盖上现在的依据'
+  - id: rel.dl.writer-reader
+    from: access.writer.explainer
+    to: access.reader
+    type: queries
+    description: '重讲落盘向描述读取取：readProject 读项目当前版本的描述文件（含题解）'
+    purpose: '读描述来判别与盖依据'
+  - id: rel.dl.writer-load
+    from: access.writer.explainer
+    to: model
+    type: queries
+    description: '重讲落盘向模型层取：loadModel 加载现在的描述与换上新题解的候选描述'
+    purpose: '加载描述与候选题解'
+  - id: rel.dl.desk-transport
+    from: present.desk-view
+    to: state.desk.edit.dialogue.transport
+    type: commands
+    description: '项目视图交给 agent 通道同步：创建 DeskState 时用 httpAgentTransport 注入对话的传输（开发服务器的 /agent 端点与 import.meta.hot 的推送）'
+    purpose: '把对话的传输接到开发服务器'

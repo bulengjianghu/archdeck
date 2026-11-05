@@ -31,5 +31,10 @@ export default defineConfig({
     url: `http://localhost:${PORT}/`,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
+    // DA-11：自动化一律用假 agent 替身（剧本按输入里的「#名字」挑），不调真实 claude；超时给 20s（「延迟到超时」剧本靠停止按钮结束）
+    env: {
+      ARCH_AGENT_COMMAND: JSON.stringify(['node', 'scripts/agent/fake-agent.mjs', '--dir', 'scripts/agent/scripts']),
+      ARCH_AGENT_TIMEOUT_MS: '20000',
+    },
   },
 })

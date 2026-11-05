@@ -127,3 +127,14 @@ export async function openRelated(page: Page) {
   if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click()
   await expect(toggle).toHaveAttribute('aria-expanded', 'true')
 }
+
+/**
+ * DL-4（第二十一轮）：进入草图画布时辅助栏按主语表打开并固定「对话」，资料区占去画布的宽度；
+ * 量草图画布几何、点画布节点的用例先关掉资料区（只在对话已打开时动）
+ */
+export async function closeDialogueDock(page: Page) {
+  const dock = page.getByRole('complementary', { name: '资料区' })
+  await expect(dock.locator('.tab.on:not(.preview)')).toContainText('对话')
+  await dock.getByRole('button', { name: '关闭资料区' }).click()
+  await expect(dock).toHaveCount(0)
+}

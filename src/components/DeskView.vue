@@ -11,6 +11,7 @@ import { createDeskState, propsPlacement, PROPS_WIDTH, type ModelPayload } from 
 import { isCommitVersion, isIntentVersion, type VersionRef } from '@/model'
 import { httpModelWriter, httpSourceFetcher } from './source/httpSource'
 import { DESK_STATE } from '@/state/inject'
+import { httpAgentTransport, type AgentEvents } from '@/state/sync/agent'
 import GraphCanvas from './GraphCanvas.vue'
 import CanvasTitle from './CanvasTitle.vue'
 import SearchPalette from './SearchPalette.vue'
@@ -78,6 +79,7 @@ const desk = createDeskState(fetchModel, {
   version,
   source: httpSourceFetcher(props.project, import.meta.env.BASE_URL),
   writer: httpModelWriter(props.project, import.meta.env.BASE_URL),
+  agent: httpAgentTransport(import.meta.env.BASE_URL, import.meta.hot as unknown as AgentEvents | undefined),
 })
 desk.attachRouter(router)
 provide(DESK_STATE, desk)
@@ -87,6 +89,7 @@ if (import.meta.env.DEV) (window as unknown as { __desk: typeof desk }).__desk =
 // 开发态：本项目的描述文件变化后重新加载，保留当前层次与选中
 const unwatchModel = desk.watchChanges(import.meta.hot)
 onBeforeUnmount(unwatchModel)
+onBeforeUnmount(() => desk.dialogue.dispose())
 // J5：「演化」叠加的开关按项目记在本地，模型加载后恢复
 const evolutionPrefs = useEvolutionPrefs(props.project, desk)
 // O12：「组装」开关同样按项目记在本地

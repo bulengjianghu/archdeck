@@ -44,6 +44,8 @@ import {
   type ViewAction,
   type ViewState,
   EMPTY_WORKSPACE,
+  canvasStateOf,
+  defaultDocFor,
   docKey,
   dockShown,
   workspaceTransition,
@@ -67,6 +69,7 @@ import { createIntent } from './desk/intent'
 import { createEvidence } from './desk/evidence'
 import { createEdit } from './desk/edit'
 import { createExplainers } from './desk/explainers'
+import { createDialogue, NO_AGENT, type AgentTransport } from './desk/dialogue'
 
 export type { CanvasMode, ImpactQuery, Selection, Toggles, DocRef, DocTab, DocGroup, WorkspaceState } from './transition'
 export { PROPS_WIDTH, propsPlacement, dockAppeared } from './transition'
@@ -81,6 +84,8 @@ export type DeskOptions = RouterSyncOptions & {
   source?: SourceFetcher
   /** 人拥有的文件的追加写入（B1–B5）；缺省没有写入来源 */
   writer?: ModelWriter
+  /** 对话的 agent 通道（DA-11）；缺省没有（只看描述的测试） */
+  agent?: AgentTransport
 }
 
 export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {}) {
@@ -392,7 +397,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   watch(
     () => playback.value?.scenarioId ?? null,
     (id, was) => {
-      if (id && id !== was) workspaceDispatch({ type: 'open', doc: { kind: 'sequence' }, pin: true })
+      const doc = defaultDocFor('run', { hasExplainer: explainers.has })
+      if (id && id !== was && doc) workspaceDispatch({ type: 'open', doc, pin: true })
       else if (!id && was) workspaceDispatch({ type: 'closeDoc', id: 'seq' })
     },
     { immediate: true },
@@ -413,11 +419,16 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     viaWrapper = false
     clearTimeout(openTimer)
     if (!s || s.kind !== 'module' || source === 'explainer') return
-    if (perspective.value === 'run' || edit.active.value) return
-    const doc: DocRef = explainers.has(s.id) ? { kind: 'explainer', module: s.id } : { kind: 'facts', module: s.id }
+    // DL-4：查缺省主语表——选中只驱动「题解」那一格；运行视角的时序图跟场景（上面的 watcher）、草图的对话跟编辑会话（下面的 watcher）
+    const storyFor = () => {
+      const doc = defaultDocFor(canvasStateOf(perspective.value, edit.active.value), { module: s.id, hasExplainer: explainers.has })
+      return doc && (doc.kind === 'explainer' || doc.kind === 'facts') ? doc : null
+    }
+    const doc = storyFor()
+    if (!doc) return
     if (workspaceState.value.groups.some(g => g.tabs.some(t => t.id === docKey(doc)))) return
     const openNow = () => {
-      if (selected.value !== s || perspective.value === 'run' || edit.active.value) return
+      if (selected.value !== s || !storyFor()) return
       if (workspaceState.value.groups.some(g => g.tabs.some(t => t.id === docKey(doc)))) return
       workspaceDispatch({ type: 'open', doc })
     }
@@ -426,6 +437,28 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     if (user) openTimer = setTimeout(openNow, 250)
     else openNow()
   })
+  // ── 对话（DA-1、DL-4、DL-12）：选中 / 视角 → 锚点；进入草图画布按主语表打开并固定对话 ──
+  const canvas = computed(() => canvasStateOf(perspective.value, edit.active.value))
+  const dialogueDoc = () => defaultDocFor('sketch', { hasExplainer: explainers.has }) ?? { kind: 'dialogue' as const }
+  const dialogue = createDialogue({
+    project: options.project,
+    index,
+    selection: selected,
+    step: computed(() => {
+      const f = run.frame.value
+      const sc = playback.value?.scenarioId
+      return f && sc ? { scenario: sc, frame: { id: f.id, from: f.from, to: f.to, ...(f.label ? { label: f.label } : {}) } } : null
+    }),
+    perspective: canvas,
+    transport: options.agent ?? NO_AGENT,
+    openTab: () => workspaceDispatch({ type: 'open', doc: { kind: 'dialogue' }, pin: true }),
+  })
+  watch(canvas, (c, was) => {
+    if (c === was) return
+    const doc = defaultDocFor(c, { hasExplainer: explainers.has })
+    if (doc?.kind === 'dialogue') workspaceDispatch({ type: 'open', doc: dialogueDoc(), pin: true })
+  })
+
   const workspace = {
     state: workspaceState,
     dockShown: computed(() => dockShown(workspaceState.value)),
@@ -491,6 +524,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     evidence,
     edit,
     workspace,
+    dialogue,
     // 操作
     dispatch,
     init,

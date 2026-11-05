@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
   <head>
-    <meta name="arch-basis" content="v1 019f47b526704a80 access.agent#abstraction=ce97f447 access.agent#children=307fc954 access.agent#invariants=0190633f access.agent#responsibility=16d3112f access.agent#summary=67c62664 access.agent.classify#summary=1c7a619c">
+    <meta name="arch-basis" content="v1 480524546eebc6a5 access.agent#abstraction=ce97f447 access.agent#children=820de9d9 access.agent#invariants=0190633f access.agent#responsibility=16d3112f access.agent#summary=67c62664 access.agent.classify#summary=1c7a619c access.agent.process#summary=12dfd43d">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>agent 接口 · 给 AI 的双窗口</title>
@@ -60,6 +60,7 @@ code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border
 
     <h2>它凭什么快</h2>
     <p>每次查询前先对指纹：描述、源码清单、基线任何一个变了才重建索引——所以长驻的 AI 助手新建文件、新加依赖之后，不用重扫就能立刻得到判定。判定之外还附目标模块的职责与访问面，让助手知道<b>该走哪里</b>，而不只是被拒绝。</p>
+    <p>第三个窗口朝里开：辅助栏的「对话」由 <span data-arch="access.agent.process">agent 子进程</span> 接待——开发服务器起一个只读的 claude，把上下文包递进去、把薄协议的输出流回页面；它能用的查询就是这里 MCP 外壳里不写记录的那几件。</p>
     <p>判定的规则引擎是 <span data-arch="model.governance">架构治理</span>，拦截记录落在 <span data-arch="access.governance-store">治理存储</span>——效果可量化：这个月拦了多少次、拦在哪些门。</p>
 
   </body>

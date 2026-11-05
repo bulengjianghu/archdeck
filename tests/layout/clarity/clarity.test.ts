@@ -179,15 +179,18 @@ describe('L30 几何检查器', () => {
 // 架构治理、草图编辑声明分层（这六个层次由普通层次变为分层总览，多成员层的带内成员不超七全显、不换行）后重定：
 // 有代码事实 重合 53 → 27、压节点 3 → 3（根层原有的 3 处）、箭头叠 0 → 3、贴框 10 → 17；无代码事实 重合 45 → 17、压节点 3 → 3、贴框 7 → 20。
 // 箭头叠 3 处都是「核心边与带间边落在同一个没有内容的单成员层带上」（access → model、规则判定 → 事实比对、改 ID → 寻址），上升待裁（29 待裁 Q9）
+// 第二十一轮波 1：自描述新增对话的六个模块与十条关系（modules/dialogue.yaml），布局代码未动——h5p-arch-desk 重合 26 → 30、无代码事实 17 → 18
+// （不加这份描述时为 26 / 17）：描述写入层多了「重讲落盘」，它到描述读取、模型层的两条出界线与追加写入、草图写回的同向线平行相贴（+2）；
+// DeskState 层 +1；编辑中的草图层多了对话会话 +1。上升待裁（波 1 报告）
 const CEILING: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 27, arrows: 3, crossNode: 3, labels: 0, hug: 17, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 30, arrows: 3, crossNode: 3, labels: 0, hug: 17, onFrame: 0 },
   h5player: { overlap: 93, arrows: 1, crossNode: 2, labels: 0, hug: 18, onFrame: 0 },
   'media-web-player': { overlap: 23, arrows: 0, crossNode: 7, labels: 2, hug: 5, onFrame: 0 },
 }
 // 第十五轮：模型层新增两个第二级模块（模型层入口、场景语义）后，把四层声明为层（ADR-0051 修订）——模型层由普通层次改为分层总览：
 // 有代码事实重合 62 → 53、压节点 12 → 3、贴框 6 → 10；无代码事实重合 48 → 45、压节点 12 → 3、贴框 6 → 7
 const BARE: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 17, arrows: 0, crossNode: 3, labels: 0, hug: 20, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 18, arrows: 0, crossNode: 3, labels: 0, hug: 20, onFrame: 0 },
   h5player: { overlap: 96, arrows: 0, crossNode: 0, labels: 3, hug: 13, onFrame: 0 },
   'media-web-player': { overlap: 35, arrows: 0, crossNode: 1, labels: 0, hug: 6, onFrame: 0 },
 }

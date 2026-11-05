@@ -10,7 +10,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { parse } from 'yaml'
-import { graphNode, openCheckList, openDesk, restoreOwned, openProjectMenu, switchVersion } from './helpers'
+import { closeDialogueDock, graphNode, openCheckList, openDesk, restoreOwned, openProjectMenu, switchVersion } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 const GOV = path.join(PROJECT, 'governance')
@@ -115,6 +115,7 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     await dialog.getByRole('button', { name: '创建并打开草图' }).click()
     await expect(page).toHaveURL(/\/d\/zz-e2e-sketch\/sketch/)
     await expect(page.locator('.sketch-canvas')).toBeVisible()
+    await closeDialogueDock(page)
     await expect(page.locator('.info-bar .name')).toHaveText('E2E 草图')
     await expect(saveButton(page)).toBeVisible()
 
@@ -222,6 +223,7 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     // 刷新原样：位置、合并结果、关系与原则都在
     await page.reload()
     await expect(graphNode(page, 'state.desk.session')).toBeVisible()
+    await closeDialogueDock(page)
     await expect(graphNode(page, a)).toHaveCount(0)
     await expect(page.locator('.sk-edge-label', { hasText: 'E2E 连线' })).toBeVisible()
     const x = await page.evaluate(
@@ -343,6 +345,7 @@ test('X21 根草图：设计面板「改骨架」→ 层画成带 → 拖到另�
     await dialog.locator('input[name="design-id"]').fill('zz-e2e-root')
     await dialog.getByRole('button', { name: '创建并打开草图' }).click()
     await expect(page.locator('.sketch-canvas')).toBeVisible()
+    await closeDialogueDock(page)
     await page.locator('.vue-flow__pane').click({ position: { x: 5, y: 5 } })
     await page.locator('[data-testid="design-sketches"]').getByRole('button', { name: '改骨架' }).click()
 
@@ -388,6 +391,7 @@ test('E-1、#20b：从当前版本的项目菜单点「编辑骨架」打开持�
   await page.getByRole('menuitem', { name: '编辑骨架' }).click()
   await expect(page).toHaveURL(/\/p\/h5p-arch-desk\/i\/skeleton/)
   await expect(page.locator('.sketch-canvas')).toBeVisible()
+  await closeDialogueDock(page)
   await expect(page.locator('.info-bar .name')).toHaveText('骨架')
   await expect(saveButton(page)).toBeVisible()
   await expect(page.locator('.sk-band')).toHaveCount(4)
@@ -450,6 +454,7 @@ test('F-60–F-62、#15、#20b：草图的信息条只出现一次名称、唯�
     await switchVersion(page, 'zz-e2e-bar/sketch')
     const bar = page.locator('.info-bar')
     await expect(page.locator('.sketch-canvas')).toBeVisible()
+    await closeDialogueDock(page)
     await expect(saveButton(page)).toBeVisible()
 
     // 身份区：kind + 名称（只这一次）+ 状态 + 唯一一条面包屑；不再有「编辑草图：」「尺子」「校验」「放弃」「编辑」
@@ -531,6 +536,7 @@ test('T2b 裁决 6：当前版本上「在此设计」的对话框有「加到�
 
     await expect(page).toHaveURL(/\/d\/zz-e2e-add\/sketch/)
     await expect(page.locator('.sketch-canvas')).toBeVisible()
+    await closeDialogueDock(page)
     const crumbs = page.locator('.info-bar .mount')
     await expect(crumbs.locator('.here')).toHaveAttribute('data-crumb', 'state.transition')
     await expect(page.locator('.info-bar .name')).toHaveText('E2E 加一张')
@@ -547,6 +553,7 @@ test('草图画布手势：按住空格拖动空白处 = 平移（视口变、�
   await openProjectMenu(page)
   await page.getByRole('menuitem', { name: '编辑骨架' }).click()
   await expect(page.locator('.sk-band')).toHaveCount(4)
+  await closeDialogueDock(page)
   await expect(page.locator('.sk-zoom')).toContainText('空格 + 拖动 = 平移，Ctrl + 滚轮 = 缩放')
   const viewport = page.locator('.sk-flow .vue-flow__transformationpane')
   const transform = () => viewport.getAttribute('style')
@@ -661,6 +668,7 @@ test('X22（第五轮 T3）：草图画布的系统框随可用区域自适应�
     await openDesk(page, '/p/h5p-arch-desk')
     await switchVersion(page, 'zz-e2e-size/sketch')
     await expect(page.locator('.sketch-canvas')).toBeVisible()
+    await closeDialogueDock(page)
     const sys = graphNode(page, 'frame:system')
     const center = graphNode(page, 'frame:center')
     const desk = () =>
@@ -733,6 +741,7 @@ test('X7a（第五轮 T3）：有未保存改动时切换版本、浏览器后�
     await openProjectMenu(page)
     await switcher.selectOption('zz-e2e-leave/sketch')
     await expect(page.locator('.sketch-canvas')).toBeVisible()
+    await closeDialogueDock(page)
     const rename = async (text: string) => {
       await graphNode(page, 'state.desk.beta').locator('.name').click()
       const name = page.locator('[data-testid="sketch-module-form"] [name="module-name"]')
@@ -763,6 +772,7 @@ test('X7a（第五轮 T3）：有未保存改动时切换版本、浏览器后�
     await page.goBack()
     await expect(page).toHaveURL(/zz-e2e-leave\/sketch/)
     await expect(page.locator('.sketch-canvas')).toBeVisible()
+    await closeDialogueDock(page)
     await rename('Beta 弃')
     await page.goBack()
     await expect(ask).toBeVisible()
@@ -785,6 +795,7 @@ test('X7d（第五轮 T3）：草图面板改 ID 时提交前预览影响（后�
     await openDesk(page, '/p/h5p-arch-desk')
     await switchVersion(page, 'zz-e2e-rename/sketch')
     await expect(page.locator('.sketch-canvas')).toBeVisible()
+    await closeDialogueDock(page)
     await graphNode(page, 'state.desk.alpha').locator('.name').click()
     const form = page.locator('[data-testid="sketch-module-form"]')
     const id = form.locator('[name="module-id"]')
@@ -851,6 +862,7 @@ test('E9、DV-13（第五轮 T3）：模块面板「相关决策」列编号与�
     await openDesk(page, '/p/h5p-arch-desk')
     await switchVersion(page, 'zz-e2e-adrs/sketch')
     await expect(page.locator('.sketch-canvas')).toBeVisible()
+    await closeDialogueDock(page)
     await graphNode(page, 'state.desk.alpha').locator('.name').click()
     const field = page.locator('[data-testid="sketch-module-form"] [name="module-adrs"]')
     await field.fill('ADR-0025, 27, 25')
@@ -878,6 +890,7 @@ test('X23、X24（第六轮 T3）：草图里声明端口与实现者（拖线�
     await dialog.locator('input[name="design-id"]').fill('zz-e2e-ports')
     await dialog.getByRole('button', { name: '创建并打开草图' }).click()
     await expect(page.locator('.sketch-canvas')).toBeVisible()
+    await closeDialogueDock(page)
     const ids: string[] = sketchFile(box.dir, 'state.desk').modules.map((m: { id: string }) => m.id)
     const [owner, impl, user] = ids
     for (const id of [owner, impl, user]) await expect(graphNode(page, id)).toBeVisible()

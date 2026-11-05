@@ -50,3 +50,4 @@ export function loadModel(files: readonly RawFile[]): LoadedModel {
   const index = buildIndex(checked.model)
   return { index, issues: [...loaded.issues, ...checked.issues, ...explainerIssues(index)] }
 }
+export * from './dialogue'
