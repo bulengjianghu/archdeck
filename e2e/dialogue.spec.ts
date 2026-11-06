@@ -36,6 +36,10 @@ test('验收 13：点「讨论 ›」打开对话；假 agent 回带引用的问
   const transcript = await dialogue(page).getByTestId('dialogue-log').innerText()
   await graphNode(page, 'model').click()
   await expect.poll(() => query(page).get('sel')).toBe('m:model')
+  // 合并复跑（round21/integration）：WS-8 例外（ADR-0062）在用户点选 250ms 后打开并激活所选模块的理解页，对话标签退到后面——
+  // 原先断言抢在 250ms 内才过，负载下必红。先等理解页出来，再切回对话（这一交互待负责人裁，见 23-merge-report §6）
+  await expect(dock(page).locator('.tab.on')).toContainText('模型层')
+  await dock(page).getByRole('tab', { name: '对话' }).click()
   await expect(dialogue(page).getByTestId('anchor-bar')).toContainText('模型层')
   expect(await dialogue(page).getByTestId('dialogue-log').innerText()).toBe(transcript)
 
