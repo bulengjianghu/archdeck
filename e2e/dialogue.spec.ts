@@ -18,6 +18,7 @@ async function say(page: Page, text: string) {
 const discuss = (page: Page) => dock(page).locator('.module-doc [data-action="discuss"]')
 
 test('验收 13：点「讨论 ›」打开对话；假 agent 回带引用的问答卡，单击引用画布定位；换选中锚点条变、转录不变', async ({ page }) => {
+  test.setTimeout(120_000)
   await openDesk(page, '/p/h5p-arch-desk?sel=m:state')
   await discuss(page).click()
   await expect(dock(page).locator('.tab.on')).toContainText('对话')
@@ -26,7 +27,7 @@ test('验收 13：点「讨论 ›」打开对话；假 agent 回带引用的问
 
   await say(page, '为什么这样分？')
   const card = dialogue(page).getByTestId('answer-card')
-  await expect(card).toBeVisible()
+  await expect(card).toBeVisible({ timeout: LOAD_BUDGET })
   // DA-3：引用原文由架构台填；推断段标「推断」
   await expect(card.getByTestId('cite')).toHaveAttribute('data-module', 'state')
   await expect(card.getByTestId('inferred')).toBeVisible()
@@ -39,8 +40,11 @@ test('验收 13：点「讨论 ›」打开对话；假 agent 回带引用的问
   expect(await dialogue(page).getByTestId('dialogue-log').innerText()).toBe(transcript)
 
   // 单击引用：画布回到被引用的模块
-  await card.getByTestId('cite').click()
-  await expect.poll(() => query(page).get('sel')).toBe('m:state')
+  // 收尾复跑：负载下别的用例改描述，重新加载让卡片重绘、按钮被换掉，单击一直重试到用例超时——短超时单击、看选中，按 toPass 重试
+  await expect(async () => {
+    await card.getByTestId('cite').click({ timeout: 3_000 })
+    await expect.poll(() => query(page).get('sel'), { timeout: 3_000 }).toBe('m:state')
+  }).toPass({ timeout: LOAD_BUDGET })
 })
 
 test('停止按钮终止假 agent 的延迟剧本：这一轮什么都不落，可再发', async ({ page }) => {
