@@ -234,6 +234,8 @@ const ready = computed(() => (mode === 'commit' ? !!c.value : !!d.value || isInt
   align-items: center;
   gap: 2px;
   min-width: 0;
+  /* 合并走查（1280 宽，认可提示出现时身份区被挤）：面包屑收窄时裁掉，不压到「编辑中 ●」上 */
+  overflow: hidden;
   white-space: nowrap;
   color: var(--text-2);
 }
