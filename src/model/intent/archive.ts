@@ -5,6 +5,8 @@
  */
 import type { DesignEstimate, DesignStatus } from '../design'
 import { driftText, type ApprovalDrift, type TransitionContext } from './approval'
+import type { ModelIndex, SketchEntity } from '../types'
+import { flattenSketch } from './check'
 import { archiveVerdict } from './lifecycle'
 import type { SketchCheck } from './types'
 
@@ -94,45 +96,74 @@ export function changedModules(before: Readonly<Record<string, string>>, after: 
   return { changed, removed, added }
 }
 
+/**
+ * DL-49（收尾 S2）：本设计覆盖的模块——各张草图的挂载点、草图里的模块，以及它们在当前版本里的后代。
+ * 「认可以来的改动」里落在这里的归第一组（本设计的），新加的模块落在这里也算本设计的
+ */
+export function designCover(entities: readonly SketchEntity[], index: ModelIndex): Set<string> {
+  const roots = new Set<string>()
+  for (const e of entities) {
+    roots.add(e.def.mount)
+    for (const m of flattenSketch(e)) roots.add(m.id)
+  }
+  const out = new Set(roots)
+  for (const id of index.modules.keys()) if ((index.pathOf.get(id) ?? []).some(a => roots.has(a))) out.add(id)
+  return out
+}
+
 export interface EstimateGap {
   /** 认可时记下了估算 */
   recorded: boolean
   /** 估牵动的模块数；全是新框时为 null（「新」，不给数） */
   estimated: number | null
-  /** 实际：改了与删了的 + 新加的 */
+  /** 实际：第一组与第二组的合计（同期其他改动不计） */
   actual: number
-  /** 认可时就有、描述变了或删了的 */
+  /** 认可时就有、描述变了或删了的（不含同期其他改动） */
   touched: string[]
-  /** 新加的模块 */
+  /** 新加的模块（本设计覆盖里的） */
   added: string[]
   /** 估了没改 */
   spared: string[]
-  /** 改了没估 */
+  /** 改了没估（本设计覆盖里改了、认可时没估到的） */
   missed: string[]
+  /** 第一组：本设计覆盖的（草图模块及后代、新加），改了与新加的 */
+  covered: string[]
+  /** 第二组：估算闭包内的（不在覆盖里、在估的牵动里） */
+  closure: string[]
+  /** 第三组：同期其他改动（两者之外），单列、不计入实际与差 */
+  others: string[]
 }
 
-/** DL-49：认可时的估算与此刻当前版本的描述指纹对比 */
-export function estimateGap(estimate: DesignEstimate | undefined, now: Readonly<Record<string, string>>): EstimateGap {
-  if (!estimate) return { recorded: false, estimated: null, actual: 0, touched: [], added: [], spared: [], missed: [] }
-  const { changed, removed, added } = changedModules(estimate.current, now)
-  const touched = [...changed, ...removed].sort()
+/** DL-49：认可时的估算与此刻当前版本的描述指纹对比；cover 为本设计覆盖的模块（designCover） */
+export function estimateGap(estimate: DesignEstimate | undefined, now: Readonly<Record<string, string>>, cover: ReadonlySet<string>): EstimateGap {
+  if (!estimate) return { recorded: false, estimated: null, actual: 0, touched: [], added: [], spared: [], missed: [], covered: [], closure: [], others: [] }
+  const { changed, removed, added: fresh } = changedModules(estimate.current, now)
+  const touchedAll = [...changed, ...removed].sort()
   const est = new Set(estimate.modules)
-  const hit = new Set(touched)
+  const all = [...touchedAll, ...fresh].sort()
+  const covered = all.filter(id => cover.has(id))
+  const closure = all.filter(id => !cover.has(id) && est.has(id))
+  const mine = new Set([...covered, ...closure])
+  const touched = touchedAll.filter(id => mine.has(id))
+  const hit = new Set(touchedAll)
   return {
     recorded: true,
     estimated: estimate.fresh ? null : estimate.modules.length,
-    actual: touched.length + added.length,
+    actual: covered.length + closure.length,
     touched,
-    added,
+    added: fresh.filter(id => mine.has(id)),
     spared: [...est].filter(id => !hit.has(id)).sort(),
-    missed: touched.filter(id => !est.has(id)),
+    missed: touched.filter(id => cover.has(id) && !est.has(id)),
+    covered,
+    closure,
+    others: all.filter(id => !mine.has(id)),
   }
 }
 
-/** 归档预览的一行：「认可时估牵动 N · 实际改了 N′」 */
+/** 归档预览的一行：「认可时估牵动 N · 实际改了 N′」，同期其他改动单列一句 */
 export function gapLine(g: EstimateGap): string {
   if (!g.recorded) return '认可时没有记下估算，无从比对'
-  return `认可时估牵动 ${g.estimated === null ? '新' : g.estimated} · 实际改了 ${g.actual}${g.added.length ? `（其中新加 ${g.added.length}）` : ''}`
+  return `认可时估牵动 ${g.estimated === null ? '新' : g.estimated} · 实际改了 ${g.actual}${g.added.length ? `（其中新加 ${g.added.length}）` : ''}${g.others.length ? ` · 另有同期其他改动 ${g.others.length}` : ''}`
 }
 
 /** DL-50：归档预览（写端点算、页面与命令行同一份）——三关、估与实际、将写确认记录的模块、将晋升替换的持久草图；不能归档时带原因 */

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 归档预览（DL-50，TK-5、TK-6）：三关（核验一致 / 棘轮无新增 / 草图指纹一致）、「认可时估牵动 N · 实际改了 N′」与差、
- * 将写确认记录的模块数、将晋升替换的持久草图；「确认归档」才写（status: implemented、确认记录、晋升）。数据取写端点的归档预览（与命令行同一份）。
+ * 认可以来的改动分三组（本设计覆盖的、估算闭包内的、同期其他改动，DL-49），将写确认记录的模块数、将晋升替换的持久草图；「确认归档」才写（status: implemented、确认记录、晋升）。数据取写端点的归档预览（与命令行同一份）。
  */
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -56,6 +56,12 @@ onMounted(async () => {
           <h4>估与实际</h4>
           <p data-testid="archive-gap-line">{{ a.gapText.value }}</p>
           <template v-if="p.gap.recorded">
+            <!-- DL-49（收尾 S2）：认可以来的改动分三组；同期其他改动单列、不计入实际与差 -->
+            <ul class="groups" data-testid="archive-groups">
+              <li data-group="covered">本设计覆盖的（草图模块及后代、新加）：{{ list(p.gap.covered) }}</li>
+              <li data-group="closure">估算闭包内的：{{ list(p.gap.closure) }}</li>
+              <li data-group="others" class="muted">同期其他改动（不计入）：{{ list(p.gap.others) }}</li>
+            </ul>
             <p class="muted">改了没估：{{ list(p.gap.missed) }}</p>
             <p class="muted">估了没改：{{ list(p.gap.spared) }}</p>
             <p class="muted">新加：{{ list(p.gap.added) }}</p>
@@ -111,6 +117,11 @@ h4 {
 
 p {
   margin: 2px 0;
+}
+
+.groups {
+  margin: 4px 0;
+  padding-left: 16px;
 }
 
 .lead,

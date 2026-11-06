@@ -9,6 +9,7 @@ import {
   archiveGates,
   CHANGE_KINDS,
   checkSketches,
+  designCover,
   estimateGap,
   needsRatchet,
   reviewHashes,
@@ -163,7 +164,7 @@ export function createApproval(i: ApprovalInputs) {
     return {
       status: st,
       gates,
-      gap: estimateGap(i.estimate(), reviewHashes(cur)),
+      gap: estimateGap(i.estimate(), reviewHashes(cur), designCover(ents, cur)),
       covered,
       promotes,
       ...(needsRatchet(checks, drift) ? {} : { reason: gates.first?.detail }),

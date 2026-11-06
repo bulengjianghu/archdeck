@@ -22,6 +22,7 @@ import {
   archiveVerdict,
   checkSketches,
   designTransition,
+  designCover,
   estimateGap,
   gateContext,
   needsRatchet,
@@ -221,7 +222,7 @@ function archivePlan(modelRoot: string, project: string, design: string, root: s
   const gates = archiveGates({ checks, gateErrors: ratchet.errors, ...('note' in ratchet && ratchet.note ? { ratchetUnknown: ratchet.note } : {}), drift })
   const move = designTransition(info.status, 'archive', gateContext(gates, drift))
   const reason = move.ok ? undefined : info.status === 'accepted' && gates.first ? gates.first.detail : move.reason
-  const gap = estimateGap(info.estimate, reviewHashes(index))
+  const gap = estimateGap(info.estimate, reviewHashes(index), designCover(entities, index))
   const covered: string[] = []
   const promotes: string[] = []
   entities.forEach((entity, i) => {

@@ -6,11 +6,14 @@ import {
   approvalDrift,
   archiveGates,
   changedModules,
+  designCover,
   designTransition,
   estimateGap,
   gapLine,
   gateContext,
+  loadModel,
   needsRatchet,
+  parseDesignSketches,
   TASK_ORDER,
   type SketchCheck,
 } from '../../src/model'
@@ -91,18 +94,55 @@ describe('DL-49 估与实际', () => {
   it('改了、删了、新加按描述指纹算', () => {
     expect(changedModules(before, after)).toEqual({ changed: ['b'], removed: ['c'], added: ['e'] })
   })
+  // 本设计覆盖的：全都在（与估算闭包、同期其他改动无关的旧口径）
+  const all = new Set(['a', 'b', 'c', 'd', 'e'])
   it('差集：估了没改、改了没估，新加的单列；估 N · 实际 N′', () => {
-    const g = estimateGap({ at: '2026-11-06', modules: ['a', 'b'], fresh: false, current: before }, after)
-    expect(g).toMatchObject({ recorded: true, estimated: 2, actual: 3, touched: ['b', 'c'], added: ['e'], spared: ['a'], missed: ['c'] })
+    const g = estimateGap({ at: '2026-11-06', modules: ['a', 'b'], fresh: false, current: before }, after, all)
+    expect(g).toMatchObject({ recorded: true, estimated: 2, actual: 3, touched: ['b', 'c'], added: ['e'], spared: ['a'], missed: ['c'], others: [] })
     expect(gapLine(g)).toBe('认可时估牵动 2 · 实际改了 3（其中新加 1）')
   })
   it('全是新框：估写「新」不给数；没有估算记录时注明无从比对', () => {
-    const g = estimateGap({ modules: [], fresh: true, current: before }, after)
+    const g = estimateGap({ modules: [], fresh: true, current: before }, after, all)
     expect(g.estimated).toBeNull()
     expect(gapLine(g)).toBe('认可时估牵动 新 · 实际改了 3（其中新加 1）')
-    const none = estimateGap(undefined, after)
+    const none = estimateGap(undefined, after, all)
     expect(none.recorded).toBe(false)
     expect(gapLine(none)).toBe('认可时没有记下估算，无从比对')
+  })
+  describe('收尾 S2：实际分三组', () => {
+    const b0 = { a: '1', b: '1', c: '1', x: '1' }
+    const b1 = { a: '2', 'a.k': '1', b: '2', c: '1', x: '2', z: '1' }
+    const g = estimateGap({ modules: ['b', 'c'], fresh: false, current: b0 }, b1, new Set(['a', 'a.k']))
+    it('本设计覆盖的（草图模块及后代、新加）：改了的与新加的都在这组', () => {
+      expect(g.covered).toEqual(['a', 'a.k'])
+      expect(g.added).toEqual(['a.k'])
+      // 覆盖内改了、认可时没估到：「改了没估」
+      expect(g.missed).toEqual(['a'])
+    })
+    it('估算闭包内的：不在覆盖里、在估的牵动里', () => {
+      expect(g.closure).toEqual(['b'])
+      expect(g.spared).toEqual(['c'])
+    })
+    it('两者之外的「同期其他改动」单列，不计入「改了没估」与实际数', () => {
+      expect(g.others).toEqual(['x', 'z'])
+      expect(g.missed).not.toContain('x')
+      expect(g.actual).toBe(3)
+      expect(g.touched).toEqual(['a', 'b'])
+      expect(gapLine(g)).toBe('认可时估牵动 2 · 实际改了 3（其中新加 1） · 另有同期其他改动 2')
+    })
+  })
+  it('覆盖：草图的挂载点、草图里的模块与它们在当前版本里的后代', () => {
+    const { index } = loadModel([
+      { path: 'system.yaml', text: 'system: { id: s, name: S }' },
+      {
+        path: 'modules/m.yaml',
+        text: 'modules:\n  - { id: ui, name: UI, responsibility: x }\n  - { id: ui.x, name: X, parent: ui, responsibility: x }\n  - { id: ui.x.y, name: Y, parent: ui.x, responsibility: y }\n  - { id: core, name: Core, responsibility: c }\n',
+      },
+    ])
+    const ents = parseDesignSketches([
+      { design: 'd', file: { path: 'designs/d/sketches/ui.x.yaml', text: 'sketch:\n  id: d\n  mount: ui.x\n  modules:\n    - { id: ui.x.n, name: N }\n' } },
+    ])
+    expect([...designCover(ents, index)].sort()).toEqual(['ui.x', 'ui.x.n', 'ui.x.y'])
   })
 })
 

@@ -115,7 +115,14 @@ test('用例 12：改一半——不点按钮 ✓ 与待做、待做在前、归
     await archiveBtn(page).click()
     const dlg = page.getByTestId('archive-dialog')
     await expect(dlg.getByTestId('archive-gates').locator('.pass')).toHaveCount(3)
-    await expect(dlg.getByTestId('archive-gap-line')).toHaveText(/^认可时估牵动 (\d+|新) · 实际改了 \d+（其中新加 2）$/)
+    // 同期别的用例也在改当前版本的描述：落在本设计覆盖外、估算外的单列一句（DL-49 三组）
+    await expect(dlg.getByTestId('archive-gap-line')).toHaveText(/^认可时估牵动 (\d+|新) · 实际改了 \d+（其中新加 2）( · 另有同期其他改动 \d+)?$/)
+    // 收尾 S2：认可以来的改动分三组——本设计覆盖的（挂载点 state.desk.edit 之下新加的两个）、估算闭包内的、同期其他改动
+    const groups = dlg.getByTestId('archive-groups')
+    await expect(groups.locator('li')).toHaveCount(3)
+    await expect(groups.locator('[data-group="covered"]')).toContainText(/本设计覆盖的.*认可.*归档|本设计覆盖的.*归档.*认可/)
+    await expect(groups.locator('[data-group="closure"]')).toContainText('估算闭包内的')
+    await expect(groups.locator('[data-group="others"]')).toContainText('同期其他改动（不计入）')
     await expect(dlg.getByTestId('archive-covered')).toContainText('确认记录')
     await dlg.getByTestId('archive-confirm').click()
     await expect(dlg).toHaveCount(0, { timeout: LOAD_BUDGET })
