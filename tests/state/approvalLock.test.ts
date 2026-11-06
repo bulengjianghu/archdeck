@@ -57,6 +57,16 @@ function transport(): AgentTransport & { sent: { mode: string }[] } {
   return { sent, turn: async (_p, b) => (sent.push({ mode: b.mode }), { ok: true }), stop: async () => {}, subscribe: () => () => {} }
 }
 
+const payloadOf = (status: DesignStatus): ModelPayload => ({
+  dir: 'x',
+  files: [SYSTEM, SKELETON, SKETCH],
+  compare: { current: { label: '当前版本', dir: 'x', files: [SYSTEM, BASE] } },
+  sketch: { file: 'designs/d/sketches/core.a.yaml', path: 'sketches/core.a.yaml', hash: 'h0' },
+  sketchFiles: [{ mount: 'core.a', file: 'designs/d/sketches/core.a.yaml', path: 'sketches/core.a.yaml', hash: 'h0' }],
+  sketchPrompt: 'PROMPT',
+  designs: [{ id: 'd', name: 'D', status, revisions: [], problems: [] }],
+})
+
 async function setup(status: DesignStatus, agent = transport()) {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
   await router.push('/')
@@ -157,5 +167,31 @@ describe('DL-34 对话会话的锁（纯转移）', () => {
   })
   it('状态锁先于 AI 回合只读：起草中 AI 回合的原因仍是 AI_BUSY', () => {
     expect(AI_BUSY).toContain('AI 正在修改')
+  })
+})
+
+describe('重新加载按发起先后（第二十一轮收尾复跑）', () => {
+  it('先发起、后返回的旧载荷不盖住新的：认可后迟到的「起草中」不回滚状态', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+    await router.push('/')
+    const queue: ((p: ModelPayload) => void)[] = []
+    const desk = createDeskState(() => new Promise<ModelPayload>(r => queue.push(r)), {
+      version: { design: 'd', revision: 'sketch' },
+      writer: writer().writer,
+      project: 'p',
+    })
+    desk.attachRouter(router)
+    const init = desk.init()
+    queue.shift()!(payloadOf('draft'))
+    await init
+    expect(desk.edit.statusLock.value).toBeFalsy()
+    const stale = desk.reload() // 文件变化触发、认可写入之前发起
+    const fresh = desk.reload() // 认可写入之后发起
+    queue[1](payloadOf('accepted'))
+    await fresh
+    expect(desk.edit.statusLock.value).toContain('回到起草')
+    queue[0](payloadOf('draft'))
+    await stale
+    expect(desk.edit.statusLock.value).toContain('回到起草')
   })
 })

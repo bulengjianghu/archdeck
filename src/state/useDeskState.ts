@@ -317,9 +317,13 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   })
 
   // ── 加载（模型源同步）──
+  /** 重新加载按发起先后算：文件变化与写入后的重新加载会并发，先发起、后返回的旧载荷不能盖住新的（认可后迟到的旧状态曾把信息条回滚成「起草中」） */
+  let reloadSeq = 0
   async function reload() {
+    const n = ++reloadSeq
     try {
       const loaded = await fetchAndLoad(fetchModel)
+      if (n !== reloadSeq) return
       const prevIndex = index.value
       const previousPath = prevIndex && levelId.value ? (prevIndex.pathOf.get(levelId.value) ?? []) : []
       modelDir.value = loaded.payload.dir
@@ -345,6 +349,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
         void sourceSync.refresh()
       }
     } catch (e) {
+      if (n !== reloadSeq) return
       status.value = index.value ? 'ready' : 'error'
       loadError.value = e instanceof Error ? e.message : String(e)
     }
