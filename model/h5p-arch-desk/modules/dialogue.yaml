@@ -49,7 +49,7 @@ modules:
       会话的值（DialogueState：转录——每条带当时的锚点：用户、回答、错误、已停止；锚点、视角、运行状态、排队的输入、草稿、模式、状态锁）与纯转移 dialogueTransition：
       发送（空闲开一轮，运行中进队列）、停止（这一轮不落，排队的退回草稿）、换锚点与换视角（转录不变）、改 / 问 / 重讲切换与锁定（DL-19、DL-34）、
       agent 事件（片段累加、说完落一条并接着发队首、出错记错误卡、超时视同停止，别的轮次与停止后的迟到事件不认）；modeFor：重讲只对模块。
-      restore（DL-51）：落盘的各轮按 transcriptEntries 还原成转录，只在转录为空、空闲时整份放进来。
+      restore（DL-51）：落盘的各轮按 transcriptEntries 还原成转录（补记了提议卡结果的「改」一轮带上结果，恢复的回答标 restored），只在转录为空、空闲时整份放进来。
       不发请求、不订阅推送、不派生显示数据。
     codeRefs: [src/state/desk/dialogue/state.ts]
   - id: state.desk.edit.dialogue.anchor
@@ -78,7 +78,7 @@ modules:
     summary: 把一轮的请求发给开发服务器，把推送交回会话
     parent: state.desk.edit.dialogue
     kind: component
-    responsibility: AgentTransport 的 HTTP 实现（设计 dialogue-layers：发一轮、停止，订阅开发服务器推送的 agent 事件交回会话；不碰会话的值）。同步适配器（DA-11）：AgentTransport 的 HTTP 实现——POST /agent/<项目>/turn 起一轮、/agent/<项目>/stop 停止；订阅开发服务器的推送 `arch-agent:event`，只把本项目的事件交回对话会话。只搬运，不改会话。
+    responsibility: AgentTransport 的 HTTP 实现（设计 dialogue-layers：发一轮、停止，订阅开发服务器推送的 agent 事件交回会话；不碰会话的值）。同步适配器（DA-11）：AgentTransport 的 HTTP 实现——POST /agent/<项目>/turn 起一轮、/agent/<项目>/stop 停止、/agent/<项目>/outcome 补记提议卡结果（DL-51）；订阅开发服务器的推送 `arch-agent:event`，只把本项目的事件交回对话会话。只搬运，不改会话。
     codeRefs: [src/state/sync/agent.ts]
 
   # ── 呈现层：对话标签 ──
@@ -91,7 +91,7 @@ modules:
       辅助栏的「对话」标签（DA-1–DA-5、DA-7）：锚点条粘顶（模块 / 步骤 / 系统，单击定位）；转录里每条带当时的锚点；问答卡的引用按 {模块, 字段} 显示架构台填的原文、单击在画布上定位（题解字段打开题解），推断段标「推断」，解析不了的标「引用无效」；
       梳理卡与发问时贴的照片并排、四组、不确定标记；重讲的结果卡（落了 / 被拒的原因）；AI 回合中的状态提示、排队数与停止按钮；
       输入框钉在底部：问 / 重讲（重讲只在锚点是模块时可选）与「只问」「只动讲法」徽标、贴图（粘贴或选文件，至多 4 张）、Enter 发送。
-      草图里（波 2，DA-6–DA-10）：改 / 问切换与「可改」徽标；AI 改完一轮出提议卡（ProposalCard：第几轮、动了哪几个号、牵动谁按当前描述估、撤回本轮）；梳理卡旁「按这张图起草」；问答卡「存为设计说明」（图随文字一起存）。只读对话会话、只发意图。
+      草图里（波 2，DA-6–DA-10）：改 / 问切换与「可改」徽标；AI 改完一轮出提议卡（ProposalCard：第几轮、动了哪几个号、牵动谁按当前描述估、撤回本轮；从设计目录恢复的只看不撤回，DL-51）；梳理卡旁「按这张图起草」；问答卡「存为设计说明」（图随文字一起存）。只读对话会话、只发意图。
       机制图（DiagramBlock，DL-42）：回答里的图放进与图解同一机制的沙箱 iframe（复用 explainerFrame），说明在图下，单击 data-arch 在画布上选中（草图里选中当前张的框），被拒的只出原因；设计说明预览里的图段同用它。
     codeRefs: [src/components/dock/DialogueDoc.vue, src/components/dock/ProposalCard.vue, src/components/dock/DiagramBlock.vue]
 
@@ -104,8 +104,8 @@ modules:
     responsibility: |
       agent 子进程管理（DA-11，DL-18；ADR-0063 决策 11）：命令可配——缺省 claude 命令行（-p、stream-json、只读工具集 Read / Grep / Glob 加架构台 MCP 的只读查询、--add-dir 架构台目录），ARCH_AGENT_COMMAND 换成别的命令（测试用假 agent）；工作目录 = 被描述项目的源码根；环境变量里像密钥的一律不传；
       一个对话会话同时只有一轮；超时（ARCH_AGENT_TIMEOUT_MS）视同停止；停止 = 终止整个进程组、这一轮不落；非零退出出错误事件；不合法的产出整轮拒绝；结构化块攒到结束才一次交出，文本片段随到随推；claude 的 stream-json 由适配器翻译成薄协议。
-      一轮的接入（agentTurn）：校验请求、读描述构造上下文包（代码事实摘要取架构治理的 impact）、贴图落到临时目录（设计里的落到设计目录）、起子进程；重讲的收尾交给重讲落盘；设计里的对话随设计落盘（designs/<设计>/dialogue/），当前版本上的不落。
-      端点由 ModelSource 插件挂载：POST /agent/<项目>/turn、/agent/<项目>/stop，只收同源 JSON；推送 `arch-agent:event`。
+      一轮的接入（agentTurn）：校验请求、读描述构造上下文包（代码事实摘要取架构治理的 impact）、贴图落到临时目录（设计里的落到设计目录）、起子进程；重讲的收尾交给重讲落盘；设计里的对话随设计落盘（designs/<设计>/dialogue/），当前版本上的不落；页面算出的提议卡结果由 recordOutcome 补记进同一份转录（DL-51）。
+      端点由 ModelSource 插件挂载：POST /agent/<项目>/turn、/agent/<项目>/stop、/agent/<项目>/outcome，只收同源 JSON；推送 `arch-agent:event`。
     principle: |
       - **三种产出都不直接写文件**：问只读；重讲的题解与讲法要求由架构台判别后写；改（波 2）的编辑操作由架构台应用到编辑会话。
       - **自动化不调真实 claude**：单测与 E2E 一律用假 agent（scripts/agent/fake-agent.mjs），真实 claude 只由人手动走查。
@@ -147,7 +147,7 @@ relations:
     from: access.model-source
     to: access.agent.process
     type: commands
-    description: 'ModelSource 插件交给 agent 子进程：挂 POST /agent/<项目>/turn、/stop 两个端点，createAgentRunner 起子进程、startTurn 起一轮；子进程的事件经插件推送 arch-agent:event'
+    description: 'ModelSource 插件交给 agent 子进程：挂 POST /agent/<项目>/turn、/stop、/outcome 三个端点，createAgentRunner 起子进程、startTurn 起一轮、recordOutcome 补记提议卡结果；子进程的事件经插件推送 arch-agent:event'
     purpose: '起停对话的子进程并推送输出'
   - id: rel.dl.source-service
     from: access.model-source

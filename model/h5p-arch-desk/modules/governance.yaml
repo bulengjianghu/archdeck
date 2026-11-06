@@ -365,6 +365,7 @@ relations:
   - {id: rel.gv.facts-ports, from: state.desk.facts, to: model.governance.ports, type: queries, description: 架构治理派生（desk.facts）向端口面板取：portEntry / portPanel 取端口面板与端口记号的数据（K11、L13），portIssues 取端口孤立（U14）, purpose: 取端口面板、端口记号与孤立 }
   - { id: rel.gv.ports-facts, from: model.governance.ports, to: model.governance.facts, type: queries, description: 端口面板向事实比对取：调用 portOwner 找端口的定义模块、related 判使用者是否在定义模块子树外、isTarget 排除目标态（K11、U14）, purpose: 找定义模块、判使用者在子树外 }
   - { id: rel.gv.report-ports, from: model.governance.report, to: model.governance.ports, type: queries, description: 治理报告与门禁向端口面板取：调用 portIssues 把端口孤立并入报告的问题（U14）, purpose: 把端口孤立并入报告问题 }
+  - { id: rel.gv.rework-gate, from: model.rework, to: model.intent.check, type: queries, description: 返工清单向草图核验取：对当前版本的核验调用 gateSeverity，已认可未归档设计的偏差按门禁口径降为提醒（DL-45）, purpose: 让问题页签与命令行、lint:model 同口径 }
   - { id: rel.gv.rework-ports, from: model.rework, to: model.governance.ports, type: queries, description: 返工清单向端口面板取：调用 portIssues 把端口孤立列为返工项（一个端口一个根因，U14）, purpose: 把端口孤立列为返工项 }
   - { id: rel.gv.dispatch-port, from: present.panel.dispatch, to: present.panel.port, type: commands, description: 面板分派交给端口面板：选中端口时渲染 PortPanel（L13、K11）, purpose: 选中端口时显示端口面板 }
   - { id: rel.gv.module-port, from: present.panel.module, to: present.panel.port, type: commands, description: 模块面板交给端口面板：渲染「端口」一节 ModulePorts（K11）, purpose: 在模块面板列出它的端口 }
