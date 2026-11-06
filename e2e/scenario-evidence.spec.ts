@@ -10,19 +10,24 @@ test('打开自身的场景：面板有「证据」一节，单击文件在资�
   const side = page.getByTestId('dock-step-side')
   const section = side.locator('.scenario-panel .section').filter({ has: page.locator('h3', { hasText: '证据' }) })
   // 代码事实晚到时证据清单才出现；「证据与清单」折叠块缺省关闭——重试到清单真正可见（并发负载下首读源码可能超过 10s）
-  await expect(async () => {
+  // 合并复跑：面板随描述重新加载重绘后折叠块回到关闭——展开写成函数，单击证据的重试里也先展开
+  const unfold = async () => {
     const foldSummary = side.locator('[data-testid="check-lists-fold"]').first()
     if (await foldSummary.count()) {
       const details = foldSummary.locator('xpath=..')
       if ((await details.evaluate(el => (el as unknown as { open: boolean }).open)) !== true) await foldSummary.click()
     }
+  }
+  await expect(async () => {
+    await unfold()
     await expect(section.getByRole('button', { name: 'tests/acceptance/run-perspective.test.ts' })).toBeVisible({ timeout: 3_000 })
   }).toPass({ timeout: 30_000 })
   await expect(section.locator('.missing')).toHaveCount(0)
   // 收尾复跑（第二十一轮，第二十轮已知偶发再收紧）：负载下别的用例改描述，面板随重新加载重绘、按钮被换掉，单击一直重试到用例超时——滚到、短超时单击、看标签，按 toPass 重试
   const evidence = section.getByRole('button', { name: 'e2e/run-default.spec.ts' })
   await expect(async () => {
-    await evidence.evaluate(el => el.scrollIntoView({ block: 'center' }))
+    await unfold()
+    await evidence.evaluate(el => el.scrollIntoView({ block: 'center' }), undefined, { timeout: 3_000 })
     await evidence.click({ timeout: 3_000 })
     await expect(page.locator('.dock .tab.on')).toContainText('run-default.spec.ts', { timeout: 3_000 })
   }).toPass({ timeout: 30_000 })
