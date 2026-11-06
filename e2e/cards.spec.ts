@@ -45,17 +45,21 @@ test('CD-2 悬浮（第二十轮 §4 改写）：放不下时浮在画布右侧�
   // 抽屉上任意一点都归抽屉（实底、不透传）
   const inside = await page.evaluate(`!!document.elementFromPoint(${pr.x + pr.width / 2}, ${pr.y + pr.height / 2})?.closest('aside.props')`)
   expect(inside).toBe(true)
-  // 画布左半边照常接指针：单击空白取消选中
+  // 画布左半边照常接指针：单击落在哪就选中哪（空白取消选中）。
+  // 收尾 S0：第二十轮已知偶发——量点与单击之间画布还在挪（浮层出现后的适应），单击落到了别处；先等画布静止，量点与单击按 toPass 重试一次
   const canvas = await rect(page, 'main.canvas-area')
   const cx = canvas.x + 60
   const cy = canvas.y + canvas.height / 2
-  const hit = (await page.evaluate(`(() => {
-    const el = document.elementFromPoint(${cx}, ${cy})
-    return { vueflow: !!el?.closest('.vue-flow'), node: el?.closest('.vue-flow__node')?.getAttribute('data-id') ?? null }
-  })()`)) as { vueflow: boolean; node: string | null }
-  expect(hit.vueflow).toBe(true)
-  await page.mouse.click(cx, cy)
-  await expect.poll(() => query(page).get('sel')).toBe(hit.node ? `m:${hit.node}` : null)
+  await expect(async () => {
+    await waitSettled(page)
+    const hit = (await page.evaluate(`(() => {
+      const el = document.elementFromPoint(${cx}, ${cy})
+      return { vueflow: !!el?.closest('.vue-flow'), node: el?.closest('.vue-flow__node')?.getAttribute('data-id') ?? null }
+    })()`)) as { vueflow: boolean; node: string | null }
+    expect(hit.vueflow).toBe(true)
+    await page.mouse.click(cx, cy)
+    await expect.poll(() => query(page).get('sel'), { timeout: 3_000 }).toBe(hit.node ? `m:${hit.node}` : null)
+  }).toPass({ timeout: 20_000 })
 })
 
 test('CD-3 身份卡粘顶（ADR-0061）：滚到底身份卡仍钉在抽屉上沿；选中即自动打开辅助栏的理解页', async ({ page }) => {

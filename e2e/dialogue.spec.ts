@@ -5,7 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, openDesk, query } from './helpers'
+import { graphNode, LOAD_BUDGET, openDesk, query } from './helpers'
 
 const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
 const dialogue = (page: Page) => dock(page).getByTestId('dialogue')
@@ -47,15 +47,16 @@ test('停止按钮终止假 agent 的延迟剧本：这一轮什么都不落，�
   await openDesk(page, '/p/h5p-arch-desk?sel=m:state')
   await discuss(page).click()
   await say(page, '#timeout 想得久一点')
-  await expect(dialogue(page).getByTestId('msg-live')).toContainText('AI 正在回答')
+  // 收尾 S0：等回答卡与停止的预算与 sketch-dialogue 同口径（LOAD_BUDGET），负载下服务端读描述就要好几秒
+  await expect(dialogue(page).getByTestId('msg-live')).toContainText('AI 正在回答', { timeout: LOAD_BUDGET })
   await dialogue(page).getByTestId('dialogue-stop').click()
-  await expect(dialogue(page).getByTestId('msg-stopped')).toContainText('已停止')
+  await expect(dialogue(page).getByTestId('msg-stopped')).toContainText('已停止', { timeout: LOAD_BUDGET })
   await expect(dialogue(page).getByTestId('msg-live')).toHaveCount(0)
   await expect(dialogue(page).getByTestId('dialogue-stop')).toHaveCount(0)
   await expect(dialogue(page).getByTestId('msg-agent')).toHaveCount(0)
   // 停止后可再发
   await say(page, '再问一次')
-  await expect(dialogue(page).getByTestId('answer-card')).toBeVisible()
+  await expect(dialogue(page).getByTestId('answer-card')).toBeVisible({ timeout: LOAD_BUDGET })
 })
 
 test('崩溃出错误卡，会话不受影响', async ({ page }) => {

@@ -3,10 +3,20 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { expect, type Locator, type Page } from '@playwright/test'
 
-/** 打开 `#/p/...`（hash 路由），等结构图出现节点 */
+/**
+ * 负载预算（第二十一轮收尾 S0）：多会话并行时开发服务器读描述、现编译组件要好几秒；与 agent 一轮的等待同口径（ARCH_AGENT_TIMEOUT_MS = 20s 留余量）
+ */
+export const LOAD_BUDGET = 25_000
+
+/** 打开 `#/p/...`（hash 路由），等结构图出现节点；负载下第一次没等到就重新加载再等（toPass，总预算 LOAD_BUDGET 之上再给一次重载的余量） */
 export async function openDesk(page: Page, hashPath: string) {
+  const node = page.locator('.vue-flow__node').first()
   await page.goto(`./#${hashPath}`)
-  await expect(page.locator('.vue-flow__node').first()).toBeVisible({ timeout: 20_000 })
+  let tries = 0
+  await expect(async () => {
+    if (tries++ > 0) await page.reload()
+    await expect(node).toBeVisible({ timeout: 15_000 })
+  }).toPass({ timeout: LOAD_BUDGET + 10_000, intervals: [0] })
 }
 
 /** TB-6：打开导航顶部的项目菜单（版本、编辑骨架、新建设计、所有项目）；已打开时不动 */
@@ -183,9 +193,15 @@ export async function sketchOn(page: Page, design: string, opts: { mount?: strin
   // 上一次没清干净（中途被杀）的同名设计先删掉
   fs.rmSync(dir, { recursive: true, force: true })
   for (const f of extra) fs.rmSync(f, { force: true })
-  const r = await page.request.post(`./write/h5p-arch-desk/designs`, { data: { id: design, name: `E2E ${design}`, goal, mount } })
-  expect(r.ok()).toBe(true)
-  await openDesk(page, `/p/h5p-arch-desk/d/${design}/sketch`)
-  await expect(page.locator('.sketch-canvas')).toBeVisible()
+  // 建好设计之后的任何一步失败都先清理再抛（收尾 S0：负载下打开画布超时曾留下临时设计）
+  try {
+    const r = await page.request.post(`./write/h5p-arch-desk/designs`, { data: { id: design, name: `E2E ${design}`, goal, mount } })
+    expect(r.ok()).toBe(true)
+    await openDesk(page, `/p/h5p-arch-desk/d/${design}/sketch`)
+    await expect(page.locator('.sketch-canvas')).toBeVisible()
+  } catch (e) {
+    await restore()
+    throw e
+  }
   return { restore, dir, yaml: () => fs.readFileSync(path.join(dir, 'design.yaml'), 'utf8') }
 }
