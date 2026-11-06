@@ -1,6 +1,8 @@
 {
-  "updatedAt": "2026-10-30T01:18:21.285Z",
+  "updatedAt": "2026-11-06T01:10:56.799Z",
   "files": {
+    "designs/dialogue-layers/design.yaml": "2eb044ff675b1fa7c4620dec9f8c805ad63ed0e7",
+    "designs/dialogue-layers/sketches/state.desk.edit.dialogue.yaml": "b513ce846499d4a5ae955667856b3e38b8ae8741",
     "designs/phase2-dynamic/design.yaml": "6516452b564ba19af25d3966b1d462226c04bc50",
     "designs/phase2-dynamic/sketches/model.scenario.yaml": "a995723ac57e941231284740095a28894699c7b8",
     "designs/phase2-dynamic/sketches/present.panel.yaml": "26a2d38f7dd099ec041f3939ea6ddec89eaf7f85",

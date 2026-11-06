@@ -1,0 +1,13 @@
+# 设计「对话会话的下一层」（人拥有）：目标、状态、基线与各轮的评审意见；每轮说明在 r<N>/revision.yaml（E8）
+design:
+  id: dialogue-layers
+  name: 对话会话的下一层
+  status: accepted
+  goal: 把「对话会话」（state.desk.edit.dialogue，现在是一个 500 行的文件 src/state/desk/dialogue.ts）的下一层画成它实际的子结构：会话的值与转移、锚点、端口、卡片派生、协调，加上已有的 agent 通道同步；认可后按任务单把文件拆开、重新生成描述，验证第二十一轮的「起草 → 认可 → 任务单 → 归档」闭环（波 4 T4.2）。
+  base:
+    commit: 8d708126e9fd39f89eb25a65a2fa98a2958d35b7
+    generatedAt: 2026-11-06
+  approval:
+    at: 2026-11-06
+    sketches:
+      sketches/state.desk.edit.dialogue.yaml: b513ce846499d4a5ae955667856b3e38b8ae8741

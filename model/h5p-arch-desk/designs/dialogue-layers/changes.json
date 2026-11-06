@@ -1,0 +1,45 @@
+{
+  "nextNumber": 6,
+  "items": [
+    {
+      "n": 1,
+      "key": "added:module:state.desk.edit.dialogue.anchor",
+      "kind": "added",
+      "summary": "新增 锚点",
+      "round": 1,
+      "by": "ai"
+    },
+    {
+      "n": 2,
+      "key": "added:module:state.desk.edit.dialogue.ports",
+      "kind": "added",
+      "summary": "新增 对外端口",
+      "round": 1,
+      "by": "ai"
+    },
+    {
+      "n": 3,
+      "key": "added:module:state.desk.edit.dialogue.state",
+      "kind": "added",
+      "summary": "新增 会话的值与转移",
+      "round": 1,
+      "by": "ai"
+    },
+    {
+      "n": 4,
+      "key": "added:module:state.desk.edit.dialogue.views",
+      "kind": "added",
+      "summary": "新增 卡片派生",
+      "round": 1,
+      "by": "ai"
+    },
+    {
+      "n": 5,
+      "key": "changed:module:state.desk.edit.dialogue.transport",
+      "kind": "changed",
+      "summary": "修改 agent 通道同步：responsibility",
+      "round": 1,
+      "by": "human"
+    }
+  ]
+}
