@@ -287,6 +287,7 @@ modules:
       信息条的动作区（F-61）：提交版本与设计轮次为「说明」；草图（打开即编辑）为保存（⌘S）、撤销 / 重做图标、保存并交给 AI（没有未保存改动时为「交给 AI」；全设计有格式错误或语义提示时禁用并悬停说明原因，F-52）、说明（全设计变更清单按血缘分组的弹层，F-53）、退出（有未保存改动时三选保存 / 放弃 / 取消，回到进入草图之前的版本，#20b）；保存结果与失败原因的提示；
       文件已在外部改动时整个动作区换成横幅「重新加载并重放 / 放弃本次改动」，重放有失败时列出失败的操作；窄屏只剩图标。另含全设计变更清单的分组组件（ChangeGroups，对比弹层共用）与草图下共用的确认 / 三选对话框（useEditDialog）。
       设计的草图上（波 3，DL-38）：保存 · 放弃（本次未保存的改动）· 撤销 / 重做 · 校验（全设计的格式错误与语义提示）· 认可 ▾——先开认可前总览（AcceptDialog：带号的改动、影响面按当前描述估、涉及的场景），确认才写；下拉保留「交给 AI 展开一轮」作可选预览；已认可时只剩「回到起草」（二次确认）；已实现 / 已放弃只看。持久草图仍是「保存并交给 AI」。
+      已认可时（波 4，DL-50）：「回到起草 · 归档」，三关全绿「归档」才亮、灰时悬停给第一道没过的关；ArchiveDialog 归档预览——三关、「认可时估牵动 N · 实际改了 N′」与差、将写确认记录的模块数、晋升的持久草图，确认后写入。
     codeRefs: [src/components/infobar/ActionZone.vue, src/components/infobar/AcceptDialog.vue, src/components/infobar/ArchiveDialog.vue, src/components/infobar/ChangeGroups.vue, src/components/edit/EditDialog.vue, src/components/edit/useEditDialog.ts, src/components/edit/leave.ts]
   - id: present.version.compare
     name: 对比区

@@ -33,18 +33,51 @@ modules:
     parent: state.desk.edit
     kind: component
     responsibility: |
-      对话会话（DA-1、DA-2、DA-11，DL-12）：DialogueState 一个值——转录（每条带当时的锚点：用户、回答、错误、已停止）、锚点、视角、运行状态（空闲 / 运行中的轮次与流式片段）、排队的输入、草稿、模式（问 / 重讲）、会话编号；
-      只经纯转移函数 dialogueTransition 改变：发送（空闲开一轮，运行中进队列）、停止（这一轮不落，排队的退回草稿）、换锚点与换视角（转录不变）、agent 事件（片段累加、说完落一条并接着发队首、出错记错误卡、超时视同停止，别的轮次与停止后的迟到事件不认）；重讲只对模块，锚点不是模块时按「问」发；
-      协调（createDialogue）：选中 / 视角 → 换锚点；进入新的运行轮次 → 经注入的 AgentTransport 发一轮，停止 → 通知子进程；推送的事件 → 转移；给呈现层派生引用原文、梳理卡与锚点文字。当前版本上的会话只在内存。
-      机制图（DL-41–DL-43）：一轮说完时检查回答里的图块（当前版本上查描述，草图里查当前张），结果随条目留下、之后不重判；给呈现层派生图的显示数据与引用原文、存为设计说明的围栏块、设计说明正文的文字段与图段。
+      对话会话（DA-1、DA-2、DA-11，DL-12）：会话是一个值、规则是纯函数、协调只翻译（设计 dialogue-layers 定下的下一层）——
+      会话的值与转移（state）、锚点（anchor）、对外端口（ports）、卡片派生（views）、agent 通道同步（transport）各是一个子模块；
+      它自己是协调者 createDialogue：选中 / 视角 → 换锚点；进入新的运行轮次 → 经注入的 AgentTransport 发一轮，停止 → 通知子进程；推送的事件 → 转移；
+      一轮说完时按「当前版本查描述、草图里查当前张」检查机制图（DL-41）、草图里把改动块交给编辑分组（DL-21）；给呈现层派生引用原文、梳理卡、图与设计说明图段、锚点文字。
+      当前版本上的会话只在内存，设计里的随设计落盘（接入层按请求带的设计写）。
     abstraction: 会话是值、规则是纯函数、协调只翻译——与编辑会话同一套分法；轮次 = 会话编号 + 序号，多个页面的推送不串。
-    codeRefs: [src/state/desk/dialogue.ts]
+    codeRefs: [src/state/desk/dialogue/index.ts]
+  - id: state.desk.edit.dialogue.state
+    name: 会话的值与转移
+    summary: 对话会话这一个值与改变它的纯转移
+    parent: state.desk.edit.dialogue
+    kind: component
+    responsibility: |
+      会话的值（DialogueState：转录——每条带当时的锚点：用户、回答、错误、已停止；锚点、视角、运行状态、排队的输入、草稿、模式、状态锁）与纯转移 dialogueTransition：
+      发送（空闲开一轮，运行中进队列）、停止（这一轮不落，排队的退回草稿）、换锚点与换视角（转录不变）、改 / 问 / 重讲切换与锁定（DL-19、DL-34）、
+      agent 事件（片段累加、说完落一条并接着发队首、出错记错误卡、超时视同停止，别的轮次与停止后的迟到事件不认）；modeFor：重讲只对模块。
+      不发请求、不订阅推送、不派生显示数据。
+    codeRefs: [src/state/desk/dialogue/state.ts]
+  - id: state.desk.edit.dialogue.anchor
+    name: 锚点
+    summary: 这一问挂在哪：由选中推出锚点、判同、给锚点条文字
+    parent: state.desk.edit.dialogue
+    kind: component
+    responsibility: 由选中、步骤与当前张推出锚点（anchorOf；草图里总有锚点：选中的框或当前张的挂载点），判断两个锚点是否相同（sameAnchor），给锚点条生成文字（anchorText）。不记录会话，也不决定什么时候换锚点。
+    codeRefs: [src/state/desk/dialogue/anchor.ts]
+  - id: state.desk.edit.dialogue.ports
+    name: 对外端口
+    summary: 对话与外界的边界：传输端口、一轮请求与草图那一面
+    parent: state.desk.edit.dialogue
+    kind: component
+    responsibility: 声明对话与外界的边界——agent 传输端口 AgentTransport 与一轮请求 AgentTurnRequest、草图那一面 DialogueSketchPort（在不在草图里、当前张、草图上下文、把改动块应用到编辑会话、状态锁、当前张有没有某个框），以及没注入时的空实现 NO_AGENT。不含任何实现（传输由 agent 通道同步实现，草图那一面由编辑分组给）。
+    codeRefs: [src/state/desk/dialogue/ports.ts]
+  - id: state.desk.edit.dialogue.views
+    name: 卡片派生
+    summary: 从描述与回答块派生给对话标签的显示数据
+    parent: state.desk.edit.dialogue
+    kind: component
+    responsibility: 从描述与回答块派生给呈现层的数据——引用原文（citeViews，解析不了的标「引用无效」）、机制图检查（checkDiagrams，只拒那一块）、梳理卡（digestOf），以及图与设计说明图段的显示数据类型（DiagramView、NoteSegmentView）。规则在对话的模型里，这里只调用；不改会话。
+    codeRefs: [src/state/desk/dialogue/views.ts]
   - id: state.desk.edit.dialogue.transport
     name: agent 通道同步
     summary: 把一轮的请求发给开发服务器，把推送交回会话
     parent: state.desk.edit.dialogue
     kind: component
-    responsibility: 同步适配器（DA-11）：AgentTransport 的 HTTP 实现——POST /agent/<项目>/turn 起一轮、/agent/<项目>/stop 停止；订阅开发服务器的推送 `arch-agent:event`，只把本项目的事件交回对话会话。只搬运，不改会话。
+    responsibility: AgentTransport 的 HTTP 实现（设计 dialogue-layers：发一轮、停止，订阅开发服务器推送的 agent 事件交回会话；不碰会话的值）。同步适配器（DA-11）：AgentTransport 的 HTTP 实现——POST /agent/<项目>/turn 起一轮、/agent/<项目>/stop 停止；订阅开发服务器的推送 `arch-agent:event`，只把本项目的事件交回对话会话。只搬运，不改会话。
     codeRefs: [src/state/sync/agent.ts]
 
   # ── 呈现层：对话标签 ──
@@ -95,8 +128,20 @@ relations:
     from: state.desk.edit.dialogue
     to: model.review.dialogue
     type: queries
-    description: '对话会话向对话的模型取：resolveCitation 按 {模块, 字段} 填引用原文、digestView 算梳理卡的渲染数据、checkDiagram 与 diagramDescribedRefs 检查机制图并填图里的引用原文、diagramFence / splitNoteDiagrams 写读设计说明的图段，派生给对话标签'
-    purpose: '填引用原文与梳理卡给对话标签'
+    description: '对话会话（协调者）向对话的模型取：一轮说完时 diagramDescribedRefs / describedModule 填机制图的引用原文，diagramFence / splitNoteDiagrams / diagramSvgReasons / diagramAspect 写读设计说明的图段，派生给对话标签'
+    purpose: '给对话标签派生图与设计说明图段'
+  - id: rel.dl.state-anchor
+    from: state.desk.edit.dialogue.state
+    to: state.desk.edit.dialogue.anchor
+    type: queries
+    description: '会话的值与转移向锚点取：dialogueTransition 在换锚点、换视角时调 sameAnchor 判断锚点是否真的变了，没变就原样返回'
+    purpose: '换锚点时判断是否真的变了'
+  - id: rel.dl.views-model
+    from: state.desk.edit.dialogue.views
+    to: model.review.dialogue
+    type: queries
+    description: '卡片派生向对话的模型取：citeViews 调 resolveCitation 填引用原文，checkDiagrams 调 checkDiagram 检查机制图，digestOf 调 digestView 算梳理卡'
+    purpose: '按对话的模型的规则派生卡片数据'
   - id: rel.dl.source-process
     from: access.model-source
     to: access.agent.process
