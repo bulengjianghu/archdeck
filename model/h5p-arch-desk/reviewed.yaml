@@ -362,3 +362,38 @@ reviewed:
         草图画布下的属性面板（SK-17、SK-18）：顶部两级校验（红色格式错误、黄色语义提示，单击定位，跨草图也能定位）、常驻「待重连 N 条」、不进两级的提示、本张的两个核验数（相对当前版本 N 处偏差 / 相对基线改了 N 处，可展开清单；持久草图只有前者）与面板内提示；
         无选中时为父模块——原则可编辑、「带入现有原则」，名称与职责只读（上一层没写时显示当前版本的文字并标出来源）；根草图无选中时为设计概览（全设计计数与各张草图）；多选时合并 / 删除所选；
         层：名称、ID、抽象原则、包含 / 不包含、可依赖的层、删层；模块：名称、ID（前缀与唯一校验）、职责、核心、封闭、代码落点、对外接口、原则、血缘只读（来自 A、B · 合并 / 拆分 / 改 ID / 移动）、「进入下一层 →」；关系：类型、说明、经由接口；引用节点：当前版本里的职责与位置、折叠进来的精确关系、「在模型里查看」「打开挂在它身上的草图」；元信息：挂载点、lifetime、supersedes。
+  - module: state.desk.edit.dialogue.transport
+    at: 2026-11-06
+    hash: 727a00508c01be17
+    source: sketch:dialogue-layers
+    summary:
+      responsibility: AgentTransport 的 HTTP 实现（设计 dialogue-layers：发一轮、停止，订阅开发服务器推送的 agent 事件交回会话；不碰会话的值）。同步适配器（DA-11）：AgentTransport 的 HTTP 实现——POST /agent/<项目>/turn 起一轮、/agent/<项目>/stop 停止；订阅开发服务器的推送 `arch-agent:event`，只把本项目的事件交回对话会话。只搬运，不改会话。
+  - module: state.desk.edit.dialogue.state
+    at: 2026-11-06
+    hash: fcb5be62a7f06233
+    source: sketch:dialogue-layers
+    summary:
+      responsibility: |-
+        会话的值（DialogueState：转录——每条带当时的锚点：用户、回答、错误、已停止；锚点、视角、运行状态、排队的输入、草稿、模式、状态锁）与纯转移 dialogueTransition：
+        发送（空闲开一轮，运行中进队列）、停止（这一轮不落，排队的退回草稿）、换锚点与换视角（转录不变）、改 / 问 / 重讲切换与锁定（DL-19、DL-34）、
+        agent 事件（片段累加、说完落一条并接着发队首、出错记错误卡、超时视同停止，别的轮次与停止后的迟到事件不认）；modeFor：重讲只对模块。
+        restore（DL-51）：落盘的各轮按 transcriptEntries 还原成转录，只在转录为空、空闲时整份放进来。
+        不发请求、不订阅推送、不派生显示数据。
+  - module: state.desk.edit.dialogue.anchor
+    at: 2026-11-06
+    hash: 37dff86112180229
+    source: sketch:dialogue-layers
+    summary:
+      responsibility: 由选中、步骤与当前张推出锚点（anchorOf；草图里总有锚点：选中的框或当前张的挂载点），判断两个锚点是否相同（sameAnchor），给锚点条生成文字（anchorText）。不记录会话，也不决定什么时候换锚点。
+  - module: state.desk.edit.dialogue.ports
+    at: 2026-11-06
+    hash: 09d9ed36f75dfb44
+    source: sketch:dialogue-layers
+    summary:
+      responsibility: 声明对话与外界的边界——agent 传输端口 AgentTransport 与一轮请求 AgentTurnRequest、草图那一面 DialogueSketchPort（在不在草图里、当前张、草图上下文、把改动块应用到编辑会话、状态锁、当前张有没有某个框），以及没注入时的空实现 NO_AGENT。不含任何实现（传输由 agent 通道同步实现，草图那一面由编辑分组给）。
+  - module: state.desk.edit.dialogue.views
+    at: 2026-11-06
+    hash: db35e12ba87a3bd9
+    source: sketch:dialogue-layers
+    summary:
+      responsibility: 从描述与回答块派生给呈现层的数据——引用原文（citeViews，解析不了的标「引用无效」）、机制图检查（checkDiagrams，只拒那一块）、梳理卡（digestOf），以及图与设计说明图段的显示数据类型（DiagramView、NoteSegmentView）。规则在对话的模型里，这里只调用；不改会话。
