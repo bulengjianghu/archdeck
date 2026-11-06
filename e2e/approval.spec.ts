@@ -197,14 +197,17 @@ test('放弃：设计面板「放弃设计」二次确认后为「已放弃」�
   await expect(page.getByTestId('design-locked')).toHaveText('只看')
   expect(yaml()).toMatch(/status: abandoned/)
   await expect(bar(page).getByRole('button', { name: '认可', exact: true })).toHaveCount(0)
-  // 项目卡片不再列出
-  await page.goto('./')
-  const card = page.locator('ul.grid > li', { has: page.locator('code.id', { hasText: /^h5p-arch-desk$/ }) })
-  await expect(card).toBeVisible()
-  await expect(card).not.toContainText('E2E zz-e2e-w3-abandon')
-  // 草图与对话仍可开
+  // 草图与对话仍可开：真的重新加载（从磁盘读回已放弃的设计）
+  // 收尾复跑：先开草图、最后才去项目卡片页——卡片页在任一描述变化时都重取 projects.json（全部项目的健康度，开发服务器上同步算），
+  // 4 个 worker 一起写描述时这些请求排队把开发服务器堵住，紧接着开草图的模块与 sketch.json 都等不到
+  await page.reload()
   await openDesk(page, `/p/h5p-arch-desk/d/zz-e2e-w3-abandon/sketch`)
   await expect(page.locator('.sketch-canvas')).toBeVisible()
   await expect(dialogue(page)).toBeVisible()
   await expect(dialogue(page).getByTestId('mode-badge')).toHaveText('只问')
+  // 项目卡片不再列出（卡片页读 projects.json，负载下要好几秒）
+  await page.goto('./')
+  const card = page.locator('ul.grid > li', { has: page.locator('code.id', { hasText: /^h5p-arch-desk$/ }) })
+  await expect(card).toBeVisible({ timeout: LOAD_BUDGET })
+  await expect(card).not.toContainText('E2E zz-e2e-w3-abandon')
 })
