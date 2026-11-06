@@ -30,35 +30,64 @@ const REVIEW_TEXT: Record<string, string> = { reviewed: '已确认', stale: '需
 
 <template>
   <div v-if="m" class="module-doc" :data-module="module">
-    <div class="fact-head">
-      <h2>{{ m.name }}</h2>
-      <code>{{ m.id }}</code>
-      <NameActions :module="module" place="fact-card" />
-      <span v-if="m.kind" class="badge">{{ m.kind }}</span>
-      <span v-if="m.role === 'core'" class="badge accent">核心</span>
+    <div class="fact" :class="{ paged: withStory }">
+      <div class="fact-head">
+        <h2>{{ m.name }}</h2>
+        <code>{{ m.id }}</code>
+        <NameActions :module="module" place="fact-card" />
+        <span v-if="m.kind" class="badge">{{ m.kind }}</span>
+        <span v-if="m.role === 'core'" class="badge accent">核心</span>
+      </div>
+      <ModuleUnderstand :id="module" />
+      <p class="scenarios" data-testid="fact-scenarios">
+        <template v-if="scenarios.length"
+          >出现在 {{ scenarios.length }} 个场景：<button v-for="s in shown" :key="s" class="link" @click="desk.openScenario(s)">
+            {{ idx.scenarios.get(s)?.name ?? s }}</button
+          ><span v-if="scenarios.length > shown.length" class="more">+{{ scenarios.length - shown.length }}</span></template
+        ><span v-else class="muted">不在任何场景里</span>
+      </p>
+      <p class="health" data-testid="fact-health">
+        <template v-if="violations !== null"
+          >健康：违规 {{ violations }} · 模块环 {{ cycles }} · <span :class="['review', review.status]">{{ REVIEW_TEXT[review.status] ?? review.status }}</span
+          >（核对卡在选中抽屉）</template
+        ><span v-else class="muted">健康：代码事实读取中…</span>
+      </p>
     </div>
-    <ModuleUnderstand :id="module" />
-    <p class="scenarios" data-testid="fact-scenarios">
-      <template v-if="scenarios.length"
-        >出现在 {{ scenarios.length }} 个场景：<button v-for="s in shown" :key="s" class="link" @click="desk.openScenario(s)">
-          {{ idx.scenarios.get(s)?.name ?? s }}</button
-        ><span v-if="scenarios.length > shown.length" class="more">+{{ scenarios.length - shown.length }}</span></template
-      ><span v-else class="muted">不在任何场景里</span>
-    </p>
-    <p class="health" data-testid="fact-health">
-      <template v-if="violations !== null"
-        >健康：违规 {{ violations }} · 模块环 {{ cycles }} · <span :class="['review', review.status]">{{ REVIEW_TEXT[review.status] ?? review.status }}</span
-        >（核对卡在选中抽屉）</template
-      ><span v-else class="muted">健康：代码事实读取中…</span>
-    </p>
     <ExplainerDoc v-if="withStory" class="story" :module="module" />
   </div>
 </template>
 
 <style scoped>
 .module-doc {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 12px 14px;
   font-size: 13.5px;
+}
+
+/* 第二十轮 02-review 缺陷 1：事实卡限高内部滚动，故事（iframe）撑满剩余高度、在 iframe 内滚到底 */
+.fact {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.fact.paged {
+  flex: 0 1 auto;
+  max-height: 55%;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.story {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
 }
 
 .fact-head {
@@ -114,11 +143,5 @@ const REVIEW_TEXT: Record<string, string> = { reviewed: '已确认', stale: '需
 
 .review.reviewed {
   color: var(--ok, var(--text-2));
-}
-
-.story {
-  margin-top: 12px;
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
 }
 </style>

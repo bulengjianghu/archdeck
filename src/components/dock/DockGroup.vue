@@ -10,9 +10,6 @@ import type { DocGroup, DocTab } from '@/state/useDeskState'
 import SourceView from '../source/SourceView.vue'
 import SequenceDoc from './SequenceDoc.vue'
 import ModuleDoc from './ModuleDoc.vue'
-import StepPanel from '../panel/StepPanel.vue'
-import RunSection from '../panel/RunSection.vue'
-import ScenarioPanel from '../panel/ScenarioPanel.vue'
 import { staleText } from '../shared/explainerText'
 import ToolIcon from '../shared/ToolIcon.vue'
 import { docKindView, docLabel, docTip, type DocKindContext } from './docKinds'
@@ -38,13 +35,6 @@ const stale = (t: DocTab) => {
   const st = t.doc.kind === 'explainer' ? desk.explainers.status(t.doc.module) : null
   return st?.stale ? staleText(st) : null
 }
-/** Q4'（round20/01 §6）：运行视角右栏 = 时序图 + 步骤节——选中步骤显示步骤详情，选中其他对象显示「这次流程里它做了什么」（V6 新家） */
-const stepSel = computed(() => desk.selected.value?.kind === 'step')
-const scSel = computed(() => desk.selected.value?.kind === 'scenario')
-const runSel = computed(() => {
-  const k = desk.selected.value?.kind
-  return k === 'module' || k === 'relation' || k === 'edge' || k === 'actor' || k === 'port'
-})
 const tip = (t: DocTab) => docTip(t.doc, kindCtx) + (stale(t) ? `（${stale(t)}）` : '') + (t.preview ? '（预览：双击固定）' : '')
 </script>
 
@@ -93,15 +83,8 @@ const tip = (t: DocTab) => docTip(t.doc, kindCtx) + (stale(t) ? `（${stale(t)}�
       <template v-if="active">
         <SourceView v-if="active.doc.kind === 'source'" :key="active.id" :path="active.doc.path" :line="active.doc.line ?? undefined" />
         <template v-else-if="active.doc.kind === 'sequence'">
-          <template v-if="desk.perspective.value === 'run'">
-            <SequenceDoc class="seq" />
-            <!-- V6 新家（round20/01 §6）：这次怎么走（时序图）与这一步 / 这个对象在流程里做了什么（步骤节）同栏 -->
-            <div class="step-side" data-testid="dock-step-side">
-              <StepPanel v-if="stepSel" :key="`step:${desk.selected.value!.id}`" />
-              <ScenarioPanel v-else-if="scSel" :key="`sc:${desk.selected.value!.id}`" />
-              <RunSection v-else-if="runSel" :key="`run:${desk.selected.value?.id ?? ''}`" />
-            </div>
-          </template>
+          <!-- 步骤节在 DockPane 常驻（第二十轮 §6） -->
+          <SequenceDoc v-if="desk.perspective.value === 'run'" />
           <p v-else class="empty">没有打开的场景</p>
         </template>
         <!-- 第二十轮读先方案：辅助栏的一页 = 事实卡（架构台渲染）+ 故事（有图解才有）。exp 与 fact 两种标签同一渲染，事实卡在页顶 -->
@@ -238,20 +221,5 @@ const tip = (t: DocTab) => docTip(t.doc, kindCtx) + (stale(t) ? `（${stale(t)}�
   text-align: center;
   color: var(--text-3);
   font-size: 12.5px;
-}
-
-/* Q4'：步骤节钉在时序图下方，不把回放参照挤走 */
-.seq {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.step-side {
-  flex: none;
-  max-height: 45%;
-  overflow: auto;
-  border-top: 1px solid var(--border);
-  padding: 8px 10px;
-  background: var(--surface);
 }
 </style>

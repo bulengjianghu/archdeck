@@ -4,10 +4,11 @@
  * 两个项目的未解释的交互都已为 0（ADR-0026），h5player 的违规都在基线内（不画线）：叠加线用例拦截事实端点去掉基线，让违规成为「无基线的全部违规」画出来（K9）。
  */
 import { expect, test } from '@playwright/test'
-import { openCheckList, openDesk, query, setSwitch } from './helpers'
+import { openCheckList, openDesk, query, setSwitch, openPanel } from './helpers'
 
 test('开启代码事实：未证实的边标「未证实」、仍是实线，已证实的不标 ✓（K9、L10、L26）', async ({ page }) => {
   await openDesk(page, '/p/h5player')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await openCheckList(page) // PC-10：系统核对卡的三行结论与折叠清单（ADR-0059）
   await expect(page.locator('.panel [data-check="verify"]')).toContainText(/条关系全部被代码证实|条关系中 \d+ 条未证实/)
   await expect(page.locator('.panel [data-check="governance"]')).toContainText(/违规/)
@@ -24,12 +25,14 @@ test('开启代码事实：未证实的边标「未证实」、仍是实线，�
   await expect(page.locator('.vue-flow__edge-text', { hasText: '✓' })).toHaveCount(0)
   // 普通层次：单条未证实的边也写字；一条边只有一个 pill
   await openDesk(page, '/p/h5player?level=infra.framework')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(page.locator('.vue-flow__edge-text', { hasText: '未证实' }).first()).toBeAttached()
   for (const e of await page.locator('.vue-flow__edge-route').all()) expect(await e.locator('.vue-flow__edge-text').count()).toBeLessThanOrEqual(1)
 })
 
 test('K5a：Projector 文件内概念子模块之间的关系，面板标「概念拆分，同文件」', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=model.projector&sel=r:rel.ad.overview-endpoints')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(page.locator('.panel')).toContainText('不判定：概念拆分，同文件')
 })
 
@@ -39,6 +42,7 @@ test('h5player：没有基线时违规画成叠加线；单击叠加线选中它
     await route.fulfill({ response: res, json: { ...(await res.json()), baseline: null } })
   })
   await openDesk(page, '/p/h5player')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await openCheckList(page) // PC-10：系统核对卡的三行结论与折叠清单（ADR-0059）
   await expect(page.locator('.panel [data-check="verify"]')).toContainText(/条关系全部被代码证实|条关系中 \d+ 条未证实/)
   await expect(page.locator('.panel [data-check="governance"]')).toContainText(/违规/)
@@ -52,8 +56,10 @@ test('h5player：没有基线时违规画成叠加线；单击叠加线选中它
   // 根层的违规都落在已有的层间边上（只加红晕）；Framework 层有没有关系边的违规（外部的 app → kernel），画成叠加线
   // L44（第十四轮 F12）：一端在框外的叠加线同框外的交互边，静息态只在画布角计数，选中外部模块（聚焦边界节点）时画出
   await openDesk(page, '/p/h5player?level=infra.framework')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(page.getByTestId('overlay-corner')).toContainText(/框外代码依赖 \d+ 条（违规 \d+）/)
   await openDesk(page, '/p/h5player?level=infra.framework&sel=m:app')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   const overlay = page.locator('.vue-flow__edge[data-id^="dep:"] .vue-flow__edge-text', { hasText: '违规' }).first()
   await expect(overlay).toBeVisible()
   // L18：代码依赖叠加线是依赖——虚线
@@ -66,6 +72,7 @@ test('h5player：没有基线时违规画成叠加线；单击叠加线选中它
 
 test('运行视角下图例与「显示 ▾」都不出现「代码事实」开关（L9）', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await page.getByRole('button', { name: /^显示 ▾/ }).click()
   await expect(page.getByRole('menu', { name: '显示' })).toContainText('场景中显示全部节点与关系类型')
   await expect(page.getByRole('switch', { name: '代码事实' })).toHaveCount(0)

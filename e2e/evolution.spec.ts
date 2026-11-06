@@ -3,10 +3,11 @@
  * 开「时间耦合」后本层出现波浪线，单击选中它看面板。以 h5p-arch-desk 自身验收（源码在本地、是 git 仓库）。
  */
 import { expect, test } from '@playwright/test'
-import { openCheckList, openDesk, openPanelLists, query } from './helpers'
+import { openCheckList, openDesk, openPanel, openPanelLists, query } from './helpers'
 
 test('缺省关闭：没有角标与耦合线；开启「缺陷」热度后出现角标，刷新后仍开启；运行视角不叠加', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=present')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   const panel = page.getByRole('region', { name: '图例' })
   const heat = panel.getByRole('switch', { name: '演化热度' })
   await expect(heat).toHaveAttribute('aria-checked', 'false')
@@ -30,12 +31,14 @@ test('缺省关闭：没有角标与耦合线；开启「缺陷」热度后出�
   await expect(page.locator('.heat-badge').first()).toBeVisible()
   // 运行视角不叠加
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(page.locator('.heat-badge')).toHaveCount(0)
   await expect(page.getByRole('region', { name: '图例' }).getByRole('switch', { name: '演化热度' })).toHaveCount(0)
 })
 
 test('系统面板「演化」列出热度前 10；模块树可按热度排序', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   const panel = page.locator('.panel')
   // ADR-0060：证据与清单整块缺省折叠；G11 V15c：演化清单默认折叠带计数，展开再断言
   await openPanelLists(page)
@@ -57,12 +60,14 @@ test('系统面板「演化」列出热度前 10；模块树可按热度排序',
 test('开启时间耦合：本层出现波浪线，单击选中它，地址带 sel=c:，面板列出共同的提交；关系面板标「同提交 ×N」', async ({ page }) => {
   // ADR-0052：呈现层声明了分层，带内同层成员之间的耦合不画；在普通层次「画布」里看
   await openDesk(page, '/p/h5p-arch-desk?level=present.canvas')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   const panel = page.getByRole('region', { name: '图例' })
   await panel.getByRole('switch', { name: '时间耦合' }).click()
   // F7（L44）：时间耦合按需显示——静息态只在画布角计数，选中一端时画出
   await expect(page.getByTestId('couple-corner')).toContainText(/时间耦合 \d+ 对/)
   await expect(page.locator('.edge-couple')).toHaveCount(0)
   await openDesk(page, '/p/h5p-arch-desk?level=present.canvas&sel=m:present.canvas.flow')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   const line = page.locator('.edge-couple').first()
   await expect(line).toBeVisible()
   await expect(page.locator('.edge-couple .vue-flow__edge-text').first()).toContainText('×')

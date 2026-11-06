@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import Panel from '../../src/components/panel/Panel.vue'
+import StepPanel from '../../src/components/panel/StepPanel.vue'
 import { resetStructurePrefs } from '../../src/components/display/useDisplayPrefs'
 import { focusSurfaceElement, resetSurfaceFocus } from '../../src/components/panel/surfaceFocus'
 import { VERDICT_LEVEL, alignedEvidence, alignedLevel, weakestLevel, stepChain } from '../../src/components/panel/chain'
@@ -107,7 +108,9 @@ async function open(url: string, opts: { facts?: boolean } = {}) {
   desk.facts.surfaceOf('lib')
   desk.facts.surfaceOf('bus')
   await flush()
-  const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
+  // 第二十轮 §6：运行视角的步骤面板住辅助栏步骤节（抽屉不渲染）——场景里挂步骤面板本身
+  const comp = url.includes('sc=') ? StepPanel : Panel
+  const wrapper = mount(comp, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
   await flush()
   return { desk, wrapper }
 }

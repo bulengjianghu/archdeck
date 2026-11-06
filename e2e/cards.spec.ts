@@ -15,6 +15,7 @@ async function rect(page: Page, sel: string) {
 test('CD-2（第二十轮 §4 改写）：选中面板是实底抽屉——不透画布、与画布有分界；抽屉里的卡各自是卡', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?sel=m:kit')
   await waitSettled(page)
+  await page.getByRole('button', { name: '属性', exact: true }).click() // 抽屉缺省收起
   await page.locator('.dock-toggle').click()
   await expect(page.locator('.dock-area')).toHaveCount(0)
   const props = page.locator('aside.props')
@@ -40,6 +41,7 @@ test('CD-2 悬浮（第二十轮 §4 改写）：放不下时浮在画布右侧�
   await page.setViewportSize({ width: 1100, height: 900 })
   await openDesk(page, '/p/media-web-player?sel=m:kit')
   await waitSettled(page)
+  await page.getByRole('button', { name: '属性', exact: true }).click() // 抽屉缺省收起，先拉开
   await expect(page.locator('aside.props')).toHaveClass(/floating/)
   const pr = await rect(page, 'aside.props')
   // 抽屉上任意一点都归抽屉（实底、不透传）
@@ -50,21 +52,25 @@ test('CD-2 悬浮（第二十轮 §4 改写）：放不下时浮在画布右侧�
   const canvas = await rect(page, 'main.canvas-area')
   const cx = canvas.x + 60
   const cy = canvas.y + canvas.height / 2
+  // 收尾 S0：第二十轮已知偶发——量点与单击之间画布还在挪（浮层出现后的适应），单击落到了别处；先等画布静止，量点与单击按 toPass 重试
   await expect(async () => {
     await waitSettled(page)
     const hit = (await page.evaluate(`(() => {
       const el = document.elementFromPoint(${cx}, ${cy})
-      return { vueflow: !!el?.closest('.vue-flow'), node: el?.closest('.vue-flow__node')?.getAttribute('data-id') ?? null }
-    })()`)) as { vueflow: boolean; node: string | null }
+      const node = el?.closest('.vue-flow__node')
+      return { vueflow: !!el?.closest('.vue-flow'), node: node?.getAttribute('data-id') ?? null, band: !!node?.querySelector('.frame, .tier') || (node?.classList.contains('vue-flow__node-frame') ?? false) }
+    })()`)) as { vueflow: boolean; node: string | null; band: boolean }
     expect(hit.vueflow).toBe(true)
     await page.mouse.click(cx, cy)
-    await expect.poll(() => query(page).get('sel'), { timeout: 3_000 }).toBe(hit.node ? `m:${hit.node}` : null)
+    // 带框 / 分层节点点击穿透（等于点画布空白=取消选中）；普通模块节点则选中它
+    await expect.poll(() => query(page).get('sel'), { timeout: 3_000 }).toBe(hit.band || !hit.node ? null : `m:${hit.node}`)
   }).toPass({ timeout: 20_000 })
 })
 
 test('CD-3 身份卡粘顶（ADR-0061）：滚到底身份卡仍钉在抽屉上沿；选中即自动打开辅助栏的理解页', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sel=m:state.desk')
   await waitSettled(page)
+  await page.getByRole('button', { name: '属性', exact: true }).click() // 抽屉缺省收起，拉开量粘顶
   const area = page.locator('.panel-area')
   const card = page.locator('.panel .id-card').first()
   // 选中（含 URL 直达）即自动在辅助栏打开理解页（事实卡 + 故事，第二十轮读先方案）

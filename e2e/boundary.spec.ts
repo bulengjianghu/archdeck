@@ -3,15 +3,17 @@
  * R17 场景列表默认只列主流程，可切到全部类别。
  */
 import { expect, test } from '@playwright/test'
-import { graphNode, openDesk, query } from './helpers'
+import { graphNode, openDesk, query, openPanel } from './helpers'
 
 test('L14：h5player 的对外 API 压在 PlayerIndex 框的上边，SW 通道（adapter）压在 Worker 基础设施框的左边（外部系统一侧）', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra.player-index')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   const api = (await graphNode(page, 'infra.player-index.player-api').boundingBox())!
   const stats = (await graphNode(page, 'infra.player-index.stats').boundingBox())!
   expect(api.y + api.height).toBeLessThan(stats.y)
   await expect(graphNode(page, 'infra.player-index.player-api').locator('.rim-tag')).toHaveText('端口')
   await openDesk(page, '/p/h5player?level=infra.workers')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   const sw = (await graphNode(page, 'infra.workers.sw-channel').boundingBox())!
   const task = (await graphNode(page, 'infra.workers.worker-task').boundingBox())!
   expect(sw.x + sw.width).toBeLessThan(task.x)
@@ -20,6 +22,7 @@ test('L14：h5player 的对外 API 压在 PlayerIndex 框的上边，SW 通道�
 
 test('O12：「组装」开关缺省关；开启后出现组装叠加线与组装根角标，单击叠加线选中代码依赖；开关按项目记在本地、不进 URL', async ({ page }) => {
   await openDesk(page, '/p/h5player')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   const toggle = page.getByRole('switch', { name: '组装' })
   await expect(toggle).toBeEnabled()
   await expect(toggle).not.toBeChecked()
@@ -39,6 +42,7 @@ test('O12：「组装」开关缺省关；开启后出现组装叠加线与组�
   await expect(page.locator('.dep-panel')).toContainText('模块依赖')
   // 重新打开项目：本地记住的开关恢复
   await openDesk(page, '/p/h5player?level=infra')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(page.getByRole('switch', { name: '组装' })).toBeChecked()
 })
 
@@ -51,6 +55,7 @@ test('R17：场景列表默认只列主流程，切到「全部类别」后出�
     await route.fulfill({ response: res, json: { ...body, files } })
   })
   await openDesk(page, '/p/h5player')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await page.getByRole('group', { name: '视角' }).getByRole('button', { name: /运行/ }).click()
   const list = page.getByRole('dialog', { name: '选择场景' })
   await list.getByRole('group', { name: '范围' }).getByRole('button', { name: /全部/ }).click()

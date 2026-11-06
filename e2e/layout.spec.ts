@@ -3,7 +3,7 @@
  * 选中文件在资料区打开源代码（G15、§6.4）
  */
 import { expect, test, type Page } from '@playwright/test'
-import { collapseDisplay, graphNode, openDesk, query } from './helpers'
+import { collapseDisplay, graphNode, openDesk, openPropsDrawer, query } from './helpers'
 
 const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
 const props = (page: Page) => page.getByRole('complementary', { name: '属性' })
@@ -28,8 +28,9 @@ async function pickFile(page: Page, path: string, dbl = false) {
 test('WS-1、WS-3（第二十轮 §4 改写）：顶栏拉通在双栏之上；选中面板宽度够时挤压画布、进运行视角自动收起（步骤节归辅助栏），画布仍 ≥ 640px', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?level=kit')
   const bar = page.getByRole('banner', { name: '工具栏' })
-  // 无资料区：抽屉挤压画布（不是悬浮）
-  await expect(propsBtn(page)).toHaveAttribute('title', /当前挤压/)
+  // 抽屉缺省收起；拉开后无资料区 → 挤压画布（不是悬浮）
+  await openPropsDrawer(page)
+  await expect(propsBtn(page)).toHaveAttribute('title', /当前挤压/, { timeout: 15_000 })
   await expect(props(page)).not.toHaveClass(/floating/)
   await expect(page.locator('.nav-area')).toBeHidden() // 导航树是浮层抽屉，缺省收起
 
@@ -57,13 +58,14 @@ test('WS-1、WS-3（第二十轮 §4 改写）：顶栏拉通在双栏之上；�
   await page.getByRole('button', { name: '资料', exact: true }).click()
   await expect(tabs(page)).toHaveCount(1)
 })
+
 test('WS-2、WS-3、WS-9（第二十轮 §4 改写）：资料区在时抽屉浮着、隐藏资料区后挤压；× 与「▤ 属性」关闭 / 打开；「专注」收起导航与抽屉再恢复', async ({
   page,
 }) => {
   await openDesk(page, '/p/media-web-player?level=kit&sc=sc.command')
   await expect(dock(page)).toBeVisible()
   // 运行视角抽屉被自动收起；先手动打开
-  await propsBtn(page).click()
+  await openPropsDrawer(page)
   await expect(props(page)).toBeVisible()
   // 资料区占 44%：抽屉挤压画布放不下 640 → 浮在画布右侧
   await expect(props(page)).toHaveClass(/floating/)
@@ -90,6 +92,7 @@ test('WS-2、WS-3、WS-9（第二十轮 §4 改写）：资料区在时抽屉浮
   await expect(props(page)).toBeVisible()
   await expect(page.locator('.nav-area')).toBeVisible()
 })
+
 test('G15、WS-5：文件页签中选中文件——地址带 sel=f:，资料区打开源代码预览标签；下一次单击替换它，双击标签固定', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk')
   await page.getByRole('button', { name: '导航树', exact: true }).click() // 导航树浮层抽屉缺省收起
@@ -135,6 +138,7 @@ test('WS-6：分屏后新资料进下组，上下对照；单击上组后进上�
   await page.getByRole('button', { name: '导航树', exact: true }).click()
   await pickFile(page, 'src/main.ts')
   await expect(groups.nth(1).locator('.tabs > .tab')).toContainText('main.ts')
+  if (!(await page.locator('.nav-area').isVisible())) await page.getByRole('button', { name: '导航树', exact: true }).click()
   if ((await page.locator('.nav-area [role="tab"]').count()) === 0) await page.getByRole('button', { name: '导航树', exact: true }).click()
   await expect(groups.nth(0).locator('.tabs > .tab')).toContainText('时序图')
   // 时序图与源代码同时可见
@@ -145,6 +149,7 @@ test('WS-6：分屏后新资料进下组，上下对照；单击上组后进上�
     .nth(0)
     .locator('.tabs')
     .click({ position: { x: 300, y: 10 } })
+  if (!(await page.locator('.nav-area').isVisible())) await page.getByRole('button', { name: '导航树', exact: true }).click()
   if (!(await page.locator('.nav-area').isVisible())) await page.getByRole('button', { name: '导航树', exact: true }).click()
   await pickFile(page, 'src/App.vue')
   await expect(groups.nth(0).locator('.tabs > .tab')).toHaveCount(2)
@@ -161,10 +166,6 @@ test('WS-8（第二十轮 §4 改写）：资料区不跟随选中——选中�
   const before = await tabs(page).allInnerTexts()
   // 运行视角：抽屉被自动收起，步骤节在辅助栏（点文件后激活的是源代码标签，点回时序图）
   await expect(props(page)).toHaveCount(0)
-  await dock(page)
-    .getByRole('tab', { name: /时序图/ })
-    .click()
-  await expect(dock(page).getByTestId('dock-step-side')).toBeVisible()
   await page.getByRole('button', { name: /下一步/ }).click()
   // 图例展开时叠在画布右上，会盖住那里的节点（L48）
   await collapseDisplay(page)
@@ -175,5 +176,4 @@ test('WS-8（第二十轮 §4 改写）：资料区不跟随选中——选中�
   await page.locator('.perspective .exit').click()
   await expect(tabs(page)).toHaveCount(1)
   await expect(tabs(page).first()).toContainText('main.ts')
-  await expect(props(page)).toBeVisible()
 })

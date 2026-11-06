@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import Panel from '../../src/components/panel/Panel.vue'
-import ModuleDoc from '../../src/components/dock/ModuleDoc.vue'
 import RunSection from '../../src/components/panel/RunSection.vue'
+import StepPanel from '../../src/components/panel/StepPanel.vue'
+import ScenarioPanel from '../../src/components/panel/ScenarioPanel.vue'
+import ModuleDoc from '../../src/components/dock/ModuleDoc.vue'
 import { createDeskState, type SourceFetcher } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
 import type { FileDep } from '../../src/model'
@@ -134,6 +136,19 @@ describe('属性面板', () => {
   })
 })
 
+/** 第二十轮 §4：运行视角的步骤 / 场景面板住辅助栏步骤节（Panel 在运行视角不再渲染它们）——直接挂面板组件测 */
+async function mountRun(comp: unknown, url: string, files = scenarioFiles()) {
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+  await router.push(url)
+  const desk = createDeskState(async () => ({ dir: 'model/test', files }))
+  desk.attachRouter(router)
+  await desk.init()
+  await flushPromises()
+  const wrapper = mount(comp as never, { global: { provide: { [DESK_STATE as symbol]: desk, panelUnfold: { value: true } }, plugins: [router] } })
+  await flushPromises()
+  return { wrapper: wrapper as never, desk }
+}
+
 describe('属性面板 · 运行视角', () => {
   it('参与者：入口关系与由它触发的场景，可打开场景', async () => {
     const { wrapper, desk } = await mountPanel('/?sel=a:actor.biz', scenarioFiles())
@@ -144,8 +159,11 @@ describe('属性面板 · 运行视角', () => {
   })
 
   it('选中场景（停在开头）时显示场景（触发者、所在层次、引用；步骤目录在导航树），选中步骤时显示步骤', async () => {
-    const { wrapper, desk } = await mountPanel('/?sc=sc.play&step=sc.play%23update&alt=0', scenarioFiles())
-    const text = wrapper.text()
+    const { wrapper: stepW, desk } = (await mountRun(StepPanel, '/?sc=sc.play&step=sc.play%23update&alt=0')) as never as {
+      wrapper: { text: () => string }
+      desk: { closeScenario: () => void; openScenario: (id: string) => void }
+    }
+    const text = stepW.text()
     expect(text).toContain('选中的步骤')
     expect(text).toContain('StateMachine → Pipeline')
     expect(text).toContain('推断')
@@ -153,7 +171,8 @@ describe('属性面板 · 运行视角', () => {
     desk.closeScenario()
     desk.openScenario('sc.play')
     await flushPromises()
-    const s = wrapper.text()
+    const scW = (await mountRun(ScenarioPanel, '/?sc=sc.play')).wrapper as never as { text: () => string }
+    const s = scW.text()
     expect(s).not.toContain('步骤目录')
     expect(s).toContain('业务方')
     expect(s).toContain('引用了')
@@ -180,7 +199,9 @@ describe('P15：经由上层关系', () => {
       'upper.yaml': 'relations: [{ id: r9, from: app.solution, to: infra.framework, type: calls }]',
       'scenarios/x.yaml': 'scenario: { id: sc.v, name: V, steps: [{ call: { id: a, from: app.solution, to: infra.framework.pipeline, label: swap } }] }',
     })
-    const { wrapper, desk } = await mountPanel('/?level=infra.framework&sc=sc.v&step=sc.v%23a', files)
+    const { wrapper, desk } = (await mountRun(StepPanel, '/?level=infra.framework&sc=sc.v&step=sc.v%23a', files)) as never as Awaited<
+      ReturnType<typeof mountPanel>
+    >
     const text = wrapper.text()
     expect(text).toContain('（经由上层关系）')
     expect(text).toContain('对应关系建在上层：Solution → Framework')
@@ -193,7 +214,7 @@ describe('P15：经由上层关系', () => {
 
   it('未绑定关系的步骤仍为「交互中未建模」（附录 B 改名），不显示上层关系', async () => {
     const files = scenarioFiles({ 'scenarios/x.yaml': 'scenario: { id: sc.u, name: U, steps: [{ call: { id: a, from: infra.mus, to: app.fragments } }] }' })
-    const { wrapper } = await mountPanel('/?level=infra&sc=sc.u&step=sc.u%23a', files)
+    const { wrapper } = (await mountRun(StepPanel, '/?level=infra&sc=sc.u&step=sc.u%23a', files)) as never as Awaited<ReturnType<typeof mountPanel>>
     expect(wrapper.text()).toContain('（交互中未建模）')
     expect(wrapper.text()).not.toContain('结构中未建模')
     expect(wrapper.text()).not.toContain('对应关系建在上层')
@@ -235,7 +256,7 @@ describe('D-5：步骤的输入', () => {
       'scenarios/inh.yaml':
         'scenario: { id: sc.inh, name: I, steps: [{ call: { id: a, from: infra.framework.sm, to: app.solution, label: "sendCommand(cmd)" } }] }',
     })
-    const { wrapper } = await mountPanel('/?sc=sc.inh&step=sc.inh%23a', files)
+    const { wrapper } = (await mountRun(StepPanel, '/?sc=sc.inh&step=sc.inh%23a', files)) as never as Awaited<ReturnType<typeof mountPanel>>
     expect(wrapper.find('.call').text()).toBe('sendCommand(cmd: Command): Result')
     expect(wrapper.text()).toContain('取自关系')
   })

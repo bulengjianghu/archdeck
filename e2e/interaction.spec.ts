@@ -1,6 +1,6 @@
 /** 交互视角（§6.1、§6.3，ADR-0031 之前称结构视角）：首页进入项目、分层总览、下钻与返回、单击选中 */
 import { expect, test } from '@playwright/test'
-import { graphNode, openDesk, query } from './helpers'
+import { graphNode, openDesk, openPropsDrawer, query } from './helpers'
 
 test('首页列出项目，进入 h5player 看到分层总览；双击层下钻，面包屑返回', async ({ page }) => {
   await page.goto('./')
@@ -22,6 +22,7 @@ test('首页列出项目，进入 h5player 看到分层总览；双击层下钻�
 
 test('单击节点选中并在面板显示属性，单击空白取消选中', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra')
+  await openPropsDrawer(page) // 抽屉缺省收起（第二十轮 §4）
   const node = page.locator('.vue-flow__node-module').first()
   const id = await node.getAttribute('data-id')
   // 节点可能落在右上角的图例底下（取决于布局）：直接在节点上派发单击

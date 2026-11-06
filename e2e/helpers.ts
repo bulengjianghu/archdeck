@@ -96,14 +96,37 @@ export async function closeNav(page: Page) {
 }
 
 /** 第二十轮 §4：选中面板缺省收起（运行视角自动收起，步骤节在辅助栏）——要动核对卡先把抽屉拉开 */
+export const openPanel = openPropsDrawer
+
 export async function openPropsDrawer(page: Page) {
   if (await page.locator('aside.props .panel').count()) return
+  // 描述加载完成前点击会与就绪渲染竞态（.panel 迟迟不出 → 重试点击反复开合）：先等加载态结束
+  await expect(page.locator('.canvas-area .state')).toHaveCount(0, { timeout: 30_000 })
   await page.locator('.props-toggle').click()
   await expect(page.locator('aside.props .panel')).toBeVisible()
 }
 
 /** 属性栏核对卡（PC-2）收起时展开它；给了 data-sec 时再展开那个折叠的清单（PC-8） */
 export async function openCheckList(page: Page, sec?: string) {
+  // 运行视角：步骤 / 场景面板住辅助栏步骤节（第二十轮 §6）；其余在抽屉
+  const side = page.getByTestId('dock-step-side')
+  if ((await side.count()) && (await side.locator('[data-card="check"]').count())) {
+    const t = side.locator('[data-card="check"] .card-toggle').first()
+    await expect(side.locator('[data-card="check"] .card-sum').first()).not.toHaveText(/读取中/, { timeout: 20_000 })
+    await expect(async () => {
+      if ((await t.getAttribute('aria-expanded')) === 'false') await t.click()
+      await expect(t).toHaveAttribute('aria-expanded', 'true', { timeout: 1_000 })
+    }).toPass({ timeout: 15_000 })
+    const fs = side.locator('[data-testid="check-lists-fold"]').first()
+    if (await fs.count()) {
+      const d = fs.locator('xpath=..')
+      if ((await d.evaluate(el => (el as unknown as { open: boolean }).open)) !== true) await fs.click()
+    }
+    if (!sec) return
+    const fold = side.locator(`[data-sec="${sec}"] .fold`).first()
+    if ((await fold.count()) && (await fold.getAttribute('aria-expanded')) === 'false') await fold.click()
+    return
+  }
   await openPropsDrawer(page)
   const toggle = page.locator('.panel [data-card="check"] .card-toggle').first()
   await expect(toggle).toBeVisible()

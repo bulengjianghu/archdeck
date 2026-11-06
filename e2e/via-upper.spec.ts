@@ -18,8 +18,9 @@ test('beginXxxModelSwitch()：交互图画类型色实线临时线、标签位�
 
   // PC-10：端点与本层投影是步骤核对卡的清单
   await openCheckList(page, 'evidence.ends')
-  await expect(page.locator('.panel')).toContainText('对应关系建在上层')
-  await page.locator('.panel button', { hasText: '定位到这条关系' }).click()
+  const side = page.getByTestId('dock-step-side')
+  await expect(side).toContainText('对应关系建在上层')
+  await side.locator('button', { hasText: '定位到这条关系' }).click()
   await expect.poll(() => query(page).get('sel')).toBe('r:rel.solution.stage-swap-framework')
   expect(query(page).get('level')).not.toBe('infra.framework')
 })

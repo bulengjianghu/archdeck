@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import Panel from '../../src/components/panel/Panel.vue'
+import ScenarioPanel from '../../src/components/panel/ScenarioPanel.vue'
 import ModuleDoc from '../../src/components/dock/ModuleDoc.vue'
 import { createDeskState } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
@@ -481,7 +482,16 @@ modules:
     const a = await mountPanel('/?sel=a:actor.biz', scenarioFiles())
     expect(cardsOf(a.wrapper)).toEqual(['understand', 'related'])
     expect(a.wrapper.find('[data-card="understand"] [data-sec="boundary.relations"]').exists()).toBe(true)
-    const s = await mountPanel('/?sc=sc.play', scenarioFiles())
+    // 第二十轮 §6：场景面板住辅助栏步骤节（抽屉在运行视角不渲染）——直接挂场景面板
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+    await router.push('/?sc=sc.play')
+    const sd = createDeskState(async () => ({ dir: 'model/test', files: scenarioFiles() }))
+    sd.attachRouter(router)
+    await sd.init()
+    const sw = mount(ScenarioPanel, { global: { provide: { [DESK_STATE as symbol]: sd }, plugins: [router] } })
+    mounted.push(sw)
+    await flushPromises()
+    const s = { wrapper: sw }
     // 第二十轮读先方案：场景面板的相关资料卡删除（时序图在辅助栏按场景自动打开）
     expect(cardsOf(s.wrapper)).toEqual(['understand', 'check'])
     await openCheck(s.wrapper)

@@ -1,6 +1,6 @@
 /** 步骤的代码证据（S16–S18、D-21）：步骤面板列出候选调用点、单击在资料区滚到该行；无证据的步骤在时序图带「?」并进问题页签 */
 import { expect, test } from '@playwright/test'
-import { openCheckList, openDesk, openPropsDrawer } from './helpers'
+import { openCheckList, openDesk } from './helpers'
 
 test('单步到 transition(openScenario)：面板按名字匹配到 useDeskState.ts 的一行，单击在资料区预览并滚到该行', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
@@ -40,8 +40,9 @@ test('单步到 transition(openScenario)：面板按名字匹配到 useDeskState
 
 test('无证据（无承载）的步骤：时序图消息带「?」，场景面板计数、场景列表「? N」，问题页签有「步骤无证据」', async ({ page }) => {
   await openDesk(page, '/p/h5player?sc=sc.timeshift-leg-switch')
-  await openPropsDrawer(page)
+  // 场景面板住辅助栏步骤节（第二十轮 §6）
   await expect(page.locator('svg .no-evidence').first()).toBeVisible({ timeout: 20_000 })
+  await openCheckList(page)
   const section = page
     .getByTestId('dock-step-side')
     .locator('.scenario-panel .section')

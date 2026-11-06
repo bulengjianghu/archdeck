@@ -32,7 +32,7 @@ export const DOC_KIND_VIEWS: Record<string, DocKindView> = {
     tip: d => (d as { path: string }).path,
   },
   explainer: { label: (d, c) => c.moduleName(mod(d)), tip: (d, c) => `图解 · ${c.moduleName(mod(d))}`, icon: '▣' },
-  facts: { label: (d, c) => c.moduleName(mod(d)), tip: (d, c) => `理解页 · ${c.moduleName(mod(d))}`, icon: '▣' },
+  facts: { label: (d, c) => `事实 · ${c.moduleName(mod(d))}`, tip: (d, c) => `理解页 · ${c.moduleName(mod(d))}`, icon: '▣' },
   dialogue: {
     label: () => '对话',
     tip: () => '对话：问 · 重讲题解（当前版本）· 改（草图里）',

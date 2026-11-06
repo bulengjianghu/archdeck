@@ -3,12 +3,13 @@
  * 以本项目与 h5player 验收（01 §6.25）。
  */
 import { expect, test } from '@playwright/test'
-import { graphNode, openDesk, openPanelLists, waitSettled } from './helpers'
+import { graphNode, openDesk, openPanel, openPanelLists, waitSettled } from './helpers'
 
 const top = async (page: Parameters<typeof graphNode>[0], id: string) => (await graphNode(page, id).boundingBox())!.y
 
 test('ADR-0052：本项目「模型层」声明四层（层是分类、不占级）——打开即 4 条带，单成员层的带即成员，契约在最下，切到结构视角节点不动', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=model')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   const bandTop = async (id: string) => (await graphNode(page, id).boundingBox())!.y
   // 交付、契约是单成员层：带即成员（返工清单、类型与 Schema）；解释、描述是多成员层：带节点为 s:<父模块>/<层>
   for (const [id, name] of [
@@ -27,6 +28,7 @@ test('ADR-0052：本项目「模型层」声明四层（层是分类、不占级
   await waitSettled(page)
   const before = await graphNode(page, 'model.governance').boundingBox()
   await openDesk(page, '/p/h5p-arch-desk?level=model&v=s')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(page.locator('.vue-flow__node[data-id="model.types"]')).toBeAttached()
   await waitSettled(page)
   expect(await graphNode(page, 'model.governance').boundingBox()).toEqual(before)
@@ -34,6 +36,7 @@ test('ADR-0052：本项目「模型层」声明四层（层是分类、不占级
 
 test('ST-1、K21：DeskState 声明了三层（同步适配器 → 写入口 → 派生）——分层总览、不算依赖深度；选中后面板「拆分信号」列出不占文件的子模块', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=state.desk')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   for (const id of ['s:state.desk/sync', 's:state.desk/write', 's:state.desk/derive']) await expect(graphNode(page, id)).toBeVisible()
   await expect(page.getByTestId('tier-hint')).toHaveCount(0)
   await expect(page.locator('.vue-flow__node[data-id^="tier:"]')).toHaveCount(0)
@@ -41,6 +44,7 @@ test('ST-1、K21：DeskState 声明了三层（同步适配器 → 写入口 →
   await graphNode(page, 's:state.desk/derive').click({ position: { x: 40, y: 12 } })
   await expect(page.getByTestId('stratum-panel')).toContainText('只读状态与模型')
   await openDesk(page, '/p/h5p-arch-desk?level=state&sel=m:state.desk')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   // G11 V15c：「拆分信号」折叠在 ⑤；ADR-0060：证据与清单整块缺省折叠，先打开
   await openPanelLists(page)
   const split = page.getByTestId('split-signals')
@@ -53,9 +57,11 @@ test('ST-1、K21：DeskState 声明了三层（同步适配器 → 写入口 →
 
 test('K22：h5player「MUs 媒体单元」缓冲 → 校正器向上，面板写明是控制反转', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra.mus')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   expect(await top(page, 'infra.mus.buffer')).toBeGreaterThan(await top(page, 'infra.mus.corrector'))
   const edge = page.locator('.vue-flow__edge[data-id^="infra.mus.buffer->infra.mus.corrector"]').first()
   const id = await edge.getAttribute('data-id')
   await openDesk(page, `/p/h5player?level=infra.mus&sel=${encodeURIComponent(`e:${id}`)}`)
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(page.getByTestId('upward-note')).toContainText('控制反转')
 })

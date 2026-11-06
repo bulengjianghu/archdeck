@@ -146,9 +146,9 @@ function store(key: string, value: string) {
 }
 
 const ws = desk.workspace
-// WS-2：属性栏开关是工作区状态，按本机记住（沿用旧的面板折叠键）
+// WS-2（第二十轮 §4 改写）：选中面板抽屉缺省收起，开关状态按本机记住
 const PROPS_KEY = 'h5p-arch-desk:panel-collapsed'
-ws.setProps(readNumber(PROPS_KEY, 0, 1, 0) !== 1)
+ws.setProps(readNumber(PROPS_KEY, 0, 1, 1) !== 1)
 const propsOpen = computed(() => ws.state.value.propsOpen)
 function toggleProps() {
   ws.setProps(!propsOpen.value)
@@ -163,7 +163,7 @@ const navKey = (run: boolean) => (run ? 'h5p-arch-desk:nav-collapsed:run' : 'h5p
 const navCollapsedOf = (run: boolean) => readNumber(navKey(run), 0, 1, 1) === 1
 const navCollapsed = ref(navCollapsedOf(desk.perspective.value === 'run'))
 // V6 新家（第二十轮 §6）：运行视角的「这一步 / 这个对象做了什么」住右栏的步骤节，选中抽屉随之收起（用户可再打开）
-let propsBeforeRun = readNumber(PROPS_KEY, 0, 1, 0) !== 1
+let propsBeforeRun = readNumber(PROPS_KEY, 0, 1, 1) !== 1
 // 草图编辑：画布是主面，导航浮层自动收起（退出不自动恢复）
 // DL-20（裁决 11 §2）：草图编辑态选中面板缺省收起（与运行视角同口径）——对话在场后表单用得少；退出时恢复进入前的样子
 let propsBeforeEdit: boolean | null = null
@@ -470,8 +470,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <SketchCanvas v-else-if="desk.edit.active.value" />
           <template v-else>
             <GraphCanvas />
-            <!-- TB-7：画布标题行——面包屑、⚠、源码胶囊、版本胶囊 -->
-            <CanvasTitle @issues="showIssues" />
+            <!-- TB-7：画布标题行——面包屑、⚠、源码胶囊、版本胶囊；导航浮层开着时让位到抽屉右侧（02-review 缺陷 3） -->
+            <CanvasTitle :style="{ left: navCollapsed ? undefined : `${navWidth + 12}px` }" @issues="showIssues" />
           </template>
           <!-- CD-7、CD-8：回放胶囊浮在画布底部居中，与左下角的缩放胶囊同一行 -->
           <PlayerBar v-if="playerShown" ref="player" class="player-bar" :class="{ wide: !playerFits }" :style="playerStyle" />

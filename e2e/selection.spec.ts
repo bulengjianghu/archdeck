@@ -3,7 +3,6 @@ import { expect, test } from '@playwright/test'
 import { collapseDisplay, graphNode, openDesk, query } from './helpers'
 
 /** 第二十轮 §4：运行视角抽屉自动收起，步骤详情住辅助栏的步骤节（V6 新家） */
-const stepSide = (page: import('@playwright/test').Page) => page.getByTestId('dock-step-side')
 
 const HOOK = '/p/h5player?level=infra.framework&sc=sc.command&alt=1&step=sc.command%23hook'
 
@@ -14,8 +13,8 @@ test('选中步骤：只有它用选中样式，配对的返回只加「配对�
   await expect(page.locator('.msg.paired')).toHaveCount(1)
   await expect(page.locator('.msg.paired .pair-tag')).toContainText('配对')
   await expect(page.locator('.lane.emph')).toHaveCount(0)
-  await expect(stepSide(page)).toContainText('选中的步骤')
-  await expect(stepSide(page)).not.toContainText('已钉住')
+  await expect(page.getByTestId('dock-step-side')).toContainText('选中的步骤')
+  await expect(page.getByTestId('dock-step-side')).not.toContainText('已钉住')
   // 结构图：选中步骤时其余走过的步骤序号变灰
   await expect(page.locator('.vue-flow__node-step .n.muted').first()).toBeVisible()
 })
@@ -34,7 +33,7 @@ test('选中模块：突出它所在的泳道、不突出消息，进度只剩�
   await expect(page.locator('.msg.selected')).toHaveCount(0)
   await expect(page.locator('.num .progress')).toHaveCount(1)
   await expect(page.locator('.vue-flow__node-step .n.muted')).toHaveCount(0)
-  await expect(stepSide(page)).not.toContainText('已钉住')
+  await expect(page.getByTestId('dock-step-side')).not.toContainText('已钉住')
 })
 
 test('Esc 回到选中进度所在的步骤，再按无动作（N9）；「下一步」从进度处继续并选中下一步', async ({ page }) => {
@@ -63,7 +62,8 @@ test('Esc 回到选中进度所在的步骤，再按无动作（N9）；「下�
 test('打开场景选中场景：面板是场景概览，地址没有 sel 与 step；按 → 选中第 1 步', async ({ page }) => {
   await openDesk(page, '/p/h5player')
   await page.goto('./#/p/h5player?sc=sc.command')
-  await expect(stepSide(page)).toContainText('触发')
+  // 场景概览住辅助栏步骤节（第二十轮 §6）
+  await expect(page.getByTestId('dock-step-side')).toContainText('触发')
   expect(query(page).get('step')).toBeNull()
   await page.locator('.vue-flow__pane').click({ position: { x: 5, y: 5 } })
   await page.keyboard.press('ArrowRight')

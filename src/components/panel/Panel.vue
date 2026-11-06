@@ -9,8 +9,6 @@
 import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
-import ScenarioPanel from './ScenarioPanel.vue'
-import StepPanel from './StepPanel.vue'
 import ModulePanel from './ModulePanel.vue'
 import RelationPanel from './RelationPanel.vue'
 import EdgePanel from './EdgePanel.vue'
@@ -64,8 +62,8 @@ const target = computed(() => {
     <SketchPanel v-if="desk.edit.active.value" />
     <p v-if="dropped && !desk.edit.active.value" class="dropped" role="note">切换视角后原选中（{{ dropped }}）没有对应的依赖边，已取消选中</p>
     <template v-else-if="target">
-      <StepPanel v-if="target.kind === 'step'" :key="`f:${target.id}`" />
-      <ScenarioPanel v-else-if="target.kind === 'scenario'" :key="`s:${target.id}`" />
+      <!-- V6 新家（第二十轮 §6，复审确认）：运行视角下步骤 / 场景面板只住辅助栏的步骤节，抽屉不再渲染 -->
+      <template v-if="desk.perspective.value === 'run' && (target.kind === 'step' || target.kind === 'scenario')" />
       <template v-else>
         <FilePanel v-if="target.kind === 'file'" :key="`f:${target.id}`" :path="target.id" />
         <DepPanel v-else-if="target.kind === 'dep'" :key="`d:${target.id}`" />
