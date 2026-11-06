@@ -317,10 +317,22 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   })
 
   // ── 加载（模型源同步）──
-  /** 重新加载按发起先后算：文件变化与写入后的重新加载会并发，先发起、后返回的旧载荷不能盖住新的（认可后迟到的旧状态曾把信息条回滚成「起草中」） */
+  /**
+   * N5：重新加载按发起先后算——文件变化与写入后的重新加载会并发，先发起、后返回的旧载荷不能盖住新的（认可后迟到的旧状态曾把信息条回滚成「起草中」）；
+   * 被更晚发起的那次取代的调用不提前返回，等到最后发起的那一次落地（首次加载与写入之后的调用方要的是落地后的状态）
+   */
   let reloadSeq = 0
+  let inflight: Promise<void> = Promise.resolve()
   async function reload() {
-    const n = ++reloadSeq
+    const run = loadOnce(++reloadSeq)
+    inflight = run
+    await run
+    for (let seen = run; inflight !== seen;) {
+      seen = inflight
+      await seen
+    }
+  }
+  async function loadOnce(n: number) {
     try {
       const loaded = await fetchAndLoad(fetchModel)
       if (n !== reloadSeq) return

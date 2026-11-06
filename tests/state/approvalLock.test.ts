@@ -194,4 +194,28 @@ describe('重新加载按发起先后（第二十一轮收尾复跑）', () => {
     await stale
     expect(desk.edit.statusLock.value).toContain('回到起草')
   })
+  it('首次加载途中又发起一次（文件变化）：首次加载等到最后那次落地再按 URL 初始化，不因被取代而跳过', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+    await router.push('/')
+    const queue: ((p: ModelPayload) => void)[] = []
+    const desk = createDeskState(() => new Promise<ModelPayload>(r => queue.push(r)), {
+      version: { design: 'd', revision: 'sketch' },
+      writer: writer().writer,
+      project: 'p',
+    })
+    desk.attachRouter(router)
+    let done = false
+    const init = desk.init().then(() => (done = true))
+    const later = desk.reload()
+    queue[0](payloadOf('draft'))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(done).toBe(false)
+    queue[1](payloadOf('accepted'))
+    await Promise.all([init, later])
+    expect(desk.index.value).not.toBeNull()
+    expect(desk.edit.statusLock.value).toContain('回到起草')
+    expect(desk.edit.editable).toBe(true)
+    expect(desk.edit.session.value).not.toBeNull()
+  })
 })
