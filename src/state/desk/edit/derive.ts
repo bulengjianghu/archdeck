@@ -47,10 +47,12 @@ function referenceFile(current: ModelIndex | null, files: readonly RawFile[], sk
     for (const id of Object.keys(d.layout?.modules ?? {})) need.add(id)
     if (d.mount !== ROOT_MOUNT) need.add(d.mount)
   }
+  // 草图自己定义了的模块不再从当前版本补（同接入层 referenceStubs，X1）
+  const own = new Set(sketches.flatMap(d => locateAll(d).map(m => m.id)))
   const modules: { id: string; name: string; parent?: string; kind?: string; responsibility?: string }[] = []
   const actors: { id: string; name: string; kind: string }[] = []
   const add = (id: string) => {
-    if (index.modules.has(id) || modules.some(m => m.id === id)) return
+    if (index.modules.has(id) || own.has(id) || modules.some(m => m.id === id)) return
     const m = current.modules.get(id)
     if (!m) return
     if (m.parentId !== current.rootId) add(m.parentId)

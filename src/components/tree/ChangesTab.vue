@@ -94,10 +94,10 @@ watch(
       </div>
       <!-- DL-50：三关（归档条件），随描述与文件变化重算 -->
       <p v-if="taskMode && gates" class="gates" data-testid="task-gates">
-        <span v-for="g in gates.gates" :key="g.key" :class="g.ok ? 'ok' : 'bad'" :data-gate="g.key" :title="g.detail"
-          >{{ g.ok ? '✓' : '✗' }} {{ g.label }}</span
+        <span v-for="g in gates.gates" :key="g.key" :class="g.skipped ? 'skip' : g.ok ? 'ok' : 'bad'" :data-gate="g.key" :title="g.detail"
+          >{{ g.skipped ? '–' : g.ok ? '✓' : '✗' }} {{ g.label }}</span
         >
-        <span v-if="gates.first" class="why" data-testid="task-gate-why">{{ gates.first.detail }}</span>
+        <span v-if="gates.first" class="why" data-testid="task-gate-why" :title="gates.first.detail">{{ gates.first.detail }}</span>
         <span v-else class="why ok">三关全绿，可以归档</span>
       </p>
       <p v-else-if="withdrawn" class="withdrawn" data-testid="task-withdrawn">{{ tasks?.note }}</p>
@@ -198,8 +198,17 @@ watch(
   color: var(--danger);
 }
 
+.gates .skip {
+  color: var(--text-2);
+}
+
+/* 没过的那一关的说明最多三行，全文在悬停里 */
 .gates .why {
+  display: -webkit-box;
   flex-basis: 100%;
+  overflow: hidden;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
   color: var(--text-2);
 }
 

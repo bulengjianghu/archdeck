@@ -22,6 +22,7 @@ import {
   checkSketches,
   compareDesign,
   diffModels,
+  flattenSketch,
   isArchived,
   isExplainerFile,
   isSketchFile,
@@ -487,10 +488,12 @@ export function referenceStubs(current: ModelIndex, files: readonly RawFile[]): 
     for (const x of s.def.interfaces ?? []) if (x.owner) need.add(x.owner)
     if (s.def.mount !== ROOT_MOUNT) need.add(s.def.mount)
   }
+  // 草图自己定义了的模块不再从当前版本补（草图里的框挂在挂载点下，挂载点还没补进来时它不在索引里；补了会与草图写的字段重定义，X1）
+  const own = new Set(index.model.sketches.flatMap(s => flattenSketch(s).map(m => m.id)))
   const modules: { id: string; name: string; parent?: string; kind?: string; responsibility?: string }[] = []
   const actors: { id: string; name: string; kind: string }[] = []
   const add = (id: string) => {
-    if (index.modules.has(id) || modules.some(m => m.id === id)) return
+    if (index.modules.has(id) || own.has(id) || modules.some(m => m.id === id)) return
     const m = current.modules.get(id)
     if (!m) return
     if (m.parentId !== current.rootId) add(m.parentId)

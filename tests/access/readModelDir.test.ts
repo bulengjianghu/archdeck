@@ -162,6 +162,28 @@ describe('接入层 · 多项目读取', () => {
     expect(designSketches(path.join(modelRoot, 'gamma'), 'plain')).toEqual([])
   })
 
+  it('X19（第二十一轮波 4 走查修）：草图自己定义了的基线模块不再从当前版本补引用——草图改写它的职责后草图版本仍可加载、不报 X1 重定义', () => {
+    // 挂载点 core.impl 是当前版本 modules 里的模块（不在持久草图里）：草图版本要从当前版本补它；它下面的 core.impl.y 草图自己写了
+    write('gamma/zz-own.yml', 'modules: [{ id: core.impl.y, name: Y, parent: core.impl, responsibility: 旧职责 }]')
+    write('gamma/designs/own/design.yaml', 'design:\n  name: 自己写职责\n')
+    write(
+      'gamma/designs/own/sketches/core.impl.yaml',
+      'sketch: { id: own, mount: core.impl, modules: [{ id: core.impl.y, name: Y, responsibility: 草图里改写的职责 }, { id: core.impl.z, name: Z }], relations: [{ id: rel.own.z-y, from: core.impl.z, to: core.impl.y, type: queries }] }',
+    )
+    try {
+      const v = readSketchVersion(modelRoot, 'gamma', 'own', root)!
+      const refs = v.files.find(f => f.path === 'references.yaml')!.text
+      expect(refs).toContain('id: core.impl')
+      expect(refs).not.toContain('id: core.impl.y')
+      const { index, issues } = loadModel(v.files)
+      expect(issues.filter(i => i.severity === 'error')).toEqual([])
+      expect(index.modules.get('core.impl.y')?.responsibility).toBe('草图里改写的职责')
+    } finally {
+      fs.rmSync(path.join(modelRoot, 'gamma/designs/own'), { recursive: true, force: true })
+      fs.rmSync(path.join(modelRoot, 'gamma/zz-own.yml'), { force: true })
+    }
+  })
+
   it('DV-10：草图作为版本——system + 持久草图 + 该设计的各张草图（+ 引用的外部模块），对比基线为当前版本，附「交给 AI」的指令', () => {
     const v = readSketchVersion(modelRoot, 'gamma', 'sk', root)!
     expect(v.version).toEqual({ design: 'sk', revision: 'sketch' })
