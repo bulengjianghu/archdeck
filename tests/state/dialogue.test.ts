@@ -2,8 +2,8 @@
  * 对话会话的转移函数（T1.3，DL-12；DA-1、DA-2、DA-11）：发送、排队、停止、换锚点、换视角各一条规则，外加 agent 事件的落法。
  */
 import { describe, expect, it } from 'vitest'
-import { anchorOf, dialogueTransition, EMPTY_DIALOGUE, modeFor, type DialogueInput, type DialogueState } from '../../src/state/desk/dialogue'
-import type { Anchor } from '../../src/model'
+import { anchorOf, dialogueTransition, EMPTY_DIALOGUE, modeFor, transcriptEntries, type DialogueInput, type DialogueState } from '../../src/state/desk/dialogue'
+import type { AgentBlock, Anchor, DiagramCheck, TranscriptRecord } from '../../src/model'
 
 const M: Anchor = { kind: 'module', module: 'state.desk' }
 const N: Anchor = { kind: 'module', module: 'model' }
@@ -89,5 +89,45 @@ describe('DL-12 对话会话', () => {
     })
     expect(anchorOf({ kind: 'relation', id: 'r' }, null)).toEqual({ kind: 'none' })
     expect(anchorOf(null, null)).toEqual({ kind: 'none' })
+  })
+})
+
+describe('DL-51 设计里对话的读回', () => {
+  const S: Anchor = { kind: 'module', module: 'state.desk.edit.dialogue', sheet: 'state.desk.edit.dialogue' }
+  const records: TranscriptRecord[] = [
+    {
+      turn: 'x-t1',
+      request: { mode: 'edit', anchor: S, text: '加四个框', images: [] },
+      result: { type: 'done', blocks: [{ kind: 'edit', summary: '新增四个框', ops: [] }] },
+    },
+    {
+      turn: 'x-t2',
+      request: { mode: 'ask', anchor: S, text: '画一张图', images: [{ name: '01.png', type: 'image/png', dataUrl: 'data:image/png;base64,AA==' }] },
+      result: { type: 'done', blocks: [{ kind: 'diagram', svg: '<svg/>', caption: '图' }] },
+    },
+    { turn: 'x-t3', request: { mode: 'ask', anchor: S, text: '再问', images: [] }, result: { type: 'error', message: '403' } },
+    { turn: 'x-t4', request: { mode: 'ask', anchor: S, text: '停', images: [] }, result: { type: 'stopped', reason: 'timeout' } },
+  ]
+  it('落盘的各轮 → 每轮一对条目，带当时的锚点；贴图原样；机制图按给的检查判一次', () => {
+    const check = (blocks: readonly AgentBlock[]): Record<number, DiagramCheck> =>
+      blocks.some(b => b.kind === 'diagram') ? { 0: { ok: false, reasons: ['不合格'] } } : {}
+    const entries = transcriptEntries(records, check)
+    expect(entries.map(e => e.role)).toEqual(['user', 'agent', 'user', 'agent', 'user', 'error', 'user', 'stopped'])
+    expect(entries[0]).toMatchObject({ role: 'user', anchor: S, input: { text: '加四个框', mode: 'edit' } })
+    expect(entries[2]).toMatchObject({ input: { images: [{ name: '01.png' }] } })
+    expect(entries[1]).not.toHaveProperty('diagrams')
+    expect(entries[3]).toMatchObject({ diagrams: { 0: { ok: false } } })
+    expect(entries[5]).toMatchObject({ role: 'error', message: '403' })
+    expect(entries[7]).toMatchObject({ role: 'stopped', reason: 'timeout' })
+  })
+  it('restore：只在转录为空、空闲时整份放进来；之后照常追加', () => {
+    const entries = transcriptEntries(records)
+    const s = go(at(), { type: 'restore', entries })
+    expect(s.transcript).toHaveLength(8)
+    expect(go(s, { type: 'restore', entries: entries.slice(0, 2) }).transcript).toHaveLength(8)
+    const busy = go(at(), { type: 'send', input: ask('一') })
+    expect(go(busy, { type: 'restore', entries }).transcript).toHaveLength(1)
+    const next = go(s, { type: 'send', input: ask('接着问') })
+    expect(next.transcript.at(-1)).toMatchObject({ role: 'user', input: { text: '接着问' } })
   })
 })

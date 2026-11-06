@@ -45,6 +45,7 @@ import type {
   ProjectSummary,
   RawFile,
   RevisionInfo,
+  TranscriptRecord,
   VersionRef,
 } from '../src/model'
 
@@ -92,6 +93,8 @@ export interface ModelPayload {
   changes?: unknown
   /** DL-10：设计说明（notes/） */
   notes?: { file: string; title: string; module?: string; at?: string; text: string }[]
+  /** DL-51：设计里落盘的对话（各轮，贴图为 data URL） */
+  transcript?: TranscriptRecord[]
 }
 
 /** 一张草图文件：挂载点、相对项目描述目录的路径、在载荷里的路径、读取时的指纹 */
@@ -453,7 +456,7 @@ export function readSketchVersion(
 }
 
 /** DL-3、DL-10：设计目录下页面与 AI 拥有的两样——编号表与设计说明（不登记指纹） */
-function designExtras(modelRoot: string, project: string, design: string): Pick<ModelPayload, 'changes' | 'notes'> {
+function designExtras(modelRoot: string, project: string, design: string): Pick<ModelPayload, 'changes' | 'notes' | 'transcript'> {
   const dir = path.join(modelRoot, project, DESIGNS_DIR, design)
   let changes: unknown
   try {
@@ -474,7 +477,45 @@ function designExtras(modelRoot: string, project: string, design: string): Pick<
           return { file: `notes/${f}`, title: /^#\s+(.+)$/m.exec(text)?.[1]?.trim() ?? f.replace(/\.md$/, ''), ...(module ? { module } : {}), text }
         })
     : []
-  return { ...(changes !== undefined ? { changes } : {}), ...(notes.length ? { notes } : {}) }
+  const transcript = readTranscript(dir)
+  return { ...(changes !== undefined ? { changes } : {}), ...(notes.length ? { notes } : {}), ...(transcript.length ? { transcript } : {}) }
+}
+
+/** DL-51：设计里落盘的对话（dialogue/transcript.jsonl，一轮一行）；贴图（设计目录里的路径）读成 data URL，超过 5 MB 或读不到的只留名字；坏行跳过 */
+const PHOTO_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }
+function readTranscript(designDir: string): TranscriptRecord[] {
+  const file = path.join(designDir, 'dialogue', 'transcript.jsonl')
+  if (!fs.existsSync(file)) return []
+  const out: TranscriptRecord[] = []
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    if (!line.trim()) continue
+    try {
+      const r = JSON.parse(line) as {
+        at?: string
+        turn?: string
+        request?: { mode?: string; anchor?: unknown; text?: string; images?: unknown[] }
+        result?: { type?: string }
+      }
+      if (!r.turn || !r.request || !r.result || !['done', 'error', 'stopped'].includes(r.result.type ?? '')) continue
+      const images = (r.request.images ?? [])
+        .filter((x): x is string => typeof x === 'string')
+        .map(rel => {
+          const abs = path.resolve(designDir, rel)
+          const type = PHOTO_TYPES[path.extname(abs).slice(1).toLowerCase()] ?? 'image/png'
+          const ok = abs.startsWith(designDir + path.sep) && fs.existsSync(abs) && fs.statSync(abs).size <= 5 * 1024 * 1024
+          return { name: path.basename(rel), type, dataUrl: ok ? `data:${type};base64,${fs.readFileSync(abs).toString('base64')}` : '' }
+        })
+      out.push({
+        ...(r.at ? { at: r.at } : {}),
+        turn: r.turn,
+        request: { ...(r.request as TranscriptRecord['request']), images },
+        result: r.result as TranscriptRecord['result'],
+      })
+    } catch {
+      // 坏行跳过：转录是证据，不是描述，读不出的一行不拦整份
+    }
+  }
+  return out
 }
 
 /** X19：草图版本里的引用文件——草图引用、但草图与持久草图都没有定义的模块（与它们缺的祖先）与参与者，取当前版本的名称与位置，让草图版本自成一份可加载的描述 */

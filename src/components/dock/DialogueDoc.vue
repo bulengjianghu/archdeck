@@ -31,6 +31,12 @@ const BADGE = { ask: '只问', renarrate: '只动讲法', edit: '可改' } as co
 type Outcome = NonNullable<Extract<DialogueEntry, { role: 'agent' }>['outcome']>
 const proposal = (o: Outcome | undefined) => (o && 'kind' in o && o.kind === 'proposal' ? o : null)
 const renarrated = (o: Outcome | undefined) => (o && !('kind' in o) ? o : null)
+/** DL-51：恢复的「改」一轮（没有提议卡结果、有改动块）的一句话 */
+const restoredEdit = (e: Extract<DialogueEntry, { role: 'agent' }>): string | null => {
+  if (e.outcome) return null
+  const b = e.blocks.find(x => x.kind === 'edit')
+  return b && b.kind === 'edit' ? (b.summary ?? '这一轮的改动') : null
+}
 const notesCount = (o: Outcome | undefined) => {
   const r = renarrated(o)
   return r?.applied ? r.notes.length : 0
@@ -225,6 +231,10 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
           </template>
           <!-- DA-8：提议卡 -->
           <ProposalCard v-if="proposal(e.outcome)" :outcome="proposal(e.outcome)!" :busy="running" />
+          <!-- DL-51：从设计目录恢复的「改」一轮——提议卡的结果不落盘，只给一句话，号与撤回看「改动」页签 -->
+          <p v-else-if="restoredEdit(e)" class="card restored" data-testid="restored-edit">
+            改动（已随设计保存）· {{ restoredEdit(e) }} <span class="muted">· 号与撤回见「改动」页签</span>
+          </p>
           <!-- DA-4：重讲的结果 -->
           <div v-else-if="renarrated(e.outcome)" class="card outcome" :class="{ rejected: !renarrated(e.outcome)!.applied }" data-testid="renarrate-outcome">
             <template v-if="renarrated(e.outcome)!.applied">
@@ -324,6 +334,10 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
 </template>
 
 <style scoped>
+.card.restored {
+  font-size: 12px;
+}
+
 .lock-note {
   font-size: 11.5px;
   color: var(--text-3);

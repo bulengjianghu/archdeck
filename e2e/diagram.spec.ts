@@ -45,7 +45,8 @@ test('DL-40–DL-43 草图里：画一张图讲拆分后怎么运作——卡上
     // 存为设计说明：图随文字写进 notes/，预览里有图
     await msg.getByTestId('save-note').click()
     const note = dock(page).getByTestId('note-doc')
-    await expect(note).toBeVisible()
+    // 存好后要等重新加载带回设计说明清单：多 worker 并行时开发服务器读草图版本一次就要 5–7 s，按 agent 一轮的预算等（同 sketch-dialogue）
+    await expect(note).toBeVisible({ timeout: 25_000 })
     await expect(note.getByTestId('diagram-caption')).toHaveText('拆分后：左边受理、右边落下，只经一条命令往来')
     await expect(note.getByTestId('diagram').frameLocator('iframe').locator('svg g[data-arch]')).toHaveCount(2)
     const files = fs.readdirSync(path.join(PROJECT, 'designs', design, 'notes'))

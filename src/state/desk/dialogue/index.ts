@@ -32,6 +32,8 @@ import {
   type DialogueEntry,
   type DialogueInput,
   type DialogueState,
+  transcriptEntries,
+  type TranscriptRecord,
 } from './state'
 import { checkDiagrams, citeViews, digestOf, type DiagramView, type NoteSegmentView } from './views'
 
@@ -53,9 +55,11 @@ export interface DialogueInputs {
   openTab: () => void
   /** 草图里的一面（没有时只在当前版本上对话） */
   sketch?: DialogueSketchPort
+  /** DL-51：设计里落盘的各轮（草图版本的载荷带来；随重新加载更新） */
+  history?: () => readonly TranscriptRecord[] | undefined
 }
 
-export function createDialogue({ project, index, selection, step, perspective, transport, design, openTab, sketch }: DialogueInputs) {
+export function createDialogue({ project, index, selection, step, perspective, transport, design, openTab, sketch, history }: DialogueInputs) {
   const session = Math.random().toString(36).slice(2, 10)
   /**
    * DL-42：图里引用的模块要填入的原文——描述里有的按图解同一口径（EX-2）；草图里才有的框只给名称；
@@ -135,6 +139,17 @@ export function createDialogue({ project, index, selection, step, perspective, t
   watch(
     () => (sketch?.active() ? (sketch.lock?.() ?? null) : null),
     lock => dispatch({ type: 'setLock', lock }),
+    { immediate: true },
+  )
+  // DL-51：设计里落盘的转录在会话为空时整份恢复（打开设计、重新加载页面）；回答里的图按当前张判一次
+  watch(
+    () => history?.(),
+    recs => {
+      if (!recs?.length || state.value.transcript.length) return
+      const known = (id: string) =>
+        sketch?.active() && sketch.sheetHas ? sketch.sheetHas(id) : !!index.value && (id === index.value.rootId || index.value.modules.has(id))
+      dispatch({ type: 'restore', entries: transcriptEntries(recs, blocks => checkDiagrams(blocks, known)) })
+    },
     { immediate: true },
   )
   const unsubscribe = project ? transport.subscribe(project, event => dispatch({ type: 'event', event })) : () => {}

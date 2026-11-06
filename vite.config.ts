@@ -10,6 +10,8 @@ export default defineConfig({
   plugins: [vue(), archModelPlugin({ modelRoot: resolveModelRoot(root), root })],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   worker: { format: 'es' },
+  // 辅助栏的资料种类是按需加载的组件（docKinds.ts）：开发服务器启动时先转好，第一次打开设计说明、对话等不再现编译（负载高时实测 6 s）
+  server: { warmup: { clientFiles: ['./src/components/dock/*.vue'] } },
   // npm run build 只做类型检查与打包验证（分块、Worker、按需加载能打成产物），产物不部署：本工具只在本地开发服务器上运行（ADR-0007 修订）
   build: {
     // elk.bundled（约 1.4MB）只在无 Worker 环境兜底，浏览器不会加载

@@ -184,6 +184,41 @@ describe('接入层 · 多项目读取', () => {
     }
   })
 
+  it('DL-51：草图版本带上设计里落盘的对话——贴图读成 data URL，读不到的只留名字，坏行跳过；没有转录时不带', () => {
+    expect(readSketchVersion(modelRoot, 'gamma', 'sk', root)!.transcript).toBeUndefined()
+    const dir = path.join(modelRoot, 'gamma/designs/sk/dialogue')
+    fs.mkdirSync(path.join(dir, 'photos/t1'), { recursive: true })
+    fs.writeFileSync(path.join(dir, 'photos/t1/01.png'), Buffer.from([1, 2, 3]))
+    const anchor = { kind: 'module', module: 'core.api', sheet: 'core.api' }
+    fs.writeFileSync(
+      path.join(dir, 'transcript.jsonl'),
+      [
+        JSON.stringify({
+          at: 'x',
+          turn: 't1',
+          request: { mode: 'ask', anchor, text: '看图', images: ['dialogue/photos/t1/01.png', 'dialogue/photos/t1/02.png'] },
+          result: { type: 'done', turn: 't1', blocks: [] },
+        }),
+        '{坏行',
+        JSON.stringify({ turn: 't2', request: { mode: 'edit', anchor, text: '改', images: [] }, result: { type: 'error', turn: 't2', message: '超时' } }),
+      ].join('\n') + '\n',
+    )
+    try {
+      const t = readSketchVersion(modelRoot, 'gamma', 'sk', root)!.transcript!
+      expect(t.map(r => [r.turn, r.result.type])).toEqual([
+        ['t1', 'done'],
+        ['t2', 'error'],
+      ])
+      expect(t[0].request.images).toEqual([
+        { name: '01.png', type: 'image/png', dataUrl: 'data:image/png;base64,AQID' },
+        { name: '02.png', type: 'image/png', dataUrl: '' },
+      ])
+      expect(t[0].request.anchor).toEqual(anchor)
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('DV-10：草图作为版本——system + 持久草图 + 该设计的各张草图（+ 引用的外部模块），对比基线为当前版本，附「交给 AI」的指令', () => {
     const v = readSketchVersion(modelRoot, 'gamma', 'sk', root)!
     expect(v.version).toEqual({ design: 'sk', revision: 'sketch' })

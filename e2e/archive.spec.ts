@@ -89,7 +89,7 @@ test('用例 12：改一半——不点按钮 ✓ 与待做、待做在前、归
     await say(page, '这一层为什么这样分？')
     await expect(dialogue(page).getByTestId('answer-card')).toBeVisible({ timeout: 25_000 })
     await dialogue(page).getByTestId('answer-card').getByTestId('save-note').click()
-    await expect(dock(page).getByTestId('note-doc')).toBeVisible()
+    await expect(dock(page).getByTestId('note-doc')).toBeVisible({ timeout: 25_000 })
     await dock(page).locator('.tab', { hasText: '对话' }).click()
     await dialogue(page).getByRole('button', { name: '改', exact: true }).click()
     await round(page, '#archive-two 加认可与归档')
@@ -124,11 +124,14 @@ test('用例 12：改一半——不点按钮 ✓ 与待做、待做在前、归
     // 确认层：草图覆盖的模块「已确认」，来源 sketch:<设计>
     const rec = fs.readFileSync(REVIEWED, 'utf8')
     expect(rec).toMatch(new RegExp(`module: state\\.desk\\.edit\\.w4-accept[\\s\\S]*?source: sketch:${design}`))
-    // 归档后的设计里：对话（只问、转录还在）与设计说明仍可开
+    // 归档后的设计里：真的重新加载页面（内存里的会话没了），对话从设计目录恢复（DL-51：只问、两轮都在、「改」的一轮给一句话）与设计说明仍可开
+    await page.reload()
     await openDesk(page, `/p/h5p-arch-desk/d/${design}/sketch`)
     await expect(dialogue(page)).toBeVisible()
     await expect(dialogue(page).getByTestId('mode-badge')).toHaveText('只问')
-    await expect(dialogue(page).getByTestId('proposal-card')).toHaveCount(1)
+    await expect(dialogue(page).getByTestId('msg-user')).toHaveCount(2)
+    await expect(dialogue(page).getByTestId('answer-card')).toHaveCount(1)
+    await expect(dialogue(page).getByTestId('restored-edit')).toContainText('改动（已随设计保存）')
     // 设计说明：与设计面板那一行同一个意图（desk.notes.open）
     const note = fs.readdirSync(path.join(dir, 'notes'))[0]
     await page.evaluate(f => (globalThis as unknown as { __desk: { notes: { open(f: string): void } } }).__desk.notes.open(f), note)

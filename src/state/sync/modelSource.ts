@@ -3,7 +3,7 @@
  * 只负责外界，加载结果由协调者 dispatch。
  */
 import type { Baseline, Baselines } from '../desk/ports'
-import { loadModel, type DesignInfo, type LoadedModel, type ModelCommit, type RawFile, type VersionRef } from '@/model'
+import { loadModel, type DesignInfo, type LoadedModel, type ModelCommit, type RawFile, type TranscriptRecord, type VersionRef } from '@/model'
 
 export interface CompareSource {
   label: string
@@ -35,6 +35,8 @@ export interface ModelPayload {
   changes?: unknown
   /** DL-10：设计说明 */
   notes?: DesignNote[]
+  /** DL-51：设计里落盘的对话（各轮，贴图为 data URL） */
+  transcript?: TranscriptRecord[]
 }
 
 /** DL-10：一份设计说明（designs/<设计>/notes/<名>.md，AI 拥有） */

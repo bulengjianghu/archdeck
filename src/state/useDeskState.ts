@@ -30,6 +30,7 @@ import {
   ROOT_MOUNT,
   type ModuleRole,
   type RuleKind,
+  type TranscriptRecord,
 } from '@/model'
 import {
   DEFAULT_TOGGLES,
@@ -111,6 +112,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   /** DL-3、DL-10：草图版本里设计的编号表与设计说明 */
   const payloadChanges = shallowRef<unknown>(undefined)
   const notes = shallowRef<DesignNote[]>([])
+  /** DL-51：设计里落盘的对话（草图版本的载荷带来） */
+  const transcript = shallowRef<TranscriptRecord[] | undefined>(undefined)
   /** DA-6：AI 正在修改草图（对话「改」的一轮在跑）——编辑分组据此只读；对话在编辑分组之后创建，这里先占位 */
   const aiEditing = shallowRef(false)
   const state = shallowRef<ViewState>({ levelId: '', selection: null, hover: null, toggles: DEFAULT_TOGGLES(RELATION_TYPES), playback: null })
@@ -330,6 +333,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       payloadSketchFiles.value = loaded.payload.sketchFiles
       payloadChanges.value = loaded.payload.changes
       notes.value = loaded.payload.notes ?? []
+      transcript.value = loaded.payload.transcript
       loadedIndex.value = loaded.model.index
       index.value = edit.onReloaded()
       status.value = 'ready'
@@ -466,6 +470,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     perspective: canvas,
     transport: options.agent ?? NO_AGENT,
     openTab: () => workspaceDispatch({ type: 'open', doc: { kind: 'dialogue' }, pin: true }),
+    history: () => transcript.value,
     // DA-6：草图里的「改」——锚点带当前张，请求带草图上下文，一轮说完应用到编辑会话（提议卡）
     sketch: {
       active: () => edit.active.value && edit.target?.kind === 'design',

@@ -37,7 +37,7 @@ modules:
       会话的值与转移（state）、锚点（anchor）、对外端口（ports）、卡片派生（views）、agent 通道同步（transport）各是一个子模块；
       它自己是协调者 createDialogue：选中 / 视角 → 换锚点；进入新的运行轮次 → 经注入的 AgentTransport 发一轮，停止 → 通知子进程；推送的事件 → 转移；
       一轮说完时按「当前版本查描述、草图里查当前张」检查机制图（DL-41）、草图里把改动块交给编辑分组（DL-21）；给呈现层派生引用原文、梳理卡、图与设计说明图段、锚点文字。
-      当前版本上的会话只在内存，设计里的随设计落盘（接入层按请求带的设计写）。
+      当前版本上的会话只在内存，设计里的随设计落盘（接入层按请求带的设计写），打开设计的草图时从载荷恢复（DL-51：会话为空时整份放进来，回答里的图按当前张判一次）。
     abstraction: 会话是值、规则是纯函数、协调只翻译——与编辑会话同一套分法；轮次 = 会话编号 + 序号，多个页面的推送不串。
     codeRefs: [src/state/desk/dialogue/index.ts]
   - id: state.desk.edit.dialogue.state
@@ -49,6 +49,7 @@ modules:
       会话的值（DialogueState：转录——每条带当时的锚点：用户、回答、错误、已停止；锚点、视角、运行状态、排队的输入、草稿、模式、状态锁）与纯转移 dialogueTransition：
       发送（空闲开一轮，运行中进队列）、停止（这一轮不落，排队的退回草稿）、换锚点与换视角（转录不变）、改 / 问 / 重讲切换与锁定（DL-19、DL-34）、
       agent 事件（片段累加、说完落一条并接着发队首、出错记错误卡、超时视同停止，别的轮次与停止后的迟到事件不认）；modeFor：重讲只对模块。
+      restore（DL-51）：落盘的各轮按 transcriptEntries 还原成转录，只在转录为空、空闲时整份放进来。
       不发请求、不订阅推送、不派生显示数据。
     codeRefs: [src/state/desk/dialogue/state.ts]
   - id: state.desk.edit.dialogue.anchor

@@ -20,6 +20,20 @@ export type Anchor =
 export type DialogueMode = 'ask' | 'renarrate' | 'edit'
 
 /**
+ * DL-51：设计里落盘的一轮（designs/<设计>/dialogue/transcript.jsonl 的一行）——请求（模式、锚点、文字、贴图）与结果（说完 / 出错 / 停止）。
+ * 接入层落盘时贴图写成设计目录里的路径，读回时换成 data URL（读不到的 dataUrl 为空串）。
+ */
+export interface TranscriptRecord {
+  at?: string
+  turn: string
+  request: { mode: DialogueMode; anchor: Anchor; text: string; images: { name: string; type: string; dataUrl: string }[] }
+  result:
+    | { type: 'done'; blocks: import('./protocol').AgentBlock[] }
+    | { type: 'error'; message: string }
+    | { type: 'stopped'; reason: 'stopped' | 'timeout' }
+}
+
+/**
  * DL-14（波 2 补齐 07 §7.1）：草图里的上下文——设计、当前张（全文）、同设计的其他草图（挂载点与模块）、基线里同一层、带号的改动清单、
  * 父模块（挂载点）的原则。页面从编辑会话构造（AI 的改动停在未保存的会话里，07 §7.2），开发服务器原样放进包里。
  */

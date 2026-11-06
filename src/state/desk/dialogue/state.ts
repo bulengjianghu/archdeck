@@ -3,7 +3,7 @@
  * 锚点、视角、运行状态、排队的输入、草稿、模式与状态锁；只经纯转移函数 dialogueTransition 改变（换锚点时问「锚点」是否真的变了）。
  * 不发请求、不订阅推送、不派生显示数据。
  */
-import { type DiagramCheck, type AgentBlock, type Anchor, type DialogueMode } from '@/model'
+import { type DiagramCheck, type AgentBlock, type Anchor, type DialogueMode, type TranscriptRecord } from '@/model'
 import type { ProposalOutcome } from '../edit/changes'
 import { sameAnchor } from './anchor'
 
@@ -25,7 +25,7 @@ export type RenarrateOutcome = { applied: true; path: string; notes: string[] } 
 
 /** 一轮的结果：重讲（DL-8）或草图里的提议（DA-8） */
 export type TurnOutcome = RenarrateOutcome | ProposalOutcome
-export type { ProposalOutcome }
+export type { ProposalOutcome, TranscriptRecord }
 
 export type DialogueEntry =
   | { id: string; role: 'user'; anchor: Anchor; input: DialogueInput }
@@ -70,9 +70,38 @@ export type AgentPush =
   | { turn: string; type: 'error'; message: string }
   | { turn: string; type: 'stopped'; reason: 'stopped' | 'timeout' }
 
+/** DL-51：落盘的各轮 → 转录（每轮一对：提问 + 回答 / 错误 / 停止，各自带当时的锚点）；diagrams 给出回答里机制图的检查（恢复那一刻判一次） */
+export function transcriptEntries(
+  records: readonly TranscriptRecord[],
+  diagrams: (blocks: readonly AgentBlock[]) => Record<number, DiagramCheck> = () => ({}),
+): DialogueEntry[] {
+  const out: DialogueEntry[] = []
+  records.forEach((r, k) => {
+    const anchor = r.request.anchor
+    out.push({ id: `r${k}u`, role: 'user', anchor, input: { text: r.request.text, mode: r.request.mode, images: r.request.images ?? [] } })
+    const res = r.result
+    if (res.type === 'done') {
+      const checked = diagrams(res.blocks)
+      out.push({
+        id: `r${k}a`,
+        role: 'agent',
+        anchor,
+        turn: r.turn,
+        text: '',
+        blocks: res.blocks,
+        ...(Object.keys(checked).length ? { diagrams: checked } : {}),
+      })
+    } else if (res.type === 'error') out.push({ id: `r${k}e`, role: 'error', anchor, turn: r.turn, message: res.message })
+    else out.push({ id: `r${k}s`, role: 'stopped', anchor, turn: r.turn, reason: res.reason })
+  })
+  return out
+}
+
 export type DialogueAction =
   | { type: 'send'; input: DialogueInput }
   | { type: 'stop' }
+  /** DL-51：打开设计时恢复落盘的转录——只在转录为空、空闲时 */
+  | { type: 'restore'; entries: DialogueEntry[] }
   | { type: 'setAnchor'; anchor: Anchor }
   | { type: 'setPerspective'; perspective: CanvasPerspective; anchor: Anchor }
   | { type: 'setDraft'; text: string }
@@ -142,6 +171,8 @@ export function dialogueTransition(s: DialogueState, a: DialogueAction): Dialogu
     }
     case 'stop':
       return s.run.status === 'running' ? halt(s, s.run.turn, 'stopped') : s
+    case 'restore':
+      return s.transcript.length || s.run.status !== 'idle' || !a.entries.length ? s : { ...s, transcript: a.entries }
     case 'setAnchor':
       // DA-2：换锚点不动转录（历史消息各自记着当时的锚点）
       return sameAnchor(s.anchor, a.anchor) ? s : { ...s, anchor: a.anchor }

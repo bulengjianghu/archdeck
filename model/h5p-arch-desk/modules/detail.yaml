@@ -742,7 +742,7 @@ interfaces:
       GET projects.json            → ProjectSummary[]
       GET models/<项目>.json       → ModelPayload        // 当前版本；不存在时 404
       GET models/<项目>/designs/<设计>/<轮次>.json → ModelPayload  // 设计版本某一轮，附 compare 对比基线
-      GET models/<项目>/designs/<设计>/sketch.json → ModelPayload  // 设计的草图版本：各张 sketches/<mount>.yaml + 引用的外部模块，附 sketchFiles（各自指纹）、基线与「交给 AI」的指令
+      GET models/<项目>/designs/<设计>/sketch.json → ModelPayload  // 设计的草图版本：各张 sketches/<mount>.yaml + 引用的外部模块，附 sketchFiles（各自指纹）、基线与「交给 AI」的指令，以及设计目录下的编号表、设计说明与落盘的对话（transcript，贴图读成 data URL，DL-51）
       GET models/<项目>/intent/<草图 ID>.json → ModelPayload  // 持久草图版本（system.yaml + intent/**），附 sketch { file, hash } 与指令
       POST write/<项目>/sketch                 { target, sketch, baseHash } → { file, hash } | 409 | 422   // B6，持久草图
       POST write/<项目>/designs/<设计>/sketch  { target, sketch, baseHash } → { file, hash } | 409 | 422   // B6，设计的一张草图
