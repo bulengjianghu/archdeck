@@ -8,6 +8,7 @@ import { graphNode, openDesk, openPanel, openPanelLists, waitSettled } from './h
 const top = async (page: Parameters<typeof graphNode>[0], id: string) => (await graphNode(page, id).boundingBox())!.y
 
 test('ADR-0052：本项目「模型层」声明四层（层是分类、不占级）——打开即 4 条带，单成员层的带即成员，契约在最下，切到结构视角节点不动', async ({ page }) => {
+  test.setTimeout(150_000)
   await openDesk(page, '/p/h5p-arch-desk?level=model')
   await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   const bandTop = async (id: string) => (await graphNode(page, id).boundingBox())!.y
@@ -24,14 +25,24 @@ test('ADR-0052：本项目「模型层」声明四层（层是分类、不占级
   expect(await bandTop('s:model/description')).toBeLessThan(await bandTop('model.types'))
   const types = await top(page, 'model.types')
   for (const id of ['model.pipeline', 'model.governance', 'model.projector']) expect(await top(page, id)).toBeLessThan(types)
-  // 位置要跨两次加载逐字节相等：先等首帧后的整体平移（再适应）结束，两边都在稳定态上读
-  await waitSettled(page)
-  const before = await graphNode(page, 'model.governance').boundingBox()
-  await openDesk(page, '/p/h5p-arch-desk?level=model&v=s')
-  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
-  await expect(page.locator('.vue-flow__node[data-id="model.types"]')).toBeAttached()
-  await waitSettled(page)
-  expect(await graphNode(page, 'model.governance').boundingBox()).toEqual(before)
+  // 位置要跨两次加载逐字节相等：先等首帧后的整体平移（再适应）结束，两边都在稳定态上读。
+  // 合并复跑（round21/integration）：全量并行时别的用例临时改写本项目描述（grading 的 roles.yaml、approval 的临时模块等，结束时恢复），
+  // 落在两次加载之间布局就不同——两次读数成对重试，同一份描述上比
+  let first = true
+  await expect(async () => {
+    if (!first) {
+      await openDesk(page, '/p/h5p-arch-desk?level=model')
+      await openPanel(page)
+    }
+    first = false
+    await waitSettled(page)
+    const before = await graphNode(page, 'model.governance').boundingBox()
+    await openDesk(page, '/p/h5p-arch-desk?level=model&v=s')
+    await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
+    await expect(page.locator('.vue-flow__node[data-id="model.types"]')).toBeAttached()
+    await waitSettled(page)
+    expect(await graphNode(page, 'model.governance').boundingBox()).toEqual(before)
+  }).toPass({ timeout: 90_000 })
 })
 
 test('ST-1、K21：DeskState 声明了三层（同步适配器 → 写入口 → 派生）——分层总览、不算依赖深度；选中后面板「拆分信号」列出不占文件的子模块', async ({ page }) => {

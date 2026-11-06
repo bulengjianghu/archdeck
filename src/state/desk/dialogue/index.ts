@@ -88,6 +88,8 @@ export function createDialogue({ project, index, selection, step, perspective, t
     mode: perspective.value === 'sketch' ? ('edit' as const) : ('ask' as const),
     anchor: anchorNow(),
   })
+  /** 停止请求在途时，下一轮等它落地再发——两次 POST 走不同连接、到达开发服务器的先后不保证，先到的新一轮会撞上「已有一轮在进行」（合并复跑） */
+  let stopping: Promise<void> = Promise.resolve()
   const dispatch = (a0: DialogueAction) => {
     const before = state.value
     // DA-6、DL-1：草图里「改」的一轮说完时，先把改动块应用到编辑会话（一轮一步），结果写进提议卡
@@ -121,23 +123,26 @@ export function createDialogue({ project, index, selection, step, perspective, t
     if (after.run.status === 'running' && (before.run.status !== 'running' || before.run.turn !== after.run.turn)) {
       const turn = after.run.turn
       const user = [...after.transcript].reverse().find(e => e.role === 'user')
-      if (user?.role === 'user' && project)
-        void transport
-          .turn(project, {
-            session,
-            turn,
-            mode: user.input.mode,
-            anchor: user.anchor,
-            text: user.input.text,
-            images: user.input.images,
-            ...((sketch?.active() ? sketch.design() : design) ? { design: sketch?.active() ? sketch.design() : design } : {}),
-            ...(sketch?.active() && sketch.context() ? { sketch: sketch.context()! } : {}),
-          })
+      if (user?.role === 'user' && project) {
+        // 请求体在发起那一刻定下（等停止落地期间草图上下文变了也不影响这一轮）
+        const body = {
+          session,
+          turn,
+          mode: user.input.mode,
+          anchor: user.anchor,
+          text: user.input.text,
+          images: user.input.images,
+          ...((sketch?.active() ? sketch.design() : design) ? { design: sketch?.active() ? sketch.design() : design } : {}),
+          ...(sketch?.active() && sketch.context() ? { sketch: sketch.context()! } : {}),
+        }
+        void stopping
+          .then(() => transport.turn(project, body))
           .then(r => {
             if (!r.ok) dispatch({ type: 'event', event: { turn, type: 'error', message: r.error } })
           })
+      }
     }
-    if (a.type === 'stop' && before.run.status === 'running' && project) void transport.stop(project, before.run.turn)
+    if (a.type === 'stop' && before.run.status === 'running' && project) stopping = transport.stop(project, before.run.turn).catch(() => {})
   }
   watch([selection, step, () => sheet()], () => dispatch({ type: 'setAnchor', anchor: anchorNow() }))
   watch(perspective, p => dispatch({ type: 'setPerspective', perspective: p, anchor: anchorNow() }))
