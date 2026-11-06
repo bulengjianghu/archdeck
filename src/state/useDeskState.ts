@@ -318,24 +318,17 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
 
   // ── 加载（模型源同步）──
   /**
-   * N5：重新加载按发起先后算——文件变化与写入后的重新加载会并发，先发起、后返回的旧载荷不能盖住新的（认可后迟到的旧状态曾把信息条回滚成「起草中」）；
-   * 被更晚发起的那次取代的调用不提前返回，等到最后发起的那一次落地（首次加载与写入之后的调用方要的是落地后的状态）
+   * N5：重新加载按发起先后算——文件变化与写入后的重新加载会并发，先发起、后返回的旧载荷不能盖住已经用上的新载荷（认可后迟到的旧状态曾把信息条回滚成「起草中」）；
+   * 没有更新的结果落地时照常用上（不等「最后一次」：别处一直在改文件时那样会永远落不了地）
    */
-  let reloadSeq = 0
-  let inflight: Promise<void> = Promise.resolve()
+  let reloadStarted = 0
+  let reloadApplied = 0
   async function reload() {
-    const run = loadOnce(++reloadSeq)
-    inflight = run
-    await run
-    for (let seen = run; inflight !== seen;) {
-      seen = inflight
-      await seen
-    }
-  }
-  async function loadOnce(n: number) {
+    const n = ++reloadStarted
     try {
       const loaded = await fetchAndLoad(fetchModel)
-      if (n !== reloadSeq) return
+      if (n < reloadApplied) return
+      reloadApplied = n
       const prevIndex = index.value
       const previousPath = prevIndex && levelId.value ? (prevIndex.pathOf.get(levelId.value) ?? []) : []
       modelDir.value = loaded.payload.dir
@@ -361,7 +354,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
         void sourceSync.refresh()
       }
     } catch (e) {
-      if (n !== reloadSeq) return
+      if (n < reloadApplied) return
       status.value = index.value ? 'ready' : 'error'
       loadError.value = e instanceof Error ? e.message : String(e)
     }

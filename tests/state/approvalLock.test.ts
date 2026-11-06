@@ -194,7 +194,7 @@ describe('重新加载按发起先后（第二十一轮收尾复跑）', () => {
     await stale
     expect(desk.edit.statusLock.value).toContain('回到起草')
   })
-  it('首次加载途中又发起一次（文件变化）：首次加载等到最后那次落地再按 URL 初始化，不因被取代而跳过', async () => {
+  it('首次加载途中又发起一次（文件变化）：各自按先后用上，首次加载照常按 URL 初始化', async () => {
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
     await router.push('/')
     const queue: ((p: ModelPayload) => void)[] = []
@@ -204,18 +204,34 @@ describe('重新加载按发起先后（第二十一轮收尾复跑）', () => {
       project: 'p',
     })
     desk.attachRouter(router)
-    let done = false
-    const init = desk.init().then(() => (done = true))
+    const init = desk.init()
     const later = desk.reload()
     queue[0](payloadOf('draft'))
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(done).toBe(false)
-    queue[1](payloadOf('accepted'))
-    await Promise.all([init, later])
+    await init
     expect(desk.index.value).not.toBeNull()
-    expect(desk.edit.statusLock.value).toContain('回到起草')
-    expect(desk.edit.editable).toBe(true)
     expect(desk.edit.session.value).not.toBeNull()
+    expect(desk.edit.statusLock.value).toBeFalsy()
+    queue[1](payloadOf('accepted'))
+    await later
+    expect(desk.edit.statusLock.value).toContain('回到起草')
+  })
+  it('别处一直在改文件：每次返回的结果只要没有更新的已落地就用上，不会因为又发起了一次而永远落不了地', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+    await router.push('/')
+    const queue: ((p: ModelPayload) => void)[] = []
+    const desk = createDeskState(() => new Promise<ModelPayload>(r => queue.push(r)), {
+      version: { design: 'd', revision: 'sketch' },
+      writer: writer().writer,
+      project: 'p',
+    })
+    desk.attachRouter(router)
+    const init = desk.init()
+    queue[0](payloadOf('draft'))
+    await init
+    const accepted = desk.reload() // 认可写入之后
+    void desk.reload() // 紧接着又一处文件变化，还没返回
+    queue[1](payloadOf('accepted'))
+    await accepted
+    expect(desk.edit.statusLock.value).toContain('回到起草')
   })
 })
