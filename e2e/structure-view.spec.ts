@@ -246,8 +246,12 @@ test('O13③：分层总览下的结构视角——带间画层间依赖，聚�
   expect(await page.locator('.vue-flow__edge-dep[data-id^="chip:"]').count()).toBe(0)
   // 本层环编号常显（Y4，不受代码事实开关影响）
   await expect(page.locator('.vue-flow__node-band .cycle-mark').first()).toBeAttached()
-  await graphNode(page, 'infra.framework').hover({ force: true })
-  await expect(page.locator('.vue-flow__edge-dep[data-id^="chip:"]').first()).toBeAttached()
+  // 合并复跑：拉开抽屉挤压画布后有一次再适应，悬停落在挪动中的节点上会落空——等画布静止，悬停与断言按 toPass 重试
+  await waitSettled(page)
+  await expect(async () => {
+    await graphNode(page, 'infra.framework').hover({ force: true })
+    await expect(page.locator('.vue-flow__edge-dep[data-id^="chip:"]').first()).toBeAttached({ timeout: 3_000 })
+  }).toPass({ timeout: 20_000 })
 })
 
 test('V11：从结构视角打开场景，退出回到结构视角；运行视角下单击「交互」即退出场景并进入交互视角', async ({ page }) => {
