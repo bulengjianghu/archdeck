@@ -167,6 +167,19 @@ test('用例 10：回到起草——回「起草中」、任务单标「认可�
   await openChanges(page)
   await expect(tab.getByTestId('task-head')).toContainText('有效')
   await expect(tab.getByTestId('task-state')).toHaveCount(2)
+
+  // 收尾 S1（DL-45）：当前版本的问题页签里，这个已认可未归档设计的偏差是提醒、尾标「任务单待做」（与 lint:model 同口径；归档关仍按错误）
+  await openDesk(page, '/p/h5p-arch-desk')
+  if (!(await page.locator('.nav-area').isVisible())) await page.getByRole('button', { name: '导航树', exact: true }).click()
+  await page.locator('.nav-tree').getByRole('tab', { name: /问题/ }).click()
+  const byCat = page.getByRole('combobox', { name: '按类别筛选' })
+  await expect(byCat.locator('option[value="sketch"]')).toBeEnabled({ timeout: LOAD_BUDGET })
+  await byCat.selectOption('sketch')
+  const mine = page.locator('.nav-tree .item', { hasText: '设计「zz-e2e-w3-withdraw」' })
+  await expect(mine.first()).toBeVisible()
+  await expect(mine.first()).toHaveClass(/\bwarning\b/)
+  await expect(mine.first().locator('.title')).toContainText('（任务单待做）')
+  await expect(page.locator('.nav-tree .item.error', { hasText: '设计「zz-e2e-w3-withdraw」' })).toHaveCount(0)
 })
 
 test('放弃：设计面板「放弃设计」二次确认后为「已放弃」、只看；项目卡片不再列出，草图与对话仍可开', async ({ page }) => {

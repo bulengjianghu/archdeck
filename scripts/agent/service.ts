@@ -397,6 +397,8 @@ export function createService(opts: ServiceOptions) {
         deps: l.deps,
         ...evo,
         sketches: l.checks,
+        // DL-45：对当前版本的核验，已认可未归档设计的偏差按门禁口径降为提醒（与 lint:model、页面同口径）
+        sketchGate: true,
       })
       const items = category ? all.items.filter(i => i.category === category) : all.items
       const list: ReworkList = category ? { ...all, items } : all

@@ -262,7 +262,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
       ...(source ? { source } : {}),
       ...(report ? { report } : {}),
       ...(evo ? { evolution: evo } : {}),
-      ...(checks.length ? { sketches: checks } : {}),
+      // DL-45：当前版本上的核验按门禁口径（已认可未归档设计的偏差为提醒，与 lint:model、arch issues 同口径）
+      ...(checks.length ? { sketches: checks, sketchGate: !options.version } : {}),
       ...(deps ? { deps } : {}),
       ...(facts.carriers.value ? { carriers: facts.carriers.value } : {}),
     })

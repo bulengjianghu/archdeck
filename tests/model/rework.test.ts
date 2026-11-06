@@ -4,7 +4,10 @@
 import { describe, expect, it } from 'vitest'
 import { sampleFiles } from '../fixtures/sample'
 import {
+  PENDING_TASK_NOTE,
   REWORK_CATEGORIES,
+  archiveGates,
+  archiveVerdict,
   assignFiles,
   checkSketches,
   governanceReport,
@@ -353,6 +356,36 @@ describe('X4 草图偏差进返工清单', () => {
     expect(warn).toMatchObject({ severity: 'warning', category: 'sketch', at: { in: 'description', file: 'designs/d/sketches/ui.extra.yaml' } })
     expect(warn.actions[1]).toMatchObject({ kind: 'accept-deviation', file: 'designs/d/design.yaml' })
     expect(reworkMarkdown(open, 'T')).toContain('### [提醒] 设计「d」的草图偏差')
+  })
+})
+
+describe('DL-45 返工清单里的门禁口径（收尾 S1）', () => {
+  it('对当前版本核验时，已认可未归档设计的偏差在返工清单为提醒、尾标任务单待做；同一份核验在归档关仍是错误；对设计各轮核验时不降', () => {
+    const files: RawFile[] = [
+      { path: 'system.yaml', text: 'system: { id: s, name: S }' },
+      { path: 'modules/m.yaml', text: 'modules:\n  - { id: ui, name: UI, responsibility: x }\n' },
+    ]
+    const { index, issues } = loadModel(files)
+    const sketch = parseDesignSketches([
+      { design: 'd', file: { path: 'designs/d/sketches/ui.yaml', text: 'sketch:\n  id: d\n  mount: ui\n  modules:\n    - { id: ui.new, name: New, responsibility: n }\n' } },
+    ])
+    const checks = checkSketches(index, sketch)
+    const errs = checks.flatMap(c => c.deviations).filter(d => d.severity === 'error')
+    expect(errs.length).toBeGreaterThan(0)
+    const gated = reworkList({ index, issues, sketches: checks, sketchGate: true })
+    const items = gated.items.filter(i => i.category === 'sketch')
+    expect(items.length).toBe(errs.length + checks.flatMap(c => c.deviations).filter(d => d.severity === 'warning').length)
+    for (const i of items) {
+      expect(i.severity).toBe('warning')
+      expect(i.title.endsWith(PENDING_TASK_NOTE)).toBe(true)
+    }
+    // 归档关：同一份核验按原严重度，第一关不过
+    const gates = archiveGates({ checks, drift: { intact: true, missing: false, changed: [], added: [], removed: [] } })
+    expect(gates.gates.find(g => g.key === 'consistent')).toMatchObject({ ok: false })
+    expect(archiveVerdict(checks[0]).reason).toContain('个错误')
+    // 设计各轮（不是对当前版本）：不降
+    const raw = reworkList({ index, issues, sketches: checks })
+    expect(raw.items.filter(i => i.category === 'sketch' && i.severity === 'error').length).toBe(errs.length)
   })
 })
 

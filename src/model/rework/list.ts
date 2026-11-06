@@ -28,7 +28,7 @@ import {
 } from '../governance'
 import { reviewDiffText, reviewStates, REVIEW_FIELD_LABELS, REVIEW_FIELDS } from '../review'
 import { isolatedCouplings, type EvolutionStats } from '../evolution'
-import { SKETCH_DEVIATION_LABELS, type SketchCheck } from '../intent'
+import { gateSeverity, SKETCH_DEVIATION_LABELS, type SketchCheck } from '../intent'
 import { isUnclassified, type Issue, type ModelIndex, type SourceLoc } from '../types'
 import { REWORK_CATEGORIES, REWORK_SEVERITIES, type ReworkAction, type ReworkItem, type ReworkList, type ReworkLoc, type ReworkSeverity } from './types'
 
@@ -44,6 +44,11 @@ export interface ReworkInput {
   evolution?: EvolutionStats
   /** X4：活动草图的核验结果；没有时不含草图偏差 */
   sketches?: readonly SketchCheck[]
+  /**
+   * DL-45：sketches 是对当前版本的核验（门禁口径）——已认可、未归档设计的偏差降为提醒、尾标「任务单待做」（与 lint:model 同一个 gateSeverity）；
+   * 对设计某一轮的核验不给（不降）
+   */
+  sketchGate?: boolean
   /** 文件依赖（K1）；与 source 同时给出时含「步骤无证据」（S17） */
   deps?: readonly FileDep[]
   /** K5d：交互的承载（页面给出带入口导出的一份）；不给时有 report 就按入口与归属现算。「步骤无证据」按承载对齐（S18b） */
@@ -199,7 +204,7 @@ export function reworkList(input: ReworkInput): ReworkList {
   items.push(...unmodeledItems(index, name))
   items.push(...reviewItems(index, name))
   if (input.evolution) items.push(...couplingItems(index, input.evolution, name))
-  for (const c of input.sketches ?? []) items.push(...sketchItems(c))
+  for (const c of input.sketches ?? []) items.push(...sketchItems(c, !!input.sketchGate))
   if (source && input.deps) items.push(...unevidencedItems(index, source.own, source.tree, input.deps, name, report ?? null, input.carriers))
 
   const sev = (s: ReworkSeverity) => REWORK_SEVERITIES.indexOf(s)
@@ -961,16 +966,19 @@ function reviewItems(index: ModelIndex, name: (id: string) => string): ReworkIte
 
 // ── 草图偏差（X4）：一条偏差一个根因；已认可的不进返工清单（没有要返工的，在设计面板列出） ──
 
-function sketchItems(c: SketchCheck): ReworkItem[] {
+function sketchItems(c: SketchCheck, gate: boolean): ReworkItem[] {
   const file = c.deviations[0]?.at?.file
   const who = c.design ? `设计「${c.design}」的草图` : `持久草图「${c.sketch}」`
-  return c.deviations.filter(d => !d.accepted).map(d => {
+  // DL-45：对当前版本核验时，已认可未归档设计的偏差是任务单——严重度与尾注取 gateSeverity（归档关与任务单不经这里，仍按原严重度）
+  return c.deviations.filter(d => !d.accepted).map(raw => {
+    const d = gate ? { ...raw, ...gateSeverity(c, raw) } : raw
     const at = descLoc(d.at)
     const actions: ReworkAction[] = []
     if (d.code === 'sketch.contradiction') actions.push({ kind: 'accept-deviation', text: '架构师决定：改草图使其与持久草图一致，或在草图里声明 supersedes 替换它（X3）', ...(file ? { file } : {}) })
     else {
       actions.push({ kind: 'follow-sketch', text: 'AI 按草图改描述：沿用草图的 ID 与父子关系，只在草图之下展开（X5）' })
-      if (d.severity !== 'error')
+      // 能不能认可按原严重度（降级的错误仍不能认可，DL-45）
+      if (raw.severity !== 'error')
         actions.push({ kind: 'accept-deviation', text: '确有理由时由架构师在设计面板「认可偏差（写理由）」，记入 design.yaml 的 accepted', ...(c.design ? { file: `designs/${c.design}/design.yaml` } : {}) })
       else actions.push({ kind: 'accept-deviation', text: '错误不能认可；意图确实要改时由架构师改草图' })
     }
