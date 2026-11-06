@@ -120,6 +120,13 @@ describe('DL-51 设计里对话的读回', () => {
     expect(entries[5]).toMatchObject({ role: 'error', message: '403' })
     expect(entries[7]).toMatchObject({ role: 'stopped', reason: 'timeout' })
   })
+  it('收尾 S3：补记了提议卡结果的「改」一轮恢复后带着结果（号与牵动）；恢复的回答都标 restored', () => {
+    const outcome = { kind: 'proposal' as const, applied: true as const, round: 1, numbers: [1, 2], impact: { modules: 3, scenarios: 0, fresh: false } }
+    const entries = transcriptEntries([{ ...records[0], outcome }, records[1]])
+    expect(entries[1]).toMatchObject({ role: 'agent', restored: true, outcome })
+    expect(entries[3]).toMatchObject({ role: 'agent', restored: true })
+    expect(entries[3]).not.toHaveProperty('outcome')
+  })
   it('restore：只在转录为空、空闲时整份放进来；之后照常追加', () => {
     const entries = transcriptEntries(records)
     const s = go(at(), { type: 'restore', entries })

@@ -31,6 +31,26 @@ export interface TranscriptRecord {
     | { type: 'done'; blocks: import('./protocol').AgentBlock[] }
     | { type: 'error'; message: string }
     | { type: 'stopped'; reason: 'stopped' | 'timeout' }
+  /** DL-51（收尾 S3）：草图里「改」一轮的提议卡结果（页面应用改动块后补记一行，读回时按轮次并进来） */
+  outcome?: TranscriptProposal
+}
+
+/**
+ * DA-8、DL-51：提议卡的结果——这一轮动了哪几个号、牵动谁（按当前描述估）；没落时为原因。页面算出后随转录落盘
+ */
+export type TranscriptProposal =
+  | { kind: 'proposal'; applied: true; round: number; numbers: number[]; impact: { modules: number; scenarios: number; fresh: boolean } }
+  | { kind: 'proposal'; applied: false; reasons: string[] }
+
+/** DL-51：转录里补记的提议卡结果是否合格（接入层落盘前、读回时各判一次） */
+export function isTranscriptProposal(x: unknown): x is TranscriptProposal {
+  if (!x || typeof x !== 'object') return false
+  const o = x as Record<string, unknown>
+  if (o.kind !== 'proposal') return false
+  if (o.applied === false) return Array.isArray(o.reasons) && o.reasons.every(r => typeof r === 'string')
+  if (o.applied !== true || typeof o.round !== 'number' || !Array.isArray(o.numbers) || !o.numbers.every(n => typeof n === 'number')) return false
+  const i = o.impact as Record<string, unknown> | undefined
+  return !!i && typeof i.modules === 'number' && typeof i.scenarios === 'number' && typeof i.fresh === 'boolean'
 }
 
 /**

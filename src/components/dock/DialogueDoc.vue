@@ -31,7 +31,7 @@ const BADGE = { ask: '只问', renarrate: '只动讲法', edit: '可改' } as co
 type Outcome = NonNullable<Extract<DialogueEntry, { role: 'agent' }>['outcome']>
 const proposal = (o: Outcome | undefined) => (o && 'kind' in o && o.kind === 'proposal' ? o : null)
 const renarrated = (o: Outcome | undefined) => (o && !('kind' in o) ? o : null)
-/** DL-51：恢复的「改」一轮（没有提议卡结果、有改动块）的一句话 */
+/** DL-51：恢复的「改」一轮没有补记提议卡结果（收尾 S3 之前落盘的）、有改动块时的一句话 */
 const restoredEdit = (e: Extract<DialogueEntry, { role: 'agent' }>): string | null => {
   if (e.outcome) return null
   const b = e.blocks.find(x => x.kind === 'edit')
@@ -230,8 +230,8 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
             </div>
           </template>
           <!-- DA-8：提议卡 -->
-          <ProposalCard v-if="proposal(e.outcome)" :outcome="proposal(e.outcome)!" :busy="running" />
-          <!-- DL-51：从设计目录恢复的「改」一轮——提议卡的结果不落盘，只给一句话，号与撤回看「改动」页签 -->
+          <ProposalCard v-if="proposal(e.outcome)" :outcome="proposal(e.outcome)!" :busy="running" :restored="!!e.restored" />
+          <!-- DL-51：从设计目录恢复的「改」一轮没有补记提议卡结果时（收尾 S3 之前落盘的）——只给一句话，号与撤回看「改动」页签 -->
           <p v-else-if="restoredEdit(e)" class="card restored" data-testid="restored-edit">
             改动（已随设计保存）· {{ restoredEdit(e) }} <span class="muted">· 号与撤回见「改动」页签</span>
           </p>

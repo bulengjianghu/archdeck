@@ -10,6 +10,7 @@ import path from 'node:path'
 import {
   buildContextPack,
   editLock,
+  isTranscriptProposal,
   loadModel,
   packPrompt,
   type AgentBlock,
@@ -158,4 +159,22 @@ export async function startTurn(
       : undefined,
   })
   return started.ok ? { ok: true, turn: body.turn } : { ok: false, error: started.error, status: 409 }
+}
+
+/**
+ * DL-51（收尾 S3）：补记提议卡的结果——页面把一轮的改动块应用到编辑会话后才知道动了哪几号、牵动谁，
+ * 随设计的转录追加一行 `{ at, turn, outcome }`，读回时按轮次并进那一轮（与那一轮的记录谁先落盘无关）
+ */
+export function recordOutcome(modelRoot: string, project: string, raw: unknown): { ok: true } | { ok: false; error: string; status: number } {
+  const b = (raw ?? {}) as { design?: unknown; turn?: unknown; outcome?: unknown }
+  if (typeof b.design !== 'string' || !/^[\w.-]+$/.test(b.design)) return { ok: false, error: '设计名不合法', status: 400 }
+  if (typeof b.turn !== 'string' || !/^[\w-]{1,60}$/.test(b.turn)) return { ok: false, error: '缺轮次编号', status: 400 }
+  if (!isTranscriptProposal(b.outcome)) return { ok: false, error: '提议卡结果不合法', status: 400 }
+  if (!/^[\w.-]+$/.test(project)) return { ok: false, error: '项目名不合法', status: 400 }
+  const designDir = path.join(modelRoot, project, 'designs', b.design)
+  if (!fs.existsSync(path.join(designDir, 'design.yaml'))) return { ok: false, error: `设计不存在：${b.design}`, status: 404 }
+  const file = path.join(designDir, 'dialogue', 'transcript.jsonl')
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.appendFileSync(file, `${JSON.stringify({ at: new Date().toISOString(), turn: b.turn, outcome: b.outcome })}\n`)
+  return { ok: true }
 }

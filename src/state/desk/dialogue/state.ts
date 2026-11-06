@@ -39,6 +39,8 @@ export type DialogueEntry =
       outcome?: TurnOutcome
       /** DL-41：机制图块到达那一刻的检查结果（按块的下标）；之后草图再改不重判 */
       diagrams?: Record<number, DiagramCheck>
+      /** DL-51：从设计目录恢复的一轮（提议卡只看不撤回，撤回看「改动」页签） */
+      restored?: true
     }
   | { id: string; role: 'error'; anchor: Anchor; turn: string; message: string }
   | { id: string; role: 'stopped'; anchor: Anchor; turn: string; reason: 'stopped' | 'timeout' }
@@ -70,7 +72,7 @@ export type AgentPush =
   | { turn: string; type: 'error'; message: string }
   | { turn: string; type: 'stopped'; reason: 'stopped' | 'timeout' }
 
-/** DL-51：落盘的各轮 → 转录（每轮一对：提问 + 回答 / 错误 / 停止，各自带当时的锚点）；diagrams 给出回答里机制图的检查（恢复那一刻判一次） */
+/** DL-51：落盘的各轮 → 转录（每轮一对：提问 + 回答 / 错误 / 停止，各自带当时的锚点；「改」一轮补记了提议卡结果的带上）；diagrams 给出回答里机制图的检查（恢复那一刻判一次） */
 export function transcriptEntries(
   records: readonly TranscriptRecord[],
   diagrams: (blocks: readonly AgentBlock[]) => Record<number, DiagramCheck> = () => ({}),
@@ -89,6 +91,8 @@ export function transcriptEntries(
         turn: r.turn,
         text: '',
         blocks: res.blocks,
+        restored: true,
+        ...(r.outcome ? { outcome: r.outcome } : {}),
         ...(Object.keys(checked).length ? { diagrams: checked } : {}),
       })
     } else if (res.type === 'error') out.push({ id: `r${k}e`, role: 'error', anchor, turn: r.turn, message: res.message })

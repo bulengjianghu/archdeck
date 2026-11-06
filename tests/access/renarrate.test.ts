@@ -8,7 +8,7 @@ import path from 'node:path'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { explainerStatus, loadModel, type RenarrateBlock } from '../../src/model'
 import { createAgentRunner, type DialogueEvent } from '../../vite/agentProcess'
-import { startTurn } from '../../vite/agentTurn'
+import { recordOutcome, startTurn } from '../../vite/agentTurn'
 import { readProject } from '../../vite/readModelDir'
 import { applyRenarrate, readNotes } from '../../vite/writeExplainer'
 
@@ -132,6 +132,17 @@ describe('一轮的接入（假 agent）', () => {
     fs.rmSync(path.join(P, 'designs/d1/dialogue'), { recursive: true })
     await turn({ mode: 'ask', anchor: { kind: 'none' }, text: '这个系统分几块？' })
     expect(fs.existsSync(path.join(P, 'designs/d1/dialogue'))).toBe(false)
+  })
+
+  it('收尾 S3（DL-51）：提议卡结果补记成转录的一行 { turn, outcome }；设计不存在、结果不合格、轮次不合法都拒', () => {
+    const outcome = { kind: 'proposal', applied: true, round: 2, numbers: [3], impact: { modules: 4, scenarios: 1, fresh: false } }
+    expect(recordOutcome(modelRoot, 'p', { design: 'd1', turn: 't9', outcome })).toMatchObject({ ok: false, status: 404 })
+    write('designs/d1/design.yaml', 'design: { id: d1, name: D1 }\n')
+    expect(recordOutcome(modelRoot, 'p', { design: 'd1', turn: 't9', outcome })).toEqual({ ok: true })
+    expect(JSON.parse(read('designs/d1/dialogue/transcript.jsonl').trim())).toMatchObject({ turn: 't9', outcome })
+    expect(recordOutcome(modelRoot, 'p', { design: 'd1', turn: 't9', outcome: { kind: 'proposal', applied: true } })).toMatchObject({ ok: false, status: 400 })
+    expect(recordOutcome(modelRoot, 'p', { design: '../x', turn: 't9', outcome })).toMatchObject({ ok: false, status: 400 })
+    expect(recordOutcome(modelRoot, 'p', { design: 'd1', turn: 'a/b', outcome })).toMatchObject({ ok: false, status: 400 })
   })
 
   it('请求不合法当场拒：重讲不锚在模块上、不是图片、锚点模块不存在', async () => {

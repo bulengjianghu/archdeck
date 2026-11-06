@@ -10,6 +10,8 @@ import type { AgentPush, ImageAttachment } from './state'
 export interface AgentTransport {
   turn(project: string, request: AgentTurnRequest): Promise<{ ok: true } | { ok: false; error: string }>
   stop(project: string, turn: string): Promise<void>
+  /** DL-51（收尾 S3）：设计里「改」一轮的提议卡结果随转录落盘（页面应用改动块之后才有）；没有实现时不落 */
+  outcome?(project: string, record: { design: string; turn: string; outcome: ProposalOutcome }): Promise<void>
   /** 订阅本项目的推送；返回取消订阅 */
   subscribe(project: string, cb: (e: AgentPush) => void): () => void
 }

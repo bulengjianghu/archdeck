@@ -200,6 +200,9 @@ describe('接入层 · 多项目读取', () => {
           result: { type: 'done', turn: 't1', blocks: [] },
         }),
         '{坏行',
+        // 收尾 S3：补记的提议卡结果按轮次并进那一轮（写在那一轮之前也行）；不合格的补记跳过
+        JSON.stringify({ turn: 't2', outcome: { kind: 'proposal', applied: false, reasons: ['没落'] } }),
+        JSON.stringify({ turn: 't1', outcome: { kind: 'proposal', applied: true, round: 1 } }),
         JSON.stringify({ turn: 't2', request: { mode: 'edit', anchor, text: '改', images: [] }, result: { type: 'error', turn: 't2', message: '超时' } }),
       ].join('\n') + '\n',
     )
@@ -214,6 +217,8 @@ describe('接入层 · 多项目读取', () => {
         { name: '02.png', type: 'image/png', dataUrl: '' },
       ])
       expect(t[0].request.anchor).toEqual(anchor)
+      expect(t[0].outcome).toBeUndefined()
+      expect(t[1].outcome).toEqual({ kind: 'proposal', applied: false, reasons: ['没落'] })
     } finally {
       fs.rmSync(dir, { recursive: true, force: true })
     }

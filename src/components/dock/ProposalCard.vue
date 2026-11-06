@@ -2,12 +2,14 @@
 /**
  * 提议卡（DA-8）：AI 改完一轮出一张——第几轮、动了哪几个号（可点：画布居中、改动页签滚到）、牵动谁（按当前描述估；全是新框标「新」）、
  * 「撤回本轮」（最近一轮 = 撤销；更早的按快照恢复，后面也碰过的先确认，CI-5）。没落时列原因。
+ * 从设计目录恢复的一轮（DL-51）：号与牵动原样，不给「撤回本轮」（撤回看「改动」页签）。
  */
 import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
 import type { ProposalOutcome } from '@/state/desk/dialogue'
 
-const props = defineProps<{ outcome: ProposalOutcome; busy?: boolean }>()
+/** restored：从设计目录恢复的一轮（DL-51）——号与牵动原样，撤回看「改动」页签 */
+const props = defineProps<{ outcome: ProposalOutcome; busy?: boolean; restored?: boolean }>()
 const desk = useDesk()
 const changes = desk.edit.changes
 const applied = computed(() => (props.outcome.applied ? props.outcome : null))
@@ -48,7 +50,8 @@ function withdraw() {
         <template v-else>牵动 {{ applied.impact.modules }} 个模块 · 涉及 {{ applied.impact.scenarios }} 个场景</template>
         <span class="est">按当前描述估</span>
       </p>
-      <p class="acts">
+      <p v-if="restored" class="acts muted" data-testid="proposal-restored">已随设计保存 · 撤回见「改动」页签</p>
+      <p v-else class="acts">
         <button class="link" data-testid="withdraw-round" :disabled="!live || busy || !!desk.edit.statusLock.value" @click="withdraw">
           {{ live ? '撤回本轮' : '本轮已撤回' }}
         </button>

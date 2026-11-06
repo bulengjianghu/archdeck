@@ -25,6 +25,7 @@ import {
   flattenSketch,
   isArchived,
   isExplainerFile,
+  isTranscriptProposal,
   isSketchFile,
   load,
   loadModel,
@@ -481,12 +482,14 @@ function designExtras(modelRoot: string, project: string, design: string): Pick<
   return { ...(changes !== undefined ? { changes } : {}), ...(notes.length ? { notes } : {}), ...(transcript.length ? { transcript } : {}) }
 }
 
-/** DL-51：设计里落盘的对话（dialogue/transcript.jsonl，一轮一行）；贴图（设计目录里的路径）读成 data URL，超过 5 MB 或读不到的只留名字；坏行跳过 */
+/** DL-51：设计里落盘的对话（dialogue/transcript.jsonl，一轮一行；补记的提议卡结果按轮次并进来）；贴图（设计目录里的路径）读成 data URL，超过 5 MB 或读不到的只留名字；坏行跳过 */
 const PHOTO_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }
 function readTranscript(designDir: string): TranscriptRecord[] {
   const file = path.join(designDir, 'dialogue', 'transcript.jsonl')
   if (!fs.existsSync(file)) return []
   const out: TranscriptRecord[] = []
+  // 收尾 S3：补记的提议卡结果（{ turn, outcome }，没有 request）按轮次并进那一轮
+  const outcomes = new Map<string, NonNullable<TranscriptRecord['outcome']>>()
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
     if (!line.trim()) continue
     try {
@@ -495,6 +498,11 @@ function readTranscript(designDir: string): TranscriptRecord[] {
         turn?: string
         request?: { mode?: string; anchor?: unknown; text?: string; images?: unknown[] }
         result?: { type?: string }
+        outcome?: unknown
+      }
+      if (r.turn && !r.request && isTranscriptProposal(r.outcome)) {
+        outcomes.set(r.turn, r.outcome)
+        continue
       }
       if (!r.turn || !r.request || !r.result || !['done', 'error', 'stopped'].includes(r.result.type ?? '')) continue
       const images = (r.request.images ?? [])
@@ -515,7 +523,7 @@ function readTranscript(designDir: string): TranscriptRecord[] {
       // 坏行跳过：转录是证据，不是描述，读不出的一行不拦整份
     }
   }
-  return out
+  return out.map(r => (outcomes.has(r.turn) ? { ...r, outcome: outcomes.get(r.turn)! } : r))
 }
 
 /** X19：草图版本里的引用文件——草图引用、但草图与持久草图都没有定义的模块（与它们缺的祖先）与参与者，取当前版本的名称与位置，让草图版本自成一份可加载的描述 */

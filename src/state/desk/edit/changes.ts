@@ -34,6 +34,7 @@ import {
   type SketchContext,
   type SketchPoint,
   type Touched,
+  type TranscriptProposal,
 } from '@/model'
 import { placeNewBoxes } from '@/layout/layout'
 import type { EditDerivations } from './derive'
@@ -44,9 +45,7 @@ import { applyRound, latestLive, roundState, withdrawItem, withdrawRound, type R
 export type NumberedItem = ChangeItem & { n: number; round: number; by: ChangeAuthor }
 
 /** 提议卡（DA-8）：这一轮动了哪几个号、牵动谁（按当前描述估）；没落时为原因 */
-export type ProposalOutcome =
-  | { kind: 'proposal'; applied: true; round: number; numbers: number[]; impact: { modules: number; scenarios: number; fresh: boolean } }
-  | { kind: 'proposal'; applied: false; reasons: string[] }
+export type ProposalOutcome = TranscriptProposal
 
 /** 要人确认的撤回（级联 / 之后又被改过）：呈现层列出后调 confirm() */
 export interface PendingWithdraw {

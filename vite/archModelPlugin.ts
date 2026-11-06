@@ -13,7 +13,8 @@
  *   草图整份写回 POST /write/<项目>/sketch（持久草图）、/write/<项目>/designs/<设计>/sketch（设计的一张草图），
  *   按设计写回 POST /write/<项目>/designs/<设计>/sketches（多张、改名、删除，B6、B7、X20），设计状态 POST /write/<项目>/designs/<设计>/status（认可 / 回到起草 / 放弃，DL-33），新建设计 POST /write/<项目>/designs（B6，ADR-0024、ADR-0025）；
  *   持久草图版本 GET /models/<项目>/intent/<草图 ID>.json；写后照常推送变化。
- * 对话（DA-11，ADR-0063）：POST /agent/<项目>/turn 起一轮（子进程见 agentProcess.ts、一轮的接入见 agentTurn.ts）、POST /agent/<项目>/stop 停止；
+ * 对话（DA-11，ADR-0063）：POST /agent/<项目>/turn 起一轮（子进程见 agentProcess.ts、一轮的接入见 agentTurn.ts）、POST /agent/<项目>/stop 停止、
+ *   POST /agent/<项目>/outcome 补记提议卡结果（DL-51）；
  *   输出推送 `arch-agent:event`，载荷 { project, turn, type, … }。
  * 项目内容只搬运原始文本，解析与校验都在页面侧的模型层完成，与命令行同一套报错。
  */
@@ -42,7 +43,7 @@ import { loadModel } from '../src/model'
 import { LEDGER_PAGE_LIMIT, governanceDir, readBaseline, readLedger } from './governanceStore'
 import type { CodeFactsSummary, FactsPayload, ModelIndex, ModuleRole, RuleKind, SourcePayload } from '../src/model'
 import { agentConfigFromEnv, createAgentRunner } from './agentProcess'
-import { AGENT_EVENT, startTurn } from './agentTurn'
+import { AGENT_EVENT, recordOutcome, startTurn } from './agentTurn'
 
 export const MODEL_CHANGED_EVENT = 'arch-model:changed'
 export const PROJECTS_FILE = 'projects.json'
@@ -112,7 +113,7 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
       }
       server.middlewares.use((req, res, next) => {
         const [url] = (req.url ?? '').split('?')
-        const a = /^\/agent\/([^/]+)\/(turn|stop)$/.exec(url)
+        const a = /^\/agent\/([^/]+)\/(turn|stop|outcome)$/.exec(url)
         if (!a) return next()
         if (req.method !== 'POST') return json(res, { error: '只接受 POST' }, 405)
         const origin = req.headers.origin
@@ -133,6 +134,10 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
             return json(res, { error: '正文不是 JSON' }, 400)
           }
           if (a[2] === 'stop') return json(res, { stopped: runner.stop(project, (body as { turn?: string }).turn) })
+          if (a[2] === 'outcome') {
+            const r = recordOutcome(modelRoot, project, body)
+            return r.ok ? json(res, r) : json(res, { error: r.error }, r.status)
+          }
           startTurn({ modelRoot, root, runner, facts }, project, body).then(
             r => (r.ok ? json(res, r) : json(res, { error: r.error }, r.status)),
             e => json(res, { error: e instanceof Error ? e.message : String(e) }, 500),

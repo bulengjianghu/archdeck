@@ -108,7 +108,12 @@ export function createDialogue({ project, index, selection, step, perspective, t
       sketch
     ) {
       const outcome = sketch.apply(a.event.blocks, a.event.turn)
-      if (outcome) a = { ...a, event: { ...a.event, outcome } }
+      if (outcome) {
+        a = { ...a, event: { ...a.event, outcome } }
+        // DL-51（收尾 S3）：提议卡的结果随设计的转录落盘，恢复后原样显示
+        const d = sketch.design()
+        if (d && project) void transport.outcome?.(project, { design: d, turn: a.event.turn, outcome })
+      }
     }
     const after = dialogueTransition(before, a)
     state.value = after

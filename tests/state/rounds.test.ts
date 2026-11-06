@@ -159,12 +159,14 @@ describe('DL-19 对话在草图里', () => {
     expect(anchorText(null, { kind: 'module', module: 'state.desk', sheet: 'state.desk' }, name)).toBe('当前张 DeskState')
     expect(anchorText(null, { kind: 'module', module: 'state.desk.edit', sheet: 'state.desk' }, name)).toBe('当前张 DeskState · 编辑')
   })
-  it('协调者：「改」的一轮说完时先把改动块交给编辑会话，结果写进提议卡；请求带设计与草图上下文', async () => {
+  it('协调者：「改」的一轮说完时先把改动块交给编辑会话，结果写进提议卡并补记进设计的转录；请求带设计与草图上下文', async () => {
     let push: (e: AgentPush) => void = () => {}
     const sent: unknown[] = []
+    const recorded: unknown[] = []
     const transport: AgentTransport = {
       turn: async (_p, req) => (sent.push(req), { ok: true }),
       stop: async () => {},
+      outcome: async (p, r) => void recorded.push({ p, ...r }),
       subscribe: (_p, cb) => ((push = cb), () => {}),
     }
     const applied: string[] = []
@@ -205,6 +207,8 @@ describe('DL-19 对话在草图里', () => {
     push({ turn, type: 'done', blocks: [{ kind: 'edit', ops: [MERGE] }] })
     expect(applied).toEqual([turn])
     expect(d.state.value.transcript.at(-1)).toMatchObject({ role: 'agent', outcome: { kind: 'proposal', round: 1 } })
+    // 收尾 S3（DL-51）：提议卡的结果随设计的转录落盘
+    expect(recorded).toEqual([{ p: 'p', design: 'd1', turn, outcome: { kind: 'proposal', applied: true, round: 1, numbers: [1], impact: { modules: 2, scenarios: 0, fresh: false } } }])
     expect(d.editing()).toBe(false)
   })
 })

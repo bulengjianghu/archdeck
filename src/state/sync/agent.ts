@@ -1,5 +1,5 @@
 /**
- * 对话的同步适配器（DA-11）：页面经开发服务器的 POST /agent/<项目>/turn、/stop 起停一轮，agent 的输出经推送通道 `arch-agent:event` 回来。
+ * 对话的同步适配器（DA-11）：页面经开发服务器的 POST /agent/<项目>/turn、/stop 起停一轮（/outcome 补记提议卡结果，DL-51），agent 的输出经推送通道 `arch-agent:event` 回来。
  * 外界是状态的投影：这里只搬运请求与事件，不改对话会话（会话只经 dialogueTransition 改变）。
  */
 import type { AgentPush, AgentTransport, AgentTurnRequest } from '../desk/dialogue'
@@ -22,6 +22,7 @@ export function httpAgentTransport(base: string, events: AgentEvents | undefined
     turn: (project: string, request: AgentTurnRequest) =>
       post(`agent/${encodeURIComponent(project)}/turn`, request).catch(e => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) })),
     stop: async (project: string, turn: string) => void (await post(`agent/${encodeURIComponent(project)}/stop`, { turn }).catch(() => null)),
+    outcome: async (project, record) => void (await post(`agent/${encodeURIComponent(project)}/outcome`, record).catch(() => null)),
     subscribe(project, cb) {
       if (!events) return () => {}
       const on = (data: AgentPush & { project?: string }) => {

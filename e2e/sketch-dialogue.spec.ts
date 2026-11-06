@@ -7,7 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, openDesk, openSketchPanel, query, sketchOn } from './helpers'
+import { graphNode, LOAD_BUDGET, openDesk, openSketchPanel, query, sketchOn } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 
@@ -271,6 +271,35 @@ test('改 / 问切换、DL-21：「问」只回答不改图；AI 想挪已有的
     await say(page, '#move-boxes 挪一挪')
     await expect(dialogue(page).getByTestId('msg-error')).toContainText('moveNode')
     await expect(page.locator('.info-bar .dirty')).toHaveCount(0)
+  } finally {
+    await restore()
+  }
+})
+
+test('收尾 S3（DL-51）：草图里 AI 改一轮、保存后真的重新加载——提议卡的结果随转录落盘，恢复后仍显示动了哪几号、牵动谁', async ({ page }) => {
+  test.setTimeout(120_000)
+  const design = 'zz-e2e-s3-reload'
+  const { restore, dir } = await sketchOn(page, design, { mount: 'state.desk.edit' })
+  try {
+    const card = await round(page, '#approval-add 加一个认可')
+    const numbers = await card.getByTestId('proposal-number').allInnerTexts()
+    const impact = await card.getByTestId('proposal-impact').innerText()
+    expect(numbers.length).toBeGreaterThan(0)
+    await page.locator('.info-bar').getByRole('button', { name: '保存' }).click()
+    await expect(page.locator('.info-bar .dirty')).toHaveCount(0, { timeout: LOAD_BUDGET })
+    // 页面应用完改动块后补记的那一行已落盘
+    const transcript = path.join(dir, 'dialogue/transcript.jsonl')
+    await expect.poll(() => (fs.existsSync(transcript) ? fs.readFileSync(transcript, 'utf8') : ''), { timeout: LOAD_BUDGET }).toContain('"outcome"')
+    await page.reload()
+    await openDesk(page, `/p/h5p-arch-desk/d/${design}/sketch`)
+    const back = cards(page)
+    await expect(back).toHaveCount(1, { timeout: LOAD_BUDGET })
+    await expect(back.getByTestId('proposal-number')).toHaveText(numbers)
+    await expect(back.getByTestId('proposal-impact')).toHaveText(impact)
+    // 恢复的一轮只看：撤回看「改动」页签
+    await expect(back.getByTestId('proposal-restored')).toBeVisible()
+    await expect(back.getByTestId('withdraw-round')).toHaveCount(0)
+    await expect(dialogue(page).getByTestId('restored-edit')).toHaveCount(0)
   } finally {
     await restore()
   }
