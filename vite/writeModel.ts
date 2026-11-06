@@ -24,6 +24,7 @@ import {
   designTransition,
   estimateGap,
   gateContext,
+  needsRatchet,
   isReviewSource,
   loadModel,
   parseDesignSketches,
@@ -211,8 +212,13 @@ function archivePlan(modelRoot: string, project: string, design: string, root: s
   const prefix = `${DESIGNS_DIR}/${design}/`
   const drift = approvalDrift(info.approval, Object.fromEntries(files.map(({ file }) => [file.path.slice(prefix.length), sketchHash(file.text)])))
   // 第二关的门禁错误由调用方算（代码事实属外壳一侧：页面插件与 agent 接口各有现成的）；没给时按不可得
-  const ratchet = opts.ratchet ? opts.ratchet(index) : { errors: null, note: '没有给出棘轮判定（代码事实不可得）' }
-  const gates = archiveGates({ checks, gateErrors: ratchet.errors, ...(ratchet.note ? { ratchetUnknown: ratchet.note } : {}), drift })
+  // 棘轮要算整份代码事实：另两关过了才算（预览随文件变化频繁重取，不能每次都算）
+  const ratchet = !needsRatchet(checks, drift)
+    ? { errors: undefined }
+    : opts.ratchet
+      ? opts.ratchet(index)
+      : { errors: null, note: '没有给出棘轮判定（代码事实不可得）' }
+  const gates = archiveGates({ checks, gateErrors: ratchet.errors, ...('note' in ratchet && ratchet.note ? { ratchetUnknown: ratchet.note } : {}), drift })
   const move = designTransition(info.status, 'archive', gateContext(gates, drift))
   const reason = move.ok ? undefined : info.status === 'accepted' && gates.first ? gates.first.detail : move.reason
   const gap = estimateGap(info.estimate, reviewHashes(index))

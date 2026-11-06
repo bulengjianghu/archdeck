@@ -10,6 +10,7 @@ import {
   estimateGap,
   gapLine,
   gateContext,
+  needsRatchet,
   TASK_ORDER,
   type SketchCheck,
 } from '../../src/model'
@@ -69,6 +70,18 @@ describe('DL-47 归档三关', () => {
     // 没有认可记录（旧流程认可的设计）也不过
     const none = approvalDrift(undefined, { 'sketches/app.yaml': 'h1' })
     expect(archiveGates({ checks: [check()], gateErrors: [], drift: none }).first?.detail).toBe('没有认可记录')
+  })
+})
+
+describe('DL-47 棘轮按需算', () => {
+  it('另两关没过时不算棘轮（暂不判），第一道没过的关取判过的那一关', () => {
+    expect(needsRatchet([check()], intact)).toBe(true)
+    expect(needsRatchet([bad], intact)).toBe(false)
+    expect(needsRatchet([check()], drifted)).toBe(false)
+    const g = archiveGates({ checks: [check()], drift: drifted })
+    expect(g.gates[1]).toMatchObject({ key: 'ratchet', ok: false, skipped: true })
+    expect(g.first?.key).toBe('drift')
+    expect(designTransition('accepted', 'archive', gateContext(g, drifted))).toMatchObject({ ok: false, reason: expect.stringContaining('棘轮') })
   })
 })
 

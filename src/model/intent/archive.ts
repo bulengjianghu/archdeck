@@ -17,6 +17,8 @@ export interface ArchiveGate {
   ok: boolean
   /** 一句说明：过时说过了什么，不过时说差在哪 */
   detail: string
+  /** 没判（棘轮要算整份代码事实，前后两关没过时不算） */
+  skipped?: boolean
 }
 
 export interface ArchiveGates {
@@ -32,13 +34,19 @@ export const ARCHIVE_GATE_LABELS: Record<ArchiveGateKey, string> = { consistent:
 export interface ArchiveGateInput {
   /** 本设计各张草图对当前版本的核验（按原严重度，DL-45 的门禁降级不作用于这里） */
   checks: readonly SketchCheck[]
-  /** 当前版本的门禁错误（U8：rule.new、cycle.grew）；代码事实不可得时为 null */
-  gateErrors: readonly { message: string }[] | null
+  /** 当前版本的门禁错误（U8：rule.new、cycle.grew）；代码事实不可得时为 null；没算（undefined）时这一关记「暂不判」 */
+  gateErrors?: readonly { message: string }[] | null
   /** gateErrors 为 null 时的原因 */
   ratchetUnknown?: string
   /** 认可指纹比对（DL-35） */
   drift: ApprovalDrift
 }
+
+/**
+ * DL-47：棘轮要不要算——它要读整份源码算治理报告（秒级），核验一致与草图指纹两关都过了才值得算；
+ * 调用方先用 needsRatchet 判，再决定传不传 gateErrors
+ */
+export const needsRatchet = (checks: readonly SketchCheck[], drift: ApprovalDrift): boolean => !!checks.length && checks.every(c => archiveVerdict(c).ok) && drift.intact
 
 /** DL-47：三关各一行 */
 export function archiveGates(input: ArchiveGateInput): ArchiveGates {
@@ -51,14 +59,17 @@ export function archiveGates(input: ArchiveGateInput): ArchiveGates {
       : { key: 'consistent', label: ARCHIVE_GATE_LABELS.consistent, ok: true, detail: `${input.checks.length} 张草图与当前版本一致` }
   const errs = input.gateErrors
   const ratchet: ArchiveGate =
-    errs === null
+    errs === undefined
+      ? { key: 'ratchet', label: ARCHIVE_GATE_LABELS.ratchet, ok: false, skipped: true, detail: '核验一致与草图指纹两关过了再判' }
+      : errs === null
       ? { key: 'ratchet', label: ARCHIVE_GATE_LABELS.ratchet, ok: false, detail: input.ratchetUnknown ?? '代码事实不可得，判断不了棘轮' }
       : errs.length
         ? { key: 'ratchet', label: ARCHIVE_GATE_LABELS.ratchet, ok: false, detail: `规则有 ${errs.length} 条新违反：${errs[0].message}` }
         : { key: 'ratchet', label: ARCHIVE_GATE_LABELS.ratchet, ok: true, detail: '规则没有新违反' }
   const drift: ArchiveGate = { key: 'drift', label: ARCHIVE_GATE_LABELS.drift, ok: input.drift.intact, detail: driftText(input.drift) }
   const gates = [consistent, ratchet, drift]
-  const first = gates.find(g => !g.ok) ?? null
+  // 第一道没过的关：判过的优先（暂不判的棘轮不挡在没过的指纹关前面）
+  const first = gates.find(g => !g.ok && !g.skipped) ?? gates.find(g => !g.ok) ?? null
   return { gates, ok: !first, first }
 }
 

@@ -145,7 +145,17 @@ export function createApproval(i: ApprovalInputs) {
     preview.value = r.ok ? r.preview : null
     previewError.value = r.ok ? null : r.error
   }
-  watch([status, () => i.approval(), () => i.current(), () => i.sketchFiles()], () => void refreshPreview(), { immediate: true })
+  // 文件监听一阵阵地推送（重新生成会连写几份文件）：静下来 400 ms 再取一次
+  let timer: ReturnType<typeof setTimeout> | undefined
+  watch(
+    [status, () => i.approval(), () => i.current(), () => i.sketchFiles()],
+    () => {
+      clearTimeout(timer)
+      if (status.value !== 'accepted') return void refreshPreview()
+      timer = setTimeout(() => void refreshPreview(), 400)
+    },
+    { immediate: true },
+  )
   /** 「归档」此刻能不能点（不能时为原因） */
   const archiveBlocked = computed<string | null>(() => {
     if (status.value !== 'accepted') return '设计还没认可'
