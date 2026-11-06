@@ -150,8 +150,23 @@ export function createAgentRunner(config: AgentConfig, emit: (project: string, e
     settled?.(e)
   }
   const find = (project: string, turn?: string) => [...running.values()].find(r => r.project === project && (!turn || r.turn === turn))
+  /**
+   * 先到的停止（合并复跑定位）：页面一发就显示「正在回答」，服务端却要先读描述、取代码事实才起子进程——
+   * 停止落在这段空档时找不到这一轮；记下来，这一轮随后来起时直接按「已停止」结束、不起子进程。一分钟后作废
+   */
+  const earlyStops = new Map<string, ReturnType<typeof setTimeout>>()
+  const turnKey = (project: string, turn: string) => `${project}\u0000${turn}`
 
   function start(t: TurnStart): { ok: true } | { ok: false; error: string } {
+    const early = earlyStops.get(turnKey(t.project, t.turn))
+    if (early !== undefined) {
+      clearTimeout(early)
+      earlyStops.delete(turnKey(t.project, t.turn))
+      const e: DialogueEvent = { turn: t.turn, type: 'stopped', reason: 'stopped' }
+      emit(t.project, e)
+      t.settled?.(e)
+      return { ok: true }
+    }
     const key = keyOf(t.project, t.session)
     if (running.has(key)) return { ok: false, error: '这个对话已有一轮在进行，先停止或等它说完' }
     if ([...running.values()].some(r => r.turn === t.turn && r.project === t.project)) return { ok: false, error: '轮次编号重复' }
@@ -248,7 +263,16 @@ export function createAgentRunner(config: AgentConfig, emit: (project: string, e
   /** 停止：终止子进程，这一轮什么都不落（DA-11）；给了轮次只停那一轮，不给停这个项目最早的一轮 */
   function stop(project: string, turn?: string): boolean {
     const r = find(project, turn)
-    if (!r) return false
+    if (!r) {
+      if (turn) {
+        const k = turnKey(project, turn)
+        clearTimeout(earlyStops.get(k))
+        const timer = setTimeout(() => earlyStops.delete(k), 60_000)
+        timer.unref?.()
+        earlyStops.set(k, timer)
+      }
+      return false
+    }
     end(project, r, { turn: r.turn, type: 'stopped', reason: 'stopped' }, r.settled)
     return true
   }

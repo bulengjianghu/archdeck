@@ -99,6 +99,23 @@ describe('子进程一轮（假 agent）', () => {
     runner.stopAll()
     expect(runner.running('p')).toEqual([])
   })
+
+  it('停止先于这一轮起子进程到达（服务端还在读描述）：这一轮来起时按「已停止」结束、不起子进程，同一会话的下一轮照常', async () => {
+    const events: DialogueEvent[] = []
+    const settled: DialogueEvent[] = []
+    const runner = createAgentRunner(config('timeout'), (_p, e) => events.push(e))
+    const base = { project: 'p', session: 'a', pack: {}, promptText: '', cwd: ROOT }
+    expect(runner.stop('p', 'a-1')).toBe(false)
+    expect(runner.start({ ...base, turn: 'a-1', settled: e => settled.push(e) }).ok).toBe(true)
+    expect(events).toEqual([{ turn: 'a-1', type: 'stopped', reason: 'stopped' }])
+    expect(settled).toEqual(events)
+    expect(runner.running('p')).toEqual([])
+    expect(runner.pid('p')).toBeNull()
+    // 先到的停止只作用一次
+    expect(runner.start({ ...base, turn: 'a-2' }).ok).toBe(true)
+    expect(runner.running('p')).toEqual(['a-2'])
+    runner.stopAll()
+  })
 })
 
 describe('配置与边界', () => {

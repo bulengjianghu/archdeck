@@ -103,7 +103,7 @@ modules:
     kind: component
     responsibility: |
       agent 子进程管理（DA-11，DL-18；ADR-0063 决策 11）：命令可配——缺省 claude 命令行（-p、stream-json、只读工具集 Read / Grep / Glob 加架构台 MCP 的只读查询、--add-dir 架构台目录），ARCH_AGENT_COMMAND 换成别的命令（测试用假 agent）；工作目录 = 被描述项目的源码根；环境变量里像密钥的一律不传；
-      一个对话会话同时只有一轮；超时（ARCH_AGENT_TIMEOUT_MS）视同停止；停止 = 终止整个进程组、这一轮不落；非零退出出错误事件；不合法的产出整轮拒绝；结构化块攒到结束才一次交出，文本片段随到随推；claude 的 stream-json 由适配器翻译成薄协议。
+      一个对话会话同时只有一轮；超时（ARCH_AGENT_TIMEOUT_MS）视同停止；停止 = 终止整个进程组、这一轮不落（先于子进程起来到达的停止记下，这一轮来起时直接按已停止结束）；非零退出出错误事件；不合法的产出整轮拒绝；结构化块攒到结束才一次交出，文本片段随到随推；claude 的 stream-json 由适配器翻译成薄协议。
       一轮的接入（agentTurn）：校验请求、读描述构造上下文包（代码事实摘要取架构治理的 impact）、贴图落到临时目录（设计里的落到设计目录）、起子进程；重讲的收尾交给重讲落盘；设计里的对话随设计落盘（designs/<设计>/dialogue/），当前版本上的不落；页面算出的提议卡结果由 recordOutcome 补记进同一份转录（DL-51）。
       端点由 ModelSource 插件挂载：POST /agent/<项目>/turn、/agent/<项目>/stop、/agent/<项目>/outcome，只收同源 JSON；推送 `arch-agent:event`。
     principle: |
