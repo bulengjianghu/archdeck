@@ -19,6 +19,7 @@ import {
   validateSketch,
   type DesignAction,
   type DesignStatus,
+  type ModelIndex,
   type SketchDef,
 } from '../src/model'
 import { DESIGNS_DIR, ESTIMATE_FILE, designSketches, isProjectId, readDesignInfo, readModelDir, sketchHash } from './readModelDir'
@@ -44,7 +45,7 @@ export function designSketchHashes(projectDirAbs: string, design: string): Recor
 }
 
 /** 磁盘上的设计草图逐张校验（与按设计写回同一上下文）：格式错误与语义提示 */
-function validateOnDisk(dir: string, root: string, design: string): { errors: string[]; hints: string[] } {
+function validateOnDisk(dir: string, root: string, design: string): { errors: string[]; hints: string[]; index: ModelIndex } {
   const all = readModelDir(dir, root).files
   const persistent = load(all.filter(f => isSketchFile(f.path))).model.sketches.filter(s => sketchLifetime(s) === 'persistent')
   const index = loadModel(all).index
@@ -60,16 +61,15 @@ function validateOnDisk(dir: string, root: string, design: string): { errors: st
     errors.push(...v.errors.map(e => `「${mount}」${e.message}`))
     hints.push(...v.warnings.map(e => `「${mount}」${e.message}`))
   }
-  return { errors, hints }
+  return { errors, hints, index }
 }
 
 /**
  * DL-49：认可时记下估算——页面读到的影响面与此刻当前版本各模块的描述指纹，写 designs/<设计>/estimate.json（页面维护、不登记指纹）。
  * 归档预览拿它与归档时的描述指纹比，得出「实际改了」。
  */
-function writeEstimate(dir: string, designDir: string, raw: DesignStatusRequest['estimate'], root: string): void {
+function writeEstimate(designDir: string, raw: DesignStatusRequest['estimate'], index: ModelIndex): void {
   const modules = Array.isArray(raw?.modules) ? [...new Set(raw.modules.filter((x): x is string => typeof x === 'string'))].sort() : []
-  const { index } = loadModel(readModelDir(dir, root).files)
   const body = { at: today(), modules, fresh: raw?.fresh === true, current: reviewHashes(index) }
   fs.writeFileSync(path.join(designDir, ESTIMATE_FILE), `${JSON.stringify(body, null, 2)}\n`)
 }
@@ -87,12 +87,15 @@ export function setDesignStatus(modelRoot: string, project: string, design: stri
   const info = readDesignInfo(designDir, design)
   const now = designSketchHashes(dir, design)
   let ctx = {}
+  // 校验时加载过的当前版本，记估算时接着用（不重复加载）
+  let current: ModelIndex | undefined
   if (action === 'accept' && (info.status === 'draft' || info.status === 'reviewing')) {
     if (!Object.keys(now).length) throw new WriteError(`设计「${design}」没有草图，没有可认可的意图`)
     const seen = req.sketches && typeof req.sketches === 'object' ? req.sketches : {}
     const same = Object.keys(seen).length === Object.keys(now).length && Object.entries(now).every(([f, h]) => seen[f] === h)
     if (!same) throw new WriteConflict('草图文件与页面读到的不一致（有未保存的改动，或文件已在外部改动）：重新加载后再认可')
     const v = validateOnDisk(dir, root, design)
+    current = v.index
     ctx = { saved: true, errors: v.errors.length, firstError: v.errors[0], hints: v.hints.length, firstHint: v.hints[0] }
   }
   const t = designTransition(info.status, action, ctx)
@@ -103,7 +106,7 @@ export function setDesignStatus(modelRoot: string, project: string, design: stri
   if (action === 'accept') {
     const node = doc.createNode({ at: today(), sketches: now })
     doc.setIn(['design', 'approval'], node)
-    writeEstimate(dir, designDir, req.estimate, root)
+    writeEstimate(designDir, req.estimate, current ?? loadModel(readModelDir(dir, root).files).index)
   } else if (action === 'withdraw') {
     doc.setIn(['design', 'approval'], doc.createNode({ ...(info.approval?.at ? { at: info.approval.at } : {}), withdrawnAt: today() }))
   }

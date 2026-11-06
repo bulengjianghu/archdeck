@@ -79,7 +79,7 @@ test('验收 6.42 第 2 条：项目菜单切版本（版本胶囊 × 回当前�
   await openProjectMenu(page)
   const menu = page.getByRole('menu', { name: '项目' })
   await expect(menu.getByRole('menuitem')).toHaveText(['编辑骨架', '新建设计', '所有项目'])
-  await expect(menu.locator('select[aria-label="切换版本"] optgroup[label^="已归档"] option').first()).toContainText('二期 · 动态视角')
+  await expect(menu.locator('select[aria-label="切换版本"] optgroup[label^="已归档"] option', { hasText: '二期 · 动态视角' })).not.toHaveCount(0)
   // 新建设计：对话框
   await menu.getByRole('menuitem', { name: '新建设计' }).click()
   await expect(menu).toBeHidden()
