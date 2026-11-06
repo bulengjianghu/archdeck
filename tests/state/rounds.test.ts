@@ -208,7 +208,9 @@ describe('DL-19 对话在草图里', () => {
     expect(applied).toEqual([turn])
     expect(d.state.value.transcript.at(-1)).toMatchObject({ role: 'agent', outcome: { kind: 'proposal', round: 1 } })
     // 收尾 S3（DL-51）：提议卡的结果随设计的转录落盘
-    expect(recorded).toEqual([{ p: 'p', design: 'd1', turn, outcome: { kind: 'proposal', applied: true, round: 1, numbers: [1], impact: { modules: 2, scenarios: 0, fresh: false } } }])
+    expect(recorded).toEqual([
+      { p: 'p', design: 'd1', turn, outcome: { kind: 'proposal', applied: true, round: 1, numbers: [1], impact: { modules: 2, scenarios: 0, fresh: false } } },
+    ])
     expect(d.editing()).toBe(false)
   })
 })
