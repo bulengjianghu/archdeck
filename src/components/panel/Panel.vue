@@ -63,7 +63,15 @@ const target = computed(() => {
     <p v-if="dropped && !desk.edit.active.value" class="dropped" role="note">切换视角后原选中（{{ dropped }}）没有对应的依赖边，已取消选中</p>
     <template v-else-if="target">
       <!-- V6 新家（第二十轮 §6，复审确认）：运行视角下步骤 / 场景面板只住辅助栏的步骤节，抽屉不再渲染 -->
-      <template v-if="desk.perspective.value === 'run' && (target.kind === 'step' || target.kind === 'scenario')" />
+      <!-- 第二十轮复审小尾巴（合并时补）：手动拉开抽屉不再是空白浮板，指向步骤节 -->
+      <p
+        v-if="desk.perspective.value === 'run' && (target.kind === 'step' || target.kind === 'scenario')"
+        class="run-note"
+        role="note"
+        data-testid="props-run-note"
+      >
+        {{ target.kind === 'step' ? '这一步' : '场景概览' }}在辅助栏的步骤节（资料区底部）
+      </p>
       <template v-else>
         <FilePanel v-if="target.kind === 'file'" :key="`f:${target.id}`" :path="target.id" />
         <DepPanel v-else-if="target.kind === 'dep'" :key="`d:${target.id}`" />
@@ -97,6 +105,7 @@ const target = computed(() => {
 .panel .id-card,
 .panel .card,
 .panel .dropped,
+.panel .run-note,
 .panel .design-section,
 .panel .commit-section,
 .panel .sk-panel {
@@ -112,6 +121,13 @@ const target = computed(() => {
   font-size: 12.5px;
   color: var(--warning);
   background: var(--warning-soft);
+}
+
+.panel .run-note {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-2);
 }
 
 .panel :is(.design-section, .commit-section) > .head {

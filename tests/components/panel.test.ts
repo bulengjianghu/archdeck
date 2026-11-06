@@ -191,6 +191,23 @@ describe('属性面板 · 运行视角', () => {
     expect(text).toContain('在「播放」中')
     expect(text).toContain('离进度最近')
   })
+
+  it('运行视角选中步骤 / 场景时手动拉开抽屉：不是空白浮板，只有一行指向辅助栏步骤节（第二十轮复审小尾巴）', async () => {
+    for (const url of ['/?sc=sc.play&step=sc.play%23update&alt=0', '/?sc=sc.play']) {
+      const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+      await router.push(url)
+      const desk = createDeskState(async () => ({ dir: 'model/test', files: scenarioFiles() }))
+      desk.attachRouter(router)
+      await desk.init()
+      await flushPromises()
+      const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+      await flushPromises()
+      const note = wrapper.find('[data-testid="props-run-note"]')
+      expect(note.exists()).toBe(true)
+      expect(note.text()).toContain('辅助栏的步骤节')
+      expect(wrapper.find('.scenario-panel').exists()).toBe(false)
+    }
+  })
 })
 
 describe('P15：经由上层关系', () => {
