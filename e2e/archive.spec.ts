@@ -114,7 +114,7 @@ test('用例 12：改一半——不点按钮 ✓ 与待做、待做在前、归
     await expect(archiveBtn(page)).toBeEnabled()
     await archiveBtn(page).click()
     const dlg = page.getByTestId('archive-dialog')
-    await expect(dlg.getByTestId('archive-gates').locator('.ok')).toHaveCount(3)
+    await expect(dlg.getByTestId('archive-gates').locator('.pass')).toHaveCount(3)
     await expect(dlg.getByTestId('archive-gap-line')).toHaveText(/^认可时估牵动 (\d+|新) · 实际改了 \d+（其中新加 2）$/)
     await expect(dlg.getByTestId('archive-covered')).toContainText('确认记录')
     await dlg.getByTestId('archive-confirm').click()

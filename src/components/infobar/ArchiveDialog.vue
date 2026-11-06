@@ -47,7 +47,7 @@ onMounted(async () => {
         <section data-testid="archive-gates">
           <h4>三关</h4>
           <ul class="gates">
-            <li v-for="g in p.gates.gates" :key="g.key" :class="g.skipped ? 'skip' : g.ok ? 'ok' : 'bad'" :data-gate="g.key">
+            <li v-for="g in p.gates.gates" :key="g.key" :class="g.skipped ? 'skip' : g.ok ? 'pass' : 'fail'" :data-gate="g.key">
               <span class="mark">{{ g.skipped ? '–' : g.ok ? '✓' : '✗' }}</span> {{ g.label }} <span class="muted">· {{ g.detail }}</span>
             </li>
           </ul>
@@ -124,11 +124,11 @@ p {
   list-style: none;
 }
 
-.gates .ok .mark {
+.gates .pass .mark {
   color: var(--ok, #2e8b57);
 }
 
-.gates .bad .mark {
+.gates .fail .mark {
   color: var(--danger);
 }
 
