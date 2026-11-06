@@ -5,7 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { openDesk, restoreOwned, sketchOn } from './helpers'
+import { LOAD_BUDGET, openDesk, restoreOwned, sketchOn } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 const OWNED = path.join(PROJECT, 'governance/owned.json')
@@ -21,18 +21,18 @@ async function say(page: Page, text: string) {
 async function round(page: Page, text: string) {
   const n = await cards(page).count()
   await say(page, text)
-  await expect(cards(page)).toHaveCount(n + 1, { timeout: 25_000 })
+  await expect(cards(page)).toHaveCount(n + 1, { timeout: LOAD_BUDGET })
   await expect(page.getByTestId('ai-editing')).toHaveCount(0)
 }
 const bar = (page: Page) => page.locator('.info-bar')
 async function save(page: Page) {
   await bar(page).getByRole('button', { name: '保存' }).click()
-  await expect(bar(page).locator('.dirty')).toHaveCount(0)
+  await expect(bar(page).locator('.dirty')).toHaveCount(0, { timeout: LOAD_BUDGET })
 }
 async function accept(page: Page) {
   await bar(page).getByRole('button', { name: '认可', exact: true }).click()
   await page.getByTestId('accept-dialog').getByTestId('accept-confirm').click()
-  await expect(bar(page).locator('.chip.accepted')).toHaveText('已认可')
+  await expect(bar(page).locator('.chip.accepted')).toHaveText('已认可', { timeout: LOAD_BUDGET })
 }
 async function openChanges(page: Page) {
   if (!(await page.locator('.nav-area').isVisible())) await page.getByRole('button', { name: '导航树', exact: true }).click()
@@ -87,9 +87,9 @@ test('用例 12：改一半——不点按钮 ✓ 与待做、待做在前、归
     // 先问一句、存为设计说明（归档后要还能开）
     await dialogue(page).getByRole('button', { name: '问', exact: true }).click()
     await say(page, '这一层为什么这样分？')
-    await expect(dialogue(page).getByTestId('answer-card')).toBeVisible({ timeout: 25_000 })
+    await expect(dialogue(page).getByTestId('answer-card')).toBeVisible({ timeout: LOAD_BUDGET })
     await dialogue(page).getByTestId('answer-card').getByTestId('save-note').click()
-    await expect(dock(page).getByTestId('note-doc')).toBeVisible({ timeout: 25_000 })
+    await expect(dock(page).getByTestId('note-doc')).toBeVisible({ timeout: LOAD_BUDGET })
     await dock(page).locator('.tab', { hasText: '对话' }).click()
     await dialogue(page).getByRole('button', { name: '改', exact: true }).click()
     await round(page, '#archive-two 加认可与归档')
@@ -118,7 +118,7 @@ test('用例 12：改一半——不点按钮 ✓ 与待做、待做在前、归
     await expect(dlg.getByTestId('archive-gap-line')).toHaveText(/^认可时估牵动 (\d+|新) · 实际改了 \d+（其中新加 2）$/)
     await expect(dlg.getByTestId('archive-covered')).toContainText('确认记录')
     await dlg.getByTestId('archive-confirm').click()
-    await expect(dlg).toHaveCount(0)
+    await expect(dlg).toHaveCount(0, { timeout: LOAD_BUDGET })
     await expect(bar(page).locator('.chip.implemented')).toBeVisible({ timeout: 20_000 })
     expect(yaml()).toMatch(/status: implemented/)
     // 确认层：草图覆盖的模块「已确认」，来源 sketch:<设计>

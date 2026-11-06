@@ -5,7 +5,7 @@
  */
 import fs from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, openSketchPanel, sketchOn } from './helpers'
+import { graphNode, LOAD_BUDGET, openSketchPanel, sketchOn } from './helpers'
 
 const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
 const dialogue = (page: Page) => dock(page).getByTestId('dialogue')
@@ -15,13 +15,13 @@ async function round(page: Page, text: string) {
   const n = await cards(page).count()
   await input(page).fill(text)
   await input(page).press('Enter')
-  await expect(cards(page)).toHaveCount(n + 1, { timeout: 25_000 })
+  await expect(cards(page)).toHaveCount(n + 1, { timeout: LOAD_BUDGET })
   await expect(page.getByTestId('ai-editing')).toHaveCount(0)
 }
 const bar = (page: Page) => page.locator('.info-bar')
 async function save(page: Page) {
   await bar(page).getByRole('button', { name: '保存' }).click()
-  await expect(bar(page).locator('.dirty')).toHaveCount(0)
+  await expect(bar(page).locator('.dirty')).toHaveCount(0, { timeout: LOAD_BUDGET })
 }
 const NEW = 'state.desk.run-derive'
 
@@ -49,7 +49,7 @@ test('DL-44 没指定层时认可被拦并提示去「层」里指定；人在�
     await round(page, '#stratum-bare 加一个运行派生')
     await save(page)
     await bar(page).getByRole('button', { name: '认可', exact: true }).click()
-    await expect(page.getByTestId('accept-dialog')).toHaveCount(0)
+    await expect(page.getByTestId('accept-dialog')).toHaveCount(0, { timeout: LOAD_BUDGET })
     await expect(bar(page).getByRole('status')).toContainText('不属于任何一层')
     // 人：选中新框 → 面板「层」字段
     await graphNode(page, NEW).locator('.name').click()

@@ -7,7 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, openDesk, openSketchPanel, sketchOn } from './helpers'
+import { graphNode, LOAD_BUDGET, openDesk, openSketchPanel, sketchOn } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 
@@ -33,13 +33,19 @@ async function round(page: Page, text: string) {
 const bar = (page: Page) => page.locator('.info-bar')
 async function save(page: Page) {
   await bar(page).getByRole('button', { name: '保存' }).click()
-  await expect(bar(page).locator('.dirty')).toHaveCount(0)
+  await expect(bar(page).locator('.dirty')).toHaveCount(0, { timeout: LOAD_BUDGET })
 }
 async function accept(page: Page) {
   await bar(page).getByRole('button', { name: '认可', exact: true }).click()
   const dlg = page.getByTestId('accept-dialog')
   await expect(dlg).toBeVisible()
   return dlg
+}
+/** 认可、回到起草、放弃都是写请求：负载下服务端读描述、算估算要好几秒（冷启动时首轮实测 >10 s，收尾 S0），按 LOAD_BUDGET 等 */
+async function confirmAccept(page: Page) {
+  await page.getByTestId('accept-dialog').getByTestId('accept-confirm').click()
+  await expect(page.getByTestId('accept-dialog')).toHaveCount(0, { timeout: LOAD_BUDGET })
+  await expect(bar(page).locator('.chip.accepted')).toHaveText('已认可', { timeout: LOAD_BUDGET })
 }
 async function openChanges(page: Page) {
   if (!(await page.locator('.nav-area').isVisible())) await page.getByRole('button', { name: '导航树', exact: true }).click()
@@ -80,9 +86,7 @@ test('用例 9：认可——总览列出全设计改动与影响面，确认后
   await expect(dlg.getByTestId('accept-item')).toHaveCount(1)
   await expect(dlg.getByTestId('accept-item')).toContainText(/#\d+ 新增 认可/)
   await expect(dlg.getByTestId('accept-impact')).toContainText('按当前描述估')
-  await dlg.getByTestId('accept-confirm').click()
-  await expect(page.getByTestId('accept-dialog')).toHaveCount(0)
-  await expect(bar(page).locator('.chip.accepted')).toHaveText('已认可')
+  await confirmAccept(page)
   await expect(page.getByTestId('design-locked')).toContainText('回到起草')
   await expect(bar(page).getByRole('button', { name: '回到起草' })).toBeVisible()
   await expect(bar(page).getByRole('button', { name: '保存' })).toHaveCount(0)
@@ -137,13 +141,13 @@ test('用例 10：回到起草——回「起草中」、任务单标「认可�
   cleanup = restore
   await round(page, '#approval-add 加一个认可')
   await save(page)
-  await (await accept(page)).getByTestId('accept-confirm').click()
-  await expect(bar(page).locator('.chip.accepted')).toHaveText('已认可')
+  await accept(page)
+  await confirmAccept(page)
   const first = /sketches\/state\.desk\.edit\.yaml: ([0-9a-f]{40})/.exec(yaml())![1]
   // 回到起草：二次确认
   await bar(page).getByRole('button', { name: '回到起草' }).click()
   await page.getByRole('dialog', { name: '回到起草？' }).getByRole('button', { name: '回到起草' }).click()
-  await expect(bar(page).locator('.chip.draft')).toHaveText('起草中')
+  await expect(bar(page).locator('.chip.draft')).toHaveText('起草中', { timeout: LOAD_BUDGET })
   await expect(page.getByTestId('design-locked')).toHaveCount(0)
   expect(yaml()).toMatch(/status: draft/)
   expect(yaml()).toMatch(/withdrawnAt:/)
@@ -155,8 +159,8 @@ test('用例 10：回到起草——回「起草中」、任务单标「认可�
   await round(page, '#approval-rename save 改名')
   await save(page)
   await expect(tab.getByTestId('change-row')).toHaveCount(2)
-  await (await accept(page)).getByTestId('accept-confirm').click()
-  await expect(bar(page).locator('.chip.accepted')).toHaveText('已认可')
+  await accept(page)
+  await confirmAccept(page)
   const second = /sketches\/state\.desk\.edit\.yaml: ([0-9a-f]{40})/.exec(yaml())![1]
   expect(second).not.toBe(first)
   expect(yaml()).not.toMatch(/withdrawnAt:/)
@@ -176,7 +180,7 @@ test('放弃：设计面板「放弃设计」二次确认后为「已放弃」�
     .getByRole('dialog', { name: /放弃设计/ })
     .getByRole('button', { name: '放弃设计' })
     .click()
-  await expect(bar(page).locator('.chip.abandoned')).toHaveText('已放弃')
+  await expect(bar(page).locator('.chip.abandoned')).toHaveText('已放弃', { timeout: LOAD_BUDGET })
   await expect(page.getByTestId('design-locked')).toHaveText('只看')
   expect(yaml()).toMatch(/status: abandoned/)
   await expect(bar(page).getByRole('button', { name: '认可', exact: true })).toHaveCount(0)
