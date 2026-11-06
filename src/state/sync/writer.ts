@@ -5,7 +5,7 @@
 import type { ModelWriter } from '../desk/ports'
 
 // ADR-0052：写入口与派生按这些形状调用写入（DeskState 的接线端口，归协调者 state.desk），这里实现
-export type { WriteOutcome, SketchSaveOutcome, DesignSketchWrite, DesignSaveOutcome, ModelWriter } from '../desk/ports'
+export type { WriteOutcome, SketchSaveOutcome, DesignSketchWrite, DesignSaveOutcome, ModelWriter, ArchivePreview } from '../desk/ports'
 
 const none = async (): Promise<{ ok: false; error: string }> => ({ ok: false, error: '没有注入写入来源' })
 
@@ -18,6 +18,7 @@ export const NO_WRITER: ModelWriter = {
   accept: none,
   role: none,
   archive: none,
+  archivePreview: none,
   designStatus: none,
   saveSketch: none,
   saveDesignSketches: none,

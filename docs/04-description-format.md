@@ -30,7 +30,7 @@ model/<项目>/
 | 拥有者 | 文件 | 页面 | 指纹 |
 |---|---|---|---|
 | AI（按代码生成） | `system.yaml`、`modules/`（骨架之下）、`actors.yaml`、`scenarios/`、`explainers/`（图解，§3.11）；设计版本各轮快照 `designs/<设计>/r<N>/`，含该轮说明 `revision.yaml`（E8）；设计说明 `designs/<设计>/notes/`（第二十一轮波 2）与讲法要求 `explainers/<模块 ID>.notes.md`（第二十一轮波 1，ADR-0063） | 只读（notes / 讲法要求由架构台在对话里写入） | — |
-| 人（架构师、负责人） | 草图：`intent/*.yaml`（骨架等持久草图）、`designs/<设计>/sketches/*.yaml`；`rules.yaml`（AI 重新生成时不改动，§3.8）；`source-ignore.yaml`（忽略项）；`designs/<设计>/design.yaml`（目标、状态、基线、ADR、认可偏差 `accepted`、评审意见 `revisions[].feedback`——不含每轮说明，E8）；`reviewed.yaml`（确认记录，§3.9） | 只追加：例外、忽略项、评审意见（该轮没有条目时新建，B2）、认可偏差；确认记录追加或按模块更新（Z1）；归档 / 晋升改设计状态、晋升时整份替换持久草图；草图在画布编辑后按设计整份覆盖、新建设计，级联改名与删除只限 `designs/<设计>/sketches/*`（B6、B7、X7）；其余由人编辑。`designs/<设计>/changes.json` 由页面随编辑会话维护（手改也可以，DL-3），**不登记指纹** | 记在 `governance/owned.json`：人改完后 `npm run arch -- own` 登记，页面写入自动更新，`lint:model` 不符即报错 `owned.changed`；`changes.json`、`notes/`、`*.notes.md` 不在指纹清单里 |
+| 人（架构师、负责人） | 草图：`intent/*.yaml`（骨架等持久草图）、`designs/<设计>/sketches/*.yaml`；`rules.yaml`（AI 重新生成时不改动，§3.8）；`source-ignore.yaml`（忽略项）；`designs/<设计>/design.yaml`（目标、状态、基线、ADR、认可偏差 `accepted`、评审意见 `revisions[].feedback`——不含每轮说明，E8）；`reviewed.yaml`（确认记录，§3.9） | 只追加：例外、忽略项、评审意见（该轮没有条目时新建，B2）、认可偏差；确认记录追加或按模块更新（Z1）；归档 / 晋升改设计状态、晋升时整份替换持久草图；草图在画布编辑后按设计整份覆盖、新建设计，级联改名与删除只限 `designs/<设计>/sketches/*`（B6、B7、X7）；其余由人编辑。`designs/<设计>/changes.json` 由页面随编辑会话维护（手改也可以，DL-3），**不登记指纹** | 记在 `governance/owned.json`：人改完后 `npm run arch -- own` 登记，页面写入自动更新，`lint:model` 不符即报错 `owned.changed`；`changes.json`、`estimate.json`、`notes/`、`*.notes.md` 不在指纹清单里 |
 | 命令行与 agent 接口 | `governance/` | 只读 | — |
 
 - 骨架只描述层、第二级模块与第二级之间的关系（自草图 v2 起，根草图带第二级关系，晋升后由骨架拥有；`modules/` 里同 ID 的关系只能补 `interface`、`payload`、`via` 等骨架没写的字段）；AI 只能用 `parent: <第二级 ID>` 往骨架之下挂子模块，对骨架里的模块只能补草图没写的字段，不得重定义已写的字段（X1，`lint:model` 报 `sketch-redefined`）。没有 `intent/skeleton.yaml` 的旧描述仍可把层写在 `modules/layers.yaml`（兼容期）。
@@ -729,6 +729,7 @@ npm run arch -- baseline --project <项目>   # 写 model/<项目>/governance/ba
 model/<项目>/designs/<设计 ID>/
   sketches/<挂载点>.yaml         架构师的草图（§3.10，人拥有），每个挂载点一张；版本切换中排在 r1 之前
   changes.json                   改动项编号表（§3.10「改动项编号表」，页面维护、不登记指纹）
+  estimate.json                  认可时记下的估算（DL-49）：认可前总览读到的牵动模块、是否全是新框、当前版本各模块的描述指纹；页面「认可」时写，不登记指纹，归档预览拿它比「实际改了」
   notes/                         设计说明（§3.10「设计说明」，AI 拥有）
   design.yaml                    人拥有：目标、状态、认可（含各张草图指纹）、基线、ADR、认可偏差、各轮的评审意见
   r1/   system.yaml、intent/、modules/…、revision.yaml   第 1 轮（可选的展开快照）：AI 从当前版本完整复制后按草图扩展；revision.yaml 为本轮说明（AI 拥有）

@@ -3,7 +3,7 @@
  * 与 fetchModel 一样由项目视图创建：外界的地址只在呈现层出现。取不到清单时为 error（附原因）。
  */
 import type { ExportedSymbol, FactsPayload, SourceFile, SourceHistory, SourcePayload } from '@/model'
-import type { DesignSaveOutcome, ModelWriter, SketchSaveOutcome, SourceFetcher, WriteOutcome } from '@/state/useDeskState'
+import type { ArchivePreview, DesignSaveOutcome, ModelWriter, SketchSaveOutcome, SourceFetcher, WriteOutcome } from '@/state/useDeskState'
 
 export function httpSourceFetcher(project: string, base = ''): SourceFetcher {
   const enc = encodeURIComponent
@@ -110,6 +110,19 @@ export function httpModelWriter(project: string, base = ''): ModelWriter {
     accept: b => post('accept', b),
     role: b => post('role', b),
     archive: b => post('archive', b),
+    archivePreview: async ({ design }) => {
+      try {
+        const res = await fetch(`${base}write/${encodeURIComponent(project)}/archive`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ design, preview: true }),
+        })
+        const out = (await res.json()) as { preview?: ArchivePreview; error?: string }
+        return res.ok && out.preview ? { ok: true, preview: out.preview } : { ok: false, error: out.error ?? `HTTP ${res.status}` }
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    },
     designStatus: ({ design, ...body }) => post(`designs/${encodeURIComponent(design)}/status`, body),
   }
 }

@@ -23,7 +23,7 @@ import { isModelFile, listProjects, readDesignRevision, readIntentVersion, readP
 import { readExports, readSourceFile, readSourceTree } from './readSource'
 import { readCodeDeps } from './readDeps'
 import { readGateErrors, readHealth } from './readHealth'
-import { WriteError, appendAccepted, appendAllow, appendFeedback, appendIgnore, appendReviewed, appendRole, archiveDesign } from './writeModel'
+import { WriteError, appendAccepted, appendAllow, appendFeedback, appendIgnore, appendReviewed, appendRole, archiveDesign, archivePreview } from './writeModel'
 import { saveNote } from './designNotes'
 import { setDesignStatus, type DesignStatusRequest } from './designStatus'
 import {
@@ -40,7 +40,7 @@ import { headModel, listModelCommits, readCommitVersion, readFileAtHead, readMod
 import { historyOptions, readCommitMessage, readSourceHistory } from './readHistory'
 import { loadModel } from '../src/model'
 import { LEDGER_PAGE_LIMIT, governanceDir, readBaseline, readLedger } from './governanceStore'
-import type { CodeFactsSummary, FactsPayload, ModuleRole, RuleKind, SourcePayload } from '../src/model'
+import type { CodeFactsSummary, FactsPayload, ModelIndex, ModuleRole, RuleKind, SourcePayload } from '../src/model'
 import { agentConfigFromEnv, createAgentRunner } from './agentProcess'
 import { AGENT_EVENT, startTurn } from './agentTurn'
 
@@ -163,6 +163,8 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
             const parsed = JSON.parse(raw || '{}') as unknown
             const body = (parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}) as Record<string, string>
             const project = decodeURIComponent(w[1])
+            // DL-47 第二关：当前版本的门禁错误（U8），按源码现算
+            const ratchet = (index: ModelIndex) => readGateErrors(modelRoot, project, index, root)
             const out =
               w[2] === 'feedback'
                 ? appendFeedback(modelRoot, project, body.design, body.revision, body.text, root)
@@ -191,9 +193,9 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
                                   ? saveDesignSketches(modelRoot, project, decodeURIComponent(many![2]), parsed as SaveDesignRequest, root)
                                   : w[2] === 'designs'
                                     ? createDesign(modelRoot, project, parsed as Parameters<typeof createDesign>[2], root, { base: headModel })
-                                    : archiveDesign(modelRoot, project, body.design, root, {
-                                        ratchet: index => readGateErrors(modelRoot, project, index, root),
-                                      })
+                                    : (parsed as { preview?: unknown }).preview === true
+                                      ? { preview: archivePreview(modelRoot, project, body.design, root, { ratchet }) }
+                                      : archiveDesign(modelRoot, project, body.design, root, { ratchet })
             json(res, out)
           } catch (e) {
             const status =

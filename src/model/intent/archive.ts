@@ -3,7 +3,7 @@
  * 草图指纹与认可记录一致（DL-35）——各给一行结论；认可时记下的影响面与实际改了的模块对比。纯函数：
  * 核验、门禁错误、指纹比对与描述指纹都由调用方算好传进来（页面、写端点、命令行同一套）。
  */
-import type { DesignEstimate } from '../design'
+import type { DesignEstimate, DesignStatus } from '../design'
 import { driftText, type ApprovalDrift, type TransitionContext } from './approval'
 import { archiveVerdict } from './lifecycle'
 import type { SketchCheck } from './types'
@@ -122,4 +122,14 @@ export function estimateGap(estimate: DesignEstimate | undefined, now: Readonly<
 export function gapLine(g: EstimateGap): string {
   if (!g.recorded) return '认可时没有记下估算，无从比对'
   return `认可时估牵动 ${g.estimated === null ? '新' : g.estimated} · 实际改了 ${g.actual}${g.added.length ? `（其中新加 ${g.added.length}）` : ''}`
+}
+
+/** DL-50：归档预览（写端点算、页面与命令行同一份）——三关、估与实际、将写确认记录的模块、将晋升替换的持久草图；不能归档时带原因 */
+export interface ArchivePreview {
+  status: DesignStatus
+  gates: ArchiveGates
+  gap: EstimateGap
+  covered: string[]
+  promotes: string[]
+  reason?: string
 }

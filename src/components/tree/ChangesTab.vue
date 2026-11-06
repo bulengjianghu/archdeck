@@ -9,7 +9,6 @@
  * 认可已撤回时顶部标「认可已撤回」。
  */
 import { computed, nextTick, ref, watch } from 'vue'
-import { TASK_ORDER } from '@/model'
 import { useDesk } from '@/state/inject'
 import { CHANGE_BADGES, sixCounts } from '../sketch/labels'
 
@@ -20,6 +19,7 @@ const taskMode = computed(() => approval.taskMode.value)
 const tasks = computed(() => approval.tasks.value)
 const rowOf = computed(() => new Map((tasks.value?.rows ?? []).filter(r => r.n !== null).map(r => [r.n!, r])))
 const withdrawn = computed(() => tasks.value?.state === 'withdrawn')
+const gates = computed(() => approval.preview.value?.gates ?? null)
 const STATE = { done: '✓', todo: '待做', unchecked: '不核验' } as const
 const copied = ref(false)
 async function copyTasks() {
@@ -49,8 +49,7 @@ const shown = computed(() => {
   )
   // DL-46：任务模式下待做在前、不核验其次、✓ 留在最后（同态按号）
   if (!taskMode.value) return list
-  const rank = (n: number) => TASK_ORDER[rowOf.value.get(n)?.state ?? 'todo']
-  return [...list].sort((a, b) => rank(a.n) - rank(b.n) || a.n - b.n)
+  return [...list].sort((a, b) => approval.taskRank(a.n) - approval.taskRank(b.n) || a.n - b.n)
 })
 const six = computed(() => sixCounts(changes.counts.value as Parameters<typeof sixCounts>[0]))
 const sheetName = (m: string) => (m === 'root' ? '根' : (desk.edit.nameOf(m) ?? m))
@@ -93,6 +92,14 @@ watch(
           <button data-testid="export-tasks" title="导出 JSON 给外部系统；与 npm run arch -- tasks --json 同一份" @click="exportJson">导出 JSON</button>
         </div>
       </div>
+      <!-- DL-50：三关（归档条件），随描述与文件变化重算 -->
+      <p v-if="taskMode && gates" class="gates" data-testid="task-gates">
+        <span v-for="g in gates.gates" :key="g.key" :class="g.ok ? 'ok' : 'bad'" :data-gate="g.key" :title="g.detail"
+          >{{ g.ok ? '✓' : '✗' }} {{ g.label }}</span
+        >
+        <span v-if="gates.first" class="why" data-testid="task-gate-why">{{ gates.first.detail }}</span>
+        <span v-else class="why ok">三关全绿，可以归档</span>
+      </p>
       <p v-else-if="withdrawn" class="withdrawn" data-testid="task-withdrawn">{{ tasks?.note }}</p>
       <div class="six" data-testid="changes-six">
         <span v-for="c in six" :key="c.key" class="six-n" :class="[c.key, { zero: !c.n }]" :title="c.label">{{ c.mark }} {{ c.n }}</span>
@@ -175,6 +182,27 @@ watch(
 </template>
 
 <style scoped>
+.gates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin: 2px 12px 4px;
+  font-size: 11.5px;
+}
+
+.gates .ok {
+  color: var(--ok, #2e8b57);
+}
+
+.gates .bad {
+  color: var(--danger);
+}
+
+.gates .why {
+  flex-basis: 100%;
+  color: var(--text-2);
+}
+
 .pad {
   padding: 4px 12px;
   margin: 0;

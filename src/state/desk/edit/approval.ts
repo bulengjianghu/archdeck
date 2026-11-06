@@ -3,15 +3,18 @@
  * 写后重新加载（N5）；认可前总览（全设计的改动项、影响面、涉及的场景）；认可后的任务单（模型层 taskList，与命令行同一份）。
  * 去向与拒绝原因只由模型层的迁移表给（designTransition），这里只收集条件。
  */
-import { computed, type ComputedRef, type ShallowRef } from 'vue'
+import { computed, shallowRef, watch, type ComputedRef, type ShallowRef } from 'vue'
 import {
   CHANGE_KINDS,
   checkSketches,
   designEntities,
   designTransition,
+  gapLine,
+  TASK_ORDER,
   taskList,
   taskMarkdown,
   type AcceptedDeviation,
+  type ArchivePreview,
   type ChangeKind,
   type DesignApproval,
   type DesignStatus,
@@ -90,7 +93,10 @@ export function createApproval(i: ApprovalInputs) {
           ? Object.fromEntries(Object.values(read).map(r => [r.file, r.hash]))
           : Object.fromEntries(i.sketchFiles().map(f => [f.path ?? f.file, f.hash]))
         : undefined
-    const r = await i.writer.designStatus({ design: i.design, action, ...(sketches ? { sketches } : {}) })
+    // DL-49：认可时把认可前总览读到的影响面一并交给写端点，记成估算
+    const impact = action === 'accept' ? overview.value.impact : null
+    const estimate = action === 'accept' ? { modules: impact?.modules ?? [], fresh: impact?.fresh ?? false } : undefined
+    const r = await i.writer.designStatus({ design: i.design, action, ...(sketches ? { sketches } : {}), ...(estimate ? { estimate } : {}) })
     if (!r.ok) return { ok: false, reason: r.error }
     await i.reload()
     return { ok: true }
@@ -120,6 +126,42 @@ export function createApproval(i: ApprovalInputs) {
   /** 任务模式（DL-38）：设计已认可（或认可已撤回仍要提示）时「改动」页签带状态列 */
   const taskMode = computed(() => status.value === 'accepted')
 
+  /**
+   * DL-47、DL-50：归档预览（三关、估与实际）——写端点按磁盘与代码事实算（与命令行同一份），设计已认可时取；
+   * 设计信息或当前版本一变（文件监听 N5 → 重新加载）就重取，三关随之重算。
+   */
+  const preview = shallowRef<ArchivePreview | null>(null)
+  const previewError = shallowRef<string | null>(null)
+  let asked = 0
+  async function refreshPreview() {
+    const n = ++asked
+    if (!i.design || status.value !== 'accepted') {
+      preview.value = null
+      previewError.value = null
+      return
+    }
+    const r = await i.writer.archivePreview({ design: i.design })
+    if (n !== asked) return
+    preview.value = r.ok ? r.preview : null
+    previewError.value = r.ok ? null : r.error
+  }
+  watch([status, () => i.approval(), () => i.current(), () => i.sketchFiles()], () => void refreshPreview(), { immediate: true })
+  /** 「归档」此刻能不能点（不能时为原因） */
+  const archiveBlocked = computed<string | null>(() => {
+    if (status.value !== 'accepted') return '设计还没认可'
+    const p = preview.value
+    if (!p) return previewError.value ?? '正在核对三关…'
+    return p.gates.first ? `${p.gates.first.label}：${p.gates.first.detail}` : (p.reason ?? null)
+  })
+  async function archive(): Promise<ApprovalOutcome & { note?: string }> {
+    if (!i.design) return { ok: false, reason: '只有设计能归档' }
+    if (archiveBlocked.value) return { ok: false, reason: archiveBlocked.value }
+    const r = await i.writer.archive({ design: i.design })
+    if (!r.ok) return { ok: false, reason: r.error }
+    await i.reload()
+    return { ok: true, ...(r.note ? { note: r.note } : {}) }
+  }
+
   return {
     status,
     acceptBlocked,
@@ -129,6 +171,14 @@ export function createApproval(i: ApprovalInputs) {
     abandon: () => act('abandon'),
     tasks,
     taskMode,
+    preview,
+    /** DL-49：归档预览的「估 N · 实际 N′」一行 */
+    gapText: computed(() => (preview.value ? gapLine(preview.value.gap) : '')),
+    /** DL-46：任务模式下改动项号的次序键（待做 → 不核验 → ✓） */
+    taskRank: (n: number) => TASK_ORDER[tasks.value?.rows.find(r => r.n === n)?.state ?? 'todo'],
+    archiveBlocked,
+    archive,
+    refreshPreview,
     /** 复制给 agent 的 Markdown（与 arch tasks 同一份） */
     markdown: () => (tasks.value ? taskMarkdown(tasks.value) : ''),
     /** 导出给外部系统的 JSON（与 arch tasks --json 同一份） */

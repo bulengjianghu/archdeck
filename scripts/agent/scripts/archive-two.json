@@ -1,0 +1,20 @@
+{
+  "steps": [
+    {
+      "block": {
+        "kind": "edit",
+        "summary": "新增「认可」与「归档」，认可读编辑会话",
+        "ops": [
+          { "op": "edit", "sketch": "{{sketch.mount}}", "edit": { "op": "addModule", "parent": "{{sketch.mount}}", "name": "认可", "id": "approval" } },
+          { "op": "edit", "sketch": "{{sketch.mount}}", "edit": { "op": "addModule", "parent": "{{sketch.mount}}", "name": "归档", "id": "archiver" } },
+          {
+            "op": "edit",
+            "sketch": "{{sketch.mount}}",
+            "edit": { "op": "connect", "from": "{{sketch.mount}}.approval", "to": "{{sketch.mount}}.session", "type": "queries", "description": "读编辑会话" }
+          }
+        ]
+      }
+    },
+    { "done": true }
+  ]
+}

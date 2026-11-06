@@ -4,6 +4,7 @@
  */
 import type { ShallowRef } from 'vue'
 import type {
+  ArchivePreview,
   ChangeTable,
   ExportedSymbol,
   FactsPayload,
@@ -18,6 +19,9 @@ import type {
   SourceHistory,
   SourcePayload,
 } from '@/model'
+
+/** DL-50：归档预览（写端点算）——呈现层的写入来源经这里取类型 */
+export type { ArchivePreview }
 
 export type WriteOutcome = { ok: true; file: string; note?: string } | { ok: false; error: string }
 
@@ -49,8 +53,16 @@ export interface ModelWriter {
   role(input: { module: string; role: ModuleRole }): Promise<WriteOutcome>
   /** X3：归档 / 晋升 */
   archive(input: { design: string }): Promise<WriteOutcome>
+  /** DL-50：归档预览（三关、估与实际；不写文件） */
+  archivePreview(input: { design: string }): Promise<{ ok: true; preview: ArchivePreview } | { ok: false; error: string }>
   /** DL-33：设计状态——认可（带页面读到的各张草图指纹）、回到起草、放弃 */
-  designStatus(input: { design: string; action: 'accept' | 'withdraw' | 'abandon'; sketches?: Record<string, string> }): Promise<WriteOutcome>
+  designStatus(input: {
+    design: string
+    action: 'accept' | 'withdraw' | 'abandon'
+    sketches?: Record<string, string>
+    /** DL-49：认可时读到的影响面 */
+    estimate?: { modules: string[]; fresh: boolean }
+  }): Promise<WriteOutcome>
   /** B6：草图整份写回，带读取时的指纹 */
   saveSketch(input: { target: SketchTarget; sketch: SketchDef; baseHash: string }): Promise<SketchSaveOutcome>
   /** X20：按设计写回若干张草图（新文件、改名、删除），带各自读取时的指纹 */

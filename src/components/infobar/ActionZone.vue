@@ -17,6 +17,7 @@ import { ask } from '../edit/useEditDialog'
 import { confirmLeave, leaveSketch } from '../edit/leave'
 import ChangeGroups from './ChangeGroups.vue'
 import AcceptDialog from './AcceptDialog.vue'
+import ArchiveDialog from './ArchiveDialog.vue'
 
 const props = defineProps<{ mode: 'commit' | 'round' | 'sketch' }>()
 const desk = useDesk()
@@ -34,6 +35,7 @@ const isDesign = computed(() => e.target?.kind === 'design')
 const status = computed(() => e.approval.status.value)
 const locked = computed(() => !!e.statusLock.value)
 const accepting = ref(false)
+const archiving = ref(false)
 const menuOpen = ref(false)
 const checkOpen = ref(false)
 const menuRoot = ref<HTMLElement>()
@@ -183,9 +185,17 @@ onBeforeUnmount(() => {
     </div>
     <template v-else>
       <template v-if="editing && isDesign && locked">
-        <button v-if="status === 'accepted'" class="primary withdraw" aria-label="回到起草" title="回到「起草中」：草图解锁，认可的指纹作废" @click="withdraw">
-          <span class="ico">↺</span><span class="txt">回到起草</span>
-        </button>
+        <template v-if="status === 'accepted'">
+          <button class="withdraw" aria-label="回到起草" title="回到「起草中」：草图解锁，认可的指纹作废" @click="withdraw">
+            <span class="ico">↺</span><span class="txt">回到起草</span>
+          </button>
+          <!-- DL-50：三关全绿才亮；灰时悬停给第一道没过的关 -->
+          <span class="archive-wrap" :title="e.approval.archiveBlocked.value ?? '三关全绿：归档（状态改已实现、写确认记录、晋升替换持久草图）'">
+            <button class="primary archive" aria-label="归档" :disabled="!!e.approval.archiveBlocked.value" @click="archiving = true">
+              <span class="ico">⇲</span><span class="txt">归档</span>
+            </button>
+          </span>
+        </template>
       </template>
       <template v-else-if="editing">
         <button
@@ -269,6 +279,7 @@ onBeforeUnmount(() => {
       </button>
     </template>
     <AcceptDialog v-if="accepting" @close="accepting = false" />
+    <ArchiveDialog v-if="archiving" @close="archiving = false" @done="n => ((archiving = false), flash(n))" />
     <span v-if="failed.length" class="failed" :title="failed.join('\n')">重放失败 {{ failed.length }} 个操作</span>
     <span v-if="note" class="note" role="status">{{ note }}</span>
   </div>

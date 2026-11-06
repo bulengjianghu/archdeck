@@ -32,6 +32,7 @@ import {
   reviewHashes,
   isReviewable,
   sketchModules,
+  type ArchivePreview,
   type ArchiveVerdict,
   type EstimateGap,
   type ModelIndex,
@@ -189,7 +190,8 @@ export interface ArchiveOptions {
   ratchet?: (index: ModelIndex) => { errors: readonly { message: string }[] | null; note?: string }
 }
 
-export function archiveDesign(modelRoot: string, project: string, design: string, root: string, opts: ArchiveOptions = {}): ArchiveResult {
+/** DL-47–DL-50：归档的计划——三关、估与实际、将写确认记录的模块、将晋升的持久草图；归档与预览同一份 */
+function archivePlan(modelRoot: string, project: string, design: string, root: string, opts: ArchiveOptions) {
   const dir = projectDir(modelRoot, project)
   if (!isProjectId(design)) throw new WriteError('设计 ID 不合法')
   const designDir = path.join(dir, DESIGNS_DIR, design)
@@ -212,8 +214,27 @@ export function archiveDesign(modelRoot: string, project: string, design: string
   const ratchet = opts.ratchet ? opts.ratchet(index) : { errors: null, note: '没有给出棘轮判定（代码事实不可得）' }
   const gates = archiveGates({ checks, gateErrors: ratchet.errors, ...(ratchet.note ? { ratchetUnknown: ratchet.note } : {}), drift })
   const move = designTransition(info.status, 'archive', gateContext(gates, drift))
-  if (!move.ok) throw new WriteError(`不能归档：${info.status === 'accepted' && gates.first ? gates.first.detail : move.reason}`)
+  const reason = move.ok ? undefined : info.status === 'accepted' && gates.first ? gates.first.detail : move.reason
   const gap = estimateGap(info.estimate, reviewHashes(index))
+  const covered: string[] = []
+  const promotes: string[] = []
+  entities.forEach((entity, i) => {
+    if (verdicts[i].outcome === 'promote') promotes.push(entity.def.supersedes!)
+    else covered.push(...sketchModules(entity, index).filter(id => !covered.includes(id)))
+  })
+  const preview: ArchivePreview = { status: info.status, gates, gap, covered, promotes, ...(reason ? { reason } : {}) }
+  return { dir, file, index, entities, verdicts, preview }
+}
+
+/** DL-50：归档预览——不写任何文件 */
+export function archivePreview(modelRoot: string, project: string, design: string, root: string, opts: ArchiveOptions = {}): ArchivePreview {
+  return archivePlan(modelRoot, project, design, root, opts).preview
+}
+
+export function archiveDesign(modelRoot: string, project: string, design: string, root: string, opts: ArchiveOptions = {}): ArchiveResult {
+  const { dir, file, index, entities, verdicts, preview } = archivePlan(modelRoot, project, design, root, opts)
+  if (preview.reason) throw new WriteError(`不能归档：${preview.reason}`)
+  const gap = preview.gap
   const at = today()
   const doc = openDoc(file, '')
   if (!isMap(doc.get('design'))) throw new WriteError('design.yaml 缺少顶层键 design')

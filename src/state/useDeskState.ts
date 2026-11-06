@@ -78,7 +78,7 @@ export type { ExplainerRefView, BasisChangeKind } from './desk/explainers'
 export { encodeSelection, decodeSelection } from './transition'
 export type { CompareSource, ModelPayload, FetchModel } from './sync/modelSource'
 export type { SourceFetcher, Resource } from './sync/source'
-export type { ModelWriter, WriteOutcome, SketchSaveOutcome, DesignSaveOutcome, DesignSketchWrite } from './sync/writer'
+export type { ModelWriter, WriteOutcome, SketchSaveOutcome, DesignSaveOutcome, DesignSketchWrite, ArchivePreview } from './sync/writer'
 
 export type DeskOptions = RouterSyncOptions & {
   /** 被描述项目的源码（G1、G2）；缺省为没有源码来源（只看描述的测试） */
