@@ -8,20 +8,26 @@ import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import DockGroup from './DockGroup.vue'
 import RunSection from '../panel/RunSection.vue'
+import StepPanel from '../panel/StepPanel.vue'
+import ScenarioPanel from '../panel/ScenarioPanel.vue'
 
 const desk = useDesk()
 const ws = desk.workspace.state
 const run = computed(() => desk.perspective.value === 'run')
 const runSel = computed(() => ['module', 'relation', 'edge', 'actor', 'port'].includes(desk.selected.value?.kind ?? ''))
-// 步骤 / 场景面板住抽屉（运行视角），不在这里重复（02-review 缺陷 5：一个主语）
+const stepSel = computed(() => desk.selected.value?.kind === 'step')
+const scSel = computed(() => desk.selected.value?.kind === 'scenario')
 </script>
 
 <template>
   <aside class="dock" aria-label="资料区">
     <DockGroup v-for="(g, gi) in ws.groups" :key="gi" :group="g" :gi="gi" :count="ws.groups.length" :focused="ws.focus === gi" />
     <!-- 第二十轮 §6：步骤节常驻（不随标签激活消失）；预览源代码等操作不会把它挤走 -->
-    <div v-if="run && runSel" class="step-side" data-testid="dock-step-side">
-      <RunSection :key="`run:${desk.selected.value?.id ?? ''}`" />
+    <div v-if="run" class="step-side" data-testid="dock-step-side">
+      <!-- V6 新家（第二十轮 §6，复审确认）：这一步做了什么 / 场景概览 / 这个对象在流程里做了什么，与时序图同栏 -->
+      <StepPanel v-if="stepSel" :key="`step:${desk.selected.value!.id}`" />
+      <ScenarioPanel v-else-if="scSel" :key="`sc:${desk.selected.value?.id}`" />
+      <RunSection v-else-if="runSel" :key="`run:${desk.selected.value?.id ?? ''}`" />
     </div>
   </aside>
 </template>

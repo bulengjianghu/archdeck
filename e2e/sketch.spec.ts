@@ -37,7 +37,7 @@ test('X4：r4 与草图一致；故意制造偏差（封闭子树多出子模块
   const owned = fs.readFileSync(OWNED, 'utf8')
   try {
     await openDesk(page, '/p/h5p-arch-desk/d/phase2-dynamic/r4')
-  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
+    await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
     await expect(page.locator('.panel')).toContainText('与草图一致')
 
     fs.writeFileSync(EXTRA, 'modules:\n  - { id: model.scenario.e2e, name: E2E 多出来的, parent: model.scenario, responsibility: 只为核验 }\n')
@@ -51,7 +51,7 @@ test('X4：r4 与草图一致；故意制造偏差（封闭子树多出子模块
 
     // 提醒级偏差：r1 缺草图的接口 if.state.transition；在 r1 上认可它
     await openDesk(page, '/p/h5p-arch-desk/d/phase2-dynamic/r1')
-  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
+    await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
     await page.getByRole('button', { name: /^⚠/ }).click()
     const warn = page.locator('.issue-list .item', { hasText: 'if.state.transition' })
     await expect(warn).toHaveCount(1)

@@ -10,7 +10,9 @@ const bar = (page: Page) => page.getByRole('banner', { name: '工具栏' })
 const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
 const title = (page: Page) => page.locator('.canvas-title')
 
-test('验收 6.42 第 1 条（第二十轮 §4 改写）：顶栏拉通——项目菜单在栏首，其右是视角段与工具按钮；导航树是画布浮层抽屉，不再挤压任何栏（TB-1、TB-2）', async ({ page }) => {
+test('验收 6.42 第 1 条（第二十轮 §4 改写）：顶栏拉通——项目菜单在栏首，其右是视角段与工具按钮；导航树是画布浮层抽屉，不再挤压任何栏（TB-1、TB-2）', async ({
+  page,
+}) => {
   await openDesk(page, '/p/media-web-player?level=kit')
   await page.getByRole('button', { name: '属性', exact: true }).click() // 抽屉缺省收起，打开后「专注」才是静息标签
   const names = await bar(page)

@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import Panel from '../../src/components/panel/Panel.vue'
+import ScenarioPanel from '../../src/components/panel/ScenarioPanel.vue'
 import ScenarioList from '../../src/components/ScenarioList.vue'
 import { OPEN_PREVIEW } from '../../src/components/shared/preview'
 import { createDeskState, type SourceFetcher } from '../../src/state/useDeskState'
@@ -36,7 +36,7 @@ async function setup(url: string, withSource = true) {
 describe('场景面板的证据', () => {
   it('列出证据文件：在源码清单里的可在副栏预览，不在的标「不在源码清单中」', async () => {
     const { global, opened } = await setup('/?sc=sc.ev')
-    const wrapper = mount(Panel, { global })
+    const wrapper = mount(ScenarioPanel, { global })
     await flushPromises()
     const section = wrapper.findAll('section').find(x => x.text().startsWith('证据'))!
     expect(section.exists()).toBe(true)
@@ -50,13 +50,13 @@ describe('场景面板的证据', () => {
 
   it('没有源码清单时不判断存不存在；没写 evidence 的场景没有这一节', async () => {
     const { global } = await setup('/?sc=sc.ev', false)
-    const wrapper = mount(Panel, { global })
+    const wrapper = mount(ScenarioPanel, { global })
     await flushPromises()
     const section = wrapper.findAll('section').find(x => x.text().startsWith('证据'))!
     expect(section.findAll('.evidence li').map(i => i.text())).toEqual(['src/a.ts', 'tests/nope.test.ts'])
     expect(section.find('.missing').exists()).toBe(false)
     const plain = await setup('/?sc=sc.play')
-    const w2 = mount(Panel, { global: plain.global })
+    const w2 = mount(ScenarioPanel, { global: plain.global })
     await flushPromises()
     expect(w2.findAll('section').some(x => x.text().startsWith('证据'))).toBe(false)
   })

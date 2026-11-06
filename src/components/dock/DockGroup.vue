@@ -214,5 +214,4 @@ const tip = (t: DocTab) =>
   color: var(--text-3);
   font-size: 12.5px;
 }
-
 </style>

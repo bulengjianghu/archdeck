@@ -1,10 +1,9 @@
 /** 步骤的代码证据（S16–S18、D-21）：步骤面板列出候选调用点、单击在资料区滚到该行；无证据的步骤在时序图带「?」并进问题页签 */
 import { expect, test } from '@playwright/test'
-import { closeNav, openCheckList, openDesk, openPanel, openPropsDrawer } from './helpers'
+import { openCheckList, openDesk } from './helpers'
 
 test('单步到 transition(openScenario)：面板按名字匹配到 useDeskState.ts 的一行，单击在资料区预览并滚到该行', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
-  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   // 从开头单步，直到选中 transition(openScenario) 那一步
   const title = page.locator('.step-panel h2')
   for (let i = 0; i < 10 && !((await title.count()) && (await title.textContent())?.startsWith('transition(openScenario)')); i++)
@@ -41,9 +40,13 @@ test('单步到 transition(openScenario)：面板按名字匹配到 useDeskState
 
 test('无证据（无承载）的步骤：时序图消息带「?」，场景面板计数、场景列表「? N」，问题页签有「步骤无证据」', async ({ page }) => {
   await openDesk(page, '/p/h5player?sc=sc.timeshift-leg-switch')
-  await openPropsDrawer(page) // 运行视角抽屉自动收起，场景面板住抽屉；拉开看「证据」
+  // 场景面板住辅助栏步骤节（第二十轮 §6）
   await expect(page.locator('svg .no-evidence').first()).toBeVisible({ timeout: 20_000 })
-  const section = page.locator('.scenario-panel .section').filter({ has: page.locator('h3', { hasText: '证据' }) })
+  await openCheckList(page)
+  const section = page
+    .getByTestId('dock-step-side')
+    .locator('.scenario-panel .section')
+    .filter({ has: page.locator('h3', { hasText: '证据' }) })
   await expect(section).toContainText(/无证据 [1-9]/)
   await page.getByRole('button', { name: /^运行 · / }).click()
   await expect(page.locator('.scenario-list .item .unevidenced').first()).toHaveText(/\? \d+/)

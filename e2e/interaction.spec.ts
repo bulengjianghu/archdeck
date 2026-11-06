@@ -1,6 +1,6 @@
 /** 交互视角（§6.1、§6.3，ADR-0031 之前称结构视角）：首页进入项目、分层总览、下钻与返回、单击选中 */
 import { expect, test } from '@playwright/test'
-import { closeNav, graphNode, openDesk, openPanel, openPropsDrawer, query } from './helpers'
+import { graphNode, openDesk, openPropsDrawer, query } from './helpers'
 
 test('首页列出项目，进入 h5player 看到分层总览；双击层下钻，面包屑返回', async ({ page }) => {
   await page.goto('./')

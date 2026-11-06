@@ -3,7 +3,7 @@
  * 选中文件在资料区打开源代码（G15、§6.4）
  */
 import { expect, test, type Page } from '@playwright/test'
-import { closeNav, collapseDisplay, graphNode, openDesk, openPanel, openPropsDrawer, query } from './helpers'
+import { collapseDisplay, graphNode, openDesk, openPropsDrawer, query } from './helpers'
 
 const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
 const props = (page: Page) => page.getByRole('complementary', { name: '属性' })
@@ -59,7 +59,9 @@ test('WS-1、WS-3（第二十轮 §4 改写）：顶栏拉通在双栏之上；�
   await expect(tabs(page)).toHaveCount(1)
 })
 
-test('WS-2、WS-3、WS-9（第二十轮 §4 改写）：资料区在时抽屉浮着、隐藏资料区后挤压；× 与「▤ 属性」关闭 / 打开；「专注」收起导航与抽屉再恢复', async ({ page }) => {
+test('WS-2、WS-3、WS-9（第二十轮 §4 改写）：资料区在时抽屉浮着、隐藏资料区后挤压；× 与「▤ 属性」关闭 / 打开；「专注」收起导航与抽屉再恢复', async ({
+  page,
+}) => {
   await openDesk(page, '/p/media-web-player?level=kit&sc=sc.command')
   await expect(dock(page)).toBeVisible()
   // 运行视角抽屉被自动收起；先手动打开
