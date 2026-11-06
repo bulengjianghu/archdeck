@@ -177,6 +177,8 @@ export function createEdit(i: EditInputs) {
     status: () => i.designInfo?.()?.status,
     approval: () => i.designInfo?.()?.approval,
     accepted: () => i.designInfo?.()?.accepted ?? [],
+    estimate: () => i.designInfo?.()?.estimate,
+    sketchHashes: () => i.designInfo?.()?.sketches,
     name: () => i.designInfo?.()?.name,
     baseline: i.baseline,
     current: i.current,

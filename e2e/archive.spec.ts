@@ -42,22 +42,25 @@ async function openChanges(page: Page) {
 const archiveBtn = (page: Page) => bar(page).getByRole('button', { name: '归档', exact: true })
 const MOD = (id: string, name: string) =>
   `  - { id: state.desk.edit.${id}, name: ${name}, parent: state.desk.edit, responsibility: E2E 临时, summary: E2E 临时 }\n`
-const REL =
-  'relations:\n  - { id: rel.e2e-w4-approval, from: state.desk.edit.approval, to: state.desk.edit.session, type: queries, description: 读编辑会话, purpose: E2E }\n'
+const REL = (id: string) =>
+  `relations:\n  - { id: rel.e2e-${id}, from: state.desk.edit.${id}, to: state.desk.edit.session, type: queries, description: 读编辑会话, purpose: E2E }\n`
 
 test('用例 11：认可后在文件里手改草图——「归档」灰、三关提示「草图自认可后已改动」，直接请求归档也被拒', async ({ page }) => {
   test.setTimeout(120_000)
   const design = 'zz-e2e-w4-drift'
-  const { restore, dir } = await sketchOn(page, design, { mount: 'state.desk.edit', goal: '波 4 用例 11' })
+  const regenerated = path.join(PROJECT, 'modules/zz-e2e-w4-drift.yaml')
+  const { restore, dir } = await sketchOn(page, design, { mount: 'state.desk.edit', extra: [regenerated], goal: '波 4 用例 11' })
   try {
-    await round(page, '#approval-add 加一个认可')
+    await round(page, '#archive-one 加一个核对')
     await save(page)
     await accept(page)
     const tab = await openChanges(page)
-    await expect(tab.getByTestId('task-gates')).toBeVisible({ timeout: 20_000 })
+    // 代码已经改到位（直接写一份描述代替重新生成）：只剩指纹这一关会变
+    fs.writeFileSync(regenerated, `modules:\n${MOD('w4-drift', '核对')}${REL('w4-drift')}`)
+    await expect(tab.getByTestId('task-state')).toHaveText(['✓'], { timeout: 20_000 })
     // 手改草图文件（认可之后、在架构台之外）
     const file = path.join(dir, 'sketches/state.desk.edit.yaml')
-    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('name: 认可', 'name: 认可（手改）'))
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('name: 核对', 'name: 核对（手改）'))
     await expect(tab.getByTestId('task-gate-why')).toContainText('草图自认可后已改动', { timeout: 20_000 })
     await expect(tab.locator('[data-gate="drift"]')).toHaveClass(/bad/)
     // 「归档」不亮：动作区或是灰的「归档」，或整个换成「文件已变」的横幅（会话察觉文件在外部改了）
@@ -98,14 +101,14 @@ test('用例 12：改一半——不点按钮 ✓ 与待做、待做在前、归
     await expect(archiveBtn(page)).toBeDisabled()
 
     // 改一半：重新生成的描述只有「认可」与它的关系——不点按钮，做到的打 ✓，待做排在前
-    fs.writeFileSync(regenerated, `modules:\n${MOD('approval', '认可')}${REL}`)
+    fs.writeFileSync(regenerated, `modules:\n${MOD('w4-accept', '认可')}${REL('w4-accept')}`)
     await expect(tab.getByTestId('task-state')).toHaveText(['待做', '✓'], { timeout: 20_000 })
     await expect(tab.getByTestId('change-row').first()).toContainText('归档')
     await expect(tab.locator('[data-gate="consistent"]')).toHaveClass(/bad/, { timeout: 20_000 })
     await expect(archiveBtn(page)).toBeDisabled()
 
     // 全做完：三关全绿，「归档」亮
-    fs.writeFileSync(regenerated, `modules:\n${MOD('approval', '认可')}${MOD('archiver', '归档')}${REL}`)
+    fs.writeFileSync(regenerated, `modules:\n${MOD('w4-accept', '认可')}${MOD('w4-archive', '归档')}${REL('w4-accept')}`)
     await expect(tab.getByTestId('task-state')).toHaveText(['✓', '✓'], { timeout: 20_000 })
     await expect(tab.getByTestId('task-gates')).toContainText('三关全绿', { timeout: 30_000 })
     await expect(archiveBtn(page)).toBeEnabled()
@@ -120,7 +123,7 @@ test('用例 12：改一半——不点按钮 ✓ 与待做、待做在前、归
     expect(yaml()).toMatch(/status: implemented/)
     // 确认层：草图覆盖的模块「已确认」，来源 sketch:<设计>
     const rec = fs.readFileSync(REVIEWED, 'utf8')
-    expect(rec).toMatch(new RegExp(`module: state\\.desk\\.edit\\.approval[\\s\\S]*?source: sketch:${design}`))
+    expect(rec).toMatch(new RegExp(`module: state\\.desk\\.edit\\.w4-accept[\\s\\S]*?source: sketch:${design}`))
     // 归档后的设计里：对话（只问、转录还在）与设计说明仍可开
     await openDesk(page, `/p/h5p-arch-desk/d/${design}/sketch`)
     await expect(dialogue(page)).toBeVisible()

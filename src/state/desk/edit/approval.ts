@@ -5,8 +5,14 @@
  */
 import { computed, shallowRef, watch, type ComputedRef, type ShallowRef } from 'vue'
 import {
+  approvalDrift,
+  archiveGates,
   CHANGE_KINDS,
   checkSketches,
+  estimateGap,
+  needsRatchet,
+  reviewHashes,
+  sketchModules,
   designEntities,
   designTransition,
   gapLine,
@@ -17,6 +23,7 @@ import {
   type ArchivePreview,
   type ChangeKind,
   type DesignApproval,
+  type DesignEstimate,
   type DesignStatus,
   type ImpactEstimate,
   type ModelIndex,
@@ -37,6 +44,10 @@ export interface ApprovalInputs {
   status: () => DesignStatus | undefined
   approval: () => DesignApproval | undefined
   accepted: () => readonly AcceptedDeviation[]
+  /** DL-49：认可时记下的估算 */
+  estimate: () => DesignEstimate | undefined
+  /** DL-47：设计目录下各张草图此刻的指纹（载荷里的设计信息，随文件监听更新） */
+  sketchHashes: () => readonly { file: string; hash?: string }[] | undefined
   name: () => string | undefined
   baseline: () => ModelIndex | null
   current: () => ModelIndex | null
@@ -127,40 +138,76 @@ export function createApproval(i: ApprovalInputs) {
   const taskMode = computed(() => status.value === 'accepted')
 
   /**
-   * DL-47、DL-50：归档预览（三关、估与实际）——写端点按磁盘与代码事实算（与命令行同一份），设计已认可时取；
-   * 设计信息或当前版本一变（文件监听 N5 → 重新加载）就重取，三关随之重算。
+   * DL-47、DL-50：归档预览（三关、估与实际）。核验一致、草图指纹与估与实际在页面上按同一套模型函数算（随描述与文件变化即时重算）；
+   * 棘轮要读整份源码算治理报告，只在另两关都过了时向写端点要（写端点按磁盘重判全部三关，与命令行同一份），静下来 400 ms 再要。
    */
-  const preview = shallowRef<ArchivePreview | null>(null)
+  const local = computed<ArchivePreview | null>(() => {
+    const s = i.session.value
+    const cur = i.current()
+    const st = status.value
+    if (!s || !cur || !i.design || st !== 'accepted') return null
+    // 与写端点同一口径：本设计各张草图对当前版本核验（带认可的偏差）
+    const ents = designEntities(s.doc.sketches, i.design)
+    const checks = checkSketches(cur, ents, new Map([[i.design, i.accepted()]])).filter(c => c.design === i.design)
+    // 草图指纹取载荷里的设计信息（磁盘此刻的那一份，认可后手改也会反映出来）
+    const prefix = `designs/${i.design}/`
+    const disk = Object.fromEntries((i.sketchHashes() ?? []).map(f => [f.file.startsWith(prefix) ? f.file.slice(prefix.length) : f.file, f.hash ?? '']))
+    const drift = approvalDrift(i.approval(), disk)
+    const gates = archiveGates({ checks, drift })
+    const covered: string[] = []
+    const promotes: string[] = []
+    for (const ent of ents) {
+      if (ent.def.supersedes) promotes.push(ent.def.supersedes)
+      else covered.push(...sketchModules(ent, cur).filter(id => !covered.includes(id)))
+    }
+    return {
+      status: st,
+      gates,
+      gap: estimateGap(i.estimate(), reviewHashes(cur)),
+      covered,
+      promotes,
+      ...(needsRatchet(checks, drift) ? {} : { reason: gates.first?.detail }),
+    }
+  })
+  /** 写端点算的那一份（只在另两关都过了时要） */
+  const remote = shallowRef<ArchivePreview | null>(null)
   const previewError = shallowRef<string | null>(null)
   let asked = 0
   async function refreshPreview() {
     const n = ++asked
-    if (!i.design || status.value !== 'accepted') {
-      preview.value = null
+    const l = local.value
+    if (!i.design || !l || l.reason) {
+      remote.value = null
       previewError.value = null
       return
     }
     const r = await i.writer.archivePreview({ design: i.design })
     if (n !== asked) return
-    preview.value = r.ok ? r.preview : null
+    remote.value = r.ok ? r.preview : null
     previewError.value = r.ok ? null : r.error
   }
-  // 文件监听一阵阵地推送（重新生成会连写几份文件）：静下来 400 ms 再取一次
   let timer: ReturnType<typeof setTimeout> | undefined
   watch(
-    [status, () => i.approval(), () => i.current(), () => i.sketchFiles()],
-    () => {
+    local,
+    l => {
       clearTimeout(timer)
-      if (status.value !== 'accepted') return void refreshPreview()
+      remote.value = null
+      if (!l || l.reason) return void refreshPreview()
       timer = setTimeout(() => void refreshPreview(), 400)
     },
     { immediate: true },
   )
+  /** 页面看到的预览：另两关没过时用本地的（棘轮「暂不判」），都过了用写端点的 */
+  const preview = computed<ArchivePreview | null>(() => {
+    const l = local.value
+    if (!l) return null
+    return l.reason ? l : remote.value
+  })
   /** 「归档」此刻能不能点（不能时为原因） */
   const archiveBlocked = computed<string | null>(() => {
     if (status.value !== 'accepted') return '设计还没认可'
     const p = preview.value
-    if (!p) return previewError.value ?? '正在核对三关…'
+    if (!p) return previewError.value ?? '正在核对棘轮…'
     return p.gates.first ? `${p.gates.first.label}：${p.gates.first.detail}` : (p.reason ?? null)
   })
   async function archive(): Promise<ApprovalOutcome & { note?: string }> {
