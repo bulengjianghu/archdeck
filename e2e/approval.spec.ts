@@ -203,7 +203,8 @@ test('放弃：设计面板「放弃设计」二次确认后为「已放弃」�
   await page.reload()
   await openDesk(page, `/p/h5p-arch-desk/d/zz-e2e-w3-abandon/sketch`)
   await expect(page.locator('.sketch-canvas')).toBeVisible()
-  await expect(dialogue(page)).toBeVisible()
+  // 对话标签的正文是按需加载的组件，刚整页重新加载、负载下现编译要好几秒（同 openDesk 的负载预算）
+  await expect(dialogue(page)).toBeVisible({ timeout: LOAD_BUDGET })
   await expect(dialogue(page).getByTestId('mode-badge')).toHaveText('只问')
   // 项目卡片不再列出（卡片页读 projects.json，负载下要好几秒）
   await page.goto('./')

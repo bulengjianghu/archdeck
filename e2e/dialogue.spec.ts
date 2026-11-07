@@ -69,9 +69,9 @@ test('崩溃出错误卡，会话不受影响', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sel=m:state')
   await discuss(page).click()
   await say(page, '#crash 试试')
-  await expect(dialogue(page).getByTestId('msg-error')).toContainText('崩溃')
+  await expect(dialogue(page).getByTestId('msg-error')).toContainText('崩溃', { timeout: LOAD_BUDGET })
   await say(page, '再来')
-  await expect(dialogue(page).getByTestId('answer-card')).toBeVisible()
+  await expect(dialogue(page).getByTestId('answer-card')).toBeVisible({ timeout: LOAD_BUDGET })
 })
 
 test('验收 7（梳理卡部分）：贴图后假 agent 回梳理卡——照片与卡并排，四组各有条目，不确定标记可见', async ({ page }) => {

@@ -29,13 +29,15 @@ test('L27：选中状态下悬停另一个模块，画面有响应——它的�
   const chip = page.locator('.vue-flow__edge-dep[data-id="chip:bundle:kit.session->pipeline.latency"]')
   await expect(chip).toHaveCount(0)
   expect(await nodeFaded(page, 'kit.session')).toBeGreaterThan(0)
-  // 画布首帧后还会再适应一次（节点平移），悬停落空时再悬停一次
+  // 画布首帧后还会再适应一次（节点平移，代码事实到达后的并集重排）：先等画布静止；悬停落空或节点在悬停后又挪开时整段重来
+  // （第二十二轮波 1 复跑：悬停后节点平移、光标落到别处，邻居的淡化回来了——同 structure-view O13③ 的做法）
+  await waitSettled(page)
   await expect(async () => {
     await graphNode(page, 'kit.session').hover({ force: true })
     await expect(chip).toBeAttached({ timeout: 1000 })
+    await expect(graphNode(page, 'kit.session').locator('.dim')).toHaveCount(0, { timeout: 1000 })
   }).toPass()
   expect(await faded(page, 'chip:bundle:kit.session->pipeline.latency')).toBe(false)
-  await expect(graphNode(page, 'kit.session').locator('.dim')).toHaveCount(0)
   // 选中的一跳仍在
   expect(await faded(page, 'chip:bundle:providers.element->pipeline.latency')).toBe(false)
   await page.mouse.move(5, 500)

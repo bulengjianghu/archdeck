@@ -250,7 +250,8 @@ test('改 / 问切换、DL-21：「问」只回答不改图；AI 想挪已有的
     await expect(dialogue(page).getByTestId('mode-badge')).toHaveText('只问')
     await say(page, '为什么这样分？')
     const answer = dialogue(page).getByTestId('answer-card')
-    await expect(answer).toBeVisible()
+    // 等 agent 一轮：与本文件其余各轮同口径（LOAD_BUDGET）
+    await expect(answer).toBeVisible({ timeout: LOAD_BUDGET })
     await expect(cards(page)).toHaveCount(0)
     await expect(page.locator('.info-bar .dirty')).toHaveCount(0)
     // 存为设计说明
@@ -269,7 +270,7 @@ test('改 / 问切换、DL-21：「问」只回答不改图；AI 想挪已有的
     await dialogue(page).getByRole('button', { name: '改', exact: true }).click()
     await expect(dialogue(page).getByTestId('mode-badge')).toHaveText('可改')
     await say(page, '#move-boxes 挪一挪')
-    await expect(dialogue(page).getByTestId('msg-error')).toContainText('moveNode')
+    await expect(dialogue(page).getByTestId('msg-error')).toContainText('moveNode', { timeout: LOAD_BUDGET })
     await expect(page.locator('.info-bar .dirty')).toHaveCount(0)
   } finally {
     await restore()
