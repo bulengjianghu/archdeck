@@ -273,7 +273,7 @@ export async function layoutGraph(view: LevelView, tiers?: LayoutTiers | null, m
   // L28：按依赖分层时只自上而下（被依赖的在下），层带与环组框在布局结果上算
   if (tiers) {
     const geom = tierGeometry(down.nodes, tiers, down.parentFrame, FRAME_PAD)
-    // L30：层号文字避开内部边与全部框外边（运行视角「全显」时画出的最多一组）
+    // L30：层号文字避开内部边与全部框外边（回放「全显」时画出的最多一组）
     const outside = [...outsideRoutes(down, view.edges).values()].map(r => r.points)
     return { ...down, tiers: placeTierLabels(geom, down.nodes, [...[...down.edges.values()].map(r => r.points), ...outside]) }
   }

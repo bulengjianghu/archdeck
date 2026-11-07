@@ -47,7 +47,8 @@ export type DialogueEntry =
 
 export type DialogueRun = { status: 'idle' } | { status: 'running'; turn: string; live: string; mode: DialogueMode }
 
-export type CanvasPerspective = 'structure' | 'interaction' | 'run' | 'sketch'
+/** 画布的种类（对话的锚点随它切换）：两个视角与草图画布；回放是交互视角（LY-6） */
+export type CanvasPerspective = 'structure' | 'interaction' | 'sketch'
 
 export interface DialogueState {
   transcript: DialogueEntry[]
@@ -181,7 +182,7 @@ export function dialogueTransition(s: DialogueState, a: DialogueAction): Dialogu
       // DA-2：换锚点不动转录（历史消息各自记着当时的锚点）
       return sameAnchor(s.anchor, a.anchor) ? s : { ...s, anchor: a.anchor }
     case 'setPerspective': {
-      // DL-12：换视角只换锚点（运行视角下锚点随选中的步骤），转录、运行中的一轮与队列都不动
+      // DL-12：换视角只换锚点（回放中锚点随选中的步骤），转录、运行中的一轮与队列都不动
       if (s.perspective === a.perspective && sameAnchor(s.anchor, a.anchor)) return s
       // DL-19：进入草图画布缺省「改」，离开时「改」回到「问」（改只在草图里，重讲只在当前版本上）
       const mode = a.perspective === 'sketch' ? (s.perspective !== 'sketch' ? (s.lock ? 'ask' : 'edit') : s.mode) : s.mode === 'edit' ? 'ask' : s.mode

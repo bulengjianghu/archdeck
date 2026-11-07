@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 外部参与者面板（C-14；V15、PC-10，ADR-0053）：头部（名称、类别徽标）之下——理解：说明、入口关系；
- * 相关资料：由它触发的场景（A6）；出处 footer 在最底。运行视角下理解卡首节为运行信息（V6）。
+ * 相关资料：由它触发的场景（A6）；出处 footer 在最底。回放中理解卡首节为运行信息（V6）。
  */
 import { computed } from 'vue'
 import { usePanelPart } from '../shared/panelPart'

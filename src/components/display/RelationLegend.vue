@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * 图例 · 线（交互与运行视角；颜色通道 ADR-0018，图例行即开关 ADR-0056，按视觉通道组织 ADR-0058）：
+ * 图例 · 线（交互与回放；颜色通道 ADR-0018，图例行即开关 ADR-0056，按视觉通道组织 ADR-0058）：
  * - 类型行即开关（L45、L8）：示意 + 名称 + 勾选态，单击切换这一类的显示，关着的行淡色、常列（L47）；隐藏的类在画布角留痕计数。
- *   运行视角的类型行只读（回放不受筛选影响，L9）。示意按画布同一套样式（查询淡、委托实色）；迁移期的未分类（calls，M17）单列。
+ *   回放的类型行只读（回放不受筛选影响，L9）。示意按画布同一套样式（查询淡、委托实色）；迁移期的未分类（calls，M17）单列。
  *   类型的定义不写在行上（L51 修订：讲解进帮助与悬停）——行悬停给「名称 = 定义」，节标题旁的「?」打开帮助并定位到「读一条线」。
  * - 线的属性各一行、只解码（ADR-0058 准入三问）：粗细（共享通道 L18，WidthRow）、箭头（实心同步 / 空心异步，L10；经端口的插座 L12）、
  *   线型（实线交互 / 虚线依赖，ADR-0035；画面有虚线才列）。机制词、「混合」、两段标签位是写在线上的字（L26、L35），不列——
@@ -27,7 +27,7 @@ const openGuide = inject(OPEN_GUIDE, null)
 const NEUTRAL = 'var(--text-2)'
 const CLASSIFIED = TYPE_ORDER.filter((t: RelationType) => !isUnclassified(t))
 const UNCLASSIFIED = TYPE_ORDER.filter(isUnclassified)
-/** L45：类型筛选只在交互视角（L8）；运行视角的类型行只读 */
+/** L45：类型筛选只在交互视角（L8）；回放的类型行只读 */
 const shown = (t: RelationType) => props.run || desk.toggles.relationTypes.includes(t)
 const toggleType = (t: RelationType) => {
   const list = desk.toggles.relationTypes

@@ -105,7 +105,7 @@ export function stageOverlay(
   return { active, walked, current, temps: [...temps.values()], previews, hiddenCurrent: frameId !== null && ci === null }
 }
 
-/** V8：运行视角下交互关系的显示方式 */
+/** V8：回放中交互关系的显示方式 */
 export type StaticMode = 'hide' | 'dim' | 'show'
 export type Visibility = 'show' | 'dim' | 'hide'
 
@@ -128,7 +128,7 @@ export interface StageDisplay {
 }
 
 /**
- * 舞台显示（V5、V8、V9、V10）：运行视角下每个节点与视图边是显示、淡化还是隐藏。布局不变，只决定画不画、淡不淡。
+ * 舞台显示（V5、V8、V9、V10）：回放中每个节点与视图边是显示、淡化还是隐藏。布局不变，只决定画不画、淡不淡。
  * - 回放边始终显示；参与路径的节点显示，只在未选分支 / 未到达处出现的节点淡化；
  * - 其余节点与静态边：隐藏 / 淡化 / 照常（按显示方式）；「在画布上显示」的节点的静态边及对端节点照常；
  * - 悬停的可见节点：「隐藏」时它的静态边及对端节点淡显，「淡显」时它的静态边照常；「全显」不变；

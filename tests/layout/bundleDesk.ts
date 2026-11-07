@@ -163,8 +163,8 @@ export async function sceneOf(desk: Desk, prefs: Partial<Prefs> = {}, extra: Par
   const x = links ? surfaceExpansion({ view: v, selection: desk.selection.value, always: p.surfaceAlways, links, spreads }) : null
   const positioned: PositionedView | null =
     x && links ? await layoutView(v, {}, { ...links, expand: x.expand, interactions: x.interactions }) : desk.positioned.value
-  const structureMode = desk.perspective.value === 'structure'
-  const interaction = desk.perspective.value === 'interaction'
+  const structureMode = desk.viewpoint.value === 'structure'
+  const interaction = desk.viewpoint.value === 'interaction' && !desk.playing.value
   const sel = desk.selection.value
   const surfaceInfo = new Map(
     (x?.expand ?? []).map(e => {

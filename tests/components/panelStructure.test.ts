@@ -151,7 +151,7 @@ describe('模块面板「结构」一节（K15、K16、K17）', () => {
     expect(cross.text()).not.toContain('StateMachine → Solution')
     await item.trigger('click')
     await flushPromises()
-    expect(desk.perspective.value).toBe('interaction')
+    expect(desk.viewpoint.value).toBe('interaction')
     expect(desk.selection.value).toEqual({ kind: 'relation', id: 'r6' })
     // 单击不跳层次：关系不在本层时面板说明「不在本层，已选中」（T3 裁决 5）
     expect(desk.view.value!.edges.some(e => e.relationIds.includes('r6'))).toBe(false)
@@ -209,7 +209,7 @@ describe('依赖边面板（结构视角 sel=d:）', () => {
     expect(wrapper.find('.dep-ruling').text()).toContain('层规则：「Infrastructure」可依赖')
     await cover.find('.cover-rel').trigger('click')
     await flushPromises()
-    expect(desk.perspective.value).toBe('interaction')
+    expect(desk.viewpoint.value).toBe('interaction')
     expect(desk.selection.value).toEqual({ kind: 'relation', id: 'r1' })
   })
 

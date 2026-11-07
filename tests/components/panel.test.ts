@@ -196,7 +196,7 @@ describe('属性面板 · 运行视角', () => {
     expect(text).toContain('离进度最近')
   })
 
-  it('运行视角选中步骤 / 场景时面板不渲染步骤 / 场景面板，只有一行指向「描述」标签（第二十二轮波 2：它们住描述标签的步骤节）', async () => {
+  it('LY-6、LY-16（第二十二轮波 4）：回放中选中步骤 / 场景，同一个面板分派给出步骤 / 场景面板，没有运行视角的特化说明', async () => {
     for (const url of ['/?sc=sc.play&step=sc.play%23update&alt=0', '/?sc=sc.play']) {
       const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
       await router.push(url)
@@ -206,10 +206,8 @@ describe('属性面板 · 运行视角', () => {
       await flushPromises()
       const wrapper = mount(Panel, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
       await flushPromises()
-      const note = wrapper.find('[data-testid="props-run-note"]')
-      expect(note.exists()).toBe(true)
-      expect(note.text()).toContain('「描述」标签')
-      expect(wrapper.find('.scenario-panel').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="props-run-note"]').exists()).toBe(false)
+      expect(wrapper.find(url.includes('step=') ? '.step-panel' : '.scenario-panel').exists()).toBe(true)
     }
   })
 })

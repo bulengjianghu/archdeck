@@ -3,16 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { loadModel, projectLevel, RELATION_TYPES } from '../../src/model'
-import {
-  DEFAULT_TOGGLES,
-  encodeView,
-  perspectiveOf,
-  transition,
-  viewpointOf,
-  type TransitionContext,
-  type ViewAction,
-  type ViewState,
-} from '../../src/state/transition'
+import { DEFAULT_TOGGLES, encodeView, transition, viewpointOf, type TransitionContext, type ViewAction, type ViewState } from '../../src/state/transition'
 import { createDeskState, type SourceFetcher } from '../../src/state/useDeskState'
 import type { FileDep, SourcePayload } from '../../src/model'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
@@ -29,14 +20,14 @@ const toInteraction: ViewAction = { type: 'setMode', mode: 'interaction' }
 
 describe('V11 三视角', () => {
   it('缺省为交互视角；单击切到结构视角进历史，再切回去；同一模式无动作', () => {
-    expect(perspectiveOf(base)).toBe('interaction')
+    expect(viewpointOf(base)).toBe('interaction')
     const r = run(base, toStructure)
     expect(r.history).toBe('push')
     expect(r.state.mode).toBe('structure')
-    expect(perspectiveOf(r.state)).toBe('structure')
+    expect(viewpointOf(r.state)).toBe('structure')
     expect(run(r.state, toStructure).state).toBe(r.state)
     const back = run(r.state, toInteraction)
-    expect(perspectiveOf(back.state)).toBe('interaction')
+    expect(viewpointOf(back.state)).toBe('interaction')
     // 交互视角不存字段：与缺省状态相同
     expect('mode' in back.state).toBe(false)
   })
@@ -71,10 +62,27 @@ describe('V11 三视角', () => {
     expect(viewpointOf(transition(base, { type: 'restore', query: { sc: 'nope', v: 's' } }, { index: idx }).state)).toBe('structure')
   })
 
+  it('LY-6（波 4 删运行视角）：旧的运行视角地址——带场景与步骤（有无 v=s），或带已不认识的视角值——都恢复为交互 + 该场景 + 该步骤，写回规范形', () => {
+    const { index: idx } = loadModel(scenarioFiles())
+    const restoreQ = (query: Record<string, string>) => transition(base, { type: 'restore', query }, { index: idx }).state
+    for (const q of [
+      { sc: 'sc.play', step: 'sc.play#start' } as Record<string, string>,
+      { sc: 'sc.play', step: 'sc.play#start', v: 's' },
+      { sc: 'sc.play', step: 'sc.play#start', v: 'r' },
+    ]) {
+      const st = restoreQ(q)
+      expect([viewpointOf(st), st.playback?.scenarioId, st.playback?.frameId]).toEqual(['interaction', 'sc.play', 'sc.play#start'])
+      expect(encodeView(st, idx)).toEqual({ sc: 'sc.play', step: 'sc.play#start' })
+    }
+    // 不带场景的旧视角值：交互视角，没有回放
+    const plain = restoreQ({ v: 'run' })
+    expect([viewpointOf(plain), plain.playback]).toEqual(['interaction', null])
+  })
+
   it('草图画布（X7a）下切换无效，画的是交互图', () => {
     const editing: ViewState = { ...base, editing: { kind: 'persistent', file: 'intent/skeleton.yaml' } as never }
     expect(run(editing, toStructure).state).toBe(editing)
-    expect(perspectiveOf({ ...editing, mode: 'structure' })).toBe('interaction')
+    expect(viewpointOf({ ...editing, mode: 'structure' })).toBe('interaction')
   })
 })
 
@@ -162,7 +170,7 @@ describe('DeskState 的画布模式', () => {
   it('v=s 直达结构视角；结构视图派生只在结构视角有；切换写进 URL', async () => {
     const { desk, router } = await open('/?v=s')
     expect(desk.mode.value).toBe('structure')
-    expect(desk.perspective.value).toBe('structure')
+    expect(desk.viewpoint.value).toBe('structure')
     const sv = desk.facts.structure.value!
     expect(sv.facts).toBe(true)
     if (sv.facts) expect(sv.bundles.map(e => e.id)).toContain('bundle:infra->app')

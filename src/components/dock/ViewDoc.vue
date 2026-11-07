@@ -6,20 +6,15 @@
  * 描述 = 回放中的步骤节（步骤详情、场景概览、运行信息），其余主语为原选中面板的全部内容（含核对卡，抽屉已删，LY-16；草图里是草图面板）；
  * 核对 = 同一份内容的核对卡（Panel / 步骤 / 场景面板的 part="check"）。
  */
-import { computed, provide } from 'vue'
+import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import type { ViewKind } from '@/state/useDeskState'
 import ExplainerView from './ExplainerView.vue'
 import SequenceDoc from './SequenceDoc.vue'
 import RunSection from '../panel/RunSection.vue'
-import StepPanel from '../panel/StepPanel.vue'
-import ScenarioPanel from '../panel/ScenarioPanel.vue'
 import Panel from '../panel/Panel.vue'
-import { PANEL_PART } from '../shared/panelPart'
 
-const props = defineProps<{ view: ViewKind }>()
-// 步骤 / 场景面板与运行信息不经 Panel：这里给出它们所在的部分
-provide(PANEL_PART, props.view === 'check' ? 'check' : 'description')
+defineProps<{ view: ViewKind }>()
 const desk = useDesk()
 const subject = computed(() => desk.subject.value)
 const playing = computed(() => !!desk.playback.value)
@@ -29,6 +24,8 @@ const runSide = computed(() => {
   const s = subject.value
   return playing.value && !!s && (s.kind === 'step' || s.kind === 'scenario' || runKinds.includes(s.kind))
 })
+/** 回放中主语是步骤或场景 */
+const stepSide = computed(() => playing.value && (subject.value?.kind === 'step' || subject.value?.kind === 'scenario'))
 const key = computed(() => `${subject.value?.kind}:${'id' in (subject.value ?? {}) ? (subject.value as { id: string }).id : ''}`)
 </script>
 
@@ -36,22 +33,14 @@ const key = computed(() => `${subject.value?.kind}:${'id' in (subject.value ?? {
   <div class="view-doc" :data-view="view" :data-subject="key">
     <ExplainerView v-if="view === 'explainer'" :key="key" />
     <template v-else-if="view === 'description'">
-      <div v-if="runSide && subject" class="run-side" data-testid="dock-step-side">
-        <StepPanel v-if="subject.kind === 'step'" :key="key" />
-        <ScenarioPanel v-else-if="subject.kind === 'scenario'" :key="key" />
-        <template v-else>
-          <Panel :key="`p:${key}`" part="description" />
-          <RunSection :key="key" />
-        </template>
+      <!-- 回放中（步骤、场景与参与对象）挂 dock-step-side：步骤 / 场景面板由同一个面板分派给出，参与对象的运行信息排在面板之后（V6） -->
+      <div class="panel-wrap" :class="{ 'run-side': runSide }" :data-testid="runSide ? 'dock-step-side' : undefined">
+        <Panel :key="key" part="description" />
+        <RunSection v-if="runSide && subject && runKinds.includes(subject.kind)" :key="`r:${key}`" />
       </div>
-      <div v-else class="panel-wrap"><Panel :key="key" part="description" /></div>
     </template>
     <template v-else-if="view === 'check'">
-      <div v-if="runSide && subject && (subject.kind === 'step' || subject.kind === 'scenario')" class="run-side part-check" data-testid="check-step-side">
-        <StepPanel v-if="subject.kind === 'step'" :key="key" />
-        <ScenarioPanel v-else :key="key" />
-      </div>
-      <div v-else class="panel-wrap"><Panel :key="key" part="check" /></div>
+      <div class="panel-wrap" :data-testid="stepSide ? 'check-step-side' : undefined"><Panel :key="key" part="check" /></div>
     </template>
     <template v-else-if="view === 'sequence'">
       <SequenceDoc v-if="playing" />
@@ -81,11 +70,6 @@ const key = computed(() => `${subject.value?.kind}:${'id' in (subject.value ?? {
   min-height: 0;
   overflow: auto;
   scrollbar-width: thin;
-}
-
-/* 核对标签里的步骤 / 场景面板只留核对卡（波 2 过渡；卡片自己按 PANEL_PART 不渲染其余卡，身份卡、出处等藏起） */
-.run-side.part-check > :deep(div > :not([data-card='check']):not(:has([data-card='check']))) {
-  display: none;
 }
 
 .empty {

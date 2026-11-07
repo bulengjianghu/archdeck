@@ -2,7 +2,7 @@
  * DeskState：协调者（docs/architecture/view-state.md §2）。
  * - 持有视图状态（一个值）、加载后的模型与对比基线；
  * - 唯一写入口 dispatch(action) → transition() → 写入新状态；对外的操作都是构造动作并 dispatch 的包装；
- * - 派生要画的数据：核心（层次、选中、视角、层次视图）平铺，领域派生分组——run 运行视角、files 源码、versions 版本、facts 架构治理、evidence 步骤证据、explainers 图解、evolution 演化事实（ADR-0013、ADR-0015、ADR-0023，见 ./desk/）；
+ * - 派生要画的数据：核心（层次、选中、视角、层次视图）平铺，领域派生分组——run 回放、files 源码、versions 版本、facts 架构治理、evidence 步骤证据、explainers 图解、evolution 演化事实（ADR-0013、ADR-0015、ADR-0023，见 ./desk/）；
  * - 与外界的交互交给同步适配器：路由（sync/router）、模型源（sync/modelSource）、布局（sync/layout）、源码（sync/source）。
  * 呈现层只读这里的状态、只调这里的操作，不直接调用模型层的计算。
  */
@@ -37,7 +37,6 @@ import {
   DEFAULT_TOGGLES,
   encodeView,
   keyIntent,
-  perspectiveOf,
   viewpointOf,
   selectedOf,
   transition,
@@ -167,11 +166,11 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const impactQuery = computed(() => state.value.impactQuery ?? null)
   const playback = computed(() => state.value.playback)
   const levelPath = computed(() => (index.value && levelId.value ? (index.value.pathOf.get(levelId.value) ?? []) : []))
-  /** 视角与选中（V1、V2、V7、V11），由视图状态推出 */
-  const perspective = computed(() => perspectiveOf(state.value))
-  /** LY-6：视角只有结构 / 交互；回放 = 交互 + playback */
+  /** LY-6：视角只有结构 / 交互；回放 = 交互 + playback（选中一个场景） */
   const viewpoint = computed(() => viewpointOf(state.value))
-  /** V11：画布模式（运行视角下为进入前的模式，退出场景即回到它） */
+  /** 回放中（交互视角 + 一个场景） */
+  const playing = computed(() => !!state.value.playback)
+  /** V11：画布模式（回放中为进入前的模式，退出场景即回到它） */
   const mode = computed<CanvasMode>(() => state.value.mode ?? 'interaction')
   const selected = computed(() => selectedOf(state.value))
 
@@ -198,7 +197,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     // 草图画布（ADR-0025）自己布局，不走层次投影与 elk
     if (!index.value || !levelId.value || editing.value) return null
     try {
-      // L9：运行视角下舞台不受显示开关影响，并补齐场景帧端点的边界节点与参与者（P12）
+      // L9：回放中舞台不受显示开关影响，并补齐场景帧端点的边界节点与参与者（P12）
       const expanded = expandedBands.value.length ? { expandedBands: expandedBands.value } : {}
       if (plan.value) return projectLevel(index.value, levelId.value, { showBoundaries: true, scenarioEnds: stageEnds(plan.value), ...expanded })
       return projectLevel(index.value, levelId.value, {
@@ -412,7 +411,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const setToggles = (patch: Partial<Toggles>) => void dispatch({ type: 'toggle', patch })
   const openScenario = (id: string) => void dispatch({ type: 'openScenario', id })
   const closeScenario = () => void dispatch({ type: 'closeScenario' })
-  /** V11：切到结构 / 交互视角（运行视角下即退出场景） */
+  /** V11：切到结构 / 交互视角（回放中即退出场景） */
   const setMode = (m: CanvasMode) => void dispatch({ type: 'setMode', mode: m })
   const next = () => void dispatch({ type: 'next' })
   const prev = () => void dispatch({ type: 'prev' })
@@ -440,7 +439,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   /** LY-7、LY-7a：主语——选中；没有时为当前层次的父模块，根层即系统 */
   const subject = computed<Subject | null>(() => (index.value ? subjectOf(state.value, index.value.rootId) : null))
   // ── 对话（DA-1、DL-12）：选中 / 视角 → 锚点；进入草图画布的对话标签由草图情境的排布给出（LY-11） ──
-  const canvas = computed(() => (edit.active.value ? 'sketch' : perspective.value))
+  const canvas = computed(() => (edit.active.value ? 'sketch' : viewpoint.value))
   const dialogue = createDialogue({
     project: options.project,
     index,
@@ -555,7 +554,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     selected,
     hoverId,
     impactQuery,
-    perspective,
+    playing,
     viewpoint,
     mode,
     subject,

@@ -1,9 +1,9 @@
 /**
- * 视角与选中（V1–V4、V7、V11）：由视图状态推出，不另存字段（ADR-0012）。
- *   视角 = playback 为 null ? mode（结构 / 交互，缺省交互） : 运行
+ * 视角与选中（V2–V4、V7；LY-6，ADR-0064）：由视图状态推出，不另存字段（ADR-0012）。
+ *   视角 = 结构 / 交互（回放与草图画布下都是交互）；回放 = 交互视角 + playback（选中一个场景）
  *   选中 = selection ≠ null ? selection
- *          运行视角：frameId ≠ null ? 步骤(frameId) : 场景
- *          结构 / 交互视角：无（面板显示当前父模块）
+ *          回放中：frameId ≠ null ? 步骤(frameId) : 场景
+ *          否则：无（主语为当前父模块，LY-7a）
  * 选中是唯一的主语；步骤与场景不存进 selection，「选中的步骤就是进度所在的一步」（V7）由表示本身保证。
  */
 import { coupleEnds, lanesOf, type LevelView, type ModelIndex, type ReturnPairs, type ScenarioLevelView, type SequenceModel } from '@/model'
@@ -12,20 +12,11 @@ import type { Selection, TransitionResult, ViewState } from './types'
 /** LY-6（ADR-0064）：视角只有两个——结构（结构图）、交互（交互图）；回放 = 交互视角 + 一个场景 */
 export type Viewpoint = 'structure' | 'interaction'
 
-/**
- * 呈现层过渡用的三态（第二十二轮波 4 删）：回放中为 'run'。新代码用 viewpointOf + playback。
- * @deprecated 用 viewpointOf 与 state.playback
- */
-export type Perspective = Viewpoint | 'run'
-
-/** 选中的对象：显式选中，或运行视角下进度所在的步骤 / 场景 */
+/** 选中的对象：显式选中，或回放中进度所在的步骤 / 场景 */
 export type Selected = Selection | { kind: 'step'; id: string } | { kind: 'scenario'; id: string }
 
 /** LY-6：视角——回放中、草图画布（X7a）下都是交互视角 */
 export const viewpointOf = (state: ViewState): Viewpoint => (state.mode === 'structure' && !state.playback && !state.editing ? 'structure' : 'interaction')
-
-/** 呈现层过渡（波 4 删）：回放中为 'run'，否则同 viewpointOf */
-export const perspectiveOf = (state: ViewState): Perspective => (state.playback ? 'run' : viewpointOf(state))
 
 /** LY-7：主语——选中的对象；系统（根层无选中） */
 export type Subject = Selected | { kind: 'system' }
@@ -131,7 +122,7 @@ export function emphasisOf(state: ViewState, ctx: EmphasisContext): Emphasis | n
 }
 
 /**
- * V3：下钻作为「指向」：运行视角下选中被下钻的模块（结构 / 交互视角按 N2 清空选中）。
+ * V3：下钻作为「指向」：回放中选中被下钻的模块（结构 / 交互视角按 N2 清空选中）。
  * 其余导航（选中、跳转、定位、返回上级）本身就设定了选中，无需改写。
  */
 export function asPointing(before: ViewState, result: TransitionResult, drilled: string): TransitionResult {

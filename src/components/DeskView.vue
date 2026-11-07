@@ -197,7 +197,7 @@ watch(
   { flush: 'post' },
 )
 onBeforeUnmount(() => playerObserver?.disconnect())
-const playerShown = computed(() => desk.perspective.value === 'run' && !desk.edit.active.value && desk.status.value === 'ready')
+const playerShown = computed(() => desk.playing.value && !desk.edit.active.value && desk.status.value === 'ready')
 const playerAt = computed(() =>
   playerPlacement({ canvasWidth: canvasWidth.value, inset: 0, playerWidth: playerSize.value.w, zoomRight: zoomRight.value, margin: PLAYER_MARGIN }),
 )
@@ -255,13 +255,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSearchKey))
 provide(STAGE_DISPLAY, useStageDisplay(props.project, desk))
 
 // 键盘：Esc 只取消选中；Backspace 返回上级，根层回项目列表（N7、N9）；
-// 运行视角：← → 单步，数字键选分支
+// 回放：← → 单步，数字键选分支
 function onKey(e: KeyboardEvent) {
   const t = e.target as HTMLElement
   if (t.closest('input, textarea, select, [contenteditable="true"]')) return
   // X7a：草图画布自己处理键盘（Delete、⌘Z / ⇧⌘Z、⌘S、Esc）
   if (desk.edit.active.value) return
-  if (desk.perspective.value === 'run') {
+  if (desk.playing.value) {
     const bp = desk.run.branchPoint.value
     if (e.key === 'ArrowRight') desk.next()
     else if (e.key === 'ArrowLeft') desk.prev()

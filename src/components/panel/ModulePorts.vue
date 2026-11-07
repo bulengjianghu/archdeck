@@ -15,7 +15,7 @@ const ports = computed(() => desk.facts.portsOf(props.id))
 /** 端口 → 表面上对应的端口元素（只在结构视角） */
 const elementOf = computed(() => {
   const out = new Map<string, string>()
-  if (desk.perspective.value !== 'structure') return out
+  if (desk.viewpoint.value !== 'structure') return out
   for (const e of desk.facts.surfaceOf(props.id)?.elements ?? []) if (e.kind === 'port' && e.interfaceId) out.set(e.interfaceId, e.name)
   return out
 })

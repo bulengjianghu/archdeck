@@ -739,7 +739,7 @@ export interface ProjectOptions {
   relationTypes?: readonly RelationType[]
   /** true 时隐藏 status: target 的模块及其关系 */
   currentOnly?: boolean
-  /** 运行视角的舞台：场景中全部帧的端点，用于补齐结构上没有关系的边界节点与参与者 */
+  /** 回放的舞台：场景中全部帧的端点，用于补齐结构上没有关系的边界节点与参与者 */
   scenarioEnds?: readonly { from: string; to: string }[]
   /** O6：分层总览中临时展开的层：非核心模块与核心模块一样露出，不改层次 */
   expandedBands?: readonly string[]

@@ -461,16 +461,16 @@ describe('L50：悬停释义取自图例同一份词表', () => {
   })
 })
 
-describe('W-10：帮助按结构 / 交互 / 运行 / 对照与治理分组，另有共享一段', () => {
+describe('W-10：帮助按结构 / 交互 / 回放 / 对照与治理分组，另有共享一段', () => {
   it('四组标题与改名', () => {
     const w = mount(GuideDialog)
-    expect(w.findAll('.group h3').map(h => h.text())).toEqual(['结构', '交互', '读一条线：三问四修饰', '运行', '对照与治理', '层'])
+    expect(w.findAll('.group h3').map(h => h.text())).toEqual(['结构', '交互', '读一条线：三问四修饰', '回放', '对照与治理', '层'])
     // L36、L37（第十四轮 F4、F16）：层的状态记号与节点注记的位置表
     expect(w.find('[data-testid="guide-layer-status"]').text()).toMatch(/已确认.*待确认.*算出/)
     expect(w.find('[data-testid="guide-node-marks"]').text()).toContain('最多三个')
     expect(w.text()).toContain('交互图变成舞台')
     expect(w.text()).not.toContain('结构图变成舞台')
-    expect(w.find('[aria-label="三个视角共享"]').text()).toContain(SHARED_CHANNELS[5].text)
+    expect(w.find('[aria-label="视角与回放共享"]').text()).toContain(SHARED_CHANNELS[5].text)
     // W-10：结构组另有「束与表面」「承载」两段（第八轮）
     const structure = w.find('[aria-label="结构"]')
     expect(structure.find('[data-testid="guide-bundle"]').text()).toContain('一对模块之间的线是一条束')

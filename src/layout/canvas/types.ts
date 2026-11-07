@@ -42,7 +42,7 @@ export interface NodeData {
   module?: ModuleEntity
   childCount: number
   selected: boolean
-  /** 结构视角有聚焦对象（悬停 / 选中）时，与它无关的节点变淡；运行视角按舞台显示 */
+  /** 结构视角有聚焦对象（悬停 / 选中）时，与它无关的节点变淡；回放按舞台显示 */
   dim: boolean
   /** 边界节点：外部模块所在路径 */
   path?: string
@@ -59,9 +59,9 @@ export interface NodeData {
   /** 外部参与者节点 */
   actor?: ActorEntity
   actorKind?: ActorKind
-  /** 运行视角：步骤序号（结构图上的序号标记） */
+  /** 回放：步骤序号（结构图上的序号标记） */
   steps?: { n: number; frameId: string; current: boolean; muted?: boolean }[]
-  /** 运行视角：分支点某个选项的预览 */
+  /** 回放：分支点某个选项的预览 */
   preview?: { pointId: string; option: number; label: string }
   /** Y4：本层环的编号 */
   cycle?: number
@@ -202,7 +202,7 @@ export type EdgeArrow = 'closed' | 'open'
 export interface RouteEdgeData {
   route: EdgeRoute
   edge: ViewEdge
-  /** L26：标签位——×N、把手与词表里的异常和修饰（` · ` 连接，含「+k」）；运行视角走过的边不标条数 */
+  /** L26：标签位——×N、把手与词表里的异常和修饰（` · ` 连接，含「+k」）；回放走过的边不标条数 */
   label: string
   /** L26②（ADR-0041）：标签位的段——异常段（警示色）在前、修饰段（中性）在后；不给时整串 label 为一段，按 warn 着色 */
   segments?: PillSegment[]
@@ -233,7 +233,7 @@ export interface RouteEdgeData {
   shelf?: boolean
   /** 设计版本：边包含新增或修改的关系 */
   change?: 'added' | 'changed'
-  /** 运行视角：当前消息、走过、分支预览、时序图悬停预览 */
+  /** 回放：当前消息、走过、分支预览、时序图悬停预览 */
   play?: 'current' | 'walked' | 'preview' | 'hover'
   /** R15：选中步骤时，不属于选中 / 配对消息的走过的边淡为灰色 */
   muted?: boolean
@@ -298,7 +298,7 @@ export interface CanvasInput {
   selection: { kind: string; id: string } | null
   /** 悬停：视图节点 ID，或 `step:<帧 ID>`（悬停时序图消息） */
   hover: string | null
-  /** 运行视角的舞台叠加；结构视角为 null */
+  /** 回放的舞台叠加；结构视角为 null */
   stage: StageOverlay | null
   scenarioView: ScenarioLevelView | null
   /** 选中突出：选中步骤所在的可见消息与配对消息（R15、R16）；选中的不是步骤时 selected 为 null */
@@ -318,7 +318,7 @@ export interface CanvasInput {
   facts?: LevelFacts | null
   /** J5：结构视角下开启热度或时间耦合时的本层投影；否则为 null */
   evolution?: LevelEvolution | null
-  /** L13：本层节点（模块 ID）定义的端口；运行视角为 null（不画） */
+  /** L13：本层节点（模块 ID）定义的端口；回放为 null（不画） */
   ports?: ReadonlyMap<string, readonly PortPanel[]> | null
   /** O12：结构视角下开启「组装」时的组装叠加线；否则为空 */
   assembly?: readonly AssemblyOverlay[] | null
@@ -326,11 +326,11 @@ export interface CanvasInput {
   assemblyRoots?: ReadonlyMap<string, number> | null
   /** L36：声明的层（分层总览的带）的状态记号，按层模块的确认状态（Z3）；不给时不画 */
   layerStatus?: ReadonlyMap<string, LayerStatus> | null
-  /** ADR-0031：结构视角的输入；交互视角与运行视角为 null（照交互图画） */
+  /** ADR-0031：结构视角的输入；交互视角与回放为 null（照交互图画） */
   structure?: StructureInput | null
   /** K22、L26（ADR-0041）：本层向上、又有不是控制反转的关系的视图边 → 这些关系（标签位写「向上」）；结构视角不给 */
   upward?: ReadonlyMap<string, readonly string[]> | null
-  /** D7、D8：本层交互视图边 → 按接收方表面散开的数据与束内混合（交互视角用；运行视角为 null） */
+  /** D7、D8：本层交互视图边 → 按接收方表面散开的数据与束内混合（交互视角用；回放为 null） */
   spreads?: ReadonlyMap<string, InteractionBundle> | null
   /** L22：交互视角选中一条交互时它的承载（不判定或没有代码事实时为 null） */
   carrier?: Carrier | null
@@ -394,6 +394,6 @@ export interface CanvasScene {
   structure?: { typeOnlyHidden: number; valueHidden: number; coveredHidden: number; reducibleHidden: number; cycleHidden: number; note: string | null }
   /** L44、F7：只能临时出现、此刻收起的线——框外的代码依赖叠加线（其中带违规的）、时间耦合；都没有时不给 */
   pending?: { overlays: number; overlayViolations: number; couples: number }
-  /** V5：运行视角隐藏了静态内容时只按这些节点适应画布；否则为 null（取全部内容） */
+  /** V5：回放隐藏了静态内容时只按这些节点适应画布；否则为 null（取全部内容） */
   visibleIds: Set<string> | null
 }

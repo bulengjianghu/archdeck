@@ -2,7 +2,7 @@
 /**
  * 模块树（T2–T5）：系统为根的完整模块层级。
  * - 状态 → 树：当前层次的祖先链展开并标出当前层次，选中的模块高亮、展开到它并滚到可见；
- *   运行视角下标出参与本场景的模块与当前步骤的两端；选中文件时标出其归属模块并展开到它（G14）。
+ *   回放中标出参与本场景的模块与当前步骤的两端；选中文件时标出其归属模块并展开到它（G14）。
  * - 树 → 意图：单击定位（N4），单击系统回根层，双击有子模块的下钻（N1、N2）；悬停本层可见的模块等同悬停画布节点。
  * 右键：「在此设计」（F-10：以该模块为挂载点新建设计，只在当前版本、不能是层）。
  * 「只看需复核」（Z3）只列含需复核模块的分支，并展开到它们。
@@ -19,9 +19,9 @@ import { canDesignAt, openNewDesign } from '../edit/designHere'
 const desk = useDesk()
 const root = ref<HTMLElement>()
 const idx = computed(() => desk.index.value!)
-const run = computed(() => desk.perspective.value === 'run')
+const run = computed(() => desk.playing.value)
 
-/** T2：结构视角下「只看现状」开启时不列目标态模块及其后代；运行视角不受开关影响（L9） */
+/** T2：结构视角下「只看现状」开启时不列目标态模块及其后代；回放不受开关影响（L9） */
 const hideTarget = computed(() => !run.value && desk.toggles.currentOnly)
 /** Z3：「只看需复核」时只列祖先链上有需复核模块的分支 */
 const onlyStale = ref(false)

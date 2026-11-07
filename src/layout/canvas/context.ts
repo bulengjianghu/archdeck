@@ -13,9 +13,9 @@ export interface SceneContext {
   st: StageOverlay | null
   sv: ScenarioLevelView | null
   layered: boolean
-  /** 结构视角下开启「代码事实」时的本层投影；运行视角为 null */
+  /** 结构视角下开启「代码事实」时的本层投影；回放为 null */
   facts: LevelFacts | null
-  /** 结构视角下开启热度或时间耦合时的本层投影（J5）；运行视角为 null */
+  /** 结构视角下开启热度或时间耦合时的本层投影（J5）；回放为 null */
   evo: LevelEvolution | null
   /** 悬停时序图中的一条消息时，它在本层的落点（预览） */
   hoverLanding: VisibleLanding | null
@@ -29,7 +29,7 @@ export interface SceneContext {
   selectedEdgeIds: Set<string>
   /** 回放走过的、预览的、悬停预览的边（视图边 ID） */
   playEdges: Set<string>
-  /** 舞台显示（V5、V8、V9、V10）：运行视角下每个节点与边显示、淡化还是隐藏；结构视角为 null */
+  /** 舞台显示（V5、V8、V9、V10）：回放中每个节点与边显示、淡化还是隐藏；结构视角为 null */
   display: StageDisplay | null
   /** R15、R16：选中步骤的消息与配对消息，以及它们所在的边；选中的不是步骤时为 null（不变灰） */
   emphMessages: Set<number> | null
@@ -42,7 +42,7 @@ export interface SceneContext {
   near: Set<string> | null
   /** L11：当前画出来的框外边按可见集分配轨道后的走线（普通层次；canvasScene 在算节点与边之前填入） */
   routes: Map<string, EdgeRoute>
-  /** ADR-0031：结构视角的派生（结构边、影响面、角标）；交互视角与运行视角为 null */
+  /** ADR-0031：结构视角的派生（结构边、影响面、角标）；交互视角与回放为 null */
   structure: StructureScene | null
 }
 
@@ -65,7 +65,7 @@ export function sceneContext(input: CanvasInput, pv: PositionedView): SceneConte
   const shown = (e: ViewEdge) => focusIds.some(f => e.from === f || e.to === f) || selectedEdgeIds.has(e.id) || playEdges.has(e.id)
   // 结构视角不画交互图的核心跨层边与共用件的边（换成结构边，O13）
   const visibleCoreEdges = structure ? [] : (pv.view.coreEdges ?? []).filter(shown)
-  // O10：运行视角不画共用件的临时线（P18）
+  // O10：回放不画共用件的临时线（P18）
   const visibleShelfEdges = st || structure ? [] : (pv.view.shelfEdges ?? []).filter(shown)
   return {
     input,
@@ -174,7 +174,7 @@ function nearOf(pv: PositionedView, layered: boolean, f: string | null, extra: r
   return set
 }
 
-/** V5：运行视角隐藏了静态内容时只按可见节点适应画布 */
+/** V5：回放隐藏了静态内容时只按可见节点适应画布 */
 export function visibleIdsOf(display: StageDisplay | null): Set<string> | null {
   if (!display || ![...display.nodes.values()].includes('hide')) return null
   return new Set([...display.nodes].filter(([, v]) => v !== 'hide').map(([id]) => id))

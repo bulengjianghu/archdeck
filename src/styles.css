@@ -321,7 +321,7 @@ a {
   opacity: 1 !important;
 }
 
-/* ── 运行视角：节点的回放态（GraphCanvas 给 Vue Flow 节点加的类） ── */
+/* ── 回放：节点的回放态（GraphCanvas 给 Vue Flow 节点加的类） ── */
 .vue-flow__node.play-current > * {
   box-shadow: 0 0 0 3px var(--accent) !important;
   opacity: 1 !important;

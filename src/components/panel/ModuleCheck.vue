@@ -156,7 +156,7 @@ const refsCount = computed(() => (m.value.codeRefs?.length ?? 0) + (m.value.docR
     </Section>
     <div data-sec="evidence.source"><ModuleSource :id="id" /></div>
     <ModuleEvolution :id="id" data-sec="evidence.evolution" />
-    <template v-if="desk.perspective.value === 'structure'">
+    <template v-if="desk.viewpoint.value === 'structure'">
       <ModuleStructure :id="id" fold data-sec="boundary.structure" />
       <ModuleSurface :id="id" fold data-sec="boundary.surface" />
     </template>

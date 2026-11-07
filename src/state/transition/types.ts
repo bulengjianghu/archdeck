@@ -65,7 +65,7 @@ export interface ViewState {
   playback: PlaybackState | null
   /** LY-6：视角；只在结构视角时写 'structure'，缺省（undefined）为交互视角。URL `v=s` */
   mode?: CanvasMode
-  /** 草图画布（X7a，ADR-0025）：打开的草图版本的编辑目标——进入草图即编辑；与运行视角互斥，不进 URL。缺省（undefined）同 null */
+  /** 草图画布（X7a，ADR-0025）：打开的草图版本的编辑目标——进入草图即编辑；与回放互斥，不进 URL。缺省（undefined）同 null */
   editing?: SketchTarget | null
   /** K15b（ADR-0037）：影响面查询——一次性，选中或视角一变即去掉（transition 统一判定）；不进 URL。缺省（undefined）同 null =「不看」 */
   impactQuery?: ImpactQuery | null
@@ -113,7 +113,7 @@ export type ViewAction =
 
 export interface TransitionContext {
   index: ModelIndex
-  /** 运行视角：打开的场景的回放计划、当前层次的舞台视图、回放路径在当前层次的投影 */
+  /** 回放：打开的场景的回放计划、当前层次的舞台视图、回放路径在当前层次的投影 */
   plan?: ScenarioPlan | null
   levelView?: LevelView | null
   scenarioView?: ScenarioLevelView | null

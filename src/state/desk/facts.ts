@@ -85,7 +85,7 @@ import {
 } from '@/model'
 import { budgetHint, isOutsideEdge, surfaceExpansion, type Expansion, type LayoutTiers, type StructureLinks } from '@/layout/layout'
 import { baseLayoutLinks, toLayoutTiers } from './layoutLinks'
-import { perspectiveOf, type ViewState } from '../transition'
+import { viewpointOf, type ViewState } from '../transition'
 import type { SourceSyncPort } from './ports'
 import type { FileDerivations } from './files'
 
@@ -258,7 +258,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
   const portsOf = (id: string): PortPanel[] => (index.value ? portPanel(index.value, report.value, id).filter(p => p.isPort) : [])
 
   /**
-   * L13：本层要画端口记号的节点（模块 ID → 端口），结构视角才有（运行视角不画）：普通层次的子模块与边界节点，分层总览只画核心模块。
+   * L13：本层要画端口记号的节点（模块 ID → 端口），结构视角才有（回放不画）：普通层次的子模块与边界节点，分层总览只画核心模块。
    * 一个节点的端口为它声明的、算端口的接口（portsOf）。
    */
   const portMarks = computed<Map<string, PortPanel[]> | null>(() => {
@@ -402,7 +402,7 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
 
   /**
    * K22、L26（ADR-0041）：本层向上的交互边——普通层次按算出的层号（levelTiers，有代码事实时），分层总览按声明的层的可依赖方向（layerUpward，第十四轮合入裁决）；
-   * 不论视角（画布只在交互图与运行视角写「向上」，面板照说）
+   * 不论视角（画布只在交互图与回放写「向上」，面板照说）
    */
   const upward = computed<UpwardEdge[]>(() => {
     const v = view.value
@@ -410,12 +410,12 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     return v.mode === 'layered' ? layerUpward(index.value, v) : (tiers.value?.upward ?? [])
   })
 
-  /** L29、K21③：画布角的分层提示（大环照样分层、本层没有依赖）；运行视角不给 */
-  const tierHints = computed<string[]>(() => (perspectiveOf(state.value) === 'run' ? [] : (tiers.value?.notes ?? []).map(tierNoteText)))
+  /** L29、K21③：画布角的分层提示（大环照样分层、本层没有依赖）；回放不给 */
+  const tierHints = computed<string[]>(() => (state.value.playback ? [] : (tiers.value?.notes ?? []).map(tierNoteText)))
 
-  /** L36：算出的层整组同一状态——画布角写一次「层 · 算出」与层数（只在画层带时；运行视角不给） */
+  /** L36：算出的层整组同一状态——画布角写一次「层 · 算出」与层数（只在画层带时；回放不给） */
   const layerNote = computed<{ status: 'computed'; count: number } | null>(() =>
-    perspectiveOf(state.value) !== 'run' && tiers.value?.banded ? { status: 'computed', count: tiers.value.count } : null,
+    !state.value.playback && tiers.value?.banded ? { status: 'computed', count: tiers.value.count } : null,
   )
 
   /** K21①②：本层（当前父模块）的子模块的拆分信号；没有代码事实时为 null */
@@ -477,10 +477,10 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
     return baseLayoutLinks(index.value, v, sv, report.value, layoutTiers.value)
   })
 
-  /** D7、D8：本层交互视图边按接收方表面散开的数据（结构 / 交互视角都给：布局取并集；运行视角与代码事实未就绪时为 null） */
+  /** D7、D8：本层交互视图边按接收方表面散开的数据（结构 / 交互视角都给：布局取并集；回放与代码事实未就绪时为 null） */
   const spreads = computed<Map<string, InteractionBundle> | null>(() => {
     const v = view.value
-    if (perspectiveOf(state.value) === 'run' || !v || status.value !== 'ready') return null
+    if (state.value.playback || !v || status.value !== 'ready') return null
     const out = new Map<string, InteractionBundle>()
     for (const e of v.edges) {
       const b = interactionSpread(e.id)
@@ -491,12 +491,12 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
 
   /**
    * C6、L20、L23：表面展开（两个视角同一套规则，V12）——选中模块、选中交互（接收方）或「总是展开表面」时展开的节点、元素端口与散开范围；
-   * 选中束不展开（T2-7）。运行视角、分层总览、没有元素级边时为 null。布局同步与画布、structureDisplay 同读这一份。
+   * 选中束不展开（T2-7）。回放、分层总览、没有元素级边时为 null。布局同步与画布、structureDisplay 同读这一份。
    */
   const expansion = computed<Expansion | null>(() => {
     const v = view.value
     const links = baseLinks.value
-    if (perspectiveOf(state.value) === 'run' || !v || !links?.elements?.length) return null
+    if (state.value.playback || !v || !links?.elements?.length) return null
     // 没有展开的触发（选中模块 / 交互 / 视图边或总是展开）时不取散开数据（它要读接收方的入口导出）
     const sel = state.value.selection
     if (!surfaceAlways.value && sel?.kind !== 'module' && sel?.kind !== 'relation' && sel?.kind !== 'edge') return null
@@ -632,13 +632,12 @@ export function createFacts({ state, index, view, files, sync, design, sketches,
 
   /**
    * L43（第十四轮 F11）：线的预算——本层静息态常显的线数超过 LINE_BUDGET 时画布角提示；结构视角数缺省偏好下画出的束，
-   * 交互视角数本层内部的交互边（分层总览为带间边）；运行视角与没有代码事实的结构视角不给
+   * 交互视角数本层内部的交互边（分层总览为带间边）；回放中与没有代码事实的结构视角不给
    */
   const lineBudget = computed<string | null>(() => {
     const v = view.value
-    const p = perspectiveOf(state.value)
-    if (!v || p === 'run') return null
-    if (p === 'structure') {
+    if (!v || state.value.playback) return null
+    if (viewpointOf(state.value) === 'structure') {
       const d = structureDisplay({ typeOnly: false, invokesOnly: false, uncoveredOnly: false }, { rest: true })
       return d ? budgetHint('structure', d.shown.length) : null
     }

@@ -46,7 +46,7 @@ export interface DialogueInputs {
   project: string | undefined
   index: Readonly<Ref<ModelIndex | null>>
   selection: Readonly<Ref<Selected | null>>
-  /** 运行视角下选中的步骤所在的场景与帧（锚点要两端） */
+  /** 回放中选中的步骤所在的场景与帧（锚点要两端） */
   step: Readonly<Ref<{ scenario: string; frame: { id: string; from: string; to: string; label?: string } } | null>>
   perspective: Readonly<Ref<CanvasPerspective>>
   transport: AgentTransport

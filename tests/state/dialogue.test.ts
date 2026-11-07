@@ -61,11 +61,11 @@ describe('DL-12 对话会话', () => {
     expect(go(moved, { type: 'setAnchor', anchor: { kind: 'module', module: 'model' } })).toBe(moved)
   })
 
-  it('换视角：只换锚点（运行视角下为步骤），转录、运行中的一轮与队列不动', () => {
+  it('换视角：只换锚点（回放中为步骤），转录、运行中的一轮与队列不动', () => {
     const s = go(at(), { type: 'send', input: ask('一') }, { type: 'send', input: ask('二') })
     const step: Anchor = { kind: 'step', scenario: 'sc', frame: 'f1', from: 'a', to: 'b' }
-    const r = go(s, { type: 'setPerspective', perspective: 'run', anchor: step })
-    expect(r).toMatchObject({ perspective: 'run', anchor: step, run: s.run, queue: s.queue, transcript: s.transcript })
+    const r = go(s, { type: 'setPerspective', perspective: 'structure', anchor: step })
+    expect(r).toMatchObject({ perspective: 'structure', anchor: step, run: s.run, queue: s.queue, transcript: s.transcript })
   })
 
   it('错误：记一条错误卡，会话不受影响、可重发；重讲只对模块，锚点不是模块时按「问」发', () => {

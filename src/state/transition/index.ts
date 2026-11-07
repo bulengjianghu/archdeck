@@ -4,7 +4,7 @@
  */
 import * as nav from './navigation'
 import * as pb from './playback'
-import { asPointing, perspectiveOf } from './selected'
+import { asPointing, viewpointOf } from './selected'
 import { restore } from './url'
 import * as edit from './edit'
 import { setMode } from './mode'
@@ -13,11 +13,11 @@ import type { TransitionContext, TransitionResult, ViewAction, ViewState } from 
 export * from './types'
 export { selectionExists, keyIntent } from './navigation'
 export { encodeSelection, decodeSelection, encodeView, sameQuery } from './url'
-export { perspectiveOf, viewpointOf, subjectOf, selectedOf, emphasisOf } from './selected'
+export { viewpointOf, subjectOf, selectedOf, emphasisOf } from './selected'
 export { leaveGuard, isEditing } from './edit'
 export { mapSelection, withMode } from './mode'
 export * from './workspace'
-export type { Perspective, Viewpoint, Subject, Selected, Emphasis, EmphasisContext } from './selected'
+export type { Viewpoint, Subject, Selected, Emphasis, EmphasisContext } from './selected'
 
 export function transition(state: ViewState, action: ViewAction, ctx: TransitionContext): TransitionResult {
   const r = step(state, action, ctx)
@@ -29,14 +29,14 @@ const sameSelection = (a: ViewState['selection'], b: ViewState['selection']) => 
 /** K15b、S2-1（ADR-0037）：影响面查询是一次性的——选中（种类或 ID）或视角变了即回到「不看」；任何动作之后统一判定，不靠各处记得清 */
 function dropStaleQuery(prev: ViewState, next: ViewState): ViewState {
   if (!next.impactQuery) return next
-  if (sameSelection(prev.selection, next.selection) && perspectiveOf(prev) === perspectiveOf(next)) return next
+  if (sameSelection(prev.selection, next.selection) && viewpointOf(prev) === viewpointOf(next) && !prev.playback === !next.playback) return next
   return { ...next, impactQuery: null }
 }
 
 /** K15b：只在结构视角、选中模块时可设；与当前相同时不变 */
 function queryImpact(state: ViewState, query: ViewState['impactQuery']): TransitionResult {
   const cur = state.impactQuery ?? null
-  if (query && (perspectiveOf(state) !== 'structure' || state.selection?.kind !== 'module')) return { state, history: 'replace' }
+  if (query && (viewpointOf(state) !== 'structure' || state.selection?.kind !== 'module')) return { state, history: 'replace' }
   if (cur?.mode === query?.mode && !!cur?.types === !!query?.types) return { state, history: 'replace' }
   return { state: { ...state, impactQuery: query }, history: 'replace' }
 }
@@ -60,7 +60,7 @@ function step(state: ViewState, action: ViewAction, ctx: TransitionContext): Tra
       const r = nav.reloaded(state, index, action.previousPath)
       return { ...r, state: pb.reloadedPlayback(r.state, ctx) }
     }
-    // 导航即「指向」：运行视角下同样设定选中；下钻选中被下钻的模块（V3）
+    // 导航即「指向」：回放中同样设定选中；下钻选中被下钻的模块（V3）
     case 'drill':
       return asPointing(state, nav.drill(state, index, action.id), action.id)
     case 'goTo':

@@ -6,7 +6,7 @@
  * - 每一行过准入三问才进正文（ADR-0058）：画布上写了字的记号不列（pill、角标里的词自己会说话，悬停有释义 L50）；此刻不在画面上的
  *   （悬停 / 选中 / 回放才出现）归脚注；讲解（定义、格式、行为、去哪看）进帮助（L51）与悬停。一行 = 一个记号 + 一个短语。
  * - 图例按视角整体替换、不混列（L19、D-26）：交互视角为线、节点、叠加、脚注；结构视角为线（形态与醒目度）、节点、规则、指标、叠加（演化）、脚注；
- *   运行视角为线（只读）、节点、脚注（回放的记号）。共享通道（L18）的行三处同位同文，不再单列一组。
+ *   回放为线（只读）、节点、脚注（回放的记号）。共享通道（L18）的行三处同位同文，不再单列一组。
  * - 图例按上下文显示（L47）：每节只列当前视角 + 当前层次静息态画面出现的记号（出现集合由 state/desk/legend 一处派生，这里算一次往下传）。
  * - 「怎么读一条线」的讲解在帮助，线一节标题旁的「?」过去（L51）。
  */
@@ -23,9 +23,9 @@ import TempLegend from './TempLegend.vue'
 import './legend.css'
 
 const desk = useDesk()
-const run = computed(() => desk.perspective.value === 'run')
+const run = computed(() => desk.playing.value)
 /** 结构视角（ADR-0031）：「线」一节换成结构视图的 */
-const structure = computed(() => desk.perspective.value === 'structure')
+const structure = computed(() => desk.viewpoint.value === 'structure')
 const { open, toggleOpen, prefs } = useDisplayPrefs(desk.project)
 /** L47：图例的出现集合——按当前视角 + 层次的静息态画面算一次，各节只显隐行 */
 const presence = createLegendPresence({

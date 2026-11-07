@@ -148,7 +148,7 @@ const touchesFocus = (ctx: SceneContext, e: { from: string; to: string }) => ctx
 /** L27：边的一端是悬停的节点（悬停叠加在影响面查询、边聚焦之上） */
 const touchesHover = (ctx: SceneContext, e: { from: string; to: string }) => !!ctx.hoverFocus && (e.from === ctx.hoverFocus || e.to === ctx.hoverFocus)
 
-/** 运行视角：按舞台显示（V5、V8）；分层总览：层间边在聚焦核心模块时变淡；普通层次：与聚焦对象无关的边变淡 */
+/** 回放：按舞台显示（V5、V8）；分层总览：层间边在聚焦核心模块时变淡；普通层次：与聚焦对象无关的边变淡 */
 function edgeDim(ctx: SceneContext, e: ViewEdge, core: boolean, selected: boolean, played: boolean): boolean {
   if (ctx.st) return !played && !selected && (ctx.display?.edges.get(e.id) ?? 'show') === 'dim'
   if (ctx.layered) return !!ctx.near && !core && !selected
@@ -188,7 +188,7 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined,
   const play = playOf(ctx, e.id)
   const fact = ctx.facts?.edgeFacts.get(e.id)
   const state = factState(fact)
-  // L26④：运行视角下走过的边由步骤序号标注，不标条数，标签照写；L23b：收起的交互束条数带把手数
+  // L26④：回放中走过的边由步骤序号标注，不标条数，标签照写；L23b：收起的交互束条数带把手数
   const quiet = !!ctx.st && !!play.play
   const head = quiet ? '' : (extra.handles ?? edgeLabel(e))
   const total = e.relationIds.length
@@ -260,7 +260,7 @@ function makeEdge(ctx: SceneContext, e: ViewEdge, route0: EdgeRoute | undefined,
   }
 }
 
-/** 运行视角下舞台隐藏的边仍画出回放经过的与选中的 */
+/** 回放中舞台隐藏的边仍画出回放经过的与选中的 */
 function stageShown(ctx: SceneContext, e: ViewEdge): boolean {
   if (!ctx.st || ctx.display?.edges.get(e.id) !== 'hide') return true
   return ctx.playEdges.has(e.id) || ctx.selectedEdgeIds.has(e.id) || !!playOf(ctx, e.id).play
@@ -302,18 +302,18 @@ export function interactionEdges(ctx: SceneContext): (CanvasEdge | null)[] {
 
 /**
  * L23b：收起的交互束——角标 `×N · M 把手`（M 为 0 只写 ×N）、悬停按所属子模块分组列出各条；束内修饰不一致时「混合」的说明接在后面。
- * 散开到元素的各段与运行视角不带（ADR-0033）。
+ * 散开到元素的各段与回放不带（ADR-0033）。
  */
 function withHandles(extra: Partial<RouteEdgeData>, badge: HandleBadge | null | undefined): Partial<RouteEdgeData> {
   if (!badge?.label) return extra
   return { ...extra, handles: badge.label, title: [badge.title, extra.title].filter(Boolean).join('\n\n') }
 }
 
-/** L23b：普通层次的交互视图边的把手角标（运行视角不给） */
+/** L23b：普通层次的交互视图边的把手角标（回放不给） */
 const badgeOf = (ctx: SceneContext, e: ViewEdge): HandleBadge | null =>
   ctx.st || ctx.layered || !ctx.input.index ? null : handleBadge(ctx.input.index, ctx.pv.view, e)
 
-/** L23（ADR-0041 裁决 4）：束内同步与异步不一致——「混合」与悬停列出各条（运行视角不标）；via 不一致由机制标签表达（L35） */
+/** L23（ADR-0041 裁决 4）：束内同步与异步不一致——「混合」与悬停列出各条（回放不标）；via 不一致由机制标签表达（L35） */
 function mixedOf(ctx: SceneContext, e: ViewEdge): Partial<RouteEdgeData> {
   if (ctx.st || ctx.structure || e.mode !== 'mixed') return {}
   return { mixed: true, title: ['束内同步 / 异步不一致（L23）：', ...e.relationIds.map(id => relationText(ctx.input.index, id))].join('\n') }
@@ -321,7 +321,7 @@ function mixedOf(ctx: SceneContext, e: ViewEdge): Partial<RouteEdgeData> {
 
 /**
  * D7、L23：接收方表面展开时，交互束按关系的接口散开到对应元素——每个元素一段（取布局里接到元素端口的那条走线），
- * 没写接口（或元素不在本层展开里）的留在原视图边上接到模块本体；只画被交互接到的元素。框外边与运行视角不散开。
+ * 没写接口（或元素不在本层展开里）的留在原视图边上接到模块本体；只画被交互接到的元素。框外边与回放不散开。
  */
 function spreadEdges(ctx: SceneContext, e: ViewEdge, route: EdgeRoute | undefined): (CanvasEdge | null)[] {
   const sp = ctx.input.spreads?.get(e.id)

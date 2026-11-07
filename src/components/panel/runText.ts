@@ -1,4 +1,4 @@
-/** 运行视角面板共用的显示文字 */
+/** 回放面板共用的显示文字 */
 import { moduleName, type Frame, type FragmentTag, type ModelIndex, type VisibleLanding } from '@/model'
 
 export const KIND_LABEL: Record<string, string> = { call: '同步调用', async: '异步', return: '返回', internal: '内部活动' }

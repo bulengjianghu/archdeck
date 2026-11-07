@@ -1,6 +1,6 @@
 /**
  * 画布场景的节点（ADR-0013）：本层的模块、带与 +N 占位块、边界节点、参与者；回放叠加的步骤序号与分支预览序号。
- * 结构视角按聚焦变淡，运行视角按舞台显示（V5、V8、V9）；回放态与文件高亮（G14）写进类名。
+ * 结构视角按聚焦变淡，回放按舞台显示（V5、V8、V9）；回放态与文件高亮（G14）写进类名。
  */
 import {
   foldSpanText,
@@ -23,11 +23,11 @@ import { inImpact, structureNodeMarks } from './structure'
 import type { CanvasNode, CanvasNodeType, NodeData, NodePorts, NodeSurface, SurfaceMark } from './types'
 
 const visOf = (ctx: SceneContext, id: string): Visibility => ctx.display?.nodes.get(id) ?? 'show'
-/** 运行视角：按舞台显示（V5、V8、V9）；结构视角：与聚焦对象无关的变淡 */
+/** 回放：按舞台显示（V5、V8、V9）；结构视角：与聚焦对象无关的变淡 */
 const dimmed = (ctx: SceneContext, id: string, base: boolean) => (ctx.st ? visOf(ctx, id) === 'dim' : base)
 const farFromFocus = (ctx: SceneContext, id: string) => !!ctx.near && !ctx.near.has(id)
 
-/** 运行视角下节点的回放态：当前消息的端点或内部活动、悬停预览 */
+/** 回放中节点的回放态：当前消息的端点或内部活动、悬停预览 */
 function playClass(ctx: SceneContext, id: string): string | undefined {
   if (!ctx.st) return undefined
   const cur = ctx.st.current?.at
@@ -141,7 +141,7 @@ function actorNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box): C
 
 /**
  * C6、L20、L23（ADR-0036）：展开表面的节点上的端口点——位置取布局在收起态节点上排出的点（相对节点），种类、扇入与使用者取 surfaceInfo；
- * 结构视角画全部点（被显示偏好收起的变淡），交互视角只画被交互（或承载段）接到的点；运行视角不画。
+ * 结构视角画全部点（被显示偏好收起的变淡），交互视角只画被交互（或承载段）接到的点；回放不画。
  * L20b：有属于子模块的元素时，悬停写「属于 <子模块>」（返工：画布上不写组名）。
  */
 function surfaceOf(ctx: SceneContext, n: ViewNode, box: Box, hits: Map<string, Set<string>> | null): Pick<NodeData, 'surface'> {
@@ -184,11 +184,11 @@ export const shortName = (parent: string, sub: string): string => (sub.startsWit
 export const PORT_MERGE = 3
 
 /**
- * L13：节点的端口记号——画在进边一侧的后半（L11：普通层次自左向右布局时为左边，其余为顶边）；运行视角不画（ports 为空）。
+ * L13：节点的端口记号——画在进边一侧的后半（L11：普通层次自左向右布局时为左边，其余为顶边）；回放不画（ports 为空）。
  * 分层总览只画核心模块的（state 层已按层次筛好）；实现者数为描述与代码事实的并集。
  */
 function portsOf(ctx: SceneContext, idx: ModelIndex, n: ViewNode): Pick<NodeData, 'ports'> {
-  // 运行视角不画；结构视角也不画（端口实现画成结构边，选中端口换成其定义模块，V12）；展开表面的节点由元素记号代替（入边一侧被元素占用）
+  // 回放不画；结构视角也不画（端口实现画成结构边，选中端口换成其定义模块，V12）；展开表面的节点由元素记号代替（入边一侧被元素占用）
   if (ctx.st || ctx.structure || ctx.pv.elements?.has(n.id)) return {}
   const list = ctx.input.ports?.get(n.moduleId)
   if (!list?.length) return {}
@@ -259,7 +259,7 @@ function moduleNode(ctx: SceneContext, idx: ModelIndex, n: ViewNode, box: Box, s
         OVER_EDGES.more,
       ),
     ]
-  // O9：共用件架上的紧凑块；运行视角下照常显示但淡化（P18）
+  // O9：共用件架上的紧凑块；回放中照常显示但淡化（P18）
   if (n.role === 'shared') return [placeNode(ctx, n.id, box, 'shared', { ...base, dim: ctx.st ? !playClass(ctx, n.id) : base.dim }, 2)]
   // L20④（ADR-0036 返工）：展开表面的节点画在边之上（含悬停提到最上层的边），端口点不被扇出线的命中区盖住
   return [placeNode(ctx, n.id, box, n.role === 'core' ? 'core' : 'module', base, base.surface ? OVER_EDGES.surface : 2)]

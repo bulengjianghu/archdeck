@@ -1,5 +1,5 @@
 /**
- * DeskState 的运行视角派生（desk.run，ADR-0013）：回放路径 → 本层帧投影 → 时序模型 → 时序图坐标，
+ * DeskState 的回放派生（desk.run，ADR-0013）：回放路径 → 本层帧投影 → 时序模型 → 时序图坐标，
  * 以及舞台叠加、选中突出、配对、路线、步骤大纲与参与模块。全部是 computed，调用纯函数。
  */
 import { computed, type ComputedRef, type Ref, type ShallowRef } from 'vue'
@@ -97,7 +97,7 @@ export function createRun({ state, index, levelId, plan, view, positioned, fileO
     const pv = positioned.value
     return layoutSequence(sequence.value, pv && pv.view.parentId === levelId.value ? pv : null, evidence?.value)
   })
-  /** 选中对象（步骤、场景、文件以外）在本场景中的参与（V6）；运行视角下才有 */
+  /** 选中对象（步骤、场景、文件以外）在本场景中的参与（V6）；回放中才有 */
   const selectionParticipation = computed<Participation | null>(() => {
     const s = state.value.selection
     if (

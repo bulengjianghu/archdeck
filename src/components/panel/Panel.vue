@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 属性栏的内容：按选中分派（V2，ADR-0012），每种对象的面板都是「头部 + 理解 · 核对 · 相关资料三卡」（V15、PC-1，ADR-0053）。
- * 结构视角：选中的对象，无选中时为当前父模块（根层显示系统）；运行视角：选中步骤 → 步骤面板，选中场景 → 场景面板，
+ * 结构视角：选中的对象，无选中时为当前父模块（根层显示系统）；回放：选中步骤 → 步骤面板，选中场景 → 场景面板，
  * 其他对象的理解卡首节为运行信息（V6）。结构视角下模式切换映射不过去而被清空的选中（V12，droppedSelection）：顶部说明原选中没有对应的依赖边。
  * 代码依赖叠加线（K10）→ 代码依赖面板；耦合线（J7）→ 耦合面板；端口（L13）→ 端口面板（K11）。草图画布下（X7，ADR-0025）：换成草图面板。
  * 卡片直接立在画布上（CD-2）：第一张是身份卡（各面板的 `.id-card`，CD-3），粘在属性列滚动区上沿、不随内容滚走（第十八轮走查 4 改回粘顶，ADR-0061；原名称胶囊 CD-4 作废）。
@@ -21,6 +21,8 @@ import PortPanel from './PortPanel.vue'
 import CyclePanel from './CyclePanel.vue'
 import StratumPanel from './StratumPanel.vue'
 import SketchPanel from '../sketch/SketchPanel.vue'
+import StepPanel from './StepPanel.vue'
+import ScenarioPanel from './ScenarioPanel.vue'
 import { PANEL_PART, type PanelPart } from '../shared/panelPart'
 
 /** 第二十二轮波 2 过渡：住在「描述」标签（原面板全部内容）或「核对」标签（只核对卡）；抽屉已删（LY-16） */
@@ -31,7 +33,7 @@ const desk = useDesk()
 const dropped = computed(() => {
   const d = desk.droppedSelection.value
   const idx = desk.index.value
-  if (!d || !idx || desk.perspective.value !== 'structure') return null
+  if (!d || !idx || desk.viewpoint.value !== 'structure') return null
   if (d.kind === 'relation') {
     const r = idx.relations.get(d.id)
     return r ? `关系 ${moduleName(idx, r.from)} → ${moduleName(idx, r.to)}` : '关系'
@@ -67,16 +69,9 @@ const target = computed(() => {
     <p v-if="desk.edit.active.value && part === 'check'" class="run-note" role="note">草图的核验在「描述」标签的草图面板里</p>
     <p v-if="dropped && !desk.edit.active.value" class="dropped" role="note">切换视角后原选中（{{ dropped }}）没有对应的依赖边，已取消选中</p>
     <template v-else-if="target">
-      <!-- V6 新家（第二十轮 §6，复审确认）：运行视角下步骤 / 场景面板只住辅助栏的步骤节，抽屉不再渲染 -->
-      <!-- 第二十轮复审小尾巴（合并时补）：手动拉开抽屉不再是空白浮板，指向步骤节 -->
-      <p
-        v-if="desk.perspective.value === 'run' && (target.kind === 'step' || target.kind === 'scenario')"
-        class="run-note"
-        role="note"
-        data-testid="props-run-note"
-      >
-        {{ target.kind === 'step' ? '这一步' : '场景概览' }}在「描述」标签
-      </p>
+      <!-- 回放中的步骤 / 场景面板（V6；第二十二轮波 4 起不再是运行视角特化：同一个分派） -->
+      <StepPanel v-if="target.kind === 'step'" :key="`st:${target.id}`" />
+      <ScenarioPanel v-else-if="target.kind === 'scenario'" :key="`sc:${target.id}`" />
       <template v-else>
         <FilePanel v-if="target.kind === 'file'" :key="`f:${target.id}`" :path="target.id" />
         <DepPanel v-else-if="target.kind === 'dep'" :key="`d:${target.id}`" />

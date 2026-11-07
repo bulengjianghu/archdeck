@@ -1,14 +1,14 @@
 <script setup lang="ts">
 /**
  * EX-5（LY-15 修订）：有图解的模块在名称行加一枚 ▣——单击即选中这个模块并激活图解标签（不下钻）。
- * 画在节点内、不改节点尺寸、不进布局（L30 计数不变）；运行视角与草图编辑态不显示。
+ * 画在节点内、不改节点尺寸、不进布局（L30 计数不变）；回放与草图编辑态不显示。
  */
 import { computed, inject } from 'vue'
 import { DESK_STATE } from '@/state/inject'
 
 const props = defineProps<{ moduleId: string; band?: boolean }>()
 const desk = inject(DESK_STATE, null)
-const shown = computed(() => !!desk && desk.perspective.value !== 'run' && !desk.edit.active.value && desk.explainers.has(props.moduleId))
+const shown = computed(() => !!desk && !desk.playing.value && !desk.edit.active.value && desk.explainers.has(props.moduleId))
 const stale = computed(() => !!desk?.explainers.status(props.moduleId)?.stale)
 const open = () => desk?.readExplainer(props.moduleId)
 </script>

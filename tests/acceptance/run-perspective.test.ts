@@ -42,7 +42,8 @@ describe('§6.2 运行视角验收', () => {
       const { desk, step } = await open(project)
       const root = desk.levelId.value
       desk.openScenario(sc)
-      expect(desk.perspective.value).toBe('run')
+      expect(desk.playing.value).toBe(true)
+      expect(desk.viewpoint.value).toBe('interaction')
       expect(desk.levelId.value).toBe(root)
       expect(desk.playback.value).toMatchObject({ scenarioId: sc, frameId: null })
       expect(desk.selected.value).toEqual({ kind: 'scenario', id: sc })
@@ -206,7 +207,7 @@ describe('§6.2 运行视角验收', () => {
     desk.openScenario('sc.command')
     desk.select({ kind: 'module', id: 'infra.framework' })
     desk.closeScenario()
-    expect(desk.perspective.value).toBe('interaction')
+    expect(desk.viewpoint.value).toBe('interaction')
     expect(desk.levelId.value).toBe('infra')
     expect(desk.selection.value).toEqual({ kind: 'module', id: 'infra.framework' })
     expect(desk.run.sequence.value).toBeNull()

@@ -11,7 +11,7 @@ test('「⋯ 更多 → 怎么读这张图」打开「怎么读这张图」：�
   await page.getByRole('button', { name: '更多' }).click()
   await page.getByRole('menuitem', { name: /怎么读这张图/ }).click()
   const dialog = page.getByRole('dialog', { name: '怎么读这张图' })
-  await expect(dialog.locator('h3')).toHaveText(['结构', '交互', '读一条线：三问四修饰', '运行', '对照与治理', '层', '三个视角共享', '快捷键'])
+  await expect(dialog.locator('h3')).toHaveText(['结构', '交互', '读一条线：三问四修饰', '回放', '对照与治理', '层', '视角与回放共享', '快捷键'])
   await expect(dialog).toContainText('交互图变成舞台')
   // ADR-0029 §3：三个判断题，第四步读修饰
   const questions = dialog.locator('ol.questions li')

@@ -17,7 +17,7 @@ import { usePanelJump, type PanelNotice } from './panelNotices'
 import { rowsFromNotices } from './panelCheck'
 
 const desk = useDesk()
-const structureView = computed(() => desk.perspective.value === 'structure')
+const structureView = computed(() => desk.viewpoint.value === 'structure')
 const sel = computed(() => desk.facts.selectedDep.value)
 const name = (id: string) => (desk.index.value ? moduleName(desk.index.value, id) : id)
 const STATUS: Record<string, string> = { new: '新增', known: '已知', open: '违规', allowed: '已豁免' }

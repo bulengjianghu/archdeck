@@ -42,7 +42,7 @@ export function createLegendPresence(inputs: LegendInputs): LegendPresence {
     const t = st.toggles
     const structure = st.mode === 'structure' && !st.playback
     const lf = inputs.facts.level.value
-    // ── 静息态画出的交互边（边界边聚焦才画，不在内；运行视角舞台缺省淡显，同一集合）──
+    // ── 静息态画出的交互边（边界边聚焦才画，不在内；回放舞台缺省淡显，同一集合）──
     const restEdges = v.edges.filter(e => !boundaryEnd(e))
     const boundaryEdges = v.edges.filter(boundaryEnd)
 
@@ -102,7 +102,7 @@ export function createLegendPresence(inputs: LegendInputs): LegendPresence {
       if (v.nodes.some(n => n.id.startsWith('boundary:') || idx.modules.get(n.moduleId)?.status === 'target')) set.add('node:outer')
     }
 
-    // ── 代码事实 · 标签（交互视角、K9 投影；运行视角不叠加 → lf 为 null → 空集合）──
+    // ── 代码事实 · 标签（交互视角、K9 投影；回放不叠加 → lf 为 null → 空集合）──
     if (lf) {
       if (restEdges.some(e => lf.violatedEdges.has(e.id)) || lf.overlays.some(o => o.violations > 0)) set.add('facts:tag:违规')
       if (lf.overlays.some(o => o.undescribed > 0)) set.add('facts:tag:未解释')
@@ -118,7 +118,7 @@ export function createLegendPresence(inputs: LegendInputs): LegendPresence {
       if (lf.cycles.size) set.add('facts:cycle')
     }
 
-    // ── 组装（O12 投影；开关关闭或运行视角为 null → 空集合，组件显示既有的「已关闭」说明）──
+    // ── 组装（O12 投影；开关关闭或回放为 null → 空集合，组件显示既有的「已关闭」说明）──
     const asm = inputs.facts.assembly.value
     if (asm) {
       if (asm.overlays.length) set.add('asm:line')
@@ -129,7 +129,7 @@ export function createLegendPresence(inputs: LegendInputs): LegendPresence {
     const evo = inputs.evolution.level.value
     if (t.heat !== 'off' && evo && evo.heat.size) set.add('evo:heat')
 
-    // 环编号在交互与结构视角都常显（Y4、T0 裁决 3：本层的环常显；运行视角没有 K9 → lf 为 null → 不列）
+    // 环编号在交互与结构视角都常显（Y4、T0 裁决 3：本层的环常显；回放没有 K9 → lf 为 null → 不列）
     if (lf?.cycles.size) set.add('shared:cycle')
     // ── 结构视角：出现集合从 structureDisplay（画布同一份过滤）的束算 ──
     if (structure) {
@@ -186,7 +186,7 @@ export function createLegendPresence(inputs: LegendInputs): LegendPresence {
         if (v.nodes.some(n => n.sharedCount)) set.add('metric:shared')
       }
     } else {
-      // 交互 / 运行视角的共享通道：违规红晕、线宽、线型、标签位（环编号在上面按 lf 统一算；运行视角没有 K9 → 虚线不列）
+      // 交互 / 回放的共享通道：违规红晕、线宽、线型、标签位（环编号在上面按 lf 统一算；回放没有 K9 → 虚线不列）
       if (restEdges.some(e => lf?.violatedEdges.has(e.id))) set.add('shared:violation')
       if (restEdges.some(e => e.relationIds.length > 1)) set.add('shared:width')
       if (restEdges.length) {

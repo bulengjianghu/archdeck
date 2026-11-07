@@ -3,9 +3,9 @@
  * 「显示 ▾」菜单（L49，第十七轮 R4.2，ADR-0056；Google Maps 图层菜单的做法）：工具栏上的一枚按钮，展开成下拉菜单，
  * 只放**没有画布记号的显示设置**——有记号的开关在图例行上（L45），一个开关只出现在一处。按视角只出现能用的项：
  * 交互视角为边界节点、只看现状、热度口径；结构视角另有只看交互使用、只看未解释（带收起计数，L21）、总是展开表面（L20）；
- * 运行视角只有交互关系的显示方式（V8）与一行说明（L9：舞台不受显示开关影响）。
+ * 回放只有交互关系的显示方式（V8）与一行说明（L9：舞台不受显示开关影响）。
  * 按钮不带摘要（TB-3，第十八轮修订 L49）：有非默认设置时按钮右上角一个点，悬停提示列出非默认设置（口径沿用第十五轮折叠摘要；
- * 运行视角只有交互关系的显示方式不是缺省的「隐藏」才算）。隐藏了什么由画布角的留痕说明（L45）。单击菜单外或 Esc 收起。
+ * 回放只有交互关系的显示方式不是缺省的「隐藏」才算）。隐藏了什么由画布角的留痕说明（L45）。单击菜单外或 Esc 收起。
  * 开关读写视图状态（desk.toggles）与显示偏好（useStructurePrefs，画布同读），不进 URL。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -21,8 +21,8 @@ const desk = useDesk()
 const stage = useStage()
 const sp = useStructurePrefs(desk.project)
 const heat = heatControls(desk.project ?? '', desk)
-const run = computed(() => desk.perspective.value === 'run')
-const structure = computed(() => desk.perspective.value === 'structure')
+const run = computed(() => desk.playing.value)
+const structure = computed(() => desk.viewpoint.value === 'structure')
 
 const open = ref(false)
 const root = ref<HTMLElement>()
@@ -115,7 +115,7 @@ const summary = computed(() => {
             </button>
           </span>
         </div>
-        <div class="info" title="运行视角下舞台不受边界节点、只看现状、关系类型筛选与代码事实影响；退出场景后恢复">ⓘ 场景中显示全部节点与关系类型</div>
+        <div class="info" title="回放中舞台不受边界节点、只看现状、关系类型筛选与代码事实影响；退出场景后恢复">ⓘ 场景中显示全部节点与关系类型</div>
       </template>
       <template v-else>
         <div class="group-label">节点</div>

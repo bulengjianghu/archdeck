@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * GraphCanvas：把 PositionedView 画成节点和边；处理平移（拖空白处或按住空格拖动）、缩放（Ctrl + 滚轮）、单击、双击、悬停。
- * 运行视角下作为舞台（V5）：本层参与的节点与走过的边突出、其余变淡，当前消息沿步骤方向流动（P10），
+ * 回放中作为舞台（V5）：本层参与的节点与走过的边突出、其余变淡，当前消息沿步骤方向流动（P10），
  * 本层没有视图边的消息画临时线（经由上层关系 P15 / 未建模 P11），步骤序号可单击指向（R13），停在分支点时预览各选项（F6）。
  * 舞台按交互关系显示方式（在工具栏「显示 ▾」切换，L49）隐藏或淡化不参与的节点与静态边（V5、V8），「在画布上显示」的对象照常（V9）；
  * 选中步骤时其余走过的边与步骤序号淡为灰色；选中其他对象时不变灰，舞台始终按进度（R15、R16）。
@@ -54,15 +54,15 @@ const desk = useDesk()
 const stageUi = useStage()
 const { setViewport, zoomIn, zoomOut, dimensions, setNodes, setEdges } = useVueFlow('arch-desk')
 
-/** 运行视角的舞台叠加；结构 / 交互视角为 null */
-const stage = computed(() => (desk.perspective.value === 'run' ? desk.run.overlay.value : null))
-const interaction = computed(() => desk.perspective.value === 'interaction')
+/** 回放的舞台叠加；结构 / 交互视角为 null */
+const stage = computed(() => (desk.playing.value ? desk.run.overlay.value : null))
+const interaction = computed(() => desk.viewpoint.value === 'interaction' && !desk.playing.value)
 /** ADR-0031、ADR-0032：结构视角的显示偏好（只引类型、只看交互使用、只看未解释、总是展开表面、只看值依赖），与图例、「显示 ▾」共享 */
 const structurePrefs = useStructurePrefs(desk.project)
 
 /** 结构视角的画布输入；其余视角为 null */
 const structure = computed<StructureInput | null>(() => {
-  if (desk.perspective.value !== 'structure') return null
+  if (desk.viewpoint.value !== 'structure') return null
   const f = desk.facts
   const p = structurePrefs.prefs.value
   const loading = f.status.value === 'loading'
@@ -274,7 +274,7 @@ function onEdgeLeave({ edge }: { edge: Edge<RouteEdgeData> }) {
   if (hoverEdge.value === edge.id) hoverEdge.value = null
 }
 // 换层次、换视角后旧的悬停不留
-watch([desk.levelVersion, desk.perspective], () => (hoverEdge.value = null))
+watch([desk.levelVersion, desk.viewpoint, desk.playing], () => (hoverEdge.value = null))
 
 // ── 视角：切换层次后自动适应画布 ──
 // 视野：内容边界直接取自布局结果（不依赖 Vue Flow 对节点尺寸的测量，首帧即可用）；
@@ -340,11 +340,11 @@ watch(desk.levelVersion, () => (pendingFit.value = true))
 watch(desk.facts.status, (now, was) => {
   if (was === 'loading' && now !== 'loading') pendingFit.value = true
 })
-/** V5：运行视角隐藏了静态内容时只按可见节点适应画布；否则为 null（取全部内容） */
+/** V5：回放隐藏了静态内容时只按可见节点适应画布；否则为 null（取全部内容） */
 const visibleIds = computed(() => scene.value.visibleIds)
-// 进出运行视角、切换显示方式后重新适应
+// 进出回放、切换显示方式后重新适应
 watch(
-  () => [desk.perspective.value, stageUi.mode.value] as const,
+  () => [desk.viewpoint.value, desk.playing.value, stageUi.mode.value] as const,
   async () => {
     pendingFit.value = true
     await nextTick()
@@ -404,7 +404,7 @@ watch(
   { immediate: true },
 )
 
-// 画布容器尺寸变化（进入 / 退出运行视角、切换分屏方向、拖动分隔条或折叠两侧栏）后重新适应
+// 画布容器尺寸变化（进入 / 退出回放、切换分屏方向、拖动分隔条或折叠两侧栏）后重新适应
 let resizeTimer: ReturnType<typeof setTimeout> | undefined
 watch(
   () => [dimensions.value.width, dimensions.value.height] as const,
@@ -416,8 +416,8 @@ watch(
 )
 
 /** O8：本层没有核心模块、普通模块超过七个时不折叠，只在画布角提示（结构 / 交互视角同一套节点，V12） */
-const foldHint = computed(() => (desk.perspective.value !== 'run' ? (desk.positioned.value?.view.foldHint ?? 0) : 0))
-/** L29、K21③：按依赖分层的提示——本层没有依赖（拆分信号）、大环照样分层；运行视角不给 */
+const foldHint = computed(() => (!desk.playing.value ? (desk.positioned.value?.view.foldHint ?? 0) : 0))
+/** L29、K21③：按依赖分层的提示——本层没有依赖（拆分信号）、大环照样分层；回放不给 */
 const tierHints = computed(() => desk.facts.tierHints.value)
 /** L44、F7：只能临时出现的线收起时的计数 */
 const pending = computed(() => scene.value.pending ?? null)
@@ -425,11 +425,11 @@ const pending = computed(() => scene.value.pending ?? null)
 const lineBudget = computed(() => desk.facts.lineBudget.value)
 /** L36：算出的依赖深度的状态记号（一组同一状态，写一次） */
 const layerNote = computed(() => desk.facts.layerNote.value)
-/** L28、ST-1（ADR-0052）：子模块多于七个又没声明分层时画布角一行；运行视角与草图编辑态不给 */
+/** L28、ST-1（ADR-0052）：子模块多于七个又没声明分层时画布角一行；回放与草图编辑态不给 */
 const undeclared = computed(() => {
   const v = desk.positioned.value?.view
   const idx = desk.index.value
-  if (!v || !idx || v.mode !== 'graph' || desk.perspective.value === 'run' || desk.edit.active.value) return 0
+  if (!v || !idx || v.mode !== 'graph' || desk.playing.value || desk.edit.active.value) return 0
   const n = (idx.childrenOf.get(v.parentId) ?? []).length
   return n > 7 && !idx.strata.has(v.parentId) ? n : 0
 })
@@ -437,8 +437,8 @@ const undeclared = computed(() => {
 const structureCorner = computed(() => scene.value.structure ?? null)
 const isEmpty = computed(() => desk.positioned.value !== null && desk.positioned.value.view.nodes.length === 0)
 
-// ── L45：隐藏画布内容的开关在画布角留痕计数、单击撤销（第十五轮 G13）；运行视角与草图编辑态不受这些开关影响（L9），不留痕 ──
-const traceable = computed(() => desk.perspective.value !== 'run' && !desk.edit.active.value)
+// ── L45：隐藏画布内容的开关在画布角留痕计数、单击撤销（第十五轮 G13）；回放与草图编辑态不受这些开关影响（L9），不留痕 ──
+const traceable = computed(() => !desk.playing.value && !desk.edit.active.value)
 /** 关系类型筛选隐藏的类数（L8：只适用于交互视角） */
 const hiddenRelationTypes = computed(() => (interaction.value && traceable.value ? RELATION_TYPES.length - desk.toggles.relationTypes.length : 0))
 const showAllTypes = () => desk.setToggles({ relationTypes: [...RELATION_TYPES] })
@@ -612,14 +612,14 @@ const showFacts = () => desk.setToggles({ showFacts: true })
       <button class="link" @click="desk.goTo(desk.run.frameLevel.value!)">到能看到它的层次</button>
     </div>
 
-    <!-- CD-1：缩放胶囊（与回放胶囊同一行、同一样式，CD-7）；手势说明在胶囊旁，运行视角让位给回放胶囊（悬停胶囊仍可看到） -->
+    <!-- CD-1：缩放胶囊（与回放胶囊同一行、同一样式，CD-7）；手势说明在胶囊旁，回放让位给回放胶囊（悬停胶囊仍可看到） -->
     <div class="zoom">
       <div class="zoom-pill desk-pill" title="空格 + 拖动 = 平移，Ctrl + 滚轮 = 缩放">
         <button title="放大" @click="zoomIn()">＋</button>
         <button title="缩小" @click="zoomOut()">－</button>
         <button title="适应画布" @click="fitNow()">适应</button>
       </div>
-      <span v-if="desk.perspective.value !== 'run'" class="gesture">空格 + 拖动 = 平移，Ctrl + 滚轮 = 缩放</span>
+      <span v-if="!desk.playing.value" class="gesture">空格 + 拖动 = 平移，Ctrl + 滚轮 = 缩放</span>
     </div>
   </div>
 </template>
