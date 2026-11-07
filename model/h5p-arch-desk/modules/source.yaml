@@ -4,7 +4,7 @@
 modules:
   # ── 骨架模块的代码落点（04 §3.10：骨架只写目录级，细到文件的由 AI 在这里补充，X1）──
   - id: present.nav-tree
-    name: 侧栏
+    name: 导航树
     summary: 以模块、场景、改动三页同步导航与定位
     abstraction: 按页的对象各成一棵树或一张表，都是「状态 → 树、树 → 意图」的双向映射，复用画布与时序图的同一套操作；页只属于界面，开合与宽度是工作区状态（LY-3、LY-4）。
     codeRefs: [src/components/tree/SideBar.vue, src/components/tree/IssuesDoc.vue, src/components/tree/types.ts]
