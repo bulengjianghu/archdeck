@@ -253,11 +253,11 @@ modules:
     responsibility: 右键菜单（SketchMenu，模型画布与模块树的「在此设计」也用它）；名称 + ID 短名的输入（PartsDialog：新建、合并为新模块、拆分若干行；英文名自动填 kebab-case 短名，中文名必须手填，#13）；连线（ConnectPopover，X23）：类型选查 / 托 / 通知 / 流（附一句读法）、机制选直接 / 端口 / 总线 / 通道、异步 / 拉取 + 一句说明，缺省为直接的委托，被拒绝时就地说明（类型与修饰的表单与草图面板共用 RelationKindFields）；引用外部模块的搜索（ReferencePicker）。
     codeRefs: [src/components/sketch/SketchMenu.vue, src/components/sketch/PartsDialog.vue, src/components/sketch/ConnectPopover.vue, src/components/sketch/ReferencePicker.vue]
   - id: present.sketch.tree
-    name: 草图导航树
+    name: 草图模块树
     summary: 列出本张草图的模块，与画布同步选中与下钻
     parent: present.sketch
     kind: component
-    responsibility: 草图画布下导航树的「模块」页签：只列本张草图的模块（根草图里层下列第二级）与引用节点，单击选中与画布同步、⇧ 单击多选、双击下钻；不另列路径（面包屑只在信息条身份区，#15）。
+    responsibility: 草图画布下侧栏的「模块」页：只列本张草图的模块（根草图里层下列第二级）与引用节点，单击选中与画布同步、⇧ 单击多选、双击下钻；不另列路径（面包屑只在信息条身份区，#15）。
     codeRefs: [src/components/sketch/SketchTree.vue]
   - id: present.panel.sketch
     name: 草图面板
@@ -301,7 +301,7 @@ modules:
     summary: 从选中模块发起新设计或加入已有设计
     parent: present.version
     kind: component
-    responsibility: 「在此设计」（F-10，SK-14）：导航树、模型画布节点右键与模块面板的模块上发起，挂载点不能是层、不能是系统根，只在当前版本上；打开新建设计对话框——设计 ID、名称、目标一句话、挂载点（入口带入可改；从设计面板「改骨架」为根挂载），有草稿设计时可选「加到设计 <名>」：打开那个设计的草图，进入草图画布后切到挂在该模块上的一张（pendingSheet，会话里没有时按基线推出）；创建后进入新设计的草图。
+    responsibility: 「在此设计」（F-10，SK-14）：侧栏模块树、模型画布节点右键与模块面板的模块上发起，挂载点不能是层、不能是系统根，只在当前版本上；打开新建设计对话框——设计 ID、名称、目标一句话、挂载点（入口带入可改；从设计面板「改骨架」为根挂载），有草稿设计时可选「加到设计 <名>」：打开那个设计的草图，进入草图画布后切到挂在该模块上的一张（pendingSheet，会话里没有时按基线推出）；创建后进入新设计的草图。
     codeRefs: [src/components/edit/NewDesignDialog.vue, src/components/edit/designHere.ts]
 
 relations:

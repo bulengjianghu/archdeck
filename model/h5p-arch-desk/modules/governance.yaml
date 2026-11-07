@@ -4,7 +4,7 @@
 modules:
   # ── 骨架模块的代码落点（04 §3.10：骨架只写目录级，细到文件的由 AI 在这里补充，X1）──
   - id: present.issues
-    name: 问题页签
+    name: 问题清单
     summary: 列出按严重度排序的返工清单，可定位、可复制给 agent
     abstraction: 只呈现模型层汇总好的返工清单，排序、筛选与复制都不新增判断；画布上只留计数角标。
     codeRefs: [src/components/tree/IssueList.vue]

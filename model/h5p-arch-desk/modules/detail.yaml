@@ -215,8 +215,8 @@ modules:
     name: 面板分派
     summary: 按当前选中挑出唯一一张对象面板
     parent: present.panel
-    responsibility: 按选中选择面板（V2）：结构 / 交互视角下为选中的对象，无选中时为当前父模块（根层为系统）；运行视角下选中步骤 / 场景时不渲染步骤 / 场景面板（它们住辅助栏的步骤节，ADR-0062），只给一行指向步骤节；选中模块 / 关系 / 聚合边 / 参与者 / 文件时为该对象的面板；没有「已钉住」之类的提示（ADR-0012）。选中端口（L13）时为端口面板（K11）；结构视角下选中依赖边（sel=d:）时为代码依赖面板，其下是这对节点的结构边（present.panel.structure，ADR-0031）。运行视角下选中模块、关系、聚合边、参与者、端口或系统时，把运行信息注入各对象理解卡的首节（RUN_FIRST，V6），对象面板不引用运行信息。属性栏的卡片样式（卡里的节去掉面板级分隔、头部粘顶）在这里统一。草图画布下整个面板换成草图面板（present.panel.sketch）。
-    codeRefs: [src/components/panel/Panel.vue]
+    responsibility: 按选中选择面板（V2）：结构 / 交互视角下为选中的对象，无选中时为当前父模块（根层为系统）；第二十二轮波 2 起面板住视图区（抽屉已删，LY-16）：「描述」标签里是全部内容，「核对」标签里只留核对卡（PANEL_PART 注入给各卡，LY-13a 过渡）；运行视角下选中步骤 / 场景时不渲染步骤 / 场景面板（它们住描述标签的步骤节），只给一行指向步骤节；选中模块 / 关系 / 聚合边 / 参与者 / 文件时为该对象的面板；没有「已钉住」之类的提示（ADR-0012）。选中端口（L13）时为端口面板（K11）；结构视角下选中依赖边（sel=d:）时为代码依赖面板，其下是这对节点的结构边（present.panel.structure，ADR-0031）。运行视角下选中模块、关系、聚合边、参与者、端口或系统时，把运行信息注入各对象理解卡的首节（RUN_FIRST，V6），对象面板不引用运行信息。属性栏的卡片样式（卡里的节去掉面板级分隔、头部粘顶）在这里统一。草图画布下整个面板换成草图面板（present.panel.sketch）。
+    codeRefs: [src/components/panel/Panel.vue, src/components/panel/panelPart.ts]
   - id: present.panel.module
     name: 模块面板
     summary: 用五问讲清一个模块，并核对它的描述与健康
@@ -276,19 +276,19 @@ modules:
     name: 面包屑
     summary: 显示当前层次路径，点击任一级返回
     parent: present.nav
-    responsibility: 画布标题行的第一项：「根层 / … / 当前层次」，以「根层」开头（悬停写系统名），点击任一级返回并选中刚离开的那一级（N7、TB-7）；草图画布下不出现。
+    responsibility: 画布页头（LY-5）侧栏开关之后的一项：「根层 / … / 当前层次」，以「根层」开头（悬停写系统名），点击任一级返回并选中刚离开的那一级（N7、TB-7）；草图画布下不出现。
     codeRefs: [src/components/Breadcrumb.vue]
   - id: present.nav.toolbar
     name: 搜索面板
     summary: 按名称或 ID 搜索模块并跳转
     parent: present.nav
-    responsibility: 工具栏 ⌕ 或 ⌘K（Ctrl+K）打开、在工具栏中央下拉的搜索面板（TB-4）：按名称或 ID 搜索模块，结果写名称与所在路径，↑ ↓ 选择、Enter 跳转（N4；运行视角下搜索跳转同样选中目标，V3）；选中、Esc、单击面板外都关闭。
+    responsibility: 画布页头 ⌕ 或 ⌘K（Ctrl+K）打开、在画布页头中央下拉的搜索面板（TB-4、LY-5）：按名称或 ID 搜索模块，结果写名称与所在路径，↑ ↓ 选择、Enter 跳转（N4；运行视角下搜索跳转同样选中目标，V3）；选中、Esc、单击面板外都关闭。
     codeRefs: [src/components/SearchPalette.vue]
   - id: present.nav.canvas-title
     name: 画布标题行
-    summary: 在画布左上角列出所在层次、问题数、源码与版本状态
+    summary: 在画布左上角列出问题数、源码与版本状态
     parent: present.nav
-    responsibility: 模型画布左上角的一排（TB-7–TB-9，ADR-0057）：面包屑、⚠ 问题胶囊（单击切到导航树「问题」页签，W-6）、源码胶囊（描述落后 N 个提交，单击展开原文，G22、TB-8）、非当前版本时的版本胶囊（× 回到当前版本，N11）。
+    responsibility: 模型画布左上角的一排胶囊（TB-7–TB-9；第二十二轮 LY-5 起面包屑移进画布页头）：⚠ 问题胶囊（单击在视图区打开「问题」资料标签，LY-4a）、源码胶囊（描述落后 N 个提交，单击展开原文，G22、TB-8）、非当前版本时的版本胶囊（× 回到当前版本，N11）。
     codeRefs: [src/components/CanvasTitle.vue]
   - id: present.canvas.legend
     name: 图例与「显示 ▾」
@@ -551,7 +551,6 @@ relations:
   - {id: rel.ad.content-act, from: present.panel.content, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 内容组件交给 dispatch 与操作：关系行点击 → revealRelation, purpose: 单击关系行时定位到关系 }
   - {id: rel.ad.crumb-act, from: present.nav.breadcrumb, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 面包屑让 dispatch 与操作接手处理, purpose: 点击路径返回某一级 }
   - {id: rel.ad.toolbar-act, from: present.nav.toolbar, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 工具栏交给 dispatch 与操作：搜索结果 → revealModule；显示开关写入 toggles, purpose: 把搜索结果跳转到模块 }
-  - {id: rel.x1.title-crumb, from: present.nav.canvas-title, to: present.nav.breadcrumb, type: commands, description: 画布标题行交给面包屑：标题行第一项渲染面包屑（TB-7）, purpose: 在画布左上角先写所在层次 }
   - {id: rel.x1.title-source, from: present.nav.canvas-title, to: present.source, type: commands, description: 画布标题行交给源代码预览：渲染源码胶囊（SourceDeltaChip），交给它描述与源码树的提交差或读取失败的原因（G22、TB-8）, purpose: 在标题行标出描述落后多少 }
   - {id: rel.x1.title-labels, from: present.nav.canvas-title, to: present.shared, type: queries, description: 画布标题行向呈现共用件取：持久草图的显示名（intentName）, purpose: 给版本胶囊取草图的显示名 }
   - {id: rel.x1.title-versions, from: present.nav.canvas-title, to: state.desk.versions, type: queries, payload: [ds.DesignInfo], description: 画布标题行向版本与对比基线（desk.versions）取：设计名与提交，写版本胶囊（TB-9）, purpose: 写出非当前版本的名称 }

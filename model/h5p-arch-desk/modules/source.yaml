@@ -4,10 +4,10 @@
 modules:
   # ── 骨架模块的代码落点（04 §3.10：骨架只写目录级，细到文件的由 AI 在这里补充，X1）──
   - id: present.nav-tree
-    name: 导航树
-    summary: 以模块、文件、步骤、问题、改动五个页签同步导航与定位
-    abstraction: 按页签对象各成一棵树，都是「状态 → 树、树 → 意图」的双向映射，复用画布与时序图的同一套操作。
-    codeRefs: [src/components/tree/NavTree.vue, src/components/tree/types.ts]
+    name: 侧栏
+    summary: 以模块、场景、改动三页同步导航与定位
+    abstraction: 按页的对象各成一棵树或一张表，都是「状态 → 树、树 → 意图」的双向映射，复用画布与时序图的同一套操作；页只属于界面，开合与宽度是工作区状态（LY-3、LY-4）。
+    codeRefs: [src/components/tree/SideBar.vue, src/components/tree/IssuesDoc.vue, src/components/tree/types.ts]
   - id: access.source
     name: 源码读取
     summary: 读出被描述项目的源码清单、文件内容与导出
@@ -28,7 +28,7 @@ modules:
     name: 文件树
     summary: 以目录树显示源码文件及其归属与行数
     parent: present.nav-tree
-    responsibility: 导航树「文件」页签（SR-1、SR-2、G13）：被描述项目的源码目录树，目录带文件数、未归属数、行数合计与超长数，文件标出未归属、归属冲突、已忽略并带行数（超长标红，G21），内部文件全部忽略的目录同样标为已忽略（G18）；选中模块时其文件高亮并展开到第一个文件，选中文件时展开并滚到它；单击文件即选中；「只看未归属」「只看超长」筛选与「刷新」；源码清单读取失败时只显示原因（G1）。未归属文件的「加入忽略」在文件面板（B4）。
+    responsibility: 侧栏模块页的「按文件」树（LY-4b；原「文件」页签，SR-1、SR-2、G13）：被描述项目的源码目录树，目录带文件数、未归属数、行数合计与超长数，文件标出未归属、归属冲突、已忽略并带行数（超长标红，G21），内部文件全部忽略的目录同样标为已忽略（G18）；选中模块时其文件高亮并展开到第一个文件，选中文件时展开并滚到它；单击文件即选中；「只看未归属」「只看超长」筛选与「刷新」；源码清单读取失败时只显示原因（G1）。未归属文件的「加入忽略」在文件面板（B4）。
     codeRefs: [src/components/tree/FileTree.vue, src/components/tree/FileTreeNode.vue]
   - id: present.panel.file
     name: 文件面板
