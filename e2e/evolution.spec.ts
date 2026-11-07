@@ -5,7 +5,7 @@
 import { expect, test } from '@playwright/test'
 import { openCheckList, openDesk, openPanel, query, openSidebar } from './helpers'
 
-test('缺省关闭：没有角标与耦合线；开启「缺陷」热度后出现角标，刷新后仍开启；运行视角不叠加', async ({ page }) => {
+test('缺省关闭：没有角标与耦合线；开启「缺陷」热度后出现角标，刷新后仍开启；回放不叠加', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=present')
   await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   const panel = page.getByRole('region', { name: '图例' })
@@ -29,7 +29,7 @@ test('缺省关闭：没有角标与耦合线；开启「缺陷」热度后出�
   await page.reload()
   await expect(page.locator('.vue-flow__node').first()).toBeVisible({ timeout: 20_000 })
   await expect(page.locator('.heat-badge').first()).toBeVisible()
-  // 运行视角不叠加
+  // 回放不叠加
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
   await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(page.locator('.heat-badge')).toHaveCount(0)

@@ -70,7 +70,7 @@ test('h5player：没有基线时违规画成叠加线；单击叠加线选中它
   await expect(page.locator('.dep-panel')).toContainText('模块依赖')
 })
 
-test('运行视角下图例与「显示 ▾」都不出现「代码事实」开关（L9）', async ({ page }) => {
+test('回放中图例与「显示 ▾」都不出现「代码事实」开关（L9）', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
   await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await page.getByRole('button', { name: /^显示 ▾/ }).click()

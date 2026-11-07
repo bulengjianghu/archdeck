@@ -25,15 +25,15 @@ test('打开自身的场景：面板有「证据」一节，单击文件在资�
   }).toPass({ timeout: 30_000 })
   await expect(section.locator('.missing')).toHaveCount(0)
   // 收尾复跑（第二十一轮，第二十轮已知偶发再收紧）：负载下别的用例改描述，面板随重新加载重绘、按钮被换掉，单击一直重试到用例超时——滚到、短超时单击、看标签，按 toPass 重试
-  const evidence = section.getByRole('button', { name: 'e2e/run-default.spec.ts' })
+  const evidence = section.getByRole('button', { name: 'e2e/playback.spec.ts' })
   await expect(async () => {
     await unfold()
     await evidence.evaluate(el => el.scrollIntoView({ block: 'center' }), undefined, { timeout: 3_000 })
     await evidence.click({ timeout: 3_000 })
-    await expect(activeTab(page, 0)).toContainText('run-default.spec.ts', { timeout: 3_000 })
+    await expect(activeTab(page, 0)).toContainText('playback.spec.ts', { timeout: 3_000 })
   }).toPass({ timeout: 30_000 })
   // 全量并行跑时首次读源码与加载语法可能超过 10s，留足余量
-  await expect(page.locator('.source-view')).toContainText('只由人开合', { timeout: 20_000 })
+  await expect(page.locator('.source-view')).toContainText('回放主路径', { timeout: 20_000 })
   await page.locator('[data-scene-chip] .t').click()
   // 每个声明了证据的场景各标一个（「打开场景并回放」「在画布上编辑草图并保存」）
   await expect(page.locator('.scenario-list .item .evidence')).toHaveCount(2)

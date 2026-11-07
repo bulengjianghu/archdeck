@@ -1,8 +1,8 @@
-/** 运行视角的统一选中（§6.8、ADR-0012）：选中样式唯一、配对标记、泳道突出、进度小标记、Esc 回到进度所在的步骤、再按无动作 */
+/** 回放的统一选中（§6.8、ADR-0012）：选中样式唯一、配对标记、泳道突出、进度小标记、Esc 回到进度所在的步骤、再按无动作 */
 import { expect, test } from '@playwright/test'
 import { collapseDisplay, graphNode, openDesk, query } from './helpers'
 
-/** 第二十轮 §4：运行视角抽屉自动收起，步骤详情住辅助栏的步骤节（V6 新家） */
+/** 第二十轮 §4：回放抽屉自动收起，步骤详情住辅助栏的步骤节（V6 新家） */
 
 const HOOK = '/p/h5player?level=infra.framework&sc=sc.command&alt=1&step=sc.command%23hook'
 

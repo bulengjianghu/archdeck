@@ -50,7 +50,7 @@ test('交互视角：类型行即开关——单击隐藏一类、行变淡仍�
   await expect(page.getByTestId('display-summary')).toHaveAttribute('data-summary', '隐藏 1 类关系 · 无边界节点')
 })
 
-test('运行视角：交互关系显示方式在「显示 ▾」里，结构类开关不出现；关系类型行只读（L9、L49）', async ({ page }) => {
+test('回放：交互关系显示方式在「显示 ▾」里，结构类开关不出现；关系类型行只读（L9、L49）', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
   await expect(page.getByTestId('display-summary')).toHaveCount(0)
   await menuBtn(page).click()
@@ -60,7 +60,7 @@ test('运行视角：交互关系显示方式在「显示 ▾」里，结构类�
   await menu.getByRole('button', { name: '淡显' }).click()
   await expect(menu.getByRole('button', { name: '淡显' })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByTestId('display-summary')).toHaveAttribute('data-summary', '交互关系：淡显')
-  // 运行视角的图例：类型行不是开关；回放的记号都是临时记号，在缺省折叠的脚注里（ADR-0058）
+  // 回放的图例：类型行不是开关；回放的记号都是临时记号，在缺省折叠的脚注里（ADR-0058）
   const legend = legendOf(page)
   await expect(legend.locator('[data-type]').first()).toBeVisible()
   await expect(legend.getByRole('switch')).toHaveCount(0)
