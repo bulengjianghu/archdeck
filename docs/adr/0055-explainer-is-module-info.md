@@ -1,6 +1,7 @@
 # ADR-0055：图解是模块的一项信息
 
 - 状态：已采纳（负责人 2026-10-30 审核第十七轮需求 R5，D5）；第十七轮 W5 已实现，标「议」的细则待裁（见末节）
+- 第二十二轮：内容标准（多图少文、不含事实）与显示位置（视图区常驻的「图解」标签，跟随主语）由 [ADR-0064](./0064-system-and-views.md) 修订（待实现）
 - 日期：2026-10-30
 - 决策人：项目负责人
 - 关联：需求 R5（第十七轮）、W-4；规则 M32、EX-1–EX-10（新增），WS-4、PC-6、PC-9（修订）；原则 C1、C2、C5；[ADR-0023](./0023-sketch-reviewed-and-evolution.md)（确认指纹 Z2）、[ADR-0053](./0053-panel-five-questions-and-contract.md)（summary、invariants）、[ADR-0054](./0054-workspace-props-and-dock.md)（资料区）
