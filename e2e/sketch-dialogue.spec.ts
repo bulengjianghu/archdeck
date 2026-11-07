@@ -253,7 +253,7 @@ test('改 / 问切换、DL-21：「问」只回答不改图；AI 想挪已有的
     // 存为设计说明
     await answer.getByTestId('save-note').click()
     // 存好后辅助栏打开预览标签（对话标签退到后面）
-    await expect(dock(page).getByTestId('note-doc')).toBeVisible()
+    await expect(dock(page).getByTestId('note-doc')).toBeVisible({ timeout: LOAD_BUDGET }) // 按需组件（NoteDoc）首次加载按负载预算
     await expect(dock(page).getByTestId('note-target')).toHaveText('目标态 · 未实现')
     const notes = fs.readdirSync(path.join(PROJECT, 'designs/zz-e2e-w2-ask/notes'))
     expect(notes).toHaveLength(1)
