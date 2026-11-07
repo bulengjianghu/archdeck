@@ -20,6 +20,8 @@ import {
   restoreOwned,
   openProjectMenu,
   switchVersion,
+  openSidebar,
+  closeNav,
 } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
@@ -102,7 +104,7 @@ const HEAD = () => execFileSync('git', ['rev-parse', 'HEAD'], { cwd: PROJECT }).
 
 /** 导航树里右键一个模块「在此设计」（第二十轮：树是浮层抽屉缺省收起，先展开；再展开它的层） */
 async function designHere(page: Page, layer: string, id: string) {
-  if (!(await page.locator('.nav-area').isVisible())) await page.getByRole('button', { name: '导航树', exact: true }).click()
+  await openSidebar(page)
   const tree = page.locator('.module-tree')
   const row = (x: string) => tree.locator(`.row[data-id="${x}"]`)
   if (!(await row(id).isVisible())) await row(layer).locator('.caret').click()
@@ -249,7 +251,7 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     await openSketchPanel(page)
     await expect(page.locator('textarea[name="mount-principle"]')).toHaveValue('协调者只持有一个值')
 
-    // 面板的两个核验数（本张）：相对基线改了 N 处、相对当前版本 N 处偏差；清单搬到导航树「改动」页签（CI-4），含「合并」
+    // 面板的两个核验数（本张）：相对基线改了 N 处、相对当前版本 N 处偏差；清单在侧栏「改动」页（CI-4、LY-4），含「合并」
     const vb = page.locator('[data-testid="verify-baseline"]')
     await expect(vb.locator('summary')).toContainText(/相对基线：改了 [1-9]\d* 处/)
     await expect(page.locator('[data-testid="verify-current"] summary')).toContainText(/相对当前版本：\d+ 处偏差/)
@@ -257,8 +259,7 @@ test('SK-14–SK-19 主路径：导航树右键「在此设计」→ 对话框 �
     await vb.locator('[data-testid="open-changes-tab"]').click()
     await expect(page.locator('[data-testid="changes-tab"]')).toContainText('合并')
     await closeSketchPanel(page)
-    await page.getByRole('button', { name: '导航树', exact: true }).click()
-    await expect(page.locator('.nav-area')).toBeHidden()
+    await closeNav(page)
 
     // 下钻：合并结果的下一层由血缘推出，来源成为它的子模块；面包屑返回
     await graphNode(page, 'state.desk.session').dblclick()

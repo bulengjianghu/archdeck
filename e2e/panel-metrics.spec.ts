@@ -1,11 +1,11 @@
 /**
  * L46（第十七轮 R3.8；第二十轮读先方案改写）：首屏守——理解面一屏读完。
- * 理解卡已搬去辅助栏的理解页（事实卡 + 故事，ModuleDoc）：选中模块自动打开资料区，
- * 断言事实卡（理解节）的底边在辅助栏可视区之内，画布列 ≥ 640；系统面板的理解卡仍在抽屉里，只记录基线。
+ * 模块的理解节在视图区的图解标签（过渡：原理解页，事实卡 + 故事，ModuleDoc），
+ * 断言事实卡（理解节）的底边在视图区可视区之内，画布列 ≥ 640（1440 宽、侧栏展开）；系统的理解卡在描述标签（原面板），只记录基线。
  * 超出的是描述写长了（summary / 原则 / 不变式），按 M27 与 04 改描述，不在界面截字。
  */
 import { expect, test, type Page } from '@playwright/test'
-import { openDesk, waitSettled } from './helpers'
+import { openDesk, showView, waitSettled } from './helpers'
 
 interface Measure {
   /** 理解卡的上沿、底边（px） */
@@ -20,11 +20,11 @@ interface Measure {
 }
 
 const MEASURE = `(() => {
-  // 事实卡在辅助栏的理解页里；系统面板的理解卡还在抽屉——两处都认，量各自可视区的底边
-  const dockCard = document.querySelector('.dock [data-sec="understand"]')
-  const dockArea = document.querySelector('.dock-area')
-  const panelCard = document.querySelector('.panel [data-card="understand"]')
-  const panelArea = document.querySelector('.panel-area')
+  // 模块：事实卡在图解标签（过渡：原理解页）；系统：理解卡在描述标签（原面板，第二十二轮波 2）——两处都认，量各自可视区的底边
+  const dockCard = document.querySelector('[data-region="views"] [data-sec="understand"]')
+  const dockArea = document.querySelector('.views-area')
+  const panelCard = document.querySelector('[data-region="views"] .panel [data-card="understand"]')
+  const panelArea = document.querySelector('[data-region="views"] .panel-wrap')
   const canvas = document.querySelector('main.canvas-area')
   const area = dockCard ? dockArea : panelArea
   const card = dockCard ?? panelCard
@@ -57,12 +57,11 @@ async function open(page: Page, path: string, _quietDock = false) {
   // 没有理解页的对象（系统面板的理解卡还在抽屉里）拉开抽屉
   // LY-8：视图区常在；模块主语的图解标签（过渡：原理解页）带事实卡，系统主语的是根图解，理解卡在抽屉
   const inDock = path.includes('sel=m:')
-  if (!inDock && (await page.locator('aside.props .panel').count()) === 0) await page.getByRole('button', { name: '属性', exact: true }).click()
+  if (!inDock) await showView(page, 'description')
   await waitSettled(page)
-  // 代码事实就绪：核对卡的结论不再是「读取中」（理解页的事实卡随描述即时渲染，等它出现即可）
-  const waitSel = inDock ? '.dock [data-sec="understand"]' : '.panel [data-card="check"] .card-sum'
-  if (inDock) await expect(page.locator(waitSel)).toBeVisible({ timeout: 20_000 })
-  else await expect(page.locator(waitSel)).not.toHaveText(/读取中/, { timeout: 20_000 })
+  // 理解页的事实卡 / 描述标签的理解卡随描述即时渲染，等它出现即可
+  const waitSel = inDock ? '[data-region="views"] [data-sec="understand"]' : '[data-region="views"] .panel [data-card="understand"]'
+  await expect(page.locator(waitSel)).toBeVisible({ timeout: 20_000 })
   return measureStable(page)
 }
 

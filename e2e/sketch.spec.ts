@@ -5,7 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
-import { openDesk, openSketchPanel, restoreOwned, switchVersion, closeNav, openPanel } from './helpers'
+import { openDesk, openSketchPanel, restoreOwned, switchVersion, openPanel } from './helpers'
 
 const DESIGN = path.resolve(import.meta.dirname, '../model/h5p-arch-desk/designs/phase2-dynamic')
 const EXTRA = path.join(DESIGN, 'r4/modules/zz-e2e-deviation.yaml')
@@ -31,8 +31,7 @@ test('DV-10：版本切换里草图排在 r1 之前；打开草图即草图画�
   await expect(page.getByTestId('design-locked')).toHaveText('只看')
   await expect(bar.getByRole('button', { name: '认可', exact: true })).toHaveCount(0)
   await expect(bar.getByRole('button', { name: '保存', exact: true })).toHaveCount(0)
-  // DL-20：选中面板在草图里缺省收起，按需展开
-  await expect(page.locator('[data-testid="sketch-panel"]')).toHaveCount(0)
+  // LY-11：草图面板在下组「描述」（抽屉已删，LY-16）
   await openSketchPanel(page)
   await expect(page.locator('[data-testid="sketch-panel"]')).toBeVisible()
 })
@@ -52,7 +51,6 @@ test('X4：r4 与草图一致；故意制造偏差（封闭子树多出子模块
     await expect(item.first()).toHaveClass(/error/)
     fs.rmSync(EXTRA)
     await expect(page.locator('.issue-list .item', { hasText: '草图偏差' })).toHaveCount(0)
-    await closeNav(page) // 导航浮层盖着 ⚠ 胶囊，下一个动作在画布上
 
     // 提醒级偏差：r1 缺草图的接口 if.state.transition；在 r1 上认可它
     await openDesk(page, '/p/h5p-arch-desk/d/phase2-dynamic/r1')
@@ -60,12 +58,15 @@ test('X4：r4 与草图一致；故意制造偏差（封闭子树多出子模块
     await page.getByRole('button', { name: /^⚠/ }).click()
     const warn = page.locator('.issue-list .item', { hasText: 'if.state.transition' })
     await expect(warn).toHaveCount(1)
+    // 「问题」与「描述」同在上组（LY-10a）：切回描述认可，再看问题
+    await openPanel(page)
     const form = page.locator('.panel .dev', { hasText: 'if.state.transition' })
     await form.getByRole('button', { name: '认可偏差（写理由）' }).click()
     await form.locator('textarea, input').fill('E2E：r1 还没有视图状态转移')
     await form.getByRole('button', { name: '写入' }).click()
-    await expect(page.locator('.issue-list .item', { hasText: 'if.state.transition' })).toHaveCount(0)
     await expect(page.locator('.panel .dev', { hasText: 'if.state.transition' })).toContainText('已认可')
+    await page.locator('[data-region="views"] .tab[data-doc-tab="issues"] .lbl').click()
+    await expect(page.locator('.issue-list .item', { hasText: 'if.state.transition' })).toHaveCount(0)
   } finally {
     if (fs.existsSync(EXTRA)) fs.rmSync(EXTRA)
     fs.writeFileSync(designYaml, before)

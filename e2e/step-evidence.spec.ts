@@ -38,7 +38,7 @@ test('单步到 transition(openScenario)：面板按名字匹配到 useDeskState
   await expect(title).toHaveText(/^transition\(openScenario\)/)
 })
 
-test('无证据（无承载）的步骤：时序图消息带「?」，场景面板计数、场景列表「? N」，问题页签有「步骤无证据」', async ({ page }) => {
+test('无证据（无承载）的步骤：时序图消息带「?」，场景面板计数、场景列表「? N」，「问题」资料标签有「步骤无证据」', async ({ page }) => {
   await openDesk(page, '/p/h5player?sc=sc.timeshift-leg-switch')
   // 场景面板住辅助栏步骤节（第二十轮 §6）
   await expect(page.locator('svg .no-evidence').first()).toBeVisible({ timeout: 20_000 })
@@ -48,12 +48,11 @@ test('无证据（无承载）的步骤：时序图消息带「?」，场景面�
     .locator('.scenario-panel .section')
     .filter({ has: page.locator('h3', { hasText: '证据' }) })
   await expect(section).toContainText(/无证据 [1-9]/)
-  await page.getByRole('button', { name: /^运行 · / }).click()
+  await page.locator('[data-scene-chip] .t').click()
   await expect(page.locator('.scenario-list .item .unevidenced').first()).toHaveText(/\? \d+/)
   await page.keyboard.press('Escape')
-  // 运行视角下导航树缺省收起（W-1）
-  await page.getByRole('button', { name: '导航树', exact: true }).click()
-  await page.getByRole('tab', { name: /问题/ }).click()
+  // LY-4a：画布左上 ⚠ 打开「问题」资料标签
+  await page.locator('.issue-badge').click()
   await page.getByRole('combobox', { name: '按类别筛选' }).selectOption('unevidenced')
-  await expect(page.locator('.nav-tree .item .title').first()).toContainText('步骤无证据')
+  await expect(page.locator('.issue-list .item .title').first()).toContainText('步骤无证据')
 })

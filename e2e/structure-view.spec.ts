@@ -21,7 +21,7 @@ async function boxes(page: Page) {
 
 const depEdges = (page: Page) => page.locator('.vue-flow__edge-dep')
 const routeEdges = (page: Page) => page.locator('.vue-flow__edge-route')
-const seg = (page: Page, mode: 'structure' | 'interaction') => page.locator(`.perspective .seg[data-mode="${mode}"]`)
+const seg = (page: Page, mode: 'structure' | 'interaction') => page.locator(`.viewpoint [data-mode="${mode}"]`)
 
 test('V11、V12：顶部「结构 ｜ 交互 ｜ 运行」单击切到结构视角，URL 写 v=s；节点一个不动，交互边换成结构边', async ({ page }) => {
   await openDesk(page, '/p/h5player?level=infra')
@@ -144,10 +144,8 @@ test('C6、L20（ADR-0036）：节点角标「表面 W」；选中模块展开�
   await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   // 展开的图例叠在画布右上，分层后 infra.framework 落在它下面
   await collapseDisplay(page)
-  // infra.framework 有图解：选中会自动打开资料区并收起导航树（WS-8 例外 + WS-9，ADR-0061）。
-  // 先预热——选中让它出现、隐藏资料区（标签保留，再次选中不重开）、等布局稳定，之后「选中不动视口」量的才是同一几何
+  // 先预热——选中一次、等布局稳定（选中不改变区域宽度，I3），之后「选中不动视口」量的是同一几何
   await graphNode(page, 'infra.framework').click()
-  if (await page.locator('.dock-area').count()) await page.locator('.dock-toggle').click()
   await waitSettled(page)
   await expect(graphNode(page, 'infra.framework').getByTestId('node-surface-w')).toHaveText(/表面 \d+/)
   const boxes = () =>
@@ -240,9 +238,6 @@ test('K15、K15b：结构视角选中模块后在面板查询影响面，按距�
 
 test('O13③：分层总览下的结构视角——带间画层间依赖，聚焦核心模块时画它的跨层依赖', async ({ page }) => {
   await openDesk(page, '/p/h5player?v=s')
-  // 视图区常在（LY-9）：收起它再拉开抽屉，抽屉挤压而不是浮在画布右侧盖住节点（悬停要落在节点上）
-  await page.locator('.dock-toggle').click()
-  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(page.locator('.vue-flow__node-band')).toHaveCount(4)
   await expect(depEdges(page).first()).toBeAttached()
   expect(await page.locator('.vue-flow__edge-dep[data-id^="chip:"]').count()).toBe(0)
@@ -258,17 +253,21 @@ test('O13③：分层总览下的结构视角——带间画层间依赖，聚�
 
 test('LY-6、LY-6a、LY-6b：旧地址 v=s + 场景打开为交互 + 场景（地址规范化）；退出场景留在交互视角；回放中单击「结构」退出场景并切到结构', async ({ page }) => {
   await openDesk(page, '/p/h5player?v=s&sc=sc.command')
-  await expect(page.locator('.perspective .seg.run')).toHaveClass(/on/)
+  await expect(page.locator('[data-scene-chip]')).toHaveClass(/\bon\b/)
+  await expect(seg(page, 'interaction')).toHaveClass(/on/)
   await expect.poll(() => query(page).get('v')).toBeNull()
   expect(query(page).get('sc')).toBe('sc.command')
   await expect(depEdges(page)).toHaveCount(0)
-  await page.locator('.perspective .exit').click()
+  await page.locator('[data-scene-chip]').getByRole('button', { name: '退出场景' }).click()
   expect(query(page).get('sc')).toBeNull()
   expect(query(page).get('v')).toBeNull()
   await expect(seg(page, 'interaction')).toHaveClass(/on/)
 
   await page.goto('./#/p/h5player?sc=sc.command')
-  await expect(page.locator('.perspective .seg.run')).toHaveClass(/on/)
+  await expect(page.locator('[data-scene-chip]')).toHaveClass(/\bon\b/)
+  // LY-6a：回放中单击「交互」无动作（回放就是交互视角 + 场景）
+  await seg(page, 'interaction').click()
+  expect(query(page).get('sc')).toBe('sc.command')
   await seg(page, 'structure').click()
   await expect.poll(() => query(page).get('sc')).toBeNull()
   expect(query(page).get('v')).toBe('s')

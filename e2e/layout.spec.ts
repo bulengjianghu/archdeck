@@ -1,21 +1,21 @@
 /**
- * 工作区布局（ADR-0054；第二十二轮 LY-8–LY-12，ADR-0064）：视图区常在（图解常驻）、按情境排布；资料标签预览替换与固定、进上组、不跟随主语；
- * 选中文件在视图区打开源代码（G15、§6.4）。选中抽屉与导航浮层是波 1 的过渡呈现（波 2 删）。
+ * 工作区布局（第二十二轮 LY-8–LY-12，ADR-0064）：视图区常在（图解常驻）、按情境排布、可整体收起（画布右上角「视图 · 主语名 ›」）；
+ * 资料标签预览替换与固定、进上组、不跟随主语；选中文件在视图区打开源代码（G15、§6.4）。选中抽屉、导航浮层已删（LY-16）。
  */
 import { expect, test, type Page } from '@playwright/test'
-import { activeTab, collapseDisplay, docTab, docTabs, graphNode, openDesk, openPropsDrawer, query, viewTab, views } from './helpers'
+import { activeTab, closeNav, collapseDisplay, docTab, docTabs, graphNode, openDesk, query, sidebar, viewTab, views, openSidebar } from './helpers'
 
 const dock = views
-const props = (page: Page) => page.getByRole('complementary', { name: '属性' })
 const tabs = (page: Page) => dock(page).locator('.tabs > .tab')
-const viewsBtn = (page: Page) => page.getByRole('button', { name: '资料', exact: true })
-/** TB-2、WS-3：「▤ 属性」——并排还是悬浮写在它的悬停提示里 */
-const propsBtn = (page: Page) => page.getByRole('button', { name: '属性', exact: true })
+const viewsBtn = (page: Page) => page.locator('[data-head="canvas"]').getByRole('button', { name: '视图区', exact: true })
 
-/** 文件页签里单击 / 双击一个文件（目录未展开时先展开） */
+/** 侧栏模块页「按文件」的树里单击 / 双击一个文件（目录未展开时先展开，LY-4b） */
 async function pickFile(page: Page, path: string, dbl = false) {
-  const tab = page.getByRole('tab', { name: '文件' })
-  if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click()
+  await openSidebar(page)
+  const page0 = sidebar(page).locator('[data-side-page="modules"]')
+  if ((await page0.getAttribute('aria-selected')) !== 'true') await page0.click()
+  const mode = sidebar(page).locator('[data-side-mode="files"]')
+  if ((await mode.getAttribute('aria-pressed')) !== 'true') await mode.click()
   const parts = path.split('/').slice(0, -1)
   for (let i = 1; i <= parts.length; i++) {
     const dir = page.locator(`.row.dir[data-dir="${parts.slice(0, i).join('/')}"]`)
@@ -26,87 +26,75 @@ async function pickFile(page: Page, path: string, dbl = false) {
   else await row.click()
 }
 
-test('LY-9、LY-12：视图区常在（图解常驻）、可整体收起；收起后抽屉挤压画布；回放中视图区按场景排布，抽屉不自动开合（LY-16）', async ({ page }) => {
+test('LY-9、LY-12：视图区常在（图解常驻）、可整体收起——收起时画布右上角「视图 · 主语名 ›」单击展开；收起按本机记住；回放中按场景排布', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?level=kit')
-  const bar = page.getByRole('banner', { name: '工具栏' })
   await expect(dock(page)).toBeVisible()
   await expect(activeTab(page)).toHaveAttribute('data-view-tab', 'explainer')
-  // 收起视图区：画布满宽；抽屉拉开后挤压画布（不是悬浮）
+  await expect(page.locator('[data-views-pill]')).toHaveCount(0)
+  // 收起视图区：画布右沿到窗口右沿；胶囊写主语（无选中 = 当前层次的父模块，LY-7a）
   await viewsBtn(page).click()
   await expect(dock(page)).toHaveCount(0)
-  await openPropsDrawer(page)
-  await expect(propsBtn(page)).toHaveAttribute('title', /当前挤压/, { timeout: 15_000 })
-  await expect(props(page)).not.toHaveClass(/floating/)
-  await expect(page.locator('.nav-area')).toBeHidden() // 导航树是浮层抽屉，缺省收起
-  await props(page).getByRole('button', { name: '关闭属性栏' }).click()
+  const pill = page.locator('[data-views-pill]')
+  await expect(pill).toContainText('视图 · 播放器 Kit')
+  const canvas = (await page.locator('.canvas-area').boundingBox())!
+  expect(Math.round(canvas.x + canvas.width)).toBe(1440)
+  // 胶囊在画布右上角
+  const pb = (await pill.boundingBox())!
+  expect(canvas.x + canvas.width - (pb.x + pb.width)).toBeLessThan(20)
+  expect(pb.y - canvas.y).toBeLessThan(20)
 
-  // 视图区收起按本机记住（LY-12a）：同一页面换地址仍收起，再按展开
+  // 视图区收起按本机记住（LY-12a）：同一页面换地址仍收起；胶囊单击展开
   await openDesk(page, '/p/media-web-player?level=kit&sc=sc.command')
   await expect(dock(page)).toHaveCount(0)
-  await viewsBtn(page).click()
+  await page.locator('[data-views-pill]').click()
   await expect(dock(page)).toBeVisible()
-  await expect(props(page)).toHaveCount(0)
-  const barBox = (await bar.boundingBox())!
-  const dockBox = (await dock(page).boundingBox())!
-  const canvas = (await page.locator('.canvas-area').boundingBox())!
-  // 顶栏拉通：横跨包括资料区在内的整个窗口宽；资料区从顶栏之下通到底
-  expect(Math.abs(barBox.width - 1440)).toBeLessThanOrEqual(1)
-  expect(dockBox.y).toBe(44)
-  expect(canvas.width).toBeGreaterThanOrEqual(640)
+  await expect(page.locator('[data-views-pill]')).toHaveCount(0)
   // 时序图标签（场景排布的上组激活）内容区顶部有「定位」「图例」（WS-10）
   await expect(activeTab(page, 0)).toHaveAttribute('data-view-tab', 'sequence')
   await expect(viewTab(page, 'sequence')).toContainText('时序图')
   await expect(dock(page).getByRole('button', { name: '定位' })).toBeVisible()
   await expect(dock(page).getByRole('button', { name: '时序图图例' })).toBeVisible()
-
-  // 「▣」收起视图区：只剩画布；再按恢复，标签还在
-  await viewsBtn(page).click()
+  // 主语条右端也能收起；再按页头开关恢复，标签还在
+  await dock(page).getByRole('button', { name: '收起视图区' }).click()
   await expect(dock(page)).toHaveCount(0)
-  await expect(page.locator('.canvas-area').boundingBox()).resolves.toMatchObject({ width: 1440 })
   await viewsBtn(page).click()
   await expect(tabs(page)).toHaveCount(4)
 })
 
-test('WS-2、WS-3（过渡）：视图区在时抽屉浮着、收起视图区后挤压；× 与「▤ 属性」关闭 / 打开；「专注」收起导航与抽屉再恢复', async ({ page }) => {
-  await openDesk(page, '/p/media-web-player?level=kit&sc=sc.command')
-  await expect(dock(page)).toBeVisible()
-  // 抽屉缺省收起；先手动打开
-  await openPropsDrawer(page)
-  await expect(props(page)).toBeVisible()
-  // 资料区占 44%：抽屉挤压画布放不下 640 → 浮在画布右侧
-  await expect(props(page)).toHaveClass(/floating/)
-  // 隐藏资料区：宽度够了，抽屉回到挤压
-  await page.getByRole('button', { name: '资料', exact: true }).click()
-  await expect(props(page)).not.toHaveClass(/floating/)
-
-  await props(page).getByRole('button', { name: '关闭属性栏' }).click()
-  await expect(props(page)).toHaveCount(0)
-  await expect(propsBtn(page)).not.toHaveAttribute('title', /当前/)
-  // 换选中不重新打开
-  await page.locator('.vue-flow__node-module').first().click()
-  await expect(props(page)).toHaveCount(0)
-  await propsBtn(page).click()
-  await expect(props(page)).toBeVisible()
-
-  // 专注：导航浮层与抽屉都收起；退出恢复
-  await page.getByRole('button', { name: '导航树', exact: true }).click()
-  await expect(page.locator('.nav-area')).toBeVisible()
-  await page.getByRole('button', { name: '专注', exact: true }).click()
-  await expect(props(page)).toHaveCount(0)
-  await expect(page.locator('.nav-area')).toBeHidden()
-  await page.getByRole('button', { name: '退出专注' }).click()
-  await expect(props(page)).toBeVisible()
-  await expect(page.locator('.nav-area')).toBeVisible()
+test('LY-3：侧栏停靠——开关在画布页头、挤压画布；宽度可拖（200–400）；开合与宽度按本机记住', async ({ page }) => {
+  await openDesk(page, '/p/media-web-player?level=kit')
+  // ≥ 1440 缺省展开
+  await expect(sidebar(page)).toBeVisible()
+  const side0 = (await page.locator('.side-area').boundingBox())!
+  expect(Math.round(side0.width)).toBe(240)
+  const canvas0 = (await page.locator('.canvas-area').boundingBox())!
+  expect(Math.round(canvas0.x)).toBe(240)
+  // 拖宽：右沿往右 80
+  const handle = (await sidebar(page).locator('.resize').boundingBox())!
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + 200)
+  await page.mouse.down()
+  await page.mouse.move(handle.x + handle.width / 2 + 80, handle.y + 200, { steps: 6 })
+  await page.mouse.up()
+  await expect.poll(async () => Math.abs(Math.round((await page.locator('.side-area').boundingBox())!.width) - 320)).toBeLessThanOrEqual(2)
+  // 拖过头夹在 400
+  const h2 = (await sidebar(page).locator('.resize').boundingBox())!
+  await page.mouse.move(h2.x + h2.width / 2, h2.y + 200)
+  await page.mouse.down()
+  await page.mouse.move(h2.x + 300, h2.y + 200, { steps: 6 })
+  await page.mouse.up()
+  await expect.poll(async () => Math.round((await page.locator('.side-area').boundingBox())!.width)).toBe(400)
+  // 收起：画布从窗口左沿开始；重新打开页面仍收起（本机记住）
+  await closeNav(page)
+  expect(Math.round((await page.locator('.canvas-area').boundingBox())!.x)).toBe(0)
+  await openDesk(page, '/p/media-web-player?level=kit')
+  await expect(sidebar(page)).toHaveCount(0)
+  await openSidebar(page)
+  expect(Math.round((await page.locator('.side-area').boundingBox())!.width)).toBe(400)
 })
 
-test('G15、LY-8a：文件页签中选中文件——地址带 sel=f:，视图区上组打开源代码预览标签；下一次单击替换它，双击标签固定', async ({ page }) => {
+test('G15、LY-8a、LY-4b：侧栏「按文件」的树中选中文件——地址带 sel=f:，视图区上组打开源代码预览标签；下一次单击替换它，双击标签固定', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk')
-  await page.getByRole('button', { name: '导航树', exact: true }).click() // 导航树浮层抽屉缺省收起
-  const pick = async (path: string, dbl = false) => {
-    // 点外即收：动过资料区之后导航浮层可能已收起，再打开
-    if (!(await page.locator('.nav-area').isVisible())) await page.getByRole('button', { name: '导航树', exact: true }).click()
-    await pickFile(page, path, dbl)
-  }
+  const pick = (path: string, dbl = false) => pickFile(page, path, dbl)
   await pick('src/main.ts')
   expect(query(page).get('sel')).toBe('f:src/main.ts')
   await expect(docTabs(page)).toHaveCount(1)
@@ -140,7 +128,6 @@ test('LY-10a、LY-11、LY-9：场景排布上下两组，新资料进上组；�
   await expect(groups).toHaveCount(2)
   await expect(groups.nth(0).locator('.seq-doc')).toBeVisible()
   await expect(activeTab(page, 1)).toHaveAttribute('data-view-tab', 'description')
-  await page.getByRole('button', { name: '导航树', exact: true }).click()
   await pickFile(page, 'src/main.ts')
   await expect(groups.nth(0).locator('.tabs > .tab[data-doc="src:src/main.ts"]')).toHaveCount(1)
   // 源代码与描述同时可见
@@ -156,11 +143,9 @@ test('LY-10a、LY-11、LY-9：场景排布上下两组，新资料进上组；�
 
 test('LY-8：选中与单步不改排布，视图标签内容随主语变；退出场景回到自由排布，资料标签留着', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
-  await page.getByRole('button', { name: '导航树', exact: true }).click()
   await pickFile(page, 'src/main.ts')
   await expect(docTab(page, 'src:src/main.ts')).toHaveCount(1)
   const before = await tabs(page).allInnerTexts()
-  await expect(props(page)).toHaveCount(0)
   await page.getByRole('button', { name: /下一步/ }).click()
   // 图例展开时叠在画布右上，会盖住那里的节点（L48）
   await collapseDisplay(page)
@@ -168,7 +153,7 @@ test('LY-8：选中与单步不改排布，视图标签内容随主语变；退�
   // 标签集合不跟随选中
   expect(await tabs(page).allInnerTexts()).toEqual(before)
   // 退出场景：自由排布（图解 描述 核对），时序图移出，源代码留着（LY-9a、LY-11b）
-  await page.locator('.perspective .exit').click()
+  await page.locator('[data-scene-chip]').getByRole('button', { name: '退出场景' }).click()
   await expect(viewTab(page, 'sequence')).toHaveCount(0)
   await expect(tabs(page)).toHaveCount(4)
   await expect(docTab(page, 'src:src/main.ts')).toHaveCount(1)

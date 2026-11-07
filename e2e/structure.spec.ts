@@ -69,6 +69,6 @@ test('L22 反向：结构视角选中束时它承载的交互临时画出；单�
   // L22、L18：反向画出的承载交互是交互——实线
   await expect(carried.first().locator('path.vue-flow__edge-path')).toHaveCSS('stroke-dasharray', 'none')
   await carried.first().locator('path.vue-flow__edge-interaction').dispatchEvent('click')
-  await expect(page.locator('.perspective .seg[data-mode="interaction"]')).toHaveClass(/on/)
+  await expect(page.locator('.viewpoint [data-mode="interaction"]')).toHaveClass(/on/)
   expect(query(page).get('sel')).toMatch(/^r:/)
 })

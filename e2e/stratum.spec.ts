@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { graphNode, LOAD_BUDGET, openSketchPanel, sketchOn } from './helpers'
 
-const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
+const dock = (page: Page) => page.locator('[data-region="views"]')
 const dialogue = (page: Page) => dock(page).getByTestId('dialogue')
 const input = (page: Page) => dialogue(page).getByRole('textbox', { name: '对话输入' })
 const cards = (page: Page) => dialogue(page).getByTestId('proposal-card')

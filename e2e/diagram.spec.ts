@@ -11,7 +11,7 @@ import { activeTab, graphNode, openDesk, query, sketchOn } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 
-const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
+const dock = (page: Page) => page.locator('[data-region="views"]')
 const dialogue = (page: Page) => dock(page).getByTestId('dialogue')
 const input = (page: Page) => dialogue(page).getByRole('textbox', { name: '对话输入' })
 async function say(page: Page, text: string) {

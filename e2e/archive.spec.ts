@@ -5,12 +5,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { LOAD_BUDGET, openDesk, restoreOwned, sketchOn } from './helpers'
+import { LOAD_BUDGET, openDesk, restoreOwned, sketchOn, openSidebar, sidebar } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 const OWNED = path.join(PROJECT, 'governance/owned.json')
 const REVIEWED = path.join(PROJECT, 'reviewed.yaml')
-const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
+const dock = (page: Page) => page.locator('[data-region="views"]')
 const dialogue = (page: Page) => dock(page).getByTestId('dialogue')
 const input = (page: Page) => dialogue(page).getByRole('textbox', { name: '对话输入' })
 const cards = (page: Page) => dialogue(page).getByTestId('proposal-card')
@@ -35,8 +35,8 @@ async function accept(page: Page) {
   await expect(bar(page).locator('.chip.accepted')).toHaveText('已认可', { timeout: LOAD_BUDGET })
 }
 async function openChanges(page: Page) {
-  if (!(await page.locator('.nav-area').isVisible())) await page.getByRole('button', { name: '导航树', exact: true }).click()
-  await page.locator('.nav-tree').getByRole('tab', { name: /改动/ }).click()
+  await openSidebar(page)
+  await sidebar(page).locator('[data-side-page="changes"]').click()
   return page.getByTestId('changes-tab')
 }
 const archiveBtn = (page: Page) => bar(page).getByRole('button', { name: '归档', exact: true })

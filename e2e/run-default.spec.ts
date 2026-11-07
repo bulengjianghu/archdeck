@@ -1,21 +1,25 @@
-/** 回放默认态（LY-16）：导航浮层（波 1 过渡）缺省收起、只由人开合，不随进出场景变；「显示 ▾」旁没有摘要（L49） */
+/** 回放默认态（LY-3、LY-16）：侧栏只由人开合，不随进出场景变（进入回放只换到「场景」页）；「显示 ▾」旁没有摘要（L49） */
 import { expect, test } from '@playwright/test'
-import { openDesk } from './helpers'
+import { closeNav, openDesk, openSidebar, sidebar } from './helpers'
 
-test('LY-16：导航浮层缺省收起、只由人开合——进出场景都不自动开合，展开后进场景仍展开', async ({ page }) => {
+test('LY-3、LY-16：侧栏只由人开合——进出场景都不自动开合；进入回放换到「场景」页、先列步骤', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk')
-  const nav = page.locator('.nav-area')
-  await expect(nav).toBeHidden()
+  // 1440 宽、没有本机记忆：缺省展开
+  await expect(sidebar(page)).toBeVisible()
   await page.goto('./#/p/h5p-arch-desk?sc=sc.open-and-play')
   await expect(page.locator('.vue-flow__node').first()).toBeVisible({ timeout: 20_000 })
-  await expect(nav).toBeHidden()
+  await expect(sidebar(page)).toBeVisible()
+  await expect(sidebar(page).locator('[data-side-page="scenes"]')).toHaveAttribute('aria-selected', 'true')
+  await expect(sidebar(page).locator('.step-tree')).toBeVisible()
   await expect(page.getByTestId('display-summary')).toHaveCount(0)
-  await page.getByRole('button', { name: '导航树', exact: true }).click()
-  await expect(nav).toBeVisible()
-  // 退出场景、再进场景：保持人开的状态
+  // 人收起后：退出场景、再进场景都保持收起
+  await closeNav(page)
   await page.goto('./#/p/h5p-arch-desk')
-  await expect(nav).toBeVisible()
+  await expect(page.locator('.vue-flow__node').first()).toBeVisible({ timeout: 20_000 })
+  await expect(sidebar(page)).toHaveCount(0)
   await page.goto('./#/p/h5p-arch-desk?sc=sc.open-and-play')
   await expect(page.locator('.vue-flow__node').first()).toBeVisible({ timeout: 20_000 })
-  await expect(nav).toBeVisible()
+  await expect(sidebar(page)).toHaveCount(0)
+  await openSidebar(page)
+  await expect(sidebar(page).locator('.step-tree')).toBeVisible()
 })

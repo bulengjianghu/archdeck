@@ -3,7 +3,7 @@
  * 以 media-web-player 的分层总览验收（01 §6.24）。
  */
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, openDesk, openCheckList, query, collapseDisplay, waitSettled } from './helpers'
+import { graphNode, openDesk, openCheckList, query, collapseDisplay, waitSettled, closeNav } from './helpers'
 
 /** 结构边是否变淡：DepEdge 变淡时线的不透明度降到 0.12（同 structure-view.spec） */
 const faded = async (page: Page, id: string) => (await page.locator(`.vue-flow__edge-dep[data-id="${id}"] path[style*="opacity: 0.12"]`).count()) > 0
@@ -46,10 +46,9 @@ test('L27：选中状态下悬停另一个模块，画面有响应——它的�
 
 test('K15b：面板点「影响面」出现距离标记；换选中后标记消失、按钮回到「不看」；刷新后不保留', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?v=s&sel=m:pipeline.latency')
-  // pipeline.latency / kit.session 都有图解：选中会自动打开资料区并收起导航树（WS-8 例外 + WS-9，ADR-0061），
-  // 先隐藏资料区（标签保留，再选中不会重开）并等布局稳定，量的是这一几何
-  if (await page.locator('.dock-area').count()) await page.locator('.dock-toggle').click()
-  await waitSettled(page)
+  // 侧栏挤压画布：收起它，图例收起，画布上要单击的节点不被盖住；选中不改变任何区域的宽度（I3）
+  await closeNav(page)
+  await collapseDisplay(page)
   // PC-8：影响面查询在核对卡的「结构指标」清单里
   await openCheckList(page, 'boundary.structure')
   await expect(choice(page, 'none')).toHaveClass(/on/)
@@ -61,9 +60,6 @@ test('K15b：面板点「影响面」出现距离标记；换选中后标记消�
   expect(query(page).toString()).not.toContain('impact')
   await page.reload()
   await expect(page.locator('.vue-flow__node').first()).toBeVisible({ timeout: 20_000 })
-  // 刷新后 URL 直达同样自动打开资料区（立即开）：再关掉，几何与刷新前一致
-  await page.waitForTimeout(400)
-  if (await page.locator('.dock-area').count()) await page.locator('.dock-toggle').click()
   await waitSettled(page)
   await openCheckList(page, 'boundary.structure')
   await expect(choice(page, 'none')).toHaveClass(/on/)

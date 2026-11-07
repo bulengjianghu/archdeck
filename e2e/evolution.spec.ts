@@ -3,7 +3,7 @@
  * 开「时间耦合」后本层出现波浪线，单击选中它看面板。以 h5p-arch-desk 自身验收（源码在本地、是 git 仓库）。
  */
 import { expect, test } from '@playwright/test'
-import { openCheckList, openDesk, openPanel, openPanelLists, query } from './helpers'
+import { openCheckList, openDesk, openPanel, openPanelLists, query, openSidebar } from './helpers'
 
 test('缺省关闭：没有角标与耦合线；开启「缺陷」热度后出现角标，刷新后仍开启；运行视角不叠加', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=present')
@@ -50,7 +50,7 @@ test('系统面板「演化」列出热度前 10；模块树可按热度排序',
   await expect(panel).toContainText(/时间耦合 \d+ 对（含上级并集）/)
   await expect(panel).toContainText('无依赖无关系的时间耦合（只列最具体的对）')
   // 第二十轮 §4：模块树在导航浮层抽屉里，先展开
-  if (!(await page.locator('.nav-area').isVisible())) await page.getByRole('button', { name: '导航树', exact: true }).click()
+  await openSidebar(page)
   const sort = page.getByRole('group', { name: '模块排序' })
   await sort.getByRole('button', { name: '按热度' }).click()
   await expect(sort.getByRole('button', { name: '按热度' })).toHaveAttribute('aria-pressed', 'true')

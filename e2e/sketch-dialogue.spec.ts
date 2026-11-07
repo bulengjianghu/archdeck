@@ -7,11 +7,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { activeTab, graphNode, LOAD_BUDGET, openDesk, openSketchPanel, query, sketchOn } from './helpers'
+import { activeTab, graphNode, LOAD_BUDGET, openDesk, openSketchPanel, query, sketchOn, openSidebar, sidebar, views } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 
-const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
+const dock = (page: Page) => page.locator('[data-region="views"]')
 const dialogue = (page: Page) => dock(page).getByTestId('dialogue')
 const input = (page: Page) => dialogue(page).getByRole('textbox', { name: '对话输入' })
 async function say(page: Page, text: string) {
@@ -28,10 +28,9 @@ async function round(page: Page, text: string) {
   await expect(page.getByTestId('ai-editing')).toHaveCount(0)
   return cards(page).nth(n)
 }
-const props = (page: Page) => page.getByRole('complementary', { name: '属性' })
 async function openChanges(page: Page) {
-  if (!(await page.locator('.nav-area').isVisible())) await page.getByRole('button', { name: '导航树', exact: true }).click()
-  await page.locator('.nav-tree').getByRole('tab', { name: /改动/ }).click()
+  await openSidebar(page)
+  await sidebar(page).locator('[data-side-page="changes"]').click()
   return page.getByTestId('changes-tab')
 }
 const rows = (page: Page) => page.getByTestId('change-row')
@@ -47,7 +46,7 @@ const shown = (page: Page) =>
     return Object.fromEntries(sc.nodes.filter(n => n.data.kind === 'module').map(n => [n.id, n.position]))
   })
 
-test('用例 1、DL-20：进入草图画布——对话自动打开并固定、锚点「当前张 DeskState」、缺省「改」；选中面板缺省收起，展开时浮在右侧、画布宽度不变', async ({
+test('用例 1、DL-20、LY-11：进入草图画布——对话自动打开并固定、锚点「当前张 DeskState」、缺省「改」；草图面板在下组「描述」，右键「编辑字段…」在那里出表单、画布宽度不变', async ({
   page,
 }) => {
   const { restore } = await sketchOn(page, 'zz-e2e-w2-layout')
@@ -55,14 +54,11 @@ test('用例 1、DL-20：进入草图画布——对话自动打开并固定、�
     await expect(activeTab(page, 0)).toContainText('对话')
     await expect(dialogue(page).getByTestId('anchor-bar')).toContainText('当前张 DeskState')
     await expect(dialogue(page).getByTestId('mode-badge')).toHaveText('可改')
-    await expect(props(page)).toHaveCount(0)
-    // 画布节点不被盖：最右边的本层模块在画布可见区域里
+    await expect(views(page).locator('[data-group="1"] .sk-panel')).toBeVisible()
     const canvas = (await page.locator('.sketch-canvas').boundingBox())!
-    // 右键「编辑字段…」按需展开：浮在画布右侧，画布宽度不变
+    // 右键「编辑字段…」：在「描述」标签的草图面板里出表单，画布宽度不变
     await graphNode(page, 'state.desk.writer').locator('.name').click({ button: 'right' })
     await page.getByRole('menuitem', { name: '编辑字段…' }).click()
-    await expect(props(page)).toBeVisible()
-    await expect(props(page)).toHaveClass(/floating/)
     expect((await page.locator('.sketch-canvas').boundingBox())!.width).toBe(canvas.width)
     await expect(page.locator('[data-testid="sketch-module-form"]')).toBeVisible()
     // 选中框后锚点条带上框

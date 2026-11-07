@@ -7,7 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
-import { restoreOwned, openCheckList, openDesk } from './helpers'
+import { restoreOwned, openCheckList, openDesk, openSidebar } from './helpers'
 
 const MODEL = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 const LAYERS = path.join(MODEL, 'intent/skeleton.yaml')
@@ -30,15 +30,16 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
   const entry = () => /module: access\.writer\n\s+at: [^\n]+\n\s+hash: (\S+)/.exec(fs.readFileSync(REVIEWED, 'utf8'))?.[1]
   try {
     await openDesk(page, `/p/h5p-arch-desk?sel=m:${MODULE}`)
+    await openSidebar(page)
     const panel = page.locator('.panel')
     const badge = panel.locator('.badge.review')
-    const treeRow = page.locator(`.nav-tree [data-id="${MODULE}"]`)
+    const treeRow = page.locator(`[data-region="sidebar"] [data-id="${MODULE}"]`)
     // V15a：确认徽标在核对卡的「确认」行
     await openCheckList(page)
     await expect(badge).toHaveText('未确认')
     const before = count()
     // 描述里可能已有别的需复核模块（如合并后指纹变了的），只断言本次多出一个
-    const tools = page.locator('.nav-tree .tools')
+    const tools = page.locator('[data-region="sidebar"] .tools')
     const stale0 = (await tools.count()) ? Number(/需复核 (\d+)/.exec(await tools.innerText())?.[1] ?? 0) : 0
 
     // 确认：文件多一条，标题旁「已确认 <日期>」（PC-8：「确认」表单是核对卡的清单，展开再填）
@@ -72,14 +73,19 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
     await expect(panel).toContainText('自上次确认以来的改动')
 
     // 返工清单多一条「需复核」
-    if (!(await page.locator('.nav-area').isVisible())) await page.getByRole('button', { name: '导航树', exact: true }).click()
-    await page.getByRole('tab', { name: /问题/ }).click()
-    await expect(page.locator('.nav-tree')).toContainText('需复核：描述写入')
-    await page.getByRole('tab', { name: '模块' }).click()
+    await page.locator('.issue-badge').click()
+    await expect(page.locator('.issue-list')).toContainText('需复核：描述写入')
+    // 「问题」与「描述」同在上组（LY-10a）：切回描述，面板重建，再展开「确认」清单
+    await openCheckList(page)
+    await panel.getByRole('button', { name: /^▸ 确认/ }).click()
 
     // 复核并确认：标记消失，记录仍是一条、hash 更新
     await panel.getByRole('button', { name: '复核并确认' }).click()
-    await expect(badge).toHaveText(/^已确认/)
+    // 切过标签后核对卡是重建的（没有人展开过），写入后全部正常时缺省收起：展开再看徽标
+    await expect(async () => {
+      await openCheckList(page)
+      await expect(badge).toHaveText(/^已确认/, { timeout: 2_000 })
+    }).toPass({ timeout: 20_000 })
     await expect(treeRow.locator('.tag.stale')).toHaveCount(0)
     await expect(panel).not.toContainText('自上次确认以来的改动')
     await expect.poll(count).toBe(before + 1)

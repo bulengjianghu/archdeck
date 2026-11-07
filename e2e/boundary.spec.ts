@@ -56,7 +56,7 @@ test('R17：场景列表默认只列主流程，切到「全部类别」后出�
   })
   await openDesk(page, '/p/h5player')
   await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
-  await page.getByRole('group', { name: '视角' }).getByRole('button', { name: /运行/ }).click()
+  await page.locator('[data-scene-chip]').click()
   const list = page.getByRole('dialog', { name: '选择场景' })
   await list.getByRole('group', { name: '范围' }).getByRole('button', { name: /全部/ }).click()
   const kinds = list.getByRole('group', { name: '类别' })

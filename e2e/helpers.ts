@@ -19,12 +19,11 @@ export async function openDesk(page: Page, hashPath: string) {
   }).toPass({ timeout: LOAD_BUDGET + 10_000, intervals: [0] })
 }
 
-/** TB-6：打开导航顶部的项目菜单（版本、编辑骨架、新建设计、所有项目）；已打开时不动 */
+/** TB-6、LY-2：打开侧栏顶上的项目菜单（版本、编辑骨架、新建设计、所有项目）；已打开时不动 */
 export async function openProjectMenu(page: Page) {
   const btn = page.getByRole('button', { name: '项目菜单' })
-  // 项目标题区在导航顶部，导航收起时（运行视角、资料区出现时）先展开
-  const nav = page.getByRole('button', { name: '导航树', exact: true })
-  if ((await nav.getAttribute('aria-pressed')) !== 'true') await nav.click()
+  // 项目标题区在侧栏顶上，侧栏收起时先展开（LY-3）
+  await openSidebar(page)
   if ((await btn.getAttribute('aria-expanded')) !== 'true') await btn.click()
   await expect(page.getByRole('menu', { name: '项目' })).toBeVisible()
 }
@@ -85,6 +84,8 @@ export const docTabs = (page: Page) => views(page).locator('.tab[data-doc-tab]')
 export const activeTab = (page: Page, group = 0) => views(page).locator(`[data-group="${group}"] .tab.on`)
 /** 激活某个视图标签 */
 export async function showView(page: Page, kind: 'explainer' | 'description' | 'check' | 'sequence') {
+  // 视图区收起时先展开（LY-12）
+  if (!(await views(page).count())) await page.locator('[data-head="canvas"]').getByRole('button', { name: '视图区', exact: true }).click()
   await viewTab(page, kind).locator('.lbl').click()
   await expect(viewTab(page, kind)).toHaveClass(/\bon\b/)
 }
@@ -106,26 +107,40 @@ export function restoreOwned(file: string, snapshot: string, paths: readonly str
   fs.writeFileSync(file, `${JSON.stringify({ ...now, updatedAt: was.updatedAt, files: sorted }, null, 2)}\n`)
 }
 
-/** 属性栏核对卡（PC-2）收起时展开它；给了 data-sec 时再展开那个折叠的清单（PC-8） */
-/** 第二十轮 §4：导航树是画布左缘的浮层抽屉——盖住画布左上的胶囊，看完树里的东西要操作画布前先收起 */
+/** 侧栏（LY-3、LY-4）：停靠在画布左边，开关在画布页头 */
+export const sidebar = (page: Page) => page.locator('[data-region="sidebar"]')
+const sidebarToggle = (page: Page) => page.locator('[data-head="canvas"]').getByRole('button', { name: '侧栏', exact: true })
+export async function openSidebar(page: Page) {
+  const t = sidebarToggle(page)
+  if ((await t.getAttribute('aria-pressed')) !== 'true') await t.click()
+  await expect(page.locator('[data-head="sidebar"]')).toBeVisible()
+}
+/** 侧栏挤压画布：要画布宽一些（或测画布上的几何）时先收起 */
 export async function closeNav(page: Page) {
-  if (await page.locator('.nav-area').isVisible()) await page.getByRole('button', { name: '导航树', exact: true }).click()
+  const t = sidebarToggle(page)
+  if ((await t.getAttribute('aria-pressed')) === 'true') await t.click()
+  await expect(page.locator('[data-head="sidebar"]')).toHaveCount(0)
+}
+/** 切到侧栏的某一页（先展开侧栏） */
+export async function sidePage(page: Page, name: 'modules' | 'scenes' | 'changes') {
+  await openSidebar(page)
+  await sidebar(page).locator(`[data-side-page="${name}"]`).click()
 }
 
-/** 第二十轮 §4：选中面板缺省收起（运行视角自动收起，步骤节在辅助栏）——要动核对卡先把抽屉拉开 */
+/** 第二十二轮波 2：抽屉已删，原选中面板的内容在「描述」标签（核对卡在「核对」标签） */
 export const openPanel = openPropsDrawer
 
 export async function openPropsDrawer(page: Page) {
-  if (await page.locator('aside.props .panel').count()) return
-  // 描述加载完成前点击会与就绪渲染竞态（.panel 迟迟不出 → 重试点击反复开合）：先等加载态结束
+  // 描述加载完成前点击会与就绪渲染竞态：先等加载态结束
   await expect(page.locator('.canvas-area .state')).toHaveCount(0, { timeout: 30_000 })
-  await page.locator('.props-toggle').click()
-  await expect(page.locator('aside.props .panel')).toBeVisible()
+  await showView(page, 'description')
+  await expect(views(page).locator('.panel[data-part="description"], [data-testid="dock-step-side"]').first()).toBeVisible()
 }
 
-/** 属性栏核对卡（PC-2）收起时展开它；给了 data-sec 时再展开那个折叠的清单（PC-8） */
+/** 核对卡（PC-2）收起时展开它；给了 data-sec 时再展开那个折叠的清单（PC-8）。第二十二轮波 2 过渡：原面板（含核对卡）整体在「描述」标签 */
 export async function openCheckList(page: Page, sec?: string) {
-  // 运行视角：步骤 / 场景面板住辅助栏步骤节（第二十轮 §6）；其余在抽屉
+  await openPropsDrawer(page)
+  // 回放中：步骤 / 场景面板在描述标签的步骤节
   const side = page.getByTestId('dock-step-side')
   if ((await side.count()) && (await side.locator('[data-card="check"]').count())) {
     const t = side.locator('[data-card="check"] .card-toggle').first()
@@ -144,7 +159,6 @@ export async function openCheckList(page: Page, sec?: string) {
     if ((await fold.count()) && (await fold.getAttribute('aria-expanded')) === 'false') await fold.click()
     return
   }
-  await openPropsDrawer(page)
   const toggle = page.locator('.panel [data-card="check"] .card-toggle').first()
   await expect(toggle).toBeVisible()
   // 代码事实晚到时核对卡会自己展开（PC-2）：先等结论定下来（不再「读取中」），再按需单击并确认已展开；
@@ -180,28 +194,23 @@ export async function openRelated(page: Page) {
 }
 
 /**
- * LY-11（第二十二轮）：进入草图画布时视图区按草图情境的排布——上组对话（固定、激活）；DL-20 过渡：选中面板缺省收起
+ * LY-11（第二十二轮）：进入草图画布时视图区按草图情境的排布——上组对话（固定、激活），下组描述（草图面板）
  */
 export async function expectSketchLayout(page: Page) {
   // LY-11：草图情境的缺省排布——上组激活的是固定的对话
   await expect(activeTab(page, 0)).toHaveAttribute('data-doc', 'dlg')
   await expect(activeTab(page, 0)).not.toHaveClass(/preview/)
-  await expect(page.getByRole('complementary', { name: '属性' })).toHaveCount(0)
+  await expect(activeTab(page, 1)).toHaveAttribute('data-view-tab', 'description')
 }
 
-/** DL-20：草图编辑态要用表单时按需展开选中面板（浮在画布右侧） */
+/** DL-20（第二十二轮波 2）：草图面板（表单）在下组的「描述」标签 */
 export async function openSketchPanel(page: Page) {
-  const props = page.getByRole('complementary', { name: '属性' })
-  if (!(await props.count())) await page.locator('.props-toggle').click()
-  await expect(props).toBeVisible()
+  await showView(page, 'description')
+  await expect(views(page).locator('.sk-panel')).toBeVisible()
 }
 
-/** DL-20：用完表单收起（浮在画布右侧的面板会挡住右边的节点） */
-export async function closeSketchPanel(page: Page) {
-  const props = page.getByRole('complementary', { name: '属性' })
-  if (await props.count()) await page.locator('.props-toggle').click()
-  await expect(props).toHaveCount(0)
-}
+/** 草图面板在视图区，不挡画布；保留这个步骤以便旧用例照常调用 */
+export async function closeSketchPanel(_page: Page) {}
 
 const SELF_PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 
