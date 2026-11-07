@@ -69,7 +69,8 @@ modules:
       - 视图状态只在 dispatch 一处赋值，新值由视图状态转移算出
       - { text: 派生与写入口不引用同步适配器，只经 desk/ports 的端口与外界往来, adr: 52 }
       - 只在路由同步里调用路由，协调者只引用它的类型
-    codeRefs: [src/state/useDeskState.ts, src/state/inject.ts, src/state/desk/intent.ts, src/state/desk/ports.ts]
+    # sync/workspaceMemory.ts（工作区的本机记忆，ADR-0064）暂归协调者本身：成为「同步适配器」层的成员要改人拥有的 intent/strata.yaml（arch own，留给人）
+    codeRefs: [src/state/useDeskState.ts, src/state/inject.ts, src/state/desk/intent.ts, src/state/desk/ports.ts, src/state/sync/workspaceMemory.ts]
   - id: access.model-source
     name: ModelSource 插件
     summary: 以同源端点提供描述与源码，并按项目推送变更

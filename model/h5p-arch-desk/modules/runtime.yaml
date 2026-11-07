@@ -56,22 +56,23 @@ modules:
   - id: state.transition
     name: 视图状态转移
     summary: 按会话规则由状态与动作算出下一个视图状态
-    abstraction: 会话规则按话题拆成纯函数，输入状态与动作、输出新状态，不碰外界；被描述系统的问题一律问模型层；工作区规则（workspace.ts）是另一个值的转移，与视图状态互不约束。
+    abstraction: 会话规则按话题拆成纯函数，输入状态与动作、输出新状态，不碰外界；被描述系统的问题一律问模型层；工作区规则（workspace.ts）是另一个值的转移，与视图状态互不约束；主语（subjectOf）由视图状态推出，视图区的每个视图标签都是（主语, 标签类型）的纯函数。
     invariants:
       - 只引用模型层与自身文件，不依赖 Vue、路由与计时器
       - 视图状态的转移输入状态、动作与上下文，只返回新状态、是否进历史与被清空的选中
-      - { text: 工作区状态是另一个值，只经 workspaceTransition 改变，不进 URL 与历史, adr: 54 }
+      - { text: 工作区状态是另一个值，只经 workspaceTransition 改变，不进 URL 与历史；每次转移之后统一规整（图解常驻、场景里时序图常驻、至多两组）, adr: 64 }
 
   # ── 呈现层 ──────────────────────────────────────────────
   - id: present.desk-view.split
-    name: 资料区
-    summary: 以多标签打开时序图、源代码与图解，可预览、分屏、关闭
+    name: 视图区
+    summary: 按情境排布的视图标签与资料标签，视图标签跟随主语
     parent: present.desk-view
-    responsibility: 工作区右侧从顶到底的一列（原「副栏」，ADR-0054；第二十轮起是顶栏之下的右栏，ADR-0062）：时序图、源代码、图解、理解页（事实卡 + 故事，ModuleDoc）与对话等资料都以标签打开，标签名、说明与正文查资料种类表（DL-5）；每组的标签栏在第一行、与工具栏同高；预览标签斜体、被下一次不固定的打开替换，双击标签固定（WS-5）；「⊟ 分屏」最多上下两组、单击组内即聚焦、「取消分屏」并回，✕ 关闭全部（WS-6、WS-7）；时序图标签内容区顶部是本层不可见提示、「定位」「图例」（WS-10）；图解标签（EX-3、EX-4、EX-7）顶部是 ↑ ↓ 图解导航与「基于旧描述 · N 处改动」，内容是只给 allow-scripts 的沙箱 iframe：srcdoc 在 head 最前注入禁止网络请求的 CSP、body 末尾注入桥接脚本（填 data-field、附「图解 ›」、单击转 postMessage），父页只收来源是这个 iframe 的消息——arch:select 在画布上选中模块（资料区不动），arch:open 以预览打开另一份图解。运行视角下组之下常驻步骤节：选中步骤 → 步骤详情、场景 → 概览、其他对象 → 这次流程里它做了什么（V6 新家，ADR-0062）。不跟随选中：只读工作区状态、只发工作区意图（WS-8）。
-    abstraction: 一列（DockPane）按组排、组下运行视角常驻步骤节；一组（DockGroup）是标签栏加活动标签的内容，标签内容按资料种类交给时序图、源代码预览、理解页（ModuleDoc：事实卡在上、图解故事在下）或种类表登记的正文组件（对话等）。
+    adrs: [64, 55]
+    responsibility: 工作区右侧的一列（第二十二轮 ADR-0064；波 1 沿用旧资料区的版式，主语条与拖拽随波 2）：一到两组标签上下排列、组高按分隔比例。视图标签（图解、描述、核对、时序图）按类型各一个、内容是主语的投影（ViewDoc；波 1 过渡：图解 = 原理解页、描述 = 回放中的步骤节或模块事实卡、核对指向选中面板），图解常驻、回放中时序图常驻（没有 ×），「+」加回关掉的描述 / 核对；资料标签（源代码、对话、设计说明）不跟随主语，预览标签斜体、被下一次不固定的打开替换，双击固定（LY-8a），名字与正文查资料种类表（DL-5）。图解（EX-3、EX-4、EX-7）顶部是 ↑ ↓ 与「基于旧描述 · N 处改动」，内容是只给 allow-scripts 的沙箱 iframe：srcdoc 在 head 最前注入禁止网络请求的 CSP、body 末尾注入桥接脚本，父页只收来源是这个 iframe 的消息——arch:select 即选中模块、arch:open 看另一份图解（选中它并激活图解标签，LY-15）。
+    abstraction: 一列（DockPane）按组排；一组（DockGroup）是标签栏加活动标签的内容；视图标签的内容交给 ViewDoc（按主语分派到图解、事实卡、步骤节、时序图），资料标签交给源代码预览或种类表登记的正文组件（对话等）。
     invariants:
-      - { text: 只读 desk.workspace 的状态、只经它的 dispatch 发意图，自身不存标签与分组, adr: 54 }
-      - 选中、悬停、移动进度都不改资料区
+      - { text: 只读 desk.workspace 的状态与主语、只经它的 dispatch 发意图，自身不存标签与分组, adr: 64 }
+      - { text: 选中、悬停、移动进度都不改排布；视图标签的内容随主语变, adr: 64 }
       - { text: 图解在只给 allow-scripts 的 iframe 里显示，父页只接受来源是那个 iframe 窗口的消息, adr: 55 }
     codeRefs: [src/components/dock/**]
 
@@ -274,7 +275,7 @@ relations:
   - {id: rel.st.navigation-strata, from: state.transition.navigation, to: model.types, type: queries, description: 导航规则向类型与 Schema 取：stratumByKey 判层的选中（sel=s:）是否存在（V2、ADR-0052）, purpose: 判断选中的层是否还存在 }
   # 呈现层内部
   - { id: rel.p2.split-sequence, from: present.desk-view.split, to: present.sequence.interact, type: commands, description: 资料区交给时序图交互：运行视角下在时序图标签的内容区渲染时序图，「定位」调用它暴露的 centerCurrent, purpose: 在时序图标签里画时序图 }
-  - { id: rel.ws.dock-workspace, from: present.desk-view.split, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 资料区交给 dispatch 与操作：标签的激活、固定、关闭，分屏、取消分屏、聚焦组、关闭全部都经 desk.workspace.dispatch（WS-5–WS-7）, purpose: 切换、固定、关闭资料标签 }
+  - { id: rel.ws.dock-workspace, from: present.desk-view.split, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 视图区交给 dispatch 与操作：标签的激活、固定、关闭、「+」加视图都经 desk.workspace.dispatch；图解里的引用经 readExplainer 选中（LY-8–LY-10、LY-15）, purpose: 切换、固定、关闭标签与看图解 }
   - {id: rel.p6.nav-perspective, from: present.nav-tree, to: state.desk.projection, type: queries, payload: [ds.ViewState], description: 导航树向视图派生（核心与 desk.run）取：视角变化时切换页签（T1）, purpose: 视角变化时切换页签 }
   - {id: rel.p3.perspective-act, from: present.perspective, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 视角切换交给 dispatch 与操作：退出场景 → closeScenario, purpose: 退出场景回到结构视角 }
   - {id: rel.p3.perspective-read, from: present.perspective, to: state.desk.projection, type: queries, payload: [ds.ViewState], description: 视角切换向视图派生（核心与 desk.run）取：当前视角与场景名, purpose: 显示当前视角与场景名 }
@@ -319,7 +320,7 @@ relations:
     interface: if.state.transition
     purpose: 由会话规则算出新状态
     payload: [ds.ViewState, ds.ViewAction, ds.WorkspaceState]
-    description: dispatch 与操作向视图状态转移取：唯一写入口：dispatch → transition → 写入新状态；工作区同一做法，desk.workspace.dispatch → workspaceTransition → 写入新的工作区状态（ADR-0054）
+    description: dispatch 与操作向视图状态转移取：唯一写入口：dispatch → transition → 写入新状态；工作区同一做法，desk.workspace.dispatch → workspaceTransition → 写入新的工作区状态（ADR-0064）；情境（场景开关、草图进出）经 setContext 告知工作区
   - {id: rel.p2.router-codec, from: state.desk.url-sync, to: state.transition.url, type: queries, interface: if.state.urlCodec, description: 路由同步向 URL 编解码取：状态 ↔ 查询参数, purpose: 在状态与地址参数间转换 }
   - {id: rel.p2.layoutsync-runner, from: state.desk.layout-sync, to: state.layout.runner, type: queries, mode: async, interface: if.layout.layoutView, payload: [ds.LevelView, ds.PositionedView], description: 布局同步向布局入口与缓存取：bandColumnsFor, purpose: 按画布宽度算带内列数 }
   # 呈现层读派生数据：每次读 computed 都是一次运行时调用（S12：步骤只对应运行时关系）
@@ -739,14 +740,19 @@ dataStructures:
   - id: ds.WorkspaceState
     name: WorkspaceState
     definition: |
-      type DocRef = { kind: 'sequence' } | { kind: 'source'; path: string; line?: number | null } | { kind: 'explainer'; module: string }
+      type ViewKind = 'explainer' | 'description' | 'check' | 'sequence'
+      type DocRef = { kind: 'source'; path: string; line?: number | null } | { kind: 'dialogue' } | { kind: 'note'; file: string }
+      type Tab = { id: string; kind: 'view'; view: ViewKind } | { id: string; kind: 'doc'; doc: DocRef; preview: boolean }
       interface WorkspaceState {
-        groups: { tabs: { id: string; doc: DocRef; preview: boolean }[]; active: string | null }[]  // 一到两组，上下排列
-        focus: number          // 新资料进入的组
-        dockHidden: boolean    // 「▣ 资料」隐藏（标签保留）
-        propsOpen: boolean     // 属性栏开关
+        context: 'free' | 'scenario' | 'sketch'          // 情境：推出缺省排布
+        groups: { tabs: Tab[]; active: string | null }[]   // 一到两组，上下排列
+        split: number                                      // 上组比例 0.2–0.8
+        collapsed: boolean                                 // 视图区整体收起
+        width: number                                      // 视图区占比 0.2–0.75
+        sidebar: { open: boolean; width: number }          // 侧栏开合与宽度
+        memory: Partial<Record<context, Arrangement>>      // 人改过的各情境排布（视图标签与对话）
       }
-    description: 工作区状态（ADR-0054，transition/workspace.ts）：资料区的标签、预览、分组与属性栏开关，一个值，只经 workspaceTransition 改变，不进 URL。规则：每份资料一个标签（时序图唯一、源代码按路径、图解按模块），再打开即激活；不固定地打开替换焦点组的预览标签；最多上下两组，新资料进焦点组，下组空了即消失；关闭后激活右邻，最后一个关闭后资料区消失，隐藏保留标签（WS-4–WS-7）。属性栏并排还是悬浮（propsPlacement，WS-3）与资料区出现（dockAppeared，WS-9）由输入推出，不进这个值。
+    description: 工作区状态（ADR-0064，transition/workspace.ts）：视图区的排布与开合，一个值，只经 workspaceTransition 改变，不进 URL。规则：视图标签按类型各一个、跟随主语，资料标签每份一个、预览替换；图解常驻、场景情境里时序图常驻；至多两组、拖空即合并；缺省排布按情境推出（自由 / 场景 / 草图），人改过的按情境记进 memory、经工作区记忆同步记在本机（LY-8–LY-12）。
   - id: ds.OutlineNode
     name: OutlineNode
     definition: |
