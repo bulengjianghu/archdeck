@@ -10,7 +10,7 @@ actors:
     description: 按代码生成当前版本、起草设计版本的 AI；它改写描述文件后，开发服务器把变更推送给页面。
 
 relations:
-  - {id: rel.ctx.perspective, from: actor.architect, to: present.perspective, type: commands, description: 架构师交给视角切换：点「运行」打开场景列表；退出场景, purpose: 进入运行视角或退出场景 }
+  - {id: rel.ctx.perspective, from: actor.architect, to: present.perspective, type: commands, description: 架构师交给视角切换：点「运行」打开场景列表；退出场景, purpose: 进入回放或退出场景 }
   - {id: rel.ctx.scenarios, from: actor.architect, to: present.scenarios, type: commands, description: 架构师交给场景列表：选定场景, purpose: 挑一个场景来回放 }
   - {id: rel.ctx.player, from: actor.architect, to: present.player, type: commands, description: 架构师交给回放胶囊：上一步 / 下一步、拖动进度、选路线与分支, purpose: 逐步推进回放并选择分支 }
   - {id: rel.ctx.nav-tree, from: actor.architect, to: present.nav-tree, type: commands, description: 架构师交给导航树：在模块树中定位、下钻；在步骤树中指向某一步、选分支, purpose: 定位模块、下钻或指向某一步 }

@@ -157,15 +157,15 @@ modules:
     responsibility: 把 Layout 的画布场景（canvasScene：节点与边的数据、显隐、变淡、回放态与选中突出）写入 Vue Flow 的 store；把单击 / 双击 / 悬停转成 DeskState 操作；切换层次后按布局外框适应画布。画什么不在这里算（ADR-0013）。单击「+N」临时展开 / 收起（分层总览与普通层次同一手势，O6、O8）；普通层次没有核心而普通模块超过七个时在画布角提示「N 个模块，考虑标出核心」。画布角另有「隐藏必留痕」（L45，第十五轮 G13）：关系类型筛选「隐藏 N 类关系」（交互视角）、「只看现状」「目标态 N 个模块已隐藏」、「代码事实」已关「隐藏 N 处标记」（desk.facts.hiddenFacts）、「只看现状」（desk.facts.hiddenByCurrentOnly，波 3 起 经状态层取数，呈现层不直接调模型层的计算，U10）等计数按钮，单击撤销对应开关（结构视角既有的只引类型 / 值使用 / 已解释三钮同区）。把端口记号（L13）、组装叠加线与组装根（O12）交给画布场景；单击组装叠加线落到这对节点的代码依赖（K10）。
     principle: |
       - **写 store 而非传属性**：节点与边通过 setNodes / setEdges 写入；属性同步在「上一层有选中、切回总览」时会被跳过。
-      - **适应画布**：内容外框直接取自布局结果，不依赖 Vue Flow 对节点尺寸的测量，只等画布容器有尺寸；运行视角隐藏静态内容时只取画布场景给出的可见节点；切换层次、画布容器尺寸变化（进入运行视角、切换分屏方向、拖动分隔条、折叠两侧栏）、代码事实读到后（结构边进布局重排一次，L15）重新适应。首次适应（WS-3）：布局同步没有进行中的请求、代码事实不在读取中、容器尺寸与悬浮避让连续两帧不变之前画布透明，满足后只适应一次再显示（4 秒兜底）。
-      - **点击含义**：单击节点 / 边 = 选中（运行视角同样，V3）；双击 = 下钻或跳到边界节点所在层次；单击边上的步骤序号 = 指向这一步，即选中它（R13）；单击分支预览序号 = 选这一支。
+      - **适应画布**：内容外框直接取自布局结果，不依赖 Vue Flow 对节点尺寸的测量，只等画布容器有尺寸；回放隐藏静态内容时只取画布场景给出的可见节点；切换层次、画布容器尺寸变化（进入回放、切换分屏方向、拖动分隔条、折叠两侧栏）、代码事实读到后（结构边进布局重排一次，L15）重新适应。首次适应（WS-3）：布局同步没有进行中的请求、代码事实不在读取中、容器尺寸与悬浮避让连续两帧不变之前画布透明，满足后只适应一次再显示（4 秒兜底）。
+      - **点击含义**：单击节点 / 边 = 选中（回放同样，V3）；双击 = 下钻或跳到边界节点所在层次；单击边上的步骤序号 = 指向这一步，即选中它（R13）；单击分支预览序号 = 选这一支。
       - **交互关系显示方式**：在工具栏「显示 ▾」切换隐藏 / 淡显 / 全显（V8、L49），值来自舞台显示（按项目记在本地）。
     codeRefs: [src/components/GraphCanvas.vue]
   - id: present.canvas.nodes
     name: 节点组件
     summary: 按种类画出模块、边界、参与者、带等节点与角标
     parent: present.canvas
-    responsibility: '七种节点：模块（职责摘要、可下钻标识、目标态虚线）、边界（系统内、本层外的模块与所在路径）、外部参与者（用户 / 外部系统 / 时间图标，系统外）、边界框（系统框与当前父模块框，FrameNode）、带（层名、抽象原则、可依赖层）、核心模块小块、「+N 个其他模块」占位；设计版本中新增 / 修改描边与「△N」变更角标。分级（ADR-0027）：普通层次的核心模块画成大块，共用件画成架上的紧凑块（SharedNode，O9），用到共用件的节点右上角「共用 ×N」角标（O10），父模块框与带右上角常驻「共用件 N · 折叠 M」并标出架的「共用件」字样（O11）；普通层次的「+N」占位双击无动作（O8）。边界与端口（ADR-0029、ADR-0030）：role: port / adapter 的模块名后带边界角色记号（L14），模块、核心小块与边界节点骑着端口记号（L13）；节点角标统一布局（DiffMark）——上边框左侧为新增 / 修改、「△N」与「组装根」角标（O12），上边框右半为端口记号，顶边有端口记号时环编号与「共用 ×N」移到下边框、热度色块让到左下角。；有图解的模块（模块、核心、带）名称行加一枚 ▣，单击以预览打开图解、双击固定、不改选中，运行视角与草图编辑态不显示（EX-5）'
+    responsibility: '七种节点：模块（职责摘要、可下钻标识、目标态虚线）、边界（系统内、本层外的模块与所在路径）、外部参与者（用户 / 外部系统 / 时间图标，系统外）、边界框（系统框与当前父模块框，FrameNode）、带（层名、抽象原则、可依赖层）、核心模块小块、「+N 个其他模块」占位；设计版本中新增 / 修改描边与「△N」变更角标。分级（ADR-0027）：普通层次的核心模块画成大块，共用件画成架上的紧凑块（SharedNode，O9），用到共用件的节点右上角「共用 ×N」角标（O10），父模块框与带右上角常驻「共用件 N · 折叠 M」并标出架的「共用件」字样（O11）；普通层次的「+N」占位双击无动作（O8）。边界与端口（ADR-0029、ADR-0030）：role: port / adapter 的模块名后带边界角色记号（L14），模块、核心小块与边界节点骑着端口记号（L13）；节点角标统一布局（DiffMark）——上边框左侧为新增 / 修改、「△N」与「组装根」角标（O12），上边框右半为端口记号，顶边有端口记号时环编号与「共用 ×N」移到下边框、热度色块让到左下角。；有图解的模块（模块、核心、带）名称行加一枚 ▣，单击以预览打开图解、双击固定、不改选中，回放与草图编辑态不显示（EX-5）'
     abstraction: 一种节点一个组件，角标共用统一的布局；只画画布场景给的数据，指标与端口不自己算。
     codeRefs: [src/components/nodes/**]
   - id: present.canvas.nodes.ports
@@ -215,14 +215,14 @@ modules:
     name: 面板分派
     summary: 按当前选中挑出唯一一张对象面板
     parent: present.panel
-    responsibility: 按选中选择面板（V2）：结构 / 交互视角下为选中的对象，无选中时为当前父模块（根层为系统）；第二十二轮起面板住视图区（抽屉已删，LY-16）：「描述」标签里是核对卡以外的部分（面板头是一行操作，不写名称与 ID），「核对」标签里只留核对卡与系统 / 层的汇总卡（PANEL_PART 注入给各面板与卡片，LY-13）；运行视角下选中步骤 / 场景时不渲染步骤 / 场景面板（它们住描述标签的步骤节），只给一行指向步骤节；选中模块 / 关系 / 聚合边 / 参与者 / 文件时为该对象的面板；没有「已钉住」之类的提示（ADR-0012）。选中端口（L13）时为端口面板（K11）；结构视角下选中依赖边（sel=d:）时为代码依赖面板，其下是这对节点的结构边（present.panel.structure，ADR-0031）。运行视角下选中模块、关系、聚合边、参与者、端口或系统时，把运行信息注入各对象理解卡的首节（RUN_FIRST，V6），对象面板不引用运行信息。属性栏的卡片样式（卡里的节去掉面板级分隔、头部粘顶）在这里统一。草图画布下整个面板换成草图面板（present.panel.sketch）。
+    responsibility: 按选中选择面板（V2）：结构 / 交互视角下为选中的对象，无选中时为当前父模块（根层为系统）；第二十二轮起面板住视图区（抽屉已删，LY-16）：「描述」标签里是核对卡以外的部分（面板头是一行操作，不写名称与 ID），「核对」标签里只留核对卡与系统 / 层的汇总卡（PANEL_PART 注入给各面板与卡片，LY-13）；回放中选中步骤 / 场景时不渲染步骤 / 场景面板（它们住描述标签的步骤节），只给一行指向步骤节；选中模块 / 关系 / 聚合边 / 参与者 / 文件时为该对象的面板；没有「已钉住」之类的提示（ADR-0012）。选中端口（L13）时为端口面板（K11）；结构视角下选中依赖边（sel=d:）时为代码依赖面板，其下是这对节点的结构边（present.panel.structure，ADR-0031）。回放中选中模块、关系、聚合边、参与者、端口或系统时，把运行信息注入各对象理解卡的首节（RUN_FIRST，V6），对象面板不引用运行信息。属性栏的卡片样式（卡里的节去掉面板级分隔、头部粘顶）在这里统一。草图画布下整个面板换成草图面板（present.panel.sketch）。
     codeRefs: [src/components/panel/Panel.vue]
   - id: present.panel.module
     name: 模块面板
     summary: 用五问讲清一个模块，并核对它的描述与健康
     parent: present.panel
     abstraction: 头部、理解、核对、相关资料各一个组件：理解卡只读契约字段与协作查询，核对卡只组合现有派生，证据节原样做核对卡的清单。
-    responsibility: 模块面板（ADR-0053；第十八轮走查修订 ADR-0060）：头部（名称、进入 / 在此设计、徽标槽位表 V15a、设计说明）；理解卡（ModuleUnderstand）按六问、意图在先——是什么（summaryOf，回退标「待提炼」，职责全文行内展开）、不是什么（excludesOf 一行，去向是链接，M33）、怎么分（原则全文；声明了分层时每层「层名 · 层的问题」加归属判定一句与成员名；未声明时写明并按 desk.facts.childTiers 的依赖深度分组列成员名，只列名字、一句话在悬停；层模块另有「层的问题与包含」折叠与可依赖链接）、守住什么（invariantsOf，ADR 链接在资料区预览）、对外表面（接口名全文一行，用途在悬停，单击展开 InterfaceItem，超 5 收「+N」）、协作（缺省折叠为一行「← N · → M」；ModuleCollab：desk.facts.collaborations 按方向与对端合并，目的全文、类型在悬停，单击目的逐条展开，悬停写 hoverRelations 让画布高亮承载的边，PC-4、PC-5）；标题的视觉权重不低于正文、界面不截字（PC-13）；运行视角下理解卡首节为分派注入的运行信息（V6）；核对卡（ModuleCheck）六行——证实、治理、表面、拆分（含子模块超七个未声明分层的 ST-1 提示）、演化、确认（moduleCheckRows，条目文字按名称写好、单击跳到清单或选中关系；条目全卡缺省至多 8 条，其余一键全部），清单整块收进「证据与清单 · N」缺省折叠（CheckCard），里面为交互证据、源代码文件、提交历史、结构指标与表面元素（结构视角）、端口、架构治理、拆分信号、代码事实 · 知识、相关决策、实现原理、核心数据结构、代码与文档引用、确认改动与确认表单（PC-6–PC-8）；画布单击本模块的表面元素时展开核对卡与「表面元素」清单（C9，跳转自动打开祖先折叠）；相关资料卡列图解与参与的场景，多于 3 份时缺省收起（PC-9）。卡片与折叠块的展开态不跨选中保持。
+    responsibility: 模块面板（ADR-0053；第十八轮走查修订 ADR-0060）：头部（名称、进入 / 在此设计、徽标槽位表 V15a、设计说明）；理解卡（ModuleUnderstand）按六问、意图在先——是什么（summaryOf，回退标「待提炼」，职责全文行内展开）、不是什么（excludesOf 一行，去向是链接，M33）、怎么分（原则全文；声明了分层时每层「层名 · 层的问题」加归属判定一句与成员名；未声明时写明并按 desk.facts.childTiers 的依赖深度分组列成员名，只列名字、一句话在悬停；层模块另有「层的问题与包含」折叠与可依赖链接）、守住什么（invariantsOf，ADR 链接在资料区预览）、对外表面（接口名全文一行，用途在悬停，单击展开 InterfaceItem，超 5 收「+N」）、协作（缺省折叠为一行「← N · → M」；ModuleCollab：desk.facts.collaborations 按方向与对端合并，目的全文、类型在悬停，单击目的逐条展开，悬停写 hoverRelations 让画布高亮承载的边，PC-4、PC-5）；标题的视觉权重不低于正文、界面不截字（PC-13）；回放中理解卡首节为分派注入的运行信息（V6）；核对卡（ModuleCheck）六行——证实、治理、表面、拆分（含子模块超七个未声明分层的 ST-1 提示）、演化、确认（moduleCheckRows，条目文字按名称写好、单击跳到清单或选中关系；条目全卡缺省至多 8 条，其余一键全部），清单整块收进「证据与清单 · N」缺省折叠（CheckCard），里面为交互证据、源代码文件、提交历史、结构指标与表面元素（结构视角）、端口、架构治理、拆分信号、代码事实 · 知识、相关决策、实现原理、核心数据结构、代码与文档引用、确认改动与确认表单（PC-6–PC-8）；画布单击本模块的表面元素时展开核对卡与「表面元素」清单（C9，跳转自动打开祖先折叠）；相关资料卡列图解与参与的场景，多于 3 份时缺省收起（PC-9）。卡片与折叠块的展开态不跨选中保持。
     codeRefs: [src/components/panel/ModulePanel.vue, src/components/panel/ModuleUnderstand.vue, src/components/panel/ModuleCollab.vue, src/components/panel/ModuleCheck.vue]
   - id: present.panel.relation
     name: 关系面板
@@ -282,7 +282,7 @@ modules:
     name: 搜索面板
     summary: 按名称或 ID 搜索模块并跳转
     parent: present.nav
-    responsibility: 画布页头 ⌕ 或 ⌘K（Ctrl+K）打开、在画布页头中央下拉的搜索面板（TB-4、LY-5）：按名称或 ID 搜索模块，结果写名称与所在路径，↑ ↓ 选择、Enter 跳转（N4；运行视角下搜索跳转同样选中目标，V3）；选中、Esc、单击面板外都关闭。
+    responsibility: 画布页头 ⌕ 或 ⌘K（Ctrl+K）打开、在画布页头中央下拉的搜索面板（TB-4、LY-5）：按名称或 ID 搜索模块，结果写名称与所在路径，↑ ↓ 选择、Enter 跳转（N4；回放中搜索跳转同样选中目标，V3）；选中、Esc、单击面板外都关闭。
     codeRefs: [src/components/SearchPalette.vue]
   - id: present.nav.canvas-title
     name: 画布标题行
@@ -295,7 +295,7 @@ modules:
     summary: 用可交互图例与「显示 ▾」菜单控制并解释画布记号
     parent: present.canvas
     adrs: [56, 58]
-    responsibility: 画布显示的控件按「有没有画布记号」分两处，一个开关只出现在一处（L45，ADR-0056）。图例（Legend）在画布右上角那一列的顶端，收起为「图例 ▾」、展开为一张卡，第一次进入项目时展开、之后按本机记住，卡高上限为画布高度的一半，画布角的留痕排在它下面（L48）。正文按读者看到的视觉通道分节、不按数据来源分组（ADR-0058，L19）：线（RelationLegend——颜色 = 关系类型的开关行、粗细 WidthRow、箭头、线型；结构视角换成 StructureLegend，子模块「结构视图图例」）、节点、规则与指标（结构视角）、叠加（OverlayLegend：代码事实、组装、演化热度、时间耦合四个开关行，开着时只在下面列非文字记号）、脚注「临时可见」（TempLegend：悬停 / 选中 / 回放才出现的记号，缺省折叠、按视角列条目）。节只是一行标题、不折叠。有开关也有记号的项图例行就是开关（LegendToggle：勾选态 + 示意 + 名称，单击切换，关着的行淡色常列；运行视角的类型行只读 L9）。进正文的行过准入三问（L47）：画布上写了字的记号不列、此刻不在画面上的不列、只解码不讲解——类型定义、机制词表、标签位格式在帮助与悬停（L51），线一节标题旁「?」经 OPEN_GUIDE 打开帮助的「读一条线」。图例按上下文显示（L47）：这里调用 state.desk.legend 算一次出现集合传给各节，没出现的记号行不列。共享通道（L18）的行三个视角同一位置、同一句话，文字只在 labels 一处（C1）。「显示 ▾」（DisplayMenu）在工具栏，放没有记号的设置：边界节点、只看现状、热度口径；结构视角另有只看交互使用、只看未解释（带收起计数）、总是展开表面；运行视角为交互关系的显示方式（V8）；有非默认设置时按钮上一个点、悬停提示列出它们（L49、TB-3）。悬停释义（gloss）按记号给出图例里的那一句，由画布并进边的悬停说明（L50）。开关在视图状态里、不进 URL，组装与演化的开关按项目记在本机（useAssemblyPrefs、useEvolutionPrefs）。
+    responsibility: 画布显示的控件按「有没有画布记号」分两处，一个开关只出现在一处（L45，ADR-0056）。图例（Legend）在画布右上角那一列的顶端，收起为「图例 ▾」、展开为一张卡，第一次进入项目时展开、之后按本机记住，卡高上限为画布高度的一半，画布角的留痕排在它下面（L48）。正文按读者看到的视觉通道分节、不按数据来源分组（ADR-0058，L19）：线（RelationLegend——颜色 = 关系类型的开关行、粗细 WidthRow、箭头、线型；结构视角换成 StructureLegend，子模块「结构视图图例」）、节点、规则与指标（结构视角）、叠加（OverlayLegend：代码事实、组装、演化热度、时间耦合四个开关行，开着时只在下面列非文字记号）、脚注「临时可见」（TempLegend：悬停 / 选中 / 回放才出现的记号，缺省折叠、按视角列条目）。节只是一行标题、不折叠。有开关也有记号的项图例行就是开关（LegendToggle：勾选态 + 示意 + 名称，单击切换，关着的行淡色常列；回放的类型行只读 L9）。进正文的行过准入三问（L47）：画布上写了字的记号不列、此刻不在画面上的不列、只解码不讲解——类型定义、机制词表、标签位格式在帮助与悬停（L51），线一节标题旁「?」经 OPEN_GUIDE 打开帮助的「读一条线」。图例按上下文显示（L47）：这里调用 state.desk.legend 算一次出现集合传给各节，没出现的记号行不列。共享通道（L18）的行三个视角同一位置、同一句话，文字只在 labels 一处（C1）。「显示 ▾」（DisplayMenu）在工具栏，放没有记号的设置：边界节点、只看现状、热度口径；结构视角另有只看交互使用、只看未解释（带收起计数）、总是展开表面；回放为交互关系的显示方式（V8）；有非默认设置时按钮上一个点、悬停提示列出它们（L49、TB-3）。悬停释义（gloss）按记号给出图例里的那一句，由画布并进边的悬停说明（L50）。开关在视图状态里、不进 URL，组装与演化的开关按项目记在本机（useAssemblyPrefs、useEvolutionPrefs）。
     abstraction: 图例按视觉通道分节、每节一个子组件；开关行与解码行分开写，开关行即开关；没有记号的设置另成一个菜单；临时记号单独一个脚注组件；图例行、悬停释义的文字只在 labels 一处。
     invariants:
       - { text: 一个开关只出现在一处：有画布记号的在图例行上，没有的在「显示 ▾」, adr: 56 }
@@ -335,8 +335,8 @@ modules:
     name: 视图派生（核心与 desk.run）
     summary: 派生画布、时序图与面板要画的数据
     parent: state.desk
-    responsibility: 由视图状态与模型派生要画的数据（全部是 computed，调用纯函数）。核心平铺在 DeskState 上：层次视图与坐标、选中（selectedOf）、视角。运行视角的派生归 desk.run（ADR-0013）：回放计划、调用与返回的配对、回放路径与路线、本层的帧投影与可见消息、选中突出（emphasisOf）、舞台叠加与参与节点、时序模型与时序图坐标，导航树用的步骤大纲与参与模块，以及场景列表（全部场景的触发者与消息数）与当前场景的触发者、ref 引用与被引用（呈现层不再自己遍历场景）。源码与版本的派生另见 desk.files、desk.versions。
-    abstraction: 按视角分组：核心派生平铺在 DeskState 上，运行视角的派生收进 desk.run 一组。
+    responsibility: 由视图状态与模型派生要画的数据（全部是 computed，调用纯函数）。核心平铺在 DeskState 上：层次视图与坐标、选中（selectedOf）、视角。回放的派生归 desk.run（ADR-0013）：回放计划、调用与返回的配对、回放路径与路线、本层的帧投影与可见消息、选中突出（emphasisOf）、舞台叠加与参与节点、时序模型与时序图坐标，导航树用的步骤大纲与参与模块，以及场景列表（全部场景的触发者与消息数）与当前场景的触发者、ref 引用与被引用（呈现层不再自己遍历场景）。源码与版本的派生另见 desk.files、desk.versions。
+    abstraction: 按视角分组：核心派生平铺在 DeskState 上，回放的派生收进 desk.run 一组。
     invariants:
       - 只有 computed：不建可写状态、不 watch、不调 dispatch
       - 只引用模型层、Layout 与视图状态转移，不引用同步适配器
@@ -345,7 +345,7 @@ modules:
     name: 图例的出现集合派生（desk.legend，L47）
     summary: 算出当前画面上实际出现的图例记号集合
     parent: state.desk
-    responsibility: 图例的出现集合（L47，第十五轮 G14）：按当前视角与层次的静息态画面算画布上出现的记号——交互视角与运行视角扫层次视图的边与节点（边界边聚焦才画、不计入，只出现在边界边上的类型单列临时键）、代码事实读 K9 的本层投影、组装读 O12 的投影、热度读 J5 的本层投影；结构视角读与画布同一份 structureDisplay 过滤后的束（形态、档、醒目度、收起计数、越过入口）。没有代码事实等加载态按空集合处理。呈现层（display/Legend）实例化一次、把集合传给各节；节结构与行序按固定词表，行只显隐、不重排；聚焦 / 悬停 / 回放才出现的临时记号归整张图例一个缺省折叠的脚注（TempLegend，ADR-0058），不进出现集合（只出现在边界边 / 核心跨层边上的类型单列 rel:temp:type 前缀的键供脚注用）。
+    responsibility: 图例的出现集合（L47，第十五轮 G14）：按当前视角与层次的静息态画面算画布上出现的记号——交互视角与回放扫层次视图的边与节点（边界边聚焦才画、不计入，只出现在边界边上的类型单列临时键）、代码事实读 K9 的本层投影、组装读 O12 的投影、热度读 J5 的本层投影；结构视角读与画布同一份 structureDisplay 过滤后的束（形态、档、醒目度、收起计数、越过入口）。没有代码事实等加载态按空集合处理。呈现层（display/Legend）实例化一次、把集合传给各节；节结构与行序按固定词表，行只显隐、不重排；聚焦 / 悬停 / 回放才出现的临时记号归整张图例一个缺省折叠的脚注（TempLegend，ADR-0058），不进出现集合（只出现在边界边 / 核心跨层边上的类型单列 rel:temp:type 前缀的键供脚注用）。
     abstraction: 按记号来源分别扫描（交互边与节点、代码事实、组装、热度、结构束），再并成一个集合。
     codeRefs: [src/state/desk/legend.ts]
   - id: state.desk.actions
@@ -460,7 +460,7 @@ relations:
   - { id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: queries, purpose: 按契约类型产出投影结果 }
   - { id: rel.p8.desk-stage, from: present.desk-view, to: present.canvas, type: commands, purpose: 放结构图并注入舞台显示设置 }
   - { id: rel.p3.desk-perspective, from: present.desk-view, to: present.perspective, type: commands, purpose: 在顶部显示视角切换 }
-  - { id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: commands, purpose: 运行视角下在画布底部浮回放胶囊 }
+  - { id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: commands, purpose: 回放中在画布底部浮回放胶囊 }
   - { id: rel.p6.desk-nav-tree, from: present.desk-view, to: present.nav-tree, type: commands, purpose: 在工作台左侧放导航树 }
   - { id: rel.gv.reader-diff, from: access.reader, to: model.diff, type: queries, purpose: 摘要草图相对上次提交的改动 }
   - { id: rel.gv.source-review, from: access.model-source, to: model.review, type: queries, purpose: 算健康度里的确认计数 }
@@ -704,7 +704,7 @@ interfaces:
     signature: |
       createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: string; version?: VersionRef; source?: SourceFetcher }): DeskState
       // DeskState（ADR-0013）：核心平铺 { state（只读）, status, index, issues, allIssues, levelId, levelPath, selection, selected, hoverId,
-      //   perspective, toggles, view, positioned, levelVersion, playback, dispatch, init, attachRouter, …操作（见 if.desk.actions） }
+      //   viewpoint, playing, toggles, view, positioned, levelVersion, playback, dispatch, init, attachRouter, …操作（见 if.desk.actions） }
       //   + run：{ scenario, plan, path, scenarioView, currentIndex, walked, frame, overlay, sequence, positionedSequence, emphasis, participation, outline, … }
       //   + files：{ payload, ownership, tree, lines, maxLines, selected, owners, hits, moduleFiles, warnings, filesOf, entryOf, file(path), exports(path), refresh }
       //   + versions：{ designs, design, revision, sketch, sketchPrompt, baselines, baseline, diff, drift }
@@ -724,7 +724,7 @@ interfaces:
       revealModule(moduleId: string): void
       setHover(id: string | null): void
       setToggles(patch: Partial<Toggles>): void
-      openScenario(id: string): void                          // 进入运行视角，停在开头（R12）
+      openScenario(id: string): void                          // 进入回放，停在开头（R12）
       closeScenario(): void
       next(): void
       prev(): void
@@ -890,7 +890,7 @@ dataStructures:
         | { kind: 'port'; id: string }     // 端口，id 为接口 ID（L13）
         // … 另有代码依赖叠加线 dep、耦合线 couple
       // 推出的选中（selectedOf，ADR-0012）：Selected = Selection | { kind: 'step'; id: frameId } | { kind: 'scenario'; id }
-    description: "显式选中的对象，编码进 URL 的 sel 参数（m: / r: / e: / a: / f: / d: / c: / p: 前缀）。运行视角下为空即选中进度所在的步骤（URL 只有 step），进度在开头时选中场景（sel 与 step 都没有）。"
+    description: "显式选中的对象，编码进 URL 的 sel 参数（m: / r: / e: / a: / f: / d: / c: / p: 前缀）。回放中为空即选中进度所在的步骤（URL 只有 step），进度在开头时选中场景（sel 与 step 都没有）。"
   - id: ds.ModelPayload
     name: ModelPayload
     definition: |
