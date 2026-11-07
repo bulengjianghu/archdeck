@@ -3,7 +3,7 @@
  * 主语条（LY-7）、标签拖拽换组 / 换序与分隔（LY-10，I7）。几何断言只认语义锚点（data-region、data-head、data-group）。
  */
 import { expect, test, type Page } from '@playwright/test'
-import { activeTab, collapseDisplay, openDesk, viewTab, views, waitSettled } from './helpers'
+import { activeTab, collapseDisplay, openDesk, query, viewTab, views, waitSettled } from './helpers'
 
 const box = async (page: Page, sel: string) => {
   const b = await page.locator(sel).first().boundingBox()
@@ -144,4 +144,109 @@ test('LY-4、LY-4a：侧栏三页（改动只在草图编辑时可用）；画�
   await expect(menu.locator('.mh')).toHaveText(['视图 · 跟随主语', '资料 · 不跟随'])
   await expect(menu.locator('[data-add-view]')).toHaveText(['核对'])
   await expect(menu.locator('[data-add-doc]')).toHaveText([/对话/])
+})
+
+test('T3.5 下钻与直达的适应缩放：侧栏与视图区宽度定下后才适应——节点包围盒的中心落在画布中央的容差内（1440、侧栏展开）', async ({ page }) => {
+  await openDesk(page, '/p/h5p-arch-desk')
+  await waitSettled(page)
+  const center = async () =>
+    (await page.evaluate(`(() => {
+      const c = document.querySelector('[data-region="canvas"] .vue-flow').getBoundingClientRect()
+      const ns = [...document.querySelectorAll('.vue-flow__node')].map(n => n.getBoundingClientRect()).filter(r => r.width > 0)
+      const l = Math.min(...ns.map(r => r.left)), t = Math.min(...ns.map(r => r.top)), r = Math.max(...ns.map(r => r.right)), b = Math.max(...ns.map(r => r.bottom))
+      return { dx: (l + r) / 2 - (c.left + c.width / 2), dy: (t + b) / 2 - (c.top + c.height / 2), w: c.width, h: c.height, bw: r - l, bh: b - t }
+    })()`)) as { dx: number; dy: number; w: number; h: number; bw: number; bh: number }
+  for (const level of ['state', 'present']) {
+    await page.locator(`[data-region="sidebar"] .row[data-id="${level}"]`).dblclick()
+    await expect.poll(() => query(page).get('level')).toBe(level)
+    await waitSettled(page)
+    const m = await center()
+    expect(Math.abs(m.dx), `${level} 水平居中`).toBeLessThan(m.w * 0.08)
+    expect(Math.abs(m.dy), `${level} 垂直居中`).toBeLessThan(m.h * 0.08)
+    // 适应后占满画布的一边（不是缩在一角）
+    expect(Math.max(m.bw / m.w, m.bh / m.h)).toBeGreaterThan(0.6)
+    await page.keyboard.press('Backspace')
+    await expect.poll(() => query(page).get('level')).toBeNull()
+    await waitSettled(page)
+  }
+  // 首次进入就在下一层、带选中（地址直达）：同样居中、占满
+  await openDesk(page, '/p/h5p-arch-desk?level=state&sel=m:state.desk')
+  await waitSettled(page)
+  const m = await center()
+  expect(Math.abs(m.dx), '直达 水平居中').toBeLessThan(m.w * 0.08)
+  expect(Math.abs(m.dy), '直达 垂直居中').toBeLessThan(m.h * 0.08)
+  expect(Math.max(m.bw / m.w, m.bh / m.h)).toBeGreaterThan(0.6)
+  // 地址栏里改层次（不重新加载，同一张画布）：同样
+  await openDesk(page, '/p/h5p-arch-desk?v=s')
+  await waitSettled(page)
+  await page.evaluate("location.hash = '#/p/h5p-arch-desk?level=state&sel=m:state.desk'")
+  await expect.poll(() => query(page).get('level')).toBe('state')
+  await waitSettled(page)
+  const n = await center()
+  expect(Math.abs(n.dx), '改地址 水平居中').toBeLessThan(n.w * 0.08)
+  expect(Math.abs(n.dy), '改地址 垂直居中').toBeLessThan(n.h * 0.08)
+  expect(Math.max(n.bw / n.w, n.bh / n.h)).toBeGreaterThan(0.6)
+})
+
+test('LY-15、I1：视图里悬停模块引用，画布提示它的位置（悬停，不移动视口），离开即消失；单击引用 = 画布选中，视图跟随主语', async ({ page }) => {
+  await openDesk(page, '/p/h5p-arch-desk?level=state')
+  await collapseDisplay(page)
+  await waitSettled(page)
+  const hover = () => page.evaluate('window.__desk.hoverId.value') as Promise<string | null>
+  const viewport = () => page.evaluate(`getComputedStyle(document.querySelector('.vue-flow__transformationpane')).transform`)
+  await page.locator('[data-region="views"] [data-view-tab="description"] .lbl').click()
+  const ref = views(page).locator('[data-ref-module="state.desk"]').first()
+  await expect(ref).toBeVisible()
+  const vp0 = await viewport()
+  await ref.hover()
+  await expect.poll(hover).toBe('state.desk')
+  await expect(page.locator('.vue-flow__node[data-id="state.desk"]')).toHaveClass(/\bpeek\b/)
+  expect(await viewport()).toBe(vp0)
+  // 离开引用：提示消失
+  await page.locator('[data-head="views"]').hover()
+  await expect.poll(hover).toBeNull()
+  await expect(page.locator('.vue-flow__node.peek')).toHaveCount(0)
+  // 单击 = 选中，主语条跟随
+  await ref.click()
+  await expect.poll(() => query(page).get('sel')).toBe('m:state.desk')
+  await expect(page.locator('[data-testid="subject-name"]')).toHaveText('DeskState')
+})
+
+test('LY-13：描述没有身份卡与核对卡（名称只在主语条），核对只放核对卡；系统与层的核对先给汇总', async ({ page }) => {
+  await openDesk(page, '/p/h5p-arch-desk?level=state&sel=m:state.desk')
+  await page.locator('[data-region="views"] [data-view-tab="description"] .lbl').click()
+  const desc = views(page).locator('.panel[data-part="description"]')
+  await expect(desc.locator('[data-card="understand"]')).toBeVisible()
+  await expect(desc.locator('[data-card="check"]')).toHaveCount(0)
+  await expect(desc.locator('.id-card h2')).toHaveCount(0)
+  await expect(desc.getByRole('button', { name: '讨论 ›' })).toBeVisible()
+  await page.locator('[data-region="views"] [data-view-tab="check"] .lbl').click()
+  const check = views(page).locator('.panel[data-part="check"]')
+  await expect(check.locator('[data-card="check"]').first()).toBeVisible()
+  await expect(check.locator('[data-card="understand"]')).toHaveCount(0)
+  await expect(check.locator('[data-testid="scope-summary"]')).toHaveCount(0)
+  // 系统：汇总（违规、环、未证实、未归属、需复核）
+  await openDesk(page, '/p/h5p-arch-desk')
+  await page.locator('[data-region="views"] [data-view-tab="check"] .lbl').click()
+  const sum = views(page).locator('[data-testid="scope-summary"]')
+  await expect(sum).toBeVisible()
+  await expect(sum.locator('[data-scope]')).toHaveCount(5)
+  // 层（单成员层即模块）：同样有汇总
+  await openDesk(page, '/p/h5p-arch-desk?sel=m:state')
+  await page.locator('[data-region="views"] [data-view-tab="check"] .lbl').click()
+  await expect(views(page).locator('[data-testid="scope-summary"]')).toBeVisible()
+})
+
+test('LY-13、LY-14：图解只放讲解；主语没有讲解时给空态——相关模块的图解链接与「到描述看事实 ›」', async ({ page }) => {
+  await openDesk(page, '/p/h5p-arch-desk?level=state&sel=m:state.desk')
+  // DeskState 有图解：只有讲解（沙箱 iframe），没有事实卡
+  await expect(views(page).locator('.explainer iframe')).toBeVisible()
+  await expect(views(page).locator('[data-sec="understand"]')).toHaveCount(0)
+  // Layout 没有图解：空态，链到所属的有图解模块，单击「到描述看事实 ›」换到描述
+  await openDesk(page, '/p/h5p-arch-desk?level=state.desk&sel=m:state.desk.writer')
+  const empty = views(page).getByTestId('explainer-empty')
+  await expect(empty).toContainText('没有图解')
+  await expect(empty.getByTestId('explainer-link').first()).toBeVisible()
+  await empty.getByTestId('to-description').click()
+  await expect(activeTab(page, 0)).toHaveAttribute('data-view-tab', 'description')
 })

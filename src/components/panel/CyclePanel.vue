@@ -5,6 +5,7 @@
  * 三卡（PC-10）：理解为说明与成员；核对为「环内的依赖」清单（环本身就是治理异常，计数在卡头）。
  */
 import { computed } from 'vue'
+import { usePanelPart } from '../shared/panelPart'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import Section from './Section.vue'
@@ -13,6 +14,8 @@ import CheckCard from './CheckCard.vue'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
+/** LY-13、LY-7：描述里面板头是一行操作（不写名称与 ID），核对里不出现 */
+const pp = usePanelPart()
 const name = (id: string) => (desk.index.value ? moduleName(desk.index.value, id) : id)
 const cycle = computed(() => desk.facts.level.value?.levelCycles.find(c => String(c.id) === props.id) ?? null)
 const hidden = computed(() => desk.facts.cycleHidden.value.get(Number(props.id)) ?? 0)
@@ -20,8 +23,8 @@ const hidden = computed(() => desk.facts.cycleHidden.value.get(Number(props.id))
 
 <template>
   <div class="cycle-panel" data-testid="cycle-panel">
-    <header class="head id-card">
-      <h2>环 {{ id }}</h2>
+    <header v-if="pp.card" class="head id-card">
+      <h2 v-if="pp.name">环 {{ id }}</h2>
       <div class="badges">
         <span class="badge warn">环组</span>
         <span v-if="cycle" class="badge">成员 {{ cycle.nodes.length }} · 环内 {{ cycle.edges.length }} 条</span>

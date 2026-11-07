@@ -9,28 +9,19 @@
 import { computed, provide } from 'vue'
 import { useDesk } from '@/state/inject'
 import type { ViewKind } from '@/state/useDeskState'
-import ModuleDoc from './ModuleDoc.vue'
-import ExplainerDoc from './ExplainerDoc.vue'
+import ExplainerView from './ExplainerView.vue'
 import SequenceDoc from './SequenceDoc.vue'
 import RunSection from '../panel/RunSection.vue'
 import StepPanel from '../panel/StepPanel.vue'
 import ScenarioPanel from '../panel/ScenarioPanel.vue'
 import Panel from '../panel/Panel.vue'
-import { PANEL_PART } from '../panel/panelPart'
+import { PANEL_PART } from '../shared/panelPart'
 
 const props = defineProps<{ view: ViewKind }>()
 // 步骤 / 场景面板与运行信息不经 Panel：这里给出它们所在的部分
 provide(PANEL_PART, props.view === 'check' ? 'check' : 'description')
 const desk = useDesk()
 const subject = computed(() => desk.subject.value)
-const rootId = computed(() => desk.index.value?.rootId ?? '')
-/** 主语是系统或模块时的模块 ID（系统取根） */
-const moduleId = computed(() => {
-  const s = subject.value
-  if (!s) return null
-  if (s.kind === 'system') return rootId.value
-  return s.kind === 'module' && desk.index.value?.modules.has(s.id) ? s.id : null
-})
 const playing = computed(() => !!desk.playback.value)
 const runKinds = ['module', 'relation', 'edge', 'actor', 'port']
 /** 回放中的步骤、场景与参与对象：住描述标签的步骤节（V6 新家），核对标签取同一面板的核对卡 */
@@ -43,18 +34,14 @@ const key = computed(() => `${subject.value?.kind}:${'id' in (subject.value ?? {
 
 <template>
   <div class="view-doc" :data-view="view" :data-subject="key">
-    <template v-if="view === 'explainer'">
-      <ExplainerDoc v-if="moduleId === rootId && desk.explainers.has(rootId)" :key="key" :module="rootId" />
-      <ModuleDoc v-else-if="moduleId && moduleId !== rootId" :key="key" :module="moduleId" :with-story="desk.explainers.has(moduleId)" />
-      <p v-else class="empty">这个对象没有图解</p>
-    </template>
+    <ExplainerView v-if="view === 'explainer'" :key="key" />
     <template v-else-if="view === 'description'">
       <div v-if="runSide && subject" class="run-side" data-testid="dock-step-side">
         <StepPanel v-if="subject.kind === 'step'" :key="key" />
         <ScenarioPanel v-else-if="subject.kind === 'scenario'" :key="key" />
         <template v-else>
-          <RunSection :key="key" />
           <Panel :key="`p:${key}`" part="description" />
+          <RunSection :key="key" />
         </template>
       </div>
       <div v-else class="panel-wrap"><Panel :key="key" part="description" /></div>

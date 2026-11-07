@@ -145,7 +145,8 @@ const maxFileCycle = computed(() => Math.max(0, ...(r.value?.fileCycles ?? []).m
         <li v-for="(c, i) in r.moduleCycles" :key="i" class="cycle">
           <span class="muted">{{ c.members.length }} 个{{ c.tolerated ? '（容忍）' : '' }}：</span>
           <template v-for="(m, j) in c.members" :key="m">
-            <button class="link" @click="desk.revealModule(m)">{{ name(m) }}</button><span v-if="j < c.members.length - 1" class="muted">、</span>
+            <button class="link" :data-ref-module="m" @click="desk.revealModule(m)">{{ name(m) }}</button
+            ><span v-if="j < c.members.length - 1" class="muted">、</span>
           </template>
         </li>
       </ul>
@@ -187,8 +188,10 @@ const maxFileCycle = computed(() => Math.max(0, ...(r.value?.fileCycles ?? []).m
         <template v-if="shared.topFanIn">
           <dt>入度最高</dt>
           <dd data-testid="shared-top" title="扇入 Ca 最大的共用件：改它牵动的模块最多；只计数、不卡门禁（Q15）">
-            <button class="link" @click="desk.revealModule(shared.topFanIn.module)">{{ name(shared.topFanIn.module) }}</button> Ca {{ shared.topFanIn.ca }}（占
-            {{ pct(shared.topFanIn.ratio) }}）
+            <button class="link" :data-ref-module="shared.topFanIn.module" @click="desk.revealModule(shared.topFanIn.module)">
+              {{ name(shared.topFanIn.module) }}
+            </button>
+            Ca {{ shared.topFanIn.ca }}（占 {{ pct(shared.topFanIn.ratio) }}）
           </dd>
         </template>
       </dl>
@@ -207,7 +210,7 @@ const maxFileCycle = computed(() => Math.max(0, ...(r.value?.fileCycles ?? []).m
         </h4>
         <ul class="plain" data-testid="shared-suggestions">
           <li v-for="s in suggestions" :key="s.module" class="suggestion" :data-module="s.module">
-            <button class="link" @click="desk.revealModule(s.module)">{{ name(s.module) }}</button>
+            <button class="link" :data-ref-module="s.module" @click="desk.revealModule(s.module)">{{ name(s.module) }}</button>
             <button v-if="desk.write.canEditRules" class="accept" :disabled="accepting === s.module" @click="acceptShared(s.module)">认可为共用件</button>
             <ul class="reasons muted">
               <li v-for="(t, i) in s.reasons" :key="i">{{ t }}</li>

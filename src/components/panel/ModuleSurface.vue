@@ -164,7 +164,7 @@ watch([focus, rows], () => nextTick(reveal))
           <div v-if="r.users.length" class="users">
             <span class="muted">使用它的模块</span>
             <template v-for="(m, i) in r.users.slice(0, USERS)" :key="m"
-              >{{ i ? '、' : ' ' }}<button class="link" @click="desk.revealModule(m)">{{ name(m) }}</button></template
+              >{{ i ? '、' : ' ' }}<button class="link" :data-ref-module="m" @click="desk.revealModule(m)">{{ name(m) }}</button></template
             ><span v-if="r.users.length > USERS" class="muted"> 等 {{ r.users.length }} 个</span>
           </div>
         </li>

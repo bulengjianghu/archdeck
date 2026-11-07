@@ -83,9 +83,9 @@ test('LY-16：选中不自动开标签——视图区排布不变，图解随选
   expect(before).toHaveLength(3)
   await graphNode(page, 'state.desk').click()
   await expect(story(page).locator('h1').first()).toBeVisible()
-  await expect(views(page).locator('.module-doc')).toHaveAttribute('data-module', 'state.desk')
+  await expect(views(page).locator('.explainer')).toHaveAttribute('data-explainer', 'state.desk')
   await graphNode(page, 'state.transition').click()
-  await expect(views(page).locator('.module-doc')).toHaveAttribute('data-module', 'state.transition')
+  await expect(views(page).locator('.explainer')).toHaveAttribute('data-explainer', 'state.transition')
   expect(await tabs(page).allTextContents()).toEqual(before)
 
   // 回放：场景排布——上〔时序图 图解 核对〕下〔描述〕

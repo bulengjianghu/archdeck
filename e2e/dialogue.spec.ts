@@ -5,7 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { activeTab, graphNode, LOAD_BUDGET, openDesk, query, views } from './helpers'
+import { activeTab, graphNode, LOAD_BUDGET, openDesk, query, showView, views } from './helpers'
 
 const dock = views
 const dialogue = (page: Page) => dock(page).getByTestId('dialogue')
@@ -14,8 +14,13 @@ async function say(page: Page, text: string) {
   await input(page).fill(text)
   await input(page).press('Enter')
 }
-/** 过渡版式：身份卡在选中抽屉里；事实卡在图解标签（原理解页）页顶——两处名称行都有「讨论 ›」，用视图区的那个 */
-const discuss = (page: Page) => dock(page).locator('.module-doc [data-action="discuss"]')
+/** LY-13b：「讨论 ›」在描述标签顶上的操作行 */
+const discuss = (page: Page) => ({
+  click: async () => {
+    await showView(page, 'description')
+    await dock(page).locator('.panel[data-part="description"] [data-action="discuss"]').click()
+  },
+})
 
 test('验收 13：点「讨论 ›」打开对话；假 agent 回带引用的问答卡，单击引用画布定位；换选中锚点条变、转录不变', async ({ page }) => {
   test.setTimeout(120_000)
@@ -110,7 +115,8 @@ test.describe('验收 14：重讲', () => {
   test('重讲后题解更新、依据重盖，事实卡与骨架字段一字未动；含事实改动的产出整轮拒绝', async ({ page }) => {
     const yamlBefore = snapshot()
     await openDesk(page, '/p/h5player?level=domain&sel=m:domain.ports')
-    const facts = dock(page).locator('.module-doc [data-sec="understand"]')
+    await showView(page, 'description')
+    const facts = dock(page).locator('.panel[data-part="description"] [data-sec="understand"]')
     await expect(facts).toBeVisible()
     const factsBefore = await facts.innerText()
     await discuss(page).click()

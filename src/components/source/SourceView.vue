@@ -69,7 +69,7 @@ const kb = (n: number) => `${Math.round(n / 1024)} KB`
       <code class="path" :title="path">{{ path }}</code>
       <span v-if="text !== null" class="muted">{{ lines }} 行</span>
       <span v-for="o in owners" :key="o" class="owner">
-        <button class="link" @click="desk.revealModule(o)">{{ moduleName(desk.index.value!, o) }}</button>
+        <button class="link" :data-ref-module="o" @click="desk.revealModule(o)">{{ moduleName(desk.index.value!, o) }}</button>
       </span>
       <span v-if="status" class="badge" :class="{ warn: status !== '已忽略' }">{{ status }}</span>
       <span class="badge ro">只读</span>

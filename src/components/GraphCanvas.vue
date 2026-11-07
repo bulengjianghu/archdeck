@@ -48,6 +48,8 @@ import { depGloss, routeGloss, withGloss } from './display/gloss'
 import SketchMenu from './sketch/SketchMenu.vue'
 import { canDesignAt, openNewDesign } from './edit/designHere'
 
+/** LY-15：视图里悬停的模块引用在本层的节点（项目视图给）——加 peek 描边，不移动视口 */
+const props = defineProps<{ peek?: string | null }>()
 const desk = useDesk()
 const stageUi = useStage()
 const { setViewport, zoomIn, zoomOut, dimensions, setNodes, setEdges } = useVueFlow('arch-desk')
@@ -163,7 +165,10 @@ const hovered = computed(() => {
   const e = withEdgeHover(scene.value.nodes, scene.value.edges, id)
   return id ? e : withElementHover(e.nodes, e.edges, dotHover.value)
 })
-const nodes = computed<Node<NodeData>[]>(() => hovered.value.nodes)
+const nodes = computed<Node<NodeData>[]>(() => {
+  const p = props.peek
+  return p ? hovered.value.nodes.map(n => (n.id === p ? { ...n, class: `${n.class ?? ''} peek`.trim() } : n)) : hovered.value.nodes
+})
 /**
  * L50：悬停说明末尾附上这个记号的图例释义（文字与图例行同一份词表，display/gloss）；在这里附、不在边组件里附——
  * 边组件被图例的示意线引用，反过来引用图例会成环。按边对象缓存，悬停时只重算变了的那几条。
@@ -359,11 +364,37 @@ function fitNow(only?: ReadonlySet<string>): boolean {
   return true
 }
 
+/**
+ * 待适应时先等定下来再适应（第二十二轮 T3.5）：布局不在计算中、代码事实不在读取中、布局与画布尺寸连续两帧不变——
+ * 下钻、改地址、侧栏或视图区开合后，布局（含代码事实到达后的并集重排）与容器宽度会接连变化，适应过早会落在半途的几何上（画布缩在一角）。
+ * 迟迟定不下来时到点照常适应（与首次显示同一兜底）。
+ */
+let fitProbe = 0
 function tryPendingFit(attempt = 0) {
   if (!pendingFit.value || !revealed.value) return
-  if (fitNow()) pendingFit.value = false
-  else if (attempt < 40) setTimeout(() => tryPendingFit(attempt + 1), 50)
+  cancelAnimationFrame(fitProbe)
+  let last = ''
+  let seen: PositionedView | null = null
+  let stable = 0
+  const started = Date.now()
+  const probe = () => {
+    if (!pendingFit.value) return
+    const pv = positioned.value
+    const busy = desk.layoutPending.value || desk.facts.status.value === 'loading'
+    const key = `${dimensions.value.width}x${dimensions.value.height}`
+    stable = !busy && pv && key === last && pv === seen ? stable + 1 : 0
+    last = key
+    seen = pv
+    if (stable >= 2 || Date.now() - started > REVEAL_DEADLINE) {
+      if (fitNow()) pendingFit.value = false
+      else if (attempt < 40) setTimeout(() => tryPendingFit(attempt + 1), 50)
+      return
+    }
+    fitProbe = requestAnimationFrame(probe)
+  }
+  fitProbe = requestAnimationFrame(probe)
 }
+onBeforeUnmount(() => cancelAnimationFrame(fitProbe))
 watch(
   () => positioned.value,
   async () => {

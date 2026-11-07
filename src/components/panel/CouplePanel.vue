@@ -4,6 +4,7 @@
  * 理解：耦合（同提交、占比、有无依赖 / 关系；历史刷新或层次变化后本层已没有这对耦合时为空态说明）；核对：共同的提交（折叠带计数）。
  */
 import { computed } from 'vue'
+import { usePanelPart } from '../shared/panelPart'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import Section from './Section.vue'
@@ -12,6 +13,8 @@ import PanelCard from './PanelCard.vue'
 import CheckCard from './CheckCard.vue'
 
 const desk = useDesk()
+/** LY-13、LY-7：描述里面板头是一行操作（不写名称与 ID），核对里不出现 */
+const pp = usePanelPart()
 const sel = computed(() => desk.evolution.selectedCouple.value)
 const name = (id: string) => (desk.index.value ? moduleName(desk.index.value, id) : id)
 const pct = (r: number) => `${Math.round(r * 100)}%`
@@ -20,10 +23,11 @@ const c = computed(() => sel.value?.coupling ?? null)
 
 <template>
   <div class="couple-panel">
-    <header class="head id-card" data-sec="head">
-      <h2 v-if="sel">
-        <button class="link" @click="desk.revealModule(sel.a)">{{ name(sel.a) }}</button> ~
-        <button class="link" @click="desk.revealModule(sel.b)">{{ name(sel.b) }}</button>
+    <header v-if="pp.card" class="head id-card" data-sec="head">
+      <h2 v-if="sel" :class="{ ends: !pp.name }">
+        <span v-if="!pp.name" class="ends-label">两端</span>
+        <button class="link" :data-ref-module="sel.a" @click="desk.revealModule(sel.a)">{{ name(sel.a) }}</button> ~
+        <button class="link" :data-ref-module="sel.b" @click="desk.revealModule(sel.b)">{{ name(sel.b) }}</button>
       </h2>
       <div class="badges">
         <span class="badge">时间耦合</span>

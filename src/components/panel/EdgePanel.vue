@@ -6,6 +6,7 @@
  * 运行视角下理解卡首节为运行信息（V6）。
  */
 import { computed, ref } from 'vue'
+import { usePanelPart } from '../shared/panelPart'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import Section from './Section.vue'
@@ -18,6 +19,8 @@ import { RELATION_TYPE_LABELS } from '../shared/labels'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
+/** LY-13、LY-7：描述里面板头是一行操作（不写名称与 ID），核对里不出现 */
+const pp = usePanelPart()
 const edge = computed(() => {
   const v = desk.view.value
   return [...(v?.edges ?? []), ...(v?.coreEdges ?? []), ...(v?.shelfEdges ?? [])].find(e => e.id === props.id)
@@ -79,8 +82,9 @@ const rows = computed(() =>
 
 <template>
   <div v-if="edge" ref="root" class="edge-panel">
-    <header class="head id-card" data-sec="head">
-      <h2 class="endpoints">
+    <header v-if="pp.card" class="head id-card" data-sec="head">
+      <h2 class="endpoints" :class="{ ends: !pp.name }">
+        <span v-if="!pp.name" class="ends-label">两端</span>
         <button class="link" @click="desk.select(endSelection(edge.from))">{{ endName(edge.from) }}</button>
         <span class="muted">→</span>
         <button class="link" @click="desk.select(endSelection(edge.to))">{{ endName(edge.to) }}</button>

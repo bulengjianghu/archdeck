@@ -8,7 +8,8 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import Panel from '../../src/components/panel/Panel.vue'
 import ScenarioPanel from '../../src/components/panel/ScenarioPanel.vue'
-import ModuleDoc from '../../src/components/dock/ModuleDoc.vue'
+import ModulePanel from '../../src/components/panel/ModulePanel.vue'
+import { PANEL_PART } from '../../src/components/shared/panelPart'
 import { createDeskState } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
 import { orderNotices, splitSignalCount, type PanelNotice } from '../../src/components/panel/panelNotices'
@@ -20,14 +21,17 @@ import type { FileDep } from '../../src/model'
 /** 跳转目标是模块级的单值：测试里每个用例结束卸载面板，免得早先面板的监听先消费掉目标 */
 const mounted: VueWrapper[] = []
 
-/** 第二十轮读先方案：理解卡搬去辅助栏的理解页（ModuleDoc = 事实卡 + 故事）；理解叙述的断言挂这里 */
+/** 第二十轮读先方案：（第二十二轮 LY-13）理解卡住「描述」标签（ModulePanel 的描述部分）；理解叙述的断言挂这里 */
 async function mountDoc(moduleId: string, url: string, files = sampleFiles(), provide: Record<string | symbol, unknown> = {}) {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
   await router.push(url)
   const desk = createDeskState(async () => ({ dir: 'model/test', files }))
   desk.attachRouter(router)
   await desk.init()
-  const wrapper = mount(ModuleDoc, { props: { module: moduleId }, global: { provide: { [DESK_STATE as symbol]: desk, ...provide }, plugins: [router] } })
+  const wrapper = mount(ModulePanel, {
+    props: { id: moduleId },
+    global: { provide: { [DESK_STATE as symbol]: desk, [PANEL_PART as symbol]: 'description', ...provide }, plugins: [router] },
+  })
   mounted.push(wrapper)
   await flushPromises()
   return { wrapper, desk }
@@ -81,7 +85,8 @@ describe('V15、PC-1：头部 + 三卡', () => {
     const { wrapper } = await mountPanel('/?sel=m:infra')
     const kids = [...wrapper.find('.module-panel').element.children]
     expect(kids[0].tagName).toBe('HEADER')
-    expect(cardsOf(wrapper)).toEqual(['check'])
+    // infra 是根下的层（单成员的层）：核对卡之前有这棵子树的汇总（LY-13，第二十二轮波 3）
+    expect(cardsOf(wrapper)).toEqual(['summary', 'check'])
     expect(kids[kids.length - 1].classList.contains('src')).toBe(true)
   })
 
@@ -472,7 +477,8 @@ modules:
 
   it('层：理解卡按五问（问题 → 说明 → 成员 · 一句话 → 可依赖的层）；核对卡为「结构」一行', async () => {
     const { wrapper } = await mountPanel('/?sel=s:app/top', sampleFiles({ 'intent/strata.yaml': STRATA }))
-    expect(cardsOf(wrapper)).toEqual(['understand', 'check'])
+    // LY-13：层的核对先给汇总
+    expect(cardsOf(wrapper)).toEqual(['understand', 'summary', 'check'])
     expect(wrapper.find('[data-testid="stratum-members"]').text()).toContain('Solution')
     await wrapper.find('[data-card="check"] .card-toggle').trigger('click')
     expect(wrapper.find('[data-check="structure"]').exists()).toBe(true)

@@ -6,6 +6,7 @@
  * 各步证据等级计数，有代码事实时）与引用（ref 的引用与被引用，折叠带计数）；相关资料：时序图。步骤目录在导航树的步骤树里（T6）。
  */
 import { computed } from 'vue'
+import { usePanelPart } from '../shared/panelPart'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import { useOpenPreview } from '../shared/preview'
@@ -18,6 +19,8 @@ import CheckCard from './CheckCard.vue'
 import type { CheckRow } from './panelCheck'
 
 const desk = useDesk()
+/** LY-13、LY-7：描述里面板头是一行操作（不写名称与 ID），核对里不出现 */
+const pp = usePanelPart()
 const openPreview = useOpenPreview()
 /** 源码清单在本地时才能判断证据文件存不存在 */
 const local = computed(() => desk.files.payload.value?.status === 'local')
@@ -70,9 +73,9 @@ function pointAt(id: string) {
 
 <template>
   <div v-if="sc" class="scenario-panel">
-    <header class="head id-card" data-sec="head">
+    <header v-if="pp.card" class="head id-card" data-sec="head">
       <div class="title">
-        <h2>{{ sc.name }}</h2>
+        <h2 v-if="pp.name">{{ sc.name }}</h2>
       </div>
       <div class="badges">
         <code>{{ sc.id }}</code>

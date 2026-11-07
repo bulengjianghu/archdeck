@@ -3,15 +3,19 @@
  * 视图区（LY-7–LY-12，ADR-0064）：页头是主语条，其下一到两组标签上下排列，组高按分隔比例（LY-10b），分隔可拖。
  * 拖拽标签（LY-10）：拖到另一组的标签栏或组内换序；只有一组时拖动中出现下半区的落点「拖到这里，上下对照」= 开下组；一组拖空即合并（状态层 normalize）。
  * 视图标签跟随主语，资料标签不跟随；只读工作区状态、只发意图（desk.workspace.dispatch）。
+ * LY-15：内容里的模块引用都带 data-ref-module，悬停时在画布上提示位置（悬停意图，不移动视口），单击即选中。
  */
 import { provide, ref } from 'vue'
 import { useDesk } from '@/state/inject'
 import DockGroup from './DockGroup.vue'
 import SubjectBar from './SubjectBar.vue'
 import { TAB_DRAG } from './tabDrag'
+import { useRefPeek } from './useRefPeek'
 
 const desk = useDesk()
 const ws = desk.workspace
+/** LY-15：视图里悬停模块引用（data-ref-module），画布上提示它在本层的位置；离开即消失 */
+const refPeek = useRefPeek()
 /** 正在拖的标签（HTML5 拖放；只在视图区内有效） */
 const dragging = ref<string | null>(null)
 provide(TAB_DRAG, dragging)
@@ -42,7 +46,7 @@ function onSplitDown(e: PointerEvent) {
 </script>
 
 <template>
-  <section class="views" aria-label="视图" data-region="views">
+  <section class="views" aria-label="视图" data-region="views" @mouseover="refPeek.onOver" @mouseleave="refPeek.onLeave">
     <SubjectBar />
     <div ref="groupsEl" class="groups" :class="{ dragging: !!dragging }">
       <template v-for="(g, gi) in ws.state.value.groups" :key="gi">

@@ -39,8 +39,8 @@ const kinds = (f: SubclassFact | AssemblyFact) => ('kinds' in f ? f.kinds.map(k 
     <template v-for="g in groups" :key="`l:${g.key}`">
       <ul v-if="open === g.key" class="plain fact-list" :aria-label="g.label">
         <li v-for="f in g.list" :key="f.key">
-          <button class="link" @click="desk.revealModule(f.from)">{{ name(f.from) }}</button> →
-          <button class="link" @click="desk.revealModule(f.to)">{{ name(f.to) }}</button>
+          <button class="link" :data-ref-module="f.from" @click="desk.revealModule(f.from)">{{ name(f.from) }}</button> →
+          <button class="link" :data-ref-module="f.to" @click="desk.revealModule(f.to)">{{ name(f.to) }}</button>
           <span class="muted small">{{ kinds(f) }} · {{ f.files.length }} 处</span>
           <FileDepList :deps="f.files" :limit="3" />
         </li>

@@ -6,20 +6,24 @@ import Panel from '../../src/components/panel/Panel.vue'
 import RunSection from '../../src/components/panel/RunSection.vue'
 import StepPanel from '../../src/components/panel/StepPanel.vue'
 import ScenarioPanel from '../../src/components/panel/ScenarioPanel.vue'
-import ModuleDoc from '../../src/components/dock/ModuleDoc.vue'
+import ModulePanel from '../../src/components/panel/ModulePanel.vue'
+import { PANEL_PART } from '../../src/components/shared/panelPart'
 import { createDeskState, type SourceFetcher } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
 import type { FileDep } from '../../src/model'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
 
-/** 第二十轮读先方案：理解卡搬去辅助栏的理解页（ModuleDoc），内容断言挂在这里 */
+/** 第二十轮读先方案：（第二十二轮 LY-13）理解卡住「描述」标签（ModulePanel 的描述部分），内容断言挂在这里 */
 async function mountDoc(moduleId: string, url = '/', files = sampleFiles()) {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
   await router.push(url)
   const desk = createDeskState(async () => ({ dir: 'model/test', files }))
   desk.attachRouter(router)
   await desk.init()
-  const wrapper = mount(ModuleDoc, { props: { module: moduleId }, global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+  const wrapper = mount(ModulePanel, {
+    props: { id: moduleId },
+    global: { provide: { [DESK_STATE as symbol]: desk, [PANEL_PART as symbol]: 'description' }, plugins: [router] },
+  })
   await flushPromises()
   return { wrapper, desk }
 }
@@ -59,10 +63,10 @@ describe('属性面板', () => {
     expect(u.find('[data-testid="module-children"]').text()).toContain('Framework')
   })
 
-  it('理解页 · 选中模块：职责、对外接口签名、出入边', async () => {
+  it('描述 · 选中模块：职责、对外接口签名、出入边；名称不在描述里（只在主语条，LY-7、LY-13b）', async () => {
     const { wrapper } = await mountDoc('infra.framework.sm', '/?level=infra.framework&sel=m:infra.framework.sm')
     const text = wrapper.text()
-    expect(text).toContain('StateMachine')
+    expect(wrapper.find('.id-card h2').exists()).toBe(false)
     expect(text).toContain('状态机')
     expect(text).toContain('sendCommand')
     // PC-3：对外表面一行一个，单击展开签名与说明

@@ -68,12 +68,14 @@ const anomalyCount = computed(() =>
       <h4 class="bad">违规</h4>
       <ul class="plain">
         <li v-for="v in d.violations.out" :key="v.key">
-          → <button class="link" @click="desk.revealModule(v.other)">{{ name(v.other) }}</button> <span class="chip">{{ RULE_LABELS[v.kind] }}</span
+          → <button class="link" :data-ref-module="v.other" @click="desk.revealModule(v.other)">{{ name(v.other) }}</button>
+          <span class="chip">{{ RULE_LABELS[v.kind] }}</span
           ><span class="muted">{{ STATUS[v.status] }}</span>
           <div class="muted small">{{ v.example }}</div>
         </li>
         <li v-for="v in d.violations.in" :key="v.key">
-          ← <button class="link" @click="desk.revealModule(v.other)">{{ name(v.other) }}</button> <span class="chip">{{ RULE_LABELS[v.kind] }}</span
+          ← <button class="link" :data-ref-module="v.other" @click="desk.revealModule(v.other)">{{ name(v.other) }}</button>
+          <span class="chip">{{ RULE_LABELS[v.kind] }}</span
           ><span class="muted">{{ STATUS[v.status] }}</span>
           <div class="muted small">{{ v.example }}</div>
         </li>
@@ -84,12 +86,12 @@ const anomalyCount = computed(() =>
       <p class="list">
         <template v-for="m in d.undescribed.out" :key="`o:${m}`">
           <span
-            >→ <button class="link" @click="desk.revealModule(m)">{{ name(m) }}</button></span
+            >→ <button class="link" :data-ref-module="m" @click="desk.revealModule(m)">{{ name(m) }}</button></span
           >
         </template>
         <template v-for="m in d.undescribed.in" :key="`i:${m}`">
           <span
-            >← <button class="link" @click="desk.revealModule(m)">{{ name(m) }}</button></span
+            >← <button class="link" :data-ref-module="m" @click="desk.revealModule(m)">{{ name(m) }}</button></span
           >
         </template>
       </p>
@@ -97,7 +99,7 @@ const anomalyCount = computed(() =>
     <div v-if="d.cycles.length" class="block">
       <h4 class="bad">所在的模块环</h4>
       <p v-for="(c, i) in d.cycles" :key="i" class="list">
-        <button v-for="m in c" :key="m" class="link" @click="desk.revealModule(m)">{{ name(m) }}</button>
+        <button v-for="m in c" :key="m" class="link" :data-ref-module="m" @click="desk.revealModule(m)">{{ name(m) }}</button>
       </p>
     </div>
     <div v-if="cycle" class="block level-cycle">
@@ -109,7 +111,7 @@ const anomalyCount = computed(() =>
         <li v-for="e in cycle.edges" :key="`${e.from}->${e.to}`">
           <details>
             <summary>
-              <button class="link" :title="e.edgeId ? '在画布上选中这条边' : '选中这对节点的代码依赖'" @click.prevent="pick(e)">
+              <button class="link" :title="e.edgeId ? '在画布上选中这条边' : '选中这对节点的代码依赖'" :data-ref-module="e" @click.prevent="pick(e)">
                 {{ name(e.fromModule) }} → {{ name(e.toModule) }}
               </button>
               <span class="muted small">{{ e.deps.length }} 条模块依赖</span>

@@ -77,6 +77,12 @@ export function archModelPlugin(options: { modelRoot: string; root: string }): P
     name: 'h5p-arch-desk:model-source',
     configureServer(server) {
       server.watcher.add(modelRoot)
+      // 第二十二轮 T3.6：Node 的 keep-alive 空闲超时缺省 5s——页面隔几秒再发写入（如归档前先跑完一轮），可能正好复用服务器刚关掉的连接，
+      // 客户端得到 ECONNRESET。把空闲超时放宽到 65s（headersTimeout 须更大），连接由客户端先关
+      if (server.httpServer && 'keepAliveTimeout' in server.httpServer) {
+        server.httpServer.keepAliveTimeout = 65_000
+        server.httpServer.headersTimeout = 66_000
+      }
       // AI 重新生成时会连续写多个文件，按项目合并成一次通知
       const timers = new Map<string, ReturnType<typeof setTimeout>>()
       server.watcher.on('all', (_event, file) => {

@@ -1,6 +1,6 @@
 /**
  * L46（第十七轮 R3.8；第二十轮读先方案改写）：首屏守——理解面一屏读完。
- * 模块的理解节在视图区的图解标签（过渡：原理解页，事实卡 + 故事，ModuleDoc），
+ * 模块的理解节（五问）在视图区的描述标签（LY-13），
  * 断言事实卡（理解节）的底边在视图区可视区之内，画布列 ≥ 640（1440 宽、侧栏展开）；系统的理解卡在描述标签（原面板），只记录基线。
  * 超出的是描述写长了（summary / 原则 / 不变式），按 M27 与 04 改描述，不在界面截字。
  */
@@ -20,13 +20,13 @@ interface Measure {
 }
 
 const MEASURE = `(() => {
-  // 模块：事实卡在图解标签（过渡：原理解页）；系统：理解卡在描述标签（原面板，第二十二轮波 2）——两处都认，量各自可视区的底边
-  const dockCard = document.querySelector('[data-region="views"] [data-sec="understand"]')
+  // 第二十二轮 LY-13：模块的理解（五问）与系统的理解卡都在描述标签——两处都认，量各自可视区的底边
+  const dockCard = document.querySelector('[data-region="views"] .panel [data-sec="understand"]')
   const dockArea = document.querySelector('.views-area')
   const panelCard = document.querySelector('[data-region="views"] .panel [data-card="understand"]')
   const panelArea = document.querySelector('[data-region="views"] .panel-wrap')
   const canvas = document.querySelector('main.canvas-area')
-  const area = dockCard ? dockArea : panelArea
+  const area = dockCard ? panelArea ?? dockArea : panelArea
   const card = dockCard ?? panelCard
   if (!area || !card || !canvas) return null
   const a = area.getBoundingClientRect()
@@ -57,10 +57,10 @@ async function open(page: Page, path: string, _quietDock = false) {
   // 没有理解页的对象（系统面板的理解卡还在抽屉里）拉开抽屉
   // LY-8：视图区常在；模块主语的图解标签（过渡：原理解页）带事实卡，系统主语的是根图解，理解卡在抽屉
   const inDock = path.includes('sel=m:')
-  if (!inDock) await showView(page, 'description')
+  await showView(page, 'description')
   await waitSettled(page)
   // 理解页的事实卡 / 描述标签的理解卡随描述即时渲染，等它出现即可
-  const waitSel = inDock ? '[data-region="views"] [data-sec="understand"]' : '[data-region="views"] .panel [data-card="understand"]'
+  const waitSel = inDock ? '[data-region="views"] .panel [data-sec="understand"]' : '[data-region="views"] .panel [data-card="understand"]'
   await expect(page.locator(waitSel)).toBeVisible({ timeout: 20_000 })
   return measureStable(page)
 }

@@ -2,12 +2,13 @@
 /**
  * 图解的内容（EX-3、EX-4、EX-7，ADR-0055；LY-13、LY-15，ADR-0064）：顶部一行 ↑ ↓ 图解导航、「在画布上选中」与过期提示（可展开改动），下面是沙箱 iframe。
  * iframe 只给 allow-scripts；父页只接受来源是这个 iframe 窗口的消息：arch:select 即选中模块（视图随主语跟随，LY-15），
- * arch:open 看另一份图解（选中它并激活图解标签）。↑ ↓ 同 arch:open。
+ * arch:open 看另一份图解（选中它并激活图解标签），arch:hover 在画布上提示引用的位置（LY-15）。↑ ↓ 同 arch:open。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useDesk } from '@/state/inject'
 import { BASIS_CHANGE_TEXT, staleText } from '../shared/explainerText'
 import { explainerSrcdoc, isExplainerMessage } from './explainerFrame'
+import { useRefPeek } from './useRefPeek'
 
 const props = defineProps<{ module: string }>()
 const desk = useDesk()
@@ -21,10 +22,17 @@ const srcdoc = computed(() => (html.value ? explainerSrcdoc(html.value, ex.refs(
 const nav = computed(() => ex.nav(props.module))
 const status = computed(() => ex.status(props.module))
 const open = (id: string) => desk.readExplainer(id)
+/** LY-15：iframe 里悬停引用，画布提示位置 */
+const { peek } = useRefPeek()
+onBeforeUnmount(() => peek(null))
 
 function onMessage(e: MessageEvent) {
   if (!frame.value || e.source !== frame.value.contentWindow || !isExplainerMessage(e.data)) return
   const id = e.data.module
+  if (e.data.type === 'arch:hover') {
+    peek(id || null)
+    return
+  }
   if (e.data.type === 'arch:open') {
     if (ex.has(id)) open(id)
   } else if (desk.index.value?.modules.has(id)) desk.revealModule(id)
@@ -41,7 +49,13 @@ onBeforeUnmount(() => window.removeEventListener('message', onMessage))
         <button v-for="d in nav.down" :key="d" class="nav down" :title="`下一级图解：${name(d)}`" @click="open(d)">↓ {{ name(d) }}</button>
       </span>
       <span class="sp" />
-      <button v-if="module !== desk.index.value?.rootId" class="nav sel" title="在画布上选中这个模块（资料区不动）" @click="desk.revealModule(module)">
+      <button
+        v-if="module !== desk.index.value?.rootId"
+        class="nav sel"
+        title="在画布上选中这个模块（资料区不动）"
+        :data-ref-module="module"
+        @click="desk.revealModule(module)"
+      >
         在画布上选中
       </button>
       <button v-if="status?.stale" class="stale" :aria-expanded="showChanges" data-testid="explainer-stale" @click="showChanges = !showChanges">

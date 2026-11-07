@@ -28,7 +28,7 @@ const segments = computed(() => desk.dialogue.noteSegments(body.value))
     <header>
       <span class="badge" data-testid="note-target">目标态 · 未实现</span>
       <h3>{{ note?.title ?? doc.file }}</h3>
-      <button v-if="note?.module" class="link" @click="desk.revealModule(note.module)">{{ note.module }}</button>
+      <button v-if="note?.module" class="link" :data-ref-module="note.module" @click="desk.revealModule(note.module)">{{ note.module }}</button>
     </header>
     <template v-if="note">
       <template v-for="(seg, k) in segments" :key="k">

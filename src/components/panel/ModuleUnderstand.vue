@@ -105,7 +105,7 @@ const invariants = computed(() => invariantsOf(m.value))
         <template v-for="(e, i) in neg" :key="i"
           ><span v-if="i" class="muted"> · </span>{{ e.text
           }}<template v-if="hasNegTarget(e)">
-            <button class="link to" @click="goNeg(e)">→ {{ idx.modules.get(e.to!)?.name ?? e.to }}</button></template
+            <button class="link to" :data-ref-module="e.to" @click="goNeg(e)">→ {{ idx.modules.get(e.to!)?.name ?? e.to }}</button></template
           ></template
         >
       </p>
@@ -125,7 +125,8 @@ const invariants = computed(() => invariantsOf(m.value))
           <p v-if="x.admits" class="admits">归属：{{ x.admits }}</p>
           <p class="members">
             <template v-for="(id, i) in x.members" :key="id"
-              ><span v-if="i" class="muted">、</span><button class="link" @click="openChild(id)">{{ idx.modules.get(id)?.name ?? id }}</button
+              ><span v-if="i" class="muted">、</span
+              ><button class="link" :data-ref-module="id" @click="openChild(id)">{{ idx.modules.get(id)?.name ?? id }}</button
               ><ChangeBadge entity="module" :id="id"
             /></template>
           </p>
@@ -144,7 +145,8 @@ const invariants = computed(() => invariantsOf(m.value))
             <span class="t-label">{{ b.label }}</span>
             <span class="members" :title="b.ids.map(childSummary).filter(Boolean).join('\n')">
               <template v-for="(id, i) in b.ids" :key="id"
-                ><span v-if="i" class="muted">、</span><button class="link" @click="openChild(id)">{{ idx.modules.get(id)?.name ?? id }}</button
+                ><span v-if="i" class="muted">、</span
+                ><button class="link" :data-ref-module="id" @click="openChild(id)">{{ idx.modules.get(id)?.name ?? id }}</button
                 ><ChangeBadge entity="module" :id="id"
               /></template>
             </span>
@@ -152,7 +154,8 @@ const invariants = computed(() => invariantsOf(m.value))
         </div>
         <p v-else class="members flat" data-testid="module-children">
           <template v-for="(c, i) in flatShown" :key="c.id"
-            ><span v-if="i" class="muted">、</span><button class="link" :title="childSummary(c.id)" @click="openChild(c.id)">{{ c.name }}</button
+            ><span v-if="i" class="muted">、</span
+            ><button class="link" :data-ref-module="c.id" :title="childSummary(c.id)" @click="openChild(c.id)">{{ c.name }}</button
             ><ChangeBadge entity="module" :id="c.id"
           /></template>
           <button v-if="children.length > MEMBER_CAP" class="link more" :aria-expanded="membersOpen" @click="membersOpen = !membersOpen">

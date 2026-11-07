@@ -21,7 +21,7 @@ import PortPanel from './PortPanel.vue'
 import CyclePanel from './CyclePanel.vue'
 import StratumPanel from './StratumPanel.vue'
 import SketchPanel from '../sketch/SketchPanel.vue'
-import { PANEL_PART, type PanelPart } from './panelPart'
+import { PANEL_PART, type PanelPart } from '../shared/panelPart'
 
 /** 第二十二轮波 2 过渡：住在「描述」标签（原面板全部内容）或「核对」标签（只核对卡）；抽屉已删（LY-16） */
 const props = withDefaults(defineProps<{ part?: PanelPart }>(), { part: 'all' })
@@ -95,8 +95,45 @@ const target = computed(() => {
 </template>
 
 <style>
-/* 第二十二轮波 2 过渡：「核对」标签只留核对卡（PanelCard 自己不渲染其余卡；身份卡、设计说明、出处等藏起） */
-.panel.part-check > div > :not([data-card='check']):not(:has([data-card='check'])) {
+/* LY-13b（第二十二轮波 3）：「描述」里面板头是一行操作——不粘顶、不成卡，名称与 ID 在主语条（多数面板按 usePanelPart 不渲染它们；
+   没有引入它的面板用 subject-name / subject-id 两个类，在这里藏起）；「核对」里面板头不出现 */
+.panel[data-part='description'] .id-card .subject-name,
+.panel[data-part='description'] .id-card .subject-id,
+.panel[data-part='check'] .id-card {
+  display: none;
+}
+
+.panel[data-part='description'] .id-card {
+  position: static;
+  padding: 0 4px 2px;
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.panel[data-part='description'] .id-card .badges {
+  margin-top: 0;
+}
+
+.panel .ends {
+  font-size: 13.5px;
+  font-weight: 400;
+}
+
+.panel .ends-label {
+  margin-right: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.panel .scenarios {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+/* 「核对」标签只留核对卡（PanelCard 自己不渲染其余卡；身份卡、设计说明、出处等藏起） */
+.panel.part-check > div > :not([data-card='check'], [data-card='summary']):not(:has([data-card='check'], [data-card='summary'])) {
   display: none;
 }
 

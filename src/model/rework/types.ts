@@ -138,6 +138,10 @@ export interface ReworkList {
   facts: boolean
 }
 
+/** 范围汇总（reworkScope，第二十二轮 LY-13 核对标签）的五类：违规、环、未证实、未归属、需复核 */
+export const SCOPE_CATEGORIES = ['violation', 'cycle', 'unconfirmed', 'ownership', 'review'] as const satisfies readonly ReworkCategory[]
+export type ScopeCategory = (typeof SCOPE_CATEGORIES)[number]
+
 /** 类别与严重度的名称：命令行、MCP 与页面共用 */
 export const REWORK_CATEGORY_LABELS: Record<ReworkCategory, string> = {
   description: '描述错误与提醒',

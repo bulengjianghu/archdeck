@@ -7,7 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { activeTab, graphNode, openDesk, query, sketchOn } from './helpers'
+import { activeTab, graphNode, openDesk, query, showView, sketchOn } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 
@@ -80,7 +80,8 @@ test('DL-41 不合格的图（脚本、外链、不存在的模块）：整块�
 
 test('DL-42 当前版本上：图里单击模块，画布选中（与图解同一机制），资料区不动', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sel=m:state')
-  await dock(page).locator('.module-doc [data-action="discuss"]').click()
+  await showView(page, 'description')
+  await dock(page).locator('.panel[data-part="description"] [data-action="discuss"]').click()
   await say(page, '#diagram-ask 画一张图讲它怎么运作')
   const fig = dialogue(page).getByTestId('diagram')
   await expect(fig).toBeVisible()

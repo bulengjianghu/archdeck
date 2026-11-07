@@ -121,7 +121,8 @@ const segText = (s: CarrierSegment) => CARRIER_ROLE_TEXT[s.role](name(s.from), n
       <span class="muted">涉及</span>
       <template v-for="(m, i) in thirds" :key="m"
         >{{ i ? '、' : ' '
-        }}<button class="link third" :title="inView(m) ? '选中它' : '跳到它所在的层次并选中'" @click="desk.revealModule(m)">{{ name(m) }}</button
+        }}<button class="link third" :title="inView(m) ? '选中它' : '跳到它所在的层次并选中'" :data-ref-module="m" @click="desk.revealModule(m)">
+          {{ name(m) }}</button
         ><span v-if="!inView(m)" class="muted">（不在本层）</span></template
       >
     </p>

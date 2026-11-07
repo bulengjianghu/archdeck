@@ -32,7 +32,7 @@ const port = computed(() => desk.facts.portOf(props.id))
     <div class="body">
       <DesignNote class="inline" :text="x.designNote" />
       <div v-if="owner" class="meta">
-        提供方 <button class="link" @click="desk.revealModule(owner.id)">{{ owner.name }}</button>
+        提供方 <button class="link" :data-ref-module="owner.id" @click="desk.revealModule(owner.id)">{{ owner.name }}</button>
       </div>
       <CodeBlock v-if="x.signature" :code="x.signature" />
       <Markdown :text="x.description" />

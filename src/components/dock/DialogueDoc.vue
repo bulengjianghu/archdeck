@@ -206,7 +206,7 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
                       <template v-if="it.modules.length"
                         >→
                         <template v-for="m in it.modules" :key="m.id"
-                          ><button v-if="m.known" class="link" @click="desk.revealModule(m.id)">{{ m.name }}</button
+                          ><button v-if="m.known" class="link" :data-ref-module="m.id" @click="desk.revealModule(m.id)">{{ m.name }}</button
                           ><span v-else class="muted">{{ m.id }}</span>
                         </template></template
                       >

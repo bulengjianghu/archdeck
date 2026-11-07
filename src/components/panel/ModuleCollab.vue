@@ -44,7 +44,7 @@ onBeforeUnmount(() => hoverRelations(null))
       <div class="line" :title="rowTitle(c)">
         <span class="dir">{{ c.dir === 'in' ? '←' : '→' }}</span>
         <span class="head"
-          ><button class="link peer" @click="pick(c.peer)">{{ name(c.peer) }}</button
+          ><button class="link peer" :data-ref-module="c.peer" @click="pick(c.peer)">{{ name(c.peer) }}</button
           ><span v-if="c.relations.length > 1" class="n">×{{ c.relations.length }}</span></span
         >
         <button class="why" :class="{ pending: c.purpose?.pending }" :aria-expanded="!!open[c.key]" @click="open[c.key] = !open[c.key]">

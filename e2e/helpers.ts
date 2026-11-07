@@ -8,15 +8,18 @@ import { expect, type Locator, type Page } from '@playwright/test'
  */
 export const LOAD_BUDGET = 25_000
 
-/** 打开 `#/p/...`（hash 路由），等结构图出现节点；负载下第一次没等到就重新加载再等（toPass，总预算 LOAD_BUDGET 之上再给一次重载的余量） */
+/**
+ * 打开 `#/p/...`（hash 路由），等画布出现节点。负载下（第二十二轮 T3.6 定位）慢的是布局（Worker 里算，草图整张更重），不是服务端：
+ * 草图的框节点在布局完成前是 0×0，所以先按 LOAD_BUDGET 整段等它，等不到才重新加载一次再等一个 LOAD_BUDGET——重新加载会让布局从头再算，不能早于预算
+ */
 export async function openDesk(page: Page, hashPath: string) {
   const node = page.locator('.vue-flow__node').first()
   await page.goto(`./#${hashPath}`)
   let tries = 0
   await expect(async () => {
     if (tries++ > 0) await page.reload()
-    await expect(node).toBeVisible({ timeout: 15_000 })
-  }).toPass({ timeout: LOAD_BUDGET + 10_000, intervals: [0] })
+    await expect(node).toBeVisible({ timeout: LOAD_BUDGET })
+  }).toPass({ timeout: 2 * LOAD_BUDGET + 10_000, intervals: [0] })
 }
 
 /** TB-6、LY-2：打开侧栏顶上的项目菜单（版本、编辑骨架、新建设计、所有项目）；已打开时不动 */
@@ -127,7 +130,7 @@ export async function sidePage(page: Page, name: 'modules' | 'scenes' | 'changes
   await sidebar(page).locator(`[data-side-page="${name}"]`).click()
 }
 
-/** 第二十二轮波 2：抽屉已删，原选中面板的内容在「描述」标签（核对卡在「核对」标签） */
+/** 第二十二轮：抽屉已删，原选中面板除核对卡以外的内容在「描述」标签（LY-13），核对卡在「核对」标签 */
 export const openPanel = openPropsDrawer
 
 export async function openPropsDrawer(page: Page) {
@@ -137,11 +140,12 @@ export async function openPropsDrawer(page: Page) {
   await expect(views(page).locator('.panel[data-part="description"], [data-testid="dock-step-side"]').first()).toBeVisible()
 }
 
-/** 核对卡（PC-2）收起时展开它；给了 data-sec 时再展开那个折叠的清单（PC-8）。第二十二轮波 2 过渡：原面板（含核对卡）整体在「描述」标签 */
+/** 核对卡（PC-2）收起时展开它；给了 data-sec 时再展开那个折叠的清单（PC-8）。核对卡住「核对」标签（LY-13） */
 export async function openCheckList(page: Page, sec?: string) {
-  await openPropsDrawer(page)
-  // 回放中：步骤 / 场景面板在描述标签的步骤节
-  const side = page.getByTestId('dock-step-side')
+  await expect(page.locator('.canvas-area .state')).toHaveCount(0, { timeout: 30_000 })
+  await showView(page, 'check')
+  // 回放中：步骤 / 场景面板的核对卡在核对标签的步骤节
+  const side = page.getByTestId('check-step-side')
   if ((await side.count()) && (await side.locator('[data-card="check"]').count())) {
     const t = side.locator('[data-card="check"] .card-toggle').first()
     await expect(side.locator('[data-card="check"] .card-sum').first()).not.toHaveText(/读取中/, { timeout: 20_000 })

@@ -5,6 +5,7 @@
  * 核对：证实（K5 / K6）、承载（K20 缺段）两行，清单为代码事实与承载的逐段证据；相关资料：经过它的场景。运行视角下理解卡首节为运行信息（V6）。
  */
 import { computed, ref } from 'vue'
+import { usePanelPart } from '../shared/panelPart'
 import { useDesk } from '@/state/inject'
 import { RUNTIME_RELATION_TYPES, callbackText, isCallbackVia, moduleName, parseVia, purposeOf, relationMode, viaLabel } from '@/model'
 import { RELATION_TYPE_HINTS, RELATION_TYPE_LABELS } from '../shared/labels'
@@ -24,6 +25,8 @@ import type { CheckRow } from './panelCheck'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
+/** LY-13、LY-7：描述里面板头是一行操作（不写名称与 ID），核对里不出现 */
+const pp = usePanelPart()
 const r = computed(() => desk.index.value!.relations.get(props.id)!)
 const name = (id: string) => moduleName(desk.index.value!, id)
 const point = (id: string) => (desk.index.value!.actors.has(id) ? desk.select({ kind: 'actor', id }) : desk.revealModule(id))
@@ -123,11 +126,12 @@ const couple = computed(() => desk.evolution.between(r.value.from, r.value.to))
 
 <template>
   <div v-if="r" ref="root" class="relation-panel">
-    <header class="head id-card">
-      <h2 class="endpoints">
-        <button class="link" @click="point(r.from)">{{ name(r.from) }}</button>
+    <header v-if="pp.card" class="head id-card">
+      <h2 class="endpoints" :class="{ ends: !pp.name }">
+        <span v-if="!pp.name" class="ends-label">两端</span>
+        <button class="link" :data-ref-module="r.from" @click="point(r.from)">{{ name(r.from) }}</button>
         <span class="arrow">→</span>
-        <button class="link" @click="point(r.to)">{{ name(r.to) }}</button>
+        <button class="link" :data-ref-module="r.to" @click="point(r.to)">{{ name(r.to) }}</button>
       </h2>
       <div class="badges">
         <code>{{ r.id }}</code>

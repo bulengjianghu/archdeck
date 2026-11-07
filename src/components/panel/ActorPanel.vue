@@ -4,6 +4,7 @@
  * 相关资料：由它触发的场景（A6）；出处 footer 在最底。运行视角下理解卡首节为运行信息（V6）。
  */
 import { computed } from 'vue'
+import { usePanelPart } from '../shared/panelPart'
 import { useDesk } from '@/state/inject'
 import { ACTOR_KIND_LABELS } from '../shared/labels'
 import Markdown from './Markdown.vue'
@@ -15,6 +16,8 @@ import RelatedCard from './RelatedCard.vue'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
+/** LY-13、LY-7：描述里面板头是一行操作（不写名称与 ID），核对里不出现 */
+const pp = usePanelPart()
 const idx = computed(() => desk.index.value!)
 const a = computed(() => idx.value.actors.get(props.id))
 const relations = computed(() => [...(idx.value.outRelations.get(props.id) ?? []), ...(idx.value.inRelations.get(props.id) ?? [])])
@@ -23,9 +26,9 @@ const scenarios = computed(() => idx.value.triggeredBy.get(props.id) ?? [])
 
 <template>
   <div v-if="a" class="actor-panel">
-    <header class="head id-card" data-sec="head">
+    <header v-if="pp.card" class="head id-card" data-sec="head">
       <div class="title">
-        <h2>{{ a.name }}</h2>
+        <h2 v-if="pp.name">{{ a.name }}</h2>
       </div>
       <div class="badges">
         <code>{{ a.id }}</code>

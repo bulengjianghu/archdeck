@@ -12,45 +12,44 @@ async function rect(page: Page, sel: string) {
   return b!
 }
 
-test('CD-1、CD-2（第二十二轮波 2 改写）：抽屉删了（LY-16），原面板的卡住在视图区——描述标签里身份卡与各卡（含核对卡）、核对标签里只有核对卡', async ({
+test('CD-1、CD-2（第二十二轮 LY-13 改写）：抽屉删了（LY-16），原面板的卡住在视图区——描述标签里理解等各卡、核对标签里只有核对卡；面板头只是一行操作（不成卡）', async ({
   page,
 }) => {
   await openDesk(page, '/p/media-web-player?sel=m:kit')
   await waitSettled(page)
   await expect(page.locator('aside.props')).toHaveCount(0)
   const looks = async () =>
-    (await page.evaluate(`[...document.querySelectorAll('[data-region="views"] .panel .id-card, [data-region="views"] .panel [data-card]')].map(el => {
+    (await page.evaluate(`[...document.querySelectorAll('[data-region="views"] .panel [data-card]')].map(el => {
       const s = getComputedStyle(el)
       return { radius: s.borderTopLeftRadius, shadow: s.boxShadow !== 'none' }
     })`)) as { radius: string; shadow: boolean }[]
   await showView(page, 'description')
-  await expect(page.locator('[data-region="views"] .panel[data-part="description"] .id-card')).toBeVisible()
+  await expect(page.locator('[data-region="views"] .panel[data-part="description"] [data-card="understand"]')).toBeVisible()
+  // LY-13b：面板头是一行操作——不成卡、没有名称
+  const head = (await page.evaluate(
+    `(() => { const s = getComputedStyle(document.querySelector('[data-region="views"] .panel[data-part="description"] .id-card')); return { shadow: s.boxShadow, position: s.position } })()`,
+  )) as { shadow: string; position: string }
+  expect(head).toEqual({ shadow: 'none', position: 'static' })
   const d = await looks()
   expect(d.length).toBeGreaterThanOrEqual(1)
   for (const l of d) expect(l).toMatchObject({ radius: '12px', shadow: true })
   await showView(page, 'check')
   await expect(page.locator('[data-region="views"] .panel[data-part="check"] [data-card="check"]')).toBeVisible()
-  // 核对标签只留核对卡：身份卡藏起
-  await expect(page.locator('[data-region="views"] .panel[data-part="check"] .id-card')).toBeHidden()
+  // 核对标签只留核对卡：没有面板头
+  await expect(page.locator('[data-region="views"] .panel[data-part="check"] .id-card')).toHaveCount(0)
   for (const l of await looks()) expect(l).toMatchObject({ radius: '12px', shadow: true })
 })
 
-test('CD-3 身份卡粘顶（ADR-0061；第二十二轮波 2：住描述标签）：滚到底身份卡仍钉在滚动区上沿；图解跟随选中', async ({ page }) => {
+test('CD-3 作废（第二十二轮 LY-13b）：名称只在主语条；描述顶上一行操作（讨论 ›、进入、在此设计），图解跟随选中', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sel=m:state.desk')
   await waitSettled(page)
-  // 图解常驻、跟随主语（LY-8）：主语是 state.desk
-  await expect(page.locator('[data-region="views"] .module-doc')).toHaveAttribute('data-module', 'state.desk')
+  await expect(page.locator('[data-region="views"] .explainer')).toHaveAttribute('data-explainer', 'state.desk')
   await showView(page, 'description')
-  const area = page.locator('[data-region="views"] .panel-wrap')
-  const card = page.locator('.panel .id-card').first()
-  await expect(card).toBeVisible()
-  // 滚到底：身份卡钉在滚动区上沿，没有名称胶囊
-  await area.evaluate(el => el.scrollTo({ top: el.scrollHeight }))
-  const [cardBox, areaBox] = await Promise.all([card.boundingBox(), area.boundingBox()])
-  expect(cardBox!.y).toBeGreaterThanOrEqual(areaBox!.y - 0.5)
-  expect(cardBox!.y - areaBox!.y).toBeLessThan(12) // 面板内边距之内钉住
+  const row = page.locator('[data-region="views"] .panel[data-part="description"] .id-card')
+  await expect(row.locator('h2')).toHaveCount(0)
+  await expect(row.getByRole('button', { name: '讨论 ›' })).toBeVisible()
+  await expect(page.locator('[data-head="views"] [data-testid="subject-name"]')).toHaveText('DeskState')
   await expect(page.getByTestId('props-mini')).toHaveCount(0)
-  await expect(page.locator('[data-region="views"] .tab[data-view-tab="explainer"]')).toHaveCount(1)
 })
 
 /** 回放胶囊、缩放胶囊、画布（相对视口） */

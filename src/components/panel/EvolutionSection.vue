@@ -32,7 +32,7 @@ const REASON: Record<string, string> = {
         <h4>{{ kind === 'fixes' ? '缺陷' : '修改' }}热度前 {{ top.length }}</h4>
         <ol v-if="top.length" class="top">
           <li v-for="m in top" :key="m.id">
-            <button class="link" @click="desk.revealModule(m.id)">{{ name(m.id) }}</button>
+            <button class="link" :data-ref-module="m.id" @click="desk.revealModule(m.id)">{{ name(m.id) }}</button>
             <span class="muted">
               {{ kind === 'fixes' ? m.fixes : m.changes }} 次 · {{ m.lines }} 行 · 热度 {{ Math.round(kind === 'fixes' ? m.fixHeat : m.heat) }}</span
             >

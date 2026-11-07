@@ -41,9 +41,9 @@ const rows = computed<CheckRow[]>(() => {
 <template>
   <div v-if="x && panel" class="port-panel">
     <header class="head id-card" data-sec="head">
-      <h2>端口 {{ x.name }}</h2>
+      <h2 class="subject-name">端口 {{ x.name }}</h2>
       <div class="badges">
-        <code>{{ x.id }}</code>
+        <code class="subject-id">{{ x.id }}</code>
         <span class="badge" :class="{ accent: panel.isPort }">{{ panel.isPort ? '端口' : '接口（不算端口）' }}</span>
         <span class="badge">实现者 {{ panel.implementers.length }}</span>
         <ChangeBadge entity="interface" :id="x.id" detail />

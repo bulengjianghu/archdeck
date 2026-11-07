@@ -414,3 +414,10 @@ a {
 .sk-node-dragging button:disabled {
   pointer-events: none;
 }
+
+/* LY-15：视图里悬停的模块引用——画布上那个节点加强调色虚线描边（不移动视口），离开即消失 */
+.vue-flow__node.peek {
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
+  border-radius: 10px;
+}

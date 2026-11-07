@@ -146,13 +146,15 @@ const relText = (id: string) => {
         <div v-if="metrics.topDependents.length">
           <span class="muted">依赖它最多</span>
           <span v-for="t in metrics.topDependents" :key="t.module" class="top-item">
-            <button class="link" @click="desk.revealModule(t.module)">{{ name(t.module) }}</button><span class="muted"> {{ t.files }} 处</span>
+            <button class="link" :data-ref-module="t.module" @click="desk.revealModule(t.module)">{{ name(t.module) }}</button
+            ><span class="muted"> {{ t.files }} 处</span>
           </span>
         </div>
         <div v-if="metrics.topDependencies.length">
           <span class="muted">它依赖最多</span>
           <span v-for="t in metrics.topDependencies" :key="t.module" class="top-item">
-            <button class="link" @click="desk.revealModule(t.module)">{{ name(t.module) }}</button><span class="muted"> {{ t.files }} 处</span>
+            <button class="link" :data-ref-module="t.module" @click="desk.revealModule(t.module)">{{ name(t.module) }}</button
+            ><span class="muted"> {{ t.files }} 处</span>
           </span>
         </div>
       </div>
@@ -161,7 +163,7 @@ const relText = (id: string) => {
         <span class="badge warn">逆稳定</span>
         它（I {{ fmtI(metrics.instability) }}）依赖了更易变的
         <template v-for="(a, i) in against" :key="a.module"
-          >{{ i ? '、' : '' }}<button class="link" @click="desk.revealModule(a.module)">{{ name(a.module) }}</button
+          >{{ i ? '、' : '' }}<button class="link" :data-ref-module="a.module" @click="desk.revealModule(a.module)">{{ name(a.module) }}</button
           ><span class="muted">（I {{ fmtI(a.hit.to) }}）</span></template
         >；只是提示，不计违规
       </p>
@@ -206,7 +208,7 @@ const relText = (id: string) => {
             </summary>
             <ul class="plain">
               <li v-for="e in shownOf(`${s.dir}:${g.label}`, g.list)" :key="e.module">
-                <button class="link" @click="desk.revealModule(e.module)">{{ name(e.module) }}</button>
+                <button class="link" :data-ref-module="e.module" @click="desk.revealModule(e.module)">{{ name(e.module) }}</button>
                 <span v-if="filesOf(e.module) !== null" class="muted"> {{ filesOf(e.module) }} 个文件</span>
                 <span v-if="e.inCycle" class="cyc" title="在模块环中">↻</span>
                 <span

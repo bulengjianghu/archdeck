@@ -21,6 +21,7 @@ import {
   type RawFile,
   type ScenarioPlan,
   reworkList,
+  reworkScope as reworkScopeOf,
   reworkItemMarkdown,
   reworkMarkdown,
   type ReworkItem,
@@ -306,6 +307,13 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const explainers = createExplainers({ index })
 
   /** W-6、Q9：给 agent 的指令（Markdown）；不给返工项时为整份清单 */
+  /** LY-13：核对标签的系统 / 层汇总——这几棵子树里的返工项按五类计数（口径同返工清单） */
+  function reworkScope(roots: readonly string[]) {
+    const list = rework.value
+    const idx = index.value
+    return list && idx ? reworkScopeOf(list, idx, roots) : null
+  }
+
   function reworkPrompt(item?: ReworkItem): string {
     const list = rework.value
     if (!list) return ''
@@ -533,6 +541,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     issues,
     allIssues,
     rework,
+    reworkScope,
     reworkPrompt,
     expandedBands,
     toggleBand,

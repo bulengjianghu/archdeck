@@ -27,6 +27,7 @@ import { OPEN_PREVIEW } from './shared/preview'
 import { HAS_EXPLAINER } from './panel/related'
 import { SIDE_NAV, type ModulesMode, type SidePage } from './shared/navTab'
 import { OPEN_PROPS } from './shared/openProps'
+import { REF_PEEK } from './shared/refPeek'
 import { playerPlacement } from './shared/playerPlacement'
 import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
 import { useEvolutionPrefs } from './display/useEvolutionPrefs'
@@ -154,6 +155,10 @@ const subjectName = computed(() => {
   return idx && s ? subjectLabel(idx, s).name : ''
 })
 const openViews = () => ws.dispatch({ type: 'setCollapsed', collapsed: false })
+
+/** LY-15：视图里悬停的模块引用在画布上的节点（视图区写、画布读） */
+const refPeek = ref<string | null>(null)
+provide(REF_PEEK, refPeek)
 
 /** DL-20：手势编辑需要表单时（右键「编辑字段…」、改动页定位到的项）——激活「描述」标签（原抽屉内容在那里，波 2 过渡） */
 provide(OPEN_PROPS, () => ws.showView('description'))
@@ -299,7 +304,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <!-- X7a：进入草图即草图画布（ADR-0025） -->
         <SketchCanvas v-else-if="desk.edit.active.value" />
         <template v-else>
-          <GraphCanvas />
+          <GraphCanvas :peek="refPeek" />
           <!-- TB-7：画布左上角——⚠、源码胶囊、版本胶囊（LY-5） -->
           <CanvasTitle @issues="showIssues" />
         </template>

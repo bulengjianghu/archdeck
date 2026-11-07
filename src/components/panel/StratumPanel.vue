@@ -5,6 +5,8 @@
  * 核对：结构一行（Ca / Ce / I 与本层的向上依赖，向上依赖为提示，ST-3–ST-5 的依据）。
  */
 import { computed } from 'vue'
+import { usePanelPart } from '../shared/panelPart'
+import ScopeSummary from './ScopeSummary.vue'
 import { useDesk } from '@/state/inject'
 import { mayDependOnOf, moduleName, stratumByKey, stratumKey, summaryOf } from '@/model'
 import Section from './Section.vue'
@@ -14,6 +16,8 @@ import type { CheckRow } from './panelCheck'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
+/** LY-13、LY-7：描述里面板头是一行操作（不写名称与 ID），核对里不出现 */
+const pp = usePanelPart()
 const idx = computed(() => desk.index.value)
 const s = computed(() => (idx.value ? (stratumByKey(idx.value, props.id) ?? null) : null))
 const name = (id: string) => (idx.value ? moduleName(idx.value, id) : id)
@@ -54,8 +58,8 @@ const rows = computed<CheckRow[]>(() => {
 
 <template>
   <div class="stratum-panel" data-testid="stratum-panel">
-    <header class="head id-card">
-      <h2>{{ s?.name ?? id }}</h2>
+    <header v-if="pp.card" class="head id-card">
+      <h2 v-if="pp.name">{{ s?.name ?? id }}</h2>
       <div class="badges">
         <span class="badge">层</span>
         <span v-if="s" class="badge">{{ name(s.parent) }} · 第 {{ (idx?.strata.get(s.parent) ?? []).indexOf(s) + 1 }} 层</span>
@@ -76,7 +80,7 @@ const rows = computed<CheckRow[]>(() => {
         <Section title="成员" :count="s.members.length" data-sec="boundary.children">
           <ul class="list" data-testid="stratum-members">
             <li v-for="m in s.members" :key="m">
-              <button class="link" @click="desk.select({ kind: 'module', id: m })">{{ name(m) }}</button>
+              <button class="link" :data-ref-module="m" @click="desk.select({ kind: 'module', id: m })">{{ name(m) }}</button>
               <span v-if="brief(m)" class="muted"> · {{ brief(m) }}</span>
             </li>
           </ul>
@@ -88,6 +92,8 @@ const rows = computed<CheckRow[]>(() => {
           </span>
         </Section>
       </PanelCard>
+      <!-- LY-13：主语是系统 / 层时，核对标签先给这棵子树的汇总 -->
+      <ScopeSummary :roots="s?.members ?? []" />
       <CheckCard :rows="rows">
         <Section v-if="metrics && metrics.instability !== null" title="结构" fold data-sec="structure">
           <p>Ca {{ metrics.ca }} · Ce {{ metrics.ce }} · I {{ metrics.instability.toFixed(2) }}</p>

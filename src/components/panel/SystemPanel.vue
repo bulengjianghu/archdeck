@@ -9,6 +9,7 @@
  * G22 的源码落后提醒是页面级胶囊，不进面板。
  */
 import { computed, ref } from 'vue'
+import ScopeSummary from './ScopeSummary.vue'
 import { useDesk } from '@/state/inject'
 import Markdown from './Markdown.vue'
 import Section from './Section.vue'
@@ -249,9 +250,9 @@ const ledger = computed(() => f.ledger.value)
     <CommitSection v-else-if="desk.versions.commit.value" />
     <!-- ① 头部 -->
     <header class="head id-card" :class="{ 'after-design': !!desk.versions.design.value || !!desk.versions.commit.value }" data-sec="head">
-      <h2>{{ sys.name }}</h2>
+      <h2 class="subject-name">{{ sys.name }}</h2>
       <div class="badges">
-        <code>{{ sys.id }}</code>
+        <code class="subject-id">{{ sys.id }}</code>
         <span class="badge">系统</span>
       </div>
     </header>
@@ -263,12 +264,14 @@ const ledger = computed(() => f.ledger.value)
       <Section :title="layered ? '分层' : '顶层模块'" :count="top.length" data-sec="boundary.top">
         <ul class="plain">
           <li v-for="m in top" :key="m.id" class="top">
-            <button class="link" @click="desk.select({ kind: 'module', id: m.id })">{{ m.name }}</button>
+            <button class="link" :data-ref-module="m.id" @click="desk.select({ kind: 'module', id: m.id })">{{ m.name }}</button>
             <span class="muted">{{ brief(m) }}</span>
           </li>
         </ul>
       </Section>
     </PanelCard>
+    <!-- LY-13：主语是系统 / 层时，核对标签先给这棵子树的汇总 -->
+    <ScopeSummary :roots="[sys.id]" />
     <CheckCard :rows="rows">
       <template #row-review="{ row }">
         <ReviewSection :id="sys.id" part="badge" /><span> · {{ row.text }}</span>

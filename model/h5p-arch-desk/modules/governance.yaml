@@ -46,7 +46,7 @@ modules:
     name: 返工清单
     summary: 把各类问题按根因汇总成带建议动作的返工清单
     abstraction: 只汇总其他模型子模块已有的结果并按根因聚合，不新增事实、不重做判定。
-    codeRefs: [src/model/rework/index.ts, src/model/rework/list.ts, src/model/rework/markdown.ts, src/model/rework/health.ts, src/model/rework/coverage.ts]
+    codeRefs: [src/model/rework/index.ts, src/model/rework/list.ts, src/model/rework/markdown.ts, src/model/rework/health.ts, src/model/rework/coverage.ts, src/model/rework/scope.ts]
   - id: model.evolution
     name: 演化事实
     summary: 把 git 历史提升为模块的修改热度与时间耦合

@@ -1,18 +1,20 @@
 /**
  * 图解标签的 iframe 文档（EX-2、EX-3）：在图解原文的 head 最前注入 CSP（禁止一切网络请求）与引用的样式，
- * 在 body 末尾注入桥接脚本——按架构台给的原文填 data-field、给有图解的引用附「图解 ›」（每个模块只在第一处附一次）、把单击变成 postMessage。
+ * 在 body 末尾注入桥接脚本——按架构台给的原文填 data-field、给有图解的引用附「图解 ›」（每个模块只在第一处附一次）、把单击与悬停（LY-15）变成 postMessage。
  * iframe 只给 allow-scripts（不给 same-origin），父页按消息来源校验（ExplainerDoc）。
  */
 import type { ExplainerRefView } from '@/state/useDeskState'
 
 /** 桥接脚本发给父页的消息 */
-export type ExplainerMessage = { type: 'arch:select'; module: string } | { type: 'arch:open'; module: string }
+export type ExplainerMessage =
+  | { type: 'arch:select'; module: string }
+  | { type: 'arch:open'; module: string }
+  /** LY-15：悬停引用（空串 = 离开） */
+  | { type: 'arch:hover'; module: string }
 
+const TYPES = new Set(['arch:select', 'arch:open', 'arch:hover'])
 export const isExplainerMessage = (d: unknown): d is ExplainerMessage =>
-  !!d &&
-  typeof d === 'object' &&
-  ((d as ExplainerMessage).type === 'arch:select' || (d as ExplainerMessage).type === 'arch:open') &&
-  typeof (d as ExplainerMessage).module === 'string'
+  !!d && typeof d === 'object' && TYPES.has((d as ExplainerMessage).type) && typeof (d as ExplainerMessage).module === 'string'
 
 const CSP = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; font-src data:">`
 
@@ -74,6 +76,13 @@ const BRIDGE = `(function () {
     if (el && !el.classList.contains('arch-missing')) { e.preventDefault(); send('arch:select', el.getAttribute('data-arch')); }
   };
   document.addEventListener('click', act);
+  var hovered = '';
+  document.addEventListener('mouseover', function (e) {
+    var t = e.target instanceof Element ? e.target.closest('[data-arch]') : null;
+    var id = t && !t.classList.contains('arch-missing') ? t.getAttribute('data-arch') || '' : '';
+    if (id !== hovered) { hovered = id; send('arch:hover', id); }
+  });
+  document.addEventListener('mouseleave', function () { if (hovered) { hovered = ''; send('arch:hover', ''); } });
   document.addEventListener('keydown', function (e) { if (e.key === 'Enter') act(e); });
 })();`
 

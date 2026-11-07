@@ -1,11 +1,11 @@
 /**
- * 主语条的一行（LY-7）与波 2 过渡的面板分部（LY-13a）：subjectLabel 是纯函数——所在路径（祖先，不含根与自己）› 名称 + ID + 角色徽标；
- * cardShown——「描述」放原面板全部内容，「核对」只放核对卡
+ * 主语条的一行（LY-7）与面板分部（LY-13）：subjectLabel 是纯函数——所在路径（祖先，不含根与自己）› 名称 + ID + 角色徽标；
+ * cardShown——「描述」放核对卡以外的卡，「核对」只放核对卡
  */
 import { describe, expect, it } from 'vitest'
 import { loadModel } from '../../src/model'
 import { subjectLabel } from '../../src/components/dock/subjectLabel'
-import { cardShown } from '../../src/components/panel/panelPart'
+import { cardShown } from '../../src/components/shared/panelPart'
 import { scenarioFiles } from '../fixtures/sample'
 
 const { index } = loadModel(scenarioFiles())
@@ -39,9 +39,9 @@ describe('LY-7 主语条', () => {
   })
 })
 
-describe('LY-13a 波 2 过渡：面板分部', () => {
-  it('描述放全部卡（含核对卡）；核对只放核对卡', () => {
-    expect(['understand', 'check', 'related'].map(k => cardShown('description', k))).toEqual([true, true, true])
+describe('LY-13 面板分部', () => {
+  it('描述放核对卡以外的卡；核对只放核对卡', () => {
+    expect(['understand', 'check', 'related'].map(k => cardShown('description', k))).toEqual([true, false, true])
     expect(['understand', 'check', 'related'].map(k => cardShown('check', k))).toEqual([false, true, false])
     expect(cardShown('all', 'check')).toBe(true)
   })

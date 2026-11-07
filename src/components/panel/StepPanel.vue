@@ -8,6 +8,7 @@
  * 并可定位，P15）、本层一条可见消息覆盖的多帧；最后是出处。
  */
 import { computed } from 'vue'
+import { usePanelPart } from '../shared/panelPart'
 import { useDesk } from '@/state/inject'
 import { CARRIER_ROLE_TEXT, moduleName, type CarrierSegment } from '@/model'
 import Section from './Section.vue'
@@ -25,6 +26,8 @@ import { alignedEvidence, stepChain } from './chain'
 import { KIND_LABEL, dataNames, fragmentText, frameText, landingText, signatureLine, stepOutput } from './runText'
 
 const desk = useDesk()
+/** LY-13、LY-7：描述里面板头是一行操作（不写名称与 ID），核对里不出现 */
+const pp = usePanelPart()
 const idx = computed(() => desk.index.value!)
 const f = computed(() => desk.run.frame.value!)
 const msg = computed(() => {
@@ -88,13 +91,13 @@ function pointAt(id: string) {
 
 <template>
   <div v-if="f" class="step-panel">
-    <header class="head id-card">
+    <header v-if="pp.card" class="head id-card">
       <div class="badges top">
         <span class="badge accent">选中的步骤</span>
         <span v-if="msg" class="muted">第 {{ msg.index + 1 }} / {{ total }} 步（本层）</span>
         <span v-else class="badge warn">本层不可见</span>
       </div>
-      <h2>{{ f.label || frameText(idx, f) }}</h2>
+      <h2 v-if="pp.name">{{ f.label || frameText(idx, f) }}</h2>
       <div class="badges">
         <span class="badge">{{ KIND_LABEL[f.kind] }}</span>
         <span v-for="(t, i) in f.fragments" :key="i" class="badge">{{ fragmentText(t) }}</span>

@@ -6,6 +6,7 @@
  * 未归属文件可「加入忽略」：只追加 source-ignore.yaml（人拥有的文件，B4、ADR-0019）；属于某个模块时仍由人或 AI 补 codeRefs。
  */
 import { computed } from 'vue'
+import { usePanelPart } from '../shared/panelPart'
 import { useDesk } from '@/state/inject'
 import { isLong, moduleName } from '@/model'
 import { useOpenPreview } from '../shared/preview'
@@ -18,6 +19,8 @@ import type { CheckRow } from './panelCheck'
 
 const props = defineProps<{ path: string }>()
 const desk = useDesk()
+/** LY-13、LY-7：描述里面板头是一行操作（不写名称与 ID），核对里不出现 */
+const pp = usePanelPart()
 const openPreview = useOpenPreview()
 const idx = computed(() => desk.index.value!)
 const local = computed(() => (desk.files.payload.value?.status === 'local' ? desk.files.payload.value : null))
@@ -69,10 +72,10 @@ const rows = computed<CheckRow[]>(() => {
 
 <template>
   <div class="file-panel">
-    <header class="head id-card" data-sec="head">
-      <h2>{{ name }}</h2>
+    <header v-if="pp.card" class="head id-card" data-sec="head">
+      <h2 v-if="pp.name">{{ name }}</h2>
       <div class="badges">
-        <code>{{ path }}</code>
+        <code v-if="pp.name">{{ path }}</code>
         <span class="badge">文件</span>
         <span v-if="owners.length > 1" class="badge warn">归属冲突</span>
         <span v-else-if="exists && !owners.length && !ignored" class="badge warn">未归属</span>
@@ -92,7 +95,7 @@ const rows = computed<CheckRow[]>(() => {
         <Section title="归属模块" :count="owners.length" data-sec="boundary.owner">
           <ul v-if="owners.length" class="plain">
             <li v-for="o in owners" :key="o" class="owner">
-              <button class="link" @click="desk.revealModule(o)">{{ moduleName(idx, o) }}</button>
+              <button class="link" :data-ref-module="o" @click="desk.revealModule(o)">{{ moduleName(idx, o) }}</button>
               <span class="muted"> · {{ pathOf(o) }}</span>
             </li>
           </ul>
@@ -127,7 +130,7 @@ const rows = computed<CheckRow[]>(() => {
         <Section v-if="entries.length" title="作为入口" data-sec="boundary.entries">
           <ul class="plain">
             <li v-for="m in entries" :key="m">
-              <button class="link" @click="desk.revealModule(m)">{{ moduleName(idx, m) }}</button> 的对外入口
+              <button class="link" :data-ref-module="m" @click="desk.revealModule(m)">{{ moduleName(idx, m) }}</button> 的对外入口
             </li>
           </ul>
         </Section>

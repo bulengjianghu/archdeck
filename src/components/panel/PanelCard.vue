@@ -7,11 +7,11 @@
  * 卡头「小号粗标题 ▾」、结论靠右，没有底色与分隔线（CD-5）；卡片外观与间距由属性列统一给（CD-1、CD-2，Panel）。
  */
 import { computed, inject, ref, watch, type Ref } from 'vue'
-import { PANEL_PART, cardShown } from './panelPart'
+import { PANEL_PART, cardShown } from '../shared/panelPart'
 
 const props = withDefaults(
   defineProps<{
-    kind: 'understand' | 'check' | 'related'
+    kind: 'understand' | 'check' | 'related' | 'summary'
     title: string
     summary?: string
     warn?: boolean

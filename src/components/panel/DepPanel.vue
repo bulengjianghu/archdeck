@@ -56,7 +56,7 @@ const rows = computed(() => rowsFromNotices(notices.value, [{ key: 'governance',
 <template>
   <div ref="root" class="dep-panel">
     <header class="head id-card" data-sec="head">
-      <h2 v-if="sel">{{ name(sel.from) }} → {{ name(sel.to) }}</h2>
+      <h2 v-if="sel" class="subject-name">{{ name(sel.from) }} → {{ name(sel.to) }}</h2>
       <div class="badges">
         <span class="badge">{{ structureView ? '依赖边' : '代码依赖' }}</span>
         <template v-if="structure.some(g => g.list.length)"><span class="muted">知识</span><StructureFacts :groups="structure" /></template>
@@ -72,8 +72,8 @@ const rows = computed(() => rowsFromNotices(notices.value, [{ key: 'governance',
           <ul class="plain">
             <li v-for="d in sel.detail.deps" :key="d.key" class="item">
               <div>
-                <button class="link" @click="desk.revealModule(d.from)">{{ name(d.from) }}</button> →
-                <button class="link" @click="desk.revealModule(d.to)">{{ name(d.to) }}</button>
+                <button class="link" :data-ref-module="d.from" @click="desk.revealModule(d.from)">{{ name(d.from) }}</button> →
+                <button class="link" :data-ref-module="d.to" @click="desk.revealModule(d.to)">{{ name(d.to) }}</button>
                 <span :class="d.described ? 'muted' : 'warn'">{{ d.described ? '有交互' : '未解释' }}</span>
                 <span class="muted">{{ d.files.length }} 处</span>
               </div>
@@ -87,8 +87,8 @@ const rows = computed(() => rowsFromNotices(notices.value, [{ key: 'governance',
           <ul class="plain">
             <li v-for="v in violations" :key="v.key" class="item">
               <div>
-                <button class="link" @click="desk.revealModule(v.from)">{{ name(v.from) }}</button> →
-                <button class="link" @click="desk.revealModule(v.to)">{{ name(v.to) }}</button>
+                <button class="link" :data-ref-module="v.from" @click="desk.revealModule(v.from)">{{ name(v.from) }}</button> →
+                <button class="link" :data-ref-module="v.to" @click="desk.revealModule(v.to)">{{ name(v.to) }}</button>
                 <span class="chip">{{ RULE_LABELS[v.kind] }}</span
                 ><span :class="v.status === 'new' ? 'bad' : 'muted'">{{ STATUS[v.status] }}</span>
               </div>

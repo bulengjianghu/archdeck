@@ -47,7 +47,7 @@ const users = computed(() => ({ port: props.panel.users.filter(u => u.how === 'p
         <code>{{ x?.name ?? panel.port }}</code>
         <template v-if="panel.owner">
           <span class="muted">定义于</span>
-          <button class="link" @click="desk.revealModule(panel.owner)">{{ name(panel.owner) }}</button>
+          <button class="link" :data-ref-module="panel.owner" @click="desk.revealModule(panel.owner)">{{ name(panel.owner) }}</button>
         </template>
       </div>
       <CodeBlock v-if="!titled && x?.signature" :code="x.signature" />
@@ -59,7 +59,7 @@ const users = computed(() => ({ port: props.panel.users.filter(u => u.how === 'p
       <p v-if="!panel.implementers.length" class="muted warn">没有任何实现者（描述与代码事实都没有，U14）</p>
       <ul v-else class="plain">
         <li v-for="i in panel.implementers" :key="i.module" class="party">
-          <button class="link" @click="desk.revealModule(i.module)">{{ name(i.module) }}</button>
+          <button class="link" :data-ref-module="i.module" @click="desk.revealModule(i.module)">{{ name(i.module) }}</button>
           <span v-if="source(i)" class="tag" :class="{ code: i.code && !i.described }">{{ source(i) }}</span>
           <span v-if="evidence(i)?.mark" class="fact" :class="evidence(i)!.cls" :title="evidence(i)!.title">{{ evidence(i)!.mark }}</span>
         </li>
