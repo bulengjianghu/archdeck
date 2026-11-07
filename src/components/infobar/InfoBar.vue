@@ -130,6 +130,7 @@ const ready = computed(() => (mode === 'commit' ? !!c.value : !!d.value || isInt
 
 .info-bar {
   display: flex;
+  flex-wrap: wrap; /* 第二十二轮：信息条住画布列（LY-1），列窄时各区换行而不是互相压住 */
   align-items: stretch;
   min-height: 38px;
   font-size: 12.5px;
@@ -150,7 +151,8 @@ const ready = computed(() => (mode === 'commit' ? !!c.value : !!d.value || isInt
 }
 
 .who {
-  flex: 1;
+  flex: 1 1 260px;
+  overflow: hidden;
 }
 
 .kind {
