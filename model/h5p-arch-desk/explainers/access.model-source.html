@@ -4,65 +4,49 @@
     <meta name="arch-basis" content="v1 93405dc5e8aef879 access.model-source#abstraction=e7f24a21 access.model-source#invariants=16797a02 access.model-source#responsibility=6fc319a0 access.model-source#summary=9c7ec10e">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>数据站 · 本地小邮局</title>
+    <title>ModelSource 插件 · 邮政窗口</title>
     <style>
 :root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
 @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
-body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
 h1{font-size:18px;margin:0 0 4px}
-h2{font-size:15px;margin:22px 0 6px}
-.lede{color:var(--text-2);margin:0 0 14px}
-figure{margin:10px 0 4px}
-figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
-svg{width:100%;height:auto;display:block}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
 svg text{font-family:inherit;fill:var(--text)}
 svg .muted{fill:var(--text-2)}
-.cols{display:grid;gap:8px;margin:8px 0}
-.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
-.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
-.cols b{display:block;font-size:13.5px}
-.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
-.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
-code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
 </style>
   </head>
   <body>
 
-    <h1>本地小邮局</h1>
-    <p class="lede">这一层是 <span data-arch="access.model-source">ModelSource 插件</span>：<span data-arch="access.model-source" data-field="summary"></span>。开发服务器里的邮政窗口：页面要什么来取，文件一存就推送。</p>
+    <h1>开发服务器里的邮政窗口</h1>
+    <p class="lede"><span data-arch="access.model-source">ModelSource 插件</span>让页面不必打包描述：要什么，就到同源端点去取。</p>
 
+    <h2>取与推</h2>
     <figure>
-      <svg viewBox="0 0 640 216" role="img" aria-label="各窗口的端点与推送、写入口">
-        <defs><marker id="j" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
-        <rect x="14" y="30" width="250" height="156" rx="10" fill="var(--ok-soft)" stroke="var(--ok)"/>
-        <text x="139" y="54" font-size="12" text-anchor="middle" class="">取件窗口（只读）</text>
-        <rect x="30" y="66" width="218" height="22" rx="4" fill="var(--bg)" stroke="var(--line)"/><text x="139" y="81" font-size="9" text-anchor="middle" class="">项目清单（附健康度）</text>
-        <rect x="30" y="92" width="218" height="22" rx="4" fill="var(--bg)" stroke="var(--line)"/><text x="139" y="107" font-size="9" text-anchor="middle" class="">描述 · 设计各轮 · 提交版本</text>
-        <rect x="30" y="118" width="218" height="22" rx="4" fill="var(--bg)" stroke="var(--line)"/><text x="139" y="133" font-size="9" text-anchor="middle" class="">源码清单 · 单文件 · 导出</text>
-        <rect x="30" y="144" width="218" height="22" rx="4" fill="var(--bg)" stroke="var(--line)"/><text x="139" y="159" font-size="9" text-anchor="middle" class="">代码事实 · 基线 · 拦截记录</text>
-        <path d="M266,90 L294,90" stroke="var(--text-2)" stroke-width="2" marker-end="url(#j)"/>
-        <rect x="298" y="62" width="130" height="56" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
-        <text x="363" y="86" font-size="11" text-anchor="middle" class="">页面</text>
-        <path d="M266,130 L294,130" stroke="var(--text-2)" stroke-width="2" marker-end="url(#j)"/>
-        <rect x="298" y="126" width="130" height="56" rx="10" fill="var(--soft)" stroke="var(--line)"/>
-        <text x="363" y="150" font-size="11" text-anchor="middle" class="">命令行 / AI</text>
-        <rect x="452" y="30" width="174" height="74" rx="10" fill="var(--warn-soft)" stroke="var(--warn)"/>
-        <text x="539" y="52" font-size="11" text-anchor="middle" class="">推送（存盘即发）</text>
-        <text x="468" y="74" font-size="9" class="muted">arch-model:changed</text>
-        <text x="468" y="90" font-size="9" class="muted">页面收到即重新加载</text>
-        <rect x="452" y="116" width="174" height="70" rx="10" fill="var(--hot-soft)" stroke="var(--hot)"/>
-        <text x="539" y="138" font-size="11" text-anchor="middle" class="">寄件（只追加）</text>
-        <text x="468" y="160" font-size="9" class="muted">POST 写入口 · 只收同源 JSON</text>
-        <text x="320" y="204" font-size="10" text-anchor="middle" class="">它只搬运文本与做摘要——不解释含义，解释是模型层的事</text>
+      <svg viewBox="0 0 480 266" role="img" aria-label="ModelSource 插件：开发服务器里的同源端点，页面按需取；存盘后按项目推送变化">
+        <defs><marker id="a3P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a3S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a3A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a3M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a3g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a3l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="140" y="6" width="200" height="44" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="240.0" y="25.1" font-size="12.5" text-anchor="middle">页面</text><text x="240.0" y="39.6" font-size="10.5" text-anchor="middle" class="muted">按需取，收到推送就重载</text>
+        <g data-arch="access.model-source"><rect x="100" y="96" width="280" height="60" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="240.0" y="123.5" font-size="13.5" text-anchor="middle" font-weight="600">ModelSource 插件</text><text x="240.0" y="138.0" font-size="10.5" text-anchor="middle" class="muted">开发服务器里的同源端点</text></g>
+        <path d="M200,50 L200,94" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a3g)"/>
+        <path d="M280,94 L280,52" stroke="var(--ok)" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#a3A)"/>
+        <text x="194" y="76" font-size="10.5" text-anchor="end" class="muted">取</text>
+        <text x="288" y="76" font-size="10.5" text-anchor="start" style="fill:var(--ok)">推送（按项目）</text>
+        <rect x="6" y="176" width="110" height="28" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="61.0" y="193.8" font-size="11" text-anchor="middle">项目清单 + 体检</text>
+        <rect x="124" y="176" width="110" height="28" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="179.0" y="193.8" font-size="11" text-anchor="middle">描述</text>
+        <rect x="242" y="176" width="110" height="28" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="297.0" y="193.8" font-size="11" text-anchor="middle">源码</text>
+        <rect x="360" y="176" width="110" height="28" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="415.0" y="193.8" font-size="11" text-anchor="middle">历史</text>
+        <line x1="6" y1="168" x2="474" y2="168" stroke="var(--line)" stroke-width="1"/>
+        <line x1="240" y1="156" x2="240" y2="168" stroke="var(--line)" stroke-width="1"/>
+        <path d="M240,232 L240,206" stroke="var(--text-2)" stroke-width="1.2" fill="none" stroke-dasharray="5 4" marker-end="url(#a3g)"/>
+        <rect x="140" y="232" width="200" height="30" rx="8" fill="var(--soft)" stroke="var(--line)" stroke-dasharray="5 4"/><text x="240.0" y="251.0" font-size="11.5" text-anchor="middle">磁盘：存盘即触发</text>
       </svg>
-      <figcaption>两扇取件窗、一扇寄件门、一条推送铃。</figcaption>
+      <figcaption>页面按需取项目清单、描述、源码与历史，清单里附带体检结果。文件一存盘，插件就按项目推送变化，页面只重载那一个项目。</figcaption>
     </figure>
-
-    <h2>窗口与门的分工</h2>
-    <div class="cols c2">
-      <div><b>寄件门</b>端点由它挂载、货物由 <span data-arch="access.writer">描述写入</span> 验收：只收人拥有的文件、只追加、写后更新指纹。</div>
-      <div><b>推送铃</b>描述变了、源码变了都推一条消息——页面听见就重读，所以「存盘即所见」。</div>
-    </div>
 
   </body>
 </html>

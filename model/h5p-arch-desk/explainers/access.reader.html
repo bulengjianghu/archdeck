@@ -4,63 +4,52 @@
     <meta name="arch-basis" content="v1 563f7b5e31bb0e14 access.reader#abstraction=d3df8c97 access.reader#invariants=22665bca access.reader#responsibility=756b1425 access.reader#summary=f96fa202">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>描述读取 · 图书管理员</title>
+    <title>描述读取 · 凭一个约定认项目</title>
     <style>
 :root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
 @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
-body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
 h1{font-size:18px;margin:0 0 4px}
-h2{font-size:15px;margin:22px 0 6px}
-.lede{color:var(--text-2);margin:0 0 14px}
-figure{margin:10px 0 4px}
-figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
-svg{width:100%;height:auto;display:block}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
 svg text{font-family:inherit;fill:var(--text)}
 svg .muted{fill:var(--text-2)}
-.cols{display:grid;gap:8px;margin:8px 0}
-.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
-.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
-.cols b{display:block;font-size:13.5px}
-.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
-.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
-code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
 </style>
   </head>
   <body>
 
-    <h1>图书管理员</h1>
-    <p class="lede">这一层是 <span data-arch="access.reader">描述读取</span>：<span data-arch="access.reader" data-field="summary"></span>。它凭一条约定在模型根目录里认出项目，再按需取书。</p>
+    <h1>凭一个约定认项目</h1>
+    <p class="lede"><span data-arch="access.reader">描述读取</span>不需要配置清单：目录里有系统卡，就是一个项目。</p>
 
+    <h2>认项目、认版本</h2>
     <figure>
-      <svg viewBox="0 0 640 196" role="img" aria-label="约定识别项目，按版本取书并生成摘要">
-        <defs><marker id="k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
-        <rect x="14" y="30" width="230" height="92" rx="10" fill="var(--ok-soft)" stroke="var(--ok)"/>
-        <text x="129" y="54" font-size="11.5" text-anchor="middle" class="">一条约定</text>
-        <text x="30" y="78" font-size="9.5" class="muted">模型根目录下，含 system.yaml</text>
-        <text x="30" y="94" font-size="9.5" class="muted">的子目录 = 一个项目</text>
-        <text x="30" y="112" font-size="9.5" class="muted">designs/&lt;设计&gt;/ 下每轮一个快照</text>
-        <path d="M246,76 L274,76" stroke="var(--text-2)" stroke-width="2" marker-end="url(#k)"/>
-        <rect x="278" y="30" width="168" height="92" rx="10" fill="var(--bg)" stroke="var(--warn)"/>
-        <text x="362" y="54" font-size="11.5" text-anchor="middle" class="">取书单</text>
-        <text x="294" y="78" font-size="9" class="muted">当前版本（跳过设计与治理）</text>
-        <text x="294" y="94" font-size="9" class="muted">设计某一轮 + 对比基线</text>
-        <text x="294" y="110" font-size="9" class="muted">design.yaml（设计说明）</text>
-        <path d="M448,76 L476,76" stroke="var(--text-2)" stroke-width="2" marker-end="url(#k)"/>
-        <rect x="480" y="30" width="146" height="92" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
-        <text x="553" y="54" font-size="11" text-anchor="middle" class="">顺手续一次</text>
-        <text x="494" y="78" font-size="9" class="muted">交给模型层生成</text>
-        <text x="494" y="94" font-size="9" class="muted">项目摘要，随书附上</text>
-        <text x="320" y="152" font-size="10" text-anchor="middle" class="">读的是文本与摘要——不解释描述的含义；图解（explainers/）也是它认领进来的</text>
-        <text x="320" y="178" font-size="9.5" text-anchor="middle" class="">所以「换一种页面布局」不需要它改一行：约定不变，书不变</text>
+      <svg viewBox="0 0 480 250" role="img" aria-label="描述读取：目录里含系统卡的就是项目；当前版本、设计某一轮、git 提交都按同一约定读出">
+        <defs><marker id="a6P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a6S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a6A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a6M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a6g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a6l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="6" y="6" width="200" height="34" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="16" y="27.4" font-size="12.5" text-anchor="start">model/</text>
+        <line x1="20" y1="40" x2="20" y2="65" stroke="var(--text-2)" stroke-width="1"/>
+        <line x1="20" y1="65" x2="34" y2="65" stroke="var(--text-2)" stroke-width="1"/>
+        <rect x="36" y="50" width="190" height="30" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="46" y="68.8" font-size="11" text-anchor="start">✓ h5player/  · 有系统卡</text>
+        <line x1="20" y1="40" x2="20" y2="105" stroke="var(--text-2)" stroke-width="1"/>
+        <line x1="20" y1="105" x2="34" y2="105" stroke="var(--text-2)" stroke-width="1"/>
+        <rect x="36" y="90" width="190" height="30" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="46" y="108.8" font-size="11" text-anchor="start">✓ h5p-arch-desk/  · 有系统卡</text>
+        <line x1="20" y1="40" x2="20" y2="145" stroke="var(--text-2)" stroke-width="1"/>
+        <line x1="20" y1="145" x2="34" y2="145" stroke="var(--text-2)" stroke-width="1"/>
+        <rect x="36" y="130" width="190" height="30" rx="8" fill="none" stroke="var(--gray)" stroke-dasharray="5 4"/><text x="46" y="148.8" font-size="11" text-anchor="start">✗ 草稿/  · 没有系统卡</text>
+        <rect x="258" y="6" width="216" height="34" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="366.0" y="27.4" font-size="12.5" text-anchor="middle">一个项目的哪一版？</text>
+        <rect x="258" y="50" width="216" height="30" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="366.0" y="69.0" font-size="11.5" text-anchor="middle">当前版本</text>
+        <rect x="258" y="90" width="216" height="30" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="366.0" y="109.0" font-size="11.5" text-anchor="middle">设计的某一轮 r&lt;N&gt;</text>
+        <rect x="258" y="130" width="216" height="30" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="366.0" y="149.0" font-size="11.5" text-anchor="middle">某个 git 提交</text>
+        <g data-arch="access.reader"><rect x="110" y="186" width="260" height="50" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="240.0" y="208.3" font-size="13" text-anchor="middle" font-weight="600">描述读取</text><text x="240.0" y="222.8" font-size="10.5" text-anchor="middle" class="muted">同一约定读出原文与项目摘要</text></g>
+        <path d="M131,170 L200,184" stroke="var(--ok)" stroke-width="1.4" fill="none" marker-end="url(#a6A)"/>
+        <path d="M366,170 L300,184" stroke="var(--ok)" stroke-width="1.4" fill="none" marker-end="url(#a6A)"/>
       </svg>
-      <figcaption>一条约定认项目，一份书单取版本。</figcaption>
+      <figcaption>项目、当前版本、设计的某一轮、对比基线，都按同一个目录约定取。读出来的只是原文与摘要，解析与校验交给模型层。</figcaption>
     </figure>
-
-    <h2>与两个邻居的分工</h2>
-    <div class="cols c2">
-      <div><b>上游</b>磁盘上有什么它说了算——哪些目录算项目、哪些文件算描述，全在这条约定里；<span data-arch="access.model-source">数据站</span> 的端点只是把它的产出摆上窗口。</div>
-      <div><b>下游</b>取到的文本交给 <span data-arch="model.pipeline">进料口</span> 解析校验；图解原文（explainers/）同样由它读出、按文件认领给模块。</div>
-    </div>
 
   </body>
 </html>

@@ -8,64 +8,58 @@
     <style>
 :root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
 @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
-body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
 h1{font-size:18px;margin:0 0 4px}
-h2{font-size:15px;margin:22px 0 6px}
-.lede{color:var(--text-2);margin:0 0 14px}
-figure{margin:10px 0 4px}
-figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
-svg{width:100%;height:auto;display:block}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
 svg text{font-family:inherit;fill:var(--text)}
 svg .muted{fill:var(--text-2)}
-.cols{display:grid;gap:8px;margin:8px 0}
-.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
-.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
-.cols b{display:block;font-size:13.5px}
-.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
-.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
-code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
 </style>
   </head>
   <body>
 
     <h1>讲解员与登记台</h1>
-    <p class="lede">这一层是 <span data-arch="present.panel">属性面板</span>：<span data-arch="present.panel" data-field="summary"></span>。选中什么讲什么；架构师的笔迹也从这里登记。</p>
+    <p class="lede"><span data-arch="present.panel">属性面板</span>把主语讲清楚：它被声明成什么、可信不可信。架构师的确认与意见，也从这里登记。</p>
 
+    <h2>按主语换装，分进两个标签</h2>
     <figure>
-      <svg viewBox="0 0 640 232" role="img" aria-label="头部加三卡：理解、核对、相关资料">
-        <defs><marker id="f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
-        <rect x="14" y="10" width="612" height="40" rx="8" fill="var(--soft)" stroke="var(--line)"/>
-        <text x="30" y="35" font-size="11" class="">头部：名称 · 徽标 · 设计说明 · ×</text>
-        <rect x="14" y="58" width="196" height="110" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
-        <text x="112" y="80" font-size="11.5" text-anchor="middle" class="">理解卡</text>
-        <text x="30" y="100" font-size="9" class="muted">六问：是什么 / 不是什么 /</text>
-        <text x="30" y="114" font-size="9" class="muted">怎么分 / 守住什么 / 表面 /</text>
-        <text x="30" y="128" font-size="9" class="muted">协作——意图在先、画布有</text>
-        <text x="30" y="142" font-size="9" class="muted">的不复述、全文不截字</text>
-        <rect x="222" y="58" width="196" height="110" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/>
-        <text x="320" y="80" font-size="11.5" text-anchor="middle" class="">核对卡</text>
-        <text x="238" y="100" font-size="9" class="muted">先结论后条目：证实 / 治理 /</text>
-        <text x="238" y="114" font-size="9" class="muted">表面 / 拆分 / 演化 / 确认；</text>
-        <text x="238" y="128" font-size="9" class="muted">异常行下平铺条目，清单</text>
-        <text x="238" y="142" font-size="9" class="muted">折叠带计数、按严重度排</text>
-        <rect x="430" y="58" width="196" height="110" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/>
-        <text x="528" y="80" font-size="11.5" text-anchor="middle" class="">相关资料卡</text>
-        <text x="446" y="100" font-size="9" class="muted">本模块的图解（▣）与参与</text>
-        <text x="446" y="114" font-size="9" class="muted">的场景：单击预览、双击固</text>
-        <text x="446" y="128" font-size="9" class="muted">定、已打开标「已打开」；</text>
-        <text x="446" y="142" font-size="9" class="muted">多于 3 份缺省收起</text>
-        <text x="320" y="196" font-size="10" text-anchor="middle" class="">「确认 / 例外 / 评审意见」从面板写入人拥有的文件——只追加，写后更新指纹</text>
-        <text x="320" y="216" font-size="9.5" text-anchor="middle" class="muted">面板是分派器：对象不同（模块 / 关系 / 边 / 系统 / 设计）换不同的卡，自己不存内容</text>
+      <svg viewBox="0 0 480 296" role="img" aria-label="面板分派：按主语挑出一张对象面板，事实落在描述标签，核对卡落在核对标签；写入经描述写入只追加">
+        <defs><marker id="a18P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a18S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a18A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a18M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a18g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a18l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="6" y="4" width="87" height="26" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="49.5" y="21.0" font-size="11.5" text-anchor="middle">模块</text>
+        <path d="M49,30 L200,52" stroke="var(--text-2)" stroke-width="1.1" fill="none" marker-end="url(#a18g)"/>
+        <rect x="101" y="4" width="87" height="26" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="144.5" y="21.0" font-size="11.5" text-anchor="middle">关系</text>
+        <path d="M144,30 L220,52" stroke="var(--text-2)" stroke-width="1.1" fill="none" marker-end="url(#a18g)"/>
+        <rect x="196" y="4" width="87" height="26" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="239.5" y="21.0" font-size="11.5" text-anchor="middle">场景</text>
+        <path d="M239,30 L240,52" stroke="var(--text-2)" stroke-width="1.1" fill="none" marker-end="url(#a18g)"/>
+        <rect x="291" y="4" width="87" height="26" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="334.5" y="21.0" font-size="11.5" text-anchor="middle">步骤</text>
+        <path d="M334,30 L260,52" stroke="var(--text-2)" stroke-width="1.1" fill="none" marker-end="url(#a18g)"/>
+        <rect x="386" y="4" width="87" height="26" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="429.5" y="21.0" font-size="11.5" text-anchor="middle">文件</text>
+        <path d="M429,30 L280,52" stroke="var(--text-2)" stroke-width="1.1" fill="none" marker-end="url(#a18g)"/>
+        <g data-arch="present.panel.dispatch"><rect x="140" y="54" width="200" height="44" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="240.0" y="73.1" font-size="12.5" text-anchor="middle" font-weight="600">面板分派</text><text x="240.0" y="87.6" font-size="10.5" text-anchor="middle" class="muted">按主语挑一张面板</text></g>
+        <rect x="6" y="128" width="300" height="108" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+        <text x="16" y="146" font-size="11.5" text-anchor="start" font-weight="600">描述标签：被声明成什么</text>
+        <g data-arch="present.panel.module"><rect x="16" y="156" width="88" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="60.0" y="174.8" font-size="11" text-anchor="middle">模块面板</text></g>
+        <g data-arch="present.panel.relation"><rect x="112" y="156" width="88" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="156.0" y="174.8" font-size="11" text-anchor="middle">关系面板</text></g>
+        <g data-arch="present.panel.scenario"><rect x="208" y="156" width="88" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="252.0" y="174.8" font-size="11" text-anchor="middle">场景面板</text></g>
+        <g data-arch="present.panel.step"><rect x="16" y="194" width="88" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="60.0" y="212.8" font-size="11" text-anchor="middle">步骤面板</text></g>
+        <g data-arch="present.panel.file"><rect x="112" y="194" width="88" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="156.0" y="212.8" font-size="11" text-anchor="middle">文件面板</text></g>
+        <g data-arch="present.panel.system"><rect x="208" y="194" width="88" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="252.0" y="212.8" font-size="11" text-anchor="middle">系统面板</text></g>
+        <rect x="320" y="128" width="154" height="108" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+        <text x="330" y="146" font-size="11.5" text-anchor="start" font-weight="600">核对标签：可信吗</text>
+        <rect x="332" y="160" width="130" height="64" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="397.0" y="181.7" font-size="12" text-anchor="middle">核对卡</text><text x="397.0" y="196.2" font-size="10.5" text-anchor="middle" class="muted">证实 · 治理 · 表面</text><text x="397.0" y="210.7" font-size="10.5" text-anchor="middle" class="muted">拆分 · 演化 · 确认</text>
+        <path d="M200,98 L156,126" stroke="var(--accent)" stroke-width="1.4" fill="none" marker-end="url(#a18P)"/>
+        <path d="M280,98 L380,126" stroke="var(--accent)" stroke-width="1.4" fill="none" marker-end="url(#a18P)"/>
+        <g data-arch="access.writer"><rect x="150" y="256" width="180" height="36" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="240.0" y="278.2" font-size="12" text-anchor="middle">描述写入 · 只追加</text></g>
+        <path d="M156,236 L210,254" stroke="var(--ok)" stroke-width="1.4" fill="none" marker-end="url(#a18A)"/>
+        <text x="80" y="252" font-size="10.5" text-anchor="middle" style="fill:var(--ok)">确认 · 例外 · 意见</text>
       </svg>
-      <figcaption>头部 + 三卡：讲解给读者，登记给架构师。</figcaption>
+      <figcaption>面板自己不存内容，按主语的种类挑一张对象面板；事实落在「描述」标签，核对卡落在「核对」标签。确认、例外与评审意见经描述写入落盘，只追加。</figcaption>
     </figure>
-
-    <h2>分派出去的窗口</h2>
-    <div class="cols c3">
-      <div><b>模块窗</b><span data-arch="present.panel.module">模块卡</span> 由 <span data-arch="present.panel.dispatch">分派器</span> 按选中对象换装：关系、边、系统、设计各有各的卡。</div>
-      <div><b>写入通道</b>确认、例外、评审意见经 <span data-arch="access.writer">描述写入</span> 落盘——面板是唯一入口，且只追加。</div>
-      <div><b>讲解原理</b>理解卡讲「是什么 / 不是什么」，但每个模块「为什么这样设计」另有图解——面板的相关资料卡就是图解的门（本页你能看到，就是从那扇门进来的）。</div>
-    </div>
 
   </body>
 </html>

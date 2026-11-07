@@ -8,56 +8,51 @@
     <style>
 :root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
 @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
-body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
 h1{font-size:18px;margin:0 0 4px}
-h2{font-size:15px;margin:22px 0 6px}
-.lede{color:var(--text-2);margin:0 0 14px}
-figure{margin:10px 0 4px}
-figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
-svg{width:100%;height:auto;display:block}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
 svg text{font-family:inherit;fill:var(--text)}
 svg .muted{fill:var(--text-2)}
-.cols{display:grid;gap:8px;margin:8px 0}
-.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
-.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
-.cols b{display:block;font-size:13.5px}
-.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
-.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
-code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
 </style>
   </head>
   <body>
 
     <h1>场景的银幕</h1>
-    <p class="lede">这一层是 <span data-arch="present.sequence">时序图</span>：<span data-arch="present.sequence" data-field="summary"></span>。场景回放时，每一步「谁在跟谁说话」就在这块银幕上放映。</p>
+    <p class="lede">在交互视角里选中一个场景，<span data-arch="present.sequence">时序图</span>标签就出现：每一步「谁在跟谁说话」都在这块银幕上。</p>
 
+    <h2>一张时序图怎么读</h2>
     <figure>
-      <svg viewBox="0 0 640 218" role="img" aria-label="泳道、组合步骤、消息帧与回放进度">
-        <defs><marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
-        <rect x="16" y="20" width="90" height="26" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="61" y="37" font-size="10" text-anchor="middle" class="">模块 A</text>
-        <rect x="300" y="20" width="90" height="26" rx="8" fill="var(--bg)" stroke="var(--accent)"/><text x="345" y="37" font-size="10" text-anchor="middle" class="">模块 B</text>
-        <rect x="560" y="20" width="70" height="26" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="595" y="37" font-size="9.5" text-anchor="middle" class="">参与者</text>
-        <path d="M61,46 L61,196 M345,46 L345,196" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="4 4"/>
-        <rect x="150" y="60" width="200" height="24" rx="4" fill="var(--soft)" stroke="var(--line)"/><text x="250" y="76" font-size="9" text-anchor="middle" class="muted">组合步骤（画成组合框）</text>
-        <path d="M64,100 L341,100" stroke="var(--ok)" stroke-width="2" marker-end="url(#d)"/>
-        <rect x="170" y="92" width="66" height="16" rx="3" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="203" y="104" font-size="8.5" text-anchor="middle" class="">可见消息</text>
-        <path d="M345,132 L64,132" stroke="var(--text-2)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#d)"/>
-        <circle cx="61" cy="164" r="5" fill="var(--hot)"/><circle cx="345" cy="164" r="5" fill="var(--hot)"/>
-        <text x="320" y="168" font-size="9" text-anchor="middle" class="muted">▶ 回放头：选中的步骤就是进度所在</text>
-        <text x="320" y="208" font-size="10" text-anchor="middle" class="">粒度随层次变：下钻后消息自动变细——只写一套最细步骤，各层各自投影</text>
+      <svg viewBox="0 0 480 296" role="img" aria-label="时序图：泳道头、生命线、消息与组合框；选中的一步就是进度，单击消息即选中">
+        <defs><marker id="a19P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a19S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a19A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a19M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a19g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a19l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <g data-arch="present.sequence.heads">
+        <rect x="10" y="6" width="100" height="30" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="60.0" y="25.0" font-size="11.5" text-anchor="middle">参与者</text>
+        <rect x="130" y="6" width="100" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="180.0" y="25.0" font-size="11.5" text-anchor="middle">模块 A</text>
+        <rect x="250" y="6" width="100" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="300.0" y="25.0" font-size="11.5" text-anchor="middle">模块 B</text>
+        <rect x="370" y="6" width="100" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="420.0" y="25.0" font-size="11.5" text-anchor="middle">模块 C</text>
+        </g>
+        <g data-arch="present.sequence.lanes">
+        <line x1="60" y1="36" x2="60" y2="266" stroke="var(--line)" stroke-width="1.4" stroke-dasharray="4 4"/>
+        <line x1="180" y1="36" x2="180" y2="266" stroke="var(--line)" stroke-width="1.4" stroke-dasharray="4 4"/>
+        <line x1="300" y1="36" x2="300" y2="266" stroke="var(--line)" stroke-width="1.4" stroke-dasharray="4 4"/>
+        <line x1="420" y1="36" x2="420" y2="266" stroke="var(--line)" stroke-width="1.4" stroke-dasharray="4 4"/>
+        </g>
+        <path d="M60,62 L178,62" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a19g)"/>
+        <path d="M180,96 L298,96" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a19g)"/>
+        <g data-arch="present.sequence.fragments"><rect x="150" y="116" width="320" height="104" rx="4" fill="none" stroke="var(--text-2)"/><rect x="150" y="116" width="40" height="18" fill="var(--soft)" stroke="var(--text-2)"/><text x="170" y="129" font-size="10.5" text-anchor="middle">alt</text><text x="198" y="129" font-size="10.5" class="muted">[已加载]</text><line x1="150" y1="170" x2="470" y2="170" stroke="var(--text-2)" stroke-dasharray="4 3"/><text x="158" y="184" font-size="10.5" class="muted">[未加载]</text></g>
+        <rect x="176" y="136" width="250" height="24" rx="4" fill="var(--accent-soft)"/>
+        <path d="M300,150 L418,150" stroke="var(--accent)" stroke-width="2.4" fill="none" marker-end="url(#a19P)"/>
+        <path d="M300,202 L418,202" stroke="var(--text-2)" stroke-width="1.4" fill="none" stroke-dasharray="5 4" marker-end="url(#a19g)"/>
+        <path d="M300,242 L182,242" stroke="var(--text-2)" stroke-width="1.4" fill="none" stroke-dasharray="5 4" marker-end="url(#a19g)"/>
+        <g data-arch="present.sequence.interact"><text x="300" y="280" font-size="11" text-anchor="middle" style="fill:var(--accent)">单击消息 = 选中这一步 = 进度到这里</text></g>
       </svg>
-      <figcaption>泳道与帧：银幕和画布同亮同暗。</figcaption>
+      <figcaption>一条竖线是一个参与方，消息自上而下；分支、循环画成组合框，单击分支条件就改走那一支。单击一条消息就是选中这一步，进度跟着到这里，画布上同一条边一起突出。粒度随层次变：下钻后同一场景的消息自动变细。</figcaption>
     </figure>
-
-    <h2>四个零件</h2>
-    <div class="cols c2">
-      <div><b><span data-arch="present.sequence.lanes">泳道</span></b>每条竖线一个参与方：本层模块、经由上层的边界、外部参与者，各就各位。</div>
-      <div><b><span data-arch="present.sequence.fragments">组合框</span></b>分支、循环这类组合步骤画成框，帧在框里排队。</div>
-      <div><b><span data-arch="present.sequence.interact">交互</span></b>单击帧即选中步骤、在画布上高亮那条边；银幕与画布永不各演各的。</div>
-      <div><b><span data-arch="present.sequence.heads">头部与定位</span></b>场景头信息与「定位」：从属性面板的一步直接跳到银幕上的那帧。</div>
-    </div>
-
-    <p class="note">银幕只放映不编剧：每帧落在哪条泳道、哪个位置，由 <span data-arch="state.layout">排版</span> 算好，内容来自 <span data-arch="model.scenario">场景投影</span>。</p>
 
   </body>
 </html>
