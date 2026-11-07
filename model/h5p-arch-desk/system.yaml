@@ -6,5 +6,5 @@ system:
     按依赖方向分为呈现 / 视图状态 / 接入 / 模型四层，关于被描述系统的知识只放在不依赖 Vue 与布局库的模型层，会话状态是一个值、只经纯转移函数改变（见 docs/03-architecture.md）。
   source:
     repo: h5player-demo/packages/h5p-arch-desk
-    commit: e0c1b86586dea84fa600a8c808efd9ed5723d2a0
+    commit: 883d30d8462451008e793c2fb167f23c00724093
     generatedAt: '2026-11-06'
