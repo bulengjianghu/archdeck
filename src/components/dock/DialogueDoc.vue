@@ -80,7 +80,7 @@ function locate(a: Anchor) {
 
 /** DA-3：引用单击定位——题解打开题解，其余在画布上选中模块 */
 function openCite(c: Citation) {
-  if (c.field === 'explainer') desk.workspace.open({ kind: 'explainer', module: c.module })
+  if (c.field === 'explainer') desk.readExplainer(c.module)
   else desk.revealModule(c.module)
 }
 /** 引用的原文由架构台填（DL-13）；解析不了的标「引用无效」 */
@@ -239,9 +239,7 @@ const STOP_TEXT = { stopped: '已停止：这一轮什么都没落', timeout: '�
           <div v-else-if="renarrated(e.outcome)" class="card outcome" :class="{ rejected: !renarrated(e.outcome)!.applied }" data-testid="renarrate-outcome">
             <template v-if="renarrated(e.outcome)!.applied">
               题解已按要求重讲，依据已盖 · 讲法要求 {{ notesCount(e.outcome) }} 条
-              <button v-if="e.anchor.kind === 'module'" class="link" @click="desk.workspace.open({ kind: 'explainer', module: e.anchor.module })">
-                看题解 ›
-              </button>
+              <button v-if="e.anchor.kind === 'module'" class="link" @click="desk.readExplainer(e.anchor.module)">看题解 ›</button>
             </template>
             <template v-else>
               重讲被拒，什么都没写：

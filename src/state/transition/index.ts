@@ -13,11 +13,11 @@ import type { TransitionContext, TransitionResult, ViewAction, ViewState } from 
 export * from './types'
 export { selectionExists, keyIntent } from './navigation'
 export { encodeSelection, decodeSelection, encodeView, sameQuery } from './url'
-export { perspectiveOf, selectedOf, emphasisOf } from './selected'
+export { perspectiveOf, viewpointOf, subjectOf, selectedOf, emphasisOf } from './selected'
 export { leaveGuard, isEditing } from './edit'
 export { mapSelection, withMode } from './mode'
 export * from './workspace'
-export type { Perspective, Selected, Emphasis, EmphasisContext } from './selected'
+export type { Perspective, Viewpoint, Subject, Selected, Emphasis, EmphasisContext } from './selected'
 
 export function transition(state: ViewState, action: ViewAction, ctx: TransitionContext): TransitionResult {
   const r = step(state, action, ctx)
@@ -95,4 +95,3 @@ function step(state: ViewState, action: ViewAction, ctx: TransitionContext): Tra
       return nav.toggle(state, index, action.patch)
   }
 }
-export * from './defaultDoc'

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * 图解的呈现（ADR-0055）：EX-2 引用填充与 EX-3 桥接（iframe 文档、消息来源校验）、EX-4 导航、EX-5 画布标记、
- * EX-7 过期提示（标签、相关资料卡、核对卡「确认」行），以及 PC-9 的判定注入。
+ * EX-7 过期提示（内容区、核对卡「确认」行），以及图解标签跟随主语（LY-8、LY-15，ADR-0064）。
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { JSDOM } from 'jsdom'
@@ -98,9 +98,8 @@ describe('EX-3 iframe 文档', () => {
 })
 
 describe('EX-3、EX-4、EX-7 图解标签', () => {
-  it('↓ 有图解的后代；依据一致时不显示过期；只接受来自这个 iframe 的消息：选中模块，资料区不动', async () => {
+  it('↓ 有图解的后代；依据一致时不显示过期；只接受来自这个 iframe 的消息：选中模块（视图随主语跟随），排布不动', async () => {
     const { d } = await desk()
-    d.workspace.open({ kind: 'explainer', module: 'infra' })
     const w = mount(ExplainerDoc, { props: { module: 'infra' }, global: provide(d), attachTo: document.body })
     mounted.push(w)
     expect(w.findAll('.nav.down').map(b => b.text())).toEqual(['↓ Framework'])
@@ -114,10 +113,13 @@ describe('EX-3、EX-4、EX-7 图解标签', () => {
     await flushPromises()
     expect(d.selection.value).toEqual({ kind: 'module', id: 'infra.mus' })
     expect(d.workspace.state.value).toBe(before)
+    expect(d.subject.value).toEqual({ kind: 'module', id: 'infra.mus' })
+    // arch:open 看另一份图解 = 选中它并激活图解标签（LY-15）
+    d.workspace.dispatch({ type: 'activate', id: 'view:description' })
     window.dispatchEvent(new MessageEvent('message', { data: { type: 'arch:open', module: 'infra.framework' }, source: frame.contentWindow }))
-    expect(d.workspace.isOpen({ kind: 'explainer', module: 'infra.framework' })).toBe(true)
-    // 预览替换：infra 的预览被 infra.framework 换掉
-    expect(d.workspace.isOpen({ kind: 'explainer', module: 'infra' })).toBe(false)
+    await flushPromises()
+    expect(d.selection.value).toEqual({ kind: 'module', id: 'infra.framework' })
+    expect(d.workspace.state.value.groups[0].active).toBe('view:explainer')
   })
 
   it('↑ 最近的有图解的祖先；没有依据时标「未记录依据」', async () => {
@@ -131,13 +133,13 @@ describe('EX-3、EX-4、EX-7 图解标签', () => {
     expect(w.find('[data-testid="explainer-stale"]').text()).toContain('未记录依据')
   })
 
-  it('子模块的 summary 改了：标签与内容区都标「基于旧描述 · 1 处改动」，展开列出改动', async () => {
-    const { d } = await desk('/', files('提供状态机与流水线'))
-    d.workspace.open({ kind: 'explainer', module: 'infra' }, true)
-    const g = mount(DockGroup, { props: { group: d.workspace.state.value.groups[0], gi: 0, count: 1, focused: true }, global: provide(d) })
+  it('子模块的 summary 改了：图解标签（主语 = infra）的内容区标「基于旧描述 · 1 处改动」，展开列出改动', async () => {
+    const { d } = await desk('/?sel=m:infra', files('提供状态机与流水线'))
+    const g = mount(DockGroup, { props: { group: d.workspace.state.value.groups[0], gi: 0, count: 1 }, global: provide(d) })
     mounted.push(g)
-    expect(g.find('.tab .lbl').text()).toBe('▣Infrastructure')
-    expect(g.find('[data-testid="tab-stale"]').text()).toBe('基于旧描述 · 1 处改动')
+    await flushPromises()
+    expect(g.find('[data-view-tab="explainer"] .lbl').text()).toBe('图解')
+    expect(g.find('[data-view-tab="explainer"] .x').exists()).toBe(false)
     const stale = g.find('[data-testid="explainer-stale"]')
     expect(stale.text()).toContain('基于旧描述 · 1 处改动')
     await stale.trigger('click')
@@ -146,7 +148,7 @@ describe('EX-3、EX-4、EX-7 图解标签', () => {
 })
 
 describe('EX-5 画布标记', () => {
-  it('有图解才显示；单击以预览打开、不改选中，双击固定；运行视角不显示', async () => {
+  it('有图解才显示；单击即选中这个模块并激活图解标签（LY-15）', async () => {
     const { d } = await desk('/?sel=m:app')
     const w = mount(ExplainerMark, { props: { moduleId: 'infra' }, global: provide(d) })
     mounted.push(w)
@@ -155,12 +157,10 @@ describe('EX-5 画布标记', () => {
         .find('button')
         .exists(),
     ).toBe(false)
+    d.workspace.dispatch({ type: 'activate', id: 'view:check' })
     await w.find('button').trigger('click')
-    const tab = () => d.workspace.state.value.groups[0].tabs.find(t => t.id === 'exp:infra')
-    expect(tab()?.preview).toBe(true)
-    expect(d.selection.value).toEqual({ kind: 'module', id: 'app' })
-    await w.find('button').trigger('dblclick')
-    expect(tab()?.preview).toBe(false)
+    expect(d.selection.value).toEqual({ kind: 'module', id: 'infra' })
+    expect(d.workspace.state.value.groups[0].active).toBe('view:explainer')
   })
 })
 
@@ -202,50 +202,19 @@ describe('EX-7 属性栏', () => {
   })
 })
 
-describe('理解页随选中自动打开（第二十轮读先方案；ADR-0061 的 WS-8 例外扩展）', () => {
-  it('有图解的模块打开「事实卡 + 故事」页，无图解的打开纯事实卡页；抽屉不再有「图解 ›」按钮', async () => {
-    const { d, router } = await desk('/?sel=m:app')
-    const w = mount(Panel, { global: { ...provide(d, { [HAS_EXPLAINER as symbol]: (id: string) => d.explainers.has(id) }), plugins: [router] } })
-    mounted.push(w)
-    await flushPromises()
-    // 抽屉不再有图解入口按钮（入口在辅助栏理解页与画布 ▣）
-    expect(w.find('[data-testid="open-explainer"]').exists()).toBe(false)
-    // 选中带图解的模块 → exp 页（事实卡 + 故事）；250ms 稳定窗后打开
+describe('LY-8、LY-16 图解标签跟随主语，不再自动打开', () => {
+  it('选中模块不开新标签、不改排布；图解标签的主语随选中变（无选中为系统）', async () => {
+    const { d } = await desk('/')
+    const before = d.workspace.state.value
+    expect(d.subject.value).toEqual({ kind: 'system' })
     d.select({ kind: 'module', id: 'infra' })
     await flushPromises()
     await new Promise(r => setTimeout(r, 300))
-    const tab = (id: string) => d.workspace.state.value.groups[0].tabs.find(t => t.id === id)
-    expect(tab('exp:infra')?.preview).toBe(true)
-    // 选中无图解的模块 → fact 页（只有事实卡）
+    expect(d.workspace.state.value).toBe(before)
+    expect(d.subject.value).toEqual({ kind: 'module', id: 'infra' })
     d.select({ kind: 'module', id: 'app' })
     await flushPromises()
-    await new Promise(r => setTimeout(r, 300))
-    expect(tab('fact:app')?.preview).toBe(true)
-  })
-
-  it('理解页按 WS-5 替换预览、不累积；已固定的不被自动打开降级', async () => {
-    const { d } = await desk('/?sel=m:app')
-    const tabs = () => d.workspace.state.value.groups[0].tabs
-    d.select({ kind: 'module', id: 'infra' })
-    await flushPromises()
-    await new Promise(r => setTimeout(r, 300))
-    expect(tabs().map(t => t.id)).toEqual(['exp:infra'])
-    // 选另一个模块：新的理解页替换预览标签（WS-5），不累积
-    d.select({ kind: 'module', id: 'app' })
-    await flushPromises()
-    await new Promise(r => setTimeout(r, 300))
-    expect(tabs().map(t => t.id)).toEqual(['fact:app'])
-    // 固定的页不被替换；回到已开着的 infra 不再新开
-    d.workspace.open({ kind: 'explainer', module: 'infra.framework' }, true)
-    d.select({ kind: 'module', id: 'infra' })
-    await flushPromises()
-    await new Promise(r => setTimeout(r, 300))
-    expect(
-      tabs()
-        .filter(t => t.id.startsWith('exp:') || t.id.startsWith('fact:'))
-        .map(t => t.id),
-    ).toEqual(['exp:infra', 'exp:infra.framework'])
-    expect(tabs().find(t => t.id === 'exp:infra.framework')!.preview).toBe(false)
-    expect(tabs().find(t => t.id === 'exp:infra')!.preview).toBe(true)
+    expect(d.workspace.state.value).toBe(before)
+    expect(d.subject.value).toEqual({ kind: 'module', id: 'app' })
   })
 })

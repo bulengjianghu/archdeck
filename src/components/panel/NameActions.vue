@@ -12,7 +12,7 @@ const ctx = computed<NameActionContext>(() => ({
   hasExplainer: id => desk.explainers.has(id),
   current: !desk.version,
   sketching: desk.edit.active.value,
-  openExplainer: id => desk.workspace.open({ kind: 'explainer', module: id }),
+  openExplainer: id => desk.readExplainer(id),
   openDialogue: id => desk.dialogue.open(id),
 }))
 const actions = computed(() => nameActions(props.place, props.module, ctx.value))

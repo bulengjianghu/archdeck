@@ -1,9 +1,18 @@
-/** 画布模式（ADR-0031）：三视角 V11、切换不变式与选中映射 V12、URL `v=s`；纯函数与 DeskState */
+/** 视角（ADR-0031；LY-6，ADR-0064）：两个视角 + 场景、切换不变式与选中映射 V12、URL `v=s`；纯函数与 DeskState */
 import { describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { loadModel, projectLevel, RELATION_TYPES } from '../../src/model'
-import { DEFAULT_TOGGLES, encodeView, perspectiveOf, transition, type TransitionContext, type ViewAction, type ViewState } from '../../src/state/transition'
+import {
+  DEFAULT_TOGGLES,
+  encodeView,
+  perspectiveOf,
+  transition,
+  viewpointOf,
+  type TransitionContext,
+  type ViewAction,
+  type ViewState,
+} from '../../src/state/transition'
 import { createDeskState, type SourceFetcher } from '../../src/state/useDeskState'
 import type { FileDep, SourcePayload } from '../../src/model'
 import { sampleFiles, scenarioFiles } from '../fixtures/sample'
@@ -32,28 +41,34 @@ describe('V11 三视角', () => {
     expect('mode' in back.state).toBe(false)
   })
 
-  it('打开场景进入运行视角，退出回到进入前的模式', () => {
+  it('LY-6：打开场景即交互视角 + 这个场景；视角只有两个；退出场景留在交互视角（LY-6a）', () => {
     const { index: idx } = loadModel(scenarioFiles())
     const c: TransitionContext = { index: idx }
     const s = transition({ ...base, levelId: 'sys' }, toStructure, c).state
+    expect(viewpointOf(s)).toBe('structure')
     const opened = transition(s, { type: 'openScenario', id: 'sc.play' }, c).state
-    expect(perspectiveOf(opened)).toBe('run')
+    expect([viewpointOf(opened), opened.playback?.scenarioId, 'mode' in opened]).toEqual(['interaction', 'sc.play', false])
     const closed = transition(opened, { type: 'closeScenario' }, c).state
-    expect(perspectiveOf(closed)).toBe('structure')
-    // 运行视角下单击「交互」即退出场景并回到交互视角
-    const switched = transition(opened, toInteraction, c)
-    expect([switched.state.playback, perspectiveOf(switched.state), switched.history]).toEqual([null, 'interaction', 'push'])
-    // 运行视角下单击进入前的模式：只退出场景
-    expect(perspectiveOf(transition(opened, toStructure, c).state)).toBe('structure')
+    expect([viewpointOf(closed), closed.playback]).toEqual(['interaction', null])
+    // LY-6a：回放中单击「交互」不动（已是交互视角）
+    expect(transition(opened, toInteraction, c).state).toBe(opened)
+    // LY-6a：回放中单击「结构」= 退出场景并切到结构视角
+    const toS = transition(opened, toStructure, c)
+    expect([toS.state.playback, viewpointOf(toS.state), toS.history]).toEqual([null, 'structure', 'push'])
   })
 
-  it('URL：结构视角写 v=s，交互视角不写；按 v 恢复；运行视角下照写进入前的模式', () => {
+  it('URL：结构视角写 v=s，交互视角不写；按 v 恢复；回放不写 v；旧地址 sc + v=s 恢复为交互 + 场景（LY-6b）', () => {
     const s = run(base, toStructure).state
     expect(encodeView(s, index).v).toBe('s')
     expect(encodeView(base, index).v).toBeUndefined()
     expect(run(base, { type: 'restore', query: { level: 'infra', v: 's' } }).state.mode).toBe('structure')
     expect('mode' in run(s, { type: 'restore', query: { level: 'infra' } }).state).toBe(false)
-    expect(encodeView({ ...s, playback: { scenarioId: 'x', frameId: null, choices: new Map() } }, index)).toMatchObject({ v: 's', sc: 'x' })
+    const { index: idx } = loadModel(scenarioFiles())
+    const old = transition(base, { type: 'restore', query: { sc: 'sc.play', v: 's' } }, { index: idx }).state
+    expect([viewpointOf(old), old.playback?.scenarioId, 'mode' in old]).toEqual(['interaction', 'sc.play', false])
+    expect(encodeView(old, idx)).toEqual({ sc: 'sc.play' })
+    // 场景不存在时 v=s 照常是结构视角
+    expect(viewpointOf(transition(base, { type: 'restore', query: { sc: 'nope', v: 's' } }, { index: idx }).state)).toBe('structure')
   })
 
   it('草图画布（X7a）下切换无效，画的是交互图', () => {

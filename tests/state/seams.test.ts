@@ -1,8 +1,8 @@
 /**
- * 第二十一轮预留的三处缝（T1.0，DL-4、DL-5、DL-17）：加一种资料种类、加一行主语表、加一个名称行动作，都不改其他代码。
+ * 第二十一轮预留的缝（T1.0，DL-5、DL-17；DL-4 主语表第二十二轮由 LY-11 情境排布表取代）：加一种资料种类、加一行排布表、加一个名称行动作，都不改其他代码。
  */
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_DOC_TABLE, defaultDocFor, docKey, EMPTY_WORKSPACE, workspaceTransition, type DocRef } from '../../src/state/transition'
+import { DEFAULT_ARRANGEMENTS, docKey, EMPTY_WORKSPACE, workspaceTransition, type DocRef } from '../../src/state/transition'
 import { DOC_KIND_VIEWS, docLabel, docTip, type DocKindContext } from '../../src/components/dock/docKinds'
 import { NAME_ACTIONS, nameActions, type NameAction, type NameActionContext } from '../../src/components/panel/nameActions'
 
@@ -13,11 +13,12 @@ describe('DL-5 资料种类可扩展', () => {
 
   it('键按种类与其余字段推出；打开、激活、关闭只认键', () => {
     expect(docKey(fake)).toBe('notes:d1')
+    const base = EMPTY_WORKSPACE.groups[0].tabs.map(t => t.id)
     let s = workspaceTransition(EMPTY_WORKSPACE, { type: 'open', doc: fake, pin: true })
-    s = workspaceTransition(s, { type: 'open', doc: { kind: 'sequence' } })
-    expect(s.groups[0].tabs.map(t => t.id)).toEqual(['notes:d1', 'seq'])
-    s = workspaceTransition(s, { type: 'closeDoc', id: 'notes:d1' })
-    expect(s.groups[0].tabs.map(t => t.id)).toEqual(['seq'])
+    s = workspaceTransition(s, { type: 'open', doc: { kind: 'source', path: 'a.ts' } })
+    expect(s.groups[0].tabs.map(t => t.id)).toEqual([...base, 'notes:d1', 'src:a.ts'])
+    s = workspaceTransition(s, { type: 'close', id: 'notes:d1' })
+    expect(s.groups[0].tabs.map(t => t.id)).toEqual([...base, 'src:a.ts'])
   })
 
   it('标签名：种类表里加一行就有名字与说明；没登记也退回种类名', () => {
@@ -33,21 +34,10 @@ describe('DL-5 资料种类可扩展', () => {
   })
 })
 
-describe('DL-4 辅助栏缺省主语表', () => {
-  const has = (id: string) => id === 'withStory'
-
-  it('结构 / 交互 → 题解（有图解开图解，否则理解页）；运行 → 时序图；草图 → 对话；题解没选中模块时为空', () => {
-    expect(defaultDocFor('structure', { module: 'withStory', hasExplainer: has })).toEqual({ kind: 'explainer', module: 'withStory' })
-    expect(defaultDocFor('interaction', { module: 'plain', hasExplainer: has })).toEqual({ kind: 'facts', module: 'plain' })
-    expect(defaultDocFor('run', { module: 'plain', hasExplainer: has })).toEqual({ kind: 'sequence' })
-    expect(defaultDocFor('sketch', { module: 'plain', hasExplainer: has })).toEqual({ kind: 'dialogue' })
-    expect(defaultDocFor('structure', { hasExplainer: has })).toBeNull()
-  })
-
-  it('加一行：新画布状态只在表里加一行，函数不改', () => {
-    const table = { ...DEFAULT_DOC_TABLE, review: 'dialogue' as const }
-    expect(defaultDocFor('review', { hasExplainer: has }, table)).toEqual({ kind: 'dialogue' })
-    expect(defaultDocFor('review', { hasExplainer: has })).toBeNull()
+describe('LY-11 缺省排布是一张表（取代 DL-4 主语表）', () => {
+  it('三种情境各一行；草图那一行里有对话', () => {
+    expect(Object.keys(DEFAULT_ARRANGEMENTS).sort()).toEqual(['free', 'scenario', 'sketch'])
+    expect(DEFAULT_ARRANGEMENTS.sketch.groups[0][0]).toBe('dialogue')
   })
 })
 

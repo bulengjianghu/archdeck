@@ -134,9 +134,11 @@ describe('§6.4 源代码验收', () => {
     await settle()
     // G14：分层总览高亮所在的带与路径上露出的模块
     expect([...desk.files.hits.value!.nodes]).toEqual(['s:present/block', 'present.nav-tree'])
-    // G15、WS-8：选中文件即在资料区打开它的源代码预览标签
-    expect(desk.workspace.state.value.groups[0].tabs).toEqual([{ id: `src:${file}`, doc: { kind: 'source', path: file }, preview: true }])
-    expect(desk.workspace.dockShown.value).toBe(true)
+    // G15、LY-8a：选中文件即在视图区上组打开它的源代码预览标签（资料标签不跟随主语）
+    expect(desk.workspace.state.value.groups[0].tabs.filter(t => t.kind === 'doc')).toEqual([
+      { id: `src:${file}`, kind: 'doc', doc: { kind: 'source', path: file }, preview: true },
+    ])
+    expect(desk.workspace.state.value.groups[0].active).toBe(`src:${file}`)
     const view = mount(SourceView, { props: { path: file }, global })
     await settle()
     expect(view.text()).toContain('只读')
@@ -186,18 +188,18 @@ describe('§6.4 源代码验收', () => {
     expect(bare.desk.files.ownership.value!.ignored.has('docs/README.md')).toBe(true)
   })
 
-  it('6. 资料区不跟随选中（WS-8、G15）：打开场景开时序图；选中文件开源代码预览；单步、选中模块不改资料区；退出场景关时序图', async () => {
+  it('6. 视图区（LY-8、LY-11、G15）：打开场景换场景排布；选中文件开源代码预览；单步、选中模块不改排布；退出场景回自由排布', async () => {
     const { desk } = await open('h5p-arch-desk')
     const ws = desk.workspace
-    const ids = () => ws.state.value.groups.flatMap(g => g.tabs.map(t => `${t.id}${t.preview ? '~' : ''}`))
-    expect(ws.dockShown.value).toBe(false)
+    const ids = () => ws.state.value.groups.flatMap(g => g.tabs.map(t => (t.kind === 'view' ? t.view : `${t.id}${t.preview ? '~' : ''}`)))
+    expect(ids()).toEqual(['explainer', 'description', 'check'])
     desk.openScenario('sc.open-and-play')
     await settle()
-    expect(ids()).toEqual(['seq'])
+    expect(ids()).toEqual(['sequence', 'explainer', 'check', 'description'])
     desk.selectFile('src/state/useDeskState.ts')
     await settle()
     expect(desk.selected.value).toEqual({ kind: 'file', id: 'src/state/useDeskState.ts' })
-    expect(ids()).toEqual(['seq', 'src:src/state/useDeskState.ts~'])
+    expect(ids()).toEqual(['sequence', 'explainer', 'check', 'src:src/state/useDeskState.ts~', 'description'])
     expect(ws.state.value.groups[0].active).toBe('src:src/state/useDeskState.ts')
     const before = ws.state.value
     desk.next()
@@ -209,17 +211,16 @@ describe('§6.4 源代码验收', () => {
     // 另一个文件：替换预览标签
     desk.selectFile('src/state/inject.ts')
     await settle()
-    expect(ids()).toEqual(['seq', 'src:src/state/inject.ts~'])
+    expect(ids()).toEqual(['sequence', 'explainer', 'check', 'src:src/state/inject.ts~', 'description'])
     // 关掉标签后再选同一个文件：选中没变，不重新打开（只有选中变为另一个文件才打开）
-    ws.dispatch({ type: 'close', group: 0, id: 'src:src/state/inject.ts' })
+    ws.dispatch({ type: 'close', id: 'src:src/state/inject.ts' })
     desk.selectFile('src/state/inject.ts')
     await settle()
-    expect(ids()).toEqual(['seq'])
-    // 退出场景：时序图标签关闭，资料区随之消失
+    expect(ids()).toEqual(['sequence', 'explainer', 'check', 'description'])
+    // 退出场景：回到自由情境的排布，时序图移出（LY-9a）
     desk.closeScenario()
     await settle()
-    expect(ids()).toEqual([])
-    expect(ws.dockShown.value).toBe(false)
+    expect(ids()).toEqual(['explainer', 'description', 'check'])
   })
 
   it('h5player：Framework 的入口导出与描述的接口对应，描述的真实归属问题报为警告', async () => {

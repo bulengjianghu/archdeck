@@ -9,15 +9,36 @@
 import { coupleEnds, lanesOf, type LevelView, type ModelIndex, type ReturnPairs, type ScenarioLevelView, type SequenceModel } from '@/model'
 import type { Selection, TransitionResult, ViewState } from './types'
 
-/** V11：结构视角（结构图）/ 交互视角（交互图）/ 运行视角（场景） */
-export type Perspective = 'structure' | 'interaction' | 'run'
+/** LY-6（ADR-0064）：视角只有两个——结构（结构图）、交互（交互图）；回放 = 交互视角 + 一个场景 */
+export type Viewpoint = 'structure' | 'interaction'
+
+/**
+ * 呈现层过渡用的三态（第二十二轮波 4 删）：回放中为 'run'。新代码用 viewpointOf + playback。
+ * @deprecated 用 viewpointOf 与 state.playback
+ */
+export type Perspective = Viewpoint | 'run'
 
 /** 选中的对象：显式选中，或运行视角下进度所在的步骤 / 场景 */
 export type Selected = Selection | { kind: 'step'; id: string } | { kind: 'scenario'; id: string }
 
-/** V11：草图画布（X7a）画的是交互图，按交互视角 */
-export const perspectiveOf = (state: ViewState): Perspective =>
-  state.playback ? 'run' : state.mode === 'structure' && !state.editing ? 'structure' : 'interaction'
+/** LY-6：视角——回放中、草图画布（X7a）下都是交互视角 */
+export const viewpointOf = (state: ViewState): Viewpoint => (state.mode === 'structure' && !state.playback && !state.editing ? 'structure' : 'interaction')
+
+/** 呈现层过渡（波 4 删）：回放中为 'run'，否则同 viewpointOf */
+export const perspectiveOf = (state: ViewState): Perspective => (state.playback ? 'run' : viewpointOf(state))
+
+/** LY-7：主语——选中的对象；系统（根层无选中） */
+export type Subject = Selected | { kind: 'system' }
+
+/**
+ * LY-7、LY-7a：主语 = 选中（含回放中进度所在的步骤 / 场景，V7）；没有时为当前层次的父模块，根层即系统。
+ * 视图区每个视图标签的内容都是（主语, 标签类型）的纯函数。
+ */
+export function subjectOf(state: ViewState, rootId: string): Subject {
+  const s = selectedOf(state)
+  if (s) return s
+  return !state.levelId || state.levelId === rootId ? { kind: 'system' } : { kind: 'module', id: state.levelId }
+}
 
 /** V2、V7：选中的对象；null = 结构 / 交互视角无选中（面板显示当前父模块，N13） */
 export function selectedOf(state: ViewState): Selected | null {

@@ -8,7 +8,7 @@
  * | `sc`    | 打开的场景（有即运行视角）                        |
  * | `step`  | 播放头帧 ID                                       |
  * | `alt`   | 已选分支：路径上依次经过的分支点的选项，以 `.` 连接 |
- * | `v`     | 画布模式：`s` 为结构视角，交互视角缺省不写（V11）；运行视角下照写进入前的模式 |
+ * | `v`     | 视角：`s` 为结构视角，交互视角缺省不写（LY-6）；回放总是交互视角，旧地址带 `sc` 与 `v=s` 时按交互恢复（LY-6b） |
  */
 import { choiceList, choicesFromList, planScenario, resolvePath, type ModelIndex, type ScenarioPlan } from '@/model'
 import { withMode } from './mode'
@@ -54,8 +54,13 @@ export function restore(state: ViewState, ctx: TransitionContext, query: Query):
   const { index } = ctx
   const level = query.level ?? index.rootId
   const sel = decodeSelection(query.sel)
-  const next = withMode(withLevel(state, index, level, { select: selectionExists(index, sel) ? sel : null }), query.v === 's' ? 'structure' : 'interaction')
-  return { state: { ...next, playback: restorePlayback(state, ctx, query) }, history: 'replace' }
+  const playback = restorePlayback(state, ctx, query)
+  // LY-6b：旧地址同时带场景与 v=s（运行视角下照写进入前的模式）→ 交互 + 场景；之后写回的地址即规范形
+  const next = withMode(
+    withLevel(state, index, level, { select: selectionExists(index, sel) ? sel : null }),
+    query.v === 's' && !playback ? 'structure' : 'interaction',
+  )
+  return { state: { ...next, playback }, history: 'replace' }
 }
 
 function restorePlayback(state: ViewState, ctx: TransitionContext, query: Query): PlaybackState | null {

@@ -1,103 +1,83 @@
 <script setup lang="ts">
 /**
- * 资料区的一组（WS-4–WS-7）：第一行是标签栏（与工具栏同高），下面是活动标签的内容。
- * 预览标签标题斜体，双击固定；单击组内即聚焦该组（新资料进焦点组）。上组的标签栏右端有 ⊟ 分屏（分屏后按下态，再按取消）与 × 关闭全部（TB-10）。
+ * 视图区的一组（LY-8–LY-10，ADR-0064；第二十二轮波 1 的过渡呈现，波 2 换成拖拽与「+」菜单的新标签栏）：
+ * 第一行是标签栏，下面是活动标签的内容。视图标签（图解、描述、核对、时序图）的内容是主语的投影（ViewDoc）；
+ * 资料标签（源代码、对话、设计说明）不跟随主语，预览标签斜体、双击固定（LY-8a）。常驻标签没有 ×（LY-9）。
  * 只读工作区状态、只发意图（desk.workspace.dispatch）。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useDesk } from '@/state/inject'
-import type { DocGroup, DocTab } from '@/state/useDeskState'
+import { isResident, type Tab, type TabGroup, type ViewKind } from '@/state/useDeskState'
 import SourceView from '../source/SourceView.vue'
-import SequenceDoc from './SequenceDoc.vue'
-import ModuleDoc from './ModuleDoc.vue'
-import { staleText } from '../shared/explainerText'
-import ToolIcon from '../shared/ToolIcon.vue'
-import { docKindView, docLabel, docTip, type DocKindContext } from './docKinds'
+import ViewDoc from './ViewDoc.vue'
+import { docKindView, docLabel, docTip, VIEW_LABELS, type DocKindContext } from './docKinds'
 
-const props = defineProps<{ group: DocGroup; gi: number; count: number; focused: boolean }>()
+const props = defineProps<{ group: TabGroup; gi: number; count: number }>()
 const desk = useDesk()
 const ws = desk.workspace
 const active = computed(() => props.group.tabs.find(t => t.id === props.group.active) ?? null)
 
-/** DL-5：标签名、说明与记号查资料种类表，不写种类分支 */
+/** DL-5：资料标签的标签名、说明与记号查资料种类表，不写种类分支 */
 const kindCtx: DocKindContext = {
-  // EX-3：图解 / 理解页的标签名取模块名（系统根取系统名）
   moduleName: id => (id === desk.index.value?.rootId ? desk.index.value.model.system.name : (desk.index.value?.modules.get(id)?.name ?? id)),
   scenarioName: () => desk.run.scenario.value?.name ?? null,
   noteTitle: file => desk.notes.list.value.find(n => n.file === file)?.title ?? file,
 }
-const label = (t: DocTab) => docLabel(t.doc, kindCtx)
-const icon = (t: DocTab) => docKindView(t.doc)?.icon
-/** 新种类的正文组件（既有四种走下面的既有分支） */
-const bodyOf = computed(() => (active.value ? docKindView(active.value.doc)?.component : undefined))
-/** EX-7：图解依据过期时标在标题后 */
-const stale = (t: DocTab) => {
-  const st = t.doc.kind === 'explainer' ? desk.explainers.status(t.doc.module) : null
-  return st?.stale ? staleText(st) : null
+const label = (t: Tab) => (t.kind === 'view' ? VIEW_LABELS[t.view] : docLabel(t.doc, kindCtx))
+const icon = (t: Tab) => (t.kind === 'doc' ? docKindView(t.doc)?.icon : undefined)
+const tip = (t: Tab) =>
+  t.kind === 'view' ? `${VIEW_LABELS[t.view]}（视图：跟随主语）` : docTip(t.doc, kindCtx) + '（资料：不跟随主语）' + (t.preview ? '（预览：双击固定）' : '')
+const resident = (t: Tab) => isResident(ws.state.value, t.id)
+/** 新种类的正文组件 */
+const bodyOf = computed(() => (active.value?.kind === 'doc' ? docKindView(active.value.doc)?.component : undefined))
+
+/** LY-9：「+」——加回被关掉的视图标签 */
+const plusOpen = ref(false)
+const addable = computed<ViewKind[]>(() =>
+  (['description', 'check'] as ViewKind[]).filter(v => !ws.state.value.groups.some(g => g.tabs.some(t => t.kind === 'view' && t.view === v))),
+)
+function add(view: ViewKind) {
+  plusOpen.value = false
+  ws.dispatch({ type: 'addView', view, group: props.gi })
 }
-const tip = (t: DocTab) => docTip(t.doc, kindCtx) + (stale(t) ? `（${stale(t)}）` : '') + (t.preview ? '（预览：双击固定）' : '')
 </script>
 
 <template>
-  <section class="group" :class="{ focused: focused && count > 1 }" :data-group="gi" @pointerdown="ws.dispatch({ type: 'focusGroup', group: gi })">
-    <header class="tabs" role="tablist" :aria-label="count > 1 ? `资料 · ${gi === 0 ? '上' : '下'}组` : '资料'">
+  <section class="group" :data-group="gi">
+    <header class="tabs" role="tablist" :aria-label="count > 1 ? `视图 · ${gi === 0 ? '上' : '下'}组` : '视图'">
       <span
         v-for="t in group.tabs"
         :key="t.id"
         class="tab"
-        :class="{ on: t.id === group.active, preview: t.preview }"
+        :class="{ on: t.id === group.active, preview: t.kind === 'doc' && t.preview, view: t.kind === 'view' }"
         :data-doc="t.id"
-        @dblclick="ws.dispatch({ type: 'pin', group: gi, id: t.id })"
+        :data-view-tab="t.kind === 'view' ? t.view : undefined"
+        :data-doc-tab="t.kind === 'doc' ? t.doc.kind : undefined"
+        @dblclick="ws.dispatch({ type: 'pin', id: t.id })"
       >
-        <button role="tab" class="lbl" :aria-selected="t.id === group.active" :title="tip(t)" @click="ws.dispatch({ type: 'activate', group: gi, id: t.id })">
+        <button role="tab" class="lbl" :aria-selected="t.id === group.active" :title="tip(t)" @click="ws.dispatch({ type: 'activate', id: t.id })">
           <span v-if="icon(t)" class="kind-ic" aria-hidden="true">{{ icon(t) }}</span
           >{{ label(t) }}
         </button>
-        <span v-if="stale(t)" class="stale-chip" data-testid="tab-stale">{{ stale(t) }}</span>
-        <button class="x" :title="`关闭${label(t)}`" :aria-label="`关闭${label(t)}`" @click.stop="ws.dispatch({ type: 'close', group: gi, id: t.id })">
+        <button v-if="!resident(t)" class="x" :title="`关闭${label(t)}`" :aria-label="`关闭${label(t)}`" @click.stop="ws.dispatch({ type: 'close', id: t.id })">
           ×
         </button>
       </span>
+      <span class="plus-wrap">
+        <button v-if="addable.length" class="plus" title="添加视图标签" aria-label="添加标签" :aria-expanded="plusOpen" @click="plusOpen = !plusOpen">+</button>
+        <span v-if="plusOpen" class="plus-menu" role="menu">
+          <button v-for="v in addable" :key="v" role="menuitem" :data-add-view="v" @click="add(v)">{{ VIEW_LABELS[v] }}</button>
+        </span>
+      </span>
       <span class="sp" />
-      <!-- TB-10：这一组资料自己的操作——⊟ 分屏（分屏后为按下态，再按取消）、× 关闭全部 -->
-      <template v-if="gi === 0">
-        <button
-          v-if="count === 1"
-          class="ib"
-          title="上下分屏：之后打开的资料放进下组"
-          aria-label="上下分屏"
-          :disabled="!group.tabs.length"
-          @click="ws.dispatch({ type: 'split' })"
-        >
-          <ToolIcon name="split" />
-        </button>
-        <button v-else class="ib on" title="取消分屏：下组的标签并回上组" aria-label="取消分屏" @click="ws.dispatch({ type: 'unsplit' })">
-          <ToolIcon name="split" />
-        </button>
-        <button class="ib close-all" title="关闭全部资料（资料区随之消失）" aria-label="关闭资料区" @click="ws.dispatch({ type: 'closeDock' })">
-          <ToolIcon name="close" />
-        </button>
-      </template>
     </header>
     <div class="body">
       <template v-if="active">
-        <SourceView v-if="active.doc.kind === 'source'" :key="active.id" :path="active.doc.path" :line="active.doc.line ?? undefined" />
-        <template v-else-if="active.doc.kind === 'sequence'">
-          <!-- 步骤节在 DockPane 常驻（第二十轮 §6） -->
-          <SequenceDoc v-if="desk.perspective.value === 'run'" />
-          <p v-else class="empty">没有打开的场景</p>
-        </template>
-        <!-- 第二十轮读先方案：辅助栏的一页 = 事实卡（架构台渲染）+ 故事（有图解才有）。exp 与 fact 两种标签同一渲染，事实卡在页顶 -->
-        <ModuleDoc
-          v-else-if="active.doc.kind === 'explainer' || active.doc.kind === 'facts'"
-          :key="active.id"
-          :module="active.doc.module"
-          :with-story="active.doc.kind === 'explainer'"
-        />
+        <ViewDoc v-if="active.kind === 'view'" :key="active.id" :view="active.view" />
+        <SourceView v-else-if="active.doc.kind === 'source'" :key="active.id" :path="active.doc.path" :line="active.doc.line ?? undefined" />
         <!-- DL-5：其余种类的正文由资料种类表给出 -->
         <component :is="bodyOf" v-else-if="bodyOf" :key="active.id" :doc="active.doc" />
       </template>
-      <p v-else class="empty">从场景、文件或面板里的「预览」打开一份资料，放进这一组</p>
     </div>
   </section>
 </template>
@@ -128,8 +108,45 @@ const tip = (t: DocTab) => docTip(t.doc, kindCtx) + (stale(t) ? `（${stale(t)}�
   font-size: 12.5px;
 }
 
-.focused .tabs {
-  box-shadow: inset 0 2px 0 var(--accent);
+.plus-wrap {
+  position: relative;
+  align-self: center;
+}
+
+.plus {
+  border: none;
+  background: none;
+  width: 24px;
+  height: 24px;
+  color: var(--text-3);
+  font-size: 15px;
+}
+
+.plus-menu {
+  position: absolute;
+  top: 26px;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  min-width: 96px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--card-shadow);
+}
+
+.plus-menu button {
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.plus-menu button:hover {
+  background: var(--bg);
 }
 
 .tab {

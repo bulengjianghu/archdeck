@@ -1,5 +1,5 @@
 /**
- * 画布模式（V11、V12，ADR-0031）：不开场景时在结构 / 交互视角之间切换，打开场景即运行视角、退出回到进入前的模式（mode 在回放期间保留）。
+ * 画布模式（LY-6，ADR-0064；V12，ADR-0031）：视角只有结构 / 交互两个；打开场景即交互视角 + 这个场景，退出场景留在交互视角。
  * 切换只换边与角标：层次、视图节点、分级与折叠、临时展开都不在这里改；选中按 V12 映射。纯函数。
  */
 import { interactionEdgeBetween, nodeOf, type LevelView, type ModelIndex } from '@/model'
@@ -59,10 +59,13 @@ export function mapSelection(s: Selection | null, mode: CanvasMode, ctx: Transit
   return [edge ? { kind: 'edge', id: edge } : s, undefined]
 }
 
-/** V11：切换模式（运行视角下即退出场景，回到所选模式）；同一模式且不在运行视角时无动作。进历史 */
+/**
+ * LY-6、LY-6a：切换视角；同一视角无动作（回放中单击「交互」不退出场景）。回放中切到结构 = 退出场景并切到结构视角。进历史
+ * （回放中 mode 总是交互，openScenario 保证）
+ */
 export function setMode(state: ViewState, ctx: TransitionContext, mode: CanvasMode): TransitionResult {
-  const current: CanvasMode = state.mode === 'structure' ? 'structure' : 'interaction'
-  if (mode === current && !state.playback) return replace(state)
+  const current: CanvasMode = state.mode === 'structure' && !state.playback ? 'structure' : 'interaction'
+  if (mode === current) return replace(state)
   const [selection, dropped] = mode === current ? [state.selection, undefined] : mapSelection(state.selection, mode, ctx)
   return { state: { ...withMode(state, mode), playback: null, selection }, history: 'push', ...(dropped ? { dropped } : {}) }
 }

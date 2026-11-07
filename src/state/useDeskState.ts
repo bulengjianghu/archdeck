@@ -37,6 +37,7 @@ import {
   encodeView,
   keyIntent,
   perspectiveOf,
+  viewpointOf,
   selectedOf,
   transition,
   type CanvasMode,
@@ -46,16 +47,20 @@ import {
   type ViewAction,
   type ViewState,
   EMPTY_WORKSPACE,
-  canvasStateOf,
-  defaultDocFor,
   docKey,
-  dockShown,
+  hasTab,
+  layoutContextOf,
+  subjectOf,
+  viewKey,
   workspaceTransition,
   type DocRef,
+  type Subject,
+  type ViewKind,
   type WorkspaceAction,
   type WorkspaceState,
 } from './transition'
 import { createRouterSync, type RouterSync, type RouterSyncOptions } from './sync/router'
+import { attachWorkspaceMemory, type WorkspaceMemory } from './sync/workspaceMemory'
 import { fetchAndLoad, watchModelChanges, type Baselines, type ChangeEvents, type DesignNote, type FetchModel } from './sync/modelSource'
 import { createLayoutSync } from './sync/layout'
 import { bandColumnsFor, layoutView, type LayoutOptions } from '@/layout/layout'
@@ -73,10 +78,11 @@ import { createEdit } from './desk/edit'
 import { createExplainers } from './desk/explainers'
 import { createDialogue, NO_AGENT, type AgentTransport } from './desk/dialogue'
 
-export type { CanvasMode, ImpactQuery, Selection, Toggles, DocRef, DocTab, DocGroup, WorkspaceState } from './transition'
-export { PROPS_WIDTH, propsPlacement, dockAppeared } from './transition'
+export type { CanvasMode, ImpactQuery, Selection, Toggles, DocRef, Tab, TabGroup, ViewKind, Subject, LayoutContext, WorkspaceState } from './transition'
 export type { ExplainerRefView, BasisChangeKind } from './desk/explainers'
 export { encodeSelection, decodeSelection } from './transition'
+export { isResident } from './transition'
+export { browserMemory } from './sync/workspaceMemory'
 export type { CompareSource, ModelPayload, FetchModel } from './sync/modelSource'
 export type { SourceFetcher, Resource } from './sync/source'
 export type { ModelWriter, WriteOutcome, SketchSaveOutcome, DesignSaveOutcome, DesignSketchWrite, ArchivePreview } from './sync/writer'
@@ -88,6 +94,8 @@ export type DeskOptions = RouterSyncOptions & {
   writer?: ModelWriter
   /** 对话的 agent 通道（DA-11）；缺省没有（只看描述的测试） */
   agent?: AgentTransport
+  /** LY-3、LY-11：工作区的本机记忆（人改过的排布、视图区与侧栏的开合宽度）；缺省不记 */
+  memory?: WorkspaceMemory
 }
 
 export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {}) {
@@ -160,6 +168,8 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const levelPath = computed(() => (index.value && levelId.value ? (index.value.pathOf.get(levelId.value) ?? []) : []))
   /** 视角与选中（V1、V2、V7、V11），由视图状态推出 */
   const perspective = computed(() => perspectiveOf(state.value))
+  /** LY-6：视角只有结构 / 交互；回放 = 交互 + playback */
+  const viewpoint = computed(() => viewpointOf(state.value))
   /** V11：画布模式（运行视角下为进入前的模式，退出场景即回到它） */
   const mode = computed<CanvasMode>(() => state.value.mode ?? 'interaction')
   const selected = computed(() => selectedOf(state.value))
@@ -385,21 +395,9 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   const drillInto = (id: string) => dispatch({ type: 'drill', id })
   const goTo = (id: string, select?: Selection | null) => void dispatch({ type: 'goTo', id, select })
   const goUp = () => void dispatch({ type: 'goUp' })
-  /** 最近一次选中的来源：'explainer' = 图解 iframe 的 arch:select（EX-3：画布选中、资料区不动，自动打开图解要豁免） */
-  const selectSource = ref<'explainer' | null>(null)
-  /** 最近一次选中是否来自用户操作包装器（画布 / 树 / 搜索）：是则自动打开走稳定窗，否则（URL 同步）立即打开 */
-  let viaWrapper = false
-  const select = (s: Selection | null, source: 'explainer' | null = null) => {
-    selectSource.value = source
-    viaWrapper = true
-    void dispatch({ type: 'select', selection: s })
-  }
+  const select = (s: Selection | null) => void dispatch({ type: 'select', selection: s })
   const revealRelation = (id: string) => void dispatch({ type: 'revealRelation', id })
-  const revealModule = (id: string, source: 'explainer' | null = null) => {
-    selectSource.value = source
-    viaWrapper = true
-    void dispatch({ type: 'revealModule', id })
-  }
+  const revealModule = (id: string) => void dispatch({ type: 'revealModule', id })
   const setHover = (id: string | null) => void dispatch({ type: 'hover', id })
   /** K15b：影响面查询（null =「不看」），一次性 */
   const queryImpact = (query: ImpactQuery | null) => void dispatch({ type: 'queryImpact', query })
@@ -419,56 +417,22 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
   }
   const selectFile = (path: string) => select({ kind: 'file', id: path })
 
-  // ── 工作区（WS，ADR-0054）：资料区与属性栏开关是另一个值，只经 workspaceTransition 改变；不进 URL ──
+  // ── 工作区（LY，ADR-0064）：视图区的排布与开合是另一个值，只经 workspaceTransition 改变；不进 URL ──
+  // 视图标签跟随主语（内容是（主语, 标签类型）的纯函数），这里没有「打开资料」的协调，只有：情境 → setContext（LY-11）、选中另一个文件 → 源代码预览（G15）
   const workspaceState = shallowRef<WorkspaceState>(EMPTY_WORKSPACE)
   const workspaceDispatch = (a: WorkspaceAction) => void (workspaceState.value = workspaceTransition(workspaceState.value, a))
-  // WS-8：资料区不跟随选中；只把「打开场景 / 退出场景 / 选中另一个文件」翻译成打开资料（G15）。描述重新加载后场景与文件不变，不再打开
-  watch(
-    () => playback.value?.scenarioId ?? null,
-    (id, was) => {
-      const doc = defaultDocFor('run', { hasExplainer: explainers.has })
-      if (id && id !== was && doc) workspaceDispatch({ type: 'open', doc, pin: true })
-      else if (!id && was) workspaceDispatch({ type: 'closeDoc', id: 'seq' })
-    },
-    { immediate: true },
-  )
+  /** LY-11c：情境由视图状态（场景）与编辑会话推出 */
+  const layoutContext = computed(() => layoutContextOf(!!playback.value, edit.active.value))
+  watch(layoutContext, context => workspaceDispatch({ type: 'setContext', context }), { immediate: true })
   watch(
     () => files.selected.value,
     (path, was) => path && path !== was && workspaceDispatch({ type: 'open', doc: { kind: 'source', path } }),
     { immediate: true },
   )
-  // WS-8 的例外（第十八轮走查 4，ADR-0061；第二十轮读先方案扩展）：结构 / 交互视角下选中变为任何模块 → 辅助栏打开它的理解页
-  // （事实卡 + 有图解时的故事），让「选中即理解」零点击。已在资料区开着（含固定）不再动；运行视角的资料区归时序图与步骤节、
-  // 草图编辑不打开；图解 iframe 里点链接来的选中带 source: 'explainer'（EX-3：正在读父图解，资料区不动），来源标记消费后即复位
-  let openTimer: ReturnType<typeof setTimeout> | undefined
-  watch(selected, s => {
-    const source = selectSource.value
-    const user = viaWrapper
-    selectSource.value = null
-    viaWrapper = false
-    clearTimeout(openTimer)
-    if (!s || s.kind !== 'module' || source === 'explainer') return
-    // DL-4：查缺省主语表——选中只驱动「题解」那一格；运行视角的时序图跟场景（上面的 watcher）、草图的对话跟编辑会话（下面的 watcher）
-    const storyFor = () => {
-      const doc = defaultDocFor(canvasStateOf(perspective.value, edit.active.value), { module: s.id, hasExplainer: explainers.has })
-      return doc && (doc.kind === 'explainer' || doc.kind === 'facts') ? doc : null
-    }
-    const doc = storyFor()
-    if (!doc) return
-    if (workspaceState.value.groups.some(g => g.tabs.some(t => t.id === docKey(doc)))) return
-    const openNow = () => {
-      if (selected.value !== s || !storyFor()) return
-      if (workspaceState.value.groups.some(g => g.tabs.some(t => t.id === docKey(doc)))) return
-      workspaceDispatch({ type: 'open', doc })
-    }
-    // URL 直达 / 状态同步来的选中立即打开（资料区在首次适应之前就位，缩放只取一个值）；
-    // 用户点选走 250ms 稳定窗：双击下钻、连续点选期间资料区不重排（画布几何稳定是交互的前提）
-    if (user) openTimer = setTimeout(openNow, 250)
-    else openNow()
-  })
-  // ── 对话（DA-1、DL-4、DL-12）：选中 / 视角 → 锚点；进入草图画布按主语表打开并固定对话 ──
-  const canvas = computed(() => canvasStateOf(perspective.value, edit.active.value))
-  const dialogueDoc = () => defaultDocFor('sketch', { hasExplainer: explainers.has }) ?? { kind: 'dialogue' as const }
+  /** LY-7、LY-7a：主语——选中；没有时为当前层次的父模块，根层即系统 */
+  const subject = computed<Subject | null>(() => (index.value ? subjectOf(state.value, index.value.rootId) : null))
+  // ── 对话（DA-1、DL-12）：选中 / 视角 → 锚点；进入草图画布的对话标签由草图情境的排布给出（LY-11） ──
+  const canvas = computed(() => (edit.active.value ? 'sketch' : perspective.value))
   const dialogue = createDialogue({
     project: options.project,
     index,
@@ -500,11 +464,6 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     on => (aiEditing.value = on),
     { immediate: true },
   )
-  watch(canvas, (c, was) => {
-    if (c === was) return
-    const doc = defaultDocFor(c, { hasExplainer: explainers.has })
-    if (doc?.kind === 'dialogue') workspaceDispatch({ type: 'open', doc: dialogueDoc(), pin: true })
-  })
 
   /** DA-10、DL-10：设计说明——草图版本里设计的 notes/；存为设计说明（写端点）后重新加载并打开预览标签 */
   const noteDesign = isSketchRevision(options.version) ? options.version.design : null
@@ -524,13 +483,34 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
 
   const workspace = {
     state: workspaceState,
-    dockShown: computed(() => dockShown(workspaceState.value)),
+    context: layoutContext,
     dispatch: workspaceDispatch,
-    /** 打开一份资料：不固定为预览标签（WS-5） */
+    /** 打开一份资料：不固定为预览标签（LY-8a） */
     open: (doc: DocRef, pin = false) => workspaceDispatch({ type: 'open', doc, pin }),
-    /** 这份资料是否已在资料区开着（任一组；PC-9 的「已打开」） */
-    isOpen: (doc: DocRef) => workspaceState.value.groups.some(g => g.tabs.some(t => t.id === docKey(doc))),
-    setProps: (open: boolean) => workspaceDispatch({ type: 'setProps', open }),
+    /** 这份资料是否已在视图区开着（任一组） */
+    isOpen: (doc: DocRef) => hasTab(workspaceState.value, docKey(doc)),
+    /** 视图里的引用请求看某个视图标签——激活它（不在就从「+」加进上组），视图区收起时展开 */
+    showView: (view: ViewKind) => {
+      if (workspaceState.value.collapsed) workspaceDispatch({ type: 'setCollapsed', collapsed: false })
+      if (!hasTab(workspaceState.value, viewKey(view))) workspaceDispatch({ type: 'addView', view, group: 0 })
+      else workspaceDispatch({ type: 'activate', id: viewKey(view) })
+    },
+  }
+
+  if (options.memory) attachWorkspaceMemory(options.memory, workspaceState, workspaceDispatch)
+
+  /**
+   * LY-15、EX-5：看某个模块的图解 = 选中它（系统 = 回到根层、取消选中），并激活图解标签——视图标签跟随主语，没有「按模块开图解」
+   */
+  function readExplainer(id: string) {
+    const idx = index.value
+    if (!idx) return
+    if (id === idx.rootId) {
+      if (state.value.levelId !== idx.rootId) goTo(idx.rootId, null)
+      else select(null)
+    } else if (edit.active.value) select({ kind: 'module', id })
+    else revealModule(id)
+    workspace.showView('explainer')
   }
 
   /** 键盘（N7、N9）：返回 'leave' 表示应回到项目列表，由呈现层导航 */
@@ -567,7 +547,9 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     hoverId,
     impactQuery,
     perspective,
+    viewpoint,
     mode,
+    subject,
     droppedSelection,
     toggles,
     view,
@@ -613,6 +595,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     seek,
     chooseBranch,
     selectFile,
+    readExplainer,
   }
 }
 

@@ -30,8 +30,8 @@ function onMessage(e: MessageEvent) {
   const v = props.view
   const id = e.data.module
   if (!v.ok || !(id in v.refs)) return
-  if (desk.edit.active.value) desk.select({ kind: 'module', id }, 'explainer')
-  else desk.revealModule(id, 'explainer')
+  if (desk.edit.active.value) desk.select({ kind: 'module', id })
+  else desk.revealModule(id)
 }
 onMounted(() => window.addEventListener('message', onMessage))
 onBeforeUnmount(() => window.removeEventListener('message', onMessage))

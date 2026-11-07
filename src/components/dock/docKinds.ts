@@ -1,10 +1,10 @@
 /**
- * 资料种类的呈现表（DL-5）：每种资料的标签名、悬停说明、种类记号，以及（新种类的）正文组件。
+ * 资料种类的呈现表（DL-5）：每种资料（LY-8 的资料标签）的标签名、悬停说明、种类记号，以及（新种类的）正文组件。
  * 标签栏与分组逻辑只查这张表，不写种类分支；加一种资料 = workspace.ts 的联合加一种 + 这里加一行。
- * 时序图、源代码、理解页 / 图解的正文仍由 DockGroup 的既有分支渲染（它们带着运行视角的步骤节等版式）；新种类在这里给 component。
+ * 源代码的正文由 DockGroup 的既有分支渲染；视图标签（图解、描述、核对、时序图）的正文是 ViewDoc。
  */
 import { defineAsyncComponent, type Component } from 'vue'
-import type { DocRef } from '@/state/useDeskState'
+import type { DocRef, ViewKind } from '@/state/useDeskState'
 
 export interface DocKindContext {
   moduleName: (id: string) => string
@@ -23,16 +23,14 @@ export interface DocKindView {
   component?: Component
 }
 
-const mod = (d: DocRef) => (d as { module: string }).module
+/** LY-8：视图标签的名字（按类型各一个，不带主语——主语在主语条） */
+export const VIEW_LABELS: Record<ViewKind, string> = { explainer: '图解', description: '描述', check: '核对', sequence: '时序图' }
 
 export const DOC_KIND_VIEWS: Record<string, DocKindView> = {
-  sequence: { label: (_d, c) => `时序图${c.scenarioName() ? ` · ${c.scenarioName()}` : ''}` },
   source: {
     label: d => `源代码 · ${(d as { path: string }).path.split('/').pop()}`,
     tip: d => (d as { path: string }).path,
   },
-  explainer: { label: (d, c) => c.moduleName(mod(d)), tip: (d, c) => `图解 · ${c.moduleName(mod(d))}`, icon: '▣' },
-  facts: { label: (d, c) => `事实 · ${c.moduleName(mod(d))}`, tip: (d, c) => `理解页 · ${c.moduleName(mod(d))}`, icon: '▣' },
   dialogue: {
     label: () => '对话',
     tip: () => '对话：问 · 重讲题解（当前版本）· 改（草图里）',

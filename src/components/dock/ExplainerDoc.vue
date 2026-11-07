@@ -1,9 +1,8 @@
 <script setup lang="ts">
 /**
- * 资料区的图解标签内容（EX-3、EX-4、EX-7，ADR-0055）：顶部一行 ↑ ↓ 图解导航、「在画布上选中」与过期提示（可展开改动），下面是沙箱 iframe。
- * iframe 只给 allow-scripts；父页只接受来源是这个 iframe 窗口的消息：arch:select 在画布上选中模块（资料区不动，WS-8；
- * 来源记为 'explainer'，选中的自动打开图解豁免，ADR-0061），
- * arch:open 以预览标签打开另一份图解。
+ * 图解的内容（EX-3、EX-4、EX-7，ADR-0055；LY-13、LY-15，ADR-0064）：顶部一行 ↑ ↓ 图解导航、「在画布上选中」与过期提示（可展开改动），下面是沙箱 iframe。
+ * iframe 只给 allow-scripts；父页只接受来源是这个 iframe 窗口的消息：arch:select 即选中模块（视图随主语跟随，LY-15），
+ * arch:open 看另一份图解（选中它并激活图解标签）。↑ ↓ 同 arch:open。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useDesk } from '@/state/inject'
@@ -21,14 +20,14 @@ const html = computed(() => ex.html(props.module))
 const srcdoc = computed(() => (html.value ? explainerSrcdoc(html.value, ex.refs(props.module), window.location.origin) : ''))
 const nav = computed(() => ex.nav(props.module))
 const status = computed(() => ex.status(props.module))
-const open = (id: string, pin = false) => desk.workspace.open({ kind: 'explainer', module: id }, pin)
+const open = (id: string) => desk.readExplainer(id)
 
 function onMessage(e: MessageEvent) {
   if (!frame.value || e.source !== frame.value.contentWindow || !isExplainerMessage(e.data)) return
   const id = e.data.module
   if (e.data.type === 'arch:open') {
     if (ex.has(id)) open(id)
-  } else if (desk.index.value?.modules.has(id)) desk.revealModule(id, 'explainer')
+  } else if (desk.index.value?.modules.has(id)) desk.revealModule(id)
 }
 onMounted(() => window.addEventListener('message', onMessage))
 onBeforeUnmount(() => window.removeEventListener('message', onMessage))
@@ -37,20 +36,9 @@ onBeforeUnmount(() => window.removeEventListener('message', onMessage))
 <template>
   <div class="explainer" :data-explainer="module">
     <div class="bar">
-      <button v-if="nav.up" class="nav up" :title="`上一级图解：${name(nav.up)}（单击预览 · 双击固定）`" @click="open(nav.up)" @dblclick="open(nav.up, true)">
-        ↑ {{ name(nav.up) }}
-      </button>
+      <button v-if="nav.up" class="nav up" :title="`上一级图解：${name(nav.up)}`" @click="open(nav.up)">↑ {{ name(nav.up) }}</button>
       <span v-if="nav.down.length" class="downs">
-        <button
-          v-for="d in nav.down"
-          :key="d"
-          class="nav down"
-          :title="`下一级图解：${name(d)}（单击预览 · 双击固定）`"
-          @click="open(d)"
-          @dblclick="open(d, true)"
-        >
-          ↓ {{ name(d) }}
-        </button>
+        <button v-for="d in nav.down" :key="d" class="nav down" :title="`下一级图解：${name(d)}`" @click="open(d)">↓ {{ name(d) }}</button>
       </span>
       <span class="sp" />
       <button v-if="module !== desk.index.value?.rootId" class="nav sel" title="在画布上选中这个模块（资料区不动）" @click="desk.revealModule(module)">

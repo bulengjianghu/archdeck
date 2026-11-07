@@ -1,6 +1,6 @@
 /**
  * 视图状态：用户此刻在看什么，一个值（docs/architecture/view-state.md §1）。
- * 只经 transition() 改变；视角与选中由它推出，不另存字段（运行视角下 selection 为空即选中进度所在的步骤 / 场景，ADR-0012）。
+ * 只经 transition() 改变；视角、选中与主语由它推出，不另存字段（回放中 selection 为空即选中进度所在的步骤 / 场景，ADR-0012；主语 LY-7）。
  */
 import type { EditEffects, HeatKind, LevelView, ModelIndex, RelationType, ScenarioLevelView, ScenarioPlan, SketchTarget } from '@/model'
 
@@ -50,8 +50,8 @@ export interface PlaybackState {
 }
 
 /**
- * V11（ADR-0031）：不开场景时画布的模式——交互视角画交互图（四类交互），结构视角画结构图（依赖事实）。
- * 打开场景即运行视角，模式保留，退出场景回到进入前的模式。
+ * LY-6（ADR-0064）：视角——交互视角画交互图（四类交互），结构视角画结构图（依赖事实）。
+ * 回放 = 交互视角 + 一个场景（playback 非空时 mode 总是交互）；退出场景留在交互视角。
  */
 export type CanvasMode = 'interaction' | 'structure'
 
@@ -61,9 +61,9 @@ export interface ViewState {
   selection: Selection | null
   hover: string | null
   toggles: Toggles
-  /** null = 结构 / 交互视角（按 mode）；非 null = 运行视角（V1、V11） */
+  /** 回放中的场景（LY-6）；null = 没有场景 */
   playback: PlaybackState | null
-  /** V11：画布模式；只在结构视角时写 'structure'，缺省（undefined）为交互视角。URL `v=s` */
+  /** LY-6：视角；只在结构视角时写 'structure'，缺省（undefined）为交互视角。URL `v=s` */
   mode?: CanvasMode
   /** 草图画布（X7a，ADR-0025）：打开的草图版本的编辑目标——进入草图即编辑；与运行视角互斥，不进 URL。缺省（undefined）同 null */
   editing?: SketchTarget | null
@@ -94,7 +94,7 @@ export type ViewAction =
   /** K15b：设定或撤掉影响面查询（null =「不看」）；只在结构视角、选中模块时生效 */
   | { type: 'queryImpact'; query: ImpactQuery | null }
   | { type: 'toggle'; patch: Partial<Toggles> }
-  /** V11、V12：切到结构 / 交互视角（运行视角下即退出场景）；进历史 */
+  /** LY-6a、V12：切到结构 / 交互视角（回放中切到结构即退出场景）；进历史 */
   | { type: 'setMode'; mode: CanvasMode }
   | { type: 'openScenario'; id: string }
   | { type: 'closeScenario' }

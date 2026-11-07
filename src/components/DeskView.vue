@@ -7,7 +7,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
-import { createDeskState, propsPlacement, PROPS_WIDTH, type ModelPayload } from '@/state/useDeskState'
+import { browserMemory, createDeskState, type ModelPayload } from '@/state/useDeskState'
 import { isCommitVersion, isIntentVersion, type VersionRef } from '@/model'
 import { httpModelWriter, httpSourceFetcher } from './source/httpSource'
 import { DESK_STATE } from '@/state/inject'
@@ -82,6 +82,7 @@ const desk = createDeskState(fetchModel, {
   source: httpSourceFetcher(props.project, import.meta.env.BASE_URL),
   writer: httpModelWriter(props.project, import.meta.env.BASE_URL),
   agent: httpAgentTransport(import.meta.env.BASE_URL, import.meta.hot as unknown as AgentEvents | undefined),
+  memory: browserMemory(),
 })
 desk.attachRouter(router)
 provide(DESK_STATE, desk)
@@ -146,36 +147,33 @@ function store(key: string, value: string) {
 }
 
 const ws = desk.workspace
-// WS-2（第二十轮 §4 改写）：选中面板抽屉缺省收起，开关状态按本机记住
+// 第二十二轮波 1 的过渡（波 2 删抽屉与浮层）：选中抽屉与导航浮层的开合是呈现层的本地值，不再进工作区状态；
+// 只由人开合（LY-16：不随运行视角、资料区出现自动收起），按本机记住
 const PROPS_KEY = 'h5p-arch-desk:panel-collapsed'
-ws.setProps(readNumber(PROPS_KEY, 0, 1, 1) !== 1)
-const propsOpen = computed(() => ws.state.value.propsOpen)
+const PROPS_WIDTH = 330
+const MIN_CANVAS = 620
+const propsOpen = ref(readNumber(PROPS_KEY, 0, 1, 1) !== 1)
+const setProps = (open: boolean) => (propsOpen.value = open)
 function toggleProps() {
-  ws.setProps(!propsOpen.value)
+  setProps(!propsOpen.value)
   // DL-20：草图编辑态的展开收起只在这一回（缺省收起），不改本机记住的偏好
   if (!desk.edit.active.value) store(PROPS_KEY, propsOpen.value ? '0' : '1')
 }
 
-// 导航树是画布左缘的浮层抽屉（第二十轮读先方案 §2）：不挤压画布，宽度固定 300
+// 导航树是画布左缘的浮层抽屉（过渡）：不挤压画布，宽度固定 300，缺省收起，开合按本机记住（不再按视角分别记）
 const navWidth = ref(300)
-// W-1（第二十轮 §4 改写）：导航树是画布左缘的浮层抽屉，缺省收起（画布 + 理解页是主形态）；展开状态按视角分别记在本地
-const navKey = (run: boolean) => (run ? 'h5p-arch-desk:nav-collapsed:run' : 'h5p-arch-desk:nav-collapsed')
-const navCollapsedOf = (run: boolean) => readNumber(navKey(run), 0, 1, 1) === 1
-const navCollapsed = ref(navCollapsedOf(desk.perspective.value === 'run'))
-// V6 新家（第二十轮 §6）：运行视角的「这一步 / 这个对象做了什么」住右栏的步骤节，选中抽屉随之收起（用户可再打开）
-let propsBeforeRun = readNumber(PROPS_KEY, 0, 1, 1) !== 1
-// 草图编辑：画布是主面，导航浮层自动收起（退出不自动恢复）
-// DL-20（裁决 11 §2）：草图编辑态选中面板缺省收起（与运行视角同口径）——对话在场后表单用得少；退出时恢复进入前的样子
+const NAV_KEY = 'h5p-arch-desk:nav-collapsed'
+const navCollapsed = ref(readNumber(NAV_KEY, 0, 1, 1) === 1)
+// DL-20（过渡）：草图编辑态选中面板缺省收起——对话在场后表单用得少；退出时恢复进入前的样子
 let propsBeforeEdit: boolean | null = null
 watch(
   () => desk.edit.active.value,
   on => {
-    if (on && !navCollapsed.value) toggleNav()
     if (on) {
       propsBeforeEdit = propsOpen.value
-      if (propsOpen.value) ws.setProps(false)
+      if (propsOpen.value) setProps(false)
     } else if (propsBeforeEdit !== null) {
-      if (propsBeforeEdit !== propsOpen.value) ws.setProps(propsBeforeEdit)
+      if (propsBeforeEdit !== propsOpen.value) setProps(propsBeforeEdit)
       propsBeforeEdit = null
     }
   },
@@ -183,27 +181,15 @@ watch(
 )
 /** DL-20：手势编辑需要表单时按需展开（右键「编辑字段…」、改动页签定位到的项） */
 provide(OPEN_PROPS, () => {
-  if (!propsOpen.value) ws.setProps(true)
+  if (!propsOpen.value) setProps(true)
 })
-watch(
-  () => desk.perspective.value,
-  (p, was) => {
-    navCollapsed.value = navCollapsedOf(p === 'run')
-    if (p === 'run' && was && was !== 'run') {
-      propsBeforeRun = propsOpen.value
-      if (propsOpen.value) toggleProps()
-    } else if (was === 'run' && p !== 'run' && !propsOpen.value && propsBeforeRun) {
-      toggleProps()
-    }
-  },
-)
 
 function toggleNav() {
   navCollapsed.value = !navCollapsed.value
-  store(navKey(desk.perspective.value === 'run'), navCollapsed.value ? '1' : '0')
+  store(NAV_KEY, navCollapsed.value ? '1' : '0')
 }
 
-// WS-9：专注——导航树或属性栏任一展开时都收起；都已收起时都恢复
+// 专注：导航树或属性栏任一展开时都收起；都已收起时都恢复
 const focused = computed(() => navCollapsed.value && !propsOpen.value)
 function toggleFocus() {
   const open = focused.value
@@ -211,9 +197,10 @@ function toggleFocus() {
   if (propsOpen.value !== open) toggleProps()
 }
 
-// W-4：资料区占整个项目视图宽度的比例，按项目记在本地
-const DOCK_KEY = `h5p-arch-desk:dock-ratio:${props.project}`
-const dockRatio = ref(readNumber(DOCK_KEY, 0.2, 0.75, 0.44))
+// LY-10b：视图区占整个项目视图宽度的比例，是工作区状态（本机记忆经同步适配器）
+const dockRatio = computed(() => ws.state.value.width)
+/** LY-12：视图区可整体收起 */
+const viewsShown = computed(() => !ws.state.value.collapsed)
 const desktop = ref<HTMLElement>()
 let dragging: 'dock' | null = null
 function onDividerDown(which: 'dock', e: PointerEvent) {
@@ -223,11 +210,10 @@ function onDividerDown(which: 'dock', e: PointerEvent) {
 function onDividerMove(e: PointerEvent) {
   if (dragging === 'dock' && desktop.value) {
     const r = desktop.value.getBoundingClientRect()
-    dockRatio.value = Math.min(0.75, Math.max(0.2, (r.right - e.clientX) / r.width))
+    ws.dispatch({ type: 'setWidth', width: (r.right - e.clientX) / r.width })
   }
 }
 function onDividerUp() {
-  if (dragging === 'dock') store(DOCK_KEY, String(dockRatio.value))
   dragging = null
 }
 
@@ -244,7 +230,7 @@ onMounted(() => {
   }
 })
 onBeforeUnmount(() => stageObserver?.disconnect())
-const placement = computed(() => propsPlacement(stageWidth.value))
+const placement = computed(() => (stageWidth.value - PROPS_WIDTH >= MIN_CANVAS ? 'docked' : 'floating'))
 // DL-20：草图编辑态展开的选中面板浮在画布右侧，不挤压画布（画布宽度不变，草图的可用区域不随之重排）
 const floating = computed(() => propsOpen.value && (placement.value === 'floating' || desk.edit.active.value))
 const canvasInset = computed(() => (floating.value ? PROPS_WIDTH + 16 : 0))
@@ -295,11 +281,9 @@ const propsStyle = computed(() =>
 provide(OPEN_PREVIEW, (path: string, line?: number) => ws.open({ kind: 'source', path, line }))
 // PC-9、EX-1：相关资料卡的图解入口——模块有没有图解由模型层判定（desk.explainers）
 provide(HAS_EXPLAINER, (id: string) => desk.explainers.has(id))
-// WS-7：「▣ 资料」——有标签时隐藏 / 显示；没有标签时运行视角打开时序图，其他视角不可用
-const hasDocs = computed(() => ws.state.value.groups.some(g => g.tabs.length))
+// LY-12：「▣」——收起 / 展开视图区（图解常驻，视图区总有内容）
 function toggleDock() {
-  if (hasDocs.value) ws.dispatch({ type: 'toggleDock' })
-  else if (desk.perspective.value === 'run') ws.open({ kind: 'sequence' }, true)
+  ws.dispatch({ type: 'setCollapsed', collapsed: !ws.state.value.collapsed })
 }
 // W-10：「怎么读这张图」
 const guideOpen = ref(false)
@@ -350,15 +334,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSearchKey))
 const propsTip = computed(() =>
   propsOpen.value ? `选中面板（跟随选中）· 当前${floating.value ? '浮在画布右侧：宽度不够挤压' : '挤压画布'}；单击关闭` : '属性（跟随选中）：单击打开',
 )
-const dockTip = computed(() =>
-  hasDocs.value
-    ? ws.dockShown.value
-      ? '资料：隐藏资料区（标签保留）'
-      : '资料：显示资料区'
-    : desk.perspective.value === 'run'
-      ? '资料：打开时序图'
-      : '资料：还没有打开的资料（打开场景或文件）',
-)
+const dockTip = computed(() => (viewsShown.value ? '视图：收起视图区（专注地图）' : '视图：展开视图区'))
 
 // 舞台显示（V8、V9）：只属于画布这块界面
 provide(STAGE_DISPLAY, useStageDisplay(props.project, desk))
@@ -435,15 +411,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <button class="ib props-toggle" :class="{ on: propsOpen }" :aria-pressed="propsOpen" :title="propsTip" aria-label="属性" @click="toggleProps">
         <ToolIcon name="props" />
       </button>
-      <button
-        class="ib dock-toggle"
-        :class="{ on: ws.dockShown.value }"
-        :aria-pressed="ws.dockShown.value"
-        :disabled="!hasDocs && desk.perspective.value !== 'run'"
-        :title="dockTip"
-        aria-label="资料"
-        @click="toggleDock"
-      >
+      <button class="ib dock-toggle" :class="{ on: viewsShown }" :aria-pressed="viewsShown" :title="dockTip" aria-label="资料" @click="toggleDock">
         <ToolIcon name="dock" />
       </button>
       <MoreMenu />
@@ -489,7 +457,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         </aside>
       </div>
 
-      <template v-if="ws.dockShown.value">
+      <template v-if="viewsShown">
         <div class="divider dock-divider" @pointerdown="onDividerDown('dock', $event)" @pointermove="onDividerMove" @pointerup="onDividerUp" />
         <div class="dock-area" :style="{ width: `${dockRatio * 100}%` }">
           <DockPane />
