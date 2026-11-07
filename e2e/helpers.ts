@@ -72,6 +72,23 @@ export function query(page: Page): URLSearchParams {
   return new URLSearchParams(hash.slice(hash.indexOf('?') + 1))
 }
 
+/**
+ * 第二十二轮语义锚点（ADR-0064）：视图区 `data-region="views"`、视图标签 `data-view-tab="<类型>"`、资料标签 `data-doc-tab="<种类>"` 与键 `data-doc`、
+ * 组 `data-group`。E2E 只认这些锚点，不认版式（波 2 换版式时选择器不动）。
+ */
+export const views = (page: Page) => page.locator('[data-region="views"]')
+export const viewTab = (page: Page, kind: 'explainer' | 'description' | 'check' | 'sequence') => views(page).locator(`.tab[data-view-tab="${kind}"]`)
+export const docTab = (page: Page, id: string) => views(page).locator(`.tab[data-doc="${id}"]`)
+/** 资料标签（不跟随主语的那一类） */
+export const docTabs = (page: Page) => views(page).locator('.tab[data-doc-tab]')
+/** 第 group 组激活的标签 */
+export const activeTab = (page: Page, group = 0) => views(page).locator(`[data-group="${group}"] .tab.on`)
+/** 激活某个视图标签 */
+export async function showView(page: Page, kind: 'explainer' | 'description' | 'check' | 'sequence') {
+  await viewTab(page, kind).locator('.lbl').click()
+  await expect(viewTab(page, kind)).toHaveClass(/\bon\b/)
+}
+
 /** 结构图上的视图节点 */
 export const graphNode = (page: Page, id: string) => page.locator(`.vue-flow__node[data-id="${id}"]`)
 
@@ -163,11 +180,12 @@ export async function openRelated(page: Page) {
 }
 
 /**
- * DL-4、DL-20（第二十一轮波 2）：进入草图画布时辅助栏按主语表打开并固定「对话」，选中面板缺省收起——画布不再被挤压，资料区不用关
+ * LY-11（第二十二轮）：进入草图画布时视图区按草图情境的排布——上组对话（固定、激活）；DL-20 过渡：选中面板缺省收起
  */
 export async function expectSketchLayout(page: Page) {
-  const dock = page.getByRole('complementary', { name: '资料区' })
-  await expect(dock.locator('.tab.on:not(.preview)')).toContainText('对话')
+  // LY-11：草图情境的缺省排布——上组激活的是固定的对话
+  await expect(activeTab(page, 0)).toHaveAttribute('data-doc', 'dlg')
+  await expect(activeTab(page, 0)).not.toHaveClass(/preview/)
   await expect(page.getByRole('complementary', { name: '属性' })).toHaveCount(0)
 }
 

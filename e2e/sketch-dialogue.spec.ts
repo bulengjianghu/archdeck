@@ -7,7 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, LOAD_BUDGET, openDesk, openSketchPanel, query, sketchOn } from './helpers'
+import { activeTab, graphNode, LOAD_BUDGET, openDesk, openSketchPanel, query, sketchOn } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 
@@ -52,7 +52,7 @@ test('用例 1、DL-20：进入草图画布——对话自动打开并固定、�
 }) => {
   const { restore } = await sketchOn(page, 'zz-e2e-w2-layout')
   try {
-    await expect(dock(page).locator('.tab.on:not(.preview)')).toContainText('对话')
+    await expect(activeTab(page, 0)).toContainText('对话')
     await expect(dialogue(page).getByTestId('anchor-bar')).toContainText('当前张 DeskState')
     await expect(dialogue(page).getByTestId('mode-badge')).toHaveText('可改')
     await expect(props(page)).toHaveCount(0)

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * 视角切换（V1、V11、W-3）：「结构 ｜ 交互 ｜ 运行 · <场景名>」——不开场景时结构 / 交互单击切换（setMode）；运行视角下单击结构或交互即退出场景并进入该模式（V11a）；
+ * 视角切换（V1、V11、W-3；第二十二轮波 1 过渡，波 4 换成「结构 ｜ 交互」+ 场景胶囊）：「结构 ｜ 交互 ｜ 运行 · <场景名>」——结构 / 交互单击切换（setMode）；
+ * 回放中单击结构即退出场景并切到结构（LY-6a）；旧版式里「运行」是单独一段，单击交互仍退出场景（状态层 LY-6a 里这是无动作，适配在这里）；
  * 「运行」弹出场景列表，运行视角下可换场景或退出（回到进入前的视角）。草图画布下不出现（DeskView）。
  * 运行段写「运行 · 场景名 ▾」，场景名最多 12 字、超出截断，悬停看全名（TB-1）；整段不收缩。
  */
@@ -41,7 +42,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick))
       :class="{ on: desk.perspective.value === 'interaction' }"
       :aria-pressed="desk.perspective.value === 'interaction'"
       title="交互视角：谁调谁、谁负责后果"
-      @click="desk.setMode('interaction')"
+      @click="desk.playback.value ? desk.closeScenario() : desk.setMode('interaction')"
     >
       交互
     </button>
@@ -54,7 +55,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick))
     >
       运行<template v-if="scene"> · {{ sceneShort }}</template> ▾
     </button>
-    <button v-if="desk.run.scenario.value" class="exit" title="退出场景：回到进入前的视角" aria-label="退出场景" @click="desk.closeScenario()">×</button>
+    <button v-if="desk.run.scenario.value" class="exit" title="退出场景（留在交互视角，LY-6a）" aria-label="退出场景" @click="desk.closeScenario()">×</button>
     <ScenarioList v-if="open" @picked="open = false" />
   </div>
 </template>

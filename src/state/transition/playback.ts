@@ -5,7 +5,6 @@
  * 播放头以帧 ID 记录，与层次无关；层次变化时不动它（R6）。
  */
 import { choicesFor, choicesForBranch, landing, pointPrefix, projectScenario, resolvePath, stepAfter, stepBefore, type ScenarioLevelView } from '@/model'
-import { withMode } from './mode'
 import type { TransitionContext, TransitionResult, ViewState } from './types'
 
 const replace = (state: ViewState): TransitionResult => ({ state, history: 'replace' })
@@ -21,7 +20,9 @@ function scenarioView(state: ViewState, ctx: TransitionContext, choices = state.
 /** LY-6、R5、R12：打开场景（或换场景）即交互视角 + 这个场景，不改层次；停在开头、选中场景（V2）；R10：进历史 */
 export function openScenario(state: ViewState, ctx: TransitionContext, id: string): TransitionResult {
   if (!ctx.index.scenarios.has(id)) return replace(state)
-  return push({ ...withMode(state, 'interaction'), selection: null, playback: { scenarioId: id, frameId: null, choices: new Map() } })
+  // 交互视角不存字段（同 mode.ts 的 withMode；不引用它，回放规则与视角模式互不依赖）
+  const { mode: _mode, ...interaction } = state
+  return push({ ...interaction, selection: null, playback: { scenarioId: id, frameId: null, choices: new Map() } })
 }
 
 /** LY-6a：退出场景留在交互视角，层次与选中保留（R10：进历史） */

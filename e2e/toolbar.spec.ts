@@ -14,6 +14,8 @@ test('验收 6.42 第 1 条（第二十轮 §4 改写）：顶栏拉通——项
   page,
 }) => {
   await openDesk(page, '/p/media-web-player?level=kit')
+  // 视图区常在（LY-9）：先收起它，抽屉才挤压画布（量「当前挤压」）
+  await page.getByRole('button', { name: '资料', exact: true }).click()
   await page.getByRole('button', { name: '属性', exact: true }).click() // 抽屉缺省收起，打开后「专注」才是静息标签
   const names = await bar(page)
     .getByRole('button')
@@ -36,6 +38,7 @@ test('验收 6.42 第 1 条（第二十轮 §4 改写）：顶栏拉通——项
   await expect(bar(page).getByRole('button', { name: '导航树', exact: true })).not.toHaveClass(/\bon\b/)
 
   await openDesk(page, '/p/media-web-player?level=kit&sc=sc.command')
+  await page.getByRole('button', { name: '资料', exact: true }).click()
   await expect(dock(page)).toBeVisible()
   const run = page.locator('.perspective .seg.run')
   const full = (await run.getAttribute('title'))!
@@ -51,7 +54,9 @@ test('验收 6.42 第 1 条（第二十轮 §4 改写）：顶栏拉通——项
   expect(more2.x + more2.width).toBeLessThanOrEqual(barBox.x + barBox.width)
 })
 
-test('验收 6.42 第 2 条（第二十轮 §4 改写）：项目菜单住顶栏栏首，与资料区标签栏底线同高；资料区在顶栏之下通到底（TB-6、TB-10、TB-11）', async ({ page }) => {
+test('验收 6.42 第 2 条（第二十轮 §4 改写；TB-10 第二十二轮作废）：项目菜单住顶栏栏首，与视图区标签栏底线同高；视图区在顶栏之下通到底（TB-6、TB-11）', async ({
+  page,
+}) => {
   await openDesk(page, '/p/media-web-player?level=kit&sc=sc.command')
   await expect(dock(page)).toBeVisible()
   const head = page.locator('.project-head')
@@ -70,9 +75,9 @@ test('验收 6.42 第 2 条（第二十轮 §4 改写）：项目菜单住顶栏
   const divider = (await page.locator('.dock-divider').boundingBox())!
   expect(divider.y).toBe(44)
   expect(divider.height).toBe(900 - 44)
-  // 标签栏右端：⊟ 分屏、× 全部关闭
-  await expect(dock(page).getByRole('button', { name: '上下分屏' }).locator('svg')).toHaveCount(1)
-  await expect(dock(page).getByRole('button', { name: '关闭资料区' }).locator('svg')).toHaveCount(1)
+  // LY-10：没有「⊟ 分屏」与「× 全部关闭」——分组由排布与拖拽决定，图解常驻（视图区只能整体收起，LY-12）
+  await expect(dock(page).getByRole('button', { name: '上下分屏' })).toHaveCount(0)
+  await expect(dock(page).getByRole('button', { name: '关闭资料区' })).toHaveCount(0)
 })
 
 test('验收 6.42 第 2 条：项目菜单切版本（版本胶囊 × 回当前版本）、编辑骨架、新建设计、所有项目（TB-6、TB-9）', async ({ page }) => {

@@ -5,23 +5,23 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, LOAD_BUDGET, openDesk, query } from './helpers'
+import { activeTab, graphNode, LOAD_BUDGET, openDesk, query, views } from './helpers'
 
-const dock = (page: Page) => page.getByRole('complementary', { name: '资料区' })
+const dock = views
 const dialogue = (page: Page) => dock(page).getByTestId('dialogue')
 const input = (page: Page) => dialogue(page).getByRole('textbox', { name: '对话输入' })
 async function say(page: Page, text: string) {
   await input(page).fill(text)
   await input(page).press('Enter')
 }
-/** 第二十轮版式：身份卡在选中抽屉里；事实卡在辅助栏理解页页顶——两处名称行都有「讨论 ›」，用理解页的那个 */
+/** 过渡版式：身份卡在选中抽屉里；事实卡在图解标签（原理解页）页顶——两处名称行都有「讨论 ›」，用视图区的那个 */
 const discuss = (page: Page) => dock(page).locator('.module-doc [data-action="discuss"]')
 
 test('验收 13：点「讨论 ›」打开对话；假 agent 回带引用的问答卡，单击引用画布定位；换选中锚点条变、转录不变', async ({ page }) => {
   test.setTimeout(120_000)
   await openDesk(page, '/p/h5p-arch-desk?sel=m:state')
   await discuss(page).click()
-  await expect(dock(page).locator('.tab.on')).toContainText('对话')
+  await expect(activeTab(page)).toContainText('对话')
   await expect(dialogue(page).getByTestId('anchor-bar')).toContainText('视图状态层')
   await expect(dialogue(page).getByTestId('mode-badge')).toHaveText('只问')
 
@@ -36,10 +36,8 @@ test('验收 13：点「讨论 ›」打开对话；假 agent 回带引用的问
   const transcript = await dialogue(page).getByTestId('dialogue-log').innerText()
   await graphNode(page, 'model').click()
   await expect.poll(() => query(page).get('sel')).toBe('m:model')
-  // 合并复跑（round21/integration）：WS-8 例外（ADR-0062）在用户点选 250ms 后打开并激活所选模块的理解页，对话标签退到后面——
-  // 原先断言抢在 250ms 内才过，负载下必红。先等理解页出来，再切回对话（这一交互待负责人裁，见 23-merge-report §6）
-  await expect(dock(page).locator('.tab.on')).toContainText('模型层')
-  await dock(page).getByRole('tab', { name: '对话' }).click()
+  // LY-16：选中不再自动打开理解页，对话标签留在前面（资料标签不跟随主语）
+  await expect(activeTab(page)).toHaveAttribute('data-doc', 'dlg')
   await expect(dialogue(page).getByTestId('anchor-bar')).toContainText('模型层')
   expect(await dialogue(page).getByTestId('dialogue-log').innerText()).toBe(transcript)
 

@@ -67,21 +67,21 @@ test('CD-2 悬浮（第二十轮 §4 改写）：放不下时浮在画布右侧�
   }).toPass({ timeout: 20_000 })
 })
 
-test('CD-3 身份卡粘顶（ADR-0061）：滚到底身份卡仍钉在抽屉上沿；选中即自动打开辅助栏的理解页', async ({ page }) => {
+test('CD-3 身份卡粘顶（ADR-0061，抽屉随波 2 删）：滚到底身份卡仍钉在抽屉上沿；视图区的图解跟随选中', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sel=m:state.desk')
   await waitSettled(page)
   await page.getByRole('button', { name: '属性', exact: true }).click() // 抽屉缺省收起，拉开量粘顶
   const area = page.locator('.panel-area')
   const card = page.locator('.panel .id-card').first()
-  // 选中（含 URL 直达）即自动在辅助栏打开理解页（事实卡 + 故事，第二十轮读先方案）
-  await expect(page.locator('.dock-area .tab[data-doc="exp:state.desk"]')).toHaveClass(/preview/)
+  // 图解常驻、跟随主语（LY-8）：主语是 state.desk
+  await expect(page.locator('[data-region="views"] .module-doc')).toHaveAttribute('data-module', 'state.desk')
   // 滚到底：身份卡钉在滚动区上沿，没有名称胶囊
   await area.evaluate(el => el.scrollTo({ top: el.scrollHeight }))
   const [cardBox, areaBox] = await Promise.all([card.boundingBox(), area.boundingBox()])
   expect(cardBox!.y).toBeGreaterThanOrEqual(areaBox!.y - 0.5)
   expect(cardBox!.y - areaBox!.y).toBeLessThan(12) // 面板内边距之内钉住
   await expect(page.getByTestId('props-mini')).toHaveCount(0)
-  await expect(page.locator('.dock-area .tab[data-doc="exp:state.desk"]')).toHaveCount(1)
+  await expect(page.locator('[data-region="views"] .tab[data-view-tab="explainer"]')).toHaveCount(1)
 })
 
 /** 回放胶囊、缩放胶囊、画布（相对视口） */

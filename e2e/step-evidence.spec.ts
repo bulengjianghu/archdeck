@@ -1,6 +1,6 @@
 /** 步骤的代码证据（S16–S18、D-21）：步骤面板列出候选调用点、单击在资料区滚到该行；无证据的步骤在时序图带「?」并进问题页签 */
 import { expect, test } from '@playwright/test'
-import { openCheckList, openDesk } from './helpers'
+import { activeTab, openCheckList, openDesk } from './helpers'
 
 test('单步到 transition(openScenario)：面板按名字匹配到 useDeskState.ts 的一行，单击在资料区预览并滚到该行', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
@@ -28,7 +28,7 @@ test('单步到 transition(openScenario)：面板按名字匹配到 useDeskState
   const line = Number((await candidate.textContent())!.split(':')[1])
 
   await candidate.click()
-  await expect(page.locator('.dock .tab.on')).toContainText('useDeskState.ts')
+  await expect(activeTab(page, 0)).toContainText('useDeskState.ts')
   // 全量并行跑时首次读源码与加载语法可能超过 10s，留足余量
   const target = page.locator('.source-view .line.target')
   await expect(target).toHaveCount(1, { timeout: 20_000 })

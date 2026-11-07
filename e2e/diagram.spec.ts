@@ -7,7 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, openDesk, query, sketchOn } from './helpers'
+import { activeTab, graphNode, openDesk, query, sketchOn } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 
@@ -40,7 +40,7 @@ test('DL-40–DL-43 草图里：画一张图讲拆分后怎么运作——卡上
     await boxes.nth(1).locator('rect').click()
     await expect(graphNode(page, id).locator('.sk-node')).toHaveClass(/selected/)
     await expect(dialogue(page).getByTestId('anchor-bar')).toContainText('当前张 DeskState · ')
-    await expect(dock(page).locator('.tab.on')).toContainText('对话')
+    await expect(activeTab(page, 0)).toContainText('对话')
 
     // 存为设计说明：图随文字写进 notes/，预览里有图
     await msg.getByTestId('save-note').click()
@@ -91,5 +91,5 @@ test('DL-42 当前版本上：图里单击模块，画布选中（与图解同�
   expect(id).toMatch(/^state\./)
   await child.locator('rect').click()
   await expect.poll(() => query(page).get('sel')).toBe(`m:${id}`)
-  await expect(dock(page).locator('.tab.on')).toContainText('对话')
+  await expect(activeTab(page, 0)).toContainText('对话')
 })

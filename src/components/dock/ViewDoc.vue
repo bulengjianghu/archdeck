@@ -2,7 +2,7 @@
 /**
  * 视图标签的内容（LY-13）：（主语, 标签类型）的纯投影，自己没有状态。
  * 第二十二轮波 1 的过渡适配：沿用旧组件——图解 = 原理解页（事实卡 + 有图解时的故事；系统为根图解）；
- * 描述 = 回放中的步骤节（步骤详情、场景概览、运行信息），其余对象为原选中面板；核对 = 指向选中面板的核对卡。
+ * 描述 = 回放中的步骤节（步骤详情、场景概览、运行信息），模块为事实卡；其余对象与草图暂指向选中面板（不重复渲染它）；核对同样指向选中面板。
  * 波 3 按 LY-13 拆分内容（图解去事实、描述收事实、核对收核对卡）。
  */
 import { computed } from 'vue'
@@ -14,7 +14,6 @@ import SequenceDoc from './SequenceDoc.vue'
 import RunSection from '../panel/RunSection.vue'
 import StepPanel from '../panel/StepPanel.vue'
 import ScenarioPanel from '../panel/ScenarioPanel.vue'
-import Panel from '../panel/Panel.vue'
 
 defineProps<{ view: ViewKind }>()
 const desk = useDesk()
@@ -49,7 +48,8 @@ const key = computed(() => `${subject.value?.kind}:${'id' in (subject.value ?? {
         <ScenarioPanel v-else-if="subject.kind === 'scenario'" :key="key" />
         <RunSection v-else :key="key" />
       </div>
-      <div v-else class="panel-wrap"><Panel :key="key" /></div>
+      <ModuleDoc v-else-if="moduleId && moduleId !== rootId && !desk.edit.active.value" :key="key" :module="moduleId" />
+      <p v-else class="empty">这个对象的描述暂在选中面板（▤ 属性）；第二十二轮波 3 搬进这里</p>
     </template>
     <template v-else-if="view === 'check'">
       <p class="empty">核对卡暂在选中面板（▤ 属性）；第二十二轮波 3 搬进这里</p>
@@ -69,8 +69,7 @@ const key = computed(() => `${subject.value?.kind}:${'id' in (subject.value ?? {
   flex-direction: column;
 }
 
-.run-side,
-.panel-wrap {
+.run-side {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;

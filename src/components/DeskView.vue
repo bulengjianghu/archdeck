@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * 单个项目的架构视图，三列（W-1、WS-1，ADR-0054）：导航树（顶部是项目标题区，TB-6）| 工作列（只属于它的工具栏、画布、属性栏、回放胶囊）| 资料区。
- * 工具栏只放改变显示的控件（C6、TB-1，ADR-0057）；「我在哪」在画布左上角的标题行（TB-7）。
- * 属性栏按工作列宽度并排或悬浮（WS-3），卡片直接立在画布上（CD-2）；回放胶囊浮在画布底部居中、避让悬浮卡片（CD-7、CD-8）；「专注」一键收起导航树与属性栏（WS-9）。每次进入项目创建一份独立的 DeskState，
+ * 单个项目的架构视图。第二十二轮波 1（ADR-0064）：视图区（原资料区）显示新的工作区状态——视图标签跟随主语、按情境排布、常在可收起；
+ * 顶栏、导航浮层与选中抽屉仍是旧版式（波 2 换成侧栏 + 画布 | 视图区两部分），抽屉与浮层的开合是这里的本地值、只由人开合。
+ * 「我在哪」在画布左上角的标题行（TB-7）；回放胶囊浮在画布底部居中、避让悬浮卡片（CD-7、CD-8）。每次进入项目创建一份独立的 DeskState，
  * 其 watch 都在本组件作用域内，离开项目时随组件销毁。
  */
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
@@ -169,6 +169,8 @@ let propsBeforeEdit: boolean | null = null
 watch(
   () => desk.edit.active.value,
   on => {
+    // 过渡：浮层盖住画布左缘，进入草图收起它（不写本机记忆）；波 2 侧栏停靠后按 LY-3 只由人开合，这条随浮层删
+    if (on) navCollapsed.value = true
     if (on) {
       propsBeforeEdit = propsOpen.value
       if (propsOpen.value) setProps(false)

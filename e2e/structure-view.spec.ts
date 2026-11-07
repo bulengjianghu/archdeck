@@ -240,6 +240,8 @@ test('K15、K15b：结构视角选中模块后在面板查询影响面，按距�
 
 test('O13③：分层总览下的结构视角——带间画层间依赖，聚焦核心模块时画它的跨层依赖', async ({ page }) => {
   await openDesk(page, '/p/h5player?v=s')
+  // 视图区常在（LY-9）：收起它再拉开抽屉，抽屉挤压而不是浮在画布右侧盖住节点（悬停要落在节点上）
+  await page.locator('.dock-toggle').click()
   await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(page.locator('.vue-flow__node-band')).toHaveCount(4)
   await expect(depEdges(page).first()).toBeAttached()
@@ -254,22 +256,23 @@ test('O13③：分层总览下的结构视角——带间画层间依赖，聚�
   }).toPass({ timeout: 20_000 })
 })
 
-test('V11：从结构视角打开场景，退出回到结构视角；运行视角下单击「交互」即退出场景并进入交互视角', async ({ page }) => {
+test('LY-6、LY-6a、LY-6b：旧地址 v=s + 场景打开为交互 + 场景（地址规范化）；退出场景留在交互视角；回放中单击「结构」退出场景并切到结构', async ({ page }) => {
   await openDesk(page, '/p/h5player?v=s&sc=sc.command')
-  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await expect(page.locator('.perspective .seg.run')).toHaveClass(/on/)
+  await expect.poll(() => query(page).get('v')).toBeNull()
+  expect(query(page).get('sc')).toBe('sc.command')
   await expect(depEdges(page)).toHaveCount(0)
   await page.locator('.perspective .exit').click()
   expect(query(page).get('sc')).toBeNull()
-  expect(query(page).get('v')).toBe('s')
-  await expect(seg(page, 'structure')).toHaveClass(/on/)
-
-  await page.goto('./#/p/h5player?v=s&sc=sc.command')
-  await expect(page.locator('.perspective .seg.run')).toHaveClass(/on/)
-  await seg(page, 'interaction').click()
-  expect(query(page).get('sc')).toBeNull()
   expect(query(page).get('v')).toBeNull()
   await expect(seg(page, 'interaction')).toHaveClass(/on/)
+
+  await page.goto('./#/p/h5player?sc=sc.command')
+  await expect(page.locator('.perspective .seg.run')).toHaveClass(/on/)
+  await seg(page, 'structure').click()
+  await expect.poll(() => query(page).get('sc')).toBeNull()
+  expect(query(page).get('v')).toBe('s')
+  await expect(seg(page, 'structure')).toHaveClass(/on/)
 })
 
 test('§6.22、L16（ADR-0035）：结构视角的依赖全部虚线，形态只靠端点记号——端口实现在被依赖方一端为空心菱形 ◇，子类为空心三角', async ({ page }) => {
