@@ -82,7 +82,7 @@ URL 与此一致，编码不需区分：选中步骤时只有 `step`；选中场
 
 | 子模块 | 规则 | 遇到关于被描述系统的问题时调用 |
 |---|---|---|
-| 视角与选中 | V1–V4、V7、R15、R16、G16：视角与选中由状态推出（`perspectiveOf` / `selectedOf`）；导航动作在运行视角下即「指向」，选中对象（下钻选中被下钻的模块）；取消选中即回到进度所在的步骤；选中突出 `emphasisOf` | `lanesOf`（R15、R16） |
+| 视角与选中 | V1–V4、V7、R15、R16、G16：视角与选中由状态推出（`viewpointOf` / `selectedOf`；第二十二轮波 4 删运行视角：视角只有结构 / 交互，回放 = 交互 + `playback`，DeskState 给 `viewpoint` 与 `playing`）；导航动作在运行视角下即「指向」，选中对象（下钻选中被下钻的模块）；取消选中即回到进度所在的步骤；选中突出 `emphasisOf` | `lanesOf`（R15、R16） |
 | 导航 | N1–N13：下钻、跳转、返回上级、选中、定位、Esc / Backspace、重新加载与切换版本后的回退；跳转与定位只在层次改变时进历史（N10） | `nearestExisting`（N5、N11）、`nearestVisibleLevel`（N12）、`lowestCommonAncestor`（N3） |
 | 回放 | R1、R5、R6、R10、R12、R13、V7、F6e：打开场景（停在开头、选中场景）、退出、单步与指向（选中那一步并移动进度）、选分支（任何分支点；进度不在新路径上时停在分支点之前；选中不变）；重新加载后场景失效则退出 | `stepAfter` / `stepBefore`（R7）、`landing`、`choicesFor`（R13）、`chooseBranch`（F6b）、`choicesForBranch` / `pointPrefix`（F6e）、`resolvePath`（F6） |
 | URL 编解码 | N6、N10、F6c、R10、R12：状态 ↔ 查询参数；解码时丢弃无效值，恢复到最接近的合法状态：带有效步骤时停在该步；同一场景已打开且没带步骤时保留原进度；只有场景时停在开头 | `choiceList` / `choicesFromList`（F6c）、`planScenario` |
@@ -187,7 +187,7 @@ createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: s
 // SourceFetcher: { tree(): Promise<SourcePayload>; file(path): Promise<SourceFile | null>; exports(path): Promise<ExportedSymbol[] | null> }；缺省为没有源码来源（清单为 `error`，只看描述的测试用），项目视图注入 `httpSourceFetcher`
 // DeskState（ADR-0013）：
 //   核心：state（只读）· status · loadError · index · issues · allIssues · modelDir · levelId · levelPath · selection · selected · hoverId
-//         perspective · toggles · view · positioned · levelVersion · playback · project · version
+//         viewpoint · playing · toggles · view · positioned · levelVersion · playback · project · version
 //   操作：dispatch · init · reload · attachRouter · watchChanges · pressKey
 //         drillInto · goTo · goUp · select · selectFile · revealRelation · revealModule · setHover · setToggles
 //         openScenario · closeScenario · next · prev · seek · chooseBranch
@@ -199,7 +199,7 @@ createDeskState(fetchModel: () => Promise<ModelPayload>, options?: { project?: s
 
 transition(state: ViewState, action: ViewAction, ctx: TransitionContext): { state: ViewState; history: 'push' | 'replace' }
 // TransitionContext: { index: ModelIndex; plan?: ScenarioPlan; levelView?: LevelView; scenarioView?: ScenarioLevelView }
-perspectiveOf(state): 'structure' | 'run'
+viewpointOf(state): 'structure' | 'interaction'   // 回放中与草图画布下都是 interaction（LY-6）
 emphasisOf(state, ctx: EmphasisContext): Emphasis | null                               // 选中突出（R15、R16）；结构 / 交互视角为 null
 // EmphasisContext: { index; levelView; scenarioView; sequence; pairs: ReturnPairs | null; fileOwners: readonly string[] }
 // Emphasis: { selected: number | null; paired: ReadonlySet<number>; lanes: ReadonlySet<string> }   // 选中消息、配对消息（可见消息序号）、突出的泳道（视图节点 ID）
