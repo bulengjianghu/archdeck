@@ -28,7 +28,9 @@ test('单击节点选中并在面板显示属性，单击空白取消选中', as
   // 节点可能落在右上角的图例底下（取决于布局）：直接在节点上派发单击
   await node.dispatchEvent('click')
   expect(query(page).get('sel')).toBe(`m:${id}`)
-  await expect(page.locator('.panel h2').first()).toBeVisible()
+  // LY-13b：名称只在主语条；描述顶上是一行操作
+  await expect(page.locator('.panel .id-card').first()).toBeVisible()
+  await expect(page.locator('[data-testid="subject-name"]')).not.toHaveText('')
   await page.locator('.vue-flow__pane').click({ position: { x: 5, y: 5 } })
   expect(query(page).get('sel')).toBeNull()
 })

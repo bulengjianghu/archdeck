@@ -3,7 +3,7 @@
  * 开「时间耦合」后本层出现波浪线，单击选中它看面板。以 h5p-arch-desk 自身验收（源码在本地、是 git 仓库）。
  */
 import { expect, test } from '@playwright/test'
-import { openCheckList, openDesk, openPanel, openPanelLists, query, openSidebar } from './helpers'
+import { openCheckList, openDesk, openPanel, query, openSidebar } from './helpers'
 
 test('缺省关闭：没有角标与耦合线；开启「缺陷」热度后出现角标，刷新后仍开启；运行视角不叠加', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=present')
@@ -38,10 +38,9 @@ test('缺省关闭：没有角标与耦合线；开启「缺陷」热度后出�
 
 test('系统面板「演化」列出热度前 10；模块树可按热度排序', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk')
-  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
+  // LY-13：演化清单在核对卡（核对标签）；ADR-0060：证据与清单整块缺省折叠，openCheckList 一并展开
+  await openCheckList(page)
   const panel = page.locator('.panel')
-  // ADR-0060：证据与清单整块缺省折叠；G11 V15c：演化清单默认折叠带计数，展开再断言
-  await openPanelLists(page)
   await expect(panel).toContainText('演化（git 历史）')
   await panel.getByRole('button', { name: /^▸ 演化（git 历史）/ }).click()
   await expect(panel).toContainText(/修改热度前 10/)
@@ -75,6 +74,8 @@ test('开启时间耦合：本层出现波浪线，单击选中它，地址带 s
   await page.locator('.edge-couple .vue-flow__edge-text').first().dispatchEvent('click')
   await expect.poll(() => query(page).get('sel')).toMatch(/^c:.+~.+$/)
   await expect(page.locator('.couple-panel')).toContainText('同提交')
+  // LY-13：共同的提交是核对卡的清单（核对标签）
+  await openCheckList(page)
   await expect(page.locator('.couple-panel')).toContainText('共同的提交')
   // 模块的提交历史是核对卡的清单（PC-8），展开后列出提交（先收起右上角的图例，免得它盖住节点）
   const head = panel.locator('.head-btn')

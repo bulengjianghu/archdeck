@@ -139,6 +139,7 @@ test.describe('验收 14：重讲', () => {
     // 题解在辅助栏里是新的；事实卡与骨架一字未动
     await dialogue(page).getByRole('button', { name: '看题解 ›' }).click()
     await expect(dock(page).frameLocator('iframe').getByTestId('renarrated')).toBeVisible()
+    await showView(page, 'description')
     await expect.poll(() => facts.innerText()).toBe(factsBefore)
     expect(snapshot()).toEqual(yamlBefore)
   })

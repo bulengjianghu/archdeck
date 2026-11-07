@@ -5,7 +5,8 @@ import { activeTab, openCheckList, openDesk } from './helpers'
 test('单步到 transition(openScenario)：面板按名字匹配到 useDeskState.ts 的一行，单击在资料区预览并滚到该行', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
   // 从开头单步，直到选中 transition(openScenario) 那一步
-  const title = page.locator('.step-panel h2')
+  // LY-7、LY-13b：步骤的名称在主语条
+  const title = page.locator('[data-head="views"] [data-testid="subject-name"]')
   for (let i = 0; i < 10 && !((await title.count()) && (await title.textContent())?.startsWith('transition(openScenario)')); i++)
     await page.getByRole('button', { name: /下一步/ }).click()
   await expect(title).toHaveText(/^transition\(openScenario\)/)
@@ -44,7 +45,7 @@ test('无证据（无承载）的步骤：时序图消息带「?」，场景面�
   await expect(page.locator('svg .no-evidence').first()).toBeVisible({ timeout: 20_000 })
   await openCheckList(page)
   const section = page
-    .getByTestId('dock-step-side')
+    .getByTestId('check-step-side')
     .locator('.scenario-panel .section')
     .filter({ has: page.locator('h3', { hasText: '证据' }) })
   await expect(section).toContainText(/无证据 [1-9]/)

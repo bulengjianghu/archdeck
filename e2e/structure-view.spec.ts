@@ -180,6 +180,8 @@ test('C6、L20（ADR-0036）：节点角标「表面 W」；选中模块展开�
   expect(await toDots.evaluateAll(ps => ps.filter(p => !p.getAttribute('marker-end')).length)).toBe(0)
   // T2-4、C9：单击点直接定位到面板「表面」一节的该元素
   const name = (await marks.first().getAttribute('data-element'))!
+  // LY-13：「表面」清单在核对卡（核对标签）
+  await openCheckList(page)
   await marks.first().click()
   await expect(page.locator(`li.element[data-element="${name}"]`)).toHaveClass(/flash/)
   // L20④：悬停点——落在它上的边高亮（衬边），面板「表面」一节同一行同亮

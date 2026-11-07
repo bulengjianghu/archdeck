@@ -1,13 +1,12 @@
 /** 核对卡的异常条目（V15b、PC-7）：有 ⚠ 行时核对卡自动展开；每条带跳转目标的条目单击跳到对应清单——折叠的清单自动展开、滚动到视口内并闪一次 */
 import { expect, test } from '@playwright/test'
-import { openDesk, openPanel, openPanelLists, waitSettled } from './helpers'
+import { openDesk, waitSettled, openCheckList } from './helpers'
 
 test('核对卡：有异常自动展开，异常条目逐条单击跳到对应清单，目标展开并进入视口', async ({ page }) => {
   await page.setViewportSize({ width: 1700, height: 1100 })
   await openDesk(page, '/p/h5player?level=app&sel=m:app.solution&v=s')
-  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
   await waitSettled(page)
-  await openPanelLists(page) // ADR-0060：证据与清单缺省折叠
+  await openCheckList(page) // LY-13：核对卡在核对标签；ADR-0060：证据与清单缺省折叠，一并展开
   await page.waitForSelector('[data-sec="boundary.structure"]', { timeout: 20_000 })
   const card = page.locator('.panel [data-card="check"]')
   await expect(card.locator('.card-toggle')).toHaveAttribute('aria-expanded', 'true')
