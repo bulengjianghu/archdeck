@@ -290,7 +290,13 @@ function toLayout(p: SketchPoint): SketchPoint {
 
 /** X21：根草图里第二级模块所在的层（ID 的第一段） */
 const layerOf = (id: string) => id.split('.')[0]
+/**
+ * 拖节点途经禁用的按钮（信息条的撤销 / 保存等）时，Chrome 不把 mouseup 交给页面，拖动收不了尾：拖动期间禁用按钮不接指针（全局样式 .sk-node-dragging）
+ */
+const draggingClass = (on: boolean) => document.documentElement.classList.toggle('sk-node-dragging', on)
+onBeforeUnmount(() => draggingClass(false))
 function onNodeDrag({ event, nodes: dragged }: { event: MouseEvent | TouchEvent; nodes: GraphNode[] }) {
+  draggingClass(true)
   const p = flowPoint(event)
   const moving = new Set(dragged.map(n => n.id))
   // 落到另一个模块上 = 降级；根草图里落到另一条层带上 = 移入
@@ -310,6 +316,7 @@ function onNodeDrag({ event, nodes: dragged }: { event: MouseEvent | TouchEvent;
   dropParent.value = !!single && !root.value && !hit && (overParentCrumb(event) || (!!scene.value && outsideCenter(scene.value, p)))
 }
 function onNodeDragStop({ nodes: dragged }: { event: MouseEvent | TouchEvent; nodes: GraphNode[] }) {
+  draggingClass(false)
   const target = dropTarget.value
   const parent = dropParent.value
   dropTarget.value = null

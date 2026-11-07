@@ -150,6 +150,14 @@ describe('LY-8 两类标签', () => {
     const moved = run(split, { type: 'move', id: 'src:a.ts', group: 1, index: 1 }, { type: 'activate', id: V('check') }, { type: 'open', doc: src('a.ts') })
     expect(actives(moved)[1]).toBe('src:a.ts')
   })
+  it('LY-10a 从下组的「+」打开的资料进下组；组号越界取上组', () => {
+    const split = run(EMPTY_WORKSPACE, { type: 'move', id: V('check'), group: 1, index: 0 })
+    const below = run(split, { type: 'open', doc: { kind: 'issues' }, pin: true, group: 1 })
+    expect(groups(below)[1]).toEqual(['check', 'issues'])
+    expect(actives(below)[1]).toBe('issues')
+    const outside = run(EMPTY_WORKSPACE, { type: 'open', doc: { kind: 'issues' }, pin: true, group: 3 })
+    expect(groups(outside)[0]).toContain('issues')
+  })
 })
 
 describe('LY-10 分组与拖拽', () => {
@@ -197,7 +205,7 @@ describe('LY-12、LY-3、LY-10b 开合与宽度', () => {
     expect(s.groups).toBe(EMPTY_WORKSPACE.groups)
     expect(workspaceTransition(s, { type: 'setCollapsed', collapsed: true })).toBe(s)
   })
-  it('视图区宽度 0.2–0.75，缺省 0.44', () => {
+  it('视图区宽度 0.2–0.75，缺省 0.36', () => {
     expect(EMPTY_WORKSPACE.width).toBe(DEFAULT_WIDTH)
     expect(run(EMPTY_WORKSPACE, { type: 'setWidth', width: 0.9 }).width).toBe(0.75)
   })

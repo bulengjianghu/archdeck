@@ -2,12 +2,13 @@
 /**
  * 场景列表（D-1、R4、R4a、R17）：默认只列与当前层次相关的场景（有帧端点在当前子树内），可切到全部、按发起者筛选；
  * R17：默认只列主流程（kind: main），可切到「全部类别」（记在本机，不进 URL），非主流程项标出类别；
- * 选定即进入运行视角，不改变层次。声明了证据文件的场景标「测试 N」（N 为证据文件数，S15、D-20）——只说明声明了测试，不说明测过了；无证据步骤标「? N」（S17）。
+ * 选定即进入回放（交互视角 + 这个场景，LY-6），不改变层次。住在侧栏「场景」页（LY-4，inline）。声明了证据文件的场景标「测试 N」（N 为证据文件数，S15、D-20）——只说明声明了测试，不说明测过了；无证据步骤标「? N」（S17）。
  */
 import { computed, ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'
 import { filterScenariosByKind, moduleName, scenarioKind, type ScenarioKind } from '@/model'
 
+defineProps<{ /** 侧栏页里平铺（不是弹出层） */ inline?: boolean }>()
 const emit = defineEmits<{ picked: [] }>()
 const desk = useDesk()
 const scope = ref<'level' | 'all'>('level')
@@ -62,7 +63,7 @@ function pick(id: string) {
 </script>
 
 <template>
-  <div class="scenario-list" role="dialog" aria-label="选择场景">
+  <div class="scenario-list" :class="{ inline }" :role="inline ? 'region' : 'dialog'" aria-label="选择场景">
     <div class="filters">
       <div class="seg" role="group" aria-label="范围">
         <button :class="{ on: scope === 'level' }" @click="scope = 'level'">本层相关 {{ related.size }}</button>
@@ -119,6 +120,18 @@ function pick(id: string) {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 8px 24px rgb(0 0 0 / 14%);
+}
+
+.scenario-list.inline {
+  position: static;
+  width: auto;
+  max-height: none;
+  overflow: visible;
+  padding: 0 6px;
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .filters {

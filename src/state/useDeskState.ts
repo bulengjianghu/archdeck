@@ -486,7 +486,7 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     context: layoutContext,
     dispatch: workspaceDispatch,
     /** 打开一份资料：不固定为预览标签（LY-8a） */
-    open: (doc: DocRef, pin = false) => workspaceDispatch({ type: 'open', doc, pin }),
+    open: (doc: DocRef, pin = false, group?: number) => workspaceDispatch({ type: 'open', doc, pin, ...(group === undefined ? {} : { group }) }),
     /** 这份资料是否已在视图区开着（任一组） */
     isOpen: (doc: DocRef) => hasTab(workspaceState.value, docKey(doc)),
     /** 视图里的引用请求看某个视图标签——激活它（不在就从「+」加进上组），视图区收起时展开 */

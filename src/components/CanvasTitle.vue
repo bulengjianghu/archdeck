@@ -1,13 +1,12 @@
 <script setup lang="ts">
 /**
- * 画布标题行（TB-7–TB-9，ADR-0057）：模型画布左上角一排——面包屑（根层 / …）、⚠ 问题胶囊（W-6）、源码胶囊（G22）、
+ * 画布左上角的状态胶囊（TB-7–TB-9；第二十二轮 LY-5：面包屑移进画布页头）——⚠ 问题胶囊（单击打开「问题」资料标签，LY-4a）、源码胶囊（G22）、
  * 非当前版本时的版本胶囊（× 回到当前版本，N11；有未保存改动时由项目视图的离开确认三选，X7a）。「我在哪」贴着画布放（C6）。
  */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { isCommitVersion, isIntentVersion, isSketchVersion } from '@/model'
 import { useDesk } from '@/state/inject'
-import Breadcrumb from './Breadcrumb.vue'
 import SourceDeltaChip from './source/SourceDeltaChip.vue'
 import { intentName } from './shared/labels'
 
@@ -44,12 +43,11 @@ const toCurrent = () => void router.push({ name: 'project', params: { project: d
 
 <template>
   <div class="canvas-title">
-    <Breadcrumb />
     <button
       v-if="issueCount.total"
       class="canvas-chip issue-badge"
       :class="{ bad: issueCount.errors }"
-      :title="`返工清单：${issueCount.errors} 个错误、${issueCount.warnings} 个提醒，单击在导航树「问题」页签查看`"
+      :title="`返工清单：${issueCount.errors} 个错误、${issueCount.warnings} 个提醒，单击在视图区打开「问题」`"
       @click="emit('issues')"
     >
       ⚠ {{ issueCount.total }}
@@ -67,7 +65,7 @@ const toCurrent = () => void router.push({ name: 'project', params: { project: d
   position: absolute;
   top: 10px;
   left: 12px;
-  right: calc(12px + 140px + var(--canvas-inset, 0px));
+  right: calc(12px + 140px);
   z-index: 6;
   display: flex;
   flex-wrap: wrap;

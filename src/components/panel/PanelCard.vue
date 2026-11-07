@@ -7,6 +7,7 @@
  * 卡头「小号粗标题 ▾」、结论靠右，没有底色与分隔线（CD-5）；卡片外观与间距由属性列统一给（CD-1、CD-2，Panel）。
  */
 import { computed, inject, ref, watch, type Ref } from 'vue'
+import { PANEL_PART, cardShown } from './panelPart'
 
 const props = withDefaults(
   defineProps<{
@@ -24,6 +25,8 @@ const props = withDefaults(
   { open: true, summary: undefined, force: undefined },
 )
 const unfold = inject<Ref<boolean> | null>('panelUnfold', null)
+/** 第二十二轮波 2 过渡：核对标签只显示核对卡（panelPart） */
+const shown = cardShown(inject(PANEL_PART, 'all'), props.kind)
 const user = ref<boolean | null>(null)
 const isOpen = computed(() => !!unfold?.value || (user.value ?? props.open))
 watch(
@@ -33,7 +36,7 @@ watch(
 </script>
 
 <template>
-  <section class="card" :class="[`card-${kind}`, { closed: !isOpen }]" :data-card="kind">
+  <section v-if="shown" class="card" :class="[`card-${kind}`, { closed: !isOpen }]" :data-card="kind">
     <h3 class="card-head">
       <button class="card-toggle" :aria-expanded="isOpen" @click="user = !isOpen">
         <span class="card-title">{{ title }}</span>

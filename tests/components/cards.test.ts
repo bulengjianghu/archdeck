@@ -98,11 +98,11 @@ describe('CD-3：身份卡', () => {
     expect(children[children.length - 1].classList.contains('acts')).toBe(true)
   })
 
-  it('× 在身份卡右上角、悬停身份卡或键盘聚焦时显出（DeskView 的样式）', () => {
+  it('抽屉与它的 × 随 LY-16 删除：项目视图里没有选中抽屉（第二十二轮波 2）', () => {
     const desk = src('components/DeskView.vue')
-    expect(desk).toMatch(/\.props-close \{[\s\S]*?opacity: 0;/)
-    expect(desk).toContain('.panel-area:has(.id-card:hover) .props-close')
-    expect(desk).toContain('.props-close:focus-visible')
+    expect(desk).not.toContain('props-close')
+    expect(desk).not.toContain('aside.props')
+    expect(desk).not.toMatch(/<Panel\b/)
   })
 })
 

@@ -47,7 +47,6 @@ import Legend from './display/Legend.vue'
 import { depGloss, routeGloss, withGloss } from './display/gloss'
 import SketchMenu from './sketch/SketchMenu.vue'
 import { canDesignAt, openNewDesign } from './edit/designHere'
-import { useCanvasInset } from './shared/canvasInset'
 
 const desk = useDesk()
 const stageUi = useStage()
@@ -277,8 +276,8 @@ watch([desk.levelVersion, desk.perspective], () => (hoverEdge.value = null))
 // 只需等画布容器有尺寸，切换层次后自动适应
 const pendingFit = ref(true)
 
-// WS-3 首次适应：打开项目后，布局（含代码事实到达后的并集重排，L15）、画布容器尺寸（资料区出现、导航收起、属性栏并排或悬浮）
-// 与 inset 都定下来之前画布不可见；连续两帧不变才适应一次再显示，之后的变化照常重新适应。
+// WS-3 首次适应：打开项目后，布局（含代码事实到达后的并集重排，L15）与画布容器尺寸（侧栏、视图区的开合与宽度）
+// 都定下来之前画布不可见；连续两帧不变才适应一次再显示，之后的变化照常重新适应。
 // 兜底：迟迟定不下来（代码事实读得很慢）时到点照常显示，之后按原来的触发重新适应。
 const revealed = ref(false)
 const REVEAL_DEADLINE = 4000
@@ -303,7 +302,7 @@ function probeReveal() {
   const h = flow?.offsetHeight ?? 0
   // Vue Flow 的 dimensions 由它自己的 ResizeObserver 更新，晚一拍；与实测尺寸一致才算定下来
   const synced = Math.abs(dimensions.value.width - w) < 1 && Math.abs(dimensions.value.height - h) < 1
-  const key = ready && synced && w > 0 && h > 0 ? `${w}x${h}:${inset.value}` : ''
+  const key = ready && synced && w > 0 && h > 0 ? `${w}x${h}` : ''
   stableFrames = key && key === lastKey && pv === layoutSeen ? stableFrames + 1 : 0
   lastKey = key
   layoutSeen = pv
@@ -347,13 +346,10 @@ watch(
     tryPendingFit()
   },
 )
-// WS-3：属性栏悬浮时盖住画布右侧，适应只用没被盖住的部分；悬浮与并排切换后重新适应
-const inset = useCanvasInset()
-watch(inset, () => revealed.value && fitNow())
 function fitNow(only?: ReadonlySet<string>): boolean {
   const pv = positioned.value
   const { height } = dimensions.value
-  const width = dimensions.value.width - Math.min(inset.value, dimensions.value.width / 2)
+  const width = dimensions.value.width
   if (!pv || width <= 0 || height === 0) return false
   const b = contentBounds(pv, only ?? visibleIds.value ?? undefined)
   if (!b) return false
@@ -466,7 +462,7 @@ const showFacts = () => desk.setToggles({ showFacts: true })
     </VueFlow>
 
     <div v-if="isEmpty" class="empty">这个模块没有子模块</div>
-    <!-- L48：画布右上角一列——图例在顶端，留痕与提示排在它下面，图例再长也不盖住它们；属性栏悬浮时整列让出卡片宽度（WS-3） -->
+    <!-- L48：画布右上角一列——图例在顶端，留痕与提示排在它下面，图例再长也不盖住它们；视图区收起时让出顶上的「视图 ›」胶囊（LY-12，--views-pill-h） -->
     <div class="top-right">
       <Legend />
       <div
@@ -633,10 +629,10 @@ const showFacts = () => desk.setToggles({ showFacts: true })
 /* 左沿也定下来（12px）：这一列的宽度就是画布可见宽度，图例卡不会伸出画布、盖到导航上（CD-1，与 X1 集成） */
 .top-right {
   position: absolute;
-  top: 10px;
+  top: calc(10px + var(--views-pill-h, 0px));
   bottom: 52px;
   left: 12px;
-  right: calc(12px + var(--canvas-inset, 0px));
+  right: 12px;
   z-index: 5;
   display: flex;
   flex-direction: column;

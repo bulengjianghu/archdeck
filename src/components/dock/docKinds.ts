@@ -5,6 +5,7 @@
  */
 import { defineAsyncComponent, type Component } from 'vue'
 import type { DocRef, ViewKind } from '@/state/useDeskState'
+import IssuesDoc from '../tree/IssuesDoc.vue'
 
 export interface DocKindContext {
   moduleName: (id: string) => string
@@ -42,6 +43,13 @@ export const DOC_KIND_VIEWS: Record<string, DocKindView> = {
     tip: (d, c) => `设计说明（目标态 · 未实现）· ${c.noteTitle?.((d as { file: string }).file) ?? (d as { file: string }).file}`,
     icon: '✎',
     component: defineAsyncComponent(() => import('./NoteDoc.vue')),
+  },
+  /** LY-4a：返工清单——画布左上 ⚠ 胶囊或「+」打开 */
+  issues: {
+    label: () => '问题',
+    tip: () => '问题：返工清单（错误、提醒、提示）',
+    icon: '⚠',
+    component: IssuesDoc,
   },
 }
 

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * 单个项目的架构视图。第二十二轮波 1（ADR-0064）：视图区（原资料区）显示新的工作区状态——视图标签跟随主语、按情境排布、常在可收起；
- * 顶栏、导航浮层与选中抽屉仍是旧版式（波 2 换成侧栏 + 画布 | 视图区两部分），抽屉与浮层的开合是这里的本地值、只由人开合。
- * 「我在哪」在画布左上角的标题行（TB-7）；回放胶囊浮在画布底部居中、避让悬浮卡片（CD-7、CD-8）。每次进入项目创建一份独立的 DeskState，
+ * 单个项目的架构视图（LY-1，ADR-0064）：左边系统——侧栏（停靠，LY-3、LY-4）+ 画布（页头 LY-5）；右边视图区——主语条 + 至多上下两组标签（LY-7–LY-12）。
+ * 没有全宽顶栏，三区各自有 44px 页头、底线对齐（LY-2）；选中不改变任何区域的宽度（I3）。侧栏、视图区的开合与宽度是工作区状态，只由人开合。
+ * 「我在哪」（⚠、源码、版本胶囊）在画布左上角（TB-7）；回放胶囊浮在画布底部居中（CD-7）。每次进入项目创建一份独立的 DeskState，
  * 其 watch 都在本组件作用域内，离开项目时随组件销毁。
  */
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
@@ -14,24 +14,19 @@ import { DESK_STATE } from '@/state/inject'
 import { httpAgentTransport, type AgentEvents } from '@/state/sync/agent'
 import GraphCanvas from './GraphCanvas.vue'
 import CanvasTitle from './CanvasTitle.vue'
-import SearchPalette from './SearchPalette.vue'
+import CanvasHead from './CanvasHead.vue'
 import ProjectMenu from './ProjectMenu.vue'
-import MoreMenu from './MoreMenu.vue'
-import ToolIcon from './shared/ToolIcon.vue'
 import InfoBar from './infobar/InfoBar.vue'
 import GuideDialog from './GuideDialog.vue'
-import DisplayMenu from './display/DisplayMenu.vue'
 import { OPEN_GUIDE, type GuideSection } from './shared/guide'
-import PerspectiveSwitch from './PerspectiveSwitch.vue'
 import PlayerBar from './PlayerBar.vue'
 import DockPane from './dock/DockPane.vue'
-import Panel from './panel/Panel.vue'
-import NavTree from './tree/NavTree.vue'
+import { subjectLabel } from './dock/subjectLabel'
+import SideBar from './tree/SideBar.vue'
 import { OPEN_PREVIEW } from './shared/preview'
 import { HAS_EXPLAINER } from './panel/related'
-import { NAV_TAB, type NavTab } from './shared/navTab'
+import { SIDE_NAV, type ModulesMode, type SidePage } from './shared/navTab'
 import { OPEN_PROPS } from './shared/openProps'
-import { CANVAS_INSET } from './shared/canvasInset'
 import { playerPlacement } from './shared/playerPlacement'
 import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
 import { useEvolutionPrefs } from './display/useEvolutionPrefs'
@@ -128,118 +123,53 @@ const onUnload = (e: BeforeUnloadEvent) => {
 onMounted(() => window.addEventListener('beforeunload', onUnload))
 onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
 
-// 导航树：宽度可拖动、可折叠，记在本地（W-1）；资料区与工作列的比例按项目记在本地（W-4）
-function readNumber(key: string, min: number, max: number, fallback: number): number {
-  try {
-    const raw = localStorage.getItem(key)
-    const w = raw === null ? NaN : Number(raw)
-    return w >= min && w <= max ? w : fallback
-  } catch {
-    return fallback
-  }
-}
-function store(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value)
-  } catch {
-    /* 存不了就算了 */
-  }
-}
-
 const ws = desk.workspace
-// 第二十二轮波 1 的过渡（波 2 删抽屉与浮层）：选中抽屉与导航浮层的开合是呈现层的本地值，不再进工作区状态；
-// 只由人开合（LY-16：不随运行视角、资料区出现自动收起），按本机记住
-const PROPS_KEY = 'h5p-arch-desk:panel-collapsed'
-const PROPS_WIDTH = 330
-const MIN_CANVAS = 620
-const propsOpen = ref(readNumber(PROPS_KEY, 0, 1, 1) !== 1)
-const setProps = (open: boolean) => (propsOpen.value = open)
-function toggleProps() {
-  setProps(!propsOpen.value)
-  // DL-20：草图编辑态的展开收起只在这一回（缺省收起），不改本机记住的偏好
-  if (!desk.edit.active.value) store(PROPS_KEY, propsOpen.value ? '0' : '1')
-}
-
-// 导航树是画布左缘的浮层抽屉（过渡）：不挤压画布，宽度固定 300，缺省收起，开合按本机记住（不再按视角分别记）
-const navWidth = ref(300)
-const NAV_KEY = 'h5p-arch-desk:nav-collapsed'
-const navCollapsed = ref(readNumber(NAV_KEY, 0, 1, 1) === 1)
-// DL-20（过渡）：草图编辑态选中面板缺省收起——对话在场后表单用得少；退出时恢复进入前的样子
-let propsBeforeEdit: boolean | null = null
-watch(
-  () => desk.edit.active.value,
-  on => {
-    // 过渡：浮层盖住画布左缘，进入草图收起它（不写本机记忆）；波 2 侧栏停靠后按 LY-3 只由人开合，这条随浮层删
-    if (on) navCollapsed.value = true
-    if (on) {
-      propsBeforeEdit = propsOpen.value
-      if (propsOpen.value) setProps(false)
-    } else if (propsBeforeEdit !== null) {
-      if (propsBeforeEdit !== propsOpen.value) setProps(propsBeforeEdit)
-      propsBeforeEdit = null
-    }
-  },
-  { immediate: true },
-)
-/** DL-20：手势编辑需要表单时按需展开（右键「编辑字段…」、改动页签定位到的项） */
-provide(OPEN_PROPS, () => {
-  if (!propsOpen.value) setProps(true)
-})
-
-function toggleNav() {
-  navCollapsed.value = !navCollapsed.value
-  store(NAV_KEY, navCollapsed.value ? '1' : '0')
-}
-
-// 专注：导航树或属性栏任一展开时都收起；都已收起时都恢复
-const focused = computed(() => navCollapsed.value && !propsOpen.value)
-function toggleFocus() {
-  const open = focused.value
-  if (navCollapsed.value !== !open) toggleNav()
-  if (propsOpen.value !== open) toggleProps()
-}
-
-// LY-10b：视图区占整个项目视图宽度的比例，是工作区状态（本机记忆经同步适配器）
-const dockRatio = computed(() => ws.state.value.width)
-/** LY-12：视图区可整体收起 */
+// LY-4：侧栏的页（模块 / 场景 / 改动）只属于界面，由项目视图持有（场景胶囊、改动徽标要能切页）
+const sideNav = { page: ref<SidePage>('modules'), mode: ref<ModulesMode>('modules') }
+provide(SIDE_NAV, sideNav)
+/** LY-3：侧栏开合与宽度是工作区状态（本机记忆经同步适配器），只由人开合 */
+const sidebar = computed(() => ws.state.value.sidebar)
+/** LY-12：视图区可整体收起；宽度是占项目视图的比例（LY-10b） */
 const viewsShown = computed(() => !ws.state.value.collapsed)
+const viewsWidth = computed(() => ws.state.value.width)
 const desktop = ref<HTMLElement>()
-let dragging: 'dock' | null = null
-function onDividerDown(which: 'dock', e: PointerEvent) {
-  dragging = which
-  ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-}
-function onDividerMove(e: PointerEvent) {
-  if (dragging === 'dock' && desktop.value) {
-    const r = desktop.value.getBoundingClientRect()
-    ws.dispatch({ type: 'setWidth', width: (r.right - e.clientX) / r.width })
+function onDividerDown(e: PointerEvent) {
+  const el = e.currentTarget as HTMLElement
+  el.setPointerCapture(e.pointerId)
+  const move = (ev: PointerEvent) => {
+    const r = desktop.value?.getBoundingClientRect()
+    if (r && r.width > 0) ws.dispatch({ type: 'setWidth', width: (r.right - ev.clientX) / r.width })
   }
-}
-function onDividerUp() {
-  dragging = null
-}
-
-// WS-3：属性栏并排还是悬浮由工作列宽度推出，不存状态
-const stage = ref<HTMLElement>()
-const stageWidth = ref(0)
-let stageObserver: ResizeObserver | null = null
-onMounted(() => {
-  if (!stage.value) return
-  stageWidth.value = stage.value.clientWidth
-  if (typeof ResizeObserver !== 'undefined') {
-    stageObserver = new ResizeObserver(entries => (stageWidth.value = entries[0].contentRect.width))
-    stageObserver.observe(stage.value)
+  const up = () => {
+    el.removeEventListener('pointermove', move)
+    el.removeEventListener('pointerup', up)
   }
+  el.addEventListener('pointermove', move)
+  el.addEventListener('pointerup', up)
+}
+/** LY-12：视图区收起时画布右上角的胶囊「视图 · 主语名 ›」，单击展开 */
+const subjectName = computed(() => {
+  const idx = desk.index.value
+  const s = desk.subject.value
+  return idx && s ? subjectLabel(idx, s).name : ''
 })
-onBeforeUnmount(() => stageObserver?.disconnect())
-const placement = computed(() => (stageWidth.value - PROPS_WIDTH >= MIN_CANVAS ? 'docked' : 'floating'))
-// DL-20：草图编辑态展开的选中面板浮在画布右侧，不挤压画布（画布宽度不变，草图的可用区域不随之重排）
-const floating = computed(() => propsOpen.value && (placement.value === 'floating' || desk.edit.active.value))
-const canvasInset = computed(() => (floating.value ? PROPS_WIDTH + 16 : 0))
-provide(CANVAS_INSET, canvasInset)
+const openViews = () => ws.dispatch({ type: 'setCollapsed', collapsed: false })
 
-// CD-8：回放胶囊的位置（playerPlacement）；放不下时悬浮卡片列底部让出胶囊
+/** DL-20：手势编辑需要表单时（右键「编辑字段…」、改动页定位到的项）——激活「描述」标签（原抽屉内容在那里，波 2 过渡） */
+provide(OPEN_PROPS, () => ws.showView('description'))
+
+// CD-7：回放胶囊浮在画布底部居中；与左下角的缩放胶囊相碰时右移（playerPlacement；悬浮卡片避让 CD-8 随抽屉删除，LY-16）
 const PLAYER_MARGIN = 12
+const canvasArea = ref<HTMLElement>()
+const canvasWidth = ref(0)
+let canvasObserver: ResizeObserver | null = null
+onMounted(() => {
+  if (!canvasArea.value || typeof ResizeObserver === 'undefined') return
+  canvasWidth.value = canvasArea.value.clientWidth
+  canvasObserver = new ResizeObserver(entries => (canvasWidth.value = entries[0].contentRect.width))
+  canvasObserver.observe(canvasArea.value)
+})
+onBeforeUnmount(() => canvasObserver?.disconnect())
 const player = ref<{ $el: HTMLElement }>()
 const playerSize = ref({ w: 0, h: 0 })
 /** 缩放胶囊的右沿（相对画布左沿） */
@@ -263,30 +193,15 @@ watch(
 )
 onBeforeUnmount(() => playerObserver?.disconnect())
 const playerShown = computed(() => desk.perspective.value === 'run' && !desk.edit.active.value && desk.status.value === 'ready')
-const canvasWidth = computed(() => (propsOpen.value && !floating.value ? stageWidth.value - PROPS_WIDTH : stageWidth.value))
 const playerAt = computed(() =>
-  playerPlacement({
-    canvasWidth: canvasWidth.value,
-    inset: canvasInset.value,
-    playerWidth: playerSize.value.w,
-    zoomRight: zoomRight.value,
-    margin: PLAYER_MARGIN,
-  }),
+  playerPlacement({ canvasWidth: canvasWidth.value, inset: 0, playerWidth: playerSize.value.w, zoomRight: zoomRight.value, margin: PLAYER_MARGIN }),
 )
-const playerFits = computed(() => playerAt.value.fits)
 const playerStyle = computed(() => ({ left: `${playerAt.value.left}px` }))
-const propsStyle = computed(() =>
-  floating.value && playerShown.value && !playerFits.value ? { bottom: `${playerSize.value.h + 2 * PLAYER_MARGIN}px` } : undefined,
-)
 
-// 资料区（G15、WS-8）：面板等组件经注入请求「预览某个文件」，在资料区打开为预览标签
+// 视图区（G15）：面板等组件经注入请求「预览某个文件」，在视图区打开为预览的资料标签
 provide(OPEN_PREVIEW, (path: string, line?: number) => ws.open({ kind: 'source', path, line }))
-// PC-9、EX-1：相关资料卡的图解入口——模块有没有图解由模型层判定（desk.explainers）
+// PC-9、EX-1：图解入口——模块有没有图解由模型层判定（desk.explainers）
 provide(HAS_EXPLAINER, (id: string) => desk.explainers.has(id))
-// LY-12：「▣」——收起 / 展开视图区（图解常驻，视图区总有内容）
-function toggleDock() {
-  ws.dispatch({ type: 'setCollapsed', collapsed: !ws.state.value.collapsed })
-}
 // W-10：「怎么读这张图」
 const guideOpen = ref(false)
 /** L51：图例关系组的「?」打开帮助并定位到「读一条线」 */
@@ -296,20 +211,18 @@ function openGuide(section?: GuideSection) {
   guideOpen.value = true
 }
 provide(OPEN_GUIDE, openGuide)
-// W-6：导航树页签由项目视图持有，画布的问题角标切到「问题」页签
-const navTab = ref<NavTab>(desk.perspective.value === 'run' ? 'steps' : 'modules')
-provide(NAV_TAB, navTab)
+/** LY-4a：画布的 ⚠ 胶囊打开「问题」资料标签 */
 function showIssues() {
-  navTab.value = 'issues'
-  if (navCollapsed.value) toggleNav()
+  ws.open({ kind: 'issues' }, true)
+  if (ws.state.value.collapsed) openViews()
 }
-// CI-4：单击画布上的改动徽标——展开导航树、切到「改动」页签
+// CI-4：单击画布上的改动徽标——侧栏切到「改动」页（人的单击：收起着就展开）
 watch(
   () => desk.edit.changes.reveal.value,
   r => {
     if (!r) return
-    navTab.value = 'changes'
-    if (navCollapsed.value) toggleNav()
+    sideNav.page.value = 'changes'
+    if (!sidebar.value.open) ws.dispatch({ type: 'setSidebar', open: true })
   },
 )
 // CI-5、DL-2：撤回有级联 / 之后又被改过时先列出确认（与编辑的二次确认同一对话框）
@@ -332,11 +245,6 @@ function onSearchKey(e: KeyboardEvent) {
 }
 onMounted(() => window.addEventListener('keydown', onSearchKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onSearchKey))
-// TB-2：「▤ 属性」的悬停提示写当前并排还是悬浮（WS-3）
-const propsTip = computed(() =>
-  propsOpen.value ? `选中面板（跟随选中）· 当前${floating.value ? '浮在画布右侧：宽度不够挤压' : '挤压画布'}；单击关闭` : '属性（跟随选中）：单击打开',
-)
-const dockTip = computed(() => (viewsShown.value ? '视图：收起视图区（专注地图）' : '视图：展开视图区'))
 
 // 舞台显示（V8、V9）：只属于画布这块界面
 provide(STAGE_DISPLAY, useStageDisplay(props.project, desk))
@@ -368,201 +276,93 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
+  <!-- LY-1：系统（侧栏 + 画布）｜ 视图（主语条 + 标签组）；没有全宽顶栏，三区各自有 44px 页头、底线对齐（LY-2） -->
   <div ref="desktop" class="desk">
-    <!-- 第二十轮读先方案 §4：顶栏拉通（项目 · 视角 · 搜索 · 显示 · 抽屉开关），下方画布 + 辅助栏双栏 -->
-    <header class="top" aria-label="工具栏">
+    <aside v-if="sidebar.open" class="side-area" :style="{ width: `${sidebar.width}px` }">
       <ProjectMenu />
-      <span class="vsep" aria-hidden="true" />
-      <button
-        class="ib nav-toggle"
-        :class="{ on: !navCollapsed }"
-        :title="navCollapsed ? '展开导航树' : '收起导航树'"
-        aria-label="导航树"
-        :aria-pressed="!navCollapsed"
-        @click="toggleNav"
-      >
-        <ToolIcon name="nav" />
-      </button>
-      <!-- 草图画布下没有运行视角（场景不在草图里画） -->
-      <PerspectiveSwitch v-if="desk.status.value === 'ready' && !desk.edit.active.value" />
-      <span class="spacer" />
-      <!-- L49、TB-3：「显示 ▾」——没有画布记号的显示设置；有非默认设置时带一个点 -->
-      <DisplayMenu v-if="desk.status.value === 'ready' && !desk.edit.active.value" />
-      <span class="vsep" aria-hidden="true" />
-      <button
-        class="ib"
-        data-search-toggle
-        :class="{ on: searchOpen }"
-        title="搜索模块（⌘K）"
-        aria-label="搜索模块"
-        :aria-expanded="searchOpen"
-        @click="searchOpen = !searchOpen"
-      >
-        <ToolIcon name="search" />
-      </button>
-      <button
-        class="ib"
-        :class="{ on: focused }"
-        :title="focused ? '退出专注：恢复导航树与选中面板' : '专注：收起导航树与选中面板'"
-        :aria-label="focused ? '退出专注' : '专注'"
-        :aria-pressed="focused"
-        @click="toggleFocus"
-      >
-        <ToolIcon name="focus" />
-      </button>
-      <button class="ib props-toggle" :class="{ on: propsOpen }" :aria-pressed="propsOpen" :title="propsTip" aria-label="属性" @click="toggleProps">
-        <ToolIcon name="props" />
-      </button>
-      <button class="ib dock-toggle" :class="{ on: viewsShown }" :aria-pressed="viewsShown" :title="dockTip" aria-label="资料" @click="toggleDock">
-        <ToolIcon name="dock" />
-      </button>
-      <MoreMenu />
-      <SearchPalette v-if="desk.status.value === 'ready'" v-model:open="searchOpen" />
-    </header>
+      <SideBar v-if="desk.status.value === 'ready'" />
+    </aside>
 
-    <div class="sub-bars">
+    <section class="sys" aria-label="系统">
+      <CanvasHead v-model:search="searchOpen" />
       <InfoBar v-if="version && desk.status.value === 'ready'" />
-    </div>
-
-    <div class="body">
-      <div ref="stage" class="stage">
-        <main class="canvas-area" :style="{ '--canvas-inset': `${canvasInset}px` }">
-          <div v-if="desk.status.value === 'loading'" class="state">正在加载架构描述…</div>
-          <div v-else-if="desk.status.value === 'error'" class="state error">
-            <strong>无法加载架构描述</strong>
-            <p>{{ desk.loadError.value }}</p>
-            <div class="actions">
-              <button @click="desk.reload()">重试</button>
-              <button @click="router.push('/')">返回项目列表</button>
-            </div>
+      <main ref="canvasArea" class="canvas-area" data-region="canvas" :style="viewsShown ? undefined : { '--views-pill-h': '34px' }">
+        <div v-if="desk.status.value === 'loading'" class="state">正在加载架构描述…</div>
+        <div v-else-if="desk.status.value === 'error'" class="state error">
+          <strong>无法加载架构描述</strong>
+          <p>{{ desk.loadError.value }}</p>
+          <div class="actions">
+            <button @click="desk.reload()">重试</button>
+            <button @click="router.push('/')">返回项目列表</button>
           </div>
-          <!-- X7a：进入草图即草图画布（ADR-0025） -->
-          <SketchCanvas v-else-if="desk.edit.active.value" />
-          <template v-else>
-            <GraphCanvas />
-            <!-- TB-7：画布标题行——面包屑、⚠、源码胶囊、版本胶囊；导航浮层开着时让位到抽屉右侧（02-review 缺陷 3） -->
-            <CanvasTitle :style="{ left: navCollapsed ? undefined : `${navWidth + 12}px` }" @issues="showIssues" />
-          </template>
-          <!-- CD-7、CD-8：回放胶囊浮在画布底部居中，与左下角的缩放胶囊同一行 -->
-          <PlayerBar v-if="playerShown" ref="player" class="player-bar" :class="{ wide: !playerFits }" :style="playerStyle" />
-        </main>
-        <!-- 第二十轮 §4：选中面板是抽屉——宽度够时挤压画布，不够时浮在画布右侧（实底，不透传点击）；× 右上角 -->
-        <aside v-if="propsOpen" class="props" :class="{ floating }" :style="propsStyle" aria-label="属性">
-          <div class="panel-area">
-            <button class="props-close" title="关闭选中面板" aria-label="关闭属性栏" @click="toggleProps">×</button>
-            <Panel v-if="desk.status.value === 'ready'" />
-          </div>
-        </aside>
-        <!-- 导航树＝画布左缘的浮层抽屉：不挤压画布 -->
-        <aside v-show="!navCollapsed" class="nav-area" :style="{ width: `${navWidth}px` }">
-          <NavTree v-if="desk.status.value === 'ready'" />
-        </aside>
-      </div>
-
-      <template v-if="viewsShown">
-        <div class="divider dock-divider" @pointerdown="onDividerDown('dock', $event)" @pointermove="onDividerMove" @pointerup="onDividerUp" />
-        <div class="dock-area" :style="{ width: `${dockRatio * 100}%` }">
-          <DockPane />
         </div>
-      </template>
-    </div>
+        <!-- X7a：进入草图即草图画布（ADR-0025） -->
+        <SketchCanvas v-else-if="desk.edit.active.value" />
+        <template v-else>
+          <GraphCanvas />
+          <!-- TB-7：画布左上角——⚠、源码胶囊、版本胶囊（LY-5） -->
+          <CanvasTitle @issues="showIssues" />
+        </template>
+        <!-- LY-12：视图区收起时，画布右上角的「视图 · 主语名 ›」 -->
+        <button
+          v-if="!viewsShown && desk.status.value === 'ready'"
+          class="views-pill"
+          data-views-pill
+          :title="`展开视图区（主语：${subjectName}）`"
+          @click="openViews"
+        >
+          视图 · <span class="nm">{{ subjectName }}</span> ›
+        </button>
+        <!-- CD-7：回放胶囊浮在画布底部居中，与左下角的缩放胶囊同一行 -->
+        <PlayerBar v-if="playerShown" ref="player" class="player-bar" :class="{ wide: !playerAt.fits }" :style="playerStyle" />
+      </main>
+    </section>
+
+    <template v-if="viewsShown">
+      <div class="divider" role="separator" aria-orientation="vertical" aria-label="拖动调整视图区宽度" @pointerdown="onDividerDown" />
+      <div class="views-area" :style="{ width: `${viewsWidth * 100}%` }">
+        <DockPane />
+      </div>
+    </template>
 
     <GuideDialog v-if="guideOpen" :section="guideSection" @close="guideOpen = false" />
     <EditDialog />
-    <!-- F-10：「在此设计」（导航树、模型画布节点右键、属性面板）打开的新建设计对话框 -->
+    <!-- F-10：「在此设计」（侧栏模块树、模型画布节点右键、描述标签）打开的新建设计对话框 -->
     <NewDesignDialog v-if="newDesignRequest" :mount="newDesignRequest.mount" @close="closeNewDesign" />
   </div>
 </template>
 
 <style scoped>
 .desk {
+  --head-h: 44px;
   --toolbar-h: 44px;
   display: flex;
-  flex-direction: column;
   height: 100%;
   min-height: 0;
-}
-
-/* 第二十轮读先方案 §4：顶栏之下是画布 + 辅助栏双栏；抽屉与树都挂在画布上 */
-.body {
-  flex: 1 1 0;
-  display: flex;
   min-width: 0;
-  min-height: 0;
 }
 
-/* 导航树＝画布左缘的浮层抽屉（第二十轮 §4）：不挤压画布，实底投影 */
-.nav-area {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 30;
+/* LY-3：侧栏停靠——挤压画布（只由人开合，选中不改变任何区域的宽度，I3） */
+.side-area {
+  flex: none;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--surface);
+  background: var(--bg);
   border-right: 1px solid var(--border);
-  box-shadow: var(--card-shadow);
 }
 
-.nav-area > :deep(.nav-tree) {
+.side-area > :deep(.side-bar) {
   flex: 1 1 0;
-  height: auto;
   min-height: 0;
-  overflow: hidden;
 }
 
-.top {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: var(--toolbar-h);
-  padding: 0 10px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  min-width: 0;
-  flex: none;
-}
-
-.top > .nav-toggle {
-  margin-right: 4px;
-}
-
-.spacer {
+.sys {
   flex: 1 1 0;
-  min-width: 0;
-}
-
-/* TB-1：视角段与右侧按钮都不收缩，工作列再窄挤掉的只是中间的空白 */
-.top > * {
-  flex-shrink: 0;
-}
-
-.top > .spacer {
-  flex-shrink: 1;
-}
-
-.vsep {
-  width: 1px;
-  height: 18px;
-  margin: 0 4px;
-  background: var(--border);
-}
-
-.sub-bars {
   display: flex;
   flex-direction: column;
-  flex: none;
-}
-
-.stage {
-  position: relative;
-  flex: 1 1 0;
-  display: flex;
-  min-height: 0;
   min-width: 0;
+  min-height: 0;
 }
 
 .canvas-area {
@@ -574,68 +374,45 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   min-height: 0;
 }
 
-/* 选中面板＝抽屉（第二十轮 §4，取代 CD-2「属性卡片立在画布上」）：实底面板，挤压画布；放不下时浮在画布右侧、不透传点击 */
-.props {
-  position: relative;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  width: 330px;
-  min-height: 0;
-  background: var(--surface);
-  border-left: 1px solid var(--border);
-}
-
-.props.floating {
+.views-pill {
   position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
-  border-left: 1px solid var(--border);
+  top: 10px;
+  right: 12px;
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 260px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12px;
+  white-space: nowrap;
   box-shadow: var(--card-shadow);
 }
 
-/* CD-3：× 在属性列滚动区右上角、身份卡（第一张卡）的右上角（上沿 12、右沿 12）；身份卡粘顶（ADR-0061），× 恒在可视区，悬停身份卡或键盘聚焦时显出 */
-.props-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 7; /* 高于粘顶的身份卡（CD-3，ADR-0061）：× 悬在身份卡右上角、可单击 */
-  border: none;
-  background: none;
-  font-size: 15px;
-  line-height: 1;
-  padding: 2px 6px;
-  color: var(--text-3);
-  opacity: 0;
-  transition: opacity 0.15s;
+.views-pill .nm {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
 }
 
-.panel-area:has(.id-card:hover) .props-close,
-.props-close:hover,
-.props-close:focus-visible {
-  opacity: 1;
+.views-pill:hover {
+  color: var(--text);
 }
 
-.panel-area {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  scrollbar-width: thin;
-}
-
-/* CD-7：回放胶囊在画布底部居中（left 由 CD-8 推出：居中于未被悬浮卡片盖住的部分） */
+/* CD-7：回放胶囊在画布底部居中 */
 .player-bar {
   position: absolute;
   bottom: 12px;
   z-index: 21;
 }
 
-/* TB-1：工作列放不下工具栏时资料区先让位 */
-.dock-area {
-  flex: 0 1 auto;
+.views-area {
+  flex: none;
   min-width: 280px;
   min-height: 0;
 }
@@ -664,12 +441,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   flex: none;
   width: 5px;
   cursor: col-resize;
-  background: var(--border);
-  border-left: 2px solid var(--bg);
-  border-right: 2px solid var(--bg);
+  background: var(--surface);
+  border-left: 1px solid var(--border);
 }
 
 .divider:hover {
-  background: var(--accent);
+  background: var(--border);
 }
 </style>

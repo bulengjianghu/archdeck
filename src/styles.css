@@ -409,3 +409,8 @@ a {
 .desk-pill {
   border-radius: var(--pill-radius);
 }
+
+/* 草图画布拖节点期间（SketchCanvas）：禁用的按钮不接指针，松手的 mouseup 照常落到页面、拖动收尾（Chrome 的禁用按钮吞掉鼠标事件） */
+.sk-node-dragging button:disabled {
+  pointer-events: none;
+}

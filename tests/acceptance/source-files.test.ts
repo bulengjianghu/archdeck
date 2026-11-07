@@ -12,7 +12,7 @@ import { readProject } from '../../vite/readModelDir'
 import { readExports, readSourceFile, readSourceTree } from '../../vite/readSource'
 import { createDeskState, type SourceFetcher } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
-import NavTree from '../../src/components/tree/NavTree.vue'
+import NavTree from '../../src/components/tree/SideBar.vue'
 import Panel from '../../src/components/panel/Panel.vue'
 import SourceView from '../../src/components/source/SourceView.vue'
 import { assignFiles, sourceIssues, type RawFile, type SourcePayload } from '../../src/model'
@@ -62,7 +62,8 @@ async function open(project: string, url = `/p/${project}`, extra: RawFile[] = [
   const nav = mount(NavTree, { global })
   const panel = mount(Panel, { global })
   await settle()
-  const tab = (name: string) => nav.findAll('[role=tab]').find(t => t.text() === name)!
+  /** LY-4b：「文件」是模块页的按文件树 */
+  const tab = (name: string) => (name === '文件' ? nav.find('[data-side-mode=files]') : nav.findAll('[role=tab]').find(t => t.text() === name)!)
   const fileRow = (f: string) => nav.findAll('.row.file').find(r => r.attributes('data-path') === f)
   return { desk, router, nav, panel, tab, fileRow, global }
 }
@@ -87,11 +88,11 @@ describe('§6.4 源代码验收', () => {
     await tab('文件').trigger('click')
     await settle()
     const files = desk.files.filesOf('present.nav-tree')
-    expect(files).toEqual(expect.arrayContaining(['src/components/tree/NavTree.vue', 'src/components/tree/FileTree.vue', 'src/components/tree/ModuleTree.vue']))
+    expect(files).toEqual(expect.arrayContaining(['src/components/tree/SideBar.vue', 'src/components/tree/FileTree.vue', 'src/components/tree/ModuleTree.vue']))
     expect(panel.text()).toContain('源代码文件')
     await expand(panel, '源代码文件')
     expect(panel.text()).toContain('src/components/tree/FileTree.vue')
-    expect(fileRow('src/components/tree/NavTree.vue')!.classes()).toContain('hit')
+    expect(fileRow('src/components/tree/SideBar.vue')!.classes()).toContain('hit')
     expect(nav.findAll('.row.file.hit')).toHaveLength(files.length)
 
     desk.revealModule('present')
@@ -115,10 +116,8 @@ describe('§6.4 源代码验收', () => {
     // 模块树展开到归属模块并标出
     const nav = mount(NavTree, { global })
     await settle()
-    await nav
-      .findAll('[role=tab]')
-      .find(t => t.text() === '模块')!
-      .trigger('click')
+    await nav.find('[data-side-page=modules]').trigger('click')
+    await nav.findAll('.mode button')[0].trigger('click')
     await settle()
     expect(
       nav

@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-/** 导航树（W-7、T1–T8）与分屏方向（W-4） */
+/** 侧栏（LY-3、LY-4；原导航树 W-7、T1–T8）：模块 / 场景 / 改动三页，模块页「按模块 / 按文件」；问题清单是资料标签（LY-4a） */
 import { describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import NavTree from '../../src/components/tree/NavTree.vue'
+import SideBar from '../../src/components/tree/SideBar.vue'
+import IssueList from '../../src/components/tree/IssueList.vue'
 import { createDeskState } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
 import { REWORK_CATEGORIES, REWORK_CATEGORY_LABELS } from '../../src/model'
@@ -15,19 +16,32 @@ async function mountTree(url = '/', files = sampleFiles()) {
   const desk = createDeskState(async () => ({ dir: 'model/test', files }))
   desk.attachRouter(router)
   await desk.init()
-  const wrapper = mount(NavTree, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+  const wrapper = mount(SideBar, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
   await flushPromises()
   const row = (id: string) => wrapper.findAll('.row').find(r => r.attributes('data-id') === id)
   return { wrapper, desk, router, row }
 }
 
-/** 页签名（问题页签带计数，去掉） */
+async function mountIssues(url = '/', files = sampleFiles()) {
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
+  await router.push(url)
+  const desk = createDeskState(async () => ({ dir: 'model/test', files }))
+  desk.attachRouter(router)
+  await desk.init()
+  const wrapper = mount(IssueList, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+  await flushPromises()
+  return { wrapper, desk }
+}
+
+/** 侧栏页名（改动页带计数，去掉） */
 const tabNames = (wrapper: Awaited<ReturnType<typeof mountTree>>['wrapper']) => wrapper.findAll('[role=tab]').map(t => t.text().replace(/\d+$/, ''))
 
 describe('模块树', () => {
-  it('T1、T3：结构视角有模块与文件页签；展开到当前层次并标出它，选中的模块高亮', async () => {
+  it('LY-4、T3：侧栏三页（改动只在草图编辑时可用），模块页有按模块 / 按文件；展开到当前层次并标出它，选中的模块高亮', async () => {
     const { wrapper, row } = await mountTree('/?level=infra.framework&sel=m:infra.framework.sm')
-    expect(tabNames(wrapper)).toEqual(['模块', '文件', '问题'])
+    expect(tabNames(wrapper)).toEqual(['模块', '场景', '改动'])
+    expect(wrapper.find('[data-side-page=changes]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-side-mode=files]').exists()).toBe(true)
     expect(row('infra.framework')!.classes()).toContain('level')
     expect(row('infra.framework.sm')!.classes()).toContain('selected')
     // 祖先链展开，旁支不展开
@@ -81,31 +95,35 @@ describe('模块树', () => {
     expect(row('infra.next')).toBeUndefined()
     desk.openScenario('sc.play')
     await flushPromises()
-    await wrapper.findAll('[role=tab]')[0].trigger('click')
+    await wrapper.find('[data-side-page=modules]').trigger('click')
     expect(row('infra.next')).toBeTruthy()
   })
 })
 
 describe('运行视角', () => {
-  it('T1：进入运行视角切到步骤页签，退出切回模块页签', async () => {
+  it('LY-4c：进入回放切到场景页、先列这个场景的步骤，「全部场景」换回列表；退出后场景页回到列表', async () => {
     const { wrapper, desk } = await mountTree('/', scenarioFiles())
+    expect(wrapper.find('.module-tree').exists()).toBe(true)
     desk.openScenario('sc.play')
     await flushPromises()
-    expect(tabNames(wrapper)).toEqual(['模块', '文件', '步骤', '问题'])
+    expect(wrapper.find('[role=tab][aria-selected=true]').text()).toBe('场景')
     expect(wrapper.find('.step-tree').exists()).toBe(true)
+    await wrapper.find('[data-testid=all-scenes]').trigger('click')
+    expect(wrapper.find('.scenario-list').exists()).toBe(true)
     desk.closeScenario()
     await flushPromises()
     expect(wrapper.find('.step-tree').exists()).toBe(false)
-    expect(wrapper.findAll('[role=tab]')).toHaveLength(3)
+    expect(wrapper.find('.scenario-list').exists()).toBe(true)
   })
 
-  it('T1：选中文件切到文件页签（ADR-0007）', async () => {
+  it('LY-4b：选中文件切到模块页的按文件树（ADR-0007）', async () => {
     const { wrapper, desk } = await mountTree('/', scenarioFiles())
     desk.openScenario('sc.play')
     await flushPromises()
     desk.selectFile('src/a.ts')
     await flushPromises()
-    expect(wrapper.find('[role=tab][aria-selected=true]').text()).toBe('文件')
+    expect(wrapper.find('[role=tab][aria-selected=true]').text()).toBe('模块')
+    expect(wrapper.find('[data-side-mode=files]').attributes('aria-pressed')).toBe('true')
     expect(wrapper.find('.file-tree').exists()).toBe(true)
     // 未注入源码来源时清单为 error，文件页签给出原因
     expect(wrapper.find('.source-note.err').text()).toContain('没有注入源码来源')
@@ -113,7 +131,7 @@ describe('运行视角', () => {
 
   it('T5：模块树标出参与模块与当前步骤的两端', async () => {
     const { wrapper, desk, row } = await mountTree('/?level=infra&sc=sc.play&step=sc.play%23start', scenarioFiles())
-    await wrapper.findAll('[role=tab]')[0].trigger('click')
+    await wrapper.find('[data-side-page=modules]').trigger('click')
     await flushPromises()
     expect(row('infra.player')!.classes()).toEqual(expect.arrayContaining(['part', 'active']))
     expect(row('app')!.classes()).toContain('part')
@@ -166,14 +184,11 @@ describe('运行视角', () => {
   })
 })
 
-describe('问题页签（W-6）', () => {
+describe('问题清单（W-6；LY-4a 起是「问题」资料标签的正文）', () => {
   it('列出返工清单：计数为错误与提醒，按严重度排序；展开见位置与建议，可定位、可复制给 agent', async () => {
     const bad = sampleFiles({ 'extra.yaml': 'relations:\n  - { id: rel.bad, from: infra, to: nowhere, type: calls }\n' })
-    const { wrapper, desk } = await mountTree('/', bad)
-    const tab = wrapper.findAll('[role=tab]').find(t => t.text().startsWith('问题'))!
+    const { wrapper, desk } = await mountIssues('/', bad)
     const list = desk.rework.value!
-    expect(tab.find('.count').text()).toBe(String(list.counts.error + list.counts.warning))
-    await tab.trigger('click')
     const items = wrapper.findAll('.issue-list .item')
     expect(items.length).toBe(list.items.length)
     expect(items[0].classes()).toContain('error')
@@ -194,10 +209,7 @@ describe('问题页签（W-6）', () => {
       'extra.yaml': 'relations:\n  - { id: rel.bad, from: infra, to: nowhere, type: calls }\n',
       'scenarios/extra.yaml': 'scenario: { id: sc.x, name: X, steps: [{ call: { from: domain.services, to: infra.mus, label: go } }] }\n',
     })
-    const { wrapper, desk } = await mountTree('/', bad)
-    const tab = wrapper.findAll('[role=tab]').find(t => t.text().startsWith('问题'))!
-    const badge = tab.find('.count').text()
-    await tab.trigger('click')
+    const { wrapper, desk } = await mountIssues('/', bad)
     const list = desk.rework.value!
     expect(list.byCategory.description).toBeGreaterThan(0)
     expect(list.byCategory.unmodeled).toBeGreaterThan(0)
@@ -216,6 +228,5 @@ describe('问题页签（W-6）', () => {
     expect(wrapper.find('.issue-list').text()).toContain('没有符合筛选条件的问题')
     await select.setValue('description')
     expect(items()).toHaveLength(list.items.filter(i => i.category === 'description' && i.severity === 'error').length)
-    expect(tab.find('.count').text()).toBe(badge)
   })
 })

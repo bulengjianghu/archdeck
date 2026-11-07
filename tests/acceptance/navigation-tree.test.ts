@@ -9,7 +9,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { readProject, type ModelPayload } from '../../vite/readModelDir'
 import { createDeskState } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
-import NavTree from '../../src/components/tree/NavTree.vue'
+import NavTree from '../../src/components/tree/SideBar.vue'
 import type { RawFile } from '../../src/model'
 
 const ROOT = path.resolve(import.meta.dirname, '../..')

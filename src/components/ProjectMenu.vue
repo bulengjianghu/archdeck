@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * 项目标题区（TB-6，ADR-0057）：导航树顶部 44px，项目名单行（放不下省略、悬停看全名）带 ▾；单击展开项目菜单——
+ * 项目标题区（TB-6；第二十二轮 LY-2）：侧栏页头 44px（含 1px 底线，与画布页头、主语条底线对齐），项目名一行带 ▾、其下一行灰字是版本；
+ * 单击展开项目菜单——
  * 版本（VersionSwitcher 的下拉，数据与行为原样）、编辑骨架、新建设计（当前版本时）、所有项目。单击菜单外或 Esc 收起。
  * 「对项目做什么」都在这里（C6），工具栏不再放它们。
  */
@@ -16,6 +17,17 @@ const open = ref(false)
 const root = ref<HTMLElement>()
 /** 系统名；加载完成前为项目 ID */
 const name = computed(() => desk.index.value?.model.system.name ?? desk.project ?? '')
+/** 版本一行：当前版本带描述对齐的提交（短），其余版本写种类与名字 */
+const versionLine = computed(() => {
+  const v = desk.version
+  if (!v) {
+    const c = desk.index.value?.model.system.source?.commit
+    return `当前版本${c ? ` · ${c.slice(0, 8)}` : ''}`
+  }
+  if ('commit' in v) return `提交 · ${v.commit.slice(0, 8)}`
+  if ('intent' in v) return `持久草图 · ${v.intent}`
+  return `设计 · ${v.design} · ${v.revision}`
+})
 const canSkeleton = computed(() => !desk.version && desk.edit.lookup.intentIds.value.includes('skeleton'))
 
 function run(fn: () => void) {
@@ -46,10 +58,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="root" class="project-head">
+  <div ref="root" class="project-head" data-head="sidebar">
     <button class="project-btn" :class="{ on: open }" :title="name" :aria-expanded="open" aria-haspopup="true" aria-label="项目菜单" @click="open = !open">
-      <span class="name">{{ name }}</span
-      ><span class="caret" aria-hidden="true">▾</span>
+      <span class="lines"
+        ><span class="name">{{ name }}<span class="caret" aria-hidden="true"> ▾</span></span
+        ><span class="ver" data-testid="project-version">{{ versionLine }}</span></span
+      >
     </button>
     <section v-show="open" class="menu project-menu" role="menu" aria-label="项目">
       <template v-if="desk.status.value === 'ready'">
@@ -72,7 +86,8 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   align-items: center;
-  height: var(--toolbar-h);
+  box-sizing: border-box;
+  height: var(--head-h, 44px);
   padding: 0 8px;
   border-bottom: 1px solid var(--border);
   flex: none;
@@ -89,8 +104,9 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: 6px;
   background: none;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
+  text-align: left;
 }
 
 .project-btn:hover,
@@ -98,7 +114,27 @@ onBeforeUnmount(() => {
   background: var(--bg);
 }
 
+.lines {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.ver {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-3);
+}
+
 .name {
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

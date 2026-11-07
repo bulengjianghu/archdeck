@@ -6,7 +6,7 @@
  * 代码依赖叠加线（K10）→ 代码依赖面板；耦合线（J7）→ 耦合面板；端口（L13）→ 端口面板（K11）。草图画布下（X7，ADR-0025）：换成草图面板。
  * 卡片直接立在画布上（CD-2）：第一张是身份卡（各面板的 `.id-card`，CD-3），粘在属性列滚动区上沿、不随内容滚走（第十八轮走查 4 改回粘顶，ADR-0061；原名称胶囊 CD-4 作废）。
  */
-import { computed } from 'vue'
+import { computed, provide } from 'vue'
 import { useDesk } from '@/state/inject'
 import { moduleName } from '@/model'
 import ModulePanel from './ModulePanel.vue'
@@ -21,7 +21,11 @@ import PortPanel from './PortPanel.vue'
 import CyclePanel from './CyclePanel.vue'
 import StratumPanel from './StratumPanel.vue'
 import SketchPanel from '../sketch/SketchPanel.vue'
+import { PANEL_PART, type PanelPart } from './panelPart'
 
+/** 第二十二轮波 2 过渡：住在「描述」标签（原面板全部内容）或「核对」标签（只核对卡）；抽屉已删（LY-16） */
+const props = withDefaults(defineProps<{ part?: PanelPart }>(), { part: 'all' })
+provide(PANEL_PART, props.part)
 const desk = useDesk()
 /** V12：切到结构视角时原选中（关系、视图边、端口）没有对应的依赖边，被清空 */
 const dropped = computed(() => {
@@ -58,8 +62,9 @@ const target = computed(() => {
 </script>
 
 <template>
-  <div class="panel">
-    <SketchPanel v-if="desk.edit.active.value" />
+  <div class="panel" :class="{ 'part-check': part === 'check' }" :data-part="part">
+    <SketchPanel v-if="desk.edit.active.value && part !== 'check'" />
+    <p v-if="desk.edit.active.value && part === 'check'" class="run-note" role="note">草图的核验在「描述」标签的草图面板里</p>
     <p v-if="dropped && !desk.edit.active.value" class="dropped" role="note">切换视角后原选中（{{ dropped }}）没有对应的依赖边，已取消选中</p>
     <template v-else-if="target">
       <!-- V6 新家（第二十轮 §6，复审确认）：运行视角下步骤 / 场景面板只住辅助栏的步骤节，抽屉不再渲染 -->
@@ -70,7 +75,7 @@ const target = computed(() => {
         role="note"
         data-testid="props-run-note"
       >
-        {{ target.kind === 'step' ? '这一步' : '场景概览' }}在辅助栏的步骤节（资料区底部）
+        {{ target.kind === 'step' ? '这一步' : '场景概览' }}在「描述」标签
       </p>
       <template v-else>
         <FilePanel v-if="target.kind === 'file'" :key="`f:${target.id}`" :path="target.id" />
@@ -90,6 +95,11 @@ const target = computed(() => {
 </template>
 
 <style>
+/* 第二十二轮波 2 过渡：「核对」标签只留核对卡（PanelCard 自己不渲染其余卡；身份卡、设计说明、出处等藏起） */
+.panel.part-check > div > :not([data-card='check']):not(:has([data-card='check'])) {
+  display: none;
+}
+
 /* CD-2：属性列不是面板——底色就是画布（透明），卡片直接立在上面，四周 12、卡间距 12 */
 .panel {
   min-height: 100%;

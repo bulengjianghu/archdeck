@@ -16,6 +16,8 @@ export type DocRef =
   | { kind: 'dialogue' }
   /** DA-10、DL-10：设计说明（designs/<设计>/notes/<名>.md）的预览标签 */
   | { kind: 'note'; file: string }
+  /** LY-4a：返工清单（原导航树「问题」页签）——会话里的工作物，不跟随主语 */
+  | { kind: 'issues' }
 
 /** LY-8：视图标签——看主语的四个角度 */
 export type ViewKind = 'explainer' | 'description' | 'check' | 'sequence'
@@ -68,8 +70,8 @@ export interface WorkspaceState {
 }
 
 export type WorkspaceAction =
-  /** 打开资料：已开即激活（固定地打开则转固定、源代码更新目标行）；否则进上组，不固定时替换该组的预览标签（LY-8a、LY-10a） */
-  | { type: 'open'; doc: DocRef; pin?: boolean }
+  /** 打开资料：已开即激活（固定地打开则转固定、源代码更新目标行）；否则进第 group 组（缺省上组；「+」给发起的组），不固定时替换该组的预览标签（LY-8a、LY-10a） */
+  | { type: 'open'; doc: DocRef; pin?: boolean; group?: number }
   | { type: 'activate'; id: string }
   | { type: 'pin'; id: string }
   /** 关闭一个标签；常驻标签无效（LY-9、LY-9a） */
@@ -90,7 +92,7 @@ export type WorkspaceAction =
 export const SPLIT_RANGE = [0.2, 0.8] as const
 export const WIDTH_RANGE = [0.2, 0.75] as const
 export const SIDEBAR_RANGE = [200, 400] as const
-export const DEFAULT_WIDTH = 0.44
+export const DEFAULT_WIDTH = 0.36
 export const DEFAULT_SIDEBAR_WIDTH = 240
 /** LY-3：没有本机记忆时，窗口宽 ≥ 1440 侧栏缺省展开 */
 export const SIDEBAR_OPEN_MIN = 1440
@@ -247,7 +249,7 @@ function withGroups(s: WorkspaceState, groups: TabGroup[]): WorkspaceState {
 export function workspaceTransition(s: WorkspaceState, a: WorkspaceAction): WorkspaceState {
   switch (a.type) {
     case 'open':
-      return open(s, a.doc, !!a.pin)
+      return open(s, a.doc, !!a.pin, a.group ?? 0)
     case 'activate': {
       const at = findTab(s, a.id)
       if (!at || s.groups[at.group].active === a.id) return s
@@ -301,8 +303,8 @@ export function workspaceTransition(s: WorkspaceState, a: WorkspaceAction): Work
   }
 }
 
-/** LY-8a、LY-10a：已开即激活（固定地打开则转固定、源代码更新目标行）；否则进上组，不固定时替换该组的预览标签 */
-function open(s: WorkspaceState, doc: DocRef, pin: boolean): WorkspaceState {
+/** LY-8a、LY-10a：已开即激活（固定地打开则转固定、源代码更新目标行）；否则进第 group 组（越界取上组），不固定时替换该组的预览标签 */
+function open(s: WorkspaceState, doc: DocRef, pin: boolean, group: number): WorkspaceState {
   const id = docKey(doc)
   const at = findTab(s, id)
   if (at)
@@ -313,10 +315,14 @@ function open(s: WorkspaceState, doc: DocRef, pin: boolean): WorkspaceState {
       ),
     }
   const tab: Tab = { id, kind: 'doc', doc, preview: !pin }
-  const g = s.groups[0]
+  const gi = group >= 0 && group < s.groups.length ? group : 0
+  const g = s.groups[gi]
   const pv = pin ? -1 : g.tabs.findIndex(t => t.kind === 'doc' && t.preview)
   const tabs = pv >= 0 ? g.tabs.map((t, k) => (k === pv ? tab : t)) : [...g.tabs, tab]
-  return withGroups(s, [{ tabs, active: id }, ...s.groups.slice(1)])
+  return withGroups(
+    s,
+    s.groups.map((x, k) => (k === gi ? { tabs, active: id } : x)),
+  )
 }
 
 /** LY-9a、LY-10：关闭后激活同位置的右邻（没有则左邻）；常驻标签不可关；一组空了即合并 */
