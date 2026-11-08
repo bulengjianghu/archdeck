@@ -496,11 +496,10 @@ export function createDeskState(fetchModel: FetchModel, options: DeskOptions = {
     open: (doc: DocRef, pin = false, group?: number) => workspaceDispatch({ type: 'open', doc, pin, ...(group === undefined ? {} : { group }) }),
     /** 这份资料是否已在视图区开着（任一组） */
     isOpen: (doc: DocRef) => hasTab(workspaceState.value, docKey(doc)),
-    /** 视图里的引用请求看某个视图标签——激活它（不在就从「+」加进上组），视图区收起时展开 */
+    /** 视图里的引用请求看某个视图标签——激活它（视图标签常驻，LY-9；时序图只在场景里），视图区收起时展开 */
     showView: (view: ViewKind) => {
       if (workspaceState.value.collapsed) workspaceDispatch({ type: 'setCollapsed', collapsed: false })
-      if (!hasTab(workspaceState.value, viewKey(view))) workspaceDispatch({ type: 'addView', view, group: 0 })
-      else workspaceDispatch({ type: 'activate', id: viewKey(view) })
+      workspaceDispatch({ type: 'activate', id: viewKey(view) })
     },
   }
 

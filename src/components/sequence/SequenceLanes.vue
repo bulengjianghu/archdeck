@@ -2,8 +2,8 @@
 /**
  * 消息区：生命线与按序自上而下的消息（R2：同步实线实心箭头、异步虚线开放箭头、显式返回点线；S10a 只画显式返回）；
  * 内部活动画成生命线上的激活条；外部参与者在最左，竖线隔出系统边界（A7）。
- * 选中突出（R15、R16）：只有选中的步骤用选中样式，配对的调用 / 返回加浅色「配对」标记；选中其他对象时突出泳道的生命线，
- * 进度所在的消息只在序号旁加小标记。
+ * 选中突出（R15、R16）：选中的步骤用选中样式，配对的调用 / 返回加浅色「配对」标记；选中模块等其他对象时突出泳道的生命线与它参与的消息、
+ * 其余消息变淡（R16a），进度所在的消息保留当前步骤的样式、序号旁加小标记（R15a，负责人 2026-11-08 走查：选中模块不改进度）。
  * 泳道头在 SequenceHeads（固定在顶部与底部，D-2）。不做悬停弹出（W-1）。
  */
 import { computed } from 'vue'
@@ -37,7 +37,8 @@ function state(m: SequenceMessage): string {
   const em = props.emphasis
   if (em?.selected === m.pathIndex) return 'selected'
   const pos = m.pathIndex < props.walked ? 'walked' : 'future'
-  return pos + (em?.paired.has(m.pathIndex) ? ' paired' : '')
+  const focus = em?.lanes.size ? (em.current === m.pathIndex ? ' current' : em.involved.has(m.pathIndex) ? ' involved' : ' faded') : ''
+  return pos + (em?.paired.has(m.pathIndex) ? ' paired' : '') + focus
 }
 /** 选中的不是步骤时，进度所在的消息只在序号旁加小标记 */
 const isProgress = (m: SequenceMessage) => m.pathIndex !== undefined && m.pathIndex === props.current && props.emphasis?.selected == null
@@ -160,9 +161,28 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
   stroke-dasharray: 2 3;
 }
 
-.selected .arrow {
+.selected .arrow,
+.current .arrow {
   stroke: var(--accent);
   stroke-width: 2.5;
+}
+
+.msg.current .hit {
+  fill: var(--accent-soft);
+}
+
+/* R16a：主语模块参与的消息加粗，其余变淡 */
+.involved .arrow {
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
+.involved.future {
+  opacity: 0.8;
+}
+
+.msg.faded {
+  opacity: 0.32;
 }
 
 /* R15：配对的调用 / 返回只加浅色标记 */
@@ -204,6 +224,14 @@ const isHover = (m: SequenceMessage) => !!m.frameIds[0] && props.hover === `step
 .selected .label {
   fill: var(--accent);
   font-weight: 600;
+}
+
+.current .label {
+  fill: var(--accent);
+}
+
+.involved .label {
+  fill: var(--text);
 }
 
 .tag {

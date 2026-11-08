@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
-/** 侧栏（LY-3、LY-4；原导航树 W-7、T1–T8）：模块 / 场景 / 改动三页，模块页「按模块 / 按文件」；问题清单是资料标签（LY-4a） */
+/** 侧栏（LY-3、LY-4；原导航树 W-7、T1–T8）：竖栏切模块 / 场景 / 改动三页，页名一行右端「筛选 ▾」（LY-4d）；问题清单是资料标签（LY-4a） */
 import { describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { defineComponent, h, provide, ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import SideBar from '../../src/components/tree/SideBar.vue'
+import SideRail from '../../src/components/tree/SideRail.vue'
+import { SIDE_NAV, type ModulesMode, type SidePage } from '../../src/components/shared/navTab'
+import { SIDE_FILTERS, createSideFilters } from '../../src/components/shared/sideFilters'
 import IssueList from '../../src/components/tree/IssueList.vue'
 import { createDeskState } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
@@ -16,7 +20,15 @@ async function mountTree(url = '/', files = sampleFiles()) {
   const desk = createDeskState(async () => ({ dir: 'model/test', files }))
   desk.attachRouter(router)
   await desk.init()
-  const wrapper = mount(SideBar, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
+  // 竖栏与侧栏共用项目视图持有的页（SIDE_NAV）
+  const Host = defineComponent({
+    setup() {
+      provide(SIDE_NAV, { page: ref<SidePage>('modules'), mode: ref<ModulesMode>('modules') })
+      provide(SIDE_FILTERS, createSideFilters())
+      return () => [h(SideRail), h(SideBar)]
+    },
+  })
+  const wrapper = mount(Host, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
   await flushPromises()
   const row = (id: string) => wrapper.findAll('.row').find(r => r.attributes('data-id') === id)
   return { wrapper, desk, router, row }
@@ -33,14 +45,18 @@ async function mountIssues(url = '/', files = sampleFiles()) {
   return { wrapper, desk }
 }
 
-/** 侧栏页名（改动页带计数，去掉） */
-const tabNames = (wrapper: Awaited<ReturnType<typeof mountTree>>['wrapper']) => wrapper.findAll('[role=tab]').map(t => t.text().replace(/\d+$/, ''))
+/** 竖栏的三页（悬停名 = aria-label） */
+const railNames = (wrapper: Awaited<ReturnType<typeof mountTree>>['wrapper']) => wrapper.findAll('[data-rail]').map(t => t.attributes('aria-label'))
+const pageName = (wrapper: Awaited<ReturnType<typeof mountTree>>['wrapper']) => wrapper.find('[data-side-page-name]').text()
 
 describe('模块树', () => {
-  it('LY-4、T3：侧栏三页（改动只在草图编辑时可用），模块页有按模块 / 按文件；展开到当前层次并标出它，选中的模块高亮', async () => {
+  it('LY-4、T3：竖栏三页（改动只在草图编辑时可用），模块页「筛选 ▾」里有按模块 / 按文件；展开到当前层次并标出它，选中的模块高亮', async () => {
     const { wrapper, row } = await mountTree('/?level=infra.framework&sel=m:infra.framework.sm')
-    expect(tabNames(wrapper)).toEqual(['模块', '场景', '改动'])
-    expect(wrapper.find('[data-side-page=changes]').attributes('disabled')).toBeDefined()
+    expect(railNames(wrapper)).toEqual(['模块', '场景', '改动'])
+    expect(wrapper.find('[data-rail=changes]').attributes('disabled')).toBeDefined()
+    expect(pageName(wrapper)).toBe('模块')
+    expect(wrapper.find('[data-side-mode=files]').exists()).toBe(false)
+    await wrapper.find('[data-side-filter]').trigger('click')
     expect(wrapper.find('[data-side-mode=files]').exists()).toBe(true)
     expect(row('infra.framework')!.classes()).toContain('level')
     expect(row('infra.framework.sm')!.classes()).toContain('selected')
@@ -95,8 +111,44 @@ describe('模块树', () => {
     expect(row('infra.next')).toBeUndefined()
     desk.openScenario('sc.play')
     await flushPromises()
-    await wrapper.find('[data-side-page=modules]').trigger('click')
+    await wrapper.find('[data-rail=modules]').trigger('click')
     expect(row('infra.next')).toBeTruthy()
+  })
+})
+
+describe('LY-3、LY-4d 竖栏与筛选（负责人 2026-11-08 走查）', () => {
+  it('点当前页的图标收起侧栏，点另一页的图标展开并切页；收起时竖栏还在', async () => {
+    const { wrapper, desk } = await mountTree('/', scenarioFiles())
+    const ws = desk.workspace
+    expect(ws.state.value.sidebar.open).toBe(false)
+    await wrapper.find('[data-rail=scenes]').trigger('click')
+    expect(ws.state.value.sidebar.open).toBe(true)
+    expect(pageName(wrapper)).toBe('场景')
+    expect(wrapper.find('[data-rail=scenes]').attributes('aria-pressed')).toBe('true')
+    await wrapper.find('[data-rail=modules]').trigger('click')
+    expect(ws.state.value.sidebar.open).toBe(true)
+    expect(pageName(wrapper)).toBe('模块')
+    await wrapper.find('[data-rail=modules]').trigger('click')
+    expect(ws.state.value.sidebar.open).toBe(false)
+    expect(wrapper.find('[data-rail=modules]').attributes('aria-pressed')).toBe('false')
+    // 顶格的侧栏开关
+    await wrapper.find('[data-head=rail] button').trigger('click')
+    expect(ws.state.value.sidebar.open).toBe(true)
+  })
+
+  it('场景页的筛选收在弹层里：范围、类别、发起者；没选「全部」的项计入「筛选 · N」', async () => {
+    const { wrapper } = await mountTree('/', scenarioFiles())
+    await wrapper.find('[data-rail=scenes]').trigger('click')
+    expect(wrapper.find('.scenario-list').exists()).toBe(true)
+    expect(wrapper.find('.scenario-list [aria-label=范围]').exists()).toBe(false)
+    expect(wrapper.find('[data-filter-count]').text()).toBe('2')
+    await wrapper.find('[data-side-filter]').trigger('click')
+    const pop = wrapper.find('[data-filter-pop]')
+    expect(pop.find('[aria-label=范围]').exists()).toBe(true)
+    expect(pop.find('[aria-label=类别]').exists()).toBe(true)
+    expect(pop.find('select[aria-label=按发起者筛选]').exists()).toBe(true)
+    await pop.findAll('[aria-label=范围] button')[1].trigger('click')
+    expect(wrapper.find('[data-filter-count]').text()).toBe('1')
   })
 })
 
@@ -106,7 +158,7 @@ describe('运行视角', () => {
     expect(wrapper.find('.module-tree').exists()).toBe(true)
     desk.openScenario('sc.play')
     await flushPromises()
-    expect(wrapper.find('[role=tab][aria-selected=true]').text()).toBe('场景')
+    expect(pageName(wrapper)).toBe('场景')
     expect(wrapper.find('.step-tree').exists()).toBe(true)
     await wrapper.find('[data-testid=all-scenes]').trigger('click')
     expect(wrapper.find('.scenario-list').exists()).toBe(true)
@@ -122,8 +174,11 @@ describe('运行视角', () => {
     await flushPromises()
     desk.selectFile('src/a.ts')
     await flushPromises()
-    expect(wrapper.find('[role=tab][aria-selected=true]').text()).toBe('模块')
+    expect(pageName(wrapper)).toBe('模块')
+    await wrapper.find('[data-side-filter]').trigger('click')
     expect(wrapper.find('[data-side-mode=files]').attributes('aria-pressed')).toBe('true')
+    // LY-4d：按文件是生效的筛选，「筛选 · 1」
+    expect(wrapper.find('[data-filter-count]').text()).toBe('1')
     expect(wrapper.find('.file-tree').exists()).toBe(true)
     // 未注入源码来源时清单为 error，文件页签给出原因
     expect(wrapper.find('.source-note.err').text()).toContain('没有注入源码来源')
@@ -131,7 +186,7 @@ describe('运行视角', () => {
 
   it('T5：模块树标出参与模块与当前步骤的两端', async () => {
     const { wrapper, desk, row } = await mountTree('/?level=infra&sc=sc.play&step=sc.play%23start', scenarioFiles())
-    await wrapper.find('[data-side-page=modules]').trigger('click')
+    await wrapper.find('[data-rail=modules]').trigger('click')
     await flushPromises()
     expect(row('infra.player')!.classes()).toEqual(expect.arrayContaining(['part', 'active']))
     expect(row('app')!.classes()).toContain('part')

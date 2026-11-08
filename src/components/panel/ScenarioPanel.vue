@@ -16,7 +16,7 @@ import Markdown from './Markdown.vue'
 import DesignNote from './DesignNote.vue'
 import PanelCard from './PanelCard.vue'
 import CheckCard from './CheckCard.vue'
-import type { CheckRow } from './panelCheck'
+import { scenarioCheckRowsOf } from './checkRows'
 
 const desk = useDesk()
 /** LY-13、LY-7：描述里面板头是一行操作（不写名称与 ID），核对里不出现 */
@@ -45,25 +45,7 @@ const refsCount = computed(() => refs.value.length + referencedBy.value.length)
 const evCounts = computed(() => desk.evidence.counts.value)
 const EV_SHORT = { name: '按名字', module: '按依赖', none: '无证据', skipped: '不判定' } as const
 
-const rows = computed<CheckRow[]>(() => {
-  const missing = local.value ? (sc.value?.evidence ?? []).filter(f => !hasFile(f)) : []
-  const none = evCounts.value?.none ?? 0
-  if (!sc.value?.evidence?.length && !evCounts.value)
-    return [{ key: 'evidence', label: '证据', state: 'none', text: '没有写证据文件，也没有代码事实', items: [] }]
-  const items = [
-    ...missing.map(f => ({ text: `${f}：不在源码清单中`, target: 'boundary.evidence' })),
-    ...(none ? [{ text: `${none} 步没有代码证据（S16）`, target: 'boundary.evidence' }] : []),
-  ]
-  return [
-    {
-      key: 'evidence',
-      label: '证据',
-      state: items.length ? 'bad' : 'ok',
-      text: `证据文件 ${sc.value?.evidence?.length ?? 0}${evCounts.value ? ` · 各步无证据 ${none}` : ''}`,
-      items,
-    },
-  ]
-})
+const rows = computed(() => scenarioCheckRowsOf(desk))
 
 function pointAt(id: string) {
   if (idx.value.actors.has(id)) desk.select({ kind: 'actor', id })

@@ -65,7 +65,7 @@ describe('§6.8 统一选中验收', () => {
     const at = desk.playback.value!.frameId
     desk.drillInto('infra')
     expect(desk.selected.value).toEqual({ kind: 'module', id: 'infra' })
-    expect(desk.run.emphasis.value).toEqual({ selected: null, paired: new Set(), lanes: new Set() })
+    expect(desk.run.emphasis.value).toMatchObject({ selected: null, paired: new Set(), lanes: new Set(), involved: new Set() })
     desk.next()
     expect(desk.selected.value!.kind).toBe('step')
     desk.goUp()

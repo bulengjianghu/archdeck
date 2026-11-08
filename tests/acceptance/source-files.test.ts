@@ -12,7 +12,7 @@ import { readProject } from '../../vite/readModelDir'
 import { readExports, readSourceFile, readSourceTree } from '../../vite/readSource'
 import { createDeskState, type SourceFetcher } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
-import NavTree from '../../src/components/tree/SideBar.vue'
+import { SideHost as NavTree, sideTab } from '../components/sideHost'
 import Panel from '../../src/components/panel/Panel.vue'
 import SourceView from '../../src/components/source/SourceView.vue'
 import { assignFiles, sourceIssues, type RawFile, type SourcePayload } from '../../src/model'
@@ -63,7 +63,7 @@ async function open(project: string, url = `/p/${project}`, extra: RawFile[] = [
   const panel = mount(Panel, { global })
   await settle()
   /** LY-4b：「文件」是模块页的按文件树 */
-  const tab = (name: string) => (name === '文件' ? nav.find('[data-side-mode=files]') : nav.findAll('[role=tab]').find(t => t.text() === name)!)
+  const tab = (name: string) => sideTab(nav, name)
   const fileRow = (f: string) => nav.findAll('.row.file').find(r => r.attributes('data-path') === f)
   return { desk, router, nav, panel, tab, fileRow, global }
 }
@@ -116,8 +116,9 @@ describe('§6.4 源代码验收', () => {
     // 模块树展开到归属模块并标出
     const nav = mount(NavTree, { global })
     await settle()
-    await nav.find('[data-side-page=modules]').trigger('click')
-    await nav.findAll('.mode button')[0].trigger('click')
+    await nav.find('[data-rail=modules]').trigger('click')
+    await nav.find('[data-side-filter]').trigger('click')
+    await nav.findAll('[aria-label=树] button')[0].trigger('click')
     await settle()
     expect(
       nav
@@ -194,11 +195,11 @@ describe('§6.4 源代码验收', () => {
     expect(ids()).toEqual(['explainer', 'description', 'check'])
     desk.openScenario('sc.open-and-play')
     await settle()
-    expect(ids()).toEqual(['sequence', 'explainer', 'check', 'description'])
+    expect(ids()).toEqual(['sequence', 'explainer', 'description', 'check'])
     desk.selectFile('src/state/useDeskState.ts')
     await settle()
     expect(desk.selected.value).toEqual({ kind: 'file', id: 'src/state/useDeskState.ts' })
-    expect(ids()).toEqual(['sequence', 'explainer', 'check', 'src:src/state/useDeskState.ts~', 'description'])
+    expect(ids()).toEqual(['sequence', 'src:src/state/useDeskState.ts~', 'explainer', 'description', 'check'])
     expect(ws.state.value.groups[0].active).toBe('src:src/state/useDeskState.ts')
     const before = ws.state.value
     desk.next()
@@ -210,12 +211,12 @@ describe('§6.4 源代码验收', () => {
     // 另一个文件：替换预览标签
     desk.selectFile('src/state/inject.ts')
     await settle()
-    expect(ids()).toEqual(['sequence', 'explainer', 'check', 'src:src/state/inject.ts~', 'description'])
+    expect(ids()).toEqual(['sequence', 'src:src/state/inject.ts~', 'explainer', 'description', 'check'])
     // 关掉标签后再选同一个文件：选中没变，不重新打开（只有选中变为另一个文件才打开）
     ws.dispatch({ type: 'close', id: 'src:src/state/inject.ts' })
     desk.selectFile('src/state/inject.ts')
     await settle()
-    expect(ids()).toEqual(['sequence', 'explainer', 'check', 'description'])
+    expect(ids()).toEqual(['sequence', 'explainer', 'description', 'check'])
     // 退出场景：回到自由情境的排布，时序图移出（LY-9a）
     desk.closeScenario()
     await settle()

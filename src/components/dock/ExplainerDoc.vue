@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
  * 图解的内容（EX-3、EX-4、EX-7，ADR-0055；LY-13、LY-15，ADR-0064）：顶部一行 ↑ ↓ 图解导航、「在画布上选中」与过期提示（可展开改动），下面是沙箱 iframe。
+ * 导航不单独占一条带底线的栏：它是图解内容的第一行，iframe 按内容撑高（arch:size），整块在标签里一起滚动（负责人 2026-11-08 走查）。
  * iframe 只给 allow-scripts；父页只接受来源是这个 iframe 窗口的消息：arch:select 即选中模块（视图随主语跟随，LY-15），
  * arch:open 看另一份图解（选中它并激活图解标签），arch:hover 在画布上提示引用的位置（LY-15）。↑ ↓ 同 arch:open。
  */
@@ -15,6 +16,8 @@ const desk = useDesk()
 const ex = desk.explainers
 const frame = ref<HTMLIFrameElement | null>(null)
 const showChanges = ref(false)
+/** iframe 内容的高度（arch:size）；没收到前给一个缺省高度 */
+const frameHeight = ref<number | null>(null)
 
 const name = (id: string) => (id === desk.index.value?.rootId ? desk.index.value.model.system.name : (desk.index.value?.modules.get(id)?.name ?? id))
 const html = computed(() => ex.html(props.module))
@@ -28,6 +31,10 @@ onBeforeUnmount(() => peek(null))
 
 function onMessage(e: MessageEvent) {
   if (!frame.value || e.source !== frame.value.contentWindow || !isExplainerMessage(e.data)) return
+  if (e.data.type === 'arch:size') {
+    frameHeight.value = e.data.height
+    return
+  }
   const id = e.data.module
   if (e.data.type === 'arch:hover') {
     peek(id || null)
@@ -68,7 +75,16 @@ onBeforeUnmount(() => window.removeEventListener('message', onMessage))
       </li>
       <li class="muted">引用的原文已是现在的描述；核对讲法后由 AI 运行 <code>arch explainer --write</code> 更新依据</li>
     </ul>
-    <iframe v-if="html" ref="frame" class="frame" :title="`图解 · ${name(module)}`" sandbox="allow-scripts" referrerpolicy="no-referrer" :srcdoc="srcdoc" />
+    <iframe
+      v-if="html"
+      ref="frame"
+      class="frame"
+      :title="`图解 · ${name(module)}`"
+      sandbox="allow-scripts"
+      referrerpolicy="no-referrer"
+      :srcdoc="srcdoc"
+      :style="{ height: frameHeight === null ? '100%' : `${frameHeight}px` }"
+    />
     <p v-else class="empty">「{{ name(module) }}」没有图解（描述里找不到它的图解文件）</p>
   </div>
 </template>
@@ -79,17 +95,22 @@ onBeforeUnmount(() => window.removeEventListener('message', onMessage))
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+  overflow: auto;
 }
 
+/* 导航是内容的第一行：不画底线、跟着内容滚动 */
 .bar {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  border-bottom: 1px solid var(--border);
+  padding: 8px 16px 0;
   font-size: 12px;
   flex: none;
   min-width: 0;
+}
+
+.bar:empty {
+  display: none;
 }
 
 .downs {
@@ -131,15 +152,13 @@ onBeforeUnmount(() => window.removeEventListener('message', onMessage))
 }
 
 .changes {
-  margin: 0;
+  margin: 6px 16px 0;
   padding: 6px 12px 8px 28px;
-  border-bottom: 1px solid var(--border);
+  border-radius: 8px;
   font-size: 12px;
   color: var(--text-2);
   background: var(--bg);
   flex: none;
-  max-height: 30%;
-  overflow: auto;
 }
 
 .changes .kind {
@@ -155,9 +174,10 @@ onBeforeUnmount(() => window.removeEventListener('message', onMessage))
 }
 
 .frame {
-  flex: 1 1 auto;
+  flex: none;
+  display: block;
   width: 100%;
-  min-height: 0;
+  min-height: 120px;
   border: none;
   background: var(--surface);
   color-scheme: light dark;

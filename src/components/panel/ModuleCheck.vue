@@ -6,7 +6,6 @@
  */
 import { computed, ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'
-import { HOT_SURFACE_MODULES, moduleName } from '@/model'
 import Markdown from './Markdown.vue'
 import Section from './Section.vue'
 import CheckCard from './CheckCard.vue'
@@ -22,112 +21,20 @@ import ModuleStructure from './ModuleStructure.vue'
 import ModuleSurface from './ModuleSurface.vue'
 import ModuleDecisions from './ModuleDecisions.vue'
 import ReviewSection from './ReviewSection.vue'
-import { moduleCheckRows, relationTypeLabel, type CheckItem } from './panelCheck'
+import { moduleCheckRowsOf, moduleReviewInScope } from './checkRows'
 import { useSurfaceFocus } from './surfaceFocus'
-import { BASIS_CHANGE_TEXT, staleText } from '../shared/explainerText'
+import { BASIS_CHANGE_TEXT } from '../shared/explainerText'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
 const idx = computed(() => desk.index.value!)
 const m = computed(() => idx.value.modules.get(props.id)!)
-const name = (id: string) => (idx.value.actors.get(id)?.name ?? moduleName(idx.value, id)) as string
-const inside = (id: string) => !!idx.value.pathOf.get(id)?.includes(props.id)
-
-const ready = computed(() => desk.facts.status.value === 'ready')
-const detail = computed(() => (ready.value ? desk.facts.moduleDetail(props.id) : null))
+const rows = computed(() => moduleCheckRowsOf(desk, props.id))
 const crossing = computed(() => desk.facts.collaborations(props.id).flatMap(c => c.relations))
-
-/** 一条关系相对本模块的写法：「→ 对端（类型）」/「← 对端（类型）」 */
-const relText = (rid: string) => {
-  const r = idx.value.relations.get(rid)!
-  const out = inside(r.from)
-  return `${out ? '→' : '←'} ${name(out ? r.to : r.from)}（${relationTypeLabel(r.type)}）`
-}
-
 /** EX-7：本模块图解的依据状态（没有图解为 null） */
 const explainer = computed(() => desk.explainers.status(props.id))
 /** 确认行：徽标（已确认 / 需复核 / 未确认）只在范围内或已有记录时出现（ReviewSection 同口径） */
-const reviewInScope = computed(() => idx.value.stratumOf.get(props.id)?.members.length === 1 || desk.review.scope.value.has(props.id))
-const rows = computed(() => {
-  const d = detail.value
-  const unconfirmed: CheckItem[] = ready.value
-    ? desk.facts.isolatedOf(props.id).map(rid => ({ text: `${relText(rid)}：代码里两端之间没有依赖`, relation: rid }))
-    : []
-  const undescribed: CheckItem[] = d
-    ? [
-        ...d.undescribed.out.map(x => ({ text: `→ ${name(x)}：代码有依赖，描述没写关系`, target: 'evidence.governance' })),
-        ...d.undescribed.in.map(x => ({ text: `← ${name(x)}：代码有依赖，描述没写关系`, target: 'evidence.governance' })),
-      ]
-    : []
-  const violations: CheckItem[] = d
-    ? [
-        ...d.violations.out.map(v => ({ text: `→ ${name(v.other)}：${v.reason}`, target: 'evidence.governance' })),
-        ...d.violations.in.map(v => ({ text: `← ${name(v.other)}：${v.reason}`, target: 'evidence.governance' })),
-      ]
-    : []
-  const cycles: CheckItem[] = d ? d.cycles.map(c => ({ text: `模块环：${c.map(name).join(' ↔ ')}`, target: 'evidence.governance' })) : []
-  if (ready.value && desk.facts.selectedCycle.value) cycles.push({ text: '本层环：选中的节点在本层的环里', target: 'evidence.governance' })
-  const against: CheckItem[] = ready.value
-    ? desk.facts.againstOf(props.id).map(a => ({
-        text: `→ ${name(a.module)}：依赖比自己更易变的模块（I ${a.hit.from.toFixed(2)} → ${a.hit.to.toFixed(2)}）`,
-        target: 'boundary.structure',
-      }))
-    : []
-  const sm = ready.value ? desk.facts.surfaceMetricsOf(props.id) : null
-  const surface: CheckItem[] = sm
-    ? [
-        ...sm.bypasses.map(f => ({ text: `越过入口：${f.from}:${f.line} → ${f.via}`, target: 'boundary.surface' })),
-        ...sm.uses
-          .filter(u => u.element.state === 'exported-only' && u.modules.length >= HOT_SURFACE_MODULES)
-          .map(u => ({ text: `热表面未声明：${u.element.name} 被 ${u.modules.length} 个模块使用`, target: 'boundary.surface' })),
-      ]
-    : []
-  const s = desk.facts.splitOf(props.id)
-  const long = desk.files.linesOf(props.id).long
-  const split: CheckItem[] = []
-  if (s) {
-    const to = 'evidence.split'
-    if (s.noFiles) split.push({ text: '不占任何文件：代码在别的模块的文件里', target: to })
-    for (const x of s.shared)
-      split.push({
-        text: `与 ${x.modules
-          .filter(y => y !== props.id)
-          .map(name)
-          .join('、')} 共用 ${x.file}`,
-        target: to,
-      })
-    if (s.children.noFiles.length) split.push({ text: `${s.children.noFiles.length} 个子模块不占文件`, target: to })
-    for (const x of s.children.shared) split.push({ text: `子模块 ${x.modules.map(name).join('、')} 共用 ${x.file}`, target: to })
-    if (s.noDeps) split.push({ text: '子模块之间有交互、没有值依赖', target: to })
-    else for (const x of s.undepended) split.push({ text: `${name(x.from)} 与 ${name(x.to)} 交互却没有值依赖`, target: to })
-    if (long) split.push({ text: `${long} 个文件超过 ${desk.files.maxLines.value} 行`, target: 'evidence.source' })
-  }
-  // ST-1（ADR-0060）：子模块超过七个却没有声明分层——与代码事实无关的描述信号，单击跳到理解卡的「怎么分」
-  const childCount = (desk.index.value?.childrenOf.get(props.id) ?? []).length
-  if (childCount > 7 && !(desk.index.value?.strata.get(props.id) ?? []).length)
-    split.push({ text: `${childCount} 个子模块未声明分层：归纳 2–5 个有原则的层，或记一条拆分信号（ST-1）`, target: 'split', hint: true })
-  const ev = desk.evolution.moduleOf(props.id)
-  const stats = desk.evolution.stats.value
-  const st = desk.review.of(props.id)
-  return moduleCheckRows({
-    facts: ready.value && !!d,
-    noFactsReason: { loading: '代码事实读取中', design: '设计版本没有代码事实', error: '没有代码事实（源码不可用）', ready: '没有代码事实' }[
-      desk.facts.status.value
-    ],
-    relations: crossing.value.length,
-    unconfirmed,
-    undescribed,
-    violations,
-    cycles,
-    against,
-    surfaceWidth: sm?.w ?? null,
-    surface,
-    split,
-    evolution: ev && stats && ev.changes ? { changes: ev.changes, fixes: ev.fixes, heat: Math.round(ev.heat), days: stats.days } : null,
-    review: { status: st.status, date: st.entry?.at, changes: st.diff?.count, inScope: reviewInScope.value },
-    ...(explainer.value?.stale ? { explainerStale: staleText(explainer.value) } : {}),
-  })
-})
+const reviewInScope = computed(() => moduleReviewInScope(desk, props.id))
 
 // C9：画布单击本模块的表面元素时展开核对卡（「表面元素」清单收到后自己展开并定位）
 const focus = useSurfaceFocus()

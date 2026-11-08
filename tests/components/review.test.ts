@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import Panel from '../../src/components/panel/Panel.vue'
-import ModuleTree from '../../src/components/tree/ModuleTree.vue'
+import SideBar from '../../src/components/tree/SideBar.vue'
 import { createDeskState, type ModelWriter } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
 import { loadModel, reviewEntries, reviewHash, type ReviewedInput } from '../../src/model'
@@ -24,7 +24,7 @@ const idx = loadModel(sampleFiles()).index
 const [ok] = reviewEntries(idx, ['infra.framework'], { source: 'manual', at: '2026-10-22', note: '看过' })
 const REVIEWED = `reviewed:\n  - ${JSON.stringify(ok)}\n  - { module: infra.mus, at: '2026-10-20', hash: stale, source: 'sketch:next', summary: { responsibility: 旧职责, provides: [{ id: if.gone, signature: 'gone(): void' }] } }\n`
 
-async function mountWith(Comp: typeof Panel | typeof ModuleTree, url: string, reviewed = REVIEWED, version?: { design: string; revision: string }) {
+async function mountWith(Comp: typeof Panel | typeof SideBar, url: string, reviewed = REVIEWED, version?: { design: string; revision: string }) {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
   await router.push(url)
   const batches: ReviewedInput[][] = []
@@ -128,17 +128,20 @@ describe('系统与层的确认（RV-7、Z7，ADR-0042）', () => {
 
 describe('模块树的需复核标记（RV-4）', () => {
   it('需复核的节点带「需复核」，已确认的带 ✓；「只看需复核」只列含需复核模块的分支并展开到它', async () => {
-    const { wrapper } = await mountWith(ModuleTree, '/')
+    // LY-4d：「只看需复核」收在侧栏「筛选 ▾」弹层里
+    const { wrapper } = await mountWith(SideBar, '/')
     const row = (id: string) => wrapper.find(`[data-id="${id}"]`)
     expect(row('infra').exists()).toBe(true)
-    expect(wrapper.find('.tools').text()).toContain('需复核 1')
-    await wrapper.find('.tools input').setValue(true)
+    await wrapper.find('[data-side-filter]').trigger('click')
+    expect(wrapper.find('.chk').text()).toContain('只看需复核 1')
+    await wrapper.find('.chk input').setValue(true)
     await flushPromises()
     expect(row('infra.mus').exists()).toBe(true)
     expect(row('infra.mus').find('.tag.stale').text()).toBe('需复核')
     expect(row('infra.framework').exists()).toBe(false)
     expect(row('app').exists()).toBe(false)
-    await wrapper.find('.tools input').setValue(false)
+    expect(wrapper.find('[data-filter-count]').text()).toBe('1')
+    await wrapper.find('.chk input').setValue(false)
     await flushPromises()
     expect(row('infra.framework').find('.tag.reviewed').text()).toBe('✓')
     expect(row('app').exists()).toBe(true)

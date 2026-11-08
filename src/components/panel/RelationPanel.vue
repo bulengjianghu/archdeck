@@ -21,7 +21,7 @@ import StructureFacts, { type StructureGroup } from './StructureFacts.vue'
 import PanelCard from './PanelCard.vue'
 import CheckCard from './CheckCard.vue'
 import { usePanelJump } from './panelNotices'
-import type { CheckRow } from './panelCheck'
+import { relationCheckRowsOf } from './checkRows'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -32,44 +32,11 @@ const name = (id: string) => moduleName(desk.index.value!, id)
 const point = (id: string) => (desk.index.value!.actors.has(id) ? desk.select({ kind: 'actor', id }) : desk.revealModule(id))
 const runtime = computed(() => RUNTIME_RELATION_TYPES.includes(r.value.type))
 const fact = computed(() => desk.facts.relationFact(props.id))
-const carrier = computed(() => desk.facts.carrierOf(props.id))
 
 // ── 核对卡（PC-10）：证实（K6，写了 via 或同文件概念拆分的不判定不算异常）、承载缺段（K20）；清单来自现有派生，不新算 ──
 const root = ref<HTMLElement | null>(null)
 usePanelJump(root)
-const rows = computed<CheckRow[]>(() => {
-  const f = fact.value
-  const out: CheckRow[] = []
-  if (!f) out.push({ key: 'verify', label: '证实', state: 'none', text: '没有代码事实', items: [] })
-  else if (f.via || f.host || f.status === 'skipped')
-    out.push({ key: 'verify', label: '证实', state: 'none', text: '不判定（经机制、同文件或端点是参与者）', items: [] })
-  else if (f.status === 'unconfirmed')
-    out.push({
-      key: 'verify',
-      label: '证实',
-      state: 'bad',
-      text: '未被代码证实',
-      items: [
-        {
-          text: f.isolated ? '两端之间在代码里没有任何依赖，多半是描述写错（K6）' : '两端之间只有反向的依赖，可能经端口或注入（K6）',
-          target: 'evidence.fact',
-        },
-      ],
-    })
-  else out.push({ key: 'verify', label: '证实', state: 'ok', text: '已被代码证实', items: [] })
-  const c = carrier.value
-  if (c) {
-    const missing = c.segments.filter(x => x.missing)
-    out.push({
-      key: 'carrier',
-      label: '承载',
-      state: missing.length ? 'bad' : 'ok',
-      text: missing.length ? `${c.segments.length} 段中缺 ${missing.length} 段` : `${c.segments.length} 段齐全`,
-      items: missing.map(x => ({ text: `缺段：${name(x.from)} → ${name(x.to)}`, target: 'boundary.carrier' })),
-    })
-  }
-  return out
-})
+const rows = computed(() => relationCheckRowsOf(desk, props.id))
 const purpose = computed(() => purposeOf(r.value))
 
 /** 知识（谁知道谁）：由代码事实给出——依据的依赖与箭头同向 / 反向，经端口，或不判定 */

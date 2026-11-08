@@ -1,60 +1,30 @@
 <script setup lang="ts">
 /**
  * 场景列表（D-1、R4、R4a、R17）：默认只列与当前层次相关的场景（有帧端点在当前子树内），可切到全部、按发起者筛选；
- * R17：默认只列主流程（kind: main），可切到「全部类别」（记在本机，不进 URL），非主流程项标出类别；
+ * R17：默认只列主流程（kind: main），可切到「全部类别」（记在本机，不进 URL），非主流程项标出类别。
+ * 筛选是侧栏与画布「场景 ▾」共用的一份（sideFilters）：侧栏页里收在「筛选 ▾」弹层（LY-4d），下拉里平铺在列表上方；
  * 选定即进入回放（交互视角 + 这个场景，LY-6），不改变层次。住在侧栏「场景」页（LY-4，inline）。声明了证据文件的场景标「测试 N」（N 为证据文件数，S15、D-20）——只说明声明了测试，不说明测过了；无证据步骤标「? N」（S17）。
  */
-import { computed, ref, watch } from 'vue'
+import { computed, provide } from 'vue'
 import { useDesk } from '@/state/inject'
-import { filterScenariosByKind, moduleName, scenarioKind, type ScenarioKind } from '@/model'
+import { scenarioKind, type ScenarioKind } from '@/model'
+import { scenarioListing } from './tree/scenarioListing'
+import { SIDE_FILTERS, useSideFilters } from './shared/sideFilters'
+import ScenarioFilters from './tree/ScenarioFilters.vue'
 
 defineProps<{ /** 侧栏页里平铺（不是弹出层） */ inline?: boolean }>()
 const emit = defineEmits<{ picked: [] }>()
 const desk = useDesk()
-const scope = ref<'level' | 'all'>('level')
-const trigger = ref('')
-
-/** R17：类别筛选记在本机（所有项目共用），不进 URL */
-const KINDS_KEY = 'h5p-arch-desk:scenario-kinds'
-const readKinds = (): 'main' | 'all' => {
-  try {
-    return localStorage.getItem(KINDS_KEY) === 'all' ? 'all' : 'main'
-  } catch {
-    return 'main'
-  }
-}
-const kinds = ref<'main' | 'all'>(readKinds())
-watch(kinds, v => {
-  try {
-    localStorage.setItem(KINDS_KEY, v)
-  } catch {
-    /* 存不了就算了 */
-  }
-})
+const filters = useSideFilters()
+// 下拉里平铺的筛选（ScenarioFilters）读同一份——没有项目视图提供时也一样
+provide(SIDE_FILTERS, filters)
+const { scope, kinds, trigger } = filters
 const KIND_LABEL: Record<ScenarioKind, string> = { main: '主流程', exception: '异常', maintenance: '维护' }
 
-const all = computed(() =>
-  desk.run.catalog.value.map(({ scenario: s, trigger: by, messages }) => ({ s, by, byName: by ? moduleName(desk.index.value!, by) : '—', count: messages })),
-)
-const related = computed(() => new Set(desk.index.value?.scenariosOf.get(desk.levelId.value) ?? []))
-const triggers = computed(() => [...new Map(all.value.filter(x => x.by).map(x => [x.by!, x.byName])).entries()])
-const inScope = computed(() => all.value.filter(x => (scope.value === 'all' || related.value.has(x.s.id)) && (!trigger.value || x.by === trigger.value)))
-const mainCount = computed(
-  () =>
-    filterScenariosByKind(
-      inScope.value.map(x => x.s),
-      'main',
-    ).length,
-)
-const shown = computed(() => {
-  const keep = new Set(
-    filterScenariosByKind(
-      inScope.value.map(x => x.s),
-      kinds.value,
-    ),
-  )
-  return inScope.value.filter(x => keep.has(x.s))
-})
+const listing = computed(() => scenarioListing(desk, { scope: scope.value, kinds: kinds.value, trigger: trigger.value }))
+const all = computed(() => listing.value.all)
+const inScope = computed(() => listing.value.inScope)
+const shown = computed(() => listing.value.shown)
 
 function pick(id: string) {
   desk.openScenario(id)
@@ -64,20 +34,7 @@ function pick(id: string) {
 
 <template>
   <div class="scenario-list" :class="{ inline }" :role="inline ? 'region' : 'dialog'" aria-label="选择场景">
-    <div class="filters">
-      <div class="seg" role="group" aria-label="范围">
-        <button :class="{ on: scope === 'level' }" @click="scope = 'level'">本层相关 {{ related.size }}</button>
-        <button :class="{ on: scope === 'all' }" @click="scope = 'all'">全部 {{ all.length }}</button>
-      </div>
-      <div class="seg" role="group" aria-label="类别">
-        <button :class="{ on: kinds === 'main' }" title="只列主流程（kind: main）" @click="kinds = 'main'">主流程 {{ mainCount }}</button>
-        <button :class="{ on: kinds === 'all' }" title="含异常处理与维护类流程" @click="kinds = 'all'">全部类别 {{ inScope.length }}</button>
-      </div>
-      <select v-model="trigger" aria-label="按发起者筛选">
-        <option value="">全部发起者</option>
-        <option v-for="[id, name] in triggers" :key="id" :value="id">{{ name }}</option>
-      </select>
-    </div>
+    <ScenarioFilters v-if="!inline" class="filters" />
     <ul v-if="shown.length">
       <li v-for="x in shown" :key="x.s.id">
         <button class="item" :class="{ current: desk.playback.value?.scenarioId === x.s.id }" @click="pick(x.s.id)">
@@ -135,44 +92,7 @@ function pick(id: string) {
 }
 
 .filters {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px;
   margin-bottom: 6px;
-}
-
-.seg {
-  display: flex;
-}
-
-.seg button {
-  font-size: 12px;
-  border-radius: 0;
-}
-
-.seg button:first-child {
-  border-radius: 6px 0 0 6px;
-}
-
-.seg button:last-child {
-  border-radius: 0 6px 6px 0;
-  margin-left: -1px;
-}
-
-.seg button.on {
-  background: var(--accent-soft);
-  color: var(--accent);
-  border-color: var(--accent);
-  position: relative;
-}
-
-select {
-  font-size: 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
 }
 
 ul {

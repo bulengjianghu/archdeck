@@ -211,7 +211,7 @@ describe('回放', () => {
     expect(emphasisOf(base, emCtx(base))).toBeNull()
     const start = open('sys').state
     expect(selectedOf(start)).toEqual({ kind: 'scenario', id: 'sc.play' })
-    expect(emphasisOf(start, emCtx(start))).toEqual({ selected: null, paired: new Set(), lanes: new Set() })
+    expect(emphasisOf(start, emCtx(start))).toEqual({ selected: null, current: null, paired: new Set(), lanes: new Set(), involved: new Set() })
     const s = open('infra', next, next).state
     const em = emphasisOf({ ...s, selection: { kind: 'module', id: 'infra.mus' } }, emCtx(s))!
     expect(em.selected).toBeNull()
@@ -229,6 +229,30 @@ describe('回放', () => {
     expect(lanes(s, { kind: 'file', id: 'x.ts' }, ['infra.mus'])).toEqual(['infra.mus'])
   })
 
+  it('R15a、R16a（负责人 2026-11-08 走查）：选中模块时进度所在的消息保留（current），它参与的消息突出（involved），进度不动', () => {
+    const s = open('infra', next, next).state
+    const stepEm = emphasisOf(s, emCtx(s))!
+    expect(stepEm.selected).not.toBeNull()
+    expect(stepEm.current).toBe(stepEm.selected)
+    const seq0 = emCtx(s).sequence!
+    const target = seq0.participants.find(p => p.kind === 'module' && seq0.messages.some(m => m.pathIndex !== undefined && m.to === p.nodeId))!
+    const picked = run(s, { type: 'select', selection: { kind: 'module', id: target.id } }).state
+    expect(picked.playback!.frameId).toBe(s.playback!.frameId)
+    const em = emphasisOf(picked, emCtx(picked))!
+    expect(em.selected).toBeNull()
+    expect(em.current).toBe(stepEm.selected)
+    expect([...em.lanes]).toEqual([target.nodeId])
+    const seq = emCtx(picked).sequence!
+    const expected = seq.messages.filter(m => m.pathIndex !== undefined && (em.lanes.has(m.from) || em.lanes.has(m.to))).map(m => m.pathIndex)
+    expect(expected.length).toBeGreaterThan(0)
+    expect(expected.length).toBeLessThan(seq.messages.filter(m => m.pathIndex !== undefined).length)
+    expect([...em.involved].sort()).toEqual(expected.sort())
+    // 开头（没有进度）：current 为 null
+    const start = open('infra').state
+    const atStart = emphasisOf({ ...start, selection: { kind: 'module', id: 'infra.mus' } }, emCtx(start))!
+    expect(atStart.current).toBeNull()
+  })
+
   it('R16：选中的模块在本层包含多条泳道时全部突出；文件归属多个模块取并集；选中步骤本层不可见时不突出', () => {
     const s = open('sys', next).state
     // 分层总览：层 infra 含核心模块泳道与「infra · 其他」
@@ -237,7 +261,7 @@ describe('回放', () => {
     expect(lanes(s, { kind: 'file', id: 'x.ts' }, ['infra.mus', 'domain.services'])).toEqual(['domain.services', 'infra'])
     // 选中的步骤在本层不可见：不突出
     const hidden = { ...s, playback: { ...s.playback!, frameId: 'nope' } }
-    expect(emphasisOf(hidden, emCtx(hidden))).toEqual({ selected: null, paired: new Set(), lanes: new Set() })
+    expect(emphasisOf(hidden, emCtx(hidden))).toEqual({ selected: null, current: null, paired: new Set(), lanes: new Set(), involved: new Set() })
   })
 
   it('R13：指向某一步——选中它，进度前进或后退到该步；在未选分支上先改选；落在合并消息的第一帧', () => {

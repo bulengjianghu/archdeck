@@ -32,15 +32,18 @@ describe('LY-11 缺省排布由情境推出', () => {
     expect(actives(EMPTY_WORKSPACE)).toEqual([V('explainer')])
     expect(EMPTY_WORKSPACE.context).toBe('free')
   })
-  it('场景 = 上〔时序图 图解 核对〕下〔描述〕，时序图与描述激活', () => {
+  it('场景 = 上〔时序图〕下〔图解 描述 核对〕，时序图与图解激活，约 46/54（负责人 2026-11-08 走查）', () => {
     const s = run(EMPTY_WORKSPACE, { type: 'setContext', context: 'scenario' })
-    expect(groups(s)).toEqual([['sequence', 'explainer', 'check'], ['description']])
-    expect(actives(s)).toEqual([V('sequence'), V('description')])
-    expect(s.split).toBe(DEFAULT_ARRANGEMENTS.scenario.split)
+    expect(groups(s)).toEqual([['sequence'], ['explainer', 'description', 'check']])
+    expect(actives(s)).toEqual([V('sequence'), V('explainer')])
+    expect(s.split).toBe(0.46)
   })
-  it('LY-11a 草图编辑 = 上〔对话 图解〕下〔描述〕，对话固定、激活', () => {
+  it('LY-11a、LY-11d 草图编辑 = 上〔对话 图解〕下〔描述 核对〕，对话固定、激活', () => {
     const s = run(EMPTY_WORKSPACE, { type: 'setContext', context: 'sketch' })
-    expect(groups(s)).toEqual([['dlg', 'explainer'], ['description']])
+    expect(groups(s)).toEqual([
+      ['dlg', 'explainer'],
+      ['description', 'check'],
+    ])
     expect(actives(s)).toEqual(['dlg', V('description')])
   })
   it('回到自由情境即回到自由的排布；同一情境无动作', () => {
@@ -74,32 +77,43 @@ describe('LY-11 缺省排布由情境推出', () => {
     expect(actives(free)).toEqual(['src:a.ts'])
   })
   it('LY-11b 记忆只记视图标签与对话，不记资料标签', () => {
-    const s = run(EMPTY_WORKSPACE, { type: 'open', doc: src('a.ts'), pin: true }, { type: 'close', id: V('check') })
-    expect(s.memory.free?.groups).toEqual([['explainer', 'description']])
-    expect(s.memory.free?.active).toEqual([null])
+    const s = run(EMPTY_WORKSPACE, { type: 'open', doc: src('a.ts'), pin: true }, { type: 'move', id: V('check'), group: 0, index: 0 })
+    expect(s.memory.free?.groups).toEqual([['check', 'explainer', 'description']])
+    expect(s.memory.free?.active).toEqual(['check'])
   })
 })
 
-describe('LY-9 常驻', () => {
-  it('图解不可关；时序图在场景情境不可关；描述、核对可关', () => {
-    expect(isResident(EMPTY_WORKSPACE, V('explainer'))).toBe(true)
+describe('LY-9 常驻（负责人 2026-11-08 走查修订）', () => {
+  it('图解、描述、核对始终常驻、不可关；时序图在场景情境常驻', () => {
+    for (const v of ['explainer', 'description', 'check'] as const) {
+      expect(isResident(EMPTY_WORKSPACE, V(v))).toBe(true)
+      expect(workspaceTransition(EMPTY_WORKSPACE, { type: 'close', id: V(v) })).toBe(EMPTY_WORKSPACE)
+    }
     expect(isResident(EMPTY_WORKSPACE, V('sequence'))).toBe(false)
     expect(isResident({ context: 'scenario' }, V('sequence'))).toBe(true)
-    expect(workspaceTransition(EMPTY_WORKSPACE, { type: 'close', id: V('explainer') })).toBe(EMPTY_WORKSPACE)
     const sc = run(EMPTY_WORKSPACE, { type: 'setContext', context: 'scenario' })
     expect(workspaceTransition(sc, { type: 'close', id: V('sequence') })).toBe(sc)
-    expect(groups(run(EMPTY_WORKSPACE, { type: 'close', id: V('description') }))).toEqual([['explainer', 'check']])
+    expect(isResident(EMPTY_WORKSPACE, 'src:a.ts')).toBe(false)
   })
-  it('LY-9a 退出场景时时序图移出；没有场景时加不进时序图', () => {
+  it('LY-9a 退出场景时时序图移出；资料标签照样可关', () => {
     const s = run(EMPTY_WORKSPACE, { type: 'setContext', context: 'scenario' }, { type: 'setContext', context: 'free' })
     expect(groups(s).flat()).not.toContain('sequence')
-    expect(workspaceTransition(EMPTY_WORKSPACE, { type: 'addView', view: 'sequence', group: 0 })).toBe(EMPTY_WORKSPACE)
+    const doc = run(EMPTY_WORKSPACE, { type: 'open', doc: src('a.ts'), pin: true }, { type: 'close', id: 'src:a.ts' })
+    expect(groups(doc)).toEqual(groups(EMPTY_WORKSPACE))
   })
-  it('规整：丢了的常驻标签放回上组最前；不该在的时序图移出', () => {
+  it('规整：丢了的图解 / 时序图放回上组最前，丢了的描述 / 核对放回末组最后；不该在的时序图移出', () => {
     const bare: WorkspaceState = { ...EMPTY_WORKSPACE, groups: [{ tabs: [], active: null }] }
-    expect(groups(normalize(bare))).toEqual([['explainer']])
+    expect(groups(normalize(bare))).toEqual([['explainer', 'description', 'check']])
     const sc = normalize({ ...bare, context: 'scenario' })
-    expect(groups(sc)).toEqual([['explainer', 'sequence']])
+    expect(groups(sc)).toEqual([['explainer', 'sequence', 'description', 'check']])
+    const two = normalize({
+      ...EMPTY_WORKSPACE,
+      groups: [
+        { tabs: [], active: null },
+        { tabs: [{ id: 'dlg', kind: 'doc', doc: { kind: 'dialogue' }, preview: false }], active: 'dlg' },
+      ],
+    })
+    expect(groups(two)).toEqual([['explainer'], ['dlg', 'description', 'check']])
     const stray = normalize({
       ...EMPTY_WORKSPACE,
       groups: [{ tabs: [...EMPTY_WORKSPACE.groups[0].tabs, { id: V('sequence'), kind: 'view', view: 'sequence' }], active: V('sequence') }],
@@ -107,20 +121,12 @@ describe('LY-9 常驻', () => {
     expect(groups(stray)).toEqual([['explainer', 'description', 'check']])
     expect(actives(stray)).toEqual([V('explainer')])
   })
-  it('「+」再开被关掉的描述 / 核对：进发起的那一组并激活；已开即激活', () => {
-    const closed = run(EMPTY_WORKSPACE, { type: 'close', id: V('check') })
-    const back = run(closed, { type: 'addView', view: 'check', group: 0 })
-    expect(groups(back)).toEqual([['explainer', 'description', 'check']])
-    expect(actives(back)).toEqual([V('check')])
-    const again = run(EMPTY_WORKSPACE, { type: 'addView', view: 'description', group: 0 })
-    expect(groups(again)).toEqual(groups(EMPTY_WORKSPACE))
-    expect(actives(again)).toEqual([V('description')])
-  })
 })
 
 describe('LY-8 两类标签', () => {
-  it('视图标签按类型各一个：再加同类只激活', () => {
-    const s = run(EMPTY_WORKSPACE, { type: 'addView', view: 'check', group: 0 }, { type: 'addView', view: 'check', group: 0 })
+  it('视图标签按类型各一个：规整去重', () => {
+    const t = EMPTY_WORKSPACE.groups[0].tabs[2]
+    const s = normalize({ ...EMPTY_WORKSPACE, groups: [{ tabs: [...EMPTY_WORKSPACE.groups[0].tabs, t], active: t.id }] })
     expect(groups(s)[0].filter(x => x === 'check')).toHaveLength(1)
   })
   it('资料标签每份一个：再打开只激活它，源代码更新目标行', () => {
@@ -175,20 +181,29 @@ describe('LY-10 分组与拖拽', () => {
   it('一组拖空即合并', () => {
     const s = run(EMPTY_WORKSPACE, { type: 'move', id: V('check'), group: 1, index: 0 }, { type: 'move', id: V('check'), group: 0, index: 1 })
     expect(groups(s)).toEqual([['explainer', 'check', 'description']])
-    const closed = run(EMPTY_WORKSPACE, { type: 'move', id: V('check'), group: 1, index: 0 }, { type: 'close', id: V('check') })
-    expect(groups(closed)).toEqual([['explainer', 'description']])
+    const closed = run(
+      EMPTY_WORKSPACE,
+      { type: 'open', doc: src('a.ts'), pin: true },
+      { type: 'move', id: 'src:a.ts', group: 1, index: 0 },
+      { type: 'close', id: 'src:a.ts' },
+    )
+    expect(groups(closed)).toEqual([['explainer', 'description', 'check']])
   })
   it('至多两组：没有第三组；只剩一个标签时不能开下组（拖空即合并，原样）', () => {
     const two = run(EMPTY_WORKSPACE, { type: 'move', id: V('check'), group: 1, index: 0 })
     expect(workspaceTransition(two, { type: 'move', id: V('description'), group: 2, index: 0 })).toBe(two)
-    const lone = run(EMPTY_WORKSPACE, { type: 'close', id: V('description') }, { type: 'close', id: V('check') })
-    expect(workspaceTransition(lone, { type: 'move', id: V('explainer'), group: 1, index: 0 })).toBe(lone)
+    const lone = run(EMPTY_WORKSPACE, { type: 'setContext', context: 'scenario' }, { type: 'move', id: V('explainer'), group: 0, index: 1 })
+    expect(groups(lone)[1]).toEqual(['description', 'check'])
+    // 上组空了即合并：把时序图拖到下组
+    const merged = run(EMPTY_WORKSPACE, { type: 'setContext', context: 'scenario' }, { type: 'move', id: V('sequence'), group: 1, index: 0 })
+    expect(groups(merged)).toEqual([['sequence', 'explainer', 'description', 'check']])
   })
   it('关闭后激活同位置的右邻，没有则左邻', () => {
-    const s = run(EMPTY_WORKSPACE, { type: 'activate', id: V('description') }, { type: 'close', id: V('description') })
-    expect(actives(s)).toEqual([V('check')])
-    const t = run(EMPTY_WORKSPACE, { type: 'activate', id: V('check') }, { type: 'close', id: V('check') })
-    expect(actives(t)).toEqual([V('description')])
+    const two = run(EMPTY_WORKSPACE, { type: 'open', doc: src('a.ts'), pin: true }, { type: 'open', doc: src('b.ts'), pin: true })
+    const s = run(two, { type: 'activate', id: 'src:a.ts' }, { type: 'close', id: 'src:a.ts' })
+    expect(actives(s)).toEqual(['src:b.ts'])
+    const t = run(two, { type: 'close', id: 'src:b.ts' })
+    expect(actives(t)).toEqual(['src:a.ts'])
   })
   it('LY-10b 分隔比例 0.2–0.8，改了即记下', () => {
     expect(run(EMPTY_WORKSPACE, { type: 'setSplit', split: 0.95 }).split).toBe(0.8)
@@ -224,13 +239,13 @@ describe('本机记忆读回（restore）', () => {
   it('读回记忆即按当前情境重摆，开合宽度按读回的', () => {
     const memory = { free: { groups: [['check' as const, 'explainer' as const]], active: ['check' as const], split: 0.5 } }
     const s = run(EMPTY_WORKSPACE, { type: 'restore', memory, collapsed: true, width: 0.3, sidebar: { open: true, width: 260 } })
-    expect(groups(s)).toEqual([['check', 'explainer']])
+    expect(groups(s)).toEqual([['check', 'explainer', 'description']])
     expect(actives(s)).toEqual([V('check')])
     expect([s.collapsed, s.width, s.sidebar]).toEqual([true, 0.3, { open: true, width: 260 }])
   })
-  it('记下的排布丢了图解也会补回（常驻优先于记忆）', () => {
+  it('记下的排布丢了常驻标签也会补回（常驻优先于记忆；旧版本里关掉过描述的记忆同样补回）', () => {
     const s = initialWorkspace('free', { free: { groups: [['check']], active: ['check'], split: 0.5 } })
-    expect(groups(s)).toEqual([['explainer', 'check']])
+    expect(groups(s)).toEqual([['explainer', 'check', 'description']])
   })
   it('形状不对的记忆丢弃', () => {
     expect(validArrangement(null)).toBeNull()

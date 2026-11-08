@@ -52,24 +52,32 @@ export interface EmphasisContext {
 export interface Emphasis {
   /** 选中的步骤所在的可见消息（选中样式）；选中的不是步骤、或它在本层不可见时为 null */
   selected: number | null
+  /**
+   * R15a（负责人 2026-11-08 走查）：进度所在的可见消息——不论主语是什么都保留当前步骤的样式（选中步骤时等于 selected）；
+   * 在开头或本层不可见时为 null
+   */
+  current: number | null
+  /** R16a：主语是模块等（突出泳道）时，它参与的可见消息（一端在突出的泳道上）；其余消息变淡 */
+  involved: ReadonlySet<number>
   /** 与选中步骤配对的调用 / 返回（F7）所在的可见消息（浅色「配对」标记） */
   paired: ReadonlySet<number>
   /** 突出的泳道（视图节点 ID） */
   lanes: ReadonlySet<string>
 }
 
-const NONE: Emphasis = { selected: null, paired: new Set(), lanes: new Set() }
+const NONE: Emphasis = { selected: null, current: null, paired: new Set(), lanes: new Set(), involved: new Set() }
 
 /**
- * R15、R16：选中突出——任何时刻只有被选中的那一个对象用选中样式；结构 / 交互视角为 null。
- * 选中步骤：它所在的可见消息 + 配对帧所在的可见消息（本层不可见时都没有）；
- * 选中模块 / 文件（归属模块）/ 关系（两端）/ 视图边（两端）/ 参与者：突出泳道（lanesOf），不突出消息；选中场景：不突出。
+ * R15、R16：选中突出——结构 / 交互视角为 null。进度所在的消息（current）始终保留当前步骤的样式（R15a）。
+ * 选中步骤：它所在的可见消息（即 current）+ 配对帧所在的可见消息（本层不可见时都没有）；
+ * 选中模块 / 文件（归属模块）/ 关系（两端）/ 视图边（两端）/ 参与者：突出泳道（lanesOf）与它们参与的消息（R16a），其余消息变淡；选中场景：不突出。
  */
 export function emphasisOf(state: ViewState, ctx: EmphasisContext): Emphasis | null {
   const pb = state.playback
   if (!pb) return null
   const s = selectedOf(state)
   const { index, scenarioView: view, sequence } = ctx
+  const progress = pb.frameId ? (view?.messageOf.get(pb.frameId) ?? null) : null
   if (s?.kind === 'step') {
     const current = view?.messageOf.get(s.id)
     if (!view || current === undefined) return NONE
@@ -79,9 +87,9 @@ export function emphasisOf(state: ViewState, ctx: EmphasisContext): Emphasis | n
       const m = pair === undefined ? undefined : view.messageOf.get(pair)
       if (m !== undefined && m !== current) paired.add(m)
     }
-    return { selected: current, paired, lanes: new Set() }
+    return { selected: current, current, paired, lanes: new Set(), involved: new Set() }
   }
-  if (!s || s.kind === 'scenario' || !sequence) return NONE
+  if (!s || s.kind === 'scenario' || !sequence) return { ...NONE, current: progress }
   const lanes = new Set<string>()
   const add = (id: string) => lanesOf(index, sequence, state.levelId, id).forEach(n => lanes.add(n))
   switch (s.kind) {
@@ -118,7 +126,9 @@ export function emphasisOf(state: ViewState, ctx: EmphasisContext): Emphasis | n
       break
     }
   }
-  return { selected: null, paired: new Set(), lanes }
+  const involved = new Set<number>()
+  if (lanes.size) for (const m of sequence.messages) if (m.pathIndex !== undefined && (lanes.has(m.from) || lanes.has(m.to))) involved.add(m.pathIndex)
+  return { selected: null, current: progress, paired: new Set(), lanes, involved }
 }
 
 /**

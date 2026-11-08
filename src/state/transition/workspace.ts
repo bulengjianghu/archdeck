@@ -1,8 +1,9 @@
 /**
  * 工作区规则（LY，ADR-0064）：视图区的排布（两组的标签序列、各组激活标签、分隔比例）、视图区与侧栏的开合与宽度是一个值
  * WorkspaceState，只经纯函数 workspaceTransition 改变；每次转移之后统一 normalize（常驻、至多两组、空组合并）。
- * 标签分两类（LY-8）：视图标签（图解、描述、核对、时序图）按类型各一个、内容随主语变——这里只记「有哪几个、摆在哪」，
- * 内容是（主语, 标签类型）的纯函数，不在工作区里；资料标签（源代码、对话、设计说明）不跟随主语。
+ * 标签分三类（LY-8，负责人 2026-11-08 走查修订）：视图标签（图解、描述、核对）按类型各一个、内容随主语变、全部常驻；
+ * 情境标签（时序图）跟随场景、不跟随主语，有场景时常驻；资料标签（源代码、对话、设计说明、问题）不跟随主语。
+ * 这里只记「有哪几个、摆在哪」，内容是（主语 / 场景, 标签类型）的纯函数，不在工作区里。
  * 缺省排布由情境推出（LY-11，defaultArrangement），人改过的排布按情境记进 memory（LY-11b），由同步适配器读写本机。
  * 与 ViewState 不互相约束（情境由协调者从视图状态推出后经 setContext 告知），不进 URL 与历史。
  */
@@ -19,9 +20,13 @@ export type DocRef =
   /** LY-4a：返工清单（原导航树「问题」页签）——会话里的工作物，不跟随主语 */
   | { kind: 'issues' }
 
-/** LY-8：视图标签——看主语的四个角度 */
+/** LY-8：视图标签（看主语的三个角度）与情境标签（时序图，看当前场景）——工作区里都按类型各一个 */
 export type ViewKind = 'explainer' | 'description' | 'check' | 'sequence'
 export const VIEW_KINDS: readonly ViewKind[] = ['explainer', 'description', 'check', 'sequence']
+/** LY-8：情境标签——跟随场景，不跟随主语 */
+export const isContextView = (view: ViewKind) => view === 'sequence'
+/** LY-9：始终常驻的视图标签（跟随主语的三个） */
+export const SUBJECT_VIEWS: readonly ViewKind[] = ['explainer', 'description', 'check']
 
 export type Tab =
   | { id: string; kind: 'view'; view: ViewKind }
@@ -78,8 +83,6 @@ export type WorkspaceAction =
   | { type: 'close'; id: string }
   /** 拖拽：移到第 group 组的第 index 位；group 等于组数即开下组（LY-10） */
   | { type: 'move'; id: string; group: number; index: number }
-  /** 「+」：加一个视图标签到第 group 组（已开即激活它，LY-9、LY-10a） */
-  | { type: 'addView'; view: ViewKind; group: number }
   | { type: 'setSplit'; split: number }
   | { type: 'setContext'; context: LayoutContext }
   | { type: 'setCollapsed'; collapsed: boolean }
@@ -100,11 +103,21 @@ export const defaultSidebarOpen = (windowWidth: number) => windowWidth >= SIDEBA
 
 const clamp = (v: number, [lo, hi]: readonly [number, number]) => Math.min(hi, Math.max(lo, v))
 
-/** LY-11：缺省排布表——加一种情境只加一行 */
+/**
+ * LY-11：缺省排布表——加一种情境只加一行。场景：上组只有时序图（情境标签），下组是跟随主语的三个视图标签，约 46/54
+ *（负责人 2026-11-08 走查）；草图：核对随 LY-9 常驻，排在下组描述之后（LY-11d）
+ */
 export const DEFAULT_ARRANGEMENTS: Readonly<Record<LayoutContext, Arrangement>> = {
   free: { groups: [['explainer', 'description', 'check']], active: ['explainer'], split: 0.58 },
-  scenario: { groups: [['sequence', 'explainer', 'check'], ['description']], active: ['sequence', 'description'], split: 0.56 },
-  sketch: { groups: [['dialogue', 'explainer'], ['description']], active: ['dialogue', 'description'], split: 0.6 },
+  scenario: { groups: [['sequence'], ['explainer', 'description', 'check']], active: ['sequence', 'explainer'], split: 0.46 },
+  sketch: {
+    groups: [
+      ['dialogue', 'explainer'],
+      ['description', 'check'],
+    ],
+    active: ['dialogue', 'description'],
+    split: 0.6,
+  },
 }
 
 export const defaultArrangement = (context: LayoutContext): Arrangement => DEFAULT_ARRANGEMENTS[context]
@@ -137,9 +150,9 @@ const DIALOGUE: DocRef = { kind: 'dialogue' }
 const slotTab = (slot: Slot): Tab => (slot === 'dialogue' ? { id: docKey(DIALOGUE), kind: 'doc', doc: DIALOGUE, preview: false } : viewTab(slot))
 const slotOf = (t: Tab): Slot | null => (t.kind === 'view' ? t.view : t.doc.kind === 'dialogue' ? 'dialogue' : null)
 
-/** LY-9：常驻标签——图解始终；时序图在场景情境 */
+/** LY-9（负责人 2026-11-08 走查修订）：常驻标签——图解、描述、核对始终；时序图在场景情境 */
 export function isResident(s: Pick<WorkspaceState, 'context'>, id: string): boolean {
-  return id === viewKey('explainer') || (id === viewKey('sequence') && s.context === 'scenario')
+  return SUBJECT_VIEWS.some(v => id === viewKey(v)) || (id === viewKey('sequence') && s.context === 'scenario')
 }
 
 /** 视图标签在这个情境里可不可以出现（时序图只在场景里，LY-9） */
@@ -177,7 +190,8 @@ export function arrangementOf(s: WorkspaceState): Arrangement {
 }
 
 /**
- * LY-9、LY-10：规整——去重；图解常驻（不在就放回上组最前）；时序图在场景情境常驻（不在就放回上组最前）、其他情境移出；
+ * LY-9、LY-10：规整——去重；图解常驻（不在就放回上组最前）；描述、核对常驻（不在就放回末组最后，如旧版本机记忆里被关掉的）；
+ * 时序图在场景情境常驻（不在就放回上组最前）、其他情境移出；
  * 空组与另一组合并、至多两组、至少一组；激活标签无效时取该组第一个。没有变化时返回原状态。
  */
 export function normalize(s: WorkspaceState): WorkspaceState {
@@ -188,13 +202,16 @@ export function normalize(s: WorkspaceState): WorkspaceState {
   })
   if (groups.length > 2) groups = [groups[0], { tabs: groups.slice(1).flatMap(g => g.tabs), active: groups[1].active }]
   if (!groups.length) groups = [{ tabs: [], active: null }]
-  const ensure = (view: ViewKind) => {
+  const ensure = (view: ViewKind, atEnd = false) => {
     if (seen.has(viewKey(view))) return
     seen.add(viewKey(view))
-    groups[0] = { ...groups[0], tabs: [viewTab(view), ...groups[0].tabs] }
+    const g = atEnd ? groups.length - 1 : 0
+    groups[g] = { ...groups[g], tabs: atEnd ? [...groups[g].tabs, viewTab(view)] : [viewTab(view), ...groups[g].tabs] }
   }
   if (s.context === 'scenario') ensure('sequence')
   ensure('explainer')
+  ensure('description', true)
+  ensure('check', true)
   groups = groups.filter(g => g.tabs.length)
   if (!groups.length) groups = [{ tabs: [], active: null }]
   groups = groups.map(g => (g.tabs.some(t => t.id === g.active) ? g : { ...g, active: g.tabs[0]?.id ?? null }))
@@ -267,10 +284,6 @@ export function workspaceTransition(s: WorkspaceState, a: WorkspaceAction): Work
     }
     case 'move': {
       const next = move(s, a.id, a.group, a.index)
-      return next === s ? s : remember(next)
-    }
-    case 'addView': {
-      const next = addView(s, a.view, a.group)
       return next === s ? s : remember(next)
     }
     case 'setSplit': {
@@ -357,18 +370,6 @@ function move(s: WorkspaceState, id: string, group: number, index: number): Work
   const src = groups[at.group]
   if (at.group !== group && src.active === id) src.active = src.tabs[at.index]?.id ?? src.tabs[at.index - 1]?.id ?? null
   return withGroups(s, groups)
-}
-
-/** LY-9、LY-10a：「+」加视图标签——已开即激活；时序图只在场景情境 */
-function addView(s: WorkspaceState, view: ViewKind, group: number): WorkspaceState {
-  const id = viewKey(view)
-  if (hasTab(s, id)) return workspaceTransition(s, { type: 'activate', id })
-  if (!allowed(s.context, viewTab(view))) return s
-  const gi = Math.max(0, Math.min(group, s.groups.length - 1))
-  return withGroups(
-    s,
-    s.groups.map((g, k) => (k === gi ? { tabs: [...g.tabs, viewTab(view)], active: id } : g)),
-  )
 }
 
 /** LY-11c：情境由视图状态与编辑会话推出 */

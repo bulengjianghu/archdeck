@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 画布页头（LY-5、LY-2，ADR-0064）：44px（含 1px 底线），与侧栏项目标题、视图区主语条底线对齐；取代全宽顶栏（LY-1、LY-16）。
- * 左起：侧栏开关、面包屑；右侧：视角段「结构 ｜ 交互」与场景胶囊、「显示 ▾」、⌕、⋯（帮助）、视图区开关。
+ * 左起：面包屑（侧栏开关在竖栏顶格，负责人 2026-11-08 走查）；右侧：视角段「结构 ｜ 交互」与场景胶囊、「显示 ▾」、⌕、⋯（帮助）、视图区开关。
  * 只发意图：开合是工作区状态（侧栏 LY-3、视图区 LY-12），只由人开合。草图画布下没有面包屑、视角段与显示。
  */
 import { computed } from 'vue'
@@ -17,24 +17,12 @@ const search = defineModel<boolean>('search', { required: true })
 const desk = useDesk()
 const ws = desk.workspace
 const ready = computed(() => desk.status.value === 'ready')
-const sidebarOpen = computed(() => ws.state.value.sidebar.open)
 const viewsOpen = computed(() => !ws.state.value.collapsed)
-const toggleSidebar = () => ws.dispatch({ type: 'setSidebar', open: !sidebarOpen.value })
 const toggleViews = () => ws.dispatch({ type: 'setCollapsed', collapsed: viewsOpen.value })
 </script>
 
 <template>
   <header class="canvas-head" data-head="canvas" aria-label="画布页头">
-    <button
-      class="ib side-toggle"
-      :class="{ on: sidebarOpen }"
-      :aria-pressed="sidebarOpen"
-      :title="sidebarOpen ? '收起侧栏' : '展开侧栏'"
-      aria-label="侧栏"
-      @click="toggleSidebar"
-    >
-      <ToolIcon name="nav" />
-    </button>
     <Breadcrumb v-if="ready" />
     <span class="spacer" />
     <PerspectiveSwitch v-if="ready && !desk.edit.active.value" />
@@ -75,7 +63,7 @@ const toggleViews = () => ws.dispatch({ type: 'setCollapsed', collapsed: viewsOp
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 10px;
+  padding: 0 10px 0 14px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   min-width: 0;
