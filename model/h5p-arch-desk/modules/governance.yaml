@@ -6,7 +6,7 @@ modules:
   - id: present.issues
     name: 问题页签
     summary: 列出按严重度排序的返工清单，可定位、可复制给 agent
-    abstraction: 只呈现模型层汇总好的返工清单，排序、筛选与复制都不新增判断；画布上只留计数角标。
+    abstraction: 只呈现模型层汇总好的返工清单，排序、筛选与复制都不新增判断；第二十二轮起它是「问题」资料标签的正文（LY-4a，不跟随主语），画布左上角只留 ⚠ 胶囊，单击打开这个标签。
     codeRefs: [src/components/tree/IssueList.vue]
   - id: access.deps
     name: 依赖提取
@@ -77,14 +77,14 @@ modules:
     name: 代码依赖面板
     summary: 说明选中的代码依赖线背后的模块依赖与违规
     parent: present.panel
-    responsibility: 选中代码依赖叠加线时的面板（K10）：投影到这对节点的模块依赖（已解释 / 未解释）、其中的违规与理由、文件证据；层次变化后不再存在时说明原因。三卡（PC-10）：理解卡为文件依赖（结构视角）或模块依赖；核对卡为治理一行，清单为违规明细。
+    responsibility: 选中代码依赖叠加线时的面板（K10）：投影到这对节点的模块依赖（已解释 / 未解释）、其中的违规与理由、文件证据；层次变化后不再存在时说明原因。两卡（PC-10）：理解卡为文件依赖（结构视角）或模块依赖；核对卡为治理一行，清单为违规明细。
     codeRefs: [src/components/panel/DepPanel.vue]
   - id: present.panel.port
     name: 端口面板
     summary: 展示端口的定义、实现者与使用者并可定位
     parent: present.panel
     adrs: [29]
-    responsibility: 端口面板（K11，原「端口三角」，ADR-0029）：选中端口（L13，sel=p:<接口 ID>）时显示接口的说明与「定义 · 实现者 · 使用者」——实现者带证据档（已证实 / 结构性实现 / 证据像使用）并标出「仅代码事实」的（K5c），使用者分经端口与直接、带证实状态；单击定义模块、实现者、使用关系即定位选中；不算端口的接口说明原因（T0 裁决 4）；没有代码事实时（设计版本）只按描述。模块面板的「端口」一节为它声明的每个端口各列一份（ModulePorts）。三卡（PC-10）：理解卡先给一句用途（说明首句），再是说明与三方；核对卡为实现者一行（描述写了、代码未证实的实现者）。
+    responsibility: 端口面板（K11，原「端口三角」，ADR-0029）：选中端口（L13，sel=p:<接口 ID>）时显示接口的说明与「定义 · 实现者 · 使用者」——实现者带证据档（已证实 / 结构性实现 / 证据像使用）并标出「仅代码事实」的（K5c），使用者分经端口与直接、带证实状态；单击定义模块、实现者、使用关系即定位选中；不算端口的接口说明原因（T0 裁决 4）；没有代码事实时（设计版本）只按描述。模块面板的「端口」一节为它声明的每个端口各列一份（ModulePorts）。两卡（PC-10）：理解卡先给一句用途（说明首句），再是说明与三方；核对卡为实现者一行（描述写了、代码未证实的实现者）。
     codeRefs: [src/components/panel/PortPanel.vue, src/components/panel/PortEntry.vue, src/components/panel/ModulePorts.vue]
 
   # ── 视图状态层 ──────────────────────────────────────────
@@ -351,7 +351,7 @@ relations:
   - {id: rel.gv.source-health-model, from: access.model-source, to: model, type: queries, interface: if.model.loadModel, description: ModelSource 插件向 loadModel 入口取：健康度：加载描述（Q10）, purpose: 算健康度前加载描述 }
   - {id: rel.gv.source-health-own, from: access.model-source, to: model.source.ownership, type: queries, interface: if.model.assignFiles, description: ModelSource 插件向归属与入口取：健康度：归属（Q10）, purpose: 算健康度时取源码归属 }
   - {id: rel.gv.source-health-report, from: access.model-source, to: model.governance.report, type: queries, interface: if.governance.report, description: ModelSource 插件向治理报告与门禁取：健康度：治理报告（Q10）, purpose: 算健康度时取治理报告 }
-  - {id: rel.gv.desk-rework, from: state.desk, to: model.rework, type: queries, interface: if.rework.list, payload: [ds.ReworkItem], description: DeskState 向返工清单取：问题页签的返工清单与「复制给 agent」的 Markdown（W-6）, purpose: 取返工清单与给 agent 的 Markdown }
+  - {id: rel.gv.desk-rework, from: state.desk, to: model.rework, type: queries, interface: if.rework.list, payload: [ds.ReworkItem], description: DeskState 向返工清单取：「问题」资料标签的返工清单与「复制给 agent」的 Markdown（W-6）, purpose: 取返工清单与给 agent 的 Markdown }
   - {id: rel.gv.source-writer, from: access.model-source, to: access.writer.append, type: commands, description: ModelSource 插件交给追加写入：POST /write/<项目>/feedback | allow | ignore（B1–B5）, purpose: 把意见、例外、忽略写入描述 }
   - { id: rel.gv.writer-reader, from: access.writer.append, to: access.reader, type: queries, description: 追加写入向描述读取取：写回端点调用 isProjectId 校验项目、readModelDir / readDesignInfo / designSketches 读描述与设计, purpose: 校验项目并读描述与设计 }
   - {id: rel.gv.writer-model, from: access.writer.append, to: model, type: queries, interface: if.model.loadModel, description: 追加写入向 loadModel 入口取：加例外前校验两端模块存在、找 rules 所在文件（B3）, purpose: 加例外前确认两端存在、找规则文件 }
@@ -365,7 +365,7 @@ relations:
   - {id: rel.gv.facts-ports, from: state.desk.facts, to: model.governance.ports, type: queries, description: 架构治理派生（desk.facts）向端口面板取：portEntry / portPanel 取端口面板与端口记号的数据（K11、L13），portIssues 取端口孤立（U14）, purpose: 取端口面板、端口记号与孤立 }
   - { id: rel.gv.ports-facts, from: model.governance.ports, to: model.governance.facts, type: queries, description: 端口面板向事实比对取：调用 portOwner 找端口的定义模块、related 判使用者是否在定义模块子树外、isTarget 排除目标态（K11、U14）, purpose: 找定义模块、判使用者在子树外 }
   - { id: rel.gv.report-ports, from: model.governance.report, to: model.governance.ports, type: queries, description: 治理报告与门禁向端口面板取：调用 portIssues 把端口孤立并入报告的问题（U14）, purpose: 把端口孤立并入报告问题 }
-  - { id: rel.gv.rework-gate, from: model.rework, to: model.intent.check, type: queries, description: 返工清单向草图核验取：对当前版本的核验调用 gateSeverity，已认可未归档设计的偏差按门禁口径降为提醒（DL-45）, purpose: 让问题页签与命令行、lint:model 同口径 }
+  - { id: rel.gv.rework-gate, from: model.rework, to: model.intent.check, type: queries, description: 返工清单向草图核验取：对当前版本的核验调用 gateSeverity，已认可未归档设计的偏差按门禁口径降为提醒（DL-45）, purpose: 让「问题」标签与命令行、lint:model 同口径 }
   - { id: rel.gv.rework-ports, from: model.rework, to: model.governance.ports, type: queries, description: 返工清单向端口面板取：调用 portIssues 把端口孤立列为返工项（一个端口一个根因，U14）, purpose: 把端口孤立列为返工项 }
   - { id: rel.gv.dispatch-port, from: present.panel.dispatch, to: present.panel.port, type: commands, description: 面板分派交给端口面板：选中端口时渲染 PortPanel（L13、K11）, purpose: 选中端口时显示端口面板 }
   - { id: rel.gv.module-port, from: present.panel.module, to: present.panel.port, type: commands, description: 模块面板交给端口面板：渲染「端口」一节 ModulePorts（K11）, purpose: 在模块面板列出它的端口 }
@@ -416,7 +416,8 @@ relations:
   - { id: rel.r8.facts-layout, from: state.desk.facts, to: state.layout, type: queries, description: 架构治理派生（desk.facts）向 Layout 取：surfaceExpansion 按选中与「总是展开表面」算表面展开的节点、端口点的元素、子模块组号与优先次序，并进交给布局同步的 layoutLinks（L20a）, purpose: 算表面展开的节点与元素 }
   - { id: rel.r8.facts-layout-runner, from: state.desk.facts, to: state.layout.runner, type: queries, description: 架构治理派生（desk.facts）向布局入口与缓存取：chipBundleId 给分层总览核心块的跨层束编 ID（O13③）, purpose: 给跨层束编 ID }
   - { id: rel.r8.facts-selection, from: state.desk.facts, to: state.transition.selection, type: queries, description: 架构治理派生（desk.facts）向视角与选中规则取：viewpointOf 判结构视角（线的预算），回放中不展开表面、不取交互束散开, purpose: 回放中不展开表面 }
-  - { id: rel.r8.surface-marks-focus, from: present.canvas.nodes, to: present.panel, type: commands, description: 节点组件交给属性面板：单击端口点时 focusSurfaceElement 请求「表面」一节定位到该元素，悬停时 hoverSurfaceElement 让「表面」一节同一行同亮（L20④）, purpose: 让「表面」一节定位或同亮元素 }
+  - { id: rel.r8.surface-marks-focus, from: present.canvas.nodes, to: present.panel, type: commands, description: 节点组件交给属性面板（视图区「描述」标签）：单击端口点时 focusSurfaceElement 请求「表面」一节定位到该元素，悬停时 hoverSurfaceElement 让「表面」一节同一行同亮（L20④）, purpose: 让「表面」一节定位或同亮元素 }
+  - { id: rel.ly.canvas-hover-read, from: present.canvas.flow, to: present.panel, type: queries, description: 视图转换与交互向属性面板取：面板「表面」一节与协作行的悬停（useSurfaceHover、useRelationHover、edgeOfRelations），画布据此高亮落在端口点上的边与承载这些关系的边（L20④、PC-5）, purpose: 让画布与面板的悬停同亮 }
   - { id: rel.r8.sequence-chain, from: present.sequence.interact, to: present.panel.step, type: queries, description: 时序图交互向步骤面板取：weakestLevel 取一条消息合并的各帧中最弱的证据等级，定「?」（S17、S18b）, purpose: 取最弱证据等级来标「?」 }
   - { id: rel.gv.agent-structure, from: access.agent, to: model.governance.structure, type: queries, description: agent 接口向结构视图取：arch impact / metrics 与 MCP 同名工具调用 impactOf、structureMetrics、moduleMetrics 输出影响面与指标（Q14）, purpose: 命令行与 MCP 回答影响面与度量 }
   - { id: rel.gv.panel-structure-read, from: present.panel.structure, to: state.desk.facts, type: queries, description: 结构视图面板向架构治理派生（desk.facts）取：metricsOf、impactOf、againstOf、isolatedOf、edgeFiles、structure、relationFact 显示指标、影响面、逆稳定、交互图互查与依赖边明细（K14–K17、U15、U17）, purpose: 取度量、影响面与结构边 }

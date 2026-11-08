@@ -211,7 +211,7 @@ modules:
   - id: present.sketch
     name: 草图画布
     summary: 让人在一层上自由画草图并发出编辑操作
-    abstraction: 每个手势只发编辑分组的一个操作，画布自己不算规则与布局；节点、对话框与导航树经共用约定互通。
+    abstraction: 每个手势只发编辑分组的一个操作，画布自己不算规则与布局；节点、对话框与侧栏经共用约定互通。
     adrs: [24, 25]
     parent: present
     kind: subsystem
@@ -266,7 +266,7 @@ modules:
     parent: present.panel
     kind: component
     responsibility: |
-      草图画布下的属性面板（SK-17、SK-18）：顶部两级校验（红色格式错误、黄色语义提示，单击定位，跨草图也能定位）、常驻「待重连 N 条」、不进两级的提示、本张的两个核验数（相对当前版本 N 处偏差 / 相对基线改了 N 处，可展开清单；持久草图只有前者）与面板内提示；
+      草图画布下视图区「描述」标签里的草图面板（SK-17、SK-18）：顶部两级校验（红色格式错误、黄色语义提示，单击定位，跨草图也能定位）、常驻「待重连 N 条」、不进两级的提示、本张的两个核验数（相对当前版本 N 处偏差 / 相对基线改了 N 处，可展开清单；持久草图只有前者）与面板内提示；
       无选中时为父模块——原则可编辑、「带入现有原则」，名称与职责只读（上一层没写时显示当前版本的文字并标出来源）；根草图无选中时为设计概览（全设计计数与各张草图）；多选时合并 / 删除所选；
       层：名称、ID、抽象原则、包含 / 不包含、可依赖的层、删层；模块：名称、ID（前缀与唯一校验；改 ID 前列出影响——级联条数、子草图文件名、当前版本引用数——并二次确认，X7d）、职责、相关决策 adrs（E9）、角色（下拉：普通 / 核心 / 共用件 / 事件总线，SK-22）、封闭、代码落点、对外接口、原则、血缘只读（来自 A、B · 合并 / 拆分 / 改 ID / 移动）、「进入下一层 →」、端口的实现者（增删，写进接口的 implementedBy，X24）；关系：类型（查 / 托 / 通知 / 流）与修饰（机制、异步、拉取；表单 RelationKindFields，新建连线也用，X23）、说明、经由接口，待分类（迁移期的 calls）与待重连标出；引用节点：当前版本里的职责与位置、折叠进来的精确关系、「在模型里查看」「打开挂在它身上的草图」；元信息：挂载点、lifetime、supersedes。
     principle: 面板只发编辑分组的操作；合并 / 拆分 / 删除这类要对话框的，经 sketchRequest 交给画布。
@@ -321,11 +321,11 @@ relations:
   - {id: rel.v4.dialogs-commands, from: present.sketch.dialogs, to: state.desk.edit.commands, type: commands, interface: if.desk.edit, description: 菜单与对话框交给编辑操作：connect（连线被拒绝时就地说明）、addReference；读 suggestShort、referenceCandidates, purpose: 提交连线与引用，取短名与候选 }
   - { id: rel.v4.dialogs-kind-fields, from: present.sketch.dialogs, to: present.panel.sketch, type: commands, description: 菜单与对话框交给草图面板：连线弹层渲染草图面板的类型与修饰表单 RelationKindFields（X23）, purpose: 复用面板的类型与修饰表单 }
   - { id: rel.v4.elements-rim, from: present.sketch.elements, to: present.canvas.nodes.rim, type: commands, description: 节点与边交给边界角色记号：草图的模块节点角色为 port / adapter 时渲染 RimTag（L14）, purpose: 给端口 / 适配器节点标边界角色 }
-  - {id: rel.v4.tree-commands, from: present.sketch.tree, to: state.desk.edit.commands, type: commands, interface: if.desk.edit, description: 草图导航树交给编辑操作：读当前张的画布数据；⇧ 单击多选（pick）、双击下钻（openChild）, purpose: 取本张模块，多选与下钻 }
+  - {id: rel.v4.tree-commands, from: present.sketch.tree, to: state.desk.edit.commands, type: commands, interface: if.desk.edit, description: 侧栏的草图模块树交给编辑操作：读当前张的画布数据；⇧ 单击多选（pick）、双击下钻（openChild）, purpose: 取本张模块，多选与下钻 }
   - {id: rel.v4.sketch-dialog, from: present.sketch.canvas, to: present.version.actions, type: commands, description: 画布与手势交给动作区：ask：删除级联与拆分前（X7k）的二次确认（useEditDialog）, purpose: 删除级联与拆分前请人二次确认 }
   - { id: rel.v4.desk-view-sketch, from: present.desk-view, to: present.sketch.canvas, type: commands, description: 项目视图交给画布与手势：进入草图时项目视图把画布区渲染为草图画布, purpose: 进入草图时让画布区换成草图画布 }
   - { id: rel.v4.dispatch-sketch, from: present.panel.dispatch, to: present.panel.sketch, type: commands, description: 面板分派交给草图面板：进入草图时面板分派渲染草图面板, purpose: 进入草图时显示草图面板 }
-  - { id: rel.v4.nav-tree-sketch, from: present.nav-tree, to: present.sketch.tree, type: commands, description: 导航树交给草图导航树：进入草图时模块页签渲染本张草图的模块与引用树, purpose: 进入草图时模块页签列本张草图 }
+  - { id: rel.v4.nav-tree-sketch, from: present.nav-tree, to: present.sketch.tree, type: commands, description: 侧栏交给草图模块树：进入草图时「模块」页渲染本张草图的模块与引用树, purpose: 进入草图时模块页列本张草图 }
   - {id: rel.v4.sketch-panel, from: present.sketch.canvas, to: present.panel.sketch, type: notifies, via: 'channel:inject', description: 选中变化时面板跟随（经注入的 DeskState 的选中，画布与面板互不引用）, purpose: 让面板跟着画布的选中显示 }
   - {id: rel.v4.panel-requests, from: present.panel.sketch, to: present.sketch.canvas, type: commands, via: 'channel:shared-ref@present.sketch.contracts', description: 草图面板交给画布与手势：requestSketch：合并 / 拆分 / 删除的对话框与级联确认由画布打开（经共享的 sketchRequest，画布接到后打开并清掉）, purpose: 让画布打开合并、拆分、删除对话框 }
   - { id: rel.v4.panel-badges, from: present.panel.sketch, to: present.sketch.contracts, type: commands, description: 草图面板交给画布的约定与显示名：调用 sixCounts 算设计概览的六类计数、requestSketch 请画布打开合并 / 拆分 / 删除对话框，渲染血缘角标, purpose: 取六类计数并请画布开对话框 }
@@ -333,7 +333,7 @@ relations:
   - {id: rel.v4.sketch-layout-types, from: state.layout.sketch, to: model.types, type: queries, description: 草图布局向类型与 Schema 取：调用 isSharedRole 把共用件排上层带的共用件架、不计入七的软限（O9、X13）, purpose: 把共用件排上共用件架、不计软限 }
   - {id: rel.v4.panel-commands, from: present.panel.sketch, to: state.desk.edit.commands, type: commands, interface: if.desk.edit, description: 草图面板交给编辑操作：updateModule / rename / setAbstraction / edit（关系、接口、元信息）/ openChild / openMount；读 validation、pending、vsCurrent、vsBaseline、parent、lineageOf, purpose: 把面板上的改动落成编辑 }
   - { id: rel.v4.panel-design-sketches, from: present.panel.sketch, to: present.panel.design, type: commands, description: 草图面板交给设计面板：渲染设计概览与父模块下的草图列表（DesignSketches：点击切张、改骨架）, purpose: 显示设计概览与可切换的草图 }
-  - { id: rel.v4.panel-type-labels, from: present.panel.sketch, to: present.shared, type: commands, description: 草图面板交给呈现共用件：经 useOpenPreview / useNavTab 打开草图文件与切换页签, purpose: 预览草图文件、切换页签 }
+  - { id: rel.v4.panel-type-labels, from: present.panel.sketch, to: present.shared, type: commands, description: 草图面板交给呈现共用件：经 useOpenPreview 以资料标签预览草图文件, purpose: 预览草图文件 }
   - {id: rel.v4.architect-new-design, from: actor.architect, to: present.version.new-design, type: commands, description: 架构师交给新建设计与「在此设计」：「在此设计」后填设计 ID、名称、目标与挂载点，或选「加到设计 <名>」, purpose: 在选中模块上发起新设计 }
   - {id: rel.ed.architect-bar, from: actor.architect, to: present.version.actions, type: commands, description: 架构师交给动作区：保存、撤销 / 重做、保存并交给 AI、说明、退出, purpose: 保存、撤销或结束这次编辑 }
   - {id: rel.ed.bar-commands, from: present.version.actions, to: state.desk.edit.commands, type: commands, interface: if.desk.edit, description: 动作区交给编辑操作：canLeave / exit / save / saveAndHandToAi / discard / replayOnReload / undo / redo；读 dirty、designErrors / designWarnings、comparison, purpose: 执行保存、撤销、退出与重放 }

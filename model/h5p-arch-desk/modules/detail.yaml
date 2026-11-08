@@ -43,7 +43,7 @@ modules:
     name: 版本切换与设计信息条
     summary: 标明当前版本，提供切换、对比与新建设计的入口
     abstraction: 项目菜单收「对项目做什么」（版本、编辑骨架、新建设计、所有项目），信息条按「这是哪个版本、能做什么、和谁比」三问分区；各区只调 DeskState 的操作。
-    principle: 项目菜单（ProjectMenu）在导航顶部（TB-6，ADR-0057）：项目名 ▾，菜单里版本切换（VersionSwitcher）的下拉原样沿用——选中后只显示名称，kind 用图标，草图选项为「✎ 名称」（F-63）——另有编辑骨架、新建设计（经 openNewDesign 打开同一个对话框）、所有项目；信息条按三区拆成子模块（身份、动作、对比，F-60–F-62），另有「在此设计」的新建设计对话框。
+    principle: 项目菜单（ProjectMenu）在侧栏顶上（LY-2，ADR-0064；原 TB-6）：项目名 ▾，菜单里版本切换（VersionSwitcher）的下拉原样沿用——选中后只显示名称，kind 用图标，草图选项为「✎ 名称」（F-63）——另有编辑骨架、新建设计（经 openNewDesign 打开同一个对话框）、所有项目；信息条按三区拆成子模块（身份、动作、对比，F-60–F-62），另有「在此设计」的新建设计对话框。
     codeRefs: [src/components/VersionSwitcher.vue, src/components/ProjectMenu.vue]
   - id: present.canvas
     name: 画布
@@ -130,12 +130,12 @@ modules:
   - id: present.panel
     name: 属性面板
     summary: 显示选中对象的详情并发起人拥有文件的写入
-    abstraction: 选中是唯一主语：按选中只挑一张对象面板，每张都是头部加理解、核对、相关资料三卡；三卡骨架归面板自身，各面板只读派生数据、共用内容块，写入只经 DeskState 发起。
+    abstraction: 主语是唯一的选中：按主语只挑一张对象面板，面板分两部分投到视图区——「描述」标签是面板头一行操作加理解卡与清单，「核对」标签是核对卡；卡片骨架归面板自身，各面板只读派生数据、共用内容块，写入只经 DeskState 发起。
     invariants:
       - { text: 对象面板只由 Panel.vue 按 desk.selected 挑一张，别处不挂对象面板, adr: 12 }
       - { text: 写入人拥有的文件只经 desk.write 发起，面板不直接发请求, adr: 19 }
       - { text: 核对卡的分项与计数只取现有派生，不新算, adr: 53 }
-    principle: 卡片直接立在画布上（CD-1–CD-6，ADR-0057）：每个对象面板的头部是身份卡（.id-card，名称 / ID 与徽标 / 动作三行，粘在选中抽屉滚动区上沿，ADR-0061 / ADR-0062），面板是实底抽屉：缺省收起、宽度够时挤压画布、不够时浮在画布右侧（第二十轮读先版式取代 CD-2「卡片立在画布上」）；理解叙述在辅助栏的理解页（ModuleDoc：事实卡 + 故事），原抽屉理解卡与名称胶囊 / CD-4 已移除。卡片外观取共用样式的 --card-* 变量，设计说明、出处等散块也成卡。三卡骨架（ADR-0053）由面板自身持有、各对象面板共用——卡片 PanelCard（卡头结论、缺省展开态、定位请求时展开；理解卡首节渲染分派经 RUN_FIRST 注入的运行信息，V6）、核对卡 CheckCard（分项一行一个状态加结论，⚠ 行下平铺条目至多 5 条、单击跳到清单或选中关系，清单插槽）、相关资料卡 RelatedCard（图解与场景，单击预览、双击固定、已打开标记；图解有无由 HAS_EXPLAINER 注入，W5 接入）、ADR 编号链接 AdrLink；分项的纯函数在 panelCheck（checkSummary、moduleCheckRows、rowsFromNotices、relationTypeLabel，PC-2、PC-6、PC-10），注入键在 related。层面板与环面板也直接归面板自身。
+    principle: 面板住视图区（ADR-0064；抽屉与身份卡随 LY-16 删除）：名称、ID 与角色徽标只在主语条（LY-7），面板头在「描述」里是一行操作与徽标（讨论 ›、图解 ›、进入、在此设计，LY-13b），在「核对」里不出现；渲染哪一部分由视图区经 PANEL_PART 注入（cardShown）。选中不改变视图区宽度，也不自动打开任何标签。卡片外观取共用样式的 --card-* 变量，设计说明、出处等散块也成卡。卡片骨架（ADR-0053）由面板自身持有、各对象面板共用——卡片 PanelCard（卡头结论、缺省展开态、定位请求时展开）、核对卡 CheckCard（分项一行一个状态加结论，⚠ 行下平铺条目至多 5 条、单击跳到清单或选中关系，清单插槽）、相关资料卡 RelatedCard（PC-9 作废后只剩参与者面板用来列由它触发的场景）、ADR 编号链接 AdrLink；分项的纯函数在 panelCheck（checkSummary、moduleCheckRows、rowsFromNotices、relationTypeLabel，PC-2、PC-6、PC-10），注入键在 related。层面板与环面板也直接归面板自身。
   - id: present.shared
     name: 呈现共用件
     summary: 为各呈现子系统提供共用文案、代码高亮与注入入口
@@ -157,7 +157,7 @@ modules:
     responsibility: 把 Layout 的画布场景（canvasScene：节点与边的数据、显隐、变淡、回放态与选中突出）写入 Vue Flow 的 store；把单击 / 双击 / 悬停转成 DeskState 操作；切换层次后按布局外框适应画布。画什么不在这里算（ADR-0013）。单击「+N」临时展开 / 收起（分层总览与普通层次同一手势，O6、O8）；普通层次没有核心而普通模块超过七个时在画布角提示「N 个模块，考虑标出核心」。画布角另有「隐藏必留痕」（L45，第十五轮 G13）：关系类型筛选「隐藏 N 类关系」（交互视角）、「只看现状」「目标态 N 个模块已隐藏」、「代码事实」已关「隐藏 N 处标记」（desk.facts.hiddenFacts）、「只看现状」（desk.facts.hiddenByCurrentOnly，波 3 起 经状态层取数，呈现层不直接调模型层的计算，U10）等计数按钮，单击撤销对应开关（结构视角既有的只引类型 / 值使用 / 已解释三钮同区）。把端口记号（L13）、组装叠加线与组装根（O12）交给画布场景；单击组装叠加线落到这对节点的代码依赖（K10）。
     principle: |
       - **写 store 而非传属性**：节点与边通过 setNodes / setEdges 写入；属性同步在「上一层有选中、切回总览」时会被跳过。
-      - **适应画布**：内容外框直接取自布局结果，不依赖 Vue Flow 对节点尺寸的测量，只等画布容器有尺寸；回放隐藏静态内容时只取画布场景给出的可见节点；切换层次、画布容器尺寸变化（进入回放、切换分屏方向、拖动分隔条、折叠两侧栏）、代码事实读到后（结构边进布局重排一次，L15）重新适应。首次适应（WS-3）：布局同步没有进行中的请求、代码事实不在读取中、容器尺寸与悬浮避让连续两帧不变之前画布透明，满足后只适应一次再显示（4 秒兜底）。
+      - **适应画布**：内容外框直接取自布局结果，不依赖 Vue Flow 对节点尺寸的测量，只等画布容器有尺寸；回放隐藏静态内容时只取画布场景给出的可见节点；切换层次、画布容器尺寸变化（开合或拖宽侧栏与视图区）、代码事实读到后（结构边进布局重排一次，L15）重新适应。首次适应（WS-3）：布局同步没有进行中的请求、代码事实不在读取中、容器尺寸与悬浮避让连续两帧不变之前画布透明，满足后只适应一次再显示（4 秒兜底）。
       - **点击含义**：单击节点 / 边 = 选中（回放同样，V3）；双击 = 下钻或跳到边界节点所在层次；单击边上的步骤序号 = 指向这一步，即选中它（R13）；单击分支预览序号 = 选这一支。
       - **交互关系显示方式**：在工具栏「显示 ▾」切换隐藏 / 淡显 / 全显（V8、L49），值来自舞台显示（按项目记在本地）。
     codeRefs: [src/components/GraphCanvas.vue]
@@ -215,26 +215,26 @@ modules:
     name: 面板分派
     summary: 按当前选中挑出唯一一张对象面板
     parent: present.panel
-    responsibility: 按选中选择面板（V2）：结构 / 交互视角下为选中的对象，无选中时为当前父模块（根层为系统）；第二十二轮起面板住视图区（抽屉已删，LY-16）：「描述」标签里是核对卡以外的部分（面板头是一行操作，不写名称与 ID），「核对」标签里只留核对卡与系统 / 层的汇总卡（PANEL_PART 注入给各面板与卡片，LY-13）；回放中选中步骤 / 场景时不渲染步骤 / 场景面板（它们住描述标签的步骤节），只给一行指向步骤节；选中模块 / 关系 / 聚合边 / 参与者 / 文件时为该对象的面板；没有「已钉住」之类的提示（ADR-0012）。选中端口（L13）时为端口面板（K11）；结构视角下选中依赖边（sel=d:）时为代码依赖面板，其下是这对节点的结构边（present.panel.structure，ADR-0031）。回放中选中模块、关系、聚合边、参与者、端口或系统时，把运行信息注入各对象理解卡的首节（RUN_FIRST，V6），对象面板不引用运行信息。属性栏的卡片样式（卡里的节去掉面板级分隔、头部粘顶）在这里统一。草图画布下整个面板换成草图面板（present.panel.sketch）。
+    responsibility: 按选中选择面板（V2）：结构 / 交互视角下为选中的对象，无选中时为当前父模块（根层为系统）；第二十二轮起面板住视图区（抽屉已删，LY-16）：「描述」标签里是核对卡以外的部分（面板头是一行操作，不写名称与 ID），「核对」标签里只留核对卡与系统 / 层的汇总卡（PANEL_PART 注入给各面板与卡片，LY-13）；回放中选中步骤 / 场景时不渲染步骤 / 场景面板（它们住描述标签的步骤节），只给一行指向步骤节；选中模块 / 关系 / 聚合边 / 参与者 / 文件时为该对象的面板；没有「已钉住」之类的提示（ADR-0012）。选中端口（L13）时为端口面板（K11）；结构视角下选中依赖边（sel=d:）时为代码依赖面板，其下是这对节点的结构边（present.panel.structure，ADR-0031）。回放中的运行信息不经面板：视图区在描述标签里把它排在面板之后（V6），对象面板不引用运行信息。视图区里的卡片样式（卡里的节去掉面板级分隔）在这里统一。草图画布下整个面板换成草图面板（present.panel.sketch）。
     codeRefs: [src/components/panel/Panel.vue]
   - id: present.panel.module
     name: 模块面板
     summary: 用五问讲清一个模块，并核对它的描述与健康
     parent: present.panel
-    abstraction: 头部、理解、核对、相关资料各一个组件：理解卡只读契约字段与协作查询，核对卡只组合现有派生，证据节原样做核对卡的清单。
-    responsibility: 模块面板（ADR-0053；第十八轮走查修订 ADR-0060）：头部（名称、进入 / 在此设计、徽标槽位表 V15a、设计说明）；理解卡（ModuleUnderstand）按六问、意图在先——是什么（summaryOf，回退标「待提炼」，职责全文行内展开）、不是什么（excludesOf 一行，去向是链接，M33）、怎么分（原则全文；声明了分层时每层「层名 · 层的问题」加归属判定一句与成员名；未声明时写明并按 desk.facts.childTiers 的依赖深度分组列成员名，只列名字、一句话在悬停；层模块另有「层的问题与包含」折叠与可依赖链接）、守住什么（invariantsOf，ADR 链接在资料区预览）、对外表面（接口名全文一行，用途在悬停，单击展开 InterfaceItem，超 5 收「+N」）、协作（缺省折叠为一行「← N · → M」；ModuleCollab：desk.facts.collaborations 按方向与对端合并，目的全文、类型在悬停，单击目的逐条展开，悬停写 hoverRelations 让画布高亮承载的边，PC-4、PC-5）；标题的视觉权重不低于正文、界面不截字（PC-13）；回放中理解卡首节为分派注入的运行信息（V6）；核对卡（ModuleCheck）六行——证实、治理、表面、拆分（含子模块超七个未声明分层的 ST-1 提示）、演化、确认（moduleCheckRows，条目文字按名称写好、单击跳到清单或选中关系；条目全卡缺省至多 8 条，其余一键全部），清单整块收进「证据与清单 · N」缺省折叠（CheckCard），里面为交互证据、源代码文件、提交历史、结构指标与表面元素（结构视角）、端口、架构治理、拆分信号、代码事实 · 知识、相关决策、实现原理、核心数据结构、代码与文档引用、确认改动与确认表单（PC-6–PC-8）；画布单击本模块的表面元素时展开核对卡与「表面元素」清单（C9，跳转自动打开祖先折叠）；相关资料卡列图解与参与的场景，多于 3 份时缺省收起（PC-9）。卡片与折叠块的展开态不跨选中保持。
+    abstraction: 面板头、理解、核对各一个组件：理解卡只读契约字段与协作查询，核对卡只组合现有派生，证据节原样做核对卡的清单。
+    responsibility: 模块面板（ADR-0053；第十八轮走查修订 ADR-0060；第二十二轮分投描述 / 核对两个标签，LY-13）：面板头（一行操作与徽标：讨论 ›、图解 ›、进入、在此设计，状态、标签、变更；名称与 ID 在主语条，LY-13b）、设计说明；理解卡（ModuleUnderstand）按六问、意图在先——是什么（summaryOf，回退标「待提炼」，职责全文行内展开）、不是什么（excludesOf 一行，去向是链接，M33）、怎么分（原则全文；声明了分层时每层「层名 · 层的问题」加归属判定一句与成员名；未声明时写明并按 desk.facts.childTiers 的依赖深度分组列成员名，只列名字、一句话在悬停；层模块另有「层的问题与包含」折叠与可依赖链接）、守住什么（invariantsOf，ADR 链接以资料标签预览）、对外表面（接口名全文一行，用途在悬停，单击展开 InterfaceItem，超 5 收「+N」）、协作（缺省折叠为一行「← N · → M」；ModuleCollab：desk.facts.collaborations 按方向与对端合并，目的全文、类型在悬停，单击目的逐条展开，悬停写 hoverRelations 让画布高亮承载的边，PC-4、PC-5）；标题的视觉权重不低于正文、界面不截字（PC-13）；核对卡（ModuleCheck，在「核对」标签）六行——证实、治理、表面、拆分（含子模块超七个未声明分层的 ST-1 提示）、演化、确认（moduleCheckRows，条目文字按名称写好、单击跳到清单或选中关系；条目全卡缺省至多 8 条，其余一键全部），清单整块收进「证据与清单 · N」缺省折叠（CheckCard），里面为交互证据、源代码文件、提交历史、结构指标与表面元素（结构视角）、端口、架构治理、拆分信号、代码事实 · 知识、相关决策、实现原理、核心数据结构、代码与文档引用、确认改动与确认表单（PC-6–PC-8）；画布单击本模块的表面元素时展开核对卡与「表面元素」清单（C9，跳转自动打开祖先折叠）。图解在「图解」标签、参与的场景在侧栏「场景」页，模块面板不再列相关资料（PC-9 作废）。卡片与折叠块的展开态不跨选中保持。
     codeRefs: [src/components/panel/ModulePanel.vue, src/components/panel/ModuleUnderstand.vue, src/components/panel/ModuleCollab.vue, src/components/panel/ModuleCheck.vue]
   - id: present.panel.relation
     name: 关系面板
     summary: 按维度说明一条关系的两端、语义与机制
     parent: present.panel
-    responsibility: 关系的两端与类型；「关系」一节按维度各一行——控制流、知识（由代码事实给出：同向 / 反向 / 经端口——发起方只知道端口、接收方是它的实现者 / 不判定，K5b；旁标两端之间的子类与组装事实，K12、K13）、语义（查询 / 委托 / 通知 / 流，ADR-0029）、同步性（通知一律异步，查询与委托按 mode）、机制（直接 / 端口 / 总线 / 通道，标题处另标「经 …」与拉取）、平面（ADR-0022）；经由接口、交换的数据结构；不在当前视图时提供「定位到所在层次」。三卡（PC-10）：理解卡先给目的（purposeOf，回退标待提炼），再是说明与上述维度、接口与数据；核对卡为证实与承载两行，清单为代码事实与承载；相关资料卡列经过它的场景（desk.run.scenariosOfRelation）。
+    responsibility: 关系的两端与类型；「关系」一节按维度各一行——控制流、知识（由代码事实给出：同向 / 反向 / 经端口——发起方只知道端口、接收方是它的实现者 / 不判定，K5b；旁标两端之间的子类与组装事实，K12、K13）、语义（查询 / 委托 / 通知 / 流，ADR-0029）、同步性（通知一律异步，查询与委托按 mode）、机制（直接 / 端口 / 总线 / 通道，标题处另标「经 …」与拉取）、平面（ADR-0022）；经由接口、交换的数据结构；不在当前视图时提供「定位到所在层次」。两卡（PC-10；相关资料卡随 PC-9 作废）：理解卡先给目的（purposeOf，回退标待提炼），再是说明与上述维度、接口与数据；核对卡为证实与承载两行，清单为代码事实与承载。
     codeRefs: [src/components/panel/RelationPanel.vue]
   - id: present.panel.edge
     name: 聚合边面板
     summary: 列出聚合边背后的原始关系并可跳转
     parent: present.panel
-    responsibility: 列出聚合边背后的原始关系与各类型条数，点击任一条跳到它所在的层次并选中。三卡（PC-10）：理解卡为原始关系（每条先给目的）；核对卡为方向（K22 向上却不是控制反转）与证实两行（rowsFromNotices）。
+    responsibility: 列出聚合边背后的原始关系与各类型条数，点击任一条跳到它所在的层次并选中。两卡（PC-10）：理解卡为原始关系（每条先给目的）；核对卡为方向（K22 向上却不是控制反转）与证实两行（rowsFromNotices）。
     codeRefs: [src/components/panel/EdgePanel.vue]
   - id: present.panel.system
     name: 系统面板
@@ -253,7 +253,7 @@ modules:
     name: 内容组件
     summary: 提供面板共用的 Markdown、代码与接口等内容块
     parent: present.panel
-    responsibility: 面板共用的内容块：Markdown（禁用原始 HTML）、TS 代码块（高亮用呈现共用件）、接口与数据结构折叠项（算端口的接口带「端口 · 实现者 N」，单击打开端口面板，K11、L13）、关系行（聚合边面板里先给目的）、分节（可由定位请求展开）；信号的严重度排序与单击跳转 panelNotices（V15b、PC-7）。三卡的骨架不在这里，归属性面板自身（见 present.panel）。
+    responsibility: 面板共用的内容块：Markdown（禁用原始 HTML）、TS 代码块（高亮用呈现共用件）、接口与数据结构折叠项（算端口的接口带「端口 · 实现者 N」，单击打开端口面板，K11、L13）、关系行（聚合边面板里先给目的）、分节（可由定位请求展开）；信号的严重度排序与单击跳转 panelNotices（V15b、PC-7）。卡片骨架不在这里，归属性面板自身（见 present.panel）。
     codeRefs:
       - src/components/panel/Markdown.vue
       - src/components/panel/CodeBlock.vue
@@ -269,7 +269,7 @@ modules:
     summary: 展示模块的耦合指标并查询影响面
     parent: present.panel
     adrs: [31]
-    responsibility: 属性面板里结构视角的两节（ADR-0031）：模块的「结构」一节（ModuleStructure）——扇入 Ca、扇出 Ce、不稳定度 I 与三档、本层节点数、贡献最多的依赖方 / 被依赖方（K16）；影响面查询（分段按钮「不看 / 影响面 / 依赖面 / 两者」与「含只引类型」，经 queryImpact 写视图状态，一次性；查询时清单按距离分组、列模块与文件数、可能波及标「可能」，K15b–K15d；「只看值依赖」写显示偏好、只管指标）；逆稳定的提示行（U17，info）；交互图互查——涉及本模块、两端之间没有任何依赖的交互关系，单击切到交互视角并选中（K17）。依赖边面板的结构部分（DepStructure，选中依赖边 sel=d:<依赖方>-><被依赖方> 时）——这对节点的结构边：种类与档、文件依赖条数与清单、聚合的模块依赖条数（K14、L16）；交互覆盖与「未解释」（K17）；规则判定（违规或允许它的规则，U15）；两端的不稳定度与「逆稳定」（U17）。全部读 desk.facts 的派生（metricsOf、impactOf、againstOf、isolatedOf、edgeFiles、structure），没有代码事实时只说明原因（K8、U16）。在模块核对卡里是「结构指标」清单（结构视角，PC-8），影响面查询随清单展开（ADR-0053 Q11）；逆稳定计入「治理」行、交互图互查计入「证实」行。
+    responsibility: 「描述」标签里结构视角的两节（ADR-0031）：模块的「结构」一节（ModuleStructure）——扇入 Ca、扇出 Ce、不稳定度 I 与三档、本层节点数、贡献最多的依赖方 / 被依赖方（K16）；影响面查询（分段按钮「不看 / 影响面 / 依赖面 / 两者」与「含只引类型」，经 queryImpact 写视图状态，一次性；查询时清单按距离分组、列模块与文件数、可能波及标「可能」，K15b–K15d；「只看值依赖」写显示偏好、只管指标）；逆稳定的提示行（U17，info）；交互图互查——涉及本模块、两端之间没有任何依赖的交互关系，单击切到交互视角并选中（K17）。依赖边面板的结构部分（DepStructure，选中依赖边 sel=d:<依赖方>-><被依赖方> 时）——这对节点的结构边：种类与档、文件依赖条数与清单、聚合的模块依赖条数（K14、L16）；交互覆盖与「未解释」（K17）；规则判定（违规或允许它的规则，U15）；两端的不稳定度与「逆稳定」（U17）。全部读 desk.facts 的派生（metricsOf、impactOf、againstOf、isolatedOf、edgeFiles、structure），没有代码事实时只说明原因（K8、U16）。在模块核对卡里是「结构指标」清单（结构视角，PC-8），影响面查询随清单展开（ADR-0053 Q11）；逆稳定计入「治理」行、交互图互查计入「证实」行。
     codeRefs: [src/components/panel/ModuleStructure.vue, src/components/panel/DepStructure.vue]
 
   - id: present.nav.breadcrumb
@@ -335,7 +335,7 @@ modules:
     name: 视图派生（核心与 desk.run）
     summary: 派生画布、时序图与面板要画的数据
     parent: state.desk
-    responsibility: 由视图状态与模型派生要画的数据（全部是 computed，调用纯函数）。核心平铺在 DeskState 上：层次视图与坐标、选中（selectedOf）、视角。回放的派生归 desk.run（ADR-0013）：回放计划、调用与返回的配对、回放路径与路线、本层的帧投影与可见消息、选中突出（emphasisOf）、舞台叠加与参与节点、时序模型与时序图坐标，导航树用的步骤大纲与参与模块，以及场景列表（全部场景的触发者与消息数）与当前场景的触发者、ref 引用与被引用（呈现层不再自己遍历场景）。源码与版本的派生另见 desk.files、desk.versions。
+    responsibility: 由视图状态与模型派生要画的数据（全部是 computed，调用纯函数）。核心平铺在 DeskState 上：层次视图与坐标、选中（selectedOf）、视角。回放的派生归 desk.run（ADR-0013）：回放计划、调用与返回的配对、回放路径与路线、本层的帧投影与可见消息、选中突出（emphasisOf）、舞台叠加与参与节点、时序模型与时序图坐标，侧栏用的步骤大纲与参与模块，以及场景列表（全部场景的触发者与消息数）与当前场景的触发者、ref 引用与被引用（呈现层不再自己遍历场景）。源码与版本的派生另见 desk.files、desk.versions。
     abstraction: 按视角分组：核心派生平铺在 DeskState 上，回放的派生收进 desk.run 一组。
     invariants:
       - 只有 computed：不建可写状态、不 watch、不调 dispatch
@@ -459,9 +459,9 @@ relations:
   - { id: rel.p7.source-content, from: present.source, to: present.shared, type: queries, purpose: 用共用的 Shiki 高亮源码 }
   - { id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: queries, purpose: 按契约类型产出投影结果 }
   - { id: rel.p8.desk-stage, from: present.desk-view, to: present.canvas, type: commands, purpose: 放结构图并注入舞台显示设置 }
-  - { id: rel.p3.desk-perspective, from: present.desk-view, to: present.perspective, type: commands, purpose: 在顶部显示视角切换 }
+  - { id: rel.p3.desk-perspective, from: present.desk-view, to: present.perspective, type: commands, purpose: 在画布页头显示视角段与场景胶囊 }
   - { id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: commands, purpose: 回放中在画布底部浮回放胶囊 }
-  - { id: rel.p6.desk-nav-tree, from: present.desk-view, to: present.nav-tree, type: commands, purpose: 在工作台左侧放导航树 }
+  - { id: rel.p6.desk-nav-tree, from: present.desk-view, to: present.nav-tree, type: commands, purpose: 在画布左边停靠侧栏 }
   - { id: rel.gv.reader-diff, from: access.reader, to: model.diff, type: queries, purpose: 摘要草图相对上次提交的改动 }
   - { id: rel.gv.source-review, from: access.model-source, to: model.review, type: queries, purpose: 算健康度里的确认计数 }
   - { id: rel.gv.history-evolution, from: access.history, to: model.evolution, type: queries, purpose: 判断提交是否为缺陷修复 }
@@ -481,26 +481,26 @@ relations:
   - { id: rel.gv.model-types, from: model.governance, to: model.types, type: queries, purpose: 按契约类型产出治理结果 }
   - { id: rel.gv.model-source, from: model.governance, to: model.source, type: queries, purpose: 按文件归属把依赖提升到模块 }
   - { id: rel.ad.desk-labels, from: state.desk, to: model.types, type: queries, purpose: 取模型类型与名称查询 }
-  - { id: rel.ad.navtree-tab, from: present.nav-tree, to: present.shared, type: queries, purpose: 让面板能切换导航树页签 }
+  - { id: rel.ad.navtree-tab, from: present.nav-tree, to: present.shared, type: queries, purpose: 让侧栏与项目视图共用同一个当前页 }
   - { id: rel.ad.version-labels, from: present.version, to: present.shared, type: queries, purpose: 取设计状态的中文显示名 }
   - { id: rel.ad.present-names, from: present, to: model.types, type: queries, purpose: 取显示名与领域枚举 }
   - { id: rel.ad.diff-index, from: model.diff, to: model.types, type: queries, purpose: 按索引类型逐字段比对两版 }
   - { id: rel.ad.reader-types, from: access.reader, to: model.types, type: queries, purpose: 按契约类型组装项目载荷 }
   - { id: rel.ad.list-types, from: present.project-list, to: model.types, type: queries, purpose: 判断设计是否已归档 }
   - { id: rel.ad.desk-version, from: present.desk-view, to: present.version, type: commands, purpose: 在工作台放版本信息条 }
-  - { id: rel.ad.desk-issues, from: present.nav-tree, to: present.issues, type: commands, purpose: 在问题页签列出返工清单 }
+  - { id: rel.ad.desk-issues, from: present.nav-tree, to: present.issues, type: commands, purpose: 在「问题」资料标签列出返工清单 }
   - { id: rel.ad.desk-nav, from: present.desk-view, to: present.nav, type: commands, purpose: 在画布左上角放标题行、在工具栏放搜索 }
   - { id: rel.ad.shell-desk, from: present.shell, to: present.desk-view, type: commands, purpose: 按路由打开项目的某个版本 }
   - { id: rel.ad.shell-list, from: present.shell, to: present.project-list, type: commands, purpose: 在根路由显示项目列表 }
   # 呈现层内部
   - {id: rel.ad.desk-canvas, from: present.desk-view, to: present.canvas.flow, type: commands, description: 项目视图交给视图转换与交互：渲染 GraphCanvas, purpose: 在画布区渲染结构图 }
-  - {id: rel.ad.desk-panel, from: present.desk-view, to: present.panel.dispatch, type: commands, description: 项目视图交给面板分派：渲染 Panel, purpose: 在右侧渲染属性面板 }
+  - {id: rel.ad.desk-panel, from: present.desk-view, to: present.panel.dispatch, type: commands, description: 项目视图交给面板分派：视图区的描述 / 核对标签渲染 Panel, purpose: 在视图区渲染主语的面板 }
   - {id: rel.ad.flow-nodes, from: present.canvas.flow, to: present.canvas.nodes, type: commands, description: 视图转换与交互交给节点组件：渲染 ModuleNode、BoundaryNode、BandNode、CoreNode, purpose: 按节点种类渲染节点 }
   - {id: rel.ad.flow-edges, from: present.canvas.flow, to: present.canvas.edges, type: commands, description: 视图转换与交互交给边组件：渲染 RouteEdge, purpose: 按走线渲染边 }
   - { id: rel.ad.flow-legend, from: present.canvas.flow, to: present.canvas.legend, type: commands, description: 视图转换与交互交给图例：画布在右上角那一列渲染图例（Legend），留痕排在它下面；并调用 gloss 把图例释义并进边的悬停说明（L50）, purpose: 在画布右上角放图例并附悬停释义 }
   - { id: rel.w4.desk-display-menu, from: present.desk-view, to: present.canvas.legend, type: commands, description: 项目视图在工具栏视角切换之后渲染「显示 ▾」（DisplayMenu，L49），并经 OPEN_GUIDE 提供打开帮助的入口给图例「线」一节标题旁的「?」（L51）, purpose: 在工具栏放没有记号的显示设置 }
-  - { id: rel.w5.dock-explainer-text, from: present.desk-view.split, to: present.shared, type: queries, description: 资料区的图解标签向呈现共用件取过期的一句话与改动的增删改文字（staleText、BASIS_CHANGE_TEXT，EX-7）, purpose: 写出图解的过期提示 }
-  - { id: rel.w5.module-explainer-text, from: present.panel.module, to: present.shared, type: queries, description: 模块面板的相关资料卡与核对卡向呈现共用件取图解过期的一句话与改动文字（EX-7）, purpose: 写出图解的过期提示 }
+  - { id: rel.w5.dock-explainer-text, from: present.desk-view.split, to: present.shared, type: queries, description: 视图区的图解标签向呈现共用件取过期的一句话与改动的增删改文字（staleText、BASIS_CHANGE_TEXT，EX-7）, purpose: 写出图解的过期提示 }
+  - { id: rel.w5.module-explainer-text, from: present.panel.module, to: present.shared, type: queries, description: 模块面板的核对卡向呈现共用件取图解过期的一句话与改动文字（EX-7）, purpose: 写出图解的过期提示 }
   - { id: rel.ad.legend-presence, from: present.canvas.legend, to: state.desk.legend, type: queries, payload: [ds.ViewState, ds.LevelView], description: 图例向出现集合派生取：按当前视角与层次的静息态画面算出现的记号集合（L47），传给各图例组过滤行, purpose: 只列画面上实际出现的图例行 }
   - { id: rel.ad.legend-edge-style, from: present.canvas.legend, to: present.canvas.edges, type: queries, description: 图例向边组件取：图例的示意线调用画布边的 edgeStyle 与箭头、插座组件，按同一套颜色、线宽、线型与查询的半透明绘制（L10、L12）, purpose: 让示意线与画布边同一画法 }
   - {id: rel.ad.panel-module, from: present.panel.dispatch, to: present.panel.module, type: commands, description: 面板分派交给模块面板：渲染 ModulePanel, purpose: 选中模块时显示模块面板 }
@@ -557,7 +557,7 @@ relations:
   - {id: rel.x1.title-rework, from: present.nav.canvas-title, to: state.desk.loading, type: queries, payload: [ds.Issue], description: 画布标题行向模型源同步取：返工清单的错误与提醒计数（W-6）, purpose: 写出 ⚠ 问题数 }
   - {id: rel.x1.title-files, from: present.nav.canvas-title, to: state.desk.files, type: queries, description: 画布标题行向源码派生（desk.files）取：源码清单里的提交差 commitDelta 或读取失败的原因, purpose: 判断源码胶囊写什么 }
   - {id: rel.x1.title-shell, from: present.nav.canvas-title, to: present.shell, type: commands, via: 'channel:router', description: 画布标题行交给应用外壳与路由：版本胶囊的 × 导航到当前版本的路由，带上当前 level / sel, purpose: 一键回到当前版本 }
-  - {id: rel.ad.issues-read, from: present.issues, to: state.desk.loading, type: commands, payload: [ds.Issue], description: 问题页签让模型源同步接手处理, purpose: 取加载后汇总的返工清单 }
+  - {id: rel.ad.issues-read, from: present.issues, to: state.desk.loading, type: commands, payload: [ds.Issue], description: 「问题」资料标签让模型源同步接手处理, purpose: 取加载后汇总的返工清单 }
   - {id: rel.ad.version-read, from: present.version, to: state.desk.versions, type: commands, payload: [ds.DesignInfo, ds.ModelDiff], description: 版本切换与设计信息条交给版本与对比基线（desk.versions）：设计、轮次、对比基线、变更计数；对比基线与标出变更写入 toggles, purpose: 切换对比基线与标出变更 }
   - {id: rel.ad.flow-diff, from: present.canvas.flow, to: state.desk.versions, type: queries, payload: [ds.ModelDiff], description: 视图转换与交互向版本与对比基线（desk.versions）取：节点与边的变更标记, purpose: 给节点与边标出新增与修改 }
   - {id: rel.ad.design-read, from: present.panel.design, to: state.desk.versions, type: queries, payload: [ds.DesignInfo, ds.ModelDiff], description: 设计面板向版本与对比基线（desk.versions）取结果, purpose: 取设计信息与变更清单 }
@@ -609,12 +609,12 @@ relations:
   - {id: rel.ad.overview-collector, from: model.projector.overview, to: model.projector.collector, type: queries, description: 分层总览向边汇总取：核心跨层边单独汇总, purpose: 单独汇总核心跨层边 }
   # 模型层入口的再导出与名称、标签（K7 按代码补齐）
   - {id: rel.ad.indexer-steps, from: model.pipeline.indexer, to: model.scenario-semantics, type: queries, description: Indexer 向回放计划取：messagesOf：建索引时收集场景消息, purpose: 建索引时收集场景消息 }
-  - { id: rel.ad.content-labels, from: present.panel.content, to: present.shared, type: commands, description: 内容组件交给呈现共用件：渲染变更角标与代码块时调用 useOpenPreview 在资料区预览文件、useNavTab 切页签、highlightTs 高亮签名, purpose: 预览文件、切页签与高亮签名 }
-  - { id: rel.ad.relation-type-labels, from: present.panel.relation, to: present.shared, type: commands, description: 关系面板交给呈现共用件：经 useOpenPreview / useNavTab 打开证据文件与切换页签, purpose: 打开证据文件并切换页签 }
-  - { id: rel.ad.edge-type-labels, from: present.panel.edge, to: present.shared, type: commands, description: 聚合边面板交给呈现共用件：经 useOpenPreview / useNavTab 打开证据文件与切换页签, purpose: 打开证据文件并切换页签 }
-  - { id: rel.gv.ports-type-labels, from: present.panel.governance, to: present.shared, type: commands, description: 架构治理面板交给呈现共用件：治理面板经 useOpenPreview / useNavTab 打开证据文件与切换页签, purpose: 打开证据文件并切换页签 }
-  - { id: rel.ad.design-labels, from: present.panel.design, to: present.shared, type: commands, description: 设计面板交给呈现共用件：调用 intentName 显示持久草图名，经 useOpenPreview 在资料区预览 ADR 与草图文件, purpose: 显示草图名并预览 ADR 与草图 }
-  - { id: rel.ad.actor-labels, from: present.panel.actor, to: present.shared, type: commands, description: 参与者面板交给呈现共用件：经 useOpenPreview / useNavTab 打开证据文件与切换页签, purpose: 打开证据文件并切换页签 }
+  - { id: rel.ad.content-labels, from: present.panel.content, to: present.shared, type: commands, description: 内容组件交给呈现共用件：渲染变更角标与代码块时调用 useOpenPreview 以资料标签预览文件、highlightTs 高亮签名, purpose: 预览文件与高亮签名 }
+  - { id: rel.ad.relation-type-labels, from: present.panel.relation, to: present.shared, type: commands, description: 关系面板交给呈现共用件：经 useOpenPreview 以资料标签打开证据文件, purpose: 打开证据文件 }
+  - { id: rel.ad.edge-type-labels, from: present.panel.edge, to: present.shared, type: commands, description: 聚合边面板交给呈现共用件：经 useOpenPreview 以资料标签打开证据文件, purpose: 打开证据文件 }
+  - { id: rel.gv.ports-type-labels, from: present.panel.governance, to: present.shared, type: commands, description: 架构治理面板交给呈现共用件：治理面板经 useOpenPreview 以资料标签打开证据文件, purpose: 打开证据文件 }
+  - { id: rel.ad.design-labels, from: present.panel.design, to: present.shared, type: commands, description: 设计面板交给呈现共用件：调用 intentName 显示持久草图名，经 useOpenPreview 以资料标签预览 ADR 与草图文件, purpose: 显示草图名并预览 ADR 与草图 }
+  - { id: rel.ad.actor-labels, from: present.panel.actor, to: present.shared, type: commands, description: 参与者面板交给呈现共用件：经 useOpenPreview 以资料标签打开证据文件, purpose: 打开证据文件 }
   - {id: rel.ad.nodes-act, from: present.canvas.nodes, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 节点组件交给 dispatch 与操作：分支预览选这一支（chooseBranch）、步骤序号指向这一步（seek）, purpose: 从分支预览选分支、从序号指向步骤 }
   - { id: rel.ad.port-marks-act, from: present.canvas.nodes.ports, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 端口记号交给 dispatch 与操作：单击端口 select 端口（L13），单击合成的「端口 ×N」select 定义模块, purpose: 单击记号选中端口或定义模块 }
   - {id: rel.ad.system-read, from: present.panel.system, to: state.desk.projection, type: queries, description: 系统面板向视图派生（核心与 desk.run）取：读索引、层次视图与版本, purpose: 取索引、层次视图与版本信息 }

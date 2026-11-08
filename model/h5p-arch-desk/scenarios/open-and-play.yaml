@@ -30,7 +30,7 @@ scenario:
     - call: {id: outline, from: state.desk.projection, to: model.scenario.outline, label: outlineScenario：步骤大纲}
     - call: {from: state.desk.projection, to: model.scenario.participation, label: scenarioModules：参与模块}
     - call: {from: present.sequence.interact, to: state.desk.projection, label: 读取定位好的时序图, payload: ds.PositionedSequence}
-    - call: {from: present.nav-tree.steps, to: state.desk.projection, label: 读取步骤大纲，切到步骤页签, payload: ds.OutlineNode}
+    - call: {from: present.nav-tree.steps, to: state.desk.projection, label: 读取步骤大纲，在场景页列出步骤, payload: ds.OutlineNode}
     - loop:
         while: 每按一次「下一步」
         steps:

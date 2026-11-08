@@ -187,15 +187,18 @@ describe('L30 几何检查器', () => {
 // 第二十一轮波 3：新代码（认可与任务单）带来的代码事实使有代码事实的贴框 14 → 15（换回波 2 的描述仍是 15，是代码事实不是描述）；
 // 自描述新增两条关系（AI 回合与撤回 → 草图核验与生命周期、设计面板 → 动作区）使无代码事实的重合 21 → 22（换回波 2 的描述回到 21）。布局代码未动，上升待裁（波 3 报告）
 // 第二十一轮收尾：自描述新增关系 rel.gv.rework-gate（返工清单 → 草图核验与生命周期，DL-45）使无代码事实的重合 22 → 23。布局代码未动，协调者 2026-11-06 准予上调
+// 第二十二轮波 5：自描述按代码补五条交互（视图区 → 运行信息 / 视图状态转移 / 内容组件、侧栏 → 场景列表、画布 → 属性面板）、删一条（面板分派 → 运行信息，代码里已无），
+// 布局代码未动——h5p-arch-desk 重合 34 → 36、无代码事实 23 → 26；其中「视图区 → 视图状态转移」（isResident，呈现层到视图状态层的跨层线）占 +2 / +2，
+// 拿掉它回到 34 / 24。上升待裁（波 5 报告）
 const CEILING: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 34, arrows: 3, crossNode: 3, labels: 0, hug: 15, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 36, arrows: 3, crossNode: 3, labels: 0, hug: 15, onFrame: 0 },
   h5player: { overlap: 93, arrows: 1, crossNode: 2, labels: 0, hug: 18, onFrame: 0 },
   'media-web-player': { overlap: 23, arrows: 0, crossNode: 7, labels: 2, hug: 5, onFrame: 0 },
 }
 // 第十五轮：模型层新增两个第二级模块（模型层入口、场景语义）后，把四层声明为层（ADR-0051 修订）——模型层由普通层次改为分层总览：
 // 有代码事实重合 62 → 53、压节点 12 → 3、贴框 6 → 10；无代码事实重合 48 → 45、压节点 12 → 3、贴框 6 → 7
 const BARE: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 23, arrows: 0, crossNode: 3, labels: 0, hug: 18, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 26, arrows: 0, crossNode: 3, labels: 0, hug: 18, onFrame: 0 },
   h5player: { overlap: 96, arrows: 0, crossNode: 0, labels: 3, hug: 13, onFrame: 0 },
   'media-web-player': { overlap: 35, arrows: 0, crossNode: 1, labels: 0, hug: 6, onFrame: 0 },
 }
