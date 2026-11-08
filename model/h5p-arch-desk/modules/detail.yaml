@@ -276,7 +276,7 @@ modules:
     name: 面包屑
     summary: 显示当前层次路径，点击任一级返回
     parent: present.nav
-    responsibility: 画布页头（LY-5）侧栏开关之后的一项：「根层 / … / 当前层次」，以「根层」开头（悬停写系统名），点击任一级返回并选中刚离开的那一级（N7、TB-7）；草图画布下不出现。
+    responsibility: 画布页头（LY-5）最左的一项（侧栏开关在竖栏顶格）：「根层 / … / 当前层次」，以「根层」开头（悬停写系统名），点击任一级返回并选中刚离开的那一级（N7、TB-7）；草图画布下不出现。
     codeRefs: [src/components/Breadcrumb.vue]
   - id: present.nav.toolbar
     name: 搜索面板
@@ -481,7 +481,8 @@ relations:
   - { id: rel.gv.model-types, from: model.governance, to: model.types, type: queries, purpose: 按契约类型产出治理结果 }
   - { id: rel.gv.model-source, from: model.governance, to: model.source, type: queries, purpose: 按文件归属把依赖提升到模块 }
   - { id: rel.ad.desk-labels, from: state.desk, to: model.types, type: queries, purpose: 取模型类型与名称查询 }
-  - { id: rel.ad.navtree-tab, from: present.nav-tree, to: present.shared, type: queries, purpose: 让侧栏与项目视图共用同一个当前页 }
+  - { id: rel.ad.navtree-tab, from: present.nav-tree, to: present.shared, type: queries, description: 侧栏与竖栏向呈现共用件取项目视图注入的当前页（SIDE_NAV）与筛选（SIDE_FILTERS，LY-4d）, purpose: 与项目视图共用当前页与筛选 }
+  - { id: rel.ly.scenarios-filters, from: present.scenarios, to: present.shared, type: queries, description: 场景列表向呈现共用件取侧栏与「场景 ▾」下拉共用的一份筛选（useSideFilters，LY-4d）, purpose: 与「场景 ▾」下拉共用筛选 }
   - { id: rel.ad.version-labels, from: present.version, to: present.shared, type: queries, purpose: 取设计状态的中文显示名 }
   - { id: rel.ad.present-names, from: present, to: model.types, type: queries, purpose: 取显示名与领域枚举 }
   - { id: rel.ad.diff-index, from: model.diff, to: model.types, type: queries, purpose: 按索引类型逐字段比对两版 }

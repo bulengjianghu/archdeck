@@ -190,8 +190,10 @@ describe('L30 几何检查器', () => {
 // 第二十二轮波 5：自描述按代码补五条交互（视图区 → 运行信息 / 视图状态转移 / 内容组件、侧栏 → 场景列表、画布 → 属性面板）、删一条（面板分派 → 运行信息，代码里已无），
 // 布局代码未动——h5p-arch-desk 重合 34 → 36、无代码事实 23 → 26；其中「视图区 → 视图状态转移」（isResident，呈现层到视图状态层的跨层线）占 +2 / +2，
 // 拿掉它回到 34 / 24。上升待裁（波 5 报告）
+// 第二十二轮补丁（负责人 2026-11-08 走查）：自描述在侧栏下新增子模块「竖栏」（present.nav-tree.rail），布局代码未动——有代码事实的重合 36 → 37；
+// 把竖栏并回侧栏（不设子模块）即回到 36。上升待裁（21-patch-report）
 const CEILING: Record<(typeof PROJECTS)[number], Counts> = {
-  'h5p-arch-desk': { overlap: 36, arrows: 3, crossNode: 3, labels: 0, hug: 15, onFrame: 0 },
+  'h5p-arch-desk': { overlap: 37, arrows: 3, crossNode: 3, labels: 0, hug: 15, onFrame: 0 },
   h5player: { overlap: 93, arrows: 1, crossNode: 2, labels: 0, hug: 18, onFrame: 0 },
   'media-web-player': { overlap: 23, arrows: 0, crossNode: 7, labels: 2, hug: 5, onFrame: 0 },
 }
