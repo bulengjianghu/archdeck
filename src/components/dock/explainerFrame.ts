@@ -1,6 +1,6 @@
 /**
  * 图解标签的 iframe 文档（EX-2、EX-3）：在图解原文的 head 最前注入 CSP（禁止一切网络请求）与引用的样式，
- * 在 body 末尾注入桥接脚本——按架构台给的原文填 data-field、给有图解的引用附「图解 ›」（每个模块只在第一处附一次）、把单击与悬停（LY-15）变成 postMessage。
+ * 在 body 末尾注入桥接脚本——按架构台给的原文填 data-field、给有图解的引用附「图解 ›」（每个模块只在 HTML 正文里第一次出现的地方附一次，SVG 里的跳过）、把单击与悬停（LY-15）变成 postMessage。
  * iframe 只给 allow-scripts（不给 same-origin），父页按消息来源校验（ExplainerDoc）。
  */
 import type { ExplainerRefView } from '@/state/useDeskState'
@@ -55,7 +55,8 @@ const BRIDGE = `(function () {
         el.appendChild(item);
       });
     }
-    if (r.explainer && !linked[id] && !(el.parentElement && el.parentElement.closest('[data-arch]'))) {
+    // 「图解 ›」只附在 HTML 正文里第一次出现的地方：SVG 里插不进 HTML 的 <a>（插了也不显示），跳过（第二十二轮波 5）
+    if (r.explainer && !linked[id] && !el.closest('svg') && !(el.parentElement && el.parentElement.closest('[data-arch]'))) {
       linked[id] = true;
       var a = document.createElement('a');
       a.className = 'arch-exp';

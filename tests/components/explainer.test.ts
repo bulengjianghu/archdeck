@@ -89,6 +89,21 @@ describe('EX-3 iframe 文档', () => {
     expect(post).not.toHaveBeenCalled()
   })
 
+  it('「图解 ›」跳过 SVG 里的引用：模块第一次出现在图里时，附在它第一次出现在 HTML 正文的地方；只出现在图里的不附', () => {
+    const svgFirst = page(
+      '<svg viewBox="0 0 480 40"><g id="g" data-arch="a"><text>甲</text></g><g id="g2" data-arch="c"><text>丙</text></g></svg><p><span id="p" data-arch="a">甲</span></p>',
+    )
+    const refs2: Record<string, ExplainerRef> = { ...refs, c: { name: '丙', summary: null, invariants: [], explainer: true } }
+    const dom = new JSDOM(explainerSrcdoc(svgFirst, refs2, 'http://desk.test'), { runScripts: 'dangerously' })
+    const d = dom.window.document
+    const links = [...d.querySelectorAll('a.arch-exp')]
+    expect(links.map(x => x.getAttribute('data-explainer'))).toEqual(['a'])
+    expect(d.getElementById('p')!.nextElementSibling?.classList.contains('arch-exp')).toBe(true)
+    expect(d.querySelector('svg a')).toBeNull()
+    // 图里的框照样可单击选中
+    expect(d.getElementById('g2')!.getAttribute('role')).toBe('link')
+  })
+
   it('消息形状校验', () => {
     expect(isExplainerMessage({ type: 'arch:select', module: 'a' })).toBe(true)
     expect(isExplainerMessage({ type: 'arch:select', module: 1 })).toBe(false)
