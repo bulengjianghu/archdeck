@@ -3,7 +3,7 @@
  * 从「场景 ▾」选场景 → ← → 逐步 → 单击「结构」即退出（LY-6a）→ 回到交互、从侧栏再进 → ✕ 退出；进出场景时视图区按情境排布，人改过的按情境记住。
  */
 import { expect, test } from '@playwright/test'
-import { activeTab, openDesk, query, sidebar, viewTab, views, waitSettled } from './helpers'
+import { activeTab, openDesk, openFilters, query, sidebar, sidePage, viewTab, views, waitSettled } from './helpers'
 
 const seg = (page: import('@playwright/test').Page, mode: 'structure' | 'interaction') => page.locator(`[data-head="canvas"] [data-mode="${mode}"]`)
 const chip = (page: import('@playwright/test').Page) => page.locator('[data-scene-chip]')
@@ -25,7 +25,9 @@ test('回放主路径：场景胶囊选场景 → ← → 逐步 → 切结构�
   await expect(chip(page)).toHaveClass(/\bon\b/)
   await expect(seg(page, 'interaction')).toHaveClass(/\bon\b/)
   await expect(activeTab(page, 0)).toHaveAttribute('data-view-tab', 'sequence')
-  await expect(activeTab(page, 1)).toHaveAttribute('data-view-tab', 'description')
+  // 场景排布（负责人 2026-11-08 走查）：上组只有时序图，下组图解 描述 核对
+  await expect(activeTab(page, 1)).toHaveAttribute('data-view-tab', 'explainer')
+  await expect(views(page).locator('[data-group="0"] .tabs > .tab')).toHaveCount(1)
   await expect(page.locator('.player-bar')).toBeVisible()
 
   // 2. → → ←：逐步，主语条写进度，地址带 step
@@ -41,9 +43,9 @@ test('回放主路径：场景胶囊选场景 → ← → 逐步 → 切结构�
   await seg(page, 'interaction').click()
   expect(query(page).get('sc')).toBe('sc.open-and-play')
 
-  // 人改排布：关掉核对（场景情境记住）
-  await views(page).getByRole('button', { name: '关闭核对' }).click()
-  await expect(viewTab(page, 'check')).toHaveCount(0)
+  // 人改排布：把核对拖到上组（场景情境记住；视图标签常驻不可关，LY-9）
+  await viewTab(page, 'check').dragTo(views(page).locator('[data-group="0"] .tabs'))
+  await expect(views(page).locator('[data-group="0"] [data-view-tab="check"]')).toHaveCount(1)
 
   // 3. 单击「结构」：退出场景并切到结构（LY-6a），视图区回到自由排布（核对还在——记忆按情境分）
   await seg(page, 'structure').click()
@@ -52,17 +54,20 @@ test('回放主路径：场景胶囊选场景 → ← → 逐步 → 切结构�
   await expect(page.locator('.player-bar')).toHaveCount(0)
   await expect(viewTab(page, 'sequence')).toHaveCount(0)
   await expect(viewTab(page, 'check')).toHaveCount(1)
+  await expect(views(page).locator('.group')).toHaveCount(1)
   // 再回交互
   await seg(page, 'interaction').click()
   await expect.poll(() => query(page).get('v')).toBeNull()
 
-  // 4. 侧栏「场景」页再进：同一个场景，场景排布照人改过的（没有核对）
-  await sidebar(page).locator('[data-side-page="scenes"]').click()
-  await sidebar(page).getByRole('button', { name: /全部/ }).first().click()
+  // 4. 侧栏「场景」页再进：同一个场景，场景排布照人改过的（核对在上组）
+  await sidePage(page, 'scenes')
+  const pop = await openFilters(page)
+  await pop.getByRole('group', { name: '范围' }).getByRole('button', { name: /^全部/ }).click()
+  await sidebar(page).locator('[data-side-filter]').click()
   await sidebar(page).locator('.scenario-list .item', { hasText: '打开场景并回放' }).click()
   await expect.poll(() => query(page).get('sc')).toBe('sc.open-and-play')
   await expect(viewTab(page, 'sequence')).toHaveCount(1)
-  await expect(viewTab(page, 'check')).toHaveCount(0)
+  await expect(views(page).locator('[data-group="0"] [data-view-tab="check"]')).toHaveCount(1)
 
   // 5. ✕ 退出：留在交互视角，自由排布
   await chip(page).getByRole('button', { name: '退出场景' }).click()

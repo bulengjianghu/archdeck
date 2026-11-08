@@ -1,18 +1,21 @@
 <script setup lang="ts">
 /**
- * 视图区的一组（LY-8–LY-10，ADR-0064）：第一行是标签栏（38px），下面是活动标签的内容。
- * 视图标签（图解、描述、核对、时序图）的内容是主语的投影（ViewDoc）；资料标签（源代码、对话、设计说明、问题）不跟随主语，
- * 预览标签斜体、双击固定（LY-8a）。常驻标签没有 ×（LY-9）。标签可拖（LY-10）：落在标签栏按位置插入，落在内容区放到该组末尾。
- * 「+」菜单分两节：视图 · 跟随主语（被关掉的描述、核对）、资料 · 不跟随（对话、问题），加进发起的这一组（LY-10a）。
+ * 视图区的一组（LY-8–LY-10，ADR-0064；负责人 2026-11-08 走查修订）：第一行是标签栏（34px，不画底线），下面是活动标签的内容。
+ * 标签是文字：选中为深色字 + 压在标签栏底边的 2px 下划线，未选中为灰字，不用底色胶囊。
+ * 视图标签（图解、描述、核对）的内容是主语的投影、全部常驻；情境标签（时序图）跟随场景，名字带进度「时序图 · 2/8」；
+ * 「核对」名字带结论「核对 ⚠2」（核对卡里要看的项数，LY-9b）。资料标签（源代码、对话、设计说明、问题）不跟随主语，
+ * 预览标签斜体、双击固定（LY-8a），× 只在悬停时出现；常驻标签没有 ×（LY-9）。标签可拖（LY-10）：落在标签栏按位置插入，落在内容区放到该组末尾。
+ * 「+」菜单只开资料标签（对话、问题），加进发起的这一组（LY-10a）。
  * 只读工作区状态、只发意图（desk.workspace.dispatch）。
  */
 import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useDesk } from '@/state/inject'
-import { isResident, type DocRef, type Tab, type TabGroup, type ViewKind } from '@/state/useDeskState'
+import { isResident, type DocRef, type Tab, type TabGroup } from '@/state/useDeskState'
 import SourceView from '../source/SourceView.vue'
 import ViewDoc from './ViewDoc.vue'
 import { docKindView, docLabel, docTip, VIEW_LABELS, type DocKindContext } from './docKinds'
 import { TAB_DRAG, noDrag } from './tabDrag'
+import { checkWarnCount } from '../panel/checkRows'
 
 const props = defineProps<{ group: TabGroup; gi: number; count: number }>()
 const desk = useDesk()
@@ -26,31 +29,35 @@ const kindCtx: DocKindContext = {
   noteTitle: file => desk.notes.list.value.find(n => n.file === file)?.title ?? file,
 }
 const label = (t: Tab) => (t.kind === 'view' ? VIEW_LABELS[t.view] : docLabel(t.doc, kindCtx))
+/** LY-8：时序图（情境标签）的进度「当前步 / 本层步数」；开头为 0 */
+const progress = computed(() => {
+  const total = desk.run.scenarioView.value?.messages.length ?? 0
+  if (!desk.playback.value || !total) return ''
+  const ci = desk.run.currentIndex.value
+  return `${ci === null ? 0 : ci + 1}/${total}`
+})
+/** LY-9b：核对标签带的结论——核对卡里「要看」的项数 */
+const checkCount = computed(() => checkWarnCount(desk))
 const icon = (t: Tab) => (t.kind === 'doc' ? docKindView(t.doc)?.icon : undefined)
 const tip = (t: Tab) =>
-  resident(t)
-    ? `${label(t)}（视图：跟随主语；常驻，不可关闭）`
-    : t.kind === 'view'
-      ? `${VIEW_LABELS[t.view]}（视图：跟随主语）`
-      : docTip(t.doc, kindCtx) + '（资料：不跟随主语）' + (t.preview ? '（预览：双击固定）' : '')
+  t.kind === 'view'
+    ? t.view === 'sequence'
+      ? `${label(t)}（情境：跟随场景，不跟随主语；常驻）`
+      : `${label(t)}（视图：跟随主语；常驻）`
+    : docTip(t.doc, kindCtx) + '（资料：不跟随主语）' + (t.preview ? '（预览：双击固定）' : '')
 const resident = (t: Tab) => isResident(ws.state.value, t.id)
 /** 新种类的正文组件 */
 const bodyOf = computed(() => (active.value?.kind === 'doc' ? docKindView(active.value.doc)?.component : undefined))
 
-/** LY-9、LY-10a：「+」——加回被关掉的视图标签、打开资料 */
+/** LY-10a：「+」——只开资料标签（视图标签常驻，LY-9） */
 const plusOpen = ref(false)
 const plusEl = ref<HTMLElement>()
 const has = (id: string) => ws.state.value.groups.some(g => g.tabs.some(t => t.id === id))
-const addableViews = computed<ViewKind[]>(() => (['description', 'check'] as ViewKind[]).filter(v => !has(`view:${v}`)))
 const DOCS: { doc: DocRef; id: string; label: string; note: string }[] = [
   { doc: { kind: 'dialogue' }, id: 'dlg', label: '对话', note: '问 · 改' },
   { doc: { kind: 'issues' }, id: 'issues', label: '问题', note: '返工清单' },
 ]
 const addableDocs = computed(() => DOCS.filter(d => !has(d.id) && (d.doc.kind !== 'dialogue' || !desk.version || desk.edit.active.value)))
-function addView(view: ViewKind) {
-  plusOpen.value = false
-  ws.dispatch({ type: 'addView', view, group: props.gi })
-}
 function addDoc(doc: DocRef) {
   plusOpen.value = false
   ws.open(doc, true, props.gi)
@@ -135,7 +142,8 @@ function drop(index: number) {
       >
         <button role="tab" class="lbl" :aria-selected="t.id === group.active" :title="tip(t)" @click="ws.dispatch({ type: 'activate', id: t.id })">
           <span v-if="icon(t)" class="kind-ic" aria-hidden="true">{{ icon(t) }}</span
-          >{{ label(t) }}
+          >{{ label(t) }}<span v-if="t.kind === 'view' && t.view === 'sequence' && progress" class="ctx" data-tab-progress> · {{ progress }}</span
+          ><span v-if="t.kind === 'view' && t.view === 'check' && checkCount" class="cnt" data-tab-count>⚠{{ checkCount }}</span>
         </button>
         <button v-if="!resident(t)" class="x" :title="`关闭${label(t)}`" :aria-label="`关闭${label(t)}`" @click.stop="ws.dispatch({ type: 'close', id: t.id })">
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" /></svg>
@@ -146,20 +154,15 @@ function drop(index: number) {
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg>
         </button>
         <span v-if="plusOpen" class="plus-menu" role="menu" aria-label="添加标签">
-          <template v-if="addableViews.length">
-            <span class="mh">视图 · 跟随主语</span>
-            <button v-for="v in addableViews" :key="v" role="menuitem" :data-add-view="v" @click="addView(v)">{{ VIEW_LABELS[v] }}</button>
-          </template>
           <template v-if="addableDocs.length">
-            <span class="mh">资料 · 不跟随</span>
+            <span class="mh">资料 · 不跟随主语</span>
             <button v-for="d in addableDocs" :key="d.id" role="menuitem" :data-add-doc="d.doc.kind" @click="addDoc(d.doc)">
               {{ d.label }}<span class="note">{{ d.note }}</span>
             </button>
           </template>
-          <span v-if="!addableViews.length && !addableDocs.length" class="empty">全部已打开</span>
+          <span v-if="!addableDocs.length" class="empty">全部已打开</span>
         </span>
       </span>
-      <span class="sp" />
     </header>
     <div class="body" @dragover="onBodyOver" @drop.prevent="drop(group.tabs.length)">
       <template v-if="active">
@@ -180,16 +183,16 @@ function drop(index: number) {
   min-height: 0;
 }
 
+/* 标签栏不画底线（视图区只有主语条那一条横线），选中标签的下划线压在栏的底边 */
 .tabs {
   position: relative;
   flex: none;
   box-sizing: border-box;
-  height: 38px;
+  height: 34px;
   display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 0 8px;
-  border-bottom: 1px solid var(--border);
+  align-items: stretch;
+  gap: 16px;
+  padding: 0 8px 0 16px;
   background: var(--surface);
   font-size: 12.5px;
 }
@@ -197,9 +200,9 @@ function drop(index: number) {
 .tabs.drop-end > .plus-wrap::before {
   content: '';
   position: absolute;
-  left: -3px;
-  top: 3px;
-  bottom: 3px;
+  left: -9px;
+  top: 8px;
+  bottom: 8px;
   width: 2px;
   border-radius: 2px;
   background: var(--accent);
@@ -212,20 +215,27 @@ function drop(index: number) {
   flex: 0 1 auto;
   min-width: 0;
   max-width: 220px;
-  height: 26px;
-  border-radius: 6px;
-  color: var(--text-2);
+  color: var(--text-3);
   user-select: none;
 }
 
 .tab:hover {
   color: var(--text);
-  background: var(--surface-2);
 }
 
 .tab.on {
   color: var(--text);
-  background: var(--surface-3);
+}
+
+.tab.on::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--text);
 }
 
 .tab.dragged {
@@ -235,9 +245,9 @@ function drop(index: number) {
 .tab.drop-before::before {
   content: '';
   position: absolute;
-  left: -2px;
-  top: 3px;
-  bottom: 3px;
+  left: -9px;
+  top: 8px;
+  bottom: 8px;
   width: 2px;
   border-radius: 2px;
   background: var(--accent);
@@ -246,8 +256,8 @@ function drop(index: number) {
 .tab .lbl {
   border: none;
   background: none;
-  padding: 0 4px 0 10px;
-  height: 26px;
+  padding: 0 1px;
+  height: 100%;
   color: inherit;
   font-size: 12.5px;
   overflow: hidden;
@@ -256,12 +266,20 @@ function drop(index: number) {
   cursor: pointer;
 }
 
-.tab.pin .lbl {
-  padding-right: 10px;
-}
-
 .tab.preview .lbl {
   font-style: italic;
+}
+
+.tab .ctx {
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.tab .cnt {
+  margin-left: 4px;
+  color: var(--warning);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .kind-ic {
@@ -270,11 +288,12 @@ function drop(index: number) {
   color: var(--accent);
 }
 
+/* 资料标签的 × 只在悬停时出现 */
 .tab .x {
   flex: none;
   width: 16px;
   height: 16px;
-  margin-right: 5px;
+  margin: 0 -4px 0 4px;
   display: grid;
   place-items: center;
   padding: 0;
@@ -286,7 +305,6 @@ function drop(index: number) {
 }
 
 .tab:hover .x,
-.tab.on .x,
 .tab .x:focus-visible {
   opacity: 0.7;
 }
@@ -308,6 +326,8 @@ function drop(index: number) {
 .plus-wrap {
   position: relative;
   flex: none;
+  margin-left: auto;
+  align-self: center;
 }
 
 .plus {
@@ -336,7 +356,7 @@ function drop(index: number) {
 .plus-menu {
   position: absolute;
   top: 30px;
-  left: 0;
+  right: 0;
   z-index: 30;
   display: flex;
   flex-direction: column;
@@ -379,10 +399,6 @@ function drop(index: number) {
   padding: 6px 8px;
   font-size: 12px;
   color: var(--text-3);
-}
-
-.sp {
-  flex: 1;
 }
 
 .body {

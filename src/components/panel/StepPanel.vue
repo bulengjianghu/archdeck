@@ -19,7 +19,7 @@ import RelationRow from './RelationRow.vue'
 import RevealButton from './RevealButton.vue'
 import PanelCard from './PanelCard.vue'
 import CheckCard from './CheckCard.vue'
-import type { CheckRow } from './panelCheck'
+import { stepCheckRowsOf } from './checkRows'
 import { useOpenPreview } from '../shared/preview'
 import { EVIDENCE_LEVEL_LABELS } from '../shared/labels'
 import { alignedEvidence, stepChain } from './chain'
@@ -70,18 +70,7 @@ const CHAIN_MARK = { ok: '✓', missing: '✗', skipped: '—', na: '' } as cons
 const segText = (s: CarrierSegment) => CARRIER_ROLE_TEXT[s.role](s.from === '*' ? '某模块' : moduleName(idx.value, s.from), moduleName(idx.value, s.to))
 
 /** 核对卡（PC-10）：代码证据一行——无证据或承载缺段为 ⚠，不判定为 — */
-const rows = computed<CheckRow[]>(() => {
-  const e = shownEv.value
-  if (!e) return [{ key: 'evidence', label: '代码证据', state: 'none', text: '没有代码事实', items: [] }]
-  const missing = chain.value?.carrier.segments?.filter(sg => sg.missing) ?? []
-  const items = [
-    ...(e.level === 'none' ? [{ text: e.note || '代码里没找到这一步的证据', target: 'evidence.code' }] : []),
-    ...missing.map(sg => ({ text: `承载缺段：${segText(sg)}`, target: 'evidence.code' })),
-  ]
-  return [
-    { key: 'evidence', label: '代码证据', state: items.length ? 'bad' : e.level === 'skipped' ? 'none' : 'ok', text: EVIDENCE_LEVEL_LABELS[e.level], items },
-  ]
-})
+const rows = computed(() => stepCheckRowsOf(desk))
 
 function pointAt(id: string) {
   if (idx.value.actors.has(id)) desk.select({ kind: 'actor', id })

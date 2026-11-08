@@ -13,29 +13,15 @@ import ChangeBadge from './ChangeBadge.vue'
 import PortEntry from './PortEntry.vue'
 import PanelCard from './PanelCard.vue'
 import CheckCard from './CheckCard.vue'
-import { firstSentence, moduleName } from '@/model'
-import type { CheckRow } from './panelCheck'
+import { firstSentence } from '@/model'
+import { portCheckRowsOf } from './checkRows'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
 const x = computed(() => desk.index.value?.interfaces.get(props.id))
 const panel = computed(() => desk.facts.portOf(props.id))
 const use = computed(() => (x.value?.description ? firstSentence(x.value.description) : ''))
-const rows = computed<CheckRow[]>(() => {
-  const p = panel.value
-  if (!p || !p.implementers.length) return []
-  if (!desk.facts.report.value) return [{ key: 'implementers', label: '实现者', state: 'none', text: '没有代码事实', items: [] }]
-  const bad = p.implementers.filter(i => i.described && i.status === 'unconfirmed')
-  return [
-    {
-      key: 'implementers',
-      label: '实现者',
-      state: bad.length ? 'bad' : 'ok',
-      text: bad.length ? `${p.implementers.length} 个中 ${bad.length} 个未证实` : `${p.implementers.length} 个都有代码证据`,
-      items: bad.map(i => ({ text: `${moduleName(desk.index.value!, i.module)}：描述写了实现，代码里没找到证据`, target: 'boundary.port' })),
-    },
-  ]
-})
+const rows = computed(() => portCheckRowsOf(desk, props.id))
 </script>
 
 <template>

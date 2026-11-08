@@ -24,6 +24,7 @@ import SketchPanel from '../sketch/SketchPanel.vue'
 import StepPanel from './StepPanel.vue'
 import ScenarioPanel from './ScenarioPanel.vue'
 import { PANEL_PART, type PanelPart } from '../shared/panelPart'
+import { panelTargetOf } from './checkRows'
 
 /** 第二十二轮波 2 过渡：住在「描述」标签（原面板全部内容）或「核对」标签（只核对卡）；抽屉已删（LY-16） */
 const props = withDefaults(defineProps<{ part?: PanelPart }>(), { part: 'all' })
@@ -42,25 +43,7 @@ const dropped = computed(() => {
   if (d.kind === 'port') return `端口 ${idx.interfaces.get(d.id)?.name ?? d.id}`
   return '选中的对象'
 })
-const target = computed(() => {
-  const idx = desk.index.value
-  const s = desk.selected.value
-  if (!idx) return null
-  if (s?.kind === 'step') return desk.run.frame.value ? { kind: 'step' as const, id: s.id } : null
-  if (s?.kind === 'scenario') return { kind: 'scenario' as const, id: s.id }
-  if (s?.kind === 'module' && idx.modules.has(s.id)) return { kind: 'module' as const, id: s.id }
-  if (s?.kind === 'relation' && idx.relations.has(s.id)) return { kind: 'relation' as const, id: s.id }
-  if (s?.kind === 'edge') return { kind: 'edge' as const, id: s.id }
-  if (s?.kind === 'actor' && idx.actors.has(s.id)) return { kind: 'actor' as const, id: s.id }
-  if (s?.kind === 'file') return { kind: 'file' as const, id: s.id }
-  if (s?.kind === 'dep') return { kind: 'dep' as const, id: s.id }
-  if (s?.kind === 'couple') return { kind: 'couple' as const, id: s.id }
-  if (s?.kind === 'port') return { kind: 'port' as const, id: s.id }
-  if (s?.kind === 'cycle') return { kind: 'cycle' as const, id: s.id }
-  if (s?.kind === 'stratum') return { kind: 'stratum' as const, id: s.id }
-  const level = desk.levelId.value
-  return level && level !== idx.rootId ? { kind: 'module' as const, id: level } : { kind: 'system' as const, id: idx.rootId }
-})
+const target = computed(() => panelTargetOf(desk))
 </script>
 
 <template>

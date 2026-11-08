@@ -9,7 +9,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { readProject, type ModelPayload } from '../../vite/readModelDir'
 import { createDeskState } from '../../src/state/useDeskState'
 import { DESK_STATE } from '../../src/state/inject'
-import NavTree from '../../src/components/tree/SideBar.vue'
+import { SideHost as NavTree, sideTab } from '../components/sideHost'
 import type { RawFile } from '../../src/model'
 
 const ROOT = path.resolve(import.meta.dirname, '../..')
@@ -27,7 +27,7 @@ async function open(project: string, url = `/p/${project}`, extra: RawFile[] = [
   const wrapper = mount(NavTree, { global: { provide: { [DESK_STATE as symbol]: desk }, plugins: [router] } })
   await flushPromises()
   const row = (id: string) => wrapper.findAll('.row').find(r => r.attributes('data-id') === id)
-  const tab = (name: string) => wrapper.findAll('[role=tab]').find(t => t.text() === name)
+  const tab = (name: string) => sideTab(wrapper, name)
   return { desk, router, wrapper, row, tab }
 }
 

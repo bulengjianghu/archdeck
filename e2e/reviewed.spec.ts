@@ -7,7 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
-import { restoreOwned, openCheckList, openDesk, openSidebar } from './helpers'
+import { openCheckList, openDesk, openFilters, openSidebar, restoreOwned } from './helpers'
 
 const MODEL = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 const LAYERS = path.join(MODEL, 'intent/skeleton.yaml')
@@ -39,8 +39,7 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
     await expect(badge).toHaveText('未确认')
     const before = count()
     // 描述里可能已有别的需复核模块（如合并后指纹变了的），只断言本次多出一个
-    const tools = page.locator('[data-region="sidebar"] .tools')
-    const stale0 = (await tools.count()) ? Number(/需复核 (\d+)/.exec(await tools.innerText())?.[1] ?? 0) : 0
+    const stale0 = (await page.evaluate('window.__desk.review.stale.value.size')) as number
 
     // 确认：文件多一条，标题旁「已确认 <日期>」（PC-8：「确认」表单是核对卡的清单，展开再填）
     await panel.getByRole('button', { name: /^▸ 确认/ }).click()
@@ -62,7 +61,10 @@ test('确认 → 改职责一行 → 需复核（差异只有那一行）→ 复
     fs.writeFileSync(LAYERS, layers0.replace(OLD_LINE, NEW_LINE))
     await expect(badge).toHaveText('需复核')
     await expect(treeRow.locator('.tag.stale')).toHaveText('需复核')
-    await expect(tools).toContainText(`需复核 ${stale0 + 1}`)
+    // LY-4d：「只看需复核」与计数在侧栏「筛选 ▾」弹层里
+    const pop = await openFilters(page)
+    await expect(pop.locator('.chk')).toContainText(`只看需复核 ${stale0 + 1}`)
+    await page.locator('[data-region="sidebar"] [data-side-filter]').click()
     // PC-8：diff 明细是核对卡的清单，展开再断言
     await panel.getByRole('button', { name: /^▸ 自上次确认以来的改动/ }).click()
     const diff = panel.locator('.diff')

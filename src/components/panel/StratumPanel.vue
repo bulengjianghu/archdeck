@@ -12,7 +12,7 @@ import { mayDependOnOf, moduleName, stratumByKey, stratumKey, summaryOf } from '
 import Section from './Section.vue'
 import PanelCard from './PanelCard.vue'
 import CheckCard from './CheckCard.vue'
-import type { CheckRow } from './panelCheck'
+import { stratumCheckRowsOf, stratumMetricsOf } from './checkRows'
 
 const props = defineProps<{ id: string }>()
 const desk = useDesk()
@@ -21,10 +21,7 @@ const pp = usePanelPart()
 const idx = computed(() => desk.index.value)
 const s = computed(() => (idx.value ? (stratumByKey(idx.value, props.id) ?? null) : null))
 const name = (id: string) => (idx.value ? moduleName(idx.value, id) : id)
-const metrics = computed(() => {
-  if (!idx.value || !s.value) return null
-  return desk.facts.strataOf(s.value.parent).find(m => m.id === s.value!.id) ?? null
-})
+const metrics = computed(() => stratumMetricsOf(desk, props.id))
 const deps = computed(() => {
   if (!idx.value || !s.value) return []
   const list = idx.value.strata.get(s.value.parent) ?? []
@@ -37,23 +34,7 @@ const brief = (id: string) => {
   const m = idx.value?.modules.get(id)
   return m ? (summaryOf(m)?.text ?? '') : ''
 }
-const rows = computed<CheckRow[]>(() => {
-  const x = metrics.value
-  if (!x || x.instability === null) return [{ key: 'structure', label: '结构', state: 'none', text: '没有代码事实', items: [] }]
-  return [
-    {
-      key: 'structure',
-      label: '结构',
-      state: x.upward.length ? 'hint' : 'ok',
-      text: `Ca ${x.ca} · Ce ${x.ce} · I ${x.instability.toFixed(2)}${x.upward.length ? ` · 向上 ${x.upward.length}` : ''}`,
-      items: x.upward.map(u => ({
-        text: `向上：${name(u.from)} → ${name(u.to)}${u.typeOnly ? '（只引类型）' : ''} · ${u.files} 处`,
-        target: 'structure',
-        hint: true,
-      })),
-    },
-  ]
-})
+const rows = computed(() => stratumCheckRowsOf(desk, props.id))
 </script>
 
 <template>

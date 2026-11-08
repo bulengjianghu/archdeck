@@ -12,8 +12,8 @@ modules:
       - 描述、源码与写入的 HTTP 实现由这里注入 DeskState，子组件不直接请求
       - { text: 侧栏、画布、视图区的宽度只随人拖动或开合变，选中、打开场景、打开资料都不改, adr: 64 }
     principle: |
-      - 两部分（LY-1，ADR-0064）：左边系统——侧栏（停靠、可收可拖宽，开合与宽度是工作区状态，只由人开合，LY-3）+ 画布；右边视图区。没有全宽顶栏，三区页头同高 44px、底线对齐（LY-2）：侧栏顶上是项目菜单，画布页头（CanvasHead）是侧栏开关、面包屑、视角段与场景胶囊、「显示 ▾」⌕ ⋯、视图区开关（LY-5），视图区页头是主语条（LY-7）。⌘K 打开搜索面板；「⋯」（MoreMenu）里是帮助与快捷键。
-      - 视图区可整体收起（LY-12），收起时画布右上角出「视图 · 主语名 ›」胶囊（--views-pill-h 让画布右上角那一列下移）；侧栏的页（模块 / 场景 / 改动）由这里持有、经 SIDE_NAV 注入，画布的改动徽标切到「改动」页（人的单击，侧栏收着就展开）。⚠ 胶囊在视图区打开「问题」资料标签（LY-4a）。
+      - 两部分（LY-1，ADR-0064）：左边系统——竖栏（侧栏开关与三页图标，LY-3）+ 侧栏（停靠、可收可拖宽，开合与宽度是工作区状态，只由人开合）+ 画布；右边视图区。没有全宽顶栏，竖栏顶格与三区页头同高 44px、底线连成一条，区与区之间只画 1px 线、命中区在线两侧透明扩展（LY-2）：侧栏顶上是项目菜单，画布页头（CanvasHead）是面包屑、视角段与场景胶囊、「显示 ▾」⌕ ⋯、视图区开关（LY-5），视图区页头是主语条（LY-7）。竖栏、侧栏、视图区与页头是面板底，画布正文是唯一下沉的台面（LY-2a）。⌘K 打开搜索面板；「⋯」（MoreMenu）里是帮助与快捷键。
+      - 视图区可整体收起（LY-12），收起时画布右上角出「视图 · 主语名 ›」胶囊（--views-pill-h 让画布右上角那一列下移）；视图区宽度的比例按竖栏右边那块算（LY-10d）；侧栏的页（模块 / 场景 / 改动）与筛选（LY-4d）由这里持有、经 SIDE_NAV、SIDE_FILTERS 注入，画布的改动徽标切到「改动」页（人的单击，侧栏收着就展开）。⚠ 胶囊在视图区打开「问题」资料标签（LY-4a）。
       - 回放胶囊浮在画布底部居中，位置由 playerPlacement 按画布宽、胶囊宽与缩放胶囊右沿推出（CD-7；悬浮卡片避让随抽屉删除，LY-16）。面板的「预览」经 OPEN_PREVIEW 打开源代码预览标签（G15）；手势编辑要表单时（OPEN_PROPS）激活「描述」标签。
       - 「怎么读这张图」（GuideDialog）按三问四修饰讲一条线（ADR-0029 §3）：三个判断题定类型，再读机制（插座 = 经端口）、异步、拉取；查询淡、委托实色，端口是方框进边一侧的小记号。
       - 「组装」叠加开关同演化叠加，按项目记在本机：模型加载后恢复，之后每次变化写回（useAssemblyPrefs，O12）。
@@ -22,9 +22,9 @@ modules:
   - id: present.scenarios
     name: 场景列表
     summary: 列出与当前层次相关的场景，选定即进入回放
-    abstraction: 只列出与筛选 DeskState 派生好的场景，选定即交给它进入回放（交互视角 + 场景，LY-6），自身不遍历场景、不改层次；同一组件既是画布页头「场景 ▾」的下拉，也平铺在侧栏「场景」页（LY-4、LY-5a）。
+    abstraction: 只列出与筛选 DeskState 派生好的场景，选定即交给它进入回放（交互视角 + 场景，LY-6），自身不遍历场景、不改层次；同一组件既是画布页头「场景 ▾」的下拉，也平铺在侧栏「场景」页（LY-4、LY-5a）。列表、计数与发起者选项是同一份纯派生（scenarioListing），筛选（范围、类别、发起者）是侧栏与下拉共用的一份（sideFilters）：下拉里平铺在列表上方，侧栏里收在「筛选 ▾」弹层（LY-4d）。
     principle: 场景按类别筛选（R17，ADR-0030）：默认只列主流程（kind 缺省 main），可切到「全部类别」，切换记在本机、所有项目共用、不进 URL；非主流程项在名字后标「异常」/「维护」；类别筛选与层次、发起者筛选叠加（filterScenariosByKind）。
-    codeRefs: [src/components/ScenarioList.vue]
+    codeRefs: [src/components/ScenarioList.vue, src/components/tree/ScenarioFilters.vue, src/components/tree/scenarioListing.ts]
   - id: present.perspective
     name: 视角切换
     summary: 显示当前视角与场景，并提供进入或退出场景的入口
@@ -52,7 +52,7 @@ modules:
     invariants:
       - 只有 SequenceView 取 DeskState 并发操作，泳道头、消息区、组合框只收属性
       - 坐标全取 desk.run 定位好的时序图，组件不调用排布函数
-      - 只在播放头所在的帧变化时滚动，悬停、选中、换层次不滚动
+      - 只在播放头所在的帧变化时把进度滚到中间；主语换成模块等时只把它的泳道与消息滚到可见，悬停、换层次不滚动
   - id: state.transition
     name: 视图状态转移
     summary: 按会话规则由状态与动作算出下一个视图状态
@@ -60,15 +60,15 @@ modules:
     invariants:
       - 只引用模型层与自身文件，不依赖 Vue、路由与计时器
       - 视图状态的转移输入状态、动作与上下文，只返回新状态、是否进历史与被清空的选中
-      - { text: 工作区状态是另一个值，只经 workspaceTransition 改变，不进 URL 与历史；每次转移之后统一规整（图解常驻、场景里时序图常驻、至多两组）, adr: 64 }
+      - { text: 工作区状态是另一个值，只经 workspaceTransition 改变，不进 URL 与历史；每次转移之后统一规整（图解、描述、核对常驻，场景里时序图常驻，至多两组）, adr: 64 }
 
   # ── 呈现层 ──────────────────────────────────────────────
   - id: present.desk-view.split
     name: 视图区
-    summary: 按情境排布的视图标签与资料标签，视图标签跟随主语
+    summary: 按情境排布三类标签，视图随主语、时序图随场景
     parent: present.desk-view
     adrs: [64, 55]
-    responsibility: 项目视图右边的视图区（ADR-0064）：页头是主语条（SubjectBar：路径 › 名称、ID、角色徽标，右端收起视图区，LY-7、LY-12），其下一到两组标签上下排列、组高按分隔比例、分隔可拖。标签可拖（HTML5 拖放）：落在标签栏按位置插入、落在内容区放到该组末尾，只有一组时拖动中出现下半区落点「拖到这里，上下对照」= 开下组（LY-10）。视图标签（图解、描述、核对、时序图）按类型各一个、内容是主语的投影（ViewDoc，LY-13）：图解只放讲解（ExplainerView；没有讲解给空态与相关模块的图解链接），描述是面板头一行操作 + 理解 / 事实 / 关系等面板（名称只在主语条），核对只放核对卡（系统与层先给子树汇总），回放中步骤与场景在步骤节；内容里的模块引用悬停即在画布描边提示（LY-15，refHover / useRefPeek），单击即选中，图解常驻、回放中时序图常驻（没有 ×），「+」菜单分「视图 · 跟随主语」「资料 · 不跟随」两节，加进发起的那一组；资料标签（源代码、对话、设计说明、问题）不跟随主语，预览标签斜体、被下一次不固定的打开替换，双击固定（LY-8a），名字与正文查资料种类表（DL-5）。图解（EX-3、EX-4、EX-7）顶部是 ↑ ↓ 与「基于旧描述 · N 处改动」，内容是只给 allow-scripts 的沙箱 iframe：srcdoc 在 head 最前注入禁止网络请求的 CSP、body 末尾注入桥接脚本，父页只收来源是这个 iframe 的消息——arch:select 即选中模块、arch:open 看另一份图解（选中它并激活图解标签，LY-15）。
+    responsibility: 项目视图右边的视图区（ADR-0064）：页头是主语条（SubjectBar：路径 › 名称、ID、角色徽标，右端收起视图区，LY-7、LY-12），其下一到两组标签上下排列、组高按分隔比例、分隔是 1px 线（命中区在线两侧透明扩展）、可拖。标签可拖（HTML5 拖放）：落在标签栏按位置插入、落在内容区放到该组末尾，只有一组时拖动中出现下半区落点「拖到这里，上下对照」= 开下组（LY-10）。标签栏 34px、不画底线，标签是文字——选中为深色字加压在栏底边的 2px 下划线（LY-8，负责人 2026-11-08 走查）。视图标签（图解、描述、核对）按类型各一个、内容是主语的投影（ViewDoc，LY-13），全部常驻、没有 ×，「核对」名带核对卡里要看的项数（LY-9b，取 panel 的核对行纯派生）；情境标签（时序图）跟随场景、不跟随主语，名带进度「时序图 · 2/8」：图解只放讲解（ExplainerView；没有讲解给空态与相关模块的图解链接），描述是面板头一行操作 + 理解 / 事实 / 关系等面板（名称只在主语条），核对只放核对卡（系统与层先给子树汇总），回放中步骤与场景在步骤节；内容里的模块引用悬停即在画布描边提示（LY-15，refHover / useRefPeek），单击即选中；「+」菜单只开资料标签，加进发起的那一组；资料标签（源代码、对话、设计说明、问题）不跟随主语，× 只在悬停时出现，预览标签斜体、被下一次不固定的打开替换，双击固定（LY-8a），名字与正文查资料种类表（DL-5）。图解（EX-3、EX-4、EX-7）的第一行是 ↑ ↓ 与「基于旧描述 · N 处改动」，不单独成栏、跟着内容滚动——iframe 按桥接脚本报告的内容高度（arch:size）撑高（LY-13e）；内容是只给 allow-scripts 的沙箱 iframe：srcdoc 在 head 最前注入禁止网络请求的 CSP、body 末尾注入桥接脚本，父页只收来源是这个 iframe 的消息——arch:select 即选中模块、arch:open 看另一份图解（选中它并激活图解标签，LY-15）。
     abstraction: 一列（DockPane）是主语条加按组排的标签；一组（DockGroup）是标签栏加活动标签的内容；视图标签的内容交给 ViewDoc（按主语分派到图解 / 图解空态、面板的描述部分与核对部分、步骤节、时序图），资料标签交给源代码预览或种类表登记的正文组件（对话、问题等）。
     invariants:
       - { text: 只读 desk.workspace 的状态与主语、只经它的 dispatch 发意图，自身不存标签与分组, adr: 64 }
@@ -80,7 +80,7 @@ modules:
     name: 泳道与消息
     summary: 画出生命线、消息箭头与内部活动
     parent: present.sequence
-    responsibility: 消息区：生命线、按序自上而下画消息箭头与标签；同步 / 异步 / 显式返回三种线型（隐含的返回不画）；内部活动画成生命线上的激活条；本层没有视图边的消息在标签后标「经由上层关系」（P15）或红色箭头「交互中未建模」（P11）；外部参与者泳道在最左，用竖线隔出系统边界；选中突出（R15、R16）：只有选中的步骤用选中样式，配对的调用 / 返回加浅色「配对」标记；选中模块等对象时突出相关泳道的生命线，进度所在的消息只在序号旁加小标记；不做悬停弹出（W-1）。经过共用件的内部活动在标签后标「共用 <名>」/「共用 ×N」，悬停列出共用件（P18）。
+    responsibility: 消息区：生命线、按序自上而下画消息箭头与标签；同步 / 异步 / 显式返回三种线型（隐含的返回不画）；内部活动画成生命线上的激活条；本层没有视图边的消息在标签后标「经由上层关系」（P15）或红色箭头「交互中未建模」（P11）；外部参与者泳道在最左，用竖线隔出系统边界；选中突出（R15、R15a、R16、R16a）：选中的步骤用选中样式，配对的调用 / 返回加浅色「配对」标记；选中模块等对象时突出相关泳道的生命线与它参与的消息、其余消息变淡，进度所在的消息保留当前步骤的样式与序号旁的小标记（选中模块不改进度，负责人 2026-11-08 走查）；不做悬停弹出（W-1）。经过共用件的内部活动在标签后标「共用 <名>」/「共用 ×N」，悬停列出共用件（P18）。
     codeRefs: [src/components/sequence/SequenceLanes.vue]
   - id: present.sequence.fragments
     name: 组合框
@@ -92,13 +92,13 @@ modules:
     name: 时序图交互
     summary: 把时序图上的单击与悬停转成回放操作，并按进度滚动
     parent: present.sequence
-    responsibility: 单击消息 = 指向这一步（R13）：选中它，进度前进或后退到它；在未选分支上的消息同样可单击，先改选该分支再跳转；单击 alt 的分支条件 = chooseBranch（F6e）；只在用户移动进度后把进度所在的步骤滚到纵向中间，时序图标签顶部的「定位」调用这里暴露的方法，悬停、选中、切换层次都不滚动（D-7）；悬停消息时在交互图上预览对应的边；把选中突出（emphasis，R15）交给泳道头与消息区。
+    responsibility: 单击消息 = 指向这一步（R13）：选中它，进度前进或后退到它；在未选分支上的消息同样可单击，先改选该分支再跳转；单击 alt 的分支条件 = chooseBranch（F6e）；只在用户移动进度后把进度所在的步骤滚到纵向中间，时序图标签顶部的「定位」调用这里暴露的方法，悬停、选中、切换层次都不滚动（D-7）；单击泳道头 = 选中这个模块或参与者（主语换成它，进度不变，R16a），主语的泳道与参与的消息滚到可见；悬停消息时在交互图上预览对应的边；把选中突出（emphasis，R15、R15a）交给泳道头与消息区。
     codeRefs: [src/components/sequence/SequenceView.vue]
   - id: present.sequence.heads
     name: 泳道头
     summary: 在时序图顶部与底部固定显示泳道头与分组框
     parent: present.sequence
-    responsibility: 泳道头固定在时序图顶部、底部另有一份，消息区夹在中间纵向滚动，三块按时序图自身宽度从左起排、不拉伸（D-2）；顶部另画同一父模块的分组框（P13）与系统边界线（A7）；选中模块、文件、关系、视图边、参与者时突出相关泳道（R15、R16）；与消息区同在一个滚动容器，横向滚动时一起移动。
+    responsibility: 泳道头固定在时序图顶部、底部另有一份，消息区夹在中间纵向滚动，三块按时序图自身宽度从左起排、不拉伸（D-2）；顶部另画同一父模块的分组框（P13）与系统边界线（A7）；选中模块、文件、关系、视图边、参与者时突出相关泳道（R15、R16）；单击泳道头发出选中（交给时序图交互）；与消息区同在一个滚动容器，横向滚动时一起移动。
     codeRefs: [src/components/sequence/SequenceHeads.vue]
 
   - id: present.panel.scenario
@@ -280,7 +280,7 @@ relations:
   - {id: rel.p3.perspective-act, from: present.perspective, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 视角切换交给 dispatch 与操作：单击「结构」「交互」→ setMode（回放中单击「结构」即退出场景并切到结构，LY-6a），场景胶囊的 ✕ → closeScenario（留在交互视角）, purpose: 切换视角与退出场景 }
   - {id: rel.p3.perspective-read, from: present.perspective, to: state.desk.projection, type: queries, payload: [ds.ViewState], description: 视角切换向视图派生（核心与 desk.run）取：当前视角与场景名, purpose: 显示当前视角与场景名 }
   - { id: rel.ly.view-run, from: present.desk-view.split, to: present.panel.run, type: commands, description: 视图区交给运行信息：回放中主语是模块、关系、聚合边、参与者或端口时，在描述标签里面板之后渲染运行信息（RunSection，V6）, purpose: 答对象在这次流程中做了什么 }
-  - { id: rel.ly.view-resident, from: present.desk-view.split, to: state.transition, type: queries, description: 视图区向视图状态转移取：标签组调用 isResident 判断标签是否常驻（图解始终、回放中时序图），常驻的不画 ×（LY-9）, purpose: 判断哪些标签不可关闭 }
+  - { id: rel.ly.view-resident, from: present.desk-view.split, to: state.transition, type: queries, description: 视图区向视图状态转移取：标签组调用 isResident 判断标签是否常驻（图解、描述、核对始终，回放中时序图），常驻的不画 ×（LY-9）, purpose: 判断哪些标签不可关闭 }
   - { id: rel.ly.note-markdown, from: present.desk-view.split, to: present.panel.content, type: commands, description: 视图区交给内容组件：设计说明资料标签的正文交给 Markdown 渲染, purpose: 渲染设计说明的正文 }
   - { id: rel.ly.side-scenes, from: present.nav-tree, to: present.scenarios, type: commands, description: 侧栏交给场景列表：「场景」页平铺场景列表，单击进入回放（LY-4）, purpose: 在侧栏场景页列出场景 }
   - {id: rel.p3.run-read, from: present.panel.run, to: state.desk.projection, type: queries, payload: [ds.Participation], description: 运行信息向视图派生（核心与 desk.run）取结果, purpose: 取对象在本场景参与的步骤 }
@@ -404,7 +404,7 @@ interfaces:
       // TransitionContext: { index: ModelIndex; plan?: ScenarioPlan; levelView?: LevelView; scenarioView?: ScenarioLevelView }
       viewpointOf(state): 'structure' | 'interaction'   // 回放中与草图画布下都是交互（LY-6）
       selectedOf(state): Selected | null   // Selected = Selection | { kind: 'step'; id: frameId } | { kind: 'scenario'; id }；null = 结构 / 交互视角无选中（V2）
-      emphasisOf(state, ctx: EmphasisContext): Emphasis | null   // 选中突出（R15、R16）；null = 结构 / 交互视角
+      emphasisOf(state, ctx: EmphasisContext): Emphasis | null   // 选中突出（R15、R15a、R16、R16a）；null = 结构 / 交互视角
       // EmphasisContext: { index; levelView; scenarioView; sequence; pairs: ReturnPairs | null; fileOwners: readonly string[] }
     semantics: 纯函数；非法动作返回原状态（不抛错）；同样输入同样输出。规则清单中每条至少一个单测。
   - id: if.state.urlCodec
@@ -684,10 +684,12 @@ dataStructures:
     definition: |
       interface Emphasis {
         selected: number | null          // 选中的步骤所在的可见消息（选中样式）；选中的不是步骤或本层不可见时为 null
+        current: number | null           // 进度所在的可见消息：不论主语是什么都保留当前步骤的样式（R15a）；开头或本层不可见时为 null
         paired: ReadonlySet<number>      // 与选中步骤配对的调用 / 返回所在的可见消息（浅色「配对」标记，F7）
         lanes: ReadonlySet<string>       // 突出的泳道（视图节点 ID）
+        involved: ReadonlySet<number>    // 一端在突出的泳道上的可见消息（R16a），其余消息变淡
       }
-    description: 选中突出（R15、R16）：任何时刻只有被选中的那一个对象用选中样式；交互图只在 selected 不为空时把其余走过的边变灰。
+    description: 选中突出（R15、R15a、R16、R16a）：选中步骤用选中样式；选中模块等突出泳道与它参与的消息、其余变淡；进度所在的消息始终保留当前步骤的样式（选中模块不改进度）；交互图只在 selected 不为空时把其余走过的边变灰。
   - id: ds.RouteItem
     name: RouteItem
     definition: |
@@ -755,7 +757,7 @@ dataStructures:
         sidebar: { open: boolean; width: number }          // 侧栏开合与宽度
         memory: Partial<Record<context, Arrangement>>      // 人改过的各情境排布（视图标签与对话）
       }
-    description: 工作区状态（ADR-0064，transition/workspace.ts）：视图区的排布与开合，一个值，只经 workspaceTransition 改变，不进 URL。规则：视图标签按类型各一个、跟随主语，资料标签每份一个、预览替换；图解常驻、场景情境里时序图常驻；至多两组、拖空即合并；缺省排布按情境推出（自由 / 场景 / 草图），人改过的按情境记进 memory、经工作区记忆同步记在本机（LY-8–LY-12）。
+    description: 工作区状态（ADR-0064，transition/workspace.ts）：视图区的排布与开合，一个值，只经 workspaceTransition 改变，不进 URL。规则：视图标签（图解、描述、核对）按类型各一个、跟随主语、常驻，时序图是情境标签、场景情境里常驻，资料标签每份一个、预览替换；至多两组、拖空即合并；缺省排布按情境推出（自由 / 场景 / 草图），人改过的按情境记进 memory、经工作区记忆同步记在本机（LY-8–LY-12）。
   - id: ds.OutlineNode
     name: OutlineNode
     definition: |

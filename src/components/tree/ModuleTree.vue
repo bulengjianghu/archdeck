@@ -7,12 +7,13 @@
  * 右键：「在此设计」（F-10：以该模块为挂载点新建设计，只在当前版本、不能是层）。
  * 「只看需复核」（Z3）只列含需复核模块的分支，并展开到它们。
  * 排序「描述顺序 / 按热度」（J8）：按热度时同一父模块下的子模块按热度降序、同值保持描述顺序，热度种类取「显示」面板所选（关闭时按修改热度）。
- * 展开状态、筛选与排序只属于这块界面。
+ * 筛选与排序的开关在侧栏「筛选 ▾」弹层里（LY-4d，sideFilters）；展开状态只属于这块界面。
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { heatCount, heatValue, type HeatKind } from '@/model'
 import { useDesk } from '@/state/inject'
 import ModuleTreeNode from './ModuleTreeNode.vue'
+import { useSideFilters } from '../shared/sideFilters'
 import SketchMenu from '../sketch/SketchMenu.vue'
 import { canDesignAt, openNewDesign } from '../edit/designHere'
 
@@ -24,10 +25,9 @@ const run = computed(() => desk.playing.value)
 /** T2：结构视角下「只看现状」开启时不列目标态模块及其后代；回放不受开关影响（L9） */
 const hideTarget = computed(() => !run.value && desk.toggles.currentOnly)
 /** Z3：「只看需复核」时只列祖先链上有需复核模块的分支 */
-const onlyStale = ref(false)
+const { onlyStale, sort } = useSideFilters()
 const staleBranches = computed(() => new Set([...desk.review.stale.value].flatMap(id => idx.value.pathOf.get(id) ?? [])))
 /** J8：排序方式；热度种类取开关所选，关闭时按修改热度 */
-const sort = ref<'order' | 'heat'>('order')
 const kind = computed<HeatKind>(() => (desk.toggles.heat === 'fixes' ? 'fixes' : 'changes'))
 const heatOf = (id: string) => {
   const m = desk.evolution.moduleOf(id)
@@ -128,25 +128,6 @@ function onChoose(key: string) {
 
 <template>
   <div class="module-tree">
-    <div v-if="!run" class="sort" role="group" aria-label="模块排序">
-      <span class="sort-label">排序</span>
-      <span class="segmented">
-        <button :class="{ on: sort === 'order' }" :aria-pressed="sort === 'order'" @click="sort = 'order'">描述顺序</button>
-        <button
-          :class="{ on: sort === 'heat' }"
-          :aria-pressed="sort === 'heat'"
-          :disabled="desk.evolution.status.value !== 'ready'"
-          :title="desk.evolution.status.value === 'ready' ? `按${kind === 'fixes' ? '缺陷' : '修改'}热度降序（同一父模块下）` : '没有演化事实'"
-          @click="sort = 'heat'"
-        >
-          按热度
-        </button>
-      </span>
-    </div>
-    <div v-if="desk.review.stale.value.size || onlyStale" class="tools">
-      <label><input v-model="onlyStale" type="checkbox" /> 只看需复核</label>
-      <span class="warn">需复核 {{ desk.review.stale.value.size }}</span>
-    </div>
     <ul ref="root" class="tree" role="tree" @mouseleave="hover(null)">
       <ModuleTreeNode
         :id="idx.rootId"
@@ -176,59 +157,5 @@ function onChoose(key: string) {
   list-style: none;
   margin: 0;
   padding: 0;
-}
-
-.tools {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 2px 10px 6px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 4px;
-  font-size: 11.5px;
-}
-
-.tools .warn {
-  color: var(--warning);
-}
-
-.sort {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px 6px;
-  font-size: 11.5px;
-  color: var(--text-3);
-}
-
-.segmented {
-  display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.segmented button {
-  border: none;
-  border-radius: 0;
-  background: none;
-  padding: 0 8px;
-  font: inherit;
-  color: var(--text-2);
-  white-space: nowrap;
-}
-
-.segmented button + button {
-  border-left: 1px solid var(--border);
-}
-
-.segmented button.on {
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.segmented button:disabled {
-  opacity: 0.5;
 }
 </style>

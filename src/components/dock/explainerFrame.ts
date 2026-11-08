@@ -1,6 +1,7 @@
 /**
  * 图解标签的 iframe 文档（EX-2、EX-3）：在图解原文的 head 最前注入 CSP（禁止一切网络请求）与引用的样式，
- * 在 body 末尾注入桥接脚本——按架构台给的原文填 data-field、给有图解的引用附「图解 ›」（每个模块只在 HTML 正文里第一次出现的地方附一次，SVG 里的跳过）、把单击与悬停（LY-15）变成 postMessage。
+ * 在 body 末尾注入桥接脚本——按架构台给的原文填 data-field、给有图解的引用附「图解 ›」（每个模块只在 HTML 正文里第一次出现的地方附一次，SVG 里的跳过）、把单击与悬停（LY-15）变成 postMessage，
+ * 并报告文档高度（arch:size）：iframe 按内容撑高，由图解标签的外层滚动，顶部的 ↑ ↓ 导航跟着内容一起滚（负责人 2026-11-08 走查）。
  * iframe 只给 allow-scripts（不给 same-origin），父页按消息来源校验（ExplainerDoc）。
  */
 import type { ExplainerRefView } from '@/state/useDeskState'
@@ -11,10 +12,16 @@ export type ExplainerMessage =
   | { type: 'arch:open'; module: string }
   /** LY-15：悬停引用（空串 = 离开） */
   | { type: 'arch:hover'; module: string }
+  /** 文档内容的高度（px）：iframe 按它撑高 */
+  | { type: 'arch:size'; height: number }
 
 const TYPES = new Set(['arch:select', 'arch:open', 'arch:hover'])
-export const isExplainerMessage = (d: unknown): d is ExplainerMessage =>
-  !!d && typeof d === 'object' && TYPES.has((d as ExplainerMessage).type) && typeof (d as ExplainerMessage).module === 'string'
+export const isExplainerMessage = (d: unknown): d is ExplainerMessage => {
+  if (!d || typeof d !== 'object') return false
+  const m = d as { type?: unknown; module?: unknown; height?: unknown }
+  if (m.type === 'arch:size') return typeof m.height === 'number' && Number.isFinite(m.height) && m.height >= 0
+  return TYPES.has(m.type as string) && typeof m.module === 'string'
+}
 
 const CSP = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; font-src data:">`
 
@@ -85,6 +92,14 @@ const BRIDGE = `(function () {
   });
   document.addEventListener('mouseleave', function () { if (hovered) { hovered = ''; send('arch:hover', ''); } });
   document.addEventListener('keydown', function (e) { if (e.key === 'Enter') act(e); });
+  var lastH = -1;
+  var size = function () {
+    var h = Math.ceil(document.documentElement.getBoundingClientRect().height);
+    if (h !== lastH) { lastH = h; parent.postMessage({ type: 'arch:size', height: h }, D.origin); }
+  };
+  if (window.ResizeObserver) new ResizeObserver(size).observe(document.documentElement);
+  window.addEventListener('load', size);
+  size();
 })();`
 
 /** 脚本里的 JSON：防止 </script> 提前结束脚本 */

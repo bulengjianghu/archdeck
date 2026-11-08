@@ -245,6 +245,8 @@ test('O13③：分层总览下的结构视角——带间画层间依赖，聚�
   expect(await page.locator('.vue-flow__edge-dep[data-id^="chip:"]').count()).toBe(0)
   // 本层环编号常显（Y4，不受代码事实开关影响）
   await expect(page.locator('.vue-flow__node-band .cycle-mark').first()).toBeAttached()
+  // 展开的图例叠在画布右上（L48）：竖栏占去 44px 后 infra.framework 落在图例下面，先收起图例再悬停
+  await collapseDisplay(page)
   // 合并复跑：拉开抽屉挤压画布后有一次再适应，悬停落在挪动中的节点上会落空——等画布静止，悬停与断言按 toPass 重试
   await waitSettled(page)
   await expect(async () => {

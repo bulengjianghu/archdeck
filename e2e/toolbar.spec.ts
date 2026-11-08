@@ -17,16 +17,16 @@ test('验收 6.44（LY-5，取代 6.42 第 1 条）：画布页头——侧栏�
   const names = await head(page)
     .getByRole('button')
     .evaluateAll(els => els.filter(e => !e.closest('.crumbs')).map(e => e.getAttribute('aria-label') ?? e.textContent!.trim()))
-  expect(names).toEqual(['侧栏', '结构', '交互', '场景', '显示 ▾', '搜索模块', '更多', '视图区'])
+  expect(names).toEqual(['结构', '交互', '场景', '显示 ▾', '搜索模块', '更多', '视图区'])
   await expect(head(page).locator('.crumbs')).toHaveText(/^根层\s*\/\s*播放器 Kit$/)
-  for (const name of ['侧栏', '搜索模块', '更多', '视图区']) {
+  for (const name of ['搜索模块', '更多', '视图区']) {
     const svg = head(page).getByRole('button', { name, exact: true }).locator('svg')
     await expect(svg).toHaveAttribute('width', '16')
     await expect(svg).toHaveAttribute('fill', 'none')
   }
-  // 开着的浅色底：视图区开着；侧栏的开合按窗口（≥ 1440 缺省展开，LY-3）
+  // 开着的浅色底：视图区开着；侧栏的开合按窗口（≥ 1440 缺省展开，LY-3），开关在竖栏顶格（负责人 2026-11-08 走查）
   await expect(head(page).getByRole('button', { name: '视图区', exact: true })).toHaveClass(/\bon\b/)
-  await expect(head(page).getByRole('button', { name: '侧栏', exact: true })).toHaveClass(/\bon\b/)
+  await expect(page.locator('[data-head="rail"]').getByRole('button', { name: '侧栏', exact: true })).toHaveClass(/\bon\b/)
 
   // 回放中：场景胶囊写场景名（≤ 12 字、悬停看全名）带 ✕；「交互」为按下态（回放 = 交互 + 场景，LY-6）
   await openDesk(page, '/p/media-web-player?level=kit&sc=sc.command')

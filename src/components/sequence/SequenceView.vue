@@ -2,13 +2,14 @@
 /**
  * 时序图（D-2、D-7、R3、R5、R11）：只画定位好坐标的时序模型。
  * 单击消息（含未选分支上的）→ 指向该步，即选中它（R13）；单击 alt 的分支条件 → 选该分支（F6e）；悬停消息时在结构图上预览对应的边；选中突出（R15、R16）。
+ * 单击泳道头 → 选中这个模块（或参与者），进度不变；主语是模块等时把它的泳道与它参与的消息滚到可见（R16a，负责人 2026-11-08 走查）。
  * 泳道头固定在顶部、底部另有一份，消息区夹在中间纵向滚动，三块从左起排、不拉伸（D-2）；只在用户移动播放头后把当前步骤滚到中间（D-7）。
  * 不可见提示、「定位」「图例」在时序图标签的内容区顶部（dock/SequenceDoc.vue，WS-10），「定位」调用这里暴露的 centerCurrent。
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useDesk } from '@/state/inject'
 import { headsHeight } from '@/layout/sequence'
-import { moduleName, type SequenceMessage } from '@/model'
+import { moduleName, type SequenceMessage, type SequenceParticipant } from '@/model'
 import SequenceHeads from './SequenceHeads.vue'
 import SequenceLanes from './SequenceLanes.vue'
 import SequenceFragments from './SequenceFragments.vue'
@@ -36,6 +37,10 @@ const groupName = (parentId: string) => (desk.index.value ? moduleName(desk.inde
 function pick(m: SequenceMessage) {
   desk.seek(m.frameIds[0])
 }
+function pickLane(p: SequenceParticipant) {
+  if (p.kind === 'actor') desk.select({ kind: 'actor', id: p.id })
+  else desk.select({ kind: 'module', id: p.id })
+}
 function hover(m: SequenceMessage | null) {
   desk.setHover(m ? `step:${m.frameIds[0]}` : null)
 }
@@ -57,6 +62,37 @@ function centerCurrent() {
 
 defineExpose({ centerCurrent })
 
+/** R16a：主语的泳道横向滚到可见；它参与的消息都不在视口里时，把离进度最近的一条滚到可见 */
+function revealLanes() {
+  const el = scroller.value
+  const p = ps.value
+  const em = desk.run.emphasis.value
+  if (!el || !p || !em?.lanes.size) return
+  const boxes = [...em.lanes].map(id => p.lanes.get(id)).filter((b): b is NonNullable<typeof b> => !!b)
+  if (boxes.length) {
+    const left = Math.min(...boxes.map(b => b.x))
+    const right = Math.max(...boxes.map(b => b.x + b.w))
+    if (left < el.scrollLeft) el.scrollLeft = Math.max(0, left - 16)
+    else if (right > el.scrollLeft + el.clientWidth) el.scrollLeft = Math.min(left - 16, right - el.clientWidth + 16)
+  }
+  const ys = p.model.messages.flatMap((m, i) => (m.pathIndex !== undefined && em.involved.has(m.pathIndex) ? [{ y: p.messages[i].y, at: m.pathIndex }] : []))
+  if (!ys.length) return
+  const t = top.value
+  const visible = ys.some(x => x.y - t >= el.scrollTop && x.y - t <= el.scrollTop + el.clientHeight - t)
+  if (visible) return
+  const ci = desk.run.currentIndex.value ?? 0
+  const near = ys.reduce((a, b) => (Math.abs(b.at - ci) < Math.abs(a.at - ci) ? b : a))
+  el.scrollTop = Math.max(0, near.y - el.clientHeight / 2)
+}
+watch(
+  () => [...(desk.run.emphasis.value?.lanes ?? [])].join('|'),
+  async key => {
+    if (!key) return
+    await nextTick()
+    revealLanes()
+  },
+)
+
 // D-7：只在用户移动播放头后滚动——悬停、选中、切换层次、重新加载都不改播放头，不会触发
 watch(
   () => desk.playback.value?.frameId,
@@ -76,7 +112,7 @@ watch(
         <button v-if="desk.run.home.value" @click="desk.goTo(desk.run.home.value)">跳到场景所在层次：{{ homeName }}</button>
       </div>
       <template v-else-if="ps">
-        <div class="pin top"><SequenceHeads :ps="ps" where="top" :group-name="groupName" :lanes="desk.run.emphasis.value?.lanes" /></div>
+        <div class="pin top"><SequenceHeads :ps="ps" where="top" :group-name="groupName" :lanes="desk.run.emphasis.value?.lanes" @pick="pickLane" /></div>
         <svg :width="ps.size.w" :height="ps.size.h - top" :viewBox="`0 ${top} ${ps.size.w} ${ps.size.h - top}`" class="svg">
           <defs>
             <marker id="seq-solid" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
@@ -98,7 +134,7 @@ watch(
             @hover="hover"
           />
         </svg>
-        <div class="pin bottom"><SequenceHeads :ps="ps" where="bottom" :group-name="groupName" :lanes="desk.run.emphasis.value?.lanes" /></div>
+        <div class="pin bottom"><SequenceHeads :ps="ps" where="bottom" :group-name="groupName" :lanes="desk.run.emphasis.value?.lanes" @pick="pickLane" /></div>
       </template>
     </div>
   </section>

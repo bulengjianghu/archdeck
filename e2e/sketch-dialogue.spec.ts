@@ -7,7 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { activeTab, graphNode, LOAD_BUDGET, openDesk, openSketchPanel, query, sketchOn, openSidebar, sidebar, views } from './helpers'
+import { activeTab, graphNode, LOAD_BUDGET, openDesk, openSketchPanel, query, sketchOn, openSidebar, sidePage, views } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 
@@ -30,7 +30,7 @@ async function round(page: Page, text: string) {
 }
 async function openChanges(page: Page) {
   await openSidebar(page)
-  await sidebar(page).locator('[data-side-page="changes"]').click()
+  await sidePage(page, 'changes')
   return page.getByTestId('changes-tab')
 }
 const rows = (page: Page) => page.getByTestId('change-row')

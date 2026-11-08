@@ -1,7 +1,9 @@
 <script setup lang="ts">
 /**
- * 单个项目的架构视图（LY-1，ADR-0064）：左边系统——侧栏（停靠，LY-3、LY-4）+ 画布（页头 LY-5）；右边视图区——主语条 + 至多上下两组标签（LY-7–LY-12）。
- * 没有全宽顶栏，三区各自有 44px 页头、底线对齐（LY-2）；选中不改变任何区域的宽度（I3）。侧栏、视图区的开合与宽度是工作区状态，只由人开合。
+ * 单个项目的架构视图（LY-1，ADR-0064）：左边系统——竖栏 + 侧栏（停靠，LY-3、LY-4）+ 画布（页头 LY-5）；右边视图区——主语条 + 至多上下两组标签（LY-7–LY-12）。
+ * 没有全宽顶栏，竖栏顶格、侧栏、画布、视图区的页头同高 44px、底线连成一条（LY-2）；选中不改变任何区域的宽度（I3）。侧栏、视图区的开合与宽度是工作区状态，只由人开合。
+ * 底色按区域性质分（LY-2a，负责人 2026-11-08 走查）：竖栏、侧栏、视图区与三区页头是面板底（--surface），画布正文是唯一下沉的台面（--bg）；
+ * 区与区之间只画 1px 线，拖拽的命中区在线两侧透明扩展，不占可见宽度。
  * 「我在哪」（⚠、源码、版本胶囊）在画布左上角（TB-7）；回放胶囊浮在画布底部居中（CD-7）。每次进入项目创建一份独立的 DeskState，
  * 其 watch 都在本组件作用域内，离开项目时随组件销毁。
  */
@@ -23,10 +25,12 @@ import PlayerBar from './PlayerBar.vue'
 import DockPane from './dock/DockPane.vue'
 import { subjectLabel } from './dock/subjectLabel'
 import SideBar from './tree/SideBar.vue'
+import SideRail from './tree/SideRail.vue'
 import { OPEN_PREVIEW } from './shared/preview'
 import { HAS_EXPLAINER } from './panel/related'
 import { SIDE_NAV, type ModulesMode, type SidePage } from './shared/navTab'
 import { OPEN_PROPS } from './shared/openProps'
+import { SIDE_FILTERS, createSideFilters } from './shared/sideFilters'
 import { REF_PEEK } from './shared/refPeek'
 import { playerPlacement } from './shared/playerPlacement'
 import { STAGE_DISPLAY, useStageDisplay } from './stage/useStageDisplay'
@@ -128,18 +132,22 @@ const ws = desk.workspace
 // LY-4：侧栏的页（模块 / 场景 / 改动）只属于界面，由项目视图持有（场景胶囊、改动徽标要能切页）
 const sideNav = { page: ref<SidePage>('modules'), mode: ref<ModulesMode>('modules') }
 provide(SIDE_NAV, sideNav)
+// LY-4d：侧栏页的筛选（侧栏「筛选 ▾」与画布「场景 ▾」共用一份）
+provide(SIDE_FILTERS, createSideFilters())
 /** LY-3：侧栏开合与宽度是工作区状态（本机记忆经同步适配器），只由人开合 */
 const sidebar = computed(() => ws.state.value.sidebar)
-/** LY-12：视图区可整体收起；宽度是占项目视图的比例（LY-10b） */
+/** LY-12：视图区可整体收起；宽度是占竖栏右边这块（侧栏 + 画布 + 视图区）的比例（LY-10b），竖栏的 44px 不参与 */
 const viewsShown = computed(() => !ws.state.value.collapsed)
 const viewsWidth = computed(() => ws.state.value.width)
 const desktop = ref<HTMLElement>()
+/** LY-3：竖栏宽（与 SideRail 同） */
+const RAIL_W = 44
 function onDividerDown(e: PointerEvent) {
   const el = e.currentTarget as HTMLElement
   el.setPointerCapture(e.pointerId)
   const move = (ev: PointerEvent) => {
     const r = desktop.value?.getBoundingClientRect()
-    if (r && r.width > 0) ws.dispatch({ type: 'setWidth', width: (r.right - ev.clientX) / r.width })
+    if (r && r.width > RAIL_W) ws.dispatch({ type: 'setWidth', width: (r.right - ev.clientX) / (r.width - RAIL_W) })
   }
   const up = () => {
     el.removeEventListener('pointermove', move)
@@ -283,6 +291,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 <template>
   <!-- LY-1：系统（侧栏 + 画布）｜ 视图（主语条 + 标签组）；没有全宽顶栏，三区各自有 44px 页头、底线对齐（LY-2） -->
   <div ref="desktop" class="desk">
+    <!-- LY-3：竖栏——侧栏收起时也在 -->
+    <SideRail />
     <aside v-if="sidebar.open" class="side-area" :style="{ width: `${sidebar.width}px` }">
       <ProjectMenu />
       <SideBar v-if="desk.status.value === 'ready'" />
@@ -325,7 +335,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
     <template v-if="viewsShown">
       <div class="divider" role="separator" aria-orientation="vertical" aria-label="拖动调整视图区宽度" @pointerdown="onDividerDown" />
-      <div class="views-area" :style="{ width: `${viewsWidth * 100}%` }">
+      <div class="views-area" :style="{ width: `calc((100% - ${RAIL_W}px) * ${viewsWidth})` }">
         <DockPane />
       </div>
     </template>
@@ -353,7 +363,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--bg);
+  background: var(--surface);
   border-right: 1px solid var(--border);
 }
 
@@ -372,6 +382,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .canvas-area {
   position: relative;
+  background: var(--bg);
   flex: 1 1 0;
   display: flex;
   flex-direction: column;
@@ -442,15 +453,26 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   color: var(--danger);
 }
 
+/* 画布与视图区之间只画 1px 线；命中区在线两侧透明扩展 */
 .divider {
+  position: relative;
+  z-index: 25;
   flex: none;
-  width: 5px;
+  width: 1px;
   cursor: col-resize;
-  background: var(--surface);
-  border-left: 1px solid var(--border);
+  background: var(--border);
+}
+
+.divider::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
 }
 
 .divider:hover {
-  background: var(--border);
+  background: var(--border-strong);
 }
 </style>

@@ -3,7 +3,7 @@
  * 主语条（LY-7）、标签拖拽换组 / 换序与分隔（LY-10，I7）。几何断言只认语义锚点（data-region、data-head、data-group）。
  */
 import { expect, test, type Page } from '@playwright/test'
-import { activeTab, collapseDisplay, openDesk, query, viewTab, views, waitSettled } from './helpers'
+import { activeTab, collapseDisplay, openDesk, query, rail, sidePage, viewTab, views, waitSettled } from './helpers'
 
 const box = async (page: Page, sel: string) => {
   const b = await page.locator(sel).first().boundingBox()
@@ -17,29 +17,30 @@ const regions = async (page: Page) => ({
   views: await box(page, '[data-region="views"]'),
 })
 
-test('I6、LY-1、LY-2：三区页头同高 44px（含 1px 底线）、底线对齐；没有全宽顶栏', async ({ page }) => {
+test('I6、LY-1、LY-2：竖栏顶格与三区页头同高 44px（含 1px 底线）、底线对齐；没有全宽顶栏', async ({ page }) => {
   for (const width of [1280, 1440]) {
     await page.setViewportSize({ width, height: 900 })
     await openDesk(page, '/p/h5p-arch-desk')
     // 1280 侧栏缺省收起：展开它，三区都在
-    const toggle = page.locator('[data-head="canvas"]').getByRole('button', { name: '侧栏', exact: true })
+    const toggle = page.locator('[data-head="rail"]').getByRole('button', { name: '侧栏', exact: true })
     if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click()
     await expect(page.getByRole('banner', { name: '工具栏' })).toHaveCount(0)
-    const heads = await Promise.all(['sidebar', 'canvas', 'views'].map(h => box(page, `[data-head="${h}"]`)))
+    const heads = await Promise.all(['rail', 'sidebar', 'canvas', 'views'].map(h => box(page, `[data-head="${h}"]`)))
     for (const h of heads) {
       expect(h.y).toBe(0)
       expect(h.h).toBe(44)
     }
     // 底线：1px 实线，在 y = 43 那一行
-    const lines = (await page.evaluate(`['sidebar', 'canvas', 'views'].map(h => {
+    const lines = (await page.evaluate(`['rail', 'sidebar', 'canvas', 'views'].map(h => {
       const s = getComputedStyle(document.querySelector('[data-head="' + h + '"]'))
       return s.borderBottomWidth + ' ' + s.borderBottomStyle
     })`)) as string[]
-    expect(lines).toEqual(['1px solid', '1px solid', '1px solid'])
-    // 三块从左到右：侧栏 | 画布 | 视图区，铺满窗口宽
+    expect(lines).toEqual(['1px solid', '1px solid', '1px solid', '1px solid'])
+    // 从左到右：竖栏 | 侧栏 | 画布 | 视图区，铺满窗口宽
     const r = await regions(page)
-    expect(r.sidebar.x).toBe(0)
-    expect(r.canvas.x).toBe(r.sidebar.w)
+    expect((await box(page, '[data-region="rail"]')).w).toBe(44)
+    expect(r.sidebar.x).toBe(44)
+    expect(r.canvas.x).toBe(44 + r.sidebar.w)
     expect(r.views.x + r.views.w).toBe(width)
   }
 })
@@ -89,11 +90,11 @@ test('LY-7：主语条一行——所在路径（灰）› 名称 + ID + 角色�
   await expect(bar.locator('[data-testid="subject-name"]')).toHaveText('视图状态层')
 })
 
-test('I7、LY-10：拖标签到下半区开下组，分隔可拖，拖回上组即合并；组内拖动换序；图解常驻没有 ×', async ({ page }) => {
+test('I7、LY-10：拖标签到下半区开下组，分隔可拖，拖回上组即合并；组内拖动换序；视图标签常驻没有 ×', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk')
   const groups = views(page).locator('.group')
   await expect(groups).toHaveCount(1)
-  await expect(viewTab(page, 'explainer').locator('.x')).toHaveCount(0)
+  await expect(views(page).locator('.tab[data-view-tab] .x')).toHaveCount(0)
   // 组内换序：把「核对」拖到「图解」之前
   await viewTab(page, 'check').dragTo(viewTab(page, 'explainer'), { targetPosition: { x: 4, y: 10 } })
   await expect(views(page).locator('[data-group="0"] .tab').first()).toHaveAttribute('data-view-tab', 'check')
@@ -123,12 +124,17 @@ test('I7、LY-10：拖标签到下半区开下组，分隔可拖，拖回上组�
   await expect(views(page).locator('[data-group="0"] .tab').first()).toHaveAttribute('data-view-tab', 'check')
 })
 
-test('LY-4、LY-4a：侧栏三页（改动只在草图编辑时可用）；画布 ⚠ 打开「问题」资料标签，「+」菜单分视图 / 资料两节', async ({ page }) => {
+test('LY-4、LY-4a：竖栏三页（改动只在草图编辑时可用）；画布 ⚠ 打开「问题」资料标签，「+」菜单只开资料', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk')
   const side = page.locator('[data-region="sidebar"]')
-  await expect(side.getByRole('tab')).toHaveText([/^\s*模块\s*$/, /^\s*场景\s*$/, /^\s*改动/])
-  await expect(side.locator('[data-side-page="changes"]')).toBeDisabled()
-  await side.locator('[data-side-page="scenes"]').click()
+  await expect(rail(page).locator('[data-rail]')).toHaveCount(3)
+  expect(
+    await rail(page)
+      .locator('[data-rail]')
+      .evaluateAll(es => es.map(e => e.getAttribute('aria-label'))),
+  ).toEqual(['模块', '场景', '改动'])
+  await expect(rail(page).locator('[data-rail="changes"]')).toBeDisabled()
+  await sidePage(page, 'scenes')
   await expect(side.locator('.scenario-list')).toBeVisible()
   // ⚠ → 问题资料标签（不跟随主语）
   await page.locator('.issue-badge').click()
@@ -137,12 +143,11 @@ test('LY-4、LY-4a：侧栏三页（改动只在草图编辑时可用）；画�
   await collapseDisplay(page)
   await page.locator('.vue-flow__node-module, .vue-flow__node-core').first().click()
   await expect(views(page).locator('.tab[data-doc-tab="issues"]')).toHaveCount(1)
-  // 「+」：视图 · 跟随主语 / 资料 · 不跟随
-  await views(page).locator('[data-view-tab="check"] .x').click()
+  // 「+」：只有资料 · 不跟随主语（视图标签常驻，LY-9）
   await views(page).getByRole('button', { name: '添加标签' }).click()
   const menu = views(page).getByRole('menu', { name: '添加标签' })
-  await expect(menu.locator('.mh')).toHaveText(['视图 · 跟随主语', '资料 · 不跟随'])
-  await expect(menu.locator('[data-add-view]')).toHaveText(['核对'])
+  await expect(menu.locator('.mh')).toHaveText(['资料 · 不跟随主语'])
+  await expect(menu.locator('[data-add-view]')).toHaveCount(0)
   await expect(menu.locator('[data-add-doc]')).toHaveText([/对话/])
 })
 

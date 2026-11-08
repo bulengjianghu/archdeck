@@ -13,8 +13,8 @@ import StructureFacts, { type StructureGroup } from './StructureFacts.vue'
 import DepStructure from './DepStructure.vue'
 import PanelCard from './PanelCard.vue'
 import CheckCard from './CheckCard.vue'
-import { usePanelJump, type PanelNotice } from './panelNotices'
-import { rowsFromNotices } from './panelCheck'
+import { usePanelJump } from './panelNotices'
+import { depCheckRowsOf } from './checkRows'
 
 const desk = useDesk()
 const structureView = computed(() => desk.viewpoint.value === 'structure')
@@ -35,22 +35,7 @@ const structure = computed<StructureGroup[]>(() => {
 const root = ref<HTMLElement | null>(null)
 usePanelJump(root)
 const violations = computed(() => sel.value?.detail?.violations ?? [])
-const notices = computed<PanelNotice[]>(() =>
-  violations.value.length
-    ? [
-        {
-          key: 'violations',
-          label: '违规',
-          count: violations.value.length,
-          target: 'evidence.violations',
-          to: '违规',
-          // 与模块面板同口径（审核轮 2 B1）：治理信号，不是门禁红（U8），不含返工清单 info 级（K24）
-          note: '这对节点之间声明的架构规则违规（U2–U6），含基线内的已知违规；门禁卡的是基线外的新增（U8），返工清单的 info 级提示（K24 层符合性）不在此计数',
-        },
-      ]
-    : [],
-)
-const rows = computed(() => rowsFromNotices(notices.value, [{ key: 'governance', label: '治理', notices: ['violations'], ok: '没有违规' }]))
+const rows = computed(() => depCheckRowsOf(desk))
 </script>
 
 <template>

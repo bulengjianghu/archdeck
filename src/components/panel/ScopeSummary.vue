@@ -7,11 +7,12 @@ import { computed } from 'vue'
 import { useDesk } from '@/state/inject'
 import { REWORK_CATEGORY_LABELS, SCOPE_CATEGORIES } from '@/model'
 import PanelCard from './PanelCard.vue'
+import { scopeTotalOf } from './checkRows'
 
 const props = defineProps<{ roots: readonly string[] }>()
 const desk = useDesk()
 const scope = computed(() => desk.reworkScope(props.roots))
-const total = computed(() => (scope.value ? SCOPE_CATEGORIES.reduce((n, c) => n + scope.value!.counts[c], 0) : 0))
+const total = computed(() => scopeTotalOf(desk, props.roots) ?? 0)
 const facts = computed(() => !!desk.rework.value?.facts)
 const LABEL: Record<(typeof SCOPE_CATEGORIES)[number], string> = {
   violation: REWORK_CATEGORY_LABELS.violation,

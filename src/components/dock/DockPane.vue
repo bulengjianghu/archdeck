@@ -92,16 +92,27 @@ function onSplitDown(e: PointerEvent) {
   min-height: 0;
 }
 
+/* 上下两组之间只画 1px 线；拖拽的命中区在线两侧透明扩展，不占可见高度 */
 .gsplit {
+  position: relative;
+  z-index: 3;
   flex: none;
-  height: 5px;
+  height: 1px;
   cursor: row-resize;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
+  background: var(--border);
+}
+
+.gsplit::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -4px;
+  bottom: -4px;
 }
 
 .gsplit:hover {
-  background: var(--border);
+  background: var(--border-strong);
 }
 
 .splitzone {

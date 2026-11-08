@@ -1,6 +1,6 @@
 /** 回放的统一选中（§6.8、ADR-0012）：选中样式唯一、配对标记、泳道突出、进度小标记、Esc 回到进度所在的步骤、再按无动作 */
 import { expect, test } from '@playwright/test'
-import { collapseDisplay, graphNode, openDesk, query } from './helpers'
+import { collapseDisplay, graphNode, openDesk, query, showView } from './helpers'
 
 /** 第二十轮 §4：回放抽屉自动收起，步骤详情住辅助栏的步骤节（V6 新家） */
 
@@ -13,13 +13,17 @@ test('选中步骤：只有它用选中样式，配对的返回只加「配对�
   await expect(page.locator('.msg.paired')).toHaveCount(1)
   await expect(page.locator('.msg.paired .pair-tag')).toContainText('配对')
   await expect(page.locator('.lane.emph')).toHaveCount(0)
+  // 场景排布下组缺省是图解（负责人 2026-11-08 走查），步骤节在描述
+  await showView(page, 'description')
   await expect(page.getByTestId('dock-step-side')).toContainText('选中的步骤')
   await expect(page.getByTestId('dock-step-side')).not.toContainText('已钉住')
   // 结构图：选中步骤时其余走过的步骤序号变灰
   await expect(page.locator('.vue-flow__node-step .n.muted').first()).toBeVisible()
 })
 
-test('选中模块：突出它所在的泳道、不突出消息，进度只剩小标记，结构图不变灰；sel 与 step 并存', async ({ page }) => {
+test('选中模块（R15a、R16a）：突出它所在的泳道与它参与的消息、其余变淡；进度所在的消息保留当前步骤样式与小标记，结构图不变灰；sel 与 step 并存', async ({
+  page,
+}) => {
   await openDesk(page, HOOK)
   // 展开的图例叠在画布右上，合入 X1 后画布变高、适应放大，这个节点落在图例下面（L48）：先收起图例再点
   await collapseDisplay(page)
@@ -31,8 +35,13 @@ test('选中模块：突出它所在的泳道、不突出消息，进度只剩�
   await expect(page.locator('.lane.emph').first()).toContainText('状态机')
   await expect(page.locator('.lifeline.emph')).toHaveCount(1)
   await expect(page.locator('.msg.selected')).toHaveCount(0)
+  await expect(page.locator('.msg.current')).toHaveCount(1)
+  await expect(page.locator('.msg.current')).toContainText('pre / post hook')
+  expect(await page.locator('.msg.involved').count()).toBeGreaterThan(0)
+  expect(await page.locator('.msg.faded').count()).toBeGreaterThan(0)
   await expect(page.locator('.num .progress')).toHaveCount(1)
   await expect(page.locator('.vue-flow__node-step .n.muted')).toHaveCount(0)
+  await showView(page, 'description')
   await expect(page.getByTestId('dock-step-side')).not.toContainText('已钉住')
 })
 
@@ -62,7 +71,8 @@ test('Esc 回到选中进度所在的步骤，再按无动作（N9）；「下�
 test('打开场景选中场景：面板是场景概览，地址没有 sel 与 step；按 → 选中第 1 步', async ({ page }) => {
   await openDesk(page, '/p/h5player')
   await page.goto('./#/p/h5player?sc=sc.command')
-  // 场景概览住辅助栏步骤节（第二十轮 §6）
+  // 场景概览住描述的步骤节（第二十轮 §6；场景排布下组缺省是图解）
+  await showView(page, 'description')
   await expect(page.getByTestId('dock-step-side')).toContainText('触发')
   expect(query(page).get('step')).toBeNull()
   await page.locator('.vue-flow__pane').click({ position: { x: 5, y: 5 } })
