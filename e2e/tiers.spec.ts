@@ -20,11 +20,15 @@ test('ADR-0052：本项目「模型层」声明四层（层是分类、不占级
     ['model.types', '类型与 Schema'],
   ] as const)
     await expect(page.locator(`.vue-flow__node[data-id="${id}"]`)).toContainText(name)
-  expect(await bandTop('model.rework')).toBeLessThan(await bandTop('s:model/explain'))
-  expect(await bandTop('s:model/explain')).toBeLessThan(await bandTop('s:model/description'))
-  expect(await bandTop('s:model/description')).toBeLessThan(await bandTop('model.types'))
-  const types = await top(page, 'model.types')
-  for (const id of ['model.pipeline', 'model.governance', 'model.projector']) expect(await top(page, id)).toBeLessThan(types)
+  // 第二十二轮波 5：位置要在稳定态上读——代码事实读到后布局会重排一次（L15），首帧读到的是半途的几何（全量 5.6m 负载下复现过一次 733 ≮ 654）
+  await waitSettled(page)
+  await expect(async () => {
+    expect(await bandTop('model.rework')).toBeLessThan(await bandTop('s:model/explain'))
+    expect(await bandTop('s:model/explain')).toBeLessThan(await bandTop('s:model/description'))
+    expect(await bandTop('s:model/description')).toBeLessThan(await bandTop('model.types'))
+    const types = await top(page, 'model.types')
+    for (const id of ['model.pipeline', 'model.governance', 'model.projector']) expect(await top(page, id)).toBeLessThan(types)
+  }).toPass({ timeout: 30_000 })
   // 位置要跨两次加载逐字节相等：先等首帧后的整体平移（再适应）结束，两边都在稳定态上读。
   // 合并复跑（round21/integration）：全量并行时别的用例临时改写本项目描述（grading 的 roles.yaml、approval 的临时模块等，结束时恢复），
   // 落在两次加载之间布局就不同——两次读数成对重试，同一份描述上比
