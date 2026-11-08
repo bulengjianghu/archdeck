@@ -4,65 +4,48 @@
     <meta name="arch-basis" content="v1 df5b344797a3ae35 model.pipeline#abstraction=e4df30c9 model.pipeline#children=c972f2fd model.pipeline#invariants=58713462 model.pipeline#responsibility=80ad7ed3 model.pipeline#summary=2faa4b54 model.pipeline.indexer#summary=d536b137 model.pipeline.loader#summary=dc4781e8 model.pipeline.validator#summary=2e76657d rel:rel.ad.flow-validate-index=d29e8e11">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>加载流水线 · 进料三步</title>
+    <title>加载流水线 · 三站进料口</title>
     <style>
 :root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
 @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
-body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
 h1{font-size:18px;margin:0 0 4px}
-h2{font-size:15px;margin:22px 0 6px}
-.lede{color:var(--text-2);margin:0 0 14px}
-figure{margin:10px 0 4px}
-figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
-svg{width:100%;height:auto;display:block}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
 svg text{font-family:inherit;fill:var(--text)}
 svg .muted{fill:var(--text-2)}
-.cols{display:grid;gap:8px;margin:8px 0}
-.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
-.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
-.cols b{display:block;font-size:13.5px}
-.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
-.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
-code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
 </style>
   </head>
   <body>
 
-    <h1>进料三步</h1>
-    <p class="lede">这一层是 <span data-arch="model.pipeline">加载流水线</span>：<span data-arch="model.pipeline" data-field="summary"></span>。文本从这三步变成能查询的模型——模块、关系、场景走同一条流水线。</p>
+    <h1>三站进料口</h1>
+    <p class="lede"><span data-arch="model.pipeline">加载流水线</span>是模型层唯一的进料口：页面、命令行、AI 读到的模型都从这里出来。</p>
 
+    <h2>三站各查一类问题</h2>
     <figure>
-      <svg viewBox="0 0 640 176" role="img" aria-label="Loader 单文件检查、Validator 跨文件校验、Indexer 建索引，问题全汇总">
-        <defs><marker id="o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
-        <rect x="14" y="30" width="170" height="84" rx="10" fill="var(--soft)" stroke="var(--line)"/>
-        <text x="99" y="54" font-size="11" text-anchor="middle" class="">① Loader</text>
-        <text x="30" y="76" font-size="9" class="muted">解析单个文件、查格式：</text>
-        <text x="30" y="92" font-size="9" class="muted">形状不对在这里就拦下</text>
-        <path d="M186,72 L214,72" stroke="var(--text-2)" stroke-width="2" marker-end="url(#o)"/>
-        <rect x="218" y="30" width="170" height="84" rx="10" fill="var(--bg)" stroke="var(--warn)"/>
-        <text x="303" y="54" font-size="11" text-anchor="middle" class="">② Validator</text>
-        <text x="234" y="76" font-size="9" class="muted">跨文件查引用：指向的</text>
-        <text x="234" y="92" font-size="9" class="muted">模块 / 接口存在吗</text>
-        <path d="M390,72 L418,72" stroke="var(--text-2)" stroke-width="2" marker-end="url(#o)"/>
-        <rect x="422" y="30" width="170" height="84" rx="10" fill="var(--ok-soft)" stroke="var(--ok)"/>
-        <text x="507" y="54" font-size="11" text-anchor="middle" class="">③ Indexer</text>
-        <text x="438" y="76" font-size="9" class="muted">建查询结构：模块树、</text>
-        <text x="438" y="92" font-size="9" class="muted">关系表、场景索引</text>
-        <path d="M594,72 L616,72" stroke="var(--text-2)" stroke-width="2" marker-end="url(#o)"/>
-        <rect x="14" y="130" width="598" height="30" rx="6" fill="var(--warn-soft)" stroke="var(--warn)"/>
-        <text x="313" y="149" font-size="10" text-anchor="middle" class="">各步自报问题，统一汇总在模型层入口——坏点悄悄混不过去</text>
+      <svg viewBox="0 0 480 292" role="img" aria-label="加载流水线：描述文件经 Loader、Validator、Indexer 三站变成可查询的模型，问题全部汇总">
+        <defs><marker id="a9P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a9S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a9A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a9M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a9g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a9l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="6" y="4" width="270" height="46" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="141.0" y="24.3" font-size="13" text-anchor="middle">描述文件</text><text x="141.0" y="38.8" font-size="10.5" text-anchor="middle" class="muted">YAML 原文</text>
+        <g data-arch="model.pipeline.loader"><rect x="6" y="62" width="270" height="46" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="141.0" y="82.3" font-size="13" text-anchor="middle" font-weight="600">Loader</text><text x="141.0" y="96.8" font-size="10.5" text-anchor="middle" class="muted">解析 · 单文件格式 · 合并</text></g>
+        <path d="M141,50 L141,60" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a9g)"/>
+        <path d="M276,85 C300,85 300,146 322,146" stroke="var(--text-2)" stroke-width="1.2" fill="none" stroke-dasharray="5 4" marker-end="url(#a9g)"/>
+        <g data-arch="model.pipeline.validator"><rect x="6" y="120" width="270" height="46" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="141.0" y="140.3" font-size="13" text-anchor="middle" font-weight="600">Validator</text><text x="141.0" y="154.8" font-size="10.5" text-anchor="middle" class="muted">跨文件：引用 · 层次 · 场景</text></g>
+        <path d="M141,108 L141,118" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a9g)"/>
+        <path d="M276,143 C300,143 300,146 322,146" stroke="var(--text-2)" stroke-width="1.2" fill="none" stroke-dasharray="5 4" marker-end="url(#a9g)"/>
+        <g data-arch="model.pipeline.indexer"><rect x="6" y="178" width="270" height="46" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="141.0" y="198.3" font-size="13" text-anchor="middle" font-weight="600">Indexer</text><text x="141.0" y="212.8" font-size="10.5" text-anchor="middle" class="muted">按 ID 与层次建索引</text></g>
+        <path d="M141,166 L141,176" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a9g)"/>
+        <path d="M276,201 C300,201 300,146 322,146" stroke="var(--text-2)" stroke-width="1.2" fill="none" stroke-dasharray="5 4" marker-end="url(#a9g)"/>
+        <rect x="6" y="236" width="270" height="46" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="141.0" y="256.3" font-size="13" text-anchor="middle">可查询的模型</text><text x="141.0" y="270.8" font-size="10.5" text-anchor="middle" class="muted">给解释层与各前端</text>
+        <path d="M141,224 L141,234" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a9g)"/>
+        <rect x="324" y="106" width="150" height="80" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="399.0" y="136.1" font-size="13" text-anchor="middle">问题清单</text><text x="399.0" y="150.6" font-size="10.5" text-anchor="middle" class="muted">带文件与行号</text><text x="399.0" y="165.1" font-size="10.5" text-anchor="middle" class="muted">一个不漏</text>
       </svg>
-      <figcaption>进料三步：解析、校验、建索引。</figcaption>
+      <figcaption>单文件的格式、跨文件的引用、建索引，三站各管一类。格式坏的文件整份跳过并报出位置；问题全部汇总上报，不悄悄混过去。</figcaption>
     </figure>
-
-    <h2>为什么这样切</h2>
-    <div class="cols c3">
-      <div><b><span data-arch="model.pipeline.loader">单文件关</span></b>格式问题就地拦截，报错带文件与行号——不把坏数据往下游送。</div>
-      <div><b><span data-arch="model.pipeline.validator">跨文件关</span></b>引用完整性在这里收口：悬空的模块、接口、场景全部现形。</div>
-      <div><b><span data-arch="model.pipeline.indexer">索引关</span></b>建好查询结构后，投影、治理、agent 全都直查索引——同一个入口，同一种口径。</div>
-    </div>
-
-    <p class="note">流水线只出索引不出结论：谁连谁归投影班管、对不对得上归裁判管——进料的只保证「干净」。</p>
 
   </body>
 </html>

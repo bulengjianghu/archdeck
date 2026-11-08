@@ -4,77 +4,79 @@
     <meta name="arch-basis" content="v1 bdd8f492518c31c2 model#abstraction=eb9a0ba1 model#children=4662cf4f model#excludes=75552ed7 model#includes=9662fd32 model#invariants=3e7d132b model#responsibility=c0ea5904 model#strata=44f7a520 model#summary=b787f489 model.diff#summary=efa13fc4 model.evolution#summary=14c0661c model.governance#invariants=671b2a93 model.governance#summary=19aca572 model.intent#summary=7d2891c7 model.pipeline#invariants=58713462 model.pipeline#summary=2faa4b54 model.projector#invariants=3c5dac6e model.projector#summary=5d63959f model.review#summary=12766c0e model.rework#summary=675f0728 model.scenario#invariants=ef71677c model.scenario#summary=a184a2b7 model.scenario-semantics#summary=b2c07800 model.source#summary=2099de0f model.types#invariants=760c6103 model.types#summary=4cb9fd5b rel:rel.ad.diff-index=d84a4b90 rel:rel.ad.indexer-steps=3c273c9e rel:rel.ad.loader-schema=b41758ed rel:rel.ed.check-load=fcf4299e rel:rel.ed.check-types=ea38a0cb rel:rel.ed.relations-types=42a14f15 rel:rel.ed.validate-schema=505053c7 rel:rel.ed.validate-types=11445224 rel:rel.gv.evolution-facts=548af3e3 rel:rel.gv.evolution-level=c73be09c rel:rel.gv.evolution-ownership=d4dc7934 rel:rel.gv.evolution-types=c4e3005e rel:rel.gv.facts-ports-source=5f26f8d3 rel:rel.gv.model-projector=180c774a rel:rel.gv.model-source=eee5b1b2 rel:rel.gv.model-types=249552c3 rel:rel.gv.pipeline-rules=35f7c0eb rel:rel.gv.ports-source=11e75665 rel:rel.gv.review-types=8795a099 rel:rel.gv.rework-evolution=871da071 rel:rel.gv.rework-facts=27c9b147 rel:rel.gv.rework-gate=75ae0c42 rel:rel.gv.rework-ports=04d831d4 rel:rel.gv.rework-review=df28fd26 rel:rel.gv.rework-scenario=17acf454 rel:rel.gv.rework-source=71ea7bb9 rel:rel.gv.rework-structure-level=a3e8b5a3 rel:rel.gv.rework-tiers=7b7b222d rel:rel.gv.rework-types=94257c2a rel:rel.gv.structure-ownership=5b61d4e5 rel:rel.gv.tiers-projector=a18b31e8 rel:rel.gv.tiers-source=15fbf68c rel:rel.p2.level-edgeid=478a761a rel:rel.p2.level-endpoints=320c5bd7 rel:rel.p2.level-lca=1691a4b7 rel:rel.p2.projector-roles=eaa3c3e7 rel:rel.p2.scenario-types=301ee308 rel:rel.p2.seqmodel-names=15fc16be rel:rel.p3.validator-bind=cc578ef2 rel:rel.p7.ownership-endpoint=b67c87f1 rel:rel.p7.ownership-types=e448e94a rel:rel.p8.sequence-hierarchy=c5727f7b rel:rel.st.edit-migrate=61d70399 rel:rel.st.layers-migrate=e6c05eb5 rel:rel.st.rework-strata=e1498ac4 rel:rel.st.tiers-indexer=90089409 rel:rel.v2.diff-check=047a389b rel:rel.w5.loader-explainer=5d4d3bbe">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>模型层 · 百科全书：进料、索引、两条投影链</title>
+    <title>模型层 · 百科全书</title>
     <style>
 :root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
 @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
-body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
 h1{font-size:18px;margin:0 0 4px}
-h2{font-size:15px;margin:22px 0 6px}
-.lede{color:var(--text-2);margin:0 0 14px}
-figure{margin:10px 0 4px}
-figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
-svg{width:100%;height:auto;display:block}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
 svg text{font-family:inherit;fill:var(--text)}
 svg .muted{fill:var(--text-2)}
-.cols{display:grid;gap:8px;margin:8px 0}
-.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
-.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
-.cols b{display:block;font-size:13.5px}
-.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
-.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
-code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
 </style>
   </head>
   <body>
 
-    <h1>百科全书：进料、索引、两条投影链</h1>
-    <p class="lede">这一层是 <span data-arch="model">模型层</span>：<span data-arch="model" data-field="summary"></span>。结构与行为归架构台，这里只存「关于被描述系统的知识」——脱离工作台依然成立。</p>
+    <h1>百科全书：关于被描述系统的知识</h1>
+    <p class="lede"><span data-arch="model">模型层</span>脱离工作台也成立：给它描述与代码事实，它回答被描述的系统长什么样。</p>
 
+    <h2>四个次层，数据往上流</h2>
     <figure>
-      <svg viewBox="0 0 640 248" role="img" aria-label="进料口三步建索引，结构班与运行班两条投影链，右侧答题窗口">
-        <defs><marker id="j" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
-        <rect x="14" y="30" width="148" height="118" rx="10" fill="var(--ok-soft)" stroke="var(--ok)"/>
-        <text x="88" y="52" font-size="11.5" text-anchor="middle" class="">进料口</text>
-        <text x="88" y="74" font-size="9.5" text-anchor="middle" class="muted">① 解析单文件</text>
-        <text x="88" y="92" font-size="9.5" text-anchor="middle" class="muted">② 交叉校验引用</text>
-        <text x="88" y="110" font-size="9.5" text-anchor="middle" class="muted">③ 建查询索引</text>
-        <text x="88" y="134" font-size="9" text-anchor="middle" class="muted">问题全汇总上报，</text>
-        <text x="88" y="147" font-size="9" text-anchor="middle" class="muted">坏点悄悄混不过去</text>
-        <path d="M164,72 L192,72" stroke="var(--ok)" stroke-width="2.5" marker-end="url(#j)"/>
-        <path d="M164,104 L192,104" stroke="var(--ok)" stroke-width="2.5" marker-end="url(#j)"/>
-        <rect x="196" y="36" width="178" height="66" rx="10" fill="var(--bg)" stroke="var(--warn)"/>
-        <text x="285" y="56" font-size="11" text-anchor="middle" class="">结构班：层次投影</text>
-        <text x="285" y="74" font-size="9" text-anchor="middle" class="muted">给定一层 → 这层的节点、</text>
-        <text x="285" y="88" font-size="9" text-anchor="middle" class="muted">线、边界与旁观者</text>
-        <rect x="196" y="116" width="178" height="66" rx="10" fill="var(--bg)" stroke="var(--warn)"/>
-        <text x="285" y="136" font-size="11" text-anchor="middle" class="">运行班：场景投影</text>
-        <text x="285" y="154" font-size="9" text-anchor="middle" class="muted">步骤树 → 帧 → 按分支取路径</text>
-        <text x="285" y="168" font-size="9" text-anchor="middle" class="muted">→ 投影成本层可见消息</text>
-        <rect x="396" y="30" width="120" height="90" rx="10" fill="var(--soft)" stroke="var(--line)"/>
-        <text x="456" y="52" font-size="10.5" text-anchor="middle" class="">四个词记住</text>
-        <text x="408" y="72" font-size="9" class="muted">步骤=剧本一行</text>
-        <text x="408" y="88" font-size="9" class="muted">帧=最小演出</text>
-        <text x="408" y="104" font-size="9" class="muted">路径=按分支串起</text>
-        <text x="408" y="120" font-size="9" class="muted">消息=本层看到段</text>
-        <path d="M376,72 L392,72" stroke="var(--text-2)" stroke-width="1.6" marker-end="url(#j)"/>
-        <rect x="528" y="30" width="100" height="90" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
-        <text x="578" y="52" font-size="10.5" text-anchor="middle" class="">答题窗口</text>
-        <text x="540" y="72" font-size="9" class="muted">下一步是谁？</text>
-        <text x="540" y="88" font-size="9" class="muted">到第7帧选哪支？</text>
-        <text x="540" y="104" font-size="9" class="muted">谁参与了哪步？</text>
-        <path d="M518,72 L524,72" stroke="var(--text-2)" stroke-width="1.6" marker-end="url(#j)"/>
-        <rect x="196" y="200" width="432" height="36" rx="8" fill="var(--soft)" stroke="var(--line)"/>
-        <text x="412" y="222" font-size="10" text-anchor="middle" class="">两条链平行：关系 → 视图边，帧 → 可见消息；只写一套最细步骤，各层各自投影</text>
+      <svg viewBox="0 0 480 298" role="img" aria-label="模型层四个次层：交付、解释、描述、契约，各自的成员模块">
+        <defs><marker id="a7P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a7S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a7A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a7M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a7g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a7l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="2" y="4" width="476" height="46" rx="6" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="30" y="31.0" font-size="12" text-anchor="middle" font-weight="600">交付</text>
+        <g data-arch="model.rework"><rect x="62" y="10" width="120" height="34" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="122.0" y="31.0" font-size="11.5" text-anchor="middle">返工清单</text></g>
+        <rect x="2" y="56" width="476" height="88" rx="6" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="30" y="104.0" font-size="12" text-anchor="middle" font-weight="600">解释</text>
+        <g data-arch="model.projector"><rect x="62" y="62" width="160" height="34" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="142.0" y="83.0" font-size="11.5" text-anchor="middle">Projector 层次投影</text></g>
+        <g data-arch="model.scenario"><rect x="230" y="62" width="110" height="34" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="285.0" y="83.0" font-size="11.5" text-anchor="middle">场景投影</text></g>
+        <g data-arch="model.source"><rect x="348" y="62" width="110" height="34" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="403.0" y="83.0" font-size="11.5" text-anchor="middle">源码归属</text></g>
+        <g data-arch="model.governance"><rect x="62" y="104" width="110" height="34" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="117.0" y="125.0" font-size="11.5" text-anchor="middle">架构治理</text></g>
+        <g data-arch="model.evolution"><rect x="180" y="104" width="110" height="34" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="235.0" y="125.0" font-size="11.5" text-anchor="middle">演化事实</text></g>
+        <rect x="2" y="150" width="476" height="88" rx="6" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="30" y="198.0" font-size="12" text-anchor="middle" font-weight="600">描述</text>
+        <g data-arch="model.pipeline"><rect x="62" y="156" width="120" height="34" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="122.0" y="177.0" font-size="11.5" text-anchor="middle">加载流水线</text></g>
+        <g data-arch="model.scenario-semantics"><rect x="190" y="156" width="240" height="34" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="310.0" y="177.0" font-size="11.5" text-anchor="middle">场景语义（步骤与回放计划）</text></g>
+        <g data-arch="model.intent"><rect x="62" y="198" width="80" height="34" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="102.0" y="219.0" font-size="11.5" text-anchor="middle">意图</text></g>
+        <g data-arch="model.diff"><rect x="150" y="198" width="100" height="34" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="200.0" y="219.0" font-size="11.5" text-anchor="middle">版本对比</text></g>
+        <g data-arch="model.review"><rect x="258" y="198" width="80" height="34" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="298.0" y="219.0" font-size="11.5" text-anchor="middle">确认</text></g>
+        <rect x="2" y="244" width="476" height="46" rx="6" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="30" y="271.0" font-size="12" text-anchor="middle" font-weight="600">契约</text>
+        <g data-arch="model.types"><rect x="62" y="250" width="150" height="34" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="137.0" y="271.0" font-size="11.5" text-anchor="middle">类型与 Schema</text></g>
+        <path d="M452,214 L452,108" stroke="var(--hot)" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#a7M)"/>
+        <text x="446" y="226" font-size="10" text-anchor="end" style="fill:var(--hot)">可信模型</text>
       </svg>
-      <figcaption>从文本到图：一班画结构，一班画运行。</figcaption>
+      <figcaption>描述层把文本读成可信、可比的模型；解释层拿它回答关于系统的问题；交付层只把结果组装给人。契约层是共同的词汇，只有形状，不含计算。</figcaption>
     </figure>
 
-    <h2>为什么页面、终端、助手都信它</h2>
-    <p>百科全书不依赖任何界面：输入描述与事实，输出数据与答案。页面要画图来问，命令行要校验来问，AI 助手要判断来问——同一个 <span data-arch="model.pipeline">进料口</span>、同一套索引，同一个答案。换单词表不必改全书：<span data-arch="model.types">公共词表</span> 一页管所有名字与形状。</p>
-    <p>班里还有一位裁判：<span data-arch="model.governance">架构治理</span>，专管「描述说的」与「代码干的」对不对得上，它有自己的图解。</p>
-
-    <p class="note ok">知识与会话分开：换个前端（页面 / 命令行 / AI），全书照用——这是本项目判别「一条规则放哪层」的那把刀。</p>
+    <h2>两条平行的投影链</h2>
+    <figure>
+      <svg viewBox="0 0 480 196" role="img" aria-label="两条平行的投影链：关系经层次投影成本层的边，步骤经场景投影成本层可见的消息">
+        <defs><marker id="a8P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a8S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a8A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a8M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a8g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a8l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="176" y="2" width="128" height="28" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="240.0" y="20.2" font-size="12" text-anchor="middle">当前层次</text>
+        <line x1="240" y1="30" x2="240" y2="46" stroke="var(--text-2)" stroke-width="1.2"/>
+        <rect x="6" y="50" width="130" height="50" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="71.0" y="72.1" font-size="12.5" text-anchor="middle">最细的关系</text><text x="71.0" y="86.6" font-size="10.5" text-anchor="middle" class="muted">只写一套</text>
+        <g data-arch="model.projector"><rect x="176" y="50" width="128" height="50" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="240.0" y="79.4" font-size="12.5" text-anchor="middle" font-weight="600">层次投影</text></g>
+        <rect x="344" y="50" width="130" height="50" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="409.0" y="72.1" font-size="12.5" text-anchor="middle">本层的边</text><text x="409.0" y="86.6" font-size="10.5" text-anchor="middle" class="muted">画布 / 时序图</text>
+        <path d="M136,75 L174,75" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a8g)"/>
+        <path d="M304,75 L342,75" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a8g)"/>
+        <rect x="6" y="130" width="130" height="50" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="71.0" y="152.1" font-size="12.5" text-anchor="middle">最细的步骤</text><text x="71.0" y="166.6" font-size="10.5" text-anchor="middle" class="muted">只写一套</text>
+        <g data-arch="model.scenario"><rect x="176" y="130" width="128" height="50" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="240.0" y="159.4" font-size="12.5" text-anchor="middle" font-weight="600">场景投影</text></g>
+        <rect x="344" y="130" width="130" height="50" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="409.0" y="152.1" font-size="12.5" text-anchor="middle">本层可见的消息</text><text x="409.0" y="166.6" font-size="10.5" text-anchor="middle" class="muted">时序图</text>
+        <path d="M136,155 L174,155" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a8g)"/>
+        <path d="M304,155 L342,155" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a8g)"/>
+        <path d="M240,46 L240,48" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a8g)"/>
+        <path d="M176,16 L158,16 L158,155 L174,155" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a8g)"/>
+      </svg>
+      <figcaption>只写一套最细的关系与步骤，各层各自投影：关系汇成本层的边，步骤汇成本层可见的消息。所以下钻时，图和时序图一起变细。</figcaption>
+    </figure>
 
   </body>
 </html>
