@@ -1,0 +1,84 @@
+# 取自 kernel/src/services/signals.ts（record、scheduleIntakeWakeTx、scheduleDraftChangedTx、decline）、signal-rules.ts、intake-budget.ts、
+# services/orchestrator.ts（整理台唤起看池与预算）、playbooks/src/triager.ts、kernel-api/src/mcp.ts 的 intake-tools 与 http.ts 的信号路由组。
+scenario:
+  id: sc.signal-intake
+  name: 信号池整理
+  kind: main
+  description: |
+    进池模式下录入的信号不直接建任务：信号进池并按攒批窗口排整理唤醒（人也可点「立即整理」）；到点由内核唤起整理台（每主人 + 仓库一个整理台任务，
+    超按天预算出裁决卡），整理会话只读、scope=intake，列出池里信号后判重复 / 无效 / 暂缓、建草稿任务并挂上信号。
+    草稿变动等攒批窗口到期再唤醒草稿的驱动（统筹者），它起草清单并发确认卡；人确认即冻结草稿、按需求圈开工，或把草稿退回池。
+  cause: 主人以进池方式录入信号
+  evidence:
+    - test/flow/intake-loop.test.ts
+    - test/flow/pool-loop.test.ts
+    - packages/kernel/test/signal-pool.test.ts
+    - packages/kernel/test/intake-s2.test.ts
+    - packages/kernel-api/test/intake-mcp.test.ts
+    - packages/kernel-api/test/signal-pool-api.test.ts
+    - packages/ui/test/signals.test.tsx
+  steps:
+    - call: {id: intake, from: actor.owner, to: surface.intake.new-task, label: 录入（进池）}
+    - async: {from: surface.intake.new-task, to: surface.api.client, relation: rel.surface.new-task-create, label: api.createSignal}
+    - async: {from: surface.api.client, to: client.local-ui.server, relation: rel.surface.http-signal, label: 'POST /api/signals（pool）'}
+    - async: {from: client.local-ui.server, to: client.local-ui.kernel-proxy, label: createSignal}
+    - async: {from: client.local-ui.kernel-proxy, to: server.http.intake-routes, relation: rel.client.ui-signal-kernel, label: 'POST /v1/signals'}
+    - async: {from: server.http.intake-routes, to: kernel.intake.signals, relation: rel.server.intake-signals, label: 'record(mode=pool)'}
+    - async: {from: kernel.intake.signals, to: kernel.ledger.ledger, label: signal.recorded}
+    - async: {from: kernel.ledger.ledger, to: kernel.intake.signal-rules, relation: rel.kernel.ledger-signal-reactors, label: 进池反应}
+    - async: {id: window, from: kernel.intake.signal-rules, to: kernel.intake.signals, label: scheduleIntakeWakeTx：按攒批窗口排整理唤醒}
+    - async: {from: kernel.intake.signals, to: kernel.liveness.wakeups, label: scheduleWakeup(整理台任务)}
+    - alt:
+        - when: 人点「立即整理」
+          steps:
+            - call: {id: triage-now, from: actor.owner, to: surface.intake.signals, label: 信号页上点立即整理}
+            - async: {from: surface.intake.signals, to: surface.api.client, relation: rel.surface.signals-triage, label: api.triageNow}
+            - async: {from: surface.api.client, to: client.local-ui.server, relation: rel.surface.http-triage, label: 'POST /api/signals/:id/triage-now'}
+            - async: {from: client.local-ui.kernel-proxy, to: server.http.intake-routes, relation: rel.client.ui-signal-kernel, label: triage-now}
+            - async: {from: server.http.intake-routes, to: kernel.intake.signals, relation: rel.server.intake-signals, label: triageNow：唤醒提到现在}
+        - when: 等窗口到期
+          steps:
+            - async: {from: actor.time, to: kernel.liveness.scheduler, label: pg-boss 一轮}
+    - call: {from: kernel.liveness.watchdog, to: kernel.orchestration.launcher, label: wake(整理台任务)}
+    - async: {from: kernel.orchestration.launcher, to: kernel.intake.signals, label: 池里有无待整理信号、池视图}
+    - async: {id: budget, from: kernel.orchestration.launcher, to: kernel.intake.budget, label: checkIntakeDailyBudgetTx}
+    - alt:
+        - when: 今天的整理花费到上限
+          steps:
+            - async: {id: over-budget, from: kernel.intake.budget, to: kernel.tasks.cards, label: 裁决卡「今天继续 / 明天再整理」}
+        - when: 未到上限
+          steps:
+            - call: {from: kernel.orchestration.launcher, to: playbooks.orchestrator.builder, label: 拼提示词}
+            - call: {from: playbooks.orchestrator.builder, to: playbooks.orchestrator.triager, label: 整理台提示词（池视图）}
+            - async: {from: kernel.orchestration.launcher, to: kernel.orchestration.executions, label: 'dispatch(scope=intake, 只读, sonnet)'}
+            - async: {from: kernel.orchestration.executions, to: kernel.dispatch.jobs, label: session.start 任务包}
+            - async: {from: server.hub.push, to: client.channel.runner, relation: rel.server.hub-jobs-ws, label: 推任务包}
+            - call: {from: client.channel.runner, to: client.channel.executor, label: execute(job)}
+            - async: {from: client.channel.executor, to: adapters.ai.executor, label: start(SessionSpec)}
+            - async: {id: triager, from: adapters.ai.executor, to: actor.triager, label: 起整理会话}
+            - async: {from: actor.triager, to: server.mcp.service, label: gixn_list_signals}
+            - async: {from: server.mcp.service, to: server.mcp.intake-tools, label: 调工具实现（范围限主人 + 仓库）}
+            - async: {from: server.mcp.intake-tools, to: kernel.intake.signals, relation: rel.server.intake-tools-view, label: 池视图}
+            - loop:
+                while: 池里还有没整理的信号
+                steps:
+                  - async: {id: triage, from: actor.triager, to: server.mcp.service, label: 'gixn_create_draft / gixn_triage_signal(duplicate / invalid / hold) / gixn_fold_draft'}
+                  - async: {from: server.mcp.intake-tools, to: kernel.intake.signals, relation: rel.server.intake-tools-signals, label: 建草稿、分诊、挂接}
+                  - async: {from: kernel.intake.signals, to: kernel.ledger.ledger, label: 'signal.triaged / 草稿 task.created / draft.changed'}
+            - async: {from: kernel.ledger.ledger, to: kernel.intake.signal-rules, relation: rel.kernel.ledger-signal-reactors, label: 草稿变动反应}
+            - async: {id: draft-changed, from: kernel.intake.signal-rules, to: kernel.intake.signals, label: scheduleDraftChangedTx：攒批窗口到期唤醒驱动}
+            - ref: sc.orchestrator-wake
+            - alt:
+                - when: 主人确认草稿（答确认卡）
+                  steps:
+                    - call: {id: confirm, from: actor.owner, to: surface.inbox.card-detail, label: 确认 → 草稿冻结，按需求圈开工}
+                    - async: {from: server.http.inbox-routes, to: kernel.tasks.cards, relation: rel.server.inbox-cards, label: answer}
+                    - async: {from: kernel.tasks.cards, to: kernel.intake.signals, label: 草稿转正（信号随任务冻结）}
+                - when: 主人退回草稿
+                  steps:
+                    - call: {id: decline, from: actor.owner, to: surface.intake.drafts, label: 退回池}
+                    - async: {from: surface.intake.drafts, to: surface.api.client, relation: rel.surface.drafts-ops, label: api.declineDraft}
+                    - async: {from: surface.api.client, to: client.local-ui.server, relation: rel.surface.http-triage, label: 'POST /api/tasks/:id/decline'}
+                    - async: {from: client.local-ui.server, to: client.local-ui.kernel-proxy, label: declineDraft}
+                    - async: {from: client.local-ui.kernel-proxy, to: server.http.intake-routes, relation: rel.client.ui-signal-kernel, label: 'POST /v1/tasks/:id/decline'}
+                    - async: {from: server.http.intake-routes, to: kernel.intake.signals, relation: rel.server.intake-signals, label: 'decline(signals=pool)'}

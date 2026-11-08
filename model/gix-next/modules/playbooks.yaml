@@ -1,0 +1,259 @@
+# 区域：剧本（packages/playbooks，含 templates/*.md）——统筹剧本、角色剧本、自愈手册与放行命令、模板与版本登记
+# 第二级模块（playbooks.orchestrator / roles / heal / templates）由骨架定义，此处只补原则与边界并往下挂子模块。
+# orchestrator.ts 内部子结构写成概念子模块（不写 codeRefs，§3.7），params.ts 与 triager.ts 按文件拆。
+# 剧本被 kernel-api 注入内核（组装事实）；内核调用这些函数的关系由 kernel 区域经端口写，这里只声明接口。
+
+modules:
+  - id: playbooks
+    name: 剧本
+    summary: 给统筹者、执行者与整理台出可复原的提示词与默认参数
+  # 第二级模块的补充条目（名称与骨架一致）
+  - id: playbooks.orchestrator
+    name: 统筹剧本
+    summary: 按剧本与唤醒原因拼出统筹者与整理台的提示词
+    abstraction: 按「选段 / 现状与事件 / 参数 / 整理台」切分：模板正文静态，任务相关内容全进 taskAppend；剧本名由档案决定解析，内核只读参数不解释剧本。
+    invariants:
+      - 纯函数：不连库、不起进程，只读包内模板
+      - 全文 = 选中的模板段落 + taskAppend，fullTextHash 是全文 sha256，模板版本、段落与 taskAppend 能复原全文
+      - 剧本选择：档案里最近一条 playbook.chosen 决定 > 输入的剧本 > standard
+    excludes: [何时唤起统筹者与现状快照的计算 → kernel.orchestration, 执行角色提示词 → playbooks.roles, 模板读取与分段 → playbooks.templates]
+  - id: playbooks.roles
+    name: 角色剧本
+    summary: 按角色拼出执行会话的提示词与审核要求
+    abstraction: 一个角色一个模板，任务、可跑命令、配方要点、审核要求与简报都进 taskAppend；审核要求三层合成单独成件，版本号可追溯每一层。
+  - id: playbooks.heal
+    name: 自愈手册与放行命令
+    summary: 给出每类故障的处置与每个角色可跑的命令
+    abstraction: 两张按枚举穷举的表：故障类 → 手册条目，角色 → 由配方命令推出的放行规则；只给数据与纯函数，不执行。
+  - id: playbooks.templates
+    name: 模板与版本登记
+    summary: 读取分段模板并登记每个版本的正文哈希
+    abstraction: 模板文件只存静态段落与条件块，读取与渲染是唯一入口；版本登记表只追加，正文哈希与最后一行一致由测试守。
+
+  # ───────────────────────── playbooks.orchestrator ─────────────────────────
+  - id: playbooks.orchestrator.builder
+    parent: playbooks.orchestrator
+    name: 统筹提示词拼装
+    summary: 选出剧本与段落，拼出统筹者全文
+    kind: component
+    responsibility: >-
+      orchestrator.ts 的拼装部分：createOrchestratorPromptBuilder 实现内核 PromptBuilder（结构兼容，多给 fullTextHash），整理台任务转给整理台提示词；
+      resolvePlaybook 定本次剧本；orchestratorSectionKeys 按任务类型、剧本与唤醒原因归类（classifyCause）选段；codeHostFlags 把代码平台能力转成 local / noci 条件标记。
+
+  - id: playbooks.orchestrator.situation
+    parent: playbooks.orchestrator
+    name: 任务追加
+    summary: 把任务、现状快照、档案与验收现状写成 taskAppend
+    kind: component
+    responsibility: >-
+      orchestrator.ts 的 taskAppend 部分（orchestratorTaskAppend）：任务一行、唤醒原因、剧本（含配方覆盖的参数）、现状段（在跑执行、待答卡、MR 与流水线、预算、租约、已排唤醒、缺陷验证计划）、
+      本任务默认值表、配方要点、档案摘要、验收项现状，最后接事件段。快照与验收现状由内核算好传入，这里只排版。
+
+  - id: playbooks.orchestrator.events
+    parent: playbooks.orchestrator
+    name: 事件折叠
+    summary: 只留上次正常唤醒之后的事件并折叠成紧凑行
+    kind: component
+    responsibility: >-
+      orchestrator.ts 的事件段部分：eventsSinceLastWake 取最后一次正常结束的统筹唤醒之后的事件；dropCoveredBySnapshot 去掉现状段已给出的；
+      foldEvents / formatEvent 把成对的适配器调用、重复轮询与进度折成一行，各类事件出紧凑格式，与契约对不上时退回原文。
+
+  - id: playbooks.orchestrator.params
+    parent: playbooks.orchestrator
+    name: 剧本参数表
+    summary: 给出各剧本的可写、预算与审核默认，可被配方覆盖
+    kind: component
+    responsibility: PLAYBOOK_PARAMS 与 playbookParams(name, recipe)：standard / solo / prototype 的驱动会话可写、默认预算与审核默认；配方 playbooks.<名> 按项目覆盖预算、审核与其它参数，剧本选择与可写不可覆盖。内核建任务定预算、派统筹定可写时读它。
+    codeRefs: [packages/playbooks/src/params.ts]
+
+  - id: playbooks.orchestrator.triager
+    parent: playbooks.orchestrator
+    name: 整理台提示词
+    summary: 把本仓库的信号池视图拼成整理台提示词
+    kind: component
+    responsibility: buildTriagerPrompt：triager 模板 + 本次整理（待整理与暂缓的信号、可并入的草稿、在跑任务、近 14 天合入、会话预算），每类限条数。
+    codeRefs: [packages/playbooks/src/triager.ts]
+
+  # ───────────────────────── playbooks.roles ─────────────────────────
+  - id: playbooks.roles.executor
+    parent: playbooks.roles
+    name: 执行角色提示词
+    summary: 按角色拼出开发、审核、写脚本、调研的提示词
+    kind: component
+    responsibility: >-
+      buildExecutorPrompt(role, ctx)：按角色选模板与段落（开发退回续会话加 resume，审核第 2 轮起加 round2），taskAppend 写本次执行、可跑的命令（放行规则）、
+      配方要点、审核要求（仅审核）与本次简报；审核另返回审核要求版本，供结论的 promptVersion 使用。
+    codeRefs: [packages/playbooks/src/executor.ts]
+
+  - id: playbooks.roles.review
+    parent: playbooks.roles
+    name: 审核要求合成
+    summary: 把默认、仓库、任务三层审核要求合成一份带版本的文本
+    kind: component
+    responsibility: composeReviewPrompt：固定项 → 默认关注点 → 仓库层 → 任务层，后层优先、固定项去不掉；仓库层带替换标记时整体替换默认关注点；版本号 = 默认模板版本 + 各层哈希前 8 位。
+    codeRefs: [packages/playbooks/src/review.ts]
+
+  # ───────────────────────── playbooks.heal ─────────────────────────
+  - id: playbooks.heal.handbook
+    parent: playbooks.heal
+    name: 自愈手册
+    summary: 给每类故障一条处置：能否自愈、要不要人、能否重试
+    kind: component
+    responsibility: healHandbook（故障类 → healId、说明、步骤、要人动手、可重试、卡片正文），环境故障不占任务重试；healTable / healInfoFor 按 healId 或故障类查给人看的说明。healId 是各包 Fault.healHint 的统一取值。
+    codeRefs: [packages/playbooks/src/heal.ts]
+
+  - id: playbooks.heal.commands
+    parent: playbooks.heal
+    name: 放行命令
+    summary: 由配方命令推出每个角色可跑的命令前缀
+    kind: component
+    responsibility: allowedCommandsFromRecipe(recipe, role)：可写角色给配方命令与命令模板拆成的前缀规则 + 提交与合并命令，调研只给配方命令，统筹与审核为空；只设环境或带命令替换的段不放行，release 命令不放行。
+    codeRefs: [packages/playbooks/src/commands.ts]
+
+  # ───────────────────────── playbooks.templates ─────────────────────────
+  - id: playbooks.templates.loader
+    parent: playbooks.templates
+    name: 模板读取与渲染
+    summary: 读出分段模板，按段落与条件标记拼出全文
+    kind: component
+    responsibility: parseTemplate / loadTemplate（front matter 的 templateId 与语义化版本、按段落标记分段、进程内缓存）、resolveConditions（整行条件块按标记取一支）、section、assemble（段落 + taskAppend，带全文哈希）。
+    codeRefs: [packages/playbooks/src/template.ts]
+
+  - id: playbooks.templates.registry
+    parent: playbooks.templates
+    name: 版本登记表
+    summary: 记下每个模板每个版本的正文哈希
+    kind: component
+    responsibility: TEMPLATE_REGISTRY：每个模板按时间顺序追加 {version, bodySha256}，不改旧行；模板正文改了必须升版本并追加一行（测试核对）。
+    codeRefs: [packages/playbooks/src/registry.ts]
+
+  - id: playbooks.templates.driver-texts
+    parent: playbooks.templates
+    name: 统筹与整理台模板
+    summary: 提供统筹者各剧本、流程、唤醒原因段落与整理台正文
+    kind: component
+    responsibility: orchestrator.md（common、playbook:<剧本>、flow:<任务类型>、verify、cause:<归类> 各段）与 triager.md（整理台的 common 段）的静态正文。
+    codeRefs: [packages/playbooks/templates/orchestrator.md, packages/playbooks/templates/triager.md]
+
+  - id: playbooks.templates.role-texts
+    parent: playbooks.templates
+    name: 角色与审核模板
+    summary: 提供各执行角色与审核默认层的正文
+    kind: component
+    responsibility: developer / reviewer / script_writer / researcher 的角色段落与 review-default（固定项、默认关注点）的静态正文。
+    codeRefs: ['packages/playbooks/templates/{developer,reviewer,script_writer,researcher,review-default}.md']
+
+relations:
+  - id: rel.playbooks.builder-situation
+    from: playbooks.orchestrator.builder
+    to: playbooks.orchestrator.situation
+    type: queries
+    purpose: 取本次唤醒的任务追加
+    description: build 时调 orchestratorTaskAppend(input, opts) 得到 taskAppend 文本。
+  - id: rel.playbooks.builder-triager
+    from: playbooks.orchestrator.builder
+    to: playbooks.orchestrator.triager
+    type: queries
+    purpose: 整理台任务改出整理台提示词
+    description: task_kind 为 intake 时直接返回 buildTriagerPrompt(input)。
+  - id: rel.playbooks.builder-template
+    from: playbooks.orchestrator.builder
+    to: playbooks.templates.loader
+    type: queries
+    purpose: 按选中段落拼出统筹者全文
+    description: loadTemplate('orchestrator') 后 assemble(t, sectionKeys, taskAppend, codeHostFlags)。
+  - id: rel.playbooks.situation-events
+    from: playbooks.orchestrator.situation
+    to: playbooks.orchestrator.events
+    type: queries
+    purpose: 取折叠后的增量事件行
+    description: 写事件段时调 eventsSinceLastWake、dropCoveredBySnapshot（有快照时）与 foldEvents，按 maxEvents 截断。
+  - id: rel.playbooks.situation-params
+    from: playbooks.orchestrator.situation
+    to: playbooks.orchestrator.params
+    type: queries
+    purpose: 写出配方覆盖后的剧本参数
+    description: 剧本行在配方覆盖了生效剧本时调 playbookParams(name, recipe)，写出覆盖后的审核、预算与其它参数。
+  - id: rel.playbooks.triager-template
+    from: playbooks.orchestrator.triager
+    to: playbooks.templates.loader
+    type: queries
+    purpose: 拼出整理台全文
+    description: assemble(loadTemplate('triager'), ['common'], taskAppend)。
+  - id: rel.playbooks.executor-review
+    from: playbooks.roles.executor
+    to: playbooks.roles.review
+    type: queries
+    purpose: 取合成好的审核要求与版本
+    description: 审核角色调 composeReviewPrompt({repoLayer, taskLayer, repoLayerPath})，正文进 taskAppend，版本写进「审核要求版本」行。
+  - id: rel.playbooks.executor-commands
+    from: playbooks.roles.executor
+    to: playbooks.heal.commands
+    type: queries
+    interface: if.playbooks.heal.allowedCommandsFromRecipe
+    purpose: 告诉执行者能跑哪些命令
+    description: 写「可以跑的命令」段时调 allowedCommandsFromRecipe(recipe, role) 与 isWritableRole，与会话实际放行的规则一致。
+  - id: rel.playbooks.executor-template
+    from: playbooks.roles.executor
+    to: playbooks.templates.loader
+    type: queries
+    purpose: 按角色段落拼出执行者全文
+    description: loadTemplate(角色模板) 后 assemble(t, keys, taskAppend)。
+  - id: rel.playbooks.review-template
+    from: playbooks.roles.review
+    to: playbooks.templates.loader
+    type: queries
+    purpose: 取审核默认层的固定项与关注点
+    description: loadTemplate('review-default') 后 section(t, 'fixed' / 'focus')，各层哈希用 sha256。
+
+interfaces:
+  - id: if.playbooks.orchestrator.createOrchestratorPromptBuilder
+    name: createOrchestratorPromptBuilder
+    owner: playbooks.orchestrator.builder
+    signature: |
+      createOrchestratorPromptBuilder(opts?: {
+        recipeFor?: (repo: string) => Recipe | undefined;
+        defaults?: Partial<PlaybookDefaults>;
+        models?: Partial<ModelConfig>;
+        maxEvents?: number;
+      }): OrchestratorPromptBuilder   // { build(input: OrchestratorPromptInput): RenderedPrompt }
+    semantics: |
+      - 返回的 build 与内核 PromptBuilder 同形（多给 fullTextHash），由 kernel-api 注入内核；纯函数，不读库。
+      - task_kind=intake 时出整理台提示词，否则按 resolvePlaybook 与唤醒原因选段 + taskAppend。
+      - 事件段最多 maxEvents 行（默认 200，与内核事件窗口一致）。
+  - id: if.playbooks.orchestrator.resolvePlaybook
+    name: resolvePlaybook
+    owner: playbooks.orchestrator.builder
+    signature: |
+      resolvePlaybook(input: { dossier: Dossier; playbook?: PlaybookName }): { name: PlaybookName; source: "decision" | "input" | "default" }
+    semantics: 档案里最近一条 summary 以「playbook.chosen：<名>」开头的决定 > 输入 > standard；不认识的剧本名跳过。kernel-api 作剧本钩子 resolve 注入内核。
+  - id: if.playbooks.orchestrator.playbookParams
+    name: playbookParams
+    owner: playbooks.orchestrator.params
+    signature: |
+      playbookParams(name: string, recipe?: Recipe): PlaybookParams | undefined
+      // PlaybookParams { name; title; when; promptSection; driverWrites: boolean;
+      //   review: { mode: "none" | "single_model" | "two_models"; escalateOverLines?: number }; budget?: Budget; params?: Record<string, unknown> }
+    semantics: 不认识的名字返回 undefined（内核按 standard）；配方覆盖 budget 整体替换、review 逐字段合并。kernel-api 作剧本钩子 params 注入内核。
+  - id: if.playbooks.roles.buildExecutorPrompt
+    name: buildExecutorPrompt
+    owner: playbooks.roles.executor
+    signature: |
+      buildExecutorPrompt(role: ExecutorRole, ctx: {
+        task: { id: string; title: string; kind: "requirement" | "defect"; repo: string };
+        brief: string; resume?: boolean; round?: number; recipe?: Recipe;
+        review?: { repoLayer?: string; taskLayer?: string };
+      }): RenderedPrompt & { reviewPromptVersion?: string }
+    semantics: 纯函数；taskAppend 以「# 本次简报」收尾（MCP 的 gixn_get_task 按它截简报）；审核角色的 taskAppend 带「审核要求版本：」行。
+  - id: if.playbooks.heal.healHandbook
+    name: healHandbook
+    owner: playbooks.heal.handbook
+    signature: |
+      const healHandbook: Record<FaultClass, { healId: string; summary: string; steps: string[]; needsHuman: boolean; retryable: boolean; cardText?: string }>
+    semantics: 按 FaultClass 穷举；kernel-api 作 healHandbook 注入内核，内核发环境故障卡、决定是否自动重试时查它。
+  - id: if.playbooks.heal.allowedCommandsFromRecipe
+    name: allowedCommandsFromRecipe
+    owner: playbooks.heal.commands
+    signature: |
+      allowedCommandsFromRecipe(recipe: Recipe, role: SessionRole): string[]
+    semantics: 返回 Claude Code 权限规则 Bash(...) 括号内写法（前缀规则「<命令>:*」，去重）；只读角色（统筹、审核）返回空。kernel-api 作 allowedCommands 注入内核，派执行时填进会话规格。

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 dc036a4bd11a6a72 kernel.orchestration#abstraction=47d8f13a kernel.orchestration#children=0f251457 kernel.orchestration#excludes=1d11a618 kernel.orchestration#invariants=e6405ffb kernel.orchestration#responsibility=4fae799b kernel.orchestration#summary=ccc86dc3 kernel.orchestration.dossiers#summary=dc539c28 kernel.orchestration.executions#summary=5c50d825 kernel.orchestration.launcher#summary=56fec3ca kernel.orchestration.playbook-hooks#summary=483f023b kernel.orchestration.queries#summary=565655c1 rel:rel.kernel.launcher-dispatch=fd5f875a rel:rel.kernel.launcher-playbook=da351a9e rel:rel.kernel.launcher-queries=00e44ae7">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>统筹与执行 · 每次都从零拼起</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--gray:#8c959f;
+--surface:#0969da;--surface-s:#ddf4ff;--client:#1b7c83;--client-s:#d8f3f6;--adapters:#bc4c00;--adapters-s:#fff1e5;
+--server:#bf3989;--server-s:#ffeff7;--kernel:#8250df;--kernel-s:#fbefff;--playbooks:#1a7f37;--playbooks-s:#dafbe1;
+--share:#9a6700;--share-s:#fff8c5;--human:#cf222e;--human-s:#ffebe9;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--gray:#6e7681;
+--surface:#4493f8;--surface-s:#0c2d6b;--client:#39c5cf;--client-s:#0b3a3f;--adapters:#f0883e;--adapters-s:#3d2310;
+--server:#ec6cb9;--server-s:#3d1530;--kernel:#ab7df8;--kernel-s:#2b1d47;--playbooks:#3fb950;--playbooks-s:#12351e;
+--share:#d29922;--share-s:#3b2e0a;--human:#ff7b72;--human-s:#4b1113}}
+body{margin:0;padding:16px 18px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:20px 0 4px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 2px}
+figcaption{font-size:12.5px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text);font-size:12px}
+svg .m{fill:var(--text-2);font-size:11px}
+svg .t{font-size:12.5px;font-weight:600}
+svg .w{fill:var(--human)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0;font-size:12.5px}
+.chips span{border:1px solid var(--line);border-radius:10px;padding:0 8px;background:var(--soft)}
+</style>
+  </head>
+  <body>
+    <h1>统筹者不记事，每次都从零拼起</h1>
+    <p class="lede">内核只决定「什么时候、带着什么现状」叫醒统筹者：<span data-arch="kernel.orchestration.launcher">统筹者唤起</span>把<span data-arch="kernel.orchestration.dossiers">任务档案</span>、<span data-arch="kernel.orchestration.queries">只读查询</span>算出的现状和一段新事件拼成提示词，<span data-arch="kernel.orchestration.executions">执行派发</span>把它变成一个会话。剧本写什么、令牌怎么签，都经端口从外面来，由<span data-arch="kernel.orchestration.playbook-hooks">剧本钩子</span>等端口接住。</p>
+
+    <h2>一次唤醒：先问该不该醒，再拼</h2>
+    <figure>
+      <svg viewBox="0 0 480 300" role="img" aria-label="唤醒先过几道跳过条件，再从档案、快照、事件窗口和剧本端口拼提示词，最后派统筹执行">
+        <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="10" y="10" width="120" height="40" rx="8" fill="var(--soft)" stroke="var(--gray)" stroke-dasharray="4 3"/><text x="70" y="35" text-anchor="middle" class="m">到点的唤醒</text>
+        <path d="M130 30 H158" stroke="var(--text-2)" marker-end="url(#a)"/>
+        <rect x="160" y="6" width="310" height="96" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/>
+        <text x="172" y="26" class="t">先锁任务，再看要不要跳过</text>
+        <text x="172" y="46" class="m">已终态、预算暂停 · 已有统筹者在跑</text>
+        <text x="172" y="64" class="m">在等人答卡，而这次只是兜底唤醒</text>
+        <text x="172" y="82" class="m">统筹者反复起不来，环境故障卡还没答</text>
+        <text x="172" y="98" class="m w">跳过也照记，活性会再排下一次</text>
+        <!-- 拼 -->
+        <rect x="10" y="130" width="104" height="52" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="62" y="152" text-anchor="middle">档案</text><text x="62" y="170" text-anchor="middle" class="m">共享记忆</text>
+        <rect x="124" y="130" width="104" height="52" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="176" y="152" text-anchor="middle">现状快照</text><text x="176" y="170" text-anchor="middle" class="m">从表里算</text>
+        <rect x="238" y="130" width="104" height="52" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="290" y="152" text-anchor="middle">事件窗口</text><text x="290" y="170" text-anchor="middle" class="m">只给新的</text>
+        <rect x="352" y="130" width="118" height="52" rx="8" fill="var(--soft)" stroke="var(--gray)" stroke-dasharray="4 3"/><text x="411" y="152" text-anchor="middle" class="m">剧本（端口）</text><text x="411" y="170" text-anchor="middle" class="m">入口注入</text>
+        <path d="M315 102 V 118 H 62 V128 M176 118 V128 M290 118 V128 M411 118 V128" fill="none" stroke="var(--text-2)" marker-end="url(#a)"/>
+        <rect x="100" y="206" width="280" height="36" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-width="2"/>
+        <text x="240" y="229" text-anchor="middle">拼好的提示词 + 会话可写与否</text>
+        <path d="M62 182 V194 H411 V182 M240 194 V204" fill="none" stroke="var(--text-2)" marker-end="url(#a)"/>
+        <path d="M240 242 V260" stroke="var(--text-2)" marker-end="url(#a)"/>
+        <rect x="100" y="262" width="280" height="32" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/>
+        <text x="240" y="283" text-anchor="middle">派统筹执行，记一笔「已唤起」</text>
+      </svg>
+      <figcaption>跳过条件都是为了不白花钱：醒了也只能继续等的，就不起会话。剧本缺省时内核有一份能跑的占位实现，所以内核单测不需要剧本包；会话在仓库里只读还是在工作树里可写，也由生效剧本决定。</figcaption>
+    </figure>
+
+    <h2>现状给全量，事件只给增量</h2>
+    <figure>
+      <svg viewBox="0 0 480 196" role="img" aria-label="事件时间线上，从上次正常收工的唤醒起取窗口，失败的唤醒不算，去掉进度事件，超出上限取最新">
+        <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <line x1="10" y1="70" x2="462" y2="70" stroke="var(--text-2)" marker-end="url(#b)"/>
+        <text x="440" y="90" class="m">序号</text>
+        <g fill="var(--gray)">
+          <circle cx="30" cy="70" r="4"/><circle cx="52" cy="70" r="4"/><circle cx="74" cy="70" r="4"/>
+          <circle cx="160" cy="70" r="4"/><circle cx="182" cy="70" r="4"/>
+          <circle cx="250" cy="70" r="4"/><circle cx="290" cy="70" r="4"/><circle cx="330" cy="70" r="4"/><circle cx="352" cy="70" r="4"/><circle cx="392" cy="70" r="4"/>
+        </g>
+        <g fill="var(--line)"><circle cx="270" cy="70" r="3"/><circle cx="310" cy="70" r="3"/><circle cx="372" cy="70" r="3"/></g>
+        <rect x="100" y="54" width="12" height="32" rx="3" fill="var(--playbooks)"/>
+        <text x="106" y="44" text-anchor="middle" class="m">正常收工的唤醒</text>
+        <rect x="216" y="54" width="12" height="32" rx="3" fill="var(--human)"/>
+        <text x="222" y="108" text-anchor="middle" class="m">失败的唤醒：不算看过</text>
+        <rect x="100" y="120" width="314" height="26" rx="6" fill="var(--kernel-s)" stroke="var(--kernel)"/>
+        <text x="257" y="138" text-anchor="middle">这次给统筹者的事件窗口</text>
+        <path d="M106 88 V118 M414 72 V118" stroke="var(--kernel)" stroke-dasharray="3 3"/>
+        <text x="10" y="170" class="m">浅点是执行进度：已在现状快照里，不进窗口。</text>
+        <text x="10" y="188" class="m">窗口有上限，超了只留最新的一段。</text>
+      </svg>
+      <figcaption>统筹者不需要读完整本账：「现在是什么样」由快照从投影与运行表直接算好，事件只回答「上次看完之后发生了什么」。失败或被杀的那次唤醒没看完，所以窗口从更早那次正常收工处算起。</figcaption>
+    </figure>
+
+    <h2>账里只记指纹，正文和令牌放运行表</h2>
+    <figure>
+      <svg viewBox="0 0 480 208" role="img" aria-label="派执行时，账里记提示词哈希与模板版本；运行表的任务包里放提示词全文、令牌与放行命令">
+        <defs><marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="170" y="10" width="140" height="40" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-width="2"/><text x="240" y="35" text-anchor="middle">派一个执行</text>
+        <path d="M200 50 L110 82 M280 50 L370 82" stroke="var(--text-2)" marker-end="url(#c)"/>
+        <rect x="10" y="84" width="200" height="74" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/>
+        <text x="110" y="104" text-anchor="middle" class="t">账（永久、可回看）</text>
+        <text x="22" y="126" class="m">提示词的哈希、模板版本</text>
+        <text x="22" y="146" class="m">角色、预算</text>
+        <rect x="270" y="84" width="200" height="74" rx="8" fill="var(--soft)" stroke="var(--line)" stroke-dasharray="4 3"/>
+        <text x="370" y="104" text-anchor="middle" class="t">任务包（运行表）</text>
+        <text x="282" y="126" class="m">提示词全文 · 放行的命令</text>
+        <text x="282" y="146" class="m">本次执行专用的令牌</text>
+        <path d="M370 158 V178" stroke="var(--text-2)" marker-end="url(#c)"/>
+        <rect x="270" y="180" width="200" height="24" rx="6" fill="var(--client-s)" stroke="var(--client)"/>
+        <text x="370" y="197" text-anchor="middle">runner 领走、起会话</text>
+        <rect x="10" y="176" width="200" height="28" rx="6" fill="var(--soft)" stroke="var(--gray)" stroke-dasharray="4 3"/>
+        <text x="110" y="195" text-anchor="middle" class="m">签令牌、算放行命令：端口</text>
+        <path d="M210 190 H268" stroke="var(--gray)" stroke-dasharray="3 3" marker-end="url(#c)"/>
+      </svg>
+      <figcaption>令牌一旦进账就永远删不掉，所以只放在用完即弃的任务包里；账里留哈希，事后仍能核对当时用的是哪版提示词。令牌只授权本任务，会话经 MCP 读写的也只能是这个任务的东西。</figcaption>
+    </figure>
+  </body>
+</html>

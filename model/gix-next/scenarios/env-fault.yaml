@@ -1,0 +1,65 @@
+# 取自 adapter-repo-local 的远程失败归类、runner/src/faults.ts、kernel/src/faults.ts（按 errorCode 优先、文本兜底，按自愈手册统一）、rules.ts（faultReactor / recordFaultTx / healReactor）、
+# playbooks/src/heal.ts；演练 test/drills/glab-expired、proxy-blocked、rate-limit、api-slow。
+scenario:
+  id: sc.env-fault
+  name: 环境故障分类与自愈
+  kind: exception
+  description: |
+    外部调用全部带超时；失败先分类。环境故障（凭据过期、代理、限流、API 变慢、设备离线、runner 离线）走自愈手册、不占任务重试次数；
+    要人动手的（凭据过期、设备离线）才发一张裁决卡，同类卡待答时不重复发；不要人的由统筹者按手册自愈（重试、退避）。
+    故障带 errorCode 时按它分类，认报错文本只作兜底。人处理好后答「已处理，重试」，统筹者被唤起重试原动作，heal.attempted 记成败。
+  cause: 适配器调用失败（如 glab 建 MR 返回 401 / Cloudflare 403 / 429 或超时）
+  evidence:
+    - test/drills/glab-expired.test.ts
+    - test/drills/proxy-blocked.test.ts
+    - test/drills/rate-limit.test.ts
+    - test/drills/api-slow.test.ts
+    - test/drills/device-unplugged.test.ts
+    - packages/kernel/test/recovery-faults-budget.test.ts
+    - packages/playbooks/test/heal-commands.test.ts
+  steps:
+    - async: {id: call, from: client.channel.dispatch, to: adapters.repo.gitlab, relation: rel.client.dispatch-codehost, label: openChange（adapter.call 任务包，见内核经适配器调外部系统）}
+    - async: {from: adapters.repo.gitlab, to: adapters.repo.git, label: glab 建 MR}
+    - async: {from: adapters.repo.git, to: share.proc, label: 带总超时跑 glab（超时杀整棵进程树）}
+    - alt:
+        - when: 远程报错（401 token expired / Cloudflare 403 拦截页 / 429）
+          steps:
+            - call: {id: classify-remote, from: adapters.repo.gitlab, to: adapters.repo.faults, label: '转成契约故障：env.credentials / env.proxy / env.rate_limit'}
+        - when: 超时
+          steps:
+            - call: {id: classify-timeout, from: client.channel.executor, to: client.channel.faults, label: toFault：timeout}
+    - return: {from: client.channel.dispatch, to: client.channel.executor, label: AdapterError(fault)}
+    - call: {from: client.channel.executor, to: client.channel.runner, label: 'report(JobUpdate: fault)'}
+    - async: {from: client.channel.runner, to: server.http.runner-routes, relation: rel.client.report-ws, label: update}
+    - async: {from: server.http.runner-routes, to: kernel.dispatch.jobs, relation: rel.server.runner-job-update, label: update}
+    - call: {from: kernel.dispatch.jobs, to: kernel.rules.faults, label: 归类}
+    - async: {from: kernel.dispatch.jobs, to: kernel.ledger.ledger, label: 'adapter.completed(ok=false, fault)'}
+    - async: {id: react, from: kernel.ledger.ledger, to: kernel.rules.ledger-rules, relation: rel.kernel.ledger-reactors, label: healReactor + faultReactor}
+    - call: {from: kernel.rules.ledger-rules, to: kernel.rules.faults, label: normalizeFault：errorCode 优先、报错文本兜底}
+    - call: {from: kernel.rules.faults, to: playbooks.heal.handbook, label: 手册条目、needsHuman、retryable}
+    - alt:
+        - when: 要人动手（凭据过期、设备离线），且没有同类待答卡
+          steps:
+            - async: {id: card, from: kernel.rules.ledger-rules, to: kernel.tasks.cards, label: fault.classified（不计尝试）+ 裁决卡「环境故障需要人处理」}
+            - async: {from: server.hub.patrol, to: client.channel.runner, label: cards.changed}
+            - async: {from: client.channel.runner, to: client.local-ui.server, label: 转出内核消息}
+            - async: {from: client.local-ui.server, to: client.local-ui.decision, label: present(card)}
+            - async: {from: client.local-ui.decision, to: actor.owner, label: 系统通知（卡正文是手册给人看的那段话）}
+            - call: {id: fixed, from: actor.owner, to: surface.inbox.card-detail, label: 重新登录 glab / 插回设备后选「已处理，重试」}
+            - async: {from: client.local-ui.kernel-proxy, to: server.http.inbox-routes, relation: rel.client.ui-signal-kernel, label: 'POST /v1/cards/:id/answer'}
+            - async: {from: server.http.inbox-routes, to: kernel.tasks.cards, relation: rel.server.inbox-cards, label: answer}
+            - async: {from: kernel.tasks.cards, to: kernel.liveness.wakeups, label: 卡答唤醒统筹者}
+        - when: 不要人（代理、限流、API 变慢）
+          steps:
+            - async: {id: backoff, from: kernel.rules.ledger-rules, to: kernel.liveness.wakeups, label: fault.classified（不计尝试）+ 按失败退避排唤醒}
+    - ref: sc.orchestrator-wake
+    - alt:
+        - when: 限流
+          steps:
+            - async: {id: set-wakeup, from: actor.orchestrator, to: server.mcp.service, label: gixn_set_wakeup：按手册退避，到点再重试}
+            - async: {from: server.mcp.plan-tools, to: kernel.liveness.wakeups, label: scheduleWakeup}
+        - when: 其余
+          steps:
+            - async: {id: retry, from: actor.orchestrator, to: server.mcp.service, label: gixn_repo_op 重试同一动作}
+            - async: {from: server.mcp.adapter-tools, to: kernel.dispatch.adapter-calls, relation: rel.server.adapter-request, label: 新的调用}
+    - async: {id: healed, from: kernel.ledger.ledger, to: kernel.rules.ledger-rules, relation: rel.kernel.ledger-reactors, label: 重试结果回来 → heal.attempted（条目 id、成败、发起方）}

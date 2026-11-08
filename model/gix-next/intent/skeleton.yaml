@@ -1,0 +1,275 @@
+# 骨架（持久草图，X1、X2，ADR-0023）：7 个层 + 第二级模块。2026-11-08 由 AI 起草（读 gix-next @ 1cd6d9ad1），待负责人审核后 npm run arch -- own 登记。
+# 分层依据：docs/spec/GIX-架构设计文档.md §2.3 进程视图（服务端 / 本地客户端 / agent 会话）与 §2.4 开发视图（领域核心 → 应用服务 → 接口与适配，依赖只向内）。
+# 层 = 包的归类：surface=ui，client=runner，adapters=adapter-repo-local / adapter-ai-claude / device-local，server=kernel-api，
+# kernel=kernel，playbooks=playbooks，share=contracts / evidence / proc。第二级封闭：区域文件只能用 parent 往第二级模块下挂子模块。
+
+sketch:
+  id: skeleton
+  mount: root
+  lifetime: persistent
+  closed: [surface, client, adapters, server, kernel, playbooks, share]
+  modules:
+    # ─────────────── 1 界面 ───────────────
+    - id: surface
+      name: 本地 UI 页面
+      kind: layer
+      order: 1
+      abstraction: 人看与答的页面：只读 runner 本地 UI 服务转来的内核数据、只发人的决定，不持有任务状态
+      responsibility: runner 本地 UI 的单页应用（React）：收件箱与决策卡、任务列表与详情（档案、运行、时间线、证据）、信号与录入、runner 状态、工作环境设置与度量；数据全部经 runner 本地 UI 的 /api 与 SSE，另带一套模拟数据供离线预览。
+      includes: [收件箱与决策卡, 任务视图, 信号池与录入, runner 与工作环境页, 页面外壳与导航]
+      excludes: [卡片与任务的真源（在内核）, 系统通知（runner 发）, 证据存储]
+      mayDependOn: [share]
+      docRefs: [docs/design/runner-ui]
+      children:
+        - id: surface.shell
+          name: 页面外壳与导航
+          kind: subsystem
+          responsibility: 应用入口、路由与全局状态、页面外壳（侧栏、命令面板、抽屉、提示）与通用小组件、主题与样式。
+          codeRefs: ['packages/ui/index.html', 'packages/ui/src/main.tsx', 'packages/ui/src/App.tsx', 'packages/ui/src/store.tsx', 'packages/ui/src/labels.ts', 'packages/ui/src/time.ts', 'packages/ui/src/lib/router.ts', 'packages/ui/src/lib/theme.ts', 'packages/ui/src/lib/useStickyStack.ts', 'packages/ui/src/components/{Shell,CommandPalette,Drawer,Modal,Toast,Chip,Icons,Link,Markdown,overlay}.*', 'packages/ui/src/styles.css', 'packages/ui/src/styles/**']
+        - id: surface.inbox
+          name: 收件箱与决策卡
+          kind: subsystem
+          role: core
+          responsibility: 人拍板的地方：待答决策卡列表与卡片详情（证据、统筹者建议、内核核对、确认方式、放行说明），把人的回答交给 runner 转内核。
+          codeRefs: ['packages/ui/src/pages/InboxPage.tsx', 'packages/ui/src/components/{CardDetail,ConfirmMethods,KernelCheck,VerdictBar,AcceptanceTable,EvidenceDrawer,EvidenceViewer}.tsx', 'packages/ui/src/lib/{cards,acceptance,notifications,releaseNotes}.ts']
+        - id: surface.tasks
+          name: 任务视图
+          kind: subsystem
+          role: core
+          responsibility: 任务列表与任务详情：阶段、预算、档案、执行与真机运行、事件时间线与证据，按任务事件流实时刷新；只读。
+          codeRefs: ['packages/ui/src/pages/{TasksPage,TaskDetailPage}.tsx', 'packages/ui/src/components/{TaskList,TaskDetail,PhaseSteps,BudgetBar}.tsx', 'packages/ui/src/components/tasks/**', 'packages/ui/src/lib/{dossier,events,runs,change,useTaskDetail,report}.ts']
+        - id: surface.intake
+          name: 信号与录入
+          kind: subsystem
+          responsibility: 录入一句话需求或缺陷、信号池页面（待整理信号、草稿任务与人的放行 / 退回）。
+          codeRefs: ['packages/ui/src/pages/SignalsPage.tsx', 'packages/ui/src/components/{NewTaskDrawer,DraftSignals}.tsx', 'packages/ui/src/lib/signals.ts']
+        - id: surface.ops
+          name: runner、工作环境与度量
+          kind: subsystem
+          responsibility: runner 状态页（在线、设备、配方）、工作环境（profiles）设置与体检、按剧本的度量页。
+          codeRefs: ['packages/ui/src/pages/{RunnerPage,SettingsPage,MetricsPage}.tsx', 'packages/ui/src/lib/profiles.ts']
+        - id: surface.api
+          name: 数据访问与模拟数据
+          kind: subsystem
+          responsibility: 页面访问 runner 本地 UI /api 的唯一入口（类型取自契约），以及离线预览用的模拟实现。
+          codeRefs: [packages/ui/src/api.ts, packages/ui/src/mock/**]
+
+    # ─────────────── 2 本地客户端 ───────────────
+    - id: client
+      name: 本地客户端（runner）
+      kind: layer
+      order: 2
+      abstraction: 研发机上的常驻进程：只出站连内核，按能力领任务包、经适配器执行、回报结果；不做流程决定
+      responsibility: gixn-runner：注册与主人绑定、心跳、WebSocket 收任务包（断了退回长轮询）、按 capability + op 分派给本地适配器或内置判项、跑判项命令与预览截图、工作环境与体检、本地发布与依赖缓存，以及给人用的本地 UI 服务与系统通知。
+      includes: [通道与任务执行, 判项与预览, 工作环境与适配器注册, 本地 UI 服务]
+      excludes: [流程决定与合入门（内核）, git / Claude / 设备的具体操作（适配器）, 页面本身（surface）]
+      mayDependOn: [adapters, share]
+      docRefs: [docs/spec/GIX-架构设计文档.md, packages/runner/README.md]
+      children:
+        - id: client.channel
+          name: 通道与任务执行
+          kind: subsystem
+          role: core
+          responsibility: runner 主体：注册、心跳、WS 收任务包与长轮询兜底、按 jobId 去重执行、按 capability + op 分派、经 WS 或 HTTP 回报进展与结果。
+          codeRefs: ['packages/runner/src/{bin,index,runner,kernel-client,executor,dispatch,ops,faults,logger,config}.ts']
+        - id: client.checks
+          name: 判项与预览
+          kind: subsystem
+          role: core
+          responsibility: 内置 run_check 判项（command / scope 两种判法）、失败清单解析、独占判项串行道、预览截图；结果与输出进证据存储。
+          codeRefs: ['packages/runner/src/{check,check-failures,lane,preview}.ts']
+        - id: client.profiles
+          name: 工作环境与运维
+          kind: subsystem
+          responsibility: 工作环境（profiles）读写、内置适配器注册表、体检、本地发布、私有包缓存、只读会话目录、工作树清扫与本机命令行。
+          codeRefs: ['packages/runner/src/{profiles,registry,doctor,module-checks,release,readonly-cwd,worktree-sweep,cli}.ts', 'packages/runner/src/deps/**', 'packages/runner/scripts/**']
+        - id: client.local-ui
+          name: 本地 UI 服务
+          kind: subsystem
+          role: core
+          responsibility: 只监听 127.0.0.1 的本地 UI 服务：托管页面、代主人调内核的人的接口、SSE 推卡片与任务变化、读证据与会话记录、系统通知、录入框作为信号来源。
+          codeRefs: [packages/runner/src/ui/**]
+
+    # ─────────────── 3 本地适配器 ───────────────
+    - id: adapters
+      name: 本地适配器
+      kind: layer
+      order: 3
+      abstraction: 每种外部系统一个能力接口的本地实现，按模块由 runner 加载；项目无关，命令全由配方给，过同一套契约测试
+      responsibility: 能力接口的本地实现：本地代码库与代码平台（git、glab）、Claude Code 启动与续会话、本地真机组件（设备驱动、锁、构建身份与场景运行）。
+      includes: [本地工作区与代码平台, Claude Code 执行器, 本地真机组件]
+      excludes: [任务包的领取与回报（runner）, 何时调用（内核）, 提示词（剧本）]
+      mayDependOn: [share]
+      docRefs: [docs/spec/GIX-架构设计文档.md]
+      children:
+        - id: adapters.repo
+          name: 本地代码库与代码平台
+          kind: subsystem
+          role: core
+          responsibility: 本地工作区（任务工作树、基线工作树、diff、提交、对齐集成分支）与两个代码平台实现（local-git、gitlab 经 glab），外加本地发布器；远程失败转成契约故障。
+          codeRefs: [packages/adapter-repo-local/src/**]
+        - id: adapters.ai
+          name: Claude Code 执行器
+          kind: subsystem
+          role: core
+          responsibility: 按角色组装 claude 命令行与 MCP 配置、启动与续会话、解析 stream-json 输出与用量、按吞吐判停滞与杀进程。
+          codeRefs: [packages/adapter-ai-claude/src/**]
+          docRefs: [packages/adapter-ai-claude/README.md]
+        - id: adapters.device
+          name: 本地真机组件
+          kind: subsystem
+          role: core
+          responsibility: 设备实验室：Chrome / Android / iOS 驱动、单机设备文件锁、配方真机接入件（出构建、产物哈希、起被测页面）、按场景脚本跑 N 次并拉回证据、无头截图。
+          codeRefs: [packages/device-local/src/**]
+          docRefs: [packages/device-local/README.md]
+
+    # ─────────────── 4 服务端入口 ───────────────
+    - id: server
+      name: 服务端入口（kernel-api）
+      kind: layer
+      order: 4
+      abstraction: 组合根与三个入口：装配内核并注入剧本，HTTP、runner 通道、MCP 只做鉴权、校验与翻译，不含业务规则
+      responsibility: gixn-kernel 进程：读配置与配方、迁移检查、恢复与看门狗启动；HTTP 接口（人的接口、runner 接口）、runner 通道（WebSocket 推 + 长轮询）、给 agent 会话的 MCP 服务与一次性令牌。
+      includes: [进程装配与 HTTP, runner 通道, MCP 服务与令牌]
+      excludes: [任务规则与合入门（内核）, 提示词正文（剧本）]
+      mayDependOn: [kernel, playbooks, share]
+      docRefs: [packages/kernel-api/README.md]
+      children:
+        - id: server.http
+          name: 进程装配与 HTTP
+          kind: subsystem
+          role: core
+          responsibility: 进程入口与组合根：配置、建内核并注入剧本 / 自愈手册 / 放行命令；HTTP 路由（任务、信号、卡片、runner 注册与心跳、度量）与错误映射。
+          codeRefs: ['packages/kernel-api/src/{bin,app,config,http,errors,index}.ts']
+        - id: server.hub
+          name: runner 通道
+          kind: subsystem
+          role: core
+          responsibility: runner 通道：WS 主动推任务包、长轮询兜底，经内核任务队列原子认领，投递失败退回待领。
+          codeRefs: [packages/kernel-api/src/hub.ts]
+        - id: server.mcp
+          name: MCP 服务与令牌
+          kind: subsystem
+          role: core
+          responsibility: 给统筹者、执行者、整理台会话的 MCP 工具，按令牌 scope 授权本任务资源；令牌签发与校验（引导、runner、会话）。
+          codeRefs: ['packages/kernel-api/src/{mcp,tokens}.ts']
+
+    # ─────────────── 5 内核 ───────────────
+    - id: kernel
+      name: 内核
+      kind: layer
+      order: 5
+      abstraction: 统筹者推进、内核兜底：一切变化先写只追加的账、投影与反应同一事务；内核不编排阶段，只守合入门、证据、活性、租约与恢复
+      responsibility: 领域核心与应用服务：账与投影、兜底规则与合入门、活性看门狗与恢复、统筹者唤起与执行、任务 / 清单 / 卡片、适配器调用与外部状态轮询、租约与真机运行、信号池。
+      includes: [账与投影, 兜底规则与门, 活性与恢复, 统筹者唤起, 任务与决策卡, 适配器调用与租约, 信号池]
+      excludes: [提示词与默认流程（剧本）, 外部系统的具体操作（适配器）, 网络入口（kernel-api）]
+      mayDependOn: [share]
+      docRefs: [docs/spec/GIX-架构设计文档.md, packages/kernel/README.md, docs/decisions.md]
+      children:
+        - id: kernel.assembly
+          name: 内核装配
+          kind: subsystem
+          responsibility: createKernel：按选项装配账、各服务、看门狗与恢复，向 kernel-api 暴露服务层与内核错误类型。
+          codeRefs: ['packages/kernel/src/{kernel,index,errors}.ts']
+        - id: kernel.ledger
+          name: 账与投影
+          kind: subsystem
+          role: core
+          responsibility: 只追加的事件表与写账事务：守卫、投影、反应在同一事务内；投影器确定性重放；数据库表结构、迁移与连接池。
+          codeRefs: ['packages/kernel/src/{ledger,projector}.ts', 'packages/kernel/src/db/**', 'packages/kernel/drizzle/**', 'packages/kernel/drizzle.config.ts', 'packages/kernel/scripts/**']
+        - id: kernel.rules
+          name: 兜底规则与门
+          kind: subsystem
+          role: core
+          responsibility: 写账前的守卫与写账后的反应规则、合入门与验证门、缺陷放行门、放行卡内核核对与确认快照、故障分类与驱动者声明。
+          codeRefs: ['packages/kernel/src/{rules,declarations,faults}.ts', 'packages/kernel/src/services/{merge,verify,defect-gate,kernel-check,confirm-snapshot}.ts']
+        - id: kernel.liveness
+          name: 活性与恢复
+          kind: subsystem
+          role: core
+          responsibility: 每个任务始终有下次唤醒；看门狗每轮触发到点唤醒、判停滞、清扫过期；pg-boss 驱动；启动时恢复。
+          codeRefs: ['packages/kernel/src/{watchdog,liveness,scheduler,recovery}.ts']
+        - id: kernel.orchestration
+          name: 统筹与执行
+          kind: subsystem
+          role: core
+          responsibility: 唤起统筹者（现状快照 + 增量事件 + 剧本）、派执行会话与令牌、任务档案、剧本钩子与只读查询。
+          codeRefs: ['packages/kernel/src/playbook.ts', 'packages/kernel/src/services/{orchestrator,executions,dossiers,queries}.ts']
+        - id: kernel.tasks
+          name: 任务、清单与卡
+          kind: subsystem
+          responsibility: 建任务与任务摘要、验收清单与验证计划、决策卡的发出 / 回答 / 到期、按剧本的度量。
+          codeRefs: ['packages/kernel/src/services/{tasks,acceptance,cards,metrics}.ts']
+        - id: kernel.dispatch
+          name: 适配器调用、租约与真机
+          kind: subsystem
+          role: core
+          responsibility: 内核经适配器调外部系统的统一入口与任务包队列、结果归一成领域事件的需求圈反应、外部状态轮询、租约、真机构建与运行。
+          codeRefs: ['packages/kernel/src/flow.ts', 'packages/kernel/src/services/{adapters,jobs,external,leases,device-runs}.ts']
+        - id: kernel.intake
+          name: 信号池
+          kind: subsystem
+          responsibility: 信号进池、整理台按攒批窗口唤醒、草稿任务与放行 / 退回、信号规则与整理台按天预算。
+          codeRefs: ['packages/kernel/src/signal-rules.ts', 'packages/kernel/src/services/{signals,intake-budget}.ts']
+
+    # ─────────────── 6 剧本 ───────────────
+    - id: playbooks
+      name: 剧本
+      kind: layer
+      order: 6
+      abstraction: 剧本 = 提示词段 + 默认参数，由服务端入口注入内核；内核不解释剧本，剧本也不依赖内核运行时
+      responsibility: 统筹剧本与参数、角色剧本（开发、审核、写脚本、调研）、整理台提示词、审核提示词三层合成、自愈手册、按配方生成放行命令、模板与版本登记。
+      includes: [统筹剧本, 角色剧本, 自愈手册, 放行命令, 模板]
+      excludes: [何时唤起统筹者（内核）, 会话启动（适配器）]
+      mayDependOn: [share]
+      docRefs: [packages/playbooks/README.md]
+      children:
+        - id: playbooks.orchestrator
+          name: 统筹剧本
+          kind: subsystem
+          role: core
+          responsibility: 统筹者提示词（公共段 + 剧本段 + 流程段 + 唤醒原因段 + 现状与事件）与剧本参数表；整理台（triager）提示词。
+          codeRefs: ['packages/playbooks/src/{orchestrator,params,triager}.ts']
+        - id: playbooks.roles
+          name: 角色剧本
+          kind: subsystem
+          responsibility: 执行角色提示词（developer / reviewer / script_writer / researcher）与审核提示词三层合成。
+          codeRefs: ['packages/playbooks/src/{executor,review}.ts']
+        - id: playbooks.heal
+          name: 自愈手册与放行命令
+          kind: subsystem
+          responsibility: 每类故障一条的自愈手册（环境故障不占重试、要人动手发卡）；按配方生成 Claude Code 放行命令。
+          codeRefs: ['packages/playbooks/src/{heal,commands}.ts']
+        - id: playbooks.templates
+          name: 模板与版本登记
+          kind: subsystem
+          responsibility: 模板文件（front matter + 分段正文）的读取与按段渲染、模板版本登记表。
+          codeRefs: ['packages/playbooks/src/{template,registry,index}.ts', 'packages/playbooks/templates/**']
+
+    # ─────────────── 7 共享基础 ───────────────
+    - id: share
+      name: 契约与基础
+      kind: layer
+      order: 7
+      abstraction: 各进程之间只认这里的契约：zod schema 即类型真源；工具件无业务、只给通用能力
+      responsibility: 契约（领域对象、事件、API、MCP 工具、能力接口、配方、工作环境、统筹者快照、契约测试）、按内容哈希寻址的证据存储、带超时能杀整棵进程树的外部命令执行。
+      includes: [契约与契约测试, 证据存储, 外部命令执行]
+      excludes: [业务规则（内核）, 适配器实现]
+      mayDependOn: []
+      children:
+        - id: share.contracts
+          name: 契约
+          kind: subsystem
+          role: core
+          responsibility: 全部跨进程、跨包契约的 zod schema 与类型、生成的 JSON Schema，以及给适配器用的契约测试套件。
+          codeRefs: [packages/contracts/src/**, packages/contracts/schemas/**, packages/contracts/scripts/**]
+        - id: share.evidence
+          name: 证据存储
+          kind: subsystem
+          responsibility: 本地证据存储：按 sha256 内容哈希寻址，同内容重复写返回同一引用，账里只记引用。
+          codeRefs: [packages/evidence/src/**]
+        - id: share.proc
+          name: 外部命令执行
+          kind: subsystem
+          responsibility: 统一的外部命令执行：必须有总超时、可选无输出超时，子进程独立进程组，超时或取消杀整棵进程树。
+          codeRefs: [packages/proc/src/**]

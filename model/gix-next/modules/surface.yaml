@@ -1,0 +1,969 @@
+# 区域：本地 UI 页面（packages/ui，React + Vite，由 gixn-runner 在 127.0.0.1:7312 托管）
+# 2026-11-08 由 AI 生成（读 gix-next @ 1cd6d9ad1）。第二级模块由骨架定义，此处只补原则等字段并往下挂子模块。
+# 页面 → runner 本地 UI 服务的 HTTP 调用由本区域写（surface.api.client → client.local-ui）；SSE 推送方向由 client 区域写。
+# mock/** 是离线预览的替身（VITE_GIXN_MOCK=1 时整个 api 换成内存实现），不写到真实服务的关系；api.ts 按构建常量选实现属组装，不写关系。
+
+modules:
+  # ───────────── 层与第二级模块的补充条目 ─────────────
+  - id: surface
+    name: 本地 UI 页面
+    summary: 让主人在本机看任务进展、答决策卡、丢任务进来
+  - id: surface.shell
+    name: 页面外壳与导航
+    summary: 给各页面提供路由、全局数据、外壳与通用小件
+    abstraction: 按「全局数据 / 路由 / 外壳与叠层 / 通用小件」切分：全局数据与路由各只有一份，页面经它们的钩子读写，小件不碰数据接口。
+    excludes: [页面各自的数据拉取 → surface.api, 新建抽屉的内容 → surface.intake]
+  - id: surface.inbox
+    name: 收件箱与决策卡
+    summary: 列出待答决策卡，把人选的选项与备注交给内核
+    abstraction: 按「队列 / 卡片详情 / 可复用的展示件」切分：队列管排序、选中与跳转，详情按卡类型套模板并收集选择，验收表、证据、核对等展示件只读、可被任务视图复用。
+    invariants:
+      - 人的回答只经全局数据的 answerCard 发出；答卡期间该卡从队列隐藏，失败再放回
+      - 每张卡每个选项一个幂等键，网络失败重试同一选项不会重复记账
+      - 放行卡的任一选项、危险与负向选项先弹确认框；要求备注的选项没写备注不提交
+    excludes: [卡片的发出、到期与真源 → kernel.tasks, 草稿任务所含信号的整理 → surface.intake, 系统通知的推送 → client.local-ui]
+  - id: surface.tasks
+    name: 任务视图
+    summary: 展示任务的阶段、预算、档案、执行记录与证据，随事件刷新
+    abstraction: 按「列表 / 详情数据 / 页签」切分：数据只在详情页加载一次（任务详情 + 分页的账事件），各页签只把账事件派生成人能读的视图，不另调接口。
+    invariants:
+      - 任务视图自身只读：除在本机打开工作树外不调写接口，草稿整理经信号与录入模块
+      - 账事件按 afterSeq 增量拉取、只往末尾追加；全局任务变化计数变化时从已加载的最后一条往后拉
+      - 详情抽屉的当前条目都进地址（?run= / ?ev= / ?raw= / ?entry=），刷新与分享可复原
+    excludes: [任务阶段与状态的推进 → kernel.orchestration, 草稿任务的信号拆分与合并 → surface.intake, 证据原文的存储 → share.evidence]
+  - id: surface.intake
+    name: 信号与录入
+    summary: 把一句话需求或缺陷录进来，并让人整理信号池与草稿任务
+    abstraction: 按「录入 / 池的总览 / 草稿上的操作」切分：三处各自调数据接口，写完都只触发全局重拉，不在页面里维护信号状态。
+    excludes: [信号的自动整理与攒批 → kernel.intake, 验收清单的修改（经确认卡留言） → surface.inbox]
+  - id: surface.ops
+    name: runner、工作环境与度量
+    summary: 展示本机 runner 状态、工作环境体检与按剧本的度量
+    abstraction: 按页面切分，工作环境数据与健康判断单独成块，供设置页与新建抽屉共用；页面只读，写操作只有设默认环境与跑体检。
+    excludes: [工作环境文件的读写与体检执行 → client.profiles, 度量的计算 → kernel.tasks]
+  - id: surface.api
+    name: 数据访问与模拟数据
+    summary: 给页面一套访问 runner 本地 UI 服务的数据函数
+    abstraction: 按「真实现 / 内存替身 / 演示数据」切分：两种实现满足同一个 Api 接口，按构建常量整体替换，页面不感知用的是哪一种。
+    excludes: [接口的服务端实现与令牌校验 → client.local-ui, 数据的类型定义 → share.contracts]
+
+  # ───────────── surface.shell ─────────────
+  - id: surface.shell.app
+    parent: surface.shell
+    name: 应用入口与页面分派
+    summary: 按地址挑页面渲染，挂上全局快捷键与新建抽屉
+    kind: component
+    responsibility: >-
+      入口挂载 React 并套上提示、全局数据、证据抽屉三层 Provider；按路由选页面与面包屑，「/」按有无待决卡重定向；
+      连不上 runner 时给出全屏错误与重试；⌘K 开命令面板、N 叠出新建抽屉，录入成功后提示并可跳转。不负责数据拉取。
+    codeRefs: [packages/ui/index.html, packages/ui/src/main.tsx, packages/ui/src/App.tsx]
+  - id: surface.shell.store
+    parent: surface.shell
+    name: 全局数据
+    summary: 持有会话、待决卡、任务列表与实时连接状态
+    kind: component
+    responsibility: >-
+      DataProvider：取会话令牌、拉待决卡与任务列表、开 SSE 订阅并按 cards.changed / tasks.changed 重拉，记连接状态与重连次数、
+      任务变化计数（tick）供详情页重拉；答卡时乐观隐藏、成功后移除、失败放回。不持有任务详情与信号。
+    codeRefs: [packages/ui/src/store.tsx]
+  - id: surface.shell.router
+    parent: surface.shell
+    name: 路由
+    summary: 把地址解析成路由对象，生成各页链接并导航
+    kind: component
+    responsibility: 自写的 history 路由：全部路径集中在路由表，解析地址为 Route 与新建抽屉预填，生成各页链接（to.*），带参改写、导航与订阅地址变化；站内链接组件按普通点击走 history、修饰键点击保留浏览器默认。
+    codeRefs: [packages/ui/src/lib/router.ts, packages/ui/src/components/Link.tsx]
+  - id: surface.shell.frame
+    parent: surface.shell
+    name: 外壳与命令面板
+    summary: 给页面套上导航、面包屑、断线横幅与命令面板
+    kind: component
+    responsibility: 左侧导航（带待决数角标）、顶栏面包屑、断线横幅与重连、窄屏底部标签栏；吸顶区逐层叠加；⌘K 命令面板按模糊匹配找卡片、任务与命令，最近打开的任务置顶。
+    codeRefs: [packages/ui/src/components/Shell.tsx, packages/ui/src/components/CommandPalette.tsx, packages/ui/src/lib/useStickyStack.ts]
+  - id: surface.shell.overlays
+    parent: surface.shell
+    name: 叠层与提示
+    summary: 提供抽屉、对话框与轻提示，统一处理 Esc 与叠层顺序
+    kind: component
+    responsibility: 右侧抽屉（详情模式：固定摘要、页签、拖动改宽并记住、↑↓ 切上一条 / 下一条）、居中对话框、右下角轻提示；叠层栈判断最上层与是否在输入，供全局快捷键避让。
+    codeRefs: [packages/ui/src/components/Drawer.tsx, packages/ui/src/components/Modal.tsx, packages/ui/src/components/Toast.tsx, packages/ui/src/components/overlay.ts]
+  - id: surface.shell.kit
+    parent: surface.shell
+    name: 通用小件与文案
+    summary: 提供标签、图标、极简 Markdown、中文文案与时间格式
+    kind: component
+    responsibility: 带色标签（卡类型、任务类型、任务状态）、线性图标、只生成 React 元素的极简 Markdown（链接只认 http(s)）、卡片 / 任务 / 阶段 / 事件分组的中文文案、时长与本地时间格式。无状态、不调接口。
+    codeRefs: [packages/ui/src/components/Chip.tsx, packages/ui/src/components/Icons.tsx, packages/ui/src/components/Markdown.tsx, packages/ui/src/labels.ts, packages/ui/src/time.ts]
+  - id: surface.shell.theme
+    parent: surface.shell
+    name: 主题与样式
+    summary: 应用跟随系统、浅色或深色外观与全站样式
+    kind: component
+    responsibility: 外观偏好存本机浏览器并写到 <html data-theme>；全站样式与各页面的分块样式。
+    codeRefs: [packages/ui/src/lib/theme.ts, packages/ui/src/styles.css, 'packages/ui/src/styles/**']
+
+  # ───────────── surface.inbox ─────────────
+  - id: surface.inbox.page
+    parent: surface.inbox
+    name: 收件箱队列
+    summary: 排好待决卡队列，答完自动跳到下一张
+    kind: component
+    responsibility: >-
+      左列表右详情：按有时限 → 放行卡 → 打开时间排序、按类型筛选、J/K 与数字键操作；选中卡进地址；提交回答时生成幂等键交给全局数据，
+      成功跳下一张并提示、失败回到原卡；遗留项「另立任务」预填新建抽屉；列出派生通知。
+    codeRefs: [packages/ui/src/pages/InboxPage.tsx, packages/ui/src/lib/cards.ts]
+  - id: surface.inbox.card-detail
+    parent: surface.inbox
+    name: 卡片详情
+    summary: 按卡类型展示放行、确认、裁决内容并收集人的选择
+    kind: component
+    responsibility: >-
+      通用头部 + 放行 / 确认 / 裁决三套模板 + 吸底选项栏：短标签与说明、必填备注、确认框、预算卡的新硬上限；放行卡显示结论条、验收表、
+      内核核对、越过的默认值与遗留、合入信息；嵌入草稿信号区；可在本机打开工作树。选择经回调交给队列，自己不发回答。
+    codeRefs: [packages/ui/src/components/CardDetail.tsx]
+  - id: surface.inbox.checks
+    parent: surface.inbox
+    name: 内核核对与判法原文
+    summary: 展示内核附在卡上的核对结果与判法原文
+    kind: component
+    responsibility: 放行卡「内核核对」段（机器判项结论、判在哪个提交、旧红或豁免理由、只标黄不拦的提醒）与确认卡上内核附的判法原文（命令全文、模板展开、路径约束、配方外命令标出）。只读卡上数据，不来自统筹者叙述。
+    codeRefs: [packages/ui/src/components/KernelCheck.tsx, packages/ui/src/components/ConfirmMethods.tsx]
+  - id: surface.inbox.acceptance
+    parent: surface.inbox
+    name: 验收表与结论条
+    summary: 把验收清单画成结论表与比例条
+    kind: component
+    responsibility: 验收项 → 页面结论（通过 / 未过 / 待你看 / 豁免 / 未判）、判法与旧红新绿列；验收表三种模式（放行、状态、确认），理由就地展开、点行开证据；结论比例条。放行卡与任务验收页签共用。
+    codeRefs: [packages/ui/src/components/AcceptanceTable.tsx, packages/ui/src/components/VerdictBar.tsx, packages/ui/src/lib/acceptance.ts]
+  - id: surface.inbox.evidence
+    parent: surface.inbox
+    name: 证据查看
+    summary: 在抽屉里打开证据，图片直接显示、文本按大小内联
+    kind: component
+    responsibility: 证据抽屉 Provider（任何地方 useEvidence 打开）、证据缩略图与行列表、证据内容读取（图片给地址、JSON 格式化、超过 200KB 只给链接）与渠道色板。
+    codeRefs: [packages/ui/src/components/EvidenceDrawer.tsx, packages/ui/src/components/EvidenceViewer.tsx]
+  - id: surface.inbox.notices
+    parent: surface.inbox
+    name: 收件箱通知
+    summary: 取从账派生的通知并在本机记已读
+    kind: component
+    responsibility: 拉收件箱通知（不要求人答），已读只存浏览器本地、最多留 500 条；接口不可用（旧 runner）时不显示通知组。
+    codeRefs: [packages/ui/src/lib/notifications.ts]
+  - id: surface.inbox.parsing
+    parent: surface.inbox
+    name: 正文兜底解析
+    summary: 从统筹者写的正文与回报里兜底取出结构化字段
+    kind: component
+    responsibility: 放行卡「越过的默认值」「遗留」在契约字段缺失时从 Markdown 正文按小节兜底解析（中英文标题都认）。开发 / 调研回报的容错解析在任务档案（surface.tasks.dossier）。
+    codeRefs: [packages/ui/src/lib/releaseNotes.ts]
+
+  # ───────────── surface.tasks ─────────────
+  - id: surface.tasks.list
+    parent: surface.tasks
+    name: 任务列表
+    summary: 按页签与筛选列出任务，标出等你决定的与下一步
+    kind: component
+    responsibility: 页签（进行中 / 等你 / 已结束 / 全部）+ 类型 / 仓库 / 关键字筛选（都进地址）；行 = 标题、状态与阶段细条、预算条、下一步；等你的排前，其余按更新时间；进行中合计花费。
+    codeRefs: [packages/ui/src/pages/TasksPage.tsx, packages/ui/src/components/tasks/taskList.ts]
+  - id: surface.tasks.detail
+    parent: surface.tasks
+    name: 任务详情页与数据
+    summary: 加载一个任务的详情与账事件，分发给各页签
+    kind: component
+    responsibility: 头部、大阶段条、待决提示条与六页签的切换；读任务详情（档案、验收清单、待决卡）、按 afterSeq 分页拉账事件（首次连拉、可加载更多、随任务变化增量拉）；一次派生事件视图、执行记录与证据汇总交给页签。
+    codeRefs: [packages/ui/src/pages/TaskDetailPage.tsx, packages/ui/src/lib/useTaskDetail.ts, packages/ui/src/components/tasks/useTaskEvents.ts]
+  - id: surface.tasks.tabs
+    parent: surface.tasks
+    name: 概览、验收、活动与证据页签
+    summary: 展示任务概览、验收清单、活动记录与证据汇总
+    kind: component
+    responsibility: 概览（目标、预算、最近活动、草稿信号区、打开工作树）、验收页签（锚点高亮一行）、活动记录（按分组筛选、原始 JSON 进抽屉）、证据页签（卡片证据 + 验收判定证据 + 账里带证据的事件，按哈希去重）。
+    codeRefs: [packages/ui/src/components/tasks/TaskTabs.tsx, packages/ui/src/components/tasks/evidence.ts]
+  - id: surface.tasks.activity
+    parent: surface.tasks
+    name: 事件人话与时间线
+    summary: 把账事件翻成中文一句话并画成时间线
+    kind: component
+    responsibility: 覆盖契约全部事件类型的「事件 → 一句中文 + 分组」表（类型层面由 Record<EventType, …> 保证），相对时间与分天；活动时间线按人的动作、故障与预算、判定与审核着色。
+    codeRefs: [packages/ui/src/lib/events.ts, packages/ui/src/components/tasks/Timeline.tsx]
+  - id: surface.tasks.runs
+    parent: surface.tasks
+    name: 执行记录
+    summary: 按执行会话列出模型、花费、提示词、回报与会话全文
+    kind: component
+    responsibility: 把账里每次执行会话的派发、开始、进展、收工、结束与审核结论按 executionId 合成一行，按角色 + 模型汇总花费；点行在详情抽屉里看，按需读完整会话记录。
+    codeRefs: [packages/ui/src/components/tasks/RunsTab.tsx, packages/ui/src/lib/runs.ts]
+  - id: surface.tasks.dossier
+    parent: surface.tasks
+    name: 档案页签
+    summary: 按起草、开发、验证、放行分组展示任务档案
+    kind: component
+    responsibility: 档案条目（决定、执行进度、开发 / 调研回报）按账里最近一次阶段标记归入四组，组头带时间范围、可折叠；遗留、坑、笔记在右栏；长条目全文与回报原始 JSON 进详情抽屉。
+    codeRefs: [packages/ui/src/components/tasks/DossierTab.tsx, packages/ui/src/lib/dossier.ts, packages/ui/src/lib/report.ts]
+  - id: surface.tasks.progress
+    parent: surface.tasks
+    name: 阶段条与预算条
+    summary: 用阶段条、预算条与变更标签表达任务进展
+    kind: component
+    responsibility: 需求 / 缺陷各 7 步的阶段条（列表细条、详情大条；阶段只是统筹者上报的展示状态）、花费 / 预算条（过软上限橙、到硬上限红）、去平台化的变更引用标签。收件箱的卡片详情也用。
+    codeRefs: [packages/ui/src/components/PhaseSteps.tsx, packages/ui/src/components/BudgetBar.tsx, packages/ui/src/lib/change.ts]
+  - id: surface.tasks.legacy
+    parent: surface.tasks
+    name: 旧版任务表与详情
+    summary: 保留重设计前的任务表与详情组件，现已无人引用
+    kind: component
+    status: deprecated
+    responsibility: 重设计（docs/design/runner-ui）之前的任务表与单页详情；源码里已没有页面或测试导入它们。
+    codeRefs: [packages/ui/src/components/TaskList.tsx, packages/ui/src/components/TaskDetail.tsx]
+
+  # ───────────── surface.intake ─────────────
+  - id: surface.intake.new-task
+    parent: surface.intake
+    name: 新建抽屉
+    summary: 把一句话需求或缺陷连同仓库、环境、预算录成信号
+    kind: component
+    responsibility: >-
+      全局新建抽屉（?new=1 叠层，可预填）：类型卡片、一句话、仓库（设置页默认 > 上次 > 第一个配方）、工作环境（最近体检有失败的不可选）、
+      参考链接、预算折叠、进池 / 直接建任务；同一份填写复用同一幂等键，重复提交只建一个任务。默认仓库的读写也在这里。
+    codeRefs: [packages/ui/src/components/NewTaskDrawer.tsx]
+  - id: surface.intake.signals
+    parent: surface.intake
+    name: 信号池页
+    summary: 按状态分组列出池里的信号，并能立即整理或放回池
+    kind: component
+    responsibility: 信号按待整理 / 暂缓 / 重复 / 不做 / 已挂任务分组（可按仓库筛），每条显示原文摘要、来源、整理决定与理由、所挂任务；「立即整理」按仓库排一次整理；随任务变化重拉。
+    codeRefs: [packages/ui/src/pages/SignalsPage.tsx, packages/ui/src/lib/signals.ts]
+  - id: surface.intake.drafts
+    parent: surface.intake
+    name: 草稿信号区
+    summary: 在草稿任务上让人改标题、拆分、合并或不做
+    kind: component
+    responsibility: 列出任务所含信号；草稿任务上可改标题 / 目标 / 范围、选中信号拆出或移到别的草稿、整个草稿合并、不做；已开工的只读；放行卡上列出确认后退回池的信号。读不到信号接口时用卡上内核附的信号列表。嵌在卡片详情与任务概览里。
+    codeRefs: [packages/ui/src/components/DraftSignals.tsx]
+
+  # ───────────── surface.ops ─────────────
+  - id: surface.ops.runner
+    parent: surface.ops
+    name: 本机页与本机设置
+    summary: 展示 runner 在线、执行中、设备与配方，并设外观与默认仓库
+    kind: component
+    responsibility: 每 10 秒拉本机状态（kernel 连接通道、执行中、真机、配方），失败保留上次结果；本机设置（外观、默认仓库等）。
+    codeRefs: [packages/ui/src/pages/RunnerPage.tsx]
+  - id: surface.ops.settings
+    parent: surface.ops
+    name: 配置页
+    summary: 浏览工作环境与组件，设默认环境并跑体检
+    kind: component
+    responsibility: 配置区三页（工作环境、组件只读、体检），按环境切换；文件为真源，页面不写文件，只设默认环境与跑体检、看最近一次体检。
+    codeRefs: [packages/ui/src/pages/SettingsPage.tsx]
+  - id: surface.ops.profiles
+    parent: surface.ops
+    name: 工作环境数据
+    summary: 取工作环境列表并判断每个环境能否使用
+    kind: component
+    responsibility: 拉工作环境列表（旧 runner 404 时标不可用）、能力槽名称与说明、健康状态文案、按最近一次体检给出不可用原因与一句提示。配置页与新建抽屉共用。
+    codeRefs: [packages/ui/src/lib/profiles.ts]
+  - id: surface.ops.metrics
+    parent: surface.ops
+    name: 剧本度量页
+    summary: 按剧本汇总并逐任务列出度量
+    kind: component
+    responsibility: 按 7 / 30 / 90 天时间窗拉剧本度量：按初始剧本汇总 + 逐任务明细；只读，数据由内核从账算。
+    codeRefs: [packages/ui/src/pages/MetricsPage.tsx]
+
+  # ───────────── surface.api ─────────────
+  - id: surface.api.client
+    parent: surface.api
+    name: 数据访问函数集
+    summary: 经同源 /api 与 SSE 访问 runner 本地 UI 服务
+    kind: component
+    responsibility: >-
+      Api 接口及其真实现：先取会话令牌，之后每个请求带 x-gixn-token；SSE 与证据链接用查询参数带令牌；非 2xx 转成 ApiFailure；
+      幂等键生成；按构建常量 VITE_GIXN_MOCK 整体换成内存替身。不缓存数据。
+    codeRefs: [packages/ui/src/api.ts]
+  - id: surface.api.mock
+    parent: surface.api
+    name: 内存替身
+    summary: 用内存实现同一套 Api，供离线预览与用例
+    kind: component
+    responsibility: 与真 Api 同签名的内存实现（含信号与草稿操作），模拟延迟、失败、断线与旧 runner 404；浏览器控制台 __gixnMock 可切状态。生产构建里被摇掉。
+    codeRefs: [packages/ui/src/mock/api.ts, packages/ui/src/mock/signals.ts]
+  - id: surface.api.fixtures
+    parent: surface.api
+    name: 演示数据
+    summary: 提供取自原型的演示任务、卡片、环境与度量数据
+    kind: component
+    responsibility: 演示库（任务、卡片、账事件、验收、档案、证据、通知、度量、工作环境与体检模板、预览图、放行正文样例），时间相对页面加载时刻。
+    codeRefs: [packages/ui/src/mock/data.ts, packages/ui/src/mock/metrics.ts, packages/ui/src/mock/profiles.ts, packages/ui/src/mock/preview.ts, 'packages/ui/src/mock/*.md']
+
+interfaces:
+  - id: if.surface.api.api
+    name: api
+    owner: surface.api.client
+    signature: |
+      const api: Api
+      interface Api {
+        session(): Promise<Session>
+        listCards(): Promise<{ cards: Card[] }>
+        answerCard(cardId: string, b: AnswerBody): Promise<{ ok: true }>
+        listTasks(): Promise<{ tasks: TaskSummary[] }>
+        getTask(taskId: string): Promise<TaskDetail>
+        taskEvents(taskId: string, afterSeq?: string | null): Promise<{ events: LedgerEvent[]; nextAfterSeq: string | null }>
+        createSignal(b: CreateSignalBody): Promise<CreateSignalResult>
+        listSignals(q?: ListSignalsQuery): Promise<{ signals: SignalRecord[] }>
+        triageNow(signalId: string): Promise<{ intakeTaskId: string | null; scheduled: boolean; at: string | null }>
+        triageSignal(signalId: string, b: { decision: SignalTriageDecision; duplicateOf?: string; reason: string }): Promise<{ signal: SignalRecord }>
+        moveSignal(signalId: string, b: { toTaskId: string | null; reason?: string }): Promise<{ ok: true; taskId?: string | null }>
+        draftOp(taskId: string, o: DraftOp): Promise<{ ok: true; taskId?: string | null }>
+        openWorktree(path: string): Promise<{ ok: true }>
+        runnerStatus(): Promise<RunnerUiStatus>
+        transcript(ref: string): Promise<Transcript>
+        listProfiles(): Promise<ListProfilesResponse>
+        setDefaultProfile(name: string): Promise<{ ok: true }>
+        runDoctor(name: string): Promise<DoctorReport>
+        lastDoctor(name: string): Promise<DoctorReport | null>
+        listNotifications(since?: string): Promise<ListNotificationsResponse>
+        playbookMetrics(since?: string): Promise<PlaybookMetricsResponse>
+        evidenceUrl(hash: string): string
+        readEvidence(hash: string): Promise<string>
+        openStream(on: (event: StreamEvent) => void): () => void
+      }
+    semantics: |
+      - session() 必须先成功：它取回页面令牌，之后的请求才带得上 x-gixn-token
+      - 非 2xx 抛 ApiFailure（带 status）；lastDoctor 的 404 返回 null；旧 runner 没有的接口（信号、配置、通知、度量）以 404 失败，调用方降级
+      - VITE_GIXN_MOCK=1 时整体换成内存实现，签名与语义相同
+  - id: if.surface.api.newKey
+    name: newKey
+    owner: surface.api.client
+    signature: |
+      newKey(): string
+    semantics: |
+      - 生成幂等键（crypto.randomUUID，不可用时退回时间戳 + 随机串）；答卡与录入用它保证重试不重复记账
+  - id: if.surface.api.openStream
+    name: openStream
+    owner: surface.api.client
+    signature: |
+      openStream(on: (event: StreamEvent) => void): () => void   // StreamEvent = "cards.changed" | "tasks.changed" | "open" | "error"
+    semantics: |
+      - 开 EventSource(/api/stream?t=<令牌>)，把 hello / cards.changed / tasks.changed / 错误转成回调；返回关闭函数
+  - id: if.surface.shell.useAppData
+    name: useAppData
+    owner: surface.shell.store
+    signature: |
+      useAppData(): AppData
+      interface AppData {
+        session: Session | null; fatal: string | null; loaded: boolean
+        cards: Card[]; tasks: TaskSummary[]; conn: "connecting" | "live" | "lost"; retries: number
+        loadErr: string | null; now: Date; tick: number
+        reload(): void; reconnect(): void; retrySession(): void
+        answerCard(card: Card, a: AnswerBody): Promise<void>
+      }
+    semantics: |
+      - 只能在 DataProvider 内使用，否则抛错
+      - cards 只含 open 状态、且不含正在答的卡；tasks 不含整理台任务（taskKind = intake）
+      - tick 在 tasks.changed 与 reload 时加一，任务详情据此重拉
+      - answerCard 期间该卡隐藏；成功后移除并重拉卡片，失败抛出并放回（跳转与报错由调用方负责）
+  - id: if.surface.shell.navigate
+    name: navigate
+    owner: surface.shell.router
+    signature: |
+      navigate(href: string, opts?: { replace?: boolean }): void
+    semantics: |
+      - history.pushState / replaceState 后广播站内导航事件，useLocation 的订阅者随之更新
+  - id: if.surface.shell.to
+    name: to
+    owner: surface.shell.router
+    signature: |
+      const to: { inbox(cardId?, kind?): string; tasks(f?): string; task(id, tab?): string; signals(repo?): string; runner(): string; runnerSettings(): string; metrics(days?): string; settings(page, profile?): string }
+    semantics: |
+      - 全部站内地址由此生成，页面不手写路径
+  - id: if.surface.shell.withNewTask
+    name: withNewTask
+    owner: surface.shell.router
+    signature: |
+      withNewTask(href: string, prefill?: NewTaskPrefill): string
+    semantics: |
+      - 在任意地址上叠加 ?new=1 及 newKind / newText / newFrom / newLink 预填，打开全局新建抽屉
+  - id: if.surface.shell.useLocation
+    name: useLocation
+    owner: surface.shell.router
+    signature: |
+      useLocation(): { route: Route; newTask: NewTaskPrefill | null; href: string }
+  - id: if.surface.shell.Link
+    name: Link
+    owner: surface.shell.router
+    signature: |
+      Link(props: AnchorHTMLAttributes<HTMLAnchorElement> & { to: string; replace?: boolean }): JSX.Element
+  - id: if.surface.shell.useToast
+    name: useToast
+    owner: surface.shell.overlays
+    signature: |
+      useToast(): (text: string, action?: { label: string; onClick(): void }) => void
+  - id: if.surface.shell.Drawer
+    name: Drawer
+    owner: surface.shell.overlays
+    signature: |
+      Drawer(props: { title; onClose(); summary?; tabs?: DrawerTab[]; onStep?(delta: -1 | 1); footer?; children }): JSX.Element   // 裁剪
+  - id: if.surface.inbox.AcceptanceTable
+    name: AcceptanceTable
+    owner: surface.inbox.acceptance
+    signature: |
+      AcceptanceTable(props: { items: readonly ItemView[]; mode?: "release" | "status" | "confirm" }): JSX.Element
+  - id: if.surface.inbox.VerdictBar
+    name: VerdictBar
+    owner: surface.inbox.acceptance
+    signature: |
+      VerdictBar(props: { items: readonly ItemView[] }): JSX.Element
+  - id: if.surface.inbox.EvidenceDrawer
+    name: EvidenceDrawer
+    owner: surface.inbox.evidence
+    signature: |
+      EvidenceDrawer(props: { ev: EvidenceRef; onClose(): void; onStep?(delta: -1 | 1): void }): JSX.Element
+  - id: if.surface.tasks.useTaskDetail
+    name: useTaskDetail
+    owner: surface.tasks.detail
+    signature: |
+      useTaskDetail(taskId: string | null, refreshKey: unknown): { detail: TaskDetail | null; error: string | null; loading: boolean }
+    semantics: |
+      - refreshKey 变化时重拉，重拉期间保留旧数据
+  - id: if.surface.tasks.PhaseSteps
+    name: PhaseSteps
+    owner: surface.tasks.progress
+    signature: |
+      PhaseSteps(props: { task: Pick<TaskSummary, "kind" | "phase" | "status">; size?: "mini" | "big" }): JSX.Element
+  - id: if.surface.tasks.phaseLabel
+    name: phaseLabel
+    owner: surface.tasks.progress
+    signature: |
+      phaseLabel(t: Pick<TaskSummary, "kind" | "phase" | "status">): string
+  - id: if.surface.tasks.BudgetBar
+    name: BudgetBar
+    owner: surface.tasks.progress
+    signature: |
+      BudgetBar(props: { cost: number | null | undefined; budget?: Budget | null; compact?: boolean }): JSX.Element
+  - id: if.surface.intake.NewTaskDrawer
+    name: NewTaskDrawer
+    owner: surface.intake.new-task
+    signature: |
+      NewTaskDrawer(props: { prefill: NewTaskPrefill; onClose(): void; onCreated(taskId: string | null): void }): JSX.Element
+    semantics: |
+      - 池模式进池时 onCreated(null)，直接建任务时 onCreated(taskId)
+  - id: if.surface.intake.setDefaultRepo
+    name: setDefaultRepo
+    owner: surface.intake.new-task
+    signature: |
+      setDefaultRepo(repo: string | null): void
+    semantics: |
+      - 存本机浏览器；null 清除，新建抽屉退回「记住上次选的」
+  - id: if.surface.intake.DraftSignals
+    name: DraftSignals
+    owner: surface.intake.drafts
+    signature: |
+      DraftSignals(props: { task: TaskSummary; goal?: string; fallback?: CardSignal[]; refreshKey?: unknown }): JSX.Element
+  - id: if.surface.ops.useProfiles
+    name: useProfiles
+    owner: surface.ops.profiles
+    signature: |
+      useProfiles(): { state: ProfilesState; reload(): void; patch(...): void }   // 裁剪
+
+dataStructures:
+  - id: ds.AnswerBody
+    name: AnswerBody
+    definition: |
+      interface AnswerBody { optionId: string; comment?: string; idempotencyKey: string; hardUsd?: number /* 预算卡追加后的硬上限 */ }
+  - id: ds.CreateSignalBody
+    name: CreateSignalBody
+    definition: |
+      interface CreateSignalBody {
+        kind: "requirement" | "defect"; text: string; links: string[]; repo: string; idempotencyKey: string
+        budget?: Budget; profile?: string; playbook?: PlaybookName; mode?: "pool" | "direct"; urgent?: boolean
+      }
+  - id: ds.DraftOp
+    name: DraftOp
+    definition: |
+      type DraftOp =
+        | { op: "draft"; body: { title?: string; goal?: string; scope?: string } }
+        | { op: "split"; body: { signalIds: string[]; to: "pool" | "new_draft"; title?; goal?; scope?; reason? } }
+        | { op: "fold"; body: { intoTaskId: string; reason?: string } }
+        | { op: "decline"; body: { signals: "pool" | "declined"; reason?: string } }
+  - id: ds.LedgerEvent
+    name: LedgerEvent
+    definition: |
+      interface LedgerEvent { seq?: string; eventId?: string; type: string; taskId: string | null; actor: { kind: string; id: string }; at: string; reason?: string; payload?: unknown }
+
+relations:
+  # ── 页面 → runner 本地 UI 服务（跨进程 HTTP） ──
+  - id: rel.surface.http-session
+    from: surface.api.client
+    to: client.local-ui
+    type: queries
+    mode: async
+    via: channel:http@share.contracts
+    purpose: 取页面令牌与主人、配方
+    description: GET /api/session 取页面令牌、主人（GitLabUser）、配方与工作树目录；令牌存在模块内，之后每个请求带 x-gixn-token。
+  - id: rel.surface.http-read
+    from: surface.api.client
+    to: client.local-ui
+    type: queries
+    mode: async
+    via: channel:http@share.contracts
+    purpose: 读卡片、任务、信号与本机状态
+    description: >-
+      GET /api/cards、/api/tasks、/api/tasks/:id、/api/tasks/:id/events?afterSeq=、/api/signals、/api/notifications、/api/metrics/playbooks、
+      /api/runner、/api/profiles、/api/profiles/:name/doctor、/api/transcript?ref=、/api/evidence/:hash?t=；响应类型取自契约（Card、TaskSummary、SignalRecord、RunnerUiStatus 等）。
+  - id: rel.surface.http-answer
+    from: surface.api.client
+    to: client.local-ui
+    type: commands
+    mode: async
+    via: channel:http@share.contracts
+    payload: ds.AnswerBody
+    purpose: 交出人对决策卡的回答
+    description: POST /api/cards/:id/answer，带选项、备注、幂等键与预算卡的新硬上限；runner 代主人转给内核。
+  - id: rel.surface.http-signal
+    from: surface.api.client
+    to: client.local-ui
+    type: commands
+    mode: async
+    via: channel:http@share.contracts
+    payload: ds.CreateSignalBody
+    purpose: 录入一句话需求或缺陷
+    description: POST /api/signals，带类型、原文、链接、仓库、工作环境、剧本、进池或直接建任务与幂等键；返回任务号或信号号。
+  - id: rel.surface.http-triage
+    from: surface.api.client
+    to: client.local-ui
+    type: commands
+    mode: async
+    via: channel:http@share.contracts
+    payload: ds.DraftOp
+    purpose: 整理池里的信号与草稿任务
+    description: POST /api/signals/:id/triage-now、/triage、/move 与 /api/tasks/:id/{draft,split,fold,decline}（人操作接口）。
+  - id: rel.surface.http-profiles
+    from: surface.api.client
+    to: client.local-ui
+    type: commands
+    mode: async
+    via: channel:http@share.contracts
+    purpose: 设默认工作环境并跑体检
+    description: PUT /api/profiles/default 设默认环境；POST /api/profiles/:name/doctor 跑一次体检（可能要几秒），返回 DoctorReport。
+  - id: rel.surface.http-worktree
+    from: surface.api.client
+    to: client.local-ui
+    type: commands
+    mode: async
+    via: channel:http
+    purpose: 在本机打开任务工作树
+    description: POST /api/open-worktree { path }，runner 用设置里的程序打开该工作树。
+  - id: rel.surface.sse-subscribe
+    from: surface.api.client
+    to: client.local-ui
+    type: commands
+    mode: async
+    via: channel:sse
+    purpose: 订阅卡片与任务的变化
+    description: new EventSource('/api/stream?t=<令牌>') 开订阅；推回来的 hello / cards.changed / tasks.changed 由 client 区域的推送关系描述。
+
+  # ── 全局数据 ↔ 数据访问 ──
+  - id: rel.surface.store-load
+    from: surface.shell.store
+    to: surface.api.client
+    type: queries
+    mode: async
+    interface: if.surface.api.api
+    purpose: 取会话、待决卡与任务列表
+    description: 启动时 session()；之后 listCards（只留 open）与 listTasks（去掉整理台任务）；连上或收到变化通知时重拉。
+  - id: rel.surface.store-answer
+    from: surface.shell.store
+    to: surface.api.client
+    type: commands
+    mode: async
+    interface: if.surface.api.api
+    payload: ds.AnswerBody
+    purpose: 把人的回答交给 runner
+    description: answerCard 先把卡隐藏，再调 api.answerCard；成功后移除并重拉卡片，失败放回并把错误抛给调用方。
+  - id: rel.surface.store-subscribe
+    from: surface.shell.store
+    to: surface.api.client
+    type: commands
+    interface: if.surface.api.openStream
+    purpose: 开实时连接并在重连时重开
+    description: 有会话后调 api.openStream(回调) 开订阅，reconnect 时关掉旧连接再开；卸载时调返回的关闭函数。
+  - id: rel.surface.stream-changed
+    from: surface.api.client
+    to: surface.shell.store
+    type: notifies
+    via: channel:callback@surface.api.client
+    purpose: 宣告连接状态与卡片、任务的变化
+    description: openStream 把 SSE 的 hello / cards.changed / tasks.changed / 错误转成回调；全局数据据此改连接状态、重拉卡片或任务并加 tick。
+
+  # ── 外壳 ──
+  - id: rel.surface.app-location
+    from: surface.shell.app
+    to: surface.shell.router
+    type: queries
+    interface: if.surface.shell.useLocation
+    purpose: 按地址选页面与新建抽屉
+    description: useLocation 订阅地址变化，得到 Route 与新建抽屉预填，App 按 route.name 渲染页面。
+  - id: rel.surface.app-navigate
+    from: surface.shell.app
+    to: surface.shell.router
+    type: commands
+    interface: if.surface.shell.navigate
+    purpose: 重定向首页、开关新建抽屉
+    description: 「/」按有无待决卡 replace 到收件箱或任务；N 键叠加 ?new=1；抽屉关闭或录入成功后去掉 new 参数，提示里的按钮跳到任务或信号页。
+  - id: rel.surface.app-store
+    from: surface.shell.app
+    to: surface.shell.store
+    type: commands
+    interface: if.surface.shell.useAppData
+    purpose: 按会话状态渲染并重试连接
+    description: 读会话、致命错误与待决卡数决定渲染与标题；连不上 runner 时点重试调 retrySession。
+  - id: rel.surface.app-new-task
+    from: surface.shell.app
+    to: surface.intake.new-task
+    type: commands
+    interface: if.surface.intake.NewTaskDrawer
+    purpose: 按地址叠出新建抽屉
+    description: 地址带 ?new=1 时渲染 NewTaskDrawer 并传入预填、关闭与录入完成回调。
+  - id: rel.surface.new-task-created
+    from: surface.intake.new-task
+    to: surface.shell.app
+    type: commands
+    via: channel:callback@surface.intake.new-task
+    purpose: 交回录入结果以提示与跳转
+    description: 录入成功后调 App 传入的 onCreated(taskId | null)：App 关抽屉并提示，池模式指向信号页、直接建任务指向任务详情。
+  - id: rel.surface.frame-store
+    from: surface.shell.frame
+    to: surface.shell.store
+    type: commands
+    interface: if.surface.shell.useAppData
+    purpose: 画角标与断线横幅，断线时重连
+    description: 外壳读待决卡数、任务、会话、连接状态与重连次数画导航与横幅，点「重连」调 reconnect；命令面板读卡片与任务做候选。
+  - id: rel.surface.frame-navigate
+    from: surface.shell.frame
+    to: surface.shell.router
+    type: commands
+    interface: if.surface.shell.navigate
+    purpose: 从命令面板跳到卡片、任务或页面
+    description: 命令面板选中一项后 navigate 到卡片、任务、收件箱、任务列表、本机或叠出新建抽屉。
+
+  # ── 收件箱 ──
+  - id: rel.surface.inbox-store
+    from: surface.inbox.page
+    to: surface.shell.store
+    type: queries
+    interface: if.surface.shell.useAppData
+    purpose: 取待决卡与任务画队列
+    description: 读 cards、tasks、now、tick 与 loaded，排序筛选后画列表；tick 变化时重取通知。
+  - id: rel.surface.inbox-answer
+    from: surface.inbox.page
+    to: surface.shell.store
+    type: commands
+    mode: async
+    interface: if.surface.shell.useAppData
+    payload: ds.AnswerBody
+    purpose: 提交人的回答
+    description: 以 answerKey(cardId, optionId) 作幂等键调 answerCard；先跳到下一张，失败时提示并回到原卡。
+  - id: rel.surface.inbox-navigate
+    from: surface.inbox.page
+    to: surface.shell.router
+    type: commands
+    interface: if.surface.shell.navigate
+    purpose: 选中卡进地址、答完跳下一张
+    description: 选中、J/K 切换与答完都 navigate 到 /inbox/:cardId；遗留项「另立任务」叠出预填好的新建抽屉。
+  - id: rel.surface.inbox-key
+    from: surface.inbox.page
+    to: surface.api.client
+    type: queries
+    interface: if.surface.api.newKey
+    purpose: 给每个选项取一个幂等键
+    description: answerKey 按卡号 + 选项号缓存 newKey() 生成的键，跨重挂载保留，重试同一选项复用。
+  - id: rel.surface.inbox-notices
+    from: surface.inbox.page
+    to: surface.inbox.notices
+    type: queries
+    purpose: 取派生通知列在队列里
+    description: useNotifications(tick) 取通知与已读状态，接口不可用时不显示通知组。
+  - id: rel.surface.card-choice
+    from: surface.inbox.card-detail
+    to: surface.inbox.page
+    type: commands
+    via: channel:callback@surface.inbox.card-detail
+    purpose: 交出人选的选项与备注
+    description: 通过必填备注与确认框后调队列传入的 onSubmit(选项, 附加项)；另立任务经 onSpinOff 回调。
+  - id: rel.surface.card-task
+    from: surface.inbox.card-detail
+    to: surface.tasks.detail
+    type: queries
+    mode: async
+    interface: if.surface.tasks.useTaskDetail
+    purpose: 取卡所属任务的档案与验收清单
+    description: useTaskDetail(card.taskId, refreshKey) 取任务详情，放行卡据此画验收表、目标与合入信息。
+  - id: rel.surface.card-drafts
+    from: surface.inbox.card-detail
+    to: surface.intake.drafts
+    type: commands
+    interface: if.surface.intake.DraftSignals
+    purpose: 在确认卡上整理草稿所含信号
+    description: 草稿任务或卡上带信号时嵌入 DraftSignals，传入任务、目标与卡上内核附的信号作兜底。
+  - id: rel.surface.card-worktree
+    from: surface.inbox.card-detail
+    to: surface.api.client
+    type: commands
+    mode: async
+    interface: if.surface.api.api
+    purpose: 在本机打开卡对应的工作树
+    description: 点「打开工作树」调 api.openWorktree(card.worktreePath)，结果用轻提示反馈。
+  - id: rel.surface.acceptance-evidence
+    from: surface.inbox.acceptance
+    to: surface.inbox.evidence
+    type: commands
+    purpose: 点验收行打开它的证据
+    description: 验收表经 useEvidence() 取到打开函数，点证据按钮在证据抽屉里打开。
+  - id: rel.surface.evidence-read
+    from: surface.inbox.evidence
+    to: surface.api.client
+    type: queries
+    mode: async
+    interface: if.surface.api.api
+    purpose: 取证据原文与地址显示
+    description: 图片用 evidenceUrl(hash) 作地址，文本经 readEvidence(hash) 读取（超过 200KB 只给链接）。
+  - id: rel.surface.notices-read
+    from: surface.inbox.notices
+    to: surface.api.client
+    type: queries
+    mode: async
+    interface: if.surface.api.api
+    purpose: 取最近的收件箱通知
+    description: listNotifications() 取最近 7 天从账派生的通知。
+
+  # ── 任务视图 ──
+  - id: rel.surface.tasks-store
+    from: surface.tasks.list
+    to: surface.shell.store
+    type: queries
+    interface: if.surface.shell.useAppData
+    purpose: 取任务与待决卡分组排序
+    description: 读 tasks、cards、now、loaded，按页签与筛选组装行，待决卡按 openCardId 或 taskId 归属。
+  - id: rel.surface.tasks-navigate
+    from: surface.tasks.list
+    to: surface.shell.router
+    type: commands
+    interface: if.surface.shell.navigate
+    purpose: 筛选进地址并进入任务详情
+    description: 关键字、仓库筛选以 replace 写回地址；点行 navigate 到 /tasks/:id。
+  - id: rel.surface.detail-store
+    from: surface.tasks.detail
+    to: surface.shell.store
+    type: queries
+    interface: if.surface.shell.useAppData
+    purpose: 取任务摘要、待决卡与刷新计数
+    description: 从全局任务列表取任务摘要与待决卡，tick 变化时重拉详情并增量拉事件。
+  - id: rel.surface.detail-location
+    from: surface.tasks.detail
+    to: surface.shell.router
+    type: queries
+    interface: if.surface.shell.useLocation
+    purpose: 读抽屉条目与筛选参数
+    description: 从地址取 ?filter= / ?raw= / ?ev= / ?run= / ?entry= 交给对应页签。
+  - id: rel.surface.detail-load
+    from: surface.tasks.detail
+    to: surface.api.client
+    type: queries
+    mode: async
+    interface: if.surface.api.api
+    payload: ds.LedgerEvent
+    purpose: 取任务详情与账事件
+    description: getTask(taskId) 取档案、验收清单与待决卡；taskEvents(taskId, afterSeq) 分页拉事件，首次最多连拉 10 页，之后按变化增量拉。
+  - id: rel.surface.tabs-navigate
+    from: surface.tasks.tabs
+    to: surface.shell.router
+    type: commands
+    interface: if.surface.shell.navigate
+    purpose: 让抽屉当前条目进地址
+    description: 活动记录「原始」与证据页签打开 / 切换时以 replace 改写 ?raw= / ?ev=。
+  - id: rel.surface.tabs-evidence
+    from: surface.tasks.tabs
+    to: surface.inbox.evidence
+    type: commands
+    interface: if.surface.inbox.EvidenceDrawer
+    purpose: 在证据页签打开证据抽屉
+    description: 地址带 ?ev= 时渲染 EvidenceDrawer，↑↓ 在任务证据汇总里切换。
+  - id: rel.surface.tabs-drafts
+    from: surface.tasks.tabs
+    to: surface.intake.drafts
+    type: commands
+    interface: if.surface.intake.DraftSignals
+    purpose: 在任务概览里整理草稿信号
+    description: 草稿任务或带信号的任务在概览里嵌入 DraftSignals。
+  - id: rel.surface.tabs-worktree
+    from: surface.tasks.tabs
+    to: surface.api.client
+    type: commands
+    mode: async
+    interface: if.surface.api.api
+    purpose: 在本机打开任务工作树
+    description: 概览里点「打开工作树」调 api.openWorktree(path)，结果用轻提示反馈。
+  - id: rel.surface.runs-transcript
+    from: surface.tasks.runs
+    to: surface.api.client
+    type: queries
+    mode: async
+    interface: if.surface.api.api
+    purpose: 取一次执行会话的完整记录
+    description: 在抽屉里看某次执行时按账里的 transcriptRef 调 transcript(ref)。
+  - id: rel.surface.runs-navigate
+    from: surface.tasks.runs
+    to: surface.shell.router
+    type: commands
+    interface: if.surface.shell.navigate
+    purpose: 让选中的执行进地址
+    description: 打开或 ↑↓ 切换执行记录时以 replace 改写 ?run=。
+  - id: rel.surface.dossier-navigate
+    from: surface.tasks.dossier
+    to: surface.shell.router
+    type: commands
+    interface: if.surface.shell.navigate
+    purpose: 让选中的档案条目进地址
+    description: 打开长条目全文或原始 JSON 时以 replace 改写 ?entry=。
+
+  # ── 信号与录入 ──
+  - id: rel.surface.new-task-session
+    from: surface.intake.new-task
+    to: surface.shell.store
+    type: queries
+    interface: if.surface.shell.useAppData
+    purpose: 取配方列表选仓库
+    description: 读会话里的配方（仓库）列表，按默认仓库 > 上次 > 第一个选初值。
+  - id: rel.surface.new-task-profiles
+    from: surface.intake.new-task
+    to: surface.ops.profiles
+    type: queries
+    interface: if.surface.ops.useProfiles
+    purpose: 列出可选的工作环境
+    description: useProfiles() 取环境列表与默认环境，最近体检有失败项的标为不可选。
+  - id: rel.surface.new-task-create
+    from: surface.intake.new-task
+    to: surface.api.client
+    type: commands
+    mode: async
+    interface: if.surface.api.api
+    payload: ds.CreateSignalBody
+    purpose: 把填写内容录成信号
+    description: 校验后以同一份填写的幂等键调 createSignal；失败时保留抽屉内容。
+  - id: rel.surface.signals-store
+    from: surface.intake.signals
+    to: surface.shell.store
+    type: commands
+    interface: if.surface.shell.useAppData
+    purpose: 随任务变化重拉，操作后刷新全局
+    description: 读 tick、tasks 与 now，tick 变化时重拉信号；放回池等操作后调 reload。
+  - id: rel.surface.signals-read
+    from: surface.intake.signals
+    to: surface.api.client
+    type: queries
+    mode: async
+    interface: if.surface.api.api
+    purpose: 取池里的信号分组展示
+    description: listSignals({ repo }) 取信号，按状态分组。
+  - id: rel.surface.signals-triage
+    from: surface.intake.signals
+    to: surface.api.client
+    type: commands
+    mode: async
+    interface: if.surface.api.api
+    purpose: 立即整理或把信号放回池
+    description: 「立即整理」以该仓库最早的待整理信号调 triageNow；「放回池」调 triageSignal(decision = pending)。
+  - id: rel.surface.drafts-read
+    from: surface.intake.drafts
+    to: surface.api.client
+    type: queries
+    mode: async
+    interface: if.surface.api.api
+    purpose: 取任务所含的信号
+    description: listSignals({ taskId }) 取信号；接口不可用时退回卡上内核附的信号列表。
+  - id: rel.surface.drafts-ops
+    from: surface.intake.drafts
+    to: surface.api.client
+    type: commands
+    mode: async
+    interface: if.surface.api.api
+    payload: ds.DraftOp
+    purpose: 改草稿、拆分、合并或不做
+    description: draftOp(taskId, { draft | split | fold | decline }) 与逐条 moveSignal 把信号移到别的草稿。
+  - id: rel.surface.drafts-store
+    from: surface.intake.drafts
+    to: surface.shell.store
+    type: commands
+    interface: if.surface.shell.useAppData
+    purpose: 操作后刷新全局任务与卡片
+    description: 读任务列表找可合并的草稿；每次操作成功后调 reload。
+  - id: rel.surface.drafts-navigate
+    from: surface.intake.drafts
+    to: surface.shell.router
+    type: commands
+    interface: if.surface.shell.navigate
+    purpose: 拆分或合并后跳到目标草稿
+    description: 拆成新草稿或合并到另一草稿后 navigate 到目标任务。
+
+  # ── runner、工作环境与度量 ──
+  - id: rel.surface.runner-status
+    from: surface.ops.runner
+    to: surface.api.client
+    type: queries
+    mode: async
+    interface: if.surface.api.api
+    purpose: 每 10 秒取本机状态
+    description: 定时调 runnerStatus()，失败保留上次结果并显示错误。
+  - id: rel.surface.runner-store
+    from: surface.ops.runner
+    to: surface.shell.store
+    type: queries
+    interface: if.surface.shell.useAppData
+    purpose: 取会话与任务画执行中与配方
+    description: 读会话（主人、配方、工作树目录）与任务列表。
+  - id: rel.surface.runner-repo
+    from: surface.ops.runner
+    to: surface.intake.new-task
+    type: commands
+    interface: if.surface.intake.setDefaultRepo
+    purpose: 设新建任务的默认仓库
+    description: 本机设置里读当前默认仓库并在选择后调 setDefaultRepo（存本机浏览器）。
+  - id: rel.surface.settings-profiles
+    from: surface.ops.settings
+    to: surface.ops.profiles
+    type: queries
+    interface: if.surface.ops.useProfiles
+    purpose: 取工作环境列表与健康状态
+    description: useProfiles() 取列表，设默认或体检后经 reload / patch 刷新。
+  - id: rel.surface.settings-ops
+    from: surface.ops.settings
+    to: surface.api.client
+    type: commands
+    mode: async
+    interface: if.surface.api.api
+    purpose: 设默认环境、跑体检、看上次体检
+    description: setDefaultProfile(name)、runDoctor(name)，以及进入体检页时 lastDoctor(name)（没跑过返回 null）。
+  - id: rel.surface.settings-navigate
+    from: surface.ops.settings
+    to: surface.shell.router
+    type: commands
+    interface: if.surface.shell.navigate
+    purpose: 切换正在看的工作环境
+    description: 环境切换条以 replace 导航到 /settings/<页>/<环境名>。
+  - id: rel.surface.profiles-read
+    from: surface.ops.profiles
+    to: surface.api.client
+    type: queries
+    mode: async
+    interface: if.surface.api.api
+    purpose: 取工作环境列表
+    description: listProfiles() 取环境与默认环境；旧 runner 404 时标为不可用。
+  - id: rel.surface.metrics-read
+    from: surface.ops.metrics
+    to: surface.api.client
+    type: queries
+    mode: async
+    interface: if.surface.api.api
+    purpose: 取时间窗内的剧本度量
+    description: playbookMetrics(since) 按 7 / 30 / 90 天窗取按剧本汇总与逐任务明细。

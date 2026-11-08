@@ -1,0 +1,913 @@
+# 区域：契约与基础——packages/contracts（@gixn/contracts）、packages/evidence（@gixn/evidence）、packages/proc（@gixn/proc）。
+# 第二级模块（share.contracts / share.evidence / share.proc）由骨架定义，此处只写补充条目并往 share.contracts 下挂子模块。
+# 2026-11-08 由 AI 生成（读 gix-next @ 1cd6d9ad1）。
+# 包入口 src/index.ts 与 JSON Schema 导出脚本 scripts/export-json-schema.ts 留在 share.contracts 本身（骨架 codeRefs 覆盖）。
+# 接口 ID 一律 if.share.<第二级>.<导出名>；数据结构 ID 一律 ds.<TS 类型名>，其他区域按这些 ID 引用。
+
+modules:
+  # ─────────────── 层与第二级模块的补充条目 ───────────────
+  - id: share
+    name: 契约与基础
+    summary: 给各进程一套共同认的契约、证据存储与命令执行
+
+  - id: share.contracts
+    name: 契约
+    summary: 定义跨进程、跨包的全部数据形状与能力接口
+    abstraction: 按契约面切文件：领域对象、事件、HTTP、MCP、能力接口、配方、快照各一份，zod schema 即类型，JSON Schema 由它导出、不手改；契约测试单独一个入口
+    invariants:
+      - 只依赖 zod 与 yaml，不导入任何 @gixn 包，也不含 I/O 与运行时状态（契约测试除外）
+      - 事件、HTTP API、MCP 工具与配方各带版本常量（EVENT_SCHEMA_VERSION、API_VERSION、MCP_TOOLS_VERSION、RECIPE_VERSION），事件 envelope 带 schemaVersion
+      - MCP 工具表里没有合入、改租约、改任务终态的工具（工具名不含 FORBIDDEN_TOOL_WORDS，契约测试核对）
+    excludes: [事件投影与守卫规则 → kernel.ledger, 能力接口的本地实现 → adapters, 统筹者提示词怎么用快照 → playbooks.orchestrator]
+
+  - id: share.evidence
+    name: 证据存储
+    summary: 按内容哈希存取证据，同内容重复写回同一引用
+    abstraction: 单文件：内容按 sha256 分两级目录落盘、旁放元数据 JSON；接口 EvidenceStore 与本地实现分开，使用者只依赖接口
+
+  - id: share.proc
+    name: 外部命令执行
+    summary: 带超时执行外部命令，超时或取消时杀整棵进程树
+    abstraction: 单文件：start 给可杀的运行句柄、run 跑到结束，超时与停滞判定、输出尾部与落盘都在一处，不懂任何业务
+    invariants:
+      - 没有总超时（timeoutSec ≤ 0）即拒绝启动
+      - 子进程独立进程组，超时 / 无输出超时 / 取消时先 SIGTERM 整组、宽限后 SIGKILL，结束后再清一次进程组
+
+  # ─────────────── share.contracts 子模块 ───────────────
+  - id: share.contracts.common
+    parent: share.contracts
+    name: 基础类型与故障
+    kind: component
+    summary: 提供版本常量、标识、证据引用与故障分类
+    responsibility: >-
+      各契约共用的原语：契约版本常量、Id / 时间戳 / sha256 / 提交号 / 幂等键、GitLab 用户、账中的发起方 Actor、执行者与会话角色、
+      设备类别、证据渠道与证据引用 EvidenceRef、构建身份、用量；以及 S5 故障分类 FaultClass / Fault（env.* 不计入任务失败）与超时声明 TimeoutSpec。
+      不负责故障的判定与自愈（内核与剧本）。
+    codeRefs: [packages/contracts/src/common.ts, packages/contracts/src/faults.ts]
+    provides: [if.share.contracts.isEnvFault]
+    dataStructures: [ds.EvidenceRef, ds.GitLabUser, ds.SessionRole, ds.BuildIdentity, ds.Usage, ds.Fault, ds.FaultClass]
+
+  - id: share.contracts.domain
+    parent: share.contracts
+    name: 领域对象与验收清单
+    kind: component
+    summary: 定义信号、任务档案、决策卡、执行、验收与真机对象
+    responsibility: >-
+      领域对象的 schema：信号与任务状态 / 阶段、任务档案 Dossier 与局部更新、四类决策卡 Card（含内核核对、确认快照）、执行 Execution 与审核结果、
+      验证计划 / 运行 / 判定、runner 能力、租约、预算、模型配置与剧本默认值；验收项 AcceptanceItem 与六类判法 VerdictMethod、基线（旧红）与清单 Acceptance。
+      卡片与清单的结构性约束（放行卡不设超时、建议必在选项内、编号唯一、human 判法与人判对应）写在 schema 里；状态流转不在这里。
+    codeRefs:
+      - packages/contracts/src/domain.ts
+      - packages/contracts/src/acceptance.ts
+      - 'packages/contracts/schemas/{AcceptanceItem,VerdictMethod,Signal,Dossier,VerificationPlan,Run,Verdict,Lease}.json'
+    dataStructures: [ds.Signal, ds.TaskStatus, ds.TaskPhase, ds.Dossier, ds.Card, ds.Execution, ds.AcceptanceItem, ds.VerdictMethod, ds.Acceptance, ds.VerificationPlan, ds.Lease, ds.Budget, ds.RunnerCapabilities]
+
+  - id: share.contracts.events
+    parent: share.contracts
+    name: 事件
+    kind: component
+    summary: 定义过程账的事件类型、载荷 schema 与校验
+    responsibility: >-
+      只追加的过程账的事件契约：每种事件 type → payload schema（EventPayloads）、事件 envelope（带 schemaVersion、actor、幂等键、理由）、
+      按 type 校验载荷的 parseEvent、旧账兼容（mrIid 读成 changeRef）、人的动作只能是哪几种（HUMAN_EVENT_TYPES）。投影与反应不在这里。
+    codeRefs: [packages/contracts/src/events.ts, packages/contracts/schemas/events.json, packages/contracts/schemas/EventEnvelope.json]
+    provides: [if.share.contracts.parseEvent]
+    dataStructures: [ds.GixEvent, ds.EventType]
+
+  - id: share.contracts.api
+    parent: share.contracts
+    name: HTTP 与 runner 通道
+    kind: component
+    summary: 定义 HTTP 路由、请求响应、任务包与 runner 通道消息
+    responsibility: >-
+      HTTP API v1 的路由表 Routes 与错误体 ApiError；runner 注册 / 心跳、任务包 Job（session.start / session.kill / adapter.call）与
+      进展回报 JobUpdate、WebSocket 上下行消息；录入、信号池、草稿操作、卡片、任务查询、度量、收件箱通知的请求与响应；kernel 配置；runner 本地页面的本机状态。
+    codeRefs:
+      - packages/contracts/src/api.ts
+      - 'packages/contracts/schemas/{Job,JobUpdate,RegisterRunnerRequest,CreateSignalRequest,AnswerCardRequest,TaskDetailResponse}.json'
+    provides: [if.share.contracts.Routes]
+    dataStructures: [ds.ApiError, ds.Job, ds.AdapterCallJob, ds.JobUpdate, ds.WsServerMessage, ds.McpGrant, ds.TaskSummary, ds.SignalRecord, ds.InboxNotification, ds.PlaybookMetricsResponse]
+
+  - id: share.contracts.mcp
+    parent: share.contracts
+    name: MCP 工具
+    kind: component
+    summary: 定义统筹者、执行会话与整理台的 MCP 工具与令牌声明
+    responsibility: >-
+      MCP 服务 gixn 的工具定义（名称、scope、说明、输入输出 schema）：执行会话工具集、统筹者专用工具集、整理台工具集与全集；
+      同步等待上限常量、禁止出现的工具词、MCP 令牌声明。工具的授权与执行在 kernel-api。
+    codeRefs: [packages/contracts/src/mcp.ts, packages/contracts/schemas/mcp-tools.json]
+    provides: [if.share.contracts.ALL_TOOLS, if.share.contracts.EXECUTOR_TOOLS, if.share.contracts.ORCHESTRATOR_TOOLS, if.share.contracts.INTAKE_TOOLS]
+    dataStructures: [ds.ToolDef, ds.McpTokenClaims]
+
+  - id: share.contracts.capabilities
+    parent: share.contracts
+    name: 能力接口与工作环境
+    kind: component
+    summary: 定义外部系统的能力接口、适配器注册与工作环境
+    responsibility: >-
+      能力接口：需求来源 SignalSource、本地工作区 Workspace、代码平台 CodeHost、AI 执行 AiExecutor、真机 DeviceLab、决策通道 DecisionChannel、
+      发布器 Releaser、依赖源 DepSource，及其输入输出类型；适配器失败统一抛 AdapterError（带 Fault）；适配器模块元信息 AdapterModule；
+      工作环境 Profile（各槽选哪个适配器、项目绑定、剧本策略）、体检结果、runner 本机配置中心接口。实现都在适配器与 runner。
+    codeRefs: [packages/contracts/src/adapters.ts, packages/contracts/src/profile.ts]
+    provides:
+      - if.share.contracts.AdapterError
+      - if.share.contracts.SignalSource
+      - if.share.contracts.Workspace
+      - if.share.contracts.CodeHost
+      - if.share.contracts.AiExecutor
+      - if.share.contracts.DeviceLab
+      - if.share.contracts.DecisionChannel
+      - if.share.contracts.Releaser
+      - if.share.contracts.DepSource
+      - if.share.contracts.AdapterModule
+    dataStructures: [ds.CommandResult, ds.SessionSpec, ds.SessionOutcome, ds.ScenarioRunInput, ds.Profile, ds.PlaybookName, ds.HealthCheck, ds.ChangeInfo, ds.HostProject]
+
+  - id: share.contracts.recipe
+    parent: share.contracts
+    name: 仓库配方
+    kind: component
+    summary: 定义仓库配方的格式并从 YAML 解析成配方
+    responsibility: >-
+      仓库配方 Recipe（.gix/recipe.yaml）：集成分支、工作树、各类命令与命令模板（含串行道 exclusive）、CI 说明、存量红登记、预览、真机接入件、
+      按剧本覆盖参数、需征得同意的规则；parseRecipeYaml 把 YAML 文本解析并补默认值。配方从哪里读由适配器与 kernel-api 决定。
+    codeRefs: [packages/contracts/src/recipe.ts, packages/contracts/schemas/Recipe.json]
+    provides: [if.share.contracts.parseRecipeYaml]
+    dataStructures: [ds.Recipe]
+
+  - id: share.contracts.orchestrator
+    parent: share.contracts
+    name: 统筹者现状快照
+    kind: component
+    summary: 定义统筹者唤醒时看到的现状快照
+    responsibility: >-
+      OrchestratorSnapshot 及其各段（在跑执行、待答卡、变更、代码平台、预算、分支、租约、待唤醒、在途调用、验证计划、剧本、任务间依赖与重叠）：
+      内核从投影算好交给剧本渲染成提示词的现状段；只读视图，不进账。
+    codeRefs: [packages/contracts/src/orchestrator.ts]
+    dataStructures: [ds.OrchestratorSnapshot]
+
+  - id: share.contracts.testing
+    parent: share.contracts
+    name: 契约测试套件
+    kind: component
+    summary: 给每种能力接口一套实现者都要过的契约测试
+    responsibility: >-
+      经 @gixn/contracts/testing 入口导出的 vitest 套件：Workspace、CodeHost、AiExecutor、DeviceLab、DecisionChannel、SignalSource 各一套，
+      由各实现者的测试文件传入工厂与夹具后运行；只验证契约行为（幂等、超时、故障分类等），不含具体实现。
+    codeRefs: [packages/contracts/src/testing/**]
+    provides:
+      - if.share.contracts.workspaceContract
+      - if.share.contracts.codeHostContract
+      - if.share.contracts.aiExecutorContract
+      - if.share.contracts.deviceLabContract
+      - if.share.contracts.decisionChannelContract
+      - if.share.contracts.signalSourceContract
+
+relations:
+  - id: rel.share.evidence-ref
+    from: share.evidence
+    to: share.contracts.common
+    type: queries
+    payload: ds.EvidenceRef
+    purpose: 按契约校验并构造证据引用
+    description: 首次 put 写元数据、ref 读回元数据时都经 EvidenceRef.parse（zod）校验成契约形状。
+
+interfaces:
+  # ─────────────── share.contracts：能力接口（端口） ───────────────
+  - id: if.share.contracts.Workspace
+    name: Workspace
+    owner: share.contracts.capabilities
+    signature: |
+      interface Workspace {
+        readonly id: string
+        loadRecipe(repoPath: string): Promise<Recipe>
+        prepareWorktree(recipe: Recipe, input: { taskId: string; branch: string; baseCommit?: string; integrationCommit?: () => Promise<string> }): Promise<WorktreeInfo>
+        prepareBaselineWorktree(recipe: Recipe, input: { taskId: string; baseCommit: string; overlayFrom: string; paths: string[] }): Promise<{ path: string }>
+        diff(input: { worktree: string; baseCommit: string }): Promise<DiffSummary>
+        runCommand(input: CommandSpecInput): Promise<CommandResult>
+        commitAll(input: { worktree: string; message: string; author?: { name: string; email: string } }): Promise<{ commit: string | null }>
+        syncIntegration(recipe: Recipe, input: { worktree: string; integrationCommit: string; integrationBranch?: string }): Promise<{ changed: boolean; newBase: string; conflict: boolean }>
+      }
+    semantics: |
+      - 本地工作区永远是本机 git，不连任何远端；集成分支提交号由调用方先经 CodeHost.fetchIntegration 取来再传入
+      - prepareWorktree 对同一 taskId 幂等，退回时复用同一工作树
+      - runCommand 必须带超时、能杀整棵进程树；失败以 AdapterError（带 Fault）抛出
+    implementedBy: [adapters.repo.workspace]
+
+  - id: if.share.contracts.CodeHost
+    name: CodeHost
+    owner: share.contracts.capabilities
+    signature: |
+      interface CodeHost {
+        readonly id: string
+        readonly capabilities: CodeHostCapabilities   // { remote, ci, reviewLink }
+        fetchIntegration(p: HostProject): Promise<{ commit: string; branch: string }>
+        publish(p: HostProject, input: { worktree: string; branch: string }): Promise<{ headSha: string; files?: number; totalLines?: number }>
+        openChange(p: HostProject, input: { taskId: string; branch: string; baseCommit: string; title: string; description: string }): Promise<ChangeInfo>
+        getChange(p: HostProject, ref: string): Promise<ChangeInfo>
+        getChecks(p: HostProject, ref: string): Promise<ChecksInfo | null>
+        mergeAfterApproval(p: HostProject, input: { ref: string; expectedSha: string }): Promise<ChangeInfo>
+      }
+    semantics: |
+      - openChange 对同一 taskId 幂等；无 CI 的平台 getChecks 返回 null
+      - mergeAfterApproval 只由内核在人放行后调用：分支头不是 expectedSha 或有冲突时抛 AdapterError，不强合
+    implementedBy: [adapters.repo.local-git, adapters.repo.gitlab, client.profiles.registry]
+
+  - id: if.share.contracts.AiExecutor
+    name: AiExecutor
+    owner: share.contracts.capabilities
+    signature: |
+      interface AiExecutor {
+        readonly id: string
+        start(spec: SessionSpec, onEvent: (e: SessionEvent) => void): Promise<RunningSession>
+      }
+      interface RunningSession { readonly executionId: string; readonly pid?: number; readonly done: Promise<SessionOutcome>; kill(reason: string): Promise<void> }
+      type SessionEvent = { type: "started"; sessionHandle?: string; pid?: number } | { type: "output"; bytes: number; text?: string } | { type: "usage"; usage: Usage }
+    semantics: |
+      - 起会话或续会话（spec.resumeSessionHandle）；总超时、无吞吐超时或超预算时必须自己停，以 killed + fault 结束
+      - onEvent 回报启动、输出吞吐与用量，供上层按吞吐判停滞
+    implementedBy: [adapters.ai.executor]
+
+  - id: if.share.contracts.DeviceLab
+    name: DeviceLab
+    owner: share.contracts.capabilities
+    signature: |
+      interface DeviceLab {
+        readonly id: string
+        listDevices(): Promise<DeviceInfo[]>
+        checkReadiness(deviceId: string): Promise<Readiness>
+        heal(deviceId: string, fault: Fault): Promise<{ ok: boolean; needsHuman: boolean; detail: string }>
+        lock(deviceId: string, holder: string): Promise<{ release(): Promise<void> }>
+        runScenario(input: ScenarioRunInput): Promise<ScenarioRunOutput>
+      }
+    semantics: |
+      - lock 是单机文件锁，防本机其他会话抢；内核租约才是真源
+      - runScenario 先核对构建身份（E3），页面加载的不是期望构建即中止；按 iterations 跑 N 次并落盘证据文件
+    implementedBy: [adapters.device.lab]
+
+  - id: if.share.contracts.DecisionChannel
+    name: DecisionChannel
+    owner: share.contracts.capabilities
+    signature: |
+      interface DecisionChannel { readonly id: string; present(card: Card): Promise<void>; withdraw(cardId: string): Promise<void> }
+    semantics: 展示卡片并提醒主人（本地 UI + 系统通知）；人的回答经 HTTP API 回内核，不经这个接口。
+    implementedBy: [client.local-ui.decision]
+
+  - id: if.share.contracts.SignalSource
+    name: SignalSource
+    owner: share.contracts.capabilities
+    signature: |
+      interface SignalSource {
+        readonly id: string
+        start(sink: (signal: Signal) => Promise<{ taskId: string | null }>): Promise<void>
+        stop(): Promise<void>
+      }
+    semantics: 每条信号交给 sink；池模式下信号进池、没有任务，taskId 为 null。
+    implementedBy: [client.local-ui.intake]
+
+  - id: if.share.contracts.Releaser
+    name: Releaser
+    owner: share.contracts.capabilities
+    signature: |
+      interface Releaser {
+        readonly id: string
+        release(p: HostProject, input: { commit: string; branch: string; signal?: AbortSignal }): Promise<ReleaseResult>
+      }
+    semantics: 合入后的可选步骤，成败不影响任务终态 merged；失败抛 AdapterError，且不留 tag、产物目录与临时工作树；不 push。
+    implementedBy: [adapters.repo.release]
+
+  - id: if.share.contracts.DepSource
+    name: DepSource
+    owner: share.contracts.capabilities
+    signature: |
+      interface DepSource { readonly id: string; installEnv(p: HostProject): Record<string, string> | Promise<Record<string, string>> }
+    semantics: 跑配方 install 时额外注入的环境变量（如私有包缓存的 pnpm store），与配方 install.env 合并、同名以它为准。
+    implementedBy: [client.profiles.private-cache]
+
+  - id: if.share.contracts.AdapterModule
+    name: AdapterModule
+    owner: share.contracts.capabilities
+    signature: |
+      interface AdapterModule<T> {
+        readonly id: string; readonly slot: ProfileSlot; readonly title: string; readonly available: boolean
+        readonly configSchema: z.ZodType
+        create(config: Record<string, unknown>, ctx: { dataDir: string }): T | Promise<T>
+        check(config: Record<string, unknown>, ctx: { dataDir: string; recipes: Recipe[]; binding: (recipe: string) => Record<string, unknown> }): Promise<HealthCheck[]>
+      }
+    semantics: 工作环境里一个槽的 use 对应一个模块；配置中心按 configSchema 渲染 / 校验，体检调 check。
+    implementedBy: [adapters.repo.modules, adapters.repo.release, client.profiles.registry, client.profiles.private-cache]
+
+  - id: if.share.contracts.AdapterError
+    name: AdapterError
+    owner: share.contracts.capabilities
+    signature: |
+      class AdapterError extends Error { readonly fault: Fault; constructor(fault: Fault) }
+    semantics: 能力接口的方法失败一律以它抛出（带故障分类），不抛裸异常；message 为「[class] message」。
+
+  # ─────────────── share.contracts：函数与常量 ───────────────
+  - id: if.share.contracts.parseRecipeYaml
+    name: parseRecipeYaml
+    owner: share.contracts.recipe
+    signature: |
+      parseRecipeYaml(text: string): Recipe
+    semantics: YAML 解析后按 Recipe schema 校验并补默认值；不合法抛 zod 错误（如缺集成分支）。
+
+  - id: if.share.contracts.parseEvent
+    name: parseEvent
+    owner: share.contracts.events
+    signature: |
+      parseEvent(input: unknown): GixEvent
+    semantics: 先校验 envelope，再按 type 校验 payload；旧账 mrIid 在这里换算为 changeRef。
+
+  - id: if.share.contracts.isEnvFault
+    name: isEnvFault
+    owner: share.contracts.common
+    signature: |
+      isEnvFault(c: FaultClass): boolean
+    semantics: env.* 与 timeout 为环境故障：走自愈手册、不占任务重试次数。
+
+  - id: if.share.contracts.Routes
+    name: Routes
+    owner: share.contracts.api
+    signature: |
+      const Routes: {
+        health; runnerRegister; runnerHeartbeat; runnerJobs; runnerJobUpdate; runnerStream; runnerExecutionPrompt
+        signals; signal; signalTriageNow; signalTriage; signalMove; taskDraft; taskSplit; taskFold; taskDecline
+        cards; cardAnswer; tasks; task; taskEvents; metricsPlaybooks; notifications; mcp
+      }   // 均以 /v1 开头，如 runnerJobs = "/v1/runners/jobs"
+    semantics: kernel-api 与 runner 共用的 HTTP 路由表（runnerStream 为 WebSocket，mcp 为 MCP Streamable HTTP）；带 :param 占位。
+
+  - id: if.share.contracts.ALL_TOOLS
+    name: ALL_TOOLS
+    owner: share.contracts.mcp
+    signature: |
+      const ALL_TOOLS: ToolDef[]   // = EXECUTOR_TOOLS + ORCHESTRATOR_ONLY_TOOLS + INTAKE_TOOLS
+    semantics: MCP 服务注册的全部工具；工具名唯一，且不含 merge / lease / abandon / terminal。
+
+  - id: if.share.contracts.EXECUTOR_TOOLS
+    name: EXECUTOR_TOOLS
+    owner: share.contracts.mcp
+    signature: |
+      const EXECUTOR_TOOLS: readonly ToolDef[]   // gixn_get_task, gixn_get_dossier, gixn_write_progress, gixn_submit_evidence, gixn_report_done, gixn_ask, gixn_device_try_run …
+    semantics: 执行会话可用的工具（统筹者也可用）。
+
+  - id: if.share.contracts.ORCHESTRATOR_TOOLS
+    name: ORCHESTRATOR_TOOLS
+    owner: share.contracts.mcp
+    signature: |
+      const ORCHESTRATOR_TOOLS: readonly ToolDef[]   // 执行会话工具 + gixn_dispatch_execution, gixn_draft_acceptance, gixn_open_card, gixn_run_checks, gixn_repo_op, gixn_set_wakeup, gixn_end_turn …
+    semantics: 统筹者会话的工具集；不含执行者亲自试跑的工具。
+
+  - id: if.share.contracts.INTAKE_TOOLS
+    name: INTAKE_TOOLS
+    owner: share.contracts.mcp
+    signature: |
+      const INTAKE_TOOLS: readonly ToolDef[]   // gixn_list_signals, gixn_triage_signal, gixn_create_draft, gixn_update_draft, gixn_move_signal, gixn_fold_draft
+    semantics: 只给整理台会话（信号整理智能体）的工具，不在统筹者与执行会话工具集里。
+
+  # ─────────────── share.contracts：契约测试套件（@gixn/contracts/testing） ───────────────
+  - id: if.share.contracts.workspaceContract
+    name: workspaceContract
+    owner: share.contracts.testing
+    signature: |
+      workspaceContract(name: string, make: () => Promise<{ adapter: Workspace; fixture: WorkspaceFixture }>): void
+  - id: if.share.contracts.codeHostContract
+    name: codeHostContract
+    owner: share.contracts.testing
+    signature: |
+      codeHostContract(name: string, make: () => Promise<{ host: CodeHost; fixture: CodeHostFixture }>): void
+  - id: if.share.contracts.aiExecutorContract
+    name: aiExecutorContract
+    owner: share.contracts.testing
+    signature: |
+      aiExecutorContract(name: string, make: () => Promise<{ adapter: AiExecutor; fixture: AiExecutorFixture }>): void
+  - id: if.share.contracts.deviceLabContract
+    name: deviceLabContract
+    owner: share.contracts.testing
+    signature: |
+      deviceLabContract(name: string, make: () => Promise<{ adapter: DeviceLab; fixture: DeviceLabFixture }>): void
+  - id: if.share.contracts.decisionChannelContract
+    name: decisionChannelContract
+    owner: share.contracts.testing
+    signature: |
+      decisionChannelContract(name: string, make: () => Promise<{ adapter: DecisionChannel; sampleCard: Card }>): void
+  - id: if.share.contracts.signalSourceContract
+    name: signalSourceContract
+    owner: share.contracts.testing
+    signature: |
+      signalSourceContract(name: string, make: () => Promise<{ adapter: SignalSource; emit: (s: Omit<Signal, "recordedAt">) => Promise<void> }>): void
+
+  # ─────────────── share.evidence ───────────────
+  - id: if.share.evidence.EvidenceStore
+    name: EvidenceStore
+    owner: share.evidence
+    signature: |
+      interface EvidenceStore {
+        readonly root: string
+        put(input: Buffer | string | { file: string }, meta: { channel: EvidenceChannel; source: string; mime?: string; label?: string }): Promise<EvidenceRef>
+        get(hash: string): Promise<string | null>     // 内容文件绝对路径
+        has(hash: string): Promise<boolean>
+        ref(hash: string): Promise<EvidenceRef | null>
+      }
+    semantics: |
+      - 按 sha256 内容寻址，布局 <root>/<hash 前 2 位>/<hash>，旁放 <hash>.json 元数据
+      - 同内容重复 put 返回同一引用（首次 put 的元数据为准）；内容与元数据都先写临时文件再改名
+  - id: if.share.evidence.LocalEvidenceStore
+    name: LocalEvidenceStore
+    owner: share.evidence
+    signature: |
+      class LocalEvidenceStore implements EvidenceStore { constructor(root?: string /* 缺省 $GIXN_DATA_DIR/evidence 或 ~/.gix-next/evidence */); relPath(hash: string): string }
+  - id: if.share.evidence.expandHome
+    name: expandHome
+    owner: share.evidence
+    signature: |
+      expandHome(p: string): string
+    semantics: 把 ~ 与 ~/ 开头的路径展开为家目录；纯函数。
+
+  # ─────────────── share.proc ───────────────
+  - id: if.share.proc.run
+    name: run
+    owner: share.proc
+    signature: |
+      run(opts: RunOptions): Promise<RunResult>
+    semantics: 等同 start(opts).result；非零退出不抛错，结果里看 exitCode / timedOut / idleTimedOut / aborted。
+  - id: if.share.proc.start
+    name: start
+    owner: share.proc
+    signature: |
+      start(opts: RunOptions): Running
+      interface Running { pid: number | undefined; kill(reason?: string): void; result: Promise<RunResult> }
+    semantics: |
+      - timeoutSec 不是正数、或 command 与 file 都没给时同步抛错
+      - 子进程放进独立进程组；总超时、无输出超时、opts.signal 取消或 kill() 时杀整组（SIGTERM，graceMs 后 SIGKILL）
+      - 内存只留输出尾部（缺省 64KB），完整输出追加到 logPath；每块输出回调 onOutput
+  - id: if.share.proc.killTree
+    name: killTree
+    owner: share.proc
+    signature: |
+      killTree(pid: number | undefined, sig?: NodeJS.Signals): void
+    semantics: 先按进程组发信号，失败再发给单个进程；进程已退出时静默。
+
+dataStructures:
+  # ─────────────── common / faults ───────────────
+  - id: ds.EvidenceRef
+    name: EvidenceRef
+    definition: |
+      interface EvidenceRef {
+        hash: string        // sha256
+        path: string        // 相对证据存储根
+        size: number; mime: string
+        channel: EvidenceChannel   // command | scope | ci | review | device | human | agent_reference | preview
+        source: string      // 产出它的适配器，如 runner:<id>/repo-local
+        label?: string
+      }
+  - id: ds.GitLabUser
+    name: GitLabUser
+    definition: |
+      interface GitLabUser { id: number; username: string }
+  - id: ds.SessionRole
+    name: SessionRole
+    definition: |
+      type ExecutorRole = "developer" | "reviewer" | "script_writer" | "researcher"
+      type SessionRole = "orchestrator" | ExecutorRole
+  - id: ds.BuildIdentity
+    name: BuildIdentity
+    definition: |
+      interface BuildIdentity { commit: string; artifactHash: string; label?: string; url?: string }
+  - id: ds.Usage
+    name: Usage
+    definition: |
+      interface Usage { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; costUsd: number }
+  - id: ds.FaultClass
+    name: FaultClass
+    definition: |
+      type FaultClass = "env.credentials" | "env.proxy" | "env.rate_limit" | "env.device_offline" | "env.device_not_ready"
+        | "env.api_slow" | "env.network" | "env.runner_offline" | "env.workspace_dirty" | "timeout" | "task.failure" | "unknown"
+  - id: ds.Fault
+    name: Fault
+    definition: |
+      interface Fault {
+        class: FaultClass
+        message: string
+        errorCode?: string   // 机器可读，如 ADAPTER_MISSING；内核优先按它分类
+        healHint?: string    // 自愈手册条目 id，如 heal.glab-reauth
+        needsHuman: boolean  // 缺省 false
+        retryable: boolean   // 缺省 true
+      }
+
+  # ─────────────── domain / acceptance ───────────────
+  - id: ds.Signal
+    name: Signal
+    definition: |
+      interface Signal {
+        kind: "requirement" | "defect"
+        text: string; links: string[]
+        repo: string          // 配方名
+        profile?: string      // 工作环境名，任务新建时钉住
+        recordedBy: GitLabUser; recordedAt: string
+      }
+  - id: ds.TaskStatus
+    name: TaskStatus
+    definition: |
+      type TaskStatus = "draft" | "active" | "paused_budget" | "merged" | "abandoned"   // 终态只有 merged、abandoned
+  - id: ds.TaskPhase
+    name: TaskPhase
+    definition: |
+      type TaskPhase = "intake" | "drafting_acceptance" | "awaiting_confirm" | "developing" | "verifying" | "planning_verification"
+        | "reproducing" | "regressing" | "awaiting_release" | "merging" | "done"   // 统筹者上报的展示状态，不是状态机
+  - id: ds.Dossier
+    name: Dossier
+    definition: |
+      interface Dossier {
+        taskId: string; version: number
+        goal: string; phase: TaskPhase                      // 统筹者维护
+        decisions: { at: string; summary: string; reason: string }[]
+        leftovers: string[]; pitfalls: string[]; notes: string
+        progress: { at: string; executionId: string; text: string }[]   // 执行会话收工写回
+        kernel: { attempts: number; rounds: number; costUsd: number; diffLines: number }   // 内核填，agent 不可写
+      }
+  - id: ds.Card
+    name: Card
+    definition: |
+      interface Card {
+        id: string; taskId: string
+        kind: "tradeoff" | "confirm" | "adjudicate" | "release"
+        owner: number                      // GitLab 用户 ID
+        title: string; question: string; body: string
+        evidence: EvidenceRef[]
+        recommendation: { optionId: string; reason: string }   // 必须是选项之一
+        options: CardOption[]              // ≥ 2
+        kernelCheck?: KernelCheck          // 放行卡：内核核对
+        acceptanceSnapshot?: CardAcceptanceSnapshot   // 确认卡：判法原文
+        signals?: CardSignal[]; returnedSignals?: ReturnedSignal[]
+        overrides?: string[]; leftovers?: string[]; worktreePath?: string
+        openedAt: string; timeoutAt?: string   // 放行卡不得设超时
+        status: "open" | "answered" | "expired_default_applied" | "withdrawn"
+        answer?: { optionId: string; comment?: string; by: number; at: string }
+      }
+  - id: ds.Execution
+    name: Execution
+    definition: |
+      interface Execution {
+        id: string; taskId: string
+        role: SessionRole; model: string; tool: "claude-code"
+        prompt: { templateId: string; templateVersion: string; taskAppend: string; fullTextHash: string }
+        sessionHandle?: string; runnerId?: string; worktreePath?: string
+        budgetUsd?: number; timeoutSec: number
+        status: "queued" | "running" | "finished" | "failed" | "killed"
+        usage?: Usage; result?: Record<string, unknown>; summary?: string; transcriptRef?: string
+      }
+  - id: ds.AcceptanceItem
+    name: AcceptanceItem
+    definition: |
+      interface AcceptanceItem {
+        id: string                 // 如 A1
+        description: string
+        judge: "machine" | "human"
+        method: VerdictMethod
+        checkRef?: { path: string; commit: string }   // 本任务新写的检查脚本
+        isNewCheck: boolean        // 决定要不要旧红
+        baseline?: { result: "red"; baseCommit: string; runId: string; at: string } | { result: "waived"; reason: string; at: string } | { result: "preexisting" }
+        outcome: { status: "pending" | "pass" | "fail" | "error" | "waived"; runId?: string; headCommit?: string; evidence: EvidenceRef[]; at?: string; note?: string }
+      }
+  - id: ds.VerdictMethod
+    name: VerdictMethod
+    definition: |
+      type VerdictMethod =
+        | { type: "command"; command: string; cwd?: string; success: { exitCode: number; reportPath?: string; mustPass?: string[] }; timeoutSec: number }
+        | { type: "scope"; allowedPaths: string[]; deniedPaths?: string[] }
+        | { type: "ci"; jobs: string[] }
+        | { type: "review"; reviewers: { model: string; taskPrompt?: string }[]; maxRounds: number }
+        | { type: "device"; scenario: RepoFileRef; deviceClass: DeviceClass; planId: string }
+        | { type: "human"; whatToLook: string }
+  - id: ds.Acceptance
+    name: Acceptance
+    definition: |
+      interface Acceptance {
+        taskId: string; version: number
+        items: AcceptanceItem[]        // ≥ 1，编号唯一，human 判法与人判一一对应
+        confirmedAt?: string; confirmedBy?: number
+        changes: { version: number; at: string; kind: "intent_kept" | "intent_changed"; summary: string; reason: string; changedItemIds: string[] }[]
+      }
+  - id: ds.VerificationPlan
+    name: VerificationPlan
+    definition: |
+      interface VerificationPlan {
+        id: string; taskId: string
+        device: { id: string; class: DeviceClass }
+        network: { profile: string; detail?: string }
+        oldBuild: { commit: string }; newBuild?: { commit: string }
+        scenario: RepoFileRef
+        n: number
+        threshold: { oldMinRepro: number; newMaxRepro: number }
+        audible: boolean; confirmedAt?: string
+      }
+  - id: ds.Lease
+    name: Lease
+    definition: |
+      interface Lease {
+        id: string
+        resource: { kind: "device" | "port" | "workspace"; key: string }
+        taskId: string; holder: string
+        acquiredAt: string; expiresAt: string; heartbeatAt: string
+      }
+  - id: ds.Budget
+    name: Budget
+    definition: |
+      interface Budget { softUsd: number; hardUsd: number }
+  - id: ds.RunnerCapabilities
+    name: RunnerCapabilities
+    definition: |
+      interface RunnerCapabilities {
+        recipes: string[]
+        maxConcurrency: number          // 兼容字段：长执行道上限
+        lanes?: { kernelJobs: number; shortSessions: number; longSessions: number }
+        devices: { id: string; class: DeviceClass; platform: string }[]
+        agentTools: "claude-code"[]
+      }
+
+  # ─────────────── events ───────────────
+  - id: ds.EventType
+    name: EventType
+    definition: |
+      type EventType = keyof typeof EventPayloads
+      // 信号与任务：signal.recorded / triaged / attached / detached，task.draft_created / created / phase_reported / paused / merged / abandoned …
+      // 统筹与执行：orchestrator.woken, decision.made, dossier.updated, execution.dispatched / started / progress / finished, review.recorded
+      // 清单与真机：acceptance.drafted / confirmed / changed / baseline_recorded / item_judged, plan.drafted / confirmed, device.run_recorded, verdict.recorded
+      // 外部调用：adapter.requested / completed, repo.change_status / checks_status；卡与放行：card.opened / answered / withdrawn, release.granted / rejected, merge.requested
+      // 活性与资源：wakeup.scheduled / fired, watchdog.stalled, recovery.performed, fault.classified, heal.attempted, budget.*, lease.*, runner.*
+  - id: ds.GixEvent
+    name: GixEvent
+    definition: |
+      type GixEvent = { [K in EventType]: {
+        seq?: string                 // 全局递增序号（bigserial 字符串化）
+        eventId: string; schemaVersion: 1
+        type: K
+        taskId: string | null
+        actor: { kind: "human" | "orchestrator" | "executor" | "kernel" | "runner"; id: string }
+        at: string
+        idempotencyKey?: string
+        reason?: string              // 统筹者决定与人的动作的理由
+        payload: z.infer<(typeof EventPayloads)[K]>
+      } }[EventType]
+
+  # ─────────────── api ───────────────
+  - id: ds.ApiError
+    name: ApiError
+    definition: |
+      interface ApiError {
+        error: {
+          code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "invariant_violation" | "internal"
+          message: string; details?: unknown
+        }
+      }
+  - id: ds.McpGrant
+    name: McpGrant
+    definition: |
+      interface McpGrant { url: string; token: string /* 只授权本任务、本次执行 */; serverName: "gixn" }
+  - id: ds.AdapterCallJob
+    name: AdapterCallJob
+    definition: |
+      interface AdapterCallJob {
+        kind: "adapter.call"
+        callId: string; taskId: string | null
+        capability: "repo" | "device" | "command"
+        op: string                     // 如 prepare_worktree、run_check、preview_capture
+        args: Record<string, unknown>
+        idempotencyKey: string; timeoutSec: number
+      }
+  - id: ds.Job
+    name: Job
+    definition: |
+      interface Job {
+        jobId: string; createdAt: string
+        affinityRunnerId?: string      // 续会话、退回必须回原 runner
+        body: SessionStartJob | SessionKillJob | AdapterCallJob
+      }
+      interface SessionStartJob {
+        kind: "session.start"; executionId: string; taskId: string
+        role: SessionRole; model: string; prompt: string; cwd: string; readOnly: boolean
+        mcp: McpGrant; resumeSessionHandle?: string
+        timeoutSec: number; idleTimeoutSec: number; budgetUsd?: number; allowedCommands?: string[]
+      }
+      interface SessionKillJob { kind: "session.kill"; executionId: string; reason: string }
+  - id: ds.JobUpdate
+    name: JobUpdate
+    definition: |
+      type JobUpdate =
+        | { type: "accepted"; at: string }
+        | { type: "session.started"; sessionHandle?: string; pid?: number; promptHash?: string; at: string }
+        | { type: "session.progress"; usage: Usage; lastOutputAt: string; outputBytes: number }   // 吞吐信号
+        | { type: "session.finished"; status: "finished" | "failed" | "killed"; usage: Usage; sessionHandle?: string; summary?: string;
+            result?: Record<string, unknown>; transcriptRef?: string; fault?: Fault; at: string }
+        | { type: "adapter.completed"; ok: boolean; durationMs: number; result?: Record<string, unknown>; evidence: EvidenceRef[]; fault?: Fault; at: string }
+  - id: ds.WsServerMessage
+    name: WsServerMessage
+    definition: |
+      type WsServerMessage =                 // kernel → runner
+        | { type: "jobs"; jobs: Job[] } | { type: "abort"; jobIds: string[] } | { type: "cards.changed" } | { type: "pong"; serverTime: string }
+      type WsClientMessage =                 // runner → kernel
+        | { type: "ping" } | { type: "update"; jobId: string; update: JobUpdate }
+  - id: ds.TaskSummary
+    name: TaskSummary
+    definition: |
+      interface TaskSummary {
+        id: string; title: string; kind: "requirement" | "defect"; repo: string; owner: number
+        status: TaskStatus; phase: TaskPhase
+        nextWakeupAt: string | null; branch: string | null
+        changeRef?: string | null; changeUrl?: string   // 本地 local:<taskId> / GitLab !<iid>
+        costUsd?: number; budget?: Budget; openCardId?: string | null
+        profile?: string; taskKind?: "normal" | "intake"; scope?: string; signalIds?: string[]
+        createdAt: string; updatedAt: string
+      }
+  - id: ds.SignalRecord
+    name: SignalRecord
+    definition: |
+      interface SignalRecord {
+        id: string; owner: number; repo: string
+        kind: "requirement" | "defect"; text: string; links: string[]
+        profile: string | null; mode: "pool" | "direct"; urgent: boolean
+        status: "pending" | "attached" | "duplicate" | "declined" | "held"
+        taskId: string | null; duplicateOf: string | null; reason: string | null
+        recordedBy: GitLabUser; recordedAt: string; triagedAt: string | null
+      }
+  - id: ds.InboxNotification
+    name: InboxNotification
+    definition: |
+      interface InboxNotification {
+        id: string                    // n.<事件 seq> 或 n.card.<cardId>
+        kind: "auto_start" | "playbook_switched" | "task_merged" | "task_abandoned" | "card_waiting"
+        taskId: string; taskTitle: string; at: string; text: string
+        from?: PlaybookName; to?: PlaybookName
+        cardId?: string; waitingHours?: number
+      }
+  - id: ds.PlaybookMetricsResponse
+    name: PlaybookMetricsResponse
+    definition: |
+      interface PlaybookMetricsResponse {
+        since: string; until: string
+        tasks: PlaybookTaskMetrics[]     // 每任务：剧本路径、是否升级 / 免确认、花费、墙钟、唤醒与会话数、卡数、返工
+        summary: PlaybookSummary[]       // 按初始剧本：合入率、花费均值 / 中位、升级率 …
+        truncated: boolean               // 窗内超过 500 个任务
+      }
+
+  # ─────────────── mcp ───────────────
+  - id: ds.ToolDef
+    name: ToolDef
+    definition: |
+      interface ToolDef<I extends z.ZodTypeAny, O extends z.ZodTypeAny> {
+        name: string                     // gixn_*
+        scope: "executor" | "orchestrator" | "intake"
+        description: string
+        input: I; output: O
+      }
+  - id: ds.McpTokenClaims
+    name: McpTokenClaims
+    definition: |
+      interface McpTokenClaims { sub: string /* executionId */; task: string; scope: "executor" | "orchestrator" | "intake"; role: string; ver: "1" }
+
+  # ─────────────── capabilities / profile ───────────────
+  - id: ds.CommandResult
+    name: CommandResult
+    definition: |
+      interface CommandResult {
+        exitCode: number | null; timedOut: boolean; durationMs: number
+        stdoutTail: string; stderrTail: string   // 尾部最多 64KB
+        logPath?: string                          // 完整输出
+      }
+  - id: ds.SessionSpec
+    name: SessionSpec
+    definition: |
+      interface SessionSpec {
+        executionId: string; role: SessionRole; model: string
+        prompt: string; cwd: string; readOnly: boolean
+        mcp: McpGrant
+        resumeSessionHandle?: string
+        timeoutSec: number; idleTimeoutSec: number; budgetUsd?: number
+        allowedCommands?: string[]       // 无人值守放行的 Bash 命令，由内核按配方生成
+      }
+  - id: ds.SessionOutcome
+    name: SessionOutcome
+    definition: |
+      interface SessionOutcome {
+        status: "finished" | "failed" | "killed"
+        usage: Usage
+        sessionHandle?: string; summary?: string; transcriptRef?: string
+        fault?: Fault
+      }
+  - id: ds.ScenarioRunInput
+    name: ScenarioRunInput
+    definition: |
+      interface ScenarioRunInput {
+        deviceId: string; pageUrl: string
+        expectedBuild: BuildIdentity      // 页面加载的不是它即中止
+        scenarioPath: string; iterations: number; evidenceDir: string; timeoutSec: number
+        audibleConsent: boolean
+        testApiGlobal: string; buildIdentityGlobal?: string
+        serve?: { cmd: string; readyUrl: string; timeoutSec: number; cwd: string }   // 给了就由 runner 起被测页面
+      }
+      // 输出 ScenarioRunOutput { device: DeviceInfo; observedBuild: BuildIdentity; buildVerified: boolean; iterations: RunResult[]; evidenceFiles: { path; kind }[] }
+  - id: ds.PlaybookName
+    name: PlaybookName
+    definition: |
+      type PlaybookName = "solo" | "standard" | "prototype"
+  - id: ds.Profile
+    name: Profile
+    definition: |
+      interface Profile {
+        version: 1
+        name: string                     // 文件名，[a-z0-9-]
+        title: string; description?: string
+        components: {                    // 各槽选哪个适配器：{ use: string, ...配置 }
+          codeHost: ComponentChoice      // 必选
+          signal?; ai?; device?; decision?; release?; deps?: ComponentChoice
+        }
+        projects: Record<string, Record<string, unknown>>   // 配方名 → 平台绑定参数
+        flow?: string; prompts: string[]
+        policy?: { defaultPlaybook?: PlaybookName; autoStart?: { playbooks: PlaybookName[] }; intake?: IntakePolicy }
+      }
+  - id: ds.HealthCheck
+    name: HealthCheck
+    definition: |
+      interface HealthCheck {
+        slot: ProfileSlot | "recipe"
+        title: string
+        state: "ok" | "warn" | "bad"
+        fix?: string                     // 怎么修（含可执行命令）
+        detail?: string
+      }
+      // DoctorReport { profile: string; state: HealthState; checkedAt: string; checks: HealthCheck[] }
+  - id: ds.ChangeInfo
+    name: ChangeInfo
+    definition: |
+      interface ChangeInfo {
+        ref: string                      // 不透明：本地 local:<taskId>，GitLab !<iid>
+        url?: string
+        state: "opened" | "merged" | "closed"
+        draft: boolean
+        headSha?: string; mergeCommitSha?: string | null; mergedInto?: string
+      }
+  - id: ds.HostProject
+    name: HostProject
+    definition: |
+      interface HostProject { recipe: Recipe; binding: Record<string, unknown> /* 本环境对该项目的绑定参数 */ }
+
+  # ─────────────── recipe / orchestrator ───────────────
+  - id: ds.Recipe
+    name: Recipe
+    definition: |
+      interface Recipe {
+        version: 1
+        repo: { name: string; integrationBranch: string; localPath?: string; gitlabProject?: string /* 废弃 */; gitlabHost?: string /* 废弃 */ }
+        worktree: { root?: string; branchPrefix: string; cacheLinks: { from: string; to: string }[] }
+        commands: { install?; build?; test?; testSelect?; lint?; typecheck?; release?: CommandSpec }   // { cmd, cwd?, timeoutSec, env?, exclusive? }
+        commandTemplates: Record<string, CommandSpec & { description?: string }>
+        review: { promptOverride?: string }
+        ci: { notes?: string; pollIntervalSec: number; localEquivalent?: string }
+        verification?: { quarantine: QuarantineEntry[]; preview?: PreviewSpec }
+        device?: DeviceAttachment       // 被测页面怎么起、测试接口、构建身份读法、怎么出新旧构建、场景目录
+        playbooks?: Partial<Record<PlaybookName, PlaybookOverride>>
+        rules: { needsConsent: string[] }
+      }
+  - id: ds.OrchestratorSnapshot
+    name: OrchestratorSnapshot
+    definition: |
+      interface OrchestratorSnapshot {
+        at: string
+        task: { status: string; phase?: string | null; attempts: number; rounds: number; releaseState?: string | null }
+        executions: SnapshotExecution[]      // 在跑或排队（不含本次统筹者）
+        openCards: SnapshotCard[]
+        change?: SnapshotChange; codeHost?: SnapshotCodeHost
+        budget: SnapshotBudget; branch: SnapshotBranch
+        leases: SnapshotLease[]
+        pendingWakeups: SnapshotWakeup[]
+        inflightCalls?: SnapshotInflightCall[]
+        plan?: SnapshotPlan | null           // null = 缺陷任务还没有计划
+        playbook?: { initial: PlaybookName; autoStart: PlaybookName[] }
+        relations?: SnapshotRelations        // 依赖、改动重叠、谁在等我
+      }
+
+  # ─────────────── proc ───────────────
+  - id: ds.RunOptions
+    name: RunOptions
+    definition: |
+      interface RunOptions {
+        command?: string                 // 经 /bin/sh -c
+        file?: string; args?: string[]   // 或直接执行
+        cwd: string; env?: Record<string, string | undefined>; extendEnv?: boolean
+        timeoutSec: number               // 必填，> 0
+        idleTimeoutSec?: number          // 无输出判停滞
+        input?: string; logPath?: string
+        onOutput?: (chunk: string, stream: "stdout" | "stderr") => void
+        signal?: AbortSignal; graceMs?: number; tailBytes?: number
+      }
+  - id: ds.RunResult
+    name: RunResult
+    definition: |
+      interface RunResult {              // @gixn/proc 的 RunResult（与契约里真机单次结果的 zod 常量 RunResult 同名，后者没有导出 TS 类型）
+        exitCode: number | null; signal: string | null
+        timedOut: boolean; idleTimedOut: boolean; aborted: boolean
+        durationMs: number
+        stdoutTail: string; stderrTail: string; outputBytes: number
+        logPath?: string
+      }
