@@ -15,7 +15,7 @@ import ExportSection from './ExportSection.vue'
 import WriteForm from './WriteForm.vue'
 import PanelCard from './PanelCard.vue'
 import CheckCard from './CheckCard.vue'
-import type { CheckRow } from './panelCheck'
+import { fileCheckRowsOf } from './checkRows'
 
 const props = defineProps<{ path: string }>()
 const desk = useDesk()
@@ -40,34 +40,7 @@ const pathOf = (id: string) =>
     .slice(1)
     .map(m => moduleName(idx.value, m))
     .join(' / ')
-const rows = computed<CheckRow[]>(() => {
-  if (!local.value) return [{ key: 'source', label: '源码', state: 'none', text: '源码清单不可用', items: [] }]
-  if (!exists.value) return [{ key: 'source', label: '源码', state: 'bad', text: '文件不存在', items: [{ text: '不在源码文件清单中（可能已删除或改名）' }] }]
-  const own: CheckRow =
-    owners.value.length > 1
-      ? {
-          key: 'owner',
-          label: '归属',
-          state: 'bad',
-          text: `${owners.value.length} 个模块都匹配`,
-          items: [{ text: '多个互不包含的模块的 codeRefs 都匹配这个文件（G6）', target: 'boundary.owner' }],
-        }
-      : ignored.value
-        ? { key: 'owner', label: '归属', state: 'none', text: '已忽略', items: [] }
-        : owners.value.length
-          ? { key: 'owner', label: '归属', state: 'ok', text: moduleName(idx.value, owners.value[0]), items: [] }
-          : { key: 'owner', label: '归属', state: 'bad', text: '未归属', items: [{ text: '没有模块的 codeRefs 匹配这个文件', target: 'boundary.owner' }] }
-  const src: CheckRow = long.value
-    ? {
-        key: 'source',
-        label: '源码',
-        state: 'hint',
-        text: `${lineCount.value} 行`,
-        items: [{ text: `超过 ${desk.files.maxLines.value} 行（G21），考虑拆文件`, hint: true }],
-      }
-    : { key: 'source', label: '源码', state: 'ok', text: lineCount.value !== undefined ? `${lineCount.value} 行` : '可读', items: [] }
-  return [own, src]
-})
+const rows = computed(() => fileCheckRowsOf(desk, props.path))
 </script>
 
 <template>

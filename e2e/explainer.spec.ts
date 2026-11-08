@@ -6,6 +6,8 @@
 import { expect, test, type Page } from '@playwright/test'
 import { activeTab, collapseDisplay, graphNode, openDesk, query, showView, viewTab, views, waitSettled } from './helpers'
 
+/** 标签的键（标签名里带核对结论与时序图进度，会随主语与进度变，比较排布只看键） */
+const tabIds = (page: Page) => tabs(page).evaluateAll(ts => ts.map(t => t.getAttribute('data-doc')))
 const tabs = (page: Page) => views(page).locator('.tabs > .tab')
 const story = (page: Page) => views(page).frameLocator('iframe')
 
@@ -36,12 +38,12 @@ test('验收 6.41 第 2 条（LY-15 改写）：图解里点模块链接即选�
   // EX-2：引用由架构台填入描述原文
   await expect(frame.locator('[data-arch="kit.session"][data-field="summary"]')).toHaveText('判定命令能否受理、选出路线、核对事件顺序')
   await expect(frame.locator('a.arch-exp[data-explainer="kit.kernel"]')).toHaveCount(1)
-  const before = await tabs(page).allTextContents()
+  const before = await tabIds(page)
 
   await frame.locator('.who[data-arch="kit.session"]').click()
   await expect.poll(() => query(page).get('sel')).toBe('m:kit.session')
   await expect(story(page).locator('h1')).toContainText('说明书上的规则页')
-  expect(await tabs(page).allTextContents()).toEqual(before)
+  expect(await tabIds(page)).toEqual(before)
 
   // 回到 kit 再点「图解 ›」：选中 kit.kernel、图解换成它的
   await page.goto('./#/p/media-web-player?level=kit&sel=m:kit')
@@ -51,7 +53,7 @@ test('验收 6.41 第 2 条（LY-15 改写）：图解里点模块链接即选�
   await story(page).locator('a.arch-exp[data-explainer="kit.kernel"]').click()
   await expect.poll(() => query(page).get('sel')).toBe('m:kit.kernel')
   await expect(story(page).locator('h1')).toContainText('会话内核')
-  expect(await tabs(page).allTextContents()).toEqual(before)
+  expect(await tabIds(page)).toEqual(before)
 })
 
 test('验收 6.41 第 3 条：临时改 kit.kernel 的 summary，kit 的图解标出「基于旧描述」', async ({ page }) => {
@@ -79,21 +81,21 @@ test('验收 6.41 第 3 条：临时改 kit.kernel 的 summary，kit 的图解�
 test('LY-16：选中不自动开标签——视图区排布不变，图解随选中换内容；回放中按场景排布，画布 ▣ 不显示', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?level=state')
   await waitSettled(page)
-  const before = await tabs(page).allTextContents()
+  const before = await tabIds(page)
   expect(before).toHaveLength(3)
   await graphNode(page, 'state.desk').click()
   await expect(story(page).locator('h1').first()).toBeVisible()
   await expect(views(page).locator('.explainer')).toHaveAttribute('data-explainer', 'state.desk')
   await graphNode(page, 'state.transition').click()
   await expect(views(page).locator('.explainer')).toHaveAttribute('data-explainer', 'state.transition')
-  expect(await tabs(page).allTextContents()).toEqual(before)
+  expect(await tabIds(page)).toEqual(before)
 
-  // 回放：场景排布——上〔时序图 图解 核对〕下〔描述〕
+  // 回放：场景排布——上〔时序图〕下〔图解 描述 核对〕（负责人 2026-11-08 走查）
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
   await page.reload()
   await waitSettled(page)
   await expect(activeTab(page, 0)).toHaveAttribute('data-view-tab', 'sequence')
-  await expect(activeTab(page, 1)).toHaveAttribute('data-view-tab', 'description')
+  await expect(activeTab(page, 1)).toHaveAttribute('data-view-tab', 'explainer')
   await expect(viewTab(page, 'sequence').locator('.x')).toHaveCount(0)
   await expect(page.locator('[data-testid="explainer-mark"]')).toHaveCount(0)
 })

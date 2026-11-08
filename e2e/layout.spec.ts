@@ -3,19 +3,38 @@
  * 资料标签预览替换与固定、进上组、不跟随主语；选中文件在视图区打开源代码（G15、§6.4）。选中抽屉、导航浮层已删（LY-16）。
  */
 import { expect, test, type Page } from '@playwright/test'
-import { activeTab, closeNav, collapseDisplay, docTab, docTabs, graphNode, openDesk, query, sidebar, viewTab, views, openSidebar } from './helpers'
+import {
+  activeTab,
+  closeNav,
+  collapseDisplay,
+  docTab,
+  docTabs,
+  graphNode,
+  openDesk,
+  openFilters,
+  query,
+  sidebar,
+  sidePage,
+  viewTab,
+  views,
+  openSidebar,
+} from './helpers'
 
 const dock = views
+/** 标签的键（标签名里带核对结论与时序图进度，会随主语与进度变，比较排布只看键） */
+const tabIds = (page: Page) => tabs(page).evaluateAll(ts => ts.map(t => t.getAttribute('data-doc')))
 const tabs = (page: Page) => dock(page).locator('.tabs > .tab')
 const viewsBtn = (page: Page) => page.locator('[data-head="canvas"]').getByRole('button', { name: '视图区', exact: true })
 
 /** 侧栏模块页「按文件」的树里单击 / 双击一个文件（目录未展开时先展开，LY-4b） */
 async function pickFile(page: Page, path: string, dbl = false) {
-  await openSidebar(page)
-  const page0 = sidebar(page).locator('[data-side-page="modules"]')
-  if ((await page0.getAttribute('aria-selected')) !== 'true') await page0.click()
-  const mode = sidebar(page).locator('[data-side-mode="files"]')
-  if ((await mode.getAttribute('aria-pressed')) !== 'true') await mode.click()
+  // LY-4d：「按文件」收在模块页的「筛选 ▾」弹层里，选完收起弹层
+  await sidePage(page, 'modules')
+  if (!(await sidebar(page).locator('.file-tree').count())) {
+    const pop = await openFilters(page)
+    await pop.locator('[data-side-mode="files"]').click()
+    await sidebar(page).locator('[data-side-filter]').click()
+  }
   const parts = path.split('/').slice(0, -1)
   for (let i = 1; i <= parts.length; i++) {
     const dir = page.locator(`.row.dir[data-dir="${parts.slice(0, i).join('/')}"]`)
@@ -61,14 +80,15 @@ test('LY-9、LY-12：视图区常在（图解常驻）、可整体收起——�
   await expect(tabs(page)).toHaveCount(4)
 })
 
-test('LY-3：侧栏停靠——开关在画布页头、挤压画布；宽度可拖（200–400）；开合与宽度按本机记住', async ({ page }) => {
+test('LY-3：侧栏停靠——开关在竖栏顶格、挤压画布；宽度可拖（200–400）；开合与宽度按本机记住', async ({ page }) => {
   await openDesk(page, '/p/media-web-player?level=kit')
   // ≥ 1440 缺省展开
   await expect(sidebar(page)).toBeVisible()
   const side0 = (await page.locator('.side-area').boundingBox())!
   expect(Math.round(side0.width)).toBe(240)
   const canvas0 = (await page.locator('.canvas-area').boundingBox())!
-  expect(Math.round(canvas0.x)).toBe(240)
+  // 竖栏 44 + 侧栏 240
+  expect(Math.round(canvas0.x)).toBe(284)
   // 拖宽：右沿往右 80
   const handle = (await sidebar(page).locator('.resize').boundingBox())!
   await page.mouse.move(handle.x + handle.width / 2, handle.y + 200)
@@ -83,9 +103,9 @@ test('LY-3：侧栏停靠——开关在画布页头、挤压画布；宽度可�
   await page.mouse.move(h2.x + 300, h2.y + 200, { steps: 6 })
   await page.mouse.up()
   await expect.poll(async () => Math.round((await page.locator('.side-area').boundingBox())!.width)).toBe(400)
-  // 收起：画布从窗口左沿开始；重新打开页面仍收起（本机记住）
+  // 收起：画布紧贴竖栏（竖栏还在）；重新打开页面仍收起（本机记住）
   await closeNav(page)
-  expect(Math.round((await page.locator('.canvas-area').boundingBox())!.x)).toBe(0)
+  expect(Math.round((await page.locator('.canvas-area').boundingBox())!.x)).toBe(44)
   await openDesk(page, '/p/media-web-player?level=kit')
   await expect(sidebar(page)).toHaveCount(0)
   await openSidebar(page)
@@ -122,36 +142,37 @@ test('G15、LY-8a、LY-4b：侧栏「按文件」的树中选中文件——地�
   await expect(viewTab(page, 'explainer').locator('.x')).toHaveCount(0)
 })
 
-test('LY-10a、LY-11、LY-9：场景排布上下两组，新资料进上组；描述可关、从「+」再开（进发起的那一组）', async ({ page }) => {
+test('LY-10a、LY-11、LY-9：场景排布上下两组，新资料进上组；视图标签常驻不可关，「+」打开的资料进发起的那一组', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
   const groups = dock(page).locator('.group')
   await expect(groups).toHaveCount(2)
   await expect(groups.nth(0).locator('.seq-doc')).toBeVisible()
-  await expect(activeTab(page, 1)).toHaveAttribute('data-view-tab', 'description')
+  await expect(activeTab(page, 1)).toHaveAttribute('data-view-tab', 'explainer')
   await pickFile(page, 'src/main.ts')
   await expect(groups.nth(0).locator('.tabs > .tab[data-doc="src:src/main.ts"]')).toHaveCount(1)
   // 源代码与描述同时可见
   await expect(groups.nth(0).locator('.source-view')).toBeVisible()
   await expect(groups.nth(1)).toBeVisible()
-  // 关掉核对，再从「+」加回
-  await dock(page).getByRole('button', { name: '关闭核对' }).click()
-  await expect(viewTab(page, 'check')).toHaveCount(0)
-  await groups.nth(0).getByRole('button', { name: '添加标签' }).click()
-  await groups.nth(0).locator('[data-add-view="check"]').click()
-  await expect(activeTab(page, 0)).toHaveAttribute('data-view-tab', 'check')
+  // 视图标签与时序图常驻：没有关闭按钮
+  await expect(dock(page).getByRole('button', { name: '关闭核对' })).toHaveCount(0)
+  await expect(dock(page).getByRole('button', { name: '关闭时序图' })).toHaveCount(0)
+  // 从下组的「+」打开「问题」：进下组并激活
+  await groups.nth(1).getByRole('button', { name: '添加标签' }).click()
+  await groups.nth(1).locator('[data-add-doc="issues"]').click()
+  await expect(activeTab(page, 1)).toHaveAttribute('data-doc-tab', 'issues')
 })
 
 test('LY-8：选中与单步不改排布，视图标签内容随主语变；退出场景回到自由排布，资料标签留着', async ({ page }) => {
   await openDesk(page, '/p/h5p-arch-desk?sc=sc.open-and-play')
   await pickFile(page, 'src/main.ts')
   await expect(docTab(page, 'src:src/main.ts')).toHaveCount(1)
-  const before = await tabs(page).allInnerTexts()
+  const before = await tabIds(page)
   await page.getByRole('button', { name: /下一步/ }).click()
   // 图例展开时叠在画布右上，会盖住那里的节点（L48）
   await collapseDisplay(page)
   await graphNode(page, 'state.desk').click()
   // 标签集合不跟随选中
-  expect(await tabs(page).allInnerTexts()).toEqual(before)
+  expect(await tabIds(page)).toEqual(before)
   // 退出场景：自由排布（图解 描述 核对），时序图移出，源代码留着（LY-9a、LY-11b）
   await page.locator('[data-scene-chip]').getByRole('button', { name: '退出场景' }).click()
   await expect(viewTab(page, 'sequence')).toHaveCount(0)

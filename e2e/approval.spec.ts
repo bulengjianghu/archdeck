@@ -7,7 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { graphNode, LOAD_BUDGET, openDesk, openSketchPanel, sketchOn, openSidebar, sidebar } from './helpers'
+import { graphNode, LOAD_BUDGET, openDesk, openSketchPanel, sketchOn, openSidebar, sidePage } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 
@@ -49,7 +49,7 @@ async function confirmAccept(page: Page) {
 }
 async function openChanges(page: Page) {
   await openSidebar(page)
-  await sidebar(page).locator('[data-side-page="changes"]').click()
+  await sidePage(page, 'changes')
   return page.getByTestId('changes-tab')
 }
 const shown = (page: Page) =>

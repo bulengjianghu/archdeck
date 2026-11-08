@@ -2,13 +2,14 @@
  * 核对卡的分项（PC-6–PC-10）：各面板的核对行由这里的纯派生给出（只读 desk 的现有派生，不新算），
  * 面板渲染核对卡、视图区的「核对」标签名取同一份行的「要看」项数（LY-9b，负责人 2026-11-08 走查）——标签没激活时也要有数。
  */
-import { CARRIER_ROLE_TEXT, HOT_SURFACE_MODULES, SCOPE_CATEGORIES, moduleName, stratumByKey, type CarrierSegment } from '@/model'
+import { CARRIER_ROLE_TEXT, HOT_SURFACE_MODULES, SCOPE_CATEGORIES, isLong, moduleName, stratumByKey, type CarrierSegment } from '@/model'
 import type { DeskState } from '@/state/useDeskState'
 import { staleText } from '../shared/explainerText'
 import { EVIDENCE_LEVEL_LABELS } from '../shared/labels'
 import { alignedEvidence, stepChain } from './chain'
 import { checkSummary, moduleCheckRows, relationTypeLabel, rowsFromNotices, type CheckItem, type CheckRow } from './panelCheck'
 import type { PanelNotice } from './panelNotices'
+import { systemCheckRowsOf } from './systemCheckRows'
 
 /** 确认行的徽标只在范围内或已有记录时出现（ReviewSection 同口径） */
 export const moduleReviewInScope = (desk: DeskState, id: string) => desk.index.value!.stratumOf.get(id)?.members.length === 1 || desk.review.scope.value.has(id)
@@ -259,6 +260,95 @@ export function scopeTotalOf(desk: DeskState, roots: readonly string[]): number 
   return scope ? SCOPE_CATEGORIES.reduce((n, c) => n + scope.counts[c], 0) : null
 }
 
+/** 本层视图里的一条边（普通、核心跨层、共用件） */
+const viewEdgeOf = (desk: DeskState, id: string) => {
+  const v = desk.view.value
+  return [...(v?.edges ?? []), ...(v?.coreEdges ?? []), ...(v?.shelfEdges ?? [])].find(e => e.id === id)
+}
+
+/** PC-10：视图边——方向（向上却不是控制反转，K22）、证实（K6） */
+export function edgeCheckRowsOf(desk: DeskState, id: string): CheckRow[] {
+  const edge = viewEdgeOf(desk, id)
+  const upward = desk.facts.upward.value.find(u => u.edge === id) ?? null
+  const notices: PanelNotice[] =
+    upward && !upward.inversion
+      ? [
+          {
+            key: 'upward',
+            label: '向上却不是控制反转',
+            count: 1,
+            target: 'boundary.relations',
+            to: '原始关系',
+            note: `本层分了层（算出的或声明的），依赖都朝下；${upward.relations.join('、')} 是直接的查询或委托，发起方却在被依赖的一侧——多半是没标的回调、通知或经通道（K22）`,
+          },
+        ]
+      : []
+  const rep = desk.facts.report.value
+  const unconfirmed = rep && edge ? edge.relationIds.filter(r => rep.relations.get(r)?.status === 'unconfirmed').length : null
+  return rowsFromNotices(
+    [...notices, ...(unconfirmed ? [{ key: 'unconfirmed' as const, label: '未证实', count: unconfirmed, target: 'boundary.relations', to: '原始关系' }] : [])],
+    [
+      { key: 'direction', label: '方向', notices: ['upward'], ok: upward?.inversion ? '向上，是控制反转' : '没有违背分层' },
+      { key: 'verify', label: '证实', notices: ['unconfirmed'], ...(unconfirmed === null ? { none: '没有代码事实' } : { ok: '全部被代码证实' }) },
+    ],
+  )
+}
+
+/** PC-10：文件——归属（G6）、源码（存在、行数 G21） */
+export function fileCheckRowsOf(desk: DeskState, path: string): CheckRow[] {
+  const idx = desk.index.value!
+  const payload = desk.files.payload.value
+  const local = payload?.status === 'local' ? payload : null
+  if (!local) return [{ key: 'source', label: '源码', state: 'none', text: '源码清单不可用', items: [] }]
+  if (!local.files.includes(path))
+    return [{ key: 'source', label: '源码', state: 'bad', text: '文件不存在', items: [{ text: '不在源码文件清单中（可能已删除或改名）' }] }]
+  const owners = desk.files.ownership.value?.owners.get(path) ?? []
+  const ignored = !!desk.files.ownership.value?.ignored.has(path)
+  const lineCount = desk.files.lines.value[path]
+  const long = isLong(lineCount, desk.files.maxLines.value)
+  const own: CheckRow =
+    owners.length > 1
+      ? {
+          key: 'owner',
+          label: '归属',
+          state: 'bad',
+          text: `${owners.length} 个模块都匹配`,
+          items: [{ text: '多个互不包含的模块的 codeRefs 都匹配这个文件（G6）', target: 'boundary.owner' }],
+        }
+      : ignored
+        ? { key: 'owner', label: '归属', state: 'none', text: '已忽略', items: [] }
+        : owners.length
+          ? { key: 'owner', label: '归属', state: 'ok', text: moduleName(idx, owners[0]), items: [] }
+          : { key: 'owner', label: '归属', state: 'bad', text: '未归属', items: [{ text: '没有模块的 codeRefs 匹配这个文件', target: 'boundary.owner' }] }
+  const src: CheckRow = long
+    ? {
+        key: 'source',
+        label: '源码',
+        state: 'hint',
+        text: `${lineCount} 行`,
+        items: [{ text: `超过 ${desk.files.maxLines.value} 行（G21），考虑拆文件`, hint: true }],
+      }
+    : { key: 'source', label: '源码', state: 'ok', text: lineCount !== undefined ? `${lineCount} 行` : '可读', items: [] }
+  return [own, src]
+}
+
+/** PC-10：端口——实现者的代码证据（K11）；没有实现者时没有分项 */
+export function portCheckRowsOf(desk: DeskState, id: string): CheckRow[] {
+  const p = desk.facts.portOf(id)
+  if (!p || !p.implementers.length) return []
+  if (!desk.facts.report.value) return [{ key: 'implementers', label: '实现者', state: 'none', text: '没有代码事实', items: [] }]
+  const bad = p.implementers.filter(i => i.described && i.status === 'unconfirmed')
+  return [
+    {
+      key: 'implementers',
+      label: '实现者',
+      state: bad.length ? 'bad' : 'ok',
+      text: bad.length ? `${p.implementers.length} 个中 ${bad.length} 个未证实` : `${p.implementers.length} 个都有代码证据`,
+      items: bad.map(i => ({ text: `${moduleName(desk.index.value!, i.module)}：描述写了实现，代码里没找到证据`, target: 'boundary.port' })),
+    },
+  ]
+}
+
 /** 面板按选中分派的对象（V2，ADR-0012）：回放中步骤 / 场景；无选中时为当前父模块，根层为系统（N13）。Panel 与核对计数共用 */
 export type PanelTarget = {
   kind: 'step' | 'scenario' | 'module' | 'relation' | 'edge' | 'actor' | 'file' | 'dep' | 'couple' | 'port' | 'cycle' | 'stratum' | 'system'
@@ -298,7 +388,7 @@ export function checkWarnCount(desk: DeskState): number {
   const scope = (roots: readonly string[]) => scopeTotalOf(desk, roots) ?? 0
   switch (t.kind) {
     case 'system':
-      return scope([t.id])
+      return scope([t.id]) + warn(systemCheckRowsOf(desk))
     case 'module':
       return (idx.stratumOf.get(t.id)?.members.length === 1 ? scope([t.id]) : 0) + warn(moduleCheckRowsOf(desk, t.id))
     case 'stratum':
@@ -311,6 +401,12 @@ export function checkWarnCount(desk: DeskState): number {
       return warn(scenarioCheckRowsOf(desk))
     case 'step':
       return warn(stepCheckRowsOf(desk))
+    case 'edge':
+      return warn(edgeCheckRowsOf(desk, t.id))
+    case 'file':
+      return warn(fileCheckRowsOf(desk, t.id))
+    case 'port':
+      return warn(portCheckRowsOf(desk, t.id))
     default:
       return 0
   }

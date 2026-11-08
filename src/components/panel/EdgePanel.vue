@@ -13,8 +13,8 @@ import Section from './Section.vue'
 import RelationRow from './RelationRow.vue'
 import PanelCard from './PanelCard.vue'
 import CheckCard from './CheckCard.vue'
-import { usePanelJump, type PanelNotice } from './panelNotices'
-import { rowsFromNotices } from './panelCheck'
+import { usePanelJump } from './panelNotices'
+import { edgeCheckRowsOf } from './checkRows'
 import { RELATION_TYPE_LABELS } from '../shared/labels'
 
 const props = defineProps<{ id: string }>()
@@ -48,36 +48,7 @@ const endSelection = (nodeId: string) =>
 // ── 核对卡（PC-10）：向上却不是控制反转（K22）、未证实（K6）；单击跳到「原始关系」 ──
 const root = ref<HTMLElement | null>(null)
 usePanelJump(root)
-const notices = computed<PanelNotice[]>(() =>
-  upward.value && !upward.value.inversion
-    ? [
-        {
-          key: 'upward',
-          label: '向上却不是控制反转',
-          count: 1,
-          target: 'boundary.relations',
-          to: '原始关系',
-          note: `本层分了层（算出的或声明的），依赖都朝下；${upward.value.relations.join('、')} 是直接的查询或委托，发起方却在被依赖的一侧——多半是没标的回调、通知或经通道（K22）`,
-        },
-      ]
-    : [],
-)
-const unconfirmed = computed(() => {
-  const rep = desk.facts.report.value
-  return rep && edge.value ? edge.value.relationIds.filter(id => rep.relations.get(id)?.status === 'unconfirmed').length : null
-})
-const rows = computed(() =>
-  rowsFromNotices(
-    [
-      ...notices.value,
-      ...(unconfirmed.value ? [{ key: 'unconfirmed' as const, label: '未证实', count: unconfirmed.value, target: 'boundary.relations', to: '原始关系' }] : []),
-    ],
-    [
-      { key: 'direction', label: '方向', notices: ['upward'], ok: upward.value?.inversion ? '向上，是控制反转' : '没有违背分层' },
-      { key: 'verify', label: '证实', notices: ['unconfirmed'], ...(unconfirmed.value === null ? { none: '没有代码事实' } : { ok: '全部被代码证实' }) },
-    ],
-  ),
-)
+const rows = computed(() => edgeCheckRowsOf(desk, props.id))
 </script>
 
 <template>

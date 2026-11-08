@@ -110,9 +110,10 @@ export function restoreOwned(file: string, snapshot: string, paths: readonly str
   fs.writeFileSync(file, `${JSON.stringify({ ...now, updatedAt: was.updatedAt, files: sorted }, null, 2)}\n`)
 }
 
-/** 侧栏（LY-3、LY-4）：停靠在画布左边，开关在画布页头 */
+/** 侧栏（LY-3、LY-4）：停靠在画布左边，开关在最左竖栏的顶格（负责人 2026-11-08 走查） */
 export const sidebar = (page: Page) => page.locator('[data-region="sidebar"]')
-const sidebarToggle = (page: Page) => page.locator('[data-head="canvas"]').getByRole('button', { name: '侧栏', exact: true })
+export const rail = (page: Page) => page.locator('[data-region="rail"]')
+const sidebarToggle = (page: Page) => page.locator('[data-head="rail"]').getByRole('button', { name: '侧栏', exact: true })
 export async function openSidebar(page: Page) {
   const t = sidebarToggle(page)
   if ((await t.getAttribute('aria-pressed')) !== 'true') await t.click()
@@ -124,10 +125,18 @@ export async function closeNav(page: Page) {
   if ((await t.getAttribute('aria-pressed')) === 'true') await t.click()
   await expect(page.locator('[data-head="sidebar"]')).toHaveCount(0)
 }
-/** 切到侧栏的某一页（先展开侧栏） */
+/** 切到侧栏的某一页：竖栏图标——侧栏收起时展开并切页；已在这一页时不动（再点会收起） */
 export async function sidePage(page: Page, name: 'modules' | 'scenes' | 'changes') {
-  await openSidebar(page)
-  await sidebar(page).locator(`[data-side-page="${name}"]`).click()
+  const icon = rail(page).locator(`[data-rail="${name}"]`)
+  if ((await icon.getAttribute('aria-pressed')) !== 'true') await icon.click()
+  await expect(icon).toHaveAttribute('aria-pressed', 'true')
+}
+/** 侧栏这一页的「筛选 ▾」弹层（LY-4d）：打开并返回它 */
+export async function openFilters(page: Page) {
+  const pop = sidebar(page).locator('[data-filter-pop]')
+  if (!(await pop.count())) await sidebar(page).locator('[data-side-filter]').click()
+  await expect(pop).toBeVisible()
+  return pop
 }
 
 /** 第二十二轮：抽屉已删，原选中面板除核对卡以外的内容在「描述」标签（LY-13），核对卡在「核对」标签 */

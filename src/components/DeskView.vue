@@ -136,16 +136,18 @@ provide(SIDE_NAV, sideNav)
 provide(SIDE_FILTERS, createSideFilters())
 /** LY-3：侧栏开合与宽度是工作区状态（本机记忆经同步适配器），只由人开合 */
 const sidebar = computed(() => ws.state.value.sidebar)
-/** LY-12：视图区可整体收起；宽度是占项目视图的比例（LY-10b） */
+/** LY-12：视图区可整体收起；宽度是占竖栏右边这块（侧栏 + 画布 + 视图区）的比例（LY-10b），竖栏的 44px 不参与 */
 const viewsShown = computed(() => !ws.state.value.collapsed)
 const viewsWidth = computed(() => ws.state.value.width)
 const desktop = ref<HTMLElement>()
+/** LY-3：竖栏宽（与 SideRail 同） */
+const RAIL_W = 44
 function onDividerDown(e: PointerEvent) {
   const el = e.currentTarget as HTMLElement
   el.setPointerCapture(e.pointerId)
   const move = (ev: PointerEvent) => {
     const r = desktop.value?.getBoundingClientRect()
-    if (r && r.width > 0) ws.dispatch({ type: 'setWidth', width: (r.right - ev.clientX) / r.width })
+    if (r && r.width > RAIL_W) ws.dispatch({ type: 'setWidth', width: (r.right - ev.clientX) / (r.width - RAIL_W) })
   }
   const up = () => {
     el.removeEventListener('pointermove', move)
@@ -333,7 +335,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
     <template v-if="viewsShown">
       <div class="divider" role="separator" aria-orientation="vertical" aria-label="拖动调整视图区宽度" @pointerdown="onDividerDown" />
-      <div class="views-area" :style="{ width: `${viewsWidth * 100}%` }">
+      <div class="views-area" :style="{ width: `calc((100% - ${RAIL_W}px) * ${viewsWidth})` }">
         <DockPane />
       </div>
     </template>

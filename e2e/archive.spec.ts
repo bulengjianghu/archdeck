@@ -5,7 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { LOAD_BUDGET, openDesk, restoreOwned, sketchOn, openSidebar, sidebar } from './helpers'
+import { LOAD_BUDGET, openDesk, restoreOwned, sketchOn, openSidebar, sidePage } from './helpers'
 
 const PROJECT = path.resolve(import.meta.dirname, '../model/h5p-arch-desk')
 const OWNED = path.join(PROJECT, 'governance/owned.json')
@@ -36,7 +36,7 @@ async function accept(page: Page) {
 }
 async function openChanges(page: Page) {
   await openSidebar(page)
-  await sidebar(page).locator('[data-side-page="changes"]').click()
+  await sidePage(page, 'changes')
   return page.getByTestId('changes-tab')
 }
 const archiveBtn = (page: Page) => bar(page).getByRole('button', { name: '归档', exact: true })
