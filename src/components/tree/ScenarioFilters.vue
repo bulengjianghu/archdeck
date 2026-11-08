@@ -67,13 +67,19 @@ const listing = computed(() => scenarioListing(desk, { scope: scope.value, kinds
   display: flex;
 }
 
+.stacked .seg {
+  width: 100%;
+}
+
 .stacked .seg button {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .seg button {
   font-size: 12px;
   border-radius: 0;
+  white-space: nowrap;
 }
 
 .seg button:first-child {

@@ -235,12 +235,15 @@ function onResizeDown(e: PointerEvent) {
 
 .seg {
   display: flex;
+  width: 100%;
 }
 
 .seg button {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   font-size: 12px;
   border-radius: 0;
+  white-space: nowrap;
 }
 
 .seg button:first-child {
