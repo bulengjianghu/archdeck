@@ -5,26 +5,26 @@
 import { expect, test, type Page } from '@playwright/test'
 import { activeTab, openDesk, openFilters, query, rail, sidebar, viewTab, views, waitSettled } from './helpers'
 
-/** 截一行像素（y），在页面里解码成 RGB 列表（不依赖解码库） */
+/** 截一行像素（y），在页面里解码成 RGB 列表（不依赖解码库；E2E 的 tsconfig 不带 DOM，页面里的代码写成字符串） */
 async function pixelRow(page: Page, y: number, width: number): Promise<string[]> {
   const png = await page.screenshot({ clip: { x: 0, y, width, height: 1 } })
-  return (await page.evaluate(async b64 => {
+  return (await page.evaluate(`(async () => {
     const img = new Image()
-    img.src = `data:image/png;base64,${b64}`
+    img.src = 'data:image/png;base64,${png.toString('base64')}'
     await img.decode()
     const c = document.createElement('canvas')
     c.width = img.width
     c.height = 1
-    const g = c.getContext('2d')!
+    const g = c.getContext('2d')
     g.drawImage(img, 0, 0)
     const d = g.getImageData(0, 0, img.width, 1).data
-    const out: string[] = []
-    for (let i = 0; i < d.length; i += 4) out.push(`${d[i]},${d[i + 1]},${d[i + 2]}`)
+    const out = []
+    for (let i = 0; i < d.length; i += 4) out.push(d[i] + ',' + d[i + 1] + ',' + d[i + 2])
     return out
-  }, png.toString('base64'))) as string[]
+  })()`)) as string[]
 }
 const rgb = (page: Page, sel: string, prop: string) =>
-  page.evaluate(([s, p]) => getComputedStyle(document.querySelector(s)!).getPropertyValue(p), [sel, prop]) as Promise<string>
+  page.evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(sel)})).getPropertyValue(${JSON.stringify(prop)})`) as Promise<string>
 const box = async (page: Page, sel: string) => (await page.locator(sel).first().boundingBox())!
 const progress = (page: Page) => viewTab(page, 'sequence').locator('[data-tab-progress]')
 
