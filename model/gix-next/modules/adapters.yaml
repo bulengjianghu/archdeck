@@ -1,0 +1,456 @@
+# 区域：本地适配器（packages/adapter-repo-local、adapter-ai-claude、device-local）——能力接口的本地实现。
+# 第二级模块（adapters.repo / adapters.ai / adapters.device）由骨架定义，此处只写补充条目并往下挂子模块。
+# 2026-11-08 由 AI 生成（读 gix-next @ 1cd6d9ad1）。能力接口（Workspace / CodeHost / Releaser / AiExecutor / DeviceLab / AdapterModule）
+# 定义在 share.contracts，实现者（implementedBy）由 share 区域写；runner 怎么调用它们由 client 区域写。
+
+modules:
+  # ───────────── 层与第二级模块的补充条目 ─────────────
+  - id: adapters
+    name: 本地适配器
+    summary: 在本机实现代码库、代码平台、AI 执行与真机这几种能力接口
+  - id: adapters.repo
+    name: 本地代码库与代码平台
+    summary: 在本机管理任务工作树，并在 local-git 或 GitLab 上开变更与合入
+    abstraction: 按「本地工作区 / 代码平台 / 发布器」切分：工作区只做本机 git、不连远端，平台各一个实现、共用 git 执行与失败分类，注册元信息与工厂单独一处。
+    invariants:
+      - 本地工作区不连任何远端：集成分支提交号由调用方从代码平台取来传入
+      - 合入前校验分支头仍是放行的 expectedSha，对不上或冲突抛 AdapterError，不强合
+      - 本地发布只在本地仓库打 tag，从不 push；失败不留 tag、产物目录与临时工作树
+    excludes: [何时开变更与合入 → kernel.dispatch, 按任务钉住环境选平台 → client.profiles]
+  - id: adapters.ai
+    name: Claude Code 执行器
+    summary: 无人值守地起或续 Claude Code 会话，报告输出、用量与结局
+    abstraction: 按「命令行组装 / 进程驱动 / 流解析」切分：参数与 MCP 配置的组装、stream-json 解析与用量累计都是纯函数，只有执行器碰子进程。
+    invariants:
+      - 总超时、无吞吐超时、预算任一触发即杀整棵进程树并以 killed 结束
+      - 提示词经 stdin 传入；MCP 令牌只写在 0600 的配置文件里，会话结束即删除
+      - 不用 --allowedTools；只读角色靠 --disallowedTools 与 settings 的 deny 两层
+    excludes: [提示词的内容 → playbooks.templates, 会话何时起与续 → kernel.orchestration, 任务包的领取与回报 → client.channel]
+  - id: adapters.device
+    name: 本地真机组件
+    summary: 在本机列设备、查就绪、锁设备并按场景脚本跑 N 次取证据
+    abstraction: 驱动按平台各一个、只认驱动接口，实验室只编排「锁 → 起会话 → 跑场景 → 拉证据」；场景脚本只见页面句柄的最小抽象，不依赖 Playwright。
+    invariants:
+      - 设备文件锁判活 = 持有进程活着且启动时间一致，不按时间回收
+      - 场景声明会出声而没有出声同意时拒跑
+      - 失败一律抛带 Fault 分类的 AdapterError
+    excludes: [设备租约（跨机真源） → kernel.dispatch, 被测页面服务的起停 → client.channel]
+
+  # ───────────────────────── adapters.repo ─────────────────────────
+  - id: adapters.repo.git
+    parent: adapters.repo
+    name: git 执行与工作树元数据
+    summary: 给三个实现统一跑 git，并记录工作树的基础提交
+    kind: component
+    responsibility: Git 类：经外部命令执行跑 git（失败转本地故障），常用查询（rev-parse、分支存在、祖先判断），每个任务工作树的基础提交记在它自己的 git 目录、不进版本库；~ 展开与连 GitLab 的 NO_PROXY 环境。
+    provides: [if.adapters.repo.expandHome, if.adapters.repo.gitlabEnv]
+    codeRefs: [packages/adapter-repo-local/src/git.ts]
+
+  - id: adapters.repo.faults
+    parent: adapters.repo
+    name: 失败分类
+    summary: 把 git、glab 与 install 的失败转成契约故障
+    kind: component
+    responsibility: classifyRemoteFailure（代理拦截先于凭据判断）、install 失败一律按环境故障、本地 git 失败原样带输出、任务失败；healHint 用剧本手册里的条目 id。
+    codeRefs: [packages/adapter-repo-local/src/faults.ts]
+
+  - id: adapters.repo.workspace
+    parent: adapters.repo
+    name: 本地工作区
+    summary: 建任务与基线工作树、跑命令、提交并对齐集成分支
+    kind: component
+    responsibility: >-
+      LocalWorkspace 实现契约 Workspace：读配方（补常驻仓库路径）、为任务建或复用工作树（同一 taskId 幂等）并装依赖、基线工作树（覆盖新检查文件用于旧红）、
+      diff、带超时跑命令、提交、把调用方给的集成分支提交合进任务分支；契约之外另有只读快照工作树、常驻配方查找与终态任务工作树清理（只删 GIX 自己建的）。
+    provides: [if.adapters.repo.LocalWorkspace]
+    codeRefs: [packages/adapter-repo-local/src/workspace.ts]
+
+  - id: adapters.repo.local-git
+    parent: adapters.repo
+    name: local-git 代码平台
+    summary: 以常驻仓库为平台，在本地记录变更并合入集成分支
+    kind: component
+    responsibility: >-
+      LocalGitCodeHost 实现契约 CodeHost（无远端）：读本地集成分支（缺省 gixn/local-integration，不存在时建出）、publish 只记 head 与改动量、
+      变更记录写 <数据根>/changes/<taskId>.json、无 CI；合入先校验 expectedSha，在临时工作树 merge --no-ff 后带旧值 update-ref 写回；渲染变更页给本地 UI。
+    provides: [if.adapters.repo.LocalGitCodeHost, if.adapters.repo.LocalGitConfig]
+    codeRefs: [packages/adapter-repo-local/src/local-git.ts]
+
+  - id: adapters.repo.gitlab
+    parent: adapters.repo
+    name: GitLab 代码平台
+    summary: 经 git 与 glab 在 GitLab 上推分支、开 MR、查流水线并合入
+    kind: component
+    responsibility: GitLabCodeHost 实现契约 CodeHost：远端固定 origin，变更 = MR（ref 写作 !iid），检查 = 流水线；项目参数取环境的项目绑定，没有时退回旧配方字段；连 GitLab 的命令都带 NO_PROXY 与 GITLAB_HOST。
+    provides: [if.adapters.repo.GitLabCodeHost, if.adapters.repo.DEFAULT_GITLAB_HOST]
+    codeRefs: [packages/adapter-repo-local/src/gitlab.ts]
+
+  - id: adapters.repo.modules
+    parent: adapters.repo
+    name: 注册元信息与入口
+    summary: 给 runner 提供代码平台的适配器模块与工作区工厂
+    kind: component
+    responsibility: localGitModule / gitlabModule（契约 AdapterModule：配置 schema、create、check）、createWorkspace 工厂、runner 按 GIXN_RUNNER_REPO_MODULE 加载的默认工厂，以及包入口。
+    provides: [if.adapters.repo.createWorkspace, if.adapters.repo.localGitModule, if.adapters.repo.gitlabModule, if.adapters.repo.GitLabConfig]
+    codeRefs: [packages/adapter-repo-local/src/modules.ts, packages/adapter-repo-local/src/runner-module.ts, packages/adapter-repo-local/src/index.ts]
+
+  - id: adapters.repo.release
+    parent: adapters.repo
+    name: 本地发布器
+    summary: 在给定提交上跑配方发布命令，产出带清单的发布目录与 tag
+    kind: component
+    responsibility: >-
+      LocalCommandReleaser 实现契约 Releaser（release 槽 local-command）：在临时 --detach 工作树执行配方 commands.release，产物移到 <数据根>/releases/<tag>/ 并写 manifest，
+      再打带注释 tag（UTC 日期 + 提交号）；只保留最近 keep 个目录；附注册元信息与可写检查。
+    provides: [if.adapters.repo.localCommandReleaseModule]
+    codeRefs: [packages/adapter-repo-local/src/release.ts]
+
+  # ───────────────────────── adapters.ai ─────────────────────────
+  - id: adapters.ai.args
+    parent: adapters.ai
+    name: 命令行与 MCP 配置组装
+    summary: 按角色拼出 claude 命令行、权限设置与 MCP 配置文件
+    kind: component
+    responsibility: buildArgs / buildSettings：stream-json + verbose、模型、strict MCP、acceptEdits、Bash 只放行配方命令与内置只读命令、显式拒绝 git push，只读角色禁写工具，续会话与预算；writeMcpConfig 写 0600 的 gixn MCP 配置；会话记录目录的编码。
+    codeRefs: [packages/adapter-ai-claude/src/args.ts]
+
+  - id: adapters.ai.executor
+    parent: adapters.ai
+    name: 会话执行器
+    summary: 起 claude 子进程，转出事件，按三道闸停会话并给出结局
+    kind: component
+    responsibility: >-
+      ClaudeCliExecutor 实现契约 AiExecutor：写 MCP 配置、起子进程（提示词走 stdin，去掉嵌套会话环境变量）、逐行解析输出发 started / output / usage，
+      超预算或总 / 无吞吐超时即杀进程树；结束时以会话记录为准算用量，按 stderr / result 文本分类失败（MCP 令牌被拒单独识别）；runner 按 GIXN_RUNNER_AI_MODULE 加载的默认工厂与包入口。
+    provides: [if.adapters.ai.ClaudeCliExecutor]
+    codeRefs: [packages/adapter-ai-claude/src/executor.ts, packages/adapter-ai-claude/src/runner-module.ts, packages/adapter-ai-claude/src/index.ts]
+
+  - id: adapters.ai.stream
+    parent: adapters.ai
+    name: 输出流与用量
+    summary: 解析 stream-json 行，按消息去重累计 token 与费用
+    kind: component
+    responsibility: 行切分与 stream-json 解析；按 message.id 去重累计用量，按模型价表（缓存写分 5 分钟与 1 小时两档，查不到按最贵估）估费用；从会话记录 jsonl 读用量（续会话只读新增部分）。
+    codeRefs: [packages/adapter-ai-claude/src/stream.ts]
+
+  # ───────────────────────── adapters.device ─────────────────────────
+  - id: adapters.device.lab
+    parent: adapters.device
+    name: 设备实验室
+    summary: 列设备、查就绪、自愈，并按场景脚本跑 N 次拉回证据
+    kind: component
+    responsibility: >-
+      LocalDeviceLab 实现契约 DeviceLab：汇总各驱动的设备与就绪（查不到的项写明原因）、自愈交驱动、lock 用单机文件锁；runScenario 动态加载场景脚本，
+      出声检查、起会话、核对页面构建身份、跑 N 次并写截图与指标证据文件。runner 按 GIXN_RUNNER_DEVICE_MODULE 加载的默认工厂与包入口。
+    provides: [if.adapters.device.LocalDeviceLab, if.adapters.device.createDeviceLab]
+    codeRefs: [packages/device-local/src/lab.ts, packages/device-local/src/runner-module.ts, packages/device-local/src/index.ts]
+
+  - id: adapters.device.drivers
+    parent: adapters.device
+    name: 设备驱动
+    summary: 按平台列设备、查就绪、自愈并开浏览器会话
+    kind: component
+    responsibility: >-
+      驱动接口与三个实现：本机 Chrome（Playwright，有头为桌面真浏览器、无头只供自测；每会话独立 profile，自愈杀孤儿 Chrome）、
+      Android（adb + 手机 Chrome 经 CDP，自愈 reconnect / 唤醒）、iOS（devicectl 列设备与部分就绪，跑场景未实现，自愈一律要人）。
+    codeRefs: ['packages/device-local/src/drivers/**']
+
+  - id: adapters.device.lock
+    parent: adapters.device
+    name: 单机设备锁
+    summary: 用 O_EXCL 文件锁防本机其他会话抢同一台设备
+    kind: component
+    responsibility: 锁文件写持有者（holder、pid、进程启动时间、主机）；持有者死了下一个申请者清掉，活的永不抢；拿不到排队等，超时抛 env.device_not_ready。跨机真源是内核租约。
+    codeRefs: [packages/device-local/src/lock.ts]
+
+  - id: adapters.device.attachment
+    parent: adapters.device
+    name: 配方真机接入件
+    summary: 出构建、算产物哈希并起被测页面，另带手动跑一次的命令
+    kind: component
+    responsibility: 配方 device 段的主机侧操作：占位符替换、跑 device.build、产物目录哈希（与被测页面同一算法）得构建身份、起被测页面服务；attach-run 命令行对着接入件手动跑「出构建 → 起页面 → 跑场景」或只出构建，供自测与排障。
+    codeRefs: [packages/device-local/src/attachment.ts, packages/device-local/src/attach-run.ts, packages/device-local/src/attach-run-lib.ts]
+
+  - id: adapters.device.scenario
+    parent: adapters.device
+    name: 场景脚本接口
+    summary: 定义场景脚本可用的上下文与应返回的结果
+    kind: component
+    responsibility: 场景脚本是默认导出 (ctx) => 结果 的 ES 模块，可声明 audible；ctx 只给页面句柄的最小抽象（打开、求值、等待、截图等），换驱动时脚本不用改。
+    codeRefs: [packages/device-local/src/scenario.ts]
+
+  - id: adapters.device.screenshot
+    parent: adapters.device
+    name: 无头截图
+    summary: 用本机无头 Chrome 逐页打开并截可视区
+    kind: component
+    responsibility: captureScreenshots：开一次 chrome-headless 会话，逐页等 load 与页面稳定后截 1280×800，最后关会话删临时 profile；没装 Chrome 抛 env.device_not_ready。给 runner 预览截图复用。
+    provides: [if.adapters.device.captureScreenshots]
+    codeRefs: [packages/device-local/src/screenshot.ts]
+
+  - id: adapters.device.util
+    parent: adapters.device
+    name: 通用件
+    summary: 提供抛契约故障、带超时等待与跑外部命令的小工具
+    kind: component
+    responsibility: fail（抛带 Fault 的 AdapterError）、withTimeout、sh（经外部命令执行、必带超时）、进程判活与启动时间、数据目录与安全文件名。
+    codeRefs: [packages/device-local/src/util.ts]
+
+interfaces:
+  - id: if.adapters.repo.createWorkspace
+    name: createWorkspace
+    owner: adapters.repo.modules
+    signature: |
+      createWorkspace(ctx: { dataDir: string }): LocalWorkspace
+  - id: if.adapters.repo.localGitModule
+    name: localGitModule
+    owner: adapters.repo.modules
+    signature: |
+      const localGitModule: AdapterModule<CodeHost>   // id "local-git", slot "codeHost"
+  - id: if.adapters.repo.gitlabModule
+    name: gitlabModule
+    owner: adapters.repo.modules
+    signature: |
+      const gitlabModule: AdapterModule<CodeHost>     // id "gitlab", slot "codeHost"
+  - id: if.adapters.repo.GitLabConfig
+    name: GitLabConfig
+    owner: adapters.repo.modules
+    signature: |
+      const GitLabConfig: z.ZodObject<{ glabPath?, host? /* … */ }>
+  - id: if.adapters.repo.LocalWorkspace
+    name: LocalWorkspace
+    owner: adapters.repo.workspace
+    signature: |
+      class LocalWorkspace implements Workspace {
+        // 契约 Workspace 全部方法，另有：
+        findResidentRecipe(dir: string): Promise<Recipe | null>
+        prepareReadSnapshot(recipe: Recipe, input: { commit: string }): Promise<{ path: string; headCommit: string }>
+        cleanupTaskWorktrees(recipe: Recipe, taskId: string /* … */): Promise<…>
+      }
+  - id: if.adapters.repo.LocalGitCodeHost
+    name: LocalGitCodeHost
+    owner: adapters.repo.local-git
+    signature: |
+      class LocalGitCodeHost implements CodeHost {
+        constructor(opts: LocalGitHostOptions)   // dataDir, config?
+        integrationBranch(p: HostProject): string
+        renderChange(taskId: string, maxBytes?: number): Promise<string | null>
+        // 契约 CodeHost 全部方法
+      }
+  - id: if.adapters.repo.LocalGitConfig
+    name: LocalGitConfig
+    owner: adapters.repo.local-git
+    signature: |
+      const LocalGitConfig: z.ZodObject<{ integrationBranch? /* … */ }>
+  - id: if.adapters.repo.GitLabCodeHost
+    name: GitLabCodeHost
+    owner: adapters.repo.gitlab
+    signature: |
+      class GitLabCodeHost implements CodeHost { constructor(opts?: GitLabHostOptions) /* 契约 CodeHost 全部方法 */ }
+  - id: if.adapters.repo.DEFAULT_GITLAB_HOST
+    name: DEFAULT_GITLAB_HOST
+    owner: adapters.repo.gitlab
+    signature: |
+      const DEFAULT_GITLAB_HOST: string
+  - id: if.adapters.repo.localCommandReleaseModule
+    name: localCommandReleaseModule
+    owner: adapters.repo.release
+    signature: |
+      const localCommandReleaseModule: AdapterModule<Releaser>   // id "local-command", slot "release"
+  - id: if.adapters.repo.expandHome
+    name: expandHome
+    owner: adapters.repo.git
+    signature: |
+      expandHome(p: string): string
+  - id: if.adapters.repo.gitlabEnv
+    name: gitlabEnv
+    owner: adapters.repo.git
+    signature: |
+      gitlabEnv(host: string): Record<string, string>   // NO_PROXY / no_proxy 加上主机
+  - id: if.adapters.ai.ClaudeCliExecutor
+    name: ClaudeCliExecutor
+    owner: adapters.ai.executor
+    signature: |
+      class ClaudeCliExecutor implements AiExecutor {
+        constructor(o?: ClaudeCliExecutorOptions)   // claudePath?, claudeConfigDir?, runDir?, addDirs?, extraArgs?, logger?
+        start(spec: SessionSpec, onEvent: (e: SessionEvent) => void): Promise<RunningSession>
+      }
+    semantics: |
+      - 超时或超预算自己停并以 killed + fault 结束
+      - 结局的用量以会话记录为准，result.total_cost_usd 有值时作最终费用
+  - id: if.adapters.device.LocalDeviceLab
+    name: LocalDeviceLab
+    owner: adapters.device.lab
+    signature: |
+      class LocalDeviceLab implements DeviceLab {
+        constructor(opts?: LocalDeviceLabOptions)   // dataDir?, drivers?: ("chrome" | "android" | "ios")[]
+        listDevices(): Promise<DeviceInfo[]>
+        checkReadiness(deviceId: string): Promise<LocalReadiness>
+        heal(deviceId: string, fault: Fault): Promise<{ ok: boolean; needsHuman: boolean; detail: string }>
+        lock(deviceId: string, holder: string): Promise<{ release(): Promise<void> }>
+        runScenario(input: ScenarioRunInput): Promise<ScenarioRunOutput>
+      }
+  - id: if.adapters.device.createDeviceLab
+    name: createDeviceLab
+    owner: adapters.device.lab
+    signature: |
+      createDeviceLab(opts?: LocalDeviceLabOptions): LocalDeviceLab
+  - id: if.adapters.device.captureScreenshots
+    name: captureScreenshots
+    owner: adapters.device.screenshot
+    signature: |
+      captureScreenshots(input: { shots: { url: string; file: string }[]; timeoutMs: number; dataDir?: string }): Promise<{ browser: string }>
+
+relations:
+  # ───────────── adapters.repo ─────────────
+  - id: rel.adapters.git-proc
+    from: adapters.repo.git
+    to: share.proc
+    type: commands
+    mode: async
+    interface: if.share.proc.run
+    purpose: 带超时地跑 git 与 glab
+    description: Git.exec / run / try 经外部命令执行跑 git（glab 也经它），失败转本地故障。
+  - id: rel.adapters.workspace-git
+    from: adapters.repo.workspace
+    to: adapters.repo.git
+    type: commands
+    mode: async
+    purpose: 建工作树、跑命令、提交与合并集成分支
+    description: worktree add / commit / merge / diff 以及配方命令与 install 都经 Git.exec（总超时、无输出超时、杀进程树）；基础提交读写在工作树自己的 git 目录。
+  - id: rel.adapters.workspace-faults
+    from: adapters.repo.workspace
+    to: adapters.repo.faults
+    type: queries
+    purpose: 把 install 与本地 git 失败归类
+    description: 装依赖失败经 installFailure 归为环境故障，配方与路径问题经 taskFailure。
+  - id: rel.adapters.local-git-git
+    from: adapters.repo.local-git
+    to: adapters.repo.git
+    type: commands
+    mode: async
+    purpose: 读写集成分支并在临时工作树合入
+    description: rev-parse、merge-base --is-ancestor、临时工作树 merge --no-ff、带旧值的 update-ref 都经 Git。
+  - id: rel.adapters.gitlab-git
+    from: adapters.repo.gitlab
+    to: adapters.repo.git
+    type: commands
+    mode: async
+    purpose: 推分支并经 glab 操作 MR 与流水线
+    description: fetch / push 与 glab api 经 Git.exec，环境带 gitlabEnv。
+  - id: rel.adapters.gitlab-faults
+    from: adapters.repo.gitlab
+    to: adapters.repo.faults
+    type: queries
+    purpose: 把远程失败转成契约故障
+    description: fetch、push、glab 失败经 classifyRemoteFailure 分出代理拦截、凭据、网络、超时等。
+  - id: rel.adapters.release-git
+    from: adapters.repo.release
+    to: adapters.repo.git
+    type: commands
+    mode: async
+    purpose: 建临时工作树并打发布 tag
+    description: 在给定提交上 worktree add --detach、发布后打带注释 tag，finally 清掉临时工作树。
+  - id: rel.adapters.release-proc
+    from: adapters.repo.release
+    to: share.proc
+    type: commands
+    mode: async
+    interface: if.share.proc.run
+    purpose: 跑配方的发布命令
+    description: 在临时工作树执行 commands.release（产物写到 GIXN_RELEASE_OUT），signal 中止时杀命令。
+
+  # ───────────── adapters.ai ─────────────
+  - id: rel.adapters.ai-args
+    from: adapters.ai.executor
+    to: adapters.ai.args
+    type: commands
+    purpose: 写 MCP 配置并拼出命令行
+    description: 起会话前 writeMcpConfig 写 0600 配置文件，buildArgs 按 spec 拼参数与权限设置。
+  - id: rel.adapters.ai-proc
+    from: adapters.ai.executor
+    to: share.proc
+    type: commands
+    mode: async
+    interface: if.share.proc.start
+    purpose: 起 claude 子进程并在需要时杀掉
+    description: 经外部命令执行起 claude -p（独立进程组、总超时与无输出超时、提示词走 stdin），超预算时 kill 杀整棵进程树。
+  - id: rel.adapters.ai-stream
+    from: adapters.ai.executor
+    to: adapters.ai.stream
+    type: queries
+    purpose: 解析输出并算用量与费用
+    description: stdout 按行切分后 parseLine，UsageAccumulator 累计；结束时 usageFromTranscript 读会话记录定最终用量。
+
+  # ───────────── adapters.device ─────────────
+  - id: rel.adapters.lab-drivers
+    from: adapters.device.lab
+    to: adapters.device.drivers
+    type: commands
+    mode: async
+    purpose: 按平台查设备、自愈并开会话跑场景
+    description: 按设备 id 选驱动，listDevices / readiness / heal / openSession，场景在驱动会话的页面上执行。
+  - id: rel.adapters.lab-lock
+    from: adapters.device.lab
+    to: adapters.device.lock
+    type: commands
+    mode: async
+    purpose: 占住设备防本机抢用
+    description: DeviceLab.lock 经 acquireLock 在 <数据根>/locks 下建锁文件，release 删除。
+  - id: rel.adapters.lab-util
+    from: adapters.device.lab
+    to: adapters.device.util
+    type: queries
+    purpose: 抛契约故障并给步骤套超时
+    description: 场景各步经 withTimeout 限时，出错经 fail 抛带分类的 AdapterError。
+  - id: rel.adapters.drivers-util
+    from: adapters.device.drivers
+    to: adapters.device.util
+    type: commands
+    mode: async
+    purpose: 跑 adb 与 devicectl 等设备命令
+    description: Android / iOS / Chrome 驱动经 sh 跑外部命令（必带超时），失败经 fail 抛契约故障。
+  - id: rel.adapters.drivers-proc
+    from: adapters.device.drivers
+    to: share.proc
+    type: commands
+    interface: if.share.proc.killTree
+    purpose: 自愈时杀掉孤儿 Chrome
+    description: Chrome 驱动按 profile 目录名里的持有进程 pid 判孤儿，经 killTree 杀进程树。
+  - id: rel.adapters.util-proc
+    from: adapters.device.util
+    to: share.proc
+    type: commands
+    mode: async
+    interface: if.share.proc.run
+    purpose: 带超时地跑外部命令
+    description: sh 经外部命令执行跑命令，命令不存在时 exitCode 为空或 127。
+  - id: rel.adapters.screenshot-drivers
+    from: adapters.device.screenshot
+    to: adapters.device.drivers
+    type: commands
+    mode: async
+    purpose: 开无头 Chrome 会话逐页截图
+    description: captureScreenshots 用 ChromeDriver 的 chrome-headless 设备开一次会话，逐页打开截图后关会话。
+  - id: rel.adapters.lock-util
+    from: adapters.device.lock
+    to: adapters.device.util
+    type: queries
+    purpose: 判断持有进程是否还活着
+    description: 判活用 pidAlive 与 pidStartTime（防 pid 复用），拿不到锁超时经 fail 抛 env.device_not_ready。
+  - id: rel.adapters.attachment-proc
+    from: adapters.device.attachment
+    to: share.proc
+    type: commands
+    mode: async
+    interface: if.share.proc.start
+    purpose: 跑构建命令并起被测页面服务
+    description: runAttachmentBuild 经 run 跑 device.build，startAttachmentServe 经 start 起服务等 readyUrl 就绪。
+  - id: rel.adapters.attach-run-lab
+    from: adapters.device.attachment
+    to: adapters.device.lab
+    type: commands
+    mode: async
+    interface: if.adapters.device.LocalDeviceLab
+    purpose: 手动对着接入件跑一次场景
+    description: attach-run 命令行出构建、起页面后建 LocalDeviceLab 调 runScenario，打印一行 JSON 摘要。

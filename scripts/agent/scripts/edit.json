@@ -1,0 +1,16 @@
+{
+  "steps": [
+    { "text": "按你说的在当前张上加一个框……" },
+    { "wait": 30 },
+    {
+      "block": {
+        "kind": "edit",
+        "summary": "新增「白板新框」，接到挂载点的第一个模块",
+        "ops": [
+          { "op": "edit", "sketch": "{{sketch.mount}}", "edit": { "op": "addModule", "parent": "{{sketch.mount}}", "name": "白板新框", "id": "whiteboard" } }
+        ]
+      }
+    },
+    { "done": true }
+  ]
+}

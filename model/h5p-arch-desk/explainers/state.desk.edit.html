@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 6132503ff2239e98 rel:rel.ch.session-apply=cadbd1b1 rel:rel.ed.commands-derive=03902767 rel:rel.ed.commands-save=a736a68c rel:rel.ed.commands-session=280bd60d rel:rel.ed.derive-session=2a28c2cd rel:rel.ed.save-session=1ee87bf4 state.desk.edit#abstraction=df89cd64 state.desk.edit#children=4868cdc1 state.desk.edit#invariants=7da2dfab state.desk.edit#responsibility=cc2c4ea5 state.desk.edit#summary=f5f06854 state.desk.edit.changes#summary=d4a687fd state.desk.edit.commands#summary=c8943280 state.desk.edit.derive#summary=371a7807 state.desk.edit.dialogue#summary=e44b9826 state.desk.edit.save#summary=e7730bf5 state.desk.edit.session#summary=8da1c730">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>编辑中的草图 · 会话是一个值</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
+</style>
+  </head>
+  <body>
+
+    <h1>会话是一个值</h1>
+    <p class="lede"><span data-arch="state.desk.edit">编辑中的草图</span>是架构师在画布上改草图时的会话：手势改的是会话里的值，保存才落盘。</p>
+
+    <h2>手势改值，保存落盘</h2>
+    <figure>
+      <svg viewBox="0 0 480 252" role="img" aria-label="草图编辑会话：手势经编辑操作与纯函数应用改会话值，保存时整个设计一次落盘">
+        <defs><marker id="a18P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a18S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a18A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a18M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a18g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a18l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="6" y="14" width="66" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="39.0" y="33.0" font-size="11.5" text-anchor="middle">合并</text>
+        <rect x="82" y="14" width="66" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="115.0" y="33.0" font-size="11.5" text-anchor="middle">拆分</text>
+        <rect x="158" y="14" width="66" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="191.0" y="33.0" font-size="11.5" text-anchor="middle">连线</text>
+        <rect x="234" y="14" width="66" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="267.0" y="33.0" font-size="11.5" text-anchor="middle">改名</text>
+        <path d="M304,29 L328,29" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a18g)"/>
+        <g data-arch="state.desk.edit.commands"><rect x="330" y="6" width="144" height="46" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="402.0" y="26.1" font-size="12.5" text-anchor="middle">编辑操作</text><text x="402.0" y="40.6" font-size="10.5" text-anchor="middle" class="muted">一个手势一个</text></g>
+        <g data-arch="model.intent"><rect x="342" y="92" width="132" height="50" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="408.0" y="114.1" font-size="12.5" text-anchor="middle">应用编辑</text><text x="408.0" y="128.6" font-size="10.5" text-anchor="middle" class="muted">模型层 · 纯函数</text></g>
+        <g data-arch="state.desk.edit.session"><rect x="150" y="80" width="170" height="74" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="235.0" y="107.4" font-size="14" text-anchor="middle" font-weight="600">编辑会话</text><text x="235.0" y="121.9" font-size="10.5" text-anchor="middle" class="muted">当前值</text><text x="235.0" y="136.4" font-size="10.5" text-anchor="middle" class="muted">撤销栈 ▮▮▮▯</text></g>
+        <g data-arch="state.desk.edit.derive"><rect x="6" y="92" width="124" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="68.0" y="113.8" font-size="11.5" text-anchor="middle">编辑会话的派生</text><text x="68.0" y="128.3" font-size="10.5" text-anchor="middle" class="muted">画布 · 校验 · 脏</text></g>
+        <g data-arch="state.desk.edit.save"><rect x="150" y="196" width="170" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="235.0" y="218.1" font-size="12.5" text-anchor="middle">草图写回同步</text><text x="235.0" y="232.6" font-size="10.5" text-anchor="middle" class="muted">整个设计一次落盘</text></g>
+        <g data-arch="access.writer"><rect x="342" y="196" width="132" height="50" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="408.0" y="218.1" font-size="12.5" text-anchor="middle">描述写入</text><text x="408.0" y="232.6" font-size="10.5" text-anchor="middle" class="muted">写前比对指纹</text></g>
+        <path d="M408,52 L408,90" stroke="var(--warn)" stroke-width="1.8" fill="none" marker-end="url(#a18S)"/>
+        <path d="M342,117 L322,117" stroke="var(--warn)" stroke-width="1.8" fill="none" marker-end="url(#a18S)"/>
+        <path d="M150,117 L132,117" stroke="var(--text-2)" stroke-width="1.2" fill="none" stroke-dasharray="5 4" marker-end="url(#a18g)"/>
+        <path d="M235,154 L235,194" stroke="var(--warn)" stroke-width="1.8" fill="none" marker-end="url(#a18S)"/>
+        <path d="M320,221 L340,221" stroke="var(--ok)" stroke-width="1.6" fill="none" marker-end="url(#a18A)"/>
+      </svg>
+      <figcaption>打开草图版本就建一个编辑会话，每个手势经纯函数变成会话的新值。撤销、重做就是回到栈上的前一个值；保存时整个设计一次写回。</figcaption>
+    </figure>
+
+    <h2>AI 的一轮 = 一步</h2>
+    <figure>
+      <svg viewBox="0 0 480 290" role="img" aria-label="AI 改完的一轮作为一步落进撤销栈：撤回最近一轮就是撤销">
+        <defs><marker id="a19P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a19S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a19A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a19M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a19g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a19l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <g data-arch="state.desk.edit.dialogue"><rect x="6" y="10" width="140" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="76.0" y="32.1" font-size="12.5" text-anchor="middle">对话会话</text><text x="76.0" y="46.6" font-size="10.5" text-anchor="middle" class="muted">发送 · 停止 · 换锚点</text></g>
+        <rect x="176" y="4" width="298" height="64" rx="8" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="190" y="22" font-size="11.5" text-anchor="start" font-weight="600">AI 的一轮</text>
+        <rect x="190" y="32" width="80" height="28" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="230.0" y="49.9" font-size="11" text-anchor="middle">编辑 1</text>
+        <rect x="282" y="32" width="80" height="28" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="322.0" y="49.9" font-size="11" text-anchor="middle">编辑 2</text>
+        <rect x="374" y="32" width="80" height="28" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="414.0" y="49.9" font-size="11" text-anchor="middle">编辑 3</text>
+        <g data-arch="state.desk.edit.changes"><rect x="160" y="104" width="160" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="240.0" y="126.1" font-size="12.5" text-anchor="middle">AI 回合与撤回</text><text x="240.0" y="140.6" font-size="10.5" text-anchor="middle" class="muted">把一轮并成一步</text></g>
+        <rect x="110" y="176" width="260" height="108" rx="6" fill="var(--bg)" stroke="var(--line)"/>
+        <text x="240" y="194" font-size="11.5" text-anchor="middle" font-weight="600">撤销栈</text>
+        <rect x="130" y="202" width="220" height="17" rx="4" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="240.0" y="214.2" font-size="10.5" text-anchor="middle">这一轮 = 一步</text>
+        <rect x="130" y="222" width="220" height="17" rx="4" fill="var(--soft)" stroke="var(--line)"/><text x="240.0" y="234.2" font-size="10.5" text-anchor="middle"></text>
+        <rect x="130" y="242" width="220" height="17" rx="4" fill="var(--soft)" stroke="var(--line)"/><text x="240.0" y="254.2" font-size="10.5" text-anchor="middle"></text>
+        <rect x="130" y="262" width="220" height="17" rx="4" fill="var(--soft)" stroke="var(--line)"/><text x="240.0" y="274.2" font-size="10.5" text-anchor="middle"></text>
+        <path d="M146,35 L174,35" stroke="var(--warn)" stroke-width="1.8" fill="none" marker-end="url(#a19S)"/>
+        <path d="M325,68 L260,102" stroke="var(--warn)" stroke-width="1.8" fill="none" marker-end="url(#a19S)"/>
+        <path d="M240,154 L240,174" stroke="var(--warn)" stroke-width="1.8" fill="none" marker-end="url(#a19S)"/>
+      </svg>
+      <figcaption>对话里 AI 改完的一轮作为一步落进同一个撤销栈，撤回最近一轮就是撤销。撤回更早的一轮或其中一项，算一步新的编辑。</figcaption>
+    </figure>
+
+  </body>
+</html>

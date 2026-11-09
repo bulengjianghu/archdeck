@@ -1,0 +1,443 @@
+# 架构治理（ADR-0015）：代码事实、架构规则、棘轮门禁与 agent 接口。
+# 规则编号（K、U、Y、Q）见 docs/02-domain.md §2.14–§2.17；机制见 docs/architecture/governance.md。
+
+modules:
+  # ── 骨架模块的代码落点（04 §3.10：骨架只写目录级，细到文件的由 AI 在这里补充，X1）──
+  - id: present.issues
+    name: 问题页签
+    summary: 列出按严重度排序的返工清单，可定位、可复制给 agent
+    abstraction: 只呈现模型层汇总好的返工清单，排序、筛选与复制都不新增判断；第二十二轮起它是「问题」资料标签的正文（LY-4a，不跟随主语），画布左上角只留 ⚠ 胶囊，单击打开这个标签。
+    codeRefs: [src/components/tree/IssueList.vue]
+  - id: access.deps
+    name: 依赖提取
+    summary: 从源码提取文件级依赖事实，不做判断
+    abstraction: 只提取事实不做判断：说明符解析到清单中的文件即止，归属与规则交给模型层；给分类器的事实单独成件、只在命令行用。
+    principle: 继承与组装的提取（ADR-0029、ADR-0030）：类声明的 implements / extends 子句记为 inherits（导入名、子句种类，目标上带穿透后的声明种类；默认导入的基类按默认导出解析），供端口实现者（K5c）与子类事实（K12）；值位置的交互使用另记种类 invokeKinds——call、extends、new、factory（create* / make* / build* 或 *Factory，成员调用只认命名空间导入或 *Factory 对象）、register（交给 register* / provide / bind / use 的调用），K7 只看 call，K13 看后三种（Error 类的 new 不算组装）。
+    codeRefs: [vite/readDeps.ts]
+  - id: access.governance-store
+    name: 治理存储
+    summary: 存取项目的治理基线与拦截记录
+    abstraction: 只存取项目下的 governance/：基线只由命令行生成，拦截记录只追加。
+    codeRefs: [vite/governanceStore.ts]
+  - id: access.history
+    name: 源码历史读取
+    summary: 读出被描述项目源码仓库的 git 提交历史
+    abstraction: 只读 git 历史并按 HEAD 与窗口缓存，不判断归属；git 不可用时给出原因而不报错。
+    codeRefs: [vite/readHistory.ts]
+  - id: access.agent
+    name: agent 接口
+    summary: 为 AI agent 与人提供命令行和 MCP 的架构查询
+    abstraction: 查询核心只有一份，命令行与 MCP 两层外壳同输入同结果；只读描述、规则与基线，只写拦截记录——显式 --write 的命令例外（classify 写回关系类型，explainer 写入图解的依据 arch-basis，EX-9）。
+    invariants:
+      - 命令行与 MCP 两层外壳都只经 createService 这一份查询核心
+      - 复用缓存前比对输入指纹：描述文本、源码文件的修改时间与大小、基线与登记文件
+    codeRefs: [scripts/agent/**, scripts/arch.ts, scripts/arch-mcp.ts, .mcp.json]
+  - id: model.governance
+    name: 架构治理
+    summary: 比对代码事实与描述，判定违规、环与门禁问题
+    abstraction: 事实比对、规则判定与环各算一类，报告只组合它们；本层投影、结构视图与查询都只是读法，不新增事实。
+    excludes: [读源码与描述文件 → access.model-source, 返工清单的汇总 → model.rework]
+    invariants:
+      - 事实比对只依赖类型；判定、读法与组合依次建在其上，不反向引用
+      - 不碰文件系统：依赖、基线与历史都由调用方传入
+    adrs: [15, 26]
+    codeRefs: [src/model/governance/index.ts]
+  - id: model.rework
+    name: 返工清单
+    summary: 把各类问题按根因汇总成带建议动作的返工清单
+    abstraction: 只汇总其他模型子模块已有的结果并按根因聚合，不新增事实、不重做判定。
+    codeRefs: [src/model/rework/index.ts, src/model/rework/list.ts, src/model/rework/markdown.ts, src/model/rework/health.ts, src/model/rework/coverage.ts, src/model/rework/scope.ts]
+  - id: model.evolution
+    name: 演化事实
+    summary: 把 git 历史提升为模块的修改热度与时间耦合
+    abstraction: 与代码事实同一做法：历史按归属提升到模块再投影到本层，输入全由接入层给，不碰文件系统。
+    codeRefs: [src/model/evolution/index.ts, src/model/evolution/history.ts, src/model/evolution/level.ts]
+  - id: model.intent
+    name: 意图
+    summary: 核验草图与版本的偏差并判定能否归档
+    abstraction: 按草图生命周期切分：编辑只产出新草图、校验只判是否合法、核验只比对版本，三者都是纯函数、互不越位。
+    adrs: [23, 24, 25]
+    codeRefs: [src/model/intent/index.ts]
+
+  # ── 呈现层 ──────────────────────────────────────────────
+  - id: present.panel.governance
+    name: 架构治理面板
+    summary: 展示违规、环、规则与证实，可加例外
+    parent: present.panel
+    responsibility: 面板中的「架构治理」证据清单（GV-7 修订，PC-12，ADR-0059）：系统核对卡里只放折叠带计数、为 0 不出现、按严重度排的清单——违规按新增 / 违规（无基线）/ 已知（基线内）/ 已豁免分组，组内同一「规则 → 对端」的多个来源合成一行（N 个来源 · M 处，按处数降序，单击展开逐条，再展开理由与文件证据，未豁免的可「加例外（写理由）」，B3；每组前 12 行、其余「+N」）；模块环（含容忍的）与文件环的个数；端口与查询副作用一行一条（端口 · 问题词，说明进悬停，单击端口打开端口面板，U13、U14）；共用件（反向依赖、体量与阈值、入度最高的共用件及其扇入占比 Q15、反向依赖清单、疑似共用件带四条依据与「认可为共用件」经 desk.write.role 写进 intent/roles.yaml，U11、U12，ADR-0027）；未证实的关系（证实行的证据，单击选中那条关系，K5、K6）；未解释的交互（K7）。结论与条目在系统核对卡的三行上（SystemPanel），库存数在「规模与来源」，这里不写结论、不讲解。模块的生效规则、出入违规与未解释的交互、所在环（Q1）；选中带环编号的节点时所在的本层环：环内节点、构成环的每条本层依赖（展开见模块依赖与文件证据，单击选中对应的视图边或代码依赖，GV-9、Y5）；关系的证实与文件证据（K5、K6；经端口的按端口证实——发起方依赖端口的定义模块、接收方是它已证实的实现者，K5b；写了其余 via 的标「不判定」）；关系行上的证实标记。文件证据可单击选中文件。子类与组装是代码事实、不是关系（StructureFacts）：关系面板与代码依赖面板「知识」行旁标「子类 N」「组装 N」，模块面板的「代码事实」列子类 / 基类、组装 / 被组装于并标出组装根（ModuleKnowledge），单击展开两端、方式（new / 工厂 / 注册）与文件证据。在模块核对卡里是「架构治理」清单（异常已平铺在「治理」「证实」行下，PC-6）。
+
+    codeRefs:
+      - src/components/panel/GovernanceSection.vue
+      - src/components/panel/ModuleGovernance.vue
+      - src/components/panel/RelationFact.vue
+      - src/components/panel/StructureFacts.vue
+      - src/components/panel/ModuleKnowledge.vue
+      - src/components/panel/FileDepList.vue
+  - id: present.panel.dep
+    name: 代码依赖面板
+    summary: 说明选中的代码依赖线背后的模块依赖与违规
+    parent: present.panel
+    responsibility: 选中代码依赖叠加线时的面板（K10）：投影到这对节点的模块依赖（已解释 / 未解释）、其中的违规与理由、文件证据；层次变化后不再存在时说明原因。两卡（PC-10）：理解卡为文件依赖（结构视角）或模块依赖；核对卡为治理一行，清单为违规明细。
+    codeRefs: [src/components/panel/DepPanel.vue]
+  - id: present.panel.port
+    name: 端口面板
+    summary: 展示端口的定义、实现者与使用者并可定位
+    parent: present.panel
+    adrs: [29]
+    responsibility: 端口面板（K11，原「端口三角」，ADR-0029）：选中端口（L13，sel=p:<接口 ID>）时显示接口的说明与「定义 · 实现者 · 使用者」——实现者带证据档（已证实 / 结构性实现 / 证据像使用）并标出「仅代码事实」的（K5c），使用者分经端口与直接、带证实状态；单击定义模块、实现者、使用关系即定位选中；不算端口的接口说明原因（T0 裁决 4）；没有代码事实时（设计版本）只按描述。模块面板的「端口」一节为它声明的每个端口各列一份（ModulePorts）。两卡（PC-10）：理解卡先给一句用途（说明首句），再是说明与三方；核对卡为实现者一行（描述写了、代码未证实的实现者）。
+    codeRefs: [src/components/panel/PortPanel.vue, src/components/panel/PortEntry.vue, src/components/panel/ModulePorts.vue]
+
+  # ── 视图状态层 ──────────────────────────────────────────
+  - id: state.desk.facts
+    name: 架构治理派生（desk.facts）
+    summary: 从代码事实派生治理报告与本层投影供界面读
+    parent: state.desk
+    responsibility: 由源码同步取得的代码事实派生（computed，调用模型层架构治理）：事实状态（设计版本或历史提交、取数中、失败——源码清单读取失败也算，K8、G1）、治理报告、本层向上的交互边 upward（K22：普通层次取 levelTiers 的结果、分层总览取 layerUpward，画布据此写「向上」、边面板据此说明，ADR-0041）、交互视角「代码事实」开关开启时（缺省开启）或结构视角下的本层投影（只取基线外的违规，K9、Y4）、门禁错误（U9）、拦截记录摘要（Q4）、选中的代码依赖叠加线（K10）、选中节点所在的本层环（Y5）、模块治理信息与关系证实（含知识方向与经端口的证实，K5b）。四类交互与端口（ADR-0029）：端口面板 portOf / portsOf（K11；有代码事实时实现者带证据档并含「仅代码事实」的，否则只按描述）、本层要画端口记号的节点 portMarks（L13，只在交互视角，分层总览只画核心模块）、端口孤立（U14，治理面板）、未分类条数与其中核心之间的（M17）；子类与组装事实 structureOf（模块的子类 / 基类、组装 / 被组装于、是否组装根）与 structureBetween（两端之间的，关系与代码依赖面板用，K12、K13）；「组装」开关开启时组装事实与组装根的本层投影 assembly（O12，不参与布局）。结构视图（ADR-0031）：结构视角下本层的结构视图 structure（有代码事实时为束与元素级边，否则为允许依赖图，活动草图的 mayDependOn 一并投影，U16）；交给布局同步的结构边 layoutLinks（不论视角，本层全部束与元素级边，分层总览另加全部核心块的跨层束 chipDeps，普通层次带按值依赖的分层；构造逻辑是纯函数 baseLayoutLinks / toLayoutTiers，线的几何检查器（测试）同用一份；读取中为空，L15 并集布局；有表面展开时带 expansion——选中模块 / 交互 / 视图边或「总是展开表面」（setSurfaceAlways 交来）时展开的节点与元素端口、交互束的散开，两个视角一份，L20a）；全系统指标 metrics / valueMetrics 与模块明细 metricsOf（K16）、模块的影响面 impactOf（K15）与按视图状态的影响面查询算好的 queried（K15b，缺省只看值依赖）、逆稳定 againstOf（U17）、交互图互查 isolatedOf（K17）；视角切换用的 structurePair（V12）；结构视角画布按显示偏好过滤、跨界折叠与聚焦的 structureDisplay（L21a）；表面 surfaceOf / surfaceMetricsOf / bypassesOf、展开元素的悬停数据 surfaceInfo（K18、K19）；承载 carriers / carrierOf / stepCarrierOf 与交互束散开 interactionSpread / spreads（K5d、S18b、D7）；留痕计数 hiddenFacts（L45）与 hiddenByCurrentOnly（L7，「只看现状」隐藏的目标态模块及其后代，画布角留痕用——呈现层不直接调模型层的计算，波 3 起）。
+    codeRefs: [src/state/desk/facts.ts, src/state/desk/evidence.ts, src/state/desk/layoutLinks.ts]
+  - id: state.desk.evolution
+    name: 演化事实派生（desk.evolution）
+    summary: 从 git 历史派生热度与耦合供界面读取
+    parent: state.desk
+    responsibility: 由源码同步取得的 git 历史派生（computed，调用模型层演化事实）：演化状态（设计版本、取数中、读不到 git 历史带原因，J1）、模块统计与时间耦合、结构 / 交互视角下热度或耦合开关开启时的本层投影（J5）、选中的耦合线（J7）、模块的统计与耦合对端、热度前 N、无依赖无关系的耦合对、提交说明按需取。
+    codeRefs: [src/state/desk/evolution.ts]
+
+  - id: state.desk.review
+    name: 人确认层派生（desk.review）
+    summary: 给出确认状态与图解的依据状态，写入确认记录
+    parent: state.desk
+    responsibility: 每个模块的确认状态与差异、确认范围与计数（调用模型层「确认」，Z3–Z5）；「确认」的写入意图——按当天、来源 manual 生成记录，经注入的 ModelWriter 分批写入，结果由文件变化推送回来（N5）；只对当前版本（Z1）。图解派生（desk.explainers，ADR-0055）与确认过期同一套机制、放在这里：有图解的模块与路径（EX-1）、各图解的依据状态与改动（EX-7）、原文与要填入的引用原文（EX-2）、↑ ↓ 导航（EX-4），以及呈现层用的形状；呈现层只读这里，不直接调模型层（U10）。
+    codeRefs: [src/state/desk/review.ts, src/state/desk/explainers.ts]
+
+  # ── 模型层 ──────────────────────────────────────────────
+  - id: model.governance.facts
+    name: 事实比对
+    summary: 把文件依赖提升为模块依赖并证实描述的关系
+    parent: model.governance
+    responsibility: 文件依赖按归属提升为模块依赖（一端是归属冲突文件的不提升、单独列出，祖先后代之间的另记，K4）；关系的证实（四类交互，迁移期的未分类同查询 / 委托；端点相同或互为祖先后代，notifies 与 streams 两向；证实时给出依据相对箭头的知识方向，K5；两端宿主相同的概念拆分不判定，K5a；via 按四形态——port:<P> 时发起方依赖端口的定义模块且接收方是 P 已证实的实现者即「经端口」证实，其余 via 不判定，K5b）；端口实现者的证实 confirmImplementers（类 implements / extends 解析到接口或引用接口名为已证实，只引数据类型为结构性实现（info），引用了函数 / 类 / 变量为证据像使用；代码里有而描述没写的实现者为「仅代码事实」，只认继承子句，K5c）；未证实是否报警（描述写了的端口实现者，或两端之间没有任何依赖的交互关系，K6）；未解释的交互（只计调用类的交互使用——调用、渲染或交出函数 / 类 / 组件；纯值读取、只有继承或只有组装使用的不算；四类关系、端口实现者、子类与组装事实都算覆盖，notifies 与 streams 覆盖两个方向，K7）；子类事实 heritageFacts（类 extends 别的模块的类，含默认导入的基类，K12）与组装事实 assemblyFacts（new、工厂、注册，按模块聚合、带文件证据；组装根 = 组装图入度 0、出度 ≥ 1，K13）；未分类关系与「核心之间」的判定（unclassifiedRelations、isCoreBetween，M17）；模块分级的治理（ADR-0027）：疑似共用件的建议——没有 role、入度来自 ≥2 层或 ≥3 兄弟、没有运行时出边、不在场景路径上、名称像工具模块，四条依据（U11），共用件子树对子树外非共用件的值依赖（U12）。
+    codeRefs: [src/model/governance/facts.ts, src/model/governance/evidence.ts, src/model/governance/roles.ts]
+  - id: model.governance.rules
+    name: 规则判定
+    summary: 判定依赖是否违反层规则、白名单与访问面
+    parent: model.governance
+    responsibility: 一条依赖对层规则、依赖白名单、访问面的判定与例外（U2–U5；层规则按最近公共祖先声明的分层判，任意层级，ADR-0052）；按种类、规则所在与两端合并为违规（U6）；一个模块上生效的规则（Q1）。声明的分层的校验（strata.ts）：各层的 Ca / Ce / I 与向上依赖（strataMetrics），稳定性逆序、单成员层没写理由、底层只引类型的向上 import 三类 info（ST-3–ST-5），新模块的归属建议（placeSuggestion，ST-2）。
+    codeRefs: [src/model/governance/rules.ts, src/model/governance/strata.ts]
+  - id: model.governance.cycles
+    name: 环与环度
+    summary: 找出模块环与文件环并算出环度
+    parent: model.governance
+    responsibility: Tarjan 强连通分量（迭代实现）、模块环与文件环（只按值依赖，只引类型的依赖不成环）、容忍、环度 = 规模平方和（Y1–Y3）。
+    codeRefs: [src/model/governance/cycles.ts]
+  - id: model.governance.report
+    name: 治理报告与门禁
+    summary: 汇成治理报告，按基线给出门禁错误
+    parent: model.governance
+    responsibility: 组合事实、比对、违规、环与基线成治理报告（含端口实现者 implementers（K5c）、子类 subclasses（K12）、组装 assembly 与组装根 assemblyRoots（K13）；疑似共用件与共用件反向依赖，反向依赖报 warning 不进门禁，U11、U12；端口孤立并入问题，U14）；按基线标出新增 / 已知并给出门禁问题（U8）；页面只取门禁错误（U9）；由报告生成基线（U7）。
+    codeRefs: [src/model/governance/report.ts]
+  - id: model.governance.level
+    name: 本层投影
+    summary: 把代码事实投影到当前层次的节点与边
+    parent: model.governance
+    responsibility: 代码事实投影到当前层次：视图边的证实与违规、未解释的交互与违规的叠加线、本层的环及其构成——环内节点与每条本层依赖的视图边、模块依赖（K9、Y4、Y5）；叠加线选中时的模块依赖（K10）。组装事实的本层投影 levelAssembly（O12，ADR-0030）：同 K9 的叠加线按 mapEndpoint 落到本层节点，同一对节点合并为一条组装叠加线（单击落到这对节点的代码依赖），组装根按最深模块算、聚合到本层最深的可见节点。与交互图、帧共用 mapEndpoint；结构视图（子模块「结构视图」）复用这里的 nodeOf。
+    codeRefs: [src/model/governance/level.ts]
+  - id: model.governance.structure
+    name: 结构视图
+    summary: 从代码事实给出依赖束、模块表面与影响面
+    parent: model.governance
+    adrs: [31]
+    responsibility: 结构视图（ADR-0031，第八轮修订）、模块表面与承载链（ADR-0032）——只读代码事实与规则，不读关系来定边。依赖边：模块依赖（K4，全部种类）按 mapEndpoint 投影到本层，一对节点同方向一条束 Bundle（最强形态 子类 ＞ 组装 ＞ 端口实现 ＞ 使用、最强档、文件依赖条数、元素数、越过入口数），束内为元素级边 ElementEdge（依赖方 → 被依赖方的表面元素，一条一种形态，K14），带交互覆盖与「未解释」标记（K17）、这对节点的规则判定（U15）与逆稳定提示（U17，标全部束）（levelDeps）；分层总览核心模块的跨层依赖同样按束 chipDeps（O13③）。表面（surface.ts）：入口导出与声明接口匹配为表面元素（surfaceOf，K18）、文件依赖接到元素与越过入口（elementSlots、formOf、gateModule）、W / B 与元素扇入（surfaceMetrics，K19）、越过入口与热表面未声明（surfaceIssues：U18 与 U4 去重、共用件豁免 U19）。承载（carrier.ts）：按 via 取模板逐段核对元素级边，给齐全 / 模块级 / 缺段 / 无承载 / 外部（carrierOf、carriersOf，K20、K5d），交互束按接收方表面散开（interactionBundle，D7、D8）。影响面 impactOf / levelImpact（K15；传入闭包按 cuttableDep / contractOf 分必然与可能波及，K15d）；指标 structureMetrics、moduleMetrics（K16，有入口的带 W / B）；稳定依赖方向 againstStability（U17）；交互图互查 isolatedInteractions（K17）；没有代码事实时的允许依赖图 allowedDeps（U16）；视角切换的边映射 hasStructureEdge、interactionEdgeBetween（V12）。数据类型、承载的名称表与证据对齐 alignedLevel 在「类型与 Schema」（governance/types.ts）。
+    codeRefs: [src/model/governance/structure.ts, src/model/governance/surface.ts, src/model/governance/carrier.ts]
+  - id: model.governance.tiers
+    name: 分层与拆分信号
+    summary: 按值依赖给本层定层，找出向上的边与拆分信号
+    parent: model.governance
+    adrs: [38]
+    responsibility: 普通层次按本层值依赖分层（ADR-0038）——tierNodes：强连通分量合组、到汇点的最长链定高度、没人依赖的提到顶层、孤立的另列（L28）；levelTiers：取本层值依赖（与 Y4 共用 levelValueDeps）给参与分层的节点定层，环组复用 Y4 编号，找向上的交互边并判断是否控制反转（isInversion，K22）；layerUpward：分层总览按声明的分层找向上的边——接收方的层可依赖发起方的层、反过来不可（mayDependOn），两层都没写时按层序（ADR-0041）；直接交互却两个方向都没有值依赖的兄弟与大环、本层无依赖的提示（L29、K21③）；splitSignals：子模块不占文件、兄弟共用文件（K21①②）；tierFindings / tierIssues：逐个普通层次（「+N」展开）出 split.* 与 tier.upward 的 info 提醒（分层总览也报，第十四轮 F8）；layerDrift：声明的层序与实算比对（K24），并入治理报告、返工清单按它定位。层号对全集算、「+N」放在成员最上的一层并给出层号跨度 foldSpan（L39）；平铺提示（L40）。线的级别（grades.ts，K23）：gradeBundles 按例外（违规 / 向上 / 逆稳定 / 未解释）、环内、传递约简（91 §2 口径）给结构视角的束定级，forcedExceptions 给出照画的例外。布局只消费层号。
+    codeRefs: [src/model/governance/tiers.ts, src/model/governance/grades.ts]
+  - id: model.governance.query
+    name: agent 查询
+    summary: 为 agent 定位文件、说明模块、写前判定依赖
+    parent: model.governance
+    responsibility: 定位文件、说明模块（路径与各级职责、生效规则、接口签名、出入关系与违规，Q1）；写前判定（允许 / 拒绝 / 无约束、环影响、覆盖关系、目标语义，Q2）；拦截记录统计（Q4）。输出可直接序列化。
+    codeRefs: [src/model/governance/query.ts, src/model/governance/ledger.ts]
+  - id: model.governance.ports
+    name: 端口面板
+    summary: 给出端口的定义、实现者、使用者与孤立问题
+    parent: model.governance
+    adrs: [29]
+    responsibility: 端口（ADR-0029：端口就是接口，归属定义模块）。portEntry：一个接口的端口面板——定义模块、实现者（给了治理报告时取代码事实的实现者，带证据档并含「仅代码事实」的，K5c；否则为描述的 implementedBy）、使用者（经端口——via 为 port:<P>——或直接以它为 interface 的交互关系的发起方，带证实状态）、是否算端口（被经端口引用或有实现者，T0 裁决 4）（K11）；portPanel：模块声明的每个接口（G12）各一份；portIssues：端口孤立——算端口而没有任何实现者为 warning、有实现者而没有使用者为 info，定义模块或全部实现者是目标态的不报（U14）。只读描述与给定的治理报告。
+    codeRefs: [src/model/governance/ports.ts]
+  - id: model.governance.classify
+    name: 分类建议
+    summary: 为未分类关系建议查询或委托并给出依据
+    parent: model.governance
+    responsibility: 给迁移期未分类（calls）的关系建议查询或委托（ADR-0029 §5「分类是主张」）：按第一问「被调方拥有后果吗」打分，证据为代码事实（交互种类、调用点结果是否被使用、被调函数签名的返回形态、目标文件的状态持有，由依赖提取给出）、描述（共用件、链路上的通知、接口签名、目标模块名）与名字；给出类型、置信度与依据，只有继承或只有组装的标出；把说明改为交互口吻。不碰文件系统，命令行 arch classify 用它写回。
+    codeRefs: [src/model/governance/classify.ts]
+
+  # ── 接入层：分类的代码事实与命令行（ADR-0029 §5，arch classify）──
+  - id: access.deps.classify-facts
+    name: 分类的代码事实
+    summary: 从源码读出调用点、返回形态与状态持有
+    parent: access.deps
+    responsibility: 给分类器读源码事实（只做 TypeScript 语法解析、不做类型检查，只在命令行用）：依赖方文件里对导入名的调用点及结果是否被 await / 赋值使用，目标文件顶层声明的返回形态（写了返回类型按类型、没写按函数体有没有 return <值>，经 returnShapeOf 归为 void / Promise<void> / 有值），目标文件是否持有状态（模块级响应式状态或可变变量、有实例字段的类、写文件或发网络请求）。说明符解析复用依赖提取；不判断归属与分类。
+    codeRefs: [vite/readClassifyFacts.ts]
+  - id: access.agent.classify
+    name: 分类命令
+    summary: 在命令行为未分类关系给出建议并可写回
+    parent: access.agent
+    responsibility: 命令行 npm run arch -- classify（ADR-0029 §5、§6）：对当前版本（有源码时按代码事实 + 描述 + 名字）或设计某一轮 / 草图版本（没有代码事实，同 ID 已分类的沿用当前版本）的未分类关系逐条给出建议类型、置信度与依据，--core-only 只列核心之间的，--override 读人工核对后的覆盖；--write 按 YAML 语法树的位置只替换 type 与 description 两个值（不重排文件），人拥有的草图只改 type、草图写了说明的关系其他文件里同 ID 的说明也不改（X1）。
+    codeRefs: [scripts/agent/classify.ts]
+
+  # 骨架里的「确认」（model.review）只补它提供的接口（X1：补充草图没写的字段）
+  - id: model.review
+    name: 确认
+    summary: 给出模块的确认摘要、指纹与确认状态
+    abstraction: 确认的摘要、指纹与状态都是纯函数，页面、命令行与草图归档共用同一份。
+    provides: [if.review.query]
+    codeRefs: [src/model/review/index.ts, src/model/review/hash.ts, src/model/review/status.ts, src/model/review/text.ts]
+
+  - id: model.review.explainer
+    name: 图解
+    summary: 查找模块的图解，判定它的依据是否过期
+    parent: model.review
+    kind: component
+    responsibility: 图解的架构查询（ADR-0055）：按 explainer 字段或约定路径 explainers/<模块 ID>.html 查找（M32、EX-1），↑ 最近有图解的祖先、↓ 子树里最近有图解的后代（EX-4）；依据 = 本模块的确认摘要与 summary / invariants + 直接子模块的 summary / invariants + 子模块之间的关系，按项记 8 位指纹（复用确认的指纹算法），读写 arch-basis、比出增删改（EX-6、EX-7）；图解里 data-arch 引用到的模块要填入的原文（EX-2）；lint：未知模块、未知字段、抄写原文、越级、过期、未记录依据、孤儿文件（EX-8）。只做有限的 HTML 文本解析，不依赖 DOM；页面与命令行 arch explainer（EX-9）共用。
+    abstraction: 查找、依据与检查分文件：依据只读索引算指纹，HTML 只按标签做文本解析，检查组合两者产出问题。
+    invariants:
+      - { text: 依据只含本模块描述、子模块的对外承诺与子模块之间的关系，子模块内部改动不使父模块的图解过期, adr: 55 }
+      - 不依赖 DOM：HTML 只按标签做有限的文本解析，只改写 arch-basis 一个 meta
+    codeRefs: [src/model/explainer/**]
+
+interfaces:
+  - id: if.governance.report
+    name: governanceReport
+    owner: model.governance.report
+    signature: |
+      governanceReport(index: ModelIndex, own: SourceOwnership, tree: { files; packages }, code: CodeDeps, baseline: Baseline | null): GovernanceReport
+      levelFacts(index: ModelIndex, view: LevelView, report: GovernanceReport): LevelFacts
+      levelAssembly(index: ModelIndex, view: LevelView, report: GovernanceReport): LevelAssembly   // O12
+      portEntry(index, report, portId): PortPanel | null · portPanel(index, report, moduleId): PortPanel[] · portIssues(index, report): Issue[]   // K11、U14
+    semantics: |
+      - 纯函数；页面、lint:model、agent 接口同一套结果（Q6）
+      - 没有基线时违规为 open（提醒）；有基线时基线外为 new（错误）
+  - id: if.governance.check
+    name: checkDependency
+    owner: model.governance.query
+    signature: |
+      checkDependency(index: ModelIndex, own: SourceOwnership, report: GovernanceReport | null, entryOf: EntryOf, from: string, targets: CheckTarget[]): CheckResult
+      describeModule(index: ModelIndex, own: SourceOwnership, report: GovernanceReport | null, entryOf: EntryOf, id: string): ModuleDetail | null
+    semantics: |
+      - 多个目标逐个判定，取最严的结果（Q2）
+      - 只读，不改事实；拦截记录由 agent 接口写
+  - id: if.access.deps
+    name: readCodeDeps
+    owner: access.deps
+    signature: |
+      readCodeDeps(root: string, files: string[], packages: Record<string, PackageEntry>): CodeDeps
+      resolveImport(root: string, files: string[], packages: Record<string, PackageEntry>, from: string, spec: string, names?: string[]): CheckTarget[]
+  - id: if.agent.mcp
+    name: MCP 工具
+    owner: access.agent
+    signature: |
+      list_projects() · overview(project?) · locate(target, project?)
+      check_dependency(from, to, names?, project?) · list_violations(onlyNew?, project?)
+      list_cycles(project?) · rescan(project?) · issues(format?, category?, project?) · prevention_report(project?)
+    semantics: |
+      - stdio；check_dependency 与 rescan 写拦截记录（Q4）
+      - 每次调用前比对输入，源码清单或文件的修改时间变了就重建，不必先 rescan
+      - 不提供改规则、生成基线（Q5）
+
+  - id: if.review.query
+    name: reviewStates
+    owner: model.review
+    signature: |
+      reviewHash(index: ModelIndex, moduleId: string): string
+      reviewStates(index: ModelIndex): Map<string, ReviewState>
+      reviewCounts(index: ModelIndex): ReviewCounts
+      reviewEntries(index: ModelIndex, ids: string[], opts: { source: string; note?: string; at?: string }): ReviewedInput[]
+    semantics: |
+      - 纯函数；记录来自 index.model.reviewed（Z1）
+      - 内容相同必得相同指纹，与声明顺序无关（Z2）
+
+  - id: if.rework.list
+    name: reworkList
+    owner: model.rework
+    signature: |
+      reworkList(input: { index: ModelIndex; issues: Issue[]; source?: { own: SourceOwnership; tree }; report?: GovernanceReport }): ReworkList
+      reworkMarkdown(list: ReworkList, title: string, opts?: { modelDir?; sourceRoot?; limit? }): string
+    semantics: |
+      - 纯函数；命令行与 MCP 的 issues 同一份结果（Q9）
+      - 返工项 ID 为「类别:根因键」，重新计算后不变
+
+dataStructures:
+  - id: ds.ReworkItem
+    name: ReworkItem
+    definition: |
+      interface ReworkItem {
+        id: string; category: ReworkCategory; severity: 'error' | 'warning' | 'info'; rules: string[]; code: string
+        title: string; detail?: string; at?: ReworkLoc; affected: ReworkLoc[]; actions: ReworkAction[]; target: ReworkTarget
+      }
+  - id: ds.FileDep
+    name: FileDep
+    definition: |
+      interface FileDep {
+        from: string; to: string; via: string; kind: 'value' | 'type'; line: number; names?: string[]
+        heritage?: true; uses?: true; invokes?: true
+        invokeKinds?: ('call' | 'extends' | 'new' | 'factory' | 'register')[]   // K7 只看 call，K13 看后三种
+        inherits?: { name: string; clause: 'implements' | 'extends'; decl?: string }[]   // K5c、K12
+      }
+  - id: ds.GovernanceReport
+    name: GovernanceReport
+    definition: |
+      interface GovernanceReport {
+        moduleDeps: Map<string, ModuleDep>; relations: Map<string, Confirmation>; undescribed: ModuleDep[]
+        implementers: Map<string, PortFacts>          // 端口 → 实现者（K5c，含「仅代码事实」）
+        subclasses: SubclassFact[]; assembly: AssemblyFact[]; assemblyRoots: string[]   // K12、K13
+        violations: Violation[]; moduleCycles: Cycle[]; fileCycles: Cycle[]; cyclicity: { modules; files }
+        baseline: Baseline | null; gate: GateSummary; issues: Issue[]
+        // …
+      }
+  - id: ds.CheckResult
+    name: CheckResult
+    definition: |
+      interface CheckResult { verdict: 'allowed' | 'denied' | 'unconstrained'; notes: string[]; checks: PairCheck[]; targets: ModuleBrief[] }
+
+relations:
+  - {id: rel.st.tiers-indexer, from: model.governance.tiers, to: model.pipeline.indexer, type: queries, description: 分层与拆分信号向 Indexer 取：isLayered 判父模块是否声明了分层（声明了的只查向上的线，ADR-0052）, purpose: 判父模块是否声明了分层 }
+  - {id: rel.st.rework-strata, from: model.rework, to: model.governance.rules, type: queries, description: 返工清单向规则判定取：strataFindings 的稳定性逆序、单成员层与底层只引类型的提示，汇成「分层」类（ST-3–ST-5）, purpose: 把分层提示汇成返工的「分层」类 }
+  # 外部参与者
+  - {id: rel.gv.ai-agent, from: actor.ai, to: access.agent, type: commands, interface: if.agent.mcp, payload: [ds.CheckResult], description: AI 交给 agent 接口：coding agent 写代码前判定依赖、写完重新扫描（MCP 或命令行）, purpose: 写代码前判依赖、写完重新扫描 }
+  # 呈现层
+  - { id: rel.gv.dispatch-dep, from: present.panel.dispatch, to: present.panel.dep, type: commands, description: 面板分派交给代码依赖面板：选中代码依赖叠加线时面板分派渲染代码依赖面板, purpose: 选中代码依赖线时显示依赖面板 }
+  - {id: rel.gv.system-gov, from: present.panel.system, to: present.panel.governance, type: commands, description: 系统面板交给架构治理面板：在核对卡的清单区渲染 GovernanceSection 的折叠证据清单（违规、模块环、端口与查询副作用、共用件、未证实的关系、未解释的交互），结论与条目由系统面板自己的三行给出（ADR-0059）, purpose: 在系统核对卡放治理证据清单 }
+  - {id: rel.gv.module-gov, from: present.panel.module, to: present.panel.governance, type: commands, description: 模块面板交给架构治理面板：渲染 ModuleGovernance 与代码事实里的子类、组装（ModuleKnowledge）, purpose: 在模块面板显示治理与代码知识 }
+  - {id: rel.gv.relation-gov, from: present.panel.relation, to: present.panel.governance, type: commands, description: 关系面板交给架构治理面板：渲染代码事实一节 RelationFact，「知识」行旁渲染两端之间的子类与组装（StructureFacts）, purpose: 在关系面板显示代码事实 }
+  - { id: rel.gv.dep-gov, from: present.panel.dep, to: present.panel.governance, type: commands, description: 代码依赖面板交给架构治理面板：渲染文件证据列表（FileDepList）与这对节点之间的子类、组装（StructureFacts）, purpose: 显示文件证据与两端的子类组装 }
+  - {id: rel.gv.panel-read, from: present.panel.governance, to: state.desk.facts, type: queries, payload: [ds.GovernanceReport], description: 架构治理面板向架构治理派生（desk.facts）取：治理报告、模块治理信息、关系证实、拦截摘要, purpose: 取治理报告、证实与拦截摘要 }
+  - {id: rel.gv.dep-read, from: present.panel.dep, to: state.desk.facts, type: queries, description: 代码依赖面板向架构治理派生（desk.facts）取：选中的代码依赖叠加线, purpose: 取选中的代码依赖线 }
+  - {id: rel.gv.canvas-read, from: present.canvas.flow, to: state.desk.facts, type: queries, description: 视图转换与交互向架构治理派生（desk.facts）取：本层投影（K9、Y4）与留痕计数（hiddenFacts、hiddenByCurrentOnly，L45 / L7，波 3 起「只看现状」的计数也经这里取）, purpose: 取本层投影与留痕计数画叠加线 }
+  - {id: rel.gv.legend-read, from: present.canvas.legend, to: state.desk.facts, type: queries, description: 图例与「显示 ▾」向架构治理派生（desk.facts）取结果：代码事实是否就绪、本层投影与 structureDisplay 的收起条数, purpose: 取事实状态画图例与开关 }
+  - {id: rel.gv.canvas-select, from: present.canvas.flow, to: state.desk.actions, type: commands, interface: if.desk.actions, description: "视图转换与交互交给 dispatch 与操作：单击代码依赖叠加线 → select(kind: dep)", purpose: 单击依赖叠加线时选中它 }
+  # 视图状态层
+  - {id: rel.gv.facts-model, from: state.desk.facts, to: model.governance, type: queries, interface: if.governance.report, payload: [ds.GovernanceReport], description: 架构治理派生（desk.facts）向架构治理取：entryResolver、governanceReport、gateIssues、scenarioEvidence，levelAssembly 取组装叠加（O12），unclassifiedRelations 数未分类（M17）, purpose: 算治理报告、门禁与本层投影 }
+  # 接入层
+  - {id: rel.gv.source-deps, from: access.model-source, to: access.deps, type: queries, interface: if.access.deps, payload: [ds.FileDep], description: ModelSource 插件向依赖提取取：/source/<项目>/facts.json, purpose: 取代码事实供端点返回 }
+  - {id: rel.gv.source-store, from: access.model-source, to: access.governance-store, type: queries, description: ModelSource 插件向治理存储取：基线与最近的拦截记录, purpose: 取基线与拦截记录随事实下发 }
+  - {id: rel.gv.deps-exports, from: access.deps, to: access.source, type: queries, description: 依赖提取向源码读取取：复用导出解析穿透再导出（K3）, purpose: 沿再导出链追到声明文件 }
+  - {id: rel.gv.deps-resolve, from: access.deps, to: model.source.resolve, type: queries, interface: if.model.specResolver, description: 依赖提取向路径补全与包入口取：说明符解析与包入口（K2）, purpose: 解析说明符、找包入口 }
+  - {id: rel.gv.agent-deps, from: access.agent, to: access.deps, type: queries, interface: if.access.deps, description: agent 接口向依赖提取取：readCodeDeps、resolveImport, purpose: 取文件依赖供治理查询 }
+  - {id: rel.gv.agent-store, from: access.agent, to: access.governance-store, type: commands, description: agent 接口交给治理存储：读基线；写拦截记录；命令行生成基线, purpose: 读基线、记拦截、生成基线 }
+  - {id: rel.gv.agent-reader, from: access.agent, to: access.reader, type: queries, description: agent 接口向描述读取取：读项目描述, purpose: 读项目描述以加载模型 }
+  - {id: rel.gv.agent-source, from: access.agent, to: access.source, type: queries, description: agent 接口向源码读取取：源码清单, purpose: 取源码清单以判定归属 }
+  - {id: rel.gv.agent-model, from: access.agent, to: model.governance, type: queries, interface: if.governance.check, payload: [ds.CheckResult], description: agent 接口向架构治理取：governanceReport、entryResolver、makeBaseline、isCoreBetween, purpose: 用治理判定回答定位与写前查询 }
+  - {id: rel.gv.lint-deps, from: access.lint, to: access.deps, type: queries, interface: if.access.deps, description: 命令行校验向依赖提取取：readCodeDeps, purpose: 取代码依赖做门禁比对 }
+  - {id: rel.gv.lint-store, from: access.lint, to: access.governance-store, type: queries, description: 命令行校验向治理存储取：读基线, purpose: 读基线按棘轮判新增违规 }
+  - {id: rel.gv.lint-model, from: access.lint, to: model.governance, type: queries, interface: if.governance.report, description: 命令行校验向架构治理取：门禁问题与摘要（U8）, purpose: 取门禁问题与治理摘要输出 }
+  # 模型层
+  - { id: rel.gv.model-projector, from: model.governance.level, to: model.projector, type: queries, description: 本层投影向 Projector 层次投影取：调用 mapEndpoint / viewNodeOf 把模块依赖的两端映射到本层节点（K9、Y4）, purpose: 把依赖两端映射到本层节点 }
+  # 架构治理内部与名称、标签（K7 按代码补齐）
+  - {id: rel.gv.cycles-facts, from: model.governance.cycles, to: model.governance.facts, type: queries, description: 环与环度向事实比对取：within：环按模块子树判断, purpose: 按模块子树判断成环 }
+  - {id: rel.gv.level-facts, from: model.governance.level, to: model.governance.facts, type: queries, description: 本层投影向事实比对取：depKey：本层叠加线按模块依赖键取依据, purpose: 按依赖键取叠加线的依据 }
+  - {id: rel.gv.level-cycles, from: model.governance.level, to: model.governance.cycles, type: queries, description: 本层投影向环与环度取：stronglyConnected：本层环编号（Y4）, purpose: 给本层环编号 }
+  - {id: rel.gv.query-facts, from: model.governance.query, to: model.governance.facts, type: queries, description: agent 查询向事实比对取：coveringRelations、related：写前判定与模块治理信息（Q1、Q2）, purpose: 写前判定时找覆盖的关系 }
+  - {id: rel.gv.query-cycles, from: model.governance.query, to: model.governance.cycles, type: queries, description: agent 查询向环与环度取：stronglyConnected：写前判定这条依赖会不会成环或扩大环, purpose: 判新依赖会不会成环或扩环 }
+  - {id: rel.gv.query-rules, from: model.governance.query, to: model.governance.rules, type: queries, description: agent 查询向规则判定取：judge、rulesFor：判定与生效的规则, purpose: 判定依赖并列出生效规则 }
+  - {id: rel.gv.report-facts, from: model.governance.report, to: model.governance.facts, type: queries, description: 治理报告与门禁向事实比对取：liftDeps、confirmRelations、undescribedDeps（K4、K5、K7）, purpose: 提升依赖、证实关系、找未描述 }
+  - {id: rel.gv.report-cycles, from: model.governance.report, to: model.governance.cycles, type: queries, description: 治理报告与门禁向环与环度取：moduleCycles、fileCycles、cyclicityOf（Y1–Y3）, purpose: 找出环并算环度 }
+  - {id: rel.gv.report-rules, from: model.governance.report, to: model.governance.rules, type: queries, description: 治理报告与门禁向规则判定取：evaluateRules（U2–U4）, purpose: 算出违规 }
+  - {id: rel.gv.rules-facts, from: model.governance.rules, to: model.governance.facts, type: queries, description: 规则判定向事实比对取：within：规则按模块子树匹配, purpose: 按模块子树匹配规则 }
+  - {id: rel.gv.agent-pipeline, from: access.agent, to: model, type: queries, interface: if.model.loadModel, description: agent 接口向模型层入口取：loadModel 加载描述, purpose: 把描述加载成索引 }
+  - {id: rel.gv.agent-ownership, from: access.agent, to: model.source.ownership, type: queries, interface: if.model.assignFiles, description: agent 接口向归属与入口取：按 codeRefs 归属源码（G3–G8）, purpose: 按 codeRefs 把源码归到模块 }
+  - {id: rel.gv.source-health, from: access.model-source, to: model.rework, type: queries, description: ModelSource 插件向返工清单取：projectHealth：项目卡片的健康度（Q10）, purpose: 给项目卡片算健康度 }
+  - {id: rel.gv.source-health-model, from: access.model-source, to: model, type: queries, interface: if.model.loadModel, description: ModelSource 插件向 loadModel 入口取：健康度：加载描述（Q10）, purpose: 算健康度前加载描述 }
+  - {id: rel.gv.source-health-own, from: access.model-source, to: model.source.ownership, type: queries, interface: if.model.assignFiles, description: ModelSource 插件向归属与入口取：健康度：归属（Q10）, purpose: 算健康度时取源码归属 }
+  - {id: rel.gv.source-health-report, from: access.model-source, to: model.governance.report, type: queries, interface: if.governance.report, description: ModelSource 插件向治理报告与门禁取：健康度：治理报告（Q10）, purpose: 算健康度时取治理报告 }
+  - {id: rel.gv.desk-rework, from: state.desk, to: model.rework, type: queries, interface: if.rework.list, payload: [ds.ReworkItem], description: DeskState 向返工清单取：「问题」资料标签的返工清单与「复制给 agent」的 Markdown（W-6）, purpose: 取返工清单与给 agent 的 Markdown }
+  - {id: rel.gv.source-writer, from: access.model-source, to: access.writer.append, type: commands, description: ModelSource 插件交给追加写入：POST /write/<项目>/feedback | allow | ignore（B1–B5）, purpose: 把意见、例外、忽略写入描述 }
+  - { id: rel.gv.writer-reader, from: access.writer.append, to: access.reader, type: queries, description: 追加写入向描述读取取：写回端点调用 isProjectId 校验项目、readModelDir / readDesignInfo / designSketches 读描述与设计, purpose: 校验项目并读描述与设计 }
+  - {id: rel.gv.writer-model, from: access.writer.append, to: model, type: queries, interface: if.model.loadModel, description: 追加写入向 loadModel 入口取：加例外前校验两端模块存在、找 rules 所在文件（B3）, purpose: 加例外前确认两端存在、找规则文件 }
+  - { id: rel.gv.writer-types, from: access.writer.append, to: model.types, type: queries, description: 追加写入向类型与 Schema 取：写确认记录前调用 isReviewSource 校验来源（Z6）, purpose: 写确认记录前校验来源 }
+  - {id: rel.gv.agent-rework, from: access.agent, to: model.rework, type: queries, interface: if.rework.list, payload: [ds.ReworkItem], description: agent 接口向返工清单取：命令行与 MCP 的 issues（Q9）, purpose: 回答 issues 查询 }
+  - {id: rel.gv.rework-source, from: model.rework, to: model.source, type: queries, description: 返工清单向源码归属取：matchRef、moduleEntry：冲突的 codeRefs 组合与 entry 是否存在, purpose: 找出冲突的 codeRefs 与缺失入口 }
+  - {id: rel.gv.rework-scenario, from: model.rework, to: model.scenario-semantics, type: queries, description: 返工清单向场景语义取：bindRelation、forEachStep：未建模的步骤（S13、P11）, purpose: 找出结构中未建模的步骤 }
+  - {id: rel.gv.rework-facts, from: model.rework, to: model.governance.facts, type: queries, description: 返工清单向事实比对取：unconfirmedWarns、unconfirmedCode、unconfirmedReason：报警的未证实关系与端口实现者、问题代码与说明（K5c、K6；证据像使用建议从 implementedBy 去掉并按交互改写），isCoreBetween 只列核心之间的未分类（M17），返工清单与健康度共用, purpose: 列出报警的未证实关系与实现者 }
+  - {id: rel.gv.ports-source, from: model.governance.ports, to: model.source.ownership, type: queries, description: 端口面板向归属与入口取：调用 moduleInterfaces 取模块声明的接口（G12）, purpose: 取模块声明的接口 }
+  - {id: rel.gv.facts-ports-source, from: model.governance.facts, to: model.source.ownership, type: queries, description: 事实比对向归属与入口取：调用 moduleInterfaces 取端口定义模块声明的接口名（K5c 的证据）, purpose: 取端口定义模块的接口名作证据 }
+  - {id: rel.gv.facts-ports, from: state.desk.facts, to: model.governance.ports, type: queries, description: 架构治理派生（desk.facts）向端口面板取：portEntry / portPanel 取端口面板与端口记号的数据（K11、L13），portIssues 取端口孤立（U14）, purpose: 取端口面板、端口记号与孤立 }
+  - { id: rel.gv.ports-facts, from: model.governance.ports, to: model.governance.facts, type: queries, description: 端口面板向事实比对取：调用 portOwner 找端口的定义模块、related 判使用者是否在定义模块子树外、isTarget 排除目标态（K11、U14）, purpose: 找定义模块、判使用者在子树外 }
+  - { id: rel.gv.report-ports, from: model.governance.report, to: model.governance.ports, type: queries, description: 治理报告与门禁向端口面板取：调用 portIssues 把端口孤立并入报告的问题（U14）, purpose: 把端口孤立并入报告问题 }
+  - { id: rel.gv.rework-gate, from: model.rework, to: model.intent.check, type: queries, description: 返工清单向草图核验取：对当前版本的核验调用 gateSeverity，已认可未归档设计的偏差按门禁口径降为提醒（DL-45）, purpose: 让「问题」标签与命令行、lint:model 同口径 }
+  - { id: rel.gv.rework-ports, from: model.rework, to: model.governance.ports, type: queries, description: 返工清单向端口面板取：调用 portIssues 把端口孤立列为返工项（一个端口一个根因，U14）, purpose: 把端口孤立列为返工项 }
+  - { id: rel.gv.dispatch-port, from: present.panel.dispatch, to: present.panel.port, type: commands, description: 面板分派交给端口面板：选中端口时渲染 PortPanel（L13、K11）, purpose: 选中端口时显示端口面板 }
+  - { id: rel.gv.module-port, from: present.panel.module, to: present.panel.port, type: commands, description: 模块面板交给端口面板：渲染「端口」一节 ModulePorts（K11）, purpose: 在模块面板列出它的端口 }
+  - { id: rel.gv.port-read, from: present.panel.port, to: state.desk.facts, type: queries, description: 端口面板向架构治理派生（desk.facts）取：portOf / portsOf 端口面板，report 判有没有代码事实（K11）, purpose: 取端口面板数据与有无代码事实 }
+  - { id: rel.gv.port-select, from: present.panel.port, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 端口面板交给 dispatch 与操作：单击端口、定义模块、实现者、使用关系时 select / revealModule / revealRelation 定位选中, purpose: 点端口相关项时定位选中 }
+  - { id: rel.gv.port-content, from: present.panel.port, to: present.panel.content, type: commands, description: 端口面板交给内容组件：渲染分节、Markdown、设计说明与变更角标, purpose: 复用分节与说明的渲染 }
+  - { id: rel.gv.dep-content, from: present.panel.dep, to: present.panel.content, type: commands, description: 代码依赖面板交给内容组件：渲染分节组件 Section, purpose: 复用分节的渲染 }
+  - { id: rel.gv.panel-content, from: present.panel.governance, to: present.panel.content, type: commands, description: 架构治理面板交给内容组件：治理面板渲染分节组件 Section, purpose: 复用分节的渲染 }
+  # 按代码补齐（K7，2026-10-23 重新生成）
+  - { id: rel.gv.agent-check, from: access.agent, to: model.intent.check, type: queries, description: agent 接口向草图核验与生命周期取：sketch-check --design 调用 checkSketches 逐张核验、compareDesign 做两个对比（相对基线 / 相对当前版本）、compareOwned 比对指纹（X4、X6、X17）, purpose: 命令行核验设计草图并做对比 }
+  - { id: rel.gv.agent-classify, from: access.agent.classify, to: model.governance.classify, type: queries, description: 分类命令向分类建议取：arch classify 调用 classifyRelation 取每条未分类关系的建议类型、置信度与依据，interactionDescription 取交互口吻的说明, purpose: 为每条未分类关系取建议 }
+  - { id: rel.gv.classify-facts, from: model.governance.classify, to: model.governance.facts, type: queries, description: 分类建议向事实比对取：related 判两端子树、plainInteraction 判只有继承或组装的使用, purpose: 判两端子树与只有继承组装的使用 }
+  - { id: rel.gv.classify-cmd-facts, from: access.agent.classify, to: access.deps.classify-facts, type: queries, description: 分类命令向分类的代码事实取：调用 readClassifyCode 读调用点、签名的返回形态与目标文件的状态持有, purpose: 读调用点、返回形态与状态持有 }
+  - { id: rel.gv.deps-classify, from: access.deps.classify-facts, to: model.governance.classify, type: queries, description: 分类的代码事实向分类建议取：读签名时调用 returnShapeOf 把返回类型归为 void / Promise<void> / 有值, purpose: 把签名的返回类型归成三类 }
+  - { id: rel.gv.agent-append, from: access.agent, to: access.writer.append, type: commands, description: agent 接口交给追加写入：sketch archive 调用与页面同一个 archiveDesign（X8）, purpose: 命令行归档与页面走同一套 }
+  - { id: rel.gv.lint-check, from: access.lint, to: model.intent.check, type: queries, description: '命令行校验向草图核验与生命周期取：lint:model 调用 checkSketches 核验活动草图、compareOwned 比对人拥有文件的指纹（X4、X6）', purpose: 核验活动草图、比对人拥有文件 }
+  - { id: rel.gv.append-check, from: access.writer.append, to: model.intent.check, type: queries, description: 追加写入向草图核验与生命周期取：归档前调用 checkSketches / archiveVerdict 核验当前版本，sketchModules 取草图覆盖的模块（X3）, purpose: 归档前核验当前版本并取覆盖模块 }
+  - { id: rel.gv.append-review, from: access.writer.append, to: model.review, type: queries, description: 追加写入向确认取：写确认记录时调用 reviewEntries / reviewHash 算条目与指纹（Z6）, purpose: 算确认记录的条目与指纹 }
+  - { id: rel.gv.append-store, from: access.writer.append, to: access.governance-store, type: commands, description: 追加写入交给治理存储：写后调用 touchOwned 更新指纹、appendLedger 记拦截记录（X6、Z6）, purpose: 写后更新指纹、记拦截记录 }
+  - {id: rel.gv.source-history, from: access.model-source, to: access.history, type: queries, description: ModelSource 插件向源码历史读取取：GET source/<项目>/history.json、commit.json（J1）, purpose: 取 git 历史与提交说明供端点返回 }
+  - { id: rel.gv.reader-check, from: access.reader, to: model.intent.check, type: queries, description: 描述读取向草图核验与生命周期取：读项目摘要时调用 checkSketches / compareDesign 算项目卡片上设计的偏差计数（X4）, purpose: 算项目卡片上设计的偏差数 }
+  - { id: rel.gv.evolution-facts, from: model.evolution, to: model.governance.facts, type: queries, description: 演化事实向事实比对取：耦合统计调用 within 判两端之间有无模块依赖（J4）, purpose: 判耦合的两端有无模块依赖 }
+  - { id: rel.gv.evolution-level, from: model.evolution, to: model.governance.level, type: queries, description: 演化事实向本层投影取：本层热度调用 nodeOf 把模块映射到本层节点（J5）, purpose: 把热度映射到本层节点 }
+  - { id: rel.gv.evolution-ownership, from: model.evolution, to: model.source.ownership, type: queries, description: 演化事实向归属与入口取：按归属调用 moduleFiles / moduleLines 把文件的改动提升为模块（J2）, purpose: 把文件改动提升为模块改动 }
+  - {id: rel.gv.desk-evolution-model, from: state.desk.evolution, to: model.evolution, type: queries, description: 演化事实派生（desk.evolution）向演化事实取：evolutionStats、levelEvolution：热度与耦合的派生（J5）, purpose: 派生热度与耦合 }
+  - {id: rel.gv.source-history-options, from: access.model-source, to: model.evolution, type: queries, description: ModelSource 插件向演化事实取：读源码历史与健康度前调用 historyOptions，按 system.source.history 取统计窗口与耦合阈值（J1）, purpose: 取统计窗口与耦合阈值 }
+  - {id: rel.gv.desk-review-model, from: state.desk.review, to: model.review, type: queries, interface: if.review.query, description: 人确认层派生（desk.review）向确认取：reviewStates、reviewCounts、reviewEntries（Z3–Z5）, purpose: 算确认状态、计数与条目 }
+  - { id: rel.w5.loader-explainer, from: model.pipeline.loader, to: model.review.explainer, type: queries, description: Loader 用 isExplainerFile 认出 explainers/*.html，原样带进模型、不按 YAML 解析（EX-1）, purpose: 认出图解文件 }
+  - { id: rel.gv.navigation-evolution, from: state.transition.navigation, to: model.evolution, type: queries, description: 导航规则向演化事实取：选中耦合线时调用 coupleEnds 取两端（J7）, purpose: 选中耦合线时取两端 }
+  - { id: rel.gv.selection-evolution, from: state.transition.selection, to: model.evolution, type: queries, description: 视角与选中规则向演化事实取：选中耦合线时调用 coupleEnds 取要突出的两端（J7）, purpose: 选中耦合线时取要突出的两端 }
+  - { id: rel.gv.scenario-panel-shared, from: present.panel.scenario, to: present.shared, type: commands, description: 场景面板交给呈现共用件：经 useOpenPreview 在资料区预览证据文件（S15）, purpose: 在资料区预览证据文件 }
+  - { id: rel.gv.step-panel-shared, from: present.panel.step, to: present.shared, type: commands, description: 步骤面板交给呈现共用件：经 useOpenPreview 在资料区预览代码证据（S16）, purpose: 在资料区预览代码证据 }
+  # 结构视图（ADR-0031）
+  - { id: rel.gv.canvas-structure-level, from: state.layout.canvas.structure, to: model.governance.structure, type: queries, description: 结构视角的画布场景向结构视图取：调用 chipDeps 取分层总览核心模块的跨层依赖、levelImpact 把选中模块的影响面投到本层节点（O13③、K15）, purpose: 取跨层依赖与选中的影响面 }
+  - { id: rel.gv.canvas-structure-node, from: state.layout.canvas.structure, to: model.governance.level, type: queries, description: 结构视角的画布场景向本层投影取：调用 nodeOf 定位选中模块在本层所在的节点（K15）, purpose: 找选中模块在本层的节点 }
+  - { id: rel.gv.canvas-structure-projector, from: state.layout.canvas.structure, to: model.projector, type: queries, description: 画布场景向 Projector 层次投影取：结构视角调用 shelfOf 取共用件架上的节点，决定共用件边的折叠（O13）, purpose: 决定共用件边的折叠 }
+  - { id: rel.gv.transition-structure-level, from: state.transition.mode, to: model.governance.level, type: queries, description: 视角模式与选中映射向本层投影取：切换结构 / 交互视角时调用 nodeOf 找关系两端在本层的节点（V12）, purpose: 切视角时找关系两端的节点 }
+  - { id: rel.gv.transition-structure-edge, from: state.transition.mode, to: model.governance.structure, type: queries, description: 视角模式与选中映射向结构视图取：依赖边切到交互视角时调用 interactionEdgeBetween 取同一对节点的交互边（V12）, purpose: 切到交互视角时找对应交互边 }
+  - { id: rel.gv.level-rules, from: model.governance.structure, to: model.governance.rules, type: queries, description: 结构视图向规则判定取：结构边的规则叠加与允许依赖图调用 rulesOf 列出约束这对节点的层规则、白名单与访问面（U15、U16）, purpose: 列出约束这对节点的规则 }
+  - { id: rel.gv.rework-structure-level, from: model.rework, to: model.governance.structure, type: queries, description: 返工清单向结构视图取：共用件健康度调用 structureMetrics 算入度最高的共用件（Q15）, purpose: 找入度最高的共用件 }
+  - { id: rel.gv.structure-level, from: model.governance.structure, to: model.governance.level, type: queries, description: 结构视图向本层投影取：调用 nodeOf 把模块依赖、影响面与允许依赖的两端映射到本层节点（L15、K15、U16）, purpose: 把依赖与影响面映射到本层节点 }
+  - { id: rel.gv.structure-facts, from: model.governance.structure, to: model.governance.facts, type: queries, description: 结构视图向事实比对取：调用 coveringRelations 数覆盖依赖边的交互、implementsInto 判端口实现者覆盖、contractNames 取被依赖方的端口名、plainInteraction 判纯交互使用、within 判子树、sharedHostOf 跳过共用件（K14、K17、U17）, purpose: 数交互覆盖、判端口实现覆盖 }
+  - { id: rel.gv.structure-cycles, from: model.governance.structure, to: model.governance.cycles, type: queries, description: 结构视图向环与环度取：「只看值依赖」时调用 valueDeps 去掉只引类型的模块依赖（K15、K16）, purpose: 只看值依赖时去掉只引类型的 }
+  - { id: rel.gv.structure-ownership, from: model.governance.structure, to: model.source.ownership, type: queries, description: 结构视图向归属与入口取：影响面调用 moduleFiles 数闭包内模块的源码文件（K15）, purpose: 数影响面内的源码文件 }
+  - { id: rel.gv.facts-structure, from: state.desk.facts, to: model.governance.structure, type: queries, description: 架构治理派生（desk.facts）向结构视图取：结构视角调用 structureView 取本层结构边或允许依赖图，structureMetrics / moduleMetrics 算指标，impactOf / levelImpact 算影响面，againstStabilityOf、isolatedInteractions 给面板，hasStructureEdge 给视角切换（K14–K17、U15–U17、V12）；surfaceOf / surfaceMetrics 取表面与 W / B，carriersOf 取承载，interactionBundle 取交互束的散开（K18–K20、K5d、D7）, purpose: 取本层结构边与模块度量 }
+  - { id: rel.r8.report-structure, from: model.governance.report, to: model.governance.structure, type: queries, description: 治理报告与门禁向结构视图取：moduleElementEdges、carrierOf 判写了 via 的关系的承载缺口（carrier.gap）与 fact.unconfirmed 的缺段文本，surfaceIssues 取越过入口与热表面未声明（K5d、U18、U19）, purpose: 查 via 关系的承载缺口 }
+  - { id: rel.r8.canvas-structure-facts, from: state.layout.canvas.structure, to: model.governance.facts, type: queries, description: 结构视角的画布场景向事实比对取：isTarget 判目标态节点（跨界折叠的边界节点，L21③）, purpose: 认出目标态的边界节点 }
+  - { id: rel.r8.facts-layout, from: state.desk.facts, to: state.layout, type: queries, description: 架构治理派生（desk.facts）向 Layout 取：surfaceExpansion 按选中与「总是展开表面」算表面展开的节点、端口点的元素、子模块组号与优先次序，并进交给布局同步的 layoutLinks（L20a）, purpose: 算表面展开的节点与元素 }
+  - { id: rel.r8.facts-layout-runner, from: state.desk.facts, to: state.layout.runner, type: queries, description: 架构治理派生（desk.facts）向布局入口与缓存取：chipBundleId 给分层总览核心块的跨层束编 ID（O13③）, purpose: 给跨层束编 ID }
+  - { id: rel.r8.facts-selection, from: state.desk.facts, to: state.transition.selection, type: queries, description: 架构治理派生（desk.facts）向视角与选中规则取：viewpointOf 判结构视角（线的预算），回放中不展开表面、不取交互束散开, purpose: 回放中不展开表面 }
+  - { id: rel.r8.surface-marks-focus, from: present.canvas.nodes, to: present.panel, type: commands, description: 节点组件交给属性面板（视图区「描述」标签）：单击端口点时 focusSurfaceElement 请求「表面」一节定位到该元素，悬停时 hoverSurfaceElement 让「表面」一节同一行同亮（L20④）, purpose: 让「表面」一节定位或同亮元素 }
+  - { id: rel.ly.canvas-hover-read, from: present.canvas.flow, to: present.panel, type: queries, description: 视图转换与交互向属性面板取：面板「表面」一节与协作行的悬停（useSurfaceHover、useRelationHover、edgeOfRelations），画布据此高亮落在端口点上的边与承载这些关系的边（L20④、PC-5）, purpose: 让画布与面板的悬停同亮 }
+  - { id: rel.r8.sequence-chain, from: present.sequence.interact, to: present.panel.step, type: queries, description: 时序图交互向步骤面板取：weakestLevel 取一条消息合并的各帧中最弱的证据等级，定「?」（S17、S18b）, purpose: 取最弱证据等级来标「?」 }
+  - { id: rel.gv.agent-structure, from: access.agent, to: model.governance.structure, type: queries, description: agent 接口向结构视图取：arch impact / metrics 与 MCP 同名工具调用 impactOf、structureMetrics、moduleMetrics 输出影响面与指标（Q14）, purpose: 命令行与 MCP 回答影响面与度量 }
+  - { id: rel.gv.panel-structure-read, from: present.panel.structure, to: state.desk.facts, type: queries, description: 结构视图面板向架构治理派生（desk.facts）取：metricsOf、impactOf、againstOf、isolatedOf、edgeFiles、structure、relationFact 显示指标、影响面、逆稳定、交互图互查与依赖边明细（K14–K17、U15、U17）, purpose: 取度量、影响面与结构边 }
+  - { id: rel.gv.panel-structure-act, from: present.panel.structure, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 结构视图面板交给 dispatch 与操作：单击交互图互查或覆盖它的关系时 setMode 切到交互视角并 select 选中，单击模块时 revealModule（K17）, purpose: 跳到交互视角或定位模块 }
+  - { id: rel.gv.module-structure, from: present.panel.module, to: present.panel.structure, type: commands, description: 模块面板交给结构视图面板：结构视角下渲染模块的「结构」一节 ModuleStructure（K15、K16、K17、U17）, purpose: 结构视角下显示模块的结构 }
+  - { id: rel.gv.dep-structure, from: present.panel.dep, to: present.panel.structure, type: commands, description: 代码依赖面板交给结构视图面板：结构视角选中依赖边时渲染这对节点的结构边、交互覆盖、规则与稳定性 DepStructure（K14、K17、U15、U17）, purpose: 结构视角下显示这对节点的结构 }
+  - { id: rel.gv.structure-content, from: present.panel.structure, to: present.panel.content, type: commands, description: 结构视图面板交给内容组件：渲染分节组件 Section, purpose: 复用分节的渲染 }
+  - { id: rel.gv.structure-gov, from: present.panel.structure, to: present.panel.governance, type: commands, description: 结构视图面板交给架构治理面板：渲染结构边的文件依赖清单 FileDepList, purpose: 列出结构边的文件依赖 }
+  - { id: rel.gv.structure-prefs, from: present.panel.structure, to: present.canvas.legend, type: commands, description: 结构视图面板交给图例：经 useStructurePrefs 读写影响面方向与「只看值依赖」的显示偏好（画布同读，K15）, purpose: 读写影响面方向与值依赖偏好 }
+  - { id: rel.gv.url-mode, from: state.transition.url, to: state.transition.mode, type: queries, description: URL 编解码向视角模式与选中映射取：解码 v=s 时调用 withMode 得到带模式的视图状态（V11）, purpose: 解码 URL 时得到带模式的视图 }
+  - { id: rel.gv.desk-facts-intent, from: state.desk.facts, to: model.intent.check, type: queries, description: 架构治理派生（desk.facts）向草图核验与生命周期取：没有代码事实时调用 sketchLifetime、flattenSketch 把活动草图里层的 mayDependOn 接进允许依赖图（U16）, purpose: 没有代码事实时取草图的层规则 }
+  - { id: rel.gv.tiers-level, from: model.governance.tiers, to: model.governance.level, type: queries, description: 分层向本层投影取：调用 levelValueDeps 取本层值依赖、levelCycleMembers 取 Y4 的环编号（L28）, purpose: 取本层值依赖与环编号 }
+  - { id: rel.gv.tiers-projector, from: model.governance.tiers, to: model.projector, type: queries, description: 分层向 Projector 层次投影取：校验提醒逐个普通层次调用 projectLevel（「+N」展开）得到本层视图（K21、K22）, purpose: 逐个层次投影出本层视图 }
+  - { id: rel.gv.tiers-source, from: model.governance.tiers, to: model.source, type: queries, description: 分层向源码归属取：splitSignals 调用 moduleFiles 判断子模块占不占文件（K21）, purpose: 判子模块占不占文件 }
+  - { id: rel.gv.report-tiers, from: model.governance.report, to: model.governance.tiers, type: queries, description: 治理报告向分层取：调用 tierIssues 把拆分信号与向上非控制反转的边作为 info 并入问题（K21、K22）, purpose: 把拆分信号与向上的边并入问题 }
+  - { id: rel.gv.rework-tiers, from: model.rework, to: model.governance.tiers, type: queries, description: 返工清单向分层取：调用 tierFindings 生成「模块拆分与分层」类的返工项并定位到父模块或边（K21、K22）, purpose: 生成拆分与分层类返工项 }
+  - { id: rel.gv.facts-tiers, from: state.desk.facts, to: model.governance.tiers, type: queries, description: 架构治理派生向分层取：调用 levelTiers 给布局层号、画布角提示与面板向上说明，调用 splitSignals 给模块面板拆分信号（L28、K21）, purpose: 给布局层号、提示与拆分信号 }
+  - { id: rel.gv.agent-tiers, from: access.agent, to: model.governance.tiers, type: queries, description: agent 接口向分层取：tiers 命令调用 tierView、levelTiers、splitSignals 列出每层的子模块、环组、孤立的、向上的边与拆分信号（L28、Q 接口）, purpose: 命令行列出层、环组与拆分信号 }
+  - { id: rel.gv.tiers-facts, from: model.governance.tiers, to: model.governance.facts, type: queries, description: 分层向事实比对取：调用 depKey 给本层依赖与有交互无依赖的节点对去重（L28、K21）, purpose: 给本层依赖与节点对去重 }
+  - { id: rel.gv.tiers-cycles, from: model.governance.tiers, to: model.governance.cycles, type: queries, description: 分层向环与环度取：校验提醒调用 valueDeps 只留值依赖，再按最近公共祖先归到层次（L28、Y1）, purpose: 只留值依赖再归到层次 }
+  - { id: rel.r14.facts-projector, from: state.desk.facts, to: model.projector, type: queries, description: 架构治理派生（desk.facts）向 Projector 层次投影取：调用 shelfOf 取本层共用件，线的级别（K23）的约简宇宙与照画的例外据此排除共用件, purpose: 取本层共用件以排除在约简外 }
+  - { id: rel.r14.canvas-tiers, from: state.layout.canvas, to: model.governance.tiers, type: queries, description: 画布场景向分层与拆分信号取：调用 foldSpanText 在「+N」上写成员的层号跨度与跨 ≥ 3 层的提示（L39、L40）, purpose: 在「+N」上写成员的层号跨度 }
+  - { id: rel.r14.pill-labels, from: present.canvas.edges, to: state.layout.runner.boundaries, type: queries, description: 边组件向框外元素与手工走线取：标签位的 pill 调用 labelWidth、PILL_GAP 按两段的实际文字估宽并排开（L26、L33）, purpose: 按文字估宽排开标签 }

@@ -1,0 +1,1 @@
+{ "steps": [{ "text": "开始回答……" }, { "wait": 20 }, { "exit": 3, "stderr": "假 agent 中途崩溃" }] }

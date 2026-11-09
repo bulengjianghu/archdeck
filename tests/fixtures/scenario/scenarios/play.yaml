@@ -1,0 +1,20 @@
+scenario:
+  id: sc.play
+  name: 播放
+  cause: 业务方调用 play
+  steps:
+    - call: { id: start, from: actor.biz, to: infra.player, label: play }
+    - call: { from: infra.player, to: infra.framework.sm, label: sendCommand, relation: rp }
+    - call: { from: infra.framework.sm, to: app.solution, relation: r1, interface: if.sm }
+    - alt:
+        - when: 需要改图
+          steps:
+            - call: { id: update, from: infra.framework.sm, to: infra.framework.pipeline, payload: ds.cmd }
+            - loop:
+                while: 每个 MU
+                steps:
+                  - async: { from: infra.framework.pipeline, to: infra.mus, label: catch-up }
+        - when: 无需改图
+          steps: []
+    - ref: sc.decide
+    - async: { id: done, from: infra.framework.sm, to: infra.player, label: 结果事件 }

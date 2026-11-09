@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 ce66368b937c03e6 kernel#abstraction=61845d6e kernel#children=d70b7fe2 kernel#excludes=09299f88 kernel#includes=cc1e8b60 kernel#responsibility=0a09c337 kernel#summary=66422383 kernel.assembly#summary=44e7e874 kernel.dispatch#invariants=421f5050 kernel.dispatch#summary=df4947d2 kernel.intake#summary=e3910632 kernel.ledger#invariants=67078286 kernel.ledger#summary=0df1c2c6 kernel.liveness#invariants=8236101c kernel.liveness#summary=d0f0f246 kernel.orchestration#invariants=e6405ffb kernel.orchestration#summary=ccc86dc3 kernel.rules#invariants=3fd60039 kernel.rules#summary=2d2e0554 kernel.tasks#summary=84269531 rel:rel.kernel.acceptance-ledger=16dc3793 rel:rel.kernel.adapter-calls-ledger=c0f31483 rel:rel.kernel.cards-draft=4f7663fc rel:rel.kernel.cards-kernel-check=d4cd1582 rel:rel.kernel.cards-ledger=2adb2e35 rel:rel.kernel.cards-merge=d17a6220 rel:rel.kernel.cards-snapshot=f5f6db60 rel:rel.kernel.cards-wakeups=f8ea5699 rel:rel.kernel.device-plan=a16305ee rel:rel.kernel.dossiers-ledger=860b3af3 rel:rel.kernel.executions-jobs=9b7e3562 rel:rel.kernel.executions-ledger=780dbe10 rel:rel.kernel.external-fault=3da9a5ff rel:rel.kernel.factory-recover=5feca392 rel:rel.kernel.factory-scheduler=ff453b13 rel:rel.kernel.flow-ledger=fef6ab04 rel:rel.kernel.flow-wakeups=c981be2c rel:rel.kernel.intake-budget-cards=9f50e659 rel:rel.kernel.intake-budget-wakeups=2fb41d8a rel:rel.kernel.jobs-faults=9b13b5fc rel:rel.kernel.jobs-ledger=902a2cd7 rel:rel.kernel.jobs-wakeups=31c378d5 rel:rel.kernel.launcher-declarations=aa4fe971 rel:rel.kernel.launcher-intake=8ea4fd64 rel:rel.kernel.launcher-intake-budget=8336b004 rel:rel.kernel.leases-ledger=ef4d400b rel:rel.kernel.leases-wakeups=c7e24051 rel:rel.kernel.ledger-finalize=16674dcb rel:rel.kernel.ledger-flow-reactor=c9c5b3af rel:rel.kernel.ledger-guards=641b2017 rel:rel.kernel.ledger-reactors=735cf20d rel:rel.kernel.ledger-signal-guard=3889f1e5 rel:rel.kernel.ledger-signal-reactors=eeb2e90e rel:rel.kernel.merge-call=810e442b rel:rel.kernel.merge-wakeups=dd3edaeb rel:rel.kernel.recovery-faults=72a6544e rel:rel.kernel.recovery-leases=23469202 rel:rel.kernel.recovery-ledger=173b7ecc rel:rel.kernel.recovery-runners=726eb8c9 rel:rel.kernel.rules-adapter-calls=8b38125f rel:rel.kernel.rules-cards=e40cd64d rel:rel.kernel.rules-draft=4d908dd2 rel:rel.kernel.rules-kill=7989074f rel:rel.kernel.rules-playbook=2bcedc2a rel:rel.kernel.rules-queries=d10fc04d rel:rel.kernel.rules-wakeups=cbd0e726 rel:rel.kernel.signals-declarations=c4f9a33f rel:rel.kernel.signals-ledger=9442942a rel:rel.kernel.signals-prewt=e43daf47 rel:rel.kernel.signals-tasks=10fa8bed rel:rel.kernel.signals-wakeups=f70a1b5e rel:rel.kernel.tasks-ledger=41c36303 rel:rel.kernel.tasks-prewt=93eaa33c rel:rel.kernel.tasks-wakeups=00d4b145 rel:rel.kernel.wakeups-ledger=0d359956 rel:rel.kernel.wakeups-queries=85f8fd37 rel:rel.kernel.watchdog-cards=cc75aa3f rel:rel.kernel.watchdog-kill=52588e21 rel:rel.kernel.watchdog-leases=feb654a8 rel:rel.kernel.watchdog-ledger=9ebd4042 rel:rel.kernel.watchdog-poll=094493d7 rel:rel.kernel.watchdog-runners=ade2bbe9 rel:rel.kernel.watchdog-wake=5cdc560b">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>内核 · 八块围着一本账转</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--gray:#8c959f;
+--surface:#0969da;--surface-s:#ddf4ff;--client:#1b7c83;--client-s:#d8f3f6;--adapters:#bc4c00;--adapters-s:#fff1e5;
+--server:#bf3989;--server-s:#ffeff7;--kernel:#8250df;--kernel-s:#fbefff;--playbooks:#1a7f37;--playbooks-s:#dafbe1;
+--share:#9a6700;--share-s:#fff8c5;--human:#cf222e;--human-s:#ffebe9;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--gray:#6e7681;
+--surface:#4493f8;--surface-s:#0c2d6b;--client:#39c5cf;--client-s:#0b3a3f;--adapters:#f0883e;--adapters-s:#3d2310;
+--server:#ec6cb9;--server-s:#3d1530;--kernel:#ab7df8;--kernel-s:#2b1d47;--playbooks:#3fb950;--playbooks-s:#12351e;
+--share:#d29922;--share-s:#3b2e0a;--human:#ff7b72;--human-s:#4b1113}}
+body{margin:0;padding:16px 18px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:20px 0 4px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 2px}
+figcaption{font-size:12.5px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text);font-size:12px}
+svg .m{fill:var(--text-2);font-size:11px}
+svg .t{font-size:12.5px;font-weight:600}
+svg .w{fill:var(--human)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0;font-size:12.5px}
+.chips span{border:1px solid var(--line);border-radius:10px;padding:0 8px;background:var(--soft)}
+</style>
+  </head>
+  <body>
+    <h1>八块围着一本账转</h1>
+    <p class="lede">内核里谁想改状态，都得开一笔写账事务；<span data-arch="kernel.ledger">账与投影</span>在这笔事务里请<span data-arch="kernel.rules">兜底规则与门</span>把关、请反应补出后续。所以读这一层先看那笔事务，再看谁往里写、谁插在里面。</p>
+
+    <h2>唯一的写入口：一笔写账事务</h2>
+    <figure>
+      <svg viewBox="0 0 480 292" role="img" aria-label="上排五个服务开事务写账，中间是事务的五步，下排是插进事务的规则端口">
+        <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <text x="10" y="14" class="m">开事务、写事件的服务</text>
+        <g data-arch="kernel.tasks"><rect x="10" y="22" width="86" height="36" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="53" y="45" text-anchor="middle">任务与卡</text></g>
+        <g data-arch="kernel.orchestration"><rect x="103" y="22" width="86" height="36" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="146" y="45" text-anchor="middle">统筹与执行</text></g>
+        <g data-arch="kernel.dispatch"><rect x="196" y="22" width="86" height="36" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="239" y="45" text-anchor="middle">适配器调用</text></g>
+        <g data-arch="kernel.liveness"><rect x="289" y="22" width="86" height="36" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="332" y="45" text-anchor="middle">活性与恢复</text></g>
+        <g data-arch="kernel.intake"><rect x="382" y="22" width="88" height="36" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="426" y="45" text-anchor="middle">信号池</text></g>
+        <path d="M53 58 V80 M146 58 V80 M239 58 V80 M332 58 V80 M426 58 V80" stroke="var(--text-2)" marker-end="url(#a)"/>
+        <!-- 事务 -->
+        <g data-arch="kernel.ledger">
+          <rect x="10" y="84" width="460" height="92" rx="10" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-width="2.5"/>
+          <text x="22" y="104" class="t">账与投影：一笔事务，要么全成，要么全不成</text>
+        </g>
+        <g>
+          <rect x="22" y="118" width="74" height="40" rx="6" fill="var(--bg)" stroke="var(--kernel)"/><text x="59" y="143" text-anchor="middle">守卫</text>
+          <rect x="110" y="118" width="74" height="40" rx="6" fill="var(--bg)" stroke="var(--kernel)"/><text x="147" y="143" text-anchor="middle">追加事件</text>
+          <rect x="198" y="118" width="74" height="40" rx="6" fill="var(--bg)" stroke="var(--kernel)"/><text x="235" y="143" text-anchor="middle">投影</text>
+          <rect x="286" y="118" width="74" height="40" rx="6" fill="var(--bg)" stroke="var(--kernel)"/><text x="323" y="143" text-anchor="middle">反应</text>
+          <rect x="374" y="118" width="84" height="40" rx="6" fill="var(--bg)" stroke="var(--kernel)"/><text x="416" y="139" text-anchor="middle">收尾</text><text x="416" y="153" text-anchor="middle" class="m">再提交</text>
+          <path d="M96 138 H108 M184 138 H196 M272 138 H284 M360 138 H372" stroke="var(--text-2)" marker-end="url(#a)"/>
+        </g>
+        <!-- 插件 -->
+        <text x="10" y="200" class="m">插进事务的端口函数（账本身不认识它们）</text>
+        <g data-arch="kernel.rules"><rect x="10" y="208" width="150" height="40" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-dasharray="4 3"/><text x="85" y="226" text-anchor="middle">兜底规则与门</text><text x="85" y="241" text-anchor="middle" class="m">守卫 + 反应</text></g>
+        <g data-arch="kernel.intake"><rect x="168" y="208" width="96" height="40" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-dasharray="4 3"/><text x="216" y="226" text-anchor="middle">信号规则</text><text x="216" y="241" text-anchor="middle" class="m">守卫 + 反应</text></g>
+        <g data-arch="kernel.dispatch"><rect x="272" y="208" width="96" height="40" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-dasharray="4 3"/><text x="320" y="226" text-anchor="middle">结果归一</text><text x="320" y="241" text-anchor="middle" class="m">反应（最后跑）</text></g>
+        <g data-arch="kernel.liveness"><rect x="376" y="208" width="94" height="40" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-dasharray="4 3"/><text x="423" y="226" text-anchor="middle">补唤醒</text><text x="423" y="241" text-anchor="middle" class="m">收尾</text></g>
+        <path d="M59 208 V160 M120 208 L310 160 M216 208 L318 160 M320 208 V160 M423 208 V160" stroke="var(--gray)" stroke-dasharray="3 3" marker-end="url(#a)"/>
+        <g data-arch="kernel.assembly"><rect x="10" y="260" width="460" height="26" rx="6" fill="none" stroke="var(--gray)"/><text x="240" y="278" text-anchor="middle" class="m">内核装配：启动时把这些函数按顺序插上，此后不再变</text></g>
+      </svg>
+      <figcaption>上排是开事务写事件的服务，下排是插在事务里的函数。账只管顺序与回滚边界，换掉一条规则不碰账；守卫一抛错，这一笔连同它引出的后续一起撤销。</figcaption>
+    </figure>
+
+    <h2>为什么依赖成了一个环，怎么读</h2>
+    <figure>
+      <svg viewBox="0 0 480 270" role="img" aria-label="上：账、反应规则、各服务三者成环；下：把环按一笔事务展开成一条时间线">
+        <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <text x="10" y="16" class="m">按 import 看：一个环</text>
+        <rect x="20" y="30" width="110" height="36" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-width="2"/><text x="75" y="53" text-anchor="middle">账（事务）</text>
+        <rect x="185" y="30" width="110" height="36" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="240" y="53" text-anchor="middle">反应规则</text>
+        <rect x="350" y="30" width="110" height="36" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="405" y="53" text-anchor="middle">各个服务</text>
+        <path d="M130 48 H183" stroke="var(--text-2)" marker-end="url(#b)"/><text x="156" y="42" text-anchor="middle" class="m">调</text>
+        <path d="M295 48 H348" stroke="var(--text-2)" marker-end="url(#b)"/><text x="321" y="42" text-anchor="middle" class="m">调</text>
+        <path d="M405 66 C405 100, 75 100, 75 68" fill="none" stroke="var(--text-2)" marker-end="url(#b)"/><text x="240" y="98" text-anchor="middle" class="m">再写账</text>
+        <line x1="10" y1="116" x2="470" y2="116" stroke="var(--line)"/>
+        <text x="10" y="136" class="m">按一笔事务看：一条有头有尾的线</text>
+        <rect x="10" y="146" width="460" height="74" rx="10" fill="none" stroke="var(--kernel)" stroke-dasharray="5 4"/>
+        <text x="20" y="164" class="m">开事务</text>
+        <text x="434" y="164" class="m">提交</text>
+        <rect x="22" y="172" width="80" height="32" rx="6" fill="var(--soft)" stroke="var(--line)"/><text x="62" y="193" text-anchor="middle">事件 A</text>
+        <rect x="128" y="172" width="96" height="32" rx="6" fill="var(--soft)" stroke="var(--line)"/><text x="176" y="193" text-anchor="middle">反应 → 服务</text>
+        <rect x="250" y="172" width="80" height="32" rx="6" fill="var(--soft)" stroke="var(--line)"/><text x="290" y="193" text-anchor="middle">事件 B</text>
+        <rect x="356" y="172" width="104" height="32" rx="6" fill="var(--soft)" stroke="var(--line)"/><text x="408" y="193" text-anchor="middle">补唤醒、入队</text>
+        <path d="M102 188 H126 M224 188 H248 M330 188 H354" stroke="var(--text-2)" marker-end="url(#b)"/>
+        <text x="240" y="240" text-anchor="middle" class="m">反应只补事件、排唤醒、放任务包，不在事务里唤起统筹者；</text>
+        <text x="240" y="258" text-anchor="middle" class="m">统筹者要等看门狗下一轮另开事务，所以线一定会走到头。</text>
+      </svg>
+      <figcaption>环是真实的：反应得调各服务，各服务又得写账。但它不是失控的递归——同一笔事务里每圈都要产生新事件、过一遍守卫，最终只落成唤醒和任务包；读的时候沿「一笔事务」走，不沿 import 走。</figcaption>
+    </figure>
+
+    <h2>不卡死：唤醒是账上的事实</h2>
+    <figure>
+      <svg viewBox="0 0 480 214" role="img" aria-label="每笔事务收尾补唤醒，看门狗到点触发，活性唤起统筹者，统筹者的决定再写账">
+        <defs><marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="10" y="20" width="130" height="50" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="75" y="42" text-anchor="middle">事务收尾</text><text x="75" y="60" text-anchor="middle" class="m">没唤醒就补一条</text>
+        <rect x="175" y="20" width="130" height="50" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="240" y="42" text-anchor="middle">看门狗一轮</text><text x="240" y="60" text-anchor="middle" class="m">默认 15 秒</text>
+        <rect x="340" y="20" width="130" height="50" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-width="2"/><text x="405" y="42" text-anchor="middle">唤起统筹者</text><text x="405" y="60" text-anchor="middle" class="m">快照 + 增量事件</text>
+        <path d="M140 45 H173 M305 45 H338" stroke="var(--text-2)" marker-end="url(#c)"/>
+        <text x="322" y="38" text-anchor="middle" class="m">到点</text>
+        <rect x="340" y="110" width="130" height="44" rx="8" fill="var(--playbooks-s)" stroke="var(--playbooks)"/><text x="405" y="130" text-anchor="middle">统筹者会话</text><text x="405" y="146" text-anchor="middle" class="m">派执行、发卡、设唤醒</text>
+        <path d="M405 70 V108" stroke="var(--text-2)" marker-end="url(#c)"/>
+        <path d="M340 132 H75 V72" fill="none" stroke="var(--text-2)" marker-end="url(#c)"/>
+        <text x="200" y="126" text-anchor="middle" class="m">经 MCP 写账，又是一笔事务</text>
+        <path d="M240 70 V 176 H 120" fill="none" stroke="var(--gray)" stroke-dasharray="3 3" marker-end="url(#c)"/>
+        <text x="10" y="170" class="m">看门狗顺手做：</text>
+        <text x="10" y="188" class="m">判停滞杀会话 · 卡到期 · 租约过期</text>
+        <text x="10" y="206" class="m">runner 离线 · 外部状态轮询</text>
+        <text x="250" y="196" class="m">等人答卡时只是兜底的唤醒：照记，不唤起</text>
+      </svg>
+      <figcaption>活性只看一张唤醒表：写账时补齐、到点触发，<span data-arch="kernel.orchestration">统筹与执行</span>只在被触发时才起会话。事务里的反应从不直接唤起统筹者，这样一笔事务的长短与 AI 会话无关。</figcaption>
+    </figure>
+
+    <h2>对外：两条事件夹住一次调用，合入要过门</h2>
+    <figure>
+      <svg viewBox="0 0 480 220" role="img" aria-label="人放行后请求合入，守卫查放行与证据，经适配器调用记两条事件，结果归一成已合入">
+        <defs><marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <circle cx="40" cy="40" r="26" fill="var(--human-s)" stroke="var(--human)"/><text x="40" y="45" text-anchor="middle" class="w">人放行</text>
+        <rect x="90" y="18" width="110" height="44" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-width="2"/><text x="145" y="38" text-anchor="middle">合入门</text><text x="145" y="54" text-anchor="middle" class="m">对当前 head 吗？</text>
+        <rect x="228" y="18" width="120" height="44" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="288" y="38" text-anchor="middle">记「请求调用」</text><text x="288" y="54" text-anchor="middle" class="m">同事务放任务包</text>
+        <rect x="376" y="18" width="94" height="44" rx="8" fill="var(--client-s)" stroke="var(--client)"/><text x="423" y="38" text-anchor="middle">runner</text><text x="423" y="54" text-anchor="middle" class="m">适配器执行</text>
+        <path d="M66 40 H88 M200 40 H226 M348 40 H374" stroke="var(--text-2)" marker-end="url(#d)"/>
+        <rect x="228" y="100" width="120" height="44" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="288" y="120" text-anchor="middle">记「调用完成」</text><text x="288" y="136" text-anchor="middle" class="m">同事务归一</text>
+        <path d="M423 62 V122 H350" fill="none" stroke="var(--text-2)" marker-end="url(#d)"/><text x="430" y="96" class="m">回报</text>
+        <rect x="90" y="100" width="110" height="44" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="145" y="120" text-anchor="middle">已合入</text><text x="145" y="136" text-anchor="middle" class="m">终态，收工</text>
+        <path d="M228 122 H202" stroke="var(--text-2)" marker-end="url(#d)"/>
+        <line x1="145" y1="62" x2="145" y2="98" stroke="var(--human)" stroke-dasharray="3 3"/>
+        <text x="152" y="84" class="m w">守卫查两次</text>
+        <text x="10" y="176" class="m">任务包是运行表、不进账（里面有令牌）；</text>
+        <text x="10" y="194" class="m">派了什么、结果如何，由框里的两条事件记下。</text>
+        <text x="10" y="212" class="m">统筹者与执行者都没有合入权限，只能请人放行。</text>
+      </svg>
+      <figcaption>合入是最典型的一次对外调用：<span data-arch="kernel.rules">门</span>在请求与落定两处各拦一次，<span data-arch="kernel.dispatch">适配器调用、租约与真机</span>负责两条事件和中间的任务包。其余调用（建工作树、跑判项、跑真机）走同一条路，只是不过合入门。</figcaption>
+    </figure>
+  </body>
+</html>

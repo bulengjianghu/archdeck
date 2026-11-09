@@ -1,0 +1,10 @@
+# 设计 sketch-editor 挂在「present.panel」上的草图：由一期的 designs/sketch-editor/sketch.yaml 按挂载点机械拆出（ADR-0025 迁移，内容不变），同设计另有 model.intent、state.desk、state.transition、access.writer、present.canvas、present.version。
+sketch:
+  id: sketch-editor
+  mount: present.panel
+  lifetime: until-implemented
+  modules:
+    - id: present.panel.edit
+      name: 编辑表单
+      kind: component
+      responsibility: 编辑态下层 / 模块 / 关系 / 接口 / 草图元信息的表单，以及即时校验结果与「实现后将有 N 处偏差」的核验结果；改动即发意图。

@@ -1,0 +1,85 @@
+# 取自 kernel/src/watchdog.ts（fireDueWakeups）、services/orchestrator.ts（OrchestratorLauncher.wake）、services/executions.ts（dispatch）、
+# kernel-api/src/app.ts（afterMutation）、hub.ts、runner/src/executor.ts（统筹执行开跑前取最新提示词）与 kernel-api/src/mcp.ts（plan-tools 的 gixn_end_turn）。
+scenario:
+  id: sc.orchestrator-wake
+  name: 统筹者一次唤醒
+  kind: main
+  description: |
+    统筹者按事件唤起、无状态：到点的唤醒（事件型如卡答、执行结束、适配器结果，或兜底的 liveness.idle）由写后链或看门狗一轮触发；
+    启动器持任务锁，跳过终态、预算暂停、已有统筹者在跑、等人答卡时的兜底唤醒；否则拼提示词（剧本 + 档案 + 现状快照 OrchestratorSnapshot + 上次正常收工之后的增量事件），
+    派一次统筹执行（只读、一次性 MCP 令牌）并入 session.start 任务包；runner 开跑前再取一次按此刻快照重拼的提示词，起 Claude Code 会话。
+    会话经 MCP 读事件、做决定（派执行 / 发起适配器调用 / 发卡），最后 gixn_end_turn 消化看过的唤醒并按需设下次唤醒，答完即退。
+  cause: 任务的一条唤醒到点（事件型或兜底）
+  evidence:
+    - packages/kernel/test/liveness.test.ts
+    - packages/kernel/test/batch-wake.test.ts
+    - packages/kernel/test/orchestrator-backoff.test.ts
+    - packages/kernel/test/p0-liveness.test.ts
+    - packages/kernel-api/test/g6-prompt.test.ts
+    - packages/kernel-api/test/mcp-flow.test.ts
+    - packages/playbooks/test/orchestrator.test.ts
+  steps:
+    - async: {id: due, from: server.http.assembly, to: kernel.liveness.watchdog, relation: rel.server.mutation-wakeups, label: 'fireDueWakeups(now)（写后链；看门狗一轮同样会调）'}
+    - call: {from: kernel.liveness.watchdog, to: kernel.ledger.ledger, label: 'wakeup.fired（每条到点的唤醒一条）'}
+    - call: {id: wake, from: kernel.liveness.watchdog, to: kernel.orchestration.launcher, label: 'wake(taskId, cause, tx)'}
+    - alt:
+        - when: 终态、预算暂停、已有统筹者在跑，或等人答卡时的兜底唤醒
+          steps:
+            - return: {id: skipped, from: kernel.orchestration.launcher, to: kernel.liveness.watchdog, label: 不派会话（唤醒照记，再排下一次兜底）}
+        - when: 照常唤起
+          steps:
+            - async: {id: snapshot, from: kernel.orchestration.launcher, to: kernel.orchestration.queries, label: 任务行、在跑与排队执行、待答卡、分支对齐、已花费用 → OrchestratorSnapshot}
+            - async: {from: kernel.orchestration.launcher, to: kernel.orchestration.playbook-hooks, label: effectivePlaybookOf：生效剧本与会话可写与否}
+            - async: {from: kernel.orchestration.launcher, to: kernel.rules.declarations, label: 同仓库任务的依赖与改动重叠}
+            - call: {id: prompt, from: kernel.orchestration.launcher, to: playbooks.orchestrator.builder, label: 'buildPrompt(档案、唤醒事件窗口 ≤200 条、验收项现状、快照、剧本)'}
+            - call: {from: playbooks.orchestrator.builder, to: playbooks.orchestrator.situation, label: 现状段与唤醒原因段}
+            - call: {from: playbooks.orchestrator.situation, to: playbooks.orchestrator.events, label: 增量事件段}
+            - call: {from: playbooks.orchestrator.builder, to: playbooks.templates.loader, label: 公共段 + 剧本段 + 流程段模板}
+            - async: {id: dispatch, from: kernel.orchestration.launcher, to: kernel.orchestration.executions, label: 'dispatch(role=orchestrator, readonly)'}
+            - async: {from: kernel.orchestration.executions, to: server.mcp.tokens, label: '签本次执行的 MCP 令牌（scope=orchestrator）与 MCP 地址'}
+            - call: {from: kernel.orchestration.executions, to: playbooks.heal.commands, label: 按配方与角色生成放行命令}
+            - async: {from: kernel.orchestration.executions, to: kernel.ledger.ledger, label: 'execution.dispatched / orchestrator.woken'}
+            - async: {from: kernel.orchestration.executions, to: kernel.dispatch.jobs, label: session.start 任务包（续会话沿用句柄与 runner 亲和）}
+    - call: {from: server.http.assembly, to: server.hub.push, label: kick()}
+    - async: {from: server.hub.push, to: kernel.dispatch.jobs, label: 按主人 / 配方 / 亲和原子认领}
+    - async: {from: server.hub.push, to: server.hub.delivery, label: deliverable：执行已不在排队或运行即作废}
+    - async: {id: deliver, from: server.hub.push, to: client.channel.runner, relation: rel.server.hub-jobs-ws, label: "{type: 'jobs', jobs}"}
+    - call: {from: client.channel.runner, to: client.channel.executor, label: execute(job)：回 accepted、按 jobId 去重、进长执行道}
+    - async: {from: client.channel.executor, to: client.channel.kernel-client, label: 开跑前取最新提示词}
+    - async: {from: client.channel.kernel-client, to: server.http.runner-routes, relation: rel.client.fresh-prompt, label: 'GET /v1/runners/executions/:id/prompt'}
+    - async: {from: server.http.runner-routes, to: kernel.orchestration.launcher, label: refreshOrchestratorPrompt：按此刻快照重拼（不在排队时 409，用派发时那份）}
+    - async: {from: client.channel.executor, to: client.profiles.worktrees, label: 只读角色换到集成分支最新的只读快照}
+    - async: {from: client.channel.executor, to: adapters.ai.executor, label: 'start(SessionSpec, onEvent)'}
+    - call: {from: adapters.ai.executor, to: adapters.ai.args, label: 写 MCP 配置、拼 claude 命令行}
+    - async: {from: adapters.ai.executor, to: share.proc, label: 起 claude 子进程（独立进程组）}
+    - async: {id: session, from: adapters.ai.executor, to: actor.orchestrator, label: 统筹者会话开跑}
+    - async: {id: read, from: actor.orchestrator, to: server.mcp.service, label: 'gixn_get_events / gixn_get_dossier'}
+    - async: {from: server.mcp.service, to: server.mcp.auth, label: resolveMcpCtx}
+    - async: {from: server.mcp.auth, to: server.mcp.tokens, label: 验 MCP 令牌签名与形状}
+    - async: {from: server.mcp.auth, to: kernel.orchestration.executions, label: 执行仍在排队或运行、任务与角色对得上 → scope}
+    - async: {from: server.mcp.service, to: server.mcp.plan-tools, label: 'gixn_get_events(afterSeq)'}
+    - async: {from: server.mcp.plan-tools, to: kernel.ledger.ledger, label: 'events({taskId, afterSeq, readBy})'}
+    - alt:
+        - when: 派执行
+          steps:
+            - async: {id: decide-dispatch, from: actor.orchestrator, to: server.mcp.service, label: 'gixn_dispatch_execution(role, model, brief)'}
+            - async: {from: server.mcp.service, to: server.mcp.dispatch-tools, label: 调工具实现}
+            - call: {from: server.mcp.dispatch-tools, to: playbooks.roles.executor, label: 'buildExecutorPrompt(role, …)'}
+            - async: {from: server.mcp.dispatch-tools, to: kernel.orchestration.executions, relation: rel.server.dispatch-execution, label: 记决定 + dispatch（同一事务）}
+        - when: 发起适配器调用（判项、推分支建变更、真机运行）
+          steps:
+            - ref: sc.adapter-call
+        - when: 要人拍板
+          steps:
+            - async: {id: decide-card, from: actor.orchestrator, to: server.mcp.service, label: 'gixn_open_card(confirm / question / release)'}
+            - async: {from: server.mcp.service, to: server.mcp.card-tools, label: 调工具实现}
+            - async: {from: server.mcp.card-tools, to: kernel.tasks.cards, relation: rel.server.card-open, label: openCardTx}
+    - async: {id: end, from: actor.orchestrator, to: server.mcp.service, label: 'gixn_end_turn(nextWakeupInSec)'}
+    - async: {from: server.mcp.service, to: server.mcp.plan-tools, label: 调工具实现}
+    - async: {from: server.mcp.plan-tools, to: kernel.orchestration.dossiers, relation: rel.server.plan-dossier, label: 记本次唤醒结束、消化看过的唤醒（causeSeq）}
+    - async: {from: server.mcp.plan-tools, to: kernel.liveness.wakeups, label: 'scheduleWakeup(at, orchestrator:<cause>)：撤掉内核补的兜底唤醒'}
+    - async: {from: server.mcp.service, to: server.http.assembly, label: afterMutation：触发到期唤醒并踢通道}
+    - return: {from: adapters.ai.executor, to: client.channel.executor, label: 会话结束：结局与用量}
+    - async: {from: client.channel.runner, to: server.http.runner-routes, relation: rel.client.report-ws, label: "{type: update} session.finished"}
+    - async: {from: server.http.runner-routes, to: kernel.dispatch.jobs, relation: rel.server.runner-job-update, label: 'update(jobId, JobUpdate)'}
+    - async: {id: finished, from: kernel.dispatch.jobs, to: kernel.ledger.ledger, label: execution.finished（统筹者自身失败 60 秒起退避重唤，不计尝试）}

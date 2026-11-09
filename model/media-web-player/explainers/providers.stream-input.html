@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 72ef87a82abfff7b providers.stream-input#abstraction=05eb6829 providers.stream-input#children=d664c1e3 providers.stream-input#invariants=a9371be4 providers.stream-input#provides=822f1c34 providers.stream-input#responsibility=6db6973d providers.stream-input#summary=f7cd47eb providers.stream-input.input#summary=20e13537 providers.stream-input.timeshift#summary=4e3ba3ab rel:rel.providers.input-timeshift=98a43b99">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>拉流内核 · 进料口与溢流阀</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>进料口与溢流阀</h1>
+    <p class="lede">这一层是 <span data-arch="providers.stream-input">拉流内核</span>：<span data-arch="providers.stream-input" data-field="summary"></span>。两种机芯共用同一个进料口：把网络字节喂给解码引擎，攒多了就丢旧保新。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 238" role="img" aria-label="网络字节先进水箱，水位过高跳到最新关键帧，再喂给解码引擎会话">
+        <defs><marker id="e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="14" y="36" width="108" height="56" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="68" y="60" font-size="11" text-anchor="middle" class="">网络字节流</text><text x="68" y="76" font-size="9" text-anchor="middle" class="muted">FLV / HLS / MP4</text>
+        <path d="M124,64 L152,64" stroke="var(--text-2)" stroke-width="2" marker-end="url(#e)"/>
+        <rect x="156" y="20" width="178" height="132" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="245" y="44" font-size="11" text-anchor="middle" class="">字节先进水箱排队</text>
+        <rect x="172" y="88" width="146" height="48" rx="8" fill="var(--accent)" opacity="0.45"/>
+        <text x="245" y="116" font-size="10" text-anchor="middle" class="">压缩缓冲（水箱）</text>
+        <text x="245" y="66" font-size="9" text-anchor="middle" class="muted">攒着等解码引擎消化</text>
+        <path d="M336,88 L368,88" stroke="var(--hot)" stroke-width="2.5" marker-end="url(#e)"/>
+        <rect x="372" y="56" width="128" height="62" rx="10" fill="var(--warn-soft)" stroke="var(--warn)"/>
+        <text x="436" y="80" font-size="10.5" text-anchor="middle" class="">水位过高 → 溢流阀</text>
+        <text x="436" y="98" font-size="9" text-anchor="middle" class="muted">跳到最新关键帧</text>
+        <path d="M502,88 L522,88" stroke="var(--text-2)" stroke-width="2.5" marker-end="url(#e)"/>
+        <rect x="526" y="44" width="104" height="88" rx="10" fill="var(--bg)" stroke="var(--warn)"/>
+        <text x="578" y="72" font-size="10.5" text-anchor="middle" class="">解码引擎会话</text>
+        <text x="578" y="90" font-size="9" text-anchor="middle" class="muted">按字节收料 · 出帧</text>
+        <text x="578" y="104" font-size="9" text-anchor="middle" class="muted">报水位</text>
+        <rect x="156" y="172" width="220" height="52" rx="8" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="266" y="192" font-size="10.5" text-anchor="middle" class="">同一入口还管：seek · 退回直播</text>
+        <text x="266" y="210" font-size="9" text-anchor="middle" class="muted">切时移三段：截断 → 接入中 → 时移</text>
+        <rect x="400" y="172" width="230" height="52" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/>
+        <text x="515" y="192" font-size="10.5" text-anchor="middle" class="">到达即计量：喂给延迟律当读数</text>
+        <text x="515" y="210" font-size="9" text-anchor="middle" class="muted">迟到多少，律说了算怎么追</text>
+        <path d="M578,134 L578,168" stroke="var(--text-2)" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#e)"/>
+      </svg>
+      <figcaption>进料口：喂字节、控水位、报读数，三件事一件不少。</figcaption>
+    </figure>
+
+    <h2>两个岗位</h2>
+    <div class="cols c2">
+      <div><b><span data-arch="providers.stream-input.input">进料</span></b>按引擎肯收的块推字节；水箱攒满说明观众掉队了——溢流阀直接跳到最新关键帧，旧画面整段放弃，观众只觉得「追上了直播」。</div>
+      <div><b><span data-arch="providers.stream-input.timeshift">切时移</span></b>FLV 直播切回看列表的三段计算：从截断点无缝接入录制流；拖动进度与退回直播也走这同一个入口。</div>
+    </div>
+
+    <p class="note">它只进料不做决策：追不追、追多快，交给 <span data-arch="pipeline.latency">延迟律</span>；引擎怎么样，问 <span data-arch="providers.wasm-module">解码发动机</span>。进料口与恒温器手拉手——到达即计量，迟到多少立刻有读数。</p>
+
+  </body>
+</html>

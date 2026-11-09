@@ -1,0 +1,67 @@
+/**
+ * 四类交互与端口的画法（ADR-0029）：L10 查询淡（半透明、线宽不变）、委托实色；L13 端口记号在进边一侧后半、标实现者数，
+ * 单击端口即选中（V2，sel=p:<接口 ID>），副栏是端口面板（K11）——定义 · 实现者（描述 / 仅代码事实）· 使用者，单击实现者选中该模块。
+ */
+import { expect, test } from '@playwright/test'
+import { openDesk, query, openPanel } from './helpers'
+
+test('L13、V2、K11：单击端口记号出端口面板，URL 带 sel=p:，单击实现者选中该模块', async ({ page }) => {
+  await openDesk(page, '/p/h5player?level=infra.framework')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
+  const mark = page.locator('.vue-flow__node[data-id="infra.framework.plugin"] .port-mark')
+  await expect(mark).toHaveCount(1)
+  await expect(mark).toHaveAttribute('aria-label', /端口 PluginBase，实现者 \d+/)
+  // 记号骑在节点顶边（进边一侧）的后半
+  const node = (await page.locator('.vue-flow__node[data-id="infra.framework.plugin"]').boundingBox())!
+  const m = (await mark.boundingBox())!
+  expect(m.x).toBeGreaterThanOrEqual(node.x + node.width / 2 - 1)
+  expect(Math.abs(m.y + m.height / 2 - node.y)).toBeLessThan(m.height)
+  await mark.dispatchEvent('click')
+  await expect.poll(() => query(page).get('sel')).toBe('p:if.framework.plugin.PluginBase')
+  const panel = page.locator('.panel')
+  await expect(panel.locator('h2')).toHaveText('端口 PluginBase')
+  await expect(panel).toContainText('定义于')
+  await expect(panel.locator('.implementers .tag', { hasText: '仅代码事实' }).first()).toBeVisible()
+  await expect(mark).toHaveClass(/selected/)
+  await panel.locator('.implementers .party .link').first().click()
+  await expect.poll(() => query(page).get('sel')).toMatch(/^m:/)
+  // 从 URL 恢复端口选中
+  await openDesk(page, '/p/h5player?level=infra.framework&sel=p:if.framework.media-unit.MediaUnit')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
+  await expect(page.locator('.panel h2')).toHaveText('端口 MediaUnit')
+})
+
+test('L10、L12：图例示意与画布同一套样式——查询半透明、线宽与委托相同（只「淡」不「细」）；端口示意带插座', async ({ page }) => {
+  // T2 迁移后 app 层有真实的查询 / 委托：在图例上验（示意与画布共用 edgeStyle）；画布上的同一映射见单测 routeEdge
+  // L47（G14）：换到 app 层量——infra 层静息态没有经端口机制的边，端口示意（带插座）不列
+  await openDesk(page, '/p/h5player?level=app')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
+  // L45（第十七轮 R4）：类型行即开关（.item 按钮），示意仍与画布同一套样式
+  const types = page.getByRole('region', { name: '图例' }).locator('.type-list')
+  const swatch = (label: string) => types.locator('.item', { hasText: label }).first().locator('svg.swatch line').first()
+  const q = swatch('查询')
+  const c = swatch('委托')
+  await expect(q).toHaveAttribute('stroke', 'var(--rel-queries)')
+  await expect(c).toHaveAttribute('stroke', 'var(--rel-commands)')
+  await expect(q).toHaveCSS('opacity', '0.6')
+  await expect(c).toHaveCSS('opacity', '1')
+  expect(await q.getAttribute('stroke-width')).toBe(await c.getAttribute('stroke-width'))
+  // L47（G14）：只列本层画面出现的类型——app 层没有未分类与流（行按词表保留、只显隐）
+  await expect(types.locator('[data-type="calls"]')).not.toBeVisible()
+  await expect(types.locator('[data-type="streams"]')).not.toBeVisible()
+  await expect(page.getByRole('region', { name: '图例' }).locator('.reading-row marker.socket-marker')).toHaveCount(1)
+})
+
+test('L12、L10：画布上经端口的边在目标端有插座；查询边半透明、委托实色（T2 迁移后的真实数据）', async ({ page }) => {
+  // rel.solution.stage-swap-factory-base 经 SolutionStageFactory 端口（via: port:），在 app 层聚合到 Solution → 段工厂的委托边上
+  await openDesk(page, '/p/h5player?level=app')
+  await openPanel(page) // 抽屉缺省收起（第二十轮 §4）
+  const edge = page.locator('.vue-flow__edge[data-id="app.solution->app.factories:commands"]')
+  await expect(edge).toHaveCount(1)
+  await expect(edge.locator('path.edge-socket')).toHaveCount(1)
+  await expect(edge.locator('.vue-flow__edge-path')).toHaveCSS('opacity', '1')
+  const query = page.locator('.vue-flow__edge[data-id$=":queries"] .vue-flow__edge-path').first()
+  await expect(query).toHaveCSS('opacity', '0.6')
+  // 没有经端口关系的边没有插座
+  await expect(page.locator('.vue-flow__edge[data-id$=":queries"]').first().locator('path.edge-socket')).toHaveCount(0)
+})

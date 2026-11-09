@@ -1,0 +1,761 @@
+# 区域：服务端入口（packages/kernel-api）——进程装配与 HTTP、runner 通道、MCP 服务与令牌
+# 第二级模块（server.http / server.hub / server.mcp）由骨架定义，此处只补原则与边界并往下挂子模块。
+# http.ts、hub.ts、mcp.ts 各是单文件，内部子结构（路由组、投递环节、工具组）写成概念子模块（不写 codeRefs，§3.7）。
+# 组合根装配（createKernel、new RunnerHub、把剧本 / 自愈手册 / 放行命令 / 令牌签发交给内核）是组装事实，不写关系。
+
+modules:
+  - id: server
+    name: 服务端入口（kernel-api）
+    summary: 把内核开成一个常驻进程，对 runner 与 agent 开门
+  # 第二级模块的补充条目（名称与骨架一致）
+  - id: server.http
+    name: 进程装配与 HTTP
+    summary: 启动内核进程，经 HTTP 给 runner 与人的操作开接口
+    abstraction: 按「进程生命周期 / 组合根 / 路由」切分：路由组只做鉴权、契约校验与翻译成内核服务调用，写操作后的唤醒与通知统一交给组合根的一条串行链。
+    invariants:
+      - 请求与响应都按契约 schema 校验，任何错误统一映射成契约 ApiError
+      - 人的接口只读写令牌主人自己的信号、任务与卡，别人的一律 403
+      - 写操作后的到期唤醒与通道通知经同一条串行链执行，出错只记日志
+    excludes: [合入的发起与合入门 → kernel.rules, 任务包的认领与投递 → server.hub, 提示词正文 → playbooks]
+  - id: server.hub
+    name: runner 通道
+    summary: 把待领任务包送到在线 runner，送不到就退回
+    abstraction: 按投递路径切分：WS 主动推与长轮询是两条并行的路，共用同一个认领入口与同一套「只投活着的执行、送不到退回」的收尾。
+    invariants:
+      - WS 与长轮询都经 JobQueue.pull 原子认领，同一任务包只投一次
+      - 认领后没送到即退回 pending，只动仍由本 runner 认领的
+      - 同一 runner 的 WS 推送串行，前一批落定才推下一批
+    excludes: [任务包的产生与排队 → kernel.dispatch, runner 回报的落账 → server.http]
+  - id: server.mcp
+    name: MCP 服务与令牌
+    summary: 让 agent 会话按令牌授权调用本任务的内核工具
+    abstraction: 按「签发与校验 / 服务与授权 / 工具组」切分：令牌只证明身份，每次请求再查库确认执行仍活着；工具组按会话角色分，只翻译成内核服务调用，不含规则。
+    invariants:
+      - 每次请求都核对令牌签名、执行仍在排队或运行、任务非终态、scope 与执行角色一致
+      - 只列出并接受令牌 scope 内的工具，跨 scope 调用拒绝；入参出参按契约 schema 校验
+      - 没有合入、租约、终态工具，业务错误以 isError 结果返回
+    excludes: [工具定义与各 scope 清单 → share.contracts, 会话的启动与停滞判断 → adapters.ai, 派执行与唤醒的规则 → kernel.orchestration]
+
+  # ───────────────────────── server.http ─────────────────────────
+  - id: server.http.boot
+    parent: server.http
+    name: 进程入口
+    summary: 按序启动内核进程，收到退出信号时优雅退出
+    kind: component
+    responsibility: >-
+      gixn-kernel 可执行入口：读配置、建日志（令牌字段脱敏）、核对迁移已到最新（不到退出码 3）、建令牌服务与连接池、装配应用、
+      启动恢复（recover）、启动 pg-boss 看门狗、监听 127.0.0.1，再补触发一次到期唤醒；SIGTERM / SIGINT 时停接新请求、关 WS、停看门狗、关连接池，15 秒兜底强退。
+      不负责装配细节（组合根）与路由。
+    codeRefs: [packages/kernel-api/src/bin.ts]
+
+  - id: server.http.assembly
+    parent: server.http
+    name: 组合根
+    summary: 装出内核、通道与 HTTP，并提供写后唤醒链
+    kind: component
+    responsibility: >-
+      createKernelApp：建内核并注入令牌签发、统筹剧本、剧本解析与参数、自愈手册、放行命令与统筹者只读目录；建 runner 通道与 HTTP 应用；
+      提供 afterMutation（串行：触发到期唤醒，再踢通道）给路由与 MCP 工具在写操作后调用。另有 checkMigrations：按迁移记录或迁移产出的表与只追加触发器核对数据库已到最新。
+    codeRefs: [packages/kernel-api/src/app.ts]
+
+  - id: server.http.config
+    parent: server.http
+    name: 运行配置
+    summary: 读出并校验内核运行配置与配方目录
+    kind: component
+    responsibility: >-
+      loadConfig：读数据根下的 kernel.yaml（契约 KernelConfig 校验），环境变量覆盖端口、连接串、离线判定与看门狗间隔、公开地址；
+      另读 recipes/*.yaml 配方目录，与配置里的配方合并（同名以配置为准，目录里重名或不合法即报错）。
+    codeRefs: [packages/kernel-api/src/config.ts]
+
+  - id: server.http.errors
+    parent: server.http
+    name: 错误映射
+    summary: 把内核与鉴权错误统一翻成契约 ApiError
+    kind: component
+    responsibility: toApiError：ZodError → 400、鉴权 → 401 / 403、NotFound → 404、Conflict / LeaseBusy → 409 conflict、InvariantError → 409 invariant_violation、其余 500；HttpError 表达服务层以外的入口判断（如「不是你的卡」）。HTTP 与 MCP 共用。
+    codeRefs: [packages/kernel-api/src/errors.ts]
+
+  - id: server.http.router
+    parent: server.http
+    name: HTTP 应用与鉴权
+    summary: 建 HTTP 应用，按 runner 令牌鉴权并统一错误响应
+    kind: component
+    responsibility: >-
+      buildHttp 的骨架（http.ts）：建 Fastify 与 WebSocket 插件、错误与 404 处理、runner 令牌鉴权（签名有效且 runner 仍在库里、主人对得上）、
+      任务归属检查、按契约 schema 出参，挂上各路由组与 MCP 路由。不含任何业务判断。
+
+  - id: server.http.runner-routes
+    parent: server.http
+    name: runner 接口
+    summary: 受理 runner 的注册、心跳、领包、回报与提示词刷新
+    kind: component
+    responsibility: >-
+      http.ts 的 runner 路由组：引导令牌换 runner 令牌（注册）、心跳（带回要中止的任务包）、长轮询领任务包、HTTP 回报进展与结果、
+      排队中的统筹执行开跑前重拼提示词（G6），以及 WS 握手：鉴权后把连接交给通道，收 update 落账、收 ping 回 pong。
+
+  - id: server.http.intake-routes
+    parent: server.http
+    name: 录入与信号池接口
+    summary: 受理人的录入与信号、草稿的整理操作
+    kind: component
+    responsibility: http.ts 的信号池路由组：录入信号（direct 即建任务 / pool 进池）、列出与读取信号、立即整理、人的分诊、移动信号、改草稿、拆分、并入、退回；人的操作记 human 事件。
+
+  - id: server.http.inbox-routes
+    parent: server.http
+    name: 决策卡接口
+    summary: 列出主人的决策卡，把人的回答交给内核
+    kind: component
+    responsibility: >-
+      http.ts 的卡片路由组：按主人列卡；答卡（只能答自己的），问题卡（qcard.<questionId>.*）在同一事务里另记 question.answered(by=human)；
+      放行卡答「合入」后由内核在答卡事务里发起合入，这里不另设合入入口。
+
+  - id: server.http.task-routes
+    parent: server.http
+    name: 任务与度量接口
+    summary: 给主人只读查看任务、事件、剧本度量与通知
+    kind: component
+    responsibility: http.ts 的只读路由组：任务列表、任务详情、任务事件（afterSeq 增量）、按剧本的度量（缺省最近 30 天）、收件箱通知（缺省最近 7 天）；以及 health。
+
+  # ───────────────────────── server.hub（概念子模块，同在 hub.ts） ─────────────────────────
+  - id: server.hub.push
+    parent: server.hub
+    name: WS 推送
+    summary: 给连着 WS 的 runner 主动推任务包与控制消息
+    kind: component
+    responsibility: >-
+      登记每个 runner 的一条 WS 连接（新连接顶掉旧的）、记心跳带来的能力；kick 时逐个 runner 串行认领并推一批 jobs，回调报错即退回；
+      send 发 abort / pong / cards.changed 等控制消息（按契约 WsServerMessage 校验）。
+
+  - id: server.hub.long-poll
+    parent: server.hub
+    name: 长轮询
+    summary: 让断了 WS 的 runner 挂起等到任务包或超时
+    kind: component
+    responsibility: longPoll：有就立即返回，否则挂起到 kick 唤醒或超时（最长 30 秒）后再认领；客户端已走则把刚认领的退回。
+
+  - id: server.hub.delivery
+    parent: server.hub
+    name: 投递收尾
+    summary: 只投还活着的执行，没送到的退回待领
+    kind: component
+    responsibility: deliverable：认领到的 session.start 任务包若对应执行已不在排队或运行，直接作废不投；unlease：认领了但没送到的，退回 pending（只动仍由本 runner 认领的）。
+
+  - id: server.hub.patrol
+    parent: server.hub
+    name: 通道巡检
+    summary: 每秒兜底推送后台产生的任务包与卡片变化
+    kind: component
+    responsibility: 周期巡检（默认 1 秒）：踢一次推送与长轮询，兜住看门狗等后台产生的任务包；卡片事件的最大序号变了就给所有 WS runner 发 cards.changed。
+
+  # ───────────────────────── server.mcp ─────────────────────────
+  - id: server.mcp.tokens
+    parent: server.mcp
+    name: 令牌服务
+    summary: 签发与校验引导、runner、MCP 三种令牌
+    kind: component
+    responsibility: >-
+      TokenService（jose HS256）：首次启动生成 0600 的签名密钥与引导令牌；核对引导令牌、签 / 验 runner 令牌（30 天，带主人身份）、签 / 验 MCP 令牌（claims 用契约 McpTokenClaims）；
+      issuer() 作为内核的令牌签发端口，派执行时签本任务本次执行的 MCP 令牌并给出 MCP 地址。只校验签名与形状，执行是否还活着由调用方查库；令牌不进日志、不进账。
+    codeRefs: [packages/kernel-api/src/tokens.ts]
+
+  - id: server.mcp.service
+    parent: server.mcp
+    name: MCP 服务与工具授权
+    summary: 每个请求建一个无状态 MCP 服务，按 scope 分发工具
+    kind: component
+    responsibility: >-
+      mcp.ts 的服务部分：POST /v1/mcp 每个请求建一个 Server（Streamable HTTP、无状态，GET / DELETE 405），连接断开即中止同步等待；
+      按 scope 列工具（契约 ToolDef 转 JSON Schema）、拒绝跨 scope 调用、入参出参按契约校验、调用工具实现并在成功后触发写后唤醒链，业务错误以 isError 返回。
+
+  - id: server.mcp.auth
+    parent: server.mcp
+    name: 请求身份
+    summary: 由令牌与库里的执行确定本次请求的身份与范围
+    kind: component
+    responsibility: resolveMcpCtx：校验 MCP 令牌，再查执行（仍在排队或运行、任务与角色对得上）与任务（非终态、任务种类定 scope：执行者 executor、统筹 orchestrator、整理台 intake），给出本次请求的执行、任务与 actor。
+
+  - id: server.mcp.session-tools
+    parent: server.mcp
+    name: 执行会话工具
+    summary: 让执行者读任务与档案、写进度、交证据、提问与试跑
+    kind: component
+    responsibility: >-
+      执行会话的工具：gixn_get_task（任务、清单与本次简报）、gixn_get_dossier、gixn_write_progress、gixn_submit_evidence（工作树内文件进证据存储并记账）、
+      gixn_report_done（审核会话另记结构化 review.recorded）、gixn_ask / gixn_get_answer、gixn_device_try_run（同步等出构建与试跑结果）。除 report_done 与 device_try_run 外统筹者也可用。
+
+  - id: server.mcp.dispatch-tools
+    parent: server.mcp
+    name: 派执行工具
+    summary: 替统筹者拼好角色提示词并派出执行会话
+    kind: component
+    responsibility: >-
+      gixn_dispatch_execution：定工作目录（任务工作树或常驻仓库）、模型与审核轮次，读审核仓库层（配方 review.promptOverride 指向的文件）与任务层（清单 review 判法的 taskPrompt），
+      取角色提示词，在同一事务里记决定并派执行（审核、调研只读；写脚本会话停滞判定放宽）。
+
+  - id: server.mcp.plan-tools
+    parent: server.mcp
+    name: 清单、档案与唤醒工具
+    summary: 让统筹者起草清单与计划、记决定、设唤醒、收工
+    kind: component
+    responsibility: >-
+      统筹者的记账类工具：gixn_draft_acceptance（可按环境 autoStart 直接确认）、gixn_change_acceptance（intent_kept 不许删项）、gixn_draft_plan、gixn_update_dossier、gixn_record_decision、
+      gixn_set_wakeup、gixn_answer_question、gixn_get_events、gixn_report_phase、gixn_end_turn（记本次唤醒结束并按需排下次唤醒）。
+
+  - id: server.mcp.card-tools
+    parent: server.mcp
+    name: 卡片工具
+    summary: 让统筹者发出与撤回决策卡
+    kind: component
+    responsibility: gixn_open_card：问题卡与确认卡的卡 id 按内核约定编码确认对象，放行卡先过内核预检；gixn_withdraw_card：只撤本任务的卡，放行卡不能撤。
+
+  - id: server.mcp.adapter-tools
+    parent: server.mcp
+    name: 外部操作工具
+    summary: 替统筹者发起判项、代码库、预览与真机调用并同步等结果
+    kind: component
+    responsibility: >-
+      gixn_run_checks（清单须已确认；baseline 先建基线工作树再跑、head 判已推送的 head）、gixn_repo_op、gixn_preview_capture、gixn_device_run：经内核发起适配器调用，
+      发起时同事务记等待，再轮询账同步等结果到点即退回异步（断开或执行结束即停，被免的唤醒补排一次）。
+
+  - id: server.mcp.intake-tools
+    parent: server.mcp
+    name: 信号整理工具
+    summary: 让整理台整理本仓库池里的信号与草稿，让驱动退回信号
+    kind: component
+    responsibility: >-
+      整理台会话的工具（范围限整理台所在主人 + 仓库）：gixn_list_signals、gixn_triage_signal（挂到草稿 / 重复 / 拒绝 / 暂缓）、gixn_create_draft、gixn_update_draft（只改草稿）、
+      gixn_move_signal、gixn_fold_draft；以及统筹者的 gixn_return_signal（把信号退回池，只减不增）。
+
+relations:
+  # ── 进程入口与组合根 ──
+  - id: rel.server.boot-config
+    from: server.http.boot
+    to: server.http.config
+    type: queries
+    purpose: 取启动所需的配置与配方
+    description: 启动第一步调用 loadConfig()，得到端口、连接串、数据根、配方与运行参数。
+  - id: rel.server.boot-migrations
+    from: server.http.boot
+    to: server.http.assembly
+    type: queries
+    mode: async
+    purpose: 确认数据库已迁移到最新
+    description: 启动时调用 checkMigrations，有缺失即记日志、退出码 3，不再往下启动。
+  - id: rel.server.boot-recover
+    from: server.http.boot
+    to: kernel.assembly
+    type: commands
+    mode: async
+    interface: if.kernel.assembly.Kernel
+    purpose: 启动时恢复在途任务并开看门狗
+    description: 装配后依次调用 k.recover() 与 k.startScheduler({connectionString, schema})；退出时停看门狗（WatchdogScheduler.stop）。
+  - id: rel.server.mutation-wakeups
+    via: 'channel:inject@kernel.assembly'
+    from: server.http.assembly
+    to: kernel.liveness
+    type: commands
+    mode: async
+    interface: if.kernel.liveness.Watchdog
+    purpose: 写操作后立即触发到期唤醒
+    description: afterMutation 串行链里先调 k.watchdog.fireDueWakeups(now)，统筹者派发因此立即产生任务包；出错只记日志。
+  - id: rel.server.mutation-kick
+    from: server.http.assembly
+    to: server.hub.push
+    type: commands
+    purpose: 让新任务包马上送到 runner
+    description: afterMutation 在触发唤醒之后调 hub.kick()：唤醒挂起的长轮询、给每个 WS runner 推一次。
+  - id: rel.server.routes-after-mutation
+    from: server.http.router
+    to: server.http.assembly
+    type: commands
+    mode: async
+    via: channel:callback@server.http.router
+    purpose: 写操作后触发唤醒并通知通道
+    description: 组合根把 afterMutation 放进 HttpDeps 交给 buildHttp；注册、回报、录入、信号与草稿操作、答卡等写路由完成后调用它。
+  - id: rel.server.mcp-after-mutation
+    from: server.mcp.service
+    to: server.http.assembly
+    type: commands
+    mode: async
+    via: channel:callback@server.mcp.service
+    purpose: 工具调用后触发唤醒并通知通道
+    description: 组合根把 afterMutation 放进 McpDeps；每次工具调用成功后调用，同步等待前工具实现也会先调一次让任务包尽快送出。
+
+  # ── HTTP 路由 → 内核 ──
+  - id: rel.server.router-auth
+    from: server.http.router
+    to: server.mcp.tokens
+    type: queries
+    mode: async
+    purpose: 认出请求来自哪个 runner 和主人
+    description: authRunner 从 Authorization 取 Bearer，调 TokenService.verifyRunner 校验签名与 claims。
+  - id: rel.server.router-ledger
+    via: 'channel:sql@kernel.ledger'
+    from: server.http.router
+    to: kernel.ledger
+    type: queries
+    mode: async
+    interface: if.kernel.ledger.Ledger
+    purpose: 核对 runner 仍在册、任务归属主人
+    description: 直接经 k.ledger.pool 查 runners 表（runner 被清则 401）与 tasks 表的 owner（不是自己的 403），不经内核服务。
+  - id: rel.server.register-tokens
+    from: server.http.runner-routes
+    to: server.mcp.tokens
+    type: commands
+    mode: async
+    purpose: 用引导令牌换出 runner 令牌
+    description: 注册时 checkBootstrap 核对引导令牌，注册成功后 signRunner 签发带主人身份的 runner 令牌。
+  - id: rel.server.runner-register
+    via: 'channel:inject@kernel.assembly'
+    from: server.http.runner-routes
+    to: kernel.dispatch
+    type: commands
+    mode: async
+    interface: if.kernel.dispatch.RunnerService
+    purpose: 登记 runner 并收心跳
+    description: 注册调 k.runners.register（主人、主机名、能力、上次的 runnerId）；心跳调 k.runners.heartbeat(runnerId, runningJobIds)，取回要中止的任务包。
+  - id: rel.server.runner-job-update
+    via: 'channel:inject@kernel.assembly'
+    from: server.http.runner-routes
+    to: kernel.dispatch
+    type: commands
+    mode: async
+    interface: if.kernel.dispatch.JobQueue
+    payload: ds.JobUpdate
+    purpose: 把 runner 回报的进展与结果落账
+    description: HTTP POST 回报与 WS update 消息都调 k.jobs.update(jobId, update, runnerId)，内核归一成领域事件。
+  - id: rel.server.runner-prompt
+    from: server.http.runner-routes
+    to: kernel.orchestration
+    type: queries
+    mode: async
+    interface: if.kernel.orchestration.refreshOrchestratorPrompt
+    purpose: 开跑前取统筹者的最新提示词
+    description: G6：调 refreshOrchestratorPrompt(pool, launcher.opts.promptBuilder, {executionId, owner, now}) 按此刻快照重拼；不在排队时 409，runner 用派发时那份。
+  - id: rel.server.runner-hub
+    from: server.http.runner-routes
+    to: server.hub.push
+    type: commands
+    purpose: 把连接、能力与中止指令交给通道
+    description: WS 握手鉴权后 hub.attach / 断开 hub.detach；注册与心跳带来的能力 hub.setCaps；心跳取回的中止任务包与 ping 的 pong 经 hub.send 发给该 runner。
+  - id: rel.server.runner-long-poll
+    from: server.http.runner-routes
+    to: server.hub.long-poll
+    type: commands
+    mode: async
+    purpose: 替不在 WS 上的 runner 等任务包
+    description: GET /v1/runners/jobs 调 hub.longPoll(runnerId, waitSec, isGone)，请求连接关闭即视为客户端已走。
+  - id: rel.server.intake-signals
+    via: 'channel:inject@kernel.assembly'
+    from: server.http.intake-routes
+    to: kernel.intake
+    type: commands
+    mode: async
+    interface: if.kernel.intake.SignalService
+    purpose: 录入信号并执行人的整理操作
+    description: 录入调 k.signals.record（钉住工作环境、剧本与策略）；立即整理、分诊、移动、改草稿、拆分、并入、退回分别调 triageNow / triage / moveSignal / updateDraft / split / fold / decline，actor 记 human。
+  - id: rel.server.intake-signals-read
+    via: 'channel:inject@kernel.assembly'
+    from: server.http.intake-routes
+    to: kernel.intake
+    type: queries
+    mode: async
+    interface: if.kernel.intake.SignalService
+    purpose: 列出与读取主人的信号
+    description: 调 k.signals.list({owner, repo, taskId, status}) 与 k.signals.get；不是自己的信号 403。
+  - id: rel.server.inbox-cards
+    from: server.http.inbox-routes
+    to: kernel.tasks
+    type: commands
+    mode: async
+    interface: if.kernel.tasks.CardService
+    purpose: 把人的回答交给内核落定
+    description: 先 k.cards.get 核对归属，再 k.cards.answer(cardId, {optionId, comment, by, idempotencyKey, hardUsd})；放行卡答「合入」由内核在同一事务里发起合入。列卡调 k.cards.list。
+  - id: rel.server.inbox-question
+    via: 'channel:inject@kernel.assembly'
+    from: server.http.inbox-routes
+    to: kernel.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Ledger
+    purpose: 把人对问题卡的回答记成答复
+    description: 问题卡在 k.ledger.tx 里先答卡、再 append question.answered(by=human)，执行者据此 gixn_get_answer 取到。
+  - id: rel.server.task-read
+    from: server.http.task-routes
+    to: kernel.tasks
+    type: queries
+    mode: async
+    interface: if.kernel.tasks.TaskService
+    purpose: 给主人看任务列表、详情与事件
+    description: 调 k.tasks.list({owner}) / get(taskId) / events(taskId, afterSeq)。
+  - id: rel.server.task-metrics
+    from: server.http.task-routes
+    to: kernel.tasks
+    type: queries
+    mode: async
+    interface: if.kernel.tasks.playbookMetrics
+    purpose: 给主人看按剧本的度量
+    description: 调 playbookMetrics(pool, {owner, since, until})，从账算。
+  - id: rel.server.task-notifications
+    from: server.http.task-routes
+    to: kernel.tasks
+    type: queries
+    mode: async
+    interface: if.kernel.tasks.listNotifications
+    purpose: 给主人看收件箱通知
+    description: 调 listNotifications(pool, {owner, since, now, cardWaitHours})，从账算。
+
+  # ── runner 通道 ──
+  - id: rel.server.push-pull
+    via: 'channel:inject@kernel.assembly'
+    from: server.hub.push
+    to: kernel.dispatch
+    type: commands
+    mode: async
+    interface: if.kernel.dispatch.JobQueue
+    purpose: 认领该 runner 能做的任务包
+    description: pushTo 调 k.jobs.pull(runnerId, caps)，原子把 pending 标为 leased（按主人、能力过滤）。
+  - id: rel.server.long-poll-pull
+    via: 'channel:inject@kernel.assembly'
+    from: server.hub.long-poll
+    to: kernel.dispatch
+    type: commands
+    mode: async
+    interface: if.kernel.dispatch.JobQueue
+    purpose: 认领该 runner 能做的任务包
+    description: longPoll 每次醒来调 k.jobs.pull(runnerId, caps)，与 WS 推送共用同一认领。
+  - id: rel.server.push-delivery
+    from: server.hub.push
+    to: server.hub.delivery
+    type: commands
+    mode: async
+    purpose: 筛掉失效任务包，没送到的退回
+    description: 认领后先 deliverable 作废已结束执行的 session.start，send 回调报错时 unlease 退回。
+  - id: rel.server.long-poll-delivery
+    from: server.hub.long-poll
+    to: server.hub.delivery
+    type: commands
+    mode: async
+    purpose: 筛掉失效任务包，客户端已走就退回
+    description: 认领后先 deliverable 筛，返回前发现客户端已走则 unlease 退回。
+  - id: rel.server.delivery-jobs
+    via: 'channel:sql@kernel.ledger'
+    from: server.hub.delivery
+    to: kernel.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Ledger
+    purpose: 作废或退回任务包
+    description: 直接经 k.ledger.pool 查 executions 是否仍活着，并 update jobs（作废标 done、退回 pending，只动本 runner 认领的），不经 JobQueue。
+  - id: rel.server.patrol-kick
+    from: server.hub.patrol
+    to: server.hub.push
+    type: commands
+    mode: async
+    purpose: 兜住后台产生的任务包
+    description: setInterval 每 intervalMs（默认 1000）调 kick()，唤醒长轮询并逐个 WS 推送。
+  - id: rel.server.patrol-cards
+    via: 'channel:sql@kernel.ledger'
+    from: server.hub.patrol
+    to: kernel.ledger
+    type: queries
+    mode: async
+    interface: if.kernel.ledger.Ledger
+    purpose: 发现卡片有变化
+    description: 每轮直接查 events 里卡片类事件的最大 seq，与上一轮比较。
+  - id: rel.server.hub-jobs-ws
+    from: server.hub.push
+    to: client.channel
+    type: commands
+    mode: async
+    via: channel:ws@share.contracts
+    payload: ds.WsServerMessage
+    purpose: 把任务包与中止指令交给 runner 执行
+    description: WS /v1/runners/stream 上发 {type:'jobs', jobs} 推任务包，另发 abort（心跳取回的中止任务包）与 pong；消息按契约 WsServerMessage 校验。
+  - id: rel.server.hub-cards-changed
+    from: server.hub.patrol
+    to: client.channel
+    type: notifies
+    via: channel:ws@share.contracts
+    payload: ds.WsServerMessage
+    purpose: 宣告决策卡有变化
+    description: 卡片事件最大 seq 变了就给所有 WS runner 发 {type:'cards.changed'}，runner 本地 UI 据此刷新卡片。
+
+  # ── MCP ──
+  - id: rel.server.mcp-ctx
+    from: server.mcp.service
+    to: server.mcp.auth
+    type: queries
+    mode: async
+    purpose: 确定本次请求的身份与工具范围
+    description: 每个 POST 先调 resolveMcpCtx(k, tokens, authorization)，失败即 401。
+  - id: rel.server.mcp-verify
+    from: server.mcp.auth
+    to: server.mcp.tokens
+    type: queries
+    mode: async
+    purpose: 校验 MCP 令牌签名与 claims
+    description: 调 TokenService.verifyMcp，claims 按契约 McpTokenClaims 校验。
+  - id: rel.server.mcp-execution
+    from: server.mcp.auth
+    to: kernel.orchestration
+    type: queries
+    mode: async
+    interface: if.kernel.orchestration.ExecutionService
+    purpose: 确认令牌对应的执行仍活着
+    description: 调 k.executions.get(claims.sub)，核对任务、角色与状态（queued / running）。
+  - id: rel.server.mcp-task-state
+    via: 'channel:sql@kernel.ledger'
+    from: server.mcp.auth
+    to: kernel.ledger
+    type: queries
+    mode: async
+    interface: if.kernel.ledger.Ledger
+    purpose: 确认任务非终态并定 scope
+    description: 直接查 tasks 的 status 与 task_kind：终态即 401，整理台任务给 intake scope。
+  - id: rel.server.mcp-call-session
+    from: server.mcp.service
+    to: server.mcp.session-tools
+    type: commands
+    mode: async
+    purpose: 执行执行会话的工具调用
+    description: CallTool 通过 scope 与入参校验后调 impls[name](ctx, input)，出参按契约校验。
+  - id: rel.server.mcp-call-dispatch
+    from: server.mcp.service
+    to: server.mcp.dispatch-tools
+    type: commands
+    mode: async
+    purpose: 执行统筹者的派执行
+    description: 同上，工具 gixn_dispatch_execution。
+  - id: rel.server.mcp-call-plan
+    from: server.mcp.service
+    to: server.mcp.plan-tools
+    type: commands
+    mode: async
+    purpose: 执行统筹者的记账类工具
+    description: 同上，清单、计划、档案、决定、唤醒、收工等工具。
+  - id: rel.server.mcp-call-card
+    from: server.mcp.service
+    to: server.mcp.card-tools
+    type: commands
+    mode: async
+    purpose: 执行统筹者的发卡与撤卡
+    description: 同上，gixn_open_card / gixn_withdraw_card。
+  - id: rel.server.mcp-call-adapter
+    from: server.mcp.service
+    to: server.mcp.adapter-tools
+    type: commands
+    mode: async
+    purpose: 执行统筹者的外部操作
+    description: 同上，判项、代码库操作、预览截图、真机运行。
+  - id: rel.server.mcp-call-intake
+    from: server.mcp.service
+    to: server.mcp.intake-tools
+    type: commands
+    mode: async
+    purpose: 执行整理台与退回信号的工具
+    description: 同上，整理台 scope 的六个工具与统筹者的 gixn_return_signal。
+
+  # 执行会话工具
+  - id: rel.server.session-task
+    from: server.mcp.session-tools
+    to: kernel.tasks
+    type: queries
+    mode: async
+    interface: if.kernel.tasks.TaskService
+    purpose: 给执行者任务与验收清单
+    description: gixn_get_task 调 k.tasks.get(taskId)，再从 execution.dispatched 的 taskAppend 截出本次简报。
+  - id: rel.server.session-dossier
+    from: server.mcp.session-tools
+    to: kernel.orchestration
+    type: commands
+    mode: async
+    interface: if.kernel.orchestration.DossierService
+    purpose: 读档案、写回进度与坑
+    description: gixn_get_dossier 调 k.dossiers.get；gixn_write_progress 调 k.dossiers.update（addProgress / addPitfall / addLeftover）。
+  - id: rel.server.session-evidence
+    from: server.mcp.session-tools
+    to: share.evidence
+    type: commands
+    mode: async
+    interface: if.share.evidence.LocalEvidenceStore
+    purpose: 把执行者交的材料存成证据
+    description: gixn_submit_evidence 把工作树内的文件逐个 put 进按内容哈希寻址的证据存储，channel=agent_reference。
+  - id: rel.server.session-ledger
+    via: 'channel:inject@kernel.assembly'
+    from: server.mcp.session-tools
+    to: kernel.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Ledger
+    purpose: 把交证据、收工、提问与审核结论记账
+    description: 直接 k.ledger.append evidence.submitted / execution.reported_done / question.asked，审核会话另记 review.recorded（轮次与提示词版本从账与执行记录里算）。
+  - id: rel.server.session-device
+    from: server.mcp.session-tools
+    to: kernel.dispatch
+    type: commands
+    mode: async
+    interface: if.kernel.dispatch.DeviceRuns
+    purpose: 在本任务租到的设备上试跑脚本
+    description: gixn_device_try_run 调 k.devices.request({…, tryRun=true})；缺构建身份时内核抛 BuildPendingError，先同步等出构建再申请一次，然后同步等试跑结果。
+  # 派执行工具
+  - id: rel.server.dispatch-prompt
+    from: server.mcp.dispatch-tools
+    to: playbooks.roles
+    type: queries
+    interface: if.playbooks.roles.buildExecutorPrompt
+    purpose: 取派给执行者的角色提示词
+    description: 调 buildExecutorPrompt(role, {task, brief, resume, round, recipe, review})，审核角色带上仓库层与任务层；结果的 text / templateId / templateVersion / taskAppend 原样交给派执行。
+  - id: rel.server.dispatch-execution
+    from: server.mcp.dispatch-tools
+    to: kernel.orchestration
+    type: commands
+    mode: async
+    interface: if.kernel.orchestration.ExecutionService
+    purpose: 派出执行会话
+    description: 在 k.ledger.tx 里先 k.dossiers.recordDecision 记「派执行」，再 k.executions.dispatch（角色、模型、提示词、cwd、只读、超时、停滞秒数、预算、续会话）。
+  - id: rel.server.dispatch-review-layer
+    from: server.mcp.dispatch-tools
+    to: kernel.tasks
+    type: queries
+    mode: async
+    interface: if.kernel.tasks.AcceptanceService
+    purpose: 取清单里给审核模型的任务层要求
+    description: 调 k.acceptance.get(taskId)，取 review 判法里写给该模型的 taskPrompt。
+  - id: rel.server.dispatch-worktree
+    from: server.mcp.dispatch-tools
+    to: kernel.orchestration
+    type: queries
+    mode: async
+    interface: if.kernel.orchestration.taskWorktree
+    purpose: 定执行会话的工作目录
+    description: 调 taskWorktree(pool, taskId)，没有工作树时退回统筹者只读目录（launcher.opts.cwdFor）。
+  # 清单、档案与唤醒工具
+  - id: rel.server.plan-acceptance
+    from: server.mcp.plan-tools
+    to: kernel.tasks
+    type: commands
+    mode: async
+    interface: if.kernel.tasks.AcceptanceService
+    purpose: 起草与变更验收清单
+    description: gixn_draft_acceptance 调 k.acceptance.draft（autoStart 允许时同事务追加 acceptance.confirmed）；gixn_change_acceptance 调 k.acceptance.change。
+  - id: rel.server.plan-plan
+    from: server.mcp.plan-tools
+    to: kernel.tasks
+    type: commands
+    mode: async
+    interface: if.kernel.tasks.PlanService
+    purpose: 起草缺陷的验证计划
+    description: gixn_draft_plan 在事务里记决定后调 k.plans.draft。
+  - id: rel.server.plan-dossier
+    from: server.mcp.plan-tools
+    to: kernel.orchestration
+    type: commands
+    mode: async
+    interface: if.kernel.orchestration.DossierService
+    purpose: 记决定、改档案
+    description: gixn_update_dossier / gixn_record_decision / 起草清单与计划 / gixn_end_turn 调 k.dossiers.update 与 recordDecision。
+  - id: rel.server.plan-playbook
+    from: server.mcp.plan-tools
+    to: kernel.orchestration
+    type: queries
+    mode: async
+    interface: if.kernel.orchestration.effectivePlaybookOf
+    purpose: 判断环境是否允许免确认卡开工
+    description: autoStart 起草时调 effectivePlaybookOf(pool, k.ctx.playbooks, taskId) 取生效剧本与策略，再以 autoStartAllowed 判定。
+  - id: rel.server.plan-wakeup
+    from: server.mcp.plan-tools
+    to: kernel.liveness
+    type: commands
+    mode: async
+    interface: if.kernel.liveness.scheduleWakeup
+    purpose: 按统筹者的意思排下次唤醒
+    description: gixn_set_wakeup 与带 nextWakeupInSec 的 gixn_end_turn 在事务里调 scheduleWakeup(tx, taskId, at, 'orchestrator:<cause>')。
+  - id: rel.server.plan-ledger
+    via: 'channel:inject@kernel.assembly'
+    from: server.mcp.plan-tools
+    to: kernel.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Ledger
+    purpose: 记答复与阶段，读增量事件
+    description: gixn_answer_question 与 gixn_report_phase 直接 k.ledger.append；gixn_get_events 调 k.ledger.events({taskId, afterSeq, types, limit, readBy})；各工具经 k.ledger.tx 组事务。
+  # 卡片工具
+  - id: rel.server.card-open
+    from: server.mcp.card-tools
+    to: kernel.tasks
+    type: commands
+    mode: async
+    interface: if.kernel.tasks.openCardTx
+    purpose: 发出决策卡
+    description: 在 k.ledger.tx 里调 openCardTx(tx, {id, kind, options, recommendation, evidence, precheck=kind==='release'})；放行卡先过内核预检，有阻塞项即拒绝。
+  - id: rel.server.card-withdraw
+    from: server.mcp.card-tools
+    to: kernel.tasks
+    type: commands
+    mode: async
+    interface: if.kernel.tasks.CardService
+    purpose: 撤回本任务的非放行卡
+    description: k.cards.get 核对属于本任务且不是放行卡后调 k.cards.withdraw。
+  # 外部操作工具
+  - id: rel.server.adapter-request
+    from: server.mcp.adapter-tools
+    to: kernel.dispatch
+    type: commands
+    mode: async
+    interface: if.kernel.dispatch.AdapterCalls
+    purpose: 发起判项、代码库与预览调用
+    description: 调 k.adapters.request({capability, op, args, idempotencyKey, timeoutSec})：prepare_baseline_worktree、run_check（幂等键按 checkKey）、repo 各 op、preview_capture。
+  - id: rel.server.adapter-device-run
+    from: server.mcp.adapter-tools
+    to: kernel.dispatch
+    type: commands
+    mode: async
+    interface: if.kernel.dispatch.DeviceRuns
+    purpose: 按已确认计划跑真机
+    description: gixn_device_run 核对计划后调 k.devices.request({taskId, planId, build})，租约、运行、记录与归还由内核做。
+  - id: rel.server.adapter-wait
+    from: server.mcp.adapter-tools
+    to: kernel.orchestration
+    type: commands
+    mode: async
+    interface: if.kernel.orchestration.ExecutionService
+    purpose: 登记同步等待，免得被判停滞
+    description: 发起调用时同事务调 k.executions.beginWait(executionId, callId, until)，看门狗据此不判停滞、结果回来不唤醒统筹。
+  - id: rel.server.adapter-completions
+    via: 'channel:sql@kernel.ledger'
+    from: server.mcp.adapter-tools
+    to: kernel.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Ledger
+    purpose: 轮询调用结果，收尾等待记录
+    description: 每 300ms 直接查 adapter.completed 事件；停下后删 execution_waits 并复查，统筹会话中途断开时经 scheduleWakeup 补一次立即唤醒。
+  - id: rel.server.adapter-worktree
+    from: server.mcp.adapter-tools
+    to: kernel.orchestration
+    type: queries
+    mode: async
+    interface: if.kernel.orchestration.taskWorktree
+    purpose: 找到任务工作树与基础提交
+    description: 判项与代码库操作前调 taskWorktree(pool, taskId) 取路径、基础提交与分支。
+  # 信号整理工具
+  - id: rel.server.intake-tools-signals
+    via: 'channel:inject@kernel.assembly'
+    from: server.mcp.intake-tools
+    to: kernel.intake
+    type: commands
+    mode: async
+    interface: if.kernel.intake.SignalService
+    purpose: 整理信号、编辑草稿、退回信号
+    description: 调 k.signals.attach / triage / createDraft / updateDraft / moveSignal / fold，actor 记整理台会话；gixn_return_signal 调 moveSignal(…, null) 退回池。
+  - id: rel.server.intake-tools-view
+    via: 'channel:inject@kernel.assembly'
+    from: server.mcp.intake-tools
+    to: kernel.intake
+    type: queries
+    mode: async
+    interface: if.kernel.intake.SignalService
+    purpose: 取本仓库池的整理视图
+    description: gixn_list_signals 调 k.signals.intakeView(owner, repo, status)：信号、草稿、在跑任务、近期合入。

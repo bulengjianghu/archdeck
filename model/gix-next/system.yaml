@@ -1,0 +1,10 @@
+system:
+  id: gix-next
+  name: GIX 新版（gix-next）
+  description: |
+    AI 驱动的研发流程自动化：每个任务由一个统筹智能体推进，从录入经验收清单、开发、验证、真机复现与回归走到合入，人只在取舍、确认、裁决、放行四个时刻拍板。
+    统筹者推进、内核兜底——内核不编排流程，只守合入门、证据、活性与恢复，一切变化先进只追加的账；依赖只向内，所有外部系统都经本地客户端上的适配器、客户端只出站（见 docs/spec/GIX-架构设计文档.md §2.3、§2.4）。
+  source:
+    repo: ../work2/gix-wt/next-main/gix-next
+    commit: 1cd6d9ad1b6c8224d16922200175f405d9d0ad39
+    generatedAt: '2026-11-08'

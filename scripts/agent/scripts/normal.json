@@ -1,0 +1,16 @@
+{
+  "steps": [
+    { "text": "正在读描述……" },
+    { "wait": 30 },
+    {
+      "block": {
+        "kind": "answer",
+        "parts": [
+          { "text": "它对外承诺的是这一句：", "cites": [{ "module": "{{anchor.module}}", "field": "summary" }] },
+          { "text": "这样切分是为了让它只有一个写入口，调用方不必知道内部顺序。", "inferred": true }
+        ]
+      }
+    },
+    { "done": true }
+  ]
+}

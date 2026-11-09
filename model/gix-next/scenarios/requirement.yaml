@@ -1,0 +1,88 @@
+# 取自设计文档 §2.1 场景 ①、§1.3 端到端流程；代码：ui NewTaskDrawer → runner 本地 UI → kernel-api 信号路由 → kernel SignalService / TaskService，
+# 卡片路由组与 CardService，mcp.ts 的 plan / card / dispatch / session 工具，flow.ts 的判项归一与合入门。
+scenario:
+  id: sc.requirement
+  name: 需求圈：录入到合入
+  kind: main
+  description: |
+    一条需求自己走到合入。人在本地 UI 录入一句话（这句话就是取舍），内核建任务并立即排唤醒；统筹者被唤起，读代码起草验收清单（判法取自配方）并发确认卡，人确认；
+    统筹者派开发会话（先写检查、再写实现、交证据、报告完成），再编排验证：本地判项旧红新绿、推分支建草稿 MR、轮询 CI、起只读审核会话；
+    不通过就合并退回简报续原会话，同一阻塞项反复出现就换打法或带方案问人。通过后对齐最新集成分支，发放行卡，人放行，内核过合入门合入，轮询到 merged 关任务。
+    统筹者与执行者不直连：决定、计划、档案与账是共享记忆。
+  cause: 主人在本地 UI 录入一句话需求（直接建任务）
+  evidence:
+    - test/flow/requirement-loop.test.ts
+    - test/flow/local-loop.test.ts
+    - packages/kernel-api/test/mcp-flow.test.ts
+    - packages/kernel/test/merge-cards-jobs.test.ts
+    - packages/ui/test/intake.test.tsx
+  steps:
+    - call: {id: intake, from: actor.owner, to: surface.intake.new-task, label: 录入一句话需求（选仓库、工作环境与剧本）}
+    - async: {from: surface.intake.new-task, to: surface.api.client, relation: rel.surface.new-task-create, label: api.createSignal}
+    - async: {from: surface.api.client, to: client.local-ui.server, relation: rel.surface.http-signal, label: 'POST /api/signals（direct、幂等键）'}
+    - async: {from: client.local-ui.server, to: client.local-ui.intake, label: submit}
+    - async: {from: client.local-ui.intake, to: client.local-ui.server, label: sink(signal)：钉住工作环境（名字 + 内容哈希）}
+    - async: {from: client.local-ui.server, to: client.local-ui.kernel-proxy, label: createSignal}
+    - async: {from: client.local-ui.kernel-proxy, to: server.http.intake-routes, relation: rel.client.ui-signal-kernel, label: 'POST /v1/signals'}
+    - async: {from: server.http.intake-routes, to: kernel.intake.signals, relation: rel.server.intake-signals, label: 'record(mode=direct)'}
+    - async: {id: created, from: kernel.intake.signals, to: kernel.tasks.task-service, label: createFromSignal}
+    - async: {from: kernel.tasks.task-service, to: kernel.ledger.ledger, label: signal.recorded + task.created（记为取舍决定）}
+    - async: {from: kernel.tasks.task-service, to: kernel.liveness.wakeups, label: 立即排唤醒}
+    - async: {from: server.http.router, to: server.http.assembly, label: afterMutation}
+    - ref: sc.orchestrator-wake
+    - async: {id: draft, from: actor.orchestrator, to: server.mcp.service, label: gixn_draft_acceptance（每条带判法）}
+    - async: {from: server.mcp.service, to: server.mcp.plan-tools, label: 调工具实现}
+    - async: {from: server.mcp.plan-tools, to: kernel.tasks.acceptance, relation: rel.server.plan-acceptance, label: acceptance.draft}
+    - async: {from: actor.orchestrator, to: server.mcp.service, label: 'gixn_open_card(kind=confirm)'}
+    - async: {from: server.mcp.service, to: server.mcp.card-tools, label: 调工具实现}
+    - async: {from: server.mcp.card-tools, to: kernel.tasks.cards, relation: rel.server.card-open, label: openCardTx（附清单快照）}
+    - call: {from: kernel.tasks.cards, to: kernel.rules.confirm-snapshot, label: acceptanceSnapshot}
+    - async: {from: server.hub.patrol, to: client.channel.runner, label: cards.changed}
+    - async: {from: client.channel.runner, to: client.local-ui.server, label: 转出内核消息}
+    - async: {from: client.local-ui.server, to: client.local-ui.decision, label: present(card)}
+    - async: {from: client.local-ui.decision, to: actor.owner, label: 系统通知：确认卡}
+    - call: {id: confirm, from: actor.owner, to: surface.inbox.card-detail, label: 逐项看清单与确认方式，选「确认」}
+    - call: {from: surface.inbox.card-detail, to: surface.inbox.page, label: onChoose}
+    - async: {from: surface.inbox.page, to: surface.shell.store, relation: rel.surface.inbox-answer, label: answerCard}
+    - async: {from: surface.shell.store, to: surface.api.client, relation: rel.surface.store-answer, label: api.answerCard}
+    - async: {from: surface.api.client, to: client.local-ui.server, relation: rel.surface.http-answer, label: 'POST /api/cards/:id/answer'}
+    - async: {from: client.local-ui.server, to: client.local-ui.kernel-proxy, label: answerCard}
+    - async: {from: client.local-ui.kernel-proxy, to: server.http.inbox-routes, relation: rel.client.ui-signal-kernel, label: 'POST /v1/cards/:id/answer'}
+    - async: {from: server.http.inbox-routes, to: kernel.tasks.cards, relation: rel.server.inbox-cards, label: answer}
+    - async: {from: kernel.tasks.cards, to: kernel.ledger.ledger, label: card.answered + acceptance.confirmed}
+    - async: {from: kernel.tasks.cards, to: kernel.liveness.wakeups, label: 卡答唤醒统筹者}
+    - loop:
+        while: 验收清单还没有在当前 head 上全部通过
+        steps:
+          - ref: sc.orchestrator-wake
+          - async: {id: develop, from: actor.orchestrator, to: server.mcp.service, label: 'gixn_dispatch_execution(developer 或 reviewer；不通过时续原会话)'}
+          - async: {from: server.mcp.service, to: server.mcp.dispatch-tools, label: 调工具实现}
+          - async: {from: server.mcp.dispatch-tools, to: kernel.orchestration.executions, relation: rel.server.dispatch-execution, label: 记决定 + dispatch}
+          - async: {from: kernel.orchestration.executions, to: kernel.dispatch.jobs, label: session.start 任务包}
+          - async: {from: server.hub.push, to: client.channel.runner, relation: rel.server.hub-jobs-ws, label: 推任务包}
+          - call: {from: client.channel.runner, to: client.channel.executor, label: execute(job)}
+          - async: {from: client.channel.executor, to: adapters.ai.executor, label: 'start(SessionSpec)：任务工作树、角色模型'}
+          - async: {id: executor, from: adapters.ai.executor, to: actor.executor, label: 起开发 / 审核会话}
+          - async: {from: actor.executor, to: server.mcp.service, label: 'gixn_get_task / gixn_get_dossier'}
+          - async: {from: server.mcp.service, to: server.mcp.session-tools, label: 调工具实现}
+          - async: {from: server.mcp.session-tools, to: kernel.tasks.task-service, label: 任务、清单与本次简报}
+          - async: {from: actor.executor, to: server.mcp.service, label: 'gixn_submit_evidence / gixn_report_done'}
+          - async: {from: server.mcp.session-tools, to: share.evidence, label: 工作树内文件进证据存储}
+          - async: {from: server.mcp.session-tools, to: kernel.ledger.ledger, label: 'evidence.submitted / execution.reported_done（审核另记 review.recorded）'}
+          - return: {from: adapters.ai.executor, to: client.channel.executor, label: 会话结束：结局与用量}
+          - async: {from: client.channel.runner, to: server.http.runner-routes, relation: rel.client.report-ws, label: session.finished}
+          - async: {from: server.http.runner-routes, to: kernel.dispatch.jobs, relation: rel.server.runner-job-update, label: update}
+          - async: {from: kernel.dispatch.jobs, to: kernel.ledger.ledger, label: execution.finished}
+          - async: {from: kernel.ledger.ledger, to: kernel.rules.ledger-rules, relation: rel.kernel.ledger-reactors, label: 预算、故障与唤醒反应}
+          - async: {from: kernel.rules.ledger-rules, to: kernel.liveness.wakeups, label: 执行结束唤醒统筹者}
+          - ref: sc.orchestrator-wake
+          - alt:
+              - when: 开发完成，进入验证
+                steps:
+                  - ref: sc.adapter-call
+              - when: 判项或审核不通过
+                steps:
+                  - async: {id: rework, from: actor.orchestrator, to: server.mcp.service, label: gixn_update_dossier：合并退回简报（下一轮续原会话或换打法）}
+                  - async: {from: server.mcp.service, to: server.mcp.plan-tools, label: 调工具实现}
+                  - async: {from: server.mcp.plan-tools, to: kernel.orchestration.dossiers, relation: rel.server.plan-dossier, label: dossier.updated / decision.recorded}
+    - ref: sc.release-merge

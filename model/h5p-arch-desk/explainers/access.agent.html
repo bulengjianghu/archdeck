@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 480524546eebc6a5 access.agent#abstraction=ce97f447 access.agent#children=820de9d9 access.agent#invariants=0190633f access.agent#responsibility=16d3112f access.agent#summary=67c62664 access.agent.classify#summary=1c7a619c access.agent.process#summary=12dfd43d">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>agent 接口 · 两个外壳一个核心</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
+</style>
+  </head>
+  <body>
+
+    <h1>两个外壳，一个核心</h1>
+    <p class="lede"><span data-arch="access.agent">agent 接口</span>让人和 AI 在写代码之前先问路：这个文件归谁、这条依赖许不许。</p>
+
+    <h2>同一个问题，同一个答案</h2>
+    <figure>
+      <svg viewBox="0 0 480 200" role="img" aria-label="agent 接口：命令行与 MCP 两个外壳，一个查询核心，问的是模型层">
+        <defs><marker id="a4P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a4S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a4A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a4M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a4g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a4l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="20" y="6" width="180" height="44" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="110.0" y="25.1" font-size="12.5" text-anchor="middle">命令行</text><text x="110.0" y="39.6" font-size="10.5" text-anchor="middle" class="muted">npm run arch -- …</text>
+        <rect x="280" y="6" width="180" height="44" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="370.0" y="25.1" font-size="12.5" text-anchor="middle">MCP 服务器</text><text x="370.0" y="39.6" font-size="10.5" text-anchor="middle" class="muted">给 AI 助手</text>
+        <g data-arch="access.agent"><rect x="120" y="82" width="240" height="50" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="240.0" y="104.5" font-size="13.5" text-anchor="middle" font-weight="600">查询核心</text><text x="240.0" y="119.0" font-size="10.5" text-anchor="middle" class="muted">同一份服务，两个外壳</text></g>
+        <g data-arch="model"><rect x="120" y="160" width="240" height="36" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="240.0" y="182.2" font-size="12" text-anchor="middle">模型层：定位 · 判定 · 违规 · 环</text></g>
+        <path d="M110,50 L190,80" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a4g)"/>
+        <path d="M370,50 L290,80" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a4g)"/>
+        <path d="M240,132 L240,158" stroke="var(--hot)" stroke-width="1.6" fill="none" marker-end="url(#a4M)"/>
+      </svg>
+      <figcaption>命令行与 MCP 只是两个外壳，背后是同一个查询核心，答案都来自模型层。所以终端里查到的，与助手查到的、页面上看到的一致。</figcaption>
+    </figure>
+
+    <h2>页面里的对话</h2>
+    <figure>
+      <svg viewBox="0 0 480 170" role="img" aria-label="页面里的对话经 agent 子进程跑起只读的 agent，输出按薄协议流回页面；分类命令给出建议并可写回">
+        <defs><marker id="a5P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a5S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a5A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a5M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a5g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a5l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="6" y="10" width="140" height="50" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="76.0" y="32.1" font-size="12.5" text-anchor="middle">页面里的对话</text><text x="76.0" y="46.6" font-size="10.5" text-anchor="middle" class="muted">发问 · 停止</text>
+        <g data-arch="access.agent.process"><rect x="176" y="10" width="150" height="50" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="251.0" y="32.1" font-size="12.5" text-anchor="middle">agent 子进程</text><text x="251.0" y="46.6" font-size="10.5" text-anchor="middle" class="muted">起停 · 只读</text></g>
+        <rect x="356" y="10" width="118" height="50" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="415.0" y="32.1" font-size="12.5" text-anchor="middle">AI agent</text><text x="415.0" y="46.6" font-size="10.5" text-anchor="middle" class="muted">带上下文包</text>
+        <path d="M146,28 L174,28" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a5g)"/>
+        <path d="M326,28 L354,28" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a5g)"/>
+        <path d="M354,48 L328,48" stroke="var(--ok)" stroke-width="1.4" fill="none" stroke-dasharray="5 4" marker-end="url(#a5A)"/>
+        <path d="M174,48 L148,48" stroke="var(--ok)" stroke-width="1.4" fill="none" stroke-dasharray="5 4" marker-end="url(#a5A)"/>
+        <text x="240" y="80" font-size="10.5" text-anchor="middle" class="muted">输出按薄协议一段段流回</text>
+        <g data-arch="access.agent.classify"><rect x="6" y="104" width="180" height="50" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="96.0" y="126.1" font-size="12.5" text-anchor="middle">分类命令</text><text x="96.0" y="140.6" font-size="10.5" text-anchor="middle" class="muted">给未分类关系出建议</text></g>
+        <rect x="294" y="104" width="180" height="50" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="384.0" y="126.1" font-size="12.5" text-anchor="middle">人确认后写回</text><text x="384.0" y="140.6" font-size="10.5" text-anchor="middle" class="muted">查询或委托</text>
+        <path d="M186,129 L292,129" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a5g)"/>
+      </svg>
+      <figcaption>页面里的对话不直接调用 AI，而是由子进程起一个只读的 agent，把输出一段段流回。分类建议也从这里出，人确认后才写回描述。</figcaption>
+    </figure>
+
+  </body>
+</html>

@@ -1,0 +1,213 @@
+# 骨架（持久草图，X1、X2，ADR-0023）：5 个层 + 第二级模块，ID 按 plans/arch-desk-media-player/00-plan.md §2 固定。
+# 层按仓库自己的分层（docs/architecture/06-unified-web-media-architecture.md §3：App / Host → Kit → 领域窄端口 → Provider → 共享基础）；
+# 第二级封闭（closed）：区域文件只能用 parent 往第二级模块下挂子模块。人拥有：本次由 AI 起草（2026-10-26），待负责人审核后 npm run arch -- own 登记。
+# 2026-10-27 按 plans/arch-desk-media-player/10-module-review.md §5、§8（负责人裁决采纳）重划：pipeline 为 contract / latency / metering / timing / fetch，
+# providers.wasm-core 拆为 wasm-module 与 stream-input；改动清单见 11-redivision-report.md，待负责人重新 arch own。
+
+sketch:
+  id: skeleton
+  mount: root
+  lifetime: persistent
+  closed: [host, kit, pipeline, providers, share]
+  modules:
+    - id: host
+      name: 宿主与演示
+      kind: layer
+      order: 1
+      abstraction: 宿主：选管线族、注入给门面，按 SDK 的事件与快照画页面；不碰内核与管线内部
+      responsibility: 仓库内唯一的 Web 消费方——演示页：创建播放器并注入两个管线族、发命令、订阅事件与快照画状态与诊断，另含测试流配置、接入代码生成与按会话的故障注入。
+      includes: [演示页, 配置与测试流, 接入示例生成, 诊断与故障注入]
+      excludes: [会话状态, 播放决策, 管线实现]
+      mayDependOn: [kit, pipeline, providers, share]
+      docRefs: [apps/web-player-demo/docs/design/01-interaction-and-visual-constraints.md, media-sdk-kits/packages/media-player/SDK.md]
+      children:
+        - id: host.demo
+          name: 演示页与布局
+          kind: subsystem
+          role: core
+          responsibility: 演示页主体：按表单创建播放器（注入自建时钟族与元素族）、把按钮转成 SDK 命令、订阅 player.events 并只按事件与快照更新页面；页面骨架、样式与布局补丁。
+          codeRefs: [apps/web-player-demo/ui/index.html, apps/web-player-demo/ui/main.js, apps/web-player-demo/ui/page.js, apps/web-player-demo/ui/layout.js, apps/web-player-demo/ui/styles.css]
+          docRefs: [apps/web-player-demo/docs/design/01-interaction-and-visual-constraints.md]
+        - id: host.demo-config
+          name: 配置、测试流与接入代码
+          kind: subsystem
+          responsibility: 播放配置的纯函数：测试流表、表单 → 校验 → 生效配置、分享链接、地址脱敏；按生效配置生成照 SDK.md「快速开始」写法的接入示例。不碰页面元素。
+          codeRefs: [apps/web-player-demo/ui/config.js, apps/web-player-demo/ui/code.js]
+        - id: host.demo-diag
+          name: 诊断与故障注入
+          kind: subsystem
+          responsibility: 只读 SDK 事件与快照的诊断面（事件表、指标、会话页），与经故障代理按会话注入网络故障的右栏。
+          codeRefs: [apps/web-player-demo/ui/diag.js, apps/web-player-demo/ui/faults.js]
+    - id: kit
+      name: 播放器 Kit
+      kind: layer
+      order: 2
+      abstraction: 会话内核：一次 open 到 close 是一个会话；命令单通道串行、状态单一来源、会话是资源唯一属主；平台 API 经适配器注入，内核不碰浏览器
+      responsibility: 门面（统一 API、事件时序契约、快照）、会话内核（命令队列、状态、路线解析、会话开关与释放、事件信封与遥测）、会话规则（接受表、路线策略、事件顺序机检）与页面能力适配（AudioContext、屏幕常亮）。
+      includes: [门面 createPlayer / Player, 会话内核, 命令接受表与路线策略, 事件与快照契约, 页面音频与屏幕常亮适配]
+      excludes: [拉流, 解码, 呈现, 延迟执行, 具体管线族（由宿主注入）]
+      mayDependOn: [pipeline, share]
+      docRefs: [docs/design/02-web-live-player.md, docs/development/07-web-player-element-family.md]
+      children:
+        - id: kit.facade
+          name: 门面与对外契约
+          kind: subsystem
+          role: core
+          responsibility: 宿主用的门面：接过宿主给的容器与管线族，建页面级 AudioContext 上本播放器的增益、逐族建立管线族，装配会话内核与浏览器适配器（可见性、系统媒体键、屏幕常亮），把每个方法转成一条内核命令；不依赖任何 Provider（决策 15）。
+          provides: [if.kit.facade.createPlayer, if.kit.facade.Player, if.kit.facade.resumeAudio]
+          dataStructures: [ds.PlayerOptions, ds.OpenOptions, ds.LatencyPreset]
+          codeRefs: [media-sdk-kits/packages/media-player/src/index.ts, media-sdk-kits/packages/media-player/src/player.ts]
+          docRefs: [media-sdk-kits/packages/media-player/SDK.md, docs/development/07-web-player-element-family.md]
+        - id: kit.kernel
+          name: 会话内核
+          kind: subsystem
+          role: core
+          responsibility: 会话、命令队列、状态、适配器注入与遥测，别的不做：命令与管线回报的结束、失败走同一队列按序施用；打开会话时解析路线、交给所选族的管线；会话按获取的逆序释放资源，释放超时即终止；管线回报带会话代号，会话关闭后丢弃。
+          provides: [if.kit.kernel.createPlayerKernel, if.kit.kernel.PlayerKernel, if.kit.kernel.PlayerAdapters]
+          codeRefs: [media-sdk-kits/packages/media-player/src/kernel.ts]
+          docRefs: [docs/design/02-web-live-player.md, docs/development/13-web-player-architecture-review.md]
+        - id: kit.session
+          name: 会话规则
+          kind: subsystem
+          role: core
+          responsibility: 内核的对外契约与纯规则：状态与命令、事件与快照的类型，命令接受表（纯表），路线策略（各容器的 auto 顺序与解析），延迟硬上限与元素路线的互斥，以及事件顺序的机检器。
+          provides: [if.kit.session.commandRejection, if.kit.session.resolveRoute, if.kit.session.eventOrderViolations]
+          dataStructures: [ds.PlayerState, ds.PlayerCommand, ds.CommandResult, ds.PlayerEvent, ds.PlayerSnapshot, ds.ClosedReason]
+          codeRefs: [media-sdk-kits/packages/media-player/src/session.ts]
+          docRefs: [docs/development/07-web-player-element-family.md]
+        - id: kit.page
+          name: 页面能力适配
+          kind: subsystem
+          responsibility: 页面级浏览器能力的适配器：全页共用、永不关闭的 AudioContext 及「声音是否真在跑」的判定与手势内恢复；Screen Wake Lock 的持有、按需申请与拒绝报告。
+          provides: [if.kit.page.PageAudio, if.kit.page.ScreenWake]
+          codeRefs: [media-sdk-kits/packages/media-player/src/page-audio.ts, media-sdk-kits/packages/media-player/src/screen-wake.ts]
+    - id: pipeline
+      name: 管线契约与共用律
+      kind: layer
+      order: 3
+      abstraction: 领域窄端口：内核与管线族之间的契约，加两族共用的纯决策律与拉流；只依赖共享基础，不认识具体族
+      responsibility: 内核与每个管线族共用的契约（源、打开选项、命令、回报、统计、族端口），两族共用的延迟决策律（纯函数与运行骨架）、计量与锚点（抖动、冻结、墙钟锚点）、计时器与看不见即保持，以及 HTTP-FLV、HLS、MP4 的拉流与有界重连。
+      includes: [管线契约, 延迟决策律, 计量与锚点, 计时器与看不见即保持, 拉流与重连]
+      excludes: [会话状态（内核）, 解封装与解码（Provider）, 呈现与音频（Provider）]
+      mayDependOn: [share]
+      docRefs: [docs/development/07-web-player-element-family.md, docs/design/02-web-live-player.md]
+      children:
+        - id: pipeline.contract
+          name: 管线契约
+          kind: subsystem
+          role: core
+          responsibility: 内核与管线族之间的契约：一个管线拥有一个会话的拉流、解码、延迟执行、呈现与音频，内核拥有状态。定义源与打开选项、管线命令与回报（事件、统计、失败）、族端口（路线清单、启动管线、音量、释放）与给族的环境。
+          provides: [if.pipeline.contract.Pipeline, if.pipeline.contract.Pipelines, if.pipeline.contract.PipelineFamily, if.pipeline.contract.PipelineSink, if.pipeline.contract.PageVisibility]
+          dataStructures: [ds.PlayerSource, ds.TimeshiftSource, ds.PlayerOpenOptions, ds.PipelineStart, ds.PipelineCommand, ds.PipelineSinkEvent, ds.PipelineStats, ds.PipelineTimeline, ds.PipelineEnvironment]
+          codeRefs: [media-web/packages/media-playback-pipeline/src/index.ts, media-web/packages/media-playback-pipeline/src/pipeline.ts]
+          docRefs: [docs/development/07-web-player-element-family.md]
+        - id: pipeline.latency
+          name: 延迟决策律
+          kind: subsystem
+          role: core
+          responsibility: 两族共用的延迟决策律：纯函数（状态 × 读数 × 配置 → 动作与报告，可重放）与一次会话驱动它的运行骨架（携带状态、报告送 sink、动作交给本族执行器并计数）。读数怎么取、动作怎么做归各族；计量件与计时器不在这里。
+          provides: [if.pipeline.latency.decideLatency, if.pipeline.latency.runLatencyLaw, if.pipeline.latency.validateLatencyConfig]
+          dataStructures: [ds.LatencyConfig, ds.LatencyReading, ds.LatencyAction, ds.LatencyReport]
+          codeRefs: ['media-web/packages/media-playback-pipeline/src/{latency-law,latency-run,latency}.ts']
+          docRefs: [docs/design/02-web-live-player.md]
+        - id: pipeline.metering
+          name: 计量与锚点
+          kind: subsystem
+          responsibility: 两族共用、把时间戳变成读数或报告的三件观测件：到达抖动（律的死区）、画面冻结（观众看到的停顿与原因）、墙钟锚点（位置 ↔ 墙钟，三种来源取可信者）。各自独立、互不依赖，都不碰浏览器 API。
+          provides: [if.pipeline.metering.JitterMeter, if.pipeline.metering.FreezeMeter, if.pipeline.metering.anchors]
+          dataStructures: [ds.Anchor, ds.Freeze]
+          codeRefs: ['media-web/packages/media-playback-pipeline/src/{jitter,anchors,freeze}.ts']
+          docRefs: [docs/development/14-web-player-metrics.md, docs/development/11-web-player-live-timeshift.md]
+        - id: pipeline.timing
+          name: 计时器与看不见即保持
+          kind: subsystem
+          responsibility: 拉流与各族等待所用的可注入计时器；会话的「看不见即保持」（页面隐藏且声音没人听见时原地保持，HoldUnseen）及随它停走的会话计时器，只在页面可见时计时的计时器，与带超时的等待 within。是播放器领域的概念（依赖契约的 PageVisibility），不下沉到共享基础。
+          provides: [if.pipeline.timing.Timers, if.pipeline.timing.HoldUnseen, if.pipeline.timing.sessionTimers, if.pipeline.timing.visibleTimers, if.pipeline.timing.within]
+          dataStructures: [ds.Timers]
+          codeRefs: [media-web/packages/media-playback-pipeline/src/timers.ts]
+          docRefs: [docs/design/02-web-live-player.md]
+        - id: pipeline.fetch
+          name: 拉流与重连
+          kind: subsystem
+          responsibility: 一个概念的三种协议：每种拉流底下的流式 HTTP 请求（可取消、空闲超时），HTTP-FLV 拉流与有界重连（断流归因、退避、稳定清零、直播结束判定），HLS 拉流（m3u8 解析、列表时间窗口、逐片加载、墙钟定位），MP4 按字节范围分段拉取；三者共用请求与有界重试，消费者都是拉流内核。
+          provides: [if.pipeline.fetch.requestStream, if.pipeline.fetch.startPull, if.pipeline.fetch.startHlsPull, if.pipeline.fetch.startMp4Pull, if.pipeline.fetch.boundedRetries]
+          dataStructures: [ds.PullHandlers, ds.PullLoss, ds.HlsHandlers, ds.MediaPlaylist]
+          codeRefs: ['media-web/packages/media-playback-pipeline/src/{network,http-request}.ts', media-web/packages/media-playback-pipeline/src/hls/**, media-web/packages/media-playback-pipeline/src/mp4/**]
+          docRefs: [docs/development/11-web-player-live-timeshift.md]
+    - id: providers
+      name: 管线族 Provider
+      kind: layer
+      order: 4
+      abstraction: 管线族：实现管线契约，拥有一个会话的拉流、解封装、解码、延迟执行、呈现与音频；由宿主选取并注入门面
+      responsibility: 两个管线族与它们共用的两件内核：自建时钟族（webcodecs / wasm 路线，可在 Worker 中运行）、元素族（mse / native 路线），wasm 模块与会话（ABI、样本、生命周期）、拉流内核（StreamInput，含时移），以及 C 写的 wasm 原生模块（解封装、解密、解码）。
+      includes: [自建时钟族, 元素族, wasm 模块与会话, 拉流内核, wasm 原生模块]
+      excludes: [会话状态与命令接受（Kit）, 延迟决策律本身（pipeline）]
+      mayDependOn: [pipeline, share]
+      docRefs: [docs/design/02-web-live-player.md, docs/development/07-web-player-element-family.md]
+      children:
+        - id: providers.wasm-module
+          name: wasm 模块与会话
+          kind: subsystem
+          role: core
+          responsibility: 两族共用的 ABI 一侧：基线播放模块的编译与每会话实例（ABI 读写、推字节、解码、取帧与样本、错误码映射）、归一化样本与 H.264 参数集，以及一次管线会话的生命周期（逆序释放、回调守护、漏斗只报一次）。变更原因是 ABI。
+          provides: [if.providers.wasm-module.loadMediaPlayer, if.providers.wasm-module.MediaPlayerSession, if.providers.wasm-module.SessionLifecycle]
+          dataStructures: [ds.MediaPlayerProgram, ds.NormalizedSample]
+          codeRefs: ['media-wasm/packages/media-wasm-core/src/{index,module,player-abi,wasm-memory,sample,h264,session-lifecycle}.ts']
+          docRefs: [docs/development/07-web-player-element-family.md]
+        - id: providers.stream-input
+          name: 拉流内核
+          kind: subsystem
+          role: core
+          responsibility: 两族共用的输入一侧：喂模块会话的 StreamInput（FLV / HLS / MP4 输入、按模块肯收的块推入、压缩缓冲满时跳到最新 IDR、到达计量给延迟律、seek 与回直播），与 FLV 直播切时移列表（截断 → 接入中 → 时移）的计算。位于拉流与两族之间，经族给的钩子回调会话。变更原因是输入协议。
+          provides: [if.providers.stream-input.StreamInput, if.providers.stream-input.StreamInputHooks]
+          codeRefs: [media-wasm/packages/media-wasm-core/src/stream-input.ts, media-wasm/packages/media-wasm-core/src/stream-input-timeshift.ts]
+          docRefs: [docs/development/11-web-player-live-timeshift.md]
+        - id: providers.self-clocked
+          name: 自建时钟族
+          kind: subsystem
+          role: core
+          responsibility: 自建时钟管线族（webcodecs / wasm 路线）：播放器级的画布、渲染器、已编译模块与预热的 Worker；每会话拉流、分片预算解码、按媒体时钟呈现、喂音频、以本族执行器运行延迟决策律；主线程与 Worker 共用同一份会话实现，Worker 模式经消息协议映射。
+          provides: [if.providers.self-clocked.wasmPipelines, if.providers.self-clocked.serveMediaPlayerWorker]
+          dataStructures: [ds.WasmPipelineFamilyOptions, ds.ToWorkerMessage, ds.FromWorkerMessage]
+          codeRefs: [media-wasm/packages/media-provider-wasm-playback/src/**]
+          docRefs: [docs/design/02-web-live-player.md]
+        - id: providers.element
+          name: 元素族
+          kind: subsystem
+          role: core
+          responsibility: 媒体元素管线族（mse / native 路线）：播放器级的一个 video 与留最后一帧的画布；mse 用同一 wasm 模块只解封装、封成 fMP4 喂 MediaSource，native 把地址直给 video；延迟决策律作用在元素的 playbackRate / currentTime 与模块的跳 IDR 上。
+          provides: [if.providers.element.elementPipelines]
+          dataStructures: [ds.ElementPipelineFamilyOptions]
+          codeRefs: [media-wasm/packages/media-provider-element-playback/src/**]
+          docRefs: [docs/development/07-web-player-element-family.md]
+        - id: providers.native-module
+          name: wasm 原生模块（C）
+          kind: subsystem
+          responsibility: media_player.wasm 的 C 源码：FLV / MPEG-TS / MP4 / ADTS 解封装、AES-128 与 xor-v2 解密、H.264 参数解析与时间 SEI、FFmpeg 解码，与按 ABI 暴露给 JS 的会话（推字节、取归一化样本、缓冲水位、接点与时移计数）。
+          provides: [if.providers.native-module.media-player-abi]
+          codeRefs: [media-wasm/native/media-player/**]
+          docRefs: [docs/design/02-web-live-player.md, docs/development/11-web-player-live-timeshift.md]
+    - id: share
+      name: 共享基础
+      kind: layer
+      order: 5
+      abstraction: 稳定公共原语：错误、事件、操作与跨语言契约；不含播放规则
+      responsibility: Kit 与 Provider 共用的运行时无关原语（MediaFault、EventHub、Operation、MediaTrack），与跨语言契约的 TS 侧（JSON Schema 生成的类型、schema 与运行时校验器）。
+      includes: [错误与事件原语, 跨语言契约类型与校验]
+      excludes: [播放规则, 浏览器 API]
+      mayDependOn: []
+      children:
+        - id: share.core
+          name: Web 基础媒体模型
+          kind: subsystem
+          role: core
+          responsibility: 运行时无关的平台原语：带错误码的 MediaFault 与错误描述、EventHub / EventSource、一次性 Operation、MediaTrack 与编码配置键。
+          provides: [if.share.core.MediaFault, if.share.core.describeError, if.share.core.EventHub]
+          codeRefs: [media-web/packages/media-core/src/**]
+        - id: share.contracts
+          name: 跨语言契约
+          kind: subsystem
+          responsibility: 跨语言契约的 TS 侧：由 JSON Schema 生成的类型（MediaError、MediaEvent、TelemetryRecord 等）、schema 本体与按契约名的运行时校验。播放器只引其类型。
+          provides: [if.share.contracts.validateContract]
+          dataStructures: [ds.MediaError, ds.MediaEvent, ds.TelemetryRecord]
+          codeRefs: [media-specs/contracts/src/**]

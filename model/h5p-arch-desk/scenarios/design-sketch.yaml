@@ -1,0 +1,55 @@
+# 在草图画布上设计一层并交给 AI：草图 v2 的主路径（ADR-0025，01 §6.16）。
+scenario:
+  id: sc.design-sketch
+  name: 在草图画布上设计一层并交给 AI
+  kind: main
+  description: |
+    架构师在当前版本的侧栏模块树上对一个模块右键「在此设计」，新建设计：服务端以仓库 HEAD 为基线，按挂载点复制这一层的结构作为底稿（相对基线为 0）并初始布局一次，
+    页面随即进入新设计的草图画布。架构师在画布上合并两个模块、拖位置、连关系、写父模块的原则：每个手势只发一个设计级操作，经模型层的 applyDesignEdit 得到新的草图集合，
+    派生即时重算两级校验与两个对比（相对基线 / 相对当前版本）。最后「保存并交给 AI」：按设计写回（比对指纹、逐张校验、合并进 YAML 文档），
+    重新读入后得到指令——各张草图全文与相对基线的变更摘要（按血缘：「合并 A、B 为 N」）——复制到剪贴板交给 AI 起草下一轮。
+  cause: 架构师要为下一轮迭代在一个局部上整理思路
+  evidence:
+    - e2e/sketch-editor.spec.ts
+    - tests/state/editSession.test.ts
+    - tests/access/writeSketch.test.ts
+  steps:
+    - call: {id: here, from: actor.architect, to: present.nav-tree.modules, label: '模块右键「在此设计」'}
+    - call: {from: present.nav-tree.modules, to: present.version.new-design, label: 'openNewDesign(mount)：对话框带入挂载点'}
+    - call: {id: create, from: actor.architect, to: present.version.new-design, label: '填设计 ID、名称、目标，点「新建」'}
+    - call: {from: present.version.new-design, to: state.desk.edit.commands, label: 'createDesign({ id, name, goal, mount })'}
+    - call: {from: state.desk.edit.commands, to: state.desk.edit.save, label: '交给写回同步'}
+    - async: {from: state.desk.edit.save, to: access.writer.sketch, relation: rel.ed.save-writer, label: 'POST /write/<项目>/designs { id, name, goal, mount }'}
+    - call: {from: access.writer.sketch, to: model.intent, label: 'seedFromBaseline(mount, HEAD 那一版描述) + gridLayout：底稿与初始布局'}
+    - return: {from: access.writer.sketch, to: state.desk.edit.save, label: '{ file, files }：design.yaml（base.commit = HEAD）与 sketches/<mount>.yaml，登记指纹'}
+    - call: {from: present.version.new-design, to: present.shell, label: '进入新设计的草图 /d/<设计>/sketch'}
+    - call: {id: enter, from: state.desk.edit.commands, to: state.desk.actions, label: 'dispatch(enterEdit)：打开草图版本即进入草图画布'}
+    - call: {from: state.desk.actions, to: state.transition.edit, relation: rel.p2.dispatch-transition, label: 'transition(enterEdit)：层次为挂载点，退出场景、清掉文件选中'}
+    - loop:
+        while: 每个手势（合并两个模块、拖位置、连关系、写原则）
+        steps:
+          - call: {id: op, from: actor.architect, to: present.sketch.canvas, label: '合并 / 拖位置 / 连线'}
+          - call: {from: present.sketch.canvas, to: state.desk.edit.commands, label: 'merge / moveNode / connect', payload: ds.DesignEditOp}
+          - call: {from: state.desk.edit.commands, to: state.desk.edit.session, label: 'apply(session, op)：设计级撤销的一步'}
+          - call: {from: state.desk.edit.session, to: model.intent.edit, label: 'applyDesignEdit(各张草图, op, ctx)', payload: [ds.SketchDef, ds.DesignEditOp]}
+          - return: {from: model.intent.edit, to: state.desk.edit.session, label: '新的草图集合与影响（前缀级联、from 指向基线）', payload: ds.EditResult}
+          - call: {from: state.desk.edit.commands, to: state.desk.actions, label: 'dispatch(edited)：选中合并结果'}
+          - call: {from: state.desk.edit.derive, to: model.intent.validate, label: 'validateSketch：两级校验', payload: ds.SketchValidation}
+          - call: {from: state.desk.edit.derive, to: model.intent.check, label: 'compareDesign：相对基线「合并 1」、相对当前版本', payload: ds.SketchComparison}
+    - call: {id: hand, from: actor.architect, to: present.version.actions, label: '点「保存并交给 AI」'}
+    - call: {from: present.version.actions, to: state.desk.edit.commands, label: 'saveAndHandToAi()：没有格式错误与语义提示才做'}
+    - call: {from: state.desk.edit.commands, to: state.desk.edit.save, label: '保存整个设计'}
+    - async: {from: state.desk.edit.save, to: access.writer.sketch, relation: rel.ed.save-writer, label: 'POST /write/<项目>/designs/<设计>/sketches', payload: ds.SaveDesignRequest}
+    - call: {from: access.writer.sketch, to: model.intent.validate, label: '逐张再校验（只拦格式错误）'}
+    - alt:
+        - when: 指纹相同且没有格式错误
+          steps:
+            - return: {id: saved, from: access.writer.sketch, to: state.desk.edit.save, label: '合并写回、更新指纹、记拦截记录'}
+            - call: {from: state.desk.edit.save, to: state.desk.edit.session, label: 'saved：清空撤销栈，接上新指纹'}
+            - async: {from: present.desk-view, to: access.model-source, relation: rel.ad.desk-fetch, label: '重新读入草图版本'}
+            - call: {from: access.model-source, to: access.reader, label: 'readSketchVersion：指令 = 草图全文 + 相对基线的变更（按血缘）'}
+            - return: {from: state.desk.edit.commands, to: present.version.actions, label: '指令，复制到剪贴板'}
+        - when: 文件已在外部改动
+          steps:
+            - return: {id: conflict, from: access.writer.sketch, to: state.desk.edit.save, label: '409「文件已变，重新加载后再改」'}
+            - call: {from: state.desk.edit.save, to: state.desk.edit.session, label: '已过时；可「重新加载并重放」'}

@@ -1,0 +1,18 @@
+{
+  "steps": [
+    {
+      "block": {
+        "kind": "edit",
+        "summary": "给编辑会话写上职责",
+        "ops": [
+          {
+            "op": "edit",
+            "sketch": "{{sketch.mount}}",
+            "edit": { "op": "updateModule", "id": "{{sketch.mount}}.session", "patch": { "responsibility": "持有设计的全部草图与撤销栈" } }
+          }
+        ]
+      }
+    },
+    { "done": true }
+  ]
+}

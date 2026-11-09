@@ -1,0 +1,30 @@
+# 设计 phase2-dynamic 挂在「model.scenario」上的草图：由一期的 designs/phase2-dynamic/sketch.yaml 按挂载点机械拆出（ADR-0025 迁移，内容不变），同设计另有 root、state.transition、state.layout、present.panel。
+sketch:
+  id: phase2-dynamic
+  mount: model.scenario
+  lifetime: until-implemented
+  modules:
+    - id: model.scenario.flatten
+      name: 回放计划
+      responsibility: 步骤树 → 帧树（ref 内联、loop 一遍、par 串行、alt 分叉）
+    - id: model.scenario.path
+      name: 回放路径
+      responsibility: 按已选分支从回放计划走出线性帧序列，在未选分支处截止
+    - id: model.scenario.level
+      name: 帧的层次投影
+      responsibility: 帧按与结构图同一套端点规则投影到当前层次，合并为可见消息
+    - id: model.scenario.participation
+      name: 参与查询
+      responsibility: 某个模块 / 关系 / 边在本场景中参与了哪些步骤
+    - id: model.scenario.sequence
+      name: 时序模型
+      responsibility: 本层的泳道、消息与组合框，不含坐标
+  interfaces:
+    - id: if.model.planScenario
+      name: planScenario
+      owner: model.scenario.flatten
+    - id: if.model.projectScenario
+      name: projectScenario
+      owner: model.scenario.level
+  closed:
+    - model.scenario

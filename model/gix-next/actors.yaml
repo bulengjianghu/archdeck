@@ -1,0 +1,147 @@
+# 外部参与者：主动发起交互的外部实体（A3），及其入口关系。依据 docs/spec/GIX-架构设计文档.md §2.0（系统上下文五方）、§2.3（进程视图）。
+# 不建参与者的：GitLab / 代码平台（内核定时发轮询任务包、runner 经 glab 出站，平台从不主动推送）、本地代码库与真机（由 runner 上的适配器驱动，被动）、
+# PostgreSQL 与证据盘（被动存储）。runner 是系统内的进程（client 层），不是参与者。
+# 三类 agent 会话是 runner 起的 Claude Code 子进程，但它们主动经 MCP 调服务端，按 A3 建为参与者；它们怎么被起来写在「系统 → 参与者」的关系里。
+actors:
+  - id: actor.owner
+    name: 主人（人）
+    kind: user
+    description: |
+      任务的主人：在 runner 本地 UI 上录入一句话需求或缺陷（即取舍）、整理信号池的草稿、答决策卡（确认清单与计划、裁决、放行合入或退回）；
+      另在研发机命令行上跑体检、发布与依赖同步。不查进度、不搬资料、不催下一步。
+  - id: actor.orchestrator
+    name: 统筹者会话
+    kind: system
+    description: |
+      每任务一个、按事件唤起的强模型 Claude Code 会话（scope=orchestrator 的一次性 MCP 令牌，只读运行在常驻仓库的快照里）：
+      读现状快照与增量事件，起草验收清单与验证计划、派执行、发起适配器调用、发卡、维护档案、设下次唤醒，答完即退。草稿任务的驱动也是它。
+  - id: actor.executor
+    name: 执行者会话
+    kind: system
+    description: |
+      按角色起的 Claude Code 会话（开发 developer、审核 reviewer、写脚本 script_writer、调研 researcher；scope=executor 令牌）：
+      在任务工作树里读任务与档案、写进度、交证据、提问、报告完成；写脚本角色还在租到的设备上试跑。不知道整个流程。
+  - id: actor.triager
+    name: 整理台会话
+    kind: system
+    description: |
+      信号池的整理会话（sonnet、只读、scope=intake 令牌，范围限主人 + 仓库）：攒批窗口到期被唤起，列出池里的信号，
+      判重复 / 无效 / 暂缓，建草稿任务并把信号挂上去。单列而不并入统筹者：令牌范围、工具集与唤起条件都不同。
+  - id: actor.time
+    name: 时间
+    kind: time
+    description: |
+      定时驱动：pg-boss 的 stately 队列默认每 15 秒触发一轮看门狗（到点唤醒、判停滞、清扫、外部状态轮询）；
+      runner 通道每 1 秒巡检一次（踢推送与长轮询、发 cards.changed）。runner 自己的心跳与重连定时在进程内，不单列。
+
+relations:
+  - id: rel.ctx.owner-intake
+    from: actor.owner
+    to: surface.intake.new-task
+    type: commands
+    purpose: 录入一句话需求或缺陷
+    description: 在新建任务抽屉里写一句话、选仓库与工作环境、剧本与进池方式后提交；这句话就是取舍卡，提交即建任务或进信号池。
+  - id: rel.ctx.owner-answer
+    from: actor.owner
+    to: surface.inbox.card-detail
+    type: commands
+    purpose: 确认、裁决、放行或退回
+    description: 在收件箱的卡片详情里看证据、统筹者建议、内核核对与放行说明后选一个选项（可带备注、预算卡带新硬上限）。
+  - id: rel.ctx.owner-drafts
+    from: actor.owner
+    to: surface.intake.drafts
+    type: commands
+    purpose: 整理草稿任务与池里的信号
+    description: 在信号池与任务详情的草稿区里对整理台建的草稿改写、拆分、并入或退回池。
+  - id: rel.ctx.owner-signals
+    from: actor.owner
+    to: surface.intake.signals
+    type: commands
+    purpose: 立即整理或分诊池里的信号
+    description: 在信号页上看待整理信号，点「立即整理」把整理唤醒提到现在，或亲自分诊、移动信号。
+  - id: rel.ctx.owner-cli
+    from: actor.owner
+    to: client.profiles.cli
+    type: commands
+    purpose: 体检、手动发布与同步依赖
+    description: 在研发机上跑 gixn doctor / gixn release <配方> / gixn deps sync <配方>，与页面和 runner 共用同一套工作环境与注册表。
+  - id: rel.ctx.orchestrator-mcp
+    from: actor.orchestrator
+    to: server.mcp.service
+    type: commands
+    mode: async
+    interface: if.share.contracts.ORCHESTRATOR_TOOLS
+    via: channel:http@share.contracts.mcp
+    purpose: 推进任务：派执行、发卡、设唤醒
+    description: |
+      Claude Code 经 runner 注入的 MCP 配置以 Streamable HTTP POST /v1/mcp 调 gixn_* 工具（Bearer 一次性 MCP 令牌）：
+      gixn_get_events / gixn_draft_acceptance / gixn_draft_plan / gixn_dispatch_execution / gixn_run_checks / gixn_repo_op / gixn_device_run / gixn_open_card / gixn_set_wakeup / gixn_end_turn 等。
+  - id: rel.ctx.executor-mcp
+    from: actor.executor
+    to: server.mcp.service
+    type: commands
+    mode: async
+    interface: if.share.contracts.EXECUTOR_TOOLS
+    via: channel:http@share.contracts.mcp
+    purpose: 读任务、交证据、提问与报告完成
+    description: |
+      同一 MCP 端点、scope=executor 的令牌：gixn_get_task / gixn_get_dossier / gixn_write_progress / gixn_submit_evidence / gixn_ask / gixn_get_answer / gixn_report_done，
+      写脚本角色另有 gixn_device_try_run。
+  - id: rel.ctx.triager-mcp
+    from: actor.triager
+    to: server.mcp.service
+    type: commands
+    mode: async
+    interface: if.share.contracts.INTAKE_TOOLS
+    via: channel:http@share.contracts.mcp
+    purpose: 整理池里的信号并建草稿
+    description: 同一 MCP 端点、scope=intake 的令牌：gixn_list_signals / gixn_triage_signal / gixn_create_draft / gixn_update_draft / gixn_move_signal / gixn_fold_draft。
+  - id: rel.ctx.time-watchdog
+    from: actor.time
+    to: kernel.liveness.scheduler
+    type: commands
+    mode: async
+    via: channel:pg-boss
+    purpose: 每轮触发看门狗
+    description: pg-boss 在业务 schema 对应的队列里按 watchdogIntervalSec（默认 15 秒）投递一条作业，处理完一轮再排下一轮（singletonKey 防重叠）。
+  - id: rel.ctx.time-patrol
+    from: actor.time
+    to: server.hub.patrol
+    type: commands
+    mode: async
+    via: channel:timer
+    purpose: 每秒巡检通道
+    description: hub.start(hubIntervalMs) 的 setInterval（默认 1 秒）：踢一次推送与长轮询，兜住后台产生的任务包，卡片有变化就发 cards.changed。
+
+  # 系统 → 参与者：会话由 runner 上的 Claude Code 执行器起，主人由系统通知提醒
+  - id: rel.ctx.start-orchestrator
+    from: adapters.ai.executor
+    to: actor.orchestrator
+    type: commands
+    mode: async
+    via: channel:ipc
+    purpose: 起统筹者会话带提示词与令牌
+    description: claude 子进程（stream-json）以统筹提示词、MCP 配置（地址 + 一次性令牌）与放行命令启动，只读运行在集成分支的快照工作树里；可续会话。
+  - id: rel.ctx.start-executor
+    from: adapters.ai.executor
+    to: actor.executor
+    type: commands
+    mode: async
+    via: channel:ipc
+    purpose: 起执行会话带简报与令牌
+    description: claude 子进程以角色提示词、模型、MCP 配置与放行命令启动在任务工作树（审核 / 调研换到只读快照）；超时、超预算或停滞时杀整棵进程树。
+  - id: rel.ctx.start-triager
+    from: adapters.ai.executor
+    to: actor.triager
+    type: commands
+    mode: async
+    via: channel:ipc
+    purpose: 起整理会话带池视图与令牌
+    description: claude 子进程以整理台提示词（池视图、草稿所含信号）与 scope=intake 的 MCP 配置只读启动。
+  - id: rel.ctx.notify-owner
+    from: client.local-ui.decision
+    to: actor.owner
+    type: notifies
+    via: channel:notification
+    purpose: 提醒主人有新卡待答
+    description: 同一张卡只弹一次系统通知：有 terminal-notifier 时直达卡片深链，否则退回 osascript；卡离开待决时撤下。

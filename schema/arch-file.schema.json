@@ -1,0 +1,1264 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://h5p-arch-desk/arch-file.schema.json",
+  "title": "h5p-arch-desk 架构描述文件",
+  "description": "一个描述文件（YAML 或 JSON）的结构。各顶层键均可选、可组合；跨文件引用由 validate 检查。",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "system": {
+      "$ref": "#/definitions/system"
+    },
+    "module": {
+      "$ref": "#/definitions/module"
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/module"
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/relation"
+      }
+    },
+    "interfaces": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/interface"
+      }
+    },
+    "dataStructures": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/dataStructure"
+      }
+    },
+    "actors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/actor"
+      }
+    },
+    "scenario": {
+      "$ref": "#/definitions/scenario"
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/scenario"
+      }
+    },
+    "sourceIgnore": {
+      "$ref": "#/definitions/textList",
+      "description": "忽略清单（G8）：不属于任何模块的源码文件，glob 相对源码根目录"
+    },
+    "sourceLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "源码限制（G20、Q13）：maxLines 为超长阈值，缺省 500；sharedRatio 为共用件行数占比的提醒阈值，缺省 0.2；只能声明一次",
+      "properties": {
+        "maxLines": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sharedRatio": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "架构规则（U1–U5、Y3）：架构师的意图，约定写在 rules.yaml，只能声明一次；AI 重新生成当前版本时不改动",
+      "properties": {
+        "layers": {
+          "type": "boolean",
+          "description": "层规则开关（U2），缺省 true：层按 mayDependOn 默认拒绝"
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "module"
+            ],
+            "properties": {
+              "module": {
+                "$ref": "#/definitions/id"
+              },
+              "mayDependOn": {
+                "$ref": "#/definitions/idList",
+                "description": "依赖白名单（U3）：子树之外只许依赖这些模块的子树"
+              },
+              "exposes": {
+                "$ref": "#/definitions/textList",
+                "description": "访问面（U4）：子树之外只许经这些文件访问；glob 相对源码根目录，entry 表示模块入口"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "allow": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to"
+            ],
+            "properties": {
+              "from": {
+                "$ref": "#/definitions/id"
+              },
+              "to": {
+                "$ref": "#/definitions/id"
+              },
+              "rule": {
+                "enum": [
+                  "layer",
+                  "deps",
+                  "exposes"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "description": "必填（U1）"
+              }
+            }
+          }
+        },
+        "cycles": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tolerated": {
+              "$ref": "#/definitions/idList",
+              "description": "容忍的环（Y3）：环的全部成员都在这些子树内时不计入门禁"
+            }
+          }
+        }
+      }
+    },
+    "reviewed": {
+      "type": "array",
+      "description": "确认记录（Z1–Z6，ADR-0023）：架构师确认过的模块，约定写在 reviewed.yaml，由页面与草图归档写入；AI 重新生成当前版本时不改动",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "module",
+          "at",
+          "hash"
+        ],
+        "properties": {
+          "module": {
+            "$ref": "#/definitions/id"
+          },
+          "at": {
+            "type": "string",
+            "description": "确认日期 YYYY-MM-DD"
+          },
+          "hash": {
+            "type": "string",
+            "description": "确认内容的指纹（Z2）"
+          },
+          "source": {
+            "type": "string",
+            "pattern": "^(manual|sketch:[A-Za-z0-9][A-Za-z0-9._:-]*)$",
+            "description": "来源（Z6）：manual 或 sketch:<设计 ID>"
+          },
+          "note": {
+            "type": "string",
+            "description": "架构师自己的话（可选）"
+          },
+          "summary": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "确认时的摘要（Z3）：需复核时据此显示差异；系统的确认只有 description（Z7）",
+            "properties": {
+              "responsibility": {
+                "type": "string"
+              },
+              "abstraction": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "includes": {
+                "$ref": "#/definitions/textList"
+              },
+              "excludes": {
+                "$ref": "#/definitions/textList"
+              },
+              "mayDependOn": {
+                "$ref": "#/definitions/idList"
+              },
+              "provides": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "$ref": "#/definitions/id"
+                    },
+                    "signature": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "children": {
+                "$ref": "#/definitions/idList"
+              },
+              "strata": {
+                "$ref": "#/definitions/textList",
+                "description": "分层声明，一层一行（Z2、ADR-0052）"
+              }
+            }
+          }
+        }
+      }
+    },
+    "sketch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "mount"
+      ],
+      "description": "草图（X1、X2、X9，ADR-0023、ADR-0025）：人拥有的局部描述，只在 intent/*.yaml 与 designs/<设计>/sketches/<mount>.yaml 里用；一张草图挂在一个模块下、只画一个层次，内容与普通描述同形，没写的字段不约束",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id",
+          "description": "持久草图有固定 ID（骨架为 skeleton）；设计的草图 ID 即设计 ID"
+        },
+        "mount": {
+          "$ref": "#/definitions/id",
+          "description": "挂载点（X9）：模块 ID 或 root；不能是层。非根草图的模块是挂载点的直接子节点，根挂载为层与层的直接子模块"
+        },
+        "lifetime": {
+          "enum": [
+            "persistent",
+            "until-implemented"
+          ],
+          "description": "生命周期（X3）：intent/ 下缺省 persistent，设计的草图缺省 until-implemented"
+        },
+        "closed": {
+          "$ref": "#/definitions/idList",
+          "description": "封闭的子树（X2）：这些草图模块的直接子模块集合必须与草图相等"
+        },
+        "supersedes": {
+          "$ref": "#/definitions/id",
+          "description": "定稿实现后替换的持久草图 ID（晋升，X3）"
+        },
+        "abstraction": {
+          "type": "string",
+          "description": "挂载点模块对内的原则（X10），加载为挂载点模块的 abstraction；根挂载不用，改用各层的 abstraction 等字段"
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/sketchModule"
+          }
+        },
+        "relations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/relation"
+          }
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/interface"
+          }
+        },
+        "dataStructures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/dataStructure"
+          }
+        },
+        "layout": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "布局（X15、X22）：本层模块的坐标（非根草图相对中心区的内容原点；引用节点不记，读到的旧坐标忽略、保存时去掉）与关系标签位置；人拥有，随草图归档",
+          "properties": {
+            "modules": {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/definitions/id"
+              },
+              "additionalProperties": {
+                "$ref": "#/definitions/spot"
+              }
+            },
+            "relations": {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/definitions/id"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "label": {
+                    "$ref": "#/definitions/point"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "strata": {
+          "$ref": "#/definitions/strata"
+        }
+      }
+    },
+    "roles": {
+      "description": "模块角色（ADR-0027、ADR-0030，M16；约定文件 intent/roles.yaml，人拥有）：模块 ID → core / shared / bus / port / adapter；草图里写了 role 的以草图为准",
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/definitions/id"
+      },
+      "additionalProperties": {
+        "enum": [
+          "core",
+          "shared",
+          "bus",
+          "port",
+          "adapter"
+        ]
+      }
+    },
+    "strata": {
+      "$ref": "#/definitions/strata"
+    }
+  },
+  "definitions": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "idList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/id"
+      }
+    },
+    "text": {
+      "type": "string"
+    },
+    "textList": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "repo": {
+              "type": "string"
+            },
+            "commit": {
+              "type": "string"
+            },
+            "generatedAt": {
+              "type": "string"
+            },
+            "adrDir": {
+              "type": "string",
+              "description": "E9：ADR 文件所在目录（相对源码根目录），缺省 docs/adr"
+            },
+            "history": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "days": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "fixPatterns": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "coupling": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "min": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "ratio": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "module": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parent": {
+          "$ref": "#/definitions/id"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "current",
+            "target",
+            "deprecated"
+          ]
+        },
+        "role": {
+          "description": "角色（02 §1.1、ADR-0027、ADR-0030）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）/ port 对外端口模块 / adapter 适配器（L14）；不写为普通",
+          "enum": [
+            "core",
+            "shared",
+            "bus",
+            "port",
+            "adapter"
+          ]
+        },
+        "responsibility": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string",
+          "description": "一句话职责（M27、ADR-0053）：≤ 30 字，动词开头，写对外承诺、不写内部构成"
+        },
+        "explainer": {
+          "type": "string",
+          "pattern": "^explainers/[^/]+\\.html$",
+          "description": "图解（M32、ADR-0055）：相对项目描述目录的 explainers/<文件>.html；不写时按约定路径 explainers/<模块 ID>.html 查找"
+        },
+        "principle": {
+          "type": "string"
+        },
+        "dataStructures": {
+          "$ref": "#/definitions/idList"
+        },
+        "provides": {
+          "$ref": "#/definitions/idList"
+        },
+        "codeRefs": {
+          "$ref": "#/definitions/textList"
+        },
+        "entry": {
+          "type": "string",
+          "description": "对外入口文件，相对源码根目录；不写时按约定推出（G10）"
+        },
+        "docRefs": {
+          "$ref": "#/definitions/textList"
+        },
+        "adrs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": "E9：相关架构决策的编号（整数列表，如 [25, 27]，不要写 0025）；ADR 文件在源码根目录的 docs/adr/<四位编号>-*.md"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "tags": {
+          "$ref": "#/definitions/textList"
+        },
+        "order": {
+          "type": "number",
+          "description": "迁移期：旧写法 kind: layer 的层序（M26），新写法写在 strata 上"
+        },
+        "abstraction": {
+          "type": "string",
+          "description": "内部切分的原则一句（M24、ADR-0053）：为什么这样分子模块；不兼任职责（职责写 summary / responsibility）"
+        },
+        "invariants": {
+          "type": "array",
+          "description": "守住什么（M28、ADR-0053）：≤ 3 条不变式，每条一句；可写成字符串，或 { text, adr }（adr 为 ADR 编号整数）",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "text"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "adr": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "相关架构决策的编号（整数，同 adrs）"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "includes": {
+          "$ref": "#/definitions/textList"
+        },
+        "excludes": {
+          "$ref": "#/definitions/textList"
+        },
+        "mayDependOn": {
+          "$ref": "#/definitions/idList"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/module"
+          }
+        },
+        "designNote": {
+          "type": "string",
+          "description": "设计版本专用：为什么这样设计 / 调整（Markdown）"
+        },
+        "stratum": {
+          "$ref": "#/definitions/id",
+          "description": "所属的层：父模块 strata 里的局部 ID（ST、ADR-0052）"
+        }
+      }
+    },
+    "sketchModule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parent": {
+          "$ref": "#/definitions/id"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "current",
+            "target",
+            "deprecated"
+          ]
+        },
+        "role": {
+          "description": "角色（02 §1.1、ADR-0027、ADR-0030）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）/ port 对外端口模块 / adapter 适配器（L14）；不写为普通",
+          "enum": [
+            "core",
+            "shared",
+            "bus",
+            "port",
+            "adapter"
+          ]
+        },
+        "responsibility": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string",
+          "description": "一句话职责（M27、ADR-0053）：≤ 30 字，动词开头，写对外承诺、不写内部构成"
+        },
+        "explainer": {
+          "type": "string",
+          "pattern": "^explainers/[^/]+\\.html$",
+          "description": "图解（M32、ADR-0055）：相对项目描述目录的 explainers/<文件>.html；不写时按约定路径 explainers/<模块 ID>.html 查找"
+        },
+        "principle": {
+          "type": "string"
+        },
+        "dataStructures": {
+          "$ref": "#/definitions/idList"
+        },
+        "provides": {
+          "$ref": "#/definitions/idList"
+        },
+        "codeRefs": {
+          "$ref": "#/definitions/textList"
+        },
+        "entry": {
+          "type": "string",
+          "description": "对外入口文件，相对源码根目录；不写时按约定推出（G10）"
+        },
+        "docRefs": {
+          "$ref": "#/definitions/textList"
+        },
+        "adrs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": "E9：相关架构决策的编号（整数列表，如 [25, 27]，不要写 0025）；ADR 文件在源码根目录的 docs/adr/<四位编号>-*.md"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "tags": {
+          "$ref": "#/definitions/textList"
+        },
+        "order": {
+          "type": "number",
+          "description": "迁移期：旧写法 kind: layer 的层序（M26），新写法写在 strata 上"
+        },
+        "abstraction": {
+          "type": "string",
+          "description": "内部切分的原则一句（M24、ADR-0053）：为什么这样分子模块；不兼任职责（职责写 summary / responsibility）"
+        },
+        "invariants": {
+          "type": "array",
+          "description": "守住什么（M28、ADR-0053）：≤ 3 条不变式，每条一句；可写成字符串，或 { text, adr }（adr 为 ADR 编号整数）",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "text"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "adr": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "相关架构决策的编号（整数，同 adrs）"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "includes": {
+          "$ref": "#/definitions/textList"
+        },
+        "excludes": {
+          "$ref": "#/definitions/textList"
+        },
+        "mayDependOn": {
+          "$ref": "#/definitions/idList"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/sketchModule"
+          }
+        },
+        "designNote": {
+          "type": "string",
+          "description": "设计版本专用：为什么这样设计 / 调整（Markdown）"
+        },
+        "from": {
+          "$ref": "#/definitions/idList",
+          "description": "血缘（X11）：这个模块由哪些基线模块而来，一律指向基线 ID；全新模块不写"
+        },
+        "stratum": {
+          "$ref": "#/definitions/id",
+          "description": "所属的层：父模块 strata 里的局部 ID（ST、ADR-0052）"
+        }
+      },
+      "description": "草图里的模块（X9、X11）：字段同普通模块，可带血缘 from"
+    },
+    "relation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "from",
+        "to",
+        "type"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "type": {
+          "description": "关系类型（02 §1.1、ADR-0029）：四类交互 queries 查询 / commands 委托 / notifies 通知 / streams 流，箭头是控制流方向。迁移期：calls 读作「未分类」（M17，提示）；implements 已不是关系类型，实现者写进接口的 implementedBy（M17，读到时丢弃并提醒）；depends 已不是关系类型（M15）；event / dataflow 是已弃用的旧名（M12）",
+          "anyOf": [
+            {
+              "enum": [
+                "queries",
+                "commands",
+                "notifies",
+                "streams"
+              ]
+            },
+            {
+              "enum": [
+                "calls"
+              ],
+              "deprecated": true
+            },
+            {
+              "enum": [
+                "event",
+                "dataflow"
+              ],
+              "deprecated": true
+            }
+          ]
+        },
+        "pull": {
+          "description": "只用于 streams：拉取型流，箭头仍指数据去向（M13）",
+          "type": "boolean"
+        },
+        "mode": {
+          "description": "同步性：只用于 queries / commands（迁移期含未分类 calls）——同步缺省，异步（Promise、异步回调、postMessage、定时器回调）写 async（M13）；notifies 一律异步、streams 不比",
+          "enum": [
+            "sync",
+            "async"
+          ]
+        },
+        "via": {
+          "description": "机制（K5b、ADR-0029）：port:<接口 ID> 经端口 / bus:<总线模块 ID> 经总线 / channel:<通道名> 经通道（可加契约模块 channel:<通道名>@<模块 ID>，M21）；旧的平铺取值 http / hmr / inject / router / callback / port / bus 是迁移期别名（M20）",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(port|bus):[^\\s:@]\\S*$"
+            },
+            {
+              "type": "string",
+              "pattern": "^channel:[^\\s:@][^\\s@]*(@[^\\s@]+)?$"
+            },
+            {
+              "enum": [
+                "http",
+                "hmr",
+                "inject",
+                "router",
+                "callback",
+                "port",
+                "bus"
+              ],
+              "deprecated": true
+            }
+          ]
+        },
+        "interface": {
+          "$ref": "#/definitions/id"
+        },
+        "payload": {
+          "oneOf": [
+            {
+              "$ref": "#/definitions/id"
+            },
+            {
+              "$ref": "#/definitions/idList"
+            }
+          ]
+        },
+        "description": {
+          "type": "string",
+          "description": "机制：怎么连、经什么（M29：目的写 purpose）"
+        },
+        "purpose": {
+          "type": "string",
+          "description": "目的（M29、ADR-0053）：≤ 20 字，从调用方的视角写「为了什么」"
+        },
+        "designNote": {
+          "type": "string",
+          "description": "设计版本专用：为什么这样设计 / 调整（Markdown）"
+        }
+      }
+    },
+    "interface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "$ref": "#/definitions/id"
+        },
+        "signature": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "semantics": {
+          "type": "string"
+        },
+        "implementedBy": {
+          "description": "端口的实现者模块（ADR-0029、M18）：AI 的主张，代码事实是裁判（K5c）",
+          "$ref": "#/definitions/idList"
+        },
+        "designNote": {
+          "type": "string",
+          "description": "设计版本专用：为什么这样设计 / 调整（Markdown）"
+        }
+      }
+    },
+    "dataStructure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "definition": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "invariants": {
+          "type": "string"
+        },
+        "designNote": {
+          "type": "string",
+          "description": "设计版本专用：为什么这样设计 / 调整（Markdown）"
+        }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "kind"
+      ],
+      "description": "外部参与者：系统之外主动发起交互的实体，不进模块树（规则 A1–A5）",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "user",
+            "system",
+            "time"
+          ],
+          "description": "user 人的操作 / system 外部系统主动调用或推送 / time 定时与超时"
+        },
+        "description": {
+          "type": "string"
+        },
+        "designNote": {
+          "type": "string",
+          "description": "设计版本专用：为什么这样设计 / 调整（Markdown）"
+        }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "steps"
+      ],
+      "description": "一条有名字的执行链路；不写默认层次与触发者（规则 S9、A6）",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "description": "场景的类别（M19、ADR-0030）：main 主流程（缺省）/ exception 异常 / maintenance 维护；运行视角默认只列主流程（R17）",
+          "enum": [
+            "main",
+            "exception",
+            "maintenance"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "cause": {
+          "type": "string",
+          "description": "触发原因（文字）"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "证据文件：验证这条链路的测试、E2E 等源码文件路径（相对源码根目录）；只校验在源码清单里存在，不解析内容（S15）"
+        },
+        "steps": {
+          "$ref": "#/definitions/steps"
+        },
+        "designNote": {
+          "type": "string",
+          "description": "设计版本专用：为什么这样设计 / 调整（Markdown）"
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/step"
+      }
+    },
+    "message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id",
+          "description": "场景内唯一；写了则帧 ID 稳定（F2、S11）"
+        },
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "label": {
+          "type": "string"
+        },
+        "relation": {
+          "$ref": "#/definitions/id",
+          "description": "对应的结构关系（S12、S13）"
+        },
+        "interface": {
+          "$ref": "#/definitions/id"
+        },
+        "payload": {
+          "oneOf": [
+            {
+              "$ref": "#/definitions/id"
+            },
+            {
+              "$ref": "#/definitions/idList"
+            }
+          ]
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "step": {
+      "description": "消息步骤（call / async / return）或组合步骤（alt / loop / par / ref），规则 S2",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "call"
+          ],
+          "properties": {
+            "call": {
+              "$ref": "#/definitions/message"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "async"
+          ],
+          "properties": {
+            "async": {
+              "$ref": "#/definitions/message"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "return"
+          ],
+          "properties": {
+            "return": {
+              "$ref": "#/definitions/message"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "alt"
+          ],
+          "properties": {
+            "alt": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "when",
+                  "steps"
+                ],
+                "properties": {
+                  "when": {
+                    "type": "string"
+                  },
+                  "steps": {
+                    "$ref": "#/definitions/steps"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "loop"
+          ],
+          "properties": {
+            "loop": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "while",
+                "steps"
+              ],
+              "properties": {
+                "while": {
+                  "type": "string"
+                },
+                "steps": {
+                  "$ref": "#/definitions/steps"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "par"
+          ],
+          "properties": {
+            "par": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "steps"
+                ],
+                "properties": {
+                  "steps": {
+                    "$ref": "#/definitions/steps"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ref"
+          ],
+          "properties": {
+            "ref": {
+              "$ref": "#/definitions/id",
+              "description": "引用另一个场景 ID（S6）"
+            }
+          }
+        }
+      ]
+    },
+    "spot": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "布局里模块的位置（X15）：根草图的第二级模块的 y 相对所在层带的顶（只记 x 时取带内第一行，X21）",
+      "required": [
+        "x"
+      ],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      }
+    },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      }
+    },
+    "stratum": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "description": "层（ST、ADR-0052）：父模块对子模块的分类，不是节点、不占级；成员用 members 列出或在子模块上写 stratum",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id",
+          "description": "局部 ID：在父模块内唯一"
+        },
+        "name": {
+          "type": "string"
+        },
+        "order": {
+          "type": "number",
+          "description": "自上而下"
+        },
+        "asks": {
+          "type": "string",
+          "description": "回答的问题"
+        },
+        "admits": {
+          "type": "string",
+          "description": "归属判定问：新模块只看职责就能回答是 / 否"
+        },
+        "abstraction": {
+          "type": "string",
+          "description": "原则正文"
+        },
+        "mayDependOn": {
+          "$ref": "#/definitions/idList",
+          "description": "本父模块内可依赖的层 ID；不写等于 []"
+        },
+        "singular": {
+          "type": "string",
+          "description": "单成员层的理由（M5b）"
+        },
+        "members": {
+          "$ref": "#/definitions/idList",
+          "description": "成员：父模块的直接子模块 ID"
+        },
+        "designNote": {
+          "type": "string"
+        }
+      }
+    },
+    "strata": {
+      "type": "object",
+      "description": "分层声明（ST、ADR-0052）：父模块 ID（根写 root）→ 层；约定文件 intent/strata.yaml（人拥有），草图里写了的以草图为准",
+      "propertyNames": {
+        "$ref": "#/definitions/id"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/stratum"
+        }
+      }
+    }
+  }
+}

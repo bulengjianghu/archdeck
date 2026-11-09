@@ -1,0 +1,47 @@
+# 取自 kernel/src/watchdog.ts（staleRunners / markOffline、alertNoRunner）、services/jobs.ts（RunnerService：离线结算、挂起亲和任务包、注册时结算同一 runner 丢失的工作）、
+# kernel-api/src/http.ts（注册换令牌、WS 握手交给通道）、runner/src/runner.ts（注册带 previousRunnerId、心跳、WS 断了退回长轮询）；演练 test/drills/runner-gone。
+scenario:
+  id: sc.runner-gone
+  name: runner 掉线
+  kind: exception
+  description: |
+    runner 掉线（断网、死机、停进程）后心跳停了：看门狗按离线判定秒数把它标离线，名下运行中的执行与已认领未回报的调用判失败（env.runner_offline，环境故障、不计尝试），
+    亲和它的任务包挂起，统筹者被唤醒决定继续等还是从已推的分支带档案在别处重来；没有任何在线 runner 能接时发卡请人启动 runner。
+    runner 回来（同一 runnerId 重新注册）或另一台上线时，内核结算它手里丢失的工作、补清理，任务接着走。
+  cause: runner 心跳超过离线判定秒数没有到
+  evidence:
+    - test/drills/runner-gone.test.ts
+    - packages/kernel/test/runner-restart.test.ts
+    - packages/kernel/test/recovery-faults-budget.test.ts
+    - packages/kernel-api/test/runner-channel.test.ts
+    - packages/runner/test/runner.test.ts
+  steps:
+    - async: {from: actor.time, to: kernel.liveness.scheduler, label: pg-boss 一轮}
+    - async: {from: kernel.liveness.scheduler, to: kernel.liveness.watchdog, label: tick()}
+    - call: {id: offline, from: kernel.liveness.watchdog, to: kernel.dispatch.jobs, label: staleRunners → markOffline(runnerId)}
+    - async: {id: settle, from: kernel.dispatch.jobs, to: kernel.ledger.ledger, label: runner.offline；名下执行与调用判失败（env.runner_offline，不计尝试）；亲和任务包挂起}
+    - call: {from: kernel.dispatch.jobs, to: kernel.rules.faults, label: 归类为 env.runner_offline}
+    - async: {from: kernel.dispatch.jobs, to: kernel.liveness.wakeups, label: 唤醒统筹者}
+    - ref: sc.orchestrator-wake
+    - alt:
+        - when: 另一台在线 runner 能接（同主人、有配方与设备）
+          steps:
+            - async: {id: redispatch, from: actor.orchestrator, to: server.mcp.service, label: gixn_dispatch_execution：从已推的分支带档案重派}
+            - async: {from: server.mcp.dispatch-tools, to: kernel.orchestration.executions, relation: rel.server.dispatch-execution, label: 新的执行}
+            - async: {from: server.hub.push, to: client.channel.runner, relation: rel.server.hub-jobs-ws, label: 推给在线的 runner}
+        - when: 没有在线 runner 能接
+          steps:
+            - call: {id: no-runner, from: kernel.liveness.watchdog, to: kernel.tasks.cards, label: 裁决卡「没有在线的 runner 能接这个任务」}
+            - call: {from: actor.owner, to: surface.inbox.card-detail, label: 启动 gixn-runner 后选「已处理，重试」}
+        - when: 统筹者决定继续等
+          steps:
+            - async: {id: wait, from: actor.orchestrator, to: server.mcp.service, label: gixn_set_wakeup：过一会儿再看}
+    - async: {id: back, from: client.channel.runner, to: client.channel.kernel-client, label: '启动 / 401 后 register(previousRunnerId, 能力)'}
+    - async: {from: client.channel.kernel-client, to: server.http.runner-routes, relation: rel.client.register, label: 'POST /v1/runners/register（引导令牌）'}
+    - async: {from: server.http.runner-routes, to: server.mcp.tokens, label: 换 runner 令牌（30 天，带主人身份）}
+    - async: {id: register, from: server.http.runner-routes, to: kernel.dispatch.jobs, relation: rel.server.runner-register, label: register：结算同一 runner 手里丢失的工作、补清理}
+    - async: {from: kernel.dispatch.jobs, to: kernel.ledger.ledger, label: runner.registered；丢失的执行判失败并作废任务包}
+    - async: {from: client.channel.runner, to: server.hub.push, relation: rel.client.ws-attach, label: 'WS /v1/runners/stream（连不上就退回长轮询）'}
+    - call: {from: server.http.runner-routes, to: server.hub.push, label: attach 连接、setCaps 能力}
+    - async: {from: client.channel.kernel-client, to: server.http.runner-routes, relation: rel.client.heartbeat, label: 按 heartbeatSec 心跳（带运行中的 jobId）}
+    - async: {from: server.http.runner-routes, to: kernel.dispatch.jobs, relation: rel.server.runner-register, label: heartbeat → 要中止的任务包}

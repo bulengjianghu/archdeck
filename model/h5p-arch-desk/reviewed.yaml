@@ -1,0 +1,399 @@
+# 确认记录（Z1，ADR-0023）：架构师确认过的模块，由页面与草图归档写入；AI 重新生成描述时不改动
+reviewed:
+  - module: present.project-list
+    at: 2026-10-22
+    hash: dba21ce7cd53262a
+    source: manual
+    note: 第三轮自举样本：按 docs/03 §3 模块表核对职责、对外接口与子模块
+    summary:
+      responsibility: 列出模型根目录下的全部项目，卡片以健康度为主（描述错误与提醒、违规相对基线 ±N 或「无基线」、模块环个数与最大规模、未证实、未归属，H-1、Q10），简介、分层、规模、生成来源为次，及各项目推进中的设计版本（已实现、已放弃的设计归档，只注明个数，DV-6），点击进入项目当前版本或设计的最新一轮。
+  - module: present.desk-view
+    at: 2026-10-22
+    hash: 07d024d3430cf0fa
+    source: manual
+    note: 第三轮自举样本：按 docs/03 §3 模块表核对职责、对外接口与子模块
+    summary:
+      responsibility: 单个项目某个版本的工作台：按项目 + 版本创建并注入一份 DeskState，布置左侧导航树、中间画布区、设计信息条与右侧属性面板（两侧宽度可拖动、可折叠，宽度与折叠状态记在本地；「专注」一键收起两侧栏，W-1）；创建并注入舞台显示（静态关系显示方式、在画布上显示，V8、V9）；处理键盘意图；打开场景后画布区交给分屏容器放入结构图与时序图（默认左右，可切换为上下），底部出现回放控制条。
+      children:
+        - present.desk-view.split
+  - module: present.sequence
+    at: 2026-10-22
+    hash: 915bbe2721cce6e2
+    source: manual
+    note: 第三轮自举样本：按 docs/03 §3 模块表核对职责、对外接口与子模块
+    summary:
+      responsibility: 运行视角下把定位好坐标的时序模型画成 SVG（D-2）：泳道为当前层次的参与者，互不包含（P14），按层次顺序排列，同一父模块的泳道有分组框（P9、P13），泳道头固定在顶部、底部另有一份（D-2），外部参与者固定在最左并以竖线隔开系统边界；消息自上而下，alt / loop / par / ref 画成组合框；同步实线实心箭头、异步虚线开放箭头（D-6），只画显式 return（S10a）；选中突出：只有选中的步骤用选中样式、配对返回加浅色标记，选中模块等对象时突出相关泳道（R15、R16）；单击消息 = 指向这一步即选中它（R13），单击 alt 的分支条件 = 改走这一支（F6e）；只在用户移动进度后滚动（D-7）；不做悬停弹出（W-1）；当前层次看不到任何帧时提示并提供「跳到场景所在层次」。
+      children:
+        - present.sequence.fragments
+        - present.sequence.heads
+        - present.sequence.interact
+        - present.sequence.lanes
+  - module: present.canvas
+    at: 2026-10-22
+    hash: 27fb3bc8768d9e32
+    source: manual
+    note: 第三轮自举样本：按 docs/03 §3 模块表核对职责、对外接口与子模块
+    summary:
+      responsibility: 把带坐标的视图画成节点和边；处理平移、缩放、单击、双击、悬停；聚焦时只显示相关的边、其余变淡；运行视角下结构图作为舞台：默认只显示参与本场景的节点与走过的边，不参与的节点与静态边按显示方式隐藏 / 淡显 / 全显，布局不变（V5、V8），「在画布上显示」的对象的静态边照常（V9）；叠加回放；选中步骤时其余走过的边变灰（D-3、R15）；右下角浮动的「显示」面板（显示设置与图例）。 分层总览中单击带内「+N」临时展开该层全部模块（O6）；容器宽度交给协调者换算成带内列数（O7）。
+      children:
+        - present.canvas.edges
+        - present.canvas.flow
+        - present.canvas.legend
+        - present.canvas.nodes
+  - module: present.panel
+    at: 2026-10-22
+    hash: c310228acfbf3b58
+    source: manual
+    note: 第三轮自举样本：按 docs/03 §3 模块表核对职责、对外接口与子模块
+    summary:
+      responsibility: 显示**选中**（唯一的主语，ADR-0012）的对象：结构视角下为选中的对象，无选中时为当前父模块；运行视角下选中步骤时为步骤（作用、输入、输出在前），选中场景时为场景概览，选中模块 / 关系 / 边 / 参与者时先回答「在这次流程中做了什么」，结构信息折叠在下方，可在画布上显示（V9）。对象种类：系统（设计版本另含设计说明与变更清单）、模块、关系、聚合边、外部参与者、场景、步骤；设计版本中标出新增 / 修改与设计说明。 信息顺序（§4.3）：模块为职责 → 对外接口 → 子模块 → 出入边 → 架构治理 → 源代码，实现原理、核心数据结构、代码与文档引用默认折叠；根层为健康度 → 分层 → 简介 → 生成来源与规模 → 治理明细。人拥有的文件的追加写入在这里发起（WriteForm：加例外、加入忽略、记录评审意见，B1–B4）。
+      children:
+        - present.panel.actor
+        - present.panel.content
+        - present.panel.dep
+        - present.panel.design
+        - present.panel.dispatch
+        - present.panel.edge
+        - present.panel.file
+        - present.panel.governance
+        - present.panel.module
+        - present.panel.module-source
+        - present.panel.relation
+        - present.panel.run
+        - present.panel.scenario
+        - present.panel.step
+        - present.panel.system
+  - module: state.desk
+    at: 2026-10-22
+    hash: f313b0260c7dc17b
+    source: manual
+    note: 第三轮自举样本：补人确认层派生（desk.review）后复核
+    summary:
+      responsibility: 当前项目当前版本的唯一状态持有者：层次、选中（含文件）、悬停、显示开关、加载状态，当前场景与回放进度，设计版本与提交版本的对比基线与差异，被描述项目的源码清单与文件归属，返工清单（W-6）与写入人拥有的文件（B1–B4），分层总览的临时展开与带内列数（O6、O7）；对外提供唯一一组操作，并经同步适配器与路由、描述文件、布局、源码保持一致。对外核心平铺，运行视角、源码、版本、架构治理的派生分为 run / files / versions / facts 四组（ADR-0013、ADR-0015）。
+      children:
+        - state.desk.actions
+        - state.desk.facts
+        - state.desk.files
+        - state.desk.layout-sync
+        - state.desk.loading
+        - state.desk.projection
+        - state.desk.review
+        - state.desk.source-sync
+        - state.desk.url-sync
+        - state.desk.versions
+        - state.desk.writer
+  - module: state.transition
+    at: 2026-10-22
+    hash: aea9d7094c04ed6e
+    source: manual
+    note: 第三轮自举样本：按 docs/03 §3 模块表核对职责、对外接口与子模块
+    summary:
+      responsibility: 会话规则的纯函数：给定视图状态、动作与上下文，算出下一个视图状态及是否进浏览器历史。管视角与选中（V）、选中与进度（播放头）、悬停的关系、开关、浏览器历史与 URL 编解码；凡是关于被描述系统的问题（最近存在 / 可见的祖先、本层的下一步、到达某帧需要的分支选择、谁参与了哪一步）都调用模型层的架构查询，自己不实现。不依赖 Vue、路由、计时器。
+      children:
+        - state.transition.navigation
+        - state.transition.playback
+        - state.transition.selection
+        - state.transition.url
+  - module: state.layout
+    at: 2026-10-22
+    hash: ca423883f7ca99b7
+    source: manual
+    note: 第三轮自举样本：按 docs/03 §3 模块表核对职责、对外接口与子模块
+    summary:
+      responsibility: 给层次视图算坐标与边的走线：分层总览按层序分带规则排布（带内列数按画布宽度换算，O7），普通层次用 elkjs；框外的角色按方位摆放（A7、L4），交叉处画跳线（L11）；给时序模型算泳道与步骤坐标；舞台叠加与舞台显示；画布场景（节点与边的数据、显隐、变淡、回放态，ADR-0013）；结果按视图内容缓存。
+      children:
+        - state.layout.canvas
+        - state.layout.runner
+        - state.layout.sequence
+        - state.layout.stage
+  - module: access.model-source
+    at: 2026-10-22
+    hash: 35a727e2f5946f2a
+    source: manual
+    note: 第三轮自举样本：按 docs/03 §3 模块表核对职责、对外接口与子模块
+    summary:
+      responsibility: 提供 /projects.json（附健康度，Q10）、/models/<项目>.json、/models/<项目>/designs/<设计>/<轮次>.json、/models/<项目>/commits/<提交>.json（E5、E6），各版本附改动过描述的最近提交，并按项目推送 arch-model:changed（含设计版本的变化）；另提供 /source/<项目>.json、/source/<项目>/file.json、/source/<项目>/exports.json、/source/<项目>/facts.json（代码事实、基线与拦截记录，K8；源码清单短暂缓存）；挂载 POST /write/<项目>/feedback | allow | ignore（只收同源 JSON，B1–B5）。
+  - module: access.reader
+    at: 2026-10-22
+    hash: deca7a98c9670f75
+    source: manual
+    note: 第三轮自举样本：按 docs/03 §3 模块表核对职责、对外接口与子模块
+    summary:
+      responsibility: 约定「模型根目录下含 system.yaml 的子目录即项目、其下 designs/<设计>/ 是设计版本」，读取项目当前版本（跳过 designs/ 与 governance/）或设计某一轮的描述文件（YAML / JSON）及对比基线，读 design.yaml，并跑一遍模型层生成项目摘要。
+  - module: access.agent
+    at: 2026-10-22
+    hash: e4f9ec36f5974fde
+    source: manual
+    note: 第三轮自举样本：按 docs/03 §3 模块表核对职责、对外接口与子模块
+    summary:
+      responsibility: 给 AI coding agent 与人用的架构查询：查询核心按项目加载描述、源码清单、代码事实与基线并调用模型层的架构治理（定位、写前判定、违规、环、重新扫描、拦截报告，Q1–Q4）；每次查询前比对输入（描述、源码清单与各文件的修改时间与大小、基线），变了就重建，长驻时新建文件、新加依赖后无需重新扫描即可判定；两层外壳——命令行 npm run arch（另有生成基线）与 MCP 服务器 npm run arch:mcp（stdio），同一输入同一结果（Q6）；只读描述、规则与基线，只写拦截记录（Q5）。
+  - module: model.types
+    at: 2026-10-22
+    hash: eecfb7b478efd714
+    source: manual
+    note: 第三轮自举样本：按 docs/03 §3 模块表核对职责、对外接口与子模块
+    summary:
+      responsibility: 模型层的契约：描述文件的形状（JSON Schema 与对应的 TS 类型；顶层键含 actors、scenario / scenarios 与步骤树），加载、索引、投影、场景投影、源码归属、架构治理各阶段的数据类型（声明收在 types.ts、scenario/types.ts、source/types.ts、governance/types.ts），领域枚举，以及只查表的名称查询与小谓词（moduleName、isLong、isArchived、RULE_LABELS）。不含投影与计算；呈现层对模型层只依赖它（U10）。
+  - module: model.pipeline
+    at: 2026-10-22
+    hash: cf5fb57c55b7a399
+    source: manual
+    note: 第三轮自举样本：按 docs/03 §3 模块表核对职责、对外接口与子模块
+    summary:
+      responsibility: 文本 → 模型 → 索引：Loader 解析与单文件格式检查，Validator 跨文件引用检查，Indexer 建查询结构；模块、关系与场景走同一条流水线。各步自报问题，汇总在模型层入口。
+      children:
+        - model.pipeline.indexer
+        - model.pipeline.loader
+        - model.pipeline.validator
+  - module: model.projector
+    at: 2026-10-22
+    hash: 11be632575dd75db
+    source: manual
+    note: 第三轮自举样本：按 docs/03 §3 模块表核对职责、对外接口与子模块
+    summary:
+      responsibility: 给定当前父模块，算出这一层的节点、直接边、聚合边、边界节点、外部参与者；子模块都是层时算出分层总览（带、核心模块、核心跨层边；临时展开的层全部子模块按核心模块露出，O6）。
+      children:
+        - model.projector.collector
+        - model.projector.endpoints
+        - model.projector.hierarchy
+        - model.projector.overview
+  - module: model.scenario
+    at: 2026-10-22
+    hash: 3a49c97b4e3d40d8
+    source: manual
+    note: 第三轮自举样本：按 docs/03 §3 模块表核对职责、对外接口与子模块
+    summary:
+      responsibility: 运行视角的投影规则：读场景语义（回放计划与绑定），按已选分支求出回放路径，再按当前层次投影——每帧落到本层哪条边（本层没有视图边时为「经由上层关系」或「结构中未建模」）、哪个节点（内部活动）或不可见，合并出本层的可见消息；产出本层的时序模型与场景所在层次；回答场景相关的架构查询：本层的下一步 / 上一步、到达某帧需要的分支选择、某个模块 / 关系 / 边在本场景中参与了哪些步骤。
+      children:
+        - model.scenario.level
+        - model.scenario.outline
+        - model.scenario.participation
+        - model.scenario.path
+        - model.scenario.sequence
+  - module: model.governance
+    at: 2026-10-22
+    hash: 5051626d8ed35657
+    source: manual
+    note: 第三轮自举样本：按 docs/03 §3 模块表核对职责、对外接口与子模块
+    summary:
+      responsibility: 代码事实与架构规则：文件依赖按归属提升为模块依赖，与描述比对（关系已证实 / 未证实、未描述依赖，K4–K7）；按 rules 与层的 mayDependOn 判定违规（层规则、依赖白名单、访问面、例外，U2–U6）；模块环与文件环、环度（Y）；按基线给出门禁问题（U8）；投影到当前层次（K9、Y4）；agent 查询（定位、模块说明、写前判定、拦截统计，Q1、Q2、Q4）。输入是索引、归属与接入层给的依赖，不碰文件系统。
+      children:
+        - model.governance.cycles
+        - model.governance.facts
+        - model.governance.level
+        - model.governance.ports
+        - model.governance.query
+        - model.governance.report
+        - model.governance.rules
+  - module: model.intent.edit
+    at: 2026-10-22
+    hash: 98afdd2af151b51f
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        对草图定义的纯函数编辑：输入一份草图（ds.SketchDef）、一个编辑操作（ds.EditOp）与上下文（持久草图、当前版本索引），输出新草图与这次编辑的影响（新建、改名、删除了哪些 ID），或拒绝原因。
+        操作族：层（加、删、排序、可依赖的层）、模块（加、删、改字段、核心与封闭）、移动与改 ID（ID 前缀级联到后代、关系两端、接口 owner、closed 与 mayDependOn 中的引用）、关系与接口（连、改、删；接口 owner 固定为所在模块）、草图元信息（lifetime、supersedes）、新建草图的底稿。
+        不碰文件、YAML 文本与界面；不判断草图整体是否合法（那是校验的事）。
+      children:
+        - model.intent.edit.layers
+        - model.intent.edit.locate
+        - model.intent.edit.modules
+        - model.intent.edit.move
+        - model.intent.edit.relations
+        - model.intent.edit.seed
+  - module: model.intent.validate
+    at: 2026-10-22
+    hash: 7e0ac1d0c29bc159
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        草图的即时校验，编辑态每次操作后与保存前（页面与写入端点）共用同一函数：
+        格式（按 JSON Schema 检查草图的形状，未知字段即错）；ID 规则（格式、在本草图与持久草图中唯一、子模块 ID 以父 ID 为前缀，X5）；引用完整（parent、关系两端、接口 owner、关系的经由接口、closed 与 mayDependOn 的元素都要在本草图或持久草图中找到；草图之间不引用 AI 生成的实体）；
+        关系不连祖先与后代（M6）；层依赖无环；与持久草图的矛盾（复用 model.intent.check 的矛盾检查，只有一份）。
+        输出按实体定位的问题列表（error 拒绝保存，warning 只提示），不改草图。
+  - module: model.intent.check
+    at: 2026-10-22
+    hash: 66806509f00507a6
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        一期已有的意图计算（草图修订后归这里）：草图与持久草图的矛盾检查 sketchContradictions（供草图校验共用）；核验 sketchCheck / checkSketches——按口径比对设计某一轮或当前版本得出偏差、应用认可偏差（X2、X4）；
+        归档判定 archiveVerdict 与草图覆盖的模块 sketchModules（X3，交给确认层写确认记录）；人拥有文件的指纹比对 compareOwned（X6）。输入是草图定义与模型索引，不碰文件系统。
+  - module: state.desk.edit
+    at: 2026-10-22
+    hash: ca97798c479dccfa
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        DeskState 的编辑分组（desk.edit）：持有编辑会话（ds.EditSession，一个值：编辑目标、读取时的草图与文件指纹、编辑中的草图、撤销 / 重做栈），由纯函数改变；
+        对外提供编辑操作（每个画布 / 面板意图一个，经 model.intent.edit 应用）、撤销 / 重做、保存、放弃、新建设计；
+        编辑态下把编辑中的草图加载成模型索引，作为 DeskState 的 index 交给已有的投影、布局、导航树与面板——派生给画布与面板的只有草图本身；并派生即时校验、对当前版本的实时核验（L-1）、本次改动摘要（L-2）与晋升预览（L-4）。
+      children:
+        - state.desk.edit.commands
+        - state.desk.edit.derive
+        - state.desk.edit.save
+        - state.desk.edit.session
+  - module: state.transition.edit
+    at: 2026-10-22
+    hash: 663e8e54a7187978
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        编辑态的会话规则（纯函数）：进入编辑态（只在草图版本上、视图状态里记下编辑目标）与退出；编辑态与运行视角、文件选中、代码事实互斥（E-4：进入编辑态时退出场景、清掉文件选中，编辑态下打开场景、选中文件的动作无效）；
+        Esc 只取消选中（N7 不变，编辑态下不另赋含义）；有未保存改动时离开（切换版本、退出编辑、关闭页面）要确认（E-3）；编辑改名与删除后层次与选中怎么跟随。
+      children:
+        - state.transition.edit.follow
+        - state.transition.edit.mode
+  - module: access.writer.sketch
+    at: 2026-10-22
+    hash: 499e5a1cb1cca457
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        人拥有的草图的整份写回（B6）与新建设计：
+        saveSketch——目标为持久草图 intent/<ID>.yaml 或设计的草图 designs/<设计>/sketch.yaml；先比对文件当前指纹与读取时的指纹（X6 同一算法），不同即拒绝（409，「文件已变，重新加载后再改」，S-3）；再从磁盘读持久草图、用 validateSketch 校验，有 error 即拒绝（422，附问题列表，S-2）；
+        然后用 YAML 文档模型把新草图合并进原文档：映射逐键、带 id 的列表按 id 对齐、标量只在值变了才替换，没变的节点原样保留（连同注释）；写回后更新 owned.json 的指纹并在 ledger.jsonl 记一行（来源 page、种类 sketch）。
+        createDesign——设计 ID 合法且目录不存在；写 design.yaml（名称、目标、status: draft、base.commit 取当前版本 system.source.commit）与 sketch.yaml（底稿），两者都登记指纹。
+        端点由 ModelSource 插件挂载：POST /write/<项目>/sketch（持久草图，正文带草图 ID）、/write/<项目>/designs/<设计>/sketch、/write/<项目>/designs（新建），只收同源 JSON（B5）。
+  - module: access.writer.append
+    at: 2026-10-22
+    hash: e5d8ae85de3f021d
+    source: sketch:sketch-editor
+    summary:
+      responsibility: |-
+        一期已有的写入（草图修订后归这里）：人拥有文件的追加写入——评审意见（B2）、例外（B3）、忽略项（B4）、确认记录（Z1、Z6，同一模块更新那一条）、认可偏差（X4）——与归档 / 晋升（X3）；
+        YAML 文档模型的打开（openDoc：解析失败拒绝写）与保存（save：写回并更新指纹，X6）这两个件供草图写回共用。只追加、不删改。
+  - module: present.panel.dispatch
+    at: 2026-10-24
+    hash: d001d198ab14dc1e
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 按选中选择面板（V2）：结构视角下为选中的对象，无选中时为当前父模块（根层为系统）；运行视角下选中步骤时为步骤面板、选中场景时为场景面板，选中模块 / 关系 / 聚合边 / 参与者 / 文件时为该对象的面板；没有「已钉住」之类的提示（ADR-0012）。运行视角下模块、关系、聚合边面板顶部加「运行信息」，结构信息折叠在下方（V6）。草图画布下整个面板换成草图面板（present.panel.sketch）。
+  - module: present.panel.module
+    at: 2026-10-24
+    hash: 570bc70c13dbef34
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 模块的职责、实现原理、对外接口、核心数据结构、子模块、出入边、声明了接口时的端口三角（K11）、代码与文档引用；层额外显示抽象原则、包含 / 不包含、可依赖的层。
+  - module: present.panel.relation
+    at: 2026-10-24
+    hash: f53611859ba948c1
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 关系的两端与类型；「关系」一节按五个维度各一行——控制流、知识（由代码事实给出：同向 / 反向 / 经端口 / 不判定）、语义、同步性、平面（ADR-0022）；经由接口、交换的数据结构；不在当前视图时提供「定位到所在层次」。
+  - module: present.panel.edge
+    at: 2026-10-24
+    hash: 4c3af555f9cd290c
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 列出聚合边背后的原始关系与各类型条数，点击任一条跳到它所在的层次并选中。
+  - module: present.panel.system
+    at: 2026-10-24
+    hash: a8dfe549162904f6
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 系统简介、生成来源（仓库 / 提交 / 时间）、规模统计与顶层模块列表。
+  - module: present.panel.design
+    at: 2026-10-24
+    hash: 54393529b3563c35
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 设计版本与提交版本的根层：设计目标与范围、定稿结论的 ADR 链接（E7）、本轮做了什么、待评审确认的问题、按实体分组的变更清单（点击跳转，删除项只列出；与提交版本共用 ChangeList）、各轮评审意见与轮次切换、「记录评审意见」（B2）；提交版本为提交说明与变更清单（E5、E6）；设计的各张草图（挂载点、模块数、推出 / 脏标记，点击切张）与「改骨架」（DesignSketches，草图面板里也用，F-2）。
+  - module: present.panel.content
+    at: 2026-10-24
+    hash: c30d7f8440e8400f
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 面板共用的内容块：Markdown（禁用原始 HTML）、TS 代码块（高亮用呈现共用件）、接口与数据结构折叠项、关系行、分节。
+  - module: present.panel.governance
+    at: 2026-10-24
+    hash: c58a7b7835ae3bf9
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 面板中的「架构治理」：根层先给健康度摘要（事实统计；违规相对基线 ±N、环度 ↑↓、模块环个数与最大规模，绝对值在悬停中，GV-7），明细里违规按新增 / 已知 / 已豁免分组（可展开文件证据，未豁免的可「加例外（写理由）」，B3）、模块环与外部依赖、拦截记录摘要（GV-7）；模块的生效规则、出入违规与未描述依赖、所在环（Q1）；选中带环编号的节点时所在的本层环：环内节点、构成环的每条本层依赖（展开见模块依赖与文件证据，单击选中对应的视图边或代码依赖，GV-9、Y5）；关系的证实与文件证据（K5、K6，implements 另有「证据像 depends」）；声明了接口的模块的端口三角：定义 · 实现者 · 使用者，每项带证实标记、单击选中关系（K11）；关系行上的证实标记。文件证据可单击选中文件。
+  - module: present.panel.dep
+    at: 2026-10-24
+    hash: 81e99d7cde77f167
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 选中代码依赖叠加线时的面板（K10）：投影到这对节点的模块依赖（已描述 / 未描述）、其中的违规与理由、文件证据；层次变化后不再存在时说明原因。
+  - module: present.panel.scenario
+    at: 2026-10-24
+    hash: 74d054ed8ff48d15
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 选中场景时（进度在开头且没有选中其他对象，V2、R12）显示：场景名称、说明、触发者（第一条消息的发送方）与触发原因、场景所在层次（可跳转）、参与模块；ref 引用了哪些场景、被哪些场景引用。步骤目录在导航树的步骤树里。
+  - module: present.panel.step
+    at: 2026-10-24
+    hash: fadeb866cd5ce835
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 先回答「这一步做什么」（D-5）：作用（标签与说明）；输入（携带的数据）与输出（配对返回的数据，本步是返回时为回应的调用，异步为「不等待返回」，没写显式返回时指向接口签名，F7）；数据结构；经由接口。其后是真实端点与本层投影（经由上层关系时注明对应关系建在上层，可「定位到这条关系」，P15）、本层一条可见消息覆盖的多帧；结构关系（对应关系与「推断」标记）默认折叠，可「在画布上显示」这条消息两端的静态关系（V9）；最后是出处。
+  - module: present.panel.run
+    at: 2026-10-24
+    hash: f063b167b54bad20
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 运行视角下选中模块、关系、聚合边、参与者时面板顶部的一节，回答「在这次流程中做了什么」（V6）：本场景中参与的步骤（按顺序，可单击选中，标出离进度最近的一步）、在本层投影下收发的消息、本场景中用到的接口与数据；模块与参与者可「在画布上显示」它在本层节点的静态关系（V9）；面板原有的结构信息折叠在其下方。
+  - module: present.panel.actor
+    at: 2026-10-24
+    hash: 1b92e1962259e095
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 外部参与者的名称、类别（用户 / 外部系统 / 时间）、说明；与系统的入口关系；由它触发的场景（可打开）。
+  - module: present.panel.file
+    at: 2026-10-24
+    hash: 6ff014bc5173fe6e
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 选中文件时的面板（SR-7）：路径、行数与是否超长（G21）、归属模块（可定位，冲突时全部列出）或未归属 / 已忽略及处理提示（未归属文件可「加入忽略」，B4）、当前层次中的投影说明（G14）、以它为入口的模块、导出（与模块接口的对应）；「预览源码」重新打开副栏预览。
+  - module: present.panel.module-source
+    at: 2026-10-24
+    hash: 838193f4400fb96f
+    source: sketch:sketch-v2
+    summary:
+      responsibility: 模块面板的「源代码」一节（SR-5）：模块的文件（子树并集，可选中，注明直接归属的子模块，带行数、超长标红）与模块行数合计、超长数（G21）、入口文件及来源（描述 entry / 约定 index.ts / package.json）、入口导出按「已对应 / 导出未描述 / 描述未导出」分组列出（G12）。
+  - module: present.panel.sketch
+    at: 2026-10-24
+    hash: e2f760192bb5c7bf
+    source: sketch:sketch-v2
+    summary:
+      responsibility: |-
+        草图画布下的属性面板（SK-17、SK-18）：顶部两级校验（红色格式错误、黄色语义提示，单击定位，跨草图也能定位）、常驻「待重连 N 条」、不进两级的提示、本张的两个核验数（相对当前版本 N 处偏差 / 相对基线改了 N 处，可展开清单；持久草图只有前者）与面板内提示；
+        无选中时为父模块——原则可编辑、「带入现有原则」，名称与职责只读（上一层没写时显示当前版本的文字并标出来源）；根草图无选中时为设计概览（全设计计数与各张草图）；多选时合并 / 删除所选；
+        层：名称、ID、抽象原则、包含 / 不包含、可依赖的层、删层；模块：名称、ID（前缀与唯一校验）、职责、核心、封闭、代码落点、对外接口、原则、血缘只读（来自 A、B · 合并 / 拆分 / 改 ID / 移动）、「进入下一层 →」；关系：类型、说明、经由接口；引用节点：当前版本里的职责与位置、折叠进来的精确关系、「在模型里查看」「打开挂在它身上的草图」；元信息：挂载点、lifetime、supersedes。
+  - module: state.desk.edit.dialogue.transport
+    at: 2026-11-06
+    hash: 727a00508c01be17
+    source: sketch:dialogue-layers
+    summary:
+      responsibility: AgentTransport 的 HTTP 实现（设计 dialogue-layers：发一轮、停止，订阅开发服务器推送的 agent 事件交回会话；不碰会话的值）。同步适配器（DA-11）：AgentTransport 的 HTTP 实现——POST /agent/<项目>/turn 起一轮、/agent/<项目>/stop 停止；订阅开发服务器的推送 `arch-agent:event`，只把本项目的事件交回对话会话。只搬运，不改会话。
+  - module: state.desk.edit.dialogue.state
+    at: 2026-11-06
+    hash: fcb5be62a7f06233
+    source: sketch:dialogue-layers
+    summary:
+      responsibility: |-
+        会话的值（DialogueState：转录——每条带当时的锚点：用户、回答、错误、已停止；锚点、视角、运行状态、排队的输入、草稿、模式、状态锁）与纯转移 dialogueTransition：
+        发送（空闲开一轮，运行中进队列）、停止（这一轮不落，排队的退回草稿）、换锚点与换视角（转录不变）、改 / 问 / 重讲切换与锁定（DL-19、DL-34）、
+        agent 事件（片段累加、说完落一条并接着发队首、出错记错误卡、超时视同停止，别的轮次与停止后的迟到事件不认）；modeFor：重讲只对模块。
+        restore（DL-51）：落盘的各轮按 transcriptEntries 还原成转录，只在转录为空、空闲时整份放进来。
+        不发请求、不订阅推送、不派生显示数据。
+  - module: state.desk.edit.dialogue.anchor
+    at: 2026-11-06
+    hash: 37dff86112180229
+    source: sketch:dialogue-layers
+    summary:
+      responsibility: 由选中、步骤与当前张推出锚点（anchorOf；草图里总有锚点：选中的框或当前张的挂载点），判断两个锚点是否相同（sameAnchor），给锚点条生成文字（anchorText）。不记录会话，也不决定什么时候换锚点。
+  - module: state.desk.edit.dialogue.ports
+    at: 2026-11-06
+    hash: 09d9ed36f75dfb44
+    source: sketch:dialogue-layers
+    summary:
+      responsibility: 声明对话与外界的边界——agent 传输端口 AgentTransport 与一轮请求 AgentTurnRequest、草图那一面 DialogueSketchPort（在不在草图里、当前张、草图上下文、把改动块应用到编辑会话、状态锁、当前张有没有某个框），以及没注入时的空实现 NO_AGENT。不含任何实现（传输由 agent 通道同步实现，草图那一面由编辑分组给）。
+  - module: state.desk.edit.dialogue.views
+    at: 2026-11-06
+    hash: db35e12ba87a3bd9
+    source: sketch:dialogue-layers
+    summary:
+      responsibility: 从描述与回答块派生给呈现层的数据——引用原文（citeViews，解析不了的标「引用无效」）、机制图检查（checkDiagrams，只拒那一块）、梳理卡（digestOf），以及图与设计说明图段的显示数据类型（DiagramView、NoteSegmentView）。规则在对话的模型里，这里只调用；不改会话。

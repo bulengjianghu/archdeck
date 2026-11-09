@@ -1,0 +1,24 @@
+import { createApp } from 'vue'
+import { createRouter, createWebHashHistory } from 'vue-router'
+import './styles.css'
+import App from './App.vue'
+import ProjectList from './components/ProjectList.vue'
+// 项目视图按路由懒加载：首页不加载画布、时序图与面板（ADR-0013）
+const DeskView = () => import('./components/DeskView.vue')
+
+const router = createRouter({
+  history: createWebHashHistory(),
+  routes: [
+    { path: '/', name: 'home', component: ProjectList, meta: { title: '架构台' } },
+    { path: '/p/:project', name: 'project', component: DeskView, props: true },
+    // 设计版本（ADR-0002）
+    { path: '/p/:project/d/:design/:revision', name: 'design', component: DeskView, props: true },
+    // 持久草图版本（ADR-0024）：骨架等，可在画布上编辑
+    { path: '/p/:project/i/:intent', name: 'intent', component: DeskView, props: true },
+    // 提交版本（E5、E6）：描述在某个 git 提交时的快照，可选对比基线（另一个提交或 worktree）
+    { path: '/p/:project/c/:commit/:base?', name: 'commit', component: DeskView, props: true },
+    { path: '/:pathMatch(.*)*', redirect: '/' },
+  ],
+})
+
+createApp(App).use(router).mount('#app')

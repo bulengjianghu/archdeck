@@ -1,0 +1,57 @@
+# 取自 docs/development/11-web-player-live-timeshift.md §6、§9（输入切换）与 stream-input.ts 的 Shift 状态（直播 → 截断 → 接入中 → 时移）。
+scenario:
+  id: sc.live-timeshift
+  name: 直播时移（set-timeshift → StreamInput 时移 → HLS 定位）
+  kind: main
+  description: |
+    FLV 直播 open 之后宿主给出时移列表（setTimeshift）：会话不中断，StreamInput 以 watch 方式只看列表，把列表窗口按墙钟锚点
+    放到会话时间轴上，时间轴变得可 seek、带墙钟。宿主 seek 进窗口时停掉直播输入，时移列表按列表时间定位、喂同一个模块，
+    播放模式变成 timeshift；暂停到压缩缓冲满时则在最后一个 IDR 处截断直播，play 后时移列表在接点续接（截断 → 接入中 → 时移）。
+  cause: 集成方页面在 FLV 直播会话上调用 setTimeshift(list)，随后 seek 进时移窗口
+  evidence:
+    - media-wasm/tests/stream-input.test.mjs
+    - media-wasm/tests/media-player-timeshift.test.mjs
+    - media-sdk-kits/tests/player.test.mjs
+  steps:
+    - async: {id: set, from: actor.host-app, to: kit.facade.player-api, label: 'setTimeshift({url, decryptionKey?})'}
+    - async: {from: kit.facade.player-api, to: kit.kernel.schedule, relation: rel.kit.api-submit, label: "submit({type: 'set-timeshift'})"}
+    - call: {from: kit.kernel.schedule, to: kit.session.acceptance, label: commandRejection：须是 flv 会话、地址非空}
+    - call: {from: kit.kernel.schedule, to: kit.kernel.decide, relation: rel.kit.schedule-decide, label: apply：记下会话的时移列表（快照显示正在用的）}
+    - call: {from: kit.kernel.decide, to: providers.self-clocked.session, relation: rel.kit.decide-self-clocked, label: "pipeline.command({type: 'set-timeshift'})"}
+    - call: {from: providers.self-clocked.session, to: providers.stream-input.input, label: setTimeshift(list)}
+    - call: {id: watch, from: providers.stream-input.input, to: pipeline.fetch.hls-loader, label: "startHlsPull(list, 'watch')：只看清单"}
+    - async: {from: pipeline.fetch.hls-loader, to: providers.stream-input.input, label: 'timeline(window, targetDurationMs)'}
+    - call: {from: providers.stream-input.input, to: providers.stream-input.timeshift, label: 'listOffsetMs / liveTimeline：按直播锚点放置列表窗口'}
+    - async: {from: providers.stream-input.input, to: kit.kernel.envelope, label: timeline（可 seek、带墙钟）}
+    - async: {from: kit.kernel.envelope, to: actor.host-app, label: timeline 事件}
+    - alt:
+        - when: 宿主 seek 进时移窗口
+          steps:
+            - async: {id: seek, from: actor.host-app, to: kit.facade.player-api, label: seek(ms) / seekToWallClock(epochMs)}
+            - async: {from: kit.facade.player-api, to: kit.kernel.schedule, relation: rel.kit.api-submit, label: submit(seek)}
+            - call: {from: kit.kernel.schedule, to: kit.kernel.decide, relation: rel.kit.schedule-decide, label: apply(seek)}
+            - call: {from: kit.kernel.decide, to: providers.self-clocked.session, relation: rel.kit.decide-self-clocked, label: "pipeline.command({type: 'seek'})"}
+            - call: {from: providers.self-clocked.session, to: providers.stream-input.input, label: 'reposition(seek, positionMs)'}
+            - call: {from: providers.stream-input.input, to: providers.stream-input.timeshift, label: 'seekOffsetMs / shiftedTimeline：会话时间 → 列表时间'}
+            - call: {from: providers.stream-input.input, to: pipeline.fetch.hls-loader, label: 停直播输入，时移列表 seek(listMs) / seekWallClock}
+        - when: 暂停到压缩缓冲满（有带墙钟的窗口）
+          steps:
+            - call: {id: cut, from: providers.stream-input.input, to: providers.wasm-module.module, relation: rel.providers.input-reposition, label: truncateToRandomAccess()：在最后一个 IDR 截断直播}
+            - call: {from: providers.stream-input.input, to: pipeline.metering.anchors, label: 'trustedAnchor(时间 SEI, 到达时刻)：接点的墙钟'}
+            - call: {from: providers.stream-input.input, to: providers.stream-input.timeshift, label: 'junctionOf(cut, anchor)'}
+            - async: {from: providers.stream-input.input, to: kit.kernel.envelope, label: log live-cut}
+            - call: {id: join, from: providers.stream-input.input, to: pipeline.fetch.hls-loader, label: 'play 后 join(junction.epochMs)：找接点所在的片'}
+    - loop:
+        while: 时移列表的片字节到达
+        steps:
+          - async: {from: pipeline.fetch.hls-loader, to: providers.stream-input.input, label: 'segmentStart / chunk(bytes) / segmentEnd'}
+          - async: {from: providers.stream-input.input, to: providers.wasm-module.module, relation: rel.providers.input-push, label: push(bytes)}
+    - alt:
+        - when: 接入中（截断后续接）
+          steps:
+            - call: {id: continue, from: providers.stream-input.input, to: providers.wasm-module.module, relation: rel.providers.input-reposition, label: "continue('mpegts', join)：在接点续接，不重复不跳帧"}
+        - when: 直接定位
+          steps: []
+    - call: {id: mode, from: providers.stream-input.input, to: providers.self-clocked.session, label: "mode('timeshift') / edge(false)：律的动作撤销"}
+    - async: {from: providers.self-clocked.session, to: kit.kernel.envelope, label: 'mode timeshift / stats.timeshift'}
+    - async: {from: kit.kernel.envelope, to: actor.host-app, label: playback-mode timeshift}

@@ -1,0 +1,54 @@
+/** 模型层入口：文本 → 校验后的索引。模型层不依赖 Vue / DOM / 布局库。 */
+import { load } from './load'
+import { validate } from './validate'
+import { buildIndex } from './indexer'
+import { explainerIssues } from './explainer'
+import type { Issue, ModelIndex, RawFile } from './types'
+
+export * from './types'
+export * from './design'
+export * from './names'
+export * from './contract'
+export type { ProjectSummary, ProjectHealth, SharedHealth } from './project-summary'
+export { load, migrateSketch } from './load'
+export { validate } from './validate'
+export { buildIndex, nearestExisting, isLayered, triggerOf, strataOf, stratumOf } from './indexer'
+export * from './scenario'
+export * from './source'
+export * from './governance'
+export * from './rework'
+export * from './review'
+export * from './evolution'
+export * from './intent'
+export * from './explainer'
+export {
+  projectLevel,
+  mapEndpoint,
+  nearestVisibleLevel,
+  countHiddenByCurrentOnly,
+  edgeId,
+  hierarchyKey,
+  compareKeys,
+  lowestCommonAncestor,
+  DEFAULT_PROJECT_OPTIONS,
+  FOLD_LIMIT,
+  moreNodeId,
+  viewNodeOf,
+  shelfOf,
+} from './project'
+export type { Endpoint } from './project'
+export { diffModels } from './diff'
+
+export interface LoadedModel {
+  index: ModelIndex
+  issues: Issue[]
+}
+
+export function loadModel(files: readonly RawFile[]): LoadedModel {
+  const loaded = load(files)
+  const checked = validate(loaded.model)
+  const index = buildIndex(checked.model)
+  return { index, issues: [...loaded.issues, ...checked.issues, ...explainerIssues(index)] }
+}
+export * from './dialogue'
+export * from './changes'

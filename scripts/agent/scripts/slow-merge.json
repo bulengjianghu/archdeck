@@ -1,0 +1,16 @@
+{
+  "steps": [
+    { "text": "想一想怎么合……" },
+    { "wait": 4000 },
+    {
+      "block": {
+        "kind": "edit",
+        "summary": "合并 edit 与 versions 为编辑会话",
+        "ops": [
+          { "op": "merge", "sketch": "{{sketch.mount}}", "ids": ["{{sketch.mount}}.edit", "{{sketch.mount}}.versions"], "name": "编辑会话", "id": "session" }
+        ]
+      }
+    },
+    { "done": true }
+  ]
+}

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 020647302d3a4bee kernel.dispatch#abstraction=f0589216 kernel.dispatch#children=66f70902 kernel.dispatch#excludes=9db415ac kernel.dispatch#invariants=421f5050 kernel.dispatch#responsibility=a839dce5 kernel.dispatch#summary=df4947d2 kernel.dispatch.adapter-calls#summary=df1e2f3b kernel.dispatch.device-runs#summary=c4a7bb7a kernel.dispatch.external#summary=216af2bc kernel.dispatch.flow#summary=cfa2830f kernel.dispatch.jobs#summary=eed50a75 kernel.dispatch.leases#summary=4467f034 rel:rel.kernel.adapter-calls-jobs=8def78c0 rel:rel.kernel.device-calls=1211a11f rel:rel.kernel.device-leases=76cfb27a rel:rel.kernel.external-adapter-args=f4053772 rel:rel.kernel.external-flow=638c218f rel:rel.kernel.external-jobs=f22d2f33 rel:rel.kernel.jobs-poll-result=1586adf0">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>适配器调用 · 两条事件夹住一次外部动作</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--gray:#8c959f;
+--surface:#0969da;--surface-s:#ddf4ff;--client:#1b7c83;--client-s:#d8f3f6;--adapters:#bc4c00;--adapters-s:#fff1e5;
+--server:#bf3989;--server-s:#ffeff7;--kernel:#8250df;--kernel-s:#fbefff;--playbooks:#1a7f37;--playbooks-s:#dafbe1;
+--share:#9a6700;--share-s:#fff8c5;--human:#cf222e;--human-s:#ffebe9;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--gray:#6e7681;
+--surface:#4493f8;--surface-s:#0c2d6b;--client:#39c5cf;--client-s:#0b3a3f;--adapters:#f0883e;--adapters-s:#3d2310;
+--server:#ec6cb9;--server-s:#3d1530;--kernel:#ab7df8;--kernel-s:#2b1d47;--playbooks:#3fb950;--playbooks-s:#12351e;
+--share:#d29922;--share-s:#3b2e0a;--human:#ff7b72;--human-s:#4b1113}}
+body{margin:0;padding:16px 18px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:20px 0 4px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 2px}
+figcaption{font-size:12.5px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text);font-size:12px}
+svg .m{fill:var(--text-2);font-size:11px}
+svg .t{font-size:12.5px;font-weight:600}
+svg .w{fill:var(--human)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0;font-size:12.5px}
+.chips span{border:1px solid var(--line);border-radius:10px;padding:0 8px;background:var(--soft)}
+</style>
+  </head>
+  <body>
+    <h1>两条事件夹住一次外部动作</h1>
+    <p class="lede">内核自己不碰 git、CI 和设备：<span data-arch="kernel.dispatch.adapter-calls">适配器调用入口</span>记下意图，<span data-arch="kernel.dispatch.jobs">任务包队列与 runner</span>把它交给研发机并收回结果，<span data-arch="kernel.dispatch.flow">需求圈反应</span>把结果翻成领域事件。<span data-arch="kernel.dispatch.external">外部状态轮询</span>、<span data-arch="kernel.dispatch.leases">租约</span>与<span data-arch="kernel.dispatch.device-runs">真机构建与运行</span>都搭在这条路上。</p>
+
+    <h2>一次调用的来回</h2>
+    <figure>
+      <svg viewBox="0 0 480 290" role="img" aria-label="写请求事件并入任务包，runner 原子认领执行，回报转成完成事件，同一事务归一成领域事件">
+        <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="6" y="6" width="236" height="78" rx="10" fill="none" stroke="var(--kernel)" stroke-dasharray="5 4"/>
+        <text x="16" y="22" class="m">事务一</text>
+        <rect x="16" y="30" width="104" height="44" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-width="2"/><text x="68" y="50" text-anchor="middle">请求事件</text><text x="68" y="66" text-anchor="middle" class="m">意图写进键</text>
+        <rect x="130" y="30" width="104" height="44" rx="8" fill="var(--soft)" stroke="var(--line)" stroke-dasharray="4 3"/><text x="182" y="50" text-anchor="middle">任务包</text><text x="182" y="66" text-anchor="middle" class="m">运行表</text>
+        <path d="M120 52 H128" stroke="var(--text-2)" marker-end="url(#a)"/>
+        <rect x="300" y="30" width="170" height="44" rx="8" fill="var(--client-s)" stroke="var(--client)"/><text x="385" y="50" text-anchor="middle">runner 认领</text><text x="385" y="66" text-anchor="middle" class="m">按主人、配方、设备</text>
+        <path d="M234 52 H298" stroke="var(--text-2)" marker-end="url(#a)"/>
+        <text x="266" y="44" text-anchor="middle" class="m">一次只</text>
+        <text x="266" y="68" text-anchor="middle" class="m">给一个</text>
+        <rect x="300" y="108" width="170" height="40" rx="8" fill="var(--adapters-s)" stroke="var(--adapters)"/><text x="385" y="133" text-anchor="middle">本地适配器执行</text>
+        <path d="M385 74 V106" stroke="var(--text-2)" marker-end="url(#a)"/>
+        <path d="M385 148 V176 H244" fill="none" stroke="var(--text-2)" marker-end="url(#a)"/>
+        <text x="392" y="168" class="m">回报（可能重复、迟到）</text>
+        <rect x="6" y="156" width="236" height="126" rx="10" fill="none" stroke="var(--kernel)" stroke-dasharray="5 4"/>
+        <text x="16" y="172" class="m">事务二</text>
+        <rect x="16" y="180" width="216" height="40" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-width="2"/><text x="124" y="205" text-anchor="middle">完成事件（按键去重）</text>
+        <path d="M124 220 V232" stroke="var(--text-2)" marker-end="url(#a)"/>
+        <rect x="16" y="234" width="216" height="40" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="124" y="252" text-anchor="middle">按键前缀归一</text><text x="124" y="267" text-anchor="middle" class="m">变更 · 检查 · 判项 · 真机</text>
+        <text x="260" y="226" class="m">键前缀决定结果怎么读：</text>
+        <text x="260" y="244" class="m">check 是判项、device 是真机、</text>
+        <text x="260" y="262" class="m">其余按操作名归到变更与检查</text>
+      </svg>
+      <figcaption>任务包会丢、会重发、回报会迟到，所以真相只看两条事件：请求时写一条，完成时写一条，中间的一切靠幂等键去重。判项通过与否只从适配器产出里读，不听 agent 自己说。</figcaption>
+    </figure>
+
+    <h2>轮询：不进账，变了才记</h2>
+    <figure>
+      <svg viewBox="0 0 480 200" role="img" aria-label="看门狗每轮到点发轮询任务包，结果与上次相同就什么都不记，变化才写状态事件；连续故障只记首次与恢复">
+        <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="10" y="20" width="110" height="44" rx="8" fill="var(--soft)" stroke="var(--gray)" stroke-dasharray="4 3"/><text x="65" y="40" text-anchor="middle" class="m">看门狗一轮</text><text x="65" y="56" text-anchor="middle" class="m">（活性）</text>
+        <rect x="150" y="20" width="140" height="44" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="220" y="40" text-anchor="middle">到点且上次已回</text><text x="220" y="56" text-anchor="middle" class="m">才发轮询任务包</text>
+        <rect x="320" y="20" width="150" height="44" rx="8" fill="var(--client-s)" stroke="var(--client)"/><text x="395" y="47" text-anchor="middle">查变更与流水线</text>
+        <path d="M120 42 H148 M290 42 H318" stroke="var(--text-2)" marker-end="url(#b)"/>
+        <path d="M395 64 V92 H292" fill="none" stroke="var(--text-2)" marker-end="url(#b)"/>
+        <rect x="150" y="76" width="140" height="44" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="220" y="96" text-anchor="middle">和上次一样吗？</text><text x="220" y="112" text-anchor="middle" class="m">比对存下的摘要</text>
+        <path d="M150 98 H90 V140" fill="none" stroke="var(--text-2)" marker-end="url(#b)"/><text x="96" y="92" class="m">一样</text>
+        <rect x="20" y="142" width="140" height="40" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="90" y="166" text-anchor="middle" class="m">账上什么都不写</text>
+        <path d="M290 98 H360 V140" fill="none" stroke="var(--text-2)" marker-end="url(#b)"/><text x="300" y="92" class="m">变了</text>
+        <rect x="280" y="142" width="160" height="40" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-width="2"/><text x="360" y="166" text-anchor="middle">记一条状态事件</text>
+        <text x="10" y="198" class="m">一直出错也一样：只记第一次失败和恢复的那一次。</text>
+      </svg>
+      <figcaption>轮询一天能跑几千次，若次次进账，账就被噪音淹没、统筹者的事件窗口也会被挤满。节奏与上次结果存在运行表里，账上留下的每一条都代表外面真的变了。</figcaption>
+    </figure>
+
+    <h2>租约：一次拿全，或者排队</h2>
+    <figure>
+      <svg viewBox="0 0 480 222" role="img" aria-label="两个任务申请交叉的资源，按固定顺序加锁就不会互等；拿不全就一件不拿、记排队；归还时唤醒排队者">
+        <defs><marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <text x="10" y="18" class="m">任务甲要：设备 A、端口 7</text>
+        <text x="10" y="36" class="m">任务乙要：端口 7、设备 A</text>
+        <text x="270" y="18" class="m">先按「种类 + 名字」排好序，</text>
+        <text x="270" y="36" class="m">两人都先锁设备 A 再锁端口 7</text>
+        <rect x="10" y="50" width="100" height="36" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="60" y="73" text-anchor="middle">设备 A</text>
+        <rect x="130" y="50" width="100" height="36" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="180" y="73" text-anchor="middle">端口 7</text>
+        <path d="M110 68 H128" stroke="var(--text-2)" marker-end="url(#c)"/>
+        <path d="M230 68 H262" stroke="var(--text-2)" marker-end="url(#c)"/>
+        <rect x="264" y="50" width="206" height="36" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="367" y="73" text-anchor="middle">都空闲？</text>
+        <path d="M320 86 V110" stroke="var(--text-2)" marker-end="url(#c)"/><text x="292" y="104" class="m">是</text>
+        <path d="M420 86 V110" stroke="var(--text-2)" marker-end="url(#c)"/><text x="428" y="104" class="m">否</text>
+        <rect x="250" y="112" width="110" height="40" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-width="2"/><text x="305" y="137" text-anchor="middle">全部拿到</text>
+        <rect x="370" y="112" width="100" height="40" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="420" y="130" text-anchor="middle">一件不拿</text><text x="420" y="145" text-anchor="middle" class="m">记排队</text>
+        <rect x="10" y="112" width="220" height="40" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="120" y="130" text-anchor="middle" class="m">真机运行时，持有者是这次调用；</text><text x="120" y="145" text-anchor="middle" class="m">跑完归一时顺手归还</text>
+        <rect x="10" y="172" width="460" height="40" rx="8" fill="none" stroke="var(--gray)" stroke-dasharray="4 3"/>
+        <text x="240" y="190" text-anchor="middle" class="m">归还时唤醒排队的任务；过期的由看门狗收回</text>
+        <text x="240" y="206" text-anchor="middle" class="m">成功、失败都归还，任务不会抱着设备卡住</text>
+      </svg>
+      <figcaption>「拿一半再等另一半」是死锁的来源，所以要么一次拿全，要么一件不拿去排队。把租约持有者设成那次调用而不是任务，结果一回来就能在同一笔事务里还掉，不必等统筹者想起来。</figcaption>
+    </figure>
+  </body>
+</html>

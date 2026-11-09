@@ -1,0 +1,59 @@
+# 取自 docs/design/02-web-live-player.md §3（选路）与 §4.1（会话与资源属主），kernel.ts 的 openSession、live/pipeline.ts 与 stream-input.ts。
+scenario:
+  id: sc.open-first-frame
+  name: 打开到首帧（路线解析与漏斗）
+  kind: main
+  description: |
+    宿主 open 一个 FLV 直播：命令排队、过接受表；有旧会话先按 replaced 关闭；内核按容器的 auto 顺序在两族列出的路线上解析出
+    自建时钟族的 webcodecs / wasm 路线，建 sink、发 session-opened，交给族启动管线。主线程模式下会话开模块实例与 StreamInput，
+    HTTP-FLV 字节推进模块，漏斗按 first-load → first-response → first-data → first-frame → video-rendered 各报一次，
+    内核把它们换算成相对 open 的毫秒记遥测、发给宿主。Worker 模式见「Worker 线程化」。
+  cause: 观看者在演示页点播放（宿主调用 player.open）
+  evidence:
+    - media-sdk-kits/tests/kernel.test.mjs
+    - media-sdk-kits/tests/web-player/tests/routes.test.mjs
+    - media-wasm/tests/live-pipeline-session.test.mjs
+    - media-wasm/tests/stream-input.test.mjs
+  steps:
+    - call: {id: click, from: actor.viewer, to: host.demo.app, label: 点播放（表单 → 生效配置）}
+    - async: {id: open, from: host.demo.app, to: kit.facade.player-api, relation: rel.host.player-commands, label: 'open(source, {latency, autoplay})'}
+    - async: {from: kit.facade.player-api, to: kit.kernel.schedule, relation: rel.kit.api-submit, label: "submit({type: 'open'})：拷贝源、密钥与延迟配置后排队"}
+    - call: {from: kit.kernel.schedule, to: kit.session.acceptance, interface: if.kit.session.commandRejection, label: 'commandRejection(open, context)'}
+    - return: {from: kit.session.acceptance, to: kit.kernel.schedule, label: null（接受）}
+    - call: {from: kit.kernel.schedule, to: kit.kernel.decide, relation: rel.kit.schedule-decide, label: 'apply(open)'}
+    - alt:
+        - when: 有正在跑的会话
+          steps:
+            - async: {id: replace, from: kit.kernel.decide, to: kit.kernel.lifecycle, relation: rel.kit.decide-close-session, label: closeSession(replaced)：等旧管线释放}
+        - when: 没有会话
+          steps: []
+    - call: {id: session, from: kit.kernel.decide, to: kit.kernel.lifecycle, relation: rel.kit.decide-open-session, label: 'openSession(source, options)'}
+    - call: {from: kit.kernel.lifecycle, to: kit.session.routes, interface: if.kit.session.resolveRoute, label: 'resolveRoute(flv, auto, families.routes)'}
+    - return: {from: kit.session.routes, to: kit.kernel.lifecycle, label: '{family: 自建时钟族, route: webcodecs}'}
+    - call: {from: kit.kernel.lifecycle, to: kit.kernel.envelope, label: sinkFor(s)，发 session-opened}
+    - call: {id: start, from: kit.kernel.lifecycle, to: providers.self-clocked.family, relation: rel.kit.lifecycle-start-self-clocked, label: 'startPipeline({generation, threading, route, source, options, sink})'}
+    - alt:
+        - when: threading 解析为 worker
+          steps:
+            - ref: sc.worker-session
+        - when: 主线程
+          steps:
+            - call: {id: create, from: providers.self-clocked.family, to: providers.self-clocked.session, label: 'createWasmPipeline(deps)(start)'}
+            - call: {from: providers.self-clocked.session, to: providers.wasm-module.module, relation: rel.providers.session-module, label: "MediaPlayerSession.open(program, limits, 'audio', 'flv')"}
+            - call: {from: providers.self-clocked.session, to: providers.stream-input.input, relation: rel.providers.session-input, label: 'start(source, liveStart)'}
+            - call: {from: providers.stream-input.input, to: pipeline.fetch.flv-pull, label: 'startPull(url, handlers)'}
+            - async: {from: pipeline.fetch.flv-pull, to: pipeline.fetch.request, label: requestStream(url)}
+            - async: {from: providers.wasm-module.lifecycle, to: kit.kernel.envelope, label: funnel first-load}
+            - loop:
+                while: 响应字节到达
+                steps:
+                  - async: {from: pipeline.fetch.request, to: pipeline.fetch.flv-pull, label: chunk(bytes)}
+                  - async: {from: pipeline.fetch.flv-pull, to: providers.stream-input.input, label: 'chunk(bytes)（首块前 connected）'}
+                  - async: {from: providers.stream-input.input, to: providers.wasm-module.module, relation: rel.providers.input-push, label: push(bytes)}
+                  - call: {from: providers.stream-input.input, to: providers.self-clocked.session, label: received()：钩子回调，解码与呈现}
+            - async: {from: providers.stream-input.input, to: kit.kernel.envelope, label: funnel first-response / first-data（经会话的钩子）}
+            - call: {from: providers.self-clocked.session, to: providers.self-clocked.video, label: 解码视频（WebCodecs 或模块软解）}
+            - call: {from: providers.self-clocked.session, to: providers.self-clocked.presentation, label: 按媒体时钟画第一帧}
+            - async: {id: first-frame, from: providers.self-clocked.session, to: kit.kernel.envelope, label: 'funnel first-frame / mode live / timeline / stream-info'}
+    - async: {from: kit.kernel.envelope, to: host.demo.app, label: 'session-opened → state loading → funnel → state playing → playback-mode live'}
+    - return: {id: result, from: kit.facade.player-api, to: host.demo.app, relation: rel.host.player-commands, label: '{accepted: true, generation}'}

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 97f9350c9252fb65 model.governance#abstraction=e1510ff8 model.governance#children=76b28d17 model.governance#excludes=621da20f model.governance#invariants=671b2a93 model.governance#responsibility=d096fd7c model.governance#strata=d0903489 model.governance#summary=19aca572 model.governance.classify#summary=8a8d485b model.governance.cycles#summary=e1f5f33c model.governance.facts#summary=164194ff model.governance.level#summary=fd23984f model.governance.ports#summary=b50052e4 model.governance.query#summary=9722d707 model.governance.report#summary=d00977fb model.governance.rules#summary=4dde250f model.governance.structure#summary=c0ca6a56 model.governance.tiers#summary=676e7de4 rel:rel.gv.classify-facts=acc46e06 rel:rel.gv.cycles-facts=07d53bb9 rel:rel.gv.level-cycles=31083c3d rel:rel.gv.level-facts=ef84483c rel:rel.gv.level-rules=85c7c8e4 rel:rel.gv.ports-facts=24ef5cff rel:rel.gv.query-cycles=9b0422a6 rel:rel.gv.query-facts=81d18944 rel:rel.gv.query-rules=7ff3fd88 rel:rel.gv.report-cycles=cb26979b rel:rel.gv.report-facts=b65c7468 rel:rel.gv.report-ports=5f3d23e0 rel:rel.gv.report-rules=dddaccd0 rel:rel.gv.report-tiers=fd457bd1 rel:rel.gv.rules-facts=7c988abe rel:rel.gv.structure-cycles=d8c973b9 rel:rel.gv.structure-facts=85820afc rel:rel.gv.structure-level=4f8c01dc rel:rel.gv.tiers-cycles=3f29d67b rel:rel.gv.tiers-facts=9994c910 rel:rel.gv.tiers-level=c07121a2 rel:rel.r8.report-structure=80b34040">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>架构治理 · 描述说的与代码干的</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
+</style>
+  </head>
+  <body>
+
+    <h1>描述说的，与代码干的</h1>
+    <p class="lede"><span data-arch="model.governance">架构治理</span>是模型层里的裁判：它不信描述，也不信代码，只看两者对不对得上。</p>
+
+    <h2>比对，裁判，门禁</h2>
+    <figure>
+      <svg viewBox="0 0 480 292" role="img" aria-label="架构治理：代码事实与描述比对，经规则、环、分层三位裁判汇成治理报告，按基线给出门禁">
+        <defs><marker id="a13P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a13S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a13A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a13M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a13g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a13l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="6" y="6" width="210" height="46" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="111.0" y="26.1" font-size="12.5" text-anchor="middle">代码事实</text><text x="111.0" y="40.6" font-size="10.5" text-anchor="middle" class="muted">文件之间的依赖</text>
+        <rect x="264" y="6" width="210" height="46" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="369.0" y="26.1" font-size="12.5" text-anchor="middle">描述</text><text x="369.0" y="40.6" font-size="10.5" text-anchor="middle" class="muted">模块与关系</text>
+        <g data-arch="model.governance.facts"><rect x="120" y="80" width="240" height="50" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="240.0" y="102.3" font-size="13" text-anchor="middle" font-weight="600">事实比对</text><text x="240.0" y="116.8" font-size="10.5" text-anchor="middle" class="muted">提升到模块 · 证实关系</text></g>
+        <path d="M111,52 L180,78" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a13g)"/>
+        <path d="M369,52 L300,78" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a13g)"/>
+        <g data-arch="model.governance.rules"><rect x="6" y="158" width="150" height="46" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="81.0" y="178.1" font-size="12.5" text-anchor="middle">规则判定</text><text x="81.0" y="192.6" font-size="10.5" text-anchor="middle" class="muted">违规</text></g>
+        <path d="M240,130 L81,156" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a13g)"/>
+        <g data-arch="model.governance.cycles"><rect x="164" y="158" width="150" height="46" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="239.0" y="178.1" font-size="12.5" text-anchor="middle">环与环度</text><text x="239.0" y="192.6" font-size="10.5" text-anchor="middle" class="muted">模块环 · 文件环</text></g>
+        <path d="M240,130 L239,156" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a13g)"/>
+        <g data-arch="model.governance.tiers"><rect x="322" y="158" width="150" height="46" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="397.0" y="178.1" font-size="12.5" text-anchor="middle">分层与拆分信号</text><text x="397.0" y="192.6" font-size="10.5" text-anchor="middle" class="muted">向上的边</text></g>
+        <path d="M240,130 L397,156" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a13g)"/>
+        <g data-arch="model.governance.report"><rect x="90" y="236" width="220" height="50" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="200.0" y="258.3" font-size="13" text-anchor="middle" font-weight="600">治理报告与门禁</text><text x="200.0" y="272.8" font-size="10.5" text-anchor="middle" class="muted">新增才拦</text></g>
+        <rect x="340" y="236" width="134" height="50" rx="8" fill="var(--bg)" stroke="var(--line)" stroke-dasharray="5 4"/><text x="407.0" y="258.1" font-size="12.5" text-anchor="middle">基线</text><text x="407.0" y="272.6" font-size="10.5" text-anchor="middle" class="muted">人生成、存档</text>
+        <path d="M81,204 L160,234" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a13g)"/>
+        <path d="M239,204 L200,234" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a13g)"/>
+        <path d="M397,204 L240,234" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a13g)"/>
+        <path d="M340,261 L312,261" stroke="var(--text-2)" stroke-width="1.4" fill="none" stroke-dasharray="5 4" marker-end="url(#a13g)"/>
+      </svg>
+      <figcaption>先把文件之间的依赖提升到模块，再拿去证实描述里的关系。三位裁判各判一类问题；门禁只拦相对基线新增的违规和变大的环。</figcaption>
+    </figure>
+
+    <h2>同一份事实，多种用法</h2>
+    <figure>
+      <svg viewBox="0 0 480 210" role="img" aria-label="同一份代码事实的五种用法：本层投影、结构视图、端口面板、agent 查询、分类建议">
+        <defs><marker id="a14P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a14S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a14A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a14M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a14g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a14l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="160" y="80" width="160" height="50" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="240.0" y="102.5" font-size="13.5" text-anchor="middle" font-weight="600">代码事实</text><text x="240.0" y="117.0" font-size="10.5" text-anchor="middle" class="muted">比对后的结果</text>
+        <g data-arch="model.governance.level"><rect x="6" y="6" width="150" height="50" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="81.0" y="28.1" font-size="12.5" text-anchor="middle">本层投影</text><text x="81.0" y="42.6" font-size="10.5" text-anchor="middle" class="muted">画布上的依赖线</text></g>
+        <g data-arch="model.governance.structure"><rect x="324" y="6" width="150" height="50" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="399.0" y="28.1" font-size="12.5" text-anchor="middle">结构视图</text><text x="399.0" y="42.6" font-size="10.5" text-anchor="middle" class="muted">依赖束 · 影响面</text></g>
+        <g data-arch="model.governance.ports"><rect x="6" y="154" width="150" height="50" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="81.0" y="176.1" font-size="12.5" text-anchor="middle">端口面板</text><text x="81.0" y="190.6" font-size="10.5" text-anchor="middle" class="muted">实现者 · 使用者</text></g>
+        <g data-arch="model.governance.query"><rect x="166" y="154" width="150" height="50" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="241.0" y="176.1" font-size="12.5" text-anchor="middle">agent 查询</text><text x="241.0" y="190.6" font-size="10.5" text-anchor="middle" class="muted">写前问路</text></g>
+        <g data-arch="model.governance.classify"><rect x="324" y="154" width="150" height="50" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="399.0" y="176.1" font-size="12.5" text-anchor="middle">分类建议</text><text x="399.0" y="190.6" font-size="10.5" text-anchor="middle" class="muted">查询还是委托</text></g>
+        <path d="M180,80 L120,58" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a14g)"/>
+        <path d="M300,80 L360,58" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a14g)"/>
+        <path d="M180,130 L110,152" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a14g)"/>
+        <path d="M240,130 L240,152" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a14g)"/>
+        <path d="M300,130 L370,152" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a14g)"/>
+      </svg>
+      <figcaption>画布上的依赖线、结构视图、端口面板、写代码前的问路和关系分类，用的都是同一份比对结果。所以它们彼此不会说出两种答案。</figcaption>
+    </figure>
+
+  </body>
+</html>

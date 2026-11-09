@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 1fe6f27d58dca89d rel:rel.share.configuration-fault=a464a55d rel:rel.share.fault-contracts=e2bde31d share.core#abstraction=2bad9a95 share.core#children=24a2ed08 share.core#invariants=d22c77f6 share.core#provides=fb287d3f share.core#responsibility=c1d08cce share.core#summary=aed0b4cd share.core.configuration#summary=351c0035 share.core.operation#summary=2141aa3e share.core.primitives#summary=6c790408">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>基础媒体模型 · 公共词表</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>公共词表</h1>
+    <p class="lede">这一层是 <span data-arch="share.core">基础媒体模型</span>：<span data-arch="share.core" data-field="summary"></span>。机身机芯说话都用这几个词——不含任何播放规则。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 176" role="img" aria-label="四件原语：错误、事件、一次性操作、轨道">
+        <defs><marker id="l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="20" y="30" width="280" height="52" rx="10" fill="var(--hot-soft)" stroke="var(--hot)"/>
+        <text x="160" y="52" font-size="11" text-anchor="middle" class="">错误 MediaFault</text>
+        <text x="36" y="72" font-size="9" class="muted">带错误码 + 统一的描述函数——报错永远同一种长相</text>
+        <rect x="340" y="30" width="280" height="52" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="480" y="52" font-size="11" text-anchor="middle" class="">事件 EventHub</text>
+        <text x="356" y="72" font-size="9" class="muted">订阅 / 发布的原语——谁管语义不管，只管怎么传</text>
+        <rect x="20" y="94" width="280" height="52" rx="10" fill="var(--ok-soft)" stroke="var(--ok)"/>
+        <text x="160" y="116" font-size="11" text-anchor="middle" class="">一次性操作 Operation</text>
+        <text x="36" y="136" font-size="9" class="muted">做完即失效的凭证——关停、取消不重不漏</text>
+        <rect x="340" y="94" width="280" height="52" rx="10" fill="var(--bg)" stroke="var(--ok)"/>
+        <text x="480" y="116" font-size="11" text-anchor="middle" class="">轨道 MediaTrack</text>
+        <text x="356" y="136" font-size="9" class="muted">画面轨 / 声音轨的描述与编码配置键</text>
+        <text x="320" y="168" font-size="10" text-anchor="middle" class="">运行时无关、浏览器无关——所以在 Node 里也能测</text>
+      </svg>
+      <figcaption>四件原语：错误、事件、凭证、轨道。</figcaption>
+    </figure>
+
+    <h2>三间储物间</h2>
+    <div class="cols c3">
+      <div><b><span data-arch="share.core.primitives">原语间</span></b>错误与事件的基础形状——机身机芯的普通话。</div>
+      <div><b><span data-arch="share.core.operation">凭证间</span></b>一次性操作的发放与作废。</div>
+      <div><b><span data-arch="share.core.configuration">配置间</span></b>轨道与编码配置的键位表。</div>
+    </div>
+
+    <p class="note ok">对照 h5player 工具层的「跨层契约」可以看出同一套心法：公共词表越薄越好——薄到不含规则，才永远不偏袒任何一层。</p>
+
+  </body>
+</html>

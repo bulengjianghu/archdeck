@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 0d88f9406928748c rel:rel.p5.stage-runner=39c81588 rel:rel.p8.canvas-route=ad41e977 rel:rel.p8.flow-stage-display=353da88b state.layout#abstraction=8c450f77 state.layout#children=a4a3e352 state.layout#invariants=4ca262b8 state.layout#responsibility=6136fa26 state.layout#summary=e8e7f59b state.layout.canvas#summary=673eecfd state.layout.runner#summary=a750b73a state.layout.sequence#summary=71a7dde1 state.layout.sketch#summary=7ab3b042 state.layout.stage#summary=df3ac630">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Layout · 把「谁连谁」变成「画在哪」</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
+</style>
+  </head>
+  <body>
+
+    <h1>把「谁连谁」变成「画在哪」</h1>
+    <p class="lede"><span data-arch="state.layout">Layout</span> 只出坐标与走线，不知道选中了谁、走到哪一步。画布拿到的是成品。</p>
+
+    <h2>五个工位，各排各的</h2>
+    <figure>
+      <svg viewBox="0 0 480 296" role="img" aria-label="排版五个工位：层次视图、画布场景、时序图、舞台叠加、草图各有排法">
+        <defs><marker id="a21P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a21S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a21A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a21M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a21g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a21l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="120" y="4" width="240" height="38" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="240.0" y="27.4" font-size="12.5" text-anchor="middle">要画什么：节点 · 边 · 步骤</text>
+        <path d="M240,42 L240,58" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a21g)"/>
+        <line x1="78" y1="60" x2="78" y2="266" stroke="var(--text-2)" stroke-width="1.2"/>
+        <line x1="78" y1="60" x2="240" y2="60" stroke="var(--text-2)" stroke-width="1.2"/>
+        <g data-arch="state.layout.runner"><rect x="4" y="70" width="150" height="36" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="79.0" y="92.4" font-size="12.5" text-anchor="middle">布局入口与缓存</text></g>
+        <path d="M154,88 L172,88" stroke="var(--text-2)" stroke-width="1.1" fill="none" marker-end="url(#a21g)"/>
+        <text x="178" y="92" font-size="11.5" text-anchor="start">层次视图 → 坐标；按内容缓存</text>
+        <g data-arch="state.layout.canvas"><rect x="4" y="116" width="150" height="36" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="79.0" y="138.4" font-size="12.5" text-anchor="middle">画布场景</text></g>
+        <path d="M154,134 L172,134" stroke="var(--text-2)" stroke-width="1.1" fill="none" marker-end="url(#a21g)"/>
+        <text x="178" y="138" font-size="11.5" text-anchor="start">坐标 → 画布要画的节点与边</text>
+        <g data-arch="state.layout.sequence"><rect x="4" y="162" width="150" height="36" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="79.0" y="184.4" font-size="12.5" text-anchor="middle">时序图排布</text></g>
+        <path d="M154,180 L172,180" stroke="var(--text-2)" stroke-width="1.1" fill="none" marker-end="url(#a21g)"/>
+        <text x="178" y="184" font-size="11.5" text-anchor="start">泳道、消息、组合框的坐标</text>
+        <g data-arch="state.layout.stage"><rect x="4" y="208" width="150" height="36" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="79.0" y="230.4" font-size="12.5" text-anchor="middle">舞台叠加</text></g>
+        <path d="M154,226 L172,226" stroke="var(--text-2)" stroke-width="1.1" fill="none" marker-end="url(#a21g)"/>
+        <text x="178" y="230" font-size="11.5" text-anchor="start">回放时画布上的叠加与显隐</text>
+        <g data-arch="state.layout.sketch"><rect x="4" y="254" width="150" height="36" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="79.0" y="276.4" font-size="12.5" text-anchor="middle">草图布局</text></g>
+        <path d="M154,272 L172,272" stroke="var(--text-2)" stroke-width="1.1" fill="none" marker-end="url(#a21g)"/>
+        <text x="178" y="276" font-size="11.5" text-anchor="start">草图画布另算，互不干扰</text>
+      </svg>
+      <figcaption>层次视图交给布局引擎自动排，结果按视图内容缓存，内容没变就不重算。时序图、回放叠加与草图各有自己的排法，互不干扰。</figcaption>
+    </figure>
+
+    <h2>点一下不会挪位</h2>
+    <figure>
+      <svg viewBox="0 0 480 150" role="img" aria-label="选中前后节点坐标不变，只换描边">
+        <defs><marker id="a22P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a22S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a22A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a22M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a22g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a22l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="6" y="8" width="200" height="110" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+        <text x="106" y="140" font-size="11" text-anchor="middle" class="muted">选中前</text>
+        <rect x="20" y="22" width="56" height="30" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="48.0" y="40.9" font-size="11" text-anchor="middle">A</text>
+        <rect x="136" y="22" width="56" height="30" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="164.0" y="40.9" font-size="11" text-anchor="middle">B</text>
+        <rect x="78" y="76" width="56" height="30" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="106.0" y="94.8" font-size="11" text-anchor="middle">C</text>
+        <path d="M76,37 L134,37" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a22g)"/>
+        <path d="M156,52 L130,74" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a22g)"/>
+        <rect x="274" y="8" width="200" height="110" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+        <text x="374" y="140" font-size="11" text-anchor="middle" class="muted">选中后</text>
+        <rect x="288" y="22" width="56" height="30" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="316.0" y="40.9" font-size="11" text-anchor="middle">A</text>
+        <rect x="404" y="22" width="56" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="432.0" y="40.9" font-size="11" text-anchor="middle" font-weight="600">B</text>
+        <rect x="346" y="76" width="56" height="30" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="374.0" y="94.8" font-size="11" text-anchor="middle">C</text>
+        <path d="M344,37 L402,37" stroke="var(--accent)" stroke-width="2" fill="none" marker-end="url(#a22P)"/>
+        <path d="M424,52 L398,74" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a22g)"/>
+        <path d="M212,63 L268,63" stroke="var(--text-2)" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#a22g)"/>
+        <text x="240" y="54" font-size="10.5" text-anchor="middle" class="muted">不重排</text>
+      </svg>
+      <figcaption>选中、悬停与回放只改描边和显隐，不进排版。人靠位置记地图，所以位置不随交互跳动。</figcaption>
+    </figure>
+
+  </body>
+</html>

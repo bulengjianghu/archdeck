@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 84b07a7581240ab3 rel:rel.ed.edit-navigation=fb2ca7dd rel:rel.gv.url-mode=aeebf769 rel:rel.p2.url-navigation=788e0f07 state.transition#abstraction=8f9d7502 state.transition#children=bca91cfb state.transition#invariants=d1cd65d8 state.transition#responsibility=14855441 state.transition#summary=349bf794 state.transition.edit#summary=9911dcf0 state.transition.mode#summary=16d0566a state.transition.navigation#summary=a37973ba state.transition.playback#summary=69730b70 state.transition.selection#summary=c9cc5c4f state.transition.url#summary=980dd767">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>视图状态转移 · 规则机器</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
+</style>
+  </head>
+  <body>
+
+    <h1>规则机器</h1>
+    <p class="lede"><span data-arch="state.transition">视图状态转移</span>是一组纯函数：给它当前状态和一个动作，它算出下一个状态。浏览中的每一条会话规则都住在这里。</p>
+
+    <h2>三进三出，全是数据</h2>
+    <figure>
+      <svg viewBox="0 0 480 198" role="img" aria-label="规则机器三进三出：当前状态、动作、上下文进，新状态、是否进历史、被清掉的选中出">
+        <defs><marker id="a11P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a11S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a11A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a11M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a11g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a11l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="6" y="8" width="130" height="46" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="71.0" y="28.1" font-size="12.5" text-anchor="middle">当前状态</text><text x="71.0" y="42.6" font-size="10.5" text-anchor="middle" class="muted">层次 · 选中 · 进度</text>
+        <path d="M136,31 C156,31 156,94 170,94" stroke="var(--text-2)" stroke-width="1.8" fill="none" marker-end="url(#a11g)"/>
+        <rect x="6" y="70" width="130" height="46" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="71.0" y="90.1" font-size="12.5" text-anchor="middle">动作</text><text x="71.0" y="104.6" font-size="10.5" text-anchor="middle" class="muted">点了一下 · 按了键</text>
+        <path d="M136,93 C156,93 156,94 170,94" stroke="var(--text-2)" stroke-width="1.8" fill="none" marker-end="url(#a11g)"/>
+        <rect x="6" y="132" width="130" height="46" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="71.0" y="152.1" font-size="12.5" text-anchor="middle">上下文</text><text x="71.0" y="166.6" font-size="10.5" text-anchor="middle" class="muted">模型层的投影</text>
+        <path d="M136,155 C156,155 156,94 170,94" stroke="var(--text-2)" stroke-width="1.8" fill="none" marker-end="url(#a11g)"/>
+        <g data-arch="state.transition"><rect x="172" y="60" width="114" height="68" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="229.0" y="84.4" font-size="14" text-anchor="middle" font-weight="600">纯函数</text><text x="229.0" y="98.9" font-size="10.5" text-anchor="middle" class="muted">不碰 Vue</text><text x="229.0" y="113.4" font-size="10.5" text-anchor="middle" class="muted">不碰路由与时钟</text></g>
+        <rect x="322" y="8" width="152" height="46" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="398.0" y="35.4" font-size="12.5" text-anchor="middle">新状态</text>
+        <path d="M286,94 C304,94 304,31 320,31" stroke="var(--text-2)" stroke-width="1.8" fill="none" marker-end="url(#a11g)"/>
+        <rect x="322" y="70" width="152" height="46" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="398.0" y="97.4" font-size="12.5" text-anchor="middle">是否进浏览器历史</text>
+        <path d="M286,94 C304,94 304,93 320,93" stroke="var(--text-2)" stroke-width="1.8" fill="none" marker-end="url(#a11g)"/>
+        <rect x="322" y="132" width="152" height="46" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="398.0" y="159.4" font-size="12.5" text-anchor="middle">被清掉的选中</text>
+        <path d="M286,94 C304,94 304,155 320,155" stroke="var(--text-2)" stroke-width="1.8" fill="none" marker-end="url(#a11g)"/>
+      </svg>
+      <figcaption>规则需要「这一层有谁」时，去问上下文里的模型层投影，自己不存系统知识。同样的输入永远同样的输出，所以不用启动浏览器就能逐条验证。</figcaption>
+    </figure>
+
+    <h2>六个工位，一个值</h2>
+    <figure>
+      <svg viewBox="0 0 480 270" role="img" aria-label="六个工位改同一个视图状态：导航、视角模式、视角与选中、回放、编辑、URL 编解码">
+        <defs><marker id="a12P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a12S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a12A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a12M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a12g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a12l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="150" y="108" width="180" height="54" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="240.0" y="132.5" font-size="13.5" text-anchor="middle" font-weight="600">一个视图状态</text><text x="240.0" y="147.0" font-size="10.5" text-anchor="middle" class="muted">六个工位改同一个值</text>
+        <g data-arch="state.transition.navigation"><rect x="4" y="8" width="136" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="72.0" y="29.9" font-size="12" text-anchor="middle">导航规则</text><text x="72.0" y="44.5" font-size="10.5" text-anchor="middle" class="muted">下钻 · 跳转 · 返回</text></g>
+        <path d="M140,33 C152,33 150,135 148,135" stroke="var(--warn)" stroke-width="1.4" fill="none" marker-end="url(#a12S)"/>
+        <g data-arch="state.transition.mode"><rect x="4" y="110" width="136" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="72.0" y="131.9" font-size="12" text-anchor="middle">视角模式与选中映射</text><text x="72.0" y="146.4" font-size="10.5" text-anchor="middle" class="muted">结构 ⇄ 交互</text></g>
+        <path d="M140,135 C152,135 150,135 148,135" stroke="var(--warn)" stroke-width="1.4" fill="none" marker-end="url(#a12S)"/>
+        <g data-arch="state.transition.selection"><rect x="4" y="212" width="136" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="72.0" y="233.9" font-size="12" text-anchor="middle">视角与选中规则</text><text x="72.0" y="248.4" font-size="10.5" text-anchor="middle" class="muted">唯一选中 · 突出</text></g>
+        <path d="M140,237 C152,237 150,135 148,135" stroke="var(--warn)" stroke-width="1.4" fill="none" marker-end="url(#a12S)"/>
+        <g data-arch="state.transition.playback"><rect x="340" y="8" width="136" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="408.0" y="29.9" font-size="12" text-anchor="middle">回放规则</text><text x="408.0" y="44.5" font-size="10.5" text-anchor="middle" class="muted">开场景 · 单步 · 分支</text></g>
+        <path d="M340,33 C328,33 330,135 332,135" stroke="var(--warn)" stroke-width="1.4" fill="none" marker-end="url(#a12S)"/>
+        <g data-arch="state.transition.edit"><rect x="340" y="110" width="136" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="408.0" y="131.9" font-size="12" text-anchor="middle">编辑规则</text><text x="408.0" y="146.4" font-size="10.5" text-anchor="middle" class="muted">进出草图 · 互斥</text></g>
+        <path d="M340,135 C328,135 330,135 332,135" stroke="var(--warn)" stroke-width="1.4" fill="none" marker-end="url(#a12S)"/>
+        <g data-arch="state.transition.url"><rect x="340" y="212" width="136" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="408.0" y="233.9" font-size="12" text-anchor="middle">URL 编解码</text><text x="408.0" y="248.4" font-size="10.5" text-anchor="middle" class="muted">状态 ⇄ 地址</text></g>
+        <path d="M340,237 C328,237 330,135 332,135" stroke="var(--warn)" stroke-width="1.4" fill="none" marker-end="url(#a12S)"/>
+      </svg>
+      <figcaption>每个工位只回答一类变化，但改的都是同一个值——互相约束的东西不拆成几面旗子。比如打开场景就切到交互视角，这件事只在一处规则里说。</figcaption>
+    </figure>
+
+    <h2>一个主语</h2>
+    <figure>
+      <svg viewBox="0 0 480 170" role="img" aria-label="一个主语：选中的步骤就是进度所在；什么都没选时主语是当前层的父模块">
+        <defs><marker id="a13P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a13S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a13A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a13M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a13g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a13l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <line x1="24" y1="74" x2="296" y2="74" stroke="var(--line)" stroke-width="2"/>
+        <circle cx="40" cy="74" r="8" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="40" y="104" font-size="10.5" text-anchor="middle" class="muted">第 1 步</text>
+        <circle cx="102" cy="74" r="8" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="102" y="104" font-size="10.5" text-anchor="middle" class="muted">第 2 步</text>
+        <circle cx="164" cy="74" r="12" fill="var(--accent)" stroke="var(--accent)"/>
+        <circle cx="226" cy="74" r="8" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="226" y="104" font-size="10.5" text-anchor="middle" class="muted">第 4 步</text>
+        <circle cx="288" cy="74" r="8" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="288" y="104" font-size="10.5" text-anchor="middle" class="muted">第 5 步</text>
+        <path d="M164,26 L164,58" stroke="var(--accent)" stroke-width="1.6" fill="none" marker-end="url(#a13P)"/>
+        <text x="164" y="18" font-size="11.5" text-anchor="middle">选中的步骤</text>
+        <path d="M164,136 L164,90" stroke="var(--accent)" stroke-width="1.6" fill="none" marker-end="url(#a13P)"/>
+        <text x="164" y="154" font-size="11.5" text-anchor="middle">进度</text>
+        <text x="232" y="60" font-size="11" text-anchor="middle" style="fill:var(--accent)">同一个位置</text>
+        <rect x="320" y="36" width="154" height="84" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="397.0" y="68.0" font-size="13" text-anchor="middle">什么都没选</text><text x="397.0" y="82.5" font-size="10.5" text-anchor="middle" class="muted">主语 = 当前层的父模块</text><text x="397.0" y="97.0" font-size="10.5" text-anchor="middle" class="muted">根层即系统</text>
+      </svg>
+      <figcaption>选中与进度不争：选中一步就是把进度移到那一步，移动进度就是换选中。什么都没选时，主语退回当前层的父模块。</figcaption>
+    </figure>
+
+  </body>
+</html>

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 664c453037c76cb5 kernel.ledger#abstraction=ed4ba647 kernel.ledger#children=aca7161b kernel.ledger#excludes=6d548047 kernel.ledger#invariants=67078286 kernel.ledger#responsibility=20db364c kernel.ledger#summary=0df1c2c6 kernel.ledger.ledger#summary=0f17a1fc kernel.ledger.migrate#summary=49862ccc kernel.ledger.pool#summary=d817965f kernel.ledger.projector#summary=0682d64a kernel.ledger.schema#summary=4166f391 rel:rel.kernel.ledger-project=698c660b">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>账与投影 · 一笔事务的内部</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--gray:#8c959f;
+--surface:#0969da;--surface-s:#ddf4ff;--client:#1b7c83;--client-s:#d8f3f6;--adapters:#bc4c00;--adapters-s:#fff1e5;
+--server:#bf3989;--server-s:#ffeff7;--kernel:#8250df;--kernel-s:#fbefff;--playbooks:#1a7f37;--playbooks-s:#dafbe1;
+--share:#9a6700;--share-s:#fff8c5;--human:#cf222e;--human-s:#ffebe9;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--gray:#6e7681;
+--surface:#4493f8;--surface-s:#0c2d6b;--client:#39c5cf;--client-s:#0b3a3f;--adapters:#f0883e;--adapters-s:#3d2310;
+--server:#ec6cb9;--server-s:#3d1530;--kernel:#ab7df8;--kernel-s:#2b1d47;--playbooks:#3fb950;--playbooks-s:#12351e;
+--share:#d29922;--share-s:#3b2e0a;--human:#ff7b72;--human-s:#4b1113}}
+body{margin:0;padding:16px 18px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:20px 0 4px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 2px}
+figcaption{font-size:12.5px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text);font-size:12px}
+svg .m{fill:var(--text-2);font-size:11px}
+svg .t{font-size:12.5px;font-weight:600}
+svg .w{fill:var(--human)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0;font-size:12.5px}
+.chips span{border:1px solid var(--line);border-radius:10px;padding:0 8px;background:var(--soft)}
+</style>
+  </head>
+  <body>
+    <h1>一笔事务里发生了什么</h1>
+    <p class="lede"><span data-arch="kernel.ledger.ledger">写账事务</span>定顺序与回滚边界，<span data-arch="kernel.ledger.projector">投影器</span>把事件翻成表，<span data-arch="kernel.ledger.schema">表结构与迁移脚本</span>、<span data-arch="kernel.ledger.migrate">迁移执行</span>与<span data-arch="kernel.ledger.pool">连接池</span>守住谁能动哪张表。规则与唤醒是别的模块从端口插进来的（灰色）。</p>
+
+    <h2>追加一条事件的七步</h2>
+    <figure>
+      <svg viewBox="0 0 480 330" role="img" aria-label="校验、任务锁、幂等查重、守卫、写入、投影、反应；反应可再追加；最后收尾提交，任一步抛错整笔回滚">
+        <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="6" y="6" width="468" height="318" rx="12" fill="none" stroke="var(--kernel)" stroke-dasharray="6 4"/>
+        <text x="18" y="26" class="m">一个数据库事务</text>
+        <g>
+          <rect x="30" y="36" width="190" height="30" rx="6" fill="var(--share-s)" stroke="var(--share)"/><text x="125" y="56" text-anchor="middle">① 按契约校验、补信封</text>
+          <rect x="30" y="78" width="190" height="30" rx="6" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="125" y="98" text-anchor="middle">② 锁住这个任务</text>
+          <rect x="30" y="120" width="190" height="30" rx="6" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="125" y="140" text-anchor="middle">③ 幂等键查重</text>
+          <rect x="30" y="162" width="190" height="30" rx="6" fill="var(--soft)" stroke="var(--gray)" stroke-dasharray="4 3"/><text x="125" y="182" text-anchor="middle" class="m">④ 守卫（端口，只读）</text>
+          <rect x="30" y="204" width="190" height="30" rx="6" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-width="2"/><text x="125" y="224" text-anchor="middle">⑤ 插入事件表</text>
+          <rect x="30" y="246" width="190" height="30" rx="6" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="125" y="266" text-anchor="middle">⑥ 投影</text>
+          <rect x="30" y="288" width="190" height="30" rx="6" fill="var(--soft)" stroke="var(--gray)" stroke-dasharray="4 3"/><text x="125" y="308" text-anchor="middle" class="m">⑦ 反应（端口，可再追加）</text>
+          <path d="M125 66 V76 M125 108 V118 M125 150 V160 M125 192 V202 M125 234 V244 M125 276 V286" stroke="var(--text-2)" marker-end="url(#a)"/>
+        </g>
+        <path d="M220 303 H252 V51 H222" fill="none" stroke="var(--gray)" stroke-dasharray="3 3" marker-end="url(#a)"/>
+        <text x="260" y="180" class="m">反应补的事件</text>
+        <text x="260" y="196" class="m">从 ① 再走一遍</text>
+        <path d="M220 135 H300" stroke="var(--text-2)" marker-end="url(#a)"/>
+        <text x="304" y="131" class="m">命中：返回旧事件，</text>
+        <text x="304" y="147" class="m">什么也不写</text>
+        <rect x="290" y="226" width="172" height="40" rx="8" fill="var(--soft)" stroke="var(--gray)" stroke-dasharray="4 3"/>
+        <text x="376" y="243" text-anchor="middle" class="m">事务结束前：收尾端口</text>
+        <text x="376" y="259" text-anchor="middle" class="m">给动过的任务补唤醒</text>
+        <text x="290" y="290" class="w">任一步抛错 → 整笔回滚</text>
+        <text x="290" y="308" class="m">包括反应引出的全部事件</text>
+        <text x="300" y="46" class="m">同一任务的写入</text>
+        <text x="300" y="62" class="m">在 ② 排队，一个个来</text>
+      </svg>
+      <figcaption>账自己只有这条流水线，「什么能写」「写完该发生什么」都是插进来的函数。幂等键放在守卫之前，所以重复的回报不会被误判成违规，也不会写两遍。</figcaption>
+    </figure>
+
+    <h2>同一套投影，跑两种场合</h2>
+    <figure>
+      <svg viewBox="0 0 480 196" role="img" aria-label="运行时：事件经投影进表，再跑反应；全量重放：事件按序号只经投影，结果一样">
+        <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="10" y="60" width="96" height="70" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-width="2"/>
+        <text x="58" y="90" text-anchor="middle">事件表</text><text x="58" y="108" text-anchor="middle" class="m">按序号排</text>
+        <rect x="186" y="60" width="108" height="70" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)"/>
+        <text x="240" y="88" text-anchor="middle">投影</text><text x="240" y="106" text-anchor="middle" class="m">只看事件本身</text><text x="240" y="121" text-anchor="middle" class="m">不看钟、不写账</text>
+        <rect x="374" y="60" width="96" height="70" rx="8" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="422" y="90" text-anchor="middle">投影表</text><text x="422" y="108" text-anchor="middle" class="m">任务、卡、租约…</text>
+        <path d="M106 80 H184 M294 80 H372" stroke="var(--text-2)" marker-end="url(#b)"/>
+        <text x="145" y="72" text-anchor="middle" class="m">运行时</text>
+        <path d="M106 112 H184 M294 112 H372" stroke="var(--kernel)" stroke-dasharray="5 3" marker-end="url(#b)"/>
+        <text x="145" y="128" text-anchor="middle" class="m">全量重放</text>
+        <rect x="186" y="10" width="108" height="34" rx="8" fill="var(--soft)" stroke="var(--gray)" stroke-dasharray="4 3"/>
+        <text x="240" y="32" text-anchor="middle" class="m">反应</text>
+        <path d="M240 60 V46" stroke="var(--text-2)" marker-end="url(#b)"/>
+        <text x="300" y="32" class="m">只在运行时跑</text>
+        <text x="10" y="162" class="m">重放不跑反应：反应当时补出的事件本来就在事件表里，</text>
+        <text x="10" y="180" class="m">再跑一遍只会重复。所以清空投影表重放，得到的是同一份状态。</text>
+      </svg>
+      <figcaption>投影是「事件 → 表」的纯映射，这是能整表重建的前提：只要它不读时钟、不生新事件，同一串事件放几遍都是同一结果。要加一张投影表，就在投影里加一个分支，再重放即可。</figcaption>
+    </figure>
+
+    <h2>三种表，两个角色</h2>
+    <figure>
+      <svg viewBox="0 0 480 214" role="img" aria-label="事件表只追加；投影表可重建；运行表不进账也不重放；迁移用属主角色，运行用应用角色">
+        <rect x="10" y="10" width="146" height="110" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-width="2"/>
+        <text x="83" y="32" text-anchor="middle" class="t">事件表</text>
+        <text x="20" y="56" class="m">只追加</text>
+        <text x="20" y="76" class="m">触发器拒绝改与删</text>
+        <text x="20" y="96" class="m">唯一的真源</text>
+        <rect x="167" y="10" width="146" height="110" rx="8" fill="var(--soft)" stroke="var(--kernel)"/>
+        <text x="240" y="32" text-anchor="middle" class="t">投影表</text>
+        <text x="177" y="56" class="m">随事件同事务更新</text>
+        <text x="177" y="76" class="m">随时可清空重建</text>
+        <text x="177" y="96" class="m">给查询与快照读</text>
+        <rect x="324" y="10" width="146" height="110" rx="8" fill="var(--soft)" stroke="var(--line)" stroke-dasharray="4 3"/>
+        <text x="397" y="32" text-anchor="middle" class="t">运行表</text>
+        <text x="334" y="56" class="m">任务包、心跳、轮询</text>
+        <text x="334" y="76" class="m">与触发事件同事务写</text>
+        <text x="334" y="96" class="m">不进账、重放不动</text>
+        <rect x="10" y="140" width="225" height="62" rx="8" fill="none" stroke="var(--line)"/>
+        <text x="122" y="162" text-anchor="middle">属主角色</text>
+        <text x="122" y="182" text-anchor="middle" class="m">跑迁移、建表、装触发器</text>
+        <rect x="245" y="140" width="225" height="62" rx="8" fill="none" stroke="var(--line)"/>
+        <text x="357" y="162" text-anchor="middle">应用角色（运行时）</text>
+        <text x="357" y="182" text-anchor="middle" class="m">事件表上只能插入与查询</text>
+      </svg>
+      <figcaption>「只追加」由数据库自己守，不靠代码自觉：运行时连接根本没有改删事件表的权限。运行表放的是不该或不必留痕的东西（比如带令牌的任务包），派了什么、结果如何仍由事件记下。</figcaption>
+    </figure>
+  </body>
+</html>

@@ -1,0 +1,42 @@
+# 取自 kernel.ts 的 apply（failed）、closeSession / releasePipeline（PIPELINE_STOP_TIMEOUT_MS）与 Worker 失败交回主线程（threading auto）。
+scenario:
+  id: sc.session-failure
+  name: 会话失败关闭路径
+  kind: exception
+  description: |
+    管线不可继续时（网络耗尽、不支持的流、超分辨率上限、解码器挂住、Worker 崩溃、内部错误）经 sink.failed 报原因：内核只认当前代号，
+    把失败入队按序施用——发 error、关闭会话：先标记关闭（之后的回报丢弃），按获取逆序释放，管线 stop 超过 3 s（按宿主时钟）即 terminate；
+    释放的异常报在会话上、不挡队列；最后记会话级遥测、发 session-closed {type: failed, cause}。threading 为 auto 且原因是 worker 时，
+    内核接着在主线程开一个接续会话（续播点、liveStart again），先发 threading-switched。之后宿主 play 会在原处重开。
+  cause: 管线经 sink.failed 报不可继续的失败
+  evidence:
+    - media-sdk-kits/tests/kernel.test.mjs
+    - media-wasm/tests/live-pipeline-session.test.mjs
+  steps:
+    - async: {id: failed, from: providers.wasm-module.lifecycle, to: kit.kernel.envelope, label: 'sink.failed(cause, error)：只报一次，会话停止工作'}
+    - async: {from: kit.kernel.envelope, to: kit.kernel.schedule, relation: rel.kit.envelope-schedule, label: "enqueue({kind: 'failed', generation, cause, error})"}
+    - alt:
+        - when: 代号不是当前会话（迟到的回报）
+          steps: []
+        - when: 当前会话
+          steps:
+            - call: {from: kit.kernel.schedule, to: kit.kernel.decide, relation: rel.kit.schedule-decide, label: apply(failed)}
+            - async: {id: close, from: kit.kernel.decide, to: kit.kernel.lifecycle, relation: rel.kit.decide-close-session, label: closeSession(failed)}
+            - async: {from: kit.kernel.lifecycle, to: providers.self-clocked.session, relation: rel.kit.lifecycle-stop-self-clocked, label: pipeline.stop()}
+            - alt:
+                - when: 3 s 内落定
+                  steps: []
+                - when: 超时
+                  steps:
+                    - async: {id: terminate, from: kit.kernel.lifecycle, to: providers.self-clocked.session, relation: rel.kit.lifecycle-stop-self-clocked, label: terminate()（Worker 模式即终止 Worker）}
+                    - call: {from: kit.kernel.lifecycle, to: kit.kernel.envelope, label: log stop-timed-out}
+            - call: {from: kit.kernel.lifecycle, to: kit.kernel.envelope, label: 'error 与 session-closed；会话级遥测（卡顿、意图时长、冻结）'}
+            - alt:
+                - when: cause 为 worker 且 threading 为 auto
+                  steps:
+                    - call: {id: handover, from: kit.kernel.decide, to: kit.kernel.lifecycle, relation: rel.kit.decide-open-session, label: 接续会话：主线程、续播点、liveStart again}
+                    - call: {from: kit.kernel.lifecycle, to: kit.kernel.envelope, label: session-opened + threading-switched}
+                    - call: {from: kit.kernel.lifecycle, to: providers.self-clocked.family, relation: rel.kit.lifecycle-start-self-clocked, label: "startPipeline({threading: 'main'})"}
+                - when: 其他原因
+                  steps: []
+    - async: {from: kit.kernel.envelope, to: actor.host-app, label: "error → session-closed {type: 'failed', cause, error}"}

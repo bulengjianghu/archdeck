@@ -1,0 +1,149 @@
+# 草图里「改」（第二十一轮波 2，ADR-0063 决策 1、6、10）：编辑操作的外部表示、改动项与编号、恢复到基线与按轮快照、影响面估算（模型层）；
+# AI 回合与三种撤回、编号表的维护（视图状态层）；侧栏「改动」页（呈现层）。
+# 规则编号（DA-6、DA-8–DA-10、CI-1–CI-7、DL-1–DL-3、DL-6、DL-7、DL-19–DL-31）见 docs/01-requirements.md §4.13–§4.14、docs/02-domain.md §2.28。
+
+modules:
+  # ── 模型层：放在意图下——它读的是草图集合、血缘与基线的挂载点范围，产出的是编辑操作 ──
+  - id: model.intent.changes
+    name: 改动项与恢复操作
+    summary: 把相对基线的变更聚成带号的改动项，算出撤回它的操作
+    parent: model.intent
+    kind: component
+    responsibility: |
+      对话起草的模型层（CI-1–CI-7，DL-1–DL-3、DL-6、DL-7）：
+      编辑操作的外部表示（ops.ts，DL-21）——设计级编辑操作的 JSON 形状校验，一条不合法整串拒绝；agent 的改动块不许出位置类与恢复类操作（validateEditBlock）；
+      改动项（items.ts，DL-23）——相对基线的对比（compareDesign）按血缘聚成一处一项，带稳定键、图上要标的模块与关系、删除了的基线实体，映射回基线模块（baselineOrigins）；
+      编号表（numbering.ts，DL-3、DL-24）——按产生顺序给号、撤回留空不复用、记第几轮与谁；
+      影响面估算（impact.ts，DL-7、DL-27）——映射回基线后取传入闭包（有代码事实用 K15 的 impactOf，否则用描述的关系图）与涉及的场景，全是新框标「新」；
+      恢复到基线（revert.ts，DL-2、DL-25）——六类改动、修改、关系、接口各自的逆向操作序列，试算后列出因此消失或变了的别的项（级联）；
+      按轮快照（rounds.ts，DL-1、DL-26）——一轮碰过的模块与关系、之后又被改过的、按快照恢复的操作；
+      草图上下文（context.ts，DL-14）——给 agent 的当前张、其他草图、基线同一层、带号的改动清单与父模块原则。
+      任务单（tasks.ts，DL-36、DL-37）：改动项（相对基线）的号取编号表，状态由草图对当前版本的核验推出——未认可的偏差按实体 ID、关系两端或后代归到改动项，归到即「待做」、否则 ✓，核验比不到的为「不核验」；归不到的偏差单列「对不上号」；任务单头按设计状态（有效 / 认可已撤回 / 预览 / 作废 / 已归档）；Markdown 出口写明「把代码改到草图那样、不手工勾」。
+    abstraction: 按问题分文件：外部表示、聚合、编号、估算、恢复、快照、上下文各成一件；全部纯函数，输入草图集合与基线、输出数据或编辑操作，换一个前端（命令行、任务单）照样成立。
+    invariants:
+      - 撤回一律表示成编辑操作族里的操作，与手势进同一条撤销记录
+      - 号只认改动项的稳定键，撤回过的号不再分配
+    codeRefs: [src/model/changes/**]
+
+  # ── 视图状态层：挂在编辑中的草图下——AI 的一轮与撤回都是编辑会话上的步 ──
+  - id: state.desk.edit.changes
+    name: AI 回合与撤回
+    summary: 把 AI 的一轮应用为一步，维护编号表与三种撤回
+    parent: state.desk.edit
+    kind: component
+    responsibility: |
+      编辑分组里的改动项与 AI 回合（DA-6、DA-8、DA-9、CI-3–CI-5，DL-1、DL-2、DL-22–DL-26、DL-28）：
+      一轮（rounds.ts applyRound）——AI 说完时先恢复它要撤回的号，再做改动块的操作，当前张没有 layout 时先落下显示的位置，最后按 DL-6 安放新框，一次性成设计级撤销的一步，记下开始前的快照与碰过的东西；任一条做不成整轮不落，返回提议卡的结果（第几轮、动了哪几个号、牵动谁按当前描述估）；
+      三种撤回——撤回最近一轮 = 一步撤销；更早的一轮按快照恢复（之后又被改过的先列出确认）；一项 = 恢复到基线（别的项依赖它时先列出确认）；
+      编号表——会话每变一步对一次（谁、第几轮），进入草图与放弃改动时以 changes.json 为准，随保存写回；
+      与画布、侧栏「改动」页的联动——徽标的号、刚应用的一轮、悬停的号、单击行居中、单击徽标滚到、删除项的虚框位置；给 agent 的草图上下文。
+      认可与任务单（波 3，edit/approval.ts，DL-32–DL-38）：收集认可的条件（已保存、格式错误、未解决的提示）问迁移表；认可时把编辑会话保存后接上的各张草图指纹交给写入端口；认可前总览（全设计改动项按类别、影响面按当前描述估）；任务单——会话里的草图对当前版本的核验按号归到改动项（taskList），复制 Markdown、导出 JSON；状态锁（已认可 / 已实现 / 已放弃）先于 AI 回合只读，撤回一律拒绝并说明「回到起草」。
+      归档（波 4，DL-46–DL-50）：任务模式待做在前、✓ 留着；认可时把认可前总览的影响面交给写入端口记成估算；已认可时按同一套模型函数在页面上算核验一致、草图指纹（载荷里的设计信息）与估与实际（当前版本各模块的描述指纹 reviewHashes；改动按本设计覆盖 designCover、估算闭包、同期其他改动分三组，DL-49），另两关都过了才向写入端口要棘轮（防抖），三关全绿「归档」才亮，归档后重新加载。
+    principle: |
+      - **一轮一步**：AI 的产出整轮成一步，撤回最近一轮就是撤销，不另造撤回的机制；更早的一轮和单项撤回是一步新的编辑，可反悔。
+      - **只读期由会话说了算**：AI 的一轮在跑时编辑操作一律拒绝（locked），画布与「改动」页只照着禁用。
+    codeRefs: [src/state/desk/edit/changes.ts, src/state/desk/edit/rounds.ts, src/state/desk/edit/approval.ts]
+
+  # ── 呈现层：侧栏的「改动」页 ──
+  - id: present.nav-tree.changes
+    name: 改动页
+    summary: 列出带号的改动项，可定位、可撤回
+    parent: present.nav-tree
+    kind: component
+    responsibility: 侧栏的「改动」页（CI-4，DL-5，LY-4）：只在设计的草图画布下出现，与「问题」资料标签同形——顶部六类计数、筛选（全部 / 本轮 / 某张草图）、撤回本轮；每行 #n · 类别 · 一句话 · 第几轮 · 谁 · 撤回；单击行画布居中、单击画布徽标清单滚到并闪一下、悬停两边一起高亮（删除项在原位置显示虚框）。只读编辑分组的改动项、只发意图。设计已认可时切任务模式（DL-38）：每行多一列状态（✓ / 待做 / 不核验，悬停给怎样算做到），撤回变灰，顶部任务单头与「复制给 agent」（Markdown）「导出 JSON」，对不上号的偏差列在最后；认可已撤回时顶部标出。
+    codeRefs: [src/components/tree/ChangesTab.vue]
+
+relations:
+  - id: rel.ch.approval-review
+    from: state.desk.edit.changes
+    to: model.review
+    type: queries
+    description: '认可与任务单的一面向人确认层取：reviewHashes 算当前版本各模块的描述指纹，与认可时记下的估算比出「实际改了」（DL-49）'
+    purpose: '算归档预览的估与实际'
+  # ── 模型层：改动项读核验与血缘、用编辑操作族表示撤回 ──
+  - id: rel.ch.items-check
+    from: model.intent.changes
+    to: model.intent.check
+    type: queries
+    description: '改动项向草图核验取相对基线的对比（compareDesign），并用血缘的前缀映射把改动映射回基线模块（baselineOrigins）'
+    purpose: '按血缘聚合改动项、映射回基线'
+  - id: rel.ch.locate
+    from: model.intent.changes
+    to: model.intent.edit.locate
+    type: queries
+    description: '改动项按模块寻址（locateAll、shortName）：一轮碰过的模块、恢复改 ID 时取原短名'
+    purpose: '找草图里的模块与短名'
+  - id: rel.ch.design-edit
+    from: model.intent.changes
+    to: model.intent.edit.design
+    type: queries
+    description: '恢复到基线试算逆向操作（applyDesignEdit），得出恢复后的草图集合再重算改动项，列出级联'
+    purpose: '试算撤回一项的结果'
+  - id: rel.ch.restore-place
+    from: model.intent.edit.design
+    to: model.intent.edit.modules
+    type: commands
+    description: '设计级编辑的 restore / restoreEntities 用模块操作的 placeModule 把基线模块或快照里的模块按作者的写法放回它的父下'
+    purpose: '把恢复回来的模块放回原处'
+  # ── 视图状态层：AI 回合与撤回 ──
+  - id: rel.ch.session-model
+    from: state.desk.edit.changes
+    to: model.intent.changes
+    type: queries
+    description: 'AI 回合与撤回向改动项的模型取：聚合与编号（aggregateChanges、reconcileChanges、numbered）、校验改动块（validateEditBlock）、逆向操作与级联（revertOps、revertPlan）、一轮碰过的与按快照恢复的操作、影响面估算、给 agent 的草图上下文'
+    purpose: '取改动项、编号、撤回操作与影响面'
+  - id: rel.ch.session-apply
+    from: state.desk.edit.changes
+    to: state.desk.edit.session
+    type: commands
+    description: 'AI 回合与撤回让编辑会话应用一步（apply / undo）：一轮的操作一次性成一步、撤回最近一轮即撤销、撤回更早一轮与撤回一项是一步新编辑'
+    purpose: '把一轮与撤回落成编辑会话的一步'
+  - id: rel.ch.session-locate
+    from: state.desk.edit.changes
+    to: model.intent.edit.locate
+    type: queries
+    description: '安放新框前按模块寻址（locateAll）：这一轮新出现、还没有位置的框，与它们所在草图里原有的框'
+    purpose: '找要安放的新框与原有的框'
+  - id: rel.ch.session-grid
+    from: state.desk.edit.changes
+    to: model.intent.edit.layout
+    type: queries
+    description: '根草图的原有框没有 layout 时取网格的初始位置（gridLayout），作安放新框时的已占位置'
+    purpose: '取根草图的初始位置'
+  - id: rel.ch.session-place
+    from: state.desk.edit.changes
+    to: state.layout.sketch
+    type: queries
+    description: 'AI 回合与撤回向草图布局取新框的安放位置（placeNewBoxes，DL-6：有关系的框旁 → 空位 → 中心区右侧）'
+    purpose: '给 AI 的新框找位置'
+  - id: rel.ch.edit-seed
+    from: state.desk.edit
+    to: state.layout.runner
+    type: queries
+    description: '编辑中的草图按挂载点向布局入口要模型画布那一层的布局（layoutView），作新建草图的起点（DL-30）'
+    purpose: '借模型画布的位置作草图起点'
+  # ── 呈现层 ──
+  - id: rel.ch.tab-labels
+    from: present.nav-tree.changes
+    to: present.sketch.contracts
+    type: queries
+    description: '改动页用草图画布的变更标签与六类计数（CHANGE_BADGES、sixCounts）标类别、算顶部计数，与画布角标同一套字'
+    purpose: '与画布同一套类别标签'
+  - id: rel.ch.canvas-props
+    from: present.sketch.canvas
+    to: present.shared
+    type: queries
+    description: '草图画布的右键「编辑字段…」经共用件 openProps 请项目视图按需展开选中面板（DL-20）'
+    purpose: '按需展开选中面板'
+  - id: rel.ch.edge-path
+    from: present.sketch.elements
+    to: present.canvas.edges
+    type: queries
+    description: '草图的边用边组件的 roundedPolyline 把正交折线画成带圆角的路径，与模型画布同一种线（DL-29）'
+    purpose: '与模型画布同一种折线'
+  - id: rel.ch.approval-check
+    from: state.desk.edit.changes
+    to: model.intent.check
+    type: queries
+    description: '认可与任务单向草图核验与生命周期取：设计各张草图对当前版本的核验（checkSketches，带基线与认可的偏差）、认可能不能做与拒绝原因（designTransition）'
+    purpose: '核验推出任务状态、迁移表判认可'

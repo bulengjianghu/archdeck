@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 b50ddaeffb1570af infra.mus#abstraction=019a12c2 infra.mus#children=577b6286 infra.mus#invariants=dd769c37 infra.mus#provides=31e898b5 infra.mus#responsibility=2f1be120 infra.mus#summary=2444fe89 infra.mus.buffer#summary=b8717a43 infra.mus.corrector#summary=6430a37c infra.mus.decoder#summary=2e2322ab infra.mus.demuxer#summary=6a341f57 infra.mus.factory#summary=e83cfaad infra.mus.loader#summary=1068c9c0 infra.mus.process-plugin#summary=c26c6ac9 infra.mus.remuxer#summary=d0398ae1 infra.mus.render#summary=a07da272 rel:rel.mus.factory-render=1f9b6a15 rel:rel.mus.flow.decoded-audio=eb09aa49 rel:rel.mus.flow.decoded-canvas=4f8e838d rel:rel.mus.flow.decoded-stream=c48cfe04 rel:rel.mus.flow.demuxed-pts=97b66912 rel:rel.mus.flow.demuxer-flv-buffer=f0b14d7a rel:rel.mus.flow.demuxer-hls-buffer=fe943309 rel:rel.mus.flow.demuxer-mp4-buffer=b78f5b7c rel:rel.mus.flow.fhlsdemuxed-remuxer=fbdcde9d rel:rel.mus.flow.fhlsremuxed-render=ab78aebf rel:rel.mus.flow.fhlsremuxer-buffer=7d268698 rel:rel.mus.flow.frameinfo-plugin=8056af49 rel:rel.mus.flow.frameinfo-processed=f5ecddab rel:rel.mus.flow.loader-flv-demuxer=ea75d49f rel:rel.mus.flow.loader-hls-demuxer=7f9e700c rel:rel.mus.flow.loader-mp4-demuxer=8d5ad83e rel:rel.mus.flow.mp4remuxer-mse=515a530b rel:rel.mus.flow.mp4remuxer-vcs=77ff8289 rel:rel.mus.flow.plugin-processed=771709be rel:rel.mus.flow.processed-audio=680f319e rel:rel.mus.flow.processed-mp4remuxer=320b1317 rel:rel.mus.flow.processed-wasmaudio=b22cb2ad rel:rel.mus.flow.processed-wasmvideo=c7bcae61 rel:rel.mus.flow.processed-wcs=a8272e81 rel:rel.mus.flow.wasmaudio-decoded=925ab25b rel:rel.mus.flow.wasmvideo-decoded=0bfbc3a8 rel:rel.mus.flow.wcs-decoded=5e52e745 rel:rel.mus.mse-mp4remuxer=16a5fb3c rel:rel.mus.pts-h264=d3f226f0">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MUs 媒体单元 · 三段传送带：只执行，不做决定</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>三段传送带：只执行，不做决定</h1>
+    <p class="lede">这一层是 <span data-arch="infra.mus">MUs 媒体单元</span>：<span data-arch="infra.mus" data-field="summary"></span>。一帧数据从网络到屏幕的全程流水线，快而稳。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 238" role="img" aria-label="Load 搬运拆包、Process 校正解密、Play 解码上屏三段传送带">
+        <defs><marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="8" y="8" width="204" height="160" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/>
+        <text x="20" y="30" font-size="12" class="">Load · 搬运与拆包</text>
+        <rect x="24" y="44" width="78" height="30" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="63" y="63" font-size="10" text-anchor="middle" class="">搬字节</text>
+        <path d="M104,59 L116,59" stroke="var(--ok)" stroke-width="2" marker-end="url(#d)"/>
+        <rect x="120" y="44" width="78" height="30" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="159" y="63" font-size="10" text-anchor="middle" class="">拆包</text>
+        <rect x="24" y="88" width="174" height="34" rx="8" fill="var(--bg)" stroke="var(--warn)"/><text x="111" y="103" font-size="10" text-anchor="middle" class="">段尾缓冲（阀门）</text><text x="111" y="116" font-size="9" text-anchor="middle" class="muted">下游说放才放</text>
+        <text x="20" y="148" font-size="9.5" class="">原料车间：网络流变成</text><text x="20" y="162" font-size="9.5" class="">一帧一帧的料</text>
+
+        <rect x="222" y="8" width="196" height="160" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/>
+        <text x="234" y="30" font-size="12" class="">Process · 中途加工</text>
+        <rect x="236" y="44" width="78" height="30" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="275" y="63" font-size="10" text-anchor="middle" class="">校正</text>
+        <path d="M316,59 L328,59" stroke="var(--warn)" stroke-width="2" marker-end="url(#d)"/>
+        <rect x="332" y="44" width="72" height="30" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="368" y="63" font-size="10" text-anchor="middle" class="">解密插槽</text>
+        <text x="234" y="100" font-size="9.5" class="">质检工位：料不对就修，</text>
+        <text x="234" y="114" font-size="9.5" class="">看不懂就请外援（统一插槽，</text>
+        <text x="234" y="128" font-size="9.5" class="">随装随用）</text>
+
+        <rect x="428" y="8" width="204" height="160" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="440" y="30" font-size="12" class="">Play · 成品与上屏</text>
+        <rect x="440" y="44" width="56" height="30" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="468" y="63" font-size="9.5" text-anchor="middle" class="">重新打包</text>
+        <rect x="500" y="44" width="56" height="30" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="528" y="57" font-size="9.5" text-anchor="middle" class="">解码</text><text x="528" y="70" font-size="8.5" text-anchor="middle" class="muted">后台线程</text>
+        <rect x="560" y="44" width="60" height="30" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="590" y="63" font-size="9.5" text-anchor="middle" class="">缓冲上屏</text>
+        <path d="M498,59 L502,59 M558,59 L562,59" stroke="var(--accent)" stroke-width="2" marker-end="url(#d)"/>
+        <rect x="440" y="88" width="180" height="34" rx="8" fill="var(--bg)" stroke="var(--warn)"/><text x="530" y="103" font-size="10" text-anchor="middle" class="">成品缓冲（水位计）</text><text x="530" y="116" font-size="9" text-anchor="middle" class="muted">攒多少放多少，只执行动作</text>
+        <text x="440" y="148" font-size="9.5" class="">成品车间：帧变成画面，</text>
+        <text x="440" y="162" font-size="9.5" class="">按媒体时钟点画上去</text>
+
+        <path d="M214,88 L220,88" stroke="var(--text-2)" stroke-width="2.5" marker-end="url(#d)"/>
+        <path d="M420,88 L426,88" stroke="var(--text-2)" stroke-width="2.5" marker-end="url(#d)"/>
+
+        <rect x="8" y="182" width="624" height="46" rx="10" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="320" y="200" font-size="10.5" text-anchor="middle" class="">传送带纪律：上游直呼下游，一帧传递零中介——快</text>
+        <text x="320" y="218" font-size="10.5" text-anchor="middle" class="">只执行动作，不做任何决定——稳</text>
+      </svg>
+      <figcaption>三段传送带：搬原料 → 中途加工 → 成品上屏。</figcaption>
+    </figure>
+
+    <h2>零件与把手</h2>
+    <div class="cols c3">
+      <div><b>原料段</b><span data-arch="infra.mus.loader">搬字节</span> 与 <span data-arch="infra.mus.demuxer">拆包</span> 把整流变成一帧一帧；段尾阀门归 <span data-arch="infra.mus.buffer">缓冲</span>，开不开由策略说了算。</div>
+      <div><b>加工段</b><span data-arch="infra.mus.corrector">校正</span> 修时间戳；加密流走 <span data-arch="infra.mus.process-plugin">外部插件插槽</span>，统一契约随装随用。造零件的是 <span data-arch="infra.mus.factory">单元工厂</span>。</div>
+      <div><b>成品段</b><span data-arch="infra.mus.remuxer">重新打包</span> → <span data-arch="infra.mus.decoder">解码</span>（重活在后台线程）→ <span data-arch="infra.mus.render">上屏</span>，按媒体钟走点。</div>
+    </div>
+
+    <p class="note">传送带不做任何决定：水位多高、何时追帧、怎么拖动进度，都不归它管——所以换一种「玩法」时，传送带的零件不变，变的只是指挥它的策略。</p>
+
+  </body>
+</html>

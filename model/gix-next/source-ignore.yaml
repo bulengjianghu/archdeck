@@ -1,0 +1,13 @@
+# 不属于任何模块的文件（G8），相对源码根目录 work2/gix-wt/next-main/gix-next。
+# 测试、文档、部署脚本、配方样例、构建配置不归属模块；测试文件作为场景 evidence 引用。
+sourceIgnore:
+  - '*'
+  - '.*'
+  - '.*/**'
+  - 'docs/**'
+  - 'deploy/**'
+  - 'recipes/**'
+  - 'scripts/**'
+  - 'test/**'
+  - 'packages/*/*.{json,md,ts,mjs}'
+  - 'packages/*/test/**'

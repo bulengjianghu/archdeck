@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 5c7edb1f6d90ee30 rel:rel.ad.projection-layout=e9839d85 rel:rel.ch.edit-seed=65bc54ab rel:rel.ch.session-place=1b572acc rel:rel.ed.commands-mode=0e613139 rel:rel.p2.dispatch-transition=e9d3563d rel:rel.p2.layoutsync-runner=47bbc5ed rel:rel.p2.projection-seqlayout=f9d041ed rel:rel.p2.router-codec=f7fa094c rel:rel.p5.projection-stage=1b2b1414 rel:rel.p8.projection-emphasis=91daa8ce rel:rel.r8.facts-layout=15f7d946 rel:rel.r8.facts-layout-runner=6af43f73 rel:rel.r8.facts-selection=e5f2c303 rel:rel.v4.commands-sketch-layout=41d00e70 rel:rel.v4.derive-sketch-layout=84e593c9 state#abstraction=27cd00bc state#children=e946c4ca state#excludes=47fd1e7a state#includes=cdfbf19d state#responsibility=f7ce7d4e state#summary=3c4f7bf4 state.desk#invariants=5d134717 state.desk#summary=7be4e190 state.layout#invariants=4ca262b8 state.layout#summary=e8e7f59b state.transition#invariants=d1cd65d8 state.transition#summary=349bf794">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>视图状态层 · 一个值、纯函数、一个协调者</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
+</style>
+  </head>
+  <body>
+
+    <h1>一个值、纯函数、一个协调者</h1>
+    <p class="lede">关于「这一次浏览」的一切都住在<span data-arch="state">视图状态层</span>：看哪、选谁、走到哪、怎么摆。它由三件套组成：<span data-arch="state.desk">DeskState</span>、<span data-arch="state.transition">视图状态转移</span>和 <span data-arch="state.layout">Layout</span>。</p>
+
+    <h2>三件套怎么配合</h2>
+    <figure>
+      <svg viewBox="0 0 480 246" role="img" aria-label="视图状态层三件套：意图经转移规则写入 DeskState，排版算坐标，呈现层只读派生；地址、文件、本机记忆是状态的投影">
+        <defs><marker id="a8P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a8S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a8A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a8M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a8g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a8l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="8" y="8" width="130" height="46" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="73.0" y="28.3" font-size="13" text-anchor="middle">意图</text><text x="73.0" y="42.8" font-size="10.5" text-anchor="middle" class="muted">来自三个区</text>
+        <g data-arch="state.transition"><rect x="8" y="96" width="130" height="52" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="73.0" y="119.3" font-size="13" text-anchor="middle">视图状态转移</text><text x="73.0" y="133.8" font-size="10.5" text-anchor="middle" class="muted">纯函数</text></g>
+        <g data-arch="state.desk"><rect x="170" y="88" width="140" height="68" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="240.0" y="112.4" font-size="14" text-anchor="middle" font-weight="600">DeskState</text><text x="240.0" y="126.9" font-size="10.5" text-anchor="middle" class="muted">唯一的值</text><text x="240.0" y="141.4" font-size="10.5" text-anchor="middle" class="muted">唯一的写入口</text></g>
+        <g data-arch="state.layout"><rect x="344" y="8" width="128" height="46" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="408.0" y="28.3" font-size="13" text-anchor="middle">Layout</text><text x="408.0" y="42.8" font-size="10.5" text-anchor="middle" class="muted">坐标与走线</text></g>
+        <rect x="344" y="100" width="128" height="48" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="408.0" y="121.3" font-size="13" text-anchor="middle">呈现层</text><text x="408.0" y="135.8" font-size="10.5" text-anchor="middle" class="muted">只读派生、发意图</text>
+        <path d="M73,54 L73,94" stroke="var(--warn)" stroke-width="1.8" fill="none" marker-end="url(#a8S)"/>
+        <path d="M138,122 L168,122" stroke="var(--warn)" stroke-width="1.8" fill="none" marker-end="url(#a8S)"/>
+        <path d="M310,100 C330,80 330,50 342,40" stroke="var(--text-2)" stroke-width="1.8" fill="none" marker-end="url(#a8g)"/>
+        <path d="M408,54 L408,98" stroke="var(--text-2)" stroke-width="1.8" fill="none" marker-end="url(#a8g)"/>
+        <path d="M310,124 L342,124" stroke="var(--text-2)" stroke-width="1.8" fill="none" marker-end="url(#a8g)"/>
+        <rect x="100" y="200" width="84" height="32" rx="8" fill="var(--soft)" stroke="var(--line)" stroke-dasharray="5 4"/><text x="142.0" y="220.0" font-size="11.5" text-anchor="middle">地址</text>
+        <path d="M240,156 L142,198" stroke="var(--text-2)" stroke-width="1.2" fill="none" stroke-dasharray="5 4" marker-end="url(#a8g)"/>
+        <rect x="200" y="200" width="84" height="32" rx="8" fill="var(--soft)" stroke="var(--line)" stroke-dasharray="5 4"/><text x="242.0" y="220.0" font-size="11.5" text-anchor="middle">描述文件</text>
+        <path d="M240,156 L242,198" stroke="var(--text-2)" stroke-width="1.2" fill="none" stroke-dasharray="5 4" marker-end="url(#a8g)"/>
+        <rect x="300" y="200" width="84" height="32" rx="8" fill="var(--soft)" stroke="var(--line)" stroke-dasharray="5 4"/><text x="342.0" y="220.0" font-size="11.5" text-anchor="middle">本机记忆</text>
+        <path d="M240,156 L342,198" stroke="var(--text-2)" stroke-width="1.2" fill="none" stroke-dasharray="5 4" marker-end="url(#a8g)"/>
+        <text x="48" y="220" font-size="10.5" text-anchor="middle" class="muted">同步适配器</text>
+      </svg>
+      <figcaption>状态只有一个值，改它的唯一方式是把意图交给转移规则。地址、文件和本机记忆都是这个值的投影，由同步适配器对齐，不反过来改它。</figcaption>
+    </figure>
+
+    <h2>主语从状态推出来</h2>
+    <figure>
+      <svg viewBox="0 0 480 292" role="img" aria-label="主语从状态推出：有选中取选中，在回放取进度所在步骤，否则取当前层的父模块；四个视图标签读主语">
+        <defs><marker id="a9P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a9S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a9A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a9M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a9g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a9l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <g data-arch="state.desk"><rect x="8" y="6" width="464" height="40" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="240.0" y="30.4" font-size="12.5" text-anchor="middle">状态：层次 · 选中 · 场景与进度 · 草图会话</text></g>
+        <rect x="40" y="62" width="400" height="34" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="50" y="83.2" font-size="12" text-anchor="start">① 有选中 → 选中的对象</text>
+        <path d="M24,79 L38,79" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a9g)"/>
+        <rect x="40" y="106" width="400" height="34" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="50" y="127.2" font-size="12" text-anchor="start">② 在回放 → 进度所在的那一步</text>
+        <path d="M24,123 L38,123" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a9g)"/>
+        <rect x="40" y="150" width="400" height="34" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="50" y="171.2" font-size="12" text-anchor="start">③ 都没有 → 当前层的父模块（根层即系统）</text>
+        <path d="M24,167 L38,167" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a9g)"/>
+        <line x1="24" y1="46" x2="24" y2="167" stroke="var(--text-2)" stroke-width="1.2"/>
+        <rect x="180" y="196" width="120" height="36" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="240.0" y="218.7" font-size="13.5" text-anchor="middle" font-weight="600">主语</text>
+        <path d="M240,190 L240,194" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a9g)"/>
+        <line x1="240" y1="164" x2="240" y2="190" stroke="var(--text-2)" stroke-width="1.2"/>
+        <rect x="8" y="256" width="108" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="62.0" y="275.2" font-size="12" text-anchor="middle">图解</text>
+        <path d="M240,232 L62,254" stroke="var(--accent)" stroke-width="1.2" fill="none" marker-end="url(#a9P)"/>
+        <rect x="126" y="256" width="108" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="180.0" y="275.2" font-size="12" text-anchor="middle">描述</text>
+        <path d="M240,232 L180,254" stroke="var(--accent)" stroke-width="1.2" fill="none" marker-end="url(#a9P)"/>
+        <rect x="244" y="256" width="108" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="298.0" y="275.2" font-size="12" text-anchor="middle">核对</text>
+        <path d="M240,232 L298,254" stroke="var(--accent)" stroke-width="1.2" fill="none" marker-end="url(#a9P)"/>
+        <rect x="362" y="256" width="108" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="416.0" y="275.2" font-size="12" text-anchor="middle">时序图</text>
+        <path d="M240,232 L416,254" stroke="var(--accent)" stroke-width="1.2" fill="none" marker-end="url(#a9P)"/>
+      </svg>
+      <figcaption>主语不是另存的一份状态，而是从选中、进度与层次推出来的值，所以永远和选中对得上。选中的步骤就是进度所在的一步；状态里没有「播放中」，回放只随人的操作前进。</figcaption>
+    </figure>
+
+    <h2>排版单独一站</h2>
+    <figure>
+      <svg viewBox="0 0 480 140" role="img" aria-label="排版单独一站：层次视图进，坐标出，按内容缓存；选中与悬停只改描边与显隐">
+        <defs><marker id="a10P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a10S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a10A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a10M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a10g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a10l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="6" y="30" width="132" height="54" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="72.0" y="54.1" font-size="12.5" text-anchor="middle">本层要画的</text><text x="72.0" y="68.6" font-size="10.5" text-anchor="middle" class="muted">节点 · 边（无像素）</text>
+        <g data-arch="state.layout"><rect x="170" y="22" width="140" height="70" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="240.0" y="47.4" font-size="14" text-anchor="middle" font-weight="600">Layout</text><text x="240.0" y="61.9" font-size="10.5" text-anchor="middle" class="muted">按内容缓存</text><text x="240.0" y="76.4" font-size="10.5" text-anchor="middle" class="muted">不变就不重算</text></g>
+        <rect x="342" y="30" width="132" height="54" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="408.0" y="54.1" font-size="12.5" text-anchor="middle">画布</text><text x="408.0" y="68.6" font-size="10.5" text-anchor="middle" class="muted">照坐标画</text>
+        <path d="M138,57 L168,57" stroke="var(--text-2)" stroke-width="1.8" fill="none" marker-end="url(#a10g)"/>
+        <path d="M310,57 L340,57" stroke="var(--text-2)" stroke-width="1.8" fill="none" marker-end="url(#a10g)"/>
+        <text x="240" y="124" font-size="10.5" text-anchor="middle" class="muted">选中、悬停、回放只改描边与显隐，不进排版</text>
+      </svg>
+      <figcaption>坐标既不是会话规则也不是系统知识，所以单独由排版来算。它只认「这一层要画什么」，结果按内容缓存；节点不会因为点了一下而挪位。</figcaption>
+    </figure>
+
+  </body>
+</html>

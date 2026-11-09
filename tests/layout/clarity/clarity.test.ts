@@ -1,0 +1,238 @@
+/**
+ * L30（ADR-0039）：线的清晰度——几何检查器自身的单测，与三个项目所有层次的计数回归（只降不升）。
+ * 计数随描述与布局变化：改动让某一类下降时把 CEILING 改成新的数（`CLARITY_REPORT=1 npx vitest run tests/layout/clarity/report.test.ts` 打印，
+ * `CLARITY_REPORT=levels` 逐层、`CLARITY_LEVEL=<项目>:<层次>` 逐条）；上升说明有回退，先看明细再决定。
+ */
+import { describe, expect, it } from 'vitest'
+import { check, countFindings, KINDS, type CheckLine, type Counts } from './checker'
+import { PROJECTS, checkProject } from './scenes'
+
+const line = (id: string, pts: [number, number][], extra: Partial<CheckLine> = {}): CheckLine => ({
+  id,
+  points: pts.map(([x, y]) => ({ x, y })),
+  ends: ['a', 'b'],
+  ...extra,
+})
+const kinds = (f: ReturnType<typeof check>) => f.map(x => x.kind)
+
+describe('L30 几何检查器', () => {
+  it('overlap：平行且相距不到 6 px、重叠超过 6 px 的两段算重合；相距一个轨距（10）不算', () => {
+    const a = line('a', [
+      [0, 0],
+      [100, 0],
+    ])
+    expect(
+      kinds(
+        check({
+          lines: [
+            a,
+            line('b', [
+              [20, 3],
+              [80, 3],
+            ]),
+          ],
+          obstacles: [],
+          frames: [],
+        }),
+      ),
+    ).toContain('overlap')
+    expect(
+      kinds(
+        check({
+          lines: [
+            a,
+            line('b', [
+              [20, 10],
+              [80, 10],
+            ]),
+          ],
+          obstacles: [],
+          frames: [],
+        }),
+      ),
+    ).not.toContain('overlap')
+  })
+
+  it('arrows：两条线的终点相距不到 4 px', () => {
+    const f = check({
+      lines: [
+        line('a', [
+          [0, 0],
+          [0, 50],
+        ]),
+        line('b', [
+          [40, 0],
+          [2, 50],
+        ]),
+      ],
+      obstacles: [],
+      frames: [],
+    })
+    expect(kinds(f)).toContain('arrows')
+  })
+
+  it('crossNode：穿过节点内部、或穿过带的文字区；从自己两端节点的边上出入不算', () => {
+    const box = { x: 0, y: 40, w: 100, h: 40 }
+    const into = line(
+      'a',
+      [
+        [50, 0],
+        [50, 40],
+      ],
+      { ends: ['n', 'x'] },
+    )
+    const through = line('b', [
+      [50, 0],
+      [50, 120],
+    ])
+    const f = check({ lines: [into, through], obstacles: [{ id: 'n', box, kind: 'node' }], frames: [] })
+    expect(f.filter(x => x.kind === 'crossNode').map(x => x.ids[0])).toEqual(['b'])
+  })
+
+  it('labels：标签互压、标签压节点', () => {
+    const l1 = line(
+      'a',
+      [
+        [0, 0],
+        [100, 0],
+      ],
+      { label: { at: { x: 50, y: 0 }, text: '×3 · 2 把手' } },
+    )
+    const l2 = line(
+      'b',
+      [
+        [0, 8],
+        [100, 8],
+      ],
+      { label: { at: { x: 55, y: 8 }, text: '×2' } },
+    )
+    expect(kinds(check({ lines: [l1, l2], obstacles: [], frames: [] }))).toContain('labels')
+  })
+
+  it('hug：与框线平行、相距不到 6 px、并行超过 24 px', () => {
+    const frame = { x: 0, y: 0, w: 200, h: 200 }
+    expect(
+      kinds(
+        check({
+          lines: [
+            line('a', [
+              [20, 4],
+              [120, 4],
+            ]),
+          ],
+          obstacles: [],
+          frames: [frame],
+        }),
+      ),
+    ).toContain('hug')
+    expect(
+      kinds(
+        check({
+          lines: [
+            line('a', [
+              [20, 14],
+              [120, 14],
+            ]),
+          ],
+          obstacles: [],
+          frames: [frame],
+        }),
+      ),
+    ).not.toContain('hug')
+  })
+
+  it('onFrame：终点落在框线上、不在任何节点的边上', () => {
+    const frame = { x: 0, y: 0, w: 200, h: 200 }
+    expect(
+      kinds(
+        check({
+          lines: [
+            line('a', [
+              [50, -40],
+              [50, 0],
+            ]),
+          ],
+          obstacles: [],
+          frames: [frame],
+        }),
+      ),
+    ).toContain('onFrame')
+  })
+
+  it('多个场景里同一组线的同一类问题只计一次', () => {
+    const f = { kind: 'overlap' as const, ids: ['a', 'b'], at: { x: 0, y: 0 } }
+    expect(countFindings([f, f]).overlap).toBe(1)
+  })
+})
+
+/**
+ * 三个项目所有层次（交互视角的线，分层总览含逐个聚焦核心模块，普通层次含全部框外边）的计数上限：只降不升；结构视角另见 STRUCTURE。
+ * 布局与产品一致（state/desk/layoutLinks.ts：结构边、核心跨层束、按值依赖的分层）；BARE 为没有代码事实时的布局（设计版本、提交版本）。
+ */
+// 第十四轮 F14（ADR-0041）：标签按两段的实际文字测量（机制、混合、向上，scenes.ts 的 labelOf）后重定，走线与其余各类计数不变：
+// 标签互压 h5player 1 → 0、h5p 无代码事实 1 → 0；上升两处待裁决（B-09）——media-web-player 0 → 2（kit.facade：adapter 一半压在框外、贴着左侧外部系统，
+// 两条一跳的「事件」线没有放标签的地方），h5player 无代码事实 2 → 3（根层分层总览的核心跨层边标签）。
+// 第十四轮合入裁决（负责人 2026-10-28）：media 的 +2 接受、登记为后续布局项；检查器改同时性口径（scenes.ts）——聚焦核心模块时层间边变淡、不写标签，
+// 只算核心跨层边之间的互压（h5player 无代码事实这一组 3 → 1）；选中一条核心跨层边、没有聚焦模块时它与带标签的层间边同时出现，另成场景（新纳入测量，
+// 多出 2 处：app → infra.framework 的委托 / 查询标签与层间边标签互压），合计 3：与 labels 分支的终点持平，比 2fbf33e 多 1（议，见 A-08「合并」）
+// 第十六轮 H4（ADR-0052，层是分类、不占级）：模型层的四层改为 model 的 strata、撤掉 model.api，ST-1 为呈现层、属性面板、接入层、DeskState、
+// 架构治理、草图编辑声明分层（这六个层次由普通层次变为分层总览，多成员层的带内成员不超七全显、不换行）后重定：
+// 有代码事实 重合 53 → 27、压节点 3 → 3（根层原有的 3 处）、箭头叠 0 → 3、贴框 10 → 17；无代码事实 重合 45 → 17、压节点 3 → 3、贴框 7 → 20。
+// 箭头叠 3 处都是「核心边与带间边落在同一个没有内容的单成员层带上」（access → model、规则判定 → 事实比对、改 ID → 寻址），上升待裁（29 待裁 Q9）
+// 第二十一轮波 1：自描述新增对话的六个模块与十条关系（modules/dialogue.yaml），布局代码未动——h5p-arch-desk 重合 26 → 30、无代码事实 17 → 18
+// （不加这份描述时为 26 / 17）：描述写入层多了「重讲落盘」，它到描述读取、模型层的两条出界线与追加写入、草图写回的同向线平行相贴（+2）；
+// DeskState 层 +1；编辑中的草图层多了对话会话 +1。上升待裁（波 1 报告）
+// 第二十一轮波 2：自描述新增 modules/changes.yaml（改动项与恢复操作、AI 回合与撤回、改动页签三个模块与十三条关系），模型画布的布局代码未动——
+// h5p-arch-desk 重合 30 → 34、贴框 17 → 14；无代码事实 重合 18 → 21、贴框 20 → 18（拿掉这份描述时重合回到 30 / 18 以内）。上升待裁（波 2 报告）
+// 第二十一轮波 3：新代码（认可与任务单）带来的代码事实使有代码事实的贴框 14 → 15（换回波 2 的描述仍是 15，是代码事实不是描述）；
+// 自描述新增两条关系（AI 回合与撤回 → 草图核验与生命周期、设计面板 → 动作区）使无代码事实的重合 21 → 22（换回波 2 的描述回到 21）。布局代码未动，上升待裁（波 3 报告）
+// 第二十一轮收尾：自描述新增关系 rel.gv.rework-gate（返工清单 → 草图核验与生命周期，DL-45）使无代码事实的重合 22 → 23。布局代码未动，协调者 2026-11-06 准予上调
+// 第二十二轮波 5：自描述按代码补五条交互（视图区 → 运行信息 / 视图状态转移 / 内容组件、侧栏 → 场景列表、画布 → 属性面板）、删一条（面板分派 → 运行信息，代码里已无），
+// 布局代码未动——h5p-arch-desk 重合 34 → 36、无代码事实 23 → 26；其中「视图区 → 视图状态转移」（isResident，呈现层到视图状态层的跨层线）占 +2 / +2，
+// 拿掉它回到 34 / 24。上升待裁（波 5 报告）
+// 第二十二轮补丁（负责人 2026-11-08 走查）：自描述在侧栏下新增子模块「竖栏」（present.nav-tree.rail），布局代码未动——有代码事实的重合 36 → 37；
+// 把竖栏并回侧栏（不设子模块）即回到 36。上升待裁（21-patch-report）
+const CEILING: Record<(typeof PROJECTS)[number], Counts> = {
+  'h5p-arch-desk': { overlap: 37, arrows: 3, crossNode: 3, labels: 0, hug: 15, onFrame: 0 },
+  h5player: { overlap: 93, arrows: 1, crossNode: 2, labels: 0, hug: 18, onFrame: 0 },
+  'media-web-player': { overlap: 23, arrows: 0, crossNode: 7, labels: 2, hug: 5, onFrame: 0 },
+}
+// 第十五轮：模型层新增两个第二级模块（模型层入口、场景语义）后，把四层声明为层（ADR-0051 修订）——模型层由普通层次改为分层总览：
+// 有代码事实重合 62 → 53、压节点 12 → 3、贴框 6 → 10；无代码事实重合 48 → 45、压节点 12 → 3、贴框 6 → 7
+const BARE: Record<(typeof PROJECTS)[number], Counts> = {
+  'h5p-arch-desk': { overlap: 26, arrows: 0, crossNode: 3, labels: 0, hug: 18, onFrame: 0 },
+  h5player: { overlap: 96, arrows: 0, crossNode: 0, labels: 3, hug: 13, onFrame: 0 },
+  'media-web-player': { overlap: 35, arrows: 0, crossNode: 1, labels: 0, hug: 6, onFrame: 0 },
+}
+/**
+ * 结构视角（有代码事实，缺省显示偏好）画出来的束：基线录于 75ec65f 的布局（第十三轮修复，ADR-0040 否决节）；
+ * 第十四轮 F9、F10（可推出与环内的静息态不画、例外照画，L42）与框外结构边按实际标签文字避让（L33）后重定：
+ * h5p 3 / 1 / 1 → 1 / 0 / 0（重合 / 压节点 / 标签），h5player 重合 32 → 6、标签 18 → 3、贴框 4 → 3，media 重合 1 → 0、标签 1 → 0。
+ * 任何常显的线都由所在视角的检查器测量（第十三轮评审 M7）；改变结构视角画线规则的改动，在这一组上量前后。
+ * 第二十一轮波 2：新增的改动项与 AI 回合两个模块带来的依赖（代码事实）使 h5p 重合 1 → 0、贴框 0 → 1，画线规则未动。上升待裁（波 2 报告）
+ */
+const STRUCTURE: Record<(typeof PROJECTS)[number], Counts> = {
+  'h5p-arch-desk': { overlap: 0, arrows: 0, crossNode: 0, labels: 0, hug: 1, onFrame: 0 },
+  h5player: { overlap: 6, arrows: 0, crossNode: 0, labels: 3, hug: 3, onFrame: 0 },
+  'media-web-player': { overlap: 0, arrows: 0, crossNode: 0, labels: 0, hug: 0, onFrame: 0 },
+}
+// ADR-0039 修订 1（没有端口记号的节点进边用整条边）后重定：h5p 箭头叠 25 → 1、重合 98 → 64；elk 端口约束变了、节点随之重排，
+// 少数几类小幅上升（h5p 贴框 4 → 9，h5player 贴框 13 → 18、无代码事实的重合 66 → 96，media 压节点 5 → 7），明细与取舍见第十二轮 C-08 报告
+// 第十四轮 F1（层号对全集算）后 h5p 重合 64 → 59、压节点 4 → 3、贴框 9 → 7
+
+describe('L30 计数回归（只降不升）', () => {
+  for (const [facts, limits] of [
+    [true, CEILING],
+    [false, BARE],
+  ] as const)
+    for (const p of PROJECTS)
+      it(`${p}${facts ? '' : '（无代码事实）'}`, async () => {
+        const { total } = await checkProject(p, { facts })
+        for (const k of KINDS) expect({ kind: k, count: total[k] }).toEqual({ kind: k, count: Math.min(total[k], limits[p][k]) })
+      }, 180000)
+  for (const p of PROJECTS)
+    it(`${p}（结构视角）`, async () => {
+      const { total } = await checkProject(p, { perspective: 'structure' })
+      for (const k of KINDS) expect({ kind: k, count: total[k] }).toEqual({ kind: k, count: Math.min(total[k], STRUCTURE[p][k]) })
+    }, 180000)
+})

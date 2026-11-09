@@ -1,0 +1,1702 @@
+# 区域：内核（packages/kernel，@gixn/kernel）。2026-11-08 由 AI 生成（读 gix-next @ 1cd6d9ad1）。
+# 第二级模块（kernel.assembly / ledger / rules / liveness / orchestration / tasks / dispatch / intake）由骨架定义，此处只补原则并往下挂子模块。
+# 子模块按文件拆；对外接口 = 入口 src/index.ts 导出、被 kernel-api 使用的符号（ID 规则 if.<第二级>.<导出名>）。
+# 注入点（PromptBuilder / AllowedCommandsFn / PlaybookHooks / HealBook / TokenIssuer）是端口，实现者写在接口的 implementedBy。
+# 内核只依赖 contracts；别的区域调内核的关系由 server 区域写。
+
+modules:
+  - id: kernel
+    name: 内核
+    summary: 守住任务的账、门、活性与恢复，由统筹者推进
+
+  # ───────────── 第二级模块的补充条目 ─────────────
+  - id: kernel.assembly
+    name: 内核装配
+    summary: 按选项装出整个内核，交给入口一组服务
+    abstraction: 装配只 new 与接线、不含规则：注入点全部从选项进来，缺省给可运行的占位实现；错误类型集中定义供入口映射。
+
+  - id: kernel.ledger
+    name: 账与投影
+    summary: 把一切变化写成只追加的事件，并同步更新投影
+    abstraction: 按「写账事务 / 投影 / 存储」切分：事务定顺序与回滚边界，投影是事件到表的确定性映射，存储只管表结构、迁移与连接。
+    invariants:
+      - 事件只经 Tx.append 写入（events 唯一的 insert 在此），迁移触发器拒改删，运行角色只有 INSERT / SELECT
+      - 守卫、写事件、投影、反应与提交前收尾在同一数据库事务里，任何一步抛错整笔回滚
+      - 投影只读事件、不读时钟、不产生事件；全量重放只跑投影不跑反应
+    excludes: [决定写账前该不该放行 → kernel.rules, 运行旁表（任务包、心跳）的读写 → kernel.dispatch]
+
+  - id: kernel.rules
+    name: 兜底规则与门
+    summary: 拒绝违反不变量的写入，并让账上的变化自动生出后续
+    abstraction: 守卫与反应分开：守卫只读不写、抛错即回滚，反应在同一事务里补事件、排唤醒、发调用；各门的判定是可复用的阻塞项计算，守卫与卡片预检共用一份。
+    invariants:
+      - 放行（release.granted / rejected）只能由人经放行卡做出，放行卡不得设超时、不按超时默认处理
+      - merge.requested 与 task.merged 写账前必须有针对当前 head 的放行与证据引用
+      - 终态任务上只有收尾类事件与工作树清理调用能进账
+    excludes: [编排阶段与决定下一步 → playbooks.orchestrator, 发起合入的适配器调用本身 → kernel.dispatch]
+
+  - id: kernel.liveness
+    name: 活性与恢复
+    summary: 保证每个任务总会被再次唤醒，进程重启后接着跑
+    abstraction: 唤醒是账上的事实（wakeup.scheduled / fired），活性只看唤醒表：写账时补齐、看门狗到点触发、恢复时先结算丢失的工作再触发。
+    invariants:
+      - 每笔写账事务提交前，动过的非终态任务（整理台除外）没有待触发唤醒即补一条 liveness.idle
+      - 反应只排唤醒、不直接唤起统筹者：统筹者只在看门狗触发到点唤醒时唤起
+      - 看门狗每轮各步独立，一步出错只记日志；pg-boss stately 队列只排一轮下一次
+    excludes: [唤起时拼提示词与派会话 → kernel.orchestration, 判外部调用结果 → kernel.dispatch]
+
+  - id: kernel.orchestration
+    name: 统筹与执行
+    summary: 唤起无状态的统筹者、派执行会话并维护任务档案
+    abstraction: 内核只决定「何时、带什么现状」唤起统筹者，提示词、剧本参数、放行命令与令牌全部经注入的端口取，未注入时有缺省实现；快照与查询只读投影与运行表。
+    invariants:
+      - 同一任务同时至多一个在跑的统筹者：wake 持任务锁后查在跑的统筹执行
+      - 派执行只记提示词哈希与模板版本进账，提示词全文与 MCP 令牌只进运行表任务包
+      - 不导入 playbooks：剧本内容只经 PromptBuilder / PlaybookHooks / AllowedCommandsFn 端口进来
+    excludes: [提示词正文与剧本参数表 → playbooks.orchestrator, MCP 令牌签发与校验 → server.mcp, 起会话与杀进程 → adapters.ai]
+
+  - id: kernel.tasks
+    name: 任务、清单与卡
+    summary: 建任务、管验收清单与验证计划、发出与回答决策卡
+    abstraction: 每个服务只写自己对象的事件，跨对象的后果（放行后合入、确认后转 active）在答卡的同一事务里完成或交给反应；度量与通知只读账与投影。
+
+  - id: kernel.dispatch
+    name: 适配器调用、租约与真机
+    summary: 经 runner 调外部系统，把结果归一成领域事件
+    abstraction: 调用意图编码在幂等键里（check / poll / merge / device 等前缀），结果回来按键归一；任务包与心跳是不进账的运行表，与触发事件同事务写入。
+    invariants:
+      - 适配器调用先写 adapter.requested 再同事务入任务包；外部状态轮询的任务包不进账，只在状态变化时记事件
+      - 适配器结果在 adapter.completed 的同一事务里由 flowReactor 归一成领域事件，判项结论只来自适配器产出
+      - 租约按 kind+key 排序加锁、一个事务内拿全或全不拿，拿不到记 lease.queued 排队
+    excludes: [在研发机上真正执行调用 → client.channel, 判项命令与截图 → client.checks]
+
+  - id: kernel.intake
+    name: 信号池
+    summary: 收信号进池，按窗口唤醒整理台起草任务并等人放行
+    abstraction: 整理台就是一个 task_kind=intake 的任务，复用统筹者唤起；信号规则作为守卫与反应挂进账，攒批窗口与按天预算都表达为唤醒。
+
+  # ───────────────────────── kernel.assembly ─────────────────────────
+  - id: kernel.assembly.factory
+    parent: kernel.assembly
+    name: 内核工厂
+    kind: component
+    summary: 按选项装出账、各服务、看门狗与恢复
+    responsibility: >-
+      createKernel(options)：建内核上下文（时钟、默认参数、日志、自愈手册、剧本钩子），建账并登记守卫、反应与「总有下次唤醒」收尾，
+      建各服务并接线（轮询结果处理交给外部状态轮询、配方查找交给上下文），返回 Kernel：服务层字段加 recover() 与 startScheduler()。
+      不含任何业务规则。
+    codeRefs: [packages/kernel/src/kernel.ts]
+    provides: [if.kernel.assembly.createKernel, if.kernel.assembly.Kernel, if.kernel.assembly.KernelOptions]
+
+  - id: kernel.assembly.exports
+    parent: kernel.assembly
+    name: 包入口
+    kind: component
+    summary: 对外导出内核工厂、各服务与工具函数
+    responsibility: '@gixn/kernel 的转出面：再导出工厂、账、活性、各服务、剧本钩子、迁移目录与投影表清单等，供 kernel-api 使用。'
+    codeRefs: [packages/kernel/src/index.ts]
+
+  - id: kernel.assembly.errors
+    parent: kernel.assembly
+    name: 内核错误
+    kind: component
+    summary: 给出带错误码的内核错误类型
+    responsibility: 违反不变量（invariant_violation）、不存在（not_found）、冲突（conflict）、租约被占已排队四类错误，入口按 code 映射为 API 错误。
+    codeRefs: [packages/kernel/src/errors.ts]
+    provides: [if.kernel.assembly.InvariantError, if.kernel.assembly.NotFoundError, if.kernel.assembly.ConflictError, if.kernel.assembly.LeaseBusyError]
+
+  # ───────────────────────── kernel.ledger ─────────────────────────
+  - id: kernel.ledger.ledger
+    parent: kernel.ledger
+    name: 写账事务
+    kind: component
+    summary: 在一个事务里校验、写入、投影事件并跑反应
+    responsibility: >-
+      Ledger.tx 开事务、提交前跑收尾；Tx.append：契约校验 → 任务级 advisory 锁 → 幂等键查重 → 守卫 → 写 events → 投影 → 反应。
+      另有读账（按任务 / 位置 / 类型，执行会话读到的位置记进 execution_reads）、全量重放投影与逐表快照。
+    principle: |
+      - 守卫、反应、收尾都是登记进来的函数数组，账本身不认识任何业务规则。
+      - 同一任务的写入经 `pg_advisory_xact_lock` 串行；幂等键命中返回已有事件、不重复写。
+    codeRefs: [packages/kernel/src/ledger.ts]
+    provides: [if.kernel.ledger.Ledger, if.kernel.ledger.Tx, if.kernel.ledger.Guard, if.kernel.ledger.Reactor]
+
+  - id: kernel.ledger.projector
+    parent: kernel.ledger
+    name: 投影器
+    kind: component
+    summary: 把一条事件确定性地映射为投影表的更新
+    responsibility: project(db, event)：按事件类型更新任务、档案、清单、卡片、租约、唤醒、执行、runner、计划、运行、适配器调用、信号等投影表；不读时钟、不写事件。
+    codeRefs: [packages/kernel/src/projector.ts]
+
+  - id: kernel.ledger.schema
+    parent: kernel.ledger
+    name: 表结构与迁移脚本
+    kind: component
+    summary: 定义账、投影表与运行表的结构及其 SQL 迁移
+    responsibility: drizzle 表定义（events、14 张投影表、jobs / runner_heartbeats / execution_reads / execution_waits / poll_state 运行表）、投影表清单与排序键，以及生成的 SQL 迁移（含只追加触发器与授权）。
+    codeRefs: [packages/kernel/src/db/schema.ts, packages/kernel/drizzle/**]
+    provides: [if.kernel.ledger.PROJECTION_TABLES]
+
+  - id: kernel.ledger.migrate
+    parent: kernel.ledger
+    name: 迁移执行
+    kind: component
+    summary: 以属主角色按序执行迁移，给出 pg-boss 的 schema 名
+    responsibility: migrate / dropSchema（用属主连接、可指定 schema）、迁移目录常量、pg-boss schema 命名，以及命令行迁移脚本。
+    codeRefs: [packages/kernel/src/db/migrate.ts, packages/kernel/scripts/**]
+    provides: [if.kernel.ledger.MIGRATIONS_DIR]
+
+  - id: kernel.ledger.pool
+    parent: kernel.ledger
+    name: 连接池
+    kind: component
+    summary: 建运行时连接池，时间与数值按契约格式进出
+    responsibility: createPool：以 gixn_app 角色连库、可设 search_path；时间戳一律转 ISO 字符串、numeric 转数字；Queryable 是池与事务连接的共同形状。
+    codeRefs: [packages/kernel/src/db/pool.ts]
+    provides: [if.kernel.ledger.createPool]
+
+  # ───────────────────────── kernel.rules ─────────────────────────
+  - id: kernel.rules.ledger-rules
+    parent: kernel.rules
+    name: 守卫与反应
+    kind: component
+    summary: 写账前拦下违规事件，写账后同事务产出后续动作
+    responsibility: >-
+      守卫：终态后只收尾、合入与完成要放行和证据、放行只能来自人与放行卡、卡片只能答一次、档案版本递增、清单确认来源、预算暂停时不派执行、缺陷放行门。
+      反应：作废已结算的任务包、自愈与故障分类、预算软硬上限、按事件排唤醒（失败退避与合批）、终态时收会话 / 撤卡 / 清理工作树 / 唤醒依赖任务、runner 注册时补清理、消化统筹者看过的唤醒，并挂上信号池与需求圈反应。
+    codeRefs: [packages/kernel/src/rules.ts]
+
+  - id: kernel.rules.faults
+    parent: kernel.rules
+    name: 故障分类
+    kind: component
+    summary: 把适配器报错归成故障类并按自愈手册统一处置
+    responsibility: 按 errorCode 优先、报错文本兜底把故障归类；按注入的自愈手册统一 healHint、retryable 与是否要人；缺适配器改判 runner 离线、会话超时改判停滞等改判规则。
+    codeRefs: [packages/kernel/src/faults.ts]
+    provides: [if.kernel.rules.HealBook]
+
+  - id: kernel.rules.declarations
+    parent: kernel.rules
+    name: 驱动者声明
+    kind: component
+    summary: 从档案决定里解析任务依赖与改动范围
+    responsibility: 解析决定里的 depends_on / touches 声明，算同仓库任务的改动重叠与依赖关系（进统筹者快照），以及任务终态时该唤醒哪些依赖它的任务。
+    codeRefs: [packages/kernel/src/declarations.ts]
+
+  - id: kernel.rules.merge-gate
+    parent: kernel.rules
+    name: 合入门
+    kind: component
+    summary: 核对放行与验证后才发起合入，不满足就拒绝并唤醒
+    responsibility: >-
+      mergeBlockers：放行针对当前 head、放行卡发出时的 head 未变，再加验证门的全部阻塞项；满足才写 merge.requested 并发 merge_after_approval 调用。
+      人答放行卡后在同一事务里发起合入，不满足则排 merge.refused 唤醒；合入完成由需求圈反应看到 merged 才记终态。
+    codeRefs: [packages/kernel/src/services/merge.ts]
+    provides: [if.kernel.rules.MergeGate]
+
+  - id: kernel.rules.verify
+    parent: kernel.rules
+    name: 验证门
+    kind: component
+    summary: 列出当前 head 上验证还差什么
+    responsibility: verifyBlockers：清单已确认、机器判项全部在当前 head 上通过、新检查有旧红或豁免、有证据与变更、缺陷放行门；合入门与放行卡预检共用。
+    codeRefs: [packages/kernel/src/services/verify.ts]
+
+  - id: kernel.rules.defect-gate
+    parent: kernel.rules
+    name: 缺陷放行门
+    kind: component
+    summary: 核对缺陷任务有确认的计划与前后对照
+    responsibility: 缺陷任务报待放行或放行前：要有最近确认的验证计划、旧构建复现与新构建判定，可按豁免码越过；给出最近确认的计划。
+    codeRefs: [packages/kernel/src/services/defect-gate.ts]
+
+  - id: kernel.rules.kernel-check
+    parent: kernel.rules
+    name: 放行卡内核核对
+    kind: component
+    summary: 为放行卡算出内核核对的逐项结果
+    responsibility: releaseKernelCheck：按任务现状逐项给出放行前核对（判项、分支对齐、变更与检查状态、验证阻塞项），附在放行卡上给人看。
+    codeRefs: [packages/kernel/src/services/kernel-check.ts]
+
+  - id: kernel.rules.confirm-snapshot
+    parent: kernel.rules
+    name: 确认快照
+    kind: component
+    summary: 为确认卡生成清单快照并标出配方外命令
+    responsibility: acceptanceSnapshot：把验收清单转成确认卡上的逐项快照，按配方标出不在配方里的判项命令。
+    codeRefs: [packages/kernel/src/services/confirm-snapshot.ts]
+
+  # ───────────────────────── kernel.liveness ─────────────────────────
+  - id: kernel.liveness.wakeups
+    parent: kernel.liveness
+    name: 唤醒与下次唤醒
+    kind: component
+    summary: 排唤醒，并保证动过的任务总有下一次唤醒
+    responsibility: >-
+      scheduleWakeup：终态任务跳过，写 wakeup.scheduled（带触发事件 causeSeq）；统筹者自定唤醒时撤掉内核补的兜底唤醒。
+      ensureNextWakeup 作为写账事务的收尾，为没有待触发唤醒的非终态任务补 liveness.idle。
+    codeRefs: [packages/kernel/src/liveness.ts]
+    provides: [if.kernel.liveness.scheduleWakeup]
+
+  - id: kernel.liveness.watchdog
+    parent: kernel.liveness
+    name: 看门狗
+    kind: component
+    summary: 每轮清理过期、判停滞并触发到点唤醒
+    responsibility: >-
+      tick 依次：心跳超时的 runner 标离线、清扫过期租约、到期卡按建议处理、执行判停滞或总超时并 kill（发 kill 后久不回报补记 killed）、
+      适配器调用内核截止、没有 runner 能接的任务包发卡、外部状态轮询、到点唤醒（已有统筹者在跑则跳过）、补齐缺失唤醒。
+    codeRefs: [packages/kernel/src/watchdog.ts]
+    provides: [if.kernel.liveness.Watchdog]
+
+  - id: kernel.liveness.scheduler
+    parent: kernel.liveness
+    name: 看门狗调度
+    kind: component
+    summary: 用 pg-boss 按间隔驱动看门狗，多实例只跑一份
+    responsibility: WatchdogScheduler：在业务 schema 对应的 pg-boss schema 建 stately 队列，处理完一轮再排下一轮（singletonKey），停止时优雅关闭。
+    codeRefs: [packages/kernel/src/scheduler.ts]
+    provides: [if.kernel.liveness.WatchdogScheduler]
+
+  - id: kernel.liveness.recovery
+    parent: kernel.liveness
+    name: 启动恢复
+    kind: component
+    summary: 启动时结算丢失的工作并唤醒该醒的任务
+    responsibility: >-
+      recover：清扫过期租约、清掉同步等待记录、心跳过期的 runner 标离线；离线 runner 名下的执行、账说已派发但任务包已丢的执行与调用判失败（env.runner_offline，不计尝试）并唤醒；
+      最后立即触发已到点的唤醒。不补发任务包（提示词全文与令牌不在账里）。
+    codeRefs: [packages/kernel/src/recovery.ts]
+
+  # ───────────────────────── kernel.orchestration ─────────────────────────
+  - id: kernel.orchestration.launcher
+    parent: kernel.orchestration
+    name: 统筹者唤起
+    kind: component
+    summary: 带着现状快照与增量事件唤起统筹者会话
+    responsibility: >-
+      OrchestratorLauncher.wake：持任务锁，跳过终态、预算暂停、已有统筹者在跑、等人答卡时的兜底唤醒、环境故障卡未答时的失败重唤；整理台另看池里有无待整理信号与按天预算。
+      拼提示词（档案、唤醒事件窗口、验收项现状、OrchestratorSnapshot、初始剧本、整理台池视图）交给注入的 PromptBuilder，按生效剧本定会话可写与否，派统筹执行并记 orchestrator.woken。
+      另提供开跑前重拼提示词与快照计算。
+    codeRefs: [packages/kernel/src/services/orchestrator.ts]
+    provides: [if.kernel.orchestration.OrchestratorLauncher, if.kernel.orchestration.PromptBuilder, if.kernel.orchestration.WAKE_EVENTS_MAX, if.kernel.orchestration.refreshOrchestratorPrompt]
+
+  - id: kernel.orchestration.executions
+    parent: kernel.orchestration
+    name: 执行派发
+    kind: component
+    summary: 派执行会话、签令牌、下发 kill 与记同步等待
+    responsibility: >-
+      ExecutionService.dispatch：写 execution.dispatched（提示词哈希、模板版本、预算缺省取剩余硬预算），经注入的 TokenIssuer 签本次执行的 MCP 令牌、
+      按配方与角色经 AllowedCommandsFn 生成放行命令，入 session.start 任务包（续会话沿用句柄与 runner 亲和）；killTx 下发 session.kill；同步等待记录。
+    codeRefs: [packages/kernel/src/services/executions.ts]
+    provides: [if.kernel.orchestration.ExecutionService, if.kernel.orchestration.TokenIssuer, if.kernel.orchestration.AllowedCommandsFn]
+
+  - id: kernel.orchestration.playbook-hooks
+    parent: kernel.orchestration
+    name: 剧本钩子
+    kind: component
+    summary: 经注入的钩子得出本任务生效的剧本与参数
+    responsibility: PlaybookHooks 端口与缺省实现（一律 standard）；读录入时定下的初始剧本与环境策略，经钩子解析生效剧本与 driverWrites；环境策略是否允许免确认开工。
+    codeRefs: [packages/kernel/src/playbook.ts]
+    provides: [if.kernel.orchestration.PlaybookHooks, if.kernel.orchestration.defaultPlaybookHooks, if.kernel.orchestration.effectivePlaybookOf, if.kernel.orchestration.autoStartAllowed]
+
+  - id: kernel.orchestration.dossiers
+    parent: kernel.orchestration
+    name: 任务档案
+    kind: component
+    summary: 读写任务档案、记带理由的决定
+    responsibility: DossierService：读档案、按版本号乐观更新（dossier.updated）、记决定（decision.recorded，越过默认处单独标出）；档案是统筹者与执行者的共享记忆。
+    codeRefs: [packages/kernel/src/services/dossiers.ts]
+    provides: [if.kernel.orchestration.DossierService]
+
+  - id: kernel.orchestration.queries
+    parent: kernel.orchestration
+    name: 只读查询
+    kind: component
+    summary: 给各服务读任务行、执行行与派生状态
+    responsibility: 读任务 / 执行投影行、是否终态、是否有在跑的统筹者、最近适配器结果、分支对齐、任务工作树、某位置之前的 head、代码平台能力、已花费用；只读，不写账。
+    codeRefs: [packages/kernel/src/services/queries.ts]
+    provides: [if.kernel.orchestration.taskWorktree]
+    dataStructures: [ds.TaskRow, ds.ExecutionRow]
+
+  # ───────────────────────── kernel.tasks ─────────────────────────
+  - id: kernel.tasks.task-service
+    parent: kernel.tasks
+    name: 任务服务
+    kind: component
+    summary: 从信号建任务，给出任务摘要、详情与事件流
+    responsibility: >-
+      TaskService.createFromSignal：写 signal.recorded 与 task.created（初始剧本、按剧本钩子与配方定预算、钉住工作环境），按需预建工作树，立即排唤醒；
+      幂等键重复录入返回已有任务。另有任务摘要列表、详情（档案、清单、待答卡）与分页事件。
+    codeRefs: [packages/kernel/src/services/tasks.ts]
+    provides: [if.kernel.tasks.TaskService]
+
+  - id: kernel.tasks.acceptance
+    parent: kernel.tasks
+    name: 验收清单与验证计划
+    kind: component
+    summary: 起草与改验收清单、记基线与判项、管验证计划
+    responsibility: >-
+      AcceptanceService：起草 / 改清单（新版本撤旧确认卡）、请求确认（发确认卡）、记基线与判项结论；
+      PlanService：起草验证计划、请求确认、记真机运行与判定。只写自己对象的事件。
+    codeRefs: [packages/kernel/src/services/acceptance.ts]
+    provides: [if.kernel.tasks.AcceptanceService, if.kernel.tasks.PlanService]
+
+  - id: kernel.tasks.cards
+    parent: kernel.tasks
+    name: 决策卡
+    kind: component
+    summary: 发出决策卡，按人的回答或到期默认产出后果
+    responsibility: >-
+      openCardTx 发卡（放行卡附内核核对、可预检拒发，确认卡附清单快照）；CardService 答卡、撤卡、到期按建议默认处理（放行卡除外）。
+      答卡按卡类产出后果：确认清单与计划、放行并在同一事务发起合入、预算续上、放弃任务，然后排唤醒；确认卡版本过期即撤卡。
+    codeRefs: [packages/kernel/src/services/cards.ts]
+    provides: [if.kernel.tasks.CardService, if.kernel.tasks.openCardTx]
+
+  - id: kernel.tasks.metrics
+    parent: kernel.tasks
+    name: 度量与通知
+    kind: component
+    summary: 按剧本算任务度量，列出给主人的通知
+    responsibility: playbookMetrics：时间窗内按剧本统计任务结果、时长、花费与卡等人；listNotifications：从账里挑出合入、放弃、卡等太久、剧本切换等给主人的通知。只读。
+    codeRefs: [packages/kernel/src/services/metrics.ts]
+    provides: [if.kernel.tasks.playbookMetrics, if.kernel.tasks.listNotifications]
+
+  # ───────────────────────── kernel.dispatch ─────────────────────────
+  - id: kernel.dispatch.flow
+    parent: kernel.dispatch
+    name: 需求圈反应
+    kind: component
+    summary: 把适配器结果归一成变更、检查、判项与真机记录
+    responsibility: >-
+      flowReactor：按调用的幂等键前缀归一 adapter.completed——变更状态（无变化不记，合上即 task.merged 终态）、检查状态（终态且是当前 head 即判 ci 项）、
+      判项命令的基线与 head 结论（全命中存量红登记记豁免）、审核结论判 review 项、真机运行记录并归还以调用为持有者的租约。另给幂等键编解码。
+    codeRefs: [packages/kernel/src/flow.ts]
+    provides: [if.kernel.dispatch.checkKey, if.kernel.dispatch.checkSkipReason]
+
+  - id: kernel.dispatch.adapter-calls
+    parent: kernel.dispatch
+    name: 适配器调用入口
+    kind: component
+    summary: 以幂等键与超时发起适配器调用，自动补配方参数
+    responsibility: AdapterCalls / requestAdapterCallTx：按任务仓库补完整配方与钉住的工作环境，写 adapter.requested（参数哈希），入 adapter.call 任务包（真机调用要求 runner 接着那台设备）；按仓库名找配方。
+    codeRefs: [packages/kernel/src/services/adapters.ts]
+    provides: [if.kernel.dispatch.AdapterCalls]
+
+  - id: kernel.dispatch.jobs
+    parent: kernel.dispatch
+    name: 任务包队列与 runner
+    kind: component
+    summary: 给 runner 派任务包、收回报，并管 runner 在线状态
+    responsibility: >-
+      JobQueue：入队（与触发事件同事务、亲和 runner 离线即挂起）、按主人 / 配方 / 设备 / 亲和原子认领、把 JobUpdate 转成执行与调用事件（迟到的回报按已结算去重，轮询结果交给轮询处理器）。
+      RunnerService：注册（同一 runner 重启时结算它手里丢失的工作）、心跳（返回该中止的任务包）、离线结算与挂起任务包。
+    codeRefs: [packages/kernel/src/services/jobs.ts]
+    provides: [if.kernel.dispatch.JobQueue, if.kernel.dispatch.RunnerService, if.kernel.dispatch.PollResultHandler]
+
+  - id: kernel.dispatch.external
+    parent: kernel.dispatch
+    name: 外部状态轮询
+    kind: component
+    summary: 按节奏轮询变更与检查状态，只在变化时记账
+    responsibility: ExternalPoller：看门狗每轮对有变更的非终态任务按配方节奏发 get_change / get_checks 轮询任务包（不进账，上次没回不再发）；结果归一后无变化翻倍放慢、有变化重置，连续故障只记首次与恢复。
+    codeRefs: [packages/kernel/src/services/external.ts]
+    provides: [if.kernel.dispatch.ExternalPoller]
+
+  - id: kernel.dispatch.leases
+    parent: kernel.dispatch
+    name: 租约
+    kind: component
+    summary: 原子获取设备、端口与工作区租约，到期回收
+    responsibility: LeaseService：按固定顺序原子拿全或排队、续约、归还（唤醒排队者）、withLease 包裹、过期清扫、列出租约与队列。
+    codeRefs: [packages/kernel/src/services/leases.ts]
+    provides: [if.kernel.dispatch.LeaseService]
+
+  - id: kernel.dispatch.device-runs
+    parent: kernel.dispatch
+    name: 真机构建与运行
+    kind: component
+    summary: 按确认的计划出构建、拿设备租约、发起场景运行
+    responsibility: DeviceRuns：取已确认计划，按配方真机接入件确保有该提交的构建身份（没有就发构建调用并报构建中），拿设备租约（持有者为调用），发 run_scenario（参数全由配方、计划与构建身份得出）。
+    codeRefs: [packages/kernel/src/services/device-runs.ts]
+    provides: [if.kernel.dispatch.DeviceRuns, if.kernel.dispatch.BuildPendingError]
+
+  # ───────────────────────── kernel.intake ─────────────────────────
+  - id: kernel.intake.signal-rules
+    parent: kernel.intake
+    name: 信号规则
+    kind: component
+    summary: 守住信号原文与挂接规则，按事件排整理唤醒
+    responsibility: 守卫：信号原文不可改、只能挂到草稿任务、同一时刻只挂一个任务、确认后只能退回池；反应：放弃时放回信号、进池排整理唤醒、草稿变动唤醒、整理台重新排队。
+    codeRefs: [packages/kernel/src/signal-rules.ts]
+
+  - id: kernel.intake.signals
+    parent: kernel.intake
+    name: 信号池服务
+    kind: component
+    summary: 录入信号、整理、起草与改动草稿任务
+    responsibility: >-
+      SignalService：录入（池模式进池、直接模式建任务）、整理（重复 / 无效 / 挂接）、建草稿任务、改草稿、移动与拆分信号、合并与放弃草稿、立即整理；
+      整理台任务的建立与攒批窗口唤醒、草稿变动唤醒、整理台池视图。
+    codeRefs: [packages/kernel/src/services/signals.ts]
+    provides: [if.kernel.intake.SignalService]
+
+  - id: kernel.intake.budget
+    parent: kernel.intake
+    name: 整理台按天预算
+    kind: component
+    summary: 整理台当天花费到上限时停派会话并问人
+    responsibility: checkIntakeDailyBudgetTx：按内核本地日统计整理会话花费，到上限出裁决卡（今天继续 / 明天再整理），选明天则排次日 0 点唤醒。
+    codeRefs: [packages/kernel/src/services/intake-budget.ts]
+
+relations:
+  # ── 账：守卫、投影、反应、收尾 ──
+  - id: rel.kernel.ledger-parse-event
+    from: kernel.ledger.ledger
+    to: share.contracts
+    type: queries
+    interface: if.share.contracts.parseEvent
+    purpose: 写账前按契约校验事件
+    description: Tx.append 先用 parseEvent 校验并补齐信封（事件 ID、版本、时间），不合契约抛 ZodError，整笔回滚。
+  - id: rel.kernel.ledger-project
+    from: kernel.ledger.ledger
+    to: kernel.ledger.projector
+    type: commands
+    mode: async
+    purpose: 同事务更新投影表
+    description: 事件写入后在同一事务里调 project；rebuildProjections 清空投影表后按 seq 全量重放。
+  - id: rel.kernel.ledger-guards
+    from: kernel.ledger.ledger
+    to: kernel.rules.ledger-rules
+    type: queries
+    mode: async
+    interface: if.kernel.ledger.Guard
+    via: port:if.kernel.ledger.Guard
+    purpose: 写入前拦下违反不变量的事件
+    description: Tx.append 在写 events 前依次调用登记的守卫（createKernel 登记 rules.guards），抛错即整笔回滚。
+  - id: rel.kernel.ledger-signal-guard
+    from: kernel.ledger.ledger
+    to: kernel.intake.signal-rules
+    type: queries
+    mode: async
+    interface: if.kernel.ledger.Guard
+    via: port:if.kernel.ledger.Guard
+    purpose: 写入前守住信号池规则
+    description: 信号守卫随 rules.guards 一并登记，写信号、挂接、草稿类事件前检查。
+  - id: rel.kernel.ledger-reactors
+    from: kernel.ledger.ledger
+    to: kernel.rules.ledger-rules
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Reactor
+    via: port:if.kernel.ledger.Reactor
+    purpose: 让事件在同事务里生出后续
+    description: 事件写入并投影后依次调用登记的反应（故障、预算、唤醒、终态收尾等），反应可再写事件；重放时不调。
+  - id: rel.kernel.ledger-signal-reactors
+    from: kernel.ledger.ledger
+    to: kernel.intake.signal-rules
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Reactor
+    via: port:if.kernel.ledger.Reactor
+    purpose: 让信号事件排整理与草稿唤醒
+    description: 信号池反应（放回信号、进池排整理、草稿变动、整理台重排）作为反应列表的一段被依次调用。
+  - id: rel.kernel.ledger-flow-reactor
+    from: kernel.ledger.ledger
+    to: kernel.dispatch.flow
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Reactor
+    via: port:if.kernel.ledger.Reactor
+    purpose: 让适配器结果归一成领域事件
+    description: flowReactor 排在反应列表末尾，adapter.completed 与 review.recorded 写入后同事务归一。
+  - id: rel.kernel.ledger-finalize
+    from: kernel.ledger.ledger
+    to: kernel.liveness.wakeups
+    type: commands
+    mode: async
+    via: channel:callback@kernel.ledger.ledger
+    purpose: 提交前补齐下次唤醒
+    description: Ledger.tx 提交前调用登记的收尾函数（createKernel 登记 ensureNextWakeup），对本事务动过的任务补唤醒。
+
+  # ── 装配 ──
+  - id: rel.kernel.factory-recover
+    from: kernel.assembly.factory
+    to: kernel.liveness.recovery
+    type: commands
+    mode: async
+    purpose: 启动时恢复
+    description: Kernel.recover() 以租约、runner、看门狗服务调用 recover。
+  - id: rel.kernel.factory-scheduler
+    from: kernel.assembly.factory
+    to: kernel.liveness.scheduler
+    type: commands
+    mode: async
+    interface: if.kernel.liveness.WatchdogScheduler
+    purpose: 启动看门狗定时驱动
+    description: Kernel.startScheduler() 建 WatchdogScheduler（pg-boss schema 由业务 schema 推出）并 start，tick 绑定 watchdog.tick。
+
+  # ── 活性 ──
+  - id: rel.kernel.scheduler-tick
+    from: kernel.liveness.scheduler
+    to: kernel.liveness.watchdog
+    type: commands
+    mode: async
+    via: channel:callback@kernel.liveness.scheduler
+    purpose: 每轮跑一次看门狗
+    description: pg-boss 队列的 worker 每取到「下一轮」就调用注入的 tick（watchdog.tick），完成后再排下一轮。
+  - id: rel.kernel.watchdog-wake
+    from: kernel.liveness.watchdog
+    to: kernel.orchestration.launcher
+    type: commands
+    interface: if.kernel.orchestration.OrchestratorLauncher
+    purpose: 到点唤醒统筹者
+    description: fireDueWakeups 在每个任务的事务里先写 wakeup.fired，再以合并的原因调 launcher.wake（已有统筹者在跑则跳过）。
+  - id: rel.kernel.watchdog-kill
+    from: kernel.liveness.watchdog
+    to: kernel.orchestration.executions
+    type: commands
+    interface: if.kernel.orchestration.ExecutionService
+    purpose: 收掉停滞或超时的会话
+    description: 判停滞或总超时后写 watchdog.stalled，并经 killTx 下发 session.kill 任务包。
+  - id: rel.kernel.watchdog-cards
+    from: kernel.liveness.watchdog
+    to: kernel.tasks.cards
+    type: commands
+    interface: if.kernel.tasks.CardService
+    purpose: 处理到期卡、没人接时问人
+    description: 每轮调 cards.expireDue 按建议处理到期卡；任务包久无 runner 能接时经 openCardTx 发裁决卡。
+  - id: rel.kernel.watchdog-leases
+    from: kernel.liveness.watchdog
+    to: kernel.dispatch.leases
+    type: commands
+    interface: if.kernel.dispatch.LeaseService
+    purpose: 回收过期租约
+    description: 每轮调 leases.sweepExpired。
+  - id: rel.kernel.watchdog-runners
+    from: kernel.liveness.watchdog
+    to: kernel.dispatch.jobs
+    type: commands
+    interface: if.kernel.dispatch.RunnerService
+    purpose: 把失联的 runner 标离线
+    description: 每轮取心跳超时的 runner（staleRunners）逐个 markOffline，结算其手里的执行与任务包。
+  - id: rel.kernel.watchdog-poll
+    from: kernel.liveness.watchdog
+    to: kernel.dispatch.external
+    type: commands
+    interface: if.kernel.dispatch.ExternalPoller
+    purpose: 按周期查变更与检查状态
+    description: 每轮调 poller.pollAll 发到期的轮询任务包。
+  - id: rel.kernel.watchdog-ledger
+    from: kernel.liveness.watchdog
+    to: kernel.ledger.ledger
+    type: commands
+    interface: if.kernel.ledger.Tx
+    purpose: 记触发、停滞、截止与收掉
+    description: 每个任务一个事务，写 wakeup.fired、watchdog.stalled、调用内核截止的 adapter.completed、kill 未回报时补记的 execution.finished。
+  - id: rel.kernel.recovery-watchdog
+    from: kernel.liveness.recovery
+    to: kernel.liveness.watchdog
+    type: commands
+    mode: async
+    interface: if.kernel.liveness.Watchdog
+    purpose: 恢复后立即触发到点唤醒
+    description: recover 结算完丢失的工作后调 watchdog.fireDueWakeups。
+  - id: rel.kernel.recovery-runners
+    from: kernel.liveness.recovery
+    to: kernel.dispatch.jobs
+    type: commands
+    mode: async
+    interface: if.kernel.dispatch.RunnerService
+    purpose: 结算离线 runner 的工作
+    description: 心跳过期的 runner 经 markOffline 标离线，其运行中执行判失败。
+  - id: rel.kernel.recovery-leases
+    from: kernel.liveness.recovery
+    to: kernel.dispatch.leases
+    type: commands
+    mode: async
+    interface: if.kernel.dispatch.LeaseService
+    purpose: 回收停机期间过期的租约
+    description: 启动时先调 leases.sweepExpired。
+  - id: rel.kernel.recovery-ledger
+    from: kernel.liveness.recovery
+    to: kernel.ledger.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Tx
+    purpose: 判丢失的执行与调用失败
+    description: 对离线 runner 的执行、任务包已丢的执行与调用写失败事件（幂等键 recovery:*），故障为 env.runner_offline。
+  - id: rel.kernel.recovery-wakeups
+    from: kernel.liveness.recovery
+    to: kernel.liveness.wakeups
+    type: commands
+    mode: async
+    interface: if.kernel.liveness.scheduleWakeup
+    purpose: 让统筹者重新决定
+    description: 每个判失败的执行排 recovery.* 唤醒（带失败事件的 causeSeq）。
+  - id: rel.kernel.recovery-faults
+    from: kernel.liveness.recovery
+    to: kernel.rules.faults
+    type: queries
+    purpose: 构造 runner 离线故障
+    description: runnerOfflineFault 按自愈手册构造不计尝试的环境故障。
+  - id: rel.kernel.wakeups-ledger
+    from: kernel.liveness.wakeups
+    to: kernel.ledger.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Tx
+    purpose: 把唤醒记成账上的事实
+    description: 在调用方事务里写 wakeup.scheduled；统筹者自定唤醒时以 seen-by 原因写 wakeup.fired 撤掉兜底唤醒。
+  - id: rel.kernel.wakeups-queries
+    from: kernel.liveness.wakeups
+    to: kernel.orchestration.queries
+    type: queries
+    mode: async
+    purpose: 跳过终态任务
+    description: 排唤醒与补唤醒前读任务行判终态与整理台。
+
+  # ── 兜底规则 ──
+  - id: rel.kernel.rules-wakeups
+    from: kernel.rules.ledger-rules
+    to: kernel.liveness.wakeups
+    type: commands
+    mode: async
+    interface: if.kernel.liveness.scheduleWakeup
+    purpose: 让事件唤醒统筹者重新评估
+    description: 卡答、执行结束、适配器结果、提问、预算软上限、合入待定、依赖任务终态等事件写入后排唤醒（带 causeSeq，统筹失败按退避、执行结束按合批）。
+  - id: rel.kernel.rules-adapter-calls
+    from: kernel.rules.ledger-rules
+    to: kernel.dispatch.adapter-calls
+    type: commands
+    mode: async
+    purpose: 终态后清理任务工作树
+    description: 任务终态或 runner 重新注册时，经 requestAdapterCallTx 发 cleanup:<taskId> 清理调用（失败重试至多 3 次）。
+  - id: rel.kernel.rules-kill
+    from: kernel.rules.ledger-rules
+    to: kernel.dispatch.jobs
+    type: commands
+    mode: async
+    purpose: 终态时收掉在跑的会话
+    description: 任务终态时对在跑的执行经 enqueueJobTx 入 session.kill 任务包；已结算的执行与调用的未完成任务包标 void。
+  - id: rel.kernel.rules-cards
+    from: kernel.rules.ledger-rules
+    to: kernel.tasks.cards
+    type: commands
+    mode: async
+    interface: if.kernel.tasks.openCardTx
+    purpose: 要人动手时发卡
+    description: 环境故障要人处理、预算硬上限暂停时经 openCardTx 发裁决卡；同类环境故障已有待答卡时不重复发。
+  - id: rel.kernel.rules-faults
+    from: kernel.rules.ledger-rules
+    to: kernel.rules.faults
+    type: queries
+    purpose: 统一故障的处置建议
+    description: 记故障前经 normalizeFault 按自愈手册统一 healHint、retryable 与 needsHuman。
+  - id: rel.kernel.rules-heal
+    from: kernel.rules.ledger-rules
+    to: playbooks.heal
+    type: queries
+    interface: if.kernel.rules.HealBook
+    via: port:if.kernel.rules.HealBook
+    purpose: 取要人动手卡的正文与手册 id
+    description: 发环境故障卡、记 heal.attempted 时读上下文里注入的自愈手册条目（cardText、healId）。
+  - id: rel.kernel.faults-heal
+    from: kernel.rules.faults
+    to: playbooks.heal
+    type: queries
+    interface: if.kernel.rules.HealBook
+    via: port:if.kernel.rules.HealBook
+    purpose: 按手册统一故障处置
+    description: normalizeFault 读注入的 HealBook 条目，替换 healHint、定 retryable 与 needsHuman；没注入时保留适配器给的。
+  - id: rel.kernel.rules-merge-guard
+    from: kernel.rules.ledger-rules
+    to: kernel.rules.merge-gate
+    type: queries
+    purpose: 核对合入针对当前 head 的放行
+    description: merge.requested 守卫调用 assertReleasedForHead。
+  - id: rel.kernel.rules-defect-gate
+    from: kernel.rules.ledger-rules
+    to: kernel.rules.defect-gate
+    type: queries
+    mode: async
+    purpose: 缺陷任务报待放行前核对
+    description: task.phase_reported(awaiting_release) 守卫调用 defectBlockers，有阻塞项即拒绝。
+  - id: rel.kernel.rules-declarations
+    from: kernel.rules.ledger-rules
+    to: kernel.rules.declarations
+    type: queries
+    mode: async
+    purpose: 找出该唤醒的依赖任务
+    description: 任务终态时调 wakeTargetsOnTerminal，取声明依赖它的任务逐个排唤醒。
+  - id: rel.kernel.rules-playbook
+    from: kernel.rules.ledger-rules
+    to: kernel.orchestration.playbook-hooks
+    type: queries
+    mode: async
+    interface: if.kernel.orchestration.effectivePlaybookOf
+    purpose: 核对 autoStart 确认的剧本
+    description: acceptance.confirmed 由统筹者按 autoStart 写入时，经 effectivePlaybookOf 与 autoStartAllowed 核对生效剧本与环境策略。
+  - id: rel.kernel.rules-draft
+    from: kernel.rules.ledger-rules
+    to: kernel.intake.signals
+    type: commands
+    mode: async
+    purpose: 草稿任务的人为改动立即唤醒
+    description: 草稿任务上的卡答等事件经 scheduleDraftChangedTx 排草稿变动唤醒。
+  - id: rel.kernel.rules-queries
+    from: kernel.rules.ledger-rules
+    to: kernel.orchestration.queries
+    type: queries
+    mode: async
+    purpose: 读任务现状与已花费用
+    description: 守卫与反应读任务行（终态、放行、证据数、状态）与已花费用。
+  - id: rel.kernel.merge-call
+    from: kernel.rules.merge-gate
+    to: kernel.dispatch.adapter-calls
+    type: commands
+    mode: async
+    purpose: 门满足后发起合入
+    description: requestMergeTx 写 merge.requested 后经 requestAdapterCallTx 发 merge_after_approval（ref、expectedSha，幂等键 merge:<task>:<head>）。
+  - id: rel.kernel.merge-verify
+    from: kernel.rules.merge-gate
+    to: kernel.rules.verify
+    type: queries
+    mode: async
+    purpose: 取验证还差的阻塞项
+    description: mergeBlockers 在放行核对之后追加 verifyBlockers 的结果。
+  - id: rel.kernel.merge-wakeups
+    from: kernel.rules.merge-gate
+    to: kernel.liveness.wakeups
+    type: commands
+    mode: async
+    interface: if.kernel.liveness.scheduleWakeup
+    purpose: 合入被拒时唤醒统筹者
+    description: 合入门不满足时排 merge.refused:<原因> 唤醒（放行后自动发起时不抛错）。
+  - id: rel.kernel.verify-defect
+    from: kernel.rules.verify
+    to: kernel.rules.defect-gate
+    type: queries
+    mode: async
+    purpose: 加上缺陷放行门的阻塞项
+    description: verifyBlockers 末尾追加 defectBlockers。
+  - id: rel.kernel.check-verify
+    from: kernel.rules.kernel-check
+    to: kernel.rules.verify
+    type: queries
+    mode: async
+    purpose: 放行卡上列出验证阻塞项
+    description: releaseKernelCheck 调 verifyBlockers 作为核对的一项。
+
+  # ── 统筹与执行 ──
+  - id: rel.kernel.launcher-prompt
+    from: kernel.orchestration.launcher
+    to: playbooks.orchestrator
+    type: queries
+    interface: if.kernel.orchestration.PromptBuilder
+    via: port:if.kernel.orchestration.PromptBuilder
+    purpose: 拼出统筹者提示词
+    description: 唤起与开跑前重拼时，把任务、档案、增量事件、验收项现状、现状快照、初始剧本、整理台池视图交给注入的 PromptBuilder.build，取回全文、模板 id 与版本、任务追加段。
+  - id: rel.kernel.launcher-dispatch
+    from: kernel.orchestration.launcher
+    to: kernel.orchestration.executions
+    type: commands
+    mode: async
+    interface: if.kernel.orchestration.ExecutionService
+    purpose: 派统筹执行会话
+    description: wake 在同一事务里以 orchestrator 角色调 dispatch（整理台用整理模型、只读与单次预算上限），随后写 orchestrator.woken。
+  - id: rel.kernel.launcher-playbook
+    from: kernel.orchestration.launcher
+    to: kernel.orchestration.playbook-hooks
+    type: queries
+    mode: async
+    interface: if.kernel.orchestration.effectivePlaybookOf
+    purpose: 定统筹会话可写与否
+    description: sessionMode 取生效剧本的 driverWrites；可写且工作树已建则在任务工作树可写运行。
+  - id: rel.kernel.launcher-intake
+    from: kernel.orchestration.launcher
+    to: kernel.intake.signals
+    type: queries
+    mode: async
+    purpose: 判池里有无待整理并取池视图
+    description: 整理台唤起前查 poolPending，拼提示词时取 intakeViewOf。
+  - id: rel.kernel.launcher-intake-budget
+    from: kernel.orchestration.launcher
+    to: kernel.intake.budget
+    type: commands
+    mode: async
+    purpose: 整理台超预算时停派
+    description: 派整理会话前在同一事务调 checkIntakeDailyBudgetTx，不放行时它顺带出卡或排次日唤醒。
+  - id: rel.kernel.launcher-declarations
+    from: kernel.orchestration.launcher
+    to: kernel.rules.declarations
+    type: queries
+    mode: async
+    purpose: 快照里带上任务依赖与重叠
+    description: 计算 OrchestratorSnapshot 时调 relationsOf。
+  - id: rel.kernel.launcher-queries
+    from: kernel.orchestration.launcher
+    to: kernel.orchestration.queries
+    type: queries
+    mode: async
+    purpose: 读任务现状算快照
+    description: 读任务行、在跑统筹者、分支对齐、工作树、代码平台能力等组成快照与跳过判断。
+  - id: rel.kernel.executions-token
+    from: kernel.orchestration.executions
+    to: server.mcp
+    type: queries
+    mode: async
+    interface: if.kernel.orchestration.TokenIssuer
+    via: port:if.kernel.orchestration.TokenIssuer
+    purpose: 给会话签本次执行的 MCP 令牌
+    description: dispatch 调注入的 TokenIssuer.issue（任务、执行、角色，整理台加 scope=intake），令牌放进 session.start 任务包。
+  - id: rel.kernel.executions-allowed
+    from: kernel.orchestration.executions
+    to: playbooks.heal
+    type: queries
+    interface: if.kernel.orchestration.AllowedCommandsFn
+    via: port:if.kernel.orchestration.AllowedCommandsFn
+    purpose: 按配方与角色生成放行命令
+    description: 派可写或调研角色时调注入的 AllowedCommandsFn(recipe, role)；只读角色直接为空，未注入时为空。
+  - id: rel.kernel.executions-jobs
+    from: kernel.orchestration.executions
+    to: kernel.dispatch.jobs
+    type: commands
+    mode: async
+    purpose: 下发起会话与杀会话的任务包
+    description: dispatch 入 session.start、killTx 入 session.kill（发往执行所在 runner）；与 execution.dispatched 同事务。
+  - id: rel.kernel.executions-ledger
+    from: kernel.orchestration.executions
+    to: kernel.ledger.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Tx
+    purpose: 记下派了什么执行
+    description: 写 execution.dispatched（提示词哈希、模板版本、预算、超时）。
+  - id: rel.kernel.playbook-hooks
+    from: kernel.orchestration.playbook-hooks
+    to: playbooks.orchestrator
+    type: queries
+    interface: if.kernel.orchestration.PlaybookHooks
+    via: port:if.kernel.orchestration.PlaybookHooks
+    purpose: 解析生效剧本与 driverWrites
+    description: effectivePlaybookOf 调注入钩子的 resolve（档案 playbook.chosen > 初始剧本）与 params；未注入时一律 standard。
+  - id: rel.kernel.dossiers-ledger
+    from: kernel.orchestration.dossiers
+    to: kernel.ledger.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Tx
+    purpose: 记档案改动与决定
+    description: 写 dossier.updated（版本号由守卫校验递增）与 decision.recorded。
+
+  # ── 任务、清单与卡 ──
+  - id: rel.kernel.tasks-ledger
+    from: kernel.tasks.task-service
+    to: kernel.ledger.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Tx
+    purpose: 记录信号与新任务
+    description: createFromSignal 写 signal.recorded 与 task.created（幂等键命中返回已有任务）。
+  - id: rel.kernel.tasks-wakeups
+    from: kernel.tasks.task-service
+    to: kernel.liveness.wakeups
+    type: commands
+    mode: async
+    interface: if.kernel.liveness.scheduleWakeup
+    purpose: 建任务后立刻唤醒统筹者
+    description: 新任务排 task.created 唤醒。
+  - id: rel.kernel.tasks-prewt
+    from: kernel.tasks.task-service
+    to: kernel.dispatch.adapter-calls
+    type: commands
+    mode: async
+    purpose: 预建任务工作树
+    description: 剧本参数要求时经 requestAdapterCallTx 发 prepare_worktree（幂等键 prewt:）。
+  - id: rel.kernel.tasks-playbook
+    from: kernel.tasks.task-service
+    to: playbooks.orchestrator
+    type: queries
+    interface: if.kernel.orchestration.PlaybookHooks
+    via: port:if.kernel.orchestration.PlaybookHooks
+    purpose: 按剧本与配方定初始预算
+    description: 建任务时调注入钩子的 params(playbook, recipe)，预算取录入显式 > 剧本默认 > 内核默认。
+  - id: rel.kernel.acceptance-cards
+    from: kernel.tasks.acceptance
+    to: kernel.tasks.cards
+    type: commands
+    mode: async
+    interface: if.kernel.tasks.openCardTx
+    purpose: 请人确认清单与计划
+    description: requestConfirmation 经 openCardTx 发确认卡；清单出新版本时撤掉旧版本的待答确认卡。
+  - id: rel.kernel.acceptance-ledger
+    from: kernel.tasks.acceptance
+    to: kernel.ledger.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Tx
+    purpose: 记清单、基线、判项与计划
+    description: 写 acceptance.drafted / changed / baseline_recorded / item_judged、plan.* 与 run 记录。
+  - id: rel.kernel.cards-merge
+    from: kernel.tasks.cards
+    to: kernel.rules.merge-gate
+    type: commands
+    mode: async
+    purpose: 人放行后立即发起合入
+    description: 放行卡选放行时，在答卡同一事务里调 startMergeAfterGrantTx。
+  - id: rel.kernel.cards-kernel-check
+    from: kernel.tasks.cards
+    to: kernel.rules.kernel-check
+    type: queries
+    mode: async
+    purpose: 放行卡附上内核核对
+    description: 发放行卡时调 releaseKernelCheck；precheck 时有阻塞项即拒发。
+  - id: rel.kernel.cards-snapshot
+    from: kernel.tasks.cards
+    to: kernel.rules.confirm-snapshot
+    type: queries
+    purpose: 确认卡附上清单快照
+    description: 发清单确认卡时调 acceptanceSnapshot（带任务仓库的配方）。
+  - id: rel.kernel.cards-draft
+    from: kernel.tasks.cards
+    to: kernel.intake.signals
+    type: commands
+    mode: async
+    purpose: 放弃任务时撤掉草稿唤醒
+    description: 答卡选放弃时调 withdrawDraftChangedTx。
+  - id: rel.kernel.cards-wakeups
+    from: kernel.tasks.cards
+    to: kernel.liveness.wakeups
+    type: commands
+    mode: async
+    interface: if.kernel.liveness.scheduleWakeup
+    purpose: 答卡或到期后唤醒统筹者
+    description: 答卡、到期默认、撤卡后排 card.* 唤醒（带事件 causeSeq）。
+  - id: rel.kernel.cards-ledger
+    from: kernel.tasks.cards
+    to: kernel.ledger.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Tx
+    purpose: 记发卡、答卡与卡的后果
+    description: 写 card.opened / answered / expired_default_applied / withdrawn，以及答卡产出的确认、放行、续上、放弃事件。
+
+  # ── 适配器调用、租约与真机 ──
+  - id: rel.kernel.adapter-calls-jobs
+    from: kernel.dispatch.adapter-calls
+    to: kernel.dispatch.jobs
+    type: commands
+    mode: async
+    purpose: 把调用变成 runner 的任务包
+    description: requestAdapterCallTx 写 adapter.requested 后在同一事务经 enqueueJobTx 入 adapter.call 任务包。
+  - id: rel.kernel.adapter-calls-ledger
+    from: kernel.dispatch.adapter-calls
+    to: kernel.ledger.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Tx
+    purpose: 记下发起了什么调用
+    description: 写 adapter.requested（参数哈希、超时、幂等键 adapter:<key> 去重）。
+  - id: rel.kernel.jobs-poll-result
+    from: kernel.dispatch.jobs
+    to: kernel.dispatch.external
+    type: commands
+    mode: async
+    via: channel:callback@kernel.dispatch.jobs
+    purpose: 把轮询结果交给轮询器归一
+    description: JobQueue.update 收到轮询调用（poll 前缀）的 adapter.completed 时不写 adapter.* 账，调 createKernel 接上的 pollHandler（ExternalPoller.onResult）。
+  - id: rel.kernel.jobs-ledger
+    from: kernel.dispatch.jobs
+    to: kernel.ledger.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Tx
+    purpose: 把 runner 回报记成事件
+    description: 回报转成 execution.started / progress / finished / reported_done 与 adapter.completed；注册与离线写 runner.registered / runner.offline 与失败结算。
+  - id: rel.kernel.jobs-wakeups
+    from: kernel.dispatch.jobs
+    to: kernel.liveness.wakeups
+    type: commands
+    mode: async
+    interface: if.kernel.liveness.scheduleWakeup
+    purpose: runner 丢工作后唤醒统筹者
+    description: runner 重启或离线结算执行失败后排 runner.restarted / runner.offline 唤醒。
+  - id: rel.kernel.jobs-faults
+    from: kernel.dispatch.jobs
+    to: kernel.rules.faults
+    type: queries
+    purpose: 归类离线与会话超时故障
+    description: 结算时构造 runnerOfflineFault，会话超时按角色改判（reclassifySessionTimeout）。
+  - id: rel.kernel.external-jobs
+    from: kernel.dispatch.external
+    to: kernel.dispatch.jobs
+    type: commands
+    mode: async
+    purpose: 发不进账的轮询任务包
+    description: pollAll 直接经 enqueueJobTx 入 adapter.call 任务包（幂等键 poll:），节奏存 poll_state。
+  - id: rel.kernel.external-adapter-args
+    from: kernel.dispatch.external
+    to: kernel.dispatch.adapter-calls
+    type: queries
+    interface: if.kernel.dispatch.AdapterCalls
+    purpose: 取配方与补全轮询参数
+    description: 按任务仓库取配方定节奏，argsFor 补全配方与钉住的环境。
+  - id: rel.kernel.external-flow
+    from: kernel.dispatch.external
+    to: kernel.dispatch.flow
+    type: commands
+    mode: async
+    purpose: 把轮询到的状态归一记账
+    description: onResult 调 recordChangeStatus / recordChecks（fromPoll），无变化不写事件。
+  - id: rel.kernel.external-fault
+    from: kernel.dispatch.external
+    to: kernel.rules.ledger-rules
+    type: commands
+    mode: async
+    purpose: 记轮询的首次故障
+    description: 连续故障只在第一次经 recordFaultTx 写 fault.classified。
+  - id: rel.kernel.flow-wakeups
+    from: kernel.dispatch.flow
+    to: kernel.liveness.wakeups
+    type: commands
+    mode: async
+    interface: if.kernel.liveness.scheduleWakeup
+    purpose: 外部状态有意义变化时唤醒
+    description: 轮询看到变更状态变化、检查进入终态、平台外合入时排 repo.* 唤醒；归还租约后唤醒排队者。
+  - id: rel.kernel.flow-ledger
+    from: kernel.dispatch.flow
+    to: kernel.ledger.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Tx
+    purpose: 把结果记成领域事件
+    description: 写 repo.change_status / checks_status、task.merged、acceptance.baseline_recorded / item_judged、device.run_recorded、lease.released。
+  - id: rel.kernel.leases-ledger
+    from: kernel.dispatch.leases
+    to: kernel.ledger.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Tx
+    purpose: 记租约的获取、排队与归还
+    description: 写 lease.acquired / queued / heartbeat / released。
+  - id: rel.kernel.leases-wakeups
+    from: kernel.dispatch.leases
+    to: kernel.liveness.wakeups
+    type: commands
+    mode: async
+    interface: if.kernel.liveness.scheduleWakeup
+    purpose: 资源空出时唤醒排队任务
+    description: 归还后为排队等该资源的任务排 lease.available 唤醒。
+  - id: rel.kernel.device-calls
+    from: kernel.dispatch.device-runs
+    to: kernel.dispatch.adapter-calls
+    type: commands
+    mode: async
+    interface: if.kernel.dispatch.AdapterCalls
+    purpose: 发构建与场景运行
+    description: 没有构建身份时发构建调用（build:），拿到租约后发 device.run_scenario（device:，callId 预先定好作租约持有者）。
+  - id: rel.kernel.device-leases
+    from: kernel.dispatch.device-runs
+    to: kernel.dispatch.leases
+    type: commands
+    mode: async
+    interface: if.kernel.dispatch.LeaseService
+    purpose: 占住要跑的设备
+    description: 发运行前以 call:<callId> 为持有者 acquire 设备租约，拿不到抛 LeaseBusyError。
+  - id: rel.kernel.device-plan
+    from: kernel.dispatch.device-runs
+    to: kernel.rules.defect-gate
+    type: queries
+    mode: async
+    purpose: 取最近确认的验证计划
+    description: 未指定计划时调 latestConfirmedPlan。
+
+  # ── 信号池 ──
+  - id: rel.kernel.signal-rules-schedule
+    from: kernel.intake.signal-rules
+    to: kernel.intake.signals
+    type: commands
+    mode: async
+    purpose: 信号进池与草稿变动时排唤醒
+    description: 反应里调 scheduleIntakeWakeTx（进池、窗口、重排）与 scheduleDraftChangedTx，判断前查 poolPending。
+  - id: rel.kernel.signals-tasks
+    from: kernel.intake.signals
+    to: kernel.tasks.task-service
+    type: commands
+    mode: async
+    interface: if.kernel.tasks.TaskService
+    purpose: 直接模式录入即建任务
+    description: record 在直接模式下调 tasks.createFromSignal。
+  - id: rel.kernel.signals-ledger
+    from: kernel.intake.signals
+    to: kernel.ledger.ledger
+    type: commands
+    mode: async
+    interface: if.kernel.ledger.Tx
+    purpose: 记信号、整理与草稿事件
+    description: 写 signal.recorded / triaged / attached / detached、task.draft_created / draft_updated / folded / abandoned 等。
+  - id: rel.kernel.signals-wakeups
+    from: kernel.intake.signals
+    to: kernel.liveness.wakeups
+    type: commands
+    mode: async
+    interface: if.kernel.liveness.scheduleWakeup
+    purpose: 按攒批窗口唤醒整理台
+    description: 整理唤醒（intake.*）与草稿变动唤醒都以 scheduleWakeup 排进唤醒表。
+  - id: rel.kernel.signals-prewt
+    from: kernel.intake.signals
+    to: kernel.dispatch.adapter-calls
+    type: commands
+    mode: async
+    purpose: 为草稿任务预建工作树
+    description: 建草稿时按剧本参数经 requestAdapterCallTx 发 prepare_worktree（prewt:）。
+  - id: rel.kernel.signals-declarations
+    from: kernel.intake.signals
+    to: kernel.rules.declarations
+    type: queries
+    purpose: 读草稿声明的改动范围
+    description: 整理视图里经 parseDeclarations 取各草稿的 touches。
+  - id: rel.kernel.signals-playbook
+    from: kernel.intake.signals
+    to: playbooks.orchestrator
+    type: queries
+    interface: if.kernel.orchestration.PlaybookHooks
+    via: port:if.kernel.orchestration.PlaybookHooks
+    purpose: 按剧本定草稿任务预算
+    description: 建草稿任务时调注入钩子的 params(playbook, recipe)。
+  - id: rel.kernel.intake-budget-cards
+    from: kernel.intake.budget
+    to: kernel.tasks.cards
+    type: commands
+    mode: async
+    interface: if.kernel.tasks.openCardTx
+    purpose: 当天超预算时问人
+    description: 到上限且当天未问过时经 openCardTx 发「今天继续 / 明天再整理」裁决卡。
+  - id: rel.kernel.intake-budget-wakeups
+    from: kernel.intake.budget
+    to: kernel.liveness.wakeups
+    type: commands
+    mode: async
+    interface: if.kernel.liveness.scheduleWakeup
+    purpose: 次日 0 点再整理
+    description: 选明天再整理时排 intake.budget_day 唤醒。
+
+interfaces:
+  # ── kernel.assembly ──
+  - id: if.kernel.assembly.createKernel
+    name: createKernel
+    owner: kernel.assembly.factory
+    signature: |
+      createKernel(o: KernelOptions): Kernel
+    semantics: |
+      - 只装配不启动：不跑恢复、不起看门狗；入口按序调 recover() 与 startScheduler()。
+      - 未注入的端口取缺省：令牌为不签名占位、提示词为内核内置、剧本一律 standard、放行命令为空、自愈手册缺省保留适配器的 healHint。
+  - id: if.kernel.assembly.KernelOptions
+    name: KernelOptions
+    owner: kernel.assembly.factory
+    signature: |
+      interface KernelOptions {
+        pool: pg.Pool;                       // gixn_app 连接池
+        now?: () => Date;                    // 可注入时钟
+        defaults?: Partial<PlaybookDefaults>;
+        healHandbook?: HealBook;
+        models?: Partial<ModelConfig>;
+        recipes?: Record<string, Recipe>;
+        tokenIssuer?: TokenIssuer;
+        promptBuilder?: PromptBuilder;
+        allowedCommands?: AllowedCommandsFn;
+        orchestratorCwd?: (task: TaskRow) => string;
+        playbooks?: PlaybookHooks;
+        executionIdleSec?: number;           // 缺省 600
+        noRunnerAlertSec?: number;           // 缺省 300
+        runnerOfflineSec?: number;           // 缺省 90
+        watchdogIntervalSec?: number;        // 缺省 15
+        log?: Logger;
+      }
+  - id: if.kernel.assembly.Kernel
+    name: Kernel
+    owner: kernel.assembly.factory
+    signature: |
+      interface Kernel {
+        ctx: KernelContext; ledger: Ledger;
+        tasks: TaskService; signals: SignalService; dossiers: DossierService;
+        acceptance: AcceptanceService; plans: PlanService; cards: CardService;
+        jobs: JobQueue; runners: RunnerService; executions: ExecutionService;
+        adapters: AdapterCalls; launcher: OrchestratorLauncher; leases: LeaseService;
+        merge: MergeGate; poller: ExternalPoller; devices: DeviceRuns; watchdog: Watchdog;
+        recover(): Promise<RecoveryReport>;
+        startScheduler(opts: { connectionString: string; schema?: string }): Promise<WatchdogScheduler>;
+      }
+    semantics: 给 kernel-api 的服务层；入口只经这些字段读写内核，所有写最终都落到 ledger 的事务里。
+  - id: if.kernel.assembly.InvariantError
+    name: InvariantError
+    owner: kernel.assembly.errors
+    signature: |
+      class InvariantError extends Error { readonly code: "invariant_violation"; readonly details?: unknown }
+    semantics: 违反内核不变量（合入门、放行、终态后再推进等）；在写账事务里抛出时整笔回滚。
+  - id: if.kernel.assembly.NotFoundError
+    name: NotFoundError
+    owner: kernel.assembly.errors
+    signature: |
+      class NotFoundError extends Error { readonly code: "not_found" }
+  - id: if.kernel.assembly.ConflictError
+    name: ConflictError
+    owner: kernel.assembly.errors
+    signature: |
+      class ConflictError extends Error { readonly code: "conflict" }
+    semantics: 版本冲突、卡已不是待答等；调用方可重读后重试。
+  - id: if.kernel.assembly.LeaseBusyError
+    name: LeaseBusyError
+    owner: kernel.assembly.errors
+    signature: |
+      class LeaseBusyError extends Error { readonly code: "conflict"; readonly queued: { kind: string; key: string }[] }
+    semantics: withLease / 真机运行拿不到资源时抛出，此时已写 lease.queued 排队。
+
+  # ── kernel.ledger ──
+  - id: if.kernel.ledger.Ledger
+    name: Ledger
+    owner: kernel.ledger.ledger
+    signature: |
+      class Ledger {
+        readonly pool: pg.Pool; readonly ctx: KernelContext;
+        readonly guards: Guard[]; readonly reactors: Reactor[]; readonly finalizers: ((t: Tx) => Promise<void>)[];
+        tx<T>(fn: (t: Tx) => Promise<T>): Promise<T>;
+        run<T>(t: Tx | undefined, fn: (t: Tx) => Promise<T>): Promise<T>;
+        append<E extends GixEvent>(input: AppendInput): Promise<AppendResult<E>>;
+        events(q?: EventsQuery, db?: Queryable): Promise<GixEvent[]>;
+        rebuildProjections(): Promise<{ events: number }>;
+        snapshotProjections(): Promise<Record<string, unknown[]>>;
+      }
+    semantics: |
+      - tx：fn 内全部写入、投影、反应与提交前收尾要么全成要么全不成。
+      - events 带 readBy 且不按类型过滤时记下执行会话读到的位置（只增不减）。
+      - rebuildProjections 要在内核静止时执行；不动运行旁表、不跑反应。
+  - id: if.kernel.ledger.Tx
+    name: Tx
+    owner: kernel.ledger.ledger
+    signature: |
+      class Tx {
+        readonly client: pg.PoolClient; readonly ledger: Ledger;
+        readonly touched: Set<string>; readonly appended: GixEvent[];
+        now(): Date; nowIso(): string;
+        query<R>(text: string, params?: unknown[]): Promise<pg.QueryResult<R>>;
+        lockTask(taskId: string): Promise<void>;
+        lockKey(key: string): Promise<void>;
+        append<E extends GixEvent>(input: AppendInput): Promise<AppendResult<E>>;
+      }
+    semantics: |
+      - append：契约校验 → 任务锁 → 幂等键查重（命中返回 duplicate）→ 守卫 → 写 events → 投影 → 反应。
+      - 锁是事务级 advisory 锁，提交或回滚即释放。
+  - id: if.kernel.ledger.Guard
+    name: Guard
+    owner: kernel.ledger.ledger
+    signature: |
+      type Guard = (t: Tx, ev: GixEvent) => Promise<void>
+    semantics: 写入前的不变量检查；抛错即整笔事务回滚。不写事件。
+    implementedBy: [kernel.rules.ledger-rules, kernel.intake.signal-rules]
+  - id: if.kernel.ledger.Reactor
+    name: Reactor
+    owner: kernel.ledger.ledger
+    signature: |
+      type Reactor = (t: Tx, ev: GixEvent) => Promise<void>
+    semantics: 写入并投影后、同一事务内的反应，可以再写事件；全量重放时不执行。
+    implementedBy: [kernel.rules.ledger-rules, kernel.intake.signal-rules, kernel.dispatch.flow]
+  - id: if.kernel.ledger.createPool
+    name: createPool
+    owner: kernel.ledger.pool
+    signature: |
+      createPool(opts: { connectionString: string; schema?: string; max?: number }): pg.Pool
+    semantics: 时间戳转 ISO 字符串、numeric 转数字；schema 给出时设 search_path（测试用独立 schema）。
+  - id: if.kernel.ledger.MIGRATIONS_DIR
+    name: MIGRATIONS_DIR
+    owner: kernel.ledger.migrate
+    signature: |
+      const MIGRATIONS_DIR: string   // packages/kernel/drizzle/ 的绝对路径
+    semantics: 入口启动时据此核对迁移是否已全部执行。
+  - id: if.kernel.ledger.PROJECTION_TABLES
+    name: PROJECTION_TABLES
+    owner: kernel.ledger.schema
+    signature: |
+      const PROJECTION_TABLES: readonly ["tasks", "dossiers", "acceptances", "cards", "leases", "lease_queue", "wakeups",
+        "executions", "runners", "questions", "plans", "runs", "adapter_calls", "signals"]
+    semantics: 能从账全量重放的表；不含运行旁表。
+
+  # ── kernel.rules ──
+  - id: if.kernel.rules.HealBook
+    name: HealBook
+    owner: kernel.rules.faults
+    signature: |
+      type HealBook = Partial<Record<FaultClass, HealBookEntry>>;
+      interface HealBookEntry { healId: string; needsHuman: boolean; retryable?: boolean; cardText?: string }
+    semantics: 自愈手册，由入口注入 playbooks 的 healHandbook；retryable 缺省为 !needsHuman；没注入时保留适配器给的 healHint，卡正文只写条目 id。
+    implementedBy: [playbooks.heal.handbook]
+  - id: if.kernel.rules.MergeGate
+    name: MergeGate
+    owner: kernel.rules.merge-gate
+    signature: |
+      class MergeGate {
+        requestMerge(taskId: string, t?: Tx): Promise<{ callId: string }>;
+      }
+    semantics: 合入门不满足抛 InvariantError 并排 merge.refused 唤醒；满足则写 merge.requested 并发 merge_after_approval。
+
+  # ── kernel.liveness ──
+  - id: if.kernel.liveness.scheduleWakeup
+    name: scheduleWakeup
+    owner: kernel.liveness.wakeups
+    signature: |
+      scheduleWakeup(t: Tx, taskId: string, at: Date, cause: string, causeSeq?: string | null): Promise<string | null>
+    semantics: |
+      - 终态任务返回 null 不排。
+      - cause 以 orchestrator: 开头时撤掉该任务待触发的 liveness.* 兜底唤醒。
+  - id: if.kernel.liveness.Watchdog
+    name: Watchdog
+    owner: kernel.liveness.watchdog
+    signature: |
+      class Watchdog {
+        tick(): Promise<TickReport>;
+        fireDueWakeups(now: Date): Promise<{ fired: number; woken: number; skippedLiveOrchestrator: number }>;
+        stallExecutions(now: Date): Promise<{ stalled: number; timedOut: number }>;
+        // alertNoRunner / settleKilledExecutions / expireOverdueCalls / repairMissingWakeups …
+      }
+    semantics: tick 的每一步独立 try，失败只记日志；fireDueWakeups 每个任务一个事务、持任务锁。
+  - id: if.kernel.liveness.WatchdogScheduler
+    name: WatchdogScheduler
+    owner: kernel.liveness.scheduler
+    signature: |
+      class WatchdogScheduler {
+        constructor(opts: { connectionString: string; schema: string; intervalSec: number; tick: () => Promise<unknown>; log: Logger });
+        start(): Promise<void>;
+        stop(): Promise<void>;
+        ticks: number;
+      }
+
+  # ── kernel.orchestration ──
+  - id: if.kernel.orchestration.OrchestratorLauncher
+    name: OrchestratorLauncher
+    owner: kernel.orchestration.launcher
+    signature: |
+      class OrchestratorLauncher {
+        readonly opts: Required<OrchestratorLauncherOptions>;   // promptBuilder、cwdFor、超时
+        wake(taskId: string, cause: string, t?: Tx): Promise<{ executionId: string } | null>;
+      }
+    semantics: 不唤起时返回 null（终态、预算暂停、已有统筹者在跑、只有兜底唤醒而在等人答卡、整理台无待整理或超预算）。
+  - id: if.kernel.orchestration.PromptBuilder
+    name: PromptBuilder
+    owner: kernel.orchestration.launcher
+    signature: |
+      interface PromptBuilder {
+        build(input: {
+          task: TaskRow; dossier: Dossier; recentEvents: GixEvent[]; cause: string;
+          acceptanceStatus?: AcceptanceItemStatus[]; snapshot: OrchestratorSnapshot;
+          playbook?: PlaybookName; intake?: IntakeView; signals?: PromptSignal[];
+        }): { text: string; templateId: string; templateVersion: string; taskAppend: string };
+      }
+    semantics: 纯计算、同步返回；入口注入 playbooks 的 createOrchestratorPromptBuilder，未注入时用内核内置的简单实现。
+    implementedBy: [playbooks.orchestrator.builder]
+  - id: if.kernel.orchestration.WAKE_EVENTS_MAX
+    name: WAKE_EVENTS_MAX
+    owner: kernel.orchestration.launcher
+    signature: |
+      const WAKE_EVENTS_MAX = 200
+    semantics: 唤醒时给提示词的增量事件上限（取最新的）。
+  - id: if.kernel.orchestration.refreshOrchestratorPrompt
+    name: refreshOrchestratorPrompt
+    owner: kernel.orchestration.launcher
+    signature: |
+      refreshOrchestratorPrompt(db: Queryable, builder: PromptBuilder, q: { executionId: string; owner: number; now: Date }): Promise<{ text: string; fullTextHash: string }>
+    semantics: runner 开跑前按此刻现状重拼排队中的统筹执行的提示词；只读、不进账；不是本人的或已不在排队抛 NotFound / Conflict。
+  - id: if.kernel.orchestration.ExecutionService
+    name: ExecutionService
+    owner: kernel.orchestration.executions
+    signature: |
+      class ExecutionService {
+        dispatch(input: DispatchInput, actor?: Actor, t?: Tx): Promise<{ executionId: string; jobId: string }>;
+        killTx(t: Tx, executionId: string, reason: string): Promise<string | null>;
+        beginWait(executionId: string, callId: string, until: Date, db?: Queryable): Promise<void>;
+        endWait(executionId: string, callId: string): Promise<void>;
+        get(executionId: string): Promise<ExecutionRow | null>;
+        listByTask(taskId: string): Promise<ExecutionRow[]>;
+        readonly recipeFor: (repo: string) => Recipe | undefined;
+        readonly allowedCommandsFor: AllowedCommandsFn;
+      }
+    semantics: |
+      - dispatch 不给预算时取任务剩余硬预算（至少 1 USD）；只读角色（调研除外）不放配方命令。
+      - beginWait 期间看门狗不按无进展判该执行停滞（总超时照判）。
+  - id: if.kernel.orchestration.TokenIssuer
+    name: TokenIssuer
+    owner: kernel.orchestration.executions
+    signature: |
+      interface TokenIssuer {
+        issue(grant: { taskId: string; executionId: string; role: SessionRole; scope?: "intake" }): Promise<McpGrant> | McpGrant;
+      }
+    semantics: 只授权本任务、本次执行；入口注入真签发器，未注入时用不签名的占位（测试与开发）。
+    implementedBy: [server.mcp.tokens]
+  - id: if.kernel.orchestration.AllowedCommandsFn
+    name: AllowedCommandsFn
+    owner: kernel.orchestration.executions
+    signature: |
+      type AllowedCommandsFn = (recipe: Recipe, role: SessionRole) => string[]
+    semantics: 按配方与角色给出 Claude Code 权限规则括号内写法；入口注入 playbooks 的 allowedCommandsFromRecipe，未注入时为空。
+    implementedBy: [playbooks.heal.commands]
+  - id: if.kernel.orchestration.PlaybookHooks
+    name: PlaybookHooks
+    owner: kernel.orchestration.playbook-hooks
+    signature: |
+      interface PlaybookHooks {
+        resolve(input: { dossier: Dossier; playbook?: PlaybookName }): { name: string };
+        params(name: string, recipe?: Recipe): { driverWrites: boolean; budget?: Budget } | undefined;
+      }
+    semantics: 内核只在建任务定预算、派统筹定可写与否、核对 autoStart 时读剧本；入口注入 playbooks 的 resolvePlaybook / playbookParams。
+    implementedBy: [playbooks.orchestrator.params]
+  - id: if.kernel.orchestration.defaultPlaybookHooks
+    name: defaultPlaybookHooks
+    owner: kernel.orchestration.playbook-hooks
+    signature: |
+      const defaultPlaybookHooks: PlaybookHooks   // resolve → 初始剧本或 standard；params → undefined
+  - id: if.kernel.orchestration.effectivePlaybookOf
+    name: effectivePlaybookOf
+    owner: kernel.orchestration.playbook-hooks
+    signature: |
+      effectivePlaybookOf(db: Queryable, hooks: PlaybookHooks, taskId: string, dossier?: Dossier): Promise<{ name: string; initial: PlaybookName; policy?: ProfilePolicy; driverWrites: boolean }>
+  - id: if.kernel.orchestration.autoStartAllowed
+    name: autoStartAllowed
+    owner: kernel.orchestration.playbook-hooks
+    signature: |
+      autoStartAllowed(policy: ProfilePolicy | undefined, playbook: string): boolean
+    semantics: 环境策略 autoStart.playbooks 含该剧本时允许免确认卡开工。
+  - id: if.kernel.orchestration.DossierService
+    name: DossierService
+    owner: kernel.orchestration.dossiers
+    signature: |
+      class DossierService {
+        get(taskId: string): Promise<Dossier>;
+        update(taskId: string, patch: DossierPatch, version: number, actor: Actor, t?: Tx): Promise<{ version: number }>;   // 参数裁剪
+        recordDecision(taskId: string, decision: Decision, actor: Actor, t?: Tx): Promise<void>;                          // 参数裁剪
+      }
+    semantics: update 按版本号乐观并发，版本不是当前 +1 抛 ConflictError。
+  - id: if.kernel.orchestration.taskWorktree
+    name: taskWorktree
+    owner: kernel.orchestration.queries
+    signature: |
+      taskWorktree(db: Queryable, taskId: string): Promise<{ path: string; baseCommit?: string; branch?: string } | null>
+    semantics: 读最近一次 prepare_worktree 的适配器结果；没建过返回 null。
+
+  # ── kernel.tasks ──
+  - id: if.kernel.tasks.TaskService
+    name: TaskService
+    owner: kernel.tasks.task-service
+    signature: |
+      class TaskService {
+        createFromSignal(signal: SignalInput, owner: number, opts?: { idempotencyKey?: string; budget?: Budget; title?: string;
+          profile?: string; profileHash?: string; codeHost?: string; capabilities?: CodeHostCapabilities;
+          playbook?: PlaybookName; policy?: ProfilePolicy }, t?: Tx): Promise<{ taskId: string; signalId: string; duplicate: boolean }>;
+        get(taskId: string): Promise<TaskDetail>;
+        list(f?: { owner?: number; status?: TaskStatus[]; repo?: string; includeIntake?: boolean }): Promise<TaskSummary[]>;
+        events(taskId: string, afterSeq?: string | null, limit?: number): Promise<{ events: GixEvent[]; nextAfterSeq: string | null }>;
+      }
+    semantics: createFromSignal 同一幂等键重复录入返回已有任务；建成即排 task.created 唤醒。
+  - id: if.kernel.tasks.AcceptanceService
+    name: AcceptanceService
+    owner: kernel.tasks.acceptance
+    signature: |
+      class AcceptanceService {
+        get(taskId: string): Promise<{ acceptance: Acceptance; confirmed: boolean } | null>;
+        draft(taskId: string, acceptance: AcceptanceInput, actor: Actor, t?: Tx): Promise<{ acceptance: Acceptance; ignored: string[] }>;
+        requestConfirmation(taskId: string, actor: Actor, opts?: ConfirmCardOpts, t?: Tx): Promise<Card>;
+        change(…): Promise<…>;
+        recordBaseline(taskId: string, itemId: string, baseline: BaselineInput, actor: Actor, t?: Tx): Promise<void>;
+        judgeItem(taskId: string, itemId: string, outcome: ItemOutcomeInput, actor: Actor, t?: Tx): Promise<void>;
+      }
+    semantics: 清单出新版本时撤掉旧版本的待答确认卡；人确认的必须是他看到的版本。
+  - id: if.kernel.tasks.PlanService
+    name: PlanService
+    owner: kernel.tasks.acceptance
+    signature: |
+      class PlanService {
+        get(planId: string): Promise<{ plan: VerificationPlan; confirmed: boolean; verdict: Verdict | null } | null>;
+        draft(plan: VerificationPlanInput, actor: Actor, t?: Tx): Promise<VerificationPlan>;
+        requestConfirmation(planId: string, actor: Actor, opts?: ConfirmCardOpts, t?: Tx): Promise<Card>;
+        recordRun(…): Promise<…>;
+        recordVerdict(taskId: string, verdict: VerdictInput, actor: Actor, t?: Tx): Promise<void>;
+      }
+  - id: if.kernel.tasks.CardService
+    name: CardService
+    owner: kernel.tasks.cards
+    signature: |
+      class CardService {
+        open(input: OpenCardInput, t?: Tx): Promise<Card>;
+        get(cardId: string): Promise<Card | null>;
+        list(f?: { owner?: number; status?: Card["status"]; taskId?: string }): Promise<Card[]>;
+        answer(cardId: string, a: AnswerInput, t?: Tx): Promise<{ duplicate: boolean }>;
+        withdraw(cardId: string, reason: string, t?: Tx, actor?: Actor): Promise<void>;
+        expireDue(now: Date): Promise<number>;
+      }
+    semantics: |
+      - answer：卡不是待答抛 ConflictError，选项不存在抛 InvariantError；清单确认卡的版本已过期则撤卡、唤醒并抛 ConflictError。
+      - 放行卡选放行时在同一事务里发起合入；expireDue 不处理放行卡。
+  - id: if.kernel.tasks.openCardTx
+    name: openCardTx
+    owner: kernel.tasks.cards
+    signature: |
+      openCardTx(t: Tx, input: OpenCardInput, actor?: Actor): Promise<Card>
+    semantics: 放行卡附内核核对、precheck 时有阻塞项拒发；确认卡附清单快照；放行卡不得设超时（守卫拒绝）。
+  - id: if.kernel.tasks.playbookMetrics
+    name: playbookMetrics
+    owner: kernel.tasks.metrics
+    signature: |
+      playbookMetrics(db: Queryable, q: { owner: number; since: Date; until: Date }): Promise<PlaybookMetricsResponse>
+    semantics: 只读；时间窗内最近创建的至多 500 个任务，整理台不算。
+  - id: if.kernel.tasks.listNotifications
+    name: listNotifications
+    owner: kernel.tasks.metrics
+    signature: |
+      listNotifications(db: Queryable, q: { owner: number; since: Date; now?: Date; cardWaitHours?: number }): Promise<ListNotificationsResponse>
+    semantics: 只读；从账里挑合入、放弃、卡等人超时（缺省 2 小时）、剧本切换等通知，id 为 n.<事件 seq>。
+
+  # ── kernel.dispatch ──
+  - id: if.kernel.dispatch.checkKey
+    name: checkKey
+    owner: kernel.dispatch.flow
+    signature: |
+      checkKey(mode: "baseline" | "head", itemId: string, commit: string, nonce: string): string   // check:<mode>:<itemId>:<commit>:<nonce>
+    semantics: 判项调用的幂等键；结果回来时 flowReactor 按它把结论记到对应判项与提交上。
+  - id: if.kernel.dispatch.checkSkipReason
+    name: checkSkipReason
+    owner: kernel.dispatch.flow
+    signature: |
+      checkSkipReason(result: Record<string, unknown> | undefined): string | undefined
+    semantics: run_check 结果里 runner 给的「没跑」原因（dirty / head_mismatch）的说明，其余返回 undefined。
+  - id: if.kernel.dispatch.AdapterCalls
+    name: AdapterCalls
+    owner: kernel.dispatch.adapter-calls
+    signature: |
+      class AdapterCalls {
+        readonly recipes: Record<string, Recipe>;
+        recipeFor(repo: string): Recipe | undefined;
+        argsFor(task: string | { repo: string; profile?: string | null; profile_hash?: string | null } | undefined, capability: string, op: string, input: Record<string, unknown>): Record<string, unknown>;
+        request(input: AdapterCallInput, actor?: Actor, t?: Tx): Promise<{ callId: string; duplicate: boolean }>;
+        get(callId: string): Promise<…>;
+      }
+    semantics: request 以 adapter:<幂等键> 去重；repo 类调用自动带完整配方，任务没有配方时抛 InvariantError。
+  - id: if.kernel.dispatch.JobQueue
+    name: JobQueue
+    owner: kernel.dispatch.jobs
+    signature: |
+      class JobQueue {
+        pollHandler?: PollResultHandler;
+        pull(runnerId: string, capabilities: RunnerCapabilitiesInput, max?: number): Promise<Job[]>;
+        get(jobId: string): Promise<(Job & { state: string; leasedBy: string | null; taskId: string | null }) | null>;
+        list(f?: { state?: string; taskId?: string; kind?: JobBody["kind"] }): Promise<(Job & { state: string })[]>;
+        update(jobId: string, update: JobUpdateInput, runnerId?: string): Promise<{ duplicate: boolean }>;
+        releaseRunnerJobs(t: Tx, runnerId: string): Promise<{ held: number; requeued: number }>;
+      }
+    semantics: |
+      - pull 只给任务主人 = runner 主人、配方 / 设备在能力表里、亲和匹配的任务包，for update skip locked 原子标为 leased。
+      - update 校验认领者；内核已先结算的执行，迟到的回报不再记账。
+  - id: if.kernel.dispatch.RunnerService
+    name: RunnerService
+    owner: kernel.dispatch.jobs
+    signature: |
+      class RunnerService {
+        register(r: { owner: number; hostname: string; capabilities: RunnerCapabilitiesInput; previousRunnerId?: string }): Promise<{ runnerId: string }>;
+        heartbeat(runnerId: string, runningJobIds?: string[]): Promise<{ abortJobIds: string[] }>;
+        markOffline(runnerId: string, t?: Tx): Promise<{ executionsFailed: number }>;
+        staleRunners(now: Date, offlineSec: number): Promise<string[]>;
+      }
+    semantics: 同一 runnerId 重新注册视为重启：它名下运行中的执行与已认领未回报的调用判失败（env.runner_offline，不计尝试）并唤醒；挂起等它的任务包重新可拉。
+  - id: if.kernel.dispatch.PollResultHandler
+    name: PollResultHandler
+    owner: kernel.dispatch.jobs
+    signature: |
+      type PollResultHandler = (t: Tx, job: { taskId: string | null; body: AdapterCallJobBody }, u: AdapterCompletedUpdate) => Promise<void>
+    semantics: 内核轮询任务包的结果处理，不进 adapter.* 账；createKernel 以闭包接上 ExternalPoller.onResult（结构性满足，外部状态轮询不引用此类型）。
+  - id: if.kernel.dispatch.ExternalPoller
+    name: ExternalPoller
+    owner: kernel.dispatch.external
+    signature: |
+      class ExternalPoller {
+        pollAll(now: Date): Promise<{ requested: number }>;
+        onResult(t: Tx, job: { taskId: string | null; body: AdapterCallJobBody }, u: AdapterCompletedUpdate): Promise<void>;
+        state(t: Queryable, taskId: string, op: string): Promise<PollStateRow | null>;
+      }
+    semantics: 上次没回不再发；合入请求发出后或平台没有 CI 时只轮询变更。
+  - id: if.kernel.dispatch.LeaseService
+    name: LeaseService
+    owner: kernel.dispatch.leases
+    signature: |
+      class LeaseService {
+        acquire(resources: LeaseResource[], taskId: string, holder: string, ttlSec: number, t?: Tx): Promise<{ ok: true; leases: Lease[] } | { ok: false; queued: LeaseResource[] }>;
+        release(leaseId: string, reason?: "done" | "error" | "expired" | "aborted", t?: Tx): Promise<void>;
+        heartbeat(leaseId: string, ttlSec: number, t?: Tx): Promise<Lease>;
+        withLease<T>(…): Promise<T>;
+        sweepExpired(now: Date): Promise<number>;
+        list(f?: { taskId?: string }): Promise<Lease[]>;
+        queue(): Promise<{ kind: string; key: string; holder: string; taskId: string }[]>;
+      }
+    semantics: 按 kind+key 排序加锁，拿全或全不拿；拿不到记 lease.queued；归还后唤醒排队者。
+  - id: if.kernel.dispatch.DeviceRuns
+    name: DeviceRuns
+    owner: kernel.dispatch.device-runs
+    signature: |
+      class DeviceRuns {
+        confirmedPlan(taskId: string, planId?: string): Promise<VerificationPlan>;
+        buildIdentity(taskId: string, commit: string): Promise<BuildIdentity | null>;
+        ensureBuild(taskId: string, commit: string, dev: DeviceAttachment, cwd: string): Promise<BuildIdentity>;
+        request(i: DeviceRunRequest, actor: Actor): Promise<{ callId: string; leaseId: string }>;
+      }
+    semantics: 参数全由配方真机接入件、计划与构建身份得出，缺就报错不发半截；设备被占抛 LeaseBusyError；构建未就绪抛 BuildPendingError。
+  - id: if.kernel.dispatch.BuildPendingError
+    name: BuildPendingError
+    owner: kernel.dispatch.device-runs
+    signature: |
+      class BuildPendingError extends InvariantError { constructor(commit: string, buildCallId: string, lastFailure?: string) }
+    semantics: 该提交的构建已发起但还没有构建身份；调用方等构建结果回来再发运行。
+
+  # ── kernel.intake ──
+  - id: if.kernel.intake.SignalService
+    name: SignalService
+    owner: kernel.intake.signals
+    signature: |
+      class SignalService {
+        record(…): Promise<…>;                       // 池模式进池 / 直接模式建任务
+        get(id: string): Promise<SignalRecord>;
+        list(f?: { owner?: number; repo?: string; status?: SignalStatus[]; taskId?: string; limit?: number }): Promise<SignalRecord[]>;
+        triage(signalId: string, decision: SignalTriageDecision, o: { duplicateOf?: string; reason: string }, actor: Actor, t?: Tx): Promise<SignalRecord>;
+        attach(signalId: string, taskId: string, reason: string, actor: Actor, t?: Tx): Promise<SignalRecord>;
+        createDraft(owner: number, repo: string, input: CreateDraftInput, actor: Actor, t?: Tx): Promise<{ taskId: string }>;
+        updateDraft(taskId: string, patch: { title?: string; goal?: string; scope?: string }, reason: string, actor: Actor, t?: Tx): Promise<void>;
+        moveSignal(signalId: string, toTaskId: string | null, reason: string, actor: Actor, o?: { fromTaskId?: string }, t?: Tx): Promise<{ taskId: string | null }>;
+        fold(fromTaskId: string, intoTaskId: string, reason: string, actor: Actor, t?: Tx): Promise<void>;
+        split(…): Promise<…>;
+        decline(taskId: string, signals: "pool" | "declined", reason: string, actor: Actor, t?: Tx): Promise<void>;
+        triageNow(signalId: string, t?: Tx): Promise<{ intakeTaskId: string | null; scheduled: boolean; at: string | null }>;
+        intakeView(owner: number, repo: string, status?: SignalStatus[]): Promise<IntakeView>;
+      }
+    semantics: HTTP 与整理台 MCP 共用；挂接、并入、改草稿只在草稿任务上成立（信号守卫拒绝其余）。
+
+dataStructures:
+  - id: ds.TaskRow
+    name: TaskRow
+    definition: |
+      interface TaskRow {            // tasks 投影表的一行
+        id: string; title: string; kind: string; repo: string; owner: number;
+        status: string;              // draft / active / paused_budget / merged / abandoned
+        phase: string; task_kind: string;   // normal / intake
+        budget_soft_usd: number; budget_hard_usd: number;
+        head_sha: string | null; integration_sha: string | null; change_ref: string | null;
+        release_state: string | null; release_head: string | null; release_card_id: string | null;
+        evidence_count: number;
+        // …
+      }
+  - id: ds.ExecutionRow
+    name: ExecutionRow
+    definition: |
+      interface ExecutionRow {       // executions 投影表的一行
+        id: string; task_id: string; role: string; model: string;
+        status: string;              // queued / running / succeeded / failed / killed …
+        runner_id: string | null; session_handle: string | null;
+        timeout_sec: number; started_at: string | null; last_progress_at: string | null;
+        // …
+      }

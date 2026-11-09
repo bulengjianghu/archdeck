@@ -1,0 +1,39 @@
+# 取自 kernel-api/src/bin.ts（启动顺序）、app.ts（checkMigrations）、kernel/src/kernel.ts（recover / startScheduler）、recovery.ts；演练 test/e2e kill-recovery。
+scenario:
+  id: sc.recovery
+  name: 内核重启恢复
+  kind: maintenance
+  description: |
+    状态全在持久处（分支上的提交、证据文件、账、档案），会话、进程、客户端随时可丢。gixn-kernel 被 launchd 重新拉起后：读配置、核对迁移已到最新（不到退出码 3），
+    装配应用，然后 recover()——清扫过期租约、清掉同步等待记录、心跳过期的 runner 标离线；离线 runner 名下的执行、账说已派发但任务包已丢的执行与调用判失败
+    （env.runner_offline，不计尝试）并唤醒；最后立即触发已到点的唤醒。不补发任务包（提示词全文与令牌不在账里），恢复就是带着档案重新唤醒统筹者。
+    之后启动 pg-boss 看门狗、监听端口；runner 按退避重连通道，回报队列里没发出的按序补发。
+  cause: gixn-kernel 进程被 kill 后由 launchd 重新拉起
+  evidence:
+    - test/e2e/test/kill-recovery.test.ts
+    - packages/kernel-api/test/bin.test.ts
+    - packages/kernel/test/recovery-faults-budget.test.ts
+    - packages/kernel/test/runner-restart.test.ts
+  steps:
+    - call: {id: config, from: server.http.boot, to: server.http.config, label: loadConfig + 配方目录}
+    - async: {id: migrations, from: server.http.boot, to: server.http.assembly, label: checkMigrations}
+    - alt:
+        - when: 迁移不到最新
+          steps:
+            - return: {id: exit, from: server.http.assembly, to: server.http.boot, label: 报错，退出码 3（提示迁移命令）}
+        - when: 已到最新
+          steps:
+            - async: {id: recover, from: server.http.boot, to: kernel.assembly.factory, label: recover()}
+            - async: {from: kernel.assembly.factory, to: kernel.liveness.recovery, label: recover}
+            - async: {from: kernel.liveness.recovery, to: kernel.dispatch.leases, label: sweepExpired}
+            - async: {from: kernel.liveness.recovery, to: kernel.ledger.ledger, label: 清掉同步等待记录}
+            - async: {id: settle, from: kernel.liveness.recovery, to: kernel.dispatch.jobs, label: 心跳过期的 runner 标离线；名下执行与已丢任务包的执行、调用判失败}
+            - call: {from: kernel.liveness.recovery, to: kernel.rules.faults, label: env.runner_offline（不计尝试）}
+            - async: {from: kernel.liveness.recovery, to: kernel.liveness.wakeups, label: 为判失败的任务排立即唤醒}
+            - async: {id: fire, from: kernel.liveness.recovery, to: kernel.liveness.watchdog, label: fireDueWakeups：立即触发已到点的唤醒}
+            - ref: sc.orchestrator-wake
+            - async: {id: scheduler, from: server.http.boot, to: kernel.assembly.factory, label: startScheduler()}
+            - async: {from: kernel.assembly.factory, to: kernel.liveness.scheduler, label: 启动 pg-boss 看门狗队列}
+            - async: {id: reconnect, from: client.channel.runner, to: server.hub.push, relation: rel.client.ws-attach, label: 按退避重连 WS（上限 30s）}
+            - async: {from: client.channel.runner, to: server.http.runner-routes, relation: rel.client.report-ws, label: 回报队列里没发出的按序补发}
+            - async: {from: server.http.runner-routes, to: kernel.dispatch.jobs, relation: rel.server.runner-job-update, label: 迟到的回报按已结算去重}

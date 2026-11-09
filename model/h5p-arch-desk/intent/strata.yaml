@@ -1,0 +1,221 @@
+# 分层声明（ADR-0052，ST-1）：子模块多于七个的父模块，按原则归纳出的层。人拥有（同 roles.yaml 的地位）；同一父模块草图写了的以草图为准。
+# 根与模型层的分层写在骨架（intent/skeleton.yaml）上。层是分类、不占级：成员仍是父模块的直接子模块。
+
+strata:
+  # 呈现层（16）：按「谁布置谁」——外壳选页、页面布置区块、区块共用叶子
+  present:
+    - id: shell
+      name: 外壳
+      order: 1
+      asks: 打开哪一页？
+      admits: 它只按路由选页、不布置页面内容吗？
+      abstraction: 外壳只决定当前是哪一页、换页时重建视图，不碰页面里的区块。
+      mayDependOn: [ page, block, shared ]
+      singular: 应用只有一个外壳；路由与页面切换只能有一处
+      members: [ present.shell ]
+    - id: page
+      name: 页面
+      order: 2
+      asks: 这一页由哪些区块组成、怎么摆？
+      admits: 它把区块布置成一页（注入状态、分栏、副栏），自身不画具体对象吗？
+      abstraction: 页面创建并注入状态，把区块摆进栏位；区块不知道自己在哪一页。
+      mayDependOn: [ block, shared ]
+      members: [ present.project-list, present.desk-view ]
+    - id: block
+      name: 区块
+      order: 3
+      asks: 这块界面画什么对象、上交什么手势？
+      admits: 它画一类对象或一组控件、只读状态只发意图，能放进不同页面的栏位吗？
+      abstraction: 区块彼此对等：各画一类对象，经 DeskState 协调，区块之间不直接调用。逻辑上是项目视图的组成——成员超七，记为拆分信号（考虑收进 present.desk-view），本轮不动边界。
+      mayDependOn: [ shared ]
+      members:
+        [
+          present.version,
+          present.sketch,
+          present.scenarios,
+          present.perspective,
+          present.sequence,
+          present.player,
+          present.nav-tree,
+          present.source,
+          present.canvas,
+          present.panel,
+          present.nav,
+          present.issues,
+        ]
+    - id: shared
+      name: 共用件
+      order: 4
+      asks: 各区块共用的叶子组件与样式是哪些？
+      admits: 它不认识任何区块、只按参数画吗？
+      mayDependOn: []
+      singular: 共用叶子收在一处，避免区块之间互相借用
+      members: [ present.shared ]
+
+  # 属性面板（18）：按「谁嵌谁」——分派挑面板、面板由节组成、节用内容块
+  present.panel:
+    - id: dispatch
+      name: 分派
+      order: 1
+      asks: 选中的是什么、该开哪个面板？
+      admits: 它只按选中的种类挑面板、不画对象内容吗？
+      mayDependOn: [ object, section, content ]
+      singular: 选中是唯一主语（V2），分派只能有一处
+      members: [ present.panel.dispatch ]
+    - id: object
+      name: 对象面板
+      order: 2
+      asks: 这一类对象的面板长什么样？
+      admits: 它是一类选中对象（模块、关系、边、端口、场景……）的整面板吗？
+      abstraction: 一类选中对象一个面板，按五段骨架（ADR-0050）布置节；端口面板既是对象面板又被模块面板内嵌（ModulePorts），按主要身份归这里。
+      mayDependOn: [ section, content ]
+      members:
+        [
+          present.panel.module,
+          present.panel.relation,
+          present.panel.edge,
+          present.panel.system,
+          present.panel.design,
+          present.panel.sketch,
+          present.panel.dep,
+          present.panel.port,
+          present.panel.scenario,
+          present.panel.step,
+          present.panel.actor,
+          present.panel.file,
+        ]
+    - id: section
+      name: 节
+      order: 3
+      asks: 面板里可复用的一节讲什么？
+      admits: 它是被不同对象面板嵌入的一节（结构、治理、运行、源代码），自身不是整面板吗？
+      mayDependOn: [ content ]
+      members: [ present.panel.structure, present.panel.governance, present.panel.run, present.panel.module-source ]
+    - id: content
+      name: 内容块
+      order: 4
+      asks: 面板通用的内容块是哪些？
+      admits: 它只按参数画一段内容（Markdown、接口、数据结构、代码块），不认识面板吗？
+      mayDependOn: []
+      singular: 通用内容块收在一处，避免面板之间互相借用
+      members: [ present.panel.content ]
+
+  # 接入层（9）：端口与适配器的二分——外壳把同一套能力挂到 HTTP / 命令行 / MCP，存取件一类磁盘对象一件
+  access:
+    - id: shell
+      name: 外壳
+      order: 1
+      asks: 能力从哪个入口交出去（页面、命令行、agent）？
+      admits: 它把存取件与模型层的能力挂到一个对外入口，自身不读写磁盘吗？
+      abstraction: 外壳只做协议：HTTP 中间件、命令行、MCP；同一套能力，不同入口。
+      mayDependOn: [ store ]
+      members: [ access.model-source, access.lint, access.agent ]
+    - id: store
+      name: 存取件
+      order: 2
+      asks: 一类磁盘或 git 对象怎么读写？
+      admits: 它只负责一类磁盘对象（描述、源码、依赖、治理文件、历史）的读或写吗？
+      abstraction: 一类磁盘对象一件，只搬运文本或事实；彼此可借用（如写入后按读取校验）。
+      mayDependOn: []
+      members: [ access.reader, access.writer, access.source, access.deps, access.governance-store, access.history ]
+
+  # DeskState（14）：原则原文「dispatch 是唯一写入口；派生按领域分组且只读，与外界的往来全放在同步适配器里」
+  state.desk:
+    - id: sync
+      name: 同步适配器
+      order: 1
+      asks: 状态与外界（模型源、文件、路由、布局、源码）怎么往来？
+      admits: 它把外界的变化交给写入口、把状态投影到外界，自身不定义状态吗？
+      mayDependOn: [ write, derive ]
+      members: [ state.desk.loading, state.desk.writer, state.desk.url-sync, state.desk.layout-sync, state.desk.source-sync ]
+    - id: write
+      name: 写入口
+      order: 2
+      asks: 状态经哪里改？
+      admits: 它是改状态的入口（dispatch 与操作、编辑操作），而不是只读的派生吗？
+      abstraction: 只有写入口改状态。「编辑中的草图」主要职责是编辑操作的入口，内含会话与派生，归这里（designNote 见描述）。
+      mayDependOn: [ derive ]
+      members: [ state.desk.actions, state.desk.edit ]
+    - id: derive
+      name: 派生
+      order: 3
+      asks: 画面需要的哪类数据，从状态与模型里怎么算出？
+      admits: 它只读状态与模型、按一个领域给出派生数据，不改状态吗？
+      abstraction: 派生按领域分组且只读；子模块之间没有值依赖（经协调者文件接线），方向由这条规则守住。
+      mayDependOn: []
+      members:
+        [
+          state.desk.projection,
+          state.desk.versions,
+          state.desk.legend,
+          state.desk.facts,
+          state.desk.evolution,
+          state.desk.review,
+          state.desk.files,
+        ]
+
+  # 架构治理（10）：原则原文「事实比对、规则判定与环各算一类，报告只组合它们；本层投影、结构视图与查询都只是读法，不新增事实」
+  model.governance:
+    - id: compose
+      name: 组合
+      order: 1
+      asks: 怎么把事实与判定组合成报告、回答与建议？
+      admits: 它只组合下面几层的结果（报告、查询、建议），不新增事实吗？
+      mayDependOn: [ read, judge, facts ]
+      members: [ model.governance.report, model.governance.query, model.governance.classify ]
+    - id: read
+      name: 读法
+      order: 2
+      asks: 同一份事实按什么角度读（本层、结构、依赖深度、端口）？
+      admits: 它把事实投影成一种读法，不新增事实也不判定违规吗？
+      mayDependOn: [ judge, facts ]
+      members: [ model.governance.level, model.governance.structure, model.governance.tiers, model.governance.ports ]
+    - id: judge
+      name: 判定
+      order: 3
+      asks: 这条依赖违不违规、成不成环？
+      admits: 它按规则或图论判定事实（违规、环度），不组合报告吗？
+      mayDependOn: [ facts ]
+      members: [ model.governance.rules, model.governance.cycles ]
+    - id: facts
+      name: 事实
+      order: 4
+      asks: 代码里实际有哪些依赖、与描述对得上吗？
+      admits: 它从文件依赖提升出模块级事实并与描述比对，不判定规则吗？
+      mayDependOn: []
+      singular: 事实是治理的唯一输入，只能有一份
+      members: [ model.governance.facts ]
+
+  # 草图编辑（8）：原则原文「先寻址再编辑：单张草图的操作族各自成件，设计级编辑在其上做跨草图级联」
+  model.intent.edit:
+    - id: design
+      name: 设计级
+      order: 1
+      asks: 跨草图的操作（合并、拆分、降级、升级、移入、改 ID、删除）怎么级联？
+      admits: 它在一个设计的多张草图之间级联，单张草图的修改交给操作族吗？
+      mayDependOn: [ sketch, address ]
+      singular: 跨草图的级联只能有一处
+      members: [ model.intent.edit.design ]
+    - id: sketch
+      name: 单张草图
+      order: 2
+      asks: 单张草图上的一族操作怎么改？
+      admits: 它只改一张草图里的一族对象（层、模块、ID、关系与接口、底稿、位置）吗？
+      mayDependOn: [ address ]
+      members:
+        [
+          model.intent.edit.layers,
+          model.intent.edit.modules,
+          model.intent.edit.move,
+          model.intent.edit.relations,
+          model.intent.edit.seed,
+          model.intent.edit.layout,
+        ]
+    - id: address
+      name: 寻址
+      order: 3
+      asks: 草图里的东西在哪、新 ID 叫什么？
+      admits: 它只定位与生成 ID、不改草图吗？
+      mayDependOn: []
+      singular: 寻址与 ID 生成是各操作族的共同前提，只能有一份
+      members: [ model.intent.edit.locate ]

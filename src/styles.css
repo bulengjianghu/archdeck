@@ -1,0 +1,423 @@
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --surface-3: #e8ebf0;
+  --border: #dde1e7;
+  --border-strong: #c3c9d3;
+  --text: #1c2330;
+  --text-2: #4d5767;
+  --text-3: #808a99;
+  --accent: #2f6fe4;
+  --accent-soft: #e6eefc;
+  /* L25：悬停边衬边的投影（暗色主题为浅色外发光） */
+  --hover-shadow: rgba(15, 23, 42, 0.38);
+  --danger: #c93a3a;
+  --danger-soft: #fbeaea;
+  --warning: #a86a0a;
+  --warning-soft: #fdf3e1;
+
+  /* 关系类型（L10、ADR-0029）：四类各一色相——查询低饱和（画布上另加半透明，edgeStyle QUERY_OPACITY）、委托实色、通知与流沿用；
+     迁移期的未分类（calls，M17）为中性灰，与 --text-3 的冷灰拉开 */
+  --rel-queries: #9686c4;
+  --rel-commands: #2f6fe4;
+  --rel-streams: #0f9b8e;
+  --rel-notifies: #c98a10;
+  --rel-calls: #8c8c8c;
+  /* 代码依赖叠加线（K9，点线；有违规时为 --danger） */
+  --edge-code: #8a4f7d;
+  /* 组装叠加线与组装根角标（O12，点划线） */
+  --assembly: #b0592a;
+  /* 时间耦合的波浪线（J5）：灰；无依赖无关系的更深 */
+  --edge-couple: #9aa3b2;
+  --edge-couple-strong: #4b5563;
+  /* 热度角标三档（J5） */
+  --heat-1: #f6d9a8;
+  --heat-2: #ec9d5a;
+  --heat-3: #c8432a;
+  --actor: #8a5cc7;
+  --actor-soft: #f3edfb;
+
+  --layer-bg: #f3f5f9;
+  --layer-border: #d5dbe4;
+  --boundary-bg: transparent;
+
+  /* 设计版本相对对比基线的变更（ADR-0002） */
+  --diff-added: #1f9d55;
+  --diff-added-soft: #ddf3e6;
+  --diff-changed: #c27c0e;
+  --diff-changed-soft: #fbefd9;
+  --diff-removed: #c93a3a;
+
+  /* 结构视角（ADR-0031，L16、L17、K15、U16）：画布结构边（depStyle）与「显示」面板图例（StructureSwatch、MetricLegend）、
+     节点角标（StructMarks）、模块「结构」一节共用这一套；依赖的档用明度（引用正文三档灰），色相只给允许边、不稳定度与影响面 */
+  /* L43（第十四轮 F11）：骨架安静、例外醒目；档不再用明度 */
+  --dep-skeleton: var(--text-3);
+  --dep-exception: var(--text);
+  --dep-allowed: #2f8f6a;
+  /* U16（ADR-0035）：允许边画浅一档的虚线（与底色混合，不用透明度） */
+  --dep-allowed-soft: #7dbca3;
+  --stability-stable: #4a8fd6;
+  --stability-mid: #a3abb8;
+  --stability-unstable: #e08a2e;
+  --impact-in: #c8562a;
+  --impact-out: #1f8a8a;
+  --impact-both: #8a5cc7;
+
+  --radius: 8px;
+
+  /* CD-1（第十八轮 Y2.1，ADR-0057）：卡片——工作区里除了画布都是这一种东西（属性卡片、图例、画布角的胶囊、缩放胶囊、回放胶囊）；
+     画布的底色就是 --bg（属性列并排时与之同色，CD-2） */
+  --card-bg: var(--surface);
+  --card-border: #e4e7ec;
+  --card-radius: 12px;
+  --pill-radius: 999px;
+  --card-shadow: 0 1px 2px rgb(15 23 42 / 5%), 0 4px 14px rgb(15 23 42 / 7%);
+  --card-gap: 12px;
+  --font: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151b;
+    --surface: #1a1e26;
+    --surface-2: #222731;
+    --surface-3: #2b313d;
+    --border: #2f3542;
+    --border-strong: #434b5b;
+    --text: #e6e9ef;
+    --text-2: #aab2c0;
+    --text-3: #7a8394;
+    --accent: #6b9cf5;
+    --accent-soft: #1f2d48;
+    --hover-shadow: rgba(255, 255, 255, 0.32);
+    --danger: #ef7a7a;
+    --danger-soft: #3a2224;
+    --warning: #e2a646;
+    --warning-soft: #3a2f1c;
+
+    --rel-queries: #9a8cc6;
+    --rel-commands: #6b9cf5;
+    --rel-streams: #3cc4b5;
+    --rel-notifies: #e2a646;
+    --rel-calls: #8f8f8f;
+    --edge-code: #d58cc4;
+    --assembly: #e08a5a;
+    --edge-couple: #6c7686;
+    --edge-couple-strong: #c5ccd8;
+    --heat-1: #6b5230;
+    --heat-2: #b86d2e;
+    --heat-3: #ef6a4c;
+    --actor: #b08ae6;
+    --actor-soft: #2c2440;
+
+    --layer-bg: #1d222b;
+    --layer-border: #343b49;
+
+    --diff-added: #4cc483;
+    --diff-added-soft: #1b3326;
+    --diff-changed: #e2a646;
+    --diff-changed-soft: #3a2f1c;
+    --diff-removed: #ef7a7a;
+    --dep-allowed: #4cc49a;
+    --dep-allowed-soft: #2f7d63;
+    --stability-stable: #6ba6eb;
+    --stability-mid: #6c7686;
+    --stability-unstable: #eba052;
+    --impact-in: #ef8a5e;
+    --impact-out: #45c0c0;
+    --impact-both: #b08ae6;
+    --card-border: #2c323e;
+    --card-shadow: 0 1px 2px rgb(0 0 0 / 35%), 0 4px 14px rgb(0 0 0 / 30%);
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.6 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--border-strong);
+}
+
+input {
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+}
+
+input:focus,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+code,
+pre {
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+a {
+  color: var(--accent);
+}
+
+.link {
+  color: var(--accent);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.muted {
+  color: var(--text-3);
+}
+
+.rel-queries {
+  --rel: var(--rel-queries);
+}
+.rel-commands {
+  --rel: var(--rel-commands);
+}
+.rel-calls {
+  --rel: var(--rel-calls);
+}
+.rel-streams {
+  --rel: var(--rel-streams);
+}
+.rel-notifies {
+  --rel: var(--rel-notifies);
+}
+
+.rel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--rel);
+}
+
+.rel-chip::before {
+  content: '';
+  width: 14px;
+  height: 0;
+  border-top: 2px solid var(--rel);
+}
+
+.rel-queries.rel-chip::before {
+  opacity: 0.6;
+}
+
+.vue-flow__edge-textbg {
+  fill: var(--surface);
+}
+
+.vue-flow__edge-text {
+  fill: var(--text-2);
+  font-size: 11px;
+}
+
+/* 标签位（L26）：×N、把手与异常和修饰写在一个带边框的 pill 里 */
+.edge-label-pill .vue-flow__edge-textbg {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.edge-label-pill .vue-flow__edge-text {
+  font-weight: 600;
+}
+
+/* 标签含异常（违规 / 向上 / 未证实 / 未解释 / 缺段 / 未建模，L26）：警示色字、警示色边框；分两段时只有异常段警示色（EdgePill，ADR-0041） */
+.edge-label-warn .vue-flow__edge-text {
+  fill: var(--warning);
+  font-weight: 600;
+}
+
+.edge-label-pill.edge-label-warn .vue-flow__edge-textbg:not(.plain) {
+  stroke: var(--warning);
+}
+
+/* ── 设计版本的变更标记：节点描边 + 角标（各节点组件共用；需压过节点组件自身的边框与阴影） ── */
+.diff-added {
+  border-color: var(--diff-added) !important;
+  box-shadow: 0 0 0 3px var(--diff-added-soft) !important;
+}
+
+.diff-changed {
+  border-color: var(--diff-changed) !important;
+  box-shadow: 0 0 0 3px var(--diff-changed-soft) !important;
+}
+
+.diff-tag {
+  display: inline-block;
+  font-size: 10.5px;
+  line-height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #fff;
+}
+
+.diff-tag.added {
+  background: var(--diff-added);
+}
+
+.diff-tag.changed {
+  background: var(--diff-changed);
+}
+
+.diff-tag.removed {
+  background: var(--diff-removed);
+}
+
+.diff-tag.touched {
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+/* ── 选中文件：归属模块在本层的投影节点（G14） ── */
+.vue-flow__node.file-hit > * {
+  box-shadow:
+    0 0 0 3px var(--accent),
+    0 0 0 6px var(--accent-soft) !important;
+  opacity: 1 !important;
+}
+
+/* ── 回放：节点的回放态（GraphCanvas 给 Vue Flow 节点加的类） ── */
+.vue-flow__node.play-current > * {
+  box-shadow: 0 0 0 3px var(--accent) !important;
+  opacity: 1 !important;
+}
+
+.vue-flow__node.play-internal > * {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.vue-flow__node.play-hover > * {
+  box-shadow: 0 0 0 3px var(--warning) !important;
+  opacity: 1 !important;
+}
+
+@keyframes pulse {
+  50% {
+    box-shadow: 0 0 0 7px var(--accent-soft);
+  }
+}
+
+/* L25：悬停一条边时两端节点的描边环（比选中节点的描边细一档、同强调色）；类名由画布场景的悬停叠加加在 Vue Flow 节点外层 */
+.vue-flow__node.edge-end {
+  outline: 1.5px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+
+/* TB-2：工具栏与资料区标签栏的图标按钮——30px，开着的浅色底 */
+.ib {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-2);
+}
+
+.ib:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--bg);
+}
+
+.ib.on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.ib:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* TB-7：画布标题行的胶囊（⚠、源码、版本）；外观取卡片变量（CD-1） */
+.canvas-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--pill-radius);
+  background: var(--card-bg);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+  box-shadow: var(--card-shadow);
+}
+
+/* CD-1：卡片与胶囊的共用外观（圆角 12 / 全圆，浅边，轻投影） */
+.desk-card,
+.desk-pill {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+}
+
+.desk-card {
+  border-radius: var(--card-radius);
+}
+
+.desk-pill {
+  border-radius: var(--pill-radius);
+}
+
+/* 草图画布拖节点期间（SketchCanvas）：禁用的按钮不接指针，松手的 mouseup 照常落到页面、拖动收尾（Chrome 的禁用按钮吞掉鼠标事件） */
+.sk-node-dragging button:disabled {
+  pointer-events: none;
+}
+
+/* LY-15：视图里悬停的模块引用——画布上那个节点加强调色虚线描边（不移动视口），离开即消失 */
+.vue-flow__node.peek {
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
+  border-radius: 10px;
+}

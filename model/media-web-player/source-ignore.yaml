@@ -1,0 +1,39 @@
+# 不属于任何模块的文件（G8）：Web 播放器之外的整个仓库，以及播放器各包的测试、文档、构建配置。glob 写法同 codeRefs，相对源码根目录（work4/media-platform）。
+# 范围见 plans/arch-desk-media-player/00-plan.md §1：SDK.md §1.1 列出的包 + 仓库内唯一的 Web 消费方（演示页）。
+# 测试文件不归属模块，但作为场景 evidence 引用。剩下的未归属文件就是描述漏写的源码，应补进对应模块的 codeRefs。
+sourceIgnore:
+  # 播放器之外的子系统与仓库级目录
+  - '{catalog,devtools,docs,third_party,tools}/**'
+  - '{media-engine,media-rtc,media-device,media-control,media-quality,media-test,media-toolkit}/**'
+  # 仓库根的文件与点目录
+  - '*'
+  - '.*'
+  - '.*/**'
+  # apps：演示页之外的应用；演示页的测试、脚本、文档与包配置
+  - 'apps/{media-studio,remote,sts}/**'
+  - 'apps/web-player-demo/{docs,scripts,tests}/**'
+  - 'apps/web-player-demo/*.{json,md}'
+  # media-sdk-kits：只纳入 packages/media-player/src
+  - 'media-sdk-kits/*'
+  - 'media-sdk-kits/{bindings,catalog,crates,docs,examples,extensions,hosts,scripts,tests}/**'
+  - 'media-sdk-kits/packages/*'
+  - 'media-sdk-kits/packages/{media,media-assets,media-capture,media-device,media-live,media-playback,media-processing,media-publishing,media-recording,media-remote,media-telemetry}/**'
+  - 'media-sdk-kits/packages/media-player/*'
+  # media-web：只纳入 media-playback-pipeline 与 media-core 的 src
+  - 'media-web/*'
+  - 'media-web/{docs,examples,scripts,tests}/**'
+  - 'media-web/packages/*'
+  - 'media-web/packages/{media-provider-browser-capture,media-provider-browser-processing,media-provider-container,media-provider-spi,media-provider-webcodecs,media-resources,media-runtime}/**'
+  - 'media-web/packages/{media-playback-pipeline,media-core}/*'
+  # media-wasm：只纳入三个包的 src 与 native/media-player；ffmpeg / openh264 两个 Provider 不经 SDK 接入，播放器各包也不导入它们
+  - 'media-wasm/*'
+  - 'media-wasm/{crates,scripts,tests}/**'
+  - 'media-wasm/native/{ffmpeg-h264-wasm,openh264-wasm}/**'
+  - 'media-wasm/packages/{media-provider-ffmpeg-wasm,media-provider-openh264-wasm}/**'
+  - 'media-wasm/packages/{media-wasm-core,media-provider-wasm-playback,media-provider-element-playback}/*'
+  - 'media-wasm/packages/media-provider-wasm-playback/scripts/**'
+  # media-specs：只纳入 contracts/src
+  - 'media-specs/*'
+  - 'media-specs/{conformance,docs,scripts}/**'
+  - 'media-specs/contracts/*'
+  - 'media-specs/contracts/{codegen,docs,generated,schemas,tests}/**'

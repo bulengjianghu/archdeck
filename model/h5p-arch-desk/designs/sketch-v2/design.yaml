@@ -1,0 +1,13 @@
+# 设计：草图编辑 v2（第四轮，ADR-0025）。人拥有：目标、状态、基线、ADR；各轮说明由 AI 写在 r<N>/revision.yaml。
+# 草图（格式 v2，04 §3.10）：sketches/root.yaml（根挂载，骨架复制 + 呈现层的变化，supersedes: skeleton）与 sketches/present.panel.yaml（属性面板一层，新增草图面板）。
+design:
+  id: sketch-v2
+  name: 草图编辑 v2
+  status: implemented
+  adr: docs/adr/0025-sketch-as-thinking-medium.md
+  goal: |
+    把草图编辑重做为「思考的介质」：一张草图挂在一个模块下、只画一个层次、自由布局，拆合是设计动作并记血缘，
+    对比只有「相对基线」与「相对当前版本」；替换叠在分层总览上的二期编辑态（ADR-0025，需求 SK-12–SK-21）。
+  base:
+    commit: 52852866df248d4511a628face5cc87fb4ea7651
+    generatedAt: '2026-10-23'

@@ -1,0 +1,93 @@
+/**
+ * 名称查询与小谓词：只按 ID 或枚举查表，不做投影与计算。属于模型层的契约（与类型、枚举一起），
+ * 呈现层、命令行与模型层内部共用同一套显示名。
+ */
+import { parseVia, type ModelIndex, type RuleKind, type StratumEntity } from './types'
+
+/** 模块、参与者或系统根的显示名；层的全局键（`<父模块>/<层>`）与多成员层的带节点（`s:<键>`）取层名（ADR-0052） */
+export function moduleName(index: ModelIndex, id: string): string {
+  return id === index.rootId ? index.model.system.name : (index.modules.get(id)?.name ?? index.actors.get(id)?.name ?? stratumName(index, id) ?? id)
+}
+
+/** ST：按全局键或带节点 ID 查层名（只查表） */
+function stratumName(index: ModelIndex, id: string): string | undefined {
+  return index.strata ? stratumByKey(index, id.startsWith('s:') ? id.slice(2) : id)?.name : undefined
+}
+
+// ── 层（ADR-0052）：只按 ID 查表的小谓词，模型层、呈现层与命令行共用 ──
+
+/**
+ * ST：层的全局键——根的层用局部 ID（迁移来的根层 ID 即模块 ID，违规键与基线照旧），其余为 `<父模块>/<局部 ID>`。
+ * 视图里多成员层的带节点 ID 为 `s:<键>`（stratumNodeId）。
+ */
+export function stratumKey(index: Pick<ModelIndex, 'rootId'>, s: Pick<StratumEntity, 'parent' | 'id'>): string {
+  return s.parent === index.rootId ? s.id : `${s.parent}/${s.id}`
+}
+
+/** ST：按全局键找层 */
+export function stratumByKey(index: ModelIndex, key: string): StratumEntity | undefined {
+  const slash = key.lastIndexOf('/')
+  const parent = slash < 0 ? index.rootId : key.slice(0, slash)
+  const id = slash < 0 ? key : key.slice(slash + 1)
+  return index.strata.get(parent)?.find(s => s.id === id)
+}
+
+/** ST：单成员层（它的带就是成员，O2） */
+export const isSingular = (s: Pick<StratumEntity, 'members'>): boolean => s.members.length === 1
+
+/** ST：层生效的可依赖的层（局部 ID）；迁移来的旧层没写时不约束（undefined，M26），新写法没写等于 [] */
+export function mayDependOnOf(s: Pick<StratumEntity, 'mayDependOn' | 'migrated'>): readonly string[] | undefined {
+  return s.mayDependOn ?? (s.migrated ? undefined : [])
+}
+
+/** ST：层的显示名（同一父模块下的局部 ID → 名称） */
+export function stratumNames(index: ModelIndex, parent: string, ids: readonly string[]): string[] {
+  const list = index.strata.get(parent) ?? []
+  return ids.map(id => list.find(s => s.id === id)?.name ?? id)
+}
+
+
+/** G20：超过阈值即超长；没有行数（不统计的文件）不算 */
+export const isLong = (lines: number | undefined, maxLines: number): boolean => lines !== undefined && lines > maxLines
+
+/** K5b、M20：常用通道的名称（其余通道按通道名显示） */
+export const CHANNEL_LABELS: Readonly<Record<string, string>> = { http: 'HTTP', hmr: 'HMR 事件', inject: '注入', router: '路由', callback: '回调' }
+
+/**
+ * K5b：机制的显示名——`port:<接口>` 为「端口 <接口名>」、`bus:<模块>` 为「总线 <模块名>」、`channel:<名>` 为通道名（常用的取中文名）；
+ * 迁移期的「端口 / 总线未指明」（M20）照此标出。给了索引时接口、模块按显示名，否则按 ID。
+ */
+export function viaLabel(via: string, index?: ModelIndex): string {
+  const v = parseVia(via)
+  if (!v) return CHANNEL_LABELS[via] ?? via
+  if (v.kind === 'channel') {
+    const ch = v.name ?? v.target!
+    const label = CHANNEL_LABELS[ch] ?? ch
+    return v.contract ? `${label}（契约 ${index ? moduleName(index, v.contract) : v.contract}）` : label
+  }
+  if (v.kind === 'port') return v.target ? `端口 ${index?.interfaces.get(v.target)?.name ?? v.target}` : '端口（未指明）'
+  return v.target ? `总线 ${index ? moduleName(index, v.target) : v.target}` : '事件总线（未指明）'
+}
+
+/** 规则种类的名称：门禁消息、命令行与页面共用 */
+export const RULE_LABELS: Record<RuleKind, string> = { layer: '层规则', deps: '依赖白名单', exposes: '访问面' }
+
+/**
+ * L24：经回调关系的配对正向关系——方向相反、端点相同、写了接口的关系（接收方调用发起方的那个操作时把执行器交过来）。
+ * 不是经回调的关系或找不到时为空
+ */
+export function callbackPairs(idx: ModelIndex, relationId: string): string[] {
+  const r = idx.relations.get(relationId)
+  if (!r) return []
+  return [...idx.relations.values()].filter(x => x.from === r.to && x.to === r.from && !!x.interface && x.id !== r.id).map(x => x.id)
+}
+
+/** L24：经回调的一句说明——「<接收方> 把执行器交给 <发起方>，契约在 <契约模块>」（没写 @ 为「契约未指明」），有配对正向关系时接「随 <接口名> 交来」 */
+export function callbackText(idx: ModelIndex, relationId: string): string {
+  const r = idx.relations.get(relationId)
+  if (!r) return relationId
+  const contract = parseVia(r.via)?.contract
+  const via = callbackPairs(idx, relationId).map(id => idx.relations.get(id)!.interface!)
+  const names = [...new Set(via)].map(i => idx.interfaces.get(i)?.name ?? i)
+  return `经回调：${moduleName(idx, r.to)} 把执行器交给 ${moduleName(idx, r.from)}，${contract ? `契约在 ${moduleName(idx, contract)}` : '契约未指明'}${names.length ? `，随 ${names.join('、')} 交来` : ''}（代码依赖方向与箭头相反，L24）`
+}

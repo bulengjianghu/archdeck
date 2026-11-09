@@ -1,0 +1,233 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`DL-14 上下文包（三种锚点） > 无选中：系统根与第二级的概览 1`] = `
+{
+  "anchor": {
+    "kind": "none",
+  },
+  "boundaries": [
+    "只读：不写任何文件，不改规则、确认记录、当前版本、草图文件（ADR-0063 §7.1）；草图里的改动只能以改动块交给架构台。",
+    "答案引用描述原文时只写 {模块, 字段}；说不准的标推断。",
+  ],
+  "explainer": null,
+  "facts": null,
+  "images": [],
+  "notes": [],
+  "output": [
+    "一行一个 JSON：{"type":"text","text":…} 文本片段、{"type":"block","block":…} 结构化块、{"type":"done"} 结束。",
+    "问答卡：{"kind":"answer","parts":[{"text":…,"cites":[{"module":…,"field":…}],"inferred":true?}]}；field 取 summary / responsibility / invariants / principle / interfaces / relations / explainer，原文由架构台填，不要抄写；推断出来的段写 inferred: true。",
+    "收到图片时回梳理卡：{"kind":"digest","groups":{"matched":[],"mismatched":[],"extra":[],"missing":[]}}，条目 {"label":…,"modules":[…]?,"note":…?,"uncertain":true?}——对上的 / 一个框对应代码里多个模块的 / 画了但代码里没有依赖的 / 系统有而没画的。",
+    "机制图块：用户要图，或讲拆分 / 合并之后怎么运作时，在问答卡之外再给一块 {"kind":"diagram","svg":"<svg …>…</svg>","caption":"一句说明"}——一张自包含的内联 SVG：必须写 viewBox，宽不超过 640（资料区一列），宽高比在 1:4 到 4:1，不超过 64 KB；不许 <script>、on… 事件属性、javascript:、外部链接与 <foreignObject>；颜色用 currentColor 或写死的中性色。",
+    "图里的模块用 data-arch="<模块 ID>" 标出（单击在画布上选中），ID 必须在描述里（草图里：在当前张 sketch.current 里或就是挂载点）；不合格的图整块被拒，文字照常显示。",
+    "示例（一行）：{"type":"block","block":{"kind":"diagram","caption":"拆分后命令先进会话、再由施用者落盘","svg":"<svg xmlns=\\"http://www.w3.org/2000/svg\\" viewBox=\\"0 0 400 120\\"><g data-arch=\\"<模块 ID>\\"><rect x=\\"10\\" y=\\"30\\" width=\\"140\\" height=\\"60\\" rx=\\"8\\" fill=\\"none\\" stroke=\\"currentColor\\"/><text x=\\"80\\" y=\\"65\\" text-anchor=\\"middle\\" fill=\\"currentColor\\">会话</text></g></svg>"}}",
+  ],
+  "project": {
+    "id": "s",
+    "name": "系统",
+  },
+  "protocol": "arch-agent/1",
+  "queries": [
+    "MCP 服务器 arch 的只读工具：overview、locate、list_violations、list_cycles、issues、hotspots、coupling、surface、impact、metrics、tiers、strata、place、sketch_check（参数 project 取上下文包的 project.id）",
+    "impact：改它牵动谁（传入闭包）/ 它要谁（传出闭包）；metrics：扇入、扇出、不稳定度；surface：模块表面；locate：文件归哪个模块",
+    "源码与描述用 Read / Grep / Glob 读（工作目录限定在被描述项目与架构台目录）",
+  ],
+  "request": {
+    "mode": "ask",
+    "text": "这个系统分几块？",
+  },
+  "skeleton": [
+    {
+      "children": [
+        {
+          "id": "p",
+          "name": "父模块",
+          "summary": "给宿主一次可靠的会话",
+        },
+        {
+          "id": "q",
+          "name": "别处",
+          "summary": "提供别处的能力",
+        },
+      ],
+      "id": "s",
+      "name": "系统",
+      "summary": "一个用来测试对话的系统",
+    },
+  ],
+  "sketch": null,
+  "writing": [],
+}
+`;
+
+exports[`DL-14 上下文包（三种锚点） > 模块锚点：骨架字段（职责、一句话、原则、不变式、子模块、关系、接口）、它的题解、代码事实摘要、可用查询 1`] = `
+{
+  "anchor": {
+    "kind": "module",
+    "module": "p",
+    "name": "父模块",
+  },
+  "boundaries": [
+    "只读：不写任何文件，不改规则、确认记录、当前版本、草图文件（ADR-0063 §7.1）；草图里的改动只能以改动块交给架构台。",
+    "答案引用描述原文时只写 {模块, 字段}；说不准的标推断。",
+  ],
+  "explainer": {
+    "html": "<!doctype html><html><head><meta charset="utf-8"><title>t</title></head><body><h1>父模块</h1><p><span data-arch="p" data-field="summary"></span>，然后 <span data-arch="p.a">甲</span>。</p></body></html>",
+    "module": "p",
+    "path": "explainers/p.html",
+  },
+  "facts": {
+    "ca": 2,
+    "ce": 1,
+    "cycles": 0,
+    "impactIn": 3,
+    "instability": 0.33,
+  },
+  "images": [],
+  "notes": [],
+  "output": [
+    "一行一个 JSON：{"type":"text","text":…} 文本片段、{"type":"block","block":…} 结构化块、{"type":"done"} 结束。",
+    "问答卡：{"kind":"answer","parts":[{"text":…,"cites":[{"module":…,"field":…}],"inferred":true?}]}；field 取 summary / responsibility / invariants / principle / interfaces / relations / explainer，原文由架构台填，不要抄写；推断出来的段写 inferred: true。",
+    "收到图片时回梳理卡：{"kind":"digest","groups":{"matched":[],"mismatched":[],"extra":[],"missing":[]}}，条目 {"label":…,"modules":[…]?,"note":…?,"uncertain":true?}——对上的 / 一个框对应代码里多个模块的 / 画了但代码里没有依赖的 / 系统有而没画的。",
+    "机制图块：用户要图，或讲拆分 / 合并之后怎么运作时，在问答卡之外再给一块 {"kind":"diagram","svg":"<svg …>…</svg>","caption":"一句说明"}——一张自包含的内联 SVG：必须写 viewBox，宽不超过 640（资料区一列），宽高比在 1:4 到 4:1，不超过 64 KB；不许 <script>、on… 事件属性、javascript:、外部链接与 <foreignObject>；颜色用 currentColor 或写死的中性色。",
+    "图里的模块用 data-arch="<模块 ID>" 标出（单击在画布上选中），ID 必须在描述里（草图里：在当前张 sketch.current 里或就是挂载点）；不合格的图整块被拒，文字照常显示。",
+    "示例（一行）：{"type":"block","block":{"kind":"diagram","caption":"拆分后命令先进会话、再由施用者落盘","svg":"<svg xmlns=\\"http://www.w3.org/2000/svg\\" viewBox=\\"0 0 400 120\\"><g data-arch=\\"<模块 ID>\\"><rect x=\\"10\\" y=\\"30\\" width=\\"140\\" height=\\"60\\" rx=\\"8\\" fill=\\"none\\" stroke=\\"currentColor\\"/><text x=\\"80\\" y=\\"65\\" text-anchor=\\"middle\\" fill=\\"currentColor\\">会话</text></g></svg>"}}",
+  ],
+  "project": {
+    "id": "s",
+    "name": "系统",
+  },
+  "protocol": "arch-agent/1",
+  "queries": [
+    "MCP 服务器 arch 的只读工具：overview、locate、list_violations、list_cycles、issues、hotspots、coupling、surface、impact、metrics、tiers、strata、place、sketch_check（参数 project 取上下文包的 project.id）",
+    "impact：改它牵动谁（传入闭包）/ 它要谁（传出闭包）；metrics：扇入、扇出、不稳定度；surface：模块表面；locate：文件归哪个模块",
+    "源码与描述用 Read / Grep / Glob 读（工作目录限定在被描述项目与架构台目录）",
+  ],
+  "request": {
+    "mode": "ask",
+    "text": "为什么这样分？",
+  },
+  "skeleton": [
+    {
+      "children": [
+        {
+          "id": "p.a",
+          "name": "甲",
+          "summary": "按序施用全部命令",
+        },
+        {
+          "id": "p.b",
+          "name": "乙",
+          "summary": "决定会话变成什么",
+        },
+      ],
+      "id": "p",
+      "invariants": [
+        "命令单通道串行施用",
+      ],
+      "name": "父模块",
+      "parent": "s",
+      "principle": "命令走单通道",
+      "responsibility": "父模块的职责。",
+      "summary": "给宿主一次可靠的会话",
+    },
+  ],
+  "sketch": null,
+  "writing": [],
+}
+`;
+
+exports[`DL-14 上下文包（三种锚点） > 步骤锚点：两端模块的骨架，锚点带两端与场景名；没有题解 1`] = `
+{
+  "anchor": {
+    "frame": "f1",
+    "from": "p.a",
+    "fromName": "甲",
+    "kind": "step",
+    "label": "施用",
+    "scenario": "sc",
+    "scenarioName": "sc",
+    "to": "p.b",
+    "toName": "乙",
+  },
+  "boundaries": [
+    "只读：不写任何文件，不改规则、确认记录、当前版本、草图文件（ADR-0063 §7.1）；草图里的改动只能以改动块交给架构台。",
+    "答案引用描述原文时只写 {模块, 字段}；说不准的标推断。",
+  ],
+  "explainer": null,
+  "facts": null,
+  "images": [],
+  "notes": [],
+  "output": [
+    "一行一个 JSON：{"type":"text","text":…} 文本片段、{"type":"block","block":…} 结构化块、{"type":"done"} 结束。",
+    "问答卡：{"kind":"answer","parts":[{"text":…,"cites":[{"module":…,"field":…}],"inferred":true?}]}；field 取 summary / responsibility / invariants / principle / interfaces / relations / explainer，原文由架构台填，不要抄写；推断出来的段写 inferred: true。",
+    "收到图片时回梳理卡：{"kind":"digest","groups":{"matched":[],"mismatched":[],"extra":[],"missing":[]}}，条目 {"label":…,"modules":[…]?,"note":…?,"uncertain":true?}——对上的 / 一个框对应代码里多个模块的 / 画了但代码里没有依赖的 / 系统有而没画的。",
+    "机制图块：用户要图，或讲拆分 / 合并之后怎么运作时，在问答卡之外再给一块 {"kind":"diagram","svg":"<svg …>…</svg>","caption":"一句说明"}——一张自包含的内联 SVG：必须写 viewBox，宽不超过 640（资料区一列），宽高比在 1:4 到 4:1，不超过 64 KB；不许 <script>、on… 事件属性、javascript:、外部链接与 <foreignObject>；颜色用 currentColor 或写死的中性色。",
+    "图里的模块用 data-arch="<模块 ID>" 标出（单击在画布上选中），ID 必须在描述里（草图里：在当前张 sketch.current 里或就是挂载点）；不合格的图整块被拒，文字照常显示。",
+    "示例（一行）：{"type":"block","block":{"kind":"diagram","caption":"拆分后命令先进会话、再由施用者落盘","svg":"<svg xmlns=\\"http://www.w3.org/2000/svg\\" viewBox=\\"0 0 400 120\\"><g data-arch=\\"<模块 ID>\\"><rect x=\\"10\\" y=\\"30\\" width=\\"140\\" height=\\"60\\" rx=\\"8\\" fill=\\"none\\" stroke=\\"currentColor\\"/><text x=\\"80\\" y=\\"65\\" text-anchor=\\"middle\\" fill=\\"currentColor\\">会话</text></g></svg>"}}",
+  ],
+  "project": {
+    "id": "s",
+    "name": "系统",
+  },
+  "protocol": "arch-agent/1",
+  "queries": [
+    "MCP 服务器 arch 的只读工具：overview、locate、list_violations、list_cycles、issues、hotspots、coupling、surface、impact、metrics、tiers、strata、place、sketch_check（参数 project 取上下文包的 project.id）",
+    "impact：改它牵动谁（传入闭包）/ 它要谁（传出闭包）；metrics：扇入、扇出、不稳定度；surface：模块表面；locate：文件归哪个模块",
+    "源码与描述用 Read / Grep / Glob 读（工作目录限定在被描述项目与架构台目录）",
+  ],
+  "request": {
+    "mode": "ask",
+    "text": "这一步谁负责？",
+  },
+  "skeleton": [
+    {
+      "id": "p.a",
+      "interfaces": [
+        {
+          "id": "if1",
+          "name": "施用口",
+          "signature": "apply(cmd)",
+        },
+      ],
+      "invariants": [
+        "甲只读不写会话状态",
+      ],
+      "name": "甲",
+      "parent": "p",
+      "relations": [
+        {
+          "description": "交给决定",
+          "from": "p.a",
+          "id": "r1",
+          "to": "p.b",
+          "type": "commands",
+        },
+      ],
+      "summary": "按序施用全部命令",
+    },
+    {
+      "id": "p.b",
+      "name": "乙",
+      "parent": "p",
+      "relations": [
+        {
+          "from": "p.b",
+          "id": "r2",
+          "to": "q",
+          "type": "queries",
+        },
+        {
+          "description": "交给决定",
+          "from": "p.a",
+          "id": "r1",
+          "to": "p.b",
+          "type": "commands",
+        },
+      ],
+      "summary": "决定会话变成什么",
+    },
+  ],
+  "sketch": null,
+  "writing": [],
+}
+`;

@@ -1,0 +1,435 @@
+# 二期 · 动态视角：新增的子模块、关系、接口与数据结构（设计版本 phase2-dynamic / r4，定稿）。
+# 对已有模块的调整直接改在 layers.yaml / detail.yaml 中，并写了 designNote。
+# 规则编号（V / N / S / A / F / P / R）见 design.yaml 中 r4 的「领域规则清单」。
+
+modules:
+  # ── 呈现层 ──────────────────────────────────────────────
+  - id: present.desk-view.split
+    name: 分屏容器
+    parent: present.desk-view
+    responsibility: 按布局树排布画布区的视图（结构图、时序图）：二期只提供上下两块、比例可拖、下方可收起；比例与收起状态按项目记在本地。
+    principle: 布局树是可序列化的值（ds.PaneLayout），视图组件只按「槽位」挂载，不知道自己在哪；以后的自由拖拽分屏只需扩展布局树的编辑操作。
+    codeRefs: [src/components/split/**]
+    designNote: r2 新增（评审意见 1）。布局属于呈现层的本地偏好，不进视图状态、不进 URL。
+
+  - id: present.sequence.lanes
+    name: 泳道与消息
+    parent: present.sequence
+    responsibility: 画参与者头部与生命线、按序自上而下画消息箭头与标签；同步 / 异步 / 显式返回三种线型（隐含的返回不画）；内部活动画成生命线上的激活条；外部参与者泳道在最左，用竖线隔出系统边界。
+    codeRefs: [src/components/sequence/SequenceLanes.vue]
+    designNote: 泳道就是当前层次的参与者（子模块、边界节点、外部参与者），名称与结构图一致；下钻后泳道随之变细。
+  - id: present.sequence.fragments
+    name: 组合框
+    parent: present.sequence
+    responsibility: 画 alt / loop / par / ref 组合框：左上角标类型，loop 标循环条件，par 标「并行（串行回放）」，ref 显示被引用场景名；alt 显示全部分支与条件，已选分支正常显示、未选分支淡化，未到达的分支点各分支都淡化；框内消息在本层全部合并为内部活动时，框缩成一行。
+    codeRefs: [src/components/sequence/SequenceFragments.vue]
+  - id: present.sequence.interact
+    name: 时序图交互
+    parent: present.sequence
+    responsibility: 单击消息 = 指向这一步（R13）：播放头前进或后退到它并暂停，焦点跟随它；在未选分支上的消息同样可单击，先改选该分支再跳转；当前消息高亮并自动滚动到可见；悬停消息时在结构图上预览对应的边（D-7，悬停不暂停）。
+    codeRefs: [src/components/sequence/SequenceView.vue]
+
+  - id: present.panel.scenario
+    name: 场景面板
+    parent: present.panel
+    responsibility: 场景名称、说明、触发者（第一条消息的发送方）与触发原因、场景所在层次（可跳转）、参与模块、步骤目录（按组合框缩进，点击跳到该步）；ref 引用了哪些场景、被哪些场景引用。
+    codeRefs: [src/components/panel/ScenarioPanel.vue]
+  - id: present.panel.step
+    name: 步骤面板
+    parent: present.panel
+    responsibility: 当前步骤的类型、序号、所在组合框路径与分支条件（D-5）；from → to 的真实端点与在本层投影到的节点（均可点击）；本层一条可见消息覆盖多帧时列出这些帧；经由接口的签名与语义、携带的数据结构；引用的关系；说明。
+    codeRefs: [src/components/panel/StepPanel.vue]
+    designNote: 同时显示「真实端点」和「在本层投影到谁」，避免在高层回放时误以为是子模块本身在通信。
+  - id: present.panel.run
+    name: 运行信息
+    parent: present.panel
+    responsibility: 运行视角下模块、关系、聚合边、参与者面板顶部的一节，回答「在这次流程中做了什么」（V6）：本场景中参与的步骤（按顺序，可单击跳转，标出离播放头最近的一步）、在本层投影下收发的消息、本场景中用到的接口与数据；面板原有的结构信息折叠在其下方。
+    codeRefs: [src/components/panel/RunSection.vue]
+    designNote: r3 新增（r2 评审意见 4）。数据来自模型层的参与查询，面板只展示。
+  - id: present.panel.actor
+    name: 参与者面板
+    parent: present.panel
+    responsibility: 外部参与者的名称、类别（用户 / 外部系统 / 时间）、说明；与系统的入口关系；由它触发的场景（可打开）。
+    codeRefs: [src/components/panel/ActorPanel.vue]
+
+  # ── 视图状态层 ──────────────────────────────────────────
+  - id: state.transition.focus
+    name: 视角与焦点规则
+    parent: state.transition
+    responsibility: 视角（结构 / 运行，由是否打开场景决定）与焦点（结构视角 = 选中或当前父模块；运行视角 = 跟随或钉住）的转移；维持焦点不变式：播放中 ⇒ 无选中，有选中 ⇒ 暂停；任何「指向」动作（选中、下钻、搜索跳转、指向步骤）在运行视角下都先暂停；取消选中（Esc、单击空白）回到跟随但保持暂停；只有播放控制能恢复播放（规则 V1–V6）。
+    codeRefs: [src/state/transition/focus.ts]
+    designNote: r3 新增（r2 评审意见 4）。焦点不单独存字段：运行视角下「有选中」即钉住、「无选中」即跟随，不变式由转移保证，状态里没有可以不一致的冗余。
+  - id: state.transition.navigation
+    name: 导航规则
+    parent: state.transition
+    responsibility: 层次与选中的会话规则：下钻、跳转、返回上级、选中、定位关系 / 模块时选中与层次怎么变、Esc 的先后、进不进浏览器历史（规则 N1–N12）；「重新加载后退到哪」「被『只看现状』隐藏时退到哪」等定位问题调用模型层的 nearestExisting / nearestVisibleLevel。
+    codeRefs: [src/state/transition/navigation.ts]
+    designNote: 从一期 DeskState 搬来，行为不变；r3 按知识划分，定位类知识下沉模型层，这里只留会话规则。
+  - id: state.transition.playback
+    name: 回放规则
+    parent: state.transition
+    responsibility: 回放的会话规则：打开场景（从头打开自动播放，从带步骤的链接进入停在该步）、退出场景、前进 / 后退、指向某一步、到达分支点或末尾暂停、选分支、播放 / 暂停 / 速度（规则 R1–R13、F6a、F6c）。「下一步是哪一帧」「到达某帧需要哪些分支选择」「改选后保留哪些选择」都调用模型层的场景查询。
+    principle: |
+      - 播放头以**帧 ID** 记录，与层次无关；层次变化后仍是同一帧（R6）。
+      - 指向某一步（R13）：播放头移到该步（向前或向后）并暂停；所需的分支选择由模型层 choicesFor 给出；画面等同从头播放到这一步。
+      - 恢复播放：清空选中（焦点回到跟随）；只有播放控制能恢复播放（V4）。取消选中也回到跟随，但不恢复播放。
+    codeRefs: [src/state/transition/playback.ts]
+  - id: state.transition.url
+    name: URL 编解码
+    parent: state.transition
+    responsibility: 视图状态与查询参数互相转换：`level` `sel` `sc` `step` `alt`（已选分支，按分支点有序编码）；解码时丢弃无效值并给出最接近的合法状态；标注一次转移是否进浏览器历史（N10、R10）。
+    codeRefs: [src/state/transition/url.ts]
+
+  - id: state.layout.sequence
+    name: 时序图排布
+    parent: state.layout
+    responsibility: 给时序模型算坐标：外部参与者泳道在最左，其余泳道按结构图中节点的横坐标排序（规则 P9）；泳道宽度按名称自适应；消息纵向累加；组合框包住其子消息并按嵌套深度内缩；结果按「层次 + 场景 + 路径」缓存。
+    principle: 规则简单、同步计算，不调用 elk（技术选型 §3.3）。
+    codeRefs: [src/layout/sequence.ts]
+
+  # ── 模型层 ──────────────────────────────────────────────
+  - id: model.scenario.flatten
+    name: 回放计划
+    parent: model.scenario
+    responsibility: 把步骤树展开成回放计划（帧树）：ref 内联子场景并记为 ref 组合框（F3）；loop 展开一遍并标注循环条件（F4）；par 各分支按书写顺序串行并标注并行（F5）；alt 处分叉为分支点，每个选项一棵子树（F6）。每帧带 ID、所在组合框路径，以及对应的结构关系（显式引用或按 S13 推断，标明是否推断）。
+    principle: |
+      帧 ID = 场景 ID + 步骤 id；步骤没写 id 时用它在树中的路径（如 `sc.open#4.alt0.1`）（F2）。ref 内联时 ID 加上引用处前缀，同一子场景被引用两次也不冲突。
+      绑定关系 bindRelation（S12、S13）：显式引用优先；否则两端之间恰好一条运行时关系（calls / dataflow / event，event 按反向）即认定并标为推断；Validator 用同一个函数，校验与界面结果一致。
+    codeRefs: [src/model/scenario/plan.ts]
+  - id: model.scenario.path
+    name: 回放路径
+    parent: model.scenario
+    responsibility: 按已选分支从回放计划走出线性帧序列，遇到未选分支的分支点即截止并报告；回答分支选择的组合问题：在某个分支点改选后保留哪些选择（F6b）、到达某一帧需要哪些选择（R13）。
+    codeRefs: [src/model/scenario/path.ts]
+    designNote: r2 新增（评审意见 5）。r1 的帧序列是一次展开的固定列表；用户在分支点选择后，路径才确定，所以拆成「计划」与「路径」两步。
+  - id: model.scenario.level
+    name: 帧的层次投影
+    parent: model.scenario
+    responsibility: 把路径上每一帧的 from / to 用 mapEndpoint 映射到当前层次：两个不同节点之间 → 对应的视图边 ID（P1、P2，含边界边、参与者边、核心跨层边 P7）；两端在同一子模块 → 内部活动（P3）；两端都在本层外 → 不可见（P4）。把连续的帧合并为本层的可见消息（同一条边或同一节点上的内部活动合并，P5），作为单步单位。算出场景所在层次（所有帧端点的最近公共祖先，S9）。
+    principle: |
+      视图边 ID 与 projectLevel 的边 ID 规则相同（edgeId），画布直接给已有的边加回放态；消息方向与边方向相反时标记 reverse（P10）；本层两节点之间没有视图边时落点为「未建模」（P11）。关系类型筛选不作用于回放（P8 已删除）。
+      r3（按知识划分）：「本层的下一步 / 上一步」（R7）与「指向某帧时播放头落在哪条可见消息」（R13：落在其所在可见消息，合并时取这一段的第一帧）在这里回答。
+    codeRefs: [src/model/scenario/level.ts]
+  - id: model.scenario.participation
+    name: 参与查询
+    parent: model.scenario
+    responsibility: 回答「某个模块 / 关系 / 视图边 / 参与者在本场景中做了什么」：按路径顺序列出它参与的帧（模块含其子树、视图边含其聚合的关系、关系含推断绑定），在本层投影下收发的消息，用到的接口与数据结构。
+    codeRefs: [src/model/scenario/participation.ts]
+    designNote: r3 新增（V6）。也是脱离工作台仍成立的知识——例如问 AI「Layout 在打开场景这个流程里做了什么」用的是同一个查询。
+  - id: model.scenario.sequence
+    name: 时序模型
+    parent: model.scenario
+    responsibility: 由本层的可见消息产出时序模型：参与者、消息（同步 / 异步 / 显式返回 / 内部活动）、组合框（类型、条件、包住的消息区间；alt 含全部分支及哪一支已选）；框内消息全部合并为内部活动时标记为折叠（P6）。
+    codeRefs: [src/model/scenario/sequence.ts]
+
+relations:
+  # 呈现层内部
+  - { id: rel.p2.split-canvas, from: present.desk-view.split, to: present.canvas.flow, type: commands, description: 分屏容器交给视图转换与交互：上方槽位 }
+  - { id: rel.p2.split-sequence, from: present.desk-view.split, to: present.sequence.interact, type: commands, description: 分屏容器交给时序图交互：下方槽位，打开场景时出现 }
+  - { id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: commands, description: 项目视图让回放控制条接手处理 }
+  - { id: rel.p3.desk-perspective, from: present.desk-view, to: present.perspective, type: commands, description: 项目视图让视角切换接手处理 }
+  - { id: rel.p3.perspective-scenarios, from: present.perspective, to: present.scenarios, type: commands, description: 视角切换交给场景列表：「运行」入口弹出场景列表 }
+  - { id: rel.p3.perspective-act, from: present.perspective, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 视角切换交给 dispatch 与操作：退出场景 → closeScenario }
+  - { id: rel.p3.perspective-read, from: present.perspective, to: state.desk.projection, type: queries, payload: [ds.ViewState], description: 视角切换向视图派生取：当前视角与场景名 }
+  - { id: rel.p3.run-read, from: present.panel.run, to: state.desk.projection, type: queries, payload: [ds.Participation], description: 运行信息向视图派生取结果 }
+  - { id: rel.p3.run-act, from: present.panel.run, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 运行信息交给 dispatch 与操作：单击参与的步骤 → seek（R13） }
+  - { id: rel.p2.seq-lanes, from: present.sequence.interact, to: present.sequence.lanes, type: commands, description: 时序图交互让泳道与消息接手处理 }
+  - { id: rel.p2.seq-fragments, from: present.sequence.interact, to: present.sequence.fragments, type: commands, description: 时序图交互让组合框接手处理 }
+  - { id: rel.p2.panel-scenario, from: present.panel.dispatch, to: present.panel.scenario, type: commands, description: 面板分派让场景面板接手处理 }
+  - { id: rel.p2.panel-step, from: present.panel.dispatch, to: present.panel.step, type: commands, description: 面板分派让步骤面板接手处理 }
+  - { id: rel.p2.panel-actor, from: present.panel.dispatch, to: present.panel.actor, type: commands, description: 面板分派让参与者面板接手处理 }
+  - { id: rel.p2.step-content, from: present.panel.step, to: present.panel.content, type: commands, description: 步骤面板交给内容组件：接口与数据结构折叠项复用一期内容组件 }
+  - { id: rel.p2.scenario-content, from: present.panel.scenario, to: present.panel.content, type: commands, description: 场景面板让内容组件接手处理 }
+
+  # 呈现 → 视图状态（只读派生、只 dispatch）
+  - { id: rel.p2.list-read, from: present.scenarios, to: state.desk.projection, type: queries, payload: [ds.ModelIndex], description: 场景列表向视图派生取：按 scenariosOf(当前层次) 与 triggeredBy 筛选 }
+  - { id: rel.p2.list-open, from: present.scenarios, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 场景列表交给 dispatch 与操作：openScenario(id) }
+  - { id: rel.p2.player-read, from: present.player, to: state.desk.projection, type: queries, payload: [ds.ViewState, ds.ScenarioLevelView], description: 回放控制条向视图派生取：当前位置、本层可见消息数、是否停在分支点及其选项 }
+  - { id: rel.p2.player-act, from: present.player, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 回放控制条交给 dispatch 与操作：prev / next / play / pause / seek / setSpeed / chooseBranch }
+  - { id: rel.p2.seq-read, from: present.sequence.interact, to: state.desk.projection, type: queries, payload: [ds.PositionedSequence, ds.ViewState], description: 时序图交互向视图派生取：读取定位好的时序图与当前位置 }
+  - { id: rel.p2.seq-act, from: present.sequence.interact, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 时序图交互交给 dispatch 与操作：单击消息（含未选分支上的）→ seek（R13）；悬停 → setHover }
+  - { id: rel.p2.flow-step, from: present.canvas.flow, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 视图转换与交互交给 dispatch 与操作：单击步骤序号 → seek（R13）；单击分支预览序号 → chooseBranch；单击节点 / 边仍是 select（运行视角下同时暂停） }
+  - { id: rel.p2.step-read, from: present.panel.step, to: state.desk.projection, type: queries, payload: [ds.Frame, ds.ScenarioLevelView], description: 步骤面板向视图派生取结果 }
+  - { id: rel.p2.step-act, from: present.panel.step, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 步骤面板交给 dispatch 与操作：端点点击 → revealModule；关系点击 → revealRelation }
+  - { id: rel.p2.scenario-act, from: present.panel.scenario, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 场景面板交给 dispatch 与操作：步骤目录 → seek；ref → openScenario；「跳到场景所在层次」→ goTo }
+  - { id: rel.p2.actor-act, from: present.panel.actor, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 参与者面板交给 dispatch 与操作：打开由它触发的场景 }
+
+  # 视图状态内部
+  - id: rel.p2.dispatch-transition
+    from: state.desk.actions
+    to: state.transition
+    type: queries
+    interface: if.state.transition
+    payload: [ds.ViewState, ds.ViewAction]
+    description: dispatch 与操作向视图状态转移取：唯一写入口：dispatch → transition → 写入新状态
+  - { id: rel.p2.router-codec, from: state.desk.url-sync, to: state.transition.url, type: queries, interface: if.state.urlCodec, description: 路由同步向 URL 编解码取：状态 ↔ 查询参数 }
+  - { id: rel.p2.clock-actions, from: state.desk.clock, to: state.desk.actions, type: commands, mode: async, interface: if.desk.actions, description: 时钟同步交给 dispatch 与操作：到点 dispatch(next) }
+  - { id: rel.p2.layoutsync-runner, from: state.desk.layout-sync, to: state.layout.runner, type: queries, mode: async, interface: if.layout.layoutView, payload: [ds.LevelView, ds.PositionedView], description: 布局同步向布局入口与缓存取结果 }
+  - id: rel.p2.projection-plan
+    from: state.desk.projection
+    to: model.scenario.flatten
+    type: queries
+    interface: if.model.planScenario
+    payload: [ds.ScenarioPlan]
+    description: 视图派生向回放计划取：打开场景时展开一次，与层次无关
+  - { id: rel.p2.projection-path, from: state.desk.projection, to: model.scenario.path, type: queries, interface: if.model.resolvePath, payload: [ds.ScenarioPlan, ds.Frame], description: 视图派生向回放路径取：已选分支变化时重算路径 }
+  - id: rel.p2.projection-level
+    from: state.desk.projection
+    to: model.scenario.level
+    type: queries
+    interface: if.model.projectScenario
+    payload: [ds.LevelView, ds.Frame, ds.ScenarioLevelView]
+    description: 视图派生向帧的层次投影取：层次视图或路径变化时重新投影
+  - { id: rel.p2.projection-sequence, from: state.desk.projection, to: model.scenario.sequence, type: queries, payload: [ds.SequenceModel], description: 视图派生向时序模型取结果 }
+  - id: rel.p2.projection-seqlayout
+    from: state.desk.projection
+    to: state.layout.sequence
+    type: queries
+    interface: if.layout.layoutSequence
+    payload: [ds.SequenceModel, ds.PositionedSequence]
+    description: 视图派生向时序图排布取：同步计算；泳道顺序参考结构图布局
+  - { id: rel.p2.seqlayout-types, from: state.layout.sequence, to: model.types, type: queries, payload: [ds.SequenceModel], description: 时序图排布向类型与 Schema 取结果 }
+
+  # 视图状态 → 模型（转移规则需要的查询）
+  - { id: rel.p2.playback-path, from: state.transition.playback, to: model.scenario.path, type: queries, interface: if.model.resolvePath, description: 回放规则向回放路径取：是否停在分支点；改选后保留哪些选择（F6b）；到达某帧需要的选择（R13） }
+  - { id: rel.p2.playback-level, from: state.transition.playback, to: model.scenario.level, type: queries, interface: if.model.projectScenario, description: 回放规则向帧的层次投影取：本层的下一步 / 上一步（R7）；指向某帧时的落点（R13） }
+  - { id: rel.p2.nav-projector, from: state.transition.navigation, to: model.projector, type: queries, interface: if.model.projectLevel, description: 导航规则向 Projector 层次投影取：nearestVisibleLevel（N12） }
+  - { id: rel.p3.nav-existing, from: state.transition.navigation, to: model.pipeline.indexer, type: queries, interface: if.model.buildIndex, description: 导航规则向 Indexer 取：nearestExisting（N5、N11） }
+  - { id: rel.p3.projection-participation, from: state.desk.projection, to: model.scenario.participation, type: queries, interface: if.model.participation, payload: [ds.Participation], description: 视图派生向参与查询取：运行视角下钉住对象时派生其运行信息 }
+
+  # 模型层内部
+  - { id: rel.p2.level-endpoints, from: model.scenario.level, to: model.projector.endpoints, type: queries, interface: if.model.mapEndpoint, description: 帧的层次投影向端点映射取：与结构投影共用同一套端点规则 }
+  - { id: rel.p2.level-sequence, from: model.scenario.level, to: model.scenario.sequence, type: streams, payload: [ds.ScenarioLevelView], description: 本层的可见消息交给时序模型 }
+  - { id: rel.p3.validator-bind, from: model.pipeline.validator, to: model.scenario.flatten, type: queries, description: Validator 向回放计划取：S5a / S13 与回放共用 bindRelation }
+  - { id: rel.p2.level-lca, from: model.scenario.level, to: model.pipeline.indexer, type: queries, interface: if.model.buildIndex, description: 帧的层次投影向 Indexer 取：场景所在层次 = 帧端点的最近公共祖先 }
+  - { id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: queries, payload: [ds.ScenarioEntity, ds.ScenarioPlan, ds.Frame, ds.ScenarioLevelView, ds.SequenceModel], description: 场景投影向类型与 Schema 取结果 }
+
+interfaces:
+  - id: if.state.transition
+    name: transition
+    owner: state.transition
+    signature: |
+      transition(state: ViewState, action: ViewAction, ctx: TransitionContext): { state: ViewState; history: 'push' | 'replace' }
+      // TransitionContext: { index: ModelIndex; levelView: LevelView | null; plan?: ScenarioPlan; scenarioView?: ScenarioLevelView }
+    semantics: 纯函数；非法动作返回原状态（不抛错）；同样输入同样输出；任何输出都满足焦点不变式（V2）。规则清单中每条至少一个单测。
+  - id: if.state.urlCodec
+    name: URL 编解码
+    owner: state.transition.url
+    signature: |
+      encodeView(state: ViewState, index: ModelIndex): Record<string, string>
+      decodeView(query: Record<string, string>, index: ModelIndex): ViewAction   // 'restore'：恢复到最接近的合法状态
+  - id: if.model.planScenario
+    name: planScenario
+    owner: model.scenario.flatten
+    signature: |
+      planScenario(index: ModelIndex, scenarioId: string): ScenarioPlan
+      bindRelation(index: ModelIndex, msg: Message): { relation?: string; inferred: boolean; reverse: boolean }   // S12、S13
+    semantics: 纯函数；校验已保证 ref 无环，展开必然终止。
+  - id: if.model.resolvePath
+    name: resolvePath
+    owner: model.scenario.path
+    signature: |
+      resolvePath(plan: ScenarioPlan, choices: ReadonlyMap<string, number>): { frames: Frame[]; pending?: BranchPoint }
+      chooseBranch(plan, choices, pointId: string, option: number): Map<string, number>   // F6b：改选后丢弃其后的选择
+      choicesFor(plan, choices, frameId: string): Map<string, number> | null             // R13：到达该帧需要的选择（尽量保留现有选择）
+    semantics: pending 为路径截止处未选分支的分支点；无效的选择（分支点不在路径上、序号越界）被忽略。
+  - id: if.model.projectScenario
+    name: projectScenario / scenarioHome
+    owner: model.scenario.level
+    signature: |
+      projectScenario(index: ModelIndex, view: LevelView, frames: Frame[]): ScenarioLevelView
+      scenarioHome(index: ModelIndex, plan: ScenarioPlan): string   // 所有帧端点的最近公共祖先（模块 ID 或根）
+      stepAfter(view: ScenarioLevelView, frameId: string | null): string | null    // R7：下一条可见消息覆盖的第一帧
+      stepBefore(view: ScenarioLevelView, frameId: string): string | null
+      landing(view: ScenarioLevelView, frameId: string): string                    // R13：该帧所在可见消息的第一帧
+    semantics: 依赖 projectLevel 的输出，保证帧落到的视图边一定存在于本层视图中。
+  - id: if.model.participation
+    name: participation
+    owner: model.scenario.participation
+    signature: |
+      participation(index: ModelIndex, frames: Frame[], view: ScenarioLevelView,
+                    target: { kind: 'module' | 'relation' | 'edge' | 'actor'; id: string }): Participation
+  - id: if.model.mapEndpoint
+    name: mapEndpoint
+    owner: model.projector.endpoints
+    signature: |
+      mapEndpoint(index: ModelIndex, parentId: string, id: string):
+        | { kind: 'local'; node: string; exact: boolean }
+        | { kind: 'external'; node: string; exact: boolean }
+        | { kind: 'actor'; node: string }          // 二期：参与者在任何层次都映射为它自己
+        | { kind: 'skip' }
+    semantics: 从 projectLevel 中提出的端点映射，模块端点的行为不变；结构投影与场景投影共用。
+  - id: if.layout.layoutSequence
+    name: layoutSequence
+    owner: state.layout.sequence
+    signature: |
+      layoutSequence(model: SequenceModel, structure?: PositionedView): PositionedSequence
+    semantics: 同步、纯函数；参与者泳道在最左，其余按 structure 中节点横坐标排序。
+
+dataStructures:
+  - id: ds.ActorDef
+    name: ActorDef
+    definition: |
+      interface ActorDef {
+        id: string
+        name: string
+        kind: 'user' | 'system' | 'time'   // 用户 / 外部系统 / 时间
+        description?: string
+      }
+    description: 外部参与者：系统之外主动发起交互的实体，不进模块树（规则 A1–A5）。可作为关系与消息的端点。
+  - id: ds.ScenarioDef
+    name: ScenarioDef
+    definition: |
+      interface ScenarioDef {
+        id: string
+        name: string
+        description?: string
+        cause?: string                 // 触发原因（文字）；触发者由第一条消息的发送方推出
+        steps: StepDef[]
+      }
+    description: 场景文件（`scenarios/*.yaml|json`）中一个场景的形状。不写默认层次与触发者（规则 S9、A6）。
+  - id: ds.StepDef
+    name: StepDef
+    definition: |
+      type StepDef =
+        | { call: Message } | { async: Message } | { return: Message }
+        | { alt: { when: string; steps: StepDef[] }[] }
+        | { loop: { while: string; steps: StepDef[] } }
+        | { par: { steps: StepDef[] }[] }
+        | { ref: string }              // 引用另一个场景 ID
+      interface Message {
+        id?: string                    // 可选，场景内唯一；写了则帧 ID 稳定（F2）
+        from: string; to: string       // 模块（写最深的）或参与者
+        label?: string
+        relation?: string              // 可选：对应的结构关系，端点须一致（event 反向比对）
+        interface?: string
+        payload?: string | string[]
+        note?: string
+      }
+    description: 步骤树；消息步骤为叶子，组合步骤可任意嵌套。
+  - id: ds.ScenarioEntity
+    name: ScenarioEntity
+    definition: |
+      interface ScenarioEntity extends ScenarioDef {
+        src: SourceLoc
+        stepSrc: Map<string, SourceLoc>   // 步骤路径 → 出处，供报错与面板显示
+      }
+    description: Loader 合并后的场景。
+  - id: ds.ScenarioPlan
+    name: ScenarioPlan
+    definition: |
+      interface ScenarioPlan {
+        scenarioId: string
+        nodes: PlanNode[]
+      }
+      type PlanNode =
+        | { kind: 'frame'; frame: Frame }
+        | { kind: 'branch'; point: BranchPoint; options: PlanNode[][] }
+      interface BranchPoint { id: string; options: { when: string; first?: Frame }[] }
+    description: 回放计划：展开后的帧树，只在 alt 处分叉；loop / par / ref 已线性化并以组合框标签记录。
+  - id: ds.Frame
+    name: Frame
+    definition: |
+      interface Frame {
+        id: string                     // 'sc.open#m3' 或 'sc.open#4.alt0.1'（无步骤 id 时用路径）
+        kind: 'call' | 'async' | 'return'
+        from: string; to: string       // 真实端点（最深模块或参与者）
+        label?: string; interface?: string; payload: string[]
+        relation?: string; relationInferred: boolean   // S13：推断的在面板上标「推断」
+        fragments: { kind: 'alt' | 'loop' | 'par' | 'ref'; label: string; branch?: number }[]  // 外到内
+      }
+    description: 一帧回放单位，与层次无关。
+  - id: ds.ScenarioLevelView
+    name: ScenarioLevelView
+    definition: |
+      interface ScenarioLevelView {
+        levelId: string
+        messages: {                    // 本层可见消息 = 单步单位（R7）
+          frameIds: string[]           // 覆盖的连续帧
+          at:
+            | { kind: 'edge'; edgeId: string; from: string; to: string; reverse: boolean }   // reverse：与边箭头方向相反（P10）
+            | { kind: 'unmodeled'; from: string; to: string }                                // P11：本层无视图边，回放时画临时虚线
+            | { kind: 'internal'; node: string }
+        }[]
+        hidden: string[]               // 本层不可见的帧
+        home: string                   // 场景所在层次
+      }
+    description: 路径在当前层次的落点；画布、回放控制、时序模型共用。
+  - id: ds.SequenceModel
+    name: SequenceModel
+    definition: |
+      interface SequenceModel {
+        participants: { nodeId: string; id: string; kind: 'module' | 'boundary' | 'actor' }[]
+        messages: { index: number; from: string; to: string; kind: 'call' | 'async' | 'return' | 'internal'; label: string }[]
+        fragments: {
+          kind: 'alt' | 'loop' | 'par' | 'ref'; label: string; depth: number
+          first: number; last: number; collapsed: boolean
+          branches?: { when: string; chosen: boolean | null }[]   // 仅 alt；null = 未到达
+        }[]
+      }
+    description: 当前层次的时序图内容（无坐标）。
+  - id: ds.PositionedSequence
+    name: PositionedSequence
+    definition: |
+      interface PositionedSequence {
+        model: SequenceModel
+        lanes: Map<string, { x: number; w: number }>
+        boundaryX?: number              // 参与者与系统内泳道之间的分隔线
+        messages: { y: number }[]
+        fragments: { x: number; y: number; w: number; h: number }[]
+        size: { w: number; h: number }
+      }
+    description: 时序图布局结果。
+  - id: ds.ViewState
+    name: ViewState
+    definition: |
+      interface ViewState {
+        levelId: string
+        selection: Selection | null
+        hover: string | null
+        toggles: Toggles                  // 边界节点、只看现状、关系类型、标出变更、对比基线
+        playback: PlaybackState | null    // null = 结构视角；非 null = 运行视角（V1）
+      }
+      // 焦点不变式（V2）：playback?.playing ⇒ selection === null；运行视角下 selection ≠ null 即「钉住」
+    description: 视图状态：用户此刻在看什么，一个值（C+）。由 DeskState 持有，只经 transition 改变；视角与焦点由它推出，不另存字段。
+  - id: ds.PlaybackState
+    name: PlaybackState
+    definition: |
+      interface PlaybackState {
+        scenarioId: string
+        frameId: string | null            // 播放头（帧 ID），null = 尚未开始
+        choices: Map<string, number>      // 分支点 ID → 已选选项
+        playing: boolean
+        speed: 0.5 | 1 | 2
+      }
+    description: 视图状态中的回放部分；scenarioId、frameId、choices 写进 URL（sc / step / alt）。
+  - id: ds.ViewAction
+    name: ViewAction
+    definition: |
+      type ViewAction =
+        | { type: 'loaded' | 'reloaded' } | { type: 'restore'; query: … }
+        | { type: 'drill'; id } | { type: 'goTo'; id; select? } | { type: 'goUp' }
+        | { type: 'select'; selection } | { type: 'revealRelation'; id } | { type: 'revealModule'; id }
+        | { type: 'hover'; id } | { type: 'toggle'; patch: Partial<Toggles> }
+        | { type: 'openScenario'; id } | { type: 'closeScenario' }
+        | { type: 'next' } | { type: 'prev' } | { type: 'seek'; frameId }
+        | { type: 'play' } | { type: 'pause' } | { type: 'speed'; value }
+        | { type: 'chooseBranch'; pointId; option }
+    description: 用户意图与外界变化统一成动作，经 dispatch 交给 transition。
+  - id: ds.Participation
+    name: Participation
+    definition: |
+      interface Participation {
+        frames: { frameId: string; seq: number; role: 'from' | 'to' | 'internal' | 'traverse' }[]  // 按路径顺序
+        messages: number[]              // 本层可见消息的序号
+        interfaces: string[]; dataStructures: string[]
+        nearest?: string                // 离播放头最近的参与帧
+      }
+    description: 某个对象在本场景中做了什么，运行视角面板的「运行信息」。
+  - id: ds.PaneLayout
+    name: PaneLayout
+    definition: |
+      type PaneLayout =
+        | { kind: 'pane'; slot: 'structure' | 'sequence'; collapsed?: boolean }
+        | { kind: 'split'; dir: 'row' | 'column'; sizes: number[]; children: PaneLayout[] }
+    description: 分屏布局树；二期固定为 column 两块，后续自由拖拽只扩展其编辑操作（评审意见 1）。

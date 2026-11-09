@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 9a9ab9a488c7855a state.desk.actions#abstraction=a470106b state.desk.actions#invariants=a571a4eb state.desk.actions#responsibility=6f40dc96 state.desk.actions#summary=c8b5ff29">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>dispatch 与操作 · 只有一支笔</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
+</style>
+  </head>
+  <body>
+
+    <h1>只有一支笔</h1>
+    <p class="lede"><span data-arch="state.desk.actions">dispatch 与操作</span>是整张桌子的写入口：想改状态，都从这里排队过。</p>
+
+    <h2>操作装弹，dispatch 击发，规则瞄准</h2>
+    <figure>
+      <svg viewBox="0 0 480 262" role="img" aria-label="一支笔：意图装成动作，dispatch 是唯一赋值处，规则算新值">
+        <defs><marker id="a16P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a16S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a16A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a16M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a16g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a16l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="4" y="6" width="87" height="28" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="47.5" y="24.0" font-size="11.5" text-anchor="middle">下钻</text>
+        <path d="M47,34 L200,64" stroke="var(--text-2)" stroke-width="1.1" fill="none" marker-end="url(#a16g)"/>
+        <rect x="99" y="6" width="87" height="28" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="142.5" y="24.0" font-size="11.5" text-anchor="middle">选中</text>
+        <path d="M142,34 L220,64" stroke="var(--text-2)" stroke-width="1.1" fill="none" marker-end="url(#a16g)"/>
+        <rect x="194" y="6" width="87" height="28" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="237.5" y="24.0" font-size="11.5" text-anchor="middle">打开场景</text>
+        <path d="M237,34 L240,64" stroke="var(--text-2)" stroke-width="1.1" fill="none" marker-end="url(#a16g)"/>
+        <rect x="289" y="6" width="87" height="28" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="332.5" y="24.0" font-size="11.5" text-anchor="middle">单步</text>
+        <path d="M332,34 L260,64" stroke="var(--text-2)" stroke-width="1.1" fill="none" marker-end="url(#a16g)"/>
+        <rect x="384" y="6" width="87" height="28" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="427.5" y="24.0" font-size="11.5" text-anchor="middle">拖标签</text>
+        <path d="M427,34 L280,64" stroke="var(--text-2)" stroke-width="1.1" fill="none" marker-end="url(#a16g)"/>
+        <rect x="140" y="66" width="200" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="240.0" y="88.3" font-size="13" text-anchor="middle">对外操作</text><text x="240.0" y="102.8" font-size="10.5" text-anchor="middle" class="muted">一种意图一个，只装一个动作</text>
+        <rect x="170" y="140" width="140" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="240.0" y="162.7" font-size="14" text-anchor="middle" font-weight="600">dispatch</text><text x="240.0" y="177.2" font-size="10.5" text-anchor="middle" class="muted">唯一赋值处</text>
+        <g data-arch="state.transition"><rect x="20" y="212" width="190" height="46" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="115.0" y="232.1" font-size="12.5" text-anchor="middle">视图状态转移</text><text x="115.0" y="246.6" font-size="10.5" text-anchor="middle" class="muted">算新的视图状态</text></g>
+        <rect x="270" y="212" width="190" height="46" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="365.0" y="232.1" font-size="12.5" text-anchor="middle">工作区规则</text><text x="365.0" y="246.6" font-size="10.5" text-anchor="middle" class="muted">算新的标签排布</text>
+        <path d="M240,116 L240,138" stroke="var(--warn)" stroke-width="2" fill="none" marker-end="url(#a16S)"/>
+        <path d="M210,190 L150,210" stroke="var(--warn)" stroke-width="1.6" fill="none" marker-end="url(#a16S)"/>
+        <path d="M270,190 L330,210" stroke="var(--warn)" stroke-width="1.6" fill="none" marker-end="url(#a16S)"/>
+      </svg>
+      <figcaption>每个对外操作只把意图装成一个动作，不直接写状态。视图区的标签排布走同一条路：经工作区规则算出新值。</figcaption>
+    </figure>
+
+    <h2>为什么不用优先级</h2>
+    <figure>
+      <svg viewBox="0 0 480 276" role="img" aria-label="靠优先级猜谁赢，不如让所有改动排成一列过同一个纯函数">
+        <defs><marker id="a17P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a17S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a17A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a17M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a17g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a17l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <text x="8" y="16" font-size="12" text-anchor="start" font-weight="600">✗ 靠优先级猜</text>
+        <rect x="8" y="28" width="90" height="36" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="53.0" y="50.2" font-size="12" text-anchor="middle">选中</text>
+        <path d="M98,46 C140,46 150,69 188,69" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a17g)"/>
+        <rect x="8" y="74" width="90" height="36" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="53.0" y="96.2" font-size="12" text-anchor="middle">播放头</text>
+        <path d="M98,92 C140,92 150,69 188,69" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a17g)"/>
+        <rect x="190" y="46" width="110" height="46" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="245.0" y="66.3" font-size="13" text-anchor="middle">面板</text><text x="245.0" y="80.8" font-size="10.5" text-anchor="middle" class="muted">谁赢？</text>
+        <text x="316" y="66" font-size="10.5" text-anchor="start" class="muted">规则越加越多，</text>
+        <text x="316" y="82" font-size="10.5" text-anchor="start" class="muted">仍会漏掉一种组合</text>
+        <line x1="4" y1="128" x2="476" y2="128" stroke="var(--line)" stroke-width="1" stroke-dasharray="4 4"/>
+        <text x="8" y="152" font-size="12" text-anchor="start" font-weight="600">✓ 排成一列</text>
+        <rect x="8" y="164" width="90" height="36" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="53.0" y="186.2" font-size="12" text-anchor="middle">选中</text>
+        <path d="M98,182 C130,182 140,205 166,205" stroke="var(--warn)" stroke-width="1.6" fill="none" marker-end="url(#a17S)"/>
+        <rect x="8" y="210" width="90" height="36" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="53.0" y="232.2" font-size="12" text-anchor="middle">播放头</text>
+        <path d="M98,228 C130,228 140,205 166,205" stroke="var(--warn)" stroke-width="1.6" fill="none" marker-end="url(#a17S)"/>
+        <rect x="168" y="182" width="160" height="46" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="248.0" y="202.3" font-size="13" text-anchor="middle">dispatch → 规则</text><text x="248.0" y="216.8" font-size="10.5" text-anchor="middle" class="muted">一处回答</text>
+        <rect x="366" y="186" width="100" height="38" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="416.0" y="209.4" font-size="12.5" text-anchor="middle">一个值</text>
+        <path d="M328,205 L364,205" stroke="var(--warn)" stroke-width="1.6" fill="none" marker-end="url(#a17S)"/>
+        <text x="240" y="268" font-size="10.5" text-anchor="middle" class="muted">「下钻后选中谁」只在规则里答一次</text>
+      </svg>
+      <figcaption>多个入口想改同一处显示时，不靠优先级猜谁赢，而是让所有改动排成一列、过同一个纯函数。牵扯在一起的问题因此只在规则里回答一次。</figcaption>
+    </figure>
+
+  </body>
+</html>

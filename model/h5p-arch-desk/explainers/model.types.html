@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 1749504daf61ba7b model.types#abstraction=0f291e02 model.types#invariants=760c6103 model.types#responsibility=9ac6a64b model.types#summary=4cb9fd5b">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>类型与 Schema · 一份词汇</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
+</style>
+  </head>
+  <body>
+
+    <h1>一份词汇</h1>
+    <p class="lede"><span data-arch="model.types">类型与 Schema</span>规定描述长什么样：模块、关系、场景各有哪些字段、取哪些值。</p>
+
+    <h2>共同的词汇，不含计算</h2>
+    <figure>
+      <svg viewBox="0 0 480 210" role="img" aria-label="类型与 Schema 是模型层其余三个次层共同的词汇：只有形状与只查表的谓词，不含计算">
+        <defs><marker id="a15P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a15S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a15A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a15M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a15g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a15l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="6" y="6" width="150" height="40" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="81.0" y="30.4" font-size="12.5" text-anchor="middle">交付</text>
+        <path d="M81,46 L200,88" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a15g)"/>
+        <rect x="164" y="6" width="150" height="40" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="239.0" y="30.4" font-size="12.5" text-anchor="middle">解释</text>
+        <path d="M239,46 L240,88" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a15g)"/>
+        <rect x="322" y="6" width="150" height="40" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="397.0" y="30.4" font-size="12.5" text-anchor="middle">描述</text>
+        <path d="M397,46 L280,88" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a15g)"/>
+        <g data-arch="model.types"><rect x="110" y="90" width="260" height="62" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="240.0" y="111.4" font-size="14" text-anchor="middle" font-weight="600">类型与 Schema</text><text x="240.0" y="125.9" font-size="10.5" text-anchor="middle" class="muted">形状 · 取值 · 只查表的谓词</text><text x="240.0" y="140.4" font-size="10.5" text-anchor="middle" class="muted">一份词汇</text></g>
+        <rect x="140" y="176" width="200" height="30" rx="8" fill="none" stroke="var(--gray)" stroke-dasharray="5 4"/><text x="240.0" y="195.2" font-size="12" text-anchor="middle">✗ 不含任何计算</text>
+      </svg>
+      <figcaption>其余三个次层都说这一份词汇，所以改一个名字只改一处。它只放形状和查表即得的谓词，一旦有了计算，就该挪到用它的那一层。</figcaption>
+    </figure>
+
+  </body>
+</html>

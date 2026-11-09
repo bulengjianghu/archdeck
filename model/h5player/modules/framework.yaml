@@ -1,0 +1,1774 @@
+# 区域：infra.framework（Framework 机制内核）
+# 代码：packages/framework/src/**
+# 只在 infra.framework 之下挂子模块；跨区域关系只引用第二级模块 ID。
+
+modules:
+  - id: infra
+    name: Infrastructure
+    summary: 把播放机制落到浏览器、网络、Worker 与 Wasm 上
+  # ─── 第二级模块的原则（ADR-0042，补充骨架条目）───
+  - { id: infra.framework, name: "Framework 机制内核", abstraction: 只放不含业务选择的通用机制，按可靠执行的对象切分：命令、图事务、模型槽位、插件各有唯一机制，业务经 Hook 与插件注入。, summary: 可靠执行命令、图事务、模型换代与插件生命周期, invariants: [排队命令由单一调度循环逐条执行，immediate 只插队首，不并行, MU 图拓扑只经 updatePipeline 的 diff 事务改变，失败恢复事务前快照, 包依赖只有 domain 与 share，不引用播放器业务代码] }
+  # ───────────────────────── 内核门面与事件 / 错误路由 ─────────────────────────
+  - id: infra.framework.kernel
+    name: 内核门面与事件 / 错误路由
+    summary: 装配三个控制器，路由事件与错误并映射领域事件
+    parent: infra.framework
+    kind: component
+    order: 1
+    responsibility: >-
+      Framework 入口对象：按组合根注入的绑定函数惰性创建三个 Controller，组装事件总线、错误处理链与插件 API，
+      并把 emit / handleError 回填到 Context；同时负责把领域事件映射为对外 EventKey。不含任何播放业务决策。
+    abstraction: 门面只做装配与路由：控制器按注入的绑定函数惰性创建，事件与错误各走一条链，领域事件经适配器单向映射为对外事件。
+    codeRefs:
+      - packages/framework/src/index.ts
+      - packages/framework/src/types.ts
+      - packages/framework/src/controllers/bindControllers.ts
+      - packages/framework/src/controllers/controllerBase.ts
+      - packages/framework/src/controllers/stateMachine/internalCommand.ts
+      - packages/framework/src/common/utils/eventEmitter.ts
+      - packages/framework/src/common/domainEventAdapter.ts
+      - packages/framework/src/common/profileEventBus.ts
+      - packages/framework/src/common/errorBase.ts
+    docRefs: [docs/arch/blueprint.md, docs/design/0-kernel/observation-and-coordination.md]
+    children:
+      - id: infra.framework.kernel.facade
+        name: Framework 门面与控制器装配
+        summary: 惰性创建并缓存三个控制器，交出插件 API
+        kind: component
+        responsibility: >-
+          Framework 类本体：经 ControllerBinder 按 ControllerKey 惰性创建并缓存 Pipeline / StateMachine / Plugin 三个控制器
+          （Pipeline 先建，它自身就是 Dispatcher），构造 PluginApi 交给 PluginController；ControllerBase 为控制器提供
+          内部命令、日志、埋点与模型只读投影等公共能力。不内置隐式工厂单例。
+        principle: |
+          - 组合根调用 `bindFrameworkControllers()` 得到 binder 并传入 `new Framework(context, binder)`，Framework 只经 binder 建 Controller（依赖倒置，便于替身）。
+          - 构造顺序固定：先取 Pipeline（作为全局 Dispatcher）→ StateMachine → 注入 `context.emit / hasEventListener / handleError` → Plugin.initApi(PluginApi)。
+          - `destroy()` 清空控制器表并级联 PluginController.destroy。
+        provides:
+          - if.framework.kernel.Framework
+          - if.framework.kernel.bindFrameworkControllers
+          - if.framework.kernel.PluginApi
+        dataStructures: [ds.ControllerKey, ds.ControllerBindingDeps]
+        codeRefs:
+          - packages/framework/src/index.ts
+          - packages/framework/src/types.ts
+          - packages/framework/src/controllers/bindControllers.ts
+          - packages/framework/src/controllers/controllerBase.ts
+      - id: infra.framework.kernel.event-bus
+        name: 事件总线
+        summary: 按事件键同步发布订阅，并包装监听器异常
+        kind: component
+        responsibility: >-
+          SDK 内部与对外共用的同步事件总线：按 EventKey 订阅 / 退订 / 发布，emit 时做性能采样，监听器抛错包装为
+          EventUnknownError 上抛；提供「某事件是否有订阅者」查询，供帧级埋点按需开关。
+        provides: [if.framework.kernel.emit]
+        dataStructures: [ds.EventInfo, ds.EventPayloadMap]
+        codeRefs:
+          - packages/framework/src/common/utils/eventEmitter.ts
+          - packages/framework/src/index.ts
+      - id: infra.framework.kernel.error-chain
+        name: 错误路由链
+        summary: 统一接住错误，交插件拦截后按级别处置
+        kind: component
+        responsibility: >-
+          统一错误入口 handleError：包装为 ErrorBase、非 Ignore 级埋点，依次交给插件注册的 ErrorHandler 拦截；
+          未被拦截的按级别处理（Ignore 只记日志，Warn / Recoverable 上抛 Error 事件，Fatal 另以立即 + 中断当前命令的
+          Error 命令驱动状态机进入错误态）。另提供内部命令拒绝的观测出口，避免 fire-and-forget 命令逃逸为 unhandledrejection。
+        principle: |
+          1. `errorWrapper` 归一 → 非 Ignore 级 `context.track`。
+          2. 责任链：`errorHandlers` 依序调用，任一返回 null 即视为已处理。
+          3. 未处理：emit `EventKey.Error`（监听器抛错只记日志，不回灌 handleError 防递归）；Fatal 时 `sendCommand({key: Error, options: {immediate, abortCurrentCommand}})`。
+          4. `observeInternalCommand` 给内部命令 Promise 挂 catch：预期内拒绝（状态不匹配 / 取消）记 Track，其余记 Warn，原 Promise 原样返回。
+        provides:
+          - if.framework.kernel.handleError
+          - if.framework.kernel.observeInternalCommand
+        dataStructures: [ds.ErrorHandler]
+        codeRefs:
+          - packages/framework/src/index.ts
+          - packages/framework/src/controllers/stateMachine/internalCommand.ts
+          - packages/framework/src/common/errorBase.ts
+          - packages/framework/src/common/types/error.ts
+      - id: infra.framework.kernel.domain-events
+        name: 领域事件适配
+        summary: 把领域事件中转并映射为对外事件
+        kind: component
+        responsibility: >-
+          领域事件到对外事件的边界：ProfileEventBus 把 state / statistic 单例发布的领域事件同步中转给 Context；
+          DomainEventAdapter 把 LoadModeChanged / PlayModeChanged / SolutionChanged 映射为 PlayModeChange / SolutionChange /
+          PlayerDataChange 等 EventKey 并记日志，对不映射的事件显式忽略、未知 kind 抛错（穷尽性守卫）。
+        provides:
+          - if.framework.kernel.createProfileEventBus
+          - if.framework.kernel.DomainEventAdapter
+        codeRefs:
+          - packages/framework/src/common/domainEventAdapter.ts
+          - packages/framework/src/common/profileEventBus.ts
+        docRefs: [docs/arch/blueprint.md]
+
+  # ───────────────────────── 状态机 ─────────────────────────
+  - id: infra.framework.state-machine
+    name: 状态机
+    summary: 串行执行命令，按规则表迁移状态并下发动作
+    parent: infra.framework
+    kind: component
+    order: 2
+    responsibility: >-
+      控制面唯一的生命周期状态通道：串行调度命令，按当前模式的迁移规则表匹配状态、执行 pre / post Hook、
+      把命令翻译为 Action 经 Dispatcher 下发给 MU，并三段式提交 PlaybackState 的状态迁移。
+      不负责方案选择与业务编排（由 Hook 的注册方承担）。
+    abstraction: 调度、迁移与规则分离：命令串行进入，迁移按规则表数据驱动，业务编排只经 pre / post Hook 注册进来。
+    principle: |
+      一条命令的时序（`StateMachine.receive`）：
+      1. 规则表查 `trigger = command.key` 的迁移；`match(current)` 不通过 → `CommandNoMatchTransitionError`。
+      2. 计算 nextState，`stateModel.beginTransition(nextState)`（暂存，命令代次 +1）。
+      3. 依次执行 preHooks，任一返回 true 即阻断（释放暂存，`CommandBlockedByHookError`）。
+      4. 生成 actions（规则显式给出或按命令→动作映射兜底），逐个 `dispatcher.dispatchAsync` 并等待。
+      5. 依次执行 postHooks。
+      6. `commitTransition(nextState)` 提交，状态变化则 emit `PlayerStatusChange`，最后 `endTransition` 释放暂存。
+      每个 await 之后都检查「当前命令 id 是否仍是自己」，被 abort 的僵尸续段只能了结自己的 resolver，不得清理后继命令的所有权。
+    provides:
+      - if.framework.state-machine.StateMachineController
+      - if.framework.state-machine.sendCommand
+      - if.framework.state-machine.addPreCommandHook
+    dataStructures: [ds.CommandInfo, ds.SwitchPayload, ds.CommandResponse, ds.CommandHook, ds.StateMachineMode, ds.PlayerStatusChangeEventPayload]
+    codeRefs: [packages/framework/src/controllers/stateMachine/**, packages/framework/src/common/types/command.ts, packages/framework/src/common/types/stateMachine.ts]
+    docRefs: [docs/design/0-kernel/state-machine.md]
+    children:
+      - id: infra.framework.state-machine.scheduler
+        name: 命令调度器
+        summary: 排队串行执行命令，支持插队、取消与终态推演
+        kind: component
+        responsibility: >-
+          StateMachineController 对外命令面与 Command / Scheduler：命令入队串行执行（immediate 插队首、abortCurrentCommand
+          取消在跑命令），Promise 化结果；白名单命令可走 sendCommandImmediate 同步直达 dispatch（脊髓反射）；
+          getFinalState 用队列中待执行命令推演最终状态。
+        principle: |
+          - 调度循环为 while 迭代 + 重入保护：同一时刻只有一个命令在执行。
+          - 出队时已非 waiting 的命令以「Command canceled.」settle 后跳过，避免队列停摆。
+          - `cancel()` 置状态并调用 Receiver.abortCommand(id)，由状态机按 id 了结并释放暂存。
+        provides:
+          - if.framework.state-machine.StateMachineController
+          - if.framework.state-machine.sendCommand
+        dataStructures: [ds.CommandInfo, ds.CommandResponse]
+        codeRefs:
+          - packages/framework/src/controllers/stateMachine/stateMachineController.ts
+          - packages/framework/src/controllers/stateMachine/command/**
+      - id: infra.framework.state-machine.engine
+        name: 状态迁移引擎
+        summary: 按匹配、Hook、分发、提交的时序执行单条命令
+        kind: component
+        responsibility: >-
+          StateMachine（Receiver）：执行单条命令的匹配 → Hook → 动作分发 → 状态提交时序，管理 pre / post Hook 注册，
+          按命令 id 绑定结算出口并处理 abort；提供不改状态的纯查询 transferState。
+        principle: |
+          - 三段式迁移：`beginTransition` 暂存 → `commitTransition` 提交 → `endTransition` 释放；本地 `transitionOwned` 标记保证只在持有暂存时释放。
+          - `commandResolvers` 以命令 id 为键，A7 约束：每条命令只能 settle 自己。
+          - Play 命令受理即计一次播放尝试，并在进入动作阶段前补开统计计数窗口。
+        provides: [if.framework.state-machine.addPreCommandHook]
+        dataStructures: [ds.CommandHook]
+        codeRefs:
+          - packages/framework/src/controllers/stateMachine/stateMachine/stateMachine.ts
+          - packages/framework/src/controllers/stateMachine/stateMachine/utils.ts
+          - packages/framework/src/controllers/stateMachine/stateMachine/constants.ts
+      - id: infra.framework.state-machine.rules
+        name: 迁移规则表
+        summary: 按模式给出状态迁移规则表与白名单状态
+        kind: component
+        responsibility: >-
+          按 StateMachineMode（Default 直播 / VodDefault 点播）维护的迁移规则表：trigger、match、actions、targetState，
+          以及白名单状态集；提供只供测试调用的静态校验（目标态在白名单内、可达状态都有出边）。
+        dataStructures: [ds.StateTransitionConfig, ds.StateMachineConfig, ds.StateMachineMode]
+        codeRefs:
+          - packages/framework/src/controllers/stateMachine/stateMachine/transitionRule/**
+          - packages/framework/src/controllers/stateMachine/stateMachine/stateMachine.types.ts
+
+  # ───────────────────────── Pipeline 事务 ─────────────────────────
+  - id: infra.framework.pipeline
+    name: Pipeline 事务与动作分发
+    summary: 原子更新 MU 图拓扑，并把动作分发给 MU
+    parent: infra.framework
+    kind: component
+    order: 3
+    responsibility: >-
+      持有 MU 图（节点、段账本、外部锚点、活动腿），以声明式 diff 原子更新图拓扑并完成节点 Init / Destroy 生命周期，
+      失败整体回滚；按全局或按腿把 Action 分发给 MU。不决定建什么图（由三段工厂产出 diff）。
+    abstraction: 图事务与动作分发分离：拓扑变更只经声明式 diff 原子提交、失败整体回滚，逐帧推送不经控制器，多腿以句柄按腿隔离。
+    principle: |
+      `updatePipeline(diff)` 的原子提交：
+      1. **准备**：把裸 MuKey 翻译为 NodeId（Load 段 `<MuKey>@<LegId>`），物化当前拓扑，交 Domain 的 `validateDiff` 按图规则 G1–G7 与当前 nextStatus 校验，得到目标拓扑；校验失败直接返回 `Err`，图不动。
+      2. **快照**：记录 muMap / segmentMap / anchors / 邻接表 / 活动腿与 `PlaybackState` memento。
+      3. **改图**：一次性重写所有节点的 previous / next 边、段账本与活动腿，并同步 stateModel 的 MU 登记与裸 Key 别名。
+      4. **就地 Init**：新增节点逐个 `Init`；任一失败 → 已 Init 的尽力 `Destroy` 补偿 → 恢复快照 → 返回 `Err(PipelineNotWorkError)`。
+      5. **成功后才 Destroy 出图节点**（先建后拆，回滚时旧节点仍完好），销毁失败只告警。
+      动作分发：`dispatch / dispatchAsync` 按 muKeys 解析目标 NodeId（未给即广播），只命中全局可寻址（活动腿）节点；Capture 只发给渲染器。
+    provides:
+      - if.framework.pipeline.PipelineController
+      - if.framework.pipeline.updatePipeline
+      - if.framework.pipeline.Dispatcher
+      - if.framework.pipeline.PipelineLegHandle
+    dataStructures: [ds.PipelineDiff, ds.PipelineNodeAddition, ds.PipelineUpdateReport, ds.PipelineUpdateResult, ds.Action, ds.ActionResponse]
+    codeRefs:
+      - packages/framework/src/controllers/pipelineController.ts
+      - packages/framework/src/controllers/pipelineLegs.ts
+      - packages/framework/src/common/contracts/pipeline.ts
+    docRefs:
+      - docs/design/0-kernel/pipeline-transaction.md
+      - docs/design/0-kernel/pipeline-graph-rules.md
+      - docs/design/0-kernel/pipeline-legs.md
+    children:
+      - id: infra.framework.pipeline.transaction
+        name: 图事务
+        summary: 以快照回滚原子提交图变更并管理节点生命周期
+        kind: component
+        responsibility: >-
+          updatePipeline 的准备 / 快照 / 改图 / 就地 Init / 回滚 / 出图 Destroy 全流程，以及 catchUpRestart（换代静默旧段的
+          重启恢复）与 describe（图诊断投影）。图合法性规则本身在 Domain，不在此处。
+        principle: |
+          - 校验与改图分离：Domain `validateDiff` 产出目标拓扑，本模块只负责物化与原子切换。
+          - 回滚面 = 图结构 + `PlaybackState.snapshot()/restore()`，保证 MU 状态登记与图同进退。
+          - catchUpRestart 以 `reason: 'restart'` 重发 Init / Load / Play，豁免 MU 动作账本判重。
+        provides: [if.framework.pipeline.updatePipeline, if.framework.pipeline.PipelineController]
+        dataStructures: [ds.PipelineDiff, ds.PipelineNodeAddition, ds.PipelineUpdateReport, ds.PipelineUpdateResult]
+        codeRefs:
+          - packages/framework/src/controllers/pipelineController.ts
+          - packages/framework/src/common/contracts/pipeline.ts
+      - id: infra.framework.pipeline.dispatch
+        name: 动作分发器
+        summary: 把动作广播或定向给 MU 并汇总响应
+        kind: component
+        responsibility: >-
+          Dispatcher 实现：把 Action 同步或异步广播 / 定向到图中 MU 并汇总 MU 响应；裸 MuKey 按活动腿别名解析，
+          另有按腿分发的 dispatchForLeg 供腿句柄使用。
+        provides: [if.framework.pipeline.Dispatcher]
+        dataStructures: [ds.Action, ds.ActionResponse]
+        codeRefs: [packages/framework/src/controllers/pipelineController.ts, packages/framework/src/common/types/action.ts]
+      - id: infra.framework.pipeline.legs
+        name: 多腿句柄
+        summary: 把图操作收窄到单条加载腿
+        kind: component
+        responsibility: >-
+          PipelineLegHandle：把图操作收窄到某条加载腿（只看 / 只派发 / 只更新本腿节点），让三段工厂按裸 MuKey 与段名
+          'load' 书写即可落到指定腿；句柄不持图状态，每次现查宿主。活动腿派发转发宿主全局 dispatch 以保持可观测面。
+        provides: [if.framework.pipeline.PipelineLegHandle]
+        codeRefs: [packages/framework/src/controllers/pipelineLegs.ts]
+        docRefs: [docs/design/0-kernel/pipeline-legs.md]
+
+  # ───────────────────────── 插件控制器 ─────────────────────────
+  - id: infra.framework.plugin
+    name: 插件控制器与插件基类
+    summary: 登记、替换、摘除插件，并给插件受控 API
+    parent: infra.framework
+    kind: component
+    order: 4
+    responsibility: >-
+      插件生命周期机制：PluginController 登记 / 同名替换 / 摘除插件并区分方案插件子集（换方案时整体清理），
+      析构错误隔离后统一上报；PluginBase 为插件提供事件订阅（自动退订）、命令与 Hook、错误处理器、控制器与模型只读投影等受控 API。
+      不包含任何具体插件。
+    principle: |
+      - `pluginMap` 是登记唯一事实源，`solutionPlugins` 只是其子集视图，所有摘除路径两表同步变更。
+      - `usePlugin` → `plugin.apply(PluginApi)`；同名先摘旧再装新。
+      - 清理时单个插件 `destroy()` 抛错被包装收集，整轮清理完成后再交 handleError，避免错误链同步发命令重入清理循环。
+    provides: [if.framework.plugin.IPluginController, if.framework.plugin.PluginBase]
+    codeRefs:
+      - packages/framework/src/controllers/pluginController.ts
+      - packages/framework/src/pluginBase.ts
+      - packages/framework/src/common/contracts/plugin.ts
+    docRefs: [docs/design/0-kernel/plugin-controller.md]
+
+  # ───────────────────────── ModelRegistry ─────────────────────────
+  - id: infra.framework.model-registry
+    name: ModelRegistry
+    summary: 唯一持有模型槽位，提供可回滚换代与稳定视图
+    parent: infra.framework
+    kind: component
+    order: 5
+    responsibility: >-
+      模型生命周期的唯一持有层与切换事实源：持有 state / statistic 全局单例与可换代的 stream / play 槽位，
+      分发换代稳定的视图 Proxy 与属性订阅，提供可回滚的模型切换、代际收口，以及多腿的待命模型槽位。
+      模型的定义、不变量与语义方法在 Domain，不在此处。
+    abstraction: 按槽位主体、视图代理、待命槽位与单例构造切分：写路径只在槽位主体，视图与待命件只借窄宿主接口。
+    principle: |
+      - **稳定视图**：`getView(kind)` 返回的 Proxy 身份不随换代变化，读穿到当前实例；`watch` 订阅挂在 Registry 上，换代自动迁移到新实例。
+      - **写拦截**：接管 / 创建的每个实例立即被 set-trap Proxy 包裹，语义方法内部写 `this.x` 也会触发通知；只有「当前」实例的写入才通知，按 prop 倒排索引使无人订阅的热路径写入零开销。
+      - **代际切换**：`begin{Stream|Playback}ModelSwitch` 先把候选实例发布为当前并更新三元组槽位，返回 `{commit, rollback}`；commit 时 reset 旧实例并返回 DomainEvent（LoadModeChanged 等），rollback 时恢复旧实例与槽位并 destroy 候选。单飞标志保证同一时刻只有一个流模型切换在途。
+      - **代际收口**：`resetGeneration(kind, 'reset' | 'destroy')`；单例只允许 reset，空槽位静默返回，收口不清槽位。
+    provides:
+      - if.framework.model-registry.ModelRegistryRuntime
+      - if.framework.model-registry.beginStreamModelSwitch
+      - if.framework.model-registry.beginPlaybackModelSwitch
+      - if.framework.model-registry.resetGeneration
+      - if.framework.model-registry.StandbyModelSlots
+    dataStructures: [ds.ModelRegistryOptions, ds.PlaybackModelSwitch, ds.GenerationDisposition]
+    codeRefs:
+      - packages/framework/src/common/modelRegistry.ts
+      - packages/framework/src/common/modelRegistryViews.ts
+      - packages/framework/src/common/standbyModelSlots.ts
+      - packages/framework/src/common/types/modelRegistryRuntime.ts
+      - packages/framework/src/common/models/**
+    docRefs: [docs/design/0-kernel/model-registry.md, docs/design/0-kernel/pipeline-legs.md]
+    children:
+      - id: infra.framework.model-registry.registry
+        name: 槽位与代际切换
+        summary: 管理单例与槽位，执行模型换代并通知订阅
+        kind: component
+        responsibility: >-
+          ModelRegistry 主体：单例安装、stream / play 槽位与播放三元组（loadMode / playMode / solution）、
+          replace / adopt / begin*Switch / changePlayMode / resetGeneration、watch 订阅表与通知分发；实现 Domain 的 IModelRegistry 端口。
+        principle: |
+          - 三元组只存在于槽位判别值中，仅在 adopt / replace / commit 成功后刷新，Context 上是只读投影。
+          - 候选在 begin 时即发布（工厂建候选代时需要读到新三元组），领域事件延迟到 commit 才返回给调用方。
+        provides:
+          - if.framework.model-registry.ModelRegistryRuntime
+          - if.framework.model-registry.beginStreamModelSwitch
+          - if.framework.model-registry.beginPlaybackModelSwitch
+          - if.framework.model-registry.resetGeneration
+        dataStructures: [ds.ModelRegistryOptions, ds.PlaybackModelSwitch, ds.GenerationDisposition]
+        codeRefs:
+          - packages/framework/src/common/modelRegistry.ts
+          - packages/framework/src/common/types/modelRegistryRuntime.ts
+      - id: infra.framework.model-registry.views
+        name: 视图代理与写拦截
+        summary: 分发换代稳定的视图代理，拦截写入发通知
+        kind: component
+        responsibility: >-
+          构造 getView 分发的稳定视图 Proxy 与接管实例的 set-trap 包裹体（含方法调用前后差异通知、方法绑定缓存），
+          只依赖 Registry 的窄宿主接口，不持跨调用全局状态。
+        codeRefs: [packages/framework/src/common/modelRegistryViews.ts]
+      - id: infra.framework.model-registry.standby
+        name: 待命模型槽位
+        summary: 按腿持有待命模型，并把它提升为当前
+        kind: component
+        responsibility: >-
+          按腿持有 stream 模型的候选 / 让位实例：不进当前槽、不发布到 getView、不触发 watch；beginPromote 把某腿实例
+          提升为当前（与流模型切换共用单飞标志），旧当前实例降级为让位腿私有、不 reset，撤腿时才 destroy。
+        principle: |
+          - 待命实例创建即用同一 `wrapInstance` 包裹，非当前时写入天然不通知。
+          - `standbyView(leg)` 叠一层判别字段覆盖 Proxy，loadMode / playMode 读作本腿三元组。
+          - 合法性校验在占用单飞之前完成；提升在途时禁止 destroy 让位腿。
+        provides: [if.framework.model-registry.StandbyModelSlots]
+        codeRefs: [packages/framework/src/common/standbyModelSlots.ts]
+        docRefs: [docs/design/0-kernel/pipeline-legs.md]
+      - id: infra.framework.model-registry.singletons
+        name: 单例模型工厂
+        summary: 构造 state 与 statistic 两个全局单例
+        kind: component
+        responsibility: >-
+          state / statistic 两个全局单例的唯一构造点：分别创建 Domain 的 PlaybackState 与 Statistic 并注入领域事件发布器，
+          由组合根交给 Registry 在构造期创建。
+        provides: [if.framework.model-registry.createSingletons]
+        codeRefs:
+          - packages/framework/src/common/models/singletonModelFactories.ts
+          - packages/framework/src/common/models/modelBase.ts
+
+  # ───────────────────────── Context / 设置 ─────────────────────────
+  - id: infra.framework.context
+    name: Context 与设置
+    summary: 向全局提供只读投影、横切面与少量写端口
+    parent: infra.framework
+    kind: component
+    order: 6
+    responsibility: >-
+      贯穿全局的运行时上下文：config + Registry 的只读投影（四个模型、播放三元组）+ 横切面（emit / log / track / recordFrame / handleError）
+      + 少量显式写端口（settings、updateNeedsDecryption）；多腿时以 LegContext 门面按腿角色隔离。不提供业务写入口。
+    abstraction: 只读投影与显式写端口分开：读一律走 Registry 投影，写只经 settings 等少量窄端口，多腿以腿上下文按角色隔离。
+    principle: |
+      - 模型 getter 全部是 `modelRegistry.getView` 的投影；stream / play 在实例接管前返回 undefined（兼容窗口）。
+      - `stop()` 只 reset 各代际，`reset()` 对 stream / play 走 destroy，均经 `resetGeneration` 收口。
+      - 领域事件处理先按播放档案（或活动腿变化）重刷 buffer 四阈值，再交 DomainEventAdapter 对外发布，保证监听方读到稳定值。
+    provides:
+      - if.framework.context.Context
+      - if.framework.context.PlayerSettings
+      - if.framework.context.LegContext
+    dataStructures: [ds.PlayerConfig, ds.PlayerData, ds.BufferThresholdPatch, ds.LegRole]
+    codeRefs:
+      - packages/framework/src/common/context.ts
+      - packages/framework/src/common/playerSettings.ts
+      - packages/framework/src/common/legContext.ts
+      - packages/framework/src/common/types/context.ts
+    docRefs: [docs/arch/blueprint.md, docs/design/0-kernel/pipeline-legs.md]
+    children:
+      - id: infra.framework.context.core
+        name: Context 门面
+        summary: 暴露注册表投影与日志、埋点等横切面
+        kind: component
+        responsibility: >-
+          Context 类：持有 config / data，挂接 ProfileEventBus，暴露 Registry 投影与横切面（日志按级别闸门、埋点、帧记录），
+          处理播放档案领域事件并刷新 buffer 阈值，执行 stop / reset 的代际收口。
+        provides: [if.framework.context.Context]
+        dataStructures: [ds.PlayerConfig, ds.PlayerData]
+        codeRefs: [packages/framework/src/common/context.ts, packages/framework/src/common/types/context.ts]
+      - id: infra.framework.context.settings
+        name: 设置端口
+        summary: 提供具名设置写入口并补发数据变更事件
+        kind: component
+        responsibility: >-
+          PlayerSettings：音量、日志级别、调试地址、buffer 四阈值、降延迟放行、时移录制地址的具名写入口；
+          写入落 data 同名字段并补发 PlayerDataChange（payload 为补丁）。
+        provides: [if.framework.context.PlayerSettings]
+        dataStructures: [ds.BufferThresholdPatch, ds.TimeShiftSourcePatch]
+        codeRefs: [packages/framework/src/common/playerSettings.ts]
+      - id: infra.framework.context.leg-context
+        name: 腿上下文
+        summary: 按腿角色把上下文各面路由到全局或腿内
+        kind: component
+        responsibility: >-
+          LegContext：MU 与腿内片段拿到的 Context 门面，按角色（active / standby / yielded）把 emit、data.url、settings、
+          log、handleError、recordFrame、stateModel、play 模型可见性逐面路由到全局或腿内隔离总线；缓存最近的流事实事件供升活动后回放。
+        principle: |
+          - 非活动腿的 emit / error 进腿内总线、settings 写入静默丢弃；data.url 按 legId 是否为 primary 路由（非主腿恒读本腿地址）。
+          - stateModel 的裸 MuKey 映射为 `<MuKey>@<legId>`（只看是否含 @，与角色无关）。
+          - streamModel 按 Registry 活动腿归属路由。
+        provides: [if.framework.context.LegContext]
+        dataStructures: [ds.LegRole, ds.LegBusMessage]
+        codeRefs: [packages/framework/src/common/legContext.ts]
+        docRefs: [docs/design/0-kernel/pipeline-legs.md]
+
+  # ───────────────────────── MediaUnit 基类 ─────────────────────────
+  - id: infra.framework.media-unit
+    name: MediaUnit 基类
+    summary: 给 MU 提供逐帧直推、状态过滤与动作入口
+    parent: infra.framework
+    kind: component
+    order: 7
+    responsibility: >-
+      所有 MU 的抽象基类（MU SDK 入口）：前后继链上的逐帧 input → processMediaData → output 直推、按 MuStatus 过滤迟到数据、
+      同步 / 异步动作入口、每 MU 计数器与错误包装；提供动作自检账本，拦截同一命令代次内重复的构造 / 就绪类动作。不含具体媒体处理。
+    principle: |
+      - 数据面：`input()` 先查 stateModel 中本节点 next 状态是否 Running，非 Running 丢弃（防异步 output 迟到）；`support(type)` 不支持则透传。
+      - 动作账本：Init / Destroy / Load / Play 以 `(mu, action, commandGeneration)` 判重；开发 / 测试构建抛错，生产只发 Track 告警；`reason: 'restart'` 豁免。
+      - 四条分发线（建图事务直调、dispatchAsync 广播、同步 dispatch、工厂直调）都收口于 `handleAction / handleActionAsync`。
+    provides: [if.framework.media-unit.MediaUnit]
+    dataStructures:
+      - ds.MediaPacket
+      - ds.MediaData
+      - ds.MuConfig
+      - ds.StreamMediaData
+      - ds.DemuxedVideoMetadata
+      - ds.DemuxedAudioMetadata
+      - ds.DemuxedVideoData
+      - ds.DemuxedAudioData
+      - ds.DemuxedVideoCombinedData
+      - ds.DemuxedAudioCombinedData
+      - ds.DecodedVideoData
+      - ds.DecodedAudioData
+      - ds.Mp4RemuxedMetadata
+      - ds.Mp4RemuxedData
+      - ds.FhlsRemuxedData
+    codeRefs: [packages/framework/src/mediaUnit.ts]
+    docRefs: [docs/design/0-kernel/mu-base-sdk-entry.md, docs/design/0-kernel/state-machine.md]
+
+  # ───────────────────────── 公共类型契约 ─────────────────────────
+  - id: infra.framework.contracts
+    name: 框架公共类型契约
+    summary: 导出命令、动作、事件与 MU 等公共类型
+    parent: infra.framework
+    kind: component
+    order: 8
+    responsibility: >-
+      Framework 对外导出、被 Player 各模块共用的类型面：命令 / 动作 / 事件键与载荷、MU 与媒体数据包、控制器接口、
+      Context / 配置 / 数据形状、帧信息等；对 Domain 与 Share 中的同名类型（PlayerStatus、LoadMode、IPlugin、Result、ErrorBase 等）只做再导出，不产生第二份声明。
+    dataStructures:
+      - ds.CommandInfo
+      - ds.SwitchPayload
+      - ds.Action
+      - ds.ActionResponse
+      - ds.EventInfo
+      - ds.EventPayloadMap
+      - ds.PlayerStatusChangeEventPayload
+      - ds.MediaPacket
+      - ds.MediaData
+      - ds.MuConfig
+      - ds.FramePatch
+      - ds.TrackInfo
+    codeRefs:
+      - packages/framework/src/common/index.ts
+      - packages/framework/src/common/types/**
+      - packages/framework/src/common/contracts/**
+
+  # ───────────────────────── 工具 ─────────────────────────
+  - id: infra.framework.utils
+    name: 通用运行时工具
+    summary: 提供环境探测、观测、Worker / Wasm 与定时工具
+    parent: infra.framework
+    kind: component
+    order: 9
+    responsibility: >-
+      依赖浏览器环境的通用工具集：环境 / 能力探测、性能采样与埋点载体、Worker 消息桥与 Wasm 加载、定时与节流、
+      媒体与全屏辅助等。与 share.utils 的区别是这里允许有环境副作用；不含播放业务规则。
+    abstraction: 按环境副作用的类别切分（探测、观测、Worker / Wasm、定时与 DOM），各件不含播放业务规则，供机制与 MU 复用。
+    codeRefs: [packages/framework/src/common/utils/**, packages/framework/src/common/solutionSelector.ts]
+    children:
+      - id: infra.framework.utils.env-probe
+        name: 环境与能力探测
+        summary: 探测浏览器能力，给出各方案可用性
+        kind: component
+        responsibility: >-
+          Feature / Platform / device 探测浏览器与平台能力（MSE、WebCodecs、Wasm 等），并据此给出各 SolutionType 的可用性表，
+          供 Domain 的方案选型使用；选型规则本身不在此处。
+        provides: [if.framework.utils.getSolutionCapabilities]
+        codeRefs:
+          - packages/framework/src/common/utils/feature.ts
+          - packages/framework/src/common/utils/platform.ts
+          - packages/framework/src/common/utils/device.ts
+          - packages/framework/src/common/utils/userActivation.ts
+          - packages/framework/src/common/solutionSelector.ts
+          - packages/framework/src/common/utils/url.ts
+      - id: infra.framework.utils.observe
+        name: 性能采样与埋点载体
+        summary: 采样执行耗时并承载埋点数据
+        kind: component
+        responsibility: >-
+          全局 performance 执行耗时采样（关闭时零拼 key）、统计工具与 TrackInfo 埋点载体。
+        provides: [if.framework.utils.performance]
+        dataStructures: [ds.TrackInfo]
+        codeRefs:
+          - packages/framework/src/common/utils/performance/**
+          - packages/framework/src/common/utils/statistic.ts
+          - packages/framework/src/common/utils/track.ts
+      - id: infra.framework.utils.worker-wasm
+        name: Worker 消息桥与 Wasm 加载
+        summary: 跨线程配对请求应答，并加载 Wasm 模块
+        kind: component
+        responsibility: >-
+          WorkerMessageBridge：主线程与 Worker 之间基于序号与桥编号的请求 / 响应调用（超时、可转移对象、旧消息隔离）；
+          Wasm 胶水代码、加载地址解析与各解码 / 转封装模块的初始化配置。
+        provides: [if.framework.utils.WorkerMessageBridge]
+        codeRefs:
+          - packages/framework/src/common/utils/worker/**
+          - packages/framework/src/common/utils/wasmLoader/**
+      - id: infra.framework.utils.misc
+        name: 定时、媒体与 DOM 辅助
+        summary: 提供定时、节流、环形缓冲与媒体 DOM 辅助
+        kind: component
+        responsibility: >-
+          共享定时器、任务队列、防抖节流、吞吐限速、环形缓冲、时间与格式化、SEI 墙钟读取、媒体 / 画布 / 样式 / 全屏 / fetch 等零散辅助。
+        codeRefs:
+          - packages/framework/src/common/utils/sharedIntervalTimer.ts
+          - packages/framework/src/common/utils/taskQueue.ts
+          - packages/framework/src/common/utils/timerHelper.ts
+          - packages/framework/src/common/utils/throttle.ts
+          - packages/framework/src/common/utils/debounce.ts
+          - packages/framework/src/common/utils/throughputLimiter.ts
+          - packages/framework/src/common/utils/ringBuffer.ts
+          - packages/framework/src/common/utils/seiWallClock.ts
+          - packages/framework/src/common/utils/media.ts
+          - packages/framework/src/common/utils/fullscreen.ts
+
+# ═══════════════════════════════ 关系 ═══════════════════════════════
+relations:
+  # ── 内核门面 ──
+  - id: rel.framework.facade-creates-state-machine
+    from: infra.framework.kernel.facade
+    to: infra.framework.state-machine
+    type: commands
+    description: Framework 门面与控制器装配交给状态机：经 binder 惰性创建 StateMachineController；ControllerBase.sendCommand 经它发内部命令
+    interface: if.framework.state-machine.sendCommand
+    purpose: 建状态机以发内部命令
+  - id: rel.framework.facade-creates-pipeline
+    from: infra.framework.kernel.facade
+    to: infra.framework.pipeline
+    type: commands
+    purpose: 建 Pipeline 作全局分发器
+    description: 'Framework 门面与控制器装配交给 Pipeline 事务与动作分发：组合根装配时 bindFrameworkControllers 首个 new PipelineController，Framework 取它作全局 Dispatcher 注入其余控制器（bindControllers.ts:18、index.ts:43）'
+  - id: rel.framework.facade-inject-context
+    from: infra.framework.kernel.facade
+    to: infra.framework.context.core
+    type: commands
+    purpose: 给 Context 回填发事件与报错能力
+    description: Framework 门面与控制器装配交给 Context 门面：构造期把 emit / hasEventListener / handleError 回填到 Context
+  - id: rel.framework.facade-event-bus
+    from: infra.framework.kernel.facade
+    to: infra.framework.kernel.event-bus
+    type: commands
+    purpose: 建总线承载事件发布与订阅
+    description: 'Framework 门面与控制器装配交给事件总线：Framework 构造时 new EventEmitter，事件经它 emit，PluginApi 的 on / off 转交给它（index.ts:42–51、125–126）'
+  - id: rel.framework.facade-error-chain
+    from: infra.framework.kernel.facade
+    to: infra.framework.kernel.error-chain
+    type: commands
+    purpose: 把错误交插件拦截与分级处置
+    description: 'Framework 门面与控制器装配交给错误路由链：Framework 的 handleError 依次交给已登记的 errorHandlers，未被拦截的致命错误经 observeInternalCommand 下发错误命令（index.ts:79–108）'
+  # ── 错误链 ──
+  - id: rel.framework.error-emit
+    from: infra.framework.kernel.error-chain
+    to: infra.player-index.player-api
+    type: notifies
+    description: 未被拦截的 Warn / Recoverable / Fatal 错误发布 EventKey.Error，经事件总线送达 Player 对外 API（订阅后转发业务方；插件侧的订阅者见 infra.framework → 各插件的通知）
+    payload: ds.EventInfo
+    via: 'bus:infra.framework.kernel.event-bus'
+    purpose: 宣告未被拦截的错误
+  - id: rel.framework.error-fatal-command
+    from: infra.framework.kernel.error-chain
+    to: infra.framework.state-machine.scheduler
+    type: commands
+    mode: async
+    description: 错误路由链交给命令调度器：Fatal 错误以 immediate + abortCurrentCommand 的 Error 命令驱动状态机进入错误态
+    interface: if.framework.state-machine.sendCommand
+    purpose: 让状态机立即进入错误态
+    payload: ds.CommandInfo
+  - id: rel.framework.error-track
+    from: infra.framework.kernel.error-chain
+    to: infra.framework.context.core
+    type: commands
+    purpose: 为错误埋点并记日志
+    description: 错误路由链交给 Context 门面：非 Ignore 级错误经 context.track 埋点、按级别记日志
+  # ── 领域事件适配 ──
+  - id: rel.framework.domain-events-emit
+    from: infra.framework.kernel.domain-events
+    to: infra.player-index.player-api
+    type: notifies
+    description: DomainEvent 映射为 PlayModeChange / SolutionChange 对外事件，经事件总线送达 Player 对外 API（订阅后转发业务方；同时映射出的 PlayerDataChange 只有播放器信息浮层订阅）
+    payload: ds.EventInfo
+    via: 'bus:infra.framework.kernel.event-bus'
+    purpose: 宣告播放模式与方案变化
+  - id: rel.framework.profile-bus-forward
+    from: infra.framework.kernel.domain-events
+    to: infra.framework.context.core
+    type: notifies
+    purpose: 让 Context 处理单例的领域事件
+    description: ProfileEventBus 把单例模型发布的领域事件同步转发给 handlePlaybackProfileEvents
+  # ── 状态机 ──
+  - id: rel.framework.sm-scheduler-engine
+    from: infra.framework.state-machine.scheduler
+    to: infra.framework.state-machine.engine
+    type: commands
+    mode: async
+    purpose: 串行执行取出的命令
+    description: 命令调度器交给状态迁移引擎：串行取出命令交 Receiver.receive 执行；取消时 abortCommand(id)
+    payload: ds.CommandInfo
+  - id: rel.framework.sm-immediate-dispatch
+    from: infra.framework.state-machine.scheduler
+    to: infra.framework.pipeline.dispatch
+    type: commands
+    description: 命令调度器交给动作分发器：白名单命令走 sendCommandImmediate 同步直达 dispatch（不经状态迁移）
+    interface: if.framework.pipeline.Dispatcher
+    purpose: 让白名单命令同步直达 MU
+  - id: rel.framework.sm-engine-dispatch
+    from: infra.framework.state-machine.engine
+    to: infra.framework.pipeline.dispatch
+    type: commands
+    mode: async
+    description: 状态迁移引擎交给动作分发器：把命令生成的 Action 逐个 dispatchAsync 下发给 MU 并等待
+    interface: if.framework.pipeline.Dispatcher
+    purpose: 把命令的动作下发给 MU
+    payload: ds.Action
+  - id: rel.framework.sm-engine-state-model
+    from: infra.framework.state-machine.engine
+    to: domain.models
+    type: commands
+    purpose: 三段式提交播放状态迁移
+    description: 状态迁移引擎交给领域模型：PlaybackState 三段式迁移 begin / commit / endTransition、snapshotState；Play 受理时计播放尝试
+  - id: rel.framework.sm-engine-status-event
+    from: infra.framework.state-machine.engine
+    to: infra.player-index.player-api
+    type: notifies
+    description: 主状态变化时发布 PlayerStatusChange，经事件总线送达 Player 对外 API（订阅后转发业务方）
+    payload: ds.PlayerStatusChangeEventPayload
+    via: 'bus:infra.framework.kernel.event-bus'
+    purpose: 宣告主状态变化
+  - id: rel.framework.sm-engine-status-timeshift
+    from: infra.framework.state-machine.engine
+    to: app.timeshift.coordinator
+    type: notifies
+    description: PlayerStatusChange 经事件总线送达时移会话协调器（进入 Paused 即用户暂停入口；协调器经外壳注入的 on 订阅）
+    payload: ds.PlayerStatusChangeEventPayload
+    via: 'bus:infra.framework.kernel.event-bus'
+    purpose: 宣告主状态变化（含暂停）
+  - id: rel.framework.sm-engine-error
+    from: infra.framework.state-machine.engine
+    to: infra.framework.kernel.error-chain
+    type: commands
+    description: 状态迁移引擎交给错误路由链：命令执行异常包装为 CommandUnknownError 交 handleError
+    interface: if.framework.kernel.handleError
+    purpose: 上报命令执行异常
+  - id: rel.framework.sm-engine-solution-hooks
+    from: infra.framework.state-machine.engine
+    to: app.solution
+    type: commands
+    via: 'channel:callback'
+    purpose: 让 Solution 在命令前后编排
+    description: 状态迁移引擎交给 Solution：命令执行前后依次回调 Solution 经 SolutionDeps 注册的 pre / post 命令 Hook（CommandHook.callback(command)），逐个 await；pre Hook 返回 true 即阻断命令（CommandBlockedByHookError）
+    payload: ds.CommandInfo
+  - id: rel.framework.sm-engine-timeshift-hooks
+    from: infra.framework.state-machine.engine
+    to: app.timeshift
+    type: commands
+    via: 'channel:callback'
+    purpose: 让时移在命令前介入换腿
+    description: 状态迁移引擎交给时移：命令执行前回调时移协调器注册的前置 Hook（观察 Pause 来源、Resume、Seek、Switch、Destroy），逐个 await；Resume 时在状态迁移前放流放阀
+    payload: ds.CommandInfo
+  - id: rel.framework.sm-errors
+    from: infra.framework.state-machine
+    to: share.errors
+    type: queries
+    purpose: 构造命令被拒的错误结果
+    description: '状态机向错误原语取：命令被 Hook 阻断、取消或无匹配迁移时构造带 ErrorCode 的 ErrorBase 作为命令结果（stateMachine.ts:209–241）'
+  # ── Pipeline ──
+  - id: rel.framework.pipeline-validate
+    from: infra.framework.pipeline.transaction
+    to: domain.rules
+    type: queries
+    purpose: 校验 diff 并得出目标拓扑
+    description: 图事务向规则表取：用 validateDiff 按图规则 G1–G7 与当前 nextStatus 校验 diff 并得到目标拓扑
+  - id: rel.framework.pipeline-state-snapshot
+    from: infra.framework.pipeline.transaction
+    to: domain.models
+    type: commands
+    purpose: 快照恢复状态并登记节点增删
+    description: 图事务交给领域模型：事务前 PlaybackState.snapshot()、失败 restore()；改图时 addMu / removeMu / realiasMu
+  - id: rel.framework.pipeline-mu-lifecycle
+    from: infra.framework.pipeline.transaction
+    to: infra.framework.media-unit
+    type: commands
+    mode: async
+    description: 图事务交给 MediaUnit 基类：节点进图就地 Init、出图在事务成功后 Destroy；失败时对已 Init 节点补偿 Destroy
+    interface: if.framework.media-unit.MediaUnit
+    purpose: 让进出图的节点初始化或销毁
+    payload: ds.Action
+  - id: rel.framework.pipeline-dispatch-mu
+    from: infra.framework.pipeline.dispatch
+    to: infra.framework.media-unit
+    type: commands
+    description: 动作分发器交给 MediaUnit 基类：把 Action 广播 / 定向到 MU 的 handleAction / handleActionAsync
+    interface: if.framework.media-unit.MediaUnit
+    purpose: 让 MU 执行动作
+    payload: ds.Action
+  - id: rel.framework.legs-transaction
+    from: infra.framework.pipeline.legs
+    to: infra.framework.pipeline.transaction
+    type: commands
+    description: 多腿句柄交给图事务：腿句柄把裸 MuKey 确定性翻译为本腿 NodeId 后调 updatePipelineForLeg
+    interface: if.framework.pipeline.updatePipeline
+    purpose: 只更新本腿的节点
+    payload: ds.PipelineDiff
+  - id: rel.framework.legs-dispatch
+    from: infra.framework.pipeline.legs
+    to: infra.framework.pipeline.dispatch
+    type: commands
+    description: 多腿句柄交给动作分发器：活动腿转发全局 dispatch，非活动腿走 dispatchForLeg
+    interface: if.framework.pipeline.Dispatcher
+    purpose: 按腿派发动作
+  - id: rel.framework.pipeline-result
+    from: infra.framework.pipeline.transaction
+    to: share.errors
+    type: queries
+    purpose: 构造事务失败的错误
+    description: '图事务向错误原语取：事务失败时构造 ErrorBase（PipelineNotWorkError）放进 Result 返回（pipelineController.ts:534）'
+  # ── 插件 ──
+  - id: rel.framework.plugin-commands
+    from: infra.framework.plugin
+    to: infra.framework.state-machine.scheduler
+    type: commands
+    description: 插件控制器与插件基类交给命令调度器：插件经 PluginApi 发命令、sendCommandImmediate
+    interface: if.framework.state-machine.sendCommand
+    purpose: 让插件发命令
+  - id: rel.framework.plugin-hooks
+    from: infra.framework.plugin
+    to: infra.framework.state-machine.engine
+    type: commands
+    description: 插件控制器与插件基类交给状态迁移引擎：插件注册 pre / post 命令 Hook
+    interface: if.framework.state-machine.addPreCommandHook
+    purpose: 让插件注册命令 Hook
+  - id: rel.framework.plugin-events
+    from: infra.framework.plugin
+    to: infra.framework.kernel.event-bus
+    type: commands
+    description: 插件控制器与插件基类交给事件总线：插件基类经 PluginApi 在总线上订阅 / 退订（销毁时自动退订，回调抛错包装为 PluginEventUnknownError）与发布事件；事件本身按事件名写在真实的发布者与订阅者之间（M14）
+    via: 'channel:inject'
+    purpose: 让插件订阅与发布事件
+  - id: rel.framework.plugin-error-chain
+    from: infra.framework.plugin
+    to: infra.framework.kernel.error-chain
+    type: commands
+    description: 插件控制器与插件基类交给错误路由链：注册 / 移除 ErrorHandler；插件析构错误收集后统一 handleError
+    interface: if.framework.kernel.handleError
+    purpose: 登记拦截器并上报析构错误
+  - id: rel.framework.plugin-dispatcher
+    from: infra.framework.plugin
+    to: infra.framework.pipeline.dispatch
+    type: commands
+    description: 插件控制器与插件基类交给动作分发器：插件经 getDispatcher 直接下发 Action，经 describePipeline 读取图诊断
+    interface: if.framework.pipeline.Dispatcher
+    purpose: 让插件直接下发动作、读图诊断
+  # ── ModelRegistry ──
+  - id: rel.framework.registry-models
+    from: infra.framework.model-registry.registry
+    to: domain.models
+    type: commands
+    purpose: 创建模型，换代时重置或销毁
+    description: 槽位与代际切换交给领域模型：经创建器产出 StreamModel / PlaybackModel 实例，换代时调用其 reset / destroy 语义方法
+  - id: rel.framework.registry-views
+    from: infra.framework.model-registry.registry
+    to: infra.framework.model-registry.views
+    type: queries
+    purpose: 取稳定视图并给实例套写拦截
+    description: 槽位与代际切换向视图代理与写拦截取：构造期为每个 kind 创建稳定视图，接管实例时 wrapInstance 套写拦截
+  - id: rel.framework.registry-standby
+    from: infra.framework.model-registry.registry
+    to: infra.framework.model-registry.standby
+    type: commands
+    description: 槽位与代际切换交给待命模型槽位：createStandby / beginPromote / destroyStandby 等薄委托
+    interface: if.framework.model-registry.StandbyModelSlots
+    purpose: 委托待命槽位的管理与提升
+  - id: rel.framework.standby-views
+    from: infra.framework.model-registry.standby
+    to: infra.framework.model-registry.views
+    type: queries
+    purpose: 给待命实例套写拦截
+    description: 待命模型槽位向视图代理与写拦截取：待命实例创建即 wrapInstance，复用「仅当前实例写入才通知」的短路
+  # ── Context ──
+  - id: rel.framework.context-registry
+    from: infra.framework.context.core
+    to: infra.framework.model-registry.registry
+    type: commands
+    description: Context 门面交给槽位与代际切换：模型 getter 投影 getView；三元组投影 getPlaybackSelection；stop / reset 经 resetGeneration 收口
+    interface: if.framework.model-registry.resetGeneration
+    purpose: 投影模型视图并收口代际
+  - id: rel.framework.context-adapter
+    from: infra.framework.context.core
+    to: infra.framework.kernel.domain-events
+    type: commands
+    description: Context 门面交给领域事件适配：构造期 attach 到 ProfileEventBus；处理领域事件时交 DomainEventAdapter 对外发布
+    interface: if.framework.kernel.DomainEventAdapter
+    purpose: 把领域事件转为对外事件
+  - id: rel.framework.context-buffer-policy
+    from: infra.framework.context.core
+    to: domain.services
+    type: queries
+    purpose: 计算 buffer 四阈值
+    description: Context 门面向决策服务取：播放档案换代或活动腿变化时用 resolveLegPlaybackBuffer 计算 buffer 四阈值
+  - id: rel.framework.settings-event
+    from: infra.framework.context.settings
+    to: app.plugins.diagnostics.player-info
+    type: notifies
+    description: 每次写设置补发 PlayerDataChange（payload 为补丁），经事件总线送达唯一的订阅者播放器信息浮层
+    payload: ds.EventInfo
+    via: 'bus:infra.framework.kernel.event-bus'
+    purpose: 宣告设置变更的补丁
+  - id: rel.framework.leg-context-base
+    from: infra.framework.context.leg-context
+    to: infra.framework.context.core
+    type: commands
+    purpose: 活动腿各面转发到全局
+    description: 腿上下文交给 Context 门面：活动角色把各面转发到全局 Context，非活动角色路由到腿内隔离面
+  - id: rel.framework.leg-context-standby
+    from: infra.framework.context.leg-context
+    to: infra.framework.model-registry.standby
+    type: commands
+    purpose: 按活动腿归属路由流模型
+    description: 腿上下文交给待命模型槽位：streamModel 按 getActiveStreamLeg 的活动腿归属路由
+  # ── MediaUnit ──
+  - id: rel.framework.mu-context
+    from: infra.framework.media-unit
+    to: infra.framework.context
+    type: commands
+    via: 'channel:inject'
+    description: MediaUnit 基类交给 Context 与设置：MU 经注入的 Context（或 LegContext）emit / log / track / handleError，读取配置与模型投影
+    interface: if.framework.context.Context
+    purpose: 发事件、记日志、报错并读配置
+  - id: rel.framework.mu-state-model
+    from: infra.framework.media-unit
+    to: domain.models
+    type: queries
+    purpose: 过滤迟到数据并判重动作
+    description: MediaUnit 基类向领域模型取：按 PlaybackState 中本节点 MuStatus 过滤迟到数据；读命令代次做动作账本判重
+  - id: rel.framework.mu-perf
+    from: infra.framework.media-unit
+    to: infra.framework.utils.observe
+    type: commands
+    description: MediaUnit 基类交给性能采样与埋点载体：处理与动作耗时采样、账本告警埋点
+    interface: if.framework.utils.performance
+    purpose: 采样处理与动作耗时
+  - id: rel.framework.mu-errors
+    from: infra.framework.media-unit
+    to: share.errors
+    type: queries
+    purpose: 把未知异常包装为 MU 错误
+    description: 'MediaUnit 基类向错误原语取：process / doAction 抛出的未知异常经 errorWrapper 包装为 MuProcessUnknownError / MuActionUnknownError（mediaUnit.ts:208、295）'
+  # ── 契约与工具 ──
+  - id: rel.framework.env-probe-domain
+    from: infra.framework.utils.env-probe
+    to: domain.services
+    type: queries
+    purpose: 推断源模式以出能力表
+    description: 环境与能力探测向决策服务取：环境探测调用 Domain 的 inferSourceModes 推断源模式，把能力表交给方案选型
+  - id: rel.framework.event-bus-perf
+    from: infra.framework.kernel.event-bus
+    to: infra.framework.utils.observe
+    type: commands
+    description: 事件总线交给性能采样与埋点载体：emit 时按事件键做耗时采样
+    interface: if.framework.utils.performance
+    purpose: 采样事件分发耗时
+
+# ═══════════════════════════════ 接口 ═══════════════════════════════
+
+  # ── 补充的交互（ADR-0026：有值使用的模块依赖按交互补全，K7）──
+  - { id: rel.framework.context-utils, from: infra.framework.context.core, to: infra.framework.utils, type: queries, description: Context 门面向通用运行时工具取：创建上下文时调用 Time 取时间戳, purpose: 取时间戳 }
+  - { id: rel.framework.contracts-polyfill, from: infra.framework.contracts, to: infra.framework.utils, type: commands, description: 框架公共类型契约交给通用运行时工具：公共入口加载即执行 utils/polyfill，安装运行时补丁, purpose: 加载时安装运行时补丁 }
+  - { id: rel.framework.misc-observe, from: infra.framework.utils.misc, to: infra.framework.utils.observe, type: commands, description: 定时、媒体与 DOM 辅助交给性能采样与埋点载体：共享定时器经 TrackInfo 记录采样与埋点, purpose: 为共享定时器记采样 }
+  - { id: rel.framework.scheduler-utils, from: infra.framework.state-machine.scheduler, to: infra.framework.utils, type: queries, description: 命令调度器向通用运行时工具取：命令对象经 Generator 生成命令 ID、经 Time 记录时间, purpose: 生成命令 ID 并记时间 }
+  - { id: rel.framework.mu-error-chain, from: infra.framework.media-unit, to: infra.framework.kernel.error-chain, type: commands, description: MediaUnit 基类交给错误路由链：MU 基类经 errorWrapper 包装处理异常并走错误路由链, purpose: 把处理异常送入错误链 }
+  - { id: rel.framework.plugin-errors, from: infra.framework.plugin, to: share.errors, type: queries, description: 插件控制器与插件基类向错误原语取：把插件回调里的异常经 errorWrapper 包装为 ErrorBase 交给错误链, purpose: 把插件回调异常包装为错误 }
+
+interfaces:
+  - id: if.framework.kernel.Framework
+    name: Framework
+    owner: infra.framework.kernel.facade
+    signature: |
+      class Framework implements ControllerManager {
+        constructor(context: Context, bindController: ControllerBinder);
+        on<K extends EventKey>(key: K, func: EventListener<K>): void;
+        getController(key: ControllerKey): ControllerBase | undefined;
+        destroy(): void;
+      }
+    description: 机制内核入口，由组合根创建一次。
+    semantics: >-
+      构造期按 Pipeline → StateMachine → Plugin 的顺序惰性创建控制器，并回填 context.emit / handleError / hasEventListener；
+      getController 结果按 key 缓存；destroy 清空控制器表并销毁全部插件。
+  - id: if.framework.kernel.bindFrameworkControllers
+    name: bindFrameworkControllers
+    owner: infra.framework.kernel.facade
+    signature: |
+      function bindFrameworkControllers(): ControllerBinder;
+      type ControllerBinder = (key: ControllerKey, deps: ControllerBindingDeps) => unknown;
+    description: ControllerKey 契约到具体 Controller 实现的绑定，由组合根显式传给 Framework。
+  - id: if.framework.kernel.PluginApi
+    name: PluginApi
+    owner: infra.framework.kernel.facade
+    signature: |
+      interface PluginApi {
+        on<K extends EventKey>(key: K, func: EventListener<K>): void;
+        off<K extends EventKey>(key: K, func: EventListener<K>): void;
+        emit<K extends EventKey>(info: EventInfo<K>): void;
+        registerErrorHandler(handler: ErrorHandler): void;
+        removeErrorHandler(handler: ErrorHandler): void;
+        getContext(): Context;
+        getDispatcher(): Dispatcher;
+        getController(key: ControllerKey): ControllerBase | undefined;
+      }
+    description: 插件可见的受控能力面，由 Framework 组装后经 PluginController.initApi 注入。
+  - id: if.framework.kernel.emit
+    name: emit
+    owner: infra.framework.kernel.event-bus
+    signature: |
+      emit<K extends EventKey>(info: EventInfo<K>): void;
+      hasEventListener<K extends EventKey>(key: K): boolean;
+    description: 同步发布事件（挂在 Context 与 PluginApi 上）。
+    semantics: 同步调用全部监听器；监听器抛错被包装为 EventUnknownError 向调用方抛出。
+  - id: if.framework.kernel.handleError
+    name: handleError
+    owner: infra.framework.kernel.error-chain
+    signature: |
+      handleError(error: ErrorBase): void;          // 挂在 Context 上
+      type ErrorHandler = (error: ErrorBase | null) => ErrorBase | null;
+    description: 全局错误入口，经插件注册的 ErrorHandler 责任链后按级别上报。
+    semantics: >-
+      Ignore 只记日志；Warn / Recoverable 发 Error 事件；Fatal 另发 immediate + abortCurrentCommand 的 Error 命令。
+      Error 事件监听器抛错只记日志，不再回灌 handleError。
+  - id: if.framework.kernel.observeInternalCommand
+    name: observeInternalCommand
+    owner: infra.framework.kernel.error-chain
+    signature: |
+      function observeInternalCommand<T>(promise: Promise<T>, log: InternalCommandLog,
+        module: string, info: CommandInfo): Promise<T>;
+    description: 内部 fire-and-forget 命令的拒绝观测出口。
+    semantics: 原 Promise 原样返回；状态不匹配 / 取消记 Track，其余拒绝记 Warn。Player 公开方法不经过这里。
+  - id: if.framework.kernel.createProfileEventBus
+    name: ProfileEventBus
+    owner: infra.framework.kernel.domain-events
+    signature: |
+      function createProfileEventBus(): ProfileEventBus;
+      interface ProfileEventBus {
+        publish(events: readonly DomainEvent[]): void;
+        attach(handler: (events: readonly DomainEvent[]) => void): void;
+      }
+    description: 单例模型领域事件到 Context 的中转汇。
+    semantics: 组合根先建 bus、以其 publisher 建单例，Context 构造期 attach；publish 同步转发，attach 前单例无发布点。
+  - id: if.framework.kernel.DomainEventAdapter
+    name: DomainEventAdapter
+    owner: infra.framework.kernel.domain-events
+    signature: |
+      function createDomainEventAdapter(deps: {
+        emit<K extends EventKey>(info: EventInfo<K>): void;
+        log(level: LogLevel, module: string, message: string): void;
+        getData(): Readonly<PlayerData>;
+      }): { handle(events: readonly DomainEvent[]): void };
+    description: 领域事件到对外 EventKey 的映射。
+    semantics: 未知 DomainEvent kind 抛 TypeError（穷尽性守卫）；Overlay* / StatisticSliceStarted 显式忽略。
+
+  - id: if.framework.state-machine.StateMachineController
+    name: StateMachineController
+    owner: infra.framework.state-machine.scheduler
+    signature: |
+      interface StateMachineController extends ControllerBase {
+        sendCommand(info: CommandInfo): Promise<ActionResponse[]>;
+        sendCommandImmediate(info: CommandInfo): ActionResponse[] | null;
+        addPreCommandHook(hook: CommandHook): ClearEffect;
+        addPostCommandHook(hook: CommandHook): ClearEffect;
+        updateStateMachineMode(mode: StateMachineMode): boolean;
+        getFinalState(): State;
+        transferState(state: State, info: CommandInfo): State;
+      }
+    description: 控制面命令入口与状态机配置面。
+    semantics: >-
+      updateStateMachineMode 仅在当前 nextStatus 属于目标模式白名单时切换规则表；getFinalState 用待执行队列推演最终状态；
+      transferState 是纯查询，不触碰 stateModel、不 dispatch。
+  - id: if.framework.state-machine.sendCommand
+    name: sendCommand
+    owner: infra.framework.state-machine.scheduler
+    signature: |
+      sendCommand(info: CommandInfo): Promise<ActionResponse[]>;
+    description: 提交一条生命周期命令，串行执行。
+    semantics: >-
+      options.immediate 插到队首；options.abortCurrentCommand 取消在跑命令（以 CommandCanceledError 结算）。
+      成功 resolve 各 Action 的 MU 响应；无规则 / 状态不匹配 / 被 Hook 阻断 / 被取消时 reject ErrorBase（调度器取消出口为字符串）。
+  - id: if.framework.state-machine.addPreCommandHook
+    name: addPreCommandHook / addPostCommandHook
+    owner: infra.framework.state-machine.engine
+    signature: |
+      addPreCommandHook(hook: CommandHook): ClearEffect;
+      addPostCommandHook(hook: CommandHook): ClearEffect;
+      interface CommandHook {
+        module: string;
+        commands?: CommandKey[];            // 缺省 = 所有命令
+        callback(command: CommandInfo): Promise<boolean | void>;
+      }
+    description: 在命令的状态匹配之后、动作下发之前 / 之后插入编排逻辑（Solution 换方案等即挂在这里）。
+    semantics: >-
+      pre Hook 在 beginTransition 之后依注册顺序 await 执行，任一返回 true 即阻断命令（CommandBlockedByHookError）；
+      post Hook 在动作完成之后、commitTransition 之前执行；每个 Hook 返回后检查命令是否已被取消。返回值为注销函数。
+
+  - id: if.framework.pipeline.PipelineController
+    name: PipelineController
+    owner: infra.framework.pipeline.transaction
+    signature: |
+      interface PipelineController extends ControllerBase, Dispatcher {
+        updatePipeline(diff: PipelineDiff): Promise<PipelineUpdateResult>;
+        catchUpRestart(mu: MediaUnit): Promise<void>;   // Suspend 落地后删除
+        getSegmentNodes(segment: SegmentKind): readonly MediaUnit[];
+        getNode(key: MuKey): MediaUnit | undefined;
+        describe(): { mus: Array<{ key: MuKey; type?: MuType; counters: unknown }> };
+        // 多腿（实现类上）
+        getActiveLeg(): LegId;
+        getLeg(legId: LegId): PipelineLegHandle | undefined;
+        openLeg(legId: LegId): PipelineLegHandle;
+      }
+    description: MU 图的持有者与唯一改图入口。
+  - id: if.framework.pipeline.updatePipeline
+    name: updatePipeline
+    owner: infra.framework.pipeline.transaction
+    signature: |
+      updatePipeline(diff: PipelineDiff): Promise<PipelineUpdateResult>;
+      type PipelineUpdateResult = Result<PipelineUpdateReport, ErrorBase>;
+    description: 以声明式 diff 原子更新图拓扑与节点生命周期。
+    semantics: >-
+      先经 Domain validateDiff 校验（Destroyed 期拒绝 addNodes 等），失败返回 Err 且图不变；
+      新增节点就地 Init，任一失败则补偿 Destroy 并恢复快照（含 PlaybackState memento），返回 Err(PipelineNotWorkError)；
+      成功后才 Destroy 出图节点（失败只告警）。不负责 Load / Play 启动，那归编排层。
+  - id: if.framework.pipeline.Dispatcher
+    name: Dispatcher
+    owner: infra.framework.pipeline.dispatch
+    signature: |
+      interface Dispatcher {
+        dispatch(action: Action, muKeys?: MuKey[]): ActionResponse;
+        dispatchAsync(action: Action, muKeys?: MuKey[]): Promise<ActionResponse>;
+      }
+    description: 把 Action 下发给图中 MU。
+    semantics: 未给 muKeys 即广播；裸 MuKey 解析到活动腿节点；Capture 只发给渲染器；MU 抛错包装为 MuActionUnknownError 向上抛。
+  - id: if.framework.pipeline.PipelineLegHandle
+    name: PipelineLegHandle
+    owner: infra.framework.pipeline.legs
+    signature: |
+      class PipelineLegHandle {
+        readonly legId: LegId;
+        get isActive(): boolean;
+        nodes(): readonly MediaUnit[];
+        getNode(key: MuKey): MediaUnit | undefined;
+        getSegmentNodes(segment: SegmentKind): readonly MediaUnit[];
+        dispatch(action: Action, muKeys?: MuKey[]): ActionResponse;
+        dispatchAsync(action: Action, muKeys?: MuKey[]): Promise<ActionResponse>;
+        updatePipeline(diff: PipelineDiff): Promise<PipelineUpdateResult>;
+        // …
+      }
+    description: 收窄到某条加载腿的图操作句柄，可直接当作工厂的 pipelineController 使用。
+    semantics: 句柄不持图状态；撤腿后旧句柄自然看到空腿。updatePipeline 对裸 MuKey 做确定性 `<key>@<legId>` 拼接。
+
+  - id: if.framework.plugin.IPluginController
+    name: IPluginController
+    owner: infra.framework.plugin
+    signature: |
+      interface IPluginController extends ControllerBase {
+        initApi(api: PluginApi): void;
+        usePlugin(plugin: IPlugin<PluginApi>): IPluginController;
+        useSolutionPlugin(plugin: IPlugin<PluginApi>): IPluginController;
+        removePlugin(name: string): void;
+        clearSolutionPlugins(): void;
+        hasPlugin(name: string): boolean;
+      }
+    description: 插件登记与生命周期管理。
+    semantics: 同名插件先摘旧再装新；clearSolutionPlugins 只清方案插件子集；析构错误隔离，整轮清理后统一 handleError。
+  - id: if.framework.plugin.PluginBase
+    name: PluginBase
+    owner: infra.framework.plugin
+    implementedBy: [app.plugins.buffer-strategy.live-adaptive, app.timeshift.shell, app.strategies.load.base, app.strategies.play-base]
+    signature: |
+      abstract class PluginBase implements IPlugin<PluginApi> {
+        abstract name: string;
+        apply(api: PluginApi): void;     // 不要覆盖，内部调 init()
+        destroy(): void;                 // 不要覆盖，自动退订后调 onDestroy()
+        protected abstract init(): void;
+        protected abstract onDestroy(): void;
+        protected on / off / emit;                       // 事件
+        protected sendCommand / sendCommandImmediate;    // 命令
+        protected addPreCommandHook / addPostCommandHook;
+        protected registerErrorHandler / handleError;
+        protected getController / getDispatcher / getContext;
+        // … stateModel / playModel / streamModel 等只读投影
+      }
+    description: 业务插件的基类。
+
+  - id: if.framework.model-registry.ModelRegistryRuntime
+    name: ModelRegistryRuntime
+    owner: infra.framework.model-registry.registry
+    signature: |
+      interface ModelRegistryRuntime extends IModelRegistry {   // IModelRegistry 来自 domain.ports
+        configureCreators(options: { streamCreators?; playbackCreators? }): void;
+        getCurrent<K extends 'stream' | 'play'>(kind: K): ModelInstanceMap[K] | undefined;
+        beginStreamModelSwitch(loadMode: LoadMode, playMode?: PlayMode,
+          creatorOptions?: { playMode?: PlayMode; timeline?: StreamModelTimeline }): StreamModelSwitch;
+        beginPlaybackModelSwitch(solution: SolutionType): PlaybackModelSwitch;
+        resetGeneration(kind: GenerationCloseKind, disposition: GenerationDisposition): void;
+      }
+    description: Framework / 组合根使用的 Registry 能力面（在 Domain 端口之上扩展事务与代际收口）。
+  - id: if.framework.model-registry.beginStreamModelSwitch
+    name: beginStreamModelSwitch
+    owner: infra.framework.model-registry.registry
+    signature: |
+      beginStreamModelSwitch(loadMode: LoadMode, playMode?: PlayMode,
+        creatorOptions?: { playMode?: PlayMode; timeline?: StreamModelTimeline }): StreamModelSwitch;
+    description: 开启可回滚的流模型换代。
+    semantics: >-
+      已有在途流模型切换时抛错（单飞，与 beginPromote 共用标志）；立即发布候选为当前并更新 loadMode / playMode 槽位；
+      commit 时 reset 旧实例并返回 LoadModeChanged / PlayModeChanged；rollback 恢复旧实例与槽位并 destroy 候选；commit / rollback 幂等。
+  - id: if.framework.model-registry.beginPlaybackModelSwitch
+    name: beginPlaybackModelSwitch
+    owner: infra.framework.model-registry.registry
+    signature: |
+      beginPlaybackModelSwitch(solution: SolutionType): PlaybackModelSwitch;
+    description: 开启可回滚的播放模型换代（按方案）。
+    semantics: 语义与 beginStreamModelSwitch 对称，commit 时返回 SolutionChanged 等领域事件。
+  - id: if.framework.model-registry.resetGeneration
+    name: resetGeneration
+    owner: infra.framework.model-registry.registry
+    signature: |
+      resetGeneration(kind: Exclude<ModelKind, 'runtime'>, disposition: 'reset' | 'destroy'): void;
+    description: 代际收口端口（Context.stop / reset 使用）。
+    semantics: state / statistic 收到 'destroy' 抛 TypeError；stream / play 槽位为空时静默返回；不清槽位，下一次 adopt / replace 正常换代。
+  - id: if.framework.model-registry.StandbyModelSlots
+    name: 待命模型槽位
+    owner: infra.framework.model-registry.standby
+    signature: |
+      getActiveStreamLeg(): string;
+      createStandby(legId: string, options: { loadMode: LoadMode; playMode: PlayMode }): void;
+      hasStandby(legId: string): boolean;
+      standbyView(legId: string): StreamModel;
+      beginPromote(legId: string): StreamModelSwitch;
+      destroyStandby(legId: string): void;
+    description: 多腿换腿时按腿持有 stream 模型的候选 / 让位实例（挂在 ModelRegistry 上薄委托）。
+    semantics: >-
+      不能为活动腿建待命；beginPromote 的合法性校验先于占用单飞；提升在途时让位腿不可 destroy；
+      commit 返回三元组变化的领域事件，rollback 恢复活动腿与当前指针。
+  - id: if.framework.model-registry.createSingletons
+    name: createPlaybackState / createStatistic
+    owner: infra.framework.model-registry.singletons
+    signature: |
+      function createPlaybackState(publisher: DomainEventPublisher): PlaybackState;
+      function createStatistic(publisher: DomainEventPublisher): Statistic;
+    description: 全局单例模型的唯一构造点，由组合根作为 singletonCreators 交给 ModelRegistry。
+
+  - id: if.framework.context.Context
+    name: Context
+    owner: infra.framework.context.core
+    signature: |
+      interface Context {
+        config: PlayerConfig | undefined;
+        data: PlayerData;
+        settings: PlayerSettings;
+        modelRegistry: ModelRegistryRuntime;
+        stateModel: PlaybackStateMachineView;      // Registry 视图只读投影
+        statisticModel: StatisticOwnerView;
+        streamModel: StreamModelUnion;             // 接管前为 undefined
+        playModel: PlaybackModelUnion;
+        updateNeedsDecryption(v: boolean): void;
+        handlePlaybackProfileEvents(events: readonly DomainEvent[]): void;
+        stop(): void;  reset(): void;
+        emit<K extends EventKey>(info: EventInfo<K>): void;
+        handleError(error: ErrorBase): void;
+        log(level: LogLevel, name: string, ...data: any[]): void;
+        track(info: TrackInfo): void;
+        recordFrame(kind: MediaKind, index: number, patch: FramePatch): void;
+        // … videoElementPool / videoElementReserve 端口
+      }
+    description: 全局运行时上下文（只读投影 + 横切面 + 显式写端口）。
+    semantics: stop 只 reset 各代际；reset 对 stream / play 走 destroy；不提供 loadMode / playMode / solution 写入口。
+  - id: if.framework.context.PlayerSettings
+    name: PlayerSettings
+    owner: infra.framework.context.settings
+    signature: |
+      interface PlayerSettings {
+        setVolume(volume: number): void;
+        setLogLevel(logLevel: LogLevel): void;
+        setDebugServerUrl(url: string | undefined): void;
+        setBufferThresholds(t: BufferThresholdPatch): void;
+        setLatencyDropAllowed(allowed: boolean): void;
+        setTimeShiftSource(source: TimeShiftSourcePatch): void;
+      }
+    description: Context 配置类字段的唯一具名写端口。
+    semantics: 写入即落 data 并同步发布 PlayerDataChange（payload 为补丁）。
+  - id: if.framework.context.LegContext
+    name: LegContext
+    owner: infra.framework.context.leg-context
+    signature: |
+      class LegContext implements Context {
+        constructor(base: Context, options: { legId: LegId; url: string; role?: LegRole });
+        readonly legId: LegId;
+        get role(): LegRole;
+        setRole(role: LegRole): void;
+        on(listener: (msg: LegBusMessage) => void): () => void;   // 腿内总线
+        replayStreamFacts(): void;
+        dispose(): void;
+        // … 其余 Context 成员按角色路由
+      }
+    description: 多腿时交给腿内 MU 与片段的 Context 门面。
+
+  - id: if.framework.media-unit.MediaUnit
+    name: MediaUnit
+    owner: infra.framework.media-unit
+    signature: |
+      abstract class MediaUnit<T extends MediaData | undefined, K extends MediaData | undefined> {
+        readonly key: MuKey;
+        readonly type: MuType;
+        nodeId: MuKey;
+        readonly counters: MuCounters;
+        nextMus: MediaUnit[];  previousMus: MediaUnit[];
+        abstract support(type?: MediaPacketType): boolean;
+        input(data: T): void;
+        protected abstract processMediaData(data: T): void;
+        protected output(data: T | K): void;
+        handleAction(action: Action): MuActionResponse;
+        handleActionAsync(action: Action): Promise<MuActionResponse>;
+        protected doAction(action: Action): ActionResponsePayload;
+        protected doActionAsync(action: Action): Promise<ActionResponsePayload>;
+      }
+    description: 所有媒体单元的基类，定义数据面直推与动作入口。
+    semantics: >-
+      input 仅在本节点 next 状态为 Running 时处理；同一命令代次内重复的 Init / Destroy / Load / Play 在开发构建抛错、生产构建告警。
+      处理 / 动作异常分别包装为 MuProcessUnknownError / MuActionUnknownError 抛出。
+
+  - id: if.framework.utils.getSolutionCapabilities
+    name: getSolutionCapabilities
+    owner: infra.framework.utils.env-probe
+    signature: |
+      function getSolutionCapabilities(): SolutionCapabilities;   // Record<SolutionType, boolean>
+    description: 探测当前环境各播放方案的可用性，交 Domain 方案选型使用。
+  - id: if.framework.utils.performance
+    name: performance
+    owner: infra.framework.utils.observe
+    signature: |
+      const performance: {
+        readonly isEnabled: boolean;
+        execute: { begin(key: string): void; end(key: string): void };
+        // …
+      };
+    description: 全局执行耗时采样器。
+    semantics: 关闭时调用方应传空 key，避免热路径拼字符串。
+  - id: if.framework.utils.WorkerMessageBridge
+    name: WorkerMessageBridge
+    owner: infra.framework.utils.worker-wasm
+    signature: |
+      class WorkerMessageBridge {
+        connectMessageHandler(target: Worker): void;
+        call(key: string, payload: any, options?: { timeout?: number; transfer?: Transferable[] }): Promise<any>;
+        send(key: string, payload: any, options?: { timeout?: number; transfer?: Transferable[] }): void;
+        registerMessageCallback(key: string, callback: (payload: any) => any): void;
+        incrementBridgeNumber(): void;
+        destroy(): void;
+      }
+    description: 主线程与 Worker 间的请求 / 响应调用桥。
+    semantics: 只允许主线程调用子线程；桥编号不一致的旧消息被丢弃；请求默认 100s 超时。
+  - id: if.framework.contracts.MediaPlugin
+    name: MediaPlugin
+    owner: infra.framework.contracts
+    implementedBy: [infra.third-party.decrypt-plugins]
+    signature: |
+      interface MediaPlugin {
+        key: MuKey;
+        init?: () => Promise<void>;
+        reset?: () => void;                                   // 流会话边界（Load / Play / Stop）清掉残留
+        interceptorAsync?: (data: MediaPacket) => Promise<MediaPacket>;
+        interceptor?: (data: MediaPacket, output: MediaUnit<MediaPacket, MediaPacket>['output']) => void;
+      }
+    description: 外部媒体插件的契约（如直播 / 点播解密）：Process 段经 MuPluginWrapper 包装为插件 MU，拦截媒体包加工后输出。
+
+# ═══════════════════════════════ 数据结构 ═══════════════════════════════
+dataStructures:
+  - id: ds.CommandInfo
+    name: CommandInfo
+    definition: |
+      interface CommandInfo {
+        id?: string;                 // 调度时生成的序列号
+        startTime?: number;
+        key: CommandKey;             // Init / Load / Play / Pause / Stop / Switch / Reset / Destroy / SwitchLeg / Seek / Error …
+        mus?: MuKey[];               // 定向下发的 MU
+        payload?: CommandPayload;
+        options?: {
+          immediate?: boolean;            // 插到队首
+          abortCurrentCommand?: boolean;  // 取消在跑命令
+          source?: 'Recovery' | 'Internal';
+        };
+      }
+    description: 控制面命令；改变 Player 生命周期状态的唯一载体。
+  - id: ds.SwitchPayload
+    name: SwitchPayload
+    definition: |
+      interface SwitchPayload {
+        solution?: SolutionType;
+        url?: string;
+        playMode?: PlayMode;
+        needsDecryption?: boolean;
+        seekTo?: number;             // 时移换腿接管后由 Switch 前置 Hook 补齐（毫秒，清单轴）
+      }
+    description: Switch（换流 / 换方案）命令的载荷。
+  - id: ds.CommandResponse
+    name: CommandResponse
+    definition: |
+      interface CommandResponse {
+        status: 'success' | 'error';
+        message?: string;
+        data?: ActionResponse[];
+        error?: ErrorBase;
+      }
+    description: 状态机对单条命令的结算结果。
+  - id: ds.CommandHook
+    name: CommandHook
+    definition: |
+      interface CommandHook {
+        module: string;
+        commands?: CommandKey[];
+        callback: (command: CommandInfo) => Promise<boolean | void>;
+      }
+    description: 命令前 / 后置钩子；pre 钩子返回 true 阻断命令。
+  - id: ds.StateMachineMode
+    name: StateMachineMode
+    definition: |
+      enum StateMachineMode { Default = 'Default', VodDefault = 'VodDefault', Preload = 'Preload' }
+    description: 迁移规则表的选择键（Preload 尚无规则表）。
+  - id: ds.StateTransitionConfig
+    name: StateTransitionConfig
+    definition: |
+      interface StateTransitionConfig {
+        trigger: CommandKey;
+        match?: (state: State) => boolean;
+        actions?: ActionInfo[] | ((ctx: Context, state: State, info: CommandInfo) => ActionInfo[] | undefined);
+        targetState?: State | ((state: State, info: CommandInfo) => State);
+      }
+    description: 一条状态迁移规则。
+    invariants: 省略 actions 表示按命令→动作映射兜底；显式 [] 表示纯状态刷新、不下发动作。
+  - id: ds.StateMachineConfig
+    name: StateMachineConfig
+    definition: |
+      interface StateMachineConfig {
+        transitions: StateTransitionConfig[];
+        initialState: State;
+        status: PlayerStatus[];      // 白名单
+      }
+    description: 一种模式下的完整迁移规则表。
+    invariants: 常量 targetState 的 status 必须在白名单内；从初始态可达的每个 status 都必须有出边。
+  - id: ds.Action
+    name: Action
+    definition: |
+      interface Action {
+        key: ActionKey;              // Init / Destroy / Load / Play / Pause / Stop / Seek / SendBuffer / DropBuffer / Capture …
+        payload?: ActionPayload;
+        reason?: 'restart';          // 换代静默旧段重启，豁免动作账本判重
+      }
+    description: 控制器下发给 MU 的动作。
+  - id: ds.ActionResponse
+    name: ActionResponse
+    definition: |
+      interface ActionResponse {
+        action: ActionKey;
+        result: Array<{ mu: MuKey; payload: ActionResponsePayload }>;   // MuActionResponse[]
+      }
+    description: 一次分发的汇总响应。
+  - id: ds.PipelineDiff
+    name: PipelineDiff
+    definition: |
+      interface PipelineDiff {
+        addNodes?: readonly PipelineNodeAddition[];
+        removeNodes?: readonly MuKey[];
+        edges: readonly PipelineEdge[];          // 目标边全集
+        externalAnchors?: readonly { key: MuKey; position: SemanticPosition }[];
+        activeLeg?: LegId;                       // 同一事务内改指活动腿
+      }
+    description: 图事务的声明式输入，由三段工厂产出。
+    invariants: 合法性由 Domain validateDiff 按图规则 G1–G7 判定；边端点可写裸 MuKey 或 NodeId。
+  - id: ds.PipelineNodeAddition
+    name: PipelineNodeAddition
+    definition: |
+      interface PipelineNodeAddition {
+        node: MediaUnit<MediaPacket, MediaPacket>;
+        segment: SegmentKind;        // load / process / play / external …
+        leg?: LegId;                 // 仅 segment === 'load' 生效，缺省主腿
+      }
+    description: diff 中的新增节点。
+  - id: ds.PipelineUpdateReport
+    name: PipelineUpdateReport
+    definition: |
+      interface PipelineUpdateReport {
+        added: readonly MuKey[];
+        removed: readonly MuKey[];
+        retainedExternal: readonly MuKey[];
+        edges: readonly PipelineEdge[];
+      }
+    description: 图事务成功后的报告。
+  - id: ds.PipelineUpdateResult
+    name: PipelineUpdateResult
+    definition: |
+      type PipelineUpdateResult = Result<PipelineUpdateReport, ErrorBase>;
+    description: updatePipeline 的返回值；失败时图已恢复到事务前快照。
+  - id: ds.ModelRegistryOptions
+    name: ModelRegistryOptions
+    definition: |
+      interface ModelRegistryOptions {
+        loadMode: LoadMode;
+        playMode: PlayMode;
+        solution?: SolutionType;
+        streamCreators?: Partial<Record<LoadMode, (opts?) => StreamModel>>;
+        playbackCreators?: Partial<Record<SolutionType, () => PlaybackModelInstance>>;
+        singletonCreators?: { state?: () => object; statistic?: () => object };
+      }
+    description: Registry 的构造选项：初始三元组与各 kind 的创建器，由组合根注入。
+  - id: ds.PlaybackModelSwitch
+    name: PlaybackModelSwitch
+    definition: |
+      interface PlaybackModelSwitch {
+        commit(): readonly DomainEvent[];
+        rollback(): void;
+      }
+      type StreamModelSwitch = PlaybackModelSwitch;
+    description: 可回滚模型换代的句柄，与 Pipeline 事务协同提交。
+    invariants: commit / rollback 只生效一次（幂等）；在途期间同类切换不可再开启。
+  - id: ds.GenerationDisposition
+    name: GenerationDisposition
+    definition: |
+      type GenerationCloseKind = 'state' | 'statistic' | 'stream' | 'play';
+      type GenerationDisposition = 'reset' | 'destroy';
+    description: 代际收口的目标与处置方式。
+    invariants: state / statistic 只允许 'reset'。
+  - id: ds.EventInfo
+    name: EventInfo
+    definition: |
+      interface EventInfo<K extends EventKey> {
+        key: K;                      // PlayerStatusChange / Error / PlayerDataChange / PlayModeChange / SolutionChange / FirstFrame …
+        payload: EventPayloadMap[K];
+      }
+    description: 事件总线上的一条事件。
+  - id: ds.EventPayloadMap
+    name: EventPayloadMap
+    definition: |
+      interface EventPayloadMap {
+        [EventKey.PlayerStatusChange]: { oldStatus; newStatus; commandInfo };
+        [EventKey.Error]: { error: ErrorJson };
+        [EventKey.PlayerDataChange]: Partial<PlayerData>;
+        // … 约 100 个 EventKey 的载荷映射
+      }
+    description: EventKey 到载荷类型的映射表，决定 on / emit 的类型安全。
+  - id: ds.PlayerStatusChangeEventPayload
+    name: PlayerStatusChangeEventPayload
+    definition: |
+      interface PlayerStatusChangeEventPayload {
+        oldStatus: PlayerStatus;
+        newStatus: PlayerStatus;
+        commandInfo: CommandInfo;    // 含 options.source，可区分用户操作与内部恢复
+      }
+    description: 状态机提交迁移且主状态变化时发布的 PlayerStatusChange 事件载荷。
+  - id: ds.ErrorHandler
+    name: ErrorHandler
+    definition: |
+      type ErrorHandler = (error: ErrorBase | null) => ErrorBase | null;
+    description: 错误责任链节点；返回 null 表示已处理。
+  - id: ds.ControllerKey
+    name: ControllerKey
+    definition: |
+      enum ControllerKey { StateMachine = 'StateMachine', Plugin = 'Plugin', Pipeline = 'Pipeline' }
+    description: Framework 管理的控制器标识。
+  - id: ds.ControllerBindingDeps
+    name: ControllerBindingDeps
+    definition: |
+      interface ControllerBindingDeps {
+        context: Context;
+        dispatcher: Dispatcher;
+        manager: ControllerManager;
+      }
+    description: 创建控制器时注入的依赖。
+  - id: ds.PlayerConfig
+    name: PlayerConfig
+    definition: |
+      interface PlayerConfig {
+        url?: string;
+        playMode?: PlayMode;
+        solution?: SolutionType;
+        solutionPriority?: SolutionType[];
+        hasAudio?: boolean;  hasVideo?: boolean;
+        keepLastFrame?: boolean;
+        needsDecryption?: boolean;
+        bufferMode?: BufferMode;
+        buffer?: { /* 四阈值 */ };
+        hls?: { /* … */ };
+        reconnect?: ReconnectConfig;
+        trackOption?: { /* … */ };
+        wasmAssets?: { /* … */ };
+        // …
+      }
+    description: 用户传入的播放器配置（构造期只读）。
+  - id: ds.PlayerData
+    name: PlayerData
+    definition: |
+      interface PlayerData {
+        url?: string;  previousUrl?: string;
+        needsDecryption: boolean;
+        volume: number;
+        deviceId: string;  playbackId?: string;
+        stateMatchineMode?: StateMachineMode;
+        networkStatus: NetworkStatus;
+        logLevel: LogLevel;
+        startFillBufferDuration: number;  stopFillBufferDuration: number;
+        startDropFrameDuration: number;   stopDropFrameDuration: number;
+        latencyDropAllowed?: boolean;
+        activeLeg: 'live' | 'recording';
+        timeShiftUrl?: string;
+        // …
+      }
+    description: Context 持有的运行时数据面；配置类字段只经 PlayerSettings 写，变化以 PlayerDataChange 通知。
+  - id: ds.BufferThresholdPatch
+    name: BufferThresholdPatch
+    definition: |
+      interface BufferThresholdPatch {
+        startFillBufferDuration?: number;
+        stopFillBufferDuration?: number;
+        startDropFrameDuration?: number;
+        stopDropFrameDuration?: number;
+      }
+    description: buffer 四阈值的部分补丁。
+  - id: ds.TimeShiftSourcePatch
+    name: TimeShiftSourcePatch
+    definition: |
+      interface TimeShiftSourcePatch {
+        timeShiftUrl?: string;
+        timeShiftNeedsDecryption?: boolean;
+      }
+    description: 时移录制地址补丁；缺省键按 undefined 写入（清除）。
+  - id: ds.LegRole
+    name: LegRole
+    definition: |
+      type LegRole = 'active' | 'standby' | 'yielded';
+    description: 加载腿在 LegContext 中的角色；standby 与 yielded 行为相同、仅语义不同。
+  - id: ds.LegBusMessage
+    name: LegBusMessage
+    definition: |
+      type LegBusMessage =
+        | { kind: 'event'; info: EventInfo<EventKey> }
+        | { kind: 'error'; error: ErrorBase };
+    description: 非活动腿的 emit / 错误进入的腿内总线消息。
+  - id: ds.MediaData
+    name: MediaData
+    definition: |
+      interface MediaData<T extends MediaPacketType = MediaPacketType> {
+        type: T;
+        // …
+      }
+    description: MU 间直推的媒体数据基形，按 MediaPacketType 判别。
+  - id: ds.MediaPacket
+    name: MediaPacket
+    definition: |
+      type MediaPacket =
+        | DemuxedVideoData | DemuxedAudioData | DemuxedVideoMetadata | DemuxedAudioMetadata
+        | DecodedVideoData | DecodedAudioData
+        | Mp4RemuxedMetadata | Mp4RemuxedData | FhlsRemuxedData
+        // …
+    description: 数据面三段流水线上流动的媒体包联合类型。
+  - id: ds.MuConfig
+    name: MuConfig
+    definition: |
+      interface MuConfig {
+        key: MuKey;
+        type: MuType;
+        plugin?: MediaPlugin;        // 外部媒体插件
+      }
+    description: 创建 MU 时的身份配置。
+  - id: ds.FramePatch
+    name: FramePatch
+    definition: |
+      interface FramePatch {
+        dts?: number;  pts?: number;
+        frameType?: AggregatedFrameType;
+        naluTypes?: number[];
+        parseTime?: number;          // demuxer 完成解析
+        transformInTime?: number;    // 进入 decoder / remuxer
+        transformOutTime?: number;   // 出帧 / 出段
+        // …
+      }
+    description: Context.recordFrame 的帧级记录补丁，仅在有 FrameInfoRecord 订阅者时产生。
+  - id: ds.TrackInfo
+    name: TrackInfo
+    definition: |
+      class TrackInfo {
+        name: string;
+        type: TrackType;             // Error / Action / …
+        module?: string;
+        data?: string;
+        time?: number;
+        extraData?: Record<string, TrackExtraValue>;
+        appendExtra(key: string, value: TrackExtraValue): this;
+      }
+    description: 埋点载体，经 Context.track 上报。
+  # ── 数据面媒体包（common/types/mediaUnit.ts，按 MediaPacketType 判别） ──
+  - id: ds.StreamMediaData
+    name: StreamMediaData
+    definition: |
+      interface StreamMediaData<T extends ArrayBuffer | Uint8Array = Uint8Array>
+        extends MediaData<MediaPacketType.StreamData> {
+        data: T;                     // 原始字节流分块
+        byteStart?: number;
+        sequence?: number;
+      }
+    description: Loader 输出给解封装器的原始流数据块。
+  - id: ds.DemuxedVideoMetadata
+    name: DemuxedVideoMetadata
+    definition: |
+      interface DemuxedVideoMetadata extends VideoMetadata, MediaData<MediaPacketType.FlvDemuxedVideoMetadata> {
+        // VideoMetadata：
+        id: number;  timescale: number;  duration: number;
+        codec: string;  profile: string;  level: string;
+        codecWidth: number;  codecHeight: number;  presentWidth: number;  presentHeight: number;
+        frameRate: { /* … */ };
+        spspps: Uint8Array;  avcc: Uint8Array;  naluLengthSize: number;
+        spsppsHash?: string;
+        // …
+      }
+    description: 解封装得到的视频轨元数据（编码参数、分辨率、SPS/PPS 等）。
+  - id: ds.DemuxedAudioMetadata
+    name: DemuxedAudioMetadata
+    definition: |
+      interface DemuxedAudioMetadata extends AudioMetadata, MediaData<MediaPacketType.FlvDemuxedAudioMetadata> {
+        // AudioMetadata：
+        timescale: number;  duration: number;
+        audioSampleRate: number;  channelCount: number;
+        codec?: string;  config?: number[];
+        refSampleDuration?: number;
+        // …
+      }
+    description: 解封装得到的音频轨元数据（采样率、声道、编码配置）。
+  - id: ds.DemuxedVideoData
+    name: DemuxedVideoData
+    definition: |
+      interface DemuxedVideoData extends MediaVideoTrackData, MediaData<MediaPacketType.FlvDemuxedVideoData> {
+        id: number;
+        sequenceNumber: number;
+        samples: AVCVideoData[];     // 每帧 dts / pts / cts / units(NALU) / isKeyframe / frameType / index …
+        length: number;
+      }
+    description: 解封装得到的一批视频帧样本（按轨批量）。
+  - id: ds.DemuxedAudioData
+    name: DemuxedAudioData
+    definition: |
+      interface DemuxedAudioData extends MediaAudioTrackData, MediaData<MediaPacketType.FlvDemuxedAudioData> {
+        id: number;
+        sequenceNumber: number;
+        samples: AACAudioData[];     // 每帧 pts / dts / unit / duration / index
+        length: number;
+      }
+    description: 解封装得到的一批音频帧样本（按轨批量）。
+  - id: ds.DemuxedVideoCombinedData
+    name: DemuxedVideoCombinedData
+    definition: |
+      interface DemuxedVideoCombinedData extends AVCVideoData, MediaData<MediaPacketType.FlvDemuxedVideoCombinedData> {
+        dts: number;  pts: number;  cts: number;
+        size: number;  duration: number;
+        units: AVCUnit[];            // NALU 列表
+        isKeyframe: boolean;
+        frameType: FrameType;
+        index: number;
+        // …
+      }
+    description: 单帧形态的解封装视频数据（不按轨批量，逐帧下发）。
+  - id: ds.DemuxedAudioCombinedData
+    name: DemuxedAudioCombinedData
+    definition: |
+      interface DemuxedAudioCombinedData extends AACAudioData, MediaData<MediaPacketType.FlvDemuxedAudioCombinedData> {
+        pts?: number;  dts?: number;
+        unit: Uint8Array;
+        duration?: number;
+        index: number;
+      }
+    description: 单帧形态的解封装音频数据（逐帧下发）。
+  - id: ds.DecodedVideoData
+    name: DecodedVideoData
+    definition: |
+      interface DecodedVideoData extends MediaData<MediaPacketType.DecodedVideoData> {
+        data: Uint8Array | VideoFrame;   // 软解 YUV 或 WebCodecs VideoFrame
+        pts: number;
+        dts?: number;
+        width?: number;  height?: number;
+        frameType?: FrameType;
+        index?: number;                  // 帧信息统计的锚定标识
+        // …
+      }
+    description: 解码器输出、交给渲染的视频帧。
+  - id: ds.DecodedAudioData
+    name: DecodedAudioData
+    definition: |
+      interface DecodedAudioData extends MediaData<MediaPacketType.DecodedAudioData> {
+        data: Float32Array | AudioData;
+        pts: number;
+        dts?: number;
+        index?: number;
+      }
+    description: 解码器输出、交给音频渲染的 PCM 数据。
+  - id: ds.Mp4RemuxedMetadata
+    name: Mp4RemuxedMetadata
+    definition: |
+      interface Mp4RemuxedMetadata extends MediaData<MediaPacketType.Mp4RemuxedMetadata> {
+        mediaType: MediaType;        // video / audio
+        data: ArrayBuffer;           // init segment（ftyp + moov）
+        codec?: string;
+        container: string;
+        mediaDuration?: number;
+      }
+    description: 转封装得到的 fMP4 初始化段，供 MSE 建立 SourceBuffer。
+  - id: ds.Mp4RemuxedData
+    name: Mp4RemuxedData
+    definition: |
+      interface Mp4RemuxedData extends MediaData<MediaPacketType.Mp4RemuxedData> {
+        mediaType: MediaType;
+        data: ArrayBuffer;           // moof + mdat
+        sampleCount: number;
+        info: Mp4RemuxedDataInfo;    // begin / end dts、pts，同步点，首尾样本
+        timestamp: number;
+        duration: number;
+        timestampOffset?: number;
+        details?: Partial<Mp4Detail>[];
+      }
+    description: 转封装得到的 fMP4 媒体段，供 MSE append。
+  - id: ds.FhlsRemuxedData
+    name: FhlsRemuxedData
+    definition: |
+      interface FhlsRemuxedData extends MediaData<MediaPacketType.FhlsRemuxedData> {
+        data: Uint8Array;            // TS 打包段
+        pts: number;
+        dts?: number;
+        endDts: number;
+        streamId: string;
+        videoFrameIndices?: number[];
+        audioFrameIndices?: number[];
+      }
+    description: FHLS 方案 remuxer 输出的 TS 段及其帧索引。

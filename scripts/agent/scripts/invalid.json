@@ -1,0 +1,1 @@
+{ "steps": [{ "text": "给你一张卡" }, { "block": { "kind": "answer", "parts": [{ "cites": [{ "module": "x" }] }] } }, { "done": true }] }

@@ -1,0 +1,58 @@
+# 草图（人拥有）：挂在「state.desk.edit.dialogue」下的一层，架构师的意图，AI 按它展开各轮（ADR-0023、ADR-0025）
+sketch:
+  id: dialogue-layers
+  mount: state.desk.edit.dialogue
+  lifetime: until-implemented
+  modules:
+    - id: state.desk.edit.dialogue.transport
+      name: agent 通道同步
+      kind: component
+      responsibility: AgentTransport 的 HTTP 实现：发一轮、停止，订阅开发服务器推送的 agent 事件交回会话；不碰会话的值
+    - id: state.desk.edit.dialogue.state
+      name: 会话的值与转移
+      kind: component
+      responsibility: 负责对话会话这一个值（DialogueState：转录、锚点、视角、运行状态、队列、草稿、模式）和改变它的纯转移 dialogueTransition 与 modeFor（重讲只对模块）；不负责发请求、订阅推送、派生显示数据。
+    - id: state.desk.edit.dialogue.anchor
+      name: 锚点
+      kind: component
+      responsibility: 负责「这一问挂在哪」：由选中、步骤与当前张推出锚点（anchorOf），判断两个锚点是否相同（sameAnchor），给锚点条生成文字（anchorText）；不负责记录会话，也不负责决定什么时候换锚点。
+    - id: state.desk.edit.dialogue.ports
+      name: 对外端口
+      kind: component
+      responsibility: 负责声明对话与外界的边界：agent 传输端口 AgentTransport 与一轮请求 AgentTurnRequest、草图那一面 DialogueSketchPort，以及没注入时的空实现 NO_AGENT；不负责任何实现（传输由 agent 通道同步实现，草图那一面由编辑分组给）。
+    - id: state.desk.edit.dialogue.views
+      name: 卡片派生
+      kind: component
+      responsibility: 负责从描述和回答块派生给呈现层的数据：引用原文（citeViews）、机制图检查（checkDiagrams）、梳理卡（digestOf），以及图与设计说明图段的显示数据（DiagramView、NoteSegmentView）；不负责改会话，也不负责判断模块在不在描述里以外的规则（那些归对话的模型）。
+  relations:
+    - id: rel.dl.desk-transport
+      from: present.desk-view
+      to: state.desk.edit.dialogue.transport
+      type: commands
+    - id: rel.state-anchor
+      from: state.desk.edit.dialogue.state
+      to: state.desk.edit.dialogue.anchor
+      type: queries
+      description: dialogueTransition 在换锚点、换视角时调用 sameAnchor 判断锚点是否真的变了，没变就原样返回
+    - id: rel.views-dialogue
+      from: state.desk.edit.dialogue.views
+      to: model.review.dialogue
+      type: queries
+      description: 卡片派生调用对话的模型：citeViews 调 resolveCitation 填引用原文，checkDiagrams 调 checkDiagram 检查机制图，digestOf 调 digestView 算梳理卡
+  layout:
+    modules:
+      state.desk.edit.dialogue.transport:
+        x: 138
+        y: 302
+      state.desk.edit.dialogue.state:
+        x: 0
+        y: 0
+      state.desk.edit.dialogue.anchor:
+        x: 220
+        y: 0
+      state.desk.edit.dialogue.ports:
+        x: 0
+        y: 120
+      state.desk.edit.dialogue.views:
+        x: 220
+        y: 120

@@ -1,0 +1,30 @@
+{
+  "updatedAt": "2026-11-06T02:08:54.352Z",
+  "files": {
+    "designs/dialogue-layers/design.yaml": "3d72c63f67dea56f1687f2d5d15205d52513205d",
+    "designs/dialogue-layers/sketches/state.desk.edit.dialogue.yaml": "b513ce846499d4a5ae955667856b3e38b8ae8741",
+    "designs/phase2-dynamic/design.yaml": "6516452b564ba19af25d3966b1d462226c04bc50",
+    "designs/phase2-dynamic/sketches/model.scenario.yaml": "a995723ac57e941231284740095a28894699c7b8",
+    "designs/phase2-dynamic/sketches/present.panel.yaml": "26a2d38f7dd099ec041f3939ea6ddec89eaf7f85",
+    "designs/phase2-dynamic/sketches/root.yaml": "f71dab814a711f7672eaac7583b7c9b78bb4e86b",
+    "designs/phase2-dynamic/sketches/state.layout.yaml": "a4f8109c1e653f8fb5486a9d86d44602248f1491",
+    "designs/phase2-dynamic/sketches/state.transition.yaml": "40fbe46f1ab799cc300e7bdc2757d82835060239",
+    "designs/sketch-editor/design.yaml": "46e20095b6662259cc65afd0bc97350d06b863e0",
+    "designs/sketch-editor/sketches/access.writer.yaml": "79648873601e32d8259a579107fce63c058dedeb",
+    "designs/sketch-editor/sketches/model.intent.yaml": "6c32fb602556e1a2a218b6ec8c853346a461bf85",
+    "designs/sketch-editor/sketches/present.canvas.yaml": "96415702bba760e3700f2105de7cdfdf72756c26",
+    "designs/sketch-editor/sketches/present.panel.yaml": "49169361ee778a9af3db73379c90f584a91f26f9",
+    "designs/sketch-editor/sketches/present.version.yaml": "decb6bdfbb19e28f2238a4ee237642906b6f53a6",
+    "designs/sketch-editor/sketches/state.desk.yaml": "897b32887108fbe8242de35e035d1d9d9bbadf0a",
+    "designs/sketch-editor/sketches/state.transition.yaml": "50fa541560439058344f6d120aa818134d8af9ae",
+    "designs/sketch-v2/design.yaml": "168e2021850d6abe9af948dcff96962df8b0e47f",
+    "designs/sketch-v2/sketches/present.panel.yaml": "0cfa557263bd23ff3d6592e373a3044d74c5dbca",
+    "designs/sketch-v2/sketches/root.yaml": "e5864c95659d40221645d59ccddb2b6c8c0b4cdb",
+    "intent/roles.yaml": "4f46ba974d866ad0acf337677142ebb82122bc1c",
+    "intent/skeleton.yaml": "c2fe4ae351c4020fe44eb5dc063e2468adf936f8",
+    "intent/strata.yaml": "ce4dc94236fabe81cac188f7daf3de655283f36f",
+    "reviewed.yaml": "2db09710a0f38997a0763ed208093be46eb11c3b",
+    "rules.yaml": "c7651875c7f9dd22a0c1d81974e31c6ec34d5c1d",
+    "source-ignore.yaml": "308aa1e447d02c2521eb9bb6803faa300d2f3860"
+  }
+}

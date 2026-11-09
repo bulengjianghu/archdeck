@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 96ec84771a57acf4 adapters#summary=dad91a72 client#summary=3234672d gix-next#description=1cb95f86 gix-next#strata=29552939 kernel#summary=66422383 playbooks#summary=0f00048f rel:rel.adapters.ai-proc=756188aa rel:rel.adapters.attachment-proc=e0ae80ea rel:rel.adapters.drivers-proc=1499425e rel:rel.adapters.git-proc=9292c6f8 rel:rel.adapters.release-proc=181256d0 rel:rel.adapters.util-proc=03ea947e rel:rel.client.check-diff=52c2f6dd rel:rel.client.check-evidence=a3cc6c3e rel:rel.client.check-proc=0b7dc66b rel:rel.client.dispatch-codehost=b6d3937e rel:rel.client.dispatch-device=dcde0f3a rel:rel.client.dispatch-evidence=564757e6 rel:rel.client.dispatch-serve=af96198c rel:rel.client.dispatch-workspace=2f4b7b73 rel:rel.client.doctor-device=5ca47428 rel:rel.client.doctor-local-git=4aaeef1a rel:rel.client.doctor-module-check=bf01334e rel:rel.client.executor-ai=d6826026 rel:rel.client.fresh-prompt=a7fad9b0 rel:rel.client.heartbeat=27b62747 rel:rel.client.preview-evidence=de500551 rel:rel.client.preview-proc=aaa6cbaf rel:rel.client.preview-shot=bcfc7cf7 rel:rel.client.private-cache-proc=357f5e13 rel:rel.client.pull-jobs=3f751dd2 rel:rel.client.register=5387a504 rel:rel.client.release-integration=320deafa rel:rel.client.release-releaser=560a646e rel:rel.client.report-http=c482d0d2 rel:rel.client.report-ws=9c32a857 rel:rel.client.ui-change-page=1ff44ef1 rel:rel.client.ui-evidence=44822dc1 rel:rel.client.ui-read-kernel=fd18618a rel:rel.client.ui-signal-kernel=6d3e4392 rel:rel.client.ui-sse=e4866a14 rel:rel.client.worktrees-integration=53882f2c rel:rel.client.worktrees-snapshot=cb3db621 rel:rel.client.ws-attach=a2ec2a87 rel:rel.kernel.executions-allowed=b20e9006 rel:rel.kernel.executions-token=b3b9a063 rel:rel.kernel.faults-heal=b9e94da7 rel:rel.kernel.launcher-prompt=0a1d0c91 rel:rel.kernel.ledger-parse-event=67d94ffd rel:rel.kernel.playbook-hooks=581b60b7 rel:rel.kernel.rules-heal=2090cf34 rel:rel.kernel.signals-playbook=93d14fa6 rel:rel.kernel.tasks-playbook=0adf72f7 rel:rel.server.adapter-completions=e5917322 rel:rel.server.adapter-device-run=3ec00849 rel:rel.server.adapter-request=69ab8801 rel:rel.server.adapter-wait=c3a25daf rel:rel.server.adapter-worktree=1a048eae rel:rel.server.boot-recover=e2b4432e rel:rel.server.card-open=dbbf0975 rel:rel.server.card-withdraw=c146819c rel:rel.server.delivery-jobs=3a5d6944 rel:rel.server.dispatch-execution=809aa225 rel:rel.server.dispatch-prompt=c9aaa4ae rel:rel.server.dispatch-review-layer=e69eea95 rel:rel.server.dispatch-worktree=22fdb2d6 rel:rel.server.hub-cards-changed=cb09cc16 rel:rel.server.hub-jobs-ws=f1631c24 rel:rel.server.inbox-cards=60567c6e rel:rel.server.inbox-question=41954a4e rel:rel.server.intake-signals=a519e118 rel:rel.server.intake-signals-read=326028a3 rel:rel.server.intake-tools-signals=7eb30fab rel:rel.server.intake-tools-view=da87b339 rel:rel.server.long-poll-pull=061ab9fe rel:rel.server.mcp-execution=bbad3df2 rel:rel.server.mcp-task-state=162f6ac3 rel:rel.server.mutation-wakeups=49686de4 rel:rel.server.patrol-cards=207d7bf2 rel:rel.server.plan-acceptance=ea2c95a7 rel:rel.server.plan-dossier=a8594c43 rel:rel.server.plan-ledger=e25a534a rel:rel.server.plan-plan=c3c5475c rel:rel.server.plan-playbook=c7b8cfa4 rel:rel.server.plan-wakeup=553d3f83 rel:rel.server.push-pull=c60a2643 rel:rel.server.router-ledger=92f16a83 rel:rel.server.runner-job-update=fb6d207e rel:rel.server.runner-prompt=155e17b0 rel:rel.server.runner-register=f34c1d4a rel:rel.server.session-device=8285109c rel:rel.server.session-dossier=beee3032 rel:rel.server.session-evidence=7c43f177 rel:rel.server.session-ledger=561efb7c rel:rel.server.session-task=88318a42 rel:rel.server.task-metrics=4c6ff177 rel:rel.server.task-notifications=536a2423 rel:rel.server.task-read=2ebdc671 rel:rel.surface.http-answer=5a209f4e rel:rel.surface.http-profiles=4bced386 rel:rel.surface.http-read=4256a58e rel:rel.surface.http-session=c924067a rel:rel.surface.http-signal=06b85e1c rel:rel.surface.http-triage=f4e6c647 rel:rel.surface.http-worktree=5c47b99d rel:rel.surface.sse-subscribe=a0c81026 server#summary=c5a5bbf4 share#summary=90a73119 surface#summary=1ada5cfb">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>GIX 新版 · 统筹者推进，内核兜底</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--gray:#8c959f;
+--surface:#0969da;--surface-s:#ddf4ff;--client:#1b7c83;--client-s:#d8f3f6;--adapters:#bc4c00;--adapters-s:#fff1e5;
+--server:#bf3989;--server-s:#ffeff7;--kernel:#8250df;--kernel-s:#fbefff;--playbooks:#1a7f37;--playbooks-s:#dafbe1;
+--share:#9a6700;--share-s:#fff8c5;--human:#cf222e;--human-s:#ffebe9;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--gray:#6e7681;
+--surface:#4493f8;--surface-s:#0c2d6b;--client:#39c5cf;--client-s:#0b3a3f;--adapters:#f0883e;--adapters-s:#3d2310;
+--server:#ec6cb9;--server-s:#3d1530;--kernel:#ab7df8;--kernel-s:#2b1d47;--playbooks:#3fb950;--playbooks-s:#12351e;
+--share:#d29922;--share-s:#3b2e0a;--human:#ff7b72;--human-s:#4b1113}}
+body{margin:0;padding:16px 18px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:20px 0 4px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 2px}
+figcaption{font-size:12.5px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text);font-size:12px}
+svg .m{fill:var(--text-2);font-size:11px}
+svg .t{font-size:12.5px;font-weight:600}
+svg .w{fill:var(--human)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0;font-size:12.5px}
+.chips span{border:1px solid var(--line);border-radius:10px;padding:0 8px;background:var(--soft)}
+</style>
+  </head>
+  <body>
+    <h1>统筹者推进，内核兜底</h1>
+    <p class="lede">每个任务交给一个不记事的统筹智能体往前推，内核不排流程，只守几条推不坏的底线。下面依次看：进程怎么连、代码怎么分层、人在哪儿拍板、出事了怎么接着走。</p>
+
+    <h2>三类进程，连接只往外</h2>
+    <figure>
+      <svg viewBox="0 0 480 330" role="img" aria-label="服务端常驻、研发机上的 runner 只出站连服务端、agent 会话经 MCP 连服务端">
+        <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <!-- 服务端 -->
+        <rect x="150" y="10" width="320" height="100" rx="10" fill="var(--kernel-s)" stroke="var(--kernel)"/>
+        <text x="164" y="32" class="t">服务端进程（常驻）</text>
+        <text x="164" y="54">入口 → 内核 ← 装配时注入剧本</text>
+        <text x="164" y="76" class="m">账：只追加的事件表（PostgreSQL）</text>
+        <text x="164" y="96" class="m">证据：本地盘，按内容哈希存</text>
+        <!-- 人 -->
+        <rect x="10" y="22" width="110" height="48" rx="24" fill="var(--human-s)" stroke="var(--human)"/>
+        <text x="65" y="51" text-anchor="middle" class="t w">人</text>
+        <!-- 研发机 -->
+        <rect x="6" y="140" width="468" height="182" rx="12" fill="none" stroke="var(--gray)" stroke-dasharray="5 4"/>
+        <text x="16" y="158" class="m">研发机（开发者本机）</text>
+        <rect x="16" y="168" width="200" height="74" rx="10" fill="var(--client-s)" stroke="var(--client)"/>
+        <text x="28" y="190" class="t">本地客户端 runner（常驻）</text>
+        <text x="28" y="210" class="m">按能力领任务包 · 本地 UI</text>
+        <text x="28" y="230" class="m">经适配器动 git、Claude、设备</text>
+        <rect x="270" y="168" width="194" height="74" rx="10" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="282" y="190" class="t">agent 会话（Claude Code）</text>
+        <text x="282" y="210" class="m">统筹者答完即退</text>
+        <text x="282" y="230" class="m">执行者超时、超预算即杀</text>
+        <line x1="216" y1="205" x2="268" y2="205" stroke="var(--text-2)" marker-end="url(#a)"/>
+        <text x="242" y="198" text-anchor="middle" class="m">起/杀</text>
+        <!-- 外部 -->
+        <rect x="16" y="272" width="96" height="36" rx="8" fill="none" stroke="var(--gray)"/>
+        <text x="64" y="295" text-anchor="middle" class="m">代码平台</text>
+        <rect x="120" y="272" width="96" height="36" rx="8" fill="none" stroke="var(--gray)"/>
+        <text x="168" y="295" text-anchor="middle" class="m">真机设备</text>
+        <line x1="64" y1="242" x2="64" y2="270" stroke="var(--text-2)" marker-end="url(#a)"/>
+        <line x1="168" y1="242" x2="168" y2="270" stroke="var(--text-2)" marker-end="url(#a)"/>
+        <!-- 出站连接 -->
+        <path d="M150 168 L210 112" fill="none" stroke="var(--client)" stroke-width="2" marker-end="url(#a)"/>
+        <text x="126" y="132" class="m">长连接，断了长轮询</text>
+        <path d="M367 168 L367 112" fill="none" stroke="var(--client)" stroke-width="2" marker-end="url(#a)"/>
+        <text x="374" y="144" class="m">MCP · 一次性令牌</text>
+        <path d="M65 70 L65 166" fill="none" stroke="var(--human)" marker-end="url(#a)" marker-start="url(#a)"/>
+        <text x="72" y="104" class="m">卡片 ⇄ 决定</text>
+        <text x="280" y="270" class="m">粗箭头全部从研发机往外：</text>
+        <text x="280" y="288" class="m">服务端从不反向连进研发机，</text>
+        <text x="280" y="306" class="m">代码、证据都留在内网。</text>
+      </svg>
+      <figcaption>服务端只管「记」与「判」，真正动手的事都在研发机上做。人只看本地 UI 上的卡片，不直接碰服务端。</figcaption>
+    </figure>
+
+    <h2>七层，依赖只向内</h2>
+    <figure>
+      <svg viewBox="0 0 480 280" role="img" aria-label="研发机三层、服务端三层，底下共用契约层；箭头都指向更稳的一侧">
+        <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <text x="40" y="16" class="m">研发机这边</text>
+        <text x="262" y="16" class="m">服务端这边</text>
+        <g data-arch="surface"><rect x="40" y="24" width="180" height="38" rx="8" fill="var(--surface-s)" stroke="var(--surface)"/><text x="130" y="48" text-anchor="middle">1 本地 UI 页面</text></g>
+        <g data-arch="client"><rect x="40" y="82" width="180" height="38" rx="8" fill="var(--client-s)" stroke="var(--client)"/><text x="130" y="106" text-anchor="middle">2 本地客户端</text></g>
+        <g data-arch="adapters"><rect x="40" y="140" width="180" height="38" rx="8" fill="var(--adapters-s)" stroke="var(--adapters)"/><text x="130" y="164" text-anchor="middle">3 本地适配器</text></g>
+        <g data-arch="server"><rect x="262" y="24" width="200" height="38" rx="8" fill="var(--server-s)" stroke="var(--server)"/><text x="362" y="48" text-anchor="middle">4 服务端入口（装配）</text></g>
+        <g data-arch="kernel"><rect x="262" y="104" width="94" height="52" rx="8" fill="var(--kernel-s)" stroke="var(--kernel)" stroke-width="2"/><text x="309" y="134" text-anchor="middle">5 内核</text></g>
+        <g data-arch="playbooks"><rect x="368" y="104" width="94" height="52" rx="8" fill="var(--playbooks-s)" stroke="var(--playbooks)"/><text x="415" y="134" text-anchor="middle">6 剧本</text></g>
+        <g data-arch="share"><rect x="18" y="216" width="444" height="44" rx="8" fill="var(--share-s)" stroke="var(--share)"/><text x="240" y="236" text-anchor="middle">7 契约与基础</text><text x="240" y="252" text-anchor="middle" class="m">跨进程只认这里的格式</text></g>
+        <!-- 左列 -->
+        <path d="M28 43 L40 43 M28 43 L28 214" fill="none" stroke="var(--text-2)" marker-end="url(#b)"/>
+        <line x1="130" y1="120" x2="130" y2="138" stroke="var(--text-2)" marker-end="url(#b)"/>
+        <line x1="130" y1="178" x2="130" y2="214" stroke="var(--text-2)" marker-end="url(#b)"/>
+        <!-- 右列 -->
+        <line x1="309" y1="62" x2="309" y2="102" stroke="var(--text-2)" marker-end="url(#b)"/>
+        <line x1="415" y1="62" x2="415" y2="102" stroke="var(--text-2)" marker-end="url(#b)"/>
+        <text x="362" y="86" text-anchor="middle" class="m">把剧本注入内核</text>
+        <text x="362" y="174" text-anchor="middle" class="m">互不 import</text>
+        <line x1="309" y1="156" x2="309" y2="214" stroke="var(--text-2)" marker-end="url(#b)"/>
+        <line x1="415" y1="156" x2="415" y2="214" stroke="var(--text-2)" marker-end="url(#b)"/>
+        <!-- 进程界 -->
+        <line x1="241" y1="22" x2="241" y2="208" stroke="var(--gray)" stroke-dasharray="3 4"/>
+        <text x="241" y="200" text-anchor="middle" class="m">网络</text>
+      </svg>
+      <figcaption>箭头是「可以依赖」：越往下越稳，越往上越好换。内核不认识剧本、剧本也不认识内核，只在入口装配时接上；两边进程之间不 import，只认第 7 层的格式。</figcaption>
+    </figure>
+    <div class="chips"><span data-arch="surface">本地 UI 页面</span><span data-arch="client">本地客户端</span><span data-arch="adapters">本地适配器</span><span data-arch="server">服务端入口</span><span data-arch="kernel">内核</span><span data-arch="playbooks">剧本</span><span data-arch="share">契约与基础</span></div>
+
+    <h2>人只在四个时刻拍板</h2>
+    <figure>
+      <svg viewBox="0 0 480 196" role="img" aria-label="默认流程六步，人在取舍、确认、裁决、放行四处拍板">
+        <defs><marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <!-- 人的时刻 -->
+        <g>
+          <circle cx="43" cy="30" r="20" fill="var(--human-s)" stroke="var(--human)"/><text x="43" y="35" text-anchor="middle" class="w">取舍</text>
+          <circle cx="121" cy="30" r="20" fill="var(--human-s)" stroke="var(--human)"/><text x="121" y="35" text-anchor="middle" class="w">确认</text>
+          <rect x="172" y="12" width="132" height="36" rx="18" fill="var(--human-s)" stroke="var(--human)" stroke-dasharray="4 3"/><text x="238" y="35" text-anchor="middle" class="w">裁决（偶尔）</text>
+          <circle cx="355" cy="30" r="20" fill="var(--human-s)" stroke="var(--human)" stroke-width="2"/><text x="355" y="35" text-anchor="middle" class="w">放行</text>
+          <line x1="43" y1="50" x2="43" y2="74" stroke="var(--human)"/>
+          <line x1="121" y1="50" x2="121" y2="74" stroke="var(--human)"/>
+          <line x1="238" y1="48" x2="238" y2="74" stroke="var(--human)" stroke-dasharray="3 3"/>
+          <line x1="355" y1="50" x2="355" y2="74" stroke="var(--human)"/>
+        </g>
+        <!-- 默认流程 -->
+        <g>
+          <rect x="10" y="76" width="66" height="32" rx="6" fill="var(--soft)" stroke="var(--line)"/><text x="43" y="97" text-anchor="middle">录入</text>
+          <rect x="88" y="76" width="66" height="32" rx="6" fill="var(--soft)" stroke="var(--line)"/><text x="121" y="97" text-anchor="middle">定标准</text>
+          <rect x="166" y="76" width="66" height="32" rx="6" fill="var(--soft)" stroke="var(--line)"/><text x="199" y="97" text-anchor="middle">开发</text>
+          <rect x="244" y="76" width="66" height="32" rx="6" fill="var(--soft)" stroke="var(--line)"/><text x="277" y="97" text-anchor="middle">验证</text>
+          <rect x="322" y="76" width="66" height="32" rx="6" fill="var(--soft)" stroke="var(--line)"/><text x="355" y="97" text-anchor="middle">放行</text>
+          <rect x="400" y="76" width="70" height="32" rx="6" fill="var(--kernel-s)" stroke="var(--kernel)"/><text x="435" y="97" text-anchor="middle">合入</text>
+          <path d="M76 92 H86 M154 92 H164 M232 92 H242 M310 92 H320 M388 92 H398" stroke="var(--text-2)" marker-end="url(#c)"/>
+          <path d="M277 108 C 277 132, 199 132, 199 110" fill="none" stroke="var(--text-2)" stroke-dasharray="3 3" marker-end="url(#c)"/>
+          <text x="238" y="140" text-anchor="middle" class="m">不通过就退回</text>
+        </g>
+        <!-- 谁推 / 谁守 -->
+        <rect x="10" y="154" width="378" height="30" rx="6" fill="var(--playbooks-s)" stroke="var(--playbooks)"/>
+        <text x="199" y="174" text-anchor="middle">统筹者推进：顺序、退回、换打法都是默认值，可越过但要写理由</text>
+        <rect x="400" y="154" width="70" height="30" rx="6" fill="var(--kernel-s)" stroke="var(--kernel)"/>
+        <text x="435" y="174" text-anchor="middle">内核守门</text>
+      </svg>
+      <figcaption>阶段只是统筹者报的进度，不是状态机，所以流程可以绕、可以回头。人的四刻是硬的：没有人放行，内核就不发起合入，放行卡也不会因为没人答而自动通过。</figcaption>
+    </figure>
+
+    <h2>一切进账，恢复就是带档案重唤</h2>
+    <figure>
+      <svg viewBox="0 0 480 236" role="img" aria-label="会话、进程、客户端随时可丢；账、档案、分支、证据都在持久处；恢复就是结算丢失的工作再唤醒统筹者">
+        <defs><marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="10" y="10" width="216" height="110" rx="10" fill="none" stroke="var(--gray)" stroke-dasharray="5 4"/>
+        <text x="22" y="32" class="t">随时可以丢</text>
+        <text x="22" y="56" class="m">agent 会话（可续，也可重起）</text>
+        <text x="22" y="78" class="m">runner 进程、整台研发机掉线</text>
+        <text x="22" y="100" class="m">服务端进程本身</text>
+        <rect x="254" y="10" width="216" height="110" rx="10" fill="var(--kernel-s)" stroke="var(--kernel)"/>
+        <text x="266" y="32" class="t">不会丢</text>
+        <text x="266" y="56" class="m">账：每一步都是一条事件</text>
+        <text x="266" y="78" class="m">任务档案：统筹者的记忆</text>
+        <text x="266" y="100" class="m">分支上的提交、证据文件</text>
+        <!-- 恢复环 -->
+        <rect x="10" y="150" width="100" height="40" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="60" y="175" text-anchor="middle">进程重启</text>
+        <rect x="128" y="150" width="104" height="40" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="180" y="175" text-anchor="middle">结算丢的活</text>
+        <rect x="250" y="150" width="100" height="40" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="300" y="175" text-anchor="middle">到点唤醒</text>
+        <rect x="368" y="150" width="102" height="40" rx="8" fill="var(--playbooks-s)" stroke="var(--playbooks)"/><text x="419" y="169" text-anchor="middle">新统筹者</text><text x="419" y="184" text-anchor="middle" class="m">读档案接着推</text>
+        <path d="M110 170 H126 M232 170 H248 M350 170 H366" stroke="var(--text-2)" marker-end="url(#d)"/>
+        <path d="M419 190 V 216 H 60 V 192" fill="none" stroke="var(--text-2)" stroke-dasharray="3 3" marker-end="url(#d)"/>
+        <text x="240" y="230" text-anchor="middle" class="m">下次再丢，还是这一圈；每个没结束的任务都排着下一次唤醒</text>
+        <path d="M362 120 L 402 148" stroke="var(--kernel)" marker-end="url(#d)"/>
+      </svg>
+      <figcaption>内核不去接住会话本身：会话可以随时没，只要事实都在账和档案里，换一个统筹者照样接得上。终态只有「已合入」和「人决定放弃」，其余状态总排着下一次唤醒，所以不会卡死。</figcaption>
+    </figure>
+  </body>
+</html>

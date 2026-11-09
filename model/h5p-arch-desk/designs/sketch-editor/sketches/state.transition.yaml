@@ -1,0 +1,10 @@
+# 设计 sketch-editor 挂在「state.transition」上的草图：由一期的 designs/sketch-editor/sketch.yaml 按挂载点机械拆出（ADR-0025 迁移，内容不变），同设计另有 model.intent、state.desk、access.writer、present.canvas、present.panel、present.version。
+sketch:
+  id: sketch-editor
+  mount: state.transition
+  lifetime: until-implemented
+  modules:
+    - id: state.transition.edit
+      name: 编辑规则
+      kind: component
+      responsibility: 进入 / 退出编辑态的会话规则：编辑态与运行视角、文件选中、代码事实互斥；有未保存改动时的离开确认；Esc 只取消选中。
