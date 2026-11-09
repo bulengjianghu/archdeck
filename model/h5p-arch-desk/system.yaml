@@ -6,5 +6,5 @@ system:
     按依赖方向分为呈现 / 视图状态 / 接入 / 模型四层，关于被描述系统的知识只放在不依赖 Vue 与布局库的模型层，会话状态是一个值、只经纯转移函数改变（见 docs/03-architecture.md）。
   source:
     repo: archdeck
-    commit: 9f5fe315148eac14029df4d74727415ce80efb99
+    commit: bdf742fe2f76d90a8781f45bacf433eb7d4acba2
     generatedAt: '2026-11-09'
