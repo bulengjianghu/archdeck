@@ -118,7 +118,7 @@ export ARCH_WORKSPACE_ROOT=/path/to/work4   # 含 h5player/、media-platform/ �
 本仓库源自 [h5player-demo](https://gitlab.iptco.me/lsst/lss/frontend/h5player-demo) 的 `packages/h5p-arch-desk`，上游在该包里的新提交通过 `git subtree split` 持续迁入（保留提交记录）：
 
 ```bash
-scripts/sync-from-h5player-demo.sh [上游分支]   # 缺省 gix-next/model；split + fetch + merge，一条龙
+docs/archdeck/sync-from-h5player-demo.sh [上游分支]   # 缺省 gix-next/model；split + fetch + merge + 描述对齐，一条龙
 ```
 
 上游与本地各改了同一批文件时的约定：路径适配类修改（`model/h5p-arch-desk/system.yaml` 的 `source.repo`、CLAUDE.md/README 的路径说明）以本地为准，其余以上游为准；同步后脚本会把 `source.commit` / `generatedAt` 对齐到迁入的代码顶点。
