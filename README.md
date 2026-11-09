@@ -21,7 +21,11 @@ npm install
 npm run dev          # 本地查看：首页是项目列表，读取 model/ 下各项目，描述文件变化后自动刷新
 ```
 
-打开终端里提示的地址，点一个项目卡片即可。
+打开终端里提示的地址，点一个项目卡片即可。本项目自身（`model/h5p-arch-desk`）的源码就是本仓库，开箱即用；h5player 等外部项目的描述要读它们的本地源码，`repo` 相对作者的工作区 `work4/` 书写，需先指定工作区根目录（否则这些卡片报「源码根目录不存在」）：
+
+```bash
+export ARCH_WORKSPACE_ROOT=/path/to/work4   # 含 h5player/、media-platform/ 的目录；单测、E2E 与 lint:model 同样需要
+```
 
 ## 命令
 

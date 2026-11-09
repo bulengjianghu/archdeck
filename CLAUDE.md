@@ -61,11 +61,10 @@ npm run arch:mcp     # 架构治理 MCP 服务器（stdio）
 
 ## 4. 标准跑法与门禁（G9）
 
-源码根目录按「工作区根目录 + `system.source.repo`」解析，工作区根目录缺省为本包往上三级（G1）；自项目（G22）缺省为所在包目录。在 `git worktree`（如 `work4/wt/<名>/packages/h5p-arch-desk`）里往上三级是 `work4/wt/`，不是 `work4/`：两个项目的源码都找不到（`source.missing`，代码事实与演化相关的单测失败）；只设 `ARCH_WORKSPACE_ROOT` 时 h5player 找到了，本项目自身的代码事实却读到主检出 `work4/h5player-demo/` 而不是这个 worktree。所以在 worktree 里跑任何 npm 命令都要带两个环境变量：
+源码根目录按「工作区根目录 + `system.source.repo`」解析，工作区根目录缺省为本仓库往上三级（G1）；自项目（G22，`repo: archdeck` 与仓库目录同名）缺省为本仓库根，在 `git worktree` 里就是那个 worktree 自己，不用配置。外部项目（h5player、media-web-player、gix-next）的 `repo` 都相对 `work4/` 书写，而本仓库往上三级落在用户主目录，找不到它们的源码（`source.missing`，代码事实与演化相关的单测失败）。所以跑任何 npm 命令都要带工作区根目录：
 
 ```bash
-export ARCH_WORKSPACE_ROOT=<work4 的绝对路径>                               # 让 h5player 等项目找到源码
-export ARCH_SOURCE_ROOT_H5P_ARCH_DESK=<这个 worktree 的 packages/h5p-arch-desk 绝对路径>  # 自身的代码事实读这个 worktree
+export ARCH_WORKSPACE_ROOT=<work4 的绝对路径>   # h5player、media-platform 在 work4/ 下，gix-next 为 ../work2/gix-wt/next-main/gix-next
 ```
 
 门禁命令（进入包目录后，缺环境变量就是假红）：

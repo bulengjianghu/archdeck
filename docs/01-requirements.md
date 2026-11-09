@@ -2,7 +2,7 @@
 
 > 本文回答**做什么、为什么、做到什么程度**。概念与规则的定义在 [02-domain.md](./02-domain.md)，本文只按编号引用；实现方式见 [03-architecture.md](./03-architecture.md)。
 > 状态：**已实现** / **待实现**（已定稿未开发）/ **后续**（不在当前范围）。
-> 位置：`h5player-demo/packages/h5p-arch-desk`；服务对象：h5player 等项目的架构师与核心工程师。
+> 位置：独立开源仓库 `archdeck`（2026-11 从 `h5player-demo/packages/h5p-arch-desk` 迁出）；服务对象：h5player 等项目的架构师与核心工程师。
 
 ## 0. 一句话
 

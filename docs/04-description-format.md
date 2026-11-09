@@ -393,7 +393,7 @@ import 是**证据**（代码事实），关系是**交互的主张**。按代�
 
 ### 3.7 源码归属
 
-源码根目录 = 工作区根目录（默认 `work4/`）+ `system.source.repo`（G1），如 `repo: h5player` → `work4/h5player`，`repo: h5player-demo/packages/h5p-arch-desk` → 本包。`codeRefs` 与 `entry` 都相对这个目录书写。
+源码根目录 = 工作区根目录 + `system.source.repo`（G1），如 `repo: h5player` → `<工作区根目录>/h5player`；自项目 `repo: archdeck` 与仓库目录同名时（G22）就是本仓库根。`codeRefs` 与 `entry` 都相对这个目录书写。
 
 - **每个源码文件都应恰好归属一个模块**：子模块写自己的文件，父模块可以写覆盖整个目录的 glob，祖先与后代同时匹配时归最深的模块（G5）；两个互不包含的模块不要写同一个文件（G6）。
 - **概念子模块**：一个文件内有清晰的子结构、值得在图上分开讲时（如 Projector 文件内的分层总览、端点映射与边收集），子模块不写 `codeRefs`，挂在拥有该文件的模块下面；它与同一宿主内其他部分的关系照常写，`lint:model` 标「概念拆分，同文件」、不判定（K5a），不要为了能被证实而改写端点。
