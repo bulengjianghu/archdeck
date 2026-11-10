@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
   <head>
-    <meta name="arch-basis" content="v1 93405dc5e8aef879 access.model-source#abstraction=e7f24a21 access.model-source#invariants=16797a02 access.model-source#responsibility=6fc319a0 access.model-source#summary=9c7ec10e">
+    <meta name="arch-basis" content="v1 f556006a8186c23a access.model-source#abstraction=b66f31c2 access.model-source#invariants=16797a02 access.model-source#responsibility=6fc319a0 access.model-source#summary=9c7ec10e">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ModelSource 插件 · 邮政窗口</title>
@@ -45,7 +45,7 @@ svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
         <path d="M240,232 L240,206" stroke="var(--text-2)" stroke-width="1.2" fill="none" stroke-dasharray="5 4" marker-end="url(#a3g)"/>
         <rect x="140" y="232" width="200" height="30" rx="8" fill="var(--soft)" stroke="var(--line)" stroke-dasharray="5 4"/><text x="240.0" y="251.0" font-size="11.5" text-anchor="middle">磁盘：存盘即触发</text>
       </svg>
-      <figcaption>页面按需取项目清单、描述、源码与历史，清单里附带体检结果。文件一存盘，插件就按项目推送变化，页面只重载那一个项目。</figcaption>
+      <figcaption>页面按需取项目清单、描述、源码与历史，清单里附带体检结果。文件一存盘，插件就按项目推送变化，页面只重载那一个项目。纯静态托管的在线 demo 不走这个窗口：构建期由 scripts/build-demo.ts 把同一批读取函数的载荷预渲染成 JSON，页面以只读模式取静态文件。</figcaption>
     </figure>
 
   </body>

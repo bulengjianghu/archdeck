@@ -74,12 +74,12 @@ modules:
   - id: access.model-source
     name: ModelSource 插件
     summary: 以同源端点提供描述与源码，并按项目推送变更
-    abstraction: 只把读取、写入、源码与治理各模块挂成同源端点并按项目推送变更，自身不解析描述。
+    abstraction: 只把读取、写入、源码与治理各模块挂成同源端点并按项目推送变更，自身不解析描述；静态 demo 在构建期把同一批读取函数的载荷预渲染为 JSON（scripts/build-demo.ts），经 GitHub Pages 部署只读运行（.github/workflows/deploy-pages.yml）。
     invariants:
       - { text: 写端点只收同源的 JSON POST：异源 403、非 JSON 415, adr: 19 }
       - 自身不读写磁盘，读取、写入、源码与治理都委托给各存取件
       - 变更推送按项目区分，载荷只带项目名
-    codeRefs: [vite/archModelPlugin.ts, vite/readHealth.ts, vite.config.ts]
+    codeRefs: [vite/archModelPlugin.ts, vite/readHealth.ts, vite.config.ts, scripts/build-demo.ts, .github/workflows/deploy-pages.yml]
   - id: access.reader
     name: 描述读取
     summary: 发现项目与版本，读出描述原文与项目摘要
