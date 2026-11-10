@@ -1,0 +1,38 @@
+# 取自 docs/design/02-web-live-player.md §4.3 / §4.5 与 live/worker-pipeline.ts、worker-host.ts、worker-messages.ts（协议版本 2）。
+scenario:
+  id: sc.worker-session
+  name: Worker 线程化（worker-host ↔ worker-pipeline）
+  kind: main
+  description: |
+    threading 解析为 worker 时，自建时钟族取预热的 Worker、新建画布（控制权转给 OffscreenCanvas）与 AudioWorkletNode，交给主线程端；
+    主线程端经 postMessage 发 start（已编译模块克隆、画布与音频端口转交），Worker 端校验消息后在 Worker 内建同一份会话管线运行：
+    画进 OffscreenCanvas、PCM 经 MessagePort 直写音频线程。管线回报以 event / stats / failed 消息回到主线程端，再交给内核的 sink；
+    内核的命令以 command 消息下发。内核在主线程仍是唯一的状态源。
+  cause: 内核以 threading worker 启动自建时钟族的管线（auto 且 Worker 可用）
+  evidence:
+    - media-wasm/tests/live-worker-pipeline.test.mjs
+    - media-wasm/tests/worker-contract.test.mjs
+    - media-sdk-kits/tests/kernel.test.mjs
+  steps:
+    - call: {id: start, from: kit.kernel.lifecycle, to: providers.self-clocked.family, relation: rel.kit.lifecycle-start-self-clocked, label: "startPipeline({threading: 'worker', …})"}
+    - call: {from: providers.self-clocked.family, to: providers.self-clocked.worker-client, label: 'startWorkerPipeline(预热的 Worker, 新画布, start)'}
+    - async: {from: providers.self-clocked.worker-client, to: providers.self-clocked.audio, label: createWorkletNode / connectOutputPort}
+    - async: {id: post-start, from: providers.self-clocked.worker-client, to: providers.self-clocked.worker-host, label: 'postMessage start {module, canvas, audio.port}（转交）'}
+    - call: {from: providers.self-clocked.worker-host, to: providers.self-clocked.worker-protocol, label: "parsePlayerWorkerMessage('to-worker')"}
+    - call: {from: providers.self-clocked.worker-host, to: providers.self-clocked.presentation, label: createVideoRenderer(OffscreenCanvas)}
+    - call: {from: providers.self-clocked.worker-host, to: providers.self-clocked.audio, relation: rel.providers.worker-host-audio, label: createPortOutput(port)}
+    - call: {id: run, from: providers.self-clocked.worker-host, to: providers.self-clocked.session, label: 'createWasmPipeline(deps)(start)：与主线程同一份会话'}
+    - async: {from: providers.self-clocked.worker-host, to: providers.self-clocked.worker-client, label: 'response {ok: true}'}
+    - par:
+        - steps:
+            - loop:
+                while: 会话运行
+                steps:
+                  - async: {from: providers.self-clocked.worker-host, to: providers.self-clocked.audio, relation: rel.providers.audio-pcm, label: pcm → AudioWorklet（音频线程回已播帧数）}
+                  - async: {id: report, from: providers.self-clocked.worker-host, to: providers.self-clocked.worker-client, label: 'event / stats / failed'}
+                  - call: {from: providers.self-clocked.worker-client, to: providers.self-clocked.worker-protocol, label: "parsePlayerWorkerMessage('from-worker')"}
+                  - async: {from: providers.self-clocked.worker-client, to: kit.kernel.envelope, label: sink.event / sink.stats / sink.failed}
+        - steps:
+            - call: {id: command, from: kit.kernel.decide, to: providers.self-clocked.worker-client, relation: rel.kit.decide-self-clocked, label: 'pipeline.command(pause / seek …)；hold-unseen 与 visibility 由观察跟随同样下发'}
+            - async: {from: providers.self-clocked.worker-client, to: providers.self-clocked.worker-host, label: postMessage command}
+            - call: {from: providers.self-clocked.worker-host, to: providers.self-clocked.session, label: pipeline.command(command)}

@@ -1,0 +1,14 @@
+{
+  "steps": [
+    {
+      "block": {
+        "kind": "renarrate",
+        "module": "{{anchor.module}}",
+        "notes": ["顺手把职责也改短"],
+        "html": "{{explainer.html}}",
+        "summary": "改过的一句话职责"
+      }
+    },
+    { "done": true }
+  ]
+}

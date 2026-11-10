@@ -1,0 +1,81 @@
+# 设计 sketch-editor / r2 的本轮说明（AI 拥有，E8）：由 notes/r2.md 迁入（E8 实现后读取侧支持）
+revision:
+  date: '2026-10-22'
+  summary: |
+    按 r1 的评审意见（feedback 5 条意见、2 条疑问、5 项确认）与修订后的草图修改。对比「上一轮」可只看本轮改动。
+
+    **影响面：仍不大面积调整架构**。本轮新增 2 个模块（都是草图补的），其余是职责、接口、关系的调整。
+
+    ### 意见的落实
+
+    1. **新建设计的底稿（意见 1）**：缺省改为**空草图**。复制底稿的选项改名为「改骨架（定稿后晋升替换骨架）」，语义不变：复制骨架的层与第二级并声明 `supersedes: skeleton`。对话框选中它时说明后果：定稿实现后整份替换 `intent/skeleton.yaml`，而不是归档。见 `model.intent.edit.seed` 与 `present.version.edit`。**这一条偏离了负责人原裁决「缺省复制」**（原裁决时还不知道复制必然 supersedes），待负责人复核。
+    2. **封闭子树下的已有代码（意见 2，草图已修订）**：
+       - 新增 `model.intent.check`（草图核验与生命周期）。`check.ts`、`lifecycle.ts`、`owned.ts` 从 `model.intent` 自身移入，`model.intent` 只剩入口 `index.ts`。矛盾检查留在核验里，以 `sketchContradictions` 导出，校验依赖它（`rel.ed.validate-check`，对应草图 `rel.se.validate-check`）。核验的平铺改为调用寻址（`rel.ed.check-locate`）。一期已有的函数补登为接口 `if.intent.sketchCheck`。
+       - 新增 `access.writer.append`（追加写入）。`writeModel.ts` 整个归这里，草图写回依赖它的 `openDoc` / `save`（`rel.ed.sketch-append`，对应草图 `rel.se.sketch-append`）。已有的 4 条写入关系（`rel.gv.source-writer`、`writer-reader`、`writer-model`、`writer-types`）的端点由 `access.writer` 下沉到 `access.writer.append`。
+       - 实时核验的关系 `rel.ed.derive-check` 终点由 `model.intent` 下沉到 `model.intent.check`，场景同步。
+    3. **第三级的 core（意见 3）**：去掉 `model.intent.edit`、`model.intent.validate`、`present.canvas.edit` 的 `core`。模块表单的「核心」开关只对第二级模块显示。
+    4. **拆分 design.yaml 的所有权（意见 4）**，纳入本设计：
+       - 每一轮的说明（summary、questions）移到 AI 拥有的 `r<N>/revision.yaml`。
+       - `design.yaml` 只留人拥有的 goal / base / status / adr / accepted，以及 revisions[] 的 id、date、feedback。
+       - 「描述读取」的 `readDesignInfo` 合并两处：两处都写时以 revision.yaml 为准，并记一条 problem；旧轮次兼容。`readModelDir` 读一轮描述时跳过 `revision.yaml`。接口 `readRevisionNote`；`ds.DesignInfo` 形状不变、来源拆成两处。
+       - 04 §5 的目录图、design.yaml 示例与「新一轮」写法随之改。
+       - 两个工具缺口列为本设计的实现项：
+         - 只有草图、没有轮次的设计不报「没有可打开的轮次」（描述读取）。
+         - `sketch-check --design` 不带 `--project` 时，在全部项目里找这个设计 ID（agent 接口；恰好一个即用，否则报错列出候选）。
+    5. **重放失败的兜底（意见 5）**：`replay` 列出失败的操作，会话仍为 stale。信息条给出「放弃本次改动」：以新读到的草图重新开始，清空两个栈。不会卡在 stale 状态。见 `state.desk.edit.session`、`state.desk.edit.save`、`present.version.edit`、`if.desk.edit`。
+
+    ### 疑问的答复
+
+    6. **present.panel.edit 拆 5 个子模块是否过细**：层表单与模块表单的字段如下。
+       - 交集 4 项：名称、ID、职责、封闭（外加「删除」操作）。
+       - 层独有 4 项：抽象原则、包含、不包含、可依赖的层。层的排序在画布上拖动，不在表单里。
+       - 模块独有 5 项：kind、核心（仅第二级）、代码落点、所属父（即移动）、对外接口（增删改）。
+
+       交集占并集 13 项中的 4 项，占层表单 8 项的一半，占模块表单 9 项的不到一半，**不过半，维持分开**。共有的 4 项做成两张表单共用的字段段，只是组件复用，不单设子模块。5 个子模块在 04 §3.2 建议的 3~9 个之内。答复写在 `present.panel.edit` 的 designNote。
+
+    7. **撤销粒度与文本字段（写进 X7g）**：
+       - 一个编辑操作（EditOp）是一步。
+       - 文本字段从获得焦点到失焦或回车是一次提交，产生一个 `updateModule` / `updateRelation`，即一步；其间的多次击键不进撤销栈。
+       - 值未变时不提交；Esc 还原字段，不提交。
+       - 同一字段的连续两次提交是两步，不合并：可预测优先于省步数。
+
+       **改 ID 与移动的关系（写进 X7d）**：模块表单的 ID 字段只改短名，父 ID 前缀只读。提交即 `renameModule`，等价于「父不变的移动」：同一个级联（后代、关系两端、接口 owner、closed、mayDependOn），关系与接口自身的 ID 不变；同一个 IdImpact 确认，有后代或当前版本里有引用时弹出。要换父只能用「所属父」下拉或画布拖动。
+
+    ### 确认项的落实
+
+    问题 1 A、2 A（关系 / 接口 ID 不随模块改名，确认框给出当前版本的引用数）、4 A、6 A、9 A，与 r1 相同，未改。
+
+    ### 规模与核验
+
+    - 模块 148 → 150（+2：`model.intent.check`、`access.writer.append`）。
+    - 关系 363 → 367（+4：`validate-check`、`check-locate`、`check-types`、`sketch-append`）。
+    - 接口 50 → 51（+1：`if.intent.sketchCheck`）。
+    - 数据结构 53 不变；场景 2 不变。
+    - `sketch-check --revision r2` 一致（0 错误 0 提醒）；`lint:model` r2 0 错误 0 提醒。
+
+    ### 规则草案（来源均为「议」，定稿前盘点；相对 r1 改了 X7d、X7g）
+
+    - **X7a**：编辑态只在草图版本（设计的草图、持久草图）上开启，与运行视角、文件选中互斥，不进 URL。
+    - **X7b**：编辑操作是纯函数，只拒绝不成立的操作（目标不存在、ID 冲突、前缀不符、同一对同类型关系已有、连祖先与后代、设计草图移动持久草图的模块），其余交给校验。
+    - **X7c**：ID 生成规则：
+      - 模块 = 父 ID + kebab-case 短名；
+      - 关系 = `rel.<from 短名>-<to 短名>`；
+      - 接口 = `if.<owner 短路径>.<名称>`。
+    - **X7d**：移动 = 改父 + 改 ID，级联后代、关系两端、接口 owner、closed、mayDependOn；关系与接口自身的 ID 不变；移动前预览影响并确认。表单改 ID 只改短名，即父不变的移动，同一级联与确认。
+    - **X7e**：删除级联子树、两端落在子树内的关系、owner 在子树内的接口，以及 closed / mayDependOn 中的引用；有级联时确认。
+    - **X7f**：校验的引用范围为本草图 ∪ 持久草图；error 拒绝保存；页面与写入端点同一函数；矛盾检查与核验同一份。
+    - **X7g**：撤销 / 重做只在本次未保存的编辑内。一个操作一步；文本字段一次提交（失焦或回车）一步，击键不计，值未变不提交，连续提交不合并；保存即清空。
+    - **X7h**：编辑后的跟随：改名换成新 ID，删除退到最近仍存在的祖先，新建即选中。
+    - **X7i（新）**：保存冲突时可重新加载并重放本次操作；有失败时列出失败的操作，可放弃本次改动。
+    - **B6 细化**：整份写回的顺序是指纹比对 → 校验 → 文档合并（注释只在未改动的节点保留）→ 更新指纹 → 拦截记录一行。
+    - **DV（新，议）**：每轮说明在 AI 拥有的 `r<N>/revision.yaml`，`design.yaml` 只放人拥有的内容。
+  questions:
+  - |
+    **revisions[] 里的 id / date 行仍由 AI 写进 design.yaml**：按意见 4 拆分后，AI 起草新一轮仍要在人拥有的 `design.yaml` 的 revisions[] 里加一行 id 与 date，每轮依旧触发一次 `owned.changed`，要人登记。
+       - A. 轮次从 `r<N>/revision.yaml` 发现（date 也写在 revision.yaml），design.yaml 的 revisions[] 只在记评审意见时由页面端点（B2）按需建立条目。AI 从此完全不碰 design.yaml。
+       - B. 维持 AI 追加 id / date，人每轮 `arch own`。
+       - C. 加一个「登记新一轮」写端点，由它追加并自动更新指纹。
+
+       推荐 A：所有权真正分开，B 的人工登记每轮都要做，C 让 AI 调人拥有文件的写端点，与 X6 的初衷相悖。代价：轮次顺序改由目录名 r<N> 的数字决定，revisions[] 不再是轮次清单。
+  - '**待负责人复核**：新建设计的底稿缺省由「复制」改为「空草图」（意见 1，偏离原裁决），请负责人确认。'
+  - '**定稿前的规则盘点**：上面的 X7a–X7i、B6 细化与 DV 新规则都是「议」。r3 若定稿，将按 CLAUDE.md §3 步骤 4 附完整规则清单，请指出其中要改或要删的。'

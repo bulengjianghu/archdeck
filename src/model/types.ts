@@ -1,0 +1,789 @@
+/**
+ * 架构描述的数据类型。
+ *
+ * 分两组：
+ * - `*Def`：YAML 文件里写的形状（与 schema/arch-file.schema.json 对应）；
+ * - 其余：Loader 合并、规整后的模型，以及 Indexer / Projector 的产物。
+ */
+
+// ── YAML 文件形状 ─────────────────────────────────────────────
+
+/** 四类交互（§1.1、ADR-0029）：查询 / 委托 / 通知 / 流；箭头一律是控制流方向，「谁知道谁」是代码事实，不是关系 */
+export type InteractionType = 'queries' | 'commands' | 'notifies' | 'streams'
+export const INTERACTION_TYPES: readonly InteractionType[] = ['queries', 'commands', 'notifies', 'streams']
+/**
+ * 关系类型：四类交互，加迁移期的 `calls`——「未分类」（M17：按查询或委托参与证实、覆盖与场景绑定）。
+ * `implements` 已不是关系类型（M17）：只可能出现在历史提交的描述文件里，Loader 丢弃并提醒 `relation.implements-removed`。
+ */
+export type RelationType = InteractionType | 'calls'
+/** 关系索引里可能出现的类型（四类 + 未分类），按图例顺序 */
+export const RELATION_TYPES: readonly RelationType[] = ['queries', 'commands', 'notifies', 'streams', 'calls']
+/** M17：迁移期的「未分类」 */
+export const UNCLASSIFIED = 'calls' as const
+export const isUnclassified = (t: RelationType): boolean => t === UNCLASSIFIED
+/** M13、K5、S19：查询或委托（含未分类）——发起方 → 接收方的依赖即证实；mode 只对它们有意义 */
+export const CALL_LIKE_TYPES: readonly RelationType[] = ['queries', 'commands', 'calls']
+export const isCallLike = (t: RelationType): boolean => CALL_LIKE_TYPES.includes(t)
+/** M13、S19、L10：关系的同步性——通知一律异步；查询与委托按 mode（缺省同步）；流不比，按 mode 缺省同步 */
+export const relationMode = (r: { type: RelationType; mode?: 'sync' | 'async' }): 'sync' | 'async' => (r.type === 'notifies' ? 'async' : (r.mode ?? 'sync'))
+/** M15：已不是关系类型的旧类型（ADR-0026），读取时丢弃并提醒 */
+export const REMOVED_RELATION_TYPE = 'depends'
+/** M17：已不是关系类型的旧类型（ADR-0029，实现者写进接口的 implementedBy），读取时丢弃并提醒（同 M15） */
+export const MIGRATED_RELATION_TYPE = 'implements'
+/** 旧名（M12）：加载时映射，event 同时翻转两端；一轮后删除 */
+export type LegacyRelationType = 'event' | 'dataflow'
+export const LEGACY_RELATION_TYPES: Readonly<Record<LegacyRelationType, { to: RelationType; flip: boolean }>> = {
+  event: { to: 'notifies', flip: true },
+  dataflow: { to: 'streams', flip: false },
+}
+
+/**
+ * 机制维度 via（ADR-0029、K5b）：`port:<接口 ID>` 经端口 / `bus:<模块 ID>` 经总线 / `channel:<名>` 经通道（可加契约模块 `channel:<名>@<模块 ID>`，M21）；
+ * 迁移期另有 `port`「端口未指明」与 `bus`「总线未指明」（M20），不判定。
+ */
+export type RelationVia = `port:${string}` | `bus:${string}` | `channel:${string}` | 'port' | 'bus'
+export type ViaKind = 'port' | 'bus' | 'channel'
+export const VIA_KINDS: readonly ViaKind[] = ['port', 'bus', 'channel']
+/** M20：旧的平铺取值（迁移期别名） */
+export const LEGACY_VIAS: readonly string[] = ['http', 'hmr', 'inject', 'router', 'callback', 'port', 'bus']
+/**
+ * 解析后的机制：target 为接口 ID、总线模块 ID 或通道（冒号之后的原文）；端口 / 总线未指明（M20）时没有 target。
+ * M21：通道可写契约模块 `channel:<名>@<模块 ID>`——name 为通道名，contract 为契约模块；旧写法 `channel:<名>` 没有 contract
+ */
+export interface ParsedVia {
+  kind: ViaKind
+  target?: string
+  /** 通道名（只在通道写了契约模块时给；没写时通道名即 target） */
+  name?: string
+  /** M21：通道的契约模块（只 channel） */
+  contract?: string
+}
+/** 解析 via；不合四形态（含旧的平铺取值）为 undefined */
+export function parseVia(via: string | undefined): ParsedVia | undefined {
+  if (via === undefined) return undefined
+  if (via === 'port' || via === 'bus') return { kind: via }
+  const m = /^(port|bus|channel):(.+)$/.exec(via)
+  if (!m) return undefined
+  if (m[1] !== 'channel') return { kind: m[1] as ViaKind, target: m[2] }
+  const at = m[2].lastIndexOf('@')
+  return at > 0 && at < m[2].length - 1 ? { kind: 'channel', target: m[2], name: m[2].slice(0, at), contract: m[2].slice(at + 1) } : { kind: 'channel', target: m[2] }
+}
+
+/** L24：经回调——via 为 channel:callback（含 @<契约模块>；旧别名 callback 读入时已改写为 channel:callback，M20） */
+export function isCallbackVia(via: string | undefined): boolean {
+  const v = parseVia(via)
+  return v?.kind === 'channel' && (v.name ?? v.target) === 'callback'
+}
+
+/** L35①：机制词，按 L26② 修饰段的次序排列；直接、同步不写 */
+export const MECHANISMS = ['回调', '端口', '总线', '注入', '跨进程', '路由', '事件', '通道', '拉取'] as const
+export type Mechanism = (typeof MECHANISMS)[number]
+
+/** L35①：通道名的固定归类（小写比较）；归不进的落在「通道」 */
+const CHANNEL_MECHANISMS: Readonly<Record<string, Mechanism>> = {
+  callback: '回调',
+  inject: '注入',
+  router: '路由',
+  ...Object.fromEntries(['http', 'https', 'ws', 'websocket', 'sse', 'postmessage', 'worker', 'hmr', 'ipc'].map(n => [n, '跨进程'])),
+  ...Object.fromEntries(['event', 'dom', 'mediasession'].map(n => [n, '事件'])),
+}
+
+/** L35①：一条关系的机制——端口、总线按 via 形态，通道按通道名（不分大小写，@<契约模块> 不影响），没写 via 的拉取型流为「拉取」；直接、同步为 null */
+export function mechanismOf(r: { via?: string; pull?: boolean }): Mechanism | null {
+  const v = parseVia(r.via)
+  if (v?.kind === 'port') return '端口'
+  if (v?.kind === 'bus') return '总线'
+  if (v?.kind === 'channel') {
+    const name = (v.name ?? v.target ?? '').toLowerCase()
+    return CHANNEL_MECHANISMS[name] ?? (name.endsWith('change') ? '事件' : '通道')
+  }
+  return r.pull ? '拉取' : null
+}
+
+/** L35②：一组关系里每个机制的条数（没有机制的关系不计） */
+export function mechanismCounts(rels: Iterable<{ via?: string; pull?: boolean }>): Partial<Record<Mechanism, number>> {
+  const out: Partial<Record<Mechanism, number>> = {}
+  for (const r of rels) {
+    const m = mechanismOf(r)
+    if (m) out[m] = (out[m] ?? 0) + 1
+  }
+  return out
+}
+
+/** 运行时关系（§1.1）：ADR-0029 起关系全是交互，与 RELATION_TYPES 相同；步骤只对应它们（S12）。迁移期含未分类 */
+export const RUNTIME_RELATION_TYPES: readonly RelationType[] = ['queries', 'commands', 'notifies', 'streams', 'calls']
+
+export type ModuleStatus = 'current' | 'target' | 'deprecated'
+export type ModuleRole = 'core' | 'shared' | 'bus' | 'port' | 'adapter'
+export const MODULE_ROLES: readonly ModuleRole[] = ['core', 'shared', 'bus', 'port', 'adapter']
+/** L14、O8：边界角色（ADR-0030）——port 对外端口模块、adapter 适配器；常显、不折叠 */
+export const isBoundaryRole = (role: ModuleRole | undefined): boolean => role === 'port' || role === 'adapter'
+/** O9、P18、U12：共用件——`shared` 与 `bus` 同样收进共用件架 */
+export const isSharedRole = (role: ModuleRole | undefined): boolean => role === 'shared' || role === 'bus'
+/** M16、U11：模块角色的约定文件（人拥有） */
+export const ROLES_FILE = 'intent/roles.yaml'
+/** ST（ADR-0052）：分层声明的约定文件（人拥有）；草图里写了的以草图为准 */
+export const STRATA_FILE = 'intent/strata.yaml'
+
+export interface SourceDef {
+  repo?: string
+  commit?: string
+  generatedAt?: string
+  /** E9：ADR 文件所在目录（相对源码根目录），缺省 docs/adr */
+  adrDir?: string
+  /** J1、J4：git 历史的窗口、补充的缺陷匹配与耦合阈值（都可选） */
+  history?: HistoryDef
+}
+
+/** J1、J4：`system.source.history` 的写法（04 §3.7） */
+export interface HistoryDef {
+  /** 窗口天数，缺省 180 */
+  days?: number
+  /** 补充的缺陷匹配正则（不分大小写），与缺省规则取并集 */
+  fixPatterns?: string[]
+  /** 时间耦合阈值：同提交次数（缺省 5）、占两端修改次数的比例（缺省 0.3） */
+  coupling?: { min?: number; ratio?: number }
+}
+
+export interface SystemDef {
+  id: string
+  name: string
+  description?: string
+  source?: SourceDef
+}
+
+export interface ModuleDef {
+  id: string
+  name: string
+  /** 只在文件顶层的 `module` 上有意义：挂到哪个父模块下，缺省为系统根 */
+  parent?: string
+  kind?: string
+  status?: ModuleStatus
+  /** 角色（§1.1、ADR-0027、ADR-0030）：core 核心 / shared 共用件 / bus 事件总线（不作 notifies 的端点，M14）/ port 对外端口模块 / adapter 适配器；不写为普通。旧写法 `core: true` 由 Loader 映射（M16） */
+  role?: ModuleRole
+  responsibility?: string
+  /** M27（ADR-0053）：一句话职责，≤ 30 字，动词开头，写对外承诺；取值走 summaryOf（M30） */
+  summary?: string
+  /** M32（ADR-0055）：图解文件，相对项目描述目录的 `explainers/<文件>.html`；不写按约定路径查找（EX-1） */
+  explainer?: string
+  principle?: string
+  dataStructures?: string[]
+  provides?: string[]
+  /** 源码路径或 glob，相对源码根目录（G3） */
+  codeRefs?: string[]
+  /** 对外入口文件，相对源码根目录；不写时按约定推出（G10） */
+  entry?: string
+  docRefs?: string[]
+  /** E9：相关架构决策的编号（整数，显示为 ADR-0025）；面板「相关决策」列出，不继承 */
+  adrs?: number[]
+  owner?: string
+  tags?: string[]
+  /** ST（ADR-0052）：所属的层——父模块 strata 里的局部 ID（与层的 members 二选一写，归一到同一份索引） */
+  stratum?: string
+  /** 迁移期（M26）：旧写法 kind: layer 的层序与可依赖的层，Loader 改写为父模块的 strata；新写法写在 strata 上 */
+  order?: number
+  /** 对内的原则：内部切分的原则一句（来自挂在它身上的草图的 abstraction，X10；ADR-0053 收窄，不兼任职责） */
+  abstraction?: string
+  /** M28（ADR-0053）：≤ 3 条不变式；取值走 invariantsOf 归一 */
+  invariants?: (string | InvariantDef)[]
+  includes?: string[]
+  excludes?: string[]
+  mayDependOn?: string[]
+  children?: ModuleDef[]
+  /** 设计版本专用：为什么这样设计 / 调整（Markdown） */
+  designNote?: string
+  /** 只在草图里：血缘——这个模块由哪些基线模块而来，一律指向基线 ID（X11）；不进模型索引 */
+  from?: string[]
+}
+
+export interface RelationDef {
+  id: string
+  from: string
+  to: string
+  /** 文件里也可能写旧名（M12）与迁移期的 calls（M17）；历史提交里的 implements 由 Loader 丢弃（M17） */
+  type: RelationType | LegacyRelationType | typeof MIGRATED_RELATION_TYPE
+  /** 只用于 queries / commands（迁移期含未分类）：同步缺省，异步写 async（M13） */
+  mode?: 'sync' | 'async'
+  /** 只用于 streams：拉取型流，箭头仍指数据去向（M13） */
+  pull?: boolean
+  /** 机制（K5b、ADR-0029）：port:<接口 ID> / bus:<模块 ID> / channel:<名>；旧的平铺取值按 M20 读入 */
+  via?: string
+  interface?: string
+  payload?: string | string[]
+  /** 机制：怎么连、经什么 */
+  description?: string
+  /** M29（ADR-0053）：目的，≤ 20 字，调用方视角的「为了什么」；取值走 purposeOf（M30） */
+  purpose?: string
+  designNote?: string
+}
+
+/** M28：一条不变式；adr 为 ADR 编号（整数） */
+export interface InvariantDef {
+  text: string
+  adr?: number
+}
+
+export interface InterfaceDef {
+  id: string
+  name: string
+  /** 定义模块（端口的定义模块，ADR-0029） */
+  owner?: string
+  signature?: string
+  /** 端口的实现者模块（ADR-0029、M18）：AI 的主张，代码事实是裁判（K5c） */
+  implementedBy?: string[]
+  description?: string
+  semantics?: string
+  designNote?: string
+}
+
+export interface DataStructureDef {
+  id: string
+  name: string
+  definition?: string
+  description?: string
+  invariants?: string
+  designNote?: string
+}
+
+export type ActorKind = 'user' | 'system' | 'time'
+
+/** 外部参与者：系统之外主动发起交互的实体，不进模块树（A1–A5） */
+export interface ActorDef {
+  id: string
+  name: string
+  kind: ActorKind
+  description?: string
+  designNote?: string
+}
+
+/** 消息步骤的内容（S2） */
+export interface MessageDef {
+  /** 场景内唯一；写了则帧 ID 稳定（F2、S11） */
+  id?: string
+  from: string
+  to: string
+  label?: string
+  relation?: string
+  interface?: string
+  payload?: string | string[]
+  note?: string
+}
+
+export type StepDef =
+  | { call: MessageDef }
+  | { async: MessageDef }
+  | { return: MessageDef }
+  | { alt: { when: string; steps: StepDef[] }[] }
+  | { loop: { while: string; steps: StepDef[] } }
+  | { par: { steps: StepDef[] }[] }
+  | { ref: string }
+
+/** 场景的类别（M19、ADR-0030）：主流程 / 异常 / 维护；不写为 main */
+export type ScenarioKind = 'main' | 'exception' | 'maintenance'
+export const SCENARIO_KINDS: readonly ScenarioKind[] = ['main', 'exception', 'maintenance']
+/** M19：场景的类别，缺省 main */
+export const scenarioKind = (sc: { kind?: ScenarioKind }): ScenarioKind => sc.kind ?? 'main'
+/** R17：场景列表按类别筛选——`main` 只留主流程（缺省），`all` 全部；保持原顺序 */
+export const filterScenariosByKind = <T extends { kind?: ScenarioKind }>(list: readonly T[], show: 'main' | 'all'): T[] =>
+  show === 'all' ? [...list] : list.filter(sc => scenarioKind(sc) === 'main')
+
+export interface ScenarioDef {
+  id: string
+  name: string
+  /** M19：main 主流程（缺省）/ exception 异常 / maintenance 维护 */
+  kind?: ScenarioKind
+  description?: string
+  /** 触发原因（文字）；触发者由第一条消息的发送方推出（A6） */
+  cause?: string
+  /** S15：证据文件——验证这条链路的测试、E2E 等源码文件（相对源码根目录）；只校验在源码清单里存在 */
+  evidence?: string[]
+  steps: StepDef[]
+  designNote?: string
+}
+
+/** 一个描述文件的顶层形状；各键均可选，可任意组合 */
+export interface ArchFileDef {
+  system?: SystemDef
+  module?: ModuleDef
+  modules?: ModuleDef[]
+  relations?: RelationDef[]
+  interfaces?: InterfaceDef[]
+  dataStructures?: DataStructureDef[]
+  actors?: ActorDef[]
+  scenario?: ScenarioDef
+  scenarios?: ScenarioDef[]
+  /** 忽略清单（G8）：不属于任何模块的源码文件 */
+  sourceIgnore?: string[]
+  /** G20：源码文件的超长阈值 */
+  sourceLimits?: SourceLimits
+  /** U1：架构规则（约定文件 rules.yaml），只能声明一次 */
+  rules?: RulesDef
+  /** Z1：确认记录（约定文件 reviewed.yaml），人拥有，由页面与草图归档写入 */
+  reviewed?: ReviewedEntryDef[]
+  /** X1：草图（只在 intent/*.yaml 与 designs/<设计>/sketches/<mount>.yaml 里用） */
+  sketch?: SketchDef
+  /** M16、U11：模块角色（约定文件 intent/roles.yaml，人拥有）：模块 ID → role；草图里写了的以草图为准 */
+  roles?: Record<string, ModuleRole>
+  /** ST（ADR-0052）：父模块对子模块的分层声明（约定文件 intent/strata.yaml，人拥有）：父模块 ID（根写 root）→ 层；草图里写了的以草图为准 */
+  strata?: StrataDef
+}
+
+/** ST（ADR-0052）：一个层——父模块对子模块的分类，不是节点、不占级 */
+export interface StratumDef {
+  /** 局部 ID：在父模块内唯一 */
+  id: string
+  name: string
+  /** 自上而下 */
+  order?: number
+  /** 回答的问题（检验 1） */
+  asks?: string
+  /** 归属判定问（检验 2）：新模块只看职责就能回答是 / 否 */
+  admits?: string
+  /** 原则正文 */
+  abstraction?: string
+  /** 本父模块内可依赖的层 ID；不写等于 []（迁移来的旧层不写时不约束，M26） */
+  mayDependOn?: string[]
+  /** M5b：单成员层的理由 */
+  singular?: string
+  /** 成员：父模块的直接子模块 ID（也可在子模块上写 stratum） */
+  members?: string[]
+  /** 设计版本专用 */
+  designNote?: string
+}
+
+/** 父模块 ID（根写 root 或系统 ID）→ 层 */
+export type StrataDef = Record<string, StratumDef[]>
+
+/** X3：草图的生命周期 */
+export type SketchLifetime = 'persistent' | 'until-implemented'
+export const SKETCH_LIFETIMES: readonly SketchLifetime[] = ['persistent', 'until-implemented']
+
+/** X9：根挂载——层与层的直接子模块（骨架即根挂载的持久草图） */
+export const ROOT_MOUNT = 'root'
+
+/** X15：草图里的一个位置 */
+export interface SketchPoint {
+  x: number
+  y: number
+}
+
+/** X15：布局里记的模块位置——根草图的第二级模块的 y 相对所在层带的顶（X21；旧草图只记 x 时取带内第一行），其余草图记 x、y */
+export interface SketchSpot {
+  x: number
+  y?: number
+}
+
+/** X15：草图的布局——模块坐标（引用节点按它显示的模块 ID 记，X19）与关系标签位置；人拥有，随草图归档，不进模型索引 */
+export interface SketchLayout {
+  modules?: Record<string, SketchSpot>
+  relations?: Record<string, { label?: SketchPoint }>
+}
+
+/**
+ * X1、X2、X9：草图（格式 v2，ADR-0025）——人拥有的局部描述：一张草图挂在一个模块下、只画一个层次；
+ * 内容与普通描述同形，没写的字段不约束。
+ */
+export interface SketchDef {
+  /** 持久草图有固定 ID（骨架为 skeleton）；设计的草图 ID 即设计 ID */
+  id: string
+  /** X9：挂载点——模块 ID 或 root；不能是层。非根草图的模块是挂载点的直接子节点，根挂载为层与层的直接子模块 */
+  mount: string
+  /** intent/ 下缺省 persistent，设计的草图缺省 until-implemented（X3） */
+  lifetime?: SketchLifetime
+  /** 封闭的子树：这些模块（挂载点或本草图的模块）的直接子模块集合必须与草图相等（X2） */
+  closed?: string[]
+  /** 定稿实现后替换的持久草图 ID（晋升，X3）；同挂载点已有持久草图时必须声明（X4） */
+  supersedes?: string
+  /** X10：挂载点模块对内的原则（加载为挂载点模块的 abstraction）；根挂载不用，改用各层的 abstraction 等字段 */
+  abstraction?: string
+  modules?: ModuleDef[]
+  /** ST（ADR-0052）：本草图里的分层声明——挂载点或草图里的模块（根挂载写 root）→ 层 */
+  strata?: StrataDef
+  relations?: RelationDef[]
+  interfaces?: InterfaceDef[]
+  dataStructures?: DataStructureDef[]
+  /** X15：人摆放的位置 */
+  layout?: SketchLayout
+}
+
+/** G20：源码文件的限制；maxLines 缺省 500 */
+export interface SourceLimits {
+  maxLines?: number
+  /** Q13：共用件子树行数占已归属行数的提醒阈值，缺省 0.2 */
+  sharedRatio?: number
+}
+
+/** 架构规则的种类：层规则（U2）、依赖白名单（U3）、访问面（U4） */
+export type RuleKind = 'layer' | 'deps' | 'exposes'
+export const RULE_KINDS: readonly RuleKind[] = ['layer', 'deps', 'exposes']
+
+/** 一个模块上的规则（U3、U4） */
+export interface ModuleRuleDef {
+  module: string
+  /** 子树之外只许依赖这些模块的子树；写了即默认拒绝 */
+  mayDependOn?: string[]
+  /** 子树之外只许经这些文件访问：glob，或 `entry`（模块入口，G10） */
+  exposes?: string[]
+  reason?: string
+}
+
+/** 例外（U5） */
+export interface AllowDef {
+  from: string
+  to: string
+  rule?: RuleKind
+  reason: string
+}
+
+/** 架构规则（U1–U5、Y3）：架构师的意图，AI 重新生成当前版本时不改动 */
+export interface RulesDef {
+  /** 层规则开关，缺省 true（U2） */
+  layers?: boolean
+  modules?: ModuleRuleDef[]
+  allow?: AllowDef[]
+  cycles?: { tolerated?: string[] }
+}
+
+/** Z2、Z3：确认时的摘要——指纹覆盖的内容的一份副本，需复核时据此显示差异 */
+export interface ReviewSummaryDef {
+  responsibility?: string
+  /** ADR-0042 */
+  abstraction?: string
+  includes?: string[]
+  excludes?: string[]
+  mayDependOn?: string[]
+  provides?: { id: string; signature?: string }[]
+  children?: string[]
+  /** Z2（ADR-0052）：分层声明，一层一行 */
+  strata?: string[]
+  /** 系统简介（Z7） */
+  description?: string
+}
+
+/** Z1、Z6：一条确认记录；source 为 `manual` 或 `sketch:<设计 ID>` */
+export interface ReviewedEntryDef {
+  module: string
+  /** 确认日期 YYYY-MM-DD */
+  at: string
+  /** 指纹（Z2） */
+  hash: string
+  source?: string
+  note?: string
+  summary?: ReviewSummaryDef
+}
+
+// ── 加载产物 ─────────────────────────────────────────────────
+
+export interface RawFile {
+  /** 相对模型目录的路径，如 `modules/domain.yaml` */
+  path: string
+  text: string
+}
+
+/** 实体在描述文件中的出处，用于报错定位 */
+export interface SourceLoc {
+  file: string
+  /** YAML 内的路径，如 `module.children.2.id` */
+  path: string
+  line?: number
+}
+
+export interface ModuleEntity extends Omit<ModuleDef, 'children' | 'parent'> {
+  /** 父模块 ID；直接挂在系统下时为 system.id */
+  parentId: string
+  /** M16：role 取自 intent/roles.yaml（不是草图或模块文件写的）；核验不把它当草图偏差（X4） */
+  roleFrom?: 'roles'
+  /** 声明顺序，用于稳定排序 */
+  seq: number
+  src: SourceLoc
+}
+
+export interface RelationEntity extends Omit<RelationDef, 'payload' | 'type' | 'via'> {
+  /** 校验后只有四类与未分类（implements 已转成实现者，M17） */
+  type: RelationType
+  /** 校验后为四形态或迁移期的「端口 / 总线未指明」（M20） */
+  via?: RelationVia
+  payload: string[]
+  seq: number
+  src: SourceLoc
+}
+
+export interface InterfaceEntity extends InterfaceDef {
+  /** 是端口（裁决 4）：被 via: port: 引用、或描述写了实现者；代码事实发现的实现者另由架构治理合并（K5c、K11）。由 Validator 推出，不参与版本对比 */
+  port?: true
+  src: SourceLoc
+}
+
+export interface DataStructureEntity extends DataStructureDef {
+  src: SourceLoc
+}
+
+export interface ActorEntity extends ActorDef {
+  seq: number
+  src: SourceLoc
+}
+
+export interface ReviewedEntry extends ReviewedEntryDef {
+  src: SourceLoc
+}
+
+export type MessageKind = 'call' | 'async' | 'return'
+
+export interface Message extends Omit<MessageDef, 'payload'> {
+  payload: string[]
+}
+
+/**
+ * 规整后的步骤。path 是步骤在本场景步骤树中的路径（F2）：列表下标以 `.` 连接，
+ * 组合步骤的子列表记为 `alt<k>` / `loop` / `par<k>`，如 `4.alt0.1`。
+ */
+export type Step = { path: string; src: SourceLoc } & (
+  | { kind: MessageKind; msg: Message }
+  | { kind: 'alt'; branches: { when: string; steps: Step[] }[] }
+  | { kind: 'loop'; while: string; steps: Step[] }
+  | { kind: 'par'; branches: { steps: Step[] }[] }
+  | { kind: 'ref'; scenario: string }
+)
+
+export type MessageStep = Extract<Step, { msg: Message }>
+
+export interface ScenarioEntity extends Omit<ScenarioDef, 'steps'> {
+  steps: Step[]
+  seq: number
+  src: SourceLoc
+}
+
+export interface ArchModel {
+  system: SystemDef
+  modules: ModuleEntity[]
+  relations: RelationEntity[]
+  interfaces: InterfaceEntity[]
+  dataStructures: DataStructureEntity[]
+  actors: ActorEntity[]
+  scenarios: ScenarioEntity[]
+  /** 各文件 sourceIgnore 的合并（G8），不参与版本对比 */
+  sourceIgnore: string[]
+  /** G20：只取第一处声明，不参与版本对比 */
+  sourceLimits?: SourceLimits
+  /** U1：只取第一处声明，去掉坏引用后的架构规则；不参与版本对比 */
+  rules?: RulesDef
+  /** U1：rules 的出处 */
+  rulesSrc?: SourceLoc
+  /** M23、Z7：system 的出处（提示与返工清单定位用），不参与版本对比 */
+  systemSrc?: SourceLoc
+  /** Z1：各文件 reviewed 的合并（Validator 去掉坏引用、按模块去重），不参与版本对比 */
+  reviewed: ReviewedEntry[]
+  /** X1：本次加载的草图文件（整份定义，供核验），不参与版本对比 */
+  sketches: SketchEntity[]
+  /** ST（ADR-0052）：分层声明（Validator 归一后成员齐全、引用有效）；按父模块、order 排序 */
+  strata?: StratumEntity[]
+  /** EX-1（ADR-0055）：图解文件（相对项目描述目录的路径 → HTML 原文），不按 YAML 解析、不参与版本对比 */
+  explainers?: Record<string, string>
+}
+
+/** ST：已加载的层 */
+export interface StratumEntity extends Omit<StratumDef, 'members'> {
+  /** 父模块 ID（根为系统 ID） */
+  parent: string
+  /** 成员（父模块的直接子模块，按父模块的子模块顺序） */
+  members: string[]
+  /** M26：由旧写法 kind: layer 迁移而来 */
+  migrated?: true
+  /** 声明出自草图（X1：同一父模块草图与 intent/strata.yaml 都写了时以草图为准） */
+  fromSketch?: true
+  /** 只有草图的版本（DV-10）从当前版本带来的 intent/strata.yaml 声明：只在本版本里成员齐全时生效（ST-6） */
+  inherited?: true
+  src: SourceLoc
+}
+
+/** 一份已加载的草图（X1）：定义、所在文件与出处；设计的草图另记所属设计 */
+export interface SketchEntity {
+  def: SketchDef
+  file: string
+  src: SourceLoc
+  /** X9：挂载点（即 def.mount） */
+  mount?: string
+  /** X15：没有 layout——打开时自动布局一次，不因此写回 */
+  needsLayout?: boolean
+  /** 设计的草图：所属设计 ID（由接入层按路径或载荷给出，模型层只透传） */
+  design?: string
+}
+
+/** info：只提示，不计入错误与提醒数（如未分类，M17） */
+export type IssueSeverity = 'error' | 'warning' | 'info'
+
+export interface Issue {
+  severity: IssueSeverity
+  code: string
+  message: string
+  file?: string
+  path?: string
+  line?: number
+}
+
+// ── 索引 ─────────────────────────────────────────────────────
+
+export interface ModelIndex {
+  model: ArchModel
+  rootId: string
+  modules: Map<string, ModuleEntity>
+  relations: Map<string, RelationEntity>
+  interfaces: Map<string, InterfaceEntity>
+  dataStructures: Map<string, DataStructureEntity>
+  /** 父 ID → 子模块 ID（按声明顺序；层按 order） */
+  childrenOf: Map<string, string[]>
+  /** 模块 ID → 从根到它的路径（含根、含自身） */
+  pathOf: Map<string, string[]>
+  /** 模块或参与者 ID → 以它为一端的关系 ID */
+  outRelations: Map<string, string[]>
+  inRelations: Map<string, string[]>
+  actors: Map<string, ActorEntity>
+  scenarios: Map<string, ScenarioEntity>
+  /** 模块 ID → 有帧端点在其子树内的场景（根含全部场景，R4） */
+  scenariosOf: Map<string, string[]>
+  /** 参与者 ID → 由它触发（第一条消息由它发出）的场景（A6） */
+  triggeredBy: Map<string, string[]>
+  /** ST（ADR-0052）：父模块 ID → 层（按 order）；没有声明分层的父模块不在表里 */
+  strata: Map<string, StratumEntity[]>
+  /** ST：子模块 ID → 它在父模块下所属的层 */
+  stratumOf: Map<string, StratumEntity>
+}
+
+// ── 层次投影 ─────────────────────────────────────────────────
+
+export type ViewMode = 'graph' | 'layered'
+
+/** layer / core 只在分层总览；shared 为共用件架上的共用件（O9）；more 为普通层次的「+N」占位（O8） */
+export type ViewNodeRole = 'module' | 'boundary' | 'layer' | 'core' | 'actor' | 'shared' | 'more'
+
+export interface ViewNode {
+  /** 视图内唯一 ID；module / layer / core 用模块 ID，boundary 用 `boundary:<模块ID>`，actor 用参与者 ID */
+  id: string
+  /** 对应的模块 ID；actor 节点为参与者 ID */
+  moduleId: string
+  role: ViewNodeRole
+  hasChildren: boolean
+  /** core 节点（与分层总览中 shared 节点）所在的带（带节点的视图 ID） */
+  layerId?: string
+  /** ST（ADR-0052）：layer 节点（带）对应的层的全局键（stratumKey）；单成员层的带即成员，moduleId 为成员 */
+  stratum?: string
+  /** actor 节点的类别，决定排布位置（A7） */
+  actorKind?: ActorKind
+  /** 普通层次的核心模块（role: core）：大块常显（ADR-0027） */
+  core?: true
+  /** L14：边界角色（ADR-0030）——port 贴父模块框（分层总览为所在的带）的上边、adapter 贴右边；常显、不折叠（O8） */
+  rim?: 'port' | 'adapter'
+  /** O10：「共用 ×N」——它连到的共用件个数（共用件架上的节点不带） */
+  sharedCount?: number
+  /** O8：more 节点折叠的普通模块数（展开时为 0） */
+  hiddenCount?: number
+  /** O8：more 节点临时展开出来的模块数（占位变为「收起 N 个」） */
+  expanded?: number
+}
+
+export type ViewEdgeKind = 'direct' | 'aggregate'
+
+export interface ViewEdge {
+  /** `<from>-><to>:<type>`（L5：同一对节点按类型各一条），同一视图内唯一且在重新加载后保持不变 */
+  id: string
+  kind: ViewEdgeKind
+  from: string
+  to: string
+  type: RelationType
+  /** 原始关系；条数即其长度 */
+  relationIds: string[]
+  /** 原始关系的同步/异步汇总：全同步、全异步，或混合 */
+  mode: 'sync' | 'async' | 'mixed'
+  /** L35②：机制 → 带该机制的关系条数（mechanismCounts）；没有机制时不给 */
+  mechs?: Partial<Record<Mechanism, number>>
+}
+
+export interface Band {
+  /** 带节点的视图 ID：单成员层为成员模块 ID，多成员层为 `s:<层的全局键>`（O2） */
+  layerId: string
+  /** 层的全局键（stratumKey） */
+  stratum: string
+  order: number
+  coreModuleIds: string[]
+  hiddenCount: number
+  /** O6：临时展开时，展开出来的非核心模块数（已并入 coreModuleIds，hiddenCount 为 0） */
+  expanded?: number
+  /** O9：该层的共用件（role: shared / bus），收进带底的共用件架 */
+  shelf: string[]
+}
+
+export interface LevelView {
+  mode: ViewMode
+  parentId: string
+  nodes: ViewNode[]
+  edges: ViewEdge[]
+  /** 仅 layered：每层一条带，按 order 升序 */
+  bands?: Band[]
+  /** 仅 layered：核心模块的跨层关系，默认不画，悬停/选中时显示 */
+  coreEdges?: ViewEdge[]
+  /** O9：仅普通层次——本层的共用件（视图节点 ID，节点 role 为 shared），收进父模块框底部的共用件架；分层总览的在各带的 shelf */
+  shelf?: string[]
+  /** O10：共用件与本层其他节点之间的边（任一方向、任一类型），默认不画，悬停 / 选中一端时画 */
+  shelfEdges?: ViewEdge[]
+  /** O8：仅普通层次——普通模块的「+N」占位：节点 ID、折叠的模块（展开时为空）、是否临时展开 */
+  fold?: { id: string; members: string[]; expanded: boolean }
+  /** O8：本层没有核心模块、普通模块超过七个时不折叠，只提示这个数（「N 个模块，考虑标出核心」） */
+  foldHint?: number
+  /** O8：折叠进占位的模块 → 占位节点 ID（端点映射到本层后再经它换成视图节点，viewNodeOf） */
+  alias?: Record<string, string>
+}
+
+export interface ProjectOptions {
+  showBoundaries: boolean
+  /** 为空表示不过滤 */
+  relationTypes?: readonly RelationType[]
+  /** true 时隐藏 status: target 的模块及其关系 */
+  currentOnly?: boolean
+  /** 回放的舞台：场景中全部帧的端点，用于补齐结构上没有关系的边界节点与参与者 */
+  scenarioEnds?: readonly { from: string; to: string }[]
+  /** O6：分层总览中临时展开的层：非核心模块与核心模块一样露出，不改层次 */
+  expandedBands?: readonly string[]
+}
+
+// ── 版本对比（E1、E2）：计算在 diff.ts ──
+
+/** 变更种类：按 ID 的新增 / 修改 / 删除，与按血缘的合并 / 拆分 / 改 ID / 移动（X11、X17） */
+export type ChangeKind = 'added' | 'changed' | 'removed' | 'merged' | 'split' | 'renamed' | 'moved'
+export const CHANGE_KINDS: readonly ChangeKind[] = ['added', 'changed', 'merged', 'split', 'renamed', 'moved', 'removed']
+export const CHANGE_KIND_LABELS: Readonly<Record<ChangeKind, string>> = {
+  added: '新增',
+  changed: '修改',
+  merged: '合并',
+  split: '拆分',
+  renamed: '改 ID',
+  moved: '移动',
+  removed: '删除',
+}
+export type EntityKind = 'module' | 'relation' | 'interface' | 'dataStructure'
+
+export interface Change {
+  entity: EntityKind
+  id: string
+  kind: ChangeKind
+  /** 显示名；关系为「from → to」 */
+  name: string
+  /** 修改了哪些字段（字段名；显示名在呈现层） */
+  fields?: string[]
+  /** 合并 / 改 ID / 移动：来源的基线 ID（X11）；拆分时 id 为被拆的基线 ID */
+  from?: string[]
+  /** 拆分的结果 ID */
+  to?: string[]
+}
+
+export interface ModelDiff {
+  /** 全部变更，按实体类别、变更类别、声明顺序排列 */
+  changes: Change[]
+  /** 目标模型中存在的实体（新增 / 修改）按 ID 查询 */
+  module: Map<string, Change>
+  relation: Map<string, Change>
+  interface: Map<string, Change>
+  dataStructure: Map<string, Change>
+  /** 目标模型中的模块 ID → 涉及它（及其子树）的变更条数，不含模块自身的增改 */
+  touched: Map<string, number>
+  counts: Record<ChangeKind, number>
+}

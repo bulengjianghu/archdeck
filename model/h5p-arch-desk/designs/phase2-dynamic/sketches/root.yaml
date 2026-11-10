@@ -1,0 +1,70 @@
+# 设计 phase2-dynamic 挂在「root」上的草图：由一期的 designs/phase2-dynamic/sketch.yaml 按挂载点机械拆出（ADR-0025 迁移，内容不变），同设计另有 model.scenario、state.transition、state.layout、present.panel。
+# 回溯草图（自举样本，ADR-0023）：二期动态视角定稿时（ADR-0003）架构师钉住的那部分——
+# 新增一个模型层核心模块「场景投影」（封闭：它的直接子模块只许这几个）、视图状态层拆出「视图状态转移」、Layout 加时序图排布、
+# 呈现层加时序图 / 场景列表 / 回放控制条 / 视角切换与两个面板；其余（职责细节、更深层的拆分、接口签名）由 AI 展开。
+# 对 r1–r4 与当前版本跑核验（npm run arch -- sketch-check --design phase2-dynamic [--revision r1]）得到真实的偏差清单：
+# r1 还没有「视图状态转移」与回放路径（r2、r3 评审后才加），当前版本在封闭的「场景投影」下多出了步骤大纲（outline）。
+sketch:
+  id: phase2-dynamic
+  mount: root
+  lifetime: until-implemented
+  modules:
+    - id: model
+      name: 模型层
+      kind: layer
+      children:
+        - id: model.scenario
+          name: 场景投影
+          kind: subsystem
+          role: core
+          responsibility: 运行视角的核心规则：场景的步骤树展开成回放计划，按已选分支求出回放路径，再按当前层次投影成可见消息与时序模型；回答本层的下一步、到达某帧需要的分支选择、谁参与了哪一步。
+    - id: state
+      name: 视图状态层
+      kind: layer
+      children:
+        - id: state.transition
+          name: 视图状态转移
+          kind: subsystem
+          role: core
+          responsibility: 会话规则的纯函数：给定视图状态、动作与上下文算出下一个视图状态；关于被描述系统的问题一律问模型层。
+    - id: present
+      name: 呈现层
+      kind: layer
+      children:
+        - id: present.sequence
+          name: 时序图
+          kind: subsystem
+          role: core
+          responsibility: 运行视角下把定位好坐标的时序模型画成 SVG，单击消息指向该步。
+        - id: present.player
+          name: 回放控制条
+          kind: subsystem
+          responsibility: 上一步 / 下一步、进度、分支选择
+        - id: present.scenarios
+          name: 场景列表
+          kind: subsystem
+          responsibility: 按层次与发起者筛选场景，选定即进入运行视角
+        - id: present.perspective
+          name: 视角切换
+          kind: subsystem
+          responsibility: 「结构 ｜ 运行：<场景名>」，进入 / 退出运行视角
+  relations:
+    - id: rel.sk.desk-scenario
+      from: state.desk
+      to: model.scenario
+      type: queries
+      description: DeskState 派生回放计划、路径与本层投影
+    - id: rel.sk.desk-transition
+      from: state.desk
+      to: state.transition
+      type: queries
+      description: 唯一写入口 dispatch → transition
+    - id: rel.sk.sequence-desk
+      from: present.sequence
+      to: state.desk
+      type: queries
+      description: 时序图只读派生数据、只发意图
+  interfaces:
+    - id: if.state.transition
+      name: transition
+      owner: state.transition

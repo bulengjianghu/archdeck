@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 df5b344797a3ae35 model.pipeline#abstraction=e4df30c9 model.pipeline#children=c972f2fd model.pipeline#invariants=58713462 model.pipeline#responsibility=80ad7ed3 model.pipeline#summary=2faa4b54 model.pipeline.indexer#summary=d536b137 model.pipeline.loader#summary=dc4781e8 model.pipeline.validator#summary=2e76657d rel:rel.ad.flow-validate-index=d29e8e11">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>加载流水线 · 三站进料口</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
+</style>
+  </head>
+  <body>
+
+    <h1>三站进料口</h1>
+    <p class="lede"><span data-arch="model.pipeline">加载流水线</span>是模型层唯一的进料口：页面、命令行、AI 读到的模型都从这里出来。</p>
+
+    <h2>三站各查一类问题</h2>
+    <figure>
+      <svg viewBox="0 0 480 292" role="img" aria-label="加载流水线：描述文件经 Loader、Validator、Indexer 三站变成可查询的模型，问题全部汇总">
+        <defs><marker id="a9P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a9S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a9A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a9M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a9g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a9l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="6" y="4" width="270" height="46" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="141.0" y="24.3" font-size="13" text-anchor="middle">描述文件</text><text x="141.0" y="38.8" font-size="10.5" text-anchor="middle" class="muted">YAML 原文</text>
+        <g data-arch="model.pipeline.loader"><rect x="6" y="62" width="270" height="46" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="141.0" y="82.3" font-size="13" text-anchor="middle" font-weight="600">Loader</text><text x="141.0" y="96.8" font-size="10.5" text-anchor="middle" class="muted">解析 · 单文件格式 · 合并</text></g>
+        <path d="M141,50 L141,60" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a9g)"/>
+        <path d="M276,85 C300,85 300,146 322,146" stroke="var(--text-2)" stroke-width="1.2" fill="none" stroke-dasharray="5 4" marker-end="url(#a9g)"/>
+        <g data-arch="model.pipeline.validator"><rect x="6" y="120" width="270" height="46" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="141.0" y="140.3" font-size="13" text-anchor="middle" font-weight="600">Validator</text><text x="141.0" y="154.8" font-size="10.5" text-anchor="middle" class="muted">跨文件：引用 · 层次 · 场景</text></g>
+        <path d="M141,108 L141,118" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a9g)"/>
+        <path d="M276,143 C300,143 300,146 322,146" stroke="var(--text-2)" stroke-width="1.2" fill="none" stroke-dasharray="5 4" marker-end="url(#a9g)"/>
+        <g data-arch="model.pipeline.indexer"><rect x="6" y="178" width="270" height="46" rx="8" fill="var(--hot-soft)" stroke="var(--hot)"/><text x="141.0" y="198.3" font-size="13" text-anchor="middle" font-weight="600">Indexer</text><text x="141.0" y="212.8" font-size="10.5" text-anchor="middle" class="muted">按 ID 与层次建索引</text></g>
+        <path d="M141,166 L141,176" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a9g)"/>
+        <path d="M276,201 C300,201 300,146 322,146" stroke="var(--text-2)" stroke-width="1.2" fill="none" stroke-dasharray="5 4" marker-end="url(#a9g)"/>
+        <rect x="6" y="236" width="270" height="46" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="141.0" y="256.3" font-size="13" text-anchor="middle">可查询的模型</text><text x="141.0" y="270.8" font-size="10.5" text-anchor="middle" class="muted">给解释层与各前端</text>
+        <path d="M141,224 L141,234" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a9g)"/>
+        <rect x="324" y="106" width="150" height="80" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="399.0" y="136.1" font-size="13" text-anchor="middle">问题清单</text><text x="399.0" y="150.6" font-size="10.5" text-anchor="middle" class="muted">带文件与行号</text><text x="399.0" y="165.1" font-size="10.5" text-anchor="middle" class="muted">一个不漏</text>
+      </svg>
+      <figcaption>单文件的格式、跨文件的引用、建索引，三站各管一类。格式坏的文件整份跳过并报出位置；问题全部汇总上报，不悄悄混过去。</figcaption>
+    </figure>
+
+  </body>
+</html>

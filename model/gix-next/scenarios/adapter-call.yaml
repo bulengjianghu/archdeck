@@ -1,0 +1,68 @@
+# 取自 kernel-api/src/mcp.ts（adapter-tools：gixn_run_checks / gixn_repo_op 与同步等待）、kernel/src/services/adapters.ts、jobs.ts、flow.ts，
+# kernel-api/src/hub.ts 与 http.ts（推送 / 长轮询、回报），runner/src/executor.ts、dispatch.ts、check.ts。设计文档 §2.3 通信模式 1。
+scenario:
+  id: sc.adapter-call
+  name: 内核经适配器调外部系统
+  kind: main
+  description: |
+    通信模式 1：统筹者经 MCP 发起调用，内核写 adapter.requested 并在同一事务入 adapter.call 任务包（带幂等键与超时；任务包是运行表，不进账）；
+    runner 经 WS 推送（断了长轮询）领到后按 capability + op 分派给本地适配器或内置判项，结果经 JobUpdate 回报，内核写 adapter.completed，
+    需求圈反应按幂等键前缀把它归一成领域事件（变更状态、检查状态、判项基线与 head 结论、审核结论、真机运行记录）。
+    统筹者可同步等结果（等待期间不判停滞、结果回来不再唤醒），超时或会话断开即退回异步，结果回来照常唤醒。
+  cause: 统筹者调 gixn_run_checks / gixn_repo_op / gixn_preview_capture
+  evidence:
+    - packages/kernel/test/flow.test.ts
+    - packages/kernel-api/test/sync-wait.test.ts
+    - packages/kernel-api/test/runner-channel.test.ts
+    - packages/runner/test/runner.test.ts
+    - packages/runner/test/check.test.ts
+    - packages/adapter-repo-local/test/contract.test.ts
+  steps:
+    - async: {id: request, from: actor.orchestrator, to: server.mcp.service, label: 'gixn_run_checks(baseline / head) / gixn_repo_op(push, open_change …)'}
+    - async: {from: server.mcp.service, to: server.mcp.adapter-tools, label: 调工具实现（清单须已确认）}
+    - async: {from: server.mcp.adapter-tools, to: kernel.orchestration.queries, relation: rel.server.adapter-worktree, label: taskWorktree：工作树路径、基础提交与分支}
+    - async: {id: requested, from: server.mcp.adapter-tools, to: kernel.dispatch.adapter-calls, relation: rel.server.adapter-request, label: 'request({capability, op, args, idempotencyKey, timeoutSec})'}
+    - async: {from: kernel.dispatch.adapter-calls, to: kernel.ledger.ledger, label: adapter.requested（参数哈希）}
+    - async: {from: kernel.dispatch.adapter-calls, to: kernel.dispatch.jobs, label: 入 adapter.call 任务包（与触发事件同事务）}
+    - async: {from: server.mcp.adapter-tools, to: kernel.orchestration.executions, relation: rel.server.adapter-wait, label: 'beginWait(executionId, callId, until)'}
+    - async: {from: server.mcp.service, to: server.http.assembly, label: afterMutation}
+    - call: {from: server.http.assembly, to: server.hub.push, label: kick()}
+    - alt:
+        - when: runner 在 WS 上
+          steps:
+            - async: {id: push, from: server.hub.push, to: kernel.dispatch.jobs, label: 原子认领}
+            - async: {from: server.hub.push, to: client.channel.runner, relation: rel.server.hub-jobs-ws, label: "{type: 'jobs', jobs}"}
+        - when: WS 不通，退回长轮询
+          steps:
+            - async: {id: long-poll, from: client.channel.kernel-client, to: server.hub.long-poll, relation: rel.client.pull-jobs, label: 'GET /v1/runners/jobs?waitSec=25'}
+            - async: {from: server.hub.long-poll, to: kernel.dispatch.jobs, label: 挂起到 kick 或超时后原子认领}
+            - return: {from: server.hub.long-poll, to: client.channel.kernel-client, label: 任务包（客户端已走则退回待领）}
+    - call: {from: client.channel.runner, to: client.channel.executor, label: execute(job)：回 accepted、按 jobId 去重}
+    - async: {from: client.channel.executor, to: client.channel.dispatch, label: 'dispatch(job)：套 job 超时（排串行道不计时）'}
+    - alt:
+        - when: repo 能力（推分支、建变更、查变更与检查）
+          steps:
+            - async: {id: repo, from: client.channel.dispatch, to: adapters.repo.gitlab, relation: rel.client.dispatch-codehost, label: 'publish / openChange / getChecks（按任务钉住的工作环境取代码平台）'}
+            - async: {from: adapters.repo.gitlab, to: adapters.repo.git, label: 推分支、glab 操作 MR 与流水线}
+            - async: {from: adapters.repo.git, to: share.proc, label: 带超时跑 git / glab}
+        - when: command 能力（内置 run_check）
+          steps:
+            - async: {id: check, from: client.channel.dispatch, to: client.checks.run-check, label: 'run_check(判法, 工作树)'}
+            - async: {from: client.checks.run-check, to: client.checks.lanes, label: 独占判项排串行道}
+            - async: {from: client.checks.run-check, to: share.proc, label: 在工作树里跑判项命令（先核对 HEAD 与工作树干净）}
+            - call: {from: client.checks.run-check, to: client.checks.failures, label: 失败时解析失败清单}
+            - async: {from: client.checks.run-check, to: share.evidence, label: 完整输出与报告进证据存储}
+    - call: {from: client.channel.executor, to: client.channel.runner, label: 'report(JobUpdate: result / fault、evidence)'}
+    - async: {from: client.channel.runner, to: server.http.runner-routes, relation: rel.client.report-ws, label: "{type: update}（WS 不在时走 HTTP 回报）"}
+    - async: {from: server.http.runner-routes, to: kernel.dispatch.jobs, relation: rel.server.runner-job-update, label: 'update(jobId, JobUpdate)：迟到的按已结算去重'}
+    - async: {id: completed, from: kernel.dispatch.jobs, to: kernel.ledger.ledger, label: adapter.completed}
+    - async: {from: kernel.ledger.ledger, to: kernel.dispatch.flow, relation: rel.kernel.ledger-flow-reactor, label: flowReactor：按幂等键前缀归一}
+    - async: {id: normalized, from: kernel.dispatch.flow, to: kernel.ledger.ledger, label: 'repo.mr_status / 判项基线与 head 结论 / ci 项（无变化不记）'}
+    - alt:
+        - when: 统筹者在同步等待
+          steps:
+            - async: {id: sync, from: server.mcp.adapter-tools, to: kernel.ledger.ledger, relation: rel.server.adapter-completions, label: 每 300ms 查 adapter.completed，取到即删等待记录}
+            - return: {from: server.mcp.service, to: actor.orchestrator, label: 调用结果（不再为它唤醒统筹者）}
+        - when: 异步，或等待超时 / 会话断开
+          steps:
+            - async: {id: wake, from: kernel.dispatch.flow, to: kernel.liveness.wakeups, label: 排唤醒（同一批调用回齐再唤醒）}

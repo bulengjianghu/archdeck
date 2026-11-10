@@ -1,0 +1,269 @@
+# 二期 · 动态视角：新增的子模块、关系、接口与数据结构（设计版本 phase2-dynamic / r1）。
+# 对已有模块的调整直接改在 layers.yaml / detail.yaml 中，并写了 designNote。
+
+modules:
+  # ── 呈现层 ──────────────────────────────────────────────
+  - id: present.sequence.lanes
+    name: 泳道与消息
+    parent: present.sequence
+    responsibility: 画参与者头部与生命线、按序号自上而下画消息箭头与标签；同步 / 异步 / 返回三种线型；内部活动画成生命线上的激活条。
+    codeRefs: [src/components/sequence/SequenceLanes.vue]
+    designNote: 参与者就是当前层次的节点（子模块或边界节点），名称与结构图一致；下钻后泳道随之变细。
+  - id: present.sequence.fragments
+    name: 组合框
+    parent: present.sequence
+    responsibility: 画 alt / loop / par / ref 组合框：左上角标类型，alt 分支间画虚线分隔并标条件，loop 标循环条件，ref 显示被引用场景名、单击可打开该场景。
+    codeRefs: [src/components/sequence/SequenceFragments.vue]
+  - id: present.sequence.interact
+    name: 时序图交互
+    parent: present.sequence
+    responsibility: 单击消息 → 选中该步骤并让回放跳到这一步；当前步骤高亮并自动滚动到可见；悬停消息时在结构图上预览对应的边（D-7）。
+    codeRefs: [src/components/sequence/SequenceView.vue]
+
+  - id: present.panel.scenario
+    name: 场景面板
+    parent: present.panel
+    responsibility: 场景名称、说明、默认层次、参与模块、步骤目录（按组合框缩进，点击跳到该步）；ref 引用了哪些场景、被哪些场景引用。
+    codeRefs: [src/components/panel/ScenarioPanel.vue]
+  - id: present.panel.step
+    name: 步骤面板
+    parent: present.panel
+    responsibility: 步骤的类型、序号、所在组合框路径与分支条件（D-5）；from → to（真实端点与在本层投影到的节点，均可点击）；经由接口的签名与语义、携带的数据结构；引用的关系；说明。
+    codeRefs: [src/components/panel/StepPanel.vue]
+    designNote: 同时显示「真实端点」和「在本层投影到谁」，避免在高层回放时误以为是子模块本身在通信。
+
+  # ── 视图状态层 ──────────────────────────────────────────
+  - id: state.desk.playback
+    name: 回放
+    parent: state.desk
+    responsibility: 当前场景、回放帧序列、当前帧序号、播放 / 暂停与速度；提供打开 / 关闭场景、跳到某一帧、上一步 / 下一步、播放 / 暂停等操作；自动播放用定时器推进，切换层次时保持在同一帧。
+    principle: |
+      - 当前帧以**帧 ID** 为准（不是层次投影后的序号），下钻 / 返回后在新层次里找到同一帧继续，满足 D-4。
+      - 自动播放遇到「内部活动」帧照常计时；层次切换、打开别的场景、组件销毁时停止定时器。
+      - 打开场景时若当前层次与场景无关，跳到场景的默认层次。
+    codeRefs: [src/state/useDeskState.ts, src/state/playback.ts]
+    designNote: 作为 DeskState 的子模块而不是独立 store（待确认问题 2）。定时器逻辑单独成文件 playback.ts，便于用假时钟测试。
+
+  - id: state.layout.sequence
+    name: 时序图排布
+    parent: state.layout
+    responsibility: 给时序模型算坐标：泳道等距（宽度按名称自适应，最少等宽）、消息按序号纵向累加、组合框包住其子消息并按嵌套深度内缩；结果按「层次 + 场景」缓存。
+    principle: 规则简单、同步计算，不调用 elk（技术选型 §3.3）。参与者的左右顺序取其在结构图布局中的横坐标，使两张图的左右关系一致。
+    codeRefs: [src/layout/sequence.ts]
+
+  # ── 模型层 ──────────────────────────────────────────────
+  - id: model.scenario.flatten
+    name: 场景展开
+    parent: model.scenario
+    responsibility: 把步骤树展开成有序的回放帧：内联 ref 引用的子场景（带深度保护）、alt 各分支按书写顺序依次展开并标注分支条件、loop / par 展开一遍并标注；每帧带稳定 ID、序号与所在组合框路径。
+    principle: |
+      帧 ID 由场景 ID 与步骤在树中的路径组成（如 `sc.command#4.alt0.1`），描述重新生成后只要结构没变 ID 就不变，URL 中的 step 仍然有效。
+    codeRefs: [src/model/scenario/flatten.ts]
+    designNote: alt 分支全部按顺序回放、每帧标出所在分支（待确认问题 5）；若评审选择「回放前选分支」，只需在这里加一个分支选择参数。
+  - id: model.scenario.level
+    name: 帧的层次投影
+    parent: model.scenario
+    responsibility: 把每一帧的 from / to 用 mapEndpoint 映射到当前层次：落在两个不同子模块之间 → 对应的视图边 ID；一端在外部 → 边界边；两端在同一子模块 → 内部活动（只高亮该节点）；两端都在外部 → 本层不可见。
+    principle: 视图边 ID 与 projectLevel 产出的边 ID 规则相同（edgeId），画布据此直接给已有的边加回放态，不需要额外的边。
+    codeRefs: [src/model/scenario/level.ts]
+  - id: model.scenario.sequence
+    name: 时序模型
+    parent: model.scenario
+    responsibility: 由本层的帧投影产出时序模型：参与者（按首次出场排序）、消息（同步 / 异步 / 返回 / 内部活动）、组合框（类型、条件、包住的消息区间）；同一节点上连续的内部活动合并为一条。
+    codeRefs: [src/model/scenario/sequence.ts]
+
+relations:
+  # 呈现层内部
+  - { id: rel.p2.desk-player, from: present.desk-view, to: present.player, type: commands, description: 项目视图让回放控制条接手处理 }
+  - { id: rel.p2.seq-lanes, from: present.sequence.interact, to: present.sequence.lanes, type: commands, description: 时序图交互让泳道与消息接手处理 }
+  - { id: rel.p2.seq-fragments, from: present.sequence.interact, to: present.sequence.fragments, type: commands, description: 时序图交互让组合框接手处理 }
+  - { id: rel.p2.panel-scenario, from: present.panel.dispatch, to: present.panel.scenario, type: commands, description: 面板分派让场景面板接手处理 }
+  - { id: rel.p2.panel-step, from: present.panel.dispatch, to: present.panel.step, type: commands, description: 面板分派让步骤面板接手处理 }
+  - { id: rel.p2.step-content, from: present.panel.step, to: present.panel.content, type: commands, description: 步骤面板交给内容组件：接口与数据结构折叠项复用一期内容组件 }
+  - { id: rel.p2.scenario-content, from: present.panel.scenario, to: present.panel.content, type: commands, description: 场景面板让内容组件接手处理 }
+
+  # 呈现 → 视图状态
+  - id: rel.p2.list-read
+    from: present.scenarios
+    to: state.desk.loading
+    type: queries
+    payload: [ds.ModelIndex]
+    description: 场景列表向加载与重新加载取：用索引的 scenariosOf(当前层次) 筛出相关场景
+  - { id: rel.p2.list-open, from: present.scenarios, to: state.desk.playback, type: commands, interface: if.desk.playback, description: 场景列表交给回放：openScenario(id) }
+  - { id: rel.p2.player-act, from: present.player, to: state.desk.playback, type: commands, interface: if.desk.playback, description: 回放控制条交给回放：prev / next / play / pause / stepTo / setSpeed }
+  - { id: rel.p2.seq-read, from: present.sequence.interact, to: state.desk.projection, type: queries, payload: [ds.PositionedSequence, ds.PlaybackState], description: 时序图交互向视图派生取：读取定位好的时序图与当前帧 }
+  - { id: rel.p2.seq-act, from: present.sequence.interact, to: state.desk.playback, type: commands, interface: if.desk.playback, description: 时序图交互交给回放：单击消息 → stepTo(frameId)，同时选中该步骤 }
+  - { id: rel.p2.seq-hover, from: present.sequence.interact, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 时序图交互交给操作：悬停消息 → setHover(对应视图边的端点) }
+  - { id: rel.p2.flow-step, from: present.canvas.flow, to: state.desk.playback, type: commands, interface: if.desk.playback, description: 视图转换与交互交给回放：回放中单击带序号的边 → 跳到该步 }
+  - { id: rel.p2.step-read, from: present.panel.step, to: state.desk.projection, type: queries, payload: [ds.Frame, ds.ScenarioLevelView], description: 步骤面板向视图派生取结果 }
+  - { id: rel.p2.step-act, from: present.panel.step, to: state.desk.actions, type: commands, interface: if.desk.actions, description: 步骤面板交给操作：端点点击 → revealModule；关系点击 → revealRelation }
+  - { id: rel.p2.scenario-act, from: present.panel.scenario, to: state.desk.playback, type: commands, interface: if.desk.playback, description: 场景面板交给回放：步骤目录点击 → stepTo；ref 点击 → openScenario }
+
+  # 视图状态内部与 → 模型
+  - { id: rel.p2.playback-url, from: state.desk.playback, to: state.desk.url-sync, type: commands, description: 回放交给 URL 同步：场景与步骤写进 sc / step }
+  - { id: rel.p2.url-playback, from: state.desk.url-sync, to: state.desk.playback, type: commands, description: URL 同步交给回放：后退 / 分享链接回写场景与步骤 }
+  - { id: rel.p2.playback-actions, from: state.desk.playback, to: state.desk.actions, type: commands, description: 回放交给操作：打开场景时若当前层次无关则 goTo(默认层次)；跳到某帧时选中该步骤 }
+  - id: rel.p2.playback-flatten
+    from: state.desk.playback
+    to: model.scenario.flatten
+    type: queries
+    interface: if.model.flattenScenario
+    payload: [ds.Frame]
+    description: 回放向场景展开取：打开场景时展开一次得到帧序列，与层次无关
+  - id: rel.p2.projection-level
+    from: state.desk.projection
+    to: model.scenario.level
+    type: queries
+    interface: if.model.projectScenario
+    payload: [ds.LevelView, ds.Frame, ds.ScenarioLevelView]
+    description: 视图派生向帧的层次投影取：层次视图或场景变化时重新投影帧
+  - id: rel.p2.projection-seqlayout
+    from: state.desk.projection
+    to: state.layout.sequence
+    type: queries
+    interface: if.layout.layoutSequence
+    payload: [ds.SequenceModel, ds.PositionedSequence]
+    description: 视图派生向时序图排布取：同步计算；参与者左右顺序参考结构图布局
+  - { id: rel.p2.seqlayout-types, from: state.layout.sequence, to: model.types, type: queries, payload: [ds.SequenceModel], description: 时序图排布向类型与 Schema 取结果 }
+
+  # 模型层内部
+  - { id: rel.p2.level-endpoints, from: model.scenario.level, to: model.projector.endpoints, type: queries, interface: if.model.mapEndpoint, description: 帧的层次投影向端点映射取：与结构投影共用同一套端点规则 }
+  - { id: rel.p2.level-sequence, from: model.scenario.level, to: model.scenario.sequence, type: streams, payload: [ds.ScenarioLevelView], description: 本层的帧投影交给时序模型 }
+  - { id: rel.p2.scenario-types, from: model.scenario, to: model.types, type: queries, payload: [ds.ScenarioEntity, ds.Frame, ds.ScenarioLevelView, ds.SequenceModel], description: 场景投影向类型与 Schema 取结果 }
+
+interfaces:
+  - id: if.model.flattenScenario
+    name: flattenScenario
+    owner: model.scenario.flatten
+    signature: |
+      flattenScenario(index: ModelIndex, scenarioId: string): Frame[]
+    semantics: 纯函数；ref 内联深度上限 8，超过时截断并在最后一帧标注；校验已保证 ref 无环。
+    designNote: 帧序列与层次无关，打开场景时算一次；层次变化只重做投影。
+  - id: if.model.projectScenario
+    name: projectScenario
+    owner: model.scenario.level
+    signature: |
+      projectScenario(index: ModelIndex, view: LevelView, frames: Frame[]): ScenarioLevelView
+    semantics: 依赖 projectLevel 的输出（view），保证帧落到的视图边一定存在于本层视图中；被关系类型筛选隐藏的边上的帧标为 hidden。
+  - id: if.model.mapEndpoint
+    name: mapEndpoint
+    owner: model.projector.endpoints
+    signature: |
+      mapEndpoint(index: ModelIndex, parentId: string, moduleId: string):
+        | { kind: 'local'; node: string; exact: boolean }
+        | { kind: 'external'; node: string; exact: boolean }
+        | { kind: 'skip' }
+    semantics: 从 projectLevel 中提出的端点映射，行为不变；结构投影与场景投影共用。
+    designNote: 唯一需要改动一期代码的公共函数（只是导出），一期单测覆盖其行为。
+  - id: if.layout.layoutSequence
+    name: layoutSequence
+    owner: state.layout.sequence
+    signature: |
+      layoutSequence(model: SequenceModel, structure?: PositionedView): PositionedSequence
+    semantics: 同步、纯函数；给出 structure 时泳道按结构图中节点横坐标排序。
+  - id: if.desk.playback
+    name: 回放操作
+    owner: state.desk.playback
+    signature: |
+      openScenario(id: string): void         // 展开帧、必要时跳到默认层次、写 URL（进历史）
+      closeScenario(): void
+      stepTo(frameId: string): void          // 同时选中该步骤
+      next(): void; prev(): void
+      play(): void; pause(): void; setSpeed(x: 0.5 | 1 | 2): void
+    semantics: 都是 DeskState 的操作；没有打开场景时 stepTo / next / prev / play 无效果。
+
+dataStructures:
+  - id: ds.ScenarioDef
+    name: ScenarioDef
+    definition: |
+      interface ScenarioDef {
+        id: string
+        name: string
+        description?: string
+        level?: string               // 默认展示层次（模块 ID），缺省为根
+        steps: StepDef[]
+      }
+    description: 场景文件（`scenarios/*.yaml`）中一个场景的形状，与技术选型 §4.4 一致。
+  - id: ds.StepDef
+    name: StepDef
+    definition: |
+      type StepDef =
+        | { call: Message } | { async: Message } | { return: Message }
+        | { alt: { when: string; steps: StepDef[] }[] }
+        | { loop: { while: string; steps: StepDef[] } }
+        | { par: { steps: StepDef[] }[] }
+        | { ref: string }              // 引用另一个场景 ID
+      interface Message {
+        from: string; to: string       // 写最深的模块，上层由投影合并
+        label?: string
+        relation?: string              // 可选：对应的结构关系，引用时端点须一致
+        interface?: string
+        payload?: string | string[]
+        note?: string
+      }
+    description: 步骤树；组合步骤可任意嵌套。
+  - id: ds.ScenarioEntity
+    name: ScenarioEntity
+    definition: |
+      interface ScenarioEntity extends ScenarioDef {
+        src: SourceLoc
+        stepSrc: Map<string, SourceLoc>   // 步骤路径 → 出处，供报错与面板显示
+      }
+    description: Loader 合并后的场景。
+  - id: ds.Frame
+    name: Frame
+    definition: |
+      interface Frame {
+        id: string                     // 'sc.command#4.alt0.1'，结构不变则稳定
+        seq: number                    // 1 起的序号
+        kind: 'call' | 'async' | 'return'
+        from: string; to: string       // 真实端点（最深模块）
+        label?: string; relation?: string; interface?: string; payload: string[]
+        fragments: { kind: 'alt' | 'loop' | 'par' | 'ref'; label: string; branch?: number }[]  // 外到内
+      }
+    description: 展开后的一帧回放步骤，与层次无关。
+  - id: ds.ScenarioLevelView
+    name: ScenarioLevelView
+    definition: |
+      interface ScenarioLevelView {
+        levelId: string
+        frames: {
+          frameId: string
+          at:
+            | { kind: 'edge'; edgeId: string; from: string; to: string }   // 视图边（含边界边、核心跨层边）
+            | { kind: 'internal'; node: string }                           // 同一子模块内部
+            | { kind: 'hidden' }                                           // 本层不可见
+        }[]
+      }
+    description: 帧在当前层次的落点；画布与时序模型都用它。
+  - id: ds.SequenceModel
+    name: SequenceModel
+    definition: |
+      interface SequenceModel {
+        participants: { nodeId: string; moduleId: string; boundary: boolean }[]
+        messages: { frameIds: string[]; from: string; to: string; kind: 'call' | 'async' | 'return' | 'internal'; label: string }[]
+        fragments: { kind: 'alt' | 'loop' | 'par' | 'ref'; label: string; first: number; last: number; depth: number; dividers?: number[] }[]
+      }
+    description: 当前层次的时序图内容（无坐标）；内部活动合并后一条消息可对应多帧。
+  - id: ds.PositionedSequence
+    name: PositionedSequence
+    definition: |
+      interface PositionedSequence {
+        model: SequenceModel
+        lanes: Map<string, { x: number; w: number }>
+        messages: { y: number }[]
+        fragments: { x: number; y: number; w: number; h: number }[]
+        size: { w: number; h: number }
+      }
+    description: 时序图布局结果。
+  - id: ds.PlaybackState
+    name: PlaybackState
+    definition: |
+      interface PlaybackState {
+        scenarioId: string | null
+        frames: Frame[]
+        frameId: string | null         // 当前帧
+        playing: boolean
+        speed: 0.5 | 1 | 2
+      }
+    description: DeskState 中的回放部分；scenarioId 与 frameId 写进 URL（sc / step）。

@@ -1,0 +1,10 @@
+# 设计 sketch-editor 挂在「present.canvas」上的草图：由一期的 designs/sketch-editor/sketch.yaml 按挂载点机械拆出（ADR-0025 迁移，内容不变），同设计另有 model.intent、state.desk、state.transition、access.writer、present.panel、present.version。
+sketch:
+  id: sketch-editor
+  mount: present.canvas
+  lifetime: until-implemented
+  modules:
+    - id: present.canvas.edit
+      name: 画布编辑态
+      kind: component
+      responsibility: 只在草图下开启：带的插入条与排序、带内 / 父模块内新建模块、拖动移动、拖线建关系、右键菜单、删除；每个操作只发一个编辑意图给 DeskState，不保存坐标。

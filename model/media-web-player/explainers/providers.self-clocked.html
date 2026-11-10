@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 7bf000265828cc29 providers.self-clocked#abstraction=d76f2d4b providers.self-clocked#children=87d357ed providers.self-clocked#invariants=c5606cb8 providers.self-clocked#provides=881cf0d3 providers.self-clocked#responsibility=659c5f0c providers.self-clocked#summary=b43d498a providers.self-clocked.audio#summary=d97408b4 providers.self-clocked.family#summary=6ebd7dd1 providers.self-clocked.presentation#summary=68203f54 providers.self-clocked.session#summary=f8ee54a2 providers.self-clocked.video#summary=be76f074 providers.self-clocked.worker-client#summary=98d815e0 providers.self-clocked.worker-host#summary=e52fb39a providers.self-clocked.worker-protocol#summary=1fdc72a8 rel:rel.providers.audio-parse=4f1c6cb8 rel:rel.providers.audio-pcm=98a767b7 rel:rel.providers.family-audio=aefd9624 rel:rel.providers.family-parse=b50f0bc6 rel:rel.providers.family-presentation=1b6dc055 rel:rel.providers.family-session=6c3f3d98 rel:rel.providers.family-webcodecs=0f4af8a3 rel:rel.providers.family-worker=27da50c5 rel:rel.providers.session-audio=ff01c842 rel:rel.providers.session-pcm=104a3852 rel:rel.providers.session-presentation=9d1486d2 rel:rel.providers.session-video=c8d8dbad rel:rel.providers.worker-client-audio=4bd9cfaa rel:rel.providers.worker-client-parse=364ac37c rel:rel.providers.worker-host-audio=e5f6245b rel:rel.providers.worker-host-parse=654439a1 rel:rel.providers.worker-host-presentation=5e528920 rel:rel.providers.worker-host-session=0e8ad4d1 rel:rel.providers.worker-host-video=8e06c4d6 rel:rel.providers.worker-report=c7e2f96f rel:rel.providers.worker-start=19f4a5b3">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>自建时钟机芯 · 自备节拍器</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>自备节拍器的机芯</h1>
+    <p class="lede">这一层是 <span data-arch="providers.self-clocked">自建时钟机芯</span>：<span data-arch="providers.self-clocked" data-field="summary"></span>。画面自己画、节拍自己打——自由度最大的一种机芯。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 240" role="img" aria-label="播放器级资产与每会话流水，Worker 与主线程共用同一份会话实现">
+        <defs><marker id="j" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="14" y="24" width="280" height="74" rx="10" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="154" y="46" font-size="11" text-anchor="middle" class="">播放器级（开机一次）</text>
+        <text x="30" y="66" font-size="9" class="muted">画布 · 渲染器 · 已编译 wasm 模块</text>
+        <text x="30" y="82" font-size="9" class="muted">预热的后台线程（解码重活专用）</text>
+        <rect x="346" y="24" width="280" height="74" rx="10" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="486" y="46" font-size="11" text-anchor="middle" class="">每会话（打开一次）</text>
+        <text x="362" y="66" font-size="9" class="muted">拉流 → 分片预算解码 → 按媒体钟呈现</text>
+        <text x="362" y="82" font-size="9" class="muted">喂音频 · 以本族执行器跑延迟律</text>
+        <path d="M294,61 L342,61" stroke="var(--text-2)" stroke-width="2" marker-end="url(#j)"/>
+        <rect x="120" y="116" width="400" height="66" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="320" y="140" font-size="11.5" text-anchor="middle" class="">主线程 ⇄ 后台线程：同一份会话实现</text>
+        <text x="320" y="160" font-size="9" text-anchor="middle" class="">Worker 模式只是把同一颗芯装进另一间屋——消息协议做映射，逻辑不分叉</text>
+        <rect x="90" y="198" width="210" height="30" rx="8" fill="var(--bg)" stroke="var(--ok)"/><text x="195" y="217" font-size="9.5" text-anchor="middle" class="">呈现：画布一帧帧自绘</text>
+        <rect x="340" y="198" width="210" height="30" rx="8" fill="var(--bg)" stroke="var(--ok)"/><text x="445" y="217" font-size="9.5" text-anchor="middle" class="">节拍：自己的媒体钟走点</text>
+        <text x="320" y="132" font-size="0" text-anchor="middle" class=""></text>
+      </svg>
+      <figcaption>同一颗芯、两间屋：主线程与 Worker 共用一份会话实现。</figcaption>
+    </figure>
+
+    <h2>机芯里的岗位</h2>
+    <div class="cols c2">
+      <div><b><span data-arch="providers.self-clocked.family">族装配</span> 与 <span data-arch="providers.self-clocked.session">会话</span></b>开机建画布、渲染器、线程池；每会话拉流、按预算解码、按钟呈现。</div>
+      <div><b><span data-arch="providers.self-clocked.video">视频</span> / <span data-arch="providers.self-clocked.presentation">呈现</span> / <span data-arch="providers.self-clocked.audio">音频</span></b>解码出的帧上画布、到点出画面、声音喂输出——三线并行一拍不乱。</div>
+      <div><b><span data-arch="providers.self-clocked.worker-client">客户端</span> / <span data-arch="providers.self-clocked.worker-host">宿主</span> / <span data-arch="providers.self-clocked.worker-protocol">协议</span></b>把会话搬进后台线程的三件套：一头发指令、一头干活、协议做映射。</div>
+      <div><b>与延迟律的握手</b>读数从到达计量来，动作（快进 / 跳帧）由本族执行器落到位——律是共用的，手脚是本族的。</div>
+    </div>
+
+  </body>
+</html>

@@ -1,0 +1,10 @@
+system:
+  id: media-web-player
+  name: media-platform Web 播放器
+  description: |
+    media-platform 的 Web 直播 / 点播播放器 SDK（`@lsst/media-player` 及其管线族）与唯一的演示页：让 Web 宿主以 open 到 close 的一次会话播放平台的流。
+    会话内核串行执行命令、持有唯一状态并解析路线，管线族由宿主注入、只经窄端口与共用契约协作，按仓库分层分为宿主、Kit、管线契约、Provider、共享基础五层（见 docs/architecture/06 §3、docs/design/02-web-live-player.md §3）。
+  source:
+    repo: media-platform
+    commit: 54213951dbad1a777e84eb7d2b184f764a471d42
+    generatedAt: '2026-10-26'

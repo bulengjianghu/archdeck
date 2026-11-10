@@ -1,0 +1,1235 @@
+# 区域：infra.mus（MUs 媒体单元）
+# 代码：packages/player/src/mus/{loader,demuxer,corrector,remuxer,decoder,buffer,render}/**、mus/muFactory.ts、mus/muPluginWrapper.ts
+# 不含 mus/workerTask、mus/serviceWorker（归 infra.workers）。
+# 按数据面三段划分：Load（loader / demuxer / buffer.demuxed）→ Process（corrector / process-plugin）→ Play（buffer.processed / remuxer / decoder / buffer.decoded / render）。
+
+modules:
+  # ─── 第二级模块的原则（ADR-0042，补充骨架条目）───
+  - { id: infra.mus, name: "MUs 媒体单元", abstraction: 按数据面三段与节点角色切分：上游 output 直推下游 input、不经控制面，节点只执行动作不做决策，协议算法下沉 Domain。, summary: 沿三段流水线逐帧加载、解码并呈现媒体数据, invariants: [上游 output 同步调用下游 input 逐帧直推，不经控制面, 节点在 next 状态非 Running 时丢弃迟到输入, MU 不发状态机命令，也不引用插件、策略与 Solution] }
+  # ───────────────────────── 装配入口 ─────────────────────────
+  - id: infra.mus.factory
+    name: MU 工厂
+    summary: 按配置实例化具体 MU，并按能力回落出画实现
+    parent: infra.mus
+    kind: module
+    responsibility: 按 MuConfig 的 MuKey 实例化具体 MU（含按浏览器能力在 MediaStream / WebGL / 2D 三种出画实现间回落），是三段工厂取得 MU 实例的唯一入口；不负责选方案、不负责连边。
+    principle: |
+      - `createMu(context, muConfig)` 是一个 MuKey → 具体类的 switch；`MuType.Plugin` 一律交给 `MuPluginWrapper`。
+      - 同一 MuKey 可按环境给出不同实现：`VideoFrameRender` 依次探测 `StreamSinkRender.isSupported()` → `MuVideoFrameGlRender.isSupported()` → 回落 2D 画布；`VideoYuvRender` 刻意只走 WebGL（实测 MediaStream 上屏对软解 I420 更贵）。
+      - 未知 MuKey 返回 `null`，由调用方（Pipeline 事务）判错。
+    provides: [if.mus.factory.createMu]
+    codeRefs: [packages/player/src/mus/muFactory.ts]
+    docRefs: [docs/design/2-assembly/solution.md]
+
+  - id: infra.mus.process-plugin
+    name: 外部插件节点（含解密）
+    summary: 把外部媒体插件包装成 Process 段末位 MU
+    parent: infra.mus
+    kind: module
+    responsibility: 把外部 MediaPlugin（如直播 / 点播解密插件 Decryptor / VodDecryptor）包装成正规 MU 插入 Process 段末位，转发同步 / 异步拦截结果；流会话边界（Load / Play / Stop）时让插件清掉上一会话残留。不负责解密算法本身与是否需要解密的判定。
+    principle: |
+      - `processMediaData` 优先调用插件的 `interceptorAsync(data)` 并在 Promise 兑现后 `output`；否则调用同步 `interceptor(data, output)`，由插件决定何时、输出几次。
+      - `Init` 时 await 插件 `init()`；`Load / Play / Stop` 时调用插件 `reset()` 再交基类处理。
+    codeRefs: [packages/player/src/mus/muPluginWrapper.ts]
+    docRefs: [docs/design/3-components/decrypt/decrypt-plugins.md]
+
+  # ───────────────────────── Load 段 ─────────────────────────
+  - id: infra.mus.loader
+    name: 加载器（Load 段首）
+    summary: 按策略动作拉取流或分片字节并直推解封装
+    parent: infra.mus
+    kind: module
+    responsibility: 数据面唯一入水口：按策略下发的 LoadData / LoadStreamInfo / CancelLoad 等动作拉取 FLV 流、HLS 分片或 MP4 字节区间，以 StreamData 包直推解封装器，并上报连接 / 到流事件与网络错误。不决定何时加载、加载多少（归加载策略）。
+    abstraction: 按源协议切分加载器、共用 HTTP 流读取器；何时拉、拉多少一律由策略动作下达，加载器只执行并上报事实。
+    principle: |
+      - Loader 的 `support()` 恒为 false：不接受上游输入，数据只由网络回调驱动 `output`。
+      - 网络回调是异步任务，回调内同步执行完下游整条直推链；链上抛出的错误在回调里被包装为 `PullStreamTaskError` 等经 `handleError` 上报。
+      - Stop 可回退、Destroy 为终态：Destroy 之后迟到的请求结果一律丢弃。
+    provides: [if.mus.loader.load-actions]
+    codeRefs: [packages/player/src/mus/loader/**]
+    docRefs: [docs/design/3-components/loader/stream-loaders.md]
+    children:
+      - id: infra.mus.loader.stream-reader
+        name: HTTP 流读取器
+        summary: 以 fetch 流式读取并逐块回调，可设停滞超时
+        kind: component
+        responsibility: fetch 流式读取的通用实现 `HttpStreamLoader` 与其接口 `StreamLoader`：连接回调、逐块数据回调、错误回调与可选的下载停滞超时；被 FLV 与 HLS 加载 MU 复用。
+        provides: [if.mus.loader.StreamLoader]
+        dataStructures: [ds.StreamLoaderStartOptions]
+        codeRefs: [packages/player/src/mus/loader/httpStreamLoader.ts, packages/player/src/mus/loader/loader.types.ts]
+      - id: infra.mus.loader.flv
+        name: FLV 直播加载
+        summary: 按动作开断 FLV 长连接并逐块下推
+        kind: component
+        responsibility: '`MuHttpLoader`：FLV 直播腿的长连接拉流，收到 LoadData 即开流、Stop / Destroy 即断流，逐块以 StreamData 下推。'
+        codeRefs: [packages/player/src/mus/loader/muHttpLoader.ts]
+      - id: infra.mus.loader.hls
+        name: HLS 加载
+        summary: 解析 m3u8 并按游标逐片下载 TS 分片
+        kind: component
+        responsibility: '`MuHlsHttpLoader`：拉取并解析 m3u8（主清单选码率、直播轮询刷新），按 HlsModel 游标逐片下载 TS 分片；直播连续失败计数到阈值才上报给重连；时移录像腿带停滞超时与最近分片字节缓存。'
+        principle: |
+          - 清单解析使用 npm 包 `m3u8-parser`，分片下载复用 `HttpStreamLoader`。
+          - CancelLoad 后录像腿保留在途下载（`attached: false`），同地址再拉时直接接上；录像腿成功落地的分片进 LRU 缓存，续播重装时不再走网络。
+          - 清单刷新失败按可恢复错误 `HlsPlaylistRefreshError` 上报，不打断播放；直播分片 / 清单连续失败 3 次才以原始错误码交直播重连。
+        codeRefs: [packages/player/src/mus/loader/muHlsHttpLoader.ts]
+        docRefs: [docs/design/5-capabilities/guard/live-reconnect.md]
+      - id: infra.mus.loader.mp4
+        name: MP4 点播加载
+        summary: 先拉 moov，再按字节区间拉取 MP4 分片
+        kind: component
+        responsibility: '`MuMp4Loader` 与其 `NetLoader` 网络门面（fetch / xhr 双实现、重试、Range）：先分块拉 moov 元数据，再按 Mp4StreamModel 给出的字节区间拉取分片，输出带 byteStart 的 ArrayBuffer StreamData。'
+        principle: |
+          - LoadStreamInfo 阶段按 10KB 起步逐块拉取，借 mp4box 的 `parseOneBox` 判断 moov 是否完整，完整后写入流模型。
+          - LoadData 携带 `[start, end]` 区间，结果按请求顺序排队输出（`pendingOutputs`），保证下游拿到的字节偏移有序。
+          - `net/` 是移植的 HTTP 库（fetch / xhr / Task / 错误码），只经 `NetLoader` 门面使用。
+        codeRefs: [packages/player/src/mus/loader/mp4/**]
+
+  - id: infra.mus.demuxer
+    name: 解封装器
+    summary: 把字节流解成音视频帧与轨道元数据并落写流事实
+    parent: infra.mus
+    kind: module
+    responsibility: 把 StreamData 字节流解成音视频帧与轨道元数据（四类 FlvDemuxed* 包）直推 Load 段尾缓冲；负责字节拼接、解析器生命周期、流事实落写（metadata、SPS / PPS、样本信息）与帧序合法性校验。协议算法（位读取、AMF、SPS）调用 Domain，不在此重复实现。
+    abstraction: 按容器格式切分解封装器，H.264 切片解析单独成件被共用；位流语法等协议算法调 Domain，不在此重复实现。
+    principle: |
+      - 每种容器分两层：纯协议解析器（`FlvDemuxer` / `TsDemuxer` / mp4box）+ MU 包装层（`MuFlvDemuxer` / `MuTsDemuxer` / `MuMp4Demuxer`）。解析器不接收 Context，流模型落写全部在包装层。
+      - 字节拼接：上一包未消费的尾巴与新包拼接后送解析，解析器返回已消费字节数，剩余留到下一包。
+      - 参数集落写时序：SPS / PPS 必须在首次下发视频帧之前写入 streamModel，下游 PTS 校正依赖它计算 POC。
+      - 音频先于视频输出（下游以音频到达判定有无音频）；视频轨帧序异常整批丢弃并报错，音频轨只告警。
+    codeRefs: [packages/player/src/mus/demuxer/**]
+    docRefs: [docs/design/3-components/demux/mu-demuxer-wrappers.md, docs/design/1-domain/stream-parse-algorithms.md]
+    children:
+      - id: infra.mus.demuxer.flv
+        name: FLV 解封装
+        summary: 解析 FLV tag，产出帧与媒体信息并检出异常
+        kind: component
+        responsibility: FLV tag 解析（脚本 / 音频 / 视频 tag、AVCDecoderConfigurationRecord、AAC 配置）与其 MU 包装：首包 probe 建解析器，产出 MediaInfo 与四类解封装包，检出时间戳重复 / 不连续 / metadata 重复。
+        dataStructures: [ds.MediaInfo, ds.ProbeData]
+        codeRefs:
+          - packages/player/src/mus/demuxer/flvDemuxer.ts
+          - packages/player/src/mus/demuxer/muFlvDemuxer.ts
+          - packages/player/src/mus/demuxer/demuxer.types.ts
+      - id: infra.mus.demuxer.hls
+        name: TS（HLS）解封装
+        summary: 解析 MPEG-TS 并跨分片归一时间线
+        kind: component
+        responsibility: MPEG-TS 解析（PAT / PMT / PES、ADTS、H.264 NALU）与其 MU 包装；额外负责跨分片时间线归一——以首片音视频最小 dts 减去分片 durationStart 得到 dtsPtsOffset，此后每帧统一扣减，并向 HlsModel 登记已解封装帧。
+        principle: |
+          - 基线（dtsPtsOffset）就绪前帧只累积不下发；基线只在出现视频帧时建立。
+          - metadata 仅在分辨率变化时更新下发；`spsppsHash` 每次变化换新值，供下游判断是否重建解码器。
+          - 加密流按与转推侧的约定强制起始码长度 4。
+        dataStructures: [ds.PmtResult]
+        codeRefs: [packages/player/src/mus/demuxer/tsDemuxer.ts, packages/player/src/mus/demuxer/muTsDemuxer.ts]
+      - id: infra.mus.demuxer.mp4
+        name: MP4 解封装
+        summary: 解析 ISO BMFF，按轨聚批输出样本
+        kind: component
+        responsibility: 基于 mp4box 的 ISO BMFF 解析：从 moov / avcC / udta 落写流事实（含加密版本），把 mdat 样本按轨聚批输出；硬 seek（byteStart 跳变）时重定位各轨 nextSample 并清理已用样本。
+        codeRefs: [packages/player/src/mus/demuxer/muMp4Demuxer.ts]
+        docRefs: [docs/design/1-domain/mp4-stream-model.md]
+      - id: infra.mus.demuxer.h264
+        name: H.264 切片解析
+        summary: 解析 H.264 slice header 供解封装与校正共用
+        kind: component
+        responsibility: '`H264DecodeParser`：从 NALU 中解析 slice header（帧类型、POC 所需字段等），供三种解封装器与 PTS 校正共用。'
+        codeRefs: [packages/player/src/mus/demuxer/h264SliceParser.ts]
+
+  # ───────────────────────── Process 段 ─────────────────────────
+  - id: infra.mus.corrector
+    name: 校正器（Process 段）
+    summary: 在入播放段前就地修正视频帧的时间戳与类型
+    parent: infra.mus
+    kind: module
+    responsibility: 在帧进入播放段之前就地修正视频帧事实：重建 PTS、过滤解码器不能消化的 NALU、细化帧类型。只处理 FlvDemuxedVideoData，其余包类型原样透传；不增删音频、不做解密。
+    abstraction: 按要修正的帧事实切分为独立的就地变换，只碰视频帧，其余包原样透传。
+    principle: |
+      - 三个校正 MU 由 processFactory 按需串成链（PtsCorrector → NaluTypeFilter → FrameInfoCorrector → 解密插件），链为空时 Load 段尾直连 Play 段首。
+      - 都是「就地改字段 + `output` 原对象」，不复制帧、不插 Hook。
+      - 判定逻辑尽量提纯：PTS 顺序判定与校正批次计算在无状态的 `ptsOrderRules`，位读取用 Domain 的 ExpGolomb。
+    codeRefs: [packages/player/src/mus/corrector/**]
+    docRefs: [docs/design/1-domain/stream-parse-algorithms.md]
+    children:
+      - id: infra.mus.corrector.pts
+        name: PTS 重建
+        summary: 以 POC 为显示序重建含 B 帧流的 pts
+        kind: component
+        responsibility: '`MuPtsCorrector` + 纯函数 `ptsOrderRules`：补偿上游 CTS 恒为 0 的缺陷——以 H.264 POC 为真实显示序重算含 B 帧流的 pts / cts。'
+        principle: |
+          - 初始判定期：攒够 P 帧后计算 pts 与 poc 比值的方差，判定该流 pts 顺序是否本就正确；正确则此后整条流旁路（不可逆）。
+          - 校正期：遇关键帧或攒够 2 个 P 帧为一批，按 POC 排序后以「上一关键帧 pts + dts 增量」重算 pts。
+          - 依赖上游 demuxer 写在 streamModel 上的 SPS / PPS（共享黑板）。
+        dataStructures: [ds.PtsCorrectionPlan]
+        codeRefs: [packages/player/src/mus/corrector/muPtsCorrector.ts, packages/player/src/mus/corrector/ptsOrderRules.ts]
+      - id: infra.mus.corrector.nalu-filter
+        name: NALU 过滤
+        summary: 丢弃解码器不能消化的 NALU 与伪 NALU
+        kind: component
+        responsibility: '`MuNaluTypeFilter`：按「加载方式 × 播放方案 × 是否加密」丢弃 SEI / AUD 等解码器不可消化的 NALU，并拦截 CDN 在 SEI 后插入的伪 NALU，同步修正 size / length。'
+        codeRefs: [packages/player/src/mus/corrector/muNaluTypeFilter.ts]
+      - id: infra.mus.corrector.frame-info
+        name: 帧类型细化
+        summary: 把非 I 帧细化为 P / B / SP / SI
+        kind: component
+        responsibility: '`MuFrameInfoCorrector`：对非 I 帧读 slice header 的 slice_type，把容器层只有两态的帧类型细化为 P / B / SP / SI，供下游丢帧与时序策略使用。'
+        codeRefs: [packages/player/src/mus/corrector/muFrameInfoCorrector.ts]
+
+  # ───────────────────────── 缓冲（跨段） ─────────────────────────
+  - id: infra.mus.buffer
+    name: 缓冲
+    summary: 在段间入队、存储并按策略动作出队帧
+    parent: infra.mus
+    kind: module
+    responsibility: 段与段之间的帧队列：入队、存储、按策略动作出队、丢弃与 BufferChange 事实上报。只管「帧怎么进、怎么存、怎么出」，不管「该不该出、出多少、何时停」（归运行时驾驶策略）。
+    abstraction: 按流水线位置与方案切分缓冲、共用入队 / 存储 / 出队基类；只管帧怎么进出，出不出、出多少由策略动作决定。
+    principle: |
+      - 缓冲是数据面上唯一「拉 / 推解耦」的位置：上游 `input` 只入队；出队由策略经动作（SendAllBuffer / SendBuffer / Hold / Release …）触发，出队后仍是 `output` 直推下游。
+      - 基类 `MuMediaBufferBase` 统一音 / 视频双队列、DropBuffer / DropAllBuffer 与 BufferChange 事件；帧账本按能力读取（Video 方案无账本时跳过）。
+      - 入队时就地把样本打标为 *CombinedData（单帧粒度），不整样本克隆。
+    provides: [if.mus.buffer.release-actions]
+    codeRefs: [packages/player/src/mus/buffer/muBufferBase.ts]
+    docRefs: [docs/design/3-components/buffer/demuxed-buffer.md, docs/design/5-capabilities/buffer/buffer-adaptive.md]
+    children:
+      - id: infra.mus.buffer.demuxed
+        name: 解封装缓冲（Load 段尾）
+        summary: 缓存加载腿的解封装帧，并提供段尾阀门
+        kind: component
+        responsibility: '`MuDemuxedBuffer`：每条加载腿的尾节点，缓存解封装帧与轨道元数据，SendAllBuffer 时整批出队；提供段尾阀门 Hold / Release（关阀期只保留不下推，超出保留跨度时从队头裁剪并标记）。'
+        codeRefs: [packages/player/src/mus/buffer/muDemuxedBuffer.ts]
+        docRefs: [docs/design/0-kernel/pipeline-legs.md]
+      - id: infra.mus.buffer.processed
+        name: 处理后缓冲（Play 段首）
+        summary: 按指令定量出队给解码或重封装，支持换腿截流
+        kind: component
+        responsibility: '`MuProcessedBuffer`：Process 段之后、Play 段之前的帧队列，按 SendBuffer 定量出队给解码器 / 重封装器；提供换腿用的截流 HoldFromNextKeyframe / ReleaseHold（从下一个视频关键帧起留队，音频按 pts 跟随）。'
+        codeRefs: [packages/player/src/mus/buffer/muProcessedBuffer.ts]
+        docRefs: [docs/design/2-assembly/leg-switch-transaction.md]
+      - id: infra.mus.buffer.decoded
+        name: 解码后缓冲
+        summary: 排队解码产物，按音画同步节奏出队渲染
+        kind: component
+        responsibility: '`MuDecodedBuffer`：Wcs / Wasm 方案解码产物（VideoFrame / YUV / PCM）的队列，由送渲染策略按音画同步节奏 SendBuffer 出队给渲染。'
+        codeRefs: [packages/player/src/mus/buffer/muDecodedBuffer.ts]
+        docRefs: [docs/design/4-solutions/wcs-wasm/live-frame-strategy.md]
+      - id: infra.mus.buffer.fhls-demuxed
+        name: Fhls 解封装缓冲
+        summary: 音视频按 dts 合流切段，并执行降延迟丢帧
+        kind: component
+        responsibility: Fhls 方案重封装前的合流队列（直播 `MuFhlsDemuxedBuffer`、点播 `MuVodFhlsDemuxedBuffer`）：音视频按 dts 合流、按约 200ms 切段喂给重封装器；直播侧执行降延迟丢帧并做原始 DTS 与渲染 DTS 的换算。
+        principle: |
+          - 丢帧选段由 Domain 状态机 `pickLatencyDropRange` 演进，本模块只把合流队列翻译成事实喂入、执行返回的丢帧动作；偏移记账写 FhlsModel。
+          - 时间戳换算走 Domain `fhlsPresentationClock`；内容跳变（ContentDiscontinuity）开新一代，输出帧恒按当前代换算。
+        codeRefs:
+          - packages/player/src/mus/buffer/muFhlsDemuxedBufferBase.ts
+          - packages/player/src/mus/buffer/muFhlsDemuxedBufferDrop.ts
+          - packages/player/src/mus/buffer/muFhlsDemuxedBuffer.ts
+          - packages/player/src/mus/buffer/muVodFhlsDemuxedBuffer.ts
+        docRefs: [docs/design/4-solutions/fhls/fhls-solution.md]
+      - id: infra.mus.buffer.fhls-remuxed
+        name: Fhls 分片缓冲
+        summary: 缓存 TS 分片，应答 SW 的清单与分片请求
+        kind: component
+        responsibility: Fhls 方案重封装后的 TS 分片缓存（直播 `MuFhlsRemuxedBuffer`、点播 `MuVodFhlsRemuxedBuffer`）：作为 Service Worker 服务的数据提供方，应答其清单 / 分片请求，让原生 HLS 的 video 元素按需拉取。
+        principle: |
+          - 数据面在这里由「推」转「拉」：分片入缓存后不再 `output`，而是等 Service Worker 代 video 元素来取（含取片限速、补缓冲等待、取片代号防 Stop 后迟到）。
+          - streamId 不匹配的分片直接丢弃；Service Worker 服务只 init 一次，防止监听器翻倍导致首播黑屏。
+        codeRefs: [packages/player/src/mus/buffer/muFhlsRemuxedBuffer.ts, packages/player/src/mus/buffer/muVodFhlsRemuxedBuffer.ts]
+        docRefs: [docs/design/4-solutions/fhls/fhls-solution.md]
+
+  # ───────────────────────── Play 段 ─────────────────────────
+  - id: infra.mus.remuxer
+    name: 重封装器
+    summary: 把帧重封装为 fMP4 或 TS 分片供原生播放
+    parent: infra.mus
+    kind: module
+    responsibility: 把解封装帧重新封装为浏览器原生播放所需的容器：fMP4（init segment + moof/mdat，供 MSE / Vcs）或 TS 分片（供 Fhls 原生 HLS）。
+    abstraction: 按目标容器切分：fMP4 面向 MSE / Vcs，TS 分片面向 Fhls 原生 HLS，由下游呈现方式决定选哪一个。
+    codeRefs: [packages/player/src/mus/remuxer/**]
+    children:
+      - id: infra.mus.remuxer.mp4
+        name: fMP4 重封装
+        summary: 生成 fMP4 的 init 与 media segment 并衔接时间戳
+        kind: component
+        responsibility: '`MP4Remuxer`（含 MP4 / AAC 箱体生成）与 MU 包装 `MuMp4Remuxer`、逐帧变体 `MuMp4FrameRemuxer`（一帧一片，仅视频，供 Vcs）：生成 init segment 与 media segment，处理 dtsBase、音频静音帧补洞、跨分片时间戳衔接，并写入 MseModel 媒体原点。'
+        principle: |
+          - 维护跨批复用的 videoTrack / audioTrack（上游每批会清空自己的轨），批内只剩 1 个样本时留待下一批以算准时长。
+          - spsppsHash 变化即重发 init segment（码率 / 分辨率切换）。
+          - ContentDiscontinuity：`pause-hold-trimmed` 来源武装视频空洞接续；其他来源丢弃累计轨里的旧内容样本，避免与新内容首批拼接。
+          - dtsBase 未就绪时只累计不成片（硬门槛）。
+        dataStructures: [ds.InitSegment, ds.MediaSegment, ds.Mp4VideoSample, ds.SampleInfo, ds.MediaSegmentInfo]
+        provides: [if.mus.remuxer.mp4.actions]
+        codeRefs:
+          - packages/player/src/mus/remuxer/mp4Remuxer.ts
+          - packages/player/src/mus/remuxer/mp4.ts
+          - packages/player/src/mus/remuxer/aac.ts
+          - packages/player/src/mus/remuxer/remuxer.types.ts
+          - packages/player/src/mus/remuxer/muMp4Remuxer.ts
+          - packages/player/src/mus/remuxer/muMp4FrameRemuxer.ts
+        docRefs: [docs/design/3-components/remux/mp4-remuxer.md]
+      - id: infra.mus.remuxer.fhls
+        name: TS 重封装（Wasm）
+        summary: 用 Wasm muxer 把帧写成 TS 分片
+        kind: component
+        responsibility: '`FhlsRemuxer`（libmuxer wasm 单例）与 MU 包装 `MuFhlsRemuxer`：把合流帧逐帧写入 wasm muxer 生成 TS 分片（可选分片加密），回调产出 FhlsRemuxedData 并记录 FhlsModel 冲刷进度。'
+        principle: |
+          - wasm 生命周期：initialize → 设音视频参数 / 注册数据回调 → open_muxer（分片时长、是否加密）→ add_data 逐帧 → close_muxer / deinitialize。
+          - 模块级单例 `getFhlsRemuxer()`，跨 MU 代际复用 wasm 实例，避免重复加载。
+        codeRefs: [packages/player/src/mus/remuxer/fhlsRemuxer.ts, packages/player/src/mus/remuxer/muFhlsRemuxer.ts]
+        docRefs: [docs/design/4-solutions/fhls/fhls-solution.md]
+
+  - id: infra.mus.decoder
+    name: 解码器
+    summary: 把帧解码为画面或 PCM，维护在途计数与重建
+    parent: infra.mus
+    kind: module
+    responsibility: Wcs / Wasm / Vcs 方案的解码节点：把解封装帧解码为 DecodedVideoData（VideoFrame 或 YUV）/ DecodedAudioData（PCM），维护在途解码计数与解码耗时，处理参数集变化时的重配与出错重建。何时送解码、丢哪帧由送解码策略决定。
+    abstraction: 按解码技术切分，各自只把帧解出并维护在途计数与重建；送哪帧、丢哪帧由送解码策略决定。
+    principle: |
+      - 两条腿：WebCodecs（浏览器硬解，主线程异步回调）与 Wasm（软解：视频在 Worker 中跑 libvdec，音频在主线程跑 libadec 实例池）。
+      - 首帧必须是关键帧，之前的非关键帧直接丢弃并扣减在途计数，避免送解码闸门卡死。
+      - spsppsHash 变化触发重配；解码出错时自毁并在下次动作时按流模型当前事实重建。
+    codeRefs: [packages/player/src/mus/decoder/**]
+    docRefs: [docs/design/3-components/decoder/video-decoders.md, docs/design/3-components/decoder/audio-decoders.md]
+    children:
+      - id: infra.mus.decoder.wcs
+        name: WebCodecs 解码
+        summary: 用 WebCodecs 硬解音视频并恢复显示序
+        kind: component
+        responsibility: '`MuVideoDecoder` / `MuAudioDecoder`：基于 WebCodecs VideoDecoder / AudioDecoder 的硬解，按时间戳把输出帧与送解码记录配对、恢复显示序；参数集变化时先 flush 排空再重配，期间到达的样本暂存并恰好重放一次。'
+        codeRefs: [packages/player/src/mus/decoder/muVideoDecoder.ts, packages/player/src/mus/decoder/muAudioDecoder.ts]
+      - id: infra.mus.decoder.wasm-video
+        name: Wasm 视频解码
+        summary: 在 Worker 中用 Wasm 软解视频为 YUV
+        kind: component
+        responsibility: 主线程 MU `MuWasmVideoDecoder` 与 Worker 侧任务 `WasmVideoDecodeTask`（libvdec）：经 WorkerMessageBridge 送帧、收 YUV 输出；剔除与已配置相同的带内 SPS / PPS；fatal 解码错误时在滑动窗口内限次重建 Worker。
+        principle: |
+          - 主线程侧只做送帧、配置去重与计数；解码与输入 / 输出内存管理在 Worker 内的 wasm 中完成，输出缓冲池复用。
+          - 重建 Worker 后补发 metadata，并在首个关键帧前扣减被首关键帧门丢掉的帧计数。
+        provides: [if.mus.decoder.wasm-video.worker-protocol]
+        codeRefs: [packages/player/src/mus/decoder/muWasmVideoDecoder.ts, packages/player/src/mus/decoder/wasmVideoDecodeTask.ts]
+      - id: infra.mus.decoder.wasm-audio
+        name: Wasm 音频解码
+        summary: 在主线程用 Wasm 软解 AAC 为 PCM
+        kind: component
+        responsibility: '`MuWasmAudioDecoder` 与 `WasmAudioDecodeTask`（libadec，模块级实例池 getAudioDecoder / releaseInstance）：主线程同步软解 AAC 为 PCM；Wcs、Wasm、Vcs 三个方案共用的音频解码腿。'
+        codeRefs: [packages/player/src/mus/decoder/muWasmAudioDecoder.ts, packages/player/src/mus/decoder/wasmAudioDecoder.ts]
+
+  - id: infra.mus.render
+    name: 渲染（Play 段尾）
+    summary: 把媒体交给浏览器呈现，并发出首帧等读数事件
+    parent: infra.mus
+    kind: module
+    responsibility: 数据面的出口：把 fMP4 分片、解码帧、PCM 或媒体地址交给浏览器呈现（video 元素 / MSE / canvas / MediaStream / WebAudio），并承担挂载、音量、倍速、截图、全屏、清屏等呈现动作与首帧 / 渲染进度等读数事件。只执行，不做水位、追帧、seek 等决策。
+    abstraction: 按呈现目标切分渲染实现、共用 video 元素基类；元素归池所有、渲染只借用，跨代保留不随 MU 销毁。
+    principle: |
+      各渲染路径差异：
+      - **mse**：fMP4 append 进 MediaSource / SourceBuffer，由 video 元素自行解码播放；渲染执行策略下发的写入闸、区间回收、时长、追帧 seek。
+      - **fhls**：video 元素以原生 HLS 拉取 Service Worker 提供的清单与 TS 分片；渲染不接收帧（`support()` 为 false）。
+      - **video**：直接把 url 交给 video 元素，无 Load 段；不支持 inline 的设备用 rAF 音画代理。
+      - **vcs**：fMP4 逐帧分片拼成小 mp4 Blob，在 3 个 video 元素间环状轮转播放以实现低延迟。
+      - **canvas / stream-sink**（Wcs / Wasm）：解码帧逐帧上屏到 2D / WebGL 画布或 MediaStream 视频轨；「何时送」由上层送渲染策略决定。
+      - **audio**：PCM 经 AudioBuffer / ScriptProcessor / AudioWorklet 播放，后两者支持 sonic 变速。
+    provides: [if.mus.render.display-actions]
+    codeRefs: [packages/player/src/mus/render/**]
+    docRefs: [docs/design/3-components/render/video-element-render.md, docs/design/3-components/render/frame-canvas-render.md, docs/design/3-components/render/audio-render.md]
+    children:
+      - id: infra.mus.render.video-element
+        name: video 元素渲染基类
+        summary: 管理 video 元素的挂载、音量、倍速、截图与全屏
+        kind: component
+        responsibility: 抽象基类 `VideoElementRender`：video 元素的创建 / 借用、挂载与卸载、音量与自动播放静音降级（首次用户激活后恢复）、倍速、截图、全屏、清屏、质量统计与 VideoInfoChange 事件；Mse / Fhls / Video 三个方案的渲染都继承它。
+        principle: |
+          - 元素来源有三：开启 keepLastFrame 时向元素池借用；关闭时优先取备用已解锁元素；否则新建。
+          - Stop 时按 `shouldRetainOnStop` 的结论把元素交池保留（保留最后一帧），否则清空。
+        codeRefs: [packages/player/src/mus/render/videoElementRender.ts, packages/player/src/mus/render/snapshotCover.ts]
+        docRefs: [docs/design/3-components/render/video-element-render.md]
+      - id: infra.mus.render.keep-last-frame
+        name: 元素池与保留
+        summary: 跨代保留 video 元素，换会话不黑屏、iOS 有声起播
+        kind: component
+        responsibility: 跨渲染 MU 代际存活的 video 元素资源：`VideoElementPool`（keepLastFrame：两个元素交替，新会话出帧后叠放再撤旧元素）、`VideoElementReserve`（关闭 keepLastFrame 时备好在手势里解锁过的空闲元素，保证 iOS 有声起播）与保留判定纯函数 `shouldRetainOnStop`。纯 DOM 机制，由组合根创建并经 Context 端口注入。
+        provides: [if.mus.render.keep-last-frame.createVideoElementPool]
+        dataStructures: [ds.RetainFacts]
+        codeRefs: [packages/player/src/mus/render/keepLastFrame/**, packages/player/src/mus/render/videoElementReserve.ts]
+        docRefs: [docs/design/6-features/keep-last-frame.md]
+      - id: infra.mus.render.mse
+        name: MSE 渲染
+        summary: 经 MediaSource 追加 fMP4，执行删除与 seek
+        kind: component
+        responsibility: '`MuMseMediaSource` → `MuMseRenderBase` → `MuMseRender` 三层：建立 MediaSource / SourceBuffer、排队 append fMP4、执行写入闸 / 区间删除 / 设时长 / EndOfStream / seek，发 VideoRendered、VideoSeeked、SourceBufferUpdated、BufferChange 读数事件；直播与点播共用一个实现。同目录的纯函数（缓冲时长、空洞跳转、回收区间、追帧目标、首帧对齐、PTS 桶插值）也供策略层直接调用。'
+        principle: |
+          - 「渲染只执行，判定在策略」：写入闸判据、暂停丢数、空洞跳变、已播回收、追帧目标都在直播 / 点播策略，渲染只暴露动作与读数。
+          - 媒体资源一侧（MediaSource、append 队列）与读数事件一侧（video 事件、seek 窗口、首帧对齐）分两层继承，便于分别测试。
+          - 直播内容拼接跳变由 `LiveSpliceSkip` 处理。
+        provides: [if.mus.render.mse.actions, if.mus.render.mse.decisions]
+        codeRefs: [packages/player/src/mus/render/mse/**]
+        docRefs: [docs/design/4-solutions/mse/mse-render.md, docs/design/4-solutions/mse/mse-strategy.md]
+      - id: infra.mus.render.fhls
+        name: Fhls 渲染
+        summary: 把 SW 提供的 HLS 地址交给 video 原生播放
+        kind: component
+        responsibility: '`MuFhlsRender`：把 Service Worker 提供的 HLS 地址交给 video 元素原生播放，维护可见性不变式（已挂载且画面尺寸已知才可见）、首帧时机、卡顿 / 回退检测、重装呈现与重挂载。'
+        codeRefs: [packages/player/src/mus/render/muFhlsRender.ts]
+        docRefs: [docs/design/4-solutions/fhls/fhls-solution.md]
+      - id: infra.mus.render.video
+        name: Video 渲染
+        summary: 直接设置 video 元素的 src 播放
+        kind: component
+        responsibility: '`MuVideoRender` 与 `RafMediaProxy`：Video 方案直接设置 video 元素 src 播放（无 Load 段）；不支持 inline 播放的设备上用 audio 元素 + rAF 代理 video。'
+        codeRefs: [packages/player/src/mus/render/muVideoRender.ts, packages/player/src/mus/render/rafMediaProxy.ts]
+        docRefs: [docs/design/4-solutions/video/video-solution.md]
+      - id: infra.mus.render.vcs
+        name: Vcs 渲染
+        summary: 接收逐帧 fMP4，用多个 video 元素轮转播放
+        kind: component
+        responsibility: '`MuVcs2Render`：Vcs 方案的渲染 MU，接收逐帧 fMP4 分片，交给内部的 Model / Controller / View 三件套完成分片调度与多 video 元素轮转播放；由 `VcsFactory` 在 Init 时装配。'
+        abstraction: 按 MVC 切分：模型只记分片与时间轴事实，控制器调度装载与切片，视图只管 video 元素播放，MU 外壳只接收与装配。
+        principle: |
+          - 3 个 FragmentModel 组成环状链表，各自绑定一个 video 元素：当前片播放的同时，下一片由加载控制器把累积的逐帧分片合成 mp4 Blob 预加载，到点由切换控制器无缝切换。
+          - VcsModel 是注册在 ModelRegistry 里的播放模型（组合 RenderTimeline 与 FrameBufferLedger），供策略层读取缓冲时长等事实。
+        codeRefs: [packages/player/src/mus/render/vcs2/muVcsRender2.ts, packages/player/src/mus/render/vcs2/factory.ts, packages/player/src/mus/render/vcs2/common.ts]
+        docRefs: [docs/design/4-solutions/vcs/vcs-solution.md]
+        children:
+          - id: infra.mus.render.vcs.model
+            name: Vcs 模型
+            summary: 记录分片累积、当前位置、帧账本与渲染时间轴
+            kind: component
+            responsibility: '`VcsModel`（Vcs 方案播放模型：逐帧分片累积、当前片位置、缓冲时长、帧账本与渲染时间轴）与 `FragmentModel`（单个分片槽的状态与链表指针）。'
+            dataStructures: [ds.VcsModel, ds.FragmentModel]
+            codeRefs: [packages/player/src/mus/render/vcs2/model/**]
+          - id: infra.mus.render.vcs.controller
+            name: Vcs 控制器
+            summary: 调度分片合成、装载与定时切换
+            kind: component
+            responsibility: '`VcsController` 统筹首片启动、`LoadFragmentController` 把逐帧数据合成分片并装载、`SwitchFragmentController` 定时判断并切换到下一片、`FragmentController` / `FirstFragmentController` 控制单个分片槽的播放生命周期。'
+            codeRefs: [packages/player/src/mus/render/vcs2/controller/**]
+          - id: infra.mus.render.vcs.view
+            name: Vcs 视图
+            summary: 管理容器与 video 代理的播放、截图与全屏
+            kind: component
+            responsibility: '`VcsPlayer`（容器、挂载、尺寸、截图、全屏）与 `VideoProxy` / `RafVideoProxy`（单个 video 元素的播放代理）。'
+            codeRefs: [packages/player/src/mus/render/vcs2/view/**]
+      - id: infra.mus.render.canvas
+        name: 画布渲染
+        summary: 把 VideoFrame 或 YUV 绘制到 2D / WebGL 画布
+        kind: component
+        responsibility: 基类 `CanvasRender` 与三种实现：2D 画布绘制 VideoFrame（`MuVideoFrameRender`）、WebGL 纹理上传 VideoFrame（`MuVideoFrameGlRender`）、WebGL 平面上传 Wasm 软解 YUV（`MuYuvRender`）；收到帧即上屏，并处理尺寸变化、清屏、截图。
+        codeRefs: [packages/player/src/mus/render/canvas/**]
+        docRefs: [docs/design/3-components/render/frame-canvas-render.md]
+      - id: infra.mus.render.stream-sink
+        name: MediaStream 渲染
+        summary: 把解码帧写入 MediaStream 视频轨，积压超限丢帧
+        kind: component
+        responsibility: '`StreamSinkRender` / `MuVideoFrameStreamRender`：把 WebCodecs 解码帧写入 MediaStreamTrackGenerator 视频轨，交给 video 元素按视频层合成，不经画布；未排完帧超过上限即丢帧以防媒体内存堆积。动作面与画布渲染对齐。'
+        codeRefs: [packages/player/src/mus/render/stream/**]
+        docRefs: [docs/design/3-components/render/frame-canvas-render.md]
+      - id: infra.mus.render.audio
+        name: 音频渲染
+        summary: 用 WebAudio 播放 PCM，支持音量与不变调变速
+        kind: component
+        responsibility: 基类 `AudioRender`（AudioContext、增益音量、自动播放、倍速与播放模式切换）与三种实现：AudioBuffer 排程播放、ScriptProcessor + sonic 变速、AudioWorklet（`audioProcessor.js` + sonic wasm）变速；Wcs / Wasm / Vcs 方案共用。
+        codeRefs: [packages/player/src/mus/render/audio/**]
+        docRefs: [docs/design/3-components/render/audio-render.md]
+
+relations:
+  # ═════════ 数据面：Load 段 ═════════
+  - id: rel.mus.flow.loader-flv-demuxer
+    from: infra.mus.loader.flv
+    to: infra.mus.demuxer.flv
+    type: streams
+    purpose: 把 FLV 字节流交给解封装
+    payload: ds.StreamMediaData
+    description: 网络回调里逐块 output 直推 FLV 字节流
+  - id: rel.mus.flow.loader-hls-demuxer
+    from: infra.mus.loader.hls
+    to: infra.mus.demuxer.hls
+    type: streams
+    purpose: 把 TS 分片字节交给解封装
+    payload: ds.StreamMediaData
+    description: 逐块下推 TS 分片字节（带分片序号）
+  - id: rel.mus.flow.loader-mp4-demuxer
+    from: infra.mus.loader.mp4
+    to: infra.mus.demuxer.mp4
+    type: streams
+    purpose: 把 MP4 字节区间交给解封装
+    payload: ds.StreamMediaData
+    description: 按请求顺序下推带 byteStart 的字节区间
+  - id: rel.mus.flow.demuxer-flv-buffer
+    from: infra.mus.demuxer.flv
+    to: infra.mus.buffer.demuxed
+    type: streams
+    purpose: 把 FLV 帧与元数据存入段尾
+    payload: [ds.DemuxedVideoData, ds.DemuxedAudioData, ds.DemuxedVideoMetadata, ds.DemuxedAudioMetadata]
+    description: 解封装帧与轨道元数据直推 Load 段尾缓冲（音频先于视频）
+  - id: rel.mus.flow.demuxer-hls-buffer
+    from: infra.mus.demuxer.hls
+    to: infra.mus.buffer.demuxed
+    type: streams
+    purpose: 把归一后的 TS 帧存入段尾
+    payload: [ds.DemuxedVideoData, ds.DemuxedAudioData, ds.DemuxedVideoMetadata, ds.DemuxedAudioMetadata]
+    description: 时间线归一后的帧批量直推
+  - id: rel.mus.flow.demuxer-mp4-buffer
+    from: infra.mus.demuxer.mp4
+    to: infra.mus.buffer.demuxed
+    type: streams
+    purpose: 把 MP4 样本存入段尾
+    payload: [ds.DemuxedVideoData, ds.DemuxedAudioData, ds.DemuxedVideoMetadata, ds.DemuxedAudioMetadata]
+    description: 按轨聚批的样本直推
+
+  # ═════════ 数据面：Process 段 ═════════
+  - id: rel.mus.flow.demuxed-pts
+    from: infra.mus.buffer.demuxed
+    to: infra.mus.corrector.pts
+    type: streams
+    purpose: 把出队帧送进校正链
+    payload: [ds.DemuxedVideoData, ds.DemuxedAudioData]
+    description: SendAllBuffer 出队后直推 Process 段首（音频与 metadata 在校正链上透传）
+  - id: rel.mus.flow.demuxed-processed
+    from: infra.mus.buffer.demuxed
+    to: infra.mus.buffer.processed
+    type: streams
+    purpose: 无处理段时直送播放段首
+    payload: [ds.DemuxedVideoData, ds.DemuxedAudioData]
+    description: Process 段为空时 Load 段尾直连 Play 段首
+  - id: rel.mus.flow.pts-nalu
+    from: infra.mus.corrector.pts
+    to: infra.mus.corrector.nalu-filter
+    type: streams
+    purpose: 把重建 pts 的帧交去过滤
+    payload: ds.DemuxedVideoData
+    description: 重建 pts / cts 后直推
+  - id: rel.mus.flow.nalu-frameinfo
+    from: infra.mus.corrector.nalu-filter
+    to: infra.mus.corrector.frame-info
+    type: streams
+    purpose: 把过滤后的帧交去细化类型
+    payload: ds.DemuxedVideoData
+    description: 剔除不可解码 NALU 后直推
+  - id: rel.mus.flow.frameinfo-plugin
+    from: infra.mus.corrector.frame-info
+    to: infra.mus.process-plugin
+    type: streams
+    purpose: 把加密帧送去解密
+    payload: ds.DemuxedVideoData
+    description: 加密流时进入解密插件节点
+  - id: rel.mus.flow.frameinfo-processed
+    from: infra.mus.corrector.frame-info
+    to: infra.mus.buffer.processed
+    type: streams
+    purpose: 把校正好的帧送入播放段首
+    payload: [ds.DemuxedVideoData, ds.DemuxedAudioData]
+    description: 非加密流时校正链尾直推 Play 段首
+  - id: rel.mus.flow.plugin-processed
+    from: infra.mus.process-plugin
+    to: infra.mus.buffer.processed
+    type: streams
+    purpose: 把解密后的帧送入播放段首
+    payload: [ds.DemuxedVideoData, ds.DemuxedAudioData]
+    description: 插件拦截（同步或 Promise 兑现）后输出
+
+  # ═════════ 数据面：Play 段（Mse / Vcs） ═════════
+  - id: rel.mus.flow.processed-mp4remuxer
+    from: infra.mus.buffer.processed
+    to: infra.mus.remuxer.mp4
+    type: streams
+    purpose: 出队帧供封装为 fMP4
+    payload: [ds.DemuxedVideoData, ds.DemuxedAudioData, ds.DemuxedVideoMetadata, ds.DemuxedAudioMetadata]
+    description: Mse 方案（Mp4Remuxer）与 Vcs 方案（Mp4FrameRemuxer，仅视频）按 SendBuffer 出队
+  - id: rel.mus.flow.mp4remuxer-mse
+    from: infra.mus.remuxer.mp4
+    to: infra.mus.render.mse
+    type: streams
+    purpose: 把 fMP4 分片追加进 MSE
+    payload: [ds.Mp4RemuxedMetadata, ds.Mp4RemuxedData]
+    description: init segment 与 media segment 直推，append 进 SourceBuffer
+  - id: rel.mus.flow.mp4remuxer-vcs
+    from: infra.mus.remuxer.mp4
+    to: infra.mus.render.vcs
+    type: streams
+    purpose: 把逐帧 fMP4 交给 Vcs 播放
+    payload: [ds.Mp4RemuxedMetadata, ds.Mp4RemuxedData]
+    description: 一帧一片的 fMP4 直推 Vcs 渲染
+  - id: rel.mus.flow.processed-audio
+    from: infra.mus.buffer.processed
+    to: infra.mus.render.audio
+    type: streams
+    purpose: 把音频元数据交给音频渲染
+    payload: ds.DemuxedAudioMetadata
+    description: Vcs 方案下音频元数据直达音频渲染
+
+  # ═════════ 数据面：Play 段（Wcs / Wasm） ═════════
+  - id: rel.mus.flow.processed-wcs
+    from: infra.mus.buffer.processed
+    to: infra.mus.decoder.wcs
+    type: streams
+    purpose: 出队视频帧供 WebCodecs 解码
+    payload: [ds.DemuxedVideoData, ds.DemuxedVideoMetadata]
+    description: Wcs 方案按送解码策略出队视频帧
+  - id: rel.mus.flow.processed-wasmvideo
+    from: infra.mus.buffer.processed
+    to: infra.mus.decoder.wasm-video
+    type: streams
+    purpose: 出队视频帧供 Wasm 解码
+    payload: [ds.DemuxedVideoData, ds.DemuxedVideoMetadata]
+    description: Wasm 方案按送解码策略出队视频帧
+  - id: rel.mus.flow.processed-wasmaudio
+    from: infra.mus.buffer.processed
+    to: infra.mus.decoder.wasm-audio
+    type: streams
+    purpose: 出队音频帧供软解
+    payload: [ds.DemuxedAudioData, ds.DemuxedAudioMetadata, ds.DemuxedAudioCombinedData]
+    description: Wcs / Wasm / Vcs 方案的音频腿
+  - id: rel.mus.flow.wcs-decoded
+    from: infra.mus.decoder.wcs
+    to: infra.mus.buffer.decoded
+    type: streams
+    purpose: 把硬解帧存入解码后缓冲
+    payload: [ds.DecodedVideoData, ds.DecodedAudioData]
+    description: WebCodecs output 回调中直推解码帧
+  - id: rel.mus.flow.wasmvideo-decoded
+    from: infra.mus.decoder.wasm-video
+    to: infra.mus.buffer.decoded
+    type: streams
+    purpose: 把 YUV 存入解码后缓冲
+    payload: ds.DecodedVideoData
+    description: Worker 回传 YUV 后在主线程直推
+  - id: rel.mus.flow.wasmaudio-decoded
+    from: infra.mus.decoder.wasm-audio
+    to: infra.mus.buffer.decoded
+    type: streams
+    purpose: 把 PCM 存入解码后缓冲
+    payload: ds.DecodedAudioData
+    description: 同步软解 PCM 直推
+  - id: rel.mus.flow.decoded-canvas
+    from: infra.mus.buffer.decoded
+    to: infra.mus.render.canvas
+    type: streams
+    purpose: 按音画同步出队帧上屏
+    payload: ds.DecodedVideoData
+    description: 送渲染策略按音画同步出队，2D / WebGL / YUV 上屏
+  - id: rel.mus.flow.decoded-stream
+    from: infra.mus.buffer.decoded
+    to: infra.mus.render.stream-sink
+    type: streams
+    purpose: 出队帧写入 MediaStream 视频轨
+    payload: ds.DecodedVideoData
+    description: 支持 MediaStream 视频轨的浏览器上的 Wcs 出画
+  - id: rel.mus.flow.decoded-audio
+    from: infra.mus.buffer.decoded
+    to: infra.mus.render.audio
+    type: streams
+    purpose: 出队 PCM 播放声音
+    payload: ds.DecodedAudioData
+    description: PCM 出队给音频渲染
+
+  # ═════════ 数据面：Play 段（Fhls） ═════════
+  - id: rel.mus.flow.processed-fhlsdemuxed
+    from: infra.mus.buffer.processed
+    to: infra.mus.buffer.fhls-demuxed
+    type: streams
+    purpose: 把帧送入 Fhls 合流队列
+    payload: [ds.DemuxedVideoData, ds.DemuxedAudioData]
+    description: 非分段（直播）Fhls 从处理后队列接数据
+  - id: rel.mus.flow.fhlsdemuxed-remuxer
+    from: infra.mus.buffer.fhls-demuxed
+    to: infra.mus.remuxer.fhls
+    type: streams
+    purpose: 按段送帧封装为 TS
+    payload: [ds.DemuxedVideoCombinedData, ds.DemuxedAudioCombinedData]
+    description: 合流并换算渲染 DTS 后按段直推
+  - id: rel.mus.flow.fhlsremuxer-buffer
+    from: infra.mus.remuxer.fhls
+    to: infra.mus.buffer.fhls-remuxed
+    type: streams
+    purpose: 把 TS 分片存入分片缓冲
+    payload: ds.FhlsRemuxedData
+    description: wasm muxer 数据回调产出 TS 分片
+  - id: rel.mus.flow.fhlsremuxed-sw
+    from: infra.mus.buffer.fhls-remuxed
+    to: infra.workers
+    type: streams
+    purpose: 经 SW 应答清单与分片请求
+    payload: ds.FhlsRemuxedData
+    description: 作为 Service Worker 服务（fhlsService / vodFhlsService）的数据提供方应答清单与分片请求
+  - id: rel.mus.flow.fhlsremuxed-render
+    from: infra.mus.buffer.fhls-remuxed
+    to: infra.mus.render.fhls
+    type: streams
+    purpose: 让原生 HLS 拉取 TS 分片
+    payload: ds.FhlsRemuxedData
+    description: 拉模式：video 元素经 Service Worker 原生拉取 TS 分片（不经 output 直推）
+
+  # ═════════ 区域内依赖 / 调用 ═════════
+  - id: rel.mus.factory-render
+    from: infra.mus.factory
+    to: infra.mus.render
+    type: commands
+    purpose: 实例化渲染并选定出画实现
+    description: MU 工厂交给渲染（Play 段尾）：实例化渲染 MU，并探测 StreamSink / WebGL 能力选择出画实现
+  - id: rel.mus.loader-flv-reader
+    from: infra.mus.loader.flv
+    to: infra.mus.loader.stream-reader
+    type: commands
+    interface: if.mus.loader.StreamLoader
+    purpose: 开断 FLV 长连接
+    description: FLV 直播加载交给 HTTP 流读取器：经 StreamLoader 开流 / 断流
+  - id: rel.mus.loader-hls-reader
+    from: infra.mus.loader.hls
+    to: infra.mus.loader.stream-reader
+    type: commands
+    interface: if.mus.loader.StreamLoader
+    purpose: 下载 TS 分片
+    description: HLS 加载交给 HTTP 流读取器：分片下载复用 HttpStreamLoader（录像腿带停滞超时）
+  - id: rel.mus.demuxer-flv-h264
+    from: infra.mus.demuxer.flv
+    to: infra.mus.demuxer.h264
+    type: queries
+    purpose: 解析 slice header 得帧信息
+    description: FLV 解封装向 H.264 切片解析取：解析 slice header
+  - id: rel.mus.demuxer-hls-h264
+    from: infra.mus.demuxer.hls
+    to: infra.mus.demuxer.h264
+    type: queries
+    purpose: 解析 slice header 得帧信息
+    description: TS（HLS）解封装向 H.264 切片解析取：解析 slice header
+  - id: rel.mus.demuxer-mp4-h264
+    from: infra.mus.demuxer.mp4
+    to: infra.mus.demuxer.h264
+    type: queries
+    purpose: 解析 slice header 得帧信息
+    description: MP4 解封装向 H.264 切片解析取：解析 slice header
+  - id: rel.mus.pts-h264
+    from: infra.mus.corrector.pts
+    to: infra.mus.demuxer.h264
+    type: queries
+    purpose: 取计算 POC 所需的字段
+    description: PTS 重建向 H.264 切片解析取：提取 POC 所需的 slice 字段
+  - id: rel.mus.videoelement-keeplastframe
+    from: infra.mus.render.video-element
+    to: infra.mus.render.keep-last-frame
+    type: queries
+    purpose: 判定 Stop 时是否保留元素
+    description: video 元素渲染基类向元素池与保留取：Stop 时调用 shouldRetainOnStop 判定是否把元素交池保留；元素池本身经 Context 端口借还
+  - id: rel.mus.mse-mp4remuxer
+    from: infra.mus.render.mse
+    to: infra.mus.remuxer.mp4
+    type: queries
+    purpose: 补生成 init segment
+    description: MSE 渲染向 fMP4 重封装取：调用 MP4 箱体生成函数补生成 init segment
+  - id: rel.mus.vcs-controller-model
+    from: infra.mus.render.vcs.controller
+    to: infra.mus.render.vcs.model
+    type: commands
+    purpose: 读写分片累积与槽位状态
+    payload: ds.VcsModel
+    description: Vcs 控制器交给 Vcs 模型：读写分片累积、当前片位置与分片槽状态
+  - id: rel.mus.vcs-controller-view
+    from: infra.mus.render.vcs.controller
+    to: infra.mus.render.vcs.view
+    type: commands
+    purpose: 驱动 video 代理装载与切换
+    description: Vcs 控制器交给 Vcs 视图：驱动 video 代理装载 / 播放 / 切换
+
+  # ═════════ 出边：infra.framework（MU 基类 / 事件 / 错误路由） ═════════
+  - id: rel.mus.loader-event
+    from: infra.mus.loader
+    to: infra.framework
+    type: notifies
+    purpose: 宣告连上流与到流，上报网络错误
+    description: 经 context.emit 发 StreamConnected / StreamDataArrived；网络错误经 handleError 进错误路由
+  - id: rel.mus.demuxer-event
+    from: infra.mus.demuxer
+    to: infra.framework
+    type: notifies
+    purpose: 宣告视频元数据已就绪
+    description: 首次拿齐视频 metadata 时发 StreamInfoLoaded
+  - id: rel.mus.buffer-event
+    from: infra.mus.buffer
+    to: infra.framework
+    type: notifies
+    purpose: 宣告缓冲量变化
+    description: 入队 / 出队 / 丢弃时发 BufferChange
+  - id: rel.mus.render-event
+    from: infra.mus.render
+    to: infra.framework
+    type: notifies
+    purpose: 宣告渲染进度与画面信息
+    description: 发 VideoRendered / VideoSeeked / SourceBufferUpdated / VideoInfoChange / BufferChange 等读数事件
+  - id: rel.mus.wasmvideo-bridge
+    from: infra.mus.decoder.wasm-video
+    to: infra.framework
+    type: commands
+    mode: async
+    interface: if.mus.decoder.wasm-video.worker-protocol
+    purpose: 与解码 Worker 收发帧
+    description: Wasm 视频解码交给 Framework 机制内核：经 framework 的 WorkerMessageBridge 与解码 Worker 收发消息
+
+  # ═════════ 出边：infra.workers ═════════
+
+  # ═════════ 出边：domain ═════════
+  - id: rel.mus.demuxer-algorithms
+    from: infra.mus.demuxer
+    to: domain.algorithms
+    type: queries
+    purpose: 解析 AMF 元数据与 SPS
+    description: 解封装器向协议算法取：调用 AMF 解析、SpsParser、ExpGolomb 等纯协议算法
+  - id: rel.mus.h264-algorithms
+    from: infra.mus.demuxer.h264
+    to: domain.algorithms
+    type: queries
+    purpose: 按指数哥伦布读位流
+    description: H.264 切片解析向协议算法取：基于 ExpGolomb / SpsParser 解析 slice header
+  - id: rel.mus.corrector-algorithms
+    from: infra.mus.corrector
+    to: domain.algorithms
+    type: queries
+    purpose: 读 slice_type 并计算 POC
+    description: 校正器（Process 段）向协议算法取：FastExpGolomb 读 slice_type、SpsParser / ExpGolomb 计算 POC
+  - id: rel.mus.fhlsdemuxed-algorithms
+    from: infra.mus.buffer.fhls-demuxed
+    to: domain.algorithms
+    type: queries
+    purpose: 选出降延迟丢帧区段
+    description: Fhls 解封装缓冲向协议算法取：降延迟丢帧选段状态机 pickLatencyDropRange
+  - id: rel.mus.fhlsdemuxed-services
+    from: infra.mus.buffer.fhls-demuxed
+    to: domain.services
+    type: queries
+    purpose: 换算原始与渲染 DTS
+    description: Fhls 解封装缓冲向决策服务取：fhlsPresentationClock 的原始 / 渲染 DTS 换算与 spliceEpoch 分代
+  - id: rel.mus.demuxed-services
+    from: infra.mus.buffer.demuxed
+    to: domain.services
+    type: queries
+    purpose: 取点播停拉线作阀门保留跨度
+    description: 解封装缓冲（Load 段尾）向决策服务取：resolvePlaybackBuffer 取点播停拉线作为段尾阀门保留跨度
+  - id: rel.mus.loader-models
+    from: infra.mus.loader
+    to: domain.models
+    type: commands
+    purpose: 推进分片游标并记账在途
+    description: 加载器（Load 段首）交给领域模型：读写 HlsModel / Mp4StreamModel 的分片游标、在途记账与 moov 事实
+  - id: rel.mus.demuxer-models
+    from: infra.mus.demuxer
+    to: domain.models
+    type: commands
+    purpose: 落写流元数据与参数集
+    description: 解封装器交给领域模型：落写 streamModel 的音视频 metadata、SPS / PPS、样本信息、dtsPtsOffset、加密版本
+  - id: rel.mus.buffer-models
+    from: infra.mus.buffer
+    to: domain.models
+    type: commands
+    purpose: 记帧账本与 Fhls 丢帧事实
+    description: 缓冲交给领域模型：写帧账本（FrameBufferLedger）与 FhlsModel 的丢帧偏移 / 原生需求事实
+  - id: rel.mus.remuxer-models
+    from: infra.mus.remuxer
+    to: domain.models
+    type: commands
+    purpose: 读 dtsBase，写原点与冲刷进度
+    description: 重封装器交给领域模型：读 streamModel.dtsBase；写 MseModel 媒体原点、FhlsModel 冲刷进度
+  - id: rel.mus.decoder-models
+    from: infra.mus.decoder
+    to: domain.models
+    type: commands
+    purpose: 记在途解码数，取元数据重配
+    description: 解码器交给领域模型：维护 FrameModel 帧账本的在途解码计数，读流模型当前视频 metadata 用于重配
+  - id: rel.mus.render-models
+    from: infra.mus.render
+    to: domain.models
+    type: commands
+    purpose: 写 seek 窗口、播放位置等读数
+    description: 渲染（Play 段尾）交给领域模型：写 MseModel / FhlsModel / VideoPlayModel 的渲染读数（seek 窗口、播放位置、缓冲量）
+  - id: rel.mus.vcsmodel-models
+    from: infra.mus.render.vcs.model
+    to: domain.models
+    type: commands
+    purpose: 复用模型基类、帧账本与时间轴
+    description: Vcs 模型交给领域模型：VcsModel 继承 ModelBase、new 出 RenderTimeline 与 FrameBufferLedger 组合，违例抛 InvariantError
+
+  # ═════════ 出边：其他 infra / share ═════════
+  - id: rel.mus.render-modelaccess
+    from: infra.mus.render
+    to: infra.player-index
+    type: queries
+    purpose: 把播放模型收窄为具体类型
+    description: 渲染（Play 段尾）向 PlayerIndex 取：经 modelAccess 的 require*/read* 函数把 playModel 收窄为 MseModel / FhlsModel / VideoPlayModel 等
+  - id: rel.mus.buffer-modelaccess
+    from: infra.mus.buffer
+    to: infra.player-index
+    type: queries
+    purpose: 取帧账本与 Fhls 模型
+    description: 缓冲向 PlayerIndex 取：经 modelAccess 读帧账本 / FhlsModel
+  - id: rel.mus.decoder-modelaccess
+    from: infra.mus.decoder
+    to: infra.player-index
+    type: queries
+    purpose: 取帧模型
+    description: 解码器向 PlayerIndex 取：经 modelAccess 取 FrameModel
+  - id: rel.mus.remuxer-modelaccess
+    from: infra.mus.remuxer
+    to: infra.player-index
+    type: queries
+    purpose: 取 Fhls 模型
+    description: 重封装器向 PlayerIndex 取：经 modelAccess 取 FhlsModel
+  - id: rel.mus.loader-mp4box
+    from: infra.mus.loader.mp4
+    to: infra.third-party
+    type: queries
+    purpose: 判断 moov 是否完整
+    description: MP4 点播加载向三方库与外部媒体插件取：用 mp4box 的 parseOneBox / MultiBufferStream 判断 moov 完整性
+  - id: rel.mus.demuxer-mp4box
+    from: infra.mus.demuxer.mp4
+    to: infra.third-party
+    type: queries
+    purpose: 解析 ISO BMFF 容器
+    description: MP4 解封装向三方库与外部媒体插件取：基于 mp4box ISOFile 解析 ISO BMFF
+  - id: rel.mus.demuxer-hls-adts
+    from: infra.mus.demuxer.hls
+    to: infra.third-party
+    type: queries
+    purpose: 解析 ADTS 音频帧
+    description: TS（HLS）解封装向三方库与外部媒体插件取：使用 thirdParty/hls 的 ADTS 解析与字节拼接工具
+  - id: rel.mus.audio-sonic
+    from: infra.mus.render.audio
+    to: infra.third-party
+    type: commands
+    purpose: 倍速时不变调变速
+    description: 音频渲染交给三方库与外部媒体插件：ScriptProcessor / AudioWorklet 渲染使用 sonic 变速（JS 与 wasm）
+  - id: rel.mus.errors
+    from: infra.mus.loader
+    to: share.errors
+    type: queries
+    purpose: 把网络与任务异常转为带码错误
+    description: 加载器（Load 段首）向错误原语取：加载 MU 把网络与任务异常经 errorWrapper / new ErrorBase 包装为带 ErrorCode 的错误
+  - id: rel.mus.decoder-errors
+    from: infra.mus.decoder
+    to: share.errors
+    type: queries
+    purpose: 把解码异常转为带码错误
+    description: 解码器向错误原语取：解码 MU 把解码器异常经 errorWrapper / new ErrorBase 包装为带 ErrorCode 的错误
+  - id: rel.mus.demuxer-errors
+    from: infra.mus.demuxer
+    to: share.errors
+    type: queries
+    purpose: 把解析异常转为带码错误
+    description: 解封装器向错误原语取：解封装 MU 把解析异常经 errorWrapper / new ErrorBase 包装为 MuDemuxerError 等
+  - id: rel.mus.render-errors
+    from: infra.mus.render
+    to: share.errors
+    type: queries
+    purpose: 把出画与播放异常转为带码错误
+    description: 渲染（Play 段尾）向错误原语取：各渲染 MU（video 元素、MSE、画布、MediaStream、音频、Fhls、Vcs）把出画与播放异常以 new ErrorBase 构造带 ErrorCode 的错误
+  - id: rel.mus.fhls-remux-errors
+    from: infra.mus.buffer.fhls-remuxed
+    to: share.errors
+    type: queries
+    purpose: 把取片与封装失败转为错误
+    description: Fhls 分片缓冲向错误原语取：把分片请求与重封装失败构造为 ErrorBase
+  - id: rel.mus.remuxer-errors
+    from: infra.mus.remuxer.fhls
+    to: share.errors
+    type: queries
+    purpose: 报告 muxer 初始化失败
+    description: TS 重封装（Wasm）向错误原语取：初始化失败时抛出 ErrorBase（MuRemuxerError）
+
+  # 借用框架运行时工具（K7：取结果、无副作用的查询，第六轮 T2 补）
+  - { id: rel.mus.nalu-filter-sei-clock, from: infra.mus.corrector.nalu-filter, to: infra.framework.utils.misc, type: queries, description: NALU 过滤向定时、媒体与 DOM 辅助取：readSeiWallClock 读 SEI 里的墙钟, purpose: 读 SEI 中的墙钟 }
+  - { id: rel.mus.wcs-time, from: infra.mus.decoder.wcs, to: infra.framework.utils, type: queries, description: WebCodecs 解码向通用运行时工具取：Time 取时间戳计解码耗时, purpose: 计解码耗时 }
+  - { id: rel.mus.wcs-platform, from: infra.mus.decoder.wcs, to: infra.framework.utils.env-probe, type: queries, description: WebCodecs 解码向环境与能力探测取：Platform 判平台差异, purpose: 按平台差异处理解码 }
+  - { id: rel.mus.wasm-audio-time, from: infra.mus.decoder.wasm-audio, to: infra.framework.utils, type: queries, description: Wasm 音频解码向通用运行时工具取：Time 取时间戳, purpose: 取时间戳 }
+  - { id: rel.mus.wasm-audio-wasm-loader, from: infra.mus.decoder.wasm-audio, to: infra.framework.utils.worker-wasm, type: queries, description: Wasm 音频解码向 Worker 消息桥与 Wasm 加载取：getWasmLoaderUrl / getWasmFile 取 wasm 加载地址与文件, purpose: 取 wasm 加载地址与文件 }
+  - { id: rel.mus.wasm-audio-url, from: infra.mus.decoder.wasm-audio, to: infra.framework.utils.env-probe, type: queries, description: Wasm 音频解码向环境与能力探测取：Url 拼接 wasm 资源地址, purpose: 拼接 wasm 资源地址 }
+  - { id: rel.mus.wasm-audio-adts, from: infra.mus.decoder.wasm-audio, to: infra.framework.utils.misc, type: queries, description: Wasm 音频解码向定时、媒体与 DOM 辅助取：addADTSHeader 给 AAC 帧补 ADTS 头, purpose: 给 AAC 帧补 ADTS 头 }
+  - { id: rel.mus.fhls-remux-url, from: infra.mus.remuxer.fhls, to: infra.framework.utils.env-probe, type: queries, description: TS 重封装（Wasm）向环境与能力探测取：Url 拼接 wasm 资源地址, purpose: 拼接 wasm 资源地址 }
+  - { id: rel.mus.fhls-remux-wasm-loader, from: infra.mus.remuxer.fhls, to: infra.framework.utils.worker-wasm, type: queries, description: TS 重封装（Wasm）向 Worker 消息桥与 Wasm 加载取：getWasmLoaderUrl / getWasmFile 取 wasm 加载地址与文件, purpose: 取 wasm 加载地址与文件 }
+  - { id: rel.mus.fhls-remux-utils, from: infra.mus.remuxer.fhls, to: infra.framework.utils, type: queries, description: TS 重封装（Wasm）向通用运行时工具取：Time 取时间戳、Generator 生成请求 ID, purpose: 取时间戳并生成请求 ID }
+  - { id: rel.mus.fhls-remux-media, from: infra.mus.remuxer.fhls, to: infra.framework.utils.misc, type: queries, description: TS 重封装（Wasm）向定时、媒体与 DOM 辅助取：addADTSHeader、mergeNaluUnits 拼装音视频数据, purpose: 拼装音视频数据 }
+  - { id: rel.mus.mp4-remux-platform, from: infra.mus.remuxer.mp4, to: infra.framework.utils.env-probe, type: queries, description: fMP4 重封装向环境与能力探测取：Platform 判平台差异, purpose: 按平台差异封装 }
+  - { id: rel.mus.mp4-remux-time, from: infra.mus.remuxer.mp4, to: infra.framework.utils, type: queries, description: fMP4 重封装向通用运行时工具取：Time 取时间戳, purpose: 取时间戳 }
+
+interfaces:
+  - id: if.mus.mu-lifecycle
+    name: MU 基础契约（输入 / 输出 / 动作生命周期）
+    owner: infra.mus
+    implementedBy: [infra.mus.loader, infra.mus.demuxer, infra.mus.corrector, infra.mus.process-plugin, infra.mus.buffer, infra.mus.remuxer, infra.mus.decoder, infra.mus.render]
+    signature: |
+      abstract class MediaUnit<T extends MediaData | undefined, K extends MediaData | undefined> {
+        key: MuKey; nodeId: MuKey; nextMus: MediaUnit[]; previousMus: MediaUnit[];
+        abstract support(type?: MediaPacketType): boolean;
+        input(data: T): void;                       // 状态非 Running 直接丢弃；support 为假则原样 output
+        protected abstract processMediaData(data: T): void;
+        protected output(data: T | K): void;        // for (mu of nextMus) mu.input(data)
+        handleAction(action: Action): MuActionResponse;
+        handleActionAsync(action: Action): Promise<MuActionResponse>;
+        protected doAction(action: Action): ActionResponsePayload;
+        protected doActionAsync(action: Action): Promise<ActionResponsePayload>;
+      }
+    description: 所有 MU 实现的数据面与控制面契约；基类由 infra.framework 提供，本区域每个 MU 族按此实现。
+    semantics: |
+      - 数据面零间接：`output` 直接同步调用每个下游的 `input`，逐帧路径不经 Solution / Plugin / Hook；异步来源（网络、WebCodecs、Worker、wasm 回调）在回调里发起直推。
+      - `input` 先检查本节点状态（按 nodeId），非 Running 时丢弃——用来屏蔽 Stop 后迟到的异步输出。
+      - 生命周期动作：Init → Load → Play →（Pause / Resume）→ Stop → Destroy；Init / Destroy / Load / Play 在同一命令代次内各恰一次（动作账本判重，`reason: 'restart'` 豁免）。Stop 可重启，Destroy 为终态。
+      - 处理与动作中的异常被包装为 MuProcessUnknownError / MuActionUnknownError 抛出；异步回调中的错误经 `handleError` 进错误路由。
+  - id: if.mus.factory.createMu
+    name: createMu
+    owner: infra.mus.factory
+    signature: |
+      muFactory.createMu(context: Context, muConfig: MuConfig): MediaUnit<MediaPacket | undefined, MediaPacket | undefined> | null
+    description: 三段工厂按 MuKey 取得 MU 实例的唯一入口。
+    semantics: |
+      - `muConfig.type === MuType.Plugin` 时返回包装了 `muConfig.plugin` 的插件节点；缺 plugin 抛错。
+      - 同一 MuKey 可能按浏览器能力返回不同实现（VideoFrameRender：MediaStream → WebGL → 2D）。
+      - 未知 MuKey 返回 null；构造期副作用（如 Wasm 视频解码器创建 Worker、画布创建 canvas 元素）在此发生。
+  - id: if.mus.loader.StreamLoader
+    name: StreamLoader
+    owner: infra.mus.loader.stream-reader
+    signature: |
+      interface StreamLoader {
+        start(url: string, onConnected: (time: number) => void,
+              onDataReceived: (data: Uint8Array) => void,
+              onError: (err: ErrorBase) => void,
+              options?: StreamLoaderStartOptions): void;
+        stop(): void;
+        isStreaming: boolean;
+      }
+    description: HTTP 流式读取的抽象，供 FLV / HLS 加载 MU 复用。
+    semantics: |
+      - `stallTimeoutMs` 设置后，自请求起及每收到一块数据起重新计时，超时中止并以 `MuHttpLoaderStreamError`（message 以 `stream stalled` 开头）报一次失败。
+      - `stop()` 中止当前请求；中止后不再回调数据。
+  - id: if.mus.loader.load-actions
+    name: 加载动作
+    owner: infra.mus.loader
+    signature: |
+      // 经 Action 下发给加载 MU
+      ActionKey.LoadStreamInfo  // MP4：拉 moov；HLS：拉主 / 媒体清单（payload: LoadActionPayload）
+      ActionKey.LoadData        // FLV：开流；HLS：拉下一片；MP4：拉字节区间（payload: LoadMp4FragmentActionPayload）
+      ActionKey.UpdatePlaylist  // HLS 直播：刷新清单（fire-and-forget）
+      ActionKey.CancelLoad      // 取消在途下载（HLS 录像腿保留下载以便接续）
+      ActionKey.Stop | ActionKey.Destroy
+    description: 加载策略驱动加载 MU 的控制面接口；加载 MU 自身不决定节奏。
+    semantics: |
+      - Stop 后可再次 LoadData；Destroy 之后迟到的请求结果全部丢弃。
+      - 直播 HLS 分片 / 清单连续失败 3 次才以原始错误码上报；清单刷新单次失败按可恢复错误上报。
+  - id: if.mus.buffer.release-actions
+    name: 缓冲出队与阀门动作
+    owner: infra.mus.buffer
+    signature: |
+      ActionKey.SendAllBuffer          // DemuxedBuffer：整批出队（关阀时不下推）
+      ActionKey.SendBuffer             // ProcessedBuffer / DecodedBuffer：按 payload 定量出队
+      ActionKey.Hold | ActionKey.Release                      // DemuxedBuffer 段尾阀门
+      ActionKey.HoldFromNextKeyframe | ActionKey.ReleaseHold  // ProcessedBuffer 截流
+      ActionKey.DropBuffer             // payload: DropBufferActionPayload（原因、区间）
+      ActionKey.DropAllBuffer | ActionKey.StopFillBuffer | ActionKey.ContentDiscontinuity  // Fhls 族另有 CancelPendingDrop / ReinstallPresentation
+    description: 运行时驾驶策略与换腿事务控制缓冲出队的接口；出队后的数据仍以 output 直推下游。
+    semantics: |
+      - 关阀期间数据按到达序保留，超过保留跨度（点播停拉线）从队头裁剪并记 `heldQueueTrimmed`，放阀前需向下游发 ContentDiscontinuity{source:'pause-hold-trimmed'}。
+      - 截流状态 off → armed（等关键帧）→ holding（边界关键帧及其后视频帧留队，比较基准为边界帧 dts；音频按 pts 跟随）。
+      - 每次入队 / 出队 / 丢弃都发 BufferChange。
+  - id: if.mus.remuxer.mp4.actions
+    name: fMP4 重封装动作
+    owner: infra.mus.remuxer.mp4
+    signature: |
+      ActionKey.Reset                 // 清空重封装状态，下一批重新生成 init segment
+      ActionKey.ContentDiscontinuity  // payload: ContentDiscontinuityActionPayload { source }
+      ActionKey.Stop | ActionKey.Destroy
+    description: 换腿 / seek / 内容跳变时复位 fMP4 重封装器。
+    semantics: |
+      - `source: 'pause-hold-trimmed'` 只武装视频空洞接续，不清轨；其他来源丢弃累计轨里尚未写出的旧内容样本。
+  - id: if.mus.render.display-actions
+    name: 呈现动作
+    owner: infra.mus.render
+    signature: |
+      ActionKey.Attach (AttachActionPayload) | ActionKey.Detach
+      ActionKey.Play | ActionKey.Pause | ActionKey.Resume | ActionKey.Active
+      ActionKey.SetVolume (SetVolumePayload) | ActionKey.SetPlaybackRate (SetPlaybackRatePayload)
+      ActionKey.Capture (CaptureActionPayload) → Promise<截图数据>   // 走 doActionAsync
+      ActionKey.ClearScreen | ActionKey.ToggleFullscreen
+      ActionKey.FillBuffer | ActionKey.StopFillBuffer
+    description: 各渲染 MU 对齐的一组呈现动作（video 元素、画布、MediaStream、Vcs、音频按需实现子集）。
+    semantics: |
+      - Attach 幂等：已在目标容器中的元素不再移动节点。
+      - 未 attach 的播放器初始音量为 0；自动播放被拒时降级静音，首次用户激活后恢复。
+      - Capture 是唯一必须异步的动作。
+  - id: if.mus.render.mse.actions
+    name: MSE 渲染动作
+    owner: infra.mus.render.mse
+    signature: |
+      ActionKey.SetAppendGate (SetAppendGateActionPayload { enabled, limitMs })
+      ActionKey.RemoveRange   (RemoveRangeActionPayload)
+      ActionKey.SetDuration   (SetDurationActionPayload)
+      ActionKey.EndOfStream
+      ActionKey.Seek          (SeekPayload：绝对媒体时间)
+      ActionKey.DropAllBuffer | ActionKey.FillBuffer | ActionKey.StopFillBuffer
+      ActionKey.ContentDiscontinuity
+    description: 直播 / 点播 MSE 策略下发给唯一 MSE 渲染实现的执行接口。
+    semantics: |
+      - 渲染只执行，不读 PlayerStatus；写入闸判据由策略配置，渲染在 append 前询问。
+      - seek 完成发内部事件 VideoSeeked{currentTime}（秒），不直接发 VideoRendered；SourceBuffer updateend 发 SourceBufferUpdated。
+  - id: if.mus.render.mse.decisions
+    name: MSE 缓冲纯决策函数
+    owner: infra.mus.render.mse
+    signature: |
+      computeBufferDuration(input: { currentTimeMs; latestVideoPts; latestAudioPts; ranges }): number
+      decideBufferGapTarget(ranges, currentTime: number, tolerance: number): number | undefined
+      decideChasingFrameTarget(input: { ranges; currentTime; offset; frameDuration; bufferDuration }):
+        { kind: 'align' | 'chase' | 'none'; seekTo?: number }
+      decidePlayedDataRemoveEnd(input: { currentTime; lastRemoveTime; gopDuration }): number | undefined
+      decideExpiredBufferRemovals(input: { ranges; currentTime; removeEnd; preloadTime; bufferBehind; clearAll? }): …
+      decideInitialSeekTarget(…) // 首帧对齐
+    description: 从 MSE 渲染中提纯的无副作用决策，被 app 层 MSE 直播 / 点播策略与 HLS 加载策略直接 import。
+    semantics: 纯函数，无 I/O；时间单位按各函数参数约定（秒或毫秒）。属于「Domain 候选」：未来可下沉到 domain.services / domain.algorithms。
+  - id: if.mus.render.keep-last-frame.createVideoElementPool
+    name: 元素池 / 备用元素构造
+    owner: infra.mus.render.keep-last-frame
+    signature: |
+      createVideoElementPool(options?: VideoElementPoolOptions, env?: VideoElementPoolEnv): VideoElementPool  // implements VideoElementPoolPort
+      createVideoElementReserve(hasPool: boolean): VideoElementReserve | undefined                        // implements VideoElementReservePort
+      shouldRetainOnStop(facts: RetainFacts): boolean
+    description: 组合根创建跨渲染代际存活的 video 元素资源，经 Context 端口注入渲染 MU。
+    semantics: |
+      - 有元素池时不创建备用元素（`createVideoElementReserve(true)` 返回 undefined）。
+      - 元素池交接：新元素出帧后叠放到旧元素上方，再出一帧后撤旧元素并执行其释放函数；待命位为屏外 fixed（不用 visibility:hidden）。
+  - id: if.mus.decoder.wasm-video.worker-protocol
+    name: Wasm 视频解码 Worker 消息
+    owner: infra.mus.decoder.wasm-video
+    signature: |
+      // 主线程 → Worker：metadata（解码器配置）、data（视频帧）、reset / destroy
+      // Worker → 主线程：
+      'output'   (data: DecodedVideoData & { decodeInfo?: { startTime; frameType; dts; cost } })
+      'error'    (e: { fatal?: boolean; reason?; message?; dts?; pts?; frameType?; size? })
+      'metadata' (spsppsHash?: string)
+    description: MuWasmVideoDecoder 与 Worker 内 WasmVideoDecodeTask 之间经 WorkerMessageBridge 的消息约定。
+    semantics: |
+      - `output` 无 data 表示该帧未产出画面，主线程仍需结束在途计数。
+      - `error.fatal` 表示 wasm trap：60s 滑动窗口内最多重建 Worker 3 次，重建后补发 metadata。
+
+dataStructures:
+  - id: ds.MediaInfo
+    name: MediaInfo
+    definition: |
+      class MediaInfo {
+        mimeType?: string; duration?: number;
+        hasAudio?: boolean; hasVideo?: boolean;
+        audioCodec?: string; videoCodec?: string;
+        audioSampleRate?: number; audioChannelCount?: number;
+        width?: number; height?: number; fps?: number;
+        profile?: string; level?: string; refFrames?: number; chromaFormat?: string;
+        sarNum?: number; sarDen?: number;
+        metadata?: Record<string, string | number | boolean>;
+        hasKeyframesIndex?: boolean;
+        keyframesIndex?: { times: number[]; filepositions: number[] };
+        isComplete(): boolean; isSeekable(): boolean;
+        getNearestKeyframe(ms: number): { index; milliseconds; fileposition } | null;
+      }
+    description: FLV 解封装从 onMetaData 与轨道配置汇总的媒体信息。
+    invariants: isComplete() 要求 mimeType / duration / metadata / hasKeyframesIndex 已知，且有音频时音频参数齐、有视频时视频参数齐。
+  - id: ds.ProbeData
+    name: ProbeData
+    definition: |
+      interface ProbeData {
+        match: boolean;
+        consumed?: number; dataOffset?: number;
+        hasAudioTrack?: boolean; hasVideoTrack?: boolean;
+      }
+    description: FLV 首包 header 探测结果，决定解析器的音视频轨开关与数据起始偏移。
+  - id: ds.PmtResult
+    name: PmtResult
+    definition: |
+      interface PmtResult {
+        audioPid: number; videoPid: number;
+        segmentVideoCodec: 'avc' | 'hevc';
+        segmentAudioCodec: 'aac' | 'ac3' | 'mp3';
+      }
+    description: TS 解析 PMT 得到的音视频 PID 与编码；轨道集合需看到第二张完整 PMT 才视为稳定。
+  - id: ds.PtsCorrectionPlan
+    name: PtsCorrectionPlan
+    definition: |
+      interface PtsCorrectionPlan {
+        batchSize: number;            // 0 表示条件不满足、本次不成批
+        breakWithKeyframe: boolean;   // 本批是否因遇到下一个关键帧而收批
+        corrections: { index: number; pts: number; cts: number }[];
+      }
+      // 时间戳基线来自入参 lastKeyframeInfo: { pts; dts; cts; poc }
+    description: ptsOrderRules.planPtsCorrection 决出的一个校正批次（按 POC 序重分配 DTS 增量后的 pts / cts）。
+    invariants: 纯函数产出，不修改入参；corrections 顺序不作契约，调用方按 index 取值。
+  - id: ds.StreamLoaderStartOptions
+    name: StreamLoaderStartOptions
+    definition: |
+      interface StreamLoaderStartOptions {
+        stallTimeoutMs?: number;  // 下载停滞超时；不设 = 永不超时
+      }
+    description: StreamLoader.start 的可选参数。
+  - id: ds.InitSegment
+    name: InitSegment
+    definition: |
+      type InitSegment = Omit<Mp4RemuxedMetadata, 'type'>;  // { mediaType; data: Uint8Array(ftyp+moov); codec; container; … }
+    description: fMP4 初始化分片（ftyp + moov），MSE 建 SourceBuffer 与重配时使用。
+  - id: ds.MediaSegment
+    name: MediaSegment
+    definition: |
+      type MediaSegment = Omit<Mp4RemuxedData, 'type'>;  // { mediaType; data: Uint8Array(moof+mdat); info: MediaSegmentInfo; … }
+    description: fMP4 媒体分片（moof + mdat）。
+  - id: ds.Mp4VideoSample
+    name: Mp4VideoSample
+    definition: |
+      interface Mp4VideoSample extends Mp4SampleBase {
+        units?: AVCUnit[];
+        isKeyframe: boolean; frameType: FrameType;
+        generationTime: number;
+        flags?: { isLeading; dependsOn; isDependedOn; hasRedundancy; isNonSync };
+        poc: number; spsppsHash: string | undefined; nalRefIdc: number; index: number;
+      }
+    description: 进入 fMP4 重封装的视频样本（trun 样本标志由此生成）。
+  - id: ds.SampleInfo
+    name: SampleInfo
+    definition: |
+      class SampleInfo implements Mp4MediaSampleInfo {
+        dts: number; pts: number; duration: number;
+        originalDts: number; isSyncPoint: boolean; filePosition: number | null;
+      }
+    description: 已写出样本的时间信息（重封装后时间轴与原始 dts 并存）。
+  - id: ds.MediaSegmentInfo
+    name: MediaSegmentInfo
+    definition: |
+      class MediaSegmentInfo implements Mp4RemuxedDataInfo {
+        beginDts: number; endDts: number; beginPts: number; endPts: number;
+        originalBeginDts: number; originalEndDts: number;
+        syncPoints: SampleInfo[];  // 仅视频 IDR
+        firstSample: SampleInfo | null; lastSample: SampleInfo | null;
+      }
+    description: 一个 fMP4 媒体分片的时间范围与随机访问点，随 Mp4RemuxedData 下发给渲染。
+  - id: ds.RetainFacts
+    name: RetainFacts
+    definition: |
+      interface RetainFacts {
+        enabled: boolean;      // 有元素池且元素归本 MU
+        suppressed: boolean;   // 销毁 / 清屏路径内部的 stop
+        onScreen: boolean; hasFrame: boolean; fullscreen: boolean;
+        unsupported: boolean;  // 如 Video 方案的 rAF 代理
+      }
+    description: Stop 当刻是否保留 video 元素（保留最后一帧）的结构化事实。
+    invariants: shouldRetainOnStop 仅当 enabled ∧ ¬suppressed ∧ onScreen ∧ hasFrame ∧ ¬fullscreen ∧ ¬unsupported 时为真。
+  - id: ds.VcsModel
+    name: VcsModel
+    definition: |
+      class VcsModel extends ModelBase {
+        readonly frameBufferModel: FrameBufferLedger;
+        metadata?: Mp4RemuxedMetadata;
+        appendRemuxedData(data: Mp4RemuxedData): void;
+        get bufferSize(): number;
+        reset(): void; onDestory(): void;
+        // … 当前片位置、分片槽链表、渲染时间轴（RenderTimeline）
+      }
+    description: Vcs 方案的播放模型，由组合根注册进 ModelRegistry（kind = play），供 Vcs 渲染与直播 Vcs 策略读写。
+    invariants: 读面 getter 不得调用实例方法（ModelRegistry 对方法装了快照影子，否则会递归）。
+  - id: ds.FragmentModel
+    name: FragmentModel
+    definition: |
+      class FragmentModel {
+        index: number; status: FPlayerStatus; canLoad: boolean;
+        duration: number; dataDuration: number; playStartDts: number; playbackRate: number;
+        videoPtsToIndexMap: Map<number, number[]>; ptsBaseline?: number;
+        recordPlaybackState(state: { currentTimeMs: number; durationMs: number }): void;
+        // … 前后分片指针（3 个分片槽组成环）
+      }
+    description: Vcs 渲染中单个分片槽（绑定一个 video 元素）的状态；由 View 采样 video 元素后写入播放读数，自身不持有 DOM 句柄。

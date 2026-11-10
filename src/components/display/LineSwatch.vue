@@ -1,0 +1,118 @@
+<script setup lang="ts">
+/**
+ * 图例的示意线：按 look（关系类型、事实状态、线宽档、临时线种类）取与画布 RouteEdge 同一套样式（edgeStyle），不手写示意样式。
+ * 可加箭头（同步实心 / 异步空心，与画布同一个 ArrowMarker，线同样回缩一个箭头深度；依赖类的线换成与画布同一个 UmlMarker 的依赖端点，组装另有起点菱形）、
+ * 插座记号（L12，同一个 SocketMarker）、违规红晕、回放流动、×N 标签与异常标记。
+ */
+import { computed, useId } from 'vue'
+import { FLOW, arrowDepth, arrowSize, isDependencyLine, strokeColor, strokeStyle, type ArrowKind, type CoupleLook } from '../edges/edgeStyle'
+import { depEnds, umlDepth } from '../edges/depStyle'
+import { wavyPath } from '../edges/routePath'
+import ArrowMarker from '../edges/ArrowMarker.vue'
+import SocketMarker from '../edges/SocketMarker.vue'
+import UmlMarker from '../edges/UmlMarker.vue'
+
+const props = withDefaults(
+  defineProps<{
+    look?: CoupleLook
+    /** 覆盖线色：不表示某种类型的通道说明用中性色 */
+    color?: string
+    width?: number
+    arrow?: ArrowKind
+    /** 违规红晕 */
+    halo?: boolean
+    /** 回放当前步骤的流动 */
+    flow?: boolean
+    /** ×N 标签框 */
+    pill?: boolean
+    /** 线尾的异常标记，如 ? */
+    mark?: string
+    /** L12：经端口的插座记号（与箭头叠放） */
+    socket?: boolean
+  }>(),
+  { look: () => ({}), color: undefined, width: 28, arrow: undefined, mark: undefined },
+)
+
+const style = computed(() => ({ ...strokeStyle(props.look), ...(props.color ? { stroke: props.color } : {}) }))
+const stroke = computed(() => props.color ?? strokeColor(props.look))
+// <script setup> 每个实例都会重跑，模块级计数器在这里不唯一；用 useId 保证每条示意引用自己的箭头
+const markerId = `swatch-arrow-${useId()}`
+const socketId = `${markerId}-socket`
+const size = computed(() => arrowSize(props.look.weight))
+/** L18：依赖类的线（代码依赖叠加线、组装叠加、承载缺段）带箭头时用依赖的端点记号，与画布 RouteEdge 一致 */
+const dep = computed(() => (props.arrow && isDependencyLine(props.look) ? depEnds(props.look.temp === 'assembly' ? 'assembly' : 'use') : null))
+const startId = `${markerId}-start`
+/** 线的终点：给箭头、标签或标记留位置；有箭头时再回缩一个箭头深度，箭头尖落在 tip */
+const tip = computed(() => props.width - 1 - (props.pill ? 10 : 0) - (props.mark ? 7 : 0))
+const end = computed(() => tip.value - (dep.value ? umlDepth(dep.value.end, size.value) : props.arrow ? arrowDepth(size.value) : 0))
+const begin = computed(() => 1 + (dep.value?.start ? umlDepth(dep.value.start, size.value) : 0))
+/** J5：耦合线的示意是波浪线 */
+const wavy = computed(() => (props.look.temp === 'couple' ? wavyPath({ x: 1, y: 5 }, { x: end.value, y: 5 }, 2.5, 8) : null))
+</script>
+
+<template>
+  <svg class="swatch" :width="width" height="10" :viewBox="`0 0 ${width} 10`">
+    <defs v-if="arrow || socket">
+      <UmlMarker v-if="dep" :id="markerId" :end="dep.end" :color="stroke" :size="size" :line-width="style.strokeWidth" />
+      <UmlMarker v-if="dep?.start" :id="startId" :end="dep.start" :color="stroke" :size="size" :line-width="style.strokeWidth" start />
+      <ArrowMarker v-else-if="arrow && !dep" :id="markerId" :kind="arrow" :color="stroke" :size="size" :line-width="style.strokeWidth" />
+      <SocketMarker v-if="socket" :id="socketId" :color="stroke" :size="size" />
+    </defs>
+    <line v-if="halo" x1="1" y1="5" :x2="end" y2="5" stroke="var(--danger)" stroke-width="7" stroke-opacity="0.3" stroke-linecap="round" />
+    <template v-if="flow">
+      <line x1="1" y1="5" :x2="end" y2="5" stroke="var(--accent)" :stroke-width="FLOW.baseWidth" stroke-linecap="round" />
+      <line
+        class="flow"
+        x1="1"
+        y1="5"
+        :x2="end"
+        y2="5"
+        stroke="var(--surface)"
+        :stroke-width="FLOW.width"
+        :stroke-dasharray="FLOW.dash"
+        stroke-linecap="round"
+      />
+    </template>
+    <path v-else-if="wavy" :d="wavy" fill="none" :stroke="style.stroke" :stroke-width="style.strokeWidth" stroke-linecap="round" stroke-linejoin="round" />
+    <line
+      v-else
+      :x1="begin"
+      y1="5"
+      :x2="end"
+      y2="5"
+      :stroke="style.stroke"
+      :stroke-width="style.strokeWidth"
+      :stroke-dasharray="style.strokeDasharray"
+      :opacity="style.opacity"
+      :stroke-linecap="'strokeLinecap' in style ? style.strokeLinecap : undefined"
+      :marker-end="arrow ? `url(#${markerId})` : undefined"
+      :marker-start="dep?.start ? `url(#${startId})` : undefined"
+    />
+    <line v-if="socket" x1="1" y1="5" :x2="tip" y2="5" stroke="none" :opacity="style.opacity" :marker-end="`url(#${socketId})`" />
+    <rect v-if="pill" :x="width - 10.5" y="1" width="10" height="8" rx="4" fill="var(--surface)" stroke="var(--border-strong)" />
+    <text v-if="mark" :x="width - 6" y="9" class="mark">{{ mark }}</text>
+  </svg>
+</template>
+
+<style scoped>
+.swatch {
+  flex: none;
+  overflow: visible;
+}
+
+.mark {
+  font-size: 10px;
+  font-weight: 700;
+  fill: var(--warning);
+}
+
+.flow {
+  animation: flow 0.9s linear infinite;
+}
+
+@keyframes flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+</style>

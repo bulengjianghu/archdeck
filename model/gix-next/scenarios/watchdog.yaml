@@ -1,0 +1,51 @@
+# 取自 kernel/src/scheduler.ts（pg-boss stately 队列）、watchdog.ts（tick 的九步）、liveness.ts（ensureNextWakeup）、services/executions.ts（killTx）。
+scenario:
+  id: sc.watchdog
+  name: 看门狗兜底：到点唤醒与停滞判定
+  kind: exception
+  description: |
+    活性兜底：每个任务始终有下次唤醒。pg-boss 每轮（默认 15 秒）触发 tick，按序做：心跳超时的 runner 标离线、清扫过期租约、到期卡按建议处理（放行卡除外）、
+    按吞吐判执行停滞或总超时并下发 session.kill、适配器调用过内核截止即结算为超时、没有 runner 能接的任务包发卡、外部状态轮询、到点唤醒（已有统筹者在跑则跳过）、
+    补齐缺失唤醒。一步出错不影响其他步骤，下一轮再来。正在同步等适配器结果的执行不按无进展判。
+  cause: pg-boss 到点触发一轮看门狗
+  evidence:
+    - packages/kernel/test/liveness.test.ts
+    - packages/kernel/test/p0-liveness.test.ts
+    - packages/kernel/test/p3-card-wait.test.ts
+    - packages/kernel/test/leases.test.ts
+  steps:
+    - async: {id: tick, from: actor.time, to: kernel.liveness.scheduler, label: pg-boss 队列到点}
+    - async: {from: kernel.liveness.scheduler, to: kernel.liveness.watchdog, label: tick()，处理完再排下一轮}
+    - call: {from: kernel.liveness.watchdog, to: kernel.dispatch.jobs, label: staleRunners → markOffline（见 runner 掉线）}
+    - call: {from: kernel.liveness.watchdog, to: kernel.dispatch.leases, label: sweepExpired：清扫过期租约、唤醒排队者}
+    - call: {id: cards, from: kernel.liveness.watchdog, to: kernel.tasks.cards, label: expireDue：到期卡按建议处理}
+    - call: {id: stall, from: kernel.liveness.watchdog, to: kernel.ledger.ledger, label: 查运行中执行的最后进展、总时长与同步等待记录}
+    - alt:
+        - when: 停滞（无进展超过 max(执行自己的 idleTimeoutSec, executionIdleSec)）或超总超时
+          steps:
+            - call: {id: stalled, from: kernel.liveness.watchdog, to: kernel.ledger.ledger, label: watchdog.stalled}
+            - call: {from: kernel.liveness.watchdog, to: kernel.orchestration.executions, label: killTx → session.kill 任务包（发回原 runner）}
+            - async: {from: kernel.orchestration.executions, to: kernel.dispatch.jobs, label: 入 session.kill}
+            - async: {from: server.hub.push, to: client.channel.runner, relation: rel.server.hub-jobs-ws, label: session.kill}
+            - call: {from: client.channel.runner, to: client.channel.executor, label: execute(session.kill)}
+            - async: {from: client.channel.executor, to: adapters.ai.executor, label: RunningSession.kill}
+            - async: {from: adapters.ai.executor, to: share.proc, label: 杀整棵进程树}
+            - async: {from: client.channel.runner, to: server.http.runner-routes, relation: rel.client.report-ws, label: session.finished(killed)}
+            - async: {from: server.http.runner-routes, to: kernel.dispatch.jobs, relation: rel.server.runner-job-update, label: update}
+            - async: {from: kernel.dispatch.jobs, to: kernel.ledger.ledger, label: execution.finished(killed)（久不回报时看门狗补记）}
+        - when: 有进展，或正在同步等适配器结果
+          steps: []
+    - call: {id: calls, from: kernel.liveness.watchdog, to: kernel.ledger.ledger, label: '适配器调用过 timeoutSec+300s 未在跑 → adapter.completed(ok=false, 内核截止)'}
+    - call: {id: no-runner, from: kernel.liveness.watchdog, to: kernel.tasks.cards, label: 任务包久无人能接 → 裁决卡「没有在线的 runner 能接这个任务」}
+    - call: {from: kernel.liveness.watchdog, to: kernel.dispatch.external, label: pollAll：外部状态轮询（见放行卡与合入门）}
+    - call: {from: kernel.liveness.watchdog, to: kernel.ledger.ledger, label: 到点的唤醒 → wakeup.fired}
+    - call: {id: wake, from: kernel.liveness.watchdog, to: kernel.orchestration.launcher, label: 'wake(taskId, cause)'}
+    - alt:
+        - when: 已有统筹者在跑，或只是兜底唤醒而任务在等人答卡
+          steps:
+            - return: {from: kernel.orchestration.launcher, to: kernel.liveness.watchdog, label: 跳过（唤醒照记、再排下一次兜底）}
+        - when: 否则
+          steps:
+            - ref: sc.orchestrator-wake
+    - call: {id: repair, from: kernel.liveness.watchdog, to: kernel.ledger.ledger, label: repairMissingWakeups：补齐缺失唤醒}
+    - async: {from: kernel.ledger.ledger, to: kernel.liveness.wakeups, label: 写账事务收尾 ensureNextWakeup：没有待触发唤醒的非终态任务补 liveness.idle}

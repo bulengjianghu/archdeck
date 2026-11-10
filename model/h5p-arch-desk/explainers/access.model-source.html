@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 f556006a8186c23a access.model-source#abstraction=b66f31c2 access.model-source#invariants=16797a02 access.model-source#responsibility=6fc319a0 access.model-source#summary=9c7ec10e">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ModelSource 插件 · 邮政窗口</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
+</style>
+  </head>
+  <body>
+
+    <h1>开发服务器里的邮政窗口</h1>
+    <p class="lede"><span data-arch="access.model-source">ModelSource 插件</span>让页面不必打包描述：要什么，就到同源端点去取。</p>
+
+    <h2>取与推</h2>
+    <figure>
+      <svg viewBox="0 0 480 266" role="img" aria-label="ModelSource 插件：开发服务器里的同源端点，页面按需取；存盘后按项目推送变化">
+        <defs><marker id="a3P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a3S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a3A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a3M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a3g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a3l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="140" y="6" width="200" height="44" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="240.0" y="25.1" font-size="12.5" text-anchor="middle">页面</text><text x="240.0" y="39.6" font-size="10.5" text-anchor="middle" class="muted">按需取，收到推送就重载</text>
+        <g data-arch="access.model-source"><rect x="100" y="96" width="280" height="60" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="240.0" y="123.5" font-size="13.5" text-anchor="middle" font-weight="600">ModelSource 插件</text><text x="240.0" y="138.0" font-size="10.5" text-anchor="middle" class="muted">开发服务器里的同源端点</text></g>
+        <path d="M200,50 L200,94" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a3g)"/>
+        <path d="M280,94 L280,52" stroke="var(--ok)" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#a3A)"/>
+        <text x="194" y="76" font-size="10.5" text-anchor="end" class="muted">取</text>
+        <text x="288" y="76" font-size="10.5" text-anchor="start" style="fill:var(--ok)">推送（按项目）</text>
+        <rect x="6" y="176" width="110" height="28" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="61.0" y="193.8" font-size="11" text-anchor="middle">项目清单 + 体检</text>
+        <rect x="124" y="176" width="110" height="28" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="179.0" y="193.8" font-size="11" text-anchor="middle">描述</text>
+        <rect x="242" y="176" width="110" height="28" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="297.0" y="193.8" font-size="11" text-anchor="middle">源码</text>
+        <rect x="360" y="176" width="110" height="28" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="415.0" y="193.8" font-size="11" text-anchor="middle">历史</text>
+        <line x1="6" y1="168" x2="474" y2="168" stroke="var(--line)" stroke-width="1"/>
+        <line x1="240" y1="156" x2="240" y2="168" stroke="var(--line)" stroke-width="1"/>
+        <path d="M240,232 L240,206" stroke="var(--text-2)" stroke-width="1.2" fill="none" stroke-dasharray="5 4" marker-end="url(#a3g)"/>
+        <rect x="140" y="232" width="200" height="30" rx="8" fill="var(--soft)" stroke="var(--line)" stroke-dasharray="5 4"/><text x="240.0" y="251.0" font-size="11.5" text-anchor="middle">磁盘：存盘即触发</text>
+      </svg>
+      <figcaption>页面按需取项目清单、描述、源码与历史，清单里附带体检结果。文件一存盘，插件就按项目推送变化，页面只重载那一个项目。纯静态托管的在线 demo 不走这个窗口：构建期由 scripts/build-demo.ts 把同一批读取函数的载荷预渲染成 JSON，页面以只读模式取静态文件。</figcaption>
+    </figure>
+
+  </body>
+</html>

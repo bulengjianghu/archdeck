@@ -1,0 +1,15 @@
+{
+  "steps": [
+    { "text": "按意见重新生成题解……" },
+    {
+      "block": {
+        "kind": "renarrate",
+        "module": "{{anchor.module}}",
+        "notes": ["机制图的箭头从调用方指向被调方"],
+        "html": "{{explainer.html}}"
+      },
+      "replace": [["</h1>", "</h1><p data-testid=\"renarrated\">（已按讲法要求重讲）</p>"]]
+    },
+    { "done": true }
+  ]
+}

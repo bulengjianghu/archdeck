@@ -1,0 +1,14 @@
+{
+  "steps": [
+    {
+      "block": {
+        "kind": "edit",
+        "summary": "新增「运行派生」（没指定层）",
+        "ops": [
+          { "op": "edit", "sketch": "{{sketch.mount}}", "edit": { "op": "addModule", "parent": "{{sketch.mount}}", "name": "运行派生", "id": "run-derive" } }
+        ]
+      }
+    },
+    { "done": true }
+  ]
+}

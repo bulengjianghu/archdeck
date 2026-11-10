@@ -1,0 +1,206 @@
+# 区域：宿主与演示（apps/web-player-demo/ui，原生 JS 模块，无构建）
+# 第二级模块（host.demo / host.demo-config / host.demo-diag）由骨架定义，此处只往下挂子模块。
+# 页面的 Worker 脚本（/bundle/player-worker.js）由演示服务从 media-test/probes/web-player/worker-bundle.mjs 打包，不在本描述范围内。
+
+modules:
+  - id: host
+    name: 宿主与演示
+    summary: 演示并验证 SDK 的完整接入：选族、发命令、画状态
+  # 第二级模块的原则（补充条目，ADR-0042；名称与骨架一致）
+  - { id: host.demo, name: 演示页与布局, abstraction: 控制器是页面唯一协调者，只把输入转成 SDK 命令、页面状态只取事件与快照；共用件与骨架不碰 SDK。, summary: 把观看者的操作变成播放，并如实显示播放状态, invariants: [只有控制器导入 SDK 并创建播放器，共用件与布局不导入 SDK, 演示页只经 SDK 与两个族的包入口接入，不导入内核或管线内部文件] }
+  - { id: host.demo-config, name: 配置、测试流与接入代码, abstraction: 把纯值变换与页面分开：配置与接入示例都只吃传入的值、不碰页面元素，示例只从生效配置生成。, summary: 把表单与测试流变成生效配置与可复制的接入代码 }
+  - { id: host.demo-diag, name: 诊断与故障注入, abstraction: 按只读观察与只改地址分开：诊断只读事件与快照，故障注入只经代理改写交给 SDK 的地址，当前会话由控制器注入。, summary: 呈现播放诊断，并按会话注入网络故障 }
+
+  # ───────────────────────── host.demo ─────────────────────────
+  - id: host.demo.app
+    parent: host.demo
+    name: 演示页控制器
+    summary: 协调演示页：把输入变成 SDK 命令，按事件更新页面
+    kind: component
+    responsibility: >-
+      页面的唯一协调者：首次播放时 createPlayer 并注入自建时钟族（含 Worker）与元素族；表单 → 生效配置 → open；控制条、进度条、
+      直播 / 时移 / 墙钟跳转、音量、截图、时移列表都转成 SDK 命令并记进命令日志；订阅 player.events，页面状态只来自事件与快照，
+      时长类读数用事件自带的 timestampMs 相减；声音被拦时在手势内 resumeAudio。
+    principle: |
+      - 页面状态是 SDK 的投影：不另记播放状态，渲染时读 player.snapshot；每个会话一份摘要（SESSIONS）供诊断。
+      - 故障注入只改交给 SDK 的地址（viaProxy），表单、分享链接与接入示例都用原地址。
+    codeRefs: [apps/web-player-demo/ui/main.js]
+  - id: host.demo.page-kit
+    parent: host.demo
+    name: 页面共用件
+    summary: 给演示页各块取元素、写 HTML、转义与格式化
+    kind: component
+    responsibility: 演示页各模块共用的 DOM 小件：取元素、按需写入 HTML（相同内容不重写）、正文转义、时刻格式、页面所在的源（测试源与页面同源）。
+    codeRefs: [apps/web-player-demo/ui/page.js]
+  - id: host.demo.layout
+    parent: host.demo
+    name: 页面骨架与布局
+    summary: 给出页面骨架与样式，修补滚动与吸顶布局
+    kind: component
+    responsibility: 页面 HTML 骨架与样式；布局补丁（右栏宽度、吸顶吸底高度、Safari 滚动锚定、焦点补滚、「更多」菜单补滚），导入即生效。
+    codeRefs: [apps/web-player-demo/ui/index.html, apps/web-player-demo/ui/layout.js, apps/web-player-demo/ui/styles.css]
+
+  # ───────────────────────── host.demo-config ─────────────────────────
+  - id: host.demo-config.config
+    parent: host.demo-config
+    name: 播放配置
+    summary: 把表单校验成生效配置，生成分享链接并脱敏
+    kind: component
+    responsibility: 测试流表与表单草稿 → 校验 → 生效配置，分享链接的生成与读取，地址与诊断数据脱敏；密钥只在表单（内存）与 open 参数里出现。只依赖传入的值。
+    codeRefs: [apps/web-player-demo/ui/config.js]
+  - id: host.demo-config.code-gen
+    parent: host.demo-config
+    name: 接入示例生成
+    summary: 按生效配置生成可直接照抄的接入示例
+    kind: component
+    responsibility: 按生效配置生成照 SDK.md「快速开始」写法的 main.js 与 index.html（主线程、不需要 Worker 脚本），密钥留空标 TODO、本地测试地址换成 your-host；代码高亮。
+    codeRefs: [apps/web-player-demo/ui/code.js]
+
+  # ───────────────────────── host.demo-diag ─────────────────────────
+  - id: host.demo-diag.diag
+    parent: host.demo-diag
+    name: 播放诊断
+    summary: 展示事件、指标与会话，帮人看懂播放过程
+    kind: component
+    responsibility: 事件表与事件页、指标（缓冲、延迟、帧、网络）、会话页；只读 SDK 事件与快照，当前会话等页面状态由控制器经 initDiag 注入。
+    codeRefs: [apps/web-player-demo/ui/diag.js]
+  - id: host.demo-diag.faults
+    parent: host.demo-diag
+    name: 故障注入
+    summary: 按会话给本页注入断流、慢速等网络故障
+    kind: component
+    responsibility: 右栏「故障」分段：本页一个故障代理会话（会话号只在内存），按会话注入断流、慢速、404 等网络故障，只影响本页；交给 SDK 的地址经 viaProxy 改写。
+    codeRefs: [apps/web-player-demo/ui/faults.js]
+
+relations:
+  # 宿主 → SDK
+  - id: rel.host.create-player
+    from: host.demo.app
+    to: kit.facade.player-api
+    type: commands
+    mode: async
+    interface: if.kit.facade.createPlayer
+    purpose: 首次播放时得到播放器
+    payload: ds.PlayerOptions
+    description: 首次播放时以容器与两个管线族创建播放器（createPlayer）。
+  - id: rel.host.player-commands
+    from: host.demo.app
+    to: kit.facade.player-api
+    type: commands
+    mode: async
+    interface: if.kit.facade.Player
+    purpose: 把观看者的操作交给 SDK 执行
+    description: 控制器把按钮与表单转成 SDK 命令：open / play / pause / seek / seekToLive / seekToWallClock / setTimeshift / stop / clearLastFrame / setVolume / setMuted / screenshot，按结果记命令日志。
+  - id: rel.host.resume-audio
+    from: host.demo.app
+    to: kit.facade.player-api
+    type: commands
+    mode: async
+    interface: if.kit.facade.resumeAudio
+    purpose: 在手势内恢复被拦的声音
+    description: 声音被拦或用户点击时在手势内放声（resumeAudio）。
+  - id: rel.host.self-clocked-family
+    from: host.demo.app
+    to: providers.self-clocked.family
+    type: queries
+    interface: if.providers.self-clocked.wasmPipelines
+    purpose: 取自建时钟族注入播放器
+    description: 控制器以模块胶水、wasm 地址与 Worker 工厂取自建时钟族（wasmPipelines），注入 createPlayer。
+  - id: rel.host.element-family
+    from: host.demo.app
+    to: providers.element.family
+    type: queries
+    interface: if.providers.element.elementPipelines
+    purpose: 取元素族注入播放器
+    description: 控制器以模块胶水与 wasm 地址取元素族（elementPipelines），注入 createPlayer。
+  - id: rel.host.player-events
+    from: kit.kernel.envelope
+    to: host.demo.app
+    type: notifies
+    payload: ds.PlayerEvent
+    via: bus:share.core.primitives.event-hub
+    purpose: 让页面状态与诊断跟上会话
+    description: 内核按会话顺序发出的事件经 player.events（EventHub）推给控制器，页面据此更新状态、命令反馈与诊断。
+  - id: rel.host.diag-snapshot
+    from: host.demo-diag.diag
+    to: kit.facade.player-api
+    type: queries
+    interface: if.kit.facade.Player
+    payload: ds.PlayerSnapshot
+    via: channel:inject
+    purpose: 取会话与统计画诊断面
+    description: 诊断渲染时读 player.snapshot（会话、统计、最后关闭原因）；player 由控制器经 initDiag 注入。
+  # 宿主内部
+  - id: rel.host.app-layout
+    from: host.demo.app
+    to: host.demo.layout
+    type: commands
+    purpose: 装上布局与滚动补丁
+    description: 控制器导入布局模块即装上布局补丁（右栏宽度、吸顶吸底、滚动锚定与焦点补滚）。
+  - id: rel.host.app-config
+    from: host.demo.app
+    to: host.demo-config.config
+    type: queries
+    purpose: 把表单变成可 open 的配置
+    description: 控制器按表单草稿求生效配置、源地址、分享链接与流名，日志与诊断前脱敏。
+  - id: rel.host.app-code
+    from: host.demo.app
+    to: host.demo-config.code-gen
+    type: queries
+    purpose: 展示当前配置的接入代码
+    description: 控制器按生效配置生成并高亮接入示例（generate、highlight）。
+  - id: rel.host.code-config
+    from: host.demo-config.code-gen
+    to: host.demo-config.config
+    type: queries
+    purpose: 按生效配置写出示例地址
+    description: 接入示例按生效配置取源地址、脱敏与转义。
+  - id: rel.host.app-diag
+    from: host.demo.app
+    to: host.demo-diag.diag
+    type: commands
+    purpose: 让诊断记录并呈现每个事件
+    description: 控制器注入页面状态（initDiag）、把每个事件与命令记进诊断日志（record），并让它渲染指标、日志与会话页。
+  - id: rel.host.app-faults
+    from: host.demo.app
+    to: host.demo-diag.faults
+    type: commands
+    purpose: 让故障分段生效并改写地址
+    description: 控制器初始化故障注入（initFaults）、轮询与渲染故障分段，open 前把地址经 viaProxy 改写。
+  - id: rel.host.faults-app
+    from: host.demo-diag.faults
+    to: host.demo.app
+    type: commands
+    via: channel:callback
+    purpose: 把故障操作记进日志并刷新
+    description: 故障分段经控制器注入的回调写命令日志、提示与重渲染（feed、command、toast、changed）。
+  - id: rel.host.diag-config
+    from: host.demo-diag
+    to: host.demo-config.config
+    type: queries
+    purpose: 显示流名与脱敏后的地址
+    description: 诊断与故障分段取流名、格式、源地址并脱敏（streamName、fmtOf、srcOf、redactDeep）。
+  - id: rel.host.app-page-kit
+    from: host.demo.app
+    to: host.demo.page-kit
+    type: commands
+    purpose: 取元素并按需刷新页面
+    description: 控制器取元素并按需写入 HTML（$、setHtml、forgetHtml），转义正文、格式化时刻。
+  - id: rel.host.diag-page-kit
+    from: host.demo-diag
+    to: host.demo.page-kit
+    type: commands
+    purpose: 取元素并按需刷新诊断区
+    description: 诊断与故障分段取元素并按需写入 HTML（$、setHtml），转义正文、格式化时刻。
+  - id: rel.host.layout-page-kit
+    from: host.demo.layout
+    to: host.demo.page-kit
+    type: queries
+    purpose: 找到要修补布局的元素
+    description: 布局补丁取元素、判断右栏是否自己滚动（$、sideScrolls）。
+  - id: rel.host.page-kit-config
+    from: host.demo.page-kit
+    to: host.demo-config.config
+    type: queries
+    purpose: 复用同一套转义
+    description: 页面共用件转义正文时借用配置的转义（esc）。

@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 c2e347f3f1cfd70e kit#abstraction=a89ce7bc kit#children=b1aa7d74 kit#excludes=7c26b6bf kit#includes=3a6c8ee7 kit#responsibility=b48f3052 kit#summary=e6ce7e1c kit.facade#invariants=ed1cebde kit.facade#summary=b984f995 kit.kernel#invariants=9004e94e kit.kernel#summary=7571b6fc kit.page#summary=76534dbe kit.session#invariants=1e41b86d kit.session#summary=36d2eb6d rel:rel.kit.api-submit=2ffbdc04 rel:rel.kit.assembly-kernel=73f0271f rel:rel.kit.assembly-page-audio=e4736426 rel:rel.kit.assembly-screen-wake=e1f67cc0 rel:rel.kit.decide-adapters=a5fa5b97 rel:rel.kit.follow-adapters=29937473 rel:rel.kit.follow-screen-wake=72718524 rel:rel.kit.kernel-clock=df090208 rel:rel.kit.lifecycle-adapters=00c26005 rel:rel.kit.lifecycle-routes=a13045bc rel:rel.kit.media-keys-callback=34018d72 rel:rel.kit.schedule-acceptance=50531894 rel:rel.kit.visibility-callback=f238870e">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>播放器 Kit · 四个子模块怎么配合</title>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --text: #1f2328;
+        --text-2: #57606a;
+        --line: #d0d7de;
+        --soft: #f6f8fa;
+        --accent: #0969da;
+        --accent-soft: #ddf4ff;
+        --kernel: #8250df;
+        --kernel-soft: #fbefff;
+        --rule: #1a7f37;
+        --rule-soft: #dafbe1;
+        --gray: #8c959f;
+        color-scheme: light dark;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0d1117;
+          --text: #e6edf3;
+          --text-2: #9da7b3;
+          --line: #30363d;
+          --soft: #161b22;
+          --accent: #4493f8;
+          --accent-soft: #0c2d6b;
+          --kernel: #ab7df8;
+          --kernel-soft: #2b1d47;
+          --rule: #3fb950;
+          --rule-soft: #0f2d1a;
+          --gray: #6e7681;
+        }
+      }
+      body {
+        margin: 0;
+        padding: 18px 22px 32px;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.7 -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif;
+      }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      h2 { font-size: 15px; margin: 22px 0 6px; }
+      .lede { color: var(--text-2); margin: 0 0 14px; }
+      figure { margin: 10px 0 4px; }
+      figcaption { font-size: 12px; color: var(--text-2); margin-top: 4px; }
+      svg { width: 100%; height: auto; display: block; }
+      svg text { font-family: inherit; fill: var(--text); }
+      svg .muted { fill: var(--text-2); }
+      .card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--soft); margin: 8px 0; }
+      .who { font-weight: 600; }
+      ul.inv { margin: 4px 0 0; padding-left: 20px; color: var(--text-2); }
+      table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 6px 0; }
+      th, td { border-bottom: 1px solid var(--line); text-align: left; padding: 5px 6px; vertical-align: top; }
+      th { color: var(--text-2); font-weight: 500; }
+      .q { color: var(--text-2); font-style: italic; }
+    </style>
+  </head>
+  <body>
+    <h1>播放器 Kit：为什么切成四块</h1>
+    <p class="lede">对外承诺：<span data-arch="kit" data-field="summary"></span>。下面只讲四个子模块之间怎么配合、为什么这样切分；每块内部怎么做见它们自己的图解。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 300" role="img" aria-label="宿主经门面提交命令，内核串行施用并查会话规则，页面能力与管线族由外面注入">
+        <defs>
+          <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)" />
+          </marker>
+        </defs>
+        <!-- 宿主 -->
+        <rect x="20" y="20" width="120" height="44" rx="8" fill="none" stroke="var(--gray)" stroke-dasharray="4 3" />
+        <text x="80" y="47" text-anchor="middle" class="muted">宿主（页面）</text>
+        <!-- 门面 -->
+        <rect x="200" y="14" width="170" height="56" rx="8" fill="var(--accent-soft)" stroke="var(--accent)" />
+        <text x="285" y="38" text-anchor="middle" font-weight="600">门面</text>
+        <text x="285" y="58" text-anchor="middle" font-size="12" class="muted">翻译：一个方法 = 一条命令</text>
+        <line x1="140" y1="42" x2="198" y2="42" stroke="var(--text-2)" marker-end="url(#a)" />
+        <!-- 内核 -->
+        <rect x="200" y="120" width="170" height="70" rx="8" fill="var(--kernel-soft)" stroke="var(--kernel)" stroke-width="2" />
+        <text x="285" y="146" text-anchor="middle" font-weight="600">会话内核</text>
+        <text x="285" y="166" text-anchor="middle" font-size="12" class="muted">唯一的队列 · 唯一的状态</text>
+        <text x="285" y="182" text-anchor="middle" font-size="12" class="muted">会话是资源的唯一属主</text>
+        <line x1="285" y1="70" x2="285" y2="118" stroke="var(--text-2)" marker-end="url(#a)" />
+        <text x="292" y="98" font-size="12" class="muted">submit(命令) → 受理结果</text>
+        <!-- 会话规则 -->
+        <rect x="440" y="120" width="170" height="70" rx="8" fill="var(--rule-soft)" stroke="var(--rule)" />
+        <text x="525" y="146" text-anchor="middle" font-weight="600">会话规则</text>
+        <text x="525" y="166" text-anchor="middle" font-size="12" class="muted">纯表 · 纯函数</text>
+        <text x="525" y="182" text-anchor="middle" font-size="12" class="muted">受理？哪条路线？顺序对吗？</text>
+        <line x1="370" y1="155" x2="438" y2="155" stroke="var(--text-2)" marker-end="url(#a)" />
+        <text x="404" y="148" text-anchor="middle" font-size="11" class="muted">查询</text>
+        <!-- 页面能力 -->
+        <rect x="20" y="120" width="120" height="70" rx="8" fill="var(--soft)" stroke="var(--line)" />
+        <text x="80" y="148" text-anchor="middle" font-weight="600">页面能力适配</text>
+        <text x="80" y="168" text-anchor="middle" font-size="12" class="muted">全页共用</text>
+        <text x="80" y="183" text-anchor="middle" font-size="12" class="muted">比会话活得久</text>
+        <line x1="142" y1="155" x2="198" y2="155" stroke="var(--text-2)" stroke-dasharray="3 3" marker-end="url(#a)" />
+        <text x="170" y="148" text-anchor="middle" font-size="11" class="muted">注入</text>
+        <!-- 管线族 -->
+        <rect x="200" y="236" width="170" height="46" rx="8" fill="none" stroke="var(--gray)" stroke-dasharray="4 3" />
+        <text x="285" y="264" text-anchor="middle" class="muted">管线族（宿主注入，经族端口）</text>
+        <line x1="270" y1="190" x2="270" y2="234" stroke="var(--text-2)" marker-end="url(#a)" />
+        <line x1="300" y1="234" x2="300" y2="192" stroke="var(--text-2)" stroke-dasharray="3 3" marker-end="url(#a)" />
+        <text x="232" y="216" text-anchor="end" font-size="11" class="muted">命令</text>
+        <text x="308" y="216" font-size="11" class="muted">回报（带会话代号）</text>
+        <!-- 装配 -->
+        <path d="M370 42 C 430 42, 460 90, 140 128" fill="none" stroke="var(--gray)" stroke-dasharray="2 4" />
+        <text x="440" y="34" font-size="11" class="muted">创建时：门面把适配器</text>
+        <text x="440" y="50" font-size="11" class="muted">与管线族装进内核</text>
+      </svg>
+      <figcaption>实线是每次播放都走的路；虚线是创建播放器时的一次装配。灰色是 Kit 之外的东西。</figcaption>
+    </figure>
+
+    <h2>一句话的分工</h2>
+    <div class="card"><span class="who" data-arch="kit.facade">门面与对外契约</span>：<span data-arch="kit.facade" data-field="summary"></span></div>
+    <div class="card"><span class="who" data-arch="kit.kernel">会话内核</span>：<span data-arch="kit.kernel" data-field="summary"></span></div>
+    <div class="card"><span class="who" data-arch="kit.session">会话规则</span>：<span data-arch="kit.session" data-field="summary"></span></div>
+    <div class="card"><span class="who" data-arch="kit.page">页面能力适配</span>：<span data-arch="kit.page" data-field="summary"></span></div>
+
+    <h2>为什么门面不判断状态</h2>
+    <p>
+      如果门面也看状态（比如「已经在播就不再发 play」），判断就有了两处：门面一次，内核施用时一次。两次之间状态可能已经被排在前面的命令改掉了，于是同一串操作快着点和慢着点会得到不同的结果。
+      所以门面只做翻译：宿主调一个方法，门面就提交一条命令，把内核给的「受理 / 拒绝原因」原样还给宿主。能不能受理只在一处判：内核按队列轮到这条命令时，去问会话规则。
+    </p>
+
+    <h2>为什么规则要从内核里抽出来</h2>
+    <p>
+      「在什么状态下接受什么命令」「这个容器该走哪个族、哪条路线」「事件流的顺序对不对」都是表和纯函数，不需要时钟、不需要浏览器，抽出来就能逐条单测，也能被宿主侧的测试复用（顺序机检就是给宿主核对事件流用的）。
+      内核只<em>调用</em>它们，不内嵌它们，所以改一条规则不会碰到队列与释放这些难测的部分。会话规则自己守住的是：
+    </p>
+    <ul class="inv" data-arch="kit.session" data-field="invariants"></ul>
+
+    <h2>为什么页面能力单独成块</h2>
+    <p>
+      AudioContext 与屏幕常亮是<strong>整页一份</strong>的东西：页面上可以有几个播放器、一个播放器可以开关很多次会话，它们都共用同一个声音上下文。
+      如果放进内核，它们的寿命就会被绑到会话上——关一次会话就关一次 AudioContext，下一次播放就得重新要一次用户手势。
+      所以它们由门面在创建时建好、以接口注入内核；内核只经接口问「声音是不是真在跑」「现在要不要常亮」，不碰浏览器 API。
+    </p>
+
+    <h2>管线族为什么由宿主注入</h2>
+    <p>
+      Kit 不认识任何具体的管线族：它只认<span data-arch="pipeline">管线契约</span>里的族端口。宿主决定装哪些族（元素族、自时钟族……），门面逐族建立、交给内核；内核打开会话时按会话规则选出的路线，把会话交给对应族的管线。
+      这样 Kit 可以先发版，新的族不需要改 Kit；门面这一侧守住的是：
+    </p>
+    <ul class="inv" data-arch="kit.facade" data-field="invariants"></ul>
+
+    <h2>常见误解</h2>
+    <table>
+      <tr><th>误解</th><th>实际</th></tr>
+      <tr><td class="q">「play() 返回成功就说明在播了」</td><td>返回的是这条命令是否被受理；真正开播看 state 事件（首帧后才从 loading 变为 playing）。</td></tr>
+      <tr><td class="q">「规则在门面里，所以门面能挡掉非法调用」</td><td>门面不挡；受理与否只由内核在轮到这条命令时查会话规则决定。</td></tr>
+      <tr><td class="q">「关掉会话会关掉声音上下文」</td><td>不会；页面能力比会话活得久，会话只释放它自己获取的资源。</td></tr>
+    </table>
+  </body>
+</html>

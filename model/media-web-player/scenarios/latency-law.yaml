@@ -1,0 +1,46 @@
+# 取自 docs/design/02-web-live-player.md §4.4（延迟控制）、latency-law.ts / latency-run.ts 与 live/pipeline.ts 的执行器。
+scenario:
+  id: sc.latency-law
+  name: 延迟决策律一次判定
+  kind: main
+  description: |
+    直播在边缘播放时，会话每 100 ms 取一次读数（缓冲深度、到 IDR 的深度、抖动、积压、连接、不连续、沉淀期…）交给两族共用的
+    运行骨架；纯函数决策律按缓冲相对目标所在的区给出动作与报告：报告经 sink 成为 latency 事件与 player.latency.* 遥测，
+    动作交给本族的执行器——变速（媒体时钟与重采样跟着变）、丢非参考帧、跳到最新 IDR。手段无效即锁定，回到边缘时从头开始。
+  cause: 自建时钟会话的读数定时器（READING_INTERVAL_MS = 100 ms）
+  evidence:
+    - media-web/tests/latency-law.test.mjs
+    - media-web/tests/latency-contract.test.mjs
+    - media-wasm/tests/live-pipeline.test.mjs
+  steps:
+    - loop:
+        while: 会话在直播边缘播放，每 100 ms
+        steps:
+          - call: {id: signals, from: providers.self-clocked.session, to: providers.stream-input.input, label: 'takeSignals(atMs)：抖动、积压、连接、不连续'}
+          - return: {from: providers.stream-input.input, to: providers.self-clocked.session, label: '{jitterMs, backlog, connected, discontinuity}'}
+          - call: {id: read, from: providers.self-clocked.session, to: pipeline.latency.run, label: 'law.read(reading)'}
+          - call: {id: decide, from: pipeline.latency.run, to: pipeline.latency.law, label: 'decideLatency(state, reading, config)'}
+          - return: {from: pipeline.latency.law, to: pipeline.latency.run, label: '{state, action, reports}'}
+          - alt:
+              - when: 有报告（over-limit、target-unreachable、means-locked…，边沿触发）
+                steps:
+                  - async: {id: report, from: pipeline.latency.run, to: kit.kernel.envelope, label: "sink.event({type: 'latency', report})"}
+                  - async: {from: kit.kernel.envelope, to: actor.host-app, label: latency 事件 + player.latency.* 遥测}
+              - when: 没有报告
+                steps: []
+          - alt:
+              - when: set-rate（追帧或充水）
+                steps:
+                  - call: {id: rate, from: pipeline.latency.run, to: providers.self-clocked.session, label: execute(set-rate)}
+                  - call: {from: providers.self-clocked.session, to: providers.self-clocked.audio, relation: rel.providers.session-audio, label: 媒体时钟与重采样按新速率}
+              - when: skip-to-random-access（超限跳 IDR）
+                steps:
+                  - call: {id: skip, from: pipeline.latency.run, to: providers.self-clocked.session, label: execute(skip-to-random-access)}
+                  - call: {from: providers.self-clocked.session, to: providers.wasm-module.module, label: skipToRandomAccess()}
+                  - call: {from: providers.self-clocked.session, to: pipeline.metering.freeze, label: 'freezes.acted：冻结原因记为 latency'}
+              - when: set-drop-non-reference
+                steps:
+                  - call: {id: drop, from: pipeline.latency.run, to: providers.self-clocked.session, label: execute(set-drop-non-reference)}
+                  - call: {from: providers.self-clocked.session, to: providers.self-clocked.video, label: setSkipNonReference(enabled)}
+              - when: none
+                steps: []

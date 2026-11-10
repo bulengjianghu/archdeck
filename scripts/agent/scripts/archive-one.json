@@ -1,0 +1,36 @@
+{
+  "steps": [
+    {
+      "block": {
+        "kind": "edit",
+        "summary": "新增「核对」，读编辑会话",
+        "ops": [
+          {
+            "op": "edit",
+            "sketch": "{{sketch.mount}}",
+            "edit": {
+              "op": "addModule",
+              "parent": "{{sketch.mount}}",
+              "name": "核对",
+              "id": "w4-drift"
+            }
+          },
+          {
+            "op": "edit",
+            "sketch": "{{sketch.mount}}",
+            "edit": {
+              "op": "connect",
+              "from": "{{sketch.mount}}.w4-drift",
+              "to": "{{sketch.mount}}.session",
+              "type": "queries",
+              "description": "读编辑会话"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "done": true
+    }
+  ]
+}

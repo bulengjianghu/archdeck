@@ -1,0 +1,421 @@
+/**
+ * 返工清单（docs/02-domain.md §2.17 Q7–Q9）：按根因聚合、每条的内容与建议动作、Markdown 输出。
+ */
+import { describe, expect, it } from 'vitest'
+import { sampleFiles } from '../fixtures/sample'
+import {
+  PENDING_TASK_NOTE,
+  REWORK_CATEGORIES,
+  archiveGates,
+  archiveVerdict,
+  assignFiles,
+  checkSketches,
+  governanceReport,
+  parseDesignSketches,
+  loadModel,
+  projectHealth,
+  reworkItemMarkdown,
+  reworkList,
+  reworkMarkdown,
+  sourceIssues,
+  type Baseline,
+  type FileDep,
+  type RawFile,
+  type ReworkItem,
+} from '@/model'
+
+const MODULES = `
+modules:
+  - id: ui
+    name: UI
+    kind: layer
+    order: 1
+    abstraction: 界面
+    responsibility: 界面层
+    children:
+      - { id: ui.view, name: View, responsibility: 视图, codeRefs: [src/ui/view/**, src/shared/**] }
+      - { id: ui.store, name: Store, responsibility: 状态, codeRefs: [src/ui/store/**, src/shared/**] }
+      - { id: ui.panel, name: Panel, responsibility: 面板, codeRefs: [src/ui/panel/**] }
+  - id: core
+    name: Core
+    kind: layer
+    order: 2
+    abstraction: 内核
+    responsibility: 内核层
+    mayDependOn: []
+    children:
+      - { id: core.api, name: Api, responsibility: 对外接口, codeRefs: [src/core/api/**], entry: src/core/api/missing.ts }
+      - { id: core.impl, name: Impl, responsibility: 实现, codeRefs: [src/core/impl/**] }
+      - { id: core.util, name: Util, responsibility: 工具, codeRefs: [src/core/util/**] }
+relations:
+  - { id: rel.1, from: ui.view, to: ui.store, type: calls }
+  - { id: rel.2, from: ui.store, to: core.api, type: calls }
+  # core.impl 实现 if.util：写在接口的 implementedBy（M17，implements 已不是关系类型）
+  - { id: rel.4, from: ui.view, to: core.api, type: calls }
+  - { id: rel.5, from: ui.view, to: core.api, type: streams }
+  - { id: rel.bad, from: ui.view, to: nowhere, type: calls }
+interfaces:
+  - { id: if.util, name: Util, owner: core.util, implementedBy: [core.impl] }
+`
+
+const SCENARIO = `
+scenario:
+  id: sc
+  name: 场景
+  steps:
+    - call: { from: ui.panel, to: core.util, label: 未建模一 }
+    - return: { from: core.util, to: ui.panel, label: 未建模二 }
+    - call: { from: ui.view, to: core.api, label: 候选不唯一 }
+    - call: { from: ui.store, to: core.api, label: 已建模 }
+    - call: { from: ui.view, to: ui.view, label: 内部活动 }
+`
+
+const files = (): RawFile[] => [
+  { path: 'system.yaml', text: 'system: { id: sys, name: Sys }' },
+  { path: 'modules/layers.yaml', text: MODULES },
+  { path: 'scenarios/sc.yaml', text: SCENARIO },
+  { path: 'rules.yaml', text: 'rules:\n  allow:\n    - { from: core.util, to: ui.store, rule: layer, reason: 测试例外 }\n' },
+]
+
+const SRC = [
+  'src/ui/view/a.ts',
+  'src/ui/store/s.ts',
+  'src/ui/panel/p.ts',
+  'src/shared/x.ts',
+  'src/shared/y.ts',
+  'src/core/api/index.ts',
+  'src/core/impl/i.ts',
+  'src/core/impl/j.ts',
+  'src/core/util/u.ts',
+  'src/core/extra/e1.ts',
+  'src/core/extra/e2.ts',
+  'src/core/impl/stray/z.ts',
+  'src/tools/t.ts',
+  'docs/readme.md',
+]
+
+const dep = (from: string, to: string, line = 1): FileDep => ({ from, to, via: to, kind: 'value', line, uses: true, invokes: true })
+
+const DEPS: FileDep[] = [
+  dep('src/core/impl/i.ts', 'src/ui/view/a.ts', 3), // core → ui：违规（U2）
+  dep('src/core/impl/j.ts', 'src/ui/view/a.ts', 4), // 同一对
+  dep('src/core/util/u.ts', 'src/ui/view/a.ts', 5), // 另一依赖方、同一被依赖方 → 同一根因
+  dep('src/core/util/u.ts', 'src/ui/store/s.ts', 6), // 已豁免
+  dep('src/ui/view/a.ts', 'src/ui/store/s.ts'), // rel.1 证实
+  dep('src/ui/view/a.ts', 'src/ui/panel/p.ts', 7), // 未描述依赖
+  dep('src/core/impl/i.ts', 'src/shared/x.ts', 8), // 一端归属冲突：不提升（K4），不衍生违规
+  dep('src/shared/y.ts', 'src/ui/view/a.ts', 9), // 同上
+]
+
+function setup(baseline: Baseline | null = null, withFacts = true) {
+  const { index, issues } = loadModel(files())
+  const own = assignFiles(index, SRC, ['docs/**'])
+  const tree = { files: SRC, packages: {} }
+  const report = withFacts ? governanceReport(index, own, tree, { deps: DEPS, external: {}, parsed: SRC.length }, baseline) : undefined
+  return { index, issues, list: reworkList({ index, issues, source: { own, tree }, ...(report ? { report } : {}) }) }
+}
+
+const byCode = (items: ReworkItem[], code: string) => items.filter(i => i.code === code)
+
+describe('Q7 内容与按根因聚合', () => {
+  it('同一组重叠的 codeRefs 导致的冲突文件合并为一条，带全部受影响文件', () => {
+    const { list } = setup()
+    const [c] = byCode(list.items, 'source.conflict')
+    expect(byCode(list.items, 'source.conflict')).toHaveLength(1)
+    expect(c.affected.map(a => a.file)).toEqual(['src/shared/x.ts', 'src/shared/y.ts'])
+    expect(c.title).toContain('View「src/shared/**」')
+    expect(c.title).toContain('Store「src/shared/**」')
+    expect(c.target.modules).toEqual(['ui.store', 'ui.view'])
+  })
+
+  it('K4：归属冲突项注明因冲突未计入的依赖条数，这些依赖不衍生违规与未描述依赖', () => {
+    const { list } = setup()
+    const [c] = byCode(list.items, 'source.conflict')
+    expect(c.detail).toBe('2 条依赖因冲突未计入（不提升到任何模块，K4）；冲突解决后自然计入')
+    expect(c.rules).toEqual(['G6', 'K4'])
+    const sources = list.items.filter(i => i.category === 'violation' || i.category === 'undescribed').flatMap(i => i.affected.map(a => `${a.file} ${a.note ?? ''}`))
+    expect(sources.some(f => f.includes('src/shared/'))).toBe(false)
+    expect(setup(null, false).list.items.find(i => i.code === 'source.conflict')!.detail).toBeUndefined()
+  })
+
+  it('未归属文件按所在目录聚合', () => {
+    const { list } = setup()
+    const items = byCode(list.items, 'source.unowned')
+    expect(items.map(i => i.id).sort()).toEqual(['ownership:unowned:src/core/extra', 'ownership:unowned:src/tools'])
+    expect(items.find(i => i.id.endsWith('src/core/extra'))!.affected).toHaveLength(2)
+  })
+
+  it('违规按（基线状态、种类、规则所在、被依赖方）聚合；已豁免单独一条', () => {
+    const { list } = setup()
+    const v = list.items.filter(i => i.category === 'violation')
+    const open = v.find(i => i.status === 'open')!
+    expect(v.filter(i => i.status === 'open')).toHaveLength(1)
+    expect(open.title).toContain('2 个模块 → View')
+    expect(open.detail).toBe('依赖方：Impl、Util')
+    expect(open.affected.map(a => `${a.file}:${a.line}`)).toEqual(['src/core/impl/i.ts:3', 'src/core/impl/j.ts:4', 'src/core/util/u.ts:5'])
+    expect(v.find(i => i.status === 'allowed')!.severity).toBe('info')
+  })
+
+  it('结构中未建模的步骤按两端（不论方向）聚合；内部活动与已绑定关系的不算；与层次无关', () => {
+    const { list } = setup()
+    const items = list.items.filter(i => i.category === 'unmodeled')
+    expect(items.map(i => i.id).sort()).toEqual(['unmodeled:core.util<->ui.panel', 'unmodeled:core.api<->ui.view'].sort())
+    expect(items.find(i => i.id === 'unmodeled:core.util<->ui.panel')!.affected).toHaveLength(2)
+  })
+
+  it('S5a 的未建模提醒不重复列在描述问题里；校验问题照常列出并带规则编号', () => {
+    const { list, issues } = setup()
+    expect(issues.some(i => i.code === 'step-unmodeled')).toBe(true)
+    const desc = list.items.filter(i => i.category === 'description')
+    expect(desc.some(i => i.code === 'step-unmodeled')).toBe(false)
+    const bad = desc.find(i => i.code === 'unknown-endpoint')!
+    expect(bad.severity).toBe('error')
+    expect(bad.rules).toEqual(['M5'])
+    expect(bad.at).toMatchObject({ in: 'description', file: 'modules/layers.yaml' })
+    expect(bad.at!.line).toBeGreaterThan(0)
+  })
+
+  it('返工项 ID 稳定：重新计算结果相同', () => {
+    expect(setup().list.items.map(i => i.id)).toEqual(setup().list.items.map(i => i.id))
+  })
+
+  it('没有代码事实时只含描述、归属、未建模与按描述判定的端口孤立（U14：if.util 的实现者 core.impl，没有使用者）', () => {
+    const { list } = setup(null, false)
+    expect(list.facts).toBe(false)
+    expect(new Set(list.items.map(i => i.category))).toEqual(new Set(['description', 'ownership', 'unmodeled', 'port']))
+    expect(list.items.find(i => i.category === 'port')).toMatchObject({ severity: 'info', code: 'port.no-user' })
+  })
+})
+
+describe('Q8 返工项的内容与排序', () => {
+  it('严重度：新增违规与环度上升为 error，已知为 warning，未描述依赖与可收紧基线为 info', () => {
+    const baseline: Baseline = {
+      createdAt: 't',
+      violations: ['layer:core:core.util->ui.view', 'layer:core:gone->ui.view'],
+      cyclicity: { modules: 0, files: 0 },
+    }
+    const { list } = setup(baseline)
+    const v = list.items.filter(i => i.category === 'violation')
+    expect(v.find(i => i.status === 'new')!).toMatchObject({ severity: 'error', code: 'rule.new' })
+    expect(v.find(i => i.status === 'known')!).toMatchObject({ severity: 'warning', code: 'rule.known' })
+    expect(list.items.find(i => i.code === 'baseline.resolved')!.severity).toBe('info')
+    expect(list.items.find(i => i.id === 'undescribed:ui.view->ui.panel')!).toMatchObject({ severity: 'info', target: { dep: 'ui.view->ui.panel' } })
+  })
+
+  it('按严重度、类别、受影响数排序', () => {
+    const { list } = setup()
+    const sev = { error: 0, warning: 1, info: 2 }
+    const ranks = list.items.map(i => sev[i.severity])
+    expect(ranks).toEqual([...ranks].sort((a, b) => a - b))
+    expect(list.counts.error + list.counts.warning + list.counts.info).toBe(list.items.length)
+  })
+
+  it('建议动作：冲突收窄 codeRefs；未归属补 codeRefs（建议归属）或加忽略（整个目录为 <目录>/*）', () => {
+    const { list } = setup()
+    expect(byCode(list.items, 'source.conflict')[0].actions.map(a => a.kind)).toEqual(['add-code-refs'])
+    const extra = list.items.find(i => i.id === 'ownership:unowned:src/core/extra')!
+    expect(extra.actions.map(a => a.kind)).toEqual(['add-code-refs', 'add-ignore'])
+    expect(extra.actions[1]).toMatchObject({ file: 'source-ignore.yaml', snippet: 'sourceIgnore:\n  - src/core/extra/*' })
+    // 同目录子树里没有已归属文件时往上找：src/core 下归属最多的是 Impl
+    expect(extra.actions[0].snippet).toBe('codeRefs: [src/core/impl/**, src/core/extra/*]')
+    const tools = list.items.find(i => i.id === 'ownership:unowned:src/tools')!
+    expect(tools.actions[1].snippet).toBe('sourceIgnore:\n  - src/tools/*')
+  })
+
+  it('建议动作：违规改代码或加例外（多条时写在规则所在上）；未描述依赖补关系；entry 不存在改描述', () => {
+    const { list } = setup()
+    const open = list.items.find(i => i.status === 'open')!
+    expect(open.actions.map(a => a.kind)).toEqual(['fix-code', 'add-exception'])
+    expect(open.actions[1].snippet).toBe('allow:\n  - { from: core, to: ui.view, rule: layer, reason: <写理由> }')
+    expect(open.rules).toEqual(['U2', 'U6', 'U8'])
+    const und = list.items.find(i => i.id === 'undescribed:ui.view->ui.panel')!
+    expect(und.actions[0]).toMatchObject({ kind: 'add-relation', file: 'modules/layers.yaml' })
+    expect(und.affected).toEqual([{ in: 'source', file: 'src/ui/view/a.ts', line: 7, note: '→ src/ui/panel/p.ts' }])
+    expect(byCode(list.items, 'source.entry')[0].actions[0].kind).toBe('fix-description')
+  })
+
+  it('未证实：列两端之间没有任何依赖的交互关系（K6），建议改正关系或检查 codeRefs；未证实的端口实现者（K5c，原 implements）建议从 implementedBy 去掉', () => {
+    const { list } = setup()
+    const u = list.items.filter(i => i.category === 'unconfirmed')
+    expect(u.map(i => i.id).sort()).toEqual(['unconfirmed:if.util#core.impl', 'unconfirmed:rel.2', 'unconfirmed:rel.4', 'unconfirmed:rel.5'])
+    const rels = u.filter(i => i.target.relation)
+    expect(rels.every(i => i.actions.map(a => a.kind).join() === 'fix-relation,add-code-refs')).toBe(true)
+    expect(u.find(i => i.target.relation === 'rel.2')!.title).toContain('两端之间在代码中没有任何依赖')
+    const impl = u.find(i => i.id === 'unconfirmed:if.util#core.impl')!
+    expect(impl).toMatchObject({ severity: 'warning', rules: ['K5c', 'K6'], target: { modules: ['core.impl', 'core.util'] } })
+    expect(impl.actions.map(a => a.kind)).toEqual(['fix-description', 'add-code-refs'])
+  })
+
+  it('未建模：两端之间有多条运行时关系时补步骤 relation 并列出候选，否则补关系', () => {
+    const { list } = setup()
+    const amb = list.items.find(i => i.id === 'unmodeled:core.api<->ui.view')!
+    expect(amb.actions[0].kind).toBe('add-step-relation')
+    expect(amb.actions[0].snippet).toContain('relation: rel.4')
+    expect(amb.actions[0].snippet).toContain('relation: rel.5')
+    const none = list.items.find(i => i.id === 'unmodeled:core.util<->ui.panel')!
+    expect(none.actions[0].kind).toBe('add-relation')
+    expect(none.at).toMatchObject({ in: 'description', file: 'scenarios/sc.yaml' })
+  })
+})
+
+describe('Q9 Markdown', () => {
+  it('描述文件加模型目录前缀，带行号、规则、建议与 YAML 片段', () => {
+    const { list } = setup()
+    const md = reworkMarkdown(list, 'Sys', { modelDir: 'model/sys', sourceRoot: '/src/root' })
+    expect(md).toContain('# 返工清单：Sys')
+    expect(md).toContain('/src/root')
+    expect(md).toMatch(/`model\/sys\/modules\/layers\.yaml:\d+`/)
+    expect(md).toContain('`src/core/impl/i.ts:3 → src/ui/view/a.ts`')
+    expect(md).toContain('```yaml')
+    const one = reworkItemMarkdown(list.items[0], { modelDir: 'model/sys' })
+    expect(md).toContain(one)
+  })
+
+  it('受影响位置超过上限时截断并注明', () => {
+    const { list } = setup()
+    const conflict = byCode(list.items, 'source.conflict')[0]
+    expect(reworkItemMarkdown(conflict, { limit: 1 })).toContain('…另 1 处')
+  })
+})
+
+describe('Q10 项目健康度', () => {
+  const health = (baseline: Baseline | null) => {
+    const { index } = loadModel(files())
+    const own = assignFiles(index, SRC, ['docs/**'])
+    const report = governanceReport(index, own, { files: SRC, packages: {} }, { deps: DEPS, external: {}, parsed: SRC.length }, baseline)
+    return projectHealth(index, own, report)
+  }
+
+  it('没有基线：违规为绝对数，delta 为 null；环、未证实、未归属与冲突计数', () => {
+    const h = health(null)
+    expect(h.violations).toEqual({ count: 2, new: 0, resolved: 0, allowed: 1, delta: null })
+    expect(h.cycles).toEqual({ count: 0, maxSize: 0, cyclicity: 0, baseline: null })
+    expect(h.unconfirmed).toBe(4)
+    expect(h.unowned).toBe(3)
+    expect(h.conflicts).toBe(2)
+  })
+
+  it('有基线：delta = 新增 − 已消除', () => {
+    const h = health({ createdAt: 't', violations: ['layer:core:core.util->ui.view', 'layer:core:gone->ui.view', 'layer:core:gone2->ui.view'], cyclicity: { modules: 4, files: 0 } })
+    expect(h.violations).toMatchObject({ count: 2, new: 1, resolved: 2, delta: -1 })
+    expect(h.cycles!.baseline).toBe(4)
+  })
+})
+
+describe('S15 场景证据', () => {
+  const withEvidence = (): RawFile[] =>
+    files().map(f => (f.path === 'scenarios/sc.yaml' ? { ...f, text: f.text.replace('  steps:', '  evidence: [src/ui/view/a.ts, tests/missing.test.ts]\n  steps:') } : f))
+  it('证据文件不在源码清单：描述类提醒，带场景出处、规则 S15 与建议；传进来的 issues 里已有的不重复', () => {
+    const { index, issues } = loadModel(withEvidence())
+    const own = assignFiles(index, SRC, ['docs/**'])
+    const tree = { files: SRC, packages: {} }
+    const list = reworkList({ index, issues, source: { own, tree } })
+    const items = byCode(list.items, 'scenario.evidence')
+    expect(items.map(i => i.id)).toEqual(['description:scenario.evidence:sc:tests/missing.test.ts'])
+    expect(items[0]).toMatchObject({ category: 'description', severity: 'warning', rules: ['S15'], target: { scenario: 'sc' } })
+    expect(items[0].at).toMatchObject({ in: 'description', file: 'scenarios/sc.yaml' })
+    expect(items[0].actions[0]).toMatchObject({ kind: 'fix-description', file: 'scenarios/sc.yaml' })
+    const again = reworkList({ index, issues: [...issues, ...sourceIssues(index, own, tree)], source: { own, tree } })
+    expect(byCode(again.items, 'scenario.evidence')).toHaveLength(1)
+    // 没有源码清单时不判断
+    expect(byCode(reworkList({ index, issues }).items, 'scenario.evidence')).toEqual([])
+  })
+})
+
+describe('X4 草图偏差进返工清单', () => {
+  it('一条偏差一个根因，类别 sketch；错误只能按草图改，提醒可认可；已认可的不进清单', () => {
+    const files: RawFile[] = [
+      { path: 'system.yaml', text: 'system: { id: s, name: S }' },
+      {
+        path: 'intent/skeleton.yaml',
+        text: 'sketch:\n  id: skeleton\n  mount: root\n  closed: [ui]\n  modules:\n    - { id: ui, name: UI, kind: layer, order: 1, abstraction: a, responsibility: x }\n    - { id: core, name: Core, kind: layer, order: 2, abstraction: b, responsibility: y }\n',
+      },
+      { path: 'modules/m.yaml', text: 'modules:\n  - { id: ui.extra, name: E, parent: ui, responsibility: x }\n  - { id: ui.extra.a, name: A, parent: ui.extra, responsibility: a }\n' },
+    ]
+    const { index, issues } = loadModel(files)
+    const sketch = parseDesignSketches([
+      {
+        design: 'd',
+        file: {
+          path: 'designs/d/sketches/ui.extra.yaml',
+          text: 'sketch:\n  id: d\n  mount: ui.extra\n  modules:\n    - { id: ui.extra.a, name: A }\n  relations:\n    - { id: rel.d.a, from: ui.extra.a, to: core, type: calls }\n',
+        },
+      },
+    ])
+    const checks = checkSketches(index, sketch, new Map([['d', [{ deviation: 'missing-relation:rel.d.a', reason: '经注入' }]]]))
+    const list = reworkList({ index, issues, sketches: checks })
+    expect(list.byCategory.sketch).toBe(1)
+    const item = list.items.find(i => i.category === 'sketch')!
+    expect(item).toMatchObject({ id: 'sketch:skeleton:extra-child:ui.extra', severity: 'error', code: 'sketch.extra-child', rules: ['X2', 'X4'], target: { modules: ['ui.extra', 'ui'] } })
+    expect(item.title).toContain('持久草图「skeleton」偏差')
+    expect(item.actions.map(a => a.kind)).toEqual(['follow-sketch', 'accept-deviation'])
+    expect(item.actions[1].text).toContain('错误不能认可')
+    // 未认可时提醒进清单，带认可的建议
+    const open = reworkList({ index, issues, sketches: checkSketches(index, sketch) })
+    const warn = open.items.find(i => i.id === 'sketch:d:missing-relation:rel.d.a')!
+    expect(warn).toMatchObject({ severity: 'warning', category: 'sketch', at: { in: 'description', file: 'designs/d/sketches/ui.extra.yaml' } })
+    expect(warn.actions[1]).toMatchObject({ kind: 'accept-deviation', file: 'designs/d/design.yaml' })
+    expect(reworkMarkdown(open, 'T')).toContain('### [提醒] 设计「d」的草图偏差')
+  })
+})
+
+describe('DL-45 返工清单里的门禁口径（收尾 S1）', () => {
+  it('对当前版本核验时，已认可未归档设计的偏差在返工清单为提醒、尾标任务单待做；同一份核验在归档关仍是错误；对设计各轮核验时不降', () => {
+    const files: RawFile[] = [
+      { path: 'system.yaml', text: 'system: { id: s, name: S }' },
+      { path: 'modules/m.yaml', text: 'modules:\n  - { id: ui, name: UI, responsibility: x }\n' },
+    ]
+    const { index, issues } = loadModel(files)
+    const sketch = parseDesignSketches([
+      { design: 'd', file: { path: 'designs/d/sketches/ui.yaml', text: 'sketch:\n  id: d\n  mount: ui\n  modules:\n    - { id: ui.new, name: New, responsibility: n }\n' } },
+    ])
+    const checks = checkSketches(index, sketch)
+    const errs = checks.flatMap(c => c.deviations).filter(d => d.severity === 'error')
+    expect(errs.length).toBeGreaterThan(0)
+    const gated = reworkList({ index, issues, sketches: checks, sketchGate: true })
+    const items = gated.items.filter(i => i.category === 'sketch')
+    expect(items.length).toBe(errs.length + checks.flatMap(c => c.deviations).filter(d => d.severity === 'warning').length)
+    for (const i of items) {
+      expect(i.severity).toBe('warning')
+      expect(i.title.endsWith(PENDING_TASK_NOTE)).toBe(true)
+    }
+    // 归档关：同一份核验按原严重度，第一关不过
+    const gates = archiveGates({ checks, drift: { intact: true, missing: false, changed: [], added: [], removed: [] } })
+    expect(gates.gates.find(g => g.key === 'consistent')).toMatchObject({ ok: false })
+    expect(archiveVerdict(checks[0]).reason).toContain('个错误')
+    // 设计各轮（不是对当前版本）：不降
+    const raw = reworkList({ index, issues, sketches: checks })
+    expect(raw.items.filter(i => i.category === 'sketch' && i.severity === 'error').length).toBe(errs.length)
+  })
+})
+
+describe('S17 步骤无证据', () => {
+  it('两端之间没有任何依赖的步骤按端点（含方向）聚合为 warning，有依赖与不判定的不进；没给文件依赖时不判断', () => {
+    const { index, issues } = loadModel(files())
+    const own = assignFiles(index, SRC, ['docs/**'])
+    const tree = { files: SRC, packages: {} }
+    const deps = [...DEPS, dep('src/ui/store/s.ts', 'src/core/api/index.ts', 2)]
+    const list = reworkList({ index, issues, source: { own, tree }, deps })
+    const items = byCode(list.items, 'step.no-evidence')
+    expect(items.map(i => i.id).sort()).toEqual(['unevidenced:core.util->ui.panel', 'unevidenced:ui.panel->core.util', 'unevidenced:ui.view->core.api'])
+    expect(items[0]).toMatchObject({ category: 'unevidenced', severity: 'warning', rules: ['S16', 'S17'], target: { scenario: 'sc' } })
+    expect(items[0].affected[0]).toMatchObject({ in: 'description', file: 'scenarios/sc.yaml' })
+    expect(items[0].actions.map(a => a.kind)).toEqual(['fix-description', 'add-code-refs', 'fix-relation'])
+    expect(list.byCategory.unevidenced).toBe(3)
+    expect(byCode(reworkList({ index, issues, source: { own, tree } }).items, 'step.no-evidence')).toEqual([])
+  })
+})
+
+describe('Q7、Q8（ADR-0029）：未分类、端口孤立、查询副作用三个新类别', () => {
+  it('未分类只列核心之间的 calls（裁决 12，info，建议按三问定类型、写进草图即确认），其余只计数；类别排在未解释的交互之后', () => {
+    const { index, issues } = loadModel(sampleFiles())
+    const list = reworkList({ index, issues })
+    const u = list.items.filter(i => i.category === 'unclassified')
+    expect(u.map(i => i.target.relation)).toEqual(['r1', 'r2'])
+    expect(u[0]).toMatchObject({ severity: 'info', code: 'relation.unclassified', rules: ['M17', 'X23'] })
+    expect(u[0].actions[0]).toMatchObject({ kind: 'classify', snippet: expect.stringContaining('type: queries') })
+    // 逐条的 relation.unclassified 提示不进「描述」类
+    expect(list.items.some(i => i.category === 'description' && i.code === 'relation.unclassified')).toBe(false)
+    expect(REWORK_CATEGORIES.slice(5, 12)).toEqual(['unconfirmed', 'port', 'surface', 'query-side-effect', 'undescribed', 'unclassified', 'unmodeled'])
+  })
+})

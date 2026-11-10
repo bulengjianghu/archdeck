@@ -1,0 +1,935 @@
+# 区域：本地客户端（gixn-runner，packages/runner）——通道与任务执行、判项与预览、工作环境与运维、本地 UI 服务。
+# 第二级模块（client.channel / client.checks / client.profiles / client.local-ui）由骨架定义，此处只写补充条目并往下挂子模块。
+# 2026-11-08 由 AI 生成（读 gix-next @ 1cd6d9ad1）。适配器的装配（环境变量指向的 runner-module 默认导出工厂、内置注册表 create）
+# 是组装事实（K13），不写关系；runner 经能力接口调适配器写 via: port:if.share.contracts.<接口>。
+
+modules:
+  # ───────────── 层与第二级模块的补充条目 ─────────────
+  - id: client
+    name: 本地客户端（runner）
+    summary: 在研发机上领任务包、经本地适配器执行并回报
+  - id: client.channel
+    name: 通道与任务执行
+    summary: 保持与内核的连接，把任务包去重执行并按序回报
+    abstraction: 按「连接 / 执行 / 分派」切分：通道只管收发与回报队列，执行器管去重、并发道与会话生命周期，分派按 capability + op 把调用交给能力接口；进程入口只装配。
+    invariants:
+      - 只出站：注册、心跳、长轮询、回报与 WS 都由 runner 发起，内核不来连 runner
+      - 同一 jobId 只执行一次：WS 与长轮询重复投递的任务包直接忽略
+      - 回报经唯一出站队列按序发送：WS 在走 WS，否则走 HTTP，发不出去留在队首重试
+    excludes: [判项命令怎么跑 → client.checks, 何时派什么任务包 → kernel.dispatch, 页面与人的接口代调 → client.local-ui]
+  - id: client.checks
+    name: 判项与预览
+    summary: 在任务工作树里跑判项与预览截图，产出带证据的结论
+    abstraction: 按「判法执行 / 输出解析 / 排队」切分：判项只给 pass/fail 与证据、失败清单解析是纯函数，并发约束集中在道里，结论的取舍留给内核。
+    invariants:
+      - 只认 command 与 scope 两种判法，其他判法以 fault 失败
+      - 判前核对 HEAD 是要判的提交（需要时工作树干净），不符就不跑并回原因
+      - 标了 exclusive 的命令模板在同一 runner 内一次只跑一个，排队时间不计超时
+    excludes: [对照存量红与判定能否合入 → kernel.rules, 真机场景运行 → adapters.device]
+  - id: client.profiles
+    name: 工作环境与运维
+    summary: 管理工作环境与适配器注册表，提供体检、发布与本机命令
+    abstraction: 文件为真源：工作环境按文件加载、按名字 + 哈希钉住，能力实现一律经注册表的适配器模块创建，体检、发布与依赖缓存都从环境的槽取实现。
+  - id: client.local-ui
+    name: 本地 UI 服务
+    summary: 在本机给主人提供页面、代调内核并推送卡片与任务变化
+    abstraction: 按「服务 / 代调 / 提醒 / 来源」切分：服务只做路由与防跨站，内核数据经代调现取不留存，提醒与录入各按契约（DecisionChannel / SignalSource）实现。
+    invariants:
+      - 只监听 127.0.0.1，校验 Host / Origin / Sec-Fetch-Site，除 /api/session 外都要每次启动随机生成的页面令牌
+      - 不持有卡片与任务：一律用 runner 令牌代主人向内核现取，未注册完成时回 503
+      - 同一张卡只弹一次系统通知，已弹集合落盘，重启不重弹
+    excludes: [卡片与任务的真源 → kernel.tasks, 页面本身 → surface.shell]
+
+  # ───────────────────────── client.channel ─────────────────────────
+  - id: client.channel.boot
+    parent: client.channel
+    name: 进程入口与装配
+    summary: 启动 runner 进程，装好适配器、工作环境与本地 UI
+    kind: component
+    responsibility: >-
+      gixn-runner 进程入口：读配置与路径、建日志与证据存储，读工作环境；按环境变量（GIXN_RUNNER_AI_MODULE / REPO_MODULE / DEVICE_MODULE）
+      动态加载适配器模块的默认工厂，没配时 AI / 真机按默认环境的组件从内置注册表建、本地工作区用内置的；起本地 UI 与 Runner，
+      SIGTERM / SIGINT 时优雅退出。包入口转出 runner 的全部公共符号。不做任何任务执行。
+    codeRefs: [packages/runner/src/bin.ts, packages/runner/src/index.ts, packages/runner/src/logger.ts]
+
+  - id: client.channel.config
+    parent: client.channel
+    name: 配置与本机状态
+    summary: 读写 runner 配置、数据根路径与注册状态
+    kind: component
+    responsibility: >-
+      runner.yaml 的 zod 校验与读入、数据根与各文件路径（GIXN_DATA_DIR）、三条并发道上限与起会话错峰的缺省、本地 UI 配置解析；
+      state.json（runnerId 与 runner 令牌）的原子读写，供重启后沿用 runnerId 注册。
+    provides: [if.client.channel.RunnerConfig, if.client.channel.resolvePaths]
+    codeRefs: [packages/runner/src/config.ts]
+
+  - id: client.channel.runner
+    parent: client.channel
+    name: 通道主体
+    summary: 注册、心跳、收任务包并按序回报，断线自动切换通道
+    kind: component
+    responsibility: >-
+      注册（带 previousRunnerId，失败指数退避，401 自动重新注册）→ 按 heartbeatSec 心跳（带运行中的 jobId，响应里的 abortJobIds 立即中止）→
+      WebSocket 收 jobs / abort；WS 断开或连不上退回长轮询，WS 恢复后停轮询；亲和别的 runner 的任务包忽略。回报进唯一出站队列按序发。
+      给本地 UI 只读快照、设备就绪探测与内核消息订阅。
+    principle: |
+      - 通道二选一：WS 打开即中止长轮询并冲刷回报队列；WS 关闭即开长轮询并按退避重连（上限 30s）。
+      - 回报队列：队首发成功才出队；WS 发送失败退回 HTTP，HTTP 失败定时重试，退出时限时冲刷。
+    provides: [if.client.channel.Runner]
+    codeRefs: [packages/runner/src/runner.ts]
+
+  - id: client.channel.kernel-client
+    parent: client.channel
+    name: 内核 HTTP 客户端
+    summary: 以契约路由向内核发 runner 接口请求，每次都带超时
+    kind: component
+    responsibility: >-
+      runner → 内核的 HTTP 调用：注册、心跳、长轮询取任务包、回报进展、开跑前取统筹者最新提示词；按契约 Routes 拼路径、用 runner 令牌鉴权、
+      响应按契约 schema 校验；非 2xx 抛 KernelHttpError（带状态码），并给出 WS 地址。
+    provides: [if.client.channel.KernelClient, if.client.channel.KernelHttpError]
+    codeRefs: [packages/runner/src/kernel-client.ts]
+
+  - id: client.channel.executor
+    parent: client.channel
+    name: 任务执行器
+    summary: 把任务包按三条并发道去重执行，管理 AI 会话的生死
+    kind: component
+    responsibility: >-
+      收到即回 accepted，按 jobId 去重；任务包分三条道（内核作业、短执行、长执行）各自限流、先来先到，起 AI 会话另有错峰；
+      session.start 交给 AiExecutor，按间隔报进展、超时后强杀兜底，统筹执行开跑前取最新提示词（取不到用派发时那份），只读角色换到只读快照目录；
+      session.kill 立即杀对应会话；adapter.call 交给分派并套 job 超时（排串行道的时间不计）。中止与退出时报 killed。
+    principle: |
+      - 道：adapter.call 走内核作业道，不占 AI 会话位——统筹会话常同步等这类作业，同道会互等到超时。
+      - 失败只做粗分类（超时 / 适配器自带 / unknown），细分归内核。
+    codeRefs: [packages/runner/src/executor.ts]
+
+  - id: client.channel.dispatch
+    parent: client.channel
+    name: 调用分派
+    summary: 按能力与操作名把调用交给工作区、代码平台、真机或内置判项
+    kind: component
+    responsibility: >-
+      adapter.call 的分派：repo 能力分给本地工作区或按任务钉住的工作环境取的代码平台（旧 op 名作别名），合入成功后按环境自动发布一次；
+      device 能力分给 DeviceLab（跑场景前锁设备、按需起被测页面，证据文件逐个进证据存储）；command 能力只有内置 run_check；
+      另有清理工作树与预览截图。op 名称表在这里。没有对应适配器时抛 ADAPTER_MISSING 故障。
+    codeRefs: [packages/runner/src/dispatch.ts, packages/runner/src/ops.ts]
+
+  - id: client.channel.faults
+    parent: client.channel
+    name: 故障与超时
+    summary: 把异常粗分成契约故障，给调用套可暂停的超时
+    kind: component
+    responsibility: 超时错误与缺适配器故障（errorCode ADAPTER_MISSING，要人动手）；toFault 只分超时、适配器自带、unknown 三类；withTimeout 与可暂停的超时（排道时停表）。
+    codeRefs: [packages/runner/src/faults.ts]
+
+  # ───────────────────────── client.checks ─────────────────────────
+  - id: client.checks.run-check
+    parent: client.checks
+    name: 判项执行
+    summary: 按 command 或 scope 判法判一个检查项并存证据
+    kind: component
+    responsibility: >-
+      run_check：command 判法在工作树里跑命令（超时取判法与 job 的小者），按退出码与报告里的必过用例判 pass，完整输出与报告进证据，
+      失败时附失败清单；scope 判法取 diff 的文件逐个对允许 / 禁止路径判越界。判前核对 HEAD 与工作树干净，不符回跳过原因。
+    codeRefs: [packages/runner/src/check.ts]
+
+  - id: client.checks.failures
+    parent: client.checks
+    name: 失败清单解析
+    summary: 从判项命令输出里解析失败的用例与包
+    kind: component
+    responsibility: 纯函数 parseCheckFailures：认 pnpm -r、vitest、node:test 的输出，列出失败用例与失败包；认不全时补一条 UNPARSED 条目，保证内核照旧判 fail。
+    codeRefs: [packages/runner/src/check-failures.ts]
+
+  - id: client.checks.lanes
+    parent: client.checks
+    name: 串行道与起会话错峰
+    summary: 让独占判项串行执行，并给 AI 会话的启动错峰
+    kind: component
+    responsibility: ExclusiveLane：标 exclusive 的判项在本 runner 内先来先到一次一个，排队时可中止并通知执行器停表；StartPacer：任意时间窗内最多放行若干个会话启动。只管本 runner 内。
+    codeRefs: [packages/runner/src/lane.ts]
+
+  - id: client.checks.preview
+    parent: client.checks
+    name: 预览截图
+    summary: 在任务工作树里起预览服务并逐页无头截图
+    kind: component
+    responsibility: >-
+      preview_capture：按配方 verification.preview 起服务（{port} 换成空闲端口）、等 readyUrl 2xx、逐页截图，截图与服务日志进证据，
+      截完杀整棵进程树；总时限即调用超时。截图器是可注入的端口，缺省动态加载本地真机组件的无头 Chrome 截图。
+    provides: [if.client.checks.Screenshotter]
+    codeRefs: [packages/runner/src/preview.ts]
+
+  # ───────────────────────── client.profiles ─────────────────────────
+  - id: client.profiles.store
+    parent: client.profiles
+    name: 工作环境
+    summary: 加载工作环境文件，按任务钉住的环境给出各槽的实现
+    kind: component
+    responsibility: >-
+      <数据根>/profiles/*.yaml 为真源（非法文件启动即失败），没有文件时生成兼容的 gitlab-legacy；默认环境的选择与写回 runner.yaml；
+      录入时钉住「名字 + 内容哈希」；按任务钉住的环境经注册表建代码平台、发布器、依赖源并缓存；列表脱敏、体检与快检入口。
+    provides: [if.client.profiles.Profiles, if.client.profiles.loadProfiles]
+    codeRefs: [packages/runner/src/profiles.ts]
+
+  - id: client.profiles.registry
+    parent: client.profiles
+    name: 内置适配器注册表
+    summary: 把工作环境里的 use 名字映射到适配器模块
+    kind: component
+    responsibility: >-
+      各槽的内置适配器模块：codeHost（local-git、gitlab、内存假平台 fake）、ai（claude-cli）、device（device-local）、decision / signal（本地 UI 自带）、
+      release（local-command）、deps（private-cache）；ai 与 device 的创建按兄弟包的 runner-module 动态加载；代码平台的体检换成 runner 版。
+    provides: [if.client.profiles.builtinModules]
+    codeRefs: [packages/runner/src/registry.ts]
+
+  - id: client.profiles.doctor
+    parent: client.profiles
+    name: 体检
+    summary: 逐槽检查工作环境的适配器与配方，给出修法
+    kind: component
+    responsibility: >-
+      完整体检（全部槽与配方，结果落盘为最近一次）与新建任务前的快检（只看要用的槽与目标配方，单项 5s）；各适配器的 runner 版检查
+      （git、glab 配置、claude 可执行、设备就绪），每条 bad / warn 带一句修法与命令。
+    codeRefs: [packages/runner/src/doctor.ts, packages/runner/src/module-checks.ts]
+
+  - id: client.profiles.release
+    parent: client.profiles
+    name: 本地发布入口
+    summary: 在集成分支最新提交上按环境的发布器发布一次
+    kind: component
+    responsibility: 合入后自动发布与 gixn release 共用：环境 release 槽建发布器 → 代码平台取集成分支最新提交 → 发布；没配发布或配方没有 release 命令返回 null，失败不抛、回 ok=false 与原因。
+    codeRefs: [packages/runner/src/release.ts]
+
+  - id: client.profiles.private-cache
+    parent: client.profiles
+    name: 私有包缓存
+    summary: 让依赖私有包的项目断内网也能装依赖
+    kind: component
+    responsibility: >-
+      deps 槽 private-cache：专用 pnpm store；gixn deps sync 取集成分支锁文件、pnpm fetch 拉全部依赖进 store 并记录同步；
+      启用后给配方 install 注入离线优先的 store 环境变量；体检按 integrity 查 scope 内的包是否已缓存。不做本地 registry 服务。
+    codeRefs: ['packages/runner/src/deps/**']
+
+  - id: client.profiles.worktrees
+    parent: client.profiles
+    name: 只读快照与工作树清扫
+    summary: 给只读会话换到集成分支快照，任务终态后清理工作树
+    kind: component
+    responsibility: >-
+      只读角色会话（统筹者、调研、审核）的运行目录从配方常驻仓库换成 HEAD = 集成分支最新的只读快照工作树；集成分支提交号的统一取法；
+      cleanup_worktrees 逐个任务交给本地工作区删任务与基线工作树，失败只回报。两者都按本地工作区是否具备该扩展能力判断，不具备则不动。
+    codeRefs: [packages/runner/src/readonly-cwd.ts, packages/runner/src/worktree-sweep.ts]
+
+  - id: client.profiles.cli
+    parent: client.profiles
+    name: 本机命令行
+    summary: 提供 gixn release、doctor、deps sync 等本机命令
+    kind: component
+    responsibility: gixn 命令行：release <配方>、doctor、deps sync <配方>，与页面和 runner 共用同一套环境、注册表与发布逻辑；另含手动真截图脚本。
+    codeRefs: [packages/runner/src/cli.ts, 'packages/runner/scripts/**']
+
+  # ───────────────────────── client.local-ui ─────────────────────────
+  - id: client.local-ui.boot
+    parent: client.local-ui
+    name: 本地 UI 装配
+    summary: 按配置在 runner 进程内装起本地 UI 服务
+    kind: component
+    responsibility: startLocalUi：解析 UI 配置（关闭时不起），装配代调内核、决策通道与系统通知、录入来源、本机状态、工作树打开器与 local-git 变更页，起服务；页面产物目录的定位。
+    codeRefs: [packages/runner/src/ui/index.ts]
+
+  - id: client.local-ui.server
+    parent: client.local-ui
+    name: 本地 HTTP 服务
+    summary: 托管页面与 /api，防跨站，并经 SSE 推卡片与任务变化
+    kind: component
+    responsibility: >-
+      只监听 127.0.0.1 的 HTTP 服务：静态页面与 SPA 回退、/api 路由（会话、录入、卡片、信号整理、任务、度量、工作环境、证据、会话记录、打开工作树）；
+      防跨站与页面令牌；卡片巡检（内核 WS 推送 + 5s 兜底）——新卡提醒、离开待决撤提醒，卡片或任务变了经 SSE 推 cards.changed / tasks.changed。
+    codeRefs: [packages/runner/src/ui/server.ts]
+
+  - id: client.local-ui.kernel-proxy
+    parent: client.local-ui
+    name: 人的接口代调
+    summary: 用 runner 令牌代主人调用内核的人的接口
+    kind: component
+    responsibility: UiKernel：录入信号、列卡与答卡、任务与账、信号池整理、草稿任务操作、剧本度量与通知；令牌由 Runner 注册后提供，没有时抛 KernelNotReadyError。
+    codeRefs: [packages/runner/src/ui/kernel-api.ts]
+
+  - id: client.local-ui.decision
+    parent: client.local-ui
+    name: 决策通道与系统通知
+    summary: 有新卡时弹一次系统通知，点击直达卡片
+    kind: component
+    responsibility: >-
+      LocalDecisionChannel 实现契约 DecisionChannel：present 同一张卡只弹一次（已弹 id 落盘）、withdraw 移除；系统通知有 terminal-notifier 就用它直达卡片深链，
+      否则退回 osascript。卡片本体不在这里。
+    codeRefs: [packages/runner/src/ui/decision-channel.ts, packages/runner/src/ui/notify.ts]
+
+  - id: client.local-ui.intake
+    parent: client.local-ui
+    name: 录入来源
+    summary: 把页面录入的一句话变成信号交给内核
+    kind: component
+    responsibility: LocalSignalSource 实现契约 SignalSource：页面提交补上录入时间后交给 sink；幂等键、预算、剧本与进池方式挂在信号旁边，由 sink 带给内核。
+    codeRefs: [packages/runner/src/ui/signal-source.ts]
+
+  - id: client.local-ui.status
+    parent: client.local-ui
+    name: 本机状态
+    summary: 把 runner 快照拼成页面要的本机状态与设备就绪
+    kind: component
+    responsibility: GET /api/runner 的数据：通道、心跳、并发道与占用、正在执行（带人能读的名字与任务）、设备就绪（带超时与短缓存，占用标 busy）、配方。
+    codeRefs: [packages/runner/src/ui/runner-status.ts]
+
+  - id: client.local-ui.transcript
+    parent: client.local-ui
+    name: 会话记录读取
+    summary: 把 claude 会话 jsonl 整理成页面能读的条目
+    kind: component
+    responsibility: 只取提示词、助手文字、工具调用与结果，单条截断、总条数封顶；路径只许在 ~/.claude/projects 下（由服务校验）。
+    codeRefs: [packages/runner/src/ui/transcript.ts]
+
+interfaces:
+  - id: if.client.channel.Runner
+    name: Runner
+    owner: client.channel.runner
+    signature: |
+      class Runner {
+        constructor(deps: RunnerDeps)        // config, paths, evidence, logger, ai?, workspace?, profiles?, device?, screenshotter?
+        readonly client: KernelClient
+        start(): Promise<void>
+        stop(reason?: string): Promise<void>
+        snapshot(): RunnerSnapshot
+        checkDeviceReadiness(deviceId: string): Promise<Readiness | null>
+        onServerMessage(fn: (m: ServerMessage) => void): () => void
+      }
+    semantics: |
+      - start 注册成功后才开心跳与 WS；注册失败指数退避直到 stop
+      - stop：停止拉取，运行中的任务报 killed，限时冲刷回报后断开
+  - id: if.client.channel.KernelClient
+    name: KernelClient
+    owner: client.channel.kernel-client
+    signature: |
+      class KernelClient {
+        token: string | null
+        register(body): Promise<RegisterRunnerResponse>
+        heartbeat(runningJobIds: string[]): Promise<HeartbeatResponse>
+        pullJobs(waitSec: number, signal?: AbortSignal): Promise<PullJobsResponse>
+        executionPrompt(executionId: string, timeoutMs?: number): Promise<ExecutionPromptResponse>
+        postUpdate(jobId: string, update: JobUpdate): Promise<void>
+        streamUrl(): string
+      }
+    semantics: |
+      - 每次调用都带超时（缺省 15s，长轮询为 waitSec + 15s）
+      - 非 2xx 抛 KernelHttpError；响应按契约 schema 校验
+  - id: if.client.channel.KernelHttpError
+    name: KernelHttpError
+    owner: client.channel.kernel-client
+    signature: |
+      class KernelHttpError extends Error { readonly status: number }
+  - id: if.client.channel.RunnerConfig
+    name: RunnerConfig
+    owner: client.channel.config
+    signature: |
+      const RunnerConfig: z.ZodObject<{ kernelUrl, owner, bootstrapTokenPath?, recipes, maxConcurrency, kernelJobs?, shortSessions?, longSessions?, devices, defaultProfile?, ui? /* … */ }>
+  - id: if.client.channel.resolvePaths
+    name: resolvePaths
+    owner: client.channel.config
+    signature: |
+      resolvePaths(env?: NodeJS.ProcessEnv): RunnerPaths
+  - id: if.client.profiles.Profiles
+    name: Profiles
+    owner: client.profiles.store
+    signature: |
+      class Profiles {
+        get(name?: string | null): LoadedProfile
+        pin(name?: string | null): Promise<PinnedProfile>
+        setDefault(name: string): Promise<void>
+        codeHost(name?: string | null, pinnedHash?: string): Promise<ResolvedCodeHost>
+        releaser(name?: string | null): Promise<Releaser | null>
+        installEnv(name: string | null | undefined, recipe: Recipe): Promise<Record<string, string>>
+        doctor(name: string): Promise<DoctorReport>
+        quickCheck(name: string, repo: string): Promise<DoctorReport>
+        list(): Promise<ListProfilesResponse>
+      }
+    semantics: |
+      - 钉住的哈希与当前文件不同时只告警，任务中途不换环境
+      - 各槽实现经注册表的适配器模块创建并缓存
+  - id: if.client.profiles.loadProfiles
+    name: loadProfiles
+    owner: client.profiles.store
+    signature: |
+      loadProfiles(o: { dataDir: string; defaultProfile?: string; recipes?: Recipe[] }): ProfileSet
+    semantics: |
+      - 非法文件直接抛 ProfileError；没有文件时生成 gitlab-legacy
+  - id: if.client.profiles.builtinModules
+    name: builtinModules
+    owner: client.profiles.registry
+    signature: |
+      builtinModules(o?: BuiltinModuleOptions): ModuleRegistry   // Partial<Record<ProfileSlot, Record<string, AdapterModule<unknown>>>>
+  - id: if.client.checks.Screenshotter
+    name: Screenshotter
+    owner: client.checks.preview
+    signature: |
+      interface Screenshotter {
+        capture(input: { shots: { url: string; file: string }[]; timeoutMs: number; signal?: AbortSignal }): Promise<{ browser?: string }>
+      }
+    semantics: |
+      - 经 RunnerDeps.screenshotter 注入（测试替身）；缺省 chromeScreenshotter 动态加载本地真机组件的无头截图
+
+relations:
+  # ───────────── 跨进程：runner → 内核（kernel-api） ─────────────
+  - id: rel.client.register
+    from: client.channel.kernel-client
+    to: server.http
+    type: commands
+    mode: async
+    via: channel:http@share.contracts
+    purpose: 登记本机与主人、换取 runner 令牌
+    description: POST /v1/runners/register（引导令牌 + previousRunnerId + 能力），返回 runnerId、令牌与心跳间隔；Runner 启动与令牌 401 时调用。
+  - id: rel.client.heartbeat
+    from: client.channel.kernel-client
+    to: server.http
+    type: commands
+    mode: async
+    via: channel:http@share.contracts
+    purpose: 报活并领回要中止的任务
+    description: 每 heartbeatSec 秒 POST /v1/runners/heartbeat 带运行中的 jobId，响应里的 abortJobIds 交执行器立即中止。
+  - id: rel.client.pull-jobs
+    from: client.channel.kernel-client
+    to: server.hub
+    type: commands
+    mode: async
+    via: channel:http@share.contracts
+    payload: ds.Job
+    purpose: WS 不通时长轮询领任务包
+    description: GET /v1/runners/jobs?waitSec=25，内核 hub 原子认领后交付；WS 断开或连不上时由 Runner 循环调用，WS 恢复即中止。
+  - id: rel.client.report-http
+    from: client.channel.kernel-client
+    to: server.http
+    type: commands
+    mode: async
+    via: channel:http@share.contracts
+    payload: ds.JobUpdate
+    purpose: WS 不在时回报任务进展与结果
+    description: POST /v1/runners/jobs/:jobId/updates，回报队列在 WS 发送失败或未连上时走这里，失败定时重试。
+  - id: rel.client.fresh-prompt
+    from: client.channel.kernel-client
+    to: server.http
+    type: queries
+    mode: async
+    via: channel:http@share.contracts
+    purpose: 开跑前取统筹者最新提示词
+    description: GET /v1/runners/executions/:executionId/prompt（10s 超时）；409 或失败时执行器退回派发时那份提示词。
+  - id: rel.client.ws-attach
+    from: client.channel.runner
+    to: server.hub
+    type: commands
+    mode: async
+    via: channel:ws@share.contracts
+    purpose: 建立推送通道以收任务包与中止
+    description: 以 Bearer 令牌连 /v1/runners/stream，内核 hub 登记该连接并经它推 jobs / abort / cards.changed；断开后按退避重连（上限 30s）。
+  - id: rel.client.report-ws
+    from: client.channel.runner
+    to: server.http
+    type: commands
+    mode: async
+    via: channel:ws@share.contracts
+    payload: ds.JobUpdate
+    purpose: 按序回报任务进展与结果
+    description: 回报队列队首经 WS 发 {type:update, jobId, update}，由 kernel-api 的 WS 处理写入任务包回报；发送失败退回 HTTP。
+
+  # ───────────── 通道内部 ─────────────
+  - id: rel.client.boot-runner
+    from: client.channel.boot
+    to: client.channel.runner
+    type: commands
+    mode: async
+    interface: if.client.channel.Runner
+    purpose: 启动通道，收到信号时优雅退出
+    description: main() 建 Runner 后 start()；SIGTERM / SIGINT 时与本地 UI 一起 stop()。
+  - id: rel.client.boot-config
+    from: client.channel.boot
+    to: client.channel.config
+    type: queries
+    mode: async
+    interface: if.client.channel.resolvePaths
+    purpose: 取数据根路径与校验过的配置
+    description: resolvePaths() 定数据根与各文件路径，loadConfig() 读 runner.yaml 并 zod 校验，无效即退出。
+  - id: rel.client.boot-profiles
+    from: client.channel.boot
+    to: client.profiles.store
+    type: queries
+    interface: if.client.profiles.loadProfiles
+    purpose: 取默认环境的 ai 与 device 组件
+    description: 加载工作环境（非法即退出），取默认环境的组件配置，交注册表模块建 AI 执行器与真机组件（环境变量覆盖优先）。
+  - id: rel.client.boot-registry
+    from: client.channel.boot
+    to: client.profiles.registry
+    type: queries
+    interface: if.client.profiles.builtinModules
+    purpose: 取内置适配器注册表
+    description: builtinModules({devices}) 得到各槽的适配器模块，交给工作环境与默认组件的创建。
+  - id: rel.client.boot-ui
+    from: client.channel.boot
+    to: client.local-ui.boot
+    type: commands
+    mode: async
+    purpose: 与注册并行起本地页面
+    description: startLocalUi({runner, config, paths, evidence, profiles})；失败只记日志，runner 照常运行。
+  - id: rel.client.runner-client
+    from: client.channel.runner
+    to: client.channel.kernel-client
+    type: commands
+    mode: async
+    interface: if.client.channel.KernelClient
+    purpose: 经 HTTP 注册、心跳、轮询与回报
+    description: Runner 持有 KernelClient，register / heartbeat / pullJobs / postUpdate 都经它发出，401 时重新注册。
+  - id: rel.client.runner-executor
+    from: client.channel.runner
+    to: client.channel.executor
+    type: commands
+    purpose: 把收到的任务包交去执行或中止
+    description: WS 或长轮询收到的任务包逐个 submit（亲和别的 runner 的忽略）；abort 消息与心跳的 abortJobIds 调 abort；退出时 shutdown。
+  - id: rel.client.runner-state
+    from: client.channel.runner
+    to: client.channel.config
+    type: commands
+    mode: async
+    purpose: 沿用并保存 runnerId 与令牌
+    description: 注册前 loadState 取上次的 runnerId 作 previousRunnerId，注册成功后 saveState 原子写回 state.json。
+  - id: rel.client.executor-report
+    from: client.channel.executor
+    to: client.channel.runner
+    type: commands
+    via: channel:callback@client.channel.executor
+    purpose: 交出每个任务包的进展与结果
+    description: 执行器选项里的 report(jobId, update) 是 Runner 注入的回调，把回报放进出站队列并触发冲刷。
+  - id: rel.client.executor-prompt
+    from: client.channel.executor
+    to: client.channel.kernel-client
+    type: queries
+    mode: async
+    interface: if.client.channel.KernelClient
+    via: channel:callback@client.channel.executor
+    purpose: 统筹执行开跑前换上最新提示词
+    description: 执行器选项里的 freshPrompt(executionId) 是 Runner 注入的回调，转调 KernelClient.executionPrompt（10s 超时），抛错或空时用任务包里那份。
+  - id: rel.client.executor-ai
+    from: client.channel.executor
+    to: adapters.ai
+    type: commands
+    mode: async
+    interface: if.share.contracts.AiExecutor
+    via: port:if.share.contracts.AiExecutor
+    payload: ds.SessionSpec
+    purpose: 起或续 AI 会话并收事件与结局
+    description: session.start 任务包转成 SessionSpec 调 AiExecutor.start(spec, onEvent)，事件转成 session.started / progress，done 落定报 session.finished；中止调 RunningSession.kill。
+  - id: rel.client.executor-dispatch
+    from: client.channel.executor
+    to: client.channel.dispatch
+    type: commands
+    mode: async
+    purpose: 把 adapter.call 交给对应能力执行
+    description: adapter.call 任务包套可暂停的 job 超时后交 dispatchAdapterCall，结果与证据报 adapter.completed，异常经 toFault 粗分类。
+  - id: rel.client.executor-lanes
+    from: client.channel.executor
+    to: client.checks.lanes
+    type: commands
+    mode: async
+    purpose: 给 AI 会话启动错峰
+    description: 起会话前经 StartPacer 排队（任意时间窗内最多放行若干个），并持有本 runner 唯一的判项串行道交给分派。
+  - id: rel.client.executor-cwd
+    from: client.channel.executor
+    to: client.profiles.worktrees
+    type: commands
+    mode: async
+    purpose: 给只读会话换到集成分支快照
+    description: 起会话前 resolveSessionCwd：只读角色且 cwd 是配方常驻仓库时，换成只读快照工作树。
+  - id: rel.client.executor-faults
+    from: client.channel.executor
+    to: client.channel.faults
+    type: queries
+    purpose: 把异常归成契约故障
+    description: 执行失败经 toFault 粗分类，超时用 withTimeout / pausableTimeout 包裹，缺 AI 执行器报 adapterMissingFault。
+
+  # ───────────── 分派 → 能力接口（适配器）与内置判项 ─────────────
+  - id: rel.client.dispatch-workspace
+    from: client.channel.dispatch
+    to: adapters.repo
+    type: commands
+    mode: async
+    interface: if.share.contracts.Workspace
+    via: port:if.share.contracts.Workspace
+    purpose: 在本机建工作树、跑命令、提交与对齐
+    description: repo 能力的本地工作区 op（prepare_worktree / prepare_baseline_worktree / diff / run_command / commit_all / sync_integration）按 args 校验后调 Workspace；run_command 的日志文件进证据。
+  - id: rel.client.dispatch-codehost
+    from: client.channel.dispatch
+    to: adapters.repo
+    type: commands
+    mode: async
+    interface: if.share.contracts.CodeHost
+    via: port:if.share.contracts.CodeHost
+    purpose: 在任务钉住的代码平台上发布、开变更与合入
+    description: fetch_integration / publish / open_change / get_change / get_checks / merge_after_approval 经工作环境取的 CodeHost 执行，结果带环境名与平台能力；旧 op 名补旧字段。
+  - id: rel.client.dispatch-device
+    from: client.channel.dispatch
+    to: adapters.device
+    type: commands
+    mode: async
+    interface: if.share.contracts.DeviceLab
+    via: port:if.share.contracts.DeviceLab
+    payload: ds.ScenarioRunInput
+    purpose: 列设备、查就绪、自愈并跑场景
+    description: device 能力的 op 调 DeviceLab；run_scenario 先 lock(deviceId)、按需起被测页面，结束后释放锁并把证据文件逐个进证据存储。
+  - id: rel.client.dispatch-check
+    from: client.channel.dispatch
+    to: client.checks.run-check
+    type: commands
+    mode: async
+    purpose: 执行内置 run_check 判项
+    description: command 能力的 run_check 交 runCheck，带上本地工作区、证据存储、串行道与执行器的停表钩子。
+  - id: rel.client.dispatch-preview
+    from: client.channel.dispatch
+    to: client.checks.preview
+    type: commands
+    mode: async
+    purpose: 执行预览截图调用
+    description: repo op preview_capture 交 capturePreviewJob，总时限 = job 超时，截图器取注入的或缺省 Chrome 无头。
+  - id: rel.client.dispatch-profiles
+    from: client.channel.dispatch
+    to: client.profiles.store
+    type: queries
+    mode: async
+    interface: if.client.profiles.Profiles
+    purpose: 取任务钉住环境的代码平台与依赖环境变量
+    description: 按 args.profile / profileHash 取 ResolvedCodeHost，按环境的 deps 槽取 install 要注入的环境变量合进配方。
+  - id: rel.client.dispatch-release
+    from: client.channel.dispatch
+    to: client.profiles.release
+    type: commands
+    mode: async
+    purpose: 合入成功后自动发布一次
+    description: merge_after_approval 结果为 merged 时在合入调用剩余时限内 publishRelease，结果放进 release 字段，失败不影响合入。
+  - id: rel.client.dispatch-sweep
+    from: client.channel.dispatch
+    to: client.profiles.worktrees
+    type: commands
+    mode: async
+    purpose: 清理终态任务的工作树并取集成分支
+    description: cleanup_worktrees 交 cleanupTerminalWorktrees；取集成分支提交号统一经 fetchIntegrationOf。
+  - id: rel.client.dispatch-serve
+    from: client.channel.dispatch
+    to: share.proc
+    type: commands
+    mode: async
+    interface: if.share.proc.start
+    purpose: 跑场景前起被测页面服务
+    description: ScenarioRunInput.serve 给了时在任务工作树起服务进程（独立进程组），等 readyUrl 2xx，跑完杀整棵进程树。
+  - id: rel.client.dispatch-evidence
+    from: client.channel.dispatch
+    to: share.evidence
+    type: commands
+    mode: async
+    interface: if.share.evidence.EvidenceStore
+    purpose: 把命令日志与真机证据存进证据存储
+    description: run_command 的日志（channel command）与 run_scenario 的截图、指标文件（channel device）按内容哈希存入，引用随回报交内核。
+
+  # ───────────── 判项与预览 ─────────────
+  - id: rel.client.check-proc
+    from: client.checks.run-check
+    to: share.proc
+    type: commands
+    mode: async
+    interface: if.share.proc.run
+    purpose: 在工作树里跑判项命令
+    description: command 判法经 run 跑命令（总超时、可中止），另用 git 核对 HEAD 与工作树干净。
+  - id: rel.client.check-diff
+    from: client.checks.run-check
+    to: adapters.repo
+    type: queries
+    mode: async
+    interface: if.share.contracts.Workspace
+    via: port:if.share.contracts.Workspace
+    purpose: 取改动文件判 scope 越界
+    description: scope 判法调 Workspace.diff({worktree, baseCommit})，逐个文件对允许 / 禁止路径判定。
+  - id: rel.client.check-failures
+    from: client.checks.run-check
+    to: client.checks.failures
+    type: queries
+    purpose: 从失败输出里列出失败用例与包
+    description: 命令判项失败时 parseCheckFailures(log, cwd)，写进结果的 detail.failedTests / failedPackages。
+  - id: rel.client.check-lane
+    from: client.checks.run-check
+    to: client.checks.lanes
+    type: commands
+    mode: async
+    purpose: 独占判项排队一次只跑一个
+    description: 判法模板标 exclusive 时进 ExclusiveLane 排队，进出道时经 LaneHooks 通知执行器停表与复表。
+  - id: rel.client.check-evidence
+    from: client.checks.run-check
+    to: share.evidence
+    type: commands
+    mode: async
+    interface: if.share.evidence.EvidenceStore
+    purpose: 存命令输出、测试报告与越界报告
+    description: 完整输出（channel command）、vitest/jest 报告与 scope 判定报告（channel scope）存入证据存储。
+  - id: rel.client.preview-proc
+    from: client.checks.preview
+    to: share.proc
+    type: commands
+    mode: async
+    interface: if.share.proc.start
+    purpose: 起预览服务并在截完后杀掉
+    description: 按 verification.preview 起服务进程（寿命 = 总时限），截完或取消即杀整棵进程树。
+  - id: rel.client.preview-shot
+    from: client.checks.preview
+    to: adapters.device
+    type: commands
+    mode: async
+    interface: if.adapters.device.captureScreenshots
+    purpose: 用本机无头 Chrome 逐页截图
+    description: 缺省截图器 chromeScreenshotter 按相对路径动态 import 本地真机组件的 screenshot 模块，调 captureScreenshots；runner 不硬依赖 playwright。
+  - id: rel.client.preview-evidence
+    from: client.checks.preview
+    to: share.evidence
+    type: commands
+    mode: async
+    interface: if.share.evidence.EvidenceStore
+    purpose: 把截图与服务日志存为证据
+    description: 每页截图与服务日志以 preview 渠道存入证据存储。
+
+  # ───────────── 工作环境与运维 ─────────────
+  - id: rel.client.profiles-doctor
+    from: client.profiles.store
+    to: client.profiles.doctor
+    type: commands
+    mode: async
+    purpose: 对环境做完整体检或快检
+    description: doctor(name) 跑完整体检并落盘为最近一次，quickCheck 只看要用的槽与目标配方，lastDoctor 读上次结果。
+  - id: rel.client.profiles-deps
+    from: client.profiles.store
+    to: client.profiles.private-cache
+    type: queries
+    mode: async
+    interface: if.share.contracts.DepSource
+    via: port:if.share.contracts.DepSource
+    purpose: 取 install 要注入的依赖环境变量
+    description: installEnv 经环境 deps 槽建的 DepSource（private-cache）取 store 目录与离线优先的环境变量。
+  - id: rel.client.doctor-module-check
+    from: client.profiles.doctor
+    to: adapters.repo
+    type: queries
+    mode: async
+    interface: if.share.contracts.AdapterModule
+    via: port:if.share.contracts.AdapterModule
+    purpose: 体检发布等槽的适配器配置
+    description: runDoctor 逐槽调注册表适配器模块的 check(config, ctx)；release 槽 local-command 用适配器包自带的检查。
+  - id: rel.client.doctor-local-git
+    from: client.profiles.doctor
+    to: adapters.repo
+    type: queries
+    interface: if.adapters.repo.LocalGitCodeHost
+    purpose: 查 local-git 的集成分支是否存在
+    description: localGitCheck 按 LocalGitConfig 建 LocalGitCodeHost 取集成分支名，再用 git 查常驻仓库与分支。
+  - id: rel.client.doctor-device
+    from: client.profiles.doctor
+    to: adapters.device
+    type: queries
+    mode: async
+    interface: if.share.contracts.DeviceLab
+    via: port:if.share.contracts.DeviceLab
+    purpose: 探测登记设备是否就绪
+    description: device-local 体检经注册表建的真机组件 listDevices / checkReadiness（3s 超时）。
+  - id: rel.client.release-releaser
+    from: client.profiles.release
+    to: adapters.repo
+    type: commands
+    mode: async
+    interface: if.share.contracts.Releaser
+    via: port:if.share.contracts.Releaser
+    purpose: 在集成分支最新提交上出发布版
+    description: 环境 release 槽建的发布器 release(project, {commit, branch, signal})，成功给 tag 与产物目录。
+  - id: rel.client.release-integration
+    from: client.profiles.release
+    to: adapters.repo
+    type: queries
+    mode: async
+    interface: if.share.contracts.CodeHost
+    via: port:if.share.contracts.CodeHost
+    purpose: 取集成分支最新提交作发布点
+    description: 发布前经钉住环境的代码平台 fetchIntegration。
+  - id: rel.client.release-profiles
+    from: client.profiles.release
+    to: client.profiles.store
+    type: queries
+    mode: async
+    interface: if.client.profiles.Profiles
+    purpose: 取环境的发布器与代码平台
+    description: publishRelease 经 Profiles.releaser 与 Profiles.codeHost 取实现，没配发布即返回 null。
+  - id: rel.client.private-cache-proc
+    from: client.profiles.private-cache
+    to: share.proc
+    type: commands
+    mode: async
+    interface: if.share.proc.run
+    purpose: 拉依赖进专用 store
+    description: deps sync 在临时目录跑 pnpm fetch --store-dir；体检与同步经 git show 读集成分支的锁文件。
+  - id: rel.client.worktrees-snapshot
+    from: client.profiles.worktrees
+    to: adapters.repo
+    type: commands
+    mode: async
+    interface: if.share.contracts.Workspace
+    via: port:if.share.contracts.Workspace
+    purpose: 建只读快照、清理任务工作树
+    description: 本地工作区具备扩展能力时（LocalWorkspace 的 findResidentRecipe / prepareReadSnapshot / cleanupTaskWorktrees，契约 Workspace 之外、按方法存在判断）才调用，不具备则不换 cwd、清理记为 errors。
+  - id: rel.client.worktrees-integration
+    from: client.profiles.worktrees
+    to: adapters.repo
+    type: queries
+    mode: async
+    interface: if.share.contracts.CodeHost
+    via: port:if.share.contracts.CodeHost
+    purpose: 取集成分支最新提交号
+    description: fetchIntegrationOf 调代码平台 fetchIntegration；只读快照与分派的 fetch_integration / prepare_worktree / sync_integration 共用。
+  - id: rel.client.cli-release
+    from: client.profiles.cli
+    to: client.profiles.release
+    type: commands
+    mode: async
+    purpose: 手动发布一次
+    description: gixn release <配方> [--profile] 读配方目录与环境后调 publishRelease，结果打印一行 JSON。
+  - id: rel.client.cli-doctor
+    from: client.profiles.cli
+    to: client.profiles.store
+    type: commands
+    mode: async
+    interface: if.client.profiles.Profiles
+    purpose: 在命令行跑体检
+    description: gixn doctor 按环境调 Profiles.doctor，逐条打印检查与修法，有 bad 退出码 1。
+  - id: rel.client.cli-deps
+    from: client.profiles.cli
+    to: client.profiles.private-cache
+    type: commands
+    mode: async
+    purpose: 同步私有包缓存
+    description: gixn deps sync <配方> 取环境 deps 槽的 store 配置调 syncDeps。
+
+  # ───────────── 本地 UI ─────────────
+  - id: rel.client.ui-start
+    from: client.local-ui.boot
+    to: client.local-ui.server
+    type: commands
+    mode: async
+    purpose: 装好依赖后起本地服务
+    description: startLocalUi 装配 UiServer 选项（代调、决策通道、录入、状态、打开器、变更页、内核消息订阅）后 start()。
+  - id: rel.client.ui-change-page
+    from: client.local-ui.boot
+    to: adapters.repo
+    type: queries
+    mode: async
+    interface: if.adapters.repo.LocalGitCodeHost
+    purpose: 给页面渲染 local-git 变更记录
+    description: 注入服务的 changePage(taskId) 建 LocalGitCodeHost 调 renderChange，返回变更记录与 git diff 的文本。
+  - id: rel.client.ui-kernel
+    from: client.local-ui.server
+    to: client.local-ui.kernel-proxy
+    type: commands
+    mode: async
+    purpose: 把页面请求转给内核
+    description: /api 的卡片、答卡、信号、任务、度量、通知请求转调 UiKernel；内核未就绪映射为 503。
+  - id: rel.client.ui-decision
+    from: client.local-ui.server
+    to: client.local-ui.decision
+    type: commands
+    mode: async
+    interface: if.share.contracts.DecisionChannel
+    purpose: 新卡提醒主人、撤下离开待决的卡
+    description: 卡片巡检发现新卡调 present、卡离开待决调 withdraw，首次巡检后 retainOnly 清理已弹集合。
+  - id: rel.client.ui-intake
+    from: client.local-ui.server
+    to: client.local-ui.intake
+    type: commands
+    mode: async
+    interface: if.share.contracts.SignalSource
+    purpose: 把页面录入交给录入来源
+    description: start 时交入 sink，POST /api/signals 调 submit；stop 时停止。
+  - id: rel.client.ui-intake-sink
+    from: client.local-ui.intake
+    to: client.local-ui.server
+    type: commands
+    mode: async
+    via: channel:callback@share.contracts
+    purpose: 把信号交出去建任务或进池
+    description: submit 补录入时间后调 SignalSource.start 收到的 sink；sink 由服务给出，钉住工作环境后转调内核 createSignal。
+  - id: rel.client.ui-status
+    from: client.local-ui.server
+    to: client.local-ui.status
+    type: queries
+    mode: async
+    via: channel:callback@client.local-ui.server
+    purpose: 取本机状态给 /api/runner
+    description: 服务选项 runnerStatus() 由装配注入，转调 RunnerStatusBuilder.build()。
+  - id: rel.client.ui-transcript
+    from: client.local-ui.server
+    to: client.local-ui.transcript
+    type: queries
+    mode: async
+    purpose: 读会话记录给页面
+    description: GET /api/transcript 校验路径在 ~/.claude/projects 下后 readTranscript。
+  - id: rel.client.ui-profiles
+    from: client.local-ui.server
+    to: client.profiles.store
+    type: commands
+    mode: async
+    interface: if.client.profiles.Profiles
+    via: channel:inject@client.local-ui.server
+    purpose: 列环境、切默认、体检与录入时钉环境
+    description: 服务选项里的 profiles（结构类型）与 pinProfile 由装配注入 Profiles 实例；/api/profiles 列表与默认切换、/api/profiles/:name/doctor、录入前快检与 pin；没有 Profiles 时这些接口 503。
+  - id: rel.client.ui-evidence
+    from: client.local-ui.server
+    to: share.evidence
+    type: queries
+    mode: async
+    interface: if.share.evidence.EvidenceStore
+    purpose: 读本机证据给页面查看
+    description: GET /api/evidence/:hash 读证据文件与元信息，html / svg 降级为纯文本，未知类型只给下载。
+  - id: rel.client.ui-sse
+    from: client.local-ui.server
+    to: surface.api
+    type: notifies
+    via: channel:sse
+    purpose: 宣告卡片或任务有变化
+    description: GET /api/stream 的 SSE 连接上推 cards.changed（内核 WS 推送或 5s 巡检发现变化）与 tasks.changed（有页面连接时巡检），另有 25s 保活。
+  - id: rel.client.runner-ui-relay
+    from: client.channel.runner
+    to: client.local-ui.server
+    type: notifies
+    via: channel:callback@client.channel.runner
+    purpose: 转出内核经 WS 推来的消息
+    description: 服务经 onServerMessage 订阅，Runner 每收到合契约的 WS 消息即回调；服务据 cards.changed 立即刷新卡片。
+  - id: rel.client.ui-runner-status
+    from: client.local-ui.status
+    to: client.channel.runner
+    type: queries
+    mode: async
+    interface: if.client.channel.Runner
+    purpose: 读通道快照与设备就绪
+    description: build() 读 Runner.snapshot()，逐台设备经 checkDeviceReadiness 探测（3s 超时、15s 缓存）。
+  - id: rel.client.ui-signal-kernel
+    from: client.local-ui.kernel-proxy
+    to: server.http
+    type: commands
+    mode: async
+    via: channel:http@share.contracts
+    purpose: 代主人录入、答卡与整理信号
+    description: POST signals（带幂等键）、cards/:cardId/answer、信号整理 / 移动、草稿任务 draft / split / fold / decline；runner 令牌鉴权，主人身份由内核从令牌取。
+  - id: rel.client.ui-read-kernel
+    from: client.local-ui.kernel-proxy
+    to: server.http
+    type: queries
+    mode: async
+    via: channel:http@share.contracts
+    purpose: 代主人读卡片、任务、账与度量
+    description: GET cards?status=、tasks、tasks/:id、tasks/:id/events?afterSeq=、signals、metrics/playbooks、notifications，响应按契约 schema 校验。

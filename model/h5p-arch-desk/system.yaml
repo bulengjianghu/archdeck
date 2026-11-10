@@ -1,0 +1,10 @@
+system:
+  id: h5p-arch-desk
+  name: h5p-arch-desk
+  description: |
+    本地架构工作台：AI 把项目代码压缩成模块级描述，本工具画成可下钻、可回放的架构图，再对照代码事实、用规则与门禁管住演化，让架构师看见、对照、守住自己的系统。
+    按依赖方向分为呈现 / 视图状态 / 接入 / 模型四层，关于被描述系统的知识只放在不依赖 Vue 与布局库的模型层，会话状态是一个值、只经纯转移函数改变（见 docs/03-architecture.md）。
+  source:
+    repo: archdeck
+    commit: dd68b18874292f5dcfd9466bd6e42c9ed91f1846
+    generatedAt: '2026-11-09'

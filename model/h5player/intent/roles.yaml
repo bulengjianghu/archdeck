@@ -1,0 +1,12 @@
+# 模块角色（M16、U11，人拥有，ADR-0027、ADR-0030）：模块 ID → core / shared / bus / port / adapter。第二级写在骨架里，更深的写在这里或挂在父模块上的草图里（草图为准）。
+# 第五轮 T2（05-t1-rulings 第 4 条）：事件总线标 bus——它不作 notifies 的端点，通知写在真实的发布者与订阅者之间（M14）。待负责人 npm run arch -- own 登记。
+# 第六轮 T4（ADR-0030 边界样本，读代码核实）：待负责人核对后 npm run arch -- own 登记。
+#   - infra.player-index 在骨架里是 core（草图为准），端口标在它下面真正对外的两块：Player 类（packages/player/src/index.ts 默认导出、包 main）与对外转出面（类型、PluginBase 再导出）。
+#   - adapter：内置三方库与解密媒体插件（thirdParty/**、mediaPlugins/**）；把外部 MediaPlugin 包成 MU 的 MuPluginWrapper；直接用 navigator.serviceWorker 的 SW 注册与消息通道。
+roles:
+  infra.framework.kernel.event-bus: bus
+  infra.player-index.player-api: port
+  infra.player-index.public-surface: port
+  infra.third-party: adapter
+  infra.mus.process-plugin: adapter
+  infra.workers.sw-channel: adapter

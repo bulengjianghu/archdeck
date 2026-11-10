@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 c7d42a9fc848d423 present.sequence#abstraction=5f0a36de present.sequence#children=845f4cb3 present.sequence#invariants=20edf782 present.sequence#responsibility=7a0b328e present.sequence#summary=92a73a33 present.sequence.fragments#summary=74a66d53 present.sequence.heads#summary=e93d0b1a present.sequence.interact#summary=90afd4e1 present.sequence.lanes#summary=3150babe rel:rel.p2.seq-fragments=2b7d41a1 rel:rel.p2.seq-lanes=0ebae6ea rel:rel.p9.seq-heads=60cf3004">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>时序图 · 场景的银幕</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
+</style>
+  </head>
+  <body>
+
+    <h1>场景的银幕</h1>
+    <p class="lede">在交互视角里选中一个场景，<span data-arch="present.sequence">时序图</span>标签就出现：每一步「谁在跟谁说话」都在这块银幕上。</p>
+
+    <h2>一张时序图怎么读</h2>
+    <figure>
+      <svg viewBox="0 0 480 296" role="img" aria-label="时序图：泳道头、生命线、消息与组合框；选中的一步就是进度，单击消息即选中">
+        <defs><marker id="a19P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a19S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a19A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a19M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a19g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a19l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <g data-arch="present.sequence.heads">
+        <rect x="10" y="6" width="100" height="30" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="60.0" y="25.0" font-size="11.5" text-anchor="middle">参与者</text>
+        <rect x="130" y="6" width="100" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="180.0" y="25.0" font-size="11.5" text-anchor="middle">模块 A</text>
+        <rect x="250" y="6" width="100" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="300.0" y="25.0" font-size="11.5" text-anchor="middle">模块 B</text>
+        <rect x="370" y="6" width="100" height="30" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="420.0" y="25.0" font-size="11.5" text-anchor="middle">模块 C</text>
+        </g>
+        <g data-arch="present.sequence.lanes">
+        <line x1="60" y1="36" x2="60" y2="266" stroke="var(--line)" stroke-width="1.4" stroke-dasharray="4 4"/>
+        <line x1="180" y1="36" x2="180" y2="266" stroke="var(--line)" stroke-width="1.4" stroke-dasharray="4 4"/>
+        <line x1="300" y1="36" x2="300" y2="266" stroke="var(--line)" stroke-width="1.4" stroke-dasharray="4 4"/>
+        <line x1="420" y1="36" x2="420" y2="266" stroke="var(--line)" stroke-width="1.4" stroke-dasharray="4 4"/>
+        </g>
+        <path d="M60,62 L178,62" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a19g)"/>
+        <path d="M180,96 L298,96" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a19g)"/>
+        <g data-arch="present.sequence.fragments"><rect x="150" y="116" width="320" height="104" rx="4" fill="none" stroke="var(--text-2)"/><rect x="150" y="116" width="40" height="18" fill="var(--soft)" stroke="var(--text-2)"/><text x="170" y="129" font-size="10.5" text-anchor="middle">alt</text><text x="198" y="129" font-size="10.5" class="muted">[已加载]</text><line x1="150" y1="170" x2="470" y2="170" stroke="var(--text-2)" stroke-dasharray="4 3"/><text x="158" y="184" font-size="10.5" class="muted">[未加载]</text></g>
+        <rect x="176" y="136" width="250" height="24" rx="4" fill="var(--accent-soft)"/>
+        <path d="M300,150 L418,150" stroke="var(--accent)" stroke-width="2.4" fill="none" marker-end="url(#a19P)"/>
+        <path d="M300,202 L418,202" stroke="var(--text-2)" stroke-width="1.4" fill="none" stroke-dasharray="5 4" marker-end="url(#a19g)"/>
+        <path d="M300,242 L182,242" stroke="var(--text-2)" stroke-width="1.4" fill="none" stroke-dasharray="5 4" marker-end="url(#a19g)"/>
+        <g data-arch="present.sequence.interact"><text x="300" y="280" font-size="11" text-anchor="middle" style="fill:var(--accent)">单击消息 = 选中这一步 = 进度到这里</text></g>
+      </svg>
+      <figcaption>一条竖线是一个参与方，消息自上而下；分支、循环画成组合框，单击分支条件就改走那一支。单击一条消息就是选中这一步，进度跟着到这里，画布上同一条边一起突出。粒度随层次变：下钻后同一场景的消息自动变细。</figcaption>
+    </figure>
+
+  </body>
+</html>

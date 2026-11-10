@@ -1,0 +1,10 @@
+{
+  "scenario": {
+    "id": "sc.decide",
+    "name": "决策",
+    "steps": [
+      { "call": { "from": "app.solution", "to": "domain.services", "label": "decide" } },
+      { "return": { "from": "domain.services", "to": "app.solution", "label": "决策结果" } }
+    ]
+  }
+}

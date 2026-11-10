@@ -1,0 +1,97 @@
+# 取自设计文档 §2.1 场景 ②；代码：mcp.ts 的 gixn_draft_plan / gixn_device_try_run / gixn_device_run，kernel/src/services/device-runs.ts（出构建、租约、run_scenario）、
+# defect-gate.ts、leases.ts、flow.ts（device.run_recorded 并归还以调用为持有者的租约），runner/src/dispatch.ts（锁设备、起被测页面、证据进存储）。
+scenario:
+  id: sc.defect
+  name: 缺陷圈：真机复现与回归
+  kind: main
+  description: |
+    人录入缺陷；统筹者起草验证计划（设备、网络条件、旧构建、场景脚本、N、阈值）与由它派生的验收清单，发一张确认卡，人确认时清单与计划一并确认。
+    统筹者派写脚本执行者，它经 gixn_device_try_run 在租到的设备上试跑（至多 5 轮）、改到能复现后提交进任务分支。
+    每次运行（试跑与正式运行同一条链路）：内核取该提交的构建身份，没有就经 runner 在任务工作树里出构建并先拒跑；有了再拿设备租约（持有者为调用），
+    发 run_scenario 任务包（只投给接着这台设备的 runner）；runner 锁设备、起被测页面、真机组件核对构建身份后跑 N 次，证据拉回进存储；
+    结果记 device.run_recorded，租约成败都归还。旧构建达阈值即复现，脚本成为验收标准进开发；新构建取任务分支 head，同条件再跑 N 次，过缺陷放行门才能放行。
+  cause: 主人录入一个缺陷
+  evidence:
+    - test/flow/defect-loop.test.ts
+    - packages/kernel/test/defect-gate.test.ts
+    - packages/kernel/test/leases.test.ts
+    - packages/kernel/test/flow.test.ts
+    - packages/kernel-api/test/mcp-flow.test.ts
+    - packages/device-local/test/run.test.ts
+  steps:
+    - call: {id: intake, from: actor.owner, to: surface.intake.new-task, label: 录入缺陷}
+    - async: {from: surface.intake.new-task, to: surface.api.client, relation: rel.surface.new-task-create, label: api.createSignal}
+    - async: {from: surface.api.client, to: client.local-ui.server, relation: rel.surface.http-signal, label: 'POST /api/signals'}
+    - async: {from: client.local-ui.server, to: client.local-ui.kernel-proxy, label: createSignal}
+    - async: {from: client.local-ui.kernel-proxy, to: server.http.intake-routes, relation: rel.client.ui-signal-kernel, label: 'POST /v1/signals'}
+    - async: {from: server.http.intake-routes, to: kernel.intake.signals, relation: rel.server.intake-signals, label: record}
+    - async: {from: kernel.intake.signals, to: kernel.tasks.task-service, label: createFromSignal（缺陷剧本）}
+    - ref: sc.orchestrator-wake
+    - async: {id: plan, from: actor.orchestrator, to: server.mcp.service, label: 'gixn_draft_plan + gixn_draft_acceptance'}
+    - async: {from: server.mcp.service, to: server.mcp.plan-tools, label: 调工具实现}
+    - async: {from: server.mcp.plan-tools, to: kernel.tasks.acceptance, relation: rel.server.plan-plan, label: plans.draft（验证计划）}
+    - async: {from: server.mcp.plan-tools, to: kernel.tasks.acceptance, relation: rel.server.plan-acceptance, label: acceptance.draft（由计划派生的清单）}
+    - async: {from: actor.orchestrator, to: server.mcp.service, label: 'gixn_open_card(kind=confirm)'}
+    - async: {from: server.mcp.card-tools, to: kernel.tasks.cards, relation: rel.server.card-open, label: 一张确认卡}
+    - call: {id: confirm, from: actor.owner, to: surface.inbox.card-detail, label: 确认计划与清单}
+    - async: {from: client.local-ui.kernel-proxy, to: server.http.inbox-routes, relation: rel.client.ui-signal-kernel, label: 'POST /v1/cards/:id/answer'}
+    - async: {from: server.http.inbox-routes, to: kernel.tasks.cards, relation: rel.server.inbox-cards, label: answer}
+    - async: {from: kernel.tasks.cards, to: kernel.ledger.ledger, label: acceptance.confirmed + plan.confirmed（引用同一张卡）}
+    - ref: sc.orchestrator-wake
+    - async: {id: script-writer, from: actor.orchestrator, to: server.mcp.service, label: 'gixn_dispatch_execution(script_writer)'}
+    - async: {from: server.mcp.dispatch-tools, to: kernel.orchestration.executions, relation: rel.server.dispatch-execution, label: 派写脚本会话（停滞判定放宽）}
+    - async: {from: adapters.ai.executor, to: actor.executor, label: 起写脚本会话}
+    - loop:
+        while: 脚本还不能复现（每次至多 5 轮试跑）
+        steps:
+          - async: {id: try-run, from: actor.executor, to: server.mcp.service, label: 'gixn_device_try_run(script)'}
+          - async: {from: server.mcp.service, to: server.mcp.session-tools, label: 调工具实现}
+          - async: {from: server.mcp.session-tools, to: kernel.dispatch.device-runs, relation: rel.server.session-device, label: 'request({tryRun: true})'}
+          - async: {from: kernel.dispatch.device-runs, to: kernel.rules.defect-gate, label: 最近确认的计划}
+          - alt:
+              - when: 该提交还没有构建身份
+                steps:
+                  - async: {id: build, from: kernel.dispatch.device-runs, to: kernel.dispatch.adapter-calls, label: 'repo.run_command(buildCommand)：出构建、算产物哈希、写身份文件'}
+                  - async: {from: client.channel.dispatch, to: adapters.repo.workspace, relation: rel.client.dispatch-workspace, label: 在任务工作树里跑构建命令}
+                  - return: {from: kernel.dispatch.device-runs, to: server.mcp.session-tools, label: BuildPendingError：先同步等出构建再申请}
+              - when: 构建身份齐全
+                steps:
+                  - async: {id: lease, from: kernel.dispatch.device-runs, to: kernel.dispatch.leases, label: 拿设备租约（持有者为调用，被占则排队）}
+          - async: {id: run, from: kernel.dispatch.device-runs, to: kernel.dispatch.adapter-calls, label: run_scenario（参数全由配方、计划与构建身份得出）}
+          - async: {from: kernel.dispatch.adapter-calls, to: kernel.dispatch.jobs, label: 任务包（只投给接着这台设备的 runner）}
+          - async: {from: server.hub.push, to: client.channel.runner, relation: rel.server.hub-jobs-ws, label: 推任务包}
+          - call: {from: client.channel.runner, to: client.channel.executor, label: execute(job)}
+          - async: {from: client.channel.executor, to: client.channel.dispatch, label: dispatch(job)}
+          - async: {from: client.channel.dispatch, to: adapters.device.lab, label: lock(deviceId)}
+          - async: {from: adapters.device.lab, to: adapters.device.lock, label: 本机设备文件锁}
+          - async: {from: client.channel.dispatch, to: share.proc, label: 按配方 device.serve 起被测页面，等 readyUrl}
+          - async: {from: client.channel.dispatch, to: adapters.device.lab, label: runScenario：核对构建身份，跑 N 次}
+          - async: {from: adapters.device.lab, to: adapters.device.drivers, label: 开设备会话跑场景，拉回证据}
+          - async: {from: client.channel.dispatch, to: share.evidence, label: 证据文件逐个进存储}
+          - async: {from: client.channel.runner, to: server.http.runner-routes, relation: rel.client.report-ws, label: 运行结果}
+          - async: {from: server.http.runner-routes, to: kernel.dispatch.jobs, relation: rel.server.runner-job-update, label: update}
+          - async: {from: kernel.dispatch.jobs, to: kernel.ledger.ledger, label: adapter.completed}
+          - async: {from: kernel.ledger.ledger, to: kernel.dispatch.flow, relation: rel.kernel.ledger-flow-reactor, label: flowReactor}
+          - async: {id: recorded, from: kernel.dispatch.flow, to: kernel.ledger.ledger, label: device.run_recorded + lease.released（成败都归还）}
+          - return: {from: server.mcp.service, to: actor.executor, label: 试跑结果}
+    - async: {from: actor.executor, to: server.mcp.service, label: gixn_report_done（脚本路径 + 提交号）}
+    - ref: sc.orchestrator-wake
+    - async: {id: old-build, from: actor.orchestrator, to: server.mcp.service, label: 'gixn_device_run(build=old)：按计划跑 N 次'}
+    - async: {from: server.mcp.service, to: server.mcp.adapter-tools, label: 调工具实现}
+    - async: {from: server.mcp.adapter-tools, to: kernel.dispatch.device-runs, relation: rel.server.adapter-device-run, label: 'request({planId, build: old})（同上一条链路）'}
+    - alt:
+        - when: 旧构建复现达阈值
+          steps:
+            - async: {id: develop, from: actor.orchestrator, to: server.mcp.service, label: 复现脚本成为验收标准，派开发（同需求圈第 3–6 步）}
+            - async: {id: new-build, from: actor.orchestrator, to: server.mcp.service, label: 'gixn_device_run(build=new)：内核取任务分支 head 作新构建'}
+            - async: {from: server.mcp.adapter-tools, to: kernel.dispatch.device-runs, relation: rel.server.adapter-device-run, label: 同设备、同条件、同脚本再跑 N 次}
+            - alt:
+                - when: 新构建不再出现
+                  steps:
+                    - ref: sc.release-merge
+                - when: 仍出现
+                  steps:
+                    - async: {id: back-to-dev, from: actor.orchestrator, to: server.mcp.service, label: 退回开发（续原会话）}
+        - when: 复现不了
+          steps:
+            - async: {id: ask, from: actor.orchestrator, to: server.mcp.service, label: 改脚本、换条件，或 gixn_open_card 带方案问人}

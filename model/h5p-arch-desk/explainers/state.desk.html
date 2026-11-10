@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 977b543a92e24846 rel:rel.ad.actions-url=ee809217 rel:rel.ad.loading-baselines=576244ee rel:rel.ad.loading-keep=81db26a9 rel:rel.ad.url-actions=f3fa5e9d rel:rel.ed.commands-dispatch=df494174 rel:rel.ed.reload-edit=c4309091 rel:rel.p2.layoutsync-read=546928ed rel:rel.p7.loading-source=606acff1 state.desk#abstraction=fe2cca8a state.desk#children=eae65519 state.desk#excludes=d9bc60bd state.desk#invariants=5d134717 state.desk#responsibility=3af198ae state.desk#strata=01d21db0 state.desk#summary=7be4e190 state.desk.actions#invariants=a571a4eb state.desk.actions#summary=c8b5ff29 state.desk.edit#invariants=7da2dfab state.desk.edit#summary=f5f06854 state.desk.evolution#summary=d99e1148 state.desk.facts#summary=fc394171 state.desk.files#summary=17670005 state.desk.layout-sync#summary=cf48c827 state.desk.legend#summary=b1717032 state.desk.loading#summary=cad85356 state.desk.projection#invariants=0e1b4fe3 state.desk.projection#summary=c0e149bc state.desk.review#summary=b32a7878 state.desk.source-sync#summary=b5a12e0f state.desk.url-sync#summary=bb4503b9 state.desk.versions#summary=8319938f state.desk.writer#summary=002b6389">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DeskState · 唯一账本</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
+</style>
+  </head>
+  <body>
+
+    <h1>唯一账本</h1>
+    <p class="lede"><span data-arch="state.desk">DeskState</span> 持有一个项目版本的全部视图状态。写只有一个入口，读是一组派生，外界是它的投影。</p>
+
+    <h2>一笔写，多处读</h2>
+    <figure>
+      <svg viewBox="0 0 480 270" role="img" aria-label="DeskState：一个写入口、一组只读派生，草图编辑另有会话值">
+        <defs><marker id="a14P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a14S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a14A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a14M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a14g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a14l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <g data-arch="state.desk.actions"><rect x="4" y="10" width="140" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="74.0" y="32.1" font-size="12.5" text-anchor="middle">dispatch 与操作</text><text x="74.0" y="46.6" font-size="10.5" text-anchor="middle" class="muted">唯一写入口</text></g>
+        <rect x="174" y="6" width="132" height="58" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="240.0" y="32.6" font-size="14" text-anchor="middle" font-weight="600">视图状态</text><text x="240.0" y="47.1" font-size="10.5" text-anchor="middle" class="muted">一个值</text>
+        <g data-arch="state.desk.edit"><rect x="336" y="10" width="140" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)" stroke-dasharray="5 4"/><text x="406.0" y="32.1" font-size="12.5" text-anchor="middle">编辑会话</text><text x="406.0" y="46.6" font-size="10.5" text-anchor="middle" class="muted">进草图时另起一个</text></g>
+        <path d="M144,35 L172,35" stroke="var(--warn)" stroke-width="2" fill="none" marker-end="url(#a14S)"/>
+        <path d="M306,35 L334,35" stroke="var(--text-2)" stroke-width="1.2" fill="none" stroke-dasharray="5 4" marker-end="url(#a14g)"/>
+        <path d="M240,64 L240,82" stroke="var(--text-2)" stroke-width="1.6" fill="none" marker-end="url(#a14g)"/>
+        <line x1="4" y1="84" x2="476" y2="84" stroke="var(--text-2)" stroke-width="1.2"/>
+        <g data-arch="state.desk.projection"><rect x="4" y="94" width="150" height="30" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="79.0" y="113.0" font-size="11.5" text-anchor="middle">视图派生</text></g>
+        <g data-arch="state.desk.facts"><rect x="162" y="94" width="150" height="30" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="237.0" y="113.0" font-size="11.5" text-anchor="middle">架构治理派生</text></g>
+        <g data-arch="state.desk.evolution"><rect x="320" y="94" width="150" height="30" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="395.0" y="113.0" font-size="11.5" text-anchor="middle">演化事实派生</text></g>
+        <g data-arch="state.desk.files"><rect x="4" y="134" width="150" height="30" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="79.0" y="153.0" font-size="11.5" text-anchor="middle">源码派生</text></g>
+        <g data-arch="state.desk.versions"><rect x="162" y="134" width="150" height="30" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="237.0" y="153.0" font-size="11.5" text-anchor="middle">版本与对比基线</text></g>
+        <g data-arch="state.desk.review"><rect x="320" y="134" width="150" height="30" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="395.0" y="153.0" font-size="11.5" text-anchor="middle">人确认层派生</text></g>
+        <g data-arch="state.desk.legend"><rect x="4" y="174" width="150" height="30" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="79.0" y="193.0" font-size="11.5" text-anchor="middle">图例的出现集合</text></g>
+        <rect x="166" y="224" width="148" height="40" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="240.0" y="241.1" font-size="12.5" text-anchor="middle">呈现层</text><text x="240.0" y="255.6" font-size="10.5" text-anchor="middle" class="muted">只读这些派生</text>
+        <path d="M240,206 L240,222" stroke="var(--accent)" stroke-width="1.6" fill="none" marker-end="url(#a14P)"/>
+      </svg>
+      <figcaption>所有改动都经 dispatch 和转移规则写回这一个值；呈现层读到的都是派生，摸不到底账。草图编辑有自己的会话值，进草图时整张桌子切到设计时态。</figcaption>
+    </figure>
+
+    <h2>外界是状态的投影</h2>
+    <figure>
+      <svg viewBox="0 0 480 296" role="img" aria-label="同步适配器：地址、描述文件、人拥有文件、布局、源码都对齐到状态；外界的变化变成动作送回">
+        <defs><marker id="a15P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a15S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a15A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a15M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a15g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a15l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <rect x="160" y="112" width="160" height="56" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="240.0" y="137.7" font-size="14" text-anchor="middle" font-weight="600">视图状态</text><text x="240.0" y="152.2" font-size="10.5" text-anchor="middle" class="muted">外界是它的投影</text>
+        <g data-arch="state.desk.url-sync"><rect x="6" y="8" width="148" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="80.0" y="30.1" font-size="12.5" text-anchor="middle">路由同步</text><text x="80.0" y="44.6" font-size="10.5" text-anchor="middle" class="muted">地址 ⇄ 状态</text></g>
+        <g data-arch="state.desk.writer"><rect x="326" y="8" width="148" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="400.0" y="30.1" font-size="12.5" text-anchor="middle">描述写入同步</text><text x="400.0" y="44.6" font-size="10.5" text-anchor="middle" class="muted">写人拥有的文件</text></g>
+        <g data-arch="state.desk.loading"><rect x="6" y="222" width="148" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="80.0" y="244.1" font-size="12.5" text-anchor="middle">模型源同步</text><text x="80.0" y="258.6" font-size="10.5" text-anchor="middle" class="muted">描述变了就重载</text></g>
+        <g data-arch="state.desk.source-sync"><rect x="166" y="222" width="148" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="240.0" y="244.1" font-size="12.5" text-anchor="middle">源码同步</text><text x="240.0" y="258.6" font-size="10.5" text-anchor="middle" class="muted">按需取回、缓存</text></g>
+        <g data-arch="state.desk.layout-sync"><rect x="326" y="222" width="148" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="400.0" y="244.1" font-size="12.5" text-anchor="middle">布局同步</text><text x="400.0" y="258.6" font-size="10.5" text-anchor="middle" class="muted">只收最新一次</text></g>
+        <path d="M180,112 C150,90 90,80 80,60" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a15g)"/>
+        <path d="M300,112 C330,90 390,80 400,60" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a15g)"/>
+        <path d="M180,168 C150,190 90,200 80,220" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a15g)"/>
+        <path d="M240,168 L240,220" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a15g)"/>
+        <path d="M300,168 C330,190 390,200 400,220" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a15g)"/>
+        <text x="240" y="290" font-size="10.5" text-anchor="middle" class="muted">外界的变化不直接改状态，而是变成一个动作送回</text>
+      </svg>
+      <figcaption>地址、文件、布局与源码都由同步适配器对齐到状态。异步的布局只收最新一次的结果，过期的直接丢掉。</figcaption>
+    </figure>
+
+  </body>
+</html>

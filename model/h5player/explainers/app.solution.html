@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 4500e9bd28473dd7 app.solution#abstraction=746abe48 app.solution#children=7a3ea0a9 app.solution#invariants=555878cf app.solution#provides=69fb4161 app.solution#responsibility=186bea1a app.solution#summary=bdebf858 app.solution.leg-switch#summary=6b4fcc1a app.solution.legs#summary=913b5389 app.solution.lifecycle#summary=593682ae app.solution.play-stage-start#summary=0933ed61 app.solution.ports#invariants=f258b64d app.solution.ports#summary=2c5377f3 app.solution.stage-swap#summary=7be07f65 app.solution.stream-facts#summary=bf53b284 rel:rel.solution.leg-switch-legs=b5b6c03d rel:rel.solution.leg-switch-legs-outcome=2e527391 rel:rel.solution.leg-switch-lifecycle=7efd21f6 rel:rel.solution.leg-switch-stage-swap=4e12ca24 rel:rel.solution.legs-leg-switch=a6114b68 rel:rel.solution.legs-lifecycle=689a7cdc rel:rel.solution.legs-stage-swap=f092ce9b rel:rel.solution.lifecycle-leg-switch=bd8e7fd5 rel:rel.solution.lifecycle-legs=512eea62 rel:rel.solution.lifecycle-play-stage-start=01c033f7 rel:rel.solution.lifecycle-stage-swap=90ce4d5e rel:rel.solution.lifecycle-stream-facts=e1aa9f41 rel:rel.solution.stream-facts-play-stage-start=fd42a7bc rel:rel.solution.stream-facts-stage-swap=f190db55">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Solution · 换腿：十步交接棒</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>换腿：十步交接棒</h1>
+    <p class="lede">这一层是 <span data-arch="app.solution">Solution</span>：<span data-arch="app.solution" data-field="summary"></span>。「腿」就是一条从拉流到上屏的完整流水线；直播切时移回看，就是旧腿在播、新腿备好，十步原子交接。</p>
+
+    <figure>
+      <svg viewBox="0 0 640 236" role="img" aria-label="旧腿在播、新腿后台准备，十步事务完成交接，前七步可整体回滚">
+        <defs><marker id="e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <text x="18" y="42" font-size="11" class="">旧腿（直播）</text>
+        <rect x="96" y="24" width="528" height="34" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="112" y="45" font-size="10" class="">正在播放 ▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶</text>
+        <text x="18" y="96" font-size="11" class="">新腿（回看）</text>
+        <rect x="96" y="78" width="528" height="34" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/>
+        <text x="112" y="99" font-size="10" class="">后台准备 …… …… …… …… …… …… …… ▶ 接管播放</text>
+        <rect x="36" y="162" width="386" height="64" rx="10" fill="none" stroke="var(--ok)" stroke-width="2" stroke-dasharray="7 5"/>
+        <rect x="436" y="162" width="196" height="64" rx="10" fill="none" stroke="var(--warn)" stroke-width="2" stroke-dasharray="7 5"/>
+        <circle cx="52" cy="178" r="13" fill="var(--ok)"/><text x="52" y="182" font-size="11" text-anchor="middle" class="">①</text><text x="52" y="206" font-size="9.5" text-anchor="middle" class="muted">两腿阀门</text><text x="52" y="219" font-size="9.5" text-anchor="middle" class="muted">都先关小</text><circle cx="112" cy="178" r="13" fill="var(--ok)"/><text x="112" y="182" font-size="11" text-anchor="middle" class="">②</text><text x="112" y="206" font-size="9.5" text-anchor="middle" class="muted">卸下旧腿</text><text x="112" y="219" font-size="9.5" text-anchor="middle" class="muted">首尾片段</text><circle cx="172" cy="178" r="13" fill="var(--ok)"/><text x="172" y="182" font-size="11" text-anchor="middle" class="">③</text><text x="172" y="206" font-size="9.5" text-anchor="middle" class="muted">新腿扶正</text><text x="172" y="219" font-size="9.5" text-anchor="middle" class="muted">旧腿让位</text><circle cx="232" cy="178" r="13" fill="var(--ok)"/><text x="232" y="182" font-size="11" text-anchor="middle" class="">④</text><text x="232" y="206" font-size="9.5" text-anchor="middle" class="muted">图纸换边</text><text x="232" y="219" font-size="9.5" text-anchor="middle" class="muted">一次生效</text><circle cx="292" cy="178" r="13" fill="var(--ok)"/><text x="292" y="182" font-size="11" text-anchor="middle" class="">⑤</text><text x="292" y="206" font-size="9.5" text-anchor="middle" class="muted">就绪信号</text><text x="292" y="219" font-size="9.5" text-anchor="middle" class="muted">解密对账</text><circle cx="352" cy="178" r="13" fill="var(--ok)"/><text x="352" y="182" font-size="11" text-anchor="middle" class="">⑥</text><text x="352" y="206" font-size="9.5" text-anchor="middle" class="muted">重配缓冲</text><text x="352" y="219" font-size="9.5" text-anchor="middle" class="muted">切播放模式</text><circle cx="412" cy="178" r="13" fill="var(--ok)"/><text x="412" y="182" font-size="11" text-anchor="middle" class="">⑦</text><text x="412" y="206" font-size="9.5" text-anchor="middle" class="muted">提交</text><text x="412" y="219" font-size="9.5" text-anchor="middle" class="muted">大局已定</text><circle cx="472" cy="178" r="13" fill="var(--warn)"/><text x="472" y="182" font-size="11" text-anchor="middle" class="">⑧</text><text x="472" y="206" font-size="9.5" text-anchor="middle" class="muted">挂新片段</text><text x="472" y="219" font-size="9.5" text-anchor="middle" class="muted">重放流事实</text><circle cx="532" cy="178" r="13" fill="var(--warn)"/><text x="532" y="182" font-size="11" text-anchor="middle" class="">⑨</text><text x="532" y="206" font-size="9.5" text-anchor="middle" class="muted">按切点丢</text><text x="532" y="219" font-size="9.5" text-anchor="middle" class="muted">残留数据</text><circle cx="592" cy="178" r="13" fill="var(--warn)"/><text x="592" y="182" font-size="11" text-anchor="middle" class="">⑩</text><text x="592" y="206" font-size="9.5" text-anchor="middle" class="muted">放行新腿</text><text x="592" y="219" font-size="9.5" text-anchor="middle" class="muted">开始播</text>
+      </svg>
+      <figcaption>②–⑦ 可回滚段：成功一步存一个「撤销动作」，任一步失败整体退回——原腿继续播，观众毫无察觉。⑧–⑩ 收尾段：失败不回滚，如实报告。</figcaption>
+    </figure>
+
+    <h2>为什么做成原子事务</h2>
+    <p>交接一旦做了一半被观众看见，就是画面卡住或黑屏。所以十步要么全部完成、要么当没发生过：前七步每成功一步就压一个「撤销闭包」，任何一步失灵就按相反顺序全部撤销；后三步已成定局，出问题不再回滚，而是把结果如实写进交接报告。</p>
+    <p>交接命令与播放命令走同一条「单行道」排队执行——两次换腿、换腿与拖动进度，都不会撞车。</p>
+
+    <h2>这一层的岗位</h2>
+    <div class="cols c3">
+      <div><b><span data-arch="app.solution.leg-switch">十步事务</span></b>与 <span data-arch="app.solution.legs">腿册</span>：腿的生、换、退、查全在这一册账上。</div>
+      <div><b><span data-arch="app.solution.stage-swap">段换代</span></b>：同一条腿内换段（比如清晰度切换）与跨腿换腿共用一套图纸提交机制。</div>
+      <div><b><span data-arch="app.solution.lifecycle">生命周期</span> 与 <span data-arch="app.solution.stream-facts">流事实</span></b>：初始化与销毁的顺序；流到了、能播了这些事实的受理台。</div>
+    </div>
+
+    <p class="note ok">只编排，不做决策：选哪条腿是参谋部的事（见 <span data-arch="domain.services.timeshift">时移换腿判定</span>），队长只保证交接稳稳当当。</p>
+
+  </body>
+</html>

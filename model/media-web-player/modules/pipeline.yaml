@@ -1,0 +1,682 @@
+# 区域：管线契约与共用律（media-web/packages/media-playback-pipeline/src）
+# 第二级模块（pipeline.contract / latency / metering / timing / fetch）由骨架定义，此处只往下挂子模块；pipeline.timing 只有 timers.ts 一个文件，不再分。
+# 2026-10-27 按 plans/arch-desk-media-player/10-module-review.md §8 重划：每个第二级的名字对它的多数消费者成立。
+# pipeline.ts 是单文件契约，按「源 / 管线端口 / 回报 / 族端口」写成概念子模块（不写 codeRefs，§3.7）。
+
+modules:
+  - id: pipeline
+    name: 管线契约与共用律
+    summary: 定下内核与管线族的契约，提供两族共用的律与拉流
+  # 第二级模块的原则（补充条目，ADR-0042；名称与骨架一致）
+  - { id: pipeline.contract, name: 管线契约, abstraction: 按一次会话的流向切契约：源进、命令下行、回报经 sink 上行、族端口管建立与释放；内核拥有状态，管线拥有其余。, summary: 约定内核与管线族之间怎么开会话、下命令、报事实, invariants: [契约包不导入内核与任何管线族，只依赖共享基础与跨语言契约, 管线只经 sink 向内核回报，内核只经端口向管线下命令] }
+  - { id: pipeline.latency, name: 延迟决策律, abstraction: 决策与执行分界：律是不读时钟、可重放的纯函数，运行骨架只携带状态并把动作交给本族执行器，读数与动作归各族。, summary: 按缓冲读数决定延迟手段，两族得到同样的决策, invariants: [决策律是纯函数，状态 × 读数 × 配置 → 动作与报告，不读时钟，可录制重放, 运行骨架不取读数、不执行动作，动作只交给本族执行器] }
+  - { id: pipeline.metering, name: 计量与锚点, abstraction: 按观测对象分成互不依赖的观测件：只把时间戳变成读数或报告，不碰浏览器 API、不做决策。, summary: 把时间戳变成抖动、冻结与墙钟换算的读数 }
+  - { id: pipeline.timing, name: 计时器与看不见即保持, abstraction: 时间一律经注入的计时器，按谁在等选停走规则：会话的等待随看不见即保持停走，非会话的等待只在页面可见时计时。, summary: 给拉流与会话可注入、看不见时会停走的计时 }
+  - { id: pipeline.fetch, name: 拉流与重连, abstraction: 按协议切拉流，共用一个流式请求与一套有界重试和丢失归因；拉流只交字节，不认识模块与解封装。, summary: 按协议拉回字节，断线时有界重连并归因 }
+
+  # ───────────────────────── pipeline.contract（概念子模块，同在 pipeline.ts） ─────────────────────────
+  - id: pipeline.contract.source
+    parent: pipeline.contract
+    name: 源与打开选项
+    summary: 描述会话播什么、怎么播与失败怎么归类
+    kind: component
+    responsibility: >-
+      会话播放什么、怎么播：容器（flv / hls / mp4）与两族的路线（webcodecs / wasm、mse / native），源地址与 32 字节密钥、FLV 直播配套的时移列表，
+      打开选项（延迟配置、路线、autoplay、线程），会话失败的原因分类，时间轴（直播窗口或点播范围，可带墙钟锚点）与播放模式。
+    provides: [if.pipeline.contract.isDecryptionKey, if.pipeline.contract.isTimeshiftSource]
+    dataStructures: [ds.PlayerSource, ds.TimeshiftSource, ds.PlayerOpenOptions, ds.PipelineTimeline]
+  - id: pipeline.contract.session-port
+    parent: pipeline.contract
+    name: 管线端口
+    summary: 让内核启动、控制并停下一个会话的管线
+    kind: component
+    responsibility: 一个会话的管线：启动参数（代号、线程、路线、源、选项、liveStart、sink），内核下发的命令（播放控制、seek 三种、时移列表、可见性、看不见即保持），以及 stop / terminate / screenshot。Worker 模式把它映射成消息，主线程模式就地运行。
+    provides: [if.pipeline.contract.Pipeline]
+    dataStructures: [ds.PipelineStart, ds.PipelineCommand]
+  - id: pipeline.contract.report
+    parent: pipeline.contract
+    name: 管线回报
+    summary: 约定管线向内核报告的事实、统计与失败
+    kind: component
+    responsibility: 管线经 sink 报给内核的事实：漏斗阶段、路线切换、时间轴、seek / 缓冲 / 网络、延迟报告、可恢复错误与日志、声音被拦、流信息、冻结、结束 / 暂停 / 播放 / 模式 / 边缘，每秒的累计统计，与不可继续的失败；另含无进展看门（progressWatch）。
+    provides: [if.pipeline.contract.PipelineSink]
+    dataStructures: [ds.PipelineSinkEvent, ds.PipelineStats]
+  - id: pipeline.contract.family-port
+    parent: pipeline.contract
+    name: 族端口
+    summary: 约定族为播放器提供哪些路线与能力
+    kind: component
+    responsibility: 一个管线族为一个播放器建立的样子：Worker 是否可用、能跑的容器 × 路线与跑不了的原因、startPipeline、音量能否控制、能否计冻结、setVolume / clearLastFrame / destroy；以及播放器交给族的环境（容器元素、页面音频图、页面可见性）。
+    provides: [if.pipeline.contract.Pipelines, if.pipeline.contract.PipelineFamily, if.pipeline.contract.PageVisibility]
+    dataStructures: [ds.PipelineEnvironment]
+
+  # ───────────────────────── pipeline.latency（只含律本身：纯函数与它的运行骨架） ─────────────────────────
+  - id: pipeline.latency.law
+    parent: pipeline.latency
+    name: 决策律
+    summary: 按缓冲深度选出延迟手段，可录制重放
+    kind: component
+    responsibility: >-
+      延迟决策律本身：纯函数 decideLatency(state, reading, config) → { state, action, reports }，按缓冲深度相对目标分区，偏差越大手段越重
+      （变速 → 丢非参考帧 / 跳 IDR → 重连），不在加速与减速间来回；手段无效即锁定。还有配置校验、初始状态与录制重放。
+    principle: |
+      - 不读浏览器 API、不设定时器：时间只来自 `reading.atMs`；从 `initialLatencyState()` 重放录下的读数序列必须得到同样的决策。
+      - 报告边沿触发（开始一次、结束一次）：over-limit、target-unreachable、jitter-above-target、target-adapted、means-locked…
+    provides: [if.pipeline.latency.decideLatency, if.pipeline.latency.validateLatencyConfig]
+    dataStructures: [ds.LatencyConfig, ds.LatencyReading, ds.LatencyAction, ds.LatencyReport]
+    codeRefs: [media-web/packages/media-playback-pipeline/src/latency.ts, media-web/packages/media-playback-pipeline/src/latency-law.ts]
+    docRefs: [docs/design/02-web-live-player.md]
+  - id: pipeline.latency.run
+    parent: pipeline.latency
+    name: 决策律运行骨架
+    summary: 在会话里驱动决策律，把动作交给本族执行
+    kind: component
+    responsibility: 一个会话里两族相同的那一段：携带律的状态、每个读数做一次决策，报告送 sink、动作交给本族的执行器并按类型计数（统计的 latencyActions）；回到直播边缘时从头开始。读数怎么取、动作怎么做归各族。
+    provides: [if.pipeline.latency.runLatencyLaw]
+    codeRefs: [media-web/packages/media-playback-pipeline/src/latency-run.ts]
+
+  # ───────────────────────── pipeline.metering（三件独立的观测件：时间戳 → 读数 / 报告） ─────────────────────────
+  - id: pipeline.metering.jitter
+    parent: pipeline.metering
+    name: 到达抖动
+    summary: 测出到达抖动，给律一个不该响应的死区
+    kind: component
+    responsibility: 媒体到达的抖动——律不该响应的死区：每个样本取「到达时间 − 媒体时间」，只采样媒体推进不快于到达的块（GOP 缓存回放、卡顿后的积压被排除），给出窗口内的离散度与是否在消化积压。
+    provides: [if.pipeline.metering.JitterMeter]
+    codeRefs: [media-web/packages/media-playback-pipeline/src/jitter.ts]
+  - id: pipeline.metering.freeze
+    parent: pipeline.metering
+    name: 画面冻结
+    summary: 判出观众看到的画面冻结并归因
+    kind: component
+    responsibility: 观众看到的画面冻结：两帧上屏间隔超过 max(3 × 平均帧间隔, 平均 + 150 ms)（WebRTC freezeCount 的阈值）即一次冻结，按间隙里出现的信号归因（seek、律的动作、缓冲、起播、迟到、未知），边界处截断。
+    provides: [if.pipeline.metering.FreezeMeter]
+    dataStructures: [ds.Freeze]
+    codeRefs: [media-web/packages/media-playback-pipeline/src/freeze.ts]
+    docRefs: [docs/development/14-web-player-metrics.md]
+  - id: pipeline.metering.anchors
+    parent: pipeline.metering
+    name: 墙钟锚点
+    summary: 在位置与墙钟之间换算，取最可信的锚点
+    kind: component
+    responsibility: 时间轴的墙钟锚点：位置 ↔ 墙钟的换算，三种来源（流内时间 SEI 精确到帧、PROGRAM-DATE-TIME 精确到片、到达时刻估计）与各自误差，取可信者；按时间轴记录到达，新时间轴作废旧锚点。切换逻辑只读锚点、不读来源。
+    provides: [if.pipeline.metering.anchors]
+    dataStructures: [ds.Anchor]
+    codeRefs: [media-web/packages/media-playback-pipeline/src/anchors.ts]
+    docRefs: [docs/development/11-web-player-live-timeshift.md]
+
+  # ───────────────────────── pipeline.fetch（一个概念的三种协议） ─────────────────────────
+  - id: pipeline.fetch.request
+    parent: pipeline.fetch
+    name: 流式 HTTP 请求
+    summary: 发一次可取消、有空闲超时的流式 HTTP 请求
+    kind: component
+    responsibility: 每种拉流底下的那一次请求：fetch 的响应体按块交给处理器，可带字节范围并校验 Content-Range；AbortController 可取消，空闲超过 IDLE_TIMEOUT_MS（含等响应头）即判丢失；失败分类（网络、HTTP 状态、范围、超时）。
+    provides: [if.pipeline.fetch.requestStream]
+    codeRefs: [media-web/packages/media-playback-pipeline/src/http-request.ts]
+  - id: pipeline.fetch.flv-pull
+    parent: pipeline.fetch
+    name: HTTP-FLV 拉流与有界重连
+    summary: 拉 HTTP-FLV 直播，断线有界重连并判定结束
+    kind: component
+    responsibility: >-
+      HTTP-FLV 直播拉流：断线后按退避重连，达到上限或源站拒绝即耗尽（带可否重试）；连接稳定 STEADY_MS 后计数清零；干净结束算一次断线，
+      重连也干净结束或 404 才判直播结束（决策 29 (a)）。丢失归因、错误码与有界重试给 HLS、MP4 拉取共用；看不见即保持时重试随之停走。
+    provides: [if.pipeline.fetch.startPull, if.pipeline.fetch.boundedRetries, if.pipeline.fetch.PullHandlers]
+    dataStructures: [ds.PullHandlers, ds.PullLoss]
+    codeRefs: [media-web/packages/media-playback-pipeline/src/network.ts]
+    docRefs: [docs/design/02-web-live-player.md]
+  - id: pipeline.fetch.hls-loader
+    parent: pipeline.fetch
+    name: HLS 拉流
+    summary: 按清单逐片拉 HLS，保证 seek 总有终点
+    kind: component
+    responsibility: >-
+      读清单、维护窗口、逐片加载：直播按目标时长刷新清单，片按 HTTP-FLV 拉流的规则重试，清单停滞或窗口越过播放位置走同一条断线 / 耗尽路径；
+      seek / 按墙钟 seek / 回直播边缘都保证有终点（起片、结束或失败）；AES-128 取密钥、xor-v2 标记交给解密；watch 模式只看清单供时移。
+    provides: [if.pipeline.fetch.startHlsPull, if.pipeline.fetch.HlsHandlers]
+    dataStructures: [ds.HlsHandlers]
+    codeRefs: [media-web/packages/media-playback-pipeline/src/hls/loader.ts]
+    docRefs: [docs/development/11-web-player-live-timeshift.md]
+  - id: pipeline.fetch.hls-playlist
+    parent: pipeline.fetch
+    name: m3u8 解析
+    summary: 把 m3u8 文本解析成清单或报出不支持的标记
+    kind: component
+    responsibility: 纯函数 parsePlaylist(text, baseUrl)：媒体清单（目标时长、序号、ENDLIST、EVENT、片与 PROGRAM-DATE-TIME、GAP、DISCONTINUITY、AES-128 与 xor-v2 标记）或主清单（取第一个变体），不支持的标记给出错误。
+    provides: [if.pipeline.fetch.parsePlaylist]
+    dataStructures: [ds.MediaPlaylist]
+    codeRefs: [media-web/packages/media-playback-pipeline/src/hls/playlist.ts]
+  - id: pipeline.fetch.hls-window
+    parent: pipeline.fetch
+    name: 列表时间窗口
+    summary: 把清单的片排成连续的列表时间与可 seek 窗口
+    kind: component
+    responsibility: 把清单给出的片按列表时间首尾相接（第一张清单的第一片为 0），滑动窗口只移动可 seek 范围的起点；直播从边缘往回若干目标时长起播。对给它的清单是纯的，加载什么、何时加载归 HLS 拉流。
+    codeRefs: [media-web/packages/media-playback-pipeline/src/hls/window.ts]
+  - id: pipeline.fetch.mp4
+    parent: pipeline.fetch
+    name: MP4 分段拉取
+    summary: 按字节范围分段拉 MP4，丢失时从断点续拉
+    kind: component
+    responsibility: 按模块要的字节范围逐段拉 MP4 文件：首个请求探测源站是否支持 Range，文件大小变化即失败，丢失的请求从未交出的下一个字节重试。不认识模块与 box。
+    provides: [if.pipeline.fetch.startMp4Pull, if.pipeline.fetch.Mp4PullHandlers]
+    codeRefs: [media-web/packages/media-playback-pipeline/src/mp4/**]
+
+relations:
+  # 决策律
+  - id: rel.pipeline.run-law
+    from: pipeline.latency.run
+    to: pipeline.latency.law
+    type: queries
+    interface: if.pipeline.latency.decideLatency
+    purpose: 每个读数求出该做的动作
+    description: 运行骨架每个读数调用一次决策律（decideLatency），以初始状态开始、回边缘时重置。
+  - id: rel.pipeline.run-execute-self-clocked
+    from: pipeline.latency.run
+    to: providers.self-clocked.session
+    type: commands
+    via: channel:callback@pipeline.latency.run
+    purpose: 让本族执行律选出的动作
+    description: 运行骨架把律选出的动作交给自建时钟会话给它的执行器（变速、丢非参考帧、跳 IDR），执行后计数。
+  - id: rel.pipeline.run-execute-mse
+    from: pipeline.latency.run
+    to: providers.element.mse
+    type: commands
+    via: channel:callback@pipeline.latency.run
+    purpose: 让本族执行律选出的动作
+    description: 运行骨架把律选出的动作交给 mse 会话给它的执行器（元素变速、跳到最新 IDR）。
+  - id: rel.pipeline.run-sink
+    from: pipeline.latency.run
+    to: kit.kernel.envelope
+    type: notifies
+    interface: if.pipeline.contract.PipelineSink
+    via: port:if.pipeline.contract.PipelineSink
+    purpose: 让宿主知道延迟控制的状况
+    description: 律的报告（超限、目标不可达、手段锁定…）经会话的 sink 作为 latency 事件报给内核。
+  - id: rel.pipeline.law-fault
+    from: pipeline.latency.law
+    to: share.core
+    type: queries
+    interface: if.share.core.MediaFault
+    purpose: 以统一错误拒绝不合法配置
+    description: 配置校验不合法时构造 invalid-argument 的 MediaFault。
+  # 拉流
+  - id: rel.pipeline.pull-request
+    from: pipeline.fetch.flv-pull
+    to: pipeline.fetch.request
+    type: commands
+    mode: async
+    interface: if.pipeline.fetch.requestStream
+    purpose: 每次连接拉取直播字节
+    description: 每次连接发一次流式请求（requestStream），停止与重连时取消它。
+  - id: rel.pipeline.fetch-timers
+    from: pipeline.fetch
+    to: pipeline.timing
+    type: commands
+    interface: if.pipeline.timing.Timers
+    purpose: 计超时、退避与清单刷新
+    description: 拉流（HTTP-FLV、HLS、MP4）与请求的空闲超时、退避重连、清单刷新在注入的计时器上设定时器（缺省 defaultTimers）。
+  - id: rel.pipeline.request-body-pull
+    from: pipeline.fetch.request
+    to: pipeline.fetch.flv-pull
+    type: streams
+    purpose: 把直播字节交给拉流
+    description: 请求把响应体按块连续交给 HTTP-FLV 拉流（ok / chunk / done / fail 回调）。
+  - id: rel.pipeline.request-body-hls
+    from: pipeline.fetch.request
+    to: pipeline.fetch.hls-loader
+    type: streams
+    purpose: 把清单与片的字节交给拉流
+    description: 请求把清单、密钥与片的响应体按块连续交给 HLS 拉流。
+  - id: rel.pipeline.request-body-mp4
+    from: pipeline.fetch.request
+    to: pipeline.fetch.mp4
+    type: streams
+    purpose: 把每段字节交给分段拉取
+    description: 请求把每段字节范围的响应体按块连续交给 MP4 拉取，带校验过的 Content-Range。
+  - id: rel.pipeline.request-fault
+    from: pipeline.fetch.request
+    to: share.core
+    type: queries
+    interface: if.share.core.describeError
+    purpose: 写出请求失败的说明
+    description: 把 fetch 的异常转成失败说明（describeError）。
+  - id: rel.pipeline.hls-request
+    from: pipeline.fetch.hls-loader
+    to: pipeline.fetch.request
+    type: commands
+    mode: async
+    interface: if.pipeline.fetch.requestStream
+    purpose: 取清单、密钥与片
+    description: 清单、密钥与每个片各发一次流式请求。
+  - id: rel.pipeline.hls-retries
+    from: pipeline.fetch.hls-loader
+    to: pipeline.fetch.flv-pull
+    type: queries
+    interface: if.pipeline.fetch.boundedRetries
+    purpose: 按同一规则重试并归因
+    description: 按 HTTP-FLV 拉流的规则重试（boundedRetries）并取丢失的可否重试与说明（lossRetryable、fileLossRetryable、describeUrl）。
+  - id: rel.pipeline.hls-parse
+    from: pipeline.fetch.hls-loader
+    to: pipeline.fetch.hls-playlist
+    type: queries
+    interface: if.pipeline.fetch.parsePlaylist
+    purpose: 读懂清单内容
+    description: 每次读到清单文本后解析（parsePlaylist）。
+  - id: rel.pipeline.hls-window
+    from: pipeline.fetch.hls-loader
+    to: pipeline.fetch.hls-window
+    type: commands
+    purpose: 决定下一片与 seek 落点
+    description: 拉流持有窗口（new HlsWindow），以每张新清单更新它，按它取下一片、算时间轴与 seek 落点。
+  - id: rel.pipeline.mp4-request
+    from: pipeline.fetch.mp4
+    to: pipeline.fetch.request
+    type: commands
+    mode: async
+    interface: if.pipeline.fetch.requestStream
+    purpose: 取回模块要的字节范围
+    description: 每段字节范围发一次带 Range 的流式请求，校验 Content-Range 与文件大小。
+  - id: rel.pipeline.mp4-retries
+    from: pipeline.fetch.mp4
+    to: pipeline.fetch.flv-pull
+    type: queries
+    interface: if.pipeline.fetch.boundedRetries
+    purpose: 按有界规则重试丢失
+    description: 丢失的请求按有界重试规则重来（boundedRetries、fileLossRetryable）。
+
+interfaces:
+  # 契约
+  - id: if.pipeline.contract.Pipeline
+    name: Pipeline
+    owner: pipeline.contract.session-port
+    signature: |
+      interface Pipeline {
+        command(command: PipelineCommand): void;
+        stop(): Promise<void>;
+        terminate(): void;
+        screenshot(): Promise<Blob>;
+      }
+    semantics: |
+      - 一个会话一个；Worker 模式映射成消息，主线程模式就地运行。
+      - stop 释放管线获取的一切；不在时限内落定时内核调 terminate（Worker 模式即终止 Worker）。
+      - screenshot 在会话出第一帧前、上下文丢失时拒绝（invalid-state）。
+    implementedBy: [providers.self-clocked.session, providers.self-clocked.worker-client, providers.element.mse, providers.element.native]
+  - id: if.pipeline.contract.isDecryptionKey
+    name: isDecryptionKey
+    owner: pipeline.contract.source
+    signature: |
+      isDecryptionKey(value: unknown): value is Uint8Array   // 32 字节
+  - id: if.pipeline.contract.isTimeshiftSource
+    name: isTimeshiftSource
+    owner: pipeline.contract.source
+    signature: |
+      isTimeshiftSource(value: unknown): value is TimeshiftSource   // url 非空，密钥缺省或 32 字节
+  - id: if.pipeline.contract.PipelineSink
+    name: PipelineSink
+    owner: pipeline.contract.report
+    signature: |
+      interface PipelineSink {
+        event(event: PipelineSinkEvent): void;
+        stats(stats: PipelineStats): void;
+        failed(cause: SessionFailureCause, error: MediaError): void;
+      }
+    semantics: 会话开始关闭后的调用被内核丢弃；failed 之后内核让会话失败并 stop 管线。
+    implementedBy: [kit.kernel]
+  - id: if.pipeline.contract.Pipelines
+    name: Pipelines
+    owner: pipeline.contract.family-port
+    signature: |
+      interface Pipelines {
+        readonly workerAvailable: boolean;
+        readonly routes: ReadonlyArray<readonly [PlayerContainer, PlayerRoute]>;
+        readonly unavailable: readonly UnavailableRoute[];
+        readonly startPipeline: (start: PipelineStart) => Pipeline;
+        readonly volumeControl: boolean;
+        readonly freezesMeasured: boolean;
+        setVolume(volume: number, muted: boolean): void;
+        clearLastFrame(): void;
+        destroy(): void;
+      }
+    semantics: |
+      - routes 每个播放器检查一次，内核在它们之上解析路线；startPipeline 收到没列出的路线是内核的缺陷（invalid-state）。
+      - 元素族 workerAvailable 恒为 false（Safari 的 Worker 里没有 MediaSource）。
+    implementedBy: [providers.self-clocked.family, providers.element.family]
+  - id: if.pipeline.contract.PipelineFamily
+    name: PipelineFamily
+    owner: pipeline.contract.family-port
+    signature: |
+      type PipelineFamily = (environment: PipelineEnvironment) => Promise<Pipelines>
+    semantics: 宿主选族、播放器调用（决策 15）；为一个播放器建立族（装载模块、建画布 / video、预热 Worker）。
+    implementedBy: [providers.self-clocked.family, providers.element.family]
+  - id: if.pipeline.contract.PageVisibility
+    name: PageVisibility
+    owner: pipeline.contract.family-port
+    signature: |
+      interface PageVisibility { visible(): boolean; subscribe(listener: (visible: boolean) => void): () => void }
+    implementedBy: [kit.facade.browser-platform]
+  # 决策律
+  - id: if.pipeline.latency.decideLatency
+    name: decideLatency
+    owner: pipeline.latency.law
+    signature: |
+      decideLatency(state: LatencyState, reading: LatencyReading, config: LatencyConfig): LatencyDecision   // { state, action, reports }
+      replayLatency(recording: LatencyRecording, law?: LatencyLaw): number
+    semantics: 纯函数，可重放；动作 none / set-rate / set-drop-non-reference / skip-to-random-access / reconnect。
+  - id: if.pipeline.latency.validateLatencyConfig
+    name: validateLatencyConfig
+    owner: pipeline.latency.law
+    signature: |
+      validateLatencyConfig(config: unknown): LatencyConfig
+    semantics: 不合法抛 invalid-argument 的 MediaFault；absolute 基准与 reconnect 手段现阶段一律拒绝。
+  - id: if.pipeline.latency.runLatencyLaw
+    name: runLatencyLaw
+    owner: pipeline.latency.run
+    signature: |
+      runLatencyLaw(config: LatencyConfig, sink: Pick<PipelineSink, 'event'>, execute: (action: ChosenLatencyAction) => void): LatencyLawRun
+      interface LatencyLawRun { read(reading: LatencyReading): void; reset(): void; readonly counts: LatencyActionCounts }
+    semantics: 每 READING_INTERVAL_MS（100 ms）一读；报告送 sink 的 latency 事件，动作交给执行器后计数。
+  - id: if.pipeline.metering.JitterMeter
+    name: JitterMeter
+    owner: pipeline.metering.jitter
+    signature: |
+      class JitterMeter { constructor(windowMs: number); add(arrivalMs: number, mediaMs: number): void; spreadMs(nowMs: number): number; backlog(nowMs: number): boolean; reset(): void }
+  - id: if.pipeline.metering.FreezeMeter
+    name: FreezeMeter
+    owner: pipeline.metering.freeze
+    signature: |
+      class FreezeMeter {
+        constructor(report: (freeze: Freeze) => void, declaredFps: () => number | null);
+        frame(atMs: number, mediaMs: number, unseen?: number): void;
+        boundary(atMs: number): void; restart(): void;
+        seeking(atMs: number, active: boolean): void; acted(atMs: number, latency: FreezeLatency): void;
+        buffering(atMs: number, active: boolean): void; late(atMs: number): void;
+      }
+  - id: if.pipeline.metering.anchors
+    name: trustedAnchor
+    owner: pipeline.metering.anchors
+    signature: |
+      trustedAnchor(inband: Anchor | null, other: Anchor | null): Anchor | null
+      epochAt(anchor: Dated, positionMs: number): number
+      positionAt(anchor: Dated, epochMs: number): number
+      anchorErrorMs(precision: AnchorPrecision, targetDurationMs: number): number
+      class ArrivalLog { record(timeline: number, newestPositionMs: number, nowMs: number): void; anchorAt(timeline: number, positionMs: number): Anchor | null; latest(timeline: number): Anchor | null }
+  - id: if.pipeline.timing.Timers
+    name: Timers
+    owner: pipeline.timing
+    signature: |
+      interface Timers { set(callback: () => void, ms: number): () => void }
+      const defaultTimers: Timers
+  - id: if.pipeline.timing.HoldUnseen
+    name: HoldUnseen
+    owner: pipeline.timing
+    signature: |
+      class HoldUnseen { held(): boolean; subscribe(listener: (held: boolean) => void): () => void; hold(held: boolean): void }
+    semantics: 页面隐藏且声音没人听见时会话原地保持；会话的等待与输入的重试随它停走，不随页面可见性。
+  - id: if.pipeline.timing.sessionTimers
+    name: sessionTimers
+    owner: pipeline.timing
+    signature: |
+      sessionTimers(hold: HoldUnseen, base?: Timers, now?: () => number): Timers
+  - id: if.pipeline.timing.visibleTimers
+    name: visibleTimers
+    owner: pipeline.timing
+    signature: |
+      visibleTimers(visibility: PageVisibility, base?: Timers, now?: () => number): Timers
+  - id: if.pipeline.timing.within
+    name: within
+    owner: pipeline.timing
+    signature: |
+      within<T>(work: Promise<T>, ms: number, timers: Timers, expired: () => Error): Promise<T>
+  # 拉流
+  - id: if.pipeline.fetch.requestStream
+    name: requestStream
+    owner: pipeline.fetch.request
+    signature: |
+      requestStream(url: string, timers: Timers, on: RequestHandlers, range?: ByteRange): () => void   // 返回取消
+  - id: if.pipeline.fetch.startPull
+    name: startPull
+    owner: pipeline.fetch.flv-pull
+    signature: |
+      startPull(url: string, handlers: PullHandlers, timers?: Timers, start?: PullStart): Pull
+      interface Pull { reconnect(): void; holdUnseen(held: boolean): void; stop(): void }
+  - id: if.pipeline.fetch.PullHandlers
+    name: PullHandlers
+    owner: pipeline.fetch.flv-pull
+    signature: |
+      interface PullHandlers {
+        connected(reconnected: boolean): void;
+        chunk(bytes: Uint8Array): void;
+        disconnected(attempt: number, loss: PullLoss): void;
+        exhausted(loss: PullLoss, retryable: boolean): void;
+        ended(): void;
+      }
+    semantics: 拉流的使用方以对象字面量给出（StreamInput 的 FLV 输入）；字节按 chunk 连续送达。
+  - id: if.pipeline.fetch.boundedRetries
+    name: boundedRetries
+    owner: pipeline.fetch.flv-pull
+    signature: |
+      boundedRetries(timers: Timers, steady?: () => void): Retries
+      lossRetryable(cause: LossCause): boolean
+      fileLossRetryable(cause: LossCause): boolean
+      lossCode(cause: LossCause): ErrorCode
+      describeLoss(cause: LossCause): string
+      describeUrl(url: string): string
+  - id: if.pipeline.fetch.startHlsPull
+    name: startHlsPull
+    owner: pipeline.fetch.hls-loader
+    signature: |
+      startHlsPull(url: string, handlers: HlsHandlers, timers?: Timers, start?: HlsPullStart): HlsPull
+      interface HlsPull extends Pull { seek(positionMs: number): void; seekWallClock(epochMs: number, undatedMs: number): void; goLive(): void; join(epochMs: number): void; pause(paused: boolean): void; /* … */ }
+  - id: if.pipeline.fetch.HlsHandlers
+    name: HlsHandlers
+    owner: pipeline.fetch.hls-loader
+    signature: |
+      interface HlsHandlers extends Omit<PullHandlers, 'ended'> {
+        timeline(timeline: PipelineTimeline, targetDurationMs: number): void;
+        segmentStart(segment: HlsSegmentStart): void;
+        segmentEnd(): void;
+        segmentSkipped(url: string): void;
+        ended(landingMs: number | null): void;
+        unsupported(reason: string, code: 'unsupported' | 'resource-exhausted'): void;
+        watchMissed(loss: PullLoss, missed: number): void;
+      }
+    semantics: HLS 拉流的使用方以对象字面量给出（StreamInput 的 HLS 输入）；每片的字节经 chunk 连续送达，片的起止与时间轴变化各有回调。
+  - id: if.pipeline.fetch.parsePlaylist
+    name: parsePlaylist
+    owner: pipeline.fetch.hls-playlist
+    signature: |
+      parsePlaylist(text: string, baseUrl: string): MediaPlaylist | MasterPlaylist | PlaylistError
+  - id: if.pipeline.fetch.startMp4Pull
+    name: startMp4Pull
+    owner: pipeline.fetch.mp4
+    signature: |
+      startMp4Pull(url: string, handlers: Mp4PullHandlers, timers?: Timers): Mp4Pull
+      interface Mp4Pull { fetch(range: ByteRange): void; cancel(): void; holdUnseen(held: boolean): void; stop(): void }
+    semantics: 首个请求 bytes=0- 探测源站是否支持范围请求，不支持即会话失败（决策 30 (h)）；文件大小在请求间变化也失败。
+  - id: if.pipeline.fetch.Mp4PullHandlers
+    name: Mp4PullHandlers
+    owner: pipeline.fetch.mp4
+    signature: |
+      interface Mp4PullHandlers {
+        connected(reconnected: boolean): void; size(bytes: number): void; chunk(bytes: Uint8Array): void; done(): void;
+        disconnected(attempt: number, loss: PullLoss): void; exhausted(loss: PullLoss, retryable: boolean): void; unsupported(reason: string): void;
+      }
+    semantics: MP4 拉取的使用方以对象字面量给出（StreamInput 的 MP4 输入按模块要的范围 fetch）。
+
+dataStructures:
+  - id: ds.PlayerSource
+    name: PlayerSource
+    definition: |
+      interface PlayerSource {
+        url: string;
+        container: 'flv' | 'hls' | 'mp4';
+        decryptionKey?: Uint8Array;   // 32 字节
+        timeshift?: TimeshiftSource;  // FLV 直播配套的时移列表
+      }
+  - id: ds.TimeshiftSource
+    name: TimeshiftSource
+    definition: |
+      interface TimeshiftSource { url: string; decryptionKey?: Uint8Array }
+  - id: ds.PlayerOpenOptions
+    name: PlayerOpenOptions
+    definition: |
+      interface PlayerOpenOptions {
+        latency: LatencyConfig;
+        route?: 'auto' | PlayerRoute;      // PlayerRoute = 'wasm' | 'webcodecs' | 'mse' | 'native'
+        autoplay: boolean;
+        threading?: 'auto' | PipelineThreading;   // 'worker' | 'main'
+      }
+  - id: ds.PipelineTimeline
+    name: PipelineTimeline
+    definition: |
+      type PipelineTimeline =
+        | { form: 'live'; seekable: TimeRange | null; liveEdgeMs?: number; wallClock?: WallClockAnchor }
+        | { form: 'on-demand'; seekable: TimeRange; durationMs: number; wallClock?: WallClockAnchor };
+      interface WallClockAnchor { positionMs: number; epochMs: number; precision?: 'frame' | 'segment' | 'estimate' }
+  - id: ds.PipelineStart
+    name: PipelineStart
+    definition: |
+      interface PipelineStart {
+        generation: number;
+        threading: PipelineThreading;
+        route: PlayerRoute;
+        source: PlayerSource;
+        options: PlayerOpenOptions;
+        liveStart?: PullStart;    // 'again'：接续的会话，404 即直播结束
+        sink: PipelineSink;
+      }
+  - id: ds.PipelineCommand
+    name: PipelineCommand
+    definition: |
+      type PipelineCommand =
+        | { type: 'play' } | { type: 'pause' }
+        | { type: 'seek'; positionMs: number } | { type: 'seek-live' } | { type: 'seek-wall-clock'; epochMs: number }
+        | { type: 'set-timeshift'; timeshift: TimeshiftSource | null }
+        | { type: 'visibility'; visible: boolean }
+        | { type: 'hold-unseen'; held: boolean };
+  - id: ds.PipelineSinkEvent
+    name: PipelineSinkEvent
+    definition: |
+      type PipelineSinkEvent =
+        | { type: 'funnel'; stage: FunnelStage }          // first-load / first-response / first-data / first-frame / video-rendered
+        | { type: 'route-switched'; from: 'webcodecs'; to: 'wasm'; cause: string }
+        | { type: 'timeline'; timeline: PipelineTimeline }
+        | { type: 'seek'; active: boolean; positionMs: number; epochMs?: number }
+        | { type: 'buffering'; active: boolean }
+        | { type: 'network'; connected: boolean; attempt: number }
+        | { type: 'latency'; report: LatencyReport }
+        | { type: 'error'; error: MediaError } | { type: 'log'; level: …; code: LogCode; message: string }
+        | { type: 'sound-held'; held: boolean } | { type: 'stream-info'; stream: StreamInfo } | { type: 'freeze'; freeze: Freeze }
+        | { type: 'ended' } | { type: 'paused' } | { type: 'played' }
+        | { type: 'mode'; mode: PlaybackMode } | { type: 'edge'; atEdge: boolean };
+  - id: ds.PipelineStats
+    name: PipelineStats
+    definition: |
+      interface PipelineStats {   // 自开始累计，约每秒一份；某路线没有来源的计数缺省（不是 0）
+        atMs: number; positionMs: number; epochMs?: number; bufferMs: number;
+        decodedFrames?: number; renderedFrames: number;
+        droppedFrames: { nonReference?: number; waitingRandomAccess?: number; overLimit: number; late?: number };
+        randomAccessSkips?: { byLaw: number; byBufferFull: number; videoSamples: number; audioAccessUnits: number; decodedFrames?: number; appendedFrames?: number };
+        videoDecodeErrors?: number; audioDecodeErrors?: number; demuxResyncs?: number; discontinuities?: number;
+        audioUnderruns?: number; avCorrections?: number; playableAheadMs?: number; mediaSourceRebuilds?: number;
+        bytesReceived?: number; reconnects?: number; jitterMs?: number;   // …
+        timeshift?: { inputSwitches: number; joinsExact: number; joinsApprox: number; joinsFailed: number; anchorErrorMs: number };
+        latencyActions?: LatencyActionCounts;
+      }
+  - id: ds.PipelineEnvironment
+    name: PipelineEnvironment
+    definition: |
+      interface PipelineEnvironment {
+        container: HTMLElement;
+        audio: { context: AudioContext; destination: AudioNode; running(): boolean;
+                 subscribe(l: (running: boolean) => void): () => void; onResume(l: () => void): () => void } | null;
+        visibility: PageVisibility;
+      }
+  - id: ds.LatencyConfig
+    name: LatencyConfig
+    definition: |
+      interface LatencyConfig {
+        basis: 'buffer' | 'absolute';
+        targetMs: number | null;
+        limitMs: number;
+        worstMeans: 'rate' | 'drop-skip' | 'reconnect';
+        overLimit: 'clamp' | 'stall';
+        catchUpAbove?: 'target' | 'limit';
+        adaptiveHeadroomMs: number;
+      }
+  - id: ds.LatencyReading
+    name: LatencyReading
+    definition: |
+      interface LatencyReading {
+        atMs: number;                          // 会话开始以来的单调毫秒
+        bufferMs: number;                      // 最新收到的媒体时间 − 正在呈现的媒体时间
+        randomAccessBufferMs: number | null;   // 跳到最新 IDR 后剩下的深度
+        randomAccessFixed: boolean; structuralMs: number | null; jitterMs: number; backlog: boolean;
+        connected: boolean; discontinuity: boolean; canDropNonReference: boolean; rateChangeStalls: boolean;
+        settling: boolean; switchCostMs: number; seekCostMs: number;
+      }
+  - id: ds.LatencyAction
+    name: LatencyAction
+    definition: |
+      type LatencyAction =
+        | { type: 'none' }
+        | { type: 'set-rate'; rate: number }
+        | { type: 'set-drop-non-reference'; enabled: boolean }
+        | { type: 'skip-to-random-access' }
+        | { type: 'reconnect' };
+  - id: ds.LatencyReport
+    name: LatencyReport
+    definition: |
+      type LatencyReport =
+        | { type: 'over-limit'; active: true; bufferMs: number } | { type: 'over-limit'; active: false; durationMs: number; peakMs: number }
+        | { type: 'target-unreachable'; active: boolean; structuralMs: number; jitterMs: number }
+        | { type: 'jitter-above-target'; active: boolean; jitterMs: number }
+        | { type: 'target-adapted'; effectiveTargetMs: number }
+        | { type: 'means-locked'; means: LatencyMeans } | { type: 'skip-locked' } | { type: 'means-exhausted' }
+        | { type: 'absolute-unavailable'; active: boolean };
+  - id: ds.Timers
+    name: Timers
+    definition: |
+      interface Timers { set(callback: () => void, ms: number): () => void }
+  - id: ds.Anchor
+    name: Anchor
+    definition: |
+      interface Anchor { timeline: number; positionMs: number; epochMs: number; precision: 'frame' | 'segment' | 'estimate' }
+  - id: ds.Freeze
+    name: Freeze
+    definition: |
+      interface Freeze {
+        atMs: number; durationMs: number;
+        cause: 'seek' | 'latency' | 'buffering' | 'late' | 'startup' | 'unknown';
+        latency?: FreezeLatency; signals: ('seek' | 'latency' | 'buffering' | 'startup' | 'late')[];
+        truncated: boolean; mediaStepMs?: number;
+      }
+  - id: ds.PullHandlers
+    name: PullHandlers
+    definition: |
+      interface PullHandlers { connected(reconnected: boolean): void; chunk(bytes: Uint8Array): void;
+        disconnected(attempt: number, loss: PullLoss): void; exhausted(loss: PullLoss, retryable: boolean): void; ended(): void }
+  - id: ds.PullLoss
+    name: PullLoss
+    definition: |
+      interface PullLoss { of: 'stream' | 'playlist' | 'segment' | 'key'; url: string; cause: LossCause }
+      type LossCause = RequestFailure | { kind: 'ended' } | { kind: 'stale'; afterMs: number } | { kind: 'deadline'; afterMs: number }
+        | { kind: 'discontinuous' } | { kind: 'left-window' } | { kind: 'join-unreachable' } | { kind: 'segment-unreachable' };
+  - id: ds.HlsHandlers
+    name: HlsHandlers
+    definition: |
+      interface HlsHandlers extends Omit<PullHandlers, 'ended'> {
+        timeline(timeline: PipelineTimeline, targetDurationMs: number): void;
+        segmentStart(segment: HlsSegmentStart): void;
+        segmentEnd(): void;
+        segmentSkipped(url: string): void;
+        ended(landingMs: number | null): void;
+        unsupported(reason: string, code: 'unsupported' | 'resource-exhausted'): void;
+        watchMissed(loss: PullLoss, missed: number): void;
+      }
+  - id: ds.MediaPlaylist
+    name: MediaPlaylist
+    definition: |
+      interface MediaPlaylist { form: 'media'; targetDurationMs: number; mediaSequence: number; endList: boolean; event: boolean; segments: HlsSegment[] }

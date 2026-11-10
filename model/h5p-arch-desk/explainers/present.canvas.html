@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 42028ca216f9629e present.canvas#abstraction=b2cc5348 present.canvas#children=59513d62 present.canvas#excludes=08c6774f present.canvas#invariants=0543bc2e present.canvas#responsibility=21a096bf present.canvas#summary=e01dd4b4 present.canvas.edges#summary=0481e0aa present.canvas.flow#summary=461b6237 present.canvas.legend#invariants=2a8b14f1 present.canvas.legend#summary=948a2134 present.canvas.nodes#summary=e66ce409 rel:rel.ad.flow-edges=545bcec1 rel:rel.ad.flow-legend=563efa0a rel:rel.ad.flow-nodes=32b40729 rel:rel.ad.legend-edge-style=3b17fdea">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>画布 · 照单办事</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:16px 16px 28px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:24px 0 6px}
+.lede{color:var(--text-2);margin:0 0 10px}
+figure{margin:8px 0 0}
+figcaption{font-size:13px;color:var(--text);margin-top:6px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+svg [data-arch]{text-decoration:none}
+svg [data-arch]:hover rect,svg [data-arch]:focus-visible rect{stroke-width:2.6}
+</style>
+  </head>
+  <body>
+
+    <h1>只画不算的照单办事员</h1>
+    <p class="lede"><span data-arch="present.canvas">画布</span>拿到什么画什么，碰到手势就上交。它不做投影，也不做布局。</p>
+
+    <h2>左进清单，右出意图</h2>
+    <figure>
+      <svg viewBox="0 0 480 236" role="img" aria-label="画布照单办事：坐标、显隐与回放叠加从左边来，手势作为意图从右边出">
+        <defs><marker id="a16P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a16S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a16A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a16M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a16g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a16l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <g data-arch="state.layout"><rect x="6" y="14" width="150" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="81.0" y="36.1" font-size="12.5" text-anchor="middle">坐标与走线</text><text x="81.0" y="50.6" font-size="10.5" text-anchor="middle" class="muted">来自排版</text></g>
+        <path d="M156,39 C176,39 176,118 194,118" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a16g)"/>
+        <g data-arch="state.desk"><rect x="6" y="86" width="150" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="81.0" y="108.1" font-size="12.5" text-anchor="middle">显隐 · 变淡 · 描边</text><text x="81.0" y="122.6" font-size="10.5" text-anchor="middle" class="muted">来自视图状态</text></g>
+        <path d="M156,111 C176,111 176,118 194,118" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a16g)"/>
+        <rect x="6" y="158" width="150" height="50" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/><text x="81.0" y="180.1" font-size="12.5" text-anchor="middle">回放叠加</text><text x="81.0" y="194.6" font-size="10.5" text-anchor="middle" class="muted">来自排版的舞台</text>
+        <path d="M156,183 C176,183 176,118 194,118" stroke="var(--text-2)" stroke-width="1.4" fill="none" marker-end="url(#a16g)"/>
+        <g data-arch="present.canvas"><rect x="196" y="64" width="104" height="108" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="248.0" y="108.4" font-size="14" text-anchor="middle" font-weight="600">画布</text><text x="248.0" y="122.9" font-size="10.5" text-anchor="middle" class="muted">照单画</text><text x="248.0" y="137.4" font-size="10.5" text-anchor="middle" class="muted">自己不算</text></g>
+        <rect x="330" y="10" width="144" height="40" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="402.0" y="34.0" font-size="11.5" text-anchor="middle">单击 = 选中</text>
+        <path d="M300,118 C316,118 316,30 328,30" stroke="var(--accent)" stroke-width="1.2" fill="none" marker-end="url(#a16P)"/>
+        <rect x="330" y="66" width="144" height="40" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="402.0" y="90.0" font-size="11.5" text-anchor="middle">单击 ▣ = 选中并看图解</text>
+        <path d="M300,118 C316,118 316,86 328,86" stroke="var(--accent)" stroke-width="1.2" fill="none" marker-end="url(#a16P)"/>
+        <rect x="330" y="122" width="144" height="40" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="402.0" y="146.0" font-size="11.5" text-anchor="middle">悬停 = 画布描边提示</text>
+        <path d="M300,118 C316,118 316,142 328,142" stroke="var(--accent)" stroke-width="1.2" fill="none" marker-end="url(#a16P)"/>
+        <rect x="330" y="178" width="144" height="40" rx="8" fill="var(--soft)" stroke="var(--line)"/><text x="402.0" y="202.0" font-size="11.5" text-anchor="middle">拖 · 缩放 = 平移视口</text>
+        <path d="M300,118 C316,118 316,198 328,198" stroke="var(--accent)" stroke-width="1.2" fill="none" marker-end="url(#a16P)"/>
+      </svg>
+      <figcaption>坐标来自排版，显隐与描边来自视图状态，画布一个数都不算。单击、悬停、拖动都变成意图交出去；单击 ▣ 也只是选中这个模块，图解标签自己会跟上。</figcaption>
+    </figure>
+
+    <h2>四个零件</h2>
+    <figure>
+      <svg viewBox="0 0 480 190" role="img" aria-label="画布的四个零件：视图转换与交互、节点组件、边组件、图例">
+        <defs><marker id="a17P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker><marker id="a17S" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker><marker id="a17A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker><marker id="a17M" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker><marker id="a17g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker><marker id="a17l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker></defs>
+        <g data-arch="present.canvas.flow"><rect x="120" y="6" width="240" height="50" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="240.0" y="28.1" font-size="12.5" text-anchor="middle">视图转换与交互</text><text x="240.0" y="42.6" font-size="10.5" text-anchor="middle" class="muted">清单交给 Vue Flow，手势变意图</text></g>
+        <g data-arch="present.canvas.nodes"><rect x="6" y="96" width="150" height="50" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="81.0" y="118.1" font-size="12.5" text-anchor="middle">节点组件</text><text x="81.0" y="132.6" font-size="10.5" text-anchor="middle" class="muted">按种类画节点与角标</text></g>
+        <g data-arch="present.canvas.edges"><rect x="166" y="96" width="150" height="50" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="241.0" y="118.1" font-size="12.5" text-anchor="middle">边组件</text><text x="241.0" y="132.6" font-size="10.5" text-anchor="middle" class="muted">统一的线型与箭头</text></g>
+        <g data-arch="present.canvas.legend"><rect x="326" y="96" width="148" height="50" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="400.0" y="118.0" font-size="12" text-anchor="middle">图例与「显示 ▾」</text><text x="400.0" y="132.4" font-size="10.5" text-anchor="middle" class="muted">只解码，不讲解</text></g>
+        <path d="M200,56 L100,94" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a17g)"/>
+        <path d="M240,56 L240,94" stroke="var(--text-2)" stroke-width="1.2" fill="none" marker-end="url(#a17g)"/>
+        <text x="240" y="178" font-size="10.5" text-anchor="middle" class="muted">同一套视觉编码：图例解释的，就是节点与边画出来的</text>
+      </svg>
+      <figcaption>视图转换把清单交给渲染库，节点与边按同一套视觉编码画出来。图例只解码记号，「为什么这样设计」留给图解。</figcaption>
+    </figure>
+
+  </body>
+</html>

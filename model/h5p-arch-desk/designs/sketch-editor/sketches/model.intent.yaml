@@ -1,0 +1,48 @@
+# 设计 sketch-editor 挂在「model.intent」上的草图：由一期的 designs/sketch-editor/sketch.yaml 按挂载点机械拆出（ADR-0025 迁移，内容不变），同设计另有 state.desk、state.transition、access.writer、present.canvas、present.panel、present.version。
+# 草图：草图的画布编辑（任务 A 二期）。由协调者代架构师起草（负责人 2026-10-22 授权，本次只走通流程），
+# 功能清单见 plans/arch-desk-round3/08-sketch-editor-features.md。
+# 钉住的只有：编辑规则放在哪一层、编辑中的草图是一个值、写回经同一个写入模块、画布与面板只发意图。
+# 其余（子模块再拆分、接口签名、职责细节）由 AI 展开；封闭了 model.intent 与 access.writer 两个子树，AI 不得在它们之下另加直接子模块。
+# r1 评审后修订（2026-10-22，协调者代架构师）：按 questions 第 7 条补 model.intent.check 与 access.writer.append，让已有代码在封闭子树里有归属、依赖可见；按第 8 条去掉第三级的 core（04 §3.2：核心只用于第二级）。
+sketch:
+  id: sketch-editor
+  mount: model.intent
+  lifetime: until-implemented
+  modules:
+    - id: model.intent.edit
+      name: 草图编辑
+      kind: component
+      responsibility: 对草图定义的纯函数编辑：加 / 删 / 改层与模块、移动模块（ID 前缀级联到后代、关系与接口 owner）、连 / 删关系、增删接口、改 core / closed / mayDependOn；输入草图与一个编辑操作，输出新草图或拒绝原因，不碰文件与界面。
+    - id: model.intent.validate
+      name: 草图校验
+      kind: component
+      responsibility: 草图的即时校验：格式（schema）、ID 规则与唯一、引用完整、层依赖无环、与持久草图的矛盾（复用 X4 的矛盾检查）；编辑态每次操作后与保存前共用同一函数。
+    - id: model.intent.check
+      name: 草图核验与生命周期
+      kind: component
+      responsibility: 一期已有的代码归这里：草图与持久草图的矛盾检查、按口径比对设计某一轮或当前版本得出偏差、应用认可偏差、归档判定与确认记录、人拥有文件的指纹比对（X3、X4、X6）；矛盾检查供草图校验共用。
+  relations:
+    - id: rel.se.desk-edit
+      from: state.desk.edit
+      to: model.intent.edit
+      type: queries
+      description: 应用一个编辑操作得到新草图
+    - id: rel.se.desk-validate
+      from: state.desk.edit
+      to: model.intent.validate
+      type: queries
+      description: 每次操作后与保存前校验
+    - id: rel.se.validate-check
+      from: model.intent.validate
+      to: model.intent.check
+      type: queries
+      description: 矛盾检查只有一份，校验复用核验的
+  interfaces:
+    - id: if.intent.applyEdit
+      name: applyEdit
+      owner: model.intent.edit
+    - id: if.intent.validateSketch
+      name: validateSketch
+      owner: model.intent.validate
+  closed:
+    - model.intent

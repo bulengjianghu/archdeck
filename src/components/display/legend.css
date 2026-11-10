@@ -1,0 +1,201 @@
+/* 图例的共用样式（各节子组件共用，限定在 .display 内，L48）：一行一项，左列示意固定宽，右列文字 */
+.display .item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 22px;
+  line-height: 1.35;
+  text-align: left;
+  color: var(--text);
+}
+
+.display .item.muted {
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.display .item.inline {
+  gap: 12px;
+}
+
+.display .item.inline > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+/* ADR-0058：开关行下面的解码行缩进，表示属于上面那个叠加 */
+.display .item.sub {
+  padding-left: 16px;
+}
+
+.display .sw {
+  flex: none;
+  width: 28px;
+  height: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+
+.display .box {
+  display: inline-block;
+  width: 16px;
+  height: 11px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 3px;
+}
+
+.display .box.stack {
+  box-shadow:
+    2px 2px 0 -1px var(--surface),
+    2px 2px 0 0 var(--border-strong);
+}
+
+.display .box.dashed {
+  border-style: dashed;
+}
+
+.display .box.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.display .box.faded {
+  opacity: 0.35;
+}
+
+/* ADR-0058：正文分几节（线 / 节点 / 规则 / 指标 / 叠加），节只是一行标题、不折叠——整卡的收放在 L48 */
+.display .sec + .sec,
+.display .sec + .reading-row,
+.display .reading-row + .sec {
+  margin-top: 8px;
+}
+
+.display .sec-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 18px;
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--text-3);
+}
+
+.display .section-label {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* 读法行：左边一个两字的通道名（粗细 / 箭头 / 线型 / 节点），右边几对「示意 + 词」 */
+.display .reading-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-height: 20px;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.display .reading-row .dim {
+  width: 24px;
+  flex: none;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.display .pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+/* 节标题旁的「?」：打开帮助的「读一条线」（L51） */
+.display .help {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: none;
+  font-size: 10.5px;
+  line-height: 14px;
+  color: var(--text-3);
+}
+
+.display .help:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.display .chip {
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+
+.display .chip.warn {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* L26：标签位的示意——与画布 pill 同款（带边框、加粗）；warn 为异常的警示色 */
+.display .tag-pill {
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  color: var(--text-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  white-space: nowrap;
+}
+
+.display .tag-pill.warn {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+/* Y4：本层环编号的示意（与画布节点上的环编号同款） */
+.display .cycle {
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: 7px;
+  white-space: nowrap;
+}
+
+/* J5：热度角标三档的示意 */
+.display .heat {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+.display .heat.tier-1 {
+  background: var(--heat-1);
+}
+
+.display .heat.tier-2 {
+  background: var(--heat-2);
+}
+
+.display .heat.tier-3 {
+  background: var(--heat-3);
+}

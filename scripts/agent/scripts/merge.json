@@ -1,0 +1,16 @@
+{
+  "steps": [
+    { "text": "把编辑与版本合成一个编辑会话……" },
+    { "wait": 400 },
+    {
+      "block": {
+        "kind": "edit",
+        "summary": "合并 edit 与 versions 为编辑会话",
+        "ops": [
+          { "op": "merge", "sketch": "{{sketch.mount}}", "ids": ["{{sketch.mount}}.edit", "{{sketch.mount}}.versions"], "name": "编辑会话", "id": "session" }
+        ]
+      }
+    },
+    { "done": true }
+  ]
+}

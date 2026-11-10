@@ -1,0 +1,40 @@
+/**
+ * 浏览器端 E2E（ADR-0013）：本机 Chrome + 自带的开发服务器（独立端口），读真实的 model/ 描述。
+ * 运行：npm run test:e2e
+ */
+import { defineConfig } from '@playwright/test'
+
+// 多个工作副本并行跑 E2E 时用 E2E_PORT 各用各的端口，避免复用到别的副本的开发服务器
+const PORT = Number(process.env.E2E_PORT ?? 5393)
+
+export default defineConfig({
+  testDir: 'e2e',
+  // 整轮结束后原样写回指纹与拦截记录（各 spec 并行写它们，见 e2e/global-setup.ts）
+  globalSetup: './e2e/global-setup.ts',
+  // 首次打开项目时布局在 Worker 中计算、开发服务器按需编译，留足余量
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
+  // 全量实测 ~2 分钟（83 用例，fullyParallel）；10 分钟是跑偏的硬预算：超过就是环境问题，先查开发服务器与端口再谈红绿（G9，CLAUDE.md §4）
+  globalTimeout: 15 * 60_000,
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
+  reporter: process.env.CI ? 'line' : [['list'], ['html', { open: 'never' }]],
+  use: {
+    baseURL: `http://localhost:${PORT}/`,
+    channel: 'chrome',
+    viewport: { width: 1440, height: 900 },
+    trace: 'retain-on-failure',
+  },
+  webServer: {
+    command: `npx vite --port ${PORT} --strictPort`,
+    url: `http://localhost:${PORT}/`,
+    reuseExistingServer: !process.env.CI,
+    timeout: 60_000,
+    // DA-11：自动化一律用假 agent 替身（剧本按输入里的「#名字」挑），不调真实 claude；超时给 20s（「延迟到超时」剧本靠停止按钮结束）
+    env: {
+      ARCH_AGENT_COMMAND: JSON.stringify(['node', 'scripts/agent/fake-agent.mjs', '--dir', 'scripts/agent/scripts']),
+      ARCH_AGENT_TIMEOUT_MS: '20000',
+    },
+  },
+})

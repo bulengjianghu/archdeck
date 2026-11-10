@@ -1,0 +1,10 @@
+system:
+  id: h5player
+  name: H5Player
+  description: |
+    Web 端音视频播放器 SDK：让业务方用一套 API 在浏览器里按方案（WCS / Wasm / MSE / FHLS / VCS / Video）播放 FLV / MP4 / HLS 直播与点播流。
+    按「决策内收、副作用外置、契约驱动装配」分为 Infrastructure / Application / Domain / Share 四层（见 docs/arch/blueprint.md）。
+  source:
+    repo: h5player
+    commit: d7f408607a639e1ff800b7b35c5c173971c2dd65
+    generatedAt: '2026-10-24'

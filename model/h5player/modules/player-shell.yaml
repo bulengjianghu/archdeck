@@ -1,0 +1,930 @@
+# 区域：Player 外壳——对外 API、组合根、Worker 基础设施、三方库
+# 第二级模块（infra.player-index / infra.bootstrap / infra.workers / infra.third-party）由 layers.yaml 定义，此处只往下挂子模块。
+
+modules:
+  # ─── 第二级模块的原则（ADR-0042，补充骨架条目）───
+  - { id: infra.player-index, name: "PlayerIndex", abstraction: 按对外方向切分：用户操作只经命令入口进状态机，状态与统计只以只读投影和版本化快照流出，对外面不反向驱动内部。, summary: 以 Player 对外提供播放控制、事件与只读统计, invariants: [业务方只订阅入口自建的对外 EventEmitter，框架事件逐个转发，内部总线不外露, getStats 纯读：逐字段拷贝、不含内部引用，任何生命周期阶段都不抛错, 对外状态投影是无 I/O 的纯状态机，只决定转发、扣下或补发] }
+  - { id: infra.bootstrap, name: "Bootstrap 组合根", abstraction: 契约到实现的唯一绑定点：按装配对象切分运行时、模型创建器与 Solution 装配，只有出边，业务模块不反向依赖它。, summary: 把契约绑定到实现，装配出可运行的播放器 }
+  - { id: infra.workers, name: "Worker 基础设施", abstraction: 按跨出主线程的通道类型切分，通道只搬运与配对消息、不含播放决策，业务使用方与通道本体分开。, summary: 在主线程与 Worker、Service Worker 间搬运配对消息 }
+  - { id: infra.third-party, name: "三方库与外部媒体插件", abstraction: 按接入方式切分：三方库作被直接调用的算法件，解密插件只经 MediaPlugin 契约由处理段工厂挂入流水线。, summary: 提供容器解析、变速算法与内置解密插件 }
+  # ───────────────────────── infra.player-index ─────────────────────────
+  - id: infra.player-index.player-api
+    parent: infra.player-index
+    name: Player 对外 API
+    summary: 把业务方操作转成命令，并转发对外事件
+    kind: component
+    responsibility: >-
+      SDK 唯一入口类 Player：暴露生命周期（init / destroy）、播放控制（load / play / pause / resume / stop / reset / switch / seek）、
+      挂载与画面控制、运行时设置、时移入口、外部媒体插件接入与事件订阅；把用户操作转成状态机命令，把框架内部事件转发给调用方。
+      不含任何播放决策，也不直接操作 MU 或模型。
+    principle: |
+      - **操作 → 命令**：每个控制类方法先发 `UserAction` 事件（供重连 / 埋点识别用户意图），再 `StateMachineController.sendCommand({key, payload})`，返回命令结果 Promise；是否受理由状态机迁移表决定，Player 不做状态判断。
+      - **设置类直写**：`setVolume / setBuffer / setLogLevel / setTimeShiftSource` 经 `context.settings.*` 写 playerData，不投递命令（setVolume 仅已挂载时再补发 SetVolume 命令）。
+      - **少数分流**：`pause / resume / seek / backToLive` 在时移拖进度换腿进行中或可走换腿时改由时移协调器处理；`resume` 在直播重连进行中改取重连插件预备的续播重试；`stop / reset / switch / destroy` 先清时移地址。
+      - **装配次序**：`init` 调组合根 `createPlayerRuntime` → 订阅框架事件 → 先装 Logger / 全局错误捕获 → `bootstrapSolution` → 注册 Destroy 等后置 Hook → 时移协调器（必须在错误处理插件之前）→ 基础横向插件 → 按配置装 Tracker / 授时插件。
+      - **事件桥**：构造时即建对外 `EventEmitter`（autoInit=false 时也能先订阅），`framework.on(...)` 逐个转发白名单事件；`PlayerStatusChange` 经对外状态投影过滤，`VideoRendered` 附加清单轴 `positionMs`，iframe 内转发 Log。
+      - **SDK 清场**：`Destroy` 命令后置 Hook 是唯一清场入口——销毁插件、video 元素池、Solution 并摘除自身 Hook。
+    provides:
+      - if.player-index.init
+      - if.player-index.load
+      - if.player-index.play
+      - if.player-index.pause
+      - if.player-index.resume
+      - if.player-index.stop
+      - if.player-index.reset
+      - if.player-index.destroy
+      - if.player-index.switch
+      - if.player-index.seek
+      - if.player-index.attach
+      - if.player-index.viewControls
+      - if.player-index.settings
+      - if.player-index.setTimeShiftSource
+      - if.player-index.backToLive
+      - if.player-index.useMediaPlugin
+      - if.player-index.on
+      - if.player-index.getStats
+    dataStructures: [ds.PlayerConfig, ds.SwitchPayload, ds.PlayerStatsSnapshot]
+    codeRefs: [packages/player/src/index.ts]
+    docRefs:
+      - docs/design/0-kernel/mu-base-sdk-entry.md
+      - docs/design/0-kernel/state-machine.md
+      - docs/design/5-capabilities/guard/live-reconnect.md
+      - docs/design/6-features/timeshift/leg-switch.md
+
+  - id: infra.player-index.status-projection
+    parent: infra.player-index
+    name: 对外状态投影
+    summary: 对外只报真变化，扣下重连期间的伪恢复状态
+    kind: component
+    responsibility: >-
+      把框架内部的 PlayerStatusChange 序列投影成对外只报「真变化」的状态序列：直播重连期间 Recovery 来源进入 Playing / Buffering
+      的事件先扣下，出首帧时再补发，重试失败的回落对外不可见。纯状态机、无 IO；内部消费方直接订阅框架事件，不经此处。
+    principle: |
+      - 维护 `published`（对外最后声明的状态）、`held`（扣下的最新运行态事件）、`recovering`（见过重连且尚未出画面 / 无用户操作）。
+      - `onStatusChange(payload, reconnectActive)`：非用户 Play 的运行态迁移在重连语境下被扣下；否则与 `published` 比较，相同不发，不同时改写 `oldStatus` 为对外视角后转发。
+      - `onFirstFrame()`：清 `recovering`，若有扣下事件以对外视角补发一次。
+    provides: [if.player-index.status-projection.ExternalStatusProjector]
+    codeRefs: [packages/player/src/externalStatusProjector.ts]
+    docRefs: [docs/design/5-capabilities/guard/live-reconnect.md]
+
+  - id: infra.player-index.stats
+    parent: infra.player-index
+    name: 统计快照
+    summary: 随时返回版本化只读统计快照，恒不抛错
+    kind: component
+    responsibility: >-
+      定义 getStats 的版本化只读快照结构（对外契约，键名进混淆保留表），并把统计聚合与模型槽位里已有的数字定格为 plain object。
+      只读：不调方法、不发命令、不改模型、不发事件、不写日志，任何生命周期阶段都返回合法快照且恒不抛错。
+    principle: |
+      - `deriveStatsCapabilities(playMode, solution)` 是字段组可用性矩阵的唯一落点；不在 capabilities 中的组整体为 `null`。
+      - 取值统一走读属性（`has*Recorded` / `recordedFlags`）区分「未记录（null）」与「实测 0」；计数族按观测窗口是否活跃给 null。
+      - 生效三元组（solution / playMode / loadMode）取自 ModelRegistry 的 `getPlaybackSelection()`，不读 `context.data` 意图。
+      - 以结构类型描述数据源（`StatsSourceContext`），不与 Statistic 具体类耦合。
+    provides: [if.player-index.stats.buildStatsSnapshot]
+    dataStructures:
+      - ds.PlayerStatsSnapshot
+      - ds.StatsCapability
+      - ds.PlayerStatsPlayback
+      - ds.PlayerStatsStartup
+      - ds.PlayerStatsSmoothness
+      - ds.PlayerStatsLatency
+      - ds.PlayerStatsNetwork
+      - ds.PlayerStatsStrategy
+    codeRefs: [packages/player/src/stats.ts, packages/player/src/statsSnapshot.ts]
+    docRefs: [docs/design/6-features/player-get-stats.md]
+
+  - id: infra.player-index.model-access
+    parent: infra.player-index
+    name: 模型能力访问
+    summary: 把注册表取出的模型按能力收窄为具体类型
+    kind: component
+    responsibility: >-
+      给 MU 与业务插件用的模型窄化助手：把 ModelRegistry 取出的 unknown 模型按能力断言收窄为具体播放 / 流模型或能力面
+      （require* 硬断言、read* 可选读取）。只做类型断言与可选读取，不持有状态。
+    principle: |
+      - `require*`：调用 domain 的 `assert*` 能力断言，失败即抛错，用于正常播放路径。
+      - `read*`：用 `has*Capability` 判定，缺失返回 undefined——用于跨方案共用代码（如 Video 方案无帧缓冲台账、换代后旧渲染仍收到 Stop）。
+    provides: [if.player-index.model-access.requireModel]
+    codeRefs: [packages/player/src/modelAccess.ts]
+
+  - id: infra.player-index.public-surface
+    parent: infra.player-index
+    name: 对外转出面与构建入口
+    summary: 对外导出 SDK 类型、插件基类与 RMS 打包入口
+    kind: component
+    responsibility: >-
+      SDK 包对外再导出的类型与基类（SolutionType / EventKey / LogLevel / ErrorCode / PlayerConfig、PluginBase），三方库类型声明补丁，
+      以及 RMS 上报 SDK 的独立 IIFE 打包入口（对接方用 script 注入 self.RMS，主包不内嵌该 SDK）。
+    provides: [if.framework.plugin.PluginBase]
+    codeRefs:
+      - packages/player/src/types.ts
+      - packages/player/src/types/**
+      - packages/player/src/pluginBase.ts
+      - packages/player/src/rmsBundle.ts
+
+  # ───────────────────────── infra.bootstrap ─────────────────────────
+  - id: infra.bootstrap.player-runtime
+    parent: infra.bootstrap
+    name: 运行时装配
+    summary: 按固定顺序创建事件总线、注册表、Context 与内核
+    kind: component
+    responsibility: >-
+      createPlayerRuntime：按固定顺序创建 ProfileEventBus、ModelRegistry（含 state / statistic 单例）、Context、video 元素池、
+      模型创建器与 Framework，并接好 playerData 的事件投影。唯一允许 new Context 具体类的地方。
+    principle: |
+      装配顺序（每步依赖前一步的产物）：
+      1. `inferInitialSelection(config)`：由 URL / playMode / solution 推断初始三元组（Vod→Mp4，否则按 URL 后缀，缺省 Flv / Live）。
+      2. `createProfileEventBus()` → 以它为 publisher 构造 `ModelRegistry`（state / statistic 单例在此创建）。
+      3. `new Context(config, {modelRegistry, profileEventBus, deviceId})`，挂 keepLastFrame 元素池与备用 video 元素。
+      4. `modelRegistry.configureCreators(buildModelCreators(context))`（创建器需要 context 转发领域事件）。
+      5. `new Framework(context, bindFrameworkControllers())`，三 Controller 惰性创建。
+      6. `bindPlayerDataProjections`：最先订阅 NetworkStatusChange / PlaybackScopeStarted / ReconnectStateChange，投影写 `context.data.*` 并补发 PlayerDataChange——业务代码零直写这些事实字段。
+    provides: [if.bootstrap.createPlayerRuntime]
+    dataStructures: [ds.PlayerRuntime]
+    codeRefs: [packages/player/src/bootstrap/playerRuntime.ts]
+    docRefs: [docs/arch/blueprint.md, docs/design/0-kernel/model-registry.md]
+
+  - id: infra.bootstrap.model-creators
+    parent: infra.bootstrap
+    name: 模型创建器表
+    summary: 按配置构造流模型与播放模型并接好领域事件
+    kind: component
+    responsibility: >-
+      提供 ModelRegistry 用的流模型创建器（Flv / Mp4 / Hls）与播放模型创建器（Wcs / Wasm / Mse / Fhls / Vcs / Video），
+      把配置（hasAudio、hls.targetLatency）与时移换腿选项透传给领域模型构造，并把模型发布的领域事件接到 Context。不决定何时换模型。
+    provides: [if.bootstrap.buildModelCreators]
+    dataStructures: [ds.StreamModelCreatorOptions]
+    codeRefs: [packages/player/src/bootstrap/modelCreators.ts]
+    docRefs: [docs/design/0-kernel/model-registry.md]
+
+  - id: infra.bootstrap.solution-bootstrap
+    parent: infra.bootstrap
+    name: Solution 装配
+    summary: 把内核与注册表适配为 Solution 端口并启动它
+    kind: component
+    responsibility: >-
+      注册默认方案 Descriptor，把 Framework 的状态机 / Pipeline / 插件控制器、ModelRegistry、方案注册表、Fragment 挂载器、
+      三段工厂、腿上下文与选型服务适配成 Solution 所需的窄端口 SolutionDeps，创建 Solution 并发出 Init 与初始静音命令。
+    principle: |
+      - `createSolutionDeps` 是端口适配器：把 Solution 端口里的字符串键（命令键、段名、MuKey、状态机模式）在边界处按枚举校验后转成 framework 具体类型（腿限定节点号 `<MuKey>@<LegId>` 只校验 MuKey 部分），返回冻结对象。
+      - 模型换代类方法（replace / begin*Switch / beginPromote）在 commit 后统一把产生的领域事件交给 `context.handlePlaybackProfileEvents` 结算。
+      - 读取 PipelineController / ModelRegistry 的 `@internal` 腿操作面时用局部窄接口收窄，不放宽共享契约；`LegContext` 只在这里 new。
+      - `bootstrapSolution`：`registerDefaultDescriptors` → 取三 Controller → `new Solution(deps)` → `attachHooks()` → 发 `Init` 与 `SetVolume(0)` 内部命令（被拒只记日志）。
+    provides: [if.bootstrap.bootstrapSolution, if.bootstrap.createSolutionDeps]
+    dataStructures: [ds.SolutionDeps]
+    codeRefs: [packages/player/src/bootstrap/solutionBootstrap.ts]
+    docRefs: [docs/design/2-assembly/solution.md, docs/design/0-kernel/pipeline-legs.md]
+
+  # ───────────────────────── infra.workers ─────────────────────────
+  - id: infra.workers.worker-task
+    parent: infra.workers
+    name: Dedicated Worker 任务通道
+    summary: 在 Worker 线程注册可供主线程调用的解码任务
+    kind: component
+    responsibility: >-
+      Worker 线程侧的任务骨架：worker 入口脚本在子线程里建 WorkerMessageBridge、连上 self、注入 Wasm 视频解码任务；
+      任务基类在注桥后回调 registerApi 注册可被主线程调用的方法。只做搬运与配对，不含解码行为。
+    principle: |
+      - 主线程（解码 MU）`new Worker(workerScript)`，两端各持一个 `WorkerMessageBridge`：主→子 `call`（带自增序号、等待 `${type}_${seq}_response` 回包）/ `send`（不等回包）；子线程只应答，不反向调用。
+      - `bridgeNumber` 不匹配的消息在入口直接丢弃：任务重置时双方自增编号，飞行中的旧解码结果不会污染新会话；`call` 100s 超时 resolve(null)。
+    provides: [if.workers.worker-task.WorkerTaskBase]
+    codeRefs:
+      - packages/player/src/mus/workerTask/workerScript.ts
+      - packages/player/src/mus/workerTask/workerTaskBase.ts
+    docRefs: [docs/design/0-kernel/worker-infrastructure.md]
+
+  - id: infra.workers.sw-channel
+    parent: infra.workers
+    name: Service Worker 注册与消息协议
+    summary: 注册并引用计数 Service Worker，提供双向消息协议
+    kind: component
+    responsibility: >-
+      页面侧的 Service Worker 基建：注册 / 激活等待 / 版本不符时重注册 / 机型兼容重连、按脚本 URL 引用计数的注销所有权，
+      以及页面 ↔ SW 的双向 call / callback 消息协议。不认识 HLS，也不关心被拦请求的内容。
+    principle: |
+      - **协议**：`ServiceWorkerMessenger` 以随机 `hash` 配对请求与回包（`pendingCallbacks`），双向对等——页面可 `sendCallMessage`，SW 也可 `call` 页面，由 `callHandler` 应答后回 `callback`。无内置超时，调用方自行包超时。
+      - **注册**：`ServiceWorkerLoader` 复用已激活的 controller，否则先注销同脚本旧注册再 `register(scope './')`，与 `controllerchange` 竞速等待激活。
+      - **所有权**：SW 是页面级单例，而每个 MU 各持一个 loader；`serviceWorkerRegistry` 以脚本绝对 URL 计数，只有最后一个依赖者 release 才物理 unregister，使「先建后删」的流水线切换事务不会拆掉新 MU 正在用的 SW。`reinit / reload` 属全局纠偏，绕过计数强制重注册。
+    provides: [if.workers.sw-channel.ServiceWorkerMessenger, if.workers.sw-channel.serviceWorkerRegistry]
+    dataStructures: [ds.ServiceWorkerMessage]
+    codeRefs:
+      - packages/player/src/mus/serviceWorker/serviceWorkerLoader.ts
+      - packages/player/src/mus/serviceWorker/serviceWorkerRegistry.ts
+      - packages/player/src/mus/serviceWorker/serviceWorkerMessenger.ts
+    docRefs: [docs/design/0-kernel/worker-infrastructure.md]
+
+  - id: infra.workers.sw-script
+    parent: infra.workers
+    name: SW 脚本 segmentProcessor
+    summary: 在 SW 内拦截匹配请求并向页面取应答
+    kind: component
+    responsibility: >-
+      运行在 Service Worker 进程里的独立脚本（带版本号，随包以 URL 资源发布）：按页面下发的正则规则拦截 fetch，
+      经 call 消息回调页面取 m3u8 / ts / 密钥应答，取不到时回 503 + Retry-After 让浏览器重试；其余请求放行。
+    principle: |
+      - 拦截规则由页面经 `setCatchRule` 下发（规则住页面、匹配在 SW），换流 / 换加密配置不需要重新部署脚本。
+      - 页面用 `checkVersion` 与脚本 `version` 协商（`FHLS_SCRIPT_VERSION`），不一致时页面强制重注册。
+    codeRefs: [packages/player/src/mus/serviceWorker/segmentProcessor-1.1.4.js]
+    docRefs: [docs/design/0-kernel/worker-infrastructure.md]
+
+  - id: infra.workers.fhls-services
+    parent: infra.workers
+    name: Fhls 服务
+    summary: 为原生 HLS 构造播表，把分片请求映射到内部缓冲
+    kind: component
+    responsibility: >-
+      Service Worker 通道的业务使用方：直播 FhlsService 为浏览器原生 HLS 现场构造滑动播表、把分片请求映射到播放器内部缓冲的「下一片」、
+      分发解密密钥并上报原生取片需求事实；点播 VodFhlsService 经 HlsDataProvider 转发清单与分片。业务契约归 Fhls 方案。
+    principle: |
+      - 构造时把自身设为 messenger 的 `callHandler`，`init` 校验连接与脚本版本（500ms / 1s 超时），再注册 m3u8 / ts / tks 拦截器。
+      - 直播：取片全局单飞（同一时刻最多一份在途取片，对象身份即会话令牌，迟到结果丢弃）；播表保留 N 片已消费分片保证 Safari `seekable` 非空；暂停时冻结播表起点；按流标识挂起非当前流的清单请求（keep-last-frame）。
+      - 拦截表未就绪时收到的上一轮在途 call 返回 null，走 SW 的 503 重试出口而不是 reject。
+    provides: [if.workers.fhls-services.FhlsService, if.workers.fhls-services.VodFhlsService]
+    dataStructures: [ds.NativeDemandFacts, ds.HlsDataProvider]
+    codeRefs:
+      - packages/player/src/mus/serviceWorker/fhlsService.ts
+      - packages/player/src/mus/serviceWorker/vodFhlsService.ts
+    docRefs: [docs/design/4-solutions/fhls/fhls-solution.md]
+
+  # ───────────────────────── infra.third-party ─────────────────────────
+  - id: infra.third-party.mp4box
+    parent: infra.third-party
+    name: mp4box
+    summary: 解析 ISO BMFF 容器的 box 与样本表
+    kind: library
+    responsibility: >-
+      内置并裁剪的 mp4box.js（TS 化，约 1MB，百余种 box 定义）：ISO BMFF box 解析、多段缓冲流、ISOFile 与样本表；
+      供 MP4 点播的加载与解封装使用。只做容器解析，不含播放逻辑。
+    provides: [if.third-party.mp4box.parseOneBox]
+    codeRefs: [packages/player/src/thirdParty/mp4Box/**]
+
+  - id: infra.third-party.hls-utils
+    parent: infra.third-party
+    name: HLS 解析辅助
+    summary: 解析 ADTS 帧头并拼接字节
+    kind: library
+    responsibility: 源自 hls.js 的 ADTS（AAC 帧头）解析与字节拼接工具，供 TS 解封装器解析音频帧。
+    provides: [if.third-party.hls-utils.adts]
+    dataStructures: [ds.DemuxedTrack]
+    codeRefs: [packages/player/src/thirdParty/hls/**]
+
+  - id: infra.third-party.sonic
+    parent: infra.third-party
+    name: Sonic 变速
+    summary: 对 PCM 做不变调变速
+    kind: library
+    responsibility: >-
+      libsonic 的 Wasm 构建（gzip 资源）与 AudioTimeShift 封装：对 PCM 平面数据做不变调变速，供音频渲染在倍速播放时使用。
+    principle: |
+      `init` 经 framework 的 wasm 加载工具拉取并实例化 libsonic；`process(Float32Array)` 先平面→交错写入 wasm 内存，调 `process_f32`，再交错→平面输出；`setSpeed` 调整速率，`flush / clear / destroy` 管理内部残留与释放。
+    provides: [if.third-party.sonic.AudioTimeShift]
+    codeRefs: [packages/player/src/thirdParty/sonic/**]
+
+  - id: infra.third-party.decrypt-plugins
+    parent: infra.third-party
+    name: 解密媒体插件
+    summary: 就地解密音视频样本，作为插件节点挂入流水线
+    kind: component
+    responsibility: >-
+      两个实现 MediaPlugin 契约的内置解密插件（直播 FLV 解密、点播解密），内联 base64 Wasm，按 NALU 类型就地解密解封装后的音视频样本；
+      由 Process 段工厂作为 Decryptor / VodDecryptor 节点挂入流水线。不负责判定是否需要解密。
+    principle: |
+      `init` 只接受模块内 `data:` 常量实例化 Wasm（不远程加载）；`interceptorAsync(packet)` 记录元数据中的 naluLengthSize，把样本拷入 Wasm 内存、调导出的 decryptVideo / decryptAudio、再拷回原缓冲。
+    provides: [if.third-party.decrypt-plugins.interceptorAsync]
+    codeRefs: [packages/player/src/mediaPlugins/**]
+    docRefs: [docs/design/3-components/decrypt/decrypt-plugins.md]
+
+relations:
+  # ── PlayerIndex 内部 ──
+  - id: rel.player-shell.api-status-projection
+    from: infra.player-index.player-api
+    to: infra.player-index.status-projection
+    type: queries
+    interface: if.player-index.status-projection.ExternalStatusProjector
+    purpose: 转发前过滤或补发对外状态
+    description: Player 对外 API 向对外状态投影取：转发 PlayerStatusChange / FirstFrame 前经投影过滤或补发被扣下的状态。
+  - id: rel.player-shell.api-stats
+    from: infra.player-index.player-api
+    to: infra.player-index.stats
+    type: queries
+    interface: if.player-index.stats.buildStatsSnapshot
+    purpose: 构造 getStats 的只读快照
+    payload: ds.PlayerStatsSnapshot
+    description: Player 对外 API 向统计快照取：getStats 委托构造只读快照。
+  # ── PlayerIndex 出边 ──
+  - id: rel.player-shell.api-bootstrap
+    from: infra.player-index.player-api
+    to: infra.bootstrap
+    type: commands
+    purpose: init 时装配运行时与方案
+    description: Player 对外 API 交给 Bootstrap 组合根：init 时调用组合根 createPlayerRuntime 与 bootstrapSolution 完成装配（入口触发装配）。
+  - id: rel.player-shell.api-framework-command
+    from: infra.player-index.player-api
+    to: infra.framework
+    type: commands
+    mode: async
+    purpose: 把用户操作投递为状态机命令
+    description: Player 对外 API 交给 Framework 机制内核：用户操作经 StateMachineController.sendCommand 投递命令；注册 Destroy / Attach 等后置 Hook；useMediaPlugin 经 PipelineController.updatePipeline 插入 external 段节点；设置类经 context.settings 写 playerData。
+  - id: rel.player-shell.api-framework-event
+    from: infra.framework
+    to: infra.player-index.player-api
+    type: notifies
+    purpose: 宣告首帧、状态变化与错误
+    description: 框架事件总线通知 FirstFrame、PlayerStatusChange、Error、TimeShift* 等，player-api 订阅后转发到对外 EventEmitter。
+  - id: rel.player-shell.api-framework-event-publish
+    from: infra.player-index.player-api
+    to: infra.framework
+    type: notifies
+    purpose: 宣告用户操作与信息浮层开关
+    description: 发布 UserAction / TogglePlayerInfo。
+  - id: rel.player-shell.api-plugins
+    from: infra.player-index.player-api
+    to: app.plugins
+    type: commands
+    purpose: 安装常驻横向插件
+    description: Player 对外 API 交给横向用例插件：实例化并安装常驻横向插件（Logger、全局错误捕获、NoSleep、错误处理、可见性、PlayerInfo、Pipeline、网络重连、Tracker、授时）；resume 时向重连插件取续播重试。
+  - id: rel.player-shell.api-timeshift
+    from: infra.player-index.player-api
+    to: app.timeshift
+    type: commands
+    purpose: 安装时移并委托拖进度换腿
+    description: Player 对外 API 交给时移：安装时移协调器；pause / resume / seek / backToLive 在拖进度换腿时委托协调器；VideoRendered 转发前向它换算清单轴 positionMs。
+  - id: rel.player-shell.api-solution
+    from: infra.player-index.player-api
+    to: app.solution
+    type: commands
+    purpose: 销毁时释放 Solution
+    description: Player 对外 API 交给 Solution：Destroy 后置 Hook 中 dispose Solution。
+  - id: rel.player-shell.stats-domain
+    from: infra.player-index.stats
+    to: domain.models
+    type: queries
+    purpose: 读统计聚合的里程碑与计数
+    payload: ds.Statistic
+    description: 统计快照向领域模型取：只读 Statistic 读面属性（里程碑、计数族、recordedFlags 等），不调用其方法。
+  - id: rel.player-shell.stats-framework
+    from: infra.player-index.stats
+    to: infra.framework
+    type: queries
+    purpose: 读统计模型与生效的方案三元组
+    description: 统计快照向 Framework 机制内核取：读 Context.statisticModel / data 与 ModelRegistry.getPlaybackSelection() 的生效三元组；使用 PlayMode / SolutionType / Time。
+  - id: rel.player-shell.model-access-domain
+    from: infra.player-index.model-access
+    to: domain.models
+    type: queries
+    purpose: 断言能力以收窄模型类型
+    description: 模型能力访问向领域模型取：调用领域模型的 assert* / has*Capability 能力断言，收窄为 FrameModel / MseModel / FhlsModel / VideoPlayModel 等。
+
+  # ── Bootstrap 内部 ──
+  # ── Bootstrap 出边 ──
+  - id: rel.player-shell.runtime-framework
+    from: infra.bootstrap.player-runtime
+    to: infra.framework
+    type: commands
+    purpose: 创建内核及其总线、注册表与 Context
+    description: 运行时装配交给 Framework 机制内核：创建 ProfileEventBus、ModelRegistry（state / statistic 单例创建器）、Context 具体类与 Framework（绑定三 Controller）。
+  - id: rel.player-shell.runtime-framework-projection
+    from: infra.framework
+    to: infra.bootstrap.player-runtime
+    type: notifies
+    purpose: 宣告网络、重连与播放范围变化
+    description: 通知 NetworkStatusChange / PlaybackScopeStarted / ReconnectStateChange（runtime 最先订阅），投影到 context.data。
+  - id: rel.player-shell.runtime-framework-projection-publish
+    from: infra.bootstrap.player-runtime
+    to: infra.framework
+    type: notifies
+    purpose: 宣告投影后的播放数据变化
+    description: 投影后补发 PlayerDataChange。
+  - id: rel.player-shell.runtime-domain
+    from: infra.bootstrap.player-runtime
+    to: domain.models
+    type: commands
+    purpose: 构造播放状态与统计单例
+    description: 运行时装配交给领域模型：经单例创建器构造 PlaybackState 与 Statistic 单例（注入 DomainEventPublisher）。
+  - id: rel.player-shell.model-creators-framework
+    from: infra.bootstrap.model-creators
+    to: infra.framework
+    type: commands
+    purpose: 把模型的领域事件汇入 Context
+    description: 模型创建器表交给 Framework 机制内核：模型发布的领域事件经 context.handlePlaybackProfileEvents 汇入 Context；读取 config 透传参数。
+  - id: rel.player-shell.solution-bootstrap-solution
+    from: infra.bootstrap.solution-bootstrap
+    to: app.solution
+    type: commands
+    purpose: 以窄端口构造 Solution 并挂 Hook
+    payload: ds.SolutionDeps
+    description: Solution 装配交给 Solution：以适配好的 SolutionDeps 构造 Solution 并 attachHooks。
+  - id: rel.player-shell.solution-bootstrap-registry
+    from: infra.bootstrap.solution-bootstrap
+    to: app.registry
+    type: commands
+    purpose: 注册默认方案并接上片段挂载
+    description: Solution 装配交给方案注册表：注册默认 Descriptor；适配 getLoadDescriptor / getSolutionDescriptor；创建 FragmentMounter 并代理 mount / unmount。
+  - id: rel.player-shell.solution-bootstrap-framework
+    from: infra.bootstrap.solution-bootstrap
+    to: infra.framework
+    type: commands
+    purpose: 把内核能力适配成 Solution 端口
+    description: Solution 装配交给 Framework 机制内核：把状态机 / Pipeline / 插件控制器、ModelRegistry 换代与待命槽位、LegContext 适配进 SolutionDeps；发出 Init 与 SetVolume(0) 内部命令。
+  - id: rel.player-shell.solution-bootstrap-domain
+    from: infra.bootstrap.solution-bootstrap
+    to: domain.services
+    type: commands
+    purpose: 给 Solution 注入方案选型
+    description: Solution 装配交给决策服务：装配时把 selectSolution 作为 SolutionDeps.selector 注入，Solution 运行时经它调用方案选型
+
+  # ── Workers 内部 ──
+  - id: rel.player-shell.fhls-sw-channel
+    from: infra.workers.fhls-services
+    to: infra.workers.sw-channel
+    type: commands
+    interface: if.workers.sw-channel.ServiceWorkerMessenger
+    purpose: 建立 SW 连接并下发拦截规则
+    description: Fhls 服务交给 Service Worker 注册与消息协议：建立 SW 连接、版本 / 连接校验、下发拦截规则，并作为 callHandler 应答 SW 的回调。
+  - id: rel.player-shell.sw-channel-script
+    from: infra.workers.sw-channel
+    to: infra.workers.sw-script
+    type: commands
+    mode: async
+    purpose: 向 SW 下发规则并校验版本
+    payload: ds.ServiceWorkerMessage
+    description: Service Worker 注册与消息协议交给 SW 脚本 segmentProcessor：页面经 postMessage 发 call（setCatchRule、checkVersion、unregister 等）并按 hash 等待 callback。
+  - id: rel.player-shell.sw-script-channel
+    from: infra.workers.sw-script
+    to: infra.workers.sw-channel
+    type: commands
+    mode: async
+    purpose: 向页面取被拦请求的应答
+    payload: ds.ServiceWorkerMessage
+    description: SW 脚本 segmentProcessor 交给 Service Worker 注册与消息协议：拦下匹配的 fetch 后经 postMessage call 页面取 m3u8 / ts / 密钥应答。
+  # ── Workers 出边 ──
+  - id: rel.player-shell.sw-channel-framework
+    from: infra.workers.sw-channel
+    to: infra.framework
+    type: queries
+    purpose: 生成消息配对 hash
+    description: Service Worker 注册与消息协议向 Framework 机制内核取：Service Worker 通道调用 Generator 生成配对 hash
+  - id: rel.player-shell.fhls-mus
+    from: infra.workers.fhls-services
+    to: infra.mus
+    type: commands
+    mode: async
+    purpose: 向缓冲取下一片与清单
+    payload: ds.NativeDemandFacts
+    description: Fhls 服务交给 MUs 媒体单元：经构造时注入的回调（ServiceConfig / HlsDataProvider）向 Fhls 缓冲 MU 取下一片 / 清单，并回报原生取片需求事实。
+  - id: rel.player-shell.fhls-framework
+    from: infra.workers.fhls-services
+    to: infra.framework
+    type: queries
+    purpose: 取单调钟与工具处理密钥分片
+    description: Fhls 服务向 Framework 机制内核取：Fhls 解密调用 Time 单调钟计时、Tool 工具函数处理密钥与分片
+
+  # ── Third-party 出边 ──
+  - id: rel.player-shell.sonic-framework
+    from: infra.third-party.sonic
+    to: infra.framework
+    type: queries
+    purpose: 取 wasm 文件以加载 libsonic
+    description: Sonic 变速向 Framework 机制内核取：经框架的 wasm 加载工具（getWasmLoaderUrl / getWasmFile / sonicInitConfig）获取并实例化 libsonic。
+  - id: rel.player-shell.bootstrap-errors
+    from: infra.bootstrap.solution-bootstrap
+    to: share.errors
+    type: queries
+    purpose: 把方案层错误还原为 ErrorBase
+    description: Solution 装配向错误原语取：把方案层返回的错误还原为具体的 ErrorBase（new ErrorBase）再交给错误链
+  - id: rel.player-shell.api-errors
+    from: infra.player-index.player-api
+    to: share.errors
+    type: commands
+    purpose: 登记构建版本并构造插入错误
+    description: Player 对外 API 交给错误原语：启动时写入 ErrorBase.buildVersion，媒体插件插入失败时构造 ErrorBase 交给 handleError
+
+interfaces:
+  # ── Player 对外 API ──
+  - id: if.player-index.init
+    name: Player 构造与 init
+    owner: infra.player-index.player-api
+    signature: |
+      class Player {
+        constructor(config?: PlayerConfig); // autoInit 缺省 true 即同步调用 init
+        init(config: PlayerConfig): Promise<void>;
+      }
+    semantics: 构造时先建对外 EventEmitter，autoInit=false 时可先订阅事件再手动 init。重复 init 只打警告。init 完成组合根装配、插件安装与 Solution 创建，并内部发出 Init 命令。
+  - id: if.player-index.load
+    name: load
+    owner: infra.player-index.player-api
+    signature: 'load(url?: string): Promise<CommandResult>'
+    semantics: 发 UserAction 后投递 Load 命令（只加载不播放）。是否受理由状态机迁移表决定。
+  - id: if.player-index.play
+    name: play
+    owner: infra.player-index.player-api
+    signature: 'play(url?: string): Promise<CommandResult>'
+    semantics: 发 UserAction 后投递 Play 命令；url 缺省用配置地址。返回命令受理结果，不等首帧。
+  - id: if.player-index.pause
+    name: pause
+    owner: infra.player-index.player-api
+    signature: 'pause(): Promise<CommandResult | boolean>'
+    semantics: 投递 Pause{origin:'user'}；若时移拖进度换腿进行中，改由时移协调器撤销事务并进入直播暂停。配了时移地址时是否转入时移会话由协调器的前置 Hook 判定。
+  - id: if.player-index.resume
+    name: resume
+    owner: infra.player-index.player-api
+    signature: 'resume(): Promise<CommandResult | boolean>'
+    semantics: 拖进度换腿进行中只记「完成后续播」；直播重连进行中返回重连插件预备的续播重试结果；否则投递 Resume。
+  - id: if.player-index.stop
+    name: stop
+    owner: infra.player-index.player-api
+    signature: 'stop(): Promise<CommandResult>'
+    semantics: 清除时移地址后投递 Stop 命令。
+  - id: if.player-index.reset
+    name: reset
+    owner: infra.player-index.player-api
+    signature: 'reset(): Promise<CommandResult>'
+    semantics: 清除时移地址后投递 Reset 命令。
+  - id: if.player-index.destroy
+    name: destroy
+    owner: infra.player-index.player-api
+    signature: 'destroy(): Promise<CommandResult>'
+    semantics: 清除时移地址后投递 Destroy 命令；其后置 Hook 是 SDK 清场唯一入口（销毁插件、video 元素池、Solution）。之后 getStats 仍返回合法空快照。
+  - id: if.player-index.switch
+    name: switch
+    owner: infra.player-index.player-api
+    signature: |
+      switch(params: SwitchPayload): Promise<CommandResult>
+      // SwitchPayload: { url?; playMode?; solution?; needsDecryption? }
+    semantics: 显式传入 needsDecryption（含 undefined）即覆盖配置意图并把解析结果重置为基线；清时移地址、取消进行中的直播重连，投递 Switch{url, playMode, solution}。
+  - id: if.player-index.seek
+    name: seek
+    owner: infra.player-index.player-api
+    signature: 'seek(timestamp: number): Promise<CommandResult | boolean>'
+    semantics: 点播 / 接管后为清单轴毫秒的 Seek 命令；直播态登记了时移源时走拖进度换腿（冻结当前帧 → 换录制腿定位 → 续播），兑现 true / false，失败回到直播并发 TimeShiftFailed。
+  - id: if.player-index.attach
+    name: attach / detach
+    owner: infra.player-index.player-api
+    signature: |
+      attach(container: HTMLElement): Promise<CommandResult | null>;
+      detach(): Promise<CommandResult>;
+    semantics: container 非 HTMLElement（含父窗口 HTMLElement）时只记错误日志并返回 null。Attach 后置 Hook 置 isAttached 并发 Attached 事件。
+  - id: if.player-index.viewControls
+    name: 画面控制
+    owner: infra.player-index.player-api
+    signature: |
+      capture(): Promise<unknown | null>;      // 截图
+      clearScreen(): Promise<CommandResult>;
+      toggleFullscreen(): Promise<CommandResult>;
+      togglePlayerInfo(p?: { isOpen?: boolean; postion?: 'left' | 'right' }): Promise<void>;
+    semantics: 前三者投递对应命令；togglePlayerInfo 只发 TogglePlayerInfo 事件。
+  - id: if.player-index.settings
+    name: 运行时设置
+    owner: infra.player-index.player-api
+    signature: |
+      setVolume(volume: number): Promise<CommandResult | void>;
+      setPlaybackRate(rate: number): Promise<CommandResult>;
+      setBuffer(b: { startFillBufferDuration; stopFillBufferDuration; startDropFrameDuration; stopDropFrameDuration }): Promise<void>;
+      setLogLevel(level: LogLevel): Promise<void>;
+      setDebugServerUrl(url: string): Promise<void>;
+      readonly isReconnecting: boolean;
+    semantics: 设置类经 context.settings 写 playerData（不发命令）；setVolume 已挂载时再补发 SetVolume，setPlaybackRate 投递命令。isReconnecting 读 data.reconnectActive，重连期间对外状态保持 Stopped。
+  - id: if.player-index.setTimeShiftSource
+    name: setTimeShiftSource
+    owner: infra.player-index.player-api
+    signature: 'setTimeShiftSource(source?: { url?: string; needsDecryption?: boolean }): Promise<void>'
+    semantics: 登记本场直播的时移录制地址（HLS m3u8），只写 playerData、不投递命令；登记后第一次 pause 即进入时移态。不传或空 url 即清除；时移进行中调用不支持。
+  - id: if.player-index.backToLive
+    name: backToLive
+    owner: infra.player-index.player-api
+    signature: 'backToLive(): Promise<boolean>'
+    semantics: 时移中回到直播边缘，不经 stop、渲染元素原地不动。仅录制腿供数时生效；true=已回到直播，false=未生效且播放状态不变，不发 TimeShiftFailed。
+  - id: if.player-index.useMediaPlugin
+    name: useMediaPlugin
+    owner: infra.player-index.player-api
+    signature: 'useMediaPlugin(plugin: MediaPlugin, position: SemanticPosition): Promise<void>'
+    semantics: 把外部媒体插件包装成 MU，以 external 段节点 + 语义锚点经 Pipeline 事务插入；被拒不打断运行，降级为 MediaPluginInsertError（Ignore 级）日志。
+  - id: if.player-index.on
+    name: on / off 事件订阅
+    owner: infra.player-index.player-api
+    signature: |
+      on<K extends EventKey>(key: K, listener: EventListener<K>): void;
+      off<K extends EventKey>(key: K, listener: EventListener<K>): void;
+    semantics: 对外事件为框架事件的白名单转发（FirstData / FirstFrame / PlayerStatusChange / Error / VideoRendered / Seek* / FillBuffer* / TimeShift* 等）；PlayerStatusChange 经对外状态投影过滤，VideoRendered 可附 positionMs。
+  - id: if.player-index.getStats
+    name: getStats
+    owner: infra.player-index.player-api
+    signature: 'getStats(): PlayerStatsSnapshot'
+    semantics: 页面内唯一合法取数出口。同步、纯读、恒不抛错；未 init / 已 destroy 时返回 capabilities 为空、各组为 null 的合法快照。
+  # ── PlayerIndex 内部能力 ──
+  - id: if.player-index.status-projection.ExternalStatusProjector
+    name: ExternalStatusProjector
+    owner: infra.player-index.status-projection
+    signature: |
+      class ExternalStatusProjector {
+        onStatusChange(p: PlayerStatusChangeEventPayload, reconnectActive: boolean): PlayerStatusChangeEventPayload | undefined;
+        onFirstFrame(): PlayerStatusChangeEventPayload | undefined;
+      }
+    semantics: 返回 undefined 表示不对外转发；返回值的 oldStatus 已改写为对外视角。
+  - id: if.player-index.stats.buildStatsSnapshot
+    name: buildStatsSnapshot
+    owner: infra.player-index.stats
+    signature: |
+      buildStatsSnapshot(context: StatsSourceContext | undefined): PlayerStatsSnapshot;
+      deriveStatsCapabilities(playMode: unknown, solution: unknown): StatsCapability[];
+    semantics: 纯读，不调用统计聚合的任何方法。capabilities 只由 deriveStatsCapabilities 推导。
+  - id: if.player-index.model-access.requireModel
+    name: require* / read* 模型访问
+    owner: infra.player-index.model-access
+    signature: |
+      requireFrameModel(m: unknown): FrameModel;
+      requireMseModel(m: unknown): MseModel;
+      requireFhlsModel(m: unknown): FhlsModel;
+      requireVideoPlayModel(m: unknown): VideoPlayModel;
+      requireFrameBufferModel(m: unknown): PlaybackModelInstance & FrameBufferPlaybackCapability;
+      requireRenderTimelineModel(m: unknown): PlaybackModelInstance & RenderTimelinePlaybackCapability;
+      // … requirePlaybackPositionModel / requireAvRenderPtsModel / requireVideoErrorModel 等
+      readFrameBufferModel(m: unknown): FrameBufferLedger | undefined;
+      readMseModel(m: unknown): MseModel | undefined;
+      readPlayRate(m: unknown): number | undefined;
+    semantics: require* 断言失败抛错；read* 能力缺失返回 undefined，不抛错。
+  # ── Bootstrap ──
+  - id: if.bootstrap.createPlayerRuntime
+    name: createPlayerRuntime
+    owner: infra.bootstrap.player-runtime
+    signature: 'createPlayerRuntime(config: PlayerConfig | undefined): PlayerRuntime'
+    semantics: 每个 Player 实例只调一次；按固定顺序装配并完成 playerData 投影接线，投影订阅先于任何插件订阅。
+  - id: if.bootstrap.buildModelCreators
+    name: buildModelCreators
+    owner: infra.bootstrap.model-creators
+    signature: |
+      buildModelCreators(context: Context): {
+        streamCreators: Record<LoadMode, (o?: StreamModelCreatorOptions) => StreamModel>;
+        playbackCreators: Record<SolutionType, () => PlaybackModel>;
+      }
+  - id: if.bootstrap.bootstrapSolution
+    name: bootstrapSolution
+    owner: infra.bootstrap.solution-bootstrap
+    signature: 'bootstrapSolution(context: Context, framework: Framework): Solution | undefined'
+    semantics: attachHooks 失败返回 undefined；成功后发出 Init 与 SetVolume(0) 内部命令（fire-and-forget，被拒只记日志）。
+  - id: if.bootstrap.createSolutionDeps
+    name: createSolutionDeps
+    owner: infra.bootstrap.solution-bootstrap
+    signature: |
+      createSolutionDeps(context: Context, stateMachine: StateMachineController,
+        pipeline: PipelineController, plugins: PluginController): SolutionDeps
+    semantics: 返回冻结对象；字符串键在边界按枚举校验，非法值抛错。
+  # ── Workers ──
+  - id: if.workers.worker-task.WorkerTaskBase
+    name: WorkerTaskBase
+    owner: infra.workers.worker-task
+    signature: |
+      abstract class WorkerTaskBase {
+        protected workerMessageBridge: WorkerMessageBridge;
+        setWorkerMessageBridge(bridge: WorkerMessageBridge): void; // 注桥后回调 registerApi
+        protected abstract registerApi(): void;                    // 用 bridge.registerMessageCallback 注册可被调用的方法
+      }
+    semantics: worker 线程内的任务基类；子线程只应答主线程调用，不能反向 call。
+  - id: if.workers.sw-channel.ServiceWorkerMessenger
+    name: ServiceWorkerMessenger
+    owner: infra.workers.sw-channel
+    signature: |
+      class ServiceWorkerMessenger {
+        init(scriptUrl: string, forceRegister: boolean): Promise<boolean>;
+        reinit(scriptUrl: string): Promise<boolean>;
+        sendCallMessage<T>(name: string, payload: any): Promise<T>;
+        callHandler: ((name: string, payload?: any[]) => Promise<any>) | null;
+        hasServiceWorkerController(): boolean;
+        destroy(): void;
+      }
+    semantics: 双向 call / callback，以随机 hash 配对；无内置超时。destroy 释放引用计数，最后一个依赖者才物理注销 SW。
+  - id: if.workers.sw-channel.serviceWorkerRegistry
+    name: SW 引用计数注册表
+    owner: infra.workers.sw-channel
+    signature: |
+      retainServiceWorker(scriptUrl: string): void;
+      releaseServiceWorker(scriptUrl: string): boolean; // true = 最后一个依赖者，可物理 unregister
+    semantics: 以脚本绝对 URL 为键的页面级计数；reinit / reload 的强制重注册不经计数。
+  - id: if.workers.fhls-services.FhlsService
+    name: FhlsService（直播）
+    owner: infra.workers.fhls-services
+    signature: |
+      class FhlsService {
+        constructor(config: ServiceConfig); // scriptUrl、fetchNextSegment、segmentEncryptionConfig、getExpectedStreamId、isPaused?、onNativeDemand? …
+        init(): Promise<boolean>;
+        connect(): Promise<void>;
+        segmentArrived(): void;
+        restartStream(): void;
+        stop(): void;
+        destory(): void;
+        liveProgramStartTime: number;
+      }
+    semantics: 为原生 HLS 现场构造播表并按「下一片」应答分片请求；取片单飞，迟到结果丢弃；非当前流的清单请求挂起至销毁。
+  - id: if.workers.fhls-services.VodFhlsService
+    name: FhlsService（点播）
+    owner: infra.workers.fhls-services
+    signature: |
+      class FhlsService {
+        constructor(config: ServiceConfig, dataProvider: HlsDataProvider);
+        init(): Promise<boolean>;
+        // …
+      }
+    semantics: 清单与分片全部经 HlsDataProvider 获取后应答 SW 拦截请求。
+  # ── Third-party ──
+  - id: if.third-party.mp4box.parseOneBox
+    name: mp4box 解析入口
+    owner: infra.third-party.mp4box
+    signature: |
+      class MP4BoxBuffer extends ArrayBuffer { fileStart: number; }
+      class MultiBufferStream extends DataStream { /* 多段 ArrayBuffer 拼接读取 */ }
+      parseOneBox(stream: MultiBufferStream, headerOnly: boolean, parentSize?: number): IncompleteBox;
+      createFile(keepMdatData?: boolean, stream?: MultiBufferStream): ISOFile;
+  - id: if.third-party.hls-utils.adts
+    name: ADTS 解析
+    owner: infra.third-party.hls-utils
+    signature: |
+      probe(data: Uint8Array, offset: number): boolean;
+      initTrackConfig(track: DemuxedAudioTrack, observer, data: Uint8Array, offset: number, codec?: string): void;
+      appendFrame(track: DemuxedAudioTrack, data: Uint8Array, offset: number, pts: number, frameIndex: number): AudioFrame | void;
+      appendUint8Array(a: Uint8Array, b: Uint8Array): Uint8Array;
+  - id: if.third-party.sonic.AudioTimeShift
+    name: AudioTimeShift
+    owner: infra.third-party.sonic
+    signature: |
+      class AudioTimeShift {
+        init(): Promise<boolean>;
+        process(data: Float32Array): Float32Array; // PCM 平面数据
+        setSpeed(speed: number): void;
+        flush(): Float32Array; stop(): void; clear(): void; destroy(): void;
+      }
+    semantics: init 成功后才能 process；倍速变化不改变音调。
+  - id: if.third-party.decrypt-plugins.interceptorAsync
+    name: 解密插件（MediaPlugin 实现）
+    owner: infra.third-party.decrypt-plugins
+    signature: |
+      class PluginDecrypt implements MediaPlugin {      // key = MuKey.Decryptor
+        init(): Promise<void>;
+        interceptorAsync(data: MediaPacket): Promise<MediaPacket>;
+      }
+      class PluginVodDecrypt implements MediaPlugin { /* key = MuKey.VodDecryptor，同形 */ }
+    semantics: 就地改写样本字节后原样返回同一 MediaPacket；init 前收到数据则不解密直接放行。
+
+dataStructures:
+  - id: ds.PlayerStatsSnapshot
+    name: PlayerStatsSnapshot
+    description: getStats 返回的版本化只读快照，对外契约（键名进混淆保留表）。
+    definition: |
+      interface PlayerStatsSnapshot {
+        readonly statsVersion: 1;               // PLAYER_STATS_VERSION，结构不兼容才 +1
+        readonly sampledAt: number;             // performance.now() 同源，不是墙钟
+        readonly capabilities: readonly StatsCapability[];
+        readonly playback: PlayerStatsPlayback | null;
+        readonly startup: PlayerStatsStartup | null;
+        readonly smoothness: PlayerStatsSmoothness | null;
+        readonly latency: PlayerStatsLatency | null;
+        readonly network: PlayerStatsNetwork | null;
+        readonly strategy: PlayerStatsStrategy | null;
+      }
+    invariants: 组不在 capabilities 中即整体为 null；null 表示未记录 / 不适用，0 只表示实测零值；逐字段拷贝、不含内部对象引用；加字段不升版本。
+  - id: ds.StatsCapability
+    name: StatsCapability
+    description: 快照字段组可用性标签，由 deriveStatsCapabilities 按 playMode × solution 推导。
+    definition: |
+      type StatsCapability =
+        | 'playback' | 'startup' | 'startup.wasm'
+        | 'smoothness' | 'smoothness.frames' | 'smoothness.decode'
+        | 'latency.endToEnd' | 'latency.display' | 'latency.avSync' | 'latency.timer'
+        | 'network.bytes' | 'network.pullStream' | 'network'
+        | 'strategy' | 'strategy.adaptiveBuffer' | 'strategy.catchup' | 'strategy.dropFrame';
+    invariants: 只加不改；消费方忽略不认识的取值。
+  - id: ds.PlayerStatsPlayback
+    name: PlayerStatsPlayback
+    description: 播放结局计数与当前生效的方案 / 播放模式 / 加载模式。
+    definition: |
+      interface PlayerStatsPlayback {
+        readonly attempts: number; readonly successes: number; readonly failures: number;
+        readonly restarts: number; readonly restartFailures: number;
+        readonly continuousPlayDurationMs: number | null;
+        readonly solution: string | null;   // 真源 ModelRegistry 槽位，不是 context.data
+        readonly playMode: string | null;
+        readonly loadMode: string | null;
+      }
+  - id: ds.PlayerStatsStartup
+    name: PlayerStatsStartup
+    description: 起播耗时：SDK 初始化、各 wasm 加载、起播瀑布三段与最近一次 seek。
+    definition: |
+      interface PlayerStatsStartup {
+        readonly sdkInitDurationMs: number | null;
+        readonly wasmLoadMs: { video: number | null; audio: number | null; remuxer: number | null };
+        readonly firstLoadedMs: number | null;
+        readonly firstDemuxedMs: number | null;
+        readonly firstFrameMs: number | null;
+        readonly lastSeekDurationMs: number | null;
+      }
+  - id: ds.PlayerStatsSmoothness
+    name: PlayerStatsSmoothness
+    description: 流畅度：卡顿次数与时长、丢帧 / 解码帧、有效观察时长、不可见时长、帧率、码率与媒体字节数。
+    definition: |
+      interface PlayerStatsSmoothness {
+        readonly bufferingCount: number | null;
+        readonly bufferingDurationMs: number | null;
+        readonly playbackObservedMs: number | null;  // 只在 Playing 区间累加，卡顿率分母
+        readonly hiddenMs: number | null;
+        readonly droppedVideoCount: number | null;
+        readonly decodedVideoCount: number | null;
+        readonly renderFps: number | null; readonly decodeFps: number | null;
+        readonly bitrate: { currentBps; averageBps; jitterBps };  // number | null
+        readonly mediaBytesReceived: number | null;
+        // …
+      }
+  - id: ds.PlayerStatsLatency
+    name: PlayerStatsLatency
+    description: 延迟组：端到端延迟、授时状态、画面延迟、音画同步、定时器延迟、拉流方差。
+    definition: |
+      interface PlayerStatsLatency {
+        readonly endToEnd: { currentMs; averageMs; jitterMs; negativeSamples } | null;
+        readonly calibration: { offsetMs; rttMs; state: 'calibrated' | 'unconfigured' | 'failed' | 'pending' | null } | null;
+        readonly display: { streamTimeMs: number | null; delayMs: number | null } | null;
+        readonly avRenderOffsetMs: number | null;
+        readonly timerDelayMs: number | null;
+        readonly pullStreamDeviation: { sizeStddev; intervalStddevMs } | null;
+      }
+    invariants: latency 组存在时 calibration 必存在；为负的端到端样本不计入三元组，只计 negativeSamples。
+  - id: ds.PlayerStatsNetwork
+    name: PlayerStatsNetwork
+    description: 拉流累计字节、请求数与失败数；三项一律 null 起步，区分「未接计数」与「0」。
+    definition: |
+      interface PlayerStatsNetwork {
+        readonly bytesReceived: number | null;
+        readonly requestCount: number | null;
+        readonly requestFailureCount: number | null;
+      }
+  - id: ds.PlayerStatsStrategy
+    name: PlayerStatsStrategy
+    description: 策略自述面：只暴露缓冲 / 追帧 / 抽帧三套控制律已算出的结论与最近一次放行判据，不影响控制律。
+    definition: |
+      interface PlayerStatsStrategy {
+        readonly mode: 'auto' | 'fixed' | 'supply' | null;
+        readonly adaptiveBuffer: { currentMs; valleyMs; thresholds; state; workPoint; activeArm: 'sab' | 'supply' | null; … } | null;
+        readonly catchup: { count; skippedMs; lastTriggeredAt; lastTargetMs; lastReachedAt } | null;
+        readonly dropFrame: { reservedRatio; systemLoadLevel } | null;
+        readonly lastDecision: {
+          at; action: 'none' | 'grow' | 'shrink' | 'catchup' | 'wait' | null;
+          blockedBy: 'deadband' | 'minSeekInterval' | 'warmup' | 'confirming' | 'flooded' | null; // …
+          lagMs; thresholdMs;
+        } | null;
+      }
+    invariants: 某条腿出不了的量一律 null；action / blockedBy 为枚举字面量。
+  - id: ds.PlayerRuntime
+    name: PlayerRuntime
+    description: 组合根装配产物，Player 持有其中的 context 与 framework。
+    definition: |
+      interface PlayerRuntime {
+        context: Context;
+        framework: Framework;
+        modelRegistry: ModelRegistry;
+      }
+  - id: ds.StreamModelCreatorOptions
+    name: StreamModelCreatorOptions
+    description: 流模型创建器的透传选项（直播时移换腿时 createStandby / beginStreamModelSwitch / replaceStreamModel 共用）。
+    definition: |
+      interface StreamModelCreatorOptions {
+        readonly playMode?: PlayMode;
+        readonly timeline?: StreamModelTimeline;
+      }
+    invariants: 只透传，不改写语义。
+  - id: ds.ServiceWorkerMessage
+    name: ServiceWorkerMessage
+    description: 页面 ↔ Service Worker 的消息协议。
+    definition: |
+      type ServiceWorkerMessage =
+        | { type: 'call'; callName: string; payload?: any[]; hash: string }
+        | { type: 'callback'; callName: string; data: any; hash: string }
+        | { type: 'initialized'; version: string; spaceHash: string };
+    invariants: callback 的 hash 必须等于对应 call 的 hash；hash 为随机串而非序号（双方状态不共享）。
+  - id: ds.NativeDemandFacts
+    name: NativeDemandFacts
+    description: 原生（Safari）取片需求事实，每次变化同步回调给 Fhls 缓冲写进播放模型。
+    definition: |
+      interface NativeDemandFacts {
+        pending: number;                    // 在等的分片请求数
+        pendingSince: number | undefined;   // Time.getCurrentTime() 单调钟
+        lastRequestAt: number | undefined;
+        starvedWhilePaused: number;
+        requestedSinceRestart: boolean;
+      }
+    invariants: 时刻一律用 performance.now 单调钟，不得混用 Date.now()。
+  - id: ds.HlsDataProvider
+    name: HlsDataProvider
+    description: 点播 Fhls 服务向缓冲 MU 取清单与分片的数据提供接口。
+    definition: |
+      interface HlsDataProvider {
+        getPlaylist: () => Promise<string | null>;
+        getSegment: (seqNo: number) => Promise<Blob | null>;
+      }
+  - id: ds.DemuxedTrack
+    name: DemuxedTrack
+    description: 源自 hls.js 的解封装轨道描述（TS 解封装器的音视频轨道累积结构）。
+    definition: |
+      interface DemuxedTrack {
+        type: string; id: number; pid: number;
+        inputTimeScale: number; sequenceNumber: number;
+        samples: AACAudioData[] | AVCVideoData[] | Uint8Array;
+        dropped: number; codec?: string; duration?: number;
+        // …
+      }

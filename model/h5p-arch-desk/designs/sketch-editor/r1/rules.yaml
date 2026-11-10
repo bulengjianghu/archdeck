@@ -1,0 +1,40 @@
+# 架构规则（U1–U5、Y3）：架构师的意图，AI 重新生成当前版本时不改动（ADR-0015，docs/04-description-format.md §3.8）。
+# 层规则来自骨架 intent/skeleton.yaml 的 mayDependOn（X1）。
+rules:
+  modules:
+    - module: present
+      mayDependOn: [state, model.types]
+      reason: 呈现层对模型层只依赖契约（类型、枚举、名称查询与小谓词，U10）；投影、场景、归属、治理等计算经视图状态层取用。契约与计算分成不同子模块，「只用契约」才能由门禁校验，而不只是写在文档里（03 §3.5）
+    - module: state.layout
+      mayDependOn: [model]
+      reason: Layout 只把模型层的视图排成坐标，不知道 DeskState 与会话规则（03 §3.5「Projector 不知道坐标，Layout 不知道层次规则」）
+    - module: model.governance
+      mayDependOn: [model.types, model.pipeline, model.projector, model.source]
+      reason: 架构治理只复用索引、端点映射与归属，不依赖场景与版本对比
+    - module: model.evolution
+      mayDependOn: [model.types, model.governance, model.source]
+      reason: 演化事实只复用归属（文件 → 模块、行数）与治理的子树判定、端点映射，不依赖场景、版本对比与确认（议，外部评审 F3）
+    - module: model.review
+      mayDependOn: [model.types]
+      reason: 确认层只读索引的类型契约，指纹、状态与差异是纯计算，不依赖治理、归属与历史（议，外部评审 F3）
+    - module: access.agent
+      mayDependOn: [model, access.reader, access.source, access.deps, access.governance-store, access.history, access.writer]
+      reason: agent 接口只是查询核心加两层外壳，不经开发服务器；归档 / 晋升（sketch archive，X3、X8）与页面同一个写入函数，不另写一套
+    - module: model
+      exposes: [entry]
+      reason: 模型层对外只经入口 src/model/index.ts（03 §3「模型层入口：文本 → 校验后的索引」）；类型、设计版本元信息与项目摘要都由入口导出，外部不直达内部文件
+    - module: model.source
+      exposes: [entry]
+      reason: 源码归属只经 src/model/source/index.ts 访问，glob、ownership、resolve 是它的内部拆分（types.ts 属于契约「类型与 Schema」，U10）
+    - module: model.scenario
+      exposes: [entry, src/model/scenario/steps.ts]
+      reason: 场景投影只经入口访问；Indexer 直达 steps.ts 取 messagesOf——场景入口再导出的 level.ts / sequence.ts 依赖 indexer，经入口会成 indexer ↔ scenario 的环，而 steps.ts 只依赖类型
+    - module: model.governance
+      exposes: [entry]
+      reason: 架构治理只经 src/model/governance/index.ts 访问
+    - module: state.transition
+      exposes: [entry]
+      reason: 会话规则只经 src/state/transition/index.ts 访问
+    - module: state.layout
+      exposes: [src/layout/canvas.ts, src/layout/sequence.ts, src/layout/stage.ts, src/layout/layout.ts]
+      reason: Layout 没有统一入口，对外是四个纯函数文件——画布场景 canvas.ts、时序图坐标 sequence.ts、舞台叠加与显示 stage.ts、层次布局 layout.ts；DeskState 的布局同步与呈现层（画布、时序图）直接调用它们是 ADR-0013 允许的，Layout 以后拆出的内部文件不对外

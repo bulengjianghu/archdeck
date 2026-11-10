@@ -1,0 +1,678 @@
+/**
+ * Validator：跨文件检查引用完整性与结构约束。
+ *
+ * 不抛异常：有问题的实体被剔除或修剪，返回一份可以安全建索引的模型 + 问题列表。
+ * - error：实体被剔除（重复 ID、父模块不存在、关系端点无效……）
+ * - warning：实体保留，有问题的引用被去掉，或只是提醒补全内容
+ */
+import type {
+  ActorEntity,
+  ArchModel,
+  DataStructureEntity,
+  InterfaceEntity,
+  Issue,
+  ModelIndex,
+  ModuleEntity,
+  RelationEntity,
+  ReviewedEntry,
+  RulesDef,
+  ScenarioEntity,
+  SourceLoc,
+  Step,
+  StratumEntity,
+} from './types'
+import { LEGACY_VIAS, isCallLike, isCallbackVia, isUnclassified, parseVia, relationMode, type RelationVia } from './types'
+
+/** 问题消息里的类型名 */
+const TYPE_NAMES: Record<string, string> = { queries: '查询', commands: '委托', calls: '未分类关系', notifies: '通知', streams: '流' }
+import { buildIndex } from './indexer'
+import { INVARIANTS_LIMIT, PURPOSE_LIMIT, SUMMARY_LIMIT, invariantsOf, textWidth, excludesOf, EXCLUDES_LIMIT } from './contract'
+import { bindRelation, forEachStep, mapChildren, planScenario, querySideEffects, syncMismatch } from './scenario/semantics'
+
+export interface ValidateResult {
+  model: ArchModel
+  issues: Issue[]
+}
+
+type Report = (code: string, message: string, src?: SourceLoc) => void
+
+/** 各实体的检查共用：问题收集与已通过检查的模块、参与者、接口、数据结构 */
+interface Checked {
+  rootId: string
+  err: Report
+  warn: Report
+  info: Report
+  modules: Map<string, ModuleEntity>
+  actors: Map<string, ActorEntity>
+  interfaces: Map<string, InterfaceEntity>
+  dataStructures: Map<string, DataStructureEntity>
+}
+
+export function validate(input: ArchModel): ValidateResult {
+  const issues: Issue[] = []
+  const err: Report = (code, message, src) => issues.push({ severity: 'error', code, message, ...src })
+  const warn: Report = (code, message, src) => issues.push({ severity: 'warning', code, message, ...src })
+  const info: Report = (code, message, src) => issues.push({ severity: 'info', code, message, ...src })
+  const rootId = input.system.id
+
+  const modules = checkModules(input, err)
+  const actors = checkActors(input, modules, err)
+  // ── 接口、数据结构：ID 唯一 ──
+  const interfaces = dedupe(input.interfaces, 'interface', err)
+  const dataStructures = dedupe(input.dataStructures, 'data-structure', err)
+  const c: Checked = { rootId, err, warn, info, modules, actors, interfaces, dataStructures }
+  checkModuleRefs(c)
+  const strata = checkStrata(input, c)
+  checkPrinciples(input, c)
+  checkImplementers(c)
+  const relations = checkRelations(input, c)
+  markPorts(c, relations)
+  checkContract(c, relations)
+
+  const structural: ArchModel = {
+    system: input.system,
+    modules: [...modules.values()].sort((a, b) => a.seq - b.seq),
+    relations,
+    interfaces: [...interfaces.values()],
+    dataStructures: [...dataStructures.values()],
+    actors: [...actors.values()],
+    scenarios: [],
+    sourceIgnore: input.sourceIgnore ?? [],
+    ...(input.systemSrc ? { systemSrc: input.systemSrc } : {}),
+    reviewed: cleanReviewed(input.reviewed ?? [], id => modules.has(id) || id === rootId, warn),
+    sketches: input.sketches ?? [],
+    ...(strata.length ? { strata } : {}),
+    ...(input.explainers ? { explainers: input.explainers } : {}),
+    ...(input.sourceLimits ? { sourceLimits: input.sourceLimits } : {}),
+    ...(input.rules ? { rules: cleanRules(input.rules, id => modules.has(id), input.rulesSrc, err, warn), rulesSrc: input.rulesSrc } : {}),
+  }
+  const scenarios = checkScenarios(input, c, structural)
+  const model = { ...structural, scenarios }
+  checkQuerySideEffects(model, c)
+  return { model, issues }
+}
+
+/** 模块：ID 唯一、父模块存在、无环 */
+function checkModules(input: ArchModel, err: Report): Map<string, ModuleEntity> {
+  const rootId = input.system.id
+  const modules = new Map<string, ModuleEntity>()
+  for (const m of input.modules) {
+    if (m.id === rootId) err('module-id-is-system', `模块 ID「${m.id}」与系统根 ID 相同`, m.src)
+    else if (modules.has(m.id)) err('duplicate-module', `模块 ID「${m.id}」重复，首次定义在 ${modules.get(m.id)!.src.file}`, m.src)
+    else modules.set(m.id, { ...m })
+  }
+  dropOrphans(input, modules, err)
+  dropParentCycles(rootId, modules, err)
+  // 环上节点删掉后，其后代同样需要剔除
+  const reachesRoot = (id: string): boolean => {
+    let cur: string | undefined = id
+    for (let guard = 0; cur !== undefined && guard <= modules.size; guard++) {
+      if (cur === rootId) return true
+      cur = modules.get(cur)?.parentId
+    }
+    return false
+  }
+  for (const m of [...modules.values()]) if (!reachesRoot(m.id)) modules.delete(m.id)
+  return modules
+}
+
+/** 父模块不存在：剔除，其后代随之失去父模块，反复剔除直到稳定 */
+function dropOrphans(input: ArchModel, modules: Map<string, ModuleEntity>, err: Report) {
+  const rootId = input.system.id
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const m of modules.values()) {
+      if (m.parentId !== rootId && !modules.has(m.parentId)) {
+        if (!input.modules.some(x => x.id === m.parentId)) {
+          err('unknown-parent', `模块「${m.id}」的父模块「${m.parentId}」不存在`, m.src)
+        }
+        modules.delete(m.id)
+        changed = true
+      }
+    }
+  }
+}
+
+/** 父链成环（跨文件用 parent 互相指向时可能出现） */
+function dropParentCycles(rootId: string, modules: Map<string, ModuleEntity>, err: Report) {
+  for (const m of [...modules.values()]) {
+    const seen = new Set<string>([m.id])
+    let cur = m.parentId
+    while (cur !== rootId) {
+      if (seen.has(cur)) {
+        err('parent-cycle', `模块「${m.id}」的父链成环`, m.src)
+        modules.delete(m.id)
+        break
+      }
+      seen.add(cur)
+      const next = modules.get(cur)
+      if (!next) break
+      cur = next.parentId
+    }
+  }
+}
+
+/** 外部参与者：ID 唯一，不与模块、系统根重复（M3、A1） */
+function checkActors(input: ArchModel, modules: ReadonlyMap<string, ModuleEntity>, err: Report): Map<string, ActorEntity> {
+  const actors = new Map<string, ActorEntity>()
+  for (const a of input.actors) {
+    if (a.id === input.system.id || modules.has(a.id) || input.modules.some(m => m.id === a.id)) err('actor-id-conflict', `参与者 ID「${a.id}」与模块或系统根重复`, a.src)
+    else if (actors.has(a.id)) err('duplicate-actor', `参与者 ID「${a.id}」重复，首次定义在 ${actors.get(a.id)!.src.file}`, a.src)
+    else actors.set(a.id, { ...a })
+  }
+  return actors
+}
+
+/** 模块内引用：接口、数据结构存在，职责已填；接口的提供方存在 */
+function checkModuleRefs({ modules, interfaces, dataStructures, warn }: Checked) {
+  for (const m of modules.values()) {
+    if (m.provides) m.provides = keepKnown(m.provides, interfaces, id => warn('unknown-interface', `模块「${m.id}」引用的接口「${id}」不存在`, m.src))
+    if (m.dataStructures) {
+      m.dataStructures = keepKnown(m.dataStructures, dataStructures, id => warn('unknown-data-structure', `模块「${m.id}」引用的数据结构「${id}」不存在`, m.src))
+    }
+    if (!m.responsibility?.trim()) warn('missing-responsibility', `模块「${m.id}」没有填写职责`, m.src)
+  }
+  for (const x of interfaces.values()) {
+    if (x.owner && !modules.has(x.owner)) {
+      warn('unknown-owner', `接口「${x.id}」的提供方「${x.owner}」不存在`, x.src)
+      x.owner = undefined
+    }
+  }
+}
+
+/** M23：系统简介的句数（在 。！？ 与后跟空白 / 行尾的 .!? 处断句，没有句末标点的尾巴也算一句）；版本号、文件名里的点不断句 */
+export const sentenceCount = (text: string | undefined): number =>
+  (text ?? '')
+    .split(/(?<=[。！？])|(?<=[.!?])(?=\s|$)/)
+    .filter(x => /[^\s。！？.!?]/.test(x)).length
+
+/**
+ * ADR-0042：原则三级同构。M23 系统简介写两句（定位、核心原则）；M24 确认范围内的非层模块（核心与第二级，同 Z4）写一句话原则。
+ * 两者都是 info：提醒 AI 生成时补上，不计入提醒数
+ */
+function checkPrinciples(input: ArchModel, { rootId, modules, info }: Checked) {
+  // 没声明 system 时已有 missing-system（M2），不再叠一条
+  const n = sentenceCount(input.system.description)
+  if (input.systemSrc && n !== 2)
+    info(
+      'system.description-sentences',
+      n === 0
+        ? '系统没有简介：description 写两句——定位一句（为谁解决什么）、核心原则一句（按什么取舍、怎么分）（M23）'
+        : `系统简介是 ${n} 句：写两句——定位一句（为谁解决什么）、核心原则一句（按什么取舍、怎么分）（M23）`,
+      input.systemSrc ? { ...input.systemSrc, path: 'system.description' } : undefined,
+    )
+  for (const m of modules.values()) {
+    if (m.abstraction?.trim()) continue
+    const second = m.parentId !== rootId && modules.get(m.parentId)?.parentId === rootId
+    if (m.role === 'core' || second)
+      info('module.missing-abstraction', `「${m.id}」是${m.role === 'core' ? '核心模块' : '第二级模块'}，没有一句话原则 abstraction（为什么这样分子模块，M24）`, m.src)
+  }
+}
+
+/** M27–M29（ADR-0053）：描述契约的提示——一句话职责超长、核心模块缺一句话职责、不变式超条数、关系目的超长；都是 info，不计入提醒数 */
+function checkContract({ modules, info }: Checked, relations: readonly RelationEntity[]) {
+  const at = (src: SourceLoc, field: string): SourceLoc => ({ ...src, path: src.path ? `${src.path}.${field}` : field })
+  for (const m of modules.values()) {
+    const summary = m.summary?.trim()
+    if (summary && textWidth(summary) > SUMMARY_LIMIT)
+      info('module.summary-long', `「${m.id}」的一句话职责 summary 有 ${textWidth(summary)} 字，超过 ${SUMMARY_LIMIT} 字：只写对外承诺，内部构成留给 responsibility（M27）`, at(m.src, 'summary'))
+    if (!summary && m.role === 'core') info('module.missing-summary', `「${m.id}」是核心模块，没有一句话职责 summary（≤ ${SUMMARY_LIMIT} 字、动词开头、写对外承诺，M27）`, m.src)
+    const n = invariantsOf(m).length
+    if (n > INVARIANTS_LIMIT) info('module.invariants-many', `「${m.id}」写了 ${n} 条不变式，至多 ${INVARIANTS_LIMIT} 条：只留最要紧的（M28）`, at(m.src, 'invariants'))
+    // M33（ADR-0060）：否定边界——核心模块缺失给 info；超过条数、去向不是模块也给 info
+    const ex = excludesOf(m)
+    if (!ex.length && m.role === 'core')
+      info('module.excludes-missing', `「${m.id}」是核心模块，没有写否定边界 excludes（≤ ${EXCLUDES_LIMIT} 条「不负责什么 → 去向模块」，写别人容易以为是它的，M33）`, m.src)
+    if (ex.length > EXCLUDES_LIMIT) info('module.excludes-many', `「${m.id}」写了 ${ex.length} 条否定边界，至多 ${EXCLUDES_LIMIT} 条（M33）`, at(m.src, 'excludes'))
+    for (const e of ex)
+      if (e.to && !modules.has(e.to)) info('module.excludes-target', `「${m.id}」的否定边界「${e.text}」的去向「${e.to}」不是模块（M33）`, at(m.src, 'excludes'))
+  }
+  for (const r of relations) {
+    const purpose = r.purpose?.trim()
+    if (purpose && textWidth(purpose) > PURPOSE_LIMIT)
+      info('relation.purpose-long', `关系「${r.id}」的目的 purpose 有 ${textWidth(purpose)} 字，超过 ${PURPOSE_LIMIT} 字：只写调用方为了什么，机制留给 description（M29）`, at(r.src, 'purpose'))
+  }
+}
+
+/**
+ * ST（ADR-0052）：分层声明的归一与校验——父模块存在；层 ID 在父模块内唯一；成员（层的 members 与子模块的 stratum）是父模块的直接子模块；
+ * 全有或全无：声明了分层的父模块，每个直接子模块恰好属于一层（stratum.missing / stratum.multiple，错误）；mayDependOn 只引用同一父模块的层（stratum.unknown，错误）；
+ * 缺 asks / admits 给 info（stratum.principle-missing，迁移来的旧层不提示）。坏引用去掉；成员按父模块的子模块声明顺序。
+ */
+function checkStrata(input: ArchModel, { modules, rootId, err, info, warn }: Checked): StratumEntity[] {
+  const childrenOf = new Map<string, ModuleEntity[]>()
+  for (const m of [...modules.values()].sort((a, b) => a.seq - b.seq)) {
+    const list = childrenOf.get(m.parentId) ?? []
+    list.push(m)
+    childrenOf.set(m.parentId, list)
+  }
+  const byParent = new Map<string, StratumEntity[]>()
+  for (const s of input.strata ?? []) {
+    if (s.parent !== rootId && !modules.has(s.parent)) {
+      // 只有草图的版本本来就只画了一部分模块：带来的声明没有落处不提醒（同 M16 的 roles）
+      if (!s.inherited) warn('stratum.parent-missing', `层「${s.id}」的父模块「${s.parent}」不在描述里，这条分层声明没有落处`, s.src)
+      continue
+    }
+    const list = byParent.get(s.parent) ?? []
+    if (list.some(x => x.id === s.id)) {
+      err('stratum.duplicate', `「${s.parent}」下的层 ID「${s.id}」重复`, s.src)
+      continue
+    }
+    list.push({ ...s, members: [] })
+    byParent.set(s.parent, list)
+  }
+  for (const m of modules.values())
+    if (m.stratum !== undefined && !byParent.has(m.parentId)) {
+      err('stratum.unknown', `「${m.id}」写了 stratum: ${m.stratum}，但父模块「${m.parentId}」没有声明分层`, m.src)
+      delete m.stratum
+    }
+  const out: StratumEntity[] = []
+  for (const [parent, list] of byParent) {
+    const kids = childrenOf.get(parent) ?? []
+    const kidIds = new Set(kids.map(k => k.id))
+    const ids = new Set(list.map(l => l.id))
+    const claims = new Map<string, Set<string>>()
+    const claim = (child: string, layer: string) => claims.set(child, (claims.get(child) ?? new Set()).add(layer))
+    const declared = new Map((input.strata ?? []).filter(s => s.parent === parent).map(s => [s.id, s.members]))
+    // ST-6：只有草图的版本从当前版本带来的声明（intent/strata.yaml）只在本版本里全有时生效——成员缺了的去掉，
+    // 有子模块不在任何一层（设计改了这一层）或引用对不上，整份不用（info），不报错误与提醒
+    if (list.some(l => l.inherited)) {
+      const kept = (id: string) => kidIds.has(id)
+      const all = new Set([...declared.values()].flatMap(m => m.filter(kept)))
+      const fits = kids.every(k => all.has(k.id) || (k.stratum !== undefined && ids.has(k.stratum))) && list.every(l => (l.mayDependOn ?? []).every(d => ids.has(d)))
+      if (!fits) {
+        info('stratum.not-inherited', `「${parent}」在这个版本里的子模块与当前版本的分层声明对不上（设计改了这一层），本版本不按分层呈现`, list[0].src)
+        for (const k of kids) delete k.stratum
+        continue
+      }
+      for (const [id, m] of declared) declared.set(id, m.filter(kept))
+    }
+    for (const l of list) {
+      for (const id of declared.get(l.id) ?? []) {
+        if (kidIds.has(id)) claim(id, l.id)
+        else if (!modules.has(id)) warn('stratum.member-missing', `层「${l.name}」的成员「${id}」不在描述里`, l.src)
+        else err('stratum.unknown', `层「${l.name}」的成员「${id}」不是「${parent}」的直接子模块`, l.src)
+      }
+      if (l.mayDependOn)
+        l.mayDependOn = l.mayDependOn.filter(id => {
+          if (ids.has(id) && id !== l.id) return true
+          // M26：迁移来的旧层同迁移前，只提醒
+          ;(l.migrated ? warn : err)('stratum.unknown', `层「${l.name}」的 mayDependOn 引用了「${id}」，它不是「${parent}」下的另一层`, l.src)
+          return false
+        })
+      if (!l.migrated && (!l.asks?.trim() || !l.admits?.trim()))
+        info('stratum.principle-missing', `层「${l.name}」没有写${[!l.asks?.trim() && '回答的问题 asks', !l.admits?.trim() && '归属判定问 admits'].filter(Boolean).join('、')}（ST-1）`, l.src)
+    }
+    for (const k of kids) {
+      if (k.stratum === undefined) continue
+      if (ids.has(k.stratum)) claim(k.id, k.stratum)
+      else err('stratum.unknown', `「${k.id}」的 stratum「${k.stratum}」不是「${parent}」下的层`, k.src)
+    }
+    // M26：迁移来的旧层与非层兄弟混在一起时同迁移前：不按分层呈现（提醒），不报全有或全无
+    if (list.some(l => l.migrated) && kids.some(k => !claims.has(k.id))) {
+      warn('mixed-layer-siblings', `「${parent}」的子模块中只有一部分是层（kind: layer），不会按分层总览呈现`, list[0].src)
+      for (const k of kids) delete k.stratum
+      continue
+    }
+    for (const k of kids) {
+      const got = [...(claims.get(k.id) ?? [])]
+      if (got.length === 0) err('stratum.missing', `「${parent}」声明了分层，「${k.id}」不属于任何一层（全有或全无，ADR-0052）`, k.src)
+      else if (got.length > 1) err('stratum.multiple', `「${k.id}」同时属于 ${got.map(g => `「${g}」`).join('、')} 几层，只能属于一层`, k.src)
+      const own = got[0]
+      if (own !== undefined) {
+        list.find(l => l.id === own)!.members.push(k.id)
+        k.stratum = own
+      }
+    }
+    out.push(...list.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || 0))
+  }
+  return out
+}
+
+const isEndpoint = (c: Checked, id: string) => c.modules.has(id) || c.actors.has(id)
+
+/** M18：接口的 implementedBy——每项是存在的模块（参与者不可），坏引用提醒并去掉；重复的去重 */
+function checkImplementers({ modules, actors, interfaces, warn }: Checked) {
+  for (const x of interfaces.values()) {
+    if (!x.implementedBy) continue
+    const kept = new Set<string>()
+    for (const id of x.implementedBy) {
+      if (modules.has(id)) kept.add(id)
+      else
+        warn(
+          'unknown-implementer',
+          `接口「${x.id}」的实现者「${id}」${actors.has(id) ? '是外部参与者，实现者只能是模块' : '不存在'}，已去掉（M18）`,
+          x.src,
+        )
+    }
+    x.implementedBy = [...kept]
+  }
+}
+
+/** 关系：ID 唯一、端点有效、不连自身 / 两个参与者 / 祖先与后代；接口与数据结构引用存在；修饰与机制（M11、M13、M20）；迁移期的未分类（M17；implements 由 Loader 丢弃并提醒） */
+function checkRelations(input: ArchModel, c: Checked): RelationEntity[] {
+  const relations: RelationEntity[] = []
+  const relationIds = new Set<string>()
+  const buses = [...c.modules.values()].filter(m => m.role === 'bus').map(m => m.id)
+  for (const r0 of input.relations) {
+    const r = { ...r0, payload: [...r0.payload] }
+    if (relationIds.has(r.id)) {
+      c.err('duplicate-relation', `关系 ID「${r.id}」重复`, r.src)
+      continue
+    }
+    if (!relationEndsValid(c, r)) continue
+    if (r.interface && !c.interfaces.has(r.interface)) {
+      c.warn('unknown-interface', `关系「${r.id}」引用的接口「${r.interface}」不存在`, r.src)
+      r.interface = undefined
+    }
+    r.payload = keepKnown(r.payload, c.dataStructures, id => c.warn('unknown-data-structure', `关系「${r.id}」引用的数据结构「${id}」不存在`, r.src))
+    // M13：pull 只对 streams 有意义
+    if (r.pull !== undefined && r.type !== 'streams') {
+      c.warn('pull-not-streams', `关系「${r.id}」是 ${r.type}，pull 只用于 streams（拉取型流），已忽略`, r.src)
+      delete r.pull
+    }
+    // M13：mode 只对查询与委托（含未分类）有意义——通知一律异步、流不比同步性
+    if (r.mode !== undefined && !isCallLike(r.type)) {
+      c.warn(
+        'relation.mode-ignored',
+        `关系「${r.id}」是 ${r.type}，${r.type === 'notifies' ? '通知一律异步' : '流不比同步性'}，mode 只用于 queries / commands，已忽略（M13）`,
+        r.src,
+      )
+      delete r.mode
+    }
+    // M14：总线不作通知的端点——两端写真正的发布者与订阅者，可写 via: bus:<总线模块> 留痕
+    const bus = r.type === 'notifies' ? [r.from, r.to].find(id => c.modules.get(id)?.role === 'bus') : undefined
+    if (bus !== undefined) {
+      c.err(
+        'relation.bus-endpoint',
+        `关系「${r.id}」的${bus === r.from ? '发布者' : '订阅者'}「${bus}」是事件总线（role: bus）；总线是传递机制不是参与者，两端写真正的发布者与订阅者，可写 via: 'bus:${bus}' 留痕（M14）`,
+        r.src,
+      )
+      continue
+    }
+    if (r.via !== undefined) {
+      const via = checkVia(c, r, buses)
+      if (via) r.via = via
+      else delete r.via
+    }
+    // M17：calls 读作未分类（按查询或委托处理），只提示
+    if (isUnclassified(r.type))
+      c.info('relation.unclassified', `关系「${r.id}」是 calls（未分类）：按三问定为 queries（查询）或 commands（委托）；迁移期按查询或委托处理（M17）`, r.src)
+    relationIds.add(r.id)
+    relations.push(r)
+  }
+  // M22：同一对端点、同一种类（画布上的一束）里有两条以上没写接口——按表面散开时接不到元素、分不出通路（info）
+  const unnamed = new Map<string, RelationEntity[]>()
+  // ADR-0034：经回调的关系 interface 留空（04 §3.4），不计
+  for (const r of relations) if (!r.interface && !isCallbackVia(r.via)) (unnamed.get(`${r.from}->${r.to}:${r.type}`) ?? unnamed.set(`${r.from}->${r.to}:${r.type}`, []).get(`${r.from}->${r.to}:${r.type}`)!).push(r)
+  for (const list of unnamed.values())
+    if (list.length >= 2)
+      c.info(
+        'relation.bundle-no-interface',
+        `关系${list.map(r => `「${r.id}」`).join('、')}（${list[0].type}，${list[0].from} → ${list[0].to}）都没写接口：同一束里无法区分通路，建议写 interface（M22）`,
+        list[0].src,
+      )
+  return relations
+}
+
+/**
+ * M20：旧的平铺取值读成四形态并提醒——http / hmr / inject / router / callback → channel:<同名>；bus 在恰有一个总线模块时 → bus:<它>，否则「总线未指明」；port →「端口未指明」。
+ * M11：port:<P> 的 P 须是已声明的接口，bus:<M> 的 M 须是 role: bus 的模块；不是时提醒并去掉（返回 undefined）。
+ */
+function checkVia(c: Checked, r: RelationEntity, buses: readonly string[]): RelationVia | undefined {
+  const raw = r.via as string
+  let via = raw as RelationVia
+  if (LEGACY_VIAS.includes(raw)) {
+    via = raw === 'port' ? 'port' : raw === 'bus' ? (buses.length === 1 ? `bus:${buses[0]}` : 'bus') : `channel:${raw}`
+    const read = via === 'port' ? '端口未指明（不判定）' : via === 'bus' ? `总线未指明（系统里有 ${buses.length} 个总线模块，不判定）` : `via: '${via}'`
+    c.warn('relation.via-legacy', `关系「${r.id}」的 via: ${raw} 是旧写法，已按 ${read} 读取；请改写为 port:<接口 ID> / bus:<总线模块 ID> / channel:<通道名>（M20）`, r.src)
+    return via
+  }
+  const v = parseVia(via)
+  if (v?.kind === 'port' && v.target && !c.interfaces.has(v.target)) {
+    c.warn('relation.via-target', `关系「${r.id}」经端口「${v.target}」，它不是已声明的接口；已去掉 via（M11）`, r.src)
+    return undefined
+  }
+  // M21：通道的契约模块须存在；不存在时提醒并按旧写法（不写契约，外部承载不判定）读取
+  if (v?.kind === 'channel' && v.contract && !c.modules.has(v.contract)) {
+    c.warn('relation.via-target', `关系「${r.id}」经通道「${v.name}」的契约模块「${v.contract}」不存在；已按 channel:${v.name}（不核承载）读取（M21）`, r.src)
+    return `channel:${v.name}`
+  }
+  if (v?.kind === 'bus' && v.target && c.modules.get(v.target)?.role !== 'bus') {
+    c.warn('relation.via-target', `关系「${r.id}」经总线「${v.target}」，它${c.modules.has(v.target) ? '不是 role: bus 的模块' : '不存在'}；已去掉 via（M11）`, r.src)
+    return undefined
+  }
+  return via
+}
+
+/** 裁决 4：被 via: port: 引用、或描述写了实现者的接口是端口 */
+function markPorts(c: Checked, relations: readonly RelationEntity[]) {
+  const viaPorts = new Set(relations.flatMap(r => (parseVia(r.via)?.kind === 'port' && parseVia(r.via)!.target ? [parseVia(r.via)!.target!] : [])))
+  for (const x of c.interfaces.values()) if (x.implementedBy?.length || viaPorts.has(x.id)) x.port = true
+}
+
+/** 关系的两端：报错并返回 false 表示剔除 */
+function relationEndsValid(c: Checked, r: RelationEntity): boolean {
+  const isAncestor = (anc: string, id: string): boolean => {
+    let cur = c.modules.get(id)?.parentId
+    while (cur !== undefined && cur !== c.rootId) {
+      if (cur === anc) return true
+      cur = c.modules.get(cur)?.parentId
+    }
+    return false
+  }
+  const badEnd = [r.from, r.to].find(id => !isEndpoint(c, id))
+  if (badEnd !== undefined) c.err('unknown-endpoint', `关系「${r.id}」的端点「${badEnd}」不存在`, r.src)
+  else if (r.from === r.to) c.err('self-relation', `关系「${r.id}」的两端是同一个模块`, r.src)
+  else if (c.actors.has(r.from) && c.actors.has(r.to)) c.err('actor-relation', `关系「${r.id}」的两端都是外部参与者，系统内没有端点`, r.src)
+  else if (isAncestor(r.from, r.to) || isAncestor(r.to, r.from)) {
+    c.err('ancestor-relation', `关系「${r.id}」连接了祖先与后代（${r.from} / ${r.to}），包含关系已由模块树表达`, r.src)
+  } else return true
+  return false
+}
+
+/** 场景（S5–S13）：ID 唯一、步骤引用有效、ref 无循环、与结构一致 */
+function checkScenarios(input: ArchModel, c: Checked, structural: ArchModel): ScenarioEntity[] {
+  const scenarios = new Map<string, ScenarioEntity>()
+  for (const sc of input.scenarios) {
+    if (scenarios.has(sc.id)) c.err('duplicate-scenario', `场景 ID「${sc.id}」重复，首次定义在 ${scenarios.get(sc.id)!.src.file}`, sc.src)
+    else scenarios.set(sc.id, sc)
+  }
+  const relationIds = new Set(structural.relations.map(r => r.id))
+  for (const [id, sc] of scenarios) scenarios.set(id, { ...sc, steps: cleanSteps(c, id, sc.steps, scenarios, relationIds) })
+  dropCyclicRefs(scenarios, c.err)
+  // S5a、S12：与结构的一致性，与回放共用 bindRelation
+  const index = buildIndex(structural)
+  for (const [id, sc] of scenarios) scenarios.set(id, { ...sc, steps: checkBinding(index, c, sc, sc.steps) })
+  return [...scenarios.values()]
+}
+
+/** 步骤：ref 指向存在的场景，端点有效，步骤 id 在场景内唯一，关系、接口、数据结构引用存在 */
+function cleanSteps(c: Checked, id: string, steps: Step[], scenarios: ReadonlyMap<string, ScenarioEntity>, relationIds: ReadonlySet<string>): Step[] {
+  const msgIds = new Set<string>()
+  const clean = (steps: Step[]): Step[] =>
+    steps.flatMap<Step>(s => {
+      if (s.kind === 'ref') {
+        if (scenarios.has(s.scenario)) return [s]
+        c.err('unknown-ref', `场景「${id}」引用的场景「${s.scenario}」不存在`, s.src)
+        return []
+      }
+      if (!('msg' in s)) return [mapChildren(s, clean)]
+      const msg = cleanMessage(c, id, s, msgIds, relationIds)
+      return msg ? [{ ...s, msg }] : []
+    })
+  return clean(steps)
+}
+
+type MessageStep = Extract<Step, { msg: unknown }>
+
+/** 一条消息步骤；端点无效时返回 null（剔除） */
+function cleanMessage(c: Checked, id: string, s: MessageStep, msgIds: Set<string>, relationIds: ReadonlySet<string>): MessageStep['msg'] | null {
+  const msg = { ...s.msg, payload: [...s.msg.payload] }
+  const badEnd = [msg.from, msg.to].find(x => !isEndpoint(c, x))
+  if (badEnd !== undefined) {
+    c.err('unknown-step-endpoint', `场景「${id}」步骤 ${s.path} 的端点「${badEnd}」不是已声明的模块或参与者`, s.src)
+    return null
+  }
+  if (msg.id !== undefined) {
+    if (msgIds.has(msg.id)) {
+      c.err('duplicate-step-id', `场景「${id}」中步骤 id「${msg.id}」重复，已改用路径 ${s.path}`, s.src)
+      msg.id = undefined
+    } else msgIds.add(msg.id)
+  }
+  if (msg.relation && !relationIds.has(msg.relation)) {
+    c.warn('unknown-relation', `场景「${id}」步骤 ${s.path} 引用的关系「${msg.relation}」不存在`, s.src)
+    msg.relation = undefined
+  }
+  if (msg.interface && !c.interfaces.has(msg.interface)) {
+    c.warn('unknown-interface', `场景「${id}」步骤 ${s.path} 引用的接口「${msg.interface}」不存在`, s.src)
+    msg.interface = undefined
+  }
+  msg.payload = keepKnown(msg.payload, c.dataStructures, x => c.warn('unknown-data-structure', `场景「${id}」步骤 ${s.path} 引用的数据结构「${x}」不存在`, s.src))
+  return msg
+}
+
+/** S6：ref 无循环引用；成环的 ref 步骤被剔除 */
+function dropCyclicRefs(scenarios: Map<string, ScenarioEntity>, err: Report) {
+  const refsOf = (steps: readonly Step[]) => {
+    const out: Extract<Step, { kind: 'ref' }>[] = []
+    forEachStep(steps, s => s.kind === 'ref' && out.push(s))
+    return out
+  }
+  const cyclic = new Set<Step>()
+  const visit = (id: string, stack: string[]) => {
+    for (const r of refsOf(scenarios.get(id)!.steps)) {
+      if (cyclic.has(r)) continue
+      if (r.scenario === id || stack.includes(r.scenario)) {
+        err('ref-cycle', `场景「${id}」的 ref 引用「${r.scenario}」形成循环（${[...stack, id, r.scenario].join(' → ')}）`, r.src)
+        cyclic.add(r)
+      } else visit(r.scenario, [...stack, id])
+    }
+  }
+  for (const id of scenarios.keys()) visit(id, [])
+  const dropRefs = (steps: Step[]): Step[] => steps.filter(s => !cyclic.has(s)).map(s => mapChildren(s, dropRefs))
+  if (cyclic.size > 0) for (const [id, sc] of scenarios) scenarios.set(id, { ...sc, steps: dropRefs(sc.steps) })
+}
+
+/** S5a、S12：步骤引用的关系须是运行时关系且端点方向一致，否则去掉引用；两端之间没有任何关系时提醒 */
+function checkBinding(index: ModelIndex, c: Checked, sc: ScenarioEntity, steps: Step[]): Step[] {
+  return steps.map(s => {
+    if (!('msg' in s)) return mapChildren(s, x => checkBinding(index, c, sc, x))
+    const b = bindRelation(index, { kind: s.kind, ...s.msg })
+    const where = `场景「${sc.id}」步骤 ${s.path}（${s.msg.from} → ${s.msg.to}）`
+    if (b.issue === 'not-runtime') {
+      const t = index.relations.get(b.relation!)!.type
+      c.err('step-relation-not-runtime', `${where} 引用了 ${t} 关系「${b.relation}」；步骤只对应交互关系（queries / commands / notifies / streams，S12）`, s.src)
+      return { ...s, msg: { ...s.msg, relation: undefined } }
+    }
+    if (b.issue === 'mismatch') {
+      const r = index.relations.get(b.relation!)!
+      c.err('step-relation-mismatch', `${where} 与引用的关系「${r.id}」（${r.from} → ${r.to}，${r.type}）端点或方向不一致`, s.src)
+      return { ...s, msg: { ...s.msg, relation: undefined } }
+    }
+    if (b.issue === 'unrelated') c.warn('step-unmodeled', `${where} 在交互图中没有对应关系，两端之间也没有任何关系`, s.src)
+    // S19：同步性一致——只提醒，不改绑定
+    const bound = b.relation ? index.relations.get(b.relation) : undefined
+    if (bound && syncMismatch(bound, s.kind))
+      c.warn(
+        'step.sync-mismatch',
+        bound.type === 'notifies'
+          ? `${where} 是同步消息，对应的通知「${bound.id}」一律异步；改为 async 步骤（S19）`
+          : `${where} 是${s.kind === 'async' ? '异步' : '同步'}消息，对应的${TYPE_NAMES[bound.type] ?? bound.type}「${bound.id}」却是${relationMode(bound) === 'async' ? '异步' : '同步'}的；按代码改消息或关系的 mode（S19）`,
+        s.src,
+      )
+    return s
+  })
+}
+
+/** U13：查询有副作用——按场景闭包判定（querySideEffects），一对（查询，委托 / 通知）在全部场景里只报一次，定位到查询那一步 */
+function checkQuerySideEffects(model: ArchModel, c: Checked) {
+  if (!model.scenarios.length || !model.relations.some(r => r.type === 'queries')) return
+  const index = buildIndex(model)
+  const seen = new Set<string>()
+  for (const sc of model.scenarios)
+    for (const e of querySideEffects(index, planScenario(index, sc.id))) {
+      const key = `${e.query}->${e.effect}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const effect = index.relations.get(e.effect)!
+      c.warn(
+        'query.side-effect',
+        `查询「${e.query}」有副作用：场景「${sc.id}」中它的闭包里出现了${effect.type === 'notifies' ? '通知' : '委托'}「${e.effect}」（步骤 ${e.queryFrame.stepPath} → ${e.effectFrame.stepPath}）；改为委托，或把副作用移出查询（U13）`,
+        e.queryFrame.src,
+      )
+    }
+}
+
+function dedupe<T extends { id: string; src: SourceLoc }>(
+  items: readonly T[],
+  label: string,
+  err: Report,
+): Map<string, T> {
+  const map = new Map<string, T>()
+  for (const x of items) {
+    if (map.has(x.id)) err(`duplicate-${label}`, `${label === 'interface' ? '接口' : '数据结构'} ID「${x.id}」重复`, x.src)
+    else map.set(x.id, { ...x })
+  }
+  return map
+}
+
+function keepKnown(ids: readonly string[], known: Map<string, unknown>, onUnknown: (id: string) => void): string[] {
+  return ids.filter(id => {
+    if (known.has(id)) return true
+    onUnknown(id)
+    return false
+  })
+}
+
+/** Z1：确认记录引用不存在的模块提醒并去掉该条（同 M7）；同一模块多条时取最后一条并提醒 */
+function cleanReviewed(entries: readonly ReviewedEntry[], exists: (id: string) => boolean, warn: Report): ReviewedEntry[] {
+  const byModule = new Map<string, ReviewedEntry>()
+  for (const e of entries) {
+    if (!exists(e.module)) {
+      warn('unknown-reviewed-module', `确认记录失效：模块 ${e.module} 已改名或删除，请在新模块上重新确认`, e.src)
+      continue
+    }
+    if (byModule.has(e.module)) warn('duplicate-reviewed', `模块「${e.module}」有多条确认记录，取最后一条`, e.src)
+    byModule.set(e.module, e)
+  }
+  return [...byModule.values()]
+}
+
+/** U1：规则引用不存在的模块提醒并去掉该条（同 M7）；allow 缺 reason 报错并去掉该条 */
+function cleanRules(
+  rules: RulesDef,
+  exists: (id: string) => boolean,
+  src: SourceLoc | undefined,
+  err: Report,
+  warn: Report,
+): RulesDef {
+  const known = (ids: readonly string[] | undefined, where: string) =>
+    ids?.filter(id => exists(id) || (warn('unknown-rule-module', `${where}引用的模块「${id}」不存在`, src), false))
+  const modules = (rules.modules ?? []).flatMap(r => {
+    if (!exists(r.module)) {
+      warn('unknown-rule-module', `规则引用的模块「${r.module}」不存在，该条被忽略`, src)
+      return []
+    }
+    return [{ ...r, ...(r.mayDependOn ? { mayDependOn: known(r.mayDependOn, `模块「${r.module}」的 mayDependOn `) } : {}) }]
+  })
+  const allow = (rules.allow ?? []).filter(a => {
+    if (!a.reason?.trim()) {
+      err('allow-without-reason', `例外 ${a.from} → ${a.to} 没有写 reason，该条被忽略`, src)
+      return false
+    }
+    if (!exists(a.from) || !exists(a.to)) {
+      warn('unknown-rule-module', `例外 ${a.from} → ${a.to} 引用的模块不存在，该条被忽略`, src)
+      return false
+    }
+    return true
+  })
+  const tolerated = known(rules.cycles?.tolerated, 'cycles.tolerated ')
+  return {
+    ...(rules.layers !== undefined ? { layers: rules.layers } : {}),
+    modules,
+    allow,
+    ...(tolerated ? { cycles: { tolerated } } : {}),
+  }
+}

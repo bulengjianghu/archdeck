@@ -1,0 +1,64 @@
+# 外部参与者：主动发起交互的外部实体（A3），及其入口关系。
+# 被动依赖（浏览器 API、源站、三方库）不建参与者：源站的响应经拉流模块进入，浏览器回调归各族的适配器。
+actors:
+  - id: actor.viewer
+    name: 观看者
+    kind: user
+    description: 在演示页上操作的人：选流与配置、点播放 / 暂停 / 停止 / 拖进度 / 回直播 / 时移跳转、调音量、截图，声音被拦时点一下放声。
+  - id: actor.host-app
+    name: 集成方页面
+    kind: system
+    description: 按 SDK.md 接入播放器的业务页面代码：选取并注入管线族，经 Player API 发命令、订阅事件与读快照；演示页是仓库内唯一的这种消费方。
+  - id: actor.system-media-keys
+    name: 系统媒体控制
+    kind: system
+    description: 锁屏、控制中心、耳机与键盘媒体键：经 navigator.mediaSession 的 play / pause 动作在页面之外发起播放与暂停。
+  - id: actor.page-lifecycle
+    name: 页面生命周期
+    kind: system
+    description: 浏览器切到后台 / 回到前台（visibilitychange）、自动播放策略与音频中断：主动改变页面可见性与声音能否播放。
+
+relations:
+  - id: rel.ctx.viewer-demo
+    from: actor.viewer
+    to: host.demo.app
+    type: commands
+    purpose: 选流、控制播放与注入故障
+    description: 观看者在演示页上操作：表单、控制条、进度条、时移与故障分段。
+  - id: rel.ctx.host-app-api
+    from: actor.host-app
+    to: kit.facade.player-api
+    type: commands
+    mode: async
+    interface: if.kit.facade.Player
+    purpose: 在自己页面里播放直播与点播
+    description: 集成方页面调用 Player 对外 API（createPlayer、open / play / pause / seek / stop / destroy …、resumeAudio）。
+  - id: rel.ctx.media-keys
+    from: actor.system-media-keys
+    to: kit.facade.browser-platform
+    type: commands
+    via: channel:mediaSession
+    purpose: 让系统键也能播放或暂停
+    description: 系统媒体键经 navigator.mediaSession 的动作处理器交给门面的平台适配，再作为当前会话的 play / pause 入队。
+  - id: rel.ctx.visibility
+    from: actor.page-lifecycle
+    to: kit.facade.browser-platform
+    type: notifies
+    via: channel:visibilitychange
+    purpose: 宣告页面切到后台或回到前台
+    description: 浏览器在页面切后台 / 回前台时发 visibilitychange，门面的平台适配转给订阅它的会话。
+  - id: rel.ctx.audio-running
+    from: actor.page-lifecycle
+    to: kit.page.audio
+    type: notifies
+    via: channel:statechange
+    purpose: 宣告页面声音能否真的出声
+    description: AudioContext 被自动播放策略挂起或被中断后恢复时状态变化，页面音频据此判定声音是否在跑。
+  - id: rel.ctx.player-events
+    from: kit.kernel.envelope
+    to: actor.host-app
+    type: notifies
+    payload: ds.PlayerEvent
+    via: bus:share.core.primitives.event-hub
+    purpose: 让集成方按会话事件更新页面
+    description: 内核按会话顺序发出的事件经 player.events（EventHub）推给集成方页面；telemetry 同样经一个 EventHub。

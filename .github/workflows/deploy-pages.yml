@@ -1,0 +1,55 @@
+# 静态 demo 部署到 GitHub Pages（https://bulengjianghu.github.io/archdeck/）。
+# 产物是纯静态 SPA：scripts/build-demo.ts 在构建期把 ModelSource 插件的载荷预渲染成 JSON，
+# 页面以只读模式运行（src/components/DeskView.vue 的 demo 分支）。
+# 开启方式（一次性，需仓库网页操作）：Settings → Pages → Source 选 "GitHub Actions"。
+name: demo（GitHub Pages）
+
+on:
+  push:
+    branches: [release/0.0.1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 演化事实（git 历史）与版本切换的提交列表要在完整历史上计算
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      # lockfile 的 resolved 地址来自作者工作区的 npmmirror，它对 runner 的数据中心 IP 限流（实测重试 40+ 分钟后失败）；
+      # 只在构建机上手写改写为 npmjs，仓库里的 lockfile 与上游保持字节一致（同步零冲突）
+      - name: lockfile 镜像地址改写为 npmjs
+        run: sed -i 's#https://registry.npmmirror.com#https://registry.npmjs.org#g' package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run type-check
+      - run: npm run build:demo
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

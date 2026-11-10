@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta name="arch-basis" content="v1 4ed6a38e47a836cf infra.framework#abstraction=ca5d59bc infra.framework#children=02e51761 infra.framework#invariants=b8906039 infra.framework#provides=a9110547 infra.framework#responsibility=bf598100 infra.framework#summary=a84d1a11 infra.framework.context#summary=9da39a57 infra.framework.contracts#summary=4a077af4 infra.framework.kernel#summary=e7402238 infra.framework.media-unit#summary=e642fa81 infra.framework.model-registry#summary=e8102f98 infra.framework.pipeline#summary=05ed6d28 infra.framework.plugin#summary=e4c2ddc9 infra.framework.state-machine#summary=85a8263f infra.framework.utils#summary=0ad4e4d8 rel:rel.framework.context-adapter=39b9a281 rel:rel.framework.context-registry=6e9dfe30 rel:rel.framework.context-utils=9031b398 rel:rel.framework.contracts-polyfill=89942075 rel:rel.framework.error-fatal-command=05bdaa48 rel:rel.framework.error-track=0f8533b2 rel:rel.framework.event-bus-perf=c3962c5d rel:rel.framework.facade-creates-pipeline=e6c32a4d rel:rel.framework.facade-creates-state-machine=5bf07a5e rel:rel.framework.facade-inject-context=2fd1951a rel:rel.framework.leg-context-standby=b9b4449d rel:rel.framework.mu-context=fd138fec rel:rel.framework.mu-error-chain=0f6adb06 rel:rel.framework.mu-perf=bc683dad rel:rel.framework.pipeline-dispatch-mu=79df22d2 rel:rel.framework.pipeline-mu-lifecycle=d6bf5e8c rel:rel.framework.plugin-commands=a959327f rel:rel.framework.plugin-dispatcher=549856f3 rel:rel.framework.plugin-error-chain=85b3e317 rel:rel.framework.plugin-events=67ffc2a3 rel:rel.framework.plugin-hooks=8b49eb68 rel:rel.framework.profile-bus-forward=c96a21d8 rel:rel.framework.scheduler-utils=6679cb18 rel:rel.framework.sm-engine-dispatch=4a6942e4 rel:rel.framework.sm-engine-error=8103434a rel:rel.framework.sm-immediate-dispatch=2332f39b">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Framework · 发动机主轴：排队、快照、两条链</title>
+    <style>
+:root{--bg:#ffffff;--text:#1f2328;--text-2:#57606a;--line:#d0d7de;--soft:#f6f8fa;--accent:#0969da;--accent-soft:#ddf4ff;--ok:#1a7f37;--ok-soft:#dafbe1;--hot:#8250df;--hot-soft:#fbefff;--warn:#9a6700;--warn-soft:#fff8c5;--gray:#8c959f;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--text:#e6edf3;--text-2:#9da7b3;--line:#30363d;--soft:#161b22;--accent:#4493f8;--accent-soft:#0c2d6b;--ok:#3fb950;--ok-soft:#12351e;--hot:#ab7df8;--hot-soft:#2b1d47;--warn:#d29922;--warn-soft:#3b2e0a;--gray:#6e7681}}
+body{margin:0;padding:18px 22px 32px;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;margin:22px 0 6px}
+.lede{color:var(--text-2);margin:0 0 14px}
+figure{margin:10px 0 4px}
+figcaption{font-size:12px;color:var(--text-2);margin-top:4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--text)}
+svg .muted{fill:var(--text-2)}
+.cols{display:grid;gap:8px;margin:8px 0}
+.c2{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.cols div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--soft);font-size:13px}
+.cols b{display:block;font-size:13.5px}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:0 6px 6px 0;margin:12px 0 4px;font-size:13px}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+code{font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+  </head>
+  <body>
+
+    <h1>发动机主轴：排队、快照、两条链</h1>
+    <p class="lede">这一层是 <span data-arch="infra.framework">Framework 机制内核</span>：<span data-arch="infra.framework" data-field="summary"></span>。它不认识任何一种播放方案——业务怎么玩，都经 Hook 与插件从外面注入。</p>
+
+    <h2>三个通用机制</h2>
+    <figure>
+      <svg viewBox="0 0 640 196" role="img" aria-label="命令单行道、换图纸先拍快照、事件与错误各一条链">
+        <defs><marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-2)"/></marker></defs>
+        <rect x="8" y="8" width="200" height="150" rx="8" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="108" y="30" font-size="12" class="">① 命令单行道</text>
+        <rect x="24" y="44" width="52" height="24" rx="8" fill="var(--bg)" stroke="var(--line)"/><rect x="82" y="44" width="52" height="24" rx="8" fill="var(--bg)" stroke="var(--line)"/><rect x="140" y="44" width="52" height="24" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+        <text x="50" y="60" font-size="10" text-anchor="middle" class="muted">播放</text><text x="108" y="60" font-size="10" text-anchor="middle" class="muted">切流</text><text x="166" y="60" font-size="10" text-anchor="middle" class="muted">暂停</text>
+        <path d="M196,56 L218,56" stroke="var(--text-2)" stroke-width="2" marker-end="url(#c)"/>
+        <rect x="222" y="44" width="18" height="24" rx="8" fill="var(--accent)" stroke="var(--accent)"/>
+        <text x="108" y="92" font-size="10" text-anchor="middle" class="muted">队列排队，单一循环逐条执行</text>
+        <text x="108" y="108" font-size="10" text-anchor="middle" class="muted">「加急件」只准插到队首</text>
+        <text x="108" y="128" font-size="10" text-anchor="middle" class="">绝不两条命令同时跑</text>
+        <rect x="24" y="136" width="168" height="16" rx="4" fill="var(--accent-soft)" stroke="var(--line)"/><text x="108" y="148" font-size="9" text-anchor="middle" class="muted">状态机：当前状态 + 命令 → 下一状态</text>
+
+        <rect x="220" y="8" width="200" height="150" rx="8" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="320" y="30" font-size="12" class="">② 换图纸先拍快照</text>
+        <rect x="236" y="44" width="78" height="28" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="275" y="62" font-size="10" text-anchor="middle" class="">流水线图 旧</text>
+        <path d="M318,58 L338,58" stroke="var(--text-2)" stroke-width="2" marker-end="url(#c)"/>
+        <rect x="342" y="44" width="78" height="28" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="381" y="62" font-size="10" text-anchor="middle" class="">流水线图 新</text>
+        <rect x="236" y="84" width="184" height="22" rx="6" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="328" y="99" font-size="9.5" text-anchor="middle" class="">改动只经「差异事务」一次生效</text>
+        <path d="M328,116 C328,138 300,132 272,128" stroke="var(--warn)" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#c)"/>
+        <text x="320" y="150" font-size="10" text-anchor="middle" class="">中途失败？整图退回快照，</text>
+        <text x="320" y="164" font-size="10" text-anchor="middle" class="">仿佛没发生过</text>
+        <text x="232" y="176" font-size="9.5" class="muted"></text>
+
+        <rect x="432" y="8" width="200" height="150" rx="8" fill="var(--soft)" stroke="var(--line)"/>
+        <text x="452" y="30" font-size="12" class="">③ 事件与错误各一条链</text>
+        <circle cx="458" cy="52" r="5" fill="var(--accent)"/><text x="470" y="56" font-size="10" class="">事件链：发布 → 订阅者</text>
+        <circle cx="458" cy="74" r="5" fill="#cf222e"/><text x="470" y="78" font-size="10" class="">错误链：归一 → 拦截</text>
+        <rect x="448" y="92" width="86" height="24" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="491" y="108" font-size="9.5" text-anchor="middle" class="">小错：记一笔</text>
+        <rect x="540" y="92" width="86" height="24" rx="8" fill="var(--bg)" stroke="var(--line)"/><text x="583" y="108" font-size="9.5" text-anchor="middle" class="">致命：进错误态</text>
+        <text x="452" y="136" font-size="10" class="">对外事件走白名单——</text>
+        <text x="452" y="152" font-size="10" class="">内部再多，外面只见清单</text>
+      </svg>
+      <figcaption>主轴的三个通用机制：排队、快照、两条链。</figcaption>
+    </figure>
+
+    <h2>四个当黑盒的子模块怎么配合</h2>
+    <div class="cols c2">
+      <div><b><span data-arch="infra.framework.state-machine">状态机</span></b>只管「当前状态 + 命令 → 下一个状态」。所有命令排一条队，一个调度循环逐条执行，谁也不能插队并行。</div>
+      <div><b><span data-arch="infra.framework.pipeline">流水线事务</span></b>只管「谁挂在带上、怎么连」。图上的任何改动都是一次差异事务：先拍快照，改坏了整体退回。</div>
+      <div><b><span data-arch="infra.framework.model-registry">模型注册表</span></b>像换台历：新模型一页页写好，翻页瞬间整体切换，旧本立刻变只读，谁也改不了。</div>
+      <div><b><span data-arch="infra.framework.kernel">内核门面</span> 与 <span data-arch="infra.framework.plugin">插件控制器</span></b>门面把三件装配起来，事件与错误各走一条链；插件是外来能力的唯一入口。</div>
+    </div>
+
+    <h2>守住的约束</h2>
+    <ul data-arch="infra.framework" data-field="invariants"></ul>
+
+    <p class="note">它自己不含任何播放决策：换一种玩法（直播 / 点播 / 加密）时主轴的零件不变，变的只是从外面注入的东西。</p>
+
+  </body>
+</html>

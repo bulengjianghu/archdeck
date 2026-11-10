@@ -1,0 +1,81 @@
+# 取自 kernel-api/src/mcp.ts（card-tools，放行卡预检）、kernel/src/services/cards.ts、kernel-check.ts、verify.ts、merge.ts、
+# http.ts 的卡片路由组、hub.ts 的巡检、runner 本地 UI 的卡片巡检与系统通知，kernel/src/services/external.ts 与 flow.ts（轮询到 merged 才记终态）。
+scenario:
+  id: sc.release-merge
+  name: 放行卡与合入门
+  kind: main
+  description: |
+    统筹者在验证通过、对齐最新集成分支之后发放行卡：内核先预检（验证门的全部阻塞项），有阻塞即拒发，否则附上「内核核对」发卡；
+    通道巡检发现卡片变化推给 runner，本地 UI 弹系统通知、页面刷新。人在卡片详情里放行：内核在答卡的同一事务里过合入门
+    （放行针对当前 head、发卡时的 head 未变、验证门无阻塞），满足才写 merge.requested 并发 merge_after_approval 调用；
+    合入结果不直接终结任务，看门狗按配方节奏轮询变更状态，归一到 merged 才记 task.merged。放行卡不会超时、不能被统筹者撤回。
+  cause: 统筹者判定验证通过，发放行卡
+  evidence:
+    - packages/kernel/test/merge-cards-jobs.test.ts
+    - packages/kernel/test/p1-release-precheck.test.ts
+    - packages/kernel-api/test/p1-cards.test.ts
+    - packages/kernel/test/flow.test.ts
+    - packages/ui/test/p1-cards.test.tsx
+    - test/flow/requirement-loop.test.ts
+  steps:
+    - async: {id: open, from: actor.orchestrator, to: server.mcp.service, label: 'gixn_open_card(kind=release, 放行说明)'}
+    - async: {from: server.mcp.service, to: server.mcp.card-tools, label: 调工具实现}
+    - async: {from: server.mcp.card-tools, to: kernel.tasks.cards, relation: rel.server.card-open, label: 'openCardTx(precheck=true)'}
+    - async: {from: kernel.tasks.cards, to: kernel.rules.kernel-check, label: releaseKernelCheck：逐项放行前核对}
+    - async: {from: kernel.rules.kernel-check, to: kernel.rules.verify, label: verifyBlockers}
+    - async: {from: kernel.rules.verify, to: kernel.rules.defect-gate, label: 缺陷任务另过缺陷放行门}
+    - alt:
+        - when: 有阻塞项
+          steps:
+            - return: {id: refused, from: kernel.tasks.cards, to: server.mcp.card-tools, label: 拒发（isError 带阻塞项）}
+        - when: 无阻塞
+          steps:
+            - async: {id: opened, from: kernel.tasks.cards, to: kernel.ledger.ledger, label: card.opened（附内核核对）}
+    - async: {id: patrol, from: actor.time, to: server.hub.patrol, label: 每秒巡检}
+    - async: {from: server.hub.patrol, to: kernel.ledger.ledger, label: 卡片事件的最大 seq}
+    - async: {from: server.hub.patrol, to: client.channel.runner, label: "{type: 'cards.changed'}"}
+    - async: {from: client.channel.runner, to: client.local-ui.server, label: 转出内核消息}
+    - async: {from: client.local-ui.server, to: client.local-ui.decision, label: present(card)}
+    - async: {from: client.local-ui.decision, to: actor.owner, label: 系统通知（直达卡片深链）}
+    - async: {from: client.local-ui.server, to: surface.api.client, label: SSE cards.changed}
+    - async: {from: surface.api.client, to: surface.shell.store, label: 刷新卡片}
+    - call: {id: approve, from: actor.owner, to: surface.inbox.card-detail, label: 看证据、内核核对与放行说明，选「合入」}
+    - call: {from: surface.inbox.card-detail, to: surface.inbox.page, label: onChoose}
+    - async: {from: surface.inbox.page, to: surface.shell.store, relation: rel.surface.inbox-answer, label: answerCard}
+    - async: {from: surface.shell.store, to: surface.api.client, relation: rel.surface.store-answer, label: api.answerCard}
+    - async: {from: surface.api.client, to: client.local-ui.server, relation: rel.surface.http-answer, label: 'POST /api/cards/:id/answer'}
+    - async: {from: client.local-ui.server, to: client.local-ui.kernel-proxy, label: answerCard}
+    - async: {from: client.local-ui.kernel-proxy, to: server.http.inbox-routes, relation: rel.client.ui-signal-kernel, label: 'POST /v1/cards/:id/answer'}
+    - async: {from: server.http.inbox-routes, to: kernel.tasks.cards, relation: rel.server.inbox-cards, label: 'answer(cardId, {optionId, by=human, idempotencyKey})'}
+    - async: {id: gate, from: kernel.tasks.cards, to: kernel.rules.merge-gate, label: 放行 → 同一事务发起合入}
+    - async: {from: kernel.rules.merge-gate, to: kernel.rules.verify, label: mergeBlockers：head 未变 + 验证门}
+    - alt:
+        - when: 合入门满足
+          steps:
+            - async: {id: merge, from: kernel.rules.merge-gate, to: kernel.dispatch.adapter-calls, label: 'merge.requested + merge_after_approval 调用'}
+            - async: {from: kernel.dispatch.adapter-calls, to: kernel.dispatch.jobs, label: adapter.call 任务包}
+            - async: {from: server.hub.push, to: client.channel.runner, relation: rel.server.hub-jobs-ws, label: 推任务包}
+            - call: {from: client.channel.runner, to: client.channel.executor, label: execute(job)}
+            - async: {from: client.channel.executor, to: client.channel.dispatch, label: dispatch(job)}
+            - async: {from: client.channel.dispatch, to: adapters.repo.gitlab, relation: rel.client.dispatch-codehost, label: mergeAfterApproval：草稿 MR 转正式并合入（核对 expectedSha）}
+            - async: {from: client.channel.dispatch, to: client.profiles.release, label: 合入成功且环境配了发布 → 自动发布一次}
+            - async: {from: client.channel.runner, to: server.http.runner-routes, relation: rel.client.report-ws, label: 合入结果（合入中 / merged、发布结果）}
+            - async: {from: server.http.runner-routes, to: kernel.dispatch.jobs, relation: rel.server.runner-job-update, label: update}
+            - async: {from: kernel.dispatch.jobs, to: kernel.ledger.ledger, label: adapter.completed}
+        - when: 不满足（head 变了、验证门有阻塞）
+          steps:
+            - async: {id: merge-refused, from: kernel.rules.merge-gate, to: kernel.liveness.wakeups, label: merge.refused 唤醒统筹者}
+    - loop:
+        while: 变更状态还不是 merged
+        steps:
+          - async: {from: actor.time, to: kernel.liveness.scheduler, label: pg-boss 一轮}
+          - async: {from: kernel.liveness.scheduler, to: kernel.liveness.watchdog, label: tick()}
+          - call: {id: poll, from: kernel.liveness.watchdog, to: kernel.dispatch.external, label: 'pollAll：按 max(60 秒, pollIntervalSec)'}
+          - call: {from: kernel.dispatch.external, to: kernel.dispatch.adapter-calls, label: 按仓库补配方与工作环境参数}
+          - async: {from: kernel.dispatch.external, to: kernel.dispatch.jobs, label: get_change / get_checks 轮询任务包（不进账）}
+          - async: {from: client.channel.dispatch, to: adapters.repo.gitlab, relation: rel.client.dispatch-codehost, label: getChange / getChecks}
+          - async: {from: server.http.runner-routes, to: kernel.dispatch.jobs, relation: rel.server.runner-job-update, label: 轮询结果}
+          - async: {from: kernel.dispatch.jobs, to: kernel.dispatch.external, label: 轮询结果交给轮询处理器}
+          - async: {from: kernel.dispatch.external, to: kernel.dispatch.flow, label: 状态变化才归一}
+    - async: {id: merged, from: kernel.dispatch.flow, to: kernel.ledger.ledger, label: repo.mr_status → task.merged（终态）}
+    - async: {from: kernel.ledger.ledger, to: kernel.rules.ledger-rules, relation: rel.kernel.ledger-reactors, label: 终态：收会话、撤其余卡、清理工作树、唤醒依赖它的任务}
