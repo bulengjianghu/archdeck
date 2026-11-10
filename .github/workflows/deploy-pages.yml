@@ -21,6 +21,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,6 +31,10 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      # lockfile 的 resolved 地址来自作者工作区的 npmmirror，它对 runner 的数据中心 IP 限流（实测重试 40+ 分钟后失败）；
+      # 只在构建机上手写改写为 npmjs，仓库里的 lockfile 与上游保持字节一致（同步零冲突）
+      - name: lockfile 镜像地址改写为 npmjs
+        run: sed -i 's#https://registry.npmmirror.com#https://registry.npmjs.org#g' package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npm run type-check
