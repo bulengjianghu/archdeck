@@ -29,6 +29,8 @@ const versionLine = computed(() => {
   return `设计 · ${v.design} · ${v.revision}`
 })
 const canSkeleton = computed(() => !desk.version && desk.edit.lookup.intentIds.value.includes('skeleton'))
+/** 静态 demo（vite build --mode demo）只读：预渲染数据不可写，隐藏两个写入口（写入会失败） */
+const demo = import.meta.env.MODE === 'demo'
 
 function run(fn: () => void) {
   open.value = false
@@ -71,8 +73,8 @@ onBeforeUnmount(() => {
         <div class="version-row"><VersionSwitcher @switched="open = false" /></div>
         <template v-if="!desk.version">
           <div class="sep" />
-          <button v-if="canSkeleton" class="it" role="menuitem" title="打开骨架（持久草图）并进入编辑态（E-1）" @click="editSkeleton">编辑骨架</button>
-          <button class="it" role="menuitem" title="新建设计：画草图，AI 按它展开各轮（SK-10）" @click="newDesign">新建设计</button>
+          <button v-if="canSkeleton && !demo" class="it" role="menuitem" title="打开骨架（持久草图）并进入编辑态（E-1）" @click="editSkeleton">编辑骨架</button>
+          <button v-if="!demo" class="it" role="menuitem" title="新建设计：画草图，AI 按它展开各轮（SK-10）" @click="newDesign">新建设计</button>
         </template>
         <div class="sep" />
       </template>

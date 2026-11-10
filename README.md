@@ -2,6 +2,8 @@
 
 AI 开发复杂系统的顶层视角驾驶舱：本地架构工作台 **h5p-arch-desk** 的开源仓库。2026-11 从 h5player-demo 的 `packages/h5p-arch-desk` 迁出并独立开源（保留全部提交历史，见文末「与上游同步」）。
 
+**在线 demo**：<https://bulengjianghu.github.io/archdeck/>（GitHub Pages，每次 push 到 release/0.0.1 自动部署）。demo 是纯静态只读版：只展示本项目自身的架构描述（自举），源码预览、代码事实、设计版本均可交互；写入与 agent 对话仅在本地形态提供。
+
 ---
 
 **本地架构工作台：看见 · 对照 · 守住。**
@@ -21,7 +23,7 @@ npm install
 npm run dev          # 本地查看：首页是项目列表，读取 model/ 下各项目，描述文件变化后自动刷新
 ```
 
-打开终端里提示的地址，点一个项目卡片即可。本项目自身（`model/h5p-arch-desk`）的源码就是本仓库，开箱即用；h5player 等外部项目的描述要读它们的本地源码，`repo` 相对作者的工作区 `work4/` 书写，需先指定工作区根目录（否则这些卡片报「源码根目录不存在」）：
+打开终端里提示的地址，点一个项目卡片即可。本项目自身（`model/h5p-arch-desk`）的源码就是本仓库，开箱即用；克隆后首页会列出 `model/` 下全部描述项目，h5player 等外部项目的源码不在你机器上时，对应卡片会显示「源码根目录不存在」——属预期，本地开发工具的前提是被描述项目在本地（G1）。外部项目的描述要读它们的本地源码，`repo` 相对作者的工作区 `work4/` 书写，需先指定工作区根目录（否则单测、E2E 里涉及外部项目的用例也会失败）：
 
 ```bash
 export ARCH_WORKSPACE_ROOT=/path/to/work4   # 含 h5player/、media-platform/ 的目录；单测、E2E 与 lint:model 同样需要

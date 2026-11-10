@@ -13,13 +13,18 @@ export function httpSourceFetcher(project: string, base = ''): SourceFetcher {
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return res.json() as Promise<T>
   }
+  // 静态 demo（vite build --mode demo，scripts/build-demo.ts 预渲染）：逐文件端点没有 query 参数，改为路径段 URL
+  const demo = import.meta.env.MODE === 'demo'
+  const perFile = (rel: string, dev: string, dir: 'files' | 'exports') =>
+    demo ? `source/${enc(project)}/${dir}/${rel.split('/').map(encodeURIComponent).join('/')}.json` : `source/${enc(project)}/${dev}=${enc(rel)}`
   return {
     tree: async () => (await get<SourcePayload>(`source/${enc(project)}.json`)) ?? { status: 'error', reason: `开发服务器没有项目 ${project} 的源码端点` },
-    file: path => get<SourceFile>(`source/${enc(project)}/file.json?path=${enc(path)}`),
-    exports: path => get<ExportedSymbol[]>(`source/${enc(project)}/exports.json?path=${enc(path)}`),
+    file: path => get<SourceFile>(perFile(path, 'file.json?path', 'files')),
+    exports: path => get<ExportedSymbol[]>(perFile(path, 'exports.json?path', 'exports')),
     facts: () => get<FactsPayload>(`source/${enc(project)}/facts.json`),
     history: () => get<SourceHistory>(`source/${enc(project)}/history.json`),
-    commit: hash => get<{ hash: string; message: string }>(`source/${enc(project)}/commit.json?hash=${enc(hash)}`),
+    commit: hash =>
+      get<{ hash: string; message: string }>(demo ? `source/${enc(project)}/commit/${enc(hash)}.json` : `source/${enc(project)}/commit.json?hash=${enc(hash)}`),
   }
 }
 

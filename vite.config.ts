@@ -6,7 +6,9 @@ import { resolveModelRoot } from './vite/readModelDir'
 
 const root = fileURLToPath(new URL('.', import.meta.url))
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  // demo 产物部署在 GitHub Pages 的项目子路径上（scripts/build-demo.ts 预渲染数据，scripts 顶注释）
+  base: mode === 'demo' ? '/archdeck/' : '/',
   plugins: [vue(), archModelPlugin({ modelRoot: resolveModelRoot(root), root })],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   worker: { format: 'es' },
@@ -45,4 +47,4 @@ export default defineConfig({
     // 预算给足 20s：红了就是断言红，不是环境负载把默认 5s 挤爆的假红（G9，CLAUDE.md §4）
     testTimeout: 20_000,
   },
-})
+}))

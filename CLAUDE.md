@@ -76,6 +76,7 @@ npm run type-check    # ~9s
 npm run lint          # ~8s
 npm run lint:model    # ~12s
 npm run build         # ~21s
+npm run build:demo    # 静态 demo 构建：--mode demo（base=/archdeck/、只读运行时）+ scripts/build-demo.ts 预渲染 JSON 到 dist；只依赖自项目源码（G22），CI 上无需环境变量
 ```
 
 - **E2E worker 数固定 `--workers=4`**（波 2 实测立项、波 3 复实测确认，不修用例）：多会话并行负载下缺省并发（本机 12 核 ≈ 6 workers）出现过 60s 用例超时；波 3 复现实验——同一 worktree 双会话同时全量跑，缺省并发 2 次超时之一再现（1× 60s，整轮 4.2–4.4m），`--workers=4` 全天单会话 5+ 轮稳定（~1m50s）。注意同 worktree 双会话的主要失败源其实是「不并发混跑」禁止的 model/ 写入互相踩（两种并发下都有断言红），那不是 worker 数能解决的；固定 4 是取「降低浏览器进程的资源争用 + 与波 2 校准的稳定配置一致」，标准门禁（单会话）两种并发都绿，按更保守的 4 执行。

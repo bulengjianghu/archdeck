@@ -9,6 +9,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
+import { NO_WRITER } from '@/state/sync/writer'
 import { browserMemory, createDeskState, type ModelPayload } from '@/state/useDeskState'
 import { isCommitVersion, isIntentVersion, type VersionRef } from '@/model'
 import { httpModelWriter, httpSourceFetcher } from './source/httpSource'
@@ -76,12 +77,14 @@ async function fetchModel(): Promise<ModelPayload> {
   return res.json()
 }
 
+// 静态 demo（vite build --mode demo）只读：没有写入（预渲染数据不可写，编辑入口在 ProjectMenu 一并隐藏）、没有 agent 对话
+const demo = import.meta.env.MODE === 'demo'
 const desk = createDeskState(fetchModel, {
   project: props.project,
   version,
   source: httpSourceFetcher(props.project, import.meta.env.BASE_URL),
-  writer: httpModelWriter(props.project, import.meta.env.BASE_URL),
-  agent: httpAgentTransport(import.meta.env.BASE_URL, import.meta.hot as unknown as AgentEvents | undefined),
+  writer: demo ? NO_WRITER : httpModelWriter(props.project, import.meta.env.BASE_URL),
+  agent: demo ? undefined : httpAgentTransport(import.meta.env.BASE_URL, import.meta.hot as unknown as AgentEvents | undefined),
   memory: browserMemory(),
 })
 desk.attachRouter(router)

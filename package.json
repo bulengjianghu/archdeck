@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --build && vite build",
+    "build:demo": "vue-tsc --build && vite build --mode demo && vite-node scripts/build-demo.ts -- --out dist",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
